@@ -3,6 +3,7 @@
 	The 4 playable characters and their cosmetic skins.
 
 	Character fields:
+	  Role          short tag shown on the character select card (descriptive only)
 	  Cost          gold price in the lobby (0 = free)
 	  StartWeapon   weapon id from WeaponData
 	  Bonus         stat bonuses (same keys as PassiveData values) plus:
@@ -26,6 +27,7 @@ CharacterData.Characters = {
 	Knight = {
 		Id = "Knight",
 		Name = "Knight",
+		Role = "Tough tank", -- one-line tag on the character select card
 		Description = "Sturdy fighter. Starts with the Whip. Takes 10% less damage.",
 		Cost = 0,
 		StartWeapon = "Whip",
@@ -44,6 +46,7 @@ CharacterData.Characters = {
 	Mage = {
 		Id = "Mage",
 		Name = "Mage",
+		Role = "Area caster", -- one-line tag on the character select card
 		Description = "Arcane scholar. Starts with the Magic Orb. +10% area.",
 		Cost = 500,
 		StartWeapon = "MagicOrb",
@@ -62,6 +65,7 @@ CharacterData.Characters = {
 	Rogue = {
 		Id = "Rogue",
 		Name = "Rogue",
+		Role = "Fast striker", -- one-line tag on the character select card
 		Description = "Quick and sharp. Starts with Throwing Knives. +15% speed.",
 		Cost = 1000,
 		StartWeapon = "Knives",
@@ -80,6 +84,7 @@ CharacterData.Characters = {
 	Priest = {
 		Id = "Priest",
 		Name = "Priest",
+		Role = "Holy survivor", -- one-line tag on the character select card
 		Description = "Holy healer. Starts with the Garlic Aura. +20% max HP.",
 		Cost = 1500,
 		StartWeapon = "Garlic",

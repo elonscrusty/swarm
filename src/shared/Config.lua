@@ -4,8 +4,8 @@
 	so changing a value here changes it everywhere on the next sync.
 
 	Sections:
-	  Run, Player, Slots, LevelUp, XP, Gold, Drops, Enemies, Difficulty, Spawn, Boss,
-	  Projectiles, Net, Camera, Controls, Data, Monetization, Sounds, UI, Arenas, Lobby
+	  Run, Dev, Player, Slots, LevelUp, XP, Gold, Drops, Enemies, Difficulty, Spawn, Boss,
+	  Projectiles, Net, Camera, Controls, Data, Monetization, Sounds, UI, Arenas, Modes, Lobby
 ]]
 
 local Config = {}
@@ -28,6 +28,15 @@ Config.Run = {
 	-- A solo player who opens the pause menu freezes the whole run. In a group run the
 	-- menu is only an overlay (the run keeps going), so nobody can stall a shared run.
 	SoloPauseFreezesRun = true,
+}
+
+------------------------------------------------------------------------------------------
+-- DEV TOOLS (Studio and the game's creator only; the server re-checks every request)
+------------------------------------------------------------------------------------------
+Config.Dev = {
+	Enabled = true, -- false hides the DEV button everywhere and ignores dev requests
+	AddLevels = 5, -- "+5 levels" button
+	SkipToTime = 14 * 60 + 30, -- "Skip to 14:30" button (30 s before the boss)
 }
 
 ------------------------------------------------------------------------------------------
@@ -65,6 +74,8 @@ Config.LevelUp = {
 	-- If a player doesn't pick in this many seconds a random card is chosen for them,
 	-- so nobody can stay paused (and protected) forever.
 	AutoPickSeconds = 25,
+	-- In Duo/Trio a level-up freezes everyone's game, so the auto-pick comes sooner.
+	GroupAutoPickSeconds = 10,
 	SkipGold = 10, -- run gold granted when a level-up is skipped
 	-- Relative weights for building the 3 cards. Luck multiplies the "new" weights.
 	WeightUpgradeWeapon = 10,
@@ -353,6 +364,13 @@ Config.UI = {
 	Font = Enum.Font.GothamBold,
 	BodyFont = Enum.Font.Gotham,
 	ToastSeconds = 3,
+	-- Lobby screen
+	LobbyParticles = 14, -- drifting dots in the menu background (cheap looping tweens)
+	PreviewSpinSeconds = 9, -- one full turn of the 3D character previews
+	ScreenSlideSeconds = 0.3, -- slide between lobby screens
+	-- Upgrade bar (weapons + passives at the bottom of the screen during a run)
+	BarWeaponTile = 54,
+	BarPassiveTile = 44,
 }
 
 ------------------------------------------------------------------------------------------
@@ -363,30 +381,38 @@ Config.Arenas = {
 	Forest = { DisplayName = "Forest", RequiredWins = 0 },
 	Ruins = { DisplayName = "Ruins", RequiredWins = 1 },
 	Size = 400, -- square arena, centred on ArenaOrigin
-	FenceHeight = 8,
-	TreeCount = 38,
-	RockCount = 30,
+	FenceHeight = 6,
+	TreeCount = 34, -- max trees inside the fence (in groves; the tree line outside is extra)
+	RockCount = 26, -- max rocks inside the fence (outcrops, pond rim, rubble)
+	ClearRadius = 40, -- nothing collidable this close to the centre (player spawn)
 }
 
--- Run modes: which lobby pad started the countdown.
-Config.Modes = {
-	Squad = { DisplayName = "Squad", MaxPlayers = 4, MinPlayers = 1 },
-	-- Duo: two players. A fallen partner can be revived by standing next to them.
-	Duo = {
-		DisplayName = "Duo",
-		MaxPlayers = 2,
-		MinPlayers = 1, -- a lone player may still start; the second slot stays open while counting down
-		PartnerReviveSeconds = 3, -- stand this long next to a fallen partner to revive them
-		PartnerReviveRadius = 7,
-		PartnerReviveHPFraction = 0.4,
-		PartnerRevivesPerRun = 3, -- per downed player
-	},
+-- Run modes, picked with the big SOLO / DUO / TRIO buttons on the lobby screen.
+--   Solo  starts at once (no countdown).
+--   Duo / Trio  count down (Config.Run.CountdownSeconds) so others can join; the starter
+--   can press START NOW once someone joined, and a full run starts by itself.
+-- A fallen player can be revived by a teammate standing next to them (PartnerRevive).
+local PARTNER_REVIVE = {
+	Seconds = 3, -- stand this long next to a fallen teammate to revive them
+	Radius = 7,
+	HPFraction = 0.4,
+	PerRun = 3, -- per downed player
 }
+Config.Modes = {
+	Order = { "Solo", "Duo", "Trio" }, -- modes shown in the lobby (and accepted from clients)
+	Solo = { DisplayName = "Solo", MaxPlayers = 1, Countdown = false },
+	Duo = { DisplayName = "Duo", MaxPlayers = 2, Countdown = true, PartnerRevive = PARTNER_REVIVE },
+	Trio = { DisplayName = "Trio", MaxPlayers = 3, Countdown = true, PartnerRevive = PARTNER_REVIVE },
+	-- Old 1-4 player mode: no longer in the UI, still accepted from old clients (JoinRun).
+	Squad = { DisplayName = "Squad", MaxPlayers = 4, Countdown = true },
+}
+
 Config.ArenaOrigin = Vector3.new(0, 0, 0) -- floor top surface is at this height
 Config.Lobby = {
 	Origin = Vector3.new(1200, 0, 0),
 	Size = 60,
-	WallHeight = 6, -- low walls so the top-down camera sees over them
+	WallHeight = 6, -- low south wall so the top-down camera sees over it
+	MenuFieldOfView = 55, -- suggested FOV for the menu backdrop shot (MenuCamera attribute)
 }
 
 return Config

@@ -20,6 +20,7 @@ local MeshService = {}
 local root: Folder
 local readyEvent = Instance.new("BindableEvent")
 local pending = 0
+local started = false
 
 MeshService.Ready = readyEvent.Event -- fires (modelName) each time a model finishes
 
@@ -32,6 +33,25 @@ local MATERIALS = {
 
 local function vec(t: { number }): Vector3
 	return Vector3.new(t[1], t[2], t[3])
+end
+
+-- Import rotation recorded by loadModel (nil when the mesh came in upright, the normal case).
+local function importRotation(template: Instance): CFrame?
+	local r = template:GetAttribute("ImportRotation")
+	if typeof(r) == "CFrame" then
+		return r
+	end
+	return nil
+end
+
+-- Catalog sizes are in model (Roblox) axes; a rotated import needs them in its local axes.
+local function localSize(size: Vector3, template: Instance): Vector3
+	local r = importRotation(template)
+	if not r then
+		return size
+	end
+	local v = r:VectorToObjectSpace(size)
+	return Vector3.new(math.abs(v.X), math.abs(v.Y), math.abs(v.Z))
 end
 
 local function loadModel(name: string, entry)
@@ -69,7 +89,16 @@ local function loadModel(name: string, entry)
 			template.CanQuery = false
 			template.CanTouch = false
 			template.CastShadow = false
-			template.Size = vec(piece.Size)
+			-- The FBX nodes carry a Y-up axis rotation (Lcl Rotation 90, 0, 180) over Z-up
+			-- vertex data. If the importer kept that rotation on the MeshPart instead of
+			-- baking it, the geometry's local axes are not the catalog's (Roblox) axes and the
+			-- piece would lie on its side. Remember the rotation so Build() can compensate.
+			local rot = mesh.CFrame.Rotation
+			if rot.UpVector.Y < 0.99 then
+				template:SetAttribute("ImportRotation", rot)
+				warn(string.format("[MeshService] %s.%s was imported rotated; compensating", name, piece.Name))
+			end
+			template.Size = localSize(vec(piece.Size), template)
 			template.Material = MATERIALS[piece.Material] or Enum.Material.SmoothPlastic
 			template.TextureID = ""
 			template.Parent = folder
@@ -101,6 +130,16 @@ function MeshService.IsLoading(): boolean
 	return pending > 0
 end
 
+-- True while model `name` is not loaded yet but still might be (uploaded, and loading has
+-- not started or not finished). Callers use it to swap a fallback for the mesh later.
+function MeshService.MayLoad(name: string): boolean
+	local entry = MeshCatalog.Models[name]
+	if not entry or not entry.AssetId or entry.AssetId == 0 or MeshService.Get(name) then
+		return false
+	end
+	return not started or pending > 0
+end
+
 --[[
 	Builds an anchored Model of a mesh model at `cframe` (origin = ground centre).
 	palette overrides slot colours; scale multiplies the whole model.
@@ -119,12 +158,13 @@ function MeshService.Build(name: string, cframe: CFrame, palette: { [string]: Co
 		local template = folder:FindFirstChild(piece.Name) :: MeshPart?
 		if template then
 			local part = template:Clone()
-			part.Size = vec(piece.Size) * s
+			part.Size = localSize(vec(piece.Size), template) * s
 			local color = (palette and palette[piece.Slot]) or (entry.Palette and entry.Palette[piece.Slot])
 			if color then
 				part.Color = color
 			end
-			part.CFrame = cframe * CFrame.new(vec(piece.Offset) * s)
+			-- piece centre in model space; an imported rotation (rare) keeps the mesh upright
+			part.CFrame = cframe * CFrame.new(vec(piece.Offset) * s) * (importRotation(template) or CFrame.identity)
 			part.Parent = model
 		end
 	end
@@ -161,6 +201,7 @@ function MeshService.Init(_ctx)
 end
 
 function MeshService.Start()
+	started = true
 	for name, entry in pairs(MeshCatalog.Models) do
 		if entry.AssetId and entry.AssetId ~= 0 then
 			pending += 1

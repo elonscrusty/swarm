@@ -41,19 +41,29 @@ WeaponData.StatLabels = {
 --[[
 	Projectile visuals. The server only sends a visual index + position; the client builds
 	pooled parts from these definitions. Shapes use built-in Part shapes / SpecialMesh types.
+	Everything below is cosmetic (client only):
+	  Style   how VFX moves the model in flight:
+	          "Orb" wobble, "Knife" end-over-end tumble, "Dart" straight with a roll,
+	          "Axe" heavy tumble, "Bottle" lazy tumble, "Boomerang" flat spin + bank,
+	          "Saw" flat buzz-saw spin, "Stinger" spin
+	  Spin    flat spin speed (rad/s), Tumble = end-over-end speed (rad/s)
+	  Trail   { Color, Width, Life } ribbon behind the projectile (Width grows with tier)
+	  Impact  colour of the puff drawn where the projectile disappears (nil = none)
+	  Shatter true = glass shards + splash when it lands
 ]]
+local TRAIL_ORB = { Color = Color3.fromRGB(190, 120, 255), Width = 1.1, Life = 0.22 }
 WeaponData.Visuals = {
-	[1] = { Name = "Orb", Shape = "Ball", Size = Vector3.new(1.6, 1.6, 1.6), Color = Color3.fromRGB(170, 90, 255), Material = "Neon" },
-	[2] = { Name = "Knife", Shape = "Block", Size = Vector3.new(0.4, 0.3, 2.4), Color = Color3.fromRGB(220, 225, 235), Material = "Metal" },
-	[3] = { Name = "Bottle", Shape = "Ball", Size = Vector3.new(1.2, 1.6, 1.2), Color = Color3.fromRGB(80, 160, 255), Material = "Glass" },
-	[4] = { Name = "Axe", Shape = "Block", Size = Vector3.new(2.6, 0.4, 2.0), Color = Color3.fromRGB(160, 160, 170), Material = "Metal", Spin = 14 },
-	[5] = { Name = "Boomerang", Shape = "Block", Size = Vector3.new(2.6, 0.3, 0.8), Color = Color3.fromRGB(205, 160, 90), Material = "Wood", Spin = 18 },
-	[6] = { Name = "TwinOrb", Shape = "Ball", Size = Vector3.new(1.8, 1.8, 1.8), Color = Color3.fromRGB(255, 110, 210), Material = "Neon" },
-	[7] = { Name = "BossOrb", Shape = "Ball", Size = Vector3.new(2.6, 2.6, 2.6), Color = Color3.fromRGB(255, 50, 40), Material = "Neon" },
-	[8] = { Name = "EdgeKnife", Shape = "Block", Size = Vector3.new(0.4, 0.3, 2.6), Color = Color3.fromRGB(255, 215, 80), Material = "Neon" },
-	[9] = { Name = "SpiralAxe", Shape = "Block", Size = Vector3.new(3.2, 0.4, 2.4), Color = Color3.fromRGB(200, 40, 60), Material = "Neon", Spin = 20 },
-	[10] = { Name = "InfiniteBoomerang", Shape = "Block", Size = Vector3.new(3.0, 0.3, 0.9), Color = Color3.fromRGB(60, 230, 255), Material = "Neon", Spin = 22 },
-	[11] = { Name = "HellBottle", Shape = "Ball", Size = Vector3.new(1.4, 1.8, 1.4), Color = Color3.fromRGB(255, 120, 30), Material = "Neon" },
+	[1] = { Name = "Orb", Shape = "Ball", Size = Vector3.new(1.6, 1.6, 1.6), Color = Color3.fromRGB(170, 90, 255), Material = "Neon", Style = "Orb", Trail = TRAIL_ORB, Impact = Color3.fromRGB(200, 140, 255) },
+	[2] = { Name = "Knife", Shape = "Block", Size = Vector3.new(0.4, 0.3, 2.4), Color = Color3.fromRGB(220, 225, 235), Material = "Metal", Style = "Knife", Tumble = 26, Trail = { Color = Color3.fromRGB(230, 235, 255), Width = 0.45, Life = 0.12 }, Impact = Color3.fromRGB(235, 240, 255) },
+	[3] = { Name = "Bottle", Shape = "Ball", Size = Vector3.new(1.2, 1.6, 1.2), Color = Color3.fromRGB(80, 160, 255), Material = "Glass", Style = "Bottle", Tumble = 9, Trail = { Color = Color3.fromRGB(120, 190, 255), Width = 0.5, Life = 0.25 }, Shatter = true },
+	[4] = { Name = "Axe", Shape = "Block", Size = Vector3.new(2.6, 0.4, 2.0), Color = Color3.fromRGB(160, 160, 170), Material = "Metal", Spin = 14, Style = "Axe", Tumble = 15, Trail = { Color = Color3.fromRGB(210, 215, 230), Width = 1.4, Life = 0.16 }, Impact = Color3.fromRGB(220, 220, 230) },
+	[5] = { Name = "Boomerang", Shape = "Block", Size = Vector3.new(2.6, 0.3, 0.8), Color = Color3.fromRGB(205, 160, 90), Material = "Wood", Spin = 18, Style = "Boomerang", Trail = { Color = Color3.fromRGB(240, 200, 140), Width = 1.2, Life = 0.14 } },
+	[6] = { Name = "TwinOrb", Shape = "Ball", Size = Vector3.new(1.8, 1.8, 1.8), Color = Color3.fromRGB(255, 110, 210), Material = "Neon", Style = "Orb", Trail = { Color = Color3.fromRGB(255, 130, 220), Width = 1.3, Life = 0.28 }, Impact = Color3.fromRGB(255, 160, 230) },
+	[7] = { Name = "BossOrb", Shape = "Ball", Size = Vector3.new(2.6, 2.6, 2.6), Color = Color3.fromRGB(255, 50, 40), Material = "Neon", Style = "Stinger", Spin = 6, Trail = { Color = Color3.fromRGB(255, 80, 40), Width = 1.6, Life = 0.2 }, Impact = Color3.fromRGB(255, 90, 50) },
+	[8] = { Name = "EdgeKnife", Shape = "Block", Size = Vector3.new(0.4, 0.3, 2.6), Color = Color3.fromRGB(255, 215, 80), Material = "Neon", Style = "Dart", Spin = 18, Trail = { Color = Color3.fromRGB(255, 220, 90), Width = 0.6, Life = 0.14 }, Impact = Color3.fromRGB(255, 230, 120) },
+	[9] = { Name = "SpiralAxe", Shape = "Block", Size = Vector3.new(3.2, 0.4, 2.4), Color = Color3.fromRGB(200, 40, 60), Material = "Neon", Spin = 20, Style = "Saw", Trail = { Color = Color3.fromRGB(255, 60, 80), Width = 1.8, Life = 0.2 }, Impact = Color3.fromRGB(255, 80, 90) },
+	[10] = { Name = "InfiniteBoomerang", Shape = "Block", Size = Vector3.new(3.0, 0.3, 0.9), Color = Color3.fromRGB(60, 230, 255), Material = "Neon", Spin = 22, Style = "Boomerang", Trail = { Color = Color3.fromRGB(80, 240, 255), Width = 1.6, Life = 0.2 } },
+	[11] = { Name = "HellBottle", Shape = "Ball", Size = Vector3.new(1.4, 1.8, 1.4), Color = Color3.fromRGB(255, 120, 30), Material = "Neon", Style = "Bottle", Tumble = 11, Trail = { Color = Color3.fromRGB(255, 140, 40), Width = 0.9, Life = 0.3 }, Shatter = true },
 }
 
 -- Shorthand for building a stat row.
@@ -74,10 +84,11 @@ WeaponData.Weapons = {
 	Whip = {
 		Id = "Whip",
 		Name = "Whip",
-		Description = "Slashes horizontally in the direction you face.",
+		Description = "Swings a wide sword arc in the direction you face.",
 		Color = Color3.fromRGB(200, 70, 60),
 		Behavior = "Whip",
-		Params = { Length = 13, Width = 4.5 },
+		-- hit shape: a sector Reach studs long and Arc degrees wide (same area as the old 13 x 4.5 box)
+		Params = { Reach = 7, Arc = 150 },
 		Levels = {
 			--   dmg  cd    amt area spd prc dur  kb
 			row(10, 1.35, 1, 1.0, 0, 999, 0.25, 14),

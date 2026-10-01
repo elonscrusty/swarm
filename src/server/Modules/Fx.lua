@@ -7,8 +7,8 @@
 	Batch shape (keys omitted when empty):
 	  h = { enemyId, ... }                         hit flashes
 	  d = { {x, z, Color3, size}, ... }            enemy death poofs
-	  s = { {x, z, yaw, length, width, Color3} }   whip slashes
-	  b = { {x, z, radius} }                       lightning strikes
+	  s = { {x, z, yaw, reach, sweep, tier, userId} } sword swings (x, z = player; sweep +1/-1)
+	  b = { {x, z, radius, tier} }                 lightning strikes
 	  c = { {x1, z1, x2, z2} }                     chain lightning arcs
 	  p = { {x, z, radius, seconds, evo} }         holy water pools
 	  e = { {x, z, radius} }                       explosions
@@ -60,12 +60,13 @@ function Fx.Death(pos: Vector3, color: Color3, size: number)
 	pushCapped("d", { r1(pos.X), r1(pos.Z), color, r1(size) })
 end
 
-function Fx.Slash(pos: Vector3, yaw: number, length: number, width: number, color: Color3)
-	pushCapped("s", { r1(pos.X), r1(pos.Z), r1(yaw), r1(length), r1(width), color })
+-- tier = visual strength 0-3 (3 = evolved); the client draws the swing on that player.
+function Fx.Slash(pos: Vector3, yaw: number, reach: number, sweep: number, tier: number, userId: number)
+	pushCapped("s", { r1(pos.X), r1(pos.Z), math.floor(yaw * 100 + 0.5) / 100, r1(reach), sweep, tier, userId })
 end
 
-function Fx.Bolt(pos: Vector3, radius: number)
-	pushCapped("b", { r1(pos.X), r1(pos.Z), r1(radius) })
+function Fx.Bolt(pos: Vector3, radius: number, tier: number?)
+	pushCapped("b", { r1(pos.X), r1(pos.Z), r1(radius), tier or 0 })
 end
 
 function Fx.Chain(a: Vector3, b: Vector3)

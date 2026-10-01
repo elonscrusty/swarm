@@ -123,6 +123,89 @@ function UIAnim.PulseStroke(stroke: UIStroke, minThickness: number, maxThickness
 	TweenService:Create(stroke, info, { Thickness = maxThickness }):Play()
 end
 
+-- Animates a number label from `from` to `to` (gold counter). Restarts cleanly when called
+-- again before it finishes.
+function UIAnim.CountTo(label: TextLabel, from: number, to: number, format: string, seconds: number?)
+	local value = label:FindFirstChild("CountValue") :: NumberValue?
+	if not value then
+		local v = Instance.new("NumberValue")
+		v.Name = "CountValue"
+		v.Parent = label
+		v.Changed:Connect(function(n)
+			label.Text = string.format(tostring(label:GetAttribute("CountFormat") or "%d"), math.floor(n + 0.5))
+		end)
+		value = v
+	end
+	local nv = value :: NumberValue
+	label:SetAttribute("CountFormat", format)
+	nv.Value = from
+	label.Text = string.format(format, math.floor(from + 0.5))
+	if from ~= to then
+		UIAnim.Tween(nv, seconds or 0.6, { Value = to }, Enum.EasingStyle.Quart)
+		if to > from then
+			UIAnim.Punch(label, 0.12)
+		end
+	end
+end
+
+-- A light streak that sweeps across a button every few seconds (the parent should clip).
+function UIAnim.Shine(obj: GuiObject, period: number?)
+	local streak = Instance.new("Frame")
+	streak.Name = "Shine"
+	streak.BackgroundColor3 = Color3.new(1, 1, 1)
+	streak.BackgroundTransparency = 0.8
+	streak.BorderSizePixel = 0
+	streak.AnchorPoint = Vector2.new(0.5, 0.5)
+	streak.Size = UDim2.new(0, 26, 2, 0)
+	streak.Rotation = 20
+	streak.Position = UDim2.fromScale(-0.3, 0.5)
+	streak.ZIndex = obj.ZIndex + 1
+	streak.Parent = obj
+	local info = TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, false, period or 2.5)
+	TweenService:Create(streak, info, { Position = UDim2.fromScale(1.3, 0.5) }):Play()
+end
+
+-- Endless loop toward `goal` that jumps back to the start (drifting background dots).
+function UIAnim.Loop(obj: Instance, seconds: number, goal: { [string]: any }, delay: number?)
+	local info = TweenInfo.new(seconds, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1, false, delay or 0)
+	TweenService:Create(obj, info, goal):Play()
+end
+
+-- Endless gentle scale "breath" on a wrapper frame (main mode buttons idle pulse).
+-- Uses its own UIScale ("BreathScale") so it never fights press feedback.
+function UIAnim.Breathe(obj: GuiObject, amount: number, seconds: number)
+	local s = Instance.new("UIScale")
+	s.Name = "BreathScale"
+	s.Parent = obj
+	local info = TweenInfo.new(seconds, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+	TweenService:Create(s, info, { Scale = 1 + amount }):Play()
+end
+
+--[[
+	Screen change: the old screen slides out (direction -1 = to the left) while the new one
+	slides in from the other side. Positions are restored to `home` (both screens are
+	full-size frames at 0,0).
+]]
+function UIAnim.SwapScreens(old: GuiObject?, newScreen: GuiObject, direction: number, seconds: number?)
+	local t = seconds or 0.3
+	local home = UDim2.fromScale(0, 0)
+	if old and old ~= newScreen then
+		local token = (tonumber(old:GetAttribute("SwapToken")) or 0) + 1
+		old:SetAttribute("SwapToken", token)
+		local tw = UIAnim.Tween(old, t * 0.8, { Position = UDim2.new(-0.35 * direction, 0, 0, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		tw.Completed:Once(function()
+			if old:GetAttribute("SwapToken") == token then
+				old.Visible = false
+				old.Position = home
+			end
+		end)
+	end
+	newScreen:SetAttribute("SwapToken", (tonumber(newScreen:GetAttribute("SwapToken")) or 0) + 1)
+	newScreen.Visible = true
+	newScreen.Position = UDim2.new(0.35 * direction, 0, 0, 0)
+	UIAnim.Tween(newScreen, t, { Position = home }, Enum.EasingStyle.Back)
+end
+
 -- Endless gentle up-down float (lobby buttons, titles).
 function UIAnim.Float(obj: GuiObject, pixels: number, seconds: number)
 	local base = obj.Position

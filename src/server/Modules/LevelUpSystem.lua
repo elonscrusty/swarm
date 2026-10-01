@@ -332,7 +332,8 @@ local function offerNext(rp)
 		return
 	end
 	rp.Offer = rollChoices(rp)
-	rp.OfferDeadline = os.clock() + Config.LevelUp.AutoPickSeconds
+	local group = #ctx.RunManager.GetRunPlayers() > 1
+	rp.OfferDeadline = os.clock() + (group and Config.LevelUp.GroupAutoPickSeconds or Config.LevelUp.AutoPickSeconds)
 	rp.Paused = true
 	ctx.RunManager.ApplyMovement(rp)
 	ctx.RunManager.RefreshFrozen()
@@ -358,8 +359,12 @@ local function choose(rp, index: number)
 	end
 	rp.Offer = nil
 	rp.PendingLevels -= 1
-	apply(rp, c)
+	-- offerNext must always run (it releases the whole-run freeze), even if apply fails
+	local ok, err = pcall(apply, rp, c)
 	offerNext(rp)
+	if not ok then
+		warn("[LevelUpSystem] apply failed: " .. tostring(err))
+	end
 end
 
 -- Ends any open offer without applying it (death, leaving, run end).

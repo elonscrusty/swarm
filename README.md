@@ -9,8 +9,9 @@ Models come from two places:
 - **Part-built fallbacks** in code, used for anything not uploaded yet, so the game always runs.
 
 - Third-person top-down camera. You only move; weapons fire on their own.
-- 15-minute runs, a boss at 15:00. Two lobby pads: **Squad** (1-4 players) and **Duo**
-  (2 players; stand next to a fallen partner for 3 s to revive them).
+- 15-minute runs, a boss at 15:00. The lobby is a full-screen menu with three modes:
+  **Solo** (starts at once), **Duo** (2 players) and **Trio** (3 players). In Duo and Trio
+  you revive a fallen teammate by standing next to them for 3 s (see §10).
 - 8 weapons (8 levels + evolution each), 12 passives, 6 enemy types + elites + boss.
 - 4 characters, permanent gold upgrades, gamepasses, developer products, cosmetic skins.
 - Mobile first: a floating thumbstick is the only control during a run.
@@ -23,7 +24,7 @@ Models come from two places:
    rojo serve default.project.json
    ```
 3. Open a new Baseplate in Studio, delete the Baseplate part, open the Rojo plugin and press **Connect**.
-4. Press Play. The server builds the lobby; walk onto the green pad to start a run.
+4. Press Play. The lobby menu appears; tap **SOLO** to start a run right away.
 
 To make a place file without Studio: `rojo build default.project.json -o Swarm.rbxlx`.
 
@@ -43,6 +44,7 @@ src/shared/   → ReplicatedStorage.Shared
   EnemyData.lua         enemy types + per-minute spawn table
   CharacterData.lua     4 characters + 13 skins
   MetaUpgradeData.lua   lobby shop upgrades
+  IconData.lua          upgrade icon pictures (weapon / evolution / passive id → asset id)
   Remotes.lua           creates/gets ReplicatedStorage.Remotes (server creates them at boot)
 src/server/
   GameServer.server.lua bootstraps modules, runs the single Heartbeat loop
@@ -56,7 +58,7 @@ src/server/
     GoldSystem.lua      run gold, lobby purchases (characters, skins, meta), settings
     DataService.lua     DataStore with session locking, retry, autosave, migration
     MonetizationService.lua  gamepasses, developer products, ProcessReceipt
-    MapBuilder.lua      lobby + Backyard + Mall arenas
+    MapBuilder.lua      castle lobby (+ MenuCamera shot), Forest + Ruins arenas, lighting
     ModelBuilder.lua    characters, hats, enemy shells, gems, pickups, chests
     SpatialGrid.lua     20-stud bucket grid for hit detection / neighbour queries
     Fx.lua              batches visual effects into one remote call per tick
@@ -64,11 +66,16 @@ src/client/   → StarterPlayerScripts.SwarmClient
   ClientMain.client.lua starts everything, music, VIP chat tag
   CameraController.lua  fixed-angle follow camera (+ spectate when dead)
   MobileControls.lua    floating thumbstick, WASD, gamepad
-  VFX.lua               projectile rendering, effects, gem/pickup bob, aura rings, HP bars, walk cycle
+  VFX.lua               projectile rendering + spin/trails/impacts, sword swings, effects, gem/pickup
+                        bob, aura rings, HP bars, walk cycle + attack poses
   ModelLibrary.lua      detailed animated 3D models for every enemy, the boss and every projectile
   EnemyRenderer.lua     draws those models on the server's enemy bodies (client only)
-  UIBuilder.lua         every screen, built in code, scaled with UIScale
-  UIAnim.lua            UI motion: pop-ins, card fly-ins, punches, count-ups, button feedback
+  UIBuilder.lua         in-run screens (HUD + upgrade bar, level-up, pause, results), scaling
+  LobbyScreen.lua       the 2D lobby menu: home, characters, upgrades (§10)
+  ViewportPreview.lua   turning 3D character previews (ViewportFrames)
+  DevPanel.lua          DEV button for Studio / the game's creator (§10)
+  UIKit.lua             shared UI helpers, colours, upgrade icon tiles
+  UIAnim.lua            UI motion: pop-ins, screen slides, punches, count-ups, button feedback
   Audio.lua             pooled sound effects + music
 ```
 
@@ -111,6 +118,8 @@ Purchases are cosmetic or convenience (gold and skins). There are no loot boxes.
    Fill 8 rows in `Levels` (`row(damage, cooldown, amount, area, speed, pierce, duration, knockback)`)
    and an `Evolution` with a `Passive` id and evolved `Stats`.
 2. If it needs a new look, add a visual to `WeaponData.Visuals` and use its index in `Params.Visual`.
+   Its `Style` (Orb, Knife, Dart, Axe, Bottle, Boomerang, Saw, Stinger), `Trail` and `Impact` fields
+   set how the client animates it; all of that is client-side and costs no network.
 3. `WeaponSystem.lua`: write `Fire.<Behavior>(rp, w, s, def)` where `Behavior` matches the entry.
    Use `allocProjectile()` for projectiles (pick an existing `Kind`: Straight, Homing, Arc, Lob,
    Orbit, Boomerang) or damage directly with `hitEnemy` after a `grid():QueryCircle` lookup.
@@ -163,3 +172,46 @@ Preview pictures of every model are in `renders/` (`renders/Sheet_*.png`).
 
 Each model is split into pieces (one MeshPart each) that are coloured in game by "slot"
 (skins and elites recolour them) and animated by the client (legs, wings, claws, tail).
+
+## 10. Lobby screen, modes and dev tools
+
+Whenever you are not in a run, a full-screen menu (`LobbyScreen.lua`) covers the screen;
+there is no walking in the lobby (no thumbstick, lobby characters stand still, the lobby's
+ProximityPrompts are switched off).
+
+- **Home**: gold, best time and wins at the top, SETTINGS (volume) top right; your own
+  character turning in the middle (tap it to change character); your permanent upgrades
+  summarised; the big **SOLO / DUO / TRIO** buttons; CHARACTERS, UPGRADES and ARENA.
+- **Characters**: one card per character with a turning 3D preview, role, description,
+  starting weapon, bonus, Buy / Select and the skins (tap a swatch to equip or buy).
+- **Upgrades**: permanent gold upgrades and the Robux shop (gold and cosmetics only).
+- **Camera**: if the lobby (a Model/Folder `Lobby` in workspace or in `SwarmMap`) has a part
+  named `MenuCamera`, its CFrame is the menu camera; otherwise a fixed view of the spawn.
+
+Modes (`Config.Modes`):
+
+| Mode | Players | Start |
+|---|---|---|
+| Solo | 1 | at once, no countdown |
+| Duo | 2 | countdown (`Config.Run.CountdownSeconds`); others tap JOIN |
+| Trio | 3 | same as Duo |
+
+During a countdown the lobby shows who joined; the player who started it can tap
+**START NOW** once someone joined, and a full run starts by itself. Duo and Trio share the
+partner-revive rules (`PartnerRevive`: 3 s next to a fallen teammate, 40% HP, 3 per player).
+`Config.Run.MaxPlayers` (4) stays the hard cap; the old "Squad" (1-4) mode is still accepted
+from old clients but not shown.
+
+**DEV button** (bottom left): only in Studio or for the game's creator (user-owned games).
+Lobby: *Start solo now*. In a run: *+5 levels* and *Skip to 14:30 (boss)*. The server checks
+Studio / creator again for every request (`RunManager` "DevCommand"). Turn it off with
+`Config.Dev.Enabled = false`.
+
+## 11. Upgrade icons
+
+During a run your weapons (top row) and passives (bottom row) show as icon tiles at the
+bottom of the screen, with an "xN" level badge and a gold border once a weapon evolves.
+Level-up cards use the same icons. Until pictures exist each icon is a coloured tile with
+1-2 letters. To add pictures: make square PNGs (one per weapon, evolution and passive id),
+upload them as Decals/Images, and paste each asset id into `src/shared/IconData.lua`
+(instructions at the top of that file).

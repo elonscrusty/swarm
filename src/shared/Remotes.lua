@@ -31,7 +31,7 @@ Remotes.ServerToClient = {
 	"Notify", -- toast / banner text
 	"RunResult", -- win / lose stats
 	"ProfileSync", -- lobby data: gold, owned, meta levels, stats, settings, passes
-	"OpenPanel", -- lobby board prompt → open the matching UI panel
+	"OpenPanel", -- "Joined" after joining a countdown (old: lobby board prompt → panel name)
 	"ReviveOffer", -- died: offer the Revive product for N seconds
 }
 
@@ -41,6 +41,10 @@ Remotes.ClientToServer = {
 	"LevelUpReroll",
 	"LevelUpSkip",
 	"JoinRun", -- join during the lobby countdown
+	"StartRun", -- (mode) lobby SOLO / DUO / TRIO button; during a countdown it joins
+	"StartNow", -- the countdown's starter skips the rest of the countdown
+	"CycleArena", -- lobby ARENA button (next unlocked arena)
+	"DevCommand", -- (command) Studio / creator only, re-checked on the server
 	"ReturnToLobby", -- leave the results screen early
 	"SelectCharacter", -- (characterId)
 	"BuyCharacter", -- (characterId)

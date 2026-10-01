@@ -14,6 +14,7 @@
 
 	Buffer layout: u16 count, then per projectile 11 bytes:
 	  u16 id, u8 visual, u8 seq, i16 x*10, i16 y*10, i16 z*10, u8 yaw (0-255 = 0-2pi)
+	  visual = WeaponData.Visuals index (low 5 bits) + 32 * visual tier (0-3, cosmetic)
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -162,42 +163,80 @@ end
 
 local Fire = {}
 
--- WHIP / BLOODWHIP: rectangular slashes, alternating front and back.
+-- Visual tier sent with projectiles and slashes (0 = levels 1-3, 1 = 4-6, 2 = 7-8, 3 = evolved).
+-- Purely cosmetic: the client draws stronger trails/glows for higher tiers.
+local function visualTier(w): number
+	if w.Evolved then
+		return 3
+	elseif w.Level >= 7 then
+		return 2
+	elseif w.Level >= 4 then
+		return 1
+	end
+	return 0
+end
+
+-- Projectile visual byte: low 5 bits = WeaponData.Visuals index, bits 5-6 = tier (same u8 as before).
+local function visualByte(index: number, w): number
+	return index + visualTier(w) * 32
+end
+
+--[[
+	WHIP / BLOODWHIP: sword swings, alternating front and back.
+	The hit shape is a sector (Params.Arc degrees, Params.Reach studs) centred on the swing
+	direction - the same shape the client draws. Reach 7 x 150 degrees covers about the same
+	area as the old 13 x 4.5 rectangle (64 vs 58.5 studs^2; ~110 vs ~113 once enemy radii are
+	added), so the damage per swing is unchanged. The swing's visual starts immediately and
+	damage lands SWING_HIT_DELAY later, when the drawn blade is in the middle of its sweep.
+]]
+local SWING_HIT_DELAY = 0.08
+local SWING_INNER = 1.5 -- enemies this close are always inside the swing
+
 function Fire.Whip(rp, w, s, def)
 	local params = def.Params
 	local evo = w.Evolved and def.Evolution or nil
-	local length = params.Length * s.area
-	local width = params.Width * s.area
+	local reach = params.Reach * s.area
+	local half = math.rad(params.Arc) / 2
 	local facing = rp.Facing
+	local tier = visualTier(w)
 	for i = 1, s.amount do
 		local dir = (i % 2 == 1) and facing or -facing
-		local delay = (i - 1) * 0.12
-		task.delay(delay, function()
+		local sweep = (i % 2 == 1) and 1 or -1 -- forehand / backhand
+		task.delay((i - 1) * 0.12, function()
 			if not rp.Alive or not rp.Root or not ctx.RunManager.IsSimulating() then
 				return
 			end
-			local origin = ground(rp.Root.Position) + Vector3.new(0, 0, 0)
-			local center = origin + dir * (length / 2)
-			local healed = 0
-			local n = grid():QueryCircle(center.X, center.Z, length / 2 + width, queryBuf)
-			local hits = table.move(queryBuf, 1, n, 1, {})
-			for _, e in ipairs(hits) do
-				if e.Alive then
-					local rel = (e.Pos - origin) * FLAT
-					local along = rel:Dot(dir)
-					local perp = (rel - dir * along).Magnitude
-					if along >= -e.Radius and along <= length + e.Radius and perp <= width / 2 + e.Radius then
-						hitEnemy(rp, e, s.damage, origin, s.knockback)
-						if evo and healed < evo.LifestealCapPerSwing then
-							healed += evo.Lifesteal
+			Fx.Slash(ground(rp.Root.Position), yawOf(dir), reach, sweep, tier, rp.Player.UserId)
+			task.delay(SWING_HIT_DELAY, function()
+				if not rp.Alive or not rp.Root or not ctx.RunManager.IsSimulating() then
+					return
+				end
+				local origin = ground(rp.Root.Position)
+				local healed = 0
+				local n = grid():QueryCircle(origin.X, origin.Z, reach, queryBuf)
+				local hits = table.move(queryBuf, 1, n, 1, {})
+				for _, e in ipairs(hits) do
+					if e.Alive then
+						local rel = (e.Pos - origin) * FLAT
+						local d = rel.Magnitude
+						local inside = d <= SWING_INNER + e.Radius
+						if not inside then
+							local off = math.acos(math.clamp(rel:Dot(dir) / d, -1, 1)) - half
+							-- inside the sector, or overlapping one of its edges
+							inside = off <= 0 or (off < math.pi / 2 and d * math.sin(off) <= e.Radius)
+						end
+						if inside then
+							hitEnemy(rp, e, s.damage, origin, s.knockback)
+							if evo and healed < evo.LifestealCapPerSwing then
+								healed += evo.Lifesteal
+							end
 						end
 					end
 				end
-			end
-			if healed > 0 then
-				ctx.RunManager.Heal(rp, healed, true)
-			end
-			Fx.Slash(center + Vector3.new(0, 2.5, 0), yawOf(dir), length, width, evo and Color3.fromRGB(220, 20, 40) or Color3.fromRGB(255, 255, 255))
+				if healed > 0 then
+					ctx.RunManager.Heal(rp, healed, true)
+				end
+			end)
 		end)
 	end
 	Fx.Sound("Hit")
@@ -222,7 +261,7 @@ function Fire.Orb(rp, w, s, def)
 				return
 			end
 			p.Kind = "Homing"
-			p.Visual = evo and params.EvoVisual or params.Visual
+			p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
 			p.Owner = rp
 			p.Weapon = w
 			p.Pos = origin + Vector3.new(-dir.Z, 0, dir.X) * off + dir * 1.5
@@ -261,7 +300,7 @@ function Fire.Knives(rp, w, s, def)
 			start += side * centered * params.Spread - dir * math.abs(centered) * 0.8 -- staggered volley
 		end
 		p.Kind = "Straight"
-		p.Visual = evo and params.EvoVisual or params.Visual
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
 		p.Owner = rp
 		p.Weapon = w
 		p.Pos = start
@@ -314,7 +353,7 @@ function Fire.HolyWater(rp, w, s, def)
 		local to = (dest - origin) * FLAT
 		local flight = math.max(0.35, to.Magnitude / math.max(1, s.speed))
 		p.Kind = "Lob"
-		p.Visual = evo and params.EvoVisual or params.Visual
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
 		p.Owner = rp
 		p.Weapon = w
 		p.Pos = origin
@@ -365,7 +404,7 @@ function Fire.Lightning(rp, w, s, def)
 					hitEnemy(rp, e, s.damage, at, s.knockback)
 				end
 			end
-			Fx.Bolt(at, strikeRadius)
+			Fx.Bolt(at, strikeRadius, visualTier(w))
 			if evo and evo.ChainJumps then
 				local from = at
 				for _ = 1, evo.ChainJumps do
@@ -405,7 +444,7 @@ function Fire.Axe(rp, w, s, def)
 		p.Knockback = s.knockback
 		if evo and evo.Orbit then
 			p.Kind = "Orbit"
-			p.Visual = params.EvoVisual
+			p.Visual = visualByte(params.EvoVisual, w)
 			p.Angle = (i / s.amount) * TAU
 			p.OrbitRadius = params.OrbitRadius * s.area
 			p.OrbitGrowth = params.OrbitGrowth * s.area
@@ -415,7 +454,7 @@ function Fire.Axe(rp, w, s, def)
 			p.Pos = origin
 		else
 			p.Kind = "Arc"
-			p.Visual = params.Visual
+			p.Visual = visualByte(params.Visual, w)
 			local spread = (i - (s.amount + 1) / 2) * math.rad(22) + rng:NextNumber(-0.15, 0.15)
 			local dir = rotateY(rp.Facing, spread)
 			p.Pos = origin
@@ -451,7 +490,7 @@ function Fire.Boomerang(rp, w, s, def)
 		local target = targets[((i - 1) % math.max(1, #targets)) + 1]
 		local dir = target and flatDir(target.Pos - origin, rp.Facing) or rotateY(rp.Facing, (i - 1) * TAU / count)
 		p.Kind = "Boomerang"
-		p.Visual = evo and params.EvoVisual or params.Visual
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
 		p.Owner = rp
 		p.Weapon = w
 		p.Pos = origin

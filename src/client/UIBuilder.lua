@@ -1,8 +1,8 @@
 --[[
 	UIBuilder.lua
-	Builds every screen in code: HUD, level-up cards, chest animation, pause menu,
-	revive offer, win/lose screen, lobby panels (characters, shop), lobby banners and the
-	stats sign.
+	Builds every in-run screen in code: HUD (with the upgrade bar at the bottom), level-up
+	cards, chest animation, pause / settings menu, revive offer, win/lose screen, and hosts
+	the lobby menu (LobbyScreen) and the DEV button (DevPanel). Shared helpers: UIKit.
 
 	Scaling: all UI lives under one "Root" frame with a UIScale. The design is done in
 	"reference pixels" (1280x720 landscape, 720x1280 portrait); Root is sized 1/scale so
@@ -19,9 +19,11 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
-local CharacterData = require(Shared:WaitForChild("CharacterData"))
-local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
+local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local UIAnim = require(script.Parent.UIAnim)
+local UIKit = require(script.Parent.UIKit)
+local LobbyScreen = require(script.Parent.LobbyScreen)
+local DevPanel = require(script.Parent.DevPanel)
 
 local UIBuilder = {}
 
@@ -35,98 +37,18 @@ local portrait = false
 
 local profile: { [string]: any }? = nil
 local inventory: { [string]: any }? = nil
-local joinedCountdown = false
 
 -- Open modals that should stop movement.
 local blocking: { [string]: boolean } = {}
 
-local COLORS = {
-	Panel = Color3.fromRGB(24, 24, 34),
-	PanelLight = Color3.fromRGB(40, 40, 56),
-	Text = Color3.fromRGB(240, 240, 245),
-	Dim = Color3.fromRGB(170, 170, 185),
-	Gold = Color3.fromRGB(255, 210, 70),
-	Green = Color3.fromRGB(70, 200, 110),
-	Red = Color3.fromRGB(220, 70, 70),
-	Blue = Color3.fromRGB(70, 140, 230),
-	Gray = Color3.fromRGB(90, 90, 105),
-	XP = Color3.fromRGB(90, 170, 255),
-}
+local COLORS = UIKit.COLORS
 
 ------------------------------------------------------------------------------------------
--- Helpers
+-- Helpers (UIKit)
 ------------------------------------------------------------------------------------------
 
-local function new(className: string, props: { [string]: any }, parent: Instance?): any
-	local obj = Instance.new(className)
-	for k, v in pairs(props) do
-		(obj :: any)[k] = v
-	end
-	if parent then
-		obj.Parent = parent
-	end
-	return obj
-end
-
-local function corner(obj: Instance, radius: number?)
-	new("UICorner", { CornerRadius = UDim.new(0, radius or 10) }, obj)
-end
-
-local function stroke(obj: Instance, color: Color3, thickness: number?)
-	return new("UIStroke", { Color = color, Thickness = thickness or 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, obj)
-end
-
-local function pad(obj: Instance, p: number)
-	new("UIPadding", { PaddingTop = UDim.new(0, p), PaddingBottom = UDim.new(0, p), PaddingLeft = UDim.new(0, p), PaddingRight = UDim.new(0, p) }, obj)
-end
-
-local function label(parent: Instance, text: string, size: number, props: { [string]: any }?): TextLabel
-	local l = new("TextLabel", {
-		BackgroundTransparency = 1,
-		Text = text,
-		TextSize = size,
-		Font = Config.UI.Font,
-		TextColor3 = COLORS.Text,
-		Size = UDim2.new(1, 0, 0, size + 6),
-	}, parent)
-	if props then
-		for k, v in pairs(props) do
-			(l :: any)[k] = v
-		end
-	end
-	return l
-end
-
-local function button(parent: Instance, text: string, color: Color3, onClick: () -> (), props: { [string]: any }?): TextButton
-	local b = new("TextButton", {
-		Text = text,
-		TextSize = 22,
-		Font = Config.UI.Font,
-		TextColor3 = Color3.new(1, 1, 1),
-		BackgroundColor3 = color,
-		AutoButtonColor = true,
-		Size = UDim2.fromOffset(180, 50),
-	}, parent)
-	corner(b, 10)
-	if props then
-		for k, v in pairs(props) do
-			(b :: any)[k] = v
-		end
-	end
-	UIAnim.Button(b)
-	b.Activated:Connect(function()
-		if deps.Audio then
-			deps.Audio.Play("Click")
-		end
-		onClick()
-	end)
-	return b
-end
-
-local function formatTime(seconds: number): string
-	seconds = math.max(0, math.floor(seconds))
-	return string.format("%d:%02d", seconds // 60, seconds % 60)
-end
+local new, corner, stroke, pad, label, button = UIKit.new, UIKit.corner, UIKit.stroke, UIKit.pad, UIKit.label, UIKit.button
+local formatTime = UIKit.formatTime
 
 local function setBlocking(name: string, on: boolean)
 	if on then
@@ -285,13 +207,23 @@ local function buildHud()
 		TextStrokeTransparency = 0.5,
 	})
 
-	-- Inventory icons
-	local inv = new("Frame", { Name = "Inventory", Position = UDim2.fromOffset(12, 56), Size = UDim2.fromOffset(330, 100), BackgroundTransparency = 1 }, frame)
-	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, inv)
-	hud.WeaponRow = new("Frame", { Size = UDim2.fromOffset(330, 46), BackgroundTransparency = 1, LayoutOrder = 1 }, inv)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5) }, hud.WeaponRow)
-	hud.PassiveRow = new("Frame", { Size = UDim2.fromOffset(330, 40), BackgroundTransparency = 1, LayoutOrder = 2 }, inv)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5) }, hud.PassiveRow)
+	-- Upgrade bar: weapons (top row) and passives (bottom row), bottom centre. Nothing in
+	-- it is Active, so a thumb that lands on it still drives the floating thumbstick.
+	local wt, pt = Config.UI.BarWeaponTile, Config.UI.BarPassiveTile
+	local bar = new("Frame", {
+		Name = "UpgradeBar",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -10),
+		Size = UDim2.new(1, -20, 0, wt + pt + 8),
+		BackgroundTransparency = 1,
+		Active = false,
+	}, frame)
+	new("UIListLayout", { Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Bottom, SortOrder = Enum.SortOrder.LayoutOrder }, bar)
+	hud.WeaponRow = new("Frame", { Name = "Weapons", Size = UDim2.new(1, 0, 0, wt), BackgroundTransparency = 1, LayoutOrder = 1 }, bar)
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, hud.WeaponRow)
+	hud.PassiveRow = new("Frame", { Name = "Passives", Size = UDim2.new(1, 0, 0, pt), BackgroundTransparency = 1, LayoutOrder = 2 }, bar)
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, hud.PassiveRow)
+	hud.Bar = bar
 
 	-- Pause button (top right). Optional: nothing in a run needs a button.
 	button(frame, "II", Color3.fromRGB(50, 50, 70), function()
@@ -306,7 +238,7 @@ local function buildHud()
 
 	hud.Status = label(frame, "", 30, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.75),
+		Position = UDim2.new(0.5, 0, 1, -(Config.UI.BarWeaponTile + Config.UI.BarPassiveTile + 50)),
 		Size = UDim2.fromOffset(700, 40),
 		TextColor3 = Color3.fromRGB(255, 200, 200),
 		TextStrokeTransparency = 0.3,
@@ -317,18 +249,13 @@ local function buildHud()
 	hud.Hurt = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 0, 0), BackgroundTransparency = 1, ZIndex = 0 }, frame)
 end
 
-local function iconTile(parent: Instance, color: Color3, level: number, maxLevel: number, evolved: boolean, size: number)
-	local tile = new("Frame", { Size = UDim2.fromOffset(size, size), BackgroundColor3 = color }, parent)
-	corner(tile, 6)
-	stroke(tile, evolved and COLORS.Gold or Color3.fromRGB(20, 20, 25), evolved and 3 or 2)
-	-- level pips along the bottom
-	local pips = new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -3), Size = UDim2.new(1, -6, 0, 5), BackgroundTransparency = 1 }, tile)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 1), HorizontalAlignment = Enum.HorizontalAlignment.Center }, pips)
-	local pipW = math.floor((size - 6 - maxLevel) / maxLevel)
-	for i = 1, maxLevel do
-		new("Frame", { Size = UDim2.fromOffset(pipW, 5), BackgroundColor3 = (evolved or i <= level) and Color3.new(1, 1, 1) or Color3.fromRGB(30, 30, 40), BorderSizePixel = 0 }, pips)
+-- Icon key of an inventory weapon: its evolution once evolved.
+local function weaponIconId(id: string, evolved: boolean): string
+	local def = WeaponData.Weapons[id]
+	if evolved and def and def.Evolution then
+		return def.Evolution.Id
 	end
-	return tile
+	return id
 end
 
 local shownLevels: { [string]: number } = {}
@@ -352,14 +279,14 @@ local function refreshInventory()
 			shownLevels[key] = level
 		end
 	end
-	for _, w in ipairs(inventory.Weapons) do
-		local t = iconTile(hud.WeaponRow, w.Color, w.Level, 8, w.Evolved, 46)
-		label(t, string.sub(w.Name, 1, 2), 18, { Size = UDim2.new(1, 0, 1, -8), TextStrokeTransparency = 0.3 })
+	for i, w in ipairs(inventory.Weapons) do
+		local t = UIKit.IconTile(hud.WeaponRow, { Id = weaponIconId(w.Id, w.Evolved), Name = w.Name, Color = w.Color, Size = Config.UI.BarWeaponTile, Level = w.Level, Evolved = w.Evolved })
+		t.LayoutOrder = i
 		popIfChanged(t, "W" .. w.Id, w.Level + (w.Evolved and 10 or 0))
 	end
-	for _, p in ipairs(inventory.Passives) do
-		local t = iconTile(hud.PassiveRow, p.Color, p.Level, 5, false, 38)
-		label(t, string.sub(p.Name, 1, 2), 15, { Size = UDim2.new(1, 0, 1, -8), TextStrokeTransparency = 0.3 })
+	for i, p in ipairs(inventory.Passives) do
+		local t = UIKit.IconTile(hud.PassiveRow, { Id = p.Id, Name = p.Name, Color = p.Color, Size = Config.UI.BarPassiveTile, Level = p.Level })
+		t.LayoutOrder = i
 		popIfChanged(t, "P" .. p.Id, p.Level)
 	end
 end
@@ -367,59 +294,6 @@ end
 function UIBuilder.HurtFlash()
 	hud.Hurt.BackgroundTransparency = 0.65
 	TweenService:Create(hud.Hurt, TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
-end
-
-------------------------------------------------------------------------------------------
--- Lobby HUD
-------------------------------------------------------------------------------------------
-
-local lobbyUi: { [string]: any } = {}
-
-local function buildLobbyHud()
-	local frame = new("Frame", { Name = "LobbyHUD", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, root)
-	lobbyUi.Frame = frame
-	lobbyUi.Gold = label(frame, "Gold 0", 26, {
-		Position = UDim2.fromOffset(14, 12),
-		Size = UDim2.fromOffset(300, 32),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = COLORS.Gold,
-		TextStrokeTransparency = 0.4,
-	})
-
-	local banner = new("Frame", {
-		Name = "Countdown",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 12),
-		Size = UDim2.fromOffset(460, 110),
-		BackgroundColor3 = COLORS.Panel,
-		BackgroundTransparency = 0.15,
-		Visible = false,
-	}, frame)
-	corner(banner, 14)
-	lobbyUi.CountdownText = label(banner, "Run starts in 10", 30, { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 38) })
-	lobbyUi.JoinButton = button(banner, "JOIN RUN", COLORS.Green, function()
-		Remotes.Get("JoinRun"):FireServer()
-	end, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 50), Size = UDim2.fromOffset(220, 50) })
-	lobbyUi.Banner = banner
-	UIAnim.PulseStroke(stroke(lobbyUi.JoinButton, Color3.fromRGB(200, 255, 210), 2), 1, 5)
-
-	lobbyUi.Info = label(frame, "", 22, {
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -16),
-		Size = UDim2.fromOffset(700, 30),
-		TextStrokeTransparency = 0.4,
-	})
-
-	-- Quick access buttons (the boards' prompts open the same panels).
-	local quick = new("Frame", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -14, 1, -60), Size = UDim2.fromOffset(170, 120), BackgroundTransparency = 1 }, frame)
-	UIAnim.Float(quick, -6, 1.6)
-	new("UIListLayout", { Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Right }, quick)
-	button(quick, "Characters", COLORS.Blue, function()
-		UIBuilder.OpenPanel("Characters")
-	end, { Size = UDim2.fromOffset(170, 50) })
-	button(quick, "Upgrades", Color3.fromRGB(200, 140, 40), function()
-		UIBuilder.OpenPanel("Shop")
-	end, { Size = UDim2.fromOffset(170, 50) })
 end
 
 ------------------------------------------------------------------------------------------
@@ -597,11 +471,22 @@ local function makeCard(c, index: number)
 	pad(card, 12)
 	new("UIListLayout", { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, card)
 	label(card, c.RarityLabel, 16, { TextColor3 = c.RarityColor, LayoutOrder = 1, ZIndex = 33 })
-	if not portrait then
-		local icon = new("Frame", { Size = UDim2.fromOffset(84, 84), BackgroundColor3 = c.Color, LayoutOrder = 2, ZIndex = 33 }, card)
-		corner(icon, 12)
-		stroke(icon, Color3.new(0, 0, 0), 2)
+	-- upgrade icon (IconData picture or placeholder); evolutions show the evolved icon
+	local iconId = c.Id
+	if c.Type == "Evolve" then
+		local def = WeaponData.Weapons[c.Id]
+		iconId = def and def.Evolution and def.Evolution.Id or c.Id
+	elseif c.Type == "Gold" or c.Type == "Heal" then
+		iconId = c.Type
 	end
+	local iconOpts: UIKit.IconOpts = {
+		Id = iconId,
+		Name = c.Name,
+		Color = c.Color,
+		Size = portrait and 44 or 84,
+		Level = (c.Type == "WeaponUp" or c.Type == "PassiveUp") and c.Level or nil,
+		Evolved = c.Type == "Evolve",
+	}
 	local levelText = ""
 	if c.Type == "WeaponNew" or c.Type == "PassiveNew" then
 		levelText = "NEW!"
@@ -610,7 +495,19 @@ local function makeCard(c, index: number)
 	elseif c.Type == "Evolve" then
 		levelText = "EVOLUTION"
 	end
-	label(card, c.Name .. (levelText ~= "" and ("  -  " .. levelText) or ""), 24, { LayoutOrder = 3, ZIndex = 33, TextWrapped = true, Size = UDim2.new(1, 0, 0, 30) })
+	local title = c.Name .. (levelText ~= "" and ("  -  " .. levelText) or "")
+	if portrait then
+		-- portrait cards are short: icon and name share a row
+		local row = new("Frame", { Size = UDim2.new(1, 0, 0, 44), BackgroundTransparency = 1, LayoutOrder = 3, ZIndex = 33 }, card)
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, row)
+		UIKit.IconTile(row, iconOpts).LayoutOrder = 1
+		label(row, title, 24, { LayoutOrder = 2, ZIndex = 33, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, -54, 0, 44) })
+	else
+		local icon = UIKit.IconTile(card, iconOpts)
+		icon.LayoutOrder = 2
+		UIAnim.Pop(icon, 0.08 * index + 0.15, 0.4)
+		label(card, title, 24, { LayoutOrder = 3, ZIndex = 33, TextWrapped = true, Size = UDim2.new(1, 0, 0, 30) })
+	end
 	label(card, c.Description, 18, {
 		LayoutOrder = 4,
 		ZIndex = 33,
@@ -794,25 +691,41 @@ local function buildPause()
 	pause.Overlay = overlay
 	pad(panel, 20)
 	new("UIListLayout", { Padding = UDim.new(0, 12), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, panel)
-	label(panel, "PAUSED", 36, { LayoutOrder = 0, ZIndex = 41 })
+	pause.Title = label(panel, "PAUSED", 36, { LayoutOrder = 0, ZIndex = 41 })
 	slider(panel, "Music", "Music", 1)
 	slider(panel, "Sound effects", "Sfx", 2)
 	pause.Note = label(panel, "", 16, { LayoutOrder = 3, TextColor3 = COLORS.Dim, Font = Config.UI.BodyFont, TextWrapped = true, Size = UDim2.new(1, 0, 0, 40), ZIndex = 41 })
-	button(panel, "Resume", COLORS.Green, function()
+	pause.Resume = button(panel, "Resume", COLORS.Green, function()
 		UIBuilder.ClosePause()
 	end, { LayoutOrder = 4, Size = UDim2.fromOffset(220, 54), ZIndex = 41 })
 end
 
+-- The same menu is the in-run pause menu and the lobby SETTINGS screen.
+local pauseMode = "Pause" -- "Pause" | "Settings"
+
 function UIBuilder.OpenPause()
+	pauseMode = "Pause"
+	pause.Title.Text = "PAUSED"
+	pause.Resume.Text = "Resume"
 	local participants = Remotes.State():GetAttribute("Participants") or 1
 	pause.Note.Text = (participants <= 1 and Config.Run.SoloPauseFreezesRun) and "The run is paused." or "Group run: the swarm keeps coming while this menu is open!"
 	show(pause.Overlay, "Pause", true)
 	Remotes.Get("SetPause"):FireServer(true)
 end
 
+function UIBuilder.OpenSettings()
+	pauseMode = "Settings"
+	pause.Title.Text = "SETTINGS"
+	pause.Resume.Text = "Close"
+	pause.Note.Text = "Volume is saved with your progress."
+	show(pause.Overlay, "Pause", true)
+end
+
 function UIBuilder.ClosePause()
 	hide(pause.Overlay, "Pause")
-	Remotes.Get("SetPause"):FireServer(false)
+	if pauseMode == "Pause" then
+		Remotes.Get("SetPause"):FireServer(false)
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -917,241 +830,19 @@ local function onRunResult(data)
 end
 
 ------------------------------------------------------------------------------------------
--- Lobby panels: characters and shop
+-- Lobby (LobbyScreen) entry points kept for older callers
 ------------------------------------------------------------------------------------------
 
-local panels: { [string]: any } = {}
-local currentPanel: string? = nil
-
-local function panelFrame(name: string, title: string): (Frame, ScrollingFrame, TextLabel)
-	local overlay, panel = modal(name, 1100, 620, 35)
-	local titleLabel = label(panel, title, 34, { Position = UDim2.fromOffset(0, 12), ZIndex = 36 })
-	local gold = label(panel, "", 22, { Position = UDim2.fromOffset(20, 18), Size = UDim2.fromOffset(300, 28), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = COLORS.Gold, ZIndex = 36 })
-	button(panel, "X", COLORS.Red, function()
-		UIBuilder.ClosePanels()
-	end, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(48, 48), ZIndex = 37 })
-	local scroll = new("ScrollingFrame", {
-		Position = UDim2.fromOffset(16, 70),
-		Size = UDim2.new(1, -32, 1, -86),
-		BackgroundTransparency = 1,
-		ScrollBarThickness = 8,
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		CanvasSize = UDim2.new(),
-		ScrollingDirection = Enum.ScrollingDirection.Y,
-		ZIndex = 36,
-	}, panel)
-	table.insert(relayoutCallbacks, function()
-		local v = virtualSize()
-		panel.Size = UDim2.fromOffset(math.min(v.X - 24, 1100), math.min(v.Y - 24, 640))
-	end)
-	local _ = titleLabel
-	return overlay, scroll, gold
-end
-
-local function characterPreview(parent: Instance, characterId: string, skinId: string?)
-	local look = CharacterData.ResolveLook(characterId, skinId)
-	local c = look.Colors
-	local box = new("Frame", { Size = UDim2.fromOffset(110, 130), BackgroundTransparency = 1, LayoutOrder = 1, ZIndex = 37 }, parent)
-	local function block(x, y, w, h, color)
-		local f = new("Frame", { Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h), BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = 38 }, box)
-		corner(f, 3)
-	end
-	block(40, 4, 30, 14, c.Hat) -- hat
-	block(42, 16, 26, 26, c.Head) -- head
-	block(30, 44, 50, 46, c.Torso) -- torso
-	block(14, 44, 14, 44, c.Arms)
-	block(82, 44, 14, 44, c.Arms)
-	block(32, 90, 21, 38, c.Legs)
-	block(57, 90, 21, 38, c.Legs)
-	block(30, 78, 50, 6, look.GoldTrim and COLORS.Gold or c.Accent) -- belt
-end
-
-local function refreshCharacters()
-	local scroll: ScrollingFrame = panels.CharScroll
-	for _, c in ipairs(scroll:GetChildren()) do
-		if c:IsA("Frame") then
-			c:Destroy()
-		end
-	end
-	if not profile then
-		return
-	end
-	local p = profile
-	panels.CharGold.Text = "Gold " .. p.Gold
-	for order, id in ipairs(CharacterData.Order) do
-		local def = CharacterData.Characters[id]
-		local owned = p.OwnedCharacters[id] == true
-		local selected = p.SelectedCharacter == id
-		local equipped = p.Skins[id] or "Default"
-		local card = new("Frame", { Size = UDim2.fromOffset(250, 520), BackgroundColor3 = COLORS.PanelLight, LayoutOrder = order, ZIndex = 37 }, scroll)
-		corner(card, 12)
-		stroke(card, selected and COLORS.Gold or COLORS.Panel, selected and 3 or 2)
-		pad(card, 10)
-		new("UIListLayout", { Padding = UDim.new(0, 5), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, card)
-		characterPreview(card, id, equipped)
-		label(card, def.Name, 26, { LayoutOrder = 2, ZIndex = 38 })
-		label(card, def.BonusText, 18, { LayoutOrder = 3, TextColor3 = COLORS.Green, ZIndex = 38 })
-		label(card, def.Description, 15, { LayoutOrder = 4, TextColor3 = COLORS.Dim, Font = Config.UI.BodyFont, TextWrapped = true, Size = UDim2.new(1, 0, 0, 56), ZIndex = 38 })
-		if not owned then
-			local afford = p.Gold >= def.Cost
-			button(card, "Buy " .. def.Cost .. "g", afford and COLORS.Green or COLORS.Gray, function()
-				Remotes.Get("BuyCharacter"):FireServer(id)
-			end, { LayoutOrder = 5, Size = UDim2.fromOffset(200, 44), ZIndex = 39 })
-		elseif selected then
-			button(card, "Selected", COLORS.Gold, function() end, { LayoutOrder = 5, Size = UDim2.fromOffset(200, 44), ZIndex = 39, AutoButtonColor = false, TextColor3 = Color3.fromRGB(40, 30, 0) })
-		else
-			button(card, "Select", COLORS.Blue, function()
-				Remotes.Get("SelectCharacter"):FireServer(id)
-			end, { LayoutOrder = 5, Size = UDim2.fromOffset(200, 44), ZIndex = 39 })
-		end
-		label(card, "Skins", 16, { LayoutOrder = 6, TextColor3 = COLORS.Dim, ZIndex = 38 })
-		for skinOrder, skinId in ipairs(CharacterData.SkinsFor(id)) do
-			local skin = CharacterData.Skins[skinId]
-			local name = skin and skin.Name or "Default"
-			local ownsSkin = p.OwnedSkins[skinId] == true
-			local text, color, action
-			if equipped == skinId then
-				text, color = name .. "  (on)", COLORS.Gold
-				action = function() end
-			elseif ownsSkin then
-				text, color = name, COLORS.Blue
-				action = function()
-					Remotes.Get("EquipSkin"):FireServer(id, skinId)
-				end
-			else
-				local passId = skin and (skin.Pass == "StarterPack" and Config.Monetization.GamePasses.StarterPack or Config.Monetization.SkinPasses[skinId]) or 0
-				if passId and passId ~= 0 then
-					text, color = name .. "  (R$)", Color3.fromRGB(60, 160, 90)
-					action = function()
-						MarketplaceService:PromptGamePassPurchase(player, passId)
-					end
-				else
-					text, color = name .. "  (soon)", COLORS.Gray
-					action = function() end
-				end
-			end
-			button(card, text, color, action, { LayoutOrder = 6 + skinOrder, Size = UDim2.fromOffset(220, 30), TextSize = 15, ZIndex = 39 })
-		end
-	end
-end
-
-local function pips(level: number, maxLevel: number): string
-	return string.rep("#", level) .. string.rep("-", maxLevel - level)
-end
-
-local function refreshShop()
-	local scroll: ScrollingFrame = panels.ShopScroll
-	for _, c in ipairs(scroll:GetChildren()) do
-		if c:IsA("Frame") or c:IsA("TextLabel") then
-			c:Destroy()
-		end
-	end
-	if not profile then
-		return
-	end
-	local p = profile
-	panels.ShopGold.Text = "Gold " .. p.Gold
-
-	label(scroll, "Permanent upgrades (gold)", 22, { LayoutOrder = 1, TextColor3 = COLORS.Gold, ZIndex = 37 })
-	local grid = new("Frame", { Size = UDim2.new(1, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 2, ZIndex = 37 }, scroll)
-	new("UIGridLayout", { CellSize = UDim2.fromOffset(240, 170), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
-	for order, id in ipairs(MetaUpgradeData.Order) do
-		local def = MetaUpgradeData.Upgrades[id]
-		local level = p.Meta[id] or 0
-		local cost = MetaUpgradeData.CostOf(id, level)
-		local cell = new("Frame", { BackgroundColor3 = COLORS.PanelLight, LayoutOrder = order, ZIndex = 37 }, grid)
-		corner(cell, 10)
-		stroke(cell, def.Color, 2)
-		pad(cell, 8)
-		new("UIListLayout", { Padding = UDim.new(0, 3), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, cell)
-		label(cell, def.Name, 22, { LayoutOrder = 1, TextColor3 = def.Color, ZIndex = 38 })
-		label(cell, def.Description, 14, { LayoutOrder = 2, TextColor3 = COLORS.Dim, Font = Config.UI.BodyFont, TextWrapped = true, Size = UDim2.new(1, 0, 0, 36), ZIndex = 38 })
-		label(cell, pips(level, def.MaxLevel) .. "  " .. level .. "/" .. def.MaxLevel, 16, { LayoutOrder = 3, ZIndex = 38, Font = Enum.Font.Code })
-		if cost then
-			button(cell, "Buy " .. cost .. "g", p.Gold >= cost and COLORS.Green or COLORS.Gray, function()
-				Remotes.Get("BuyMeta"):FireServer(id)
-			end, { LayoutOrder = 4, Size = UDim2.fromOffset(180, 40), ZIndex = 39 })
-		else
-			label(cell, "MAX", 22, { LayoutOrder = 4, TextColor3 = COLORS.Gold, ZIndex = 38 })
-		end
-	end
-
-	label(scroll, "Robux shop (gold and cosmetics only)", 22, { LayoutOrder = 3, TextColor3 = Color3.fromRGB(120, 220, 140), ZIndex = 37 })
-	local robux = new("Frame", { Size = UDim2.new(1, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 4, ZIndex = 37 }, scroll)
-	new("UIGridLayout", { CellSize = UDim2.fromOffset(240, 110), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, robux)
-	local items = {
-		{ Name = "500 Gold", Kind = "Product", Id = Config.Monetization.Products.Gold500, Desc = "A pouch of gold." },
-		{ Name = "1500 Gold", Kind = "Product", Id = Config.Monetization.Products.Gold1500, Desc = "A sack of gold." },
-		{ Name = "5000 Gold", Kind = "Product", Id = Config.Monetization.Products.Gold5000, Desc = "A chest of gold." },
-		{ Name = "Starter Pack", Kind = "Pass", Key = "StarterPack", Id = Config.Monetization.GamePasses.StarterPack, Desc = "+25% gold forever + Gold Trim skins." },
-		{ Name = "VIP", Kind = "Pass", Key = "VIP", Id = Config.Monetization.GamePasses.VIP, Desc = "+1 reroll per run, chat tag, lobby crown." },
-		{ Name = "2x Gold", Kind = "Pass", Key = "DoubleGold", Id = Config.Monetization.GamePasses.DoubleGold, Desc = "Double gold from runs." },
-	}
-	for order, item in ipairs(items) do
-		local cell = new("Frame", { BackgroundColor3 = COLORS.PanelLight, LayoutOrder = order, ZIndex = 37 }, robux)
-		corner(cell, 10)
-		pad(cell, 8)
-		new("UIListLayout", { Padding = UDim.new(0, 3), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, cell)
-		label(cell, item.Name, 20, { LayoutOrder = 1, ZIndex = 38 })
-		label(cell, item.Desc, 13, { LayoutOrder = 2, TextColor3 = COLORS.Dim, Font = Config.UI.BodyFont, TextWrapped = true, Size = UDim2.new(1, 0, 0, 30), ZIndex = 38 })
-		local owned = item.Kind == "Pass" and p.Passes[item.Key] == true
-		if owned then
-			label(cell, "Owned", 18, { LayoutOrder = 3, TextColor3 = COLORS.Gold, ZIndex = 38 })
-		elseif not item.Id or item.Id == 0 then
-			label(cell, "Not set up yet", 16, { LayoutOrder = 3, TextColor3 = COLORS.Gray, ZIndex = 38 })
-		else
-			button(cell, "Buy (R$)", Color3.fromRGB(60, 160, 90), function()
-				if item.Kind == "Pass" then
-					MarketplaceService:PromptGamePassPurchase(player, item.Id)
-				else
-					MarketplaceService:PromptProductPurchase(player, item.Id)
-				end
-			end, { LayoutOrder = 3, Size = UDim2.fromOffset(160, 34), TextSize = 18, ZIndex = 39 })
-		end
-	end
-	if p.MemoryOnly then
-		label(scroll, "Studio test: DataStores are off, progress will not be saved.", 16, { LayoutOrder = 5, TextColor3 = COLORS.Red, ZIndex = 37 })
-	end
-end
-
-local function buildPanels()
-	local overlay, scroll, gold = panelFrame("Characters", "CHARACTERS")
-	new("UIGridLayout", { CellSize = UDim2.fromOffset(250, 520), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, scroll)
-	panels.Characters = overlay
-	panels.CharScroll = scroll
-	panels.CharGold = gold
-
-	local overlay2, scroll2, gold2 = panelFrame("Shop", "UPGRADES")
-	new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, scroll2)
-	panels.Shop = overlay2
-	panels.ShopScroll = scroll2
-	panels.ShopGold = gold2
-end
-
+-- "Characters" | "Shop" / "Upgrades": jumps to that lobby screen.
 function UIBuilder.OpenPanel(name: string)
 	if player:GetAttribute("InRun") then
 		return
 	end
-	UIBuilder.ClosePanels()
-	local overlay = panels[name]
-	if not overlay then
-		return
-	end
-	currentPanel = name
-	if name == "Characters" then
-		refreshCharacters()
-	else
-		refreshShop()
-	end
-	show(overlay, "Panel", true)
-	Remotes.Get("RequestProfile"):FireServer()
+	LobbyScreen.Show(name)
 end
 
 function UIBuilder.ClosePanels()
-	currentPanel = nil
-	panels.Characters.Visible = false
-	panels.Shop.Visible = false
-	setBlocking("Panel", false)
+	LobbyScreen.Show("Home")
 end
 
 ------------------------------------------------------------------------------------------
@@ -1162,9 +853,12 @@ local statsSign: { [string]: TextLabel } = {}
 
 local function buildStatsSign()
 	task.spawn(function()
-		local map = workspace:WaitForChild("SwarmMap")
-		local lobby = map:WaitForChild("Lobby")
-		local sign = lobby:WaitForChild("StatsSign") :: BasePart
+		local map = workspace:WaitForChild("SwarmMap", 30)
+		local lobby = map and map:WaitForChild("Lobby", 30)
+		local sign = lobby and lobby:WaitForChild("StatsSign", 30)
+		if not sign or not sign:IsA("BasePart") then
+			return -- the lobby has no stats lectern any more
+		end
 		local surface = new("SurfaceGui", {
 			Name = "SwarmStats",
 			Adornee = sign,
@@ -1194,18 +888,13 @@ function UIBuilder.RefreshProfileViews()
 		return
 	end
 	local p = profile
-	lobbyUi.Gold.Text = "Gold " .. p.Gold
+	LobbyScreen.SetProfile(p)
 	if statsSign.Best then
 		statsSign.Best.Text = "Best time: " .. formatTime(p.Stats.BestTime)
 		statsSign.Wins.Text = "Wins: " .. p.Stats.Wins
 		statsSign.Runs.Text = "Runs: " .. p.Stats.Runs
 		statsSign.Kills.Text = "Total kills: " .. p.Stats.TotalKills
 		statsSign.Gold.Text = "Gold: " .. p.Gold
-	end
-	if currentPanel == "Characters" then
-		refreshCharacters()
-	elseif currentPanel == "Shop" then
-		refreshShop()
 	end
 end
 
@@ -1236,7 +925,12 @@ local function updateFrame(dt: number)
 	local inRun = player:GetAttribute("InRun") == true
 
 	hud.Frame.Visible = inRun
-	lobbyUi.Frame.Visible = not inRun
+	if anim.InRun ~= inRun then
+		anim.InRun = inRun
+		-- the lobby is a menu: no thumbstick / walking there
+		setBlocking("Lobby", not inRun)
+		LobbyScreen.SetVisible(not inRun)
+	end
 
 	if inRun then
 		local runTime = state:GetAttribute("RunTime") or 0
@@ -1298,9 +992,9 @@ local function updateFrame(dt: number)
 		elseif player:GetAttribute("Alive") == false and not revive.Overlay.Visible and phase == "Running" then
 			local progress = player:GetAttribute("ReviveProgress") or 0
 			if progress > 0 then
-				status = string.format("Your partner is reviving you... %d%%", math.floor(progress * 100))
+				status = string.format("A teammate is reviving you... %d%%", math.floor(progress * 100))
 			elseif (player:GetAttribute("PartnerRevivesLeft") or 0) > 0 then
-				status = "You fell! Your partner can revive you by standing next to you."
+				status = "You fell! A teammate can revive you by standing next to you."
 			else
 				status = "You fell. Spectating your team..."
 			end
@@ -1308,30 +1002,7 @@ local function updateFrame(dt: number)
 		hud.Status.Text = status
 		hud.Status.Visible = status ~= ""
 	else
-		if phase == "Countdown" then
-			lobbyUi.Banner.Visible = true
-			local seconds = state:GetAttribute("Countdown") or 0
-			if seconds ~= anim.Countdown then
-				if anim.Countdown == nil then
-					UIAnim.Pop(lobbyUi.Banner, 0, 0.5)
-				end
-				anim.Countdown = seconds
-				UIAnim.Punch(lobbyUi.CountdownText, 0.4)
-			end
-			local modeName = state:GetAttribute("Mode") == "Duo" and "Duo run" or "Run"
-			lobbyUi.CountdownText.Text = modeName .. " starts in " .. tostring(seconds)
-			lobbyUi.JoinButton.Visible = not joinedCountdown
-			lobbyUi.Info.Text = joinedCountdown and "You're in! Get ready..." or ""
-		else
-			lobbyUi.Banner.Visible = false
-			anim.Countdown = nil
-			joinedCountdown = false
-			if phase == "Running" or phase == "Results" then
-				lobbyUi.Info.Text = "A run is in progress (" .. formatTime(state:GetAttribute("RunTime") or 0) .. "). Wait here for the next one!"
-			else
-				lobbyUi.Info.Text = "Green pad: Squad (1-4).  Blue pad: Duo (2 players)."
-			end
-		end
+		LobbyScreen.Update()
 	end
 
 	if levelUp.Overlay.Visible then
@@ -1350,11 +1021,9 @@ local function updateFrame(dt: number)
 			hide(results.Overlay, "Results")
 		end
 	end
-	if pause.Overlay.Visible and not inRun then
+	-- the pause menu belongs to the run, the settings menu to the lobby
+	if pause.Overlay.Visible and (pauseMode == "Pause") ~= inRun then
 		hide(pause.Overlay, "Pause")
-	end
-	if (panels.Characters.Visible or panels.Shop.Visible) and inRun then
-		UIBuilder.ClosePanels()
 	end
 end
 
@@ -1377,17 +1046,32 @@ function UIBuilder.Init(d: { [string]: any })
 	if deps.MobileControls then
 		deps.MobileControls.SetScale(uiScale)
 	end
+	UIKit.SetAudio(deps.Audio)
 
 	buildHud()
-	buildLobbyHud()
+	LobbyScreen.Init({
+		Root = root,
+		Audio = deps.Audio,
+		VirtualSize = virtualSize,
+		IsPortrait = function()
+			return portrait
+		end,
+		OnRelayout = function(fn: () -> ())
+			table.insert(relayoutCallbacks, fn)
+		end,
+		OpenSettings = UIBuilder.OpenSettings,
+		Toast = function(text: string, color: Color3?)
+			UIBuilder.Toast(text, color)
+		end,
+	})
 	buildToasts()
 	buildLevelUp()
 	buildChest()
 	buildPause()
 	buildRevive()
 	buildResults()
-	buildPanels()
 	buildStatsSign()
+	DevPanel.Init(root)
 
 	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 	updateScale()
@@ -1409,8 +1093,8 @@ function UIBuilder.Init(d: { [string]: any })
 	Remotes.Get("ReviveOffer").OnClientEvent:Connect(onReviveOffer)
 	Remotes.Get("OpenPanel").OnClientEvent:Connect(function(name)
 		if name == "Joined" then
-			joinedCountdown = true
-		else
+			LobbyScreen.SetJoined(true)
+		elseif type(name) == "string" then
 			UIBuilder.OpenPanel(name)
 		end
 	end)

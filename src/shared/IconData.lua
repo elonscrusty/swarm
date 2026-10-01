@@ -1,0 +1,115 @@
+--[[
+	IconData.lua
+	Upgrade icons: one picture per weapon, evolution and passive, shown in the in-run
+	upgrade bar and on the level-up cards.
+
+	No pictures exist yet, so every entry below is nil and the UI draws a clean placeholder
+	(a tile in the item's colour with the short Glyph text).
+
+	HOW TO FILL IT
+	  1. Make a square PNG per id (256x256 is plenty; transparent background, the item
+	     centred, no text). Name each file after its id, e.g. "Whip.png", "Bloodwhip.png".
+	  2. Upload them (Creator Dashboard → Development Items → Decals, or Claude can upload
+	     them with the Open Cloud key). Each upload gives an asset id (a number).
+	  3. Paste the number next to its id below, e.g.  Whip = 1234567890,
+	     (a full "rbxassetid://..." string works too). Leave unknown ones as nil.
+	A new weapon / passive with no entry here simply gets a placeholder.
+]]
+
+local IconData = {}
+
+IconData.Icons = {
+	-- Weapons
+	Whip = nil,
+	MagicOrb = nil,
+	Knives = nil,
+	Garlic = nil,
+	HolyWater = nil,
+	Lightning = nil,
+	Axe = nil,
+	Boomerang = nil,
+	-- Evolutions (shown once the weapon has evolved, and on EVOLUTION cards)
+	Bloodwhip = nil,
+	TwinOrbs = nil,
+	ThousandEdge = nil,
+	SoulEater = nil,
+	Hellfire = nil,
+	ThunderLoop = nil,
+	DeathSpiral = nil,
+	InfiniteReturn = nil,
+	-- Passives
+	Might = nil,
+	Armor = nil,
+	Heart = nil,
+	SpeedBoots = nil,
+	Cooldown = nil,
+	Area = nil,
+	Duplicator = nil,
+	Vacuum = nil,
+	Luck = nil,
+	Ammo = nil,
+	Candle = nil,
+	Growth = nil,
+	-- Fallback level-up cards (every slot maxed)
+	Gold = nil,
+	Heal = nil,
+} :: { [string]: (number | string)? }
+
+-- Placeholder text (1-2 letters) drawn on the coloured tile while an id has no picture.
+IconData.Glyphs = {
+	Whip = "Wh",
+	MagicOrb = "Or",
+	Knives = "Kn",
+	Garlic = "Ga",
+	HolyWater = "HW",
+	Lightning = "Lt",
+	Axe = "Ax",
+	Boomerang = "Bo",
+	Bloodwhip = "BW",
+	TwinOrbs = "TO",
+	ThousandEdge = "TE",
+	SoulEater = "SE",
+	Hellfire = "HF",
+	ThunderLoop = "TL",
+	DeathSpiral = "DS",
+	InfiniteReturn = "IR",
+	Might = "Mi",
+	Armor = "Ar",
+	Heart = "He",
+	SpeedBoots = "Sp",
+	Cooldown = "Cd",
+	Area = "Ae",
+	Duplicator = "Du",
+	Vacuum = "Va",
+	Luck = "Lu",
+	Ammo = "Am",
+	Candle = "Ca",
+	Growth = "Gr",
+	Gold = "$",
+	Heal = "+",
+} :: { [string]: string }
+
+-- "rbxassetid://..." for an id, or nil when it has no picture yet.
+function IconData.Image(id: string?): string?
+	if not id then
+		return nil
+	end
+	local v = IconData.Icons[id]
+	if type(v) == "number" and v > 0 then
+		return "rbxassetid://" .. tostring(v)
+	elseif type(v) == "string" and v ~= "" then
+		return v
+	end
+	return nil
+end
+
+-- Placeholder text for an id (falls back to the first two letters of its name).
+function IconData.Glyph(id: string?, name: string?): string
+	local g = id and IconData.Glyphs[id]
+	if g then
+		return g
+	end
+	return string.sub(name or id or "?", 1, 2)
+end
+
+return IconData

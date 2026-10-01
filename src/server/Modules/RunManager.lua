@@ -3,10 +3,19 @@
 	The run state machine and everything about players' bodies and lives.
 
 	Phases (SwarmState attribute "Phase"):
-	  Lobby      players walk around the lobby, shop, pick characters
-	  Countdown  someone pressed Start; 10 s for others to join (prompt or HUD button)
+	  Lobby      everyone sees the lobby menu screen (characters, shop, mode buttons)
+	  Countdown  someone pressed DUO / TRIO; 10 s for others to join (JOIN button); the
+	             starter may START NOW once someone joined, a full run starts at once
 	  Running    the run: timer counts up, mini-waves every 30 s, boss at 15:00
 	  Results    win / lose screen; everyone returns after Config.Run.ResultsSeconds
+	SOLO skips the countdown. Modes live in Config.Modes; "Squad" (old 1-4 mode) is still
+	accepted from old clients. The lobby's ProximityPrompts are switched off: the 2D lobby
+	screen (UIBuilder / LobbyScreen) sends StartRun / StartNow / CycleArena instead.
+
+	SwarmState attributes for the lobby screen: Phase, Mode, Countdown, Joined, MaxJoin,
+	JoinedNames, Starter (UserId), SelectedArena, LobbySpawn (CFrame).
+	ReplicatedStorage.CharacterPreviews holds one model per character + skin for the
+	client's 3D previews (rebuilt when the uploaded meshes finish loading).
 
 	Each participant gets a "run player" record (rp) that every other system uses:
 	  Player, Character, Root, Humanoid, CharacterId, Meta, Stats, HP, Level, XP, XPNeeded,
@@ -15,6 +24,9 @@
 	  Facing, MoveDir, InvulnUntil, Returned
 	HP lives here (not in the Humanoid): the Humanoid's Dead state is disabled.
 ]]
+
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
@@ -35,6 +47,8 @@ local FLAT = Vector3.new(1, 0, 1)
 local phase = "Lobby"
 local countdown = 0
 local joined: { [Player]: boolean } = {}
+local joinedOrder: { Player } = {} -- join order, for the names shown on the lobby screen
+local starter: Player? = nil -- who started the countdown (may press START NOW)
 local runPlayers: { any } = {} -- array of rp
 local byPlayer: { [Player]: any } = {}
 local runTime = 0
@@ -49,7 +63,7 @@ local totalKills = 0
 local attrTimer = 0
 local selectedArena = "Forest"
 local currentArena = "Forest"
-local mode = "Squad" -- "Squad" | "Duo" (set by the pad that started the countdown)
+local mode = "Solo" -- a Config.Modes key: "Solo" | "Duo" | "Trio" (or the old "Squad")
 local expectedRemoval: { [Model]: boolean } = {}
 
 ------------------------------------------------------------------------------------------
@@ -100,6 +114,10 @@ function RunManager.RefreshFrozen()
 	state:SetAttribute("Frozen", frozen)
 	for _, rp in ipairs(runPlayers) do
 		RunManager.ApplyMovement(rp)
+		-- start a fresh speed-check window so movement just before the freeze isn't
+		-- judged against the frozen limit of 0 (that snapped players back)
+		rp.SpeedCheckTimer = 0
+		rp.LastValidPos = rp.Root and rp.Root.Position
 	end
 end
 
@@ -138,28 +156,61 @@ function RunManager.Broadcast(text: string, color: Color3?, big: boolean?)
 	Remotes.FireAllClients("Notify", { Text = text, Color = color, Big = big })
 end
 
+-- True for a mode name a client may ask for (the lobby's modes plus the old "Squad").
+local function isMode(name: any): boolean
+	return type(name) == "string" and (table.find(Config.Modes.Order, name) ~= nil or name == "Squad")
+end
+
+local function modeDef()
+	return (Config.Modes :: any)[mode] or Config.Modes.Solo
+end
+
 local function maxPlayers(): number
-	return math.min(Config.Run.MaxPlayers, Config.Modes[mode].MaxPlayers)
+	return math.min(Config.Run.MaxPlayers, modeDef().MaxPlayers)
+end
+
+-- Partner revive rules of the current mode (Duo / Trio), or nil.
+local function reviveRules()
+	return modeDef().PartnerRevive
 end
 
 local function setPhase(newPhase: string)
 	phase = newPhase
 	state:SetAttribute("Phase", newPhase)
-	if lobby then
-		for promptMode, p in pairs({ Squad = lobby.StartPrompt, Duo = lobby.DuoPrompt }) do
-			local prompt: ProximityPrompt = p
-			if newPhase == "Lobby" then
-				prompt.Enabled = true
-				prompt.ActionText = "Start Run"
-			elseif newPhase == "Countdown" then
-				-- only the pad of the mode that is counting down accepts joiners
-				prompt.Enabled = promptMode == mode
-				prompt.ActionText = "Join Run"
-			else
-				prompt.Enabled = false
+end
+
+-- The lobby is a 2D menu now: its world prompts stay in the map but never fire.
+local function disableLobbyPrompts()
+	if not lobby then
+		return
+	end
+	for _, v in pairs(lobby) do
+		if typeof(v) == "Instance" and v:IsA("ProximityPrompt") then
+			v.Enabled = false
+		end
+	end
+	local model = lobby.Model
+	if typeof(model) == "Instance" then
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("ProximityPrompt") then
+				d.Enabled = false
 			end
 		end
 	end
+end
+
+-- Who has joined the countdown, for the lobby screen.
+local function publishJoined()
+	local names = {}
+	for _, p in ipairs(joinedOrder) do
+		if joined[p] and p.Parent then
+			table.insert(names, p.DisplayName)
+		end
+	end
+	state:SetAttribute("Joined", #names)
+	state:SetAttribute("JoinedNames", table.concat(names, ", "))
+	state:SetAttribute("MaxJoin", maxPlayers())
+	state:SetAttribute("Starter", starter and starter.UserId or 0)
 end
 
 ------------------------------------------------------------------------------------------
@@ -207,7 +258,8 @@ spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean): Mod
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
-	humanoid.WalkSpeed = inLobby and Config.Player.BaseSpeed + 2 or Config.Player.BaseSpeed
+	-- the lobby is a menu screen: lobby characters stand still
+	humanoid.WalkSpeed = inLobby and 0 or Config.Player.BaseSpeed
 	player.Character = model
 	model.Parent = workspace
 	local root = model.PrimaryPart :: BasePart
@@ -373,7 +425,8 @@ local function finalizeDeath(rp)
 	Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
 	Fx.PlayerEvent(rp.Player, "die")
 	Fx.Sound("Death")
-	if mode == "Duo" and (rp.PartnerRevives or 0) < Config.Modes.Duo.PartnerRevivesPerRun then
+	local rules = reviveRules()
+	if rules and #runPlayers > 1 and (rp.PartnerRevives or 0) < rules.PerRun then
 		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen! Stand next to them to revive.", Color3.fromRGB(255, 90, 90))
 	else
 		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen!", Color3.fromRGB(255, 90, 90))
@@ -382,27 +435,30 @@ local function finalizeDeath(rp)
 end
 
 --[[
-	DUO: a fallen player (dead, not waiting on the revive offer) is revived when their
-	living partner stands next to them for PartnerReviveSeconds. Progress decays when the
-	partner steps away. Each player can be partner-revived a few times per run.
+	DUO / TRIO: a fallen player (dead, not waiting on the revive offer) is revived when a
+	living teammate stands next to them for PartnerRevive.Seconds. Progress decays when
+	the teammate steps away. Each player can be partner-revived a few times per run.
 ]]
 partnerRevives = function(dt: number)
-	local D = Config.Modes.Duo
+	local D = reviveRules()
+	if not D then
+		return
+	end
 	for _, rp in ipairs(runPlayers) do
-		if not rp.Alive and not rp.AwaitingRevive and not rp.Returned and rp.Root and (rp.PartnerRevives or 0) < D.PartnerRevivesPerRun then
+		if not rp.Alive and not rp.AwaitingRevive and not rp.Returned and rp.Root and (rp.PartnerRevives or 0) < D.PerRun then
 			local helper = nil
 			for _, other in ipairs(runPlayers) do
 				if other ~= rp and other.Alive and other.Root then
-					if ((other.Root.Position - rp.Root.Position) * FLAT).Magnitude <= D.PartnerReviveRadius then
+					if ((other.Root.Position - rp.Root.Position) * FLAT).Magnitude <= D.Radius then
 						helper = other
 					end
 				end
 			end
 			local before = rp.ReviveProgress or 0
 			if helper then
-				rp.ReviveProgress = before + dt / D.PartnerReviveSeconds
+				rp.ReviveProgress = before + dt / D.Seconds
 			else
-				rp.ReviveProgress = math.max(0, before - dt / D.PartnerReviveSeconds)
+				rp.ReviveProgress = math.max(0, before - dt / D.Seconds)
 			end
 			if math.abs((rp.ReviveProgress or 0) - before) > 0 then
 				rp.Player:SetAttribute("ReviveProgress", math.clamp(rp.ReviveProgress, 0, 1))
@@ -411,10 +467,10 @@ partnerRevives = function(dt: number)
 				rp.ReviveProgress = 0
 				rp.Player:SetAttribute("ReviveProgress", 0)
 				rp.PartnerRevives = (rp.PartnerRevives or 0) + 1
-				rp.Player:SetAttribute("PartnerRevivesLeft", D.PartnerRevivesPerRun - rp.PartnerRevives)
+				rp.Player:SetAttribute("PartnerRevivesLeft", D.PerRun - rp.PartnerRevives)
 				rp.TimeSurvived = 0
 				revive(rp, "Revived by " .. helper.Player.DisplayName .. "!")
-				setHP(rp, rp.Stats.MaxHP * D.PartnerReviveHPFraction)
+				setHP(rp, rp.Stats.MaxHP * D.HPFraction)
 				RunManager.Notify(helper.Player, "You revived " .. rp.Player.DisplayName .. "!", Color3.fromRGB(120, 255, 160))
 			end
 		end
@@ -557,6 +613,9 @@ local function beginRun()
 		end
 	end
 	table.clear(joined)
+	table.clear(joinedOrder)
+	starter = nil
+	publishJoined()
 	if #list == 0 then
 		setPhase("Lobby")
 		return
@@ -599,7 +658,8 @@ local function beginRun()
 		player:SetAttribute("XPNeeded", rp.XPNeeded)
 		player:SetAttribute("Kills", 0)
 		player:SetAttribute("RunGold", 0)
-		player:SetAttribute("PartnerRevivesLeft", mode == "Duo" and #list > 1 and Config.Modes.Duo.PartnerRevivesPerRun or 0)
+		local rules = reviveRules()
+		player:SetAttribute("PartnerRevivesLeft", rules and #list > 1 and rules.PerRun or 0)
 		ctx.WeaponSystem.OnInventoryChanged(rp)
 		ctx.LevelUpSystem.SendInventory(rp)
 		RunManager.ApplyMovement(rp)
@@ -663,7 +723,7 @@ function RunManager.EndRun(won: boolean)
 			Gold = rp.Gold,
 			Level = rp.Level,
 			Damage = math.floor(rp.DamageDealt),
-			Arena = Config.Arenas[currentArena].DisplayName .. (mode == "Duo" and " (Duo)" or ""),
+			Arena = Config.Arenas[currentArena].DisplayName .. ((mode == "Duo" or mode == "Trio") and (" (" .. mode .. ")") or ""),
 			NewBest = newBest,
 			Unlocked = unlocked,
 			Seconds = Config.Run.ResultsSeconds,
@@ -723,41 +783,79 @@ end
 -- Lobby interactions
 ------------------------------------------------------------------------------------------
 
+local function joinedCount(): number
+	local n = 0
+	for p in pairs(joined) do
+		if p.Parent then
+			n += 1
+		end
+	end
+	return n
+end
+
 local function tryJoin(player: Player)
 	if phase ~= "Countdown" or joined[player] or not ctx.DataService.GetData(player) then
 		return
 	end
-	local n = 0
-	for _ in pairs(joined) do
-		n += 1
-	end
+	local n = joinedCount()
 	if n >= maxPlayers() then
 		RunManager.Notify(player, "This run is full.", Color3.fromRGB(255, 120, 120))
 		return
 	end
 	joined[player] = true
-	state:SetAttribute("Joined", n + 1)
+	table.insert(joinedOrder, player)
+	publishJoined()
 	RunManager.Notify(player, "You joined the run!", Color3.fromRGB(120, 255, 160))
 	Remotes.FireClient("OpenPanel", player, "Joined")
+	-- a full run starts right away
+	if n + 1 >= maxPlayers() then
+		beginRun()
+	end
 end
 
-local function startCountdown(player: Player, newMode: string?)
+--[[
+	A lobby mode button. Solo starts at once; Duo / Trio (and the old Squad) count down
+	so others can join. During a countdown any mode button just joins it.
+]]
+local function startRun(player: Player, newMode: string)
 	if phase == "Countdown" then
 		tryJoin(player)
 		return
 	end
-	if phase ~= "Lobby" or not ctx.DataService.GetData(player) then
+	if phase ~= "Lobby" or not ctx.DataService.GetData(player) or not isMode(newMode) then
 		return
 	end
-	mode = (newMode and Config.Modes[newMode]) and newMode or "Squad"
+	mode = newMode
 	state:SetAttribute("Mode", mode)
+	table.clear(joined)
+	table.clear(joinedOrder)
+	if not modeDef().Countdown then
+		joined[player] = true
+		table.insert(joinedOrder, player)
+		beginRun()
+		return
+	end
+	starter = player
 	setPhase("Countdown")
 	countdown = Config.Run.CountdownSeconds
 	state:SetAttribute("Countdown", countdown)
-	table.clear(joined)
+	publishJoined()
 	tryJoin(player)
-	local label = mode == "Duo" and "a DUO run" or "a run"
-	RunManager.Broadcast(player.DisplayName .. " is starting " .. label .. "! Tap JOIN to play.", Color3.fromRGB(120, 255, 160))
+	if (phase :: string) == "Countdown" then -- tryJoin may have started a full run
+		RunManager.Broadcast(player.DisplayName .. " is starting a " .. string.upper(modeDef().DisplayName) .. " run! Tap JOIN to play.", Color3.fromRGB(120, 255, 160))
+	end
+end
+
+-- The starter skips the rest of the countdown once someone else has joined.
+local function startNow(player: Player)
+	if phase ~= "Countdown" or player ~= starter or not joined[player] then
+		return
+	end
+	if joinedCount() < 2 then
+		RunManager.Notify(player, "Wait for someone to join, or play SOLO.", Color3.fromRGB(255, 200, 120))
+		return
+	end
+	beginRun()
 end
 
 local function cycleArena(player: Player)
@@ -785,7 +883,108 @@ local function cycleArena(player: Player)
 			return
 		end
 	end
-	RunManager.Notify(player, "Win a run to unlock the Ruins arena!", Color3.fromRGB(255, 200, 120))
+	RunManager.Notify(player, "Win a run to unlock the next arena!", Color3.fromRGB(255, 200, 120))
+end
+
+------------------------------------------------------------------------------------------
+-- Dev tools (Studio or the game's creator; the client button is only a shortcut)
+------------------------------------------------------------------------------------------
+
+local function isDev(player: Player): boolean
+	if not Config.Dev.Enabled then
+		return false
+	end
+	if RunService:IsStudio() then
+		return true
+	end
+	return game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
+end
+
+local function devCommand(player: Player, command: any)
+	if type(command) ~= "string" or not isDev(player) then
+		return
+	end
+	if command == "StartSolo" then
+		if phase == "Lobby" then
+			startRun(player, "Solo")
+		elseif phase == "Countdown" then
+			tryJoin(player)
+			if joined[player] then
+				beginRun()
+			end
+		end
+	elseif command == "AddLevels" then
+		local rp = byPlayer[player]
+		if rp and not rp.Returned and rp.Alive and phase == "Running" then
+			for _ = 1, Config.Dev.AddLevels do
+				ctx.XPSystem.GiveXP(rp, math.max(0, rp.XPNeeded - rp.XP))
+			end
+		end
+	elseif command == "SkipToBoss" then
+		local rp = byPlayer[player]
+		if rp and not rp.Returned and phase == "Running" and not bossSpawned and runTime < Config.Dev.SkipToTime then
+			runTime = Config.Dev.SkipToTime
+			miniWaveTimer = 0
+			state:SetAttribute("RunTime", runTime)
+			RunManager.Broadcast("DEV: skipped to " .. string.format("%d:%02d", runTime // 60, runTime % 60), Color3.fromRGB(255, 160, 255))
+		end
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- Character previews (3D models for the lobby screen's ViewportFrames)
+------------------------------------------------------------------------------------------
+
+local previewFolder: Folder? = nil
+
+-- Builds the preview models of one character (every skin). Anchored, no Humanoid.
+local function buildPreviews(characterId: string)
+	local folder = previewFolder
+	if not folder then
+		return
+	end
+	for _, skinId in ipairs(CharacterData.SkinsFor(characterId)) do
+		local name = characterId .. "|" .. skinId
+		local ok, model = pcall(ModelBuilder.BuildCharacter, characterId, skinId)
+		if ok and model then
+			local hum = model:FindFirstChildOfClass("Humanoid")
+			if hum then
+				hum:Destroy()
+			end
+			for _, d in ipairs(model:GetDescendants()) do
+				if d:IsA("BasePart") then
+					d.Anchored = true
+					d.CanCollide = false
+					d.CanQuery = false
+					d.CanTouch = false
+				end
+			end
+			model.Name = name
+			local old = folder:FindFirstChild(name)
+			if old then
+				old:Destroy()
+			end
+			model.Parent = folder
+		else
+			warn("[RunManager] preview " .. name .. " failed: " .. tostring(model))
+		end
+	end
+end
+
+local function setupPreviews()
+	local f = Instance.new("Folder")
+	f.Name = "CharacterPreviews"
+	f.Parent = ReplicatedStorage
+	previewFolder = f
+	for _, id in ipairs(CharacterData.Order) do
+		buildPreviews(id)
+		-- rebuild with the uploaded meshes once they have loaded
+		if ctx.MeshService and ctx.MeshService.WhenReady then
+			ctx.MeshService.WhenReady({ id }, function()
+				buildPreviews(id)
+			end)
+		end
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -864,14 +1063,15 @@ function RunManager.Step(dt: number)
 			speedCheck(rp, dt)
 		end
 		if rp.AwaitingRevive then
-			if frozen then
+			-- only the pause menu stops this clock; the client counts down the same deadline
+			if menuPaused then
 				rp.ReviveDeadline += dt
 			elseif now >= rp.ReviveDeadline then
 				finalizeDeath(rp)
 			end
 		end
 	end
-	if mode == "Duo" and not frozen and not endPending then
+	if reviveRules() and not frozen and not endPending then
 		partnerRevives(dt)
 	end
 
@@ -908,7 +1108,17 @@ end
 ------------------------------------------------------------------------------------------
 
 function RunManager.OnPlayerRemoving(player: Player)
-	joined[player] = nil
+	if joined[player] then
+		joined[player] = nil
+		local i = table.find(joinedOrder, player)
+		if i then
+			table.remove(joinedOrder, i)
+		end
+		if starter == player then
+			starter = joinedOrder[1]
+		end
+		publishJoined()
+	end
 	local rp = byPlayer[player]
 	if not rp then
 		return
@@ -972,30 +1182,39 @@ function RunManager.Init(c)
 	state:SetAttribute("BossMaxHP", 0)
 	lobby = MapBuilder.BuildLobby()
 	ctx.Lobby = lobby
+	state:SetAttribute("LobbySpawn", lobby.SpawnCFrame)
+	state:SetAttribute("Mode", mode)
+	disableLobbyPrompts()
 	setPhase("Lobby")
+	publishJoined()
 end
 
 function RunManager.Start()
-	lobby.StartPrompt.Triggered:Connect(function(player)
-		startCountdown(player, "Squad")
-	end)
-	lobby.DuoPrompt.Triggered:Connect(function(player)
-		startCountdown(player, "Duo")
-	end)
-	lobby.ArenaPrompt.Triggered:Connect(cycleArena)
-	lobby.CharacterPrompt.Triggered:Connect(function(player)
-		Remotes.FireClient("OpenPanel", player, "Characters")
-	end)
-	lobby.ShopPrompt.Triggered:Connect(function(player)
-		Remotes.FireClient("OpenPanel", player, "Shop")
-	end)
+	setupPreviews()
+	-- prompts the world builder adds later are switched off too
+	if typeof(lobby.Model) == "Instance" then
+		lobby.Model.DescendantAdded:Connect(function(d)
+			if d:IsA("ProximityPrompt") then
+				d.Enabled = false
+			end
+		end)
+	end
+
+	Remotes.Listen("StartRun", function(player, newMode)
+		if isMode(newMode) then
+			startRun(player, newMode)
+		end
+	end, 2)
+
+	Remotes.Listen("StartNow", startNow, 2)
+	Remotes.Listen("CycleArena", cycleArena, 3)
+	Remotes.Listen("DevCommand", devCommand, 3)
 
 	Remotes.Listen("JoinRun", function(player)
 		if phase == "Countdown" then
 			tryJoin(player)
-		elseif phase == "Lobby" then
-			startCountdown(player, "Squad")
 		end
+		-- in the Lobby phase JOIN does nothing: a late tap must not start a hidden run
 	end, 2)
 
 	Remotes.Listen("ReturnToLobby", function(player)
