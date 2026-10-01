@@ -2,6 +2,8 @@
 
     ROBLOX_API_KEY=... ROBLOX_USER_ID=... python3 tools/upload_meshes.py [--only A,B] [--force]
 
+* The key can come from ROBLOX_API_KEY or from a Claude cloud environment "API credential"
+  for apis.roblox.com (header x-api-key), which is added to requests automatically.
 * The API key needs the "Assets: read + write" permission for the creator.
 * Each FBX becomes a Model asset owned by ROBLOX_USER_ID (the account that owns the game,
   so the server can load it with InsertService).
@@ -27,7 +29,8 @@ API = "https://apis.roblox.com/assets/v1"
 
 def request(method, url, key, body=None, content_type=None):
     req = urllib.request.Request(url, data=body, method=method)
-    req.add_header("x-api-key", key)
+    if key:  # otherwise the cloud environment's API credential adds it on the way out
+        req.add_header("x-api-key", key)
     if content_type:
         req.add_header("Content-Type", content_type)
     with urllib.request.urlopen(req, timeout=120) as resp:
@@ -73,8 +76,8 @@ def main():
     args = ap.parse_args()
     key = os.environ.get("ROBLOX_API_KEY")
     user_id = os.environ.get("ROBLOX_USER_ID")
-    if not key or not user_id:
-        sys.exit("Set ROBLOX_API_KEY and ROBLOX_USER_ID first.")
+    if not user_id:
+        sys.exit("Set ROBLOX_USER_ID first (and ROBLOX_API_KEY, unless the key is stored as an API credential).")
     ids = {}
     if os.path.exists(IDS):
         with open(IDS) as f:
