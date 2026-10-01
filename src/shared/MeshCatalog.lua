@@ -11,7 +11,7 @@ local MeshCatalog = {}
 
 MeshCatalog.Models = {
 	Banner = {
-		AssetId = 0,
+		AssetId = 97973802453424,
 		Category = "World",
 		Palette = { Cloth = Color3.fromRGB(45, 79, 191), Gold = Color3.fromRGB(242, 193, 78), Wood = Color3.fromRGB(107, 74, 44) },
 		Pieces = {
@@ -21,7 +21,7 @@ MeshCatalog.Models = {
 		},
 	},
 	BeetleWarrior = {
-		AssetId = 0,
+		AssetId = 107351826476351,
 		Category = "Enemies",
 		Palette = { Base = Color3.fromRGB(58, 111, 224), Dark = Color3.fromRGB(26, 37, 80), Eye = Color3.fromRGB(125, 252, 255), Light = Color3.fromRGB(200, 214, 255) },
 		Pieces = {
@@ -38,7 +38,7 @@ MeshCatalog.Models = {
 		},
 	},
 	BombTick = {
-		AssetId = 0,
+		AssetId = 101975610413708,
 		Category = "Enemies",
 		Palette = { Base = Color3.fromRGB(255, 74, 46), Dark = Color3.fromRGB(42, 26, 26), Eye = Color3.fromRGB(255, 241, 90), Glow = Color3.fromRGB(255, 174, 43) },
 		Pieces = {
@@ -52,7 +52,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Bush = {
-		AssetId = 0,
+		AssetId = 72584117176722,
 		Category = "World",
 		Palette = { Accent = Color3.fromRGB(255, 90, 138), Leaf = Color3.fromRGB(79, 174, 74) },
 		Pieces = {
@@ -61,7 +61,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Chest = {
-		AssetId = 0,
+		AssetId = 108259725622289,
 		Category = "Pickups",
 		Palette = { Glow = Color3.fromRGB(255, 226, 122), Gold = Color3.fromRGB(242, 193, 78), Wood = Color3.fromRGB(138, 85, 48) },
 		Pieces = {
@@ -72,7 +72,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Crystal = {
-		AssetId = 0,
+		AssetId = 81181572909256,
 		Category = "Pickups",
 		Palette = { Glow = Color3.fromRGB(176, 91, 255), Light = Color3.fromRGB(230, 201, 255) },
 		Pieces = {
@@ -81,7 +81,7 @@ MeshCatalog.Models = {
 		},
 	},
 	CrystalCluster = {
-		AssetId = 0,
+		AssetId = 80358131831693,
 		Category = "World",
 		Palette = { Glow = Color3.fromRGB(176, 91, 255), Stone = Color3.fromRGB(110, 107, 120) },
 		Pieces = {
@@ -90,7 +90,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Knight = {
-		AssetId = 0,
+		AssetId = 77353083672000,
 		Category = "Heroes",
 		Palette = { Accent = Color3.fromRGB(200, 40, 45), Black = Color3.fromRGB(15, 15, 20), Cloth2 = Color3.fromRGB(74, 84, 104), Dark = Color3.fromRGB(44, 49, 64), Glow = Color3.fromRGB(255, 179, 71), Gold = Color3.fromRGB(242, 193, 78), Leather = Color3.fromRGB(91, 59, 37), Metal = Color3.fromRGB(196, 202, 214), Skin = Color3.fromRGB(255, 214, 170) },
 		Pieces = {
@@ -120,7 +120,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Mage = {
-		AssetId = 0,
+		AssetId = 98299343896517,
 		Category = "Heroes",
 		Palette = { Cloth = Color3.fromRGB(52, 70, 200), Cloth2 = Color3.fromRGB(42, 47, 140), Dark = Color3.fromRGB(28, 29, 58), Glow = Color3.fromRGB(90, 215, 255), Gold = Color3.fromRGB(242, 193, 78), Leather = Color3.fromRGB(91, 59, 37), Skin = Color3.fromRGB(28, 29, 58), Wood = Color3.fromRGB(107, 74, 44) },
 		Pieces = {
@@ -145,7 +145,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Mite = {
-		AssetId = 0,
+		AssetId = 130228104512815,
 		Category = "Enemies",
 		Palette = { Base = Color3.fromRGB(79, 209, 106), Dark = Color3.fromRGB(29, 90, 51), Eye = Color3.fromRGB(234, 255, 90), Light = Color3.fromRGB(168, 245, 181) },
 		Pieces = {
@@ -158,7 +158,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Mushroom = {
-		AssetId = 0,
+		AssetId = 123443089000704,
 		Category = "World",
 		Palette = { Accent = Color3.fromRGB(224, 54, 46), Light = Color3.fromRGB(243, 234, 216), White = Color3.fromRGB(255, 255, 255) },
 		Pieces = {
@@ -168,7 +168,7 @@ MeshCatalog.Models = {
 		},
 	},
 	PhaseMoth = {
-		AssetId = 0,
+		AssetId = 78927266296646,
 		Category = "Enemies",
 		Palette = { Base = Color3.fromRGB(185, 167, 255), Dark = Color3.fromRGB(60, 47, 110), Glow = Color3.fromRGB(126, 240, 255), Light = Color3.fromRGB(242, 238, 255) },
 		Pieces = {
@@ -182,7 +182,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Pickup_Bomb = {
-		AssetId = 0,
+		AssetId = 84198802573342,
 		Category = "Pickups",
 		Palette = { Dark = Color3.fromRGB(36, 36, 44), Glow = Color3.fromRGB(255, 181, 43), Metal = Color3.fromRGB(138, 143, 156), Wood = Color3.fromRGB(162, 128, 79) },
 		Pieces = {
@@ -193,7 +193,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Pickup_Chicken = {
-		AssetId = 0,
+		AssetId = 90261300812572,
 		Category = "Pickups",
 		Palette = { Base = Color3.fromRGB(196, 118, 46), Dark = Color3.fromRGB(138, 74, 28), Light = Color3.fromRGB(246, 238, 221) },
 		Pieces = {
@@ -203,7 +203,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Pickup_Magnet = {
-		AssetId = 0,
+		AssetId = 92882760771897,
 		Category = "Pickups",
 		Palette = { Accent = Color3.fromRGB(224, 48, 42), Metal = Color3.fromRGB(223, 228, 238) },
 		Pieces = {
@@ -212,7 +212,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Pillar = {
-		AssetId = 0,
+		AssetId = 133272772727166,
 		Category = "World",
 		Palette = { Dark = Color3.fromRGB(110, 107, 98), Moss = Color3.fromRGB(95, 154, 74), Stone = Color3.fromRGB(167, 164, 154) },
 		Pieces = {
@@ -222,7 +222,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Priest = {
-		AssetId = 0,
+		AssetId = 103564322036733,
 		Category = "Heroes",
 		Palette = { Black = Color3.fromRGB(15, 15, 20), Cloth = Color3.fromRGB(244, 241, 232), Cloth2 = Color3.fromRGB(226, 220, 203), Dark = Color3.fromRGB(107, 90, 58), Glow = Color3.fromRGB(255, 240, 160), Gold = Color3.fromRGB(242, 193, 78), Leather = Color3.fromRGB(138, 106, 58), Skin = Color3.fromRGB(255, 214, 170), Wood = Color3.fromRGB(231, 211, 161) },
 		Pieces = {
@@ -247,7 +247,7 @@ MeshCatalog.Models = {
 		},
 	},
 	RhinoBeetle = {
-		AssetId = 0,
+		AssetId = 139367466356627,
 		Category = "Enemies",
 		Palette = { Base = Color3.fromRGB(138, 59, 34), Dark = Color3.fromRGB(43, 22, 18), Eye = Color3.fromRGB(255, 210, 58), Light = Color3.fromRGB(232, 210, 168) },
 		Pieces = {
@@ -260,7 +260,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Rock = {
-		AssetId = 0,
+		AssetId = 112522737792867,
 		Category = "World",
 		Palette = { Moss = Color3.fromRGB(95, 154, 74), Stone = Color3.fromRGB(140, 143, 153) },
 		Pieces = {
@@ -269,7 +269,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Rogue = {
-		AssetId = 0,
+		AssetId = 74790401322834,
 		Category = "Heroes",
 		Palette = { Accent = Color3.fromRGB(122, 63, 176), Cloth = Color3.fromRGB(58, 35, 80), Cloth2 = Color3.fromRGB(34, 22, 48), Dark = Color3.fromRGB(20, 12, 30), Glow = Color3.fromRGB(195, 91, 255), Leather = Color3.fromRGB(58, 42, 34), Metal = Color3.fromRGB(185, 185, 201), Skin = Color3.fromRGB(20, 12, 30) },
 		Pieces = {
@@ -296,7 +296,7 @@ MeshCatalog.Models = {
 		},
 	},
 	ScorpionQueen = {
-		AssetId = 0,
+		AssetId = 81011487380758,
 		Category = "Enemies",
 		Palette = { Base = Color3.fromRGB(61, 66, 80), Dark = Color3.fromRGB(31, 34, 41), Eye = Color3.fromRGB(255, 42, 42), Glow = Color3.fromRGB(255, 138, 30), Light = Color3.fromRGB(201, 143, 92) },
 		Pieces = {
@@ -314,7 +314,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Shot_Axe = {
-		AssetId = 0,
+		AssetId = 128850259793462,
 		Category = "Projectiles",
 		Palette = { Dark = Color3.fromRGB(58, 63, 76), Metal = Color3.fromRGB(196, 202, 214), Wood = Color3.fromRGB(107, 74, 44) },
 		Pieces = {
@@ -324,7 +324,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Shot_Boomerang = {
-		AssetId = 0,
+		AssetId = 73745836061263,
 		Category = "Projectiles",
 		Palette = { Accent = Color3.fromRGB(200, 58, 45), Wood = Color3.fromRGB(207, 154, 85) },
 		Pieces = {
@@ -333,7 +333,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Shot_Bottle = {
-		AssetId = 0,
+		AssetId = 97220946466649,
 		Category = "Projectiles",
 		Palette = { Glow = Color3.fromRGB(74, 163, 255), Light = Color3.fromRGB(207, 234, 255), Wood = Color3.fromRGB(155, 107, 60) },
 		Pieces = {
@@ -343,7 +343,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Shot_Knife = {
-		AssetId = 0,
+		AssetId = 73879818511855,
 		Category = "Projectiles",
 		Palette = { Gold = Color3.fromRGB(242, 193, 78), Metal = Color3.fromRGB(223, 228, 238), Wood = Color3.fromRGB(91, 59, 37) },
 		Pieces = {
@@ -353,7 +353,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Shot_Orb = {
-		AssetId = 0,
+		AssetId = 74882032272111,
 		Category = "Projectiles",
 		Palette = { Glow = Color3.fromRGB(163, 91, 255), White = Color3.fromRGB(255, 255, 255) },
 		Pieces = {
@@ -363,7 +363,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Shot_Stinger = {
-		AssetId = 0,
+		AssetId = 122497034893324,
 		Category = "Projectiles",
 		Palette = { Dark = Color3.fromRGB(42, 26, 26), Glow = Color3.fromRGB(255, 90, 30) },
 		Pieces = {
@@ -372,7 +372,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Torch = {
-		AssetId = 0,
+		AssetId = 84127424615327,
 		Category = "World",
 		Palette = { Glow = Color3.fromRGB(255, 154, 43), Metal = Color3.fromRGB(74, 78, 90), Wood = Color3.fromRGB(107, 74, 44) },
 		Pieces = {
@@ -382,7 +382,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Tree_Pine = {
-		AssetId = 0,
+		AssetId = 102768819902666,
 		Category = "World",
 		Palette = { Leaf = Color3.fromRGB(47, 125, 70), Wood = Color3.fromRGB(107, 74, 44) },
 		Pieces = {
@@ -391,7 +391,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Tree_Round = {
-		AssetId = 0,
+		AssetId = 101737249490982,
 		Category = "World",
 		Palette = { Leaf = Color3.fromRGB(79, 174, 74), Leaf2 = Color3.fromRGB(60, 143, 63), Wood = Color3.fromRGB(122, 82, 50) },
 		Pieces = {
@@ -401,7 +401,7 @@ MeshCatalog.Models = {
 		},
 	},
 	Wasp = {
-		AssetId = 0,
+		AssetId = 135599708342751,
 		Category = "Enemies",
 		Palette = { Base = Color3.fromRGB(255, 204, 46), Dark = Color3.fromRGB(30, 26, 36), Eye = Color3.fromRGB(255, 59, 48), Light = Color3.fromRGB(207, 233, 255) },
 		Pieces = {
