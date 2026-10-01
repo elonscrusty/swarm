@@ -166,6 +166,7 @@ end
 -- Opening: the dark backdrop fades in and the panel pops up with a little overshoot.
 local function show(overlay: GuiObject, name: string, blocks: boolean)
 	overlay:SetAttribute("AnimToken", (tonumber(overlay:GetAttribute("AnimToken")) or 0) + 1)
+	overlay:SetAttribute("Hiding", nil)
 	local wasVisible = overlay.Visible
 	overlay.Visible = true
 	if not wasVisible then
@@ -181,17 +182,21 @@ local function show(overlay: GuiObject, name: string, blocks: boolean)
 end
 
 -- Closing: the panel shrinks away, then the overlay hides (unless reopened meanwhile).
+-- Safe to call every frame: a close that is already animating is left to finish
+-- (restarting it each frame used to keep the results screen on forever).
 local function hide(overlay: GuiObject, name: string)
 	setBlocking(name, false)
-	if not overlay.Visible then
+	if not overlay.Visible or overlay:GetAttribute("Hiding") then
 		return
 	end
 	local token = (tonumber(overlay:GetAttribute("AnimToken")) or 0) + 1
 	overlay:SetAttribute("AnimToken", token)
 	local panel = overlay:FindFirstChild("Panel")
 	if panel and panel:IsA("GuiObject") then
+		overlay:SetAttribute("Hiding", true)
 		UIAnim.PopOut(panel, function()
 			if overlay:GetAttribute("AnimToken") == token then
+				overlay:SetAttribute("Hiding", nil)
 				overlay.Visible = false
 			end
 		end)
@@ -1289,7 +1294,7 @@ local function updateFrame(dt: number)
 		end
 		local status = ""
 		if state:GetAttribute("Frozen") then
-			status = "PAUSED"
+			status = state:GetAttribute("LevelUpPause") and "PAUSED: a teammate is choosing an upgrade" or "PAUSED"
 		elseif player:GetAttribute("Alive") == false and not revive.Overlay.Visible and phase == "Running" then
 			local progress = player:GetAttribute("ReviveProgress") or 0
 			if progress > 0 then

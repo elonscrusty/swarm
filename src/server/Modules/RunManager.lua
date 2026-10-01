@@ -38,7 +38,8 @@ local joined: { [Player]: boolean } = {}
 local runPlayers: { any } = {} -- array of rp
 local byPlayer: { [Player]: any } = {}
 local runTime = 0
-local frozen = false
+local frozen = false -- the whole run is paused (menuPaused or someone is choosing a level-up)
+local menuPaused = false -- the solo pause menu is open
 local miniWaveTimer = 0
 local bossWarned = false
 local bossSpawned = false
@@ -71,6 +72,35 @@ end
 
 function RunManager.IsFrozen(): boolean
 	return frozen
+end
+
+-- True only for the solo pause menu (level-up pauses keep their auto-pick timer running).
+function RunManager.IsMenuPaused(): boolean
+	return menuPaused
+end
+
+--[[
+	The whole run freezes while the solo pause menu is open or while any player is choosing
+	a level-up card (enemies, projectiles, damage and the timer all stop for everyone).
+	Called whenever either source changes.
+]]
+function RunManager.RefreshFrozen()
+	local choosing = false
+	for _, rp in ipairs(runPlayers) do
+		if rp.Offer and rp.Alive and not rp.Returned then
+			choosing = true
+		end
+	end
+	local newFrozen = phase == "Running" and (menuPaused or choosing)
+	state:SetAttribute("LevelUpPause", phase == "Running" and choosing and not menuPaused)
+	if newFrozen == frozen then
+		return
+	end
+	frozen = newFrozen
+	state:SetAttribute("Frozen", frozen)
+	for _, rp in ipairs(runPlayers) do
+		RunManager.ApplyMovement(rp)
+	end
 end
 
 -- True when the world should move: a run is going and it isn't solo-paused.
@@ -539,6 +569,7 @@ local function beginRun()
 
 	runTime = 0
 	frozen = false
+	menuPaused = false
 	miniWaveTimer = 0
 	bossWarned = false
 	bossSpawned = false
@@ -587,7 +618,9 @@ function RunManager.EndRun(won: boolean)
 		return
 	end
 	frozen = false
+	menuPaused = false
 	state:SetAttribute("Frozen", false)
+	state:SetAttribute("LevelUpPause", false)
 	setPhase("Results")
 	resultsTimer = Config.Run.ResultsSeconds
 
@@ -901,10 +934,10 @@ function RunManager.OnPlayerRemoving(player: Player)
 	end
 	byPlayer[player] = nil
 	state:SetAttribute("Participants", #runPlayers)
-	if frozen and #runPlayers <= 1 then
-		frozen = false
-		state:SetAttribute("Frozen", false)
+	if menuPaused and #runPlayers > 1 then
+		menuPaused = false
 	end
+	RunManager.RefreshFrozen()
 	if phase == "Running" then
 		if #runPlayers == 0 then
 			RunManager.EndRun(false)
@@ -977,15 +1010,8 @@ function RunManager.Start()
 		if not rp or phase ~= "Running" or type(open) ~= "boolean" then
 			return
 		end
-		if open and Config.Run.SoloPauseFreezesRun and #runPlayers == 1 then
-			frozen = true
-		elseif not open then
-			frozen = false
-		end
-		state:SetAttribute("Frozen", frozen)
-		for _, other in ipairs(runPlayers) do
-			RunManager.ApplyMovement(other)
-		end
+		menuPaused = open and Config.Run.SoloPauseFreezesRun and #runPlayers == 1
+		RunManager.RefreshFrozen()
 	end, 4)
 
 	Remotes.Listen("ReviveDecline", function(player)

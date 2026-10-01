@@ -328,12 +328,14 @@ local function offerNext(rp)
 		Remotes.FireClient("LevelUpClose", rp.Player)
 		rp.Paused = false
 		ctx.RunManager.ApplyMovement(rp)
+		ctx.RunManager.RefreshFrozen()
 		return
 	end
 	rp.Offer = rollChoices(rp)
 	rp.OfferDeadline = os.clock() + Config.LevelUp.AutoPickSeconds
 	rp.Paused = true
 	ctx.RunManager.ApplyMovement(rp)
+	ctx.RunManager.RefreshFrozen()
 	sendOffer(rp)
 end
 
@@ -368,6 +370,7 @@ function LevelUpSystem.Cancel(rp)
 	if rp.Player.Parent then
 		Remotes.FireClient("LevelUpClose", rp.Player)
 	end
+	ctx.RunManager.RefreshFrozen()
 end
 
 ------------------------------------------------------------------------------------------
@@ -434,11 +437,13 @@ end
 ------------------------------------------------------------------------------------------
 
 function LevelUpSystem.Step(dt: number)
-	local frozen = ctx.RunManager.IsFrozen()
+	-- Level-up pauses freeze the run too, but only the pause menu stops the auto-pick timer
+	-- (otherwise a player could hold everyone's game paused forever).
+	local menuPaused = ctx.RunManager.IsMenuPaused()
 	local now = os.clock()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Offer then
-			if frozen then
+			if menuPaused then
 				rp.OfferDeadline += dt -- the solo pause menu also pauses the auto-pick timer
 			elseif now >= rp.OfferDeadline then
 				choose(rp, rng:NextInteger(1, #rp.Offer))
