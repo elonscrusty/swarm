@@ -1,6 +1,9 @@
 --[[
 	EnemyData.lua
 	Enemy definitions and the per-minute spawn table.
+	Theme: an alien insect swarm. The ids are kept from the first version (Slime = Mite,
+	Bat = Wasp, Skeleton = Beetle Warrior, Ghost = Phase Moth, Brute = Rhino Beetle,
+	Bomber = Bomb Tick, Boss = Scorpion Queen); DisplayName is what players see.
 
 	Enemy fields:
 	  HP, Speed (studs/s), Damage (contact damage), Radius (hit radius in studs)
@@ -23,6 +26,7 @@ local EnemyData = {}
 EnemyData.Enemies = {
 	Slime = {
 		Id = "Slime",
+		DisplayName = "Mite",
 		HP = 8,
 		Speed = 7,
 		Damage = 5,
@@ -38,6 +42,7 @@ EnemyData.Enemies = {
 	},
 	Bat = {
 		Id = "Bat",
+		DisplayName = "Wasp",
 		HP = 5,
 		Speed = 13,
 		Damage = 4,
@@ -55,6 +60,7 @@ EnemyData.Enemies = {
 	},
 	Skeleton = {
 		Id = "Skeleton",
+		DisplayName = "Beetle Warrior",
 		HP = 20,
 		Speed = 9,
 		Damage = 8,
@@ -70,6 +76,7 @@ EnemyData.Enemies = {
 	},
 	Ghost = {
 		Id = "Ghost",
+		DisplayName = "Phase Moth",
 		HP = 15,
 		Speed = 10.5,
 		Damage = 7,
@@ -88,6 +95,7 @@ EnemyData.Enemies = {
 	},
 	Brute = {
 		Id = "Brute",
+		DisplayName = "Rhino Beetle",
 		HP = 90,
 		Speed = 6,
 		Damage = 16,
@@ -102,6 +110,7 @@ EnemyData.Enemies = {
 	},
 	Bomber = {
 		Id = "Bomber",
+		DisplayName = "Bomb Tick",
 		HP = 12,
 		Speed = 11.5,
 		Damage = 0, -- damage comes from the explosion
@@ -117,6 +126,7 @@ EnemyData.Enemies = {
 	},
 	Boss = {
 		Id = "Boss",
+		DisplayName = "Scorpion Queen",
 		HP = 9000, -- overridden by Config.Boss.HP (kept here for reference)
 		Speed = 8,
 		Damage = 30,

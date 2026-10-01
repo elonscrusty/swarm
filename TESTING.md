@@ -26,6 +26,18 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] Die (stand still at minute 5+): DEFEATED screen with time/kills/gold/level.
 - [ ] After a win, the arena lectern can switch to Mall (neon storefronts, tiled floor, night lighting).
 
+## 1b. Duo mode (2 players: Test tab → 2 players)
+- [ ] Player 1 presses the BLUE pad: the banner says "Duo run starts in…"; only the blue pad shows "Join Run".
+- [ ] Player 2 joins; a third player gets "This run is full".
+- [ ] Let player 1 fall: toast says to stand next to them; player 2 stands close for 3 s → player 1 revives at 40% HP.
+- [ ] Both fall → DEFEATED.
+
+## 1c. Uploaded 3D models (after tools/upload_meshes.py)
+- [ ] Output has no "[MeshService] could not load" warnings.
+- [ ] Bugs, heroes, crystals, weapons, chest and pickups use the new models; legs/wings/claws move.
+- [ ] Forest arena: big trees, red mushrooms, rocks; you can't walk through trunks or rocks.
+- [ ] Ruins arena (after a win): pillars, purple crystals; lobby has banners and torches.
+
 ## 2. Four-player run (Test tab → Clients and Servers → 4 players, Start)
 - [ ] Player 1 presses Start; others see "is starting a run" and a JOIN button; all 4 join.
 - [ ] A 5th player (if testing 5) gets "This run is full".

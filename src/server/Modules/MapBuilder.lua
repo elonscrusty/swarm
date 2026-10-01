@@ -5,7 +5,7 @@
 	BuildLobby()        → lobby table (boards, start pad, spawn), built once at boot
 	BuildArena(name)    → arena table, replaces any previous arena
 	DestroyArena()
-	ApplyLighting(name) → "Lobby" | "Backyard" | "Mall"
+	ApplyLighting(name) → "Lobby" | "Forest" | "Ruins"
 
 	Every collidable arena obstacle is also recorded as a simple shape in
 	arena.Obstacles so EnemyAI can push enemies out of them cheaply:
@@ -18,6 +18,7 @@ local Lighting = game:GetService("Lighting")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local ModelBuilder = require(script.Parent.ModelBuilder)
+local MeshService = require(script.Parent.MeshService)
 
 local part = ModelBuilder.Part
 
@@ -81,11 +82,12 @@ end
 ------------------------------------------------------------------------------------------
 
 function MapBuilder.ApplyLighting(name: string)
-	if name == "Mall" then
-		Lighting.ClockTime = 0.5
-		Lighting.Brightness = 1.2
-		Lighting.Ambient = Color3.fromRGB(110, 90, 140)
-		Lighting.OutdoorAmbient = Color3.fromRGB(120, 100, 150)
+	if name == "Ruins" then
+		-- golden late afternoon
+		Lighting.ClockTime = 16.8
+		Lighting.Brightness = 2.2
+		Lighting.Ambient = Color3.fromRGB(110, 95, 120)
+		Lighting.OutdoorAmbient = Color3.fromRGB(150, 130, 150)
 		Lighting.FogEnd = 100000
 	elseif name == "Lobby" then
 		Lighting.ClockTime = 17.5
@@ -93,7 +95,7 @@ function MapBuilder.ApplyLighting(name: string)
 		Lighting.Ambient = Color3.fromRGB(120, 105, 95)
 		Lighting.OutdoorAmbient = Color3.fromRGB(150, 130, 115)
 		Lighting.FogEnd = 100000
-	else -- Backyard: bright day
+	else -- Forest: bright day
 		Lighting.ClockTime = 13.5
 		Lighting.Brightness = 2.6
 		Lighting.Ambient = Color3.fromRGB(100, 100, 105)
@@ -122,27 +124,29 @@ function MapBuilder.BuildLobby()
 		return p
 	end
 
-	-- Floor: warm wooden planks.
-	add(part({ Name = "Floor", Size = Vector3.new(size, 2, size), CFrame = CFrame.new(o + Vector3.new(0, -1, 0)), Color = Color3.fromRGB(150, 105, 70), Material = Enum.Material.WoodPlanks, CanCollide = true, CanQuery = true }))
+	-- Floor: castle courtyard flagstones.
+	add(part({ Name = "Floor", Size = Vector3.new(size, 2, size), CFrame = CFrame.new(o + Vector3.new(0, -1, 0)), Color = Color3.fromRGB(150, 146, 140), Material = Enum.Material.Slate, CanCollide = true, CanQuery = true }))
 	-- Rug in the middle.
 	add(part({ Name = "Rug", Size = Vector3.new(26, 0.1, 18), CFrame = CFrame.new(o + Vector3.new(0, 0.05, 4)), Color = Color3.fromRGB(150, 50, 60), Material = Enum.Material.Fabric }))
 	add(part({ Name = "RugBorder", Size = Vector3.new(28, 0.08, 20), CFrame = CFrame.new(o + Vector3.new(0, 0.03, 4)), Color = Color3.fromRGB(230, 190, 90), Material = Enum.Material.Fabric }))
 
 	-- Walls (low so the top-down camera can see over them) + tall invisible barriers.
-	local wallColor = Color3.fromRGB(205, 185, 160)
+	local wallColor = Color3.fromRGB(140, 138, 134)
 	for _, w in ipairs({
 		{ Vector3.new(0, wallH / 2, -half), Vector3.new(size + 2, wallH, 2) },
 		{ Vector3.new(0, wallH / 2, half), Vector3.new(size + 2, wallH, 2) },
 		{ Vector3.new(-half, wallH / 2, 0), Vector3.new(2, wallH, size + 2) },
 		{ Vector3.new(half, wallH / 2, 0), Vector3.new(2, wallH, size + 2) },
 	}) do
-		add(part({ Name = "Wall", Size = w[2], CFrame = CFrame.new(o + w[1]), Color = wallColor, Material = Enum.Material.Plaster, CanCollide = true }))
+		add(part({ Name = "Wall", Size = w[2], CFrame = CFrame.new(o + w[1]), Color = wallColor, Material = Enum.Material.Cobblestone, CanCollide = true }))
 		local barrier = add(part({ Name = "Barrier", Size = Vector3.new(w[2].X, 40, w[2].Z), CFrame = CFrame.new(o + Vector3.new(w[1].X, 20, w[1].Z)), Transparency = 1, CanCollide = true }))
 		barrier.CastShadow = false
 	end
-	-- Wainscot trim.
-	for _, z in ipairs({ -half + 1.1, half - 1.1 }) do
-		add(part({ Name = "Trim", Size = Vector3.new(size, 0.6, 0.2), CFrame = CFrame.new(o + Vector3.new(0, wallH - 0.3, z)), Color = Color3.fromRGB(110, 70, 45), Material = Enum.Material.Wood }))
+	-- Battlements along the top of the walls.
+	for t = -half, half, 6 do
+		for _, pos in ipairs({ Vector3.new(t, 0, -half), Vector3.new(t, 0, half), Vector3.new(-half, 0, t), Vector3.new(half, 0, t) }) do
+			add(part({ Name = "Merlon", Size = Vector3.new(2.6, 1.8, 2.6), CFrame = CFrame.new(o + pos + Vector3.new(0, wallH + 0.9, 0)), Color = Color3.fromRGB(150, 148, 144), Material = Enum.Material.Cobblestone }))
+		end
 	end
 
 	-- Corner lamps for a cosy glow.
@@ -155,30 +159,27 @@ function MapBuilder.BuildLobby()
 		light.Color = Color3.fromRGB(255, 200, 140)
 		light.Parent = shade
 	end
-	-- Plants along the south wall.
-	for i = -2, 2 do
-		local pos = o + Vector3.new(i * 9, 0, half - 4)
-		add(part({ Name = "Pot", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.6, 2, 2), CFrame = CFrame.new(pos + Vector3.new(0, 0.8, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(170, 90, 60), Material = Enum.Material.Slate, CanCollide = true }))
-		add(part({ Name = "Leaves", Shape = Enum.PartType.Ball, Size = Vector3.new(3, 3, 3), CFrame = CFrame.new(pos + Vector3.new(0, 2.8, 0)), Color = Color3.fromRGB(70, 150, 70), Material = Enum.Material.Grass }))
+	-- START PADS (north): SQUAD (1-4 players) on the left, DUO (exactly 2) on the right.
+	local function startPad(name: string, x: number, color: Color3, ringColor: Color3, title: string, objectText: string)
+		local padPos = o + Vector3.new(x, 0.15, -half + 12)
+		local pad = add(part({ Name = name, Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 10, 10), CFrame = CFrame.new(padPos) * CFrame.Angles(0, 0, math.rad(90)), Color = color, Material = Enum.Material.Neon, CanQuery = true }))
+		add(part({ Name = name .. "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 12, 12), CFrame = CFrame.new(padPos - Vector3.new(0, 0.05, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = ringColor }))
+		local sign = add(part({ Name = name .. "Sign", Size = Vector3.new(10, 3, 0.4), CFrame = CFrame.new(o + Vector3.new(x, 4.5, -half + 1.8)), Color = Color3.fromRGB(25, 25, 35) }))
+		textSurface(sign, Enum.NormalId.Back, title, color)
+		local pr = prompt(pad, "Start Run", objectText, name .. "Prompt")
+		pr.MaxActivationDistance = 9
+		return pad, pr
 	end
-
-	-- START PAD (north centre).
-	local padPos = o + Vector3.new(0, 0.15, -half + 12)
-	local pad = add(part({ Name = "StartPad", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 12, 12), CFrame = CFrame.new(padPos) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(60, 230, 120), Material = Enum.Material.Neon, CanQuery = true }))
-	local padRing = add(part({ Name = "StartRing", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 14, 14), CFrame = CFrame.new(padPos - Vector3.new(0, 0.05, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(30, 90, 50) }))
-	padRing.Name = "StartRing"
-	local padSign = add(part({ Name = "StartSign", Size = Vector3.new(12, 3, 0.4), CFrame = CFrame.new(o + Vector3.new(0, 4.5, -half + 3)), Color = Color3.fromRGB(25, 25, 35) }))
-	textSurface(padSign, Enum.NormalId.Back, "START RUN", Color3.fromRGB(90, 255, 140))
-	local startPrompt = prompt(pad, "Start Run", "Swarm", "StartPrompt")
-	startPrompt.MaxActivationDistance = 10
+	local pad, startPrompt = startPad("StartPad", -7, Color3.fromRGB(60, 230, 120), Color3.fromRGB(30, 90, 50), "SQUAD 1-4", "Squad (1-4 players)")
+	local duoPad, duoPrompt = startPad("DuoPad", 7, Color3.fromRGB(80, 170, 255), Color3.fromRGB(30, 60, 110), "DUO", "Duo (2 players)")
 
 	-- The camera looks north and down, so every board hangs on the north wall (face +Z)
 	-- or is a lectern tilted up toward the camera.
 	local TILT = CFrame.Angles(math.rad(-50), 0, 0) -- turns the Back (+Z) face up to the camera
 
 	-- ARENA LECTERN (west of the start pad).
-	local arenaSign = add(part({ Name = "ArenaSign", Size = Vector3.new(9, 4, 0.4), CFrame = CFrame.new(o + Vector3.new(-14, 2.2, -half + 14)) * TILT, Color = Color3.fromRGB(25, 25, 35), CanCollide = true }))
-	local arenaGui = textSurface(arenaSign, Enum.NormalId.Back, "ARENA: BACKYARD", Color3.fromRGB(255, 220, 120))
+	local arenaSign = add(part({ Name = "ArenaSign", Size = Vector3.new(9, 4, 0.4), CFrame = CFrame.new(o + Vector3.new(-21, 2.2, -half + 17)) * TILT, Color = Color3.fromRGB(25, 25, 35), CanCollide = true }))
+	local arenaGui = textSurface(arenaSign, Enum.NormalId.Back, "ARENA: FOREST", Color3.fromRGB(255, 220, 120))
 	local arenaPrompt = prompt(arenaSign, "Change Arena", "Arena", "ArenaPrompt")
 
 	-- CHARACTER BOARD (north wall, left).
@@ -194,14 +195,49 @@ function MapBuilder.BuildLobby()
 	local shopPrompt = prompt(shopPost, "Open Shop", "Upgrades", "ShopPrompt")
 
 	-- STATS LECTERN (east of the start pad). Each client draws its own stats on it.
-	local statsSign = add(part({ Name = "StatsSign", Size = Vector3.new(9, 6, 0.4), CFrame = CFrame.new(o + Vector3.new(14, 2.8, -half + 14)) * TILT, Color = Color3.fromRGB(30, 30, 45), CanCollide = true }))
+	local statsSign = add(part({ Name = "StatsSign", Size = Vector3.new(9, 6, 0.4), CFrame = CFrame.new(o + Vector3.new(21, 2.8, -half + 17)) * TILT, Color = Color3.fromRGB(30, 30, 45), CanCollide = true }))
 
 	MapBuilder.ApplyLighting("Lobby")
+
+	-- Castle dressing from the Blender meshes once they are loaded (banners, torches, trees).
+	MeshService.WhenReady({ "Banner", "Torch" }, function()
+		for _, x in ipairs({ -27, 27 }) do
+			local m = MeshService.Build("Banner", CFrame.new(o + Vector3.new(x, 0, -half + 2.2)), nil, 0.8)
+			if m then
+				m.Parent = folder
+			end
+		end
+		for _, c in ipairs({ Vector3.new(-half + 3, 0, -half + 3), Vector3.new(half - 3, 0, -half + 3), Vector3.new(-half + 3, 0, half - 3), Vector3.new(half - 3, 0, half - 3), Vector3.new(-14, 0, -half + 9), Vector3.new(14, 0, -half + 9) }) do
+			local m = MeshService.Build("Torch", CFrame.new(o + c), nil, 1)
+			if m then
+				local flame = m:FindFirstChild("Flame") :: BasePart?
+				if flame then
+					local light = Instance.new("PointLight")
+					light.Color = Color3.fromRGB(255, 170, 90)
+					light.Range = 18
+					light.Brightness = 1.4
+					light.Parent = flame
+				end
+				m.Parent = folder
+			end
+		end
+	end)
+	MeshService.WhenReady({ "Tree_Round", "Mushroom" }, function()
+		for i, x in ipairs({ -18, -6, 6, 18 }) do
+			local name = (i % 2 == 0) and "Mushroom" or "Tree_Round"
+			local m = MeshService.Build(name, CFrame.new(o + Vector3.new(x, 0, half - 5)), nil, name == "Mushroom" and 0.8 or 0.55)
+			if m then
+				m.Parent = folder
+			end
+		end
+	end)
 
 	return {
 		Model = folder,
 		SpawnCFrame = CFrame.new(o + Vector3.new(0, 3.5, 6)),
 		StartPrompt = startPrompt,
+		DuoPrompt = duoPrompt,
+		DuoPad = duoPad,
 		ArenaPrompt = arenaPrompt,
 		ArenaLabel = arenaGui:FindFirstChild("Title") :: TextLabel,
 		CharacterPrompt = charPrompt,
@@ -269,20 +305,6 @@ local function addCircleObstacle(arena, x: number, z: number, r: number)
 	table.insert(arena.Obstacles, { Kind = "Circle", Pos = Vector3.new(x, 0, z), Radius = r })
 end
 
-local function addBoxObstacle(arena, cf: CFrame, size: Vector3)
-	local hx, hz = size.X / 2, size.Z / 2
-	local p = cf.Position
-	table.insert(arena.Obstacles, {
-		Kind = "Box",
-		Pos = Vector3.new(p.X, 0, p.Z),
-		Radius = math.sqrt(hx * hx + hz * hz),
-		MinX = p.X - hx,
-		MaxX = p.X + hx,
-		MinZ = p.Z - hz,
-		MaxZ = p.Z + hz,
-	})
-end
-
 -- Fence posts, rails and an invisible tall wall on all four sides.
 local function buildBoundary(arena, style: string)
 	local c, h = arena.Center, arena.Half
@@ -302,112 +324,164 @@ local function buildBoundary(arena, style: string)
 			for t = -h, h, 20 do
 				part({ Name = "Post", Size = Vector3.new(1, fenceH, 1), CFrame = CFrame.new(mid + along * t + Vector3.new(0, fenceH / 2, 0)), Color = Color3.fromRGB(245, 240, 225), Material = Enum.Material.Wood }).Parent = arena.Model
 			end
-		else -- mall: solid tiled wall with neon strip
-			local solid = (i <= 2) and Vector3.new(size + 4, 10, 2) or Vector3.new(2, 10, size + 4)
-			part({ Name = "MallWall", Size = solid, CFrame = CFrame.new(mid + Vector3.new(0, 5, 0)), Color = Color3.fromRGB(70, 60, 90), Material = Enum.Material.SmoothPlastic }).Parent = arena.Model
-			local stripSize = (i <= 2) and Vector3.new(size, 0.4, 2.2) or Vector3.new(2.2, 0.4, size)
-			part({ Name = "NeonStrip", Size = stripSize, CFrame = CFrame.new(mid + Vector3.new(0, 9, 0)), Color = Color3.fromRGB(255, 60, 200), Material = Enum.Material.Neon }).Parent = arena.Model
+		else -- ruins: low stone wall with crenellations
+			local solid = (i <= 2) and Vector3.new(size + 4, 5, 2.5) or Vector3.new(2.5, 5, size + 4)
+			part({ Name = "RuinWall", Size = solid, CFrame = CFrame.new(mid + Vector3.new(0, 2.5, 0)), Color = Color3.fromRGB(140, 136, 126), Material = Enum.Material.Cobblestone }).Parent = arena.Model
+			for t = -h, h, 8 do
+				part({ Name = "Merlon", Size = Vector3.new(3, 2, 3), CFrame = CFrame.new(mid + along * t + Vector3.new(0, 6, 0)), Color = Color3.fromRGB(150, 146, 136), Material = Enum.Material.Cobblestone }).Parent = arena.Model
+			end
 		end
 	end
 end
 
--- Subtle grid: thin slightly-different lines every 20 studs.
-local function buildGrid(arena, color: Color3, spacing: number, transparency: number)
-	local c, h = arena.Center, arena.Half
-	for t = -h + spacing, h - spacing, spacing do
-		part({ Name = "GridX", Size = Vector3.new(arena.Half * 2, 0.05, 0.25), CFrame = CFrame.new(c + Vector3.new(0, 0.03, t)), Color = color, Transparency = transparency }).Parent = arena.Model
-		part({ Name = "GridZ", Size = Vector3.new(0.25, 0.05, arena.Half * 2), CFrame = CFrame.new(c + Vector3.new(t, 0.03, 0)), Color = color, Transparency = transparency }).Parent = arena.Model
+------------------------------------------------------------------------------------------
+-- Props: Blender mesh when loaded (MeshService), part-built fallback otherwise.
+-- Every collidable prop also gets an invisible collision Part in ObstacleFolder plus an
+-- obstacle shape, so movement and enemy steering never depend on the mesh.
+------------------------------------------------------------------------------------------
+
+local function meshProp(arena, name: string, cf: CFrame, scale: number, palette): boolean
+	local model = MeshService.Build(name, cf, palette, scale)
+	if model then
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				d.CastShadow = true
+			end
+		end
+		model.Parent = arena.Model
+		return true
+	end
+	return false
+end
+
+local function collider(arena, x: number, z: number, r: number, h: number)
+	local c = part({ Name = "Collider", Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, r * 2, r * 2), CFrame = CFrame.new(x, h / 2, z) * CFrame.Angles(0, 0, math.rad(90)), Transparency = 1, CanCollide = true, CanQuery = true })
+	c.Parent = arena.ObstacleFolder
+	addCircleObstacle(arena, x, z, r)
+end
+
+local function tree(arena, x: number, z: number)
+	local s = rng:NextNumber(0.8, 1.25)
+	local kind = rng:NextNumber() < 0.6 and "Tree_Round" or "Tree_Pine"
+	local cf = CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+	if not meshProp(arena, kind, cf, s) then
+		local trunkH = 7 * s
+		part({ Name = "Trunk", Shape = Enum.PartType.Cylinder, Size = Vector3.new(trunkH, 2.4, 2.4), CFrame = CFrame.new(x, trunkH / 2, z) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(110, 75, 45), Material = Enum.Material.Wood }).Parent = arena.Model
+		part({ Name = "Leaves", Shape = Enum.PartType.Ball, Size = Vector3.one * 8 * s, CFrame = CFrame.new(x, trunkH + 2, z), Color = Color3.fromRGB(70, 160, 70), Material = Enum.Material.Grass, CastShadow = true }).Parent = arena.Model
+	end
+	collider(arena, x, z, (kind == "Tree_Round" and 1.3 or 0.95) * s, 8)
+end
+
+local function mushroom(arena, x: number, z: number)
+	local s = rng:NextNumber(0.7, 1.3)
+	local cf = CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+	if not meshProp(arena, "Mushroom", cf, s) then
+		part({ Name = "Stem", Shape = Enum.PartType.Cylinder, Size = Vector3.new(4 * s, 1.6 * s, 1.6 * s), CFrame = CFrame.new(x, 2 * s, z) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(240, 232, 215) }).Parent = arena.Model
+		part({ Name = "Cap", Shape = Enum.PartType.Ball, Size = Vector3.new(6, 3, 6) * s, CFrame = CFrame.new(x, 4.6 * s, z), Color = Color3.fromRGB(225, 55, 45) }).Parent = arena.Model
+	end
+	collider(arena, x, z, 0.9 * s, 5 * s)
+end
+
+local function rock(arena, x: number, z: number)
+	local s = rng:NextNumber(0.7, 1.5)
+	local cf = CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+	if not meshProp(arena, "Rock", cf, s) then
+		part({ Name = "Rock", Shape = Enum.PartType.Ball, Size = Vector3.new(5, 3, 4) * s, CFrame = cf * CFrame.new(0, 1.2 * s, 0), Color = Color3.fromRGB(135, 138, 148), Material = Enum.Material.Slate }).Parent = arena.Model
+	end
+	collider(arena, x, z, 2.3 * s, 3 * s)
+end
+
+local function decoration(arena, name: string, x: number, z: number, scale: number, fallbackColor: Color3)
+	local cf = CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+	if not meshProp(arena, name, cf, scale) then
+		part({ Name = name, Shape = Enum.PartType.Ball, Size = Vector3.new(3, 2, 3) * scale, CFrame = cf * CFrame.new(0, scale, 0), Color = fallbackColor, Material = Enum.Material.Grass }).Parent = arena.Model
 	end
 end
 
-local function buildBackyard(arena)
+-- FOREST: bright grass meadow with big low-poly trees, giant red mushrooms, rocks, bushes.
+local function buildForest(arena)
 	local c, h = arena.Center, arena.Half
-	part({ Name = "Floor", Size = Vector3.new(h * 2 + 40, 2, h * 2 + 40), CFrame = CFrame.new(c - Vector3.new(0, 1, 0)), Color = Color3.fromRGB(95, 165, 70), Material = Enum.Material.Grass, CanCollide = true, CanQuery = true }).Parent = arena.Model
-	buildGrid(arena, Color3.fromRGB(80, 145, 60), 20, 0.4)
+	part({ Name = "Floor", Size = Vector3.new(h * 2 + 40, 2, h * 2 + 40), CFrame = CFrame.new(c - Vector3.new(0, 1, 0)), Color = Color3.fromRGB(104, 178, 76), Material = Enum.Material.Grass, CanCollide = true, CanQuery = true }).Parent = arena.Model
+	-- soft darker grass patches instead of a hard grid
+	for _ = 1, 26 do
+		local x, z = c.X + rng:NextNumber(-h + 10, h - 10), c.Z + rng:NextNumber(-h + 10, h - 10)
+		local r = rng:NextNumber(10, 26)
+		part({ Name = "Patch", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, r * 2, r * 2), CFrame = CFrame.new(x, 0.03, z) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(88, 160, 66), Material = Enum.Material.Grass }).Parent = arena.Model
+	end
 	buildBoundary(arena, "Fence")
-
-	-- Trees: trunk (collidable obstacle) + two leaf balls.
 	for _ = 1, Config.Arenas.TreeCount do
-		local x, z = randomSpot(arena, 6, 10)
+		local x, z = randomSpot(arena, 7, 10)
 		if x and z then
-			local trunkH = rng:NextNumber(6, 9)
-			local trunk = part({ Name = "Trunk", Shape = Enum.PartType.Cylinder, Size = Vector3.new(trunkH, 2.4, 2.4), CFrame = CFrame.new(x, trunkH / 2, z) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(110, 75, 45), Material = Enum.Material.Wood, CanCollide = true, CanQuery = true })
-			trunk.Parent = arena.ObstacleFolder
-			local leafSize = rng:NextNumber(7, 10)
-			part({ Name = "Leaves", Shape = Enum.PartType.Ball, Size = Vector3.one * leafSize, CFrame = CFrame.new(x, trunkH + leafSize * 0.3, z), Color = Color3.fromRGB(60, 140 + rng:NextInteger(-20, 20), 55), Material = Enum.Material.Grass, CastShadow = true }).Parent = arena.Model
-			part({ Name = "Leaves2", Shape = Enum.PartType.Ball, Size = Vector3.one * leafSize * 0.7, CFrame = CFrame.new(x + 1.5, trunkH + leafSize * 0.7, z - 1), Color = Color3.fromRGB(75, 160, 65), Material = Enum.Material.Grass }).Parent = arena.Model
-			addCircleObstacle(arena, x, z, 1.4)
+			tree(arena, x, z)
 		end
 	end
-	-- Rocks.
+	for _ = 1, 14 do
+		local x, z = randomSpot(arena, 6, 12)
+		if x and z then
+			mushroom(arena, x, z)
+		end
+	end
 	for _ = 1, Config.Arenas.RockCount do
 		local x, z = randomSpot(arena, 5, 10)
 		if x and z then
-			local r = rng:NextNumber(1.8, 3.6)
-			local rock = part({ Name = "Rock", Shape = Enum.PartType.Ball, Size = Vector3.new(r * 2, r * 1.4, r * 2), CFrame = CFrame.new(x, r * 0.4, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0), Color = Color3.fromRGB(125 + rng:NextInteger(-15, 15), 125, 130), Material = Enum.Material.Slate, CanCollide = true, CanQuery = true })
-			rock.Parent = arena.ObstacleFolder
-			addCircleObstacle(arena, x, z, r * 0.9)
+			rock(arena, x, z)
 		end
 	end
-	-- Flower patches (decoration, no collision).
 	for _ = 1, 40 do
-		local x, z = c.X + rng:NextNumber(-h + 5, h - 5), c.Z + rng:NextNumber(-h + 5, h - 5)
-		local colors = { Color3.fromRGB(255, 240, 90), Color3.fromRGB(255, 120, 160), Color3.fromRGB(255, 255, 255) }
-		part({ Name = "Flower", Shape = Enum.PartType.Ball, Size = Vector3.new(0.7, 0.4, 0.7), CFrame = CFrame.new(x, 0.15, z), Color = colors[rng:NextInteger(1, 3)], Material = Enum.Material.SmoothPlastic }).Parent = arena.Model
+		local x, z = c.X + rng:NextNumber(-h + 6, h - 6), c.Z + rng:NextNumber(-h + 6, h - 6)
+		if isFree(arena, x, z, 3) then
+			decoration(arena, "Bush", x, z, rng:NextNumber(0.7, 1.2), Color3.fromRGB(70, 160, 70))
+		end
 	end
 end
 
-local function buildMall(arena)
+-- RUINS: mossy stone courtyard with broken pillars, glowing crystals and torches.
+local function buildRuins(arena)
 	local c, h = arena.Center, arena.Half
-	part({ Name = "Floor", Size = Vector3.new(h * 2 + 40, 2, h * 2 + 40), CFrame = CFrame.new(c - Vector3.new(0, 1, 0)), Color = Color3.fromRGB(225, 220, 215), Material = Enum.Material.Marble, CanCollide = true, CanQuery = true }).Parent = arena.Model
-	buildGrid(arena, Color3.fromRGB(170, 165, 175), 10, 0.2)
-	buildBoundary(arena, "Mall")
-
-	local neon = { Color3.fromRGB(255, 60, 200), Color3.fromRGB(60, 220, 255), Color3.fromRGB(255, 220, 60), Color3.fromRGB(120, 255, 120), Color3.fromRGB(190, 100, 255) }
+	part({ Name = "Floor", Size = Vector3.new(h * 2 + 40, 2, h * 2 + 40), CFrame = CFrame.new(c - Vector3.new(0, 1, 0)), Color = Color3.fromRGB(150, 146, 136), Material = Enum.Material.Cobblestone, CanCollide = true, CanQuery = true }).Parent = arena.Model
+	for _ = 1, 30 do
+		local x, z = c.X + rng:NextNumber(-h + 10, h - 10), c.Z + rng:NextNumber(-h + 10, h - 10)
+		local r = rng:NextNumber(8, 20)
+		part({ Name = "Moss", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, r * 2, r * 2), CFrame = CFrame.new(x, 0.03, z) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(96, 140, 72), Material = Enum.Material.Grass }).Parent = arena.Model
+	end
+	buildBoundary(arena, "Ruins")
 	local lights = 0
-	for i = 1, Config.Arenas.StorefrontCount do
-		-- storefront blocks: rotate 0 or 90 degrees, need clear space
-		local w, d = rng:NextNumber(18, 30), rng:NextNumber(8, 12)
-		if rng:NextNumber() < 0.5 then
-			w, d = d, w
-		end
-		local x, z = randomSpot(arena, math.max(w, d) / 2 + 8, math.max(w, d) / 2 + 12)
+	for _ = 1, 34 do
+		local x, z = randomSpot(arena, 7, 12)
 		if x and z then
-			local height = 12
-			local cf = CFrame.new(x, height / 2, z)
-			local size = Vector3.new(w, height, d)
-			local block = part({ Name = "Storefront", Size = size, CFrame = cf, Color = Color3.fromRGB(80 + rng:NextInteger(0, 40), 70, 100), Material = Enum.Material.SmoothPlastic, CanCollide = true, CanQuery = true })
-			block.Parent = arena.ObstacleFolder
-			local color = neon[(i - 1) % #neon + 1]
-			-- glass window band and neon sign on every side
-			part({ Name = "Window", Size = Vector3.new(w + 0.2, 4, d + 0.2), CFrame = cf * CFrame.new(0, -2, 0), Color = Color3.fromRGB(150, 200, 230), Material = Enum.Material.Glass, Transparency = 0.3 }).Parent = arena.Model
-			local sign = part({ Name = "Sign", Size = Vector3.new(w + 0.4, 1.2, d + 0.4), CFrame = cf * CFrame.new(0, height / 2 - 1.5, 0), Color = color, Material = Enum.Material.Neon })
-			sign.Parent = arena.Model
-			if lights < 12 then
-				lights += 1
-				local light = Instance.new("PointLight")
-				light.Color = color
-				light.Range = 30
-				light.Brightness = 2
-				light.Parent = sign
+			local s = rng:NextNumber(0.9, 1.3)
+			local cf = CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+			if not meshProp(arena, "Pillar", cf, s) then
+				part({ Name = "Pillar", Shape = Enum.PartType.Cylinder, Size = Vector3.new(8 * s, 2.4 * s, 2.4 * s), CFrame = CFrame.new(x, 4 * s, z) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(170, 166, 156), Material = Enum.Material.Slate }).Parent = arena.Model
 			end
-			addBoxObstacle(arena, cf, size)
+			collider(arena, x, z, 1.6 * s, 9 * s)
 		end
 	end
-	-- Benches and planters as small round obstacles.
-	for _ = 1, 24 do
+	for _ = 1, 18 do
 		local x, z = randomSpot(arena, 5, 12)
 		if x and z then
-			local planter = part({ Name = "Planter", Shape = Enum.PartType.Cylinder, Size = Vector3.new(2.5, 4, 4), CFrame = CFrame.new(x, 1.25, z) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(240, 240, 245), Material = Enum.Material.Marble, CanCollide = true, CanQuery = true })
-			planter.Parent = arena.ObstacleFolder
-			part({ Name = "Bush", Shape = Enum.PartType.Ball, Size = Vector3.new(3.6, 3, 3.6), CFrame = CFrame.new(x, 3.2, z), Color = Color3.fromRGB(60, 160, 80), Material = Enum.Material.Grass }).Parent = arena.Model
-			addCircleObstacle(arena, x, z, 2)
+			local s = rng:NextNumber(0.8, 1.4)
+			local cf = CFrame.new(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+			if not meshProp(arena, "CrystalCluster", cf, s) then
+				part({ Name = "Crystal", Size = Vector3.new(1, 3, 1) * s, CFrame = cf * CFrame.new(0, 1.5 * s, 0), Color = Color3.fromRGB(176, 91, 255), Material = Enum.Material.Neon }).Parent = arena.Model
+			end
+			if lights < 12 then
+				lights += 1
+				local glow = part({ Name = "Glow", Size = Vector3.one, CFrame = cf * CFrame.new(0, 2, 0), Transparency = 1 })
+				local light = Instance.new("PointLight")
+				light.Color = Color3.fromRGB(190, 110, 255)
+				light.Range = 20
+				light.Brightness = 1.5
+				light.Parent = glow
+				glow.Parent = arena.Model
+			end
+			collider(arena, x, z, 1.4 * s, 3)
 		end
 	end
-	-- Ceiling light grid (neon panels high above, no shadows).
-	for gx = -h + 40, h - 40, 80 do
-		for gz = -h + 40, h - 40, 80 do
-			part({ Name = "CeilingPanel", Size = Vector3.new(14, 0.3, 14), CFrame = CFrame.new(c + Vector3.new(gx, 0.04, gz)), Color = neon[rng:NextInteger(1, #neon)], Material = Enum.Material.Neon, Transparency = 0.6 }).Parent = arena.Model
+	for _ = 1, 16 do
+		local x, z = randomSpot(arena, 4, 10)
+		if x and z then
+			rock(arena, x, z)
 		end
 	end
 end
@@ -416,10 +490,10 @@ end
 function MapBuilder.BuildArena(name: string)
 	MapBuilder.DestroyArena()
 	local arena = newArena(name)
-	if name == "Mall" then
-		buildMall(arena)
+	if name == "Ruins" then
+		buildRuins(arena)
 	else
-		buildBackyard(arena)
+		buildForest(arena)
 	end
 	arena.Model.Parent = arena.Root
 	MapBuilder.ApplyLighting(name)

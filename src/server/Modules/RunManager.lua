@@ -46,8 +46,9 @@ local endPending = false
 local resultsTimer = 0
 local totalKills = 0
 local attrTimer = 0
-local selectedArena = "Backyard"
-local currentArena = "Backyard"
+local selectedArena = "Forest"
+local currentArena = "Forest"
+local mode = "Squad" -- "Squad" | "Duo" (set by the pad that started the countdown)
 local expectedRemoval: { [Model]: boolean } = {}
 
 ------------------------------------------------------------------------------------------
@@ -107,19 +108,26 @@ function RunManager.Broadcast(text: string, color: Color3?, big: boolean?)
 	Remotes.FireAllClients("Notify", { Text = text, Color = color, Big = big })
 end
 
+local function maxPlayers(): number
+	return math.min(Config.Run.MaxPlayers, Config.Modes[mode].MaxPlayers)
+end
+
 local function setPhase(newPhase: string)
 	phase = newPhase
 	state:SetAttribute("Phase", newPhase)
 	if lobby then
-		local p: ProximityPrompt = lobby.StartPrompt
-		if newPhase == "Lobby" then
-			p.Enabled = true
-			p.ActionText = "Start Run"
-		elseif newPhase == "Countdown" then
-			p.Enabled = true
-			p.ActionText = "Join Run"
-		else
-			p.Enabled = false
+		for promptMode, p in pairs({ Squad = lobby.StartPrompt, Duo = lobby.DuoPrompt }) do
+			local prompt: ProximityPrompt = p
+			if newPhase == "Lobby" then
+				prompt.Enabled = true
+				prompt.ActionText = "Start Run"
+			elseif newPhase == "Countdown" then
+				-- only the pad of the mode that is counting down accepts joiners
+				prompt.Enabled = promptMode == mode
+				prompt.ActionText = "Join Run"
+			else
+				prompt.Enabled = false
+			end
 		end
 	end
 end
@@ -129,6 +137,7 @@ end
 ------------------------------------------------------------------------------------------
 
 local spawnCharacter -- forward declaration
+local partnerRevives: (number) -> ()
 
 local function lobbySpawnCFrame(): CFrame
 	local a = rng:NextNumber(0, math.pi * 2)
@@ -298,6 +307,8 @@ local function checkEnd()
 end
 
 local function revive(rp, message: string)
+	rp.ReviveProgress = 0
+	rp.Player:SetAttribute("ReviveProgress", 0)
 	rp.Alive = true
 	rp.AwaitingRevive = false
 	setDownedLook(rp, false)
@@ -332,8 +343,52 @@ local function finalizeDeath(rp)
 	Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
 	Fx.PlayerEvent(rp.Player, "die")
 	Fx.Sound("Death")
-	RunManager.Broadcast(rp.Player.DisplayName .. " has fallen!", Color3.fromRGB(255, 90, 90))
+	if mode == "Duo" and (rp.PartnerRevives or 0) < Config.Modes.Duo.PartnerRevivesPerRun then
+		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen! Stand next to them to revive.", Color3.fromRGB(255, 90, 90))
+	else
+		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen!", Color3.fromRGB(255, 90, 90))
+	end
 	checkEnd()
+end
+
+--[[
+	DUO: a fallen player (dead, not waiting on the revive offer) is revived when their
+	living partner stands next to them for PartnerReviveSeconds. Progress decays when the
+	partner steps away. Each player can be partner-revived a few times per run.
+]]
+partnerRevives = function(dt: number)
+	local D = Config.Modes.Duo
+	for _, rp in ipairs(runPlayers) do
+		if not rp.Alive and not rp.AwaitingRevive and not rp.Returned and rp.Root and (rp.PartnerRevives or 0) < D.PartnerRevivesPerRun then
+			local helper = nil
+			for _, other in ipairs(runPlayers) do
+				if other ~= rp and other.Alive and other.Root then
+					if ((other.Root.Position - rp.Root.Position) * FLAT).Magnitude <= D.PartnerReviveRadius then
+						helper = other
+					end
+				end
+			end
+			local before = rp.ReviveProgress or 0
+			if helper then
+				rp.ReviveProgress = before + dt / D.PartnerReviveSeconds
+			else
+				rp.ReviveProgress = math.max(0, before - dt / D.PartnerReviveSeconds)
+			end
+			if math.abs((rp.ReviveProgress or 0) - before) > 0 then
+				rp.Player:SetAttribute("ReviveProgress", math.clamp(rp.ReviveProgress, 0, 1))
+			end
+			if rp.ReviveProgress >= 1 and helper then
+				rp.ReviveProgress = 0
+				rp.Player:SetAttribute("ReviveProgress", 0)
+				rp.PartnerRevives = (rp.PartnerRevives or 0) + 1
+				rp.Player:SetAttribute("PartnerRevivesLeft", D.PartnerRevivesPerRun - rp.PartnerRevives)
+				rp.TimeSurvived = 0
+				revive(rp, "Revived by " .. helper.Player.DisplayName .. "!")
+				setHP(rp, rp.Stats.MaxHP * D.PartnerReviveHPFraction)
+				RunManager.Notify(helper.Player, "You revived " .. rp.Player.DisplayName .. "!", Color3.fromRGB(120, 255, 160))
+			end
+		end
+	end
 end
 
 local function onDowned(rp)
@@ -460,12 +515,14 @@ local function resetPlayerAttributes(player: Player)
 	player:SetAttribute("Alive", nil)
 	player:SetAttribute("Paused", false)
 	player:SetAttribute("AuraEvo", nil)
+	player:SetAttribute("ReviveProgress", nil)
+	player:SetAttribute("PartnerRevivesLeft", nil)
 end
 
 local function beginRun()
 	local list = {}
 	for player in pairs(joined) do
-		if player.Parent and ctx.DataService.GetData(player) and #list < Config.Run.MaxPlayers then
+		if player.Parent and ctx.DataService.GetData(player) and #list < maxPlayers() then
 			table.insert(list, player)
 		end
 	end
@@ -511,6 +568,7 @@ local function beginRun()
 		player:SetAttribute("XPNeeded", rp.XPNeeded)
 		player:SetAttribute("Kills", 0)
 		player:SetAttribute("RunGold", 0)
+		player:SetAttribute("PartnerRevivesLeft", mode == "Duo" and #list > 1 and Config.Modes.Duo.PartnerRevivesPerRun or 0)
 		ctx.WeaponSystem.OnInventoryChanged(rp)
 		ctx.LevelUpSystem.SendInventory(rp)
 		RunManager.ApplyMovement(rp)
@@ -572,7 +630,7 @@ function RunManager.EndRun(won: boolean)
 			Gold = rp.Gold,
 			Level = rp.Level,
 			Damage = math.floor(rp.DamageDealt),
-			Arena = Config.Arenas[currentArena].DisplayName,
+			Arena = Config.Arenas[currentArena].DisplayName .. (mode == "Duo" and " (Duo)" or ""),
 			NewBest = newBest,
 			Unlocked = unlocked,
 			Seconds = Config.Run.ResultsSeconds,
@@ -640,7 +698,7 @@ local function tryJoin(player: Player)
 	for _ in pairs(joined) do
 		n += 1
 	end
-	if n >= Config.Run.MaxPlayers then
+	if n >= maxPlayers() then
 		RunManager.Notify(player, "This run is full.", Color3.fromRGB(255, 120, 120))
 		return
 	end
@@ -650,7 +708,7 @@ local function tryJoin(player: Player)
 	Remotes.FireClient("OpenPanel", player, "Joined")
 end
 
-local function startCountdown(player: Player)
+local function startCountdown(player: Player, newMode: string?)
 	if phase == "Countdown" then
 		tryJoin(player)
 		return
@@ -658,12 +716,15 @@ local function startCountdown(player: Player)
 	if phase ~= "Lobby" or not ctx.DataService.GetData(player) then
 		return
 	end
+	mode = (newMode and Config.Modes[newMode]) and newMode or "Squad"
+	state:SetAttribute("Mode", mode)
 	setPhase("Countdown")
 	countdown = Config.Run.CountdownSeconds
 	state:SetAttribute("Countdown", countdown)
 	table.clear(joined)
 	tryJoin(player)
-	RunManager.Broadcast(player.DisplayName .. " is starting a run! Tap JOIN to play.", Color3.fromRGB(120, 255, 160))
+	local label = mode == "Duo" and "a DUO run" or "a run"
+	RunManager.Broadcast(player.DisplayName .. " is starting " .. label .. "! Tap JOIN to play.", Color3.fromRGB(120, 255, 160))
 end
 
 local function cycleArena(player: Player)
@@ -691,7 +752,7 @@ local function cycleArena(player: Player)
 			return
 		end
 	end
-	RunManager.Notify(player, "Win a run to unlock the Mall arena!", Color3.fromRGB(255, 200, 120))
+	RunManager.Notify(player, "Win a run to unlock the Ruins arena!", Color3.fromRGB(255, 200, 120))
 end
 
 ------------------------------------------------------------------------------------------
@@ -776,6 +837,9 @@ function RunManager.Step(dt: number)
 				finalizeDeath(rp)
 			end
 		end
+	end
+	if mode == "Duo" and not frozen and not endPending then
+		partnerRevives(dt)
 	end
 
 	if frozen then
@@ -879,7 +943,12 @@ function RunManager.Init(c)
 end
 
 function RunManager.Start()
-	lobby.StartPrompt.Triggered:Connect(startCountdown)
+	lobby.StartPrompt.Triggered:Connect(function(player)
+		startCountdown(player, "Squad")
+	end)
+	lobby.DuoPrompt.Triggered:Connect(function(player)
+		startCountdown(player, "Duo")
+	end)
 	lobby.ArenaPrompt.Triggered:Connect(cycleArena)
 	lobby.CharacterPrompt.Triggered:Connect(function(player)
 		Remotes.FireClient("OpenPanel", player, "Characters")
@@ -892,7 +961,7 @@ function RunManager.Start()
 		if phase == "Countdown" then
 			tryJoin(player)
 		elseif phase == "Lobby" then
-			startCountdown(player)
+			startCountdown(player, "Squad")
 		end
 	end, 2)
 

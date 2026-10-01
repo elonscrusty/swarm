@@ -108,6 +108,15 @@ local function getProjectileModel(visual: number): { any }
 		projectilePools[visual] = list
 	end
 	local pieces = table.remove(list)
+	-- drop pooled part-built models once the uploaded mesh version is available
+	local meshName = ModelLibrary.ProjectileMeshName(visual)
+	local meshReady = meshName ~= nil and ModelLibrary.MeshFolder(meshName) ~= nil
+	while pieces and meshReady and not pieces[1].Part:IsA("MeshPart") do
+		for _, piece in ipairs(pieces) do
+			piece.Part:Destroy()
+		end
+		pieces = table.remove(list)
+	end
 	if pieces then
 		return pieces
 	end
@@ -458,6 +467,9 @@ local gemState: { [BasePart]: Vector3 } = {} -- active gem → server base posit
 local gemParts: { BasePart } = {}
 local gemCFrames: { CFrame } = {}
 
+local crystals: { [BasePart]: { Pieces: { any }, Scale: number, Color: Color3 } } = {}
+local crystalFor: (BasePart) -> any
+
 local function trackGem(gem: Instance)
 	if not gem:IsA("BasePart") then
 		return
@@ -471,6 +483,12 @@ local function trackGem(gem: Instance)
 		else
 			local last = gemState[part]
 			gemState[part] = nil
+			local c = crystals[part]
+			if c then
+				for _, piece in ipairs(c.Pieces) do
+					piece.Part.CFrame = PARK
+				end
+			end
 			-- collected near me → pickup sound
 			local root = player.Character and player.Character.PrimaryPart
 			if last and root and (root.Position - last).Magnitude < 8 then
@@ -484,6 +502,27 @@ local function trackGem(gem: Instance)
 end
 
 local gemClock = 0
+
+-- One crystal mesh per pooled gem part, rebuilt when the gem's size or colour changes.
+crystalFor = function(part: BasePart)
+	local c = crystals[part]
+	local scale = part.Size.X / 0.75
+	if c and (math.abs(c.Scale - scale) > 0.01 or c.Color ~= part.Color) then
+		for _, piece in ipairs(c.Pieces) do
+			piece.Part:Destroy()
+		end
+		c = nil
+	end
+	if not c then
+		local pieces = ModelLibrary.MeshPieces("Crystal", { Glow = part.Color, Light = part.Color:Lerp(Color3.new(1, 1, 1), 0.6) }, scale, 0)
+		if not pieces then
+			return nil
+		end
+		c = { Pieces = pieces, Scale = scale, Color = part.Color }
+		crystals[part] = c
+	end
+	return c
+end
 local GEM_TILT = CFrame.Angles(math.rad(45), 0, math.rad(35.26))
 
 -- Floor pickups bob and spin; chests just glow-pulse.
@@ -517,12 +556,28 @@ local function renderGems(dt: number)
 	table.clear(gemParts)
 	table.clear(gemCFrames)
 	local n = 0
+	local useMesh = ModelLibrary.MeshFolder("Crystal") ~= nil
 	for part, base in pairs(gemState) do
-		n += 1
 		local phase = base.X * 0.37 + base.Z * 0.21
-		gemParts[n] = part
-		-- cube stood on its corner = diamond-shaped crystal
-		gemCFrames[n] = CFrame.new(base + Vector3.new(0, math.sin(gemClock * 3 + phase) * 0.3, 0)) * CFrame.Angles(0, gemClock * 2 + phase, 0) * GEM_TILT
+		local bob = Vector3.new(0, math.sin(gemClock * 3 + phase) * 0.3, 0)
+		local spin = CFrame.Angles(0, gemClock * 2 + phase, 0)
+		local crystal = useMesh and crystalFor(part) or nil
+		if crystal then
+			-- uploaded crystal mesh drawn in place of the plain server cube
+			part.LocalTransparencyModifier = 1
+			local s = crystal.Scale
+			local cf = CFrame.new(base + bob - Vector3.new(0, 0.65 * s, 0)) * spin
+			for _, piece in ipairs(crystal.Pieces) do
+				n += 1
+				gemParts[n] = piece.Part
+				gemCFrames[n] = cf * piece.Offset
+			end
+		else
+			n += 1
+			gemParts[n] = part
+			-- cube stood on its corner = diamond-shaped crystal
+			gemCFrames[n] = CFrame.new(base + bob) * spin * GEM_TILT
+		end
 	end
 	if n > 0 then
 		workspace:BulkMoveTo(gemParts, gemCFrames, Enum.BulkMoveMode.FireCFrameChanged)

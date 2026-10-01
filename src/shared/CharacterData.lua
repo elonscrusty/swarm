@@ -227,6 +227,29 @@ function CharacterData.SkinsFor(characterId: string): { string }
 	return list
 end
 
+--[[
+	Slot colours for the Blender hero meshes (see MeshCatalog). Default skin = nil (the
+	mesh's own palette). Skins map their colours onto the mesh slots:
+	  Torso → Cloth, Legs → Cloth2, Hat → Metal, Accent → Accent (Gold Trim adds Gold).
+]]
+function CharacterData.MeshPalette(characterId: string, skinId: string?): { [string]: Color3 }?
+	local skin = skinId and CharacterData.Skins[skinId]
+	if not skin or (skin.Character ~= characterId and skin.Character ~= "*") then
+		return nil
+	end
+	local c = skin.Colors
+	local palette = {}
+	palette.Cloth = c.Torso
+	palette.Cloth2 = c.Legs
+	palette.Metal = c.Hat
+	palette.Accent = c.Accent
+	if skin.GoldTrim then
+		palette.Gold = Color3.fromRGB(255, 200, 40)
+		palette.Accent = Color3.fromRGB(255, 200, 40)
+	end
+	return palette
+end
+
 -- Resolves the final look (colours + hat) for a character + skin pair.
 function CharacterData.ResolveLook(characterId: string, skinId: string?)
 	local char = CharacterData.Characters[characterId] or CharacterData.Characters[CharacterData.Default]

@@ -7,6 +7,8 @@
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
+local MeshCatalog = require(game:GetService("ReplicatedStorage").Shared.MeshCatalog)
+local MeshService = require(script.Parent.MeshService)
 
 local ModelBuilder = {}
 
@@ -232,8 +234,105 @@ ModelBuilder.ClassGear = {
 
 	opts.Crown = true adds the VIP lobby crown above the hat.
 ]]
+-- Blender mesh body parts → Roblox rig part names.
+local BONE_NAMES = {
+	Torso = "Torso",
+	Head = "Head",
+	LeftArm = "Left Arm",
+	RightArm = "Right Arm",
+	LeftLeg = "Left Leg",
+	RightLeg = "Right Leg",
+}
+
+--[[
+	Hero built from the uploaded Blender meshes (MeshCatalog <characterId>). Same rig as
+	the part-built version: invisible HumanoidRootPart, six body MeshParts joined with
+	Motor6Ds (so the client walk cycle works), gear MeshParts welded to their bone.
+	Returns nil when the meshes aren't loaded.
+]]
+local function buildMeshCharacter(characterId: string, skinId: string?, crown: boolean): Model?
+	local folder = MeshService.Get(characterId)
+	local entry = MeshCatalog.Models[characterId]
+	if not folder or not entry then
+		return nil
+	end
+	local palette = CharacterData.MeshPalette(characterId, skinId) or {}
+	-- a skin with its own hat shape replaces the mesh's head gear with that hat
+	local look = CharacterData.ResolveLook(characterId, skinId)
+	local def = CharacterData.Characters[characterId]
+	local customHat = def ~= nil and look.Hat ~= def.Hat
+	local model = Instance.new("Model")
+	model.Name = "Character"
+	local root = part({ Name = "HumanoidRootPart", Size = Vector3.new(2, 2, 1), Transparency = 1, Anchored = false, CanCollide = true })
+	root.CFrame = CFrame.new(0, 3, 0)
+	root.Parent = model
+	model.PrimaryPart = root
+
+	local bones: { [string]: BasePart } = {}
+	local gearList = {}
+	for _, piece in ipairs(entry.Pieces) do
+		local template = folder:FindFirstChild(piece.Name) :: MeshPart?
+		local isHeadGear = piece.Bone == "Head" and piece.Name ~= "Head" and piece.Name ~= "Eyes"
+		if template and not (customHat and isHeadGear) then
+			local p = template:Clone()
+			p.Anchored = false
+			p.CanCollide = false
+			p.CanQuery = false
+			p.Massless = true
+			p.CastShadow = true
+			p.Size = Vector3.new(piece.Size[1], piece.Size[2], piece.Size[3])
+			p.Color = palette[piece.Slot] or (entry.Palette and entry.Palette[piece.Slot]) or p.Color
+			p.CFrame = CFrame.new(piece.Offset[1], piece.Offset[2], piece.Offset[3])
+			if piece.Bone and piece.Name == piece.Bone then
+				p.Name = BONE_NAMES[piece.Bone] or piece.Name
+				bones[piece.Bone] = p
+			else
+				table.insert(gearList, { Part = p, Bone = piece.Bone })
+			end
+			p.Parent = model
+		end
+	end
+	local torso, head = bones.Torso, bones.Head
+	if not torso or not head then
+		model:Destroy()
+		return nil
+	end
+	-- joints in model space (root centre at y = 3)
+	local function joint(name: string, parent: BasePart, child: BasePart?, at: Vector3)
+		if not child then
+			return
+		end
+		local world = CFrame.new(at)
+		motor(name, parent, child, parent.CFrame:ToObjectSpace(world), child.CFrame:ToObjectSpace(world))
+	end
+	joint("RootJoint", root, torso, Vector3.new(0, 3, 0))
+	joint("Neck", torso, head, Vector3.new(0, 4, 0))
+	joint("Left Shoulder", torso, bones.LeftArm, Vector3.new(-1, 3.9, 0))
+	joint("Right Shoulder", torso, bones.RightArm, Vector3.new(1, 3.9, 0))
+	joint("Left Hip", torso, bones.LeftLeg, Vector3.new(-0.5, 2, 0))
+	joint("Right Hip", torso, bones.RightLeg, Vector3.new(0.5, 2, 0))
+	for _, g in ipairs(gearList) do
+		weld(bones[g.Bone] or torso, g.Part)
+	end
+	if customHat then
+		local hatFn = ModelBuilder.HatShapes[look.Hat]
+		if hatFn then
+			hatFn(head, model, look.Colors.Hat, look.Colors.Accent)
+		end
+	end
+	if crown then
+		ModelBuilder.HatShapes.Crown(head, model, Color3.fromRGB(255, 205, 50), Color3.fromRGB(255, 60, 90), 1.9)
+	end
+	return model
+end
+
 function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts: { Crown: boolean? }?): Model
 	local look = CharacterData.ResolveLook(characterId, skinId)
+	local meshModel = buildMeshCharacter(characterId, skinId, opts ~= nil and opts.Crown == true)
+	if meshModel then
+		ModelBuilder.AddHumanoid(meshModel, characterId, skinId)
+		return meshModel
+	end
 	local colors = look.Colors
 	local model = Instance.new("Model")
 	model.Name = "Character"
@@ -311,6 +410,11 @@ function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts:
 		end
 	end
 
+	ModelBuilder.AddHumanoid(model, characterId, skinId)
+	return model
+end
+
+function ModelBuilder.AddHumanoid(model: Model, characterId: string, skinId: string?)
 	local humanoid = Instance.new("Humanoid")
 	humanoid.RigType = Enum.HumanoidRigType.R15 -- R15 rules: HipHeight = floor to root bottom
 	humanoid.HipHeight = 2
@@ -326,7 +430,6 @@ function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts:
 
 	model:SetAttribute("CharacterId", characterId)
 	model:SetAttribute("SkinId", skinId or "Default")
-	return model
 end
 
 ------------------------------------------------------------------------------------------
@@ -399,9 +502,9 @@ end
 
 ModelBuilder.GemStyles = {
 	-- cubes; clients stand them on a corner so they read as cut crystals
-	Small = { Size = Vector3.new(0.75, 0.75, 0.75), Color = Color3.fromRGB(70, 160, 255) },
-	Medium = { Size = Vector3.new(1.0, 1.0, 1.0), Color = Color3.fromRGB(70, 230, 110) },
-	Large = { Size = Vector3.new(1.35, 1.35, 1.35), Color = Color3.fromRGB(255, 70, 90) },
+	Small = { Size = Vector3.new(0.75, 0.75, 0.75), Color = Color3.fromRGB(176, 91, 255) }, -- purple
+	Medium = { Size = Vector3.new(1.0, 1.0, 1.0), Color = Color3.fromRGB(80, 170, 255) }, -- blue
+	Large = { Size = Vector3.new(1.35, 1.35, 1.35), Color = Color3.fromRGB(255, 196, 50) }, -- gold
 }
 
 function ModelBuilder.BuildGem(index: number, parent: Instance): BasePart
@@ -418,7 +521,31 @@ function ModelBuilder.StyleGem(gem: BasePart, kind: string)
 end
 
 -- Floor pickups: "Chicken" | "Magnet" | "Bomb". Returns an anchored model.
+-- Wraps a MeshService model as a pickup: primary part, glow light, Pickup attribute.
+local function meshPickup(name: string, kind: string, position: Vector3, lightColor: Color3): Model?
+	local model = MeshService.Build(name, CFrame.new(position.X, position.Y - 1.2, position.Z))
+	if not model then
+		return nil
+	end
+	model.Name = kind
+	local primary = model:FindFirstChildWhichIsA("BasePart")
+	model.PrimaryPart = primary
+	if primary then
+		local light = Instance.new("PointLight")
+		light.Range = 10
+		light.Brightness = kind == "Chest" and 2 or 1
+		light.Color = lightColor
+		light.Parent = primary
+	end
+	model:SetAttribute("Pickup", kind)
+	return model
+end
+
 function ModelBuilder.BuildPickup(kind: string, position: Vector3): Model
+	local meshModel = meshPickup("Pickup_" .. kind, kind, position, (kind == "Chicken" and Color3.fromRGB(255, 200, 150)) or (kind == "Magnet" and Color3.fromRGB(255, 80, 80)) or Color3.fromRGB(255, 200, 80))
+	if meshModel then
+		return meshModel
+	end
 	local model = Instance.new("Model")
 	model.Name = kind
 	local base = CFrame.new(position)
@@ -457,6 +584,18 @@ end
 
 -- Treasure chest dropped by elites.
 function ModelBuilder.BuildChest(position: Vector3): Model
+	local meshModel = meshPickup("Chest", "Chest", position + Vector3.new(0, 1.2, 0), Color3.fromRGB(255, 210, 90))
+	if meshModel then
+		local box = meshModel:FindFirstChild("Box") :: BasePart?
+		if box then
+			meshModel.PrimaryPart = box
+			local light = meshModel:FindFirstChildWhichIsA("PointLight", true)
+			if light then
+				light.Parent = box
+			end
+		end
+		return meshModel
+	end
 	local model = Instance.new("Model")
 	model.Name = "Chest"
 	local base = CFrame.new(position + Vector3.new(0, 0.9, 0))

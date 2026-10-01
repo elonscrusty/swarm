@@ -62,7 +62,7 @@ local function defaultData()
 		PurchaseIds = {},
 		Settings = { Music = 0.6, Sfx = 0.8 },
 		ReviveTokens = 0,
-		SelectedArena = "Backyard",
+		SelectedArena = "Forest",
 	}
 end
 DataService.DefaultData = defaultData

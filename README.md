@@ -1,11 +1,16 @@
 # SWARM
 
 A Vampire Survivors-style auto-attack wave survival game for Roblox, written in Luau
-with a Rojo project layout. Everything (maps, characters, enemies, gems, UI) is built
-in code from Parts, built-in meshes and UI instances. No external assets are needed.
+with a Rojo project layout: exterminator heroes against an alien insect swarm.
+
+Models come from two places:
+- **Blender meshes** (`blender/`): chunky low-poly heroes, bugs, the Scorpion Queen boss,
+  weapons, crystals and map props. They show up in game after they are uploaded (see §9).
+- **Part-built fallbacks** in code, used for anything not uploaded yet, so the game always runs.
 
 - Third-person top-down camera. You only move; weapons fire on their own.
-- 15-minute runs, a boss at 15:00, up to 4 players per server in one arena.
+- 15-minute runs, a boss at 15:00. Two lobby pads: **Squad** (1-4 players) and **Duo**
+  (2 players; stand next to a fallen partner for 3 s to revive them).
 - 8 weapons (8 levels + evolution each), 12 passives, 6 enemy types + elites + boss.
 - 4 characters, permanent gold upgrades, gamepasses, developer products, cosmetic skins.
 - Mobile first: a floating thumbstick is the only control during a run.
@@ -139,3 +144,22 @@ call on them.
 effects. Music entries are empty: pick free licensed tracks in the Creator Store (Audio,
 filter by creator "Roblox"), and paste `rbxassetid://<id>` into `LobbyMusic`, `BattleMusic`
 and `BossMusic`.
+
+## 9. 3D models (Blender → Roblox)
+
+Preview pictures of every model are in `renders/` (`renders/Sheet_*.png`).
+
+1. Edit models in `blender/models/*.py` (enemies, heroes, items, world).
+2. Build: `pip install bpy==5.0.1 pillow` (Python 3.11), then `python3 blender/build.py`
+   (exports `meshes/<Category>/*.fbx`, `meshes/catalog.json` and new renders).
+3. Upload (once per changed model) with an Open Cloud API key that has
+   *Assets read + write* for the account that owns the game:
+   ```
+   ROBLOX_API_KEY=... ROBLOX_USER_ID=... python3 tools/upload_meshes.py
+   ```
+   This fills `meshes/uploaded_ids.json` and regenerates `src/shared/MeshCatalog.lua`.
+4. Rebuild the place (`rojo build`). On start the server loads each uploaded model with
+   InsertService; anything missing keeps its part-built fallback.
+
+Each model is split into pieces (one MeshPart each) that are coloured in game by "slot"
+(skins and elites recolour them) and animated by the client (legs, wings, claws, tail).

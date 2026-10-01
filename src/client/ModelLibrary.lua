@@ -19,6 +19,8 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local Config = require(Shared:WaitForChild("Config"))
+local MeshCatalog = require(Shared:WaitForChild("MeshCatalog"))
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ModelLibrary = {}
 
@@ -31,7 +33,8 @@ local WHITE = Color3.fromRGB(245, 245, 245)
 local folder: Instance? = nil
 
 function ModelLibrary.SetFolder(f: Instance)
-	folder = f
+	folder = f;
+	(ModelLibrary :: any)._folder = f
 end
 
 -- Creates one local part. shape: "Ball" | "Block" | "Cylinder" | "Wedge" | "Corner"
@@ -81,7 +84,73 @@ end
 local CYL_UP = CFrame.Angles(0, 0, math.rad(90)) -- cylinder axis X → Y
 
 ------------------------------------------------------------------------------------------
--- ENEMIES
+-- UPLOADED MESH MODELS (Blender-built, see MeshCatalog / server MeshService)
+------------------------------------------------------------------------------------------
+
+local MATERIALS = {
+	SmoothPlastic = Enum.Material.SmoothPlastic,
+	Neon = Enum.Material.Neon,
+	Metal = Enum.Material.Metal,
+	Glass = Enum.Material.Glass,
+}
+
+-- Template folder of a loaded mesh model, or nil (not uploaded / still loading).
+function ModelLibrary.MeshFolder(name: string): Instance?
+	local root = ReplicatedStorage:FindFirstChild("SwarmMeshes")
+	local f = root and root:FindFirstChild(name)
+	if f and f:GetAttribute("Ready") then
+		return f
+	end
+	return nil
+end
+
+--[[
+	Pieces for a mesh model. palette overrides slot colours; tint(color) can change each
+	colour (elite gold); scale grows everything; lift moves the model origin
+	(e.g. -halfHeight so a ground-origin model sits under an enemy's body centre).
+]]
+function ModelLibrary.MeshPieces(name: string, palette: { [string]: Color3 }?, scale: number?, lift: number?, tint: ((Color3) -> Color3)?): { Piece }?
+	local folder = ModelLibrary.MeshFolder(name)
+	local entry = MeshCatalog.Models[name]
+	if not folder or not entry then
+		return nil
+	end
+	local s = scale or 1
+	local pieces: { Piece } = {}
+	for _, def in ipairs(entry.Pieces) do
+		local template = folder:FindFirstChild(def.Name)
+		if template and template:IsA("MeshPart") then
+			local part = template:Clone()
+			part.Size = Vector3.new(def.Size[1], def.Size[2], def.Size[3]) * s
+			local color = (palette and palette[def.Slot]) or (entry.Palette and entry.Palette[def.Slot]) or part.Color
+			if tint then
+				color = tint(color)
+			end
+			part.Color = color
+			part.Material = MATERIALS[def.Material] or Enum.Material.SmoothPlastic
+			part.CFrame = CFrame.new(0, -150, 0)
+			part.Parent = (ModelLibrary :: any)._folder
+			local offset = Vector3.new(def.Offset[1], def.Offset[2], def.Offset[3]) * s + Vector3.new(0, lift or 0, 0)
+			local pivot = def.Pivot and CFrame.new(Vector3.new(def.Pivot[1], def.Pivot[2], def.Pivot[3]) * s) or nil
+			table.insert(pieces, { Part = part, Offset = CFrame.new(offset), Anim = def.Anim, Pivot = pivot, Color = color })
+		end
+	end
+	return pieces
+end
+
+-- Enemy type → mesh model name and whole-body motion.
+local ENEMY_MESH = {
+	Slime = { "Mite", "Walk" },
+	Bat = { "Wasp", "Fly" },
+	Skeleton = { "BeetleWarrior", "Walk" },
+	Ghost = { "PhaseMoth", "Float" },
+	Brute = { "RhinoBeetle", "Stomp" },
+	Bomber = { "BombTick", "Waddle" },
+	Boss = { "ScorpionQueen", "Stomp" },
+}
+
+------------------------------------------------------------------------------------------
+-- ENEMIES (part-built fallback models)
 ------------------------------------------------------------------------------------------
 
 local ENEMIES: { [string]: (any, Color3, Color3) -> string } = {}
@@ -242,6 +311,26 @@ end
 function ModelLibrary.Enemy(typeId: string, elite: boolean): ({ Piece }, string, number)
 	local def = EnemyData.Enemies[typeId] or EnemyData.Enemies.Slime
 	local scale = elite and Config.Enemies.EliteSizeMult or 1
+
+	-- Prefer the uploaded Blender mesh when it is loaded.
+	local meshInfo = ENEMY_MESH[typeId]
+	if meshInfo then
+		local tint = elite and function(c: Color3): Color3
+			return c:Lerp(GOLD, 0.35)
+		end or nil
+		local meshPieces = ModelLibrary.MeshPieces(meshInfo[1], nil, scale, -def.Size.Y * scale / 2, tint)
+		if meshPieces then
+			if elite then
+				local crownBuilder = builder(1)
+				eliteCrown(crownBuilder)
+				for _, piece in ipairs(crownBuilder.pieces) do
+					piece.Offset = CFrame.new(0, def.Size.Y * scale / 2 + 1.2, 0) * piece.Offset
+					table.insert(meshPieces, piece)
+				end
+			end
+			return meshPieces, meshInfo[2], scale
+		end
+	end
 	local b = builder(scale)
 	local base: Color3 = def.Color
 	if elite then
@@ -351,7 +440,35 @@ SHOTS[11] = function(b, def)
 	bottle(b, def.Color, true)
 end
 
+-- Projectile visual index → mesh model + slot colour overrides.
+local SHOT_MESH: { [number]: { any } } = {
+	[1] = { "Shot_Orb", { Glow = Color3.fromRGB(170, 90, 255) } },
+	[2] = { "Shot_Knife", nil },
+	[3] = { "Shot_Bottle", nil },
+	[4] = { "Shot_Axe", nil },
+	[5] = { "Shot_Boomerang", nil },
+	[6] = { "Shot_Orb", { Glow = Color3.fromRGB(255, 110, 210) } },
+	[7] = { "Shot_Stinger", nil },
+	[8] = { "Shot_Knife", { Metal = Color3.fromRGB(255, 215, 80), Gold = Color3.fromRGB(255, 240, 160) } },
+	[9] = { "Shot_Axe", { Metal = Color3.fromRGB(220, 40, 60), Dark = Color3.fromRGB(60, 10, 20) } },
+	[10] = { "Shot_Boomerang", { Wood = Color3.fromRGB(60, 230, 255), Accent = Color3.fromRGB(255, 255, 255) } },
+	[11] = { "Shot_Bottle", { Glow = Color3.fromRGB(255, 120, 30), Light = Color3.fromRGB(255, 200, 150) } },
+}
+
+-- Mesh model name used for a projectile visual (nil = part-built only).
+function ModelLibrary.ProjectileMeshName(visual: number): string?
+	local mesh = SHOT_MESH[visual]
+	return mesh and mesh[1] or nil
+end
+
 function ModelLibrary.Projectile(visual: number): { Piece }
+	local mesh = SHOT_MESH[visual]
+	if mesh then
+		local meshPieces = ModelLibrary.MeshPieces(mesh[1], mesh[2], visual == 7 and 1.4 or 1, 0)
+		if meshPieces then
+			return meshPieces
+		end
+	end
 	local def = WeaponData.Visuals[visual] or WeaponData.Visuals[1]
 	local b = builder(1)
 	local fn = SHOTS[visual]
@@ -391,6 +508,8 @@ function ModelLibrary.Animate(anim: string, t: number, phase: number, move: numb
 		return CFrame.new(s, math.abs(s), 0)
 	elseif anim == "Pulse" then
 		return CFrame.new(0, math.sin(t * 6 + phase) * 0.05, 0)
+	elseif anim == "Tail" then
+		return CFrame.Angles(math.sin(t * 2.2 + phase) * 0.12, 0, math.sin(t * 1.3 + phase) * 0.08)
 	elseif anim == "CrownBob" then
 		return CFrame.new(0, math.sin(t * 3 + phase) * 0.2, 0)
 	end

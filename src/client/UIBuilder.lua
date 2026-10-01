@@ -269,7 +269,7 @@ local function buildHud()
 	corner(hud.BossTrail, 6)
 	hud.BossFill = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(220, 30, 50), BorderSizePixel = 0 }, bossBack)
 	corner(hud.BossFill, 6)
-	label(bossBack, "THE SWARM QUEEN", 16, { Size = UDim2.fromScale(1, 1), ZIndex = 2, TextStrokeTransparency = 0.3 })
+	label(bossBack, "SCORPION QUEEN", 16, { Size = UDim2.fromScale(1, 1), ZIndex = 2, TextStrokeTransparency = 0.3 })
 	hud.Boss = bossBack
 
 	-- Kills + gold (top left)
@@ -1291,7 +1291,14 @@ local function updateFrame(dt: number)
 		if state:GetAttribute("Frozen") then
 			status = "PAUSED"
 		elseif player:GetAttribute("Alive") == false and not revive.Overlay.Visible and phase == "Running" then
-			status = "You fell. Spectating your team..."
+			local progress = player:GetAttribute("ReviveProgress") or 0
+			if progress > 0 then
+				status = string.format("Your partner is reviving you... %d%%", math.floor(progress * 100))
+			elseif (player:GetAttribute("PartnerRevivesLeft") or 0) > 0 then
+				status = "You fell! Your partner can revive you by standing next to you."
+			else
+				status = "You fell. Spectating your team..."
+			end
 		end
 		hud.Status.Text = status
 		hud.Status.Visible = status ~= ""
@@ -1306,7 +1313,8 @@ local function updateFrame(dt: number)
 				anim.Countdown = seconds
 				UIAnim.Punch(lobbyUi.CountdownText, 0.4)
 			end
-			lobbyUi.CountdownText.Text = "Run starts in " .. tostring(seconds)
+			local modeName = state:GetAttribute("Mode") == "Duo" and "Duo run" or "Run"
+			lobbyUi.CountdownText.Text = modeName .. " starts in " .. tostring(seconds)
 			lobbyUi.JoinButton.Visible = not joinedCountdown
 			lobbyUi.Info.Text = joinedCountdown and "You're in! Get ready..." or ""
 		else
@@ -1316,7 +1324,7 @@ local function updateFrame(dt: number)
 			if phase == "Running" or phase == "Results" then
 				lobbyUi.Info.Text = "A run is in progress (" .. formatTime(state:GetAttribute("RunTime") or 0) .. "). Wait here for the next one!"
 			else
-				lobbyUi.Info.Text = "Step on the green pad to start a run!"
+				lobbyUi.Info.Text = "Green pad: Squad (1-4).  Blue pad: Duo (2 players)."
 			end
 		end
 	end

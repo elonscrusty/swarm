@@ -31,6 +31,7 @@ local ORDER = {
 	"DataService",
 	"MonetizationService",
 	"GoldSystem",
+	"MeshService",
 	"MapBuilder",
 	"ModelBuilder",
 	"XPSystem",

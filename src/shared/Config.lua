@@ -359,14 +359,28 @@ Config.UI = {
 -- ARENAS AND LOBBY
 ------------------------------------------------------------------------------------------
 Config.Arenas = {
-	Order = { "Backyard", "Mall" },
-	Backyard = { DisplayName = "Backyard", RequiredWins = 0 },
-	Mall = { DisplayName = "Mall", RequiredWins = 1 },
+	Order = { "Forest", "Ruins" },
+	Forest = { DisplayName = "Forest", RequiredWins = 0 },
+	Ruins = { DisplayName = "Ruins", RequiredWins = 1 },
 	Size = 400, -- square arena, centred on ArenaOrigin
 	FenceHeight = 8,
 	TreeCount = 38,
 	RockCount = 30,
-	StorefrontCount = 14,
+}
+
+-- Run modes: which lobby pad started the countdown.
+Config.Modes = {
+	Squad = { DisplayName = "Squad", MaxPlayers = 4, MinPlayers = 1 },
+	-- Duo: two players. A fallen partner can be revived by standing next to them.
+	Duo = {
+		DisplayName = "Duo",
+		MaxPlayers = 2,
+		MinPlayers = 1, -- a lone player may still start; the second slot stays open while counting down
+		PartnerReviveSeconds = 3, -- stand this long next to a fallen partner to revive them
+		PartnerReviveRadius = 7,
+		PartnerReviveHPFraction = 0.4,
+		PartnerRevivesPerRun = 3, -- per downed player
+	},
 }
 Config.ArenaOrigin = Vector3.new(0, 0, 0) -- floor top surface is at this height
 Config.Lobby = {

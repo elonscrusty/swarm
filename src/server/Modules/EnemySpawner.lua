@@ -248,7 +248,7 @@ function EnemySpawner.MiniWave()
 		end
 	end
 	if count > 0 then
-		ctx.RunManager.Broadcast("A swarm of " .. typeId .. "s approaches!", Color3.fromRGB(255, 160, 80))
+		ctx.RunManager.Broadcast("A swarm of " .. (def.DisplayName or typeId) .. "s approaches!", Color3.fromRGB(255, 160, 80))
 	end
 end
 
