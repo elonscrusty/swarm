@@ -13,6 +13,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Audio = require(script.Parent:WaitForChild("Audio"))
 local CameraController = require(script.Parent:WaitForChild("CameraController"))
 local MobileControls = require(script.Parent:WaitForChild("MobileControls"))
+local EnemyRenderer = require(script.Parent:WaitForChild("EnemyRenderer"))
 local VFX = require(script.Parent:WaitForChild("VFX"))
 local UIBuilder = require(script.Parent:WaitForChild("UIBuilder"))
 
@@ -21,6 +22,7 @@ local player = Players.LocalPlayer
 Audio.Init()
 CameraController.Init()
 MobileControls.Init()
+EnemyRenderer.Init() -- before VFX: it sets up the folder the 3D models live in
 VFX.Init({
 	OnLocalEvent = function(kind)
 		if kind == "hurt" then

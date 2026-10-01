@@ -59,8 +59,11 @@ src/client/   → StarterPlayerScripts.SwarmClient
   ClientMain.client.lua starts everything, music, VIP chat tag
   CameraController.lua  fixed-angle follow camera (+ spectate when dead)
   MobileControls.lua    floating thumbstick, WASD, gamepad
-  VFX.lua               projectile rendering, effects, gem bob, aura rings, HP bars, walk cycle
+  VFX.lua               projectile rendering, effects, gem/pickup bob, aura rings, HP bars, walk cycle
+  ModelLibrary.lua      detailed animated 3D models for every enemy, the boss and every projectile
+  EnemyRenderer.lua     draws those models on the server's enemy bodies (client only)
   UIBuilder.lua         every screen, built in code, scaled with UIScale
+  UIAnim.lua            UI motion: pop-ins, card fly-ins, punches, count-ups, button feedback
   Audio.lua             pooled sound effects + music
 ```
 
@@ -123,6 +126,8 @@ That's all: pooling, movement, elites, drops and hit flashes work for every type
 - Projectiles are server data only; clients get one buffer of positions per sync tick (30 Hz)
   and draw pooled parts. Effects are batched into one remote per tick.
 - Gems are pooled Parts (500); bob/spin is local to each client.
+- Detailed enemy models exist only on clients: the server still replicates one part per
+  enemy. `Config.Graphics.MaxDetailedEnemies` caps how many get the full model on screen.
 
 Note: `SetNetworkOwner(nil)` is only called for unanchored enemy parts. Enemy bodies are
 anchored (moved by CFrame), and anchored parts are always server-owned; Roblox rejects the

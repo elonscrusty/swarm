@@ -161,6 +161,65 @@ ModelBuilder.HatShapes = {
 } :: { [string]: HatFn }
 
 ------------------------------------------------------------------------------------------
+-- Class gear (weapons, capes, armour bits) - welded to the body part it belongs to
+------------------------------------------------------------------------------------------
+
+local function gear(base: BasePart, model: Model, props, offset: CFrame): BasePart
+	props.Anchored = false
+	local p = part(props)
+	p.Massless = true
+	p.CFrame = base.CFrame * offset
+	p.Parent = model
+	weld(base, p)
+	return p
+end
+
+local CYL_UP = CFrame.Angles(0, 0, math.rad(90))
+local STEEL = Color3.fromRGB(200, 205, 215)
+local WOOD = Color3.fromRGB(120, 80, 50)
+
+ModelBuilder.ClassGear = {
+	-- Knight: shoulder plates, round shield on the left arm, sword in the right hand.
+	Knight = function(rig, c)
+		for _, arm in ipairs({ rig.LeftArm, rig.RightArm }) do
+			gear(arm, rig.Model, { Name = "Pauldron", Shape = Enum.PartType.Ball, Size = Vector3.new(1.3, 0.8, 1.2), Color = c.Hat, Material = Enum.Material.Metal }, CFrame.new(0, 0.85, 0))
+		end
+		gear(rig.LeftArm, rig.Model, { Name = "Shield", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.25, 1.9, 1.9), Color = c.Accent, Material = Enum.Material.Metal }, CFrame.new(-0.55, -0.2, 0))
+		gear(rig.LeftArm, rig.Model, { Name = "ShieldBoss", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), Color = Color3.fromRGB(255, 205, 60), Material = Enum.Material.Metal }, CFrame.new(-0.7, -0.2, 0))
+		gear(rig.RightArm, rig.Model, { Name = "Grip", Size = Vector3.new(0.25, 0.25, 0.7), Color = WOOD }, CFrame.new(0, -1.1, -0.2))
+		gear(rig.RightArm, rig.Model, { Name = "Guard", Size = Vector3.new(0.9, 0.2, 0.2), Color = Color3.fromRGB(255, 205, 60), Material = Enum.Material.Metal }, CFrame.new(0, -1.1, -0.6))
+		gear(rig.RightArm, rig.Model, { Name = "Blade", Size = Vector3.new(0.25, 0.12, 2.6), Color = STEEL, Material = Enum.Material.Metal }, CFrame.new(0, -1.1, -2.0))
+	end,
+	-- Mage: long cape, glowing staff, spell book on the belt.
+	Mage = function(rig, c)
+		gear(rig.Torso, rig.Model, { Name = "Cape", Size = Vector3.new(1.9, 3.4, 0.12), Color = c.Torso:Lerp(Color3.new(0, 0, 0), 0.35) }, CFrame.new(0, -0.6, 0.58) * CFrame.Angles(math.rad(8), 0, 0))
+		gear(rig.Torso, rig.Model, { Name = "Clasp", Shape = Enum.PartType.Ball, Size = Vector3.new(0.35, 0.35, 0.35), Color = c.Accent, Material = Enum.Material.Neon }, CFrame.new(0, 0.85, -0.5))
+		gear(rig.RightArm, rig.Model, { Name = "Staff", Shape = Enum.PartType.Cylinder, Size = Vector3.new(4.2, 0.25, 0.25), Color = WOOD, Material = Enum.Material.Wood }, CFrame.new(0, -0.3, -0.45) * CYL_UP)
+		gear(rig.RightArm, rig.Model, { Name = "StaffGem", Shape = Enum.PartType.Ball, Size = Vector3.new(0.7, 0.7, 0.7), Color = c.Accent, Material = Enum.Material.Neon }, CFrame.new(0, 1.9, -0.45))
+		gear(rig.Torso, rig.Model, { Name = "Book", Size = Vector3.new(0.2, 0.7, 0.55), Color = Color3.fromRGB(120, 40, 50) }, CFrame.new(-1.05, -0.6, 0))
+	end,
+	-- Rogue: scarf with a tail, two daggers on the hips, quiver of knives on the back.
+	Rogue = function(rig, c)
+		gear(rig.Torso, rig.Model, { Name = "Scarf", Size = Vector3.new(1.6, 0.35, 1.15), Color = c.Accent }, CFrame.new(0, 0.95, 0))
+		gear(rig.Torso, rig.Model, { Name = "ScarfTail", Size = Vector3.new(0.35, 1.2, 0.1), Color = c.Accent }, CFrame.new(0.4, 0.3, 0.6) * CFrame.Angles(math.rad(15), 0, math.rad(-10)))
+		for _, side in ipairs({ -1, 1 }) do
+			gear(rig.Torso, rig.Model, { Name = "Dagger", Size = Vector3.new(0.15, 1.0, 0.3), Color = STEEL, Material = Enum.Material.Metal }, CFrame.new(side * 1.05, -0.9, -0.1) * CFrame.Angles(0, 0, math.rad(side * 15)))
+			gear(rig.Torso, rig.Model, { Name = "DaggerHilt", Size = Vector3.new(0.2, 0.35, 0.2), Color = WOOD }, CFrame.new(side * 1.0, -0.25, -0.1))
+		end
+		gear(rig.Torso, rig.Model, { Name = "Quiver", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.6, 0.6, 0.6), Color = Color3.fromRGB(90, 60, 40) }, CFrame.new(0.3, 0.2, 0.75) * CFrame.Angles(0, 0, math.rad(70)))
+	end,
+	-- Priest: robe skirt, glowing holy symbol, censer chain in the left hand.
+	Priest = function(rig, c)
+		gear(rig.Torso, rig.Model, { Name = "Robe", Size = Vector3.new(2.3, 1.6, 1.3), Color = c.Torso }, CFrame.new(0, -1.5, 0))
+		gear(rig.Torso, rig.Model, { Name = "RobeTrim", Size = Vector3.new(2.35, 0.2, 1.35), Color = c.Accent }, CFrame.new(0, -2.25, 0))
+		gear(rig.Torso, rig.Model, { Name = "Stole", Size = Vector3.new(0.4, 1.9, 0.08), Color = c.Accent }, CFrame.new(0, -0.05, -0.53))
+		gear(rig.Torso, rig.Model, { Name = "Symbol", Shape = Enum.PartType.Ball, Size = Vector3.new(0.45, 0.45, 0.2), Color = Color3.fromRGB(255, 240, 150), Material = Enum.Material.Neon }, CFrame.new(0, 0.5, -0.6))
+		gear(rig.LeftArm, rig.Model, { Name = "Chain", Size = Vector3.new(0.08, 0.9, 0.08), Color = STEEL, Material = Enum.Material.Metal }, CFrame.new(0, -1.4, 0))
+		gear(rig.LeftArm, rig.Model, { Name = "Censer", Shape = Enum.PartType.Ball, Size = Vector3.new(0.6, 0.6, 0.6), Color = Color3.fromRGB(255, 205, 60), Material = Enum.Material.Metal }, CFrame.new(0, -2.0, 0))
+	end,
+}
+
+------------------------------------------------------------------------------------------
 -- Player characters
 ------------------------------------------------------------------------------------------
 
@@ -195,8 +254,8 @@ function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts:
 
 	local torso = limb("Torso", Vector3.new(2, 2, 1), colors.Torso, CFrame.new(), "RootJoint", root, CFrame.new(), CFrame.new())
 	local head = limb("Head", Vector3.new(1.2, 1.2, 1.2), colors.Head, CFrame.new(0, 1.6, 0), "Neck", torso, CFrame.new(0, 1, 0), CFrame.new(0, -0.6, 0))
-	limb("Left Arm", Vector3.new(0.9, 2, 0.9), colors.Arms, CFrame.new(-1.45, 0, 0), "Left Shoulder", torso, CFrame.new(-1, 0.9, 0), CFrame.new(0.45, 0.9, 0))
-	limb("Right Arm", Vector3.new(0.9, 2, 0.9), colors.Arms, CFrame.new(1.45, 0, 0), "Right Shoulder", torso, CFrame.new(1, 0.9, 0), CFrame.new(-0.45, 0.9, 0))
+	local leftArm = limb("Left Arm", Vector3.new(0.9, 2, 0.9), colors.Arms, CFrame.new(-1.45, 0, 0), "Left Shoulder", torso, CFrame.new(-1, 0.9, 0), CFrame.new(0.45, 0.9, 0))
+	local rightArm = limb("Right Arm", Vector3.new(0.9, 2, 0.9), colors.Arms, CFrame.new(1.45, 0, 0), "Right Shoulder", torso, CFrame.new(1, 0.9, 0), CFrame.new(-0.45, 0.9, 0))
 	limb("Left Leg", Vector3.new(0.95, 2, 0.95), colors.Legs, CFrame.new(-0.5, -2, 0), "Left Hip", torso, CFrame.new(-0.5, -1, 0), CFrame.new(0, 1, 0))
 	limb("Right Leg", Vector3.new(0.95, 2, 0.95), colors.Legs, CFrame.new(0.5, -2, 0), "Right Hip", torso, CFrame.new(0.5, -1, 0), CFrame.new(0, 1, 0))
 
@@ -216,6 +275,11 @@ function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts:
 
 	local hatFn = ModelBuilder.HatShapes[look.Hat] or ModelBuilder.HatShapes.Helmet
 	hatFn(head, model, colors.Hat, colors.Accent)
+
+	local gearFn = ModelBuilder.ClassGear[characterId]
+	if gearFn then
+		gearFn({ Model = model, Torso = torso, Head = head, LeftArm = leftArm, RightArm = rightArm }, colors)
+	end
 
 	if look.GoldTrim then
 		local gold = Color3.fromRGB(255, 200, 40)
@@ -334,17 +398,14 @@ end
 ------------------------------------------------------------------------------------------
 
 ModelBuilder.GemStyles = {
-	Small = { Size = Vector3.new(0.8, 1.1, 0.8), Color = Color3.fromRGB(70, 160, 255) },
-	Medium = { Size = Vector3.new(1.1, 1.5, 1.1), Color = Color3.fromRGB(70, 230, 110) },
-	Large = { Size = Vector3.new(1.5, 2.0, 1.5), Color = Color3.fromRGB(255, 70, 90) },
+	-- cubes; clients stand them on a corner so they read as cut crystals
+	Small = { Size = Vector3.new(0.75, 0.75, 0.75), Color = Color3.fromRGB(70, 160, 255) },
+	Medium = { Size = Vector3.new(1.0, 1.0, 1.0), Color = Color3.fromRGB(70, 230, 110) },
+	Large = { Size = Vector3.new(1.35, 1.35, 1.35), Color = Color3.fromRGB(255, 70, 90) },
 }
 
 function ModelBuilder.BuildGem(index: number, parent: Instance): BasePart
 	local gem = part({ Name = "G" .. index, Size = ModelBuilder.GemStyles.Small.Size, Color = ModelBuilder.GemStyles.Small.Color, Material = Enum.Material.Neon, CFrame = CFrame.new(Config.Enemies.ParkPosition) })
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Sphere
-	mesh.Scale = Vector3.new(0.8, 1, 0.8)
-	mesh.Parent = gem
 	gem:SetAttribute("Active", false)
 	gem.Parent = parent
 	return gem

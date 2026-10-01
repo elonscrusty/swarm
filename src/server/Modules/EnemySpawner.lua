@@ -200,7 +200,8 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 
 	ModelBuilder.ApplyEnemyLook(e.Part, def, elite, sizeMult)
 	e.Part.CFrame = CFrame.new(e.Pos + Vector3.new(0, e.Height, 0))
-	e.Part:SetAttribute("Type", typeId)
+	e.Part:SetAttribute("Elite", elite)
+	e.Part:SetAttribute("Type", typeId) -- set last: clients rebuild the model when it changes
 
 	table.insert(EnemySpawner.Active, e)
 	e.Slot = #EnemySpawner.Active

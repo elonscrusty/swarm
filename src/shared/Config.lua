@@ -258,6 +258,16 @@ Config.Controls = {
 }
 
 ------------------------------------------------------------------------------------------
+-- GRAPHICS (client only)
+------------------------------------------------------------------------------------------
+Config.Graphics = {
+	-- Enemies drawn with the full animated 3D model. Past this many, extra enemies show
+	-- their simple one-part body (keeps phones smooth in huge swarms). The boss is
+	-- always detailed.
+	MaxDetailedEnemies = 110,
+}
+
+------------------------------------------------------------------------------------------
 -- DATA STORE
 ------------------------------------------------------------------------------------------
 Config.Data = {

@@ -21,6 +21,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
+local UIAnim = require(script.Parent.UIAnim)
 
 local UIBuilder = {}
 
@@ -112,6 +113,7 @@ local function button(parent: Instance, text: string, color: Color3, onClick: ()
 			(b :: any)[k] = v
 		end
 	end
+	UIAnim.Button(b)
 	b.Activated:Connect(function()
 		if deps.Audio then
 			deps.Audio.Play("Click")
@@ -161,16 +163,41 @@ local function modal(name: string, width: number, height: number, order: number)
 	return overlay, panel
 end
 
+-- Opening: the dark backdrop fades in and the panel pops up with a little overshoot.
 local function show(overlay: GuiObject, name: string, blocks: boolean)
+	overlay:SetAttribute("AnimToken", (tonumber(overlay:GetAttribute("AnimToken")) or 0) + 1)
+	local wasVisible = overlay.Visible
 	overlay.Visible = true
+	if not wasVisible then
+		UIAnim.FadeIn(overlay, tonumber(overlay:GetAttribute("BackdropTransparency")) or 0.45)
+		local panel = overlay:FindFirstChild("Panel")
+		if panel and panel:IsA("GuiObject") then
+			UIAnim.Pop(panel, 0, 0.7)
+		end
+	end
 	if blocks then
 		setBlocking(name, true)
 	end
 end
 
+-- Closing: the panel shrinks away, then the overlay hides (unless reopened meanwhile).
 local function hide(overlay: GuiObject, name: string)
-	overlay.Visible = false
 	setBlocking(name, false)
+	if not overlay.Visible then
+		return
+	end
+	local token = (tonumber(overlay:GetAttribute("AnimToken")) or 0) + 1
+	overlay:SetAttribute("AnimToken", token)
+	local panel = overlay:FindFirstChild("Panel")
+	if panel and panel:IsA("GuiObject") then
+		UIAnim.PopOut(panel, function()
+			if overlay:GetAttribute("AnimToken") == token then
+				overlay.Visible = false
+			end
+		end)
+	else
+		overlay.Visible = false
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -237,6 +264,9 @@ local function buildHud()
 	}, frame)
 	corner(bossBack, 6)
 	stroke(bossBack, Color3.fromRGB(255, 80, 90), 2)
+	-- white "damage trail" that slides down behind the red fill
+	hud.BossTrail = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 240, 240), BorderSizePixel = 0 }, bossBack)
+	corner(hud.BossTrail, 6)
 	hud.BossFill = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(220, 30, 50), BorderSizePixel = 0 }, bossBack)
 	corner(hud.BossFill, 6)
 	label(bossBack, "THE SWARM QUEEN", 16, { Size = UDim2.fromScale(1, 1), ZIndex = 2, TextStrokeTransparency = 0.3 })
@@ -296,6 +326,8 @@ local function iconTile(parent: Instance, color: Color3, level: number, maxLevel
 	return tile
 end
 
+local shownLevels: { [string]: number } = {}
+
 local function refreshInventory()
 	for _, row in ipairs({ hud.WeaponRow, hud.PassiveRow }) do
 		for _, c in ipairs(row:GetChildren()) do
@@ -305,15 +337,25 @@ local function refreshInventory()
 		end
 	end
 	if not inventory then
+		table.clear(shownLevels)
 		return
+	end
+	-- tiles that are new or just levelled up pop in
+	local function popIfChanged(tile: GuiObject, key: string, level: number)
+		if shownLevels[key] ~= level then
+			UIAnim.Pop(tile, 0, shownLevels[key] and 1.4 or 0.3)
+			shownLevels[key] = level
+		end
 	end
 	for _, w in ipairs(inventory.Weapons) do
 		local t = iconTile(hud.WeaponRow, w.Color, w.Level, 8, w.Evolved, 46)
 		label(t, string.sub(w.Name, 1, 2), 18, { Size = UDim2.new(1, 0, 1, -8), TextStrokeTransparency = 0.3 })
+		popIfChanged(t, "W" .. w.Id, w.Level + (w.Evolved and 10 or 0))
 	end
 	for _, p in ipairs(inventory.Passives) do
 		local t = iconTile(hud.PassiveRow, p.Color, p.Level, 5, false, 38)
 		label(t, string.sub(p.Name, 1, 2), 15, { Size = UDim2.new(1, 0, 1, -8), TextStrokeTransparency = 0.3 })
+		popIfChanged(t, "P" .. p.Id, p.Level)
 	end
 end
 
@@ -354,6 +396,7 @@ local function buildLobbyHud()
 		Remotes.Get("JoinRun"):FireServer()
 	end, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 50), Size = UDim2.fromOffset(220, 50) })
 	lobbyUi.Banner = banner
+	UIAnim.PulseStroke(stroke(lobbyUi.JoinButton, Color3.fromRGB(200, 255, 210), 2), 1, 5)
 
 	lobbyUi.Info = label(frame, "", 22, {
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -364,6 +407,7 @@ local function buildLobbyHud()
 
 	-- Quick access buttons (the boards' prompts open the same panels).
 	local quick = new("Frame", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -14, 1, -60), Size = UDim2.fromOffset(170, 120), BackgroundTransparency = 1 }, frame)
+	UIAnim.Float(quick, -6, 1.6)
 	new("UIListLayout", { Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Right }, quick)
 	button(quick, "Characters", COLORS.Blue, function()
 		UIBuilder.OpenPanel("Characters")
@@ -408,6 +452,7 @@ function UIBuilder.Toast(text: string, color: Color3?, big: boolean?)
 		bigBanner.TextColor3 = color or COLORS.Text
 		bigBanner.TextTransparency = 0
 		bigBanner.TextStrokeTransparency = 0.2
+		UIAnim.Punch(bigBanner, 0.8)
 		task.delay(2.2, function()
 			if bigBanner.Text == text then
 				TweenService:Create(bigBanner, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
@@ -425,6 +470,10 @@ function UIBuilder.Toast(text: string, color: Color3?, big: boolean?)
 		TextWrapped = true,
 	})
 	corner(t, 8)
+	UIAnim.Pop(t, 0, 0.5)
+	t.TextTransparency = 1
+	t.BackgroundTransparency = 1
+	UIAnim.Tween(t, 0.2, { TextTransparency = 0, BackgroundTransparency = 0.5 })
 	local children = toastList:GetChildren()
 	if #children > 6 then
 		for _, c in ipairs(children) do
@@ -566,6 +615,18 @@ local function makeCard(c, index: number)
 		Size = UDim2.new(1, 0, 0, portrait and 50 or 120),
 		TextYAlignment = Enum.TextYAlignment.Top,
 	})
+	-- cards spin in one after another; evolutions get a pulsing glow
+	UIAnim.Pop(card, 0.08 * (index - 1), 0.3)
+	card.Rotation = (index % 2 == 0) and 8 or -8
+	task.delay(0.08 * (index - 1), function()
+		UIAnim.Tween(card, 0.4, { Rotation = 0 }, Enum.EasingStyle.Back)
+	end)
+	if c.Rarity == "Legendary" or c.Rarity == "Epic" then
+		local st = card:FindFirstChildOfClass("UIStroke")
+		if st then
+			UIAnim.PulseStroke(st, 3, 7)
+		end
+	end
 	card.Activated:Connect(function()
 		if not offerOpen then
 			return
@@ -592,6 +653,7 @@ local function showOffer(offer)
 	levelUp.Skip.Text = "Skip (" .. offer.Skips .. ")"
 	levelUp.Skip.Visible = offer.Skips > 0
 	levelUp.Title.Text = offer.Pending > 1 and string.format("LEVEL UP! (+%d)", offer.Pending) or "LEVEL UP!"
+	UIAnim.Punch(levelUp.Title, 0.5)
 	offerDeadline = os.clock() + offer.Seconds
 	offerOpen = true
 	show(levelUp.Overlay, "LevelUp", true)
@@ -642,6 +704,7 @@ function UIBuilder.ShowChest(data)
 		end
 	end
 	chest.Panel.Visible = true
+	UIAnim.Pop(chest.Panel, 0, 0.4)
 	chest.Lid.Position = UDim2.new(0.5, 0, 0, 72)
 	chest.Lid.Rotation = 0
 	chest.Glow.Size = UDim2.fromOffset(10, 10)
@@ -837,6 +900,15 @@ local function onRunResult(data)
 	end
 	resultsDeadline = os.clock() + (data.Seconds or 20)
 	show(results.Overlay, "Results", true)
+	-- title drops in, then the numbers count up one after another
+	UIAnim.Pop(results.Title, 0.1, 2)
+	UIAnim.CountUp(results.Lines[3], data.Kills, "Kills: %d", 0.8, 0.4)
+	UIAnim.CountUp(results.Lines[4], data.Gold, "Gold earned: %d", 0.8, 0.7)
+	UIAnim.CountUp(results.Lines[5], data.Level, "Level reached: %d", 0.6, 1.0)
+	UIAnim.CountUp(results.Lines[6], data.Damage, "Damage dealt: %d", 0.8, 1.2)
+	if data.NewBest then
+		UIAnim.Punch(results.Lines[2], 0.4)
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -1148,7 +1220,12 @@ local function onProfile(data)
 	UIBuilder.RefreshProfileViews()
 end
 
-local function updateFrame()
+-- Values the HUD animates toward each frame.
+local anim: { [string]: any } = { XP = 0 }
+local frameDt = 1 / 60
+
+local function updateFrame(dt: number)
+	frameDt = dt
 	local state = Remotes.State()
 	local phase = state:GetAttribute("Phase") or "Lobby"
 	local inRun = player:GetAttribute("InRun") == true
@@ -1159,14 +1236,56 @@ local function updateFrame()
 	if inRun then
 		local runTime = state:GetAttribute("RunTime") or 0
 		hud.Timer.Text = formatTime(runTime)
+		local minute = math.floor(runTime / 60)
+		if minute ~= anim.Minute then
+			if anim.Minute ~= nil then
+				UIAnim.Punch(hud.Timer, 0.35)
+			end
+			anim.Minute = minute
+		end
+		-- the timer glows red in the last 10 seconds before the boss
+		local toBoss = Config.Run.BossTime - runTime
+		if toBoss > 0 and toBoss <= 10 then
+			hud.Timer.TextColor3 = COLORS.Text:Lerp(COLORS.Red, 0.5 + 0.5 * math.sin(os.clock() * 10))
+		else
+			hud.Timer.TextColor3 = COLORS.Text
+		end
+
+		-- XP bar glides to its value; on a level up it fills, flashes white and resets
+		local level = player:GetAttribute("Level") or 1
 		local xp, need = player:GetAttribute("XP") or 0, player:GetAttribute("XPNeeded") or 1
-		hud.XPFill.Size = UDim2.fromScale(math.clamp(xp / math.max(1, need), 0, 1), 1)
-		hud.Level.Text = "LV " .. tostring(player:GetAttribute("Level") or 1)
-		hud.Counters.Text = string.format("Kills %d   Gold %d", player:GetAttribute("Kills") or 0, player:GetAttribute("RunGold") or 0)
+		local target = math.clamp(xp / math.max(1, need), 0, 1)
+		if anim.Level ~= nil and level > anim.Level then
+			anim.XP = 0
+			hud.XPFill.BackgroundColor3 = Color3.new(1, 1, 1)
+			UIAnim.Tween(hud.XPFill, 0.5, { BackgroundColor3 = COLORS.XP })
+			UIAnim.Punch(hud.Level, 0.6)
+		end
+		anim.Level = level
+		anim.XP += (target - anim.XP) * math.min(1, frameDt * 10)
+		hud.XPFill.Size = UDim2.fromScale(anim.XP, 1)
+		hud.Level.Text = "LV " .. tostring(level)
+
+		local kills, gold = player:GetAttribute("Kills") or 0, player:GetAttribute("RunGold") or 0
+		if anim.Gold ~= nil and gold > anim.Gold then
+			UIAnim.Punch(hud.Counters, 0.12)
+		end
+		anim.Gold = gold
+		hud.Counters.Text = string.format("Kills %d   Gold %d", kills, gold)
 		local bossMax = state:GetAttribute("BossMaxHP") or 0
 		hud.Boss.Visible = bossMax > 0
 		if bossMax > 0 then
-			hud.BossFill.Size = UDim2.fromScale(math.clamp((state:GetAttribute("BossHP") or 0) / bossMax, 0, 1), 1)
+			local frac = math.clamp((state:GetAttribute("BossHP") or 0) / bossMax, 0, 1)
+			if not anim.BossShown then
+				anim.BossShown = true
+				anim.BossTrail = 1
+				UIAnim.Pop(hud.Boss, 0, 0.3)
+			end
+			hud.BossFill.Size = UDim2.fromScale(frac, 1)
+			anim.BossTrail = math.max(frac, anim.BossTrail - frameDt * 0.25)
+			hud.BossTrail.Size = UDim2.fromScale(anim.BossTrail, 1)
+		else
+			anim.BossShown = false
 		end
 		local status = ""
 		if state:GetAttribute("Frozen") then
@@ -1179,11 +1298,20 @@ local function updateFrame()
 	else
 		if phase == "Countdown" then
 			lobbyUi.Banner.Visible = true
-			lobbyUi.CountdownText.Text = "Run starts in " .. tostring(state:GetAttribute("Countdown") or 0)
+			local seconds = state:GetAttribute("Countdown") or 0
+			if seconds ~= anim.Countdown then
+				if anim.Countdown == nil then
+					UIAnim.Pop(lobbyUi.Banner, 0, 0.5)
+				end
+				anim.Countdown = seconds
+				UIAnim.Punch(lobbyUi.CountdownText, 0.4)
+			end
+			lobbyUi.CountdownText.Text = "Run starts in " .. tostring(seconds)
 			lobbyUi.JoinButton.Visible = not joinedCountdown
 			lobbyUi.Info.Text = joinedCountdown and "You're in! Get ready..." or ""
 		else
 			lobbyUi.Banner.Visible = false
+			anim.Countdown = nil
 			joinedCountdown = false
 			if phase == "Running" or phase == "Results" then
 				lobbyUi.Info.Text = "A run is in progress (" .. formatTime(state:GetAttribute("RunTime") or 0) .. "). Wait here for the next one!"

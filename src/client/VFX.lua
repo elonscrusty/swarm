@@ -19,6 +19,8 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local Audio = require(script.Parent.Audio)
+local ModelLibrary = require(script.Parent.ModelLibrary)
+local EnemyRenderer = require(script.Parent.EnemyRenderer)
 local CameraController = require(script.Parent.CameraController)
 
 local VFX = {}
@@ -89,27 +91,27 @@ local DISC = CFrame.Angles(0, 0, math.rad(90))
 -- Projectiles
 ------------------------------------------------------------------------------------------
 
-type Entry = { Part: Part, Visual: number, Seq: number, From: Vector3, To: Vector3, Yaw: number, T: number, Spin: number, Seen: number }
+type Entry = { Pieces: { any }, Visual: number, Seq: number, From: Vector3, To: Vector3, Yaw: number, T: number, Spin: number, Seen: number, Phase: number }
 
-local projectilePools: { [number]: { Part } } = {}
+-- Each projectile is a small multi-part model from ModelLibrary, pooled per visual.
+local projectilePools: { [number]: { { any } } } = {}
 local entries: { [number]: Entry } = {}
 local batchCounter = 0
 local syncInterval = 1 / Config.Net.ProjectileSyncHz
 local projParts: { BasePart } = {}
 local projCFrames: { CFrame } = {}
 
-local function getProjectilePart(visual: number): Part
+local function getProjectileModel(visual: number): { any }
 	local list = projectilePools[visual]
 	if not list then
 		list = {}
 		projectilePools[visual] = list
 	end
-	local p = table.remove(list)
-	if p then
-		return p
+	local pieces = table.remove(list)
+	if pieces then
+		return pieces
 	end
-	local def = WeaponData.Visuals[visual] or WeaponData.Visuals[1]
-	return newPart(SHAPES[def.Shape], def.Color, (Enum.Material :: any)[def.Material] or Enum.Material.Neon, def.Size)
+	return ModelLibrary.Projectile(visual)
 end
 
 local function releaseProjectile(id: number)
@@ -117,8 +119,10 @@ local function releaseProjectile(id: number)
 	if not e then
 		return
 	end
-	e.Part.CFrame = PARK
-	table.insert(projectilePools[e.Visual], e.Part)
+	for _, piece in ipairs(e.Pieces) do
+		piece.Part.CFrame = PARK
+	end
+	table.insert(projectilePools[e.Visual], e.Pieces)
 	entries[id] = nil
 end
 
@@ -147,7 +151,8 @@ local function onProjectileBatch(b: buffer)
 		if not e then
 			local def = WeaponData.Visuals[visual] or WeaponData.Visuals[1]
 			entries[id] = {
-				Part = getProjectilePart(visual),
+				Pieces = getProjectileModel(visual),
+				Phase = math.random() * 6,
 				Visual = visual,
 				Seq = seq,
 				From = pos,
@@ -185,9 +190,11 @@ local function renderProjectiles(dt: number)
 		local alpha = math.min(e.T, 1.5) -- small extrapolation hides jitter
 		local pos = e.From:Lerp(e.To, alpha)
 		local cf = CFrame.new(pos) * CFrame.Angles(0, e.Yaw + (e.Spin ~= 0 and spinClock * e.Spin or 0), 0)
-		n += 1
-		projParts[n] = e.Part
-		projCFrames[n] = cf
+		for _, piece in ipairs(e.Pieces) do
+			n += 1
+			projParts[n] = piece.Part
+			projCFrames[n] = ModelLibrary.PieceCFrame(cf, piece, spinClock, e.Phase, 1)
+		end
 	end
 	if n > 0 then
 		workspace:BulkMoveTo(projParts, projCFrames, Enum.BulkMoveMode.FireCFrameChanged)
@@ -222,6 +229,9 @@ local function enemyBody(id: number): BasePart?
 end
 
 local function flash(id: number)
+	if EnemyRenderer.Flash(id) then
+		return
+	end
 	local body = enemyBody(id)
 	if not body then
 		return
@@ -474,6 +484,34 @@ local function trackGem(gem: Instance)
 end
 
 local gemClock = 0
+local GEM_TILT = CFrame.Angles(math.rad(45), 0, math.rad(35.26))
+
+-- Floor pickups bob and spin; chests just glow-pulse.
+local pickupBases: { [Model]: CFrame } = {}
+local function trackPickup(m: Instance)
+	if m:IsA("Model") then
+		task.defer(function()
+			if m.Parent then
+				pickupBases[m] = m:GetPivot()
+			end
+		end)
+	end
+end
+local function renderPickups()
+	for m, base in pairs(pickupBases) do
+		if not m.Parent then
+			pickupBases[m] = nil
+		elseif m.Name == "Chest" then
+			local box = m.PrimaryPart
+			local light = box and box:FindFirstChildOfClass("PointLight")
+			if light then
+				light.Brightness = 1.5 + math.sin(gemClock * 4) * 1
+			end
+		else
+			m:PivotTo(base * CFrame.new(0, 0.5 + math.sin(gemClock * 3) * 0.35, 0) * CFrame.Angles(0, gemClock * 2, 0))
+		end
+	end
+end
 local function renderGems(dt: number)
 	gemClock += dt
 	table.clear(gemParts)
@@ -483,7 +521,8 @@ local function renderGems(dt: number)
 		n += 1
 		local phase = base.X * 0.37 + base.Z * 0.21
 		gemParts[n] = part
-		gemCFrames[n] = CFrame.new(base + Vector3.new(0, math.sin(gemClock * 3 + phase) * 0.3, 0)) * CFrame.Angles(0, gemClock * 2 + phase, 0)
+		-- cube stood on its corner = diamond-shaped crystal
+		gemCFrames[n] = CFrame.new(base + Vector3.new(0, math.sin(gemClock * 3 + phase) * 0.3, 0)) * CFrame.Angles(0, gemClock * 2 + phase, 0) * GEM_TILT
 	end
 	if n > 0 then
 		workspace:BulkMoveTo(gemParts, gemCFrames, Enum.BulkMoveMode.FireCFrameChanged)
@@ -633,6 +672,13 @@ function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
 	Remotes.Get("FxBatch").OnClientEvent:Connect(onFxBatch)
 
 	task.spawn(function()
+		local pickups = workspace:WaitForChild("SwarmPickups")
+		pickups.ChildAdded:Connect(trackPickup)
+		for _, m in ipairs(pickups:GetChildren()) do
+			trackPickup(m)
+		end
+	end)
+	task.spawn(function()
 		local gems = workspace:WaitForChild("SwarmGems")
 		gems.ChildAdded:Connect(trackGem)
 		for _, g in ipairs(gems:GetChildren()) do
@@ -642,6 +688,7 @@ function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
 
 	RunService.RenderStepped:Connect(function(dt)
 		renderProjectiles(dt)
+		renderPickups()
 		renderGems(dt)
 		updateFlashes()
 		updateDecos(dt)
