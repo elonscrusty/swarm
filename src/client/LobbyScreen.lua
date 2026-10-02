@@ -199,7 +199,7 @@ local function buildChip(frame: Frame)
 	end
 	ui.Best = UIKit.Chip(face, "crown", "Best time", "0:00", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 48) }, { Size = 22, Color = P.gold_400, Accent = P.gold_200 })
 	sep(2)
-	ui.Wins = UIKit.Chip(face, "skull", "Wins", "0", { LayoutOrder = 3, Size = UDim2.fromOffset(0, 48) }, { Size = 22, Color = P.ivory_200, Back = P.slate_900 })
+	ui.Wins = UIKit.Chip(face, "trophy", "Wins", "0", { LayoutOrder = 3, Size = UDim2.fromOffset(0, 48) }, { Size = 22, Color = P.gold_400, Accent = P.gold_200 })
 	sep(4)
 	ui.Gold = UIKit.Chip(face, "coin", "Gold", "0", { LayoutOrder = 5, Size = UDim2.fromOffset(0, 48) }, { Size = 22 })
 	ui.Gold.Value.TextColor3 = P.gold_200
