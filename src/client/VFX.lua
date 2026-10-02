@@ -2567,8 +2567,8 @@ K.BAR_HEALTH = ColorSequence.new(P.crimson_400, P.crimson_600)
 K.BAR_REVIVE = ColorSequence.new(P.gold_300, P.gold_500)
 
 --[[
-	Local player: shown only while hurt (and a moment after healing to full); the HUD has
-	the full meter. Teammates: always shown; a fallen teammate's bar turns into their gold
+	Local player: the small bar only (no number), shown only while hurt (and a moment after
+	healing to full); the HUD has the full meter and the numbers. Teammates: always shown; a fallen teammate's bar turns into their gold
 	revive meter.
 ]]
 local function updateBar(deco: Deco, other: Player, root: BasePart, isLocal: boolean, alive: boolean, now: number, dt: number)
@@ -2608,12 +2608,14 @@ local function updateBar(deco: Deco, other: Player, root: BasePart, isLocal: boo
 		grad.Color = revive and K.BAR_REVIVE or K.BAR_HEALTH
 		deco.Frac = -1
 	end
+	-- the number: teammates only (the local hero's "85 / 100" is on the HUD's health panel)
 	local num = deco.BarText :: TextLabel
-	if num.Visible == revive then
-		num.Visible = not revive
+	local numShown = not revive and not isLocal
+	if num.Visible ~= numShown then
+		num.Visible = numShown
 	end
 	local hpShown, maxShown = math.ceil(hp), math.ceil(maxHp)
-	if not revive and (deco.BarHp ~= hpShown or deco.BarMax ~= maxShown) then
+	if numShown and (deco.BarHp ~= hpShown or deco.BarMax ~= maxShown) then
 		deco.BarHp, deco.BarMax = hpShown, maxShown
 		num.Text = string.format("%d / %d", hpShown, maxShown)
 	end
