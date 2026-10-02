@@ -624,7 +624,7 @@ local LIGHTING = {
 	-- sunny late morning in a forest clearing: saturated meadow, warm light
 	Forest = {
 		Clock = 10.8, Brightness = 3.0, Latitude = 38, Shadow = 0.55,
-		Ambient = rgb(120, 122, 112), Outdoor = rgb(152, 158, 148), Top = rgb(255, 240, 212), Bottom = rgb(84, 104, 70),
+		Ambient = rgb(120, 122, 116), Outdoor = rgb(152, 158, 156), Top = rgb(255, 244, 222), Bottom = rgb(84, 104, 70),
 		Diffuse = 0.5, Specular = 0.35,
 		Atmo = { Density = 0.18, Offset = 0.05, Color = rgb(198, 224, 242), Decay = rgb(120, 162, 192), Glare = 0, Haze = 0.35 },
 		Bloom = { Intensity = 0.25, Size = 22, Threshold = 1.7 },
@@ -635,7 +635,7 @@ local LIGHTING = {
 	-- sunny afternoon over the ruins: light warm paving on bright grass (warm, not dusk)
 	Ruins = {
 		Clock = 14.6, Brightness = 3.0, Latitude = 32, Shadow = 0.55,
-		Ambient = rgb(122, 118, 112), Outdoor = rgb(156, 154, 150), Top = rgb(255, 236, 206), Bottom = rgb(90, 104, 72),
+		Ambient = rgb(122, 120, 116), Outdoor = rgb(156, 156, 156), Top = rgb(255, 240, 216), Bottom = rgb(90, 104, 72),
 		Diffuse = 0.5, Specular = 0.35,
 		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(220, 226, 232), Decay = rgb(170, 152, 132), Glare = 0.1, Haze = 0.5 },
 		Bloom = { Intensity = 0.26, Size = 22, Threshold = 1.7 },

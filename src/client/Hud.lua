@@ -79,7 +79,7 @@ VIT.H = VIT.PadY * 2 + VIT.HP + VIT.Gap + VIT.XP
 local INV = { Pad = 10, Label = 84, Tile = 58, Gap = 8, RowGap = 14 } -- ability panel
 local PANEL_GAP = 6 -- between the two bottom panels
 local PILL_H, PAUSE = 44, 50 -- top right counters / pause button
-local TIMER_W, TIMER_H = 164, 52
+local TIMER_W, TIMER_H = 150, 52
 local STAGE_H = 30
 
 local host: { [string]: any } = {}
@@ -631,7 +631,7 @@ local function layout()
 	-- between the thumb side and the JUMP button, never taller than ~40% of the screen)
 	local invW, invH = invSize()
 	local stackH = VIT.H + PANEL_GAP + invH
-	local k = compact and 0.8 or 1
+	local k = compact and 0.72 or 1
 	if portrait then
 		k = compact and 0.86 or 1
 		k = math.min(k, (W - 2 * M) / invW, (H * 0.3) / stackH)

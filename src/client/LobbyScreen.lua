@@ -203,6 +203,7 @@ local function buildChip(frame: Frame)
 	UIKit.padding(face, 0, 18, 0, 16)
 	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 	ui.Chip = holder
+	ui.ChipFace = face
 	local function sep(order: number)
 		new("Frame", { BackgroundColor3 = C.Gold, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 22), LayoutOrder = order }, face)
 	end
@@ -212,6 +213,29 @@ local function buildChip(frame: Frame)
 	sep(4)
 	ui.Gold = UIKit.Chip(face, "coin", "Gold", "0", { LayoutOrder = 5, Size = UDim2.fromOffset(0, 48) }, { Size = 22 })
 	ui.Gold.Value.TextColor3 = P.gold_200
+end
+
+-- CHARACTERS shows the stats inline in the top bar: no pill box (face, edge, shadow) behind them
+local function setChipFlat(flat: boolean)
+	local face = ui.ChipFace
+	if not face or (ui.ChipFlat == true) == flat then
+		return
+	end
+	if ui.ChipAlpha == nil then
+		ui.ChipAlpha = face.BackgroundTransparency
+	end
+	ui.ChipFlat = flat
+	face.BackgroundTransparency = flat and 1 or ui.ChipAlpha
+	local edge = face:FindFirstChildOfClass("UIStroke")
+	if edge then
+		edge.Enabled = not flat
+	end
+	for _, name in ipairs({ "Shadow", "ShadowWide" }) do
+		local sh = ui.Chip:FindFirstChild(name)
+		if sh and sh:IsA("GuiObject") then
+			sh.Visible = not flat
+		end
+	end
 end
 
 --[[
@@ -823,6 +847,7 @@ local function relayout()
 	local plateH = (browse and 158 or 104) + (compact and 16 or 0)
 	local heroFrac = 0.5
 
+	setChipFlat(not portrait and current == "Characters")
 	if portrait then
 		local logoScale = math.clamp((W - 2 * M) / 380, 0.66, 0.85)
 		ui.LogoScale.Scale = logoScale
@@ -876,7 +901,7 @@ local function relayout()
 		local logoY = math.max(ins.Top + 2, 14)
 		ui.Logo.Position = UDim2.fromOffset(M, logoY)
 		ui.Chip.AnchorPoint = Vector2.new(1, 0)
-		ui.Chip.Position = UDim2.fromOffset(W - M, chipY)
+		ui.Chip.Position = UDim2.fromOffset(W - M, current == "Characters" and math.max(0, math.floor((ins.Top - 48) / 2)) or chipY)
 		-- PARTY pill left of the stats chip
 		ui.PartyCornerBtn.Instance.Visible = false
 		ui.PartyBtn.Instance.Visible = true
