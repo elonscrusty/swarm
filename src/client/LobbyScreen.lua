@@ -146,6 +146,7 @@ local function buildLogo(parent: Instance): Frame
 	new("UIStroke", { Color = P.slate_950, Thickness = 2, Transparency = 0.15, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual }, letters)
 	text(logo, "Label", UIKit.track("Survive · Upgrade · Conquer"), {
 		Name = "Tagline",
+		Visible = false, -- owner: no tagline under the logo
 		Position = UDim2.fromOffset(4, 100),
 		Size = UDim2.fromOffset(360, 22),
 		TextColor3 = P.gold_300,
