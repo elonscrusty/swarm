@@ -72,6 +72,8 @@ global Playwright install (`/opt/pw-browsers`); never run `playwright install`.
 | `items` | the pause menu ITEMS list |
 | `bugreport` | the REPORT A BUG form over the pause menu with text typed (`--set result=fail`: the server's "could not be saved" answer) |
 | `dev-inbox` | the DEV bug inbox with a page of sample reports (`--set status=ok\|offline\|empty`); run with `--studio` |
+| `party` | the lobby PARTY button and PARTY screen (MenuParty) from `PartyState` / `PartyInvite`: `--set view=home\|panel\|member\|solo\|friends\|card` |
+| `party-sim` | boots the real server with three extra players (`preview.fireServerAs`, `preview.removePlayer`) and drives PartyService: invite / decline / cooldown / accept / expiry / full / kick / leave, invalid and spammed calls, non-leader start refused, leader DUO / TRIO pull the party in, a member leaving the game; prints PASS / FAIL (`--max-time 400`) |
 | `bugreport-sim` | boots the real server and drives BugReportService through its remotes (bad payloads, a report through the mock text filter, the cooldown, the DEV inbox page and a status change), printing every answer; run with `--studio` (the mock filter turns "badword" into hashes; the mock OrderedDataStore ignores min / max, so paging past page 1 is not exercised) |
 
 Scenes only use public entry points (`MapBuilder.BuildLobby / BuildArena`,
