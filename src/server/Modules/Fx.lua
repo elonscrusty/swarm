@@ -86,7 +86,8 @@ function Fx.Ring(pos: Vector3, radius: number, color: Color3)
 end
 
 function Fx.Telegraph(pos: Vector3, yaw: number, length: number, width: number, seconds: number)
-	pushCapped("t", { r1(pos.X), r1(pos.Z), r1(yaw), r1(length), r1(width), seconds })
+	-- yaw to 0.01 rad (as Slash): 0.1 rad put the far end of a long charge lane ~2 studs off
+	pushCapped("t", { r1(pos.X), r1(pos.Z), math.floor(yaw * 100 + 0.5) / 100, r1(length), r1(width), seconds })
 end
 
 function Fx.PlayerEvent(player: Player, kind: string)

@@ -1,6 +1,7 @@
 --[[
 	ViewportPreview.lua
-	Turning 3D character previews for the lobby screens (ViewportFrame + its own camera).
+	Turning 3D character previews (ViewportFrame + its own camera), and the lookups the
+	lobby hero on the dais uses too (Showcase.lua): Template() and OwnCharacter().
 
 	Models come from ReplicatedStorage.CharacterPreviews ("<CharacterId>|<SkinId>", built by
 	the server's RunManager from the same ModelBuilder as the real characters) or from a
@@ -16,6 +17,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Theme = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Theme"))
 
 local ViewportPreview = {}
 
@@ -94,8 +96,9 @@ function ViewportPreview.Create(parent: Instance, props: { [string]: any }?): Pr
 	local vf = Instance.new("ViewportFrame")
 	vf.Name = "Preview"
 	vf.BackgroundTransparency = 1
-	vf.Ambient = Color3.fromRGB(170, 170, 185)
-	vf.LightColor = Color3.fromRGB(255, 245, 230)
+	-- dusk-courtyard lighting to match the menu scene: cool slate fill, warm key light
+	vf.Ambient = Theme.Palette.slate_300
+	vf.LightColor = Theme.Palette.fx_ivory
 	vf.LightDirection = Vector3.new(-1, -1.4, -0.8)
 	vf.Active = false
 	if props then

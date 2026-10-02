@@ -2,56 +2,150 @@
 	VFX.lua
 	All client-side visuals. Nothing here affects gameplay.
 
+	Look (docs/ART_DIRECTION.md §7): restrained and informative. Colours come from the
+	shared palette (Theme.Fx). Surfaces are SmoothPlastic with transparency; Neon only for
+	tiny cores and sparks; lifetimes short, alpha low, trails thin, no shadows.
+
 	* Projectiles: decodes the ProjectileBatch buffer (see WeaponSystem) and moves pooled
-	  local parts with interpolation between batches (one workspace:BulkMoveTo per frame).
-	  Each visual style spins/tumbles from time alone, gets a pooled Trail and an impact
-	  puff (or glass shatter) when it disappears; the visual tier makes trails stronger.
-	* Effects: FxBatch (hit flashes, death poofs, sword swings, lightning, pools, explosions,
-	  shockwaves, boss telegraphs, player events, sounds) with pooled parts and tweens.
-	* Gems: local bob/spin on top of the server position (attribute "Base").
-	* Garlic aura (ring, pulse, motes), HP bars over players, procedural limb swing and
-	  attack poses (sword swing / throw / cast) for characters.
+	  local models with interpolation between batches (one workspace:BulkMoveTo per frame).
+	  Each visual style spins/tumbles from time alone, gets a pooled thin Trail and a small
+	  impact puff (or glass shatter) when it disappears.
+	* Effects from FxBatch: hit sparks, creature-tinted death dust, sword arcs, lightning,
+	  pools, explosions, shockwave rings, boss telegraphs, player events. One-shot effects
+	  run on a small pooled animator (no Tween objects, no Instance churn once warm) inside
+	  a part budget (Config.Graphics.MaxEffectParts); warnings and player events always play.
+	* Gems: gold faceted crystals (mesh "Crystal", or the server cube on its corner) with a
+	  gentle bob and a tiny sparkle when collected; floor pickups bob and spin; chests glow.
+	* Players: gold ring under the local player (slate-blue under teammates) with a facing
+	  chevron, a small overhead health bar, the garlic / soul eater aura ring.
+	* Heroes: procedural walk cycle (arm swing, body bob and lean), idle breathing and attack
+	  poses (sword swing / throw / cast) through each rig's own Motor6Ds.
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
+local EnemyData = require(Shared:WaitForChild("EnemyData"))
+local MeshCatalog = require(Shared:WaitForChild("MeshCatalog"))
+local Theme = require(Shared:WaitForChild("Theme"))
 local Audio = require(script.Parent.Audio)
 local ModelLibrary = require(script.Parent.ModelLibrary)
 local EnemyRenderer = require(script.Parent.EnemyRenderer)
 local CameraController = require(script.Parent.CameraController)
+local Occlusion = require(script.Parent.Occlusion)
 
 local VFX = {}
+
+local P = Theme.Palette
+local FX = Theme.Fx
 
 local player = Players.LocalPlayer
 local PARK = CFrame.new(0, -150, 0) -- under the floor, above FallenPartsDestroyHeight
 local FLOOR_Y = Config.ArenaOrigin.Y
+local GRAPHICS = Config.Graphics :: any
+local MAX_FX_PARTS: number = GRAPHICS.MaxEffectParts or 220
+local MAX_TRAILS: number = GRAPHICS.MaxTrails or 40
+local TAU = math.pi * 2
+local WHITE = Color3.new(1, 1, 1)
+local SMOOTH = Enum.Material.SmoothPlastic
+local NEON = Enum.Material.Neon
+local DISC = CFrame.Angles(0, 0, math.rad(90)) -- cylinder axis X → Y: a flat disc
 
 local fxFolder: Folder
 local onLocalEvent: ((string) -> ())? = nil
 
 ------------------------------------------------------------------------------------------
--- Part pools
+-- Colours
 ------------------------------------------------------------------------------------------
 
-local function newPart(shape: Enum.PartType?, color: Color3, material: Enum.Material, size: Vector3): Part
-	local p = Instance.new("Part")
-	if shape then
-		p.Shape = shape
+-- Server effects send free RGB colours (rings); bring them into the palette by hue.
+local function paletteColor(c: Color3): Color3
+	local h, s, v = c:ToHSV()
+	if s < 0.22 then
+		return v > 0.55 and FX.Hit or P.stone_300
+	end
+	local deg = h * 360
+	if deg < 18 or deg >= 290 then
+		return P.crimson_400 -- reds and pinks: danger
+	elseif deg < 68 then
+		return FX.Gold
+	elseif deg < 165 then
+		return FX.Heal
+	elseif deg < 250 then
+		return FX.Arcane
+	end
+	return P.crimson_300 -- violet: the boss's magic
+end
+
+--[[
+	Death dust: the server sends the body colour of the enemy that died; find the creature
+	it belongs to (EnemyData colours, plain or elite-tinted) and use that creature's colour
+	from the palette, lightened into dust, plus the colour of the chitin bits.
+]]
+local ELITE_TINT = Color3.fromRGB(255, 210, 60) -- ModelBuilder tints elite bodies toward this
+local CREATURE: { [string]: { Dust: Color3, Bits: Color3 } } = {
+	Slime = { Dust = P.beetle_300, Bits = P.chitin_900 },
+	Bat = { Dust = P.wasp_500, Bits = P.wasp_900 },
+	Skeleton = { Dust = P.beetle_600, Bits = P.chitin_900 },
+	Ghost = { Dust = P.moth_300, Bits = P.moth_500 },
+	Brute = { Dust = P.slate_400, Bits = P.chitin_800 },
+	Bomber = { Dust = P.tick_500, Bits = P.chitin_900 },
+	Boss = { Dust = P.crimson_500, Bits = P.gold_500 },
+}
+type CreatureKey = { Color: Color3, Dust: Color3, Bits: Color3 }
+local creatureKeys: { CreatureKey } = {}
+for id, def in pairs(EnemyData.Enemies) do
+	local look = CREATURE[id]
+	if look and typeof(def.Color) == "Color3" then
+		local dust = look.Dust:Lerp(P.ivory_200, 0.4)
+		table.insert(creatureKeys, { Color = def.Color, Dust = dust, Bits = look.Bits })
+		table.insert(creatureKeys, { Color = def.Color:Lerp(ELITE_TINT, 0.35), Dust = dust:Lerp(P.gold_300, 0.45), Bits = look.Bits })
+	end
+end
+
+local function creatureLook(c: Color3): (Color3, Color3)
+	local best: CreatureKey? = nil
+	local bestD = 0.03
+	for _, k in ipairs(creatureKeys) do
+		local dr, dg, db = k.Color.R - c.R, k.Color.G - c.G, k.Color.B - c.B
+		local d = dr * dr + dg * dg + db * db
+		if d < bestD then
+			best, bestD = k, d
+		end
+	end
+	if best then
+		return best.Dust, best.Bits
+	end
+	local h, s, v = c:ToHSV()
+	return Color3.fromHSV(h, math.min(s, 0.35), math.clamp(v, 0.5, 0.78)), P.chitin_900
+end
+
+------------------------------------------------------------------------------------------
+-- Part pools and the shared bulk move
+------------------------------------------------------------------------------------------
+
+local SHAPES = { Ball = Enum.PartType.Ball, Block = Enum.PartType.Block, Cylinder = Enum.PartType.Cylinder }
+local pools: { [string]: { BasePart } } = { Ball = {}, Block = {}, Cylinder = {}, Wedge = {} }
+
+local function newPart(shape: string): BasePart
+	local p: BasePart
+	if shape == "Wedge" then
+		p = Instance.new("WedgePart")
+	else
+		local part = Instance.new("Part")
+		part.Shape = SHAPES[shape] or Enum.PartType.Block
+		p = part
 	end
 	p.Anchored = true
 	p.CanCollide = false
 	p.CanQuery = false
 	p.CanTouch = false
 	p.CastShadow = false
-	p.Material = material
-	p.Color = color
-	p.Size = size
+	p.Material = SMOOTH
 	p.TopSurface = Enum.SurfaceType.Smooth
 	p.BottomSurface = Enum.SurfaceType.Smooth
 	p.CFrame = PARK
@@ -59,36 +153,292 @@ local function newPart(shape: Enum.PartType?, color: Color3, material: Enum.Mate
 	return p
 end
 
--- Generic effect pools keyed by shape name ("Ball", "Block", "Cylinder").
-local effectPools: { [string]: { Part } } = { Ball = {}, Block = {}, Cylinder = {} }
-local SHAPES = { Ball = Enum.PartType.Ball, Block = Enum.PartType.Block, Cylinder = Enum.PartType.Cylinder }
-
-local function getEffectPart(shape: string): Part
-	local list = effectPools[shape]
-	local p = table.remove(list)
-	if not p then
-		p = newPart(SHAPES[shape], Color3.new(1, 1, 1), Enum.Material.Neon, Vector3.one)
-	end
-	p.Transparency = 0
+local function takePart(shape: string, color: Color3, material: Enum.Material, size: Vector3, alpha: number): BasePart
+	local p = table.remove(pools[shape]) or newPart(shape)
+	p.Color = color
+	p.Material = material
+	p.Size = size
+	p.Transparency = alpha
 	return p
 end
 
-local function releaseEffectPart(shape: string, p: Part)
+local function givePart(shape: string, p: BasePart)
 	p.CFrame = PARK
-	table.insert(effectPools[shape], p)
+	table.insert(pools[shape], p)
 end
 
--- Tween an effect part, then return it to the pool.
-local function play(shape: string, p: Part, seconds: number, goal: { [string]: any }, style: Enum.EasingStyle?)
-	local tween = TweenService:Create(p, TweenInfo.new(seconds, style or Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal)
-	tween.Completed:Once(function()
-		releaseEffectPart(shape, p)
-	end)
-	tween:Play()
+-- Parts moved this frame, flushed with one workspace:BulkMoveTo at the end of the frame.
+local bulkParts: { BasePart } = {}
+local bulkCFrames: { CFrame } = {}
+local bulkN = 0
+
+local function bulk(p: BasePart, cf: CFrame)
+	bulkN += 1
+	bulkParts[bulkN] = p
+	bulkCFrames[bulkN] = cf
 end
 
--- Flat disc lying on the floor (cylinder axis is X, so rotate it upright).
-local DISC = CFrame.Angles(0, 0, math.rad(90))
+local function flushBulk()
+	for i = #bulkParts, bulkN + 1, -1 do
+		bulkParts[i] = nil
+		bulkCFrames[i] = nil
+	end
+	if bulkN > 0 then
+		workspace:BulkMoveTo(bulkParts, bulkCFrames, Enum.BulkMoveMode.FireCFrameChanged)
+	end
+	bulkN = 0
+end
+
+local function towardCamera(pos: Vector3, dist: number): Vector3
+	local cam = workspace.CurrentCamera
+	if not cam then
+		return pos
+	end
+	local d = cam.CFrame.Position - pos
+	local m = d.Magnitude
+	return m > 1e-3 and pos + d / m * dist or pos
+end
+
+------------------------------------------------------------------------------------------
+-- One-shot effect animator (pooled records instead of Tweens)
+------------------------------------------------------------------------------------------
+
+local EASE_LINEAR, EASE_OUT, EASE_OUT3 = 0, 1, 2
+
+local function ease(kind: number, u: number): number
+	if kind == EASE_OUT then
+		local v = 1 - u
+		return 1 - v * v
+	elseif kind == EASE_OUT3 then
+		local v = 1 - u
+		return 1 - v * v * v
+	end
+	return u
+end
+
+local function easeOut(u: number): number
+	local v = 1 - math.clamp(u, 0, 1)
+	return 1 - v * v * v
+end
+
+type Anim = {
+	Part: BasePart,
+	Shape: string,
+	Start: number,
+	Dur: number,
+	Ease: number,
+	CF0: CFrame,
+	CF1: CFrame?,
+	Arc: number,
+	S0: Vector3,
+	S1: Vector3?,
+	A0: number,
+	A1: number,
+	FadeIn: number,
+	Pow: number,
+}
+
+local anims: { Anim } = {}
+local spareAnims: { Anim } = {}
+local fxParts = 0 -- effect parts in use (animator, waves, pools, telegraphs)
+
+-- Room for `count` more effect parts? Warnings (critical) may use half again the budget.
+local function room(count: number, critical: boolean?): boolean
+	local cap = critical and MAX_FX_PARTS * 1.5 or MAX_FX_PARTS
+	return fxParts + count <= cap
+end
+
+--[[
+	One-shot effect part: grows from size0 to size1 and fades from a0 to a1 over `dur`
+	seconds; with cf1 it also travels from cf0 to cf1 (plus `arc` studs of hop at mid-
+	flight). fadeIn = share of the life spent appearing; pow > 1 keeps it solid longer
+	before it fades. The caller checks room() first.
+]]
+local function fx(
+	shape: string,
+	color: Color3,
+	material: Enum.Material,
+	cf0: CFrame,
+	cf1: CFrame?,
+	size0: Vector3,
+	size1: Vector3?,
+	a0: number,
+	a1: number,
+	dur: number,
+	easing: number?,
+	arc: number?,
+	fadeIn: number?,
+	pow: number?
+)
+	local fin = fadeIn or 0
+	local p = takePart(shape, color, material, size0, fin > 0 and 1 or a0)
+	p.CFrame = cf0
+	local rec: Anim = table.remove(spareAnims) or ({} :: any)
+	rec.Part = p
+	rec.Shape = shape
+	rec.Start = os.clock()
+	rec.Dur = math.max(dur, 0.01)
+	rec.Ease = easing or EASE_LINEAR
+	rec.CF0 = cf0
+	rec.CF1 = cf1
+	rec.Arc = arc or 0
+	rec.S0 = size0
+	rec.S1 = size1
+	rec.A0 = a0
+	rec.A1 = a1
+	rec.FadeIn = fin
+	rec.Pow = pow or 1
+	table.insert(anims, rec)
+	fxParts += 1
+end
+
+local function stepAnims(now: number)
+	local i = 1
+	while i <= #anims do
+		local a = anims[i]
+		local u = (now - a.Start) / a.Dur
+		if u >= 1 then
+			givePart(a.Shape, a.Part)
+			fxParts -= 1
+			anims[i] = anims[#anims]
+			anims[#anims] = nil
+			table.insert(spareAnims, a)
+		else
+			local e = ease(a.Ease, u)
+			local p = a.Part
+			local s1 = a.S1
+			if s1 then
+				p.Size = a.S0:Lerp(s1, e)
+			end
+			local fin = a.FadeIn
+			if fin > 0 and u < fin then
+				p.Transparency = 1 + (a.A0 - 1) * (u / fin)
+			else
+				local f = (u - fin) / (1 - fin)
+				if a.Pow ~= 1 then
+					f = f ^ a.Pow
+				end
+				p.Transparency = a.A0 + (a.A1 - a.A0) * f
+			end
+			local cf1 = a.CF1
+			if cf1 then
+				local cf = a.CF0:Lerp(cf1, e)
+				if a.Arc ~= 0 then
+					cf += Vector3.new(0, a.Arc * 4 * u * (1 - u), 0)
+				end
+				bulk(p, cf)
+			end
+			i += 1
+		end
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- Rings: thin block segments around a circle (markers, auras, shockwaves)
+------------------------------------------------------------------------------------------
+
+type Ring = { Parts: { BasePart }, N: number, R: number, Width: number, Dash: number, Color: Color3, Alpha: number }
+
+local function newRing(n: number): Ring
+	local parts = table.create(n)
+	for i = 1, n do
+		parts[i] = newPart("Block")
+	end
+	return { Parts = parts, N = n, R = -1, Width = -1, Dash = -1, Color = WHITE, Alpha = -1 }
+end
+
+-- Segment look; writes only what changed. dash < 1 leaves gaps between segments.
+local function styleRing(ring: Ring, radius: number, width: number, color: Color3, alpha: number, dash: number?)
+	local d = dash or 1
+	if math.abs(ring.R - radius) > 0.02 or ring.Width ~= width or ring.Dash ~= d then
+		ring.R, ring.Width, ring.Dash = radius, width, d
+		local len = 2 * (radius + width / 2) * math.tan(math.pi / ring.N) * d
+		local size = Vector3.new(math.max(0.05, len), 0.05, width)
+		for _, p in ipairs(ring.Parts) do
+			p.Size = size
+		end
+	end
+	if ring.Color ~= color then
+		ring.Color = color
+		for _, p in ipairs(ring.Parts) do
+			p.Color = color
+		end
+	end
+	if ring.Alpha ~= alpha then
+		ring.Alpha = alpha
+		for _, p in ipairs(ring.Parts) do
+			p.Transparency = alpha
+		end
+	end
+end
+
+-- Queues the segments around (x, y, z), turned by `spin` radians.
+local function placeRing(ring: Ring, x: number, y: number, z: number, spin: number)
+	local n = ring.N
+	local r = ring.R
+	local step = TAU / n
+	for i = 1, n do
+		local a = spin + (i - 0.5) * step
+		local c, s = math.cos(a), math.sin(a)
+		-- length (local X) along the tangent, width (local Z) along the radius
+		bulk(ring.Parts[i], CFrame.new(x + c * r, y, z + s * r, s, 0, c, 0, 1, 0, -c, 0, s))
+	end
+end
+
+local function hideRing(ring: Ring)
+	for _, p in ipairs(ring.Parts) do
+		p.CFrame = PARK
+	end
+end
+
+local function destroyRing(ring: Ring?)
+	if ring then
+		for _, p in ipairs(ring.Parts) do
+			p:Destroy()
+		end
+	end
+end
+
+-- Expanding rings on the floor (shockwaves, level-up, heal, revive).
+type Wave = { Ring: Ring, X: number, Z: number, R0: number, R1: number, W: number, Color: Color3, A0: number, Start: number, Dur: number, Spin: number }
+local waves: { Wave } = {}
+local ringPool: { [number]: { Ring } } = {}
+
+local function wave(x: number, z: number, r0: number, r1: number, width: number, color: Color3, a0: number, dur: number, critical: boolean?): boolean
+	local n = r1 > 40 and 40 or (r1 > 14 and 28 or 18)
+	if not room(n, critical) then
+		return false
+	end
+	local list = ringPool[n]
+	local ring = list and table.remove(list) or newRing(n)
+	fxParts += n
+	table.insert(waves, { Ring = ring, X = x, Z = z, R0 = r0, R1 = r1, W = width, Color = color, A0 = a0, Start = os.clock(), Dur = dur, Spin = math.random() * TAU })
+	return true
+end
+
+local function stepWaves(now: number)
+	for i = #waves, 1, -1 do
+		local w = waves[i]
+		local u = (now - w.Start) / w.Dur
+		if u >= 1 then
+			hideRing(w.Ring)
+			local list = ringPool[w.Ring.N]
+			if not list then
+				list = {}
+				ringPool[w.Ring.N] = list
+			end
+			table.insert(list, w.Ring)
+			fxParts -= w.Ring.N
+			waves[i] = waves[#waves]
+			waves[#waves] = nil
+		else
+			local r = w.R0 + (w.R1 - w.R0) * ease(EASE_OUT3, u)
+			-- crisp while it travels, gone by the end
+			styleRing(w.Ring, r, w.W * (1 - 0.45 * u), w.Color, w.A0 + (1 - w.A0) * u * u)
+			placeRing(w.Ring, w.X, FLOOR_Y + 0.09, w.Z, w.Spin)
+		end
+	end
+end
 
 ------------------------------------------------------------------------------------------
 -- Attack poses (purely visual arm / body motion on top of the walk cycle)
@@ -97,22 +447,17 @@ local DISC = CFrame.Angles(0, 0, math.rad(90))
 --[[
 	A pose is started when this client sees a player attack: a sword swing (FxBatch "s")
 	or a projectile appearing next to a player (throw / cast). animateLimbs blends it over
-	the walk cycle through the rig's existing Motor6Ds (Right Shoulder, RootJoint).
+	the walk cycle through the rig's own Motor6Ds.
 ]]
 type Pose = { Kind: string, Start: number, Sweep: number, Back: boolean, Half: number }
 local poses: { [number]: Pose } = {}
 
 local SWING_WINDUP = 0.07 -- blade pulls back
 local SWING_SWEEP = 0.15 -- blade crosses the arc (ease-out)
-local SWING_FADE = 0.12 -- blade fades after the sweep
-local POSE_RECOVER = 0.16 -- arm blends back to the walk cycle
-local THROW_TIME = 0.24
-local CAST_TIME = 0.2
-
-local function easeOut(u: number): number
-	local v = 1 - math.clamp(u, 0, 1)
-	return 1 - v * v * v
-end
+local SWING_FADE = 0.1 -- tip spark fades after the sweep
+local POSE_RECOVER = 0.18 -- arm blends back to the walk cycle
+local THROW_TIME = 0.26
+local CAST_TIME = 0.24
 
 local function startPose(userId: number, kind: string, sweep: number?, back: boolean?, half: number?)
 	local now = os.clock()
@@ -131,15 +476,17 @@ end
 -- Trails (pooled Trail + carrier part, reused by projectiles)
 ------------------------------------------------------------------------------------------
 
-type TrailSlot = { Part: Part, Trail: Trail, A0: Attachment, A1: Attachment, Life: number, FreeAt: number }
+type TrailSlot = { Part: BasePart, Trail: Trail, A0: Attachment, A1: Attachment, Life: number, FreeAt: number }
+type TrailStyle = { Color: ColorSequence, Alpha: NumberSequence, Width: number, Life: number, Emission: number }
 
-local MAX_TRAILS = 64 -- projectiles beyond this simply fly without a trail
 local trailCount = 0
 local freeTrails: { TrailSlot } = {}
 local coolingTrails: { TrailSlot } = {}
+local trailStyles: { [number]: TrailStyle } = {} -- per visual byte (visual + tier)
 
 local function newTrailSlot(): TrailSlot
-	local p = newPart(Enum.PartType.Block, Color3.new(1, 1, 1), Enum.Material.SmoothPlastic, Vector3.new(0.1, 0.1, 0.1))
+	local p = newPart("Block")
+	p.Size = Vector3.new(0.1, 0.1, 0.1)
 	p.Transparency = 1
 	local a0 = Instance.new("Attachment")
 	a0.Parent = p
@@ -151,14 +498,31 @@ local function newTrailSlot(): TrailSlot
 	trail.FaceCamera = false
 	trail.LightInfluence = 0
 	trail.MinLength = 0.05
-	trail.WidthScale = NumberSequence.new(1, 0.25)
+	trail.WidthScale = NumberSequence.new(1, 0.15)
 	trail.Enabled = false
 	trail.Parent = p
-	return { Part = p, Trail = trail, A0 = a0, A1 = a1, Life = 0.2, FreeAt = 0 }
+	return { Part = p, Trail = trail, A0 = a0, A1 = a1, Life = 0.1, FreeAt = 0 }
+end
+
+local function trailStyle(raw: number, td: any, tier: number): TrailStyle
+	local st = trailStyles[raw]
+	if not st then
+		local head: Color3 = td.Color
+		local tail: Color3 = td.Tail or td.Color
+		st = {
+			Color = ColorSequence.new(head:Lerp(FX.Hit, 0.3), tail),
+			Alpha = NumberSequence.new(math.max(0.3, 0.5 - tier * 0.05), 1),
+			Width = td.Width * (0.85 + tier * 0.1),
+			Life = td.Life * (1 + tier * 0.12),
+			Emission = 0.15 + tier * 0.05,
+		}
+		trailStyles[raw] = st
+	end
+	return st
 end
 
 -- Takes a trail and starts it at `cf` (nil when the budget is used up).
-local function acquireTrail(cf: CFrame, color: Color3, width: number, life: number, tier: number): TrailSlot?
+local function acquireTrail(cf: CFrame, st: TrailStyle): TrailSlot?
 	local slot = table.remove(freeTrails)
 	if not slot then
 		if trailCount >= MAX_TRAILS then
@@ -168,13 +532,13 @@ local function acquireTrail(cf: CFrame, color: Color3, width: number, life: numb
 		slot = newTrailSlot()
 	end
 	local s = slot :: TrailSlot
-	s.A0.Position = Vector3.new(-width / 2, 0, 0)
-	s.A1.Position = Vector3.new(width / 2, 0, 0)
-	s.Life = life
-	s.Trail.Lifetime = life
-	s.Trail.Color = ColorSequence.new(color:Lerp(Color3.new(1, 1, 1), 0.5), color)
-	s.Trail.LightEmission = 0.6 + tier * 0.13
-	s.Trail.Transparency = NumberSequence.new(math.max(0.05, 0.5 - tier * 0.13), 1)
+	s.A0.Position = Vector3.new(-st.Width / 2, 0, 0)
+	s.A1.Position = Vector3.new(st.Width / 2, 0, 0)
+	s.Life = st.Life
+	s.Trail.Lifetime = st.Life
+	s.Trail.Color = st.Color
+	s.Trail.Transparency = st.Alpha
+	s.Trail.LightEmission = st.Emission
 	s.Part.CFrame = cf
 	s.Trail:Clear()
 	s.Trail.Enabled = true
@@ -188,8 +552,7 @@ local function releaseTrail(s: TrailSlot)
 	table.insert(coolingTrails, s)
 end
 
-local function stepTrails()
-	local now = os.clock()
+local function stepTrails(now: number)
 	for i = #coolingTrails, 1, -1 do
 		local s = coolingTrails[i]
 		if now >= s.FreeAt then
@@ -329,7 +692,7 @@ local function onProjectileBatch(b: buffer)
 			local trail: TrailSlot? = nil
 			local td = def.Trail
 			if td then
-				trail = acquireTrail(CFrame.new(pos) * CFrame.Angles(0, yaw, 0), td.Color, td.Width * (0.7 + tier * 0.2), td.Life * (1 + tier * 0.15), tier)
+				trail = acquireTrail(CFrame.new(pos) * CFrame.Angles(0, yaw, 0), trailStyle(raw, td, tier))
 			end
 			entries[id] = {
 				Pieces = getProjectileModel(visual),
@@ -408,13 +771,12 @@ local function projectileRotation(e: Entry, age: number): CFrame
 end
 
 local spinClock = 0
-local function renderProjectiles(dt: number)
+local function renderProjectiles(dt: number, now: number)
 	spinClock += dt
-	impactBudget = 10
-	stepTrails()
+	impactBudget = 8
+	stepTrails(now)
 	table.clear(projParts)
 	table.clear(projCFrames)
-	local now = os.clock()
 	local n = 0
 	for _, e in pairs(entries) do
 		e.T += dt / syncInterval
@@ -439,10 +801,42 @@ local function renderProjectiles(dt: number)
 	end
 end
 
+-- Glass shards + a low splash where a bottle lands.
+local function shatter(pos: Vector3, color: Color3)
+	if not room(4) then
+		return
+	end
+	local ground = Vector3.new(pos.X, FLOOR_Y + 0.5, pos.Z)
+	for i = 1, 3 do
+		local a = i * TAU / 3 + math.random() * 0.9
+		local out = Vector3.new(math.cos(a), 0, math.sin(a))
+		local to = ground + out * (1.4 + math.random()) + Vector3.new(0, -0.35, 0)
+		fx("Block", color:Lerp(FX.Hit, 0.45), SMOOTH, CFrame.lookAt(ground, ground + out), CFrame.lookAt(to, to + out) * CFrame.Angles(math.random() * 3, 0, 0), Vector3.new(0.22, 0.1, 0.4), nil, 0.15, 1, 0.26, EASE_OUT, 0.6, nil, 1.6)
+	end
+	fx("Cylinder", color, SMOOTH, CFrame.new(ground.X, FLOOR_Y + 0.1, ground.Z) * DISC, nil, Vector3.new(0.05, 1.2, 1.2), Vector3.new(0.05, 4.2, 4.2), 0.5, 1, 0.22, EASE_OUT)
+end
+
+-- Small puff / shatter where a projectile disappears (hit, expiry or landing).
+projectileImpact = function(e: Entry)
+	if impactBudget <= 0 then
+		return
+	end
+	local def = e.Def
+	if def.Shatter then
+		impactBudget -= 1
+		shatter(e.Drawn, def.Color)
+	elseif def.Impact and room(1) then
+		impactBudget -= 1
+		local size = 0.55 + e.Tier * 0.12
+		fx("Ball", def.Impact, SMOOTH, CFrame.new(e.Drawn), nil, Vector3.one * size, Vector3.one * size * 2.2, 0.35, 1, 0.13, EASE_OUT)
+	end
+end
+
 ------------------------------------------------------------------------------------------
--- Enemy hit flashes
+-- Enemy hit flashes and sparks
 ------------------------------------------------------------------------------------------
 
+-- Fallback for bodies the EnemyRenderer does not track (yet): flash the body itself.
 local enemyFolder: Folder? = nil
 local enemyBodies: { [number]: BasePart } = {}
 local flashing: { [BasePart]: number } = {}
@@ -475,13 +869,12 @@ local function flash(id: number)
 		return
 	end
 	if not flashing[body] then
-		body.Color = Color3.new(1, 1, 1)
+		body.Color = WHITE
 	end
 	flashing[body] = os.clock() + Config.Enemies.HitFlashSeconds
 end
 
-local function updateFlashes()
-	local now = os.clock()
+local function updateFlashes(now: number)
 	for body, untilTime in pairs(flashing) do
 		if now >= untilTime then
 			flashing[body] = nil
@@ -493,17 +886,40 @@ local function updateFlashes()
 	end
 end
 
+-- Small ivory flash and two gold sparks on a hit enemy (in front of its model).
+local function hitSpark(id: number)
+	local pos = EnemyRenderer.Position(id)
+	if not pos or not room(3) then
+		return
+	end
+	local at = towardCamera(pos + Vector3.new(0, 0.3, 0), 1.3)
+	fx("Ball", FX.Hit, NEON, CFrame.new(at), nil, Vector3.one * 0.3, Vector3.one * 0.85, 0.15, 1, 0.09, EASE_OUT)
+	for _ = 1, 2 do
+		local a = math.random() * TAU
+		local dir = Vector3.new(math.cos(a), 0.35 + math.random() * 0.5, math.sin(a)).Unit
+		local cf0 = CFrame.lookAt(at, at + dir)
+		fx("Block", FX.Spark, NEON, cf0, cf0 + dir * (1 + math.random() * 0.6), Vector3.new(0.08, 0.08, 0.42), Vector3.new(0.05, 0.05, 0.16), 0.05, 1, 0.13, EASE_OUT)
+	end
+end
+
 ------------------------------------------------------------------------------------------
 -- Effects from FxBatch
 ------------------------------------------------------------------------------------------
 
-local function deathPoof(x: number, z: number, color: Color3, size: number)
-	local p = getEffectPart("Ball")
-	p.Color = color
-	p.Size = Vector3.one * size
-	p.Transparency = 0.2
-	p.CFrame = CFrame.new(x, FLOOR_Y + size / 2, z)
-	play("Ball", p, 0.3, { Size = Vector3.one * size * 1.8, Transparency = 1 })
+-- Creature-tinted dust that swells and fades, plus a couple of chitin bits hopping away.
+local function deathPuff(x: number, z: number, dust: Color3, bitsColor: Color3, size: number, bits: number)
+	local s = math.clamp(size, 1.6, 12)
+	local y = FLOOR_Y + math.min(s * 0.32, 2.2)
+	fx("Ball", dust, SMOOTH, CFrame.new(x, y, z), nil, Vector3.new(s * 0.55, s * 0.32, s * 0.55), Vector3.new(s * 1.25, s * 0.5, s * 1.25), 0.4, 1, 0.24 + s * 0.012, EASE_OUT3)
+	local b = math.clamp(s * 0.16, 0.3, 1.1)
+	local from = Vector3.new(x, y, z)
+	for i = 1, bits do
+		local a = (i / bits) * TAU + math.random() * 1.2
+		local dist = s * 0.45 + 0.8 + math.random() * 1.2
+		local to = Vector3.new(x + math.cos(a) * dist, FLOOR_Y + b * 0.3, z + math.sin(a) * dist)
+		local turn = CFrame.Angles(math.random() * 3, math.random() * 3, math.random() * 3)
+		fx("Wedge", bitsColor, SMOOTH, CFrame.new(from) * turn, CFrame.new(to) * turn * CFrame.Angles(2.4, 1.3, 0), Vector3.new(b * 0.7, b * 0.35, b), nil, 0, 1, 0.36, EASE_OUT, 0.8 + s * 0.12, nil, 2)
+	end
 end
 
 local function characterRoot(userId: number): BasePart?
@@ -513,80 +929,111 @@ local function characterRoot(userId: number): BasePart?
 end
 
 --[[
-	Sword swings. Each swing is a pooled rig: a glowing blade part pivoting around the
-	player (inner end near the body, tip at the hit reach), a Trail between the blade's two
-	ends that paints the crescent behind it, and a bright tip spark. Timeline:
-	  wind-up (blade pulls back, ghosted) → sweep across the arc (ease-out, trail on,
-	  white hit flash mid-sweep) → blade fades while the trail tail dies away.
-	The arc width comes from WeaponData (the server hits the same sector).
+	Sword swings. Each swing is a pooled rig: an invisible carrier pivoting around the
+	player with two Trails between attachments along it - a wide, faint ivory band (the
+	arc) and a thin pale-gold band on its outer edge - plus a tiny spark at the tip.
+	Timeline: wind-up (carrier pulls back, trails off) → sweep across the arc (ease-out,
+	trails on) → the tip spark fades while the short trail tails die away. The arc width
+	comes from WeaponData (the server hits the same sector). Evolved (Bloodwhip) = crimson.
 ]]
-type SwingRig = { Blade: Part, Tip: Part, Trail: Trail, A0: Attachment, A1: Attachment }
-type Swing = { Rig: SwingRig, Root: BasePart?, X: number, Z: number, Yaw: number, Reach: number, Sweep: number, Tier: number, Start: number, Trailing: boolean, Life: number }
+type SwingRig = { Carrier: BasePart, Core: Trail, Edge: Trail, Inner: Attachment, Outer: Attachment, EdgeIn: Attachment, EdgeOut: Attachment, Tip: BasePart }
+type Swing = { Rig: SwingRig, Root: BasePart?, X: number, Z: number, Yaw: number, Reach: number, Sweep: number, Start: number, Trailing: boolean, Life: number }
+type SlashStyle = { Core: ColorSequence, CoreAlpha: NumberSequence, Edge: ColorSequence, EdgeAlpha: NumberSequence, EdgeWidth: number, Tip: Color3 }
 
 local SWING_ARC = math.rad(WeaponData.Weapons.Whip.Params.Arc)
 local SWING_PULL = math.rad(22) -- extra wind-up beyond the arc start
-local SWING_INNER = 1.2
-local SWING_HEIGHT = 2.4
-local SWING_COLORS = {
-	[0] = Color3.fromRGB(235, 240, 255),
-	[1] = Color3.fromRGB(255, 240, 190),
-	[2] = Color3.fromRGB(255, 210, 90),
-	[3] = Color3.fromRGB(235, 25, 50),
+local SWING_HEIGHT = 2.2
+
+local function slashStyle(core: Color3, edge: Color3, coreAlpha: number, edgeAlpha: number, edgeWidth: number, tip: Color3): SlashStyle
+	return {
+		Core = ColorSequence.new(core),
+		CoreAlpha = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, coreAlpha),
+			NumberSequenceKeypoint.new(0.5, (coreAlpha + 1) / 2 + 0.08),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		Edge = ColorSequence.new(edge, edge:Lerp(core, 0.5)),
+		EdgeAlpha = NumberSequence.new(edgeAlpha, 1),
+		EdgeWidth = edgeWidth,
+		Tip = tip,
+	}
+end
+
+local SLASH: { [number]: SlashStyle } = {
+	[0] = slashStyle(FX.Slash, FX.SlashEdge, 0.68, 0.32, 0.3, P.gold_200),
+	[1] = slashStyle(FX.Slash, FX.SlashEdge, 0.64, 0.28, 0.36, P.gold_200),
+	[2] = slashStyle(FX.Slash, P.gold_300, 0.6, 0.22, 0.42, P.gold_200),
+	[3] = slashStyle(FX.Slash:Lerp(P.crimson_300, 0.3), P.crimson_400, 0.6, 0.2, 0.48, P.crimson_300),
 }
 
 local swingRigs: { SwingRig } = {}
 local swings: { Swing } = {}
+
+local function newSlashTrail(parent: BasePart, a0: Attachment, a1: Attachment, emission: number): Trail
+	local trail = Instance.new("Trail")
+	trail.Attachment0 = a0
+	trail.Attachment1 = a1
+	trail.FaceCamera = false
+	trail.LightInfluence = 0
+	trail.LightEmission = emission
+	trail.MinLength = 0.02
+	trail.WidthScale = NumberSequence.new(1, 0.6)
+	trail.Enabled = false
+	trail.Parent = parent
+	return trail
+end
 
 local function getSwingRig(): SwingRig
 	local rig = table.remove(swingRigs)
 	if rig then
 		return rig
 	end
-	local blade = newPart(Enum.PartType.Block, Color3.new(1, 1, 1), Enum.Material.Neon, Vector3.new(0.45, 0.15, 4))
-	local tip = newPart(Enum.PartType.Ball, Color3.new(1, 1, 1), Enum.Material.Neon, Vector3.one)
-	local a0 = Instance.new("Attachment")
-	a0.Parent = blade
-	local a1 = Instance.new("Attachment")
-	a1.Parent = blade
-	local trail = Instance.new("Trail")
-	trail.Attachment0 = a0
-	trail.Attachment1 = a1
-	trail.FaceCamera = false
-	trail.LightInfluence = 0
-	trail.MinLength = 0.02
-	trail.WidthScale = NumberSequence.new(1, 0.55)
-	trail.Enabled = false
-	trail.Parent = blade
-	return { Blade = blade, Tip = tip, Trail = trail, A0 = a0, A1 = a1 }
+	local carrier = newPart("Block")
+	carrier.Size = Vector3.new(0.1, 0.1, 0.1)
+	carrier.Transparency = 1
+	local function attach(): Attachment
+		local a = Instance.new("Attachment")
+		a.Parent = carrier
+		return a
+	end
+	local inner, outer, edgeIn, edgeOut = attach(), attach(), attach(), attach()
+	local tip = newPart("Ball")
+	tip.Material = NEON
+	return {
+		Carrier = carrier,
+		Core = newSlashTrail(carrier, inner, outer, 0.15),
+		Edge = newSlashTrail(carrier, edgeIn, edgeOut, 0.4),
+		Inner = inner,
+		Outer = outer,
+		EdgeIn = edgeIn,
+		EdgeOut = edgeOut,
+		Tip = tip,
+	}
 end
 
 local function slash(x: number, z: number, yaw: number, reach: number, sweep: number, tier: number, userId: number)
-	if type(userId) ~= "number" or type(reach) ~= "number" then
+	if type(userId) ~= "number" or type(reach) ~= "number" or type(yaw) ~= "number" then
 		return
 	end
-	tier = math.clamp(tier or 0, 0, 3)
-	sweep = sweep < 0 and -1 or 1
+	tier = math.clamp(math.floor(tonumber(tier) or 0), 0, 3)
+	sweep = (tonumber(sweep) or 1) < 0 and -1 or 1
+	local st = SLASH[tier]
 	local rig = getSwingRig()
-	local color = SWING_COLORS[tier]
-	local len = math.max(1, reach - SWING_INNER)
-	local evo = tier == 3
-	rig.Blade.Size = Vector3.new(evo and 0.7 or 0.45, 0.15, len)
-	rig.Blade.Color = color
-	rig.Blade.Transparency = 0.6
-	rig.Tip.Size = Vector3.one * (0.9 + tier * 0.3)
-	rig.Tip.Color = color:Lerp(Color3.new(1, 1, 1), 0.5)
+	local inner = math.max(1.6, reach * 0.42)
+	rig.Inner.Position = Vector3.new(0, 0, -inner)
+	rig.Outer.Position = Vector3.new(0, 0, -reach)
+	rig.EdgeIn.Position = Vector3.new(0, 0, -(reach - st.EdgeWidth))
+	rig.EdgeOut.Position = Vector3.new(0, 0, -(reach + 0.06))
+	local life = 0.13 + tier * 0.012
+	rig.Core.Lifetime = life
+	rig.Core.Color = st.Core
+	rig.Core.Transparency = st.CoreAlpha
+	rig.Edge.Lifetime = life * 0.9
+	rig.Edge.Color = st.Edge
+	rig.Edge.Transparency = st.EdgeAlpha
+	rig.Tip.Color = st.Tip
+	rig.Tip.Size = Vector3.one * (0.4 + tier * 0.05)
 	rig.Tip.Transparency = 1
-	rig.A0.Position = Vector3.new(0, 0, len / 2)
-	rig.A1.Position = Vector3.new(0, 0, -len / 2)
-	local life = 0.2 + tier * 0.03
-	rig.Trail.Lifetime = life
-	rig.Trail.Color = ColorSequence.new(Color3.new(1, 1, 1), color)
-	rig.Trail.LightEmission = 0.7 + tier * 0.1
-	rig.Trail.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, math.max(0, 0.25 - tier * 0.08)),
-		NumberSequenceKeypoint.new(0.6, 0.7),
-		NumberSequenceKeypoint.new(1, 1),
-	})
 	local root = characterRoot(userId)
 	table.insert(swings, {
 		Rig = rig,
@@ -596,7 +1043,6 @@ local function slash(x: number, z: number, yaw: number, reach: number, sweep: nu
 		Yaw = yaw,
 		Reach = reach,
 		Sweep = sweep,
-		Tier = tier,
 		Start = os.clock(),
 		Trailing = false,
 		Life = life,
@@ -621,8 +1067,8 @@ local function swingAngle(sweep: number, t: number): number
 	return from + (-sweep * half - from) * easeOut((t - SWING_WINDUP) / SWING_SWEEP)
 end
 
-local function renderSwings()
-	local now = os.clock()
+local function renderSwings(now: number)
+	local swingEnd = SWING_WINDUP + SWING_SWEEP
 	for i = #swings, 1, -1 do
 		local sw = swings[i]
 		local rig = sw.Rig
@@ -631,302 +1077,498 @@ local function renderSwings()
 		if root and root.Parent then
 			sw.X, sw.Z = root.Position.X, root.Position.Z
 		end
-		local swingEnd = SWING_WINDUP + SWING_SWEEP
 		if t >= swingEnd + SWING_FADE + sw.Life then
 			-- done: park and recycle
-			rig.Trail.Enabled = false
-			rig.Blade.CFrame = PARK
+			rig.Core.Enabled = false
+			rig.Edge.Enabled = false
+			rig.Carrier.CFrame = PARK
 			rig.Tip.CFrame = PARK
-			rig.Trail:Clear()
+			rig.Core:Clear()
+			rig.Edge:Clear()
 			swings[i] = swings[#swings]
 			swings[#swings] = nil
 			table.insert(swingRigs, rig)
 		else
 			local a = swingAngle(sw.Sweep, math.min(t, swingEnd))
-			local len = rig.Blade.Size.Z
 			local pivot = CFrame.new(sw.X, FLOOR_Y + SWING_HEIGHT, sw.Z) * CFrame.Angles(0, sw.Yaw + a, 0)
-			rig.Blade.CFrame = pivot * CFrame.new(0, 0, -(SWING_INNER + len / 2))
+			bulk(rig.Carrier, pivot)
 			if t >= SWING_WINDUP and not sw.Trailing and t < swingEnd then
-				-- the sweep starts: trail on from where the blade is now
+				-- the sweep starts: trails on from where the blade is now
 				sw.Trailing = true
-				rig.Trail:Clear()
-				rig.Trail.Enabled = true
+				rig.Core:Clear()
+				rig.Edge:Clear()
+				rig.Core.Enabled = true
+				rig.Edge.Enabled = true
 			end
-			if t < SWING_WINDUP then
-				rig.Blade.Transparency = 0.6
-				rig.Tip.Transparency = 1
-			elseif t < swingEnd then
-				local u = (t - SWING_WINDUP) / SWING_SWEEP
-				-- hit flash: the blade goes white while the damage lands
-				rig.Blade.Color = (u > 0.3 and u < 0.6) and Color3.new(1, 1, 1) or SWING_COLORS[sw.Tier]
-				rig.Blade.Transparency = 0
-				rig.Tip.Transparency = 0.15
-				rig.Tip.CFrame = pivot * CFrame.new(0, 0, -(SWING_INNER + len))
-			else
-				if rig.Trail.Enabled then
-					rig.Trail.Enabled = false
+			if t >= SWING_WINDUP then
+				if t >= swingEnd and rig.Core.Enabled then
+					rig.Core.Enabled = false
+					rig.Edge.Enabled = false
 				end
 				local f = math.clamp((t - swingEnd) / SWING_FADE, 0, 1)
-				rig.Blade.Color = SWING_COLORS[sw.Tier]
-				rig.Blade.Transparency = f
-				rig.Tip.Transparency = 0.15 + 0.85 * f
-				rig.Tip.CFrame = pivot * CFrame.new(0, 0, -(SWING_INNER + len))
+				rig.Tip.Transparency = 0.2 + 0.8 * f
+				bulk(rig.Tip, pivot * CFrame.new(0, 0, -sw.Reach))
 			end
 		end
 	end
 end
 
--- Jagged bolt from a to b: `segments` neon blocks with random kinks.
+-- Thin jagged bolt from a to b: `segments` tiny neon blocks with random kinks.
 local function zigzag(a: Vector3, b: Vector3, segments: number, jitter: number, width: number, color: Color3, seconds: number)
 	local prev = a
 	for i = 1, segments do
 		local nextPos = a:Lerp(b, i / segments)
 		if i < segments then
-			nextPos += Vector3.new((math.random() - 0.5) * jitter, (math.random() - 0.5) * jitter * 0.5, (math.random() - 0.5) * jitter)
+			nextPos += Vector3.new((math.random() - 0.5) * jitter, (math.random() - 0.5) * jitter * 0.4, (math.random() - 0.5) * jitter)
 		end
-		local len = (nextPos - prev).Magnitude
+		local d = nextPos - prev
+		local len = d.Magnitude
 		if len > 0.05 then
-			local p = getEffectPart("Block")
-			p.Color = color
-			p.Size = Vector3.new(width, width, len)
-			p.CFrame = CFrame.lookAt((prev + nextPos) / 2, nextPos)
-			play("Block", p, seconds, { Transparency = 1, Size = Vector3.new(width * 0.2, width * 0.2, len) })
+			local up = math.abs(d.Y / len) > 0.7 and Vector3.zAxis or Vector3.yAxis
+			local cf = CFrame.lookAt((prev + nextPos) / 2, nextPos, up)
+			fx("Block", color, NEON, cf, nil, Vector3.new(width, width, len + width), Vector3.new(width * 0.3, width * 0.3, len), 0.05, 1, seconds, EASE_OUT)
 		end
 		prev = nextPos
 	end
 end
 
-local function bolt(x, z, radius, tier)
-	tier = tier or 0
-	local color = tier == 3 and Color3.fromRGB(190, 240, 255) or Color3.fromRGB(255, 250, 150)
-	local ground = Vector3.new(x, FLOOR_Y + 0.3, z)
-	zigzag(ground + Vector3.new(math.random(-3, 3), 26, math.random(-3, 3)), ground, 4, 3, 0.5 + tier * 0.15, color, 0.22)
-	-- impact flash + scorch ring
-	local glow = getEffectPart("Ball")
-	glow.Color = color
-	glow.Size = Vector3.one * radius
-	glow.Transparency = 0.1
-	glow.CFrame = CFrame.new(x, FLOOR_Y + 0.6, z)
-	play("Ball", glow, 0.18, { Size = Vector3.one * radius * 2, Transparency = 1 })
-	local ringPart = getEffectPart("Cylinder")
-	ringPart.Color = Color3.fromRGB(255, 240, 90)
-	ringPart.Size = Vector3.new(0.2, radius * 1.2, radius * 1.2)
-	ringPart.Transparency = 0.3
-	ringPart.CFrame = CFrame.new(x, FLOOR_Y + 0.15, z) * DISC
-	play("Cylinder", ringPart, 0.3, { Transparency = 1, Size = Vector3.new(0.2, radius * 2.2, radius * 2.2) })
+-- Lightning: a thin pale bolt from the sky and a small flash on the ground.
+local function bolt(x: number, z: number, radius: number, tier: number?)
+	local t = tonumber(tier) or 0
+	if type(x) ~= "number" or type(z) ~= "number" or not room(7, true) then
+		return
+	end
+	local r = tonumber(radius) or 3
+	local color = t >= 3 and FX.Bolt:Lerp(FX.Arcane, 0.35) or FX.Bolt
+	local ground = Vector3.new(x, FLOOR_Y + 0.2, z)
+	zigzag(ground + Vector3.new((math.random() - 0.5) * 6, 24, (math.random() - 0.5) * 6), ground, 5, 2.2, 0.2 + t * 0.03, color, 0.14)
+	fx("Cylinder", color, SMOOTH, CFrame.new(x, FLOOR_Y + 0.08, z) * DISC, nil, Vector3.new(0.05, r * 0.9, r * 0.9), Vector3.new(0.05, r * 2, r * 2), 0.45, 1, 0.2, EASE_OUT)
+	fx("Ball", color, NEON, CFrame.new(x, FLOOR_Y + 0.6, z), nil, Vector3.one * 0.6, Vector3.one * 1.4, 0.1, 1, 0.1, EASE_OUT)
 end
 
-local function chain(x1, z1, x2, z2)
+local function chain(x1: number, z1: number, x2: number, z2: number)
+	if type(x1) ~= "number" or type(x2) ~= "number" then
+		return
+	end
 	local a = Vector3.new(x1, FLOOR_Y + 2, z1)
 	local b = Vector3.new(x2, FLOOR_Y + 2, z2)
-	if (b - a).Magnitude < 0.1 then
+	if (b - a).Magnitude < 0.1 or not room(3, true) then
 		return
 	end
-	zigzag(a, b, 3, 1.6, 0.35, Color3.fromRGB(200, 240, 255), 0.2)
+	zigzag(a, b, 3, 1.4, 0.16, FX.Bolt:Lerp(FX.Arcane, 0.35), 0.15)
 end
 
--- Holy water pool: grows in, ripples while it burns, then fades.
-local function pool(x, z, radius, seconds, evo)
-	local color = evo and Color3.fromRGB(255, 110, 30) or Color3.fromRGB(70, 150, 255)
-	local p = getEffectPart("Cylinder")
-	p.Color = color
-	p.Size = Vector3.new(0.25, 0.5, 0.5)
-	p.Transparency = 0.35
-	p.CFrame = CFrame.new(x, FLOOR_Y + 0.12, z) * DISC
-	TweenService:Create(p, TweenInfo.new(0.15), { Size = Vector3.new(0.25, radius * 2, radius * 2) }):Play()
-	local ripple = getEffectPart("Cylinder")
-	ripple.Color = color:Lerp(Color3.new(1, 1, 1), evo and 0.3 or 0.5)
-	ripple.Size = Vector3.new(0.3, radius * 0.4, radius * 0.4)
-	ripple.Transparency = 0.4
-	ripple.CFrame = CFrame.new(x, FLOOR_Y + 0.16, z) * DISC
-	local rippleTween = TweenService:Create(ripple, TweenInfo.new(evo and 0.5 or 0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, -1), { Size = Vector3.new(0.3, radius * 2, radius * 2), Transparency = 1 })
-	rippleTween:Play()
-	task.delay(math.max(0.1, seconds - 0.3), function()
-		rippleTween:Cancel()
-		releaseEffectPart("Cylinder", ripple)
-		play("Cylinder", p, 0.3, { Transparency = 1 })
-	end)
-end
+--[[
+	Holy water / hellfire pools: a soft low-alpha disc that grows in, two ripples running
+	outward while it burns (plus two rising embers for hellfire), then a quick fade.
+]]
+type PoolFx = { Fill: BasePart, Ripples: { BasePart }, Embers: { BasePart }, X: number, Z: number, R: number, Start: number, Life: number, FillAlpha: number }
+local poolList: { PoolFx } = {}
+local MAX_POOLS = 24
+local RIPPLE_PERIOD = 1.1
 
--- Glass shards + splash where a bottle lands.
-local function shatter(pos: Vector3, color: Color3)
-	local ground = Vector3.new(pos.X, FLOOR_Y + 0.6, pos.Z)
-	for i = 1, 4 do
-		local a = i * math.pi / 2 + math.random() * 0.8
-		local out = Vector3.new(math.cos(a), 0, math.sin(a))
-		local shard = getEffectPart("Block")
-		shard.Color = color:Lerp(Color3.new(1, 1, 1), 0.4)
-		shard.Size = Vector3.new(0.3, 0.15, 0.55)
-		shard.Transparency = 0.1
-		shard.CFrame = CFrame.lookAt(ground, ground + out)
-		local to = ground + out * (2 + math.random() * 1.5) + Vector3.new(0, -0.4, 0)
-		play("Block", shard, 0.3, { CFrame = CFrame.lookAt(to, to + out) * CFrame.Angles(math.random() * 3, 0, 0), Transparency = 1 })
-	end
-	local splash = getEffectPart("Ball")
-	splash.Color = color
-	splash.Size = Vector3.new(1.5, 0.8, 1.5)
-	splash.Transparency = 0.2
-	splash.CFrame = CFrame.new(ground)
-	play("Ball", splash, 0.25, { Size = Vector3.new(5, 0.2, 5), Transparency = 1 })
-end
-
--- Puff / shatter where a projectile disappears (hit, expiry or landing). Budgeted per frame.
-projectileImpact = function(e: Entry)
-	if impactBudget <= 0 then
+local function pool(x: number, z: number, radius: number, seconds: number, evo: boolean)
+	if type(x) ~= "number" or type(radius) ~= "number" or #poolList >= MAX_POOLS then
 		return
 	end
-	local def = e.Def
-	if def.Shatter then
-		impactBudget -= 1
-		shatter(e.Drawn, def.Color)
-	elseif def.Impact then
-		impactBudget -= 1
-		local size = 1 + e.Tier * 0.25
-		local p = getEffectPart("Ball")
-		p.Color = def.Impact
-		p.Size = Vector3.one * size
-		p.Transparency = 0.25
-		p.CFrame = CFrame.new(e.Drawn)
-		play("Ball", p, 0.18, { Size = Vector3.one * size * 2.6, Transparency = 1 })
+	local count = evo and 5 or 3
+	if not room(count, true) then
+		return
+	end
+	local color = evo and FX.Fire or FX.Holy
+	local rippleColor = evo and P.amber_300 or P.ivory_100
+	local y = FLOOR_Y + 0.06
+	local fill = takePart("Cylinder", color, SMOOTH, Vector3.new(0.05, radius * 1.4, radius * 1.4), 1)
+	fill.CFrame = CFrame.new(x, y, z) * DISC
+	local ripples = {}
+	for k = 1, 2 do
+		local rp = takePart("Cylinder", rippleColor, SMOOTH, Vector3.new(0.05, 1, 1), 1)
+		rp.CFrame = CFrame.new(x, y + 0.01 * k, z) * DISC
+		ripples[k] = rp
+	end
+	local embers = {}
+	if evo then
+		for k = 1, 2 do
+			embers[k] = takePart("Ball", P.amber_500, NEON, Vector3.one * 0.26, 1)
+		end
+	end
+	fxParts += count
+	table.insert(poolList, {
+		Fill = fill,
+		Ripples = ripples,
+		Embers = embers,
+		X = x,
+		Z = z,
+		R = radius,
+		Start = os.clock(),
+		Life = math.max(0.4, tonumber(seconds) or 2),
+		FillAlpha = evo and 0.66 or 0.7,
+	})
+end
+
+local function stepPools(now: number)
+	for i = #poolList, 1, -1 do
+		local pl = poolList[i]
+		local t = now - pl.Start
+		if t >= pl.Life then
+			givePart("Cylinder", pl.Fill)
+			for _, rp in ipairs(pl.Ripples) do
+				givePart("Cylinder", rp)
+			end
+			for _, em in ipairs(pl.Embers) do
+				givePart("Ball", em)
+			end
+			fxParts -= 1 + #pl.Ripples + #pl.Embers
+			poolList[i] = poolList[#poolList]
+			poolList[#poolList] = nil
+		else
+			local appear = math.min(1, t / 0.18)
+			local vis = math.min(appear, math.clamp((pl.Life - t) / 0.35, 0, 1))
+			if appear < 1 or t < 0.25 then
+				local r = pl.R * (0.7 + 0.3 * easeOut(appear))
+				pl.Fill.Size = Vector3.new(0.05, r * 2, r * 2)
+			end
+			pl.Fill.Transparency = 1 - (1 - pl.FillAlpha) * vis
+			for k, rp in ipairs(pl.Ripples) do
+				local ph = (t / RIPPLE_PERIOD + (k - 1) / #pl.Ripples) % 1
+				local rr = pl.R * (0.2 + 0.8 * ph)
+				rp.Size = Vector3.new(0.05, rr * 2, rr * 2)
+				rp.Transparency = 1 - 0.4 * (1 - ph) * vis
+			end
+			for k, em in ipairs(pl.Embers) do
+				local ph = (t * 0.8 + k * 0.5) % 1
+				local a = k * math.pi + t * 0.7
+				em.Transparency = 1 - 0.7 * (1 - ph) * vis
+				bulk(em, CFrame.new(pl.X + math.cos(a) * pl.R * 0.5, FLOOR_Y + 0.3 + ph * 2.2, pl.Z + math.sin(a) * pl.R * 0.5))
+			end
+		end
 	end
 end
 
-local function explosion(x, z, radius)
-	local p = getEffectPart("Ball")
-	p.Color = Color3.fromRGB(255, 140, 40)
-	p.Size = Vector3.one * 2
-	p.Transparency = 0.1
-	p.CFrame = CFrame.new(x, FLOOR_Y + 1, z)
-	play("Ball", p, 0.35, { Size = Vector3.one * radius * 2, Transparency = 1 })
+-- Warm amber burst: a small hot core, a dusty puff and a shock ring (never blinding).
+local function explosion(x: number, z: number, radius: number)
+	if type(x) ~= "number" or type(radius) ~= "number" then
+		return
+	end
+	local r = radius
+	if room(2, true) then
+		local core = math.min(r * 0.45, 4)
+		fx("Ball", P.amber_300, NEON, CFrame.new(x, FLOOR_Y + 1.2, z), nil, Vector3.one * core, Vector3.one * core * 1.8, 0.2, 1, 0.14, EASE_OUT)
+		local dust = math.min(r * 1.1, 26)
+		fx("Ball", FX.Fire:Lerp(P.dirt_300, 0.45), SMOOTH, CFrame.new(x, FLOOR_Y + 0.6, z), nil, Vector3.new(dust * 0.5, dust * 0.22, dust * 0.5), Vector3.new(dust, dust * 0.35, dust), 0.5, 1, 0.38, EASE_OUT3)
+	end
+	wave(x, z, r * 0.15, r, 0.35 + math.min(r, 60) * 0.008, P.amber_300, 0.25, 0.28 + math.min(r, 80) / 220, true)
+	if r <= 14 and room(3) then
+		local from = Vector3.new(x, FLOOR_Y + 1, z)
+		for i = 1, 3 do
+			local a = i * TAU / 3 + math.random()
+			local dir = Vector3.new(math.cos(a), 0, math.sin(a))
+			local to = from + dir * (r * 0.6 + math.random() * 2) - Vector3.new(0, 0.8, 0)
+			fx("Block", P.amber_500, NEON, CFrame.lookAt(from, from + dir), CFrame.lookAt(to, to + dir), Vector3.new(0.14, 0.14, 0.5), Vector3.new(0.08, 0.08, 0.3), 0.1, 1, 0.3, EASE_OUT, 1.2)
+		end
+	end
 	local root = player.Character and player.Character.PrimaryPart
-	if root and (root.Position - Vector3.new(x, root.Position.Y, z)).Magnitude < radius + 25 then
-		CameraController.Shake(0.8)
+	if root and (root.Position - Vector3.new(x, root.Position.Y, z)).Magnitude < r + 25 then
+		CameraController.Shake(0.45)
 	end
 end
 
-local function ring(x, z, radius, color)
-	local p = getEffectPart("Cylinder")
-	p.Color = color
-	p.Size = Vector3.new(0.3, 1, 1)
-	p.Transparency = 0.2
-	p.CFrame = CFrame.new(x, FLOOR_Y + 0.3, z) * DISC
-	play("Cylinder", p, 0.5, { Size = Vector3.new(0.3, radius * 2, radius * 2), Transparency = 1 })
+-- Shockwave ring from the server (bomb, revive, boss): colour brought into the palette.
+local function ring(x: number, z: number, radius: number, color: Color3)
+	if type(x) ~= "number" or type(radius) ~= "number" then
+		return
+	end
+	local c = typeof(color) == "Color3" and paletteColor(color) or FX.Gold
+	wave(x, z, radius * 0.2, radius, 0.3 + math.min(radius, 60) * 0.006, c, 0.2, 0.35 + math.min(radius, 80) / 200, true)
+	if radius <= 32 and room(1, true) then
+		fx("Cylinder", c, SMOOTH, CFrame.new(x, FLOOR_Y + 0.06, z) * DISC, nil, Vector3.new(0.05, radius * 0.6, radius * 0.6), Vector3.new(0.05, radius * 2, radius * 2), 0.82, 1, 0.4, EASE_OUT)
+	end
 end
 
-local function telegraph(x, z, yaw, length, width, seconds)
-	local p = getEffectPart("Block")
-	p.Color = Color3.fromRGB(255, 40, 40)
-	p.Size = Vector3.new(width, 0.1, length)
-	p.Transparency = 0.6
-	p.CFrame = CFrame.new(x, FLOOR_Y + 0.1, z) * CFrame.Angles(0, yaw, 0)
-	play("Block", p, seconds, { Transparency = 0.95 }, Enum.EasingStyle.Linear)
+--[[
+	Boss charge warning: a crimson lane on the floor (faint base, bright edges and end
+	line) that fills from the boss to the end of the charge over the telegraph time, so
+	the timing reads at a glance; the edges pulse faster as the charge gets close.
+]]
+type Tele = { Base: BasePart, Fill: BasePart, EdgeL: BasePart, EdgeR: BasePart, Cap: BasePart, CF: CFrame, Len: number, W: number, Start: number, Dur: number }
+local teles: { Tele } = {}
+local TELE_FADE = 0.25
+
+local function telegraph(x: number, z: number, yaw: number, length: number, width: number, seconds: number)
+	if type(x) ~= "number" or type(length) ~= "number" or type(width) ~= "number" then
+		return
+	end
+	local dur = math.max(0.1, tonumber(seconds) or 1)
+	local cf = CFrame.new(x, FLOOR_Y + 0.07, z) * CFrame.Angles(0, tonumber(yaw) or 0, 0)
+	local edge = 0.22
+	local base = takePart("Block", P.crimson_600, SMOOTH, Vector3.new(width, 0.05, length), 1)
+	base.CFrame = cf
+	local fill = takePart("Block", P.crimson_400, SMOOTH, Vector3.new(width, 0.06, 0.1), 1)
+	fill.CFrame = PARK
+	local el = takePart("Block", P.crimson_300, SMOOTH, Vector3.new(edge, 0.07, length), 1)
+	el.CFrame = cf * CFrame.new(-width / 2, 0.01, 0)
+	local er = takePart("Block", P.crimson_300, SMOOTH, Vector3.new(edge, 0.07, length), 1)
+	er.CFrame = cf * CFrame.new(width / 2, 0.01, 0)
+	local cap = takePart("Block", P.crimson_300, SMOOTH, Vector3.new(width + edge, 0.07, edge), 1)
+	cap.CFrame = cf * CFrame.new(0, 0.01, -length / 2)
+	fxParts += 5
+	table.insert(teles, { Base = base, Fill = fill, EdgeL = el, EdgeR = er, Cap = cap, CF = cf, Len = length, W = width, Start = os.clock(), Dur = dur })
+end
+
+local function stepTelegraphs(now: number)
+	for i = #teles, 1, -1 do
+		local tl = teles[i]
+		local t = now - tl.Start
+		if t >= tl.Dur + TELE_FADE then
+			givePart("Block", tl.Base)
+			givePart("Block", tl.Fill)
+			givePart("Block", tl.EdgeL)
+			givePart("Block", tl.EdgeR)
+			givePart("Block", tl.Cap)
+			fxParts -= 5
+			teles[i] = teles[#teles]
+			teles[#teles] = nil
+		else
+			local u = math.clamp(t / tl.Dur, 0, 1)
+			local vis = math.min(1, t / 0.12) * (1 - math.clamp((t - tl.Dur) / TELE_FADE, 0, 1))
+			local pulse = 0.78 + 0.22 * math.sin(t * (8 + 18 * u))
+			tl.Base.Transparency = 1 - 0.3 * vis
+			local edgeAlpha = 1 - 0.85 * pulse * vis
+			tl.EdgeL.Transparency = edgeAlpha
+			tl.EdgeR.Transparency = edgeAlpha
+			tl.Cap.Transparency = edgeAlpha
+			-- the fill runs from the boss (local +Z end) toward the end of the charge
+			local len = math.max(0.1, tl.Len * u)
+			tl.Fill.Size = Vector3.new(tl.W, 0.06, len)
+			tl.Fill.Transparency = 1 - (0.35 + 0.25 * u) * vis
+			bulk(tl.Fill, tl.CF * CFrame.new(0, 0.005, tl.Len / 2 - len / 2))
+		end
+	end
+end
+
+-- Tiny glowing motes drifting up around a point (heal, level-up, revive).
+local function sparkle(pos: Vector3, color: Color3, count: number, radius: number, rise: number, dur: number)
+	if not room(count, true) then
+		return
+	end
+	for i = 1, count do
+		local a = (i / count) * TAU + math.random() * 0.6
+		local r = radius * (0.5 + math.random() * 0.5)
+		local from = pos + Vector3.new(math.cos(a) * r, math.random() * 0.8, math.sin(a) * r)
+		local to = from + Vector3.new(0, rise * (0.7 + math.random() * 0.5), 0)
+		fx("Ball", color, NEON, CFrame.new(from), CFrame.new(to), Vector3.one * 0.3, Vector3.one * 0.12, 0.15, 1, dur * (0.8 + math.random() * 0.4), EASE_OUT, nil, 0.15)
+	end
 end
 
 local function playerEvent(userId: number, kind: string)
 	local root = characterRoot(userId)
 	local isLocal = userId == player.UserId
+	local pos = root and root.Position
 	if kind == "hurt" then
 		if isLocal then
-			CameraController.Shake(0.35)
+			CameraController.Shake(0.22)
 			Audio.Play("Hit", 0.7)
 		end
-	elseif kind == "heal" and root then
-		ring(root.Position.X, root.Position.Z, 5, Color3.fromRGB(90, 255, 120))
-	elseif kind == "levelup" and root then
-		ring(root.Position.X, root.Position.Z, 8, Color3.fromRGB(255, 220, 80))
+		if pos and room(1) then
+			-- a small crimson nick on the hero
+			local at = towardCamera(pos + Vector3.new(0, 0.8, 0), 1.2)
+			fx("Ball", P.crimson_300, NEON, CFrame.new(at), nil, Vector3.one * 0.4, Vector3.one * 1.1, 0.2, 1, 0.12, EASE_OUT)
+		end
+	elseif kind == "heal" and pos then
+		wave(pos.X, pos.Z, 1, 4.5, 0.2, FX.Heal, 0.35, 0.45, true)
+		sparkle(Vector3.new(pos.X, FLOOR_Y + 0.8, pos.Z), FX.Heal, 5, 1.6, 3.2, 0.6)
+	elseif kind == "levelup" and pos then
+		wave(pos.X, pos.Z, 1.5, 9, 0.32, FX.Gold, 0.2, 0.55, true)
+		sparkle(Vector3.new(pos.X, FLOOR_Y + 0.6, pos.Z), FX.Gold, 6, 2.2, 4.2, 0.7)
+		if room(1, true) then
+			-- a soft, short column of light
+			local cf = CFrame.new(pos.X, FLOOR_Y + 3.5, pos.Z) * DISC
+			fx("Cylinder", P.gold_200, SMOOTH, cf, nil, Vector3.new(7, 3.6, 3.6), Vector3.new(7.5, 5.4, 5.4), 0.8, 1, 0.45, EASE_OUT)
+		end
 		if isLocal then
 			Audio.Play("LevelUp")
 		end
 	elseif kind == "die" then
-		if root then
-			deathPoof(root.Position.X, root.Position.Z, Color3.fromRGB(200, 200, 220), 5)
+		if pos and room(4, true) then
+			deathPuff(pos.X, pos.Z, P.stone_200, P.steel_400, 5, 3)
 		end
 		if isLocal then
 			Audio.Play("Death")
 		end
-	elseif kind == "revive" and root then
-		ring(root.Position.X, root.Position.Z, 12, Color3.fromRGB(255, 240, 150))
+	elseif kind == "revive" and pos then
+		wave(pos.X, pos.Z, 2, 12, 0.36, FX.Gold:Lerp(FX.Hit, 0.4), 0.15, 0.6, true)
+		sparkle(Vector3.new(pos.X, FLOOR_Y + 0.6, pos.Z), FX.Gold, 8, 2.4, 5, 0.8)
 	end
 	if isLocal and onLocalEvent then
 		onLocalEvent(kind)
 	end
 end
 
+local SPARKS_PER_BATCH = 6
+local FULL_DEATHS_PER_BATCH = 6 -- dust + bits; more deaths in one batch get dust only
+local DEATHS_PER_BATCH = 14
+
 local function onFxBatch(batch)
 	if type(batch) ~= "table" then
 		return
 	end
-	if batch.h then
-		for _, id in ipairs(batch.h) do
-			flash(id)
+	if type(batch.h) == "table" then
+		local hits = batch.h
+		local sparkEvery = math.max(1, math.ceil(#hits / SPARKS_PER_BATCH))
+		for i, id in ipairs(hits) do
+			if type(id) == "number" then
+				flash(id)
+				if (i - 1) % sparkEvery == 0 then
+					hitSpark(id)
+				end
+			end
 		end
 		Audio.Play("Hit")
 	end
-	if batch.d then
-		for _, d in ipairs(batch.d) do
-			deathPoof(d[1], d[2], d[3], d[4])
+	if type(batch.d) == "table" then
+		for i, d in ipairs(batch.d) do
+			if i > DEATHS_PER_BATCH then
+				break
+			end
+			if type(d) == "table" and type(d[1]) == "number" and type(d[2]) == "number" then
+				local bits = (i <= FULL_DEATHS_PER_BATCH) and ((tonumber(d[4]) or 2) > 5 and 4 or 2) or 0
+				if room(1 + bits) then
+					local dust, chitin = creatureLook(typeof(d[3]) == "Color3" and d[3] or P.stone_300)
+					deathPuff(d[1], d[2], dust, chitin, tonumber(d[4]) or 2.5, bits)
+				end
+			end
 		end
 	end
-	if batch.s then
+	if type(batch.s) == "table" then
 		for _, s in ipairs(batch.s) do
 			slash(s[1], s[2], s[3], s[4], s[5], s[6], s[7])
 		end
 	end
-	if batch.b then
+	if type(batch.b) == "table" then
 		for _, b in ipairs(batch.b) do
 			bolt(b[1], b[2], b[3], b[4])
 		end
 	end
-	if batch.c then
+	if type(batch.c) == "table" then
 		for _, c in ipairs(batch.c) do
 			chain(c[1], c[2], c[3], c[4])
 		end
 	end
-	if batch.p then
+	if type(batch.p) == "table" then
 		for _, p in ipairs(batch.p) do
-			pool(p[1], p[2], p[3], p[4], p[5])
+			pool(p[1], p[2], p[3], p[4], p[5] == true)
 		end
 	end
-	if batch.e then
+	if type(batch.e) == "table" then
 		for _, e in ipairs(batch.e) do
 			explosion(e[1], e[2], e[3])
 		end
 	end
-	if batch.r then
+	if type(batch.r) == "table" then
 		for _, r in ipairs(batch.r) do
 			ring(r[1], r[2], r[3], r[4])
 		end
 	end
-	if batch.t then
+	if type(batch.t) == "table" then
 		for _, t in ipairs(batch.t) do
 			telegraph(t[1], t[2], t[3], t[4], t[5], t[6])
 		end
 	end
-	if batch.u then
+	if type(batch.u) == "table" then
 		for _, u in ipairs(batch.u) do
 			playerEvent(u[1], u[2])
 		end
 	end
-	if batch.n then
+	if type(batch.n) == "table" then
 		for _, name in ipairs(batch.n) do
 			Audio.Play(name)
 			if name == "BossRoar" then
-				CameraController.Shake(1.2)
+				CameraController.Shake(0.55)
 			end
 		end
 	end
 end
 
 ------------------------------------------------------------------------------------------
--- Gems (local bob / spin)
+-- Gems (gold faceted crystals, local bob / spin, a sparkle when collected)
 ------------------------------------------------------------------------------------------
 
 local gemState: { [BasePart]: Vector3 } = {} -- active gem → server base position
 local gemParts: { BasePart } = {}
 local gemCFrames: { CFrame } = {}
+local gemClock = 0
+local popsThisFrame = 0
+local GEM_TILT = CFrame.Angles(math.rad(45), 0, math.rad(35.26)) -- cube on its corner
 
-local crystals: { [BasePart]: { Pieces: { any }, Scale: number, Color: Color3 } } = {}
-local crystalFor: (BasePart) -> any
+type CrystalBase = { Size: Vector3, Offset: Vector3, Light: boolean }
+type Crystal = { Pieces: { any }, Base: { CrystalBase }, Kind: string, Scale: number }
+local crystals: { [BasePart]: Crystal } = {}
+
+-- Crystal mesh slots: the gem body takes the gem colour, the shine a lighter one.
+local CRYSTAL_SLOT: { [string]: string } = {}
+do
+	local entry = MeshCatalog.Models.Crystal
+	if entry then
+		for _, def in ipairs(entry.Pieces) do
+			CRYSTAL_SLOT[def.Name] = def.Slot
+		end
+	end
+end
+
+-- Gem size from the server cube (0.75 / 1.0 / 1.35 studs) → kind, scale, colour.
+local function gemLook(part: BasePart): (string, number, Color3)
+	local x = part.Size.X
+	local kind = x >= 1.175 and "Large" or (x >= 0.875 and "Medium" or "Small")
+	return kind, x / 0.75, FX.Gem[kind] or FX.Gold
+end
+
+-- One crystal per pooled gem part, resized / recoloured when the gem's kind changes.
+local function crystalFor(part: BasePart, kind: string, scale: number, color: Color3): Crystal?
+	local c = crystals[part]
+	if not c then
+		local pieces = ModelLibrary.MeshPieces("Crystal", nil, 1, 0)
+		if not pieces then
+			return nil
+		end
+		local base: { CrystalBase } = {}
+		for i, piece in ipairs(pieces) do
+			local slot = CRYSTAL_SLOT[piece.Part.Name]
+			base[i] = { Size = piece.Part.Size, Offset = piece.Offset.Position, Light = slot == "Light" or slot == "White" }
+			-- a lit body keeps the facets readable (Neon would flatten them)
+			if piece.Part.Material == NEON and not base[i].Light then
+				piece.Part.Material = SMOOTH
+			end
+			piece.Part.CastShadow = false
+		end
+		c = { Pieces = pieces, Base = base, Kind = "", Scale = 0 }
+		crystals[part] = c
+	end
+	local cr = c :: Crystal
+	if cr.Kind ~= kind or math.abs(cr.Scale - scale) > 0.01 then
+		cr.Kind, cr.Scale = kind, scale
+		for i, piece in ipairs(cr.Pieces) do
+			local b = cr.Base[i]
+			piece.Part.Size = b.Size * scale
+			piece.Offset = CFrame.new(b.Offset * scale)
+			piece.Part.Color = b.Light and color:Lerp(FX.Hit, 0.6) or color
+		end
+	end
+	return cr
+end
+
+-- Tiny pop + four-point sparkle facing the camera where a gem was collected.
+local function gemPop(pos: Vector3, color: Color3)
+	if popsThisFrame >= 6 or not room(3) then
+		return
+	end
+	popsThisFrame += 1
+	local at = pos + Vector3.new(0, 0.3, 0)
+	fx("Ball", color:Lerp(FX.Hit, 0.5), NEON, CFrame.new(at), nil, Vector3.one * 0.3, Vector3.one * 1, 0.1, 1, 0.14, EASE_OUT)
+	local cam = workspace.CurrentCamera
+	local face = cam and CFrame.lookAt(at, cam.CFrame.Position) or CFrame.new(at)
+	fx("Block", FX.Hit, NEON, face, nil, Vector3.new(0.08, 1.1, 0.04), Vector3.new(0.03, 0.3, 0.04), 0.1, 1, 0.16, EASE_OUT)
+	fx("Block", FX.Hit, NEON, face, nil, Vector3.new(1.1, 0.08, 0.04), Vector3.new(0.3, 0.03, 0.04), 0.1, 1, 0.16, EASE_OUT)
+end
 
 local function trackGem(gem: Instance)
 	if not gem:IsA("BasePart") then
@@ -947,10 +1589,24 @@ local function trackGem(gem: Instance)
 					piece.Part.CFrame = PARK
 				end
 			end
-			-- collected near me → pickup sound
-			local root = player.Character and player.Character.PrimaryPart
-			if last and root and (root.Position - last).Magnitude < 8 then
-				Audio.Play("GemPickup")
+			if last then
+				-- collected next to a player: a tiny sparkle (and the pickup sound for me)
+				local near = math.huge
+				for _, other in ipairs(Players:GetPlayers()) do
+					local char = other.Character
+					local root = char and char.PrimaryPart
+					if root then
+						local d = (root.Position - last).Magnitude
+						near = math.min(near, d)
+						if other == player and d < 8 then
+							Audio.Play("GemPickup")
+						end
+					end
+				end
+				if near < 6 then
+					local _, _, color = gemLook(part)
+					gemPop(last, color)
+				end
 			end
 		end
 	end
@@ -959,56 +1615,6 @@ local function trackGem(gem: Instance)
 	refresh()
 end
 
-local gemClock = 0
-
--- One crystal mesh per pooled gem part, rebuilt when the gem's size or colour changes.
-crystalFor = function(part: BasePart)
-	local c = crystals[part]
-	local scale = part.Size.X / 0.75
-	if c and (math.abs(c.Scale - scale) > 0.01 or c.Color ~= part.Color) then
-		for _, piece in ipairs(c.Pieces) do
-			piece.Part:Destroy()
-		end
-		c = nil
-	end
-	if not c then
-		local pieces = ModelLibrary.MeshPieces("Crystal", { Glow = part.Color, Light = part.Color:Lerp(Color3.new(1, 1, 1), 0.6) }, scale, 0)
-		if not pieces then
-			return nil
-		end
-		c = { Pieces = pieces, Scale = scale, Color = part.Color }
-		crystals[part] = c
-	end
-	return c
-end
-local GEM_TILT = CFrame.Angles(math.rad(45), 0, math.rad(35.26))
-
--- Floor pickups bob and spin; chests just glow-pulse.
-local pickupBases: { [Model]: CFrame } = {}
-local function trackPickup(m: Instance)
-	if m:IsA("Model") then
-		task.defer(function()
-			if m.Parent then
-				pickupBases[m] = m:GetPivot()
-			end
-		end)
-	end
-end
-local function renderPickups()
-	for m, base in pairs(pickupBases) do
-		if not m.Parent then
-			pickupBases[m] = nil
-		elseif m.Name == "Chest" then
-			local box = m.PrimaryPart
-			local light = box and box:FindFirstChildOfClass("PointLight")
-			if light then
-				light.Brightness = 1.5 + math.sin(gemClock * 4) * 1
-			end
-		else
-			m:PivotTo(base * CFrame.new(0, 0.5 + math.sin(gemClock * 3) * 0.35, 0) * CFrame.Angles(0, gemClock * 2, 0))
-		end
-	end
-end
 local function renderGems(dt: number)
 	gemClock += dt
 	table.clear(gemParts)
@@ -1016,25 +1622,33 @@ local function renderGems(dt: number)
 	local n = 0
 	local useMesh = ModelLibrary.MeshFolder("Crystal") ~= nil
 	for part, base in pairs(gemState) do
+		local kind, scale, color = gemLook(part)
 		local phase = base.X * 0.37 + base.Z * 0.21
-		local bob = Vector3.new(0, math.sin(gemClock * 3 + phase) * 0.3, 0)
-		local spin = CFrame.Angles(0, gemClock * 2 + phase, 0)
-		local crystal = useMesh and crystalFor(part) or nil
+		local bob = math.sin(gemClock * 2.4 + phase) * 0.18
+		local spin = CFrame.Angles(0, gemClock * 1.3 + phase, 0)
+		local crystal = useMesh and crystalFor(part, kind, scale, color) or nil
 		if crystal then
-			-- uploaded crystal mesh drawn in place of the plain server cube
-			part.LocalTransparencyModifier = 1
-			local s = crystal.Scale
-			local cf = CFrame.new(base + bob - Vector3.new(0, 0.65 * s, 0)) * spin
+			-- the uploaded crystal mesh drawn in place of the plain server cube
+			if part.LocalTransparencyModifier ~= 1 then
+				part.LocalTransparencyModifier = 1
+			end
+			local cf = CFrame.new(base.X, base.Y + bob - 0.65 * scale, base.Z) * spin
 			for _, piece in ipairs(crystal.Pieces) do
 				n += 1
 				gemParts[n] = piece.Part
 				gemCFrames[n] = cf * piece.Offset
 			end
 		else
+			-- part fallback: the server cube stood on its corner, in the gem colour (local)
+			if part.Color ~= color then
+				part.Color = color
+			end
+			if part.Material ~= SMOOTH then
+				part.Material = SMOOTH
+			end
 			n += 1
 			gemParts[n] = part
-			-- cube stood on its corner = diamond-shaped crystal
-			gemCFrames[n] = CFrame.new(base + bob) * spin * GEM_TILT
+			gemCFrames[n] = CFrame.new(base.X, base.Y + bob, base.Z) * spin * GEM_TILT
 		end
 	end
 	if n > 0 then
@@ -1043,254 +1657,667 @@ local function renderGems(dt: number)
 end
 
 ------------------------------------------------------------------------------------------
--- Player decorations: aura rings, HP bars, limb swing
+-- Floor pickups (bob and spin) and chests (soft glow)
 ------------------------------------------------------------------------------------------
 
-type Deco = { Ring: Part?, AuraFill: Part?, Pulse: Part?, Motes: { Part }?, Bar: BillboardGui?, Fill: Frame?, Character: Model? }
-local AURA_MOTES = 6
-local decos: { [Player]: Deco } = {}
+type Pickup = { Base: CFrame, Parts: { BasePart }, Offsets: { CFrame }, Chest: boolean, Light: PointLight?, Phase: number }
+local pickups: { [Model]: Pickup } = {}
 
-local function buildBar(char: Model): (BillboardGui, Frame)
+local function trackPickup(m: Instance)
+	if not m:IsA("Model") then
+		return
+	end
+	task.defer(function()
+		if not m.Parent then
+			return
+		end
+		local model = m :: Model
+		local base = model:GetPivot()
+		local parts, offsets = {}, {}
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				table.insert(parts, d)
+				table.insert(offsets, base:ToObjectSpace(d.CFrame))
+			end
+		end
+		local chest = model.Name == "Chest"
+		local light = model:FindFirstChildWhichIsA("PointLight", true)
+		if light then
+			light.Brightness = chest and 0.9 or 0.7 -- a modest glow
+		end
+		pickups[model] = { Base = base, Parts = parts, Offsets = offsets, Chest = chest, Light = light, Phase = math.random() * TAU }
+	end)
+end
+
+local function renderPickups(now: number)
+	for m, pk in pairs(pickups) do
+		if not m.Parent then
+			pickups[m] = nil
+		elseif pk.Chest then
+			if pk.Light then
+				pk.Light.Brightness = 0.9 + math.sin(now * 3 + pk.Phase) * 0.35
+			end
+		else
+			local cf = pk.Base * CFrame.new(0, 0.45 + math.sin(now * 2.6 + pk.Phase) * 0.25, 0) * CFrame.Angles(0, now * 1.4 + pk.Phase, 0)
+			for i, part in ipairs(pk.Parts) do
+				bulk(part, cf * pk.Offsets[i])
+			end
+		end
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- Player decorations: ground marker, health bar, aura ring
+------------------------------------------------------------------------------------------
+
+type Deco = {
+	Character: Model?,
+	Marker: Ring?,
+	MarkerFill: BasePart?,
+	Chev: { BasePart }?,
+	MarkerStyle: string,
+	Aura: Ring?,
+	AuraFill: BasePart?,
+	Motes: { BasePart }?,
+	AuraR: number,
+	AuraShown: boolean,
+	Bar: BillboardGui?,
+	BarFill: Frame?,
+	BarTrail: Frame?,
+	BarGrad: UIGradient?,
+	BarTeam: boolean,
+	BarRevive: boolean,
+	Frac: number,
+	TrailFrac: number,
+	ShowUntil: number,
+}
+local decos: { [Player]: Deco } = {}
+local AURA_MOTES = 5
+
+-- Facing chevron: two short bars forming a ">" just outside the ring, pointing forward.
+local CHEV_LEN = 0.62
+local CHEV_TIP = 3.5
+local CHEV_ANGLE = math.rad(40)
+local CHEV_L = CFrame.new(-math.sin(CHEV_ANGLE) * CHEV_LEN / 2, 0, -CHEV_TIP + math.cos(CHEV_ANGLE) * CHEV_LEN / 2) * CFrame.Angles(0, -CHEV_ANGLE, 0)
+local CHEV_R = CFrame.new(math.sin(CHEV_ANGLE) * CHEV_LEN / 2, 0, -CHEV_TIP + math.cos(CHEV_ANGLE) * CHEV_LEN / 2) * CFrame.Angles(0, CHEV_ANGLE, 0)
+
+local function newDeco(): Deco
+	return {
+		Character = nil,
+		MarkerStyle = "",
+		AuraR = -1,
+		AuraShown = false,
+		BarTeam = false,
+		BarRevive = false,
+		Frac = -1,
+		TrailFrac = 1,
+		ShowUntil = 0,
+	}
+end
+
+local function corner(parent: Instance, px: number)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, px)
+	c.Parent = parent
+end
+
+-- Small overhead bar: thin dark outline, ivory track, crimson fill, light "lost" trail.
+local function buildBar(deco: Deco, root: BasePart, team: boolean)
+	if deco.Bar then
+		deco.Bar:Destroy()
+	end
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "SwarmHP"
-	gui.Size = UDim2.fromOffset(60, 8)
-	gui.StudsOffset = Vector3.new(0, 4.2, 0)
+	gui.Size = team and UDim2.fromOffset(44, 7) or UDim2.fromOffset(50, 8)
+	gui.StudsOffsetWorldSpace = Vector3.new(0, 4.9, 0)
 	gui.AlwaysOnTop = true
 	gui.LightInfluence = 0
 	gui.ResetOnSpawn = false
-	gui.Adornee = char:FindFirstChild("HumanoidRootPart") :: BasePart
-	local back = Instance.new("Frame")
-	back.Size = UDim2.fromScale(1, 1)
-	back.BackgroundColor3 = Color3.fromRGB(30, 10, 10)
-	back.BorderSizePixel = 0
-	back.Parent = gui
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 3)
-	corner.Parent = back
+	gui.MaxDistance = 500
+	gui.Adornee = root
+	gui.Enabled = false
+	local outline = Instance.new("Frame")
+	outline.Name = "Outline"
+	outline.Size = UDim2.fromScale(1, 1)
+	outline.BackgroundColor3 = P.slate_950
+	outline.BackgroundTransparency = 0.1
+	outline.BorderSizePixel = 0
+	outline.Parent = gui
+	corner(outline, 3)
+	local track = Instance.new("Frame")
+	track.Name = "Track"
+	track.Position = UDim2.fromOffset(1, 1)
+	track.Size = UDim2.new(1, -2, 1, -2)
+	track.BackgroundColor3 = P.ivory_400
+	track.BorderSizePixel = 0
+	track.ClipsDescendants = true
+	track.Parent = outline
+	corner(track, 2)
+	local trail = Instance.new("Frame")
+	trail.Name = "Trail"
+	trail.Size = UDim2.fromScale(1, 1)
+	trail.BackgroundColor3 = P.ivory_100
+	trail.BorderSizePixel = 0
+	trail.Parent = track
+	corner(trail, 2)
 	local fill = Instance.new("Frame")
 	fill.Name = "Fill"
 	fill.Size = UDim2.fromScale(1, 1)
-	fill.BackgroundColor3 = Color3.fromRGB(80, 230, 90)
+	fill.BackgroundColor3 = WHITE
 	fill.BorderSizePixel = 0
-	fill.Parent = back
-	local c2 = Instance.new("UICorner")
-	c2.CornerRadius = UDim.new(0, 3)
-	c2.Parent = fill
+	fill.Parent = track
+	corner(fill, 2)
+	local grad = Instance.new("UIGradient")
+	grad.Color = ColorSequence.new(P.crimson_400, P.crimson_600)
+	grad.Rotation = 90
+	grad.Parent = fill
 	gui.Parent = fxFolder
-	return gui, fill
+	deco.Bar, deco.BarFill, deco.BarTrail, deco.BarGrad = gui, fill, trail, grad
+	deco.BarTeam = team
+	deco.BarRevive = false
+	deco.Frac = -1
+	deco.TrailFrac = 1
 end
 
-local function updateDecos(_dt: number)
-	local t = os.clock()
+local BAR_HEALTH = ColorSequence.new(P.crimson_400, P.crimson_600)
+local BAR_REVIVE = ColorSequence.new(P.gold_300, P.gold_500)
+
+--[[
+	Local player: shown only while hurt (and a moment after healing to full); the HUD has
+	the full meter. Teammates: always shown; a fallen teammate's bar turns into their gold
+	revive meter.
+]]
+local function updateBar(deco: Deco, other: Player, root: BasePart, isLocal: boolean, alive: boolean, now: number, dt: number)
+	local team = not isLocal
+	local bar = deco.Bar
+	if not bar or deco.BarTeam ~= team or bar.Adornee ~= root then
+		buildBar(deco, root, team)
+		bar = deco.Bar
+	end
+	local gui = bar :: BillboardGui
+	local fill = deco.BarFill :: Frame
+	local trail = deco.BarTrail :: Frame
+	local grad = deco.BarGrad :: UIGradient
+	local hp = tonumber(other:GetAttribute("HP")) or 0
+	local maxHp = math.max(1, tonumber(other:GetAttribute("MaxHP")) or 1)
+	local frac = math.clamp(hp / maxHp, 0, 1)
+	local show: boolean
+	if not alive then
+		show = team
+	elseif isLocal then
+		if frac < 0.999 then
+			deco.ShowUntil = now + 1.2
+		end
+		show = now < deco.ShowUntil
+	else
+		show = true
+	end
+	if gui.Enabled ~= show then
+		gui.Enabled = show
+	end
+	if not show then
+		return
+	end
+	local revive = not alive
+	if deco.BarRevive ~= revive then
+		deco.BarRevive = revive
+		grad.Color = revive and BAR_REVIVE or BAR_HEALTH
+		deco.Frac = -1
+	end
+	local value = frac
+	if revive then
+		value = math.clamp(tonumber(other:GetAttribute("ReviveProgress")) or 0, 0, 1)
+	end
+	if value ~= deco.Frac then
+		deco.Frac = value
+		fill.Size = UDim2.fromScale(value, 1)
+	end
+	-- the light trail shows health just lost, then catches up with the fill
+	local trailFrac = deco.TrailFrac
+	if revive or value >= trailFrac then
+		trailFrac = value
+	else
+		trailFrac = math.max(value, trailFrac - dt * 0.6)
+	end
+	if trailFrac ~= deco.TrailFrac or trail.Size.X.Scale ~= trailFrac then
+		deco.TrailFrac = trailFrac
+		trail.Size = UDim2.fromScale(trailFrac, 1)
+	end
+end
+
+local function hideMarker(deco: Deco)
+	if deco.MarkerStyle == "" then
+		return
+	end
+	deco.MarkerStyle = ""
+	if deco.Marker then
+		hideRing(deco.Marker)
+	end
+	if deco.MarkerFill then
+		deco.MarkerFill.CFrame = PARK
+	end
+	for _, c in ipairs(deco.Chev or {}) do
+		c.CFrame = PARK
+	end
+end
+
+-- Gold ring + soft fill + facing chevron under the local hero; slate-blue ring under
+-- teammates; a pulsing crimson ring under a fallen player.
+local function updateMarker(deco: Deco, root: BasePart, isLocal: boolean, alive: boolean, now: number)
+	if not deco.Marker then
+		deco.Marker = newRing(20)
+		local fill = newPart("Cylinder")
+		fill.Transparency = 1
+		deco.MarkerFill = fill
+		deco.Chev = { newPart("Block"), newPart("Block") }
+	end
+	local ringObj = deco.Marker :: Ring
+	local fill = deco.MarkerFill :: BasePart
+	local chev = deco.Chev :: { BasePart }
+	local style = not alive and "down" or (isLocal and "local" or "team")
+	if deco.MarkerStyle ~= style then
+		deco.MarkerStyle = style
+		local color = style == "local" and FX.PlayerRing or FX.TeamRing
+		fill.Color = FX.PlayerRing
+		fill.Size = Vector3.new(0.04, 5.3, 5.3)
+		fill.Transparency = 0.86
+		if style ~= "local" then
+			fill.CFrame = PARK
+		end
+		for _, c in ipairs(chev) do
+			c.Color = color
+			c.Size = Vector3.new(0.17, 0.05, CHEV_LEN)
+			c.Transparency = style == "local" and 0.06 or 0.25
+			if style == "down" then
+				c.CFrame = PARK
+			end
+		end
+	end
+	local pos = root.Position
+	local y = FLOOR_Y + 0.07
+	if style == "down" then
+		styleRing(ringObj, 2.6, 0.2, P.crimson_300, math.floor((0.4 + 0.18 * math.sin(now * 5)) * 50 + 0.5) / 50)
+	elseif style == "local" then
+		styleRing(ringObj, 2.7, 0.22, FX.PlayerRing, 0.06)
+	else
+		styleRing(ringObj, 2.5, 0.18, FX.TeamRing, 0.15)
+	end
+	placeRing(ringObj, pos.X, y, pos.Z, 0)
+	if style == "local" then
+		bulk(fill, CFrame.new(pos.X, y - 0.012, pos.Z) * DISC)
+	end
+	if style ~= "down" then
+		local look = root.CFrame.LookVector
+		local cf = CFrame.new(pos.X, y, pos.Z) * CFrame.Angles(0, math.atan2(-look.X, -look.Z), 0)
+		bulk(chev[1], cf * CHEV_L)
+		bulk(chev[2], cf * CHEV_R)
+	end
+end
+
+local function hideAura(deco: Deco)
+	if not deco.AuraShown then
+		return
+	end
+	deco.AuraShown = false
+	if deco.Aura then
+		hideRing(deco.Aura)
+	end
+	if deco.AuraFill then
+		deco.AuraFill.CFrame = PARK
+	end
+	for _, m in ipairs(deco.Motes or {}) do
+		m.CFrame = PARK
+	end
+end
+
+--[[
+	Garlic aura: a thin dashed ivory ring at the damage edge turning slowly, a very faint
+	fill that breathes once a second and three motes. Soul Eater (evolved): arcane blue,
+	turning the other way, with five motes spiralling inward like pulled souls.
+]]
+local function updateAura(deco: Deco, root: BasePart, radius: number, evo: boolean, now: number)
+	if not deco.Aura then
+		deco.Aura = newRing(28)
+		deco.AuraFill = newPart("Cylinder")
+		local motes = {}
+		for i = 1, AURA_MOTES do
+			local m = newPart("Ball")
+			m.Material = NEON
+			m.Size = Vector3.one * 0.26
+			motes[i] = m
+		end
+		deco.Motes = motes
+	end
+	deco.AuraShown = true
+	local color = evo and FX.Arcane or P.ivory_200
+	local pos = root.Position
+	local ringObj = deco.Aura :: Ring
+	styleRing(ringObj, radius, 0.16, color, 0.45, 0.62)
+	placeRing(ringObj, pos.X, FLOOR_Y + 0.1, pos.Z, evo and -now * 0.8 or now * 0.3)
+	local fill = deco.AuraFill :: BasePart
+	if deco.AuraR ~= radius then
+		deco.AuraR = radius
+		fill.Size = Vector3.new(0.04, radius * 2, radius * 2)
+	end
+	local fillColor = evo and P.slate_300 or P.moss_100
+	if fill.Color ~= fillColor then
+		fill.Color = fillColor
+	end
+	fill.Transparency = 0.93 + 0.02 * math.sin(now * TAU)
+	bulk(fill, CFrame.new(pos.X, FLOOR_Y + 0.05, pos.Z) * DISC)
+	local motes = deco.Motes :: { BasePart }
+	local shown = evo and AURA_MOTES or 3
+	for i, mote in ipairs(motes) do
+		if i <= shown then
+			local a = now * (evo and 2.2 or 1.1) + i * TAU / shown
+			local r = radius * 0.85
+			if evo then
+				r = radius * (1 - ((now * 0.7 + i / shown) % 1) * 0.85)
+			end
+			if mote.Color ~= color then
+				mote.Color = color
+			end
+			mote.Transparency = 0.3
+			bulk(mote, CFrame.new(pos.X + math.cos(a) * r, FLOOR_Y + 0.9 + math.sin(now * 3 + i) * 0.3, pos.Z + math.sin(a) * r))
+		else
+			mote.CFrame = PARK
+		end
+	end
+end
+
+local rigs: { [Player]: any } = {}
+
+local function updateDecos(now: number, dt: number)
+	local meInRun = player:GetAttribute("InRun") == true
 	for _, other in ipairs(Players:GetPlayers()) do
 		local deco = decos[other]
 		if not deco then
-			deco = {}
+			deco = newDeco()
 			decos[other] = deco
 		end
 		local char = other.Character
 		local root = char and char.PrimaryPart
+		local isLocal = other == player
 		local inRun = other:GetAttribute("InRun") == true
-
-		-- HP bar
+		local alive = other:GetAttribute("Alive") ~= false
 		if deco.Character ~= char then
+			deco.Character = char
 			if deco.Bar then
 				deco.Bar:Destroy()
 				deco.Bar = nil
 			end
-			deco.Character = char
 		end
-		if inRun and char and root then
-			if not deco.Bar then
-				deco.Bar, deco.Fill = buildBar(char)
+		if root and inRun and (isLocal or meInRun) then
+			updateMarker(deco, root, isLocal, alive, now)
+			updateBar(deco, other, root, isLocal, alive, now, dt)
+		else
+			hideMarker(deco)
+			if deco.Bar and deco.Bar.Enabled then
+				deco.Bar.Enabled = false
 			end
-			local hp = other:GetAttribute("HP") or 0
-			local maxHp = math.max(1, other:GetAttribute("MaxHP") or 1)
-			local frac = math.clamp(hp / maxHp, 0, 1)
-			local fill = deco.Fill :: Frame
-			fill.Size = UDim2.fromScale(frac, 1)
-			fill.BackgroundColor3 = frac > 0.5 and Color3.fromRGB(80, 230, 90) or (frac > 0.25 and Color3.fromRGB(255, 200, 60) or Color3.fromRGB(255, 70, 70))
-			local bar = deco.Bar :: BillboardGui
-			bar.Enabled = other:GetAttribute("Alive") ~= false
-		elseif deco.Bar then
-			deco.Bar.Enabled = false
 		end
-
-		-- Garlic aura: rim ring, faint fill, a pulse wave each second and orbiting motes.
-		-- Soul Eater (evolved) turns purple and its motes spiral inward like pulled souls.
-		local radius = other:GetAttribute("AuraRadius") or 0
-		if inRun and root and radius > 0 and other:GetAttribute("Alive") ~= false then
-			if not deco.Ring then
-				deco.Ring = newPart(Enum.PartType.Cylinder, Color3.fromRGB(240, 240, 190), Enum.Material.Neon, Vector3.one)
-				deco.AuraFill = newPart(Enum.PartType.Cylinder, Color3.fromRGB(240, 240, 190), Enum.Material.Neon, Vector3.one)
-				deco.Pulse = newPart(Enum.PartType.Cylinder, Color3.fromRGB(240, 240, 190), Enum.Material.Neon, Vector3.one)
-				local motes = {}
-				for i = 1, AURA_MOTES do
-					motes[i] = newPart(Enum.PartType.Ball, Color3.fromRGB(240, 240, 190), Enum.Material.Neon, Vector3.one * 0.5)
-				end
-				deco.Motes = motes
-			end
-			local evo = other:GetAttribute("AuraEvo") == true
-			local color = evo and Color3.fromRGB(200, 90, 255) or Color3.fromRGB(240, 240, 190)
-			local cx, cz = root.Position.X, root.Position.Z
-			local ringPart = deco.Ring :: Part
-			ringPart.Color = color
-			local pulse = 1 + math.sin(t * 4) * 0.03
-			ringPart.Size = Vector3.new(0.15, radius * 2 * pulse, radius * 2 * pulse)
-			ringPart.Transparency = 0.8
-			ringPart.CFrame = CFrame.new(cx, FLOOR_Y + 0.2, cz) * DISC
-			local fill = deco.AuraFill :: Part
-			fill.Color = color
-			fill.Size = Vector3.new(0.1, radius * 2, radius * 2)
-			fill.Transparency = 0.93
-			fill.CFrame = CFrame.new(cx, FLOOR_Y + 0.17, cz) * DISC
-			-- pulse wave: inward for Soul Eater, outward for Garlic
-			local k = (t * (evo and 1.4 or 1)) % 1
-			local waveR = evo and radius * (1 - k * 0.8) or radius * (0.25 + 0.75 * k)
-			local wave = deco.Pulse :: Part
-			wave.Color = color
-			wave.Size = Vector3.new(0.12, waveR * 2, waveR * 2)
-			wave.Transparency = 0.6 + 0.4 * (evo and (1 - k) or k)
-			wave.CFrame = CFrame.new(cx, FLOOR_Y + 0.22, cz) * DISC
-			local motes = deco.Motes :: { Part }
-			local shown = evo and AURA_MOTES or AURA_MOTES // 2
-			for i, mote in ipairs(motes) do
-				if i <= shown then
-					local a = t * (evo and 2.4 or 1.2) + i * math.pi * 2 / shown
-					local r = radius * 0.85
-					if evo then
-						r = radius * (1 - ((t * 0.7 + i / shown) % 1) * 0.85)
-					end
-					mote.Color = color
-					mote.Transparency = 0.25
-					mote.CFrame = CFrame.new(cx + math.cos(a) * r, FLOOR_Y + 1 + math.sin(t * 3 + i) * 0.4, cz + math.sin(a) * r)
-				else
-					mote.CFrame = PARK
-				end
-			end
-		elseif deco.Ring then
-			deco.Ring.CFrame = PARK
-			if deco.AuraFill then
-				deco.AuraFill.CFrame = PARK
-			end
-			if deco.Pulse then
-				deco.Pulse.CFrame = PARK
-			end
-			for _, mote in ipairs(deco.Motes or {}) do
-				mote.CFrame = PARK
-			end
+		local radius = tonumber(other:GetAttribute("AuraRadius")) or 0
+		if root and inRun and alive and radius > 0 and (isLocal or meInRun) then
+			updateAura(deco, root, radius, other:GetAttribute("AuraEvo") == true, now)
+		else
+			hideAura(deco)
 		end
 	end
 	for other, deco in pairs(decos) do
 		if not other.Parent then
-			for _, part in ipairs({ deco.Ring, deco.AuraFill, deco.Pulse } :: { Part? }) do
+			destroyRing(deco.Marker)
+			destroyRing(deco.Aura)
+			for _, part in ipairs({ deco.MarkerFill, deco.AuraFill } :: { BasePart? }) do
 				if part then
 					part:Destroy()
 				end
 			end
-			for _, mote in ipairs(deco.Motes or {}) do
-				mote:Destroy()
+			for _, part in ipairs(deco.Chev or {}) do
+				part:Destroy()
+			end
+			for _, part in ipairs(deco.Motes or {}) do
+				part:Destroy()
 			end
 			if deco.Bar then
 				deco.Bar:Destroy()
 			end
 			decos[other] = nil
 			poses[other.UserId] = nil
+			rigs[other] = nil
 		end
 	end
 end
 
+------------------------------------------------------------------------------------------
+-- Hero animation: walk cycle, idle breathing, attack poses
+------------------------------------------------------------------------------------------
+
 --[[
-	Procedural walk cycle: swing arms/legs from the root's speed (no animation assets),
-	plus the attack poses started by startPose:
-	  Swing  right arm raised forward and swept across with the blade; a swing behind
-	         the player turns into a quick full-body spin slash (RootJoint)
-	  Throw  right arm cocks back over the head, then snaps forward
-	  Cast   right arm points forward briefly
-	Each pose blends back into the walk cycle over POSE_RECOVER seconds.
+	Procedural animation through the rig's own Motor6Ds (RootJoint on the root; Neck,
+	shoulders and hips on the torso). Joint points differ per hero model (MeshCatalog
+	Joints), so nothing assumes positions: rotations happen at each joint, and the leg
+	length used for the walk's body bob is read from the hip joint.
+	  Walk   chunky arm swing, legs, a body bob that keeps the feet planted (the hips drop
+	         as the legs spread), a slight lean into the run and a shoulder twist.
+	  Idle   slow breathing: the chest rises, the arms ease out, the head nods a touch.
+	  Swing  sword arm raised and swept across with the blade, shoulders winding up and
+	         following through, shield arm up; a swing behind the hero is a spin slash.
+	  Throw  arm cocks back over the head, then snaps forward with a twist.
+	  Cast   arm (staff) raised forward, the off hand lifts.
+	  Fallen slumped forward and lowered, arms hanging.
 ]]
-local swingClock = 0
-local function setMotor(torso: Instance, name: string, cf: CFrame)
+type Rig = {
+	Char: Model,
+	Root: BasePart,
+	RootJoint: Motor6D?,
+	Neck: Motor6D?,
+	LS: Motor6D?,
+	RS: Motor6D?,
+	LH: Motor6D?,
+	RH: Motor6D?,
+	Leg: number,
+	Phase: number,
+	Move: number,
+	Down: number,
+	Seed: number,
+	Complete: boolean,
+	RetryAt: number,
+}
+
+local function motorFor(torso: Instance, name: string, partName: string): Motor6D?
 	local m = torso:FindFirstChild(name)
 	if m and m:IsA("Motor6D") then
-		m.Transform = cf
+		return m
 	end
+	-- a rig that names its joints differently: the Motor6D driving that body part
+	for _, d in ipairs(torso:GetChildren()) do
+		if d:IsA("Motor6D") and d.Part1 and d.Part1.Name == partName then
+			return d
+		end
+	end
+	return nil
 end
 
--- Arm transform (and body spin) for a pose at time t; nil when the pose is over.
-local function poseTransform(pose: Pose, t: number): (CFrame?, number, number)
-	local length, armCF, spin = 0, CFrame.identity, 0
+local function buildRig(char: Model, now: number): Rig?
+	local root = char:FindFirstChild("HumanoidRootPart")
+	local torso = char:FindFirstChild("Torso")
+	if not (root and root:IsA("BasePart") and torso and torso:IsA("BasePart")) then
+		return nil
+	end
+	local rj = root:FindFirstChild("RootJoint")
+	local rig: Rig = {
+		Char = char,
+		Root = root,
+		RootJoint = (rj and rj:IsA("Motor6D")) and rj or nil,
+		Neck = motorFor(torso, "Neck", "Head"),
+		LS = motorFor(torso, "Left Shoulder", "Left Arm"),
+		RS = motorFor(torso, "Right Shoulder", "Right Arm"),
+		LH = motorFor(torso, "Left Hip", "Left Leg"),
+		RH = motorFor(torso, "Right Hip", "Right Leg"),
+		Leg = 2,
+		Phase = 0,
+		Move = 0,
+		Down = 0,
+		Seed = math.random() * 10,
+		Complete = false,
+		RetryAt = now + 1,
+	}
+	rig.Complete = rig.RootJoint ~= nil and rig.LS ~= nil and rig.RS ~= nil and rig.LH ~= nil and rig.RH ~= nil
+	-- leg length (hip joint to soles) from the rig's own joints, not from live poses
+	local hip = rig.LH or rig.RH
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local hipHeight = hum and hum.HipHeight or 2
+	if hip then
+		local jointY: number
+		local rootJoint = rig.RootJoint
+		if rootJoint and rootJoint.Part1 == hip.Part0 then
+			jointY = (rootJoint.C0 * rootJoint.C1:Inverse() * hip.C0).Position.Y
+		elseif hip.Part0 then
+			jointY = root.CFrame:PointToObjectSpace((hip.Part0.CFrame * hip.C0).Position).Y
+		else
+			jointY = -1
+		end
+		rig.Leg = math.clamp(jointY + root.Size.Y / 2 + hipHeight, 0.8, 4)
+	end
+	return rig
+end
+
+-- Right-arm transform, its weight, body spin, body twist and the off-arm transform for a
+-- pose at time t (armCF = nil when the pose is over).
+local function poseTransform(pose: Pose, t: number): (CFrame?, number, number, number, CFrame)
+	local length = 0
+	local armCF = CFrame.identity
+	local off = CFrame.identity
+	local spin, twist = 0, 0
 	if pose.Kind == "Swing" then
 		length = SWING_WINDUP + SWING_SWEEP
 		local tt = math.min(t, length)
-		local half = pose.Half
 		local s = pose.Sweep
 		local yawA
 		if tt < SWING_WINDUP then
-			yawA = s * (0.5 + 0.6 * easeOut(tt / SWING_WINDUP))
+			local u = easeOut(tt / SWING_WINDUP)
+			yawA = s * (0.5 + 0.6 * u)
+			twist = s * 0.3 * u
 		else
-			yawA = s * 1.1 - s * 2.3 * easeOut((tt - SWING_WINDUP) / SWING_SWEEP)
+			local u = easeOut((tt - SWING_WINDUP) / SWING_SWEEP)
+			yawA = s * 1.1 - s * 2.3 * u
+			twist = s * 0.3 - s * 0.65 * u
 		end
-		yawA = math.clamp(yawA, -half, half)
+		yawA = math.clamp(yawA, -pose.Half, pose.Half)
 		if pose.Back then
 			yawA = -1.0 -- arm held out to the side while the body spins
+			twist = 0
 		end
 		armCF = CFrame.Angles(0, yawA, 0) * CFrame.Angles(1.45, 0, 0)
+		off = CFrame.Angles(0.55, 0, -0.3) -- shield arm up as a guard
 		if pose.Back and tt >= SWING_WINDUP then
 			-- a full turn over the sweep and the recovery
-			spin = s * math.pi * 2 * easeOut((t - SWING_WINDUP) / (SWING_SWEEP + POSE_RECOVER))
+			spin = s * TAU * easeOut((t - SWING_WINDUP) / (SWING_SWEEP + POSE_RECOVER))
 		end
 	elseif pose.Kind == "Throw" then
 		length = THROW_TIME
 		local u = math.min(t, length) / length
-		local pitch = u < 0.4 and 3.3 * easeOut(u / 0.4) or 3.3 - 2.3 * easeOut((u - 0.4) / 0.6)
-		armCF = CFrame.Angles(pitch, 0, 0)
+		local pitch
+		if u < 0.4 then
+			local k = easeOut(u / 0.4)
+			pitch = 3.0 * k
+			twist = 0.3 * k
+		else
+			local k = easeOut((u - 0.4) / 0.6)
+			pitch = 3.0 - 2.2 * k
+			twist = 0.3 - 0.55 * k
+		end
+		armCF = CFrame.Angles(pitch, 0, 0.1)
+		off = CFrame.Angles(0.5, 0, -0.15)
 	else
 		length = CAST_TIME
-		armCF = CFrame.Angles(1.5 * easeOut(math.min(t, length) / (length * 0.4)), 0, 0)
+		local k = easeOut(math.min(t, length) / (length * 0.45))
+		armCF = CFrame.Angles(1.65 * k, 0, 0.12 * k)
+		off = CFrame.Angles(0.7 * k, 0, -0.2 * k)
+		twist = -0.12 * k
 	end
 	if t > length + POSE_RECOVER then
-		return nil, 0, 0
+		return nil, 0, 0, 0, off
 	end
 	local w = t <= length and 1 or 1 - (t - length) / POSE_RECOVER
 	if pose.Back and pose.Kind == "Swing" and t > length then
 		w = 1 -- keep the spin going until it has turned all the way round
 	end
-	return armCF, w, spin
+	return armCF, w, spin, twist, off
+end
+
+local function setTransform(m: Motor6D?, cf: CFrame)
+	if m then
+		m.Transform = cf
+	end
+end
+
+local function animateRig(other: Player, rig: Rig, dt: number, now: number)
+	local root = rig.Root
+	local v = root.AssemblyLinearVelocity
+	local speed = math.sqrt(v.X * v.X + v.Z * v.Z)
+	local alive = other:GetAttribute("Alive") ~= false
+	local fallen = not alive and other:GetAttribute("InRun") == true
+	rig.Move += ((alive and math.clamp(speed / 16, 0, 1.25) or 0) - rig.Move) * (1 - math.exp(-dt * 10))
+	rig.Down += ((fallen and 1 or 0) - rig.Down) * (1 - math.exp(-dt * 6))
+	local move = rig.Move
+	local walk = math.min(move, 1)
+	if walk > 0.02 then
+		rig.Phase = (rig.Phase + dt * (6.5 + 5 * move)) % TAU -- cadence follows speed
+	end
+	local s = math.sin(rig.Phase)
+	local legA = 0.6 * walk * s
+	local armA = 0.78 * walk * s
+	local breath = math.sin(now * 2.2 + rig.Seed) * (1 - walk)
+	-- feet stay planted: the hips drop as the legs spread (that is the walk's bob)
+	local bob = -0.7 * rig.Leg * (1 - math.cos(legA)) + 0.035 * breath
+	local lean = -0.09 * walk
+	local twist = 0.09 * walk * s
+	local rs = CFrame.Angles(-armA, 0, 0.07 + 0.03 * breath)
+	local ls = CFrame.Angles(armA, 0, -0.07 - 0.03 * breath)
+	local spin = 0
+	local pose = poses[other.UserId]
+	if pose then
+		local armCF, w, bodySpin, bodyTwist, off = poseTransform(pose, now - pose.Start)
+		if armCF then
+			rs = rs:Lerp(armCF, w)
+			ls = ls:Lerp(off, w * 0.7)
+			spin = bodySpin
+			twist += (bodyTwist - twist) * w
+		else
+			poses[other.UserId] = nil
+		end
+	end
+	local down = rig.Down
+	if down > 0.01 then
+		bob -= 0.45 * down
+		lean += (-0.35 - lean) * down
+		rs = rs:Lerp(CFrame.Angles(0.35, 0, 0.05), down)
+		ls = ls:Lerp(CFrame.Angles(0.35, 0, -0.05), down)
+	end
+	setTransform(rig.RootJoint, CFrame.new(0, bob, 0) * CFrame.Angles(0, twist + spin, 0) * CFrame.Angles(lean, 0, 0))
+	setTransform(rig.Neck, CFrame.Angles(-lean * 0.5 + 0.03 * breath - 0.25 * down, -twist * 0.6, 0))
+	setTransform(rig.RS, rs)
+	setTransform(rig.LS, ls)
+	-- legs: the swing, plus undoing the torso's lean and twist so they stay under the hero
+	setTransform(rig.LH, CFrame.Angles(-legA - lean, -twist, 0))
+	setTransform(rig.RH, CFrame.Angles(legA - lean, -twist, 0))
 end
 
 local function animateLimbs(dt: number)
-	swingClock += dt
 	local now = os.clock()
 	for _, other in ipairs(Players:GetPlayers()) do
 		local char = other.Character
-		local root = char and char.PrimaryPart
-		local torso = char and char:FindFirstChild("Torso")
-		if root and torso then
-			local speed = (root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)).Magnitude
-			local amount = math.clamp(speed / 16, 0, 1) * 0.8
-			local swing = math.sin(swingClock * 10) * amount
-			local rightArm = CFrame.Angles(-swing, 0, 0)
-			local spin = 0
-			local pose = poses[other.UserId]
-			if pose then
-				local armCF, w, bodySpin = poseTransform(pose, now - pose.Start)
-				if armCF then
-					rightArm = rightArm:Lerp(armCF, w)
-					spin = bodySpin
-				else
-					poses[other.UserId] = nil
-				end
-			end
-			setMotor(torso, "Left Shoulder", CFrame.Angles(swing, 0, 0))
-			setMotor(torso, "Right Shoulder", rightArm)
-			setMotor(torso, "Left Hip", CFrame.Angles(-swing, 0, 0))
-			setMotor(torso, "Right Hip", CFrame.Angles(swing, 0, 0))
-			-- RootJoint lives on the HumanoidRootPart; only touched for the spin slash
-			local rootJoint = root:FindFirstChild("RootJoint")
-			if rootJoint and rootJoint:IsA("Motor6D") then
-				rootJoint.Transform = spin ~= 0 and CFrame.Angles(0, spin, 0) or CFrame.identity
-			end
+		local rig: Rig? = rigs[other]
+		if rig and (rig.Char ~= char or (not rig.Complete and now >= rig.RetryAt)) then
+			rig = nil -- new character, or joints still arriving: build again
+		end
+		if not rig and char then
+			rig = buildRig(char, now)
+		end
+		rigs[other] = rig
+		if rig and rig.Root.Parent then
+			animateRig(other, rig, dt, now)
 		end
 	end
 end
@@ -1305,13 +2332,15 @@ function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
 	fxFolder.Name = "SwarmClientFx"
 	fxFolder.Parent = workspace
 
+	Occlusion.Init()
+
 	Remotes.Get("ProjectileBatch").OnClientEvent:Connect(onProjectileBatch)
 	Remotes.Get("FxBatch").OnClientEvent:Connect(onFxBatch)
 
 	task.spawn(function()
-		local pickups = workspace:WaitForChild("SwarmPickups")
-		pickups.ChildAdded:Connect(trackPickup)
-		for _, m in ipairs(pickups:GetChildren()) do
+		local folder = workspace:WaitForChild("SwarmPickups")
+		folder.ChildAdded:Connect(trackPickup)
+		for _, m in ipairs(folder:GetChildren()) do
 			trackPickup(m)
 		end
 	end)
@@ -1324,12 +2353,19 @@ function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
 	end)
 
 	RunService.RenderStepped:Connect(function(dt)
-		renderProjectiles(dt)
-		renderSwings()
-		renderPickups()
+		local now = os.clock()
+		renderProjectiles(dt, now)
+		renderSwings(now)
+		stepAnims(now)
+		stepWaves(now)
+		stepPools(now)
+		stepTelegraphs(now)
+		renderPickups(now)
 		renderGems(dt)
-		updateFlashes()
-		updateDecos(dt)
+		updateFlashes(now)
+		updateDecos(now, dt)
+		flushBulk()
+		popsThisFrame = 0
 	end)
 	RunService.PreSimulation:Connect(animateLimbs)
 end

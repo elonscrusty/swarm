@@ -60,11 +60,15 @@
     "Lighting": {
       "$className": "Lighting",
       "$properties": {
-        "ClockTime": 14,
-        "Brightness": 2.5,
+        "Technology": "Future",
+        "ClockTime": 10.6,
+        "Brightness": 3,
         "GlobalShadows": true,
-        "Ambient": [0.4, 0.4, 0.42],
-        "OutdoorAmbient": [0.55, 0.55, 0.55]
+        "ShadowSoftness": 0.4,
+        "EnvironmentDiffuseScale": 0.5,
+        "EnvironmentSpecularScale": 0.35,
+        "Ambient": [0.38, 0.42, 0.44],
+        "OutdoorAmbient": [0.52, 0.55, 0.57]
       }
     },
     "SoundService": {

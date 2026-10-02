@@ -8,20 +8,34 @@
 	  StartWeapon   weapon id from WeaponData
 	  Bonus         stat bonuses (same keys as PassiveData values) plus:
 	                  damageTaken  -0.1 = take 10% less damage
-	  Colors        Torso / Head / Arms / Legs / Hat / Accent
-	  Hat           hat shape id built by ModelBuilder (see ModelBuilder.HatShapes)
+	  Colors        colour SLOTS of the hero (the same slots as the Blender meshes,
+	                blender/models/heroes.py; values come from the shared Palette):
+	                  Metal      main armour (Rogue: leather armour)
+	                  Cloth      main fabric        Cloth2  secondary fabric / legs
+	                  Accent     cape, scarf, stole, mantle
+	                  Gold       trims, guards, buckles
+	                  Hat        headgear           HatAccent  plume, hat band, horns, jewels
+	                  Skin       face and hands
+	                MetalDark / AccentDark are optional: they default to a shade of Metal / Accent.
+	  Swatch        the slot shown as the body colour on skin swatches
+	  Hat           headgear shape (a "Hat_<Shape>" mesh, part-built ModelBuilder.HatShapes as
+	                fallback). The character's own Hat is its built-in headgear.
 
 	Skins only change colours and the hat shape (cosmetic). Each skin is sold as a
 	gamepass; its id goes in Config.Monetization.SkinPasses[skin.Id]. "GoldTrim" is the
-	Starter Pack skin and works on every character.
+	Starter Pack skin and works on every character. A skin sets any of the slots above;
+	the rest keep the character's own colours.
 ]]
+
+local Palette = require(script.Parent.Palette)
 
 local CharacterData = {}
 
 CharacterData.Order = { "Knight", "Mage", "Rogue", "Priest" }
 CharacterData.Default = "Knight"
 
-local SKIN_TONE = Color3.fromRGB(255, 214, 170)
+-- Slots a skin recolours on the hero meshes (everything else on a mesh keeps its own colour).
+local SKIN_SLOTS = { "Metal", "MetalDark", "Cloth", "Cloth2", "Accent", "AccentDark", "Gold", "Hat", "HatAccent" }
 
 CharacterData.Characters = {
 	Knight = {
@@ -34,13 +48,18 @@ CharacterData.Characters = {
 		Bonus = { damageTaken = -0.10 },
 		BonusText = "+10% armor",
 		Colors = {
-			Torso = Color3.fromRGB(150, 155, 170),
-			Head = SKIN_TONE,
-			Arms = Color3.fromRGB(120, 125, 140),
-			Legs = Color3.fromRGB(70, 75, 95),
-			Hat = Color3.fromRGB(175, 180, 195),
-			Accent = Color3.fromRGB(200, 40, 40),
+			Metal = Palette.steel_400,
+			MetalDark = Palette.steel_600,
+			Cloth = Palette.slate_600,
+			Cloth2 = Palette.slate_700,
+			Accent = Palette.crimson_500,
+			AccentDark = Palette.crimson_700,
+			Gold = Palette.gold_500,
+			Hat = Palette.steel_400,
+			HatAccent = Palette.crimson_500,
+			Skin = Palette.skin_400,
 		},
+		Swatch = "Metal",
 		Hat = "Helmet",
 	},
 	Mage = {
@@ -53,13 +72,18 @@ CharacterData.Characters = {
 		Bonus = { area = 0.10 },
 		BonusText = "+10% area",
 		Colors = {
-			Torso = Color3.fromRGB(70, 60, 170),
-			Head = SKIN_TONE,
-			Arms = Color3.fromRGB(70, 60, 170),
-			Legs = Color3.fromRGB(45, 40, 110),
-			Hat = Color3.fromRGB(60, 50, 160),
-			Accent = Color3.fromRGB(255, 215, 80),
+			Metal = Palette.slate_500,
+			MetalDark = Palette.slate_600,
+			Cloth = Palette.slate_400,
+			Cloth2 = Palette.slate_600,
+			Accent = Palette.slate_700,
+			AccentDark = Palette.slate_800,
+			Gold = Palette.gold_500,
+			Hat = Palette.slate_500,
+			HatAccent = Palette.gold_500,
+			Skin = Palette.skin_400,
 		},
+		Swatch = "Cloth",
 		Hat = "Wizard",
 	},
 	Rogue = {
@@ -72,13 +96,18 @@ CharacterData.Characters = {
 		Bonus = { speed = 0.15 },
 		BonusText = "+15% speed",
 		Colors = {
-			Torso = Color3.fromRGB(60, 110, 60),
-			Head = SKIN_TONE,
-			Arms = Color3.fromRGB(80, 60, 45),
-			Legs = Color3.fromRGB(50, 45, 40),
-			Hat = Color3.fromRGB(45, 90, 45),
-			Accent = Color3.fromRGB(200, 170, 110),
+			Metal = Palette.leather_500,
+			MetalDark = Palette.leather_700,
+			Cloth = Palette.moss_800,
+			Cloth2 = Palette.stone_700,
+			Accent = Palette.crimson_500,
+			AccentDark = Palette.crimson_700,
+			Gold = Palette.gold_600,
+			Hat = Palette.moss_700,
+			HatAccent = Palette.crimson_500,
+			Skin = Palette.skin_500,
 		},
+		Swatch = "Cloth",
 		Hat = "Hood",
 	},
 	Priest = {
@@ -91,13 +120,18 @@ CharacterData.Characters = {
 		Bonus = { maxHpMult = 0.20 },
 		BonusText = "+20% HP",
 		Colors = {
-			Torso = Color3.fromRGB(240, 240, 235),
-			Head = SKIN_TONE,
-			Arms = Color3.fromRGB(240, 240, 235),
-			Legs = Color3.fromRGB(200, 190, 160),
-			Hat = Color3.fromRGB(245, 245, 240),
-			Accent = Color3.fromRGB(230, 190, 60),
+			Metal = Palette.ivory_200,
+			MetalDark = Palette.ivory_400,
+			Cloth = Palette.ivory_100,
+			Cloth2 = Palette.ivory_300,
+			Accent = Palette.gold_600,
+			AccentDark = Palette.gold_700,
+			Gold = Palette.gold_400,
+			Hat = Palette.ivory_100,
+			HatAccent = Palette.gold_500,
+			Skin = Palette.skin_400,
 		},
+		Swatch = "Cloth",
 		Hat = "Mitre",
 	},
 }
@@ -114,7 +148,16 @@ CharacterData.Skins = {
 		Name = "Crimson Guard",
 		Character = "Knight",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(160, 30, 35), Arms = Color3.fromRGB(130, 25, 30), Legs = Color3.fromRGB(60, 20, 25), Hat = Color3.fromRGB(180, 40, 45), Accent = Color3.fromRGB(240, 200, 90) },
+		Colors = {
+			Metal = Palette.crimson_600,
+			MetalDark = Palette.crimson_800,
+			Cloth = Palette.ivory_300,
+			Cloth2 = Palette.stone_800,
+			Accent = Palette.ivory_200,
+			Gold = Palette.gold_400,
+			Hat = Palette.crimson_600,
+			HatAccent = Palette.ivory_100,
+		},
 		Hat = "Plume",
 	},
 	Knight_Shadow = {
@@ -122,7 +165,16 @@ CharacterData.Skins = {
 		Name = "Shadow Knight",
 		Character = "Knight",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(35, 35, 45), Arms = Color3.fromRGB(25, 25, 35), Legs = Color3.fromRGB(20, 20, 25), Hat = Color3.fromRGB(40, 40, 55), Accent = Color3.fromRGB(150, 60, 255) },
+		Colors = {
+			Metal = Palette.steel_800,
+			MetalDark = Palette.stone_900,
+			Cloth = Palette.slate_800,
+			Cloth2 = Palette.slate_900,
+			Accent = Palette.crimson_600,
+			Gold = Palette.crimson_400,
+			Hat = Palette.steel_800,
+			HatAccent = Palette.ivory_300,
+		},
 		Hat = "Horns",
 	},
 	Knight_Paladin = {
@@ -130,8 +182,17 @@ CharacterData.Skins = {
 		Name = "Paladin",
 		Character = "Knight",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(235, 235, 245), Arms = Color3.fromRGB(210, 215, 230), Legs = Color3.fromRGB(80, 110, 190), Hat = Color3.fromRGB(240, 240, 250), Accent = Color3.fromRGB(80, 140, 255) },
-		Hat = "Crown",
+		Colors = {
+			Metal = Palette.steel_200,
+			MetalDark = Palette.steel_400,
+			Cloth = Palette.ivory_200,
+			Cloth2 = Palette.slate_500,
+			Accent = Palette.ivory_100,
+			Gold = Palette.gold_400,
+			Hat = Palette.steel_200,
+			HatAccent = Palette.gold_400,
+		},
+		Hat = "Helmet",
 	},
 	-- Mage
 	Mage_Frost = {
@@ -139,7 +200,15 @@ CharacterData.Skins = {
 		Name = "Frost Mage",
 		Character = "Mage",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(150, 210, 255), Arms = Color3.fromRGB(130, 195, 245), Legs = Color3.fromRGB(70, 120, 180), Hat = Color3.fromRGB(190, 230, 255), Accent = Color3.fromRGB(255, 255, 255) },
+		Colors = {
+			Metal = Palette.slate_300,
+			Cloth = Palette.slate_200,
+			Cloth2 = Palette.slate_400,
+			Accent = Palette.ivory_100,
+			Gold = Palette.steel_300,
+			Hat = Palette.slate_300,
+			HatAccent = Palette.ivory_100,
+		},
 		Hat = "Wizard",
 	},
 	Mage_Ember = {
@@ -147,7 +216,15 @@ CharacterData.Skins = {
 		Name = "Ember Mage",
 		Character = "Mage",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(200, 70, 30), Arms = Color3.fromRGB(180, 60, 25), Legs = Color3.fromRGB(90, 30, 20), Hat = Color3.fromRGB(230, 100, 30), Accent = Color3.fromRGB(255, 220, 60) },
+		Colors = {
+			Metal = Palette.crimson_700,
+			Cloth = Palette.crimson_600,
+			Cloth2 = Palette.crimson_800,
+			Accent = Palette.gold_600,
+			Gold = Palette.gold_400,
+			Hat = Palette.crimson_700,
+			HatAccent = Palette.gold_500,
+		},
 		Hat = "Tophat",
 	},
 	Mage_Void = {
@@ -155,8 +232,16 @@ CharacterData.Skins = {
 		Name = "Void Mage",
 		Character = "Mage",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(25, 15, 40), Arms = Color3.fromRGB(35, 20, 55), Legs = Color3.fromRGB(15, 10, 25), Hat = Color3.fromRGB(40, 20, 70), Accent = Color3.fromRGB(200, 80, 255) },
-		Hat = "Halo",
+		Colors = {
+			Metal = Palette.slate_800,
+			Cloth = Palette.slate_800,
+			Cloth2 = Palette.slate_950,
+			Accent = Palette.slate_600,
+			Gold = Palette.slate_300,
+			Hat = Palette.slate_900,
+			HatAccent = Palette.slate_300,
+		},
+		Hat = "Hood",
 	},
 	-- Rogue
 	Rogue_Forest = {
@@ -164,7 +249,15 @@ CharacterData.Skins = {
 		Name = "Forest Ranger",
 		Character = "Rogue",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(110, 150, 60), Arms = Color3.fromRGB(100, 80, 50), Legs = Color3.fromRGB(70, 60, 40), Hat = Color3.fromRGB(90, 140, 50), Accent = Color3.fromRGB(220, 60, 40) },
+		Colors = {
+			Metal = Palette.leather_500,
+			Cloth = Palette.moss_600,
+			Cloth2 = Palette.wood_700,
+			Accent = Palette.gold_500,
+			Gold = Palette.gold_500,
+			Hat = Palette.moss_500,
+			HatAccent = Palette.crimson_400,
+		},
 		Hat = "Cap",
 	},
 	Rogue_Pirate = {
@@ -172,7 +265,15 @@ CharacterData.Skins = {
 		Name = "Pirate",
 		Character = "Rogue",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(240, 240, 235), Arms = Color3.fromRGB(150, 30, 30), Legs = Color3.fromRGB(40, 40, 60), Hat = Color3.fromRGB(180, 30, 30), Accent = Color3.fromRGB(240, 210, 90) },
+		Colors = {
+			Metal = Palette.wood_600,
+			Cloth = Palette.crimson_700,
+			Cloth2 = Palette.slate_700,
+			Accent = Palette.ivory_200,
+			Gold = Palette.gold_400,
+			Hat = Palette.crimson_500,
+			HatAccent = Palette.ivory_100,
+		},
 		Hat = "Bandana",
 	},
 	Rogue_Ninja = {
@@ -180,7 +281,15 @@ CharacterData.Skins = {
 		Name = "Ninja",
 		Character = "Rogue",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(30, 30, 35), Arms = Color3.fromRGB(30, 30, 35), Legs = Color3.fromRGB(25, 25, 30), Hat = Color3.fromRGB(35, 35, 40), Accent = Color3.fromRGB(220, 40, 40) },
+		Colors = {
+			Metal = Palette.stone_800,
+			Cloth = Palette.chitin_900,
+			Cloth2 = Palette.chitin_800,
+			Accent = Palette.crimson_500,
+			Gold = Palette.steel_400,
+			Hat = Palette.chitin_900,
+			HatAccent = Palette.crimson_500,
+		},
 		Hat = "Beanie",
 	},
 	-- Priest
@@ -189,7 +298,15 @@ CharacterData.Skins = {
 		Name = "Sun Priest",
 		Character = "Priest",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(255, 200, 70), Arms = Color3.fromRGB(255, 220, 120), Legs = Color3.fromRGB(220, 140, 40), Hat = Color3.fromRGB(255, 230, 120), Accent = Color3.fromRGB(255, 255, 255) },
+		Colors = {
+			Metal = Palette.gold_300,
+			Cloth = Palette.gold_200,
+			Cloth2 = Palette.gold_400,
+			Accent = Palette.crimson_500,
+			Gold = Palette.gold_300,
+			Hat = Palette.gold_400,
+			HatAccent = Palette.crimson_400,
+		},
 		Hat = "Crown",
 	},
 	Priest_Moon = {
@@ -197,7 +314,15 @@ CharacterData.Skins = {
 		Name = "Moon Priest",
 		Character = "Priest",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(60, 70, 120), Arms = Color3.fromRGB(80, 90, 140), Legs = Color3.fromRGB(40, 45, 80), Hat = Color3.fromRGB(190, 200, 230), Accent = Color3.fromRGB(200, 220, 255) },
+		Colors = {
+			Metal = Palette.slate_500,
+			Cloth = Palette.slate_600,
+			Cloth2 = Palette.slate_800,
+			Accent = Palette.steel_300,
+			Gold = Palette.steel_200,
+			Hat = Palette.slate_300,
+			HatAccent = Palette.steel_200,
+		},
 		Hat = "Mitre",
 	},
 	Priest_Angel = {
@@ -205,17 +330,29 @@ CharacterData.Skins = {
 		Name = "Angel",
 		Character = "Priest",
 		Pass = "Skin",
-		Colors = { Torso = Color3.fromRGB(255, 255, 255), Arms = Color3.fromRGB(250, 250, 255), Legs = Color3.fromRGB(235, 235, 245), Hat = Color3.fromRGB(255, 240, 150), Accent = Color3.fromRGB(255, 230, 120) },
+		Colors = {
+			Cloth = Palette.ivory_100,
+			Cloth2 = Palette.ivory_200,
+			Accent = Palette.gold_300,
+			Gold = Palette.gold_300,
+			Hat = Palette.gold_200,
+			HatAccent = Palette.gold_200,
+		},
 		Hat = "Halo",
 	},
-	-- Starter Pack exclusive (every character)
+	-- Starter Pack exclusive (every character): polished gold trims, gilded cape / scarf / stole
 	GoldTrim = {
 		Id = "GoldTrim",
 		Name = "Gold Trim",
 		Character = "*",
 		Pass = "StarterPack",
-		Colors = { Accent = Color3.fromRGB(255, 200, 40), Hat = Color3.fromRGB(255, 205, 60) },
-		GoldTrim = true, -- ModelBuilder adds gold trim strips
+		Colors = {
+			Accent = Palette.gold_500,
+			AccentDark = Palette.gold_700,
+			Gold = Palette.gold_300,
+			HatAccent = Palette.gold_400,
+		},
+		GoldTrim = true,
 	},
 }
 
@@ -232,43 +369,71 @@ function CharacterData.SkinsFor(characterId: string): { string }
 	return list
 end
 
+-- A darker, slightly cooler tone (MetalDark / AccentDark when a skin doesn't give them).
+local function shade(c: Color3): Color3
+	return Color3.new(c.R * 0.7, c.G * 0.7, math.min(1, c.B * 0.74))
+end
+
+local function skinFor(characterId: string, skinId: string?)
+	local skin = skinId and CharacterData.Skins[skinId]
+	if skin and (skin.Character == characterId or skin.Character == "*") then
+		return skin
+	end
+	return nil
+end
+
 --[[
-	Slot colours for the Blender hero meshes (see MeshCatalog). Default skin = nil (the
-	mesh's own palette). Skins map their colours onto the mesh slots:
-	  Torso → Cloth, Legs → Cloth2, Hat → Metal, Accent → Accent (Gold Trim adds Gold).
+	Slot colours a skin puts on the hero meshes (see MeshCatalog): the skin's own slots plus
+	derived shades. Default skin = nil (each mesh keeps its own palette, which matches
+	Characters[id].Colors). Slots the skin doesn't set keep the mesh's colours.
 ]]
 function CharacterData.MeshPalette(characterId: string, skinId: string?): { [string]: Color3 }?
-	local skin = skinId and CharacterData.Skins[skinId]
-	if not skin or (skin.Character ~= characterId and skin.Character ~= "*") then
+	local skin = skinFor(characterId, skinId)
+	if not skin then
 		return nil
 	end
-	local c = skin.Colors
-	local palette = {}
-	palette.Cloth = c.Torso
-	palette.Cloth2 = c.Legs
-	palette.Metal = c.Hat
-	palette.Accent = c.Accent
-	if skin.GoldTrim then
-		palette.Gold = Color3.fromRGB(255, 200, 40)
-		palette.Accent = Color3.fromRGB(255, 200, 40)
+	local palette: { [string]: Color3 } = {}
+	for _, slot in ipairs(SKIN_SLOTS) do
+		palette[slot] = skin.Colors[slot]
+	end
+	if palette.Metal and not palette.MetalDark then
+		palette.MetalDark = shade(palette.Metal)
+	end
+	if palette.Accent and not palette.AccentDark then
+		palette.AccentDark = shade(palette.Accent)
 	end
 	return palette
 end
 
--- Resolves the final look (colours + hat) for a character + skin pair.
+--[[
+	Resolves the final look for a character + skin pair:
+	  Colors   every slot (character colours, skin overrides, derived shades) plus swatch
+	           aliases for the UI: Torso (body), Head (skin), Arms, Legs, Hat, Accent
+	  Hat      headgear shape; GoldTrim true for the Starter Pack skin
+]]
 function CharacterData.ResolveLook(characterId: string, skinId: string?)
 	local char = CharacterData.Characters[characterId] or CharacterData.Characters[CharacterData.Default]
-	local colors = table.clone(char.Colors)
+	local colors: { [string]: Color3 } = table.clone(char.Colors)
 	local hat = char.Hat
 	local goldTrim = false
-	local skin = skinId and CharacterData.Skins[skinId]
-	if skin and (skin.Character == char.Id or skin.Character == "*") then
+	local skin = skinFor(char.Id, skinId)
+	if skin then
 		for k, v in pairs(skin.Colors) do
 			colors[k] = v
+		end
+		if skin.Colors.Metal and not skin.Colors.MetalDark then
+			colors.MetalDark = shade(skin.Colors.Metal)
+		end
+		if skin.Colors.Accent and not skin.Colors.AccentDark then
+			colors.AccentDark = shade(skin.Colors.Accent)
 		end
 		hat = skin.Hat or hat
 		goldTrim = skin.GoldTrim == true
 	end
+	colors.Torso = colors[char.Swatch] or colors.Cloth
+	colors.Head = colors.Skin
+	colors.Arms = colors.Torso
+	colors.Legs = colors.Cloth2
 	return { Colors = colors, Hat = hat, GoldTrim = goldTrim }
 end
 

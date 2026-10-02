@@ -26,9 +26,6 @@ local ModelLibrary = {}
 
 export type Piece = { Part: BasePart, Offset: CFrame, Anim: string?, Pivot: CFrame?, Color: Color3 }
 
-local GOLD = Color3.fromRGB(255, 205, 60)
-local BLACK = Color3.fromRGB(20, 20, 25)
-local WHITE = Color3.fromRGB(245, 245, 245)
 
 local folder: Instance? = nil
 
@@ -140,218 +137,369 @@ function ModelLibrary.MeshPieces(name: string, palette: { [string]: Color3 }?, s
 	return pieces
 end
 
--- Enemy type → mesh model name and whole-body motion.
+-- Enemy type → mesh model name (blender/models/enemies.py) and whole-body motion.
 local ENEMY_MESH = {
-	Slime = { "Mite", "Walk" },
-	Bat = { "Wasp", "Fly" },
-	Skeleton = { "BeetleWarrior", "Walk" },
-	Ghost = { "PhaseMoth", "Float" },
+	Slime = { "Mite", "Scuttle" },
+	Bat = { "Wasp", "Buzz" },
+	Skeleton = { "BeetleWarrior", "March" },
+	Ghost = { "PhaseMoth", "Flutter" },
 	Brute = { "RhinoBeetle", "Stomp" },
 	Bomber = { "BombTick", "Waddle" },
-	Boss = { "ScorpionQueen", "Stomp" },
+	Boss = { "ScorpionQueen", "Prowl" },
 }
 
 ------------------------------------------------------------------------------------------
--- ENEMIES (part-built fallback models)
+-- ENEMIES (part-built fallbacks, used until the meshes are loaded)
 ------------------------------------------------------------------------------------------
 
-local ENEMIES: { [string]: (any, Color3, Color3) -> string } = {}
+local Palette = require(Shared:WaitForChild("Palette"))
+local ELITE_GOLD = Palette.gold_400
 
--- Slime: wobbly translucent blob with a dark core, big eyes and a little crown of goo.
-ENEMIES.Slime = function(b, base, dark)
-	b.add("Ball", Vector3.new(2.8, 2.1, 2.8), base, CFrame.new(0, -0.05, 0), { Material = Enum.Material.Glass, Transparency = 0.2 })
-	b.add("Ball", Vector3.new(1.4, 1.1, 1.4), dark, CFrame.new(0, -0.2, 0.2), { Transparency = 0.1 })
-	b.add("Ball", Vector3.new(1.1, 0.5, 1.1), base, CFrame.new(0.2, 0.95, 0.1), { Material = Enum.Material.Glass, Transparency = 0.2 })
-	for _, x in ipairs({ -0.5, 0.5 }) do
-		b.add("Ball", Vector3.new(0.6, 0.7, 0.3), WHITE, CFrame.new(x, 0.3, -1.2))
-		b.add("Ball", Vector3.new(0.3, 0.4, 0.2), BLACK, CFrame.new(x, 0.28, -1.33))
+-- Slot colours of each creature, the same as the Blender models' palettes.
+local LOOKS: { [string]: { [string]: Color3 } } = {
+	Slime = { Base = Palette.beetle_300, Dark = Palette.chitin_900, Eye = Palette.amber_500 },
+	Bat = { Base = Palette.wasp_500, Dark = Palette.wasp_900, Light = Palette.ivory_100, Eye = Palette.amber_500 },
+	Skeleton = {
+		Base = Palette.beetle_700,
+		Light = Palette.beetle_500,
+		Dark = Palette.chitin_900,
+		Metal = Palette.steel_500,
+		White = Palette.steel_300,
+		Wood = Palette.wood_700,
+		Eye = Palette.amber_500,
+	},
+	Ghost = {
+		Base = Palette.moth_500:Lerp(Palette.crimson_300, 0.16):Lerp(Palette.stone_500, 0.25),
+		Light = Palette.moth_300:Lerp(Palette.crimson_300, 0.14):Lerp(Palette.slate_300, 0.12),
+		Accent = Palette.slate_600,
+		Glow = Palette.moth_glow,
+		Dark = Palette.chitin_800,
+		Eye = Palette.amber_500,
+	},
+	Brute = {
+		Base = Palette.slate_400,
+		Accent = Palette.slate_500,
+		Light = Palette.slate_200,
+		Dark = Palette.chitin_900,
+		White = Palette.ivory_200,
+		Eye = Palette.amber_500,
+	},
+	Bomber = { Base = Palette.tick_500, Dark = Palette.chitin_900, Glow = Palette.tick_glow, Eye = Palette.amber_500 },
+	Boss = {
+		Base = Palette.crimson_500,
+		Accent = Palette.crimson_800,
+		Gold = Palette.gold_500,
+		Dark = Palette.chitin_900,
+		Light = Palette.amber_500,
+		Glow = Palette.amber_300,
+		Eye = Palette.amber_500,
+	},
+}
+
+-- Elites get a slight gold tint: the main shell most, glowing bits not at all.
+local function eliteTint(color: Color3, slot: string?): Color3
+	if slot == "Eye" or slot == "Glow" then
+		return color
 	end
-	b.add("Block", Vector3.new(0.6, 0.12, 0.1), BLACK, CFrame.new(0, -0.2, -1.32))
-	return "Hop"
+	return color:Lerp(ELITE_GOLD, slot == "Base" and 0.3 or 0.12)
 end
 
--- Bat: round body, pointy ears, red eyes, two flapping wings with finger struts.
-ENEMIES.Bat = function(b, base, dark)
-	b.add("Ball", Vector3.new(1.1, 1.0, 1.3), base, CFrame.new(0, 0, 0))
-	b.add("Ball", Vector3.new(0.8, 0.75, 0.75), base, CFrame.new(0, 0.2, -0.7))
-	for _, x in ipairs({ -0.25, 0.25 }) do
-		b.add("Wedge", Vector3.new(0.15, 0.45, 0.3), dark, CFrame.new(x, 0.7, -0.7))
-		b.add("Ball", Vector3.new(0.18, 0.18, 0.12), Color3.fromRGB(255, 40, 40), CFrame.new(x * 0.8, 0.28, -1.05), { Material = Enum.Material.Neon })
+local NEON = Enum.Material.Neon
+local METAL = Enum.Material.Metal
+
+-- Pivot that turns a piece placed at `cf` around the body-space point `j` (body axes).
+local function joint(cf: CFrame, j: Vector3): CFrame
+	return cf:Inverse() * CFrame.new(j)
+end
+
+local function withJoint(cf: CFrame, opts: { [string]: any }?): { [string]: any }
+	local o = table.clone(opts or {})
+	if o.Joint then
+		o.Pivot = joint(cf, o.Joint)
+		o.Joint = nil
 	end
-	b.add("Wedge", Vector3.new(0.1, 0.18, 0.1), WHITE, CFrame.new(-0.12, 0.0, -1.05) * CFrame.Angles(math.rad(180), 0, 0))
-	b.add("Wedge", Vector3.new(0.1, 0.18, 0.1), WHITE, CFrame.new(0.12, 0.0, -1.05) * CFrame.Angles(math.rad(180), 0, 0))
+	return o
+end
+
+-- Ellipsoid (a block with a sphere mesh) filling `size`.
+local function egg(b, size: Vector3, color: Color3, cf: CFrame, opts: { [string]: any }?): BasePart
+	local part = b.add("Block", size, color, cf, withJoint(cf, opts))
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Parent = part
+	return part
+end
+
+-- Square bar from a to c (legs, horns, spear shafts).
+local function bar(b, a: Vector3, c: Vector3, thick: number, color: Color3, opts: { [string]: any }?): BasePart
+	local dir = c - a
+	local up = math.abs(dir.Unit.Y) > 0.9 and Vector3.zAxis or Vector3.yAxis
+	local cf = CFrame.lookAt((a + c) / 2, c, up)
+	return b.add("Block", Vector3.new(thick, thick, dir.Magnitude), color, cf, withJoint(cf, opts))
+end
+
+local function ball(b, d: number, color: Color3, pos: Vector3, opts: { [string]: any }?): BasePart
+	local cf = CFrame.new(pos)
+	return b.add("Ball", Vector3.one * d, color, cf, withJoint(cf, opts))
+end
+
+local V = Vector3.new
+
+-- Fallbacks are authored with the origin on the ground (like the meshes; front = -Z, the
+-- creature's left = -X) and lifted onto the body centre by ModelLibrary.Enemy.
+local ENEMIES: { [string]: (any, { [string]: Color3 }) -> string } = {}
+
+-- Mite: round yellow-green shell with a seam, dark head, amber eyes, six legs.
+ENEMIES.Slime = function(b, c)
+	egg(b, V(2.5, 1.6, 2.3), c.Base, CFrame.new(0, 0.95, 0.3))
+	b.add("Block", V(0.09, 0.1, 1.4), c.Dark, CFrame.new(0, 1.72, 0.45))
+	egg(b, V(1.65, 1.15, 0.95), c.Base, CFrame.new(0, 0.9, -0.7))
+	egg(b, V(1.0, 0.72, 0.85), c.Dark, CFrame.new(0, 0.6, -1.15))
+	for _, x in ipairs({ -0.29, 0.29 }) do
+		ball(b, 0.2, c.Eye, V(x, 0.72, -1.45), { Material = NEON })
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		local anim = side < 0 and "SwingA" or "SwingB"
+		local hip = V(side * 0.72, 0.5, 0.2)
+		for i, z in ipairs({ -0.42, 0.2, 0.82 }) do
+			local foot = V(side * 1.52, 0.04, z + ({ -0.72, 0.1, 0.7 })[i])
+			bar(b, V(side * 1.1, 0.88, z + ({ -0.3, 0.02, 0.28 })[i]), foot, 0.2, c.Dark, { Anim = anim, Joint = hip })
+		end
+	end
+	return "Scuttle"
+end
+
+-- Wasp: black thorax and head, gold abdomen with black bands, stinger, ivory wings.
+ENEMIES.Bat = function(b, c)
+	egg(b, V(0.62, 0.6, 0.78), c.Dark, CFrame.new(0, 0.64, -0.4))
+	egg(b, V(0.55, 0.5, 0.42), c.Dark, CFrame.new(0, 0.66, -0.9))
+	egg(b, V(0.82, 0.78, 1.36), c.Base, CFrame.new(0, 0.5, 0.74) * CFrame.Angles(math.rad(6), 0, 0))
+	for _, z in ipairs({ 0.58, 0.98 }) do
+		egg(b, V(0.86, 0.8, 0.16), c.Dark, CFrame.new(0, 0.5 - (z - 0.5) * 0.1, z))
+	end
+	bar(b, V(0, 0.42, 1.38), V(0, 0.34, 1.9), 0.1, c.Dark)
+	for _, x in ipairs({ -0.19, 0.19 }) do
+		ball(b, 0.17, c.Eye, V(x, 0.72, -1.0), { Material = NEON })
+	end
 	for _, side in ipairs({ -1, 1 }) do
 		local anim = side < 0 and "FlapL" or "FlapR"
-		local pivot = CFrame.new(-side * 0.75, 0, 0) -- hinge at the body edge
-		b.add("Block", Vector3.new(1.5, 0.08, 1.0), dark, CFrame.new(side * 1.25, 0.1, 0), { Anim = anim, Pivot = pivot })
-		b.add("Block", Vector3.new(1.6, 0.14, 0.12), base, CFrame.new(side * 1.25, 0.15, -0.45), { Anim = anim, Pivot = pivot })
-		b.add("Wedge", Vector3.new(0.08, 0.5, 0.9), dark, CFrame.new(side * 2.05, 0.1, 0.05) * CFrame.Angles(0, 0, math.rad(side * 90)), { Anim = anim, Pivot = CFrame.new(-side * 1.55, 0, 0) })
+		egg(b, V(1.3, 0.05, 0.5), c.Light, CFrame.new(side * 0.74, 0.88, -0.3) * CFrame.Angles(0, -side * math.rad(18), 0),
+			{ Transparency = 0.35, Anim = anim, Joint = V(side * 0.12, 0.88, -0.44) })
 	end
-	return "Fly"
+	return "Buzz"
 end
 
--- Skeleton: skull with sockets, ribcage, spine, pelvis, swinging bone arms and legs.
-ENEMIES.Skeleton = function(b, base, dark)
-	local bone = base
-	b.add("Block", Vector3.new(1.1, 1.0, 1.0), bone, CFrame.new(0, 1.55, -0.05))
-	b.add("Block", Vector3.new(0.8, 0.3, 0.7), bone, CFrame.new(0, 1.0, -0.15))
-	for _, x in ipairs({ -0.25, 0.25 }) do
-		b.add("Block", Vector3.new(0.28, 0.3, 0.1), BLACK, CFrame.new(x, 1.6, -0.56))
-		b.add("Ball", Vector3.new(0.1, 0.1, 0.05), Color3.fromRGB(255, 80, 60), CFrame.new(x, 1.6, -0.6), { Material = Enum.Material.Neon })
-	end
-	b.add("Block", Vector3.new(0.12, 0.25, 0.1), BLACK, CFrame.new(0, 1.35, -0.56))
-	b.add("Block", Vector3.new(0.25, 2.0, 0.25), dark, CFrame.new(0, 0.2, 0.1))
-	for i = 0, 3 do
-		b.add("Block", Vector3.new(1.4 - i * 0.12, 0.12, 0.7), bone, CFrame.new(0, 0.75 - i * 0.3, -0.05))
-	end
-	b.add("Block", Vector3.new(1.0, 0.35, 0.55), bone, CFrame.new(0, -0.6, 0))
+-- Beetle Warrior: dark green carapace, steel horned helm, shield on the left, spear on the right.
+ENEMIES.Skeleton = function(b, c)
 	for _, side in ipairs({ -1, 1 }) do
-		local armAnim = side < 0 and "SwingA" or "SwingB"
-		local legAnim = side < 0 and "SwingB" or "SwingA"
-		b.add("Block", Vector3.new(0.25, 1.7, 0.25), bone, CFrame.new(side * 0.9, 0.15, 0), { Anim = armAnim, Pivot = CFrame.new(0, 0.85, 0) })
-		b.add("Ball", Vector3.new(0.35, 0.35, 0.35), bone, CFrame.new(side * 0.9, -0.75, 0), { Anim = armAnim, Pivot = CFrame.new(0, 1.75, 0) })
-		b.add("Block", Vector3.new(0.3, 1.5, 0.3), bone, CFrame.new(side * 0.35, -1.4, 0), { Anim = legAnim, Pivot = CFrame.new(0, 0.75, 0) })
-		b.add("Block", Vector3.new(0.35, 0.15, 0.6), bone, CFrame.new(side * 0.35, -2.05, -0.15), { Anim = legAnim, Pivot = CFrame.new(0, 1.4, 0.15) })
+		local hip = V(side * 0.42, 1.62, 0.05)
+		bar(b, hip, V(side * 0.5, 0.08, -0.2), 0.42, c.Dark, { Anim = side < 0 and "SwingB" or "SwingA", Joint = hip })
+		egg(b, V(1.05, 0.62, 1.05), c.Base, CFrame.new(side * 0.85, 3.12, 0))
+		bar(b, V(side * 0.35, 3.85, -0.1), V(side * 0.62, 4.35, -0.45), 0.16, c.Dark)
+		ball(b, 0.15, c.Eye, V(side * 0.18, 3.42, -0.55), { Material = NEON })
 	end
-	return "Walk"
+	egg(b, V(1.2, 0.85, 1.0), c.Dark, CFrame.new(0, 1.7, 0.05))
+	egg(b, V(1.5, 1.42, 1.16), c.Base, CFrame.new(0, 2.6, 0))
+	egg(b, V(1.66, 2.0, 0.95), c.Base, CFrame.new(0, 2.42, 0.42))
+	egg(b, V(0.76, 0.72, 0.8), c.Dark, CFrame.new(0, 3.5, -0.16))
+	egg(b, V(1.0, 0.9, 1.04), c.Metal, CFrame.new(0, 3.72, -0.12), { Material = METAL })
+	-- left arm + shield (swing)
+	local shoulder = V(-0.82, 3.0, 0)
+	local swing = { Anim = "SwingA", Joint = shoulder }
+	bar(b, shoulder, V(-1.05, 1.95, -0.3), 0.34, c.Dark, swing)
+	local shieldCF = CFrame.new(-1.32, 2.2, -0.36) * CFrame.Angles(0, math.rad(15), math.rad(-25))
+	b.add("Cylinder", V(0.1, 1.36, 1.36), c.Metal, shieldCF * CFrame.new(0.05, 0, 0), withJoint(shieldCF * CFrame.new(0.05, 0, 0), { Material = METAL, Anim = "SwingA", Joint = shoulder }))
+	b.add("Cylinder", V(0.18, 1.2, 1.2), c.Base, shieldCF * CFrame.new(-0.04, 0, 0), withJoint(shieldCF * CFrame.new(-0.04, 0, 0), swing))
+	-- right arm holding the spear still
+	bar(b, V(0.82, 3.0, 0), V(1.0, 2.1, -0.5), 0.32, c.Dark)
+	local d = V(0, 0.92, -0.38).Unit
+	local f = V(1.0, 2.08, -0.58)
+	bar(b, f - d * 1.95, f + d * 1.75, 0.13, c.Wood)
+	bar(b, f + d * 1.7, f + d * 2.45, 0.2, c.White, { Material = METAL })
+	return "March"
 end
 
--- Ghost: glowing translucent head with a wavy tail and little arms.
-ENEMIES.Ghost = function(b, base, _dark)
-	b.add("Ball", Vector3.new(2.6, 2.4, 2.4), base, CFrame.new(0, 0.4, 0), { Material = Enum.Material.Neon, Transparency = 0.45 })
-	b.add("Ball", Vector3.new(2.0, 1.8, 1.8), base, CFrame.new(0, -0.6, 0.2), { Material = Enum.Material.Neon, Transparency = 0.5 })
-	b.add("Wedge", Vector3.new(1.4, 1.2, 1.6), base, CFrame.new(0, -1.4, 0.6) * CFrame.Angles(math.rad(180), 0, 0), { Material = Enum.Material.Neon, Transparency = 0.55, Anim = "Wiggle", Pivot = CFrame.new(0, 0.6, 0) })
-	for _, x in ipairs({ -0.5, 0.5 }) do
-		b.add("Ball", Vector3.new(0.45, 0.65, 0.2), BLACK, CFrame.new(x, 0.6, -1.15))
-	end
-	b.add("Ball", Vector3.new(0.5, 0.35, 0.2), BLACK, CFrame.new(0, 0.0, -1.15))
+-- Phase Moth: grey-lavender body, translucent wings with slate eye-spots, glowing core.
+ENEMIES.Ghost = function(b, c)
+	egg(b, V(0.8, 0.8, 0.85), c.Base, CFrame.new(0, 1.55, -0.22))
+	egg(b, V(0.46, 0.46, 1.0), c.Base, CFrame.new(0, 1.45, 0.4))
+	egg(b, V(0.48, 0.44, 0.4), c.Base, CFrame.new(0, 1.6, -0.74))
+	ball(b, 0.3, c.Glow, V(0, 1.98, -0.16), { Material = NEON, Anim = "Pulse" })
 	for _, side in ipairs({ -1, 1 }) do
-		b.add("Ball", Vector3.new(0.6, 0.9, 0.5), base, CFrame.new(side * 1.3, -0.2, -0.3), { Material = Enum.Material.Neon, Transparency = 0.5, Anim = side < 0 and "SwingA" or "SwingB", Pivot = CFrame.new(0, 0.45, 0) })
+		ball(b, 0.16, c.Eye, V(side * 0.16, 1.66, -0.86), { Material = NEON })
+		local root = V(side * 0.12, 1.74, -0.2)
+		local wing = CFrame.new(root) * CFrame.Angles(0, 0, side * math.rad(16))
+		local opts = { Anim = side < 0 and "FlutterL" or "FlutterR", Joint = root, Transparency = 0.3 }
+		egg(b, V(1.6, 0.05, 1.05), c.Light, wing * CFrame.new(side * 0.84, 0, -0.32), opts)
+		egg(b, V(1.05, 0.05, 0.95), c.Light, wing * CFrame.new(side * 0.6, -0.02, 0.48), opts)
+		egg(b, V(0.46, 0.08, 0.46), c.Accent, wing * CFrame.new(side * 1.02, 0.01, -0.38), { Anim = opts.Anim, Joint = root })
 	end
-	return "Float"
+	return "Flutter"
 end
 
--- Brute: hulking ogre with a belly, tiny head, horns, tusks, long arms and a spiked club.
-ENEMIES.Brute = function(b, base, dark)
-	local skin = base
-	b.add("Block", Vector3.new(3.6, 2.6, 2.6), skin, CFrame.new(0, 0.5, 0))
-	b.add("Ball", Vector3.new(2.8, 2.2, 1.6), skin:Lerp(WHITE, 0.25), CFrame.new(0, 0.1, -0.7))
-	b.add("Block", Vector3.new(3.8, 0.5, 2.8), dark, CFrame.new(0, -0.8, 0))
-	b.add("Block", Vector3.new(1.4, 1.2, 1.3), skin, CFrame.new(0, 2.3, -0.4))
-	for _, x in ipairs({ -0.35, 0.35 }) do
-		b.add("Ball", Vector3.new(0.3, 0.3, 0.15), Color3.fromRGB(255, 220, 40), CFrame.new(x, 2.45, -1.07), { Material = Enum.Material.Neon })
-		b.add("Wedge", Vector3.new(0.2, 0.4, 0.15), WHITE, CFrame.new(x, 1.85, -1.07))
-		b.add("Wedge", Vector3.new(0.3, 0.8, 0.3), Color3.fromRGB(230, 220, 190), CFrame.new(x * 2, 3.1, -0.4) * CFrame.Angles(0, 0, math.rad(x > 0 and -20 or 20)))
-	end
+-- Rhino Beetle: slate-blue wing cases with highlights, darker pronotum, big ivory horn.
+ENEMIES.Brute = function(b, c)
+	egg(b, V(4.0, 3.5, 4.1), c.Base, CFrame.new(0, 1.55, 0.7))
+	egg(b, V(3.44, 2.7, 2.04), c.Accent, CFrame.new(0, 1.62, -1.08))
+	egg(b, V(1.72, 1.28, 1.52), c.Dark, CFrame.new(0, 1.3, -2.12))
+	bar(b, V(0, 2.75, -1.5), V(0, 3.7, -1.98), 0.4, c.White)
+	local neck = V(0, 1.5, -2.25)
+	local toss = { Anim = "Jaw", Joint = neck }
+	bar(b, V(0, 1.42, -2.5), V(0, 2.45, -3.56), 0.75, c.White, toss)
+	bar(b, V(0, 2.3, -3.56), V(0, 4.0, -3.4), 0.55, c.White, toss)
+	bar(b, V(0, 3.9, -3.4), V(0, 4.72, -2.9), 0.32, c.White, toss)
 	for _, side in ipairs({ -1, 1 }) do
-		local armAnim = side < 0 and "SwingA" or "SwingB"
-		local legAnim = side < 0 and "SwingB" or "SwingA"
-		b.add("Block", Vector3.new(1.0, 2.8, 1.0), skin, CFrame.new(side * 2.3, -0.1, 0), { Anim = armAnim, Pivot = CFrame.new(0, 1.3, 0) })
-		b.add("Block", Vector3.new(1.2, 0.9, 1.2), dark, CFrame.new(side * 2.3, -1.6, 0), { Anim = armAnim, Pivot = CFrame.new(0, 2.8, 0) })
-		b.add("Block", Vector3.new(1.1, 1.4, 1.1), dark, CFrame.new(side * 0.9, -1.8, 0), { Anim = legAnim, Pivot = CFrame.new(0, 0.7, 0) })
+		egg(b, V(0.42, 0.22, 2.0), c.Light, CFrame.new(side * 0.68, 3.18, 0.5))
+		ball(b, 0.24, c.Eye, V(side * 0.62, 1.48, -2.56), { Material = NEON })
+		for i, l in ipairs({ { -1.22, -0.36, -0.82 }, { 0.25, 0, 0.1 }, { 1.66, 0.36, 0.84 } }) do
+			-- two alternating tripods (the mesh's rule, with Blender's +X = this -X)
+			local anim = (((i - 1) % 2 == 0) == (side < 0)) and "SwingA" or "SwingB"
+			local hip = V(side * 1.25, 1.15, l[1])
+			local knee = V(side * 2.15, 1.78, l[1] + l[2])
+			bar(b, hip, knee, 0.55, c.Dark, { Anim = anim, Joint = hip })
+			bar(b, knee, V(side * 2.4, 0.02, l[1] + l[3]), 0.42, c.Dark, { Anim = anim, Joint = hip })
+		end
 	end
-	-- club in the right hand
-	b.add("Cylinder", Vector3.new(3.0, 0.5, 0.5), Color3.fromRGB(110, 70, 40), CFrame.new(2.3, -1.6, -1.3) * CFrame.Angles(0, math.rad(90), 0), { Material = Enum.Material.Wood, Anim = "SwingB", Pivot = CFrame.new(0, 2.8, 0) })
-	b.add("Ball", Vector3.new(1.2, 1.2, 1.2), Color3.fromRGB(90, 60, 35), CFrame.new(2.3, -1.6, -2.8), { Material = Enum.Material.Wood, Anim = "SwingB", Pivot = CFrame.new(0, 2.8, 1.5) })
 	return "Stomp"
 end
 
--- Bomber: round black bomb with a pulsing red band, feet and a sparking fuse.
-ENEMIES.Bomber = function(b, base, _dark)
-	b.add("Ball", Vector3.new(2.4, 2.4, 2.4), Color3.fromRGB(35, 35, 40), CFrame.new(0, 0, 0), { Material = Enum.Material.Metal })
-	b.add("Cylinder", Vector3.new(0.4, 2.45, 2.45), base, CFrame.new(0, 0, 0) * CYL_UP, { Material = Enum.Material.Neon, Anim = "Pulse" })
-	b.add("Cylinder", Vector3.new(0.3, 0.6, 0.6), Color3.fromRGB(90, 90, 95), CFrame.new(0, 1.25, 0) * CYL_UP, { Material = Enum.Material.Metal })
-	b.add("Block", Vector3.new(0.15, 0.6, 0.15), Color3.fromRGB(160, 130, 90), CFrame.new(0.1, 1.65, 0) * CFrame.Angles(0, 0, math.rad(-15)))
-	b.add("Ball", Vector3.new(0.45, 0.45, 0.45), Color3.fromRGB(255, 220, 80), CFrame.new(0.2, 2.0, 0), { Material = Enum.Material.Neon, Anim = "Flicker" })
-	for _, x in ipairs({ -0.45, 0.45 }) do
-		b.add("Ball", Vector3.new(0.45, 0.55, 0.15), WHITE, CFrame.new(x, 0.35, -1.12))
-		b.add("Ball", Vector3.new(0.22, 0.3, 0.1), BLACK, CFrame.new(x, 0.3, -1.2))
-		b.add("Ball", Vector3.new(0.7, 0.4, 0.9), Color3.fromRGB(60, 40, 30), CFrame.new(x, -1.2, -0.1), { Anim = x < 0 and "SwingA" or "SwingB", Pivot = CFrame.new(0, 0.3, 0) })
+-- Bomb Tick: bloated crimson sac with glowing amber blisters, dark shield and head.
+ENEMIES.Bomber = function(b, c)
+	egg(b, V(2.3, 1.95, 2.65), c.Base, CFrame.new(0, 1.12, 0.32))
+	egg(b, V(1.2, 0.82, 0.86), c.Dark, CFrame.new(0, 1.02, -0.86))
+	egg(b, V(0.72, 0.56, 0.68), c.Dark, CFrame.new(0, 0.72, -1.24))
+	ball(b, 0.55, c.Glow, V(0, 2.04, 0.6), { Material = NEON, Anim = "Throb" })
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.4, c.Glow, V(side * 0.66, 1.84, -0.05), { Material = NEON, Anim = "Throb" })
+		ball(b, 0.4, c.Glow, V(side * 0.62, 1.72, 1.0), { Material = NEON, Anim = "Throb" })
+		local anim = side < 0 and "SwingA" or "SwingB"
+		local hip = V(side * 0.55, 0.6, -0.55)
+		for i, z in ipairs({ -1.0, -0.72, -0.44, -0.16 }) do
+			local df = ({ -0.66, -0.22, 0.3, 0.76 })[i]
+			bar(b, V(side * 0.75, 0.8, z), V(side * 1.42, 0.03, z + df), 0.15, c.Dark, { Anim = anim, Joint = hip })
+		end
 	end
 	return "Waddle"
 end
 
--- Boss "Swarm Queen": huge pulsing orb with glowing eyes, a jaw, horns, a spinning crown
--- of spikes, four legs and a halo ring.
-ENEMIES.Boss = function(b, base, dark)
-	b.add("Ball", Vector3.new(11, 10, 11), base, CFrame.new(0, 0, 0), { Material = Enum.Material.SmoothPlastic })
-	b.add("Ball", Vector3.new(11.6, 6, 11.6), dark, CFrame.new(0, -2.5, 0), { Transparency = 0.15 })
-	for _, x in ipairs({ -2.2, 2.2 }) do
-		b.add("Ball", Vector3.new(2.4, 1.6, 0.8), Color3.fromRGB(255, 230, 60), CFrame.new(x, 1.6, -5.0), { Material = Enum.Material.Neon })
-		b.add("Ball", Vector3.new(0.9, 1.2, 0.4), BLACK, CFrame.new(x, 1.6, -5.35))
-		b.add("Wedge", Vector3.new(1.0, 4.0, 2.0), Color3.fromRGB(230, 220, 200), CFrame.new(x * 1.6, 5.5, -1) * CFrame.Angles(math.rad(-20), 0, math.rad(x > 0 and -30 or 30)))
+-- Scorpion Queen: crimson plates with gold rims, gold crown, big claws, amber stinger.
+ENEMIES.Boss = function(b, c)
+	egg(b, V(5.0, 2.7, 3.5), c.Base, CFrame.new(0, 2.3, -2.55))
+	egg(b, V(4.6, 1.9, 8.6), c.Dark, CFrame.new(0, 1.95, 0.1))
+	for i = 0, 5 do
+		local z = -1.15 + i * 0.82
+		local w = 2.55 - math.abs(i - 1.5) * 0.12 - math.max(0, i - 3) * 0.2
+		egg(b, V(w * 2, 2.3, 1.32), c.Base, CFrame.new(0, 2.25, z))
+		egg(b, V(w * 1.7, 0.4, 0.5), c.Gold, CFrame.new(0, 3.2, z + 0.4), { Material = METAL })
 	end
-	b.add("Block", Vector3.new(6, 1.2, 1.0), BLACK, CFrame.new(0, -1.5, -5.1), { Anim = "Jaw", Pivot = CFrame.new(0, 0.6, 0.5) })
-	for i = 0, 4 do
-		b.add("Wedge", Vector3.new(0.5, 1.0, 0.4), WHITE, CFrame.new(-2 + i, -0.8, -5.2) * CFrame.Angles(math.rad(180), 0, 0), { Anim = "Jaw", Pivot = CFrame.new(0, -0.1, 0.6) })
+	for i, x in ipairs({ -0.78, -0.42, 0, 0.42, 0.78 }) do
+		local h = ({ 1.0, 1.35, 1.75, 1.35, 1.0 })[i]
+		bar(b, V(x * 1.6, 3.45, -2.85), V(x * 2.4, 3.45 + h, -2.65), 0.3, c.Gold, { Material = METAL })
 	end
-	for i = 0, 7 do
-		local a = i * math.pi / 4
-		b.add("Wedge", Vector3.new(0.8, 2.2, 1.2), GOLD, CFrame.Angles(0, a, 0) * CFrame.new(0, 5.6, -2.6), { Material = Enum.Material.Neon, Anim = "Spin", Pivot = CFrame.new(0, 0, 2.6) })
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.4, c.Eye, V(side * 0.36, 3.48, -3.62), { Material = NEON })
+		local shoulder = V(side * 1.9, 2.35, -3.3)
+		local lift = { Anim = "Jaw", Joint = shoulder }
+		bar(b, shoulder, V(side * 3.55, 2.95, -4.0), 1.1, c.Base, lift)
+		bar(b, V(side * 3.55, 2.95, -4.0), V(side * 4.05, 2.85, -5.5), 1.0, c.Base, lift)
+		egg(b, V(2.16, 1.8, 2.96), c.Base, CFrame.new(side * 3.85, 2.75, -6.55), lift)
+		egg(b, V(0.9, 0.4, 2.4), c.Gold, CFrame.new(side * 3.85, 3.5, -6.55), { Anim = "Jaw", Joint = shoulder, Material = METAL })
+		bar(b, V(side * 4.3, 2.75, -7.6), V(side * 3.8, 2.68, -9.2), 0.7, c.Dark, lift)
+		bar(b, V(side * 3.35, 2.75, -7.65), V(side * 3.3, 2.68, -9.0), 0.6, c.Dark, lift)
+		for i, l in ipairs({ { -1.75, -0.9, -1.75 }, { -0.45, -0.3, -0.5 }, { 0.85, 0.3, 0.6 }, { 2.15, 0.9, 1.75 } }) do
+			local anim = (((i - 1) % 2 == 0) == (side < 0)) and "SwingA" or "SwingB"
+			local hip = V(side * 2.0, 2.05, l[1])
+			local knee = V(side * 4.0, 3.75, l[1] + l[2] * 0.55)
+			bar(b, hip, knee, 0.7, c.Accent, { Anim = anim, Joint = hip })
+			bar(b, knee, V(side * 6.55, 0.02, l[1] + l[3]), 0.5, c.Accent, { Anim = anim, Joint = hip })
+		end
 	end
-	b.add("Cylinder", Vector3.new(0.3, 16, 16), base:Lerp(WHITE, 0.3), CFrame.new(0, -4.8, 0) * CYL_UP, { Material = Enum.Material.Neon, Transparency = 0.6, Anim = "Pulse" })
-	for i = 0, 3 do
-		local a = i * math.pi / 2 + math.pi / 4
-		b.add("Block", Vector3.new(1.4, 4, 1.4), dark, CFrame.Angles(0, a, 0) * CFrame.new(0, -4, -4.2), { Anim = (i % 2 == 0) and "SwingA" or "SwingB", Pivot = CFrame.new(0, 2, 0) })
+	local pts = { V(0, 2.6, 3.15), V(0, 3.4, 4.5), V(0, 5.05, 5.4), V(0, 7.0, 5.6), V(0, 8.85, 5.1), V(0, 10.25, 3.95), V(0, 10.95, 2.45) }
+	local base = pts[1]
+	local sway = { Anim = "Tail", Joint = base }
+	for i = 1, #pts - 1 do
+		bar(b, pts[i], pts[i + 1], 1.6 - i * 0.09, c.Base, sway)
+		if i > 1 then
+			ball(b, 1.75 - i * 0.09, c.Gold, pts[i], { Anim = "Tail", Joint = base, Material = METAL })
+		end
 	end
-	return "Hover"
+	egg(b, V(1.48, 1.48, 1.96), c.Light, CFrame.new(0, 10.9, 1.95), sway)
+	bar(b, V(0, 10.8, 1.35), V(0, 9.65, 0.5), 0.5, c.Dark, sway)
+	ball(b, 0.32, c.Glow, V(0, 9.55, 0.5), { Anim = "Tail", Joint = base, Material = NEON })
+	return "Prowl"
 end
 
--- Small floating gold crown that marks elites.
+-- Elite marker: a small antique-gold crown (band, five points, a crimson stone) that bobs
+-- and slowly turns above the creature.
 local function eliteCrown(b)
-	b.add("Cylinder", Vector3.new(0.3, 1.4, 1.4), GOLD, CFrame.new(0, 0, 0) * CYL_UP, { Material = Enum.Material.Neon, Anim = "CrownBob" })
-	for i = 0, 4 do
-		local a = i * math.pi * 2 / 5
-		b.add("Wedge", Vector3.new(0.25, 0.5, 0.25), GOLD, CFrame.Angles(0, a, 0) * CFrame.new(0, 0.35, -0.6), { Material = Enum.Material.Neon, Anim = "CrownBob" })
+	local function add(shape: string, size: Vector3, color: Color3, cf: CFrame)
+		b.add(shape, size, color, cf, { Material = shape == "Ball" and Enum.Material.SmoothPlastic or METAL, Anim = "CrownBob", Pivot = cf:Inverse() })
 	end
+	add("Cylinder", V(0.34, 1.5, 1.5), Palette.gold_500, CYL_UP)
+	for i = 0, 4 do
+		local at = CFrame.Angles(0, i * math.pi * 2 / 5, 0) * CFrame.new(0, 0.42, -0.66)
+		add("Wedge", V(0.1, 0.5, 0.16), Palette.gold_400, at * CFrame.new(-0.08, 0, 0) * CFrame.Angles(0, math.pi / 2, 0))
+		add("Wedge", V(0.1, 0.5, 0.16), Palette.gold_400, at * CFrame.new(0.08, 0, 0) * CFrame.Angles(0, -math.pi / 2, 0))
+	end
+	add("Ball", V(0.24, 0.24, 0.24), Palette.crimson_500, CFrame.new(0, 0, -0.76))
 end
 
 --[[
-	Builds the model for an enemy type. Returns pieces and the whole-body motion style
-	("Hop", "Fly", "Walk", "Float", "Stomp", "Waddle", "Hover").
+	Builds the model for an enemy type: the uploaded Blender mesh when it is loaded, else
+	the part-built fallback. Returns pieces, the whole-body motion style (see Motion) and
+	the scale. Elites are bigger (Config.Enemies.EliteSizeMult), slightly gold-tinted and
+	wear the crown.
 ]]
 function ModelLibrary.Enemy(typeId: string, elite: boolean): ({ Piece }, string, number)
 	local def = EnemyData.Enemies[typeId] or EnemyData.Enemies.Slime
 	local scale = elite and Config.Enemies.EliteSizeMult or 1
-
-	-- Prefer the uploaded Blender mesh when it is loaded.
+	local lift = -def.Size.Y * scale / 2 -- model origin (ground centre) under the body centre
+	local top = def.Size.Y * scale / 2
 	local meshInfo = ENEMY_MESH[typeId]
-	if meshInfo then
-		local tint = elite and function(c: Color3): Color3
-			return c:Lerp(GOLD, 0.35)
-		end or nil
-		local meshPieces = ModelLibrary.MeshPieces(meshInfo[1], nil, scale, -def.Size.Y * scale / 2, tint)
-		if meshPieces then
-			if elite then
-				local crownBuilder = builder(1)
-				eliteCrown(crownBuilder)
-				for _, piece in ipairs(crownBuilder.pieces) do
-					piece.Offset = CFrame.new(0, def.Size.Y * scale / 2 + 1.2, 0) * piece.Offset
-					table.insert(meshPieces, piece)
+	local motion = meshInfo and meshInfo[2] or "Scuttle"
+	local pieces: { Piece }? = meshInfo and ModelLibrary.MeshPieces(meshInfo[1], nil, scale, lift) or nil
+	if pieces and meshInfo then
+		local entry = MeshCatalog.Models[meshInfo[1]]
+		local bounds = (entry :: any).Bounds
+		if bounds then
+			top = lift + bounds[2][2] * scale
+		end
+		if elite then
+			local slotOf: { [string]: string } = {}
+			for _, d in ipairs(entry.Pieces) do
+				slotOf[d.Name] = d.Slot
+			end
+			for _, piece in ipairs(pieces) do
+				if piece.Part.Material ~= NEON then
+					piece.Color = eliteTint(piece.Color, slotOf[piece.Part.Name])
+					piece.Part.Color = piece.Color
 				end
 			end
-			return meshPieces, meshInfo[2], scale
+		end
+	else
+		local look = table.clone(LOOKS[typeId] or LOOKS.Slime)
+		if elite then
+			for slot, color in pairs(look) do
+				look[slot] = eliteTint(color, slot)
+			end
+		end
+		local b = builder(scale)
+		motion = (ENEMIES[typeId] or ENEMIES.Slime)(b, look)
+		for _, piece in ipairs(b.pieces) do
+			piece.Offset = CFrame.new(0, lift, 0) * piece.Offset
+		end
+		pieces = b.pieces
+	end
+	local out = pieces :: { Piece }
+	if elite then
+		local crown = builder(1.3)
+		eliteCrown(crown)
+		for _, piece in ipairs(crown.pieces) do
+			piece.Offset = CFrame.new(0, top + 0.9, 0) * piece.Offset
+			table.insert(out, piece)
 		end
 	end
-	local b = builder(scale)
-	local base: Color3 = def.Color
-	if elite then
-		base = base:Lerp(GOLD, 0.35)
-	end
-	local dark = base:Lerp(BLACK, 0.45)
-	local build = ENEMIES[typeId] or ENEMIES.Slime
-	local motion = build(b, base, dark)
-	if elite then
-		-- the crown floats above the head (pieces built at scale 1, then offset)
-		local crownBuilder = builder(1)
-		eliteCrown(crownBuilder)
-		local top = def.Size.Y * scale / 2 + 1.2
-		for _, piece in ipairs(crownBuilder.pieces) do
-			piece.Offset = CFrame.new(0, top, 0) * piece.Offset
-			table.insert(b.pieces, piece)
-		end
-	end
-	return b.pieces, motion, scale
+	return out, motion, scale
 end
 
 ------------------------------------------------------------------------------------------
@@ -360,101 +508,133 @@ end
 
 local SHOTS: { [number]: (any, any) -> () } = {}
 
-local function orb(b, color: Color3, size: number)
-	b.add("Ball", Vector3.one * size * 0.6, WHITE, CFrame.new(), { Material = Enum.Material.Neon })
-	b.add("Ball", Vector3.one * size, color, CFrame.new(), { Material = Enum.Material.Neon, Transparency = 0.35 })
-	b.add("Cylinder", Vector3.new(0.08, size * 1.5, size * 1.5), color, CFrame.Angles(0, 0, math.rad(90)), { Material = Enum.Material.Neon, Transparency = 0.5, Anim = "Spin" })
-	b.add("Ball", Vector3.one * size * 0.5, color, CFrame.new(0, 0, size * 0.9), { Material = Enum.Material.Neon, Transparency = 0.6 })
-end
+-- Projectile colours (kept in step with the effects trails): arcane/gold orbs in a slate
+-- shell, steel knives and axes, holy / fire flasks, wooden boomerangs with gold, crimson
+-- and amber boss stingers; evolutions go gold or crimson.
+local ShotPalette = require(Shared:WaitForChild("Palette"))
+local SHOT = {
+	Arcane = ShotPalette.fx_arcane,
+	GoldCore = ShotPalette.fx_gold,
+	Shell = ShotPalette.slate_400,
+	Steel = ShotPalette.steel_300,
+	SteelDark = ShotPalette.steel_600,
+	Gold = ShotPalette.gold_500,
+	GoldBlade = ShotPalette.gold_400,
+	Leather = ShotPalette.leather_600,
+	Wood = ShotPalette.wood_400,
+	Haft = ShotPalette.wood_500,
+	Glass = ShotPalette.ivory_100,
+	Holy = ShotPalette.fx_holy,
+	Fire = ShotPalette.fx_fire,
+	Crimson = ShotPalette.crimson_500,
+	CrimsonDark = ShotPalette.crimson_800,
+	Amber = ShotPalette.amber_500,
+	Ivory = ShotPalette.ivory_100,
+}
+local SHOT_NEON = Enum.Material.Neon
+local SHOT_METAL = Enum.Material.Metal
 
-local function knife(b, blade: Color3, neon: boolean)
-	local mat = neon and Enum.Material.Neon or Enum.Material.Metal
-	b.add("Block", Vector3.new(0.35, 0.1, 1.6), blade, CFrame.new(0, 0, -0.4), { Material = mat })
-	b.add("Wedge", Vector3.new(0.1, 0.35, 0.5), blade, CFrame.new(0, 0, -1.45) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(-90), 0, 0), { Material = mat })
-	b.add("Block", Vector3.new(0.8, 0.15, 0.15), GOLD, CFrame.new(0, 0, 0.45), { Material = Enum.Material.Metal })
-	b.add("Block", Vector3.new(0.2, 0.2, 0.8), Color3.fromRGB(90, 55, 35), CFrame.new(0, 0, 0.9), { Material = Enum.Material.Wood })
-end
-
-local function bottle(b, glass: Color3, flame: boolean)
-	b.add("Ball", Vector3.new(1.1, 1.1, 1.1), glass, CFrame.new(0, -0.1, 0), { Material = Enum.Material.Glass, Transparency = 0.2 })
-	b.add("Ball", Vector3.new(0.7, 0.7, 0.7), glass:Lerp(WHITE, 0.4), CFrame.new(0, -0.15, 0), { Material = Enum.Material.Neon, Transparency = 0.3 })
-	b.add("Cylinder", Vector3.new(0.6, 0.4, 0.4), glass, CFrame.new(0, 0.65, 0) * CYL_UP, { Material = Enum.Material.Glass, Transparency = 0.2 })
-	b.add("Cylinder", Vector3.new(0.25, 0.42, 0.42), Color3.fromRGB(150, 110, 70), CFrame.new(0, 1.0, 0) * CYL_UP, { Material = Enum.Material.Wood })
-	if flame then
-		b.add("Ball", Vector3.new(0.5, 0.8, 0.5), Color3.fromRGB(255, 160, 40), CFrame.new(0, 1.45, 0), { Material = Enum.Material.Neon, Anim = "Flicker" })
+-- Orb: small Neon core, translucent shell, two orbiting sparks.
+local function orb(b, core: Color3, size: number)
+	b.add("Ball", Vector3.one * size * 0.42, core, CFrame.new(), { Material = SHOT_NEON })
+	b.add("Ball", Vector3.one * size * 0.85, SHOT.Shell, CFrame.new(), { Transparency = 0.55 })
+	for _, x in ipairs({ -1, 1 }) do
+		local r = size * 0.55
+		b.add("Ball", Vector3.one * 0.16, core, CFrame.new(x * r, 0, 0), { Material = SHOT_NEON, Anim = "Spin", Pivot = CFrame.new(-x * r, 0, 0) })
 	end
 end
 
-local function axe(b, headColor: Color3, double: boolean, neon: boolean)
-	local mat = neon and Enum.Material.Neon or Enum.Material.Metal
-	b.add("Cylinder", Vector3.new(2.6, 0.3, 0.3), Color3.fromRGB(110, 75, 45), CFrame.new(0, 0, 0), { Material = Enum.Material.Wood })
-	b.add("Wedge", Vector3.new(0.2, 1.3, 1.0), headColor, CFrame.new(1.0, 0, -0.55) * CFrame.Angles(0, 0, math.rad(90)), { Material = mat })
-	b.add("Block", Vector3.new(0.6, 0.25, 0.5), headColor:Lerp(BLACK, 0.3), CFrame.new(1.0, 0, -0.05), { Material = Enum.Material.Metal })
-	if double then
-		b.add("Wedge", Vector3.new(0.2, 1.3, 1.0), headColor, CFrame.new(1.0, 0, 0.55) * CFrame.Angles(0, math.rad(180), math.rad(90)), { Material = mat })
-	end
+-- Knife along Z, tip toward -Z.
+local function knife(b, blade: Color3, grip: Color3)
+	b.add("Block", Vector3.new(0.36, 0.1, 1.3), blade, CFrame.new(0, 0, -0.5), { Material = SHOT_METAL })
+	b.add("Wedge", Vector3.new(0.1, 0.36, 0.45), blade, CFrame.new(0, 0, -1.37) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(-90), 0, 0), { Material = SHOT_METAL })
+	b.add("Block", Vector3.new(0.72, 0.16, 0.16), SHOT.Gold, CFrame.new(0, 0, 0.2))
+	b.add("Block", Vector3.new(0.17, 0.17, 0.6), grip, CFrame.new(0, 0, 0.6))
+	b.add("Ball", Vector3.one * 0.24, SHOT.Gold, CFrame.new(0, 0, 0.98))
 end
 
-local function boomerang(b, color: Color3, stripe: Color3, neon: boolean)
-	local mat = neon and Enum.Material.Neon or Enum.Material.Wood
+-- Flask, upright: translucent glass, small Neon liquid, cork.
+local function bottle(b, liquid: Color3)
+	b.add("Ball", Vector3.new(1.1, 1.1, 1.1), SHOT.Glass, CFrame.new(0, -0.15, 0), { Transparency = 0.5 })
+	b.add("Ball", Vector3.new(0.8, 0.6, 0.8), liquid, CFrame.new(0, -0.3, 0), { Material = SHOT_NEON })
+	b.add("Cylinder", Vector3.new(0.45, 0.36, 0.36), SHOT.Glass, CFrame.new(0, 0.5, 0) * CYL_UP, { Transparency = 0.5 })
+	b.add("Cylinder", Vector3.new(0.3, 0.36, 0.36), SHOT.Wood, CFrame.new(0, 0.82, 0) * CYL_UP)
+end
+
+-- Axe: haft along Z, head at the -Z end with its bit toward -X (matches Shot_Axe).
+local function axe(b, head: Color3)
+	b.add("Cylinder", Vector3.new(2.2, 0.22, 0.22), SHOT.Haft, CFrame.new(0, 0, 0.05) * CFrame.Angles(0, math.rad(90), 0))
+	b.add("Block", Vector3.new(0.42, 0.3, 0.5), SHOT.SteelDark, CFrame.new(0, 0, -0.72), { Material = SHOT_METAL })
+	b.add("Wedge", Vector3.new(0.12, 1.2, 1.1), head, CFrame.new(-0.75, 0, -0.75) * CFrame.Angles(0, 0, math.rad(90)), { Material = SHOT_METAL })
+	b.add("Block", Vector3.new(0.26, 0.26, 0.3), SHOT.Leather, CFrame.new(0, 0, 0.65))
+end
+
+-- Boomerang lying flat, apex toward -Z.
+local function boomerang(b, wood: Color3, inlay: Color3)
 	for _, side in ipairs({ -1, 1 }) do
-		local rot = CFrame.Angles(0, math.rad(side * 35), 0)
-		b.add("Block", Vector3.new(0.5, 0.2, 1.8), color, rot * CFrame.new(0, 0, -0.75), { Material = mat })
-		b.add("Block", Vector3.new(0.52, 0.22, 0.25), stripe, rot * CFrame.new(0, 0, -1.2), { Material = Enum.Material.SmoothPlastic })
+		local rot = CFrame.new(0, 0, -0.35) * CFrame.Angles(0, math.rad(side * 55), 0)
+		b.add("Block", Vector3.new(0.42, 0.18, 1.5), wood, rot * CFrame.new(0, 0, 0.7))
+		b.add("Block", Vector3.new(0.3, 0.2, 0.2), inlay, rot * CFrame.new(0, 0.01, 1.2))
+	end
+	b.add("Block", Vector3.new(0.26, 0.2, 0.26), inlay, CFrame.new(0, 0.01, -0.35) * CFrame.Angles(0, math.rad(45), 0))
+end
+
+-- Boss stinger: amber Neon core, crimson barbs, dark carapace ring.
+local function stinger(b, size: number)
+	b.add("Ball", Vector3.one * size * 0.34, SHOT.Amber, CFrame.new(), { Material = SHOT_NEON })
+	b.add("Cylinder", Vector3.new(0.4, size * 0.55, size * 0.55), SHOT.CrimsonDark, CYL_UP)
+	for i = 0, 3 do
+		b.add("Wedge", Vector3.new(0.3, 0.3, size * 0.42), SHOT.Crimson, CFrame.Angles(0, i * math.pi / 2 + 0.3, 0) * CFrame.new(0, 0, -size * 0.38))
 	end
 end
 
-SHOTS[1] = function(b, def)
-	orb(b, def.Color, 1.4)
+SHOTS[1] = function(b, _def)
+	orb(b, SHOT.Arcane, 1.6)
 end
 SHOTS[2] = function(b, _def)
-	knife(b, Color3.fromRGB(220, 225, 235), false)
+	knife(b, SHOT.Steel, SHOT.Leather)
 end
-SHOTS[3] = function(b, def)
-	bottle(b, def.Color, false)
+SHOTS[3] = function(b, _def)
+	bottle(b, SHOT.Holy)
 end
 SHOTS[4] = function(b, _def)
-	axe(b, Color3.fromRGB(170, 170, 180), false, false)
+	axe(b, SHOT.Steel)
 end
-SHOTS[5] = function(b, def)
-	boomerang(b, def.Color, Color3.fromRGB(200, 60, 50), false)
+SHOTS[5] = function(b, _def)
+	boomerang(b, SHOT.Wood, SHOT.Gold)
 end
-SHOTS[6] = function(b, def)
-	orb(b, def.Color, 1.6)
-	b.add("Ball", Vector3.one * 0.5, WHITE, CFrame.new(1.1, 0, 0), { Material = Enum.Material.Neon, Anim = "Spin", Pivot = CFrame.new(-1.1, 0, 0) })
+SHOTS[6] = function(b, _def)
+	orb(b, SHOT.GoldCore, 1.8)
 end
-SHOTS[7] = function(b, def)
-	orb(b, def.Color, 2.4)
-	for i = 0, 3 do
-		b.add("Wedge", Vector3.new(0.4, 0.8, 0.4), BLACK, CFrame.Angles(0, i * math.pi / 2, 0) * CFrame.new(0, 0, -1.3), { Anim = "Spin", Pivot = CFrame.new(0, 0, 1.3) })
-	end
+SHOTS[7] = function(b, _def)
+	stinger(b, 2.6)
 end
-SHOTS[8] = function(b, def)
-	knife(b, def.Color, true)
+SHOTS[8] = function(b, _def)
+	knife(b, SHOT.GoldBlade, SHOT.CrimsonDark)
 end
-SHOTS[9] = function(b, def)
-	axe(b, def.Color, true, true)
+SHOTS[9] = function(b, _def)
+	axe(b, SHOT.Crimson)
 end
-SHOTS[10] = function(b, def)
-	boomerang(b, def.Color, WHITE, true)
+SHOTS[10] = function(b, _def)
+	boomerang(b, SHOT.GoldBlade, SHOT.Ivory)
 end
-SHOTS[11] = function(b, def)
-	bottle(b, def.Color, true)
+SHOTS[11] = function(b, _def)
+	bottle(b, SHOT.Fire)
 end
 
--- Projectile visual index → mesh model + slot colour overrides.
+-- Projectile visual index → mesh model + slot colour overrides (slots: see blender/models/items.py).
 local SHOT_MESH: { [number]: { any } } = {
-	[1] = { "Shot_Orb", { Glow = Color3.fromRGB(170, 90, 255) } },
-	[2] = { "Shot_Knife", nil },
-	[3] = { "Shot_Bottle", nil },
-	[4] = { "Shot_Axe", nil },
-	[5] = { "Shot_Boomerang", nil },
-	[6] = { "Shot_Orb", { Glow = Color3.fromRGB(255, 110, 210) } },
-	[7] = { "Shot_Stinger", nil },
-	[8] = { "Shot_Knife", { Metal = Color3.fromRGB(255, 215, 80), Gold = Color3.fromRGB(255, 240, 160) } },
-	[9] = { "Shot_Axe", { Metal = Color3.fromRGB(220, 40, 60), Dark = Color3.fromRGB(60, 10, 20) } },
-	[10] = { "Shot_Boomerang", { Wood = Color3.fromRGB(60, 230, 255), Accent = Color3.fromRGB(255, 255, 255) } },
-	[11] = { "Shot_Bottle", { Glow = Color3.fromRGB(255, 120, 30), Light = Color3.fromRGB(255, 200, 150) } },
+	[1] = { "Shot_Orb", { Core = SHOT.Arcane, Shard = SHOT.Arcane, Shell = SHOT.Shell } },
+	[2] = { "Shot_Knife", { Blade = SHOT.Steel, Gold = SHOT.Gold, Grip = SHOT.Leather } },
+	[3] = { "Shot_Bottle", { Liquid = SHOT.Holy, Glass = SHOT.Glass } },
+	[4] = { "Shot_Axe", { Head = SHOT.Steel, Haft = SHOT.Haft } },
+	[5] = { "Shot_Boomerang", { Wood = SHOT.Wood, Inlay = ShotPalette.gold_400 } },
+	[6] = { "Shot_Orb", { Core = SHOT.GoldCore, Shard = SHOT.GoldCore, Shell = SHOT.Shell } },
+	[7] = { "Shot_Stinger", { Core = SHOT.Amber, Barbs = SHOT.Crimson, Carapace = SHOT.CrimsonDark } },
+	[8] = { "Shot_Knife", { Blade = SHOT.GoldBlade, Gold = SHOT.Gold, Grip = SHOT.CrimsonDark } },
+	[9] = { "Shot_Axe", { Head = SHOT.Crimson, Haft = ShotPalette.wood_600 } },
+	[10] = { "Shot_Boomerang", { Wood = SHOT.GoldBlade, Inlay = SHOT.Ivory } },
+	[11] = { "Shot_Bottle", { Liquid = SHOT.Fire, Glass = SHOT.Glass } },
 }
 
 -- Mesh model name used for a projectile visual (nil = part-built only).
@@ -466,7 +646,8 @@ end
 function ModelLibrary.Projectile(visual: number): { Piece }
 	local mesh = SHOT_MESH[visual]
 	if mesh then
-		local meshPieces = ModelLibrary.MeshPieces(mesh[1], mesh[2], visual == 7 and 1.4 or 1, 0)
+		-- meshes are modelled at their WeaponData.Visuals size, so no extra scale
+		local meshPieces = ModelLibrary.MeshPieces(mesh[1], mesh[2], 1, 0)
 		if meshPieces then
 			return meshPieces
 		end
@@ -477,7 +658,7 @@ function ModelLibrary.Projectile(visual: number): { Piece }
 	if fn then
 		fn(b, def)
 	else
-		b.add(def.Shape, def.Size, def.Color, CFrame.new(), { Material = Enum.Material.Neon })
+		b.add(def.Shape, def.Size, def.Color, CFrame.new(), { Material = SHOT_NEON })
 	end
 	return b.pieces
 end
@@ -489,7 +670,12 @@ end
 --[[
 	Extra transform for an animated piece. t = time, phase = per-enemy offset,
 	move = 0..1 how fast it is walking. The result is applied as
-	Offset * Pivot⁻¹ * rotation * Pivot so limbs swing around their joints.
+	Offset * Pivot * rotation * Pivot⁻¹ so limbs swing around their joints.
+
+	Enemy keys: SwingA/SwingB legs and arms, FlapL/FlapR fast wasp wings, FlutterL/FlutterR
+	slow moth wings (resting raised), Jaw mandibles / horn / claws, Tail, Wiggle antennae,
+	Pulse and Throb glow (Throb sinks glowing blisters into the shell and back), CrownBob
+	the elite crown. Projectiles use Spin, Flicker and Pulse.
 ]]
 function ModelLibrary.Animate(anim: string, t: number, phase: number, move: number): CFrame
 	if anim == "SwingA" or anim == "SwingB" then
@@ -498,7 +684,10 @@ function ModelLibrary.Animate(anim: string, t: number, phase: number, move: numb
 		return CFrame.Angles(math.sin(t * 9 + phase) * amount * dir, 0, 0)
 	elseif anim == "FlapL" or anim == "FlapR" then
 		local dir = anim == "FlapL" and 1 or -1
-		return CFrame.Angles(0, 0, math.sin(t * 18 + phase) * 0.8 * dir)
+		return CFrame.Angles(0, 0, math.sin(t * 34 + phase) * 0.6 * dir)
+	elseif anim == "FlutterL" or anim == "FlutterR" then
+		local dir = anim == "FlutterL" and -1 or 1 -- the left wing sits on -X
+		return CFrame.Angles(0, 0, (0.2 + math.sin(t * 7 + phase) * 0.55) * dir)
 	elseif anim == "Spin" then
 		return CFrame.Angles(0, t * 3 + phase, 0)
 	elseif anim == "Wiggle" then
@@ -510,29 +699,45 @@ function ModelLibrary.Animate(anim: string, t: number, phase: number, move: numb
 		return CFrame.new(s, math.abs(s), 0)
 	elseif anim == "Pulse" then
 		return CFrame.new(0, math.sin(t * 6 + phase) * 0.05, 0)
+	elseif anim == "Throb" then
+		local s = math.max(0, math.sin(t * 5 + phase))
+		return CFrame.new(0, s * s * s * 0.13 - 0.06, 0)
 	elseif anim == "Tail" then
 		return CFrame.Angles(math.sin(t * 2.2 + phase) * 0.12, 0, math.sin(t * 1.3 + phase) * 0.08)
 	elseif anim == "CrownBob" then
-		return CFrame.new(0, math.sin(t * 3 + phase) * 0.2, 0)
+		return CFrame.new(0, math.sin(t * 3 + phase) * 0.18, 0) * CFrame.Angles(0, t * 0.9, 0)
 	end
 	return CFrame.identity
 end
 
 -- Whole-body motion: returns a CFrame applied on top of the server body CFrame.
 function ModelLibrary.Motion(style: string, t: number, phase: number, move: number, scale: number): CFrame
-	if style == "Hop" then
+	local w = t * 9 + phase -- the leg cycle (SwingA / SwingB)
+	if style == "Scuttle" then -- small quick beetles: two bumps per stride, a little yaw
+		return CFrame.new(0, math.abs(math.sin(w)) * 0.1 * scale * move, 0) * CFrame.Angles(0, math.sin(w) * 0.06 * move, 0)
+	elseif style == "Buzz" then -- wasp: bob, bank, nose down when flying fast
+		return CFrame.new(0, math.sin(t * 7 + phase) * 0.22 * scale, 0)
+			* CFrame.Angles(-0.15 * move, 0, math.sin(t * 3.1 + phase) * 0.12)
+	elseif style == "March" then -- upright warrior: bob and sway with the stride
+		return CFrame.new(0, math.abs(math.sin(w)) * 0.14 * scale * move, 0) * CFrame.Angles(0, 0, math.sin(w) * 0.05 * move)
+	elseif style == "Flutter" then -- moth: slow float plus a lift on each wing beat
+		return CFrame.new(0, (math.sin(t * 2 + phase) * 0.35 + math.sin(t * 7 + phase) * 0.1) * scale, 0)
+			* CFrame.Angles(0, 0, math.sin(t * 1.5 + phase) * 0.1)
+	elseif style == "Stomp" then -- heavy beetle: a bump per tripod step, slow rock
+		return CFrame.new(0, math.abs(math.sin(w)) * 0.16 * scale * move, 0) * CFrame.Angles(0, 0, math.sin(t * 4.5 + phase) * 0.04 * move)
+	elseif style == "Waddle" then -- bloated tick: rolls side to side with its legs
+		return CFrame.Angles(0, 0, math.sin(w) * 0.14) * CFrame.new(0, math.abs(math.sin(w)) * 0.12 * scale, 0)
+	elseif style == "Prowl" then -- the queen: low bob, slow menacing sway
+		return CFrame.new(0, math.abs(math.sin(w)) * 0.12 * scale * move, 0) * CFrame.Angles(0, math.sin(t * 2 + phase) * 0.04, 0)
+	elseif style == "Hop" then
 		local hop = math.abs(math.sin(t * 6 + phase))
 		return CFrame.new(0, hop * 0.6 * scale * (0.3 + move), 0) * CFrame.Angles(math.sin(t * 6 + phase) * 0.12, 0, 0)
 	elseif style == "Fly" then
 		return CFrame.new(0, math.sin(t * 9 + phase) * 0.25 * scale, 0)
 	elseif style == "Walk" then
-		return CFrame.new(0, math.abs(math.sin(t * 9 + phase)) * 0.12 * scale * move, 0)
+		return CFrame.new(0, math.abs(math.sin(w)) * 0.12 * scale * move, 0)
 	elseif style == "Float" then
 		return CFrame.new(0, math.sin(t * 2 + phase) * 0.4 * scale, 0) * CFrame.Angles(0, 0, math.sin(t * 1.5 + phase) * 0.12)
-	elseif style == "Stomp" then
-		return CFrame.new(0, math.abs(math.sin(t * 4.5 + phase)) * 0.3 * scale * move, 0) * CFrame.Angles(0, 0, math.sin(t * 4.5 + phase) * 0.06)
-	elseif style == "Waddle" then
-		return CFrame.Angles(0, 0, math.sin(t * 12 + phase) * 0.18) * CFrame.new(0, math.abs(math.sin(t * 12 + phase)) * 0.15, 0)
 	elseif style == "Hover" then
 		return CFrame.new(0, 1 + math.sin(t * 1.6 + phase) * 0.8, 0)
 	end

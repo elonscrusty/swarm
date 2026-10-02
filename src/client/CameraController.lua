@@ -23,10 +23,14 @@ local player = Players.LocalPlayer
 local focus: Vector3? = nil
 local distance = Config.Camera.LobbyDistance
 local shake = 0
+local spectated: Player? = nil -- teammate followed while the local player is down
+local subjectKey: any = nil -- who the follow camera is on (a change = glide, not snap)
+local panUntil = 0 -- while > now, the follow camera glides to a new subject
 
 local menuPart: BasePart? = nil
 local nextMenuSearch = 0
 local menuBlend = 0 -- 0 = follow camera, 1 = lobby menu camera (smooth switch)
+local menuTilt = 0 -- menu framing offset (screen fraction), eased toward MenuHeroY
 
 -- The "MenuCamera" part of the lobby, searched again every 2 s until found.
 local function findMenuCamera(): BasePart?
@@ -40,7 +44,9 @@ local function findMenuCamera(): BasePart?
 	end
 	nextMenuSearch = now + 2
 	local map = workspace:FindFirstChild("SwarmMap")
-	for _, lobby in ipairs({ workspace:FindFirstChild("Lobby"), map and map:FindFirstChild("Lobby") }) do
+	-- two candidates, either may be nil (ipairs would stop at a nil first entry)
+	local candidates = { workspace:FindFirstChild("Lobby") or false, map and map:FindFirstChild("Lobby") or false }
+	for _, lobby in ipairs(candidates) do
 		local cam = lobby and lobby:FindFirstChild("MenuCamera", true)
 		if cam and cam:IsA("BasePart") then
 			menuPart = cam
@@ -65,30 +71,51 @@ local function menuCFrame(): CFrame?
 end
 
 -- Short screen shake (hurt, explosions, boss).
+-- Kept small: scaled by Config.Camera.ShakeScale and capped at ShakeMax studs.
 function CameraController.Shake(amount: number)
-	shake = math.max(shake, amount)
+	local cam = Config.Camera :: any
+	local a = math.min(amount * (cam.ShakeScale or 1), cam.ShakeMax or 0.6)
+	shake = math.max(shake, a)
 end
 
-local function subjectPosition(): Vector3?
+local function rootOf(p: Player): BasePart?
+	local char = p.Character
+	return char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+local function canSpectate(p: Player?): boolean
+	return p ~= nil and p.Parent ~= nil and p:GetAttribute("InRun") == true and p:GetAttribute("Alive") == true and rootOf(p) ~= nil
+end
+
+-- Who the follow camera is on (and where): the local player, or while they are down the
+-- same living teammate for as long as that teammate stays up.
+local function subjectPosition(): (Vector3?, any)
 	local inRun = player:GetAttribute("InRun") == true
 	if inRun and player:GetAttribute("Alive") == false then
-		-- spectate the first living teammate
-		for _, other in ipairs(Players:GetPlayers()) do
-			if other ~= player and other:GetAttribute("InRun") and other:GetAttribute("Alive") then
-				local char = other.Character
-				local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-				if root then
-					return root.Position
+		if not canSpectate(spectated) then
+			spectated = nil
+			for _, other in ipairs(Players:GetPlayers()) do
+				if other ~= player and canSpectate(other) then
+					spectated = other
+					break
 				end
 			end
 		end
+		local sp = spectated
+		if sp then
+			local root = rootOf(sp)
+			if root then
+				return root.Position, sp
+			end
+		end
+	else
+		spectated = nil
 	end
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local root = rootOf(player)
 	if root then
-		return root.Position
+		return root.Position, player
 	end
-	return nil
+	return nil, nil
 end
 
 function CameraController.Init()
@@ -114,11 +141,22 @@ function CameraController.Init()
 			if menu then
 				local part = findMenuCamera()
 				local fov = part and tonumber(part:GetAttribute("FieldOfView"))
-				cam.FieldOfView = fov or Config.Camera.FieldOfView
+				local menuFov = fov or Config.Camera.FieldOfView
+				if cam.ViewportSize.Y > cam.ViewportSize.X then
+					-- portrait: a taller view keeps the hero on the dais at a sensible size
+					menuFov = math.min(menuFov * 1.4, 80)
+				end
+				cam.FieldOfView = menuFov
 				-- slow "breathing" sway so the backdrop feels alive
 				local t = os.clock()
 				local sway = CFrame.Angles(math.sin(t * 0.21) * 0.012, math.sin(t * 0.17) * 0.025, 0)
-				local goal = menu * sway
+				-- framing: the menu layout (LobbyScreen) says where on screen the hero on the
+				-- dais should sit (camera attribute MenuHeroY, 0 = top, 0.5 = centre); tilt
+				-- the shot so the aim point lands there (portrait puts the hero higher)
+				local heroY = tonumber(cam:GetAttribute("MenuHeroY")) or 0.5
+				menuTilt += (math.clamp(0.5 - heroY, -0.25, 0.25) - menuTilt) * math.min(1, dt * 5)
+				local tilt = math.atan(2 * menuTilt * math.tan(math.rad(cam.FieldOfView) / 2))
+				local goal = menu * CFrame.Angles(-tilt, 0, 0) * sway
 				menuBlend = math.min(1, menuBlend + dt * 2)
 				if menuBlend >= 1 then
 					cam.CFrame = goal
@@ -131,10 +169,19 @@ function CameraController.Init()
 			end
 		end
 		menuBlend = 0
-		cam.FieldOfView = Config.Camera.FieldOfView
-		local target = subjectPosition()
+		local C = Config.Camera :: any
+		cam.FieldOfView = inRun and (C.RunFieldOfView or C.FieldOfView) or C.FieldOfView
+		local target, who = subjectPosition()
 		if not target then
 			return
+		end
+		local now = os.clock()
+		if who ~= subjectKey then
+			-- spectate switch: glide over instead of cutting (the first subject snaps)
+			if subjectKey ~= nil and focus then
+				panUntil = now + (C.SpectatePanSeconds or 0.4)
+			end
+			subjectKey = who
 		end
 		local viewport = cam.ViewportSize
 		local portrait = viewport.Y > viewport.X
@@ -145,10 +192,14 @@ function CameraController.Init()
 		distance += (want - distance) * math.min(1, dt * 3)
 
 		-- big jumps (teleports) snap, normal movement is smoothed
-		if not focus or (target - (focus :: Vector3)).Magnitude > 40 then
+		if now < panUntil and focus and (target - (focus :: Vector3)).Magnitude < 400 then
+			-- quick, eased glide to the new subject
+			local left = math.max(panUntil - now, 1e-3)
+			focus = (focus :: Vector3):Lerp(target, math.clamp(dt / left * 2.2, 0, 1))
+		elseif not focus or (target - (focus :: Vector3)).Magnitude > 40 then
 			focus = target
 		else
-			focus = (focus :: Vector3):Lerp(target, math.min(1, dt * Config.Camera.FollowSharpness))
+			focus = (focus :: Vector3):Lerp(target, 1 - math.exp(-dt * Config.Camera.FollowSharpness))
 		end
 
 		local pitch = math.rad(Config.Camera.Pitch)
@@ -157,8 +208,12 @@ function CameraController.Init()
 		local look = focus :: Vector3
 		local jitter = Vector3.zero
 		if shake > 0.01 then
-			jitter = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * shake
-			shake *= math.max(0, 1 - dt * 8)
+			-- smooth noise (not per-frame random jumps), decaying fast
+			local t = now * 18
+			jitter = Vector3.new(math.noise(t, 0.3), math.noise(0.7, t) * 0.6, math.noise(t, 5.1)) * (2 * shake)
+			shake *= math.exp(-dt * 7)
+		else
+			shake = 0
 		end
 		cam.CFrame = CFrame.lookAt(look + offset + jitter, look + jitter)
 		cam.Focus = CFrame.new(look)

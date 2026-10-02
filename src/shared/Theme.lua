@@ -9,6 +9,7 @@
 	an accent, not a fill. No neon grass, no rainbow buttons, restrained glow.
 
 	Use Theme.Color.* / Theme.Font.* / Theme.Space.* instead of hard-coded values.
+	The client UI kit (src/client/UIKit.lua) turns these tokens into components.
 ]]
 
 local Palette = require(script.Parent.Palette)
@@ -28,12 +29,15 @@ Theme.Color = {
 	PanelInset = Palette.slate_950, -- bar tracks, input wells
 	PanelEdge = Palette.gold_500, -- thin panel border (used with BorderTransparency)
 	Divider = Palette.slate_600,
+	Shadow = Palette.slate_950, -- soft drop shadows under panels
+	Track = Palette.slate_950, -- meter / slider tracks
 
 	-- text
 	Text = Palette.ivory_100,
 	TextMuted = Palette.ivory_300,
 	TextFaint = Palette.ivory_400,
 	TextOnGold = Palette.gold_900,
+	TextOnGoldMuted = Palette.gold_800,
 	TextDanger = Palette.crimson_300,
 
 	-- accents
@@ -45,6 +49,14 @@ Theme.Color = {
 	Slate = Palette.slate_500,
 	SlateLight = Palette.slate_300,
 	Moss = Palette.moss_400,
+	Steel = Palette.steel_300,
+	Coin = Palette.gold_400,
+
+	-- primary button (gold gradient, dark text)
+	PrimaryTop = Palette.gold_300,
+	Primary = Palette.gold_400,
+	PrimaryBottom = Palette.gold_600,
+	PrimaryEdge = Palette.gold_200,
 
 	-- meters
 	Health = Palette.crimson_500,
@@ -60,6 +72,11 @@ Theme.Color = {
 	Success = Palette.moss_300,
 	Warning = Palette.gold_400,
 	Danger = Palette.crimson_400,
+	Disabled = Palette.stone_700, -- face of a disabled button
+	DisabledText = Palette.stone_300,
+	Selected = Palette.gold_400, -- strong border of the selected card / swatch
+	Focus = Palette.gold_300, -- gamepad selection outline
+	Hover = Palette.ivory_100, -- light sheen laid over a hovered button
 }
 
 -- Transparency levels used across the UI (0 = opaque).
@@ -70,6 +87,10 @@ Theme.Alpha = {
 	Edge = 0.55, -- thin gold border on panels
 	EdgeStrong = 0.1, -- focused / primary border
 	Shadow = 0.55, -- soft drop shadow under panels
+	Hover = 0.9, -- the light sheen on a hovered button
+	Glow = 0.72, -- primary button glow
+	Disabled = 0.35, -- icons / text on a disabled control
+	Vignette = 0.35, -- strongest point of the menu edge vignette
 }
 
 -- Rarity / card tiers (level-up cards, upgrade tiles). Muted, inside the palette.
@@ -78,6 +99,29 @@ Theme.Rarity = {
 	Rare = { Label = "New", Color = Palette.slate_300, Band = Palette.slate_500 },
 	Epic = { Label = "Max", Color = Palette.crimson_300, Band = Palette.crimson_700 },
 	Legendary = { Label = "Evolution", Color = Palette.gold_300, Band = Palette.gold_600 },
+}
+
+------------------------------------------------------------------------------------------
+-- GRADIENTS (UIGradient colour sequences)
+------------------------------------------------------------------------------------------
+Theme.Gradient = {
+	-- antique gold fill of the one primary button per screen
+	Primary = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Palette.gold_200),
+		ColorSequenceKeypoint.new(0.45, Palette.gold_400),
+		ColorSequenceKeypoint.new(1, Palette.gold_600),
+	}),
+	-- polished steel: the SWARM logo letters, steel trims
+	Steel = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Palette.ivory_100),
+		ColorSequenceKeypoint.new(0.55, Palette.steel_200),
+		ColorSequenceKeypoint.new(1, Palette.steel_400),
+	}),
+	-- panels: a faint top-down light so flat slate reads as a surface
+	Panel = ColorSequence.new(Palette.slate_800, Palette.slate_900),
+	Health = ColorSequence.new(Palette.crimson_400, Palette.crimson_600),
+	XP = ColorSequence.new(Palette.gold_300, Palette.gold_500),
+	Boss = ColorSequence.new(Palette.crimson_500, Palette.crimson_700),
 }
 
 ------------------------------------------------------------------------------------------
@@ -112,6 +156,10 @@ Theme.TextSize = {
 	Caption = 12, -- labels like "BEST TIME"
 }
 
+-- Phones render the reference pixels small (UIScale ~0.6), so text there is set this much
+-- bigger to stay readable (UIKit applies it; layouts leave room for it).
+Theme.TextScaleCompact = 1.2
+
 ------------------------------------------------------------------------------------------
 -- SPACING, SHAPE, STROKES, SIZES
 ------------------------------------------------------------------------------------------
@@ -130,6 +178,32 @@ Theme.Size = {
 	IconLarge = 34,
 	Tile = 52, -- upgrade bar weapon tile
 	TileSmall = 42, -- upgrade bar passive tile
+	Chip = 44, -- stat chips, counters
+	Badge = 20, -- level badges, small pills
+	Slider = 28, -- slider knob
+}
+
+-- Screen layout (reference px).
+Theme.Layout = {
+	Margin = 24, -- screen edge margin
+	MarginCompact = 16, -- phones / short screens
+	Gutter = 12, -- gap between neighbouring cards / buttons
+	MenuColumn = 340, -- width of the menu's left (cards) and right (modes) columns
+	Nameplate = Vector2.new(460, 92),
+	HudPlate = Vector2.new(420, 66),
+}
+
+-- Draw order of the top-level UI layers (ZIndex of root children, Sibling behaviour).
+Theme.Z = {
+	Hud = 1,
+	Lobby = 2,
+	Toast = 20,
+	Chest = 25,
+	LevelUp = 30,
+	Pause = 40,
+	Revive = 45,
+	Results = 50,
+	Dev = 60,
 }
 
 ------------------------------------------------------------------------------------------
@@ -140,7 +214,34 @@ Theme.Motion = {
 	Base = 0.22,
 	Slow = 0.35,
 	Stagger = 0.05, -- delay between items entering one after another
+	PressScale = 0.96, -- buttons shrink to this while pressed
+	HoverLift = 2, -- px a hovered button rises
 }
+
+------------------------------------------------------------------------------------------
+-- ICONS (src/client/Icons.lua draws them on this grid)
+------------------------------------------------------------------------------------------
+Theme.Icon = {
+	Grid = 24, -- icons are designed on a 24 x 24 grid and scale to any size
+	Stroke = 2.6, -- line weight in grid units (same for every icon)
+	Main = Palette.ivory_100, -- default glyph colour
+	Accent = Palette.gold_400, -- default second colour
+	Back = Palette.slate_900, -- colour of cut-outs (eyes, visors, holes)
+}
+
+--[[
+	Brings any colour into the palette's mood: keeps its hue (so items stay recognisable)
+	but caps the saturation and settles the brightness. Used for item colours that come
+	from the data modules (weapons, passives, server messages), which are much brighter.
+]]
+function Theme.Tint(color: Color3, maxSaturation: number?, value: number?): Color3
+	local h, s, v = color:ToHSV()
+	if s < 0.08 then
+		-- greys and whites become warm ivory / steel
+		return Palette.ivory_200:Lerp(Palette.steel_400, math.clamp(1 - v, 0, 1))
+	end
+	return Color3.fromHSV(h, math.min(s, maxSaturation or 0.55), value or math.clamp(v, 0.62, 0.86))
+end
 
 ------------------------------------------------------------------------------------------
 -- WORLD MATERIAL RULES (used by MapBuilder / effects)

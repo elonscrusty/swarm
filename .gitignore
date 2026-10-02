@@ -1,2 +1,6 @@
 *.lock
 __pycache__/
+# preview renderer (tools/preview): dependencies, font cache, renders
+tools/preview/node_modules/
+tools/preview/.cache/
+tools/preview/out/

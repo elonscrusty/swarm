@@ -47,23 +47,29 @@ WeaponData.StatLabels = {
 	          "Axe" heavy tumble, "Bottle" lazy tumble, "Boomerang" flat spin + bank,
 	          "Saw" flat buzz-saw spin, "Stinger" spin
 	  Spin    flat spin speed (rad/s), Tumble = end-over-end speed (rad/s)
-	  Trail   { Color, Width, Life } ribbon behind the projectile (Width grows with tier)
-	  Impact  colour of the puff drawn where the projectile disappears (nil = none)
+	  Trail   { Color, Tail?, Width, Life } thin, short ribbon behind the projectile
+	          (Color at the projectile, fading to Tail; Width grows a little with tier)
+	  Impact  colour of the small puff where the projectile disappears (nil = none)
 	  Shatter true = glass shards + splash when it lands
+	Colours come from the shared palette (Theme.Fx) and match the projectile meshes:
+	orb arcane, knife steel/ivory, bottle holy, axe steel, boomerang wood/gold; evolutions
+	twin orb gold, edge knife gold, spiral axe crimson, infinite boomerang gold, hell bottle
+	fire; the boss stinger crimson + amber.
 ]]
-local TRAIL_ORB = { Color = Color3.fromRGB(190, 120, 255), Width = 1.1, Life = 0.22 }
+local Palette = require(script.Parent.Palette)
+
 WeaponData.Visuals = {
-	[1] = { Name = "Orb", Shape = "Ball", Size = Vector3.new(1.6, 1.6, 1.6), Color = Color3.fromRGB(170, 90, 255), Material = "Neon", Style = "Orb", Trail = TRAIL_ORB, Impact = Color3.fromRGB(200, 140, 255) },
-	[2] = { Name = "Knife", Shape = "Block", Size = Vector3.new(0.4, 0.3, 2.4), Color = Color3.fromRGB(220, 225, 235), Material = "Metal", Style = "Knife", Tumble = 26, Trail = { Color = Color3.fromRGB(230, 235, 255), Width = 0.45, Life = 0.12 }, Impact = Color3.fromRGB(235, 240, 255) },
-	[3] = { Name = "Bottle", Shape = "Ball", Size = Vector3.new(1.2, 1.6, 1.2), Color = Color3.fromRGB(80, 160, 255), Material = "Glass", Style = "Bottle", Tumble = 9, Trail = { Color = Color3.fromRGB(120, 190, 255), Width = 0.5, Life = 0.25 }, Shatter = true },
-	[4] = { Name = "Axe", Shape = "Block", Size = Vector3.new(2.6, 0.4, 2.0), Color = Color3.fromRGB(160, 160, 170), Material = "Metal", Spin = 14, Style = "Axe", Tumble = 15, Trail = { Color = Color3.fromRGB(210, 215, 230), Width = 1.4, Life = 0.16 }, Impact = Color3.fromRGB(220, 220, 230) },
-	[5] = { Name = "Boomerang", Shape = "Block", Size = Vector3.new(2.6, 0.3, 0.8), Color = Color3.fromRGB(205, 160, 90), Material = "Wood", Spin = 18, Style = "Boomerang", Trail = { Color = Color3.fromRGB(240, 200, 140), Width = 1.2, Life = 0.14 } },
-	[6] = { Name = "TwinOrb", Shape = "Ball", Size = Vector3.new(1.8, 1.8, 1.8), Color = Color3.fromRGB(255, 110, 210), Material = "Neon", Style = "Orb", Trail = { Color = Color3.fromRGB(255, 130, 220), Width = 1.3, Life = 0.28 }, Impact = Color3.fromRGB(255, 160, 230) },
-	[7] = { Name = "BossOrb", Shape = "Ball", Size = Vector3.new(2.6, 2.6, 2.6), Color = Color3.fromRGB(255, 50, 40), Material = "Neon", Style = "Stinger", Spin = 6, Trail = { Color = Color3.fromRGB(255, 80, 40), Width = 1.6, Life = 0.2 }, Impact = Color3.fromRGB(255, 90, 50) },
-	[8] = { Name = "EdgeKnife", Shape = "Block", Size = Vector3.new(0.4, 0.3, 2.6), Color = Color3.fromRGB(255, 215, 80), Material = "Neon", Style = "Dart", Spin = 18, Trail = { Color = Color3.fromRGB(255, 220, 90), Width = 0.6, Life = 0.14 }, Impact = Color3.fromRGB(255, 230, 120) },
-	[9] = { Name = "SpiralAxe", Shape = "Block", Size = Vector3.new(3.2, 0.4, 2.4), Color = Color3.fromRGB(200, 40, 60), Material = "Neon", Spin = 20, Style = "Saw", Trail = { Color = Color3.fromRGB(255, 60, 80), Width = 1.8, Life = 0.2 }, Impact = Color3.fromRGB(255, 80, 90) },
-	[10] = { Name = "InfiniteBoomerang", Shape = "Block", Size = Vector3.new(3.0, 0.3, 0.9), Color = Color3.fromRGB(60, 230, 255), Material = "Neon", Spin = 22, Style = "Boomerang", Trail = { Color = Color3.fromRGB(80, 240, 255), Width = 1.6, Life = 0.2 } },
-	[11] = { Name = "HellBottle", Shape = "Ball", Size = Vector3.new(1.4, 1.8, 1.4), Color = Color3.fromRGB(255, 120, 30), Material = "Neon", Style = "Bottle", Tumble = 11, Trail = { Color = Color3.fromRGB(255, 140, 40), Width = 0.9, Life = 0.3 }, Shatter = true },
+	[1] = { Name = "Orb", Shape = "Ball", Size = Vector3.new(1.6, 1.6, 1.6), Color = Palette.fx_arcane, Material = "Neon", Style = "Orb", Trail = { Color = Palette.fx_arcane, Width = 0.5, Life = 0.14 }, Impact = Palette.fx_arcane },
+	[2] = { Name = "Knife", Shape = "Block", Size = Vector3.new(0.4, 0.3, 2.4), Color = Palette.steel_200, Material = "Metal", Style = "Knife", Tumble = 26, Trail = { Color = Palette.fx_ivory, Tail = Palette.steel_300, Width = 0.18, Life = 0.08 }, Impact = Palette.fx_ivory },
+	[3] = { Name = "Bottle", Shape = "Ball", Size = Vector3.new(1.2, 1.6, 1.2), Color = Palette.fx_holy, Material = "Glass", Style = "Bottle", Tumble = 9, Trail = { Color = Palette.fx_holy, Width = 0.22, Life = 0.12 }, Shatter = true },
+	[4] = { Name = "Axe", Shape = "Block", Size = Vector3.new(2.6, 0.4, 2.0), Color = Palette.steel_400, Material = "Metal", Spin = 14, Style = "Axe", Tumble = 15, Trail = { Color = Palette.steel_200, Tail = Palette.steel_400, Width = 0.4, Life = 0.1 }, Impact = Palette.steel_200 },
+	[5] = { Name = "Boomerang", Shape = "Block", Size = Vector3.new(2.6, 0.3, 0.8), Color = Palette.wood_400, Material = "Wood", Spin = 18, Style = "Boomerang", Trail = { Color = Palette.gold_300, Tail = Palette.wood_400, Width = 0.35, Life = 0.1 } },
+	[6] = { Name = "TwinOrb", Shape = "Ball", Size = Vector3.new(1.8, 1.8, 1.8), Color = Palette.gold_300, Material = "Neon", Style = "Orb", Trail = { Color = Palette.gold_300, Width = 0.55, Life = 0.16 }, Impact = Palette.gold_200 },
+	[7] = { Name = "BossOrb", Shape = "Ball", Size = Vector3.new(2.6, 2.6, 2.6), Color = Palette.crimson_400, Material = "Neon", Style = "Stinger", Spin = 6, Trail = { Color = Palette.amber_500, Tail = Palette.crimson_500, Width = 0.6, Life = 0.14 }, Impact = Palette.crimson_300 },
+	[8] = { Name = "EdgeKnife", Shape = "Block", Size = Vector3.new(0.4, 0.3, 2.6), Color = Palette.gold_400, Material = "Metal", Style = "Dart", Spin = 18, Trail = { Color = Palette.gold_200, Tail = Palette.gold_400, Width = 0.22, Life = 0.09 }, Impact = Palette.gold_200 },
+	[9] = { Name = "SpiralAxe", Shape = "Block", Size = Vector3.new(3.2, 0.4, 2.4), Color = Palette.crimson_500, Material = "Metal", Spin = 20, Style = "Saw", Trail = { Color = Palette.crimson_300, Tail = Palette.crimson_500, Width = 0.5, Life = 0.12 }, Impact = Palette.crimson_300 },
+	[10] = { Name = "InfiniteBoomerang", Shape = "Block", Size = Vector3.new(3.0, 0.3, 0.9), Color = Palette.gold_400, Material = "Metal", Spin = 22, Style = "Boomerang", Trail = { Color = Palette.gold_200, Tail = Palette.gold_400, Width = 0.4, Life = 0.12 } },
+	[11] = { Name = "HellBottle", Shape = "Ball", Size = Vector3.new(1.4, 1.8, 1.4), Color = Palette.fx_fire, Material = "Glass", Style = "Bottle", Tumble = 11, Trail = { Color = Palette.amber_300, Tail = Palette.fx_fire, Width = 0.3, Life = 0.14 }, Shatter = true },
 }
 
 -- Shorthand for building a stat row.

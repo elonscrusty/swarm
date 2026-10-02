@@ -1,626 +1,498 @@
 --[[
 	LobbyScreen.lua
-	The 2D lobby menu, shown full-screen whenever the player is not in a run. The 3D lobby
-	stays behind it as a scenic backdrop (CameraController points the camera at it).
+	The main menu, shown whenever the player is not in a run. The 3D castle courtyard at
+	dusk is the backdrop and the hero stands on the lit dais in the middle (Showcase.lua);
+	the UI frames it:
 
-	Screens (they slide into each other):
-	  Home        top bar (gold, best time, wins, SETTINGS), the player's own character big in
-	              the middle (turning 3D preview), permanent upgrade summary, SOLO / DUO /
-	              TRIO buttons, CHARACTERS / UPGRADES / ARENA buttons. During a countdown
-	              the mode buttons become a "who joined" panel with JOIN / START NOW; while
-	              another run is going it says "A run is in progress (m:ss)".
-	  Characters  one card per character: turning 3D preview, name, role, description,
-	              starting weapon, bonus, buy / select, skins.
-	  Upgrades    permanent gold upgrades + the Robux shop (gold and cosmetics only).
+	  top left      SWARM logo (sword behind the letters) + "SURVIVE · UPGRADE · CONQUER"
+	  top right     stats chip: best time, wins, gold (stays on every menu screen)
+	  left column   feature cards CHARACTERS / UPGRADES / ARENA: <name>
+	  bottom centre nameplate of the hero with gold arrows to browse characters
+	                (owned → selected at once; locked → price, UNLOCK / DETAILS)
+	  right column  SOLO (primary gold), DUO, TRIO. A countdown (who joined, JOIN,
+	                START NOW, the number) or "run in progress" replaces this column.
+	  bottom left   SETTINGS and STATS
+	Portrait stacks: logo, stats, hero, nameplate, modes, cards, settings / stats.
 
-	Everything sent to the server is an id or a mode name; the server validates it
-	(RunManager: StartRun / StartNow / CycleArena, GoldSystem: purchases and selection).
-	UIBuilder owns the root, scaling and the profile; it calls Init / SetProfile / Update.
+	Sub-screens slide in: Characters (MenuCharacters), Upgrades (MenuUpgrades), Stats
+	(MenuStats); Settings is UIBuilder's modal. Everything sent to the server is an id or a
+	mode name; the server validates it (RunManager: StartRun / JoinRun / StartNow /
+	CycleArena, GoldSystem: purchases and selection).
 ]]
 
 local Players = game:GetService("Players")
-local MarketplaceService = game:GetService("MarketplaceService")
-local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
-local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
-local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
-local ViewportPreview = require(script.Parent.ViewportPreview)
+local Icons = require(script.Parent.Icons)
+local Showcase = require(script.Parent.Showcase)
+local MenuCharacters = require(script.Parent.MenuCharacters)
+local MenuUpgrades = require(script.Parent.MenuUpgrades)
+local MenuStats = require(script.Parent.MenuStats)
 
 local LobbyScreen = {}
 
 local player = Players.LocalPlayer
-local new, corner, stroke, pad, label, button = UIKit.new, UIKit.corner, UIKit.stroke, UIKit.pad, UIKit.label, UIKit.button
-local COLORS = UIKit.COLORS
+local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local C, P = Theme.Color, Theme.Palette
 
-local TOP = 76 -- height of the top bar area (reference pixels)
-local MARGIN = 20
-
-local MODE_STYLE = {
-	Solo = { Color = Color3.fromRGB(60, 185, 100), Sub = "Start right now" },
-	Duo = { Color = Color3.fromRGB(60, 130, 225), Sub = "2 players + revives" },
-	Trio = { Color = Color3.fromRGB(140, 80, 220), Sub = "3 players + revives" },
+local MODES = {
+	Solo = { Sub = "Start right now", Icon = "person" },
+	Duo = { Sub = "2 players + revives", Icon = "people2" },
+	Trio = { Sub = "3 players + revives", Icon = "people3" },
 }
 
--- Set by UIBuilder.
 local host: { [string]: any } = {}
 local profile: { [string]: any }? = nil
 local joinedCountdown = false
 local ui: { [string]: any } = {}
 local current = "Home"
-local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3 }
+local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Stats = 4 }
+local screens: { [string]: any } = {}
 local shownGold: number? = nil
 local lastStatus = ""
-local homeEntrance: () -> ()
+local browse: string? = nil -- a locked character being looked at from the nameplate
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
-	obj.Position = UDim2.fromOffset(math.floor(x), math.floor(y))
-	obj.Size = UDim2.fromOffset(math.floor(w), math.floor(h))
+	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
+	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
 end
 
-local function toast(text: string, color: Color3?)
+local function toast(str: string, color: Color3?)
 	if host.Toast then
-		host.Toast(text, color)
+		host.Toast(str, color)
 	end
 end
 
+local function owned(id: string): boolean
+	return profile ~= nil and profile.OwnedCharacters[id] == true
+end
+
+local function selectedChar(): string
+	return profile and profile.SelectedCharacter or CharacterData.Default
+end
+
+local function skinOf(id: string): string
+	return profile and profile.Skins[id] or "Default"
+end
+
 ------------------------------------------------------------------------------------------
--- Background: soft animated gradient + drifting dots (looping tweens only)
+-- Logo and vignette
 ------------------------------------------------------------------------------------------
 
-local function buildBackground(frame: Frame)
-	local shade = new("Frame", { Name = "Shade", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 }, frame)
-	local grad = new("UIGradient", {
-		Rotation = 90,
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 18, 50)),
-			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(40, 20, 70)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 30, 45)),
-		}),
-		-- dark at the top and bottom (readable bars), clear in the middle (3D lobby shows)
-		Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.15),
-			NumberSequenceKeypoint.new(0.22, 0.75),
-			NumberSequenceKeypoint.new(0.6, 0.85),
-			NumberSequenceKeypoint.new(1, 0.2),
-		}),
-	}, shade)
-	TweenService:Create(grad, TweenInfo.new(6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Offset = Vector2.new(0, 0.08) }):Play()
-
-	local dots = new("Frame", { Name = "Dots", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true }, frame)
-	local rng = Random.new()
-	for _ = 1, Config.UI.LobbyParticles do
-		local size = rng:NextInteger(4, 11)
-		local x = rng:NextNumber(0.02, 0.98)
-		local dot = new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(x, 1.05),
-			Size = UDim2.fromOffset(size, size),
-			BackgroundColor3 = rng:NextNumber() < 0.3 and COLORS.Gold or Color3.fromRGB(170, 200, 255),
-			BackgroundTransparency = rng:NextNumber(0.55, 0.8),
-			BorderSizePixel = 0,
-		}, dots)
-		corner(dot, size)
-		local seconds = rng:NextNumber(9, 18)
-		-- start somewhere along the path so the screen isn't empty at first
-		local t0 = rng:NextNumber()
-		dot.Position = UDim2.fromScale(x, 1.05 - 1.15 * t0)
-		local first = TweenService:Create(dot, TweenInfo.new(seconds * (1 - t0), Enum.EasingStyle.Linear), { Position = UDim2.fromScale(x + rng:NextNumber(-0.05, 0.05), -0.1) })
-		first.Completed:Once(function()
-			dot.Position = UDim2.fromScale(x, 1.05)
-			UIAnim.Loop(dot, seconds, { Position = UDim2.fromScale(x + rng:NextNumber(-0.06, 0.06), -0.1) })
-		end)
-		first:Play()
+local function buildLogo(parent: Instance): Frame
+	local logo = new("Frame", { Name = "Logo", BackgroundTransparency = 1, Size = UDim2.fromOffset(360, 130) }, parent)
+	ui.LogoScale = new("UIScale", { Name = "Fit" }, logo)
+	-- the sword behind the letters
+	local sword = new("Frame", { Name = "Sword", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(170, 54), Size = UDim2.fromOffset(330, 26), Rotation = -14 }, logo)
+	local blade = new("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Position = UDim2.fromOffset(84, 6), Size = UDim2.fromOffset(232, 14) }, sword)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Steel }, blade)
+	UIKit.stroke(blade, P.steel_600, 1, 0.3)
+	new("Frame", { BackgroundColor3 = P.steel_200, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(316, 13), Size = UDim2.fromOffset(10, 10), Rotation = 45 }, sword)
+	new("Frame", { BackgroundColor3 = P.steel_400, BorderSizePixel = 0, Position = UDim2.fromOffset(92, 12), Size = UDim2.fromOffset(212, 2) }, sword)
+	local guard = new("Frame", { BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(80, 13), Size = UDim2.fromOffset(10, 52) }, sword)
+	UIKit.corner(guard, 4)
+	UIKit.stroke(guard, P.gold_700, 1, 0.2)
+	local grip = new("Frame", { BackgroundColor3 = P.leather_500, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromOffset(75, 13), Size = UDim2.fromOffset(46, 9) }, sword)
+	UIKit.corner(grip, 3)
+	local pommel = new("Frame", { BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(26, 13), Size = UDim2.fromOffset(16, 16) }, sword)
+	UIKit.corner(pommel, 999)
+	-- the letters: a shadow, then steel-gradient text with a dark outline
+	local function word(offset: Vector2, color: Color3, transparency: number): TextLabel
+		return new("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(offset.X, offset.Y),
+			Size = UDim2.fromOffset(360, 92),
+			Text = "SWARM",
+			FontFace = Theme.Font.Display,
+			TextSize = 84,
+			TextColor3 = color,
+			TextTransparency = transparency,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, logo)
 	end
+	word(Vector2.new(4, 10), C.Shadow, 0.35)
+	local letters = word(Vector2.new(0, 4), Color3.new(1, 1, 1), 0)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Steel }, letters)
+	new("UIStroke", { Color = P.slate_950, Thickness = 2, Transparency = 0.15, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual }, letters)
+	text(logo, "Label", UIKit.track("Survive · Upgrade · Conquer"), {
+		Name = "Tagline",
+		Position = UDim2.fromOffset(4, 100),
+		Size = UDim2.fromOffset(360, 22),
+		TextColor3 = P.gold_300,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.6,
+	}, 14)
+	return logo
+end
+
+-- Soft dark edges over the 3D scene so the menu reads (in the full-screen FX gui).
+local function buildVignette(fxGui: ScreenGui)
+	local v = new("Frame", { Name = "MenuVignette", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false }, fxGui)
+	ui.Vignette = v
+	local function edge(rot: number, pos: UDim2, size: UDim2, strength: number)
+		local f = new("Frame", { BackgroundColor3 = C.Backdrop, BorderSizePixel = 0, Position = pos, Size = size }, v)
+		new("UIGradient", {
+			Rotation = rot,
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, strength), NumberSequenceKeypoint.new(1, 1) }),
+		}, f)
+	end
+	edge(0, UDim2.fromScale(0, 0), UDim2.fromScale(0.42, 1), 0.35)
+	edge(180, UDim2.fromScale(0.62, 0), UDim2.fromScale(0.38, 1), 0.4)
+	edge(90, UDim2.fromScale(0, 0), UDim2.fromScale(1, 0.25), 0.45)
+	edge(-90, UDim2.fromScale(0, 0.72), UDim2.fromScale(1, 0.28), 0.4)
+	-- the dense sub-screens dim the scene a little more
+	ui.Dim = new("Frame", { BackgroundColor3 = C.Backdrop, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, v)
 end
 
 ------------------------------------------------------------------------------------------
--- Top bar
+-- Stats chip (top right, every screen)
 ------------------------------------------------------------------------------------------
 
-local function pill(parent: Instance, caption: string, color: Color3, order: number): (Frame, TextLabel)
-	local f = new("Frame", { Size = UDim2.fromOffset(170, 52), BackgroundColor3 = COLORS.Panel, BackgroundTransparency = 0.15, LayoutOrder = order }, parent)
-	corner(f, 26)
-	stroke(f, color, 2)
-	label(f, caption, 12, { Position = UDim2.fromOffset(0, 5), Size = UDim2.new(1, 0, 0, 14), TextColor3 = COLORS.Dim })
-	local value = label(f, "-", 24, { Position = UDim2.fromOffset(0, 19), Size = UDim2.new(1, 0, 0, 28), TextColor3 = color })
-	return f, value
-end
-
-local function buildTopBar(frame: Frame)
-	local bar = new("Frame", { Name = "TopBar", BackgroundTransparency = 1 }, frame)
-	ui.TopBar = bar
-	local pills = new("Frame", { Name = "Pills", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, bar)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, pills)
-	local goldPill
-	goldPill, ui.Gold = pill(pills, "GOLD", COLORS.Gold, 1)
-	local bestPill
-	bestPill, ui.Best = pill(pills, "BEST TIME", Color3.fromRGB(140, 210, 255), 2)
-	local winsPill
-	winsPill, ui.Wins = pill(pills, "WINS", Color3.fromRGB(130, 235, 150), 3)
-	ui.Pills = { goldPill, bestPill, winsPill }
-	ui.Settings = button(bar, "SETTINGS", COLORS.Gray, function()
-		if host.OpenSettings then
-			host.OpenSettings()
-		end
-	end, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(140, 52), TextSize = 20 })
-	stroke(ui.Settings, Color3.fromRGB(200, 200, 215), 2)
-end
-
-------------------------------------------------------------------------------------------
--- Screen headers (Characters, Upgrades)
-------------------------------------------------------------------------------------------
-
--- A full-size screen (what slides) holding a dark rounded panel (the content).
-local function screenFrame(name: string): (Frame, Frame)
-	local f = new("Frame", { Name = name, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, ui.Screens)
-	local panel = new("Frame", {
-		Name = "Panel",
-		Position = UDim2.fromOffset(MARGIN, 0),
-		Size = UDim2.new(1, -2 * MARGIN, 1, -10),
-		BackgroundTransparency = 0.12,
-		BackgroundColor3 = COLORS.Panel,
-	}, f)
-	corner(panel, 18)
-	stroke(panel, COLORS.PanelLight, 2)
-	return f, panel
-end
-
-local function header(screen: Frame, title: string): TextLabel
-	button(screen, "< BACK", COLORS.Gray, function()
-		LobbyScreen.Show("Home")
-	end, { Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(130, 52), TextSize = 20 })
-	label(screen, title, 34, { Position = UDim2.fromOffset(0, 14), Size = UDim2.new(1, 0, 0, 40), TextColor3 = COLORS.Text, TextStrokeTransparency = 0.5 })
-	return label(screen, "", 20, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 22), Size = UDim2.fromOffset(200, 26), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = COLORS.Gold })
-end
-
-local function scroller(screen: Frame): ScrollingFrame
-	return new("ScrollingFrame", {
-		Position = UDim2.fromOffset(10, 72),
-		Size = UDim2.new(1, -20, 1, -80),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 8,
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		CanvasSize = UDim2.new(),
-		ScrollingDirection = Enum.ScrollingDirection.Y,
-	}, screen)
+local function buildChip(frame: Frame)
+	local holder, face = UIKit.Surface(frame, { Name = "StatsChip", Radius = 999, Size = UDim2.fromOffset(0, 48) })
+	holder.AutomaticSize = Enum.AutomaticSize.X
+	face.AutomaticSize = Enum.AutomaticSize.X
+	face.Size = UDim2.fromScale(0, 1)
+	UIKit.padding(face, 0, 18, 0, 16)
+	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
+	ui.Chip = holder
+	local function sep(order: number)
+		new("Frame", { BackgroundColor3 = C.Gold, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 22), LayoutOrder = order }, face)
+	end
+	ui.Best = UIKit.Chip(face, "crown", "Best time", "0:00", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 48) }, { Size = 22, Color = P.gold_400, Accent = P.gold_200 })
+	sep(2)
+	ui.Wins = UIKit.Chip(face, "skull", "Wins", "0", { LayoutOrder = 3, Size = UDim2.fromOffset(0, 48) }, { Size = 22, Color = P.ivory_200, Back = P.slate_900 })
+	sep(4)
+	ui.Gold = UIKit.Chip(face, "coin", "Gold", "0", { LayoutOrder = 5, Size = UDim2.fromOffset(0, 48) }, { Size = 22 })
+	ui.Gold.Value.TextColor3 = P.gold_200
 end
 
 ------------------------------------------------------------------------------------------
 -- Home
 ------------------------------------------------------------------------------------------
 
-local function bigButton(parent: Instance, title: string, sub: string, color: Color3, order: number, onClick: () -> ()): (Frame, TextButton)
-	local wrap = new("Frame", { Name = title, BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.fromOffset(280, 90) }, parent)
-	local b = button(wrap, "", color, onClick, { Size = UDim2.fromScale(1, 1), ClipsDescendants = true })
-	corner(b, 16)
-	UIKit.sheen(b, 0.3)
-	stroke(b, color:Lerp(Color3.new(1, 1, 1), 0.5), 2)
-	label(b, title, 32, { Name = "Title", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -9), Size = UDim2.new(1, -10, 0, 36), TextStrokeTransparency = 0.6 })
-	label(b, sub, 15, { Name = "Sub", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 20), Size = UDim2.new(1, -10, 0, 18), TextColor3 = Color3.fromRGB(235, 240, 255), Font = Config.UI.BodyFont })
-	return wrap, b
+local function arenaText(): (string, string)
+	local state = Remotes.State()
+	local arenaId = state:GetAttribute("SelectedArena") or "Forest"
+	local arena = (Config.Arenas :: any)[arenaId]
+	local title = "ARENA: " .. string.upper(arena and arena.DisplayName or tostring(arenaId))
+	local wins = profile and profile.Stats.Wins or 0
+	for _, name in ipairs(Config.Arenas.Order) do
+		local def = (Config.Arenas :: any)[name]
+		if wins < def.RequiredWins then
+			local need = def.RequiredWins - wins
+			return title, string.format("%s: win %d run%s to unlock", def.DisplayName, need, need == 1 and "" or "s")
+		end
+	end
+	return title, "Face the swarm"
+end
+
+-- Nameplate arrows: browse characters in order.
+local selectToken = 0
+local function browseStep(dir: number)
+	local order = CharacterData.Order
+	local cur = browse or selectedChar()
+	local i = table.find(order, cur) or 1
+	local nextId = order[((i - 1 + dir) % #order) + 1]
+	if owned(nextId) then
+		browse = nil
+		if nextId ~= selectedChar() then
+			if profile then
+				-- show it at once; the server's profile sync confirms
+				profile.SelectedCharacter = nextId
+			end
+			-- send only the last of several quick taps (the remote is rate limited), then
+			-- ask for the profile so the server's choice always wins on screen
+			selectToken += 1
+			local token = selectToken
+			task.delay(0.35, function()
+				if token == selectToken then
+					Remotes.Get("SelectCharacter"):FireServer(nextId)
+					task.delay(1, function()
+						if token == selectToken then
+							Remotes.Get("RequestProfile"):FireServer()
+						end
+					end)
+				end
+			end)
+		end
+	else
+		browse = nextId
+		Showcase.Show(nextId, "Default")
+	end
+	LobbyScreen.RefreshHero()
+	UIAnim.Punch(ui.NameTitle, 0.08)
+end
+
+local function buildNameplate(frame: Frame)
+	local plate = new("Frame", { Name = "Nameplate", BackgroundTransparency = 1 }, frame)
+	ui.Nameplate = plate
+	local holder, face = UIKit.Surface(plate, { Name = "Plate", Radius = Theme.Radius.L })
+	ui.PlateSurface = holder
+	ui.NameTitle = text(face, "H1", "Knight", { Name = "Name", TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, TS(30) + 4) })
+	ui.NameDivider = UIKit.Divider(face, 160, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12 + TS(30)) })
+	ui.NameSub = text(face, "Body", "", {
+		Name = "Sub",
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = true,
+		Position = UDim2.fromOffset(16, 24 + TS(30)),
+		Size = UDim2.new(1, -32, 0, TS(16) * 2 + 6),
+		TextYAlignment = Enum.TextYAlignment.Top,
+	})
+	ui.LockIcon = Icons.Draw(face, "lock", { Size = 22, Color = P.gold_400, Position = UDim2.fromOffset(16, 14) })
+	-- locked character: price + unlock / details
+	local lockRow = new("Frame", { Name = "LockRow", BackgroundTransparency = 1, Visible = false, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -12), Size = UDim2.new(1, 0, 0, 48) }, face)
+	ui.LockRow = lockRow
+	UIKit.list(lockRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) })
+	ui.Unlock = UIKit.Button(lockRow, {
+		Kind = "Outline",
+		Title = "UNLOCK",
+		Icon = "coin",
+		IconSize = 20,
+		Align = "Center",
+		Size = UDim2.fromOffset(196, 48),
+		LayoutOrder = 1,
+		OnClick = function()
+			local id = browse
+			if not id or not profile then
+				return
+			end
+			local def = CharacterData.Characters[id]
+			if profile.Gold < def.Cost then
+				toast("Not enough gold yet: " .. UIKit.formatNumber(def.Cost) .. " needed.", P.crimson_300)
+				return
+			end
+			Remotes.Get("BuyCharacter"):FireServer(id)
+		end,
+	})
+	ui.Details = UIKit.Button(lockRow, {
+		Title = "DETAILS",
+		Icon = "helmet",
+		IconSize = 20,
+		Align = "Center",
+		Size = UDim2.fromOffset(146, 48),
+		LayoutOrder = 2,
+		OnClick = function()
+			LobbyScreen.Show("Characters")
+		end,
+	})
+	ui.PrevArrow = UIKit.IconButton(plate, {
+		Icon = "chevronLeft",
+		Size = 52,
+		Round = true,
+		Name = "Prev",
+		OnClick = function()
+			browseStep(-1)
+		end,
+	})
+	ui.NextArrow = UIKit.IconButton(plate, {
+		Icon = "chevronRight",
+		Size = 52,
+		Round = true,
+		Name = "Next",
+		OnClick = function()
+			browseStep(1)
+		end,
+	})
+	for _, b in ipairs({ ui.PrevArrow, ui.NextArrow }) do
+		local st = b.Face:FindFirstChildOfClass("UIStroke")
+		if st then
+			st.Color = P.gold_400
+			st.Transparency = 0.1
+		end
+	end
+end
+
+local function buildModes(frame: Frame)
+	ui.ModeButtons = {}
+	for i, id in ipairs(Config.Modes.Order) do
+		local def = (Config.Modes :: any)[id]
+		local style = MODES[id] or { Sub = def.MaxPlayers .. " players", Icon = "people3" }
+		local b = UIKit.Button(frame, {
+			Kind = i == 1 and "Primary" or "Secondary",
+			Glow = i == 1,
+			Title = string.upper(def.DisplayName),
+			Subtitle = style.Sub,
+			Icon = style.Icon,
+			IconSize = 34,
+			TitleStyle = "H1",
+			TitleSize = i == 1 and 30 or 26,
+			Chevron = true,
+			Align = "Left",
+			Name = id,
+			OnClick = function()
+				Remotes.Get("StartRun"):FireServer(id)
+			end,
+		})
+		if i == 1 then
+			b.Face.ClipsDescendants = true
+			UIAnim.Shine(b.Face, 3.2, 0.78)
+		end
+		ui.ModeButtons[i] = b
+	end
+end
+
+-- Countdown (who joined, JOIN / START NOW, the number) or "run in progress".
+local function buildQueue(frame: Frame)
+	local holder, face = UIKit.Surface(frame, { Name = "Queue", Radius = Theme.Radius.L, Visible = false, Edge = P.gold_400, EdgeTransparency = 0.25 })
+	ui.Queue = holder
+	UIKit.padding(face, 14, 16, 14, 16)
+	local ring = new("Frame", { Name = "Ring", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(60, 60), BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.2 }, face)
+	UIKit.corner(ring, 999)
+	UIKit.stroke(ring, P.gold_400, 2.5, 0)
+	ui.QueueRing = ring
+	ui.QueueNumber = text(ring, "Number", "10", { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 }, 28)
+	ui.QueueTitle = text(face, "H2", "", { Position = UDim2.fromOffset(0, 2), Size = UDim2.new(1, -70, 0, TS(22) + 6), TextTruncate = Enum.TextTruncate.AtEnd })
+	ui.QueueCaption = text(face, "Caption", "", { Position = UDim2.fromOffset(0, 8 + TS(22)), Size = UDim2.new(1, -70, 0, TS(12) + 4), TextColor3 = P.gold_300 })
+	ui.QueueList = new("Frame", { Name = "Players", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 72), Size = UDim2.new(1, 0, 0, 116) }, face)
+	UIKit.list(ui.QueueList, { Padding = UDim.new(0, 4) })
+	ui.QueueNote = text(face, "Body", "", { Name = "Note", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Size = UDim2.new(1, 0, 0, TS(16) * 3 + 8) })
+	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 52) }, face)
+	ui.QueueRow = row
+	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 10) })
+	ui.Join = UIKit.Button(row, {
+		Kind = "Primary",
+		Glow = true,
+		Title = "JOIN",
+		Icon = "userPlus",
+		IconSize = 22,
+		Align = "Center",
+		Size = UDim2.new(1, 0, 1, 0),
+		LayoutOrder = 1,
+		OnClick = function()
+			Remotes.Get("JoinRun"):FireServer()
+		end,
+	})
+	ui.StartNow = UIKit.Button(row, {
+		Kind = "Primary",
+		Title = "START NOW",
+		Icon = "play",
+		IconSize = 20,
+		Align = "Center",
+		Size = UDim2.new(1, 0, 1, 0),
+		LayoutOrder = 2,
+		OnClick = function()
+			Remotes.Get("StartNow"):FireServer()
+		end,
+	})
+end
+
+local function playerRow(name: string?, order: number)
+	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 26), LayoutOrder = order }, ui.QueueList)
+	Icons.Draw(row, "person", { Size = 20, Color = name and P.gold_400 or P.slate_500, Position = UDim2.fromOffset(0, 3) })
+	text(row, "BodyStrong", name or "Waiting for a player...", {
+		Position = UDim2.fromOffset(28, 0),
+		Size = UDim2.new(1, -28, 1, 0),
+		TextColor3 = name and C.Text or C.TextFaint,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
 end
 
 local function buildHome(screen: Frame)
-	-- Your character, big and turning. Tap it to open the character screen.
-	local hero = new("TextButton", { Name = "Hero", Text = "", BackgroundTransparency = 1, AutoButtonColor = false }, screen)
-	ui.Hero = hero
-	local glow = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 1, -58),
-		Size = UDim2.new(0.55, 0, 0, 34),
-		BackgroundColor3 = COLORS.Gold,
-		BackgroundTransparency = 0.8,
-	}, hero)
-	corner(glow, 200)
-	TweenService:Create(glow, TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { BackgroundTransparency = 0.6, Size = UDim2.new(0.65, 0, 0, 40) }):Play()
-	ui.HeroPreview = ViewportPreview.Create(hero, { Size = UDim2.new(1, 0, 1, -44) })
-	ui.HeroName = label(hero, "", 26, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.new(1, 0, 0, 30), TextStrokeTransparency = 0.4 })
-	label(hero, "tap to change character", 14, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(1, 0, 0, 16), TextColor3 = COLORS.Dim, Font = Config.UI.BodyFont })
-	hero.Activated:Connect(function()
-		LobbyScreen.Show("Characters")
-	end)
-
-	-- Permanent upgrade summary (tap → upgrades)
-	local meta = new("TextButton", { Name = "Meta", Text = "", AutoButtonColor = false, BackgroundColor3 = COLORS.Panel, BackgroundTransparency = 0.2 }, screen)
-	ui.Meta = meta
-	corner(meta, 12)
-	stroke(meta, Color3.fromRGB(70, 70, 95), 2)
-	pad(meta, 8)
-	label(meta, "PERMANENT UPGRADES", 14, { Size = UDim2.new(1, 0, 0, 18), TextColor3 = COLORS.Gold })
-	local grid = new("Frame", { Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, 0, 1, -24), BackgroundTransparency = 1 }, meta)
-	ui.MetaGrid = new("UIGridLayout", { CellSize = UDim2.fromOffset(84, 40), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
-	ui.MetaChips = {}
-	for order, id in ipairs(MetaUpgradeData.Order) do
-		local def = MetaUpgradeData.Upgrades[id]
-		local chip = new("Frame", { BackgroundColor3 = COLORS.PanelLight, LayoutOrder = order }, grid)
-		corner(chip, 8)
-		label(chip, def.Name, 13, { Position = UDim2.fromOffset(5, 2), Size = UDim2.new(1, -10, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd })
-		local lv = label(chip, "0/" .. def.MaxLevel, 12, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -4, 1, -2), Size = UDim2.fromOffset(30, 16), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = COLORS.Dim })
-		local back = new("Frame", { Position = UDim2.new(0, 5, 1, -12), Size = UDim2.new(1, -40, 0, 6), BackgroundColor3 = Color3.fromRGB(20, 20, 28), BorderSizePixel = 0 }, chip)
-		corner(back, 3)
-		local fill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = def.Color, BorderSizePixel = 0 }, back)
-		corner(fill, 3)
-		ui.MetaChips[id] = { Level = lv, Fill = fill, Shown = -1 }
-	end
-	meta.Activated:Connect(function()
-		LobbyScreen.Show("Upgrades")
-	end)
-
-	-- CHARACTERS / UPGRADES / ARENA
-	local nav = new("Frame", { Name = "Nav", BackgroundTransparency = 1 }, screen)
-	ui.Nav = nav
-	ui.NavLayout = new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, nav)
-	ui.NavButtons = {}
-	local navDefs = {
-		{ "CHARACTERS", COLORS.Blue, function()
+	ui.Logo = buildLogo(screen)
+	ui.Cards = new("Frame", { Name = "Cards", BackgroundTransparency = 1 }, screen)
+	ui.CardsLayout = UIKit.list(ui.Cards, { Padding = UDim.new(0, Theme.Layout.Gutter) })
+	ui.CardCharacters = UIKit.Card(ui.Cards, {
+		Icon = "helmet",
+		Title = "CHARACTERS",
+		Subtitle = "Choose your fighter",
+		LayoutOrder = 1,
+		OnClick = function()
 			LobbyScreen.Show("Characters")
-		end },
-		{ "UPGRADES", COLORS.Orange, function()
-			LobbyScreen.Show("Upgrades")
-		end },
-		{ "ARENA", Color3.fromRGB(40, 150, 140), function()
-			Remotes.Get("CycleArena"):FireServer()
-		end },
-	}
-	for i, d in ipairs(navDefs) do
-		local b = button(nav, d[1], d[2], d[3], { LayoutOrder = i, TextSize = 22 })
-		UIKit.sheen(b, 0.25)
-		stroke(b, (d[2] :: Color3):Lerp(Color3.new(1, 1, 1), 0.4), 2)
-		ui.NavButtons[i] = b
-	end
-	ui.ArenaButton = ui.NavButtons[3]
-
-	-- SOLO / DUO / TRIO
-	local modes = new("Frame", { Name = "Modes", BackgroundTransparency = 1 }, screen)
-	ui.Modes = modes
-	ui.ModeLayout = new("UIListLayout", { Padding = UDim.new(0, 14), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center }, modes)
-	ui.ModeButtons = {}
-	ui.ModeInner = {} -- the buttons inside (the wrappers carry the idle "breath" scale)
-	for i, id in ipairs(Config.Modes.Order) do
-		local def = (Config.Modes :: any)[id]
-		local style = MODE_STYLE[id] or { Color = COLORS.Blue, Sub = def.MaxPlayers .. " players" }
-		local wrap, b = bigButton(modes, string.upper(def.DisplayName), style.Sub, style.Color, i, function()
-			Remotes.Get("StartRun"):FireServer(id)
-		end)
-		-- idle motion: a slow breath, a glowing edge and a light sweep, offset per button
-		UIAnim.Breathe(wrap, 0.035, 1.1 + i * 0.17)
-		local st = b:FindFirstChildOfClass("UIStroke")
-		if st then
-			UIAnim.PulseStroke(st, 2, 4)
-		end
-		UIAnim.Shine(b, 2.2 + i * 0.6)
-		ui.ModeButtons[i] = wrap
-		ui.ModeInner[i] = b
-	end
-
-	-- Countdown / run in progress panel (takes the mode buttons' place)
-	local status = new("Frame", { Name = "Status", BackgroundColor3 = COLORS.Panel, BackgroundTransparency = 0.1, Visible = false }, screen)
-	ui.Status = status
-	corner(status, 16)
-	ui.StatusStroke = stroke(status, COLORS.Green, 3)
-	pad(status, 10)
-	new("UIListLayout", { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, status)
-	ui.StatusTitle = label(status, "", 26, { LayoutOrder = 1, TextWrapped = true, Size = UDim2.new(1, 0, 0, 32) })
-	ui.StatusSub = label(status, "", 17, { LayoutOrder = 2, TextWrapped = true, TextColor3 = COLORS.Dim, Font = Config.UI.BodyFont, Size = UDim2.new(1, 0, 0, 42) })
-	local row = new("Frame", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 54), BackgroundTransparency = 1 }, status)
-	ui.StatusRow = row
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, row)
-	ui.Join = button(row, "JOIN", COLORS.Green, function()
-		Remotes.Get("JoinRun"):FireServer()
-	end, { LayoutOrder = 1, Size = UDim2.fromOffset(140, 52), TextSize = 24 })
-	UIAnim.PulseStroke(stroke(ui.Join, Color3.fromRGB(200, 255, 210), 2), 1, 5)
-	ui.StartNow = button(row, "START NOW", COLORS.Gold, function()
-		Remotes.Get("StartNow"):FireServer()
-	end, { LayoutOrder = 2, Size = UDim2.fromOffset(150, 52), TextSize = 20, TextColor3 = Color3.fromRGB(50, 35, 0) })
-end
-
-------------------------------------------------------------------------------------------
--- Characters
-------------------------------------------------------------------------------------------
-
-local cards: { [string]: { [string]: any } } = {}
-
-local function skinOwned(p, skinId: string): boolean
-	return skinId == "Default" or p.OwnedSkins[skinId] == true
-end
-
-local function skinPassId(skinId: string): number?
-	local skin = CharacterData.Skins[skinId]
-	if not skin then
-		return nil
-	end
-	local id = skin.Pass == "StarterPack" and Config.Monetization.GamePasses.StarterPack or Config.Monetization.SkinPasses[skinId]
-	if id and id ~= 0 then
-		return id
-	end
-	return nil
-end
-
-local function onSkinTapped(characterId: string, skinId: string)
-	local p = profile
-	if not p then
-		return
-	end
-	if skinOwned(p, skinId) then
-		if (p.Skins[characterId] or "Default") ~= skinId then
-			Remotes.Get("EquipSkin"):FireServer(characterId, skinId)
-		end
-		return
-	end
-	local passId = skinPassId(skinId)
-	if passId then
-		MarketplaceService:PromptGamePassPurchase(player, passId)
-	else
-		toast("That skin is coming soon!", COLORS.Dim)
-	end
-end
-
-local function onCharacterAction(characterId: string)
-	local p = profile
-	if not p then
-		return
-	end
-	local def = CharacterData.Characters[characterId]
-	if p.OwnedCharacters[characterId] ~= true then
-		if p.Gold < def.Cost then
-			toast("Not enough gold yet: " .. def.Cost .. " needed.", Color3.fromRGB(255, 140, 120))
-		end
-		Remotes.Get("BuyCharacter"):FireServer(characterId)
-	elseif p.SelectedCharacter ~= characterId then
-		Remotes.Get("SelectCharacter"):FireServer(characterId)
-	end
-end
-
-local function buildCard(scroll: ScrollingFrame, id: string, order: number)
-	local def = CharacterData.Characters[id]
-	local c: { [string]: any } = {}
-	local card = new("Frame", { Name = id, BackgroundColor3 = COLORS.PanelLight, LayoutOrder = order }, scroll)
-	c.Frame = card
-	corner(card, 14)
-	UIKit.sheen(card, 0.2)
-	c.Stroke = stroke(card, COLORS.Panel, 2)
-	pad(card, 10)
-	new("UIListLayout", { Padding = UDim.new(0, 4), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, card)
-
-	local stage = new("Frame", { Size = UDim2.new(1, 0, 0, 170), BackgroundColor3 = Color3.fromRGB(22, 22, 34), LayoutOrder = 1 }, card)
-	corner(stage, 10)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(60, 60, 95), Color3.fromRGB(15, 15, 25)) }, stage)
-	c.Preview = ViewportPreview.Create(stage, { Size = UDim2.fromScale(1, 1) })
-	c.Ribbon = label(stage, "SELECTED", 14, {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 6),
-		Size = UDim2.fromOffset(110, 22),
-		BackgroundColor3 = COLORS.Gold,
-		BackgroundTransparency = 0,
-		TextColor3 = Color3.fromRGB(50, 35, 0),
-		Visible = false,
+		end,
 	})
-	corner(c.Ribbon, 11)
-
-	label(card, def.Name, 26, { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 30) })
-	label(card, def.Role or "", 15, { LayoutOrder = 3, TextColor3 = COLORS.Gold, Size = UDim2.new(1, 0, 0, 18) })
-	label(card, def.Description, 14, { LayoutOrder = 4, TextColor3 = COLORS.Dim, Font = Config.UI.BodyFont, TextWrapped = true, Size = UDim2.new(1, 0, 0, 36) })
-
-	-- starting weapon with its icon
-	local weapon = WeaponData.Weapons[def.StartWeapon]
-	local wrow = new("Frame", { LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1 }, card)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center }, wrow)
-	UIKit.IconTile(wrow, { Id = def.StartWeapon, Name = weapon and weapon.Name, Color = weapon and weapon.Color, Size = 32 })
-	label(wrow, "Starts with " .. (weapon and weapon.Name or def.StartWeapon), 15, { Size = UDim2.fromOffset(170, 20), TextXAlignment = Enum.TextXAlignment.Left, AutomaticSize = Enum.AutomaticSize.X })
-	label(card, def.BonusText, 19, { LayoutOrder = 6, TextColor3 = COLORS.Green, Size = UDim2.new(1, 0, 0, 24) })
-
-	c.Action = button(card, "", COLORS.Blue, function()
-		onCharacterAction(id)
-	end, { LayoutOrder = 7, Size = UDim2.new(1, -10, 0, 50), TextSize = 22 })
-
-	label(card, "SKINS", 13, { LayoutOrder = 8, TextColor3 = COLORS.Dim, Size = UDim2.new(1, 0, 0, 16) })
-	local skins = new("Frame", { LayoutOrder = 9, Size = UDim2.new(1, 0, 0, 102), BackgroundTransparency = 1 }, card)
-	new("UIGridLayout", { CellSize = UDim2.fromOffset(48, 48), CellPadding = UDim2.fromOffset(6, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, skins)
-	c.Skins = {}
-	for skinOrder, skinId in ipairs(CharacterData.SkinsFor(id)) do
-		local look = CharacterData.ResolveLook(id, skinId)
-		local sw = new("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = look.Colors.Torso, LayoutOrder = skinOrder, ClipsDescendants = true }, skins)
-		corner(sw, 10)
-		local cap = new("Frame", { Size = UDim2.new(1, 0, 0.36, 0), BackgroundColor3 = look.Colors.Hat, BorderSizePixel = 0 }, sw)
-		local _ = cap
-		new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.62), Size = UDim2.new(1, 0, 0, 5), BackgroundColor3 = look.GoldTrim and COLORS.Gold or look.Colors.Accent, BorderSizePixel = 0 }, sw)
-		local lock = label(sw, "", 12, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -1), Size = UDim2.new(1, 0, 0, 14), TextStrokeTransparency = 0.2 })
-		local st = stroke(sw, Color3.fromRGB(15, 15, 20), 2)
-		UIAnim.Button(sw)
-		sw.Activated:Connect(function()
-			if host.Audio then
-				host.Audio.Play("Click")
+	ui.CardUpgrades = UIKit.Card(ui.Cards, {
+		Icon = "chevronsUp",
+		Title = "UPGRADES",
+		Subtitle = "Get stronger",
+		LayoutOrder = 2,
+		OnClick = function()
+			LobbyScreen.Show("Upgrades")
+		end,
+	})
+	ui.CardArena = UIKit.Card(ui.Cards, {
+		Icon = "tree",
+		Title = "ARENA: FOREST",
+		Subtitle = "Face the swarm",
+		LayoutOrder = 3,
+		OnClick = function()
+			Remotes.Get("CycleArena"):FireServer()
+		end,
+	})
+	ui.Corner = new("Frame", { Name = "CornerButtons", BackgroundTransparency = 1 }, screen)
+	ui.CornerLayout = UIKit.list(ui.Corner, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, Theme.Layout.Gutter) })
+	ui.SettingsBtn = UIKit.IconButton(ui.Corner, {
+		Icon = "gear",
+		Caption = "Settings",
+		Size = 76,
+		LayoutOrder = 1,
+		OnClick = function()
+			if host.OpenSettings then
+				host.OpenSettings()
 			end
-			onSkinTapped(id, skinId)
-		end)
-		c.Skins[skinId] = { Button = sw, Lock = lock, Stroke = st }
-	end
-	c.SkinName = label(card, "", 14, { LayoutOrder = 10, TextColor3 = COLORS.Dim, Font = Config.UI.BodyFont, Size = UDim2.new(1, 0, 0, 18) })
-	cards[id] = c
+		end,
+	})
+	ui.StatsBtn = UIKit.IconButton(ui.Corner, {
+		Icon = "bars",
+		Caption = "Stats",
+		Size = 76,
+		LayoutOrder = 2,
+		OnClick = function()
+			LobbyScreen.Show("Stats")
+		end,
+	})
+	buildNameplate(screen)
+	buildModes(screen)
+	buildQueue(screen)
 end
 
-local function refreshCharacters()
-	local p = profile
-	if not p then
+------------------------------------------------------------------------------------------
+-- Layout
+------------------------------------------------------------------------------------------
+
+-- Portrait: the three feature cards become small tiles (icon over a short caps title).
+local function setCardsCompact(on: boolean)
+	if ui.CardsCompact == on then
 		return
 	end
-	ui.CharGold.Text = "Gold " .. p.Gold
-	for id, c in pairs(cards) do
-		local def = CharacterData.Characters[id]
-		local owned = p.OwnedCharacters[id] == true
-		local selected = p.SelectedCharacter == id
-		local equipped = p.Skins[id] or "Default"
-		ViewportPreview.SetModel(c.Preview, ViewportPreview.Template(id, equipped))
-		c.Stroke.Color = selected and COLORS.Gold or (owned and Color3.fromRGB(80, 80, 110) or COLORS.Panel)
-		c.Stroke.Thickness = selected and 4 or 2
-		if c.Ribbon.Visible ~= selected and selected then
-			UIAnim.Pop(c.Ribbon, 0, 0.4)
-			UIAnim.Punch(c.Frame, 0.06)
+	ui.CardsCompact = on
+	for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
+		local layout = b.Content:FindFirstChildOfClass("UIListLayout")
+		local column = b.Content:FindFirstChild("Text") :: Frame?
+		local right = b.Content:FindFirstChild("Right") :: Frame?
+		local iconHolder = b.Content:FindFirstChild("IconHolder") :: Frame?
+		if layout then
+			layout.FillDirection = on and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
+			layout.HorizontalAlignment = on and Enum.HorizontalAlignment.Center or Enum.HorizontalAlignment.Left
+			layout.Padding = UDim.new(0, on and 4 or Theme.Space.M)
 		end
-		c.Ribbon.Visible = selected
-		if not owned then
-			local afford = p.Gold >= def.Cost
-			c.Action.Text = "BUY  " .. def.Cost .. " gold"
-			c.Action.BackgroundColor3 = afford and COLORS.Green or COLORS.Gray
-			c.Action.TextColor3 = Color3.new(1, 1, 1)
-		elseif selected then
-			c.Action.Text = "SELECTED"
-			c.Action.BackgroundColor3 = COLORS.Gold
-			c.Action.TextColor3 = Color3.fromRGB(50, 35, 0)
-		else
-			c.Action.Text = "SELECT"
-			c.Action.BackgroundColor3 = COLORS.Blue
-			c.Action.TextColor3 = Color3.new(1, 1, 1)
+		if right then
+			right.Visible = not on
 		end
-		for skinId, s in pairs(c.Skins) do
-			local on = skinId == equipped
-			s.Stroke.Color = on and COLORS.Gold or Color3.fromRGB(15, 15, 20)
-			s.Stroke.Thickness = on and 4 or 2
-			if skinOwned(p, skinId) then
-				s.Lock.Text = ""
-			else
-				s.Lock.Text = skinPassId(skinId) and "R$" or "soon"
-			end
+		if iconHolder then
+			iconHolder.Size = on and UDim2.fromOffset(40, 40) or UDim2.fromOffset(46, 46)
 		end
-		local skin = CharacterData.Skins[equipped]
-		c.SkinName.Text = "Skin: " .. (skin and skin.Name or "Default")
+		if column then
+			column.Size = on and UDim2.new(1, 0, 0, TS(15) + 6) or UDim2.new(1, -(46 + 20 + 2 * Theme.Space.M), 1, 0)
+		end
+		if b.Subtitle then
+			b.Subtitle.Visible = not on
+		end
+		if b.Title then
+			b.Title.FontFace = on and Theme.Font.Label or Theme.Font.Title
+			b.Title.TextSize = on and TS(15) or TS(Theme.TextSize.H2)
+			b.Title.TextXAlignment = on and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+			b.Title.Size = UDim2.new(1, 0, 0, b.Title.TextSize + 6)
+		end
 	end
 end
-
-local function buildCharacters(screen: Frame)
-	ui.CharGold = header(screen, "CHARACTERS")
-	local scroll = scroller(screen)
-	ui.CharGrid = new("UIGridLayout", { CellSize = UDim2.fromOffset(260, 580), CellPadding = UDim2.fromOffset(12, 12), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, scroll)
-	for order, id in ipairs(CharacterData.Order) do
-		buildCard(scroll, id, order)
-	end
-	-- the server rebuilds previews when the uploaded meshes finish loading
-	task.spawn(function()
-		local folder = ReplicatedStorage:WaitForChild("CharacterPreviews", 30)
-		if folder then
-			folder.ChildAdded:Connect(function()
-				task.defer(function()
-					refreshCharacters()
-					LobbyScreen.RefreshHero()
-				end)
-			end)
-			refreshCharacters()
-			LobbyScreen.RefreshHero()
-		end
-	end)
-end
-
-------------------------------------------------------------------------------------------
--- Upgrades (permanent gold upgrades + Robux shop)
-------------------------------------------------------------------------------------------
-
-local function pips(level: number, maxLevel: number): string
-	return string.rep("#", level) .. string.rep("-", maxLevel - level)
-end
-
-local function refreshShop(animate: boolean?)
-	local scroll: ScrollingFrame = ui.ShopScroll
-	for _, c in ipairs(scroll:GetChildren()) do
-		if c:IsA("GuiObject") then
-			c:Destroy()
-		end
-	end
-	local p = profile
-	if not p then
-		return
-	end
-	ui.ShopGold.Text = "Gold " .. p.Gold
-	local n = 0
-	local function enter(obj: GuiObject)
-		if animate then
-			n += 1
-			UIAnim.Pop(obj, 0.035 * n, 0.5)
-		end
-	end
-
-	label(scroll, "Permanent upgrades (gold)", 22, { LayoutOrder = 1, TextColor3 = COLORS.Gold })
-	local grid = new("Frame", { Size = UDim2.new(1, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 2 }, scroll)
-	new("UIGridLayout", { CellSize = UDim2.fromOffset(240, 176), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, grid)
-	for order, id in ipairs(MetaUpgradeData.Order) do
-		local def = MetaUpgradeData.Upgrades[id]
-		local level = p.Meta[id] or 0
-		local cost = MetaUpgradeData.CostOf(id, level)
-		local cell = new("Frame", { BackgroundColor3 = COLORS.PanelLight, LayoutOrder = order }, grid)
-		corner(cell, 10)
-		UIKit.sheen(cell, 0.2)
-		stroke(cell, def.Color, 2)
-		pad(cell, 8)
-		new("UIListLayout", { Padding = UDim.new(0, 3), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, cell)
-		label(cell, def.Name, 22, { LayoutOrder = 1, TextColor3 = def.Color })
-		label(cell, def.Description, 14, { LayoutOrder = 2, TextColor3 = COLORS.Dim, Font = Config.UI.BodyFont, TextWrapped = true, Size = UDim2.new(1, 0, 0, 36) })
-		label(cell, pips(level, def.MaxLevel) .. "  " .. level .. "/" .. def.MaxLevel, 16, { LayoutOrder = 3, Font = Enum.Font.Code })
-		if cost then
-			button(cell, "Buy " .. cost .. "g", p.Gold >= cost and COLORS.Green or COLORS.Gray, function()
-				Remotes.Get("BuyMeta"):FireServer(id)
-			end, { LayoutOrder = 4, Size = UDim2.fromOffset(180, 48) })
-		else
-			label(cell, "MAX", 22, { LayoutOrder = 4, TextColor3 = COLORS.Gold })
-		end
-		enter(cell)
-	end
-
-	label(scroll, "Robux shop (gold and cosmetics only)", 22, { LayoutOrder = 3, TextColor3 = Color3.fromRGB(120, 220, 140) })
-	local robux = new("Frame", { Size = UDim2.new(1, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = 4 }, scroll)
-	new("UIGridLayout", { CellSize = UDim2.fromOffset(240, 120), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, robux)
-	local items = {
-		{ Name = "500 Gold", Kind = "Product", Id = Config.Monetization.Products.Gold500, Desc = "A pouch of gold." },
-		{ Name = "1500 Gold", Kind = "Product", Id = Config.Monetization.Products.Gold1500, Desc = "A sack of gold." },
-		{ Name = "5000 Gold", Kind = "Product", Id = Config.Monetization.Products.Gold5000, Desc = "A chest of gold." },
-		{ Name = "Starter Pack", Kind = "Pass", Key = "StarterPack", Id = Config.Monetization.GamePasses.StarterPack, Desc = "+25% gold forever + Gold Trim skins." },
-		{ Name = "VIP", Kind = "Pass", Key = "VIP", Id = Config.Monetization.GamePasses.VIP, Desc = "+1 reroll per run, chat tag, lobby crown." },
-		{ Name = "2x Gold", Kind = "Pass", Key = "DoubleGold", Id = Config.Monetization.GamePasses.DoubleGold, Desc = "Double gold from runs." },
-	}
-	for order, item in ipairs(items) do
-		local cell = new("Frame", { BackgroundColor3 = COLORS.PanelLight, LayoutOrder = order }, robux)
-		corner(cell, 10)
-		UIKit.sheen(cell, 0.2)
-		pad(cell, 8)
-		new("UIListLayout", { Padding = UDim.new(0, 3), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, cell)
-		label(cell, item.Name, 20, { LayoutOrder = 1 })
-		label(cell, item.Desc, 13, { LayoutOrder = 2, TextColor3 = COLORS.Dim, Font = Config.UI.BodyFont, TextWrapped = true, Size = UDim2.new(1, 0, 0, 30) })
-		local owned = item.Kind == "Pass" and p.Passes[item.Key] == true
-		if owned then
-			label(cell, "Owned", 18, { LayoutOrder = 3, TextColor3 = COLORS.Gold })
-		elseif not item.Id or item.Id == 0 then
-			label(cell, "Not set up yet", 16, { LayoutOrder = 3, TextColor3 = COLORS.Gray })
-		else
-			button(cell, "Buy (R$)", Color3.fromRGB(60, 160, 90), function()
-				if item.Kind == "Pass" then
-					MarketplaceService:PromptGamePassPurchase(player, item.Id)
-				else
-					MarketplaceService:PromptProductPurchase(player, item.Id)
-				end
-			end, { LayoutOrder = 3, Size = UDim2.fromOffset(160, 48), TextSize = 18 })
-		end
-		enter(cell)
-	end
-	if p.MemoryOnly then
-		label(scroll, "Studio test: DataStores are off, progress will not be saved.", 16, { LayoutOrder = 5, TextColor3 = COLORS.Red })
-	end
-end
-
-local function buildUpgrades(screen: Frame)
-	ui.ShopGold = header(screen, "UPGRADES")
-	ui.ShopScroll = scroller(screen)
-	new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, ui.ShopScroll)
-end
-
-------------------------------------------------------------------------------------------
--- Layout (landscape and portrait)
-------------------------------------------------------------------------------------------
 
 local function relayout()
 	if not ui.Frame then
@@ -628,94 +500,135 @@ local function relayout()
 	end
 	local v: Vector2 = host.VirtualSize()
 	local portrait: boolean = host.IsPortrait()
-	local W = v.X
-	local H = v.Y - TOP
-	local m = MARGIN
+	local ins = host.Insets()
+	local W, H = v.X, v.Y
+	local compact = UIKit.IsCompact()
+	local M = compact and Theme.Layout.MarginCompact or Theme.Layout.Margin
+	local G = Theme.Layout.Gutter
 
-	place(ui.TopBar, m, 12, W - 2 * m, 56)
-	for _, p in ipairs(ui.Pills) do
-		p.Size = UDim2.fromOffset(portrait and 150 or 170, 52)
-	end
-	ui.Screens.Position = UDim2.fromOffset(0, TOP)
-	ui.Screens.Size = UDim2.new(1, 0, 1, -TOP)
+	local chipY = ins.Right > 4 and (ins.Top + 6) or 12
+	local plateH = (browse and 158 or 104) + (compact and 16 or 0)
+	local heroFrac = 0.5
 
 	if portrait then
-		local w = W - 2 * m
-		local metaH = 16 + 24 + 2 * 40 + 6
-		local modeH = 118
-		local rest = 8 + metaH + 14 + modeH + 30 + 12 + 60 + 16
-		-- the character gets the spare height; tall phones centre the whole stack
-		local heroH = math.clamp(H - rest, 220, 560)
-		local y0 = math.max(0, (H - heroH - rest) / 2)
-		place(ui.Hero, m, y0, w, heroH)
-		local cols = 5
-		local cellW = (w - 16 - (cols - 1) * 6) / cols
-		ui.MetaGrid.CellSize = UDim2.fromOffset(math.floor(cellW), 40)
-		place(ui.Meta, m, y0 + heroH + 8, w, metaH)
-		local y = y0 + heroH + 8 + metaH + 14
-		ui.ModeLayout.FillDirection = Enum.FillDirection.Horizontal
-		place(ui.Modes, m, y, w, modeH)
-		place(ui.Status, m, y, w, modeH + 30)
-		for _, b in ipairs(ui.ModeButtons) do
-			b.Size = UDim2.fromOffset(math.floor((w - 28) / 3), modeH)
+		local logoScale = math.clamp((W - 2 * M) / 380, 0.66, 0.85)
+		ui.LogoScale.Scale = logoScale
+		local logoY = math.max(ins.Top + 2, 10)
+		ui.Logo.Position = UDim2.fromOffset((W - 350 * logoScale) / 2, logoY)
+		local chipTop = logoY + 124 * logoScale + 4
+		ui.Chip.AnchorPoint = Vector2.new(0.5, 0)
+		-- sub-screens: under their header instead of the logo
+		ui.Chip.Position = UDim2.fromOffset(W / 2, current == "Home" and chipTop or (math.max(ins.Top + 4, 12) + 64))
+		local w = W - 2 * M
+		-- bottom-up: settings / stats, cards, DUO + TRIO, SOLO, nameplate
+		local cornerH = 64
+		local y = H - M - cornerH
+		place(ui.Corner, M, y, w, cornerH)
+		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn }) do
+			b.Instance.Size = UDim2.fromOffset(math.floor((w - G) / 2), cornerH)
 		end
-		y += modeH + 30 + 12
-		ui.NavLayout.FillDirection = Enum.FillDirection.Horizontal
-		place(ui.Nav, m, y, w, 60)
-		for _, b in ipairs(ui.NavButtons) do
-			b.Size = UDim2.fromOffset(math.floor((w - 20) / 3), 60)
+		local cardH = compact and 96 or 88
+		setCardsCompact(true)
+		y -= G + cardH
+		ui.CardsLayout.FillDirection = Enum.FillDirection.Horizontal
+		place(ui.Cards, M, y, w, cardH)
+		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
+			b.Instance.Size = UDim2.fromOffset(math.floor((w - 2 * G) / 3), cardH)
 		end
-		ui.CharGrid.CellSize = UDim2.fromOffset(math.floor(math.min(340, (w - 50) / 2)), 580)
+		local soloH, smallH = 84, 76
+		y -= G + smallH
+		local half = math.floor((w - G) / 2)
+		place(ui.ModeButtons[2].Instance, M, y, half, smallH)
+		place(ui.ModeButtons[3].Instance, M + half + G, y, half, smallH)
+		y -= G + soloH
+		place(ui.ModeButtons[1].Instance, M, y, w, soloH)
+		place(ui.Queue, M, y, w, soloH + G + smallH)
+		y -= 18 + plateH
+		local plateW = math.min(w - 2 * 62, 460)
+		place(ui.Nameplate, (W - plateW) / 2, y, plateW, plateH)
+		heroFrac = ((chipTop + 52 + y) / 2) / H
 	else
-		local side = math.clamp(W * 0.24, 240, 320)
-		ui.NavLayout.FillDirection = Enum.FillDirection.Vertical
-		place(ui.Nav, m, 6, side, 3 * 62 + 20)
-		for _, b in ipairs(ui.NavButtons) do
-			b.Size = UDim2.fromOffset(side, 62)
+		local logoScale = math.clamp(H / 760, 0.7, 1)
+		ui.LogoScale.Scale = logoScale
+		local logoY = math.max(ins.Top + 2, 14)
+		ui.Logo.Position = UDim2.fromOffset(M, logoY)
+		ui.Chip.AnchorPoint = Vector2.new(1, 0)
+		ui.Chip.Position = UDim2.fromOffset(W - M, chipY)
+		local logoBottom = logoY + 126 * logoScale
+		place(ui.Corner, M, H - M - 76, 200, 76)
+		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn }) do
+			b.Instance.Size = UDim2.fromOffset(76, 76)
 		end
-		local cellW = (side - 16 - 2 * 6) / 3
-		ui.MetaGrid.CellSize = UDim2.fromOffset(math.floor(cellW), 40)
-		place(ui.Meta, m, 6 + 3 * 62 + 20 + 14, side, 16 + 24 + 3 * 40 + 2 * 6)
-		local modesH = 3 * 100 + 2 * 14
-		ui.ModeLayout.FillDirection = Enum.FillDirection.Vertical
-		place(ui.Modes, W - m - side, math.max(0, (H - modesH) / 2 - 10), side, modesH)
-		for _, b in ipairs(ui.ModeButtons) do
-			b.Size = UDim2.fromOffset(side, 100)
+		-- left cards, centred between the logo and the corner buttons
+		local cw = math.clamp(W * 0.27, 290, 360)
+		local cardH = compact and 86 or 80
+		setCardsCompact(false)
+		ui.CardsLayout.FillDirection = Enum.FillDirection.Vertical
+		local cardsH = 3 * cardH + 2 * G
+		local top, bottom = logoBottom + 12, H - M - 76 - 12
+		place(ui.Cards, M, math.max(top, (top + bottom - cardsH) / 2), cw, cardsH)
+		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
+			b.Instance.Size = UDim2.fromOffset(cw, cardH)
 		end
-		place(ui.Status, W - m - side, math.max(0, (H - 230) / 2 - 10), side, 230)
-		local heroX = m + side + 16
-		place(ui.Hero, heroX, 0, W - 2 * heroX, H - 8)
-		local inner = W - 2 * m - 20
-		local cw = math.clamp((inner - 3 * 12) / 4, 230, 300)
-		ui.CharGrid.CellSize = UDim2.fromOffset(math.floor(cw), 580)
+		-- right column: SOLO / DUO / TRIO
+		local rw = math.clamp(W * 0.25, 280, 340)
+		local soloH, smallH = 96, 80
+		local colH = soloH + 2 * smallH + 2 * G
+		local colTop = math.max(chipY + 64, (H - colH) / 2)
+		place(ui.ModeButtons[1].Instance, W - M - rw, colTop, rw, soloH)
+		place(ui.ModeButtons[2].Instance, W - M - rw, colTop + soloH + G, rw, smallH)
+		place(ui.ModeButtons[3].Instance, W - M - rw, colTop + soloH + smallH + 2 * G, rw, smallH)
+		place(ui.Queue, W - M - rw, colTop - 10, rw, math.min(colH + 60, H - colTop - M))
+		-- nameplate bottom centre, between the columns
+		local gapL, gapR = M + cw + 16, W - M - rw - 16
+		local plateW = math.clamp(gapR - gapL - 2 * 64, 300, 460)
+		place(ui.Nameplate, W / 2 - plateW / 2, H - M - plateH, plateW, plateH)
 	end
-	-- the countdown buttons sit side by side; narrow panels shrink them
-	local statusW = ui.Status.Size.X.Offset - 20
-	local bw = math.clamp((statusW - 10) / 2, 110, 200)
-	ui.Join.Size = UDim2.fromOffset(bw, 52)
-	ui.StartNow.Size = UDim2.fromOffset(bw, 52)
+	ui.PlateSurface.Size = UDim2.fromScale(1, 1)
+	ui.PrevArrow.Instance.AnchorPoint = Vector2.new(1, 0.5)
+	ui.PrevArrow.Instance.Position = UDim2.new(0, -10, 0.5, 0)
+	ui.NextArrow.Instance.AnchorPoint = Vector2.new(0, 0.5)
+	ui.NextArrow.Instance.Position = UDim2.new(1, 10, 0.5, 0)
+	-- "run in progress" needs no player list: a compact panel
+	if lastStatus == "Busy" then
+		ui.Queue.Size = UDim2.fromOffset(ui.Queue.Size.X.Offset, math.min(ui.Queue.Size.Y.Offset, 96 + TS(16) * 3 + 20))
+	end
+	-- queue panel: a short panel (portrait) folds the player list into the note
+	local qh = ui.Queue.Size.Y.Offset
+	local busy = lastStatus == "Busy"
+	local short = qh < 240 and not busy
+	ui.QueueList.Visible = not short and not busy
+	ui.QueueNote.Position = UDim2.fromOffset(0, (short or busy) and 68 or (72 + 4 * 30))
+	ui.QueueNote.Size = UDim2.new(1, 0, 0, short and (TS(16) + 6) or (TS(16) * 3 + 8))
+	ui.QueueNote.TextTruncate = short and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
+	-- where the hero should sit on screen (read by CameraController's menu shot)
+	workspace.CurrentCamera:SetAttribute("MenuHeroY", heroFrac)
+	for _, s in pairs(screens) do
+		if s.Layout then
+			s.Layout(v, portrait, ins)
+		end
+	end
 end
 
 ------------------------------------------------------------------------------------------
--- Public
+-- Screens
 ------------------------------------------------------------------------------------------
 
--- Home: the main buttons, the upgrade summary and your character drop in one by one.
-function homeEntrance()
+local function homeEntrance()
 	local i = 0
-	for _, b in ipairs(ui.ModeInner) do
+	for _, b in ipairs(ui.ModeButtons) do
 		i += 1
-		UIAnim.Pop(b, 0.05 * i, 0.7)
+		UIAnim.Pop(b.Instance, Theme.Motion.Stagger * i, 0.85)
 	end
-	for _, b in ipairs(ui.NavButtons) do
+	for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
 		i += 1
-		UIAnim.Pop(b, 0.05 * i, 0.7)
+		UIAnim.Pop(b.Instance, Theme.Motion.Stagger * i, 0.85)
 	end
-	UIAnim.Pop(ui.Meta, 0.05 * (i + 1), 0.8)
-	UIAnim.Pop(ui.Hero, 0, 0.85)
+	UIAnim.Pop(ui.Nameplate, 0.1, 0.85)
+	UIAnim.Pop(ui.Logo, 0, 0.9)
 end
 
--- Slides to "Home" | "Characters" | "Upgrades" (old panel name "Shop" = Upgrades).
+-- Slides to "Home" | "Characters" | "Upgrades" | "Stats" (old panel name "Shop" = Upgrades).
 function LobbyScreen.Show(name: string)
 	if name == "Shop" then
 		name = "Upgrades"
@@ -728,23 +641,28 @@ function LobbyScreen.Show(name: string)
 	end
 	local direction = SCREEN_ORDER[name] >= SCREEN_ORDER[current] and 1 or -1
 	UIAnim.SwapScreens(ui[current], ui[name], direction, Config.UI.ScreenSlideSeconds)
+	local from = current
 	current = name
-	if name == "Characters" then
-		refreshCharacters()
-		local i = 0
-		for _, id in ipairs(CharacterData.Order) do
-			local c = cards[id]
-			if c then
-				i += 1
-				UIAnim.Pop(c.Frame, 0.06 * i, 0.6)
-			end
+	relayout()
+	UIAnim.Tween(ui.Dim, Theme.Motion.Base, { BackgroundTransparency = (name == "Upgrades" or name == "Stats") and 0.4 or 1 })
+	if from == "Characters" or name == "Characters" then
+		local target = browse
+		browse = nil
+		if name == "Characters" and screens.Characters.Inspect then
+			screens.Characters.Inspect(target or selectedChar())
+		else
+			Showcase.Show(selectedChar(), skinOf(selectedChar()))
+			LobbyScreen.RefreshHero()
 		end
+	end
+	local s = screens[name]
+	if s and s.OnShow then
+		s.OnShow(profile)
 		Remotes.Get("RequestProfile"):FireServer()
-	elseif name == "Upgrades" then
-		refreshShop(true)
-		Remotes.Get("RequestProfile"):FireServer()
-	else
+	end
+	if name == "Home" then
 		homeEntrance()
+		UIKit.FocusIfGamepad(ui.ModeButtons[1].Instance)
 	end
 end
 
@@ -758,34 +676,51 @@ function LobbyScreen.SetVisible(on: boolean)
 		return
 	end
 	ui.Frame.Visible = on
+	ui.Vignette.Visible = on
 	if on then
 		-- always come back to the home screen
-		for _, name in ipairs({ "Characters", "Upgrades" }) do
+		for name in pairs(SCREEN_ORDER) do
 			ui[name].Visible = false
 		end
-		ui.Home.Visible = false
 		current = "Home"
+		browse = nil
+		ui.Dim.BackgroundTransparency = 1
 		UIAnim.SwapScreens(nil, ui.Home, 1, Config.UI.ScreenSlideSeconds)
-		UIAnim.SlideIn(ui.TopBar, Vector2.new(0, -80), 0)
+		UIAnim.SlideIn(ui.Chip, Vector2.new(0, -60), 0)
 		homeEntrance()
-		LobbyScreen.RefreshHero()
 		lastStatus = ""
+		LobbyScreen.RefreshHero()
+		UIKit.FocusIfGamepad(ui.ModeButtons[1].Instance)
 	end
 end
 
--- The big centre preview: a clone of your own character (template while it spawns).
+-- Nameplate + hero on the dais: the selected character, or the locked one being browsed.
 function LobbyScreen.RefreshHero()
-	if not ui.HeroPreview then
+	if not ui.NameTitle then
 		return
 	end
-	local p = profile
-	local characterId = p and p.SelectedCharacter or CharacterData.Default
-	local skinId = p and p.Skins[characterId] or "Default"
-	local def = CharacterData.Characters[characterId] or CharacterData.Characters[CharacterData.Default]
-	local skin = CharacterData.Skins[skinId]
-	ui.HeroName.Text = def.Name .. (skin and ("  -  " .. skin.Name) or "")
-	local own = ViewportPreview.OwnCharacter()
-	ViewportPreview.SetModel(ui.HeroPreview, own or ViewportPreview.Template(characterId, skinId))
+	local id = browse or selectedChar()
+	local def = CharacterData.Characters[id] or CharacterData.Characters[CharacterData.Default]
+	local locked = browse ~= nil
+	ui.NameTitle.Text = def.Name
+	ui.LockRow.Visible = locked
+	ui.LockIcon.Visible = locked
+	if locked then
+		local afford = profile ~= nil and profile.Gold >= def.Cost
+		ui.NameSub.Text = string.format("Locked · %s · %s", def.Role or "", def.BonusText or "")
+		ui.NameSub.TextColor3 = P.gold_300
+		ui.Unlock.SetText("UNLOCK  " .. UIKit.formatNumber(def.Cost))
+		ui.Unlock.SetEnabled(afford)
+	else
+		local skinId = skinOf(id)
+		local skin = CharacterData.Skins[skinId]
+		ui.NameSub.Text = (skin and (skin.Name .. " · ") or "") .. def.Description
+		ui.NameSub.TextColor3 = C.TextMuted
+		if current ~= "Characters" then
+			Showcase.Show(id, skinId)
+		end
+	end
+	relayout()
 end
 
 function LobbyScreen.SetJoined(on: boolean)
@@ -793,41 +728,38 @@ function LobbyScreen.SetJoined(on: boolean)
 end
 
 function LobbyScreen.SetProfile(p: { [string]: any })
-	local oldChar = profile and profile.SelectedCharacter
-	local oldSkin = profile and profile.Skins[profile.SelectedCharacter]
 	profile = p
 	if not ui.Frame then
 		return
 	end
-	UIAnim.CountTo(ui.Gold, shownGold or p.Gold, p.Gold, "%d", 0.7)
+	UIAnim.CountTo(ui.Gold.Value, shownGold or p.Gold, p.Gold, UIKit.formatNumber, 0.7)
 	shownGold = p.Gold
-	ui.Best.Text = UIKit.formatTime(p.Stats.BestTime)
-	ui.Wins.Text = tostring(p.Stats.Wins)
-	for id, chip in pairs(ui.MetaChips) do
-		local def = MetaUpgradeData.Upgrades[id]
-		local level = p.Meta[id] or 0
-		chip.Level.Text = level .. "/" .. def.MaxLevel
-		chip.Level.TextColor3 = level >= def.MaxLevel and COLORS.Gold or COLORS.Dim
-		if chip.Shown ~= level then
-			UIAnim.Tween(chip.Fill, chip.Shown < 0 and 0.01 or 0.5, { Size = UDim2.fromScale(level / def.MaxLevel, 1) }, Enum.EasingStyle.Back)
-			chip.Shown = level
+	ui.Best.SetValue(UIKit.formatTime(p.Stats.BestTime))
+	ui.Wins.SetValue(UIKit.formatNumber(p.Stats.Wins))
+	if browse and owned(browse) then
+		browse = nil -- just bought it (the server also selects it)
+	end
+	LobbyScreen.RefreshHero()
+	for _, s in pairs(screens) do
+		if s.Refresh then
+			s.Refresh(p)
 		end
 	end
-	if current == "Characters" then
-		refreshCharacters()
-	elseif current == "Upgrades" then
-		refreshShop(false)
-	end
-	if oldChar ~= p.SelectedCharacter or oldSkin ~= p.Skins[p.SelectedCharacter] then
-		LobbyScreen.RefreshHero()
+end
+
+local function clearQueueList()
+	for _, c in ipairs(ui.QueueList:GetChildren()) do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
 	end
 end
 
 --[[
-	Per-frame text updates (cheap: only strings and visibility). Mode buttons swap with
-	the status panel when a countdown or another run is going.
+	Per-frame updates (cheap: only strings and visibility). The mode column swaps with the
+	queue panel when a countdown or another run is going.
 ]]
-function LobbyScreen.Update()
+function LobbyScreen.Update(_dt: number?)
 	if not ui.Frame or not ui.Frame.Visible then
 		return
 	end
@@ -841,68 +773,109 @@ function LobbyScreen.Update()
 		local seconds = state:GetAttribute("Countdown") or 0
 		local joinedN = state:GetAttribute("Joined") or 0
 		local maxN = state:GetAttribute("MaxJoin") or (def and def.MaxPlayers) or 4
-		local title = string.upper(def and def.DisplayName or modeId) .. " run starts in " .. tostring(seconds)
-		if ui.StatusTitle.Text ~= title then
-			ui.StatusTitle.Text = title
-			UIAnim.Punch(ui.StatusTitle, 0.2)
+		ui.QueueRing.Visible = true
+		ui.QueueTitle.Text = string.upper(def and def.DisplayName or modeId) .. " RUN"
+		ui.QueueCaption.Text = UIKit.track(string.format("Starting · %d/%d joined", joinedN, maxN))
+		local num = tostring(seconds)
+		if ui.QueueNumber.Text ~= num then
+			ui.QueueNumber.Text = num
+			UIAnim.Punch(ui.QueueRing, 0.15)
 		end
 		local names = state:GetAttribute("JoinedNames") or ""
-		ui.StatusSub.Text = string.format("Joined %d/%d: %s", joinedN, maxN, names ~= "" and names or "-") .. (joinedCountdown and "\nYou're in! Get ready..." or "")
-		ui.Join.Visible = not joinedCountdown
+		local key = names .. "|" .. maxN
+		if ui.QueueKey ~= key then
+			ui.QueueKey = key
+			clearQueueList()
+			local list = names ~= "" and string.split(names, ", ") or {}
+			for i = 1, math.min(maxN, 4) do
+				playerRow(list[i], i)
+			end
+		end
 		local isStarter = state:GetAttribute("Starter") == player.UserId
-		ui.StartNow.Visible = joinedCountdown and isStarter and joinedN >= 2
-		ui.StatusRow.Visible = ui.Join.Visible or ui.StartNow.Visible
-		ui.StatusStroke.Color = COLORS.Green
+		ui.Join.Instance.Visible = not joinedCountdown
+		ui.StartNow.Instance.Visible = joinedCountdown and isStarter and joinedN >= 2
+		local buttons = (ui.Join.Instance.Visible and 1 or 0) + (ui.StartNow.Instance.Visible and 1 or 0)
+		ui.QueueRow.Visible = buttons > 0
+		ui.Join.Instance.Size = UDim2.new(1 / math.max(1, buttons), -5, 1, 0)
+		ui.StartNow.Instance.Size = UDim2.new(1 / math.max(1, buttons), -5, 1, 0)
+		local note
+		if joinedCountdown then
+			note = (isStarter and joinedN < 2) and "You're in! Waiting for someone to join..." or "You're in! Get ready..."
+		else
+			note = "Tap JOIN to play together."
+		end
+		if not ui.QueueList.Visible and names ~= "" then
+			note = names .. " · " .. note
+		end
+		ui.QueueNote.Text = note
 	elseif phase == "Running" or phase == "Results" then
 		kind = "Busy"
-		ui.StatusTitle.Text = "A run is in progress (" .. UIKit.formatTime(state:GetAttribute("RunTime") or 0) .. ")"
-		ui.StatusSub.Text = "Wait here for the next one! Pick a character or buy upgrades meanwhile."
-		ui.StatusRow.Visible = false
-		ui.StatusStroke.Color = COLORS.Orange
+		ui.QueueRing.Visible = false
+		ui.QueueTitle.Text = "RUN IN PROGRESS"
+		ui.QueueCaption.Text = UIKit.track("Time " .. UIKit.formatTime(state:GetAttribute("RunTime") or 0))
+		ui.QueueNote.Text = "Wait here for the next one! Pick a character or buy upgrades meanwhile."
+		ui.QueueRow.Visible = false
+		if ui.QueueKey ~= "busy" then
+			ui.QueueKey = "busy"
+			clearQueueList()
+		end
 	else
 		joinedCountdown = false
 	end
 	if kind ~= lastStatus then
 		lastStatus = kind
-		local showStatus = kind ~= "Modes"
-		ui.Modes.Visible = not showStatus
-		ui.Status.Visible = showStatus
-		UIAnim.Pop(showStatus and ui.Status or ui.Modes, 0, 0.7)
+		local showQueue = kind ~= "Modes"
+		for _, b in ipairs(ui.ModeButtons) do
+			b.Instance.Visible = not showQueue
+		end
+		ui.Queue.Visible = showQueue
+		UIAnim.Pop(showQueue and ui.Queue or ui.ModeButtons[1].Instance, 0, 0.8)
+		relayout()
 	end
 
-	local arenaId = state:GetAttribute("SelectedArena") or "Forest"
-	local arena = (Config.Arenas :: any)[arenaId]
-	local text = "ARENA: " .. string.upper(arena and arena.DisplayName or tostring(arenaId))
-	if ui.ArenaButton.Text ~= text then
-		if ui.ArenaButton.Text ~= "ARENA" then
-			UIAnim.Punch(ui.ArenaButton, 0.15)
+	local title, sub = arenaText()
+	if ui.CardArena.Title and ui.CardArena.Title.Text ~= title then
+		if ui.ArenaShown then
+			UIAnim.Punch(ui.CardArena.Instance, 0.06)
 		end
-		ui.ArenaButton.Text = text
+		ui.ArenaShown = true
+		ui.CardArena.SetText(title, sub)
+	elseif ui.CardArena.Subtitle and ui.CardArena.Subtitle.Text ~= sub then
+		ui.CardArena.SetText(nil, sub)
 	end
 end
 
 function LobbyScreen.Init(h: { [string]: any })
 	host = h
-	local frame = new("Frame", { Name = "Lobby", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = 2 }, h.Root)
+	local frame = new("Frame", { Name = "Lobby", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = Theme.Z.Lobby }, h.Root)
 	ui.Frame = frame
-	buildBackground(frame)
-	buildTopBar(frame)
+	buildVignette(h.FxGui)
 	ui.Screens = new("Frame", { Name = "Screens", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, frame)
-	-- screens slide in from the side; their container clips nothing (full width)
-	ui.Home = new("Frame", { Name = "Home", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, ui.Screens)
-	buildHome(ui.Home)
-	local charPanel, shopPanel
-	ui.Characters, charPanel = screenFrame("Characters")
-	buildCharacters(charPanel)
-	ui.Upgrades, shopPanel = screenFrame("Upgrades")
-	buildUpgrades(shopPanel)
+	local function screen(name: string): Frame
+		local f = new("Frame", { Name = name, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, ui.Screens)
+		ui[name] = f
+		return f
+	end
+	buildHome(screen("Home"))
+	buildChip(frame)
+	local ctx = {
+		Host = h,
+		Back = function()
+			LobbyScreen.Show("Home")
+		end,
+		Toast = toast,
+		Current = function(): string
+			return current
+		end,
+		Profile = function(): { [string]: any }?
+			return profile
+		end,
+	}
+	screens.Characters = MenuCharacters.Build(screen("Characters"), ctx)
+	screens.Upgrades = MenuUpgrades.Build(screen("Upgrades"), ctx)
+	screens.Stats = MenuStats.Build(screen("Stats"), ctx)
 	h.OnRelayout(relayout)
 	relayout()
-
-	-- your own character respawns when you change character or skin
-	player.CharacterAdded:Connect(function()
-		task.delay(0.6, LobbyScreen.RefreshHero)
-	end)
 end
 
 return LobbyScreen

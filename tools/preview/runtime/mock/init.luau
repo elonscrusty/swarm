@@ -1,0 +1,405 @@
+--!nocheck
+--[[
+	mock/init.luau - assembles the mock Roblox runtime.
+
+	local mock = require("@self/mock")
+	mock.boot({ device = "phone", seed = 1, repo = "/path/to/swarm", ... })
+	→ game tree from default.project.json, services, one LocalPlayer, the global environment,
+	  and `preview` (the scene API, also available to scenes as the global `preview`).
+]]
+
+local roblox = require("@lune/roblox")
+local R = require("@self/R")
+local D = require("@self/datatypes")
+local S = require("@self/scheduler")
+require("@self/signal")
+require("@self/instance")
+require("@self/classes/core")
+require("@self/classes/world")
+require("@self/classes/services")
+local T = require("@self/text")
+local L = require("@self/layout")
+local E = require("@self/exporter")
+local M = require("@self/meshes")
+local DM = require("@self/datamodel")
+
+local states = R.states
+local Vector3, CFrame = roblox.Vector3, roblox.CFrame
+
+local Mock = {}
+
+Mock.DEVICES = {
+	pc = { name = "pc", width = 1920, height = 1080, dpr = 1, touch = false, keyboard = true, mouse = true, safe = { left = 0, right = 0, top = 0, bottom = 0 }, topbar = 58 },
+	laptop = { name = "laptop", width = 1366, height = 768, dpr = 1, touch = false, keyboard = true, mouse = true, safe = { left = 0, right = 0, top = 0, bottom = 0 }, topbar = 58 },
+	phone = { name = "phone", width = 844, height = 390, dpr = 2, touch = true, keyboard = false, mouse = false, safe = { left = 47, right = 47, top = 0, bottom = 21 }, topbar = 58 },
+	["phone-portrait"] = { name = "phone-portrait", width = 390, height = 844, dpr = 2, touch = true, keyboard = false, mouse = false, safe = { left = 0, right = 0, top = 47, bottom = 34 }, topbar = 58, topbarBelowSafeTop = true },
+	tablet = { name = "tablet", width = 1024, height = 768, dpr = 1.5, touch = true, keyboard = false, mouse = false, safe = { left = 0, right = 0, top = 0, bottom = 20 }, topbar = 58 },
+}
+
+function Mock.boot(options)
+	R.options = options
+	options.device = type(options.device) == "table" and options.device or Mock.DEVICES[options.device or "pc"]
+	if not options.device then
+		error("unknown device profile")
+	end
+	math.randomseed(options.seed or 1)
+	T.setMetrics(options.fontMetrics)
+	M.setCatalog(options.catalog)
+
+	-- the DataModel and its services
+	local game = R.create("DataModel")
+	states[game].name = "Game"
+	R.game = game
+	for _, name in ipairs({
+		"Workspace", "Players", "Lighting", "ReplicatedStorage", "ReplicatedFirst", "ServerScriptService", "ServerStorage",
+		"StarterGui", "StarterPack", "StarterPlayer", "SoundService", "Teams", "RunService", "TweenService",
+		"UserInputService", "GuiService", "CollectionService", "TextService", "HttpService", "TextChatService",
+	}) do
+		R.getService(game, name)
+	end
+	R.installRunService(R.services.RunService)
+	local lighting = R.services.Lighting
+	lighting.ClockTime = 14
+
+	-- settings() / UserSettings()
+	R.settingsObject = setmetatable({
+		Rendering = { QualityLevel = roblox.Enum.QualityLevel.Automatic },
+		Physics = { AllowSleep = true },
+		Network = { IncomingReplicationLag = 0 },
+		Studio = {},
+	}, { __type = "GlobalSettings" })
+	local ugs = R.create("UserGameSettings")
+	R.userSettings = setmetatable({
+		GetService = function(_, name)
+			if name == "UserGameSettings" then
+				return ugs
+			end
+			error("UserSettings():GetService(" .. tostring(name) .. ") is not supported by the preview mock", 2)
+		end,
+	}, { __type = "UserSettings" })
+
+	-- StarterPlayer containers Rojo leaves out
+	DM.makeGlobals()
+	DM.loadProject(options.repo, options.project or "default.project.json")
+	local sp = R.services.StarterPlayer
+	if not R.findChild(states[sp], "StarterPlayerScripts") then
+		local f = R.create("StarterPlayerScripts")
+		states[f].name = "StarterPlayerScripts"
+		R.setParent(f, states[f], sp)
+	end
+	if not R.findChild(states[sp], "StarterCharacterScripts") then
+		local f = R.create("StarterCharacterScripts")
+		states[f].name = "StarterCharacterScripts"
+		R.setParent(f, states[f], sp)
+	end
+
+	-- the local player
+	local player = R.create("Player")
+	local pst = states[player]
+	pst.name = options.playerName or "PreviewPlayer"
+	pst.props.UserId = options.userId or 1
+	pst.props.DisplayName = pst.name
+	R.localPlayer = player
+	for _, cls in ipairs({ "PlayerGui", "PlayerScripts", "Backpack" }) do
+		local c = R.create(cls)
+		states[c].name = cls
+		R.setParent(c, states[c], player)
+	end
+	R.setParent(player, pst, R.services.Players)
+	-- StarterGui contents are copied into PlayerGui (as Roblox does on join)
+	local pg = R.findChild(pst, "PlayerGui")
+	for _, c in ipairs(states[R.services.StarterGui].children) do
+		local copy = R.clone(c)
+		if copy then
+			R.setParent(copy, states[copy], pg)
+		end
+	end
+
+	local cam = R.getProp(states[R.services.Workspace], "CurrentCamera")
+	cam.CFrame = D.CFrame.lookAt(Vector3.new(0, 20, 20), Vector3.zero)
+
+	return Mock.api()
+end
+
+------------------------------------------------------------------------------------------
+-- Scene API (global `preview` in scenes)
+------------------------------------------------------------------------------------------
+
+function Mock.api()
+	local api = {}
+	api.device = R.options.device
+	api.seed = R.options.seed or 1
+	api.repo = R.options.repo
+	api.args = R.options.sceneArgs or {}
+	api.metrics = {}
+	api.overlays = {}
+	api.camera = nil -- override: { cf = CFrame, fov = number, ortho = { height = studs } }
+	api.rng = D.Random.new((R.options.seed or 1) * 7 + 3)
+	api.render = { background = nil, hideCoreUi = false }
+
+	function api.now()
+		return S.now
+	end
+
+	-- Advances simulated time (frames at `fps`, default 60).
+	function api.advance(seconds: number, fps: number?)
+		local old = S.dt
+		if fps then
+			S.dt = 1 / fps
+		end
+		S.wait(seconds)
+		S.dt = old
+	end
+
+	function api.player()
+		return R.localPlayer
+	end
+
+	function api.playerGui()
+		return R.findChild(states[R.localPlayer], "PlayerGui")
+	end
+
+	function api.require(inst)
+		return R.requireModule(inst)
+	end
+
+	-- ReplicatedStorage.Shared.<name> / ServerScriptService.Modules.<name>
+	function api.shared(name: string)
+		local shared = R.findChild(states[R.services.ReplicatedStorage], "Shared")
+		return R.requireModule(R.findChild(states[shared], name) or error("no shared module " .. name))
+	end
+
+	function api.server(name: string)
+		local modules = R.findChild(states[R.services.ServerScriptService], "Modules")
+		local m = modules and R.findChild(states[modules], name)
+		if not m then
+			error("no server module " .. name)
+		end
+		return R.requireModule(m)
+	end
+
+	-- The client modules folder the running client uses (PlayerScripts copy).
+	function api.clientFolder()
+		local ps = R.findChild(states[R.localPlayer], "PlayerScripts")
+		return R.findChild(states[ps], "SwarmClient")
+	end
+
+	function api.client(name: string)
+		local folder = api.clientFolder()
+		local m = folder and R.findChild(states[folder], name)
+		if not m then
+			error("no client module " .. name .. " (call preview.startClient first)")
+		end
+		return R.requireModule(m)
+	end
+
+	-- Copies StarterPlayerScripts into PlayerScripts and runs the LocalScripts there
+	-- (ClientMain), like Roblox does when the player joins.
+	function api.startClient(runScripts: boolean?)
+		local sps = R.findChild(states[R.services.StarterPlayer], "StarterPlayerScripts")
+		local ps = R.findChild(states[R.localPlayer], "PlayerScripts")
+		for _, c in ipairs(states[sps].children) do
+			local copy = R.clone(c)
+			R.setParent(copy, states[copy], ps)
+		end
+		if runScripts ~= false then
+			R.walk(ps, function(d)
+				local st = states[d]
+				if st.info.isA.LocalScript or (st.info.isA.Script and st.props.RunContext == roblox.Enum.RunContext.Client) then
+					R.runScript(d)
+				end
+			end)
+		end
+	end
+
+	-- Runs the server Scripts (GameServer) - the full server; needs more mocking.
+	function api.startServer()
+		R.walk(R.services.ServerScriptService, function(d)
+			local st = states[d]
+			if st.info.name == "Script" then
+				R.runScript(d)
+			end
+		end)
+	end
+
+	function api.forceMeshesUploaded()
+		return M.forceUploaded()
+	end
+
+	function api.remote(name: string)
+		local folder = R.findChild(states[R.services.ReplicatedStorage], "Remotes")
+		local r = folder and R.findChild(states[folder], name)
+		if not r then
+			error("remote " .. name .. " does not exist (call Remotes.Setup first)")
+		end
+		return r
+	end
+
+	-- Server → this client, through the real RemoteEvent (logged).
+	function api.fireClient(name: string, ...)
+		api.remote(name):FireClient(R.localPlayer, ...)
+	end
+
+	-- Simulates a tap / click on a GuiButton.
+	function api.click(button)
+		local st = states[button]
+		for _, ev in ipairs({ "MouseButton1Down", "MouseButton1Up", "MouseButton1Click", "Activated" }) do
+			R.fire(st, ev)
+		end
+	end
+
+	-- GuiObjects under PlayerGui whose Text (or Name) matches.
+	function api.findGui(match)
+		local out = {}
+		R.walk(api.playerGui(), function(d)
+			local st = states[d]
+			if st.info.isA.GuiObject then
+				local ok = false
+				if type(match) == "function" then
+					ok = match(d, st)
+				else
+					ok = st.name == match or (st.info.props.Text and R.getProp(st, "Text") == match)
+				end
+				if ok then
+					table.insert(out, d)
+				end
+			end
+		end)
+		return out
+	end
+
+	function api.isShown(obj): boolean
+		L.update(true)
+		local l = states[obj].x.layout
+		return l ~= nil and l.visible == true
+	end
+
+	function api.layoutOf(obj)
+		L.update(true)
+		return states[obj].x.layout
+	end
+
+	function api.overlay(shape)
+		table.insert(api.overlays, shape)
+	end
+
+	function api.note(msg)
+		R.note(msg)
+	end
+
+	function api.warn(msg)
+		R.warn(msg)
+	end
+
+	function api.log(...)
+		local parts = {}
+		for i = 1, select("#", ...) do
+			parts[i] = tostring((select(i, ...)))
+		end
+		print("[scene] " .. table.concat(parts, " "))
+	end
+
+	function api.worldCounts(root)
+		return E.worldCounts(root or R.services.Workspace)
+	end
+
+	-- meshes/catalog.json by model name (tris, pieces, notes)
+	function api.catalog()
+		return R.catalogJson or {}
+	end
+
+	function api.state(inst)
+		return states[inst]
+	end
+
+	api.Mock = Mock
+	R.api = api
+	return api
+end
+
+------------------------------------------------------------------------------------------
+-- Export
+------------------------------------------------------------------------------------------
+
+-- Converts Roblox values to JSON-friendly ones (scene metrics, overlays, render opts).
+local function jsonSafe(v, depth)
+	depth = depth or 0
+	local t = D.typeof(v)
+	if t == "table" then
+		if depth > 12 then
+			return nil
+		end
+		local out = {}
+		for k, x in pairs(v) do
+			out[k] = jsonSafe(x, depth + 1)
+		end
+		return out
+	elseif t == "Color3" then
+		return { v.R, v.G, v.B }
+	elseif t == "Vector3" then
+		return { v.X, v.Y, v.Z }
+	elseif t == "Vector2" then
+		return { v.X, v.Y }
+	elseif t == "CFrame" then
+		return { v:GetComponents() }
+	elseif t == "EnumItem" or t == "Instance" or t == "UDim2" or t == "UDim" then
+		return tostring(v)
+	elseif t == "number" or t == "string" or t == "boolean" then
+		return v
+	end
+	return nil
+end
+
+function Mock.export(sceneName: string)
+	local api = R.api
+	local ws = R.services.Workspace
+	local cam = R.getProp(states[ws], "CurrentCamera")
+	local camRec = { cf = { R.getProp(states[cam], "CFrame"):GetComponents() }, fov = R.getProp(states[cam], "FieldOfView") }
+	if api.camera then
+		if api.camera.cf then
+			camRec.cf = { api.camera.cf:GetComponents() }
+		end
+		if api.camera.fov then
+			camRec.fov = api.camera.fov
+		end
+		camRec.ortho = api.camera.ortho
+		camRec.near = api.camera.near
+		camRec.far = api.camera.far
+	end
+	local world = E.collectWorld(ws)
+	local gui = E.gui()
+	local counts = E.worldCounts(ws)
+	local metrics = api.metrics
+	metrics.scene = metrics.scene or counts
+	local function list(entries)
+		local out = {}
+		for _, e in ipairs(entries) do
+			table.insert(out, e)
+		end
+		return out
+	end
+	return {
+		version = 1,
+		scene = sceneName,
+		seed = R.options.seed or 1,
+		time = S.now,
+		device = R.options.device,
+		camera = camRec,
+		lighting = E.lighting(),
+		world = world,
+		gui = gui,
+		overlays = jsonSafe(api.overlays),
+		render = jsonSafe(api.render),
+		metrics = jsonSafe(metrics),
+		log = {
+			errors = list(R.log.errors),
+			warnings = list(R.log.warnings),
+			notes = list(R.log.notes),
+			remotes = R.log.fired,
+		},
+	}
+end
+
+Mock.R = R
+Mock.S = S
+return Mock

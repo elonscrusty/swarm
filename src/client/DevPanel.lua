@@ -1,13 +1,14 @@
 --[[
 	DevPanel.lua
-	A small "DEV" button (bottom-left) for testing, shown only in Studio or to the game's
-	creator (user-owned games: game.CreatorId). Hidden for everyone else.
+	A small "DEV" button for testing. Shown in Studio only; in live servers only when
+	Config.Dev.ShowInLiveGame is on, and then only to the creator of a user-owned game.
+	Normal players never see it. Config.Dev.Enabled = false removes it everywhere.
 
 	  Lobby:  Start solo now (no countdown)
 	  In run: +5 levels, Skip to 14:30 (boss)
 
-	The button is only a shortcut: the server (RunManager "DevCommand") checks Studio /
-	creator again and ignores everyone else. Config.Dev.Enabled = false removes it.
+	The button is only a shortcut: the server (RunManager "DevCommand") applies the same
+	rule again and ignores everyone else.
 ]]
 
 local Players = game:GetService("Players")
@@ -16,15 +17,17 @@ local RunService = game:GetService("RunService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 
 local DevPanel = {}
 
 local player = Players.LocalPlayer
-local new, corner, stroke, pad, button = UIKit.new, UIKit.corner, UIKit.stroke, UIKit.pad, UIKit.button
+local P = Theme.Palette
 
 local panel: Frame? = nil
+local toggle: GuiObject? = nil
 local lobbyButtons: { GuiObject } = {}
 local runButtons: { GuiObject } = {}
 
@@ -36,7 +39,7 @@ function DevPanel.IsDev(): boolean
 	if RunService:IsStudio() then
 		return true
 	end
-	return game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
+	return Config.Dev.ShowInLiveGame == true and game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
 end
 
 local function refresh()
@@ -56,54 +59,83 @@ local function send(command: string)
 	end
 end
 
-function DevPanel.Init(root: Instance)
+function DevPanel.Init(root: Instance, host: { [string]: any }?)
 	if not DevPanel.IsDev() then
 		return
 	end
-	local toggle = button(root, "DEV", Color3.fromRGB(150, 40, 150), function()
-		if panel then
-			panel.Visible = not panel.Visible
-			if panel.Visible then
-				refresh()
-				UIAnim.Pop(panel, 0, 0.7)
-			end
-		end
-	end, {
+	local t = UIKit.Button(root, {
+		Kind = "Secondary",
+		Title = "DEV",
 		Name = "DevButton",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 8, 1, -8),
-		Size = UDim2.fromOffset(64, 48),
-		TextSize = 18,
-		BackgroundTransparency = 0.25,
-		ZIndex = 60,
+		Size = UDim2.fromOffset(88, 48),
+		ZIndex = Theme.Z.Dev,
+		Align = "Center",
+		OnClick = function()
+			if panel then
+				panel.Visible = not panel.Visible
+				if panel.Visible then
+					refresh()
+					UIAnim.Pop(panel, 0, 0.8)
+				end
+			end
+		end,
 	})
-	stroke(toggle, Color3.fromRGB(255, 160, 255), 2)
+	local st = t.Face:FindFirstChildOfClass("UIStroke")
+	if st then
+		st.Color = P.crimson_400
+		st.Transparency = 0.1
+	end
+	toggle = t.Instance
 
-	local p = new("Frame", {
-		Name = "DevPanel",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 8, 1, -64),
-		Size = UDim2.fromOffset(250, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = Color3.fromRGB(30, 15, 35),
-		BackgroundTransparency = 0.05,
-		Visible = false,
-		ZIndex = 60,
-	}, root)
-	corner(p, 12)
-	stroke(p, Color3.fromRGB(255, 160, 255), 2)
-	pad(p, 8)
-	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, p)
-	UIKit.label(p, "DEV TOOLS (Studio / owner)", 14, { LayoutOrder = 0, TextColor3 = Color3.fromRGB(255, 180, 255), ZIndex = 61 })
-	local function item(text: string, command: string, order: number): TextButton
-		return button(p, text, Color3.fromRGB(110, 50, 130), function()
-			send(command)
-		end, { LayoutOrder = order, Size = UDim2.new(1, 0, 0, 48), TextSize = 18, ZIndex = 61 })
+	local holder, face = UIKit.Surface(root, { Name = "DevPanel", Size = UDim2.fromOffset(260, 0), Visible = false, ZIndex = Theme.Z.Dev, Edge = P.crimson_400, EdgeTransparency = 0.2 })
+	holder.AutomaticSize = Enum.AutomaticSize.Y
+	face.AutomaticSize = Enum.AutomaticSize.Y
+	face.Size = UDim2.fromScale(1, 0)
+	UIKit.pad(face, 10)
+	UIKit.list(face, { Padding = UDim.new(0, 6) })
+	UIKit.text(face, "Caption", UIKit.track("Dev tools · Studio only"), { LayoutOrder = 0, TextColor3 = P.crimson_300 })
+	local function item(str: string, command: string, order: number): GuiObject
+		return UIKit.Button(face, {
+			Title = str,
+			Size = UDim2.new(1, 0, 0, 48),
+			LayoutOrder = order,
+			Shadow = false,
+			Align = "Center",
+			OnClick = function()
+				send(command)
+			end,
+		}).Instance
 	end
 	table.insert(lobbyButtons, item("Start solo now", "StartSolo", 1))
 	table.insert(runButtons, item("+" .. Config.Dev.AddLevels .. " levels", "AddLevels", 2))
 	table.insert(runButtons, item(string.format("Skip to %s (boss)", UIKit.formatTime(Config.Dev.SkipToTime)), "SkipToBoss", 3))
-	panel = p
+	panel = holder
+
+	-- bottom right in landscape (clear of the menu columns and the ability bar), left edge
+	-- in portrait
+	local function layout()
+		if not host or not toggle or not panel then
+			return
+		end
+		local v: Vector2 = host.VirtualSize()
+		local portrait: boolean = host.IsPortrait()
+		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+		if portrait then
+			toggle.AnchorPoint = Vector2.new(0, 0)
+			toggle.Position = UDim2.fromOffset(M, math.floor(v.Y * 0.4))
+			panel.AnchorPoint = Vector2.new(0, 0)
+			panel.Position = UDim2.fromOffset(M, math.floor(v.Y * 0.4) + 56)
+		else
+			toggle.AnchorPoint = Vector2.new(1, 1)
+			toggle.Position = UDim2.fromOffset(v.X - M, v.Y - M)
+			panel.AnchorPoint = Vector2.new(1, 1)
+			panel.Position = UDim2.fromOffset(v.X - M, v.Y - M - 56)
+		end
+	end
+	if host then
+		host.OnRelayout(layout)
+		layout()
+	end
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
 		if panel then
 			panel.Visible = false

@@ -29,6 +29,47 @@ def color(c):
     return "Color3.fromRGB(%d, %d, %d)" % tuple(round(x * 255) for x in c)
 
 
+def collider_shape(c):
+    """One catalog collider shape as a Lua table (Kind Circle | Box | Multi)."""
+    kind = c["kind"].capitalize()
+    parts = [f"Kind = \"{kind}\""]
+    if kind == "Multi":
+        parts.append("Shapes = { " + ", ".join(collider_shape(s) for s in c["shapes"]) + " }")
+    else:
+        if kind == "Circle":
+            parts.append(f"Radius = {num(c['radius'])}")
+        else:
+            parts.append(f"Size = {vec(c['size'])}")
+        parts.append(f"Height = {num(c['height'])}")
+    if c.get("offset"):
+        parts.append(f"Offset = {vec(c['offset'])}")
+    return "{ " + ", ".join(parts) + " }"
+
+
+# Optional per-model extras (meshes/catalog.json) and how they are written.
+#   collider  simple obstacle shape(s) in Roblox studs from the origin (box size = {x, z},
+#             multi shapes carry an {x, z} offset)
+#   light     {x, y, z} where a PointLight / Fire belongs
+#   top / step / walkway  surface heights (dais top, step tread, wall walk)
+#   passage   {Width, Height} of an opening that must stay clear (arch, gate)
+#   anchor    text: what the origin is when it is not the ground centre
+def extras(m):
+    out = []
+    if m.get("collider"):
+        out.append(f"Collider = {collider_shape(m['collider'])},")
+    if m.get("light"):
+        out.append(f"Light = {vec(m['light'])},")
+    for key in ("top", "step", "walkway"):
+        if m.get(key) is not None:
+            out.append(f"{key.capitalize()} = {num(m[key])},")
+    if m.get("passage"):
+        p = m["passage"]
+        out.append(f"Passage = {{ Width = {num(p['width'])}, Height = {num(p['height'])} }},")
+    if m.get("anchor"):
+        out.append(f"Anchor = {json.dumps(m['anchor'])},")
+    return out
+
+
 def main():
     with open(CAT) as f:
         catalog = json.load(f)
@@ -46,6 +87,9 @@ def main():
         "\tAssetId = 0 means not uploaded yet: the game falls back to part-built models.",
         "\tBounds = { min, max } of the whole model (studs, Roblox axes, from the origin).",
         "\tTransparency / Shadow are per piece; Joints (heroes) are the rig joint points.",
+        "\tWorld / castle extras: Collider (Kind Circle {Radius} | Box {Size = {x, z}} with Height,",
+        "\tor Multi {Shapes} each with an {x, z} Offset), Light (PointLight point), Top / Step /",
+        "\tWalkway (surface heights), Passage (opening to keep clear), Anchor (origin note).",
         "]]",
         "",
         "local MeshCatalog = {}",
@@ -58,6 +102,8 @@ def main():
         lines.append(f"\t\tCategory = \"{m['category']}\",")
         if m.get("bounds"):
             lines.append(f"\t\tBounds = {{ {vec(m['bounds'][0])}, {vec(m['bounds'][1])} }},")
+        for line in extras(m):
+            lines.append("\t\t" + line)
         if m.get("joints"):
             lines.append("\t\tJoints = { " + ", ".join(f"{k} = {vec(v)}" for k, v in sorted(m["joints"].items())) + " },")
         pal = m.get("preview_palette", {})

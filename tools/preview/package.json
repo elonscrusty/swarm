@@ -1,0 +1,9 @@
+{
+  "name": "swarm-preview",
+  "private": true,
+  "type": "module",
+  "description": "Offline preview renderer for SWARM (docs/PREVIEW.md)",
+  "dependencies": {
+    "three": "0.186.1"
+  }
+}

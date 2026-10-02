@@ -897,7 +897,8 @@ local function isDev(player: Player): boolean
 	if RunService:IsStudio() then
 		return true
 	end
-	return game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
+	-- live servers: only when switched on, and only for the creator of a user-owned game
+	return Config.Dev.ShowInLiveGame == true and game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
 end
 
 local function devCommand(player: Player, command: any)
@@ -978,12 +979,26 @@ local function setupPreviews()
 	previewFolder = f
 	for _, id in ipairs(CharacterData.Order) do
 		buildPreviews(id)
-		-- rebuild with the uploaded meshes once they have loaded
+		-- rebuild with the uploaded meshes once they have loaded: the hero mesh plus the hat
+		-- mesh of every skin that swaps its headgear (otherwise a preview built before its
+		-- hat arrives keeps the part-built stand-in hat)
 		if ctx.MeshService and ctx.MeshService.WhenReady then
-			ctx.MeshService.WhenReady({ id }, function()
-				buildPreviews(id)
-			end)
+			for _, skinId in ipairs(CharacterData.SkinsFor(id)) do
+				ctx.MeshService.WhenReady(ModelBuilder.MeshesFor(id, skinId), function()
+					buildPreviews(id)
+				end)
+			end
 		end
+	end
+	-- the VIP lobby crown is a mesh too: rebuild lobby characters once it has loaded
+	if ctx.MeshService and ctx.MeshService.WhenReady then
+		ctx.MeshService.WhenReady({ "Hat_Crown" }, function()
+			for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
+				if ctx.DataService.GetData(player) then
+					RunManager.RefreshLobbyCharacter(player)
+				end
+			end
+		end)
 	end
 end
 

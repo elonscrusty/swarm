@@ -1,8 +1,8 @@
 --[[
 	ModelBuilder.lua
-	Builds every model in the game from plain Parts and built-in SpecialMesh types:
-	player characters (blocky humanoids + hats), enemy shells (single Part), gems,
-	floor pickups and treasure chests. No external assets.
+	Builds the server-side models: player characters (Blender hero meshes + skin hats, with
+	part-built fallbacks in the same style until the meshes load), enemy shells (single
+	Part), gems, floor pickups and treasure chests.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -67,7 +67,30 @@ local function motor(name: string, part0: BasePart, part1: BasePart, c0: CFrame,
 end
 
 ------------------------------------------------------------------------------------------
--- Hats (all built relative to the head's top centre, welded to the head)
+-- Hero rig (shared by every hero, mesh or part-built; matches blender/models/heroes.py)
+------------------------------------------------------------------------------------------
+
+local Palette = require(game:GetService("ReplicatedStorage").Shared.Palette)
+
+-- Model space, root centre at y = 3, feet at y = 0, front = -Z, the hero's left = -X.
+ModelBuilder.Rig = {
+	Neck = Vector3.new(0, 4.45, 0),
+	LeftShoulder = Vector3.new(-1.2, 3.95, 0),
+	RightShoulder = Vector3.new(1.2, 3.95, 0),
+	LeftHip = Vector3.new(-0.5, 2, 0),
+	RightHip = Vector3.new(0.5, 2, 0),
+}
+-- The standard bare head every hero shares; hats are built on its top centre.
+ModelBuilder.HeadSize = Vector3.new(1.45, 1.4, 1.35)
+ModelBuilder.HeadCenter = Vector3.new(0, 5.15, 0)
+
+local DARK = Palette.slate_950
+local CROWN_GOLD = Palette.gold_400
+local CROWN_JEWEL = Palette.crimson_400
+
+------------------------------------------------------------------------------------------
+-- Hats (part-built fallbacks for the "Hat_<Shape>" meshes): built on the head's top
+-- centre, welded to the head. Same shapes and proportions as blender/models/hats.py.
 ------------------------------------------------------------------------------------------
 
 type HatFn = (head: BasePart, model: Model, color: Color3, accent: Color3, lift: number?) -> ()
@@ -76,94 +99,191 @@ local function hatPart(head: BasePart, model: Model, props, offset: CFrame)
 	props.Anchored = false
 	local p = part(props)
 	p.Massless = true
-	p.CFrame = head.CFrame * offset
+	p.CFrame = head.CFrame * CFrame.new(0, head.Size.Y / 2, 0) * offset
 	p.Parent = model
 	weld(head, p)
 	return p
 end
 
-local TOP = 0.6 -- head is 1.2 studs tall
+local UP = CFrame.Angles(0, 0, math.rad(90)) -- cylinder axis (X) → vertical
+local METAL = Enum.Material.Metal
+
+-- great helm: bucket, gold brow band, dark T visor
+local function greatHelm(head, model, color)
+	hatPart(head, model, { Name = "Helm", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.95, 1.95, 1.95), Color = color, Material = METAL, CastShadow = true }, CFrame.new(0, -0.62, 0) * UP)
+	hatPart(head, model, { Name = "HelmTop", Shape = Enum.PartType.Ball, Size = Vector3.new(1.9, 0.75, 1.85), Color = color, Material = METAL }, CFrame.new(0, 0.32, 0))
+	hatPart(head, model, { Name = "HelmBand", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.16, 2.02, 2.02), Color = Palette.gold_500, Material = METAL }, CFrame.new(0, -0.28, 0) * UP)
+	hatPart(head, model, { Name = "VisorH", Size = Vector3.new(1.1, 0.17, 0.12), Color = DARK }, CFrame.new(0, -0.6, -0.94))
+	hatPart(head, model, { Name = "VisorV", Size = Vector3.new(0.17, 0.62, 0.12), Color = DARK }, CFrame.new(0, -0.98, -0.94))
+end
 
 ModelBuilder.HatShapes = {
 	Helmet = function(head, model, color, accent)
-		hatPart(head, model, { Name = "Helmet", Size = Vector3.new(1.45, 0.9, 1.45), Color = color, Material = Enum.Material.Metal }, CFrame.new(0, TOP - 0.25, 0))
-		hatPart(head, model, { Name = "Visor", Size = Vector3.new(1.2, 0.18, 0.12), Color = Color3.fromRGB(30, 30, 35) }, CFrame.new(0, 0.05, -0.68))
-		hatPart(head, model, { Name = "Crest", Size = Vector3.new(0.2, 0.5, 1.2), Color = accent }, CFrame.new(0, TOP + 0.4, 0))
-	end,
-	Wizard = function(head, model, color, accent)
-		hatPart(head, model, { Name = "Brim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.15, 2.4, 2.4), Color = color }, CFrame.new(0, TOP + 0.05, 0) * CFrame.Angles(0, 0, math.rad(90)))
-		local h = TOP + 0.1
-		for i, s in ipairs({ 1.3, 1.0, 0.7, 0.4 }) do
-			hatPart(head, model, { Name = "Tier" .. i, Size = Vector3.new(s, 0.45, s), Color = color }, CFrame.new(0.05 * i, h + 0.22, 0) * CFrame.Angles(0, 0, math.rad(-4 * i)))
-			h += 0.42
-		end
-		hatPart(head, model, { Name = "Band", Size = Vector3.new(1.35, 0.15, 1.35), Color = accent }, CFrame.new(0, TOP + 0.2, 0))
-	end,
-	Hood = function(head, model, color, _accent)
-		hatPart(head, model, { Name = "Hood", Shape = Enum.PartType.Ball, Size = Vector3.new(1.6, 1.6, 1.6), Color = color }, CFrame.new(0, 0.15, 0.15))
-		hatPart(head, model, { Name = "HoodTip", Wedge = true, Size = Vector3.new(0.8, 0.6, 0.8), Color = color }, CFrame.new(0, 0.6, 0.75) * CFrame.Angles(0, math.rad(180), 0))
-	end,
-	Mitre = function(head, model, color, accent)
-		hatPart(head, model, { Name = "Mitre", Size = Vector3.new(1.1, 1.0, 0.9), Color = color }, CFrame.new(0, TOP + 0.5, 0))
-		hatPart(head, model, { Name = "MitreTopF", Wedge = true, Size = Vector3.new(1.1, 0.5, 0.45), Color = color }, CFrame.new(0, TOP + 1.25, -0.225))
-		hatPart(head, model, { Name = "MitreTopB", Wedge = true, Size = Vector3.new(1.1, 0.5, 0.45), Color = color }, CFrame.new(0, TOP + 1.25, 0.225) * CFrame.Angles(0, math.rad(180), 0))
-		hatPart(head, model, { Name = "Cross", Size = Vector3.new(0.12, 0.6, 0.05), Color = accent }, CFrame.new(0, TOP + 0.55, -0.47))
-		hatPart(head, model, { Name = "CrossBar", Size = Vector3.new(0.4, 0.12, 0.05), Color = accent }, CFrame.new(0, TOP + 0.65, -0.47))
-	end,
-	Crown = function(head, model, color, accent, lift)
-		local y = TOP + (lift or 0)
-		hatPart(head, model, { Name = "CrownBand", Size = Vector3.new(1.3, 0.35, 1.3), Color = color, Material = Enum.Material.Metal }, CFrame.new(0, y + 0.15, 0))
-		for i = 0, 3 do
-			local a = i * math.pi / 2
-			hatPart(head, model, { Name = "Spike" .. i, Size = Vector3.new(0.3, 0.45, 0.3), Color = color, Material = Enum.Material.Metal }, CFrame.new(math.cos(a) * 0.5, y + 0.5, math.sin(a) * 0.5) * CFrame.Angles(0, a + math.pi / 4, 0))
-		end
-		hatPart(head, model, { Name = "Jewel", Shape = Enum.PartType.Ball, Size = Vector3.new(0.3, 0.3, 0.3), Color = accent, Material = Enum.Material.Neon }, CFrame.new(0, y + 0.2, -0.66))
-	end,
-	Tophat = function(head, model, color, accent)
-		hatPart(head, model, { Name = "Brim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 1.9, 1.9), Color = color }, CFrame.new(0, TOP + 0.05, 0) * CFrame.Angles(0, 0, math.rad(90)))
-		hatPart(head, model, { Name = "Crown", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.1, 1.2, 1.2), Color = color }, CFrame.new(0, TOP + 0.6, 0) * CFrame.Angles(0, 0, math.rad(90)))
-		hatPart(head, model, { Name = "Band", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 1.25, 1.25), Color = accent }, CFrame.new(0, TOP + 0.2, 0) * CFrame.Angles(0, 0, math.rad(90)))
-	end,
-	Horns = function(head, model, color, accent)
-		hatPart(head, model, { Name = "Helmet", Size = Vector3.new(1.4, 0.7, 1.4), Color = color, Material = Enum.Material.Metal }, CFrame.new(0, TOP - 0.15, 0))
-		for _, side in ipairs({ -1, 1 }) do
-			hatPart(head, model, { Name = "HornBase", Size = Vector3.new(0.3, 0.3, 0.3), Color = accent }, CFrame.new(side * 0.8, TOP, 0))
-			hatPart(head, model, { Name = "Horn", Wedge = true, Size = Vector3.new(0.25, 0.8, 0.4), Color = accent }, CFrame.new(side * 0.95, TOP + 0.45, 0) * CFrame.Angles(0, math.rad(side * 90), math.rad(side * -15)))
-		end
-	end,
-	Halo = function(head, model, _color, accent)
-		for i = 0, 7 do
-			local a = i * math.pi / 4
-			hatPart(head, model, { Name = "Halo" .. i, Size = Vector3.new(0.45, 0.12, 0.15), Color = accent, Material = Enum.Material.Neon }, CFrame.new(math.cos(a) * 0.65, TOP + 0.55, math.sin(a) * 0.65) * CFrame.Angles(0, -a + math.pi / 2, 0))
+		greatHelm(head, model, color)
+		for i, p in ipairs({ { 0.2, 0.75, 0.3 }, { 0.62, 0.9, 0.36 }, { 0.98, 0.65, 0.32 }, { 1.12, 0.15, 0.24 } }) do
+			hatPart(head, model, { Name = "Plume" .. i, Shape = Enum.PartType.Ball, Size = Vector3.new(0.68, p[3] * 2, p[3] * 2), Color = accent }, CFrame.new(0, p[2], p[1]))
 		end
 	end,
 	Plume = function(head, model, color, accent)
-		hatPart(head, model, { Name = "Helmet", Size = Vector3.new(1.45, 0.9, 1.45), Color = color, Material = Enum.Material.Metal }, CFrame.new(0, TOP - 0.25, 0))
-		hatPart(head, model, { Name = "Visor", Size = Vector3.new(1.2, 0.18, 0.12), Color = Color3.fromRGB(30, 30, 35) }, CFrame.new(0, 0.05, -0.68))
-		for i = 0, 2 do
-			hatPart(head, model, { Name = "Plume" .. i, Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.6, 0.6), Color = accent }, CFrame.new(0, TOP + 0.35 + i * 0.15, 0.25 * i))
+		hatPart(head, model, { Name = "Helm", Shape = Enum.PartType.Ball, Size = Vector3.new(1.95, 1.7, 1.95), Color = color, Material = METAL, CastShadow = true }, CFrame.new(0, -0.3, 0))
+		hatPart(head, model, { Name = "NeckGuard", Size = Vector3.new(1.7, 0.75, 0.2), Color = color, Material = METAL }, CFrame.new(0, -1.0, 1.0) * CFrame.Angles(math.rad(-20), 0, 0))
+		hatPart(head, model, { Name = "Nasal", Size = Vector3.new(0.15, 0.6, 0.12), Color = color, Material = METAL }, CFrame.new(0, -0.66, -0.92))
+		hatPart(head, model, { Name = "HelmBand", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.16, 2.0, 2.0), Color = Palette.gold_500, Material = METAL }, CFrame.new(0, -0.68, 0) * UP)
+		hatPart(head, model, { Name = "Crest", Size = Vector3.new(0.4, 0.9, 1.7), Color = accent }, CFrame.new(0, 0.75, 0.2))
+	end,
+	Horns = function(head, model, color, accent)
+		greatHelm(head, model, color)
+		for _, s in ipairs({ -1, 1 }) do
+			hatPart(head, model, { Name = "Horn", Size = Vector3.new(0.75, 0.42, 0.42), Color = accent }, CFrame.new(s * 1.2, -0.3, 0) * CFrame.Angles(0, 0, math.rad(s * 25)))
+			hatPart(head, model, { Name = "HornTip", Size = Vector3.new(0.3, 0.75, 0.3), Color = accent }, CFrame.new(s * 1.58, 0.2, -0.05) * CFrame.Angles(0, 0, math.rad(s * -12)))
 		end
 	end,
+	Crown = function(head, model, color, accent, lift)
+		local y = lift or 0
+		hatPart(head, model, { Name = "CrownBand", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 1.8, 1.8), Color = color, Material = METAL, CastShadow = true }, CFrame.new(0, y - 0.1, 0) * UP)
+		for i = 0, 4 do
+			local a = i * math.pi * 2 / 5
+			hatPart(head, model, { Name = "CrownPoint", Wedge = true, Size = Vector3.new(0.12, 0.45, 0.4), Color = color, Material = METAL }, CFrame.new(math.sin(a) * 0.86, y + 0.32, -math.cos(a) * 0.86) * CFrame.Angles(0, -a + math.pi / 2, 0))
+		end
+		hatPart(head, model, { Name = "CrownGem", Shape = Enum.PartType.Ball, Size = Vector3.new(0.26, 0.3, 0.16), Color = accent }, CFrame.new(0, y - 0.1, -0.92))
+	end,
+	Wizard = function(head, model, color, accent)
+		hatPart(head, model, { Name = "Brim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 3.2, 3.2), Color = color, CastShadow = true }, CFrame.new(0, -0.38, 0) * UP)
+		local h = -0.3
+		for i, w in ipairs({ 1.9, 1.5, 1.05, 0.6, 0.25 }) do
+			hatPart(head, model, { Name = "Cone" .. i, Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.34, w, w), Color = color }, CFrame.new(0, h + 0.17, 0.05 * i * i) * UP)
+			h += 0.3
+		end
+		hatPart(head, model, { Name = "Band", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.26, 1.98, 1.98), Color = accent, Material = METAL }, CFrame.new(0, -0.2, 0) * UP)
+	end,
+	Tophat = function(head, model, color, accent)
+		hatPart(head, model, { Name = "Brim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 2.3, 2.3), Color = color, CastShadow = true }, CFrame.new(0, -0.1, 0) * UP)
+		hatPart(head, model, { Name = "Crown", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.1, 1.65, 1.65), Color = color }, CFrame.new(0, 0.45, 0) * UP)
+		hatPart(head, model, { Name = "Band", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.28, 1.7, 1.7), Color = accent }, CFrame.new(0, 0.06, 0) * UP)
+	end,
+	Halo = function(head, model, _color, accent)
+		for i = 0, 9 do
+			local a = i * math.pi / 5
+			hatPart(head, model, { Name = "Halo", Size = Vector3.new(0.45, 0.09, 0.16), Color = accent, Material = Enum.Material.Neon }, CFrame.new(math.cos(a) * 0.7, 0.42, math.sin(a) * 0.7) * CFrame.Angles(0, -a + math.pi / 2, 0))
+		end
+	end,
+	Hood = function(head, model, color, _accent)
+		hatPart(head, model, { Name = "Hood", Shape = Enum.PartType.Ball, Size = Vector3.new(2.0, 2.1, 2.0), Color = color, CastShadow = true }, CFrame.new(0, -0.5, 0.12))
+		hatPart(head, model, { Name = "HoodTip", Shape = Enum.PartType.Ball, Size = Vector3.new(0.6, 0.6, 1.0), Color = color }, CFrame.new(0, 0.4, 0.75))
+		hatPart(head, model, { Name = "HoodShade", Size = Vector3.new(1.3, 1.0, 0.1), Color = DARK }, CFrame.new(0, -0.75, -0.72))
+	end,
+	Mitre = function(head, model, color, accent)
+		hatPart(head, model, { Name = "Mitre", Size = Vector3.new(1.5, 1.0, 1.25), Color = color, CastShadow = true }, CFrame.new(0, 0.12, 0))
+		hatPart(head, model, { Name = "MitreTopF", Wedge = true, Size = Vector3.new(1.5, 0.75, 0.62), Color = color }, CFrame.new(0, 0.98, -0.31))
+		hatPart(head, model, { Name = "MitreTopB", Wedge = true, Size = Vector3.new(1.5, 0.75, 0.62), Color = color }, CFrame.new(0, 0.98, 0.31) * CFrame.Angles(0, math.pi, 0))
+		hatPart(head, model, { Name = "MitreBand", Size = Vector3.new(1.58, 0.26, 1.4), Color = accent, Material = METAL }, CFrame.new(0, -0.3, 0))
+		hatPart(head, model, { Name = "Stripe", Size = Vector3.new(0.26, 1.15, 0.06), Color = accent, Material = METAL }, CFrame.new(0, 0.35, -0.65))
+		hatPart(head, model, { Name = "Cross", Size = Vector3.new(0.64, 0.18, 0.07), Color = accent, Material = METAL }, CFrame.new(0, 0.55, -0.66))
+	end,
 	Bandana = function(head, model, color, accent)
-		hatPart(head, model, { Name = "Bandana", Size = Vector3.new(1.3, 0.45, 1.3), Color = color }, CFrame.new(0, TOP - 0.1, 0))
-		hatPart(head, model, { Name = "Knot", Size = Vector3.new(0.3, 0.3, 0.5), Color = color }, CFrame.new(0, TOP - 0.15, 0.8))
-		hatPart(head, model, { Name = "EyePatch", Size = Vector3.new(0.3, 0.3, 0.06), Color = Color3.fromRGB(20, 20, 20) }, CFrame.new(0.25, 0.08, -0.62))
-		hatPart(head, model, { Name = "Dot", Size = Vector3.new(0.2, 0.2, 0.05), Color = accent }, CFrame.new(-0.3, TOP - 0.05, -0.66))
+		hatPart(head, model, { Name = "Bandana", Shape = Enum.PartType.Ball, Size = Vector3.new(1.8, 1.1, 1.8), Color = color, CastShadow = true }, CFrame.new(0, -0.12, 0.04))
+		hatPart(head, model, { Name = "Edge", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 1.84, 1.84), Color = accent }, CFrame.new(0, -0.48, 0) * UP)
+		hatPart(head, model, { Name = "Knot", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.4, 0.35), Color = color }, CFrame.new(0, -0.6, 0.9))
+		for _, s in ipairs({ -1, 1 }) do
+			hatPart(head, model, { Name = "Tail", Size = Vector3.new(0.22, 0.65, 0.08), Color = color }, CFrame.new(s * 0.15, -0.98, 0.98) * CFrame.Angles(math.rad(14), 0, math.rad(s * 16)))
+		end
+		hatPart(head, model, { Name = "EyePatch", Size = Vector3.new(0.38, 0.32, 0.08), Color = DARK }, CFrame.new(0.3, -0.72, -0.69))
 	end,
 	Beanie = function(head, model, color, accent)
-		hatPart(head, model, { Name = "Mask", Size = Vector3.new(1.3, 1.3, 1.3), Color = color }, CFrame.new(0, 0.05, 0))
-		hatPart(head, model, { Name = "EyeSlit", Size = Vector3.new(1.0, 0.25, 0.05), Color = Color3.fromRGB(255, 214, 170) }, CFrame.new(0, 0.1, -0.66))
-		hatPart(head, model, { Name = "Tail", Size = Vector3.new(0.15, 0.15, 1.2), Color = accent }, CFrame.new(0.2, 0.3, 1.1) * CFrame.Angles(math.rad(-20), 0, 0))
+		hatPart(head, model, { Name = "Cowl", Size = Vector3.new(1.62, 0.78, 1.5), Color = color, CastShadow = true }, CFrame.new(0, -0.18, 0))
+		hatPart(head, model, { Name = "Mask", Size = Vector3.new(1.62, 0.8, 1.5), Color = color }, CFrame.new(0, -1.22, 0))
+		hatPart(head, model, { Name = "SlitBack", Size = Vector3.new(1.62, 0.36, 1.1), Color = color }, CFrame.new(0, -0.68, 0.22))
+		hatPart(head, model, { Name = "Headband", Size = Vector3.new(1.7, 0.18, 1.58), Color = accent }, CFrame.new(0, -0.35, 0))
+		for _, s in ipairs({ -1, 1 }) do
+			hatPart(head, model, { Name = "Tail", Size = Vector3.new(0.16, 0.06, 1.1), Color = accent }, CFrame.new(s * 0.22, -0.48, 1.3) * CFrame.Angles(math.rad(-10), math.rad(s * 12), 0))
+		end
 	end,
 	Cap = function(head, model, color, accent)
-		hatPart(head, model, { Name = "Cap", Shape = Enum.PartType.Ball, Size = Vector3.new(1.35, 0.9, 1.35), Color = color }, CFrame.new(0, TOP, 0))
-		hatPart(head, model, { Name = "Peak", Size = Vector3.new(1.0, 0.1, 0.7), Color = color }, CFrame.new(0, TOP - 0.05, -0.8))
-		hatPart(head, model, { Name = "Feather", Size = Vector3.new(0.08, 0.9, 0.25), Color = accent }, CFrame.new(0.55, TOP + 0.4, 0.2) * CFrame.Angles(0, 0, math.rad(-25)))
+		hatPart(head, model, { Name = "Cap", Shape = Enum.PartType.Ball, Size = Vector3.new(1.78, 1.0, 1.9), Color = color, CastShadow = true }, CFrame.new(0, -0.05, 0.12))
+		hatPart(head, model, { Name = "CapTip", Wedge = true, Size = Vector3.new(0.5, 0.45, 0.9), Color = color }, CFrame.new(0, 0.3, 0.85))
+		hatPart(head, model, { Name = "Brim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 2.2, 2.2), Color = color }, CFrame.new(0, -0.3, 0) * UP)
+		hatPart(head, model, { Name = "Feather", Size = Vector3.new(0.08, 0.22, 1.5), Color = accent }, CFrame.new(-0.95, 0.15, 0.7) * CFrame.Angles(math.rad(25), 0, 0))
 	end,
 } :: { [string]: HatFn }
 
+-- Colours a hat uses: the look's Hat / HatAccent (+ Gold / Dark for trims and slits).
+local function hatPalette(colors: { [string]: Color3 }): { [string]: Color3 }
+	return { Hat = colors.Hat, HatAccent = colors.HatAccent, Gold = colors.Gold }
+end
+
+--[[
+	Welds a hat to `head`: the "Hat_<shape>" mesh when it is loaded (MeshService builds it
+	anchored; its pieces are unanchored and welded like gear), otherwise the part-built
+	HatShapes version. lift raises it, scale shrinks it (the VIP crown floats above the hat).
+	Returns the new parts.
+]]
+local function attachHat(head: BasePart, model: Model, shape: string, colors: { [string]: Color3 }, lift: number?, scale: number?): { BasePart }
+	local made: { BasePart } = {}
+	local origin = head.CFrame * CFrame.new(0, head.Size.Y / 2 + (lift or 0), 0)
+	local mesh = MeshService.Build("Hat_" .. shape, origin, hatPalette(colors), scale)
+	if mesh then
+		for _, child in ipairs(mesh:GetChildren()) do
+			if child:IsA("BasePart") then
+				child.Anchored = false
+				child.CanCollide = false
+				child.CanQuery = false
+				child.CanTouch = false
+				child.Massless = true
+				child.Parent = model
+				weld(head, child)
+				table.insert(made, child)
+			end
+		end
+		mesh:Destroy()
+		return made
+	end
+	local fn = ModelBuilder.HatShapes[shape]
+	if fn then
+		local before: { [Instance]: boolean } = {}
+		for _, c in ipairs(model:GetChildren()) do
+			before[c] = true
+		end
+		fn(head, model, colors.Hat, colors.HatAccent, lift)
+		for _, c in ipairs(model:GetChildren()) do
+			if not before[c] and c:IsA("BasePart") then
+				table.insert(made, c)
+			end
+		end
+	end
+	return made
+end
+ModelBuilder.AttachHat = attachHat
+
+-- VIP lobby crown: a smaller gold crown floating just above the top of the hero.
+local function addVipCrown(model: Model, head: BasePart)
+	local top = head.Position.Y + head.Size.Y / 2
+	for _, d in ipairs(model:GetChildren()) do
+		if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
+			top = math.max(top, d.Position.Y + d.Size.Y / 2)
+		end
+	end
+	local lift = top - (head.Position.Y + head.Size.Y / 2) + 0.55
+	local parts = attachHat(head, model, "Crown", { Hat = CROWN_GOLD, HatAccent = CROWN_JEWEL, Gold = CROWN_GOLD }, lift, 0.75)
+	for _, p in ipairs(parts) do
+		p.Name = "VIPCrown"
+		p.CastShadow = false
+	end
+end
+
+-- Mesh models a look needs (the hero + its custom hat), e.g. for MeshService.WhenReady.
+function ModelBuilder.MeshesFor(characterId: string, skinId: string?): { string }
+	local look = CharacterData.ResolveLook(characterId, skinId)
+	local def = CharacterData.Characters[characterId]
+	local list = { characterId }
+	if def and look.Hat ~= def.Hat then
+		table.insert(list, "Hat_" .. look.Hat)
+	end
+	return list
+end
+
 ------------------------------------------------------------------------------------------
--- Class gear (weapons, capes, armour bits) - welded to the body part it belongs to
+-- Class gear for the part-built fallback heroes (used until the meshes load): the same
+-- silhouettes and colour slots as the Blender heroes, welded to their body part.
 ------------------------------------------------------------------------------------------
 
 local function gear(base: BasePart, model: Model, props, offset: CFrame): BasePart
@@ -176,48 +296,68 @@ local function gear(base: BasePart, model: Model, props, offset: CFrame): BasePa
 	return p
 end
 
-local CYL_UP = CFrame.Angles(0, 0, math.rad(90))
-local STEEL = Color3.fromRGB(200, 205, 215)
-local WOOD = Color3.fromRGB(120, 80, 50)
+type Rig = { Model: Model, Torso: BasePart, Head: BasePart, LeftArm: BasePart, RightArm: BasePart, LeftLeg: BasePart, RightLeg: BasePart }
+
+local LEATHER = Palette.leather_600
+local WOOD = Palette.wood_500
+local BLADE = Palette.steel_300
+
+-- Robe skirt, front panel and gold hem (Mage, Priest); torso centre is y = 3.3.
+local function robe(rig: Rig, c, width: number)
+	gear(rig.Torso, rig.Model, { Name = "Robe", Size = Vector3.new(width, 2.3, width * 0.82), Color = c.Cloth, CastShadow = true }, CFrame.new(0, -2.05, 0))
+	gear(rig.Torso, rig.Model, { Name = "RobeFront", Size = Vector3.new(0.75, 2.2, 0.1), Color = c.Cloth2 }, CFrame.new(0, -2.05, -width * 0.41 - 0.04))
+	gear(rig.Torso, rig.Model, { Name = "RobeHem", Size = Vector3.new(width + 0.08, 0.16, width * 0.82 + 0.08), Color = c.Gold, Material = METAL }, CFrame.new(0, -3.12, 0))
+end
 
 ModelBuilder.ClassGear = {
-	-- Knight: shoulder plates, round shield on the left arm, sword in the right hand.
-	Knight = function(rig, c)
+	-- Knight: domed pauldrons, plate skirt, crimson cape, kite shield, longsword.
+	Knight = function(rig: Rig, c)
 		for _, arm in ipairs({ rig.LeftArm, rig.RightArm }) do
-			gear(arm, rig.Model, { Name = "Pauldron", Shape = Enum.PartType.Ball, Size = Vector3.new(1.3, 0.8, 1.2), Color = c.Hat, Material = Enum.Material.Metal }, CFrame.new(0, 0.85, 0))
+			local s = arm.Position.X < 0 and -1 or 1
+			gear(arm, rig.Model, { Name = "Pauldron", Shape = Enum.PartType.Ball, Size = Vector3.new(1.5, 0.95, 1.4), Color = c.Metal, Material = METAL, CastShadow = true }, CFrame.new(s * 0.06, 0.9, 0))
+			gear(arm, rig.Model, { Name = "PauldronRim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 1.55, 1.45), Color = c.Gold, Material = METAL }, CFrame.new(s * 0.06, 0.5, 0) * UP)
 		end
-		gear(rig.LeftArm, rig.Model, { Name = "Shield", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.25, 1.9, 1.9), Color = c.Accent, Material = Enum.Material.Metal }, CFrame.new(-0.55, -0.2, 0))
-		gear(rig.LeftArm, rig.Model, { Name = "ShieldBoss", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), Color = Color3.fromRGB(255, 205, 60), Material = Enum.Material.Metal }, CFrame.new(-0.7, -0.2, 0))
-		gear(rig.RightArm, rig.Model, { Name = "Grip", Size = Vector3.new(0.25, 0.25, 0.7), Color = WOOD }, CFrame.new(0, -1.1, -0.2))
-		gear(rig.RightArm, rig.Model, { Name = "Guard", Size = Vector3.new(0.9, 0.2, 0.2), Color = Color3.fromRGB(255, 205, 60), Material = Enum.Material.Metal }, CFrame.new(0, -1.1, -0.6))
-		gear(rig.RightArm, rig.Model, { Name = "Blade", Size = Vector3.new(0.25, 0.12, 2.6), Color = STEEL, Material = Enum.Material.Metal }, CFrame.new(0, -1.1, -2.0))
+		gear(rig.Torso, rig.Model, { Name = "Faulds", Size = Vector3.new(2.4, 0.8, 1.55), Color = c.MetalDark, Material = METAL }, CFrame.new(0, -1.4, 0))
+		gear(rig.Torso, rig.Model, { Name = "Cape", Size = Vector3.new(2.3, 3.3, 0.14), Color = c.Accent, CastShadow = true }, CFrame.new(0, -0.6, 0.85) * CFrame.Angles(math.rad(8), 0, 0))
+		gear(rig.Torso, rig.Model, { Name = "CapeTrim", Size = Vector3.new(2.36, 0.16, 0.2), Color = c.Gold, Material = METAL }, CFrame.new(0, 1.0, 0.72))
+		local la = rig.LeftArm
+		gear(la, rig.Model, { Name = "ShieldRim", Size = Vector3.new(0.14, 2.15, 1.55), Color = c.Gold, Material = METAL }, CFrame.new(-0.6, -0.42, -0.3) * CFrame.Angles(0, math.rad(-36), 0))
+		gear(la, rig.Model, { Name = "Shield", Size = Vector3.new(0.14, 1.9, 1.32), Color = c.Accent, CastShadow = true }, CFrame.new(-0.68, -0.42, -0.36) * CFrame.Angles(0, math.rad(-36), 0))
+		gear(la, rig.Model, { Name = "ShieldCrossV", Size = Vector3.new(0.08, 1.5, 0.22), Color = c.Gold, Material = METAL }, CFrame.new(-0.76, -0.42, -0.42) * CFrame.Angles(0, math.rad(-36), 0))
+		gear(la, rig.Model, { Name = "ShieldCrossH", Size = Vector3.new(0.08, 0.22, 1.0), Color = c.Gold, Material = METAL }, CFrame.new(-0.76, -0.1, -0.42) * CFrame.Angles(0, math.rad(-36), 0))
+		local ra = rig.RightArm
+		gear(ra, rig.Model, { Name = "Guard", Size = Vector3.new(1.0, 0.2, 0.22), Color = c.Gold, Material = METAL }, CFrame.new(0.1, -1.1, -0.42))
+		gear(ra, rig.Model, { Name = "Blade", Size = Vector3.new(0.48, 0.14, 2.4), Color = BLADE, Material = METAL }, CFrame.new(0.15, -1.5, -1.6) * CFrame.Angles(math.rad(26), 0, 0))
 	end,
-	-- Mage: long cape, glowing staff, spell book on the belt.
-	Mage = function(rig, c)
-		gear(rig.Torso, rig.Model, { Name = "Cape", Size = Vector3.new(1.9, 3.4, 0.12), Color = c.Torso:Lerp(Color3.new(0, 0, 0), 0.35) }, CFrame.new(0, -0.6, 0.58) * CFrame.Angles(math.rad(8), 0, 0))
-		gear(rig.Torso, rig.Model, { Name = "Clasp", Shape = Enum.PartType.Ball, Size = Vector3.new(0.35, 0.35, 0.35), Color = c.Accent, Material = Enum.Material.Neon }, CFrame.new(0, 0.85, -0.5))
-		gear(rig.RightArm, rig.Model, { Name = "Staff", Shape = Enum.PartType.Cylinder, Size = Vector3.new(4.2, 0.25, 0.25), Color = WOOD, Material = Enum.Material.Wood }, CFrame.new(0, -0.3, -0.45) * CYL_UP)
-		gear(rig.RightArm, rig.Model, { Name = "StaffGem", Shape = Enum.PartType.Ball, Size = Vector3.new(0.7, 0.7, 0.7), Color = c.Accent, Material = Enum.Material.Neon }, CFrame.new(0, 1.9, -0.45))
-		gear(rig.Torso, rig.Model, { Name = "Book", Size = Vector3.new(0.2, 0.7, 0.55), Color = Color3.fromRGB(120, 40, 50) }, CFrame.new(-1.05, -0.6, 0))
+	-- Mage: robe, mantle, beard, staff with a small arcane crystal.
+	Mage = function(rig: Rig, c)
+		robe(rig, c, 2.5)
+		gear(rig.Torso, rig.Model, { Name = "Mantle", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.7, 2.75, 2.75), Color = c.Accent, CastShadow = true }, CFrame.new(0, 0.75, 0) * UP)
+		gear(rig.Head, rig.Model, { Name = "FaceBeard", Wedge = true, Size = Vector3.new(1.2, 1.3, 0.5), Color = Palette.ivory_200 }, CFrame.new(0, -0.95, -0.6) * CFrame.Angles(0, 0, math.rad(180)))
+		local ra = rig.RightArm
+		gear(ra, rig.Model, { Name = "Staff", Shape = Enum.PartType.Cylinder, Size = Vector3.new(4.8, 0.24, 0.24), Color = WOOD }, CFrame.new(0.15, 0.4, -0.25) * UP)
+		gear(ra, rig.Model, { Name = "StaffCrystal", Size = Vector3.new(0.3, 0.42, 0.3), Color = Palette.fx_arcane, Material = Enum.Material.Neon }, CFrame.new(0.15, 3.0, -0.25) * CFrame.Angles(0, math.rad(45), 0))
 	end,
-	-- Rogue: scarf with a tail, two daggers on the hips, quiver of knives on the back.
-	Rogue = function(rig, c)
-		gear(rig.Torso, rig.Model, { Name = "Scarf", Size = Vector3.new(1.6, 0.35, 1.15), Color = c.Accent }, CFrame.new(0, 0.95, 0))
-		gear(rig.Torso, rig.Model, { Name = "ScarfTail", Size = Vector3.new(0.35, 1.2, 0.1), Color = c.Accent }, CFrame.new(0.4, 0.3, 0.6) * CFrame.Angles(math.rad(15), 0, math.rad(-10)))
-		for _, side in ipairs({ -1, 1 }) do
-			gear(rig.Torso, rig.Model, { Name = "Dagger", Size = Vector3.new(0.15, 1.0, 0.3), Color = STEEL, Material = Enum.Material.Metal }, CFrame.new(side * 1.05, -0.9, -0.1) * CFrame.Angles(0, 0, math.rad(side * 15)))
-			gear(rig.Torso, rig.Model, { Name = "DaggerHilt", Size = Vector3.new(0.2, 0.35, 0.2), Color = WOOD }, CFrame.new(side * 1.0, -0.25, -0.1))
+	-- Rogue: moss cloak, crimson scarf collar and mask, twin daggers.
+	Rogue = function(rig: Rig, c)
+		gear(rig.Torso, rig.Model, { Name = "Cloak", Size = Vector3.new(2.2, 3.2, 0.12), Color = c.Cloth, CastShadow = true }, CFrame.new(0, -0.7, 0.8) * CFrame.Angles(math.rad(7), 0, 0))
+		gear(rig.Torso, rig.Model, { Name = "Scarf", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.45, 2.45, 2.2), Color = c.Accent }, CFrame.new(0, 0.92, 0) * UP)
+		for _, arm in ipairs({ rig.LeftArm, rig.RightArm }) do
+			gear(arm, rig.Model, { Name = "Dagger", Size = Vector3.new(0.36, 0.12, 1.1), Color = BLADE, Material = METAL }, CFrame.new(0, -1.1, -0.95) * CFrame.Angles(math.rad(18), 0, 0))
+			gear(arm, rig.Model, { Name = "DaggerGuard", Size = Vector3.new(0.6, 0.14, 0.16), Color = c.Gold, Material = METAL }, CFrame.new(0, -0.98, -0.4))
 		end
-		gear(rig.Torso, rig.Model, { Name = "Quiver", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.6, 0.6, 0.6), Color = Color3.fromRGB(90, 60, 40) }, CFrame.new(0.3, 0.2, 0.75) * CFrame.Angles(0, 0, math.rad(70)))
 	end,
-	-- Priest: robe skirt, glowing holy symbol, censer chain in the left hand.
-	Priest = function(rig, c)
-		gear(rig.Torso, rig.Model, { Name = "Robe", Size = Vector3.new(2.3, 1.6, 1.3), Color = c.Torso }, CFrame.new(0, -1.5, 0))
-		gear(rig.Torso, rig.Model, { Name = "RobeTrim", Size = Vector3.new(2.35, 0.2, 1.35), Color = c.Accent }, CFrame.new(0, -2.25, 0))
-		gear(rig.Torso, rig.Model, { Name = "Stole", Size = Vector3.new(0.4, 1.9, 0.08), Color = c.Accent }, CFrame.new(0, -0.05, -0.53))
-		gear(rig.Torso, rig.Model, { Name = "Symbol", Shape = Enum.PartType.Ball, Size = Vector3.new(0.45, 0.45, 0.2), Color = Color3.fromRGB(255, 240, 150), Material = Enum.Material.Neon }, CFrame.new(0, 0.5, -0.6))
-		gear(rig.LeftArm, rig.Model, { Name = "Chain", Size = Vector3.new(0.08, 0.9, 0.08), Color = STEEL, Material = Enum.Material.Metal }, CFrame.new(0, -1.4, 0))
-		gear(rig.LeftArm, rig.Model, { Name = "Censer", Shape = Enum.PartType.Ball, Size = Vector3.new(0.6, 0.6, 0.6), Color = Color3.fromRGB(255, 205, 60), Material = Enum.Material.Metal }, CFrame.new(0, -2.0, 0))
+	-- Priest: robe, gold stole, sun staff, small book.
+	Priest = function(rig: Rig, c)
+		robe(rig, c, 2.65)
+		for _, x in ipairs({ -0.3, 0.3 }) do
+			gear(rig.Torso, rig.Model, { Name = "Stole", Size = Vector3.new(0.26, 3.6, 0.08), Color = c.Accent }, CFrame.new(x, -1.1, -0.8))
+		end
+		local ra = rig.RightArm
+		gear(ra, rig.Model, { Name = "Staff", Shape = Enum.PartType.Cylinder, Size = Vector3.new(4.7, 0.2, 0.2), Color = c.Gold, Material = METAL }, CFrame.new(0.15, 0.35, -0.3) * UP)
+		gear(ra, rig.Model, { Name = "StaffSun", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.14, 0.9, 0.9), Color = c.Gold, Material = METAL }, CFrame.new(0.15, 2.95, -0.32) * CFrame.Angles(0, math.rad(90), math.rad(35)))
+		gear(ra, rig.Model, { Name = "StaffCore", Shape = Enum.PartType.Ball, Size = Vector3.new(0.3, 0.3, 0.3), Color = Palette.fx_gold, Material = Enum.Material.Neon }, CFrame.new(0.15, 2.95, -0.42))
+		gear(rig.LeftArm, rig.Model, { Name = "Book", Size = Vector3.new(0.24, 0.8, 0.66), Color = Palette.crimson_700 }, CFrame.new(-0.25, -0.75, -0.3))
 	end,
 }
 
@@ -225,15 +365,6 @@ ModelBuilder.ClassGear = {
 -- Player characters
 ------------------------------------------------------------------------------------------
 
---[[
-	Builds a blocky humanoid. Layout (studs, root centre at Y=3 when standing):
-	  legs 1x2x1 (y 0..2), torso 2x2x1 (y 2..4), head 1.2^3 (y 4..5.2), arms 1x2x1.
-	The rig uses Motor6Ds so the client can swing the limbs procedurally; there are no
-	animation assets. Humanoid.RequiresNeck is off, and the Dead state is disabled by
-	RunManager because HP is tracked by the server, not by the Humanoid.
-
-	opts.Crown = true adds the VIP lobby crown above the hat.
-]]
 -- Blender mesh body parts → Roblox rig part names.
 local BONE_NAMES = {
 	Torso = "Torso",
@@ -244,11 +375,37 @@ local BONE_NAMES = {
 	RightLeg = "Right Leg",
 }
 
+-- Head-bone pieces that are the face (kept under a skin's hat); every other Head-bone piece
+-- is headgear.
+local function isFace(name: string): boolean
+	return name == "Head" or name == "Eyes" or string.sub(name, 1, 4) == "Face"
+end
+
+-- Motor6D at a model-space point (parts are unrotated when the rig is built).
+local function joint(name: string, parent: BasePart, child: BasePart?, point: Vector3)
+	if not child then
+		return
+	end
+	local world = CFrame.new(point)
+	motor(name, parent, child, parent.CFrame:ToObjectSpace(world), child.CFrame:ToObjectSpace(world))
+end
+
+local function newRoot(): (Model, BasePart)
+	local model = Instance.new("Model")
+	model.Name = "Character"
+	local root = part({ Name = "HumanoidRootPart", Size = Vector3.new(2, 2, 1), Transparency = 1, Anchored = false, CanCollide = true })
+	root.CFrame = CFrame.new(0, 3, 0)
+	root.Parent = model
+	model.PrimaryPart = root
+	return model, root
+end
+
 --[[
-	Hero built from the uploaded Blender meshes (MeshCatalog <characterId>). Same rig as
-	the part-built version: invisible HumanoidRootPart, six body MeshParts joined with
-	Motor6Ds (so the client walk cycle works), gear MeshParts welded to their bone.
-	Returns nil when the meshes aren't loaded.
+	Hero built from the uploaded Blender meshes (MeshCatalog <characterId>): invisible
+	HumanoidRootPart, six body MeshParts joined with Motor6Ds at the model's joint points
+	(so the client walk cycle and HeroPoses work), gear MeshParts welded to their bone.
+	A skin with its own hat drops the headgear pieces and welds the Hat_<shape> mesh (or
+	its part-built fallback). Returns nil when the hero's meshes aren't loaded.
 ]]
 local function buildMeshCharacter(characterId: string, skinId: string?, crown: boolean): Model?
 	local folder = MeshService.Get(characterId)
@@ -257,29 +414,24 @@ local function buildMeshCharacter(characterId: string, skinId: string?, crown: b
 		return nil
 	end
 	local palette = CharacterData.MeshPalette(characterId, skinId) or {}
-	-- a skin with its own hat shape replaces the mesh's head gear with that hat
 	local look = CharacterData.ResolveLook(characterId, skinId)
 	local def = CharacterData.Characters[characterId]
 	local customHat = def ~= nil and look.Hat ~= def.Hat
-	local model = Instance.new("Model")
-	model.Name = "Character"
-	local root = part({ Name = "HumanoidRootPart", Size = Vector3.new(2, 2, 1), Transparency = 1, Anchored = false, CanCollide = true })
-	root.CFrame = CFrame.new(0, 3, 0)
-	root.Parent = model
-	model.PrimaryPart = root
+	local model, root = newRoot()
 
 	local bones: { [string]: BasePart } = {}
 	local gearList = {}
 	for _, piece in ipairs(entry.Pieces) do
 		local template = folder:FindFirstChild(piece.Name) :: MeshPart?
-		local isHeadGear = piece.Bone == "Head" and piece.Name ~= "Head" and piece.Name ~= "Eyes"
-		if template and not (customHat and isHeadGear) then
+		local headGear = piece.Bone == "Head" and not isFace(piece.Name)
+		if template and not (customHat and headGear) then
 			local p = template:Clone()
 			p.Anchored = false
 			p.CanCollide = false
 			p.CanQuery = false
+			p.CanTouch = false
 			p.Massless = true
-			p.CastShadow = true
+			p.CastShadow = (piece :: any).Shadow == true or piece.Name == piece.Bone
 			p.Size = Vector3.new(piece.Size[1], piece.Size[2], piece.Size[3])
 			p.Color = palette[piece.Slot] or (entry.Palette and entry.Palette[piece.Slot]) or p.Color
 			p.Transparency = piece.Transparency or 0
@@ -298,125 +450,90 @@ local function buildMeshCharacter(characterId: string, skinId: string?, crown: b
 		model:Destroy()
 		return nil
 	end
-	-- joints in model space (root centre at y = 3); a model can move them (MeshCatalog
-	-- Joints, set in Blender) to fit its proportions, otherwise the classic blocky rig
+	-- joint points from the model (MeshCatalog Joints, set in Blender), else the shared rig
 	local joints = (entry :: any).Joints or {}
-	local function at(key: string, default: Vector3): Vector3
+	local function at(key: string): Vector3
 		local j = joints[key]
-		return j and Vector3.new(j[1], j[2], j[3]) or default
-	end
-	local function joint(name: string, parent: BasePart, child: BasePart?, point: Vector3)
-		if not child then
-			return
-		end
-		local world = CFrame.new(point)
-		motor(name, parent, child, parent.CFrame:ToObjectSpace(world), child.CFrame:ToObjectSpace(world))
+		return j and Vector3.new(j[1], j[2], j[3]) or (ModelBuilder.Rig :: any)[key]
 	end
 	joint("RootJoint", root, torso, Vector3.new(0, 3, 0))
-	joint("Neck", torso, head, at("Neck", Vector3.new(0, 4, 0)))
-	joint("Left Shoulder", torso, bones.LeftArm, at("LeftShoulder", Vector3.new(-1, 3.9, 0)))
-	joint("Right Shoulder", torso, bones.RightArm, at("RightShoulder", Vector3.new(1, 3.9, 0)))
-	joint("Left Hip", torso, bones.LeftLeg, at("LeftHip", Vector3.new(-0.5, 2, 0)))
-	joint("Right Hip", torso, bones.RightLeg, at("RightHip", Vector3.new(0.5, 2, 0)))
+	joint("Neck", torso, head, at("Neck"))
+	joint("Left Shoulder", torso, bones.LeftArm, at("LeftShoulder"))
+	joint("Right Shoulder", torso, bones.RightArm, at("RightShoulder"))
+	joint("Left Hip", torso, bones.LeftLeg, at("LeftHip"))
+	joint("Right Hip", torso, bones.RightLeg, at("RightHip"))
 	for _, g in ipairs(gearList) do
 		weld(bones[g.Bone] or torso, g.Part)
 	end
 	if customHat then
-		local hatFn = ModelBuilder.HatShapes[look.Hat]
-		if hatFn then
-			hatFn(head, model, look.Colors.Hat, look.Colors.Accent)
-		end
+		attachHat(head, model, look.Hat, look.Colors)
 	end
 	if crown then
-		ModelBuilder.HatShapes.Crown(head, model, Color3.fromRGB(255, 205, 50), Color3.fromRGB(255, 60, 90), 1.9)
+		addVipCrown(model, head)
 	end
 	return model
 end
 
 function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts: { Crown: boolean? }?): Model
-	local look = CharacterData.ResolveLook(characterId, skinId)
-	local meshModel = buildMeshCharacter(characterId, skinId, opts ~= nil and opts.Crown == true)
+	local crown = opts ~= nil and opts.Crown == true
+	local meshModel = buildMeshCharacter(characterId, skinId, crown)
 	if meshModel then
 		ModelBuilder.AddHumanoid(meshModel, characterId, skinId)
 		return meshModel
 	end
-	local colors = look.Colors
-	local model = Instance.new("Model")
-	model.Name = "Character"
 
-	local root = part({ Name = "HumanoidRootPart", Size = Vector3.new(2, 2, 1), Transparency = 1, Anchored = false, CanCollide = true })
-	root.CFrame = CFrame.new(0, 3, 0)
-	root.Parent = model
-	model.PrimaryPart = root
-
-	local function limb(name: string, size: Vector3, color: Color3, offset: CFrame, jointName: string, parent: BasePart, c0: CFrame, c1: CFrame)
-		local p = part({ Name = name, Size = size, Color = color, Anchored = false })
+	-- Part-built fallback (meshes not loaded): the same rig, proportions and slot colours.
+	local look = CharacterData.ResolveLook(characterId, skinId)
+	local c = look.Colors
+	local model, root = newRoot()
+	local armour = characterId == "Knight"
+	local function body(name: string, size: Vector3, pos: Vector3, color: Color3, metal: boolean?): BasePart
+		local p = part({ Name = name, Size = size, Color = color, Anchored = false, CastShadow = true, Material = metal and METAL or nil })
 		p.Massless = true
-		p.CFrame = root.CFrame * offset
+		p.CFrame = CFrame.new(pos)
 		p.Parent = model
-		motor(jointName, parent, p, c0, c1)
 		return p
 	end
+	local R = ModelBuilder.Rig
+	local torso = body("Torso", Vector3.new(2.3, 2.4, 1.4), Vector3.new(0, 3.3, 0), c.Torso, armour)
+	local head = body("Head", ModelBuilder.HeadSize, ModelBuilder.HeadCenter, c.Skin)
+	local armColor = armour and c.MetalDark or (characterId == "Rogue" and c.Cloth2 or c.Cloth)
+	local leftArm = body("Left Arm", Vector3.new(0.62, 1.75, 0.65), Vector3.new(-1.43, 3.05, 0), armColor, armour)
+	local rightArm = body("Right Arm", Vector3.new(0.62, 1.75, 0.65), Vector3.new(1.43, 3.05, 0), armColor, armour)
+	local leftLeg = body("Left Leg", Vector3.new(0.74, 1.6, 0.8), Vector3.new(-0.52, 1.25, 0), c.Cloth2)
+	local rightLeg = body("Right Leg", Vector3.new(0.74, 1.6, 0.8), Vector3.new(0.52, 1.25, 0), c.Cloth2)
+	joint("RootJoint", root, torso, Vector3.new(0, 3, 0))
+	joint("Neck", torso, head, R.Neck)
+	joint("Left Shoulder", torso, leftArm, R.LeftShoulder)
+	joint("Right Shoulder", torso, rightArm, R.RightShoulder)
+	joint("Left Hip", torso, leftLeg, R.LeftHip)
+	joint("Right Hip", torso, rightLeg, R.RightHip)
 
-	local torso = limb("Torso", Vector3.new(2, 2, 1), colors.Torso, CFrame.new(), "RootJoint", root, CFrame.new(), CFrame.new())
-	local head = limb("Head", Vector3.new(1.2, 1.2, 1.2), colors.Head, CFrame.new(0, 1.6, 0), "Neck", torso, CFrame.new(0, 1, 0), CFrame.new(0, -0.6, 0))
-	local leftArm = limb("Left Arm", Vector3.new(0.9, 2, 0.9), colors.Arms, CFrame.new(-1.45, 0, 0), "Left Shoulder", torso, CFrame.new(-1, 0.9, 0), CFrame.new(0.45, 0.9, 0))
-	local rightArm = limb("Right Arm", Vector3.new(0.9, 2, 0.9), colors.Arms, CFrame.new(1.45, 0, 0), "Right Shoulder", torso, CFrame.new(1, 0.9, 0), CFrame.new(-0.45, 0.9, 0))
-	limb("Left Leg", Vector3.new(0.95, 2, 0.95), colors.Legs, CFrame.new(-0.5, -2, 0), "Left Hip", torso, CFrame.new(-0.5, -1, 0), CFrame.new(0, 1, 0))
-	limb("Right Leg", Vector3.new(0.95, 2, 0.95), colors.Legs, CFrame.new(0.5, -2, 0), "Right Hip", torso, CFrame.new(0.5, -1, 0), CFrame.new(0, 1, 0))
-
-	-- Face: two eyes and a belt in the accent colour.
-	for _, x in ipairs({ -0.25, 0.25 }) do
-		local eye = part({ Name = "Eye", Size = Vector3.new(0.18, 0.25, 0.05), Color = Color3.fromRGB(25, 25, 30), Anchored = false })
-		eye.Massless = true
-		eye.CFrame = head.CFrame * CFrame.new(x, 0.05, -0.61)
-		eye.Parent = model
-		weld(head, eye)
+	-- eyes, fists / hands, boots, belt
+	for _, x in ipairs({ -0.27, 0.27 }) do
+		gear(head, model, { Name = "Eyes", Size = Vector3.new(0.16, 0.28, 0.06), Color = DARK }, CFrame.new(x, -0.03, -0.68))
 	end
-	local belt = part({ Name = "Belt", Size = Vector3.new(2.05, 0.3, 1.05), Color = colors.Accent, Anchored = false })
-	belt.Massless = true
-	belt.CFrame = torso.CFrame * CFrame.new(0, -0.7, 0)
-	belt.Parent = model
-	weld(torso, belt)
-
-	local hatFn = ModelBuilder.HatShapes[look.Hat] or ModelBuilder.HatShapes.Helmet
-	hatFn(head, model, colors.Hat, colors.Accent)
+	for _, arm in ipairs({ leftArm, rightArm }) do
+		local s = arm.Position.X < 0 and -1 or 1
+		gear(arm, model, { Name = "Hand", Size = Vector3.new(0.58, 0.56, 0.6), Color = armour and c.Metal or (characterId == "Rogue" and LEATHER or c.Skin), Material = armour and METAL or nil }, CFrame.new(s * 0.07, -0.93, -0.04))
+	end
+	for _, leg in ipairs({ leftLeg, rightLeg }) do
+		gear(leg, model, { Name = "Boot", Size = Vector3.new(0.84, 0.5, 1.15), Color = armour and c.Metal or LEATHER, Material = armour and METAL or nil }, CFrame.new(0, -1.0, -0.14))
+	end
+	gear(torso, model, { Name = "Belt", Size = Vector3.new(2.36, 0.22, 1.46), Color = LEATHER }, CFrame.new(0, -0.95, 0))
+	gear(torso, model, { Name = "Buckle", Size = Vector3.new(0.36, 0.28, 0.08), Color = c.Gold, Material = METAL }, CFrame.new(0, -0.95, -0.76))
 
 	local gearFn = ModelBuilder.ClassGear[characterId]
 	if gearFn then
-		gearFn({ Model = model, Torso = torso, Head = head, LeftArm = leftArm, RightArm = rightArm }, colors)
+		gearFn({ Model = model, Torso = torso, Head = head, LeftArm = leftArm, RightArm = rightArm, LeftLeg = leftLeg, RightLeg = rightLeg }, c)
 	end
-
+	attachHat(head, model, look.Hat, c)
 	if look.GoldTrim then
-		local gold = Color3.fromRGB(255, 200, 40)
-		for _, cf in ipairs({ CFrame.new(-0.95, 0, -0.52), CFrame.new(0.95, 0, -0.52) }) do
-			local strip = part({ Name = "GoldTrim", Size = Vector3.new(0.12, 2, 0.05), Color = gold, Material = Enum.Material.Neon, Anchored = false })
-			strip.Massless = true
-			strip.CFrame = torso.CFrame * cf
-			strip.Parent = model
-			weld(torso, strip)
-		end
-		local collar = part({ Name = "GoldCollar", Size = Vector3.new(2.05, 0.2, 1.05), Color = gold, Material = Enum.Material.Neon, Anchored = false })
-		collar.Massless = true
-		collar.CFrame = torso.CFrame * CFrame.new(0, 0.95, 0)
-		collar.Parent = model
-		weld(torso, collar)
+		gear(torso, model, { Name = "GoldCollar", Size = Vector3.new(1.7, 0.18, 1.2), Color = c.Gold, Material = METAL }, CFrame.new(0, 1.15, 0))
 	end
-
-	if opts and opts.Crown then
-		-- VIP crown floats above whatever hat the skin already has
-		local before = {}
-		for _, child in ipairs(model:GetChildren()) do
-			before[child] = true
-		end
-		ModelBuilder.HatShapes.Crown(head, model, Color3.fromRGB(255, 205, 50), Color3.fromRGB(255, 60, 90), 1.2)
-		for _, child in ipairs(model:GetChildren()) do
-			if not before[child] then
-				child.Name = "VIPCrown"
-			end
-		end
+	if crown then
+		addVipCrown(model, head)
 	end
-
 	ModelBuilder.AddHumanoid(model, characterId, skinId)
 	return model
 end
@@ -507,15 +624,21 @@ end
 -- Gems, pickups, chests
 ------------------------------------------------------------------------------------------
 
+local PickupTheme = require(game:GetService("ReplicatedStorage").Shared.Theme)
+local PP = PickupTheme.Palette
+
+-- XP gems are pooled cubes (clients stand them on a corner, or draw the Crystal mesh in
+-- their place). Gold tones from Theme.Fx.Gem; a matte body, never Neon.
 ModelBuilder.GemStyles = {
-	-- cubes; clients stand them on a corner so they read as cut crystals
-	Small = { Size = Vector3.new(0.75, 0.75, 0.75), Color = Color3.fromRGB(176, 91, 255) }, -- purple
-	Medium = { Size = Vector3.new(1.0, 1.0, 1.0), Color = Color3.fromRGB(80, 170, 255) }, -- blue
-	Large = { Size = Vector3.new(1.35, 1.35, 1.35), Color = Color3.fromRGB(255, 196, 50) }, -- gold
+	Small = { Size = Vector3.new(0.75, 0.75, 0.75), Color = PickupTheme.Fx.Gem.Small },
+	Medium = { Size = Vector3.new(1.0, 1.0, 1.0), Color = PickupTheme.Fx.Gem.Medium },
+	Large = { Size = Vector3.new(1.35, 1.35, 1.35), Color = PickupTheme.Fx.Gem.Large },
 }
 
 function ModelBuilder.BuildGem(index: number, parent: Instance): BasePart
-	local gem = part({ Name = "G" .. index, Size = ModelBuilder.GemStyles.Small.Size, Color = ModelBuilder.GemStyles.Small.Color, Material = Enum.Material.Neon, CFrame = CFrame.new(Config.Enemies.ParkPosition) })
+	local style = ModelBuilder.GemStyles.Small
+	local gem = part({ Name = "G" .. index, Size = style.Size, Color = style.Color, Material = Enum.Material.SmoothPlastic, CFrame = CFrame.new(Config.Enemies.ParkPosition) })
+	gem.Reflectance = 0.08 -- a little sheen instead of a glow
 	gem:SetAttribute("Active", false)
 	gem.Parent = parent
 	return gem
@@ -527,99 +650,117 @@ function ModelBuilder.StyleGem(gem: BasePart, kind: string)
 	gem.Color = style.Color
 end
 
--- Floor pickups: "Chicken" | "Magnet" | "Bomb". Returns an anchored model.
--- Wraps a MeshService model as a pickup: primary part, glow light, Pickup attribute.
-local function meshPickup(name: string, kind: string, position: Vector3, lightColor: Color3): Model?
-	local model = MeshService.Build(name, CFrame.new(position.X, position.Y - 1.2, position.Z))
+-- Warm, modest pickup lights (the chest is the brightest).
+local PICKUP_LIGHT: { [string]: { Color: Color3, Range: number, Brightness: number } } = {
+	Chicken = { Color = PP.gold_200, Range = 7, Brightness = 0.6 },
+	Magnet = { Color = PP.crimson_300, Range = 7, Brightness = 0.6 },
+	Bomb = { Color = PP.fx_fire, Range = 7, Brightness = 0.6 },
+	Chest = { Color = PP.gold_300, Range = 10, Brightness = 1.2 },
+}
+
+local function pickupLight(parent: BasePart, kind: string): PointLight
+	local def = PICKUP_LIGHT[kind] or PICKUP_LIGHT.Chicken
+	local light = Instance.new("PointLight")
+	light.Color = def.Color
+	light.Range = def.Range
+	light.Brightness = def.Brightness
+	light.Shadows = false
+	light.Parent = parent
+	return light
+end
+
+-- Chests turn their lock toward the gameplay camera (which looks toward -Z).
+local FACE_CAMERA = CFrame.Angles(0, math.pi, 0)
+
+-- Wraps a MeshService model as a pickup: primary part, light, Pickup attribute. `origin`
+-- is the model's ground centre; the pivot is put there so the client's bob/spin turns the
+-- pickup about its own centre line.
+local function meshPickup(name: string, kind: string, origin: CFrame, primaryName: string?): Model?
+	local model = MeshService.Build(name, origin)
 	if not model then
 		return nil
 	end
 	model.Name = kind
-	local primary = model:FindFirstChildWhichIsA("BasePart")
-	model.PrimaryPart = primary
+	local primary = (primaryName and model:FindFirstChild(primaryName) :: BasePart?) or model:FindFirstChildWhichIsA("BasePart")
 	if primary then
-		local light = Instance.new("PointLight")
-		light.Range = 10
-		light.Brightness = kind == "Chest" and 2 or 1
-		light.Color = lightColor
-		light.Parent = primary
+		model.PrimaryPart = primary
+		primary.PivotOffset = primary.CFrame:ToObjectSpace(origin)
+		pickupLight(primary, kind)
 	end
 	model:SetAttribute("Pickup", kind)
 	return model
 end
 
+-- Floor pickups: "Chicken" | "Magnet" | "Bomb" (position = 1.2 above the floor). Returns an
+-- anchored model: the Blender mesh when loaded, otherwise a part-built stand-in.
 function ModelBuilder.BuildPickup(kind: string, position: Vector3): Model
-	local meshModel = meshPickup("Pickup_" .. kind, kind, position, (kind == "Chicken" and Color3.fromRGB(255, 200, 150)) or (kind == "Magnet" and Color3.fromRGB(255, 80, 80)) or Color3.fromRGB(255, 200, 80))
+	local meshModel = meshPickup("Pickup_" .. kind, kind, CFrame.new(position.X, position.Y - 1.2, position.Z))
 	if meshModel then
 		return meshModel
 	end
 	local model = Instance.new("Model")
 	model.Name = kind
 	local base = CFrame.new(position)
-	local main
+	local function add(props): BasePart
+		local p = part(props)
+		p.Parent = model
+		return p
+	end
+	local main: BasePart
 	if kind == "Chicken" then
-		main = part({ Name = "Meat", Shape = Enum.PartType.Ball, Size = Vector3.new(2, 1.6, 1.6), Color = Color3.fromRGB(180, 100, 40), CFrame = base })
-		local bone = part({ Name = "Bone", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.4, 0.35, 0.35), Color = Color3.fromRGB(250, 245, 230), CFrame = base * CFrame.new(1.2, 0.2, 0) })
-		bone.Parent = model
-		local knob = part({ Name = "Knob", Shape = Enum.PartType.Ball, Size = Vector3.new(0.6, 0.6, 0.6), Color = Color3.fromRGB(250, 245, 230), CFrame = base * CFrame.new(1.9, 0.2, 0) })
-		knob.Parent = model
+		local tilt = base * CFrame.Angles(0, 0, math.rad(20))
+		main = add({ Name = "Meat", Shape = Enum.PartType.Ball, Size = Vector3.new(1.5, 1.15, 1.15), Color = PP.gold_600, CFrame = tilt * CFrame.new(-0.3, 0, 0) })
+		add({ Name = "Crisp", Shape = Enum.PartType.Ball, Size = Vector3.new(1.0, 0.6, 0.9), Color = PP.gold_700, CFrame = tilt * CFrame.new(-0.35, 0.35, 0) })
+		add({ Name = "Bone", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.9, 0.22, 0.22), Color = PP.ivory_100, CFrame = tilt * CFrame.new(0.75, 0, 0) })
+		for _, z in ipairs({ -0.11, 0.11 }) do
+			add({ Name = "Knob", Shape = Enum.PartType.Ball, Size = Vector3.new(0.32, 0.32, 0.32), Color = PP.ivory_100, CFrame = tilt * CFrame.new(1.25, 0, z) })
+		end
 	elseif kind == "Magnet" then
-		main = part({ Name = "Bottom", Size = Vector3.new(2, 0.5, 0.6), Color = Color3.fromRGB(220, 40, 40), CFrame = base * CFrame.new(0, -0.6, 0) })
-		for _, x in ipairs({ -0.75, 0.75 }) do
-			local arm = part({ Name = "Arm", Size = Vector3.new(0.5, 1.6, 0.6), Color = Color3.fromRGB(220, 40, 40), CFrame = base * CFrame.new(x, 0.25, 0) })
-			arm.Parent = model
-			local tip = part({ Name = "Tip", Size = Vector3.new(0.5, 0.4, 0.6), Color = Color3.fromRGB(220, 220, 230), Material = Enum.Material.Metal, CFrame = base * CFrame.new(x, 1.2, 0) })
-			tip.Parent = model
+		main = add({ Name = "Bottom", Size = Vector3.new(1.6, 0.5, 0.55), Color = PP.crimson_500, CFrame = base * CFrame.new(0, -0.55, 0) })
+		for _, x in ipairs({ -0.58, 0.58 }) do
+			add({ Name = "Arm", Size = Vector3.new(0.48, 1.2, 0.55), Color = PP.crimson_500, CFrame = base * CFrame.new(x, 0.15, 0) })
+			add({ Name = "Tip", Size = Vector3.new(0.52, 0.4, 0.59), Color = PP.steel_300, Material = Enum.Material.Metal, CFrame = base * CFrame.new(x, 0.9, 0) })
 		end
 	else -- Bomb
-		main = part({ Name = "Bomb", Shape = Enum.PartType.Ball, Size = Vector3.new(1.8, 1.8, 1.8), Color = Color3.fromRGB(30, 30, 35), CFrame = base })
-		local fuse = part({ Name = "Fuse", Size = Vector3.new(0.2, 0.6, 0.2), Color = Color3.fromRGB(150, 120, 80), CFrame = base * CFrame.new(0, 1.1, 0) })
-		fuse.Parent = model
-		local spark = part({ Name = "Spark", Shape = Enum.PartType.Ball, Size = Vector3.new(0.4, 0.4, 0.4), Color = Color3.fromRGB(255, 200, 60), Material = Enum.Material.Neon, CFrame = base * CFrame.new(0, 1.5, 0) })
-		spark.Parent = model
+		main = add({ Name = "Bomb", Shape = Enum.PartType.Ball, Size = Vector3.new(1.6, 1.6, 1.6), Color = PP.slate_900, Material = Enum.Material.Metal, CFrame = base * CFrame.new(0, -0.35, 0) })
+		add({ Name = "Cap", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 0.6, 0.6), Color = PP.steel_500, Material = Enum.Material.Metal, CFrame = base * CFrame.new(0, 0.5, 0) * CFrame.Angles(0, 0, math.rad(90)) })
+		add({ Name = "Fuse", Size = Vector3.new(0.12, 0.45, 0.12), Color = PP.dirt_300, CFrame = base * CFrame.new(0.08, 0.8, 0) * CFrame.Angles(0, 0, math.rad(-20)) })
+		add({ Name = "Spark", Shape = Enum.PartType.Ball, Size = Vector3.new(0.26, 0.26, 0.26), Color = PP.amber_300, Material = Enum.Material.Neon, CFrame = base * CFrame.new(0.18, 1.05, 0) })
 	end
-	main.Parent = model
 	model.PrimaryPart = main
-	local light = Instance.new("PointLight")
-	light.Range = 8
-	light.Brightness = 1
-	light.Color = (kind == "Chicken" and Color3.fromRGB(255, 200, 150)) or (kind == "Magnet" and Color3.fromRGB(255, 80, 80)) or Color3.fromRGB(255, 200, 80)
-	light.Parent = main
+	pickupLight(main, kind)
 	model:SetAttribute("Pickup", kind)
 	return model
 end
 
--- Treasure chest dropped by elites.
+-- Treasure chest dropped by elites (position = on the floor). "Box" is the primary part.
 function ModelBuilder.BuildChest(position: Vector3): Model
-	local meshModel = meshPickup("Chest", "Chest", position + Vector3.new(0, 1.2, 0), Color3.fromRGB(255, 210, 90))
+	local meshModel = meshPickup("Chest", "Chest", CFrame.new(position) * FACE_CAMERA, "Box")
 	if meshModel then
-		local box = meshModel:FindFirstChild("Box") :: BasePart?
-		if box then
-			meshModel.PrimaryPart = box
-			local light = meshModel:FindFirstChildWhichIsA("PointLight", true)
-			if light then
-				light.Parent = box
-			end
-		end
 		return meshModel
 	end
 	local model = Instance.new("Model")
 	model.Name = "Chest"
-	local base = CFrame.new(position + Vector3.new(0, 0.9, 0))
-	local box = part({ Name = "Box", Size = Vector3.new(3, 1.8, 2), Color = Color3.fromRGB(130, 80, 40), Material = Enum.Material.Wood, CFrame = base })
-	box.Parent = model
-	local lid = part({ Name = "Lid", Shape = Enum.PartType.Cylinder, Size = Vector3.new(3, 2, 2), Color = Color3.fromRGB(150, 95, 50), Material = Enum.Material.Wood, CFrame = base * CFrame.new(0, 0.9, 0) })
-	lid.Parent = model
-	for _, x in ipairs({ -1.3, 0, 1.3 }) do
-		local band = part({ Name = "Band", Size = Vector3.new(0.25, 2.9, 2.1), Color = Color3.fromRGB(255, 200, 50), Material = Enum.Material.Metal, CFrame = base * CFrame.new(x, 0.45, 0) })
-		band.Parent = model
+	local base = CFrame.new(position) * FACE_CAMERA
+	local function add(props): BasePart
+		local p = part(props)
+		p.Parent = model
+		return p
 	end
-	local glow = Instance.new("PointLight")
-	glow.Color = Color3.fromRGB(255, 210, 90)
-	glow.Range = 14
-	glow.Brightness = 2
-	glow.Parent = box
+	local box = add({ Name = "Box", Size = Vector3.new(2.8, 1.25, 1.85), Color = PP.wood_500, CFrame = base * CFrame.new(0, 0.66, 0) })
+	add({ Name = "Lid", Shape = Enum.PartType.Cylinder, Size = Vector3.new(2.84, 1.86, 1.86), Color = PP.wood_400, CFrame = base * CFrame.new(0, 1.28, 0) })
+	for _, x in ipairs({ -0.82, 0.82 }) do
+		add({ Name = "Strap", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.26, 1.94, 1.94), Color = PP.steel_700, Material = Enum.Material.Metal, CFrame = base * CFrame.new(x, 1.28, 0) })
+		add({ Name = "Strap", Size = Vector3.new(0.26, 1.15, 1.95), Color = PP.steel_700, Material = Enum.Material.Metal, CFrame = base * CFrame.new(x, 0.68, 0) })
+	end
+	for _, x in ipairs({ -1.36, 1.36 }) do
+		for _, z in ipairs({ -0.88, 0.88 }) do
+			add({ Name = "Corner", Size = Vector3.new(0.22, 0.32, 0.22), Color = PP.gold_500, CFrame = base * CFrame.new(x, 0.3, z) })
+		end
+	end
+	add({ Name = "Lock", Size = Vector3.new(0.48, 0.56, 0.12), Color = PP.gold_500, CFrame = base * CFrame.new(0, 1.15, -0.96) })
 	model.PrimaryPart = box
+	pickupLight(box, "Chest")
 	model:SetAttribute("Pickup", "Chest")
 	return model
 end

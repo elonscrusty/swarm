@@ -35,6 +35,9 @@ Config.Run = {
 ------------------------------------------------------------------------------------------
 Config.Dev = {
 	Enabled = true, -- false hides the DEV button everywhere and ignores dev requests
+	-- Dev controls show in Studio only. true also shows them to the game's creator in live
+	-- servers (user-owned games); leave false for normal play.
+	ShowInLiveGame = false,
 	AddLevels = 5, -- "+5 levels" button
 	SkipToTime = 14 * 60 + 30, -- "Skip to 14:30" button (30 s before the boss)
 }
@@ -250,14 +253,29 @@ Config.Net = {
 ------------------------------------------------------------------------------------------
 -- CAMERA AND CONTROLS (client)
 ------------------------------------------------------------------------------------------
+--[[
+	Run camera. Pitch 55 matches the angle the models are designed for (ART_DIRECTION §4)
+	and shows more of their sides; the narrower FOV from further away flattens the
+	perspective (enemies near the top of the screen keep their size) while the visible
+	ground stays what it was. Visible ground at the player (studs, width x depth):
+	  16:9 PC        109 x 82  (was 110 x 81 at pitch 58 / 64 studs / FOV 50)
+	  19.5:9 phone   133 x 82  (was 135 x 81)
+	  9:19.5 phone    38 x 109 (was 38 x 108)
+	The spawn ring (Config.Spawn.ScreenRadius) stays past the screen edges at the player's
+	row; only the far top corners reach it, slightly less than before.
+]]
 Config.Camera = {
-	Pitch = 58, -- degrees down from horizontal
+	Pitch = 55, -- degrees down from horizontal
 	Yaw = 0, -- fixed world yaw (degrees)
-	RunDistance = 64,
+	RunDistance = 77.5,
 	LobbyDistance = 34,
-	FieldOfView = 50,
+	FieldOfView = 50, -- vertical FOV outside runs (fallback for the menu shot)
+	RunFieldOfView = 42, -- vertical FOV of the run / spectate camera
 	FollowSharpness = 12, -- higher = snappier follow
 	PortraitDistanceMult = 1.35, -- zoom out further when the phone is held upright
+	SpectatePanSeconds = 0.4, -- glide to the next teammate when the spectated one falls
+	ShakeScale = 1, -- multiplies every screen shake (0 = off)
+	ShakeMax = 0.6, -- studs; shakes stay small
 }
 
 Config.Controls = {
@@ -273,9 +291,24 @@ Config.Controls = {
 ------------------------------------------------------------------------------------------
 Config.Graphics = {
 	-- Enemies drawn with the full animated 3D model. Past this many, extra enemies show
-	-- their simple one-part body (keeps phones smooth in huge swarms). The boss is
-	-- always detailed.
+	-- their simple one-part body (keeps phones smooth in huge swarms). The nearest ones
+	-- get the models; the boss and elites are always detailed.
 	MaxDetailedEnemies = 110,
+	-- Effect budget: pooled effect parts animating at once (sparks, dust, rings, bolts).
+	-- Cosmetic effects past it are skipped; boss warnings and player events never are.
+	MaxEffectParts = 220,
+	MaxTrails = 40, -- projectile trails at once (more projectiles fly without one)
+	-- Tall scenery fade (src/client/Occlusion.lua): Parts or Models tagged with Tag
+	-- (CollectionService) turn see-through while they cover the local player's
+	-- surroundings on screen, and fade back when they don't.
+	Occlusion = {
+		Tag = "SwarmOccluder",
+		Fade = 0.65, -- LocalTransparencyModifier while covering
+		CheckHz = 10,
+		FadeSeconds = 0.25,
+		InnerRadius = 6, -- studs: ground ring around the player that must stay visible
+		OuterRadius = 11, -- second ring (enemies about to reach the player)
+	},
 }
 
 ------------------------------------------------------------------------------------------
@@ -359,18 +392,26 @@ Config.Sounds = {
 ------------------------------------------------------------------------------------------
 Config.UI = {
 	ReferenceSize = Vector2.new(1280, 720), -- UI is designed at this size, UIScale fits it
-	MinScale = 0.55,
+	-- Phones would scale the reference layout down to ~0.5; this floor keeps touch targets
+	-- and text big enough (layouts reflow into the smaller virtual space instead).
+	MinScale = 0.6,
 	MaxScale = 1.5,
-	Font = Enum.Font.GothamBold,
-	BodyFont = Enum.Font.Gotham,
+	-- Fonts and sizes live in Theme (Merriweather titles, Source Sans body / numbers).
+	-- These two are only the fallbacks for plain Enum.Font properties.
+	Font = Enum.Font.SourceSansBold,
+	BodyFont = Enum.Font.SourceSans,
 	ToastSeconds = 3,
 	-- Lobby screen
-	LobbyParticles = 14, -- drifting dots in the menu background (cheap looping tweens)
 	PreviewSpinSeconds = 9, -- one full turn of the 3D character previews
 	ScreenSlideSeconds = 0.3, -- slide between lobby screens
+	-- Hero on the lobby dais (client-only clone, see src/client/Showcase.lua)
+	ShowcaseYawDegrees = 0, -- extra turn away from the menu camera (0 = faces it)
+	ShowcaseClearRadius = 8, -- lobby characters this close to the dais are hidden locally
 	-- Upgrade bar (weapons + passives at the bottom of the screen during a run)
 	BarWeaponTile = 54,
 	BarPassiveTile = 44,
+	-- HUD
+	LowHealthFraction = 0.3, -- below this the screen edge pulses crimson
 }
 
 ------------------------------------------------------------------------------------------
@@ -381,10 +422,9 @@ Config.Arenas = {
 	Forest = { DisplayName = "Forest", RequiredWins = 0 },
 	Ruins = { DisplayName = "Ruins", RequiredWins = 1 },
 	Size = 400, -- square arena, centred on ArenaOrigin
-	FenceHeight = 6,
-	TreeCount = 34, -- max trees inside the fence (in groves; the tree line outside is extra)
-	RockCount = 26, -- max rocks inside the fence (outcrops, pond rim, rubble)
 	ClearRadius = 40, -- nothing collidable this close to the centre (player spawn)
+	-- Layouts (landmarks, groves, paths) are designed in MapBuilder with a fixed seed per
+	-- arena; obstacle coverage is kept close to the old builder (see MapBuilder header).
 }
 
 -- Run modes, picked with the big SOLO / DUO / TRIO buttons on the lobby screen.
@@ -409,10 +449,8 @@ Config.Modes = {
 
 Config.ArenaOrigin = Vector3.new(0, 0, 0) -- floor top surface is at this height
 Config.Lobby = {
-	Origin = Vector3.new(1200, 0, 0),
-	Size = 60,
-	WallHeight = 6, -- low south wall so the top-down camera sees over it
-	MenuFieldOfView = 55, -- suggested FOV for the menu backdrop shot (MenuCamera attribute)
+	Origin = Vector3.new(1200, 0, 0), -- the castle courtyard (menu backdrop), far from the arena
+	MenuFieldOfView = 55, -- FOV of the menu shot (MenuCamera attribute; portrait widens it)
 }
 
 return Config

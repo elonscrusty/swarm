@@ -9,7 +9,7 @@
 	  HP, Speed (studs/s), Damage (contact damage), Radius (hit radius in studs)
 	  Size        body part size; Shape: "Ball" | "Block" | "Cylinder"
 	  Mesh        optional built-in SpecialMesh { Type = "Sphere"|"Head"|"Wedge"|..., Scale }
-	  Color, Material, Transparency
+	  Color, Material, Transparency  (plain body look: palette colours, SmoothPlastic, no Neon)
 	  Gem         chance table for the XP gem it drops { Small = w, Medium = w, Large = w }
 	  GemChance   0-1 chance to drop a gem at all
 	  KnockbackResist 0-1 (1 = immune)
@@ -20,6 +20,8 @@
 
 	To add an enemy: add an entry to Enemies and give it weight in SpawnTable rows.
 ]]
+
+local Palette = require(script.Parent.Palette)
 
 local EnemyData = {}
 
@@ -33,8 +35,8 @@ EnemyData.Enemies = {
 		Radius = 1.4,
 		Size = Vector3.new(2.8, 2.2, 2.8),
 		Shape = "Ball",
-		Mesh = { Type = "Sphere", Scale = Vector3.new(1, 0.75, 1) },
-		Color = Color3.fromRGB(90, 210, 90),
+		Mesh = { Type = "Sphere", Scale = Vector3.new(0.9, 0.8, 1) },
+		Color = Palette.beetle_300,
 		Material = "SmoothPlastic",
 		Gem = { Small = 95, Medium = 5 },
 		GemChance = 1,
@@ -49,8 +51,8 @@ EnemyData.Enemies = {
 		Radius = 1.2,
 		Size = Vector3.new(2.6, 1, 1.4),
 		Shape = "Block",
-		Mesh = { Type = "Wedge", Scale = Vector3.new(1, 1, 1) },
-		Color = Color3.fromRGB(70, 50, 90),
+		Mesh = { Type = "Sphere", Scale = Vector3.new(0.62, 0.75, 1.3) },
+		Color = Palette.wasp_500,
 		Material = "SmoothPlastic",
 		Gem = { Small = 97, Medium = 3 },
 		GemChance = 0.9,
@@ -67,8 +69,8 @@ EnemyData.Enemies = {
 		Radius = 1.4,
 		Size = Vector3.new(2, 4.2, 1.4),
 		Shape = "Block",
-		Mesh = { Type = "Torso", Scale = Vector3.new(1, 1, 1) },
-		Color = Color3.fromRGB(230, 225, 205),
+		Mesh = { Type = "Sphere", Scale = Vector3.new(1, 1, 1) },
+		Color = Palette.beetle_700,
 		Material = "SmoothPlastic",
 		Gem = { Small = 80, Medium = 20 },
 		GemChance = 1,
@@ -83,10 +85,10 @@ EnemyData.Enemies = {
 		Radius = 1.4,
 		Size = Vector3.new(2.6, 3.2, 2.6),
 		Shape = "Ball",
-		Mesh = { Type = "Head", Scale = Vector3.new(1.1, 1.3, 1.1) },
-		Color = Color3.fromRGB(200, 230, 255),
-		Material = "Neon",
-		Transparency = 0.45,
+		Mesh = { Type = "Sphere", Scale = Vector3.new(1.15, 0.5, 0.85) },
+		Color = Palette.moth_300,
+		Material = "SmoothPlastic",
+		Transparency = 0.3,
 		Gem = { Small = 85, Medium = 15 },
 		GemChance = 1,
 		KnockbackResist = 0.1,
@@ -102,8 +104,9 @@ EnemyData.Enemies = {
 		Radius = 2.4,
 		Size = Vector3.new(4.6, 5, 4.6),
 		Shape = "Block",
-		Color = Color3.fromRGB(150, 90, 60),
-		Material = "Slate",
+		Mesh = { Type = "Sphere", Scale = Vector3.new(1, 0.9, 1.15) },
+		Color = Palette.slate_400,
+		Material = "SmoothPlastic",
 		Gem = { Medium = 70, Large = 30 },
 		GemChance = 1,
 		KnockbackResist = 0.9,
@@ -117,8 +120,9 @@ EnemyData.Enemies = {
 		Radius = 1.3,
 		Size = Vector3.new(2.4, 2.4, 2.4),
 		Shape = "Ball",
-		Color = Color3.fromRGB(255, 70, 40),
-		Material = "Neon",
+		Mesh = { Type = "Sphere", Scale = Vector3.new(0.95, 0.85, 1.1) },
+		Color = Palette.tick_500,
+		Material = "SmoothPlastic",
 		Gem = { Small = 70, Medium = 30 },
 		GemChance = 1,
 		KnockbackResist = 0.3,
@@ -133,9 +137,9 @@ EnemyData.Enemies = {
 		Radius = 6,
 		Size = Vector3.new(12, 12, 12),
 		Shape = "Ball",
-		Mesh = { Type = "Sphere", Scale = Vector3.new(1, 0.9, 1) },
-		Color = Color3.fromRGB(120, 20, 40),
-		Material = "Neon",
+		Mesh = { Type = "Sphere", Scale = Vector3.new(1, 0.75, 1.15) },
+		Color = Palette.crimson_500,
+		Material = "SmoothPlastic",
 		Gem = { Large = 100 },
 		GemChance = 1,
 		KnockbackResist = 1,

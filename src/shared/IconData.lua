@@ -1,10 +1,11 @@
 --[[
 	IconData.lua
 	Upgrade icons: one picture per weapon, evolution and passive, shown in the in-run
-	upgrade bar and on the level-up cards.
+	ability bar, on the level-up cards, chest rewards and the character / upgrade screens.
 
-	No pictures exist yet, so every entry below is nil and the UI draws a clean placeholder
-	(a tile in the item's colour with the short Glyph text).
+	Every id already has a vector icon drawn in code (src/client/Icons.lua, the same style
+	as the menu icons), so all entries below can stay nil. A picture pasted here replaces
+	that id's vector icon. An id with neither (a new weapon / passive) shows its Glyph text.
 
 	HOW TO FILL IT
 	  1. Make a square PNG per id (256x256 is plenty; transparent background, the item
@@ -55,7 +56,7 @@ IconData.Icons = {
 	Heal = nil,
 } :: { [string]: (number | string)? }
 
--- Placeholder text (1-2 letters) drawn on the coloured tile while an id has no picture.
+-- Last-resort text (1-2 letters) for an id that has neither a picture nor a vector icon.
 IconData.Glyphs = {
 	Whip = "Wh",
 	MagicOrb = "Or",

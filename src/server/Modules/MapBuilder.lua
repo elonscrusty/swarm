@@ -1,35 +1,47 @@
 --[[
 	MapBuilder.lua
-	Procedurally builds the castle lobby and the two arenas (Forest, Ruins) from Parts and
-	the Blender world meshes (MeshService). Everything is anchored; decoration has
-	CanQuery / CanTouch off and small clutter casts no shadow, so the detail is cheap on
-	phones (roughly 450-550 Parts + 300-450 MeshParts per arena, ~420 + ~90 in the lobby).
+	Builds the castle lobby (the menu backdrop) and the two arenas (Forest, Ruins) from the
+	Blender world / castle kit (MeshService + MeshCatalog) with part-built fallbacks, so the
+	maps read the same before and after the meshes are uploaded.
 
-	BuildLobby()        → lobby table (spawn, menu camera, legacy prompts), built once at boot
+	BuildLobby()        → lobby table (menu camera, spawn, legacy prompts), built once at boot
 	BuildArena(name)    → arena table, replaces any previous arena
 	DestroyArena()
-	ApplyLighting(name) → "Lobby" | "Forest" | "Ruins" (sun, atmosphere, bloom, colour grade)
+	ApplyLighting(name) → "Lobby" | "Forest" | "Ruins" (sun, sky, atmosphere, clouds, grade)
 
-	Every collidable arena obstacle is also recorded as a simple shape in
-	arena.Obstacles so EnemyAI can push enemies out of them cheaply:
+	Layouts are DESIGNED, not scattered: every landmark, grove, path and outcrop has a fixed
+	place, and small decoration uses a fixed seed per map, so every server builds the same
+	map. The run camera looks down from the south (Config.Camera), so:
+	  * nothing collidable stands within Config.Arenas.ClearRadius of the centre (spawn);
+	  * tall things stand in groves, around landmarks and in the tree line outside the
+	    boundary; the south (camera) side is kept low; trees, arches, walls and other tall
+	    pieces are tagged "SwarmOccluder" so the client fades them (src/client/Occlusion.lua)
+	    when they cover the player;
+	  * decoration never collides (CanCollide / CanQuery / CanTouch off, not in the obstacle
+	    folder); only deliberate obstacles (trunks, boulders, ruin walls, arch piers,
+	    standing stones, crates ...) get ONE simple collider each, taken from the catalog
+	    Collider extra so it lines up with the mesh.
+
+	Every collider is recorded in arena.Obstacles for EnemyAI (cheap push-out) and is a part
+	in arena.ObstacleFolder (the only thing enemy raycasts hit):
 	  { Kind = "Circle", Pos = Vector3, Radius = r }
 	  { Kind = "Box", Pos = centre, Radius = halfDiagonal, MinX, MaxX, MinZ, MaxZ }
-	Obstacle Parts live in arena.ObstacleFolder (the only thing enemy raycasts hit).
 
-	Where props go (and why):
-	  * The run camera looks down from the south (Config.Camera), so tall props stand in a
-	    few groves and in the tree line outside the boundary, never as a uniform scatter
-	    that hides the player. The south border is kept low.
-	  * Nothing collidable within Config.Arenas.ClearRadius of the centre (player spawn).
-	  * Mesh props stand on the arena floor (Center.Y) by their ground centre, and their
-	    collider is made at the same x/z by the same helper.
-	  * Props are clustered (groves, outcrops, rings) around paths and landmarks, with
-	    "keepout" circles so nothing lands on a path, the pond or another prop.
+	Navigation budget (measured with `bash tools/preview/render.sh arena-map --print-metrics`):
+	blocked area and the blocked area per ring (40-100, 100-200, corners) stay within about
+	15% of the previous random builder (Forest ~1160 studs², Ruins ~1370 studs²).
+	Phone budget per arena: everything anchored, about <= 650 MeshParts + 450 Parts, <= 12
+	lights, shadows only on big pieces (grass, flowers, ferns and clutter cast none).
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local Shared = ReplicatedStorage.Shared
+local Config = require(Shared.Config)
+local Palette = require(Shared.Palette)
+local MeshCatalog = require(Shared.MeshCatalog)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local MeshService = require(script.Parent.MeshService)
 
@@ -37,13 +49,26 @@ local part = ModelBuilder.Part
 
 local MapBuilder = {}
 
+local P = Palette :: { [string]: Color3 }
+local OCCLUDER_TAG = ((Config.Graphics :: any).Occlusion or {}).Tag or "SwarmOccluder"
+
 local mapFolder: Folder? = nil
 local currentArena: { [string]: any }? = nil
-local rng = Random.new()
+local rng = Random.new(1)
 
-local rgb = Color3.fromRGB
 local TAU = math.pi * 2
 local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- turns a Cylinder's axis (X) upward
+local SMOOTH = Enum.Material.SmoothPlastic
+
+local SEEDS = { Lobby = 20250, Forest = 41207, Ruins = 93011 }
+
+local function rgb(r: number, g: number, b: number): Color3
+	return Color3.fromRGB(r, g, b)
+end
+
+local function mix(a: Color3, b: Color3, t: number): Color3
+	return a:Lerp(b, t)
+end
 
 local function ensureMapFolder(): Folder
 	if not mapFolder then
@@ -55,58 +80,41 @@ local function ensureMapFolder(): Folder
 	return mapFolder :: Folder
 end
 
-local function textSurface(target: BasePart, face: Enum.NormalId, text: string, color: Color3, bg: Color3?): SurfaceGui
-	local gui = Instance.new("SurfaceGui")
-	gui.Face = face
-	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = 40
-	gui.LightInfluence = 0
-	gui.Parent = target
-	local label = Instance.new("TextLabel")
-	label.Name = "Title"
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundColor3 = bg or Color3.fromRGB(25, 25, 35)
-	label.BackgroundTransparency = bg and 0 or 1
-	label.TextColor3 = color
-	label.Font = Enum.Font.GothamBlack
-	label.TextScaled = true
-	label.Text = text
-	label.Parent = gui
-	local pad = Instance.new("UIPadding")
-	pad.PaddingTop = UDim.new(0.1, 0)
-	pad.PaddingBottom = UDim.new(0.1, 0)
-	pad.PaddingLeft = UDim.new(0.05, 0)
-	pad.PaddingRight = UDim.new(0.05, 0)
-	pad.Parent = label
-	return gui
+local function pick<T>(list: { T }): T
+	return list[rng:NextInteger(1, #list)]
 end
 
-local function prompt(parent: Instance, action: string, object: string, name: string): ProximityPrompt
-	local p = Instance.new("ProximityPrompt")
-	p.Name = name
-	p.ActionText = action
-	p.ObjectText = object
-	p.HoldDuration = 0
-	p.MaxActivationDistance = 12
-	p.RequiresLineOfSight = false
-	p.KeyboardKeyCode = Enum.KeyCode.E
-	p.Parent = parent
-	return p
+local function jitter(amount: number): number
+	return rng:NextNumber(-amount, amount)
+end
+
+local function yawCF(deg: number): CFrame
+	return CFrame.Angles(0, math.rad(deg), 0)
+end
+
+local function randomYaw(): CFrame
+	return CFrame.Angles(0, rng:NextNumber(0, TAU), 0)
+end
+
+local function tag(inst: Instance)
+	CollectionService:AddTag(inst, OCCLUDER_TAG)
 end
 
 ------------------------------------------------------------------------------------------
--- BUILDING BLOCKS
+-- BUILDING BLOCKS (decoration by default: no collision, no queries, no shadow)
 ------------------------------------------------------------------------------------------
 
--- part() + parent. Decoration by default: no collision, no queries, no shadow.
 local function deco(parent: Instance, props: { [string]: any }): BasePart
+	if props.Material == nil then
+		props.Material = SMOOTH
+	end
 	local p = part(props)
 	p.Parent = parent
 	return p
 end
 
--- Flat disc whose TOP surface is at `top` (ground patches, puddles, rugs).
-local function disc(parent: Instance, name: string, top: Vector3, radius: number, color: Color3, material: Enum.Material?, thick: number?): BasePart
+-- Flat disc whose TOP surface is at `top` (ground patches, water, inlays).
+local function disc(parent: Instance, name: string, top: Vector3, radius: number, color: Color3, thick: number?): BasePart
 	local t = thick or 0.1
 	return deco(parent, {
 		Name = name,
@@ -114,47 +122,28 @@ local function disc(parent: Instance, name: string, top: Vector3, radius: number
 		Size = Vector3.new(t, radius * 2, radius * 2),
 		CFrame = CFrame.new(top - Vector3.new(0, t / 2, 0)) * UPRIGHT,
 		Color = color,
-		Material = material or Enum.Material.Grass,
 	})
 end
 
--- Upright cylinder standing on `base`.
-local function column(parent: Instance, name: string, base: Vector3, radius: number, height: number, color: Color3, material: Enum.Material?, extra: { [string]: any }?): BasePart
-	local props: { [string]: any } = {
+-- Flat slab whose TOP surface is at top.Y (paths, paving).
+local function slab(parent: Instance, name: string, top: Vector3, sx: number, sz: number, yaw: number, color: Color3, thick: number?): BasePart
+	local t = thick or 0.1
+	return deco(parent, {
 		Name = name,
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(height, radius * 2, radius * 2),
-		CFrame = CFrame.new(base + Vector3.new(0, height / 2, 0)) * UPRIGHT,
+		Size = Vector3.new(sx, t, sz),
+		CFrame = CFrame.new(top - Vector3.new(0, t / 2, 0)) * CFrame.Angles(0, yaw, 0),
 		Color = color,
-		Material = material or Enum.Material.Slate,
-	}
-	if extra then
-		for k, v in pairs(extra) do
-			props[k] = v
-		end
-	end
-	return deco(parent, props)
-end
-
--- Picks a random entry of a list.
-local function pick<T>(list: { T }): T
-	return list[rng:NextInteger(1, #list)]
-end
-
--- Slight random variation of a colour (keeps big surfaces from looking flat).
-local function vary(c: Color3, amount: number): Color3
-	local d = rng:NextNumber(-amount, amount)
-	return Color3.new(math.clamp(c.R + d, 0, 1), math.clamp(c.G + d, 0, 1), math.clamp(c.B + d, 0, 1))
+	})
 end
 
 ------------------------------------------------------------------------------------------
--- Flickering fire lights: one loop for every torch / brazier light in the world.
+-- Fire lights: one flicker loop for every torch / brazier light in the world.
 ------------------------------------------------------------------------------------------
 
-local flickers: { { Light: PointLight, Base: number, Phase: number } } = {}
+local flickers: { { Light: Light, Base: number, Phase: number } } = {}
 local flickerRunning = false
 
-local function addFlicker(light: PointLight)
+local function addFlicker(light: Light)
 	table.insert(flickers, { Light = light, Base = light.Brightness, Phase = rng:NextNumber(0, 10) })
 	if flickerRunning then
 		return
@@ -168,7 +157,7 @@ local function addFlicker(light: PointLight)
 				if f.Light.Parent == nil then
 					table.remove(flickers, i)
 				else
-					f.Light.Brightness = f.Base * (0.84 + 0.1 * math.sin(t * 7.3 + f.Phase) + 0.06 * math.sin(t * 17.9 + f.Phase * 2))
+					f.Light.Brightness = f.Base * (0.86 + 0.09 * math.sin(t * 7.3 + f.Phase) + 0.05 * math.sin(t * 17.9 + f.Phase * 2))
 				end
 			end
 			task.wait(0.1)
@@ -176,82 +165,262 @@ local function addFlicker(light: PointLight)
 	end)
 end
 
--- Invisible holder with a warm PointLight (optionally flickering and with a Fire effect).
-local function fireLight(parent: Instance, pos: Vector3, range: number, brightness: number, color: Color3?, withFire: boolean?): BasePart
-	local holder = deco(parent, { Name = "FireLight", Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(pos), Transparency = 1 })
+local FIRE = rgb(255, 168, 92)
+
+-- Invisible holder with a PointLight (fire lights flicker).
+local function pointLight(parent: Instance, pos: Vector3, range: number, brightness: number, color: Color3, flicker: boolean): PointLight
+	local holder = deco(parent, { Name = "Light", Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(pos), Transparency = 1 })
 	local light = Instance.new("PointLight")
-	light.Color = color or rgb(255, 170, 90)
+	light.Color = color
 	light.Range = range
 	light.Brightness = brightness
 	light.Shadows = false
 	light.Parent = holder
-	if withFire then
-		local fire = Instance.new("Fire")
-		fire.Size = 1.6
-		fire.Heat = 6
-		fire.Color = rgb(255, 140, 40)
-		fire.SecondaryColor = rgb(255, 220, 120)
-		fire.Parent = holder
+	if flicker then
+		addFlicker(light)
 	end
-	addFlicker(light)
-	return holder
+	return light
 end
 
 ------------------------------------------------------------------------------------------
--- Mesh props: Blender mesh when loaded (MeshService), part-built fallback otherwise.
--- `cf` is the prop's GROUND centre (MeshCatalog offsets are measured from it). When the
--- meshes are still loading, the fallback is swapped for the mesh once it arrives.
+-- KIT PROPS: the Blender mesh when loaded (MeshService), a part-built fallback otherwise.
+-- `cf` is the prop's origin (ground centre for standing pieces; see the catalog Anchor
+-- note for wall banners / sconces). The prop is always a Model container named after
+-- the kit piece, so tags survive the fallback → mesh swap when meshes finish loading.
 ------------------------------------------------------------------------------------------
 
-type Palette = { [string]: Color3 }
+type Pal = { [string]: Color3 }
+type PropOpts = {
+	shadow: boolean?, -- false: no shadows at all; nil: big pieces cast (catalog Shadow)
+	occluder: boolean?, -- tag "SwarmOccluder"
+	query: boolean?, -- CanQuery on (the dais: the showcase finds its top by raycast)
+}
 
-local FALLBACK: { [string]: (Model, CFrame, number, Palette?) -> () } = {}
-
-local function fbColor(palette: Palette?, slot: string, default: Color3): Color3
-	return (palette and palette[slot]) or default
+local function kitEntry(name: string): any
+	return (MeshCatalog.Models :: any)[name]
 end
 
-FALLBACK.Tree_Round = function(m, cf, s, pal)
-	deco(m, { Name = "Trunk", Shape = Enum.PartType.Cylinder, Size = Vector3.new(8 * s, 2.4 * s, 2.4 * s), CFrame = cf * CFrame.new(0, 4 * s, 0) * UPRIGHT, Color = fbColor(pal, "Wood", rgb(122, 82, 50)), Material = Enum.Material.Wood, CastShadow = true })
-	deco(m, { Name = "Leaves", Shape = Enum.PartType.Ball, Size = Vector3.new(10, 8, 9) * s, CFrame = cf * CFrame.new(0, 10 * s, 0), Color = fbColor(pal, "Leaf", rgb(79, 174, 74)), CastShadow = true })
-end
-FALLBACK.Tree_Pine = function(m, cf, s, pal)
-	deco(m, { Name = "Trunk", Shape = Enum.PartType.Cylinder, Size = Vector3.new(4 * s, 1.6 * s, 1.6 * s), CFrame = cf * CFrame.new(0, 2 * s, 0) * UPRIGHT, Color = fbColor(pal, "Wood", rgb(107, 74, 44)), Material = Enum.Material.Wood, CastShadow = true })
-	for i, r in ipairs({ 4.2, 3.2, 2.0 }) do
-		deco(m, { Name = "Leaves", Shape = Enum.PartType.Cylinder, Size = Vector3.new(3 * s, r * 2 * s, r * 2 * s), CFrame = cf * CFrame.new(0, (2.5 + i * 2.6) * s, 0) * UPRIGHT, Color = fbColor(pal, "Leaf", rgb(47, 125, 70)), CastShadow = true })
+-- Catalog preview colours with the caller's overrides on top.
+local function kitPalette(name: string, palette: Pal?): Pal
+	local out: Pal = {}
+	local entry = kitEntry(name)
+	if entry and entry.Palette then
+		for k, v in pairs(entry.Palette) do
+			out[k] = v
+		end
 	end
+	if palette then
+		for k, v in pairs(palette) do
+			out[k] = v
+		end
+	end
+	return out
+end
+
+-- Fallback builders: (model, cf, scale, palette, shadow) in the catalog's slots/colours.
+local FALLBACK: { [string]: (Model, CFrame, number, Pal, boolean) -> () } = {}
+
+local function c3(pal: Pal, slot: string, default: Color3): Color3
+	return pal[slot] or default
+end
+
+-- Part at cf * (at scaled by s), size scaled by s.
+local function fpart(m: Model, cf: CFrame, s: number, name: string, size: Vector3, at: CFrame, color: Color3, shadow: boolean?, shape: Enum.PartType?, material: Enum.Material?): BasePart
+	return deco(m, {
+		Name = name,
+		Shape = shape,
+		Size = size * s,
+		CFrame = cf * CFrame.new(at.Position * s) * at.Rotation,
+		Color = color,
+		Material = material or SMOOTH,
+		CastShadow = shadow == true,
+	})
+end
+
+-- Upright cylinder (radius r, height h) standing at y (all before scaling).
+local function fcyl(m: Model, cf: CFrame, s: number, name: string, r: number, h: number, x: number, y: number, z: number, color: Color3, shadow: boolean?, material: Enum.Material?): BasePart
+	return fpart(m, cf, s, name, Vector3.new(h, r * 2, r * 2), CFrame.new(x, y + h / 2, z) * UPRIGHT, color, shadow, Enum.PartType.Cylinder, material)
+end
+
+local function fball(m: Model, cf: CFrame, s: number, name: string, size: Vector3, x: number, y: number, z: number, color: Color3, shadow: boolean?): BasePart
+	return fpart(m, cf, s, name, size, CFrame.new(x, y, z), color, shadow, Enum.PartType.Ball)
+end
+
+local function fblock(m: Model, cf: CFrame, s: number, name: string, size: Vector3, x: number, y: number, z: number, color: Color3, shadow: boolean?, rot: CFrame?)
+	fpart(m, cf, s, name, size, CFrame.new(x, y, z) * (rot or CFrame.identity), color, shadow)
+end
+
+local NEON = Enum.Material.Neon
+
+FALLBACK.Tree_Round = function(m, cf, s, pal, sh)
+	fcyl(m, cf, s, "Trunk", 0.75, 6.5, 0, 0, 0, c3(pal, "Bark", P.wood_600), sh)
+	fball(m, cf, s, "Leaves", Vector3.new(10, 7.5, 9.5), 0, 8.4, 0, c3(pal, "Leaves", P.moss_700), sh)
+	fball(m, cf, s, "Leaves2", Vector3.new(6.5, 5, 6.5), 1.2, 11, -0.6, c3(pal, "Leaves2", P.moss_600), false)
+end
+local function pineFallback(height: number)
+	return function(m: Model, cf: CFrame, s: number, pal: Pal, sh: boolean)
+		local k = height / 16
+		fcyl(m, cf, s, "Trunk", 0.6, 3 * k, 0, 0, 0, c3(pal, "Bark", P.wood_700), sh)
+		for i, r in ipairs({ 4.4, 3.4, 2.3, 1.2 }) do
+			local slot = i % 2 == 1 and "Needles" or "Needles2"
+			fcyl(m, cf, s, "Needles", r, 3.4 * k, 0, (1.6 + (i - 1) * 3.3) * k, 0, c3(pal, slot, P.moss_800), sh and i <= 2)
+		end
+	end
+end
+FALLBACK.Tree_Pine = pineFallback(16)
+FALLBACK.Tree_PineTall = pineFallback(22)
+FALLBACK.Bush = function(m, cf, s, pal)
+	fball(m, cf, s, "Leaves", Vector3.new(3.4, 1.9, 2.2), 0, 0.85, 0, c3(pal, "Leaves", P.moss_700))
+	fball(m, cf, s, "Leaves2", Vector3.new(2, 1.4, 1.6), 0.5, 1.2, -0.2, c3(pal, "Leaves2", P.moss_500))
+end
+FALLBACK.Fern = function(m, cf, s, pal)
+	fball(m, cf, s, "Fronds", Vector3.new(2.4, 0.8, 2.4), 0, 0.35, 0, c3(pal, "Fern", P.moss_500))
+end
+FALLBACK.Flowers = function(m, cf, s, pal)
+	fball(m, cf, s, "Blooms", Vector3.new(1.2, 0.35, 1.0), 0, 0.25, 0, c3(pal, "Bloom", P.ivory_100))
 end
 FALLBACK.Mushroom = function(m, cf, s, pal)
-	deco(m, { Name = "Stem", Shape = Enum.PartType.Cylinder, Size = Vector3.new(4 * s, 1.6 * s, 1.6 * s), CFrame = cf * CFrame.new(0, 2 * s, 0) * UPRIGHT, Color = fbColor(pal, "Light", rgb(243, 234, 216)) })
-	deco(m, { Name = "Cap", Shape = Enum.PartType.Ball, Size = Vector3.new(6, 3, 6) * s, CFrame = cf * CFrame.new(0, 4.6 * s, 0), Color = fbColor(pal, "Accent", rgb(224, 54, 46)), CastShadow = s > 0.8 })
+	fcyl(m, cf, s, "Stems", 0.18, 0.7, 0, 0, 0, c3(pal, "Stem", P.ivory_200))
+	fball(m, cf, s, "Caps", Vector3.new(0.9, 0.45, 0.9), 0, 0.75, 0, c3(pal, "Cap", P.crimson_600))
 end
-FALLBACK.Rock = function(m, cf, s, pal)
-	deco(m, { Name = "Rock", Shape = Enum.PartType.Ball, Size = Vector3.new(5, 3, 4) * s, CFrame = cf * CFrame.new(0, 1.1 * s, 0), Color = fbColor(pal, "Stone", rgb(140, 143, 153)), Material = Enum.Material.Slate, CastShadow = s > 0.9 })
+local ROCK_ROT = CFrame.Angles(0.2, 0.5, 0.15)
+FALLBACK.Rock = function(m, cf, s, pal, sh)
+	fblock(m, cf, s, "Rock", Vector3.new(3.8, 2.3, 2.6), 0, 1.0, 0, c3(pal, "Stone", P.stone_500), sh, ROCK_ROT)
+	fblock(m, cf, s, "Rock2", Vector3.new(2.2, 1.6, 2), 1.1, 0.7, 0.4, c3(pal, "Stone2", P.stone_600), false, CFrame.Angles(-0.1, 1.1, 0.2))
+	fblock(m, cf, s, "Moss", Vector3.new(2.4, 0.3, 1.8), -0.3, 2.15, 0, c3(pal, "Moss", P.moss_400), false, CFrame.Angles(0.15, 0.5, 0.1))
 end
-FALLBACK.Bush = function(m, cf, s, pal)
-	deco(m, { Name = "Bush", Shape = Enum.PartType.Ball, Size = Vector3.new(4, 2.5, 2.6) * s, CFrame = cf * CFrame.new(0, 1 * s, 0), Color = fbColor(pal, "Leaf", rgb(79, 174, 74)), Material = Enum.Material.Grass })
+FALLBACK.Rock_Small = function(m, cf, s, pal)
+	fblock(m, cf, s, "Rock", Vector3.new(1.2, 0.7, 1), 0, 0.25, 0, c3(pal, "Stone", P.stone_400), false, ROCK_ROT)
 end
-FALLBACK.Pillar = function(m, cf, s, pal)
-	deco(m, { Name = "Base", Size = Vector3.new(3.2, 0.8, 3.2) * s, CFrame = cf * CFrame.new(0, 0.4 * s, 0), Color = fbColor(pal, "Stone", rgb(167, 164, 154)), Material = Enum.Material.Slate })
-	deco(m, { Name = "Pillar", Shape = Enum.PartType.Cylinder, Size = Vector3.new(7 * s, 2.3 * s, 2.3 * s), CFrame = cf * CFrame.new(0, 4.3 * s, 0) * UPRIGHT, Color = fbColor(pal, "Stone", rgb(167, 164, 154)), Material = Enum.Material.Slate, CastShadow = true })
-	deco(m, { Name = "Cap", Size = Vector3.new(2.8, 0.7, 2.8) * s, CFrame = cf * CFrame.new(0, 8.1 * s, 0), Color = fbColor(pal, "Stone", rgb(167, 164, 154)), Material = Enum.Material.Slate })
+FALLBACK.Rock_Slab = function(m, cf, s, pal)
+	fblock(m, cf, s, "Slab", Vector3.new(3.6, 0.5, 2.7), 0, 0.3, 0, c3(pal, "Slab", P.stone_400))
 end
-FALLBACK.CrystalCluster = function(m, cf, s, pal)
-	deco(m, { Name = "Base", Shape = Enum.PartType.Ball, Size = Vector3.new(3.4, 1.2, 3) * s, CFrame = cf * CFrame.new(0, 0.4 * s, 0), Color = fbColor(pal, "Stone", rgb(110, 107, 120)), Material = Enum.Material.Slate })
-	for i = 1, 3 do
-		deco(m, { Name = "Crystal", Size = Vector3.new(0.8, 3 - i * 0.5, 0.8) * s, CFrame = cf * CFrame.Angles(0, i * 2.1, math.rad(14 * (i - 1))) * CFrame.new((i - 1) * 0.6 * s, (1.8 - i * 0.2) * s, 0), Color = fbColor(pal, "Glow", rgb(176, 91, 255)), Material = Enum.Material.Neon })
+local function wallFallback(len: number, h: number, thick: number)
+	return function(m: Model, cf: CFrame, s: number, pal: Pal, sh: boolean)
+		fblock(m, cf, s, "Stone", Vector3.new(len, h * 0.8, thick), 0, h * 0.4, 0, c3(pal, "Stone", P.stone_500), sh)
+		fblock(m, cf, s, "Stone2", Vector3.new(len * 0.55, h * 0.2, thick * 0.95), -len * 0.18, h * 0.9, 0, c3(pal, "Stone2", P.stone_400), sh)
+		fblock(m, cf, s, "Stone3", Vector3.new(len + 0.2, 0.4, thick + 0.25), 0, 0.2, 0, c3(pal, "Stone3", P.stone_600), false)
+		fblock(m, cf, s, "Moss", Vector3.new(len * 0.4, 0.2, thick * 0.9), -len * 0.18, h + 0.05, 0, c3(pal, "Moss", P.moss_400), false)
 	end
 end
-FALLBACK.Torch = function(m, cf, s, pal)
-	deco(m, { Name = "Post", Shape = Enum.PartType.Cylinder, Size = Vector3.new(4 * s, 0.45 * s, 0.45 * s), CFrame = cf * CFrame.new(0, 2 * s, 0) * UPRIGHT, Color = fbColor(pal, "Wood", rgb(107, 74, 44)), Material = Enum.Material.Wood })
-	deco(m, { Name = "Bowl", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.5 * s, 1.2 * s, 1.2 * s), CFrame = cf * CFrame.new(0, 4.2 * s, 0) * UPRIGHT, Color = fbColor(pal, "Metal", rgb(74, 78, 90)), Material = Enum.Material.Metal })
-	deco(m, { Name = "Flame", Shape = Enum.PartType.Ball, Size = Vector3.new(0.8, 1.2, 0.8) * s, CFrame = cf * CFrame.new(0, 5 * s, 0), Color = fbColor(pal, "Glow", rgb(255, 154, 43)), Material = Enum.Material.Neon })
+FALLBACK.Ruin_Wall = wallFallback(8, 3.5, 1.4)
+FALLBACK.Ruin_WallLow = wallFallback(6, 1.6, 1.2)
+FALLBACK.Pillar = function(m, cf, s, pal, sh)
+	fblock(m, cf, s, "Plinth", Vector3.new(2.3, 0.6, 2.3), 0, 0.3, 0, c3(pal, "Base", P.stone_600), sh)
+	fcyl(m, cf, s, "Shaft", 0.8, 4.2, 0, 0.6, 0, c3(pal, "Shaft", P.stone_300), sh)
+end
+FALLBACK.Ruin_Arch = function(m, cf, s, pal, sh)
+	local stone, stone2 = c3(pal, "Stone", P.stone_500), c3(pal, "Stone2", P.stone_400)
+	fblock(m, cf, s, "Stone", Vector3.new(2.5, 7, 2), 3.95, 3.5, 0, stone, sh)
+	fblock(m, cf, s, "Stone2", Vector3.new(2.5, 4, 2), -3.95, 2, 0, stone2, sh)
+	fblock(m, cf, s, "Stone3", Vector3.new(4.5, 1.4, 1.9), 2.6, 7.6, 0, c3(pal, "Stone3", P.stone_600), sh, CFrame.Angles(0, 0, math.rad(-12)))
+end
+FALLBACK.Ruin_Block = function(m, cf, s, pal, sh)
+	fblock(m, cf, s, "Block", Vector3.new(2.4, 1.5, 2), 0, 0.5, 0, c3(pal, "Stone", P.stone_500), sh, CFrame.Angles(0.1, 0.3, 0.18))
+end
+FALLBACK.Fence_Section = function(m, cf, s, pal)
+	for _, x in ipairs({ -3.6, 3.6 }) do
+		fblock(m, cf, s, "Posts", Vector3.new(0.45, 2.6, 0.45), x, 1.2, 0, c3(pal, "Post", P.wood_700))
+	end
+	for _, y in ipairs({ 1.0, 2.0 }) do
+		fblock(m, cf, s, "Rails", Vector3.new(7.9, 0.28, 0.22), 0, y, 0, c3(pal, "Rail", P.wood_500))
+	end
 end
 FALLBACK.Banner = function(m, cf, s, pal)
-	deco(m, { Name = "Pole", Shape = Enum.PartType.Cylinder, Size = Vector3.new(9 * s, 0.36 * s, 0.36 * s), CFrame = cf * CFrame.new(0, 4.5 * s, 0) * UPRIGHT, Color = fbColor(pal, "Wood", rgb(107, 74, 44)), Material = Enum.Material.Wood })
-	deco(m, { Name = "Bar", Size = Vector3.new(3.4, 0.25, 0.25) * s, CFrame = cf * CFrame.new(0, 8.6 * s, 0), Color = fbColor(pal, "Wood", rgb(107, 74, 44)), Material = Enum.Material.Wood })
-	deco(m, { Name = "Cloth", Size = Vector3.new(3, 4.9, 0.1) * s, CFrame = cf * CFrame.new(0, 6.05 * s, -0.2 * s), Color = fbColor(pal, "Cloth", rgb(45, 79, 191)), Material = Enum.Material.Fabric })
-	deco(m, { Name = "Emblem", Size = Vector3.new(1, 1, 0.12) * s, CFrame = cf * CFrame.new(0, 6.6 * s, -0.28 * s) * CFrame.Angles(0, 0, math.rad(45)), Color = fbColor(pal, "Gold", rgb(242, 193, 78)) })
+	fcyl(m, cf, s, "Pole", 0.16, 9.2, 0, 0, 0, c3(pal, "Wood", P.wood_600))
+	fblock(m, cf, s, "Cloth", Vector3.new(2.6, 4.4, 0.1), 0, 6.3, -0.2, c3(pal, "Cloth", P.slate_600))
+	fblock(m, cf, s, "Gold", Vector3.new(1.0, 0.7, 0.12), 0, 7, -0.27, c3(pal, "Gold", P.gold_500))
+end
+FALLBACK.Torch = function(m, cf, s, pal)
+	fcyl(m, cf, s, "Post", 0.2, 4.4, 0, 0, 0, c3(pal, "Wood", P.wood_600))
+	fcyl(m, cf, s, "Bowl", 0.55, 0.45, 0, 4.3, 0, c3(pal, "Iron", P.steel_700))
+	fball(m, cf, s, "Flame", Vector3.new(0.6, 0.9, 0.6), 0, 5.1, 0, c3(pal, "Flame", P.fx_fire)).Material = NEON
+end
+FALLBACK.Lantern_Post = function(m, cf, s, pal)
+	fblock(m, cf, s, "Post", Vector3.new(0.45, 6.6, 0.45), 0, 3.3, 0, c3(pal, "Wood", P.wood_600))
+	fblock(m, cf, s, "Iron", Vector3.new(1.9, 0.22, 0.22), -0.85, 6.4, 0, c3(pal, "Iron", P.steel_800))
+	fpart(m, cf, s, "Core", Vector3.new(0.5, 0.7, 0.5), CFrame.new(-1.55, 5.0, 0), c3(pal, "Core", P.amber_300), false, nil, NEON)
+end
+FALLBACK.Barrel = function(m, cf, s, pal, sh)
+	fcyl(m, cf, s, "Staves", 0.78, 2, 0, 0, 0, c3(pal, "Wood", P.wood_500), sh)
+	fcyl(m, cf, s, "Hoops", 0.82, 0.18, 0, 1.4, 0, c3(pal, "Iron", P.steel_700))
+end
+FALLBACK.Crate = function(m, cf, s, pal, sh)
+	fblock(m, cf, s, "Body", Vector3.new(2, 2, 2), 0, 1, 0, c3(pal, "Wood", P.wood_500), sh)
+	fblock(m, cf, s, "Frame", Vector3.new(2.06, 0.25, 2.06), 0, 1.85, 0, c3(pal, "Frame", P.wood_700))
+end
+FALLBACK.Log = function(m, cf, s, pal, sh)
+	fpart(m, cf, s, "Bark", Vector3.new(7, 1.4, 1.4), CFrame.new(0, 0.7, 0), c3(pal, "Bark", P.wood_600), sh, Enum.PartType.Cylinder)
+end
+FALLBACK.Stump = function(m, cf, s, pal, sh)
+	fcyl(m, cf, s, "Bark", 0.85, 1.1, 0, 0, 0, c3(pal, "Bark", P.wood_600), sh)
+	fcyl(m, cf, s, "Top", 0.75, 0.06, 0, 1.1, 0, c3(pal, "Heart", P.dirt_300))
+end
+FALLBACK.CrystalCluster = function(m, cf, s, pal)
+	fblock(m, cf, s, "Base", Vector3.new(2.2, 0.6, 2), 0, 0.2, 0, c3(pal, "Stone", P.stone_600), false, ROCK_ROT)
+	fblock(m, cf, s, "Crystals", Vector3.new(0.7, 2.4, 0.7), 0, 1.3, 0, c3(pal, "Crystal", P.slate_400), false, CFrame.Angles(0, 0.6, 0.15))
+	fblock(m, cf, s, "Crystals2", Vector3.new(0.5, 1.6, 0.5), 0.6, 0.9, 0.3, c3(pal, "Crystal2", P.slate_200), false, CFrame.Angles(0.3, 0.2, -0.35))
+end
+FALLBACK.Shrine = function(m, cf, s, pal, sh)
+	fblock(m, cf, s, "Plinth", Vector3.new(3, 0.6, 2), 0, 0.3, 0, c3(pal, "Base", P.stone_600), sh)
+	fblock(m, cf, s, "Stone", Vector3.new(2.1, 4.2, 1.2), 0, 2.7, 0, c3(pal, "Stone", P.stone_500), sh)
+	fblock(m, cf, s, "Sigil", Vector3.new(0.8, 0.8, 0.08), 0, 3.2, -0.62, c3(pal, "Gold", P.gold_500))
+end
+FALLBACK.Castle_Wall = function(m, cf, s, pal, sh)
+	fblock(m, cf, s, "Wall", Vector3.new(12, 8.8, 3), 0, 4.4, 0, c3(pal, "Stone", P.stone_500), sh)
+	fblock(m, cf, s, "Base", Vector3.new(12, 0.8, 3.2), 0, 0.4, 0, c3(pal, "Base", P.stone_600), false)
+	for _, x in ipairs({ -4.5, -1.5, 1.5, 4.5 }) do
+		fblock(m, cf, s, "Trim", Vector3.new(1.8, 1.2, 3), x, 9.4, 0, c3(pal, "Trim", P.stone_400), sh)
+	end
+end
+local function towerFallback(m: Model, cf: CFrame, s: number, pal: Pal, sh: boolean)
+	fcyl(m, cf, s, "Wall", 4.0, 14, 0, 0, 0, c3(pal, "Stone", P.stone_500), sh)
+	fcyl(m, cf, s, "Trim", 4.4, 1, 0, 14, 0, c3(pal, "Trim", P.stone_400), sh)
+	for k = 0, 5 do
+		local a = k / 6 * TAU
+		fblock(m, cf, s, "Trim", Vector3.new(1.6, 1.2, 1.2), math.cos(a) * 3.9, 15.6, math.sin(a) * 3.9, c3(pal, "Trim", P.stone_400), false, CFrame.Angles(0, -a, 0))
+	end
+end
+FALLBACK.Castle_Tower = towerFallback
+FALLBACK.Castle_TowerRoof = function(m, cf, s, pal, sh)
+	towerFallback(m, cf, s, pal, sh)
+	for i, r in ipairs({ 4.6, 3.5, 2.4, 1.3 }) do
+		fcyl(m, cf, s, "Roof", r, 2.4, 0, 15 + (i - 1) * 2.4, 0, c3(pal, "Roof", P.slate_600), sh and i == 1)
+	end
+	fblock(m, cf, s, "Pennant", Vector3.new(1.6, 0.8, 0.06), 0.8, 25.4, 0, c3(pal, "Pennant", P.crimson_600))
+end
+FALLBACK.Castle_Gate = function(m, cf, s, pal, sh)
+	fblock(m, cf, s, "Wall", Vector3.new(3.4, 11.5, 4), -4.3, 5.75, 0, c3(pal, "Stone", P.stone_500), sh)
+	fblock(m, cf, s, "Wall", Vector3.new(3.4, 11.5, 4), 4.3, 5.75, 0, c3(pal, "Stone", P.stone_500), sh)
+	fblock(m, cf, s, "Trim", Vector3.new(5.2, 4.2, 4), 0, 9.4, 0, c3(pal, "Trim", P.stone_400), sh)
+	fblock(m, cf, s, "Doorway", Vector3.new(5.2, 7.3, 0.3), 0, 3.65, 0.6, c3(pal, "Warm", P.gold_700))
+	for _, x in ipairs({ -2, -1, 0, 1, 2 }) do
+		fblock(m, cf, s, "Portcullis", Vector3.new(0.18, 2.6, 0.18), x, 6, -1.6, c3(pal, "Iron", P.steel_800))
+	end
+	for x = -4.5, 4.5, 3 do
+		fblock(m, cf, s, "Trim", Vector3.new(1.8, 1.2, 4), x, 12.1, 0, c3(pal, "Trim", P.stone_400), false)
+	end
+end
+FALLBACK.Castle_Banner = function(m, cf, s, pal)
+	fblock(m, cf, s, "Rod", Vector3.new(3.2, 0.2, 0.2), 0, 0, -0.2, c3(pal, "Iron", P.steel_700))
+	fblock(m, cf, s, "Cloth", Vector3.new(2.6, 5.6, 0.1), 0, -3, -0.2, c3(pal, "Cloth", P.crimson_600))
+	fblock(m, cf, s, "Gold", Vector3.new(1.2, 0.8, 0.12), 0, -2.2, -0.27, c3(pal, "Gold", P.gold_500))
+end
+FALLBACK.Torch_Wall = function(m, cf, s, pal)
+	fblock(m, cf, s, "Iron", Vector3.new(0.4, 0.8, 0.2), 0, 0, -0.1, c3(pal, "Iron", P.steel_700))
+	fblock(m, cf, s, "Stick", Vector3.new(0.2, 1.4, 0.2), 0, 0.5, -0.6, c3(pal, "Wood", P.wood_500), false, CFrame.Angles(math.rad(-20), 0, 0))
+	fball(m, cf, s, "Flame", Vector3.new(0.45, 0.7, 0.45), 0, 1.35, -0.85, c3(pal, "Flame", P.fx_fire)).Material = NEON
+end
+FALLBACK.Brazier = function(m, cf, s, pal, sh)
+	fcyl(m, cf, s, "Pedestal", 0.55, 2.6, 0, 0, 0, c3(pal, "Stone", P.stone_500), sh)
+	fcyl(m, cf, s, "Bowl", 1.0, 0.6, 0, 2.6, 0, c3(pal, "Iron", P.steel_700))
+	fball(m, cf, s, "Flame", Vector3.new(1.2, 1.4, 1.2), 0, 3.6, 0, c3(pal, "Flame", P.fx_fire)).Material = NEON
+end
+FALLBACK.Dais = function(m, cf, s, pal, sh)
+	fcyl(m, cf, s, "Rim", 5.5, 0.6, 0, 0, 0, c3(pal, "Rim", P.stone_500), sh)
+	fcyl(m, cf, s, "Top", 4.2, 0.6, 0, 0.6, 0, c3(pal, "Top", P.stone_300), sh)
+	fcyl(m, cf, s, "Inlay", 3.2, 0.03, 0, 1.2, 0, c3(pal, "Inlay", P.gold_500))
+	fcyl(m, cf, s, "Top", 2.9, 0.04, 0, 1.2, 0, c3(pal, "Top", P.stone_300))
 end
 
 -- One MeshService.WhenReady per model name while meshes are still loading.
@@ -273,78 +442,115 @@ local function whenMeshLoads(name: string, fn: () -> ())
 	table.insert(list :: { () -> () }, fn)
 end
 
-local function meshInto(parent: Instance, name: string, cf: CFrame, scale: number, palette: Palette?, shadow: boolean): boolean
+local function applyOpts(p: BasePart, opts: PropOpts)
+	if opts.shadow == false then
+		p.CastShadow = false
+	end
+	if opts.query then
+		p.CanQuery = true
+	end
+end
+
+-- Moves the mesh pieces of kit model `name` into `container`; false when not loaded.
+local function fillMesh(container: Model, name: string, cf: CFrame, scale: number, palette: Pal?, opts: PropOpts): boolean
 	local model = MeshService.Build(name, cf, palette, scale)
 	if not model then
 		return false
 	end
 	for _, d in ipairs(model:GetChildren()) do
 		if d:IsA("BasePart") then
-			d.CastShadow = shadow
+			applyOpts(d, opts)
+			d.Parent = container
 		end
 	end
-	model.Parent = parent
+	model:Destroy()
 	return true
 end
 
--- Places mesh prop `name` standing on `cf` (ground centre, any yaw).
-local function prop(parent: Instance, name: string, cf: CFrame, scale: number, palette: Palette?, shadow: boolean?)
-	local castShadow = shadow == true
-	if meshInto(parent, name, cf, scale, palette, castShadow) then
-		return
-	end
-	local fb = Instance.new("Model")
-	fb.Name = name
-	local build = FALLBACK[name]
-	if build then
-		build(fb, cf, scale, palette)
-	end
-	fb.Parent = parent
-	if MeshService.MayLoad(name) then
-		whenMeshLoads(name, function()
-			local p = fb.Parent
-			if p and meshInto(p, name, cf, scale, palette, castShadow) then
-				fb:Destroy()
+-- Places kit piece `name` with its origin at `cf`. Returns the container Model.
+local function prop(parent: Instance, name: string, cf: CFrame, scale: number?, palette: Pal?, opts: PropOpts?): Model
+	local s = scale or 1
+	local o: PropOpts = opts or {}
+	local container = Instance.new("Model")
+	container.Name = name
+	if not fillMesh(container, name, cf, s, palette, o) then
+		local build = FALLBACK[name]
+		if build then
+			build(container, cf, s, kitPalette(name, palette), o.shadow ~= false)
+			for _, d in ipairs(container:GetChildren()) do
+				if d:IsA("BasePart") then
+					applyOpts(d, o)
+				end
 			end
-		end)
+		end
+		if MeshService.MayLoad(name) then
+			whenMeshLoads(name, function()
+				if container.Parent then
+					local old = container:GetChildren()
+					if fillMesh(container, name, cf, s, palette, o) then
+						for _, d in ipairs(old) do
+							d:Destroy()
+						end
+					end
+				end
+			end)
+		end
 	end
+	if o.occluder then
+		tag(container)
+	end
+	container.Parent = parent
+	return container
 end
 
-local function randomYaw(): CFrame
-	return CFrame.Angles(0, rng:NextNumber(0, TAU), 0)
+-- World position of the kit's light point (catalog Light extra), or nil.
+local function kitLightPoint(name: string, cf: CFrame, scale: number): Vector3?
+	local entry = kitEntry(name)
+	local l = entry and entry.Light
+	if not l then
+		return nil
+	end
+	return cf:PointToWorldSpace(Vector3.new(l[1], l[2], l[3]) * scale)
 end
 
 ------------------------------------------------------------------------------------------
--- LIGHTING
+-- LIGHTING (Lighting.Technology = Future is set in default.project.json)
 ------------------------------------------------------------------------------------------
 
 local LIGHTING = {
-	-- warm golden hour over the castle
+	-- dusk courtyard: cool slate sky and ambient, a low warm sun under the horizon glow;
+	-- the fire pools and the key light on the dais do the rest
 	Lobby = {
-		Clock = 17.6, Brightness = 2.2, Latitude = 30, Shadow = 0.35,
-		Ambient = rgb(118, 100, 92), Outdoor = rgb(160, 132, 118), Top = rgb(255, 226, 190),
-		Atmo = { Density = 0.3, Offset = 0.2, Color = rgb(240, 202, 165), Decay = rgb(125, 85, 95), Glare = 0.5, Haze = 1.8 },
-		Bloom = { Intensity = 0.6, Size = 26, Threshold = 1.15 },
-		Grade = { Brightness = 0.02, Contrast = 0.1, Saturation = 0.14, Tint = rgb(255, 242, 228) },
-		Rays = { Intensity = 0.08, Spread = 0.7 },
+		Clock = 18.1, Brightness = 1.4, Latitude = 40, Shadow = 0.35,
+		Ambient = rgb(112, 122, 158), Outdoor = rgb(146, 158, 200), Top = rgb(178, 188, 228), Bottom = rgb(46, 52, 72),
+		Diffuse = 0.35, Specular = 0.3,
+		Atmo = { Density = 0.3, Offset = 0.2, Color = rgb(132, 148, 188), Decay = rgb(206, 140, 112), Glare = 0.2, Haze = 1.4 },
+		Bloom = { Intensity = 0.35, Size = 22, Threshold = 1.4 },
+		Grade = { Brightness = 0, Contrast = 0.1, Saturation = 0, Tint = rgb(240, 242, 255) },
+		Rays = { Intensity = 0.02, Spread = 0.5 },
+		Clouds = { Cover = 0.55, Density = 0.55, Color = rgb(150, 136, 160) },
 	},
-	-- bright late morning in a forest clearing
+	-- bright, clear late morning in a forest clearing
 	Forest = {
-		Clock = 14.2, Brightness = 2.6, Latitude = 35, Shadow = 0.25,
-		Ambient = rgb(96, 102, 106), Outdoor = rgb(136, 142, 136), Top = rgb(255, 244, 222),
-		Atmo = { Density = 0.22, Offset = 0.25, Color = rgb(200, 222, 236), Decay = rgb(104, 140, 120), Glare = 0.15, Haze = 1.1 },
-		Bloom = { Intensity = 0.35, Size = 24, Threshold = 1.4 },
-		Grade = { Brightness = 0.02, Contrast = 0.06, Saturation = 0.16, Tint = rgb(255, 252, 240) },
-		Rays = { Intensity = 0.05, Spread = 0.6 },
+		Clock = 10.6, Brightness = 2.8, Latitude = 38, Shadow = 0.4,
+		Ambient = rgb(102, 108, 112), Outdoor = rgb(136, 142, 148), Top = rgb(255, 244, 226), Bottom = rgb(70, 80, 66),
+		Diffuse = 0.5, Specular = 0.35,
+		Atmo = { Density = 0.22, Offset = 0.05, Color = rgb(206, 222, 232), Decay = rgb(124, 150, 156), Glare = 0, Haze = 0.6 },
+		Bloom = { Intensity = 0.22, Size = 20, Threshold = 2 },
+		Grade = { Brightness = 0.01, Contrast = 0.08, Saturation = -0.06, Tint = rgb(255, 252, 244) },
+		Rays = { Intensity = 0.03, Spread = 0.5 },
+		Clouds = { Cover = 0.42, Density = 0.45, Color = rgb(255, 255, 255) },
 	},
-	-- low golden dusk, purple crystal haze
+	-- clear golden hour over the ruins (warm, still bright enough to read the swarm)
 	Ruins = {
-		Clock = 17.3, Brightness = 2.1, Latitude = 25, Shadow = 0.3,
-		Ambient = rgb(108, 90, 122), Outdoor = rgb(150, 122, 142), Top = rgb(255, 214, 170),
-		Atmo = { Density = 0.3, Offset = 0.15, Color = rgb(228, 190, 176), Decay = rgb(112, 72, 132), Glare = 0.45, Haze = 2 },
-		Bloom = { Intensity = 0.75, Size = 28, Threshold = 1.05 },
-		Grade = { Brightness = 0, Contrast = 0.1, Saturation = 0.1, Tint = rgb(255, 238, 228) },
-		Rays = { Intensity = 0.1, Spread = 0.75 },
+		Clock = 16.2, Brightness = 2.8, Latitude = 30, Shadow = 0.4,
+		Ambient = rgb(104, 102, 108), Outdoor = rgb(140, 138, 146), Top = rgb(255, 232, 198), Bottom = rgb(78, 78, 68),
+		Diffuse = 0.5, Specular = 0.35,
+		Atmo = { Density = 0.25, Offset = 0.08, Color = rgb(226, 212, 196), Decay = rgb(160, 132, 118), Glare = 0.2, Haze = 0.9 },
+		Bloom = { Intensity = 0.25, Size = 22, Threshold = 1.8 },
+		Grade = { Brightness = 0.01, Contrast = 0.08, Saturation = 0.06, Tint = rgb(255, 248, 238) },
+		Rays = { Intensity = 0.04, Spread = 0.55 },
+		Clouds = { Cover = 0.35, Density = 0.4, Color = rgb(255, 238, 220) },
 	},
 }
 
@@ -364,12 +570,15 @@ function MapBuilder.ApplyLighting(name: string)
 	Lighting.Brightness = L.Brightness
 	Lighting.GeographicLatitude = L.Latitude
 	Lighting.ShadowSoftness = L.Shadow
+	Lighting.GlobalShadows = true
 	Lighting.Ambient = L.Ambient
 	Lighting.OutdoorAmbient = L.Outdoor
 	Lighting.ColorShift_Top = L.Top
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.5
+	Lighting.ColorShift_Bottom = L.Bottom
+	Lighting.EnvironmentDiffuseScale = L.Diffuse
+	Lighting.EnvironmentSpecularScale = L.Specular
 	Lighting.FogEnd = 100000
+	Lighting.ExposureCompensation = 0
 
 	local atmo = lightingEffect("Atmosphere", "SwarmAtmosphere") :: Atmosphere
 	atmo.Density = L.Atmo.Density
@@ -393,337 +602,278 @@ function MapBuilder.ApplyLighting(name: string)
 	local rays = lightingEffect("SunRaysEffect", "SwarmSunRays") :: SunRaysEffect
 	rays.Intensity = L.Rays.Intensity
 	rays.Spread = L.Rays.Spread
+
+	-- dynamic clouds (no custom sky textures)
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if terrain then
+		pcall(function()
+			local clouds = terrain:FindFirstChildOfClass("Clouds") or Instance.new("Clouds")
+			clouds.Cover = L.Clouds.Cover
+			clouds.Density = L.Clouds.Density
+			clouds.Color = L.Clouds.Color
+			clouds.Enabled = true
+			clouds.Parent = terrain
+		end)
+	end
 end
 
 ------------------------------------------------------------------------------------------
--- LOBBY: a castle courtyard. The keep (gate, towers, banners) is on the north side; the
--- menu camera (part "MenuCamera") looks at it from the south over the spawn emblem.
+-- LOBBY: a castle courtyard at dusk, composed for the fixed menu camera.
+--
+--   north (−Z): keep wall with the gatehouse centred behind the hero, roofed towers
+--               framing it, crimson banners and wall torches, pines over the battlements
+--   centre:     the round two-step dais (part "MenuStand" on its top) between two braziers
+--   south (+Z): the menu camera; behind it, out of the shot, the waiting spot where real
+--               lobby characters spawn (WalkSpeed 0) and the legacy prompts / boards
+--
+-- The client showcase (src/client/Showcase.lua) stands a local clone of the hero on
+-- "MenuStand" facing "MenuCamera"; the menu UI keeps the left / right thirds and the
+-- bottom centre, so everything that matters sits in the middle band.
 ------------------------------------------------------------------------------------------
 
-local STONE = rgb(150, 146, 138)
-local STONE_DARK = rgb(112, 108, 104)
-local STONE_LIGHT = rgb(176, 170, 158)
-local ROOF = rgb(62, 72, 112)
-local BANNER_RED = rgb(150, 32, 44)
-local GOLD = rgb(232, 186, 80)
-local WOOD = rgb(110, 76, 46)
-
--- Ring of merlons (crenellations) on top of a round tower.
-local function towerMerlons(parent: Instance, centre: Vector3, radius: number, y: number, count: number, color: Color3)
-	for k = 0, count - 1 do
-		local a = k / count * TAU
-		local pos = centre + Vector3.new(math.cos(a) * radius, y + 1, math.sin(a) * radius)
-		deco(parent, { Name = "Merlon", Size = Vector3.new(2.2, 2, 1.4), CFrame = CFrame.lookAt(pos, Vector3.new(centre.X, pos.Y, centre.Z)), Color = color, Material = Enum.Material.Cobblestone, CastShadow = true })
-	end
+local function textSurface(target: BasePart, face: Enum.NormalId, text: string, color: Color3): SurfaceGui
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0
+	gui.Parent = target
+	local label = Instance.new("TextLabel")
+	label.Name = "Title"
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = color
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.Text = text
+	label.Parent = gui
+	return gui
 end
 
--- Round tower: body, corbel ring, merlons, optional stepped cone roof and flag.
-local function castleTower(parent: Instance, base: Vector3, radius: number, height: number, roof: boolean, flagColor: Color3?)
-	column(parent, "Tower", base, radius, height, STONE, Enum.Material.Cobblestone, { CanCollide = true, CastShadow = true })
-	column(parent, "TowerPlinth", base, radius + 0.7, 1.6, STONE_DARK, Enum.Material.Cobblestone)
-	column(parent, "TowerCorbel", base + Vector3.new(0, height, 0), radius + 0.8, 1.4, STONE_LIGHT, Enum.Material.Cobblestone, { CastShadow = true })
-	towerMerlons(parent, base, radius + 0.3, height + 1.4, math.max(6, math.floor(radius * 1.3)), STONE_LIGHT)
-	local top = height + 1.4
-	if roof then
-		for i, r in ipairs({ radius - 0.2, radius * 0.72, radius * 0.46, radius * 0.22 }) do
-			column(parent, "Roof", base + Vector3.new(0, top + (i - 1) * 2.1, 0), r, 2.1, vary(ROOF, 0.02), Enum.Material.Slate, { CastShadow = true })
-		end
-		top += 8.4
-	end
-	if flagColor then
-		column(parent, "FlagPole", base + Vector3.new(0, top, 0), 0.15, 5, rgb(70, 60, 50), Enum.Material.Wood)
-		deco(parent, { Name = "Flag", Size = Vector3.new(3.4, 1.9, 0.1), CFrame = CFrame.new(base + Vector3.new(1.75, top + 4, 0)) * CFrame.Angles(0, math.rad(-12), 0), Color = flagColor, Material = Enum.Material.Fabric })
-	end
+local function prompt(parent: Instance, action: string, object: string, name: string): ProximityPrompt
+	local p = Instance.new("ProximityPrompt")
+	p.Name = name
+	p.ActionText = action
+	p.ObjectText = object
+	p.HoldDuration = 0
+	p.MaxActivationDistance = 8
+	p.RequiresLineOfSight = false
+	p.KeyboardKeyCode = Enum.KeyCode.E
+	p.Enabled = false -- the 2D menu replaces the world prompts
+	p.Parent = parent
+	return p
 end
 
--- Hanging cloth banner on a wall face (front = +Z).
-local function wallBanner(parent: Instance, x: number, top: number, z: number, o: Vector3)
-	local h = 9
-	deco(parent, { Name = "HangingRod", Size = Vector3.new(5.6, 0.4, 0.4), CFrame = CFrame.new(o + Vector3.new(x, top, z + 0.95)), Color = GOLD, Material = Enum.Material.Metal })
-	deco(parent, { Name = "HangingBanner", Size = Vector3.new(4.6, h, 0.15), CFrame = CFrame.new(o + Vector3.new(x, top - h / 2, z + 0.8)), Color = BANNER_RED, Material = Enum.Material.Fabric })
-	deco(parent, { Name = "BannerTrim", Size = Vector3.new(4.6, 0.5, 0.18), CFrame = CFrame.new(o + Vector3.new(x, top - h + 0.6, z + 0.83)), Color = GOLD, Material = Enum.Material.Fabric })
-	deco(parent, { Name = "BannerEmblem", Size = Vector3.new(1.8, 1.8, 0.2), CFrame = CFrame.new(o + Vector3.new(x, top - 3.4, z + 0.86)) * CFrame.Angles(0, 0, math.rad(45)), Color = GOLD, Material = Enum.Material.Fabric })
-end
+-- Menu shot (studs, relative to the dais centre): camera height / distance, aim height.
+local MENU = {
+	DaisZ = -4, -- dais centre, relative to Config.Lobby.Origin
+	CamHeight = 7.6,
+	CamDistance = 23,
+	AimHeight = 4.5, -- the hero's chest on the dais (the aim point lands at MenuHeroY)
+	KeepZ = -21, -- keep wall face, relative to the dais
+	WaitZ = 34, -- hidden waiting spot for real characters (behind the camera)
+}
 
 function MapBuilder.BuildLobby()
-	local root = ensureMapFolder()
-	local existing = root:FindFirstChild("Lobby")
-	if existing then
-		existing:Destroy()
+	rng = Random.new(SEEDS.Lobby)
+	-- The lobby lives directly in workspace ("workspace.Lobby"): the client menu camera and
+	-- the showcase both look there first (and in workspace.SwarmMap.Lobby).
+	local mapRoot = ensureMapFolder()
+	for _, where in ipairs({ workspace, mapRoot }) do
+		local existing = where:FindFirstChild("Lobby")
+		if existing then
+			existing:Destroy()
+		end
 	end
 	local folder = Instance.new("Model")
 	folder.Name = "Lobby"
-	folder.Parent = root
+	folder.Parent = workspace
 
 	local o = Config.Lobby.Origin
-	local size = Config.Lobby.Size
-	local half = size / 2
-	local southH = Config.Lobby.WallHeight
-	local keepH = 18 -- keep wall height (north)
-	local sideH = 9 -- east / west wall height
-	local spawnPos = o + Vector3.new(0, 0, -6) -- where characters stand (emblem centre)
+	local daisPos = o + Vector3.new(0, 0, MENU.DaisZ)
+	local keepZ = MENU.DaisZ + MENU.KeepZ -- keep wall front face (relative to o)
+	local FACE_SOUTH = yawCF(180) -- kit fronts face −Z; this turns them toward the camera
+	-- castle stone one step lighter than the kit default so it reads in the dusk light
+	local CASTLE: Pal = { Stone = P.stone_400, Trim = P.stone_300, Base = P.stone_500 }
+	local FLAME: Pal = { Flame = rgb(255, 128, 40), Core = rgb(255, 196, 110) }
 
-	local function add(p: BasePart): BasePart
-		p.Parent = folder
-		return p
+	local function at(x: number, y: number, z: number): Vector3
+		return o + Vector3.new(x, y, z)
 	end
-
-	--------------------------------------------------------------------------------------
-	-- Grounds around the castle + distant hills and mountains (menu backdrop).
-	add(part({ Name = "Grounds", Size = Vector3.new(560, 2, 560), CFrame = CFrame.new(o + Vector3.new(0, -1.35, -100)), Color = rgb(98, 138, 72), Material = Enum.Material.Grass, CanCollide = true }))
-	for _, h in ipairs({
-		{ Vector3.new(-120, -14, -150), Vector3.new(150, 50, 90), rgb(88, 128, 70) },
-		{ Vector3.new(90, -16, -170), Vector3.new(180, 56, 100), rgb(80, 120, 66) },
-		{ Vector3.new(0, -20, -230), Vector3.new(220, 60, 110), rgb(92, 126, 76) },
-		{ Vector3.new(-240, -20, -330), Vector3.new(260, 290, 160), rgb(112, 118, 140) },
-		{ Vector3.new(60, -30, -400), Vector3.new(340, 350, 180), rgb(104, 110, 136) },
-		{ Vector3.new(320, -20, -340), Vector3.new(280, 270, 160), rgb(116, 120, 142) },
-	}) do
-		add(part({ Name = "Hill", Shape = Enum.PartType.Ball, Size = h[2], CFrame = CFrame.new(o + h[1]), Color = h[3], Material = Enum.Material.Grass }))
+	local function add(props: { [string]: any }): BasePart
+		return deco(folder, props)
 	end
 
 	--------------------------------------------------------------------------------------
-	-- Courtyard floor: dark grout slab + 6x6 flagstones (a warm sandstone path runs from
-	-- the south wall to the gate) + the spawn emblem.
-	add(part({ Name = "Floor", Size = Vector3.new(size, 2, size), CFrame = CFrame.new(o + Vector3.new(0, -1, 0)), Color = rgb(86, 82, 78), Material = Enum.Material.Slate, CanCollide = true, CanQuery = true }))
-	local stones = { rgb(150, 146, 138), rgb(140, 136, 130), rgb(160, 154, 144), rgb(132, 128, 124), rgb(146, 140, 128) }
-	local sand = { rgb(182, 164, 132), rgb(172, 154, 124), rgb(188, 170, 140) }
-	for ix = 0, 9 do
-		for iz = 0, 9 do
-			local x, z = -half + 3 + ix * 6, -half + 3 + iz * 6
-			local onPath = math.abs(x) < 6
-			add(part({ Name = "Flagstone", Size = Vector3.new(5.7, 0.2, 5.7), CFrame = CFrame.new(o + Vector3.new(x, 0, z)) * CFrame.Angles(0, math.rad(rng:NextNumber(-1.2, 1.2)), 0), Color = vary(onPath and pick(sand) or pick(stones), 0.02), Material = Enum.Material.Slate }))
-		end
-	end
-	-- emblem: gold ring, blue field, four gold rays and a gold centre
-	disc(folder, "EmblemRing", spawnPos + Vector3.new(0, 0.16, 0), 5.4, GOLD, Enum.Material.Metal)
-	disc(folder, "EmblemField", spawnPos + Vector3.new(0, 0.18, 0), 4.7, rgb(38, 58, 120), Enum.Material.Slate)
-	for k = 0, 3 do
-		add(part({ Name = "EmblemRay", Size = Vector3.new(0.5, 0.06, 8.6), CFrame = CFrame.new(spawnPos + Vector3.new(0, 0.19, 0)) * CFrame.Angles(0, k * math.pi / 4, 0), Color = GOLD, Material = Enum.Material.Metal }))
-	end
-	disc(folder, "EmblemCore", spawnPos + Vector3.new(0, 0.22, 0), 1.3, GOLD, Enum.Material.Metal)
-
-	--------------------------------------------------------------------------------------
-	-- The keep (north): wall, plinth, string course, merlons, arrow slits, round-arched
-	-- gate with a raised portcullis, gate buttresses with braziers, steps.
-	local keepZ = -half -- front face of the keep
-	add(part({ Name = "KeepWall", Size = Vector3.new(size + 4, keepH, 4), CFrame = CFrame.new(o + Vector3.new(0, keepH / 2, keepZ - 2)), Color = STONE, Material = Enum.Material.Cobblestone, CanCollide = true, CastShadow = true }))
-	add(part({ Name = "KeepPlinth", Size = Vector3.new(size, 1.2, 0.8), CFrame = CFrame.new(o + Vector3.new(0, 0.6, keepZ + 0.2)), Color = STONE_DARK, Material = Enum.Material.Cobblestone }))
-	add(part({ Name = "StringCourse", Size = Vector3.new(size, 0.8, 0.7), CFrame = CFrame.new(o + Vector3.new(0, 13.4, keepZ + 0.2)), Color = STONE_LIGHT, Material = Enum.Material.Slate }))
-	for x = -half + 2, half - 2, 4 do
-		add(part({ Name = "Merlon", Size = Vector3.new(2.4, 2.2, 4), CFrame = CFrame.new(o + Vector3.new(x, keepH + 1.1, keepZ - 2)), Color = STONE_LIGHT, Material = Enum.Material.Cobblestone, CastShadow = true }))
-	end
-	for _, x in ipairs({ -21, 21 }) do
-		add(part({ Name = "ArrowSlit", Size = Vector3.new(0.8, 3.6, 0.1), CFrame = CFrame.new(o + Vector3.new(x, 9, keepZ + 0.05)), Color = rgb(28, 22, 20) }))
-		add(part({ Name = "ArrowSlit", Size = Vector3.new(0.8, 2.6, 0.1), CFrame = CFrame.new(o + Vector3.new(x, 16, keepZ + 0.05)), Color = rgb(28, 22, 20) }))
-	end
-	-- gate: stone arch trim, warm-lit interior, raised portcullis teeth
-	local gateR = 5.5
-	local gateY = 6
-	local function archShape(name: string, r: number, zOff: number, color: Color3, material: Enum.Material)
-		add(part({ Name = name, Size = Vector3.new(r * 2, gateY, 0.3), CFrame = CFrame.new(o + Vector3.new(0, gateY / 2, keepZ + zOff)), Color = color, Material = material }))
-		add(part({ Name = name, Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, r * 2, r * 2), CFrame = CFrame.new(o + Vector3.new(0, gateY, keepZ + zOff)) * CFrame.Angles(0, math.rad(90), 0), Color = color, Material = material }))
-	end
-	archShape("GateTrim", gateR + 1.2, 0.15, STONE_LIGHT, Enum.Material.Slate)
-	archShape("GateDoorway", gateR, 0.35, rgb(64, 42, 30), Enum.Material.Wood)
-	for x = -4.5, 4.5, 1.5 do
-		local topY = gateY + math.sqrt(math.max(0, gateR * gateR - x * x))
-		add(part({ Name = "Portcullis", Size = Vector3.new(0.3, topY - 8.4, 0.3), CFrame = CFrame.new(o + Vector3.new(x, (topY + 8.4) / 2, keepZ + 0.6)), Color = rgb(52, 52, 58), Material = Enum.Material.Metal }))
-	end
-	add(part({ Name = "Portcullis", Size = Vector3.new(10, 0.35, 0.35), CFrame = CFrame.new(o + Vector3.new(0, 8.6, keepZ + 0.6)), Color = rgb(52, 52, 58), Material = Enum.Material.Metal }))
-	fireLight(folder, o + Vector3.new(0, 5, keepZ + 3), 16, 1.2, rgb(255, 180, 110))
-	for _, x in ipairs({ -8.6, 8.6 }) do
-		add(part({ Name = "Buttress", Size = Vector3.new(3, keepH + 3, 3), CFrame = CFrame.new(o + Vector3.new(x, (keepH + 3) / 2, keepZ - 0.5)), Color = STONE_LIGHT, Material = Enum.Material.Cobblestone, CanCollide = true, CastShadow = true }))
-		add(part({ Name = "ButtressCap", Size = Vector3.new(3.6, 0.8, 3.6), CFrame = CFrame.new(o + Vector3.new(x, keepH + 3.4, keepZ - 0.5)), Color = STONE_DARK, Material = Enum.Material.Slate }))
-		-- brazier on a bracket half way up
-		add(part({ Name = "Bracket", Size = Vector3.new(0.5, 0.5, 1.6), CFrame = CFrame.new(o + Vector3.new(x, 10.2, keepZ + 1.6)), Color = rgb(52, 52, 58), Material = Enum.Material.Metal }))
-		column(folder, "Brazier", o + Vector3.new(x, 10.4, keepZ + 2.4), 0.8, 0.7, rgb(60, 58, 62), Enum.Material.Metal)
-		add(part({ Name = "BrazierFlame", Shape = Enum.PartType.Ball, Size = Vector3.new(1.1, 1.4, 1.1), CFrame = CFrame.new(o + Vector3.new(x, 11.6, keepZ + 2.4)), Color = rgb(255, 150, 50), Material = Enum.Material.Neon }))
-		fireLight(folder, o + Vector3.new(x, 12, keepZ + 2.6), 20, 1.6, nil, true)
-	end
-	for _, x in ipairs({ -15.5, 15.5 }) do
-		wallBanner(folder, x, 16.4, keepZ, o)
-	end
-	-- steps up to the gate (collidable, 0.6 studs each)
-	for i, st in ipairs({ { 22, 9 }, { 19, 6 }, { 16, 3 } }) do
-		local h = 0.6 * i
-		add(part({ Name = "Step", Size = Vector3.new(st[1], h, st[2]), CFrame = CFrame.new(o + Vector3.new(0, h / 2, keepZ + st[2] / 2)), Color = i % 2 == 0 and STONE_LIGHT or rgb(160, 154, 144), Material = Enum.Material.Slate, CanCollide = true }))
-	end
-	-- ivy on the keep
-	for _, iv in ipairs({ { -19.5, 1.5, 2.6, 6 }, { 20, 1, 3, 5 }, { -12, 15, 3.4, 4 }, { 12, 2.5, 4, 4 } }) do
-		add(part({ Name = "Ivy", Size = Vector3.new(iv[3], iv[4], 0.2), CFrame = CFrame.new(o + Vector3.new(iv[1], iv[2] + iv[4] / 2 - 2, keepZ + 0.12)), Color = vary(rgb(70, 120, 60), 0.03), Material = Enum.Material.Grass }))
-	end
-
-	--------------------------------------------------------------------------------------
-	-- Towers: tall roofed towers at the keep corners, short ones at the south corners.
-	castleTower(folder, o + Vector3.new(-half, 0, keepZ), 6.5, 22, true, BANNER_RED)
-	castleTower(folder, o + Vector3.new(half, 0, keepZ), 6.5, 22, true, rgb(45, 79, 191))
-	castleTower(folder, o + Vector3.new(-half, 0, half), 4.5, 10, false, nil)
-	castleTower(folder, o + Vector3.new(half, 0, half), 4.5, 10, false, nil)
-
-	--------------------------------------------------------------------------------------
-	-- Side walls (crenellated), the low south wall and tall invisible barriers.
-	local walls = {
-		{ Vector3.new(-half - 1.5, 0, 0), Vector3.new(3, sideH, size), "z" },
-		{ Vector3.new(half + 1.5, 0, 0), Vector3.new(3, sideH, size), "z" },
-		{ Vector3.new(0, 0, half + 1.5), Vector3.new(size, southH, 3), "x" },
-	}
-	for _, w in ipairs(walls) do
-		local pos, sz = w[1], w[2]
-		add(part({ Name = "Wall", Size = sz, CFrame = CFrame.new(o + pos + Vector3.new(0, sz.Y / 2, 0)), Color = STONE, Material = Enum.Material.Cobblestone, CanCollide = true, CastShadow = true }))
-		add(part({ Name = "WallCap", Size = Vector3.new(sz.X + 0.4, 0.6, sz.Z + 0.4), CFrame = CFrame.new(o + pos + Vector3.new(0, sz.Y + 0.3, 0)), Color = STONE_LIGHT, Material = Enum.Material.Slate }))
-		local length = w[3] == "z" and sz.Z or sz.X
-		for t = -length / 2 + 4, length / 2 - 4, 4.5 do
-			local off = w[3] == "z" and Vector3.new(0, 0, t) or Vector3.new(t, 0, 0)
-			add(part({ Name = "Merlon", Size = Vector3.new(w[3] == "z" and 3 or 2.2, 1.8, w[3] == "z" and 2.2 or 3), CFrame = CFrame.new(o + pos + off + Vector3.new(0, sz.Y + 1.5, 0)), Color = STONE_LIGHT, Material = Enum.Material.Cobblestone }))
-		end
-	end
-	for _, b in ipairs({
-		{ Vector3.new(0, 20, -half - 2), Vector3.new(size + 2, 40, 2) },
-		{ Vector3.new(0, 20, half + 1), Vector3.new(size + 2, 40, 2) },
-		{ Vector3.new(-half - 1, 20, 0), Vector3.new(2, 40, size + 2) },
-		{ Vector3.new(half + 1, 20, 0), Vector3.new(2, 40, size + 2) },
-	}) do
-		add(part({ Name = "Barrier", Size = b[2], CFrame = CFrame.new(o + b[1]), Transparency = 1, CanCollide = true }))
-	end
-
-	--------------------------------------------------------------------------------------
-	-- Planters with bushes and flowers, exterminator supply corners.
-	for _, sx in ipairs({ -1, 1 }) do
-		for _, z in ipairs({ -12, 6 }) do
-			local c = o + Vector3.new(sx * (half - 3), 0, z)
-			add(part({ Name = "Planter", Size = Vector3.new(4, 1.4, 9), CFrame = CFrame.new(c + Vector3.new(0, 0.7, 0)), Color = STONE_DARK, Material = Enum.Material.Cobblestone, CanCollide = true }))
-			add(part({ Name = "Soil", Size = Vector3.new(3.4, 0.2, 8.4), CFrame = CFrame.new(c + Vector3.new(0, 1.35, 0)), Color = rgb(70, 50, 36), Material = Enum.Material.Ground }))
-			for _, dz in ipairs({ -2.3, 2.3 }) do
-				prop(folder, "Bush", CFrame.new(c + Vector3.new(0, 1.3, dz)) * randomYaw(), rng:NextNumber(0.75, 0.9), { Leaf = vary(rgb(79, 160, 74), 0.04), Accent = pick({ rgb(255, 90, 138), rgb(255, 210, 90), rgb(190, 120, 255) }) })
-			end
-			for _, f in ipairs({ { -1, 0 }, { 1, 0.4 }, { 0.2, -0.6 } }) do
-				add(part({ Name = "Flower", Shape = Enum.PartType.Ball, Size = Vector3.new(0.6, 0.6, 0.6), CFrame = CFrame.new(c + Vector3.new(f[1], 1.7, f[2] * 2)), Color = pick({ rgb(255, 240, 120), rgb(255, 120, 150), rgb(255, 255, 255) }) }))
+	-- Ground: grout slab + 6-stud flagstones in three close stone tones, dark meadow
+	-- outside the walls.
+	local floorX0, floorX1 = -51, 51
+	local floorZ0, floorZ1 = keepZ - 4, MENU.WaitZ + 10
+	add({ Name = "Floor", Size = Vector3.new(floorX1 - floorX0, 2, floorZ1 - floorZ0), CFrame = CFrame.new(at((floorX0 + floorX1) / 2, -1.06, (floorZ0 + floorZ1) / 2)), Color = P.stone_700, CanCollide = true, CanQuery = true })
+	add({ Name = "Grounds", Size = Vector3.new(420, 2, 420), CFrame = CFrame.new(at(0, -1.3, -60)), Color = P.moss_800, CanCollide = true })
+	local tones = { P.stone_400, mix(P.stone_400, P.stone_500, 0.5), P.stone_500, mix(P.stone_400, P.slate_400, 0.25) }
+	local tile = 6
+	for ix = 0, 13 do
+		for iz = 0, 8 do
+			local x = -42 + tile / 2 + ix * tile
+			local z = keepZ + tile / 2 + iz * tile
+			local d = Vector2.new(x, z - MENU.DaisZ).Magnitude
+			if d > 5.2 then -- the dais covers the middle
+				local t = pick(tones)
+				add({ Name = "Flagstone", Size = Vector3.new(tile - 0.32, 0.2, tile - 0.32), CFrame = CFrame.new(at(x, -0.1 + jitter(0.015), z)) * yawCF(jitter(0.8)), Color = t, CanQuery = true })
 			end
 		end
 	end
-	-- torches: at the steps and along the side walls
-	local torchSpots = { Vector3.new(-11.8, 0, keepZ + 9.6), Vector3.new(11.8, 0, keepZ + 9.6) }
+
+	--------------------------------------------------------------------------------------
+	-- Keep wall with the gatehouse in the middle, roofed towers framing it, plain towers
+	-- at the corners, side walls running toward the camera.
+	local wallZ = keepZ - 1.55 -- wall centre (3 thick, front face at keepZ)
+	local GATE_S = 1.25
+	local gateCF = CFrame.new(at(0, 0, keepZ - 2.05 * GATE_S + 0.4)) * FACE_SOUTH
+	prop(folder, "Castle_Gate", gateCF, GATE_S, CASTLE)
 	for _, sx in ipairs({ -1, 1 }) do
-		for _, z in ipairs({ -18, -3, 13 }) do
-			table.insert(torchSpots, Vector3.new(sx * (half - 1.6), 0, z))
+		for k = 1, 4 do
+			prop(folder, "Castle_Wall", CFrame.new(at(sx * (k * 12), 0, wallZ)) * FACE_SOUTH, 1, CASTLE)
+		end
+		prop(folder, "Castle_TowerRoof", CFrame.new(at(sx * 19, 0, keepZ - 0.6)), 0.95, CASTLE)
+		prop(folder, "Castle_Tower", CFrame.new(at(sx * 49, 0, wallZ)), 1.1, CASTLE)
+		for k = 0, 3 do
+			prop(folder, "Castle_Wall", CFrame.new(at(sx * 49, 0, keepZ + 6 + k * 12)) * yawCF(-90 * sx), 1, CASTLE)
 		end
 	end
-	for _, t in ipairs(torchSpots) do
-		prop(folder, "Torch", CFrame.new(o + t) * randomYaw(), 1.15)
-		fireLight(folder, o + t + Vector3.new(0, 6, 0), 18, 1.4, nil, true)
-	end
-	-- pole banners in front of the towers (rotated so the emblem side faces the courtyard)
-	for _, x in ipairs({ -23, 23 }) do
-		prop(folder, "Banner", CFrame.new(o + Vector3.new(x, 0, keepZ + 8.5)) * CFrame.Angles(0, math.pi, 0), 1.2)
-	end
-	-- supply corners: crates, barrels and a pesticide tank (the heroes are exterminators)
+	-- crimson banners and wall torches between the gate and the towers
 	for _, sx in ipairs({ -1, 1 }) do
-		local c = o + Vector3.new(sx * 21, 0, 17)
-		add(part({ Name = "Crate", Size = Vector3.new(3, 3, 3), CFrame = CFrame.new(c + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, math.rad(12 * sx), 0), Color = WOOD, Material = Enum.Material.WoodPlanks, CanCollide = true, CastShadow = true }))
-		add(part({ Name = "Crate", Size = Vector3.new(2.2, 2.2, 2.2), CFrame = CFrame.new(c + Vector3.new(0.3 * sx, 4.1, 0.2)) * CFrame.Angles(0, math.rad(-20 * sx), 0), Color = vary(WOOD, 0.04), Material = Enum.Material.WoodPlanks, CastShadow = true }))
-		column(folder, "Barrel", c + Vector3.new(3 * sx, 0, 1.5), 1.1, 2.8, rgb(96, 64, 40), Enum.Material.Wood, { CanCollide = true })
-		column(folder, "BarrelHoop", c + Vector3.new(3 * sx, 1.9, 1.5), 1.15, 0.25, rgb(60, 60, 66), Enum.Material.Metal)
-		column(folder, "Tank", c + Vector3.new(-2.6 * sx, 0, 2), 1, 3.6, rgb(236, 196, 40), Enum.Material.Metal, { CanCollide = true })
-		column(folder, "TankStripe", c + Vector3.new(-2.6 * sx, 2.2, 2), 1.05, 0.5, rgb(30, 30, 34), Enum.Material.SmoothPlastic)
-		add(part({ Name = "TankGauge", Shape = Enum.PartType.Ball, Size = Vector3.new(0.6, 0.6, 0.6), CFrame = CFrame.new(c + Vector3.new(-2.6 * sx, 3.1, 3)), Color = rgb(120, 255, 120), Material = Enum.Material.Neon }))
+		prop(folder, "Castle_Banner", CFrame.new(at(sx * 10.9, 9.4, keepZ)) * FACE_SOUTH, 1.05)
+		for _, x in ipairs({ 8.5, 13.3 }) do
+			local cf = CFrame.new(at(sx * x, 4.6, keepZ)) * FACE_SOUTH
+			prop(folder, "Torch_Wall", cf, 1.1, FLAME)
+			pointLight(folder, kitLightPoint("Torch_Wall", cf, 1.1) or cf.Position, 13, 1.3, FIRE, true)
+		end
+	end
+	-- warm-lit doorway inside the gate
+	pointLight(folder, (kitLightPoint("Castle_Gate", gateCF, GATE_S) or at(0, 3, keepZ)) + Vector3.new(0, 1, 1.5), 13, 1.2, rgb(255, 176, 110), true)
+
+	--------------------------------------------------------------------------------------
+	-- The dais (raycast-able top for the showcase), braziers either side, the hero mark.
+	local dais = prop(folder, "Dais", CFrame.new(daisPos), 1, nil, { query = true })
+	local daisEntry = kitEntry("Dais")
+	local daisTop = (daisEntry and daisEntry.Top) or 1.2
+	for _, d in ipairs(dais:GetChildren()) do
+		if d:IsA("BasePart") then
+			d.CanCollide = true
+		end
+	end
+	for _, sx in ipairs({ -1, 1 }) do
+		local cf = CFrame.new(daisPos + Vector3.new(sx * 7.2, 0, -1.6))
+		prop(folder, "Brazier", cf, 1.05, { Flame = FLAME.Flame, Core = FLAME.Core, Stone = P.stone_400, Base = P.stone_500 })
+		pointLight(folder, (kitLightPoint("Brazier", cf, 1.05) or cf.Position + Vector3.new(0, 3.4, 0)) + Vector3.new(0, 1.8, 0), 17, 1.9, FIRE, true)
+	end
+	local camPos = daisPos + Vector3.new(0, MENU.CamHeight, MENU.CamDistance)
+	local standPos = daisPos + Vector3.new(0, daisTop + 0.025, 0)
+	local menuStand = add({
+		Name = "MenuStand",
+		Size = Vector3.new(2, 0.05, 2),
+		CFrame = CFrame.lookAt(standPos, Vector3.new(camPos.X, standPos.Y, camPos.Z)),
+		Transparency = 1,
+	})
+	-- key light: warm, in front of the hero and above the camera line, so the hero is the
+	-- brightest thing in the shot; a cool rim from behind separates it from the gate
+	pointLight(folder, daisPos + Vector3.new(-2.5, 8.5, 7.5), 15, 2.4, rgb(255, 226, 188), false)
+	pointLight(folder, daisPos + Vector3.new(3, 7, -5), 9, 0.9, rgb(170, 190, 255), false)
+	-- cool "moonlight" fill over the courtyard so the walls and towers read at dusk
+	pointLight(folder, daisPos + Vector3.new(0, 24, -2), 50, 1.0, rgb(150, 170, 230), false)
+
+	--------------------------------------------------------------------------------------
+	-- Props at the edges: crates / barrels against the wall, ferns and shrubs at its foot,
+	-- pines over the battlements.
+	for _, sx in ipairs({ -1, 1 }) do
+		local base = at(sx * 13.6, 0, keepZ + 4.2)
+		prop(folder, "Crate", CFrame.new(base) * yawCF(8 * sx), 1.25)
+		prop(folder, "Crate", CFrame.new(base + Vector3.new(sx * 2.7, 0, 0.5)) * yawCF(-12 * sx), 1.1)
+		prop(folder, "Crate", CFrame.new(base + Vector3.new(sx * 1.2, 2.5, 0.1)) * yawCF(25 * sx), 0.95)
+		prop(folder, "Barrel", CFrame.new(base + Vector3.new(-sx * 2.8, 0, 0.6)), 1.25)
+		prop(folder, "Barrel", CFrame.new(base + Vector3.new(-sx * 4.6, 0, 1.4)), 1.15)
+		for _, x in ipairs({ 8.2, 16.4, 25, 30 }) do
+			prop(folder, "Fern", CFrame.new(at(sx * (x + jitter(0.6)), 0, keepZ + 0.9 + jitter(0.3))) * randomYaw(), rng:NextNumber(1.1, 1.5), nil, { shadow = false })
+		end
+		prop(folder, "Bush", CFrame.new(at(sx * 26.5, 0, keepZ + 6.5)) * randomYaw(), 1.3, nil, { shadow = false })
+		prop(folder, "Fern", CFrame.new(at(sx * 8.4, 0, MENU.DaisZ + 1.5)) * randomYaw(), 1.0, nil, { shadow = false })
+		prop(folder, "GrassTuft", CFrame.new(at(sx * 11, 0, MENU.DaisZ - 6)) * randomYaw(), 1.2, nil, { shadow = false })
+	end
+	for i = 1, 18 do
+		local x = -64 + (i - 1) * (128 / 17) + jitter(2.5)
+		local z = keepZ - rng:NextNumber(12, 30)
+		if math.abs(x) > 12 or z < keepZ - 24 then
+			prop(folder, "Tree_PineTall", CFrame.new(at(x, 0, z)) * randomYaw(), rng:NextNumber(1.05, 1.45), { Needles = mix(P.moss_700, P.slate_500, 0.3), Needles2 = mix(P.moss_600, P.slate_500, 0.3) })
+		end
 	end
 
 	--------------------------------------------------------------------------------------
-	-- Pine forest behind and beside the castle (backdrop over the walls).
-	local pinePalettes = { { Leaf = rgb(47, 125, 70) }, { Leaf = rgb(40, 108, 66) }, { Leaf = rgb(58, 132, 70) } }
-	for i = 1, 26 do
-		local x = rng:NextNumber(-95, 95)
-		local z = rng:NextNumber(-95, -42)
-		if math.abs(x) > 40 or z < -50 or i % 3 == 0 then
-			prop(folder, "Tree_Pine", CFrame.new(o + Vector3.new(x, -0.3, z)) * randomYaw(), rng:NextNumber(1.6, 2.6), pick(pinePalettes), true)
-		end
-	end
-	for _, sx in ipairs({ -1, 1 }) do
-		for _ = 1, 6 do
-			prop(folder, "Tree_Round", CFrame.new(o + Vector3.new(sx * rng:NextNumber(42, 70), -0.3, rng:NextNumber(-35, 20))) * randomYaw(), rng:NextNumber(1, 1.5), nil, true)
-		end
-	end
+	-- Embers drifting up from the braziers, a few dust motes in the torch light.
+	local air = add({ Name = "Ambience", Size = Vector3.new(26, 5, 10), CFrame = CFrame.new(daisPos + Vector3.new(0, 4, -3)), Transparency = 1 })
+	local motes = Instance.new("ParticleEmitter")
+	motes.Name = "Embers"
+	motes.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	motes.Color = ColorSequence.new(rgb(255, 196, 120))
+	motes.LightEmission = 1
+	motes.LightInfluence = 0
+	motes.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 0.14), NumberSequenceKeypoint.new(1, 0) })
+	motes.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.3), NumberSequenceKeypoint.new(1, 1) })
+	motes.Lifetime = NumberRange.new(4, 7)
+	motes.Rate = 4
+	motes.Speed = NumberRange.new(0.2, 0.6)
+	motes.SpreadAngle = Vector2.new(180, 180)
+	motes.Acceleration = Vector3.new(0, 0.25, 0)
+	motes.Shape = Enum.ParticleEmitterShape.Box
+	motes.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	motes.Parent = air
 
 	--------------------------------------------------------------------------------------
-	-- Ambient particles: warm dust motes and a few fireflies over the courtyard.
-	local air = add(part({ Name = "Ambience", Size = Vector3.new(size - 6, 6, size - 10), CFrame = CFrame.new(o + Vector3.new(0, 4, 2)), Transparency = 1 }))
-	local function emitter(name: string, color: Color3, rate: number, sizePx: number, life: number, speed: number)
-		local e = Instance.new("ParticleEmitter")
-		e.Name = name
-		e.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-		e.Color = ColorSequence.new(color)
-		e.LightEmission = 1
-		e.LightInfluence = 0
-		e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, sizePx), NumberSequenceKeypoint.new(1, 0) })
-		e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.2), NumberSequenceKeypoint.new(1, 1) })
-		e.Lifetime = NumberRange.new(life * 0.6, life)
-		e.Rate = rate
-		e.Speed = NumberRange.new(speed * 0.5, speed)
-		e.SpreadAngle = Vector2.new(180, 180)
-		e.Acceleration = Vector3.new(0, 0.15, 0)
-		e.RotSpeed = NumberRange.new(-30, 30)
-		e.Shape = Enum.ParticleEmitterShape.Box
-		e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
-		e.Parent = air
+	-- Behind the camera: the low south wall, the waiting spot and the legacy prompts /
+	-- boards (RunManager keeps them; the 2D menu replaces them, so they stay disabled).
+	local southZ = MENU.WaitZ + 9
+	for k = -3, 3 do
+		prop(folder, "Castle_Wall", CFrame.new(at(k * 12, 0, southZ + 1.5)), 1, nil, { shadow = false })
 	end
-	emitter("Motes", rgb(255, 222, 170), 7, 0.22, 9, 0.6)
-	emitter("Fireflies", rgb(210, 255, 120), 3, 0.35, 6, 1.2)
-
-	--------------------------------------------------------------------------------------
-	-- Legacy prompts / boards. The 2D menu replaces them; they stay valid (RunManager
-	-- connects to them) but sit small against the south wall, out of the menu shot.
-	local TILT = CFrame.Angles(math.rad(-50), 0, 0) -- turns the Back (+Z) face up to the camera
-	local FACE_NORTH = CFrame.Angles(0, math.pi, 0) -- turns the Back face toward the keep
-	local southZ = half - 1
-	local function startPad(name: string, x: number, color: Color3, ringColor: Color3, title: string, objectText: string)
-		local padPos = o + Vector3.new(x, 0.12, southZ - 5)
-		local pad = add(part({ Name = name, Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 4, 4), CFrame = CFrame.new(padPos) * UPRIGHT, Color = color, Material = Enum.Material.SmoothPlastic, CanQuery = true }))
-		add(part({ Name = name .. "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.16, 4.8, 4.8), CFrame = CFrame.new(padPos - Vector3.new(0, 0.03, 0)) * UPRIGHT, Color = ringColor }))
-		local sign = add(part({ Name = name .. "Sign", Size = Vector3.new(4, 1.2, 0.3), CFrame = CFrame.new(o + Vector3.new(x, 2.6, southZ - 0.3)) * FACE_NORTH, Color = rgb(25, 25, 35) }))
-		textSurface(sign, Enum.NormalId.Back, title, color)
-		local pr = prompt(pad, "Start Run", objectText, name .. "Prompt")
-		pr.MaxActivationDistance = 6
-		return pad, pr
+	local waitPos = at(0, 0, MENU.WaitZ)
+	local function post(name: string, x: number): BasePart
+		return add({ Name = name, Size = Vector3.new(4, 2, 0.4), CFrame = CFrame.new(at(x, 1.6, southZ - 0.4)), Color = P.slate_800, CanQuery = true })
 	end
-	local pad, startPrompt = startPad("StartPad", -5, rgb(60, 200, 110), rgb(30, 90, 50), "SQUAD", "Squad (1-4 players)")
-	local duoPad, duoPrompt = startPad("DuoPad", 5, rgb(80, 160, 240), rgb(30, 60, 110), "DUO", "Duo (2 players)")
-
-	local arenaSign = add(part({ Name = "ArenaSign", Size = Vector3.new(5, 2.2, 0.3), CFrame = CFrame.new(o + Vector3.new(-12, 1.4, southZ - 3)) * FACE_NORTH * TILT, Color = rgb(25, 25, 35), CanCollide = true }))
-	local arenaGui = textSurface(arenaSign, Enum.NormalId.Back, "ARENA: FOREST", rgb(255, 220, 120))
+	local startPad = add({ Name = "StartPad", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 4, 4), CFrame = CFrame.new(at(-6, 0.1, southZ - 4)) * UPRIGHT, Color = P.gold_600, CanQuery = true })
+	local duoPad = add({ Name = "DuoPad", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 4, 4), CFrame = CFrame.new(at(6, 0.1, southZ - 4)) * UPRIGHT, Color = P.slate_500, CanQuery = true })
+	local startPrompt = prompt(startPad, "Start Run", "Squad (1-4 players)", "StartPadPrompt")
+	local duoPrompt = prompt(duoPad, "Start Run", "Duo (2 players)", "DuoPadPrompt")
+	local arenaSign = post("ArenaSign", -14)
+	local arenaGui = textSurface(arenaSign, Enum.NormalId.Front, "ARENA: FOREST", P.gold_300)
 	local arenaPrompt = prompt(arenaSign, "Change Arena", "Arena", "ArenaPrompt")
-
-	local charBoard = add(part({ Name = "CharacterBoard", Size = Vector3.new(5, 2, 0.3), CFrame = CFrame.new(o + Vector3.new(-19, 3.2, southZ - 0.3)) * FACE_NORTH, Color = rgb(30, 30, 45) }))
-	textSurface(charBoard, Enum.NormalId.Back, "CHARACTERS", rgb(120, 200, 255))
-	local charPost = add(part({ Name = "CharacterPost", Size = Vector3.new(1.2, 1, 1.2), CFrame = CFrame.new(o + Vector3.new(-19, 0.5, southZ - 2.5)), Color = WOOD, CanCollide = true }))
-	local charPrompt = prompt(charPost, "Choose Character", "Characters", "CharacterPrompt")
-
-	local shopBoard = add(part({ Name = "ShopBoard", Size = Vector3.new(5, 2, 0.3), CFrame = CFrame.new(o + Vector3.new(19, 3.2, southZ - 0.3)) * FACE_NORTH, Color = rgb(30, 30, 45) }))
-	textSurface(shopBoard, Enum.NormalId.Back, "UPGRADES", rgb(255, 210, 80))
-	local shopPost = add(part({ Name = "ShopPost", Size = Vector3.new(1.2, 1, 1.2), CFrame = CFrame.new(o + Vector3.new(19, 0.5, southZ - 2.5)), Color = WOOD, CanCollide = true }))
-	local shopPrompt = prompt(shopPost, "Open Shop", "Upgrades", "ShopPrompt")
-
-	-- stats lectern: each client draws its own stats on the Back face (UIBuilder)
-	local statsSign = add(part({ Name = "StatsSign", Size = Vector3.new(5, 3.4, 0.3), CFrame = CFrame.new(o + Vector3.new(12, 1.8, southZ - 3)) * FACE_NORTH * TILT, Color = rgb(30, 30, 45), CanCollide = true }))
+	local charBoard = post("CharacterBoard", -20)
+	textSurface(charBoard, Enum.NormalId.Front, "CHARACTERS", P.ivory_100)
+	local charPrompt = prompt(charBoard, "Choose Character", "Characters", "CharacterPrompt")
+	local shopBoard = post("ShopBoard", 20)
+	textSurface(shopBoard, Enum.NormalId.Front, "UPGRADES", P.gold_300)
+	local shopPrompt = prompt(shopBoard, "Open Shop", "Upgrades", "ShopPrompt")
 
 	--------------------------------------------------------------------------------------
-	-- Menu camera: a fixed shot from the south end of the courtyard, aimed just above head
-	-- height over the spawn emblem (frames well at FOV 50-60): the character sits
-	-- mid-screen in front of the warm-lit gate, with banners, braziers and roofed towers
-	-- behind and torches, planters and supply crates along the edges.
-	local fov = Config.Lobby.MenuFieldOfView or 55
-	local camPos = o + Vector3.new(0, 7, half - 5.5)
-	local camLook = spawnPos + Vector3.new(0, 6, 0)
-	local menuCamera = add(part({ Name = "MenuCamera", Size = Vector3.new(1, 1, 1), CFrame = CFrame.lookAt(camPos, camLook), Transparency = 1 }))
+	-- Menu camera: low and centred, aimed at the hero's chest on the dais. The gate sits
+	-- right behind the hero, banners / torches / braziers stay in the middle band, the
+	-- roofed towers frame it at the UI column edges and the dais step shows above the
+	-- nameplate.
+	local fov = Config.Lobby.MenuFieldOfView or 45
+	local camLook = daisPos + Vector3.new(0, MENU.AimHeight, 0)
+	local menuCamera = add({ Name = "MenuCamera", Size = Vector3.new(1, 1, 1), CFrame = CFrame.lookAt(camPos, camLook), Transparency = 1 })
 	menuCamera:SetAttribute("FieldOfView", fov)
 	menuCamera:SetAttribute("Focus", camLook)
+	menuStand:SetAttribute("Top", daisTop)
 
 	MapBuilder.ApplyLighting("Lobby")
 
 	return {
 		Model = folder,
-		SpawnCFrame = CFrame.new(spawnPos + Vector3.new(0, 3.5, 0)),
+		-- real lobby characters wait behind the menu camera (RunManager adds a 5-stud ring)
+		SpawnCFrame = CFrame.new(waitPos + Vector3.new(0, 3.5, 0)) * yawCF(180),
 		MenuCamera = menuCamera,
+		MenuStand = menuStand,
 		StartPrompt = startPrompt,
 		DuoPrompt = duoPrompt,
 		DuoPad = duoPad,
@@ -731,56 +881,83 @@ function MapBuilder.BuildLobby()
 		ArenaLabel = arenaGui:FindFirstChild("Title") :: TextLabel,
 		CharacterPrompt = charPrompt,
 		ShopPrompt = shopPrompt,
-		StatsSign = statsSign,
-		StartPad = pad,
+		StartPad = startPad,
 	}
 end
 
 ------------------------------------------------------------------------------------------
--- ARENAS
+-- ARENA TOOLKIT
 ------------------------------------------------------------------------------------------
 
-local function newArena(name: string)
+type Arena = { [string]: any }
+
+local function newArena(name: string): Arena
 	local root = ensureMapFolder()
 	local model = Instance.new("Model")
 	model.Name = "Arena_" .. name
 	local obstacleFolder = Instance.new("Folder")
 	obstacleFolder.Name = "Obstacles"
 	obstacleFolder.Parent = model
+	local decoFolder = Instance.new("Folder")
+	decoFolder.Name = "Decor"
+	decoFolder.Parent = model
 	return {
 		Name = name,
 		Model = model,
+		Decor = decoFolder,
 		ObstacleFolder = obstacleFolder,
 		Obstacles = {},
-		Keepout = {}, -- { X, Z, R } circles that props avoid (paths, pond, decoration)
+		Keepout = {}, -- { X, Z, R } circles that scattered decoration avoids
+		Paths = {}, -- { {A = Vector3, B = Vector3, W = halfWidth} } path segments
 		Root = root,
 		Half = Config.Arenas.Size / 2,
 		Center = Config.ArenaOrigin,
 		Clear = Config.Arenas.ClearRadius or 40,
 		Trees = 0,
 		Rocks = 0,
+		Lights = 0,
 	}
 end
 
--- Is (x, z) inside the fence, out of the spawn clearing, and `clear` studs from every
--- obstacle and keepout circle?
-local function isFree(arena, x: number, z: number, clear: number): boolean
+-- World position of an arena-relative point on the floor.
+local function W(arena: Arena, x: number, z: number, y: number?): Vector3
 	local c = arena.Center
-	local dx, dz = x - c.X, z - c.Z
-	if dx * dx + dz * dz < arena.Clear * arena.Clear then
+	return Vector3.new(c.X + x, c.Y + (y or 0), c.Z + z)
+end
+
+local function keepout(arena: Arena, x: number, z: number, r: number)
+	table.insert(arena.Keepout, { X = x, Z = z, R = r })
+end
+
+-- Distance from (x, z) (arena-relative) to the nearest path edge (negative = on it).
+local function pathDistance(arena: Arena, x: number, z: number): number
+	local best = math.huge
+	for _, seg in ipairs(arena.Paths) do
+		local ax, az, bx, bz = seg.A.X, seg.A.Z, seg.B.X, seg.B.Z
+		local dx, dz = bx - ax, bz - az
+		local len2 = dx * dx + dz * dz
+		local t = len2 > 0 and math.clamp(((x - ax) * dx + (z - az) * dz) / len2, 0, 1) or 0
+		local px, pz = ax + dx * t - x, az + dz * t - z
+		best = math.min(best, math.sqrt(px * px + pz * pz) - seg.W)
+	end
+	return best
+end
+
+-- Is (x, z) (arena-relative) clear of obstacles, keepouts and paths by `clear` studs?
+local function isFree(arena: Arena, x: number, z: number, clear: number, pathPad: number?): boolean
+	if math.abs(x) > arena.Half - 3 or math.abs(z) > arena.Half - 3 then
 		return false
 	end
-	if math.abs(dx) > arena.Half - 4 or math.abs(dz) > arena.Half - 4 then
-		return false
-	end
+	local c = arena.Center
+	local wx, wz = c.X + x, c.Z + z
 	for _, ob in ipairs(arena.Obstacles) do
 		if ob.Kind == "Circle" then
-			local ox, oz = ob.Pos.X - x, ob.Pos.Z - z
+			local ox, oz = ob.Pos.X - wx, ob.Pos.Z - wz
 			local r = ob.Radius + clear
 			if ox * ox + oz * oz < r * r then
 				return false
 			end
-		elseif x > ob.MinX - clear and x < ob.MaxX + clear and z > ob.MinZ - clear and z < ob.MaxZ + clear then
+		elseif wx > ob.MinX - clear and wx < ob.MaxX + clear and wz > ob.MinZ - clear and wz < ob.MaxZ + clear then
 			return false
 		end
 	end
@@ -791,56 +968,38 @@ local function isFree(arena, x: number, z: number, clear: number): boolean
 			return false
 		end
 	end
+	if pathPad and pathDistance(arena, x, z) < pathPad then
+		return false
+	end
 	return true
 end
 
--- Free spot at a distance between rMin and rMax from the centre (inside the square).
-local function findSpot(arena, rMin: number, rMax: number, clear: number): (number?, number?)
+-- Collider parts + obstacle records (world x / z). Nothing collidable in the clearing.
+local function insideClearing(arena: Arena, wx: number, wz: number, r: number): boolean
 	local c = arena.Center
-	for _ = 1, 50 do
-		local a = rng:NextNumber(0, TAU)
-		local r = math.sqrt(rng:NextNumber(rMin * rMin, rMax * rMax))
-		local x, z = c.X + math.cos(a) * r, c.Z + math.sin(a) * r
-		if isFree(arena, x, z, clear) then
-			return x, z
-		end
+	local dx, dz = wx - c.X, wz - c.Z
+	return math.sqrt(dx * dx + dz * dz) - r < arena.Clear
+end
+
+local function circleCollider(arena: Arena, wx: number, wz: number, r: number, h: number)
+	if insideClearing(arena, wx, wz, r) then
+		warn(string.format("[MapBuilder] collider at (%.0f, %.0f) skipped: inside the spawn clearing", wx, wz))
+		return
 	end
-	return nil, nil
+	local y = arena.Center.Y
+	local cp = part({ Name = "Collider", Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, r * 2, r * 2), CFrame = CFrame.new(wx, y + h / 2, wz) * UPRIGHT, Transparency = 1, CanCollide = true, CanQuery = true })
+	cp.Parent = arena.ObstacleFolder
+	table.insert(arena.Obstacles, { Kind = "Circle", Pos = Vector3.new(wx, y, wz), Radius = r })
 end
 
--- Calls fn(x, z, i) for up to `count` free spots scattered around (cx, cz).
-local function cluster(arena, cx: number, cz: number, spread: number, count: number, clear: number, fn: (number, number, number) -> ())
-	local placed = 0
-	for _ = 1, count * 6 do
-		if placed >= count then
-			return
-		end
-		local a = rng:NextNumber(0, TAU)
-		local r = spread * math.sqrt(rng:NextNumber())
-		local x, z = cx + math.cos(a) * r, cz + math.sin(a) * r
-		if isFree(arena, x, z, clear) then
-			placed += 1
-			fn(x, z, placed)
-		end
+local function boxCollider(arena: Arena, cx: number, cz: number, sx: number, sz: number, h: number)
+	if insideClearing(arena, cx, cz, math.sqrt(sx * sx + sz * sz) / 2) then
+		warn(string.format("[MapBuilder] collider at (%.0f, %.0f) skipped: inside the spawn clearing", cx, cz))
+		return
 	end
-end
-
-local function keepout(arena, x: number, z: number, r: number)
-	table.insert(arena.Keepout, { X = x, Z = z, R = r })
-end
-
-local function circleCollider(arena, x: number, z: number, r: number, h: number)
 	local y = arena.Center.Y
-	local c = part({ Name = "Collider", Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, r * 2, r * 2), CFrame = CFrame.new(x, y + h / 2, z) * UPRIGHT, Transparency = 1, CanCollide = true, CanQuery = true })
-	c.Parent = arena.ObstacleFolder
-	table.insert(arena.Obstacles, { Kind = "Circle", Pos = Vector3.new(x, y, z), Radius = r })
-end
-
--- Axis-aligned box collider (the obstacle format is an AABB).
-local function boxCollider(arena, cx: number, cz: number, sx: number, sz: number, h: number)
-	local y = arena.Center.Y
-	local c = part({ Name = "Collider", Size = Vector3.new(sx, h, sz), CFrame = CFrame.new(cx, y + h / 2, cz), Transparency = 1, CanCollide = true, CanQuery = true })
-	c.Parent = arena.ObstacleFolder
+	local cp = part({ Name = "Collider", Size = Vector3.new(sx, h, sz), CFrame = CFrame.new(cx, y + h / 2, cz), Transparency = 1, CanCollide = true, CanQuery = true })
+	cp.Parent = arena.ObstacleFolder
 	table.insert(arena.Obstacles, {
 		Kind = "Box",
 		Pos = Vector3.new(cx, y, cz),
@@ -852,8 +1011,146 @@ local function boxCollider(arena, cx: number, cz: number, sx: number, sz: number
 	})
 end
 
--- Invisible tall walls just outside the play square (enemy raycasts hit them).
-local function boundaryWalls(arena)
+-- Registers the catalog collider of kit piece `name` placed at `cf` (scaled). Boxes are
+-- axis-aligned in the obstacle format: the box of a turned piece is its world AABB, so
+-- colliding box pieces are placed at multiples of 90° (small tilts only grow it a bit).
+local function addShape(arena: Arena, shape: any, cf: CFrame, s: number)
+	local off = shape.Offset
+	local centre = off and cf:PointToWorldSpace(Vector3.new(off[1] * s, 0, off[2] * s)) or cf.Position
+	if shape.Kind == "Circle" then
+		circleCollider(arena, centre.X, centre.Z, shape.Radius * s, shape.Height * s)
+	elseif shape.Kind == "Box" then
+		local hx, hz = shape.Size[1] * s / 2, shape.Size[2] * s / 2
+		local r, l = cf.RightVector, cf.LookVector
+		local ex = math.abs(r.X) * hx + math.abs(l.X) * hz
+		local ez = math.abs(r.Z) * hx + math.abs(l.Z) * hz
+		boxCollider(arena, centre.X, centre.Z, ex * 2, ez * 2, shape.Height * s)
+	elseif shape.Kind == "Multi" then
+		for _, sub in ipairs(shape.Shapes) do
+			addShape(arena, sub, cf, s)
+		end
+	end
+end
+
+local function kitCollider(arena: Arena, name: string, cf: CFrame, s: number)
+	local entry = kitEntry(name)
+	if entry and entry.Collider then
+		addShape(arena, entry.Collider, cf, s)
+	end
+end
+
+-- A deliberate obstacle: kit prop + its one collider. (x, z) arena-relative.
+local function obstacle(arena: Arena, name: string, x: number, z: number, yawDeg: number, s: number, palette: Pal?, opts: PropOpts?): Model
+	local cf = CFrame.new(W(arena, x, z)) * yawCF(yawDeg)
+	local m = prop(arena.Model, name, cf, s, palette, opts)
+	kitCollider(arena, name, cf, s)
+	return m
+end
+
+-- Decoration: kit prop with no collider. (x, z) arena-relative.
+local function decor(arena: Arena, name: string, x: number, z: number, yawDeg: number?, s: number?, palette: Pal?, opts: PropOpts?): Model
+	local cf = CFrame.new(W(arena, x, z)) * (yawDeg and yawCF(yawDeg) or randomYaw())
+	return prop(arena.Decor, name, cf, s, palette, opts or { shadow = false })
+end
+
+-- Fire light on a kit piece (torch / lantern / brazier) at its catalog light point.
+local function kitLight(arena: Arena, name: string, x: number, z: number, yawDeg: number, s: number, range: number, brightness: number, color: Color3)
+	local cf = CFrame.new(W(arena, x, z)) * yawCF(yawDeg)
+	local pos = kitLightPoint(name, cf, s) or cf.Position + Vector3.new(0, 4, 0)
+	pointLight(arena.Model, pos + Vector3.new(0, 0.4, 0), range, brightness, color, true)
+	arena.Lights += 1
+end
+
+local function tree(arena: Arena, name: string, x: number, z: number, s: number, palette: Pal?)
+	obstacle(arena, name, x, z, rng:NextNumber(0, 360), s, palette, { occluder = true })
+	arena.Trees += 1
+end
+
+local function boulder(arena: Arena, x: number, z: number, s: number, palette: Pal?)
+	obstacle(arena, "Rock", x, z, rng:NextNumber(0, 360), s, palette, nil)
+	arena.Rocks += 1
+end
+
+-- Ground clutter is drawn bigger than life so it reads from the high run camera.
+local CLUTTER_SCALE: { [string]: number } = { GrassTuft = 1.6, Flowers = 1.5, Fern = 1.35, Rock_Small = 1.3, Mushroom = 1.3 }
+
+-- Small clutter scattered in a disc around (cx, cz): { {name, sMin, sMax, palette?} }.
+local function scatter(arena: Arena, cx: number, cz: number, radius: number, count: number, kinds: { { any } }, clear: number?, pathPad: number?)
+	count = math.max(1, math.floor(count * (arena.DecorDensity or 1) + 0.5))
+	local placed = 0
+	for _ = 1, count * 8 do
+		if placed >= count then
+			break
+		end
+		local a = rng:NextNumber(0, TAU)
+		local r = radius * math.sqrt(rng:NextNumber())
+		local x, z = cx + math.cos(a) * r, cz + math.sin(a) * r
+		if isFree(arena, x, z, clear or 0.8, pathPad) then
+			local k = pick(kinds)
+			decor(arena, k[1], x, z, nil, rng:NextNumber(k[2], k[3]) * (CLUTTER_SCALE[k[1]] or 1), k[4])
+			placed += 1
+		end
+	end
+end
+
+-- Large soft ground patch: a blob of 3 overlapping discs of one tone.
+local function patch(arena: Arena, x: number, z: number, r: number, color: Color3, y: number)
+	local a0 = rng:NextNumber(0, TAU)
+	disc(arena.Decor, "Patch", W(arena, x, z, y), r, color)
+	for k = 1, 2 do
+		local a = a0 + k * 2.4
+		local d = r * rng:NextNumber(0.45, 0.7)
+		disc(arena.Decor, "Patch", W(arena, x + math.cos(a) * d, z + math.sin(a) * d, y + 0.001 * k), r * rng:NextNumber(0.55, 0.75), color)
+	end
+end
+
+-- Catmull-Rom points every ~step studs through the control points (arena-relative).
+local function smoothPath(ctrl: { Vector2 }, step: number): { Vector2 }
+	local out: { Vector2 } = {}
+	for i = 1, #ctrl - 1 do
+		local p0, p1, p2, p3 = ctrl[math.max(1, i - 1)], ctrl[i], ctrl[i + 1], ctrl[math.min(#ctrl, i + 2)]
+		local n = math.max(1, math.floor((p2 - p1).Magnitude / step + 0.5))
+		for k = 0, n - 1 do
+			local t = k / n
+			local t2, t3 = t * t, t * t * t
+			table.insert(out, ((p1 * 2) + (p2 - p0) * t + (p0 * 2 - p1 * 5 + p2 * 4 - p3) * t2 + (p1 * 3 - p0 - p2 * 3 + p3) * t3) * 0.5)
+		end
+	end
+	table.insert(out, ctrl[#ctrl])
+	return out
+end
+
+-- Flat dirt path with a soft (grass-dirt) edge. Segments butt end to end (no overlap,
+-- so no z-fighting seams from the high run camera); a disc a hair lower fills the outside
+-- of every bend. Registered in arena.Paths (decoration keeps off it).
+local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Color3, edge: Color3, yBase: number)
+	local pts = smoothPath(ctrl, 18)
+	local edgeW = width + 2.8
+	local limit = arena.Half + 34 -- the path fades into the tree line
+	for i = 1, #pts - 1 do
+		local a, b = pts[i], pts[i + 1]
+		if math.max(math.abs(a.X), math.abs(a.Y)) > limit and math.max(math.abs(b.X), math.abs(b.Y)) > limit then
+			continue
+		end
+		local d = b - a
+		local len = d.Magnitude
+		local mid = (a + b) / 2
+		local yaw = math.atan2(-d.X, -d.Y)
+		slab(arena.Decor, "PathEdge", W(arena, mid.X, mid.Y, yBase), edgeW, len, yaw, edge)
+		slab(arena.Decor, "Path", W(arena, mid.X, mid.Y, yBase + 0.16), width, len, yaw, core, 0.2)
+		-- bend fill only where the bend is wide enough to open a visible gap
+		local bend = i > 1 and math.acos(math.clamp(d.Unit:Dot((a - pts[i - 1]).Unit), -1, 1)) or 0
+		if bend > math.rad(4) then
+			disc(arena.Decor, "PathEdgeBend", W(arena, a.X, a.Y, yBase - 0.06), edgeW / 2, edge)
+			disc(arena.Decor, "PathBend", W(arena, a.X, a.Y, yBase + 0.08), width / 2, core)
+		end
+		table.insert(arena.Paths, { A = Vector3.new(a.X, 0, a.Y), B = Vector3.new(b.X, 0, b.Y), W = edgeW / 2 })
+	end
+	return pts
+end
+
+-- Invisible walls just outside the play square (enemy raycasts hit them).
+local function boundaryWalls(arena: Arena)
 	local c, h = arena.Center, arena.Half
 	local size = Config.Arenas.Size
 	for i, side in ipairs({ Vector3.new(0, 0, -1), Vector3.new(0, 0, 1), Vector3.new(-1, 0, 0), Vector3.new(1, 0, 0) }) do
@@ -863,647 +1160,654 @@ local function boundaryWalls(arena)
 	end
 end
 
--- Walks the four sides: fn(pos, outward, along, sideIndex, t) every `step` studs.
--- Side 2 is the south (+Z), the side nearest the camera.
-local function alongSides(arena, step: number, from: number, to: number, fn: (Vector3, Vector3, Vector3, number, number) -> ())
-	local c, h = arena.Center, arena.Half
-	for i, side in ipairs({ Vector3.new(0, 0, -1), Vector3.new(0, 0, 1), Vector3.new(-1, 0, 0), Vector3.new(1, 0, 0) }) do
-		local along = (i <= 2) and Vector3.new(1, 0, 0) or Vector3.new(0, 0, 1)
+-- Walks the four sides: fn(side, along, out, t) every `step` studs (t from -from..to).
+-- side: 1 north (−Z), 2 south (+Z, camera side), 3 west, 4 east. along / out unit x,z.
+local function alongSides(from: number, to: number, step: number, fn: (number, Vector2, Vector2, number) -> ())
+	local sides = { Vector2.new(0, -1), Vector2.new(0, 1), Vector2.new(-1, 0), Vector2.new(1, 0) }
+	for i, out in ipairs(sides) do
+		local along = (i <= 2) and Vector2.new(1, 0) or Vector2.new(0, 1)
 		local t = from
 		while t <= to do
-			fn(c + side * h + along * t, side, along, i, t)
+			fn(i, along, out, t)
 			t += step
 		end
 	end
 end
 
-local function isNearKeepout(arena, pos: Vector3, pad: number): boolean
-	for _, k in ipairs(arena.Keepout) do
-		local dx, dz = k.X - pos.X, k.Z - pos.Z
-		if dx * dx + dz * dz < (k.R + pad) * (k.R + pad) then
-			return true
+-- Dense tree line outside the boundary (decoration: the boundary walls block). The south
+-- (camera) side gets low shrubs and small round trees only.
+local function treeLine(arena: Arena, kinds: { { any } }, southKinds: { { any } }, step: number, shade: Color3)
+	local h = arena.Half
+	-- forest shade straddling the boundary: a wavy dark edge instead of a straight line
+	-- (the meadow floor ends at h + 10, under this row of discs)
+	alongSides(-h - 16, h + 16, 32, function(_side, along, out, t)
+		local p = along * (t + jitter(5)) + out * (h + 10 + jitter(2))
+		disc(arena.Decor, "Shade", W(arena, p.X, p.Y, 0.03), rng:NextNumber(18, 23), shade)
+	end)
+	alongSides(-h - 24, h + 24, step, function(side, along, out, t)
+		local south = side == 2
+		if (south and rng:NextNumber() < 0.5) or (side >= 3 and math.abs(t) > h + 8) then
+			return -- the camera side stays low and open; corners come from the N / S rows
 		end
-	end
-	return false
+		local depth = south and rng:NextNumber(12, 26) or rng:NextNumber(7, 17)
+		local p = along * (t + jitter(step * 0.3)) + out * (h + depth)
+		local k = pick(south and southKinds or kinds)
+		decor(arena, k[1], p.X, p.Y, nil, rng:NextNumber(k[2], k[3]), k[4], { occluder = true, shadow = not south })
+	end)
 end
 
--- Shared prop placers ------------------------------------------------------------------
+-- Broken split-rail fence along the boundary (decoration): runs of sections with gaps,
+-- some leaning, one now and then fallen.
+local function brokenFence(arena: Arena, scale: number, palette: Pal?, period: number)
+	local h = arena.Half
+	local len = 8 * scale
+	local k = 0
+	alongSides(-h + len / 2, h - len / 2, len, function(side, along, out, t)
+		-- a short run (2, sometimes 3 sections) every `period` slots, offset per side
+		k += 1
+		local phase = (k + side * 7) % period
+		if phase >= 2 and not (phase == 2 and rng:NextNumber() < 0.35) then
+			return
+		end
+		local p = along * t + out * (h - 1)
+		local yaw = math.deg(math.atan2(-along.Y, along.X))
+		local cf = CFrame.new(W(arena, p.X, p.Y)) * yawCF(yaw + jitter(3))
+		local roll = rng:NextNumber()
+		if roll < 0.08 then
+			-- fallen section lying in the grass
+			cf = CFrame.new(W(arena, p.X - out.X * 1.8, p.Y - out.Y * 1.8, 0.3)) * yawCF(yaw + jitter(8)) * CFrame.Angles(math.rad(80), 0, 0) * CFrame.new(0, -0.5, 0)
+		elseif roll < 0.25 then
+			cf = cf * CFrame.Angles(math.rad(jitter(9)), 0, math.rad(jitter(5)))
+		end
+		prop(arena.Decor, "Fence_Section", cf, scale, palette, { shadow = false })
+	end)
+end
 
-local ROUND_LEAVES: { Palette } = {
-	{ Leaf = rgb(79, 174, 74), Leaf2 = rgb(60, 143, 63) },
-	{ Leaf = rgb(98, 182, 70), Leaf2 = rgb(72, 150, 58) },
-	{ Leaf = rgb(66, 152, 80), Leaf2 = rgb(48, 122, 64) },
-	{ Leaf = rgb(120, 180, 64), Leaf2 = rgb(86, 150, 56) },
+------------------------------------------------------------------------------------------
+-- FOREST: a mossy clearing in the woods (the main map).
+--
+--   centre      open clearing where two dirt paths cross (spawn), a little low decor
+--   north       the paths' north arm runs through a RUINED ARCH with walls and pillars
+--   west        a SHRINE with the slate-blue crown banner and two torches
+--   east        a ring of STANDING STONES
+--   south-west  a WOODCUTTER CAMP: fence, log pile, crates, barrels, lantern post
+--   outer ring  groves (pine / round trees with ferns and mushrooms in their shade), a
+--               reed pond (north-west), boulder outcrops, an old foundation, fallen logs
+--   border      broken split-rail fence, then a dense tree line (low on the south side)
+------------------------------------------------------------------------------------------
+
+local FOREST_ROUND: { Pal } = {
+	{ Leaves = P.moss_700, Leaves2 = P.moss_600 },
+	{ Leaves = mix(P.moss_700, P.moss_600, 0.5), Leaves2 = P.moss_500 },
+	{ Leaves = P.moss_600, Leaves2 = mix(P.moss_500, P.moss_400, 0.5) },
 }
-local PINE_LEAVES: { Palette } = { { Leaf = rgb(47, 125, 70) }, { Leaf = rgb(40, 110, 72) }, { Leaf = rgb(58, 136, 66) } }
+local FOREST_PINE: { Pal } = {
+	{ Needles = P.moss_800, Needles2 = P.moss_700 },
+	{ Needles = P.moss_900, Needles2 = P.moss_800 },
+	{ Needles = mix(P.moss_800, P.slate_700, 0.2), Needles2 = P.moss_700 },
+}
+local FLOWER_TONES: { Pal } = { { Bloom = P.ivory_100 }, { Bloom = P.ivory_100 }, { Bloom = P.gold_300 } }
 
-local function tree(arena, x: number, z: number, s: number, kind: string, palette: Palette?)
-	prop(arena.Model, kind, CFrame.new(x, arena.Center.Y, z) * randomYaw(), s, palette, true)
-	circleCollider(arena, x, z, (kind == "Tree_Round" and 1.3 or 0.95) * s, 8)
-	arena.Trees += 1
+local SMALL_DECOR = {
+	{ "GrassTuft", 1.0, 1.6 },
+	{ "GrassTuft", 1.0, 1.6 },
+	{ "GrassTuft", 1.0, 1.6 },
+	{ "Fern", 0.9, 1.3 },
+	{ "Flowers", 1.0, 1.4, FLOWER_TONES[1] },
+	{ "Rock_Small", 0.7, 1.2 },
+}
+local SHADE_DECOR = {
+	{ "Fern", 1.0, 1.5 },
+	{ "Fern", 0.9, 1.3 },
+	{ "Mushroom", 0.9, 1.3 },
+	{ "GrassTuft", 1.0, 1.4 },
+}
+
+local function grove(arena: Arena, cx: number, cz: number, spots: { { any } })
+	for _, t in ipairs(spots) do
+		local kind = t[1]
+		local pal = (kind == "Tree_Round") and pick(FOREST_ROUND) or pick(FOREST_PINE)
+		tree(arena, kind, cx + t[2], cz + t[3], t[4], pal)
+	end
+	scatter(arena, cx, cz, 16, 3, SHADE_DECOR, 1)
+	scatter(arena, cx, cz, 20, 1, { { "Bush", 1.0, 1.4 } }, 1.5)
 end
 
--- Mushrooms of scale >= 0.85 block movement; smaller ones are clutter.
-local function mushroom(arena, x: number, z: number, s: number, palette: Palette?)
-	prop(arena.Model, "Mushroom", CFrame.new(x, arena.Center.Y, z) * randomYaw(), s, palette, s >= 0.85)
-	if s >= 0.85 then
-		circleCollider(arena, x, z, 0.9 * s, 5 * s)
-	else
-		keepout(arena, x, z, 1.2 * s + 0.5)
+local function outcrop(arena: Arena, x: number, z: number, big: number, medium: { number }?)
+	boulder(arena, x, z, big)
+	if medium then
+		boulder(arena, x + medium[1], z + medium[2], medium[3])
 	end
+	scatter(arena, x, z, big * 5, 3, { { "Rock_Small", 0.8, 1.4 }, { "GrassTuft", 1, 1.5 }, { "Fern", 0.9, 1.2 } }, 0.6)
 end
 
--- Rocks of scale >= 0.9 block movement; smaller ones are clutter.
-local function rock(arena, x: number, z: number, s: number, palette: Palette?)
-	prop(arena.Model, "Rock", CFrame.new(x, arena.Center.Y - 0.15 * s, z) * randomYaw(), s, palette, s >= 0.9)
-	if s >= 0.9 then
-		circleCollider(arena, x, z, 2.2 * s, 3 * s)
-		arena.Rocks += 1
-	else
-		keepout(arena, x, z, 2 * s)
-	end
-end
-
-local function bush(arena, x: number, z: number, s: number, palette: Palette?)
-	prop(arena.Model, "Bush", CFrame.new(x, arena.Center.Y - 0.1, z) * randomYaw(), s, palette, false)
-	keepout(arena, x, z, 1.8 * s)
-end
-
--- Little cluster of flowers (tiny balls, no shadow).
-local function flowers(arena, x: number, z: number, colors: { Color3 })
-	local y = arena.Center.Y
-	for _ = 1, rng:NextInteger(3, 5) do
-		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(0, 2.2)
-		deco(arena.Model, { Name = "Flower", Shape = Enum.PartType.Ball, Size = Vector3.new(0.55, 0.45, 0.55), CFrame = CFrame.new(x + math.cos(a) * r, y + 0.3, z + math.sin(a) * r), Color = pick(colors) })
-	end
-end
-
--- Wobbly flat path from the centre clearing out past the boundary.
-local function groundPath(arena, angle: number, width: number, colors: { Color3 }, material: Enum.Material, startR: number)
-	local c, h = arena.Center, arena.Half
-	local pts: { Vector3 } = {}
-	local wob = rng:NextNumber(0, 10)
-	local r = startR
-	while r < h * 1.5 do
-		local a = angle + math.sin(r * 0.022 + wob) * 0.2
-		local p = Vector3.new(c.X + math.cos(a) * r, c.Y, c.Z + math.sin(a) * r)
-		table.insert(pts, p)
-		if math.abs(p.X - c.X) > h + 24 or math.abs(p.Z - c.Z) > h + 24 then
-			break
-		end
-		r += 22
-	end
-	for i = 1, #pts - 1 do
-		local p0, p1 = pts[i], pts[i + 1]
-		local mid = (p0 + p1) / 2
-		local col = vary(pick(colors), 0.015)
-		deco(arena.Model, { Name = "Path", Size = Vector3.new(width, 0.1, (p1 - p0).Magnitude + 0.6), CFrame = CFrame.lookAt(mid, p1) + Vector3.new(0, 0.03 + i * 0.0004, 0), Color = col, Material = material })
-		disc(arena.Model, "PathBend", p1 + Vector3.new(0, 0.085, 0), width / 2, col, material)
-		keepout(arena, p0.X, p0.Z, width / 2 + 2)
-		keepout(arena, mid.X, mid.Z, width / 2 + 2)
-	end
-end
-
-------------------------------------------------------------------------------------------
--- FOREST: a sunny clearing in the woods. Dirt paths lead out from the spawn clearing;
--- trees grow in groves and as a dense tree line beyond a broken split-rail fence; red
--- mushrooms cluster in tree shade and in fairy rings; a reed pond, rock outcrops, fallen
--- logs, flowers, and a few purple alien hive nests where the swarm is breaking through.
-------------------------------------------------------------------------------------------
-
-local function forestPond(arena)
-	local x, z = findSpot(arena, 95, 165, 22)
-	if not (x and z) then
-		return
-	end
-	local y = arena.Center.Y
-	local r = rng:NextNumber(12, 16)
-	disc(arena.Model, "PondBank", Vector3.new(x, y + 0.09, z), r + 3.5, rgb(122, 104, 74), Enum.Material.Ground)
-	disc(arena.Model, "PondBed", Vector3.new(x, y + 0.1, z), r + 0.6, rgb(42, 70, 74), Enum.Material.Slate)
-	local water = disc(arena.Model, "Water", Vector3.new(x, y + 0.2, z), r, rgb(70, 140, 172), Enum.Material.Glass, 0.1)
-	water.Transparency = 0.3
-	water.Reflectance = 0.15
-	for _ = 1, 6 do
-		local a, d = rng:NextNumber(0, TAU), rng:NextNumber(2, r - 2)
-		disc(arena.Model, "LilyPad", Vector3.new(x + math.cos(a) * d, y + 0.23, z + math.sin(a) * d), rng:NextNumber(0.7, 1.2), rgb(70, 150, 70), Enum.Material.Grass, 0.04)
-	end
-	-- reeds on one side, rocks around the rim
-	local side = rng:NextNumber(0, TAU)
-	for _ = 1, 9 do
-		local a = side + rng:NextNumber(-0.7, 0.7)
-		local d = r + rng:NextNumber(-1, 1.5)
-		local hgt = rng:NextNumber(2.4, 3.8)
-		local px, pz = x + math.cos(a) * d, z + math.sin(a) * d
-		deco(arena.Model, { Name = "Reed", Size = Vector3.new(0.18, hgt, 0.18), CFrame = CFrame.new(px, y + hgt / 2, pz) * CFrame.Angles(rng:NextNumber(-0.12, 0.12), 0, rng:NextNumber(-0.12, 0.12)), Color = rgb(96, 136, 60), Material = Enum.Material.Grass })
-		deco(arena.Model, { Name = "Cattail", Size = Vector3.new(0.35, 0.8, 0.35), CFrame = CFrame.new(px, y + hgt + 0.2, pz), Color = rgb(110, 70, 40) })
-	end
+local function forestPond(arena: Arena, x: number, z: number, r: number)
+	local m = arena.Decor
+	disc(m, "PondBank", W(arena, x, z, 0.08), r + 2.6, mix(P.dirt_600, P.moss_600, 0.35))
+	disc(m, "PondBed", W(arena, x, z, 0.12), r + 0.6, P.slate_700)
+	local water = disc(m, "Water", W(arena, x, z, 0.2), r, mix(P.slate_500, P.moss_500, 0.25))
+	water.Transparency = 0.12
+	water.Reflectance = 0.06
 	for k = 1, 5 do
-		local a = side + math.pi + (k - 3) * 0.45
-		local d = r + 2
-		rock(arena, x + math.cos(a) * d, z + math.sin(a) * d, rng:NextNumber(0.4, 0.75), { Stone = rgb(120, 124, 132) })
+		local a, d = k * 1.3 + jitter(0.3), rng:NextNumber(3, r - 2)
+		disc(m, "LilyPad", W(arena, x + math.cos(a) * d, z + math.sin(a) * d, 0.23), rng:NextNumber(0.6, 1.0), P.moss_400, 0.03)
 	end
-	circleCollider(arena, x, z, r, 4)
+	-- reeds on the north-west side, rocks on the far rim
+	for k = 1, 9 do
+		local a = math.rad(200) + k * 0.13 + jitter(0.05)
+		local d = r + jitter(0.8)
+		local hgt = rng:NextNumber(2.2, 3.4)
+		local px, pz = x + math.cos(a) * d, z + math.sin(a) * d
+		deco(m, { Name = "Reed", Size = Vector3.new(0.18, hgt, 0.18), CFrame = CFrame.new(W(arena, px, pz, hgt / 2)) * CFrame.Angles(jitter(0.12), 0, jitter(0.12)), Color = P.moss_400 })
+		if k % 2 == 0 then
+			deco(m, { Name = "Cattail", Size = Vector3.new(0.32, 0.7, 0.32), CFrame = CFrame.new(W(arena, px, pz, hgt + 0.2)), Color = P.wood_600 })
+		end
+	end
+	circleCollider(arena, W(arena, x, z).X, W(arena, x, z).Z, r, 4)
+	keepout(arena, x, z, r + 3)
+	boulder(arena, x + (r + 1.6) * 0.71, z + (r + 1.6) * 0.71, 0.9)
+	boulder(arena, x + r + 1.8, z - 3, 0.85)
+	scatter(arena, x, z, r + 8, 4, { { "GrassTuft", 1.1, 1.6 }, { "Fern", 1, 1.3 }, { "Flowers", 1, 1.3 } }, 0.5)
+end
+
+-- Standing stone (part-built: chunky leaning slab with a moss cap) + circle collider.
+local function standingStone(arena: Arena, x: number, z: number, hgt: number, faceYaw: number)
+	local cf = CFrame.new(W(arena, x, z, hgt / 2 - 0.3)) * CFrame.Angles(0, faceYaw, 0) * CFrame.Angles(math.rad(jitter(5)), 0, math.rad(jitter(6)))
+	local m = Instance.new("Model")
+	m.Name = "StandingStone"
+	deco(m, { Name = "Stone", Size = Vector3.new(2.3, hgt, 1.3), CFrame = cf, Color = mix(P.stone_500, P.stone_600, rng:NextNumber(0, 0.6)), CastShadow = true })
+	deco(m, { Name = "Cap", Size = Vector3.new(1.9, 0.5, 1.15), CFrame = cf * CFrame.new(0, hgt / 2 + 0.05, 0) * CFrame.Angles(0, 0, math.rad(jitter(10))), Color = P.stone_400, CastShadow = false })
+	deco(m, { Name = "Moss", Size = Vector3.new(2.36, hgt * 0.35, 1.36), CFrame = cf * CFrame.new(0, -hgt * 0.3, 0), Color = P.moss_600 })
+	tag(m)
+	m.Parent = arena.Model
+	local wp = W(arena, x, z)
+	circleCollider(arena, wp.X, wp.Z, 1.1, hgt)
+end
+
+local function buildForest(arena: Arena)
+	local c, h = arena.Center, arena.Half
+	local m = arena.Model
+
+	-- ground: dark forest floor outside, moss meadow inside, big soft patches in two tones
+	local base = mix(P.moss_500, P.stone_400, 0.14)
+	deco(m, { Name = "ForestFloor", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = mix(P.moss_600, P.moss_700, 0.5), CanCollide = true, CanQuery = true })
+	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 20, 1, h * 2 + 20), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = base, CanCollide = true, CanQuery = true })
+	local darker, lighter, warm = mix(P.moss_600, P.stone_500, 0.1), mix(P.moss_400, P.stone_300, 0.14), mix(P.moss_400, P.dirt_400, 0.3)
+	for _, pt in ipairs({
+		{ -150, -150, 26, darker }, { 120, -165, 22, darker }, { -170, 60, 24, darker }, { 160, 120, 26, darker },
+		{ 30, -120, 20, darker }, { -60, 150, 22, darker }, { -110, -40, 18, darker },
+		{ -80, 90, 22, lighter }, { 90, 70, 24, lighter }, { -40, -90, 22, lighter }, { 70, -80, 18, lighter },
+		{ 140, -110, 18, lighter }, { -140, 120, 20, lighter }, { 0, 140, 24, lighter }, { -175, -90, 20, lighter },
+		{ 120, 175, 16, warm }, { 175, 10, 18, warm },
+	}) do
+		patch(arena, pt[1], pt[2], pt[3], pt[4], 0.02)
+	end
+
+	-- the clearing: worn lighter grass around the crossing (low, almost no decoration)
+	patch(arena, 0, 0, 24, mix(P.moss_400, P.stone_300, 0.12), 0.05)
+	patch(arena, 3, 2, 13, mix(P.moss_400, P.dirt_400, 0.35), 0.07)
+
+	-- paths: west-east and south-north, crossing in the clearing
+	local core, edge = P.dirt_500, mix(P.dirt_500, base, 0.55)
+	dirtPath(arena, {
+		Vector2.new(-262, 30), Vector2.new(-205, 16), Vector2.new(-145, 30), Vector2.new(-88, 14),
+		Vector2.new(-40, 8), Vector2.new(0, 0), Vector2.new(42, -9), Vector2.new(92, -3),
+		Vector2.new(142, -22), Vector2.new(200, -12), Vector2.new(262, -22),
+	}, 7, core, edge, 0.12)
+	dirtPath(arena, {
+		Vector2.new(-24, 262), Vector2.new(-16, 192), Vector2.new(-30, 132), Vector2.new(-10, 82),
+		Vector2.new(-6, 40), Vector2.new(0, 0), Vector2.new(9, -32), Vector2.new(14, -62),
+		Vector2.new(6, -102), Vector2.new(-16, -150), Vector2.new(-8, -200), Vector2.new(-14, -262),
+	}, 6, core, edge, 0.16)
+	-- stepping stones and pebbles along the paths
+	for _, sp in ipairs({ { 22, -4.5 }, { -20, 4 } }) do
+		local cf = CFrame.new(W(arena, sp[1], sp[2], -0.42)) * randomYaw()
+		prop(arena.Decor, "Rock_Slab", cf, rng:NextNumber(0.8, 1.05), { Slab = mix(P.stone_400, P.stone_300, 0.3) }, { shadow = false })
+	end
+
+	boundaryWalls(arena)
+
+	-- clearing decor (low, sparse, off the paths)
+	scatter(arena, 0, 0, 34, 26, { { "GrassTuft", 1.0, 1.6 }, { "GrassTuft", 1.0, 1.6 }, { "GrassTuft", 1.2, 1.8 }, { "Flowers", 1.0, 1.4, FLOWER_TONES[1] }, { "Rock_Small", 0.7, 1.1 } }, 1.2, 0.4)
+	scatter(arena, 0, 0, 40, 8, { { "Fern", 1, 1.4 }, { "Flowers", 1.1, 1.5, FLOWER_TONES[3] }, { "Flowers", 1.1, 1.5, FLOWER_TONES[1] } }, 1.5, 0.5)
+
+	--------------------------------------------------------------------------------------
+	-- LANDMARKS (mid ring)
+
+	-- 1. Ruined arch over the north path, walls running off both sides, broken columns
+	local arch = obstacle(arena, "Ruin_Arch", 14, -62, 0, 1, nil, { occluder = true })
+	arch.Name = "Landmark_Arch"
+	obstacle(arena, "Ruin_Wall", 23.4, -62.4, 0, 1, nil, { occluder = true })
+	obstacle(arena, "Ruin_WallLow", 4.2, -61.6, 180, 1)
+	obstacle(arena, "Pillar", 1, -75, 30, 1.1, nil, { occluder = true })
+	obstacle(arena, "Pillar", 29, -50, 200, 1.0, nil, { occluder = true })
+	obstacle(arena, "Ruin_Block", 25, -73, 35, 1.0)
+	decor(arena, "Ruin_Block", 34.5, -58, 70, 0.7, nil, { shadow = true })
+	keepout(arena, 14, -62, 13)
+	scatter(arena, 14, -62, 22, 8, { { "Rock_Small", 0.8, 1.3 }, { "Fern", 1, 1.4 }, { "GrassTuft", 1, 1.5 }, { "Flowers", 1, 1.3, FLOWER_TONES[1] } }, 0.6)
+
+	-- 2. Shrine: standing stone with a gold sigil facing the clearing, the slate-blue crown
+	--    banner behind it, a torch either side, a small paved apron
+	-- (facing south so the run camera sees the sigil and the crown)
+	obstacle(arena, "Shrine", -70, -32, 180, 1.1, nil, { occluder = true })
+	obstacle(arena, "Banner", -70, -36.4, 180, 1.1, nil, { occluder = true })
+	for _, dx in ipairs({ -4.8, 4.8 }) do
+		obstacle(arena, "Torch", -70 + dx, -31, 0, 1.05)
+		kitLight(arena, "Torch", -70 + dx, -31, 0, 1.05, 16, 1.5, FIRE)
+	end
+	for _, sp in ipairs({ { -70, -27.4 }, { -66.6, -26.6 }, { -73.3, -26.9 } }) do
+		prop(arena.Decor, "Rock_Slab", CFrame.new(W(arena, sp[1], sp[2], -0.45)) * yawCF(jitter(14)), 0.95, nil, { shadow = false })
+	end
+	boulder(arena, -79, -22, 1.1)
+	boulder(arena, -78, -44, 0.9)
+	keepout(arena, -70, -32, 9)
+	scatter(arena, -70, -32, 16, 7, { { "Flowers", 1.1, 1.4, FLOWER_TONES[1] }, { "Flowers", 1.1, 1.4, FLOWER_TONES[3] }, { "Fern", 1, 1.4 }, { "GrassTuft", 1, 1.5 } }, 0.5)
+
+	-- 3. Ring of standing stones (east), a flat altar stone in the middle
+	local ringX, ringZ = 84, 26
+	for k = 0, 6 do
+		local a = k / 7 * TAU + 0.3
+		standingStone(arena, ringX + math.cos(a) * 8.5, ringZ + math.sin(a) * 8.5, rng:NextNumber(3.6, 5.4), -a + math.pi / 2)
+	end
+	prop(arena.Decor, "Rock_Slab", CFrame.new(W(arena, ringX, ringZ, -0.3)) * yawCF(20), 1.2, nil, { shadow = false })
+	keepout(arena, ringX, ringZ, 11)
+	scatter(arena, ringX, ringZ, 14, 6, { { "GrassTuft", 1.1, 1.6 }, { "Flowers", 1, 1.3, FLOWER_TONES[1] }, { "Rock_Small", 0.8, 1.1 } }, 0.5)
+
+	-- 4. Woodcutter camp (south-west, all low): fence, log pile, chopping stump, crates,
+	--    barrels and a lantern post
+	local kx, kz = -56, 52
+	obstacle(arena, "Fence_Section", kx - 6, kz + 8, 0, 1)
+	obstacle(arena, "Fence_Section", kx + 2.2, kz + 8.3, 3, 1)
+	obstacle(arena, "Fence_Section", kx - 10.2, kz + 3.8, 90, 1)
+	obstacle(arena, "Log", kx + 6, kz - 6, 0, 1.1)
+	prop(arena.Decor, "Log", CFrame.new(W(arena, kx + 6.3, kz - 6.1, 1.25)) * yawCF(4), 1.0)
+	obstacle(arena, "Stump", kx - 1, kz - 3, 0, 1.15)
+	obstacle(arena, "Crate", kx - 6, kz - 2, 90, 1.0)
+	decor(arena, "Crate", kx - 6, kz - 0.1, 8, 1.0, nil, { shadow = true })
+	prop(arena.Decor, "Crate", CFrame.new(W(arena, kx - 6, kz - 1.1, 2)) * yawCF(30), 0.85)
+	obstacle(arena, "Barrel", kx - 8.6, kz - 5.6, 0, 1.05)
+	obstacle(arena, "Barrel", kx - 7.4, kz - 7.6, 40, 1.0)
+	obstacle(arena, "Lantern_Post", kx + 3, kz + 3, 0, 1.0)
+	kitLight(arena, "Lantern_Post", kx + 3, kz + 3, 0, 1.0, 14, 1.2, rgb(255, 196, 120))
+	patch(arena, kx - 2, kz - 1, 9, mix(P.dirt_400, P.moss_500, 0.55), 0.05)
+	keepout(arena, kx - 2, kz, 13)
+	scatter(arena, kx - 2, kz, 18, 6, { { "GrassTuft", 1, 1.5 }, { "Fern", 1, 1.3 }, { "Rock_Small", 0.7, 1.0 } }, 0.5)
+
+	--------------------------------------------------------------------------------------
+	-- OUTER RING: pond, groves, outcrops, an old foundation, logs and stumps
+
+	forestPond(arena, -118, -108, 12)
+
+	grove(arena, -48, -150, { { "Tree_Pine", 0, 0, 1.25 }, { "Tree_Round", 9, 6, 1.15 }, { "Tree_Pine", -8, 7, 1.05 }, { "Tree_PineTall", 4, -10, 1.0 }, { "Tree_Round", -12, -6, 1.0 } })
+	grove(arena, 112, -122, { { "Tree_Round", 0, 0, 1.3 }, { "Tree_Pine", 10, 5, 1.15 }, { "Tree_Round", -9, 8, 1.0 }, { "Tree_PineTall", 6, -9, 1.05 }, { "Tree_Pine", -7, -8, 0.95 } })
+	grove(arena, 150, 72, { { "Tree_Round", 0, 0, 1.25 }, { "Tree_Round", 11, -5, 1.05 }, { "Tree_Pine", -6, 9, 1.0 }, { "Tree_Pine", 8, 10, 1.1 }, { "Tree_Round", -10, -7, 0.95 } })
+	grove(arena, -152, -14, { { "Tree_Pine", 0, 0, 1.2 }, { "Tree_PineTall", -8, 8, 1.0 }, { "Tree_Round", 9, 4, 1.1 }, { "Tree_Pine", 2, -10, 1.0 } })
+	grove(arena, 112, 146, { { "Tree_Round", 0, 0, 1.0 }, { "Tree_Round", 10, 6, 0.9 }, { "Tree_Round", -6, 9, 0.85 } })
+	grove(arena, -122, 132, { { "Tree_Round", 0, 0, 1.05 }, { "Tree_Pine", 9, -5, 0.95 }, { "Tree_Round", -8, 7, 0.9 } })
+
+	outcrop(arena, 62, -132, 1.5, { 5.5, 3, 1.0 })
+	outcrop(arena, 166, -38, 1.45, { -4, 5, 1.0 })
+	outcrop(arena, -172, 84, 1.5, { 5, -4, 1.0 })
+	outcrop(arena, 42, 152, 1.4, { -5, -3, 0.95 })
+	outcrop(arena, -64, -112, 1.4, { 5, 4, 0.95 })
+
+	-- old foundation (north-east of the north path)
+	obstacle(arena, "Ruin_Wall", 40, -172, 0, 1, nil, { occluder = true })
+	obstacle(arena, "Ruin_Wall", 48.7, -172.2, 0, 1, nil, { occluder = true })
+	obstacle(arena, "Ruin_Wall", 53.4, -166.6, 90, 1, nil, { occluder = true })
+	obstacle(arena, "Ruin_WallLow", 53.6, -158, 90, 1)
+	obstacle(arena, "Ruin_WallLow", 33.5, -164, 90, 1)
+	obstacle(arena, "Pillar", 44, -156, 0, 1.0, nil, { occluder = true })
+	obstacle(arena, "Ruin_Block", 37, -151, 20, 1.0)
+	keepout(arena, 45, -164, 12)
+	scatter(arena, 45, -164, 18, 6, { { "Rock_Small", 0.8, 1.3 }, { "Fern", 1, 1.4 }, { "GrassTuft", 1, 1.5 }, { "Mushroom", 1, 1.2 } }, 0.6)
+
+	-- fallen logs and stumps
+	obstacle(arena, "Log", -96, 100, 0, 1.15)
+	obstacle(arena, "Log", 132, -62, 90, 1.1)
+	obstacle(arena, "Log", -28, 134, 4, 1.05)
+	for _, st in ipairs({ { -36, -136 }, { 128, -108 }, { 140, 86 }, { -142, -2 } }) do
+		obstacle(arena, "Stump", st[1], st[2], rng:NextNumber(0, 360), rng:NextNumber(1.0, 1.25))
+	end
+
+	-- corners: a couple of trees and a boulder each
+	for _, q in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+		local south = q[2] == 1
+		local bx, bz = q[1] * 172, q[2] * 172
+		boulder(arena, bx + q[1] * 6, bz - q[2] * 10, 1.35)
+		tree(arena, south and "Tree_Round" or "Tree_Pine", bx - q[1] * 4, bz + q[2] * 8, south and 0.9 or 1.2, south and pick(FOREST_ROUND) or pick(FOREST_PINE))
+		tree(arena, south and "Tree_Round" or "Tree_PineTall", bx + q[1] * 12, bz + q[2] * 2, south and 0.85 or 1.05, south and pick(FOREST_ROUND) or pick(FOREST_PINE))
+		scatter(arena, bx, bz, 18, 3, SHADE_DECOR, 1)
+	end
+
+	-- meadow scatter: grass tufts, flowers and pebbles everywhere else (sparse)
+	for _ = 1, 7 do
+		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(44, 190)
+		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, SMALL_DECOR, 1.5, 0.5)
+	end
+
+	-- BORDER: broken fence, then the tree line
+	brokenFence(arena, 1.3, nil, 22)
+	treeLine(arena, {
+		{ "Tree_PineTall", 1.3, 1.8, FOREST_PINE[1] },
+		{ "Tree_PineTall", 1.25, 1.7, FOREST_PINE[2] },
+		{ "Tree_Pine", 1.35, 1.8, FOREST_PINE[3] },
+		{ "Tree_Round", 1.35, 1.75, FOREST_ROUND[1] },
+	}, {
+		{ "Bush", 1.4, 2.0, nil },
+		{ "Tree_Round", 0.75, 0.9, FOREST_ROUND[2] },
+	}, 26, mix(P.moss_600, P.moss_700, 0.6))
+end
+
+------------------------------------------------------------------------------------------
+-- RUINS: a sunlit, overgrown ruined courtyard (unlocked after a win).
+--
+--   centre      a cracked paved plaza (grass in the gaps) with a compass inlay (spawn)
+--   avenues     four slab avenues to the walls; broken columns flank their mouths
+--   mid ring    four ruin vignettes on the diagonals: an arch (NE), a wall corner (NW),
+--               low walls with a crystal outcrop (SE), a shrine with torches (SW)
+--   outer ring  roofless buildings in the quadrants, a dry pool basin, a collapsed tower,
+--               colonnades along the avenues, boulders, crystal clusters, a few trees
+--   border      broken crenellated wall (low on the south side), corner towers, pines
+------------------------------------------------------------------------------------------
+
+local RUIN_PAL: Pal = { Stone = mix(P.stone_400, P.ivory_500, 0.25), Stone2 = mix(P.stone_300, P.ivory_400, 0.25), Stone3 = mix(P.stone_500, P.ivory_500, 0.2), Moss = P.moss_400 }
+local PILLAR_PAL: Pal = { Base = mix(P.stone_500, P.ivory_500, 0.2), Shaft = mix(P.stone_300, P.ivory_300, 0.3), Shaft2 = mix(P.stone_400, P.ivory_400, 0.3), Moss = P.moss_400 }
+local RUIN_TREES: { Pal } = {
+	{ Leaves = P.moss_600, Leaves2 = P.moss_500 },
+	{ Leaves = mix(P.moss_600, P.gold_600, 0.25), Leaves2 = mix(P.moss_500, P.gold_500, 0.3) },
+}
+
+local function ruinWallRun(arena: Arena, x0: number, z0: number, horizontal: boolean, pieces: { string }, s: number)
+	local pos = 0
+	for _, name in ipairs(pieces) do
+		local len = (name == "Ruin_WallLow" and 6 or 8) * s
+		local cx = horizontal and (x0 + pos + len / 2) or x0
+		local cz = horizontal and z0 or (z0 + pos + len / 2)
+		obstacle(arena, name, cx, cz, horizontal and pick({ 0, 180 }) or pick({ 90, -90 }), s, RUIN_PAL, { occluder = name == "Ruin_Wall" })
+		pos += len - 0.3
+	end
+end
+
+local function crystalOutcrop(arena: Arena, x: number, z: number, s: number, light: boolean)
+	obstacle(arena, "CrystalCluster", x, z, rng:NextNumber(0, 360), s)
+	decor(arena, "CrystalCluster", x + 2.6 * s, z + 1.2 * s, nil, s * 0.5)
+	if light then
+		local cf = CFrame.new(W(arena, x, z))
+		pointLight(arena.Model, (kitLightPoint("CrystalCluster", cf, s) or cf.Position) + Vector3.new(0, 1.5, 0), 12, 0.8, P.fx_arcane, false)
+		arena.Lights += 1
+	end
+	scatter(arena, x, z, 6 * s, 2, { { "Rock_Small", 0.7, 1.1 }, { "GrassTuft", 1, 1.4 } }, 0.4)
+end
+
+local function collapsedTower(arena: Arena, x: number, z: number, r: number)
+	local m = Instance.new("Model")
+	m.Name = "CollapsedTower"
+	local n = 10
+	for k = 0, n - 1 do
+		local a = k / n * TAU
+		local hgt = (k % 3 == 0) and rng:NextNumber(1.2, 2) or rng:NextNumber(3, 6.5)
+		local p = W(arena, x + math.cos(a) * (r - 1), z + math.sin(a) * (r - 1), hgt / 2)
+		deco(m, { Name = "Stone", Size = Vector3.new(2.2, hgt, r * TAU / n + 0.4), CFrame = CFrame.new(p) * CFrame.Angles(0, -a, 0), Color = mix(RUIN_PAL.Stone, RUIN_PAL.Stone3, rng:NextNumber(0, 1)), CastShadow = true })
+	end
+	disc(m, "Rubble", W(arena, x, z, 0.4), r - 1.6, RUIN_PAL.Stone3, 0.8)
+	deco(m, { Name = "Moss", Size = Vector3.new(2.3, 1.2, r * 1.6), CFrame = CFrame.new(W(arena, x - r + 1, z, 0.6)), Color = P.moss_500 })
+	tag(m)
+	m.Parent = arena.Model
+	local wp = W(arena, x, z)
+	circleCollider(arena, wp.X, wp.Z, r, 6)
+	decor(arena, "Ruin_Block", x + r + 2, z + 1.5, nil, 0.9, RUIN_PAL, { shadow = true })
 	keepout(arena, x, z, r + 4)
 end
 
-local function alienNest(arena, x: number, z: number)
-	local y = arena.Center.Y
-	local m = arena.Model
-	local r = rng:NextNumber(7, 10)
-	disc(m, "Goo", Vector3.new(x, y + 0.11, z), r, rgb(52, 30, 70), Enum.Material.SmoothPlastic)
-	disc(m, "GooRim", Vector3.new(x, y + 0.1, z), r + 1.4, rgb(84, 70, 60), Enum.Material.Ground)
-	for k = 1, 5 do
-		local a = k / 5 * TAU + rng:NextNumber(-0.3, 0.3)
-		local len = rng:NextNumber(r * 0.6, r * 1.1)
-		local mid = Vector3.new(x + math.cos(a) * len / 2, y + 0.13, z + math.sin(a) * len / 2)
-		deco(m, { Name = "Vein", Size = Vector3.new(0.35, 0.05, len), CFrame = CFrame.lookAt(mid, Vector3.new(x, mid.Y, z)), Color = rgb(190, 90, 255), Material = Enum.Material.Neon })
+local function poolBasin(arena: Arena, x: number, z: number, sx: number, sz: number)
+	local m = Instance.new("Model")
+	m.Name = "PoolBasin"
+	local rim = RUIN_PAL.Stone2
+	for _, e in ipairs({ { 0, -sz / 2, sx, 1.4 }, { 0, sz / 2, sx, 1.4 }, { -sx / 2, 0, 1.4, sz }, { sx / 2, 0, 1.4, sz } }) do
+		deco(m, { Name = "Rim", Size = Vector3.new(e[3], 1.4, e[4]), CFrame = CFrame.new(W(arena, x + e[1], z + e[2], 0.7)), Color = rim, CastShadow = true })
 	end
-	-- hive mound (collidable) and egg pods
-	column(m, "Hive", Vector3.new(x, y, z), 3, 2.4, rgb(92, 62, 82), Enum.Material.Slate, { CastShadow = true })
-	column(m, "Hive", Vector3.new(x, y + 2.4, z), 2.2, 2, rgb(104, 70, 92), Enum.Material.Slate, { CastShadow = true })
-	column(m, "Hive", Vector3.new(x, y + 4.4, z), 1.2, 1.4, rgb(116, 80, 104), Enum.Material.Slate)
-	deco(m, { Name = "HiveGlow", Shape = Enum.PartType.Ball, Size = Vector3.new(1.2, 1.2, 1.2), CFrame = CFrame.new(x, y + 5.6, z), Color = rgb(200, 110, 255), Material = Enum.Material.Neon })
-	circleCollider(arena, x, z, 3, 5)
-	for k = 1, 4 do
-		local a = rng:NextNumber(0, TAU)
-		local d = rng:NextNumber(4.5, r - 1)
-		local px, pz = x + math.cos(a) * d, z + math.sin(a) * d
-		local pod = deco(m, { Name = "EggPod", Shape = Enum.PartType.Ball, Size = Vector3.new(1.8, 2.3, 1.8), CFrame = CFrame.new(px, y + 1, pz), Color = rgb(170, 220, 90), Material = Enum.Material.Glass, Transparency = 0.35 })
-		pod.CastShadow = false
-		deco(m, { Name = "EggCore", Shape = Enum.PartType.Ball, Size = Vector3.new(0.8, 1, 0.8), CFrame = CFrame.new(px, y + 1, pz), Color = rgb(200, 255, 100), Material = Enum.Material.Neon })
-		if k == 1 then
-			keepout(arena, px, pz, 1.5)
-		end
-	end
-	keepout(arena, x, z, r + 2)
+	slab(m, "Water", W(arena, x, z, 0.75), sx - 1.4, sz - 1.4, 0, mix(P.slate_500, P.moss_500, 0.3))
+	slab(m, "Lilies", W(arena, x - sx * 0.2, z + 1, 0.78), 2.4, 1.8, 0.4, P.moss_400, 0.03)
+	m.Parent = arena.Model
+	local wp = W(arena, x, z)
+	boxCollider(arena, wp.X, wp.Z, sx, sz, 1.6)
+	keepout(arena, x, z, math.max(sx, sz) / 2 + 3)
 end
 
-local function fallenLog(arena, x: number, z: number)
-	local y = arena.Center.Y
-	local len = rng:NextNumber(9, 13)
-	local d = rng:NextNumber(2, 2.6)
-	local alongX = rng:NextNumber() < 0.5
-	local yaw = (alongX and 0 or math.pi / 2) + math.rad(rng:NextNumber(-6, 6))
-	local cf = CFrame.new(x, y + d / 2 - 0.15, z) * CFrame.Angles(0, yaw, 0)
-	deco(arena.Model, { Name = "Log", Shape = Enum.PartType.Cylinder, Size = Vector3.new(len, d, d), CFrame = cf, Color = rgb(112, 80, 52), Material = Enum.Material.Wood, CastShadow = true })
-	for _, e in ipairs({ -1, 1 }) do
-		deco(arena.Model, { Name = "LogEnd", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, d - 0.25, d - 0.25), CFrame = cf * CFrame.new(e * len / 2, 0, 0), Color = rgb(196, 156, 104), Material = Enum.Material.Wood })
-	end
-	deco(arena.Model, { Name = "LogMoss", Size = Vector3.new(len * 0.45, 0.2, d * 0.6), CFrame = cf * CFrame.new(rng:NextNumber(-1, 1), d / 2 - 0.02, 0), Color = rgb(92, 150, 70), Material = Enum.Material.Grass })
-	local sx, sz = (alongX and len or d) + 0.4, (alongX and d or len) + 0.4
-	boxCollider(arena, x, z, sx, sz, d)
-end
-
-local function buildForest(arena)
+local function buildRuins(arena: Arena)
 	local c, h = arena.Center, arena.Half
 	local m = arena.Model
-	local y = c.Y
+	arena.DecorDensity = 0.5 -- the ruin pieces carry the detail here; less ground clutter
 
-	-- ground: darker forest floor everywhere, bright meadow inside the fence
-	deco(m, { Name = "ForestFloor", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.06, 0)), Color = rgb(74, 118, 54), Material = Enum.Material.Grass, CanCollide = true, CanQuery = true })
-	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 4, 1, h * 2 + 4), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = rgb(104, 178, 76), Material = Enum.Material.Grass, CanCollide = true, CanQuery = true })
-	for _ = 1, 30 do
-		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(20, h * 1.1)
-		local px, pz = c.X + math.clamp(math.cos(a) * r, -h + 10, h - 10), c.Z + math.clamp(math.sin(a) * r, -h + 10, h - 10)
-		local tone = pick({ rgb(88, 160, 66), rgb(118, 186, 82), rgb(96, 168, 70), rgb(132, 178, 84) })
-		disc(m, "Patch", Vector3.new(px, y + 0.02 + rng:NextNumber(0, 0.03), pz), rng:NextNumber(9, 24), tone)
+	-- ground: grassy courtyard with stone-dust and darker moss patches
+	deco(m, { Name = "OuterGround", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = P.moss_700, CanCollide = true, CanQuery = true })
+	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 20, 1, h * 2 + 20), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = mix(P.moss_500, P.stone_400, 0.22), CanCollide = true, CanQuery = true })
+	local dust, deep, sun = mix(P.moss_400, P.stone_300, 0.45), mix(P.moss_500, P.moss_600, 0.6), mix(P.moss_400, P.stone_300, 0.2)
+	for _, pt in ipairs({
+		{ -120, -60, 24, dust }, { 110, 60, 22, dust }, { 60, -150, 20, dust }, { -70, 150, 20, dust },
+		{ 150, -150, 22, deep }, { -160, -150, 24, deep }, { 165, 150, 20, deep }, { -150, 120, 22, deep },
+		{ -60, -70, 18, sun }, { 70, 75, 20, sun }, { -170, 30, 18, sun }, { 160, -30, 18, sun },
+		{ 40, 120, 18, deep }, { -110, 70, 16, dust }, { 100, -90, 16, deep }, { 0, -180, 18, sun },
+	}) do
+		patch(arena, pt[1], pt[2], pt[3], pt[4], 0.02)
 	end
 
-	-- spawn clearing: worn grass ring, packed dirt, a ring of flat stones
-	disc(m, "Clearing", Vector3.new(c.X, y + 0.06, c.Z), 22, rgb(130, 168, 84))
-	disc(m, "ClearingDirt", Vector3.new(c.X, y + 0.1, c.Z), 15, rgb(140, 112, 80), Enum.Material.Ground)
-	for k = 1, 10 do
-		local a = k / 10 * TAU
-		disc(m, "FlatStone", Vector3.new(c.X + math.cos(a) * 17, y + 0.14, c.Z + math.sin(a) * 17), rng:NextNumber(0.9, 1.4), rgb(150, 150, 156), Enum.Material.Slate, 0.2)
+	-- plaza: cracked paving in two stone tones, grass where slabs are missing
+	local paveA, paveB, paveC = mix(P.stone_300, P.ivory_400, 0.15), mix(P.stone_400, P.ivory_500, 0.15), mix(P.stone_200, P.ivory_300, 0.15)
+	disc(arena.Decor, "PlazaBed", W(arena, 0, 0, 0.05), 31, mix(P.stone_500, P.moss_500, 0.5))
+	for ix = -5, 4 do
+		for iz = -5, 4 do
+			local x, z = ix * 6 + 3, iz * 6 + 3
+			local d = math.sqrt(x * x + z * z)
+			if d < 29 and (d < 9 or rng:NextNumber() > 0.14) then
+				slab(arena.Decor, "Paving", W(arena, x + jitter(0.15), z + jitter(0.15), 0.12), 5.6, 5.6, math.rad(jitter(2)), pick({ paveA, paveA, paveB, paveC }), 0.12)
+			end
+		end
 	end
-	local pathColors = { rgb(146, 116, 80), rgb(138, 110, 78), rgb(152, 124, 88) }
-	local base = rng:NextNumber(0, TAU)
+	-- compass rose: slate disc, gold ring, a long N-S / E-W cross and short diagonals
+	disc(arena.Decor, "Inlay", W(arena, 0, 0, 0.17), 5.4, mix(P.slate_500, P.stone_500, 0.5), 0.02)
+	disc(arena.Decor, "InlayRing", W(arena, 0, 0, 0.2), 4.2, P.gold_600, 0.02)
+	disc(arena.Decor, "InlayCore", W(arena, 0, 0, 0.23), 3.8, mix(P.slate_500, P.stone_500, 0.5), 0.02)
 	for k = 0, 3 do
-		groundPath(arena, base + k * math.pi / 2 + rng:NextNumber(-0.35, 0.35), rng:NextNumber(6, 8), pathColors, Enum.Material.Ground, 14)
+		slab(arena.Decor, "InlayRay", W(arena, 0, 0, 0.26 + k * 0.02), k < 2 and 0.7 or 0.45, k < 2 and 10 or 5.4, k * math.pi / 2 + (k >= 2 and math.pi / 4 or 0), P.gold_500, 0.02)
+	end
+
+	-- avenues: rows of slabs out to the walls (a few missing), keep decoration off them
+	local slabA, slabB = mix(P.stone_400, P.ivory_500, 0.15), mix(P.stone_300, P.ivory_400, 0.15)
+	for _, axis in ipairs({ Vector2.new(0, -1), Vector2.new(1, 0), Vector2.new(-1, 0), Vector2.new(0, 1) }) do
+		local d = 36
+		local stop = axis.Y > 0 and 150 or h - 6 -- the camera-side avenue fades out earlier
+		while d < stop do
+			if rng:NextNumber() > 0.14 then
+				local p = axis * (d + jitter(0.2))
+				slab(arena.Decor, "AvenueSlab", W(arena, p.X, p.Y, 0.1), axis.X ~= 0 and 7.5 or 11, axis.X ~= 0 and 11 or 7.5, math.rad(jitter(1.5)), pick({ slabA, slabB }), 0.12)
+			end
+			d += 8
+		end
+		local a, b = axis * 30, axis * (h + 10)
+		table.insert(arena.Paths, { A = Vector3.new(a.X, 0, a.Y), B = Vector3.new(b.X, 0, b.Y), W = 6.5 })
 	end
 
 	boundaryWalls(arena)
-	forestPond(arena)
 
-	-- alien nests: the swarm breaking through
-	for _ = 1, 3 do
-		local x, z = findSpot(arena, 70, h * 1.2, 14)
-		if x and z then
-			alienNest(arena, x, z)
-			for k = 1, 3 do
-				local a = rng:NextNumber(0, TAU)
-				local px, pz = x + math.cos(a) * 12, z + math.sin(a) * 12
-				if isFree(arena, px, pz, 2) then
-					mushroom(arena, px, pz, rng:NextNumber(0.4, 0.6) + k * 0.05, { Accent = rgb(150, 80, 220), White = rgb(220, 255, 140) })
-				end
+	-- grass, flowers and pebbles in the plaza gaps and around it
+	scatter(arena, 0, 0, 36, 14, { { "GrassTuft", 1, 1.5 }, { "GrassTuft", 1, 1.5 }, { "Flowers", 1, 1.3, { Bloom = P.ivory_100 } }, { "Rock_Small", 0.7, 1 } }, 1.2)
+
+	--------------------------------------------------------------------------------------
+	-- MID RING
+
+	-- broken columns flanking each avenue mouth, torches between them
+	for i, axis in ipairs({ Vector2.new(0, -1), Vector2.new(1, 0), Vector2.new(-1, 0), Vector2.new(0, 1) }) do
+		local side = Vector2.new(-axis.Y, axis.X)
+		for _, sgn in ipairs({ -1, 1 }) do
+			local p = axis * 47 + side * sgn * 10
+			if (i + sgn) % 4 == 0 then
+				obstacle(arena, "Ruin_Block", p.X, p.Y, rng:NextNumber(0, 360), 1.1, RUIN_PAL)
+			else
+				obstacle(arena, "Pillar", p.X, p.Y, rng:NextNumber(0, 360), 1.2, PILLAR_PAL, { occluder = true })
 			end
 		end
+		local t = axis * 42 + side * 7.5
+		obstacle(arena, "Torch", t.X, t.Y, 0, 1.1)
+		kitLight(arena, "Torch", t.X, t.Y, 0, 1.1, 16, 1.3, FIRE)
 	end
 
-	-- groves: tight stands of trees with mushrooms in their shade and bushes at the edge
-	local treeCap = Config.Arenas.TreeCount or 34
-	for _ = 1, 7 do
-		local gx, gz = findSpot(arena, 65, h * 1.25, 16)
-		if gx and gz and arena.Trees < treeCap then
-			local pine = rng:NextNumber() < 0.35
-			cluster(arena, gx, gz, 12, rng:NextInteger(4, 6), 5, function(x, z)
-				if arena.Trees < treeCap then
-					local kind = (pine or rng:NextNumber() < 0.2) and "Tree_Pine" or "Tree_Round"
-					tree(arena, x, z, rng:NextNumber(0.85, 1.25), kind, kind == "Tree_Pine" and pick(PINE_LEAVES) or pick(ROUND_LEAVES))
-				end
-			end)
-			local a = rng:NextNumber(0, TAU)
-			cluster(arena, gx + math.cos(a) * 13, gz + math.sin(a) * 13, 5, rng:NextInteger(2, 5), 1.5, function(x, z, i)
-				mushroom(arena, x, z, i == 1 and rng:NextNumber(0.9, 1.25) or rng:NextNumber(0.45, 0.75))
-			end)
-			cluster(arena, gx, gz, 18, rng:NextInteger(2, 4), 2, function(x, z)
-				bush(arena, x, z, rng:NextNumber(0.8, 1.2))
-			end)
+	-- NE: arch with walls either side and a crystal accent
+	obstacle(arena, "Ruin_Arch", 56, -56, 90, 1.1, RUIN_PAL, { occluder = true })
+	obstacle(arena, "Ruin_Wall", 56, -66.4, 90, 1, RUIN_PAL, { occluder = true })
+	obstacle(arena, "Ruin_WallLow", 56.2, -45.7, 90, 1, RUIN_PAL)
+	crystalOutcrop(arena, 66, -48, 1.4, true)
+	scatter(arena, 56, -56, 18, 8, { { "Rock_Small", 0.8, 1.2 }, { "Fern", 1, 1.3 }, { "GrassTuft", 1, 1.5 } }, 0.6)
+
+	-- NW: wall corner with a fallen block and a boulder
+	ruinWallRun(arena, -70, -60, true, { "Ruin_Wall", "Ruin_Wall" }, 1)
+	ruinWallRun(arena, -70.6, -59.4, false, { "Ruin_WallLow" }, 1)
+	obstacle(arena, "Ruin_Block", -58, -50, 15, 1.05, RUIN_PAL)
+	boulder(arena, -76, -44, 1.35, { Stone = RUIN_PAL.Stone, Stone2 = RUIN_PAL.Stone3 })
+	scatter(arena, -62, -54, 16, 8, { { "Rock_Small", 0.8, 1.2 }, { "Mushroom", 1, 1.2 }, { "Fern", 1, 1.3 } }, 0.6)
+
+	-- SE: low walls (camera side) around a crystal outcrop
+	ruinWallRun(arena, 50, 58, true, { "Ruin_WallLow", "Ruin_WallLow" }, 1)
+	ruinWallRun(arena, 62, 62, false, { "Ruin_Wall" }, 1)
+	crystalOutcrop(arena, 57, 68, 1.3, false)
+	boulder(arena, 44, 72, 1.3, { Stone = RUIN_PAL.Stone, Stone2 = RUIN_PAL.Stone3 })
+	scatter(arena, 56, 64, 16, 8, { { "GrassTuft", 1, 1.5 }, { "Flowers", 1, 1.3 }, { "Rock_Small", 0.8, 1.1 } }, 0.6)
+
+	-- SW: shrine with two torches and a low wall behind
+	obstacle(arena, "Shrine", -58, 56, 180, 1.1, nil, { occluder = true })
+	obstacle(arena, "Ruin_WallLow", -66, 64, 0, 1, RUIN_PAL)
+	obstacle(arena, "Ruin_Block", -48, 66, 60, 1.0, RUIN_PAL)
+	boulder(arena, -70, 50, 1.15, { Stone = RUIN_PAL.Stone, Stone2 = RUIN_PAL.Stone3 })
+	for _, o in ipairs({ { -62.5, 52.5 }, { -54.5, 60.5 } }) do
+		obstacle(arena, "Torch", o[1], o[2], 0, 1.0)
+	end
+	kitLight(arena, "Torch", -62.5, 52.5, 0, 1.0, 15, 1.3, FIRE)
+	scatter(arena, -58, 58, 14, 8, { { "Flowers", 1, 1.4, { Bloom = P.ivory_100 } }, { "Flowers", 1, 1.4, { Bloom = P.gold_300 } }, { "GrassTuft", 1, 1.5 } }, 0.5)
+
+	--------------------------------------------------------------------------------------
+	-- OUTER RING
+
+	-- roofless buildings (walls in L / U shapes), lower toward the camera side
+	local function building(bx: number, bz: number, w: number, d: number, tall: boolean)
+		local s = 1.25
+		local main = tall and "Ruin_Wall" or "Ruin_WallLow"
+		local unit = (tall and 8 or 6) * s - 0.3
+		local nW = math.max(1, math.floor(w / unit + 0.5))
+		local nD = math.max(1, math.floor(d / unit + 0.5))
+		local back = {}
+		for k = 1, nW do
+			back[k] = (k == nW and tall) and "Ruin_WallLow" or main
 		end
-	end
-
-	-- landmark trees: big lone oaks in the open with flowers around them
-	for _ = 1, 3 do
-		local x, z = findSpot(arena, 55, h * 1.2, 12)
-		if x and z then
-			tree(arena, x, z, rng:NextNumber(1.35, 1.55), "Tree_Round", pick(ROUND_LEAVES))
-			for k = 1, 3 do
-				local a = k / 3 * TAU + rng:NextNumber(-0.4, 0.4)
-				flowers(arena, x + math.cos(a) * 6, z + math.sin(a) * 6, { rgb(255, 255, 255), rgb(255, 226, 90), rgb(255, 150, 190) })
-			end
+		ruinWallRun(arena, bx - w / 2, bz - d / 2, true, back, s)
+		local sideRun = {}
+		for k = 1, nD do
+			sideRun[k] = k == 1 and main or "Ruin_WallLow"
 		end
+		ruinWallRun(arena, bx - w / 2 - 0.6, bz - d / 2 + 1.2, false, sideRun, s)
+		slab(arena.Decor, "OldFloor", W(arena, bx, bz, 0.07), w - 2, d - 2, 0, mix(P.stone_400, P.moss_500, 0.45))
+		obstacle(arena, "Pillar", bx + w / 2 - 2, bz + d / 2 - 2, rng:NextNumber(0, 360), 1.1, PILLAR_PAL, { occluder = true })
+		obstacle(arena, "Ruin_Block", bx + w * 0.15, bz + d * 0.1, rng:NextNumber(0, 360), 1.0, RUIN_PAL)
+		keepout(arena, bx, bz, math.max(w, d) / 2 + 3)
+		scatter(arena, bx, bz, math.max(w, d) / 2 + 4, 5, { { "Rock_Small", 0.8, 1.3 }, { "Fern", 1, 1.4 }, { "GrassTuft", 1, 1.5 }, { "Mushroom", 1, 1.2 } }, 0.6)
 	end
+	building(112, -112, 22, 20, true)
+	building(-118, -104, 22, 18, true)
+	building(152, 30, 20, 12, true)
+	building(-124, 118, 16, 12, false)
 
-	-- fairy rings of small mushrooms (clutter)
-	for _ = 1, 2 do
-		local x, z = findSpot(arena, 50, h * 1.2, 9)
-		if x and z then
-			local n = rng:NextInteger(7, 9)
-			for k = 1, n do
-				local a = k / n * TAU
-				mushroom(arena, x + math.cos(a) * 5, z + math.sin(a) * 5, rng:NextNumber(0.32, 0.45))
-			end
-			keepout(arena, x, z, 6)
-		end
-	end
+	poolBasin(arena, -56, -150, 18, 10)
+	collapsedTower(arena, -152, -42, 6.6)
 
-	-- rock outcrops: one big rock with smaller ones around it
-	local rockCap = Config.Arenas.RockCount or 26
-	for _ = 1, 6 do
-		local x, z = findSpot(arena, 50, h * 1.25, 9)
-		if x and z and arena.Rocks < rockCap then
-			rock(arena, x, z, rng:NextNumber(1.2, 1.7))
-			cluster(arena, x, z, 7, rng:NextInteger(1, 3), 2.5, function(px, pz)
-				rock(arena, px, pz, rng:NextNumber(0.45, 0.85))
-			end)
-		end
-	end
-
-	-- fallen logs
-	for _ = 1, 5 do
-		local x, z = findSpot(arena, 50, h * 1.2, 9)
-		if x and z then
-			fallenLog(arena, x, z)
-		end
-	end
-
-	-- flower patches and loose bushes in the meadow
-	for _ = 1, 9 do
-		local x, z = findSpot(arena, 30, h * 1.25, 3)
-		if x and z then
-			flowers(arena, x, z, pick({ { rgb(255, 255, 255), rgb(255, 240, 120) }, { rgb(190, 130, 255), rgb(255, 255, 255) }, { rgb(255, 120, 150), rgb(255, 210, 90) } }))
-		end
-	end
-	for _ = 1, 6 do
-		local x, z = findSpot(arena, 45, h * 1.25, 6)
-		if x and z then
-			cluster(arena, x, z, 4, rng:NextInteger(2, 3), 1.5, function(px, pz)
-				bush(arena, px, pz, rng:NextNumber(0.7, 1.1))
-			end)
-		end
-	end
-
-	-- BORDER: broken split-rail fence with bushes, then the tree line outside.
-	local fenceH = Config.Arenas.FenceHeight or 6
-	local fenceOn = true
-	local wood = rgb(150, 116, 80)
-	alongSides(arena, 20, -h, h - 20, function(pos, out, along, side, _t)
-		if rng:NextNumber() < 0.18 then
-			fenceOn = not fenceOn
-		end
-		local mid = pos + along * 10
-		if fenceOn and not isNearKeepout(arena, mid, 2) then
-			deco(m, { Name = "Post", Size = Vector3.new(0.9, fenceH, 0.9), CFrame = CFrame.new(pos + Vector3.new(0, fenceH / 2 - 0.3, 0)) * CFrame.Angles(0, rng:NextNumber(-0.2, 0.2), 0), Color = vary(wood, 0.03), Material = Enum.Material.Wood, CastShadow = true })
-			for _, yy in ipairs({ fenceH * 0.38, fenceH * 0.78 }) do
-				local railLen = 20.4
-				local tilt = math.rad(rng:NextNumber(-1.5, 1.5))
-				local cf = CFrame.lookAt(mid, mid + along) * CFrame.Angles(tilt, 0, 0) + Vector3.new(0, yy, 0)
-				deco(m, { Name = "Rail", Size = Vector3.new(0.45, 0.55, railLen), CFrame = cf, Color = vary(wood, 0.03), Material = Enum.Material.Wood })
-			end
-		end
-		-- hedge bushes on the inside edge, more where the fence is broken
-		if rng:NextNumber() < (fenceOn and 0.35 or 0.8) then
-			local b = mid - out * rng:NextNumber(1, 3.5) + along * rng:NextNumber(-6, 6)
-			if not isNearKeepout(arena, b, 1) then
-				prop(m, "Bush", CFrame.new(b) * randomYaw(), rng:NextNumber(0.9, 1.4), pick({ { Leaf = rgb(79, 174, 74) }, { Leaf = rgb(66, 150, 70) } }))
-			end
-		end
-	end)
-	-- tree line outside the fence; lower and sparser on the south (camera) side
-	alongSides(arena, 18, -h - 24, h + 24, function(pos, out, along, side, _t)
-		local south = side == 2
-		for row = 1, (south or rng:NextNumber() < 0.4) and 1 or 2 do
-			local depth = south and rng:NextNumber(18, 40) or (row == 1 and rng:NextNumber(7, 20) or rng:NextNumber(24, 44))
-			local p = pos + out * depth + along * rng:NextNumber(-7, 7)
-			if not isNearKeepout(arena, p, 3) then
-				local isPine = rng:NextNumber() < (south and 0.6 or 0.4)
-				local s = south and rng:NextNumber(0.6, 0.85) or rng:NextNumber(1, 1.55)
-				prop(m, isPine and "Tree_Pine" or "Tree_Round", CFrame.new(p + Vector3.new(0, -0.05, 0)) * randomYaw(), s, isPine and pick(PINE_LEAVES) or pick(ROUND_LEAVES), not south)
-			end
-		end
-		if south and rng:NextNumber() < 0.5 then
-			prop(m, "Bush", CFrame.new(pos + out * rng:NextNumber(5, 12)) * randomYaw(), rng:NextNumber(1, 1.5))
-		end
-	end)
-end
-
-------------------------------------------------------------------------------------------
--- RUINS: an overgrown castle courtyard at dusk. A mosaic plaza (spawn) opens onto four
--- flagstone avenues lined with colonnades (standing, broken and toppled pillars); ruined
--- buildings fill the quadrants; alien crystals erupt from corrupted ground; torches burn
--- at the plaza; a broken crenellated wall with corner towers rings it all.
-------------------------------------------------------------------------------------------
-
-local RUIN_STONE = { rgb(168, 162, 150), rgb(156, 150, 140), rgb(178, 170, 154), rgb(146, 142, 134) }
-local SANDSTONE = { rgb(196, 176, 136), rgb(186, 166, 128), rgb(204, 186, 146) }
-
-local AXES = { Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1) }
-
--- Broken wall line between two points on one axis: stepped chunks, one box collider.
-local function ruinWall(arena, a: Vector3, b: Vector3, maxH: number)
-	local m = arena.Model
-	local dir = (b - a)
-	local len = dir.Magnitude
-	if len < 1 then
-		return
-	end
-	dir = dir.Unit
-	local thick = 2.6
-	local chunks = math.max(1, math.floor(len / 7))
-	local cl = len / chunks
-	for k = 1, chunks do
-		local hgt = rng:NextNumber(maxH * 0.4, maxH)
-		local mid = a + dir * (cl * (k - 0.5))
-		local cf = CFrame.lookAt(mid, mid + dir) + Vector3.new(0, hgt / 2, 0) -- mid is on the floor
-		deco(m, { Name = "RuinWall", Size = Vector3.new(thick, hgt, cl + 0.05), CFrame = cf, Color = vary(pick(RUIN_STONE), 0.02), Material = Enum.Material.Cobblestone, CastShadow = true })
-		if rng:NextNumber() < 0.45 then
-			-- a jagged top block
-			local th = rng:NextNumber(1, 2.2)
-			deco(m, { Name = "RuinTop", Size = Vector3.new(thick * 0.9, th, cl * rng:NextNumber(0.3, 0.6)), CFrame = cf * CFrame.new(0, hgt / 2 + th / 2, rng:NextNumber(-cl * 0.2, cl * 0.2)), Color = vary(pick(RUIN_STONE), 0.02), Material = Enum.Material.Cobblestone, CastShadow = true })
-		end
-		if rng:NextNumber() < 0.3 then
-			deco(m, { Name = "Ivy", Size = Vector3.new(thick + 0.25, hgt * rng:NextNumber(0.4, 0.8), cl * rng:NextNumber(0.3, 0.6)), CFrame = cf * CFrame.new(0, -hgt * 0.15, 0), Color = vary(rgb(84, 128, 62), 0.03), Material = Enum.Material.Grass })
-		end
-	end
-	local mid = (a + b) / 2
-	local alongX = math.abs(dir.X) > 0.5
-	boxCollider(arena, mid.X, mid.Z, alongX and len or thick, alongX and thick or len, maxH)
-end
-
-local function ruinedBuilding(arena, bx: number, bz: number)
-	local y = arena.Center.Y
-	local sx = rng:NextNumber() < 0.5 and 1 or -1
-	local sz = rng:NextNumber() < 0.5 and 1 or -1
-	local w, d = rng:NextNumber(22, 28), rng:NextNumber(17, 22)
-	local function P(px: number, pz: number): Vector3
-		return Vector3.new(bx + px * sx, y, bz + pz * sz)
-	end
-	-- old tiled floor inside
-	deco(arena.Model, { Name = "OldFloor", Size = Vector3.new(w - 1, 0.12, d - 1), CFrame = CFrame.new(bx, y + 0.05, bz), Color = rgb(128, 122, 112), Material = Enum.Material.Slate })
-	-- back wall with a doorway gap, side wall, short broken front fragment
-	local gap = rng:NextNumber(-w / 2 + 6, w / 2 - 8)
-	ruinWall(arena, P(-w / 2, -d / 2), P(gap, -d / 2), 10)
-	ruinWall(arena, P(gap + 5, -d / 2), P(w / 2, -d / 2), 9)
-	ruinWall(arena, P(-w / 2, -d / 2 + 2.6), P(-w / 2, d / 2 - rng:NextNumber(2, 6)), 8)
-	ruinWall(arena, P(-w / 2 + 2.6, d / 2), P(-w / 2 + rng:NextNumber(7, 11), d / 2), 5)
-	-- rubble and a shady mushroom corner
-	for _ = 1, 3 do
-		local p = P(rng:NextNumber(-w / 2, w / 2), -d / 2 + rng:NextNumber(2.5, 4.5))
-		prop(arena.Model, "Rock", CFrame.new(p) * randomYaw(), rng:NextNumber(0.35, 0.6), { Stone = pick(RUIN_STONE), Moss = rgb(92, 140, 70) })
-	end
-	local corner = P(-w / 2 + 3.5, -d / 2 + 3.5)
-	for k = 1, 3 do
-		mushroom(arena, corner.X + k * 1.4 * sx, corner.Z + (k % 2) * 1.3 * sz, rng:NextNumber(0.35, 0.55), { Accent = rgb(196, 120, 64) })
-	end
-	keepout(arena, bx, bz, math.max(w, d) / 2 + 3)
-end
-
-local function crystalField(arena, x: number, z: number)
-	local y = arena.Center.Y
-	local m = arena.Model
-	local r = rng:NextNumber(8, 11)
-	disc(m, "Corruption", Vector3.new(x, y + 0.08, z), r, rgb(48, 30, 66), Enum.Material.Slate)
-	for k = 1, 4 do
-		local a = k / 4 * TAU + rng:NextNumber(-0.4, 0.4)
-		local len = rng:NextNumber(r * 0.7, r * 1.25)
-		local mid = Vector3.new(x + math.cos(a) * len / 2, y + 0.11, z + math.sin(a) * len / 2)
-		deco(m, { Name = "Crack", Size = Vector3.new(0.4, 0.05, len), CFrame = CFrame.lookAt(mid, Vector3.new(x, mid.Y, z)), Color = rgb(186, 100, 255), Material = Enum.Material.Neon })
-	end
-	-- one big collidable cluster in the middle, smaller ones around it
-	local glow = { Glow = pick({ rgb(176, 91, 255), rgb(140, 90, 255), rgb(210, 100, 255) }) }
-	prop(m, "CrystalCluster", CFrame.new(x, y, z) * randomYaw(), rng:NextNumber(1.6, 2), glow, true)
-	circleCollider(arena, x, z, 3, 5)
-	for k = 1, rng:NextInteger(3, 4) do
-		local a = k / 4 * TAU + rng:NextNumber(-0.5, 0.5)
-		local d = rng:NextNumber(3.8, r - 1.5)
-		prop(m, "CrystalCluster", CFrame.new(x + math.cos(a) * d, y, z + math.sin(a) * d) * randomYaw(), rng:NextNumber(0.6, 1.1), glow, false)
-	end
-	local holder = deco(m, { Name = "CrystalGlow", Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(x, y + 4, z), Transparency = 1 })
-	local light = Instance.new("PointLight")
-	light.Color = rgb(190, 110, 255)
-	light.Range = 22
-	light.Brightness = 1.6
-	light.Shadows = false
-	light.Parent = holder
-	keepout(arena, x, z, r + 1)
-end
-
-local function buildRuins(arena)
-	local c, h = arena.Center, arena.Half
-	local m = arena.Model
-	local y = c.Y
-
-	-- ground: earth outside, overgrown courtyard earth inside
-	deco(m, { Name = "OuterGround", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.06, 0)), Color = rgb(96, 104, 70), Material = Enum.Material.Grass, CanCollide = true, CanQuery = true })
-	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 4, 1, h * 2 + 4), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = rgb(128, 120, 98), Material = Enum.Material.Ground, CanCollide = true, CanQuery = true })
-	for _ = 1, 30 do
-		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(30, h * 1.15)
-		local px, pz = c.X + math.clamp(math.cos(a) * r, -h + 8, h - 8), c.Z + math.clamp(math.sin(a) * r, -h + 8, h - 8)
-		local tone = pick({ rgb(104, 140, 76), rgb(92, 128, 68), rgb(118, 146, 80), rgb(140, 128, 100) })
-		disc(m, "Overgrowth", Vector3.new(px, y + 0.02 + rng:NextNumber(0, 0.03), pz), rng:NextNumber(7, 20), tone, tone.G > 0.52 and Enum.Material.Grass or Enum.Material.Ground)
-	end
-
-	-- plaza: border ring, cobbles, sandstone compass star, red-brown centre
-	disc(m, "PlazaRing", Vector3.new(c.X, y + 0.12, c.Z), 31.5, rgb(104, 100, 96), Enum.Material.Slate, 0.2)
-	disc(m, "Plaza", Vector3.new(c.X, y + 0.16, c.Z), 30, rgb(166, 160, 148), Enum.Material.Cobblestone, 0.2)
-	for k = 0, 3 do
-		deco(m, { Name = "StarRay", Size = Vector3.new(2.2, 0.06, k % 2 == 0 and 50 or 36), CFrame = CFrame.new(c.X, y + 0.18, c.Z) * CFrame.Angles(0, k * math.pi / 4, 0), Color = SANDSTONE[1], Material = Enum.Material.Slate })
-	end
-	disc(m, "StarCore", Vector3.new(c.X, y + 0.2, c.Z), 6.5, rgb(140, 70, 56), Enum.Material.Slate)
-	disc(m, "StarHeart", Vector3.new(c.X, y + 0.22, c.Z), 2.6, SANDSTONE[3], Enum.Material.Slate)
-
-	-- avenues: rows of slabs (a few missing or heaved) out to the wall
-	for _, axis in ipairs(AXES) do
-		local side = Vector3.new(axis.Z, 0, axis.X)
-		local d = 31
-		while d < h - 8 do
-			if rng:NextNumber() > 0.08 then
-				local pos = c + axis * (d + 6) + Vector3.new(0, 0.07, 0)
-				deco(m, { Name = "AvenueSlab", Size = Vector3.new(22, 0.16, 11.6), CFrame = CFrame.lookAt(pos, pos + axis) * CFrame.Angles(0, math.rad(rng:NextNumber(-1.2, 1.2)), 0), Color = vary(pick(RUIN_STONE), 0.02), Material = Enum.Material.Slate })
-			end
-			keepout(arena, (c + axis * (d + 6)).X, (c + axis * (d + 6)).Z, 12)
-			d += 12
-		end
-		-- curb stones along both edges
-		for _, s in ipairs({ -1, 1 }) do
-			local mid = c + axis * ((34 + h) / 2) + side * s * 11.5 + Vector3.new(0, 0.2, 0)
-			deco(m, { Name = "Curb", Size = Vector3.new(1, 0.4, h - 34), CFrame = CFrame.lookAt(mid, mid + axis), Color = rgb(120, 116, 108), Material = Enum.Material.Slate })
-		end
-	end
-
-	-- colonnades: pillars along the avenues (standing, broken stump, toppled or missing)
-	local toppled = 0
-	for _, axis in ipairs(AXES) do
-		local side = Vector3.new(axis.Z, 0, axis.X)
-		for _, s in ipairs({ -1, 1 }) do
-			for d = 52, h - 20, 25 do
-				local p = c + axis * d + side * s * 15.5
+	-- colonnades along the avenues (pillars, some fallen as blocks)
+	for _, axis in ipairs({ Vector2.new(0, -1), Vector2.new(1, 0), Vector2.new(-1, 0) }) do
+		local side = Vector2.new(-axis.Y, axis.X)
+		for d = 112, 182, 35 do
+			for _, sgn in ipairs({ -1, 1 }) do
+				local p = axis * d + side * sgn * 11
 				local roll = rng:NextNumber()
-				if roll < 0.55 then
-					local sc = rng:NextNumber(1, 1.2)
-					prop(m, "Pillar", CFrame.new(p.X, y, p.Z) * CFrame.Angles(0, rng:NextInteger(0, 3) * math.pi / 2, 0), sc, { Stone = vary(RUIN_STONE[1], 0.02) }, true)
-					circleCollider(arena, p.X, p.Z, 1.6 * sc, 9 * sc)
-				elseif roll < 0.8 then
-					local sh = rng:NextNumber(1.5, 3.5)
-					deco(m, { Name = "PillarBase", Size = Vector3.new(3.2, 0.8, 3.2), CFrame = CFrame.new(p.X, y + 0.4, p.Z), Color = RUIN_STONE[2], Material = Enum.Material.Slate })
-					column(m, "Stump", Vector3.new(p.X, y + 0.8, p.Z), 1.15, sh, RUIN_STONE[1], Enum.Material.Slate, { CastShadow = true })
-					circleCollider(arena, p.X, p.Z, 1.7, sh + 0.8)
-				elseif toppled < 5 then
-					-- fallen drum pointing away from the avenue
-					toppled += 1
-					local len = rng:NextNumber(7, 9)
-					local centre = p + side * s * (len / 2 - 1)
-					deco(m, { Name = "FallenPillar", Shape = Enum.PartType.Cylinder, Size = Vector3.new(len, 2.3, 2.3), CFrame = CFrame.lookAt(Vector3.new(centre.X, y + 1.05, centre.Z), Vector3.new(centre.X, y + 1.05, centre.Z) + side) * CFrame.Angles(0, math.pi / 2, 0), Color = RUIN_STONE[1], Material = Enum.Material.Slate, CastShadow = true })
-					local alongX = math.abs(side.X) > 0.5
-					boxCollider(arena, centre.X, centre.Z, alongX and len or 2.5, alongX and 2.5 or len, 2.3)
+				if roll < 0.5 then
+					obstacle(arena, "Pillar", p.X, p.Y, rng:NextNumber(0, 360), rng:NextNumber(1.1, 1.3), PILLAR_PAL, { occluder = true })
+				elseif roll < 0.75 then
+					obstacle(arena, "Ruin_Block", p.X + side.X * sgn * 1.5, p.Y + side.Y * sgn * 1.5, rng:NextNumber(0, 360), 1.0, RUIN_PAL)
 				end
 			end
 		end
 	end
 
-	-- torches at the plaza mouths
-	for _, axis in ipairs(AXES) do
-		local side = Vector3.new(axis.Z, 0, axis.X)
-		for _, s in ipairs({ -1, 1 }) do
-			local p = c + axis * 40 + side * s * 13
-			prop(m, "Torch", CFrame.new(p.X, y, p.Z) * randomYaw(), 1.25)
-			fireLight(m, Vector3.new(p.X, y + 6.4, p.Z), 20, 1.5, nil, true)
-			circleCollider(arena, p.X, p.Z, 0.6, 6)
-		end
+	-- crystal outcrops (restrained accents) and boulders
+	crystalOutcrop(arena, 84, -160, 1.8, true)
+	crystalOutcrop(arena, -170, 64, 1.7, true)
+	crystalOutcrop(arena, 34, 170, 1.6, false)
+	for _, b in ipairs({ { 170, -84, 1.4 }, { -96, -170, 1.3 }, { 80, 100, 1.2 }, { -170, -110, 1.35 }, { 40, -120, 1.2 }, { -80, 172, 1.3 }, { 176, 80, 1.3 }, { -40, 120, 1.15 }, { 120, -40, 1.3 } }) do
+		boulder(arena, b[1], b[2], b[3], { Stone = RUIN_PAL.Stone, Stone2 = RUIN_PAL.Stone3 })
+		scatter(arena, b[1], b[2], 7, 3, { { "Rock_Small", 0.8, 1.2 }, { "GrassTuft", 1, 1.5 } }, 0.5)
 	end
 
-	boundaryWalls(arena)
-
-	-- ruined buildings, one per quadrant
-	for _, q in ipairs({ { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }) do
-		ruinedBuilding(arena, c.X + q[1] * rng:NextNumber(85, 120), c.Z + q[2] * rng:NextNumber(85, 120))
+	-- a few trees growing out of the ruins
+	for _, t in ipairs({ { -96, -136, 1.25 }, { 140, -60, 1.15 }, { -150, 10, 1.2 }, { 96, 160, 0.95 }, { -100, 74, 1.05 }, { 70, -176, 1.15 }, { -30, -172, 1.1 }, { 176, 112, 1.0 }, { -176, 150, 0.95 }, { 150, -170, 1.1 } }) do
+		tree(arena, "Tree_Round", t[1], t[2], t[3], pick(RUIN_TREES))
+		scatter(arena, t[1], t[2], 9, 3, { { "Fern", 1, 1.4 }, { "Bush", 1, 1.3 } }, 1)
 	end
+	obstacle(arena, "Log", 130, 90, 0, 1.1)
+	obstacle(arena, "Log", -178, -10, 90, 1.05)
 
-	-- alien crystal fields
-	for _ = 1, 5 do
-		local x, z = findSpot(arena, 60, h * 1.2, 14)
-		if x and z then
-			crystalField(arena, x, z)
-		end
-	end
-
-	-- autumn trees growing out of the ruins
-	local autumn: { Palette } = { { Leaf = rgb(214, 150, 60), Leaf2 = rgb(180, 96, 50) }, { Leaf = rgb(196, 170, 70), Leaf2 = rgb(160, 120, 52) } }
-	for _ = 1, 5 do
-		local x, z = findSpot(arena, 60, h * 1.25, 8)
-		if x and z then
-			tree(arena, x, z, rng:NextNumber(1, 1.3), "Tree_Round", pick(autumn))
-			cluster(arena, x, z, 6, 2, 1.5, function(px, pz)
-				bush(arena, px, pz, rng:NextNumber(0.7, 1), { Leaf = rgb(110, 140, 60), Accent = rgb(220, 120, 60) })
-			end)
-		end
-	end
-
-	-- rubble piles and lone boulders
-	local rockCap = Config.Arenas.RockCount or 26
-	for _ = 1, 10 do
-		local x, z = findSpot(arena, 45, h * 1.25, 6)
-		if x and z and arena.Rocks < rockCap then
-			rock(arena, x, z, rng:NextNumber(0.9, 1.3), { Stone = pick(RUIN_STONE), Moss = rgb(96, 140, 70) })
-			cluster(arena, x, z, 5, 2, 2, function(px, pz)
-				rock(arena, px, pz, rng:NextNumber(0.35, 0.6), { Stone = pick(RUIN_STONE) })
-			end)
-		end
-	end
-
-	-- BORDER: broken crenellated wall (low on the south / camera side), rubble in the
-	-- breaches, ruined corner towers, dark pines beyond.
-	alongSides(arena, 20, -h, h - 20, function(pos, out, along, side, _t)
-		local south = side == 2
-		local mid = pos + along * 10 + out * 1.6
-		if rng:NextNumber() < 0.12 then
-			-- breach: rubble mound (the invisible boundary still blocks)
-			for k = 1, 2 do
-				prop(m, "Rock", CFrame.new(mid + along * (k * 6 - 9)) * randomYaw(), rng:NextNumber(1, 1.4), { Stone = pick(RUIN_STONE) }, true)
-			end
-			return
-		end
-		local hgt = south and rng:NextNumber(3, 4.5) or rng:NextNumber(6, 11)
-		local cf = CFrame.lookAt(mid, mid + along) + Vector3.new(0, hgt / 2, 0) -- mid is on the floor
-		deco(m, { Name = "OuterWall", Size = Vector3.new(3.2, hgt, 20.05), CFrame = cf, Color = vary(pick(RUIN_STONE), 0.02), Material = Enum.Material.Cobblestone, CastShadow = not south })
-		if not south and rng:NextNumber() < 0.5 then
-			for _, k in ipairs({ -5, 5 }) do
-				deco(m, { Name = "Merlon", Size = Vector3.new(3.2, 2, 3), CFrame = cf * CFrame.new(0, hgt / 2 + 1, k), Color = RUIN_STONE[3], Material = Enum.Material.Cobblestone, CastShadow = true })
-			end
-		elseif rng:NextNumber() < 0.4 then
-			local th = rng:NextNumber(1.2, 2.5)
-			deco(m, { Name = "RuinTop", Size = Vector3.new(3, th, rng:NextNumber(5, 9)), CFrame = cf * CFrame.new(0, hgt / 2 + th / 2, rng:NextNumber(-5, 5)), Color = vary(pick(RUIN_STONE), 0.02), Material = Enum.Material.Cobblestone })
-		end
-		if rng:NextNumber() < 0.3 then
-			deco(m, { Name = "Ivy", Size = Vector3.new(3.45, hgt * rng:NextNumber(0.4, 0.85), rng:NextNumber(4, 9)), CFrame = cf * CFrame.new(0, -hgt * 0.1, rng:NextNumber(-5, 5)), Color = vary(rgb(84, 128, 62), 0.03), Material = Enum.Material.Grass })
-		end
-	end)
+	-- corners: corner towers on the far side, rubble on the camera side
 	for _, q in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
 		local south = q[2] == 1
-		local base = Vector3.new(c.X + q[1] * (h + 2), y, c.Z + q[2] * (h + 2))
-		local hgt = south and 7 or 16
-		column(m, "CornerTower", base, 8, hgt, RUIN_STONE[2], Enum.Material.Cobblestone, { CastShadow = not south })
-		column(m, "TowerRing", base + Vector3.new(0, hgt, 0), 8.6, 1.2, RUIN_STONE[3], Enum.Material.Cobblestone)
-		circleCollider(arena, base.X, base.Z, 8, hgt) -- the tower pokes into the corner
-		if not south then
-			towerMerlons(m, base, 8.1, hgt + 1.2, 7, RUIN_STONE[3])
+		local bx, bz = q[1] * (h + 2), q[2] * (h + 2)
+		if south then
+			obstacle(arena, "Ruin_Block", q[1] * (h - 9), q[2] * (h - 6), rng:NextNumber(0, 360), 1.2, RUIN_PAL)
+		else
+			obstacle(arena, "Castle_Tower", bx, bz, 0, 1.5, nil, { occluder = true })
 		end
+		boulder(arena, q[1] * (h - 18), q[2] * (h - 10), 1.1, { Stone = RUIN_PAL.Stone, Stone2 = RUIN_PAL.Stone3 })
+		scatter(arena, q[1] * (h - 18), q[2] * (h - 18), 14, 3, { { "GrassTuft", 1, 1.5 }, { "Fern", 1, 1.3 }, { "Rock_Small", 0.8, 1.2 } }, 0.8)
 	end
-	local darkPines: { Palette } = { { Leaf = rgb(46, 92, 64) }, { Leaf = rgb(38, 80, 60) }, { Leaf = rgb(56, 100, 66) } }
-	alongSides(arena, 16, -h - 20, h + 20, function(pos, out, along, side, _t)
-		if side == 2 then
-			return -- keep the camera side open
+
+	-- meadow scatter between the ruins
+	for _ = 1, 8 do
+		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(44, 190)
+		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, { { "GrassTuft", 1, 1.5 }, { "GrassTuft", 1, 1.5 }, { "Flowers", 1, 1.3, { Bloom = P.ivory_100 } }, { "Rock_Small", 0.7, 1.1 } }, 1.5, 0.3)
+	end
+
+	-- BORDER: broken crenellated wall just outside the boundary (low on the south side)
+	local wallTones = { RUIN_PAL.Stone, RUIN_PAL.Stone3, mix(RUIN_PAL.Stone, RUIN_PAL.Stone2, 0.5) }
+	alongSides(-h + 20, h - 20, 40, function(side, along, out, t)
+		local south = side == 2
+		if rng:NextNumber() < 0.12 then
+			local p = along * t + out * (h + 2)
+			decor(arena, "Rock", p.X, p.Y, nil, 1.3, { Stone = RUIN_PAL.Stone, Stone2 = RUIN_PAL.Stone3 }, { shadow = true })
+			return
 		end
-		local p = pos + out * rng:NextNumber(12, 42) + along * rng:NextNumber(-5, 5)
-		if rng:NextNumber() < 0.75 then
-			prop(m, "Tree_Pine", CFrame.new(p) * randomYaw(), rng:NextNumber(1.1, 1.7), pick(darkPines), true)
+		local hgt = south and rng:NextNumber(2.6, 3.6) or rng:NextNumber(6, 9)
+		local p = along * t + out * (h + 2.6)
+		local cf = CFrame.new(W(arena, p.X, p.Y, hgt / 2)) * CFrame.Angles(0, math.atan2(-along.X, -along.Y), 0)
+		deco(arena.Decor, { Name = "OuterWall", Size = Vector3.new(3.2, hgt, 40.05), CFrame = cf, Color = pick(wallTones), CastShadow = not south })
+		if not south then
+			for _, k in ipairs({ -12, 12 }) do
+				if rng:NextNumber() < 0.65 then
+					deco(arena.Decor, { Name = "Merlon", Size = Vector3.new(3.4, 2, 4), CFrame = cf * CFrame.new(0, hgt / 2 + 1, k + jitter(3)), Color = RUIN_PAL.Stone2, CastShadow = true })
+				end
+			end
 		end
 	end)
+	treeLine(arena, {
+		{ "Tree_PineTall", 1.1, 1.5, { Needles = P.moss_800, Needles2 = P.moss_700 } },
+		{ "Tree_Pine", 1.2, 1.6, { Needles = P.moss_900, Needles2 = P.moss_800 } },
+		{ "Tree_Round", 1.1, 1.4, RUIN_TREES[1] },
+	}, {
+		{ "Bush", 1.4, 2.0, nil },
+		{ "Tree_Round", 0.75, 0.9, RUIN_TREES[2] },
+	}, 37, mix(P.moss_600, P.moss_700, 0.6))
 end
+
+------------------------------------------------------------------------------------------
 
 -- Builds an arena by name, destroying the previous one.
 function MapBuilder.BuildArena(name: string)
 	MapBuilder.DestroyArena()
+	rng = Random.new(SEEDS[name] or SEEDS.Forest)
 	local arena = newArena(name)
 	if name == "Ruins" then
 		buildRuins(arena)

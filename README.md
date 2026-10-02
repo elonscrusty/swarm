@@ -1,5 +1,8 @@
 # SWARM
 
+Look and feel: heroic low-poly fantasy (see `docs/ART_DIRECTION.md`). Screenshots can be
+rendered without Studio with the offline preview tool (`docs/PREVIEW.md`).
+
 A Vampire Survivors-style auto-attack wave survival game for Roblox, written in Luau
 with a Rojo project layout: exterminator heroes against an alien insect swarm.
 
@@ -73,7 +76,7 @@ src/client/   → StarterPlayerScripts.SwarmClient
   UIBuilder.lua         in-run screens (HUD + upgrade bar, level-up, pause, results), scaling
   LobbyScreen.lua       the 2D lobby menu: home, characters, upgrades (§10)
   ViewportPreview.lua   turning 3D character previews (ViewportFrames)
-  DevPanel.lua          DEV button for Studio / the game's creator (§10)
+  DevPanel.lua          DEV button, Studio only by default (§10)
   UIKit.lua             shared UI helpers, colours, upgrade icon tiles
   UIAnim.lua            UI motion: pop-ins, screen slides, punches, count-ups, button feedback
   Audio.lua             pooled sound effects + music
@@ -202,9 +205,10 @@ partner-revive rules (`PartnerRevive`: 3 s next to a fallen teammate, 40% HP, 3 
 `Config.Run.MaxPlayers` (4) stays the hard cap; the old "Squad" (1-4) mode is still accepted
 from old clients but not shown.
 
-**DEV button** (bottom left): only in Studio or for the game's creator (user-owned games).
+**DEV button** (bottom right): only in Studio by default, so it never shows in normal play.
+Set `Config.Dev.ShowInLiveGame = true` to also show it to the game's creator in live servers.
 Lobby: *Start solo now*. In a run: *+5 levels* and *Skip to 14:30 (boss)*. The server checks
-Studio / creator again for every request (`RunManager` "DevCommand"). Turn it off with
+the same rule again for every request (`RunManager` "DevCommand"). Turn it off with
 `Config.Dev.Enabled = false`.
 
 ## 11. Upgrade icons

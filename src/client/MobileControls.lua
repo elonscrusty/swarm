@@ -13,6 +13,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
+local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Theme"))
 local CameraController = require(script.Parent.CameraController)
 
 local MobileControls = {}
@@ -71,25 +72,45 @@ local function buildGui()
 	gui.Name = "SwarmStick"
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = false
-	gui.DisplayOrder = 5
+	-- above the HUD (a stick may start over the ability bar); hidden while modals are open
+	gui.DisplayOrder = 11
 	gui.Parent = player:WaitForChild("PlayerGui")
 
+	-- visual style (Theme): dark slate well with a gold hairline and a faint inner ring,
+	-- an ivory knob with a gold rim
+	local P = Theme.Palette
+	local r = Config.Controls.StickRadius
 	base = Instance.new("Frame")
 	base.Name = "StickBase"
 	base.AnchorPoint = Vector2.new(0.5, 0.5)
-	base.Size = UDim2.fromOffset(Config.Controls.StickRadius * 2, Config.Controls.StickRadius * 2)
-	base.BackgroundColor3 = Color3.new(1, 1, 1)
-	base.BackgroundTransparency = 0.8
+	base.Size = UDim2.fromOffset(r * 2, r * 2)
+	base.BackgroundColor3 = P.slate_900
+	base.BackgroundTransparency = 0.55
 	base.Visible = false
 	base.Parent = gui
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(1, 0)
 	corner.Parent = base
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.new(1, 1, 1)
-	stroke.Transparency = 0.5
+	stroke.Color = P.gold_400
+	stroke.Transparency = 0.45
 	stroke.Thickness = 2
 	stroke.Parent = base
+	local inner = Instance.new("Frame")
+	inner.Name = "Ring"
+	inner.AnchorPoint = Vector2.new(0.5, 0.5)
+	inner.Position = UDim2.fromScale(0.5, 0.5)
+	inner.Size = UDim2.fromScale(0.62, 0.62)
+	inner.BackgroundTransparency = 1
+	inner.Parent = base
+	local ic = Instance.new("UICorner")
+	ic.CornerRadius = UDim.new(1, 0)
+	ic.Parent = inner
+	local is = Instance.new("UIStroke")
+	is.Color = P.ivory_300
+	is.Transparency = 0.8
+	is.Thickness = 1
+	is.Parent = inner
 	local scale = Instance.new("UIScale")
 	scale.Parent = base
 
@@ -97,13 +118,21 @@ local function buildGui()
 	knob.Name = "Knob"
 	knob.AnchorPoint = Vector2.new(0.5, 0.5)
 	knob.Position = UDim2.fromScale(0.5, 0.5)
-	knob.Size = UDim2.fromOffset(Config.Controls.StickRadius * 0.9, Config.Controls.StickRadius * 0.9)
+	knob.Size = UDim2.fromOffset(r * 0.86, r * 0.86)
 	knob.BackgroundColor3 = Color3.new(1, 1, 1)
-	knob.BackgroundTransparency = 0.35
+	knob.BackgroundTransparency = 0.12
 	knob.Parent = base
 	local kc = Instance.new("UICorner")
 	kc.CornerRadius = UDim.new(1, 0)
 	kc.Parent = knob
+	local kg = Instance.new("UIGradient")
+	kg.Rotation = 90
+	kg.Color = ColorSequence.new(P.ivory_100, P.ivory_400)
+	kg.Parent = knob
+	local ks = Instance.new("UIStroke")
+	ks.Color = P.gold_500
+	ks.Thickness = 2
+	ks.Parent = knob
 
 	-- keep the stick graphic scaled like the rest of the UI
 	RunService.RenderStepped:Connect(function()
