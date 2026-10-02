@@ -561,7 +561,7 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 			if chosen then
 				note = ready ~= "" and string.format("Waiting for your team (%s ready) · %ds", ready, left) or string.format("Travelling in %ds", left)
 			else
-				note = string.format("Next stage in %ds unless you return", left)
+				note = string.format((offer and offer.Endless) and "Next stage in %ds" or "Next stage in %ds unless you return", left)
 			end
 			if state:GetAttribute("Frozen") then
 				note ..= "  ·  paused"
