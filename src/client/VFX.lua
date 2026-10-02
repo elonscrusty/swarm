@@ -2035,7 +2035,7 @@ end
 ------------------------------------------------------------------------------------------
 
 --[[
-	XP gems must never be mistaken for gold: they are saturated cyan / blue / violet
+	XP gems must never be mistaken for gold: they are bright saturated azure / blue / violet
 	crystals (Theme.Fx.Gem), about 1.5 / 1.9 / 2.6 studs tall for the small / medium / large
 	gem (value 1 / 5 / 25; nearby small ones merge server-side, see XPSystem). A crystal is
 	a real octahedron built from eight WedgeParts (a pyramid up, a longer one down, every
@@ -2116,7 +2116,8 @@ local function parkGem(part: BasePart)
 end
 
 -- Resizes and recolours a crystal for its kind: facets alternate light / dark, the crown
--- lighter than the pavilion.
+-- lighter than the pavilion (kept close to the saturated base so the crystal reads as a
+-- vivid blue, not a pale ice tint).
 local function styleKit(kit: GemKit, kind: string)
 	kit.Kind = kind
 	local d = K.GEM_DIM[kind]
@@ -2126,9 +2127,9 @@ local function styleKit(kit: GemKit, kind: string)
 		local up = i <= 4
 		w.Size = Vector3.new(d[1] * 2, up and d[2] or d[3], d[1])
 		if up then
-			w.Color = base:Lerp(WHITE, i % 2 == 0 and 0.5 or 0.25)
+			w.Color = base:Lerp(WHITE, i % 2 == 0 and 0.32 or 0.1)
 		else
-			w.Color = base:Lerp(dark, i % 2 == 0 and 0.32 or 0.14)
+			w.Color = base:Lerp(dark, i % 2 == 0 and 0.3 or 0.1)
 		end
 	end
 	kit.Halo.Size = Vector3.new(0.05, d[1] * 2.8, d[1] * 2.8)

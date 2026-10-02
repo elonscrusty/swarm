@@ -184,6 +184,10 @@ local function addFlicker(light: Light)
 end
 
 local FIRE = rgb(255, 168, 92)
+-- arena torches / braziers: a warmer, stronger flame and light so they read as glowing
+-- pools of firelight in the bright daylight (the lobby keeps FIRE)
+local TORCH_FIRE = rgb(255, 150, 58)
+local TORCH_FLAME: { [string]: Color3 } = { Flame = rgb(255, 132, 36), Core = rgb(255, 214, 120) }
 
 -- Invisible holder with a PointLight (fire lights flicker).
 local function pointLight(parent: Instance, pos: Vector3, range: number, brightness: number, color: Color3, flicker: boolean): PointLight
@@ -1536,8 +1540,8 @@ local function buildForest(arena: Arena)
 	obstacle(arena, "Shrine", -70, -32, 180, 1.1, nil, { occluder = true })
 	obstacle(arena, "Banner", -70, -36.4, 180, 1.1, nil, { occluder = true })
 	for _, dx in ipairs({ -4.8, 4.8 }) do
-		obstacle(arena, "Torch", -70 + dx, -31, 0, 1.05)
-		kitLight(arena, "Torch", -70 + dx, -31, 0, 1.05, 16, 1.5, FIRE)
+		obstacle(arena, "Torch", -70 + dx, -31, 0, 1.05, TORCH_FLAME)
+		kitLight(arena, "Torch", -70 + dx, -31, 0, 1.05, 16, 1.8, TORCH_FIRE)
 	end
 	for _, sp in ipairs({ { -70, -27.4 }, { -66.6, -26.6 }, { -73.3, -26.9 } }) do
 		prop(arena.Decor, "Rock_Slab", CFrame.new(W(arena, sp[1], sp[2], -0.45)) * yawCF(jitter(14)), 0.95, nil, { shadow = false })
@@ -1640,7 +1644,7 @@ local function buildForest(arena: Arena)
 	}, {
 		{ "Bush", 1.4, 2.0, nil },
 		{ "Tree_Round", 0.75, 0.9, FOREST_ROUND[2] },
-	}, 26, mix(P.moss_600, P.moss_700, 0.6))
+	}, 26, mix(P.meadow_700, P.meadow_800, 0.6))
 end
 
 ------------------------------------------------------------------------------------------
@@ -1793,8 +1797,8 @@ local function buildRuins(arena: Arena)
 			end
 		end
 		local t = axis * 42 + side * 7.5
-		obstacle(arena, "Torch", t.X, t.Y, 0, 1.1)
-		kitLight(arena, "Torch", t.X, t.Y, 0, 1.1, 16, 1.3, FIRE)
+		obstacle(arena, "Torch", t.X, t.Y, 0, 1.1, TORCH_FLAME)
+		kitLight(arena, "Torch", t.X, t.Y, 0, 1.1, 16, 1.8, TORCH_FIRE)
 	end
 
 	-- NE: arch with walls either side and a crystal accent
@@ -1824,9 +1828,9 @@ local function buildRuins(arena: Arena)
 	obstacle(arena, "Ruin_Block", -48, 66, 60, 1.0, RUIN_PAL)
 	boulder(arena, -70, 50, 1.15, { Stone = RUIN_PAL.Stone, Stone2 = RUIN_PAL.Stone3 })
 	for _, o in ipairs({ { -62.5, 52.5 }, { -54.5, 60.5 } }) do
-		obstacle(arena, "Torch", o[1], o[2], 0, 1.0)
+		obstacle(arena, "Torch", o[1], o[2], 0, 1.0, TORCH_FLAME)
 	end
-	kitLight(arena, "Torch", -62.5, 52.5, 0, 1.0, 15, 1.3, FIRE)
+	kitLight(arena, "Torch", -62.5, 52.5, 0, 1.0, 15, 1.8, TORCH_FIRE)
 	scatter(arena, -58, 58, 14, 8, { { "Flowers", 1, 1.4, { Bloom = P.ivory_100 } }, { "Flowers", 1, 1.4, { Bloom = P.gold_300 } }, { "GrassTuft", 1, 1.5 } }, 0.5)
 
 	--------------------------------------------------------------------------------------
@@ -1943,7 +1947,7 @@ local function buildRuins(arena: Arena)
 	}, {
 		{ "Bush", 1.4, 2.0, nil },
 		{ "Tree_Round", 0.75, 0.9, RUIN_TREES[2] },
-	}, 37, mix(P.moss_600, P.moss_700, 0.6))
+	}, 37, mix(P.meadow_700, P.meadow_800, 0.6))
 end
 
 ------------------------------------------------------------------------------------------
@@ -2065,8 +2069,8 @@ end
 local SWAMP_RUIN: Pal = { Stone = mix(P.stone_500, P.murk_500, 0.35), Stone2 = mix(P.stone_400, P.murk_400, 0.35), Stone3 = mix(P.stone_600, P.murk_600, 0.35), Moss = mix(P.moss_500, P.murk_400, 0.5), Trim = mix(P.stone_400, P.murk_400, 0.35) }
 local SWAMP_PILLAR: Pal = { Base = SWAMP_RUIN.Stone3, Shaft = SWAMP_RUIN.Stone2, Shaft2 = SWAMP_RUIN.Stone, Moss = SWAMP_RUIN.Moss }
 local SWAMP_WOOD: Pal = { Wood = mix(P.wood_600, P.murk_600, 0.3), Frame = P.wood_700, Iron = P.steel_700, Lid = P.wood_600, Post = P.wood_700, Rail = mix(P.wood_600, P.murk_500, 0.3) }
-local SWAMP_GRASS: Pal = { Grass = P.murk_400 }
-local SWAMP_FERN: Pal = { Fern = mix(P.murk_400, P.moss_500, 0.4) }
+local SWAMP_GRASS: Pal = { Grass = P.fen_300 }
+local SWAMP_FERN: Pal = { Fern = mix(P.fen_400, P.meadow_500, 0.4) }
 local SWAMP_PEBBLE: Pal = { Stone = mix(P.stone_600, P.murk_600, 0.3) }
 local SWAMP_WISP = rgb(196, 232, 150)
 local SWAMP_SMALL = {
@@ -2086,9 +2090,9 @@ local SWAMP_POOL_RIM = { { "Reeds", 1.0, 1.4 }, { "GrassTuft", 1.0, 1.5, SWAMP_G
 -- Deep bog pond (impassable water, one circle collider), lilypads and reeds.
 local function bogPond(arena: Arena, x: number, z: number, r: number)
 	local m = arena.Decor
-	disc(m, "PondBank", W(arena, x, z, 0.08), r + 2.8, mix(P.bog_600, P.murk_600, 0.4))
+	disc(m, "PondBank", W(arena, x, z, 0.08), r + 2.8, mix(P.peat_500, P.fen_600, 0.4))
 	disc(m, "PondBed", W(arena, x, z, 0.12), r + 0.6, P.murk_800)
-	local water = disc(m, "Water", W(arena, x, z, 0.2), r, mix(P.murk_600, P.slate_600, 0.3))
+	local water = disc(m, "Water", W(arena, x, z, 0.2), r, mix(P.fen_600, P.slate_500, 0.45))
 	water.Transparency = 0.1
 	water.Reflectance = 0.08
 	for k = 1, 3 do
@@ -2120,9 +2124,9 @@ end
 local function buildSwamp(arena: Arena)
 	arena.DecorDensity = 0.7
 	arena.PortalPalette = { Moss = P.murk_400 }
-	local base = mix(P.murk_500, P.murk_400, 0.45)
-	biomeGround(arena, P.murk_600, base)
-	local dark, light, mud = mix(P.murk_600, P.murk_500, 0.5), mix(P.murk_400, P.murk_300, 0.35), mix(P.bog_500, P.murk_500, 0.45)
+	local base = mix(P.fen_500, P.fen_400, 0.45)
+	biomeGround(arena, P.fen_600, base)
+	local dark, light, mud = mix(P.fen_600, P.fen_500, 0.5), mix(P.fen_400, P.fen_300, 0.4), mix(P.peat_500, P.fen_500, 0.45)
 	groundPatches(arena, {
 		{ -150, -150, 26, dark }, { 124, -160, 22, dark }, { -170, 60, 24, dark }, { 160, 120, 26, dark },
 		{ 30, -130, 20, dark }, { -60, 150, 22, dark }, { -110, -36, 18, dark },
@@ -2131,11 +2135,11 @@ local function buildSwamp(arena: Arena)
 		{ 116, 174, 16, mud }, { 176, 12, 18, mud }, { -20, -170, 16, mud },
 	})
 	-- the clearing: firm lighter moss
-	patch(arena, 0, 0, 24, mix(P.murk_400, P.murk_300, 0.3), 0.05)
-	patch(arena, -3, 2, 13, mix(P.murk_400, P.bog_500, 0.3), 0.07)
+	patch(arena, 0, 0, 24, mix(P.fen_400, P.fen_300, 0.4), 0.05)
+	patch(arena, -3, 2, 13, mix(P.fen_400, P.peat_400, 0.3), 0.07)
 
 	-- bog tracks: west-east and south-north, crossing in the clearing
-	local core, edge = mix(P.bog_500, P.bog_600, 0.3), mix(P.bog_500, base, 0.55)
+	local core, edge = mix(P.peat_500, P.peat_400, 0.3), mix(P.peat_500, base, 0.55)
 	dirtPath(arena, {
 		Vector2.new(-262, -24), Vector2.new(-200, -10), Vector2.new(-140, -30), Vector2.new(-86, -14),
 		Vector2.new(-40, -6), Vector2.new(0, 0), Vector2.new(44, 10), Vector2.new(96, 4),
@@ -2168,7 +2172,7 @@ local function buildSwamp(arena: Arena)
 	obstacle(arena, "Barrel", hx + 6.5, hz - 5, 0, 1.05, SWAMP_WOOD)
 	obstacle(arena, "Crate", hx + 6.8, hz - 2.4, 90, 0.95, SWAMP_WOOD)
 	decor(arena, "Swamp_Log", hx - 7.5, hz - 4, 90, 0.9, nil, { shadow = true })
-	patch(arena, hx, hz + 1, 10, mix(P.bog_500, P.murk_500, 0.5), 0.05)
+	patch(arena, hx, hz + 1, 10, mix(P.peat_500, P.fen_500, 0.5), 0.05)
 	keepout(arena, hx, hz, 13)
 	scatter(arena, hx, hz, 20, 7, { { "Reeds", 1, 1.4 }, { "Fern", 1, 1.4, SWAMP_FERN }, { "Mushroom", 1, 1.2 }, { "GrassTuft", 1, 1.5, SWAMP_GRASS } }, 0.6)
 
@@ -2190,7 +2194,7 @@ local function buildSwamp(arena: Arena)
 	end
 	obstacle(arena, "Swamp_Lantern", wx, wz, 0, 1.1)
 	kitLight(arena, "Swamp_Lantern", wx, wz, 0, 1.1, 15, 1.2, SWAMP_WISP)
-	patch(arena, wx, wz, 8, mix(P.murk_400, P.murk_300, 0.4), 0.05)
+	patch(arena, wx, wz, 8, mix(P.fen_400, P.fen_300, 0.4), 0.05)
 	keepout(arena, wx, wz, 11)
 	scatter(arena, wx, wz, 14, 6, { { "Mushroom", 1, 1.3 }, { "GrassTuft", 1.1, 1.6, SWAMP_GRASS }, { "Reeds", 1, 1.3 } }, 0.5)
 
@@ -2205,7 +2209,7 @@ local function buildSwamp(arena: Arena)
 	obstacle(arena, "Barrel", kx - 8.6, kz - 5.6, 0, 1.0, SWAMP_WOOD)
 	obstacle(arena, "Swamp_Lantern", kx + 3, kz + 3, 0, 1.0)
 	kitLight(arena, "Swamp_Lantern", kx + 3, kz + 3, 0, 1.0, 13, 1.1, SWAMP_WISP)
-	patch(arena, kx - 2, kz - 1, 9, mix(P.bog_500, P.murk_500, 0.55), 0.05)
+	patch(arena, kx - 2, kz - 1, 9, mix(P.peat_500, P.fen_500, 0.55), 0.05)
 	keepout(arena, kx - 2, kz, 13)
 	scatter(arena, kx - 2, kz, 18, 6, { { "GrassTuft", 1, 1.5, SWAMP_GRASS }, { "Reeds", 1, 1.3 }, { "Rock_Small", 0.7, 1.0, SWAMP_PEBBLE } }, 0.5)
 
@@ -2285,7 +2289,7 @@ local function buildSwamp(arena: Arena)
 	}, {
 		{ "Bush", 1.4, 2.0, { Leaves = P.murk_600, Leaves2 = P.murk_500 } },
 		{ "Swamp_Willow", 0.7, 0.85, nil },
-	}, 37, mix(P.murk_600, P.murk_700, 0.6))
+	}, 37, mix(P.fen_600, P.fen_700, 0.6))
 end
 
 ------------------------------------------------------------------------------------------
@@ -2644,8 +2648,8 @@ local function buildDesert(arena: Arena)
 	for _, dx in ipairs({ -5.5, 5.5 }) do
 		obstacle(arena, "Brazier", ox + dx, oz + 6, 0, 0.9, DESERT_FIRE)
 	end
-	kitLight(arena, "Brazier", ox - 5.5, oz + 6, 0, 0.9, 15, 1.2, FIRE)
-	kitLight(arena, "Brazier", ox + 5.5, oz + 6, 0, 0.9, 15, 1.2, FIRE)
+	kitLight(arena, "Brazier", ox - 5.5, oz + 6, 0, 0.9, 15, 1.7, TORCH_FIRE)
+	kitLight(arena, "Brazier", ox + 5.5, oz + 6, 0, 0.9, 15, 1.7, TORCH_FIRE)
 	for ix = -1, 1 do
 		for iz = -1, 1 do
 			if (ix + iz) % 2 == 0 then
@@ -2664,9 +2668,9 @@ local function buildDesert(arena: Arena)
 	prop(arena.Decor, "Crate", CFrame.new(W(arena, nx + 12, nz + 3.1, 2)) * yawCF(25), 0.8, DESERT_WOOD)
 	obstacle(arena, "Barrel", nx - 11, nz + 2, 0, 1.0, DESERT_WOOD)
 	for _, t in ipairs({ { nx - 3, nz + 8 }, { nx + 7, nz + 7 } }) do
-		obstacle(arena, "Torch", t[1], t[2], 0, 1.0)
+		obstacle(arena, "Torch", t[1], t[2], 0, 1.0, TORCH_FLAME)
 	end
-	kitLight(arena, "Torch", nx + 2, nz + 7.5, 0, 1.0, 16, 1.3, FIRE)
+	kitLight(arena, "Torch", nx + 2, nz + 7.5, 0, 1.0, 16, 1.8, TORCH_FIRE)
 	patch(arena, nx + 1, nz + 1, 10, mix(P.sand_500, P.clay_500, 0.2), 0.05)
 	keepout(arena, nx + 1, nz, 14)
 	scatter(arena, nx, nz, 18, 5, { { "Rock_Small", 0.8, 1.2, DESERT_PEBBLE }, { "Dune", 0.5, 0.7 } }, 0.6)
@@ -2788,7 +2792,7 @@ end
 --   border      basalt columns and charred trees, low rocks and ash on the camera side
 ------------------------------------------------------------------------------------------
 
-local LAVA_PEBBLE: Pal = { Stone = P.basalt_500 }
+local LAVA_PEBBLE: Pal = { Stone = P.cinder_500 }
 local EMBER = rgb(255, 150, 80)
 local LAVA_SMALL = {
 	{ "Ash_Pile", 0.8, 1.2 },
@@ -2824,9 +2828,9 @@ end
 local function buildLava(arena: Arena)
 	arena.DecorDensity = 0.7
 	arena.PortalPalette = { Moss = P.ash_300 }
-	local base = mix(P.ash_400, P.basalt_500, 0.35)
-	biomeGround(arena, P.basalt_600, base)
-	local dark, pale, ash = mix(P.basalt_500, P.basalt_600, 0.4), mix(P.ash_400, P.ash_300, 0.45), mix(P.ash_400, P.basalt_500, 0.6)
+	local base = mix(P.cinder_400, P.cinder_500, 0.35)
+	biomeGround(arena, P.cinder_600, base)
+	local dark, pale, ash = mix(P.cinder_500, P.cinder_600, 0.4), mix(P.cinder_300, P.cinder_200, 0.35), mix(P.cinder_400, P.cinder_500, 0.6)
 	groundPatches(arena, {
 		{ -150, -150, 26, dark }, { 120, -165, 22, dark }, { -170, 60, 24, dark }, { 160, 120, 26, dark },
 		{ 30, -126, 20, ash }, { -60, 150, 22, dark }, { -110, -40, 18, ash },
@@ -2834,11 +2838,11 @@ local function buildLava(arena: Arena)
 		{ 140, -110, 18, pale }, { -140, 120, 20, ash }, { 0, 140, 24, pale }, { -175, -90, 20, pale },
 		{ 120, 175, 16, ash }, { 175, 10, 18, dark },
 	})
-	patch(arena, 0, 0, 24, mix(P.ash_400, P.ash_300, 0.55), 0.05)
-	patch(arena, 3, 2, 13, mix(P.ash_400, P.ash_300, 0.3), 0.07)
+	patch(arena, 0, 0, 24, mix(P.cinder_300, P.cinder_400, 0.4), 0.05)
+	patch(arena, 3, 2, 13, mix(P.cinder_300, P.cinder_200, 0.3), 0.07)
 
 	-- ash tracks
-	local core, edge = mix(P.ash_300, P.ash_400, 0.25), mix(P.ash_400, base, 0.5)
+	local core, edge = mix(P.cinder_200, P.cinder_300, 0.3), mix(P.cinder_300, base, 0.5)
 	dirtPath(arena, {
 		Vector2.new(-262, 26), Vector2.new(-200, 10), Vector2.new(-142, 28), Vector2.new(-90, 10),
 		Vector2.new(-40, 4), Vector2.new(0, 0), Vector2.new(44, -10), Vector2.new(94, -2),
@@ -2985,7 +2989,7 @@ local function buildLava(arena: Arena)
 	}, {
 		{ "Basalt_Rock", 1.0, 1.4, nil },
 		{ "Ash_Pile", 1.6, 2.2, nil },
-	}, 28, mix(P.basalt_600, P.basalt_700, 0.55))
+	}, 28, mix(P.cinder_600, P.basalt_600, 0.5))
 end
 
 ------------------------------------------------------------------------------------------

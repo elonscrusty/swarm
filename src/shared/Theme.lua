@@ -306,13 +306,14 @@ Theme.Fx = {
 	Bolt = Palette.fx_bolt,
 	Gold = Palette.gold_300,
 	Danger = Palette.crimson_400,
-	-- XP gems are saturated cyan / blue / violet crystals (never gold: gold means coins, and
-	-- never the red / orange / green of enemy attacks); Glow = the faint floor disc
+	-- XP gems are bright, saturated azure / royal blue / violet crystals that pop on the
+	-- grass, sand and snow (never gold: gold means coins, and never the red / orange / green
+	-- of enemy attacks); Glow = the faint floor disc
 	Gem = {
-		Small = Color3.fromRGB(64, 200, 255),
-		Medium = Color3.fromRGB(86, 132, 255),
-		Large = Color3.fromRGB(180, 114, 255),
-		Glow = Color3.fromRGB(64, 200, 255),
+		Small = Color3.fromRGB(28, 156, 255),
+		Medium = Color3.fromRGB(40, 92, 255),
+		Large = Color3.fromRGB(160, 72, 255),
+		Glow = Color3.fromRGB(40, 170, 255),
 		Core = Palette.ivory_100,
 	},
 	Coin = Palette.gold_500, -- gold coins (GoldCoin / GoldPile meshes, part fallback)
