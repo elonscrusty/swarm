@@ -7,11 +7,14 @@
 	network updates so movement looks fluid even at a low replication rate. All model
 	pieces move with a single workspace:BulkMoveTo per frame.
 
-	Detail budget (Config.Graphics.MaxDetailedEnemies): when more enemies are alive than
-	the budget, the ones nearest the camera focus get the full model (ranked a few times a
-	second) and the rest show their plain body, restyled locally in the creature's palette
-	colour. The boss and elites are always detailed. Models are pooled per enemy type, so
-	a recycled body reuses parts instead of building new ones.
+	Detail budget (Config.Graphics.MaxDetailedEnemies, stepping down to MinDetailedEnemies
+	while frames are slow): when more enemies are alive than the budget, the ones nearest
+	the camera focus get the full model (ranked a few times a second) and the rest show
+	their plain body, restyled locally in the creature's palette colour. The boss and
+	elites are always detailed. Models are pooled per enemy type and go back to the pool
+	when their enemy dies or drops out of the budget, so models exist only for detailed
+	enemies (plus the pools) and a recycled body reuses parts instead of building new ones.
+	Spawn dust puffs only for spawns on screen.
 
 	Readability: Flash() gives a brief white hit flash (model or plain body); elites stand
 	on a soft gold ground ring on top of their bigger, gold-tinted model with its crown,
@@ -458,6 +461,26 @@ local detailed: { [Slot]: boolean } = {}
 local rankList: { Slot } = {}
 local rankTimer = 0
 local liveCount = 0 -- live enemies seen last frame (decides whether the budget applies)
+-- Adaptive detail budget: between Config.Graphics.MinDetailedEnemies and MaxDetailedEnemies,
+-- lowered while frames are slow (smoothed frame time over 1/40 s), raised again when fast.
+local budget = Config.Graphics.MaxDetailedEnemies
+local frameTime = 1 / 60
+local budgetTimer = 1
+
+local function adaptBudget(dt: number)
+	frameTime += (math.min(dt, 0.2) - frameTime) * 0.05
+	budgetTimer -= dt
+	if budgetTimer > 0 then
+		return
+	end
+	budgetTimer = 1
+	local G = Config.Graphics
+	if frameTime > 1 / 40 then
+		budget = math.max(G.MinDetailedEnemies, budget - 10)
+	elseif frameTime < 1 / 55 then
+		budget = math.min(G.MaxDetailedEnemies, budget + 5)
+	end
+end
 
 local function rank()
 	local cam = workspace.CurrentCamera
@@ -474,7 +497,7 @@ local function rank()
 		return a.Dist < b.Dist
 	end)
 	table.clear(detailed)
-	local limit = Config.Graphics.MaxDetailedEnemies
+	local limit = budget
 	for i, slot in ipairs(rankList) do
 		if i > limit then
 			break
@@ -804,7 +827,8 @@ local function step(dt: number)
 
 	-- the budget only matters when more enemies are alive than it allows (last frame's
 	-- count: one loop over the bodies instead of two)
-	local budgeted = liveCount > Config.Graphics.MaxDetailedEnemies
+	adaptBudget(dt)
+	local budgeted = liveCount > budget
 	rankTimer -= dt
 	if budgeted and rankTimer <= 0 then
 		rankTimer = RANK_EVERY

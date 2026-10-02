@@ -936,7 +936,10 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	if stageNo > 0 and anim.BannerStage ~= stageNo then
 		if stagePhase ~= "Travel" and not state:GetAttribute("Frozen") then
 			anim.BannerStage = stageNo
-			showStageBanner(stageNo, goal)
+			-- joining mid-fight (reconnect, boss already up): no banner over the action
+			if stagePhase == "Explore" or stagePhase == "None" then
+				showStageBanner(stageNo, goal)
+			end
 		end
 	end
 

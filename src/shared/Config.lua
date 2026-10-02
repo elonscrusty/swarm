@@ -574,6 +574,9 @@ Config.Graphics = {
 	-- their simple one-part body (keeps phones smooth in huge swarms). The nearest ones
 	-- get the models; the boss and elites are always detailed.
 	MaxDetailedEnemies = 110,
+	-- ... and on a device that can't keep up (frames slower than 40 fps for a while) the
+	-- budget steps down toward this, and back up once frames are fast again.
+	MinDetailedEnemies = 60,
 	-- Effect budget: pooled effect parts animating at once (sparks, dust, rings, bolts).
 	-- Cosmetic effects past it are skipped; boss warnings and player events never are.
 	MaxEffectParts = 220,

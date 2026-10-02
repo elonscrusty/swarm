@@ -21,6 +21,8 @@
 	BossAI (data: BossData); the stage's boss id comes from StageManager.
 	Run items hook in here (ItemSystem): crits and Storm Charm in Damage, kill procs in Kill;
 	the Bargain Shrine's enemy HP (LootSystem.EnemyHPMult) in Spawn.
+	Replication: the boss HP attributes and each player's "Kills" attribute are written at
+	10 Hz from Step (not on every hit / kill); rp.Kills itself is always exact.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -50,6 +52,7 @@ local uidCounter = 0
 local spawnTimer = 0
 local bossDirty = false
 local bossAttrTimer = 0
+local killsAttrTimer = 0
 -- pacing (Config.Pacing); reset when a new run starts (the run clock goes back)
 local lastRunTime = math.huge
 local calmLeft = 0
@@ -720,8 +723,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		ctx.XPSystem.SpawnGem(pos, gemValue(def.Gem, def.XPScale or 1))
 	end
 	if rp then
-		rp.Kills += 1
-		rp.Player:SetAttribute("Kills", rp.Kills)
+		rp.Kills += 1 -- the "Kills" attribute follows at 10 Hz (EnemySpawner.Step)
 	end
 	ctx.RunManager.AddTotalKill()
 
@@ -916,6 +918,19 @@ function EnemySpawner.Step(dt: number)
 		local boss = EnemySpawner.Boss
 		state:SetAttribute("BossHP", boss and math.max(0, math.ceil(boss.HP)) or 0)
 		state:SetAttribute("BossMaxHP", boss and math.ceil(boss.MaxHP) or 0)
+	end
+
+	-- Kill counters to the HUD at 10 Hz, not on every kill (a big swarm dies by the
+	-- hundreds per second); rp.Kills itself is exact and is what results / saves use.
+	killsAttrTimer += dt
+	if killsAttrTimer >= 0.1 then
+		killsAttrTimer = 0
+		for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+			local player = rp.Player
+			if player and player.Parent and player:GetAttribute("InRun") == true and player:GetAttribute("Kills") ~= rp.Kills then
+				player:SetAttribute("Kills", rp.Kills)
+			end
+		end
 	end
 
 	if not ctx.RunManager.IsSimulating() then
