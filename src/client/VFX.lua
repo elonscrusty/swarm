@@ -1715,7 +1715,7 @@ end
 
 --[[
 	Fire Trail patches: the burning ground the server damages (WeaponFx "fp": x, z, radius,
-	life, evolved). Each patch is a scorched, half see-through bed exactly as wide as its
+	life, evolved). Each patch is a barely visible scorch bed exactly as wide as its
 	damage circle plus a small crown of flame licks standing in it. A lick is a tall pointed
 	flame card (two mirrored wedges) turned to face the camera, with a smaller, brighter core
 	card in front: a clean flame silhouette from the overhead view. Licks sway, lean and
@@ -1738,7 +1738,7 @@ K.fireEmber = 0
 K.fireFace = CFrame.identity -- turns a flame card to face the camera (set each frame)
 -- outer flame / core colours at the start, middle and end of a patch's life
 K.FIRE_OUTER = { Color3.fromRGB(255, 122, 28), Color3.fromRGB(226, 76, 26), Color3.fromRGB(140, 40, 26) }
-K.FIRE_CORE = { Color3.fromRGB(255, 200, 70), Color3.fromRGB(255, 150, 50), Color3.fromRGB(196, 84, 38) }
+K.FIRE_CORE = { Color3.fromRGB(255, 232, 110), Color3.fromRGB(255, 184, 62), Color3.fromRGB(196, 84, 38) }
 K.FIRE_OUTER_EVO = { Color3.fromRGB(255, 178, 44), Color3.fromRGB(255, 124, 34), Color3.fromRGB(200, 70, 32) }
 K.FIRE_CORE_EVO = { Color3.fromRGB(255, 236, 140), Color3.fromRGB(255, 190, 80), Color3.fromRGB(238, 128, 52) }
 K.FIRE_STAGES = 6
@@ -1807,8 +1807,8 @@ local function firePatch(x: number, z: number, radius: number, life: number, evo
 			Cards = cards,
 			Ox = offsets[k] * radius,
 			Oz = (math.random() - 0.5) * 0.5,
-			W = (main and 1.7 or 1.15) * scale * (0.9 + math.random() * 0.2),
-			H = (main and 2.6 or 1.8) * scale * (0.9 + math.random() * 0.2),
+			W = (main and 1.6 or 1.1) * scale * (0.9 + math.random() * 0.2),
+			H = (main and 3.3 or 2.3) * scale * (0.9 + math.random() * 0.2),
 			Tilt = (math.random() - 0.5) * 0.3,
 			Delay = (k - 1) * 0.09 + math.random() * 0.05,
 			Speed = 5 + math.random() * 4,
@@ -1845,8 +1845,8 @@ local function sizeLick(lick: FireLick, vis: number)
 	local c = lick.Cards
 	c[1].Size = Vector3.new(0.12, h, wl)
 	c[2].Size = Vector3.new(0.12, h, wr)
-	c[3].Size = Vector3.new(0.16, h * 0.62, wl * 0.55)
-	c[4].Size = Vector3.new(0.16, h * 0.62, wr * 0.55)
+	c[3].Size = Vector3.new(0.16, h * 0.72, wl * 0.62)
+	c[4].Size = Vector3.new(0.16, h * 0.72, wr * 0.62)
 end
 
 local function stepFirePatches(now: number)
@@ -1883,8 +1883,8 @@ local function stepFirePatches(now: number)
 				colourFire(fp, stage)
 			end
 			local left = math.clamp((fp.Life - t) / 0.5, 0, 1) -- 1 → 0 over the last half second
-			-- half see-through: the floor stays readable under a long trail
-			fp.Bed.Transparency = 1 - 0.26 * math.min(1, t / 0.2) * left
+			-- barely there: overlapping beds must never hide the floor
+			fp.Bed.Transparency = 1 - 0.09 * math.min(1, t / 0.2) * left
 			local origin = CFrame.new(fp.X, FLOOR_Y + 0.1, fp.Z) * face
 			for _, lick in ipairs(fp.Licks) do
 				local grow = math.clamp((t - lick.Delay) / 0.3, 0, 1)
@@ -1907,8 +1907,8 @@ local function stepFirePatches(now: number)
 					-- left card: tall face (+Z) toward +X; right card: toward -X
 					bulk(c[1], base * CFrame.new(-wl / 2, h / 2, 0) * CFrame.Angles(0, math.pi / 2, 0))
 					bulk(c[2], base * CFrame.new(wr / 2, h / 2, 0) * CFrame.Angles(0, -math.pi / 2, 0))
-					bulk(c[3], base * CFrame.new(-wl * 0.275, h * 0.31, 0.05) * CFrame.Angles(0, math.pi / 2, 0))
-					bulk(c[4], base * CFrame.new(wr * 0.275, h * 0.31, 0.05) * CFrame.Angles(0, -math.pi / 2, 0))
+					bulk(c[3], base * CFrame.new(-wl * 0.31, h * 0.36, 0.05) * CFrame.Angles(0, math.pi / 2, 0))
+					bulk(c[4], base * CFrame.new(wr * 0.31, h * 0.36, 0.05) * CFrame.Angles(0, -math.pi / 2, 0))
 				end
 			end
 		end
