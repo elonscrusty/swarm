@@ -1900,6 +1900,503 @@
   ]
  },
  {
+  "name": "BriarSentinel",
+  "category": "Enemies",
+  "note": "Boss (BriarBoss). Bramble treant knight ~13 tall: twisted dark bark body and root legs, mossy bramble armour plates, pale bone thorns, bark helm with amber eyes, crown of thorny branches with amber berries, amber heart-knot (Pulse), long root arms (SwingB/A) whose root fingers reach the ground.",
+  "tris": 1460,
+  "pieces": [
+   {
+    "name": "LegL",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     -2.1373,
+     2.4644,
+     -0.0815
+    ],
+    "size": [
+     2.8254,
+     4.9288,
+     3.037
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     0.5373,
+     2.1356,
+     0.4815
+    ]
+   },
+   {
+    "name": "KneeThornsL",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     -2.1184,
+     3.0679,
+     -1.1744
+    ],
+    "size": [
+     0.5156,
+     0.8164,
+     0.9924
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     0.5184,
+     1.5321,
+     1.5744
+    ]
+   },
+   {
+    "name": "LegR",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     2.1373,
+     2.4644,
+     -0.0815
+    ],
+    "size": [
+     2.8254,
+     4.9288,
+     3.037
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -0.5373,
+     2.1356,
+     0.4815
+    ]
+   },
+   {
+    "name": "KneeThornsR",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     2.1184,
+     3.0679,
+     -1.1744
+    ],
+    "size": [
+     0.5156,
+     0.8164,
+     0.9924
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -0.5184,
+     1.5321,
+     1.5744
+    ]
+   },
+   {
+    "name": "Body",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0545,
+     7.5,
+     0.542
+    ],
+    "size": [
+     5.8981,
+     7.8,
+     4.6616
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Grooves",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1604,
+     7.1337,
+     0.4419
+    ],
+    "size": [
+     6.05,
+     6.5327,
+     5.0074
+    ]
+   },
+   {
+    "name": "Armour",
+    "slot": "Leaf",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0605,
+     7.8087,
+     0.3282
+    ],
+    "size": [
+     5.1246,
+     6.2212,
+     5.2189
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Heart",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     8.5,
+     -2.25
+    ],
+    "size": [
+     1.116,
+     1.488,
+     0.744
+    ],
+    "anim": "Pulse",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "HeartKnot",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     8.4742,
+     -2.2972
+    ],
+    "size": [
+     2.2176,
+     2.5812,
+     0.6837
+    ]
+   },
+   {
+    "name": "Vines",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     7.3752,
+     0.2655
+    ],
+    "size": [
+     5.4637,
+     2.7573,
+     4.954
+    ]
+   },
+   {
+    "name": "Thorns",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     9.3055,
+     0.5115
+    ],
+    "size": [
+     5.4456,
+     5.3275,
+     6.9696
+    ]
+   },
+   {
+    "name": "Head",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.075,
+     12.151,
+     -0.4067
+    ],
+    "size": [
+     2.2955,
+     2.9392,
+     2.5854
+    ]
+   },
+   {
+    "name": "Visor",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1044,
+     11.7133,
+     -1.7062
+    ],
+    "size": [
+     1.8006,
+     1.4887,
+     0.6285
+    ]
+   },
+   {
+    "name": "Eyes",
+    "slot": "Eye",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     12.2,
+     -2.0
+    ],
+    "size": [
+     1.676,
+     0.364,
+     0.312
+    ]
+   },
+   {
+    "name": "Crown",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     14.0257,
+     -0.9694
+    ],
+    "size": [
+     4.0505,
+     2.1486,
+     2.1626
+    ]
+   },
+   {
+    "name": "Berries",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     13.9231,
+     -0.9173
+    ],
+    "size": [
+     3.4199,
+     0.4,
+     1.7933
+    ]
+   },
+   {
+    "name": "ArmL",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     -4.1957,
+     5.2753,
+     -1.1427
+    ],
+    "size": [
+     3.9087,
+     10.4507,
+     4.9146
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     1.1957,
+     4.7247,
+     1.5427
+    ]
+   },
+   {
+    "name": "PauldronL",
+    "slot": "Leaf",
+    "material": "SmoothPlastic",
+    "offset": [
+     -3.535,
+     8.2618,
+     0.1512
+    ],
+    "size": [
+     4.1578,
+     6.8994,
+     3.4199
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     0.535,
+     1.7382,
+     0.2488
+    ]
+   },
+   {
+    "name": "ArmThornsL",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     -4.4112,
+     9.7076,
+     0.4969
+    ],
+    "size": [
+     4.0187,
+     7.3918,
+     3.3939
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     1.4112,
+     0.2924,
+     -0.0969
+    ]
+   },
+   {
+    "name": "ArmVineL",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -4.1651,
+     7.2262,
+     -0.3925
+    ],
+    "size": [
+     2.1449,
+     4.665,
+     2.3021
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     1.1651,
+     2.7738,
+     0.7925
+    ]
+   },
+   {
+    "name": "ArmR",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     4.1957,
+     5.2753,
+     -1.1427
+    ],
+    "size": [
+     3.9087,
+     10.4507,
+     4.9146
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     -1.1957,
+     4.7247,
+     1.5427
+    ]
+   },
+   {
+    "name": "PauldronR",
+    "slot": "Leaf",
+    "material": "SmoothPlastic",
+    "offset": [
+     3.6848,
+     8.2223,
+     0.2284
+    ],
+    "size": [
+     4.1072,
+     6.7424,
+     3.4927
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     -0.6848,
+     1.7777,
+     0.1716
+    ]
+   },
+   {
+    "name": "ArmThornsR",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     4.4112,
+     9.7076,
+     0.4969
+    ],
+    "size": [
+     4.0187,
+     7.3918,
+     3.3939
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     -1.4112,
+     0.2924,
+     -0.0969
+    ]
+   },
+   {
+    "name": "ArmVineR",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     4.1651,
+     7.2262,
+     -0.3925
+    ],
+    "size": [
+     2.1449,
+     4.665,
+     2.3021
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     -1.1651,
+     2.7738,
+     0.7925
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.2784313725490196,
+    0.20039215686274509,
+    0.14450980392156862
+   ],
+   "Dark": [
+    0.16470588235294117,
+    0.11764705882352941,
+    0.08627450980392157
+   ],
+   "Light": [
+    0.84,
+    0.7466666666666667,
+    0.5796078431372549
+   ],
+   "Accent": [
+    0.21176470588235294,
+    0.3215686274509804,
+    0.1843137254901961
+   ],
+   "Glow": [
+    0.9647058823529412,
+    0.8549019607843137,
+    0.49411764705882355
+   ],
+   "Eye": [
+    0.9137254901960784,
+    0.7254901960784313,
+    0.2549019607843137
+   ],
+   "Leaf": [
+    0.34980392156862744,
+    0.49411764705882355,
+    0.2549019607843137
+   ]
+  },
+  "bounds": [
+   [
+    -6.421,
+    0.0,
+    -3.6
+   ],
+   [
+    6.421,
+    15.1,
+    3.996
+   ]
+  ]
+ },
+ {
   "name": "Brimstone_Altar",
   "category": "Lava",
   "note": "Landmark brimstone altar ~8.6 wide: two-step octagonal basalt dais with glowing lava channels, four curved obsidian horns, a gold-rimmed fire bowl with a big flame. Front = -Y. Collider = the bowl pedestal and the horns; light = flame.",
@@ -6423,6 +6920,612 @@
     0.558,
     0.5,
     0.433
+   ]
+  ]
+ },
+ {
+  "name": "FrostboundColossus",
+  "category": "Enemies",
+  "note": "Boss (FrostBoss). Hunched ice giant ~13 tall: deep steel-blue ice slabs over a dark rock core showing through a chest cleft with a pale-cyan Neon heart (Pulse), teal crystal spikes on shoulders and back, sunk head with glowing eyes and icicle beard, huge rock fists. Legs SwingA/B, arms SwingB/A. Frost* pieces = phase-2 frost armour shell (hidden unless FrostArmor).",
+  "tris": 1356,
+  "pieces": [
+   {
+    "name": "LegL",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     -2.5292,
+     2.6203,
+     -0.0683
+    ],
+    "size": [
+     3.405,
+     5.2406,
+     4.4043
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     0.2292,
+     2.1797,
+     0.6683
+    ]
+   },
+   {
+    "name": "KneeL",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     -2.6594,
+     2.8137,
+     -0.8446
+    ],
+    "size": [
+     2.4732,
+     1.9939,
+     1.3765
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     0.3594,
+     1.9863,
+     1.4446
+    ]
+   },
+   {
+    "name": "LegR",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     2.6288,
+     2.6438,
+     -0.1071
+    ],
+    "size": [
+     3.2066,
+     5.1047,
+     3.9832
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -0.3288,
+     2.1562,
+     0.7071
+    ]
+   },
+   {
+    "name": "KneeR",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     2.4901,
+     2.8494,
+     -0.7894
+    ],
+    "size": [
+     2.4672,
+     1.9644,
+     1.3105
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -0.1901,
+     1.9506,
+     1.3894
+    ]
+   },
+   {
+    "name": "Core",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1527,
+     7.021,
+     0.2649
+    ],
+    "size": [
+     6.1001,
+     6.3798,
+     4.7034
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Body",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0022,
+     8.6325,
+     0.5651
+    ],
+    "size": [
+     7.9699,
+     6.6875,
+     6.5925
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Heart",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     8.7,
+     -2.45
+    ],
+    "size": [
+     1.28,
+     2.0,
+     0.96
+    ],
+    "anim": "Pulse",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "Head",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0315,
+     11.0565,
+     -1.992
+    ],
+    "size": [
+     2.3192,
+     2.0566,
+     2.3371
+    ]
+   },
+   {
+    "name": "Brow",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     12.075,
+     -2.2543
+    ],
+    "size": [
+     4.0276,
+     1.6776,
+     2.2316
+    ]
+   },
+   {
+    "name": "Eyes",
+    "slot": "Eye",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     11.15,
+     -3.12
+    ],
+    "size": [
+     1.716,
+     0.39,
+     0.312
+    ]
+   },
+   {
+    "name": "Beard",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     9.7103,
+     -2.9485
+    ],
+    "size": [
+     2.2978,
+     1.625,
+     0.6792
+    ]
+   },
+   {
+    "name": "BackSpikes",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0597,
+     10.7783,
+     3.4858
+    ],
+    "size": [
+     5.1325,
+     7.1324,
+     3.5603
+    ]
+   },
+   {
+    "name": "ArmL",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     -4.8565,
+     7.4776,
+     -0.1993
+    ],
+    "size": [
+     3.1898,
+     6.0362,
+     3.5907
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     0.5565,
+     2.5224,
+     0.6993
+    ]
+   },
+   {
+    "name": "FistL",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     -5.4114,
+     2.6929,
+     -1.242
+    ],
+    "size": [
+     3.3753,
+     3.4573,
+     3.5381
+    ],
+    "shadow": true,
+    "anim": "SwingB",
+    "pivot": [
+     1.1114,
+     7.3071,
+     1.742
+    ]
+   },
+   {
+    "name": "ShoulderL",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     -4.6516,
+     8.0257,
+     0.1961
+    ],
+    "size": [
+     3.8129,
+     7.8467,
+     4.7535
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     0.3516,
+     1.9743,
+     0.3039
+    ]
+   },
+   {
+    "name": "SpikesL",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -5.3059,
+     10.3028,
+     0.3377
+    ],
+    "size": [
+     3.5865,
+     8.1034,
+     4.6189
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     1.0059,
+     -0.3028,
+     0.1623
+    ]
+   },
+   {
+    "name": "KnucklesL",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     -5.4308,
+     3.459,
+     -3.0692
+    ],
+    "size": [
+     2.3952,
+     0.9947,
+     0.6746
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     1.1308,
+     6.541,
+     3.5692
+    ]
+   },
+   {
+    "name": "ArmR",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     4.8565,
+     7.4776,
+     -0.1993
+    ],
+    "size": [
+     3.1898,
+     6.0362,
+     3.5907
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     -0.5565,
+     2.5224,
+     0.6993
+    ]
+   },
+   {
+    "name": "FistR",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     5.4798,
+     2.667,
+     -1.283
+    ],
+    "size": [
+     3.1786,
+     3.312,
+     3.4598
+    ],
+    "shadow": true,
+    "anim": "SwingA",
+    "pivot": [
+     -1.1798,
+     7.333,
+     1.783
+    ]
+   },
+   {
+    "name": "ShoulderR",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     4.6059,
+     8.0629,
+     0.0277
+    ],
+    "size": [
+     4.1782,
+     7.8146,
+     4.4861
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     -0.3059,
+     1.9371,
+     0.4723
+    ]
+   },
+   {
+    "name": "SpikesR",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     5.2814,
+     10.3205,
+     0.3377
+    ],
+    "size": [
+     3.6356,
+     8.068,
+     4.6189
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     -0.9814,
+     -0.3205,
+     0.1623
+    ]
+   },
+   {
+    "name": "KnucklesR",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     5.5384,
+     3.4408,
+     -3.0722
+    ],
+    "size": [
+     2.3365,
+     0.9386,
+     0.644
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     -1.2384,
+     6.5592,
+     3.5722
+    ]
+   },
+   {
+    "name": "FrostChest",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0749,
+     8.903,
+     -3.3352
+    ],
+    "size": [
+     5.5459,
+     3.8859,
+     2.5366
+    ],
+    "transparency": 0.18
+   },
+   {
+    "name": "FrostBack",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     12.4804,
+     2.1815
+    ],
+    "size": [
+     6.7097,
+     4.8248,
+     3.0528
+    ],
+    "transparency": 0.18
+   },
+   {
+    "name": "FrostShoulderL",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     -5.3405,
+     12.6364,
+     0.2507
+    ],
+    "size": [
+     5.1696,
+     4.0043,
+     4.0812
+    ],
+    "transparency": 0.18,
+    "anim": "SwingB",
+    "pivot": [
+     1.0405,
+     -2.6364,
+     0.2493
+    ]
+   },
+   {
+    "name": "FrostArmL",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     -5.953,
+     4.632,
+     -1.4342
+    ],
+    "size": [
+     4.3849,
+     3.0412,
+     3.8071
+    ],
+    "transparency": 0.18,
+    "anim": "SwingB",
+    "pivot": [
+     1.653,
+     5.368,
+     1.9342
+    ]
+   },
+   {
+    "name": "FrostShoulderR",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     5.3844,
+     12.607,
+     0.1172
+    ],
+    "size": [
+     5.082,
+     4.063,
+     3.8142
+    ],
+    "transparency": 0.18,
+    "anim": "SwingA",
+    "pivot": [
+     -1.0844,
+     -2.607,
+     0.3828
+    ]
+   },
+   {
+    "name": "FrostArmR",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     5.9341,
+     4.5739,
+     -1.2979
+    ],
+    "size": [
+     4.4228,
+     3.0516,
+     4.1821
+    ],
+    "transparency": 0.18,
+    "anim": "SwingA",
+    "pivot": [
+     -1.6341,
+     5.4261,
+     1.7979
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.3715686274509804,
+    0.49019607843137253,
+    0.592156862745098
+   ],
+   "Dark": [
+    0.1403921568627451,
+    0.16980392156862745,
+    0.21098039215686276
+   ],
+   "Light": [
+    0.5695588235294118,
+    0.7548529411764706,
+    0.8302941176470588
+   ],
+   "Accent": [
+    0.29,
+    0.69,
+    0.78
+   ],
+   "Glow": [
+    0.62,
+    0.96,
+    1.0
+   ],
+   "Eye": [
+    0.62,
+    0.96,
+    1.0
+   ],
+   "Stone": [
+    0.20078431372549022,
+    0.23686274509803923,
+    0.28
+   ],
+   "White": [
+    0.690921568627451,
+    0.8493529411764705,
+    0.8955686274509804
+   ]
+  },
+  "bounds": [
+   [
+    -8.145,
+    0.0,
+    -4.604
+   ],
+   [
+    8.146,
+    14.893,
+    5.266
    ]
   ]
  },
@@ -20439,6 +21542,171 @@
    "radius": 1.2,
    "height": 8
   }
+ },
+ {
+  "name": "ThornSprout",
+  "category": "Enemies",
+  "note": "ThornSprout id. Briar Sentinel's summon: small thorn beetle ~2.4 wide, bark-brown shell, moss saddle, three bold bone thorns, dark head and legs, amber eyes.",
+  "tris": 216,
+  "pieces": [
+   {
+    "name": "Shell",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0323,
+     1.0253,
+     0.3144
+    ],
+    "size": [
+     2.1798,
+     1.0506,
+     2.4337
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Moss",
+    "slot": "Leaf",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0228,
+     1.4102,
+     0.1624
+    ],
+    "size": [
+     1.4109,
+     0.5283,
+     1.3306
+    ]
+   },
+   {
+    "name": "Thorns",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.8725,
+     0.5898
+    ],
+    "size": [
+     2.0123,
+     1.4524,
+     1.3808
+    ]
+   },
+   {
+    "name": "Head",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0473,
+     0.7247,
+     -1.1987
+    ],
+    "size": [
+     1.1855,
+     0.8613,
+     1.3026
+    ]
+   },
+   {
+    "name": "Eyes",
+    "slot": "Eye",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.86,
+     -1.35
+    ],
+    "size": [
+     0.84,
+     0.24,
+     0.24
+    ]
+   },
+   {
+    "name": "LegsL",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.0651,
+     0.4559,
+     0.15
+    ],
+    "size": [
+     0.8698,
+     0.9118,
+     2.6
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     0.3651,
+     0.0441,
+     -0.05
+    ]
+   },
+   {
+    "name": "LegsR",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.0651,
+     0.4559,
+     0.15
+    ],
+    "size": [
+     0.8698,
+     0.9118,
+     2.6
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -0.3651,
+     0.0441,
+     -0.05
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.49411764705882355,
+    0.3607843137254902,
+    0.24705882352941178
+   ],
+   "Dark": [
+    0.16470588235294117,
+    0.11764705882352941,
+    0.08627450980392157
+   ],
+   "Light": [
+    0.84,
+    0.7466666666666667,
+    0.5796078431372549
+   ],
+   "Eye": [
+    0.9137254901960784,
+    0.7254901960784313,
+    0.2549019607843137
+   ],
+   "Leaf": [
+    0.42274509803921567,
+    0.5658823529411765,
+    0.29843137254901964
+   ]
+  },
+  "bounds": [
+   [
+    -1.5,
+    0.0,
+    -1.85
+   ],
+   [
+    1.5,
+    2.599,
+    1.531
+   ]
+  ]
  },
  {
   "name": "Torch",

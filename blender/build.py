@@ -131,7 +131,7 @@ def record(model, objs):
     palette = dict(K.SLOT_PREVIEW)
     palette.update(model.extra.get("palette", {}))
     used = {p.slot for p in model.pieces}
-    extra = {k: v for k, v in model.extra.items() if k not in ("palette", "joints")}
+    extra = {k: v for k, v in model.extra.items() if k not in ("palette", "joints", "render_hide")}
     if "joints" in model.extra:
         extra["joints"] = {k: K.to_roblox(v) for k, v in model.extra["joints"].items()}
     lo = [min(p["offset"][i] - p["size"][i] / 2 for p in pieces) for i in range(3)]
@@ -251,7 +251,10 @@ def main():
         print(f"{name:<22} {len(objs):>3} pieces {rec['tris']:>6} tris")
         if renderer:
             png = os.path.join(OUT_RENDER, category, name + ".png")
-            renderer.render(objs, png)
+            hide = set(model.extra.get("render_hide", ()))  # e.g. armour shown only in some phases
+            renderer.render([o for o in objs if o.name not in hide] or objs, png)
+            if hide:
+                renderer.render(objs, os.path.join(OUT_RENDER, category, name + "_All.png"))
             sheets.setdefault(category, []).append((png, name, f"{len(objs)} pieces, {rec['tris']} tris"))
         # remove this model's objects so the next model's piece names stay unique
         # (Blender would otherwise rename a second "Eyes" to "Eyes.001" in the FBX)
