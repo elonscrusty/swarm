@@ -270,7 +270,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		if tab == "Permanent" then
 			ui.Note.Text = "Buy permanent upgrades with gold. They last forever."
 		else
-			ui.Note.Text = "Gold and cosmetics only: nothing here makes you stronger in a run."
+			ui.Note.Text = "Gold packs, gold boosts and VIP perks. Purchases go through Roblox."
 		end
 		ui.Note.TextColor3 = C.TextMuted
 		if p.MemoryOnly then

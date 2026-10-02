@@ -640,10 +640,10 @@ Config.Monetization = {
 		DoubleGold = 2005460551, -- 2x gold
 	},
 	Products = {
-		Gold500 = 0,
-		Gold1500 = 0,
-		Gold5000 = 0,
-		Revive = 0, -- mid-run revive, offered once per run on death
+		Gold500 = 3716061041,
+		Gold1500 = 3716061205,
+		Gold5000 = 3716061092,
+		Revive = 3716061270, -- mid-run revive, offered once per run on death
 	},
 	ProductGold = { Gold500 = 500, Gold1500 = 1500, Gold5000 = 5000 },
 	-- One gamepass per cosmetic skin. Keys must match skin ids in CharacterData.

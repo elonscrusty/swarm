@@ -2557,15 +2557,15 @@ Config.Data = {
 ------------------------------------------------------------------------------------------
 Config.Monetization = {
 	GamePasses = {
-		StarterPack = 0, -- +25% gold forever, Gold Trim skin for every character
-		VIP = 0, -- +1 reroll per run, [VIP] chat tag, lobby crown
-		DoubleGold = 0, -- 2x gold
+		StarterPack = 2008346507, -- +25% gold forever, Gold Trim skin for every character
+		VIP = 2006432550, -- +1 reroll per run, [VIP] chat tag, lobby crown
+		DoubleGold = 2005460551, -- 2x gold
 	},
 	Products = {
-		Gold500 = 0,
-		Gold1500 = 0,
-		Gold5000 = 0,
-		Revive = 0, -- mid-run revive, offered once per run on death
+		Gold500 = 3716061041,
+		Gold1500 = 3716061205,
+		Gold5000 = 3716061092,
+		Revive = 3716061270, -- mid-run revive, offered once per run on death
 	},
 	ProductGold = { Gold500 = 500, Gold1500 = 1500, Gold5000 = 5000 },
 	-- One gamepass per cosmetic skin. Keys must match skin ids in CharacterData.
@@ -40726,7 +40726,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		if tab == "Permanent" then
 			ui.Note.Text = "Buy permanent upgrades with gold. They last forever."
 		else
-			ui.Note.Text = "Gold and cosmetics only: nothing here makes you stronger in a run."
+			ui.Note.Text = "Gold packs, gold boosts and VIP perks. Purchases go through Roblox."
 		end
 		ui.Note.TextColor3 = C.TextMuted
 		if p.MemoryOnly then
