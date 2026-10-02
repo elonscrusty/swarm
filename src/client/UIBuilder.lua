@@ -854,7 +854,7 @@ end
 -- the label wraps and truncates for real).
 local function descHeight(desc: string?, w: number): number
 	local plain = string.gsub(desc or "", "<[^>]+>", "")
-	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.5 / math.max(1, w - 2 * CARD.Pad)), 1, 2)
+	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.44 / math.max(1, w - 2 * CARD.Pad)), 1, 2)
 	return TS(14) * lines + 8
 end
 
@@ -1255,8 +1255,10 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		-- synergy bar and the evolution hint while they fit above the footer
 		local bottom = footY - 6
 		local rw = w - 2 * pad
+		-- the synergy bar keeps its room (rows that do not fit are dropped instead)
+		local synRoom = c.Synergy and CARD.Syn + 8 or 0
 		local function fits(hh: number): boolean
-			return y + hh <= bottom
+			return y + hh <= bottom - synRoom
 		end
 		if #changes > 0 then
 			local start = 1
@@ -1279,6 +1281,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				y += statRow(face, c, line, pad, y, rw, CARD.Row, tostring(line.To))
 			end
 		end
+		synRoom = 0
 		if c.Synergy and fits(CARD.Syn + 4) then
 			synergyBar(face, c, pad, y + 4, rw, CARD.Syn)
 			y += CARD.Syn + 8
@@ -1457,8 +1460,8 @@ local function showOffer(offer)
 	)
 	levelUp.Reroll.SetEnabled(rerolls > 0)
 	levelUp.Skip.SetText(
-		skips > 0 and string.format("SKIP  +%d GOLD", skipGold) or "SKIP",
-		skips > 0 and string.format("%d left · no card", skips) or (skipMax > 0 and "None left this run" or "Buy skips in Upgrades")
+		"SKIP",
+		skips > 0 and string.format("%d left · +%d gold", skips, skipGold) or (skipMax > 0 and "None left this run" or "Buy skips in Upgrades")
 	)
 	levelUp.Skip.SetEnabled(skips > 0)
 	levelUp.Title.Text = offer.Pending > 1 and string.format("LEVEL UP!  +%d", offer.Pending) or "LEVEL UP!"

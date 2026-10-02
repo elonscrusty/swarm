@@ -45,9 +45,14 @@ to the owner's mockups. Monetization live and owner-verified in Studio: 3 passes
 set up yet. Scenes: `menu-sim`, `perf-sim`,
 `xp-sim`, `rewards-sim`, `combat-fx`, `pickups-close`, `icons`.
 
+Content batch (offline-preview tested, NOT Studio-tested unless the owner says so): HUD rebuilt to the
+owner mockup (HP/XP panel under the timer, stage pill top left), level-up cards and Characters screen to
+owner mockups, brighter arenas, Endless mode + ScoreEndless/Level boards, Briar Sentinel and Frostbound
+Colossus bosses with Blender meshes (+ Thorn Sprout), synergy package (SynergyData), Lost Caravan
+encounter (CaravanEvent), parties (PartyService, MenuParty), co-op level-up/chest no longer freezes the
+team, portal chargeable at once, drag-to-spin lobby hero, hero gold prices doubled (owner).
+
 Open / next (release-candidate brief, phases):
-- C: HUD declutter, typography system.
-- D: highest-level board, Endless mode (then its own score board).
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,
   final PASS/FAIL/BLOCKED handoff with release checklist and asset manifest.

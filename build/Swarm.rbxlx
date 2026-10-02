@@ -4825,6 +4825,38 @@ MeshCatalog.Models = {
 			{ Name = "FlameCore", Slot = "Core", Material = "Neon", Offset = {-0.0248, 3.4, 0}, Size = {0.4703, 1.2, 0.4945} },
 		},
 	},
+	BriarSentinel = {
+		AssetId = 84124549381754,
+		Category = "Enemies",
+		Bounds = { {-6.421, 0, -3.6}, {6.421, 16, 3.996} },
+		Palette = { Accent = Color3.fromRGB(54, 82, 47), Base = Color3.fromRGB(71, 51, 37), Dark = Color3.fromRGB(42, 30, 22), Eye = Color3.fromRGB(233, 185, 65), Glow = Color3.fromRGB(246, 218, 126), Leaf = Color3.fromRGB(89, 126, 65), Light = Color3.fromRGB(214, 190, 148), Wood = Color3.fromRGB(126, 92, 63) },
+		Pieces = {
+			{ Name = "LegL", Slot = "Base", Material = "SmoothPlastic", Offset = {-2.0874, 2.4709, 0.0178}, Size = {2.9253, 4.9418, 3.2355}, Anim = "SwingA", Pivot = {0.3874, 2.1291, 0.3822} },
+			{ Name = "KneeThornsL", Slot = "Light", Material = "SmoothPlastic", Offset = {-2.1184, 3.0679, -1.1744}, Size = {0.5156, 0.8164, 0.9924}, Anim = "SwingA", Pivot = {0.4184, 1.5321, 1.5744} },
+			{ Name = "LegR", Slot = "Base", Material = "SmoothPlastic", Offset = {2.0874, 2.4709, 0.0178}, Size = {2.9253, 4.9418, 3.2355}, Anim = "SwingB", Pivot = {-0.3874, 2.1291, 0.3822} },
+			{ Name = "KneeThornsR", Slot = "Light", Material = "SmoothPlastic", Offset = {2.1184, 3.0679, -1.1744}, Size = {0.5156, 0.8164, 0.9924}, Anim = "SwingB", Pivot = {-0.4184, 1.5321, 1.5744} },
+			{ Name = "Body", Slot = "Base", Material = "SmoothPlastic", Offset = {0.0606, 7.4281, 0.5467}, Size = {6.5534, 8.1438, 5.1795}, Shadow = true },
+			{ Name = "Grooves", Slot = "Dark", Material = "SmoothPlastic", Offset = {-0.1604, 7.1337, 0.4419}, Size = {6.05, 6.5327, 5.0074} },
+			{ Name = "Armour", Slot = "Leaf", Material = "SmoothPlastic", Offset = {0.0722, 7.8087, 0.1931}, Size = {5.9909, 6.2212, 5.4891}, Shadow = true },
+			{ Name = "Heart", Slot = "Glow", Material = "Neon", Offset = {0, 8.5, -2.25}, Size = {1.116, 1.488, 0.744}, Anim = "Pulse", Pivot = {0, 0, 0} },
+			{ Name = "HeartKnot", Slot = "Dark", Material = "SmoothPlastic", Offset = {0, 8.4742, -2.2972}, Size = {2.2176, 2.5812, 0.6837} },
+			{ Name = "Vines", Slot = "Accent", Material = "SmoothPlastic", Offset = {0, 7.3752, 0.2655}, Size = {5.4637, 2.7573, 4.954} },
+			{ Name = "Thorns", Slot = "Light", Material = "SmoothPlastic", Offset = {0, 9.3055, 0.5115}, Size = {5.4456, 5.3275, 6.9696} },
+			{ Name = "Head", Slot = "Base", Material = "SmoothPlastic", Offset = {0.0917, 12.3563, -0.6347}, Size = {2.8056, 3.2432, 2.9832} },
+			{ Name = "Visor", Slot = "Dark", Material = "SmoothPlastic", Offset = {0.118, 11.8996, -2.152}, Size = {2.0354, 1.6486, 0.6729} },
+			{ Name = "Eyes", Slot = "Eye", Material = "Neon", Offset = {0, 12.45, -2.5}, Size = {1.88, 0.42, 0.36} },
+			{ Name = "Crown", Slot = "Wood", Material = "SmoothPlastic", Offset = {0, 14.6241, -1.266}, Size = {4.4417, 2.7518, 2.3181} },
+			{ Name = "Berries", Slot = "Glow", Material = "Neon", Offset = {0, 14.4631, -1.2139}, Size = {3.8111, 0.4, 1.9489} },
+			{ Name = "ArmL", Slot = "Base", Material = "SmoothPlastic", Offset = {-4.0559, 5.3676, -0.9742}, Size = {4.1882, 10.6352, 5.2516}, Anim = "SwingB", Pivot = {1.0559, 4.6324, 1.3742} },
+			{ Name = "PauldronL", Slot = "Leaf", Material = "SmoothPlastic", Offset = {-3.5513, 8.2815, 0.127}, Size = {4.4888, 7.3345, 3.812}, Anim = "SwingB", Pivot = {0.5513, 1.7185, 0.273} },
+			{ Name = "ArmThornsL", Slot = "Light", Material = "SmoothPlastic", Offset = {-4.4112, 9.7076, 0.4969}, Size = {4.0187, 7.3918, 3.3939}, Anim = "SwingB", Pivot = {1.4112, 0.2924, -0.0969} },
+			{ Name = "ArmVineL", Slot = "Accent", Material = "SmoothPlastic", Offset = {-4.1651, 7.2262, -0.3925}, Size = {2.1449, 4.665, 2.3021}, Anim = "SwingB", Pivot = {1.1651, 2.7738, 0.7925} },
+			{ Name = "ArmR", Slot = "Base", Material = "SmoothPlastic", Offset = {4.0559, 5.3676, -0.9742}, Size = {4.1882, 10.6352, 5.2516}, Anim = "SwingA", Pivot = {-1.0559, 4.6324, 1.3742} },
+			{ Name = "PauldronR", Slot = "Leaf", Material = "SmoothPlastic", Offset = {3.7268, 8.2372, 0.2152}, Size = {4.4394, 7.1536, 3.8897}, Anim = "SwingA", Pivot = {-0.7268, 1.7628, 0.1848} },
+			{ Name = "ArmThornsR", Slot = "Light", Material = "SmoothPlastic", Offset = {4.4112, 9.7076, 0.4969}, Size = {4.0187, 7.3918, 3.3939}, Anim = "SwingA", Pivot = {-1.4112, 0.2924, -0.0969} },
+			{ Name = "ArmVineR", Slot = "Accent", Material = "SmoothPlastic", Offset = {4.1651, 7.2262, -0.3925}, Size = {2.1449, 4.665, 2.3021}, Anim = "SwingA", Pivot = {-1.1651, 2.7738, 0.7925} },
+		},
+	},
 	Brimstone_Altar = {
 		AssetId = 70673953574008,
 		Category = "Lava",
@@ -5295,6 +5327,42 @@ MeshCatalog.Models = {
 		Pieces = {
 			{ Name = "Leaves", Slot = "Leaves", Material = "SmoothPlastic", Offset = {-0.0431, 0.23, -0.1363}, Size = {1.2032, 0.5, 1.1167} },
 			{ Name = "Blooms", Slot = "Bloom", Material = "SmoothPlastic", Offset = {-0.0999, 0.375, -0.0309}, Size = {1.0475, 0.25, 0.9288} },
+		},
+	},
+	FrostboundColossus = {
+		AssetId = 131442552699565,
+		Category = "Enemies",
+		Bounds = { {-8.145, 0, -4.604}, {8.146, 14.893, 5.266} },
+		Palette = { Accent = Color3.fromRGB(74, 176, 199), Base = Color3.fromRGB(95, 125, 151), Dark = Color3.fromRGB(36, 43, 54), Eye = Color3.fromRGB(158, 245, 255), Glow = Color3.fromRGB(158, 245, 255), Light = Color3.fromRGB(145, 192, 212), Stone = Color3.fromRGB(51, 60, 71), White = Color3.fromRGB(176, 217, 228) },
+		Pieces = {
+			{ Name = "LegL", Slot = "Stone", Material = "SmoothPlastic", Offset = {-2.5292, 2.6203, -0.0683}, Size = {3.405, 5.2406, 4.4043}, Anim = "SwingA", Pivot = {0.2292, 2.1797, 0.6683} },
+			{ Name = "KneeL", Slot = "Base", Material = "SmoothPlastic", Offset = {-2.6594, 2.8137, -0.8446}, Size = {2.4732, 1.9939, 1.3765}, Anim = "SwingA", Pivot = {0.3594, 1.9863, 1.4446} },
+			{ Name = "LegR", Slot = "Stone", Material = "SmoothPlastic", Offset = {2.6288, 2.6438, -0.1071}, Size = {3.2066, 5.1047, 3.9832}, Anim = "SwingB", Pivot = {-0.3288, 2.1562, 0.7071} },
+			{ Name = "KneeR", Slot = "Base", Material = "SmoothPlastic", Offset = {2.4901, 2.8494, -0.7894}, Size = {2.4672, 1.9644, 1.3105}, Anim = "SwingB", Pivot = {-0.1901, 1.9506, 1.3894} },
+			{ Name = "Core", Slot = "Dark", Material = "SmoothPlastic", Offset = {-0.1527, 7.021, 0.2649}, Size = {6.1001, 6.3798, 4.7034}, Shadow = true },
+			{ Name = "Body", Slot = "Base", Material = "SmoothPlastic", Offset = {0.0022, 8.6325, 0.5651}, Size = {7.9699, 6.6875, 6.5925}, Shadow = true },
+			{ Name = "Heart", Slot = "Glow", Material = "Neon", Offset = {0, 8.7, -2.45}, Size = {1.28, 2, 0.96}, Anim = "Pulse", Pivot = {0, 0, 0} },
+			{ Name = "Head", Slot = "Dark", Material = "SmoothPlastic", Offset = {0.0338, 11.359, -2.1917}, Size = {2.491, 2.146, 2.4306} },
+			{ Name = "Brow", Slot = "Base", Material = "SmoothPlastic", Offset = {0, 12.375, -2.5543}, Size = {4.2276, 1.6776, 2.2316} },
+			{ Name = "Eyes", Slot = "Eye", Material = "Neon", Offset = {0, 11.45, -3.4}, Size = {1.828, 0.42, 0.336} },
+			{ Name = "Beard", Slot = "Light", Material = "SmoothPlastic", Offset = {0, 10.0103, -3.2485}, Size = {2.2978, 1.625, 0.6792} },
+			{ Name = "BackSpikes", Slot = "Accent", Material = "SmoothPlastic", Offset = {-0.0597, 10.7783, 3.4858}, Size = {5.1325, 7.1324, 3.5603} },
+			{ Name = "ArmL", Slot = "Stone", Material = "SmoothPlastic", Offset = {-4.8565, 7.4776, -0.1993}, Size = {3.1898, 6.0362, 3.5907}, Anim = "SwingB", Pivot = {0.5565, 2.5224, 0.6993} },
+			{ Name = "FistL", Slot = "Stone", Material = "SmoothPlastic", Offset = {-5.4114, 2.6929, -1.242}, Size = {3.3753, 3.4573, 3.5381}, Anim = "SwingB", Pivot = {1.1114, 7.3071, 1.742}, Shadow = true },
+			{ Name = "ShoulderL", Slot = "Base", Material = "SmoothPlastic", Offset = {-4.6516, 8.0257, 0.1961}, Size = {3.8129, 7.8467, 4.7535}, Anim = "SwingB", Pivot = {0.3516, 1.9743, 0.3039} },
+			{ Name = "SpikesL", Slot = "Accent", Material = "SmoothPlastic", Offset = {-5.3059, 10.3028, 0.3377}, Size = {3.5865, 8.1034, 4.6189}, Anim = "SwingB", Pivot = {1.0059, -0.3028, 0.1623} },
+			{ Name = "KnucklesL", Slot = "Light", Material = "SmoothPlastic", Offset = {-5.4308, 3.459, -3.0692}, Size = {2.3952, 0.9947, 0.6746}, Anim = "SwingB", Pivot = {1.1308, 6.541, 3.5692} },
+			{ Name = "ArmR", Slot = "Stone", Material = "SmoothPlastic", Offset = {4.8565, 7.4776, -0.1993}, Size = {3.1898, 6.0362, 3.5907}, Anim = "SwingA", Pivot = {-0.5565, 2.5224, 0.6993} },
+			{ Name = "FistR", Slot = "Stone", Material = "SmoothPlastic", Offset = {5.4798, 2.667, -1.283}, Size = {3.1786, 3.312, 3.4598}, Anim = "SwingA", Pivot = {-1.1798, 7.333, 1.783}, Shadow = true },
+			{ Name = "ShoulderR", Slot = "Base", Material = "SmoothPlastic", Offset = {4.6059, 8.0629, 0.0277}, Size = {4.1782, 7.8146, 4.4861}, Anim = "SwingA", Pivot = {-0.3059, 1.9371, 0.4723} },
+			{ Name = "SpikesR", Slot = "Accent", Material = "SmoothPlastic", Offset = {5.2814, 10.3205, 0.3377}, Size = {3.6356, 8.068, 4.6189}, Anim = "SwingA", Pivot = {-0.9814, -0.3205, 0.1623} },
+			{ Name = "KnucklesR", Slot = "Light", Material = "SmoothPlastic", Offset = {5.5384, 3.4408, -3.0722}, Size = {2.3365, 0.9386, 0.644}, Anim = "SwingA", Pivot = {-1.2384, 6.5592, 3.5722} },
+			{ Name = "FrostChest", Slot = "White", Material = "SmoothPlastic", Offset = {0.0749, 8.903, -3.3352}, Size = {5.5459, 3.8859, 2.5366}, Transparency = 0.18 },
+			{ Name = "FrostBack", Slot = "White", Material = "SmoothPlastic", Offset = {0, 12.4804, 2.1815}, Size = {6.7097, 4.8248, 3.0528}, Transparency = 0.18 },
+			{ Name = "FrostShoulderL", Slot = "White", Material = "SmoothPlastic", Offset = {-5.3405, 12.6364, 0.2507}, Size = {5.1696, 4.0043, 4.0812}, Anim = "SwingB", Pivot = {1.0405, -2.6364, 0.2493}, Transparency = 0.18 },
+			{ Name = "FrostArmL", Slot = "White", Material = "SmoothPlastic", Offset = {-5.953, 4.632, -1.4342}, Size = {4.3849, 3.0412, 3.8071}, Anim = "SwingB", Pivot = {1.653, 5.368, 1.9342}, Transparency = 0.18 },
+			{ Name = "FrostShoulderR", Slot = "White", Material = "SmoothPlastic", Offset = {5.3844, 12.607, 0.1172}, Size = {5.082, 4.063, 3.8142}, Anim = "SwingA", Pivot = {-1.0844, -2.607, 0.3828}, Transparency = 0.18 },
+			{ Name = "FrostArmR", Slot = "White", Material = "SmoothPlastic", Offset = {5.9341, 4.5739, -1.2979}, Size = {4.4228, 3.0516, 4.1821}, Anim = "SwingA", Pivot = {-1.6341, 5.4261, 1.7979}, Transparency = 0.18 },
 		},
 	},
 	Frozen_Pond = {
@@ -6642,6 +6710,22 @@ MeshCatalog.Models = {
 			{ Name = "Fronds", Slot = "Fronds", Material = "SmoothPlastic", Offset = {-0.2635, 5.3, 0.0151}, Size = {9.1127, 6, 9.0884}, Shadow = true },
 		},
 	},
+	ThornSprout = {
+		AssetId = 104306826393232,
+		Category = "Enemies",
+		Bounds = { {-1.3, 0, -1.85}, {1.3, 2.599, 1.55} },
+		Palette = { Base = Color3.fromRGB(126, 92, 63), Dark = Color3.fromRGB(42, 30, 22), Eye = Color3.fromRGB(233, 185, 65), Leaf = Color3.fromRGB(108, 144, 76), Light = Color3.fromRGB(214, 190, 148) },
+		Pieces = {
+			{ Name = "Shell", Slot = "Base", Material = "SmoothPlastic", Offset = {0, 1.0255, 0.25}, Size = {2.2874, 0.9511, 2.6}, Shadow = true },
+			{ Name = "Under", Slot = "Dark", Material = "SmoothPlastic", Offset = {0, 0.6, 0.25}, Size = {2, 0.7, 2.4} },
+			{ Name = "Moss", Slot = "Leaf", Material = "SmoothPlastic", Offset = {0.0214, 1.4113, 0.2124}, Size = {1.3227, 0.4717, 1.3306} },
+			{ Name = "Thorns", Slot = "Light", Material = "SmoothPlastic", Offset = {0, 1.8725, 0.5898}, Size = {2.0123, 1.4524, 1.3808} },
+			{ Name = "Head", Slot = "Dark", Material = "SmoothPlastic", Offset = {0.0473, 0.7247, -1.1987}, Size = {1.1855, 0.8613, 1.3026} },
+			{ Name = "Eyes", Slot = "Eye", Material = "Neon", Offset = {0, 0.86, -1.35}, Size = {0.84, 0.24, 0.24} },
+			{ Name = "LegsL", Slot = "Dark", Material = "SmoothPlastic", Offset = {-0.955, 0.3954, 0.125}, Size = {0.69, 0.7908, 2.35}, Anim = "SwingA", Pivot = {0.255, 0.1046, -0.025} },
+			{ Name = "LegsR", Slot = "Dark", Material = "SmoothPlastic", Offset = {0.955, 0.3954, 0.125}, Size = {0.69, 0.7908, 2.35}, Anim = "SwingB", Pivot = {-0.255, 0.1046, -0.025} },
+		},
+	},
 	Torch = {
 		AssetId = 82035430625118,
 		Category = "World",
@@ -7010,30 +7094,30 @@ local Palette = {
 	lava_500 = Color3.fromRGB(217, 84, 42),
 	lava_300 = Color3.fromRGB(242, 154, 69),
 	lava_glow = Color3.fromRGB(255, 196, 107),
-	meadow_800 = Color3.fromRGB(61, 111, 40),
-	meadow_700 = Color3.fromRGB(74, 130, 48),
-	meadow_600 = Color3.fromRGB(88, 149, 57),
-	meadow_500 = Color3.fromRGB(102, 167, 66),
-	meadow_400 = Color3.fromRGB(120, 184, 78),
-	meadow_300 = Color3.fromRGB(144, 201, 99),
-	meadow_200 = Color3.fromRGB(174, 217, 130),
+	meadow_800 = Color3.fromRGB(62, 95, 58),
+	meadow_700 = Color3.fromRGB(74, 109, 68),
+	meadow_600 = Color3.fromRGB(87, 124, 80),
+	meadow_500 = Color3.fromRGB(101, 141, 93),
+	meadow_400 = Color3.fromRGB(116, 156, 105),
+	meadow_300 = Color3.fromRGB(138, 173, 124),
+	meadow_200 = Color3.fromRGB(163, 191, 149),
 	pave_100 = Color3.fromRGB(236, 230, 216),
 	pave_200 = Color3.fromRGB(218, 212, 198),
 	pave_300 = Color3.fromRGB(197, 192, 180),
 	pave_400 = Color3.fromRGB(173, 170, 162),
 	pave_500 = Color3.fromRGB(148, 146, 140),
-	fen_700 = Color3.fromRGB(63, 98, 51),
-	fen_600 = Color3.fromRGB(77, 116, 59),
-	fen_500 = Color3.fromRGB(93, 135, 70),
-	fen_400 = Color3.fromRGB(112, 154, 83),
-	fen_300 = Color3.fromRGB(136, 174, 104),
+	fen_700 = Color3.fromRGB(60, 86, 60),
+	fen_600 = Color3.fromRGB(73, 103, 72),
+	fen_500 = Color3.fromRGB(88, 119, 84),
+	fen_400 = Color3.fromRGB(105, 136, 98),
+	fen_300 = Color3.fromRGB(127, 155, 120),
 	peat_500 = Color3.fromRGB(110, 90, 62),
 	peat_400 = Color3.fromRGB(132, 112, 79),
-	cinder_600 = Color3.fromRGB(94, 82, 80),
-	cinder_500 = Color3.fromRGB(115, 100, 94),
-	cinder_400 = Color3.fromRGB(138, 122, 112),
-	cinder_300 = Color3.fromRGB(163, 146, 131),
-	cinder_200 = Color3.fromRGB(189, 174, 156),
+	cinder_600 = Color3.fromRGB(100, 90, 87),
+	cinder_500 = Color3.fromRGB(124, 113, 108),
+	cinder_400 = Color3.fromRGB(148, 138, 132),
+	cinder_300 = Color3.fromRGB(174, 163, 154),
+	cinder_200 = Color3.fromRGB(198, 188, 176),
 	fx_ivory = Color3.fromRGB(251, 246, 234),
 	fx_gold = Color3.fromRGB(242, 212, 138),
 	fx_heal = Color3.fromRGB(185, 222, 142),
@@ -19213,22 +19297,22 @@ local LIGHTING = {
 	-- sunny late morning in a forest clearing: saturated meadow, warm light
 	Forest = {
 		Clock = 10.8, Brightness = 3.0, Latitude = 38, Shadow = 0.55,
-		Ambient = rgb(120, 122, 112), Outdoor = rgb(152, 158, 148), Top = rgb(255, 240, 212), Bottom = rgb(84, 104, 70),
+		Ambient = rgb(120, 122, 116), Outdoor = rgb(152, 158, 156), Top = rgb(255, 244, 222), Bottom = rgb(84, 104, 70),
 		Diffuse = 0.5, Specular = 0.35,
 		Atmo = { Density = 0.18, Offset = 0.05, Color = rgb(198, 224, 242), Decay = rgb(120, 162, 192), Glare = 0, Haze = 0.35 },
 		Bloom = { Intensity = 0.25, Size = 22, Threshold = 1.7 },
-		Grade = { Brightness = 0.03, Contrast = 0.1, Saturation = 0.18, Tint = rgb(255, 250, 236) },
+		Grade = { Brightness = 0, Contrast = 0.08, Saturation = 0.03, Tint = rgb(255, 252, 244) },
 		Rays = { Intensity = 0.03, Spread = 0.5 },
 		Clouds = { Cover = 0.4, Density = 0.42, Color = rgb(255, 255, 255) },
 	},
 	-- sunny afternoon over the ruins: light warm paving on bright grass (warm, not dusk)
 	Ruins = {
 		Clock = 14.6, Brightness = 3.0, Latitude = 32, Shadow = 0.55,
-		Ambient = rgb(122, 118, 112), Outdoor = rgb(156, 154, 150), Top = rgb(255, 236, 206), Bottom = rgb(90, 104, 72),
+		Ambient = rgb(122, 120, 116), Outdoor = rgb(156, 156, 156), Top = rgb(255, 240, 216), Bottom = rgb(90, 104, 72),
 		Diffuse = 0.5, Specular = 0.35,
 		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(220, 226, 232), Decay = rgb(170, 152, 132), Glare = 0.1, Haze = 0.5 },
 		Bloom = { Intensity = 0.26, Size = 22, Threshold = 1.7 },
-		Grade = { Brightness = 0.03, Contrast = 0.1, Saturation = 0.16, Tint = rgb(255, 248, 236) },
+		Grade = { Brightness = 0, Contrast = 0.08, Saturation = 0.03, Tint = rgb(255, 250, 242) },
 		Rays = { Intensity = 0.04, Spread = 0.55 },
 		Clouds = { Cover = 0.32, Density = 0.4, Color = rgb(255, 244, 230) },
 	},
@@ -19239,7 +19323,7 @@ local LIGHTING = {
 		Diffuse = 0.5, Specular = 0.3,
 		Atmo = { Density = 0.22, Offset = 0.06, Color = rgb(202, 224, 204), Decay = rgb(118, 146, 110), Glare = 0, Haze = 0.7 },
 		Bloom = { Intensity = 0.24, Size = 20, Threshold = 1.8 },
-		Grade = { Brightness = 0.02, Contrast = 0.1, Saturation = 0.14, Tint = rgb(248, 255, 240) },
+		Grade = { Brightness = 0, Contrast = 0.08, Saturation = 0.03, Tint = rgb(250, 255, 244) },
 		Rays = { Intensity = 0.02, Spread = 0.5 },
 		Clouds = { Cover = 0.5, Density = 0.45, Color = rgb(240, 244, 236) },
 	},
@@ -19264,7 +19348,7 @@ local LIGHTING = {
 		Diffuse = 0.5, Specular = 0.3,
 		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(226, 222, 210), Decay = rgb(190, 164, 128), Glare = 0.12, Haze = 0.7 },
 		Bloom = { Intensity = 0.2, Size = 20, Threshold = 2.0 },
-		Grade = { Brightness = 0.01, Contrast = 0.1, Saturation = 0.1, Tint = rgb(255, 248, 238) },
+		Grade = { Brightness = 0.01, Contrast = 0.09, Saturation = 0.06, Tint = rgb(255, 250, 242) },
 		Rays = { Intensity = 0.03, Spread = 0.5 },
 		Clouds = { Cover = 0.2, Density = 0.35, Color = rgb(255, 250, 240) },
 	},
@@ -19276,7 +19360,7 @@ local LIGHTING = {
 		Diffuse = 0.45, Specular = 0.3,
 		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(226, 198, 176), Decay = rgb(186, 112, 76), Glare = 0.15, Haze = 0.8 },
 		Bloom = { Intensity = 0.3, Size = 22, Threshold = 1.6 },
-		Grade = { Brightness = 0.02, Contrast = 0.12, Saturation = 0.14, Tint = rgb(255, 244, 232) },
+		Grade = { Brightness = 0.02, Contrast = 0.1, Saturation = 0.08, Tint = rgb(255, 246, 236) },
 		Rays = { Intensity = 0.03, Spread = 0.5 },
 		Clouds = { Cover = 0.5, Density = 0.48, Color = rgb(198, 172, 160) },
 	},
@@ -34352,44 +34436,53 @@ return EnemyRenderer
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--[[
 	Hud.lua
-	The in-run HUD (built and driven by UIBuilder):
-	  top centre    big run timer (total run time over every stage), under it the stage
-	                pill ("STAGE 2 · Find the portal" → "Defeat the Queen" → "Survive the
-	                surge" → "Portal open"; Endless runs: "ENDLESS · STAGE 9"), a plate with health (heart + crimson bar) and
-	                level / XP (gold bar), then the boss bar while the boss lives
-	  top right     kills counter, pause button; a steel band on the health bar is the
-	                Guardian Ward shield
-	  purse         the run gold (earned this run, minus what chests and shrines took),
-	                big and bold just above the ability bar (portrait: just under it):
-	                coin + number that counts up and punches, a "+N" that floats off it,
-	                and next to a chest / shrine its price (red "NEED N" after trying
-	                to open one without enough gold, set by LootUI through SetPurseHint)
+	The in-run HUD (built and driven by UIBuilder), laid out after the owner's approved
+	mockup:
+	  top centre    the run timer (total run time over every stage) big in a dark pill with a
+	                thin gold rim; right under it one dark gold-rimmed panel: heart + big
+	                crimson health bar ("100 / 100 HP"; a steel band on it is the Guardian
+	                Ward shield), then a level medallion, "LV. 86" and the gold XP bar
+	                ("29 / 110 XP"); under that the boss bar with the boss's portrait while
+	                the boss lives
+	  top left      the stage pill under the Roblox menu buttons: "STAGE 3 • PORTAL DORMANT
+	                • 0:26" (goal and countdown of the stage loop; Endless runs: "ENDLESS •
+	                STAGE 9 • ..."); portrait: centred between the timer and the health panel
+	  top right     gold pill (coin + run gold: earned this run, minus what chests and shrines
+	                took), kills pill (skull + count), then the square gold-rimmed pause
+	                button. The gold number counts up and punches, a "+N" floats into the
+	                pill, and next to a chest / shrine its price shows in the pill (red "NEED
+	                N" after trying to open one without enough gold, set by LootUI through
+	                SetPurseHint)
+	  bottom centre only the ability panel (more of the arena in view): "WEAPONS" and
+	                "PASSIVES" rows of square tiles (item art, a round gold level badge, a
+	                gold rim once evolved / maxed, faint empty slots). Phones (compact): it
+	                scales down and stays centred, between the thumbstick side and the JUMP
+	                button. Portrait: it sits under the top cluster, away from the thumbs.
 	  centre        status line (paused, "<Name> is choosing an upgrade", fallen, partner
 	                revive progress)
 	The portal arrow, the charge ring, the portal choice panel and the travel fade live in
 	StageUI.lua.
-	  bottom centre ability bar: weapons row + passives row with level badges (portrait:
-	                under the health plate, away from the thumbs)
 	  screen edges  crimson vignette pulse when hurt, slow pulse at low health
 	Motion (all event-driven, short, skipped or reduced with ClientSettings.Reduced()):
 	  XP bar        shine sweep per gem burst; level up = white flash, sweep, ring + sparks
+	                on the medallion
 	  health        white damage chip that holds a beat before it drains, heal shimmer, a
 	                heart beat at low health
-	  counters      kills punch + sweep on every 50th, timer flashes gold each minute
-	  purse         bounce + coin sparkle on gains
-	  ability bar   a new weapon / passive pops with a shine sweep and sparks, a level up
+	  counters      kills punch + sparks on every 50th, timer flashes gold each minute
+	  gold          bounce + coin sparkle on gains
+	  ability panel a new weapon / passive pops with a shine sweep and sparks, a level up
 	                with a flash
 	  stage         "STAGE 2" banner slams in under the timer for ~1.5 s (after the travel
 	                fade), the pill flashes when the objective changes (red for the surge)
 	  boss bar      drops in with a shake, the name fades in under a sweep, shakes again at
 	                the phase marker
 
-	Calm layout: the plate is one slim HP + XP block (the XP numbers show for a few seconds
-	after XP changes, then only the bar and "Lv. N" remain), the stage pill keeps its
-	objective only while it is news or urgent (afterwards just "STAGE N"), empty ability
-	slots are small faint pips, text uses the Theme.Type roles (UIKit.Role).
+	Calm: a plain objective ("FIND THE PORTAL") is news for a few seconds, then the stage
+	pill is just "STAGE N"; counting goals (dormant portal, charge, surge) and the boss stay.
+	Texts are rewritten only when their value changes; text uses the Theme.Type roles
+	(UIKit.Role).
 
-	Nothing in the ability bar or the plates is Active, so a thumb landing on them still
+	Nothing in the ability panel or the plates is Active, so a thumb landing on them still
 	drives the floating thumbstick.
 ]]
 
@@ -34417,7 +34510,13 @@ local C, P = Theme.Color, Theme.Palette
 
 export type Insets = { Top: number, Left: number, Right: number }
 
-local PLATE_HP, PLATE_XP = 26, 16 -- plate row heights (reference px)
+-- Health panel and ability panel, designed at full size (reference px), fitted with a UIScale.
+local VIT = { W = 420, PadX = 10, PadY = 9, HP = 26, XP = 20, Gap = 8 } -- health / level panel
+VIT.H = VIT.PadY * 2 + VIT.HP + VIT.Gap + VIT.XP
+local INV = { Pad = 10, Label = 84, Tile = 64, Gap = 8, RowGap = 14 } -- ability panel
+local PILL_H, PAUSE = 44, 50 -- top right counters / pause button
+local TIMER_W, TIMER_H = 150, 52
+local STAGE_H = 30
 
 local host: { [string]: any } = {}
 local ui: { [string]: any } = {}
@@ -34429,11 +34528,6 @@ local updatePurse: (number) -> ()
 
 -- A soft colour flash over a Surface holder's face (a sibling of the face, so it never
 -- joins the face's list layout); fades out and destroys itself.
--- A stage goal that keeps changing (portal charge, dormant countdown) is never collapsed.
-local function stageGoalMoving(goal: string): boolean
-	return string.find(goal, "%d") ~= nil
-end
-
 local function glow(holder: GuiObject, color: Color3)
 	if ClientSettings.Reduced() then
 		return
@@ -34455,62 +34549,68 @@ local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
 end
 
+-- Sets a label's text only when it changed (no per-frame text churn).
+local function setText(label: TextLabel, str: string)
+	if label.Text ~= str then
+		label.Text = str
+	end
+end
+
+-- A dark HUD surface with the thin gold rim of the mockup.
+local function goldSurface(parent: Instance, name: string, radius: number, size: UDim2?): (Frame, Frame)
+	return UIKit.Surface(parent, { Name = name, Transparency = 0.12, Radius = radius, Edge = P.gold_500, EdgeTransparency = 0.25, Shadow = false, Size = size })
+end
+
+-- A pill that grows with its content (holder + face both AutomaticSize X).
+local function autoPill(parent: Instance, name: string, h: number, radius: number, padL: number, padR: number, gap: number): (Frame, Frame)
+	local holder, face = goldSurface(parent, name, radius, UDim2.fromOffset(0, h))
+	holder.AutomaticSize = Enum.AutomaticSize.X
+	face.AutomaticSize = Enum.AutomaticSize.X
+	face.Size = UDim2.fromScale(0, 1)
+	UIKit.padding(face, 0, padR, 0, padL)
+	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, gap) })
+	return holder, face
+end
+
 ------------------------------------------------------------------------------------------
 -- Build
 ------------------------------------------------------------------------------------------
 
-local function buildTop(frame: Frame)
-	-- timer
-	ui.Timer = role(frame, "Display", "00:00", {
+-- Timer pill (top centre).
+local function buildTimer(frame: Frame)
+	local holder, face = goldSurface(frame, "TimerPill", Theme.Radius.L)
+	ui.TimerPill = holder
+	ui.Timer = role(face, "Stat", "00:00", {
 		Name = "Timer",
+		Size = UDim2.fromScale(1, 1),
+		TextSize = TS(TY.Display.Size),
 		TextXAlignment = Enum.TextXAlignment.Center,
 	})
+end
 
-	-- health + level plate
-	local plateHolder, plate = UIKit.Surface(frame, { Name = "Plate", Transparency = 0.38, Radius = Theme.Radius.M, Shadow = false })
-	ui.Plate = plateHolder
-	UIKit.padding(plate, 6, 12, 6, 12)
-	local rows = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, plate)
-	UIKit.list(rows, { Padding = UDim.new(0, 4), VerticalAlignment = Enum.VerticalAlignment.Center })
+-- Stage pill under the timer: "STAGE 2 • FIND THE PORTAL", "STAGE 3 • PORTAL DORMANT • 0:26".
+local function buildStage(frame: Frame)
+	local holder, face = autoPill(frame, "Stage", STAGE_H, 999, 14, 14, 7)
+	holder.AnchorPoint = Vector2.new(0.5, 0)
+	ui.Stage = holder
+	local function label(order: number, color: Color3): TextLabel
+		return role(face, "Label", "", { LayoutOrder = order, Size = UDim2.fromOffset(0, STAGE_H), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = color })
+	end
+	local function dot(order: number): Frame
+		local d = new("Frame", { BackgroundColor3 = P.gold_400, Size = UDim2.fromOffset(4, 4), LayoutOrder = order, BorderSizePixel = 0 }, face)
+		UIKit.corner(d, 999)
+		return d
+	end
+	ui.StageNumber = label(1, P.gold_200)
+	ui.StageNumber.Text = "STAGE 1"
+	ui.StageDot = dot(2)
+	ui.StageGoal = label(3, P.ivory_100)
+	ui.StageDot2 = dot(4)
+	ui.StageCount = label(5, P.ivory_100)
+end
 
-	local hpRow = new("Frame", { Name = "HP", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, PLATE_HP), LayoutOrder = 1 }, rows)
-	ui.Heart = Icons.Draw(hpRow, "heart", { Size = 20, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5) })
-	ui.HP = UIKit.Meter(hpRow, {
-		Gradient = Theme.Gradient.Health,
-		Trail = true,
-		TextStyle = "Number",
-		TextSize = TY.Number.Size,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 30, 0.5, 0),
-		Size = UDim2.new(1, -30, 1, -2),
-	})
-
-	-- Guardian Ward shield: a steel band along the top of the health bar
-	ui.ShieldBar = new("Frame", { Name = "Shield", BackgroundColor3 = P.steel_200, BorderSizePixel = 0, Size = UDim2.new(0, 0, 0, 4), Visible = false, ZIndex = 6 }, ui.HP.Frame)
-	UIKit.corner(ui.ShieldBar, 2)
-
-	local xpRow = new("Frame", { Name = "XP", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, PLATE_XP), LayoutOrder = 2 }, rows)
-	ui.Level = role(xpRow, "Label", "Lv. 1", {
-		Name = "Level",
-		TextColor3 = P.gold_300,
-		Size = UDim2.new(0, 56, 1, 0),
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, true)
-	ui.XPRow = xpRow
-	ui.XP = UIKit.Meter(xpRow, {
-		Gradient = Theme.Gradient.XP,
-		TextStyle = "Number",
-		TextSize = TY.Caption.Size,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 60, 0.5, 0),
-		Size = UDim2.new(1, -60, 1, -2),
-	})
-
-	-- bright leading edge on the XP fill (reads as the bar's "spark")
-	local edge = new("Frame", { Name = "Edge", BackgroundColor3 = P.ivory_100, BackgroundTransparency = 0.55, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(1, 0.5), Size = UDim2.new(0, 6, 1, 0), ZIndex = 3 }, ui.XP.Fill)
-	UIKit.corner(edge, 999)
-
-	-- boss bar
+-- Boss bar (under the stage pill while the boss lives).
+local function buildBoss(frame: Frame)
 	local boss = new("Frame", { Name = "BossBar", BackgroundTransparency = 1, Visible = false }, frame)
 	ui.Boss = boss
 	local bossTitle = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 24) }, boss)
@@ -34545,16 +34645,61 @@ local function buildTop(frame: Frame)
 	ui.BossSkull = Icons.Draw(disc, "skull", { Size = 26, Color = P.crimson_300, Back = P.slate_950, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 	ui.BossDisc = disc
 	ui.BossInset = 0
+end
 
-	-- kills / gold counters + pause
-	local counters = UIKit.Panel(frame, { Name = "Counters", AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 44) }, true)
-	UIKit.padding(counters, 0, 14, 0, 12)
-	UIKit.list(counters, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
+-- Top right: gold pill, kills pill (both in ui.Counters, right-aligned), pause button.
+local function buildCounters(frame: Frame)
+	local counters = new("Frame", { Name = "Counters", BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, PILL_H), AnchorPoint = Vector2.new(1, 0) }, frame)
+	UIKit.list(counters, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
 	ui.Counters = counters
-	ui.Kills = UIKit.Chip(counters, "skull", nil, "0", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 44) }, { Size = 20, Color = P.ivory_200, Back = P.slate_950 })
+
+	-- gold (the purse)
+	local holder, face = autoPill(counters, "Purse", PILL_H, Theme.Radius.M, 10, 14, 8)
+	holder.LayoutOrder = 1
+	ui.Purse = holder
+	ui.PurseFace = face
+	ui.PurseStroke = face:FindFirstChildOfClass("UIStroke")
+	ui.PurseCoin = Icons.Draw(face, "coin", { Size = 28, LayoutOrder = 1 })
+	ui.PurseValue = role(face, "Number", "0", {
+		Name = "Value",
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(0, PILL_H),
+		AutomaticSize = Enum.AutomaticSize.X,
+	})
+	ui.PurseHint = role(face, "Label", "", {
+		Name = "Hint",
+		LayoutOrder = 3,
+		Size = UDim2.fromOffset(0, PILL_H),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextColor3 = C.TextMuted,
+		Visible = false,
+	})
+	-- "+N" floaters drift into the pill (placed under it when they spawn)
+	ui.PurseFloat = new("Frame", { Name = "PurseFloat", BackgroundTransparency = 1, Size = UDim2.fromOffset(1, 1), ZIndex = 5 }, frame)
+
+	-- kills
+	local kHolder, kFace = autoPill(counters, "Kills", PILL_H, Theme.Radius.M, 10, 14, 8)
+	kHolder.LayoutOrder = 2
+	local skull = Icons.Draw(kFace, "skull", { Size = 24, Color = P.ivory_100, Back = P.slate_900, LayoutOrder = 1 })
+	local value = role(kFace, "Number", "0", {
+		Name = "Value",
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(0, PILL_H),
+		AutomaticSize = Enum.AutomaticSize.X,
+	})
+	ui.Kills = {
+		Frame = kHolder,
+		Icon = skull,
+		Value = value,
+		SetValue = function(s: string)
+			setText(value, s)
+		end,
+	}
+
 	ui.Pause = UIKit.IconButton(frame, {
 		Icon = "pause",
-		Size = 52,
+		Kind = "Outline",
+		Size = PAUSE,
 		Name = "Pause",
 		OnClick = function()
 			if host.OnPause then
@@ -34564,39 +34709,100 @@ local function buildTop(frame: Frame)
 	})
 end
 
--- The purse: the run gold, big, in the middle just over the ability bar.
-local function buildPurse(frame: Frame)
-	local holder, face = UIKit.Surface(frame, { Name = "Purse", Transparency = 0.18, Radius = 999, Edge = P.gold_500, EdgeTransparency = 0.35, Size = UDim2.fromOffset(0, 50) })
-	holder.AnchorPoint = Vector2.new(0.5, 0)
-	holder.AutomaticSize = Enum.AutomaticSize.X
-	face.AutomaticSize = Enum.AutomaticSize.X
-	face.Size = UDim2.fromScale(0, 1)
-	UIKit.padding(face, 0, 20, 0, 12)
-	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
-	ui.Purse = holder
-	ui.PurseFace = face
-	ui.PurseStroke = face:FindFirstChildOfClass("UIStroke")
-	ui.PurseCoin = Icons.Draw(face, "coin", { Size = 32, LayoutOrder = 1 })
-	ui.PurseValue = role(face, "Stat", "0", {
-		Name = "Value",
-		LayoutOrder = 2,
-		Size = UDim2.fromOffset(0, 50),
-		AutomaticSize = Enum.AutomaticSize.X,
-		TextColor3 = P.gold_200,
-	})
-	ui.PurseHint = role(face, "Label", "", {
-		Name = "Hint",
-		LayoutOrder = 3,
-		Size = UDim2.fromOffset(0, 50),
-		AutomaticSize = Enum.AutomaticSize.X,
-		TextColor3 = C.TextMuted,
-		Visible = false,
-	})
-	-- "+N" floaters rise from the purse
-	ui.PurseFloat = new("Frame", { Name = "PurseFloat", BackgroundTransparency = 1, Size = UDim2.fromOffset(1, 1), ZIndex = 5 }, frame)
+-- The level medallion: a gold disc with a dark rim and the level-up chevrons.
+local function medallion(parent: Instance, size: number, x: number): Frame
+	local m = new("Frame", { Name = "Medallion", BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, x, 0.5, 0), Size = UDim2.fromOffset(size, size) }, parent)
+	UIKit.corner(m, 999)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.gold_200, P.gold_500) }, m)
+	UIKit.stroke(m, P.gold_700, 1.5, 0)
+	local inner = new("Frame", { BackgroundColor3 = P.gold_600, BackgroundTransparency = 0.2, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.66, 0.66) }, m)
+	UIKit.corner(inner, 999)
+	Icons.Draw(inner, "chevronsUp", { Size = math.floor(size * 0.46), Color = P.ivory_100, Back = P.gold_600, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	return m
 end
 
--- Buff chip (Ranger's Steady Aim): a small pill over the ability bar. Shown only for a
+-- Health + level panel (top centre, under the timer). ui.Plate is the placed holder; its Body is drawn
+-- at full size and fitted by a UIScale.
+local function buildVitals(frame: Frame)
+	local holder = new("Frame", { Name = "Plate", BackgroundTransparency = 1, Active = false }, frame)
+	ui.Plate = holder
+	local body, face = goldSurface(holder, "Body", Theme.Radius.L, UDim2.fromOffset(VIT.W, VIT.H))
+	ui.PlateFit = new("UIScale", { Name = "Fit", Scale = 1 }, body)
+
+	local hpRow = new("Frame", { Name = "HP", BackgroundTransparency = 1, Position = UDim2.fromOffset(VIT.PadX, VIT.PadY), Size = UDim2.new(1, -2 * VIT.PadX, 0, VIT.HP) }, face)
+	ui.Heart = Icons.Draw(hpRow, "heart", { Size = 24, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 1, 0.5, 0) })
+	ui.HP = UIKit.Meter(hpRow, {
+		Gradient = Theme.Gradient.Health,
+		Trail = true,
+		TextStyle = "Number",
+		TextSize = TY.Number.Size,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 34, 0.5, 0),
+		Size = UDim2.new(1, -34, 1, 0),
+	})
+	UIKit.stroke(ui.HP.Frame, P.crimson_700, 1.5, 0.1)
+
+	-- Guardian Ward shield: a steel band along the top of the health bar
+	ui.ShieldBar = new("Frame", { Name = "Shield", BackgroundColor3 = P.steel_200, BorderSizePixel = 0, Size = UDim2.new(0, 0, 0, 4), Visible = false, ZIndex = 6 }, ui.HP.Frame)
+	UIKit.corner(ui.ShieldBar, 2)
+
+	local xpRow = new("Frame", { Name = "XP", BackgroundTransparency = 1, Position = UDim2.fromOffset(VIT.PadX, VIT.PadY + VIT.HP + VIT.Gap), Size = UDim2.new(1, -2 * VIT.PadX, 0, VIT.XP) }, face)
+	ui.XPRow = xpRow
+	ui.Medal = medallion(xpRow, 24, 1)
+	ui.Level = role(xpRow, "Number", "LV. 1", {
+		Name = "Level",
+		Position = UDim2.fromOffset(32, 0),
+		Size = UDim2.new(0, 66, 1, 0),
+		TextColor3 = P.ivory_100,
+	})
+	ui.XP = UIKit.Meter(xpRow, {
+		Gradient = Theme.Gradient.XP,
+		TextStyle = "Number",
+		TextSize = TY.Label.Size,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 100, 0.5, 0),
+		Size = UDim2.new(1, -100, 1, 0),
+	})
+
+	-- bright leading edge on the XP fill (reads as the bar's "spark")
+	local edge = new("Frame", { Name = "Edge", BackgroundColor3 = P.ivory_100, BackgroundTransparency = 0.55, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(1, 0.5), Size = UDim2.new(0, 6, 1, 0), ZIndex = 3 }, ui.XP.Fill)
+	UIKit.corner(edge, 999)
+end
+
+local function invSize(): (number, number, number)
+	local slots = math.max((inventory and inventory.WeaponSlots) or Config.Slots.Weapons, (inventory and inventory.PassiveSlots) or Config.Slots.Passives)
+	local w = INV.Pad * 2 + INV.Label + slots * INV.Tile + math.max(0, slots - 1) * INV.Gap
+	local h = INV.Pad * 2 + INV.Tile * 2 + INV.RowGap
+	return w, h, slots
+end
+
+-- Ability panel (bottom centre): labels + two rows of tiles.
+local function buildBar(frame: Frame)
+	local holder = new("Frame", { Name = "AbilityBar", BackgroundTransparency = 1, Active = false }, frame)
+	ui.Bar = holder
+	local w, h = invSize()
+	local body, face = goldSurface(holder, "Body", Theme.Radius.L, UDim2.fromOffset(w, h))
+	ui.BarBody = body
+	ui.BarFit = new("UIScale", { Name = "Fit", Scale = 1 }, body)
+	local function rowLabel(str: string, y: number)
+		role(face, "Label", str, {
+			Name = str,
+			Position = UDim2.fromOffset(INV.Pad + 2, y),
+			Size = UDim2.fromOffset(INV.Label - 4, INV.Tile),
+			TextColor3 = P.ivory_100,
+		})
+	end
+	local y2 = INV.Pad + INV.Tile + INV.RowGap
+	rowLabel("WEAPONS", INV.Pad)
+	rowLabel("PASSIVES", y2)
+	ui.BarRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, Position = UDim2.fromOffset(INV.Pad, INV.Pad + INV.Tile + INV.RowGap / 2), Size = UDim2.new(1, -2 * INV.Pad, 0, 1) }, face)
+	ui.WeaponRow = new("Frame", { Name = "Weapons", BackgroundTransparency = 1, Active = false, Position = UDim2.fromOffset(INV.Pad + INV.Label, INV.Pad), Size = UDim2.new(1, -(2 * INV.Pad + INV.Label), 0, INV.Tile) }, face)
+	UIKit.list(ui.WeaponRow, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, INV.Gap) })
+	ui.PassiveRow = new("Frame", { Name = "Passives", BackgroundTransparency = 1, Active = false, Position = UDim2.fromOffset(INV.Pad + INV.Label, y2), Size = UDim2.new(1, -(2 * INV.Pad + INV.Label), 0, INV.Tile) }, face)
+	UIKit.list(ui.PassiveRow, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, INV.Gap) })
+end
+
+-- Buff chip (Ranger's Steady Aim): a small pill over the ability panel. Shown only for a
 -- hero with the trait (player attribute SteadyAim exists): dim "Stand still to aim" while
 -- moving, lit "Steady Aim +30%" once the bonus is on.
 local function buildBuffChip(frame: Frame)
@@ -34640,32 +34846,6 @@ local function refreshBuff()
 	if state then
 		UIAnim.Pop(ui.Buff, 0, 1.2)
 	end
-end
-
--- Stage pill under the timer: portal icon, "STAGE 2", objective.
-local function buildStage(frame: Frame)
-	local holder, face = UIKit.Surface(frame, { Name = "Stage", Transparency = 0.2, Radius = 999, Shadow = false, Size = UDim2.fromOffset(0, 30) })
-	holder.AnchorPoint = Vector2.new(0.5, 0)
-	holder.AutomaticSize = Enum.AutomaticSize.X
-	face.AutomaticSize = Enum.AutomaticSize.X
-	face.Size = UDim2.fromScale(0, 1)
-	UIKit.padding(face, 0, 14, 0, 10)
-	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 7) })
-	ui.Stage = holder
-	ui.StageIcon = Icons.Draw(face, "portal", { Size = 18, LayoutOrder = 1, Back = P.slate_900 })
-	ui.StageNumber = role(face, "Label", "STAGE 1", {
-		LayoutOrder = 2,
-		Size = UDim2.fromOffset(0, 30),
-		AutomaticSize = Enum.AutomaticSize.X,
-		TextColor3 = P.gold_300,
-	})
-	ui.StageDot = new("Frame", { BackgroundColor3 = P.gold_500, Size = UDim2.fromOffset(4, 4), LayoutOrder = 3, BorderSizePixel = 0 }, face)
-	UIKit.corner(ui.StageDot, 999)
-	ui.StageGoal = role(face, "Body", "Find the portal", {
-		LayoutOrder = 4,
-		Size = UDim2.fromOffset(0, 30),
-		AutomaticSize = Enum.AutomaticSize.X,
-	})
 end
 
 -- Stage banner: "STAGE 2" slams in over the arena for a moment (showStageBanner).
@@ -34785,15 +34965,6 @@ local function buildStatus(frame: Frame)
 	ui.StatusIcon = ""
 end
 
-local function buildBar(frame: Frame)
-	local bar = UIKit.Panel(frame, { Name = "AbilityBar", Active = false, BackgroundTransparency = 0.6 }, true)
-	ui.Bar = bar
-	ui.WeaponRow = new("Frame", { Name = "Weapons", BackgroundTransparency = 1, Active = false }, bar)
-	UIKit.list(ui.WeaponRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
-	ui.PassiveRow = new("Frame", { Name = "Passives", BackgroundTransparency = 1, Active = false }, bar)
-	UIKit.list(ui.PassiveRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
-end
-
 -- Screen-edge vignette (its own full-screen ScreenGui, so it also covers notches).
 local function buildVignette(fxGui: ScreenGui)
 	local v = new("Frame", { Name = "HurtVignette", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false }, fxGui)
@@ -34826,8 +34997,6 @@ end
 -- Layout
 ------------------------------------------------------------------------------------------
 
-local barMetrics = { Weapon = 54, Passive = 44, Gap = 6, Pad = 8, OneRow = false }
-
 -- Boss bar portrait for boss `id` (bosses/<id>): the disc shows and the meter starts after
 -- it; no picture → the plain full-width bar. Entrance: the portrait lands big and settles.
 local function setBossArt(id: any)
@@ -34850,12 +35019,6 @@ local function setBossArt(id: any)
 	end
 end
 
--- Width of an ability row: `owned` full tiles, the other slots small pips.
-local function barRowWidth(slots: number, owned: number, tile: number, gap: number): number
-	owned = math.clamp(owned, 0, slots)
-	return owned * tile + (slots - owned) * math.floor(tile * 0.4) + math.max(0, slots - 1) * gap
-end
-
 local function layout()
 	if not ui.Frame then
 		return
@@ -34866,102 +35029,72 @@ local function layout()
 	local W, H = v.X, v.Y
 	local compact = UIKit.IsCompact()
 	local M = compact and Theme.Layout.MarginCompact or Theme.Layout.Margin
+	local scale = math.max(0.01, host.Scale())
 
-	-- pause + counters (top right)
+	-- pause + gold / kills pills (top right)
 	local pauseY = ins.Right > 4 and (ins.Top + 6) or 10
-	place(ui.Pause.Instance, W - M - 52, pauseY, 52, 52)
-	ui.Counters.AnchorPoint = Vector2.new(1, 0)
-	ui.Counters.Position = UDim2.fromOffset(W - M - 52 - 10, pauseY + 4)
+	place(ui.Pause.Instance, W - M - PAUSE, pauseY, PAUSE, PAUSE)
+	ui.Counters.Position = UDim2.fromOffset(W - M - PAUSE - 8, pauseY + (PAUSE - PILL_H) / 2)
+	local countersLeft = W - M - PAUSE - 8 - ui.Counters.AbsoluteSize.X / scale
 
-	-- timer (top centre; below the topbar if its buttons would touch it)
-	local timerH = TS(TY.Display.Size) + 6
-	local timerW = 220
+	-- timer pill (top centre; below the Roblox buttons or the counters if it would touch them)
 	local timerY = 6
-	if ins.Left + 8 > W / 2 - 70 then
+	if ins.Left + 8 > W / 2 - TIMER_W / 2 then
 		timerY = ins.Top + 2
 	end
+	if countersLeft < W / 2 + TIMER_W / 2 + 8 then
+		timerY = math.max(timerY, pauseY + PAUSE + 6)
+	end
+	place(ui.TimerPill, W / 2 - TIMER_W / 2, timerY, TIMER_W, TIMER_H)
+	local y = timerY + TIMER_H + 6
+
+	-- stage pill: top left under the Roblox menu buttons (landscape); portrait has no room
+	-- beside the timer, so it sits centred under it
 	if portrait then
-		-- the counters sit top right; keep the timer clear of them
-		local countersLeft = W - M - 52 - 10 - ui.Counters.AbsoluteSize.X / math.max(0.01, host.Scale())
-		if countersLeft < W / 2 + 70 then
-			timerY = math.max(timerY, pauseY + 56)
+		ui.Stage.AnchorPoint = Vector2.new(0.5, 0)
+		ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(y))
+		if ui.Stage.Visible then
+			y += STAGE_H + 6
 		end
+		ui.LeftBottom = nil
+	else
+		local sy = math.max(ins.Top, 0) + 6
+		ui.Stage.AnchorPoint = Vector2.new(0, 0)
+		ui.Stage.Position = UDim2.fromOffset(M, math.floor(sy))
+		ui.LeftBottom = ui.Stage.Visible and (sy + STAGE_H) or nil
 	end
-	place(ui.Timer, W / 2 - timerW / 2, timerY, timerW, timerH)
 
-	-- stage pill under the timer
-	local stageH = compact and 34 or 30
-	local stageY = timerY + timerH - 2
-	if portrait and ins.Left > 8 then
-		-- the pill is wide ("STAGE 1 · The portal is dormant: 1:35"): on a narrow screen it
-		-- would run into the Roblox menu buttons, so it goes below them
-		stageY = math.max(stageY, ins.Top + 4)
-	end
-	if portrait then
-		-- and below the kills / pause row at the right
-		stageY = math.max(stageY, pauseY + 58)
-	end
-	ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(stageY))
-	ui.Stage.Size = UDim2.fromOffset(0, stageH)
-	local stageBottom = ui.Stage.Visible and (stageY + stageH + 6) or (timerY + timerH + 2)
+	-- health / level panel under the timer (one fit factor; phones a bit smaller)
+	local kv = compact and 0.85 or 1
+	kv = math.min(kv, (W - 2 * M) / VIT.W)
+	ui.PlateFit.Scale = kv
+	local vitW, vitH = VIT.W * kv, VIT.H * kv
+	place(ui.Plate, W / 2 - vitW / 2, y, vitW, vitH)
+	y += vitH
 
-	-- plate
-	local plateW = math.min(380, W - 2 * M)
-	local plateH = PLATE_HP + PLATE_XP + 4 + 12
-	local plateY = stageBottom
-	if portrait then
-		-- keep the plate clear of the counters / pause row
-		plateY = math.max(plateY, pauseY + 58)
-	end
-	place(ui.Plate, W / 2 - plateW / 2, plateY, plateW, plateH)
-
-	-- boss bar under the plate
+	-- boss bar under the health panel
 	local bossW = math.min(560, W - 2 * M)
-	local bossY = plateY + plateH + 10
+	local bossY = y + 10
 	place(ui.Boss, W / 2 - bossW / 2, bossY, bossW, 46)
-	ui.TopBottom = bossY + (ui.Boss.Visible and 50 or 0)
+	local topBottom = ui.Boss.Visible and (bossY + 62) or (y + 4)
+	ui.TopBottom = topBottom
 
-	-- ability bar
-	local slotsW = (inventory and inventory.WeaponSlots) or Config.Slots.Weapons
-	local slotsP = (inventory and inventory.PassiveSlots) or Config.Slots.Passives
-	local wt, pt = Config.UI.BarWeaponTile, Config.UI.BarPassiveTile
-	if portrait or compact then
-		wt, pt = math.min(wt, 46), math.min(pt, 38)
-	end
-	local gap = 6
-	-- owned slots are full tiles, empty ones small pips (barRowWidth)
-	local ownW = inventory and #inventory.Weapons or 0
-	local ownP = inventory and #inventory.Passives or 0
-	local rowW = math.max(barRowWidth(slotsW, ownW, wt, gap), barRowWidth(slotsP, ownP, pt, gap))
-	local pad = 8
-	local barW = rowW + pad * 2
-	local barH = wt + pt + gap + pad * 2
-	barMetrics.Weapon, barMetrics.Passive = wt, pt
-	local barY
+	-- ability panel: bottom centre (landscape), between the thumb side and the JUMP button
+	-- and never taller than ~30% of the screen; portrait: under the top cluster, away from
+	-- the thumbs
+	local invW, invH = invSize()
+	local k
 	if portrait then
-		-- under the plate / boss bar, away from the thumbs
-		barY = (ui.Boss.Visible and (bossY + 52) or (plateY + plateH + 10))
+		k = math.min(compact and 0.86 or 1, (W - 2 * M) / invW, (H * 0.22) / invH)
 	else
-		barY = H - M - barH
+		local jumpClear = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26) / scale + ins.Right + 12
+		k = math.min(compact and 0.72 or 1, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.3) / invH)
 	end
+	ui.BarFit.Scale = k
+	local barW, barH = invW * k, invH * k
+	local barY = portrait and (topBottom + 8) or (H - M - barH)
 	place(ui.Bar, W / 2 - barW / 2, barY, barW, barH)
-	place(ui.WeaponRow, pad, pad, rowW, wt)
-	place(ui.PassiveRow, pad, pad + wt + gap, rowW, pt)
-
-	-- the purse: centred just over the bar (portrait: just under it, the bar is up top).
-	-- BarTop / BarBottom include it, so everything that keeps clear of the bar keeps
-	-- clear of the purse too.
-	local purseH = compact and 44 or 50
-	ui.Purse.Size = UDim2.fromOffset(0, purseH)
-	local clusterTop, clusterBottom
-	if portrait then
-		ui.Purse.Position = UDim2.fromOffset(math.floor(W / 2), barY + barH + 6)
-		clusterTop, clusterBottom = barY, barY + barH + 6 + purseH
-	else
-		ui.Purse.Position = UDim2.fromOffset(math.floor(W / 2), barY - 8 - purseH)
-		clusterTop, clusterBottom = barY - 8 - purseH, barY + barH
-	end
-	ui.PurseFloat.Position = UDim2.fromOffset(math.floor(W / 2), ui.Purse.Position.Y.Offset)
+	local clusterTop, clusterBottom = barY, barY + barH
 	ui.BarTop = clusterTop
 	ui.BarBottom = clusterBottom
 	if ui.Buff then
@@ -34976,9 +35109,9 @@ local function layout()
 
 	-- stage banner: under the top cluster in landscape, mid-screen in portrait
 	ui.Banner.Size = UDim2.fromOffset(math.min(520, W - 2 * M), 110)
-	ui.Banner.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(portrait and H * 0.42 or math.max(H * 0.3, bossY + 90)))
+	ui.Banner.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(portrait and H * 0.5 or math.max(H * 0.3, topBottom + 70)))
 
-	-- status line: centre-low in landscape, below the ability bar in portrait
+	-- status line: centre-low in landscape, below the panels in portrait
 	local statusW = math.min(640, W - 2 * M)
 	ui.Status.Size = UDim2.fromOffset(statusW, compact and 58 or 50)
 	if portrait then
@@ -34990,7 +35123,7 @@ end
 Hud.Layout = layout
 
 ------------------------------------------------------------------------------------------
--- Ability bar contents
+-- Ability panel contents
 ------------------------------------------------------------------------------------------
 
 -- Icon key of an inventory weapon: its evolution once evolved.
@@ -35000,6 +35133,56 @@ local function weaponIconId(id: string, evolved: boolean): string
 		return def.Evolution.Id
 	end
 	return id
+end
+
+--[[
+	One ability tile: a dark rounded square with the item art, a round gold level badge in
+	the bottom-right corner and a gold rim once evolved / maxed; an empty slot is a faint
+	outline. Not Active (touches pass through to the thumbstick).
+]]
+local function hudTile(parent: Instance, size: number, id: string?, level: number?, gold: boolean?): Frame
+	local empty = id == nil
+	local tile = new("Frame", {
+		Name = empty and "Empty" or "Tile",
+		Size = UDim2.fromOffset(size, size),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = empty and 0.75 or 0.02,
+		BorderSizePixel = 0,
+		Active = false,
+	})
+	UIKit.corner(tile, math.floor(size * 0.18))
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_700, P.slate_950) }, tile)
+	if gold then
+		UIKit.stroke(tile, P.gold_400, 2.5, 0)
+	else
+		UIKit.stroke(tile, empty and P.slate_600 or P.slate_500, 1, empty and 0.55 or 0.15)
+	end
+	if not empty then
+		local inset = math.floor(size * 0.08)
+		Icons.Upgrade(tile, id, { Size = size - inset * 2, Position = UDim2.fromOffset(inset, inset), Back = P.slate_800, Name = "Icon" })
+		if level and level > 0 then
+			local d = math.max(16, math.floor(size * 0.38))
+			local badge = new("TextLabel", {
+				Name = "Badge",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(1, -math.floor(d * 0.3), 1, -math.floor(d * 0.3)),
+				Size = UDim2.fromOffset(d, d),
+				BackgroundColor3 = Color3.new(1, 1, 1),
+				BorderSizePixel = 0,
+				Text = tostring(level),
+				FontFace = TY.Number.Font,
+				TextSize = math.floor(d * 0.72),
+				TextColor3 = P.gold_900,
+				ZIndex = 5,
+				Active = false,
+			}, tile)
+			UIKit.corner(badge, 999)
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.gold_200, P.gold_500) }, badge)
+			UIKit.stroke(badge, P.slate_950, 1.5, 0.1)
+		end
+	end
+	tile.Parent = parent
+	return tile
 end
 
 -- Shine sweep inside the tile's rounded shape, plus sparks (new) or a flash (level up).
@@ -35038,8 +35221,10 @@ function Hud.SetInventory(inv: { [string]: any }?)
 		anim.BarReady = false
 		return
 	end
+	local w, h = invSize()
+	ui.BarBody.Size = UDim2.fromOffset(w, h)
 	layout()
-	local wt, pt = barMetrics.Weapon, barMetrics.Passive
+	local size = INV.Tile
 	-- tiles that are new or just levelled up pop in
 	local function popIfChanged(tile: GuiObject, key: string, level: number)
 		if shownLevels[key] ~= level then
@@ -35054,13 +35239,13 @@ function Hud.SetInventory(inv: { [string]: any }?)
 	end
 	local maxW = WeaponData.MaxLevel
 	for i = 1, (inv.WeaponSlots or Config.Slots.Weapons) do
-		local w = inv.Weapons[i]
+		local wp = inv.Weapons[i]
 		local tile
-		if w then
-			tile = UIKit.Tile(ui.WeaponRow, { Id = weaponIconId(w.Id, w.Evolved), Size = wt, Level = w.Level, Evolved = w.Evolved, Max = w.Level >= maxW })
-			popIfChanged(tile, "W" .. w.Id, w.Level + (w.Evolved and 10 or 0))
+		if wp then
+			tile = hudTile(ui.WeaponRow, size, weaponIconId(wp.Id, wp.Evolved), wp.Level, wp.Evolved or wp.Level >= maxW)
+			popIfChanged(tile, "W" .. wp.Id, wp.Level + (wp.Evolved and 10 or 0))
 		else
-			tile = UIKit.Tile(ui.WeaponRow, { Size = math.floor(wt * 0.4), Empty = true })
+			tile = hudTile(ui.WeaponRow, size)
 		end
 		tile.LayoutOrder = i
 	end
@@ -35068,10 +35253,10 @@ function Hud.SetInventory(inv: { [string]: any }?)
 		local p = inv.Passives[i]
 		local tile
 		if p then
-			tile = UIKit.Tile(ui.PassiveRow, { Id = p.Id, Size = pt, Level = p.Level, Max = p.Level >= (p.MaxLevel or PassiveData.MaxLevelOf(p.Id)) })
+			tile = hudTile(ui.PassiveRow, size, p.Id, p.Level, p.Level >= (p.MaxLevel or PassiveData.MaxLevelOf(p.Id)))
 			popIfChanged(tile, "P" .. p.Id, p.Level)
 		else
-			tile = UIKit.Tile(ui.PassiveRow, { Size = math.floor(pt * 0.4), Empty = true })
+			tile = hudTile(ui.PassiveRow, size)
 		end
 		tile.LayoutOrder = i
 	end
@@ -35122,7 +35307,7 @@ local function setStatus(str: string, icon: string?, progress: number?)
 	if not show then
 		return
 	end
-	ui.StatusText.Text = str
+	setText(ui.StatusText, str)
 	local iconName = icon or ""
 	if ui.StatusIcon ~= iconName then
 		ui.StatusIcon = iconName
@@ -35140,12 +35325,13 @@ local function setStatus(str: string, icon: string?, progress: number?)
 end
 
 ------------------------------------------------------------------------------------------
--- Purse (run gold)
+-- Purse (run gold, the gold pill top right)
 ------------------------------------------------------------------------------------------
 
 local purse = { Shown = nil :: number?, Target = 0, LastPunch = 0, Float = nil :: TextLabel?, FloatAt = 0, FloatSum = 0, Price = 0, Afford = true, AlarmUntil = 0, Need = 0, Red = false }
 
--- "+N" rising off the purse; gains close together add up on one label.
+-- "+N" drifting up into the gold pill from just under it; gains close together add up on
+-- one label.
 local function purseFloat(gain: number)
 	local now = os.clock()
 	local f = purse.Float
@@ -35157,17 +35343,20 @@ local function purseFloat(gain: number)
 	end
 	purse.FloatSum = gain
 	purse.FloatAt = now
-	local half = (ui.Purse.AbsoluteSize.X / math.max(0.01, host.Scale())) / 2
+	local scale = math.max(0.01, host.Scale())
+	local rel = (ui.Purse.AbsolutePosition - ui.Frame.AbsolutePosition) / scale
+	local size = ui.Purse.AbsoluteSize / scale
 	local label = role(ui.PurseFloat, "Number", "+" .. UIKit.formatNumber(gain), {
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.fromOffset(math.floor(half - 30), 4),
-		Size = UDim2.fromOffset(120, 34),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromOffset(math.floor(rel.X + size.X / 2), math.floor(rel.Y + size.Y + 26)),
+		Size = UDim2.fromOffset(120, 30),
+		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.gold_200,
 		ZIndex = 6,
 	})
 	purse.Float = label
 	UIAnim.Pop(label, 0, 0.5)
-	local rise = ClientSettings.Reduced() and 10 or 30
+	local rise = ClientSettings.Reduced() and 8 or 24
 	UIAnim.Tween(label, 0.9, { Position = label.Position - UDim2.fromOffset(0, rise), TextTransparency = 1, TextStrokeTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	task.delay(0.95, function()
 		label:Destroy()
@@ -35175,9 +35364,9 @@ local function purseFloat(gain: number)
 end
 
 --[[
-	Chest / shrine price next to the purse (LootUI calls this every frame): price 0 = no
+	Chest / shrine price next to the gold (LootUI calls this every frame): price 0 = no
 	priced loot in reach. alarm = the player just tried to open it without enough gold:
-	the purse flashes red with "NEED N" for a moment and shakes.
+	the gold pill flashes red with "NEED N" for a moment and shakes.
 ]]
 function Hud.SetPurseHint(price: number, afford: boolean, alarm: boolean?)
 	purse.Price, purse.Afford = price, afford
@@ -35206,7 +35395,7 @@ updatePurse = function(dt: number)
 		local now = os.clock()
 		if now - purse.LastPunch > 0.12 then
 			purse.LastPunch = now
-			UIAnim.Punch(ui.Purse, 0.14)
+			UIAnim.Punch(ui.Purse, 0.12)
 			UIAnim.Punch(ui.PurseCoin, 0.35)
 			if gold - purse.Target >= 5 then
 				UIAnim.Sparks(ui.PurseCoin, UDim2.fromScale(0.5, 0.5), P.gold_200, 5, 26, 0.45)
@@ -35229,7 +35418,7 @@ updatePurse = function(dt: number)
 		shown += step
 	end
 	purse.Shown = shown
-	ui.PurseValue.Text = UIKit.formatNumber(math.floor(shown + 0.5))
+	setText(ui.PurseValue, UIKit.formatNumber(math.floor(shown + 0.5)))
 
 	-- chest affordability
 	local now = os.clock()
@@ -35244,16 +35433,18 @@ updatePurse = function(dt: number)
 			hint, hintColor = "NEED " .. UIKit.formatNumber(purse.Price - gold), P.crimson_300
 		end
 	end
-	ui.PurseHint.Visible = hint ~= ""
-	ui.PurseHint.Text = hint
+	if ui.PurseHint.Visible ~= (hint ~= "") then
+		ui.PurseHint.Visible = hint ~= ""
+	end
+	setText(ui.PurseHint, hint)
 	ui.PurseHint.TextColor3 = hintColor
 	local red = alarm
 	if purse.Red ~= red then
 		purse.Red = red
-		ui.PurseValue.TextColor3 = red and P.crimson_300 or P.gold_200
+		ui.PurseValue.TextColor3 = red and P.crimson_300 or C.Text
 		if ui.PurseStroke then
 			ui.PurseStroke.Color = red and P.crimson_400 or P.gold_500
-			ui.PurseStroke.Transparency = red and 0 or 0.35
+			ui.PurseStroke.Transparency = red and 0 or 0.25
 		end
 	end
 end
@@ -35262,57 +35453,43 @@ end
 -- Per frame (only while in a run)
 ------------------------------------------------------------------------------------------
 
-function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
-	refreshBuff()
-	local phase = state:GetAttribute("Phase") or "Lobby"
-	local runTime = state:GetAttribute("RunTime") or 0
-
-	-- timer: punches each new minute, glows crimson in the last 10 s before the boss
-	ui.Timer.Text = UIKit.formatClock(runTime)
-	local minute = math.floor(runTime / 60)
-	if minute ~= anim.Minute then
-		if anim.Minute ~= nil then
-			UIAnim.Punch(ui.Timer, 0.25)
-			if not ClientSettings.Reduced() then
-				ui.Timer.TextColor3 = P.gold_200
-				UIAnim.Tween(ui.Timer, 0.9, { TextColor3 = C.Text })
-			end
-		end
-		anim.Minute = minute
-	end
-
-	-- stage pill: what to do on this stage
-	local stageNo = state:GetAttribute("Stage") or 0
-	local stagePhase = state:GetAttribute("StagePhase") or "None"
-	local goal, goalColor = "", C.Text
+-- What to do on this stage: goal (upper case), a countdown / progress ("" = none) and the
+-- goal's colour.
+local function stageGoal(state: Configuration, stagePhase: string): (string, string, Color3)
 	if stagePhase == "Explore" then
 		local chargeNow = state:GetAttribute("PortalCharge") or 0
 		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
 		if chargeNow > 0 then
-			goal = string.format("Opening the portal %d%%", math.floor(chargeNow * 100))
+			return "OPENING THE PORTAL", string.format("%d%%", math.floor(chargeNow * 100)), P.gold_200
 		elseif lockLeft > 0 then
-			goal, goalColor = "The portal is dormant: " .. UIKit.formatTime(lockLeft), C.TextMuted
-		else
-			goal = "Find the portal"
+			return "PORTAL DORMANT", UIKit.formatTime(lockLeft), P.ivory_100
 		end
+		return "FIND THE PORTAL", "", P.ivory_100
 	elseif stagePhase == "Boss" then
-		goal, goalColor = "Defeat the " .. tostring(state:GetAttribute("BossName") or state:GetAttribute("StageBoss") or "Queen"), P.crimson_300
+		return "DEFEAT THE " .. string.upper(tostring(state:GetAttribute("BossName") or state:GetAttribute("StageBoss") or "Queen")), "", P.crimson_300
 	elseif stagePhase == "Surge" then
 		local left = state:GetAttribute("SurgeLeft") or 0
-		goal, goalColor = left > 0 and string.format("Survive the surge · %ds", left) or "Survive the surge", P.crimson_300
+		return "SURVIVE THE SURGE", left > 0 and UIKit.formatTime(left) or "", P.crimson_300
 	elseif stagePhase == "Open" then
-		goal, goalColor = "Portal open", P.gold_300
+		return "PORTAL OPEN", "", P.gold_200
 	elseif stagePhase == "Travel" then
-		goal = "Travelling..."
+		return "TRAVELLING", "", P.ivory_100
 	end
+	return "", "", P.ivory_100
+end
+
+local function updateStage(state: Configuration)
+	local stageNo = state:GetAttribute("Stage") or 0
+	local stagePhase = state:GetAttribute("StagePhase") or "None"
+	local goal, count, goalColor = stageGoal(state, stagePhase)
 	local stageShown = stageNo > 0 and goal ~= ""
 	if ui.Stage.Visible ~= stageShown then
 		ui.Stage.Visible = stageShown
 		layout()
 	end
 	if stageShown then
-		-- Endless runs say so on the pill ("ENDLESS · STAGE 9", SwarmState Endless)
-		local num = (state:GetAttribute("Endless") == true and "ENDLESS · STAGE " or "STAGE ") .. tostring(stageNo)
+		-- Endless runs say so on the pill ("ENDLESS • STAGE 9", SwarmState Endless)
+		local num = (state:GetAttribute("Endless") == true and "ENDLESS • STAGE " or "STAGE ") .. tostring(stageNo)
 		if ui.StageNumber.Text ~= num then
 			ui.StageNumber.Text = num
 			UIAnim.Pop(ui.Stage, 0, 0.7)
@@ -35330,13 +35507,19 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		end
 		anim.StagePhase = stagePhase
 		ui.StageGoal.TextColor3 = goalColor
+		setText(ui.StageCount, count)
 		-- calm: a plain objective is news for a few seconds, then the pill is just
 		-- "STAGE N"; boss / surge / open portal and counting goals stay (urgent or moving)
-		local urgent = stagePhase ~= "Explore" or stageGoalMoving(goal)
-		local compactPill = not urgent and os.clock() - (anim.StageNewsAt or 0) > 8
-		if ui.StageGoal.Visible == compactPill then
-			ui.StageGoal.Visible = not compactPill
-			ui.StageDot.Visible = not compactPill
+		local urgent = stagePhase ~= "Explore" or count ~= ""
+		local calm = not urgent and os.clock() - (anim.StageNewsAt or 0) > 8
+		if ui.StageGoal.Visible == calm then
+			ui.StageGoal.Visible = not calm
+			ui.StageDot.Visible = not calm
+		end
+		local showCount = count ~= "" and not calm
+		if ui.StageCount.Visible ~= showCount then
+			ui.StageCount.Visible = showCount
+			ui.StageDot2.Visible = showCount
 		end
 	end
 
@@ -35346,17 +35529,20 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			anim.BannerStage = stageNo
 			-- joining mid-fight (reconnect, boss already up): no banner over the action
 			if stagePhase == "Explore" or stagePhase == "None" then
-				showStageBanner(stageNo, goal)
+				local sub = count ~= "" and (goal .. " • " .. count) or goal
+				showStageBanner(stageNo, sub)
 			end
 		end
 	end
+	return stagePhase
+end
 
+local function updateHealth(dt: number, nowT: number): (number, boolean)
 	-- health: the fill follows at once; the ivory trail (the damage chip) holds a beat
 	-- and then slides down behind it
 	local hp = player:GetAttribute("HP") or 0
 	local maxHp = math.max(1, player:GetAttribute("MaxHP") or 1)
 	local frac = math.clamp(hp / maxHp, 0, 1)
-	local nowT = os.clock()
 	if anim.LastFrac and frac < anim.LastFrac - 0.005 then
 		anim.TrailHoldUntil = nowT + 0.3
 	elseif anim.LastFrac and frac > anim.LastFrac + 0.01 and nowT - (anim.HealAt or 0) > 0.5 then
@@ -35371,14 +35557,19 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	elseif nowT >= (anim.TrailHoldUntil or 0) then
 		anim.HPTrail = math.max(frac, anim.HPTrail - dt * 0.45)
 	end
-	anim.HP += (frac - anim.HP) * math.min(1, dt * 14)
+	if math.abs(anim.HP - frac) > 0.0005 or anim.HPSet ~= anim.HP then
+		anim.HP += (frac - anim.HP) * math.min(1, dt * 14)
+		anim.HPSet = anim.HP
+		ui.HP.Set(anim.HP)
+	end
+	ui.HP.SetTrail(anim.HPTrail)
 	local shield = player:GetAttribute("Shield") or 0
-	ui.HP.Set(anim.HP)
-	ui.ShieldBar.Visible = shield > 0
+	if ui.ShieldBar.Visible ~= (shield > 0) then
+		ui.ShieldBar.Visible = shield > 0
+	end
 	if shield > 0 then
 		ui.ShieldBar.Size = UDim2.new(math.clamp(shield / maxHp, 0, 1), 0, 0, 4)
 	end
-	ui.HP.SetTrail(anim.HPTrail)
 
 	-- low health: the screen edge breathes crimson
 	local level = ui.VignetteLevel :: NumberValue
@@ -35392,10 +35583,13 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			-- reduced effects: a steady edge instead of a breathing one
 			level.Value = ClientSettings.Reduced() and 0.8 or (0.72 + 0.18 * (0.5 + 0.5 * math.sin(os.clock() * 4)))
 		end
-	elseif not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing then
+	elseif level.Value ~= 1 and (not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing) then
 		level.Value = 1
 	end
+	return frac, alive
+end
 
+local function updateXP(dt: number, nowT: number)
 	-- XP: glides to its value; on a level up it flashes and restarts from 0
 	local lvl = player:GetAttribute("Level") or 1
 	local xp, need = player:GetAttribute("XP") or 0, player:GetAttribute("XPNeeded") or 1
@@ -35411,13 +35605,15 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			end)
 		end
 		UIAnim.Punch(ui.Level, 0.4)
-		-- level-up burst: a bright sweep along the bar, a ring and gold sparks
+		UIAnim.Punch(ui.Medal, 0.4)
+		-- level-up burst: a bright sweep along the bar, a ring and gold sparks off the medallion
+		local at = UDim2.new(0, 13, 0.5, 0)
 		UIAnim.SweepOnce(ui.XP.Frame, P.ivory_100, 0.45, 0.1)
-		UIAnim.Ring(ui.XPRow, UDim2.new(0, 28, 0.5, 0), P.gold_200, 80, 0.5)
-		UIAnim.Sparks(ui.XPRow, UDim2.new(0, 28, 0.5, 0), P.gold_200, 8, 40, 0.55)
+		UIAnim.Ring(ui.XPRow, at, P.gold_200, 80, 0.5)
+		UIAnim.Sparks(ui.XPRow, at, P.gold_200, 8, 40, 0.55)
 		if not ClientSettings.Reduced() then
-			ui.Level.TextColor3 = P.ivory_100
-			UIAnim.Tween(ui.Level, 0.8, { TextColor3 = P.gold_300 })
+			ui.Level.TextColor3 = P.gold_200
+			UIAnim.Tween(ui.Level, 0.8, { TextColor3 = P.ivory_100 })
 		end
 	elseif anim.LastXPFrac and target > anim.LastXPFrac + 0.015 and nowT - (anim.XPSweepAt or 0) > 0.6 then
 		-- a gem burst: a quick glint along the bar
@@ -35426,82 +35622,84 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	end
 	anim.LastXPFrac = target
 	anim.Level = lvl
-	anim.XP += (target - anim.XP) * math.min(1, dt * 10)
-	if anim.XPShown ~= xp .. "/" .. need then
-		anim.XPShown = xp .. "/" .. need
-		anim.XPShowUntil = nowT + 3.5
+	if math.abs(anim.XP - target) > 0.0005 or anim.XPSet ~= anim.XP then
+		anim.XP += (target - anim.XP) * math.min(1, dt * 10)
+		anim.XPSet = anim.XP
+		ui.XP.Set(anim.XP)
 	end
-	local showXP = nowT < (anim.XPShowUntil or 0)
-	if ui.XP.Label.Visible ~= showXP then
-		ui.XP.Label.Visible = showXP
+	local str = string.format("%d / %d XP", xp, need)
+	if anim.XPShown ~= str then
+		anim.XPShown = str
+		ui.XP.Label.Text = str
 	end
-	ui.XP.Set(anim.XP, string.format("%d / %d XP", xp, need))
-	ui.Level.Text = "Lv. " .. tostring(lvl)
+	setText(ui.Level, "LV. " .. tostring(lvl))
+end
 
-	-- counters
+local function updateKills()
 	local kills = player:GetAttribute("Kills") or 0
-	if kills ~= anim.Kills then
-		ui.Kills.SetValue(UIKit.formatNumber(kills))
-		-- every 50th kill is a small celebration
-		if anim.Kills and kills > anim.Kills and math.floor(kills / 50) > math.floor(anim.Kills / 50) then
-			UIAnim.Punch(ui.Kills.Value, 0.35)
-			if not ClientSettings.Reduced() then
-				ui.Kills.Value.TextColor3 = P.gold_200
-				UIAnim.Tween(ui.Kills.Value, 0.8, { TextColor3 = C.Text })
-				local pos, w = ui.Counters.Position, ui.Counters.AbsoluteSize.X / math.max(0.01, host.Scale())
-				UIAnim.Sparks(ui.Frame, UDim2.fromOffset(pos.X.Offset - w + 28, pos.Y.Offset + 22), P.gold_200, 6, 30, 0.45)
-			end
-		end
-		anim.Kills = kills
+	if kills == anim.Kills then
+		return
 	end
-	updatePurse(dt)
+	ui.Kills.SetValue(UIKit.formatNumber(kills))
+	-- every 50th kill is a small celebration
+	if anim.Kills and kills > anim.Kills and math.floor(kills / 50) > math.floor(anim.Kills / 50) then
+		UIAnim.Punch(ui.Kills.Value, 0.35)
+		if not ClientSettings.Reduced() then
+			ui.Kills.Value.TextColor3 = P.gold_200
+			UIAnim.Tween(ui.Kills.Value, 0.8, { TextColor3 = C.Text })
+			UIAnim.Sparks(ui.Kills.Icon, UDim2.fromScale(0.5, 0.5), P.gold_200, 6, 30, 0.45)
+		end
+	end
+	anim.Kills = kills
+end
 
-	-- boss
+local function updateBoss(dt: number, state: Configuration)
 	local bossMax = state:GetAttribute("BossMaxHP") or 0
 	local bossShown = bossMax > 0
 	if ui.Boss.Visible ~= bossShown then
 		ui.Boss.Visible = bossShown
 		layout()
 	end
-	if bossShown then
-		local bfrac = math.clamp((state:GetAttribute("BossHP") or 0) / bossMax, 0, 1)
-		if not anim.BossShown then
-			anim.BossShown = true
-			anim.BossTrail = 1
-			anim.BossFill = 0 -- the bar fills with her name while she rises (BossIntro s)
-			ui.BossName.Text = string.upper(tostring(state:GetAttribute("BossName") or "Scorpion Queen"))
-			setBossArt(state:GetAttribute("BossId"))
-			UIAnim.Pop(ui.Boss, 0, 0.3)
-			UIAnim.Shake(ui.Boss, 7, 0.45)
-			if not ClientSettings.Reduced() then
-				ui.BossName.TextTransparency = 1
-				ui.BossName.TextStrokeTransparency = 1
-				UIAnim.Tween(ui.BossName, 0.7, { TextTransparency = 0, TextStrokeTransparency = 0.5 })
-				UIAnim.Pop(ui.BossName, 0.15, 1.6)
-			end
-			UIAnim.SweepOnce(ui.BossMeter.Frame, P.crimson_200, 0.8, 0.4)
-		end
-		anim.BossFill = math.min(1, (anim.BossFill or 1) + dt / math.max(0.3, tonumber(state:GetAttribute("BossIntro")) or 2))
-		bfrac = math.min(bfrac, anim.BossFill)
-		ui.BossMeter.Set(bfrac)
-		anim.BossTrail = math.max(bfrac, anim.BossTrail - dt * 0.25)
-		ui.BossMeter.SetTrail(anim.BossTrail)
-		local markAt = tonumber(state:GetAttribute("BossPhaseAt")) or 0
-		ui.BossMark.Visible = markAt > 0 and markAt < 1
-		-- crossing the phase marker: the bar shudders
-		if markAt > 0 and markAt < 1 and bfrac < markAt and anim.BossPhaseHit ~= true and anim.BossFill >= 1 then
-			anim.BossPhaseHit = true
-			UIAnim.Shake(ui.Boss, 8, 0.4)
-			UIAnim.SweepOnce(ui.BossMeter.Frame, P.ivory_100, 0.5, 0.3)
-			UIAnim.Punch(ui.BossName, 0.25)
-		end
-		ui.BossMark.Position = UDim2.new(markAt, ui.BossInset * (1 - markAt), 0, 36)
-	else
+	if not bossShown then
 		anim.BossShown = false
 		anim.BossPhaseHit = false
+		return
 	end
+	local bfrac = math.clamp((state:GetAttribute("BossHP") or 0) / bossMax, 0, 1)
+	if not anim.BossShown then
+		anim.BossShown = true
+		anim.BossTrail = 1
+		anim.BossFill = 0 -- the bar fills with her name while she rises (BossIntro s)
+		ui.BossName.Text = string.upper(tostring(state:GetAttribute("BossName") or "Scorpion Queen"))
+		setBossArt(state:GetAttribute("BossId"))
+		UIAnim.Pop(ui.Boss, 0, 0.3)
+		UIAnim.Shake(ui.Boss, 7, 0.45)
+		if not ClientSettings.Reduced() then
+			ui.BossName.TextTransparency = 1
+			ui.BossName.TextStrokeTransparency = 1
+			UIAnim.Tween(ui.BossName, 0.7, { TextTransparency = 0, TextStrokeTransparency = 0.5 })
+			UIAnim.Pop(ui.BossName, 0.15, 1.6)
+		end
+		UIAnim.SweepOnce(ui.BossMeter.Frame, P.crimson_200, 0.8, 0.4)
+	end
+	anim.BossFill = math.min(1, (anim.BossFill or 1) + dt / math.max(0.3, tonumber(state:GetAttribute("BossIntro")) or 2))
+	bfrac = math.min(bfrac, anim.BossFill)
+	ui.BossMeter.Set(bfrac)
+	anim.BossTrail = math.max(bfrac, anim.BossTrail - dt * 0.25)
+	ui.BossMeter.SetTrail(anim.BossTrail)
+	local markAt = tonumber(state:GetAttribute("BossPhaseAt")) or 0
+	ui.BossMark.Visible = markAt > 0 and markAt < 1
+	-- crossing the phase marker: the bar shudders
+	if markAt > 0 and markAt < 1 and bfrac < markAt and anim.BossPhaseHit ~= true and anim.BossFill >= 1 then
+		anim.BossPhaseHit = true
+		UIAnim.Shake(ui.Boss, 8, 0.4)
+		UIAnim.SweepOnce(ui.BossMeter.Frame, P.ivory_100, 0.5, 0.3)
+		UIAnim.Punch(ui.BossName, 0.25)
+	end
+	ui.BossMark.Position = UDim2.new(markAt, ui.BossInset * (1 - markAt), 0, 36)
+end
 
-	-- status line
+local function updateStatus(state: Configuration, phase: string, stagePhase: string, alive: boolean, reviveOpen: boolean)
 	local rewardNames = tostring(state:GetAttribute("RewardNames") or "")
 	local rewardMine = string.find(tostring(state:GetAttribute("RewardIds") or ""), "," .. tostring(player.UserId) .. ",", 1, true) ~= nil
 	if state:GetAttribute("Frozen") and rewardNames ~= "" and not state:GetAttribute("LevelUpPause") then
@@ -35549,6 +35747,35 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	end
 end
 
+function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
+	refreshBuff()
+	local phase = state:GetAttribute("Phase") or "Lobby"
+	local runTime = state:GetAttribute("RunTime") or 0
+
+	-- timer: punches each new minute
+	setText(ui.Timer, UIKit.formatClock(runTime))
+	local minute = math.floor(runTime / 60)
+	if minute ~= anim.Minute then
+		if anim.Minute ~= nil then
+			UIAnim.Punch(ui.TimerPill, 0.15)
+			if not ClientSettings.Reduced() then
+				ui.Timer.TextColor3 = P.gold_200
+				UIAnim.Tween(ui.Timer, 0.9, { TextColor3 = C.Text })
+			end
+		end
+		anim.Minute = minute
+	end
+
+	local stagePhase = updateStage(state)
+	local nowT = os.clock()
+	local _, alive = updateHealth(dt, nowT)
+	updateXP(dt, nowT)
+	updateKills()
+	updatePurse(dt)
+	updateBoss(dt, state)
+	updateStatus(state, phase, stagePhase, alive, reviveOpen)
+end
+
 -- Health number: rebuilt only when HP / MaxHP / Shield change (attribute signals on the
 -- player, which survive respawns and revives), never per frame.
 local function refreshHpText()
@@ -35587,7 +35814,7 @@ function Hud.SetVisible(on: boolean)
 	end
 end
 
--- Top of the ability bar.
+-- Top of the ability panel.
 function Hud.BarTop(): number
 	return ui.BarTop or 600
 end
@@ -35601,18 +35828,22 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	host = h
 	local frame = new("Frame", { Name = "HUD", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = Theme.Z.Hud }, root)
 	ui.Frame = frame
-	buildTop(frame)
+	buildTimer(frame)
 	buildStage(frame)
+	buildBoss(frame)
+	buildCounters(frame)
+	buildVitals(frame)
 	buildBanner(frame)
 	buildBuffChip(frame)
 	buildBar(frame)
-	buildPurse(frame)
 	buildStatus(frame)
 	buildVignette(fxGui)
 	for _, name in ipairs({ "HP", "MaxHP", "Shield" }) do
 		player:GetAttributeChangedSignal(name):Connect(refreshHpText)
 	end
 	refreshHpText()
+	-- the counters grow with their numbers; keep the timer clear of them
+	ui.Counters:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
 	h.OnRelayout(layout)
 	layout()
 end
@@ -37478,7 +37709,14 @@ local function picture(f: Frame, name: string, image: string, o: Opts, tint: Col
 			task.wait(FALLBACK_POLL)
 			waited += FALLBACK_POLL
 		end
-		-- never loaded: the drawn icon stays (it is visible by now)
+		-- not loaded yet: the drawn icon stays until the picture arrives, never under it
+		if fb.Parent and img.Parent then
+			img:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+				if img.IsLoaded and fb.Parent then
+					fb:Destroy()
+				end
+			end)
+		end
 	end)
 end
 
@@ -38043,6 +38281,7 @@ local function buildChip(frame: Frame)
 	UIKit.padding(face, 0, 18, 0, 16)
 	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 	ui.Chip = holder
+	ui.ChipFace = face
 	local function sep(order: number)
 		new("Frame", { BackgroundColor3 = C.Gold, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 22), LayoutOrder = order }, face)
 	end
@@ -38052,6 +38291,29 @@ local function buildChip(frame: Frame)
 	sep(4)
 	ui.Gold = UIKit.Chip(face, "coin", "Gold", "0", { LayoutOrder = 5, Size = UDim2.fromOffset(0, 48) }, { Size = 22 })
 	ui.Gold.Value.TextColor3 = P.gold_200
+end
+
+-- CHARACTERS shows the stats inline in the top bar: no pill box (face, edge, shadow) behind them
+local function setChipFlat(flat: boolean)
+	local face = ui.ChipFace
+	if not face or (ui.ChipFlat == true) == flat then
+		return
+	end
+	if ui.ChipAlpha == nil then
+		ui.ChipAlpha = face.BackgroundTransparency
+	end
+	ui.ChipFlat = flat
+	face.BackgroundTransparency = flat and 1 or ui.ChipAlpha
+	local edge = face:FindFirstChildOfClass("UIStroke")
+	if edge then
+		edge.Enabled = not flat
+	end
+	for _, name in ipairs({ "Shadow", "ShadowWide" }) do
+		local sh = ui.Chip:FindFirstChild(name)
+		if sh and sh:IsA("GuiObject") then
+			sh.Visible = not flat
+		end
+	end
 end
 
 --[[
@@ -38322,7 +38584,7 @@ local function buildModes(frame: Frame)
 	ui.EndlessRow = holder
 	ui.EndlessEdge = face:FindFirstChildOfClass("UIStroke")
 	UIKit.padding(face, 0, 12, 0, 12)
-	ui.EndlessToggle = UIKit.Toggle(face, "Endless", "cycle", "No win · stages get ever harder", player:GetAttribute("Endless") == true, function(on)
+	ui.EndlessToggle = UIKit.Toggle(face, "Endless", "cycle", "Stages never end · harder each stage", player:GetAttribute("Endless") == true, function(on)
 		endlessSentAt = os.clock()
 		Remotes.Get("SetEndless"):FireServer(on)
 	end, { Size = UDim2.fromScale(1, 1) })
@@ -38663,6 +38925,7 @@ local function relayout()
 	local plateH = (browse and 158 or 104) + (compact and 16 or 0)
 	local heroFrac = 0.5
 
+	setChipFlat(not portrait and current == "Characters")
 	if portrait then
 		local logoScale = math.clamp((W - 2 * M) / 380, 0.66, 0.85)
 		ui.LogoScale.Scale = logoScale
@@ -38716,7 +38979,7 @@ local function relayout()
 		local logoY = math.max(ins.Top + 2, 14)
 		ui.Logo.Position = UDim2.fromOffset(M, logoY)
 		ui.Chip.AnchorPoint = Vector2.new(1, 0)
-		ui.Chip.Position = UDim2.fromOffset(W - M, chipY)
+		ui.Chip.Position = UDim2.fromOffset(W - M, current == "Characters" and math.max(0, math.floor((ins.Top - 48) / 2)) or chipY)
 		-- PARTY pill left of the stats chip
 		ui.PartyCornerBtn.Instance.Visible = false
 		ui.PartyBtn.Instance.Visible = true
@@ -39842,10 +40105,12 @@ function LootUI.Layout()
 		x, w = M, W - 2 * M
 		y = (els.BarBottom or 400) + 8
 	else
-		local plateLeft = els.Plate and els.Plate.Position.X.Offset or (W / 2 - 210)
+		-- left of the centred HP panel, under the HUD's top-left stage pill
+		local plate = els.Plate
+		local plateLeft = plate and (plate.Position.X.Offset - plate.AnchorPoint.X * plate.Size.X.Offset) or (W / 2 - 210)
 		x = M + 4
 		w = math.max(140, plateLeft - x - 16)
-		y = math.max(ins.Top, 0) + 10
+		y = math.max(math.max(ins.Top, 0) + 10, (els.LeftBottom or 0) + 8)
 	end
 	local per = math.max(1, math.floor((w + 5) / 35))
 	local rows = math.max(1, math.ceil(#items / per))
@@ -40740,21 +41005,27 @@ return MenuArenas
 	MenuCharacters.lua
 	The CHARACTERS screen of the menu. The inspected hero stands on the dais in the middle
 	of the 3D scene (Showcase), so the screen is two panels around it and nothing covers it:
-	  left   the roster: one row per character with its class picture (hero_<Id>, drawn
-	         class icon as stand-in) and its name in serif; the inspected row has a bright
-	         gold border and gold name, a gold check marks the selected hero, a lock the
-	         locked ones
-	  right  the inspected character: portrait (art/portraits, drawn class icon as
-	         stand-in), NAME and status pill (SELECTED / OWNED / LOCKED), role in gold caps,
-	         the intro line, two mini cards (STARTING WEAPON with its tile, TRAIT), the
-	         EFFECT / STRENGTH / TRADEOFF rows, for a locked hero an UNLOCK card (the
-	         achievement and its progress bar, or the gold price), the big action button
-	         (gold SELECT <NAME> / UNLOCK • N GOLD, grey LOCKED • <goal>), then SKINS: square
-	         tiles (EQUIPPED / OWNED / R$ / SOON under each), the skin name and its button
-	         (equip, Robux skin passes, the Starter Pack gold trim, "coming soon")
-	Phones in landscape: the roster becomes two columns of name tiles when rows get too
-	short. Portrait: character tabs on top (two rows of four), the hero in between, the
-	details panel below.
+	  top     a compact BACK and the spaced serif title "C H A R A C T E R S" over a gold
+	          rule (UIKit.TitleBar) in the Roblox top-bar row; LobbyScreen shows the BEST /
+	          WINS / GOLD stats inline on the right
+	  left    the roster: one row per character (hero badge art, serif name), rows split by
+	          thin lines; the selected hero shows a gold check and EQUIPPED, locked heroes a
+	          lock, the inspected one a gold border, a gold accent bar and a PREVIEW pill
+	  centre  under the hero: its name in spaced caps between gold rules and
+	          "Preview • <skin>"
+	  right   framed portrait (art/portraits, drawn class icon as stand-in), the name, a
+	          status pill (SELECTED / OWNED / LOCKED with a lock), role in gold caps, the
+	          intro line; a rule; STARTING WEAPON (tile) | TRAIT (green badge); EFFECT (a big
+	          gold "+20%" when the trait text starts with one, the rest, the weapon list),
+	          STRENGTH, TRADEOFF (red); for a locked hero the UNLOCK block (achievement and
+	          big "2 / 4" with a gold bar, or the gold price); the action button (gold
+	          SELECT <NAME> / UNLOCK • N GOLD, grey "REACH STAGE 4 TO UNLOCK"); SKINS: skin
+	          cards (swatch, name, OWNED / SKIN EQUIPPED / SOON / R$ pill, a check on the
+	          equipped one) and, for a skin not owned, its GET SKIN / COMING SOON button
+	Phones in landscape: the roster turns into two columns of tiles when rows get too short;
+	when the details don't fit, the action button is pinned at the bottom of the panel.
+	Portrait: character tabs on top (two rows of four), the hero in between, the details
+	panel below.
 
 	Tapping a skin previews it on the dais; an owned skin is equipped at once (as before).
 	Server: BuyCharacter / SelectCharacter / EquipSkin (GoldSystem validates everything),
@@ -40782,9 +41053,10 @@ local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 
-local SWATCH = 52 -- skin tile size (reference px)
-local LABEL_W = 86 -- width of the EFFECT / STRENGTH / TRADEOFF column
-local ACTION_H = 48 -- the SELECT / UNLOCK button
+local LABEL_W = 96 -- width of the EFFECT / STRENGTH / TRADEOFF / UNLOCK column
+local ACTION_H = 46 -- the SELECT / UNLOCK button
+local PORTRAIT = 84 -- framed portrait in the details head
+local SKIN_GAP = 8
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -40803,11 +41075,16 @@ local function skinPassId(skinId: string): number?
 	return nil
 end
 
+local function skinName(skinId: string): string
+	local skin = CharacterData.Skins[skinId]
+	return skin and skin.Name or "Default"
+end
+
 -- Short goal for the locked button: the achievement's first clause when it is short
--- ("Reach stage 4"), else its name ("Field Engineer").
-local function shortGoal(a: { [string]: any }?): string
+-- ("Reach stage 4"), else nil (the button names the achievement instead).
+local function shortGoal(a: { [string]: any }?): string?
 	if not a then
-		return "Achievement"
+		return nil
 	end
 	local desc = tostring(a.Description or "")
 	local first = string.match(desc, "^([^:%.]+)") or desc
@@ -40815,7 +41092,26 @@ local function shortGoal(a: { [string]: any }?): string
 	if #first > 0 and #first <= 22 then
 		return first
 	end
-	return a.Name or "Achievement"
+	return nil
+end
+
+-- Trait text split for the EFFECT row: a leading "+N%" (big number, or nil), the rest as
+-- a sentence, and the weapon list after a colon (" • " separated, or nil).
+local function splitEffect(s: string): (string?, string, string?)
+	local big, rest = string.match(s, "^(%+%d+%%)%s+(.+)$")
+	local body = rest or s
+	local main, list = string.match(body, "^(.-):%s+(.+)$")
+	if main and list then
+		list = string.gsub(list, "%.$", "")
+		list = string.gsub(list, ",%s*", "  •  ")
+		body = main .. "."
+	else
+		list = nil
+	end
+	if big then
+		body = string.upper(string.sub(body, 1, 1)) .. string.sub(body, 2)
+	end
+	return big, body, list
 end
 
 function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
@@ -40831,45 +41127,85 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		return skinId == "Default" or p.OwnedSkins[skinId] == true
 	end
 
-	ui.Header = UIKit.ScreenHeader(screen, "CHARACTERS", ctx.Back)
+	ui.Header = UIKit.TitleBar(screen, "Characters", ctx.Back)
 
+	------------------------------------------------------------------------------------
 	-- left: the roster (landscape) / tabs (portrait)
-	local listHolder, listFace = UIKit.Surface(screen, { Name = "List", Radius = Theme.Radius.L })
+	------------------------------------------------------------------------------------
+	local listHolder, listFace = UIKit.Surface(screen, { Name = "List", Radius = Theme.Radius.L, Transparency = 0.06 })
 	ui.List = listHolder
-	UIKit.pad(listFace, 12)
-	ui.ListLayout = UIKit.list(listFace, { Padding = UDim.new(0, 8) })
+	UIKit.padding(listFace, 10, 10, 10, 10)
+	ui.ListLayout = UIKit.list(listFace, { Padding = UDim.new(0, 0) })
 	ui.Rows = {}
-	ui.Marks = {}
 	for i, id in ipairs(CharacterData.Order) do
 		local def = CharacterData.Characters[id]
-		local row = UIKit.Button(listFace, {
-			Title = def.Name,
-			Icon = Icons.CharacterIcon(id),
-			IconSize = 38,
-			TitleStyle = "H2",
-			TitleSize = Theme.TextSize.H2,
-			Align = "Left",
+		local hit = new("TextButton", {
+			Name = id,
+			Text = def.Name, -- invisible: tools / a11y find the row by it
+			TextTransparency = 1,
+			AutoButtonColor = false,
+			BackgroundColor3 = P.slate_700,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, 64),
 			LayoutOrder = i,
-			Shadow = false,
-			Name = id,
-			OnClick = function()
-				MenuCharacters._inspect(id)
-			end,
-		})
-		ui.Rows[id] = row
-		-- state mark on the right edge (gold check = selected, lock = locked)
-		ui.Marks[id] = { Frame = new("Frame", {
-			Name = "Mark",
-			BackgroundTransparency = 1,
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -14, 0.5, 0),
-			Size = UDim2.fromOffset(20, 20),
-			ZIndex = 4,
-		}, row.Face), State = "" }
+		}, listFace)
+		UIKit.corner(hit, Theme.Radius.M)
+		UIKit.Focusable(hit)
+		local edge = UIKit.stroke(hit, P.gold_400, 1.5, 1)
+		local accent = new("Frame", { Name = "Accent", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(0, 4, 1, -12), Visible = false, ZIndex = 3 }, hit)
+		UIKit.corner(accent, 2)
+		local sep = UIKit.Hairline(hit, { Name = "Sep", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 8, 1, 0), Size = UDim2.new(1, -16, 0, 1), BackgroundTransparency = 0.82 })
+		local icon = Icons.Character(hit, id, { Size = 46, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0) })
+		local name = text(hit, "H2", def.Name, { Name = "CharName", TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, Theme.TextSize.H2)
+		-- right side marks: check + EQUIPPED, lock, PREVIEW
+		local marks = new("Frame", { Name = "Marks", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.new(0, 170, 1, 0) }, hit)
+		UIKit.list(marks, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+		local check = Icons.Draw(marks, "check", { Size = 20, Color = P.gold_300, Back = P.slate_900 })
+		check.LayoutOrder = 1
+		local equipped = text(marks, "Label", "EQUIPPED", { Name = "Equipped", LayoutOrder = 2, Size = UDim2.fromOffset(0, TS(13) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200 }, 13)
+		local lock = Icons.Draw(marks, "lock", { Size = 18, Color = P.stone_300, Back = P.slate_900 })
+		lock.LayoutOrder = 3
+		local preview = UIKit.StatusPill(marks, "PREVIEW", { LayoutOrder = 4, Size = UDim2.fromOffset(0, TS(11) + 12) })
+		preview.TextSize = TS(11)
+		UIKit.SetStatus(preview, "PREVIEW")
+		preview.TextColor3 = P.gold_200
+		preview.BackgroundColor3 = P.slate_950
+		local pe = preview:FindFirstChild("StatusEdge") :: UIStroke?
+		if pe then
+			pe.Color = P.gold_400
+			pe.Transparency = 0.15
+		end
+		UIAnim.Button(hit)
+		hit.MouseEnter:Connect(function()
+			if inspChar ~= id then
+				hit.BackgroundTransparency = 0.82
+			end
+		end)
+		hit.MouseLeave:Connect(function()
+			if inspChar ~= id then
+				hit.BackgroundTransparency = 1
+			end
+		end)
+		hit.Activated:Connect(function()
+			UIKit.Click()
+			MenuCharacters._inspect(id)
+		end)
+		ui.Rows[id] = { Instance = hit, Edge = edge, Accent = accent, Sep = sep, Icon = icon, Name = name, Marks = marks, Check = check, Equipped = equipped, Lock = lock, Preview = preview, Mode = "" }
 	end
 
+	------------------------------------------------------------------------------------
+	-- centre: the hero's name under the dais
+	------------------------------------------------------------------------------------
+	ui.Centre = new("Frame", { Name = "HeroName", BackgroundTransparency = 1, Size = UDim2.fromOffset(420, 60) }, screen)
+	ui.CentreTitle = UIKit.TitleRule(ui.Centre, "", { Position = UDim2.fromOffset(0, 0) }, Theme.TextSize.H3 + 2)
+	ui.CentreTitle.Title.FontFace = Theme.Font.Display
+	ui.CentreTitle.Title.TextColor3 = P.ivory_100
+	ui.CentreSub = text(ui.Centre, "Body", "", { Name = "Preview", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, TS(15) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_300 }, 15)
+
+	------------------------------------------------------------------------------------
 	-- right: details
+	------------------------------------------------------------------------------------
 	local detailHolder, detailFace = UIKit.Surface(screen, { Name = "Details", Radius = Theme.Radius.L, Transparency = 0.04 })
 	ui.Detail = detailHolder
 	local scroll = new("ScrollingFrame", {
@@ -40883,94 +41219,102 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, detailFace)
-	UIKit.padding(scroll, 14, 18, 14, 18)
+	UIKit.padding(scroll, 16, 18, 14, 18)
 	ui.DetailList = UIKit.list(scroll, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Left })
 	ui.Scroll = scroll
 	-- footer for the action button when the details don't fit (phones): always in view
 	ui.Footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Visible = false, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) }, detailFace)
 	UIKit.padding(ui.Footer, 6, 18, 12, 18)
-	ui.FooterRule = new("Frame", { BackgroundColor3 = C.PanelEdge, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), Position = UDim2.fromOffset(0, -6) }, ui.Footer)
+	UIKit.Hairline(ui.Footer, { Position = UDim2.fromOffset(0, -6) })
 
-	-- head: portrait | NAME / ROLE | status pill
-	local headH = math.max(52, TS(28) + TS(12) + 10)
-	local head = new("Frame", { Name = "Head", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, headH), LayoutOrder = 1 }, scroll)
-	ui.PortraitWell = new("Frame", {
-		Name = "Portrait",
-		BackgroundColor3 = P.slate_950,
-		BackgroundTransparency = 0.1,
-		Size = UDim2.fromOffset(headH, headH),
-		ClipsDescendants = true,
-	}, head)
+	-- head: framed portrait | NAME + pill / ROLE / intro
+	local head = new("Frame", { Name = "Head", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, PORTRAIT), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, scroll)
+	ui.PortraitWell = new("Frame", { Name = "Portrait", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, Size = UDim2.fromOffset(PORTRAIT, PORTRAIT), ClipsDescendants = true }, head)
 	UIKit.corner(ui.PortraitWell, Theme.Radius.M)
-	UIKit.stroke(ui.PortraitWell, P.gold_400, 1.5, 0.25)
-	local nameX = headH + 12
-	ui.Name = text(head, "H1", "", {
-		Name = "CharName",
-		FontFace = Theme.Font.Display,
-		Position = UDim2.fromOffset(nameX, 0),
-		Size = UDim2.new(1, -(nameX + 110), 0, TS(28) + 6),
-		TextTruncate = Enum.TextTruncate.AtEnd,
-	}, 28)
-	ui.Role = text(head, "Label", "", { Name = "Role", Position = UDim2.fromOffset(nameX, TS(28) + 8), Size = UDim2.new(1, -nameX, 0, TS(13) + 4), TextColor3 = P.gold_300 }, 13)
-	ui.State = UIKit.StatusPill(head, "OWNED", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 4) })
-	ui.Desc = text(scroll, "Body", "", {
+	UIKit.stroke(ui.PortraitWell, P.gold_400, 2, 0.1)
+	local col = new("Frame", { Name = "Column", BackgroundTransparency = 1, Position = UDim2.fromOffset(PORTRAIT + 14, 0), Size = UDim2.new(1, -(PORTRAIT + 14), 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, head)
+	UIKit.list(col, { Padding = UDim.new(0, 2) })
+	local nameRow = new("Frame", { Name = "NameRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, TS(30) + 6), LayoutOrder = 1 }, col)
+	ui.Name = text(nameRow, "H1", "", { Name = "CharName", FontFace = Theme.Font.Display, Size = UDim2.new(1, -120, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, 30)
+	ui.State = UIKit.StatusPill(nameRow, "OWNED", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(0, Theme.Size.Badge + 10) })
+	ui.StatePad = ui.State:FindFirstChildOfClass("UIPadding")
+	ui.StateLock = Icons.Draw(ui.State, "lock", { Size = 14, Color = P.crimson_300, Back = P.slate_950, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -4, 0.5, 0) })
+	ui.Role = text(col, "Label", "", { Name = "Role", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(15) + 4), TextColor3 = P.gold_300 }, 15)
+	ui.Desc = text(col, "Body", "", {
 		Name = "Intro",
-		LayoutOrder = 2,
+		LayoutOrder = 3,
 		TextWrapped = true,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = P.ivory_200,
 	}, 15)
+	UIKit.Divider(scroll, 10, { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 12) })
 
-	-- two mini cards: STARTING WEAPON (tile) and TRAIT
-	local factH = math.max(50, TS(11) + TS(16) + 18)
+	-- STARTING WEAPON | TRAIT, split by a thin vertical line
+	local factH = math.max(52, TS(12) + TS(18) + 16)
 	local facts = new("Frame", { Name = "Facts", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, factH), LayoutOrder = 3 }, scroll)
-	local function miniCard(x: number, caption: string): (Frame, TextLabel, Frame)
-		local card = UIKit.Panel(facts, { Name = caption, Position = UDim2.new(x, x > 0 and 5 or 0, 0, 0), Size = UDim2.new(0.5, -5, 1, 0) }, true)
-		local well = new("Frame", { Name = "Well", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(40, 40) }, card)
-		text(card, "Caption", UIKit.track(caption), { Position = UDim2.fromOffset(56, 6), Size = UDim2.new(1, -60, 0, TS(11) + 2), TextTruncate = Enum.TextTruncate.AtEnd }, 11)
-		local value = text(card, "BodyStrong", "", { Position = UDim2.fromOffset(56, 8 + TS(11)), Size = UDim2.new(1, -60, 0, TS(16) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
-		return card, value, well
+	new("Frame", { Name = "Split", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 1, 1, -8) }, facts)
+	local function fact(x: number, caption: string): (TextLabel, Frame)
+		local half = new("Frame", { Name = caption, BackgroundTransparency = 1, Position = UDim2.new(x, x > 0 and 14 or 0, 0, 0), Size = UDim2.new(0.5, -14, 1, 0) }, facts)
+		local well = new("Frame", { Name = "Well", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(48, 48) }, half)
+		UIKit.SectionLabel(half, caption, P.gold_300, { Position = UDim2.fromOffset(60, 4), Size = UDim2.new(1, -60, 0, TS(12) + 2) })
+		local value = text(half, "BodyStrong", "", { Position = UDim2.fromOffset(60, 8 + TS(12)), Size = UDim2.new(1, -60, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, 18)
+		return value, well
 	end
-	local _, weaponName, weaponWell = miniCard(0, "Starting weapon")
-	ui.Weapon, ui.WeaponHolder = weaponName, weaponWell
-	local _, bonus, traitWell = miniCard(0.5, "Trait")
+	ui.Weapon, ui.WeaponHolder = fact(0, "Starting weapon")
+	local bonus, traitWell = fact(0.5, "Trait")
 	ui.Bonus = bonus
-	ui.Bonus.TextColor3 = P.moss_200
-	local traitDisc = new("Frame", { BackgroundColor3 = P.moss_800, Size = UDim2.fromScale(1, 1) }, traitWell)
+	local traitDisc = new("Frame", { BackgroundColor3 = P.moss_700, Size = UDim2.fromScale(1, 1) }, traitWell)
 	UIKit.corner(traitDisc, 999)
 	UIKit.stroke(traitDisc, P.moss_300, 1.5, 0.3)
-	Icons.Draw(traitDisc, "sparkle", { Size = 24, Color = P.moss_100, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.moss_800 })
+	Icons.Draw(traitDisc, "sparkle", { Size = 26, Color = P.ivory_100, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.moss_700 })
+	UIKit.Hairline(scroll, { LayoutOrder = 4 })
 
-	-- EFFECT / STRENGTH / TRADEOFF: a caption column and a wrapped line each
-	local function infoRow(order: number, caption: string, color: Color3): TextLabel
+	-- EFFECT (big "+N%" + text + weapon list), STRENGTH, TRADEOFF
+	local function infoRow(order: number, caption: string, color: Color3): (Frame, Frame)
 		local row = new("Frame", { Name = caption, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, scroll)
-		UIKit.SectionLabel(row, caption, color, { Size = UDim2.fromOffset(LABEL_W, TS(14) + 4) })
-		return text(row, "Small", "", {
-			Position = UDim2.fromOffset(LABEL_W + 4, 0),
-			Size = UDim2.new(1, -(LABEL_W + 4), 0, 0),
+		UIKit.SectionLabel(row, caption, color, { Size = UDim2.fromOffset(LABEL_W, TS(15) + 6) })
+		local body = new("Frame", { Name = "Body", BackgroundTransparency = 1, Position = UDim2.fromOffset(LABEL_W, 0), Size = UDim2.new(1, -LABEL_W, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, row)
+		return row, body
+	end
+	local function wrapped(parent: Instance, style: string, color: Color3, size: number?, props: { [string]: any }?): TextLabel
+		local l = text(parent, style, "", {
+			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			TextWrapped = true,
-			TextColor3 = C.Text,
+			TextColor3 = color,
 			TextYAlignment = Enum.TextYAlignment.Top,
-		})
+		}, size)
+		if props then
+			for k, v in pairs(props) do
+				(l :: any)[k] = v
+			end
+		end
+		return l
 	end
-	ui.Trait = infoRow(4, "Effect", P.gold_300)
-	ui.Strength = infoRow(5, "Strength", P.gold_300)
-	ui.Tradeoff = infoRow(6, "Tradeoff", P.crimson_300)
+	local _, effBody = infoRow(5, "Effect", P.gold_300)
+	UIKit.list(effBody, { Padding = UDim.new(0, 2) })
+	local effTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, effBody)
+	ui.EffectBig = text(effTop, "Display", "", { Name = "Big", Size = UDim2.fromOffset(0, TS(26) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, Position = UDim2.fromOffset(0, -6) }, 26)
+	ui.Trait = wrapped(effTop, "Body", P.ivory_100, 15)
+	ui.EffectList = wrapped(effBody, "Small", P.ivory_300, 12, { LayoutOrder = 2, Name = "Weapons" })
+	local _, strBody = infoRow(6, "Strength", P.gold_300)
+	ui.Strength = wrapped(strBody, "Body", P.ivory_100, 15)
+	local _, tradeBody = infoRow(7, "Tradeoff", P.crimson_300)
+	ui.Tradeoff = wrapped(tradeBody, "Body", P.crimson_300, 15)
 
-	-- UNLOCK card (locked heroes): goal name + progress, the rule, a gold bar
-	local unlockCard = UIKit.Panel(scroll, { Name = "Unlock", LayoutOrder = 7, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, true)
-	ui.UnlockCard = unlockCard
-	UIKit.padding(unlockCard, 8, 12, 10, 12)
-	UIKit.list(unlockCard, { Padding = UDim.new(0, 4) })
-	local uTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, TS(16) + 4), LayoutOrder = 1 }, unlockCard)
-	UIKit.SectionLabel(uTop, "Unlock", P.gold_300, { Size = UDim2.fromOffset(LABEL_W, TS(16) + 4) })
-	ui.UnlockName = text(uTop, "Label", "", { Position = UDim2.fromOffset(LABEL_W + 4, 0), Size = UDim2.new(1, -(LABEL_W + 84), 1, 0), TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd }, Theme.TextSize.Body)
-	ui.UnlockCount = text(uTop, "Number", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 80, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 }, Theme.TextSize.Body)
-	ui.UnlockRule = text(unlockCard, "Small", "", { Name = "Rule", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.ivory_200 })
-	ui.UnlockMeter = UIKit.Meter(unlockCard, { Size = UDim2.new(1, 0, 0, 8), Color = P.gold_400, LayoutOrder = 3 } :: any)
+	-- UNLOCK block (locked heroes): goal + big progress, the rule, a gold bar
+	local unlock = new("Frame", { Name = "Unlock", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 8 }, scroll)
+	ui.UnlockCard = unlock
+	UIKit.list(unlock, { Padding = UDim.new(0, 4) })
+	UIKit.Hairline(unlock, { LayoutOrder = 0 })
+	local uTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, TS(30) + 6), LayoutOrder = 1 }, unlock)
+	UIKit.SectionLabel(uTop, "Unlock", P.gold_300, { Size = UDim2.fromOffset(LABEL_W, TS(30) + 6) })
+	ui.UnlockName = text(uTop, "H2", "", { Position = UDim2.fromOffset(LABEL_W, 0), Size = UDim2.new(1, -(LABEL_W + 120), 1, 0), TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd }, Theme.TextSize.H2)
+	ui.UnlockCount = text(uTop, "Display", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 160, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 }, 28)
+	ui.UnlockRule = wrapped(unlock, "Body", P.ivory_200, 15, { Name = "Rule", LayoutOrder = 2 })
+	ui.UnlockMeter = UIKit.Meter(unlock, { Size = UDim2.new(1, 0, 0, 10), Color = P.gold_400, LayoutOrder = 3 } :: any)
 	ui.UnlockMeter.Frame.Name = "Progress"
 
 	ui.Action = UIKit.Button(scroll, {
@@ -40981,7 +41325,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		IconSize = 20,
 		Align = "Center",
 		Size = UDim2.new(1, 0, 0, ACTION_H),
-		LayoutOrder = 8,
+		LayoutOrder = 9,
 		Name = "Action",
 		OnClick = function()
 			local p = profile()
@@ -41004,26 +41348,21 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end,
 	})
-	local div = new("Frame", { Name = "Rule", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 7), LayoutOrder = 9 }, scroll)
-	new("Frame", { BackgroundColor3 = C.PanelEdge, BackgroundTransparency = 0.55, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.new(1, 0, 0, 1) }, div)
-	-- SKINS, the inspected skin's name, its state or its button (EQUIP / GET SKIN /
-	-- COMING SOON) on one line, the tiles under it
-	local skinRowH = math.max(36, TS(16) + 10)
-	local skinRow = new("Frame", { Name = "SkinRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, skinRowH), LayoutOrder = 10 }, scroll)
-	UIKit.SectionLabel(skinRow, "Skins", P.gold_300, { Size = UDim2.fromOffset(LABEL_W - 20, skinRowH) })
-	ui.SkinName = text(skinRow, "BodyStrong", "", { Position = UDim2.fromOffset(LABEL_W - 16, 0), Size = UDim2.new(1, -(LABEL_W - 16 + 168), 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
-	ui.SkinState = text(skinRow, "Caption", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 160, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 })
-	ui.Swatches = new("Frame", { Name = "Swatches", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), LayoutOrder = 11, AutomaticSize = Enum.AutomaticSize.Y }, scroll)
-	UIKit.list(ui.Swatches, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), Wraps = true })
-	ui.SkinAction = UIKit.Button(skinRow, {
+
+	-- SKINS header (label, rule, the button for a skin not owned) and the skin cards
+	local skinHeadH = math.max(34, TS(14) + 14)
+	local skinHead = new("Frame", { Name = "SkinHead", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, skinHeadH), LayoutOrder = 10 }, scroll)
+	UIKit.SectionLabel(skinHead, "Skins", P.gold_300, { Size = UDim2.fromOffset(64, skinHeadH) }).TextSize = TS(15)
+	ui.SkinRule = UIKit.Hairline(skinHead, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 70, 0.5, 0), Size = UDim2.new(1, -70, 0, 1) })
+	ui.SkinAction = UIKit.Button(skinHead, {
 		Kind = "Outline",
 		Title = "GET SKIN",
 		Icon = "robux",
-		IconSize = 18,
+		IconSize = 16,
 		Align = "Center",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromScale(1, 0),
-		Size = UDim2.new(0, 160, 1, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		Size = UDim2.new(0, 170, 1, 0),
 		Shadow = false,
 		OnClick = function()
 			local p = profile()
@@ -41042,8 +41381,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end,
 	})
+	ui.Swatches = new("Frame", { Name = "Swatches", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), LayoutOrder = 11, AutomaticSize = Enum.AutomaticSize.Y }, scroll)
+	ui.SwatchLayout = UIKit.list(ui.Swatches, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, SKIN_GAP), Wraps = true })
+	ui.SkinW = 104
 
-	local swatches: { [string]: { Hit: TextButton, Stroke: UIStroke, Lock: Frame, Badge: TextLabel } } = {}
+	local swatches: { [string]: { [string]: any } } = {}
 
 	local function buildSwatches()
 		for _, c in ipairs(ui.Swatches:GetChildren()) do
@@ -41052,35 +41394,41 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		table.clear(swatches)
+		local cardH = 34 + TS(14) + TS(10) + 32
 		for order, skinId in ipairs(CharacterData.SkinsFor(inspChar)) do
 			local look = CharacterData.ResolveLook(inspChar, skinId)
-			local cell = new("Frame", { Name = skinId, BackgroundTransparency = 1, Size = UDim2.fromOffset(SWATCH + 8, SWATCH + TS(10) + 6), LayoutOrder = order }, ui.Swatches)
 			local hit = new("TextButton", {
-				Name = "Tile",
+				Name = skinId,
 				Text = "",
 				AutoButtonColor = false,
-				BackgroundColor3 = look.Colors.Torso,
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(0.5, 0),
-				Size = UDim2.fromOffset(SWATCH, SWATCH),
-				ClipsDescendants = true,
-			}, cell)
+				BackgroundColor3 = P.slate_900,
+				BackgroundTransparency = 0.15,
+				Size = UDim2.fromOffset(ui.SkinW, cardH),
+				LayoutOrder = order,
+			}, ui.Swatches)
 			UIKit.corner(hit, Theme.Radius.M)
 			UIKit.Focusable(hit)
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 170)) }, hit)
-			new("Frame", { BackgroundColor3 = look.Colors.Hat, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0.36, 0) }, hit)
-			new("Frame", { BackgroundColor3 = look.GoldTrim and P.gold_400 or look.Colors.Accent, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.62), Size = UDim2.new(1, 0, 0, 6) }, hit)
-			local lock = new("Frame", { Name = "Lock", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.3, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, hit)
-			Icons.Draw(lock, "lock", { Size = 20, Color = P.ivory_200, Back = P.slate_950, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
-			local badge = text(cell, "Caption", "", {
-				Name = "State",
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.fromScale(0.5, 1),
-				Size = UDim2.new(1, 12, 0, TS(10) + 2),
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextColor3 = C.TextMuted,
-			}, 10)
-			local st = UIKit.stroke(hit, P.slate_950, 2, 0)
+			local st = UIKit.stroke(hit, P.slate_600, 1.5, 0.3)
+			-- the swatch: torso colour, hat band, trim
+			local sw = new("Frame", { Name = "Swatch", BackgroundColor3 = look.Colors.Torso, Position = UDim2.fromOffset(10, 8), Size = UDim2.new(1, -20, 0, 34), ClipsDescendants = true }, hit)
+			UIKit.corner(sw, 4)
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 170)) }, sw)
+			new("Frame", { BackgroundColor3 = look.Colors.Hat, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0.36, 0) }, sw)
+			new("Frame", { BackgroundColor3 = look.GoldTrim and P.gold_400 or look.Colors.Accent, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.66), Size = UDim2.new(1, 0, 0, 5) }, sw)
+			local lock = new("Frame", { Name = "Lock", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, sw)
+			Icons.Draw(lock, "lock", { Size = 18, Color = P.ivory_200, Back = P.slate_950, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+			text(hit, "Small", skinName(skinId), { Name = "SkinName", Position = UDim2.fromOffset(4, 45), Size = UDim2.new(1, -8, 0, TS(14) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd })
+			local pill = UIKit.StatusPill(hit, "OWNED", { Name = "State", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -7), Size = UDim2.fromOffset(0, TS(10) + 10) })
+			pill.TextSize = TS(10)
+			local pad = pill:FindFirstChildOfClass("UIPadding")
+			if pad then
+				pad.PaddingLeft = UDim.new(0, 8)
+				pad.PaddingRight = UDim.new(0, 8)
+			end
+			local badge = new("Frame", { Name = "Check", BackgroundColor3 = P.gold_400, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0, 6), Size = UDim2.fromOffset(22, 22), Visible = false, ZIndex = 5 }, hit)
+			UIKit.corner(badge, 999)
+			UIKit.stroke(badge, P.gold_200, 1, 0.2)
+			Icons.Draw(badge, "check", { Size = 14, Color = P.gold_900, Back = P.gold_400, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 			UIAnim.Button(hit)
 			hit.Activated:Connect(function()
 				UIKit.Click()
@@ -41092,7 +41440,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				end
 				MenuCharacters._refresh()
 			end)
-			swatches[skinId] = { Hit = hit, Stroke = st, Lock = lock, Badge = badge }
+			swatches[skinId] = { Hit = hit, Stroke = st, Lock = lock, Pill = pill, Check = badge }
 		end
 	end
 
@@ -41104,23 +41452,40 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		UIKit.ArtPicture(ui.PortraitWell, "portraits/" .. id, { CornerRadius = Theme.Radius.M }, function(fb: Frame)
-			Icons.Character(fb, id, { Size = math.floor(headH * 0.7), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+			Icons.Character(fb, id, { Size = math.floor(PORTRAIT * 0.7), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 		end)
 	end
 
-	local function setMark(id: string, state: string)
-		local m = ui.Marks[id]
-		if m.State == state then
-			return
-		end
-		m.State = state
-		for _, c in ipairs(m.Frame:GetChildren()) do
-			c:Destroy()
-		end
-		if state == "Selected" then
-			Icons.Draw(m.Frame, "check", { Size = 20, Color = P.gold_300, Back = P.slate_900 })
-		elseif state == "Locked" then
-			Icons.Draw(m.Frame, "lock", { Size = 18, Color = P.stone_300, Back = P.slate_900, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	-- a roster row's look: previewed (gold border, accent bar, PREVIEW) or plain
+	local function paintRow(id: string, p: { [string]: any })
+		local row = ui.Rows[id]
+		local insp = id == inspChar
+		local own = p.OwnedCharacters[id] == true
+		local sel = p.SelectedCharacter == id
+		local full = row.Mode == "row"
+		row.Instance.BackgroundTransparency = insp and 0.55 or (full and 1 or 0.4)
+		row.Instance.BackgroundColor3 = insp and P.slate_700 or P.slate_900
+		row.Edge.Transparency = insp and 0.05 or (full and 1 or 0.6)
+		row.Edge.Color = insp and P.gold_400 or P.slate_600
+		row.Edge.Thickness = insp and 2 or 1
+		row.Accent.Visible = insp and full
+		row.Name.TextColor3 = insp and P.gold_200 or P.ivory_100
+		row.Check.Visible = sel
+		row.Equipped.Visible = sel and full
+		row.Lock.Visible = not own
+		row.Preview.Visible = insp and not sel and full
+		-- the name takes the room the marks leave
+		if full then
+			local nx = row.Name.Position.X.Offset
+			local reserve = sel and 124 or ((insp and 96 or 0) + (own and 0 or 26))
+			row.Name.Size = UDim2.new(1, -(nx + reserve + 8), 1, 0)
+			-- a long name beside the marks a little smaller instead of cut off
+			local room = (ui.RowW or 300) - nx - reserve - 8
+			local size = Theme.TextSize.H2
+			while size > 13 and #CharacterData.Characters[id].Name * TS(size) * 0.58 > room do
+				size -= 1
+			end
+			row.Name.TextSize = TS(size)
 		end
 	end
 
@@ -41138,25 +41503,49 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			for _, c in ipairs(ui.WeaponHolder:GetChildren()) do
 				c:Destroy()
 			end
-			UIKit.Tile(ui.WeaponHolder, { Id = def.StartWeapon, Size = 40 })
+			UIKit.Tile(ui.WeaponHolder, { Id = def.StartWeapon, Size = 48 })
 		end
-		for id, row in pairs(ui.Rows) do
-			local own = p.OwnedCharacters[id] == true
-			row.SetSelected(id == inspChar)
-			setMark(id, (p.SelectedCharacter == id) and "Selected" or (own and "" or "Locked"))
+		for id in pairs(ui.Rows) do
+			paintRow(id, p)
 		end
 		local own = p.OwnedCharacters[inspChar] == true
 		local selected = p.SelectedCharacter == inspChar
 		ui.Name.Text = string.upper(def.Name)
+		-- long names a step smaller so they fit beside the pill
+		local nameSize = 30
+		while nameSize > 20 and #def.Name * TS(nameSize) * 0.74 > (ui.NameRoom or 300) do
+			nameSize -= 2
+		end
+		ui.Name.TextSize = TS(nameSize)
 		ui.Role.Text = UIKit.track(def.Role or "")
 		ui.Desc.Text = def.Description
 		local weapon = WeaponData.Weapons[def.StartWeapon]
 		ui.Weapon.Text = weapon and weapon.Name or def.StartWeapon
 		ui.Bonus.Text = def.Trait and def.Trait.Name or (def.BonusText or "")
-		ui.Trait.Text = def.Trait and def.Trait.Text or (def.BonusText or "")
+		local big, body, list = splitEffect(def.Trait and def.Trait.Text or (def.BonusText or ""))
+		ui.EffectBig.Text = big or ""
+		ui.EffectBig.Visible = big ~= nil
+		-- the text runs after the big number (its width estimated from the font size)
+		local bigW = big and math.ceil(#big * TS(26) * 0.8) + 10 or 0
+		ui.Trait.Position = UDim2.fromOffset(bigW, big and 4 or 0)
+		ui.Trait.Size = UDim2.new(1, -bigW, 0, 0)
+		ui.Trait.Text = body
+		ui.EffectList.Text = list or ""
+		ui.EffectList.Visible = list ~= nil
 		ui.Strength.Text = def.Strengths or ""
 		ui.Tradeoff.Text = def.Tradeoff or ""
-		UIKit.SetStatus(ui.State, selected and "SELECTED" or (own and "OWNED" or "LOCKED"))
+		-- status pill (a lock in front of LOCKED)
+		local status = selected and "SELECTED" or (own and "OWNED" or "LOCKED")
+		UIKit.SetStatus(ui.State, status)
+		ui.StateLock.Visible = status == "LOCKED"
+		if ui.StatePad then
+			ui.StatePad.PaddingLeft = UDim.new(0, status == "LOCKED" and 28 or 10)
+		end
+		ui.StateLock.Position = UDim2.new(0, -6, 0.5, 0)
+		-- centre caption
+		ui.CentreTitle.Set(UIKit.spaced(def.Name))
+		local previewSkin = inspSkin
+		ui.CentreSub.Text = "Preview  •  " .. skinName(previewSkin)
 		-- how to unlock it: the achievement and its progress, or the gold price
 		ui.UnlockCard.Visible = not own
 		if not own then
@@ -41178,8 +41567,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 		if not own and def.Unlock then
 			local a = AchievementData.Achievements[def.Unlock.Achievement]
+			local goal = shortGoal(a)
 			ui.Action.SetKind("Secondary")
-			ui.Action.SetText("LOCKED  •  " .. string.upper(shortGoal(a)))
+			-- (phones: just the goal when "TO UNLOCK" would not fit)
+			local tail = (UIKit.IsCompact() and goal and #goal > 14) and "" or " TO UNLOCK"
+			ui.Action.SetText(goal and (string.upper(goal) .. tail) or ("EARN " .. string.upper(a and a.Name or "its achievement") .. " TO UNLOCK"))
 			ui.Action.SetIcon("lock")
 			ui.Action.SetEnabled(false)
 		elseif not own then
@@ -41189,7 +41581,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			ui.Action.SetIcon("coin")
 		elseif selected then
 			ui.Action.SetKind("Secondary")
-			ui.Action.SetText(string.upper(def.Name) .. " SELECTED")
+			ui.Action.SetText(string.upper(def.Name) .. " EQUIPPED")
 			ui.Action.SetIcon("check")
 			ui.Action.SetEnabled(false)
 		else
@@ -41198,31 +41590,30 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			ui.Action.SetText("SELECT " .. string.upper(def.Name))
 			ui.Action.SetIcon("play")
 		end
+		-- skin cards
 		local equipped = p.Skins[inspChar] or "Default"
+		local narrow = ui.SkinW < 100
 		for skinId, s in pairs(swatches) do
 			local mine = skinOwned(p, skinId)
+			local isEq = skinId == equipped
 			s.Lock.Visible = not mine
-			if skinId == equipped then
-				s.Badge.Text = "EQUIPPED"
-				s.Badge.TextColor3 = P.gold_200
+			s.Check.Visible = isEq
+			if isEq then
+				UIKit.SetStatus(s.Pill, "EQUIPPED", narrow and "EQUIPPED" or "SKIN EQUIPPED")
+			elseif mine then
+				UIKit.SetStatus(s.Pill, "OWNED-DARK", "OWNED")
 			else
-				s.Badge.Text = mine and "OWNED" or (skinPassId(skinId) and "R$" or "SOON")
-				s.Badge.TextColor3 = C.TextMuted
+				UIKit.SetStatus(s.Pill, "SOON-DARK", skinPassId(skinId) and "R$" or "SOON")
 			end
-			s.Stroke.Color = skinId == equipped and C.Selected or (skinId == inspSkin and P.ivory_100 or P.slate_950)
-			s.Stroke.Thickness = (skinId == equipped or skinId == inspSkin) and 3 or 2
+			s.Stroke.Color = isEq and P.gold_400 or (skinId == inspSkin and P.ivory_200 or P.slate_600)
+			s.Stroke.Thickness = (isEq or skinId == inspSkin) and 2 or 1.5
+			s.Stroke.Transparency = (isEq or skinId == inspSkin) and 0 or 0.3
 		end
+		-- the button for a skin not owned (owned skins equip on tap)
 		local skin = CharacterData.Skins[inspSkin]
-		ui.SkinName.Text = skin and skin.Name or (def.Name .. " (default)")
-		local mine = skinOwned(p, inspSkin)
 		local action = ui.SkinAction
-		if mine then
-			ui.SkinState.Text = UIKit.track(inspSkin == equipped and "Equipped" or "Owned")
-			action.Instance.Visible = inspSkin ~= equipped
-			action.SetEnabled(true)
-			action.SetKind("Secondary")
-			action.SetText("EQUIP")
-			action.SetIcon("check")
+		if skinOwned(p, inspSkin) then
+			action.Instance.Visible = false
 		else
 			local passId = skinPassId(inspSkin)
 			action.Instance.Visible = true
@@ -41235,7 +41626,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 			action.SetEnabled(passId ~= nil)
 		end
-		ui.SkinState.Visible = not action.Instance.Visible
+		ui.SkinRule.Size = UDim2.new(1, -(70 + (action.Instance.Visible and 182 or 0)), 0, 1)
 	end
 	MenuCharacters._refresh = refresh
 
@@ -41251,31 +41642,29 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		MenuCharacters._relayout()
 		UIAnim.Punch(ui.Detail, 0.03)
 		if screen.Visible then
-			UIAnim.Burst(ui.Detail, UDim2.fromScale(0.5, 0.12), { P.gold_300, P.ivory_100, P.steel_200 }, 12, 70)
+			UIAnim.Burst(ui.Detail, UDim2.fromScale(0.5, 0.1), { P.gold_300, P.ivory_100, P.steel_200 }, 12, 70)
 		end
 	end
 
-	-- title size on a compact tile: long names ("Necromancer") a step smaller so they fit
-	local function tileSize(id: string): number
-		local def = CharacterData.Characters[id]
-		return (def and #def.Name > 9) and Theme.TextSize.Small - 1 or Theme.TextSize.Body
-	end
-
-	-- roster rows as tiles (no picture, centred name) or as full rows
-	local function rowStyle(id: string, tile: boolean, titleSize: number)
+	-- roster rows: "row" (art, name, marks, lines between), "tile" (small art + name in a
+	-- box, phones in landscape) or "tab" (centred name, portrait)
+	local function rowStyle(id: string, mode: string, rowH: number)
 		local row = ui.Rows[id]
-		row.SetIcon(not tile and Icons.CharacterIcon(id) or nil)
-		local column = row.Content:FindFirstChild("Text") :: Frame?
-		if column and tile then
-			column.Size = UDim2.fromScale(1, 1)
-		elseif column then
-			column.Size = UDim2.new(1, -(38 + Theme.Space.M + 22), 1, 0)
-		end
-		if row.Title then
-			row.Title.TextXAlignment = tile and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
-			row.Title.TextSize = TS(titleSize)
-		end
-		ui.Marks[id].Frame.Visible = not tile
+		row.Mode = mode
+		local def = CharacterData.Characters[id]
+		local long = #def.Name > 9
+		local iconS = mode == "row" and math.clamp(rowH - 16, 32, 52) or 30
+		row.Icon.Visible = mode ~= "tab"
+		row.Icon.Size = UDim2.fromOffset(iconS, iconS)
+		row.Icon.Position = UDim2.new(0, mode == "row" and 14 or 8, 0.5, 0)
+		local nx = mode == "tab" and 4 or (row.Icon.Position.X.Offset + iconS + (mode == "row" and 16 or 8))
+		row.Name.Position = UDim2.fromOffset(nx, 0)
+		row.Name.Size = UDim2.new(1, -(nx + (mode == "row" and 150 or 4)), 1, 0)
+		row.Name.TextXAlignment = mode == "tab" and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+		local size = mode == "row" and Theme.TextSize.H2 or (long and Theme.TextSize.Small - 1 or Theme.TextSize.Body)
+		row.Name.TextSize = TS(size)
+		row.Marks.Visible = mode == "row"
+		row.Sep.Visible = mode == "row"
 	end
 
 	-- the action button sits in the list under the details; when they don't fit (phones) it
@@ -41291,27 +41680,46 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		b.Parent = on and ui.Footer or ui.Scroll
 	end
 
+	-- skin cards share the row: up to five, at least 82 px wide
+	local function fitSkins(innerW: number)
+		local n = math.max(1, #CharacterData.SkinsFor(inspChar))
+		local per = math.clamp(math.floor((innerW + SKIN_GAP) / (82 + SKIN_GAP)), 1, 5)
+		local w = math.floor((innerW - (math.min(n, per) - 1) * SKIN_GAP) / math.min(n, per))
+		w = math.clamp(w, 82, 124)
+		if w ~= ui.SkinW then
+			ui.SkinW = w
+			for _, s in pairs(swatches) do
+				s.Hit.Size = UDim2.fromOffset(w, s.Hit.Size.Y.Offset)
+			end
+			refresh()
+		end
+	end
+
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
 		local W, H = v.X, v.Y
+		local p = profile()
 		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
-		local headY = math.max(ins.Top + 4, 12)
-		place(ui.Header.Frame, M, headY, math.min(520, W - 2 * M), 56)
-		-- portrait: the stats chip sits under the header (LobbyScreen), the tabs under it
-		local top = headY + 66 + (portrait and 58 or 0)
-		-- the details panel fits its content (measured), up to the room there is
-		-- (measured with the action button in the list, also while it is pinned below)
+		-- the title bar sits in the Roblox top-bar row, right of the Roblox buttons
+		local barX = ins.Left > 0 and (ins.Left + 8) or M
+		local barY = math.max(2, math.floor((ins.Top - 52) / 2))
+		place(ui.Header.Frame, barX, barY, math.min(560, W - barX - M), 52)
+		local barBottom = math.max(barY + 52, ins.Top)
+		-- portrait: the stats chip sits under the bar (LobbyScreen), the tabs under it
+		local top = portrait and (math.max(ins.Top + 4, 12) + 64 + 58) or (barBottom + 8)
+		-- the details panel fits its content (measured with the action button in the list,
+		-- also while it is pinned below), up to the room there is
 		local measured = ui.DetailList.AbsoluteContentSize.Y / math.max(0.01, host.Scale())
 		if ui.Action.Instance.Parent == ui.Footer then
-			measured += ACTION_H + 6
+			measured += ACTION_H + 8
 		end
-		local contentH = measured > 10 and (measured + 30) or (UIKit.IsCompact() and 640 or 590)
+		local contentH = measured > 10 and (measured + 32) or (UIKit.IsCompact() and 640 or 590)
 		local n = #CharacterData.Order
+		local centreW = 420
 		if portrait then
-			-- tabs: one compact button per character, in two rows of four when there are
-			-- more than five heroes (names stay readable)
+			-- tabs: one compact button per character, in two rows of four
 			local perRow = n > 5 and math.ceil(n / 2) or n
 			local tabRows = math.ceil(n / perRow)
-			local listH = 24 + tabRows * 52 + (tabRows - 1) * 6
+			local listH = 20 + tabRows * 52 + (tabRows - 1) * 6
 			ui.ListLayout.FillDirection = Enum.FillDirection.Horizontal
 			ui.ListLayout.Wraps = true
 			ui.ListLayout.Padding = UDim.new(0, 6)
@@ -41319,46 +41727,59 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			place(ui.List, M, top, w, listH)
 			for id, row in pairs(ui.Rows) do
 				row.Instance.Size = UDim2.new(1 / perRow, -6, 0, 52)
-				rowStyle(id, true, perRow >= 4 and tileSize(id) or Theme.TextSize.Body + 1)
+				rowStyle(id, "tab", 52)
 			end
 			local detailH = math.min(contentH, math.floor(H * 0.56) - (listH - 76))
-			place(ui.Detail, M, H - M - detailH, w, detailH)
+			local detailY = H - M - detailH
+			ui.NameRoom = w - 36 - PORTRAIT - 14 - 124
+			place(ui.Detail, M, detailY, w, detailH)
 			pinAction(contentH > detailH + 1)
+			fitSkins(w - 36)
+			place(ui.Centre, (W - centreW) / 2, detailY - 64, centreW, 58)
 			if ctx.Current() == "Characters" then
-				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + listH) + (H - M - detailH)) / 2 / H)
+				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + listH) + (detailY - 50)) / 2 / H)
 			end
 		else
-			-- one column of rows (shorter rows when needed); when even short rows don't fit
-			-- (phones in landscape) two columns of name tiles
-			local lw = math.clamp(W * 0.21, 250, 310)
-			local inner = H - M - top - 24
-			local rowH = math.floor((inner - (n - 1) * 8) / n)
+			-- one column of rows split by lines; when rows get too short (phones in
+			-- landscape) two columns of tiles
+			local lw = math.clamp(W * 0.27, 300, 350)
+			local inner = H - M - top - 20
+			local rowH = math.floor(inner / n)
 			local cols = 1
 			if rowH < 50 then
 				cols = 2
 				local rows = math.ceil(n / 2)
 				rowH = math.clamp(math.floor((inner - (rows - 1) * 6) / rows), 40, 72)
+				lw += 40 -- room for "Necromancer" in a half-width tile
 			end
-			rowH = math.min(68, rowH)
-			if cols == 2 then
-				lw += 56 -- room for "Necromancer" in a half-width tile
-			end
-			local gap = cols == 2 and 6 or 8
+			rowH = math.min(80, rowH)
+			local gap = cols == 2 and 6 or 0
 			local rows = math.ceil(n / cols)
 			ui.ListLayout.FillDirection = cols == 2 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical
 			ui.ListLayout.Wraps = cols == 2
 			ui.ListLayout.Padding = UDim.new(0, gap)
-			place(ui.List, M, top, lw, rows * rowH + (rows - 1) * gap + 24)
+			place(ui.List, M, top, lw, rows * rowH + (rows - 1) * gap + 20)
+			ui.RowW = cols == 2 and (lw - 20 - gap) / 2 or (lw - 20)
 			for id, row in pairs(ui.Rows) do
 				row.Instance.Size = cols == 2 and UDim2.new(0.5, -gap / 2, 0, rowH) or UDim2.new(1, 0, 0, rowH)
-				rowStyle(id, cols == 2, cols == 2 and tileSize(id) or (#CharacterData.Characters[id].Name > 9 and Theme.TextSize.H3 + 2 or Theme.TextSize.H2))
+				rowStyle(id, cols == 2 and "tile" or "row", rowH)
 			end
-			local rw = math.clamp(W * 0.37, 420, 520)
-			local dTop = math.max(top, 74)
-			place(ui.Detail, W - M - rw, dTop, rw, math.min(contentH, H - M - dTop))
-			pinAction(contentH > H - M - dTop + 1)
+			local rw = math.clamp(W * 0.37, 430, 530)
+			ui.NameRoom = rw - 36 - PORTRAIT - 14 - 124
+			place(ui.Detail, W - M - rw, top, rw, math.min(contentH, H - M - top))
+			pinAction(contentH > H - M - top + 1)
+			fitSkins(rw - 36)
+			-- the hero's name between the panels, under the dais
+			local gapL, gapR = M + lw, W - M - rw
+			centreW = math.min(420, gapR - gapL - 16)
+			place(ui.Centre, (gapL + gapR - centreW) / 2, H - M - 58, centreW, 58)
 			if ctx.Current() == "Characters" then
 				workspace.CurrentCamera:SetAttribute("MenuHeroY", 0.5)
+			end
+		end
+		if p then
+			for id in pairs(ui.Rows) do
+				paintRow(id, p)
 			end
 		end
 	end
@@ -42732,8 +43153,23 @@ local function send(action: string, arg: number?)
 	Remotes.Get("Party"):FireServer(action, arg)
 end
 
+-- Narrow lists (phones, stacked columns): row buttons lose their icons and shrink so the
+-- name keeps room; set by the layout from the measured list widths.
+local narrow = false
+
+-- Width of a row button (narrow lists: smaller, icon-less unless it is icon-only).
+local function bw(w: number, title: string): number
+	if narrow and title ~= "" then
+		return math.max(76, w - 32)
+	end
+	return w
+end
+
 -- A small button on a row's right edge.
 local function rowButton(parent: Instance, title: string, icon: string?, kind: string, w: number, x: number, onClick: () -> ()): any
+	if narrow and title ~= "" then
+		icon = nil
+	end
 	return UIKit.Button(parent, {
 		Kind = kind,
 		Title = title,
@@ -42741,7 +43177,7 @@ local function rowButton(parent: Instance, title: string, icon: string?, kind: s
 		IconSize = 16,
 		Align = "Center",
 		Shadow = false,
-		Size = UDim2.fromOffset(w, 40),
+		Size = UDim2.fromOffset(bw(w, title), 40),
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -x, 0.5, 0),
 		Name = title,
@@ -42751,7 +43187,7 @@ end
 
 -- Head shot, name and a status line; `right` = room kept for buttons.
 local function personRow(parent: Instance, order: number, userId: number, name: string, sub: string, subColor: Color3?, right: number, gold: boolean?): Frame
-	local f = UIKit.Panel(parent, { Name = "Row" .. order, LayoutOrder = order, Size = UDim2.new(1, -6, 0, ROW_H) }, true)
+	local f = UIKit.Panel(parent, { Name = "Row" .. order, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H), ClipsDescendants = true }, true)
 	f.BackgroundColor3 = gold and P.slate_800 or P.slate_950
 	f.BackgroundTransparency = gold and 0.05 or 0.35
 	if gold then
@@ -42997,6 +43433,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, left)
+	UIKit.padding(plist, 2, 8, 2, 2) -- strokes stay inside the clip; room for the scroll bar
 	UIKit.list(plist, { Padding = UDim.new(0, ROW_GAP) })
 	ui.Members = plist
 	ui.Hint = text(left, "Small", "", { Name = "Hint", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted }, 14)
@@ -43026,7 +43463,6 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	end)
 	ui.InviteFriends = UIKit.Button(right, {
 		Kind = "Primary",
-		Glow = true,
 		Title = "INVITE FRIENDS",
 		Icon = "userPlus",
 		IconSize = 20,
@@ -43056,6 +43492,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, right)
+	UIKit.padding(list, 2, 8, 2, 2)
 	UIKit.list(list, { Padding = UDim.new(0, ROW_GAP) })
 	ui.List = list
 	ui.Empty = text(right, "Body", "", { Name = "Empty", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, Visible = false })
@@ -43070,13 +43507,13 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		-- invites to you first
 		for _, inv in ipairs(openInvites()) do
 			order += 1
-			local f = personRow(plist, order, inv.FromId, inv.FromName, "Invited you to their party", P.gold_300, 196, true)
+			local f = personRow(plist, order, inv.FromId, inv.FromName, "Invited you to their party", P.gold_300, bw(108, "ACCEPT") + 8 + 44 + 16, true)
 			rowButton(f, "ACCEPT", nil, "Primary", 108, 8, function()
 				send("Accept", inv.FromId)
 				deadlines[inv.FromId] = 0
 				dirty = true
 			end)
-			rowButton(f, "", "close", "Secondary", 44, 124, function()
+			rowButton(f, "", "close", "Secondary", 44, bw(108, "ACCEPT") + 16, function()
 				send("Decline", inv.FromId)
 				deadlines[inv.FromId] = 0
 				dirty = true
@@ -43092,9 +43529,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			local leads = m.UserId == state.LeaderId
 			local sub = leads and "Leader · starts the runs" or (inParty() and "Member" or "Not in a party yet")
 			local canKick = isLeader() and not me
-			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, leads and P.gold_300 or nil, canKick and 112 or (leads and 96 or 0), me)
+			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, leads and P.gold_300 or nil, canKick and (bw(100, "KICK") + 12 + (leads and 96 or 0)) or (leads and 96 or 0), me)
 			if leads then
-				local pill = UIKit.StatusPill(f, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, canKick and -120 or -12, 0.5, 0), Name = "Leader" })
+				local pill = UIKit.StatusPill(f, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, canKick and -(bw(100, "KICK") + 20) or -12, 0.5, 0), Name = "Leader" })
 				UIKit.SetStatus(pill, "READY", "LEADER")
 			end
 			if canKick then
@@ -43107,7 +43544,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		local slots = math.max(0, state.Max - #members)
 		for i = 1, slots do
 			order += 1
-			local f = UIKit.Panel(plist, { Name = "Slot" .. i, LayoutOrder = order, Size = UDim2.new(1, -6, 0, ROW_H) }, true)
+			local f = UIKit.Panel(plist, { Name = "Slot" .. i, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H) }, true)
 			f.BackgroundColor3 = P.slate_950
 			f.BackgroundTransparency = 0.6
 			UIKit.stroke(f, P.slate_500, 1, 0.5)
@@ -43160,7 +43597,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 				sub = "In a run"
 			end
 			local showInvite = not same and not invitedMe[p.UserId]
-			local f = personRow(list, i, p.UserId, p.DisplayName, sub, color, (showInvite or invitedMe[p.UserId]) and 152 or 0)
+			local f = personRow(list, i, p.UserId, p.DisplayName, sub, color, (showInvite or invitedMe[p.UserId]) and (bw(140, "INVITE") + 12) or 0)
 			if invitedMe[p.UserId] then
 				rowButton(f, "ACCEPT", "check", "Primary", 140, 8, function()
 					send("Accept", p.UserId)
@@ -43180,7 +43617,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	local function friendRows(): number
 		for i, f in ipairs(friends.Rows) do
 			local sub = f.Here and "On this server" or (f.InSwarm and "Playing SWARM" or "Online")
-			local r = personRow(list, i, f.UserId, f.Name, sub, f.InSwarm and P.moss_200 or nil, f.InSwarm and not f.Here and 124 or 0)
+			local r = personRow(list, i, f.UserId, f.Name, sub, f.InSwarm and P.moss_200 or nil, f.InSwarm and not f.Here and (bw(112, "JOIN") + 12) or 0)
 			if f.InSwarm and not f.Here then
 				rowButton(r, "JOIN", "play", "Primary", 112, 8, function()
 					Remotes.Get("PartyFollow"):FireServer(f.UserId)
@@ -43212,6 +43649,12 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
 		local W, H = v.X, v.Y
+		-- the real screen size in layout units (AbsoluteSize / the root UIScale), when known
+		local scale = host.Scale and host.Scale() or 1
+		local abs = screen.AbsoluteSize
+		if abs.X > 0 and scale > 0 then
+			W, H = math.min(W, abs.X / scale), math.min(H, abs.Y / scale)
+		end
 		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
 		local headY = math.max(ins.Top + 4, 12)
 		place(ui.Header.Frame, M, headY, math.min(560, W - 2 * M), 56)
@@ -43221,15 +43664,15 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		local labelH = TS(12) + 6
 		local stackedW = W - 2 * M - 36
 		local hintW = (portrait or stackedW < 620) and stackedW or math.floor(stackedW * 0.44)
-		local hintLines = math.clamp(math.ceil(#ui.Hint.Text * TS(14) * 0.5 / math.max(1, hintW)), 1, 4)
+		local hintLines = math.clamp(math.ceil(#ui.Hint.Text * TS(14) * 0.56 / math.max(1, hintW - 8)), 1, 5)
 		local hintH = hintLines * (TS(14) + 3) + 6
 		local leaveH = ui.Leave.Instance.Visible and Theme.Size.Button or 0
-		local listWant = leftRows * (ROW_H + ROW_GAP)
+		local listWant = leftRows * (ROW_H + ROW_GAP) + 4
 		local tabsH = Theme.Size.TapMin + 4
 		local stacked = portrait or w - 36 < 620
 		-- landscape: only as tall as the longer column needs (at least four rows)
 		local leftWant = labelH + 8 + listWant + 8 + hintH + (leaveH > 0 and leaveH + 8 or 0)
-		local rightWant = tabsH + 10 + (tab == "Friends" and 58 or 0) + math.max(4, rightRows) * (ROW_H + ROW_GAP)
+		local rightWant = tabsH + 10 + (tab == "Friends" and 58 or 0) + math.max(4, rightRows) * (ROW_H + ROW_GAP) + 4
 		local panelH = math.min(maxH, (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + 36)
 		local iw, ih = w - 36, panelH - 32
 		place(ui.Panel, (W - w) / 2, top, w, panelH)
@@ -43253,6 +43696,19 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			place(ui.Leave.Instance, 0, y + hintH + 4, math.min(lw, 260), leaveH)
 		end
 		place(ui.Right, rx, ry, rw, rh)
+		-- narrow lists: compact row buttons (rows are rebuilt when this flips)
+		local wasNarrow = narrow
+		narrow = math.min(lw, rw) < 440
+		if narrow ~= wasNarrow then
+			dirty = true
+		end
+		-- tabs: no icons when the column is narrow, so the titles fit
+		for _, b in ipairs(ui.Tabs.Frame:GetChildren()) do
+			local icon = b:FindFirstChild("IconHolder", true)
+			if icon and icon:IsA("GuiObject") then
+				icon.Visible = rw >= 420
+			end
+		end
 		ui.Tabs.Frame.Position = UDim2.new()
 		ui.Tabs.Frame.Size = UDim2.new(1, 0, 0, tabsH)
 		local ly = tabsH + 10
@@ -44867,6 +45323,9 @@ local ENEMY_MESH = {
 	Healer = { "Healer", "Scuttle" },
 	Nest = { "Nest", "Static" },
 	WarBanner = { "RhinoWarlord", "Static" },
+	BriarBoss = { "BriarSentinel", "Stomp" },
+	FrostBoss = { "FrostboundColossus", "Stomp" },
+	ThornSprout = { "ThornSprout", "Scuttle" },
 }
 
 --[[
@@ -44880,11 +45339,22 @@ local MESH_EXTRA: { [string]: { Scale: number?, Only: { string }?, Shift: Vector
 }
 
 -- Pieces some poses hide (EnemyRenderer): the Burrower's soil ring, the Warlord's banner,
--- the Colossus's frost armour (shown only while it is on).
+-- the Colossus's frost armour (shown only while it is on; mesh piece names from
+-- blender/models/bosses2.py and the part-built fallback's names).
 ModelLibrary.PieceGroups = {
 	Mound = { Mound = true },
 	Banner = { BannerPole = true, BannerTrim = true, Banner = true, BannerCrown = true },
-	Frost = { FrostChest = true, FrostShoulder = true, FrostArm = true, FrostSpike = true },
+	Frost = {
+		FrostChest = true,
+		FrostBack = true,
+		FrostShoulder = true,
+		FrostShoulderL = true,
+		FrostShoulderR = true,
+		FrostArm = true,
+		FrostArmL = true,
+		FrostArmR = true,
+		FrostSpike = true,
+	},
 }
 
 ------------------------------------------------------------------------------------------
@@ -45007,36 +45477,39 @@ local LOOKS: { [string]: { [string]: Color3 } } = {
 		Wood = Palette.wood_700,
 		Stone = Palette.stone_600,
 	},
-	-- the Briar Sentinel (part-built only), her sprouts and the Frostbound Colossus
+	-- the Briar Sentinel, her sprouts and the Frostbound Colossus (part-built fallbacks of the
+	-- BriarSentinel / ThornSprout / FrostboundColossus meshes)
+	-- dark bark, bone thorns and amber read on forest grass (no green-on-green)
 	BriarBoss = {
-		Base = Palette.wood_600,
-		Bark = Palette.wood_700,
-		Light = Palette.wood_500,
-		Moss = Palette.moss_600,
-		Leaf = Palette.moss_400,
+		Base = Palette.wood_700:Lerp(Palette.wood_800, 0.35),
+		Bark = Palette.wood_900,
+		Light = Palette.wood_600,
+		Moss = Palette.moss_500:Lerp(Palette.moss_400, 0.4),
+		Leaf = Palette.moss_500,
 		Vine = Palette.moss_700,
-		Thorn = Palette.crimson_800,
-		Berry = Palette.crimson_400,
-		Gold = Palette.gold_400,
+		Thorn = Palette.gold_200:Lerp(Palette.wood_400, 0.3),
+		Berry = Palette.amber_300,
+		Gold = Palette.wood_500,
 		Eye = Palette.amber_500,
 	},
 	ThornSprout = {
-		Base = Palette.moss_500,
-		Light = Palette.moss_400,
-		Leaf = Palette.moss_300,
-		Thorn = Palette.crimson_700,
-		Dark = Palette.wood_700,
+		Base = Palette.wood_500,
+		Light = Palette.moss_400:Lerp(Palette.moss_300, 0.3),
+		Leaf = Palette.moss_400,
+		Thorn = Palette.gold_200:Lerp(Palette.wood_400, 0.3),
+		Dark = Palette.wood_900,
 		Eye = Palette.amber_500,
 	},
+	-- deep blue ice, teal crystals and dark rock read on white snow
 	FrostBoss = {
-		Base = Palette.slate_500:Lerp(Palette.ice_500, 0.35),
-		Dark = Palette.slate_700,
-		Stone = Palette.slate_600:Lerp(Palette.stone_500, 0.3),
-		Ice = Palette.ice_300,
-		IceLight = Palette.ice_100,
-		Gold = Palette.gold_500,
-		Glow = Palette.ice_100,
-		Eye = Palette.ice_100,
+		Base = Palette.ice_500:Lerp(Palette.slate_500, 0.45),
+		Dark = Palette.slate_800:Lerp(Palette.stone_800, 0.3),
+		Stone = Palette.slate_700:Lerp(Palette.stone_700, 0.4),
+		Ice = Color3.fromRGB(74, 176, 199),
+		IceLight = Palette.ice_100:Lerp(Color3.fromRGB(74, 176, 199), 0.3),
+		Gold = Palette.ice_300:Lerp(Color3.fromRGB(74, 176, 199), 0.25),
+		Glow = Color3.fromRGB(158, 245, 255),
+		Eye = Color3.fromRGB(158, 245, 255),
 	},
 	BroodEgg = {
 		Base = Palette.ivory_200,
@@ -45387,10 +45860,10 @@ ENEMIES.HiveBoss = function(b, c)
 	return "Prowl"
 end
 
--- Briar Sentinel: a bramble treant on two root legs; a bark trunk wrapped in thorny
--- vines, a moss mantle, a carved bark mask with amber eyes under a crown of thorns, long
--- branch arms with twig claws and a few crimson berries and gold blossoms (part-built:
--- no mesh yet).
+-- Briar Sentinel (fallback for the BriarSentinel mesh): a bramble treant on two root legs;
+-- a dark bark trunk wrapped in vines with bone thorns, a moss mantle, a carved bark mask
+-- with amber eyes under a crown of thorns, an amber heart-knot, long branch arms with twig
+-- claws and a few amber berries.
 ENEMIES.BriarBoss = function(b, c)
 	-- root legs, each splaying into three roots on the ground
 	for _, side in ipairs({ -1, 1 }) do
@@ -45404,6 +45877,7 @@ ENEMIES.BriarBoss = function(b, c)
 	-- trunk and bark plates
 	egg(b, V(5.2, 6.6, 4.2), c.Base, CFrame.new(0, 7.6, 0.2))
 	egg(b, V(4.2, 3.0, 3.4), c.Light, CFrame.new(0, 8.4, -1.0))
+	ball(b, 1.0, c.Berry, V(0, 8.6, -2.6), { Material = NEON, Anim = "Pulse" })
 	for i, y in ipairs({ 6.0, 7.6, 9.2 }) do
 		b.add("Block", V(0.35, 1.2, 0.4), c.Bark, CFrame.new((i - 2) * 0.9, y, -2.25) * CFrame.Angles(0, 0, 0.3 * (i - 2)))
 	end
@@ -45455,9 +45929,9 @@ ENEMIES.BriarBoss = function(b, c)
 	return "Stomp"
 end
 
--- Frostbound Colossus: a hunched giant of dark blue-grey stone, ice crystals jutting from
--- his shoulders and back, a small head sunk between them with pale glowing eyes and an
--- icicle beard, huge arms and fists bound in gold bands. "Frost*" pieces are the phase-2
+-- Frostbound Colossus (fallback for the FrostboundColossus mesh): a hunched giant of dark
+-- blue-grey stone, teal ice crystals jutting from his shoulders and back, a small head sunk
+-- between them with pale glowing eyes and an icicle beard, huge arms and fists bound in ice. "Frost*" pieces are the phase-2
 -- frost armour (shown only while the body attribute FrostArmor is set).
 ENEMIES.FrostBoss = function(b, c)
 	-- pillar legs
@@ -45510,13 +45984,14 @@ ENEMIES.FrostBoss = function(b, c)
 		local shoulder = V(side * 4.4, 10.2, 0.2)
 		local swing = { Anim = side < 0 and "SwingB" or "SwingA", Joint = shoulder, Transparency = 0.15 }
 		frost(egg(b, V(3.8, 1.6, 3.8), c.IceLight, CFrame.new(side * 4.7, 11.9, 0.2), swing), "FrostShoulder")
-		frost(egg(b, V(2.6, 3.4, 2.6), c.Ice, CFrame.new(side * 5.55, 5.4, -1.1), swing), "FrostArm")
+		frost(egg(b, V(2.6, 3.4, 2.6), c.IceLight, CFrame.new(side * 5.55, 5.4, -1.1), swing), "FrostArm")
 		frost(bar(b, V(side * 4.7, 12.4, 0.2), V(side * 5.6, 14.4, 0.6), 0.7, c.IceLight, swing), "FrostSpike")
 	end
 	return "Stomp"
 end
 
--- Thorn Sprout: a small moss bulb with crimson thorns, two leaf blades and root feet.
+-- Thorn Sprout (fallback for the ThornSprout mesh): a small bark bulb with a moss cap,
+-- bone thorns, two leaf blades and root feet.
 ENEMIES.ThornSprout = function(b, c)
 	egg(b, V(2.2, 2.0, 2.2), c.Base, CFrame.new(0, 1.2, 0))
 	egg(b, V(1.6, 0.8, 1.6), c.Light, CFrame.new(0, 2.1, 0))
@@ -51932,29 +52407,46 @@ local function cardIconId(c): string
 	return c.Id
 end
 
-local function cardBand(c): (string, Color3, Color3)
+-- Header band colours: (band fill, accent). The accent rims the card and its icon tile.
+local function cardBand(c): (Color3, Color3)
 	if c.Type == "Gold" or c.Type == "Heal" then
-		return "BONUS", P.moss_600, P.moss_200
+		return P.moss_700, P.moss_200
 	end
 	local r = Theme.Rarity[c.Rarity] or Theme.Rarity.Common
 	if c.Rarity == "Rare" then
 		-- NEW cards read cool ice-blue next to the slate upgrades
-		return string.upper(r.Label), P.ice_500:Lerp(P.slate_800, 0.45), P.ice_300
+		return P.ice_500:Lerp(P.slate_800, 0.55), P.ice_300
+	elseif c.Rarity == "Legendary" then
+		return r.Band, r.Color
 	end
-	return string.upper(r.Label), r.Band, r.Color
+	return r.Band:Lerp(P.slate_900, 0.35), r.Color
 end
 
--- Rank line under the card name: "NEW WEAPON", "LV 3 → 4 / 8", "EVOLUTION" (the server
--- sends Rank; older servers only sent Level).
-local function cardLevelText(c): string
+-- Small caps in the header band: what kind of card this is.
+local function cardKind(c): string
 	if c.Type == "WeaponNew" then
 		return "NEW WEAPON"
 	elseif c.Type == "PassiveNew" then
 		return "NEW PASSIVE"
 	elseif c.Type == "Evolve" then
+		return "EVOLUTION"
+	elseif c.Type == "Gold" or c.Type == "Heal" then
+		return "BONUS"
+	elseif c.Rarity == "Epic" then
+		return "MAX LEVEL"
+	end
+	return "UPGRADE"
+end
+
+-- Line under the card name: "LV 3 → 4 / 8", "LONGBOW EVOLVES"; nothing on NEW cards (the
+-- server sends Rank; older servers only sent Level).
+local function cardLevelText(c): string
+	if c.Type == "WeaponNew" or c.Type == "PassiveNew" then
+		return ""
+	elseif c.Type == "Evolve" then
 		local def = WeaponData.Weapons[c.Id]
 		return string.upper((def and def.Name or "Weapon") .. " evolves")
-	elseif c.Rank then
+	elseif c.Rank and c.Rank ~= "NEW" then
 		return string.upper(c.Rank)
 	elseif c.Type == "WeaponUp" then
 		return string.format("LV %d → %d / %d", c.Level - 1, c.Level, WeaponData.MaxLevel)
@@ -51973,52 +52465,94 @@ local function hex(c: Color3): string
 end
 
 --[[
-	What the card changes, as RichText lines ("Damage 10 → 15" with the new value bright):
-	the server's Lines, or the plain Description for older servers / bonus cards.
-	New cards start with their short description.
+	What a card says, split for the card layout:
+	  Desc     the short description (a weapon upgrade shows its new perk, or the weapon's
+	           own description)
+	  Stats    starting stats of a NEW weapon ({ Label, To }): a table of rows
+	  Changes  stat changes ({ Label, From, To }): the first is the boxed highlight, the
+	           rest small rows under it
+	From the server's Lines (real StatSheet / WeaponData values); bonus cards and older
+	servers fall back to the plain Description.
 ]]
-local function cardRichLines(c, sep: string): string
-	local out = {}
-	local isNew = c.Type == "WeaponNew" or c.Type == "PassiveNew" or c.Type == "PassiveUp" or c.Type == "Evolve"
-	if isNew and c.Description and c.Description ~= "" then
-		table.insert(out, string.format('<font color="%s">%s</font>', hex(C.TextMuted), c.Description))
-	end
+local function cardContent(c): (string?, { any }, { any })
 	local lines = type(c.Lines) == "table" and c.Lines or {}
-	if c.Type == "WeaponNew" then
-		-- starting stats of a new weapon on one line: "Damage 22 · Arrows 1 · Cooldown 1.70s"
-		local parts = {}
-		for _, line in ipairs(lines) do
-			if line.To and not line.From and not line.Text then
-				table.insert(parts, string.format('%s <font color="%s"><b>%s</b></font>', tostring(line.Label), hex(C.Text), tostring(line.To)))
-			end
-		end
-		if #parts > 0 then
-			table.insert(out, table.concat(parts, "  ·  "))
-		end
-		return table.concat(out, sep)
-	end
+	local stats, changes = {}, {}
+	local perk: string? = nil
 	for _, line in ipairs(lines) do
 		if line.Text then
-			table.insert(out, string.format('<font color="%s"><b>%s</b></font> %s', hex(P.gold_300), tostring(line.Label), tostring(line.Text)))
+			perk = string.format('<font color="%s"><b>%s</b></font> %s', hex(P.gold_300), tostring(line.Label), tostring(line.Text))
 		elseif line.From then
-			table.insert(out, string.format('%s %s → <font color="%s"><b>%s</b></font>', tostring(line.Label), tostring(line.From), hex(P.moss_200), tostring(line.To)))
+			table.insert(changes, line)
 		elseif line.To then
-			table.insert(out, string.format('%s <font color="%s"><b>%s</b></font>', tostring(line.Label), hex(C.Text), tostring(line.To)))
+			table.insert(stats, line)
 		end
 	end
-	if #out == 0 and c.Description then
-		table.insert(out, c.Description)
+	local desc: string? = nil
+	if c.Type == "WeaponUp" then
+		local def = WeaponData.Weapons[c.Id]
+		desc = perk or (def and def.Description)
+	elseif c.Description and c.Description ~= "" then
+		desc = c.Description
 	end
-	return table.concat(out, sep)
+	return desc, stats, changes
+end
+
+-- Icon for a stat label (Icons names); amount stats ("Arrows", "Strikes") use the weapon.
+local STAT_ICONS = {
+	{ "projectile speed", "arrowFast" },
+	{ "projectiles", "duplicate" },
+	{ "cooldown", "clock" },
+	{ "duration", "hourglass" },
+	{ "area", "area" },
+	{ "pierce", "arrowFast" },
+	{ "regen", "plus" },
+	{ "heal", "plus" },
+	{ "hp", "heart" },
+	{ "armor", "shield" },
+	{ "speed", "boot" },
+	{ "knockback", "chevronRight" },
+	{ "luck", "clover" },
+	{ "crit", "aim" },
+	{ "pickup", "magnet" },
+	{ "xp", "sprout" },
+	{ "gold", "coin" },
+	{ "damage", "sparkle" },
+}
+local function statIcon(parent: Instance, label: string, c, size: number): Frame
+	local l = string.lower(label)
+	for _, pair in ipairs(STAT_ICONS) do
+		if string.find(l, pair[1], 1, true) then
+			return Icons.Draw(parent, pair[2], { Size = size, Color = P.gold_300 })
+		end
+	end
+	if WeaponData.Weapons[c.Id] then
+		return Icons.Upgrade(parent, cardIconId(c), { Size = size })
+	end
+	return Icons.Draw(parent, "chevronsUp", { Size = size, Color = P.gold_300 })
+end
+
+-- "Synergy: Elemental Trinity 2/3" → "ELEMENTAL TRINITY • 2 / 3" (the server's card text).
+local function synergyText(c): string
+	local s = tostring(c.Synergy)
+	s = string.gsub(s, "^Synergy:%s*", "")
+	local name, have, need = string.match(s, "^(.-)%s+(%d+)%s*/%s*(%d+)$")
+	if name then
+		return string.upper(name) .. "  •  " .. have .. " / " .. need
+	end
+	return string.upper(s)
 end
 
 local pickedAt = 0 -- when a card was last picked (its punch plays before the close)
 
--- Selection: the picked card punches up with a quick flash of its accent colour, the
+-- Selection: the picked card turns gold (focus look), punches up with a quick flash, the
 -- others shrink and dim; the overlay closes right after (closeOffer).
 local function pickAnimation(index: number)
 	pickedAt = os.clock()
 	local reduced = ClientSettings.Reduced()
+	local focus = levelUp.Focus[index]
+	if focus then
+		focus(true)
+	end
 	for _, card in ipairs(levelUp.Cards:GetChildren()) do
 		if card:IsA("GuiObject") then
 			local s = UIAnim.ScaleOf(card)
@@ -52026,17 +52560,10 @@ local function pickAnimation(index: number)
 			if card.Name == "Card" .. index then
 				s.Scale = reduced and 1.03 or 1.09
 				UIAnim.Tween(s, 0.14, { Scale = 1.04 }, Enum.EasingStyle.Quad)
-				if face and face:IsA("GuiObject") then
-					local edge = face:FindFirstChildOfClass("UIStroke")
-					if edge then
-						edge.Thickness = 3
-						edge.Transparency = 0
-					end
-					if not reduced then
-						local flash = new("Frame", { Name = "PickFlash", BackgroundColor3 = card:GetAttribute("Legendary") == true and P.gold_200 or P.ivory_100, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 60 }, face)
-						UIKit.corner(flash, Theme.Radius.L)
-						TweenService:Create(flash, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
-					end
+				if face and face:IsA("GuiObject") and not reduced then
+					local flash = new("Frame", { Name = "PickFlash", BackgroundColor3 = P.gold_200, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 60 }, face)
+					UIKit.corner(flash, Theme.Radius.L)
+					TweenService:Create(flash, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
 				end
 			else
 				UIAnim.Tween(s, 0.14, { Scale = 0.93 })
@@ -52106,6 +52633,34 @@ local function goldBurst(hit: GuiObject, delay: number)
 	end)
 end
 
+-- A thin gold rule fading out towards `fadeLeft`'s side (flanks the buttons and hint).
+local function goldRule(parent: Instance, width: number, fadeLeft: boolean, order: number): Frame
+	local r = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromOffset(width, 1), LayoutOrder = order }, parent)
+	new("UIGradient", { Transparency = NumberSequence.new(fadeLeft and 1 or 0.25, fadeLeft and 0.25 or 1) }, r)
+	return r
+end
+
+-- How to choose with the device in hand ("Press 1, 2 or 3 to choose" / tap / gamepad).
+local function choiceHint(count: number): string
+	local last = UserInputService:GetLastInputType()
+	if last == Enum.UserInputType.Gamepad1 or last == Enum.UserInputType.Gamepad2 then
+		return "Press A to choose"
+	elseif last == Enum.UserInputType.Touch or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled) then
+		return "Tap a card to choose"
+	end
+	local keys = {}
+	for i = 1, math.max(1, count) do
+		table.insert(keys, tostring(i))
+	end
+	local last1 = table.remove(keys)
+	return #keys > 0 and string.format("Press %s or %s to choose", table.concat(keys, ", "), last1) or string.format("Press %s to choose", last1)
+end
+
+--[[
+	Layout (owner mockup): big serif LEVEL UP! over a gold rule with a diamond, "Choose one
+	upgrade", an AUTO-PICK pill and the gold countdown bar; the cards; REROLL / SKIP
+	flanked by thin gold rules; a hint line on how to choose with the current device.
+]]
 local function buildLevelUp()
 	local overlay = new("Frame", {
 		Name = "LevelUp",
@@ -52115,9 +52670,10 @@ local function buildLevelUp()
 		Visible = false,
 		ZIndex = Theme.Z.LevelUp,
 	}, root)
-	overlay:SetAttribute("BackdropTransparency", 0.15)
+	overlay:SetAttribute("BackdropTransparency", 0.2)
 	levelUp.Overlay = overlay
-	local dim = new("Frame", { Name = "Dim", BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.15, BorderSizePixel = 0, Active = true, ZIndex = 1 }, overlay)
+	levelUp.Focus = {}
+	local dim = new("Frame", { Name = "Dim", BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.2, BorderSizePixel = 0, Active = true, ZIndex = 1 }, overlay)
 	UIKit.Bleed(dim)
 	-- "Panel" is what show() pops in: here the whole content block
 	local panel = new("Frame", { Name = "Panel", BackgroundTransparency = 1, ZIndex = 2 }, overlay)
@@ -52127,11 +52683,14 @@ local function buildLevelUp()
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.gold_300,
 		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.5,
-	}, 44)
-	levelUp.Divider = UIKit.Divider(panel, 300)
-	levelUp.Sub = text(panel, "BodyStrong", "Choose an upgrade", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted })
-	levelUp.Timer = UIKit.Meter(panel, { Gradient = ColorSequence.new(P.gold_500, P.gold_300), Size = UDim2.fromOffset(240, 5) })
+		TextStrokeTransparency = 0.45,
+	}, 46)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.gold_200, P.gold_400) }, levelUp.Title)
+	levelUp.Divider = UIKit.Divider(panel, 460)
+	levelUp.Sub = text(panel, "H3", "Choose one upgrade", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text })
+	levelUp.Pill = UIKit.IconPill(panel, "clock", "AUTO-PICK IN 25s", { AnchorPoint = Vector2.new(0.5, 0) })
+	levelUp.Pill.Label.TextColor3 = C.Text
+	levelUp.Timer = UIKit.Meter(panel, { Gradient = ColorSequence.new(P.gold_500, P.gold_300), Size = UDim2.fromOffset(330, 7) })
 	levelUp.Cards = new("Frame", { Name = "Cards", BackgroundTransparency = 1 }, panel)
 	levelUp.Layout = UIKit.list(levelUp.Cards, {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -52141,15 +52700,18 @@ local function buildLevelUp()
 	})
 	local actions = new("Frame", { Name = "Actions", BackgroundTransparency = 1 }, panel)
 	levelUp.Actions = actions
-	UIKit.list(actions, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 16) })
+	UIKit.list(actions, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 18) })
+	levelUp.RuleL = goldRule(actions, 110, true, 0)
+	levelUp.RuleR = goldRule(actions, 110, false, 3)
 	-- REROLL: 3 new cards; SKIP: no card, a little run gold. Both show what is left this
 	-- run (permanent upgrades / VIP give them); with none bought they say where to get them.
 	levelUp.Reroll = UIKit.Button(actions, {
+		Kind = "Outline",
 		Title = "REROLL",
 		Subtitle = "New cards",
 		TitleStyle = "H3",
 		Icon = "cycle",
-		IconSize = 20,
+		IconSize = 26,
 		Size = UDim2.fromOffset(230, 60),
 		Align = "Left",
 		LayoutOrder = 1,
@@ -52171,11 +52733,12 @@ local function buildLevelUp()
 		end,
 	})
 	levelUp.Skip = UIKit.Button(actions, {
+		Kind = "Outline",
 		Title = "SKIP",
 		Subtitle = "No card",
 		TitleStyle = "H3",
 		Icon = "skip",
-		IconSize = 20,
+		IconSize = 26,
 		Size = UDim2.fromOffset(230, 60),
 		Align = "Left",
 		LayoutOrder = 2,
@@ -52189,6 +52752,18 @@ local function buildLevelUp()
 			end)
 		end,
 	})
+	-- how to choose (keyboard / touch / gamepad), between two short rules
+	local hint = new("Frame", { Name = "Hint", BackgroundTransparency = 1 }, panel)
+	UIKit.list(hint, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
+	goldRule(hint, 90, true, 0)
+	levelUp.HintText = text(hint, "Body", "", { Size = UDim2.fromOffset(0, TS(15) + 6), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.TextMuted, LayoutOrder = 1 }, 15)
+	goldRule(hint, 90, false, 2)
+	levelUp.Hint = hint
+	UserInputService.LastInputTypeChanged:Connect(function()
+		if overlay.Visible and lastOffer then
+			levelUp.HintText.Text = choiceHint(#lastOffer.Choices)
+		end
+	end)
 
 	-- keyboard: 1 / 2 / 3 pick a card. Every confirm-type press is timed here (also when
 	-- the GUI took it: gamepad A on a selected card) for the fresh-press rule.
@@ -52209,35 +52784,94 @@ local function buildLevelUp()
 	end)
 end
 
+-- Fixed parts of a card (reference px).
+local CARD = { Pad = 14, Band = 30, Tile = 62, Row = 30, Box = 76, Syn = 30, Foot = 48, PBand = 26, PTile = 56, PRow = 28 }
+
+-- Phones (landscape) get a smaller tile, footer and title so the rows keep their room.
+local function cardTileSize(): number
+	return UIKit.IsCompact() and 50 or CARD.Tile
+end
+local function cardFootH(): number
+	return UIKit.IsCompact() and 40 or CARD.Foot
+end
+local function titleSize(): number
+	return UIKit.IsCompact() and 36 or 46
+end
+
+-- Height of a description on a card `w` wide: one or two lines (a rough width estimate;
+-- the label wraps and truncates for real).
+local function descHeight(desc: string?, w: number): number
+	local plain = string.gsub(desc or "", "<[^>]+>", "")
+	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.44 / math.max(1, w - 2 * CARD.Pad)), 1, 2)
+	return TS(14) * lines + 8
+end
+
+-- The boxed highlight: shorter on phones.
+local function boxHeight(): number
+	return UIKit.IsCompact() and 62 or CARD.Box
+end
+
+-- Height a landscape card needs for everything it has to show.
+local function cardNeeds(c, w: number): number
+	local desc, stats, changes = cardContent(c)
+	local h = CARD.Band + 12 + cardTileSize() + 10 + (desc and descHeight(desc, w) + 4 or 0) + 14
+	if #changes > 0 then
+		h += boxHeight() + 6 + (#changes - 1) * (CARD.Row - 2)
+	else
+		h += #stats * CARD.Row
+	end
+	if c.Synergy then
+		h += CARD.Syn + 10
+	end
+	if c.Hint then
+		h += TS(13) * 2 + 8
+	end
+	return h + 10 + cardFootH()
+end
+
+-- Height a wide portrait card needs.
+local function cardNeedsPortrait(c): number
+	local _, stats, changes = cardContent(c)
+	local rows = #changes > 0 and math.min(#changes, 2) or math.min(#stats, 3)
+	local h = CARD.PBand + 10 + CARD.PTile + 10 + rows * CARD.PRow
+	if c.Synergy then
+		h += CARD.Syn + 4
+	end
+	if c.Hint then
+		h += TS(13) + 6
+	end
+	return math.max(120, h + 8)
+end
+
+-- Room left for the cards under the header and above the buttons (landscape).
+local function headerHeight(): number
+	local subH = (portrait or not UIKit.IsCompact() or offerHint ~= nil) and TS(18) + 6 or 0
+	return TS(titleSize()) + 6 + 10 + 6 + subH + 6 + (Theme.Size.Badge + 14) + 8 + 7 + 16
+end
+local function footerHeight(): number
+	return 16 + 60 + 8 + (TS(15) + 6)
+end
+
 -- Card sizes for the current screen.
 local function cardMetrics(count: number): (number, number)
 	local v = virtualSize()
 	local m = margin()
+	local choices = lastOffer and lastOffer.Choices or {}
 	if portrait then
-		-- tall enough for the busiest card of this offer (one line per stat change)
-		local most = 0
-		for _, c in ipairs(lastOffer and lastOffer.Choices or {}) do
-			local n = type(c.Lines) == "table" and #c.Lines or 1
-			if c.Type == "WeaponNew" then
-				n = 1
-			end
-			if c.Type == "WeaponNew" or c.Type == "PassiveNew" or c.Type == "PassiveUp" or c.Type == "Evolve" then
-				n += 1 -- the short description
-			end
-			if c.Hint then
-				n += 1
-			end
-			if c.Synergy then
-				n += 1
-			end
-			most = math.max(most, n)
+		-- tall enough for the busiest card of this offer
+		local most = 120
+		for _, c in ipairs(choices) do
+			most = math.max(most, cardNeedsPortrait(c))
 		end
-		local lineH = TS(Theme.TextSize.Small) + 5
-		return math.min(v.X - 2 * m, 600), math.clamp(78 + TS(22) + most * lineH, UIKit.IsCompact() and 150 or 136, 300)
+		return math.min(v.X - 2 * m, 600), math.min(most, 320)
 	end
 	local w = math.min(290, (v.X - 2 * m - (count - 1) * 18) / math.max(1, count))
-	local h = math.clamp(v.Y - 290, 300, 400)
-	return w, h
+	local most = 300
+	for _, c in ipairs(choices) do
+		most = math.max(most, cardNeeds(c, w))
+	end
+	local room = v.Y - headerHeight() - footerHeight() - insets.Top * 0.5 - 12
+	return w, math.max(260, math.min(most, room, 440))
 end
 
 -- Card icon: the upgrade tile framed in the card's accent (rim + a soft halo that breathes
@@ -52249,11 +52883,11 @@ local function cardTile(face: GuiObject, c, size: number, accent: Color3, popDel
 	local halo = new("Frame", {
 		Name = "Halo",
 		BackgroundColor3 = accent,
-		BackgroundTransparency = 0.86,
+		BackgroundTransparency = 0.88,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(1.3, 1.3),
+		Size = UDim2.fromScale(1.25, 1.25),
 	}, holder)
 	UIKit.corner(halo, 999)
 	local tile = UIKit.Tile(holder, { Id = id, Size = size, Evolved = c.Type == "Evolve" })
@@ -52267,7 +52901,7 @@ local function cardTile(face: GuiObject, c, size: number, accent: Color3, popDel
 	-- under it and is all there is when the frame is not uploaded
 	ArtImage.Frame(tile, ArtImage.CardBand(c), math.max(6, math.floor(size * 0.1)))
 	if not ClientSettings.Reduced() then
-		offerArm.Fx.Add(UIAnim.Glow(halo, "BackgroundTransparency", 0.84, 0.94, 1.8))
+		offerArm.Fx.Add(UIAnim.Glow(halo, "BackgroundTransparency", 0.86, 0.95, 1.8))
 		if popDelay then
 			local s = UIAnim.ScaleOf(holder)
 			s.Scale = 0.6
@@ -52281,10 +52915,84 @@ local function cardTile(face: GuiObject, c, size: number, accent: Color3, popDel
 	return holder
 end
 
+-- One stat row: icon, caps label, right-aligned value (RichText). Returns its height.
+local function statRow(parent: Instance, c, line, x: number, y: number, w: number, h: number, value: string): number
+	local row = new("Frame", { Name = "Row", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.55, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h - 2) }, parent)
+	UIKit.corner(row, 6)
+	local icon = statIcon(row, tostring(line.Label), c, 18)
+	icon.AnchorPoint = Vector2.new(0, 0.5)
+	icon.Position = UDim2.new(0, 8, 0.5, 0)
+	text(row, "Caption", UIKit.track(tostring(line.Label)), {
+		Position = UDim2.fromOffset(34, 0),
+		Size = UDim2.new(0.55, -34, 1, 0),
+		TextColor3 = P.ivory_300,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, 13)
+	text(row, "Number", value, {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -10, 0, 0),
+		Size = UDim2.new(0.45, 0, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		RichText = true,
+	}, 16)
+	return h
+end
+
+local function changeValue(line): string
+	return string.format('%s <font color="%s">→</font> <font color="%s">%s</font>', tostring(line.From), hex(P.gold_400), hex(P.fx_heal), tostring(line.To))
+end
+
+-- The boxed highlight of a card's main change: icon + caps stat, big "From → To".
+local function changeBox(parent: Instance, c, line, x: number, y: number, w: number)
+	local box = new("Frame", { Name = "Highlight", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, boxHeight()) }, parent)
+	UIKit.corner(box, 8)
+	UIKit.stroke(box, P.slate_600, 1, 0.35)
+	local compact = UIKit.IsCompact()
+	local head = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, compact and 5 or 8), Size = UDim2.new(1, 0, 0, 22) }, box)
+	UIKit.list(head, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	statIcon(head, tostring(line.Label), c, 18).LayoutOrder = 1
+	text(head, "Caption", UIKit.track(tostring(line.Label)), { Size = UDim2.fromOffset(0, 22), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, LayoutOrder = 2 }, 14)
+	text(box, "Number", string.format('%s  <font color="%s">→</font>  <font color="%s">%s</font>', tostring(line.From), hex(P.gold_400), hex(P.fx_heal), tostring(line.To)), {
+		Position = UDim2.fromOffset(6, compact and 27 or 32),
+		Size = UDim2.new(1, -12, 0, compact and 32 or 36),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		RichText = true,
+		TextScaled = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, compact and 22 or 26)
+end
+
+-- Green rounded bar: the synergy this card advances / completes (SynergyData).
+local function synergyBar(parent: Instance, c, x: number, y: number, w: number, h: number)
+	local ready = c.SynergyReady == true
+	local bar = new("Frame", { Name = "Synergy", BackgroundColor3 = ready and P.moss_600 or P.moss_800, BackgroundTransparency = 0.1, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h) }, parent)
+	UIKit.corner(bar, 6)
+	UIKit.stroke(bar, ready and P.moss_200 or P.moss_400, 1, 0.2)
+	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, bar)
+	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	Icons.Draw(row, "sparkle", { Size = h - 12, Color = P.fx_heal }).LayoutOrder = 1
+	text(row, "Caption", synergyText(c), { Size = UDim2.fromOffset(0, h), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.fx_heal, LayoutOrder = 2, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+end
+
+--[[
+	One card. Landscape (tall, owner mockup): header band with the card kind in small caps;
+	icon tile left + serif name (+ LV a → b / max) right; the description; a gold rule with
+	a diamond; then a NEW weapon's stat table (icon, caps label, value) or an upgrade's boxed
+	main change (big "From → To", the new value green) with the other changes as rows; the
+	synergy bar; the evolution hint; and a footer with the number badge + "Choose".
+	Portrait (wide, stacked): band with kind + number, icon left, name / level / description
+	right, the rows under it. Hover / gamepad focus / the pick turn the card gold-rimmed and
+	warm-tinted (Focus[index]).
+]]
 local function makeCard(c, index: number, count: number, animate: boolean)
 	local w, h = cardMetrics(count)
-	local bandText, bandColor, edgeColor = cardBand(c)
-	local legendary = c.Rarity == "Legendary"
+	if portrait then
+		h = math.min(cardNeedsPortrait(c), h) -- stacked cards each take what they need
+	end
+	local bandColor, edgeColor = cardBand(c)
+	local legendary = c.Rarity == "Legendary" or c.Type == "Evolve"
+	local desc, stats, changes = cardContent(c)
+	local pad = CARD.Pad
 	local hit = new("TextButton", {
 		Name = "Card" .. index,
 		Text = "",
@@ -52300,14 +53008,14 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		local glow = new("Frame", {
 			Name = "Glow",
 			BackgroundColor3 = P.gold_300,
-			BackgroundTransparency = 0.7,
+			BackgroundTransparency = 0.75,
 			BorderSizePixel = 0,
-			Position = UDim2.fromOffset(-8, -8),
-			Size = UDim2.new(1, 16, 1, 16),
+			Position = UDim2.fromOffset(-7, -7),
+			Size = UDim2.new(1, 14, 1, 14),
 			ZIndex = 0,
 		}, hit)
-		UIKit.corner(glow, Theme.Radius.L + 8)
-		offerArm.Fx.Add(UIAnim.Glow(glow, "BackgroundTransparency", 0.65, 0.88, 1.1))
+		UIKit.corner(glow, Theme.Radius.L + 7)
+		offerArm.Fx.Add(UIAnim.Glow(glow, "BackgroundTransparency", 0.72, 0.9, 1.1))
 	end
 	local face = new("Frame", {
 		Name = "Face",
@@ -52318,178 +53026,224 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		ClipsDescendants = false,
 	}, hit)
 	UIKit.corner(face, Theme.Radius.L)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_800, P.slate_900) }, face)
-	-- a soft wash of the rarity colour from the top (left on the wide phone cards)
-	local wash = new("Frame", { Name = "Wash", BackgroundColor3 = edgeColor, BorderSizePixel = 0, Size = portrait and UDim2.fromScale(0.5, 1) or UDim2.fromScale(1, 0.55) }, face)
-	UIKit.corner(wash, Theme.Radius.L)
-	new("UIGradient", { Rotation = portrait and 0 or 90, Transparency = NumberSequence.new(0.84, 1) }, wash)
-	local edge = UIKit.stroke(face, edgeColor, legendary and 2.5 or 1.5, legendary and 0 or 0.25)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_800, P.slate_950) }, face)
+	-- warm gold tint of the focused / picked card
+	local warm = new("Frame", { Name = "Warm", BackgroundColor3 = P.gold_600, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, face)
+	UIKit.corner(warm, Theme.Radius.L)
+	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.2, 0.75) }, warm)
+	local edge = UIKit.stroke(face, legendary and P.gold_400 or edgeColor, legendary and 2.5 or 1.5, legendary and 0 or 0.45)
 	if legendary then
-		offerArm.Fx.Add(UIAnim.PulseStroke(edge, 2, 4))
+		offerArm.Fx.Add(UIAnim.PulseStroke(edge, 2, 3.5))
 	end
+
+	-- header band
+	local bandH = portrait and CARD.PBand or CARD.Band
+	local band = new("Frame", { Name = "Band", BackgroundColor3 = bandColor, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, bandH), ZIndex = 2, ClipsDescendants = true }, face)
+	UIKit.corner(band, Theme.Radius.L)
+	new("Frame", { BackgroundColor3 = bandColor, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -Theme.Radius.L), Size = UDim2.new(1, 0, 0, Theme.Radius.L), ZIndex = 2 }, band)
+	new("Frame", { Name = "Line", BackgroundColor3 = legendary and P.gold_300 or edgeColor, BackgroundTransparency = 0.6, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 3 }, band)
+	local labelColor = legendary and P.gold_900 or edgeColor:Lerp(P.ivory_100, 0.45)
+	local bandLabel = text(band, "Label", UIKit.track(cardKind(c)), {
+		Position = UDim2.fromOffset(portrait and pad or 0, 0),
+		Size = portrait and UDim2.new(1, -pad * 2, 1, 0) or UDim2.fromScale(1, 1),
+		TextXAlignment = portrait and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center,
+		TextColor3 = labelColor,
+		ZIndex = 3,
+	}, Theme.TextSize.Caption + 1)
+	if (c.Rarity == "Rare" or c.Rarity == "Epic" or legendary) and not ClientSettings.Reduced() then
+		-- the rarer bands shine now and then (started once the card has landed level:
+		-- Roblox does not clip inside a rotated card)
+		task.delay(animate and (offerArm.Stagger * (index - 1) + 0.32) or 0, function()
+			if band.Parent then
+				offerArm.Fx.Add(UIAnim.Shine(band, legendary and 1.8 or 2.8, legendary and 0.6 or 0.8))
+			end
+		end)
+	end
+
+	-- focus look (hover, gamepad selection, the pick)
+	local focused = false
+	local function setFocus(on: boolean)
+		if focused == on then
+			return
+		end
+		focused = on
+		local t = Theme.Motion.Fast
+		UIAnim.Tween(warm, t, { BackgroundTransparency = on and 0.82 or 1 })
+		if not legendary then
+			UIAnim.Tween(edge, t, { Color = on and P.gold_400 or edgeColor, Thickness = on and 2.5 or 1.5, Transparency = on and 0 or 0.45 })
+			bandLabel.TextColor3 = on and P.gold_300 or labelColor
+		end
+	end
+	levelUp.Focus[index] = setFocus
 	UIKit.AttachStates(hit, face, Theme.Radius.L, function(on: boolean)
-		-- hover / gamepad focus: the card lifts (AttachStates), grows a touch and its rim
-		-- lights up in the rarity colour
+		-- the card lifts (AttachStates), grows a touch and turns gold
 		if offerOpen then
 			UIAnim.Tween(UIAnim.ScaleOf(hit), Theme.Motion.Fast, { Scale = on and 1.03 or 1 })
-			if not legendary then
-				UIAnim.Tween(edge, Theme.Motion.Fast, { Thickness = on and 2.5 or 1.5, Transparency = on and 0 or 0.25 })
-			end
+			setFocus(on)
 		end
 	end)
 	local delay = offerArm.Stagger * (index - 1) -- this card's entrance delay
+	local sub = cardLevelText(c)
 
 	if portrait then
-		-- horizontal card: icon left, text right, rarity pill top right
-		local tileSize = 84
-		cardTile(face, c, tileSize, edgeColor, animate and delay + 0.08 or nil).Position = UDim2.new(0, 18, 0.5, -tileSize / 2)
-		local x = 18 + tileSize + 16
-		local badge = UIKit.Badge(face, bandText, legendary and "Gold" or "Slate", { Position = UDim2.fromOffset(x, 14) })
-		badge.BackgroundColor3 = bandColor
-		badge.TextColor3 = legendary and P.gold_900 or P.ivory_100
-		text(face, "H2", c.Name, { Position = UDim2.fromOffset(x, 38), Size = UDim2.new(1, -x - 16, 0, TS(22) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
-		text(face, "Caption", cardLevelText(c), {
-			Position = UDim2.fromOffset(x, 40 + TS(22) + 2),
-			Size = UDim2.new(1, -x - 16, 0, TS(12) + 4),
-			TextColor3 = edgeColor,
-		})
-		local hintH = c.Hint and (TS(13) + 4) or 0
-		local synH = c.Synergy and (TS(13) + 4) or 0
-		text(face, "Body", cardRichLines(c, "\n"), {
-			Position = UDim2.fromOffset(x, 46 + TS(22) + TS(12) + 4),
-			Size = UDim2.new(1, -x - 16, 1, -(52 + TS(22) + TS(12) + 4 + hintH + synH)),
-			TextWrapped = true,
-			RichText = true,
-			TextColor3 = C.Text,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-		}, Theme.TextSize.Small)
+		-- number badge at the band's right end
+		local num = text(band, "Number", tostring(index), {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -pad, 0.5, 0),
+			Size = UDim2.fromOffset(20, 20),
+			TextXAlignment = Enum.TextXAlignment.Center,
+			BackgroundColor3 = P.slate_950,
+			BackgroundTransparency = 0.3,
+			ZIndex = 4,
+		}, 13)
+		UIKit.corner(num, 999)
+		UIKit.stroke(num, P.ivory_300, 1, 0.3).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		local y = bandH + 10
+		cardTile(face, c, CARD.PTile, edgeColor, animate and delay + 0.08 or nil).Position = UDim2.fromOffset(pad, y)
+		local x = pad + CARD.PTile + 12
+		text(face, "H2", c.Name, { Position = UDim2.fromOffset(x, y - 2), Size = UDim2.new(0.6, -x, 0, TS(22) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
+		if sub ~= "" then
+			text(face, "Caption", UIKit.track(sub), {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -pad, 0, y + 2),
+				Size = UDim2.new(0.4, -pad, 0, TS(13) + 4),
+				TextXAlignment = Enum.TextXAlignment.Right,
+				TextColor3 = legendary and P.gold_300 or P.ivory_300,
+			}, 13)
+		end
+		if desc then
+			text(face, "Small", desc, {
+				Position = UDim2.fromOffset(x, y + TS(22) + 4),
+				Size = UDim2.new(1, -x - pad, 0, CARD.PTile + 4 - TS(22)),
+				TextWrapped = true,
+				RichText = true,
+				TextYAlignment = Enum.TextYAlignment.Top,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+			}, 14)
+		end
+		y += CARD.PTile + 10
+		local rw = w - 2 * pad
+		if #changes > 0 then
+			for i = 1, math.min(#changes, 2) do
+				y += statRow(face, c, changes[i], pad, y, rw, CARD.PRow, changeValue(changes[i]))
+			end
+		else
+			for i = 1, math.min(#stats, 3) do
+				y += statRow(face, c, stats[i], pad, y, rw, CARD.PRow, tostring(stats[i].To))
+			end
+		end
+		if c.Synergy then
+			synergyBar(face, c, pad, y + 4, rw, CARD.Syn - 4)
+			y += CARD.Syn + 4
+		end
 		if c.Hint then
 			text(face, "Small", tostring(c.Hint), {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0, x, 1, -8),
-				Size = UDim2.new(1, -x - 16, 0, TS(13) + 2),
+				Position = UDim2.fromOffset(pad, y + 2),
+				Size = UDim2.new(1, -2 * pad, 0, TS(13) + 4),
+				TextXAlignment = Enum.TextXAlignment.Center,
 				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, 13)
 		end
-		if c.Synergy then
-			-- the synergy this NEW card completes / advances (SynergyData), above the hint
-			text(face, "Small", tostring(c.Synergy), {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0, x, 1, -8 - hintH),
-				Size = UDim2.new(1, -x - 16, 0, TS(13) + 2),
-				TextColor3 = c.SynergyReady and P.moss_200 or P.moss_300,
+	else
+		local y = bandH + 12
+		local tileSize = cardTileSize()
+		local tile = cardTile(face, c, tileSize, edgeColor, animate and delay + 0.08 or nil)
+		tile.Position = UDim2.fromOffset(pad, y)
+		local x = pad + tileSize + 12
+		local nameH = TS(22) + 6
+		local subH = sub ~= "" and TS(13) + 4 or 0
+		local ny = y + math.floor((tileSize - nameH - subH) / 2)
+		text(face, "H2", c.Name, {
+			Position = UDim2.fromOffset(x, ny),
+			Size = UDim2.new(1, -x - 8, 0, nameH),
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		}, 23)
+		if sub ~= "" then
+			text(face, "Label", UIKit.track(sub), {
+				Position = UDim2.fromOffset(x, ny + nameH),
+				Size = UDim2.new(1, -x - 8, 0, subH),
+				TextColor3 = legendary and P.gold_300 or P.ivory_300,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, 13)
 		end
-	else
-		-- rarity band
-		local band = new("Frame", { Name = "Band", BackgroundColor3 = bandColor, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 34), ZIndex = 2, ClipsDescendants = true }, face)
-		UIKit.corner(band, Theme.Radius.L)
-		if c.Rarity == "Rare" or c.Rarity == "Epic" or legendary or c.Type == "Evolve" then
-			-- the rarer bands shine now and then (started once the card has landed level:
-			-- Roblox does not clip inside a rotated card)
-			if not ClientSettings.Reduced() then
-				task.delay(animate and (delay + 0.32) or 0, function()
-					if band.Parent then
-						offerArm.Fx.Add(UIAnim.Shine(band, legendary and 1.8 or 2.8, legendary and 0.6 or 0.75))
-					end
-				end)
+		y += tileSize + 10
+		if desc then
+			text(face, "Body", desc, {
+				Position = UDim2.fromOffset(pad, y),
+				Size = UDim2.new(1, -2 * pad, 0, descHeight(desc, w)),
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextWrapped = true,
+				RichText = true,
+				TextColor3 = P.ivory_200,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+			}, 14)
+			y += descHeight(desc, w) + 4
+		end
+		UIKit.Divider(face, w - 2 * pad - 20, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, y) })
+		y += 14
+		-- footer: a hairline, the number badge and "Choose"
+		local footH = cardFootH()
+		local footY = h - footH
+		new("Frame", { Name = "FootLine", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0, Position = UDim2.fromOffset(pad, footY), Size = UDim2.new(1, -2 * pad, 0, 1) }, face)
+		local num = text(face, "Number", tostring(index), {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, -34, 0, footY + footH / 2),
+			Size = UDim2.fromOffset(30, 30),
+			TextXAlignment = Enum.TextXAlignment.Center,
+		}, 16)
+		UIKit.corner(num, 999)
+		UIKit.stroke(num, P.ivory_200, 1.5, 0.15).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		text(face, "BodyStrong", "Choose", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0.5, -8, 0, footY + footH / 2),
+			Size = UDim2.fromOffset(90, TS(16) + 6),
+		}, 16)
+		-- top-down under the rule: the rows (what the card does comes first), then the
+		-- synergy bar and the evolution hint while they fit above the footer
+		local bottom = footY - 6
+		local rw = w - 2 * pad
+		-- the synergy bar keeps its room (rows that do not fit are dropped instead)
+		local synRoom = c.Synergy and CARD.Syn + 8 or 0
+		local function fits(hh: number): boolean
+			return y + hh <= bottom - synRoom
+		end
+		if #changes > 0 then
+			local start = 1
+			if fits(boxHeight()) then
+				changeBox(face, c, changes[1], pad, y, rw)
+				y += boxHeight() + 6
+				start = 2
+			end
+			for i = start, #changes do
+				if not fits(CARD.Row - 2) then
+					break
+				end
+				y += statRow(face, c, changes[i], pad, y, rw, CARD.Row - 2, changeValue(changes[i]))
+			end
+		else
+			for _, line in ipairs(stats) do
+				if not fits(CARD.Row) then
+					break
+				end
+				y += statRow(face, c, line, pad, y, rw, CARD.Row, tostring(line.To))
 			end
 		end
-		new("Frame", { BackgroundColor3 = bandColor, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -Theme.Radius.L), Size = UDim2.new(1, 0, 0, Theme.Radius.L), ZIndex = 2 }, band)
-		text(band, "Label", UIKit.track(bandText), {
-			Size = UDim2.fromScale(1, 1),
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextColor3 = legendary and P.gold_900 or P.ivory_100,
-			ZIndex = 3,
-		}, Theme.TextSize.Caption + 1)
-		-- header: big centred icon on tall cards; on short ones (phones) the icon sits left
-		-- of the name so the lines below keep their room
-		local y
-		local tall = h >= 380 and not UIKit.IsCompact()
-		if tall then
-			local tileSize = 76
-			local tile = cardTile(face, c, tileSize, edgeColor, animate and delay + 0.08 or nil)
-			tile.AnchorPoint = Vector2.new(0.5, 0)
-			tile.Position = UDim2.new(0.5, 0, 0, 48)
-			y = 48 + tileSize + 10
-			text(face, "H2", c.Name, {
-				Position = UDim2.fromOffset(12, y),
-				Size = UDim2.new(1, -24, 0, TS(22) + 6),
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-			})
-			y += TS(22) + 6
-			text(face, "Caption", UIKit.track(cardLevelText(c)), {
-				Position = UDim2.fromOffset(12, y),
-				Size = UDim2.new(1, -24, 0, TS(12) + 6),
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextColor3 = edgeColor,
-			})
-			y += TS(12) + 8
-		else
-			local tileSize = 58
-			local tile = cardTile(face, c, tileSize, edgeColor, animate and delay + 0.08 or nil)
-			tile.Position = UDim2.fromOffset(12, 44)
-			local x = 12 + tileSize + 10
-			text(face, "H2", c.Name, {
-				Position = UDim2.fromOffset(x, 44),
-				Size = UDim2.new(1, -x - 8, 0, TS(22) + 6),
-				TextTruncate = Enum.TextTruncate.AtEnd,
-			})
-			text(face, "Caption", UIKit.track(cardLevelText(c)), {
-				Position = UDim2.fromOffset(x, 44 + TS(22) + 6),
-				Size = UDim2.new(1, -x - 8, 0, TS(12) + 6),
-				TextColor3 = edgeColor,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-			})
-			y = 44 + math.max(tileSize, TS(22) + TS(12) + 12) + 8
+		synRoom = 0
+		if c.Synergy and fits(CARD.Syn + 4) then
+			synergyBar(face, c, pad, y + 4, rw, CARD.Syn)
+			y += CARD.Syn + 8
 		end
-		UIKit.Divider(face, 120, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, y) })
-		y += 12
-		local keyRoom = (UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled) and 34 or 12
-		local hintH = c.Hint and (TS(13) * 2 + 8) or 0
-		local synH = c.Synergy and (TS(13) + 6) or 0
-		text(face, "Body", cardRichLines(c, "\n"), {
-			Position = UDim2.fromOffset(14, y),
-			Size = UDim2.new(1, -28, 1, -(y + keyRoom + hintH + synH)),
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			TextWrapped = true,
-			RichText = true,
-			TextColor3 = C.Text,
-			LineHeight = 1.12,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-		}, Theme.TextSize.Small + 1)
-		if c.Hint then
+		local hh = TS(13) * 2 + 6
+		if c.Hint and fits(hh) then
 			text(face, "Small", tostring(c.Hint), {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0, 14, 1, -keyRoom),
-				Size = UDim2.new(1, -28, 0, hintH),
+				Position = UDim2.fromOffset(pad, bottom - hh),
+				Size = UDim2.new(1, -2 * pad, 0, hh),
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextYAlignment = Enum.TextYAlignment.Bottom,
 				TextWrapped = true,
 				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
 			}, 13)
-		end
-		if c.Synergy then
-			-- the synergy this NEW card completes / advances (SynergyData), above the hint
-			text(face, "Small", tostring(c.Synergy), {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0, 14, 1, -(keyRoom + hintH)),
-				Size = UDim2.new(1, -28, 0, synH),
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextYAlignment = Enum.TextYAlignment.Bottom,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextColor3 = c.SynergyReady and P.moss_200 or P.moss_300,
-			}, 13)
-		end
-		if UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled then
-			local key = UIKit.Badge(face, tostring(index), "Dark", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10) })
-			key.Size = UDim2.fromOffset(22, 22)
-			key.AutomaticSize = Enum.AutomaticSize.None
 		end
 	end
 
@@ -52537,32 +53291,64 @@ local function layoutLevelUp()
 	local v = virtualSize()
 	local count = lastOffer and #lastOffer.Choices or 3
 	local cw, ch = cardMetrics(count)
-	local titleH = TS(44) + 8
+	local titleH = TS(titleSize()) + 6
+	-- phones (landscape) drop "Choose one upgrade" (the cards need the room) unless the
+	-- tutorial has something to say there
+	local showSub = portrait or not UIKit.IsCompact() or offerHint ~= nil
+	local subH = showSub and TS(18) + 6 or 0
+	levelUp.Sub.Visible = showSub
+	levelUp.Title.TextSize = TS(titleSize())
+	local pillH = Theme.Size.Badge + 14
 	local cardsW = portrait and cw or (count * cw + (count - 1) * 18)
-	local cardsH = portrait and (count * ch + (count - 1) * 12) or ch
-	local blockH = titleH + 12 + 26 + 16 + cardsH + 20 + 60
+	local cardsH = ch
+	if portrait then
+		cardsH = (count - 1) * 12
+		for _, c in ipairs(lastOffer and lastOffer.Choices or {}) do
+			cardsH += math.min(cardNeedsPortrait(c), ch)
+		end
+	end
+	local hintH = TS(15) + 6
+	local headH = titleH + 10 + 6 + subH + 6 + pillH + 8 + 7 + 16
+	local blockH = headH + cardsH + 16 + 60 + 8 + hintH
 	local top = math.max(insets.Top * 0.5 + 6, (v.Y - blockH) / 2)
 	local panel = levelUp.Panel :: Frame
 	panel.Position = UDim2.fromOffset(0, 0)
 	panel.Size = UDim2.fromOffset(v.X, v.Y)
 	levelUp.Title.Position = UDim2.fromOffset(0, top)
 	levelUp.Title.Size = UDim2.new(1, 0, 0, titleH)
+	local y = top + titleH
 	levelUp.Divider.AnchorPoint = Vector2.new(0.5, 0)
-	levelUp.Divider.Position = UDim2.new(0.5, 0, 0, top + titleH)
-	levelUp.Sub.Position = UDim2.fromOffset(0, top + titleH + 12)
-	levelUp.Sub.Size = UDim2.new(1, 0, 0, TS(16) + 6)
+	levelUp.Divider.Position = UDim2.new(0.5, 0, 0, y)
+	levelUp.Divider.Size = UDim2.fromOffset(math.min(460, v.X - 2 * margin()), 10)
+	y += 16
+	levelUp.Sub.Position = UDim2.fromOffset(0, y)
+	levelUp.Sub.Size = UDim2.new(1, 0, 0, subH)
+	y += subH + 6
+	levelUp.Pill.Frame.Position = UDim2.new(0.5, 0, 0, y)
+	y += pillH + 8
 	levelUp.Timer.Frame.AnchorPoint = Vector2.new(0.5, 0)
-	levelUp.Timer.Frame.Position = UDim2.new(0.5, 0, 0, top + titleH + 12 + TS(16) + 8)
-	local cardsY = top + titleH + 12 + 26 + 16
+	levelUp.Timer.Frame.Position = UDim2.new(0.5, 0, 0, y)
+	y += 7 + 16
 	levelUp.Layout.FillDirection = portrait and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
 	levelUp.Layout.Padding = UDim.new(0, portrait and 12 or 18)
-	levelUp.Cards.Position = UDim2.fromOffset((v.X - cardsW) / 2, cardsY)
+	levelUp.Cards.Position = UDim2.fromOffset((v.X - cardsW) / 2, y)
 	levelUp.Cards.Size = UDim2.fromOffset(cardsW, cardsH)
-	levelUp.Actions.Position = UDim2.fromOffset(0, cardsY + cardsH + 20)
+	y += cardsH + 16
+	levelUp.Actions.Position = UDim2.fromOffset(0, y)
 	levelUp.Actions.Size = UDim2.new(1, 0, 0, 60)
-	local bw = math.clamp(math.floor((v.X - 2 * margin() - 16) / 2), 150, 240)
+	local bw = math.clamp(math.floor((v.X - 2 * margin() - 18) / 2), 150, 240)
 	levelUp.Reroll.Instance.Size = UDim2.fromOffset(bw, 60)
 	levelUp.Skip.Instance.Size = UDim2.fromOffset(bw, 60)
+	-- the flanking rules only where there is room for them
+	local ruleW = math.floor((v.X - 2 * margin() - 2 * bw - 3 * 18) / 2)
+	levelUp.RuleL.Visible = ruleW >= 40
+	levelUp.RuleR.Visible = ruleW >= 40
+	levelUp.RuleL.Size = UDim2.fromOffset(math.min(ruleW, 140), 1)
+	levelUp.RuleR.Size = UDim2.fromOffset(math.min(ruleW, 140), 1)
+	y += 60 + 8
+	levelUp.Hint.Position = UDim2.fromOffset(0, y)
+	levelUp.Hint.Size = UDim2.new(1, 0, 0, hintH)
+	levelUp.HintText.Text = choiceHint(count)
 end
 
 local function clearCards()
@@ -52622,8 +53408,8 @@ local function showOffer(offer)
 	)
 	levelUp.Reroll.SetEnabled(rerolls > 0)
 	levelUp.Skip.SetText(
-		skips > 0 and string.format("SKIP  +%d GOLD", skipGold) or "SKIP",
-		skips > 0 and string.format("%d left · no card", skips) or (skipMax > 0 and "None left this run" or "Buy skips in Upgrades")
+		"SKIP",
+		skips > 0 and string.format("%d left · +%d gold", skips, skipGold) or (skipMax > 0 and "None left this run" or "Buy skips in Upgrades")
 	)
 	levelUp.Skip.SetEnabled(skips > 0)
 	levelUp.Title.Text = offer.Pending > 1 and string.format("LEVEL UP!  +%d", offer.Pending) or "LEVEL UP!"
@@ -54385,7 +55171,8 @@ local function updateFrame(dt: number)
 
 	if levelUp.Overlay.Visible then
 		local left = math.max(0, offerDeadline - os.clock())
-		levelUp.Sub.Text = string.format("%s  ·  auto-pick in %ds", offerHint or "Choose an upgrade", math.ceil(left))
+		levelUp.Sub.Text = offerHint or "Choose one upgrade"
+		levelUp.Pill.SetText(string.format("AUTO-PICK IN %ds", math.ceil(left)))
 		levelUp.Timer.Set(left / offerSeconds)
 	end
 	if revive.Overlay.Visible then
@@ -54706,7 +55493,7 @@ return UIBuilder
 	            Toggle, Modal, ScreenHeader
 	Dashboard   TitleRule, SegmentBar, Avatar (head shot), Medal (ranks 1-3), Hairline
 	Lobby look  ArtPicture (art/ picture with a drawn stand-in), StatusPill / SetStatus,
-	            SectionLabel, IconPill
+	            SectionLabel, IconPill, spaced / TitleBar (spaced serif title + compact BACK)
 
 	States: hover lifts 2 px and brightens, press scales to 0.96, disabled desaturates,
 	selected gets a strong gold border, gamepad focus shows a gold outline. Buttons keep a
@@ -56804,6 +57591,64 @@ function UIKit.Hairline(parent: Instance?, props: { [string]: any }?): Frame
 	end
 	f.Parent = parent
 	return f
+end
+
+------------------------------------------------------------------------------------------
+-- Spaced titles (CHARACTERS mockup): "C H A R A C T E R S", compact BACK + title bar
+------------------------------------------------------------------------------------------
+
+-- Upper-case letters spread apart with spaces (words three spaces apart).
+function UIKit.spaced(str: string): string
+	local out = {}
+	for _, code in utf8.codes(string.upper(str)) do
+		local ch = utf8.char(code)
+		table.insert(out, ch == " " and " " or ch)
+	end
+	return table.concat(out, " ")
+end
+
+export type TitleBar = { Frame: Frame, Back: Button, Title: TextLabel, Rule: Frame, SetTitle: (s: string) -> () }
+
+--[[
+	A slim screen title bar: a compact BACK button, then the screen title in spaced serif
+	caps with a thin gold rule and diamond under it. Meant to sit in the Roblox top bar
+	row (the frame is 52 px tall; place it beside the Roblox buttons).
+]]
+function UIKit.TitleBar(parent: Instance, title: string, onBack: () -> ()): TitleBar
+	local f = new("Frame", { Name = "TitleBar", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 52) }, parent)
+	local back = UIKit.Button(f, {
+		Kind = "Secondary",
+		Title = "BACK",
+		Icon = "chevronLeft",
+		IconSize = 16,
+		Size = UDim2.fromOffset(108, 42),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		Align = "Center",
+		Shadow = false,
+		OnClick = onBack,
+		Name = "Back",
+	})
+	local px = TS(Theme.TextSize.H2 + 2)
+	local t = text(f, "H2", UIKit.spaced(title), {
+		Name = "Title",
+		FontFace = Theme.Font.Display,
+		Position = UDim2.fromOffset(126, 2),
+		Size = UDim2.fromOffset(0, px + 6),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextColor3 = P.ivory_100,
+	}, Theme.TextSize.H2 + 2)
+	-- the rule follows the title's width
+	local rule = UIKit.Divider(t, 10, { Name = "Rule", AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 10) })
+	return {
+		Frame = f,
+		Back = back,
+		Title = t,
+		Rule = rule,
+		SetTitle = function(s: string)
+			t.Text = UIKit.spaced(s)
+		end,
+	}
 end
 
 return UIKit
