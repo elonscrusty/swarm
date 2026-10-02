@@ -4,8 +4,10 @@
 	so changing a value here changes it everywhere on the next sync.
 
 	Sections:
-	  Run, Dev, Player, Slots, LevelUp, XP, Gold, Drops, Enemies, Difficulty, Spawn, Boss,
-	  Projectiles, Net, Camera, Controls, Data, Monetization, Sounds, UI, Arenas, Modes, Lobby
+	  Run, Dev, Player, Slots, LevelUp, XP, Gold, Drops, Items, Chests, Shrines, Guarded,
+	  Enemies, Difficulty, Spawn, Boss, Pacing,
+	  Projectiles, Net, Camera, Controls, Graphics, Data, Monetization, Sounds, Audio,
+	  Settings, Tutorial, DamageNumbers, UI, Arenas, Modes, Lobby
 ]]
 
 local Config = {}
@@ -149,6 +151,11 @@ Config.LevelUp = {
 	WeightNewWeapon = 6,
 	WeightNewPassive = 5,
 	WeightEvolution = 40, -- an available evolution is almost always offered
+	-- a passive that evolves a weapon you own (and don't have yet) is this much likelier
+	EvolutionPassiveWeightMult = 1.5,
+	-- weapon cards from this level on say what the weapon evolves with ("Evolves at Lv 8
+	-- with Heart (owned)")
+	EvolveHintLevel = 6,
 	-- Rarity names → card colour (UI) and label.
 	Rarities = {
 		Common = { Label = "Upgrade", Color = Color3.fromRGB(205, 210, 220) },
@@ -188,12 +195,13 @@ Config.Gold = {
 	MinPerKill = 1,
 	MaxPerKill = 3,
 	KillGoldChance = 0.12,
-	Elite = 25, -- extra gold from an elite's chest (on top of ChestGold)
+	Elite = 15, -- extra gold from an elite's chest (on top of ChestGold) ...
+	EliteStageScale = 0.25, -- ... the whole elite chest gold x (1 + this x (stage - 1))
 	Boss = 200, -- every living player gets this each time the Scorpion Queen dies
 	ChestGoldMin = 15,
 	ChestGoldMax = 40,
 	WinBonus = 100, -- paid when a player leaves through an open portal (a win)
-	StageClearBonus = 75, -- plus this per stage cleared, on that same return
+	StageClearBonus = 150, -- plus this per stage cleared, on that same return
 }
 
 ------------------------------------------------------------------------------------------
@@ -213,15 +221,151 @@ Config.Drops = {
 }
 
 ------------------------------------------------------------------------------------------
+-- RUN ITEMS (src/shared/ItemData.lua, server ItemSystem.lua)
+--   Small stacking items from chests, the Shrine of Chance and the guarded altar. They last
+--   for the whole run (kept across stages) and vanish when the run ends. Stats go through
+--   the normal stat sheet (LevelUpSystem.RecomputeStats); procs have internal cooldowns
+--   here so a huge swarm can't turn them into a lag machine.
+------------------------------------------------------------------------------------------
+Config.Items = {
+	BaseCritChance = 0, -- nobody crits without items
+	BaseCritDamage = 2.0, -- a critical hit deals x this (Hunter's Eye adds to it)
+	MaxCritChance = 0.6,
+	MaxSpeedMult = 2.2, -- move speed never goes above BaseSpeed x this
+	MinCooldownMult = 0.3, -- passives + items together never make weapons faster than this
+	-- procs (per player)
+	HealOnKillAmount = 3, -- Healing Herb
+	LightningCooldown = 0.2, -- Storm Charm: seconds between procs
+	LightningRange = 16, -- studs from the hit enemy to the extra targets
+	LightningDamage = 0.4, -- share of the triggering hit
+	LightningTargets = 2, -- + 1 per stack
+	LightningMaxTargets = 5,
+	ExplodeChance = 0.2, -- Volatile Spore
+	ExplodeShare = 0.6, -- of the dead enemy's max HP (+ExplodeSharePerStack per extra stack)
+	ExplodeSharePerStack = 0.3,
+	ExplodeRadius = 7,
+	ExplodeCooldown = 0.08,
+	ExplodeBossMaxShare = 0.05, -- a burst deals at most this share of a boss's max HP
+	ThornsMult = 1.5, -- Barbed Mail: x the hit (+ThornsPerStack per extra stack); the hit is
+	ThornsPerStack = 1.0, -- max(raw x ThornsRawShare, damage taken after armor)
+	ThornsRawShare = 0.5,
+	ThornsRadius = 8,
+	ThornsCooldown = 0.5,
+	ShieldPerStack = 0.08, -- Guardian Ward: share of max HP
+	ShieldMax = 0.4,
+	ShieldDelay = 5, -- seconds without damage before it refills
+	ShieldRefillSeconds = 1,
+	QuiverEvery = 7, -- Spare Quiver: every (this - stacks)th attack, at least every QuiverMin
+	QuiverMin = 2,
+	MagnetInterval = 12, -- Magnet Totem: seconds (- MagnetIntervalPerStack per stack) ...
+	MagnetIntervalPerStack = 2,
+	MagnetIntervalMin = 4,
+	MagnetRadius = 35, -- ... studs (+ MagnetRadiusPerStack per stack)
+	MagnetRadiusPerStack = 10,
+	RegenTick = 0.5, -- regeneration is applied in ticks of this many seconds
+	PopupSeconds = 3.5, -- item popup on screen
+}
+
+------------------------------------------------------------------------------------------
+-- CHESTS ON THE MAP (LootSystem.lua; RoR style: pay gold, get one item)
+--   New spots every stage (clear of obstacles, outside the spawn clearing, away from the
+--   portal and each other); everything is removed on travel and when the run ends.
+--   Price = Cost x stage^CostExponent, x the player's gold multiplier (gamepass owners
+--   earn more gold, so they pay the same share: a pass never buys extra items).
+--   Run gold is spent: what you earned THIS run (the RunGold counter; it was banked into
+--   your saved gold as you earned it, so spending takes it back out). Savings from earlier
+--   runs are never touched.
+--   Open: stand next to it and hold E / gamepad X / the on-screen button (touch).
+------------------------------------------------------------------------------------------
+Config.Chests = {
+	SmallCount = { 10, 14 }, -- random count per stage (min, max)
+	LargeCount = { 2, 3 },
+	GoldenCount = 1,
+	Cost = { Small = 25, Large = 60, Golden = 150 }, -- on stage 1
+	CostExponent = 1.2, -- stage 2 = x2.3, stage 3 = x3.7, stage 5 = x6.9
+	HoldSeconds = { Small = 0.8, Large = 1.1, Golden = 1.4, Guarded = 1.2 },
+	-- item rarity weights per chest (luck raises Uncommon / Legendary by x(1 + luck))
+	Weights = {
+		Small = { Common = 80, Uncommon = 19, Legendary = 1 },
+		Large = { Common = 0, Uncommon = 80, Legendary = 20 },
+		Golden = { Common = 0, Uncommon = 0, Legendary = 100 },
+		Guarded = { Common = 0, Uncommon = 75, Legendary = 25 },
+		Chance = { Common = 55, Uncommon = 38, Legendary = 7 },
+	},
+	InteractRadius = 6.5, -- studs from the chest / shrine centre
+	-- placement
+	Spacing = 32, -- studs between loot spots (relaxed if the map is too full)
+	EdgeMargin = 16, -- studs inside the fence
+	SpawnExtra = 6, -- studs beyond Config.Arenas.ClearRadius (the spawn clearing)
+	PortalClearance = 16, -- studs from the portal
+	Clearance = 3.5, -- free radius around a chest (colliders, landmarks)
+}
+
+------------------------------------------------------------------------------------------
+-- SHRINES (LootSystem.lua). Each one says what it gives and what it costs BEFORE you use
+-- it (prompt: "+ benefit" / "- tradeoff") and shows when it is spent.
+------------------------------------------------------------------------------------------
+Config.Shrines = {
+	ChanceCount = { 1, 2 }, -- Shrines of Chance per stage
+	BargainCount = 1, -- Bargain Shrines per stage
+	HoldSeconds = 1.2,
+	-- Shrine of Chance: pay gold, maybe an item. Each try costs more; after MaxItems items
+	-- (or MaxTries tries) it goes dark.
+	ChanceCost = 15, -- on stage 1 (x stage^Config.Chests.CostExponent, x gold multiplier)
+	ChanceCostGrowth = 1.2,
+	ChanceSuccess = 0.5,
+	ChanceMaxItems = 2,
+	ChanceMaxTries = 6,
+	-- Bargain Shrine: the whole team gets the benefit, the swarm gets the tradeoff, for the
+	-- rest of this stage (enemies that spawn after it, and the Queen)
+	BargainDamage = 0.25, -- +25% damage
+	BargainGold = 0.3, -- +30% gold from kills
+	BargainEnemyHP = 0.2, -- enemies +20% HP
+}
+
+------------------------------------------------------------------------------------------
+-- GUARDED ALTAR (LootSystem.lua): one per stage. A free rare chest on an altar. Dormant
+-- until a living player comes within WakeRadius; then a group of elite guards climbs out
+-- around it. When every guard is dead the chest unlocks; opening it gives EVERY living
+-- teammate one item (Config.Chests.Weights.Guarded). Guards drop gems, not elite chests.
+------------------------------------------------------------------------------------------
+Config.Guarded = {
+	WakeRadius = 24,
+	Guards = 2, -- + GuardsPerStage x stage + GuardsPerExtraPlayer x (players - 1) ...
+	GuardsPerStage = 1,
+	GuardsPerExtraPlayer = 1,
+	MaxGuards = 8, -- ... at most this many
+	SpawnRadius = { 12, 20 }, -- ring around the altar
+	MinDistance = 90, -- studs from the spawn centre
+}
+
+------------------------------------------------------------------------------------------
 -- ENEMIES
 ------------------------------------------------------------------------------------------
 Config.Enemies = {
 	MaxLive = 200, -- hard cap on living enemies (must be <= PoolSize)
 	PoolSize = 300, -- enemy models pre-built at server start
-	EliteChance = 1 / 50,
+	MaxLiveRanged = 12, -- at most this many Ranged enemies (Spitters) alive; mini-waves never use them
+	EliteChance = 1 / 80, -- random elites (after Config.Pacing.EliteMinTime); scheduled ones: Pacing
 	EliteSizeMult = 2,
 	EliteHPMult = 5,
 	EliteDamageMult = 1.5,
+	EliteBlastMult = 1.4, -- elite Bomb Tick blast radius x this (not x EliteSizeMult) ...
+	EliteFuse = 1.0, -- ... and its fuse lasts at least this many seconds
+	-- Every elite gets exactly ONE affix (picked at random), shown by its aura (EliteAura_*
+	-- models, part fallback) and a small name tag:
+	--   Swift     moves faster and leaves a wind trail
+	--   Shielded  orbiting plates soak the first ShieldFraction x max HP of damage, then break
+	--   Burning   drops small fire patches behind it while it walks; a patch glows for Arm
+	--             seconds before it hurts, then burns for Life seconds (Damage every Tick)
+	EliteAffixes = { "Swift", "Shielded", "Burning" },
+	Affix = {
+		Swift = { SpeedMult = 1.45 },
+		Shielded = { ShieldFraction = 0.4 },
+		Burning = { Every = 0.8, Radius = 2.6, Arm = 0.5, Life = 3.2, Tick = 0.5, Damage = 6, MaxPatches = 5 },
+	},
+	-- New enemies fade in (client emerge) for this long; they can't hurt anyone meanwhile.
+	SpawnGrace = 0.45,
 	-- AI thinking (target choice, obstacle raycasts, separation) is split into this many
 	-- chunks; each enemy re-thinks every N frames. Movement itself runs every frame.
 	ThinkChunks = 3,
@@ -276,25 +420,43 @@ Config.Spawn = {
 -- BOSS
 ------------------------------------------------------------------------------------------
 Config.Boss = {
-	HP = 9000,
+	-- Which BossData entry is the stage boss. Attack patterns, timings and the entrance /
+	-- collapse live in src/shared/BossData.lua; HP and crowd rules stay here.
+	Id = "ScorpionQueen",
+	HP = 9000, -- x Config.Stages.BossHPByStage[stage]
 	HPPerExtraPlayer = 0.6, -- x(1 + this * (players - 1))
-	SpawnWarningSeconds = 5,
 	ClearMinionsOnSpawn = true, -- normal enemies vanish when the boss arrives
 	MinionCapDuringBoss = 60, -- regular spawning keeps this many alive during the fight
-	ChaseSeconds = 3.5,
-	ChargeTelegraph = 0.9,
-	ChargeSpeed = 70,
-	ChargeDuration = 1.1,
-	RingProjectiles = 18,
-	RingWaves = 3,
-	RingWaveGap = 0.45,
-	RingProjectileSpeed = 32,
-	RingProjectileDamage = 15,
-	RingProjectileRadius = 1.4,
-	RingProjectileLife = 6,
-	SummonCount = 8,
-	SummonType = "Skeleton",
 	ContactDamage = 30,
+}
+
+------------------------------------------------------------------------------------------
+-- PACING (EnemySpawner): the shape of the pressure inside the per-minute spawn table.
+--   calm      the first seconds of a run / of every new stage spawn at CalmMult of the
+--             normal target (a breather after travel or after the Queen's surge)
+--   build-up  between mini-waves the live target climbs from BuildUpFrom to BuildUpTo
+--   mini-wave every Config.Run.MiniWaveInterval while exploring (a ring of one type)
+--   lull      for MiniWaveLull seconds after a mini-wave the target drops to LullMult, so
+--             once the wave is beaten there is a short recovery
+--   intro     the first time a type spawns in a run it comes as a small group of
+--             IntroGroup with a one-line callout ("New: Spitter - dodge the acid")
+--   elites    a scheduled elite at EliteFirst seconds of run time, then every EliteEvery
+--             (announced); random elites only after EliteMinTime
+--   boss      the Queen fight keeps a reduced crowd (Config.Stages.BossMinionShare)
+------------------------------------------------------------------------------------------
+Config.Pacing = {
+	RunStartCalm = 6,
+	StageStartCalm = 10,
+	CalmMult = 0.35,
+	BuildUpFrom = 0.85,
+	BuildUpTo = 1.1,
+	MiniWaveLull = 8,
+	LullMult = 0.55,
+	IntroGroup = 3,
+	EliteFirst = 150,
+	EliteEvery = 165,
+	EliteMinTime = 60,
+	EliteTypes = { "Slime", "Skeleton", "Brute", "Ghost", "Spitter" }, -- scheduled elites (never a bomb tick)
 }
 
 ------------------------------------------------------------------------------------------
@@ -365,6 +527,9 @@ Config.Graphics = {
 	-- Cosmetic effects past it are skipped; boss warnings and player events never are.
 	MaxEffectParts = 220,
 	MaxTrails = 40, -- projectile trails at once (more projectiles fly without one)
+	-- Settings > Reduced effects (accessibility): the effect and trail budgets above are
+	-- multiplied by this, and screen flashes (hurt pulse, XP flash) are switched off.
+	ReducedEffectsBudget = 0.4,
 	-- Tall scenery fade (src/client/Occlusion.lua): Parts or Models tagged with Tag
 	-- (CollectionService) turn see-through while they cover the local player's
 	-- surroundings on screen, and fade back when they don't.
@@ -384,7 +549,7 @@ Config.Graphics = {
 Config.Data = {
 	StoreName = "SwarmPlayerData",
 	KeyPrefix = "Player_",
-	SchemaVersion = 3, -- bump and add a migration step in DataService when the save shape changes
+	SchemaVersion = 5, -- bump and add a migration step in DataService when the save shape changes
 	AutoSaveSeconds = 60,
 	-- A session lock is considered dead (the server crashed) if it wasn't refreshed for
 	-- this long. Must be well above AutoSaveSeconds.
@@ -438,20 +603,125 @@ Config.Monetization = {
 -- Music needs Creator Store IDs: open the Creator Store, Audio, filter by "Roblox"
 -- (free, licensed), copy the ID and paste it as "rbxassetid://<id>". Empty = silent.
 ------------------------------------------------------------------------------------------
+--[[
+	Sound effects and music. Every effect uses a sound that ships with Roblox
+	(rbxasset://sounds/...) until licensed audio is chosen: put an uploaded asset in Id
+	("rbxassetid://123") to replace one. Music slots are empty on purpose (no licensed
+	tracks yet): set LobbyMusic / BattleMusic / BossMusic Id to an audio asset you own or
+	that is free to use, and the client plays it (looped) in the lobby, during a run and
+	during the Queen fight. Volume is the sound's own volume; the player's Music / Effects
+	sliders scale everything on top.
+
+	Fields: Category (Config.Audio.Categories: voice limit, priority, ducking), MinGap (s
+	between two plays of this sound), Pitch (base playback speed) and PitchVar (random
+	+/- around it, so repeats don't sound mechanical), World = played at a world position
+	(3D, quieter far away) when the caller gives one.
+]]
 Config.Sounds = {
-	Hit = { Id = "rbxasset://sounds/swordslash.wav", Volume = 0.25, MinGap = 0.05 },
-	LevelUp = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.8 },
-	GemPickup = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.3, MinGap = 0.04 },
-	Death = { Id = "rbxasset://sounds/collide.wav", Volume = 0.8 },
-	EnemyDeath = { Id = "rbxasset://sounds/snap.mp3", Volume = 0.2, MinGap = 0.05 },
-	BossRoar = { Id = "rbxasset://sounds/Launching rocket.wav", Volume = 1 },
-	Explosion = { Id = "rbxasset://sounds/collide.wav", Volume = 0.6, MinGap = 0.1 },
-	Chest = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.7 },
-	Click = { Id = "rbxasset://sounds/button.wav", Volume = 0.5 },
-	Lightning = { Id = "rbxasset://sounds/Rocket shot.wav", Volume = 0.35, MinGap = 0.08 },
-	LobbyMusic = { Id = "", Volume = 0.35 },
-	BattleMusic = { Id = "", Volume = 0.3 },
-	BossMusic = { Id = "", Volume = 0.35 },
+	-- combat (lowest priority: there is always a lot of it)
+	Hit = { Id = "rbxasset://sounds/swordslash.wav", Volume = 0.22, Category = "Combat", MinGap = 0.06, PitchVar = 0.08 },
+	EnemyDeath = { Id = "rbxasset://sounds/snap.mp3", Volume = 0.2, Category = "Combat", MinGap = 0.06, PitchVar = 0.1 },
+	Lightning = { Id = "rbxasset://sounds/Rocket shot.wav", Volume = 0.3, Category = "Combat", MinGap = 0.1, PitchVar = 0.08 },
+	Explosion = { Id = "rbxasset://sounds/collide.wav", Volume = 0.55, Category = "Combat", MinGap = 0.12, PitchVar = 0.06, World = true },
+	-- the local hero's own attacks and body
+	Swing = { Id = "rbxasset://sounds/swordlunge.wav", Volume = 0.16, Category = "Player", MinGap = 0.14, PitchVar = 0.08 },
+	Throw = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.08, Category = "Player", MinGap = 0.2, Pitch = 1.3, PitchVar = 0.1 },
+	Hurt = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.6, Category = "Player", MinGap = 0.25, Pitch = 0.85, PitchVar = 0.05 },
+	Death = { Id = "rbxasset://sounds/collide.wav", Volume = 0.8, Category = "Player", Pitch = 0.75, PitchVar = 0 },
+	LevelUp = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.7, Category = "Player", MinGap = 0.3, PitchVar = 0 },
+	Revive = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Category = "Player", MinGap = 0.3, Pitch = 1.3, PitchVar = 0 },
+	-- pickups and rewards
+	GemPickup = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.25, Category = "Pickup", MinGap = 0.05, Pitch = 1.1, PitchVar = 0.12 },
+	Chest = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Category = "Pickup", MinGap = 0.2, PitchVar = 0 },
+	Item = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.5, Category = "Pickup", MinGap = 0.15, Pitch = 1.15, PitchVar = 0 },
+	Shrine = { Id = "rbxasset://sounds/button.wav", Volume = 0.6, Category = "Pickup", MinGap = 0.2, PitchVar = 0 },
+	Victory = { Id = "rbxasset://sounds/victory.wav", Volume = 0.5, Category = "UI", PitchVar = 0 },
+	-- warnings: telegraphs that ask the player to move (never dropped for combat noise)
+	FuseTick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.45, Category = "Warning", MinGap = 0.09, Pitch = 1.6, PitchVar = 0.03, World = true },
+	SpitterWindup = { Id = "rbxasset://sounds/splat.wav", Volume = 0.3, Category = "Warning", MinGap = 0.25, Pitch = 1.3, PitchVar = 0.08, World = true },
+	Lunge = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.35, Category = "Warning", MinGap = 0.2, Pitch = 0.8, PitchVar = 0.06, World = true },
+	-- the Queen
+	BossRoar = { Id = "rbxasset://sounds/Launching rocket.wav", Volume = 0.9, Category = "Boss", MinGap = 1, PitchVar = 0.04 },
+	BossWarn = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.45, Category = "Boss", MinGap = 0.4, Pitch = 0.7, PitchVar = 0.04, World = true },
+	BossSummon = { Id = "rbxasset://sounds/splat.wav", Volume = 0.45, Category = "Boss", MinGap = 0.4, Pitch = 0.6, PitchVar = 0.05, World = true },
+	-- interface
+	Click = { Id = "rbxasset://sounds/button.wav", Volume = 0.45, Category = "UI", MinGap = 0.05, PitchVar = 0 },
+	Toggle = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Category = "UI", MinGap = 0.05, Pitch = 1.25, PitchVar = 0 },
+	Tip = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.2, Category = "UI", MinGap = 0.5, Pitch = 1.5, PitchVar = 0 },
+	-- music slots (empty = silent; see the note above)
+	LobbyMusic = { Id = "", Volume = 0.35, Category = "Music" },
+	BattleMusic = { Id = "", Volume = 0.3, Category = "Music" },
+	BossMusic = { Id = "", Volume = 0.35, Category = "Music" },
+}
+
+--[[
+	Mixing rules for Config.Sounds (client Audio.lua).
+	  MaxVoices   effects playing at once in total; a new sound with a higher Priority
+	              steals the voice of the oldest lower-priority one, a lower one is dropped
+	  Categories  per category: Volume (sub-mix), MaxVoices, Priority (higher wins)
+	  Duck        while a Warning / Boss sound plays, Combat is turned down this much
+	  World       3D sounds: full volume up to RollOffMin studs from the camera (the run
+	              camera sits ~78 studs from the hero), fading out by RollOffMax
+]]
+Config.Audio = {
+	MaxVoices = 14,
+	Categories = {
+		Combat = { Volume = 0.9, MaxVoices = 4, Priority = 1 },
+		Pickup = { Volume = 1, MaxVoices = 3, Priority = 2 },
+		UI = { Volume = 1, MaxVoices = 2, Priority = 3 },
+		Player = { Volume = 1, MaxVoices = 3, Priority = 4 },
+		Warning = { Volume = 1, MaxVoices = 3, Priority = 5 },
+		Boss = { Volume = 1, MaxVoices = 2, Priority = 5 },
+	},
+	Duck = { Triggers = { "Warning", "Boss" }, Target = "Combat", Volume = 0.45, Seconds = 0.5 },
+	World = { RollOffMin = 90, RollOffMax = 280, Emitters = 10 },
+	DefaultPitchVar = 0.05,
+}
+
+--[[
+	Player settings (saved in the profile, checked by the server: GoldSystem SaveSettings).
+	  Music, Sfx       volumes 0-1
+	  Shake            screen shake strength 0-1 (0 = off)
+	  ReducedEffects   fewer particles and trails, no screen flashes or pulsing edges
+	  DamageNumbers    floating damage numbers over enemies (off by default; summed per
+	                   enemy and capped, so a swarm never turns into a wall of text)
+	  Tips             contextual hints (first run tutorial, co-op rules)
+]]
+Config.Settings = {
+	Defaults = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = true },
+}
+
+--[[
+	First-run tips (client Tutorial.lua): small hints that teach through play, each shown
+	once (the server keeps the ids seen in the profile: SeenTips) and dismissed on their
+	own; they never pause or block the run. A player with any run played before this
+	feature (Stats.Runs > 0) starts with TutorialDone, so only brand new players see them.
+	Settings: "Show tips" switches them off, "Replay tips" shows them again next run.
+	TeamRules (shared XP, own gold and items) shows once in the first group run, also for
+	experienced players.
+]]
+Config.Tutorial = {
+	Tips = { "Move", "Attack", "Gems", "LevelUp", "Portal", "Boss", "Revive", "TeamRules" },
+	HintSeconds = 6.5, -- each hint stays this long
+	GapSeconds = 1.5, -- pause between two hints
+	FirstDelay = 1.5, -- the first hint after the run starts
+	PortalTipAt = 40, -- run seconds before the portal objective is explained
+}
+
+--[[
+	Optional floating damage numbers (Settings > Damage numbers, off by default). The server
+	sums each player's damage per enemy and sends it only to players who switched the
+	setting on, FlushHz times a second (at most MaxPerFlush enemies, the biggest hits
+	first). The client merges a new hit into an enemy's number still on screen, creates at
+	most MaxNewPerFrame numbers per frame and shows at most MaxLabels at once.
+]]
+Config.DamageNumbers = {
+	FlushHz = 8,
+	MaxPerFlush = 16,
+	MaxLabels = 18,
+	MaxNewPerFrame = 3,
+	MergeSeconds = 0.5,
+	LifeSeconds = 0.9,
 }
 
 ------------------------------------------------------------------------------------------

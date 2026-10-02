@@ -9,6 +9,12 @@
 	                      re-seeds the small decoration for later stages; the designed
 	                      layout stays the same, variant 0 = the classic map)
 	FindPortalSpot(arena, rng, avoid?) → a clear spot for the stage portal (Config.Stages)
+	FindOpenSpot(arena, rng, opts) → a clear floor spot for loot (chests, shrines, the
+	                      guarded altar: LootSystem), spaced from other spots
+	PlaceProp(parent, name, cf, scale?, palette?, opts?) → a kit prop (mesh or fallback,
+	                      swapped for the mesh when it loads); opts.fallback builds models
+	                      that have no fallback here
+	AddCollider(arena, nameOrShape, cf, scale?) → an obstacle collider (before EnemyAI.SetArena)
 	BuildPortal(arena, pos) → the stage portal (kit mesh "Portal" or a part fallback, its
 	                      collider, rune circle, light beam) with :SetState(state, charge)
 	DestroyArena()
@@ -199,6 +205,7 @@ type PropOpts = {
 	shadow: boolean?, -- false: no shadows at all; nil: big pieces cast (catalog Shadow)
 	occluder: boolean?, -- tag "SwarmOccluder"
 	query: boolean?, -- CanQuery on (the dais: the showcase finds its top by raycast)
+	fallback: ((Model, CFrame, number, { [string]: Color3 }, boolean) -> ())?, -- builder for models without a FALLBACK entry
 }
 
 local function kitEntry(name: string): any
@@ -512,7 +519,7 @@ local function prop(parent: Instance, name: string, cf: CFrame, scale: number?, 
 	local container = Instance.new("Model")
 	container.Name = name
 	if not fillMesh(container, name, cf, s, palette, o) then
-		local build = FALLBACK[name]
+		local build = FALLBACK[name] or o.fallback
 		if build then
 			build(container, cf, s, kitPalette(name, palette), o.shadow ~= false)
 			for _, d in ipairs(container:GetChildren()) do
@@ -2041,6 +2048,102 @@ function MapBuilder.BuildPortal(arena: Arena, pos: Vector3): Portal
 		Radius = radius,
 		SetState = setState,
 	}
+end
+
+------------------------------------------------------------------------------------------
+-- LOOT SPOTS AND PROPS (LootSystem)
+------------------------------------------------------------------------------------------
+
+export type SpotOpts = {
+	MinDistance: number?, -- from the arena centre (the spawn)
+	EdgeMargin: number?, -- inside the fence
+	Clearance: number?, -- free radius (colliders, landmarks, ponds)
+	Spacing: number?, -- from every point in Avoid
+	Avoid: { Vector3 }?,
+	PathPad: number?, -- keep off the dirt paths by this much (nil = paths are fine)
+	KeepFrom: Vector3?, -- a hard keep-out point (the portal), never relaxed with Spacing
+	KeepRadius: number?, -- studs from KeepFrom
+}
+
+--[[
+	A random clear floor spot (world position) for a loot object: rejection sampling like
+	FindPortalSpot. Spacing relaxes step by step if the map is full; nil when nothing fits.
+]]
+function MapBuilder.FindOpenSpot(arena: Arena, rand: Random, opts: SpotOpts): Vector3?
+	local half = arena.Half - (opts.EdgeMargin or 16)
+	local minDist = opts.MinDistance or 0
+	local clear = opts.Clearance or 3
+	local avoid = opts.Avoid or {}
+	local c = arena.Center
+	local keep = opts.KeepFrom
+	local keep2 = (opts.KeepRadius or 0) ^ 2
+	local function try(spacing: number, tries: number): Vector3?
+		for _ = 1, tries do
+			local x, z = rand:NextNumber(-half, half), rand:NextNumber(-half, half)
+			if math.sqrt(x * x + z * z) >= minDist and isFree(arena, x, z, clear, opts.PathPad) then
+				local ok = true
+				if keep then
+					local kx, kz = c.X + x - keep.X, c.Z + z - keep.Z
+					ok = kx * kx + kz * kz >= keep2
+				end
+				for _, a in ipairs(avoid) do
+					local dx, dz = c.X + x - a.X, c.Z + z - a.Z
+					if dx * dx + dz * dz < spacing * spacing then
+						ok = false
+						break
+					end
+				end
+				if ok then
+					return W(arena, x, z)
+				end
+			end
+		end
+		return nil
+	end
+	local spacing = opts.Spacing or 0
+	return try(spacing, 300) or try(spacing * 0.6, 300) or try(spacing * 0.35, 300)
+end
+
+-- A kit prop under `parent` (the mesh, or the part fallback until it loads).
+function MapBuilder.PlaceProp(parent: Instance, name: string, cf: CFrame, scale: number?, palette: Pal?, opts: PropOpts?): Model
+	return prop(parent, name, cf, scale, palette, opts)
+end
+
+-- An obstacle collider: a catalog model's Collider (by name) or a shape table
+-- { Kind = "Circle", Radius, Height } / { Kind = "Box", Size = {x, z}, Height }.
+-- Register before EnemyAI.SetArena so the enemies' obstacle grid knows it.
+function MapBuilder.AddCollider(arena: Arena, what: any, cf: CFrame, scale: number?)
+	if type(what) == "string" then
+		kitCollider(arena, what, cf, scale or 1)
+	elseif type(what) == "table" then
+		addShape(arena, what, cf, scale or 1)
+	end
+	local pos = cf.Position
+	table.insert(arena.Keepout, { X = pos.X - arena.Center.X, Z = pos.Z - arena.Center.Z, R = 3 })
+end
+
+-- Removes scattered decoration (grass, ferns, bushes) within `radius` of `pos`, so it
+-- doesn't poke through a chest or an altar.
+function MapBuilder.ClearDecor(arena: Arena, pos: Vector3, radius: number)
+	for _, d in ipairs(arena.Decor:GetChildren()) do
+		if d:IsA("Model") and #d:GetChildren() > 0 then
+			local at = d:GetPivot().Position
+			local dx, dz = at.X - pos.X, at.Z - pos.Z
+			if dx * dx + dz * dz < radius * radius then
+				d:Destroy()
+			end
+		end
+	end
+end
+
+-- The part-built fallback of a kit model (nil when there is none).
+function MapBuilder.FallbackFor(name: string): ((Model, CFrame, number, { [string]: Color3 }, boolean) -> ())?
+	return FALLBACK[name]
+end
+
+-- True when the catalog has (and may load) a mesh model with this name.
+function MapBuilder.HasKit(name: string): boolean
+	return kitEntry(name) ~= nil
 end
 
 function MapBuilder.DestroyArena()

@@ -6,7 +6,10 @@
 	Frame order: RunManager (timer, deaths) → StageManager (portal, boss, surge, choice,
 	travel) → EnemySpawner (spawns) → EnemyAI (movement,
 	contact, grid rebuild) → WeaponSystem (firing, projectiles, sync) → XPSystem (gems,
-	pickups) → LevelUpSystem (auto-pick timers) → Fx (effect batch flush).
+	pickups) → ItemSystem (regen, shields, magnet pulses) → LootSystem (chest / shrine
+	holds, the guarded altar) → LevelUpSystem (auto-pick timers) → AchievementService (run
+	time / level milestones, once a second) → DamageNumbers (optional numbers, per player)
+	→ Fx (effect batch flush).
 ]]
 
 local Players = game:GetService("Players")
@@ -40,8 +43,12 @@ local ORDER = {
 	"EnemySpawner",
 	"EnemyAI",
 	"WeaponSystem",
+	"ItemSystem",
+	"LootSystem",
 	"StageManager",
 	"RunManager",
+	"AchievementService",
+	"DamageNumbers",
 }
 
 for _, name in ipairs(ORDER) do
@@ -83,7 +90,11 @@ local STEPS = {
 	{ "EnemyAI", ctx.EnemyAI.Step },
 	{ "WeaponSystem", ctx.WeaponSystem.Step },
 	{ "XPSystem", ctx.XPSystem.Step },
+	{ "ItemSystem", ctx.ItemSystem.Step },
+	{ "LootSystem", ctx.LootSystem.Step },
 	{ "LevelUpSystem", ctx.LevelUpSystem.Step },
+	{ "AchievementService", ctx.AchievementService.Step },
+	{ "DamageNumbers", ctx.DamageNumbers.Step },
 	{ "Fx", ctx.Fx.Step },
 }
 local lastError: { [string]: number } = {}

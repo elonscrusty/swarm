@@ -29,6 +29,7 @@ IconData.Icons = {
 	Lightning = nil,
 	Axe = nil,
 	Boomerang = nil,
+	Longbow = nil,
 	-- Evolutions (shown once the weapon has evolved, and on EVOLUTION cards)
 	Bloodwhip = nil,
 	TwinOrbs = nil,
@@ -38,6 +39,7 @@ IconData.Icons = {
 	ThunderLoop = nil,
 	DeathSpiral = nil,
 	InfiniteReturn = nil,
+	Windpiercer = nil,
 	-- Passives
 	Might = nil,
 	Armor = nil,
@@ -51,6 +53,7 @@ IconData.Icons = {
 	Ammo = nil,
 	Candle = nil,
 	Growth = nil,
+	Fletching = nil,
 	-- Fallback level-up cards (every slot maxed)
 	Gold = nil,
 	Heal = nil,
@@ -66,6 +69,7 @@ IconData.Glyphs = {
 	Lightning = "Lt",
 	Axe = "Ax",
 	Boomerang = "Bo",
+	Longbow = "Lb",
 	Bloodwhip = "BW",
 	TwinOrbs = "TO",
 	ThousandEdge = "TE",
@@ -74,6 +78,7 @@ IconData.Glyphs = {
 	ThunderLoop = "TL",
 	DeathSpiral = "DS",
 	InfiniteReturn = "IR",
+	Windpiercer = "WP",
 	Might = "Mi",
 	Armor = "Ar",
 	Heart = "He",
@@ -86,6 +91,7 @@ IconData.Glyphs = {
 	Ammo = "Am",
 	Candle = "Ca",
 	Growth = "Gr",
+	Fletching = "Fl",
 	Gold = "$",
 	Heal = "+",
 } :: { [string]: string }

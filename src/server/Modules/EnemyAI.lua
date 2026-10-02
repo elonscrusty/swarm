@@ -13,13 +13,25 @@
 	Then all parts move with a single workspace:BulkMoveTo call, and the enemy grid used
 	by WeaponSystem hit detection is rebuilt.
 
-	The boss runs a small state machine here: Chase → Charge → Chase → Ring → Chase →
-	Summon → ... (projectiles are spawned through WeaponSystem as hostile projectiles).
+	Behaviours with a readable rhythm (anticipation → telegraph → active → recovery), each
+	enemy's current one published as the body attribute "Act" for the client's poses:
+	  Ranged (Spitter)   keeps MinRange-MaxRange away, stops, "Windup" (swells; an acid
+	                     circle marks the landing spot), lobs a glob (Hazards strike)
+	  Lunge (Rhino)      "Windup" (rears up; a short lane on the floor) → "Lunge" → "Recover"
+	  Fuse (Bomb Tick)   next to a player: "Fuse" (swells and blinks inside its blast ring),
+	                     then explodes where it stands; killing it first defuses it
+	  Burning elites     drop fire patches behind them while walking (Hazards patches)
+	The boss runs BossAI (data in BossData). Hazards (strikes / patches) step here too.
+	Fresh spawns are harmless for Config.Enemies.SpawnGrace (they fade in on clients);
+	Harmless / Untargetable enemies (the Queen's entrance, burrow, collapse) neither touch
+	players nor enter the hit grid.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local SpatialGrid = require(script.Parent.SpatialGrid)
 local Fx = require(script.Parent.Fx)
+local Hazards = require(script.Parent.Hazards)
+local BossAI = require(script.Parent.BossAI)
 
 local EnemyAI = {}
 
@@ -201,82 +213,163 @@ local function think(e, runPlayers)
 end
 
 ------------------------------------------------------------------------------------------
--- Boss
+-- Behaviours (ranged, lunge, fuse, burning affix)
 ------------------------------------------------------------------------------------------
 
-local BOSS_CYCLE = { "Charge", "Ring", "Summon" }
+local setAct -- EnemySpawner.SetAct (bound in Init)
 
-local function bossSetState(e, state: string, duration: number)
-	e.BossState = state
-	e.BossTimer = duration
+local function startWindupRanged(e, R, to: Vector3)
+	local t = e.Target
+	local p = t.Root.Position
+	local point = Vector3.new(p.X, Config.ArenaOrigin.Y, p.Z)
+	e.GlobTarget = point
+	e.WarnId = Fx.Warn("circle", point.X, point.Z, R.Splash, R.Windup + R.Flight, "acid")
+	e.Face = to.Unit
+	setAct(e, "Windup", R.Windup)
 end
 
-local function bossStep(e, dt: number)
-	local B = Config.Boss
-	if not e.BossState then
-		e.BossCycle = 0
-		bossSetState(e, "Chase", B.ChaseSeconds)
+local function launchGlob(e, R)
+	local point = e.GlobTarget
+	if not point then
+		return
 	end
-	e.BossTimer -= dt
-	local state = e.BossState
-	local target = e.Target
-	if state == "Chase" then
-		e.SpeedOverride = nil
-		if e.BossTimer <= 0 then
-			e.BossCycle = (e.BossCycle % #BOSS_CYCLE) + 1
-			local nextState = BOSS_CYCLE[e.BossCycle]
-			if nextState == "Charge" then
-				local dir = target and ((target.Root.Position - e.Pos) * FLAT) or Vector3.new(0, 0, 1)
-				e.ChargeDir = dir.Magnitude > 0.1 and dir.Unit or Vector3.new(0, 0, 1)
-				local yaw = math.atan2(-e.ChargeDir.X, -e.ChargeDir.Z)
-				local length = B.ChargeSpeed * B.ChargeDuration
-				Fx.Telegraph(e.Pos + e.ChargeDir * (length / 2), yaw, length, e.Radius * 2, B.ChargeTelegraph)
-				bossSetState(e, "ChargeWindup", B.ChargeTelegraph)
-			elseif nextState == "Ring" then
-				e.RingWave = 0
-				bossSetState(e, "Ring", 0)
-			else
-				bossSetState(e, "Summon", 0.6)
-				Fx.Ring(e.Pos, 20, Color3.fromRGB(180, 60, 255))
+	local dist = ((point - e.Pos) * FLAT).Magnitude
+	Fx.Warn("glob", e.Pos.X, e.Pos.Z, point.X, point.Z, R.Flight, 5 + dist * 0.12)
+	Hazards.Strike(point, R.Splash, R.Flight, R.Damage * (e.DmgScale or 1), { Warn = e.WarnId, Style = "acid" })
+	e.WarnId = nil -- the strike owns the landing circle now
+	e.GlobTarget = nil
+end
+
+-- Per-frame behaviour after think(); may kill e (a fuse ending). Returns nothing.
+local function behave(e, dt: number)
+	local def = e.Def
+	if e.SpawnGrace > 0 then
+		e.SpawnGrace -= dt
+	end
+	e.Face = nil
+	local t = e.Target
+	local to: Vector3? = nil
+	local dist = math.huge
+	if t and t.Alive and t.Root then
+		to = (t.Root.Position - e.Pos) * FLAT
+		dist = (to :: Vector3).Magnitude
+	end
+
+	local act = e.Act
+	if act then
+		e.ActTimer -= dt
+		if act == "Windup" and def.Ranged then
+			e.SpeedOverride = 0
+			if to and dist > 0.1 then
+				e.Face = (to :: Vector3).Unit
+			end
+			if e.ActTimer <= 0 then
+				launchGlob(e, def.Ranged)
+				e.Cooldown = def.Ranged.Cooldown
+				e.SpeedOverride = nil
+				setAct(e, nil)
+			end
+		elseif act == "Windup" and def.Lunge then
+			e.SpeedOverride = 0
+			e.Dir = e.LungeDir
+			if e.ActTimer <= 0 then
+				e.WarnId = nil
+				setAct(e, "Lunge", def.Lunge.Duration)
+			end
+		elseif act == "Lunge" then
+			e.Dir = e.LungeDir
+			e.SpeedOverride = def.Lunge.Speed
+			if e.ActTimer <= 0 then
+				setAct(e, "Recover", def.Lunge.Recover)
+				e.SpeedOverride = 0
+			end
+		elseif act == "Recover" then
+			e.SpeedOverride = 0
+			if e.ActTimer <= 0 then
+				e.SpeedOverride = nil
+				e.Cooldown = def.Lunge and def.Lunge.Cooldown or 2
+				setAct(e, nil)
+			end
+		elseif act == "Fuse" then
+			e.SpeedOverride = 0
+			if e.ActTimer <= 0 then
+				ctx.EnemySpawner.Explode(e)
+				return
+			end
+		elseif e.ActTimer <= 0 then
+			setAct(e, nil)
+			e.SpeedOverride = nil
+		end
+	else
+		if e.Cooldown then
+			e.Cooldown -= dt
+		end
+		local ready = (e.Cooldown or 0) <= 0 and e.SpawnGrace <= 0
+		if def.Ranged then
+			local R = def.Ranged
+			e.SpeedOverride = nil
+			if to and dist > 0.1 then
+				local dir = (to :: Vector3).Unit
+				if dist < R.MinRange - 3 then
+					-- too close: back away (still facing the player)
+					e.Dir = -dir
+					e.SpeedOverride = e.Speed * 0.75
+					e.Face = dir
+				elseif dist <= R.MaxRange then
+					e.SpeedOverride = 0
+					e.Face = dir
+					if ready then
+						startWindupRanged(e, R, to :: Vector3)
+					end
+				end
+			end
+		elseif def.Lunge then
+			local L = def.Lunge
+			if to and ready and dist >= L.MinRange and dist <= L.Range then
+				local dir = (to :: Vector3).Unit
+				e.LungeDir = dir
+				local length = L.Speed * L.Duration
+				e.WarnId = Fx.Telegraph(e.Pos + dir * (length / 2), math.atan2(-dir.X, -dir.Z), length, e.Radius * 2, L.Windup)
+				e.PinPos = e.Pos -- held where the lane was drawn (EnemyAI.Step)
+				e.SpeedOverride = 0
+				setAct(e, "Windup", L.Windup)
+			end
+		elseif def.Explode and def.Fuse then
+			if to and e.SpawnGrace <= 0 and dist <= e.Radius + PLAYER_RADIUS + 1 then
+				-- elites: a wider blast (EliteBlastMult) but a longer fuse to get out of it
+				local radius = def.Explode.Radius * (e.Elite and Config.Enemies.EliteBlastMult or 1)
+				local fuse = e.Elite and math.max(def.Fuse, Config.Enemies.EliteFuse) or def.Fuse
+				e.WarnId = Fx.Warn("circle", e.Pos.X, e.Pos.Z, radius, fuse, "blast")
+				e.PinPos = e.Pos -- held inside the ring drawn now; Explode blasts from here
+				e.SpeedOverride = 0
+				setAct(e, "Fuse", fuse)
 			end
 		end
-	elseif state == "ChargeWindup" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			Fx.Sound("BossRoar")
-			bossSetState(e, "Charging", B.ChargeDuration)
-		end
-	elseif state == "Charging" then
-		e.Dir = e.ChargeDir
-		e.SpeedOverride = B.ChargeSpeed
-		if e.BossTimer <= 0 then
-			bossSetState(e, "Chase", B.ChaseSeconds)
-		end
-	elseif state == "Ring" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			e.RingWave += 1
-			local offset = (e.RingWave % 2) * (math.pi / B.RingProjectiles)
-			for i = 1, B.RingProjectiles do
-				local a = offset + (i / B.RingProjectiles) * math.pi * 2
-				local dir = Vector3.new(math.cos(a), 0, math.sin(a))
-				ctx.WeaponSystem.SpawnHostile(e.Pos + dir * e.Radius, dir, B.RingProjectileSpeed, B.RingProjectileDamage * ctx.StageManager.DamageMult(), B.RingProjectileRadius, B.RingProjectileLife, 7)
+	end
+
+	-- Burning elites leave short-lived fire patches behind them while they walk.
+	if e.Affix == "Burning" then
+		local B = Config.Enemies.Affix.Burning
+		e.BurnTimer = (e.BurnTimer or B.Every) - dt
+		if e.BurnTimer <= 0 then
+			e.BurnTimer = B.Every
+			local moving = e.SpeedOverride ~= 0 and e.Dir.Magnitude > 0.1
+			if moving then
+				local list = e.Patches
+				if not list then
+					list = {}
+					e.Patches = list
+				end
+				for i = #list, 1, -1 do
+					if not Hazards.IsLive(list[i]) then
+						table.remove(list, i)
+					end
+				end
+				if #list < B.MaxPatches then
+					local at = e.Pos - e.Dir * e.Radius
+					table.insert(list, Hazards.Patch(Vector3.new(at.X, Config.ArenaOrigin.Y, at.Z), B.Radius + e.Radius * 0.3, B.Arm, B.Life, B.Tick, B.Damage * (e.DmgScale or 1)))
+				end
 			end
-			if e.RingWave >= B.RingWaves then
-				bossSetState(e, "Chase", B.ChaseSeconds)
-			else
-				e.BossTimer = B.RingWaveGap
-			end
-		end
-	elseif state == "Summon" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			for i = 1, B.SummonCount do
-				local a = (i / B.SummonCount) * math.pi * 2
-				local x, z = ctx.EnemySpawner.ClampToArena(e.Pos.X + math.cos(a) * (e.Radius + 6), e.Pos.Z + math.sin(a) * (e.Radius + 6), 4)
-				ctx.EnemySpawner.Spawn(B.SummonType, Vector3.new(x, Config.ArenaOrigin.Y, z))
-			end
-			bossSetState(e, "Chase", B.ChaseSeconds)
 		end
 	end
 end
@@ -291,6 +384,7 @@ function EnemyAI.Step(dt: number)
 	end
 	frame += 1
 	clock += dt
+	Hazards.Step(dt)
 	local active = ctx.EnemySpawner.Active
 	local runPlayers = ctx.RunManager.GetRunPlayers()
 	local chunks = Config.Enemies.ThinkChunks
@@ -313,21 +407,42 @@ function EnemyAI.Step(dt: number)
 			think(e, runPlayers)
 		end
 		if e.Boss then
-			bossStep(e, dt)
+			BossAI.Step(e, dt)
+		else
+			behave(e, dt)
+		end
+		if not e.Alive then
+			continue -- exploded / died this frame: Active was swap-removed, re-check i
 		end
 
 		local speed = e.SpeedOverride or e.Speed
-		local vel = e.Dir * speed + (e.Sep or Vector3.zero) * sepStrength + e.Knock
-		local pos = e.Pos + vel * dt
-		e.Knock *= decay
-		if not e.Ghost then
-			pos = pushOut(pos, e.Radius)
+		if e.SlowUntil and e.SlowUntil > now then
+			speed *= e.SlowMult or 1 -- Chilling Aura (Garlic perk, WeaponSystem)
+		end
+		-- A fuse / lunge wind-up stays exactly where its telegraph was drawn (no
+		-- separation or knockback drift).
+		local pin = e.PinPos
+		if pin and not (e.Act == "Fuse" or (e.Act == "Windup" and e.Def.Lunge)) then
+			pin = nil
+			e.PinPos = nil
+		end
+		local pos
+		if pin then
+			e.Knock = Vector3.zero
+			pos = pin
+		else
+			local vel = e.Dir * speed + (e.Sep or Vector3.zero) * sepStrength + e.Knock
+			pos = e.Pos + vel * dt
+			e.Knock *= decay
+			if not e.Ghost then
+				pos = pushOut(pos, e.Radius)
+			end
 		end
 		pos = Vector3.new(math.clamp(pos.X, c.X - half + e.Radius, c.X + half - e.Radius), c.Y, math.clamp(pos.Z, c.Z - half + e.Radius, c.Z + half - e.Radius))
 		e.Pos = pos
 
-		local removed = false
 		local far = true
+		local harmless = e.Harmless or e.SpawnGrace > 0 or e.Damage <= 0
 		for _, rp in ipairs(runPlayers) do
 			if rp.Alive and rp.Root then
 				local rpos = rp.Root.Position
@@ -337,20 +452,14 @@ function EnemyAI.Step(dt: number)
 					far = false
 				end
 				local reach = e.Radius + PLAYER_RADIUS
-				if d2 <= reach * reach then
-					if e.Def.Explode then
-						ctx.EnemySpawner.Explode(e)
-						removed = true
-						break
-					elseif now >= e.NextContact then
-						e.NextContact = now + Config.Enemies.ContactCooldown
-						ctx.RunManager.DamagePlayer(rp, e.Damage)
-					end
+				if not harmless and d2 <= reach * reach and now >= e.NextContact then
+					e.NextContact = now + Config.Enemies.ContactCooldown
+					ctx.RunManager.DamagePlayer(rp, e.Damage)
 				end
 			end
 		end
 
-		if not removed and far and not e.Boss and #runPlayers > 0 then
+		if far and not e.Boss and not e.Act and #runPlayers > 0 then
 			-- left far behind: bring it back to the edge of someone's screen
 			local spawnAt = ctx.EnemySpawner.SpawnPoint(e.Radius)
 			if spawnAt then
@@ -359,8 +468,8 @@ function EnemyAI.Step(dt: number)
 			end
 		end
 
-		if not removed and e.Alive then
-			local look = e.Dir.Magnitude > 0.1 and e.Dir or Vector3.new(0, 0, -1)
+		if e.Alive then
+			local look = e.Face or (e.Dir.Magnitude > 0.1 and e.Dir) or Vector3.new(0, 0, -1)
 			local bob = 0
 			if e.Def.FlyHeight then
 				bob = math.sin(clock * 6 + e.Phase) * 0.4
@@ -370,10 +479,9 @@ function EnemyAI.Step(dt: number)
 			movedBuf[n] = e
 			cframesBuf[n] = CFrame.lookAt(center, center + look)
 			i += 1
-		elseif e.Alive then
-			i += 1
 		end
-		-- when an enemy died this frame, Active was swap-removed: re-check index i
+		-- when an enemy died this frame (a revive shockwave), Active was swap-removed:
+		-- re-check index i
 	end
 
 	-- An enemy can die after it was queued (a revive shockwave, an explosion chain), so
@@ -399,12 +507,23 @@ function EnemyAI.Step(dt: number)
 	local grid = ctx.EnemySpawner.Grid
 	grid:Clear()
 	for j = 1, #active do
-		grid:Insert(active[j])
+		local e = active[j]
+		if not e.Untargetable then
+			grid:Insert(e)
+		end
 	end
+end
+
+-- Cancels every hazard (group nil = all; "Boss" = the Queen's).
+function EnemyAI.ClearHazards(group: string?)
+	Hazards.Clear(group)
 end
 
 function EnemyAI.Init(c)
 	ctx = c
+	setAct = c.EnemySpawner.SetAct
+	Hazards.Init(c)
+	BossAI.Init(c)
 end
 
 function EnemyAI.Start() end

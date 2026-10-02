@@ -33,18 +33,25 @@ global Playwright install (`/opt/pw-browsers`); never run `playwright install`.
 
 | Scene | Shows |
 |---|---|
-| `menu` | lobby world + lighting, lobby home screen, camera at the lobby `MenuCamera` part |
-| `characters`, `upgrades` | lobby screens, opened with the `OpenPanel` remote |
-| `settings`, `stats` | taps the button whose text is SETTINGS / STATS (stats is skipped with a note if the UI has none) |
+| `menu` | lobby world + lighting, lobby home screen, camera at the lobby `MenuCamera` part; `--set save=failing\|memory` shows the "progress isn't being saved" notice |
+| `characters`, `upgrades` | lobby screens, opened with the `OpenPanel` remote; characters: `--set inspect=Ranger` taps a hero, `--set owned=all` owns every hero (Queen Slayer done) |
+| `settings`, `stats` | taps the button whose text is SETTINGS / STATS (stats is skipped with a note if the UI has none); `--set tab=achievements` opens the ACHIEVEMENTS tab |
 | `countdown` | Duo countdown started by the player, a teammate joined (`SwarmState` attributes) |
-| `arena` | Forest (or `--set arena=Ruins`) at 8:24, hero at the centre, 120 enemies, gems, pickups, chest, HUD with weapons / passives; the real CameraController run camera |
-| `levelup`, `results`, `pause` | in-run overlays over the arena (`LevelUpOffer`, `RunResult`, the pause entry point) |
+| `arena` | `--set character=Ranger --set steadyaim=on\|off` shows another hero and the Steady Aim chip; Forest (or `--set arena=Ruins`) at 8:24, hero at the centre, 120 enemies, gems, pickups, chest, HUD with weapons / passives; the real CameraController run camera |
+| `levelup`, `results`, `pause` | in-run overlays over the arena (`LevelUpOffer`, `RunResult`, the pause entry point); levelup builds real cards (stat lines, ranks, perks, hints): `--set cards=evolve`, `--set rerolls=0 --set skips=0 --set rerollsMax=0`; results shows the hero, build and REPLAY / MAIN MENU, `--set outcome=defeat` a Duo defeat during the Queen fight |
+| `team` | Duo / Trio HUD (TeamUI): teammates are extra Players (`preview.addPlayer`) with real characters; one fallen with the world revive circle and the marker ring. `--set mode=Duo\|Trio`, `--set revive=0.55`, `--set far=on` (off-screen arrow), `--set me=down` (you are the one down), `--set choosing=on` (a teammate picks a card: the freeze line), `--set leave=on` (a teammate disconnects) |
+| `tutorial` | a new player's first run (profile `TutorialDone = false`) with one tip showing: `--set tip=Move\|Attack\|Gems\|Portal\|Boss\|TeamRules\|Revive\|LevelUp`, `--set tips=off` |
 | `stage-portal` | stage 2: the hero by the portal while it charges (charge ring, stage pill); `--set charge=0` idle portal, `--set look=Boss\|Surge\|Open` other portal states |
 | `stage-arrow` | stage 2 at the centre after the hint time: stage pill and the edge arrow to the off-screen portal |
 | `stage-choice` | the open portal's NEXT STAGE / RETURN TO LOBBY panel (`PortalOffer` remote) |
 | `stage-sim` | boots the real server (`preview.startServer`) and plays the stage loop through the remotes (start, dev portal boss, surge, NEXT STAGE, travel, RETURN TO LOBBY), printing the state; a slow logic smoke test |
+| `enemy-telegraphs` | the arena with every enemy warning at once (Spitter wind-up + acid marker, a glob in flight, Bomb Tick fuse ring, Rhino lunge lane, the three elite affixes with a fire patch) and the "New: Spitter" toast; `--set t=<s>` another moment |
+| `boss` | the Scorpion Queen at one moment, `--set moment=entrance\|charge\|venom\|ring\|burrow\|summon\|stunned\|collapse`: her pose, the floor telegraph and the boss bar |
+| `boss-sim` | boots the real server: enemy behaviours, elite affixes, a full Queen fight (entrance, cycle, phase 2, a kill mid-attack, collapse, surge) and travel cleanup, printing every state change; run with `--studio` |
 | `models` | contact sheet of every catalog model in game colours, front 3/4 view (ViewportFrames) |
-| `arena-map` | top-down orthographic arena with obstacles (red), the spawn clear radius and the 40/100/200 rings, plus metrics |
+| `arena-map` | top-down orthographic arena with obstacles (red), the spawn clear radius and the 40/100/200 rings, plus metrics; `--set loot=1` adds the portal and the stage loot (chests, shrines, altar) |
+| `loot` | stage 2 with the real LootSystem placement: the hero at a chest / shrine / altar (`--set focus=Small\|Large\|Golden\|Chance\|Bargain\|Guarded`, `--set altar=Guarded`, `--set gold=N`) with its prompt, the items strip, item popups, a sealed Bargain |
+| `items` | the pause menu ITEMS list |
 
 Scenes only use public entry points (`MapBuilder.BuildLobby / BuildArena`,
 `MeshService.Init / Start`, `ModelBuilder.BuildCharacter / BuildEnemyShell /
@@ -60,6 +67,7 @@ still renders whatever exists.
 New scene: add `scenes/<name>.luau`; it gets the game globals plus `preview`
 (`advance(seconds)`, `fireClient(remote, ...)`, `click(button)`, `findGui(text)`,
 `shared(name)`, `server(name)`, `client(name)`, `startClient()`, `forceMeshesUploaded()`,
+`addPlayer(name, userId)` (another Player in the server, for co-op scenes),
 `overlay{...}`, `camera = {cf, fov, ortho}`, `metrics`, `render.background`).
 
 ## Metrics (`arena-map`)
@@ -178,7 +186,8 @@ so layouts can be checked against them (`--no-coreui` hides it).
 * **Runtime**: no physics (parts stay where code puts them; joints only follow when
   Part0 moves), raycasts and spatial queries hit nothing, remotes are delivered
   immediately, signals fire immediately (Roblox's default is deferred), sounds are
-  silent, one player only. The full server (`GameServer`, DataStores, monetization) is
+  silent, one LocalPlayer (scenes may add other Players with `preview.addPlayer`: they
+  have characters and attributes but run no scripts). The full server (`GameServer`, DataStores, monetization) is
   not run by the scenes; `preview.startServer()` exists but needs more mocking.
 
 ## Checks

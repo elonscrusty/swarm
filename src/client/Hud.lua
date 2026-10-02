@@ -5,7 +5,9 @@
 	                pill ("STAGE 2 · Find the portal" → "Defeat the Queen" → "Survive the
 	                surge" → "Portal open"), a plate with health (heart + crimson bar) and
 	                level / XP (gold bar), then the boss bar while the boss lives
-	  top right     kills and gold counters, pause button
+	  top right     kills and gold counters (gold = run gold: earned this run, minus what
+	                chests and shrines took), pause button; a steel band on the health bar
+	                is the Guardian Ward shield
 	  centre        status line (paused, "<Name> is choosing an upgrade", fallen, partner
 	                revive progress)
 	The portal arrow, the charge ring, the portal choice panel and the travel fade live in
@@ -25,9 +27,12 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
+local PassiveData = require(Shared:WaitForChild("PassiveData"))
+local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
+local ClientSettings = require(script.Parent.ClientSettings)
 
 local Hud = {}
 
@@ -81,6 +86,10 @@ local function buildTop(frame: Frame)
 		Size = UDim2.new(1, -32, 1, -2),
 	})
 
+	-- Guardian Ward shield: a steel band along the top of the health bar
+	ui.ShieldBar = new("Frame", { Name = "Shield", BackgroundColor3 = P.steel_200, BorderSizePixel = 0, Size = UDim2.new(0, 0, 0, 4), Visible = false, ZIndex = 6 }, ui.HP.Frame)
+	UIKit.corner(ui.ShieldBar, 2)
+
 	local xpRow = new("Frame", { Name = "XP", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0.5, -3), LayoutOrder = 2 }, rows)
 	ui.Level = text(xpRow, "Label", "Lv. 1", {
 		Name = "Level",
@@ -108,7 +117,7 @@ local function buildTop(frame: Frame)
 		Padding = UDim.new(0, 8),
 	})
 	Icons.Draw(bossTitle, "skull", { Size = 20, Color = P.crimson_300, Back = P.slate_950, LayoutOrder = 1 })
-	text(bossTitle, "H3", "SCORPION QUEEN", {
+	ui.BossName = text(bossTitle, "H3", "SCORPION QUEEN", {
 		LayoutOrder = 2,
 		Size = UDim2.fromOffset(0, 24),
 		AutomaticSize = Enum.AutomaticSize.X,
@@ -123,6 +132,9 @@ local function buildTop(frame: Frame)
 		Size = UDim2.new(1, 0, 0, 16),
 	})
 	UIKit.stroke(ui.BossMeter.Frame, P.crimson_400, 1.5, 0.2)
+	-- phase marker (BossPhaseAt, e.g. 50%): a dark notch with an ivory core on the bar
+	ui.BossMark = new("Frame", { Name = "PhaseMark", BackgroundColor3 = P.slate_950, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 36), Size = UDim2.fromOffset(5, 22), ZIndex = 4, Visible = false }, boss)
+	new("Frame", { BackgroundColor3 = P.ivory_200, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 1, 1, -4), ZIndex = 5 }, ui.BossMark)
 
 	-- kills / gold counters + pause
 	local counters = UIKit.Panel(frame, { Name = "Counters", AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 44) }, true)
@@ -141,6 +153,52 @@ local function buildTop(frame: Frame)
 			end
 		end,
 	})
+end
+
+-- Buff chip (Ranger's Steady Aim): a small pill over the ability bar. Shown only for a
+-- hero with the trait (player attribute SteadyAim exists): dim "Stand still to aim" while
+-- moving, lit "Steady Aim +30%" once the bonus is on.
+local function buildBuffChip(frame: Frame)
+	local holder, face = UIKit.Surface(frame, { Name = "BuffChip", Transparency = 0.15, Radius = 999, Shadow = false, Size = UDim2.fromOffset(0, 28) })
+	holder.AutomaticSize = Enum.AutomaticSize.X
+	face.AutomaticSize = Enum.AutomaticSize.X
+	face.Size = UDim2.fromScale(0, 1)
+	holder.Visible = false
+	UIKit.padding(face, 0, 12, 0, 8)
+	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
+	ui.Buff = holder
+	ui.BuffIcon = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(18, 18), LayoutOrder = 1 }, face)
+	ui.BuffText = text(face, "Label", "", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X })
+	ui.BuffStroke = UIKit.stroke(face, P.moss_300, 1.5, 0.2)
+end
+
+local function refreshBuff()
+	local state = player:GetAttribute("SteadyAim")
+	if not ui.Buff then
+		return
+	end
+	ui.Buff.Visible = state ~= nil and player:GetAttribute("InRun") == true
+	if state == nil or ui.BuffOn == state then
+		return
+	end
+	ui.BuffOn = state
+	for _, c in ipairs(ui.BuffIcon:GetChildren()) do
+		c:Destroy()
+	end
+	Icons.Draw(ui.BuffIcon, "aim", { Size = 18, Color = (not state) and P.stone_400 or nil, Back = P.slate_900 })
+	-- the hero's own numbers (CharacterData SteadyAim: Damage for the bow, OtherDamage for
+	-- every other weapon)
+	local heroDef = CharacterData.Characters[tostring(player:GetAttribute("CharacterId") or "")]
+	local trait = (heroDef and heroDef.SteadyAim) or (CharacterData.Characters.Ranger and CharacterData.Characters.Ranger.SteadyAim)
+	local bow = trait and math.floor((trait.Damage or 0) * 100 + 0.5) or 30
+	local other = trait and math.floor((trait.OtherDamage or 0) * 100 + 0.5) or 0
+	local onText = other > 0 and string.format("STEADY AIM +%d%% BOW · +%d%% OTHERS", bow, other) or string.format("STEADY AIM +%d%% DAMAGE", bow)
+	ui.BuffText.Text = state and onText or "STAND STILL TO AIM"
+	ui.BuffText.TextColor3 = state and P.moss_200 or C.TextMuted
+	ui.BuffStroke.Transparency = state and 0.1 or 0.75
+	if state then
+		UIAnim.Pop(ui.Buff, 0, 1.2)
+	end
 end
 
 -- Stage pill under the timer: portal icon, "STAGE 2", objective.
@@ -270,9 +328,15 @@ local function layout()
 
 	-- stage pill under the timer
 	local stageH = compact and 34 or 30
-	ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(timerY + timerH - 2))
+	local stageY = timerY + timerH - 2
+	if portrait and ins.Left > 8 then
+		-- the pill is wide ("STAGE 1 · The portal is dormant: 1:35"): on a narrow screen it
+		-- would run into the Roblox menu buttons, so it goes below them
+		stageY = math.max(stageY, ins.Top + 4)
+	end
+	ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(stageY))
 	ui.Stage.Size = UDim2.fromOffset(0, stageH)
-	local stageBottom = ui.Stage.Visible and (timerY + timerH - 2 + stageH + 6) or (timerY + timerH + 2)
+	local stageBottom = ui.Stage.Visible and (stageY + stageH + 6) or (timerY + timerH + 2)
 
 	-- plate
 	local plateW = math.min(Theme.Layout.HudPlate.X, W - 2 * M)
@@ -315,6 +379,15 @@ local function layout()
 	place(ui.PassiveRow, pad, pad + wt + gap, rowW, pt)
 	ui.BarTop = barY
 	ui.BarBottom = barY + barH
+	if ui.Buff then
+		if portrait then
+			ui.Buff.AnchorPoint = Vector2.new(0.5, 0)
+			ui.Buff.Position = UDim2.fromOffset(math.floor(W / 2), barY + barH + 6)
+		else
+			ui.Buff.AnchorPoint = Vector2.new(0.5, 1)
+			ui.Buff.Position = UDim2.fromOffset(math.floor(W / 2), barY - 8)
+		end
+	end
 
 	-- status line: centre-low in landscape, below the ability bar in portrait
 	local statusW = math.min(640, W - 2 * M)
@@ -378,7 +451,7 @@ function Hud.SetInventory(inv: { [string]: any }?)
 		local p = inv.Passives[i]
 		local tile
 		if p then
-			tile = UIKit.Tile(ui.PassiveRow, { Id = p.Id, Size = pt, Level = p.Level, Max = p.Level >= 5 })
+			tile = UIKit.Tile(ui.PassiveRow, { Id = p.Id, Size = pt, Level = p.Level, Max = p.Level >= (p.MaxLevel or PassiveData.MaxLevelOf(p.Id)) })
 			popIfChanged(tile, "P" .. p.Id, p.Level)
 		else
 			tile = UIKit.Tile(ui.PassiveRow, { Size = pt, Empty = true })
@@ -393,10 +466,15 @@ end
 
 local vignetteTween: Tween? = nil
 
--- Crimson edge pulse (replaces the old full-screen red flash).
+-- Crimson edge pulse (replaces the old full-screen red flash). Reduced effects: no
+-- screen flash at all, only the heart icon reacts.
 function Hud.Hurt()
 	local level = ui.VignetteLevel :: NumberValue
 	if not level then
+		return
+	end
+	if ClientSettings.Reduced() then
+		UIAnim.Punch(ui.Heart, 0.25)
 		return
 	end
 	if vignetteTween then
@@ -442,6 +520,7 @@ end
 ------------------------------------------------------------------------------------------
 
 function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
+	refreshBuff()
 	local phase = state:GetAttribute("Phase") or "Lobby"
 	local runTime = state:GetAttribute("RunTime") or 0
 
@@ -511,7 +590,12 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		anim.HPTrail = math.max(frac, anim.HPTrail - dt * 0.45)
 	end
 	anim.HP += (frac - anim.HP) * math.min(1, dt * 14)
-	ui.HP.Set(anim.HP, string.format("%d / %d", math.ceil(hp), maxHp))
+	local shield = player:GetAttribute("Shield") or 0
+	ui.HP.Set(anim.HP, shield > 0 and string.format("%d / %d  +%d", math.ceil(hp), maxHp, shield) or string.format("%d / %d", math.ceil(hp), maxHp))
+	ui.ShieldBar.Visible = shield > 0
+	if shield > 0 then
+		ui.ShieldBar.Size = UDim2.new(math.clamp(shield / maxHp, 0, 1), 0, 0, 4)
+	end
 	ui.HP.SetTrail(anim.HPTrail)
 
 	-- low health: the screen edge breathes crimson
@@ -519,7 +603,8 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	local alive = player:GetAttribute("Alive") ~= false
 	if alive and frac > 0 and frac <= (Config.UI.LowHealthFraction or 0.3) then
 		if not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing then
-			level.Value = 0.72 + 0.18 * (0.5 + 0.5 * math.sin(os.clock() * 4))
+			-- reduced effects: a steady edge instead of a breathing one
+			level.Value = ClientSettings.Reduced() and 0.8 or (0.72 + 0.18 * (0.5 + 0.5 * math.sin(os.clock() * 4)))
 		end
 	elseif not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing then
 		level.Value = 1
@@ -533,7 +618,7 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		anim.XP = 0
 		ui.XP.Fill.BackgroundTransparency = 0
 		local flash = ui.XP.Fill:FindFirstChildOfClass("UIGradient")
-		if flash then
+		if flash and not ClientSettings.Reduced() then
 			flash.Color = ColorSequence.new(P.ivory_100)
 			task.delay(0.25, function()
 				flash.Color = Theme.Gradient.XP
@@ -567,11 +652,18 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		if not anim.BossShown then
 			anim.BossShown = true
 			anim.BossTrail = 1
+			anim.BossFill = 0 -- the bar fills with her name while she rises (BossIntro s)
+			ui.BossName.Text = string.upper(tostring(state:GetAttribute("BossName") or "Scorpion Queen"))
 			UIAnim.Pop(ui.Boss, 0, 0.3)
 		end
+		anim.BossFill = math.min(1, (anim.BossFill or 1) + dt / math.max(0.3, tonumber(state:GetAttribute("BossIntro")) or 2))
+		bfrac = math.min(bfrac, anim.BossFill)
 		ui.BossMeter.Set(bfrac)
 		anim.BossTrail = math.max(bfrac, anim.BossTrail - dt * 0.25)
 		ui.BossMeter.SetTrail(anim.BossTrail)
+		local markAt = tonumber(state:GetAttribute("BossPhaseAt")) or 0
+		ui.BossMark.Visible = markAt > 0 and markAt < 1
+		ui.BossMark.Position = UDim2.new(markAt, 0, 0, 36)
 	else
 		anim.BossShown = false
 	end
@@ -642,6 +734,7 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	ui.Frame = frame
 	buildTop(frame)
 	buildStage(frame)
+	buildBuffChip(frame)
 	buildBar(frame)
 	buildStatus(frame)
 	buildVignette(fxGui)

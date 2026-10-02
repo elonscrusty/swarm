@@ -1,56 +1,102 @@
 --[[
 	Audio.lua
-	Plays sound effects and music from Config.Sounds. Each effect has a small pool of
-	Sound instances and a minimum gap so 200 enemies dying can't make 200 sounds.
-	Volumes come from the pause-menu sliders (saved in the profile).
+	Sound effects and music from Config.Sounds, mixed by the rules in Config.Audio.
+
+	Hierarchy (so the important sounds always get through a 200-enemy fight):
+	  * Every effect belongs to a category (Combat, Pickup, UI, Player, Warning, Boss) with
+	    its own SoundGroup under the Effects group, a voice limit and a priority.
+	  * At most Config.Audio.MaxVoices effects play at once. A new sound that finds its
+	    category or the whole mix full steals the oldest voice of a lower priority, or is
+	    dropped when nothing lower is playing. Warnings and the Queen outrank combat noise.
+	  * MinGap per sound: the same sound can't restart faster than that (200 deaths are
+	    one crunch, not 200).
+	  * Ducking: while a Warning or Boss sound plays, the Combat group is turned down.
+	  * Pitch variation (Pitch +/- PitchVar) so repeats don't sound mechanical.
+	  * 3D: sounds marked World can be played at a world position (PlayAt): full volume
+	    near the hero (the camera is ~78 studs up), quieter far away.
+	Music: LobbyMusic / BattleMusic / BossMusic slots (empty Id = silent), looped, in their
+	own group. Volumes come from the settings (Music / Effects sliders, saved).
 ]]
 
 local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
 
 local Audio = {}
 
-local POOL = 3
+local A = Config.Audio
 local sfxGroup: SoundGroup
 local musicGroup: SoundGroup
+local groups: { [string]: SoundGroup } = {}
 local pools: { [string]: { Sound } } = {}
 local nextIndex: { [string]: number } = {}
 local lastPlayed: { [string]: number } = {}
 local musicSounds: { [string]: Sound } = {}
 local currentMusic: string? = nil
 
+-- world emitters: invisible anchored parts that carry a 3D Sound each
+type Emitter = { Part: BasePart, Sound: Sound, Name: string }
+local emitters: { Emitter } = {}
+local nextEmitter = 1
+local emitterFolder: Folder? = nil
+
+type Voice = { Sound: Sound, Category: string, Priority: number, Ends: number }
+local voices: { Voice } = {}
+
+local duckUntil = 0
+local ducked = false
+
+local function categoryOf(def): string
+	local cat = def.Category
+	if cat and A.Categories[cat] then
+		return cat
+	end
+	return "Combat"
+end
+
+local function priorityOf(def): number
+	return def.Priority or A.Categories[categoryOf(def)].Priority or 1
+end
+
+local function newSound(name: string, def, parent: Instance, group: SoundGroup): Sound
+	local s = Instance.new("Sound")
+	s.Name = name
+	s.SoundId = def.Id
+	s.Volume = def.Volume or 0.5
+	s.SoundGroup = group
+	s.Parent = parent
+	return s
+end
+
 function Audio.Init()
 	sfxGroup = Instance.new("SoundGroup")
 	sfxGroup.Name = "SwarmSFX"
-	sfxGroup.Volume = 0.8
+	sfxGroup.Volume = Config.Settings.Defaults.Sfx
 	sfxGroup.Parent = SoundService
 	musicGroup = Instance.new("SoundGroup")
 	musicGroup.Name = "SwarmMusic"
-	musicGroup.Volume = 0.6
+	musicGroup.Volume = Config.Settings.Defaults.Music
 	musicGroup.Parent = SoundService
+	for name, cat in pairs(A.Categories) do
+		local g = Instance.new("SoundGroup")
+		g.Name = name
+		g.Volume = cat.Volume or 1
+		g.Parent = sfxGroup -- nested: the Effects slider scales every category
+		groups[name] = g
+	end
 
 	for name, def in pairs(Config.Sounds) do
 		if def.Id ~= "" then
-			if string.find(name, "Music") then
-				local s = Instance.new("Sound")
-				s.Name = name
-				s.SoundId = def.Id
-				s.Volume = def.Volume or 0.5
+			if def.Category == "Music" or string.find(name, "Music") then
+				local s = newSound(name, def, SoundService, musicGroup)
 				s.Looped = true
-				s.SoundGroup = musicGroup
-				s.Parent = SoundService
 				musicSounds[name] = s
 			else
+				local cat = categoryOf(def)
 				local list = {}
-				for i = 1, POOL do
-					local s = Instance.new("Sound")
-					s.Name = name .. i
-					s.SoundId = def.Id
-					s.Volume = def.Volume or 0.5
-					s.SoundGroup = sfxGroup
-					s.Parent = SoundService
-					list[i] = s
+				for i = 1, math.clamp(A.Categories[cat].MaxVoices or 3, 1, 3) do
+					list[i] = newSound(name .. i, def, SoundService, groups[cat])
 				end
 				pools[name] = list
 				nextIndex[name] = 1
@@ -59,23 +105,193 @@ function Audio.Init()
 	end
 end
 
+-- Drops voices that have finished (Sound.IsPlaying, or their expected length is over).
+local function pruneVoices(now: number)
+	for i = #voices, 1, -1 do
+		local v = voices[i]
+		if now >= v.Ends or not v.Sound.IsPlaying then
+			table.remove(voices, i)
+		end
+	end
+end
+
+--[[
+	Makes room for a sound of `priority` in `category`: true when it may play (a lower
+	priority voice is stopped if the category or the whole mix is full).
+]]
+local function claimVoice(category: string, priority: number): boolean
+	local catMax = A.Categories[category].MaxVoices or 3
+	local inCat = 0
+	for _, v in ipairs(voices) do
+		if v.Category == category then
+			inCat += 1
+		end
+	end
+	local catFull = inCat >= catMax
+	if not catFull and #voices < A.MaxVoices then
+		return true
+	end
+	local victim: number? = nil
+	if catFull then
+		-- the category is full: its oldest voice of the same or a lower priority gives way
+		for i, v in ipairs(voices) do
+			if v.Category == category and v.Priority <= priority then
+				victim = i
+				break
+			end
+		end
+	else
+		-- the whole mix is full: the oldest voice of a lower priority gives way
+		for i, v in ipairs(voices) do
+			if v.Priority < priority then
+				victim = i
+				break
+			end
+		end
+	end
+	if not victim then
+		return false
+	end
+	local v = table.remove(voices, victim) :: Voice
+	v.Sound:Stop()
+	return true
+end
+
+local function setDuck(on: boolean)
+	if ducked == on then
+		return
+	end
+	ducked = on
+	local target = groups[A.Duck.Target]
+	if target then
+		local base = A.Categories[A.Duck.Target].Volume or 1
+		TweenService:Create(target, TweenInfo.new(on and 0.08 or 0.4), { Volume = on and base * A.Duck.Volume or base }):Play()
+	end
+end
+
+local function startVoice(s: Sound, def, category: string, priority: number, pitch: number?)
+	local now = os.clock()
+	local var = def.PitchVar or A.DefaultPitchVar
+	local speed = pitch or ((def.Pitch or 1) + (math.random() * 2 - 1) * var)
+	s.PlaybackSpeed = math.max(0.1, speed)
+	s.TimePosition = 0
+	s:Play()
+	local length = s.TimeLength > 0 and s.TimeLength / s.PlaybackSpeed or 1.5
+	table.insert(voices, { Sound = s, Category = category, Priority = priority, Ends = now + math.min(length, 4) })
+	if table.find(A.Duck.Triggers, category) then
+		duckUntil = math.max(duckUntil, now + A.Duck.Seconds)
+		setDuck(true)
+		task.delay(A.Duck.Seconds + 0.05, function()
+			if os.clock() >= duckUntil then
+				setDuck(false)
+			end
+		end)
+	end
+end
+
+-- Gate shared by Play / PlayAt: MinGap, then a voice. Returns the def and its category.
+local function gate(name: string): (any, string, number)
+	local def = Config.Sounds[name]
+	if not def then
+		return nil, "", 0
+	end
+	local now = os.clock()
+	if def.MinGap and now - (lastPlayed[name] or -math.huge) < def.MinGap then
+		return nil, "", 0
+	end
+	pruneVoices(now)
+	local category = categoryOf(def)
+	local priority = priorityOf(def)
+	if not claimVoice(category, priority) then
+		return nil, "", 0
+	end
+	lastPlayed[name] = now
+	return def, category, priority
+end
+
+-- Plays an effect (2D). pitch overrides the playback speed (no random variation).
 function Audio.Play(name: string, pitch: number?)
 	local list = pools[name]
 	if not list then
 		return
 	end
-	local def = Config.Sounds[name]
-	local now = os.clock()
-	if def.MinGap and now - (lastPlayed[name] or 0) < def.MinGap then
+	local def, category, priority = gate(name)
+	if not def then
 		return
 	end
-	lastPlayed[name] = now
 	local i = nextIndex[name]
 	nextIndex[name] = (i % #list) + 1
-	local s = list[i]
-	s.PlaybackSpeed = pitch or (0.95 + math.random() * 0.1)
-	s.TimePosition = 0
-	s:Play()
+	startVoice(list[i], def, category, priority, pitch)
+end
+
+local function getEmitter(): Emitter
+	if not emitterFolder then
+		local f = Instance.new("Folder")
+		f.Name = "SwarmAudio"
+		f.Parent = workspace
+		emitterFolder = f
+		for i = 1, A.World.Emitters do
+			local p = Instance.new("Part")
+			p.Name = "Emitter" .. i
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.CanTouch = false
+			p.Transparency = 1
+			p.Size = Vector3.new(0.2, 0.2, 0.2)
+			p.CFrame = CFrame.new(0, -150, 0)
+			p.Parent = f
+			local s = Instance.new("Sound")
+			s.RollOffMode = Enum.RollOffMode.InverseTapered
+			s.RollOffMinDistance = A.World.RollOffMin
+			s.RollOffMaxDistance = A.World.RollOffMax
+			s.Parent = p
+			emitters[i] = { Part = p, Sound = s, Name = "" }
+		end
+	end
+	local e = emitters[nextEmitter]
+	nextEmitter = (nextEmitter % #emitters) + 1
+	return e
+end
+
+--[[
+	Plays an effect at a world position (sounds marked World in Config.Sounds; others fall
+	back to Play). Telegraph cues use this, so a far-away warning is quieter.
+]]
+function Audio.PlayAt(name: string, position: Vector3, pitch: number?)
+	local def0 = Config.Sounds[name]
+	if not def0 or def0.Id == "" then
+		return
+	end
+	if not def0.World then
+		Audio.Play(name, pitch)
+		return
+	end
+	local def, category, priority = gate(name)
+	if not def then
+		return
+	end
+	local e = getEmitter()
+	local s = e.Sound
+	if s.IsPlaying then
+		-- this emitter's voice is reused: forget it in the voice list
+		for i, v in ipairs(voices) do
+			if v.Sound == s then
+				table.remove(voices, i)
+				break
+			end
+		end
+		s:Stop()
+	end
+	if e.Name ~= name then
+		e.Name = name
+		s.Name = name
+		s.SoundId = def.Id
+		s.Volume = def.Volume or 0.5
+	end
+	s.SoundGroup = groups[category]
+	e.Part.CFrame = CFrame.new(position)
+	startVoice(s, def, category, priority, pitch)
 end
 
 -- "LobbyMusic" | "BattleMusic" | "BossMusic" | nil
@@ -95,6 +311,25 @@ end
 function Audio.SetVolumes(music: number, sfx: number)
 	musicGroup.Volume = math.clamp(music, 0, 1)
 	sfxGroup.Volume = math.clamp(sfx, 0, 1)
+end
+
+-- Stops every effect (run end / travel: no stray warning ticks).
+function Audio.StopEffects()
+	for _, v in ipairs(voices) do
+		v.Sound:Stop()
+	end
+	table.clear(voices)
+	setDuck(false)
+end
+
+-- For the preview tool / tests: effects playing now (name, category).
+function Audio.Voices(): { { Name: string, Category: string } }
+	pruneVoices(os.clock())
+	local out = {}
+	for _, v in ipairs(voices) do
+		table.insert(out, { Name = v.Sound.Name, Category = v.Category })
+	end
+	return out
 end
 
 return Audio

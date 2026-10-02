@@ -1,6 +1,6 @@
 --[[
 	PassiveData.lua
-	12 passive items, 5 levels each. `Values[level]` is the TOTAL bonus at that level
+	13 passive items, 3-5 levels each (PassiveData.MaxLevelOf). `Values[level]` is the TOTAL bonus at that level
 	(not the increment), so stat calculation is a single lookup.
 
 	Stat keys (summed into the player's stat sheet by LevelUpSystem.RecomputeStats):
@@ -16,10 +16,12 @@
 	  projSpeed      +projectile speed multiplier
 	  duration       +duration multiplier
 	  growth         +XP multiplier
+	  pierce         +enemies a stopping projectile passes through
 ]]
 
 local PassiveData = {}
 
+-- Highest level any passive has (each passive has its own MaxLevel: see MaxLevelOf).
 PassiveData.MaxLevel = 5
 
 PassiveData.Order = {
@@ -35,8 +37,15 @@ PassiveData.Order = {
 	"Ammo",
 	"Candle",
 	"Growth",
+	"Fletching",
 }
 
+--[[
+	Levels: every level must be a step a player can feel. Passives that used to grow in tiny
+	5-8% steps (or, like Duplicator, had empty levels) now have fewer, bigger levels with the
+	same total at max. Description = the short summary on a NEW card; level cards print the
+	real stat change (StatSheet.Lines, e.g. "Max HP 120 → 144").
+]]
 PassiveData.Passives = {
 	Might = {
 		Id = "Might",
@@ -81,12 +90,11 @@ PassiveData.Passives = {
 		Id = "SpeedBoots",
 		Name = "Speed Boots",
 		Color = Color3.fromRGB(80, 200, 255),
-		Description = "+8% move speed per level.",
+		Description = "+10% move speed per level.",
 		Values = {
-			{ speed = 0.08 },
-			{ speed = 0.16 },
-			{ speed = 0.24 },
-			{ speed = 0.32 },
+			{ speed = 0.10 },
+			{ speed = 0.20 },
+			{ speed = 0.30 },
 			{ speed = 0.40 },
 		},
 	},
@@ -94,12 +102,11 @@ PassiveData.Passives = {
 		Id = "Cooldown",
 		Name = "Cooldown",
 		Color = Color3.fromRGB(120, 230, 160),
-		Description = "Weapons fire 6% more often per level.",
+		Description = "Weapons attack about 8% more often per level.",
 		Values = {
-			{ cooldown = 0.06 },
-			{ cooldown = 0.12 },
-			{ cooldown = 0.18 },
-			{ cooldown = 0.24 },
+			{ cooldown = 0.08 },
+			{ cooldown = 0.15 },
+			{ cooldown = 0.22 },
 			{ cooldown = 0.30 },
 		},
 	},
@@ -107,12 +114,11 @@ PassiveData.Passives = {
 		Id = "Area",
 		Name = "Area",
 		Color = Color3.fromRGB(255, 170, 60),
-		Description = "+10% attack area per level.",
+		Description = "+12% attack area per level.",
 		Values = {
-			{ area = 0.10 },
-			{ area = 0.20 },
-			{ area = 0.30 },
-			{ area = 0.40 },
+			{ area = 0.12 },
+			{ area = 0.25 },
+			{ area = 0.37 },
 			{ area = 0.50 },
 		},
 	},
@@ -120,11 +126,9 @@ PassiveData.Passives = {
 		Id = "Duplicator",
 		Name = "Duplicator",
 		Color = Color3.fromRGB(200, 120, 255),
-		Description = "+1 projectile on levels 1, 3 and 5.",
+		Description = "+1 projectile, swing or strike per level (all weapons but the aura).",
 		Values = {
 			{ amount = 1 },
-			{ amount = 1 },
-			{ amount = 2 },
 			{ amount = 2 },
 			{ amount = 3 },
 		},
@@ -133,12 +137,10 @@ PassiveData.Passives = {
 		Id = "Vacuum",
 		Name = "Vacuum",
 		Color = Color3.fromRGB(90, 255, 220),
-		Description = "+30% pickup radius per level.",
+		Description = "+50% pickup radius per level.",
 		Values = {
-			{ pickup = 0.30 },
-			{ pickup = 0.60 },
-			{ pickup = 0.90 },
-			{ pickup = 1.20 },
+			{ pickup = 0.50 },
+			{ pickup = 1.00 },
 			{ pickup = 1.50 },
 		},
 	},
@@ -146,12 +148,10 @@ PassiveData.Passives = {
 		Id = "Luck",
 		Name = "Luck",
 		Color = Color3.fromRGB(110, 230, 80),
-		Description = "+10% luck per level (rare drops, better cards).",
+		Description = "More rare items and better cards.",
 		Values = {
-			{ luck = 0.10 },
-			{ luck = 0.20 },
+			{ luck = 0.15 },
 			{ luck = 0.30 },
-			{ luck = 0.40 },
 			{ luck = 0.50 },
 		},
 	},
@@ -159,12 +159,10 @@ PassiveData.Passives = {
 		Id = "Ammo",
 		Name = "Ammo",
 		Color = Color3.fromRGB(240, 220, 120),
-		Description = "+10% projectile speed per level, +1 projectile at level 5.",
+		Description = "Faster projectiles; +1 projectile at max level.",
 		Values = {
-			{ projSpeed = 0.10 },
-			{ projSpeed = 0.20 },
+			{ projSpeed = 0.15 },
 			{ projSpeed = 0.30 },
-			{ projSpeed = 0.40 },
 			{ projSpeed = 0.50, amount = 1 },
 		},
 	},
@@ -172,12 +170,10 @@ PassiveData.Passives = {
 		Id = "Candle",
 		Name = "Candle",
 		Color = Color3.fromRGB(255, 140, 40),
-		Description = "+10% effect duration per level.",
+		Description = "Projectiles fly longer, pools burn longer.",
 		Values = {
-			{ duration = 0.10 },
-			{ duration = 0.20 },
+			{ duration = 0.15 },
 			{ duration = 0.30 },
-			{ duration = 0.40 },
 			{ duration = 0.50 },
 		},
 	},
@@ -185,27 +181,41 @@ PassiveData.Passives = {
 		Id = "Growth",
 		Name = "Growth",
 		Color = Color3.fromRGB(60, 200, 120),
-		Description = "+8% XP gained per level.",
+		Description = "More XP from every gem.",
 		Values = {
-			{ growth = 0.08 },
-			{ growth = 0.16 },
-			{ growth = 0.24 },
-			{ growth = 0.32 },
+			{ growth = 0.12 },
+			{ growth = 0.25 },
 			{ growth = 0.40 },
+		},
+	},
+	-- Behaviour change: projectiles that stop on a hit (orbs, knives, thrown axes, arrows)
+	-- pass through one more enemy per level. Evolves the Longbow.
+	Fletching = {
+		Id = "Fletching",
+		Name = "Fletching",
+		Color = Color3.fromRGB(150, 200, 120),
+		Description = "Orbs, knives, axes and arrows pierce 1 more enemy per level.",
+		Values = {
+			{ pierce = 1 },
+			{ pierce = 2 },
+			{ pierce = 3 },
 		},
 	},
 }
 
--- Text for a level-up card when the passive goes to `level`.
+-- Number of levels of one passive.
+function PassiveData.MaxLevelOf(passiveId: string): number
+	local def = PassiveData.Passives[passiveId]
+	return def and #def.Values or PassiveData.MaxLevel
+end
+
+-- Text for a level-up card when the passive goes to `level` (cards add the real stat change).
 function PassiveData.DescribeLevel(passiveId: string, level: number): string
 	local def = PassiveData.Passives[passiveId]
 	if not def then
 		return ""
 	end
-	if level <= 1 then
-		return def.Description
-	end
-	return string.format("Level %d: %s", level, def.Description)
+	return def.Description
 end
 
 return PassiveData

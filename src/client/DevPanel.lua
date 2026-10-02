@@ -5,7 +5,8 @@
 	Normal players never see it. Config.Dev.Enabled = false removes it everywhere.
 
 	  Lobby:  Start solo now (no countdown)
-	  In run: +5 levels, Spawn portal boss (charges this stage's portal), Teleport to portal
+	  In run: +5 levels, Spawn portal boss (charges this stage's portal), Teleport to portal,
+	          +3 random items, +300 gold (to test chests / shrines)
 
 	The button is only a shortcut: the server (RunManager "DevCommand") applies the same
 	rule again and ignores everyone else.
@@ -110,6 +111,8 @@ function DevPanel.Init(root: Instance, host: { [string]: any }?)
 	table.insert(runButtons, item("+" .. Config.Dev.AddLevels .. " levels", "AddLevels", 2))
 	table.insert(runButtons, item("Spawn portal boss", "SpawnPortalBoss", 3))
 	table.insert(runButtons, item("Teleport to portal", "TeleportToPortal", 4))
+	table.insert(runButtons, item("+3 random items", "GiveItems", 5))
+	table.insert(runButtons, item("+300 gold", "AddGold", 6))
 	panel = holder
 
 	-- bottom right in landscape (clear of the menu columns and the ability bar), left edge

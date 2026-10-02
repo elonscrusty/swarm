@@ -11,7 +11,7 @@
 	  Each visual style spins/tumbles from time alone, gets a pooled thin Trail and a small
 	  impact puff (or glass shatter) when it disappears.
 	* Effects from FxBatch: hit sparks, creature-tinted death dust, sword arcs, lightning,
-	  pools, explosions, shockwave rings, boss telegraphs, player events. One-shot effects
+	  pools, explosions, shockwave rings, player events (telegraphs: Telegraphs.lua). One-shot effects
 	  run on a small pooled animator (no Tween objects, no Instance churn once warm) inside
 	  a part budget (Config.Graphics.MaxEffectParts); warnings and player events always play.
 	* Gems: gold faceted crystals (mesh "Crystal", or the server cube on its corner) with a
@@ -33,6 +33,7 @@ local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local MeshCatalog = require(Shared:WaitForChild("MeshCatalog"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Audio = require(script.Parent.Audio)
+local ClientSettings = require(script.Parent.ClientSettings)
 local ModelLibrary = require(script.Parent.ModelLibrary)
 local EnemyRenderer = require(script.Parent.EnemyRenderer)
 local CameraController = require(script.Parent.CameraController)
@@ -94,6 +95,7 @@ local CREATURE: { [string]: { Dust: Color3, Bits: Color3 } } = {
 	Ghost = { Dust = P.moth_300, Bits = P.moth_500 },
 	Brute = { Dust = P.slate_400, Bits = P.chitin_800 },
 	Bomber = { Dust = P.tick_500, Bits = P.chitin_900 },
+	Spitter = { Dust = P.crimson_500:Lerp(P.slate_400, 0.5), Bits = P.chitin_900 }, -- EnemyData colour
 	Boss = { Dust = P.crimson_500, Bits = P.gold_500 },
 }
 type CreatureKey = { Color: Color3, Dust: Color3, Bits: Color3 }
@@ -240,11 +242,17 @@ type Anim = {
 
 local anims: { Anim } = {}
 local spareAnims: { Anim } = {}
-local fxParts = 0 -- effect parts in use (animator, waves, pools, telegraphs)
+local fxParts = 0 -- effect parts in use (animator, waves, pools)
 
--- Room for `count` more effect parts? Warnings (critical) may use half again the budget.
+-- Settings > Reduced effects: cosmetic effect and trail budgets shrink to this share.
+local function budgetScale(): number
+	return ClientSettings.Reduced() and (GRAPHICS.ReducedEffectsBudget or 0.4) or 1
+end
+
+-- Room for `count` more effect parts? Warnings (critical) may use half again the budget
+-- (never reduced: telegraphs are gameplay information).
 local function room(count: number, critical: boolean?): boolean
-	local cap = critical and MAX_FX_PARTS * 1.5 or MAX_FX_PARTS
+	local cap = critical and MAX_FX_PARTS * 1.5 or MAX_FX_PARTS * budgetScale()
 	return fxParts + count <= cap
 end
 
@@ -525,7 +533,7 @@ end
 local function acquireTrail(cf: CFrame, st: TrailStyle): TrailSlot?
 	local slot = table.remove(freeTrails)
 	if not slot then
-		if trailCount >= MAX_TRAILS then
+		if trailCount >= MAX_TRAILS * budgetScale() then
 			return nil
 		end
 		trailCount += 1
@@ -652,6 +660,9 @@ local function poseFromSpawn(pos: Vector3, style: string?)
 			local d = Vector3.new(root.Position.X - pos.X, 0, root.Position.Z - pos.Z)
 			if d.Magnitude < 3.5 then
 				startPose(other.UserId, style == "Orb" and "Cast" or "Throw")
+				if other == player then
+					Audio.Play("Throw") -- the local hero's attack cue (MinGap keeps it quiet)
+				end
 				return
 			end
 		end
@@ -1055,6 +1066,9 @@ local function slash(x: number, z: number, yaw: number, reach: number, sweep: nu
 		back = look.X * dir.X + look.Z * dir.Z < 0
 	end
 	startPose(userId, "Swing", sweep, back, SWING_ARC / 2)
+	if userId == player.UserId then
+		Audio.Play("Swing")
+	end
 end
 
 -- Relative blade angle (radians from the swing direction) at time t since the swing began.
@@ -1285,67 +1299,6 @@ local function ring(x: number, z: number, radius: number, color: Color3)
 	end
 end
 
---[[
-	Boss charge warning: a crimson lane on the floor (faint base, bright edges and end
-	line) that fills from the boss to the end of the charge over the telegraph time, so
-	the timing reads at a glance; the edges pulse faster as the charge gets close.
-]]
-type Tele = { Base: BasePart, Fill: BasePart, EdgeL: BasePart, EdgeR: BasePart, Cap: BasePart, CF: CFrame, Len: number, W: number, Start: number, Dur: number }
-local teles: { Tele } = {}
-local TELE_FADE = 0.25
-
-local function telegraph(x: number, z: number, yaw: number, length: number, width: number, seconds: number)
-	if type(x) ~= "number" or type(length) ~= "number" or type(width) ~= "number" then
-		return
-	end
-	local dur = math.max(0.1, tonumber(seconds) or 1)
-	local cf = CFrame.new(x, FLOOR_Y + 0.07, z) * CFrame.Angles(0, tonumber(yaw) or 0, 0)
-	local edge = 0.22
-	local base = takePart("Block", P.crimson_600, SMOOTH, Vector3.new(width, 0.05, length), 1)
-	base.CFrame = cf
-	local fill = takePart("Block", P.crimson_400, SMOOTH, Vector3.new(width, 0.06, 0.1), 1)
-	fill.CFrame = PARK
-	local el = takePart("Block", P.crimson_300, SMOOTH, Vector3.new(edge, 0.07, length), 1)
-	el.CFrame = cf * CFrame.new(-width / 2, 0.01, 0)
-	local er = takePart("Block", P.crimson_300, SMOOTH, Vector3.new(edge, 0.07, length), 1)
-	er.CFrame = cf * CFrame.new(width / 2, 0.01, 0)
-	local cap = takePart("Block", P.crimson_300, SMOOTH, Vector3.new(width + edge, 0.07, edge), 1)
-	cap.CFrame = cf * CFrame.new(0, 0.01, -length / 2)
-	fxParts += 5
-	table.insert(teles, { Base = base, Fill = fill, EdgeL = el, EdgeR = er, Cap = cap, CF = cf, Len = length, W = width, Start = os.clock(), Dur = dur })
-end
-
-local function stepTelegraphs(now: number)
-	for i = #teles, 1, -1 do
-		local tl = teles[i]
-		local t = now - tl.Start
-		if t >= tl.Dur + TELE_FADE then
-			givePart("Block", tl.Base)
-			givePart("Block", tl.Fill)
-			givePart("Block", tl.EdgeL)
-			givePart("Block", tl.EdgeR)
-			givePart("Block", tl.Cap)
-			fxParts -= 5
-			teles[i] = teles[#teles]
-			teles[#teles] = nil
-		else
-			local u = math.clamp(t / tl.Dur, 0, 1)
-			local vis = math.min(1, t / 0.12) * (1 - math.clamp((t - tl.Dur) / TELE_FADE, 0, 1))
-			local pulse = 0.78 + 0.22 * math.sin(t * (8 + 18 * u))
-			tl.Base.Transparency = 1 - 0.3 * vis
-			local edgeAlpha = 1 - 0.85 * pulse * vis
-			tl.EdgeL.Transparency = edgeAlpha
-			tl.EdgeR.Transparency = edgeAlpha
-			tl.Cap.Transparency = edgeAlpha
-			-- the fill runs from the boss (local +Z end) toward the end of the charge
-			local len = math.max(0.1, tl.Len * u)
-			tl.Fill.Size = Vector3.new(tl.W, 0.06, len)
-			tl.Fill.Transparency = 1 - (0.35 + 0.25 * u) * vis
-			bulk(tl.Fill, tl.CF * CFrame.new(0, 0.005, tl.Len / 2 - len / 2))
-		end
-	end
-end
-
 -- Tiny glowing motes drifting up around a point (heal, level-up, revive).
 local function sparkle(pos: Vector3, color: Color3, count: number, radius: number, rise: number, dur: number)
 	if not room(count, true) then
@@ -1367,7 +1320,7 @@ local function playerEvent(userId: number, kind: string)
 	if kind == "hurt" then
 		if isLocal then
 			CameraController.Shake(0.22)
-			Audio.Play("Hit", 0.7)
+			Audio.Play("Hurt")
 		end
 		if pos and room(1) then
 			-- a small crimson nick on the hero
@@ -1396,11 +1349,48 @@ local function playerEvent(userId: number, kind: string)
 			Audio.Play("Death")
 		end
 	elseif kind == "revive" and pos then
+		Audio.Play("Revive")
 		wave(pos.X, pos.Z, 2, 12, 0.36, FX.Gold:Lerp(FX.Hit, 0.4), 0.15, 0.6, true)
 		sparkle(Vector3.new(pos.X, FLOOR_Y + 0.6, pos.Z), FX.Gold, 8, 2.4, 5, 0.8)
 	end
 	if isLocal and onLocalEvent then
 		onLocalEvent(kind)
+	end
+end
+
+--[[
+	Sound cue for a new warning entry { id, kind, ... } (Fx.Warn): the bomb tick's fuse
+	ticks, the spitter's wind-up gurgle, a lunge's scrape, the Queen's attacks. Played at
+	the warning's floor spot, so far-away ones are quieter.
+]]
+local function warningSound(w: { any })
+	local kind = w[2]
+	local x, z = tonumber(w[3]), tonumber(w[4])
+	if not x or not z then
+		return
+	end
+	local at = Vector3.new(x, FLOOR_Y + 1, z)
+	if kind == "circle" then
+		local style = w[7]
+		local seconds = tonumber(w[6]) or 0.7
+		if style == "blast" then
+			-- fuse: three ticks, faster and higher toward the blast
+			for i = 0, 2 do
+				task.delay(seconds * (i / 3), function()
+					Audio.PlayAt("FuseTick", at, 1.5 + i * 0.15)
+				end)
+			end
+		elseif style == "acid" then
+			Audio.PlayAt("SpitterWindup", at)
+		else
+			Audio.PlayAt("BossWarn", at)
+		end
+	elseif kind == "lane" then
+		Audio.PlayAt("Lunge", at)
+	elseif kind == "spokes" then
+		Audio.PlayAt("BossWarn", at)
+	elseif kind == "egg" then
+		Audio.PlayAt("BossSummon", at)
 	end
 end
 
@@ -1469,14 +1459,17 @@ local function onFxBatch(batch)
 			ring(r[1], r[2], r[3], r[4])
 		end
 	end
-	if type(batch.t) == "table" then
-		for _, t in ipairs(batch.t) do
-			telegraph(t[1], t[2], t[3], t[4], t[5], t[6])
-		end
-	end
 	if type(batch.u) == "table" then
 		for _, u in ipairs(batch.u) do
 			playerEvent(u[1], u[2])
+		end
+	end
+	if type(batch.w) == "table" then
+		-- telegraph cues at the warning's spot (the shapes are drawn by Telegraphs.lua)
+		for _, w in ipairs(batch.w) do
+			if type(w) == "table" then
+				warningSound(w)
+			end
 		end
 	end
 	if type(batch.n) == "table" then
@@ -2359,7 +2352,6 @@ function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
 		stepAnims(now)
 		stepWaves(now)
 		stepPools(now)
-		stepTelegraphs(now)
 		renderPickups(now)
 		renderGems(dt)
 		updateFlashes(now)

@@ -1,7 +1,8 @@
 --[[
 	ClientMain.client.lua
 	Starts every client module in order and wires the few things that span modules:
-	music per phase, the hurt flash, and the [VIP] chat tag.
+	music per phase, the hurt flash, and the [VIP] chat tag. Player settings live in
+	ClientSettings (filled from the profile by UIBuilder).
 ]]
 
 local Players = game:GetService("Players")
@@ -16,6 +17,7 @@ local MobileControls = require(script.Parent:WaitForChild("MobileControls"))
 local EnemyRenderer = require(script.Parent:WaitForChild("EnemyRenderer"))
 local VFX = require(script.Parent:WaitForChild("VFX"))
 local UIBuilder = require(script.Parent:WaitForChild("UIBuilder"))
+local DamageText = require(script.Parent:WaitForChild("DamageText"))
 
 local player = Players.LocalPlayer
 
@@ -31,6 +33,7 @@ VFX.Init({
 	end,
 })
 UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls })
+DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer
 
 -- Humanoid state switches don't replicate and the client owns its character, so the
 -- server's settings are repeated here: no tripping, ragdolling, jumping or dying.

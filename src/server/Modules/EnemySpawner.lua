@@ -9,7 +9,15 @@
 	  Id (pool index, also the model name "E<Id>"), Uid (unique per spawn), Model, Part,
 	  Def, Type, Elite, Boss, Alive, Pos (ground position), Height (body centre above floor),
 	  Radius, HP, MaxHP, Speed, Damage, Dir, Knock (knockback velocity), NextContact,
-	  Ghost, Erratic, Phase, Slot (index in Active)
+	  Ghost, Erratic, Phase, Slot (index in Active), Guard (guarded-altar id, LootSystem),
+	  Affix (elites: "Swift" | "Shielded" | "Burning"), Shield (HP the shield still soaks),
+	  DmgScale (attack damage multiplier), SpawnGrace, Act / ActTimer (EnemyAI behaviours),
+	  WarnId (its live telegraph), Harmless / Invulnerable / Untargetable / Dying (boss)
+	Pacing (Config.Pacing): calm at run / stage start, build-up between mini-waves, a lull
+	after each mini-wave, first-appearance callouts with a small intro group, scheduled
+	elites. The boss encounter itself is BossAI (data: BossData).
+	Run items hook in here (ItemSystem): crits and Storm Charm in Damage, kill procs in Kill;
+	the Bargain Shrine's enemy HP (LootSystem.EnemyHPMult) in Spawn.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -18,6 +26,8 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local SpatialGrid = require(script.Parent.SpatialGrid)
 local Fx = require(script.Parent.Fx)
+local DamageNumbers = require(script.Parent.DamageNumbers)
+local BossAI = require(script.Parent.BossAI)
 
 local EnemySpawner = {}
 
@@ -36,6 +46,13 @@ local uidCounter = 0
 local spawnTimer = 0
 local bossDirty = false
 local bossAttrTimer = 0
+-- pacing (Config.Pacing); reset when a new run starts (the run clock goes back)
+local lastRunTime = math.huge
+local calmLeft = 0
+local sinceWave = 0
+local lullLeft = 0
+local nextEliteAt = 0
+local seen: { [string]: boolean } = {}
 
 ------------------------------------------------------------------------------------------
 -- Helpers
@@ -130,15 +147,53 @@ function EnemySpawner.SpawnPoint(radius: number, angle: number?): Vector3?
 	return nil
 end
 
+-- Sets an enemy's current behaviour (EnemyAI / BossAI); the body attribute "Act" drives
+-- the client's poses (swelling, rearing up, dizzy ...). seconds = the behaviour's timer.
+function EnemySpawner.SetAct(e, act: string?, seconds: number?)
+	e.ActTimer = seconds or 0
+	if e.Act ~= act then
+		e.Act = act
+		e.Part:SetAttribute("Act", act)
+	end
+end
+
+-- "New: Spitter - dodge the acid", once per run, the first time a type spawns.
+local function introduce(typeId: string): boolean
+	if seen[typeId] then
+		return false
+	end
+	seen[typeId] = true
+	local def = EnemyData.Enemies[typeId]
+	if def and def.Intro then
+		ctx.RunManager.Broadcast(string.format("New: %s - %s", def.DisplayName or typeId, def.Intro), Color3.fromRGB(255, 205, 120))
+		return true
+	end
+	return false
+end
+
+-- Live-target multiplier from the pacing curve (calm, lull, build-up).
+local function pacingMult(): number
+	local P = Config.Pacing
+	if calmLeft > 0 then
+		return P.CalmMult
+	end
+	if lullLeft > 0 then
+		return P.LullMult
+	end
+	local u = math.clamp(sinceWave / math.max(1, Config.Run.MiniWaveInterval), 0, 1)
+	return P.BuildUpFrom + (P.BuildUpTo - P.BuildUpFrom) * u
+end
+
 ------------------------------------------------------------------------------------------
 -- Spawning
 ------------------------------------------------------------------------------------------
 
 --[[
 	Spawns an enemy of `typeId` at a ground position.
-	opts.Elite: 2x size, 5x HP, drops a chest. opts.Boss: boss stats.
+	opts.Elite: 2x size, 5x HP, drops a chest, one affix (opts.Affix or random).
+	opts.Boss: boss stats.
 ]]
-function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: boolean?, Boss: boolean? }?)
+function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: boolean?, Boss: boolean?, Affix: string? }?)
 	local def = EnemyData.Enemies[typeId]
 	if not def then
 		return nil
@@ -168,6 +223,7 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 			hp *= Config.Enemies.EliteHPMult
 		end
 	end
+	hp *= ctx.LootSystem.EnemyHPMult() -- the Bargain Shrine (1 unless sealed this stage)
 	local damage = (isBoss and Config.Boss.ContactDamage or def.Damage * (1 + statTier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1)) * stages.DamageMult()
 
 	uidCounter += 1
@@ -199,11 +255,50 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.ChargeDir = nil
 	e.SpeedOverride = nil
 	e.Sep = Vector3.zero
+	e.PinPos = nil
 	e.Target = nil
+	e.Guard = nil
+	e.BossData = nil
+	e.BossWarns = nil
+	e.PhaseIndex = nil
+	e.Act = nil
+	e.ActTimer = 0
+	e.Cooldown = nil
+	e.Face = nil
+	e.WarnId = nil
+	e.GlobTarget = nil
+	e.LungeDir = nil
+	e.Patches = nil
+	e.BurnTimer = nil
+	e.SlowUntil = nil -- Chilling Aura (Garlic perk) slow
+	e.SlowMult = nil
+	e.Harmless = false
+	e.Invulnerable = false
+	e.Untargetable = false
+	e.Dying = false
+	e.Killer = nil
+	e.SpawnGrace = isBoss and 0 or Config.Enemies.SpawnGrace
+	e.DmgScale = (1 + statTier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1) * stages.DamageMult()
+	-- elites: exactly one affix
+	local affix: string? = nil
+	if elite then
+		local list = Config.Enemies.EliteAffixes
+		affix = (opts and opts.Affix and table.find(list, opts.Affix)) and opts.Affix or list[rng:NextInteger(1, #list)]
+	end
+	e.Affix = affix
+	e.Shield = 0
+	if affix == "Swift" then
+		e.Speed *= Config.Enemies.Affix.Swift.SpeedMult
+	elseif affix == "Shielded" then
+		e.Shield = hp * Config.Enemies.Affix.Shielded.ShieldFraction
+	end
 
 	ModelBuilder.ApplyEnemyLook(e.Part, def, elite, sizeMult)
 	e.Part.CFrame = CFrame.new(e.Pos + Vector3.new(0, e.Height, 0))
 	e.Part:SetAttribute("Elite", elite)
+	e.Part:SetAttribute("Affix", affix)
+	e.Part:SetAttribute("Shield", affix == "Shielded")
+	e.Part:SetAttribute("Act", nil)
 	e.Part:SetAttribute("Type", typeId) -- set last: clients rebuild the model when it changes
 
 	table.insert(EnemySpawner.Active, e)
@@ -216,6 +311,35 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	return e
 end
 
+-- Ranged enemies (Spitters) alive now; Config.Enemies.MaxLiveRanged caps them.
+local function liveRanged(): number
+	local n = 0
+	for _, e in ipairs(EnemySpawner.Active) do
+		if e.Alive and e.Def and e.Def.Ranged then
+			n += 1
+		end
+	end
+	return n
+end
+
+-- weightedPick, leaving out Ranged types when allowRanged is false.
+local function pickType(weights: { [string]: number }, allowRanged: boolean): string
+	if allowRanged then
+		return weightedPick(weights)
+	end
+	local w = {}
+	for id, v in pairs(weights) do
+		local def = EnemyData.Enemies[id]
+		if not (def and def.Ranged) then
+			w[id] = v
+		end
+	end
+	if next(w) == nil then
+		return "Slime"
+	end
+	return weightedPick(w)
+end
+
 -- Normal spawning toward the live target for this minute.
 local function topUp()
 	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
@@ -224,13 +348,33 @@ local function topUp()
 		-- during the Queen fight: a share of the normal target, within [min, boss cap]
 		local S = Config.Stages
 		target = math.max(S.BossMinionMin, math.min(Config.Boss.MinionCapDuringBoss, math.floor(target * S.BossMinionShare)))
+	else
+		target = math.floor(target * pacingMult())
 	end
 	target = math.min(target, Config.Enemies.MaxLive)
 	local missing = math.min(Config.Spawn.MaxPerTick, target - #EnemySpawner.Active)
+	local eliteOk = ctx.RunManager.GetRunTime() >= Config.Pacing.EliteMinTime
+	local ranged = missing > 0 and liveRanged() or 0
 	for _ = 1, missing do
-		local typeId = weightedPick(row.Weights)
+		local typeId = pickType(row.Weights, ranged < Config.Enemies.MaxLiveRanged)
 		local def = EnemyData.Enemies[typeId]
-		local elite = rng:NextNumber() < Config.Enemies.EliteChance
+		if def.Ranged then
+			ranged += seen[typeId] and 1 or Config.Pacing.IntroGroup
+		end
+		if not seen[typeId] then
+			-- first appearance this run: a small group with a callout, so it reads
+			introduce(typeId)
+			local pos = EnemySpawner.SpawnPoint(def.Radius)
+			if pos then
+				for k = 1, Config.Pacing.IntroGroup do
+					local a = k * 2.1
+					local x, z = clampToArena(pos.X + math.cos(a) * 3, pos.Z + math.sin(a) * 3, 4)
+					EnemySpawner.Spawn(typeId, Vector3.new(x, Config.ArenaOrigin.Y, z))
+				end
+			end
+			break
+		end
+		local elite = eliteOk and rng:NextNumber() < Config.Enemies.EliteChance
 		local pos = EnemySpawner.SpawnPoint(def.Radius * (elite and 2 or 1))
 		if pos then
 			EnemySpawner.Spawn(typeId, pos, { Elite = elite })
@@ -238,11 +382,37 @@ local function topUp()
 	end
 end
 
+-- A scheduled elite (Config.Pacing.EliteFirst / EliteEvery), announced.
+local function scheduledElite()
+	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
+	local weights = {}
+	for _, id in ipairs(Config.Pacing.EliteTypes) do
+		if row.Weights[id] then
+			weights[id] = row.Weights[id]
+		end
+	end
+	if next(weights) == nil then
+		weights = { Slime = 1 }
+	end
+	local typeId = weightedPick(weights)
+	local def = EnemyData.Enemies[typeId]
+	local pos = EnemySpawner.SpawnPoint(def.Radius * Config.Enemies.EliteSizeMult)
+	local e = pos and EnemySpawner.Spawn(typeId, pos, { Elite = true }) or nil
+	if e then
+		seen[typeId] = true
+		ctx.RunManager.Broadcast(string.format("An elite %s %s hunts you!", e.Affix or "", def.DisplayName or typeId), Color3.fromRGB(255, 205, 120))
+	end
+end
+
 -- Burst of one enemy type surrounding a random player (every MiniWaveInterval).
 function EnemySpawner.MiniWave()
 	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
-	local typeId = weightedPick(row.Weights)
+	-- never a ring of Spitters (Ranged): a full circle of acid has no safe side
+	local typeId = pickType(row.Weights, false)
 	local def = EnemyData.Enemies[typeId]
+	introduce(typeId)
+	sinceWave = 0
+	lullLeft = Config.Pacing.MiniWaveLull
 	local count = math.floor((Config.Spawn.MiniWaveBaseCount + ctx.RunManager.GetTier() * Config.Spawn.MiniWavePerMinute) * countMult() * ctx.StageManager.SpawnMult())
 	count = math.min(count, Config.Enemies.MaxLive - #EnemySpawner.Active)
 	local offset = rng:NextNumber(0, math.pi * 2)
@@ -269,6 +439,7 @@ function EnemySpawner.SpawnBoss(at: Vector3?)
 	Fx.Sound("BossRoar")
 	if boss then
 		Fx.Ring(boss.Pos, 30, Color3.fromRGB(255, 40, 60))
+		BossAI.Begin(boss) -- the entrance: rises out of the ground, then the fight
 	end
 	return boss
 end
@@ -281,9 +452,13 @@ end
 function EnemySpawner.SpawnSurge(count: number, centre: Vector3): number
 	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
 	local made = 0
+	local ranged = liveRanged()
 	for _ = 1, count do
-		local typeId = weightedPick(row.Weights)
+		local typeId = pickType(row.Weights, ranged < Config.Enemies.MaxLiveRanged)
 		local def = EnemyData.Enemies[typeId]
+		if def.Ranged then
+			ranged += 1
+		end
 		for _attempt = 1, 4 do
 			local a = rng:NextNumber(0, math.pi * 2)
 			local r = rng:NextNumber(6, 14)
@@ -325,9 +500,22 @@ local function release(e)
 		end
 	end
 	e.Part.CFrame = PARK
+	if e.WarnId then
+		-- died mid wind-up / fuse: its telegraph goes with it
+		Fx.ClearWarn(e.WarnId)
+		e.WarnId = nil
+	end
+	if e.Act then
+		e.Act = nil
+		e.Part:SetAttribute("Act", nil)
+	end
 	if EnemySpawner.Boss == e then
 		EnemySpawner.Boss = nil
 		bossDirty = true -- hides the boss bar
+		BossAI.ClearHazards(e)
+		local state = Remotes.State()
+		state:SetAttribute("BossName", nil)
+		state:SetAttribute("BossPhase", 0)
 	end
 	table.insert(free, e.Id)
 end
@@ -336,6 +524,9 @@ end
 function EnemySpawner.Despawn(e)
 	if e.Alive then
 		release(e)
+		if e.Guard then
+			ctx.LootSystem.OnGuardDown(e, false)
+		end
 	end
 end
 
@@ -344,13 +535,15 @@ local function gemValue(weights: { [string]: number }, scale: number): number
 	return Config.XP.GemValues[kind] * scale
 end
 
--- Kills an enemy and drops its rewards. `rp` = run player credited with the kill (may be nil).
-function EnemySpawner.Kill(e, rp)
+-- Kills an enemy and drops its rewards. `rp` = run player credited with the kill (may be
+-- nil); isProc = an item proc killed it (kill procs don't chain).
+function EnemySpawner.Kill(e, rp, isProc: boolean?)
 	if not e.Alive then
 		return
 	end
 	local def = e.Def
 	local pos = e.Pos
+	local maxHP = e.MaxHP
 	release(e)
 	Fx.Death(pos + Vector3.new(0, e.Height, 0), e.Part:GetAttribute("BaseColor") or def.Color, e.Radius * 2)
 	Fx.Sound("EnemyDeath")
@@ -370,7 +563,10 @@ function EnemySpawner.Kill(e, rp)
 		end
 		ctx.RunManager.OnBossKilled(pos)
 	elseif e.Elite then
-		ctx.XPSystem.SpawnChest(pos)
+		-- altar guards drop gems only: the altar's chest is their reward
+		if not e.Guard then
+			ctx.XPSystem.SpawnChest(pos)
+		end
 		ctx.XPSystem.SpawnGem(pos + Vector3.new(2, 0, 0), gemValue(EnemyData.EliteGem, 1))
 	else
 		if rp then
@@ -378,19 +574,51 @@ function EnemySpawner.Kill(e, rp)
 		end
 		ctx.XPSystem.RollFloorPickup(pos, rp and rp.Stats.Luck or 0)
 	end
+	if e.Guard then
+		-- killed by a player (or blew itself up next to one); the portal burning the
+		-- leftovers (no killer) counts as swept away, not beaten
+		ctx.LootSystem.OnGuardDown(e, rp ~= nil or def.Explode ~= nil)
+	end
+	if rp then
+		ctx.ItemSystem.OnKill(rp, pos, maxHP, isProc)
+	end
 end
 
 --[[
-	Server-authoritative damage. Called only by WeaponSystem / pickups, never by remotes.
-	Returns true if the hit killed the enemy.
+	Server-authoritative damage. Called only by WeaponSystem / pickups / item procs, never
+	by remotes. Returns true if the hit killed the enemy. A player's hit may crit and may
+	call Storm Charm lightning (ItemSystem); isProc = this hit IS an item proc (no crit, no
+	further procs).
 ]]
-function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockback: number?): boolean
+function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockback: number?, isProc: boolean?): boolean
 	if not e.Alive or amount <= 0 then
 		return false
+	end
+	if e.Invulnerable or e.Dying then
+		return false -- the Queen's entrance, burrow and collapse
+	end
+	local crit = false
+	if rp and not isProc then
+		amount, crit = ctx.ItemSystem.ModifyHit(rp, amount)
+	end
+	if e.Shield > 0 then
+		-- Shielded elite: the orbiting plates soak damage first, then break
+		local soaked = math.min(e.Shield, amount)
+		e.Shield -= soaked
+		amount -= soaked
+		if e.Shield <= 0 then
+			e.Part:SetAttribute("Shield", false)
+			Fx.Warn("pop", e.Pos.X, e.Pos.Z, e.Radius * 1.4, "shield")
+		end
+		if amount <= 0 then
+			Fx.Hit(e.Id)
+			return false
+		end
 	end
 	e.HP -= amount
 	if rp then
 		rp.DamageDealt += amount
+		DamageNumbers.Add(rp.Player, e.Id, amount, crit) -- only for players with the setting on
 	end
 	Fx.Hit(e.Id)
 	if knockDir and knockback and knockback > 0 then
@@ -402,11 +630,16 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 	if e.Boss then
 		bossDirty = true
 	end
-	if e.HP <= 0 then
-		EnemySpawner.Kill(e, rp)
-		return true
+	local died = e.HP <= 0
+	if died and e.Boss then
+		BossAI.StartCollapse(e, rp) -- the collapse first; BossAI kills her after it
+	elseif died then
+		EnemySpawner.Kill(e, rp, isProc)
 	end
-	return false
+	if rp and not isProc then
+		ctx.ItemSystem.OnHit(rp, e, amount)
+	end
+	return died
 end
 
 -- Bomber explosion: hurts players nearby, then the bomber dies (it still drops a gem).
@@ -415,7 +648,10 @@ function EnemySpawner.Explode(e)
 		return
 	end
 	local ex = e.Def.Explode
-	local radius = ex.Radius * (e.Elite and Config.Enemies.EliteSizeMult or 1)
+	local radius = ex.Radius * (e.Elite and Config.Enemies.EliteBlastMult or 1)
+	if e.Act == "Fuse" and e.PinPos then
+		e.Pos = e.PinPos -- blast from the ring drawn at fuse start
+	end
 	local D = Config.Difficulty
 	local tierMult = (1 + math.min(ctx.RunManager.GetTier(), D.MaxTier or math.huge) * D.DamagePerMinute) * ctx.StageManager.DamageMult()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
@@ -451,9 +687,19 @@ function EnemySpawner.DespawnAll()
 	end
 	EnemySpawner.Boss = nil
 	EnemySpawner.Grid:Clear()
+	ctx.EnemyAI.ClearHazards(nil)
+	Fx.ClearWarn(0) -- every telegraph on every client
+	calmLeft = Config.Pacing.StageStartCalm -- a breather on the next stage
 	local state = Remotes.State()
 	state:SetAttribute("BossHP", 0)
 	state:SetAttribute("BossMaxHP", 0)
+	state:SetAttribute("BossName", nil)
+	state:SetAttribute("BossPhase", 0)
+end
+
+-- Attack damage multiplier of an enemy (tier, elite, stage): EnemyAI / Hazards attacks.
+function EnemySpawner.DamageScale(e): number
+	return e.DmgScale or 1
 end
 
 ------------------------------------------------------------------------------------------
@@ -474,6 +720,23 @@ function EnemySpawner.Step(dt: number)
 
 	if not ctx.RunManager.IsSimulating() then
 		return
+	end
+	-- a new run started (the run clock went back): reset the pacing and the callouts
+	local runTime = ctx.RunManager.GetRunTime()
+	if runTime < lastRunTime - 0.5 then
+		table.clear(seen)
+		calmLeft = Config.Pacing.RunStartCalm
+		sinceWave = 0
+		lullLeft = 0
+		nextEliteAt = Config.Pacing.EliteFirst
+	end
+	lastRunTime = runTime
+	calmLeft = math.max(0, calmLeft - dt)
+	lullLeft = math.max(0, lullLeft - dt)
+	sinceWave += dt
+	if runTime >= nextEliteAt and ctx.StageManager.GetPhase() == "Explore" then
+		nextEliteAt = runTime + Config.Pacing.EliteEvery
+		scheduledElite()
 	end
 	spawnTimer += dt
 	if spawnTimer >= Config.Spawn.TickSeconds then

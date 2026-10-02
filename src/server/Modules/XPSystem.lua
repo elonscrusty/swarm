@@ -139,6 +139,17 @@ function XPSystem.MagnetAll(rp)
 	end
 end
 
+-- Magnet Totem pulse: gems within `radius` of `pos` fly to this player.
+function XPSystem.MagnetRadius(rp, pos: Vector3, radius: number)
+	local r2 = radius * radius
+	for _, gem in ipairs(activeGems) do
+		local dx, dz = gem.Pos.X - pos.X, gem.Pos.Z - pos.Z
+		if dx * dx + dz * dz <= r2 then
+			gem.Target = rp
+		end
+	end
+end
+
 local function nearestCollector(pos: Vector3, runPlayers): any?
 	local best, bestD = nil, math.huge
 	for _, rp in ipairs(runPlayers) do

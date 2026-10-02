@@ -166,9 +166,13 @@ function A.build(opts)
 			end
 		end
 	end
+	if opts.place and arena then
+		-- the scene puts things on the map and may move the hero (returns a floor point)
+		centre = opts.place(s, arena, centre) or centre
+	end
 	s.centre = centre
 	if opts.hero ~= false then
-		C.spawnCharacter(s.ModelBuilder, CFrame.new(centre + Vector3.new(0, 3.5, 0)), opts.character or "Knight")
+		C.spawnCharacter(s.ModelBuilder, CFrame.new(centre + Vector3.new(0, 3.5, 0)), opts.character or preview.args.character or "Knight")
 	end
 	if opts.swarm ~= false then
 		s.enemyCount = A.swarm(s, centre, opts.enemies or tonumber(preview.args.enemies) or 120, runSeconds)
@@ -176,6 +180,10 @@ function A.build(opts)
 	end
 	C.setState({ Phase = "Running", Mode = "Solo", RunTime = runSeconds, Participants = 1, Arena = arenaName, SelectedArena = arenaName, BossHP = 0, BossMaxHP = 0, Frozen = false, LobbySpawn = CFrame.new(1200, 3.5, -6) })
 	C.setPlayer({ InRun = true, Alive = true, HP = 82, MaxHP = 120, Level = 14, XP = 38, XPNeeded = 80, Kills = 412, RunGold = 57, PartnerRevivesLeft = 0, AuraRadius = 0 })
+	if preview.args.steadyaim then
+		-- the Ranger's buff chip (WeaponSystem sets SteadyAim): --set steadyaim=on|off
+		C.setPlayer({ SteadyAim = preview.args.steadyaim == "on" })
+	end
 	if opts.stage then
 		C.setState({
 			Stage = opts.stage,

@@ -25,7 +25,8 @@
 	  Player, Character, Root, Humanoid, CharacterId, Meta, Stats, HP, Level, XP, XPNeeded,
 	  Weapons, WeaponOrder, Passives, PassiveOrder, PendingLevels, Offer, Paused, Alive,
 	  AwaitingRevive, RevivesLeft, Rerolls, Skips, Kills, Gold, DamageDealt, TimeSurvived,
-	  Facing, MoveDir, InvulnUntil, Returned, PortalChoice, PortalOffered, Committed, WinPaid
+	  Facing, MoveDir, InvulnUntil, Returned, PortalChoice, PortalOffered, Committed, WinPaid,
+	  Items, ItemOrder, ItemState, ShieldMax, GoldSpent (run items: ItemSystem / LootSystem)
 	HP lives here (not in the Humanoid): the Humanoid's Dead state is disabled.
 ]]
 
@@ -39,6 +40,7 @@ local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.Meta
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local MapBuilder = require(script.Parent.MapBuilder)
 local Fx = require(script.Parent.Fx)
+local Events = require(script.Parent.Events)
 
 local RunManager = {}
 
@@ -60,6 +62,7 @@ local frozen = false -- the whole run is paused (menuPaused or someone is choosi
 local menuPaused = false -- the solo pause menu is open
 local resultsTimer = 0
 local totalKills = 0
+local bossKills = 0 -- Scorpion Queens beaten this run (results screen)
 local attrTimer = 0
 local selectedArena = "Forest"
 local mode = "Solo" -- a Config.Modes key: "Solo" | "Duo" | "Trio" (or the old "Squad")
@@ -382,6 +385,13 @@ end
 -- HP, death, revive
 ------------------------------------------------------------------------------------------
 
+-- Player attribute "AwaitingRevive": down but deciding on the revive product (teammates
+-- can't partner-revive yet; the HUD's team list shows it).
+local function setAwaiting(rp, on: boolean)
+	rp.AwaitingRevive = on
+	rp.Player:SetAttribute("AwaitingRevive", on or nil)
+end
+
 local function setHP(rp, hp: number)
 	rp.HP = math.clamp(hp, 0, rp.Stats.MaxHP)
 	rp.Player:SetAttribute("HP", math.ceil(rp.HP))
@@ -418,7 +428,7 @@ local function revive(rp, message: string)
 	rp.ReviveProgress = 0
 	rp.Player:SetAttribute("ReviveProgress", 0)
 	rp.Alive = true
-	rp.AwaitingRevive = false
+	setAwaiting(rp, false)
 	setDownedLook(rp, false)
 	setHP(rp, rp.Stats.MaxHP * Config.Player.ReviveHPFraction)
 	rp.InvulnUntil = os.clock() + Config.Player.ReviveInvulnSeconds
@@ -442,7 +452,7 @@ local function finalizeDeath(rp)
 		return
 	end
 	rp.Alive = false
-	rp.AwaitingRevive = false
+	setAwaiting(rp, false)
 	rp.TimeSurvived = runTime
 	rp.Player:SetAttribute("Alive", false)
 	ctx.LevelUpSystem.Cancel(rp)
@@ -497,6 +507,7 @@ partnerRevives = function(dt: number)
 				rp.Player:SetAttribute("PartnerRevivesLeft", D.PerRun - rp.PartnerRevives)
 				rp.TimeSurvived = 0
 				revive(rp, "Revived by " .. helper.Player.DisplayName .. "!")
+				Events.Fire("PartnerRevive", helper.Player)
 				setHP(rp, rp.Stats.MaxHP * D.HPFraction)
 				RunManager.Notify(helper.Player, "You revived " .. rp.Player.DisplayName .. "!", Color3.fromRGB(120, 255, 160))
 			end
@@ -511,6 +522,11 @@ local function onDowned(rp)
 		revive(rp, "Extra life used!")
 		return
 	end
+	-- a run item (Phoenix Feather) comes before paid revive tokens
+	if ctx.ItemSystem.TryRevive(rp) then
+		revive(rp, "The Phoenix Feather burns: you rise again!")
+		return
+	end
 	local data = ctx.DataService.GetData(rp.Player)
 	if data and (data.ReviveTokens or 0) > 0 and not rp.ProductReviveUsed then
 		data.ReviveTokens -= 1
@@ -521,7 +537,7 @@ local function onDowned(rp)
 	if not rp.ProductReviveUsed and ctx.MonetizationService.ReviveAvailable() then
 		-- Downed: wait for the player to buy (or decline) the revive.
 		rp.Alive = false
-		rp.AwaitingRevive = true
+		setAwaiting(rp, true)
 		rp.ReviveDeadline = os.clock() + Config.Monetization.RevivePromptSeconds
 		rp.Player:SetAttribute("Alive", false)
 		ctx.WeaponSystem.ClearOwner(rp)
@@ -546,14 +562,19 @@ function RunManager.DamagePlayer(rp, amount: number)
 		return
 	end
 	local dmg = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
+	local taken = dmg -- after armor / Iron Plate, before the shield (Barbed Mail scales on it)
+	dmg = ctx.ItemSystem.AbsorbHit(rp, dmg) -- Guardian Ward shield first
 	setHP(rp, rp.HP - dmg)
 	if now - (rp.LastHurtFx or 0) > Config.Player.HurtFlashSeconds then
 		rp.LastHurtFx = now
 		Fx.PlayerEvent(rp.Player, "hurt")
 	end
 	if rp.HP <= 0 then
+		-- Go down before any on-hurt proc: thorns kills must not Herb-heal a 0 HP player.
 		onDowned(rp)
+		return
 	end
+	ctx.ItemSystem.OnHurt(rp, amount, taken) -- Barbed Mail
 end
 
 -- A revive product was bought (MonetizationService). Spend the token now if possible.
@@ -607,8 +628,14 @@ local function newRunPlayer(player: Player)
 		RevivesLeft = perRun("Revive"),
 		Rerolls = perRun("Reroll") + ctx.MonetizationService.ExtraRerolls(player),
 		Skips = perRun("Skip"),
+		RerollsMax = perRun("Reroll") + ctx.MonetizationService.ExtraRerolls(player),
+		SkipsMax = perRun("Skip"),
 		Kills = 0,
-		Gold = 0,
+		Gold = 0, -- gold banked this run (earned minus spent at chests / shrines)
+		GoldSpent = 0,
+		Items = {}, -- run items { [id] = count } (ItemSystem)
+		ItemOrder = {},
+		ShieldMax = 0,
 		DamageDealt = 0,
 		TimeSurvived = 0,
 		InvulnUntil = 0,
@@ -625,15 +652,18 @@ local function newRunPlayer(player: Player)
 end
 
 local function resetPlayerAttributes(player: Player)
-	for _, name in ipairs({ "HP", "MaxHP", "Level", "XP", "XPNeeded", "Kills", "RunGold", "AuraRadius" }) do
+	for _, name in ipairs({ "HP", "MaxHP", "Level", "XP", "XPNeeded", "Kills", "RunGold", "AuraRadius", "Shield", "ShieldMax", "GoldMult" }) do
 		player:SetAttribute(name, nil)
 	end
 	player:SetAttribute("InRun", false)
 	player:SetAttribute("Alive", nil)
 	player:SetAttribute("Paused", false)
 	player:SetAttribute("AuraEvo", nil)
+	player:SetAttribute("SteadyAim", nil)
 	player:SetAttribute("ReviveProgress", nil)
 	player:SetAttribute("PartnerRevivesLeft", nil)
+	player:SetAttribute("AwaitingRevive", nil)
+	player:SetAttribute("CharacterId", nil)
 end
 
 local function placeOnArena(arena, i: number, n: number): Vector3
@@ -664,12 +694,14 @@ local function beginRun()
 	frozen = false
 	menuPaused = false
 	totalKills = 0
+	bossKills = 0
 	state:SetAttribute("Frozen", false)
 	state:SetAttribute("RunTime", 0)
 	setPhase("Running")
 
 	for i, player in ipairs(list) do
 		local rp = newRunPlayer(player)
+		ctx.AchievementService.OnRunStart(player)
 		table.insert(runPlayers, rp)
 		byPlayer[player] = rp
 		local pos = placeOnArena(arena, i, #list) + Vector3.new(0, 3.5, 0)
@@ -680,6 +712,7 @@ local function beginRun()
 		ctx.LevelUpSystem.AddWeapon(rp, character.StartWeapon)
 		ctx.LevelUpSystem.RecomputeStats(rp)
 		setHP(rp, rp.Stats.MaxHP)
+		player:SetAttribute("CharacterId", rp.CharacterId) -- the HUD's team list shows the hero
 		player:SetAttribute("InRun", true)
 		player:SetAttribute("Alive", true)
 		player:SetAttribute("Level", 1)
@@ -687,6 +720,9 @@ local function beginRun()
 		player:SetAttribute("XPNeeded", rp.XPNeeded)
 		player:SetAttribute("Kills", 0)
 		player:SetAttribute("RunGold", 0)
+		-- chest / shrine prices are shown x this (gamepass owners earn and pay more)
+		player:SetAttribute("GoldMult", ctx.MonetizationService.GoldMultiplier(player))
+		ctx.ItemSystem.Send(rp)
 		local rules = reviveRules()
 		player:SetAttribute("PartnerRevivesLeft", rules and #list > 1 and rules.PerRun or 0)
 		ctx.WeaponSystem.OnInventoryChanged(rp)
@@ -744,7 +780,27 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	if won then
 		data.Stats.Wins += 1
 	end
+	-- the first run is the tutorial run: tips stop after it (Settings > Replay tips)
+	data.TutorialDone = true
 	return newBest, unlocked
+end
+
+-- The run's build for the results screen: weapons (level, evolved), passives (level).
+local function buildSummary(rp)
+	local weapons, passives = {}, {}
+	for _, id in ipairs(rp.WeaponOrder or {}) do
+		local w = rp.Weapons[id]
+		if w then
+			table.insert(weapons, { Id = id, Level = w.Level, Evolved = w.Evolved == true })
+		end
+	end
+	for _, id in ipairs(rp.PassiveOrder or {}) do
+		local level = rp.Passives[id]
+		if level then
+			table.insert(passives, { Id = id, Level = level })
+		end
+	end
+	return { Weapons = weapons, Passives = passives }
 end
 
 --[[
@@ -768,6 +824,10 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 	local data = ctx.DataService.GetData(player)
 	local bestStageBefore = data and (data.Stats.BestStage or 0) or 0
 	local newBest, unlocked = saveRunStats(rp, won)
+	if won then
+		Events.Fire("RunWon", player, { Stages = cleared })
+	end
+	local achievements = ctx.AchievementService.TakeRunUnlocks(player)
 	if data then
 		task.spawn(ctx.DataService.ForceSave, player)
 	end
@@ -781,15 +841,23 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		WinMinStages = Config.Stages.WinMinStages,
 		Time = math.floor(rp.TimeSurvived),
 		Kills = rp.Kills,
-		Gold = rp.Gold,
+		Gold = rp.Gold, -- banked: earned minus what chests / shrines took
+		GoldSpent = rp.GoldSpent or 0,
+		Items = ctx.ItemSystem.Summary(rp),
 		Level = rp.Level,
 		Damage = math.floor(rp.DamageDealt),
 		Arena = ctx.StageManager.ArenaDisplayName() .. ((mode == "Duo" or mode == "Trio") and (" (" .. mode .. ")") or ""),
+		Mode = mode, -- REPLAY starts this mode again (StartRun from the lobby)
+		CharacterId = rp.CharacterId,
+		Build = buildSummary(rp),
+		BossKills = bossKills, -- Queens beaten this run (the whole team's)
+		BossFight = ctx.StageManager.IsBossFight(), -- the run ended during a Queen fight
 		Stage = reached,
 		StagesCleared = cleared,
 		NewBest = newBest,
 		NewBestStage = data ~= nil and reached > bestStageBefore and reached > 1,
 		Unlocked = unlocked,
+		Achievements = achievements, -- unlocked this run: { {Id, Name, Reward, Icon} }
 		Seconds = Config.Run.ResultsSeconds,
 		InLobby = inLobby,
 	})
@@ -810,7 +878,7 @@ function RunManager.EndRun(won: boolean)
 	for _, rp in ipairs(runPlayers) do
 		ctx.LevelUpSystem.Cancel(rp)
 		finishPlayer(rp, won, false)
-		rp.AwaitingRevive = false
+		setAwaiting(rp, false)
 		RunManager.ApplyMovement(rp)
 	end
 	ctx.StageManager.EndRun() -- the results are out: the stage loop stops here
@@ -878,6 +946,12 @@ end
 function RunManager.OnBossKilled(pos: Vector3)
 	if phase ~= "Running" then
 		return
+	end
+	bossKills += 1
+	for _, rp in ipairs(runPlayers) do
+		if not rp.Returned then
+			Events.Fire("BossKilled", rp.Player) -- the whole team beat her (fallen ones too)
+		end
 	end
 	ctx.StageManager.OnBossKilled(pos)
 end
@@ -950,7 +1024,7 @@ function RunManager.TravelPlayers(arena)
 				Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
 			end
 			rp.Alive = true
-			rp.AwaitingRevive = false
+			setAwaiting(rp, false)
 			rp.ReviveProgress = 0
 			rp.TimeSurvived = 0
 			rp.Player:SetAttribute("ReviveProgress", 0)
@@ -1118,6 +1192,16 @@ local function devCommand(player: Player, command: any)
 		local rp = byPlayer[player]
 		if rp and not rp.Returned and phase == "Running" then
 			ctx.StageManager.DevTeleport(rp)
+		end
+	elseif command == "GiveItems" then
+		local rp = byPlayer[player]
+		if rp and not rp.Returned and rp.Alive and phase == "Running" then
+			ctx.ItemSystem.DevGive(rp, 3)
+		end
+	elseif command == "AddGold" then
+		local rp = byPlayer[player]
+		if rp and not rp.Returned and phase == "Running" then
+			ctx.GoldSystem.AddRunGold(rp, 300)
 		end
 	end
 end
@@ -1314,11 +1398,16 @@ function RunManager.OnPlayerRemoving(player: Player)
 	if not rp then
 		return
 	end
-	if phase == "Running" and not rp.Returned then
+	local wasInRun = phase == "Running" and not rp.Returned
+	if wasInRun then
 		saveRunStats(rp, false)
 	end
 	-- other systems may still hold this record (enemy targets, delayed whip slashes)
 	removeFromRun(rp)
+	if wasInRun and #runPlayers > 0 then
+		-- teammates see who dropped out (their HUD team list removes the row by itself)
+		RunManager.Broadcast(player.DisplayName .. " left the run.", Color3.fromRGB(255, 200, 120))
+	end
 	rp.Root = nil
 	if phase == "Running" then
 		if #runPlayers == 0 then

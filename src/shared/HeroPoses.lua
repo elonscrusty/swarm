@@ -12,7 +12,8 @@
 	  Neck            +X lifts the chin, +Y turns the head to its left
 	  RootJoint       rotates the whole body around the root centre (y = 3); Pos moves it
 	Poses:
-	  Showcase  the heroic stance for the lobby dais (Knight: sword raised, shield forward)
+	  Showcase  the heroic stance for the lobby dais (Knight: sword raised, shield forward;
+	            Ranger: longbow held out upright, drawing hand by the quiver)
 	  Idle      a subtle breathing loop (also layered on top of Showcase)
 
 	HeroPoses.Apply(model, poseName, t) poses a character built by ModelBuilder (it reads the
@@ -79,10 +80,20 @@ HeroPoses.Poses = {
 			["Right Hip"] = { -4, 0, 3 },
 		},
 	},
+	Ranger = {
+		Showcase = {
+			RootJoint = { 0, 16, 0 },
+			Neck = { 6, -12, 0 },
+			["Left Shoulder"] = { 40, 0, -22 }, -- longbow held out in front
+			["Right Shoulder"] = { -22, 0, 18 }, -- hand back by the quiver
+			["Left Hip"] = { 16, 0, -6 },
+			["Right Hip"] = { -10, 0, 6 },
+		},
+	},
 }
 
 -- body drops a little in wide stances so the feet stay on the ground
-HeroPoses.Drop = { Knight = 0.06, Mage = 0.02, Rogue = 0.16, Priest = 0.01 }
+HeroPoses.Drop = { Knight = 0.06, Mage = 0.02, Rogue = 0.16, Priest = 0.01, Ranger = 0.07 }
 
 local function angles(j: Joint?): CFrame
 	if not j then

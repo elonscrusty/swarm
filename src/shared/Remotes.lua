@@ -35,6 +35,11 @@ Remotes.ServerToClient = {
 	"ReviveOffer", -- died: offer the Revive product for N seconds
 	"PortalOffer", -- the stage portal opened: NEXT STAGE / RETURN TO LOBBY panel (or Close / Chosen)
 	"StageTravel", -- the group is travelling to the next stage: fade + "Stage N" banner
+	"Items", -- this player's run items: { {Id, Count}, ... } (ItemSystem)
+	"ItemGained", -- item popup: { Id, Count, Source }
+	"LootFeedback", -- answer to LootHold: { Id, State = "Done" | "Cancel", Reason? }
+	"AchievementUnlocked", -- { Id, Name, Reward, Icon } (AchievementService): toast
+	"DamageNumbers", -- { enemyId, amount, crit (0/1), ... } summed hits (only with the setting on)
 }
 
 -- Client → server
@@ -50,13 +55,16 @@ Remotes.ClientToServer = {
 	"ReturnToLobby", -- leave the results screen early
 	"SelectCharacter", -- (characterId)
 	"BuyCharacter", -- (characterId)
-	"BuyMeta", -- (upgradeId)
+	"BuyMeta", -- (upgradeId, levelSeenByClient?) a stale second tap is ignored
 	"EquipSkin", -- (characterId, skinId)
 	"SetPause", -- (bool) pause menu open / closed
-	"SaveSettings", -- ({ Music = 0-1, Sfx = 0-1 })
+	"SaveSettings", -- ({ Music, Sfx, Shake = 0-1, ReducedEffects, DamageNumbers, Tips = bool }) any subset
+	"Tutorial", -- ("Seen", tipId) | ("Skip") | ("Replay") first-run tips (GoldSystem)
 	"ReviveDecline", -- close the revive offer early
 	"RequestProfile", -- ask for a ProfileSync
 	"PortalChoice", -- ("Next" | "Return") answer to PortalOffer, validated by StageManager
+	"LootHold", -- (lootId, holding: boolean) start / stop holding a chest or shrine (LootSystem)
+	"EquipCosmetic", -- ("Title" | "Color", id or "") an earned achievement cosmetic
 }
 
 local folder: Folder? = nil

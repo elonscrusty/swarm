@@ -145,6 +145,7 @@ local ENEMY_MESH = {
 	Ghost = { "PhaseMoth", "Flutter" },
 	Brute = { "RhinoBeetle", "Stomp" },
 	Bomber = { "BombTick", "Waddle" },
+	Spitter = { "Spitter", "Scuttle" },
 	Boss = { "ScorpionQueen", "Prowl" },
 }
 
@@ -185,6 +186,16 @@ local LOOKS: { [string]: { [string]: Color3 } } = {
 		Eye = Palette.amber_500,
 	},
 	Bomber = { Base = Palette.tick_500, Dark = Palette.chitin_900, Glow = Palette.tick_glow, Eye = Palette.amber_500 },
+	-- mauve beetle with an amber acid sac (the same mixes as blender/models/enemies2.py)
+	Spitter = {
+		Base = Palette.crimson_500:Lerp(Palette.slate_400, 0.5),
+		Accent = Palette.amber_500,
+		Light = Palette.amber_300,
+		Dark = Palette.chitin_900,
+		Metal = Palette.crimson_800:Lerp(Palette.slate_700, 0.5),
+		Glow = Palette.amber_300,
+		Eye = Palette.amber_500,
+	},
 	Boss = {
 		Base = Palette.crimson_500,
 		Accent = Palette.crimson_800,
@@ -380,6 +391,30 @@ ENEMIES.Bomber = function(b, c)
 		end
 	end
 	return "Waddle"
+end
+
+-- Spitter: mauve shell, a bulbous amber acid sac on its back, a raised spout, six legs.
+ENEMIES.Spitter = function(b, c)
+	egg(b, V(2.0, 1.15, 2.3), c.Base, CFrame.new(0, 0.95, 0.15))
+	egg(b, V(1.3, 0.95, 1.0), c.Metal, CFrame.new(0, 0.95, -1.0))
+	egg(b, V(1.8, 1.55, 1.7), c.Accent, CFrame.new(0, 1.85, 0.35), { Anim = "Pulse", Transparency = 0.12 })
+	egg(b, V(0.7, 0.45, 0.7), c.Light, CFrame.new(0.35, 2.4, 0.05), { Anim = "Pulse" })
+	ball(b, 0.7, c.Glow, V(0, 1.95, 0.4), { Material = NEON, Anim = "Throb" })
+	local neck = V(0, 1.3, -1.05)
+	bar(b, neck, V(0, 2.15, -1.65), 0.42, c.Metal, { Anim = "Jaw", Joint = neck })
+	ball(b, 0.34, c.Glow, V(0, 2.2, -1.72), { Material = NEON, Anim = "Jaw", Joint = neck })
+	for _, x in ipairs({ -0.28, 0.28 }) do
+		ball(b, 0.18, c.Eye, V(x, 0.95, -1.5), { Material = NEON })
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		local anim = side < 0 and "SwingA" or "SwingB"
+		local hip = V(side * 0.65, 0.55, 0.1)
+		for i, z in ipairs({ -0.5, 0.15, 0.8 }) do
+			local foot = V(side * 1.45, 0.04, z + ({ -0.6, 0.1, 0.6 })[i])
+			bar(b, V(side * 0.95, 0.8, z), foot, 0.18, c.Dark, { Anim = anim, Joint = hip })
+		end
+	end
+	return "Scuttle"
 end
 
 -- Scorpion Queen: crimson plates with gold rims, gold crown, big claws, amber stinger.
@@ -622,6 +657,22 @@ SHOTS[11] = function(b, _def)
 	bottle(b, SHOT.Fire)
 end
 
+-- Arrow along Z, tip toward -Z: wooden shaft, steel head, two-tone fletching (the
+-- part-built stand-in for the "Shot_Arrow" mesh).
+local function arrow(b, shaft: Color3, head: Color3, fletch: Color3, glow: boolean)
+	b.add("Cylinder", Vector3.new(2.6, 0.14, 0.14), shaft, CFrame.new(0, 0, 0.1) * CFrame.Angles(0, math.rad(90), 0), glow and { Material = SHOT_NEON } or nil)
+	b.add("Wedge", Vector3.new(0.12, 0.34, 0.5), head, CFrame.new(0, 0, -1.4) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(-90), 0, 0), { Material = glow and SHOT_NEON or SHOT_METAL })
+	for _, rot in ipairs({ 0, 90 }) do
+		b.add("Block", Vector3.new(0.04, 0.32, 0.5), fletch, CFrame.new(0, 0, 1.2) * CFrame.Angles(0, 0, math.rad(rot)))
+	end
+end
+SHOTS[20] = function(b, _def)
+	arrow(b, SHOT.Wood, SHOT.Steel, ShotPalette.ivory_100, false)
+end
+SHOTS[21] = function(b, _def)
+	arrow(b, ShotPalette.moss_300, ShotPalette.gold_300, ShotPalette.moss_200, true)
+end
+
 -- Projectile visual index → mesh model + slot colour overrides (slots: see blender/models/items.py).
 local SHOT_MESH: { [number]: { any } } = {
 	[1] = { "Shot_Orb", { Core = SHOT.Arcane, Shard = SHOT.Arcane, Shell = SHOT.Shell } },
@@ -635,6 +686,10 @@ local SHOT_MESH: { [number]: { any } } = {
 	[9] = { "Shot_Axe", { Head = SHOT.Crimson, Haft = ShotPalette.wood_600 } },
 	[10] = { "Shot_Boomerang", { Wood = SHOT.GoldBlade, Inlay = SHOT.Ivory } },
 	[11] = { "Shot_Bottle", { Liquid = SHOT.Fire, Glass = SHOT.Glass } },
+	-- Longbow / Windpiercer arrows: the mesh when "Shot_Arrow" is in the catalog and loaded,
+	-- else SHOTS[20] / SHOTS[21] (MeshPieces returns nil for a missing model)
+	[20] = { "Shot_Arrow", nil },
+	[21] = { "Shot_Arrow", { Wood = ShotPalette.moss_300, Blade = ShotPalette.gold_300, Accent = ShotPalette.moss_200, Gold = ShotPalette.gold_200 } },
 }
 
 -- Mesh model name used for a projectile visual (nil = part-built only).
@@ -742,6 +797,77 @@ function ModelLibrary.Motion(style: string, t: number, phase: number, move: numb
 		return CFrame.new(0, 1 + math.sin(t * 1.6 + phase) * 0.8, 0)
 	end
 	return CFrame.identity
+end
+
+-- Like PieceCFrame, with the model scaled by s around the body centre (swelling poses).
+function ModelLibrary.PieceCFrameScaled(bodyCF: CFrame, piece: Piece, t: number, phase: number, move: number, s: number): CFrame
+	local off = piece.Offset
+	local cf = bodyCF * CFrame.new(off.Position * s) * off.Rotation
+	if piece.Anim then
+		local rot = ModelLibrary.Animate(piece.Anim, t, phase, move)
+		local pivot = piece.Pivot
+		if pivot then
+			local pv = CFrame.new(pivot.Position * s) * pivot.Rotation
+			cf = cf * pv * rot * pv:Inverse()
+		else
+			cf = cf * rot
+		end
+	end
+	return cf
+end
+
+--[[
+	Elite affix aura (EliteAura_Burning / _Shield / _Swift meshes when loaded, else a part
+	ring with the same read): pieces around the body centre, spinning with "Spin". radius =
+	the enemy's body radius; halfHeight lifts the ground-origin model onto the body centre.
+]]
+local AURA_MESH = { Burning = "EliteAura_Burning", Shielded = "EliteAura_Shield", Swift = "EliteAura_Swift" }
+
+function ModelLibrary.AuraMeshName(affix: string): string?
+	return AURA_MESH[affix]
+end
+
+function ModelLibrary.Aura(affix: string, radius: number, halfHeight: number): { Piece }
+	local s = radius / 1.4 -- the aura meshes are authored for a body of radius ~1.4
+	local meshName = AURA_MESH[affix]
+	local pieces = meshName and ModelLibrary.MeshPieces(meshName, nil, s, -halfHeight) or nil
+	if pieces then
+		return pieces
+	end
+	local b = builder(1)
+	local function spinPiece(shape: string, size: Vector3, color: Color3, cf: CFrame, opts: { [string]: any }?)
+		local o = table.clone(opts or {})
+		o.Anim = "Spin"
+		o.Pivot = cf:Inverse() * CFrame.new(0, cf.Position.Y, 0) -- spin around the body axis
+		b.add(shape, size, color, cf, o)
+	end
+	local r = 1.6 * s
+	local base = -halfHeight
+	if affix == "Burning" then
+		for i = 1, 10 do
+			local a = i * math.pi * 2 / 10
+			local h = (i % 2 == 0) and 1.1 or 0.75
+			local cf = CFrame.new(math.cos(a) * r, base + h * s / 2, math.sin(a) * r) * CFrame.Angles(0, -a, 0)
+			spinPiece("Wedge", V(0.3, h, 0.45) * s, (i % 2 == 0) and Palette.fx_fire or Palette.amber_300, cf, { Material = NEON, Transparency = 0.1 })
+		end
+	elseif affix == "Shielded" then
+		for i = 1, 3 do
+			local a = i * math.pi * 2 / 3
+			local rr = r + 0.35 * s
+			local cf = CFrame.lookAt(V(math.cos(a) * rr, base + 1.3 * s, math.sin(a) * rr), V(math.cos(a) * rr * 2, base + 1.3 * s, math.sin(a) * rr * 2))
+			spinPiece("Block", V(1.15, 1.15, 0.1) * s, Palette.slate_200:Lerp(Palette.fx_arcane, 0.3), cf, { Material = METAL, Transparency = 0.25 })
+			spinPiece("Block", V(1.3, 0.12, 0.14) * s, Palette.gold_400, cf * CFrame.new(0, 0.6 * s, 0), { Material = METAL })
+		end
+	else -- Swift
+		for i = 1, 3 do
+			local a = i * math.pi * 2 / 3
+			local y = base + (0.35 + (i - 1) * 0.7) * s
+			local cf = CFrame.new(math.cos(a) * (r + 0.2 * s), y, math.sin(a) * (r + 0.2 * s)) * CFrame.Angles(0, -a, 0)
+			spinPiece("Block", V(0.12, 0.1, 2.2) * s, Palette.ivory_100, cf, { Transparency = 0.35 })
+			spinPiece("Ball", V(0.22, 0.22, 0.22) * s, Palette.fx_bolt, cf * CFrame.new(0, 0, -1.1 * s), { Material = NEON })
+		end
+	end
+	return b.pieces
 end
 
 -- Final CFrame for one piece.

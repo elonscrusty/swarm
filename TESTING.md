@@ -21,6 +21,17 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] SETTINGS opens the volume menu ("Close" button); sliders work and are saved.
 - [ ] No walking in the lobby: WASD / touch do nothing, no thumbstick appears.
 
+## 0c. Characters, achievements, upgrades (new)
+- [ ] CHARACTERS lists 5 heroes; Ranger reads "Locked · Queen Slayer". Its details show Starts with Longbow, Trait Steady Aim, EFFECT / STRENGTH / TRADEOFF lines, "UNLOCK Queen Slayer: Defeat the Scorpion Queen. 0/1" and a disabled LOCKED · QUEEN SLAYER button (no gold purchase possible; the home nameplate shows LOCKED).
+- [ ] Every other hero shows its trait, strength and tradeoff; Rogue / Priest still unlock for gold.
+- [ ] Portrait: the five hero tabs fit without "...".
+- [ ] STATS has STATS / ACHIEVEMENTS tabs; the Achievements tile shows n / 12. The list shows 12 rows with reward lines and progress bars (time ones as m:ss).
+- [ ] Kill the Queen (DEV: spawn portal boss): toast "Achievement: Queen Slayer · Unlocks the Ranger · 150 gold"; the results screen lists it; back in the lobby the Ranger is owned and selectable.
+- [ ] Clearing a stage as the Knight unlocks Knight's Oath; opening a Golden Chest unlocks Golden Touch; a Duo partner revive counts toward Lifesaver (3).
+- [ ] Earned titles / name colours appear under WEAR TITLE / NAME COLOUR; picking one changes the name line above the hero nameplate on home.
+- [ ] Old save (schema 3) loads with gold, characters and skins intact and empty achievements (Output: no migration errors).
+- [ ] UPGRADES: rows show LV n/max, NOW / NEXT effect, BUY price (gold when affordable, "Need N more gold" when not) or MAXED. Double-tap BUY quickly: only ONE level is bought; the button reads BUYING... until gold updates; a toast confirms the new level.
+
 ## 1. Solo run (Play, 1 player)
 - [ ] The lobby menu shows a grey Knight with a helmet turning in the middle.
 - [ ] Tap SOLO: the run starts at once (no countdown); the timer counts up from 0:00, the pill under it says "STAGE 1 · Find the portal" and a "STAGE 1" banner shows.
@@ -38,11 +49,20 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] Take damage: red flash, HP bar over your head drops. Chicken heals, Magnet pulls every gem, Bomb clears the screen.
 - [ ] An elite (big, shiny) drops a chest; touching it plays the chest animation and lists a weapon level + gold.
 - [ ] Get a weapon to level 8 + its passive: the next level-up offers a gold EVOLUTION card (or a chest evolves it).
-- [ ] Quick boss test: DEV → "Spawn portal boss". The boss appears behind the portal with a red HP bar; it charges (red floor warning), fires rings of red orbs, summons skeletons. Killing it starts the surge (section 1d).
+- [ ] Quick boss test: DEV → "Spawn portal boss". The Queen rises out of the ground behind the portal while the boss bar fills with her name, then runs her attack cycle (full checklist in section 1f). Killing her plays a short collapse, then the surge starts (section 1d).
 - [ ] The run no longer ends at 15:00: past 15:00 the timer keeps counting and nothing special happens.
 - [ ] Die (stand still at minute 5+): DEFEATED screen with "Fell on stage N", stages, time/kills/gold/level/damage.
 - [ ] After the results screen you are back on the lobby menu (home screen), no walking.
 - [ ] After reaching stage 2, the ARENA button can switch to the next arena.
+
+## 1g. Level-up cards, perks and the Ranger (solo)
+- [ ] Every card shows the rarity band, the rank line (NEW / LV 3 → 4 / 8 / EVOLUTION) and what changes with real numbers ("Damage 10 → 15"; passives "Max HP 144 → 168").
+- [ ] A weapon at level 6+ shows "Evolves at Lv 8 with <passive>" (gold when you own it).
+- [ ] Maxed weapons / passives never show up; Ammo / Candle / Fletching don't show up with a Whip + Garlic only build; Duplicator has 3 levels, each +1.
+- [ ] REROLL shows "n left · 3 new cards" and SKIP "+10 GOLD · n left"; without the permanent upgrades they are greyed out with "Buy rerolls / skips in Upgrades".
+- [ ] Perks: Whip L6 every 3rd attack cuts both ways; Orb L5 kills split into 2 small orbs; Knives L4 bounce once; Garlic L4 visibly slows enemies in the ring (not the Queen); Longbow L6 every 3rd shot fires 3+ arrows fanned out.
+- [ ] Ranger: arrows fly where you move; standing still they aim at the nearest enemy. After 0.8 s still (server-checked position, < 0.3 studs drift) the chip over the ability bar turns gold-green "STEADY AIM +30% DAMAGE" (+30% Longbow, +10% other weapons); moving turns it back to "STAND STILL TO AIM".
+- [ ] Longbow + Fletching at Lv 8 → Windpiercer (green wind arrows, pierce everything, 4-arrow volley). Arrows use the Shot_Arrow mesh once uploaded.
 
 ## 1d. Stages and portal (solo first, then Duo)
 Tip: lower `Config.Stages.PortalLockSeconds` / `HintAfterSeconds` and use the DEV buttons to go faster.
@@ -68,6 +88,58 @@ Tip: lower `Config.Stages.PortalLockSeconds` / `HintAfterSeconds` and use the DE
 - [ ] Level-up during travel: the cards stay up on the next stage and the run stays paused until picked.
 - [ ] While a run is going, the lobby (for players who returned or joined late) shows "Run in progress · Stage N · Time m:ss".
 - [ ] HUD status: in SOLO a level-up never says "a teammate is choosing"; in Duo/Trio the others see "Paused: <Name> is choosing an upgrade" and the chooser sees only the cards.
+
+## 1e. Loot: chests, shrines, guarded altar, items (solo first, then Duo)
+Tip: DEV → "+300 gold" and "+3 random items" speed this up.
+- [ ] Every stage has 10-14 small chests, 2-3 large, 1 golden, 1-2 gold-sigil Shrines of Chance, 1 crimson Bargain Shrine and 1 Guarded Altar (stone dais with a chest on it). None stand in the spawn clearing, inside trees / walls / ponds or on the portal; travel to stage 2: all new spots, nothing left from stage 1.
+- [ ] Walk next to a chest: a prompt appears beside it with the name, what it gives, the price (coin) and HOLD E. Too little gold: the price is red, "Need N more gold", holding does nothing.
+- [ ] Hold E: the ring around the icon fills (~1 s); the gold counter drops by the price, the lid swings open, an item popup appears at the left (icon, name, rarity colour, what it does, "Large Chest"), the item joins the strip at the top left (x2 when stacked). Release early: nothing is spent. Walk away mid-hold: cancelled.
+- [ ] Phone: the prompt has a HOLD button: press and hold it (the thumbstick does not start); release stops it. Gamepad: hold X.
+- [ ] Prices grow per stage (stage 1: 25 / 60 / 150; stage 2: 57 / 138 / 345). With DoubleGold the shown price doubles (and so does income).
+- [ ] Shrine of Chance: the prompt says "+ 50% chance of an item (2 left)" and "- Each try costs 20% more gold"; each try takes gold, sometimes an item, otherwise "nothing this time"; price goes up; after 2 items / 6 tries it goes dark ("The shrine has gone dark").
+- [ ] Bargain Shrine: prompt shows "+ Team: +25% damage, +30% gold this stage" and "- Enemies: +20% HP this stage", FREE. Use it: a banner names who sealed it, a crimson BARGAIN chip shows under the items strip, enemies take longer to kill, more gold drops; next stage the chip is gone and the effect ends.
+- [ ] Guarded Altar: a floating "GUARDED ALTAR" marker over it; the prompt (when near) shows the free reward and "Wakes N elite guards". Walk within ~24 studs: "The altar's guardians awaken!", N elites climb out around it, the marker says "GUARDS LEFT x / N". Guards drop no elite chests. Kill them all: "unguarded: open it", hold to open: every living teammate gets an item popup. Marker then disappears.
+- [ ] Summon the Queen while guards are alive: the guards vanish, the altar goes back to dormant; walking near again brings back only the guards that were not killed.
+- [ ] Items work: Whetstone / Crown more damage, Quick Gloves faster attacks, Swift Feather faster walking, Hearty Bread max HP up, Bandage HP slowly refills, Keen Lens / Hunter's Eye sometimes bigger hits, Iron Plate less damage, Guardian Ward a steel band on the health bar and "+N" after 5 s without damage, Barbed Mail red ring + damage when hit, Storm Charm chain lightning, Volatile Spore explosions on kills, Spare Quiver an extra knife / orb now and then, Magnet Totem gem pulls every ~10 s, Phoenix Feather: fall once and rise at 50% (it leaves the strip).
+- [ ] Pause menu → ITEMS: a list with every item, stack count, rarity and full text; BACK closes it.
+- [ ] Results (defeat and portal return): "Items found" row with the run's items; gold = what you took home (earned minus spent). Next run starts with no items.
+- [ ] Duo: both stand at one chest and hold: only one opens it and pays; the other gets "Someone was faster" and keeps their gold. A player who leaves mid-hold: nothing breaks. Bargain applies to both. The altar gives both players an item.
+
+## 1f. Enemies, elites and the Scorpion Queen (solo first, then Duo)
+Tip: `Config.Pacing.EliteFirst = 20` and a `SpawnTable` row 1 with `Spitter = 30, Bomber = 30, Brute = 30` show every enemy within a minute; DEV → "Spawn portal boss" for the Queen. Offline: `bash tools/preview/render.sh enemy-telegraphs,boss --devices pc,phone --set moment=charge` (moments: entrance, charge, venom, ring, burrow, summon, stunned, collapse) and the headless `boss-sim --studio`.
+
+Enemy roles and telegraphs
+- [ ] New enemies climb out of the ground (short rise + dust puff) and can't hurt you during it; deaths are the usual short poof.
+- [ ] First appearance of a type in a run: one toast "New: <name> - <hint>" (Beetle Warrior 1:00, Phase Moth 3:00, Spitter / Bomb Tick 4:00, Rhino 5:00), with a small group of that type. Never again in the same run; again in the next run.
+- [ ] Spitter (mauve beetle, amber sac): keeps 22-30 studs away (backs off when you come close), stops, swells for 0.7 s while a dashed amber ring with a crosshair appears where you stood; the glob arcs over (~1 s) and splashes inside that ring only. Walking out of the ring = no damage.
+- [ ] Bomb Tick: reaching you it stops, swells and blinks faster and faster for 0.7 s inside a crimson ring with a blinking amber double edge (the blast radius), then explodes. Stepping out of the ring = no damage; killing it during the fuse defuses it (no explosion).
+- [ ] Rhino Beetle: within ~15 studs it rears up for 0.65 s over a short crimson lane, lunges along that lane, then stands still briefly (free hits). Sidestepping the lane avoids it.
+- [ ] Wasps, Mites, Beetle Warriors and Phase Moths behave as before (moths still fly through walls).
+- [ ] Telegraphs sit on the floor above paths and plazas, under heroes and bugs; they have a dark outline and stay readable on grass, dirt and stone; they never cover enemies.
+
+Pacing
+- [ ] The first seconds of a run and of every new stage are calm (few enemies), then pressure builds toward each 30 s mini-wave; after a mini-wave a few seconds of lighter spawning.
+- [ ] At 2:30 and every 2:45 after: "An elite <Affix> <Name> hunts you!" and that elite appears from off-screen.
+
+Elites (one affix each)
+- [ ] Every elite (big, gold, crowned) has exactly one aura + a small tag over the crown: BURNING (flame ring), SHIELDED (three orbiting plates), SWIFT (wind streaks, clearly faster).
+- [ ] Shielded: the first hits do no HP damage (hit flashes still show); when the shield breaks the plates shatter and the aura disappears.
+- [ ] Burning: while walking it leaves small fire patches behind it that glow for half a second before they burn; standing in a burning patch hurts in ticks; patches fade after ~3 s; never more than 5 per elite.
+- [ ] Elites still drop a chest (altar guards drop gems only).
+
+The Scorpion Queen
+- [ ] Entrance (~2.5 s): she rises out of the ground behind the portal with a dust ring, a roar and a small shake; the boss bar fills with "SCORPION QUEEN"; your hits do nothing and touching her doesn't hurt; she does not attack for ~2 s after she is up.
+- [ ] The boss bar has a notch at 50%.
+- [ ] Charge: she crouches and trembles while a crimson lane (with chevrons) fills toward its end (1 s), then rushes along it; afterwards she is dizzy for ~1.3 s (stars over her head): touching her is safe, hit her.
+- [ ] Venom Burst: claws up, then 3 circles (4 in Duo, 5 in Trio) appear under and next to the players and fill in ~1 s, then erupt with crimson spikes. Only the circles hurt; one or two steps get you out.
+- [ ] Stinger Ring: her tail rises with an amber glow and crimson spokes show every stinger lane with 3 clear gaps; two waves of stingers fly along the spokes. Standing in a gap = no damage.
+- [ ] Burrow: she sinks, a dust trail chases one player for ~2 s (she can't be hit meanwhile), then a crimson circle with inward ticks stays put for 0.8 s and she erupts there (dirt burst), dizzy for ~1 s.
+- [ ] Summon: eggs appear around her, wobble harder and crack, and Beetle Warriors fade in (no instant spawns on top of you).
+- [ ] Below 50%: "THE QUEEN IS ENRAGED!", a roar, the notch is passed; attacks come a bit sooner and every charge is a double charge (a second lane right after the first).
+- [ ] Kill her in the middle of an attack (e.g. while circles are filling): every circle, spoke, egg and flying stinger disappears at once; she collapses (~1.5 s, no slow motion); then the gold, gems and the surge come as before.
+- [ ] Duo / Trio: she targets whoever is alive; a fallen or leaving player is never charged / burrowed at; revived players are targeted again; two players hitting her at the same time never double-reward.
+- [ ] Travel to the next stage or the end of the run with telegraphs on the floor: they all vanish; nothing lingers on the next stage.
+- [ ] Phone: telegraphs are readable at phone size; the boss bar fits under the plate.
 
 ## 1a. Weapon animations (use the lobby/run, level each weapon; Studio cheats or `Config` boosts help)
 - [ ] Whip: a glowing blade pulls back, then sweeps a ~150° arc in front of you with a white crescent trail; it flashes white mid-sweep and fades. The knight's right arm swings with it. The second (back) slash makes the hero spin once. Enemies inside the arc flash; enemies outside it don't.
@@ -142,3 +214,39 @@ Tip: lower `Config.Stages.PortalLockSeconds` / `HintAfterSeconds` and use the DE
 - [ ] Session lock: run two Studio sessions with the same account (or Team Test) → the second one waits and then gets the "data is still in use" kick unless the first one left.
 - [ ] Shutdown: start a run, stop the server mid-run → next session keeps the run's gold.
 - [ ] Note: if Studio crashes, the lock frees itself after `Config.Data.LockStaleSeconds` (200 s).
+
+## 6. Co-op HUD, tips, results, accessibility, saving (new)
+Team HUD (Test tab → 2 or 3 players, DUO / TRIO):
+- [ ] Each player sees one row per teammate (right side, under the counters; portrait: under the ability bar): hero icon, name, health bar. Nothing on the left / bottom where the thumb goes; a touch starting on a row still moves the hero.
+- [ ] A teammate picks a level-up card: the run freezes, others see "Paused: <Name> is choosing an upgrade" and that row says CHOOSING.
+- [ ] A teammate falls: the row says "DOWN · N m" (crimson) and a dashed gold circle appears around them on the floor plus a ring marker over them; when they are off screen a crimson arrow at the screen edge points at them with name and distance.
+- [ ] Stand in the circle: the dashes light up, the marker ring fills, the row says "REVIVING 60%" with a gold bar, and the fallen player sees the same ring over themselves and "A teammate is reviving you... 60%". Step out: progress falls back.
+- [ ] A fallen player on the revive-product offer shows DECIDING; with no partner revives left OUT (no circle).
+- [ ] A teammate closes their client mid-run: everyone gets "<Name> left the run.", the row disappears at once, nothing breaks.
+- [ ] First group run: a "Team run" tip explains shared XP / own gold and items (once ever).
+
+First-run tips (use a fresh save: in Studio with API access off every session is fresh):
+- [ ] First run: "How to play" (drag / WASD / left stick by device) appears ~1.5 s in and closes early after walking a bit; then "Auto attack"; after the first kill "Experience"; the first LEVEL UP! line reads "Tap a card: a new weapon, an upgrade or a passive"; after ~40 s "Your goal" (portal); when the Queen appears "The Queen" (floor warnings).
+- [ ] Hints never pause or block: you keep moving through them; they wait while the pause / level-up menus are open.
+- [ ] SKIP TIPS on a hint: no more tutorial hints this run or later.
+- [ ] Second run: no tutorial hints. Settings → Replay tips: they come back. Show tips OFF: nothing shows.
+- [ ] An old save (Runs > 0) never sees tutorial hints (schema 5 migration).
+
+Results:
+- [ ] Defeat / escape / victory: title, hero medallion, arena + mode, damage, time, enemies defeated, Queens slain (or "Fell to her" / "Not reached"), stages, gold, level, NEW BEST / unlock / achievements, the build (weapons with levels, gold border when evolved, passives) and items found. On a phone everything fits or the middle scrolls; buttons always visible.
+- [ ] REPLAY (solo): back to the lobby and a new Solo run starts by itself. REPLAY (Duo defeat): a new Duo countdown starts (or joins the teammate's). REPLAY after leaving through the portal while teammates go on: disabled, "YOUR TEAM IS STILL PLAYING".
+- [ ] MAIN MENU: back to the menu. Gold on the menu matches the results (no double reward after REPLAY).
+
+Accessibility (Settings in the lobby and the pause menu):
+- [ ] Music / Effects / Screen shake sliders, Reduced effects, Damage numbers, Show tips switches (each says ON / OFF), Replay tips. Rejoin: every value is back.
+- [ ] Screen shake 0%: no shake from explosions, the Queen's roar or being hit.
+- [ ] Reduced effects: fewer sparks / dust / trails in a big fight, no crimson edge pulse when hit, the low-health edge is steady, no XP bar flash. Telegraphs are unchanged.
+- [ ] Damage numbers ON: numbers over enemies you hit; with 150+ enemies there are only a handful at a time (one per enemy, merged), crits gold with "!". OFF (default): none, and the server sends nothing.
+
+Audio:
+- [ ] In a 200-enemy fight the Bomb Tick fuse ticks, Spitter wind-up, Rhino lunge and the Queen's warnings stay audible over the hits (combat ducks briefly). Far-away warnings are quieter.
+- [ ] Your own swings / throws have a quiet cue; teammates' don't spam yours. Leaving a run silences everything at once.
+
+Saving visibility:
+- [ ] Studio with API access OFF: the lobby shows "Progress isn't being saved in this session"; the pause / settings note says so too.
+- [ ] Live server with DataStores failing (or simulate with a failing UpdateAsync): after the retries a run toast "Progress isn't being saved right now" and the lobby notice; when a save works again, "Saving works again".

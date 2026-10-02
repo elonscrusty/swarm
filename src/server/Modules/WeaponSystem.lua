@@ -1,7 +1,9 @@
 --[[
 	WeaponSystem.lua
-	Server-authoritative auto-attacks for all 8 weapons + evolutions, the projectile
-	simulation, holy water pools and hostile (boss) projectiles.
+	Server-authoritative auto-attacks for all 9 weapons + evolutions, their level perks
+	(WeaponData.Perks: Riposte, Splitting Orbs, Ricochet, Chilling Aura, Volley), the
+	Ranger's Steady Aim, the projectile simulation, holy water pools and hostile (boss)
+	projectiles.
 
 	* Projectiles are plain data records from a fixed pool (Config.Projectiles.PoolSize);
 	  the server never creates Parts for them.
@@ -20,6 +22,7 @@
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponData)
+local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local Fx = require(script.Parent.Fx)
 
 local WeaponSystem = {}
@@ -64,6 +67,8 @@ local function allocProjectile(): Projectile?
 	p.VY = 0
 	p.Rehit = nil
 	p.Cancelled = false
+	p.Split = nil
+	p.Bounces = nil
 	table.insert(live, p)
 	p.LiveIndex = #live
 	return p
@@ -94,12 +99,15 @@ local function weaponStats(rp, w)
 	local row = WeaponData.GetStats(w.Id, w.Level, w.Evolved)
 	local s = rp.Stats
 	return {
-		damage = row.damage * s.Might,
+		-- Steady Aim (Ranger): standing still gives +SteadyAimBonus damage to the Longbow and
+		-- +SteadyAimOther to every other weapon until you move
+		damage = row.damage * s.Might * (rp.SteadyAim and (1 + ((w.Id == "Longbow" and rp.SteadyAimBonus or rp.SteadyAimOther) or 0)) or 1),
 		cooldown = math.max(Config.Projectiles.MaxWeaponCooldownFloor, row.cooldown * s.CooldownMult),
 		amount = math.max(1, row.amount + s.Amount),
 		area = row.area * s.AreaMult,
 		speed = row.speed * s.ProjSpeedMult,
-		pierce = row.pierce,
+		-- Fletching: stopping projectiles pass through more enemies
+		pierce = row.pierce >= 999 and 999 or row.pierce + (s.Pierce or 0),
 		duration = row.duration * s.DurationMult,
 		knockback = row.knockback,
 	}
@@ -199,14 +207,21 @@ function Fire.Whip(rp, w, s, def)
 	local half = math.rad(params.Arc) / 2
 	local facing = rp.Facing
 	local tier = visualTier(w)
+	-- Riposte perk: every 3rd attack the forehand cut covers the full circle
+	w.Attacks = (w.Attacks or 0) + 1
+	local riposte = WeaponData.HasPerk(w, "Riposte") and w.Attacks % 3 == 0
 	for i = 1, s.amount do
 		local dir = (i % 2 == 1) and facing or -facing
 		local sweep = (i % 2 == 1) and 1 or -1 -- forehand / backhand
+		local full = riposte and i == 1
 		task.delay((i - 1) * 0.12, function()
 			if not rp.Alive or not rp.Root or not ctx.RunManager.IsSimulating() then
 				return
 			end
 			Fx.Slash(ground(rp.Root.Position), yawOf(dir), reach, sweep, tier, rp.Player.UserId)
+			if full then
+				Fx.Slash(ground(rp.Root.Position), yawOf(-dir), reach, -sweep, tier, rp.Player.UserId)
+			end
 			task.delay(SWING_HIT_DELAY, function()
 				if not rp.Alive or not rp.Root or not ctx.RunManager.IsSimulating() then
 					return
@@ -219,7 +234,7 @@ function Fire.Whip(rp, w, s, def)
 					if e.Alive then
 						local rel = (e.Pos - origin) * FLAT
 						local d = rel.Magnitude
-						local inside = d <= SWING_INNER + e.Radius
+						local inside = d <= SWING_INNER + e.Radius or (full and d <= reach + e.Radius)
 						if not inside then
 							local off = math.acos(math.clamp(rel:Dot(dir) / d, -1, 1)) - half
 							-- inside the sector, or overlapping one of its edges
@@ -275,6 +290,7 @@ function Fire.Orb(rp, w, s, def)
 			p.Target = target
 			p.TargetUid = target.Uid
 			p.TurnRate = params.TurnRate
+			p.Split = WeaponData.HasPerk(w, "Split")
 		end
 	end
 end
@@ -311,18 +327,27 @@ function Fire.Knives(rp, w, s, def)
 		p.Life = s.duration
 		p.Knockback = s.knockback
 		p.Yaw = yawOf(d)
+		p.Bounces = WeaponData.HasPerk(w, "Ricochet") and 1 or nil
 	end
 end
 
 -- GARLIC / SOUL EATER: damage ring around the player.
+local CHILL_SLOW = 0.75 -- Chilling Aura perk: enemies in the ring move at 75% speed
 function Fire.Aura(rp, w, s, def)
 	local evo = w.Evolved and def.Evolution or nil
 	local radius = def.Params.Radius * s.area * (1 + (w.Growth or 0))
 	local origin = ground(rp.Root.Position)
 	local n = grid():QueryCircle(origin.X, origin.Z, radius, queryBuf)
 	local hits = table.move(queryBuf, 1, n, 1, {})
+	local chill = WeaponData.HasPerk(w, "Chill")
+	local slowUntil = os.clock() + s.cooldown + 0.3
 	for _, e in ipairs(hits) do
 		if e.Alive then
+			if chill and not e.Boss then
+				-- Chilling Aura: EnemyAI multiplies their speed by SlowMult until SlowUntil
+				e.SlowUntil = slowUntil
+				e.SlowMult = CHILL_SLOW
+			end
 			local killed = hitEnemy(rp, e, s.damage, origin, s.knockback)
 			if killed and evo then
 				w.Growth = math.min(evo.GrowthCap, (w.Growth or 0) + evo.GrowthPerKill)
@@ -509,6 +534,55 @@ function Fire.Boomerang(rp, w, s, def)
 	end
 end
 
+--[[
+	LONGBOW / WINDPIERCER: heavy piercing arrows in the movement direction; standing still
+	they fly at the nearest enemy in range (Steady Aim's natural partner), else where you
+	face. Several arrows fly side by side. Volley perk: every 3rd shot adds two arrows at
+	±VolleyAngle degrees; Windpiercer does that on every shot.
+]]
+function Fire.Longbow(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local dir = rp.MoveDir.Magnitude > 0.1 and rp.MoveDir or nil
+	if not dir then
+		local target = nearestEnemies(origin, s.speed * s.duration, 1)[1]
+		dir = target and flatDir(target.Pos - origin, rp.Facing) or rp.Facing
+	end
+	w.Attacks = (w.Attacks or 0) + 1
+	local fan = (evo and evo.Fan) or (WeaponData.HasPerk(w, "Volley") and w.Attacks % params.VolleyEvery == 0)
+	local side = Vector3.new(-dir.Z, 0, dir.X)
+	local shots = {}
+	for i = 1, s.amount do
+		local centered = i - (s.amount + 1) / 2
+		table.insert(shots, { Dir = dir, Start = origin + dir * 1.8 + side * centered * params.Spread - dir * math.abs(centered) * 0.6 })
+	end
+	if fan then
+		for _, sign in ipairs({ -1, 1 }) do
+			table.insert(shots, { Dir = rotateY(dir, sign * math.rad(params.VolleyAngle)), Start = origin + dir * 1.8 })
+		end
+	end
+	for _, shot in ipairs(shots) do
+		local p = allocProjectile()
+		if not p then
+			return
+		end
+		p.Kind = "Straight"
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = shot.Start
+		p.Vel = shot.Dir * s.speed
+		p.Damage = s.damage
+		p.Pierce = s.pierce
+		p.Radius = params.Radius * s.area
+		p.Life = s.duration
+		p.Knockback = s.knockback
+		p.Yaw = yawOf(shot.Dir)
+	end
+	Fx.Sound("Hit")
+end
+
 ------------------------------------------------------------------------------------------
 -- Hostile projectiles (boss)
 ------------------------------------------------------------------------------------------
@@ -535,6 +609,63 @@ end
 -- Projectile simulation
 ------------------------------------------------------------------------------------------
 
+-- Splitting Orbs perk: an orb's first kill splits off two small orbs (half damage, short
+-- life) flying off at ±50 degrees. The orb is marked so it splits only once, the children
+-- never split, and no split happens while fewer than SPLIT_MIN_FREE projectile ids are
+-- free, so a big orb build can never drain the shared pool.
+local SPLIT_ANGLE = math.rad(50)
+local SPLIT_MIN_FREE = 100
+local function splitOrb(p: Projectile, e, now: number)
+	p.Split = nil
+	if #freeIds < SPLIT_MIN_FREE then
+		return
+	end
+	local base = p.Vel.Magnitude > 1e-3 and (p.Vel * FLAT).Unit or Vector3.new(0, 0, -1)
+	for _, sign in ipairs({ -1, 1 }) do
+		local c = allocProjectile()
+		if not c then
+			return
+		end
+		local d = rotateY(base, sign * SPLIT_ANGLE)
+		c.Kind = "Straight"
+		c.Visual = p.Visual
+		c.Owner = p.Owner
+		c.Weapon = p.Weapon
+		c.Pos = e.Pos
+		c.Vel = d * math.max(20, p.Speed or 38)
+		c.Damage = p.Damage * 0.5
+		c.Pierce = 1
+		c.Radius = p.Radius * 0.7
+		c.Life = 0.7
+		c.Knockback = p.Knockback
+		c.Yaw = yawOf(d)
+		c.Hits[e.Uid] = now
+	end
+end
+
+-- Ricochet perk: a knife that would stop turns toward the nearest enemy it hasn't hit
+-- (within RICOCHET_RANGE). Returns true when it bounced (keep it alive).
+local RICOCHET_RANGE = 20
+local function ricochet(p: Projectile): boolean
+	if not p.Bounces or p.Bounces <= 0 then
+		return false
+	end
+	p.Bounces -= 1
+	local nextE = grid():Nearest(p.Pos.X, p.Pos.Z, RICOCHET_RANGE, function(x)
+		return p.Hits[x.Uid] ~= nil or not x.Alive
+	end)
+	if not nextE then
+		return false
+	end
+	local speed = math.max(20, p.Vel.Magnitude)
+	local d = flatDir(nextE.Pos - p.Pos, p.Vel.Unit)
+	p.Vel = d * speed
+	p.Yaw = yawOf(d)
+	p.Pierce = 1
+	p.Age = math.min(p.Age, p.Life - RICOCHET_RANGE / speed - 0.05)
+	return true
+end
+
 -- Hits enemies overlapping a projectile. Returns true if the projectile is used up.
 local function collideEnemies(p: Projectile, now: number): boolean
 	local n = grid():QueryCircle(p.Pos.X, p.Pos.Z, p.Radius, queryBuf)
@@ -548,15 +679,19 @@ local function collideEnemies(p: Projectile, now: number): boolean
 			if last == nil or (p.Rehit and now - last >= p.Rehit) then
 				p.Hits[e.Uid] = now
 				local dir = p.Vel and p.Vel.Magnitude > 1e-3 and (p.Vel * FLAT).Unit or nil
+				local died
 				if dir then
-					ctx.EnemySpawner.Damage(e, p.Damage, p.Owner, dir, p.Knockback)
+					died = ctx.EnemySpawner.Damage(e, p.Damage, p.Owner, dir, p.Knockback)
 				else
-					hitEnemy(p.Owner, e, p.Damage, p.Pos, p.Knockback)
+					died = hitEnemy(p.Owner, e, p.Damage, p.Pos, p.Knockback)
+				end
+				if died and p.Split then
+					splitOrb(p, e, now)
 				end
 				if p.Pierce < 999 then
 					p.Pierce -= 1
 					if p.Pierce <= 0 then
-						return true
+						return not ricochet(p)
 					end
 				end
 			end
@@ -802,11 +937,65 @@ function WeaponSystem.Clear()
 	sync()
 end
 
+--[[
+	Steady Aim (CharacterData SteadyAim, the Ranger): standing still for Delay seconds turns
+	on +Damage (Longbow) / +OtherDamage (every other weapon) for new shots until the hero
+	moves again. Stillness is decided from the server-observed root position
+	(rp.LastStillPos: moving more than STILL_EPS studs flat breaks it); the client-owned
+	velocity (rp.MoveDir, RunManager) is only an extra check, so a spoofed zero velocity
+	cannot keep the bonus while walking. The player attribute SteadyAim drives the HUD chip.
+]]
+local STILL_EPS = 0.3
+
+local function setSteadyAim(rp, on: boolean)
+	if rp.SteadyAim == nil or (rp.SteadyAim == true) ~= on then
+		rp.SteadyAim = on
+		rp.Player:SetAttribute("SteadyAim", on)
+	end
+end
+
+local function updateSteadyAim(rp, dt: number)
+	local char = CharacterData.Characters[rp.CharacterId]
+	local trait = char and char.SteadyAim
+	if not trait then
+		return
+	end
+	local root = rp.Root
+	if not root then
+		rp.StillTime = 0
+		rp.LastStillPos = nil
+		setSteadyAim(rp, false)
+		return
+	end
+	local pos = root.Position
+	local last = rp.LastStillPos
+	local moved = true
+	if last then
+		local dx, dz = pos.X - last.X, pos.Z - last.Z
+		moved = dx * dx + dz * dz > STILL_EPS * STILL_EPS
+	end
+	if moved or rp.MoveDir.Magnitude > 0.1 then
+		rp.StillTime = 0
+		rp.LastStillPos = pos
+		setSteadyAim(rp, false)
+	else
+		rp.StillTime = (rp.StillTime or 0) + dt
+		if rp.StillTime >= trait.Delay then
+			rp.SteadyAimBonus = trait.Damage
+			rp.SteadyAimOther = trait.OtherDamage or trait.Damage
+			setSteadyAim(rp, true)
+		end
+	end
+end
+
 function WeaponSystem.Step(dt: number)
 	if ctx.RunManager.IsSimulating() then
 		local now = os.clock()
 		-- 1) fire weapons
 		for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+			if rp.Alive and not rp.Paused then
+				updateSteadyAim(rp, dt)
+			end
 			if rp.Alive and not rp.Paused and rp.Root then
 				for _, id in ipairs(rp.WeaponOrder) do
 					local w = rp.Weapons[id]
@@ -815,6 +1004,7 @@ function WeaponSystem.Step(dt: number)
 						local def = WeaponData.Weapons[id]
 						local s = weaponStats(rp, w)
 						w.Timer = s.cooldown
+						s.amount += ctx.ItemSystem.ExtraShot(rp, w) -- Spare Quiver (per weapon)
 						local fn = Fire[def.Behavior]
 						if fn then
 							fn(rp, w, s, def)

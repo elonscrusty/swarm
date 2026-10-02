@@ -9,7 +9,7 @@
 	Surfaces    Surface (shadow + face), Panel, Divider, Bleed (full-screen layers)
 	Controls    Button (Primary / Secondary / Outline / Ghost), IconButton, Card,
 	            Chip, Meter, Tile (upgrade icon + level badge), Badge, Tabs, Slider,
-	            Modal, ScreenHeader
+	            Toggle, Modal, ScreenHeader
 
 	States: hover lifts 2 px and brightens, press scales to 0.96, disabled desaturates,
 	selected gets a strong gold border, gamepad focus shows a gold outline. Buttons keep a
@@ -228,6 +228,11 @@ function UIKit.formatNumber(n: number): string
 end
 
 -- Letter-spaced capitals for small labels ("BEST TIME" → "B E S T  T I M E" with thin spaces).
+-- "#RRGGBB" of a colour, for RichText <font color="...">.
+function UIKit.hex(c: Color3): string
+	return string.format("#%02X%02X%02X", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+end
+
 function UIKit.track(str: string): string
 	local upper = string.upper(str)
 	local chars = {}
@@ -1511,6 +1516,120 @@ function UIKit.Slider(parent: Instance?, title: string, icon: string?, value: nu
 		end,
 		Get = function(): number
 			return v
+		end,
+	}
+end
+
+------------------------------------------------------------------------------------------
+-- Toggle
+------------------------------------------------------------------------------------------
+
+export type Toggle = { Frame: TextButton, Set: (on: boolean) -> (), Get: () -> boolean }
+
+--[[
+	Labelled on / off switch: [icon] NAME + a short description, and a pill switch on the
+	right that also says ON / OFF (never colour alone). The whole row is the tap target
+	(at least TapMin tall); gamepad A toggles it.
+]]
+function UIKit.Toggle(parent: Instance?, title: string, icon: string?, description: string?, value: boolean, onChange: (boolean) -> (), props: { [string]: any }?): Toggle
+	local on = value == true
+	local h = description and 60 or 48
+	local row = new("TextButton", {
+		Name = title,
+		Text = title,
+		TextTransparency = 1,
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, h),
+	})
+	UIKit.Focusable(row)
+	local x = 0
+	if icon then
+		Icons.Draw(row, icon, { Size = 20, Color = P.gold_400, Position = UDim2.fromOffset(0, description and 6 or 14) })
+		x = 28
+	end
+	text(row, "Label", string.upper(title), {
+		Position = UDim2.fromOffset(x, description and 2 or 0),
+		Size = UDim2.new(1, -x - 84, 0, description and (TS(Theme.TextSize.Caption) + 14) or h),
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
+	if description then
+		text(row, "Small", description, {
+			Name = "Description",
+			Position = UDim2.fromOffset(x, TS(Theme.TextSize.Caption) + 14),
+			Size = UDim2.new(1, -x - 84, 0, h - TS(Theme.TextSize.Caption) - 14),
+			TextColor3 = C.TextMuted,
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		}, 13)
+	end
+	local track = new("Frame", {
+		Name = "Switch",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0, description and 22 or h / 2),
+		Size = UDim2.fromOffset(72, 30),
+		BackgroundColor3 = C.Track,
+		BorderSizePixel = 0,
+	}, row)
+	corner(track, 999)
+	local edge = stroke(track, P.slate_600, 1.5, 0.2)
+	local knob = new("Frame", {
+		Name = "Knob",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 3, 0.5, 0),
+		Size = UDim2.fromOffset(24, 24),
+		BackgroundColor3 = P.ivory_200,
+		BorderSizePixel = 0,
+		ZIndex = 3,
+	}, track)
+	corner(knob, 999)
+	local word = text(track, "Label", "OFF", {
+		Name = "State",
+		Size = UDim2.fromScale(1, 1),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 2,
+	}, 11)
+	local function show(animate: boolean)
+		local goal = { Position = on and UDim2.new(1, -27, 0.5, 0) or UDim2.new(0, 3, 0.5, 0) }
+		if animate then
+			UIAnim.Tween(knob, Theme.Motion.Fast, goal)
+		else
+			knob.Position = goal.Position
+		end
+		track.BackgroundColor3 = on and P.gold_500 or C.Track
+		edge.Color = on and P.gold_300 or P.slate_600
+		knob.BackgroundColor3 = on and P.ivory_100 or P.stone_300
+		word.Text = on and "ON" or "OFF"
+		word.TextColor3 = on and P.gold_900 or C.TextMuted
+		-- the word sits on the side the knob left
+		word.Position = UDim2.fromOffset(on and -12 or 12, 0)
+	end
+	show(false)
+	row.Activated:Connect(function()
+		on = not on
+		show(true)
+		if audio then
+			audio.Play("Toggle")
+		end
+		onChange(on)
+	end)
+	if props then
+		for k, v in pairs(props) do
+			(row :: any)[k] = v
+		end
+	end
+	row.Parent = parent
+	return {
+		Frame = row,
+		Set = function(v: boolean)
+			if on ~= (v == true) then
+				on = v == true
+				show(false)
+			end
+		end,
+		Get = function(): boolean
+			return on
 		end,
 	}
 end

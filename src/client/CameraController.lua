@@ -16,6 +16,7 @@ local RunService = game:GetService("RunService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local ClientSettings = require(script.Parent:WaitForChild("ClientSettings"))
 
 local CameraController = {}
 
@@ -71,10 +72,15 @@ local function menuCFrame(): CFrame?
 end
 
 -- Short screen shake (hurt, explosions, boss).
--- Kept small: scaled by Config.Camera.ShakeScale and capped at ShakeMax studs.
+-- Kept small: scaled by Config.Camera.ShakeScale and the player's Screen shake setting
+-- (0 = off), capped at ShakeMax studs.
 function CameraController.Shake(amount: number)
 	local cam = Config.Camera :: any
-	local a = math.min(amount * (cam.ShakeScale or 1), cam.ShakeMax or 0.6)
+	local setting = tonumber(ClientSettings.Get("Shake")) or 1
+	if setting <= 0 then
+		return
+	end
+	local a = math.min(amount * (cam.ShakeScale or 1) * setting, (cam.ShakeMax or 0.6) * setting)
 	shake = math.max(shake, a)
 end
 

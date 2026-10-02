@@ -8,6 +8,8 @@
 	  CostGrowth   each next level costs BaseCost * CostGrowth^(owned levels)
 	  PerLevel     stat bonus per level (same keys as PassiveData values), or
 	  Special      "Revive" | "Reroll" | "Skip" (handled by RunManager / LevelUpSystem)
+	  Effect       { Format, Per }: the total effect at a level for the shop rows,
+	               string.format(Format, Per * level) ("+20 max HP")
 ]]
 
 local MetaUpgradeData = {}
@@ -17,6 +19,7 @@ MetaUpgradeData.Order = { "MaxHP", "Might", "Armor", "Speed", "Luck", "Growth", 
 MetaUpgradeData.Upgrades = {
 	MaxHP = {
 		Id = "MaxHP",
+		Effect = { Format = "+%d max HP", Per = 10 },
 		Name = "Max HP",
 		Description = "+10 max HP per level.",
 		MaxLevel = 5,
@@ -27,6 +30,7 @@ MetaUpgradeData.Upgrades = {
 	},
 	Might = {
 		Id = "Might",
+		Effect = { Format = "+%d%% damage", Per = 5 },
 		Name = "Might",
 		Description = "+5% damage per level.",
 		MaxLevel = 5,
@@ -37,6 +41,7 @@ MetaUpgradeData.Upgrades = {
 	},
 	Armor = {
 		Id = "Armor",
+		Effect = { Format = "-%d damage taken per hit", Per = 1 },
 		Name = "Armor",
 		Description = "-1 damage taken per hit per level.",
 		MaxLevel = 3,
@@ -47,6 +52,7 @@ MetaUpgradeData.Upgrades = {
 	},
 	Speed = {
 		Id = "Speed",
+		Effect = { Format = "+%d%% move speed", Per = 5 },
 		Name = "Speed",
 		Description = "+5% move speed per level.",
 		MaxLevel = 3,
@@ -57,6 +63,7 @@ MetaUpgradeData.Upgrades = {
 	},
 	Luck = {
 		Id = "Luck",
+		Effect = { Format = "+%d%% luck", Per = 10 },
 		Name = "Luck",
 		Description = "+10% luck per level.",
 		MaxLevel = 3,
@@ -67,6 +74,7 @@ MetaUpgradeData.Upgrades = {
 	},
 	Growth = {
 		Id = "Growth",
+		Effect = { Format = "+%d%% XP", Per = 5 },
 		Name = "Growth",
 		Description = "+5% XP per level.",
 		MaxLevel = 3,
@@ -77,6 +85,7 @@ MetaUpgradeData.Upgrades = {
 	},
 	Revive = {
 		Id = "Revive",
+		Effect = { Format = "%d extra life per run", Per = 1 },
 		Name = "Revive",
 		Description = "One extra life every run.",
 		MaxLevel = 1,
@@ -88,6 +97,7 @@ MetaUpgradeData.Upgrades = {
 	},
 	Reroll = {
 		Id = "Reroll",
+		Effect = { Format = "%d level-up rerolls per run", Per = 2 },
 		Name = "Reroll",
 		Description = "+2 level-up rerolls every run per level.",
 		MaxLevel = 2,
@@ -99,6 +109,7 @@ MetaUpgradeData.Upgrades = {
 	},
 	Skip = {
 		Id = "Skip",
+		Effect = { Format = "%d level-up skips per run", Per = 5 },
 		Name = "Skip",
 		Description = "Skip up to 5 level-ups per run (each skip gives a little gold).",
 		MaxLevel = 1,
@@ -109,6 +120,18 @@ MetaUpgradeData.Upgrades = {
 		Color = Color3.fromRGB(200, 200, 200),
 	},
 }
+
+-- Total effect at a level in plain words ("+20 max HP"); "None yet" at level 0.
+function MetaUpgradeData.EffectText(upgradeId: string, level: number): string
+	local def = MetaUpgradeData.Upgrades[upgradeId]
+	if not def or not def.Effect then
+		return ""
+	end
+	if level <= 0 then
+		return "None yet"
+	end
+	return string.format(def.Effect.Format, def.Effect.Per * level)
+end
 
 -- Gold price of the next level, or nil when maxed.
 function MetaUpgradeData.CostOf(upgradeId: string, ownedLevel: number): number?

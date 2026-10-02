@@ -101,6 +101,14 @@ Theme.Rarity = {
 	Legendary = { Label = "Evolution", Color = Palette.gold_300, Band = Palette.gold_600 },
 }
 
+-- Run item rarities (ItemData): ivory commons, slate-blue uncommons, gold legendaries.
+-- Color = text / border, Band = the darker fill behind badges and tile rims.
+Theme.ItemRarity = {
+	Common = { Label = "Common", Color = Palette.ivory_200, Band = Palette.stone_600 },
+	Uncommon = { Label = "Uncommon", Color = Palette.slate_300, Band = Palette.slate_600 },
+	Legendary = { Label = "Legendary", Color = Palette.gold_300, Band = Palette.gold_700 },
+}
+
 ------------------------------------------------------------------------------------------
 -- GRADIENTS (UIGradient colour sequences)
 ------------------------------------------------------------------------------------------
@@ -198,6 +206,7 @@ Theme.Z = {
 	Hud = 1,
 	Lobby = 2,
 	Toast = 20,
+	Loot = 22, -- item popups, chest / shrine prompts
 	Chest = 25,
 	LevelUp = 30,
 	Pause = 40,

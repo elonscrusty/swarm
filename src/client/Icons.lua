@@ -17,7 +17,8 @@
 	item icons have designed colours from the palette. Passing opts.Color draws the icon in
 	one colour (disabled states, icons on the gold primary button).
 
-	Icons.Draw(parent, name, opts)    any icon by name ("gear", "Whip", ...)
+	Icons.Draw(parent, name, opts)    any icon by name ("gear", "Whip", "Whetstone", ...);
+	                                  run items use their ItemData id as the icon name
 	Icons.Upgrade(parent, id, opts)   upgrade icon: IconData picture if one is set, else the
 	                                  vector icon, else the IconData glyph letters
 	Icons.Character(parent, id, opts) class icon of a character (helmet, hat, hood, mitre)
@@ -322,6 +323,8 @@ type Colors = { Main: Color3, Accent: Color3, Extra: Color3? }
 
 local DEFAULT: { [string]: Colors } = {
 	coin = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_200 },
+	info = { Main = P.gold_400, Accent = P.ivory_100 },
+	warning = { Main = P.crimson_300, Accent = P.ivory_100 },
 	heart = { Main = P.crimson_400, Accent = P.crimson_600, Extra = P.crimson_300 },
 	gem = { Main = P.gold_300, Accent = P.gold_500, Extra = P.gold_200 },
 	trophy = { Main = P.gold_400, Accent = P.gold_600, Extra = P.gold_200 },
@@ -332,6 +335,8 @@ local DEFAULT: { [string]: Colors } = {
 	wizardHat = { Main = P.slate_400, Accent = P.gold_400, Extra = P.slate_300 },
 	hood = { Main = P.moss_400, Accent = P.crimson_500, Extra = P.moss_500 },
 	mitre = { Main = P.ivory_100, Accent = P.gold_400, Extra = P.ivory_300 },
+	featherCap = { Main = P.moss_400, Accent = P.ivory_200, Extra = P.leather_500 },
+	aim = { Main = P.moss_200, Accent = P.gold_300, Extra = P.moss_300 },
 	-- weapons
 	Whip = { Main = P.steel_200, Accent = P.gold_400, Extra = P.crimson_300 },
 	MagicOrb = { Main = ARCANE, Accent = ARCANE_LIGHT, Extra = P.fx_arcane },
@@ -341,6 +346,7 @@ local DEFAULT: { [string]: Colors } = {
 	Lightning = { Main = P.gold_300, Accent = P.amber_300, Extra = P.fx_bolt },
 	Axe = { Main = P.steel_300, Accent = P.wood_400, Extra = P.gold_400 },
 	Boomerang = { Main = P.wood_400, Accent = P.gold_300, Extra = P.wood_600 },
+	Longbow = { Main = P.wood_400, Accent = P.steel_200, Extra = P.ivory_200 },
 	-- evolutions
 	Bloodwhip = { Main = P.crimson_300, Accent = P.gold_300, Extra = P.crimson_400 },
 	TwinOrbs = { Main = ARCANE, Accent = ROSE, Extra = ARCANE_LIGHT },
@@ -350,6 +356,7 @@ local DEFAULT: { [string]: Colors } = {
 	ThunderLoop = { Main = P.gold_300, Accent = P.amber_300, Extra = P.fx_arcane },
 	DeathSpiral = { Main = P.crimson_400, Accent = P.steel_300, Extra = P.crimson_300 },
 	InfiniteReturn = { Main = TEAL, Accent = P.wood_400, Extra = P.gold_300 },
+	Windpiercer = { Main = P.moss_300, Accent = P.gold_300, Extra = P.moss_200 },
 	-- passives
 	Might = { Main = P.steel_200, Accent = P.crimson_400, Extra = P.gold_400 },
 	Armor = { Main = P.steel_300, Accent = P.gold_400, Extra = P.slate_500 },
@@ -363,11 +370,34 @@ local DEFAULT: { [string]: Colors } = {
 	Ammo = { Main = P.steel_200, Accent = P.gold_300, Extra = P.wood_400 },
 	Candle = { Main = P.ivory_200, Accent = P.fx_fire, Extra = P.gold_300 },
 	Growth = { Main = P.moss_300, Accent = P.dirt_500, Extra = P.moss_200 },
+	Fletching = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.wood_400 },
 	-- fallback cards and permanent upgrades
 	Gold = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_600 },
 	Heal = { Main = P.dirt_400, Accent = P.ivory_100, Extra = P.gold_300 },
 	revive = { Main = P.crimson_400, Accent = P.ivory_100, Extra = P.crimson_300 },
 	portal = { Main = P.stone_300, Accent = P.fx_arcane, Extra = P.gold_400 },
+	-- run items (ItemData) and loot
+	Whetstone = { Main = P.stone_400, Accent = P.gold_300, Extra = P.stone_200 },
+	QuickGloves = { Main = P.leather_500, Accent = P.gold_400, Extra = P.ivory_300 },
+	SwiftFeather = { Main = P.ivory_200, Accent = P.gold_400, Extra = P.slate_300 },
+	HeartyBread = { Main = P.gold_600, Accent = P.gold_800, Extra = P.gold_400 },
+	Bandage = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.ivory_400 },
+	Lodestone = { Main = P.stone_600, Accent = P.gold_300, Extra = P.stone_400 },
+	KeenLens = { Main = P.gold_400, Accent = P.gold_300, Extra = P.slate_300 },
+	HealingHerb = { Main = P.moss_300, Accent = P.crimson_400, Extra = P.moss_500 },
+	IronPlate = { Main = P.steel_400, Accent = P.gold_400, Extra = P.steel_300 },
+	BarbedMail = { Main = P.steel_400, Accent = P.crimson_400, Extra = P.steel_200 },
+	StormCharm = { Main = P.slate_600, Accent = P.gold_400, Extra = P.fx_bolt },
+	VolatileSpore = { Main = P.moss_400, Accent = P.fx_fire, Extra = P.moss_200 },
+	GuardianWard = { Main = P.slate_300, Accent = P.gold_400, Extra = P.slate_200 },
+	SpareQuiver = { Main = P.leather_500, Accent = P.steel_200, Extra = P.wood_400 },
+	MagnetTotem = { Main = P.wood_500, Accent = P.crimson_400, Extra = P.slate_300 },
+	HuntersEye = { Main = P.ivory_200, Accent = P.moss_400, Extra = P.crimson_300 },
+	PhoenixFeather = { Main = P.fx_fire, Accent = P.gold_300, Extra = P.ivory_100 },
+	CrownOfAges = { Main = P.gold_400, Accent = P.gold_600, Extra = P.crimson_400 },
+	SunMedallion = { Main = P.gold_300, Accent = P.gold_500, Extra = P.gold_700 },
+	shrine = { Main = P.stone_300, Accent = P.gold_400, Extra = P.stone_400 },
+	altar = { Main = P.stone_300, Accent = P.wood_400, Extra = P.wood_500 },
 }
 
 ------------------------------------------------------------------------------------------
@@ -703,6 +733,20 @@ DRAW.bag = function(c)
 	box(c, 12, 12.6, 16, 1.4, c.back, 0, 0, 0.4)
 end
 
+-- Information: a ring with an "i" (tips).
+DRAW.info = function(c)
+	ring(c, 12, 12, 8.6, 2.4, c.main)
+	dot(c, 12, 7.6, 1.6, c.accent)
+	box(c, 12, 13.8, 2.6, 6.8, c.accent, 0, 1.1)
+end
+
+-- Warning: a ring with an "!" (save problems, alerts).
+DRAW.warning = function(c)
+	ring(c, 12, 12, 8.6, 2.4, c.main)
+	box(c, 12, 10.2, 2.6, 7.4, c.accent, 0, 1.2)
+	dot(c, 12, 16.4, 1.6, c.accent)
+end
+
 DRAW.clock = function(c)
 	ring(c, 12, 12, 8.4, 2.4, c.main)
 	seg(c, 12, 12, 12, 7, 2.2, c.main)
@@ -884,7 +928,36 @@ DRAW.Boomerang = function(c)
 	arc(c, 9, 12.4, 12.4, 1.2, c.accent, 18.4, 1, 23.6, 23.6, 0.55)
 end
 
+-- Bow (limbs bulging left, string at x = 14) and an arrow across it toward +x.
+local function bow(c: Ctx, wood: Color3, str: Color3, arrowColor: Color3, head: Color3)
+	local pts = {}
+	for i = 0, 10 do
+		local t = i / 10
+		local a = math.pi * (0.5 + t) -- 90..270 degrees: the left half of an ellipse
+		table.insert(pts, V(14 + math.cos(a) * 9.4, 12 - math.sin(a) * 9.6))
+	end
+	line(c, pts, 2.4, wood)
+	seg(c, 14, 2.4, 14, 21.6, 0.7, str)
+	seg(c, 3.4, 12, 18.6, 12, 1.3, arrowColor)
+	box(c, 19.6, 12, 3.4, 3.4, head, 45, 0.3)
+	seg(c, 3.2, 12, 1.6, 9.6, 1, c.mono and arrowColor or P.crimson_400)
+	seg(c, 3.2, 12, 1.6, 14.4, 1, c.mono and arrowColor or P.crimson_400)
+end
+
+DRAW.Longbow = function(c)
+	bow(c, c.main, c.extra, c.mono and c.main or P.wood_500, c.accent)
+end
+
 -- Evolutions ----------------------------------------------------------------------------
+
+DRAW.Windpiercer = function(c)
+	for _, dy in ipairs({ -5.5, 5.5 }) do
+		seg(c, 6, 12 + dy * 0.4, 18.4, 12 + dy, 1, c.extra, 0.35)
+	end
+	bow(c, c.main, c.mono and c.main or P.ivory_100, c.main, c.accent)
+	dot(c, 21, 5.2, 1.2, c.extra)
+	dot(c, 21, 18.8, 1.2, c.extra)
+end
 
 DRAW.Bloodwhip = function(c)
 	arc(c, 15, 15, 10.4, 3, c.extra, 1, 1, 15, 15)
@@ -975,6 +1048,36 @@ DRAW.Might = function(c)
 end
 
 DRAW.Armor = DRAW.shield
+
+DRAW.Fletching = function(c)
+	-- a long feather (vane + spine) over an arrow shaft
+	box(c, 13, 10.6, 6.4, 15, c.main, 40, 3.2)
+	seg(c, 7.2, 17.6, 18.4, 4.2, 1, c.mono and c.back or c.extra)
+	if not c.mono then
+		seg(c, 11.6, 8.4, 15.2, 10.6, 0.7, c.accent)
+		seg(c, 9.4, 11, 13, 13.2, 0.7, c.accent)
+	end
+	seg(c, 4, 20.6, 8, 16.4, 1.6, c.mono and c.main or c.extra)
+end
+
+DRAW.featherCap = function(c)
+	-- the Ranger's peaked cap with a long feather
+	box(c, 11, 13.6, 14.8, 8.4, c.main, -10, 4)
+	box(c, 11.4, 18, 19, 2.6, c.mono and c.main or c.extra, -4, 1.3)
+	tri(c, 19.6, 15.6, 5, "right", c.main)
+	seg(c, 13, 11, 21.2, 3, 2.2, c.accent)
+	if not c.mono then
+		seg(c, 14.6, 9.4, 20.2, 3.8, 0.6, P.ivory_400)
+	end
+end
+
+DRAW.aim = function(c)
+	ring(c, 12, 12, 7.4, 1.8, c.main)
+	for _, d in ipairs({ { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } }) do
+		seg(c, 12 + d[1] * 5.6, 12 + d[2] * 5.6, 12 + d[1] * 10.4, 12 + d[2] * 10.4, 1.8, c.main)
+	end
+	dot(c, 12, 12, 2.2, c.accent)
+end
 DRAW.Heart = DRAW.heart
 DRAW.SpeedBoots = DRAW.boot
 DRAW.Cooldown = DRAW.hourglass
@@ -985,6 +1088,198 @@ DRAW.Luck = DRAW.clover
 DRAW.Ammo = DRAW.arrowFast
 DRAW.Candle = DRAW.candle
 DRAW.Growth = DRAW.sprout
+
+-- Run items (ItemData) and loot ---------------------------------------------------------
+
+DRAW.Whetstone = function(c)
+	box(c, 11.4, 14.6, 18, 6.6, c.main, -20, 2.2)
+	box(c, 10.8, 12.4, 14.6, 1.6, c.mono and c.main or c.extra, -20, 0.8)
+	box(c, 18.6, 5.4, 3.2, 3.2, c.accent, 45, 0.4)
+	box(c, 18.6, 5.4, 1, 6.4, c.accent, 0, 0.5)
+	box(c, 18.6, 5.4, 6.4, 1, c.accent, 0, 0.5)
+end
+
+DRAW.QuickGloves = function(c)
+	for _, x in ipairs({ 10.6, 13, 15.4, 17.8 }) do
+		box(c, x, 8.8, 2.1, 6, c.main, 0, 1.05)
+	end
+	box(c, 14.2, 14.6, 9.8, 8.6, c.main, 0, 2.4)
+	box(c, 9, 13.8, 2.4, 6, c.main, -38, 1.2)
+	box(c, 14.2, 20.2, 10.4, 2.8, c.accent, 0, 0.8)
+	box(c, 3.6, 9.4, 3.6, 1.3, c.mono and c.main or c.extra, 0, 0.65, 0.3)
+	box(c, 2.8, 13.4, 3.6, 1.3, c.mono and c.main or c.extra, 0, 0.65, 0.3)
+	box(c, 3.6, 17.4, 3.6, 1.3, c.mono and c.main or c.extra, 0, 0.65, 0.3)
+end
+
+DRAW.SwiftFeather = function(c)
+	box(c, 13.2, 10.6, 7.4, 16, c.main, 40, 3.7)
+	box(c, 15.6, 8.2, 2.6, 3, c.back, 40, 0.4, 0.2)
+	seg(c, 5, 20.4, 17.6, 5.2, 1.2, c.mono and c.main or c.accent)
+	box(c, 3.6, 7.6, 3.2, 1.2, c.mono and c.main or c.extra, 0, 0.6, 0.35)
+	box(c, 4.4, 11.4, 2.6, 1.2, c.mono and c.main or c.extra, 0, 0.6, 0.35)
+end
+
+DRAW.HeartyBread = function(c)
+	box(c, 12, 15.2, 19, 8.4, c.main, 0, 3.6)
+	box(c, 12, 11.6, 16, 8, c.mono and c.main or c.extra, 0, 4)
+	for _, x in ipairs({ 7.6, 12, 16.4 }) do
+		seg(c, x - 1.2, 13.4, x + 1.2, 9.6, 1.2, c.accent)
+	end
+end
+
+DRAW.Bandage = function(c)
+	box(c, 12, 12, 21, 7.8, c.main, -45, 3.9)
+	box(c, 12, 12, 7, 7, c.mono and c.dim or c.accent, -45, 1.2)
+	for _, p in ipairs({ { 6.4, 15.4 }, { 8.6, 17.6 }, { 15.4, 6.4 }, { 17.6, 8.6 } }) do
+		dot(c, p[1], p[2], 0.7, c.mono and c.back or c.extra)
+	end
+end
+
+DRAW.Lodestone = function(c)
+	box(c, 9.4, 15, 12, 9, c.main, 14, 2.6)
+	box(c, 8.4, 13, 7, 2.2, c.mono and c.main or c.extra, 14, 1)
+	box(c, 18.6, 6.4, 3.2, 3.2, c.accent, 45, 0.4)
+	box(c, 20.2, 12.6, 2.4, 2.4, c.accent, 45, 0.4)
+	arc(c, 9.4, 15, 8.6, 1.2, c.accent, 12, 2, 23, 12, 0.5)
+end
+
+DRAW.KeenLens = function(c)
+	dot(c, 10, 10, 6, c.mono and c.dim or c.extra, c.mono and 0 or 0.55)
+	ring(c, 10, 10, 6.4, 2.2, c.main)
+	box(c, 7.6, 7.6, 3.2, 1.4, P.ivory_100, -45, 0.7, 0.3)
+	curve(c, { V(14.6, 14.6), V(17.4, 15.6), V(18.6, 18.6), V(20.8, 21) }, 1.2, c.accent)
+end
+
+DRAW.HealingHerb = function(c)
+	seg(c, 12, 21.4, 12, 9, 1.6, c.mono and c.main or c.extra)
+	box(c, 8.2, 12.6, 7.4, 3.8, c.main, 30, 1.9)
+	box(c, 15.8, 10.2, 7.4, 3.8, c.main, -30, 1.9)
+	box(c, 12, 5.8, 3.8, 6.8, c.main, 0, 1.9)
+	dot(c, 7.6, 18.2, 1.8, c.accent)
+	dot(c, 16.6, 17, 1.8, c.accent)
+	box(c, 16.6, 4.2, 1.2, 4.4, c.accent, 0, 0.5)
+	box(c, 16.6, 4.2, 4.4, 1.2, c.accent, 0, 0.5)
+end
+
+DRAW.IronPlate = function(c)
+	box(c, 12, 12, 16.4, 18.4, c.main, 0, 3.4)
+	box(c, 12, 11, 12, 13, c.mono and c.dim or c.extra, 0, 2.2)
+	for _, p in ipairs({ { 6.6, 5.4 }, { 17.4, 5.4 }, { 6.6, 18.6 }, { 17.4, 18.6 } }) do
+		dot(c, p[1], p[2], 1.2, c.accent)
+	end
+end
+
+DRAW.BarbedMail = function(c)
+	tri(c, 12, 4.6, 4.8, "up", c.accent)
+	tri(c, 4.4, 12.4, 4.8, "left", c.accent)
+	tri(c, 19.6, 12.4, 4.8, "right", c.accent)
+	tri(c, 12, 19.8, 4.8, "down", c.accent)
+	box(c, 12, 12.2, 14.6, 14.6, c.main, 0, 3.4)
+	box(c, 12, 12.2, 1.6, 9, c.mono and c.back or c.extra, 0, 0.6)
+	box(c, 12, 12.2, 9, 1.6, c.mono and c.back or c.extra, 0, 0.6)
+end
+
+DRAW.StormCharm = function(c)
+	ring(c, 12, 4.2, 1.9, 1.3, c.accent)
+	dot(c, 12, 13.6, 7.4, c.accent)
+	dot(c, 12, 13.6, 5.8, c.mono and c.back or c.main)
+	line(c, { V(13.4, 9), V(10.4, 13.8), V(13.4, 13.8), V(10.6, 18.4) }, 1.7, c.mono and c.main or c.extra)
+end
+
+DRAW.VolatileSpore = function(c)
+	for k = 0, 7 do
+		local a = k / 8 * math.pi * 2
+		seg(c, 12 + math.cos(a) * 8.4, 12 + math.sin(a) * 8.4, 12 + math.cos(a) * 10.6, 12 + math.sin(a) * 10.6, 1.4, c.accent)
+	end
+	dot(c, 12, 12, 6.6, c.main)
+	dot(c, 9.6, 10.2, 1.4, c.mono and c.back or c.extra)
+	dot(c, 14.4, 11.2, 1.1, c.mono and c.back or c.extra)
+	dot(c, 11.4, 14.8, 1.2, c.mono and c.back or c.extra)
+end
+
+DRAW.GuardianWard = function(c)
+	dot(c, 12, 12, 9.6, c.main, c.mono and 0.6 or 0.7)
+	ring(c, 12, 12, 9.4, 1.6, c.main)
+	box(c, 12, 10.2, 8, 5.8, c.accent, 0, 1.4)
+	tri(c, 12, 12.6, 8, "down", c.accent)
+	box(c, 8.4, 6.6, 3.2, 1.2, P.ivory_100, -40, 0.6, 0.35)
+end
+
+DRAW.SpareQuiver = function(c)
+	for i, x in ipairs({ 9.4, 12.4, 15.4 }) do
+		local top = 2.8 + (i == 2 and 0 or 1.2)
+		seg(c, x, top + 2, x, 12, 1.1, c.mono and c.main or c.extra)
+		tri(c, x, top + 1.2, 3.2, "up", c.accent)
+	end
+	box(c, 12.4, 15.6, 9.8, 12, c.main, 8, 2.4)
+	box(c, 12.2, 11.2, 10.6, 2.2, c.accent, 8, 1)
+end
+
+DRAW.MagnetTotem = function(c)
+	ring(c, 12, 10, 9.8, 1, c.mono and c.main or c.extra, 0.55)
+	box(c, 12, 17.4, 6, 9.6, c.main, 0, 1.2)
+	box(c, 12, 21.6, 10, 2, c.main, 0, 1)
+	arc(c, 12, 8.6, 4.4, 3, c.accent, 6, 8.6, 18, 15)
+	box(c, 7.6, 6.4, 3, 4.4, c.accent)
+	box(c, 16.4, 6.4, 3, 4.4, c.accent)
+	box(c, 7.6, 3.6, 3, 1.6, c.mono and c.main or P.steel_200, 0, 0.3)
+	box(c, 16.4, 3.6, 3, 1.6, c.mono and c.main or P.steel_200, 0, 0.3)
+end
+
+DRAW.HuntersEye = function(c)
+	box(c, 12, 12, 13, 13, c.main, 45, 3)
+	dot(c, 12, 12, 4, c.accent)
+	dot(c, 12, 12, 1.8, c.back)
+	box(c, 12, 2.6, 1.4, 4, c.mono and c.main or c.extra, 0, 0.7)
+	box(c, 12, 21.4, 1.4, 4, c.mono and c.main or c.extra, 0, 0.7)
+	box(c, 2.6, 12, 4, 1.4, c.mono and c.main or c.extra, 0, 0.7)
+	box(c, 21.4, 12, 4, 1.4, c.mono and c.main or c.extra, 0, 0.7)
+end
+
+DRAW.PhoenixFeather = function(c)
+	drop(c, 12, 14.4, 6.6, c.main)
+	drop(c, 12, 16, 4.2, c.mono and c.back or c.accent)
+	drop(c, 12, 17.4, 2.2, c.mono and c.main or c.extra)
+	drop(c, 5.4, 14, 2, c.main)
+	drop(c, 18.6, 14, 2, c.main)
+	seg(c, 12, 19, 12, 22.4, 1.2, c.mono and c.main or c.accent)
+end
+
+DRAW.CrownOfAges = function(c)
+	DRAW.crown(c)
+	if not c.mono then
+		dot(c, 12, 15.4, 1.6, c.extra)
+	end
+end
+
+DRAW.SunMedallion = function(c)
+	for k = 0, 7 do
+		local a = k * 45
+		local r = math.rad(a)
+		box(c, 12 + math.cos(r) * 8.6, 12 + math.sin(r) * 8.6, 4, 2.6, c.accent, a, 1.3)
+	end
+	dot(c, 12, 12, 6.6, c.main)
+	ring(c, 12, 12, 4.4, 1.1, c.mono and c.back or c.extra)
+	dot(c, 12, 12, 1.6, c.mono and c.back or c.extra)
+end
+
+-- Loot on the map (prompts, toasts)
+DRAW.shrine = function(c)
+	box(c, 12, 20.4, 16, 3.4, c.main, 0, 0.8)
+	box(c, 12, 11.4, 9, 15, c.main, 0, 1.4)
+	box(c, 12, 10.6, 4.4, 4.4, c.mono and c.back or c.accent, 45, 0.5)
+	box(c, 12, 4.6, 7.4, 2, c.mono and c.main or c.extra, 0, 0.8)
+end
+
+DRAW.altar = function(c)
+	box(c, 12, 20.6, 21, 3, c.main, 0, 1)
+	box(c, 12, 17.4, 16, 3.4, c.main, 0, 0.8)
+	box(c, 12, 12.4, 11, 5.6, c.accent, 0, 0.8)
+	box(c, 12, 8.4, 11, 3.2, c.mono and c.main or c.extra, 0, 1.4)
+	box(c, 12, 11.4, 2.2, 2.6, c.mono and c.back or P.gold_300, 0, 0.4)
+	box(c, 3.4, 13, 2.4, 9, c.main, 0, 0.6)
+	box(c, 20.6, 13, 2.4, 9, c.main, 0, 0.6)
+end
 
 -- Fallback cards ------------------------------------------------------------------------
 
@@ -1129,7 +1424,7 @@ function Icons.Upgrade(parent: Instance?, id: string?, opts: Opts?): Frame
 	return f
 end
 
-local CHARACTER_ICONS = { Knight = "helmet", Mage = "wizardHat", Rogue = "hood", Priest = "mitre" }
+local CHARACTER_ICONS = { Knight = "helmet", Mage = "wizardHat", Rogue = "hood", Priest = "mitre", Ranger = "featherCap" }
 
 function Icons.CharacterIcon(characterId: string): string
 	return CHARACTER_ICONS[characterId] or "person"

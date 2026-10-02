@@ -17,8 +17,8 @@ Models come from two places:
   cash out with a win. The lobby is a full-screen menu with three modes:
   **Solo** (starts at once), **Duo** (2 players) and **Trio** (3 players). In Duo and Trio
   you revive a fallen teammate by standing next to them for 3 s (see §10).
-- 8 weapons (8 levels + evolution each), 12 passives, 6 enemy types + elites + boss.
-- 4 characters, permanent gold upgrades, gamepasses, developer products, cosmetic skins.
+- 9 weapons (8 levels + evolution each, 5 of them with a behaviour perk), 13 passives, 7 enemy types with clear roles + elites with affixes + the Scorpion Queen encounter.
+- 5 characters (the Ranger is earned through an achievement), 12 achievements, permanent gold upgrades, gamepasses, developer products, cosmetic skins.
 - Mobile first: a floating thumbstick is the only control during a run.
 
 ## Gameplay loop
@@ -40,7 +40,7 @@ Models come from two places:
    chests and chickens left on the floor when the group travels are collected for them.
 5. **The portal opens**: leftovers burn up, the gems fly to you, and each living player
    picks **NEXT STAGE** or **RETURN TO LOBBY** (15 s, undecided = next stage).
-   * Return = that player's run ends at once: `WinBonus` + `StageClearBonus` per stage
+   * Return = that player's run ends at once: `WinBonus` (100) + `StageClearBonus` (150) per stage
      cleared, best time / furthest stage saved, results over the lobby menu. It counts as a
      WIN (Stats.Wins) only with `Config.Stages.WinMinStages` (3) stages cleared.
    * Reaching stage 2 unlocks Ruins in the lobby (`Config.Arenas.<name>.RequiredBestStage`).
@@ -53,6 +53,232 @@ Models come from two places:
 Code: `StageManager.lua` (server, the loop and the portal), `RunManager.lua` (players,
 results, travel), `MapBuilder.FindPortalSpot / BuildPortal`, client `StageUI.lua` (arrow,
 charge ring, choice panel, travel fade) and the stage pill in `Hud.lua`.
+
+## Exploration loot: items, chests, shrines, the guarded altar
+
+Every stage scatters loot over the map (new spots each stage, never in the spawn
+clearing, away from the portal and each other; all of it is removed on travel and when the
+run ends). Code: `LootSystem.lua` (server), `ItemSystem.lua` (server), `ItemData.lua`
+(shared), client `LootUI.lua`; numbers in `Config.Items / Chests / Shrines / Guarded`.
+
+* **Chests** (10-14 small, 2-3 large, 1 golden): stand next to one and **hold E** (gamepad X,
+  or press and hold the HOLD button on a phone). It costs **run gold** and gives one item.
+  Price = 25 / 60 / 150 x stage^1.2 (stage 2: 57 / 138 / 345), x your gold multiplier
+  (gamepass owners earn more, so they pay the same share: passes never buy items).
+  Small: 80% common, 19% uncommon, 1% legendary; large: uncommon or 20% legendary;
+  golden: legendary. Luck raises the better odds.
+* **Shrine of Chance** (1-2 per stage, gold sigil): pay gold (15 x stage^1.2, +20% per try)
+  for a 50% chance of an item (55% common, 38% uncommon, 7% legendary); dark after 2 items
+  or 6 tries.
+* **Bargain Shrine** (1 per stage, crimson): free, once per stage, the prompt shows both
+  sides first: the whole team gets **+25% damage and +30% gold**, the swarm gets **+20% HP**
+  (enemies that spawn afterwards and the Queen) until the next stage. A HUD chip shows it.
+* **Guarded Altar** (1 per stage, at least 90 studs out): a free rare chest. It wakes when a
+  player comes within 24 studs: 2 + stage + (players - 1) elite guards (max 8) climb out
+  around it. When they are all dead it unlocks; opening it gives **every living teammate**
+  an item (75% uncommon, 25% legendary). Guards drop gems, not elite chests. States show in
+  the world and on a floating marker: dormant / guards left / unguarded / claimed. If the
+  guards are swept away (the Queen's arrival, the portal), it goes dormant again and only
+  the guards that were not killed come back.
+* **Run gold**: the HUD coin counter is gold this run has banked (it goes into your save the
+  moment it is earned). Chests and shrines spend it and take the same amount back out of
+  the save, so a run can only spend what it earned; older savings are never touched. The
+  results screen shows the gold you took home and the items you found.
+
+**Items** (19, stacking, kept across stages, lost when the run ends; ivory common,
+slate-blue uncommon, gold legendary). "Linear" = every copy adds the same, "hyperbolic" =
+1 - 1/(1 + k x copies), so it never reaches 100%.
+
+| Item | Rarity | Effect (per stack) | Stacking |
+|---|---|---|---|
+| Whetstone | Common | +10% damage | linear |
+| Quick Gloves | Common | +6% attack speed | linear |
+| Swift Feather | Common | +5% move speed (total move speed capped at 2.2x) | linear |
+| Hearty Bread | Common | +15 max HP | linear |
+| Bandage Roll | Common | 1 HP/s regeneration | linear |
+| Lodestone | Common | +20% pickup radius | linear |
+| Keen Lens | Common | +5% crit chance (crits deal x2; total chance max 60%) | linear |
+| Healing Herb | Common | kills have ~5% chance to heal 3 HP | hyperbolic k = 0.05 |
+| Iron Plate | Uncommon | take less damage (6% / 15% at 3 / 38% at 10) | hyperbolic k = 0.06 |
+| Barbed Mail | Uncommon | when hit: 150% (+100%/stack) of max(half the raw hit, damage taken) to enemies within 8 studs, every 0.5 s at most | linear |
+| Storm Charm | Uncommon | ~10% of hits chain lightning to 3 (+1/stack, max 5) enemies for 40% (0.2 s cooldown) | chance hyperbolic k = 0.11 |
+| Volatile Spore | Uncommon | 20% of kills explode for 60% (+30%/stack) of the enemy's max HP (bosses: at most 5% of theirs) | linear |
+| Guardian Ward | Uncommon | shield of 8% max HP after 5 s unhurt (max 40%) | linear, capped |
+| Spare Quiver | Uncommon | every 6th attack of each weapon +1 projectile (not Garlic; 1 sooner per stack, best every 2nd) | special |
+| Magnet Totem | Uncommon | pull gems within 45 studs every 10 s (-2 s, +10 studs per stack, min 4 s) | special |
+| Hunter's Eye | Uncommon | +30% crit damage, +3% crit chance | linear |
+| Phoenix Feather | Legendary | rise again at 50% HP when you fall (used up) | one life per copy, hold at most 2 (a 3rd re-rolls into another legendary) |
+| Crown of Ages | Legendary | +12% damage, +8% attack speed, +8% move speed, +10% max HP | linear |
+| Sun Medallion | Legendary | +18% damage, +12% area, +12% duration | linear |
+
+Procs never crit and never trigger other procs; their cooldowns are in `Config.Items`.
+Models: `blender/models/loot.py` (Chest_Small / Chest_Large / Chest_Golden, category Loot,
+not uploaded yet: part-built fallbacks in `LootSystem.lua` until then), the event models
+Guard_Altar and Shrine_Bargain (category Events) and the World Shrine.
+DEV panel: "+3 random items", "+300 gold".
+
+## Enemies, pacing and the Scorpion Queen
+
+Code: `EnemyData.lua` (roster, spawn table), `BossData.lua` (boss encounters, data only),
+server `EnemySpawner.lua` (spawning, pacing, affixes, damage), `EnemyAI.lua` (movement and
+behaviours), `BossAI.lua` (runs a BossData entry), `Hazards.lua` (ground strikes, fire
+patches), `Fx.lua` (`Fx.Warn`: every telegraph is one batched entry), client
+`Telegraphs.lua` (all floor warnings) and `EnemyRenderer.lua` (poses, auras, emerge).
+Every attack follows the same rhythm: **anticipation** (a pose) → **telegraph** (a shape on
+the floor that shows exactly where it hits) → **active** (the damage, once, at the end of
+the telegraph, decided by the server) → **recovery** (a pause where the attacker can be
+hit). Telegraphs are shape-coded (filled growing circles, lanes with edge lines and
+chevrons, spokes with gaps, a dashed ring + crosshair for acid, a blinking double ring for
+a bomb, inward ticks for the burrow) in the crimson / amber family over a dark outline,
+just above the ground and under every character.
+
+### Roster (HP / damage at minute 0, stage 1, solo; both grow per minute / stage / player)
+
+| Enemy (id) | Role | HP | Speed | Contact dmg | Attack | Rewards | First seen |
+|---|---|---|---|---|---|---|---|
+| Mite (Slime) | basic melee, the standard threat | 8 | 7 | 5 | - | gem (95% small) | 0:00 |
+| Wasp (Bat) | fast and fragile, wobbles in, keeps you moving | 5 | 13 | 4 | - | gem 90% | 0:00 |
+| Beetle Warrior (Skeleton) | armoured grunt, the Queen's summons | 20 | 9 | 8 | - | gem (20% medium) | 1:00 |
+| Phase Moth (Ghost) | flanker, flies through walls | 15 | 10.5 | 7 | - | gem (15% medium) | 3:00 |
+| Spitter (new) | ranged: keeps 22-30 studs away | 14 | 8.5 | 4 | acid glob 12 dmg, 4.5 splash; 0.7 s wind-up + 1.05 s flight, every 3.2 s | gem (25% medium) | 4:00 |
+| Bomb Tick (Bomber) | suicide bomber | 12 | 11.5 | 0 | stops next to you, 0.7 s fuse, 22 dmg in 8 studs | gem (30% medium) | 4:00 |
+| Rhino Beetle (Brute) | slow and durable, blocks paths | 90 | 6 | 16 | 0.65 s rear-up + lane, 0.45 s lunge (13.5 studs), 0.8 s recovery, every 4.5 s | gem (30% large) | 5:00 |
+| Scorpion Queen (Boss) | the stage boss at the portal | 9000 x stage share | 8 | 30 | see below | 200 gold each + 12 large gems + the surge | portal |
+
+Spawn: enemies climb out of the ground (0.35 s, dust puff) and can't hurt anyone for
+`Config.Enemies.SpawnGrace` (0.45 s). Death: the same creature-coloured poof for everyone.
+The first time a type spawns in a run it comes as a small group with one callout toast
+("New: Spitter - dodge the acid"). Targeting only ever picks living players, so deaths,
+revives and players leaving never leave an enemy aiming at nobody.
+
+### Elites (Config.Enemies.EliteAffixes / Affix)
+
+Elites stay big, gold-tinted, crowned, x5 HP, x1.5 damage and drop a chest (15-40 + 15 gold,
+x(1 + 0.25 x (stage - 1))), and each gets
+**exactly one** affix, shown by its aura (`EliteAura_*` models, part ring until uploaded)
+and a small tag over the crown:
+* **Swift**: x1.45 speed, wind streaks spiral around it.
+* **Shielded**: three orbiting plates soak the first 40% of its max HP, then shatter.
+* **Burning**: a ring of flames; while it walks it drops a fire patch every 0.8 s (max 5):
+  the patch glows harmless for 0.5 s, then burns 3.2 s (6 dmg every 0.5 s to whoever stands
+  in it). Patches are only left behind it, so they never stack into unavoidable damage.
+
+### Pacing curve (Config.Pacing)
+
+* **Calm**: the first 6 s of a run and the first 10 s of every new stage (after the Queen's
+  surge and the travel) spawn at 35% of the normal live target.
+* **Build-up**: between mini-waves the live target climbs from 85% to 110%.
+* **Mini-wave** every 30 s while exploring (a ring of one type, never Spitters), then a **lull**: 8 s at
+  55% of the target, so once the wave is beaten there is a short recovery.
+* **Introductions**: Beetle Warrior 1:00, Phase Moth 3:00, Spitter and Bomb Tick 4:00
+  (Spitter weight 4 → 12 by 12:00, at most 12 alive: `Config.Enemies.MaxLiveRanged`), Rhino
+  5:00, each with its callout.
+* **Elites**: a scheduled, announced elite at 2:30 run time and every 2:45 after
+  ("An elite Shielded Rhino Beetle hunts you!"), random elites (1 in 80 spawns) only
+  after 1:00. An elite Bomb Tick's blast is x1.4 wider (12 studs) with a 1.0 s fuse.
+* **Boss milestone**: the portal (dormant 2:30 on stage 1) summons the Queen; the crowd
+  drops to half (15-60) during the fight; the surge follows her death.
+
+### The Scorpion Queen (BossData.Bosses.ScorpionQueen)
+
+* **Entrance** 2.5 s: she rises out of the ground behind the portal (dust ring, a short
+  shake, roar), invulnerable and harmless; the boss bar fills with her name. Then 2 s of
+  walking with no attack.
+* **Health display**: name, bar, a notch at 50% (the phase marker).
+* **Cycle** (3 s chase between attacks): Charge → Venom Burst → Stinger Ring → Burrow →
+  Summon → ...
+  | Attack | Anticipation | Telegraph | Active | Recovery |
+  |---|---|---|---|---|
+  | Charge (directional) | crouches, trembles | 1.0 s lane (12 wide, 63 long) filling toward its end, chevrons | 0.9 s rush at 70 studs/s, contact 30 | 1.3 s dizzy (stars), harmless to touch |
+  | Venom Burst (area) | claws up 0.5 s | 3 circles (+1 per extra player, max 5, r 6) under / near players fill over 1.1 s | erupt: 24 dmg | 0.9 s |
+  | Stinger Ring (pressure) | tail raises and glows 0.9 s | spokes for every stinger lane, 3 safe gaps of 54° | 2 waves (0.55 s apart) of 11 stingers, 15 dmg | 1.0 s |
+  | Burrow (repositioning) | sinks 0.7 s | dust trail follows one player 2 s (19 studs/s; she is invulnerable and untargetable), then the circle (r 7.5) stays put 0.8 s | erupts: 28 dmg | 1.1 s dizzy |
+  | Summon | raises up 1.1 s | 6 eggs wobble and crack around her | 6 Beetle Warriors fade in | - |
+* **Phase 2** below 50%: a 1.4 s roar ("THE QUEEN IS ENRAGED!"), chase / recovery 30%
+  shorter (telegraphs keep their length) and one twist: every Charge is a **double charge**
+  (a second 0.8 s lane re-aimed at the nearest player right after the first).
+* **Defeat**: a 1.5 s collapse (every Queen hazard, telegraph and stinger is removed at
+  once, no slow motion), then the rewards and the existing surge. Damage after 0 HP is
+  ignored (no double kill). Travel and the end of a run clear every hazard, projectile and
+  telegraph (`Fx.ClearWarn(0)`).
+* Party scaling is unchanged (`Config.Boss.HPPerExtraPlayer`, `Config.Stages.BossHPByStage`);
+  extra players add Venom Burst circles.
+
+## Level-ups, characters, achievements
+
+**Level-up cards** (LevelUpSystem → UIBuilder): every card says exactly what changes with real
+numbers, current → next: weapons from their stat rows ("Damage 10 → 15", "Arrows 1 → 2",
+"Cooldown 1.35s → 1.30s"), passives from the player's real stat sheet ("Max HP 144 → 168",
+"Damage +20% → +30%"). The rank line reads "LV 3 → 4 / 8" or NEW / EVOLUTION; the rarity band
+(Theme.Rarity) stays on top. From weapon level 6 a card says what it evolves with ("Evolves at
+Lv 8 with Heart (owned)"); the passive an owned weapon needs says so too and is 1.5x likelier.
+Rules: never past a max level (weapons 8, passives `MaxLevelOf`), evolutions only at max level
+with the passive owned, and never a passive that changes nothing for the build (Ammo with only
+melee weapons) unless it evolves a weapon you own. REROLL / SKIP show what is left this run and
+what they do ("2 left · 3 new cards", "SKIP +10 GOLD · 1 left"); with none bought they say
+"Buy rerolls in Upgrades".
+
+Passive levels were merged into meaningful steps (same totals at max): Speed Boots 4 x 10%,
+Cooldown 4 levels (8/15/22/30%), Area 4 levels (12/25/37/50%), Duplicator 3 x +1 (it had two
+empty levels), Vacuum 3 x 50%, Luck 15/30/50%, Ammo 15/30/50% + 1 projectile, Candle
+15/30/50%, Growth 12/25/40%. New passive **Fletching** (3 levels, +1 pierce each) for
+projectiles that stop on a hit; it evolves the Longbow.
+
+**Weapon perks** (behaviour changes at a level, kept when evolved):
+
+| Weapon | Level | Perk |
+|---|---|---|
+| Whip | 6 | Riposte: every 3rd attack the forehand cut covers the full circle |
+| Magic Orb | 5 | Splitting Orbs: an orb's first kill splits off 2 small orbs (half damage) |
+| Throwing Knives | 4 | Ricochet: a knife that would stop bounces once to the nearest enemy (20 studs) |
+| Garlic Aura | 4 | Chilling Aura: non-boss enemies inside move 25% slower |
+| Longbow | 6 | Volley: every 3rd shot adds 2 arrows at ±12° |
+
+**Characters** (CharacterData: Trait, Strengths, Tradeoff, Unlock), shown on CHARACTERS:
+
+| Character | Starts with | Trait | Tradeoff | Unlock |
+|---|---|---|---|---|
+| Knight | Whip | Iron Skin: -10% damage taken | short reach (~7 studs) | free |
+| Mage | Magic Orb | Arcane Reach: +10% area | fragile, orbs stop at the first enemy early | 500 gold |
+| Rogue | Throwing Knives | Fleet Foot: +15% speed | knives only fly where you move | 1,000 gold |
+| Priest | Garlic Aura | Blessed: +20% max HP | no reach | 1,500 gold |
+| Ranger | Longbow | Steady Aim: stand still 0.8 s for +30% Longbow damage (+10% other weapons) until you move | slow shots, one direction, bonus needs standing still | achievement Queen Slayer |
+
+**Longbow** (Ranger's weapon, also a normal weapon card for everyone): heavy arrows in the
+movement direction (at the nearest enemy while standing still), range ≈ 90-125 studs, pierce
+2 → 5. Damage 18 → 42, cooldown 1.70 → 1.40 s, 1 → 2 arrows. Per-target DPS L1 10.6, L8 60
+(≈ 80 with Volley), evolution **Windpiercer** (needs Fletching): 52 damage, 1.25 s, unlimited
+pierce, a 4-arrow volley every shot (≈ 166). Projectile mesh `Shot_Arrow` (part-built arrow
+until it loads); hero mesh `Ranger` (part-built fallback with longbow and quiver). The HUD
+shows a buff chip over the ability bar: "STAND STILL TO AIM" / "STEADY AIM +30% DAMAGE".
+
+**Achievements** (server-authoritative: AchievementService + AchievementData; game systems only
+fire bus events: RunManager BossKilled / RunWon / PartnerRevive, StageManager StageCleared /
+OptionalEvent (Bargain), LootSystem GoldenChest / OptionalEvent (altar); run time and level are
+polled once a second). A toast shows the unlock in the run; the results screen lists the run's
+unlocks; STATS → ACHIEVEMENTS shows progress bars and lets you wear earned titles and name
+colours (lobby nameplate, above the hero name).
+
+| Achievement | Goal | Reward |
+|---|---|---|
+| Hold the Line | survive 5:00 in one run | 100 gold |
+| Unbroken | survive 10:00 in one run | 250 gold, title Unbroken |
+| Queen Slayer | defeat the Scorpion Queen | **unlocks the Ranger**, 150 gold |
+| Conqueror | clear stage 3 and leave through the portal (a win) | 400 gold, title, Gold name colour |
+| Daredevil | open a Guarded Altar or clear a stage under a Bargain | 150 gold, title, Crimson name colour |
+| Knight's Oath / Arcane Mastery / Shadow Run / Holy Light | clear a stage as Knight / Mage / Rogue / Priest | 100 gold each (+ Arcane / Ivory colour for Mage / Priest) |
+| Lifesaver | revive teammates 3 times (total) | 200 gold, title, Moss name colour |
+| Veteran | reach level 30 in one run | 200 gold, title Veteran |
+| Golden Touch | open a Golden Chest | 100 gold, title Treasure Hunter |
+
+Save schema 4 (DataService migration 3 → 4): `Achievements = { Progress, Unlocked }`, `Title`,
+`NameColor`, all starting empty; gold, owned characters, skins and stats are untouched.
+
+**Permanent upgrades** (UPGRADES → PERMANENT): each row shows the rank (LV 2/5), pips, NOW and
+NEXT effect in plain words (MetaUpgradeData `Effect`), BUY with the price (gold button when
+affordable, "Need N more gold" when not) or MAXED. A tap shows BUYING... until the server's
+ProfileSync; `BuyMeta` carries the level the player saw, so a double tap buys one level, and a
+rejected purchase re-syncs the real gold.
 
 ## 1. Sync with Rojo
 
@@ -77,10 +303,15 @@ Studio setup for saving:
 default.project.json
 src/shared/   → ReplicatedStorage.Shared
   Config.lua            every tunable number
-  WeaponData.lua        8 weapons x 8 levels + evolutions + projectile visuals
-  PassiveData.lua       12 passives x 5 levels
-  EnemyData.lua         enemy types + per-minute spawn table
-  CharacterData.lua     4 characters + 13 skins
+  WeaponData.lua        9 weapons x 8 levels + evolutions + perks + projectile visuals,
+                        card lines ("Damage 10 → 15") and which stats each behaviour uses
+  PassiveData.lua       13 passives x 3-5 levels (PassiveData.MaxLevelOf)
+  StatSheet.lua         the run stat sheet as a pure function + card lines for passives
+  AchievementData.lua   12 achievements: event, goal, reward; titles / name colours
+  EnemyData.lua         enemy types (roles, behaviours) + per-minute spawn table
+  BossData.lua          boss encounters: entrance, phases, attack timings (data only)
+  CharacterData.lua     5 characters (trait, strengths, tradeoff, unlock) + 13 skins
+  ItemData.lua          19 run items (rarity, text, stacking, stat bonus), item rolls, prices
   MetaUpgradeData.lua   lobby shop upgrades
   IconData.lua          upgrade icon pictures (weapon / evolution / passive id → asset id)
   Remotes.lua           creates/gets ReplicatedStorage.Remotes (server creates them at boot)
@@ -91,12 +322,20 @@ src/server/
                         portal wins, travel between stages
     StageManager.lua    the stage loop: portal, charge, Queen, surge, NEXT / RETURN, travel
     EnemySpawner.lua    enemy pool, spawning, damage, deaths, drops, boss spawn
-    EnemyAI.lua         batched movement, obstacle raycasts, contact damage, boss patterns
+    EnemyAI.lua         batched movement, obstacle raycasts, contact damage, behaviours
+                        (ranged wind-up, lunge, fuse, burning patches)
+    BossAI.lua          runs a BossData encounter (entrance, attacks, phases, collapse)
+    Hazards.lua         delayed ground strikes and fire patches (server-decided damage)
     WeaponSystem.lua    all weapons, projectile simulation, hit detection, sync batches
     XPSystem.lua        XP gems (pooled), shared XP, floor pickups, chests
     LevelUpSystem.lua   stat sheet, level-up cards, reroll/skip, evolutions, chest rewards
-    GoldSystem.lua      run gold, lobby purchases (characters, skins, meta), settings
+    GoldSystem.lua      run gold (earning, spending at chests), lobby purchases, settings
+    ItemSystem.lua      run items: grant / roll, stat bonus, crits and item procs
+    LootSystem.lua      chests, Shrine of Chance, Bargain Shrine, guarded altar per stage
     DataService.lua     DataStore with session locking, retry, autosave, migration
+                        (schema 4: achievements, title, name colour)
+    Events.lua          tiny server event bus (Fire / On) for achievements
+    AchievementService.lua  achievement progress, unlocks, rewards, EquipCosmetic
     MonetizationService.lua  gamepasses, developer products, ProcessReceipt
     MapBuilder.lua      castle lobby (+ MenuCamera shot), Forest + Ruins arenas, lighting,
                         the stage portal (spot, model, beam, rune circle, state colours)
@@ -107,12 +346,15 @@ src/client/   → StarterPlayerScripts.SwarmClient
   ClientMain.client.lua starts everything, music, VIP chat tag
   CameraController.lua  fixed-angle follow camera (+ spectate when dead)
   MobileControls.lua    floating thumbstick, WASD, gamepad
+  Telegraphs.lua        every enemy floor warning (circles, lanes, spokes, acid globs, eggs,
+                        fire patches, impact bursts), pooled, from the FxBatch "w" / "x" keys
   VFX.lua               projectile rendering + spin/trails/impacts, sword swings, effects, gem/pickup
                         bob, aura rings, HP bars, walk cycle + attack poses
   ModelLibrary.lua      detailed animated 3D models for every enemy, the boss and every projectile
   EnemyRenderer.lua     draws those models on the server's enemy bodies (client only)
   UIBuilder.lua         in-run screens (HUD + upgrade bar, level-up, pause, results), scaling
   StageUI.lua           portal arrow, charge ring, NEXT STAGE / RETURN TO LOBBY panel, travel fade
+  LootUI.lua            items strip, item popups, chest / shrine / altar prompts, items list
   LobbyScreen.lua       the 2D lobby menu: home, characters, upgrades (§10)
   ViewportPreview.lua   turning 3D character previews (ViewportFrames)
   DevPanel.lua          DEV button, Studio only by default (§10)
@@ -145,9 +387,10 @@ Purchases are cosmetic or convenience (gold and skins). There are no loot boxes.
 | More / fewer enemies | `EnemyData.SpawnTable[minute].Target`, `Config.Difficulty.PlayerCountMult` |
 | Tougher enemies over time | `Config.Difficulty.HPPerMinute`, `DamagePerMinute`, `SpeedPerMinute`, `MaxTier` |
 | Bigger mini-waves | `Config.Spawn.MiniWaveBaseCount`, `MiniWavePerMinute`, `Config.Run.MiniWaveInterval` |
-| Enemy cap (performance) | `Config.Enemies.MaxLive` (≤ `PoolSize`) |
-| Elites | `Config.Enemies.EliteChance`, `EliteHPMult`, `EliteSizeMult` |
-| Boss | `Config.Boss.*` (HP, attack timings, projectile count), `Config.Stages.BossHPByStage` |
+| Enemy cap (performance) | `Config.Enemies.MaxLive` (≤ `PoolSize`), `MaxLiveRanged` (Spitters) |
+| Elites | `Config.Enemies.EliteChance`, `EliteHPMult`, `EliteSizeMult`, `EliteBlastMult`, `EliteFuse`, `EliteAffixes`, `Affix`; chest gold `Config.Gold.Elite`, `EliteStageScale` |
+| Pacing (calm, lulls, build-up, elites) | `Config.Pacing` |
+| Boss | `Config.Boss` (HP, crowd), `BossData.lua` (entrance, phases, attack timings), `Config.Stages.BossHPByStage` |
 | Stage difficulty | `Config.Stages.EnemyHPPerStage`, `EnemyDamagePerStage`, `SpawnTargetPerStage` |
 | Portal | `Config.Stages.PortalMinDistance`, `PortalRadius`, `ChargeSeconds`, `PortalLockSeconds`, `HintAfterSeconds` |
 | Queen fight crowd | `Config.Stages.BossMinionShare`, `BossMinionMin`, `Config.Boss.MinionCapDuringBoss` |
@@ -158,6 +401,9 @@ Purchases are cosmetic or convenience (gold and skins). There are no loot boxes.
 | Player survivability | `Config.Player.BaseMaxHP`, `ReviveHPFraction` |
 | Run length | the players decide (portal); `Config.Run.BossTime` is no longer used |
 | Camera | `Config.Camera.RunDistance`, `Pitch` |
+| Items | `ItemData.lua` (per-stack values), `Config.Items` (crits, proc numbers and cooldowns) |
+| Chests | `Config.Chests` (counts, `Cost`, `CostExponent`, `Weights`, `HoldSeconds`, spacing) |
+| Shrines / altar | `Config.Shrines` (Chance price / odds, Bargain numbers), `Config.Guarded` (guard count, wake radius) |
 
 ## 5. Adding a weapon
 
@@ -170,14 +416,23 @@ Purchases are cosmetic or convenience (gold and skins). There are no loot boxes.
 3. `WeaponSystem.lua`: write `Fire.<Behavior>(rp, w, s, def)` where `Behavior` matches the entry.
    Use `allocProjectile()` for projectiles (pick an existing `Kind`: Straight, Homing, Arc, Lob,
    Orbit, Boomerang) or damage directly with `hitEnemy` after a `grid():QueryCircle` lookup.
-   Level-up card text is generated from the row differences automatically.
+   Level-up card text is generated from the row differences automatically ("Damage 10 → 15"):
+   list the stats the behaviour really uses in `WeaponData.StatUse[Behavior]` (unused stats are
+   never shown, and passives that only touch unused stats are not offered), and name the amount
+   with `AmountLabel` ("Arrows"). A behaviour change at a level goes in `Perks` and is checked
+   with `WeaponData.HasPerk(w, id)`.
 
 ## 6. Adding an enemy
 
 1. `EnemyData.lua`: add an entry to `Enemies` (HP, Speed, Damage, Radius, Size, Shape/Mesh, Color,
-   Gem weights, flags like `Ghost`, `Erratic`, `Explode`).
+   Gem weights, `Role`, `Intro` (the first-appearance callout), flags like `Ghost`, `Erratic`,
+   `Explode` + `Fuse`, and optional behaviours `Ranged` / `Lunge` (EnemyAI)).
 2. Give it weight in the `SpawnTable` rows for the minutes it should appear.
-That's all: pooling, movement, elites, drops and hit flashes work for every type.
+3. Client look: a mesh name in `ModelLibrary` `ENEMY_MESH` and a part-built fallback in
+   `ENEMIES` (+ `LOOKS`, `EnemyRenderer` `PLAIN`); poses for its `Act` values in
+   `EnemyRenderer.actPose`.
+That's all: pooling, movement, elites, affixes, drops and hit flashes work for every type.
+A new boss is a `BossData` entry (and `Config.Boss.Id`); new attack moves go in `BossAI`.
 
 ## 7. How the performance budget is met
 
@@ -196,10 +451,34 @@ call on them.
 
 ## 8. Audio
 
-`Config.Sounds` uses sounds that ship with every Roblox client (`rbxasset://sounds/...`) for
-effects. Music entries are empty: pick free licensed tracks in the Creator Store (Audio,
-filter by creator "Roblox"), and paste `rbxassetid://<id>` into `LobbyMusic`, `BattleMusic`
-and `BossMusic`.
+Client `Audio.lua` plays `Config.Sounds` with the mixing rules in `Config.Audio`:
+
+- **Categories** (each its own SoundGroup under the Effects group): Combat (hits, deaths,
+  lightning, explosions), Pickup (gems, chests, items, shrines), UI (clicks, toggles, tips,
+  victory), Player (your swing / throw, hurt, level-up, revive, death), Warning (Bomb Tick
+  fuse ticks, Spitter wind-up, Rhino lunge scrape), Boss (the Queen's roar, attacks,
+  summons).
+- **Priorities and limits**: at most `Config.Audio.MaxVoices` (14) effects at once and a
+  per-category voice limit. A full category or mix lets a higher-priority sound steal the
+  oldest lower-priority voice; lower ones are dropped. Warnings and the Queen outrank
+  combat noise, and while one plays the Combat group ducks to 45% for half a second.
+- **Per sound**: `MinGap` (the same sound can't restart faster), `Pitch` / `PitchVar`
+  (random +/- variation), `World = true` (3D at the warning's floor spot: full volume near
+  the hero, quieter far away; `Config.Audio.World` sets the roll-off).
+- **Cues**: your melee swing and thrown / cast projectiles (local hero only), hit and
+  death crunches (batched), gem pickups, level-up, revive, the Bomb Tick fuse (three
+  ticks rising to the blast, timed to the real fuse), the Spitter wind-up, lunges and the
+  Queen's telegraphs (VFX plays them for every new `Fx.Warn` entry), button clicks and
+  toggles. Leaving a run stops every effect (no stray fuse ticks in the menu).
+- Every effect uses a sound that ships with Roblox (`rbxasset://sounds/...`), no invented
+  asset ids. To swap one for licensed audio, put `rbxassetid://<id>` in its `Id`.
+- **Music slots**: `LobbyMusic` (menu), `BattleMusic` (a run), `BossMusic` (while the
+  Queen's bar shows; `ClientMain` switches them). They are empty (silent) on purpose. To
+  fill one: find a track you may use (Creator Store → Audio, e.g. Roblox's own free
+  music, or upload your own), copy its id and set `Id = "rbxassetid://<id>"`; `Volume`
+  sets its level under the Music slider.
+- **Volumes**: Music and Effects sliders (Settings / pause menu) are saved in the profile
+  (`Settings.Music`, `Settings.Sfx`) and applied on every join.
 
 ## 9. 3D models (Blender → Roblox)
 
@@ -230,7 +509,7 @@ Whenever you are not in a run, a full-screen menu (`LobbyScreen.lua`) covers the
 there is no walking in the lobby (no thumbstick, lobby characters stand still, the lobby's
 ProximityPrompts are switched off).
 
-- **Home**: gold, best time and wins at the top, SETTINGS (volume) top right; your own
+- **Home**: gold, best time and wins at the top, SETTINGS (sound, comfort, tips; see §12) top right; your own
   character turning in the middle (tap it to change character); your permanent upgrades
   summarised; the big **SOLO / DUO / TRIO** buttons; CHARACTERS, UPGRADES and ARENA.
 - **Characters**: one card per character with a turning 3D preview, role, description,
@@ -268,3 +547,67 @@ Level-up cards use the same icons. Until pictures exist each icon is a coloured 
 1-2 letters. To add pictures: make square PNGs (one per weapon, evolution and passive id),
 upload them as Decals/Images, and paste each asset id into `src/shared/IconData.lua`
 (instructions at the top of that file).
+
+## 12. Co-op HUD, first-run tips, results, settings, saving
+
+**Team HUD (Duo / Trio, `TeamUI.lua`)**
+- A compact row per teammate (landscape: right edge under the kill / gold counters;
+  portrait: right edge under the ability bar), never Active, so a thumb on it still moves
+  the hero: hero icon, name, a bar and a state word (never colour alone): health bar while
+  alive, `CHOOSING` while they pick a level-up card, `DOWN · 12 m`, `REVIVING 60%` (gold
+  bar), `DECIDING` (on the revive-product offer) or `OUT` (no partner revives left).
+- Every revivable fallen player (teammates and you) gets a ring of segments over them that
+  fills with the revive progress (so both the helper and the fallen player see it) and, in
+  the world, a dashed gold circle of the revive radius (`PartnerRevive.Radius`) whose
+  dashes light up with the progress. An off-screen fallen teammate gets a crimson edge
+  arrow with their name and distance.
+- A teammate who disconnects disappears from the list at once and everyone gets a toast
+  "<Name> left the run." The level-up freeze and its "<Name> is choosing" line are
+  unchanged.
+- What is shared (checked in code): **XP** from gems goes to every *living* teammate
+  (each scaled by their own Growth). **Gold** is per player: your kills (1-3 gold by
+  chance), plus the Queen's reward paid to every living player, plus the portal bonus;
+  chests and shrines spend your own run gold. **Items** are per player: a chest or shrine
+  gives the item to whoever paid; the Guarded Altar gives one to every living teammate.
+  The first group run shows this once as a tip.
+
+**First-run tips (`Tutorial.lua`, `Config.Tutorial`)**: a brand-new player's first run gets
+short hints that teach through play: how to move (by device: drag / WASD / left stick; it
+closes early once you walk), "your weapon attacks on its own", gems are XP (after the first
+kill), the level-up cards (one line under LEVEL UP!), the portal objective (after 40 s) and
+the Queen's floor warnings. Co-op tips (once ever, also for experienced players): team
+rules and "stand in the gold circle" when a teammate first falls. Each hint shows once
+(saved), closes itself after ~6 s, never pauses or blocks (only its SKIP TIPS button takes
+a tap) and waits while a menu is open. Anyone with a run played before this update skips
+the tutorial (schema 5 migration: `TutorialDone = Runs > 0`); the server also marks it
+done when the first run ends. Settings: **Show tips** on / off, **Replay tips**.
+
+**Results screen**: the verdict (VICTORY / ESCAPED / DEFEATED), the hero's medallion, the
+arena and mode, damage dealt; tiles for time survived, enemies defeated, Queens slain (or
+"Fell to her" / "Not reached"), stages cleared, gold banked and level; new best / unlocked
+arena / achievements; the build (weapons with levels and evolutions, passives) and the
+items found. **REPLAY** goes back to the lobby and starts the same mode again with the
+existing StartRun remote (a Duo / Trio replay starts a countdown others can join; disabled
+while your team still plays on through a portal). **MAIN MENU** returns. Rewards are
+granted once on the server, not by this screen: gold is banked as it is earned, the
+portal bonus is guarded by `rp.WinPaid` and the run stats / tutorial flag by
+`rp.Committed`.
+
+**Settings (pause menu in a run, SETTINGS in the lobby; saved in the profile and checked
+by the server, `GoldSystem` SaveSettings, `Config.Settings.Defaults`)**: Music, Effects,
+Screen shake (0-100%, 0 = off), Reduced effects (effect and trail budgets x
+`Config.Graphics.ReducedEffectsBudget`, no hurt pulse / XP flash / breathing low-health
+edge, damage numbers don't move), Damage numbers (off by default; the server sums each
+player's hits per enemy 8 times a second and sends them only to players who turned them
+on, at most 16 enemies per message; the client merges new hits into the number already
+shown and shows at most 18, 3 new per frame; crits are gold, larger and end with "!"),
+Show tips, Replay tips. Changes apply at once and are sent once shortly after the last
+change.
+
+**Saving visibility**: the server sets the player attribute `SaveStatus` (`ok`,
+`failing` after a save failed all its retries, `memory` when DataStores are unavailable,
+e.g. Studio without API access). The lobby then shows a small crimson-edged notice
+"Progress isn't being saved right now" (top centre; over the dais in portrait), a run shows a
+toast when it starts failing and the pause / settings menu repeats it; "Saving works again"
+appears when a later save succeeds. Nothing pretends to save when it doesn't.
+

@@ -15,10 +15,18 @@
 	Retry:   every DataStore call is pcall'd with exponential backoff.
 	Studio:  if DataStores are unavailable (no API access) data is kept in memory only.
 
-	Save shape (Config.Data.SchemaVersion = 3):
+	Save shape (Config.Data.SchemaVersion = 5):
 	  Version, Gold, Meta {id → level}, OwnedCharacters {id → true}, SelectedCharacter,
 	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage},
-	  PurchaseIds {string}, Settings {Music, Sfx}, ReviveTokens, SelectedArena
+	  PurchaseIds {string}, Settings {Music, Sfx, Shake, ReducedEffects, DamageNumbers,
+	  Tips} (Config.Settings.Defaults), ReviveTokens, SelectedArena,
+	  Achievements {Progress {id → number}, Unlocked {id → os.time()}} (AchievementService),
+	  Title (worn achievement title, "" = none), NameColor (AchievementData.Colors id, ""),
+	  TutorialDone (first-run tips finished / skipped), SeenTips {tipId → true}
+
+	Save health is shown to the player (never pretend saving works): the player attribute
+	"SaveStatus" is "ok", "memory" (DataStores unavailable: nothing is saved this session)
+	or "failing" (the last save failed after its retries; cleared by the next good save).
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -60,9 +68,14 @@ local function defaultData()
 		Skins = {},
 		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0 },
 		PurchaseIds = {},
-		Settings = { Music = 0.6, Sfx = 0.8 },
+		Settings = table.clone(Config.Settings.Defaults),
 		ReviveTokens = 0,
 		SelectedArena = "Forest",
+		Achievements = { Progress = {}, Unlocked = {} },
+		Title = "",
+		NameColor = "",
+		TutorialDone = false,
+		SeenTips = {},
 	}
 end
 DataService.DefaultData = defaultData
@@ -71,7 +84,10 @@ DataService.DefaultData = defaultData
 	Migration steps: MIGRATIONS[n] upgrades a version-n save to version n+1.
 	Version 1 (early test builds) stored owned characters as an array and had no
 	settings / revive tokens. Version 2 had no Stats.BestStage (the stage loop): it starts
-	at 0, the furthest stage reached in a run from now on.
+	at 0, the furthest stage reached in a run from now on. Version 3 had no achievements: they
+	start empty (owned characters, gold and skins are untouched). Version 4 had no
+	accessibility settings and no first-run tips: settings get their defaults, and anyone
+	who has played a run already counts as having done the tutorial.
 ]]
 local MIGRATIONS: { [number]: (any) -> any } = {
 	[0] = function(data)
@@ -100,6 +116,35 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 			data.Stats.BestStage = 0
 		end
 		data.Version = 3
+		return data
+	end,
+	[3] = function(data)
+		-- achievements and their cosmetics; everything already owned stays as it is
+		if type(data.Achievements) ~= "table" then
+			data.Achievements = {}
+		end
+		if type(data.Achievements.Progress) ~= "table" then
+			data.Achievements.Progress = {}
+		end
+		if type(data.Achievements.Unlocked) ~= "table" then
+			data.Achievements.Unlocked = {}
+		end
+		if type(data.Title) ~= "string" then
+			data.Title = ""
+		end
+		if type(data.NameColor) ~= "string" then
+			data.NameColor = ""
+		end
+		data.Version = 4
+		return data
+	end,
+	[4] = function(data)
+		-- accessibility settings (filled from Config.Settings.Defaults below) and the
+		-- first-run tips: players who already played skip them
+		local runs = type(data.Stats) == "table" and tonumber(data.Stats.Runs) or 0
+		data.TutorialDone = (runs or 0) > 0
+		data.SeenTips = {}
+		data.Version = 5
 		return data
 	end,
 }
@@ -137,6 +182,33 @@ function DataService.Migrate(data: any): { [string]: any }
 		data.Gold = 0
 	end
 	data.Gold = math.max(0, math.floor(data.Gold))
+	if type(data.Achievements) ~= "table" then
+		data.Achievements = defaults.Achievements
+	end
+	if type(data.Achievements.Progress) ~= "table" then
+		data.Achievements.Progress = {}
+	end
+	if type(data.Achievements.Unlocked) ~= "table" then
+		data.Achievements.Unlocked = {}
+	end
+	-- settings: every key present and of the right type (old saves, hand edits)
+	if type(data.Settings) ~= "table" then
+		data.Settings = {}
+	end
+	for k, v in pairs(Config.Settings.Defaults) do
+		if type(data.Settings[k]) ~= type(v) then
+			data.Settings[k] = v
+		end
+	end
+	if type(data.TutorialDone) ~= "boolean" then
+		data.TutorialDone = (data.Stats.Runs or 0) > 0
+	end
+	if type(data.SeenTips) ~= "table" then
+		data.SeenTips = {}
+	end
+	if type(data.OwnedCharacters) ~= "table" then
+		data.OwnedCharacters = {}
+	end
 	data.OwnedCharacters[CharacterData.Default] = true
 	if not CharacterData.Characters[data.SelectedCharacter] or not data.OwnedCharacters[data.SelectedCharacter] then
 		data.SelectedCharacter = CharacterData.Default
@@ -249,6 +321,10 @@ function DataService.SaveProfile(profile: Profile, release: boolean?): boolean
 	end)
 	profile.Saving = false
 	profile.LastSave = os.clock()
+	if not lostLock and profile.Player.Parent then
+		-- the player sees when progress is not being written (UIBuilder save notice)
+		DataService.SetSaveStatus(profile.Player, ok and "ok" or "failing")
+	end
 	if lostLock then
 		profile.LockLost = true
 		warn("[DataService] session lock lost for " .. profile.Key)
@@ -319,6 +395,19 @@ function DataService.IsMemoryOnly(): boolean
 	return store == nil
 end
 
+-- Player attribute "SaveStatus": "ok" | "failing" | "memory" (see the header).
+function DataService.SetSaveStatus(player: Player, status: string)
+	if store == nil then
+		status = "memory"
+	end
+	if player:GetAttribute("SaveStatus") ~= status then
+		player:SetAttribute("SaveStatus", status)
+		if status ~= "ok" then
+			warn(string.format("[DataService] save status for %s: %s", player.Name, status))
+		end
+	end
+end
+
 local function onPlayerAdded(player: Player)
 	local profile = loadProfile(player)
 	if not player.Parent then
@@ -333,6 +422,7 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 	profiles[player] = profile
+	DataService.SetSaveStatus(player, "ok")
 	for _, fn in ipairs(loadedCallbacks) do
 		task.spawn(fn, player, profile)
 	end

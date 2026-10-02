@@ -1,7 +1,8 @@
 --[[
 	EnemyData.lua
 	Enemy definitions and the per-minute spawn table.
-	Theme: an alien insect swarm. The ids are kept from the first version (Slime = Mite,
+	Theme: an alien insect swarm (Spitter, a ranged beetle, joins from minute 4). The ids
+	are kept from the first version (Slime = Mite,
 	Bat = Wasp, Skeleton = Beetle Warrior, Ghost = Phase Moth, Brute = Rhino Beetle,
 	Bomber = Bomb Tick, Boss = Scorpion Queen); DisplayName is what players see.
 
@@ -17,6 +18,16 @@
 	  Erratic     0-1 sideways wobble strength (bats)
 	  Explode     { Radius, Damage } = blows up on contact
 	  XPScale     multiplies gem value (bosses)
+	  Role        one line: the tactical job of the type (README roster table)
+	  Intro       short callout shown once per run the first time the type spawns
+	              ("New: <DisplayName> - <Intro>"); nil = no callout (the starters)
+	  Ranged      { MinRange, MaxRange, Windup, Cooldown, Flight, Splash, Damage }: keeps its
+	              distance, stops, swells for Windup s (a ground marker shows where the glob
+	              lands), then lobs a slow glob that lands after Flight s (EnemyAI + Hazards)
+	  Lunge       { MinRange, Range, Windup, Speed, Duration, Recover, Cooldown }: a short
+	              telegraphed charge (lane on the floor) followed by a recovery pause
+	  Fuse        seconds a bomber stands, swells and blinks (blast ring on the floor) before
+	              it explodes; killing it during the fuse defuses it
 
 	To add an enemy: add an entry to Enemies and give it weight in SpawnTable rows.
 ]]
@@ -41,6 +52,7 @@ EnemyData.Enemies = {
 		Gem = { Small = 95, Medium = 5 },
 		GemChance = 1,
 		KnockbackResist = 0,
+		Role = "Basic melee: the standard threat, walks straight at you",
 	},
 	Bat = {
 		Id = "Bat",
@@ -59,6 +71,7 @@ EnemyData.Enemies = {
 		KnockbackResist = 0,
 		Erratic = 0.9,
 		FlyHeight = 2.5,
+		Role = "Fast and fragile: wobbles in quickly, pressures you to keep moving",
 	},
 	Skeleton = {
 		Id = "Skeleton",
@@ -75,6 +88,8 @@ EnemyData.Enemies = {
 		Gem = { Small = 80, Medium = 20 },
 		GemChance = 1,
 		KnockbackResist = 0.2,
+		Role = "Armoured melee: tougher grunt, the Queen's summons",
+		Intro = "tougher, armoured grunts",
 	},
 	Ghost = {
 		Id = "Ghost",
@@ -94,6 +109,8 @@ EnemyData.Enemies = {
 		KnockbackResist = 0.1,
 		Ghost = true,
 		FlyHeight = 1,
+		Role = "Flanker: flies straight through trees and walls",
+		Intro = "it flies through walls",
 	},
 	Brute = {
 		Id = "Brute",
@@ -110,6 +127,9 @@ EnemyData.Enemies = {
 		Gem = { Medium = 70, Large = 30 },
 		GemChance = 1,
 		KnockbackResist = 0.9,
+		Role = "Slow and durable: blocks paths; rears up, then lunges a short way",
+		Intro = "sidestep its lunge",
+		Lunge = { MinRange = 4, Range = 15, Windup = 0.65, Speed = 30, Duration = 0.45, Recover = 0.8, Cooldown = 4.5 },
 	},
 	Bomber = {
 		Id = "Bomber",
@@ -127,6 +147,28 @@ EnemyData.Enemies = {
 		GemChance = 1,
 		KnockbackResist = 0.3,
 		Explode = { Radius = 8, Damage = 22 },
+		Fuse = 0.7,
+		Role = "Suicide bomber: stops next to you, swells for 0.7 s, then bursts",
+		Intro = "step out of its ring",
+	},
+	Spitter = {
+		Id = "Spitter",
+		DisplayName = "Spitter",
+		HP = 14,
+		Speed = 8.5,
+		Damage = 4, -- weak bite if you walk into it; the acid glob is its real attack
+		Radius = 1.3,
+		Size = Vector3.new(2.4, 2.6, 2.4),
+		Shape = "Ball",
+		Mesh = { Type = "Sphere", Scale = Vector3.new(1, 0.9, 1.05) },
+		Color = Palette.crimson_500:Lerp(Palette.slate_400, 0.5), -- mauve shell (the model's)
+		Material = "SmoothPlastic",
+		Gem = { Small = 75, Medium = 25 },
+		GemChance = 1,
+		KnockbackResist = 0.1,
+		Role = "Ranged: keeps 22-30 studs away and lobs acid at where you stand",
+		Intro = "dodge the acid",
+		Ranged = { MinRange = 22, MaxRange = 30, Windup = 0.7, Cooldown = 3.2, Flight = 1.05, Splash = 4.5, Damage = 12 },
 	},
 	Boss = {
 		Id = "Boss",
@@ -145,6 +187,7 @@ EnemyData.Enemies = {
 		KnockbackResist = 1,
 		XPScale = 20,
 		IsBoss = true,
+		Role = "Boss: the stage's portal guardian (patterns in BossData)",
 	},
 }
 
@@ -161,17 +204,17 @@ EnemyData.SpawnTable = {
 	{ Target = 32, Weights = { Slime = 65, Bat = 25, Skeleton = 10 } },
 	{ Target = 42, Weights = { Slime = 50, Bat = 25, Skeleton = 25 } },
 	{ Target = 52, Weights = { Slime = 40, Bat = 25, Skeleton = 25, Ghost = 10 } },
-	{ Target = 62, Weights = { Slime = 30, Bat = 25, Skeleton = 25, Ghost = 15, Bomber = 5 } },
-	{ Target = 72, Weights = { Slime = 25, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 5 } },
-	{ Target = 82, Weights = { Slime = 20, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 10 } },
-	{ Target = 92, Weights = { Slime = 15, Bat = 20, Skeleton = 25, Ghost = 20, Bomber = 10, Brute = 10 } },
-	{ Target = 100, Weights = { Slime = 15, Bat = 15, Skeleton = 25, Ghost = 20, Bomber = 12, Brute = 13 } },
-	{ Target = 110, Weights = { Slime = 10, Bat = 20, Skeleton = 25, Ghost = 20, Bomber = 12, Brute = 13 } },
-	{ Target = 120, Weights = { Slime = 10, Bat = 15, Skeleton = 25, Ghost = 20, Bomber = 15, Brute = 15 } },
-	{ Target = 130, Weights = { Slime = 10, Bat = 15, Skeleton = 20, Ghost = 25, Bomber = 15, Brute = 15 } },
-	{ Target = 140, Weights = { Slime = 10, Bat = 15, Skeleton = 20, Ghost = 20, Bomber = 15, Brute = 20 } },
-	{ Target = 150, Weights = { Slime = 10, Bat = 15, Skeleton = 20, Ghost = 20, Bomber = 15, Brute = 20 } },
-	{ Target = 160, Weights = { Slime = 5, Bat = 15, Skeleton = 20, Ghost = 20, Bomber = 20, Brute = 20 } },
+	{ Target = 62, Weights = { Slime = 30, Bat = 25, Skeleton = 25, Ghost = 15, Bomber = 5, Spitter = 4 } },
+	{ Target = 72, Weights = { Slime = 25, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 5, Spitter = 6 } },
+	{ Target = 82, Weights = { Slime = 20, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 10, Spitter = 8 } },
+	{ Target = 92, Weights = { Slime = 15, Bat = 20, Skeleton = 25, Ghost = 20, Bomber = 10, Brute = 10, Spitter = 9 } },
+	{ Target = 100, Weights = { Slime = 15, Bat = 15, Skeleton = 25, Ghost = 20, Bomber = 12, Brute = 13, Spitter = 10 } },
+	{ Target = 110, Weights = { Slime = 10, Bat = 20, Skeleton = 25, Ghost = 20, Bomber = 12, Brute = 13, Spitter = 10 } },
+	{ Target = 120, Weights = { Slime = 10, Bat = 15, Skeleton = 25, Ghost = 20, Bomber = 15, Brute = 15, Spitter = 11 } },
+	{ Target = 130, Weights = { Slime = 10, Bat = 15, Skeleton = 20, Ghost = 25, Bomber = 15, Brute = 15, Spitter = 11 } },
+	{ Target = 140, Weights = { Slime = 10, Bat = 15, Skeleton = 20, Ghost = 20, Bomber = 15, Brute = 20, Spitter = 12 } },
+	{ Target = 150, Weights = { Slime = 10, Bat = 15, Skeleton = 20, Ghost = 20, Bomber = 15, Brute = 20, Spitter = 12 } },
+	{ Target = 160, Weights = { Slime = 5, Bat = 15, Skeleton = 20, Ghost = 20, Bomber = 20, Brute = 20, Spitter = 12 } },
 }
 
 -- Row for a run time in seconds (clamped to the last row).

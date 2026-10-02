@@ -1,5 +1,897 @@
 [
  {
+  "name": "Ability_Turret",
+  "category": "Abilities",
+  "note": "Engineer's deployable gear turret ~2.4 wide x 2.6 tall: steel tripod base, turning head with a brass barrel and gold gears. Origin = ground centre, barrel faces -Y. Head piece spins (Spin) around its own axis.",
+  "tris": 544,
+  "pieces": [
+   {
+    "name": "Base",
+    "slot": "MetalDark",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     0.6822,
+     0.2875
+    ],
+    "size": [
+     2.2781,
+     1.4355,
+     1.9972
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Head",
+    "slot": "Metal",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     1.84,
+     0.0
+    ],
+    "size": [
+     1.2934,
+     0.88,
+     1.2934
+    ],
+    "shadow": true,
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     -0.24,
+     0.0
+    ]
+   },
+   {
+    "name": "Barrel",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     1.8,
+     -0.4524
+    ],
+    "size": [
+     1.46,
+     0.719,
+     1.6191
+    ],
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     -0.2,
+     0.4524
+    ]
+   },
+   {
+    "name": "Muzzle",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     1.84,
+     -1.28
+    ],
+    "size": [
+     0.1905,
+     0.22,
+     0.06
+    ],
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     -0.24,
+     1.28
+    ]
+   },
+   {
+    "name": "Lamp",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.15,
+     -0.55
+    ],
+    "size": [
+     0.2504,
+     0.28,
+     0.2382
+    ],
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     -0.55,
+     0.55
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Accent": [
+    0.6823529411764706,
+    0.17647058823529413,
+    0.19215686274509805
+   ],
+   "Glow": [
+    0.9490196078431372,
+    0.8313725490196079,
+    0.5411764705882353
+   ],
+   "Metal": [
+    0.6196078431372549,
+    0.6549019607843137,
+    0.6980392156862745
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "MetalDark": [
+    0.403921568627451,
+    0.4392156862745098,
+    0.4823529411764706
+   ]
+  },
+  "bounds": [
+   [
+    -1.139,
+    -0.036,
+    -1.31
+   ],
+   [
+    1.139,
+    2.29,
+    1.286
+   ]
+  ]
+ },
+ {
+  "name": "Alchemist",
+  "category": "Heroes",
+  "note": "Slate long coat over a leather apron, aviator cap with brass goggles, bandolier of glowing flasks, a big flask in hand.",
+  "tris": 2428,
+  "pieces": [
+   {
+    "name": "Head",
+    "slot": "Skin",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.15,
+     0.0
+    ],
+    "size": [
+     1.4289,
+     1.4,
+     1.3369
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "Eyes",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.12,
+     -0.665
+    ],
+    "size": [
+     0.7,
+     0.28,
+     0.08
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceHair",
+    "slot": "Hair",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.3207,
+     0.0028
+    ],
+    "size": [
+     2.56,
+     1.2186,
+     1.7456
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Cap",
+    "slot": "Hat",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.4505,
+     0.0
+    ],
+    "size": [
+     1.8782,
+     1.639,
+     1.7027
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "Goggles",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     5.7202,
+     -0.8579
+    ],
+    "size": [
+     1.28,
+     0.6297,
+     0.414
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "GoggleStrap",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.61,
+     0.0
+    ],
+    "size": [
+     1.8108,
+     0.16,
+     1.7746
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "GoggleLens",
+    "slot": "Lens",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.76,
+     -1.0
+    ],
+    "size": [
+     1.12,
+     0.447,
+     0.1697
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "CapRivets",
+    "slot": "HatAccent",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     5.45,
+     0.0
+    ],
+    "size": [
+     1.7923,
+     0.08,
+     1.7565
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Torso",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.36,
+     0.0
+    ],
+    "size": [
+     1.9586,
+     2.32,
+     1.2934
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "Coat",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.305,
+     0.2662
+    ],
+    "size": [
+     2.5545,
+     2.29,
+     1.8437
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "Lapels",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0523,
+     3.6202,
+     -0.6647
+    ],
+    "size": [
+     1.2565,
+     1.3211,
+     0.3011
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Apron",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.9766,
+     -0.817
+    ],
+    "size": [
+     1.2382,
+     2.5438,
+     0.3166
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Cravat",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.0493,
+     -0.6371
+    ],
+    "size": [
+     0.4293,
+     0.8613,
+     0.3463
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Bandolier",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0074,
+     3.3141,
+     -0.6495
+    ],
+    "size": [
+     1.9748,
+     1.9548,
+     0.9143
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Belt",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.245,
+     -0.0545
+    ],
+    "size": [
+     1.8999,
+     0.59,
+     1.4711
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Flasks",
+    "slot": "Glass",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0315,
+     3.287,
+     -0.9331
+    ],
+    "size": [
+     1.5628,
+     1.7588,
+     0.5741
+    ],
+    "bone": "Torso",
+    "transparency": 0.35
+   },
+   {
+    "name": "Potions",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     -0.0068,
+     3.1752,
+     -0.8715
+    ],
+    "size": [
+     1.4925,
+     1.4389,
+     0.4246
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Potions2",
+    "slot": "Glow2",
+    "material": "Neon",
+    "offset": [
+     -0.0252,
+     3.1106,
+     -1.0647
+    ],
+    "size": [
+     0.3043,
+     0.264,
+     0.2894
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "FlaskCaps",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     -0.1109,
+     3.2773,
+     -0.9049
+    ],
+    "size": [
+     1.4834,
+     1.9345,
+     0.4897
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "LeftArm",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.5335,
+     3.2496,
+     0.0
+    ],
+    "size": [
+     0.9317,
+     1.739,
+     0.9239
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmCuff",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.5347,
+     2.4781,
+     0.0
+    ],
+    "size": [
+     1.0111,
+     0.2833,
+     0.9978
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmHand",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.54,
+     2.2,
+     -0.08
+    ],
+    "size": [
+     0.44,
+     0.46,
+     0.48
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "RightArm",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.5335,
+     3.2496,
+     0.0
+    ],
+    "size": [
+     0.9317,
+     1.739,
+     0.9239
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmCuff",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.5347,
+     2.4781,
+     0.0
+    ],
+    "size": [
+     1.0111,
+     0.2833,
+     0.9978
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmHand",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.54,
+     2.2,
+     -0.08
+    ],
+    "size": [
+     0.44,
+     0.46,
+     0.48
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "HeldFlask",
+    "slot": "Glass",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.6,
+     2.7543,
+     -0.5
+    ],
+    "size": [
+     0.84,
+     1.1086,
+     0.84
+    ],
+    "bone": "RightArm",
+    "transparency": 0.3
+   },
+   {
+    "name": "HeldPotion",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     1.6,
+     2.5786,
+     -0.5073
+    ],
+    "size": [
+     0.672,
+     0.5544,
+     0.672
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "HeldFlaskCap",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     1.6,
+     3.2985,
+     -0.3862
+    ],
+    "size": [
+     0.322,
+     0.1842,
+     0.287
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "LeftLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.6551,
+     1.6,
+     0.7952
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.6551,
+     1.6,
+     0.7952
+    ],
+    "bone": "RightLeg"
+   },
+   {
+    "name": "LeftLegBoot",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     0.4,
+     -0.1127
+    ],
+    "size": [
+     0.86,
+     0.8,
+     1.1253
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLegBoot",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     0.4,
+     -0.1127
+    ],
+    "size": [
+     0.86,
+     0.8,
+     1.1253
+    ],
+    "bone": "RightLeg"
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.054901960784313725,
+    0.07450980392156863,
+    0.10196078431372549
+   ],
+   "Accent": [
+    0.5647058823529412,
+    0.13333333333333333,
+    0.1607843137254902
+   ],
+   "Glow": [
+    0.7254901960784313,
+    0.8705882352941177,
+    0.5568627450980392
+   ],
+   "Metal": [
+    0.43137254901960786,
+    0.2980392156862745,
+    0.2
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Skin": [
+    0.9058823529411765,
+    0.7372549019607844,
+    0.592156862745098
+   ],
+   "Cloth": [
+    0.2,
+    0.26666666666666666,
+    0.35294117647058826
+   ],
+   "Cloth2": [
+    0.10980392156862745,
+    0.1450980392156863,
+    0.19215686274509805
+   ],
+   "Hair": [
+    0.788235294117647,
+    0.7450980392156863,
+    0.6509803921568628
+   ],
+   "Leather": [
+    0.33725490196078434,
+    0.22745098039215686,
+    0.15294117647058825
+   ],
+   "Hat": [
+    0.33725490196078434,
+    0.22745098039215686,
+    0.15294117647058825
+   ],
+   "HatAccent": [
+    0.6274509803921569,
+    0.4823529411764706,
+    0.20784313725490197
+   ],
+   "Glow2": [
+    0.615686274509804,
+    0.7215686274509804,
+    0.8901960784313725
+   ],
+   "Glass": [
+    0.9529411764705882,
+    0.9294117647058824,
+    0.8745098039215686
+   ],
+   "Lens": [
+    0.9647058823529412,
+    0.8549019607843137,
+    0.49411764705882355
+   ]
+  },
+  "bounds": [
+   [
+    -2.04,
+    0.0,
+    -1.22
+   ],
+   [
+    2.04,
+    6.27,
+    1.188
+   ]
+  ],
+  "joints": {
+   "Neck": [
+    0.0,
+    4.45,
+    0.0
+   ],
+   "LeftShoulder": [
+    -1.2,
+    3.95,
+    0.0
+   ],
+   "RightShoulder": [
+    1.2,
+    3.95,
+    0.0
+   ],
+   "LeftHip": [
+    -0.5,
+    2.0,
+    0.0
+   ],
+   "RightHip": [
+    0.5,
+    2.0,
+    0.0
+   ]
+  }
+ },
+ {
+  "name": "Ash_Pile",
+  "category": "Lava",
+  "note": "Grey ash heap with charcoal chunks and two tiny embers, ~3 x 2.2 x 0.9. Decoration (no collider).",
+  "tris": 208,
+  "pieces": [
+   {
+    "name": "Ash",
+    "slot": "Ash",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0031,
+     0.306,
+     0.1692
+    ],
+    "size": [
+     3.6037,
+     0.6719,
+     2.0257
+    ]
+   },
+   {
+    "name": "Ash2",
+    "slot": "Ash2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2845,
+     0.3318,
+     -0.0752
+    ],
+    "size": [
+     2.7787,
+     0.6651,
+     1.5075
+    ]
+   },
+   {
+    "name": "Char",
+    "slot": "Char",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0858,
+     0.1462,
+     -0.0304
+    ],
+    "size": [
+     3.1561,
+     0.2924,
+     2.2618
+    ]
+   },
+   {
+    "name": "Embers",
+    "slot": "Ember",
+    "material": "Neon",
+    "offset": [
+     -0.5045,
+     0.465,
+     -0.75
+    ],
+    "size": [
+     1.6521,
+     0.47,
+     0.1531
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Ash": [
+    0.49411764705882355,
+    0.4666666666666667,
+    0.4549019607843137
+   ],
+   "Ash2": [
+    0.6352941176470588,
+    0.6078431372549019,
+    0.5882352941176471
+   ],
+   "Char": [
+    0.09411764705882353,
+    0.09019607843137255,
+    0.10196078431372549
+   ],
+   "Ember": [
+    0.9490196078431372,
+    0.6039215686274509,
+    0.27058823529411763
+   ]
+  },
+  "bounds": [
+   [
+    -1.805,
+    -0.03,
+    -1.161
+   ],
+   [
+    1.799,
+    0.7,
+    1.182
+   ]
+  ]
+ },
+ {
   "name": "Banner",
   "category": "World",
   "note": "Pole banner ~9 tall: slate-blue cloth with a gold crown (both faces). Front = -Y.",
@@ -172,6 +1064,204 @@
    "kind": "circle",
    "radius": 0.8,
    "height": 2
+  }
+ },
+ {
+  "name": "Basalt_Column",
+  "category": "Lava",
+  "note": "Landmark cluster of hexagonal basalt columns, 2.5 to 9.5 tall, ~7 x 6, with pale tops that read from above. Collider circle.",
+  "tris": 524,
+  "pieces": [
+   {
+    "name": "Columns",
+    "slot": "Col",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.2611,
+     4.64,
+     -0.188
+    ],
+    "size": [
+     6.248,
+     9.48,
+     5.876
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Columns2",
+    "slot": "Col2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2599,
+     3.69,
+     -0.1387
+    ],
+    "size": [
+     6.0728,
+     7.58,
+     6.1763
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Tops",
+    "slot": "Top",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1024,
+     5.4998,
+     -0.1406
+    ],
+    "size": [
+     6.5654,
+     8.0796,
+     6.141
+    ]
+   },
+   {
+    "name": "Ash",
+    "slot": "Ash",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1159,
+     0.1398,
+     -0.8542
+    ],
+    "size": [
+     8.2512,
+     0.3396,
+     5.9484
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Col": [
+    0.19607843137254902,
+    0.1843137254901961,
+    0.2
+   ],
+   "Col2": [
+    0.2627450980392157,
+    0.24313725490196078,
+    0.25882352941176473
+   ],
+   "Top": [
+    0.35294117647058826,
+    0.3254901960784314,
+    0.3411764705882353
+   ],
+   "Ash": [
+    0.49411764705882355,
+    0.4666666666666667,
+    0.4549019607843137
+   ]
+  },
+  "bounds": [
+   [
+    -4.01,
+    -0.1,
+    -3.828
+   ],
+   [
+    4.242,
+    9.54,
+    2.949
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 3.0,
+   "height": 9
+  }
+ },
+ {
+  "name": "Basalt_Rock",
+  "category": "Lava",
+  "note": "Dark basalt boulder with an ash-dusted top, ~4.6 x 2.8. Collider circle.",
+  "tris": 68,
+  "pieces": [
+   {
+    "name": "Rock",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.358,
+     1.1683,
+     0.1853
+    ],
+    "size": [
+     4.0048,
+     2.4365,
+     3.1944
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Rock2",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.5265,
+     0.5478,
+     -0.5944
+    ],
+    "size": [
+     1.85,
+     1.2956,
+     1.8049
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Ash",
+    "slot": "Ash",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.7784,
+     1.9559,
+     0.478
+    ],
+    "size": [
+     3.2936,
+     0.9754,
+     2.6007
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Stone": [
+    0.2627450980392157,
+    0.24313725490196078,
+    0.25882352941176473
+   ],
+   "Stone2": [
+    0.19607843137254902,
+    0.1843137254901961,
+    0.2
+   ],
+   "Ash": [
+    0.49411764705882355,
+    0.4666666666666667,
+    0.4549019607843137
+   ]
+  },
+  "bounds": [
+   [
+    -2.452,
+    -0.1,
+    -1.497
+   ],
+   [
+    2.425,
+    2.444,
+    1.782
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 2.0,
+   "height": 2.8
   }
  },
  {
@@ -594,6 +1684,88 @@
   ]
  },
  {
+  "name": "Bones",
+  "category": "Desert",
+  "note": "Sun-bleached bones of a big beast: horned skull, spine and ribs, ~5 x 2.6. Decoration (no collider).",
+  "tris": 616,
+  "pieces": [
+   {
+    "name": "Bones",
+    "slot": "Bone",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.0444,
+     0.5112,
+     0.0
+    ],
+    "size": [
+     4.8737,
+     1.0882,
+     2.4849
+    ]
+   },
+   {
+    "name": "Bones2",
+    "slot": "Bone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.008,
+     0.5391,
+     0.2038
+    ],
+    "size": [
+     6.6208,
+     1.1382,
+     2.8196
+    ]
+   },
+   {
+    "name": "Sockets",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     2.85,
+     0.5,
+     0.0
+    ],
+    "size": [
+     0.16,
+     0.12,
+     0.62
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.16470588235294117,
+    0.11764705882352941,
+    0.08627450980392157
+   ],
+   "Bone": [
+    0.8980392156862745,
+    0.8627450980392157,
+    0.7803921568627451
+   ],
+   "Bone2": [
+    0.788235294117647,
+    0.7450980392156863,
+    0.6509803921568628
+   ]
+  },
+  "bounds": [
+   [
+    -3.318,
+    -0.033,
+    -1.242
+   ],
+   [
+    3.481,
+    1.108,
+    1.614
+   ]
+  ]
+ },
+ {
   "name": "Brazier",
   "category": "Castle",
   "note": "Iron fire bowl on a stone pedestal, ~2 x 3.6, with a flame. Collider circle.",
@@ -728,6 +1900,558 @@
   ]
  },
  {
+  "name": "Brimstone_Altar",
+  "category": "Lava",
+  "note": "Landmark brimstone altar ~8.6 wide: two-step octagonal basalt dais with glowing lava channels, four curved obsidian horns, a gold-rimmed fire bowl with a big flame. Front = -Y. Collider = the bowl pedestal and the horns; light = flame.",
+  "tris": 746,
+  "pieces": [
+   {
+    "name": "Dais",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.235,
+     0.0
+    ],
+    "size": [
+     8.4997,
+     0.57,
+     8.4997
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Dais2",
+    "slot": "Base2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.525,
+     0.0
+    ],
+    "size": [
+     6.4672,
+     2.15,
+     6.4672
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Channels",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.99,
+     0.0
+    ],
+    "size": [
+     6.2512,
+     0.06,
+     6.2512
+    ]
+   },
+   {
+    "name": "Gold",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.06,
+     0.0
+    ],
+    "size": [
+     6.5041,
+     2.52,
+     6.5041
+    ]
+   },
+   {
+    "name": "Bowl",
+    "slot": "Iron",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     2.9,
+     0.0
+    ],
+    "size": [
+     2.864,
+     0.7,
+     2.864
+    ]
+   },
+   {
+    "name": "Flame",
+    "slot": "Flame",
+    "material": "Neon",
+    "offset": [
+     -0.002,
+     4.0,
+     0.0874
+    ],
+    "size": [
+     1.776,
+     2.2,
+     1.6173
+    ]
+   },
+   {
+    "name": "FlameCore",
+    "slot": "Core",
+    "material": "Neon",
+    "offset": [
+     -0.01,
+     4.15,
+     0.0
+    ],
+    "size": [
+     0.72,
+     2.3,
+     0.72
+    ]
+   },
+   {
+    "name": "Horns",
+    "slot": "Horn",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     2.1268,
+     0.0
+    ],
+    "size": [
+     5.8686,
+     3.5709,
+     5.8686
+    ]
+   },
+   {
+    "name": "Ash",
+    "slot": "Ash",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0302,
+     0.51,
+     0.1903
+    ],
+    "size": [
+     8.1084,
+     0.14,
+     2.8465
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.19607843137254902,
+    0.1843137254901961,
+    0.2
+   ],
+   "Glow": [
+    0.9490196078431372,
+    0.6039215686274509,
+    0.27058823529411763
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Base2": [
+    0.2627450980392157,
+    0.24313725490196078,
+    0.25882352941176473
+   ],
+   "Horn": [
+    0.09411764705882353,
+    0.09019607843137255,
+    0.10196078431372549
+   ],
+   "Iron": [
+    0.22745098039215686,
+    0.25098039215686274,
+    0.2823529411764706
+   ],
+   "Flame": [
+    0.8980392156862745,
+    0.5411764705882353,
+    0.27058823529411763
+   ],
+   "Core": [
+    1.0,
+    0.7686274509803922,
+    0.4196078431372549
+   ],
+   "Ash": [
+    0.49411764705882355,
+    0.4666666666666667,
+    0.4549019607843137
+   ]
+  },
+  "bounds": [
+   [
+    -4.25,
+    -0.05,
+    -4.25
+   ],
+   [
+    4.25,
+    5.3,
+    4.25
+   ]
+  ],
+  "collider": {
+   "kind": "multi",
+   "shapes": [
+    {
+     "kind": "circle",
+     "radius": 1.4,
+     "height": 4,
+     "offset": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "kind": "circle",
+     "radius": 0.6,
+     "height": 4,
+     "offset": [
+      -2.4042,
+      2.4042
+     ]
+    },
+    {
+     "kind": "circle",
+     "radius": 0.6,
+     "height": 4,
+     "offset": [
+      2.4042,
+      2.4042
+     ]
+    },
+    {
+     "kind": "circle",
+     "radius": 0.6,
+     "height": 4,
+     "offset": [
+      2.4042,
+      -2.4042
+     ]
+    },
+    {
+     "kind": "circle",
+     "radius": 0.6,
+     "height": 4,
+     "offset": [
+      -2.4042,
+      -2.4042
+     ]
+    }
+   ]
+  },
+  "light": [
+   0.0,
+   4.0,
+   0.0
+  ],
+  "top": 0.95
+ },
+ {
+  "name": "Burrower",
+  "category": "Enemies",
+  "note": "Digger: ochre mole-cricket with an armoured pronotum and huge shovel claws (Jaw = dig stroke), soft segmented abdomen, a ring of soil clods at its feet (Mound piece, hide it when walking on the surface). ~3.4 wide x 3.6 long x 1.9 tall.",
+  "tris": 698,
+  "pieces": [
+   {
+    "name": "Abdomen",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.82,
+     1.05
+    ],
+    "size": [
+     1.3856,
+     1.312,
+     2.62
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Bands",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.82,
+     0.78
+    ],
+    "size": [
+     1.2471,
+     1.44,
+     0.68
+    ]
+   },
+   {
+    "name": "Pronotum",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.05,
+     -0.62
+    ],
+    "size": [
+     1.68,
+     1.1,
+     1.6
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Body",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.65,
+     -0.32
+    ],
+    "size": [
+     1.2124,
+     0.78,
+     2.84
+    ]
+   },
+   {
+    "name": "Eyes",
+    "slot": "Eye",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.86,
+     -1.56
+    ],
+    "size": [
+     0.78,
+     0.18,
+     0.18
+    ]
+   },
+   {
+    "name": "Antennae",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.9453,
+     -1.8731
+    ],
+    "size": [
+     1.0,
+     0.1731,
+     0.4538
+    ],
+    "anim": "Wiggle",
+    "pivot": [
+     0.0,
+     -0.0853,
+     0.2731
+    ]
+   },
+   {
+    "name": "ClawL",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.2882,
+     0.6429,
+     -1.5963
+    ],
+    "size": [
+     1.6423,
+     0.9873,
+     1.6822
+    ],
+    "anim": "Jaw",
+    "pivot": [
+     0.6682,
+     -0.0229,
+     0.5763
+    ]
+   },
+   {
+    "name": "ClawTipsL",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.4075,
+     0.3229,
+     -2.3879
+    ],
+    "size": [
+     1.443,
+     0.3658,
+     0.6898
+    ],
+    "anim": "Jaw",
+    "pivot": [
+     0.7875,
+     0.2971,
+     1.3679
+    ]
+   },
+   {
+    "name": "ClawR",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.2882,
+     0.6429,
+     -1.5963
+    ],
+    "size": [
+     1.6423,
+     0.9873,
+     1.6822
+    ],
+    "anim": "Jaw",
+    "pivot": [
+     -0.6682,
+     -0.0229,
+     0.5763
+    ]
+   },
+   {
+    "name": "ClawTipsR",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.4075,
+     0.3229,
+     -2.3879
+    ],
+    "size": [
+     1.443,
+     0.3658,
+     0.6898
+    ],
+    "anim": "Jaw",
+    "pivot": [
+     -0.7875,
+     0.2971,
+     1.3679
+    ]
+   },
+   {
+    "name": "LegsL",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.9866,
+     0.6456,
+     0.33
+    ],
+    "size": [
+     0.9067,
+     1.2912,
+     1.66
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     0.3866,
+     -0.0956,
+     -0.33
+    ]
+   },
+   {
+    "name": "LegsR",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.9866,
+     0.6456,
+     0.33
+    ],
+    "size": [
+     0.9067,
+     1.2912,
+     1.66
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -0.3866,
+     -0.0956,
+     -0.33
+    ]
+   },
+   {
+    "name": "Mound",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0725,
+     0.2321,
+     0.0871
+    ],
+    "size": [
+     4.4272,
+     0.4642,
+     4.9284
+    ],
+    "shadow": true
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.7133333333333334,
+    0.571764705882353,
+    0.33450980392156865
+   ],
+   "Dark": [
+    0.11764705882352941,
+    0.11372549019607843,
+    0.10588235294117647
+   ],
+   "Light": [
+    0.7945098039215687,
+    0.6847058823529412,
+    0.4776470588235294
+   ],
+   "Accent": [
+    0.4392156862745098,
+    0.31529411764705884,
+    0.2203921568627451
+   ],
+   "Eye": [
+    0.9137254901960784,
+    0.7254901960784313,
+    0.2549019607843137
+   ],
+   "Stone": [
+    0.45098039215686275,
+    0.3411764705882353,
+    0.25098039215686274
+   ]
+  },
+  "bounds": [
+   [
+    -2.141,
+    0.0,
+    -2.733
+   ],
+   [
+    2.286,
+    1.6,
+    2.551
+   ]
+  ]
+ },
+ {
   "name": "Bush",
   "category": "World",
   "note": "Low shrub, 3 x 2. Decoration (no collider).",
@@ -788,6 +2512,142 @@
     1.031
    ]
   ]
+ },
+ {
+  "name": "Cactus",
+  "category": "Desert",
+  "note": "Saguaro cactus ~4.2 tall with two arms and a crimson bloom. Collider circle.",
+  "tris": 210,
+  "pieces": [
+   {
+    "name": "Body",
+    "slot": "Cactus",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1295,
+     2.05,
+     0.0684
+    ],
+    "size": [
+     2.6726,
+     4.3,
+     1.2588
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Bloom",
+    "slot": "Bloom",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.5691,
+     3.735,
+     0.1387
+    ],
+    "size": [
+     1.4618,
+     1.07,
+     0.6578
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Cactus": [
+    0.2815686274509804,
+    0.3862745098039216,
+    0.22470588235294117
+   ],
+   "Bloom": [
+    0.8588235294117647,
+    0.41568627450980394,
+    0.3686274509803922
+   ]
+  },
+  "bounds": [
+   [
+    -1.466,
+    -0.1,
+    -0.561
+   ],
+   [
+    1.207,
+    4.27,
+    0.698
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 0.6,
+   "height": 4
+  }
+ },
+ {
+  "name": "Cactus_Tall",
+  "category": "Desert",
+  "note": "Tall saguaro ~7 tall with three arms. Collider circle.",
+  "tris": 274,
+  "pieces": [
+   {
+    "name": "Body",
+    "slot": "Cactus",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1355,
+     3.45,
+     -0.2074
+    ],
+    "size": [
+     3.3913,
+     7.1,
+     2.1074
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Bloom",
+    "slot": "Bloom",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.071,
+     6.935,
+     0.085
+    ],
+    "size": [
+     0.498,
+     0.27,
+     0.5885
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Cactus": [
+    0.2815686274509804,
+    0.3862745098039216,
+    0.22470588235294117
+   ],
+   "Bloom": [
+    0.8588235294117647,
+    0.41568627450980394,
+    0.3686274509803922
+   ]
+  },
+  "bounds": [
+   [
+    -1.831,
+    -0.1,
+    -1.261
+   ],
+   [
+    1.56,
+    7.07,
+    0.846
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 0.75,
+   "height": 7
+  }
  },
  {
   "name": "Castle_Banner",
@@ -1447,6 +3307,413 @@
   "walkway": 8.8
  },
  {
+  "name": "Challenge_Brazier",
+  "category": "Events",
+  "note": "Timed-challenge marker: chamfered stone obelisk on a two-step plinth with a floating gold rune ring and a fire bowl, ~3 x 6.4. Recolour Runes and Flame/FlameCore per state (idle, active, done, failed). Collider circle; light = flame.",
+  "tris": 876,
+  "pieces": [
+   {
+    "name": "Plinth",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.3775,
+     0.0
+    ],
+    "size": [
+     3.0,
+     0.845,
+     3.0
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Shaft",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.565,
+     0.0
+    ],
+    "size": [
+     1.6,
+     3.57,
+     1.6
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Trim",
+    "slot": "Trim",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.74,
+     0.0
+    ],
+    "size": [
+     1.85,
+     3.92,
+     1.85
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Bowl",
+    "slot": "Iron",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     5.086,
+     0.0
+    ],
+    "size": [
+     1.9956,
+     0.9321,
+     1.9956
+    ]
+   },
+   {
+    "name": "Runes",
+    "slot": "Runes",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.32,
+     0.0
+    ],
+    "size": [
+     2.6336,
+     3.06,
+     2.6336
+    ]
+   },
+   {
+    "name": "Flame",
+    "slot": "Flame",
+    "material": "Neon",
+    "offset": [
+     -0.013,
+     5.775,
+     0.0275
+    ],
+    "size": [
+     1.194,
+     1.55,
+     1.1131
+    ]
+   },
+   {
+    "name": "FlameCore",
+    "slot": "Core",
+    "material": "Neon",
+    "offset": [
+     -0.008,
+     5.825,
+     0.0
+    ],
+    "size": [
+     0.48,
+     1.45,
+     0.48
+    ]
+   },
+   {
+    "name": "Moss",
+    "slot": "Moss",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.029,
+     0.41,
+     0.016
+    ],
+    "size": [
+     2.7794,
+     0.14,
+     2.9402
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ],
+   "Stone": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "Trim": [
+    0.5215686274509804,
+    0.5411764705882353,
+    0.5686274509803921
+   ],
+   "Iron": [
+    0.30980392156862746,
+    0.3411764705882353,
+    0.3803921568627451
+   ],
+   "Runes": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Flame": [
+    0.8980392156862745,
+    0.5411764705882353,
+    0.27058823529411763
+   ],
+   "Core": [
+    0.8980392156862745,
+    0.788235294117647,
+    0.5333333333333333
+   ],
+   "Moss": [
+    0.39215686274509803,
+    0.5411764705882353,
+    0.2784313725490196
+   ]
+  },
+  "bounds": [
+   [
+    -1.5,
+    -0.045,
+    -1.5
+   ],
+   [
+    1.5,
+    6.55,
+    1.5
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.5,
+   "height": 6
+  },
+  "light": [
+   0.0,
+   5.75,
+   0.0
+  ]
+ },
+ {
+  "name": "Challenge_Ring",
+  "category": "Events",
+  "note": "Flat ring of inlaid curved stones marking a 24-stud challenge circle (radius 12 to the stone centre line, 1.1 wide, 0.18 tall) with gold rune ticks and four small Neon markers at the compass points. Walkable decoration (no collider). Recolour Runes / Glow per state.",
+  "tris": 800,
+  "pieces": [
+   {
+    "name": "Stones",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1749,
+     0.0646,
+     -0.1949
+    ],
+    "size": [
+     24.7179,
+     0.2092,
+     24.7922
+    ]
+   },
+   {
+    "name": "Stones2",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1873,
+     0.0618,
+     0.6817
+    ],
+    "size": [
+     24.7967,
+     0.2035,
+     23.8092
+    ]
+   },
+   {
+    "name": "Runes",
+    "slot": "Runes",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.1912,
+     0.0
+    ],
+    "size": [
+     25.0436,
+     0.1776,
+     25.0436
+    ]
+   },
+   {
+    "name": "Markers",
+    "slot": "Marker",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.09,
+     0.0
+    ],
+    "size": [
+     25.5309,
+     0.26,
+     25.5309
+    ]
+   },
+   {
+    "name": "Glow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.3,
+     0.0
+    ],
+    "size": [
+     24.3658,
+     0.08,
+     24.3658
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Glow": [
+    0.8980392156862745,
+    0.788235294117647,
+    0.5333333333333333
+   ],
+   "Stone": [
+    0.5215686274509804,
+    0.5411764705882353,
+    0.5686274509803921
+   ],
+   "Stone2": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "Runes": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Marker": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ]
+  },
+  "bounds": [
+   [
+    -12.765,
+    -0.04,
+    -12.765
+   ],
+   [
+    12.765,
+    0.34,
+    12.765
+   ]
+  ],
+  "top": 0.18
+ },
+ {
+  "name": "Charred_Tree",
+  "category": "Lava",
+  "note": "Dead charred tree ~9 tall with bare forked limbs (reads as a dark star from above) and a few ember glints. Collider = trunk.",
+  "tris": 356,
+  "pieces": [
+   {
+    "name": "Trunk",
+    "slot": "Bark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1312,
+     3.0093,
+     -0.0214
+    ],
+    "size": [
+     2.9463,
+     6.3813,
+     2.9185
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Limbs",
+    "slot": "Bark2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.3676,
+     6.5361,
+     0.3344
+    ],
+    "size": [
+     5.6464,
+     4.7324,
+     6.048
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Embers",
+    "slot": "Ember",
+    "material": "Neon",
+    "offset": [
+     -0.025,
+     2.45,
+     -0.475
+    ],
+    "size": [
+     1.2268,
+     2.6925,
+     0.33
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Bark": [
+    0.15294117647058825,
+    0.12549019607843137,
+    0.11764705882352941
+   ],
+   "Bark2": [
+    0.19607843137254902,
+    0.1843137254901961,
+    0.2
+   ],
+   "Ember": [
+    0.9490196078431372,
+    0.6039215686274509,
+    0.27058823529411763
+   ]
+  },
+  "bounds": [
+   [
+    -3.191,
+    -0.181,
+    -2.69
+   ],
+   [
+    2.456,
+    8.902,
+    3.358
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 0.9,
+   "height": 8
+  }
+ },
+ {
   "name": "Chest",
   "category": "Pickups",
   "note": "Elite treasure chest 3 x 2 x 2.1: wooden body (Box), barrel lid (Lid, hinge at the back), iron straps, gold corners and lock. Front (lock) = -Y.",
@@ -1953,6 +4220,2039 @@
   }
  },
  {
+  "name": "Desert_Mesa",
+  "category": "Desert",
+  "note": "Landmark mesa: a stepped butte of striped sandstone layers with a flat sand-capped top and fallen boulders, ~13 x 8.5 tall. Collider circle.",
+  "tris": 468,
+  "pieces": [
+   {
+    "name": "Talus",
+    "slot": "Talus",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.2512,
+     0.7963,
+     0.0153
+    ],
+    "size": [
+     12.6072,
+     1.5925,
+     10.2314
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Clay",
+    "slot": "Clay",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1117,
+     3.63,
+     0.2389
+    ],
+    "size": [
+     12.0031,
+     7.34,
+     10.4969
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Clay2",
+    "slot": "Clay2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.3683,
+     2.1838,
+     -0.0782
+    ],
+    "size": [
+     11.784,
+     4.4325,
+     10.4875
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Sand",
+    "slot": "Sand",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.272,
+     3.175,
+     0.3498
+    ],
+    "size": [
+     13.7483,
+     6.45,
+     10.2542
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Cap",
+    "slot": "Cap",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.8018,
+     5.875,
+     0.7339
+    ],
+    "size": [
+     10.3213,
+     3.55,
+     9.5069
+    ],
+    "shadow": true
+   }
+  ],
+  "preview_palette": {
+   "Talus": [
+    0.611764705882353,
+    0.47058823529411764,
+    0.2901960784313726
+   ],
+   "Clay": [
+    0.5490196078431373,
+    0.30980392156862746,
+    0.2196078431372549
+   ],
+   "Clay2": [
+    0.6901960784313725,
+    0.4117647058823529,
+    0.2901960784313726
+   ],
+   "Sand": [
+    0.7215686274509804,
+    0.5764705882352941,
+    0.3686274509803922
+   ],
+   "Cap": [
+    0.8666666666666667,
+    0.7568627450980392,
+    0.5568627450980392
+   ]
+  },
+  "bounds": [
+   [
+    -7.146,
+    -0.05,
+    -5.322
+   ],
+   [
+    6.602,
+    7.65,
+    5.487
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 5.6,
+   "height": 8.5
+  }
+ },
+ {
+  "name": "Desert_Obelisk",
+  "category": "Desert",
+  "note": "Landmark sandstone obelisk ~11 tall on a three-step plinth, gold pyramidion and gold glyph columns on every face. Front = -Y. Collider box.",
+  "tris": 866,
+  "pieces": [
+   {
+    "name": "Base",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.6475,
+     0.0
+    ],
+    "size": [
+     4.4,
+     1.395,
+     4.4
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Base2",
+    "slot": "Base2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.68,
+     0.0
+    ],
+    "size": [
+     3.5,
+     0.5,
+     3.5
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Shaft",
+    "slot": "Shaft",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.45,
+     0.0
+    ],
+    "size": [
+     1.7678,
+     8.3,
+     1.7678
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Gold",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     6.5828,
+     0.0
+    ],
+    "size": [
+     1.9759,
+     8.6343,
+     1.9759
+    ]
+   },
+   {
+    "name": "Band",
+    "slot": "Band",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.65,
+     0.0
+    ],
+    "size": [
+     1.7466,
+     0.3,
+     1.7466
+    ]
+   },
+   {
+    "name": "Sand",
+    "slot": "Sand",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0061,
+     0.321,
+     -0.0159
+    ],
+    "size": [
+     6.3223,
+     0.702,
+     5.3908
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.7215686274509804,
+    0.5764705882352941,
+    0.3686274509803922
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Base2": [
+    0.803921568627451,
+    0.6705882352941176,
+    0.4549019607843137
+   ],
+   "Shaft": [
+    0.8666666666666667,
+    0.7568627450980392,
+    0.5568627450980392
+   ],
+   "Sand": [
+    0.803921568627451,
+    0.6705882352941176,
+    0.4549019607843137
+   ],
+   "Band": [
+    0.6901960784313725,
+    0.4117647058823529,
+    0.2901960784313726
+   ]
+  },
+  "bounds": [
+   [
+    -3.155,
+    -0.05,
+    -2.711
+   ],
+   [
+    3.167,
+    10.9,
+    2.679
+   ]
+  ],
+  "collider": {
+   "kind": "box",
+   "size": [
+    3.2,
+    3.2
+   ],
+   "height": 10
+  }
+ },
+ {
+  "name": "Desert_Rock",
+  "category": "Desert",
+  "note": "Layered sandstone rock, ~4.4 x 2.8, terracotta and tan bands. Collider circle.",
+  "tris": 108,
+  "pieces": [
+   {
+    "name": "Rock",
+    "slot": "Rock",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2724,
+     0.425,
+     -0.1087
+    ],
+    "size": [
+     4.6178,
+     1.05,
+     4.0567
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Band",
+    "slot": "Band",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0759,
+     1.275,
+     -0.0667
+    ],
+    "size": [
+     4.0096,
+     0.65,
+     3.7005
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Top",
+    "slot": "Top",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2791,
+     2.025,
+     0.1889
+    ],
+    "size": [
+     2.729,
+     0.85,
+     3.0545
+    ],
+    "shadow": true
+   }
+  ],
+  "preview_palette": {
+   "Rock": [
+    0.7215686274509804,
+    0.5764705882352941,
+    0.3686274509803922
+   ],
+   "Band": [
+    0.6901960784313725,
+    0.4117647058823529,
+    0.2901960784313726
+   ],
+   "Top": [
+    0.803921568627451,
+    0.6705882352941176,
+    0.4549019607843137
+   ]
+  },
+  "bounds": [
+   [
+    -2.581,
+    -0.1,
+    -2.137
+   ],
+   [
+    2.037,
+    2.45,
+    1.92
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 2.0,
+   "height": 2.8
+  }
+ },
+ {
+  "name": "Desert_Ruin_Pillar",
+  "category": "Desert",
+  "note": "Broken sandstone column on a plinth with a terracotta band and a sand drift, ~2.6 wide, 5.2 tall. Collider circle.",
+  "tris": 240,
+  "pieces": [
+   {
+    "name": "Plinth",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.4054,
+     0.25,
+     -0.128
+    ],
+    "size": [
+     3.1108,
+     0.6,
+     2.556
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Shaft",
+    "slot": "Shaft",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.001,
+     2.785,
+     0.024
+    ],
+    "size": [
+     1.5217,
+     4.5699,
+     1.552
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Shaft2",
+    "slot": "Shaft2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.001,
+     3.125,
+     0.0231
+    ],
+    "size": [
+     1.4646,
+     1.25,
+     1.4938
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Band",
+    "slot": "Band",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.35,
+     0.0
+    ],
+    "size": [
+     1.5618,
+     0.34,
+     1.64
+    ]
+   },
+   {
+    "name": "Sand",
+    "slot": "Sand",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.288,
+     0.2346,
+     -0.0332
+    ],
+    "size": [
+     3.9992,
+     0.5292,
+     3.2433
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.7215686274509804,
+    0.5764705882352941,
+    0.3686274509803922
+   ],
+   "Shaft": [
+    0.8666666666666667,
+    0.7568627450980392,
+    0.5568627450980392
+   ],
+   "Shaft2": [
+    0.803921568627451,
+    0.6705882352941176,
+    0.4549019607843137
+   ],
+   "Band": [
+    0.6901960784313725,
+    0.4117647058823529,
+    0.2901960784313726
+   ],
+   "Sand": [
+    0.803921568627451,
+    0.6705882352941176,
+    0.4549019607843137
+   ]
+  },
+  "bounds": [
+   [
+    -1.961,
+    -0.05,
+    -1.655
+   ],
+   [
+    2.288,
+    5.07,
+    1.588
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.15,
+   "height": 5
+  }
+ },
+ {
+  "name": "Desert_Ruin_Wall",
+  "category": "Desert",
+  "note": "Broken sandstone block wall half buried in sand, 8 x 3.4 x 1.4 (length along X), terracotta course. Collider box.",
+  "tris": 714,
+  "pieces": [
+   {
+    "name": "Stone",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.873,
+     1.2918,
+     0.5207
+    ],
+    "size": [
+     5.1116,
+     2.7044,
+     2.4487
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone2",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0135,
+     1.6619,
+     -0.5559
+    ],
+    "size": [
+     7.9294,
+     3.5316,
+     2.4946
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone3",
+    "slot": "Stone3",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.4887,
+     1.7196,
+     -0.0076
+    ],
+    "size": [
+     6.9766,
+     3.4273,
+     1.4702
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Band",
+    "slot": "Band",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.0,
+     1.9,
+     0.0
+    ],
+    "size": [
+     5.9,
+     0.2,
+     1.48
+    ]
+   },
+   {
+    "name": "Sand",
+    "slot": "Sand",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0842,
+     0.4006,
+     0.0037
+    ],
+    "size": [
+     8.6688,
+     0.8613,
+     3.5236
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Stone": [
+    0.803921568627451,
+    0.6705882352941176,
+    0.4549019607843137
+   ],
+   "Stone2": [
+    0.8666666666666667,
+    0.7568627450980392,
+    0.5568627450980392
+   ],
+   "Stone3": [
+    0.7215686274509804,
+    0.5764705882352941,
+    0.3686274509803922
+   ],
+   "Sand": [
+    0.803921568627451,
+    0.6705882352941176,
+    0.4549019607843137
+   ],
+   "Band": [
+    0.6901960784313725,
+    0.4117647058823529,
+    0.2901960784313726
+   ]
+  },
+  "bounds": [
+   [
+    -4.25,
+    -0.104,
+    -1.803
+   ],
+   [
+    4.429,
+    3.433,
+    1.766
+   ]
+  ],
+  "collider": {
+   "kind": "box",
+   "size": [
+    8.0,
+    1.4
+   ],
+   "height": 3.4
+  }
+ },
+ {
+  "name": "Desert_Tent",
+  "category": "Desert",
+  "note": "Nomad tent ~6 x 5 x 3.9: striped crimson and ivory cloth on poles, open front (-Y) over a rug, a clay pot and guy ropes. Collider box.",
+  "tris": 446,
+  "pieces": [
+   {
+    "name": "Poles",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.925,
+     0.0
+    ],
+    "size": [
+     2.52,
+     4.05,
+     6.52
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Cloth",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.84,
+     -0.04
+    ],
+    "size": [
+     5.0,
+     3.68,
+     4.68
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Cloth2",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.84,
+     0.3833
+    ],
+    "size": [
+     5.0,
+     3.68,
+     3.8333
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Dark",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.725,
+     2.15
+    ],
+    "size": [
+     4.7,
+     3.45,
+     0.1
+    ]
+   },
+   {
+    "name": "Rug",
+    "slot": "Rug",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.03,
+     -1.6
+    ],
+    "size": [
+     2.6,
+     0.06,
+     3.2
+    ]
+   },
+   {
+    "name": "Gold",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.04,
+     -1.6
+    ],
+    "size": [
+     2.42,
+     0.07,
+     3.0
+    ]
+   },
+   {
+    "name": "Pot",
+    "slot": "Clay",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.9208,
+     0.475,
+     -2.9
+    ],
+    "size": [
+     0.7984,
+     0.95,
+     0.8189
+    ]
+   },
+   {
+    "name": "Ropes",
+    "slot": "Rope",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.9031,
+     0.0
+    ],
+    "size": [
+     2.4523,
+     3.9188,
+     6.4392
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.16470588235294117,
+    0.11764705882352941,
+    0.08627450980392157
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Wood": [
+    0.396078431372549,
+    0.2823529411764706,
+    0.19607843137254902
+   ],
+   "Cloth": [
+    0.5647058823529412,
+    0.13333333333333333,
+    0.1607843137254902
+   ],
+   "Cloth2": [
+    0.788235294117647,
+    0.7450980392156863,
+    0.6509803921568628
+   ],
+   "Rug": [
+    0.3215686274509804,
+    0.07450980392156863,
+    0.09411764705882353
+   ],
+   "Clay": [
+    0.6901960784313725,
+    0.4117647058823529,
+    0.2901960784313726
+   ],
+   "Rope": [
+    0.7215686274509804,
+    0.611764705882353,
+    0.47058823529411764
+   ]
+  },
+  "bounds": [
+   [
+    -2.5,
+    -0.1,
+    -3.309
+   ],
+   [
+    2.5,
+    3.95,
+    3.26
+   ]
+  ],
+  "collider": {
+   "kind": "box",
+   "size": [
+    5.0,
+    4.4
+   ],
+   "height": 3.9
+  }
+ },
+ {
+  "name": "Dune",
+  "category": "Desert",
+  "note": "Wind-shaped sand dune mound ~9 x 5.5 x 1.5 with a lit crest. Decoration (no collider).",
+  "tris": 78,
+  "pieces": [
+   {
+    "name": "Dune",
+    "slot": "Sand",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1418,
+     0.704,
+     -0.0087
+    ],
+    "size": [
+     8.4304,
+     1.4881,
+     5.2421
+    ]
+   },
+   {
+    "name": "Crest",
+    "slot": "Crest",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0161,
+     0.7321,
+     -0.7303
+    ],
+    "size": [
+     7.6391,
+     1.5179,
+     3.912
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Sand": [
+    0.803921568627451,
+    0.6705882352941176,
+    0.4549019607843137
+   ],
+   "Crest": [
+    0.8666666666666667,
+    0.7568627450980392,
+    0.5568627450980392
+   ]
+  },
+  "bounds": [
+   [
+    -4.357,
+    -0.04,
+    -2.686
+   ],
+   [
+    4.073,
+    1.491,
+    2.612
+   ]
+  ]
+ },
+ {
+  "name": "EliteAura_Burning",
+  "category": "Fx",
+  "note": "Elite aura: a ring of ten low-poly flame licks (fire orange outside, gold inner licks, tiny Neon sparks above) around the body, radius ~1.8, ~1.5 tall. Spin.",
+  "tris": 560,
+  "pieces": [
+   {
+    "name": "Flames",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0248,
+     0.675,
+     0.0
+    ],
+    "size": [
+     3.6183,
+     1.35,
+     3.5354
+    ],
+    "transparency": 0.1,
+    "anim": "Spin",
+    "pivot": [
+     0.0248,
+     -0.675,
+     0.0
+    ]
+   },
+   {
+    "name": "FlameCores",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.3912,
+     0.0
+    ],
+    "size": [
+     3.6864,
+     0.7425,
+     3.5465
+    ],
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     -0.3912,
+     0.0
+    ]
+   },
+   {
+    "name": "FlameRoots",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.25,
+     0.0
+    ],
+    "size": [
+     3.4544,
+     0.54,
+     3.3373
+    ],
+    "transparency": 0.1,
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     -0.25,
+     0.0
+    ]
+   },
+   {
+    "name": "Sparks",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0023,
+     1.26,
+     0.1717
+    ],
+    "size": [
+     3.5846,
+     0.84,
+     3.4195
+    ],
+    "anim": "Spin",
+    "pivot": [
+     -0.0023,
+     -1.26,
+     -0.1717
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.6823529411764706,
+    0.17647058823529413,
+    0.19215686274509805
+   ],
+   "Accent": [
+    0.8980392156862745,
+    0.5411764705882353,
+    0.27058823529411763
+   ],
+   "Glow": [
+    0.8980392156862745,
+    0.788235294117647,
+    0.5333333333333333
+   ],
+   "Gold": [
+    0.9388235294117647,
+    0.7733333333333333,
+    0.4870588235294117
+   ]
+  },
+  "bounds": [
+   [
+    -1.843,
+    -0.02,
+    -1.773
+   ],
+   [
+    1.843,
+    1.68,
+    1.881
+   ]
+  ]
+ },
+ {
+  "name": "EliteAura_Shield",
+  "category": "Fx",
+  "note": "Elite aura: three translucent steel hex shield plates with gold rims orbiting the body at mid height (radius ~1.9, plates ~1.1 across), a small arcane glint on each. Spin.",
+  "tris": 564,
+  "pieces": [
+   {
+    "name": "Plates",
+    "slot": "Metal",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     1.325,
+     0.2953
+    ],
+    "size": [
+     3.9287,
+     1.3241,
+     3.4493
+    ],
+    "transparency": 0.25,
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     -1.325,
+     -0.2953
+    ]
+   },
+   {
+    "name": "Rims",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     1.325,
+     0.2804
+    ],
+    "size": [
+     4.0,
+     1.4609,
+     3.5109
+    ],
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     -1.325,
+     -0.2804
+    ]
+   },
+   {
+    "name": "Glints",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     1.2999,
+     0.5196
+    ],
+    "size": [
+     3.7396,
+     0.29,
+     3.2574
+    ],
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     -1.2999,
+     -0.5196
+    ]
+   },
+   {
+    "name": "Bosses",
+    "slot": "Accent",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     1.3111,
+     0.4899
+    ],
+    "size": [
+     3.7402,
+     0.539,
+     3.3391
+    ],
+    "transparency": 0.1,
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     -1.3111,
+     -0.4899
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Accent": [
+    0.39215686274509803,
+    0.48627450980392156,
+    0.592156862745098
+   ],
+   "Glow": [
+    0.615686274509804,
+    0.7215686274509804,
+    0.8901960784313725
+   ],
+   "Metal": [
+    0.6898039215686275,
+    0.7572549019607844,
+    0.8462745098039215
+   ],
+   "Gold": [
+    0.8352941176470589,
+    0.6901960784313725,
+    0.3843137254901961
+   ]
+  },
+  "bounds": [
+   [
+    -2.0,
+    0.595,
+    -1.475
+   ],
+   [
+    2.0,
+    2.055,
+    2.159
+   ]
+  ]
+ },
+ {
+  "name": "EliteAura_Swift",
+  "category": "Fx",
+  "note": "Elite aura: three pale wind-streak ribbons spiralling around the body at different heights (radius ~1.7-2.0), tapered at both ends, translucent ivory; tiny Neon tips at the leading ends. Spin.",
+  "tris": 264,
+  "pieces": [
+   {
+    "name": "Streaks",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1103,
+     1.2333,
+     -0.009
+    ],
+    "size": [
+     3.8207,
+     1.9912,
+     3.6468
+    ],
+    "transparency": 0.3,
+    "anim": "Spin",
+    "pivot": [
+     -0.1103,
+     -1.2333,
+     0.009
+    ]
+   },
+   {
+    "name": "StreakCores",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0932,
+     1.2365,
+     -0.0172
+    ],
+    "size": [
+     3.7324,
+     1.7621,
+     3.5755
+    ],
+    "transparency": 0.1,
+    "anim": "Spin",
+    "pivot": [
+     -0.0932,
+     -1.2365,
+     0.0172
+    ]
+   },
+   {
+    "name": "Tips",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     -0.1215,
+     1.3708,
+     -0.2287
+    ],
+    "size": [
+     2.9543,
+     1.52,
+     2.9518
+    ],
+    "anim": "Spin",
+    "pivot": [
+     0.1215,
+     -1.3708,
+     0.2287
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Light": [
+    0.9529411764705882,
+    0.9294117647058824,
+    0.8745098039215686
+   ],
+   "Accent": [
+    0.8627450980392157,
+    0.9176470588235294,
+    0.9686274509803922
+   ],
+   "Glow": [
+    0.8941176470588236,
+    0.9254901960784314,
+    1.0
+   ]
+  },
+  "bounds": [
+   [
+    -1.8,
+    0.238,
+    -1.832
+   ],
+   [
+    2.021,
+    2.229,
+    1.814
+   ]
+  ]
+ },
+ {
+  "name": "Ember_Vent",
+  "category": "Lava",
+  "note": "Small basalt fumarole ~2.8 wide, 1.3 tall, with a glowing mouth, a flame lick and an ash ring. Collider circle; light = mouth.",
+  "tris": 174,
+  "pieces": [
+   {
+    "name": "Cone",
+    "slot": "Rock",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0106,
+     0.575,
+     0.0968
+    ],
+    "size": [
+     3.1678,
+     1.25,
+     3.035
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Ash",
+    "slot": "Ash",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0578,
+     0.074,
+     0.0117
+    ],
+    "size": [
+     3.832,
+     0.208,
+     3.2299
+    ]
+   },
+   {
+    "name": "Mouth",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.9,
+     0.0
+    ],
+    "size": [
+     0.5931,
+     0.1,
+     0.5931
+    ]
+   },
+   {
+    "name": "Flame",
+    "slot": "Core",
+    "material": "Neon",
+    "offset": [
+     -0.012,
+     1.4,
+     0.004
+    ],
+    "size": [
+     0.44,
+     0.9,
+     0.44
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Glow": [
+    0.9490196078431372,
+    0.6039215686274509,
+    0.27058823529411763
+   ],
+   "Rock": [
+    0.19607843137254902,
+    0.1843137254901961,
+    0.2
+   ],
+   "Ash": [
+    0.49411764705882355,
+    0.4666666666666667,
+    0.4549019607843137
+   ],
+   "Core": [
+    1.0,
+    0.7686274509803922,
+    0.4196078431372549
+   ]
+  },
+  "bounds": [
+   [
+    -1.858,
+    -0.05,
+    -1.603
+   ],
+   [
+    1.974,
+    1.85,
+    1.627
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.2,
+   "height": 1.3
+  },
+  "light": [
+   0.0,
+   1.4,
+   0.0
+  ]
+ },
+ {
+  "name": "Engineer",
+  "category": "Heroes",
+  "note": "Stout dwarf engineer: steel miner's helmet with a brass lamp, huge ginger beard, boiler backpack, gold gears, giant steel wrench.",
+  "tris": 2454,
+  "pieces": [
+   {
+    "name": "Head",
+    "slot": "Skin",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.15,
+     0.0
+    ],
+    "size": [
+     1.4289,
+     1.4,
+     1.3369
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "Eyes",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.12,
+     -0.665
+    ],
+    "size": [
+     0.7,
+     0.28,
+     0.08
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceHair",
+    "slot": "Hair",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.415,
+     0.0528
+    ],
+    "size": [
+     1.7257,
+     1.03,
+     1.6456
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Helm",
+    "slot": "Hat",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     5.8,
+     0.0
+    ],
+    "size": [
+     2.2173,
+     1.1,
+     2.2173
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "HelmTrim",
+    "slot": "HatAccent",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     5.9991,
+     -0.0292
+    ],
+    "size": [
+     0.33,
+     0.9614,
+     2.0514
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "HelmLamp",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     -0.365,
+     5.6642,
+     -0.405
+    ],
+    "size": [
+     1.33,
+     0.6107,
+     1.6054
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "HelmLight",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     5.68,
+     -1.2
+    ],
+    "size": [
+     0.42,
+     0.4232,
+     0.0892
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceBeard",
+    "slot": "Hair",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.97,
+     -0.6
+    ],
+    "size": [
+     1.92,
+     2.3,
+     0.8944
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "FaceBeardRing",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     3.3518,
+     -0.7465
+    ],
+    "size": [
+     0.4,
+     0.209,
+     0.3518
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Torso",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.37,
+     0.0
+    ],
+    "size": [
+     2.3592,
+     2.34,
+     1.6852
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "Tunic",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.85,
+     0.0
+    ],
+    "size": [
+     2.3592,
+     0.9,
+     1.7273
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Belt",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.085,
+     -0.0008
+    ],
+    "size": [
+     2.3178,
+     0.67,
+     1.6985
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Gears",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     -0.1463,
+     2.82,
+     0.2586
+    ],
+    "size": [
+     0.9275,
+     1.7791,
+     2.5972
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Pack",
+    "slot": "Metal",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     3.51,
+     1.08
+    ],
+    "size": [
+     1.1,
+     1.82,
+     1.1
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "PackPipe",
+    "slot": "MetalDark",
+    "material": "Metal",
+    "offset": [
+     0.36,
+     4.5046,
+     1.2
+    ],
+    "size": [
+     0.4,
+     0.8309,
+     0.3464
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Straps",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.0764,
+     -0.0279
+    ],
+    "size": [
+     1.7906,
+     0.8906,
+     1.3265
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Kerchief",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.34,
+     0.0
+    ],
+    "size": [
+     2.244,
+     0.32,
+     1.5194
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "LeftArm",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.4692,
+     3.1012,
+     0.0
+    ],
+    "size": [
+     0.7462,
+     1.6247,
+     0.6554
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmPauldron",
+    "slot": "Metal",
+    "material": "Metal",
+    "offset": [
+     -1.4713,
+     3.8375,
+     0.0
+    ],
+    "size": [
+     1.2386,
+     0.8104,
+     1.1707
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmPadTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     -1.4484,
+     3.5591,
+     0.0
+    ],
+    "size": [
+     1.3082,
+     0.3901,
+     1.2594
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmGlove",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.54,
+     2.26,
+     -0.02
+    ],
+    "size": [
+     0.85,
+     0.92,
+     0.85
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "RightArm",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.4692,
+     3.1012,
+     0.0
+    ],
+    "size": [
+     0.7462,
+     1.6247,
+     0.6554
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmPauldron",
+    "slot": "Metal",
+    "material": "Metal",
+    "offset": [
+     1.4713,
+     3.8375,
+     0.0
+    ],
+    "size": [
+     1.2386,
+     0.8104,
+     1.1707
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmPadTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     1.4484,
+     3.5591,
+     0.0
+    ],
+    "size": [
+     1.3082,
+     0.3901,
+     1.2594
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmGlove",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.54,
+     2.26,
+     -0.02
+    ],
+    "size": [
+     0.85,
+     0.92,
+     0.85
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "Wrench",
+    "slot": "Blade",
+    "material": "Metal",
+    "offset": [
+     1.7469,
+     1.3696,
+     -1.2588
+    ],
+    "size": [
+     0.8657,
+     2.2959,
+     3.8839
+    ],
+    "bone": "RightArm",
+    "shadow": true
+   },
+   {
+    "name": "WrenchGrip",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.5378,
+     2.1428,
+     0.0496
+    ],
+    "size": [
+     0.3805,
+     0.5853,
+     0.8723
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "WrenchGear",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     1.7393,
+     1.4374,
+     -1.4284
+    ],
+    "size": [
+     0.4371,
+     0.5992,
+     0.6385
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "LeftLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.7543,
+     1.6,
+     0.7952
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.7543,
+     1.6,
+     0.7952
+    ],
+    "bone": "RightLeg"
+   },
+   {
+    "name": "LeftLegBoot",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.54,
+     0.58,
+     -0.1343
+    ],
+    "size": [
+     0.96,
+     1.16,
+     1.2487
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "LeftLegToeCap",
+    "slot": "MetalDark",
+    "material": "Metal",
+    "offset": [
+     -0.54,
+     0.22,
+     -0.62
+    ],
+    "size": [
+     0.7652,
+     0.34,
+     0.3836
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLegBoot",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.54,
+     0.58,
+     -0.1343
+    ],
+    "size": [
+     0.96,
+     1.16,
+     1.2487
+    ],
+    "bone": "RightLeg"
+   },
+   {
+    "name": "RightLegToeCap",
+    "slot": "MetalDark",
+    "material": "Metal",
+    "offset": [
+     0.54,
+     0.22,
+     -0.62
+    ],
+    "size": [
+     0.7652,
+     0.34,
+     0.3836
+    ],
+    "bone": "RightLeg"
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.054901960784313725,
+    0.07450980392156863,
+    0.10196078431372549
+   ],
+   "Accent": [
+    0.6823529411764706,
+    0.17647058823529413,
+    0.19215686274509805
+   ],
+   "Glow": [
+    0.9490196078431372,
+    0.8313725490196079,
+    0.5411764705882353
+   ],
+   "Metal": [
+    0.6196078431372549,
+    0.6549019607843137,
+    0.6980392156862745
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Skin": [
+    0.8509803921568627,
+    0.6549019607843137,
+    0.4980392156862745
+   ],
+   "Cloth": [
+    0.27450980392156865,
+    0.3607843137254902,
+    0.4627450980392157
+   ],
+   "Cloth2": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ],
+   "Hair": [
+    0.7705882352941177,
+    0.4131372549019608,
+    0.25941176470588234
+   ],
+   "Leather": [
+    0.33725490196078434,
+    0.22745098039215686,
+    0.15294117647058825
+   ],
+   "Blade": [
+    0.7372549019607844,
+    0.7647058823529411,
+    0.796078431372549
+   ],
+   "MetalDark": [
+    0.403921568627451,
+    0.4392156862745098,
+    0.4823529411764706
+   ],
+   "Hat": [
+    0.6196078431372549,
+    0.6549019607843137,
+    0.6980392156862745
+   ],
+   "HatAccent": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ]
+  },
+  "bounds": [
+   [
+    -2.103,
+    0.0,
+    -3.201
+   ],
+   [
+    2.18,
+    6.48,
+    1.63
+   ]
+  ],
+  "joints": {
+   "Neck": [
+    0.0,
+    4.45,
+    0.0
+   ],
+   "LeftShoulder": [
+    -1.2,
+    3.95,
+    0.0
+   ],
+   "RightShoulder": [
+    1.2,
+    3.95,
+    0.0
+   ],
+   "LeftHip": [
+    -0.5,
+    2.0,
+    0.0
+   ],
+   "RightHip": [
+    0.5,
+    2.0,
+    0.0
+   ]
+  }
+ },
+ {
   "name": "Fence_Section",
   "category": "World",
   "note": "Weathered post-and-rail fence, 8 long (X) x 2.6 tall. Collider box.",
@@ -2127,6 +6427,148 @@
   ]
  },
  {
+  "name": "Frozen_Pond",
+  "category": "Snow",
+  "note": "Flat frozen pond ~10.4 x 9.2, 0.3 tall: snow bank, pale ice with a deeper centre and glint streaks, a few rocks. Slippery hazard visual (hazard radius ~4.4). Walkable decoration.",
+  "tris": 482,
+  "pieces": [
+   {
+    "name": "Bank",
+    "slot": "Bank",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1438,
+     0.04,
+     -0.0141
+    ],
+    "size": [
+     10.8168,
+     0.16,
+     9.2427
+    ]
+   },
+   {
+    "name": "Ice",
+    "slot": "Ice",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1078,
+     0.085,
+     0.104
+    ],
+    "size": [
+     9.2407,
+     0.17,
+     8.0291
+    ]
+   },
+   {
+    "name": "Deep",
+    "slot": "Deep",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.6228,
+     0.1425,
+     0.4952
+    ],
+    "size": [
+     4.8903,
+     0.085,
+     3.6804
+    ]
+   },
+   {
+    "name": "Glints",
+    "slot": "Glint",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1615,
+     0.1925,
+     0.0421
+    ],
+    "size": [
+     4.9937,
+     0.035,
+     5.0511
+    ]
+   },
+   {
+    "name": "Stones",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.2195,
+     0.3048,
+     0.3238
+    ],
+    "size": [
+     10.017,
+     0.6096,
+     6.3025
+    ]
+   },
+   {
+    "name": "Snow",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1392,
+     0.3296,
+     0.0056
+    ],
+    "size": [
+     10.5477,
+     0.6592,
+     9.1653
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Stone": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "Bank": [
+    0.8823529411764706,
+    0.9019607843137255,
+    0.9176470588235294
+   ],
+   "Ice": [
+    0.6627450980392157,
+    0.7764705882352941,
+    0.8470588235294118
+   ],
+   "Deep": [
+    0.5250980392156863,
+    0.6592156862745098,
+    0.7501960784313725
+   ],
+   "Glint": [
+    0.8627450980392157,
+    0.9176470588235294,
+    0.9450980392156862
+   ],
+   "Snow": [
+    0.9450980392156862,
+    0.9529411764705882,
+    0.9568627450980393
+   ]
+  },
+  "bounds": [
+   [
+    -5.552,
+    -0.04,
+    -4.635
+   ],
+   [
+    5.413,
+    0.659,
+    4.607
+   ]
+  ]
+ },
+ {
   "name": "GrassTuft",
   "category": "World",
   "note": "Grass tuft, 1.2 x 0.8. Scatter decoration (<= 40 tris).",
@@ -2167,6 +6609,204 @@
     0.374
    ]
   ]
+ },
+ {
+  "name": "Guard_Altar",
+  "category": "Events",
+  "note": "Ruined two-step stone altar ~6.4 x 5.6 for the guarded reward chest (chest sits on the top at the origin, top = 0.9), broken back pillars and a crimson banner with a gold crown on a pole behind. Front = -Y. Collider = the pillars and the pole only (the platform is a walkable step).",
+  "tris": 1176,
+  "pieces": [
+   {
+    "name": "Base",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.3635,
+     0.12,
+     -0.0943
+    ],
+    "size": [
+     7.2435,
+     0.82,
+     5.8088
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.8589,
+     0.6325
+    ],
+    "size": [
+     6.6761,
+     2.8836,
+     4.411
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone2",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2054,
+     0.4475,
+     0.3675
+    ],
+    "size": [
+     7.4108,
+     0.9151,
+     5.2651
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Gold",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.07,
+     0.6631
+    ],
+    "size": [
+     7.1201,
+     6.86,
+     4.7939
+    ]
+   },
+   {
+    "name": "Moss",
+    "slot": "Moss",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0702,
+     1.8754,
+     0.7862
+    ],
+    "size": [
+     6.5023,
+     2.9507,
+     4.0703
+    ]
+   },
+   {
+    "name": "Pole",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.4,
+     2.85
+    ],
+    "size": [
+     2.6,
+     7.0,
+     0.3464
+    ]
+   },
+   {
+    "name": "Banner",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.5,
+     2.72
+    ],
+    "size": [
+     2.1,
+     3.6,
+     0.1969
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Wood": [
+    0.396078431372549,
+    0.2823529411764706,
+    0.19607843137254902
+   ],
+   "Cloth": [
+    0.5647058823529412,
+    0.13333333333333333,
+    0.1607843137254902
+   ],
+   "Stone": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "Stone2": [
+    0.5215686274509804,
+    0.5411764705882353,
+    0.5686274509803921
+   ],
+   "Moss": [
+    0.39215686274509803,
+    0.5411764705882353,
+    0.2784313725490196
+   ]
+  },
+  "bounds": [
+   [
+    -3.911,
+    -0.29,
+    -2.999
+   ],
+   [
+    3.985,
+    7.5,
+    3.06
+   ]
+  ],
+  "top": 0.9,
+  "collider": {
+   "kind": "multi",
+   "shapes": [
+    {
+     "kind": "circle",
+     "radius": 0.85,
+     "height": 3,
+     "offset": [
+      2.75,
+      2.25
+     ]
+    },
+    {
+     "kind": "circle",
+     "radius": 0.85,
+     "height": 2,
+     "offset": [
+      -2.75,
+      2.25
+     ]
+    },
+    {
+     "kind": "circle",
+     "radius": 0.4,
+     "height": 7,
+     "offset": [
+      0.0,
+      2.85
+     ]
+    }
+   ]
+  }
  },
  {
   "name": "Hat_Bandana",
@@ -3064,6 +7704,719 @@
   ]
  },
  {
+  "name": "Healer",
+  "category": "Enemies",
+  "note": "Support bug: soft pale aphid with a round glowing belly (Pulse), two cornicles, small translucent wings (FlutterL/R) and a halo of six glowing motes above it (Spin, pivot on the halo axis). ~2.6 wide x 2.8 long x 3.1 tall incl. halo.",
+  "tris": 666,
+  "pieces": [
+   {
+    "name": "Body",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.0,
+     0.0753
+    ],
+    "size": [
+     1.7744,
+     1.5989,
+     2.5094
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stripes",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.5119,
+     0.41
+    ],
+    "size": [
+     1.8226,
+     0.6238,
+     0.74
+    ]
+   },
+   {
+    "name": "Head",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.8,
+     -1.27
+    ],
+    "size": [
+     0.5543,
+     0.64,
+     0.66
+    ]
+   },
+   {
+    "name": "Eyes",
+    "slot": "Eye",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.92,
+     -1.4
+    ],
+    "size": [
+     0.54,
+     0.14,
+     0.14
+    ]
+   },
+   {
+    "name": "Cornicles",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.5941,
+     1.2449
+    ],
+    "size": [
+     1.2313,
+     0.5919,
+     0.6105
+    ]
+   },
+   {
+    "name": "Glow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     1.8239,
+     0.8258
+    ],
+    "size": [
+     1.3,
+     0.2522,
+     1.5284
+    ],
+    "anim": "Pulse",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "Antennae",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.3028,
+     -1.4794
+    ],
+    "size": [
+     1.2,
+     0.5943,
+     0.3612
+    ],
+    "anim": "Wiggle",
+    "pivot": [
+     0.0,
+     -0.3028,
+     0.1794
+    ]
+   },
+   {
+    "name": "WingL",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.7856,
+     1.6698,
+     -0.71
+    ],
+    "size": [
+     1.0354,
+     0.483,
+     0.62
+    ],
+    "transparency": 0.45,
+    "anim": "FlutterL",
+    "pivot": [
+     0.4856,
+     -0.3698,
+     0.05
+    ]
+   },
+   {
+    "name": "WingR",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.7856,
+     1.6698,
+     -0.71
+    ],
+    "size": [
+     1.0354,
+     0.483,
+     0.62
+    ],
+    "transparency": 0.45,
+    "anim": "FlutterR",
+    "pivot": [
+     -0.4856,
+     -0.3698,
+     0.05
+    ]
+   },
+   {
+    "name": "LegsL",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.7522,
+     0.5362,
+     -0.59
+    ],
+    "size": [
+     0.9357,
+     1.0725,
+     1.82
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     0.3522,
+     0.1238,
+     -0.07
+    ]
+   },
+   {
+    "name": "LegsR",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.7522,
+     0.5362,
+     -0.59
+    ],
+    "size": [
+     0.9357,
+     1.0725,
+     1.82
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -0.3522,
+     0.1238,
+     -0.07
+    ]
+   },
+   {
+    "name": "Halo",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     -0.02,
+     2.62,
+     0.1
+    ],
+    "size": [
+     2.02,
+     0.26,
+     1.8188
+    ],
+    "anim": "Spin",
+    "pivot": [
+     0.02,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "HaloRing",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.62,
+     0.0717
+    ],
+    "size": [
+     1.8514,
+     0.05,
+     1.8233
+    ],
+    "transparency": 0.55,
+    "anim": "Spin",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0283
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.8580392156862745,
+    0.8711764705882353,
+    0.7688235294117647
+   ],
+   "Dark": [
+    0.17254901960784313,
+    0.16470588235294117,
+    0.15294117647058825
+   ],
+   "Light": [
+    0.6988235294117646,
+    0.7286274509803922,
+    0.5709803921568628
+   ],
+   "Accent": [
+    0.6329411764705882,
+    0.7717647058823529,
+    0.47215686274509805
+   ],
+   "Glow": [
+    0.7254901960784313,
+    0.8705882352941177,
+    0.5568627450980392
+   ],
+   "Eye": [
+    0.9137254901960784,
+    0.7254901960784313,
+    0.2549019607843137
+   ],
+   "White": [
+    0.9529411764705882,
+    0.9294117647058824,
+    0.8745098039215686
+   ]
+  },
+  "bounds": [
+   [
+    -1.303,
+    -0.0,
+    -1.66
+   ],
+   [
+    1.303,
+    2.75,
+    1.59
+   ]
+  ]
+ },
+ {
+  "name": "HiveMother",
+  "category": "Enemies",
+  "note": "Boss. Bloated hive queen ~9 wide x 13.5 long x 6.5 tall: dark amber armoured head and thorax with a gold crown, crushing mandibles (Jaw), a huge pale banded egg-sac abdomen dragging behind (Tail = slow heave) studded with glowing amber pods (Throb), an egg at the tip, ten small legs (SwingA/B), antennae Wiggle.",
+  "tris": 1996,
+  "pieces": [
+   {
+    "name": "EggSac",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.944,
+     4.176
+    ],
+    "size": [
+     6.4,
+     5.888,
+     9.736
+    ],
+    "shadow": true,
+    "anim": "Tail",
+    "pivot": [
+     0.0,
+     -0.544,
+     -4.776
+    ]
+   },
+   {
+    "name": "SacBands",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.714,
+     4.45
+    ],
+    "size": [
+     5.52,
+     5.544,
+     6.96
+    ],
+    "anim": "Tail",
+    "pivot": [
+     0.0,
+     -0.314,
+     -5.05
+    ]
+   },
+   {
+    "name": "Pods",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     4.329,
+     4.5835
+    ],
+    "size": [
+     5.2656,
+     2.6221,
+     6.033
+    ],
+    "anim": "Throb",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "Egg",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.0,
+     9.45
+    ],
+    "size": [
+     1.1413,
+     1.1413,
+     1.6
+    ],
+    "anim": "Tail",
+    "pivot": [
+     0.0,
+     1.4,
+     -10.05
+    ]
+   },
+   {
+    "name": "Thorax",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.525,
+     -3.1
+    ],
+    "size": [
+     4.3749,
+     3.75,
+     5.8
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Crown",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     3.725,
+     -3.4556
+    ],
+    "size": [
+     4.1267,
+     2.25,
+     5.1112
+    ]
+   },
+   {
+    "name": "Mandibles",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.1392,
+     -6.4128
+    ],
+    "size": [
+     2.367,
+     0.7875,
+     1.5744
+    ],
+    "anim": "Jaw",
+    "pivot": [
+     0.0,
+     0.1608,
+     0.7128
+    ]
+   },
+   {
+    "name": "Eyes",
+    "slot": "Eye",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     2.95,
+     -5.78
+    ],
+    "size": [
+     2.06,
+     0.48,
+     0.4
+    ]
+   },
+   {
+    "name": "Antennae",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.7166,
+     -6.3185
+    ],
+    "size": [
+     4.2,
+     1.095,
+     1.3631
+    ],
+    "anim": "Wiggle",
+    "pivot": [
+     0.0,
+     -0.5166,
+     0.7185
+    ]
+   },
+   {
+    "name": "LegsL",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -2.3509,
+     1.2462,
+     -1.6
+    ],
+    "size": [
+     1.8982,
+     2.4925,
+     6.0
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     0.8509,
+     0.2538,
+     -0.9
+    ]
+   },
+   {
+    "name": "LegsR",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     2.3509,
+     1.2462,
+     -1.6
+    ],
+    "size": [
+     1.8982,
+     2.4925,
+     6.0
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -0.8509,
+     0.2538,
+     -0.9
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.9180392156862746,
+    0.8603921568627451,
+    0.6945098039215687
+   ],
+   "Dark": [
+    0.11764705882352941,
+    0.11372549019607843,
+    0.10588235294117647
+   ],
+   "Light": [
+    0.96,
+    0.8847058823529411,
+    0.6462745098039215
+   ],
+   "Accent": [
+    0.7888235294117647,
+    0.6515686274509804,
+    0.39509803921568626
+   ],
+   "Glow": [
+    0.9647058823529412,
+    0.8549019607843137,
+    0.49411764705882355
+   ],
+   "Eye": [
+    0.9137254901960784,
+    0.7254901960784313,
+    0.2549019607843137
+   ],
+   "Metal": [
+    0.3631372549019608,
+    0.3019607843137255,
+    0.15890196078431373
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ]
+  },
+  "bounds": [
+   [
+    -3.3,
+    -0.058,
+    -7.2
+   ],
+   [
+    3.3,
+    5.888,
+    10.25
+   ]
+  ]
+ },
+ {
+  "name": "Ice_Crystal",
+  "category": "Snow",
+  "note": "Cluster of pale ice crystals from a snowy rock, ~3 x 3.4, with a small frost glow. Collider circle; light = glow.",
+  "tris": 214,
+  "pieces": [
+   {
+    "name": "Base",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0807,
+     0.2916,
+     0.0149
+    ],
+    "size": [
+     2.4697,
+     0.7832,
+     2.5365
+    ]
+   },
+   {
+    "name": "Snow",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.151,
+     0.6056,
+     0.056
+    ],
+    "size": [
+     2.487,
+     0.2472,
+     2.2898
+    ]
+   },
+   {
+    "name": "Crystals",
+    "slot": "Ice",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0567,
+     1.6583,
+     -0.0661
+    ],
+    "size": [
+     2.9677,
+     3.4434,
+     1.6909
+    ]
+   },
+   {
+    "name": "Crystals2",
+    "slot": "Ice2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1666,
+     1.0201,
+     0.0322
+    ],
+    "size": [
+     2.4611,
+     2.2237,
+     2.6704
+    ]
+   },
+   {
+    "name": "Glow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     -0.1763,
+     0.5635,
+     -0.3553
+    ],
+    "size": [
+     0.2991,
+     0.878,
+     0.3681
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Glow": [
+    0.8627450980392157,
+    0.9176470588235294,
+    0.9686274509803922
+   ],
+   "Stone": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ],
+   "Snow": [
+    0.9450980392156862,
+    0.9529411764705882,
+    0.9568627450980393
+   ],
+   "Ice": [
+    0.6627450980392157,
+    0.7764705882352941,
+    0.8470588235294118
+   ],
+   "Ice2": [
+    0.8627450980392157,
+    0.9176470588235294,
+    0.9450980392156862
+   ]
+  },
+  "bounds": [
+   [
+    -1.427,
+    -0.1,
+    -1.303
+   ],
+   [
+    1.541,
+    3.38,
+    1.367
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.3,
+   "height": 3
+  },
+  "light": [
+   -0.1,
+   0.8,
+   -0.3
+  ]
+ },
+ {
   "name": "Knight",
   "category": "Heroes",
   "note": "The reference hero: silver plate, great helm with a dark T visor and crimson plume, crimson cape with gold trim, crimson kite shield, steel longsword.",
@@ -3757,6 +9110,388 @@
    -1.55,
    4.95,
    0.0
+  ]
+ },
+ {
+  "name": "Lava_Pool",
+  "category": "Lava",
+  "note": "Flat lava pool ~8.6 x 7.8, 0.22 tall: basalt crust rim, molten surface, drifting crust plates and small Neon hot spots. Hazard visual (hazard radius ~3.6). Walkable decoration; light = centre.",
+  "tris": 356,
+  "pieces": [
+   {
+    "name": "Rim",
+    "slot": "Rim",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0362,
+     0.055,
+     -0.0351
+    ],
+    "size": [
+     8.9953,
+     0.17,
+     7.5094
+    ]
+   },
+   {
+    "name": "Lava",
+    "slot": "Lava",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.4016,
+     0.085,
+     -0.046
+    ],
+    "size": [
+     7.3057,
+     0.17,
+     6.3925
+    ]
+   },
+   {
+    "name": "Deep",
+    "slot": "Deep",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.6465,
+     0.14,
+     0.501
+    ],
+    "size": [
+     2.7276,
+     0.08,
+     1.7356
+    ]
+   },
+   {
+    "name": "Crust",
+    "slot": "Crust",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0374,
+     0.17,
+     0.3915
+    ],
+    "size": [
+     4.6454,
+     0.1,
+     3.9564
+    ]
+   },
+   {
+    "name": "Glow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     -0.0909,
+     0.175,
+     0.3627
+    ],
+    "size": [
+     3.1007,
+     0.05,
+     1.5736
+    ]
+   },
+   {
+    "name": "RimStones",
+    "slot": "Rim2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.2103,
+     0.3091,
+     -0.1623
+    ],
+    "size": [
+     8.7866,
+     0.6182,
+     6.5488
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Glow": [
+    1.0,
+    0.7686274509803922,
+    0.4196078431372549
+   ],
+   "Rim": [
+    0.1411764705882353,
+    0.13333333333333333,
+    0.14901960784313725
+   ],
+   "Rim2": [
+    0.2627450980392157,
+    0.24313725490196078,
+    0.25882352941176473
+   ],
+   "Lava": [
+    0.8509803921568627,
+    0.32941176470588235,
+    0.16470588235294117
+   ],
+   "Deep": [
+    0.6039215686274509,
+    0.1803921568627451,
+    0.10980392156862745
+   ],
+   "Crust": [
+    0.19607843137254902,
+    0.1843137254901961,
+    0.2
+   ]
+  },
+  "bounds": [
+   [
+    -4.461,
+    -0.03,
+    -3.79
+   ],
+   [
+    4.604,
+    0.618,
+    3.72
+   ]
+  ],
+  "light": [
+   0.0,
+   0.6,
+   0.0
+  ]
+ },
+ {
+  "name": "Lava_Ruin_Wall",
+  "category": "Lava",
+  "note": "Broken dark basalt-block wall with ash on the tops and glowing seams at its foot, 8 x 3.5 x 1.4 (length along X). Collider box.",
+  "tris": 636,
+  "pieces": [
+   {
+    "name": "Stone",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0014,
+     1.7084,
+     0.4222
+    ],
+    "size": [
+     7.957,
+     3.549,
+     2.332
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone2",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.0699,
+     1.294,
+     -0.5189
+    ],
+    "size": [
+     5.4626,
+     2.7956,
+     2.4685
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone3",
+    "slot": "Stone3",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0762,
+     0.475,
+     0.0161
+    ],
+    "size": [
+     3.9439,
+     0.9409,
+     1.451
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Ash",
+    "slot": "Ash",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.005,
+     2.245,
+     -0.0005
+    ],
+    "size": [
+     7.8533,
+     2.71,
+     1.6274
+    ]
+   },
+   {
+    "name": "Seams",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.104,
+     0.02,
+     -0.0605
+    ],
+    "size": [
+     7.5241,
+     0.05,
+     2.337
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Glow": [
+    0.9490196078431372,
+    0.6039215686274509,
+    0.27058823529411763
+   ],
+   "Stone": [
+    0.2627450980392157,
+    0.24313725490196078,
+    0.25882352941176473
+   ],
+   "Stone2": [
+    0.35294117647058826,
+    0.3254901960784314,
+    0.3411764705882353
+   ],
+   "Stone3": [
+    0.19607843137254902,
+    0.1843137254901961,
+    0.2
+   ],
+   "Ash": [
+    0.6352941176470588,
+    0.6078431372549019,
+    0.5882352941176471
+   ]
+  },
+  "bounds": [
+   [
+    -3.977,
+    -0.104,
+    -1.753
+   ],
+   [
+    3.98,
+    3.6,
+    1.588
+   ]
+  ],
+  "collider": {
+   "kind": "box",
+   "size": [
+    8.0,
+    1.4
+   ],
+   "height": 3.5
+  }
+ },
+ {
+  "name": "Lilypads",
+  "category": "Swamp",
+  "note": "Lilypad cluster with one pale bloom, ~3 x 2.6, 0.3 tall. Flat decoration for mud and water (no collider, no shadow).",
+  "tris": 252,
+  "pieces": [
+   {
+    "name": "Pads",
+    "slot": "Pad",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0522,
+     0.089,
+     -0.2279
+    ],
+    "size": [
+     2.2778,
+     0.142,
+     2.1314
+    ]
+   },
+   {
+    "name": "Pads2",
+    "slot": "Pad2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0611,
+     0.08,
+     0.5649
+    ],
+    "size": [
+     3.1407,
+     0.088,
+     1.1867
+    ]
+   },
+   {
+    "name": "Bloom",
+    "slot": "Petal",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.15,
+     0.2,
+     0.1
+    ],
+    "size": [
+     0.72,
+     0.26,
+     0.6235
+    ]
+   },
+   {
+    "name": "Heart",
+    "slot": "Heart",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1595,
+     0.18,
+     0.1
+    ],
+    "size": [
+     0.1809,
+     0.18,
+     0.1902
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Pad": [
+    0.3215686274509804,
+    0.4627450980392157,
+    0.23921568627450981
+   ],
+   "Pad2": [
+    0.39215686274509803,
+    0.5411764705882353,
+    0.2784313725490196
+   ],
+   "Petal": [
+    0.9529411764705882,
+    0.9294117647058824,
+    0.8745098039215686
+   ],
+   "Heart": [
+    0.8980392156862745,
+    0.788235294117647,
+    0.5333333333333333
+   ]
+  },
+  "bounds": [
+   [
+    -1.631,
+    0.018,
+    -1.294
+   ],
+   [
+    1.509,
+    0.33,
+    1.158
+   ]
   ]
  },
  {
@@ -4490,6 +10225,539 @@
   ]
  },
  {
+  "name": "MothMatriarch",
+  "category": "Enemies",
+  "note": "Boss (flies). Huge regal moth ~14 span x 9 long: ivory fur, two layers of translucent wings (slate under-wings, pale lavender fore-wings) with gold eye-spots and dark rims, a gold coronet and a crown of five feathery antennae, glowing heart (Pulse). Wings FlutterL/R, antennae Wiggle, legs SwingA/B.",
+  "tris": 1510,
+  "pieces": [
+   {
+    "name": "Body",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.023,
+     4.168,
+     -1.1212
+    ],
+    "size": [
+     2.5254,
+     2.6131,
+     3.7989
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Abdomen",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.8988,
+     2.2947
+    ],
+    "size": [
+     2.0018,
+     2.4551,
+     4.0105
+    ],
+    "anim": "Tail",
+    "pivot": [
+     0.0,
+     0.3012,
+     -1.6947
+    ]
+   },
+   {
+    "name": "AbdomenBands",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     3.7968,
+     2.6011
+    ],
+    "size": [
+     2.16,
+     2.4428,
+     2.7634
+    ],
+    "anim": "Tail",
+    "pivot": [
+     0.0,
+     0.4032,
+     -2.0011
+    ]
+   },
+   {
+    "name": "Coronet",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     4.8636,
+     -2.4771
+    ],
+    "size": [
+     1.28,
+     0.8129,
+     1.4458
+    ]
+   },
+   {
+    "name": "Antennae",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.8129,
+     -3.6401
+    ],
+    "size": [
+     4.8965,
+     2.052,
+     2.503
+    ],
+    "anim": "Wiggle",
+    "pivot": [
+     0.0,
+     -1.0629,
+     1.1901
+    ]
+   },
+   {
+    "name": "Eyes",
+    "slot": "Eye",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     4.35,
+     -2.95
+    ],
+    "size": [
+     1.128,
+     0.384,
+     0.32
+    ]
+   },
+   {
+    "name": "Heart",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     5.48,
+     -0.7
+    ],
+    "size": [
+     0.6,
+     0.36,
+     0.84
+    ],
+    "anim": "Pulse",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "LegsL",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.8509,
+     2.39,
+     -0.775
+    ],
+    "size": [
+     0.7839,
+     1.9799,
+     1.85
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     0.2509,
+     0.91,
+     -0.025
+    ]
+   },
+   {
+    "name": "LegsR",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.8509,
+     2.39,
+     -0.775
+    ],
+    "size": [
+     0.7839,
+     1.9799,
+     1.85
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -0.2509,
+     0.91,
+     -0.025
+    ]
+   },
+   {
+    "name": "UnderWingL",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -3.2747,
+     5.4665,
+     1.595
+    ],
+    "size": [
+     5.8751,
+     1.5558,
+     9.61
+    ],
+    "transparency": 0.18,
+    "anim": "FlutterL",
+    "pivot": [
+     2.5747,
+     -0.7165,
+     -2.195
+    ]
+   },
+   {
+    "name": "WingL",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     -3.6386,
+     5.6972,
+     -1.45
+    ],
+    "size": [
+     6.5203,
+     1.6985,
+     3.9
+    ],
+    "transparency": 0.32,
+    "anim": "FlutterL",
+    "pivot": [
+     2.9386,
+     -0.9472,
+     0.85
+    ]
+   },
+   {
+    "name": "EyeSpotsL",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     -3.6629,
+     5.7033,
+     0.0482
+    ],
+    "size": [
+     2.8914,
+     0.9101,
+     5.1035
+    ],
+    "anim": "FlutterL",
+    "pivot": [
+     2.9629,
+     -0.9533,
+     -0.6482
+    ]
+   },
+   {
+    "name": "WingMarksL",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     -4.4148,
+     5.8707,
+     1.675
+    ],
+    "size": [
+     4.9775,
+     1.4302,
+     9.45
+    ],
+    "anim": "FlutterL",
+    "pivot": [
+     3.7148,
+     -1.1207,
+     -2.275
+    ]
+   },
+   {
+    "name": "UnderWingR",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     3.2747,
+     5.4665,
+     1.595
+    ],
+    "size": [
+     5.8751,
+     1.5558,
+     9.61
+    ],
+    "transparency": 0.18,
+    "anim": "FlutterR",
+    "pivot": [
+     -2.5747,
+     -0.7165,
+     -2.195
+    ]
+   },
+   {
+    "name": "WingR",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     3.6386,
+     5.6972,
+     -1.45
+    ],
+    "size": [
+     6.5203,
+     1.6985,
+     3.9
+    ],
+    "transparency": 0.32,
+    "anim": "FlutterR",
+    "pivot": [
+     -2.9386,
+     -0.9472,
+     0.85
+    ]
+   },
+   {
+    "name": "EyeSpotsR",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     3.6629,
+     5.7033,
+     0.0482
+    ],
+    "size": [
+     2.8914,
+     0.9101,
+     5.1035
+    ],
+    "anim": "FlutterR",
+    "pivot": [
+     -2.9629,
+     -0.9533,
+     -0.6482
+    ]
+   },
+   {
+    "name": "WingMarksR",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     4.4148,
+     5.8707,
+     1.675
+    ],
+    "size": [
+     4.9775,
+     1.4302,
+     9.45
+    ],
+    "anim": "FlutterR",
+    "pivot": [
+     -3.7148,
+     -1.1207,
+     -2.275
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.8650980392156863,
+    0.8531372549019608,
+    0.8119607843137255
+   ],
+   "Dark": [
+    0.17254901960784313,
+    0.16470588235294117,
+    0.15294117647058825
+   ],
+   "Light": [
+    0.7877176470588235,
+    0.7469254901960785,
+    0.7739764705882354
+   ],
+   "Accent": [
+    0.33254901960784317,
+    0.31529411764705884,
+    0.4023529411764706
+   ],
+   "Glow": [
+    0.8862745098039215,
+    0.9176470588235294,
+    0.9568627450980393
+   ],
+   "Eye": [
+    0.9137254901960784,
+    0.7254901960784313,
+    0.2549019607843137
+   ],
+   "Metal": [
+    0.14901960784313725,
+    0.19607843137254902,
+    0.24705882352941178
+   ],
+   "Gold": [
+    0.8352941176470589,
+    0.6901960784313725,
+    0.3843137254901961
+   ],
+   "White": [
+    0.9529411764705882,
+    0.9294117647058824,
+    0.8745098039215686
+   ]
+  },
+  "bounds": [
+   [
+    -6.904,
+    1.4,
+    -4.892
+   ],
+   [
+    6.904,
+    6.839,
+    6.4
+   ]
+  ]
+ },
+ {
+  "name": "Mud_Pool",
+  "category": "Swamp",
+  "note": "Flat bog pool ~8.4 x 7.6, 0.2 tall: dark mud, wet sheen, bubbles, rim stones. Slow-zone hazard visual (hazard radius ~3.6 from the origin). Walkable decoration (no collider).",
+  "tris": 358,
+  "pieces": [
+   {
+    "name": "Rim",
+    "slot": "Rim",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.01,
+     0.015,
+     0.1151
+    ],
+    "size": [
+     8.3713,
+     0.09,
+     7.367
+    ]
+   },
+   {
+    "name": "Mud",
+    "slot": "Mud",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.3107,
+     0.05,
+     -0.0024
+    ],
+    "size": [
+     6.9736,
+     0.1,
+     6.8889
+    ]
+   },
+   {
+    "name": "Wet",
+    "slot": "Wet",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1422,
+     0.09,
+     -0.0057
+    ],
+    "size": [
+     4.8547,
+     0.08,
+     3.3616
+    ]
+   },
+   {
+    "name": "Bubbles",
+    "slot": "Bubble",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.23,
+     0.1775,
+     -0.498
+    ],
+    "size": [
+     4.5,
+     0.195,
+     2.4464
+    ]
+   },
+   {
+    "name": "Stones",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.2173,
+     0.2278,
+     -0.5665
+    ],
+    "size": [
+     7.9949,
+     0.5057,
+     5.6761
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Stone": [
+    0.3247058823529412,
+    0.35411764705882354,
+    0.34901960784313724
+   ],
+   "Rim": [
+    0.3686274509803922,
+    0.3176470588235294,
+    0.23137254901960785
+   ],
+   "Mud": [
+    0.23137254901960785,
+    0.19607843137254902,
+    0.14901960784313725
+   ],
+   "Wet": [
+    0.1568627450980392,
+    0.18823529411764706,
+    0.13725490196078433
+   ],
+   "Bubble": [
+    0.29411764705882354,
+    0.25098039215686274,
+    0.1843137254901961
+   ]
+  },
+  "bounds": [
+   [
+    -4.176,
+    -0.03,
+    -3.568
+   ],
+   [
+    4.215,
+    0.481,
+    3.799
+   ]
+  ]
+ },
+ {
   "name": "Mushroom",
   "category": "World",
   "note": "Cluster of three small forest mushrooms with muted crimson caps (~1.5 x 1). Decoration for tree shade.",
@@ -4549,6 +10817,935 @@
     1.25,
     0.426
    ]
+  ]
+ },
+ {
+  "name": "Necromancer",
+  "category": "Heroes",
+  "note": "Ivory skull mask under a tall dark cowl, slate and crimson robes, spiked bone collar and pauldrons, bone staff with a small glowing soul core.",
+  "tris": 2474,
+  "pieces": [
+   {
+    "name": "Head",
+    "slot": "Skin",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.15,
+     0.0
+    ],
+    "size": [
+     1.4289,
+     1.4,
+     1.3369
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "Eyes",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.12,
+     -0.665
+    ],
+    "size": [
+     0.7,
+     0.28,
+     0.08
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceMask",
+    "slot": "Bone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.17,
+     -0.42
+    ],
+    "size": [
+     1.3673,
+     1.1,
+     0.6837
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceSockets",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.0345,
+     -0.77
+    ],
+    "size": [
+     0.9466,
+     0.769,
+     0.16
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceGlow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     5.22,
+     -0.8
+    ],
+    "size": [
+     0.6742,
+     0.15,
+     0.1276
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Hood",
+    "slot": "Hat",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.7375,
+     0.16
+    ],
+    "size": [
+     2.489,
+     2.775,
+     2.48
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "HoodLining",
+    "slot": "HatAccent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.11,
+     -0.675
+    ],
+    "size": [
+     2.3369,
+     1.48,
+     0.4003
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "HoodShade",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.075,
+     0.1206
+    ],
+    "size": [
+     1.6614,
+     1.35,
+     1.5588
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Torso",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.36,
+     0.0
+    ],
+    "size": [
+     1.8832,
+     2.32,
+     1.2676
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "Robe",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.24,
+     0.1
+    ],
+    "size": [
+     2.856,
+     2.52,
+     2.408
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "RobeFront",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.2092,
+     -0.9652
+    ],
+    "size": [
+     0.8744,
+     2.3608,
+     0.464
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Sash",
+    "slot": "AccentDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.9612,
+     -0.1092
+    ],
+    "size": [
+     1.864,
+     1.1977,
+     1.5805
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Clasp",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     3.335,
+     -0.7442
+    ],
+    "size": [
+     0.2862,
+     2.01,
+     0.2117
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "BoneCollar",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.925,
+     0.5022
+    ],
+    "size": [
+     2.2246,
+     1.37,
+     1.4355
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "LeftArm",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.5399,
+     3.2467,
+     0.0
+    ],
+    "size": [
+     1.0291,
+     1.7448,
+     1.0347
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmCuff",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.5389,
+     2.4383,
+     0.0
+    ],
+    "size": [
+     1.1172,
+     0.2551,
+     1.1087
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmHand",
+    "slot": "Skin",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.54,
+     2.2,
+     -0.08
+    ],
+    "size": [
+     0.44,
+     0.46,
+     0.48
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmRibs",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.6819,
+     3.9301,
+     0.0
+    ],
+    "size": [
+     1.5382,
+     0.8009,
+     1.008
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "RightArm",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.5399,
+     3.2467,
+     0.0
+    ],
+    "size": [
+     1.0291,
+     1.7448,
+     1.0347
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmCuff",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.5389,
+     2.4383,
+     0.0
+    ],
+    "size": [
+     1.1172,
+     0.2551,
+     1.1087
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmHand",
+    "slot": "Skin",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.54,
+     2.2,
+     -0.08
+    ],
+    "size": [
+     0.44,
+     0.46,
+     0.48
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmRibs",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.6819,
+     3.9301,
+     0.0
+    ],
+    "size": [
+     1.5382,
+     0.8009,
+     1.008
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "Staff",
+    "slot": "Bone",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.62,
+     2.828,
+     -0.4
+    ],
+    "size": [
+     0.5414,
+     5.424,
+     0.5394
+    ],
+    "bone": "RightArm",
+    "shadow": true
+   },
+   {
+    "name": "StaffSkull",
+    "slot": "Bone",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.62,
+     4.4374,
+     -0.48
+    ],
+    "size": [
+     0.4651,
+     0.4992,
+     0.4644
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "StaffSkullEyes",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.62,
+     4.46,
+     -0.73
+    ],
+    "size": [
+     0.3252,
+     0.14,
+     0.1191
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "StaffTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     1.5787,
+     2.485,
+     -0.32
+    ],
+    "size": [
+     0.3425,
+     4.57,
+     0.46
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "StaffCore",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     1.62,
+     5.2,
+     -0.4
+    ],
+    "size": [
+     0.3578,
+     0.4,
+     0.3403
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "LeftLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.6749,
+     1.6,
+     0.7952
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.6749,
+     1.6,
+     0.7952
+    ],
+    "bone": "RightLeg"
+   },
+   {
+    "name": "LeftLegBoot",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     0.3,
+     -0.1209
+    ],
+    "size": [
+     0.7792,
+     0.6,
+     1.109
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLegBoot",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     0.3,
+     -0.1209
+    ],
+    "size": [
+     0.7792,
+     0.6,
+     1.109
+    ],
+    "bone": "RightLeg"
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.054901960784313725,
+    0.07450980392156863,
+    0.10196078431372549
+   ],
+   "Accent": [
+    0.5647058823529412,
+    0.13333333333333333,
+    0.1607843137254902
+   ],
+   "Glow": [
+    0.7735294117647059,
+    0.8870588235294118,
+    0.7009803921568627
+   ],
+   "Metal": [
+    0.788235294117647,
+    0.7450980392156863,
+    0.6509803921568628
+   ],
+   "Gold": [
+    0.6274509803921569,
+    0.4823529411764706,
+    0.20784313725490197
+   ],
+   "Skin": [
+    0.6196078431372549,
+    0.6352941176470588,
+    0.6549019607843137
+   ],
+   "Cloth": [
+    0.10980392156862745,
+    0.1450980392156863,
+    0.19215686274509805
+   ],
+   "Cloth2": [
+    0.14901960784313725,
+    0.19607843137254902,
+    0.24705882352941178
+   ],
+   "AccentDark": [
+    0.3215686274509804,
+    0.07450980392156863,
+    0.09411764705882353
+   ],
+   "Hat": [
+    0.0784313725490196,
+    0.10588235294117647,
+    0.1411764705882353
+   ],
+   "HatAccent": [
+    0.5647058823529412,
+    0.13333333333333333,
+    0.1607843137254902
+   ],
+   "Bone": [
+    0.8980392156862745,
+    0.8627450980392157,
+    0.7803921568627451
+   ]
+  },
+  "bounds": [
+   [
+    -2.451,
+    -0.02,
+    -1.197
+   ],
+   [
+    2.451,
+    7.125,
+    1.4
+   ]
+  ],
+  "joints": {
+   "Neck": [
+    0.0,
+    4.45,
+    0.0
+   ],
+   "LeftShoulder": [
+    -1.2,
+    3.95,
+    0.0
+   ],
+   "RightShoulder": [
+    1.2,
+    3.95,
+    0.0
+   ],
+   "LeftHip": [
+    -0.5,
+    2.0,
+    0.0
+   ],
+   "RightHip": [
+    0.5,
+    2.0,
+    0.0
+   ]
+  }
+ },
+ {
+  "name": "Nest",
+  "category": "Enemies",
+  "note": "Stationary hive mound ~5.2 wide x 4.2 tall: lumpy dirt-and-wax tiers, dark openings with waxy lips (enemies crawl out of them), a cluster of glowing amber egg pods at the base (Pulse) and a glowing crown vent (Throb). Does not move or turn.",
+  "tris": 664,
+  "pieces": [
+   {
+    "name": "Mound",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0416,
+     1.8771,
+     0.2049
+    ],
+    "size": [
+     4.4455,
+     3.7541,
+     4.0307
+    ],
+    "shadow": true
+   },
+   {
+    "name": "WaxRims",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.5075,
+     0.1609
+    ],
+    "size": [
+     3.9806,
+     1.47,
+     3.9201
+    ]
+   },
+   {
+    "name": "Footing",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0579,
+     0.1998,
+     -0.0208
+    ],
+    "size": [
+     5.2315,
+     0.3996,
+     4.6875
+    ]
+   },
+   {
+    "name": "Openings",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.8574,
+     1.6037,
+     -0.3115
+    ],
+    "size": [
+     2.8749,
+     3.1144,
+     3.9996
+    ]
+   },
+   {
+    "name": "Lips",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.8029,
+     1.5934,
+     -0.2646
+    ],
+    "size": [
+     3.0459,
+     3.3469,
+     4.0544
+    ]
+   },
+   {
+    "name": "Eggs",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0435,
+     0.565,
+     -1.3679
+    ],
+    "size": [
+     4.673,
+     1.462,
+     1.6846
+    ],
+    "anim": "Pulse",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "EggGlow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0552,
+     0.6436,
+     -1.3259
+    ],
+    "size": [
+     4.6272,
+     0.9222,
+     1.199
+    ],
+    "anim": "Pulse",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "Vent",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     3.86,
+     0.05
+    ],
+    "size": [
+     0.5543,
+     0.2,
+     0.64
+    ],
+    "anim": "Throb",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "VentRim",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.8,
+     0.05
+    ],
+    "size": [
+     1.0,
+     0.2,
+     1.0
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.5411764705882353,
+    0.41568627450980394,
+    0.2980392156862745
+   ],
+   "Dark": [
+    0.11764705882352941,
+    0.11372549019607843,
+    0.10588235294117647
+   ],
+   "Light": [
+    0.961764705882353,
+    0.8735294117647059,
+    0.5892156862745098
+   ],
+   "Accent": [
+    0.6990196078431372,
+    0.5607843137254902,
+    0.34019607843137256
+   ],
+   "Glow": [
+    0.9411764705882353,
+    0.6588235294117647,
+    0.35294117647058826
+   ],
+   "Stone": [
+    0.3686274509803922,
+    0.27450980392156865,
+    0.19607843137254902
+   ]
+  },
+  "bounds": [
+   [
+    -2.674,
+    -0.166,
+    -2.365
+   ],
+   [
+    2.558,
+    3.96,
+    2.323
+   ]
+  ]
+ },
+ {
+  "name": "Obsidian_Crystal",
+  "category": "Lava",
+  "note": "Cluster of black glassy obsidian shards with a small ember core, ~2.8 x 3.2. Collider circle; light = core.",
+  "tris": 132,
+  "pieces": [
+   {
+    "name": "Base",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0404,
+     0.259,
+     -0.0413
+    ],
+    "size": [
+     2.8177,
+     0.7579,
+     2.4973
+    ]
+   },
+   {
+    "name": "Shards",
+    "slot": "Obsidian",
+    "material": "Metal",
+    "offset": [
+     0.0727,
+     1.5433,
+     -0.0079
+    ],
+    "size": [
+     3.0617,
+     3.2578,
+     1.6173
+    ]
+   },
+   {
+    "name": "Shards2",
+    "slot": "Obsidian2",
+    "material": "Metal",
+    "offset": [
+     -0.2391,
+     0.9386,
+     0.0524
+    ],
+    "size": [
+     1.604,
+     1.9981,
+     2.5366
+    ]
+   },
+   {
+    "name": "Glow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     -0.1313,
+     0.5387,
+     -0.3987
+    ],
+    "size": [
+     0.2944,
+     0.8339,
+     0.3891
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.19607843137254902,
+    0.1843137254901961,
+    0.2
+   ],
+   "Glow": [
+    0.9490196078431372,
+    0.6039215686274509,
+    0.27058823529411763
+   ],
+   "Obsidian": [
+    0.09411764705882353,
+    0.09019607843137255,
+    0.10196078431372549
+   ],
+   "Obsidian2": [
+    0.16470588235294117,
+    0.18666666666666668,
+    0.23058823529411765
+   ]
+  },
+  "bounds": [
+   [
+    -1.458,
+    -0.12,
+    -1.29
+   ],
+   [
+    1.604,
+    3.172,
+    1.321
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.3,
+   "height": 3
+  },
+  "light": [
+   -0.1,
+   0.7,
+   -0.35
   ]
  },
  {
@@ -5866,6 +13063,794 @@
   }
  },
  {
+  "name": "Quicksand",
+  "category": "Desert",
+  "note": "Flat quicksand pool ~8.4 x 7.6, 0.2 tall: darker sinking centre and spiral ripples. Hazard visual (hazard radius ~3.6). Walkable decoration (no collider).",
+  "tris": 612,
+  "pieces": [
+   {
+    "name": "Rim",
+    "slot": "Rim",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0407,
+     0.01,
+     -0.077
+    ],
+    "size": [
+     8.1154,
+     0.08,
+     7.3699
+    ]
+   },
+   {
+    "name": "Sand",
+    "slot": "Sand",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1019,
+     0.045,
+     0.0929
+    ],
+    "size": [
+     7.1663,
+     0.09,
+     6.4084
+    ]
+   },
+   {
+    "name": "Inner",
+    "slot": "Inner",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0531,
+     0.08,
+     0.0337
+    ],
+    "size": [
+     4.5215,
+     0.08,
+     3.9742
+    ]
+   },
+   {
+    "name": "Core",
+    "slot": "Core",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1391,
+     0.11,
+     0.0486
+    ],
+    "size": [
+     1.6924,
+     0.06,
+     1.426
+    ]
+   },
+   {
+    "name": "Ripples",
+    "slot": "Ripple",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.3776,
+     0.115,
+     0.3034
+    ],
+    "size": [
+     6.0902,
+     0.06,
+     6.0229
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Rim": [
+    0.803921568627451,
+    0.6705882352941176,
+    0.4549019607843137
+   ],
+   "Sand": [
+    0.7215686274509804,
+    0.5764705882352941,
+    0.3686274509803922
+   ],
+   "Inner": [
+    0.611764705882353,
+    0.47058823529411764,
+    0.2901960784313726
+   ],
+   "Core": [
+    0.47843137254901963,
+    0.3568627450980392,
+    0.21568627450980393
+   ],
+   "Ripple": [
+    0.8666666666666667,
+    0.7568627450980392,
+    0.5568627450980392
+   ]
+  },
+  "bounds": [
+   [
+    -4.017,
+    -0.03,
+    -3.762
+   ],
+   [
+    4.098,
+    0.145,
+    3.608
+   ]
+  ]
+ },
+ {
+  "name": "Ranger",
+  "category": "Heroes",
+  "note": "Hooded archer: moss hood, tan dagged capelet, leather jerkin, tall longbow, quiver with crimson fletching on the back.",
+  "tris": 2248,
+  "pieces": [
+   {
+    "name": "Head",
+    "slot": "Skin",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.15,
+     0.0
+    ],
+    "size": [
+     1.4289,
+     1.4,
+     1.3369
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "Eyes",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.12,
+     -0.665
+    ],
+    "size": [
+     0.7,
+     0.28,
+     0.08
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceHair",
+    "slot": "Hair",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.415,
+     0.0578
+    ],
+    "size": [
+     1.7257,
+     1.03,
+     1.6356
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Hood",
+    "slot": "Hat",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.64,
+     0.085
+    ],
+    "size": [
+     2.3002,
+     2.42,
+     2.39
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "HoodShade",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.09,
+     0.1183
+    ],
+    "size": [
+     1.6228,
+     1.32,
+     1.5235
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "HoodTrim",
+    "slot": "HatAccent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.0145,
+     5.9896,
+     0.6262
+    ],
+    "size": [
+     0.2827,
+     0.9608,
+     0.9477
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Torso",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.36,
+     0.0
+    ],
+    "size": [
+     1.9557,
+     2.32,
+     1.2313
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "Tunic",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.7634,
+     -0.0973
+    ],
+    "size": [
+     2.1153,
+     1.0732,
+     1.6832
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Belt",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.0461,
+     -0.1062
+    ],
+    "size": [
+     1.8958,
+     2.4122,
+     1.5115
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Buckle",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     3.325,
+     -0.7883
+    ],
+    "size": [
+     0.322,
+     2.29,
+     0.2566
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Capelet",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.91,
+     0.08
+    ],
+    "size": [
+     2.9763,
+     1.34,
+     2.4192
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "Quiver",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1414,
+     3.4229,
+     1.0048
+    ],
+    "size": [
+     2.0355,
+     2.7553,
+     0.9257
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "QuiverTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.1725,
+     3.4738,
+     1.0107
+    ],
+    "size": [
+     2.0624,
+     2.7286,
+     0.9973
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Arrows",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.2334,
+     5.2143,
+     1.1814
+    ],
+    "size": [
+     1.1706,
+     1.3945,
+     0.512
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Fletching",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.4499,
+     5.56,
+     1.2065
+    ],
+    "size": [
+     0.904,
+     0.8272,
+     0.873
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "LeftArm",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.368,
+     3.0812,
+     0.0
+    ],
+    "size": [
+     0.6572,
+     1.719,
+     0.5759
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmBracer",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.45,
+     2.685,
+     -0.02
+    ],
+    "size": [
+     0.7576,
+     0.53,
+     0.7576
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmGlove",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.46,
+     2.16,
+     -0.04
+    ],
+    "size": [
+     0.5084,
+     0.5,
+     0.5443
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "RightArm",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.368,
+     3.0812,
+     0.0
+    ],
+    "size": [
+     0.6572,
+     1.719,
+     0.5759
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmBracer",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.45,
+     2.685,
+     -0.02
+    ],
+    "size": [
+     0.7576,
+     0.53,
+     0.7576
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmGlove",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.46,
+     2.16,
+     -0.04
+    ],
+    "size": [
+     0.5084,
+     0.5,
+     0.5443
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "Bow",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.513,
+     2.4022,
+     -0.3929
+    ],
+    "size": [
+     0.4309,
+     4.5017,
+     0.9369
+    ],
+    "bone": "LeftArm",
+    "shadow": true
+   },
+   {
+    "name": "BowGrip",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.5,
+     2.18,
+     -0.74
+    ],
+    "size": [
+     0.28,
+     0.6,
+     0.2425
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "BowTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     -1.5105,
+     2.3487,
+     -0.3912
+    ],
+    "size": [
+     0.379,
+     3.5775,
+     0.2092
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "BowString",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.5,
+     2.405,
+     0.06
+    ],
+    "size": [
+     0.2899,
+     4.3528,
+     0.05
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.6749,
+     1.6,
+     0.7952
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.6749,
+     1.6,
+     0.7952
+    ],
+    "bone": "RightLeg"
+   },
+   {
+    "name": "LeftLegBoot",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     0.59,
+     -0.1127
+    ],
+    "size": [
+     0.86,
+     1.18,
+     1.1253
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLegBoot",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     0.59,
+     -0.1127
+    ],
+    "size": [
+     0.86,
+     1.18,
+     1.1253
+    ],
+    "bone": "RightLeg"
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.054901960784313725,
+    0.07450980392156863,
+    0.10196078431372549
+   ],
+   "Accent": [
+    0.6823529411764706,
+    0.17647058823529413,
+    0.19215686274509805
+   ],
+   "Metal": [
+    0.33725490196078434,
+    0.22745098039215686,
+    0.15294117647058825
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Wood": [
+    0.49411764705882355,
+    0.3607843137254902,
+    0.24705882352941178
+   ],
+   "Skin": [
+    0.8509803921568627,
+    0.6549019607843137,
+    0.4980392156862745
+   ],
+   "Cloth": [
+    0.6274509803921569,
+    0.5058823529411764,
+    0.3686274509803922
+   ],
+   "Cloth2": [
+    0.16862745098039217,
+    0.25882352941176473,
+    0.1568627450980392
+   ],
+   "Hair": [
+    0.396078431372549,
+    0.2823529411764706,
+    0.19607843137254902
+   ],
+   "Leather": [
+    0.33725490196078434,
+    0.22745098039215686,
+    0.15294117647058825
+   ],
+   "MetalDark": [
+    0.24705882352941178,
+    0.16470588235294117,
+    0.10980392156862745
+   ],
+   "Hat": [
+    0.39215686274509803,
+    0.5411764705882353,
+    0.2784313725490196
+   ],
+   "HatAccent": [
+    0.6823529411764706,
+    0.17647058823529413,
+    0.19215686274509805
+   ]
+  },
+  "bounds": [
+   [
+    -1.829,
+    0.0,
+    -1.13
+   ],
+   [
+    1.902,
+    6.85,
+    1.643
+   ]
+  ],
+  "joints": {
+   "Neck": [
+    0.0,
+    4.45,
+    0.0
+   ],
+   "LeftShoulder": [
+    -1.2,
+    3.95,
+    0.0
+   ],
+   "RightShoulder": [
+    1.2,
+    3.95,
+    0.0
+   ],
+   "LeftHip": [
+    -0.5,
+    2.0,
+    0.0
+   ],
+   "RightHip": [
+    0.5,
+    2.0,
+    0.0
+   ]
+  }
+ },
+ {
+  "name": "Reeds",
+  "category": "Swamp",
+  "note": "Clump of reeds with three cattails, ~1.6 wide x 2.4 tall. Decoration (no collider).",
+  "tris": 128,
+  "pieces": [
+   {
+    "name": "Reeds",
+    "slot": "Reed",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1242,
+     0.8809,
+     0.0613
+    ],
+    "size": [
+     1.1173,
+     1.8851,
+     0.8952
+    ]
+   },
+   {
+    "name": "Reeds2",
+    "slot": "Reed2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0521,
+     1.252,
+     -0.0556
+    ],
+    "size": [
+     0.9579,
+     2.636,
+     0.7805
+    ]
+   },
+   {
+    "name": "Cattails",
+    "slot": "Cattail",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0811,
+     1.7099,
+     -0.0718
+    ],
+    "size": [
+     0.8176,
+     1.1238,
+     0.8752
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Reed": [
+    0.4235294117647059,
+    0.4627450980392157,
+    0.3215686274509804
+   ],
+   "Reed2": [
+    0.5568627450980392,
+    0.5882352941176471,
+    0.4392156862745098
+   ],
+   "Cattail": [
+    0.33725490196078434,
+    0.22745098039215686,
+    0.15294117647058825
+   ]
+  },
+  "bounds": [
+   [
+    -0.531,
+    -0.066,
+    -0.509
+   ],
+   [
+    0.683,
+    2.57,
+    0.509
+   ]
+  ]
+ },
+ {
   "name": "RhinoBeetle",
   "category": "Enemies",
   "note": "Brute id. Heavy slate-blue armoured beetle with a big ivory horn.",
@@ -6152,6 +14137,448 @@
     2.597,
     4.72,
     2.77
+   ]
+  ]
+ },
+ {
+  "name": "RhinoWarlord",
+  "category": "Enemies",
+  "note": "Boss. Massive armoured rhino beetle ~10 wide x 13 long, horn to ~8.5, banner to ~13: dark slate shell under gold-trimmed steel battle plates, ivory horn with gold bands (Jaw = horn toss), a crimson war banner with a gold crown on a pole on its back (Tail = sway), six legs SwingA/B.",
+  "tris": 1290,
+  "pieces": [
+   {
+    "name": "Shell",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.8,
+     1.4
+    ],
+    "size": [
+     8.4,
+     3.4,
+     8.6
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Body",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.6,
+     -0.2157
+    ],
+    "size": [
+     6.8476,
+     2.6,
+     10.8315
+    ]
+   },
+   {
+    "name": "Plates",
+    "slot": "Metal",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     5.4,
+     1.35
+    ],
+    "size": [
+     6.721,
+     2.4,
+     6.1706
+    ],
+    "shadow": true
+   },
+   {
+    "name": "PlateTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     5.0121,
+     0.8741
+    ],
+    "size": [
+     5.7466,
+     1.6243,
+     5.3317
+    ]
+   },
+   {
+    "name": "Pronotum",
+    "slot": "Accent",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     4.5,
+     -2.5
+    ],
+    "size": [
+     6.4,
+     2.6,
+     3.8
+    ]
+   },
+   {
+    "name": "PronotumTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     4.3845,
+     -3.88
+    ],
+    "size": [
+     5.8069,
+     2.3691,
+     1.16
+    ]
+   },
+   {
+    "name": "Horns",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.5903,
+     -3.6027
+    ],
+    "size": [
+     3.3976,
+     1.6195,
+     1.3947
+    ]
+   },
+   {
+    "name": "Horn",
+    "slot": "White",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.994,
+     -6.1492
+    ],
+    "size": [
+     1.8524,
+     6.612,
+     2.6992
+    ],
+    "anim": "Jaw",
+    "pivot": [
+     0.0,
+     -2.294,
+     1.4492
+    ]
+   },
+   {
+    "name": "HornBands",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     4.439,
+     -6.4271
+    ],
+    "size": [
+     1.7268,
+     3.7023,
+     1.7937
+    ],
+    "anim": "Jaw",
+    "pivot": [
+     0.0,
+     -1.739,
+     1.7271
+    ]
+   },
+   {
+    "name": "Eyes",
+    "slot": "Eye",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     2.9,
+     -5.2
+    ],
+    "size": [
+     2.7,
+     0.4,
+     0.4
+    ]
+   },
+   {
+    "name": "LegL1",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -3.8929,
+     2.2584,
+     -2.9603
+    ],
+    "size": [
+     3.3142,
+     4.5168,
+     2.4562
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     1.2929,
+     0.1416,
+     0.5603
+    ]
+   },
+   {
+    "name": "LegR1",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     3.8929,
+     2.2584,
+     -2.9603
+    ],
+    "size": [
+     3.3142,
+     4.5168,
+     2.4562
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -1.2929,
+     0.1416,
+     0.5603
+    ]
+   },
+   {
+    "name": "LegL2",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -3.8743,
+     2.2564,
+     0.6236
+    ],
+    "size": [
+     3.3514,
+     4.5128,
+     1.4608
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     1.2743,
+     0.1436,
+     -0.0236
+    ]
+   },
+   {
+    "name": "LegR2",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     3.8743,
+     2.2564,
+     0.6236
+    ],
+    "size": [
+     3.3514,
+     4.5128,
+     1.4608
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     -1.2743,
+     0.1436,
+     -0.0236
+    ]
+   },
+   {
+    "name": "LegL3",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -3.8929,
+     2.2589,
+     4.0705
+    ],
+    "size": [
+     3.3142,
+     4.5178,
+     2.6765
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     1.2929,
+     0.1411,
+     -0.6705
+    ]
+   },
+   {
+    "name": "LegR3",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     3.8929,
+     2.2589,
+     4.0705
+    ],
+    "size": [
+     3.3142,
+     4.5178,
+     2.6765
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -1.2929,
+     0.1411,
+     -0.6705
+    ]
+   },
+   {
+    "name": "BannerPole",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     8.9994,
+     3.735
+    ],
+    "size": [
+     0.3464,
+     8.0139,
+     0.6697
+    ],
+    "anim": "Tail",
+    "pivot": [
+     0.0,
+     -3.3994,
+     -0.135
+    ]
+   },
+   {
+    "name": "BannerTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     13.0,
+     3.9305
+    ],
+    "size": [
+     4.4,
+     1.6,
+     0.5782
+    ],
+    "anim": "Tail",
+    "pivot": [
+     0.0,
+     -7.4,
+     -0.3305
+    ]
+   },
+   {
+    "name": "Banner",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     9.9155,
+     4.05
+    ],
+    "size": [
+     3.5991,
+     4.769,
+     0.14
+    ],
+    "shadow": true,
+    "anim": "Tail",
+    "pivot": [
+     0.0,
+     -4.3155,
+     -0.45
+    ]
+   },
+   {
+    "name": "BannerCrown",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     11.1,
+     4.05
+    ],
+    "size": [
+     3.5,
+     2.4,
+     0.28
+    ],
+    "anim": "Tail",
+    "pivot": [
+     0.0,
+     -5.5,
+     -0.45
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.2,
+    0.26666666666666666,
+    0.35294117647058826
+   ],
+   "Dark": [
+    0.11764705882352941,
+    0.11372549019607843,
+    0.10588235294117647
+   ],
+   "Accent": [
+    0.403921568627451,
+    0.4392156862745098,
+    0.4823529411764706
+   ],
+   "Eye": [
+    0.9137254901960784,
+    0.7254901960784313,
+    0.2549019607843137
+   ],
+   "Metal": [
+    0.6196078431372549,
+    0.6549019607843137,
+    0.6980392156862745
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Wood": [
+    0.3058823529411765,
+    0.2196078431372549,
+    0.1568627450980392
+   ],
+   "Cloth": [
+    0.6823529411764706,
+    0.17647058823529413,
+    0.19215686274509805
+   ],
+   "White": [
+    0.8980392156862745,
+    0.8627450980392157,
+    0.7803921568627451
+   ]
+  },
+  "bounds": [
+   [
+    -5.55,
+    0.0,
+    -7.499
+   ],
+   [
+    5.55,
+    13.8,
+    5.7
    ]
   ]
  },
@@ -7890,6 +16317,251 @@
   ]
  },
  {
+  "name": "Shot_Acid",
+  "category": "Projectiles",
+  "note": "Spitter's acid glob ~1.5 wide x 2.6 long: a fat round head at -Y (flight direction) pulling a wavy tapering tail toward +Y, two trailing droplets, a dark outline rim around the outline (reads by shape), tiny Neon core. Centred on the origin.",
+  "tris": 334,
+  "pieces": [
+   {
+    "name": "Glob",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.0,
+     -0.62
+    ],
+    "size": [
+     1.1793,
+     1.12,
+     1.32
+    ]
+   },
+   {
+    "name": "Tail",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0171,
+     0.0,
+     0.6199
+    ],
+    "size": [
+     0.7591,
+     0.9995,
+     2.2002
+    ]
+   },
+   {
+    "name": "Drops",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0573,
+     0.035,
+     0.924
+    ],
+    "size": [
+     1.1452,
+     0.33,
+     0.938
+    ]
+   },
+   {
+    "name": "Outline",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     -0.04,
+     0.23
+    ],
+    "size": [
+     1.48,
+     0.14,
+     3.26
+    ]
+   },
+   {
+    "name": "Shine",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.18,
+     0.38,
+     -0.82
+    ],
+    "size": [
+     0.3118,
+     0.24,
+     0.48
+    ]
+   },
+   {
+    "name": "Core",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.42,
+     -0.62
+    ],
+    "size": [
+     0.4,
+     0.24,
+     0.48
+    ],
+    "anim": "Pulse",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.8735686274509804,
+    0.5786666666666667,
+    0.2523921568627451
+   ],
+   "Dark": [
+    0.21176470588235294,
+    0.050980392156862744,
+    0.06666666666666667
+   ],
+   "Light": [
+    0.9611764705882353,
+    0.8772549019607843,
+    0.6082352941176471
+   ],
+   "Accent": [
+    0.788235294117647,
+    0.26666666666666666,
+    0.24705882352941178
+   ],
+   "Glow": [
+    0.9529411764705882,
+    0.7568627450980392,
+    0.42352941176470593
+   ]
+  },
+  "bounds": [
+   [
+    -0.74,
+    -0.56,
+    -1.4
+   ],
+   [
+    0.74,
+    0.56,
+    1.86
+   ]
+  ]
+ },
+ {
+  "name": "Shot_Arrow",
+  "category": "Projectiles",
+  "note": "Ranger arrow ~0.4 x 3.2: steel head at the -Y end, wooden shaft, crimson fletching. Lies along Y, centred on the origin.",
+  "tris": 88,
+  "pieces": [
+   {
+    "name": "Shaft",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0057,
+     0.0,
+     0.15
+    ],
+    "size": [
+     0.1085,
+     0.1141,
+     2.7
+    ]
+   },
+   {
+    "name": "Head",
+    "slot": "Blade",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     0.0,
+     -1.37
+    ],
+    "size": [
+     0.56,
+     0.28,
+     0.5
+    ]
+   },
+   {
+    "name": "Fletching",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.0,
+     1.2
+    ],
+    "size": [
+     0.728,
+     0.6305,
+     0.84
+    ]
+   },
+   {
+    "name": "Nock",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     -0.0076,
+     0.0,
+     1.5
+    ],
+    "size": [
+     0.1447,
+     0.1522,
+     0.16
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Accent": [
+    0.6823529411764706,
+    0.17647058823529413,
+    0.19215686274509805
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Wood": [
+    0.6039215686274509,
+    0.4666666666666667,
+    0.3215686274509804
+   ],
+   "Blade": [
+    0.7372549019607844,
+    0.7647058823529411,
+    0.796078431372549
+   ]
+  },
+  "bounds": [
+   [
+    -0.364,
+    -0.315,
+    -1.62
+   ],
+   [
+    0.364,
+    0.315,
+    1.62
+   ]
+  ]
+ },
+ {
   "name": "Shot_Axe",
   "category": "Projectiles",
   "note": "Throwing axe ~1.9 x 2.3: steel bearded head at the -Y end with the bit toward +X (Roblox -X), wooden haft along Y.",
@@ -7968,6 +16640,88 @@
     0.533,
     0.15,
     1.15
+   ]
+  ]
+ },
+ {
+  "name": "Shot_Bolt",
+  "category": "Projectiles",
+  "note": "Crossbow bolt ~1.7 long: square steel head at -Y, dark wood shaft, three crimson fletches.",
+  "tris": 66,
+  "pieces": [
+   {
+    "name": "Head",
+    "slot": "Head",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     0.0,
+     -0.665
+    ],
+    "size": [
+     0.2263,
+     0.2263,
+     0.43
+    ]
+   },
+   {
+    "name": "Shaft",
+    "slot": "Shaft",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.0048,
+     0.16
+    ],
+    "size": [
+     0.0951,
+     0.0905,
+     1.32
+    ]
+   },
+   {
+    "name": "Fletch",
+    "slot": "Fletch",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.0485,
+     0.61
+    ],
+    "size": [
+     0.3961,
+     0.343,
+     0.5
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Head": [
+    0.7372549019607844,
+    0.7647058823529411,
+    0.796078431372549
+   ],
+   "Shaft": [
+    0.396078431372549,
+    0.2823529411764706,
+    0.19607843137254902
+   ],
+   "Fletch": [
+    0.6823529411764706,
+    0.17647058823529413,
+    0.19215686274509805
+   ]
+  },
+  "bounds": [
+   [
+    -0.198,
+    -0.123,
+    -0.88
+   ],
+   [
+    0.198,
+    0.22,
+    0.86
    ]
   ]
  },
@@ -8113,6 +16867,238 @@
     0.58,
     0.86,
     0.58
+   ]
+  ]
+ },
+ {
+  "name": "Shot_Fire",
+  "category": "Projectiles",
+  "note": "Low-poly fire blob ~1.3 long for fire trails: a round flame head at -Y with licks streaming back toward +Y, bright core and two orbiting embers.",
+  "tris": 160,
+  "pieces": [
+   {
+    "name": "Flame",
+    "slot": "Flame",
+    "material": "Neon",
+    "offset": [
+     -0.0283,
+     0.0098,
+     0.226
+    ],
+    "size": [
+     0.8235,
+     0.8155,
+     1.648
+    ]
+   },
+   {
+    "name": "Core",
+    "slot": "Core",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.0,
+     0.0579
+    ],
+    "size": [
+     0.4293,
+     0.48,
+     1.0842
+    ]
+   },
+   {
+    "name": "Embers",
+    "slot": "Ember",
+    "material": "Neon",
+    "offset": [
+     -0.025,
+     -0.025,
+     0.05
+    ],
+    "size": [
+     1.0752,
+     0.49,
+     0.4191
+    ],
+    "anim": "Spin",
+    "pivot": [
+     0.025,
+     0.025,
+     -0.05
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Flame": [
+    0.8980392156862745,
+    0.5411764705882353,
+    0.27058823529411763
+   ],
+   "Core": [
+    1.0,
+    0.7686274509803922,
+    0.4196078431372549
+   ],
+   "Ember": [
+    0.8980392156862745,
+    0.788235294117647,
+    0.5333333333333333
+   ]
+  },
+  "bounds": [
+   [
+    -0.563,
+    -0.398,
+    -0.598
+   ],
+   [
+    0.513,
+    0.418,
+    1.05
+   ]
+  ]
+ },
+ {
+  "name": "Shot_FrostShard",
+  "category": "Projectiles",
+  "note": "Ice shard ~1.6 long, point at -Y: pale slate faceted crystal with ivory splinters and a small Neon frost core.",
+  "tris": 76,
+  "pieces": [
+   {
+    "name": "Shard",
+    "slot": "Ice",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.0,
+     -0.05
+    ],
+    "size": [
+     0.588,
+     0.4551,
+     1.6
+    ]
+   },
+   {
+    "name": "Splinters",
+    "slot": "Ice2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0229,
+     -0.0177,
+     0.175
+    ],
+    "size": [
+     0.6448,
+     0.3638,
+     1.05
+    ]
+   },
+   {
+    "name": "Core",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.0,
+     -0.3
+    ],
+    "size": [
+     0.2326,
+     0.26,
+     0.3981
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Glow": [
+    0.8627450980392157,
+    0.9176470588235294,
+    0.9686274509803922
+   ],
+   "Ice": [
+    0.7215686274509804,
+    0.7725490196078432,
+    0.8274509803921568
+   ],
+   "Ice2": [
+    0.9529411764705882,
+    0.9294117647058824,
+    0.8745098039215686
+   ]
+  },
+  "bounds": [
+   [
+    -0.345,
+    -0.228,
+    -0.85
+   ],
+   [
+    0.3,
+    0.228,
+    0.75
+   ]
+  ]
+ },
+ {
+  "name": "Shot_Hook",
+  "category": "Projectiles",
+  "note": "Chain hook head ~1.5 long: barbed steel hook at -Y curling back, eye ring and two chain links trailing toward +Y.",
+  "tris": 366,
+  "pieces": [
+   {
+    "name": "Hook",
+    "slot": "Hook",
+    "material": "Metal",
+    "offset": [
+     -0.2612,
+     0.0,
+     -0.2253
+    ],
+    "size": [
+     0.8763,
+     0.2,
+     1.5645
+    ]
+   },
+   {
+    "name": "Chain",
+    "slot": "Chain",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     0.0,
+     0.83
+    ],
+    "size": [
+     0.2484,
+     0.2484,
+     0.6951
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Hook": [
+    0.6196078431372549,
+    0.6549019607843137,
+    0.6980392156862745
+   ],
+   "Chain": [
+    0.403921568627451,
+    0.4392156862745098,
+    0.4823529411764706
+   ]
+  },
+  "bounds": [
+   [
+    -0.699,
+    -0.124,
+    -1.008
+   ],
+   [
+    0.177,
+    0.124,
+    1.178
    ]
   ]
  },
@@ -8288,6 +17274,314 @@
   ]
  },
  {
+  "name": "Shot_Potion",
+  "category": "Projectiles",
+  "note": "Alchemist's thrown flask ~1.2 x 1.5: translucent glass bulb, glowing green potion, brass cap, cork. Upright, centred on the origin.",
+  "tris": 188,
+  "pieces": [
+   {
+    "name": "Glass",
+    "slot": "Glass",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     -0.035,
+     0.0
+    ],
+    "size": [
+     1.1,
+     1.39,
+     1.1
+    ],
+    "transparency": 0.35
+   },
+   {
+    "name": "Potion",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     -0.235,
+     0.0
+    ],
+    "size": [
+     0.88,
+     0.726,
+     0.88
+    ]
+   },
+   {
+    "name": "Cap",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     0.67,
+     0.0
+    ],
+    "size": [
+     0.391,
+     0.14,
+     0.3386
+    ]
+   },
+   {
+    "name": "Cork",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.83,
+     0.0
+    ],
+    "size": [
+     0.34,
+     0.18,
+     0.2944
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Glow": [
+    0.7254901960784313,
+    0.8705882352941177,
+    0.5568627450980392
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Wood": [
+    0.6039215686274509,
+    0.4666666666666667,
+    0.3215686274509804
+   ],
+   "Glass": [
+    0.9529411764705882,
+    0.9294117647058824,
+    0.8745098039215686
+   ]
+  },
+  "bounds": [
+   [
+    -0.55,
+    -0.73,
+    -0.55
+   ],
+   [
+    0.55,
+    0.92,
+    0.55
+   ]
+  ]
+ },
+ {
+  "name": "Shot_Soul",
+  "category": "Projectiles",
+  "note": "Necromancer's soul skull ~1.2 x 2.2: small ivory skull with glowing eyes trailing a pale spectral wisp toward +Y. Flies toward -Y.",
+  "tris": 294,
+  "pieces": [
+   {
+    "name": "Skull",
+    "slot": "Bone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.055,
+     -0.45
+    ],
+    "size": [
+     0.92,
+     0.93,
+     1.0
+    ]
+   },
+   {
+    "name": "Sockets",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.05,
+     -0.855
+    ],
+    "size": [
+     0.6744,
+     0.46,
+     0.21
+    ]
+   },
+   {
+    "name": "Eyes",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.12,
+     -0.92
+    ],
+    "size": [
+     0.5231,
+     0.16,
+     0.1361
+    ]
+   },
+   {
+    "name": "Wisp",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0097,
+     0.2317,
+     0.7149
+    ],
+    "size": [
+     0.6594,
+     0.6094,
+     2.0701
+    ],
+    "transparency": 0.4
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.054901960784313725,
+    0.07450980392156863,
+    0.10196078431372549
+   ],
+   "Light": [
+    0.8632352941176471,
+    0.908235294117647,
+    0.7877450980392157
+   ],
+   "Glow": [
+    0.7735294117647059,
+    0.8870588235294118,
+    0.7009803921568627
+   ],
+   "Bone": [
+    0.8980392156862745,
+    0.8627450980392157,
+    0.7803921568627451
+   ]
+  },
+  "bounds": [
+   [
+    -0.46,
+    -0.41,
+    -0.988
+   ],
+   [
+    0.46,
+    0.536,
+    1.75
+   ]
+  ]
+ },
+ {
+  "name": "Shot_Spear",
+  "category": "Projectiles",
+  "note": "Thrown spear ~3 long: leaf-shaped steel tip at -Y, wooden shaft, gold collar and leather grip wrap.",
+  "tris": 142,
+  "pieces": [
+   {
+    "name": "Tip",
+    "slot": "Tip",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     0.0,
+     -1.12
+    ],
+    "size": [
+     0.4,
+     0.14,
+     0.8
+    ]
+   },
+   {
+    "name": "Shaft",
+    "slot": "Shaft",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.0,
+     0.35
+    ],
+    "size": [
+     0.1299,
+     0.15,
+     2.3
+    ]
+   },
+   {
+    "name": "Collar",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.0,
+     0.33
+    ],
+    "size": [
+     0.1905,
+     0.22,
+     2.38
+    ]
+   },
+   {
+    "name": "Wrap",
+    "slot": "Wrap",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.0,
+     0.45
+    ],
+    "size": [
+     0.1732,
+     0.2,
+     0.54
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Tip": [
+    0.7372549019607844,
+    0.7647058823529411,
+    0.796078431372549
+   ],
+   "Shaft": [
+    0.49411764705882355,
+    0.3607843137254902,
+    0.24705882352941178
+   ],
+   "Wrap": [
+    0.33725490196078434,
+    0.22745098039215686,
+    0.15294117647058825
+   ]
+  },
+  "bounds": [
+   [
+    -0.2,
+    -0.11,
+    -1.52
+   ],
+   [
+    0.2,
+    0.11,
+    1.52
+   ]
+  ]
+ },
+ {
   "name": "Shot_Stinger",
   "category": "Projectiles",
   "note": "Boss stinger (~2.5 across, flat): amber Neon core, crimson barbed pinwheel, dark carapace ring.",
@@ -8368,6 +17662,156 @@
     1.066
    ]
   ]
+ },
+ {
+  "name": "Shot_Totem",
+  "category": "Projectiles",
+  "note": "Healing totem ~3.1 tall standing on the ground (origin = ground centre): carved wooden post with a face and small wings, gold crown cradling a green-gold glowing orb. Light = orb.",
+  "tris": 314,
+  "pieces": [
+   {
+    "name": "Post",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.825,
+     -0.0405
+    ],
+    "size": [
+     0.76,
+     2.85,
+     0.7391
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Carving",
+    "slot": "Wood2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.4625,
+     0.0
+    ],
+    "size": [
+     1.8,
+     0.975,
+     0.6544
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Face",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.3775,
+     -0.32
+    ],
+    "size": [
+     0.43,
+     0.385,
+     0.06
+    ]
+   },
+   {
+    "name": "Gold",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.5773,
+     0.0
+    ],
+    "size": [
+     0.64,
+     0.7546,
+     0.5543
+    ]
+   },
+   {
+    "name": "Leaves",
+    "slot": "Leaf",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1375,
+     2.3543,
+     0.0
+    ],
+    "size": [
+     0.8251,
+     0.1913,
+     0.9527
+    ]
+   },
+   {
+    "name": "Orb",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     2.75,
+     0.0
+    ],
+    "size": [
+     0.5367,
+     0.6,
+     0.5104
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.16470588235294117,
+    0.11764705882352941,
+    0.08627450980392157
+   ],
+   "Glow": [
+    0.7254901960784313,
+    0.8705882352941177,
+    0.5568627450980392
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Wood": [
+    0.49411764705882355,
+    0.3607843137254902,
+    0.24705882352941178
+   ],
+   "Leaf": [
+    0.39215686274509803,
+    0.5411764705882353,
+    0.2784313725490196
+   ],
+   "Wood2": [
+    0.6039215686274509,
+    0.4666666666666667,
+    0.3215686274509804
+   ]
+  },
+  "bounds": [
+   [
+    -0.9,
+    -0.6,
+    -0.476
+   ],
+   [
+    0.9,
+    3.05,
+    0.476
+   ]
+  ],
+  "light": [
+   0.0,
+   2.75,
+   0.0
+  ],
+  "anchor": "ground centre"
  },
  {
   "name": "Shrine",
@@ -8482,6 +17926,1469 @@
   }
  },
  {
+  "name": "Shrine_Bargain",
+  "category": "Events",
+  "note": "Bargain shrine (benefit + trade-off): weathered, chipped standing stone on a cracked plinth with a crimson sigil plate and a gold balance-scale emblem, plus a small offering dish with a crimson ember. ~3 x 5 x 2.2. Front = -Y. Recolour Sigil / Glow. Collider box; light = ember.",
+  "tris": 652,
+  "pieces": [
+   {
+    "name": "Plinth",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0064,
+     1.9394,
+     0.0125
+    ],
+    "size": [
+     3.0774,
+     4.1007,
+     2.1619
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.5575,
+     0.0
+    ],
+    "size": [
+     1.62,
+     3.715,
+     0.95
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Chip",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.056,
+     0.25,
+     -0.0812
+    ],
+    "size": [
+     4.209,
+     0.6901,
+     1.7246
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Moss",
+    "slot": "Moss",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.3807,
+     4.2956,
+     0.0039
+    ],
+    "size": [
+     0.5783,
+     0.3302,
+     0.7902
+    ]
+   },
+   {
+    "name": "Sigil",
+    "slot": "Sigil",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.75,
+     -0.4596
+    ],
+    "size": [
+     1.0,
+     1.0,
+     0.065
+    ]
+   },
+   {
+    "name": "Gold",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.945,
+     -0.5585
+    ],
+    "size": [
+     1.4,
+     2.81,
+     0.2629
+    ]
+   },
+   {
+    "name": "Dish",
+    "slot": "Iron",
+    "material": "Metal",
+    "offset": [
+     -0.95,
+     0.41,
+     -1.05
+    ],
+    "size": [
+     0.76,
+     0.82,
+     0.6582
+    ]
+   },
+   {
+    "name": "Glow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     -0.954,
+     0.95,
+     -1.05
+    ],
+    "size": [
+     0.34,
+     0.42,
+     0.34
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.2784313725490196,
+    0.2980392156862745,
+    0.32941176470588235
+   ],
+   "Glow": [
+    0.8588235294117647,
+    0.41568627450980394,
+    0.3686274509803922
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Stone": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "Stone2": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ],
+   "Sigil": [
+    0.5647058823529412,
+    0.13333333333333333,
+    0.1607843137254902
+   ],
+   "Moss": [
+    0.39215686274509803,
+    0.5411764705882353,
+    0.2784313725490196
+   ],
+   "Iron": [
+    0.30980392156862746,
+    0.3411764705882353,
+    0.3803921568627451
+   ]
+  },
+  "bounds": [
+   [
+    -2.16,
+    -0.111,
+    -1.379
+   ],
+   [
+    2.048,
+    4.461,
+    1.093
+   ]
+  ],
+  "collider": {
+   "kind": "box",
+   "size": [
+    3.0,
+    2.2
+   ],
+   "height": 5
+  },
+  "light": [
+   -0.95,
+   0.95,
+   -1.05
+  ]
+ },
+ {
+  "name": "Snow_Bush",
+  "category": "Snow",
+  "note": "Low dark shrub under a snow blanket, 3 x 1.9. Decoration (no collider).",
+  "tris": 180,
+  "pieces": [
+   {
+    "name": "Leaves",
+    "slot": "Leaves",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2482,
+     0.7508,
+     -0.0064
+    ],
+    "size": [
+     2.8098,
+     1.6117,
+     2.1369
+    ]
+   },
+   {
+    "name": "Leaves2",
+    "slot": "Leaves2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.3326,
+     0.861,
+     -0.2227
+    ],
+    "size": [
+     2.6389,
+     1.7056,
+     1.3049
+    ]
+   },
+   {
+    "name": "Snow",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0277,
+     1.2928,
+     0.0059
+    ],
+    "size": [
+     2.8993,
+     0.9067,
+     1.7294
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Leaves": [
+    0.16862745098039217,
+    0.25882352941176473,
+    0.1568627450980392
+   ],
+   "Leaves2": [
+    0.21176470588235294,
+    0.3215686274509804,
+    0.1843137254901961
+   ],
+   "Snow": [
+    0.9450980392156862,
+    0.9529411764705882,
+    0.9568627450980393
+   ]
+  },
+  "bounds": [
+   [
+    -1.653,
+    -0.055,
+    -1.075
+   ],
+   [
+    1.652,
+    1.746,
+    1.062
+   ]
+  ]
+ },
+ {
+  "name": "Snow_Drift",
+  "category": "Snow",
+  "note": "Soft snow drift mound, ~5.4 x 3.6 x 1.1, wind crest on top. Decoration (no collider).",
+  "tris": 78,
+  "pieces": [
+   {
+    "name": "Drift",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0624,
+     0.4816,
+     -0.1148
+    ],
+    "size": [
+     5.4427,
+     1.0632,
+     3.477
+    ]
+   },
+   {
+    "name": "Crest",
+    "slot": "Crest",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.915,
+     0.504,
+     0.5339
+    ],
+    "size": [
+     3.4126,
+     1.0951,
+     2.2291
+    ]
+   },
+   {
+    "name": "Drift",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     2.2254,
+     0.1595,
+     -0.9836
+    ],
+    "size": [
+     1.792,
+     0.419,
+     1.3122
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Snow": [
+    0.8823529411764706,
+    0.9019607843137255,
+    0.9176470588235294
+   ],
+   "Crest": [
+    0.9450980392156862,
+    0.9529411764705882,
+    0.9568627450980393
+   ]
+  },
+  "bounds": [
+   [
+    -2.659,
+    -0.05,
+    -1.853
+   ],
+   [
+    3.121,
+    1.052,
+    1.648
+   ]
+  ]
+ },
+ {
+  "name": "Snow_Lamp",
+  "category": "Snow",
+  "note": "Stone lantern ~4.2 tall: square post, lamp house with warm glowing windows, pyramid roof under snow. Collider circle; light = lamp.",
+  "tris": 432,
+  "pieces": [
+   {
+    "name": "Stone",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.9475,
+     0.0
+    ],
+    "size": [
+     1.4849,
+     4.005,
+     1.4849
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone2",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.23,
+     0.0
+    ],
+    "size": [
+     1.04,
+     3.86,
+     1.04
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Dark",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.72,
+     0.0
+    ],
+    "size": [
+     0.66,
+     0.66,
+     0.66
+    ]
+   },
+   {
+    "name": "Glow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     2.72,
+     0.0
+    ],
+    "size": [
+     0.74,
+     0.5,
+     0.74
+    ]
+   },
+   {
+    "name": "Snow",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0005,
+     2.13,
+     0.0011
+    ],
+    "size": [
+     1.2677,
+     3.78,
+     1.3114
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.21176470588235294,
+    0.22745098039215686,
+    0.2549019607843137
+   ],
+   "Glow": [
+    0.8980392156862745,
+    0.788235294117647,
+    0.5333333333333333
+   ],
+   "Stone": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "Stone2": [
+    0.5215686274509804,
+    0.5411764705882353,
+    0.5686274509803921
+   ],
+   "Snow": [
+    0.9450980392156862,
+    0.9529411764705882,
+    0.9568627450980393
+   ]
+  },
+  "bounds": [
+   [
+    -0.742,
+    -0.055,
+    -0.742
+   ],
+   [
+    0.742,
+    4.16,
+    0.742
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 0.7,
+   "height": 4.2
+  },
+  "light": [
+   0.0,
+   2.85,
+   0.0
+  ]
+ },
+ {
+  "name": "Snow_Pine",
+  "category": "Snow",
+  "note": "Snow-laden pine, ~16 tall, canopy radius ~4.5: dark needles under snow blankets. Collider = trunk.",
+  "tris": 514,
+  "pieces": [
+   {
+    "name": "Trunk",
+    "slot": "Bark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1305,
+     6.2133,
+     0.06
+    ],
+    "size": [
+     2.4605,
+     12.7733,
+     2.5812
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Needles",
+    "slot": "Needles",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.3062,
+     9.51,
+     0.1221
+    ],
+    "size": [
+     8.0135,
+     12.98,
+     8.7698
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Needles2",
+    "slot": "Needles2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.2262,
+     9.61,
+     -0.028
+    ],
+    "size": [
+     7.4359,
+     7.98,
+     7.04
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Snow",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1513,
+     10.203,
+     0.0847
+    ],
+    "size": [
+     6.3167,
+     11.7939,
+     6.7732
+    ],
+    "shadow": true
+   }
+  ],
+  "preview_palette": {
+   "Bark": [
+    0.3058823529411765,
+    0.2196078431372549,
+    0.1568627450980392
+   ],
+   "Needles": [
+    0.13333333333333333,
+    0.2,
+    0.12549019607843137
+   ],
+   "Needles2": [
+    0.16862745098039217,
+    0.25882352941176473,
+    0.1568627450980392
+   ],
+   "Snow": [
+    0.9450980392156862,
+    0.9529411764705882,
+    0.9568627450980393
+   ]
+  },
+  "bounds": [
+   [
+    -3.701,
+    -0.173,
+    -4.263
+   ],
+   [
+    4.313,
+    16.1,
+    4.507
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 0.9,
+   "height": 8
+  }
+ },
+ {
+  "name": "Snow_PineTall",
+  "category": "Snow",
+  "note": "Tall snowy pine for the tree line, ~22 tall. Collider = trunk.",
+  "tris": 594,
+  "pieces": [
+   {
+    "name": "Trunk",
+    "slot": "Bark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1023,
+     8.6099,
+     -0.045
+    ],
+    "size": [
+     2.6189,
+     17.5802,
+     2.6355
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Needles",
+    "slot": "Needles",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0005,
+     11.26,
+     0.2996
+    ],
+    "size": [
+     8.4566,
+     14.48,
+     8.3259
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Needles2",
+    "slot": "Needles2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.071,
+     14.51,
+     0.1981
+    ],
+    "size": [
+     7.3574,
+     14.98,
+     7.6525
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Snow",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0016,
+     13.7471,
+     0.2029
+    ],
+    "size": [
+     6.6187,
+     16.7058,
+     6.5224
+    ],
+    "shadow": true
+   }
+  ],
+  "preview_palette": {
+   "Bark": [
+    0.3058823529411765,
+    0.2196078431372549,
+    0.1568627450980392
+   ],
+   "Needles": [
+    0.13333333333333333,
+    0.2,
+    0.12549019607843137
+   ],
+   "Needles2": [
+    0.16862745098039217,
+    0.25882352941176473,
+    0.1568627450980392
+   ],
+   "Snow": [
+    0.9450980392156862,
+    0.9529411764705882,
+    0.9568627450980393
+   ]
+  },
+  "bounds": [
+   [
+    -4.229,
+    -0.18,
+    -3.863
+   ],
+   [
+    4.228,
+    22.1,
+    4.463
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.0,
+   "height": 8
+  }
+ },
+ {
+  "name": "Snow_Rock",
+  "category": "Snow",
+  "note": "Cool grey boulder with a snow blanket, ~4.6 x 3. Collider circle.",
+  "tris": 102,
+  "pieces": [
+   {
+    "name": "Rock",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.4545,
+     1.2119,
+     0.0864
+    ],
+    "size": [
+     4.1263,
+     2.6638,
+     3.1249
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Rock2",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.36,
+     0.6391,
+     -0.5906
+    ],
+    "size": [
+     1.8884,
+     1.5582,
+     1.9271
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Snow",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.1456,
+     1.8194,
+     0.2982
+    ],
+    "size": [
+     4.5014,
+     1.5894,
+     2.7943
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Stone": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "Stone2": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ],
+   "Snow": [
+    0.9450980392156862,
+    0.9529411764705882,
+    0.9568627450980393
+   ]
+  },
+  "bounds": [
+   [
+    -2.304,
+    -0.14,
+    -1.554
+   ],
+   [
+    2.518,
+    2.614,
+    1.695
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 2.0,
+   "height": 3
+  }
+ },
+ {
+  "name": "Snow_Ruin_Wall",
+  "category": "Snow",
+  "note": "Broken stone wall under snow with icicles, 8 x 3.6 x 1.4 (length along X). Collider box.",
+  "tris": 932,
+  "pieces": [
+   {
+    "name": "Stone",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0074,
+     1.6892,
+     -0.0825
+    ],
+    "size": [
+     7.961,
+     3.586,
+     3.3414
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone2",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     2.1575,
+     1.8196,
+     0.0247
+    ],
+    "size": [
+     3.6236,
+     1.7037,
+     1.4671
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone3",
+    "slot": "Stone3",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.0269,
+     1.8279,
+     0.0003
+    ],
+    "size": [
+     5.8781,
+     1.7127,
+     1.422
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Snow",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.3441,
+     1.86,
+     0.0666
+    ],
+    "size": [
+     8.593,
+     3.72,
+     3.5104
+    ]
+   },
+   {
+    "name": "Icicles",
+    "slot": "Ice",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1134,
+     1.8381,
+     -0.7028
+    ],
+    "size": [
+     7.2038,
+     3.2837,
+     0.1831
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Stone": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "Stone2": [
+    0.5215686274509804,
+    0.5411764705882353,
+    0.5686274509803921
+   ],
+   "Stone3": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ],
+   "Snow": [
+    0.9450980392156862,
+    0.9529411764705882,
+    0.9568627450980393
+   ],
+   "Ice": [
+    0.8627450980392157,
+    0.9176470588235294,
+    0.9450980392156862
+   ]
+  },
+  "bounds": [
+   [
+    -3.973,
+    -0.104,
+    -1.753
+   ],
+   [
+    4.641,
+    3.72,
+    1.822
+   ]
+  ],
+  "collider": {
+   "kind": "box",
+   "size": [
+    8.0,
+    1.4
+   ],
+   "height": 3.5
+  }
+ },
+ {
+  "name": "Snow_Shrine_Totem",
+  "category": "Snow",
+  "note": "Landmark carved totem ~7.6 tall on a snowy stone plinth: stacked carved wood segments with slate-blue paint, spread wings (T silhouette from above), ivory antlers, a gold sun disc and a small frost gem; slate prayer cloths. Front = -Y. Collider circle; light = gem.",
+  "tris": 926,
+  "pieces": [
+   {
+    "name": "Plinth",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.225,
+     0.0
+    ],
+    "size": [
+     3.4184,
+     0.55,
+     3.4184
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.715,
+     0.0
+    ],
+    "size": [
+     2.4021,
+     0.47,
+     2.4021
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Wood",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.85,
+     -0.0175
+    ],
+    "size": [
+     1.5,
+     3.9,
+     1.475
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Wood2",
+    "slot": "Wood2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.01,
+     0.0
+    ],
+    "size": [
+     5.1,
+     3.33,
+     1.2554
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Paint",
+    "slot": "Paint",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.9017,
+     -0.155
+    ],
+    "size": [
+     3.7811,
+     3.4634,
+     1.79
+    ]
+   },
+   {
+    "name": "Dark",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.295,
+     -0.53
+    ],
+    "size": [
+     0.96,
+     2.13,
+     0.28
+    ]
+   },
+   {
+    "name": "Gold",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.35,
+     -0.55
+    ],
+    "size": [
+     0.84,
+     0.7989,
+     0.1
+    ]
+   },
+   {
+    "name": "Glow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     4.35,
+     -0.63
+    ],
+    "size": [
+     0.32,
+     0.4,
+     0.1
+    ]
+   },
+   {
+    "name": "Antlers",
+    "slot": "Horn",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     6.4901,
+     0.0193
+    ],
+    "size": [
+     2.9352,
+     2.033,
+     0.3099
+    ]
+   },
+   {
+    "name": "Cloth",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.9,
+     -0.25
+    ],
+    "size": [
+     4.5351,
+     1.3164,
+     0.05
+    ]
+   },
+   {
+    "name": "Snow",
+    "slot": "Snow",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0224,
+     3.1,
+     0.0992
+    ],
+    "size": [
+     4.9301,
+     5.4,
+     3.2238
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ],
+   "Dark": [
+    0.0784313725490196,
+    0.10588235294117647,
+    0.1411764705882353
+   ],
+   "Glow": [
+    0.8627450980392157,
+    0.9176470588235294,
+    0.9686274509803922
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Wood": [
+    0.396078431372549,
+    0.2823529411764706,
+    0.19607843137254902
+   ],
+   "Cloth": [
+    0.2,
+    0.26666666666666666,
+    0.35294117647058826
+   ],
+   "Stone": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "Wood2": [
+    0.49411764705882355,
+    0.3607843137254902,
+    0.24705882352941178
+   ],
+   "Paint": [
+    0.27450980392156865,
+    0.3607843137254902,
+    0.4627450980392157
+   ],
+   "Horn": [
+    0.8980392156862745,
+    0.8627450980392157,
+    0.7803921568627451
+   ],
+   "Snow": [
+    0.9450980392156862,
+    0.9529411764705882,
+    0.9568627450980393
+   ]
+  },
+  "bounds": [
+   [
+    -2.55,
+    -0.05,
+    -1.709
+   ],
+   [
+    2.55,
+    7.507,
+    1.711
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.7,
+   "height": 7
+  },
+  "light": [
+   0.0,
+   4.35,
+   -0.7
+  ]
+ },
+ {
+  "name": "Spitter",
+  "category": "Enemies",
+  "note": "Ranged beetle: mauve shell carrying a bulbous amber acid sac (Pulse) with glowing bubbles (Throb) with a raised spout (Jaw = recoil when it spits). ~3.2 wide x 3.6 long x 3.2 tall.",
+  "tris": 690,
+  "pieces": [
+   {
+    "name": "Sac",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.32,
+     0.5
+    ],
+    "size": [
+     1.9021,
+     1.84,
+     2.12
+    ],
+    "shadow": true,
+    "anim": "Pulse",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "SacShine",
+    "slot": "Light",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.46,
+     1.965,
+     0.5
+    ],
+    "size": [
+     0.32,
+     0.4301,
+     0.8
+    ],
+    "anim": "Pulse",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "Core",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.002,
+     2.024,
+     0.835
+    ],
+    "size": [
+     1.0175,
+     0.5957,
+     0.9894
+    ],
+    "anim": "Throb",
+    "pivot": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "Shell",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.476,
+     -0.1263
+    ],
+    "size": [
+     2.1292,
+     1.852,
+     2.4273
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Body",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.62,
+     -0.285
+    ],
+    "size": [
+     1.72,
+     0.84,
+     3.27
+    ]
+   },
+   {
+    "name": "Spout",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.5403,
+     -0.538
+    ],
+    "size": [
+     0.5889,
+     1.3596,
+     1.4961
+    ],
+    "anim": "Jaw",
+    "pivot": [
+     0.0,
+     -0.5403,
+     0.438
+    ]
+   },
+   {
+    "name": "SpoutGlow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     2.9052,
+     -1.1478
+    ],
+    "size": [
+     0.3,
+     0.3,
+     0.3
+    ],
+    "anim": "Jaw",
+    "pivot": [
+     0.0,
+     -0.9052,
+     1.0478
+    ]
+   },
+   {
+    "name": "Eyes",
+    "slot": "Eye",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     0.74,
+     -1.56
+    ],
+    "size": [
+     0.73,
+     0.19,
+     0.19
+    ]
+   },
+   {
+    "name": "Antennae",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.0095,
+     -1.7486
+    ],
+    "size": [
+     1.04,
+     0.3405,
+     0.5028
+    ],
+    "anim": "Wiggle",
+    "pivot": [
+     0.0,
+     -0.1695,
+     0.2486
+    ]
+   },
+   {
+    "name": "LegsL",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.0893,
+     0.5264,
+     -0.02
+    ],
+    "size": [
+     1.0213,
+     1.0527,
+     2.8
+    ],
+    "anim": "SwingA",
+    "pivot": [
+     0.3493,
+     -0.0264,
+     0.02
+    ]
+   },
+   {
+    "name": "LegsR",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.0893,
+     0.5264,
+     -0.02
+    ],
+    "size": [
+     1.0213,
+     1.0527,
+     2.8
+    ],
+    "anim": "SwingB",
+    "pivot": [
+     -0.3493,
+     -0.0264,
+     0.02
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.5372549019607843,
+    0.3313725490196079,
+    0.3921568627450981
+   ],
+   "Dark": [
+    0.11764705882352941,
+    0.11372549019607843,
+    0.10588235294117647
+   ],
+   "Light": [
+    0.961764705882353,
+    0.8735294117647059,
+    0.5892156862745098
+   ],
+   "Accent": [
+    0.8735686274509804,
+    0.5786666666666667,
+    0.2523921568627451
+   ],
+   "Glow": [
+    0.9529411764705882,
+    0.7568627450980392,
+    0.42352941176470593
+   ],
+   "Eye": [
+    0.9137254901960784,
+    0.7254901960784313,
+    0.2549019607843137
+   ],
+   "Metal": [
+    0.23529411764705882,
+    0.13529411764705881,
+    0.17058823529411765
+   ]
+  },
+  "bounds": [
+   [
+    -1.6,
+    0.0,
+    -2.0
+   ],
+   [
+    1.6,
+    3.22,
+    1.56
+   ]
+  ]
+ },
+ {
   "name": "Stump",
   "category": "World",
   "note": "Tree stump, 1.8 x 1.2. Collider circle.",
@@ -8567,6 +19474,846 @@
    "kind": "circle",
    "radius": 0.85,
    "height": 1.2
+  }
+ },
+ {
+  "name": "Swamp_Hut",
+  "category": "Swamp",
+  "note": "Landmark stilt hut: plank cabin on six stilts, shaggy thatch roof, front porch with a ladder (-Y) and a hanging wisp lantern, ~7.2 x 8.4 x 8.6. Collider = the stilt footprint.",
+  "tris": 1436,
+  "pieces": [
+   {
+    "name": "Wood",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2352,
+     2.7515,
+     -0.9233
+    ],
+    "size": [
+     7.0296,
+     5.803,
+     7.4441
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Wood2",
+    "slot": "Wood2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0999,
+     2.9312,
+     -0.8482
+    ],
+    "size": [
+     6.0031,
+     5.4551,
+     7.3163
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Dark",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.835,
+     -0.35
+    ],
+    "size": [
+     6.8,
+     6.33,
+     6.3
+    ]
+   },
+   {
+    "name": "Glow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     -2.415,
+     4.1875,
+     -2.3018
+    ],
+    "size": [
+     2.73,
+     1.175,
+     1.9436
+    ]
+   },
+   {
+    "name": "Thatch",
+    "slot": "Thatch",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     7.2624,
+     0.6
+    ],
+    "size": [
+     6.4,
+     3.0568,
+     5.0
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Thatch2",
+    "slot": "Thatch2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     6.5336,
+     0.6
+    ],
+    "size": [
+     7.3,
+     3.8144,
+     5.9
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Moss",
+    "slot": "Moss",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.4703,
+     7.11,
+     1.4989
+    ],
+    "size": [
+     1.4069,
+     0.2,
+     1.3938
+    ]
+   },
+   {
+    "name": "Iron",
+    "slot": "Iron",
+    "material": "Metal",
+    "offset": [
+     -3.65,
+     3.98,
+     -3.15
+    ],
+    "size": [
+     0.3394,
+     0.88,
+     0.3394
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.16470588235294117,
+    0.11764705882352941,
+    0.08627450980392157
+   ],
+   "Glow": [
+    0.8117647058823529,
+    0.9019607843137255,
+    0.6509803921568628
+   ],
+   "Wood": [
+    0.396078431372549,
+    0.2823529411764706,
+    0.19607843137254902
+   ],
+   "Wood2": [
+    0.49411764705882355,
+    0.3607843137254902,
+    0.24705882352941178
+   ],
+   "Thatch": [
+    0.5458823529411765,
+    0.4886274509803922,
+    0.3498039215686275
+   ],
+   "Thatch2": [
+    0.4441176470588235,
+    0.3962745098039216,
+    0.27862745098039216
+   ],
+   "Iron": [
+    0.22745098039215686,
+    0.25098039215686274,
+    0.2823529411764706
+   ],
+   "Moss": [
+    0.4235294117647059,
+    0.4627450980392157,
+    0.3215686274509804
+   ]
+  },
+  "bounds": [
+   [
+    -3.82,
+    -0.15,
+    -4.645
+   ],
+   [
+    3.65,
+    9.0,
+    3.55
+   ]
+  ],
+  "collider": {
+   "kind": "box",
+   "size": [
+    6.6,
+    6.4
+   ],
+   "height": 8
+  },
+  "light": [
+   -3.65,
+   3.85,
+   -3.15
+  ]
+ },
+ {
+  "name": "Swamp_Lantern",
+  "category": "Swamp",
+  "note": "Crooked wooden post ~5.6 tall with a hanging cage lantern and a pale-green wisp glow (toward +X, Roblox -X); moss strands. Collider circle.",
+  "tris": 318,
+  "pieces": [
+   {
+    "name": "Post",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.4112,
+     2.704,
+     -0.1217
+    ],
+    "size": [
+     1.9198,
+     5.708,
+     1.1071
+    ]
+   },
+   {
+    "name": "Iron",
+    "slot": "Iron",
+    "material": "Metal",
+    "offset": [
+     -1.3777,
+     4.6025,
+     -0.0032
+    ],
+    "size": [
+     0.5852,
+     1.505,
+     0.6151
+    ]
+   },
+   {
+    "name": "Glow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     -1.35,
+     4.35,
+     0.0
+    ],
+    "size": [
+     0.3578,
+     0.4,
+     0.3403
+    ]
+   },
+   {
+    "name": "Moss",
+    "slot": "Moss",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.3253,
+     3.9,
+     0.01
+    ],
+    "size": [
+     1.0843,
+     3.0,
+     0.463
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Glow": [
+    0.8117647058823529,
+    0.9019607843137255,
+    0.6509803921568628
+   ],
+   "Wood": [
+    0.35490196078431374,
+    0.28823529411764703,
+    0.2007843137254902
+   ],
+   "Iron": [
+    0.22745098039215686,
+    0.25098039215686274,
+    0.2823529411764706
+   ],
+   "Moss": [
+    0.5568627450980392,
+    0.5882352941176471,
+    0.4392156862745098
+   ]
+  },
+  "bounds": [
+   [
+    -1.67,
+    -0.15,
+    -0.675
+   ],
+   [
+    0.549,
+    5.558,
+    0.432
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 0.4,
+   "height": 5.5
+  },
+  "light": [
+   -1.35,
+   4.35,
+   0.0
+  ]
+ },
+ {
+  "name": "Swamp_Log",
+  "category": "Swamp",
+  "note": "Rotting log half sunk in the bog, 7 long (X) x 1.5, moss and pale shelf fungus. Collider box.",
+  "tris": 312,
+  "pieces": [
+   {
+    "name": "Bark",
+    "slot": "Bark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.812,
+     -0.2222
+    ],
+    "size": [
+     6.9,
+     2.0569,
+     2.0333
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Ends",
+    "slot": "Heart",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.3998,
+     0.0
+    ],
+    "size": [
+     7.0,
+     1.0197,
+     1.0193
+    ]
+   },
+   {
+    "name": "Moss",
+    "slot": "Moss",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.0517,
+     1.1145,
+     0.0044
+    ],
+    "size": [
+     6.3867,
+     0.3875,
+     1.2414
+    ]
+   },
+   {
+    "name": "Fungus",
+    "slot": "Fungus",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.28,
+     0.635,
+     -0.0251
+    ],
+    "size": [
+     3.4,
+     0.17,
+     2.405
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Bark": [
+    0.27019607843137255,
+    0.22784313725490196,
+    0.1623529411764706
+   ],
+   "Heart": [
+    0.3686274509803922,
+    0.3176470588235294,
+    0.23137254901960785
+   ],
+   "Moss": [
+    0.4235294117647059,
+    0.4627450980392157,
+    0.3215686274509804
+   ],
+   "Fungus": [
+    0.788235294117647,
+    0.7450980392156863,
+    0.6509803921568628
+   ]
+  },
+  "bounds": [
+   [
+    -3.5,
+    -0.216,
+    -1.239
+   ],
+   [
+    3.5,
+    1.84,
+    1.177
+   ]
+  ],
+  "collider": {
+   "kind": "box",
+   "size": [
+    7.0,
+    1.5
+   ],
+   "height": 1.3
+  }
+ },
+ {
+  "name": "Swamp_Rock",
+  "category": "Swamp",
+  "note": "Dark wet boulder with a moss blanket and a draping fringe, ~4.4 x 2.6. Collider circle.",
+  "tris": 152,
+  "pieces": [
+   {
+    "name": "Rock",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.2337,
+     1.0558,
+     0.0078
+    ],
+    "size": [
+     4.0882,
+     2.308,
+     3.198
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Rock2",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.4774,
+     0.493,
+     -0.5459
+    ],
+    "size": [
+     2.0123,
+     1.186,
+     1.6037
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Moss",
+    "slot": "Moss",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.7702,
+     1.4381,
+     0.0441
+    ],
+    "size": [
+     3.1815,
+     1.6762,
+     2.9641
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Stone": [
+    0.32,
+    0.3503921568627451,
+    0.3392156862745098
+   ],
+   "Stone2": [
+    0.2523529411764706,
+    0.2788235294117647,
+    0.27450980392156865
+   ],
+   "Moss": [
+    0.4235294117647059,
+    0.4627450980392157,
+    0.3215686274509804
+   ]
+  },
+  "bounds": [
+   [
+    -2.484,
+    -0.1,
+    -1.591
+   ],
+   [
+    2.361,
+    2.276,
+    1.607
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.9,
+   "height": 2.6
+  }
+ },
+ {
+  "name": "Swamp_Stump",
+  "category": "Swamp",
+  "note": "Hollow broken stump with a jagged rim, moss and shelf fungus, ~2.2 x 2.3. Collider circle.",
+  "tris": 322,
+  "pieces": [
+   {
+    "name": "Bark",
+    "slot": "Bark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0049,
+     0.9921,
+     0.0284
+    ],
+    "size": [
+     2.1659,
+     2.2986,
+     2.1426
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Hollow",
+    "slot": "Heart",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0023,
+     0.9,
+     0.0134
+    ],
+    "size": [
+     1.0239,
+     0.1,
+     1.0128
+    ]
+   },
+   {
+    "name": "Moss",
+    "slot": "Moss",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.2551,
+     0.875,
+     0.0076
+    ],
+    "size": [
+     1.8523,
+     1.75,
+     1.6582
+    ]
+   },
+   {
+    "name": "Fungus",
+    "slot": "Fungus",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0976,
+     0.88,
+     -0.0238
+    ],
+    "size": [
+     2.3774,
+     0.64,
+     1.7598
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Bark": [
+    0.27019607843137255,
+    0.22784313725490196,
+    0.1623529411764706
+   ],
+   "Heart": [
+    0.16470588235294117,
+    0.11764705882352941,
+    0.08627450980392157
+   ],
+   "Moss": [
+    0.4235294117647059,
+    0.4627450980392157,
+    0.3215686274509804
+   ],
+   "Fungus": [
+    0.788235294117647,
+    0.7450980392156863,
+    0.6509803921568628
+   ]
+  },
+  "bounds": [
+   [
+    -1.091,
+    -0.157,
+    -1.043
+   ],
+   [
+    1.286,
+    2.141,
+    1.1
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.0,
+   "height": 2.2
+  }
+ },
+ {
+  "name": "Swamp_Tree",
+  "category": "Swamp",
+  "note": "Gnarled mangrove on arching prop roots with a broad flat canopy and pale hanging moss, ~12 tall, canopy radius ~5. Collider = the root knot.",
+  "tris": 1034,
+  "pieces": [
+   {
+    "name": "Trunk",
+    "slot": "Bark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.035,
+     4.4581,
+     -0.1709
+    ],
+    "size": [
+     5.7403,
+     9.3057,
+     5.733
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Leaves",
+    "slot": "Leaves",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2866,
+     9.1282,
+     0.6166
+    ],
+    "size": [
+     9.8449,
+     2.6875,
+     9.1307
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Leaves2",
+    "slot": "Leaves2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.262,
+     10.1535,
+     0.0112
+    ],
+    "size": [
+     6.6691,
+     2.2455,
+     6.1898
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Moss",
+    "slot": "Moss",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2807,
+     6.7886,
+     0.0379
+    ],
+    "size": [
+     8.4014,
+     3.5575,
+     7.8187
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Bark": [
+    0.27019607843137255,
+    0.22784313725490196,
+    0.1623529411764706
+   ],
+   "Leaves": [
+    0.20392156862745098,
+    0.24313725490196078,
+    0.17254901960784313
+   ],
+   "Leaves2": [
+    0.25882352941176473,
+    0.30196078431372547,
+    0.21176470588235294
+   ],
+   "Moss": [
+    0.5568627450980392,
+    0.5882352941176471,
+    0.4392156862745098
+   ]
+  },
+  "bounds": [
+   [
+    -5.209,
+    -0.195,
+    -3.949
+   ],
+   [
+    4.636,
+    11.276,
+    5.182
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.5,
+   "height": 8
+  }
+ },
+ {
+  "name": "Swamp_Willow",
+  "category": "Swamp",
+  "note": "Weeping willow: thick short trunk, domed crown and a curtain of drooping fronds, ~11 tall, canopy radius ~5. Collider = trunk.",
+  "tris": 512,
+  "pieces": [
+   {
+    "name": "Trunk",
+    "slot": "Bark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2526,
+     3.7512,
+     0.2764
+    ],
+    "size": [
+     4.5093,
+     7.9158,
+     4.0371
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Crown",
+    "slot": "Leaves",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.5436,
+     8.361,
+     0.1701
+    ],
+    "size": [
+     6.8989,
+     3.7966,
+     6.6328
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Crown2",
+    "slot": "Leaves2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.4311,
+     9.4895,
+     0.2054
+    ],
+    "size": [
+     6.0215,
+     2.7064,
+     4.5626
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Fronds",
+    "slot": "Fronds",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2635,
+     5.3,
+     0.0151
+    ],
+    "size": [
+     9.1127,
+     6.0,
+     9.0884
+    ],
+    "shadow": true
+   }
+  ],
+  "preview_palette": {
+   "Bark": [
+    0.35490196078431374,
+    0.28823529411764703,
+    0.2007843137254902
+   ],
+   "Leaves": [
+    0.25882352941176473,
+    0.30196078431372547,
+    0.21176470588235294
+   ],
+   "Leaves2": [
+    0.3254901960784314,
+    0.37254901960784315,
+    0.2549019607843137
+   ],
+   "Fronds": [
+    0.3647058823529412,
+    0.40862745098039216,
+    0.2815686274509804
+   ]
+  },
+  "bounds": [
+   [
+    -4.82,
+    -0.207,
+    -4.529
+   ],
+   [
+    4.293,
+    10.843,
+    4.559
+   ]
+  ],
+  "collider": {
+   "kind": "circle",
+   "radius": 1.2,
+   "height": 8
   }
  },
  {

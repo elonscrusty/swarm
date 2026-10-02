@@ -155,6 +155,18 @@ function Mock.api()
 		return R.localPlayer
 	end
 
+	-- Another player in the server (teammates for co-op scenes): a Player under Players
+	-- with a name, DisplayName and UserId; no PlayerGui / scripts (it is not this client).
+	function api.addPlayer(name: string, userId: number)
+		local p = R.create("Player")
+		local pst = states[p]
+		pst.name = name
+		pst.props.UserId = userId
+		pst.props.DisplayName = name
+		R.setParent(p, pst, R.services.Players)
+		return p
+	end
+
 	function api.playerGui()
 		return R.findChild(states[R.localPlayer], "PlayerGui")
 	end

@@ -3,8 +3,9 @@
 	The CHARACTERS screen of the menu. The inspected hero stands on the dais in the middle
 	of the 3D scene (Showcase), so the screen is two panels around it:
 	  left   every character: class icon, name, state (selected / owned / price)
-	  right  the inspected character: role, description, starting weapon, bonus, the
-	         UNLOCK / SELECT button, and its skins (equip, preview, Robux skin passes,
+	  right  the inspected character: role, description, starting weapon, trait, then
+	         TRAIT / STRENGTH / TRADEOFF lines, how to unlock it (gold, or an achievement
+	         with its progress: the Ranger), the UNLOCK / SELECT button, and its skins (equip, preview, Robux skin passes,
 	         the Starter Pack gold trim, "coming soon" for passes not set up)
 	Portrait: character tabs on top, the hero in between, the details panel below.
 
@@ -22,6 +23,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
+local AchievementData = require(Shared:WaitForChild("AchievementData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -116,8 +118,33 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	ui.WeaponHolder = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(48, 48), Position = UDim2.fromOffset(0, 4) }, facts)
 	text(facts, "Caption", UIKit.track("Starts with"), { Position = UDim2.fromOffset(58, 6), Size = UDim2.new(0.5, -58, 0, TS(12) + 2) })
 	ui.Weapon = text(facts, "BodyStrong", "", { Position = UDim2.fromOffset(58, 10 + TS(12)), Size = UDim2.new(0.5, -58, 0, TS(16) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
-	text(facts, "Caption", UIKit.track("Bonus"), { Position = UDim2.new(0.5, 8, 0, 6), Size = UDim2.new(0.5, -8, 0, TS(12) + 2) })
-	ui.Bonus = text(facts, "BodyStrong", "", { Position = UDim2.new(0.5, 8, 0, 10 + TS(12)), Size = UDim2.new(0.5, -8, 0, TS(16) + 4), TextColor3 = P.moss_200 })
+	text(facts, "Caption", UIKit.track("Trait"), { Position = UDim2.new(0.5, 8, 0, 6), Size = UDim2.new(0.5, -8, 0, TS(12) + 2) })
+	ui.Bonus = text(facts, "BodyStrong", "", { Position = UDim2.new(0.5, 8, 0, 10 + TS(12)), Size = UDim2.new(0.5, -8, 0, TS(16) + 4), TextColor3 = P.moss_200, TextTruncate = Enum.TextTruncate.AtEnd })
+	-- TRAIT / STRENGTH / TRADEOFF: a caption column and a wrapped line each
+	local function infoRow(order: number, caption: string, color: Color3): TextLabel
+		local row = new("Frame", { Name = caption, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, scroll)
+		text(row, "Caption", UIKit.track(caption), { Size = UDim2.fromOffset(92, TS(16) + 2), TextColor3 = color })
+		return text(row, "Small", "", {
+			Position = UDim2.fromOffset(96, 0),
+			Size = UDim2.new(1, -96, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			TextWrapped = true,
+			TextColor3 = C.Text,
+			TextYAlignment = Enum.TextYAlignment.Top,
+		})
+	end
+	ui.Trait = infoRow(5, "Effect", P.moss_200)
+	ui.Strength = infoRow(6, "Strength", P.gold_300)
+	ui.Tradeoff = infoRow(7, "Tradeoff", P.crimson_300)
+	ui.Unlock = text(scroll, "BodyStrong", "", {
+		Name = "Unlock",
+		LayoutOrder = 8,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		TextWrapped = true,
+		RichText = true,
+		TextColor3 = P.gold_200,
+	})
 	ui.Action = UIKit.Button(scroll, {
 		Kind = "Primary",
 		Title = "SELECT",
@@ -125,7 +152,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		IconSize = 20,
 		Align = "Center",
 		Size = UDim2.new(1, 0, 0, Theme.Size.Button),
-		LayoutOrder = 5,
+		LayoutOrder = 9,
 		OnClick = function()
 			local p = profile()
 			if not p then
@@ -133,6 +160,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 			local def = CharacterData.Characters[inspChar]
 			if p.OwnedCharacters[inspChar] ~= true then
+				if def.Unlock then
+					local a = AchievementData.Achievements[def.Unlock.Achievement]
+					ctx.Toast(string.format("Unlock the %s: %s", def.Name, a and a.Description or "earn its achievement"), P.gold_300)
+					return
+				end
 				if p.Gold < def.Cost then
 					ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(def.Cost) .. " needed.", P.crimson_300)
 				end
@@ -142,11 +174,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end,
 	})
-	UIKit.Divider(scroll, 200, { LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 10) })
-	text(scroll, "Caption", UIKit.track("Skins"), { LayoutOrder = 7 })
-	ui.Swatches = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 56), LayoutOrder = 8, AutomaticSize = Enum.AutomaticSize.Y }, scroll)
+	UIKit.Divider(scroll, 200, { LayoutOrder = 10, Size = UDim2.new(1, 0, 0, 10) })
+	text(scroll, "Caption", UIKit.track("Skins"), { LayoutOrder = 11 })
+	ui.Swatches = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 56), LayoutOrder = 12, AutomaticSize = Enum.AutomaticSize.Y }, scroll)
 	UIKit.list(ui.Swatches, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), Wraps = true })
-	local skinRow = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, TS(16) + 8), LayoutOrder = 9 }, scroll)
+	local skinRow = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, TS(16) + 8), LayoutOrder = 13 }, scroll)
 	ui.SkinName = text(skinRow, "BodyStrong", "", { Size = UDim2.new(1, -120, 1, 0) })
 	ui.SkinState = text(skinRow, "Caption", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 120, 1, 0), TextXAlignment = Enum.TextXAlignment.Right })
 	ui.SkinAction = UIKit.Button(scroll, {
@@ -156,7 +188,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		IconSize = 20,
 		Align = "Center",
 		Size = UDim2.new(1, 0, 0, 50),
-		LayoutOrder = 10,
+		LayoutOrder = 14,
 		OnClick = function()
 			local p = profile()
 			if not p then
@@ -229,7 +261,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		for id, row in pairs(ui.Rows) do
 			local d = CharacterData.Characters[id]
 			local own = p.OwnedCharacters[id] == true
-			local sub = (p.SelectedCharacter == id) and "Selected" or (own and d.Role or ("Locked · " .. UIKit.formatNumber(d.Cost) .. " gold"))
+			local lockText = d.Unlock and ("Locked · " .. ((AchievementData.Achievements[d.Unlock.Achievement] or {}).Name or "achievement")) or ("Locked · " .. UIKit.formatNumber(d.Cost) .. " gold")
+			local sub = (p.SelectedCharacter == id) and "Selected" or (own and d.Role or lockText)
 			row.SetText(d.Name, sub)
 			row.SetSelected(id == inspChar)
 			if row.Subtitle then
@@ -243,10 +276,33 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		ui.Desc.Text = def.Description
 		local weapon = WeaponData.Weapons[def.StartWeapon]
 		ui.Weapon.Text = weapon and weapon.Name or def.StartWeapon
-		ui.Bonus.Text = def.BonusText or ""
+		ui.Bonus.Text = def.Trait and def.Trait.Name or (def.BonusText or "")
+		ui.Trait.Text = def.Trait and def.Trait.Text or (def.BonusText or "")
+		ui.Strength.Text = def.Strengths or ""
+		ui.Tradeoff.Text = def.Tradeoff or ""
+		-- how to unlock it (gold price, or the achievement and its progress)
+		local unlockText = ""
+		if not p.OwnedCharacters[inspChar] then
+			if def.Unlock then
+				local aid = def.Unlock.Achievement
+				local a = AchievementData.Achievements[aid]
+				local progress = p.Achievements and p.Achievements.Progress and tonumber(p.Achievements.Progress[aid]) or 0
+				unlockText = string.format('<font color="%s">UNLOCK</font>  <b>%s</b>: %s <font color="%s">%s</font>', UIKit.hex(C.TextMuted), a and a.Name or aid, a and a.Description or "", UIKit.hex(C.TextMuted), (string.gsub(AchievementData.ProgressText(aid, progress), " ", "")))
+			else
+				unlockText = string.format('<font color="%s">UNLOCK</font>  %s gold', UIKit.hex(C.TextMuted), UIKit.formatNumber(def.Cost))
+			end
+		end
+		ui.Unlock.Text = unlockText
+		ui.Unlock.Visible = unlockText ~= ""
 		ui.State.Text = selected and "SELECTED" or (own and "OWNED" or "LOCKED")
 		ui.State.BackgroundColor3 = selected and P.moss_600 or (own and P.slate_600 or P.crimson_700)
-		if not own then
+		if not own and def.Unlock then
+			local a = AchievementData.Achievements[def.Unlock.Achievement]
+			ui.Action.SetKind("Outline")
+			ui.Action.SetText("LOCKED · " .. string.upper(a and a.Name or "Achievement"))
+			ui.Action.SetIcon("lock")
+			ui.Action.SetEnabled(false)
+		elseif not own then
 			ui.Action.SetKind("Outline")
 			ui.Action.SetText("UNLOCK  " .. UIKit.formatNumber(def.Cost) .. " GOLD")
 			ui.Action.SetIcon("coin")
@@ -321,12 +377,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local measured = ui.DetailList.AbsoluteContentSize.Y / math.max(0.01, host.Scale())
 		local contentH = measured > 10 and (measured + 36) or (UIKit.IsCompact() and 640 or 590)
 		if portrait then
-			-- tabs row: four compact character buttons
+			-- tabs row: one compact button per character
 			ui.ListLayout.FillDirection = Enum.FillDirection.Horizontal
 			local w = W - 2 * M
 			place(ui.List, M, top, w, 76)
 			for _, row in pairs(ui.Rows) do
-				row.Instance.Size = UDim2.new(0.25, -6, 1, 0)
+				row.Instance.Size = UDim2.new(1 / #CharacterData.Order, -6, 1, 0)
 				if row.Subtitle then
 					row.Subtitle.Visible = false
 				end
@@ -337,6 +393,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				end
 				if row.Title then
 					row.Title.TextXAlignment = Enum.TextXAlignment.Center
+					-- five names in one row: a smaller title so none is cut off
+					row.Title.TextSize = TS(Theme.TextSize.Body + 1)
 				end
 			end
 			local detailH = math.min(contentH, math.floor(H * 0.52))
@@ -347,7 +405,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		else
 			ui.ListLayout.FillDirection = Enum.FillDirection.Vertical
 			local lw = math.clamp(W * 0.24, 270, 330)
-			place(ui.List, M, top, lw, 4 * 72 + 3 * 8 + 24)
+			local n = #CharacterData.Order
+			place(ui.List, M, top, lw, n * 72 + (n - 1) * 8 + 24)
 			for id, row in pairs(ui.Rows) do
 				row.Instance.Size = UDim2.new(1, 0, 0, 72)
 				if row.Subtitle then
@@ -356,6 +415,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				row.SetIcon(Icons.CharacterIcon(id))
 				if row.Title then
 					row.Title.TextXAlignment = Enum.TextXAlignment.Left
+					row.Title.TextSize = TS(Theme.TextSize.H2)
 				end
 			end
 			local rw = math.clamp(W * 0.32, 360, 440)

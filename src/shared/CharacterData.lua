@@ -1,10 +1,18 @@
 --[[
 	CharacterData.lua
-	The 4 playable characters and their cosmetic skins.
+	The 5 playable characters and their cosmetic skins.
 
 	Character fields:
 	  Role          short tag shown on the character select card (descriptive only)
 	  Cost          gold price in the lobby (0 = free)
+	  Unlock        optional { Achievement = id }: unlocked by that achievement
+	                (AchievementData), never sold for gold (Cost is ignored)
+	  Trait         { Name, Text }: the passive trait (Bonus below, or SteadyAim)
+	  Strengths     one line: what the character is good at
+	  Tradeoff      one line: the real weakness (true to the numbers)
+	  SteadyAim     optional { Delay, Damage, OtherDamage }: standing still Delay s gives
+	                +Damage to the Longbow and +OtherDamage to every other weapon
+	                until the hero moves (WeaponSystem; HUD buff chip)
 	  StartWeapon   weapon id from WeaponData
 	  Bonus         stat bonuses (same keys as PassiveData values) plus:
 	                  damageTaken  -0.1 = take 10% less damage
@@ -31,7 +39,7 @@ local Palette = require(script.Parent.Palette)
 
 local CharacterData = {}
 
-CharacterData.Order = { "Knight", "Mage", "Rogue", "Priest" }
+CharacterData.Order = { "Knight", "Mage", "Rogue", "Priest", "Ranger" }
 CharacterData.Default = "Knight"
 
 -- Slots a skin recolours on the hero meshes (everything else on a mesh keeps its own colour).
@@ -46,7 +54,10 @@ CharacterData.Characters = {
 		Cost = 0,
 		StartWeapon = "Whip",
 		Bonus = { damageTaken = -0.10 },
-		BonusText = "+10% armor",
+		BonusText = "-10% damage taken",
+		Trait = { Name = "Iron Skin", Text = "Takes 10% less damage from every hit." },
+		Strengths = "Hard to kill; wide sword cuts clear the crowd in front and behind.",
+		Tradeoff = "Short reach: the Whip only hits enemies within about 7 studs.",
 		Colors = {
 			Metal = Palette.steel_400,
 			MetalDark = Palette.steel_600,
@@ -71,6 +82,9 @@ CharacterData.Characters = {
 		StartWeapon = "MagicOrb",
 		Bonus = { area = 0.10 },
 		BonusText = "+10% area",
+		Trait = { Name = "Arcane Reach", Text = "+10% area for every weapon." },
+		Strengths = "Homing orbs find targets on their own; bigger area on every weapon.",
+		Tradeoff = "Fragile: no defence bonus, and each orb stops at the first enemy early on.",
 		Colors = {
 			Metal = Palette.slate_500,
 			MetalDark = Palette.slate_600,
@@ -95,6 +109,9 @@ CharacterData.Characters = {
 		StartWeapon = "Knives",
 		Bonus = { speed = 0.15 },
 		BonusText = "+15% speed",
+		Trait = { Name = "Fleet Foot", Text = "+15% move speed." },
+		Strengths = "The fastest hero: outruns the swarm and reaches chests first.",
+		Tradeoff = "Knives only fly the way you move: enemies behind you are safe.",
 		Colors = {
 			Metal = Palette.leather_500,
 			MetalDark = Palette.leather_700,
@@ -119,6 +136,9 @@ CharacterData.Characters = {
 		StartWeapon = "Garlic",
 		Bonus = { maxHpMult = 0.20 },
 		BonusText = "+20% HP",
+		Trait = { Name = "Blessed", Text = "+20% max HP." },
+		Strengths = "The most health; the aura hits everything around you at once.",
+		Tradeoff = "No reach: the aura only hits enemies right next to you.",
 		Colors = {
 			Metal = Palette.ivory_200,
 			MetalDark = Palette.ivory_400,
@@ -133,6 +153,38 @@ CharacterData.Characters = {
 		},
 		Swatch = "Cloth",
 		Hat = "Mitre",
+	},
+	-- Ranger: unlocked by the "Queen Slayer" achievement (AchievementData). Mesh "Ranger"
+	-- (MeshCatalog) when uploaded, else the part-built fallback (ModelBuilder.ClassGear).
+	Ranger = {
+		Id = "Ranger",
+		Name = "Ranger",
+		Role = "Sharpshooter", -- one-line tag on the character select card
+		Description = "Patient archer. Starts with the Longbow. Hits hardest standing still.",
+		Cost = 0,
+		Unlock = { Achievement = "QueenSlayer" },
+		StartWeapon = "Longbow",
+		Bonus = {},
+		BonusText = "Steady Aim",
+		Trait = { Name = "Steady Aim", Text = "Stand still for 0.8 s: +30% Longbow damage (+10% other weapons) until you move." },
+		Strengths = "Longest reach: heavy arrows pierce whole lines of enemies.",
+		Tradeoff = "Slow shots in one direction, and the bonus needs you to stand still.",
+		SteadyAim = { Delay = 0.8, Damage = 0.30, OtherDamage = 0.10 },
+		-- the same slots and colours as the "Ranger" mesh (blender heroes): leather jerkin,
+		-- tan tunic, moss legs and hood, crimson scarf / fletching
+		Colors = {
+			Metal = Palette.leather_600,
+			MetalDark = Palette.leather_700,
+			Cloth = Palette.dirt_400,
+			Cloth2 = Palette.moss_800,
+			Accent = Palette.crimson_500,
+			Gold = Palette.gold_500,
+			Hat = Palette.moss_400,
+			HatAccent = Palette.crimson_500,
+			Skin = Palette.skin_500,
+		},
+		Swatch = "Hat",
+		Hat = "Hood",
 	},
 }
 
@@ -246,7 +298,7 @@ CharacterData.Skins = {
 	-- Rogue
 	Rogue_Forest = {
 		Id = "Rogue_Forest",
-		Name = "Forest Ranger",
+		Name = "Woodland Rogue",
 		Character = "Rogue",
 		Pass = "Skin",
 		Colors = {

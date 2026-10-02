@@ -359,6 +359,31 @@ ModelBuilder.ClassGear = {
 		gear(ra, rig.Model, { Name = "StaffCore", Shape = Enum.PartType.Ball, Size = Vector3.new(0.3, 0.3, 0.3), Color = Palette.fx_gold, Material = Enum.Material.Neon }, CFrame.new(0.15, 2.95, -0.42))
 		gear(rig.LeftArm, rig.Model, { Name = "Book", Size = Vector3.new(0.24, 0.8, 0.66), Color = Palette.crimson_700 }, CFrame.new(-0.25, -0.75, -0.3))
 	end,
+	-- Ranger: moss mantle and short cape, crimson scarf, quiver of arrows on the back with its
+	-- strap across the chest, leather bracer, longbow in the left hand (limbs curving back
+	-- toward the archer, ivory string). Fallback until the "Ranger" mesh is uploaded.
+	Ranger = function(rig: Rig, c)
+		gear(rig.Torso, rig.Model, { Name = "Mantle", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.55, 2.6, 2.4), Color = c.Hat, CastShadow = true }, CFrame.new(0, 0.85, 0) * UP)
+		gear(rig.Torso, rig.Model, { Name = "Scarf", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 2.2, 2.0), Color = c.Accent }, CFrame.new(0, 1.12, 0) * UP)
+		gear(rig.Torso, rig.Model, { Name = "Cape", Size = Vector3.new(2.1, 2.6, 0.12), Color = c.Hat, CastShadow = true }, CFrame.new(0, -0.35, 0.82) * CFrame.Angles(math.rad(6), 0, 0))
+		gear(rig.Torso, rig.Model, { Name = "Strap", Size = Vector3.new(0.24, 3.0, 0.1), Color = LEATHER }, CFrame.new(0, 0.05, -0.74) * CFrame.Angles(0, 0, math.rad(-38)))
+		gear(rig.Torso, rig.Model, { Name = "StrapBuckle", Size = Vector3.new(0.3, 0.3, 0.08), Color = c.Gold, Material = METAL }, CFrame.new(0.32, 0.45, -0.8))
+		local quiver = CFrame.new(0.45, 0.35, 0.95) * CFrame.Angles(0, 0, math.rad(-22))
+		gear(rig.Torso, rig.Model, { Name = "Quiver", Shape = Enum.PartType.Cylinder, Size = Vector3.new(2.1, 0.6, 0.6), Color = c.Metal, CastShadow = true }, quiver * UP)
+		gear(rig.Torso, rig.Model, { Name = "QuiverRim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.14, 0.66, 0.66), Color = c.Gold, Material = METAL }, quiver * CFrame.new(0, 1.0, 0) * UP)
+		for i, x in ipairs({ -0.14, 0.0, 0.14 }) do
+			gear(rig.Torso, rig.Model, { Name = "Fletching", Size = Vector3.new(0.08, 0.42, 0.22), Color = i == 2 and Palette.crimson_400 or Palette.ivory_200 }, quiver * CFrame.new(x, 1.32, (i - 2) * 0.08))
+		end
+		local la = rig.LeftArm
+		gear(la, rig.Model, { Name = "Bracer", Size = Vector3.new(0.7, 0.55, 0.72), Color = c.Metal }, CFrame.new(0, -0.45, 0))
+		local grip = CFrame.new(-0.05, -0.95, -0.42)
+		gear(la, rig.Model, { Name = "BowGrip", Size = Vector3.new(0.2, 0.5, 0.22), Color = LEATHER }, grip)
+		for _, sign in ipairs({ 1, -1 }) do
+			gear(la, rig.Model, { Name = "BowLimb", Size = Vector3.new(0.14, 1.55, 0.16), Color = WOOD, CastShadow = true }, grip * CFrame.new(0, sign * 0.78, 0.14) * CFrame.Angles(math.rad(sign * 20), 0, 0))
+			gear(la, rig.Model, { Name = "BowTip", Size = Vector3.new(0.16, 0.2, 0.16), Color = c.Gold, Material = METAL }, grip * CFrame.new(0, sign * 1.5, 0.53))
+		end
+		gear(la, rig.Model, { Name = "BowString", Size = Vector3.new(0.04, 2.95, 0.04), Color = Palette.ivory_100 }, grip * CFrame.new(0, 0, 0.55))
+	end,
 }
 
 ------------------------------------------------------------------------------------------
@@ -497,7 +522,7 @@ function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts:
 	local R = ModelBuilder.Rig
 	local torso = body("Torso", Vector3.new(2.3, 2.4, 1.4), Vector3.new(0, 3.3, 0), c.Torso, armour)
 	local head = body("Head", ModelBuilder.HeadSize, ModelBuilder.HeadCenter, c.Skin)
-	local armColor = armour and c.MetalDark or (characterId == "Rogue" and c.Cloth2 or c.Cloth)
+	local armColor = armour and c.MetalDark or ((characterId == "Rogue" or characterId == "Ranger") and c.Cloth2 or c.Cloth)
 	local leftArm = body("Left Arm", Vector3.new(0.62, 1.75, 0.65), Vector3.new(-1.43, 3.05, 0), armColor, armour)
 	local rightArm = body("Right Arm", Vector3.new(0.62, 1.75, 0.65), Vector3.new(1.43, 3.05, 0), armColor, armour)
 	local leftLeg = body("Left Leg", Vector3.new(0.74, 1.6, 0.8), Vector3.new(-0.52, 1.25, 0), c.Cloth2)
@@ -515,7 +540,7 @@ function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts:
 	end
 	for _, arm in ipairs({ leftArm, rightArm }) do
 		local s = arm.Position.X < 0 and -1 or 1
-		gear(arm, model, { Name = "Hand", Size = Vector3.new(0.58, 0.56, 0.6), Color = armour and c.Metal or (characterId == "Rogue" and LEATHER or c.Skin), Material = armour and METAL or nil }, CFrame.new(s * 0.07, -0.93, -0.04))
+		gear(arm, model, { Name = "Hand", Size = Vector3.new(0.58, 0.56, 0.6), Color = armour and c.Metal or ((characterId == "Rogue" or characterId == "Ranger") and LEATHER or c.Skin), Material = armour and METAL or nil }, CFrame.new(s * 0.07, -0.93, -0.04))
 	end
 	for _, leg in ipairs({ leftLeg, rightLeg }) do
 		gear(leg, model, { Name = "Boot", Size = Vector3.new(0.84, 0.5, 1.15), Color = armour and c.Metal or LEATHER, Material = armour and METAL or nil }, CFrame.new(0, -1.0, -0.14))

@@ -139,6 +139,29 @@ if runs > 1 then
 	}
 end
 
+-- --set loot=1: this stage's portal + loot (LootSystem.BuildStage) with markers per type
+local lootMarks = {}
+if preview.args.loot and arena then
+	local spot = C.try("FindPortalSpot", s.MapBuilder.FindPortalSpot, arena, Random.new(preview.seed * 13 + 5), nil)
+	if spot then
+		C.try("BuildPortal", s.MapBuilder.BuildPortal, arena, spot)
+		table.insert(lootMarks, { spot, "#7fb2ff", "Portal" })
+	end
+	local loot = C.server("LootSystem")
+	if loot then
+		C.try("LootSystem.Init", loot.Init, {
+			RunManager = { GetRunPlayers = function() return {} end, GetRunTime = function() return 0 end },
+			MonetizationService = { GoldMultiplier = function() return 1 end },
+		})
+		C.try("LootSystem.BuildStage", loot.BuildStage, arena, tonumber(preview.args.stage) or 1, spot)
+		local colors = { Small = "#d9b77a", Large = "#b07a3a", Golden = "#ffd23f", Chance = "#ffe28a", Bargain = "#ff5a5a", Guarded = "#c8d6ff" }
+		for _, obj in ipairs(loot.Objects()) do
+			table.insert(lootMarks, { obj.Pos, colors[obj.Type] or "#ffffff", obj.Type })
+		end
+		preview.metrics.loot = #loot.Objects()
+	end
+end
+
 -- overlays (the arena drawn last is the one shown)
 local c = arena.Center
 for _, ob in ipairs(arena.Obstacles) do
@@ -157,6 +180,10 @@ for _, r in ipairs({ 40, 100, 200 }) do
 	preview.overlay({ kind = "label", x = c.X + r * 0.7071 + 6, z = c.Z + r * 0.7071 + 6, text = tostring(r), color = "#ffffff", size = 15 })
 end
 preview.overlay({ kind = "label", x = c.X, z = c.Z - HALF - 14, size = 20, color = "#ffffff", text = string.format("%s  seed %d%s  |  %d obstacles  |  blocked %.2f%% (%d of %d studs\u{B2})  |  parts %d, MeshParts %d, shadow casters %d", arenaName, preview.seed, runs > 1 and string.format(" (build %d of %d)", runs, runs) or "", m.obstacles, m.blockedPercent, m.blockedArea, m.playArea, m.parts.parts, m.parts.meshParts, m.parts.shadowCasters) })
+for _, mk in ipairs(lootMarks) do
+	preview.overlay({ kind = "circle", x = mk[1].X, z = mk[1].Z, y = c.Y + 0.4, r = 4, color = mk[2], fill = mk[2], width = 2 })
+	preview.overlay({ kind = "label", x = mk[1].X, z = mk[1].Z - 8, text = mk[3], color = mk[2], size = 13 })
+end
 preview.camera = { cf = CFrame.lookAt(c + Vector3.new(0, 600, 0), c, Vector3.new(0, 0, -1)), ortho = { height = SIZE + 70 }, near = 1, far = 2000 }
 preview.render.hideCoreUi = true
 preview.advance(0.1)

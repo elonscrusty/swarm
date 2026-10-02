@@ -28,6 +28,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
+local AchievementData = require(Shared:WaitForChild("AchievementData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -247,6 +248,17 @@ local function buildNameplate(frame: Frame)
 		TextYAlignment = Enum.TextYAlignment.Top,
 	})
 	ui.LockIcon = Icons.Draw(face, "lock", { Size = 22, Color = P.gold_400, Position = UDim2.fromOffset(16, 14) })
+	-- your name with the achievement title / nameplate colour you wear (AchievementData)
+	ui.PlayerTag = text(plate, "Label", "", {
+		Name = "PlayerTag",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 0, -6),
+		Size = UDim2.new(1, 0, 0, TS(15) + 4),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.45,
+		RichText = true,
+	}, 15)
 	-- locked character: price + unlock / details
 	local lockRow = new("Frame", { Name = "LockRow", BackgroundTransparency = 1, Visible = false, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -12), Size = UDim2.new(1, 0, 0, 48) }, face)
 	ui.LockRow = lockRow
@@ -705,11 +717,20 @@ function LobbyScreen.RefreshHero()
 	ui.NameTitle.Text = def.Name
 	ui.LockRow.Visible = locked
 	ui.LockIcon.Visible = locked
-	if locked then
+	if locked and def.Unlock then
+		-- earned through an achievement (the Ranger), never bought
+		local a = AchievementData.Achievements[def.Unlock.Achievement]
+		ui.NameSub.Text = string.format("Locked · %s", a and a.Description or "earn its achievement")
+		ui.NameSub.TextColor3 = P.gold_300
+		ui.Unlock.SetText("LOCKED")
+		ui.Unlock.SetIcon("lock")
+		ui.Unlock.SetEnabled(false)
+	elseif locked then
 		local afford = profile ~= nil and profile.Gold >= def.Cost
 		ui.NameSub.Text = string.format("Locked · %s · %s", def.Role or "", def.BonusText or "")
 		ui.NameSub.TextColor3 = P.gold_300
 		ui.Unlock.SetText("UNLOCK  " .. UIKit.formatNumber(def.Cost))
+		ui.Unlock.SetIcon("coin")
 		ui.Unlock.SetEnabled(afford)
 	else
 		local skinId = skinOf(id)
@@ -736,6 +757,12 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 	shownGold = p.Gold
 	ui.Best.SetValue(UIKit.formatTime(p.Stats.BestTime))
 	ui.Wins.SetValue(UIKit.formatNumber(p.Stats.Wins))
+	if ui.PlayerTag then
+		local colorDef = AchievementData.Colors[p.NameColor or ""]
+		local nameColor = colorDef and colorDef.Color or P.ivory_200
+		local title = (type(p.Title) == "string" and p.Title ~= "") and string.format('  <font color="%s">·  %s</font>', UIKit.hex(P.gold_300), string.upper(p.Title)) or ""
+		ui.PlayerTag.Text = string.format('<font color="%s">%s</font>%s', UIKit.hex(nameColor), Players.LocalPlayer.DisplayName, title)
+	end
 	if browse and owned(browse) then
 		browse = nil -- just bought it (the server also selects it)
 	end

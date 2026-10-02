@@ -13,7 +13,9 @@
 	  p = { {x, z, radius, seconds, evo} }         holy water pools
 	  e = { {x, z, radius} }                       explosions
 	  r = { {x, z, radius, Color3} }               shockwave rings (bomb, revive, boss)
-	  t = { {x, z, yaw, length, width, seconds} }  boss charge telegraph
+	  w = { {id, kind, ...} }                      warnings / telegraphs / hazard visuals,
+	                                               drawn by src/client/Telegraphs.lua (Fx.Warn)
+	  x = { id, ... }                              cancel warnings by id (0 = all of them)
 	  u = { {userId, kind} }                       player events: "hurt" | "heal" | "levelup" | "die" | "revive"
 	  n = { soundName, ... }                       global one-shot sounds
 ]]
@@ -38,7 +40,9 @@ local function push(key: string, value: any)
 end
 
 -- Caps per flush keep a single packet small even in huge fights.
-local CAPS = { h = 120, d = 60, s = 16, b = 24, c = 40, p = 16, e = 16, r = 8, t = 4, u = 24, n = 16 }
+-- Warnings (w / x) are gameplay-critical: their caps are far above what a fight produces.
+local CAPS = { h = 120, d = 60, s = 16, b = 24, c = 40, p = 16, e = 16, r = 8, u = 24, n = 16, w = 64, x = 64 }
+local warnId = 0
 
 local function pushCapped(key: string, value: any)
 	local list = batch[key]
@@ -85,9 +89,60 @@ function Fx.Ring(pos: Vector3, radius: number, color: Color3)
 	pushCapped("r", { r1(pos.X), r1(pos.Z), r1(radius), color })
 end
 
-function Fx.Telegraph(pos: Vector3, yaw: number, length: number, width: number, seconds: number)
-	-- yaw to 0.01 rad (as Slash): 0.1 rad put the far end of a long charge lane ~2 studs off
-	pushCapped("t", { r1(pos.X), r1(pos.Z), math.floor(yaw * 100 + 0.5) / 100, r1(length), r1(width), seconds })
+--[[
+	Warnings: every telegraph / hazard visual is ONE entry sent once (the client animates
+	it from its start time); the id lets the server cancel it early (Fx.ClearWarn).
+	kind and its fields (all positions are floor x, z; seconds = how long it shows):
+	  "circle"  x, z, radius, seconds, style ("venom" | "acid" | "blast" | "burrow")
+	  "lane"    x, z (lane centre), yaw, length, width, seconds
+	  "spokes"  x, z, innerRadius, length, seconds, { angle, ... } (stinger lanes; gaps = safe)
+	  "glob"    x1, z1, x2, z2, seconds (flight), arc height
+	  "egg"     x, z, seconds (a summon egg that cracks at the end)
+	  "patch"   x, z, radius, arm, life (an elite's fire patch)
+	  "pop"     x, z, radius, style (impact burst: "acid" | "venom" | "burrow" | "dust" | "shield")
+	Returns the id.
+]]
+function Fx.Warn(kind: string, ...: any): number
+	warnId = warnId % 60000 + 1
+	local entry = { warnId, kind }
+	for i = 1, select("#", ...) do
+		entry[i + 2] = (select(i, ...))
+	end
+	pushCapped("w", entry)
+	return warnId
+end
+
+-- Cancels a warning on every client (0 = every warning; travel / run end).
+-- Clients apply a batch's cancels (x) before its new warnings (w), so a warning created
+-- and cancelled within one flush is stripped from w here instead of being cancelled.
+function Fx.ClearWarn(id: number)
+	if id == 0 then
+		-- wipes everything sent so far: pending warnings are dropped and the 0 always
+		-- goes out (never lost to the cap behind per-enemy cancels)
+		(batch :: any).w = nil
+		batch.x = { 0 }
+		hasData = true
+		return
+	end
+	local pending = batch.w
+	if pending then
+		for i, entry in ipairs(pending) do
+			if entry[1] == id then
+				table.remove(pending, i)
+				return
+			end
+		end
+	end
+	local cancels = batch.x
+	if cancels and cancels[1] == 0 then
+		return -- already cleared by a 0 in this flush
+	end
+	pushCapped("x", id)
+end
+
+-- Old boss lane telegraph entry point, now drawn by Telegraphs ("lane").
+function Fx.Telegraph(pos: Vector3, yaw: number, length: number, width: number, seconds: number): number
+	return Fx.Warn("lane", pos.X, pos.Z, math.floor(yaw * 100 + 0.5) / 100, length, width, seconds)
 end
 
 function Fx.PlayerEvent(player: Player, kind: string)

@@ -34,6 +34,7 @@ local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local MapBuilder = require(script.Parent.MapBuilder)
 local Fx = require(script.Parent.Fx)
+local Events = require(script.Parent.Events)
 
 local StageManager = {}
 
@@ -180,7 +181,9 @@ local function buildStage(n: number)
 	local spot = MapBuilder.FindPortalSpot(arena, rng, lastPortal[arenaName])
 	lastPortal[arenaName] = spot
 	portal = MapBuilder.BuildPortal(arena, spot)
-	ctx.EnemyAI.SetArena(arena) -- after the portal: its plinths are obstacles too
+	-- chests, shrines and the guarded altar (new spots every stage; the old ones are gone)
+	ctx.LootSystem.BuildStage(arena, n, spot)
+	ctx.EnemyAI.SetArena(arena) -- after the portal and the loot: their colliders count too
 	stageTime = 0
 	hinted = false
 	shownLock = -1
@@ -216,6 +219,7 @@ end
 -- The run is over (defeat, everyone returned, server cleanup).
 function StageManager.EndRun()
 	portal = nil
+	ctx.LootSystem.Clear()
 	stage = 0
 	setSub("None")
 	state:SetAttribute("Stage", 0)
@@ -262,7 +266,7 @@ function StageManager.OnBossKilled(_pos: Vector3)
 	end
 	for _, rp in ipairs(participants()) do
 		if rp.Alive then
-			ctx.GoldSystem.AddRunGold(rp, Config.Gold.Boss)
+			ctx.GoldSystem.AddRunGold(rp, Config.Gold.Boss * (rp.Stats and rp.Stats.GoldMult or 1))
 		end
 	end
 	local list = Config.Difficulty.PlayerCountMult
@@ -408,6 +412,17 @@ local function openPortal()
 		rp.PortalOffered = false
 	end
 	ctx.RunManager.Broadcast("THE PORTAL IS OPEN", Color3.fromRGB(255, 220, 120), true)
+	-- achievements: the stage is cleared for everyone standing (a Bargain stage counts as
+	-- an optional event)
+	local bargain = ctx.LootSystem and (ctx.LootSystem.TeamBonus().might or 0) > 0
+	for _, rp in ipairs(participants()) do
+		if rp.Alive and not rp.Returned then
+			Events.Fire("StageCleared", rp.Player, { Stage = stage, Character = rp.CharacterId, Bargain = bargain })
+			if bargain then
+				Events.Fire("OptionalEvent", rp.Player, { Kind = "Bargain" })
+			end
+		end
+	end
 	checkChoices(false)
 end
 

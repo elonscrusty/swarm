@@ -1,8 +1,11 @@
 --[[
 	MenuUpgrades.lua
 	The UPGRADES screen: two tabs in one panel.
-	  PERMANENT  the gold upgrades (MetaUpgradeData): icon, name, what it does, level pips,
-	             the next price (BuyMeta) or MAX
+	  PERMANENT  the gold upgrades (MetaUpgradeData): icon, name, rank (LV 2/5), level pips,
+	             NOW / NEXT effect in plain words, the price (BUY, gold when affordable,
+	             "Need N more gold" when not) or MAXED. A tap marks the row BUYING... until
+	             the server's ProfileSync (the gold and levels always come from the server);
+	             BuyMeta carries the level the player saw, so a double tap buys one level.
 	  SHOP       Robux: gold packs (developer products) and gamepasses (Starter Pack, VIP,
 	             2x Gold) with their Robux price, OWNED, or "not set up yet" for ids left 0
 	Gold and cosmetics only (never power for Robux). With DataStores off (Studio) a red note
@@ -95,48 +98,95 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		return f
 	end
 
+	-- purchase state: a tap marks the row pending (button reads BUYING..., taps ignored)
+	-- until the server's ProfileSync arrives; a level that went up flashes its row
+	local pending: { [string]: number } = {}
+	local lastLevels: { [string]: number } = {}
+
 	local function metaCard(p, id: string, order: number)
 		local def = MetaUpgradeData.Upgrades[id]
 		local level = p.Meta[id] or 0
 		local cost = MetaUpgradeData.CostOf(id, level)
+		local maxed = cost == nil
 		local f = card(order)
 		UIKit.Tile(f, { Id = Icons.MetaIcon(id), Size = 52 })
-		text(f, "H3", def.Name, { Position = UDim2.fromOffset(64, 2), Size = UDim2.new(1, -64, 0, TS(18) + 4) })
-		text(f, "Small", def.Description, { Position = UDim2.fromOffset(64, 6 + TS(18)), Size = UDim2.new(1, -64, 0, TS(14) * 2 + 4), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top })
+		text(f, "H3", def.Name, { Position = UDim2.fromOffset(64, 0), Size = UDim2.new(1, -64 - 74, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
+		local rank = UIKit.Badge(f, maxed and "MAX" or string.format("LV %d/%d", level, def.MaxLevel), maxed and "Gold" or "Slate", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 2) })
+		rank.Name = "Rank"
+		text(f, "Small", def.Description, { Position = UDim2.fromOffset(64, 6 + TS(18)), Size = UDim2.new(1, -64, 0, TS(14) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
 		-- level pips
-		local pips = new("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 1, -82), Size = UDim2.new(1, 0, 0, 14) }, f)
+		local pips = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(64, 12 + TS(18) + TS(14)), Size = UDim2.new(1, -64, 0, 10) }, f)
 		UIKit.list(pips, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5), VerticalAlignment = Enum.VerticalAlignment.Center })
 		for i = 1, def.MaxLevel do
-			local pip = new("Frame", { BackgroundColor3 = i <= level and P.gold_400 or P.slate_950, Size = UDim2.fromOffset(22, 8), LayoutOrder = i }, pips)
+			local pip = new("Frame", { BackgroundColor3 = i <= level and P.gold_400 or P.slate_950, Size = UDim2.fromOffset(math.min(26, math.floor(140 / def.MaxLevel)), 8), LayoutOrder = i }, pips)
 			UIKit.corner(pip, 999)
 			UIKit.stroke(pip, i <= level and P.gold_200 or P.slate_600, 1, 0.3)
 		end
-		text(pips, "Label", level .. " / " .. def.MaxLevel, { LayoutOrder = 99, Size = UDim2.fromOffset(60, 14), TextColor3 = level >= def.MaxLevel and P.gold_300 or C.TextMuted }, Theme.TextSize.Caption)
+		-- now / next effect (what the next level really gives)
+		local now = MetaUpgradeData.EffectText(id, level)
+		local nextText = maxed and "Fully upgraded" or MetaUpgradeData.EffectText(id, level + 1)
+		local lines = {
+			string.format('<font color="%s">NOW</font>  %s', UIKit.hex(C.TextMuted), now),
+			string.format('<font color="%s">NEXT</font>  <font color="%s"><b>%s</b></font>', UIKit.hex(C.TextMuted), UIKit.hex(maxed and P.gold_300 or P.moss_200), nextText),
+		}
+		local affordable = cost ~= nil and p.Gold >= cost
+		if cost and not affordable then
+			table.insert(lines, string.format('<font color="%s">Need %s more gold</font>', UIKit.hex(P.crimson_300), UIKit.formatNumber(cost - p.Gold)))
+		end
+		text(f, "Small", table.concat(lines, "\n"), {
+			Position = UDim2.fromOffset(0, 62),
+			Size = UDim2.new(1, 0, 1, -62 - 52),
+			RichText = true,
+			TextWrapped = true,
+			TextColor3 = C.Text,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			LineHeight = 1.1,
+		})
 		if cost then
-			local b = UIKit.Button(f, {
-				Kind = "Outline",
-				Title = UIKit.formatNumber(cost),
+			local busy = pending[id] ~= nil
+			local b
+			b = UIKit.Button(f, {
+				Kind = affordable and "Primary" or "Outline",
+				Title = busy and "BUYING..." or ("BUY  " .. UIKit.formatNumber(cost)),
 				Icon = "coin",
 				IconSize = 20,
 				Align = "Center",
 				AnchorPoint = Vector2.new(0, 1),
 				Position = UDim2.fromScale(0, 1),
-				Size = UDim2.new(1, 0, 0, 50),
+				Size = UDim2.new(1, 0, 0, 46),
 				Shadow = false,
 				OnClick = function()
+					if pending[id] then
+						return -- double tap: the first purchase is still on its way
+					end
 					local pr = ctx.Profile()
 					if pr and pr.Gold < cost then
 						ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(cost) .. " needed.", P.crimson_300)
 						return
 					end
-					Remotes.Get("BuyMeta"):FireServer(id)
+					pending[id] = os.clock()
+					b.SetText("BUYING...")
+					b.SetEnabled(false)
+					Remotes.Get("BuyMeta"):FireServer(id, level)
+					-- no answer (dropped / rejected): ask for the real profile and free the row
+					task.delay(3, function()
+						if pending[id] and os.clock() - pending[id] >= 2.9 then
+							pending[id] = nil
+							Remotes.Get("RequestProfile"):FireServer()
+						end
+					end)
 				end,
 			})
-			b.SetEnabled(p.Gold >= cost)
+			b.SetEnabled(affordable and not busy)
 		else
-			local maxed = UIKit.Badge(f, "MAXED", "Gold", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14) })
-			maxed.Size = UDim2.fromOffset(0, 26)
+			local done = UIKit.Badge(f, "MAXED", "Gold", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -12) })
+			done.Size = UDim2.fromOffset(0, 26)
 		end
+		if lastLevels[id] ~= nil and level > lastLevels[id] then
+			UIAnim.Punch(f, 0.06)
+			UIAnim.Pop(rank, 0, 1.4)
+		end
+		lastLevels[id] = level
 		return f
 	end
 
@@ -200,6 +250,8 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		if not p then
 			return
 		end
+		-- a fresh profile answers every purchase in flight
+		table.clear(pending)
 		if tab == "Permanent" then
 			ui.Note.Text = "Permanent upgrades are bought with gold and last forever."
 		else
@@ -246,7 +298,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local inner = w - 32 - 12
 		local cols = math.max(1, math.floor((inner + 12) / (portrait and 270 or 290)))
 		local cw = math.floor((inner - (cols - 1) * 12) / cols)
-		ui.Grid.CellSize = UDim2.fromOffset(cw, UIKit.IsCompact() and 196 or 178)
+		ui.Grid.CellSize = UDim2.fromOffset(cw, UIKit.IsCompact() and 206 or 190)
 	end
 
 	return {
