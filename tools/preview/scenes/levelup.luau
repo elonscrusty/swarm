@@ -93,6 +93,14 @@ if WeaponData and PassiveData and Config and StatSheet then
 		table.insert(choices, weaponNew("Longbow"))
 	end
 end
+-- --set synergy=N   card N shows a synergy line (server text format, LevelUpSystem)
+local synIndex = tonumber(preview.args.synergy)
+local SynergyData = C.shared("SynergyData")
+if synIndex and choices[synIndex] and SynergyData then
+	local s = SynergyData.Synergies[SynergyData.Order[1]]
+	choices[synIndex].Synergy = string.format("Synergy: %s %d/%d", s.Name, 2, 3)
+	choices[synIndex].SynergyReady = false
+end
 C.fire("LevelUpOffer", {
 	Choices = choices,
 	Rerolls = tonumber(preview.args.rerolls) or 2,
