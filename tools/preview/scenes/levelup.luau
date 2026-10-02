@@ -126,4 +126,45 @@ if pick then
 		preview.click(card)
 	end
 end
+-- --set touch=tap|drag|hold|zone|jump --set touchAt=<s> [--set touchCard=N]
+--   one simulated finger on card N (default 2) touchAt seconds after the offer: a quick tap,
+--   a 60 px drag, a 0.9 s hold, or a touch that began in the thumbstick zone / on JUMP and
+--   ended on the card (worst case). The log says whether the card was taken (safe input).
+local touchKind = preview.args.touch
+if touchKind then
+	C.settle(tonumber(preview.args.touchAt) or 0.9)
+	local idx = tonumber(preview.args.touchCard) or 2
+	local card
+	for _, d in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
+		if d.Name == "Card" .. idx and d:IsA("TextButton") then
+			card = d
+		end
+	end
+	if card then
+		local vp = workspace.CurrentCamera.ViewportSize
+		local opts = {}
+		if touchKind == "drag" then
+			opts.drag = 60
+		elseif touchKind == "hold" then
+			opts.hold = 0.9
+		elseif touchKind == "zone" then
+			opts.at = Vector2.new(vp.X * 0.15, vp.Y * 0.8)
+			opts.endOn = true
+		elseif touchKind == "jump" then
+			local jump = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("JumpButton", true)
+			local l = jump and preview.layoutOf(jump)
+			opts.at = l and Vector2.new(l.x + l.w / 2, l.y + l.h / 2) or Vector2.new(vp.X * 0.9, vp.Y * 0.85)
+			opts.endOn = true
+		end
+		preview.touch(card, opts)
+		C.settle(0.1)
+		local taken = false
+		for _, d in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
+			if d.Name == "PickFlash" or d.Name == "PickShade" then
+				taken = true
+			end
+		end
+		preview.log(string.format("[levelup] touch %s at %.2fs on card %d: %s", touchKind, tonumber(preview.args.touchAt) or 0.9, idx, taken and "TAKEN" or "ignored"))
+	end
+end
 C.settle(tonumber(preview.args.at) or 1.5)

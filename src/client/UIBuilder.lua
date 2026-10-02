@@ -487,9 +487,21 @@ local offerHint: string? = nil -- first-run explanation under LEVEL UP! (Tutoria
 	Arm seconds AND the press itself started after that, so a key, gamepad button or touch
 	held from gameplay never confirms a card. Fx holds the cards' idle tweens and
 	connections; it is cleared on every rebuild and on close.
+	Touch is stricter (thumbs rest on the stick and JUMP while playing): a pick needs a whole
+	tap on the same card (no drag past TouchSlop px, lifted within TouchHold s) that began
+	TouchArm s after the cards appeared; a touch that began in the thumbstick zone (left
+	40 %, lower half) or on JUMP is ignored until TouchGuard s. Until TouchArm the cards are
+	dimmed with a thin gold sweep along their bottom edge, so it is clear when taps count.
 ]]
 local offerArm = {
 	Arm = 0.35,
+	TouchArm = 0.8,
+	TouchGuard = 1.2,
+	TouchHold = 0.6,
+	TouchSlop = 24,
+	ShownAt = math.huge, -- when the cards appeared
+	Touches = setmetatable({}, { __mode = "k" }) :: any, -- touch input → record
+	LastTouch = nil :: any, -- the touch that ended last
 	Stage = 0.25,
 	Stagger = 0.06,
 	At = math.huge, -- input counts from this os.clock()
@@ -502,6 +514,73 @@ local offerArm = {
 -- True when a confirm may be taken (see offerArm above).
 local function offerArmed(): boolean
 	return offerOpen and os.clock() >= offerArm.At and offerArm.Press >= offerArm.At
+end
+
+-- Is the player on touch right now (the stricter touch rules and the locked look)?
+local function touchMode(): boolean
+	local last = UserInputService:GetLastInputType()
+	if last == Enum.UserInputType.Touch then
+		return true
+	end
+	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and last ~= Enum.UserInputType.Gamepad1
+end
+
+-- A touch that began where the thumbs rest while playing: the thumbstick zone or JUMP.
+local function touchGuarded(pos: Vector2): boolean
+	local cam = workspace.CurrentCamera
+	local vp = cam and cam.ViewportSize or Vector2.new(1, 1)
+	if pos.X < vp.X * 0.4 and pos.Y > vp.Y * 0.5 then
+		return true
+	end
+	local jump = levelUp.JumpButton
+	if not (jump and jump.Parent) then
+		jump = player:FindFirstChildOfClass("PlayerGui") and player.PlayerGui:FindFirstChild("JumpButton", true)
+		levelUp.JumpButton = jump
+	end
+	if jump and jump:IsA("GuiObject") and jump.Visible then
+		local a, size = jump.AbsolutePosition, jump.AbsoluteSize
+		-- touch positions and GUI positions may differ by the topbar inset: check both
+		for _, p in ipairs({ pos, pos - GuiService:GetGuiInset() }) do
+			if p.X >= a.X - 16 and p.X <= a.X + size.X + 16 and p.Y >= a.Y - 16 and p.Y <= a.Y + size.Y + 16 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- A complete, deliberate tap made after the cards armed (see offerArm above).
+local function touchTapOk(rec): boolean
+	local began = rec.At
+	if began < offerArm.ShownAt + offerArm.TouchArm then
+		return false
+	elseif rec.Guarded and began < offerArm.ShownAt + offerArm.TouchGuard then
+		return false
+	elseif (rec.EndedAt or os.clock()) - began > offerArm.TouchHold then
+		return false
+	end
+	return rec.Moved <= offerArm.TouchSlop
+end
+
+--[[
+	May this confirm (a card, REROLL, SKIP) be taken? `input` is the activating input when
+	known. Touch goes by touchTapOk (a touch never seen beginning is refused); a button
+	that does not say which input fired uses the touch that just ended; mouse, keys and
+	gamepad use offerArmed.
+]]
+local function confirmInput(input: InputObject?): boolean
+	if not offerOpen then
+		return false
+	end
+	if input and input.UserInputType == Enum.UserInputType.Touch then
+		local rec = offerArm.Touches[input]
+		return rec ~= nil and touchTapOk(rec)
+	end
+	local last = offerArm.LastTouch
+	if input == nil and last and os.clock() - (last.EndedAt or 0) < 0.25 then
+		return touchTapOk(last)
+	end
+	return offerArmed()
 end
 
 local function cardIconId(c): string
@@ -684,8 +763,8 @@ local function pickAnimation(index: number)
 	end
 end
 
-local function chooseCard(index: number)
-	if not offerArmed() then
+local function chooseCard(index: number, input: InputObject?)
+	if not confirmInput(input) then
 		return
 	end
 	offerOpen = false
@@ -824,15 +903,18 @@ local function buildLevelUp()
 		LayoutOrder = 1,
 		OnClick = function()
 			task.defer(function()
-				if not offerArmed() then
+				if not confirmInput(nil) then
 					return
 				end
 				-- no picks until the new cards are in (re-armed if the server sends none)
 				offerArm.At = math.huge
+				local shown = offerArm.ShownAt
+				offerArm.ShownAt = math.huge
 				local token = offerArm.Token
 				task.delay(1, function()
 					if offerArm.Token == token and offerOpen then
 						offerArm.At = os.clock()
+						offerArm.ShownAt = shown
 					end
 				end)
 				Remotes.Get("LevelUpReroll"):FireServer()
@@ -851,7 +933,7 @@ local function buildLevelUp()
 		LayoutOrder = 2,
 		OnClick = function()
 			task.defer(function()
-				if offerArmed() then
+				if confirmInput(nil) then
 					offerOpen = false
 					offerArm.At = math.huge
 					Remotes.Get("LevelUpSkip"):FireServer()
@@ -876,8 +958,30 @@ local function buildLevelUp()
 	-- the GUI took it: gamepad A on a selected card) for the fresh-press rule.
 	local keys = { [Enum.KeyCode.One] = 1, [Enum.KeyCode.Two] = 2, [Enum.KeyCode.Three] = 3, [Enum.KeyCode.Four] = 4 }
 	local confirmKeys = { [Enum.KeyCode.ButtonA] = true, [Enum.KeyCode.Return] = true, [Enum.KeyCode.KeypadEnter] = true, [Enum.KeyCode.Space] = true }
+	-- every touch is tracked (also during play: a thumb already down when the cards
+	-- appear must stay refused): when it began, where, how far it moved, when it lifted
+	UserInputService.InputChanged:Connect(function(input)
+		local rec = offerArm.Touches[input]
+		if rec then
+			local p = input.Position
+			rec.Moved = math.max(rec.Moved, (Vector2.new(p.X, p.Y) - rec.Pos).Magnitude)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		local rec = offerArm.Touches[input]
+		if rec then
+			local p = input.Position
+			rec.Moved = math.max(rec.Moved, (Vector2.new(p.X, p.Y) - rec.Pos).Magnitude)
+			rec.EndedAt = os.clock()
+			offerArm.LastTouch = rec
+		end
+	end)
 	UserInputService.InputBegan:Connect(function(input, processed)
 		local t = input.UserInputType
+		if t == Enum.UserInputType.Touch then
+			local p = Vector2.new(input.Position.X, input.Position.Y)
+			offerArm.Touches[input] = { At = os.clock(), Pos = p, Moved = 0, Guarded = touchGuarded(p) }
+		end
 		if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch or confirmKeys[input.KeyCode] or keys[input.KeyCode] then
 			offerArm.Press = os.clock()
 		end
@@ -1399,13 +1503,30 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			end
 		end
 	end
+	-- touch: dimmed with a thin gold sweep along the bottom until taps count (TouchArm)
+	local lockLeft = offerArm.ShownAt + offerArm.TouchArm - os.clock()
+	if lockLeft > 0.05 and lockLeft < 5 and touchMode() then
+		local lock = new("Frame", { Name = "Lock", BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.45, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 55 }, face)
+		UIKit.corner(lock, Theme.Radius.L)
+		local bar = new("Frame", { Name = "ArmBar", BackgroundColor3 = P.gold_300, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, -5), Size = UDim2.new(0, 0, 0, 3), ZIndex = 56 }, face)
+		UIKit.corner(bar, 999)
+		local sweep = TweenService:Create(bar, TweenInfo.new(lockLeft, Enum.EasingStyle.Linear), { Size = UDim2.new(1, -24, 0, 3) })
+		sweep:Play()
+		offerArm.Fx.Add(sweep)
+		task.delay(lockLeft, function()
+			if lock.Parent then
+				UIAnim.Tween(lock, 0.15, { BackgroundTransparency = 1 })
+				UIAnim.Tween(bar, 0.15, { BackgroundTransparency = 1 })
+			end
+		end)
+	end
 	-- a press that starts on the card counts as fresh (touch and mouse)
 	hit.MouseButton1Down:Connect(function()
 		offerArm.Press = os.clock()
 	end)
-	hit.Activated:Connect(function()
-		-- deferred: the press timing (InputBegan) of this same input is recorded first
-		task.defer(chooseCard, index)
+	hit.Activated:Connect(function(input: InputObject?)
+		-- deferred: the press timing (InputBegan / Ended) of this same input is recorded first
+		task.defer(chooseCard, index, input)
 	end)
 	return hit
 end
@@ -1524,6 +1645,7 @@ local function showOffer(offer)
 	lastOffer = offer
 	offerArm.Revealed = false
 	offerArm.At = math.huge
+	offerArm.ShownAt = math.huge
 	clearCards()
 	local rerolls, skips = tonumber(offer.Rerolls) or 0, tonumber(offer.Skips) or 0
 	local rerollMax, skipMax = tonumber(offer.RerollsMax) or rerolls, tonumber(offer.SkipsMax) or skips
@@ -1550,6 +1672,7 @@ local function showOffer(offer)
 			return
 		end
 		offerArm.Revealed = true
+		offerArm.ShownAt = os.clock()
 		local first = buildCards(true)
 		offerArm.At = os.clock() + offerArm.Arm
 		UIKit.FocusIfGamepad(first)
@@ -1571,6 +1694,7 @@ local function closeOffer()
 	offerHint = nil
 	offerArm.Token += 1
 	offerArm.At = math.huge
+	offerArm.ShownAt = math.huge
 	offerArm.Fx.Clear()
 	-- let the picked card's punch play first (unless a new offer opens meanwhile)
 	local wait = 0.12 - (os.clock() - pickedAt)

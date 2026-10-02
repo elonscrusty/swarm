@@ -833,7 +833,7 @@ Config.Audio = {
 	  Tips             contextual hints (first run tutorial, co-op rules)
 ]]
 Config.Settings = {
-	Defaults = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = true },
+	Defaults = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = true, Minimap = true },
 }
 
 --[[
