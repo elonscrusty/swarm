@@ -348,7 +348,7 @@ local function buildItemsModal(root: Frame)
 	ui.ItemsClose = UIKit.Button(content, {
 		Kind = "Primary",
 		Title = "BACK",
-		Icon = "check",
+		Icon = "chevronLeft",
 		IconSize = 18,
 		Align = "Center",
 		AnchorPoint = Vector2.new(0.5, 1),

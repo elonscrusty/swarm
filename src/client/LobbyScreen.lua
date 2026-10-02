@@ -525,7 +525,8 @@ local function curseLine(list: { string }, empty: string): string
 	for _, id in ipairs(list) do
 		table.insert(names, CurseData.Curses[id].Name)
 	end
-	return table.concat(names, ", ") .. " · " .. CurseData.GoldText(CurseData.GoldMult(list)) .. " gold"
+	-- the gold bonus first: narrow rows truncate the end of the line
+	return CurseData.GoldText(CurseData.GoldMult(list)) .. " gold · " .. table.concat(names, ", ")
 end
 
 -- Countdown (who joined, JOIN / START NOW, the number) or "run in progress".
@@ -862,8 +863,8 @@ local function relayout()
 	local heroFrac = 0.5
 
 	setChipFlat(not portrait and current == "Characters")
-	-- phones in landscape: sub-screen titles need the top row, so the chip keeps only GOLD
-	local slim = compact and not portrait and current ~= "Home"
+	-- phones in landscape: the CHARACTERS title shares the top row, so the chip keeps only GOLD
+	local slim = compact and not portrait and current == "Characters"
 	for _, ch in ipairs(ui.ChipFace:GetChildren()) do
 		if ch:IsA("GuiObject") and ch ~= ui.Gold.Frame then
 			ch.Visible = not slim
@@ -937,7 +938,7 @@ local function relayout()
 		local logoBottom = logoY + (ui.LogoH - 4) * logoScale
 		local cw = math.clamp(W * 0.27, compact and 320 or 290, 360) -- phones: room for CHARACTERS
 		local cornerW = 4 * 76 + 3 * G
-		local cornerSize = cornerW <= cw + 40 and 76 or 64
+		local cornerSize = cornerW <= cw + 20 and 76 or 64 -- clear of the nameplate arrows
 		place(ui.Corner, M, H - M - cornerSize, 4 * cornerSize + 3 * G, cornerSize)
 		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn }) do
 			b.Instance.Size = UDim2.fromOffset(cornerSize, cornerSize)

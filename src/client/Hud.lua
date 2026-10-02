@@ -634,6 +634,8 @@ local function layout()
 	ui.PlateFit.Scale = kv
 	local vitW, vitH = VIT.W * kv, VIT.H * kv
 	place(ui.Plate, W / 2 - vitW / 2, y, vitW, vitH)
+	-- width the stage pill may take before it runs under the health panel (updateStage)
+	ui.StageRoom = portrait and (W - 2 * M) or (W / 2 - vitW / 2 - 10 - M)
 	y += vitH
 
 	-- boss bar under the health panel
@@ -1046,6 +1048,12 @@ local function updateStage(state: Configuration)
 	local stageNo = state:GetAttribute("Stage") or 0
 	local stagePhase = state:GetAttribute("StagePhase") or "None"
 	local goal, count, goalColor = stageGoal(state, stagePhase)
+	-- a boss objective measured too wide for the room left of the health panel (phones,
+	-- long boss names, Endless) is shortened; the boss bar right below names the boss
+	local longGoal = goal
+	if stagePhase == "Boss" and anim.StageTooWide == longGoal then
+		goal = "DEFEAT THE BOSS"
+	end
 	local stageShown = stageNo > 0 and goal ~= ""
 	if ui.Stage.Visible ~= stageShown then
 		ui.Stage.Visible = stageShown
@@ -1084,6 +1092,11 @@ local function updateStage(state: Configuration)
 		if ui.StageCount.Visible ~= showCount then
 			ui.StageCount.Visible = showCount
 			ui.StageDot2.Visible = showCount
+		end
+		if goal == longGoal and stagePhase == "Boss" and ui.StageRoom then
+			if ui.Stage.AbsoluteSize.X / math.max(0.01, host.Scale()) > ui.StageRoom then
+				anim.StageTooWide = longGoal
+			end
 		end
 	end
 

@@ -189,8 +189,9 @@ Theme.Type = {
 	Caption = { Font = Theme.Font.Label, Size = Theme.TextSize.Caption, Stroke = nil },
 }
 
--- Phones render the reference pixels small (UIScale ~0.6), so text there is set this much
--- bigger to stay readable (UIKit applies it; layouts leave room for it).
+-- Phones render the reference pixels small (UIScale ~0.77 in landscape, see
+-- Config.UI.PhoneReferenceSize), so text there is set this much bigger to stay readable
+-- (UIKit applies it; layouts leave room for it).
 Theme.TextScaleCompact = 1.2
 
 ------------------------------------------------------------------------------------------

@@ -182,9 +182,15 @@ same TTF files the browser draws (no kerning), so wrapping matches the picture.
 | `laptop` | 1366 x 768 | 1 | mouse + keyboard | 0 |
 | `phone` | 844 x 390 landscape | 2 | touch | 47 / 47 / 0 / 21 |
 | `phone-portrait` | 390 x 844 | 2 | touch | 0 / 0 / 47 / 34 (top bar below the notch) |
+| `iphone` | 852 x 393 landscape | 3 | touch | 59 / 59 / 0 / 0, plus the real-device quirks below |
 | `tablet` | 1024 x 768 | 1.5 | touch | 0 / 0 / 0 / 20 |
 
 The Roblox top bar is 58 px on every profile; GuiService:GetGuiInset() returns it.
+`iphone` reproduces what the Roblox app does on a real phone (checked against owner
+screenshots): AbsolutePosition is reported in inset space (y = 0 at the bottom of the top
+bar, so an IgnoreGuiInset ScreenGui reads y = -58), ScreenGuis with safe-area insets clip
+to the safe area unless ClipToDeviceSafeArea = false, and TopbarInset leaves the whole
+right side free. Use it to check full-bleed dimmers and phone text sizes.
 A ghost of Roblox's menu and chat buttons is drawn at the top left (inside the safe area)
 so layouts can be checked against them (`--no-coreui` hides it).
 

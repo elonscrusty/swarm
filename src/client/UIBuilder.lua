@@ -8,10 +8,13 @@
 	from Theme.
 
 	Scaling: all UI lives under one "Root" frame with a UIScale. The design is done in
-	"reference pixels" (1280x720 landscape, 720x1280 portrait); Root is sized 1/scale so
-	the scaled result always fills the screen exactly. The ScreenGui uses the device safe
-	area (notches, rounded corners, home bar); modal dimmers and the screen-edge effects
-	still cover the whole screen (UIKit.Bleed / the SwarmFx ScreenGui). The Roblox topbar
+	"reference pixels" (1280x720 landscape, 720x1280 portrait; phones in landscape use the
+	smaller Config.UI.PhoneReferenceSize so text and buttons stay readable); Root is sized
+	1/scale so the scaled result always fills the screen exactly. The ScreenGui uses the
+	device safe area (notches, rounded corners, home bar) without clipping to it; modal
+	dimmers and backdrops still cover the whole screen (UIKit.Bleed, measured against the
+	full-screen SwarmFx ScreenGui because AbsolutePosition is reported in Roblox's inset
+	space). Full-screen modals hide the HUD while open (Hud.SetCovered). The Roblox topbar
 	buttons are kept clear using GuiService.TopbarInset (Insets()).
 ]]
 
@@ -399,6 +402,9 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 		Size = UDim2.fromOffset(0, TS(Theme.Type.Body.Size) + 22),
 		Radius = 999,
 		Transparency = 0.12,
+		-- the thin gold rim of the HUD pills
+		Edge = P.gold_500,
+		EdgeTransparency = 0.35,
 		LayoutOrder = toastOrder,
 	})
 	holder.AutomaticSize = Enum.AutomaticSize.X
