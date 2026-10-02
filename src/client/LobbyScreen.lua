@@ -938,7 +938,7 @@ local function relayout()
 		local logoBottom = logoY + (ui.LogoH - 4) * logoScale
 		local cw = math.clamp(W * 0.27, compact and 320 or 290, 360) -- phones: room for CHARACTERS
 		local cornerW = 4 * 76 + 3 * G
-		local cornerSize = cornerW <= cw + 20 and 76 or 64 -- clear of the nameplate arrows
+		local cornerSize = cornerW <= cw and 76 or 64 -- clear of the nameplate arrows
 		place(ui.Corner, M, H - M - cornerSize, 4 * cornerSize + 3 * G, cornerSize)
 		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn }) do
 			b.Instance.Size = UDim2.fromOffset(cornerSize, cornerSize)
