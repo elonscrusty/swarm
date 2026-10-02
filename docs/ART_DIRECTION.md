@@ -8,20 +8,27 @@ Blender through `blender/style.py`). Semantic tokens for the game: `src/shared/T
 ## 1. The look in one paragraph
 
 A cohesive, professionally art-directed Roblox game: chunky low-poly forms with strong
-silhouettes, clean flat-shaded materials and restrained texture. A brave little knight in a mossy
-forest clearing full of old stone ruins, fighting a swarm of beetles, wasps and moths. Moss greens,
-cool stone grays and slate blues set the world; crimson and antique gold mark heroes, banners and
-rewards; ivory is the text and the light. Soft sun, subtle shadows, controlled contrast. The menu
-is a castle courtyard at dusk lit by torches.
+silhouettes, clean flat-shaded materials and restrained texture. A brave little knight in a sunny
+forest clearing full of old stone ruins, fighting a swarm of beetles, wasps and moths. The arenas
+are bright and colourful (the owner's HUD mockup is the reference): fresh sunny grass greens, light
+warm stone paving, warm daylight with soft shadows, torches that glow as warm pools of light,
+vivid blue XP crystals and colourful creatures, all clean and readable from the top-down camera.
+Crimson and antique gold mark heroes, banners and rewards; ivory is the text and the light. The
+menu stays a castle courtyard at dusk lit by torches (owner approved).
 
-Avoid: neon grass, noisy tiled textures (Grass/Slate/Cobblestone materials on big surfaces),
+Avoid: neon / lime grass (the owner found the first bright pass a notch too vibrant; keep the
+grass a natural sunny green, not acid), blown-out whites, noisy tiled textures (Grass/Slate/Cobblestone materials on big surfaces),
 random rainbow buttons, heavy bloom, glowing everything, decorative clutter in the play space.
 
 ## 2. Palette (see art/palette.json for every value)
 
 | Family | Use |
 |---|---|
-| moss_900..100 | grass (500 base, 600/400 patches), canopies (700/800), pines (800/900), ferns |
+| meadow_800..200 | arena grass (Forest / Ruins): 500/400 play floor, 600 patches, 300 worn clearing, 700/800 outer ground and tree-line shade |
+| pave_100..500 | light warm stone paving (Ruins plaza 200-400, avenues 300/400) |
+| fen_700..300, peat_* | Swamp moss floor and its peat tracks / mud |
+| cinder_600..200 | Lava arena light warm ash floor and paths (basalt stays for rocks and crusts) |
+| moss_900..100 | lobby grounds, canopies (700/800), pines (800/900), ferns, kit greens |
 | stone_900..100 | rocks, ruins, castle walls (500/600), paving (400/300), shadows (800) |
 | slate_950..200 | UI panels (900/800), roofs, blue banners (600), cool accents, night sky |
 | crimson_900..300 | knight cape/plume/shield, banners, health, danger, boss |
@@ -32,7 +39,7 @@ random rainbow buttons, heavy bloom, glowing everything, decorative clutter in t
 | beetle_*, amber_*, wasp_*, moth_*, tick_*, chitin_* | creatures only (they must pop off the grass) |
 | fx_* | effects: slash ivory, sparks gold, heal green, arcane blue, holy white, fire, bolt |
 
-Value plan for readability from the top-down camera: ground is a mid value (moss_500), props one
+Value plan for readability from the top-down camera: ground is a bright mid value (meadow_500), props one
 step darker or lighter, creatures have dark legs/undersides (chitin) and a brighter shell than the
 grass, heroes carry the brightest whites (steel/ivory) and the strongest colour (crimson/gold).
 
@@ -114,16 +121,26 @@ brazier, round two-step stone dais. Props <= 700 tris, castle pieces <= 1500.
 
 ## 6. Lighting
 
-- Gameplay: bright, clear late-morning sun; soft shadows (ShadowSoftness ~0.4); moderate
-  contrast; a light atmosphere for depth; bloom low (Intensity <= 0.3, high threshold).
+- Gameplay (MapBuilder LIGHTING, one entry per arena): a warm, high, sunny daylight (Brightness
+  ~2.85-3.0; Snow 2.25 because its floor is white), soft shadows (ShadowSoftness ~0.5-0.55), warm
+  ambient with a ground-coloured bounce (ColorShift_Bottom), little haze (Atmosphere Haze <= 0.8)
+  so colours stay clean, a gentle grade (Saturation +0.03 on the grass arenas, up to +0.1 on
+  Snow / Desert / Lava; Contrast ~0.08-0.15) and modest bloom (Intensity <= 0.3, Threshold
+  >= 1.6) so torches, lava and crystals glow without blowing out. Ruins is a sunny afternoon, not
+  golden hour. Arena torches and braziers use a warmer flame (TORCH_FLAME) and a stronger light
+  (TORCH_FIRE, brightness ~1.7-1.8).
+- Readability checks after any lighting change (offline preview, `arena --set arena=<name>`):
+  green / pale creatures, blue crystals, the hero and the red / orange telegraphs must stay
+  distinct from the floor; no white blow-out on paving, sand or snow.
 - Menu: dusk courtyard; cool slate-blue sky and ambient, warm torch and brazier pools around the
   dais; atmospheric haze; the hero is the brightest thing on screen.
 
 ## 7. Effects
 
 Restrained and informative: ivory/pale-gold slash arcs, small gold sparks on hits, a white hit
-flash on enemies, soft heal sparkles, short thin projectile trails, blue-white XP crystals
-(fx_arcane / slate, an ivory Neon core, a soft glow disc on the floor; never gold, gold means
+flash on enemies, soft heal sparkles, short thin projectile trails, vivid saturated XP crystals
+(Theme.Fx.Gem: azure small, royal-blue medium, violet large; facets stay close to the base colour
+so they read as bright blue, not pale ice; a soft glow disc on the floor; never gold, gold means
 coins) with a sparkle when collected, chunky gold coins bursting from kills that pay gold, a gold ring under the local player (slate-blue rings under teammates). Effects
 must not cover the arena; keep alpha low, lifetimes short, sizes modest.
 
