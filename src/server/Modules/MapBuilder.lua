@@ -50,6 +50,13 @@
 	arenas are tuned to Forest: Swamp ~1140, Snow ~1040, Desert ~1130, Lava ~1140).
 	Phone budget per arena: everything anchored, about <= 650 MeshParts + 450 Parts, <= 12
 	lights, shadows only on big pieces (grass, flowers, ferns and clutter cast none).
+
+	Fine ground detail (small tufts, flowers, clover discs, pebbles) is NOT built here: each
+	client draws it around its own camera from a recycled pool (src/client/GroundDetail.lua,
+	Config.Graphics.GroundDetail). BuildArena only writes the floor layout it needs as
+	attributes on the arena model (DetailPaths, DetailBare: paths, landmark keepouts,
+	arena.Bare circles such as the Ruins plaza, hazard pools); colliders come from the
+	Obstacles folder.
 ]]
 
 local CollectionService = game:GetService("CollectionService")

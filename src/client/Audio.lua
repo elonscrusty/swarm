@@ -11,11 +11,17 @@
 	  * MinGap per sound: the same sound can't restart faster than that (200 deaths are
 	    one crunch, not 200).
 	  * Ducking: while a Warning or Boss sound plays, the Combat group is turned down.
+	  * Crowd ceiling (Config.Audio.Crowd): the more Combat / Pickup sounds start inside a
+	    short window, the further those groups fade towards a floor, so a dense swarm is a
+	    murmur instead of a wall of clicks; they recover as soon as it thins out.
 	  * Pitch variation (Pitch +/- PitchVar) so repeats don't sound mechanical.
 	  * 3D: sounds marked World can be played at a world position (PlayAt): full volume
 	    near the hero (the camera is ~78 studs up), quieter far away.
 	Music: LobbyMusic / BattleMusic / BossMusic slots (empty Id = silent), looped, in their
-	own group. Volumes come from the settings (Music / Effects sliders, saved).
+	own group. SetMusic crossfades (Config.Audio.Music.Fade) and a track resumes where it
+	stopped (Resume), so battle music carries on after a boss instead of restarting.
+	Volumes come from the settings (Music / Effects sliders, saved); nothing here changes
+	what those sliders mean.
 ]]
 
 local SoundService = game:GetService("SoundService")
@@ -46,6 +52,16 @@ local voices: { Voice } = {}
 
 local duckUntil = 0
 local ducked = false
+
+-- crowd ceiling: start times of recent Combat / Pickup sounds, current fade per group
+local crowdStarts: { number } = {}
+local crowdLevel: { [string]: number } = {}
+local crowdTween: { [string]: Tween } = {}
+local crowdPending = false
+
+-- music crossfades: the running tween per track and where each track was stopped
+local musicTweens: { [string]: Tween } = {}
+local musicPositions: { [string]: number } = {}
 
 local function categoryOf(def): string
 	local cat = def.Category
@@ -164,8 +180,56 @@ local function setDuck(on: boolean)
 	ducked = on
 	local target = groups[A.Duck.Target]
 	if target then
-		local base = A.Categories[A.Duck.Target].Volume or 1
+		local base = (A.Categories[A.Duck.Target].Volume or 1) * (crowdLevel[A.Duck.Target] or 1)
+		if crowdTween[A.Duck.Target] then
+			crowdTween[A.Duck.Target]:Cancel()
+		end
 		TweenService:Create(target, TweenInfo.new(on and 0.08 or 0.4), { Volume = on and base * A.Duck.Volume or base }):Play()
+	end
+end
+
+--[[
+	Crowd ceiling. Counts how many crowd-category sounds started inside the last Window
+	seconds and sets each listed group's volume between its base (<= Start sounds) and
+	base * Floor (>= Full sounds). Called on every such start and again once the window
+	has passed, so the groups come back up by themselves.
+]]
+local function updateCrowd()
+	local C = A.Crowd
+	if not C then
+		return
+	end
+	local now = os.clock()
+	for i = #crowdStarts, 1, -1 do
+		if now - crowdStarts[i] > C.Window then
+			table.remove(crowdStarts, i)
+		end
+	end
+	local n = #crowdStarts
+	local load = math.clamp((n - C.Start) / math.max(1, C.Full - C.Start), 0, 1)
+	local scale = 1 - (1 - C.Floor) * load
+	for _, cat in ipairs(C.Categories) do
+		local g = groups[cat]
+		if g and math.abs((crowdLevel[cat] or 1) - scale) > 0.02 then
+			crowdLevel[cat] = scale
+			local base = A.Categories[cat].Volume or 1
+			if ducked and cat == A.Duck.Target then
+				base *= A.Duck.Volume
+			end
+			if crowdTween[cat] then
+				crowdTween[cat]:Cancel()
+			end
+			local t = TweenService:Create(g, TweenInfo.new(scale < (crowdLevel[cat] or 1) and 0.12 or 0.5), { Volume = base * scale })
+			crowdTween[cat] = t
+			t:Play()
+		end
+	end
+	if n > 0 and not crowdPending then
+		crowdPending = true
+		task.delay(C.Window + 0.05, function()
+			crowdPending = false
+			updateCrowd()
+		end)
 	end
 end
 
@@ -178,6 +242,10 @@ local function startVoice(s: Sound, def, category: string, priority: number, pit
 	s:Play()
 	local length = s.TimeLength > 0 and s.TimeLength / s.PlaybackSpeed or 1.5
 	table.insert(voices, { Sound = s, Category = category, Priority = priority, Ends = now + math.min(length, 4) })
+	if A.Crowd and table.find(A.Crowd.Categories, category) then
+		table.insert(crowdStarts, now)
+		updateCrowd()
+	end
 	if table.find(A.Duck.Triggers, category) then
 		duckUntil = math.max(duckUntil, now + A.Duck.Seconds)
 		setDuck(true)
@@ -294,17 +362,53 @@ function Audio.PlayAt(name: string, position: Vector3, pitch: number?)
 	startVoice(s, def, category, priority, pitch)
 end
 
--- "LobbyMusic" | "BattleMusic" | "BossMusic" | nil
+local function fadeMusic(name: string, s: Sound, target: number, seconds: number, onDone: (() -> ())?)
+	if musicTweens[name] then
+		musicTweens[name]:Cancel()
+	end
+	local t = TweenService:Create(s, TweenInfo.new(math.max(0.05, seconds), Enum.EasingStyle.Linear), { Volume = target })
+	musicTweens[name] = t
+	t.Completed:Connect(function(state)
+		if state == Enum.PlaybackState.Completed then
+			musicTweens[name] = nil
+			if onDone then
+				onDone()
+			end
+		end
+	end)
+	t:Play()
+end
+
+--[[
+	"LobbyMusic" | "BattleMusic" | "BossMusic" | nil. The old track fades out over
+	Config.Audio.Music.Fade seconds (and remembers its position), the new one fades in,
+	continuing where it last stopped when Resume is on.
+]]
 function Audio.SetMusic(name: string?)
 	if name == currentMusic then
 		return
 	end
-	if currentMusic and musicSounds[currentMusic] then
-		musicSounds[currentMusic]:Stop()
+	local M = A.Music or { Fade = 1, Resume = true }
+	local old = currentMusic
+	if old and musicSounds[old] then
+		local s = musicSounds[old]
+		musicPositions[old] = s.TimePosition
+		fadeMusic(old, s, 0, M.Fade, function()
+			if currentMusic ~= old then
+				s:Stop()
+			end
+		end)
 	end
 	currentMusic = name
 	if name and musicSounds[name] then
-		musicSounds[name]:Play()
+		local s = musicSounds[name]
+		local def = Config.Sounds[name]
+		if not s.IsPlaying then
+			s.Volume = 0
+			s.TimePosition = (M.Resume and musicPositions[name]) or 0
+			s:Play()
+		end
+		fadeMusic(name, s, def and def.Volume or 0.3, M.Fade)
 	end
 end
 
