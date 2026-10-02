@@ -10,6 +10,9 @@
 	Controls    Button (Primary / Secondary / Outline / Ghost), IconButton, Card,
 	            Chip, Meter, Tile (upgrade icon + level badge), Badge, Tabs, Slider,
 	            Toggle, Modal, ScreenHeader
+	Dashboard   TitleRule, SegmentBar, Avatar (head shot), Medal (ranks 1-3), Hairline
+	Lobby look  ArtPicture (art/ picture with a drawn stand-in), StatusPill / SetStatus,
+	            SectionLabel, IconPill
 
 	States: hover lifts 2 px and brightens, press scales to 0.96, disabled desaturates,
 	selected gets a strong gold border, gamepad focus shows a gold outline. Buttons keep a
@@ -1703,6 +1706,365 @@ function UIKit.ScreenHeader(parent: Instance, title: string, onBack: () -> ()): 
 		TextColor3 = C.Text,
 	})
 	return { Frame = f, Back = back, Title = t }
+end
+
+------------------------------------------------------------------------------------------
+-- Lobby redesign pieces: art pictures, status pills, section labels, icon pills
+------------------------------------------------------------------------------------------
+
+local ArtData = require(Shared:WaitForChild("ArtData"))
+
+local ART_FALLBACK_DELAY = 0.6
+local ART_POLL = 0.25
+local ART_GIVE_UP = 20
+
+--[[
+	An owner-made picture from art/ (ArtData key, e.g. "arenas/Forest", "portraits/Mage")
+	filling a new frame (cropped to fill unless `scaleType` says otherwise). `fallback(f)`
+	draws the stand-in into a frame under the picture: shown at once when the key has no
+	upload, otherwise only when the picture has not loaded after 0.6 s (IsLoaded is polled,
+	as in Icons). The picture is the frame's "Image" child (dim it with ImageTransparency /
+	ImageColor3), the stand-in its "Fallback" child.
+]]
+function UIKit.ArtPicture(parent: Instance?, key: string, props: { [string]: any }?, fallback: ((Frame) -> ())?, scaleType: Enum.ScaleType?): Frame
+	local f = new("Frame", { Name = "Art", BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true, Size = UDim2.fromScale(1, 1) })
+	local fb = new("Frame", { Name = "Fallback", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Active = false }, f)
+	local image = ArtData.Image(key)
+	if not image then
+		if fallback then
+			fallback(fb)
+		end
+	else
+		fb.Visible = false
+		local img = new("ImageLabel", {
+			Name = "Image",
+			BackgroundTransparency = 1,
+			Image = image,
+			ScaleType = scaleType or Enum.ScaleType.Crop,
+			Size = UDim2.fromScale(1, 1),
+			Active = false,
+			ZIndex = 2,
+		}, f)
+		task.spawn(function()
+			local waited = 0
+			local drawn = false
+			while fb.Parent and img.Parent and waited < ART_GIVE_UP do
+				if img.IsLoaded then
+					fb:Destroy()
+					return
+				end
+				if waited >= ART_FALLBACK_DELAY and not drawn then
+					drawn = true
+					if fallback then
+						fallback(fb)
+					end
+					fb.Visible = true
+				end
+				task.wait(ART_POLL)
+				waited += ART_POLL
+			end
+		end)
+	end
+	if props then
+		for k, v in pairs(props) do
+			(f :: any)[k] = v
+		end
+	end
+	f.Parent = parent
+	return f
+end
+
+-- Status pill looks: OWNED slate, LOCKED crimson outline, SELECTED / READY / EQUIPPED gold,
+-- UNLOCKED green; anything else (USED, PRACTICE, SOON ...) dark.
+local STATUS: { [string]: { Back: Color3, Text: Color3, Edge: Color3?, Fill: boolean } } = {
+	OWNED = { Back = P.slate_600, Text = P.ivory_100, Fill = true },
+	LOCKED = { Back = P.slate_950, Text = P.crimson_300, Edge = P.crimson_500, Fill = true },
+	SELECTED = { Back = P.gold_400, Text = P.gold_900, Fill = true },
+	READY = { Back = P.gold_400, Text = P.gold_900, Fill = true },
+	EQUIPPED = { Back = P.gold_400, Text = P.gold_900, Fill = true },
+	UNLOCKED = { Back = P.moss_600, Text = P.ivory_100, Fill = true },
+}
+
+-- Restyles a StatusPill for `status` (upper-case key); `label` overrides the shown text.
+function UIKit.SetStatus(pill: TextLabel, status: string, label: string?)
+	local s = STATUS[status] or { Back = C.PanelInset, Text = C.TextMuted, Edge = C.PanelEdge, Fill = true }
+	pill.Text = label or status
+	pill.BackgroundColor3 = s.Back
+	pill.TextColor3 = s.Text
+	local edge = pill:FindFirstChild("StatusEdge") :: UIStroke?
+	if edge then
+		edge.Color = s.Edge or s.Back
+		edge.Transparency = s.Edge and 0.1 or 1
+	end
+	pill:SetAttribute("Status", status)
+end
+
+-- Rounded small-caps status pill ("OWNED", "LOCKED", "SELECTED", "UNLOCKED", "READY").
+function UIKit.StatusPill(parent: Instance?, status: string, props: { [string]: any }?): TextLabel
+	local l = text(nil, "Label", status, {
+		Name = "Status",
+		BackgroundTransparency = 0,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Size = UDim2.fromOffset(0, Theme.Size.Badge + 6),
+		AutomaticSize = Enum.AutomaticSize.X,
+	}, Theme.TextSize.Caption)
+	padding(l, 0, 10, 0, 10)
+	corner(l, 999)
+	local edge = stroke(l, C.PanelEdge, 1.5, 1)
+	edge.Name = "StatusEdge"
+	edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	UIKit.SetStatus(l, status)
+	if props then
+		for k, v in pairs(props) do
+			(l :: any)[k] = v
+		end
+	end
+	l.Parent = parent
+	return l
+end
+
+-- Small gold letter-spaced caps over a section ("EFFECT", "SKINS", "ROUTE").
+function UIKit.SectionLabel(parent: Instance?, str: string, color: Color3?, props: { [string]: any }?): TextLabel
+	local l = text(nil, "Caption", UIKit.track(str), { Name = "Section", TextColor3 = color or P.gold_300 })
+	if props then
+		for k, v in pairs(props) do
+			(l :: any)[k] = v
+		end
+	end
+	l.Parent = parent
+	return l
+end
+
+export type IconPill = { Frame: Frame, Label: TextLabel, SetText: (s: string) -> () }
+
+-- Dark pill with a thin gold border, an icon and a short caps text ("BEST STAGE 2").
+-- Its width follows the text.
+function UIKit.IconPill(parent: Instance?, icon: string?, str: string, props: { [string]: any }?): IconPill
+	local h = Theme.Size.Badge + 14
+	local f = new("Frame", {
+		Name = "IconPill",
+		BackgroundColor3 = P.slate_900,
+		BackgroundTransparency = 0.08,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(0, h),
+		AutomaticSize = Enum.AutomaticSize.X,
+	})
+	corner(f, 999)
+	stroke(f, P.gold_400, 1.5, 0.15)
+	padding(f, 0, 12, 0, icon and 8 or 12)
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, f)
+	if icon then
+		local iconFrame = Icons.Draw(f, icon, { Size = h - 10 })
+		iconFrame.LayoutOrder = 1
+	end
+	local l = text(f, "Label", str, {
+		Name = "Text",
+		Size = UDim2.fromOffset(0, h),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextColor3 = P.gold_200,
+		LayoutOrder = 2,
+	})
+	if props then
+		for k, v in pairs(props) do
+			(f :: any)[k] = v
+		end
+	end
+	f.Parent = parent
+	return {
+		Frame = f,
+		Label = l,
+		SetText = function(s: string)
+			l.Text = s
+		end,
+	}
+end
+
+------------------------------------------------------------------------------------------
+-- Lobby dashboard pieces (Daily / Leaderboards / Stats / Upgrades redesign)
+------------------------------------------------------------------------------------------
+
+export type TitleRule = { Frame: Frame, Title: TextLabel, Set: (str: string) -> () }
+
+-- A centred serif title with a thin gold rule on each side ("—— GLOBAL HIGH SCORES ——").
+function UIKit.TitleRule(parent: Instance?, str: string, props: { [string]: any }?, size: number?): TitleRule
+	local px = TS(size or Theme.TextSize.H2)
+	local f = new("Frame", { Name = "TitleRule", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, px + 10) })
+	new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 14),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, f)
+	local function rule(order: number, fadeLeft: boolean)
+		local r = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromOffset(72, 2), LayoutOrder = order }, f)
+		new("UIGradient", {
+			Transparency = NumberSequence.new(fadeLeft and 1 or 0.1, fadeLeft and 0.1 or 1),
+		}, r)
+	end
+	rule(1, true)
+	local t = text(f, "H2", str, {
+		Name = "Title",
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(0, px + 10),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = C.Text,
+	}, size or Theme.TextSize.H2)
+	rule(3, false)
+	if props then
+		for k, v in pairs(props) do
+			(f :: any)[k] = v
+		end
+	end
+	f.Parent = parent
+	return {
+		Frame = f,
+		Title = t,
+		Set = function(s: string)
+			t.Text = s
+		end,
+	}
+end
+
+-- A segmented level bar: `max` equal segments, the first `level` gold.
+function UIKit.SegmentBar(parent: Instance?, level: number, max: number, props: { [string]: any }?): Frame
+	local f = new("Frame", { Name = "Segments", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 8) })
+	local n = math.max(1, max)
+	local gap = 4
+	for i = 1, n do
+		local on = i <= level
+		local s = new("Frame", {
+			Name = "Seg" .. i,
+			BackgroundColor3 = on and P.gold_400 or P.slate_950,
+			BorderSizePixel = 0,
+			Position = UDim2.new((i - 1) / n, (i == 1) and 0 or gap / 2, 0, 0),
+			Size = UDim2.new(1 / n, -gap + ((i == 1 or i == n) and gap / 2 or 0), 1, 0),
+		}, f)
+		corner(s, 999)
+		stroke(s, on and P.gold_200 or P.slate_600, 1, on and 0.4 or 0.3)
+	end
+	if props then
+		for k, v in pairs(props) do
+			(f :: any)[k] = v
+		end
+	end
+	f.Parent = parent
+	return f
+end
+
+-- Round player avatar: the Roblox head shot (cached, pcall'd), a neutral silhouette under
+-- it until it arrives or when it cannot be fetched.
+local avatarCache: { [number]: string } = {}
+function UIKit.Avatar(parent: Instance?, userId: number?, size: number, props: { [string]: any }?): Frame
+	local f = new("Frame", {
+		Name = "Avatar",
+		BackgroundColor3 = P.slate_700,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(size, size),
+		ClipsDescendants = true,
+		Active = false,
+	})
+	corner(f, 999)
+	stroke(f, P.gold_500, 1, 0.45)
+	-- silhouette: head + shoulders
+	local head = new("Frame", { Name = "Head", BackgroundColor3 = P.slate_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.2), Size = UDim2.fromScale(0.38, 0.38) }, f)
+	corner(head, 999)
+	local body = new("Frame", { Name = "Shoulders", BackgroundColor3 = P.slate_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.64), Size = UDim2.fromScale(0.72, 0.6) }, f)
+	corner(body, 999)
+	local img = new("ImageLabel", { Name = "HeadShot", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Active = false }, f)
+	corner(img, 999)
+	if type(userId) == "number" and userId > 0 then
+		local cached = avatarCache[userId]
+		if cached then
+			img.Image = cached
+		else
+			task.spawn(function()
+				local ok, content = pcall(function()
+					return game:GetService("Players"):GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+				end)
+				if ok and type(content) == "string" and content ~= "" then
+					avatarCache[userId] = content
+					if img.Parent then
+						img.Image = content
+					end
+				end
+			end)
+		end
+	end
+	if props then
+		for k, v in pairs(props) do
+			(f :: any)[k] = v
+		end
+	end
+	f.Parent = parent
+	return f
+end
+
+-- Rank medal for places 1-3 (gold / silver / bronze disc with a laurel ring and the number).
+function UIKit.Medal(parent: Instance?, rank: number, size: number, props: { [string]: any }?): Frame
+	local tint = ({ P.gold_300, P.steel_200, Color3.fromRGB(205, 140, 88) })[rank] or P.slate_500
+	local dark = ({ P.gold_700, P.steel_500, Color3.fromRGB(122, 74, 40) })[rank] or P.slate_700
+	local f = new("Frame", { Name = "Medal", BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size), Active = false })
+	-- laurel: two leaf arcs behind the disc
+	for side = -1, 1, 2 do
+		for i = 0, 2 do
+			local leaf = new("Frame", {
+				Name = "Leaf",
+				BackgroundColor3 = tint,
+				BackgroundTransparency = 0.15,
+				BorderSizePixel = 0,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5 + side * (0.44 - i * 0.05), 0.72 - i * 0.24),
+				Size = UDim2.fromScale(0.16, 0.3),
+				Rotation = side * (25 + i * 20),
+			}, f)
+			corner(leaf, 999)
+		end
+	end
+	local disc = new("Frame", {
+		Name = "Disc",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.72, 0.72),
+		ZIndex = 2,
+	}, f)
+	corner(disc, 999)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(tint:Lerp(Color3.new(1, 1, 1), 0.25), tint:Lerp(dark, 0.45)) }, disc)
+	stroke(disc, dark, 1.5, 0.1)
+	text(disc, "Number", tostring(rank), {
+		Size = UDim2.fromScale(1, 1),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = P.slate_950,
+		TextScaled = false,
+		ZIndex = 3,
+	}, math.max(10, math.floor(size * 0.36)))
+	if props then
+		for k, v in pairs(props) do
+			(f :: any)[k] = v
+		end
+	end
+	f.Parent = parent
+	return f
+end
+
+-- A thin horizontal hairline (dividers inside cards and panels).
+function UIKit.Hairline(parent: Instance?, props: { [string]: any }?): Frame
+	local f = new("Frame", { Name = "Hairline", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1) })
+	if props then
+		for k, v in pairs(props) do
+			(f :: any)[k] = v
+		end
+	end
+	f.Parent = parent
+	return f
 end
 
 return UIKit

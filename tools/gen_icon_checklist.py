@@ -38,6 +38,14 @@ icons_lua = read("src/client/Icons.lua")
 DRAW = set(re.findall(r"^DRAW\.(\w+)\s*=", icons_lua, re.M)) - {"missing"}
 IMAGES = {k: v for k, v in re.findall(r"^\t(\w+) = (\d+),", read("src/shared/IconData.lua"), re.M)}
 PNGS = {f[:-4] for f in os.listdir(os.path.join(ROOT, "art", "icons")) if f.endswith(".png")}
+# small art: art/icons/<folder>/<key>.png (specific keys such as hero_Knight, ach_Reaper, sym_gear)
+ART = {}
+for _d, _, _fs in os.walk(os.path.join(ROOT, "art", "icons")):
+    if _d != os.path.join(ROOT, "art", "icons"):
+        for _f in _fs:
+            if _f.endswith(".png"):
+                ART[_f[:-4]] = os.path.relpath(os.path.join(_d, _f), os.path.join(ROOT, "art"))[:-4].replace(os.sep, "/")
+ART_IDS = dict(re.findall(r'\["([^"]+)"\] = (\d+)', read("src/shared/ArtData.lua")))
 PRELOAD_NOTE = "Icons.PreloadList()"
 
 
@@ -64,6 +72,11 @@ def status(key, want_image=False):
     """(status, asset reference) for an icon key."""
     if key is None:
         return "MISSING", "-"
+    art = ART.get(key) or (ART.get("sym_" + key) if key in DRAW and not key.startswith("sym_") else None)
+    if art and key not in IMAGES:
+        # new small art (Icons.lua ART_FALLBACK / SYMBOLS); the drawn icon stays underneath
+        up = ART_IDS.get(art)
+        return "working (image)", ("rbxassetid://" + up if up else "art/%s.png (ArtData id pending upload)" % art)
     img = IMAGES.get(key)
     if img and key in PNGS:
         return "working (image)", "rbxassetid://" + img
@@ -110,13 +123,13 @@ add("Fallback cards and loot markers", "Level-up fallback cards (all slots maxed
      ("revive", "Revive", "team HUD, meta upgrade, stats")], False)
 
 # characters: Icons.lua CHARACTER_ICONS
-cmap = dict(re.findall(r"(\w+) = \"(\w+)\"", re.search(r"CHARACTER_ICONS = \{(.*?)\}", icons_lua).group(1)))
+cmap = {k[5:]: k for k in re.findall(r'\b(hero_\w+) = "', icons_lua)}
 chars = blocks("src/shared/CharacterData.lua", None, "CharacterData.Skins", 2)
 rows = []
 for i, n, _ in chars:
     key = cmap.get(i)
     rows.append((key, n + " [" + i + "]", "character select, lobby, team HUD, results"))
-add("Characters (class icon)", "Class icons are drawn in code (Icons.Character). Skins reuse the class icon.", rows)
+add("Characters (class icon)", "Class icons: hero_<Id> picture (Icons.Character), drawn hat / helmet under it. Skins reuse the class icon.", rows)
 add("Locked / state icons", "Icons that mark a state.", [
     ("lock", "Locked character / arena / reward", "intentionally locked: character cards, arena cards, track rewards"),
     ("check", "Selected / done / confirm", "character select, curses, bug report, achievements"),
@@ -143,7 +156,7 @@ ach = blocks("src/shared/AchievementData.lua", None, None, 2)
 add("Achievements", "STATS > Achievements.", [(ic, n + " [" + i + "]", "STATS > Achievements") for i, n, ic in ach])
 kind = dict(re.findall(r"(\w+) = \"(\w+)\"", re.search(r"KIND_ICON = \{(.*?)\}", read("src/client/MenuTrack.lua")).group(1)))
 add("Track (account level)", "TRACK screen reward rows (by reward kind) and the medallion.",
-    [(ic, "%s reward" % k, "TRACK screen") for k, ic in kind.items()] + [("medal", "Account level medal", "TRACK, results")])
+    [(ic, "%s reward" % k, "TRACK screen") for k, ic in kind.items()] + [("track_Level", "Account level medal", "TRACK, results")])
 shop = re.findall(r'Name = "([^"]+)", Kind = "\w+", Key = "\w+", Icon = "(\w+)"', read("src/client/MenuUpgrades.lua"))
 add("Shop (Robux = cosmetics / coins only)", "UPGRADES > Shop rows.", [(ic, n, "UPGRADES > Shop") for n, ic in shop] + [("robux", "Robux price tag", "shop, character unlock")])
 tiles = re.findall(r'Key = "(\w+)", Icon = "(\w+)", Caption = "([^"]+)"', read("src/client/MenuStats.lua"))
@@ -171,7 +184,7 @@ add("All literal UI icon keys", "Every icon name written in src (screens that us
 sections.append(("Controls without an icon", "Intentional: text buttons.", [
     ("-", "Return to Main Menu (pause)", "pause menu: uses key `castle` (same as results MAIN MENU)", "working (drawn)", "drawn: DRAW.castle"),
     ("-", "DEV invincibility / DEV panel controls", "DEV panel", "working (text button, no icon: intentional)", "-"),
-    ("-", "Reroll / Skip / Auto-pick / Banish", "level-up buttons: `cycle`, `skip`; auto-pick is a timer bar (no icon); banish does not exist", "working (drawn)", "drawn: DRAW.cycle, DRAW.skip"),
+    ("-", "Reroll / Skip / Auto-pick / Banish", "level-up buttons: `cycle`, `skip` (recoloured on buttons, so drawn); auto-pick is a timer bar (no icon); banish does not exist", "working (drawn)", "drawn: DRAW.cycle, DRAW.skip"),
     ("-", "Coins / XP / pause / settings / daily", "keys `coin`, XP gems are 3D (no icon), `pause`, `gear`, `calendar`", "working (drawn)", "drawn"),
 ]))
 

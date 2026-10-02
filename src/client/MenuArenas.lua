@@ -29,12 +29,12 @@ end
 
 -- How each biome is painted on its card, and its hazard line.
 local LOOK: { [string]: { [string]: any } } = {
-	Forest = { Sky = P.moss_200, Sky2 = P.moss_400, Far = P.moss_600, Ground = P.moss_700, Icon = "tree", Hazard = "No hazards: a calm, mossy clearing" },
-	Ruins = { Sky = P.amber_300, Sky2 = P.stone_300, Far = P.stone_500, Ground = P.stone_600, Icon = "castle", Hazard = "No hazards: sunlit old stones, tight lanes" },
-	Swamp = { Sky = P.murk_300, Sky2 = P.murk_500, Far = P.murk_700, Ground = P.bog_700, Pool = P.bog_500, Icon = "sprout", Hazard = "Mud pools slow you to " .. pct(H.Mud.PlayerSpeed) },
-	Snow = { Sky = P.ice_100, Sky2 = P.snow_300, Far = P.snow_400, Ground = P.snow_200, Pool = P.ice_300, Icon = "FrostNova", Hazard = "Ice ponds: " .. pct(H.Ice.PlayerSpeed) .. " speed, but slippery" },
-	Desert = { Sky = P.amber_300, Sky2 = P.sand_300, Far = P.sand_600, Ground = P.sand_400, Pool = P.sand_700, Icon = "hourglass", Hazard = "Quicksand slows you to " .. pct(H.Quicksand.PlayerSpeed) },
-	Lava = { Sky = P.basalt_600, Sky2 = P.basalt_800, Far = P.basalt_700, Ground = P.basalt_900, Pool = P.lava_500, Glow = true, Icon = "FireTrail", Hazard = string.format("Lava pools burn: %d damage every %.1f s", H.Lava.Damage, H.Lava.Tick) },
+	Forest = { Sky = P.moss_200, Sky2 = P.moss_400, Far = P.moss_600, Ground = P.moss_700, Icon = "arena_Forest", Hazard = "No hazards: a calm, mossy clearing" },
+	Ruins = { Sky = P.amber_300, Sky2 = P.stone_300, Far = P.stone_500, Ground = P.stone_600, Icon = "arena_Ruins", Hazard = "No hazards: sunlit old stones, tight lanes" },
+	Swamp = { Sky = P.murk_300, Sky2 = P.murk_500, Far = P.murk_700, Ground = P.bog_700, Pool = P.bog_500, Icon = "arena_Swamp", Hazard = "Mud pools slow you to " .. pct(H.Mud.PlayerSpeed) },
+	Snow = { Sky = P.ice_100, Sky2 = P.snow_300, Far = P.snow_400, Ground = P.snow_200, Pool = P.ice_300, Icon = "arena_Snow", Hazard = "Ice ponds: " .. pct(H.Ice.PlayerSpeed) .. " speed, but slippery" },
+	Desert = { Sky = P.amber_300, Sky2 = P.sand_300, Far = P.sand_600, Ground = P.sand_400, Pool = P.sand_700, Icon = "arena_Desert", Hazard = "Quicksand slows you to " .. pct(H.Quicksand.PlayerSpeed) },
+	Lava = { Sky = P.basalt_600, Sky2 = P.basalt_800, Far = P.basalt_700, Ground = P.basalt_900, Pool = P.lava_500, Glow = true, Icon = "arena_Lava", Hazard = string.format("Lava pools burn: %d damage every %.1f s", H.Lava.Damage, H.Lava.Tick) },
 }
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)

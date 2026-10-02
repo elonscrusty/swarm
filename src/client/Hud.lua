@@ -48,6 +48,7 @@ local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
+local ArtImage = require(script.Parent.ArtImage)
 local ClientSettings = require(script.Parent.ClientSettings)
 
 local Hud = {}
@@ -176,6 +177,14 @@ local function buildTop(frame: Frame)
 	-- phase marker (BossPhaseAt, e.g. 50%): a dark notch with an ivory core on the bar
 	ui.BossMark = new("Frame", { Name = "PhaseMark", BackgroundColor3 = P.slate_950, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 36), Size = UDim2.fromOffset(5, 22), ZIndex = 4, Visible = false }, boss)
 	new("Frame", { BackgroundColor3 = P.ivory_200, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 1, 1, -4), ZIndex = 5 }, ui.BossMark)
+	-- the boss's painted portrait (bosses/<BossId>) in a crimson-rimmed disc at the bar's
+	-- left end; the bar starts after it. Hidden for a boss without a picture (setBossArt).
+	local disc = new("Frame", { Name = "Portrait", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0, 30), Size = UDim2.fromOffset(52, 52), ZIndex = 6, Visible = false }, boss)
+	UIKit.corner(disc, 999)
+	UIKit.stroke(disc, P.crimson_400, 2, 0.05)
+	ui.BossSkull = Icons.Draw(disc, "skull", { Size = 26, Color = P.crimson_300, Back = P.slate_950, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	ui.BossDisc = disc
+	ui.BossInset = 0
 
 	-- kills / gold counters + pause
 	local counters = UIKit.Panel(frame, { Name = "Counters", AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 44) }, true)
@@ -462,6 +471,28 @@ end
 ------------------------------------------------------------------------------------------
 
 local barMetrics = { Weapon = 54, Passive = 44, Gap = 6, Pad = 8, OneRow = false }
+
+-- Boss bar portrait for boss `id` (bosses/<id>): the disc shows and the meter starts after
+-- it; no picture → the plain full-width bar. Entrance: the portrait lands big and settles.
+local function setBossArt(id: any)
+	local key = ArtImage.Boss(type(id) == "string" and id or "ScorpionQueen")
+	local has = ArtImage.Image(key) ~= nil
+	ui.BossDisc.Visible = has
+	ui.BossInset = has and 58 or 0
+	ui.BossMeter.Frame.Position = UDim2.fromOffset(ui.BossInset, 28)
+	ui.BossMeter.Frame.Size = UDim2.new(1, -ui.BossInset, 0, 16)
+	if not has then
+		return
+	end
+	if ui.BossArt then
+		ArtImage.Set(ui.BossArt, key, { ui.BossSkull })
+	else
+		ui.BossArt = ArtImage.Place(ui.BossDisc, key, { Name = "Art", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromScale(1.3, 1.3), ZIndex = 7 }, { ui.BossSkull })
+	end
+	if not ClientSettings.Reduced() then
+		UIAnim.Pop(ui.BossDisc, 0.05, 2.2)
+	end
+end
 
 local function layout()
 	if not ui.Frame then
@@ -1054,6 +1085,7 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			anim.BossTrail = 1
 			anim.BossFill = 0 -- the bar fills with her name while she rises (BossIntro s)
 			ui.BossName.Text = string.upper(tostring(state:GetAttribute("BossName") or "Scorpion Queen"))
+			setBossArt(state:GetAttribute("BossId"))
 			UIAnim.Pop(ui.Boss, 0, 0.3)
 			UIAnim.Shake(ui.Boss, 7, 0.45)
 			if not ClientSettings.Reduced() then
@@ -1078,7 +1110,7 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			UIAnim.SweepOnce(ui.BossMeter.Frame, P.ivory_100, 0.5, 0.3)
 			UIAnim.Punch(ui.BossName, 0.25)
 		end
-		ui.BossMark.Position = UDim2.new(markAt, 0, 0, 36)
+		ui.BossMark.Position = UDim2.new(markAt, ui.BossInset * (1 - markAt), 0, 36)
 	else
 		anim.BossShown = false
 		anim.BossPhaseHit = false
@@ -1093,7 +1125,7 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			setStatus("")
 		else
 			local several = string.find(rewardNames, ",", 1, true) ~= nil
-			setStatus(string.format("Paused: %s %s opening a chest", rewardNames, several and "are" or "is"), "chest")
+			setStatus(string.format("Paused: %s %s opening a chest", rewardNames, several and "are" or "is"), "reward_ChestLarge")
 		end
 	elseif state:GetAttribute("Frozen") then
 		if state:GetAttribute("LevelUpPause") then

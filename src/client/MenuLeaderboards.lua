@@ -27,7 +27,7 @@ local BOARDS = {
 	{ Id = "Score", Title = "High score", Icon = "trophy", Caption = "Best run score, all servers · stages, bosses, kills, level, time" },
 	{ Id = "BestStage", Title = "Best stage", Icon = "portal", Caption = "Furthest stage reached in a run · all time" },
 	{ Id = "Daily", Title = "Daily", Icon = "calendar", Caption = "Today's scored Daily Challenge attempts (UTC)" },
-	{ Id = "Kills", Title = "Most kills", Icon = "skull", Caption = "Most enemies defeated in one run · all time" },
+	{ Id = "Kills", Title = "Most kills", Icon = "stat_Kills", Caption = "Most enemies defeated in one run · all time" },
 }
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)

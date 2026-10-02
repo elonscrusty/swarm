@@ -6,7 +6,7 @@ Uploaded pictures live in `src/shared/IconData.lua` (filled by `tools/gen_icon_d
 If a picture cannot load, Icons draws the vector icon (or a framed glyph) underneath.
 Preload list for ContentProvider: `Icons.PreloadList()`.
 
-Entries: 216. Problems: 0.
+Entries: 245. Problems: 0.
 
 ## Weapons
 
@@ -120,18 +120,18 @@ Level-up fallback cards (all slots maxed), loot prompts, portal and revive marke
 
 ## Characters (class icon)
 
-Class icons are drawn in code (Icons.Character). Skins reuse the class icon.
+Class icons: hero_<Id> picture (Icons.Character), drawn hat / helmet under it. Skins reuse the class icon.
 
 | Key | Name | Where it appears | Asset | Status |
 |---|---|---|---|---|
-| `helmet` | Knight [Knight] | character select, lobby, team HUD, results | drawn: DRAW.helmet | working (drawn) |
-| `wizardHat` | Mage [Mage] | character select, lobby, team HUD, results | drawn: DRAW.wizardHat | working (drawn) |
-| `hood` | Rogue [Rogue] | character select, lobby, team HUD, results | drawn: DRAW.hood | working (drawn) |
-| `mitre` | Priest [Priest] | character select, lobby, team HUD, results | drawn: DRAW.mitre | working (drawn) |
-| `featherCap` | Ranger [Ranger] | character select, lobby, team HUD, results | drawn: DRAW.featherCap | working (drawn) |
-| `goggles` | Alchemist [Alchemist] | character select, lobby, team HUD, results | drawn: DRAW.goggles | working (drawn) |
-| `minerHelm` | Engineer [Engineer] | character select, lobby, team HUD, results | drawn: DRAW.minerHelm | working (drawn) |
-| `skullHood` | Necromancer [Necromancer] | character select, lobby, team HUD, results | drawn: DRAW.skullHood | working (drawn) |
+| `hero_Knight` | Knight [Knight] | character select, lobby, team HUD, results | art/icons/heroes/hero_Knight.png (ArtData id pending upload) | working (image) |
+| `hero_Mage` | Mage [Mage] | character select, lobby, team HUD, results | art/icons/heroes/hero_Mage.png (ArtData id pending upload) | working (image) |
+| `hero_Rogue` | Rogue [Rogue] | character select, lobby, team HUD, results | art/icons/heroes/hero_Rogue.png (ArtData id pending upload) | working (image) |
+| `hero_Priest` | Priest [Priest] | character select, lobby, team HUD, results | art/icons/heroes/hero_Priest.png (ArtData id pending upload) | working (image) |
+| `hero_Ranger` | Ranger [Ranger] | character select, lobby, team HUD, results | art/icons/heroes/hero_Ranger.png (ArtData id pending upload) | working (image) |
+| `hero_Alchemist` | Alchemist [Alchemist] | character select, lobby, team HUD, results | art/icons/heroes/hero_Alchemist.png (ArtData id pending upload) | working (image) |
+| `hero_Engineer` | Engineer [Engineer] | character select, lobby, team HUD, results | art/icons/heroes/hero_Engineer.png (ArtData id pending upload) | working (image) |
+| `hero_Necromancer` | Necromancer [Necromancer] | character select, lobby, team HUD, results | art/icons/heroes/hero_Necromancer.png (ArtData id pending upload) | working (image) |
 
 ## Locked / state icons
 
@@ -139,10 +139,10 @@ Icons that mark a state.
 
 | Key | Name | Where it appears | Asset | Status |
 |---|---|---|---|---|
-| `lock` | Locked character / arena / reward | intentionally locked: character cards, arena cards, track rewards | drawn: DRAW.lock | intentionally locked |
-| `check` | Selected / done / confirm | character select, curses, bug report, achievements | drawn: DRAW.check | working (drawn) |
-| `warning` | Warning / confirm | results, level-up skip, popups | drawn: DRAW.warning | working (drawn) |
-| `close` | Close / cancel | panels | drawn: DRAW.close | working (drawn) |
+| `lock` | Locked character / arena / reward | intentionally locked: character cards, arena cards, track rewards | art/icons/ui/sym_lock.png (ArtData id pending upload) | intentionally locked |
+| `check` | Selected / done / confirm | character select, curses, bug report, achievements | art/icons/ui/sym_check.png (ArtData id pending upload) | working (image) |
+| `warning` | Warning / confirm | results, level-up skip, popups | art/icons/ui/sym_warning.png (ArtData id pending upload) | working (image) |
+| `close` | Close / cancel | panels | art/icons/ui/sym_close.png (ArtData id pending upload) | working (image) |
 
 ## Meta upgrades (permanent)
 
@@ -157,8 +157,8 @@ UPGRADES screen (Icons.MetaIcon); reuse the passive pictures.
 | `Luck` | Luck [Luck] | UPGRADES > Permanent | rbxassetid://90711845797584 | working (image) |
 | `Growth` | Growth [Growth] | UPGRADES > Permanent | rbxassetid://84926265269882 | working (image) |
 | `revive` | Revive [Revive] | UPGRADES > Permanent | rbxassetid://140117129153655 | working (image) |
-| `cycle` | Reroll [Reroll] | UPGRADES > Permanent | drawn: DRAW.cycle | working (drawn) |
-| `skip` | Skip [Skip] | UPGRADES > Permanent | drawn: DRAW.skip | working (drawn) |
+| `meta_Reroll` | Reroll [Reroll] | UPGRADES > Permanent | art/icons/meta/meta_Reroll.png (ArtData id pending upload) | working (image) |
+| `meta_Skip` | Skip [Skip] | UPGRADES > Permanent | art/icons/meta/meta_Skip.png (ArtData id pending upload) | working (image) |
 
 ## Arenas / stages
 
@@ -166,12 +166,12 @@ ARENAS screen cards (the stage pill uses portal).
 
 | Key | Name | Where it appears | Asset | Status |
 |---|---|---|---|---|
-| `tree` | Forest | ARENAS screen | drawn: DRAW.tree | working (drawn) |
-| `castle` | Ruins | ARENAS screen | drawn: DRAW.castle | working (drawn) |
-| `sprout` | Swamp | ARENAS screen | drawn: DRAW.sprout | working (drawn) |
-| `FrostNova` | Snow | ARENAS screen | rbxassetid://97835676479383 | working (image) |
-| `hourglass` | Desert | ARENAS screen | drawn: DRAW.hourglass | working (drawn) |
-| `FireTrail` | Lava | ARENAS screen | rbxassetid://92462222921176 | working (image) |
+| `arena_Forest` | Forest | ARENAS screen | art/icons/arenas/arena_Forest.png (ArtData id pending upload) | working (image) |
+| `arena_Ruins` | Ruins | ARENAS screen | art/icons/arenas/arena_Ruins.png (ArtData id pending upload) | working (image) |
+| `arena_Swamp` | Swamp | ARENAS screen | art/icons/arenas/arena_Swamp.png (ArtData id pending upload) | working (image) |
+| `arena_Snow` | Snow | ARENAS screen | art/icons/arenas/arena_Snow.png (ArtData id pending upload) | working (image) |
+| `arena_Desert` | Desert | ARENAS screen | art/icons/arenas/arena_Desert.png (ArtData id pending upload) | working (image) |
+| `arena_Lava` | Lava | ARENAS screen | art/icons/arenas/arena_Lava.png (ArtData id pending upload) | working (image) |
 
 ## Curses and run options
 
@@ -179,15 +179,15 @@ CURSES screen, countdown panel, HUD chips, results.
 
 | Key | Name | Where it appears | Asset | Status |
 |---|---|---|---|---|
-| `arrowFast` | Frenzy [Frenzy] | CURSES screen, HUD chips | drawn: DRAW.arrowFast | working (drawn) |
-| `heart` | Fragile [Fragile] | CURSES screen, HUD chips | drawn: DRAW.heart | working (drawn) |
-| `people3` | Horde [Horde] | CURSES screen, HUD chips | drawn: DRAW.people3 | working (drawn) |
-| `Heal` | Famine [Famine] | CURSES screen, HUD chips | rbxassetid://81721198350930 | working (image) |
-| `sword` | Glass Cannon [GlassCannon] | CURSES screen, HUD chips | drawn: DRAW.sword | working (drawn) |
-| `crown` | Elite Surge [EliteSurge] | CURSES screen, HUD chips | drawn: DRAW.crown | working (drawn) |
-| `sword` | Armory [Armory] | CURSES screen, HUD chips | drawn: DRAW.sword | working (drawn) |
-| `chest` | Treasure [Treasure] | CURSES screen, HUD chips | rbxassetid://102564255284031 | working (image) |
-| `chevronsUp` | Head Start [HeadStart] | CURSES screen, HUD chips | drawn: DRAW.chevronsUp | working (drawn) |
+| `curse_Frenzy` | Frenzy [Frenzy] | CURSES screen, HUD chips | art/icons/curses/curse_Frenzy.png (ArtData id pending upload) | working (image) |
+| `curse_Fragile` | Fragile [Fragile] | CURSES screen, HUD chips | art/icons/curses/curse_Fragile.png (ArtData id pending upload) | working (image) |
+| `curse_Horde` | Horde [Horde] | CURSES screen, HUD chips | art/icons/curses/curse_Horde.png (ArtData id pending upload) | working (image) |
+| `curse_Famine` | Famine [Famine] | CURSES screen, HUD chips | art/icons/curses/curse_Famine.png (ArtData id pending upload) | working (image) |
+| `curse_GlassCannon` | Glass Cannon [GlassCannon] | CURSES screen, HUD chips | art/icons/curses/curse_GlassCannon.png (ArtData id pending upload) | working (image) |
+| `curse_EliteSurge` | Elite Surge [EliteSurge] | CURSES screen, HUD chips | art/icons/curses/curse_EliteSurge.png (ArtData id pending upload) | working (image) |
+| `opt_Armory` | Armory [Armory] | CURSES screen, HUD chips | art/icons/curses/opt_Armory.png (ArtData id pending upload) | working (image) |
+| `reward_ChestLarge` | Treasure [Treasure] | CURSES screen, HUD chips | art/icons/rewards/reward_ChestLarge.png (ArtData id pending upload) | working (image) |
+| `opt_HeadStart` | Head Start [HeadStart] | CURSES screen, HUD chips | art/icons/curses/opt_HeadStart.png (ArtData id pending upload) | working (image) |
 | `revive` | Second Wind [SecondWind] | CURSES screen, HUD chips | rbxassetid://140117129153655 | working (image) |
 
 ## Achievements
@@ -196,24 +196,24 @@ STATS > Achievements.
 
 | Key | Name | Where it appears | Asset | Status |
 |---|---|---|---|---|
-| `clock` | Hold the Line [Survivor5] | STATS > Achievements | drawn: DRAW.clock | working (drawn) |
-| `clock` | Unbroken [Survivor10] | STATS > Achievements | drawn: DRAW.clock | working (drawn) |
-| `skull` | Queen Slayer [QueenSlayer] | STATS > Achievements | drawn: DRAW.skull | working (drawn) |
-| `trophy` | Conqueror [Conqueror] | STATS > Achievements | drawn: DRAW.trophy | working (drawn) |
+| `ach_Survivor5` | Hold the Line [Survivor5] | STATS > Achievements | art/icons/achievements/ach_Survivor5.png (ArtData id pending upload) | working (image) |
+| `ach_Survivor10` | Unbroken [Survivor10] | STATS > Achievements | art/icons/achievements/ach_Survivor10.png (ArtData id pending upload) | working (image) |
+| `ach_QueenSlayer` | Queen Slayer [QueenSlayer] | STATS > Achievements | art/icons/achievements/ach_QueenSlayer.png (ArtData id pending upload) | working (image) |
+| `ach_Conqueror` | Conqueror [Conqueror] | STATS > Achievements | art/icons/achievements/ach_Conqueror.png (ArtData id pending upload) | working (image) |
 | `altar` | Daredevil [Daredevil] | STATS > Achievements | rbxassetid://76272553564152 | working (image) |
-| `helmet` | Knight's Oath [KnightClear] | STATS > Achievements | drawn: DRAW.helmet | working (drawn) |
-| `wizardHat` | Arcane Mastery [MageClear] | STATS > Achievements | drawn: DRAW.wizardHat | working (drawn) |
-| `hood` | Shadow Run [RogueClear] | STATS > Achievements | drawn: DRAW.hood | working (drawn) |
-| `mitre` | Holy Light [PriestClear] | STATS > Achievements | drawn: DRAW.mitre | working (drawn) |
+| `ach_KnightClear` | Knight's Oath [KnightClear] | STATS > Achievements | art/icons/achievements/ach_KnightClear.png (ArtData id pending upload) | working (image) |
+| `ach_MageClear` | Arcane Mastery [MageClear] | STATS > Achievements | art/icons/achievements/ach_MageClear.png (ArtData id pending upload) | working (image) |
+| `ach_RogueClear` | Shadow Run [RogueClear] | STATS > Achievements | art/icons/achievements/ach_RogueClear.png (ArtData id pending upload) | working (image) |
+| `ach_PriestClear` | Holy Light [PriestClear] | STATS > Achievements | art/icons/achievements/ach_PriestClear.png (ArtData id pending upload) | working (image) |
 | `revive` | Lifesaver [Lifesaver] | STATS > Achievements | rbxassetid://140117129153655 | working (image) |
-| `chevronsUp` | Veteran [Veteran] | STATS > Achievements | drawn: DRAW.chevronsUp | working (drawn) |
+| `ach_Veteran` | Veteran [Veteran] | STATS > Achievements | art/icons/achievements/ach_Veteran.png (ArtData id pending upload) | working (image) |
 | `chest` | Golden Touch [GoldenTouch] | STATS > Achievements | rbxassetid://102564255284031 | working (image) |
 | `portal` | Deep Delver [DeepDelver] | STATS > Achievements | rbxassetid://126782693482750 | working (image) |
-| `gear` | Field Engineer [FieldEngineer] | STATS > Achievements | drawn: DRAW.gear | working (drawn) |
-| `skull` | Reaper [Reaper] | STATS > Achievements | drawn: DRAW.skull | working (drawn) |
-| `skull` | Moth Bane [MothBane] | STATS > Achievements | drawn: DRAW.skull | working (drawn) |
-| `flag` | Banner Breaker [WarlordFall] | STATS > Achievements | drawn: DRAW.flag | working (drawn) |
-| `skull` | Hive Cleanser [HiveCleanser] | STATS > Achievements | drawn: DRAW.skull | working (drawn) |
+| `ach_FieldEngineer` | Field Engineer [FieldEngineer] | STATS > Achievements | art/icons/achievements/ach_FieldEngineer.png (ArtData id pending upload) | working (image) |
+| `ach_Reaper` | Reaper [Reaper] | STATS > Achievements | art/icons/achievements/ach_Reaper.png (ArtData id pending upload) | working (image) |
+| `ach_MothBane` | Moth Bane [MothBane] | STATS > Achievements | art/icons/achievements/ach_MothBane.png (ArtData id pending upload) | working (image) |
+| `ach_WarlordFall` | Banner Breaker [WarlordFall] | STATS > Achievements | art/icons/achievements/ach_WarlordFall.png (ArtData id pending upload) | working (image) |
+| `ach_HiveCleanser` | Hive Cleanser [HiveCleanser] | STATS > Achievements | art/icons/achievements/ach_HiveCleanser.png (ArtData id pending upload) | working (image) |
 
 ## Track (account level)
 
@@ -221,11 +221,11 @@ TRACK screen reward rows (by reward kind) and the medallion.
 
 | Key | Name | Where it appears | Asset | Status |
 |---|---|---|---|---|
-| `flag` | Title reward | TRACK screen | drawn: DRAW.flag | working (drawn) |
-| `sparkle` | Color reward | TRACK screen | drawn: DRAW.sparkle | working (drawn) |
-| `area` | Ring reward | TRACK screen | drawn: DRAW.area | working (drawn) |
-| `medal` | Frame reward | TRACK screen | drawn: DRAW.medal | working (drawn) |
-| `medal` | Account level medal | TRACK, results | drawn: DRAW.medal | working (drawn) |
+| `track_Title` | Title reward | TRACK screen | art/icons/track/track_Title.png (ArtData id pending upload) | working (image) |
+| `track_Color` | Color reward | TRACK screen | art/icons/track/track_Color.png (ArtData id pending upload) | working (image) |
+| `track_Ring` | Ring reward | TRACK screen | art/icons/track/track_Ring.png (ArtData id pending upload) | working (image) |
+| `track_Frame` | Frame reward | TRACK screen | art/icons/track/track_Frame.png (ArtData id pending upload) | working (image) |
+| `track_Level` | Account level medal | TRACK, results | art/icons/track/track_Level.png (ArtData id pending upload) | working (image) |
 
 ## Shop (Robux = cosmetics / coins only)
 
@@ -233,12 +233,12 @@ UPGRADES > Shop rows.
 
 | Key | Name | Where it appears | Asset | Status |
 |---|---|---|---|---|
-| `pouch` | 500 Gold | UPGRADES > Shop | drawn: DRAW.pouch | working (drawn) |
-| `Gold` | 1,500 Gold | UPGRADES > Shop | rbxassetid://140106250613505 | working (image) |
-| `chest` | 5,000 Gold | UPGRADES > Shop | rbxassetid://102564255284031 | working (image) |
-| `gift` | Starter Pack | UPGRADES > Shop | drawn: DRAW.gift | working (drawn) |
-| `crown` | VIP | UPGRADES > Shop | drawn: DRAW.crown | working (drawn) |
-| `coin` | 2x Gold | UPGRADES > Shop | drawn: DRAW.coin | working (drawn) |
+| `shop_GoldPouch` | 500 Gold | UPGRADES > Shop | art/icons/shop/shop_GoldPouch.png (ArtData id pending upload) | working (image) |
+| `stat_Gold` | 1,500 Gold | UPGRADES > Shop | art/icons/stats/stat_Gold.png (ArtData id pending upload) | working (image) |
+| `reward_ChestGolden` | 5,000 Gold | UPGRADES > Shop | art/icons/rewards/reward_ChestGolden.png (ArtData id pending upload) | working (image) |
+| `shop_StarterPack` | Starter Pack | UPGRADES > Shop | art/icons/shop/shop_StarterPack.png (ArtData id pending upload) | working (image) |
+| `shop_VIP` | VIP | UPGRADES > Shop | art/icons/shop/shop_VIP.png (ArtData id pending upload) | working (image) |
+| `shop_DoubleGold` | 2x Gold | UPGRADES > Shop | art/icons/shop/shop_DoubleGold.png (ArtData id pending upload) | working (image) |
 | `robux` | Robux price tag | shop, character unlock | drawn: DRAW.robux | working (drawn) |
 
 ## Stats tiles
@@ -247,18 +247,18 @@ STATS screen.
 
 | Key | Name | Where it appears | Asset | Status |
 |---|---|---|---|---|
-| `crown` | Best time [Best] | STATS | drawn: DRAW.crown | working (drawn) |
+| `stat_BestTime` | Best time [Best] | STATS | art/icons/stats/stat_BestTime.png (ArtData id pending upload) | working (image) |
 | `portal` | Best stage [Stage] | STATS | rbxassetid://126782693482750 | working (image) |
-| `trophy` | Wins [Wins] | STATS | drawn: DRAW.trophy | working (drawn) |
-| `flag` | Runs played [Runs] | STATS | drawn: DRAW.flag | working (drawn) |
-| `chevronsUp` | Win rate [Rate] | STATS | drawn: DRAW.chevronsUp | working (drawn) |
-| `skull` | Total kills [Kills] | STATS | drawn: DRAW.skull | working (drawn) |
-| `coin` | Gold [Gold] | STATS | drawn: DRAW.coin | working (drawn) |
-| `helmet` | Characters [Heroes] | STATS | drawn: DRAW.helmet | working (drawn) |
-| `sparkle` | Skins owned [Skins] | STATS | drawn: DRAW.sparkle | working (drawn) |
-| `sword` | Upgrade levels [Meta] | STATS | drawn: DRAW.sword | working (drawn) |
+| `stat_Wins` | Wins [Wins] | STATS | art/icons/stats/stat_Wins.png (ArtData id pending upload) | working (image) |
+| `stat_Runs` | Runs played [Runs] | STATS | art/icons/stats/stat_Runs.png (ArtData id pending upload) | working (image) |
+| `stat_WinRate` | Win rate [Rate] | STATS | art/icons/stats/stat_WinRate.png (ArtData id pending upload) | working (image) |
+| `stat_Kills` | Total kills [Kills] | STATS | art/icons/stats/stat_Kills.png (ArtData id pending upload) | working (image) |
+| `stat_Gold` | Gold [Gold] | STATS | art/icons/stats/stat_Gold.png (ArtData id pending upload) | working (image) |
+| `stat_Heroes` | Characters [Heroes] | STATS | art/icons/stats/stat_Heroes.png (ArtData id pending upload) | working (image) |
+| `stat_Skins` | Skins owned [Skins] | STATS | art/icons/stats/stat_Skins.png (ArtData id pending upload) | working (image) |
+| `stat_Upgrades` | Upgrade levels [Meta] | STATS | art/icons/stats/stat_Upgrades.png (ArtData id pending upload) | working (image) |
 | `revive` | Saved revives [Revives] | STATS | rbxassetid://140117129153655 | working (image) |
-| `trophy` | Achievements [Ach] | STATS | drawn: DRAW.trophy | working (drawn) |
+| `ach_Badge` | Achievements [Ach] | STATS | art/icons/achievements/ach_Badge.png (ArtData id pending upload) | working (image) |
 
 ## Leaderboards
 
@@ -266,11 +266,12 @@ LEADERBOARDS tabs.
 
 | Key | Name | Where it appears | Asset | Status |
 |---|---|---|---|---|
+| `trophy` | High score [Score] | LEADERBOARDS | art/icons/ui/sym_trophy.png (ArtData id pending upload) | working (image) |
 | `portal` | Best stage [BestStage] | LEADERBOARDS | rbxassetid://126782693482750 | working (image) |
-| `calendar` | Daily [Daily] | LEADERBOARDS | drawn: DRAW.calendar | working (drawn) |
-| `skull` | Most kills [Kills] | LEADERBOARDS | drawn: DRAW.skull | working (drawn) |
-| `podium` | Leaderboards / rank button | lobby menu, daily | drawn: DRAW.podium | working (drawn) |
-| `trophy` | Wins / achievements / rank | stats | drawn: DRAW.trophy | working (drawn) |
+| `calendar` | Daily [Daily] | LEADERBOARDS | art/icons/ui/sym_calendar.png (ArtData id pending upload) | working (image) |
+| `stat_Kills` | Most kills [Kills] | LEADERBOARDS | art/icons/stats/stat_Kills.png (ArtData id pending upload) | working (image) |
+| `podium` | Leaderboards / rank button | lobby menu, daily | art/icons/ui/sym_podium.png (ArtData id pending upload) | working (image) |
+| `trophy` | Wins / achievements / rank | stats | art/icons/ui/sym_trophy.png (ArtData id pending upload) | working (image) |
 
 ## All literal UI icon keys
 
@@ -278,59 +279,87 @@ Every icon name written in src (screens that use it).
 
 | Key | Name | Where it appears | Asset | Status |
 |---|---|---|---|---|
-| `FireTrail` | FireTrail | MenuArenas | rbxassetid://92462222921176 | working (image) |
-| `FrostNova` | FrostNova | MenuArenas | rbxassetid://97835676479383 | working (image) |
-| `Gold` | Gold | MenuUpgrades | rbxassetid://140106250613505 | working (image) |
-| `Heal` | Heal | CurseData | rbxassetid://81721198350930 | working (image) |
+| `ach_Badge` | ach_Badge | MenuStats | art/icons/achievements/ach_Badge.png (ArtData id pending upload) | working (image) |
+| `ach_Conqueror` | ach_Conqueror | AchievementData | art/icons/achievements/ach_Conqueror.png (ArtData id pending upload) | working (image) |
+| `ach_FieldEngineer` | ach_FieldEngineer | AchievementData | art/icons/achievements/ach_FieldEngineer.png (ArtData id pending upload) | working (image) |
+| `ach_HiveCleanser` | ach_HiveCleanser | AchievementData | art/icons/achievements/ach_HiveCleanser.png (ArtData id pending upload) | working (image) |
+| `ach_KnightClear` | ach_KnightClear | AchievementData | art/icons/achievements/ach_KnightClear.png (ArtData id pending upload) | working (image) |
+| `ach_MageClear` | ach_MageClear | AchievementData | art/icons/achievements/ach_MageClear.png (ArtData id pending upload) | working (image) |
+| `ach_MothBane` | ach_MothBane | AchievementData | art/icons/achievements/ach_MothBane.png (ArtData id pending upload) | working (image) |
+| `ach_PriestClear` | ach_PriestClear | AchievementData | art/icons/achievements/ach_PriestClear.png (ArtData id pending upload) | working (image) |
+| `ach_QueenSlayer` | ach_QueenSlayer | AchievementData | art/icons/achievements/ach_QueenSlayer.png (ArtData id pending upload) | working (image) |
+| `ach_Reaper` | ach_Reaper | AchievementData | art/icons/achievements/ach_Reaper.png (ArtData id pending upload) | working (image) |
+| `ach_RogueClear` | ach_RogueClear | AchievementData | art/icons/achievements/ach_RogueClear.png (ArtData id pending upload) | working (image) |
+| `ach_Survivor10` | ach_Survivor10 | AchievementData | art/icons/achievements/ach_Survivor10.png (ArtData id pending upload) | working (image) |
+| `ach_Survivor5` | ach_Survivor5 | AchievementData | art/icons/achievements/ach_Survivor5.png (ArtData id pending upload) | working (image) |
+| `ach_Veteran` | ach_Veteran | AchievementData | art/icons/achievements/ach_Veteran.png (ArtData id pending upload) | working (image) |
+| `ach_WarlordFall` | ach_WarlordFall | AchievementData | art/icons/achievements/ach_WarlordFall.png (ArtData id pending upload) | working (image) |
 | `aim` | aim | Hud | drawn: DRAW.aim | working (drawn) |
 | `altar` | altar | AchievementData, LootUI | rbxassetid://76272553564152 | working (image) |
-| `arrowFast` | arrowFast | CurseData | drawn: DRAW.arrowFast | working (drawn) |
+| `arena_Desert` | arena_Desert | MenuArenas | art/icons/arenas/arena_Desert.png (ArtData id pending upload) | working (image) |
+| `arena_Forest` | arena_Forest | MenuArenas | art/icons/arenas/arena_Forest.png (ArtData id pending upload) | working (image) |
+| `arena_Lava` | arena_Lava | MenuArenas | art/icons/arenas/arena_Lava.png (ArtData id pending upload) | working (image) |
+| `arena_Ruins` | arena_Ruins | MenuArenas | art/icons/arenas/arena_Ruins.png (ArtData id pending upload) | working (image) |
+| `arena_Snow` | arena_Snow | MenuArenas | art/icons/arenas/arena_Snow.png (ArtData id pending upload) | working (image) |
+| `arena_Swamp` | arena_Swamp | MenuArenas | art/icons/arenas/arena_Swamp.png (ArtData id pending upload) | working (image) |
 | `bars` | bars | LobbyScreen, MenuStats | drawn: DRAW.bars | working (drawn) |
-| `calendar` | calendar | LobbyScreen, MenuDaily, MenuLeaderboards | drawn: DRAW.calendar | working (drawn) |
-| `castle` | castle | MenuArenas, StageUI, UIBuilder | drawn: DRAW.castle | working (drawn) |
-| `check` | check | BugReportUI, LootUI, MenuCharacters, MenuCurses | drawn: DRAW.check | working (drawn) |
-| `chest` | chest | AchievementData, CurseData, MenuUpgrades, UIBuilder | rbxassetid://102564255284031 | working (image) |
+| `calendar` | calendar | LobbyScreen, MenuDaily, MenuLeaderboards | art/icons/ui/sym_calendar.png (ArtData id pending upload) | working (image) |
+| `castle` | castle | StageUI, UIBuilder | drawn: DRAW.castle | working (drawn) |
+| `check` | check | BugReportUI, LootUI, MenuCharacters, MenuCurses | art/icons/ui/sym_check.png (ArtData id pending upload) | working (image) |
+| `chest` | chest | AchievementData, UIBuilder | rbxassetid://102564255284031 | working (image) |
 | `chevronLeft` | chevronLeft | DevInbox, LobbyScreen, UIKit | drawn: DRAW.chevronLeft | working (drawn) |
 | `chevronRight` | chevronRight | DevInbox, LobbyScreen | drawn: DRAW.chevronRight | working (drawn) |
-| `chevronsUp` | chevronsUp | AchievementData, CurseData, LobbyScreen, MenuStats, MenuUpgrades | drawn: DRAW.chevronsUp | working (drawn) |
-| `clock` | clock | AchievementData | drawn: DRAW.clock | working (drawn) |
-| `close` | close | BugReportUI, DevInbox, DevPanel, MenuCurses, UIBuilder | drawn: DRAW.close | working (drawn) |
-| `coin` | coin | Hud, LobbyScreen, MenuStats, MenuUpgrades, UIBuilder | drawn: DRAW.coin | working (drawn) |
-| `crown` | crown | CurseData, MenuStats, MenuUpgrades | drawn: DRAW.crown | working (drawn) |
-| `curse` | curse | LobbyScreen | drawn: DRAW.curse | working (drawn) |
-| `cycle` | cycle | DevInbox, UIBuilder | drawn: DRAW.cycle | working (drawn) |
-| `flag` | flag | AchievementData, MenuStats | drawn: DRAW.flag | working (drawn) |
-| `gear` | gear | AchievementData, LobbyScreen | drawn: DRAW.gear | working (drawn) |
-| `gift` | gift | MenuUpgrades | drawn: DRAW.gift | working (drawn) |
-| `heart` | heart | CurseData, Hud, UIBuilder | drawn: DRAW.heart | working (drawn) |
-| `helmet` | helmet | AchievementData, LobbyScreen, MenuStats | drawn: DRAW.helmet | working (drawn) |
-| `hood` | hood | AchievementData | drawn: DRAW.hood | working (drawn) |
-| `hourglass` | hourglass | MenuArenas | drawn: DRAW.hourglass | working (drawn) |
-| `info` | info | MenuLeaderboards | drawn: DRAW.info | working (drawn) |
-| `lock` | lock | LobbyScreen, MenuArenas, MenuCharacters | drawn: DRAW.lock | working (drawn) |
-| `medal` | medal | LobbyScreen, UIBuilder | drawn: DRAW.medal | working (drawn) |
-| `mitre` | mitre | AchievementData | drawn: DRAW.mitre | working (drawn) |
-| `pause` | pause | Hud | drawn: DRAW.pause | working (drawn) |
-| `people2` | people2 | LobbyScreen | drawn: DRAW.people2 | working (drawn) |
-| `people3` | people3 | CurseData, LobbyScreen | drawn: DRAW.people3 | working (drawn) |
-| `person` | person | LobbyScreen | drawn: DRAW.person | working (drawn) |
-| `play` | play | LobbyScreen, MenuDaily, UIBuilder | drawn: DRAW.play | working (drawn) |
-| `podium` | podium | LobbyScreen, MenuDaily | drawn: DRAW.podium | working (drawn) |
+| `chevronsUp` | chevronsUp | LobbyScreen, MenuUpgrades | art/icons/ui/sym_chevronsUp.png (ArtData id pending upload) | working (image) |
+| `close` | close | BugReportUI, DevInbox, DevPanel, MenuCurses, UIBuilder | art/icons/ui/sym_close.png (ArtData id pending upload) | working (image) |
+| `coin` | coin | Hud, LobbyScreen, MenuUpgrades | drawn: DRAW.coin | working (drawn) |
+| `curse` | curse | LobbyScreen | art/icons/ui/sym_curse.png (ArtData id pending upload) | working (image) |
+| `curse_EliteSurge` | curse_EliteSurge | CurseData | art/icons/curses/curse_EliteSurge.png (ArtData id pending upload) | working (image) |
+| `curse_Famine` | curse_Famine | CurseData | art/icons/curses/curse_Famine.png (ArtData id pending upload) | working (image) |
+| `curse_Fragile` | curse_Fragile | CurseData | art/icons/curses/curse_Fragile.png (ArtData id pending upload) | working (image) |
+| `curse_Frenzy` | curse_Frenzy | CurseData | art/icons/curses/curse_Frenzy.png (ArtData id pending upload) | working (image) |
+| `curse_GlassCannon` | curse_GlassCannon | CurseData | art/icons/curses/curse_GlassCannon.png (ArtData id pending upload) | working (image) |
+| `curse_Horde` | curse_Horde | CurseData | art/icons/curses/curse_Horde.png (ArtData id pending upload) | working (image) |
+| `cycle` | cycle | DevInbox, UIBuilder | art/icons/ui/sym_cycle.png (ArtData id pending upload) | working (image) |
+| `gear` | gear | LobbyScreen | art/icons/ui/sym_gear.png (ArtData id pending upload) | working (image) |
+| `heart` | heart | Hud, UIBuilder | drawn: DRAW.heart | working (drawn) |
+| `helmet` | helmet | LobbyScreen | drawn: DRAW.helmet | working (drawn) |
+| `info` | info | MenuLeaderboards | art/icons/ui/sym_info.png (ArtData id pending upload) | working (image) |
+| `lock` | lock | LobbyScreen, MenuArenas, MenuCharacters | art/icons/ui/sym_lock.png (ArtData id pending upload) | working (image) |
+| `medal` | medal | LobbyScreen | art/icons/ui/sym_medal.png (ArtData id pending upload) | working (image) |
+| `opt_Armory` | opt_Armory | CurseData | art/icons/curses/opt_Armory.png (ArtData id pending upload) | working (image) |
+| `opt_HeadStart` | opt_HeadStart | CurseData | art/icons/curses/opt_HeadStart.png (ArtData id pending upload) | working (image) |
+| `pause` | pause | Hud | art/icons/ui/sym_pause.png (ArtData id pending upload) | working (image) |
+| `people2` | people2 | LobbyScreen | art/icons/ui/sym_people2.png (ArtData id pending upload) | working (image) |
+| `people3` | people3 | LobbyScreen | art/icons/ui/sym_people3.png (ArtData id pending upload) | working (image) |
+| `person` | person | LobbyScreen | art/icons/ui/sym_person.png (ArtData id pending upload) | working (image) |
+| `play` | play | LobbyScreen, MenuDaily, UIBuilder | art/icons/ui/sym_play.png (ArtData id pending upload) | working (image) |
+| `podium` | podium | LobbyScreen, MenuDaily | art/icons/ui/sym_podium.png (ArtData id pending upload) | working (image) |
 | `portal` | portal | AchievementData, Hud, MenuLeaderboards, MenuStats, StageUI | rbxassetid://126782693482750 | working (image) |
-| `pouch` | pouch | MenuUpgrades | drawn: DRAW.pouch | working (drawn) |
 | `revive` | revive | AchievementData, CurseData, MenuStats, TeamUI, UIBuilder | rbxassetid://140117129153655 | working (image) |
+| `reward_ChestGolden` | reward_ChestGolden | MenuUpgrades | art/icons/rewards/reward_ChestGolden.png (ArtData id pending upload) | working (image) |
+| `reward_ChestLarge` | reward_ChestLarge | CurseData, UIBuilder | art/icons/rewards/reward_ChestLarge.png (ArtData id pending upload) | working (image) |
 | `robux` | robux | MenuCharacters, MenuUpgrades | drawn: DRAW.robux | working (drawn) |
+| `shop_DoubleGold` | shop_DoubleGold | MenuUpgrades | art/icons/shop/shop_DoubleGold.png (ArtData id pending upload) | working (image) |
+| `shop_GoldPouch` | shop_GoldPouch | MenuUpgrades | art/icons/shop/shop_GoldPouch.png (ArtData id pending upload) | working (image) |
+| `shop_StarterPack` | shop_StarterPack | MenuUpgrades | art/icons/shop/shop_StarterPack.png (ArtData id pending upload) | working (image) |
+| `shop_VIP` | shop_VIP | MenuUpgrades | art/icons/shop/shop_VIP.png (ArtData id pending upload) | working (image) |
 | `shrine` | shrine | LootUI | rbxassetid://118314946884299 | working (image) |
-| `skip` | skip | Tutorial, UIBuilder | drawn: DRAW.skip | working (drawn) |
-| `skull` | skull | AchievementData, Hud, MenuLeaderboards, MenuStats | drawn: DRAW.skull | working (drawn) |
-| `sparkle` | sparkle | MenuStats | drawn: DRAW.sparkle | working (drawn) |
-| `sprout` | sprout | MenuArenas | drawn: DRAW.sprout | working (drawn) |
-| `sword` | sword | CurseData, MenuStats | drawn: DRAW.sword | working (drawn) |
-| `tree` | tree | LobbyScreen, MenuArenas | drawn: DRAW.tree | working (drawn) |
-| `trophy` | trophy | AchievementData, MenuStats | drawn: DRAW.trophy | working (drawn) |
-| `userPlus` | userPlus | LobbyScreen | drawn: DRAW.userPlus | working (drawn) |
-| `warning` | warning | UIBuilder | drawn: DRAW.warning | working (drawn) |
-| `wizardHat` | wizardHat | AchievementData | drawn: DRAW.wizardHat | working (drawn) |
+| `skip` | skip | Tutorial, UIBuilder | art/icons/ui/sym_skip.png (ArtData id pending upload) | working (image) |
+| `skull` | skull | Hud | art/icons/ui/sym_skull.png (ArtData id pending upload) | working (image) |
+| `stat_BestTime` | stat_BestTime | MenuStats | art/icons/stats/stat_BestTime.png (ArtData id pending upload) | working (image) |
+| `stat_Gold` | stat_Gold | MenuStats, MenuUpgrades | art/icons/stats/stat_Gold.png (ArtData id pending upload) | working (image) |
+| `stat_Heroes` | stat_Heroes | MenuStats | art/icons/stats/stat_Heroes.png (ArtData id pending upload) | working (image) |
+| `stat_Kills` | stat_Kills | MenuLeaderboards, MenuStats | art/icons/stats/stat_Kills.png (ArtData id pending upload) | working (image) |
+| `stat_Runs` | stat_Runs | MenuStats | art/icons/stats/stat_Runs.png (ArtData id pending upload) | working (image) |
+| `stat_Skins` | stat_Skins | MenuStats | art/icons/stats/stat_Skins.png (ArtData id pending upload) | working (image) |
+| `stat_Upgrades` | stat_Upgrades | MenuStats | art/icons/stats/stat_Upgrades.png (ArtData id pending upload) | working (image) |
+| `stat_WinRate` | stat_WinRate | MenuStats | art/icons/stats/stat_WinRate.png (ArtData id pending upload) | working (image) |
+| `stat_Wins` | stat_Wins | MenuStats | art/icons/stats/stat_Wins.png (ArtData id pending upload) | working (image) |
+| `track_Level` | track_Level | UIBuilder | art/icons/track/track_Level.png (ArtData id pending upload) | working (image) |
+| `tree` | tree | LobbyScreen | drawn: DRAW.tree | working (drawn) |
+| `trophy` | trophy | MenuLeaderboards | art/icons/ui/sym_trophy.png (ArtData id pending upload) | working (image) |
+| `userPlus` | userPlus | LobbyScreen | art/icons/ui/sym_userPlus.png (ArtData id pending upload) | working (image) |
+| `warning` | warning | UIBuilder | art/icons/ui/sym_warning.png (ArtData id pending upload) | working (image) |
 
 ## Controls without an icon
 
@@ -340,7 +369,7 @@ Intentional: text buttons.
 |---|---|---|---|---|
 | `-` | Return to Main Menu (pause) | pause menu: uses key `castle` (same as results MAIN MENU) | drawn: DRAW.castle | working (drawn) |
 | `-` | DEV invincibility / DEV panel controls | DEV panel | - | working (text button, no icon: intentional) |
-| `-` | Reroll / Skip / Auto-pick / Banish | level-up buttons: `cycle`, `skip`; auto-pick is a timer bar (no icon); banish does not exist | drawn: DRAW.cycle, DRAW.skip | working (drawn) |
+| `-` | Reroll / Skip / Auto-pick / Banish | level-up buttons: `cycle`, `skip` (recoloured on buttons, so drawn); auto-pick is a timer bar (no icon); banish does not exist | drawn: DRAW.cycle, DRAW.skip | working (drawn) |
 | `-` | Coins / XP / pause / settings / daily | keys `coin`, XP gems are 3D (no icon), `pause`, `gear`, `calendar` | drawn | working (drawn) |
 
 ## Problems

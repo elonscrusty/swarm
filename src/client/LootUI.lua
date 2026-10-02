@@ -66,7 +66,7 @@ local hold = { Id = 0, Start = 0, Seconds = 1, Waiting = false }
 local target: Model? = nil
 local lastTouch = false
 
-local KIND_ICON = { Chest = "chest", Shrine = "shrine", Altar = "altar" }
+local KIND_ICON = { Chest = "reward_ChestLarge", Shrine = "shrine", Altar = "altar" }
 
 local function rarityOf(id: string): string
 	local def = ItemData.Items[id]
@@ -567,7 +567,7 @@ local STATE_TEXT = {
 -- Fills the prompt for `model`; returns its height.
 local function fillPrompt(model: Model, progress: number): number
 	local kind = model:GetAttribute("LootKind") or "Chest"
-	setIcon(KIND_ICON[kind] or "chest")
+	setIcon(KIND_ICON[kind] or "reward_ChestLarge")
 	ui.PromptTitle.Text = tostring(model:GetAttribute("Title") or "")
 	local st = model:GetAttribute("State")
 	local ok = usable(model)

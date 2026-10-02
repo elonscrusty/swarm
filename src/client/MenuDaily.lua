@@ -1,10 +1,18 @@
 --[[
 	MenuDaily.lua
 	The DAILY CHALLENGE screen (lobby DAILY card): today's fixed setup, the same for every
-	player (CurseData.Daily(day), day = SwarmState "DailyDay", UTC): the arena route with
-	its bosses, the curses, the starting bonus; your scored attempt (or "ready"), your best
-	ever; PLAY (StartRun "Daily": the first run of the day is scored, later ones are
-	practice) and LEADERBOARD (the Daily board).
+	player (CurseData.Daily(day), day = SwarmState "DailyDay", UTC), laid out as one
+	dashboard panel:
+	  header    calendar, the date ("OCT 02, 2026"), "UTC • RESETS IN 4H 27M", a status
+	            pill (READY / USED)
+	  hero      "Your scored attempt is ready" (or your scored result), the rules line, an
+	            info card ("counts as soon as the run starts" / practice wording, best ever)
+	  ROUTE     the first stages as numbered cards (arena picture art/arenas/<Arena> with a
+	            drawn stand-in, arena name, the stage boss) joined by chevrons
+	  CURSES    crimson curse cards and the real gold multiplier chip
+	  BONUS     the green starting-bonus card
+	  footer    PLAY DAILY (StartRun "Daily": the first run of the day is scored, later ones
+	            are practice) and LEADERBOARD (the Ranks screen on its Daily tab)
 ]]
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -25,6 +33,18 @@ local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 
 local ROUTE_STAGES = 5 -- stages shown on the route row
+local CHEVRON = 22 -- room for the ">" between route cards
+local MONTHS = { "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC" }
+
+-- Stand-in colours of each arena picture (sky, ground) while / if art is missing.
+local ARENA_TINT: { [string]: { Color3 } } = {
+	Forest = { P.moss_400, P.moss_700 },
+	Ruins = { P.amber_300, P.stone_600 },
+	Swamp = { P.murk_400, P.bog_700 },
+	Snow = { P.ice_100, P.snow_400 },
+	Desert = { P.sand_300, P.sand_600 },
+	Lava = { P.basalt_600, P.lava_700 },
+}
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -76,44 +96,59 @@ function MenuDaily.TimeLeft(): string
 	return string.format("%dm", math.max(1, m))
 end
 
-local function chip(parent: Instance, icon: string, str: string, color: Color3?, order: number): Frame
-	local f = new("Frame", { Name = "Chip", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.15, Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = order }, parent)
-	UIKit.corner(f, 999)
-	UIKit.stroke(f, color or C.PanelEdge, 1, 0.35)
-	UIKit.padding(f, 0, 12, 0, 8)
-	UIKit.list(f, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
-	Icons.Draw(f, icon, { Size = 20, LayoutOrder = 1, Color = color, Back = C.PanelInset })
-	text(f, "Label", str, { LayoutOrder = 2, Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.Text }, 13)
+-- "2026-10-02" -> "OCT 02, 2026".
+function MenuDaily.LongDate(iso: string): string
+	local y, m, d = string.match(iso, "^(%d+)-(%d+)-(%d+)$")
+	local month = m and MONTHS[tonumber(m) or 0]
+	if not (y and month and d) then
+		return iso
+	end
+	return string.format("%s %s, %s", month, d, y)
+end
+
+-- A charcoal card with a coloured hairline (route stops, curses, the bonus).
+local function card(parent: Instance, name: string, edge: Color3, edgeT: number?): Frame
+	local f = new("Frame", { Name = name, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.25, BorderSizePixel = 0 }, parent)
+	UIKit.corner(f, Theme.Radius.M)
+	UIKit.stroke(f, edge, 1.5, edgeT or 0.35)
 	return f
 end
 
-local function section(parent: Instance, caption: string, order: number): Frame
-	local f = new("Frame", { Name = caption, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, parent)
-	UIKit.list(f, { Padding = UDim.new(0, 6) })
-	text(f, "Caption", UIKit.track(caption), { LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(12) + 4), TextColor3 = P.gold_300 })
-	return f
-end
-
-local function row(parent: Instance, order: number): Frame
-	local r = new("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, parent)
-	UIKit.list(r, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), Wraps = true })
-	return r
+-- Arena picture with a painted stand-in (sky / ground bands + the arena icon).
+local function arenaPicture(parent: Instance, arena: string): Frame
+	local tint = ARENA_TINT[arena] or { P.slate_500, P.slate_700 }
+	local pic = UIKit.ArtPicture(parent, "arenas/" .. arena, { Name = "Picture" }, function(fb: Frame)
+		local sky = new("Frame", { Name = "Sky", BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, fb)
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(tint[1], tint[2]) }, sky)
+		UIKit.corner(sky, Theme.Radius.S)
+		Icons.Draw(fb, "arena_" .. arena, { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	end)
+	local img = pic:FindFirstChild("Image")
+	if img then
+		UIKit.corner(img, Theme.Radius.S)
+	end
+	return pic
 end
 
 function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
-	local ui: { [string]: any } = {}
+	local ui: { [string]: any } = { Stops = {}, Chevrons = {}, CurseCards = {} }
 	ui.Header = UIKit.ScreenHeader(screen, "DAILY CHALLENGE", ctx.Back)
 	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
 	ui.Panel = holder
-	UIKit.padding(face, 16, 16, 16, 16)
+	UIKit.padding(face, 18, 20, 18, 20)
 
-	-- top: date + reset, status badge
-	local top = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 56) }, face)
+	-- header row: calendar, date / reset, status pill, hairline
+	local top = new("Frame", { Name = "Top", BackgroundTransparency = 1 }, face)
 	ui.Top = top
-	Icons.Draw(top, "calendar", { Size = 44, Position = UDim2.fromOffset(0, 4), Back = C.Panel })
-	ui.Date = text(top, "H2", "", { Name = "Date", Position = UDim2.fromOffset(56, 2), Size = UDim2.new(1, -56, 0, TS(22) + 6) })
-	ui.Reset = text(top, "Caption", "", { Name = "Reset", Position = UDim2.fromOffset(56, 8 + TS(22)), Size = UDim2.new(1, -56, 0, TS(12) + 4) })
+	local well = new("Frame", { Name = "Well", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.2, Size = UDim2.fromOffset(48, 48) }, top)
+	UIKit.corner(well, Theme.Radius.M)
+	UIKit.stroke(well, P.gold_500, 1, 0.5)
+	Icons.Draw(well, "calendar", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+	ui.Date = text(top, "H2", "", { Name = "Date", Position = UDim2.fromOffset(62, 0), Size = UDim2.new(1, -180, 0, TS(22) + 4) })
+	ui.Reset = text(top, "Caption", "", { Name = "Reset", Position = UDim2.fromOffset(62, TS(22) + 6), Size = UDim2.new(1, -180, 0, TS(12) + 4), TextColor3 = P.gold_300 })
+	ui.Pill = UIKit.StatusPill(top, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0) })
+	ui.Rule = UIKit.Hairline(face)
 
 	local body = new("ScrollingFrame", {
 		Name = "Body",
@@ -121,39 +156,35 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
 		ScrollBarImageColor3 = P.gold_500,
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
-	UIKit.padding(body, 4, 8, 4, 2)
-	UIKit.list(body, { Padding = UDim.new(0, 14) })
 	ui.Body = body
 
-	-- your attempt
-	local status = section(body, "Your attempt", 1)
-	ui.StatusRow = row(status, 1)
-	ui.StatusNote = text(status, "Small", "", { LayoutOrder = 2, TextWrapped = true, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextColor3 = C.TextMuted })
-	-- the route
-	local route = section(body, "Route", 2)
-	ui.Route = row(route, 1)
-	-- curses
-	local curses = section(body, "Curses", 3)
-	ui.Curses = row(curses, 1)
-	-- starting bonus
-	local bonus = section(body, "Starting bonus", 4)
-	ui.Bonus = row(bonus, 1)
+	-- hero: heading, rules line, info card
+	ui.Heading = text(body, "H1", "", { Name = "Heading", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top }, 26)
+	ui.Sub = text(body, "Body", "", { Name = "Sub", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted })
+	ui.Info = card(body, "Info", P.gold_400, 0.45)
+	Icons.Draw(ui.Info, "info", { Size = 22, Position = UDim2.fromOffset(12, 12), Back = P.slate_950 })
+	ui.InfoText = text(ui.Info, "Small", "", { Name = "Text", Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -54, 1, 0), TextWrapped = true, TextColor3 = C.Text }, 15)
 
-	-- buttons
-	local foot = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 64) }, face)
+	ui.RouteLabel = UIKit.SectionLabel(body, "Route")
+	ui.CursesLabel = UIKit.SectionLabel(body, "Curses")
+	ui.BonusLabel = UIKit.SectionLabel(body, "Starting bonus", P.moss_200)
+	-- the gold multiplier chip (beside the CURSES label)
+	ui.GoldChip = UIKit.IconPill(body, "coin", "")
+
+	-- footer
+	local foot = new("Frame", { Name = "Footer", BackgroundTransparency = 1 }, face)
 	ui.Footer = foot
 	ui.Play = UIKit.Button(foot, {
 		Kind = "Primary",
 		Glow = true,
-		Title = "PLAY",
+		Title = "PLAY DAILY",
 		Subtitle = "Scored attempt",
 		Icon = "play",
 		IconSize = 26,
-		Align = "Left",
+		Align = "Center",
 		Name = "PlayDaily",
 		OnClick = function()
 			local phase = Remotes.State():GetAttribute("Phase") or "Lobby"
@@ -178,87 +209,226 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 
 	local shownDay = -1
 
+	local function clearDayCards()
+		for _, list in ipairs({ ui.Stops, ui.Chevrons, ui.CurseCards }) do
+			for _, f in ipairs(list) do
+				f:Destroy()
+			end
+			table.clear(list)
+		end
+		if ui.BonusCard then
+			ui.BonusCard:Destroy()
+			ui.BonusCard = nil
+		end
+	end
+
+	-- route stops, curses, bonus: fixed for the day
+	local function buildDay(d)
+		clearDayCards()
+		for i = 1, ROUTE_STAGES do
+			local id = d.Arenas[i]
+			local arena = (Config.Arenas :: any)[id]
+			local boss = BossData.Get(d.Bosses[i])
+			local f = card(body, "Stop" .. i, i == 1 and P.gold_400 or P.gold_500, i == 1 and 0.2 or 0.55)
+			arenaPicture(f, id)
+			local num = text(f, "Number", tostring(i), {
+				Name = "Num",
+				BackgroundColor3 = i == 1 and P.gold_400 or P.slate_900,
+				BackgroundTransparency = 0.05,
+				TextColor3 = i == 1 and P.gold_900 or P.gold_200,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				Size = UDim2.fromOffset(24, 24),
+				ZIndex = 4,
+			}, 14)
+			UIKit.corner(num, 999)
+			UIKit.stroke(num, P.gold_300, 1, 0.3)
+			text(f, "H3", arena and arena.DisplayName or id, { Name = "Arena", TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 16)
+			text(f, "Small", boss and boss.DisplayName or "?", { Name = "Boss", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+			table.insert(ui.Stops, f)
+			if i < ROUTE_STAGES then
+				local chev = Icons.Draw(body, "chevronRight", { Size = 16, Color = P.gold_400 })
+				table.insert(ui.Chevrons, chev)
+			end
+		end
+		for i, id in ipairs(d.Curses) do
+			local def = CurseData.Curses[id]
+			local f = card(body, "Curse" .. i, P.crimson_400, 0.25)
+			f.BackgroundColor3 = P.crimson_900
+			f.BackgroundTransparency = 0.45
+			Icons.Draw(f, def.Icon, { Size = 34, Position = UDim2.new(0, 12, 0.5, -17), Back = P.slate_950 })
+			text(f, "Label", string.upper(def.Name), { Name = "Name", Position = UDim2.new(0, 56, 0.5, -(TS(15) + 4)), Size = UDim2.new(1, -64, 0, TS(15) + 4), TextColor3 = P.crimson_300, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
+			text(f, "Small", def.Short, { Name = "Effect", Position = UDim2.new(0, 56, 0.5, 0), Size = UDim2.new(1, -64, 0, TS(14) + 6), TextColor3 = C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
+			table.insert(ui.CurseCards, f)
+		end
+		ui.GoldChip.SetText(UIKit.track(CurseData.GoldText(CurseData.GoldMult(d.Curses)) .. " gold"))
+		ui.GoldChip.Frame.Visible = #d.Curses > 0
+		ui.CursesLabel.Visible = #d.Curses > 0
+		local bdef = CurseData.Bonuses[d.Bonus]
+		local b = card(body, "Bonus", P.moss_300, 0.3)
+		b.BackgroundColor3 = P.moss_900
+		b.BackgroundTransparency = 0.4
+		Icons.Draw(b, bdef and bdef.Icon or "gift", { Size = 34, Position = UDim2.new(0, 12, 0.5, -17), Back = P.slate_950 })
+		text(b, "Label", string.upper(bdef and bdef.Name or d.Bonus), { Name = "Name", Position = UDim2.new(0, 56, 0.5, -(TS(15) + 4)), Size = UDim2.new(1, -64, 0, TS(15) + 4), TextColor3 = P.moss_200, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
+		text(b, "Small", CurseData.BonusText(d, MenuDaily.NameOf), { Name = "Effect", Position = UDim2.new(0, 56, 0.5, 0), Size = UDim2.new(1, -64, 0, TS(14) + 6), TextColor3 = C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
+		ui.BonusCard = b
+	end
+
 	local function fill()
 		local p = ctx.Profile()
 		local day = MenuDaily.Today()
 		local d = CurseData.Daily(day)
-		ui.Date.Text = "Daily · " .. d.Date
-		ui.Reset.Text = UIKit.track("UTC · new challenge in " .. MenuDaily.TimeLeft())
+		ui.Date.Text = MenuDaily.LongDate(d.Date)
+		ui.Reset.Text = UIKit.track("UTC • Resets in " .. MenuDaily.TimeLeft())
 		local used, score, best, bestDay = MenuDaily.Status(p)
-		-- status
-		for _, ch in ipairs(ui.StatusRow:GetChildren()) do
-			if ch:IsA("GuiObject") then
-				ch:Destroy()
-			end
-		end
+		local bestLine = best > 0 and string.format(" Best ever: %s (%s).", CurseData.ScoreText(best), CurseData.DateText(bestDay)) or ""
 		if used then
-			UIKit.Badge(ui.StatusRow, "SCORED", "Moss", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 30) })
-			text(ui.StatusRow, "H3", score > 0 and CurseData.ScoreText(score) or "Played (no stage cleared yet)", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200 })
-			ui.StatusNote.Text = "Today's scored attempt is used. You can still practise: practice runs are not scored."
+			UIKit.SetStatus(ui.Pill, "USED")
+			ui.Heading.Text = score > 0 and ("Today's score: " .. CurseData.ScoreText(score)) or "Today's scored attempt is used"
+			ui.Sub.Text = "Solo • You can keep practising today; practice runs are not scored." .. bestLine
+			ui.InfoText.Text = "One scored attempt a day. A new challenge starts at UTC midnight."
 		else
-			UIKit.Badge(ui.StatusRow, "READY", "Gold", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 30) })
-			text(ui.StatusRow, "H3", "Your scored attempt is waiting", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X })
-			ui.StatusNote.Text = "Solo. Your first daily run today is scored (stages cleared, then time); it counts the moment it starts."
+			UIKit.SetStatus(ui.Pill, "READY")
+			ui.Heading.Text = "Your scored attempt is ready"
+			ui.Sub.Text = "Solo • Your first daily run is scored by stages cleared, then time." .. bestLine
+			ui.InfoText.Text = "Your attempt counts as soon as the run starts."
 		end
-		if best > 0 then
-			ui.StatusNote.Text ..= string.format("  Best ever: %s (%s).", CurseData.ScoreText(best), CurseData.DateText(bestDay))
+		ui.Play.SetText(used and "PRACTICE" or "PLAY DAILY", used and "Practice run • not scored" or "Scored attempt")
+		if shownDay ~= day then
+			shownDay = day
+			buildDay(d)
 		end
-		ui.Play.SetText(used and "PRACTICE" or "PLAY", used and "Unscored run" or "Scored attempt")
-		ui.Play.SetKind(used and "Secondary" or "Primary")
-		if shownDay == day then
-			return
-		end
-		shownDay = day
-		-- route, curses, bonus (fixed for the day)
-		for _, f in ipairs({ ui.Route, ui.Curses, ui.Bonus }) do
-			for _, ch in ipairs(f:GetChildren()) do
-				if ch:IsA("GuiObject") then
-					ch:Destroy()
-				end
-			end
-		end
-		for i = 1, ROUTE_STAGES do
-			local arena = (Config.Arenas :: any)[d.Arenas[i]]
-			local boss = BossData.Get(d.Bosses[i])
-			chip(ui.Route, i == 1 and "flag" or "portal", string.format("%d · %s · %s", i, arena and arena.DisplayName or d.Arenas[i], boss and boss.DisplayName or "?"), i == 1 and P.gold_400 or nil, i)
-		end
-		for i, id in ipairs(d.Curses) do
-			local def = CurseData.Curses[id]
-			chip(ui.Curses, def.Icon, def.Name .. " · " .. def.Short, P.crimson_300, i)
-		end
-		chip(ui.Curses, "coin", CurseData.GoldText(CurseData.GoldMult(d.Curses)) .. " gold", P.gold_400, 10)
-		local bdef = CurseData.Bonuses[d.Bonus]
-		chip(ui.Bonus, bdef and bdef.Icon or "gift", (bdef and bdef.Name or d.Bonus) .. " · " .. CurseData.BonusText(d, MenuDaily.NameOf), P.moss_300, 1)
+		MenuDaily._layout()
 	end
 
+	-- every position is set here (the stop count and text sizes are known)
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
 		local W, H = v.X, v.Y
 		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
 		local headY = math.max(ins.Top + 4, 12)
 		place(ui.Header.Frame, M, headY, math.min(620, W - 2 * M), 56)
 		local topY = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
-		local w = math.min(W - 2 * M, 900)
-		local narrow = w < 600
-		local h = math.min(H - topY - M, portrait and 900 or 600)
-		local playH = h < 520 and 60 or 76 -- short landscape phones: a slimmer footer
-		local footH = narrow and (playH + 10 + Theme.Size.Button) or playH
-		local topH = TS(22) + TS(12) + 20
-		ui.Top.Size = UDim2.new(1, 0, 0, topH)
-		place(ui.Panel, (W - w) / 2, topY, w, h)
-		ui.Body.Position = UDim2.fromOffset(0, topH + 8)
-		ui.Body.Size = UDim2.new(1, 0, 1, -(topH + 8 + footH + 12))
-		ui.Footer.Position = UDim2.new(0, 0, 1, -footH)
-		ui.Footer.Size = UDim2.new(1, 0, 0, footH)
-		local inner = w - 32
+		local w = math.min(W - 2 * M, 1000)
+		local iw = w - 40 -- inside the face padding
+		local narrow = iw < 640
+		local maxH = H - topY - M
+
+		-- header row
+		local topH = math.max(48, TS(22) + TS(12) + 12)
+		place(ui.Top, 0, 0, iw, topH)
+		place(ui.Rule, 0, topH + 10, iw, 1)
+		local bodyY = topH + 22
+
+		-- footer
+		local playH = (maxH < 520) and 58 or 70
+		local boardH = Theme.Size.Button
+		local footH = narrow and (playH + 10 + boardH) or playH
 		if narrow then
-			place(ui.Play.Instance, 0, 0, inner, playH)
-			place(ui.Board.Instance, 0, playH + 10, inner, Theme.Size.Button)
+			place(ui.Play.Instance, 0, 0, iw, playH)
+			place(ui.Board.Instance, 0, playH + 10, iw, boardH)
 		else
-			local bw = math.min(320, math.floor((inner - 12) / 2))
-			local x0 = math.floor((inner - (2 * bw + 12)) / 2)
-			place(ui.Play.Instance, x0, 0, bw, playH)
-			place(ui.Board.Instance, x0 + bw + 12, math.floor((playH - Theme.Size.Button) / 2), bw, Theme.Size.Button)
+			local pw = math.min(400, math.floor(iw * 0.48))
+			local bw = math.min(260, math.floor(iw * 0.3))
+			local x0 = math.floor((iw - (pw + 14 + bw)) / 2)
+			place(ui.Play.Instance, x0, 0, pw, playH)
+			place(ui.Board.Instance, x0 + pw + 14, math.floor((playH - boardH) / 2), bw, boardH)
 		end
+
+		-- body content (scroll canvas coordinates)
+		local bw = iw - 8 -- room for the scroll bar
+		local y = 2
+		local infoW = narrow and bw or math.min(320, math.floor(bw * 0.36))
+		local textW = narrow and bw or (bw - infoW - 20)
+		local headPx = TS(26)
+		local headLines = (#ui.Heading.Text * headPx * 0.5 > textW) and 2 or 1
+		place(ui.Heading, 0, y, textW, headLines * (headPx + 4) + 4)
+		local subPx = TS(16)
+		local subLines = math.clamp(math.ceil(#ui.Sub.Text * subPx * 0.48 / math.max(1, textW)), 1, 4)
+		place(ui.Sub, 0, y + ui.Heading.Size.Y.Offset + 4, textW, subLines * (subPx + 3) + 4)
+		local heroH = ui.Heading.Size.Y.Offset + 4 + ui.Sub.Size.Y.Offset
+		local infoLines = math.clamp(math.ceil(#ui.InfoText.Text * TS(15) * 0.48 / math.max(1, infoW - 54)), 1, 3)
+		local infoH = math.max(48, infoLines * (TS(15) + 4) + 18)
+		if narrow then
+			place(ui.Info, 0, y + heroH + 10, infoW, infoH)
+			y += heroH + 10 + infoH + 16
+		else
+			place(ui.Info, bw - infoW, y + math.max(0, math.floor((heroH - infoH) / 2)), infoW, infoH)
+			y += math.max(heroH, infoH) + 16
+		end
+
+		-- route
+		local labelH = TS(12) + 6
+		place(ui.RouteLabel, 0, y, bw, labelH)
+		y += labelH + 6
+		local n = #ui.Stops
+		local perRow = n
+		while perRow > 2 and (bw - (perRow - 1) * CHEVRON) / perRow < 104 do
+			perRow -= 1
+		end
+		local sw = math.floor((bw - (perRow - 1) * CHEVRON) / perRow)
+		local picH = math.clamp(math.floor(sw * 0.48), 52, 86)
+		local stopH = picH + 12 + TS(16) + TS(13) + 14
+		for i, f in ipairs(ui.Stops) do
+			local col = (i - 1) % perRow
+			local rowI = (i - 1) // perRow
+			local x = col * (sw + CHEVRON)
+			local sy = y + rowI * (stopH + 10)
+			place(f, x, sy, sw, stopH)
+			local pic = f:FindFirstChild("Picture") :: Frame
+			place(pic, 6, 6, sw - 12, picH)
+			local num = f:FindFirstChild("Num") :: TextLabel
+			place(num, 10, 10, 24, 24)
+			local an = f:FindFirstChild("Arena") :: TextLabel
+			place(an, 6, picH + 10, sw - 12, TS(16) + 4)
+			local bn = f:FindFirstChild("Boss") :: TextLabel
+			place(bn, 6, picH + 12 + TS(16), sw - 12, TS(13) + 4)
+			local chev = ui.Chevrons[i]
+			if chev then
+				chev.Visible = col < perRow - 1
+				chev.Position = UDim2.fromOffset(x + sw + math.floor((CHEVRON - 16) / 2), sy + 6 + math.floor(picH / 2) - 8)
+			end
+		end
+		local routeRows = math.ceil(n / perRow)
+		y += routeRows * stopH + (routeRows - 1) * 10 + 16
+
+		-- curses (left) and the bonus (right); stacked when narrow
+		local cardH = math.max(60, TS(15) + TS(14) + 26)
+		local cursesW = narrow and bw or math.floor((bw - 20) * 0.64)
+		local bonusX = narrow and 0 or (cursesW + 20)
+		local bonusW = narrow and bw or (bw - cursesW - 20)
+		local cy = y
+		local nc = #ui.CurseCards
+		if nc > 0 then
+			place(ui.CursesLabel, 0, cy, cursesW, labelH)
+			ui.GoldChip.Frame.AnchorPoint = Vector2.new(1, 0)
+			ui.GoldChip.Frame.Position = UDim2.fromOffset(cursesW, cy - 6)
+			cy += labelH + 10
+			local perRowC = (cursesW - (nc - 1) * 10) / nc >= 190 and nc or 1
+			local cw = math.floor((cursesW - (perRowC - 1) * 10) / perRowC)
+			for i, f in ipairs(ui.CurseCards) do
+				local col = (i - 1) % perRowC
+				local rowI = (i - 1) // perRowC
+				place(f, col * (cw + 10), cy + rowI * (cardH + 10), cw, cardH)
+			end
+			local rowsC = math.ceil(nc / perRowC)
+			cy += rowsC * cardH + (rowsC - 1) * 10
+		end
+		local by = narrow and (nc > 0 and cy + 16 or y) or y
+		place(ui.BonusLabel, bonusX, by, bonusW, labelH)
+		if ui.BonusCard then
+			place(ui.BonusCard, bonusX, by + labelH + 10, bonusW, cardH)
+		end
+		local bonusBottom = by + labelH + 10 + cardH
+		y = math.max(cy, bonusBottom) + 8
+		body.CanvasSize = UDim2.fromOffset(0, y)
+
+		-- panel: as tall as the content needs, the body scrolls when it cannot fit
+		local chrome = 36 + bodyY + 16 + footH
+		local h = math.min(maxH, chrome + y)
+		local bodyH = h - chrome
+		place(ui.Panel, (W - w) / 2, topY, w, h)
+		place(body, 0, bodyY, iw, bodyH)
+		body.ScrollBarThickness = y > bodyH + 1 and 4 or 0
+		place(foot, 0, h - 36 - footH, iw, footH)
 	end
 	MenuDaily._layout = function()
 		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
@@ -273,17 +443,24 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		OnShow = function(_p)
 			shownDay = -1
 			fill()
-			UIAnim.Pop(holder, 0, 0.9)
+			UIAnim.Pop(holder, 0, 0.92)
 			holder.ClipsDescendants = true
 			UIAnim.Sweep(holder, 0.2, 0.8, 0.8)
-			MenuDaily._layout()
+			local pops = table.clone(ui.Stops)
+			for _, f in ipairs(ui.CurseCards) do
+				table.insert(pops, f)
+			end
+			if ui.BonusCard then
+				table.insert(pops, ui.BonusCard)
+			end
+			UIAnim.Cascade(pops, 0.04, 0.85)
 		end,
 		Update = function(dt: number)
 			clock += dt
 			if clock >= 1 then
 				clock = 0
 				if screen.Visible then
-					ui.Reset.Text = UIKit.track("UTC · new challenge in " .. MenuDaily.TimeLeft())
+					ui.Reset.Text = UIKit.track("UTC • Resets in " .. MenuDaily.TimeLeft())
 					if MenuDaily.Today() ~= shownDay then
 						fill()
 					end

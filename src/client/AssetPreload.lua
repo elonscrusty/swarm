@@ -4,8 +4,8 @@
 	(level-up card icons used to pop in a moment after the cards).
 
 	AssetPreload.Start()               background preload of the compact, frequently used
-	                                   set (upgrade / item pictures from IconData; menu and
-	                                   HUD icons are drawn in code and need no loading).
+	                                   set: the home-screen art (ArtImage.PreloadList), then
+	                                   the upgrade / item pictures from IconData.
 	                                   Never blocks; gives up waiting after a timeout.
 	AssetPreload.Stage(ids, maxWait)   preloads `ids` (skipping ones already done) and waits
 	                                   at most `maxWait` seconds; true when all are ready.
@@ -66,9 +66,30 @@ local function allSettled(ids: { string }): boolean
 	return true
 end
 
--- The compact startup set: every picture in IconData (weapons, evolutions, passives,
--- bonus cards, run items). Uses Icons.PreloadList when that module offers one.
+-- The compact startup set: the home-screen / loading art first (ArtImage.PreloadList:
+-- loading picture, logo, menu buttons, portraits, frames, arenas, bosses, results
+-- backdrops), then every picture in IconData (weapons, evolutions, passives, bonus cards,
+-- run items). Uses Icons.PreloadList when that module offers one.
+local iconList: () -> { string }
 local function startupList(): { string }
+	local ok, ArtImage = pcall(require, script.Parent:WaitForChild("ArtImage", 5))
+	local art = {}
+	if ok and type(ArtImage) == "table" then
+		local got, list = pcall((ArtImage :: any).PreloadList)
+		if got and type(list) == "table" then
+			art = list
+		end
+	end
+	local rest = iconList()
+	for _, id in ipairs(rest) do
+		if not table.find(art, id) then
+			table.insert(art, id)
+		end
+	end
+	return art
+end
+
+iconList = function(): { string }
 	local ok, Icons = pcall(require, script.Parent:WaitForChild("Icons", 5))
 	if ok and type(Icons) == "table" and type((Icons :: any).PreloadList) == "function" then
 		local got, list = pcall((Icons :: any).PreloadList)

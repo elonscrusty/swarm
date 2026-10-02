@@ -50,7 +50,7 @@ CurseData.Curses = {
 	Frenzy = {
 		Id = "Frenzy",
 		Name = "Frenzy",
-		Icon = "arrowFast",
+		Icon = "curse_Frenzy",
 		Short = "Enemies +25% speed",
 		Text = "The swarm moves 25% faster.",
 		Gold = 0.20,
@@ -59,7 +59,7 @@ CurseData.Curses = {
 	Fragile = {
 		Id = "Fragile",
 		Name = "Fragile",
-		Icon = "heart",
+		Icon = "curse_Fragile",
 		Short = "-30% max HP",
 		Text = "Heroes have 30% less max HP.",
 		Gold = 0.20,
@@ -68,7 +68,7 @@ CurseData.Curses = {
 	Horde = {
 		Id = "Horde",
 		Name = "Horde",
-		Icon = "people3",
+		Icon = "curse_Horde",
 		Short = "+40% enemies",
 		Text = "40% more enemies at once and bigger mini-waves.",
 		Gold = 0.25,
@@ -77,7 +77,7 @@ CurseData.Curses = {
 	Famine = {
 		Id = "Famine",
 		Name = "Famine",
-		Icon = "Heal",
+		Icon = "curse_Famine",
 		Short = "No healing pickups",
 		Text = "Roast chickens never drop.",
 		Gold = 0.15,
@@ -86,7 +86,7 @@ CurseData.Curses = {
 	GlassCannon = {
 		Id = "GlassCannon",
 		Name = "Glass Cannon",
-		Icon = "sword",
+		Icon = "curse_GlassCannon",
 		Short = "+30% damage dealt and taken",
 		Text = "You hit 30% harder, and so does the swarm.",
 		Gold = 0.15,
@@ -96,7 +96,7 @@ CurseData.Curses = {
 	EliteSurge = {
 		Id = "EliteSurge",
 		Name = "Elite Surge",
-		Icon = "crown",
+		Icon = "curse_EliteSurge",
 		Short = "Elites x3 as often",
 		Text = "Random elites appear three times as often.",
 		Gold = 0.30,
@@ -190,9 +190,9 @@ CurseData.DailyMode = "Daily"
 -- Starting bonuses of the daily (one per day; run-only, the same for every player).
 CurseData.BonusOrder = { "Armory", "Treasure", "HeadStart", "SecondWind" }
 CurseData.Bonuses = {
-	Armory = { Id = "Armory", Name = "Armory", Icon = "sword", Text = "Start with a second weapon: %s" },
-	Treasure = { Id = "Treasure", Name = "Treasure", Icon = "chest", Text = "Start with two items: %s" },
-	HeadStart = { Id = "HeadStart", Name = "Head Start", Icon = "chevronsUp", Text = "Start at level 4" },
+	Armory = { Id = "Armory", Name = "Armory", Icon = "opt_Armory", Text = "Start with a second weapon: %s" },
+	Treasure = { Id = "Treasure", Name = "Treasure", Icon = "reward_ChestLarge", Text = "Start with two items: %s" },
+	HeadStart = { Id = "HeadStart", Name = "Head Start", Icon = "opt_HeadStart", Text = "Start at level 4" },
 	SecondWind = { Id = "SecondWind", Name = "Second Wind", Icon = "revive", Text = "One extra life this run" },
 }
 -- the pools the seed picks from (base weapons / common items every hero can use)

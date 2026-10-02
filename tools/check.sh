@@ -32,6 +32,9 @@ if [ -x "$COMPILE" ]; then
 	echo "COMPILE: ok"
 fi
 
+# Small-art icon keys: every key Icons.lua wires has its PNG and a drawn fallback.
+python3 tools/check_icon_art.py
+
 if [ "${1:-}" != "--quick" ]; then
 	"$ROJO" build default.project.json -o "$(dirname "$SM")/Swarm.rbxlx" >/dev/null
 	echo "BUILD: ok"

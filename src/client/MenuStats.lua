@@ -32,18 +32,18 @@ local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 end
 
 local TILES = {
-	{ Key = "Best", Icon = "crown", Caption = "Best time" },
+	{ Key = "Best", Icon = "stat_BestTime", Caption = "Best time" },
 	{ Key = "Stage", Icon = "portal", Caption = "Best stage" },
-	{ Key = "Wins", Icon = "trophy", Caption = "Wins" },
-	{ Key = "Runs", Icon = "flag", Caption = "Runs played" },
-	{ Key = "Rate", Icon = "chevronsUp", Caption = "Win rate" },
-	{ Key = "Kills", Icon = "skull", Caption = "Total kills" },
-	{ Key = "Gold", Icon = "coin", Caption = "Gold" },
-	{ Key = "Heroes", Icon = "helmet", Caption = "Characters" },
-	{ Key = "Skins", Icon = "sparkle", Caption = "Skins owned" },
-	{ Key = "Meta", Icon = "sword", Caption = "Upgrade levels" },
+	{ Key = "Wins", Icon = "stat_Wins", Caption = "Wins" },
+	{ Key = "Runs", Icon = "stat_Runs", Caption = "Runs played" },
+	{ Key = "Rate", Icon = "stat_WinRate", Caption = "Win rate" },
+	{ Key = "Kills", Icon = "stat_Kills", Caption = "Total kills" },
+	{ Key = "Gold", Icon = "stat_Gold", Caption = "Gold" },
+	{ Key = "Heroes", Icon = "stat_Heroes", Caption = "Characters" },
+	{ Key = "Skins", Icon = "stat_Skins", Caption = "Skins owned" },
+	{ Key = "Meta", Icon = "stat_Upgrades", Caption = "Upgrade levels" },
 	{ Key = "Revives", Icon = "revive", Caption = "Saved revives" },
-	{ Key = "Ach", Icon = "trophy", Caption = "Achievements" },
+	{ Key = "Ach", Icon = "ach_Badge", Caption = "Achievements" },
 }
 
 function MenuStats.Build(screen: Frame, ctx: { [string]: any })
@@ -57,7 +57,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	local TABS_H = Theme.Size.TapMin + 10
 	ui.Tabs = UIKit.Tabs(face, {
 		{ Id = "Stats", Title = "Stats", Icon = "bars" },
-		{ Id = "Achievements", Title = "Achievements", Icon = "trophy" },
+		{ Id = "Achievements", Title = "Achievements", Icon = "ach_Badge" },
 	}, function(id)
 		tab = id
 		MenuStats._show(true)
@@ -78,7 +78,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	ui.Tiles = {}
 	for i, t in ipairs(TILES) do
 		local f = UIKit.Panel(scroll, { Name = t.Key, LayoutOrder = i }, true)
-		Icons.Draw(f, t.Icon, { Size = 28, Position = UDim2.fromOffset(14, 14), Color = if t.Icon == "coin" or t.Icon == "revive" or t.Icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
+		Icons.Draw(f, t.Icon, { Size = 34, Position = UDim2.fromOffset(14, 14), Color = if t.Icon == "coin" or t.Icon == "revive" or t.Icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
 		ui.Values[t.Key] = text(f, "Number", "-", { Position = UDim2.fromOffset(14, 48), Size = UDim2.new(1, -28, 0, TS(28) + 4) }, 28)
 		text(f, "Caption", UIKit.track(t.Caption), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -10), Size = UDim2.new(1, -28, 0, TS(12) + 2) })
 		ui.Tiles[i] = f
@@ -230,7 +230,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		if unlocked then
 			UIKit.stroke(f, P.gold_400, 1.5, 0.25)
 		end
-		Icons.Draw(f, def.Icon or "trophy", { Size = 36, Position = UDim2.fromOffset(14, 14), Color = (not unlocked) and P.stone_400 or nil, Back = P.slate_950 })
+		Icons.Draw(f, def.Icon or "ach_Badge", { Size = 36, Position = UDim2.fromOffset(14, 14), Color = (not unlocked) and P.stone_400 or nil, Dim = not unlocked, Back = P.slate_950 })
 		local column = new("Frame", { Name = "Text", BackgroundTransparency = 1, Position = UDim2.fromOffset(64, 0), Size = UDim2.new(1, -64 - right, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, f)
 		UIKit.list(column, { Padding = UDim.new(0, 2) })
 		UIKit.padding(column, 10, 0, 12, 0)

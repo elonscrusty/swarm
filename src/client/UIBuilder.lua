@@ -32,6 +32,7 @@ local PassiveData = require(Shared:WaitForChild("PassiveData"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local UIAnim = require(script.Parent.UIAnim)
 local AssetPreload = require(script.Parent.AssetPreload)
+local ArtImage = require(script.Parent.ArtImage)
 local UIKit = require(script.Parent.UIKit)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
@@ -289,8 +290,8 @@ local TOAST_ICONS = {
 	{ "horde", "skull" },
 	{ "boss", "crown" },
 	{ "queen", "crown" },
-	{ "achievement", "trophy" },
-	{ "chest", "chest" },
+	{ "achievement", "ach_Badge" },
+	{ "chest", "reward_ChestLarge" },
 	{ "shrine", "shrine" },
 	{ "curse", "curse" },
 	{ "revive", "heart" },
@@ -787,6 +788,9 @@ local function cardTile(face: GuiObject, c, size: number, accent: Color3, popDel
 		rim.Thickness = 1.5
 		rim.Transparency = 0.3
 	end
+	-- the painted rarity frame (ui/frames, 9-slice) around the tile; the drawn rim stays
+	-- under it and is all there is when the frame is not uploaded
+	ArtImage.Frame(tile, ArtImage.CardBand(c), math.max(6, math.floor(size * 0.1)))
 	if not ClientSettings.Reduced() then
 		offerArm.Fx.Add(UIAnim.Glow(halo, "BackgroundTransparency", 0.84, 0.94, 1.8))
 		if popDelay then
@@ -1229,7 +1233,7 @@ do
 		LastTick = 0,
 		Ids = {} :: { string },
 	}
-	-- Slot: { Frame, Rim (UIStroke), Bar, Flash, Index, Icon, IconId }
+	-- Slot: { Frame, Rim (UIStroke), Bar, Flash, Art (painted rarity frame or nil), Index, Icon, IconId }
 	local slots: { any } = {}
 	local iconPool: { [string]: { GuiObject } } = {}
 
@@ -1330,6 +1334,10 @@ do
 		s.Rim.Color = color
 		s.Rim.Transparency = common and 0.45 or 0.05
 		s.Bar.BackgroundColor3 = color
+		if s.Art then
+			local landed = cur ~= nil and idx == reward.Land
+			ArtImage.SetFrame(s.Art, ArtImage.ItemBand(id, landed and cur.Big == true))
+		end
 		s.Flash.BackgroundTransparency = 1
 	end
 
@@ -1565,7 +1573,7 @@ do
 		local header = new("Frame", { Name = "Header", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 3 }, face)
 		UIKit.list(header, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
 		chest.Header = header
-		chest.Icon = Icons.Draw(header, "chest", { Size = 26, LayoutOrder = 1 })
+		chest.Icon = Icons.Draw(header, "reward_ChestLarge", { Size = 26, LayoutOrder = 1 })
 		chest.Title = text(header, "H1", "TREASURE!", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, ZIndex = 3 }, 22)
 		chest.Source = text(face, "Caption", "", { Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
 
@@ -1583,7 +1591,9 @@ do
 			UIKit.corner(bar, 999)
 			local flash = new("Frame", { Name = "Flash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = P.ivory_100, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 6 }, f)
 			UIKit.corner(flash, Theme.Radius.M)
-			slots[k] = { Frame = f, Rim = rim, Bar = bar, Flash = flash, Index = -1, Icon = nil, IconId = nil }
+			-- painted rarity frame (ui/frames, 9-slice) over the rim; nil when not uploaded
+			local art = ArtImage.Frame(f, "Common", 6, { ZIndex = 5 })
+			slots[k] = { Frame = f, Rim = rim, Bar = bar, Flash = flash, Art = art, Index = -1, Icon = nil, IconId = nil }
 		end
 		-- soft edges so tiles slide in and out of view
 		for side = 0, 1 do
@@ -2230,10 +2240,10 @@ local function buildResults()
 	results.Grid = grid
 	results.GridLayout = UIKit.list(grid, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
 	results.Time = statTile(grid, "clock", "Survived", 1)
-	results.Kills = statTile(grid, "skull", "Defeated", 2)
+	results.Kills = statTile(grid, "stat_Kills", "Defeated", 2)
 	results.Boss, results.BossCaption = statTile(grid, "crown", "Queens", 3)
 	results.Stages = statTile(grid, "portal", "Stages", 4)
-	results.Gold = statTile(grid, "coin", "Gold", 5)
+	results.Gold = statTile(grid, "stat_Gold", "Gold", 5)
 	results.Level = statTile(grid, "chevronsUp", "Level", 6)
 
 	-- rewards first (new best, unlocks, achievements: what a short screen must not hide),
@@ -2244,7 +2254,7 @@ local function buildResults()
 	-- progress: account XP and level, the run's curses, the daily score
 	local prog = UIKit.Panel(body, { Name = "Progress", LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 96) }, true)
 	results.Progress = prog
-	Icons.Draw(prog, "medal", { Size = 34, Position = UDim2.fromOffset(14, 12), Back = C.PanelInset })
+	Icons.Draw(prog, "track_Level", { Size = 34, Position = UDim2.fromOffset(14, 12), Back = C.PanelInset })
 	results.XPText = text(prog, "H3", "", { Name = "XP", Position = UDim2.fromOffset(60, 8), Size = UDim2.new(1, -74, 0, TS(18) + 6), RichText = true, TextTruncate = Enum.TextTruncate.AtEnd })
 	results.XPMeter = UIKit.Meter(prog, {
 		Gradient = ColorSequence.new(P.gold_500, P.gold_300),

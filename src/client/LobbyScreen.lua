@@ -36,6 +36,7 @@ local AchievementData = require(Shared:WaitForChild("AchievementData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
+local ArtImage = require(script.Parent.ArtImage)
 local Showcase = require(script.Parent.Showcase)
 local MenuCharacters = require(script.Parent.MenuCharacters)
 local MenuUpgrades = require(script.Parent.MenuUpgrades)
@@ -141,6 +142,24 @@ local function buildLogo(parent: Instance): Frame
 		TextStrokeColor3 = C.Shadow,
 		TextStrokeTransparency = 0.6,
 	}, 14)
+	-- the painted logo (screens/logo_SWARM, 2:1) replaces the sword and letters; they stay
+	-- as the fallback while it loads or if it is not uploaded. The frame grows to fit it.
+	ui.LogoW, ui.LogoH = 350, 130
+	local drawn = { sword }
+	for _, ch in ipairs(logo:GetChildren()) do
+		if ch:IsA("TextLabel") and ch.Name ~= "Tagline" then
+			table.insert(drawn, ch)
+		end
+	end
+	local art = ArtImage.Place(logo, "screens/logo_SWARM", { Name = "LogoArt", Position = UDim2.fromOffset(0, -4), Size = UDim2.fromOffset(280, 140), ZIndex = 2 }, drawn)
+	if art then
+		ui.LogoW, ui.LogoH = 280, 150
+		logo.Size = UDim2.fromOffset(360, 150)
+		local tagline = logo:FindFirstChild("Tagline") :: TextLabel?
+		if tagline then
+			tagline.Position = UDim2.fromOffset(4, 124)
+		end
+	end
 	return logo
 end
 
@@ -312,6 +331,13 @@ local function buildNameplate(frame: Frame)
 		TextYAlignment = Enum.TextYAlignment.Top,
 	})
 	ui.LockIcon = Icons.Draw(face, "lock", { Size = 22, Color = P.gold_400, Position = UDim2.fromOffset(16, 14) })
+	-- the hero's painted bust (portraits/<Id>) in a small gold-rimmed tile on the plate's
+	-- top-left corner; hidden for heroes without a portrait (RefreshHero)
+	local medal = new("Frame", { Name = "Portrait", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.05, BorderSizePixel = 0, Position = UDim2.fromOffset(-14, -30), Size = UDim2.fromOffset(64, 64), ClipsDescendants = true, ZIndex = 4, Visible = false }, plate)
+	UIKit.corner(medal, Theme.Radius.M)
+	UIKit.stroke(medal, P.gold_400, 2, 0.05)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_700, P.slate_950) }, medal)
+	ui.PlateMedal = medal
 	-- your name with the achievement title / nameplate colour you wear (AchievementData)
 	ui.PlayerTag = text(plate, "Label", "", {
 		Name = "PlayerTag",
@@ -523,6 +549,66 @@ local function playerRow(name: string?, order: number)
 	})
 end
 
+------------------------------------------------------------------------------------------
+-- Painted art on the home screen (ArtImage; each falls back to the drawn icon)
+------------------------------------------------------------------------------------------
+
+-- Arena picture behind the ARENA card (arenas/<id>, cropped) under a dark wash that keeps
+-- the title readable; follows the selected arena.
+local function setArenaArt(arenaId: string?)
+	local b = ui.CardArena
+	if not b or ui.ArenaArtId == arenaId then
+		return
+	end
+	ui.ArenaArtId = arenaId
+	local key = ArtImage.Arena(arenaId)
+	if not ui.ArenaArt then
+		if not ArtImage.Image(key) then
+			return
+		end
+		local face = b.Face
+		local hover = face:FindFirstChild("Hover")
+		if hover and hover:IsA("GuiObject") then
+			hover.ZIndex = 2 -- the hover tint stays over the picture
+		end
+		ui.ArenaArt = ArtImage.Place(face, key, { Name = "ArenaArt", ScaleType = Enum.ScaleType.Crop, ZIndex = 1, ImageTransparency = 0.1 })
+		UIKit.corner(ui.ArenaArt, Theme.Radius.M)
+		ui.ArenaShade = new("Frame", { Name = "ArenaShade", BackgroundColor3 = C.Backdrop, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 1 }, face)
+		UIKit.corner(ui.ArenaShade, Theme.Radius.M)
+		ui.ArenaShadeGrad = new("UIGradient", { Transparency = NumberSequence.new(0.2, 0.7) }, ui.ArenaShade)
+	else
+		local has = ArtImage.Image(key) ~= nil
+		ui.ArenaShade.Visible = has
+		ArtImage.Set(ui.ArenaArt, key)
+	end
+end
+
+local function buildHomeArt()
+	-- feature cards: the picture stands a little proud of the icon well
+	for b, name in pairs({ [ui.CardCharacters] = "Characters", [ui.CardUpgrades] = "Upgrades", [ui.CardArena] = "Arenas", [ui.CardDaily] = "Daily" }) do
+		local holder = b.Content:FindFirstChild("IconHolder")
+		local well = holder and holder:FindFirstChild("Well")
+		ArtImage.ButtonIcon(well, "icons/ui/ui_" .. name, { Size = UDim2.fromScale(1.3, 1.3) })
+	end
+	-- mode column, CURSES / DAILY, START NOW
+	local function onButton(b: any, name: string, scale: number)
+		local holder = b and b.Content:FindFirstChild("IconHolder")
+		ArtImage.ButtonIcon(holder, "icons/ui/ui_" .. name, { Size = UDim2.fromScale(scale, scale) })
+	end
+	for i, id in ipairs(Config.Modes.Order) do
+		onButton(ui.ModeButtons[i], id, 1.5)
+	end
+	onButton(ui.CurseBtn, "Curses", 1.55)
+	onButton(ui.DailyBtn, "Daily", 1.55)
+	onButton(ui.StartNow, "Play", 1.6)
+	-- corner buttons (STATS keeps its drawn bars: there is no ui_ picture for it)
+	local glyphY = -TS(Theme.TextSize.Caption) / 2 - 2
+	for b, name in pairs({ [ui.SettingsBtn] = "Settings", [ui.RanksBtn] = "Leaderboards", [ui.TrackBtn] = "Track" }) do
+		ArtImage.ButtonIcon(b.Content, "icons/ui/ui_" .. name, { Position = UDim2.new(0.5, 0, 0.5, glyphY), Size = UDim2.fromOffset(42, 42) }, "Glyph")
+	end
+	setArenaArt(Remotes.State():GetAttribute("SelectedArena") or "Forest")
+end
+
 local function buildHome(screen: Frame)
 	ui.Logo = buildLogo(screen)
 	ui.Cards = new("Frame", { Name = "Cards", BackgroundTransparency = 1 }, screen)
@@ -609,6 +695,7 @@ local function buildHome(screen: Frame)
 	buildNameplate(screen)
 	buildModes(screen)
 	buildQueue(screen)
+	buildHomeArt()
 end
 
 ------------------------------------------------------------------------------------------
@@ -621,6 +708,11 @@ local function setCardsCompact(on: boolean)
 		return
 	end
 	ui.CardsCompact = on
+	if ui.ArenaShadeGrad then
+		-- tiles: darker at the bottom where the caption sits; rows: darker behind the text
+		ui.ArenaShadeGrad.Rotation = on and 90 or 0
+		ui.ArenaShadeGrad.Transparency = on and NumberSequence.new(0.65, 0.15) or NumberSequence.new(0.2, 0.7)
+	end
 	for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
 		local layout = b.Content:FindFirstChildOfClass("UIListLayout")
 		local column = b.Content:FindFirstChild("Text") :: Frame?
@@ -672,8 +764,8 @@ local function relayout()
 		local logoScale = math.clamp((W - 2 * M) / 380, 0.66, 0.85)
 		ui.LogoScale.Scale = logoScale
 		local logoY = math.max(ins.Top + 2, 10)
-		ui.Logo.Position = UDim2.fromOffset((W - 350 * logoScale) / 2, logoY)
-		local chipTop = logoY + 124 * logoScale + 4
+		ui.Logo.Position = UDim2.fromOffset((W - ui.LogoW * logoScale) / 2, logoY)
+		local chipTop = logoY + (ui.LogoH - 6) * logoScale + 4
 		ui.Chip.AnchorPoint = Vector2.new(0.5, 0)
 		-- sub-screens: under their header instead of the logo
 		ui.Chip.Position = UDim2.fromOffset(W / 2, current == "Home" and chipTop or (math.max(ins.Top + 4, 12) + 64))
@@ -716,7 +808,7 @@ local function relayout()
 		ui.Logo.Position = UDim2.fromOffset(M, logoY)
 		ui.Chip.AnchorPoint = Vector2.new(1, 0)
 		ui.Chip.Position = UDim2.fromOffset(W - M, chipY)
-		local logoBottom = logoY + 126 * logoScale
+		local logoBottom = logoY + (ui.LogoH - 4) * logoScale
 		local cw = math.clamp(W * 0.27, 290, 360)
 		local cornerW = 4 * 76 + 3 * G
 		local cornerSize = cornerW <= cw + 40 and 76 or 64
@@ -908,6 +1000,42 @@ function LobbyScreen.SetVisible(on: boolean)
 	end
 end
 
+-- The nameplate's portrait tile: the hero's bust (greyed while browsing a locked one),
+-- the drawn class icon while it loads; no tile for a hero without a portrait. The name
+-- keeps an even inset either side so it stays centred clear of the tile.
+local function setPlatePortrait(id: string, locked: boolean)
+	local medal = ui.PlateMedal
+	if not medal then
+		return
+	end
+	local key = ArtImage.Portrait(id)
+	local has = ArtImage.Image(key) ~= nil
+	medal.Visible = has
+	ui.NameTitle.Position = UDim2.fromOffset(has and 54 or 0, 8)
+	ui.NameTitle.Size = UDim2.new(1, has and -108 or 0, 0, TS(30) + 4)
+	ui.LockIcon.Position = has and UDim2.new(1, -38, 0, 14) or UDim2.fromOffset(16, 14)
+	if not has then
+		return
+	end
+	if ui.PlateMedalId ~= id then
+		ui.PlateMedalId = id
+		local old = medal:FindFirstChild("ClassIcon")
+		if old then
+			old:Destroy()
+		end
+		local icon = Icons.Character(medal, id, { Size = 34, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+		icon.Name = "ClassIcon"
+		if ui.PlatePortrait then
+			ArtImage.Set(ui.PlatePortrait, key, { icon })
+		else
+			ui.PlatePortrait = ArtImage.Place(medal, key, { Name = "Bust", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromScale(1.08, 1.08), ZIndex = 5 }, { icon })
+		end
+	end
+	if ui.PlatePortrait then
+		ui.PlatePortrait.ImageColor3 = locked and Color3.fromRGB(120, 120, 130) or Color3.new(1, 1, 1)
+	end
+end
+
 -- Nameplate + hero on the dais: the selected character, or the locked one being browsed.
 function LobbyScreen.RefreshHero()
 	if not ui.NameTitle then
@@ -919,6 +1047,7 @@ function LobbyScreen.RefreshHero()
 	ui.NameTitle.Text = def.Name
 	ui.LockRow.Visible = locked
 	ui.LockIcon.Visible = locked
+	setPlatePortrait(def.Id or id, locked)
 	if locked and def.Unlock then
 		-- earned through an achievement (the Ranger), never bought
 		local a = AchievementData.Achievements[def.Unlock.Achievement]
@@ -1099,6 +1228,7 @@ function LobbyScreen.Update(_dt: number?)
 		end
 	end
 
+	setArenaArt(state:GetAttribute("SelectedArena") or "Forest")
 	local title, sub = arenaText()
 	if ui.CardArena.Title and ui.CardArena.Title.Text ~= title then
 		if ui.ArenaShown then

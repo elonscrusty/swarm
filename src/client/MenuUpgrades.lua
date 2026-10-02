@@ -31,12 +31,12 @@ local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 
 local SHOP = {
-	{ Name = "500 Gold", Kind = "Product", Key = "Gold500", Icon = "pouch", Desc = "A pouch of gold." },
-	{ Name = "1,500 Gold", Kind = "Product", Key = "Gold1500", Icon = "Gold", Desc = "A sack of gold." },
-	{ Name = "5,000 Gold", Kind = "Product", Key = "Gold5000", Icon = "chest", Desc = "A chest of gold." },
-	{ Name = "Starter Pack", Kind = "Pass", Key = "StarterPack", Icon = "gift", Desc = "+25% gold forever + Gold Trim skins." },
-	{ Name = "VIP", Kind = "Pass", Key = "VIP", Icon = "crown", Desc = "+1 reroll per run, chat tag, lobby crown." },
-	{ Name = "2x Gold", Kind = "Pass", Key = "DoubleGold", Icon = "coin", Desc = "Double gold from runs." },
+	{ Name = "500 Gold", Kind = "Product", Key = "Gold500", Icon = "shop_GoldPouch", Desc = "A pouch of gold." },
+	{ Name = "1,500 Gold", Kind = "Product", Key = "Gold1500", Icon = "stat_Gold", Desc = "A sack of gold." },
+	{ Name = "5,000 Gold", Kind = "Product", Key = "Gold5000", Icon = "reward_ChestGolden", Desc = "A chest of gold." },
+	{ Name = "Starter Pack", Kind = "Pass", Key = "StarterPack", Icon = "shop_StarterPack", Desc = "+25% gold forever + Gold Trim skins." },
+	{ Name = "VIP", Kind = "Pass", Key = "VIP", Icon = "shop_VIP", Desc = "+1 reroll per run, chat tag, lobby crown." },
+	{ Name = "2x Gold", Kind = "Pass", Key = "DoubleGold", Icon = "shop_DoubleGold", Desc = "Double gold from runs." },
 }
 
 local prices: { [number]: number } = {}
