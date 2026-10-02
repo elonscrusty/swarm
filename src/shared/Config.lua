@@ -122,9 +122,8 @@ Config.Player = {
 	ReviveInvulnSeconds = 3,
 	ReviveClearRadius = 22, -- non-boss enemies inside this radius die on revive
 	LevelUpInvulnerable = true, -- paused (choosing an upgrade) players can't be hurt
-	-- Movement sanity check: the server snaps players back if they move faster than this
-	-- multiple of their WalkSpeed (plus a small allowance for lag).
-	SpeedCheckTolerance = 1.6,
+	-- Movement sanity check: the server snaps players back if they move faster than their
+	-- speed * Movement.HopSpeedCap * Movement.ServerTolerance (plus a small allowance for lag).
 	SpeedCheckAllowance = 6,
 }
 
@@ -893,7 +892,7 @@ Config.Lobby = {
 }
 
 ------------------------------------------------------------------------------------------
--- MOVEMENT: jump and bunny hop (client JumpController.lua, server MovementGuard.lua)
+-- MOVEMENT: jump and bunny hop (client JumpController.lua, server RunManager speedCheck)
 --   Jump: Space / gamepad A / the JUMP button (touch). A press shortly before landing is
 --   kept (BufferSeconds) and a press just after walking off an edge still jumps
 --   (CoyoteSeconds). No jumping while the run is frozen (level-up, pause), downed or in
@@ -903,9 +902,8 @@ Config.Lobby = {
 --   HopDecay per second (and resets at once when the player stops).
 --   Air control: in the air the move input only steers the takeoff direction at
 --   AirControl per second (modest; no full mid-air turns).
---   Server: MovementGuard trims horizontal velocity that stays above
---   WalkSpeed * HopSpeedCap * ServerTolerance + ServerAllowance for ServerGraceSeconds
---   (lag tolerant, never kicks). RunManager's position check still applies on top.
+--   Server: RunManager's position check allows base speed * HopSpeedCap * ServerTolerance
+--   (plus Config.Player.SpeedCheckAllowance for lag) and snaps back anything faster.
 ------------------------------------------------------------------------------------------
 Config.Movement = {
 	JumpEnabled = true,
@@ -918,9 +916,7 @@ Config.Movement = {
 	HopBonus = 0.06, -- speed multiplier added per chained hop
 	HopSpeedCap = 1.24, -- hard cap on the hop speed multiplier
 	HopDecay = 0.6, -- multiplier lost per second on the ground after HopWindow
-	ServerTolerance = 1.15,
-	ServerAllowance = 3, -- studs/s
-	ServerGraceSeconds = 0.35, -- over-speed must last this long before it is trimmed
+	ServerTolerance = 1.15, -- server speed check slack on top of the hop cap
 	ButtonSize = 84, -- touch JUMP button (pixels before UIScale)
 	ButtonMargin = 26, -- from the right and bottom safe-area edges
 }

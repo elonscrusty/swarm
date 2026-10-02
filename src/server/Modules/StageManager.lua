@@ -740,6 +740,10 @@ function StageManager.StageBoss(): string
 	return forcedBoss or stageBoss
 end
 
+function StageManager.HasForcedBoss(): boolean
+	return forcedBoss ~= nil
+end
+
 -- Dev / preview: every portal summons this boss (nil = the normal rotation again).
 function StageManager.ForceBoss(id: string?)
 	forcedBoss = (id and BossData.Bosses[id]) and id or nil

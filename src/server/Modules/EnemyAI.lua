@@ -142,6 +142,12 @@ local function pushOut(pos: Vector3, r: number): Vector3
 	return Vector3.new(x, pos.Y, z)
 end
 
+-- Nearest spot outside every obstacle footprint (RunManager uses it to move a player who
+-- jumped on top of a low obstacle, where melee enemies cannot reach).
+function EnemyAI.PushOut(pos: Vector3, r: number): Vector3
+	return pushOut(pos, r)
+end
+
 ------------------------------------------------------------------------------------------
 -- Thinking
 ------------------------------------------------------------------------------------------

@@ -343,7 +343,7 @@ spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean): Mod
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-	-- Jumping stays enabled: JumpController (client) jumps, MovementGuard caps speed
+	-- Jumping stays enabled: JumpController (client) jumps, speedCheck caps hop speed
 	-- the lobby is a menu screen: lobby characters stand still
 	humanoid.WalkSpeed = inLobby and 0 or Config.Player.BaseSpeed
 	player.Character = model
@@ -717,6 +717,7 @@ local function newRunPlayer(player: Player)
 		Facing = Vector3.new(0, 0, -1),
 		MoveDir = Vector3.zero,
 		SpeedCheckTimer = 0,
+		OnObstacleFor = 0, -- seconds the root has been inside an obstacle footprint (on top of it)
 		Returned = false,
 		PortalChoice = nil :: string?, -- "Next" while the stage portal is open
 		PortalOffered = false,
@@ -779,6 +780,15 @@ local function beginRun()
 	runSerial += 1
 	runId = string.format("%s:%d:%d", game.JobId, os.time(), runSerial)
 	runDevTainted = false
+	-- dev state left over from an earlier run (god mode, forced boss) taints this one
+	if ctx.StageManager.HasForcedBoss() then
+		runDevTainted = true
+	end
+	for _, player in ipairs(list) do
+		if player:GetAttribute("DevGod") == true then
+			runDevTainted = true
+		end
+	end
 	state:SetAttribute("Frozen", false)
 	state:SetAttribute("RunTime", 0)
 	setPhase("Running")
@@ -1035,6 +1045,7 @@ end
 -- Clears the run world and goes back to the Lobby phase.
 local function returnAll()
 	for _, rp in ipairs(runPlayers) do
+		rp.Player:SetAttribute("DevGod", nil)
 		returnPlayerToLobby(rp)
 	end
 	table.clear(runPlayers)
@@ -1044,6 +1055,7 @@ local function returnAll()
 	ctx.XPSystem.Clear()
 	ctx.EnemyAI.SetArena(nil)
 	ctx.StageManager.EndRun()
+	ctx.StageManager.ForceBoss(nil)
 	ctx.RunModifiers.EndRun()
 	MapBuilder.DestroyArena()
 	MapBuilder.ApplyLighting("Lobby")
@@ -1439,6 +1451,30 @@ end
 -- Per-frame
 ------------------------------------------------------------------------------------------
 
+-- Players can jump onto the low obstacles, where enemies (which keep out of the
+-- footprints) cannot reach them. After a short stay on top they are moved to the nearest edge.
+local OBSTACLE_PERCH_SECONDS = 0.5
+local function obstaclePerchCheck(rp, dt: number)
+	local root: BasePart? = rp.Root
+	if not root or not root.Parent or root.Anchored then
+		rp.OnObstacleFor = 0
+		return
+	end
+	local p = root.Position
+	if not ctx.EnemyAI.IsBlocked(p.X, p.Z, 0) then
+		rp.OnObstacleFor = 0
+		return
+	end
+	rp.OnObstacleFor += dt
+	if rp.OnObstacleFor < OBSTACLE_PERCH_SECONDS then
+		return
+	end
+	rp.OnObstacleFor = 0
+	local out = ctx.EnemyAI.PushOut(p, 1.7)
+	root.CFrame = CFrame.new(out.X, p.Y, out.Z) * root.CFrame.Rotation
+	rp.LastValidPos = nil -- the speed check restarts from the new spot
+end
+
 local function speedCheck(rp, dt: number)
 	local root: BasePart? = rp.Root
 	if not root or not root.Parent or root.Anchored then
@@ -1460,7 +1496,8 @@ local function speedCheck(rp, dt: number)
 	-- paused (level-up), frozen or downed players may not travel at all
 	-- (ice makes players faster: BiomeHazards' TerrainSpeedMult > 1)
 	local maxSpeed = (rp.Paused or frozen or not rp.Alive) and 0 or math.max(rp.Stats.Speed, Config.Player.BaseSpeed) * math.max(1, rp.TerrainSpeedMult or 1)
-	local allowed = maxSpeed * elapsed * Config.Player.SpeedCheckTolerance + Config.Player.SpeedCheckAllowance
+	-- hop cap: the client may raise its own WalkSpeed up to HopSpeedCap while chaining hops
+	local allowed = maxSpeed * Config.Movement.HopSpeedCap * Config.Movement.ServerTolerance * elapsed + Config.Player.SpeedCheckAllowance
 	if moved > allowed or pos.Y < Config.ArenaOrigin.Y - 20 then
 		root.CFrame = CFrame.new(last + Vector3.new(0, 0.5, 0)) * root.CFrame.Rotation
 		root.AssemblyLinearVelocity = Vector3.zero
@@ -1512,11 +1549,13 @@ function RunManager.Step(dt: number)
 			rp.MoveDir = v.Magnitude > 2 and v.Unit or Vector3.zero
 		end
 		if rp.Alive then
+			obstaclePerchCheck(rp, dt)
 			speedCheck(rp, dt)
 		end
 		if rp.AwaitingRevive then
-			-- only the pause menu stops this clock; the client counts down the same deadline
-			if menuPaused then
+			-- the pause menu and the frozen / holding states (chest, level-up, stage hold)
+			-- stop this clock; revives are skipped meanwhile, so the offer must not run out
+			if menuPaused or frozen or ctx.StageManager.IsHolding() then
 				rp.ReviveDeadline += dt
 			elseif now >= rp.ReviveDeadline then
 				finalizeDeath(rp)

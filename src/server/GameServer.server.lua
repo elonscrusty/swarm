@@ -53,7 +53,6 @@ local ORDER = {
 	"RunManager",
 	"AchievementService",
 	"DamageNumbers",
-	"MovementGuard", -- own Heartbeat: trims bunny-hop speed above Config.Movement caps
 	"BugReportService",
 }
 

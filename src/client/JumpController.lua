@@ -8,8 +8,8 @@
 	  * Bunny hop: a jump within HopWindow of landing from a jump, while moving, raises a
 	    speed multiplier by HopBonus up to HopSpeedCap. On the ground it decays back to 1
 	    (HopDecay per second) and stopping resets it. The multiplier is applied to the
-	    local WalkSpeed only; the server's WalkSpeed stays the base and MovementGuard trims
-	    anything above the cap.
+	    local WalkSpeed only; the server's WalkSpeed stays the base and RunManager's speed check
+	    snaps back anything above the cap.
 	  * Air control: in the air the move input steers the takeoff direction at AirControl
 	    per second (MobileControls.AirFilter).
 	  * No jumping in the lobby, while downed, while the run is frozen (SwarmState

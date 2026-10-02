@@ -161,15 +161,18 @@ local function filter(text: string, userId: number): string?
 	return nil
 end
 
--- Reserves one report in the player's quota (all servers). Returns ok, reason.
-local function reserveQuota(userId: number): (boolean, string?)
+-- Reserves one report in the player's quota (all servers). Returns ok, reason and the
+-- previous Last time (for refundQuota).
+local function reserveQuota(userId: number): (boolean, string?, number?)
 	local store = reports :: DataStore
 	local now = os.time()
 	local day = math.floor(now / 86400)
 	local reason: string? = nil
+	local prevLast = 0
 	local ok, err = pcall(function()
 		store:UpdateAsync("Q_" .. userId, function(old)
 			reason = nil
+			prevLast = type(old) == "table" and old.Day == day and tonumber(old.Last) or 0
 			local q = type(old) == "table" and old or {}
 			if q.Day ~= day then
 				q = { Day = day, Count = 0, Last = 0 }
@@ -189,12 +192,30 @@ local function reserveQuota(userId: number): (boolean, string?)
 	end)
 	if not ok then
 		warn("[BugReportService] quota update failed: " .. tostring(err))
-		return false, "Report could not be saved. Please try again later."
+		return false, "Report could not be saved. Please try again later.", nil
 	end
 	if reason then
-		return false, reason
+		return false, reason, nil
 	end
-	return true, nil
+	return true, nil, prevLast
+end
+
+-- Gives the reserved slot back when the report could not be saved.
+local function refundQuota(userId: number, prevLast: number)
+	local day = math.floor(os.time() / 86400)
+	local ok, err = pcall(function()
+		(reports :: DataStore):UpdateAsync("Q_" .. userId, function(old)
+			if type(old) ~= "table" or old.Day ~= day then
+				return nil
+			end
+			old.Count = math.max(0, (tonumber(old.Count) or 0) - 1)
+			old.Last = prevLast
+			return old
+		end)
+	end)
+	if not ok then
+		warn("[BugReportService] quota refund failed: " .. tostring(err))
+	end
 end
 
 local function submit(player: Player, payload: any)
@@ -238,7 +259,7 @@ local function submit(player: Player, payload: any)
 			reply(player, false, "Report could not be checked by the text filter, so it wasn't saved. Try again soon.")
 			return
 		end
-		local quotaOk, reason = reserveQuota(userId)
+		local quotaOk, reason, prevLast = reserveQuota(userId)
 		if not quotaOk then
 			reply(player, false, reason or "Report could not be saved.")
 			return
@@ -269,6 +290,7 @@ local function submit(player: Player, payload: any)
 					(reports :: DataStore):RemoveAsync(id)
 				end)
 			end
+			refundQuota(userId, prevLast or 0)
 			warn("[BugReportService] could not save report " .. id)
 			reply(player, false, "Report could not be saved. Please try again later.")
 			return

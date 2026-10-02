@@ -9,6 +9,9 @@
 	helpers, re-derives the run context itself and keeps the client's numbers apart.
 ]]
 
+local Config = require(script.Parent.Config)
+local CharacterData = require(script.Parent.CharacterData)
+
 local BugReportData = {}
 
 BugReportData.MaxLength = 500 -- characters of the report text
@@ -53,9 +56,9 @@ function BugReportData.IsStatus(s: any): boolean
 	return type(s) == "string" and table.find(BugReportData.Statuses, s) ~= nil
 end
 
--- Report ids are "<unix ms>_<userId>" (the server makes them).
+-- Report ids are "<unix ms>_<userId>" (the server makes them; Studio test users have negative ids).
 function BugReportData.IsReportId(id: any): boolean
-	return type(id) == "string" and #id <= 40 and string.match(id, "^%d+_%d+$") ~= nil
+	return type(id) == "string" and #id <= 40 and string.match(id, "^%d+_%-?%d+$") ~= nil
 end
 
 --[[
@@ -117,11 +120,15 @@ function BugReportData.CleanClientContext(ctx: any): { [string]: any }
 	end
 	local device = BugReportData.Token(ctx.Device, 12)
 	out.Device = (device and table.find(BugReportData.Devices, device)) and device or "Unknown"
-	out.Version = BugReportData.Token(ctx.Version, 16)
+	-- only known ids and a strict version shape pass: free-form strings would skip the filter
+	local version = BugReportData.Token(ctx.Version, 16)
+	out.Version = (version and string.match(version, "^%d+%.%d+%.%d+$")) and version or nil
 	out.Stage = BugReportData.Int(ctx.Stage, 0, 999)
 	out.Level = BugReportData.Int(ctx.Level, 0, 9999)
-	out.Arena = BugReportData.Token(ctx.Arena, 24)
-	out.Character = BugReportData.Token(ctx.Character, 24)
+	local arena = ctx.Arena
+	out.Arena = (type(arena) == "string" and type(Config.Arenas[arena]) == "table" and Config.Arenas[arena].DisplayName) and arena or nil
+	local character = ctx.Character
+	out.Character = (type(character) == "string" and CharacterData.Characters[character] ~= nil) and character or nil
 	out.Screen = BugReportData.Token(ctx.Screen, 12) -- "1280x720"
 	return out
 end
