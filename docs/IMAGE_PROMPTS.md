@@ -1,7 +1,11 @@
-# SWARM: images to generate (ChatGPT prompts)
+# SWARM: master list of images to generate (ChatGPT prompts)
 
-The 75 weapon, evolution, passive and item icons already exist (`art/icons`, all uploaded).
-Everything below is what the game still draws with simple vector shapes, or doesn't have at all.
+Already made, NOT in this list: the 75 icons in `art/icons` (every weapon, evolution, passive
+and item, plus Gold coin, Heal, chest, shrine, altar, portal and revive) and the shop upgrades
+that reuse them (Max HP, Might, Armor, Speed, Luck, Growth, Revive). Everything below is what
+the game still draws with simple vector shapes, borrows from another icon, or doesn't have.
+
+**Total: 136 images** in 17 groups. Work top to bottom: groups 1-9 matter most in play.
 
 How to use:
 1. Paste the **STYLE BLOCK** first in every ChatGPT chat (or once at the top of a chat).
@@ -85,21 +89,14 @@ Square 1024x1024, a single bold object, transparent background, readable at 48 p
 - **ui_Track.png**: a winding road of stone tiles leading to a gold star.
 - **ui_Settings.png**: a bronze cogwheel with a small wrench across it.
 
-## 5. Shop upgrades (permanent, bought with gold): 9 images (`art/icons/meta/`)
+## 5. Shop upgrades still without art: 2 images (`art/icons/meta/`)
 
-Square 1024x1024, transparent background, one object each, clearly different silhouettes.
+Square 1024x1024, transparent background.
 
-- **meta_MaxHP.png**: a big crimson heart with a gold plus sign.
-- **meta_Might.png**: a flexed armoured gauntlet fist with gold knuckles.
-- **meta_Armor.png**: a steel breastplate with a gold rivet trim.
-- **meta_Speed.png**: a winged leather boot.
-- **meta_Luck.png**: a four-leaf clover in a gold coin frame.
-- **meta_Growth.png**: a sprouting green seedling with a blue XP gem as its seed.
-- **meta_Revive.png**: a phoenix feather glowing orange and gold.
 - **meta_Reroll.png**: two dice mid-roll with circular motion arrows.
 - **meta_Skip.png**: a gold double arrow pointing right over a scroll.
 
-## 6. Curses and run options: 10 images (`art/icons/curses/`)
+## 6. Curses and run options: 8 images (`art/icons/curses/`)
 
 Square 1024x1024, transparent background, purple and violet accent so they read as "curse".
 
@@ -110,23 +107,17 @@ Square 1024x1024, transparent background, purple and violet accent so they read 
 - **curse_GlassCannon.png**: a small glass cannon with a crack, a glowing cannonball (more damage dealt and taken).
 - **curse_EliteSurge.png**: a beetle wearing a spiky gold crown with a purple aura (more elites).
 - **opt_Armory.png**: two crossed swords on a weapon rack.
-- **opt_Treasure.png**: a small open treasure chest spilling two items.
 - **opt_HeadStart.png**: a gold triple chevron pointing up.
-- **opt_SecondWind.png**: a soft blue swirl of wind around a small heart.
 
-## 7. Rewards, pickups and chest reel: 10 images (`art/icons/rewards/`)
+## 7. Chests, XP and pickups: 6 images (`art/icons/rewards/`)
 
-Square 1024x1024, transparent background.
+Square 1024x1024, transparent background. (The small chest and gold coin already exist.)
 
-- **reward_ChestSmall.png**: small wooden chest with iron bands, closed.
 - **reward_ChestLarge.png**: big steel-banded chest with crimson cloth trim, closed.
 - **reward_ChestGolden.png**: ornate golden chest with gems, faint golden glow.
 - **reward_ChestOpen.png**: golden chest bursting open with gold light and sparkles.
 - **reward_XPGem.png**: one faceted blue crystal gem, octahedron shape, light blue glow, clearly not a coin.
-- **reward_XPGemBig.png**: a cluster of three blue crystal gems, bigger and brighter.
-- **reward_Coin.png**: a thick gold coin with a simple crown emblem, slightly tilted.
-- **reward_CoinPile.png**: a small pile of gold coins.
-- **reward_Chicken.png**: a roast chicken leg on a leaf (healing pickup).
+- **reward_XPGemBig.png**: a cluster of three blue and violet crystal gems, bigger and brighter.
 - **reward_Bomb.png**: a round black bomb with a lit fuse and a gold band.
 
 ## 8. Reel and card frames: 5 images (`art/ui/frames/`)
@@ -140,7 +131,86 @@ sit inside. Same shape, different colour and ornament per rarity.
 - **frame_Epic.png**: deep violet frame with glowing arcane corner runes.
 - **frame_Legendary.png**: antique gold frame with crown corners and a soft gold glow.
 
-## 9. Big screens: 5 images (`art/screens/`)
+## 9. Hero class badges: 8 images (`art/icons/heroes/`)
+
+Square 1024x1024, transparent background, just the headgear, front view, readable at 32 px.
+Used on small tabs, achievement rows and stats.
+
+- **hero_Knight.png**: steel knight helmet with a crimson plume.
+- **hero_Mage.png**: slate-blue pointed wizard hat with gold stars.
+- **hero_Rogue.png**: dark green hood with a dagger crossing behind it.
+- **hero_Priest.png**: ivory and gold mitre with a small sun emblem.
+- **hero_Ranger.png**: green feathered cap with a red feather.
+- **hero_Alchemist.png**: brass goggles with orange lenses.
+- **hero_Engineer.png**: yellow miner's helmet with a glowing lamp.
+- **hero_Necromancer.png**: dark hood with a skull clasp and teal glowing eyes.
+
+## 10. Arena badges: 6 images (`art/icons/arenas/`)
+
+Square 1024x1024, transparent background, a small round emblem per arena (for buttons and
+pills; the big arena cards are group 2).
+
+- **arena_Forest.png**: a pine tree on a mossy rock.
+- **arena_Ruins.png**: a broken stone arch.
+- **arena_Swamp.png**: a dead twisted tree over a mud puddle.
+- **arena_Snow.png**: a snowy pine with an icicle.
+- **arena_Desert.png**: a cactus beside a sandstone rock.
+- **arena_Lava.png**: a black rock split by glowing lava.
+
+## 11. Achievements: 15 images (`art/icons/achievements/`)
+
+Square 1024x1024, transparent background, each on a round bronze medal so they read as awards.
+
+- **ach_Survivor5.png** (Hold the Line, survive 5 min): a shield with a bronze clock face.
+- **ach_Survivor10.png** (Unbroken, survive 10 min): a cracked but standing shield with a silver clock face.
+- **ach_QueenSlayer.png** (beat the Scorpion Queen): a sword through a small gold scorpion crown.
+- **ach_Conqueror.png** (clear stage 3 and win): a gold banner planted on a hill beside a glowing portal.
+- **ach_KnightClear.png** (clear a stage as the Knight): crossed sword and shield behind a knight helmet.
+- **ach_MageClear.png** (as the Mage): a wizard hat with an arcane rune circle.
+- **ach_RogueClear.png** (as the Rogue): two crossed daggers in a dark hood shadow.
+- **ach_PriestClear.png** (as the Priest): a mitre with golden light rays.
+- **ach_Veteran.png** (reach level 30): three gold chevrons with a laurel wreath.
+- **ach_FieldEngineer.png** (3 optional events): a wrench crossed with a key over a small altar.
+- **ach_Reaper.png** (500 kills in one run): a scythe over a pile of tiny beetle shells.
+- **ach_MothBane.png** (beat the Moth Matriarch): a torn moth wing pinned by an arrow.
+- **ach_WarlordFall.png** (beat the Rhino Warlord): a snapped war banner and a broken horn.
+- **ach_HiveCleanser.png** (beat the Hive Mother): a cracked honeycomb with a sword through it.
+- **ach_Badge.png** (the Achievements tile and tab): a gold trophy cup on a medal.
+
+## 12. Track (account level) rewards: 5 images (`art/icons/track/`)
+
+Square 1024x1024, transparent background.
+
+- **track_Title.png**: a ribbon scroll banner (title reward).
+- **track_Color.png**: a paint palette with five fantasy colours (name colour reward).
+- **track_Ring.png**: a glowing gold ring on the ground (dais ring reward).
+- **track_Frame.png**: an ornate square portrait frame (frame reward).
+- **track_Level.png**: a round gold medal with a star (account level).
+
+## 13. Shop (Robux: cosmetics and coins only): 4 images (`art/icons/shop/`)
+
+Square 1024x1024, transparent background. No Roblox logo (the game draws the Robux sign itself).
+
+- **shop_GoldPouch.png**: a leather pouch overflowing with gold coins.
+- **shop_StarterPack.png**: a wrapped gift box with a crimson ribbon and a gold coin tag.
+- **shop_VIP.png**: a gold crown on a velvet cushion.
+- **shop_DoubleGold.png**: two stacked gold coins with a glowing "x2" shape made of light (no letters needed, two coins is fine).
+
+## 14. Stats tiles: 9 images (`art/icons/stats/`)
+
+Square 1024x1024, transparent background, simple and bold (shown at 32 px).
+
+- **stat_BestTime.png**: a gold stopwatch with a crown.
+- **stat_Wins.png**: a gold victory laurel wreath.
+- **stat_Runs.png**: a small flag on a path.
+- **stat_WinRate.png**: a rising bar chart made of stone blocks.
+- **stat_Kills.png**: a cracked beetle shell.
+- **stat_Gold.png**: a stack of gold coins.
+- **stat_Heroes.png**: three small hero helmets in a row.
+- **stat_Skins.png**: a sparkling cloth swatch with a needle.
+- **stat_Upgrades.png**: an anvil with a sword on it.
+
+## 15. Big screens: 5 images (`art/screens/`)
 
 - **logo_SWARM.png** (2048x1024, transparent): the word **SWARM** in chunky carved gold-and-stone fantasy letters, crimson shadow, a few beetles and wasps flying around the letters. (This one should have text.)
 - **loading.png** (1920x1080): the little knight standing on a mossy rock at dusk, facing a huge incoming swarm of beetles, wasps and moths on the horizon, castle silhouette behind. Leave the bottom third calm for a loading bar.
@@ -148,12 +218,48 @@ sit inside. Same shape, different colour and ornament per rarity.
 - **defeat.png** (1920x1080): the knight's helmet and sword lying in the grass at dusk, beetles crawling away, moody slate-blue light, sad but not scary.
 - **results_bg.png** (1920x1080): soft blurred castle courtyard at dusk with torches, very dark, for behind the results panel.
 
-## 10. Roblox store page (not in-game): 4 images
+## 16. Roblox store page (not in-game): 4 images
 
 - **store_Icon.png** (512x512): the knight's face with a determined look, a swarm of bugs behind him, bright and bold, readable as a tiny phone icon. No text.
 - **store_Thumb1.png** (1920x1080): action shot from above: the knight in a forest clearing slashing a sword arc through a huge ring of beetles, blue XP gems everywhere, gold coins flying.
 - **store_Thumb2.png** (1920x1080): four heroes (knight, mage, ranger, necromancer) side by side facing the Scorpion Queen boss.
 - **store_Thumb3.png** (1920x1080): a golden chest bursting open with weapon icons and gold flying out, the knight cheering.
+
+## 17. Small UI symbols (lowest priority): 29 images (`art/icons/ui/`)
+
+These are drawn crisply by code today; images only help if they match the style better.
+Square 512x512, transparent background, ONE flat bold symbol each, ivory with a thin dark
+outline and a tiny gold accent, no scene, readable at 20 px.
+
+- **sym_play.png**: right-pointing triangle.
+- **sym_pause.png**: two vertical bars.
+- **sym_close.png**: an X.
+- **sym_check.png**: a check mark.
+- **sym_warning.png**: an exclamation mark in a triangle.
+- **sym_info.png**: a lower-case i in a circle.
+- **sym_lock.png**: a padlock.
+- **sym_gear.png**: a cogwheel.
+- **sym_music.png**: a music note.
+- **sym_speaker.png**: a speaker with sound waves.
+- **sym_calendar.png**: a calendar page.
+- **sym_clock.png**: a clock face.
+- **sym_hourglass.png**: an hourglass.
+- **sym_cycle.png**: two circular arrows (reroll).
+- **sym_skip.png**: double right chevrons (skip).
+- **sym_chevronsUp.png**: three up chevrons.
+- **sym_arrowFast.png**: an arrow with speed lines.
+- **sym_person.png**: one person silhouette.
+- **sym_people2.png**: two person silhouettes.
+- **sym_people3.png**: three person silhouettes.
+- **sym_userPlus.png**: a person silhouette with a plus.
+- **sym_podium.png**: a three-step podium.
+- **sym_trophy.png**: a trophy cup.
+- **sym_crown.png**: a crown.
+- **sym_medal.png**: a medal on a ribbon.
+- **sym_flag.png**: a waving flag.
+- **sym_skull.png**: a cartoon skull.
+- **sym_sparkle.png**: a four-point sparkle star.
+- **sym_curse.png**: a purple flame over a skull.
 
 ---
 
