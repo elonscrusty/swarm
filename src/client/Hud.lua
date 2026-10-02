@@ -652,7 +652,7 @@ local function layout()
 		k = math.min(compact and 0.86 or 1, (W - 2 * M) / invW, (H * 0.22) / invH)
 	else
 		local jumpClear = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26) / scale + ins.Right + 12
-		k = math.min(compact and 0.72 or 0.78, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.24) / invH)
+		k = math.min(compact and 0.62 or 0.78, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.24) / invH)
 	end
 	ui.BarFit.Scale = k
 	local barW, barH = invW * k, invH * k
@@ -1366,15 +1366,27 @@ function Hud.Reset()
 	end
 end
 
+-- The HUD is shown in a run (SetVisible) and hidden while a full-screen modal covers it
+-- (SetCovered: level-up, chest reel, pause, revive, results), so its timer / health panel
+-- never sit on top of or show through a modal's title and buttons.
+local hudOn, hudCovered = false, false
 function Hud.SetVisible(on: boolean)
+	hudOn = on
 	if ui.Frame then
-		ui.Frame.Visible = on
+		ui.Frame.Visible = on and not hudCovered
 	end
 	if not on then
 		stopBanner()
 		if ui.VignetteLevel then
 			ui.VignetteLevel.Value = 1
 		end
+	end
+end
+
+function Hud.SetCovered(on: boolean)
+	hudCovered = on
+	if ui.Frame then
+		ui.Frame.Visible = hudOn and not on
 	end
 end
 

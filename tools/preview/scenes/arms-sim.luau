@@ -64,8 +64,14 @@ if path == "death" then
 	if rp then
 		RM.DamagePlayer(rp, 1e6)
 	end
-	wait(2)
-	preview.remote("ReturnToLobby"):FireServer()
+	for _ = 1, 40 do
+		if me:GetAttribute("InRun") ~= true then
+			break
+		end
+		wait(1)
+		preview.remote("ReturnToLobby"):FireServer()
+	end
+	preview.log("death path InRun", tostring(me:GetAttribute("InRun")))
 else
 	preview.remote("SetPause"):FireServer(true)
 	wait(0.5)

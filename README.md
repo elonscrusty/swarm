@@ -777,6 +777,25 @@ partner-revive rules (`PartnerRevive`: 3 s next to a fallen teammate, 40% HP, 3 
 `Config.Run.MaxPlayers` (4) stays the hard cap; the old "Squad" (1-4) mode is still accepted
 from old clients but not shown.
 
+**Private run servers** (`RunServers.lua`, `Config.RunServers`, client `TravelOverlay.lua`).
+In the published game a run never plays on the public lobby server, so anyone can start a
+run whenever they like, even while others are mid-run. When a run would start (SOLO, the
+Daily, a DUO / TRIO countdown ending or START NOW, a party leader's start after READY) the
+lobby saves and releases each player's save, reserves a fresh private server of the same
+place and teleports the whole team there in one go ("Travelling to your run…"). The run
+server reads the run ticket (mode, Endless, curses, arena, members, starter, party; every
+field re-checked on arrival), waits up to 15 s for the team ("Starting your run…") and
+starts the run by itself; nobody else can get in. After the run (results, portal return,
+MAIN MENU) a banner counts down "Back to the lobby in N s" with GO NOW / STAY; going home
+saves first and teleports to a public lobby, party mates together (the party re-forms
+there). If a teleport fails twice the save is taken back and the run plays on the lobby
+server as before (or, coming home, the run server's own lobby keeps working). Studio, an
+unpublished place and `Config.RunServers.Enabled = false` keep the old one-run-per-server
+behaviour. Saves are safe across the hop: the old server writes and releases the save
+before the teleport and never writes it again; the new server waits for a slow release
+instead of stealing it (`DataService.ReleaseForTeleport` / `Reclaim`). Party members still
+in a run when the others go home travel back on their own (no party re-form for them).
+
 **ARENAS screen** (`MenuArenas.lua`, the ARENA card): every arena as a card with a small
 painted preview of the biome, its hazard, LOCKED / UNLOCKED with the exact rule ("Reach
 stage 4") and your progress toward it. Tap an unlocked arena to pick it for stage 1

@@ -377,3 +377,19 @@ High score, effects, performance
 - [ ] LEADERBOARDS opens on HIGH SCORE; after a normal run your score (also on the results line) appears there; in Studio the note says this server's runs only.
 - [ ] Lobby screens, HUD, banners, results and combat effects animate; with "Reduced effects" on they calm down.
 - [ ] A dense swarm (stage 4+, 300+ enemies): compare FPS with the previous version (Ctrl+F6 MicroProfiler: EnemyAI.* bars).
+
+## 9. Private run servers (published game only: teleports do not work in Studio)
+Studio runs stay on one server as before (check: Solo in Studio starts at once, no "Travelling" screen).
+Publish the place, then use two accounts (A and B) on two devices.
+- [ ] A and B join the same lobby server. Both tap SOLO at about the same time: each sees "Travelling to your run…", then "Starting your run…", then their own run. Neither sees the other in the run.
+- [ ] While A is in a run, B (back in a lobby) can start SOLO again at once: no "a run is in progress" message.
+- [ ] Party DUO: A invites B (PARTY), B taps READY, A taps DUO: both travel together and play the same run; the HUD shows both.
+- [ ] Duo countdown without a party: A taps DUO, B taps JOIN: both arrive in the same run.
+- [ ] After a run (die, portal RETURN, or pause → MAIN MENU) the banner "Back to the lobby in N s" shows; GO NOW travels at once, STAY keeps you in the private server's lobby (start another run there, or leave). After a defeat you go back by yourself about 2 s after the results.
+- [ ] A and B as a party go home together: they land on the same lobby server and are in a party again.
+- [ ] JOIN (PARTY → friends) on a friend who is mid-run says the server can't be joined; nobody can get into someone's run.
+- [ ] Save integrity: note gold, owned heroes, account level and best stage before a run. Earn gold, buy an upgrade in the run server's lobby (STAY), go home: everything is there in the lobby, and again after leaving and rejoining the game. Repeat 3 times quickly (start → MAIN MENU → GO NOW): never "Your data is still in use", never a kick, no lost gold.
+- [ ] Daily: the scored attempt counts once (play it, go home, the DAILY card says used); Endless and curses picked in the lobby are active in the run.
+- [ ] DEV (owner account): the DEV button works in a run server; a DEV run is still marked as a DEV run (nothing recorded).
+- [ ] If a teleport fails (rare; e.g. Roblox outage) you get a toast and the run plays on the lobby server instead; nobody is stuck on a blank screen.
+

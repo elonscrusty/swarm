@@ -1327,7 +1327,8 @@ local function joinParty(player: Player)
 		if phase == "Countdown" then
 			tryJoin(member)
 		end
-		if not joined[member] and phase ~= "Countdown" then
+		local went = byPlayer[member] ~= nil or (ctx.RunServers and ctx.RunServers.IsTravelling(member))
+		if not joined[member] and phase ~= "Countdown" and not went then
 			RunManager.Notify(member, player.DisplayName .. " started a " .. string.upper(modeDef().DisplayName) .. " run with no room for you.", Color3.fromRGB(255, 200, 120))
 		end
 	end

@@ -878,6 +878,10 @@ Config.UI = {
 	-- and text big enough (layouts reflow into the smaller virtual space instead).
 	MinScale = 0.6,
 	MaxScale = 1.5,
+	-- Phones in landscape (short side < 560 px) use this smaller design space instead, so a
+	-- 852 x 393 phone renders reference px at ~0.77 (text ~11-15 pt, buttons ~40 pt) and
+	-- layouts reflow into ~960 x 514 virtual px.
+	PhoneReferenceSize = Vector2.new(960, 470),
 	-- Fonts and sizes live in Theme (Merriweather titles, Source Sans body / numbers).
 	-- These two are only the fallbacks for plain Enum.Font properties.
 	Font = Enum.Font.SourceSansBold,

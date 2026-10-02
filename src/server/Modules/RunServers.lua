@@ -16,6 +16,7 @@
 
 	Lobby side (SendToRun → travel):
 	  1. ticket { V, Mode, Endless, Curses, Arena, Day, Members {UserId}, Starter, Party }
+	     (Day is informational: the run server's own UTC day picks the daily, as always)
 	  2. every player's save is written and released (DataService.ReleaseForTeleport) so
 	     the run server loads the latest save at once (no lost gold / unlocks, no double load)
 	  3. TeleportService:ReserveServer, then ONE TeleportAsync for the whole team with
@@ -481,6 +482,11 @@ function RunServers.SendToRun(list: { Player }, mode: string, starter: Player, a
 	end
 	task.spawn(travelToRun, list, t, starter)
 	return true
+end
+
+-- On the way to a run server (or home from one) right now.
+function RunServers.IsTravelling(player: Player): boolean
+	return travelling[player] ~= nil
 end
 
 -- RunManager: this player may not start or join a run now (travelling, or this run

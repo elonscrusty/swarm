@@ -212,7 +212,7 @@ if role == "lobby" then
 	check("bad mode refused", S({ V = 1, Mode = "Order", Members = { 1 } }) == nil and S({ V = 1, Mode = "God", Members = { 1 } }) == nil)
 	check("too many members refused", S({ V = 1, Mode = "Duo", Members = { 1, 2, 3 } }) == nil)
 	check("bad ids refused", S({ V = 1, Mode = "Solo", Members = { 0 / 0 } }) == nil and S({ V = 1, Mode = "Solo", Members = { -4 } }) == nil and S({ V = 1, Mode = "Solo", Members = { 1.5 } }) == nil)
-	local clean = S({ V = 1, Mode = "Duo", Members = { 7, 7, 8 }, Starter = 99, Arena = "Moon", Curses = { "Frenzy", 5 }, Endless = "yes", Party = { Leader = 50, Members = { 50 } } })
+	local clean = S({ V = 1, Mode = "Trio", Members = { 7, 7, 8 }, Starter = 99, Arena = "Moon", Curses = { "Frenzy", 5 }, Endless = "yes", Party = { Leader = 50, Members = { 50 } } })
 	check("dirty fields cleaned", clean ~= nil and ids(clean.Members) == "7,8" and clean.Starter == 7 and clean.Arena == Config.Arenas.Order[1] and #clean.Curses == 0 and clean.Endless == false and clean.Party == nil, clean and (ids(clean.Members) .. " " .. clean.Arena) or "nil")
 	local daily = S({ V = 1, Mode = "Daily", Members = { 1 }, Endless = true })
 	check("daily never endless", daily ~= nil and daily.Endless == false)

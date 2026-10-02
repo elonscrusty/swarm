@@ -84,12 +84,28 @@ local function setBlocking(name: string, on: boolean)
 	end
 end
 
+-- Modals that cover the HUD while open (Hud.SetCovered hides it under them).
+local COVERS_HUD = { LevelUp = true, Reward = true, Pause = true, Revive = true, Results = true }
+local covering: { [string]: true } = {}
+local function setCovering(name: string, on: boolean)
+	if not COVERS_HUD[name] or (covering[name] == true) == on then
+		return
+	end
+	if on then
+		covering[name] = true
+	else
+		covering[name] = nil
+	end
+	Hud.SetCovered(next(covering) ~= nil)
+end
+
 -- Opening: the dimmer fades in and the panel pops up with a little overshoot.
 local function show(overlay: GuiObject, name: string, blocks: boolean)
 	overlay:SetAttribute("AnimToken", (tonumber(overlay:GetAttribute("AnimToken")) or 0) + 1)
 	overlay:SetAttribute("Hiding", nil)
 	local wasVisible = overlay.Visible
 	overlay.Visible = true
+	setCovering(name, true)
 	if not wasVisible then
 		local dim = overlay:FindFirstChild("Dim")
 		if dim and dim:IsA("GuiObject") then
@@ -110,6 +126,7 @@ end
 -- (restarting it each frame used to keep the results screen on forever).
 local function hide(overlay: GuiObject, name: string)
 	setBlocking(name, false)
+	setCovering(name, false)
 	if not overlay.Visible or overlay:GetAttribute("Hiding") then
 		return
 	end
@@ -139,10 +156,18 @@ local function virtualSize(): Vector2
 	return gui.AbsoluteSize / math.max(0.01, uiScale.Scale)
 end
 
+-- Where the safe-area ScreenGui really sits on the screen. AbsolutePosition is reported in
+-- Roblox's "inset space" (y = 0 at the bottom of the top bar, so a full-screen
+-- IgnoreGuiInset gui reads y = -58 on a phone); fxGui covers the whole screen, so the
+-- difference of the two readings is the true offset whatever the space.
+local function guiScreenPos(): Vector2
+	return gui.AbsolutePosition - fxGui.AbsolutePosition
+end
+
 -- Room the Roblox topbar buttons take, in root (virtual) pixels.
 local function computeInsets()
 	local s = math.max(0.01, uiScale.Scale)
-	local pos, size = gui.AbsolutePosition, gui.AbsoluteSize
+	local pos, size = guiScreenPos(), gui.AbsoluteSize
 	local top, left, right = 0, 0, 0
 	local ok, rect = pcall(function()
 		return GuiService.TopbarInset
@@ -166,13 +191,26 @@ local function updateScale()
 	if portrait then
 		refX, refY = ref.Y, ref.X
 	end
-	local s = math.clamp(math.min(size.X / refX, size.Y / refY), Config.UI.MinScale, Config.UI.MaxScale)
+	local s
+	if UIKit.IsCompact() and not portrait then
+		-- phones in landscape: a smaller design space (PhoneReferenceSize) so text and
+		-- buttons come out readable / tappable; layouts reflow into it
+		local phone = Config.UI.PhoneReferenceSize
+		s = math.min(size.X / phone.X, size.Y / phone.Y, Config.UI.MaxScale)
+	else
+		s = math.clamp(math.min(size.X / refX, size.Y / refY), Config.UI.MinScale, Config.UI.MaxScale)
+	end
 	uiScale.Scale = s
 	root.Size = UDim2.fromScale(1 / s, 1 / s)
 	computeInsets()
-	-- full-bleed layers: the whole screen in root coordinates
+	-- full-bleed layers: the whole screen in root coordinates. fxGui is the whole screen;
+	-- the layer also reaches past it by the total inset on every side (harmless off
+	-- screen), so it still covers notches if a reading is off.
+	local full = fxGui.AbsoluteSize
 	local viewport = workspace.CurrentCamera.ViewportSize
-	UIKit.SetBleed(-gui.AbsolutePosition / s, Vector2.new(math.max(viewport.X, size.X), math.max(viewport.Y, size.Y)) / s)
+	full = Vector2.new(math.max(full.X, viewport.X, size.X), math.max(full.Y, viewport.Y, size.Y))
+	local extra = (full - size) + Vector2.new(8, 8)
+	UIKit.SetBleed((-guiScreenPos() - extra) / s, (full + extra * 2) / s)
 	for _, fn in ipairs(relayoutCallbacks) do
 		local ok, err = pcall(fn)
 		if not ok then
@@ -213,6 +251,17 @@ end
 
 local function margin(): number
 	return UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+end
+
+-- Width of a centred modal that reaches the top of the screen (pause, results): in
+-- landscape it stays clear of the Roblox buttons at the top left (insets.Left).
+local function tallModalWidth(maxW: number): number
+	local v = virtualSize()
+	local w = math.min(maxW, v.X - 32)
+	if not portrait and insets.Left > 0 then
+		w = math.min(w, math.max(480, v.X - 2 * (insets.Left + 8)))
+	end
+	return w
 end
 
 ------------------------------------------------------------------------------------------
@@ -900,8 +949,24 @@ local function headerHeight(): number
 	local subH = (portrait or not UIKit.IsCompact() or offerHint ~= nil) and TS(18) + 6 or 0
 	return TS(titleSize()) + 6 + 10 + 6 + subH + 6 + (Theme.Size.Badge + 14) + 8 + 7 + 16
 end
+-- Phones in landscape: lower reroll / skip buttons and no "Tap a card" hint line (each
+-- card's own footer says it), so the cards keep their height in the short screen.
+local function phoneLandscape(): boolean
+	return UIKit.IsCompact() and not portrait
+end
+local function actionH(): number
+	return phoneLandscape() and 52 or 60
+end
 local function footerHeight(): number
+	if phoneLandscape() then
+		return 12 + actionH() + 8
+	end
 	return 16 + 60 + 8 + (TS(15) + 6)
+end
+-- Top of the level-up block: the HUD is hidden under the overlay, so only the Roblox
+-- buttons (top left) matter, and the centred title clears them.
+local function levelUpTop(): number
+	return phoneLandscape() and 4 or insets.Top * 0.5 + 6
 end
 
 -- Card sizes for the current screen.
@@ -922,8 +987,8 @@ local function cardMetrics(count: number): (number, number)
 	for _, c in ipairs(choices) do
 		most = math.max(most, cardNeeds(c, w))
 	end
-	local room = v.Y - headerHeight() - footerHeight() - insets.Top * 0.5 - 12
-	return w, math.max(260, math.min(most, room, 440))
+	local room = v.Y - headerHeight() - footerHeight() - levelUpTop() - 6
+	return w, math.max(phoneLandscape() and 180 or 260, math.min(most, room, 440))
 end
 
 -- Card icon: the upgrade tile framed in the card's accent (rim + a soft halo that breathes
@@ -1359,10 +1424,11 @@ local function layoutLevelUp()
 			cardsH += math.min(cardNeedsPortrait(c), ch)
 		end
 	end
-	local hintH = TS(15) + 6
+	local showHint = not phoneLandscape()
+	local hintH = showHint and TS(15) + 6 or 0
 	local headH = titleH + 10 + 6 + subH + 6 + pillH + 8 + 7 + 16
-	local blockH = headH + cardsH + 16 + 60 + 8 + hintH
-	local top = math.max(insets.Top * 0.5 + 6, (v.Y - blockH) / 2)
+	local blockH = headH + cardsH + footerHeight()
+	local top = math.max(levelUpTop(), (v.Y - blockH) / 2)
 	local panel = levelUp.Panel :: Frame
 	panel.Position = UDim2.fromOffset(0, 0)
 	panel.Size = UDim2.fromOffset(v.X, v.Y)
@@ -1385,19 +1451,21 @@ local function layoutLevelUp()
 	levelUp.Layout.Padding = UDim.new(0, portrait and 12 or 18)
 	levelUp.Cards.Position = UDim2.fromOffset((v.X - cardsW) / 2, y)
 	levelUp.Cards.Size = UDim2.fromOffset(cardsW, cardsH)
-	y += cardsH + 16
+	y += cardsH + (showHint and 16 or 12)
+	local ah = actionH()
 	levelUp.Actions.Position = UDim2.fromOffset(0, y)
-	levelUp.Actions.Size = UDim2.new(1, 0, 0, 60)
+	levelUp.Actions.Size = UDim2.new(1, 0, 0, ah)
 	local bw = math.clamp(math.floor((v.X - 2 * margin() - 18) / 2), 150, 240)
-	levelUp.Reroll.Instance.Size = UDim2.fromOffset(bw, 60)
-	levelUp.Skip.Instance.Size = UDim2.fromOffset(bw, 60)
+	levelUp.Reroll.Instance.Size = UDim2.fromOffset(bw, ah)
+	levelUp.Skip.Instance.Size = UDim2.fromOffset(bw, ah)
 	-- the flanking rules only where there is room for them
 	local ruleW = math.floor((v.X - 2 * margin() - 2 * bw - 3 * 18) / 2)
 	levelUp.RuleL.Visible = ruleW >= 40
 	levelUp.RuleR.Visible = ruleW >= 40
 	levelUp.RuleL.Size = UDim2.fromOffset(math.min(ruleW, 140), 1)
 	levelUp.RuleR.Size = UDim2.fromOffset(math.min(ruleW, 140), 1)
-	y += 60 + 8
+	y += ah + 8
+	levelUp.Hint.Visible = showHint
 	levelUp.Hint.Position = UDim2.fromOffset(0, y)
 	levelUp.Hint.Size = UDim2.new(1, 0, 0, hintH)
 	levelUp.HintText.Text = choiceHint(count)
@@ -2299,10 +2367,10 @@ local function buildPause()
 	})
 	local function layoutOptions()
 		local v = virtualSize()
-		local w = math.min(760, v.X - 32)
+		local w = tallModalWidth(760)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
-		local twoCol = inner >= 600
+		local twoCol = inner >= 540
 		local gap = 20
 		local side = 2 -- the columns' padding keeps the slider knobs inside the scroll clip
 		local colW = twoCol and math.floor((inner - gap - 2 * side) / 2) or (inner - 2 * side)
@@ -2719,15 +2787,21 @@ local function buildResults()
 
 	local function layoutResults()
 		local v = virtualSize()
-		local w = math.min(680, v.X - 32)
+		local w = tallModalWidth(680)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
 		-- header height follows the text sizes (phones set text 20% bigger)
 		local headH = math.max(84, TS(44) + 6 + TS(12) + 8 + TS(15) + 8)
 		head.Size = UDim2.new(1, 0, 0, headH)
 		results.TitleCol.Size = UDim2.fromOffset(math.max(160, math.min(440, inner - 96)), headH)
-		-- six tiles in one row when they fit, otherwise two rows of three
-		local tileW = 94
+		-- six tiles in one row when they fit (a little narrower on phones), otherwise two
+		-- rows of three
+		local tileW = math.clamp(math.floor((inner + 8) / 6) - 8, 84, 94)
+		for _, tile in ipairs(grid:GetChildren()) do
+			if tile:IsA("GuiObject") then
+				tile.Size = UDim2.fromOffset(tileW, 104)
+			end
+		end
 		local perRow = math.max(1, math.floor((inner + 8) / (tileW + 8)))
 		local cols = perRow >= 6 and 6 or (perRow >= 3 and 3 or 2)
 		local rows = math.ceil(6 / cols)
@@ -3317,6 +3391,11 @@ function UIBuilder.Init(d: { [string]: any })
 	}, nil)
 	gui.IgnoreGuiInset = true
 	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	-- panels stay in the safe area, but dimmers / backdrops (UIKit.Bleed) must reach the
+	-- notch strips, so the gui must not clip to the safe area
+	pcall(function()
+		(gui :: any).ClipToDeviceSafeArea = false
+	end)
 	gui.Parent = player:WaitForChild("PlayerGui")
 	-- full-screen effects (hurt vignette, menu vignette) under the UI, over the 3D world
 	fxGui = new("ScreenGui", {
@@ -3328,6 +3407,16 @@ function UIBuilder.Init(d: { [string]: any })
 	fxGui.IgnoreGuiInset = true
 	fxGui.ScreenInsets = Enum.ScreenInsets.None
 	fxGui.Parent = player:WaitForChild("PlayerGui")
+	-- phones (short side under 560 px): compact layouts and the phone design space. The
+	-- full-screen gui's size is the most reliable reading; the camera viewport can still be
+	-- a placeholder this early.
+	do
+		local screen = fxGui.AbsoluteSize
+		if screen.X < 50 or screen.Y < 50 then
+			screen = viewport
+		end
+		UIKit.SetCompact(math.min(screen.X, screen.Y) < 560)
+	end
 
 	root = new("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, gui)
 	uiScale = new("UIScale", { Scale = 1 }, root)
@@ -3442,6 +3531,8 @@ function UIBuilder.Init(d: { [string]: any })
 
 	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 	gui:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateScale)
+	fxGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
+	fxGui:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateScale)
 	pcall(function()
 		GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(updateScale)
 	end)

@@ -670,7 +670,9 @@ R.defineClass("GuiService", {
 		TopbarInset = function()
 			local d = device()
 			local top = (d.topbarBelowSafeTop and d.safe.top or 0)
-			return roblox.Rect.new(d.safe.left + 120, top, d.width - d.safe.right - 60, top + d.topbar)
+			-- real phones (insetSpace) leave the whole right side of the top bar free
+			local right = d.insetSpace and (d.width - d.safe.right) or (d.width - d.safe.right - 60)
+			return roblox.Rect.new(d.safe.left + 120, top, right, top + d.topbar)
 		end,
 		IsWindows = function()
 			return false
