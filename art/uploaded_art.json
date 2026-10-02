@@ -22,5 +22,13 @@
  "icons/achievements/ach_RogueClear": 130224375993113,
  "icons/achievements/ach_Survivor10": 82260910851107,
  "icons/achievements/ach_Survivor5": 100297408905778,
+ "icons/achievements/ach_Veteran": 82915645380748,
+ "icons/achievements/ach_WarlordFall": 82788501825480,
+ "icons/arenas/arena_Desert": 91026481946956,
+ "icons/arenas/arena_Forest": 137058515428681,
+ "icons/arenas/arena_Lava": 103815742892374,
+ "icons/arenas/arena_Ruins": 87279179042437,
+ "icons/arenas/arena_Snow": 127255296709894,
+ "icons/arenas/arena_Swamp": 71073285544360,
  "portraits/Knight": 108323809289389
 }

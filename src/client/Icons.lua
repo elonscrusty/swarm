@@ -21,7 +21,7 @@
 	                                  run items use their ItemData id as the icon name
 	Icons.Upgrade(parent, id, opts)   upgrade icon: IconData picture if one is set, else the
 	                                  vector icon, else the IconData glyph letters
-	Icons.Character(parent, id, opts) class icon of a character (helmet, hat, hood, mitre)
+	Icons.Character(parent, id, opts) class icon of a character (hero_<Id> picture, drawn hat / helmet)
 	Icons.MetaIcon(id)                icon name of a permanent upgrade
 	Icons.PreloadList()               "rbxassetid://" ids of the picture icons, most used first
 	                                  (for ContentProvider:PreloadAsync)
@@ -29,6 +29,16 @@
 	One lookup path: every screen (menu, HUD, level-up, rewards) calls Draw / Upgrade /
 	Character. A picture is drawn over its vector icon (or glyph letters): the vector shows
 	while the picture loads and stays if it cannot load, so a slot is never blank.
+	Small art (art/icons/{ui,heroes,arenas,curses,meta,achievements,track,shop,stats,rewards},
+	keys in ArtData) comes through the same path, two ways:
+	  specific keys   "hero_Knight", "ach_QueenSlayer", "stat_Kills", "curse_Frenzy", ... name the
+	                  one meaning they were drawn for; callers use them directly. Drawn under
+	                  them is ART_FALLBACK[key]. The picture is never tinted (opts.Dim greys it
+	                  for locked things).
+	  symbols         the plain drawn glyphs "gear", "check", "skull", ... (SYMBOLS) show their
+	                  sym_<name> picture, but only when no opts.Color is given: a recoloured
+	                  glyph (disabled, gold on a button) stays drawn.
+	With no uploaded image (ArtData.Image nil) both draw the vector icon as before.
 	Names used by screens are listed in docs/ICON_CHECKLIST.md (tools/gen_icon_checklist.py).
 	  "castle" is the Return to Main Menu icon (pause + results); "cycle" reroll; "skip" skip.
 ]]
@@ -41,6 +51,7 @@ local IconData = require(Shared:WaitForChild("IconData"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local PassiveData = require(Shared:WaitForChild("PassiveData"))
 local ItemData = require(Shared:WaitForChild("ItemData"))
+local ArtData = require(Shared:WaitForChild("ArtData"))
 
 local P = Theme.Palette
 local G = Theme.Icon.Grid
@@ -59,6 +70,7 @@ export type Opts = {
 	ZIndex: number?,
 	LayoutOrder: number?,
 	Name: string?,
+	Dim: boolean?, -- grey a picture (locked achievement); the drawn fallback uses Color instead
 }
 
 type Ctx = {
@@ -1710,6 +1722,86 @@ local function drawVector(f: Frame, name: string, o: Opts, glyph: boolean?)
 	end
 end
 
+------------------------------------------------------------------------------------------
+-- Small art (ArtData): specific keys and symbols
+------------------------------------------------------------------------------------------
+
+-- Drawn glyphs that have a sym_<name> picture (art/icons/ui).
+local SYMBOLS: { [string]: boolean } = {}
+for _, n in ipairs({
+	"arrowFast", "calendar", "check", "chevronsUp", "clock", "close", "crown", "curse", "cycle", "flag", "gear",
+	"hourglass", "info", "lock", "medal", "music", "pause", "people2", "people3", "person", "play", "podium",
+	"skip", "skull", "sparkle", "speaker", "trophy", "userPlus", "warning",
+}) do
+	SYMBOLS[n] = true
+end
+
+-- Specific art key -> the drawn icon shown while it loads / when it is not uploaded.
+local ART_FALLBACK: { [string]: string } = {
+	-- lobby buttons (placement lives in LobbyScreen)
+	ui_Play = "play", ui_Solo = "person", ui_Duo = "people2", ui_Trio = "people3", ui_Characters = "helmet",
+	ui_Upgrades = "chevronsUp", ui_Arenas = "castle", ui_Daily = "calendar", ui_Curses = "curse",
+	ui_Leaderboards = "podium", ui_Track = "medal", ui_Settings = "gear",
+	-- hero class badges
+	hero_Knight = "helmet", hero_Mage = "wizardHat", hero_Rogue = "hood", hero_Priest = "mitre",
+	hero_Ranger = "featherCap", hero_Alchemist = "goggles", hero_Engineer = "minerHelm", hero_Necromancer = "skullHood",
+	-- arenas
+	arena_Forest = "tree", arena_Ruins = "castle", arena_Swamp = "sprout", arena_Snow = "FrostNova",
+	arena_Desert = "hourglass", arena_Lava = "FireTrail",
+	-- curses and run options
+	curse_Frenzy = "arrowFast", curse_Fragile = "heart", curse_Horde = "people3", curse_Famine = "Heal",
+	curse_GlassCannon = "sword", curse_EliteSurge = "crown", opt_Armory = "sword", opt_HeadStart = "chevronsUp",
+	-- permanent upgrades
+	meta_Reroll = "cycle", meta_Skip = "skip",
+	-- achievements
+	ach_Badge = "trophy", ach_Survivor5 = "clock", ach_Survivor10 = "clock", ach_QueenSlayer = "skull",
+	ach_Conqueror = "trophy", ach_KnightClear = "helmet", ach_MageClear = "wizardHat", ach_RogueClear = "hood",
+	ach_PriestClear = "mitre", ach_Veteran = "chevronsUp", ach_FieldEngineer = "gear", ach_Reaper = "skull",
+	ach_MothBane = "skull", ach_WarlordFall = "flag", ach_HiveCleanser = "skull",
+	-- account track
+	track_Title = "flag", track_Color = "sparkle", track_Ring = "area", track_Frame = "medal", track_Level = "medal",
+	-- shop
+	shop_GoldPouch = "pouch", shop_StarterPack = "gift", shop_VIP = "crown", shop_DoubleGold = "coin",
+	-- stats tiles
+	stat_BestTime = "crown", stat_Wins = "trophy", stat_Runs = "flag", stat_WinRate = "chevronsUp",
+	stat_Kills = "skull", stat_Gold = "coin", stat_Heroes = "helmet", stat_Skins = "sparkle", stat_Upgrades = "sword",
+	-- rewards
+	reward_ChestLarge = "chest", reward_ChestGolden = "chest", reward_ChestOpen = "chest", reward_XPGem = "Gold",
+	reward_XPGemBig = "Gold", reward_Bomb = "VolatileSpore",
+}
+
+local ART_FOLDER = {
+	ui = "ui", sym = "ui", hero = "heroes", arena = "arenas", curse = "curses", opt = "curses", meta = "meta",
+	ach = "achievements", track = "track", shop = "shop", stat = "stats", reward = "rewards",
+}
+
+-- ArtData key of a specific art name ("hero_Knight" -> "icons/heroes/hero_Knight").
+local function artKey(name: string): string?
+	local prefix = string.match(name, "^(%a+)_")
+	local folder = prefix and ART_FOLDER[prefix]
+	return folder and ("icons/" .. folder .. "/" .. name) or nil
+end
+
+-- Which picture (rbxassetid string or nil) and which drawn icon go with `name` for these opts.
+local function resolve(name: string, o: Opts): (string?, string)
+	local fallback = ART_FALLBACK[name]
+	if fallback then
+		return ArtData.Image(artKey(name)), fallback
+	end
+	if SYMBOLS[name] and o.Color == nil then
+		local image = ArtData.Image("icons/ui/sym_" .. name)
+		if image then
+			return image, name
+		end
+	end
+	return IconData.Image(name), name
+end
+
+-- True when `name` is a specific art key (hero_Knight, stat_Kills, ...).
+function Icons.IsArtKey(name: string): boolean
+	return ART_FALLBACK[name] ~= nil
+end
+
 -- A picture with a vector fallback under it. The fallback stays hidden while the picture
 -- may still be on its way (FALLBACK_DELAY) and only shows if it has not loaded by then; it
 -- goes for good once the picture is in. IsLoaded is polled as well as watched, because the
@@ -1720,6 +1812,7 @@ local FALLBACK_POLL = 0.25
 local FALLBACK_GIVE_UP = 20
 
 local function picture(f: Frame, name: string, image: string, o: Opts, tint: Color3?)
+	-- name: the drawn icon (or glyph id) that stands in until the picture is in
 	local fb = Instance.new("Frame")
 	fb.Name = "Fallback"
 	fb.BackgroundTransparency = 1
@@ -1762,12 +1855,13 @@ end
 function Icons.Draw(parent: Instance?, name: string, opts: Opts?): Frame
 	local o: Opts = opts or {}
 	local f = container(name, o)
-	local image = IconData.Image(name)
+	local image, drawn = resolve(name, o)
 	if image then
-		-- an uploaded picture replaces the drawn icon (square, transparent, never tinted)
-		picture(f, name, image, o, nil)
+		-- an uploaded picture replaces the drawn icon (square, transparent, never tinted;
+		-- only Dim greys a specific picture)
+		picture(f, drawn, image, o, if o.Dim and ART_FALLBACK[name] then Color3.fromRGB(105, 105, 115) else nil)
 	else
-		drawVector(f, name, o)
+		drawVector(f, drawn, o)
 	end
 	f.Parent = parent
 	return f
@@ -1780,6 +1874,9 @@ end
 function Icons.Upgrade(parent: Instance?, id: string?, opts: Opts?): Frame
 	local o: Opts = opts or {}
 	local key = id or "?"
+	if ART_FALLBACK[key] then
+		return Icons.Draw(parent, key, o)
+	end
 	local image = IconData.Image(id)
 	if image then
 		local f = container(key, o)
@@ -1825,6 +1922,36 @@ function Icons.PreloadList(): { string }
 	for _, item in ipairs(ItemData.Order) do
 		add(item)
 	end
+	-- small art: symbols and hero badges first (every screen), then the per-screen sets
+	local function addArt(key: string)
+		local image = ArtData.Image(key)
+		if image and not seen[image] then
+			seen[image] = true
+			table.insert(list, image)
+		end
+	end
+	local symbols = {}
+	for n in pairs(SYMBOLS) do
+		table.insert(symbols, n)
+	end
+	table.sort(symbols)
+	for _, n in ipairs(symbols) do
+		addArt("icons/ui/sym_" .. n)
+	end
+	local names = {}
+	for n in pairs(ART_FALLBACK) do
+		table.insert(names, n)
+	end
+	table.sort(names, function(a, b)
+		local ra, rb = (string.find(a, "^hero_") or string.find(a, "^ui_")) and 0 or 1, (string.find(b, "^hero_") or string.find(b, "^ui_")) and 0 or 1
+		if ra ~= rb then
+			return ra < rb
+		end
+		return a < b
+	end)
+	for _, n in ipairs(names) do
+		addArt(artKey(n) :: string)
+	end
 	local rest = {}
 	for id in pairs(IconData.Icons) do
 		table.insert(rest, id)
@@ -1836,10 +1963,12 @@ function Icons.PreloadList(): { string }
 	return list
 end
 
-local CHARACTER_ICONS = { Knight = "helmet", Mage = "wizardHat", Rogue = "hood", Priest = "mitre", Ranger = "featherCap", Alchemist = "goggles", Engineer = "minerHelm", Necromancer = "skullHood" }
-
+-- "hero_<Id>" (its picture, with the drawn class icon under it), or "person" for an unknown id.
 function Icons.CharacterIcon(characterId: string): string
-	return CHARACTER_ICONS[characterId] or "person"
+	if ART_FALLBACK["hero_" .. characterId] then
+		return "hero_" .. characterId
+	end
+	return "person"
 end
 
 function Icons.Character(parent: Instance?, characterId: string, opts: Opts?): Frame
@@ -1854,8 +1983,8 @@ local META_ICONS = {
 	Luck = "Luck",
 	Growth = "Growth",
 	Revive = "revive",
-	Reroll = "cycle",
-	Skip = "skip",
+	Reroll = "meta_Reroll",
+	Skip = "meta_Skip",
 }
 
 function Icons.MetaIcon(upgradeId: string): string
