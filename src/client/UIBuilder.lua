@@ -85,7 +85,7 @@ local function setBlocking(name: string, on: boolean)
 end
 
 -- Modals that cover the HUD while open (Hud.SetCovered hides it under them).
-local COVERS_HUD = { LevelUp = true, Reward = true, Pause = true, Revive = true, Results = true }
+local COVERS_HUD = { LevelUp = true, Reward = true, Pause = true, Revive = true, Results = true, Portal = true, Items = true, BugReport = true }
 local covering: { [string]: true } = {}
 local function setCovering(name: string, on: boolean)
 	if not COVERS_HUD[name] or (covering[name] == true) == on then

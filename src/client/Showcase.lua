@@ -9,6 +9,10 @@
 	has one, the lobby spawn emblem (SwarmState "LobbySpawn") is used.
 	Which model: the player's own live character when it matches (it carries the VIP crown),
 	otherwise the server-built template ReplicatedStorage.CharacterPreviews["<Id>|<Skin>"].
+	A source is only copied once its whole rig is there (six body parts + their Motor6Ds),
+	and it is copied again when its parts / joints change: after a run the new lobby
+	character is still replicating when the menu shows, and a copy taken then kept the
+	hero without arms for good.
 	Pose: src/shared/HeroPoses.lua (HeroPoses.Apply(model, "Showcase", t): the stance plus
 	idle breathing; the copy is fully anchored and re-placed from its rest pose each
 	frame). If that module is missing, a small built-in idle drives the Motor6Ds.
@@ -267,12 +271,52 @@ local function idOf(inst: Instance): number
 	return id
 end
 
+-- The six body parts and the Motor6D that joins each one (ModelBuilder's hero rig).
+local RIG_JOINTS = {
+	RootJoint = "Torso",
+	Neck = "Head",
+	["Left Shoulder"] = "Left Arm",
+	["Right Shoulder"] = "Right Arm",
+	["Left Hip"] = "Left Leg",
+	["Right Hip"] = "Right Leg",
+}
+
+--[[
+	True when every body part of the rig is there and joined. A model can be seen while it
+	is still arriving: right after a run the new lobby character replicates in the same
+	moment the menu shows again, and a copy taken then has no arms (or no shoulder joints).
+]]
+local function rigReady(source: Model): boolean
+	for jointName, partName in pairs(RIG_JOINTS) do
+		local j = source:FindFirstChild(jointName, true)
+		if not (j and j:IsA("Motor6D") and j.Part0 and j.Part1 and j.Part1.Name == partName and j.Part1:IsDescendantOf(source)) then
+			return false
+		end
+	end
+	return true
+end
+
+-- Parts and joints of a source: when this grows (pieces still arriving), copy it again.
+local function signature(source: Model): number
+	local n = 0
+	for _, d in ipairs(source:GetDescendants()) do
+		if d:IsA("BasePart") or d:IsA("JointInstance") or d:IsA("WeldConstraint") then
+			n += 1
+		end
+	end
+	return n
+end
+
 local function sourceFor(characterId: string, skinId: string): Model?
 	local own = player.Character
-	if own and own.PrimaryPart and own:GetAttribute("CharacterId") == characterId and (own:GetAttribute("SkinId") or "Default") == skinId then
+	if own and own.PrimaryPart and own:GetAttribute("CharacterId") == characterId and (own:GetAttribute("SkinId") or "Default") == skinId and rigReady(own) then
 		return own
 	end
-	return ViewportPreview.Template(characterId, skinId)
+	local template = ViewportPreview.Template(characterId, skinId)
+	if template and rigReady(template) then
+		return template
+	end
+	return nil
 end
 
 local function cloneOf(source: Model): Model?
@@ -406,9 +450,9 @@ local function refresh()
 	end
 	local source = sourceFor(wantChar, wantSkin)
 	if not source then
-		return -- template not built yet; CharacterPreviews.ChildAdded calls again
+		return -- not built / not fully arrived yet; the 0.25 s check calls again
 	end
-	local key = wantChar .. "|" .. wantSkin .. "|" .. tostring(idOf(source))
+	local key = wantChar .. "|" .. wantSkin .. "|" .. tostring(idOf(source)) .. "|" .. tostring(signature(source))
 	if model and modelKey == key and model.Parent then
 		return
 	end
@@ -895,9 +939,9 @@ function Showcase.Init()
 			if model and standCF and before and (standCF.Position - before.Position).Magnitude > 0.05 then
 				model:PivotTo(placeAt(standCF, rootOffset))
 			end
-			if not model or not model.Parent then
-				refresh()
-			end
+			-- also picks up a source that was still arriving (more parts / joints now) and
+			-- the live character once it is complete
+			refresh()
 			refreshRing()
 			updateHidden()
 		end

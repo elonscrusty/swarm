@@ -862,6 +862,13 @@ local function relayout()
 	local heroFrac = 0.5
 
 	setChipFlat(not portrait and current == "Characters")
+	-- phones in landscape: sub-screen titles need the top row, so the chip keeps only GOLD
+	local slim = compact and not portrait and current ~= "Home"
+	for _, ch in ipairs(ui.ChipFace:GetChildren()) do
+		if ch:IsA("GuiObject") and ch ~= ui.Gold.Frame then
+			ch.Visible = not slim
+		end
+	end
 	if portrait then
 		local logoScale = math.clamp((W - 2 * M) / 380, 0.66, 0.85)
 		ui.LogoScale.Scale = logoScale
@@ -928,7 +935,7 @@ local function relayout()
 		end
 		ui.PlaceParty()
 		local logoBottom = logoY + (ui.LogoH - 4) * logoScale
-		local cw = math.clamp(W * 0.27, 290, 360)
+		local cw = math.clamp(W * 0.27, compact and 320 or 290, 360) -- phones: room for CHARACTERS
 		local cornerW = 4 * 76 + 3 * G
 		local cornerSize = cornerW <= cw + 40 and 76 or 64
 		place(ui.Corner, M, H - M - cornerSize, 4 * cornerSize + 3 * G, cornerSize)

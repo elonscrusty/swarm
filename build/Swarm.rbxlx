@@ -2152,7 +2152,7 @@ Config.Run = {
 	-- it is summoned at each stage's portal. Kept so old references keep compiling.
 	BossTime = 15 * 60,
 	MiniWaveInterval = 30, -- a burst of extra enemies every N seconds (while exploring)
-	ResultsSeconds = 25, -- defeat screen time before everyone is sent back automatically
+	ResultsSeconds = 12, -- defeat screen time before everyone is sent back automatically (MAIN MENU leaves at once)
 	MaxPlayers = 4, -- players per run (server MaxPlayers should match in game settings)
 	ArenaSpawnSpread = 10, -- players are placed in a circle of this radius at run start
 	-- A solo player who opens the pause menu freezes the whole run. In a group run the
@@ -2280,6 +2280,9 @@ Config.Player = {
 	HurtFlashSeconds = 0.15,
 	ReviveHPFraction = 0.5, -- revived players come back with this share of max HP
 	ReviveInvulnSeconds = 3,
+	-- grace after closing the level-up cards or a chest reward: can't be hurt this long, so
+	-- the swarm that closed in meanwhile doesn't land a hit the moment play resumes
+	ChoiceGraceSeconds = 1.5,
 	ReviveClearRadius = 22, -- non-boss enemies inside this radius die on revive
 	LevelUpInvulnerable = true, -- paused (choosing an upgrade) players can't be hurt
 	-- Movement sanity check: the server snaps players back if they move faster than their
@@ -3001,6 +3004,10 @@ Config.UI = {
 	-- and text big enough (layouts reflow into the smaller virtual space instead).
 	MinScale = 0.6,
 	MaxScale = 1.5,
+	-- Phones in landscape (short side < 560 px) use this smaller design space instead, so a
+	-- 852 x 393 phone renders reference px at ~0.77 (text ~11-15 pt, buttons ~40 pt) and
+	-- layouts reflow into ~960 x 514 virtual px.
+	PhoneReferenceSize = Vector2.new(960, 470),
 	-- Fonts and sizes live in Theme (Merriweather titles, Source Sans body / numbers).
 	-- These two are only the fallbacks for plain Enum.Font properties.
 	Font = Enum.Font.SourceSansBold,
@@ -3101,6 +3108,24 @@ Config.Party = {
 	FriendsCacheSeconds = 30, -- the client asks Roblox for online friends at most this often
 	FollowCooldown = 6, -- seconds between JOIN (teleport) attempts per player
 	ActionRate = 4, -- "Party" remote calls per second per player
+}
+
+-- Private run servers (server RunServers.lua, client TravelOverlay.lua). In the live game a
+-- run never plays on the public lobby server: its players are saved and teleported
+-- together to a fresh reserved server of this place, which starts the run by itself and
+-- sends everyone back to a public lobby afterwards. So a run can always start, whoever else
+-- is playing. Studio, an unpublished place (PlaceId 0) or Enabled = false keep runs on
+-- the lobby server as before; so does a teleport that fails twice.
+Config.RunServers = {
+	Enabled = true,
+	TicketVersion = 1, -- bump when the ticket shape changes (older tickets are refused)
+	WaitForTeamSeconds = 15, -- run server: wait this long for the whole team to arrive
+	WaitForLoadSeconds = 45, -- ...longer while someone who arrived is still loading their save
+	GiveUpSeconds = 60, -- nobody's save loaded by then: everyone goes back to the lobby
+	TeleportTimeoutSeconds = 40, -- still here this long after the teleport: it failed
+	HomeDelaySeconds = 20, -- results over the lobby (portal / MAIN MENU): back to a lobby after this
+	HomeDelayAfterResultsSeconds = 2, -- the defeat results already counted down
+	HandoffLoadAttempts = 12, -- DataService load retries for a player arriving by a SWARM teleport
 }
 
 ------------------------------------------------------------------------------------------
@@ -3382,6 +3407,10 @@ CurseData.HeadStartLevel = 4
 
 CurseData.Arenas = { "Forest", "Ruins", "Swamp", "Snow", "Desert", "Lava" }
 CurseData.Bosses = { "ScorpionQueen", "MothMatriarch", "RhinoWarlord", "HiveMother" }
+-- From this UTC day on, the daily route also uses the two newer bosses. Days before it keep
+-- the old list so a day's route never changes after players have scored on it.
+CurseData.BossesFromDay = 20729 -- 2026-10-03
+CurseData.BossesLater = { "ScorpionQueen", "MothMatriarch", "RhinoWarlord", "HiveMother", "BriarSentinel", "FrostboundColossus" }
 CurseData.DailyStages = 12 -- arenas / bosses planned ahead (the plan repeats after this)
 
 -- The UTC day number of a unix time (days since 1970-01-01).
@@ -3457,7 +3486,7 @@ function CurseData.Daily(day: number): Daily
 	local seed = (day * 7919 + 104729) % 2147483647
 	local rng = Random.new(seed)
 	local arenas = plan(CurseData.Arenas, CurseData.DailyStages, rng)
-	local bosses = plan(CurseData.Bosses, CurseData.DailyStages, rng, "ScorpionQueen")
+	local bosses = plan(day >= CurseData.BossesFromDay and CurseData.BossesLater or CurseData.Bosses, CurseData.DailyStages, rng, "ScorpionQueen")
 	local curses = {}
 	for _, id in ipairs(shuffled(CurseData.Order, rng)) do
 		if #curses < CurseData.DailyCurseCount then
@@ -7440,7 +7469,7 @@ Remotes.ServerToClient = {
 	"BugReportResult", -- { Ok, Message } answer to BugReport (BugReportService)
 	"BugInboxData", -- DEV inbox: { Kind = "Page", Rows, Next?, Status } | { Kind = "Status", Id, Status, Ok }
 	"LeaderboardData", -- { Board, Rows = { {Rank, Name, Value, Me} }, Status, Age, MyRank?, MyBest } (LeaderboardService)
-	"PartyState", -- this player's party: { LeaderId, Members = { {UserId, Name} }, Max, Invites = { {FromId, FromName, Seconds} }, Sent = {userId} } (PartyService)
+	"PartyState", -- this player's party: { LeaderId, Members = { {UserId, Name, Ready} }, Max, Invites = { {FromId, FromName, Seconds} }, Sent = {userId} } (PartyService)
 	"PartyInvite", -- a new invite: { FromId, FromName, Seconds } (PartyService): the ACCEPT / DECLINE card
 }
 
@@ -7474,8 +7503,9 @@ Remotes.ClientToServer = {
 	"BugReport", -- ({ Category, Text, Client }) player bug report, filtered and rate limited (BugReportService)
 	"BugInbox", -- ("Page", cursor?) | ("SetStatus", id, status) DEV inbox, server-side allowlist
 	"LeaderboardRequest", -- (boardId) a Config.Leaderboards.Order id (LeaderboardService)
-	"Party", -- ("Invite" | "Accept" | "Decline" | "Kick", userId) | ("Leave") | ("Sync") lobby PARTY screen (PartyService)
+	"Party", -- ("Invite" | "Accept" | "Decline" | "Kick", userId) | ("Ready", boolean) | ("Leave") | ("Sync") lobby PARTY screen (PartyService)
 	"PartyFollow", -- (friendUserId) JOIN a friend's server: server-side teleport, friends only (PartyService)
+	"TravelHome", -- ("Go" | "Stay") run server, back in its lobby: go to a public lobby now / stay and play here (RunServers)
 }
 
 local folder: Folder? = nil
@@ -9377,6 +9407,7 @@ local ORDER = {
 	"StageManager",
 	"RunManager",
 	"PartyService",
+	"RunServers", -- private run servers: lobby → run server → lobby teleports (live game only)
 	"AchievementService",
 	"DamageNumbers",
 	"BugReportService",
@@ -12681,6 +12712,14 @@ return DamageNumbers
 	         If the lock was taken by another server we stop saving and kick (prevents
 	         two servers overwriting each other = item duplication).
 	Release: on leave / shutdown the final save clears the lock.
+	Handoff: a teleport to / from a private run server (RunServers) first saves and releases
+	         the profile (ReleaseForTeleport), so the next server loads the latest save at
+	         once; nothing is written by this server after that. A player who arrived by a
+	         SWARM teleport gets Config.RunServers.HandoffLoadAttempts load retries (a slow
+	         release on the other side is waited for, never stolen). If the teleport fails
+	         the player stays and Reclaim takes the lock back (keeping this server's data
+	         unless another server saved the profile meanwhile: then the stored save wins).
+	         Every save also writes LastJob (the JobId that wrote it) for that check.
 	Retry:   every DataStore call is pcall'd with exponential backoff.
 	Studio:  uses Config.Data.StudioStoreName (never the live store); if DataStores are
 	         unavailable (no API access) data is kept in memory only.
@@ -12985,9 +13024,24 @@ end
 -- Load
 ------------------------------------------------------------------------------------------
 
+-- True when the player came through a SWARM teleport (to or from a private run server):
+-- the other server released the save just before, so a lock still on it is worth waiting for.
+local function arrivedByHandoff(player: Player): boolean
+	local ok, data = pcall(function()
+		return player:GetJoinData()
+	end)
+	local td = ok and type(data) == "table" and data.TeleportData or nil
+	return type(td) == "table" and (td.SwarmRun ~= nil or td.SwarmReturn ~= nil)
+end
+
 local function loadProfile(player: Player): Profile?
 	local key = Config.Data.KeyPrefix .. player.UserId
-	for attempt = 1, Config.Data.LoadAttempts do
+	local attempts = Config.Data.LoadAttempts
+	local R = (Config :: any).RunServers
+	if R and arrivedByHandoff(player) then
+		attempts = math.max(attempts, R.HandoffLoadAttempts or attempts)
+	end
+	for attempt = 1, attempts do
 		local lockedByOther = false
 		local ok, record = update(key, function(old)
 			old = (type(old) == "table") and old or {}
@@ -13011,7 +13065,7 @@ local function loadProfile(player: Player): Profile?
 				LastSave = os.clock(),
 			}
 		end
-		if attempt < Config.Data.LoadAttempts then
+		if attempt < attempts then
 			task.wait(Config.Data.LoadRetryDelay)
 		end
 	end
@@ -13048,6 +13102,7 @@ function DataService.SaveProfile(profile: Profile, release: boolean?): boolean
 			return nil
 		end
 		old.Data = snapshot
+		old.LastJob = jobId
 		old.Lock = (not release) and { JobId = jobId, Time = os.time() } or nil
 		return old
 	end)
@@ -13118,6 +13173,81 @@ function DataService.RecordPurchase(player: Player, purchaseId: string)
 	while #data.PurchaseIds > Config.Data.MaxStoredPurchaseIds do
 		table.remove(data.PurchaseIds, 1)
 	end
+end
+
+--[[
+	Teleport handoff (RunServers): saves and releases the profile while the player is still
+	here, so the destination server can load it straight away. The profile stays readable
+	(GetData) but is never written again by this server unless Reclaim takes it back.
+	Returns true when the save is written and the lock cleared (only then teleport).
+]]
+function DataService.ReleaseForTeleport(player: Player): boolean
+	local p = profiles[player]
+	if not p then
+		return false
+	end
+	if p.Released then
+		return true
+	end
+	if store == nil then
+		-- memory only: nothing to hand over (the other server starts from defaults anyway)
+		p.Released = true
+		return true
+	end
+	return DataService.SaveProfile(p, true)
+end
+
+-- True while the profile is handed off (released for a teleport that has not failed).
+function DataService.IsReleased(player: Player): boolean
+	local p = profiles[player]
+	return p ~= nil and p.Released
+end
+
+--[[
+	The teleport failed and the player is still here: take the session lock back. When the
+	stored save was written by another server after our release (LastJob is not us), the
+	stored data replaces ours (it is newer). Returns false when another live server holds
+	the lock (the player is kicked to rejoin: two servers must never write one save).
+]]
+function DataService.Reclaim(player: Player): boolean
+	local p = profiles[player]
+	if not p then
+		return false
+	end
+	if not p.Released or p.LockLost then
+		return not p.LockLost
+	end
+	if store == nil then
+		p.Released = false
+		return true
+	end
+	local lockedByOther = false
+	local ok, record = update(p.Key, function(old)
+		old = (type(old) == "table") and old or {}
+		local lock = old.Lock
+		if lock and lock.JobId ~= jobId and type(lock.Time) == "number" and os.time() - lock.Time < Config.Data.LockStaleSeconds then
+			lockedByOther = true
+			return nil
+		end
+		old.Lock = { JobId = jobId, Time = os.time() }
+		return old
+	end)
+	if not ok or lockedByOther then
+		warn("[DataService] could not reclaim " .. p.Key .. (lockedByOther and " (locked by another server)" or ""))
+		DataService.SetSaveStatus(player, "failing")
+		if lockedByOther and player.Parent then
+			p.LockLost = true
+			player:Kick("Your save was opened on another server. Please rejoin.")
+		end
+		return false
+	end
+	if type(record) == "table" and record.LastJob ~= nil and record.LastJob ~= jobId and type(record.Data) == "table" then
+		p.Data = DataService.Migrate(record.Data)
+	end
+	p.Released = false
+	p.LastSave = os.clock()
+	DataService.SetSaveStatus(player, "ok")
+	return true
 end
 
 -- Set by GameServer: runs at shutdown before the final saves.
@@ -17486,6 +17616,7 @@ local function offerNext(rp)
 		end
 		Remotes.FireClient("LevelUpClose", rp.Player)
 		rp.Paused = false
+		ctx.RunManager.GrantChoiceGrace(rp) -- don't get hit the instant the cards close
 		ctx.RunManager.ApplyMovement(rp)
 		ctx.RunManager.RefreshFrozen()
 		return
@@ -23615,7 +23746,11 @@ return MonetizationService
 	  Decline, Leave, Kick (leader only). When the leader leaves, the next member leads;
 	           a party of one closes.
 	  Size     at most the largest lobby mode (Config.Modes.Order) and Config.Run.MaxPlayers.
-	RunManager asks CanStart (only the leader starts runs for a party) and MembersOf (the
+	READY: each member toggles READY ("Ready", PartyState Members[i].Ready); the leader's
+	start only goes when every member is ready (StartBlocked: "Waiting for N to ready up",
+	a nudge toast to the others). READY clears when someone joins / leaves and when a run
+	starts or ends (SwarmState Phase).
+	RunManager asks StartBlocked (only the leader starts, everyone ready) and MembersOf (the
 	leader's start pulls the members into that run, up to the mode's size; everyone else
 	keeps the normal countdown JOIN).
 
@@ -23627,6 +23762,12 @@ return MonetizationService
 	           "party:<userId>", MenuParty's ExperienceInviteOptions) or by following a friend
 	           (Player.FollowUserId) joins the inviter's party when the inviter is on this
 	           server and they are friends (join data can be forged, friendship cannot).
+	  Run servers (RunServers): a party plays its run on a private reserved server; JOIN
+	           can't follow anyone there (Roblox refuses the teleport: a toast says so).
+	           Coming back, party mates who go home together land on one lobby server with
+	           TeleportData { SwarmReturn = { Party = { Leader, Members } } } and the party
+	           re-forms when BOTH sides agree: the leader's own return data lists the member
+	           and the member's names that leader (one forged side can't pull anyone in).
 
 	Every client request comes through Remotes.Listen (rate limited, pcall'd) and is
 	validated: ids must be players on this server, actions must make sense for the sender.
@@ -23643,7 +23784,7 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 
 local PartyService = {}
 
-type Party = { Id: number, Leader: Player, Members: { Player } }
+type Party = { Id: number, Leader: Player, Members: { Player }, Ready: { [Player]: boolean } }
 
 local ctx
 local nextId = 0
@@ -23745,7 +23886,7 @@ local function push(player: Player)
 	local members = {}
 	if party then
 		for _, m in ipairs(party.Members) do
-			table.insert(members, { UserId = m.UserId, Name = m.DisplayName })
+			table.insert(members, { UserId = m.UserId, Name = m.DisplayName, Ready = party.Ready[m] == true })
 		end
 	end
 	local incoming = {}
@@ -23784,6 +23925,7 @@ local function removeMember(player: Player, why: string)
 		return
 	end
 	partyOf[player] = nil
+	table.clear(party.Ready) -- the line-up changed: everyone readies again
 	local i = table.find(party.Members, player)
 	if i then
 		table.remove(party.Members, i)
@@ -23824,13 +23966,14 @@ local function joinParty(player: Player, inviter: Player): string?
 	removeMember(player, "left the party")
 	if not party then
 		nextId += 1
-		local fresh: Party = { Id = nextId, Leader = inviter, Members = { inviter } }
+		local fresh: Party = { Id = nextId, Leader = inviter, Members = { inviter }, Ready = {} }
 		party = fresh
 		partyOf[inviter] = fresh
 	end
 	local p = party :: Party
 	table.insert(p.Members, player)
 	partyOf[player] = p
+	table.clear(p.Ready)
 	-- invites to this player are settled; the inviter's open invite to them too
 	if invites[player] then
 		table.clear(invites[player])
@@ -23948,6 +24091,17 @@ local ACTIONS: { [string]: (Player, any) -> () } = {
 			removeMember(player, "left the party")
 		end
 	end,
+	-- (on: boolean) a member's READY toggle (the leader is ready by starting)
+	Ready = function(player, on)
+		local party = partyOf[player]
+		if not party or type(on) ~= "boolean" or party.Leader == player then
+			return
+		end
+		if (party.Ready[player] == true) ~= on then
+			party.Ready[player] = on or nil
+			pushParty(party)
+		end
+	end,
 	Sync = function(player)
 		push(player)
 	end,
@@ -23998,7 +24152,43 @@ local function follow(player: Player, friendId: any)
 		TeleportService:TeleportAsync(game.PlaceId, { player }, options)
 	end)
 	if not sent then
-		notify(player, "Couldn't join that server. It may be full.", BAD)
+		notify(player, "Couldn't join that server. It may be full, or your friend is in a private run.", BAD)
+	end
+end
+
+-- Back from a private run server: { [Player] = { Leader = userId, Members = { [userId] = true } } }
+local returning: { [Player]: { Leader: number, Members: { [number]: boolean } } } = {}
+
+-- Re-forms a party that went home from a run server together (see the header).
+local function reformAfterRun(player: Player)
+	local rs = ctx.RunServers
+	local back = rs and rs.ReturnData(player)
+	local party = back and back.Party
+	if not party then
+		return
+	end
+	local set = {}
+	for _, id in ipairs(party.Members) do
+		set[id] = true
+	end
+	returning[player] = { Leader = party.Leader, Members = set }
+	task.delay(60, function()
+		returning[player] = nil
+	end)
+	local leader = playerById(party.Leader)
+	local mine = leader and returning[leader]
+	if not leader or not mine or mine.Leader ~= leader.UserId then
+		return -- the leader arrives later: their arrival pulls the members in
+	end
+	if player == leader then
+		for _, other in ipairs(Players:GetPlayers()) do
+			local theirs = returning[other]
+			if other ~= leader and theirs and theirs.Leader == leader.UserId and mine.Members[other.UserId] then
+				joinParty(other, leader)
+			end
+		end
+	elseif mine.Members[player.UserId] then
+		joinParty(player, leader)
 	end
 end
 
@@ -24029,6 +24219,7 @@ local function arrivalInviters(player: Player): { number }
 end
 
 local function onArrival(player: Player)
+	reformAfterRun(player)
 	for _, id in ipairs(arrivalInviters(player)) do
 		local inviter = playerById(id)
 		if inviter and inviter ~= player and isFriends(player, id) then
@@ -24046,6 +24237,43 @@ end
 ------------------------------------------------------------------------------------------
 
 -- False for a party member who is not the leader (the leader starts the party's runs).
+-- Why `player` can't start a run now (a member, or members not ready: they get a nudge),
+-- or nil. RunManager shows the text to the starter.
+function PartyService.StartBlocked(player: Player): string?
+	local party = partyOf[player]
+	if not party then
+		return nil
+	end
+	if party.Leader ~= player then
+		return "Your party leader starts the runs (or leave the party)."
+	end
+	local waiting = 0
+	for _, m in ipairs(party.Members) do
+		if m ~= player and m.Parent and not party.Ready[m] then
+			waiting += 1
+			notify(m, player.DisplayName .. " wants to start: tap READY!", WARN)
+		end
+	end
+	if waiting > 0 then
+		return string.format("Waiting for %d to ready up.", waiting)
+	end
+	return nil
+end
+
+-- Clears every party's READY (a run started or ended: ready again for the next one).
+local function resetAllReady()
+	local seen: { [Party]: boolean } = {}
+	for _, party in pairs(partyOf) do
+		if not seen[party] then
+			seen[party] = true
+			if next(party.Ready) then
+				table.clear(party.Ready)
+				pushParty(party)
+			end
+		end
+	end
+end
+
 function PartyService.CanStart(player: Player): boolean
 	local party = partyOf[player]
 	return party == nil or party.Leader == player
@@ -24070,6 +24298,7 @@ function PartyService.PartyOf(player: Player): Party?
 end
 
 local function onRemoving(player: Player)
+	returning[player] = nil
 	removeMember(player, "left the game")
 	invites[player] = nil
 	for target, map in pairs(invites) do
@@ -24101,12 +24330,23 @@ function PartyService.Start()
 		end
 	end, cfg().ActionRate)
 	Remotes.Listen("PartyFollow", follow, 1)
+	-- READY lasts one start: cleared when a run begins and when it ends
+	local state = Remotes.State()
+	state:GetAttributeChangedSignal("Phase"):Connect(function()
+		local phase = state:GetAttribute("Phase")
+		if phase == "Lobby" or phase == "Running" then
+			resetAllReady()
+		end
+	end)
 	Players.PlayerRemoving:Connect(onRemoving)
 	Players.PlayerAdded:Connect(function(player)
 		task.spawn(onArrival, player)
 	end)
 	pcall(function()
 		TeleportService.TeleportInitFailed:Connect(function(player, result)
+			if ctx.RunServers and ctx.RunServers.OwnsTeleport(player) then
+				return -- a run-server trip: RunServers retries and reports it
+			end
 			local full = result == Enum.TeleportResult.GameFull
 			notify(player, full and "That server is full." or "Couldn't join that server. Try again.", BAD)
 		end)
@@ -24138,9 +24378,13 @@ return PartyService
 	return and never a win; the run ends by defeat or the pause menu's MAIN MENU
 	(AbandonRun). Its score goes to the "ScoreEndless" board instead of "Score"; the
 	"Level" board (highest level in one run) takes every mode.
-	Parties (PartyService): only a party's leader starts runs, and that start brings the
+	Parties (PartyService): only a party's leader starts runs (once every member is READY), and that start brings the
 	members in at once up to the mode's size (joinParty); others still JOIN the countdown.
-	SOLO skips the countdown. Modes live in Config.Modes; "Squad" (old 1-4 mode) is still
+	SOLO skips the countdown. Live game (RunServers, Config.RunServers): beginRun hands the
+	team to RunServers.SendToRun, which saves them and teleports them to their own private
+	run server; that server starts the run through StartTeamRun and sends everyone back to
+	a public lobby after it (OnBackInLobby). Studio / a failed teleport play here as before.
+	Modes live in Config.Modes; "Squad" (old 1-4 mode) is still
 	accepted from old clients. The lobby's ProximityPrompts are switched off: the 2D lobby
 	screen (UIBuilder / LobbyScreen) sends StartRun / StartNow / CycleArena instead.
 
@@ -24319,10 +24563,18 @@ function RunManager.HoldReward(rp)
 	RunManager.RefreshFrozen()
 end
 
+-- A short invulnerability after a choice / reward closes (Config.Player.ChoiceGraceSeconds).
+function RunManager.GrantChoiceGrace(rp)
+	if rp.Alive then
+		rp.InvulnUntil = math.max(rp.InvulnUntil or 0, os.clock() + (Config.Player.ChoiceGraceSeconds or 0))
+	end
+end
+
 function RunManager.EndReward(rp)
 	if rp.RewardUntil then
 		rp.RewardUntil = nil
 		rp.RewardStart = nil
+		RunManager.GrantChoiceGrace(rp)
 		RunManager.RefreshFrozen()
 	end
 end
@@ -24897,7 +25149,7 @@ local function placeOnArena(arena, i: number, n: number): Vector3
 	return arena.Center + Vector3.new(math.cos(a), 0, math.sin(a)) * (n > 1 and Config.Run.ArenaSpawnSpread or 0)
 end
 
-local function beginRun()
+local function beginRun(here: boolean?)
 	local runStarter = starter -- whose curses the run uses (Solo / Daily: the only player)
 	local list = {}
 	for player in pairs(joined) do
@@ -24910,6 +25162,12 @@ local function beginRun()
 	starter = nil
 	publishJoined()
 	if #list == 0 then
+		setPhase("Lobby")
+		return
+	end
+	-- live game: the team plays on its own private run server (RunServers saves and
+	-- teleports them; this lobby is free again at once). `here` = play on this server.
+	if not here and ctx.RunServers and ctx.RunServers.SendToRun(list, mode, runStarter or list[1], selectedArena) then
 		setPhase("Lobby")
 		return
 	end
@@ -25193,7 +25451,10 @@ function RunManager.EndRun(won: boolean)
 	RunManager.Broadcast(won and "VICTORY!" or "THE SWARM WINS...", won and Color3.fromRGB(255, 220, 80) or Color3.fromRGB(255, 80, 80), true)
 end
 
-local function returnPlayerToLobby(rp)
+-- `how` (RunServers: when a run server sends the player home): "results" (the defeat
+-- results counted down), "menu" (MAIN MENU on the results) or "portal" (the results sit
+-- over the lobby menu: portal return, pause MAIN MENU).
+local function returnPlayerToLobby(rp, how: string?)
 	if rp.Returned then
 		return
 	end
@@ -25204,13 +25465,16 @@ local function returnPlayerToLobby(rp)
 		resetPlayerAttributes(player)
 		spawnCharacter(player, lobbySpawnCFrame(), true)
 		ctx.GoldSystem.SyncProfile(player)
+		if ctx.RunServers then
+			ctx.RunServers.OnBackInLobby(player, how or "portal")
+		end
 	end
 end
 
 -- Clears the run world and goes back to the Lobby phase.
-local function returnAll()
+local function returnAll(how: string?)
 	for _, rp in ipairs(runPlayers) do
-		returnPlayerToLobby(rp)
+		returnPlayerToLobby(rp, how)
 	end
 	table.clear(runPlayers)
 	table.clear(byPlayer)
@@ -25398,6 +25662,9 @@ local function tryJoin(player: Player)
 	if phase ~= "Countdown" or joined[player] or not ctx.DataService.GetData(player) then
 		return
 	end
+	if ctx.RunServers and ctx.RunServers.Blocks(player) then
+		return -- on the way to a run server, or this run server is starting its run
+	end
 	local n = joinedCount()
 	if n >= maxPlayers() then
 		RunManager.Notify(player, "This run is full.", Color3.fromRGB(255, 120, 120))
@@ -25422,7 +25689,8 @@ local function joinParty(player: Player)
 		if phase == "Countdown" then
 			tryJoin(member)
 		end
-		if not joined[member] and phase ~= "Countdown" then
+		local went = byPlayer[member] ~= nil or (ctx.RunServers and ctx.RunServers.IsTravelling(member))
+		if not joined[member] and phase ~= "Countdown" and not went then
 			RunManager.Notify(member, player.DisplayName .. " started a " .. string.upper(modeDef().DisplayName) .. " run with no room for you.", Color3.fromRGB(255, 200, 120))
 		end
 	end
@@ -25433,6 +25701,9 @@ end
 	so others can join. During a countdown any mode button just joins it.
 ]]
 local function startRun(player: Player, newMode: string)
+	if ctx.RunServers and ctx.RunServers.Blocks(player) then
+		return -- on the way to a run server, or this run server is starting its run
+	end
 	if phase == "Countdown" then
 		if newMode == "Daily" then
 			RunManager.Notify(player, "A group run is starting: join it, or play the Daily after it.", Color3.fromRGB(255, 200, 120))
@@ -25444,8 +25715,9 @@ local function startRun(player: Player, newMode: string)
 	if phase ~= "Lobby" or not ctx.DataService.GetData(player) or not isMode(newMode) then
 		return
 	end
-	if ctx.PartyService and not ctx.PartyService.CanStart(player) then
-		RunManager.Notify(player, "Your party leader starts the runs (or leave the party).", Color3.fromRGB(255, 200, 120))
+	local partyBlock = ctx.PartyService and ctx.PartyService.StartBlocked(player)
+	if partyBlock then
+		RunManager.Notify(player, partyBlock, Color3.fromRGB(255, 200, 120))
 		return
 	end
 	mode = newMode
@@ -25469,6 +25741,41 @@ local function startRun(player: Player, newMode: string)
 	if (phase :: string) == "Countdown" then -- tryJoin may have started a full run
 		RunManager.Broadcast(player.DisplayName .. " is starting a " .. string.upper(modeDef().DisplayName) .. " run! Tap JOIN to play.", Color3.fromRGB(120, 255, 160))
 	end
+end
+
+--[[
+	Starts a run on THIS server for `players` (RunServers: a run server's ticket, or the
+	lobby's fallback when the teleport failed): the mode, the arena (already validated) and
+	the starter whose curses / Endless switch it uses. Only from the Lobby phase; returns
+	true when the run is running.
+]]
+function RunManager.StartTeamRun(players: { Player }, newMode: string, arena: string?, startPlayer: Player?): boolean
+	if phase ~= "Lobby" or not isMode(newMode) then
+		return false
+	end
+	mode = newMode
+	state:SetAttribute("Mode", mode)
+	if arena and arena ~= selectedArena and table.find(Config.Arenas.Order, arena) then
+		selectedArena = arena
+		state:SetAttribute("SelectedArena", arena)
+		if lobby.ArenaLabel then
+			lobby.ArenaLabel.Text = "ARENA: " .. string.upper(Config.Arenas[arena].DisplayName)
+		end
+	end
+	table.clear(joined)
+	table.clear(joinedOrder)
+	for _, p in ipairs(players) do
+		if p.Parent and ctx.DataService.GetData(p) and not joined[p] then
+			joined[p] = true
+			table.insert(joinedOrder, p)
+		end
+	end
+	if #joinedOrder == 0 then
+		return false
+	end
+	starter = (startPlayer and joined[startPlayer]) and startPlayer or joinedOrder[1]
+	beginRun(true)
+	return (phase :: string) == "Running"
 end
 
 -- The starter skips the rest of the countdown once someone else has joined.
@@ -25735,7 +26042,7 @@ function RunManager.Step(dt: number)
 			end
 		end
 		if resultsTimer <= 0 or not anyoneWaiting then
-			returnAll()
+			returnAll("results")
 		end
 		return
 	end
@@ -25890,7 +26197,7 @@ function RunManager.Start()
 	Remotes.Listen("ReturnToLobby", function(player)
 		local rp = byPlayer[player]
 		if rp and phase == "Results" then
-			returnPlayerToLobby(rp)
+			returnPlayerToLobby(rp, "menu")
 		end
 	end, 2)
 
@@ -26300,6 +26607,797 @@ return RunModifiers
       </Item>
       <Item class="ModuleScript" referent="56">
         <Properties>
+          <string name="Name">RunServers</string>
+          <string name="Source"><![CDATA[--[[
+	RunServers.lua  (server only)
+	Private run servers: every run in the live game plays on its own reserved server, so a
+	run can always start, whoever else is playing (Config.RunServers).
+
+	Roles (decided once at boot):
+	  Lobby  a public server (today's lobby). When a run would start (RunManager.beginRun:
+	         SOLO, the Daily, a DUO / TRIO countdown's end or START NOW, a party leader's
+	         start after READY) SendToRun takes the team instead of starting it here.
+	  Run    a reserved server of this place (game.PrivateServerId ~= "" and
+	         PrivateServerOwnerId == 0, never a Roblox VIP server) whose players carry a run
+	         ticket in their join data. It starts that run by itself and sends everyone back
+	         to a public lobby afterwards.
+	  Studio, an unpublished place (PlaceId 0) and Enabled = false never leave the server:
+	  runs play on the lobby server exactly as before (role Lobby, SendToRun says no).
+
+	Lobby side (SendToRun → travel):
+	  1. ticket { V, Mode, Endless, Curses, Arena, Day, Members {UserId}, Starter, Party }
+	     (Day is informational: the run server's own UTC day picks the daily, as always)
+	  2. every player's save is written and released (DataService.ReleaseForTeleport) so
+	     the run server loads the latest save at once (no lost gold / unlocks, no double load)
+	  3. TeleportService:ReserveServer, then ONE TeleportAsync for the whole team with
+	     TeleportOptions { ReservedServerAccessCode, TeleportData { SwarmRun = ticket } }
+	  Each step is tried twice. If it still fails, the saves are taken back
+	  (DataService.Reclaim) and the run starts on this server as before (RunManager.
+	  StartTeamRun), with a toast. A single player whose teleport fails (TeleportInitFailed,
+	  or still here after TeleportTimeoutSeconds) is retried once alone, then taken back: a
+	  solo / daily run then starts here, a team member is told to start again.
+	  Player attribute "Travel" = "ToRun" shows the client's "Travelling to your run…" cover
+	  (TravelOverlay); Blocks() keeps those players out of other starts and countdowns.
+
+	Run server side:
+	  The first valid ticket is the server's (every field sanitised again here: join data
+	  passes through the client). Only its Members may stay; anyone else (or a member who
+	  arrives after the run started) is sent back to a lobby with a toast. The run starts
+	  when the whole team's saves are loaded, or after WaitForTeamSeconds (WaitForLoadSeconds
+	  while someone who is here is still loading). Character ownership is the save's, as
+	  in any run; the arena must be unlocked for someone in the team (else the first arena);
+	  the starter's curses / Endless switch are the ticket's (sanitised: they are the
+	  starter's own lobby pick). SwarmState "RunServer" (true), "RunServerStatus"
+	  ("Waiting" | "Started" | "Failed"), "RunServerHere" / "RunServerExpected" drive the
+	  client's "Starting…" cover; the lobby menu under it can't start anything meanwhile.
+	  Back in the lobby after a run (RunManager.returnPlayerToLobby → OnBackInLobby) the
+	  player goes home after HomeDelaySeconds (results over the lobby menu) or
+	  HomeDelayAfterResultsSeconds (the defeat results already counted down); player
+	  attribute "TravelHomeIn" shows the countdown with GO NOW / STAY (remote TravelHome).
+	  Going home saves and releases first, then TeleportAsync(game.PlaceId, players) with
+	  TeleportData { SwarmReturn = { Party } }: party mates waiting at the same moment go in
+	  one teleport (same lobby server) and PartyService re-forms the party there. If the
+	  teleport fails twice the save is taken back and the run server's own lobby stays
+	  usable (runs started there play here). Roblox closes the reserved server when empty;
+	  DataService's BindToClose saves anyone left.
+
+	Leaderboards, the daily, achievements and DEV taint are per run already; DEV commands
+	stay behind DevAccess on run servers too.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
+local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
+
+local RunServers = {}
+
+export type Ticket = {
+	V: number,
+	Mode: string,
+	Endless: boolean,
+	Curses: { string },
+	Arena: string,
+	Day: number,
+	Members: { number },
+	Starter: number,
+	Party: { Leader: number, Members: { number } }?,
+}
+
+type Travel = { Kind: string, Players: { Player }, Options: any, Ticket: Ticket?, Retried: { [Player]: boolean } }
+
+local ctx
+local state: Configuration
+local role = "Lobby"
+
+-- lobby + run: players on their way out through one of our teleports
+local travelling: { [Player]: Travel } = {}
+-- players whose teleport failures are ours to report (PartyService stays quiet)
+local ownTeleport: { [Player]: number } = {}
+
+-- run server
+local ticket: Ticket? = nil
+local expected: { [number]: boolean } = {}
+local firstArrival = 0
+local status = "Waiting"
+local refused: { [Player]: string } = {} -- sent home once their save is loaded
+local homeAt: { [Player]: number } = {} -- back in the run server's lobby: goes home at (os.clock)
+
+local GOOD = Color3.fromRGB(120, 255, 160)
+local WARN = Color3.fromRGB(255, 200, 120)
+local BAD = Color3.fromRGB(255, 120, 120)
+
+local function cfg()
+	return Config.RunServers
+end
+
+local function notify(player: Player, text: string, color: Color3?)
+	if player.Parent then
+		Remotes.FireClient("Notify", player, { Text = text, Color = color })
+	end
+end
+
+-- Teleports are possible: the live game with the feature on.
+local function live(): boolean
+	return cfg() ~= nil and cfg().Enabled == true and not RunService:IsStudio() and game.PlaceId ~= 0
+end
+
+function RunServers.Role(): string
+	return role
+end
+
+function RunServers.IsRunServer(): boolean
+	return role == "Run"
+end
+
+------------------------------------------------------------------------------------------
+-- Tickets
+------------------------------------------------------------------------------------------
+
+local function validMode(mode: any): boolean
+	return type(mode) == "string" and type((Config.Modes :: any)[mode]) == "table" and mode ~= "Order"
+end
+
+local function cleanIds(list: any, max: number): { number }?
+	if type(list) ~= "table" then
+		return nil
+	end
+	local out, seen = {}, {}
+	for i = 1, max do
+		local id = list[i]
+		if id == nil then
+			break
+		end
+		if type(id) ~= "number" or id ~= id or id <= 0 or id % 1 ~= 0 or id > 2 ^ 53 then
+			return nil
+		end
+		if not seen[id] then
+			seen[id] = true
+			table.insert(out, id)
+		end
+	end
+	if list[max + 1] ~= nil then
+		return nil
+	end
+	return out
+end
+
+local function cleanParty(raw: any, members: { number }?): { Leader: number, Members: { number } }?
+	if type(raw) ~= "table" or type(raw.Leader) ~= "number" then
+		return nil
+	end
+	local ids = cleanIds(raw.Members, Config.Run.MaxPlayers)
+	if not ids or not table.find(ids, raw.Leader) then
+		return nil
+	end
+	if members then
+		for _, id in ipairs(ids) do
+			if not table.find(members, id) then
+				return nil
+			end
+		end
+	end
+	return { Leader = raw.Leader, Members = ids }
+end
+
+--[[
+	Checks every field of a ticket that came back through join data (it passes through the
+	client, so it is never trusted as is). Returns a clean copy or nil.
+]]
+function RunServers.SanitizeTicket(raw: any): Ticket?
+	if type(raw) ~= "table" or raw.V ~= cfg().TicketVersion or not validMode(raw.Mode) then
+		return nil
+	end
+	local modeDef = (Config.Modes :: any)[raw.Mode]
+	local cap = math.min(Config.Run.MaxPlayers, modeDef.MaxPlayers or 1)
+	local members = cleanIds(raw.Members, cap)
+	if not members or #members == 0 then
+		return nil
+	end
+	local starter = (type(raw.Starter) == "number" and table.find(members, raw.Starter)) and raw.Starter or members[1]
+	local arena = (type(raw.Arena) == "string" and table.find(Config.Arenas.Order, raw.Arena)) and raw.Arena or Config.Arenas.Order[1]
+	local day = (type(raw.Day) == "number" and raw.Day == raw.Day) and math.floor(raw.Day) or 0
+	return {
+		V = cfg().TicketVersion,
+		Mode = raw.Mode,
+		Endless = raw.Endless == true and Config.Endless.Enabled == true and table.find(Config.Endless.Modes, raw.Mode) ~= nil,
+		Curses = CurseData.Sanitize(raw.Curses) or {},
+		Arena = arena,
+		Day = day,
+		Members = members,
+		Starter = starter,
+		Party = cleanParty(raw.Party, members),
+	}
+end
+
+-- The ticket for a team about to start on this lobby server.
+function RunServers.BuildTicket(list: { Player }, mode: string, starter: Player, arena: string): Ticket
+	local members = {}
+	for _, p in ipairs(list) do
+		table.insert(members, p.UserId)
+	end
+	local data = ctx.DataService.GetData(starter)
+	local party = nil
+	local pt = ctx.PartyService and ctx.PartyService.PartyOf(starter)
+	if pt then
+		local ids = {}
+		for _, m in ipairs(pt.Members) do
+			if table.find(members, m.UserId) then
+				table.insert(ids, m.UserId)
+			end
+		end
+		if #ids > 1 and table.find(ids, pt.Leader.UserId) then
+			party = { Leader = pt.Leader.UserId, Members = ids }
+		end
+	end
+	return {
+		V = cfg().TicketVersion,
+		Mode = mode,
+		Endless = data ~= nil and data.Endless == true,
+		Curses = data and CurseData.Sanitize(data.Curses) or {},
+		Arena = arena,
+		Day = ctx.RunModifiers.Today(),
+		Members = members,
+		Starter = starter.UserId,
+		Party = party,
+	}
+end
+
+local function joinTeleportData(player: Player): any
+	local ok, data = pcall(function()
+		return player:GetJoinData()
+	end)
+	if ok and type(data) == "table" and type(data.TeleportData) == "table" then
+		return data.TeleportData
+	end
+	return nil
+end
+
+-- The SwarmReturn part of a player's join data (back from a run server), or nil.
+function RunServers.ReturnData(player: Player): { Party: { Leader: number, Members: { number } }? }?
+	local td = joinTeleportData(player)
+	local raw = td and td.SwarmReturn
+	if type(raw) ~= "table" then
+		return nil
+	end
+	return { Party = cleanParty(raw.Party, nil) }
+end
+
+------------------------------------------------------------------------------------------
+-- Teleports
+------------------------------------------------------------------------------------------
+
+local function setTravel(player: Player, kind: string?)
+	if player.Parent then
+		player:SetAttribute("Travel", kind or "")
+	end
+end
+
+local function makeOptions(code: string?, data: { [string]: any }): any
+	local options = Instance.new("TeleportOptions")
+	if code then
+		options.ReservedServerAccessCode = code
+	end
+	options:SetTeleportData(data)
+	return options
+end
+
+-- One TeleportAsync for these players, tried twice. True when Roblox accepted it.
+local function teleport(players: { Player }, options: any): boolean
+	for attempt = 1, 2 do
+		local here = {}
+		for _, p in ipairs(players) do
+			if p.Parent then
+				table.insert(here, p)
+			end
+		end
+		if #here == 0 then
+			return true
+		end
+		local ok, err = pcall(function()
+			TeleportService:TeleportAsync(game.PlaceId, here, options)
+		end)
+		if ok then
+			return true
+		end
+		warn("[RunServers] TeleportAsync failed: " .. tostring(err))
+		if attempt < 2 then
+			task.wait(1)
+		end
+	end
+	return false
+end
+
+-- Takes a released save back (the player stays). False: the player is kicked to rejoin
+-- (their save from just before the teleport is safe in the store).
+local function takeBack(player: Player): boolean
+	if not player.Parent then
+		return false
+	end
+	if not ctx.DataService.IsReleased(player) then
+		return ctx.DataService.GetData(player) ~= nil
+	end
+	if ctx.DataService.Reclaim(player) then
+		ctx.GoldSystem.SyncProfile(player)
+		return true
+	end
+	if player.Parent then
+		player:Kick("Couldn't reach your run's server. Please rejoin: your progress is saved.")
+	end
+	return false
+end
+
+local function settle(player: Player)
+	travelling[player] = nil
+	setTravel(player, nil)
+	ownTeleport[player] = os.clock()
+	task.delay(10, function()
+		if ownTeleport[player] and os.clock() - ownTeleport[player] >= 9 then
+			ownTeleport[player] = nil
+		end
+	end)
+end
+
+-- Lobby: the team could not travel. Saves back, and the run starts on this server.
+local function fallbackHere(players: { Player }, t: Ticket, starter: Player?)
+	local back = {}
+	for _, p in ipairs(players) do
+		settle(p)
+		if takeBack(p) then
+			table.insert(back, p)
+		end
+	end
+	if #back == 0 then
+		return
+	end
+	for _, p in ipairs(back) do
+		notify(p, "Couldn't reach a run server: playing on this server.", WARN)
+	end
+	if not ctx.RunManager.StartTeamRun(back, t.Mode, t.Arena, starter) then
+		for _, p in ipairs(back) do
+			notify(p, "Couldn't start the run right now: try again.", BAD)
+		end
+	end
+end
+
+-- One player's teleport failed for good (after its retry).
+local function failOne(player: Player)
+	local tr = travelling[player]
+	if not tr then
+		return
+	end
+	settle(player)
+	if not player.Parent then
+		return
+	end
+	if tr.Kind == "Run" then
+		local t = tr.Ticket :: Ticket
+		if #t.Members == 1 then
+			fallbackHere({ player }, t, player)
+		elseif takeBack(player) then
+			notify(player, "Couldn't reach your team's run server. Start a new run.", BAD)
+		end
+	elseif takeBack(player) then
+		homeAt[player] = nil
+		player:SetAttribute("TravelHomeIn", nil)
+		notify(player, "Couldn't reach a lobby server: you can keep playing here.", WARN)
+	end
+end
+
+local function onTeleportFailed(player: Player, result: any, message: any)
+	local tr = travelling[player]
+	if not tr then
+		return
+	end
+	warn(string.format("[RunServers] teleport failed for %s: %s %s", player.Name, tostring(result), tostring(message)))
+	if not tr.Retried[player] then
+		tr.Retried[player] = true
+		task.spawn(function()
+			task.wait(1)
+			if travelling[player] == tr and player.Parent then
+				local ok = pcall(function()
+					TeleportService:TeleportAsync(game.PlaceId, { player }, tr.Options)
+				end)
+				if not ok then
+					failOne(player)
+				end
+			end
+		end)
+		return
+	end
+	failOne(player)
+end
+
+-- Players still here long after their teleport: it failed silently.
+local function watchTimeout(tr: Travel)
+	task.delay(cfg().TeleportTimeoutSeconds, function()
+		for _, p in ipairs(tr.Players) do
+			if travelling[p] == tr and p.Parent then
+				warn("[RunServers] teleport timed out for " .. p.Name)
+				failOne(p)
+			end
+		end
+	end)
+end
+
+-- True while RunServers reports this player's teleport problems (PartyService stays quiet).
+function RunServers.OwnsTeleport(player: Player): boolean
+	return travelling[player] ~= nil or ownTeleport[player] ~= nil
+end
+
+------------------------------------------------------------------------------------------
+-- Lobby: send a team to a fresh run server
+------------------------------------------------------------------------------------------
+
+local function travelToRun(list: { Player }, t: Ticket, starter: Player)
+	-- 1. save and release every profile: the run server loads exactly this
+	local released = true
+	for _, p in ipairs(list) do
+		if p.Parent and not ctx.DataService.ReleaseForTeleport(p) then
+			released = false
+		end
+	end
+	if not released then
+		warn("[RunServers] a save could not be released: the run plays here")
+		fallbackHere(list, t, starter)
+		return
+	end
+	-- 2. a fresh reserved server of this place
+	local code: string? = nil
+	for attempt = 1, 2 do
+		local ok, result = pcall(function()
+			return TeleportService:ReserveServer(game.PlaceId)
+		end)
+		if ok and type(result) == "string" and result ~= "" then
+			code = result
+			break
+		end
+		warn("[RunServers] ReserveServer failed: " .. tostring(result))
+		if attempt < 2 then
+			task.wait(1)
+		end
+	end
+	if not code then
+		fallbackHere(list, t, starter)
+		return
+	end
+	-- 3. the whole team in one teleport
+	local tr: Travel = { Kind = "Run", Players = list, Options = makeOptions(code, { SwarmRun = t }), Ticket = t, Retried = {} }
+	for _, p in ipairs(list) do
+		travelling[p] = tr
+	end
+	if not teleport(list, tr.Options) then
+		fallbackHere(list, t, starter)
+		return
+	end
+	watchTimeout(tr)
+end
+
+--[[
+	RunManager.beginRun asks first: true = the team is on its way to a private run server
+	(this lobby goes straight back to its Lobby phase); false = play here (Studio, feature
+	off, a run server's own lobby).
+]]
+function RunServers.SendToRun(list: { Player }, mode: string, starter: Player, arena: string): boolean
+	if role ~= "Lobby" or not live() or #list == 0 then
+		return false
+	end
+	local t = RunServers.BuildTicket(list, mode, starter, arena)
+	for _, p in ipairs(list) do
+		travelling[p] = { Kind = "Run", Players = list, Options = nil, Ticket = t, Retried = {} }
+		setTravel(p, "ToRun")
+	end
+	task.spawn(travelToRun, list, t, starter)
+	return true
+end
+
+-- On the way to a run server (or home from one) right now.
+function RunServers.IsTravelling(player: Player): boolean
+	return travelling[player] ~= nil
+end
+
+-- RunManager: this player may not start or join a run now (travelling, or this run
+-- server is still starting its own run).
+function RunServers.Blocks(player: Player): boolean
+	if travelling[player] then
+		return true
+	end
+	return role == "Run" and status == "Waiting"
+end
+
+------------------------------------------------------------------------------------------
+-- Run server: back to a public lobby
+------------------------------------------------------------------------------------------
+
+local function sendHome(list: { Player }, why: string?)
+	local group = {}
+	for _, p in ipairs(list) do
+		if p.Parent and not travelling[p] then
+			table.insert(group, p)
+		end
+	end
+	if #group == 0 then
+		return
+	end
+	local t = ticket
+	local data = { SwarmReturn = { V = cfg().TicketVersion, Party = t and t.Party or nil } }
+	local tr: Travel = { Kind = "Home", Players = group, Options = makeOptions(nil, data), Ticket = t, Retried = {} }
+	local ready = {}
+	for _, p in ipairs(group) do
+		homeAt[p] = nil
+		p:SetAttribute("TravelHomeIn", nil)
+		if why then
+			notify(p, why, WARN)
+		end
+		-- a save that never loaded here (refused before loading) has nothing to hand over
+		if ctx.DataService.GetData(p) == nil or ctx.DataService.ReleaseForTeleport(p) then
+			travelling[p] = tr
+			setTravel(p, "ToLobby")
+			table.insert(ready, p)
+		else
+			notify(p, "Couldn't save before travelling: you can keep playing here.", WARN)
+		end
+	end
+	if #ready == 0 then
+		return
+	end
+	tr.Players = ready
+	if not teleport(ready, tr.Options) then
+		for _, p in ipairs(ready) do
+			failOne(p)
+		end
+		return
+	end
+	watchTimeout(tr)
+end
+
+-- Everyone waiting to go home at this moment who shares a party with `player` (one teleport
+-- keeps them together).
+local function withPartyMates(player: Player): { Player }
+	local list = { player }
+	local party = ticket and ticket.Party
+	if party and table.find(party.Members, player.UserId) then
+		for other in pairs(homeAt) do
+			if other ~= player and other.Parent and table.find(party.Members, other.UserId) then
+				table.insert(list, other)
+			end
+		end
+	end
+	return list
+end
+
+--[[
+	RunManager.returnPlayerToLobby: the player's run is over. On a run server they go back
+	to a public lobby after a short wait (the results stay readable; GO NOW / STAY).
+]]
+function RunServers.OnBackInLobby(player: Player, how: string)
+	if role ~= "Run" or not live() then
+		return
+	end
+	local delay = how == "portal" and cfg().HomeDelaySeconds or cfg().HomeDelayAfterResultsSeconds
+	homeAt[player] = os.clock() + delay
+	player:SetAttribute("TravelHomeIn", math.ceil(delay))
+end
+
+local function homeStep()
+	local now = os.clock()
+	local due: { Player } = {}
+	for player, at in pairs(homeAt) do
+		if not player.Parent then
+			homeAt[player] = nil
+		elseif player:GetAttribute("InRun") == true then
+			-- REPLAY started a new run here: it goes home after that one
+			homeAt[player] = nil
+			player:SetAttribute("TravelHomeIn", nil)
+		else
+			local left = math.max(0, math.ceil(at - now))
+			if player:GetAttribute("TravelHomeIn") ~= left then
+				player:SetAttribute("TravelHomeIn", left)
+			end
+			if now >= at then
+				table.insert(due, player)
+			end
+		end
+	end
+	local sent: { [Player]: boolean } = {}
+	for _, player in ipairs(due) do
+		if not sent[player] then
+			local group = withPartyMates(player)
+			for _, p in ipairs(group) do
+				sent[p] = true
+			end
+			task.spawn(sendHome, group)
+		end
+	end
+end
+
+local function onTravelHome(player: Player, choice: any)
+	if role ~= "Run" or not homeAt[player] then
+		return
+	end
+	if choice == "Go" then
+		local group = withPartyMates(player)
+		for _, p in ipairs(group) do
+			homeAt[p] = nil
+		end
+		task.spawn(sendHome, group)
+	elseif choice == "Stay" then
+		homeAt[player] = nil
+		player:SetAttribute("TravelHomeIn", nil)
+		notify(player, "Staying here: start another run from the menu, or leave any time.", GOOD)
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- Run server: arrivals and the automatic start
+------------------------------------------------------------------------------------------
+
+local function setStatus(s: string)
+	status = s
+	state:SetAttribute("RunServerStatus", s)
+end
+
+local function arenaFor(t: Ticket, players: { Player }): string
+	local def = (Config.Arenas :: any)[t.Arena]
+	local need = def and def.RequiredBestStage or 0
+	for _, p in ipairs(players) do
+		local data = ctx.DataService.GetData(p)
+		if data and (data.Stats.BestStage or 0) >= need then
+			return t.Arena
+		end
+	end
+	return Config.Arenas.Order[1]
+end
+
+local function startTicketRun()
+	local t = ticket :: Ticket
+	local list, starter = {}, nil
+	for _, id in ipairs(t.Members) do
+		local p = Players:GetPlayerByUserId(id)
+		if p and ctx.DataService.GetData(p) then
+			table.insert(list, p)
+			if id == t.Starter then
+				starter = p
+			end
+		end
+	end
+	starter = starter or list[1]
+	if not starter then
+		return
+	end
+	-- the starter's lobby pick travelled with the ticket (their own choice: sanitised)
+	if t.Mode ~= CurseData.DailyMode then
+		local data = ctx.DataService.GetData(starter)
+		if data then
+			data.Curses = table.clone(t.Curses)
+			data.Endless = t.Endless
+			starter:SetAttribute("Curses", CurseData.ToString(t.Curses))
+			starter:SetAttribute("Endless", t.Endless)
+		end
+	end
+	setStatus("Started")
+	if not ctx.RunManager.StartTeamRun(list, t.Mode, arenaFor(t, list), starter) then
+		setStatus("Failed")
+		sendHome(list, "The run couldn't start: back to the lobby.")
+	end
+end
+
+local function waitAndStart()
+	while status == "Waiting" do
+		local t = ticket :: Ticket
+		local here, loaded = 0, 0
+		for _, id in ipairs(t.Members) do
+			local p = Players:GetPlayerByUserId(id)
+			if p then
+				here += 1
+				if ctx.DataService.GetData(p) then
+					loaded += 1
+				end
+			end
+		end
+		state:SetAttribute("RunServerHere", loaded)
+		local waited = os.clock() - firstArrival
+		if loaded >= #t.Members or (loaded > 0 and waited >= cfg().WaitForTeamSeconds and here <= loaded) or (loaded > 0 and waited >= cfg().WaitForLoadSeconds) then
+			startTicketRun()
+			return
+		end
+		if waited >= cfg().GiveUpSeconds then
+			setStatus("Failed")
+			sendHome(Players:GetPlayers(), "The run couldn't start: back to the lobby.")
+			return
+		end
+		task.wait(0.25)
+	end
+end
+
+local function refuse(player: Player, why: string)
+	refused[player] = why
+	if ctx.DataService.GetData(player) then
+		refused[player] = nil
+		sendHome({ player }, why)
+	end
+end
+
+local function onArrival(player: Player)
+	local td = joinTeleportData(player)
+	local t = td and RunServers.SanitizeTicket(td.SwarmRun)
+	if not ticket and t and table.find(t.Members, player.UserId) then
+		ticket = t
+		for _, id in ipairs(t.Members) do
+			expected[id] = true
+		end
+		firstArrival = os.clock()
+		state:SetAttribute("RunServerExpected", #t.Members)
+		state:SetAttribute("RunServerMode", t.Mode)
+		task.spawn(waitAndStart)
+	end
+	if not expected[player.UserId] then
+		refuse(player, "That run is private: back to the lobby.")
+	elseif status ~= "Waiting" and not ctx.RunManager.IsParticipant(player) then
+		refuse(player, "Your team's run already started: back to the lobby.")
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- Lifecycle
+------------------------------------------------------------------------------------------
+
+function RunServers.Init(c)
+	ctx = c
+	state = Remotes.State()
+	if live() and game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0 then
+		role = "Run"
+	end
+	state:SetAttribute("RunServer", role == "Run")
+	if role == "Run" then
+		setStatus("Waiting")
+		state:SetAttribute("RunServerHere", 0)
+		state:SetAttribute("RunServerExpected", 0)
+	end
+end
+
+function RunServers.Start()
+	pcall(function()
+		TeleportService.TeleportInitFailed:Connect(onTeleportFailed)
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		travelling[player] = nil
+		ownTeleport[player] = nil
+		homeAt[player] = nil
+		refused[player] = nil
+	end)
+	if role ~= "Run" then
+		return
+	end
+	Remotes.Listen("TravelHome", onTravelHome, 2)
+	Players.PlayerAdded:Connect(onArrival)
+	for _, p in ipairs(Players:GetPlayers()) do
+		task.spawn(onArrival, p)
+	end
+	ctx.DataService.OnProfileLoaded(function(player)
+		local why = refused[player]
+		if why then
+			refused[player] = nil
+			sendHome({ player }, why)
+		end
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(0.25)
+			homeStep()
+		end
+	end)
+end
+
+return RunServers
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="57">
+        <Properties>
           <string name="Name">SpatialGrid</string>
           <string name="Source"><![CDATA[--[[
 	SpatialGrid.lua
@@ -26468,7 +27566,7 @@ return SpatialGrid
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="57">
+      <Item class="ModuleScript" referent="58">
         <Properties>
           <string name="Name">StageManager</string>
           <string name="Source"><![CDATA[--[[
@@ -27303,7 +28401,7 @@ return StageManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="58">
+      <Item class="ModuleScript" referent="59">
         <Properties>
           <string name="Name">WeaponSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -29240,7 +30338,7 @@ return WeaponSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="59">
+      <Item class="ModuleScript" referent="60">
         <Properties>
           <string name="Name">XPSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -29723,19 +30821,19 @@ return XPSystem
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="60">
+  <Item class="SoundService" referent="61">
     <Properties>
       <string name="Name">SoundService</string>
       <bool name="RespectFilteringEnabled">true</bool>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="61">
+  <Item class="StarterGui" referent="62">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="62">
+  <Item class="StarterPlayer" referent="63">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <float name="CameraMaxZoomDistance">120</float>
@@ -29748,15 +30846,15 @@ return XPSystem
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="63">
+    <Item class="StarterPlayerScripts" referent="64">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="64">
+      <Item class="Folder" referent="65">
         <Properties>
           <string name="Name">SwarmClient</string>
         </Properties>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">ArtImage</string>
             <string name="Source"><![CDATA[--[[
@@ -30126,7 +31224,7 @@ return ArtImage
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">AssetPreload</string>
             <string name="Source"><![CDATA[--[[
@@ -30277,7 +31375,7 @@ return AssetPreload
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">Audio</string>
             <string name="Source"><![CDATA[--[[
@@ -30618,7 +31716,7 @@ return Audio
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">BugReportUI</string>
             <string name="Source"><![CDATA[--[[
@@ -30946,7 +32044,7 @@ return BugReportUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">CameraController</string>
             <string name="Source"><![CDATA[--[[
@@ -31234,7 +32332,7 @@ return CameraController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="70">
+        <Item class="LocalScript" referent="71">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[--[[
@@ -31376,6 +32474,7 @@ VFX.Init({
 })
 UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls })
 DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer
+require(script.Parent:WaitForChild("TravelOverlay")).Init() -- private run servers: travel cover + go-home banner
 
 -- Humanoid state switches don't replicate and the client owns its character, so the
 -- server's settings are repeated here: no tripping, ragdolling or dying (jumps: JumpController).
@@ -31423,7 +32522,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">ClientSettings</string>
             <string name="Source"><![CDATA[--[[
@@ -31519,7 +32618,7 @@ return ClientSettings
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">CombatFx</string>
             <string name="Source"><![CDATA[--[[
@@ -32125,7 +33224,7 @@ return CombatFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">Cosmetics</string>
             <string name="Source"><![CDATA[--[[
@@ -32202,7 +33301,7 @@ return Cosmetics
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">DamageText</string>
             <string name="Source"><![CDATA[--[[
@@ -32431,7 +33530,7 @@ return DamageText
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">DevInbox</string>
             <string name="Source"><![CDATA[--[[
@@ -32811,7 +33910,7 @@ return DevInbox
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">DevPanel</string>
             <string name="Source"><![CDATA[--[[
@@ -33259,7 +34358,7 @@ return DevPanel
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">EnemyRenderer</string>
             <string name="Source"><![CDATA[--[[
@@ -34431,7 +35530,7 @@ return EnemyRenderer
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--[[
@@ -35088,7 +36187,7 @@ local function layout()
 		k = math.min(compact and 0.86 or 1, (W - 2 * M) / invW, (H * 0.22) / invH)
 	else
 		local jumpClear = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26) / scale + ins.Right + 12
-		k = math.min(compact and 0.72 or 1, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.3) / invH)
+		k = math.min(compact and 0.62 or 0.78, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.24) / invH)
 	end
 	ui.BarFit.Scale = k
 	local barW, barH = invW * k, invH * k
@@ -35740,7 +36839,7 @@ local function updateStatus(state: Configuration, phase: string, stagePhase: str
 		elseif (player:GetAttribute("PartnerRevivesLeft") or 0) > 0 then
 			setStatus("You fell! A teammate can revive you by standing next to you.", "people2")
 		else
-			setStatus("You fell. Spectating your team...", "skull")
+			setStatus("You fell. Spectating your team · Pause → MAIN MENU to leave now", "skull")
 		end
 	else
 		setStatus("")
@@ -35802,15 +36901,27 @@ function Hud.Reset()
 	end
 end
 
+-- The HUD is shown in a run (SetVisible) and hidden while a full-screen modal covers it
+-- (SetCovered: level-up, chest reel, pause, revive, results), so its timer / health panel
+-- never sit on top of or show through a modal's title and buttons.
+local hudOn, hudCovered = false, false
 function Hud.SetVisible(on: boolean)
+	hudOn = on
 	if ui.Frame then
-		ui.Frame.Visible = on
+		ui.Frame.Visible = on and not hudCovered
 	end
 	if not on then
 		stopBanner()
 		if ui.VignetteLevel then
 			ui.VignetteLevel.Value = 1
 		end
+	end
+end
+
+function Hud.SetCovered(on: boolean)
+	hudCovered = on
+	if ui.Frame then
+		ui.Frame.Visible = hudOn and not on
 	end
 end
 
@@ -35857,7 +36968,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">Icons</string>
             <string name="Source"><![CDATA[--[[
@@ -37864,7 +38975,7 @@ return Icons
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">JumpController</string>
             <string name="Source"><![CDATA[--[[
@@ -38073,7 +39184,7 @@ return JumpController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="81">
+        <Item class="ModuleScript" referent="82">
           <Properties>
             <string name="Name">LobbyScreen</string>
             <string name="Source"><![CDATA[--[[
@@ -38096,8 +39207,9 @@ return JumpController
 	                this column.
 	  bottom left   SETTINGS, STATS, RANKS (leaderboards), TRACK (account level); portrait
 	                adds PARTY to this row
-	  top right     PARTY (landscape: left of the stats chip): party size, a red badge for
-	                open invites; opens the PARTY screen (MenuParty)
+	  top right     PARTY (landscape: left of the stats chip): party size / ready count, a red
+	                badge for open invites; opens the PARTY screen (MenuParty). A party member
+	                also gets READY / UNREADY beside it (portrait: under the stats chip)
 	  nameplate     your level, name, worn title / colour above the hero's plate
 	Portrait stacks: logo, stats, hero, nameplate, curses + daily, endless, modes, cards,
 	corner buttons.
@@ -38749,7 +39861,7 @@ local function buildParty(screen: Frame)
 	ui.PartyBtn = UIKit.Button(screen, {
 		Kind = "Secondary",
 		Title = "PARTY",
-		Subtitle = "Play with friends",
+		Subtitle = "With friends",
 		Icon = "people2",
 		IconSize = 26,
 		TitleSize = 18,
@@ -38771,6 +39883,19 @@ local function buildParty(screen: Frame)
 		end,
 	})
 	ui.PartyCornerBadge = partyBadge(ui.PartyCornerBtn.Instance)
+	-- a party member's READY toggle (the leader's start waits for everyone)
+	ui.ReadyBtn = UIKit.Button(screen, {
+		Kind = "Primary",
+		Title = "READY",
+		Icon = "check",
+		IconSize = 18,
+		Align = "Center",
+		Name = "PartyReady",
+		OnClick = function()
+			MenuParty.SetReady(not MenuParty.Summary().MyReady)
+		end,
+	})
+	ui.ReadyBtn.Instance.Visible = false
 end
 
 local function buildHome(screen: Frame)
@@ -38926,6 +40051,13 @@ local function relayout()
 	local heroFrac = 0.5
 
 	setChipFlat(not portrait and current == "Characters")
+	-- phones in landscape: sub-screen titles need the top row, so the chip keeps only GOLD
+	local slim = compact and not portrait and current ~= "Home"
+	for _, ch in ipairs(ui.ChipFace:GetChildren()) do
+		if ch:IsA("GuiObject") and ch ~= ui.Gold.Frame then
+			ch.Visible = not slim
+		end
+	end
 	if portrait then
 		local logoScale = math.clamp((W - 2 * M) / 380, 0.66, 0.85)
 		ui.LogoScale.Scale = logoScale
@@ -38943,6 +40075,7 @@ local function relayout()
 		ui.PartyCornerBtn.Instance.Visible = true
 		ui.PartyBtn.Instance.Visible = false
 		ui.PlaceParty = nil
+		place(ui.ReadyBtn.Instance, W - M - 132, chipTop + 58, 132, 48)
 		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn, ui.PartyCornerBtn }) do
 			b.Instance.Size = UDim2.fromOffset(math.floor((w - 4 * G) / 5), cornerH)
 		end
@@ -38987,10 +40120,11 @@ local function relayout()
 			local chipW = ui.Chip.AbsoluteSize.X / math.max(0.01, host.Scale())
 			local pw = compact and 180 or 210
 			place(ui.PartyBtn.Instance, W - M - chipW - G - pw, chipY - 2, pw, 52)
+			place(ui.ReadyBtn.Instance, W - M - chipW - 2 * G - pw - 132, chipY, 132, 48)
 		end
 		ui.PlaceParty()
 		local logoBottom = logoY + (ui.LogoH - 4) * logoScale
-		local cw = math.clamp(W * 0.27, 290, 360)
+		local cw = math.clamp(W * 0.27, compact and 320 or 290, 360) -- phones: room for CHARACTERS
 		local cornerW = 4 * 76 + 3 * G
 		local cornerSize = cornerW <= cw + 40 and 76 or 64
 		place(ui.Corner, M, H - M - cornerSize, 4 * cornerSize + 3 * G, cornerSize)
@@ -39395,7 +40529,20 @@ function LobbyScreen.Update(_dt: number?)
 
 	-- PARTY: size and open invites
 	local party = MenuParty.Summary()
-	local partySub = party.Count > 0 and string.format("%d/%d · %s", party.Count, party.Max, party.Leader and "Leader" or "Member") or "Play with friends"
+	local partySub = "With friends"
+	if party.Count > 0 then
+		partySub = party.Others > 0 and string.format("%d/%d · %d/%d ready", party.Count, party.Max, party.Ready, party.Others) or string.format("%d/%d · %s", party.Count, party.Max, party.Leader and "Leader" or "Member")
+	end
+	-- READY: members only, while the mode buttons show
+	local showReady = party.Count > 0 and not party.Leader and kind == "Modes"
+	ui.ReadyBtn.Instance.Visible = showReady
+	local readyText = party.MyReady and "UNREADY" or "READY"
+	if showReady and ui.ReadyBtn.Instance:GetAttribute("Shown") ~= readyText then
+		ui.ReadyBtn.Instance:SetAttribute("Shown", readyText)
+		ui.ReadyBtn.SetText(readyText)
+		ui.ReadyBtn.SetKind(party.MyReady and "Secondary" or "Primary")
+		ui.ReadyBtn.SetIcon(not party.MyReady and "check" or nil)
+	end
 	if ui.PartyBtn.Subtitle and ui.PartyBtn.Subtitle.Text ~= partySub then
 		ui.PartyBtn.SetText(nil, partySub)
 		ui.PartyBtn.SetSelected(party.Count > 0)
@@ -39524,7 +40671,7 @@ return LobbyScreen
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="82">
+        <Item class="ModuleScript" referent="83">
           <Properties>
             <string name="Name">LootUI</string>
             <string name="Source"><![CDATA[--[[
@@ -40581,7 +41728,7 @@ return LootUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">MenuArenas</string>
             <string name="Source"><![CDATA[--[[
@@ -40998,7 +42145,7 @@ return MenuArenas
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">MenuCharacters</string>
             <string name="Source"><![CDATA[--[[
@@ -41824,7 +42971,7 @@ return MenuCharacters
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">MenuCurses</string>
             <string name="Source"><![CDATA[--[[
@@ -42088,7 +43235,7 @@ return MenuCurses
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="86">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">MenuDaily</string>
             <string name="Source"><![CDATA[--[[
@@ -42623,7 +43770,7 @@ return MenuDaily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="87">
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">MenuLeaderboards</string>
             <string name="Source"><![CDATA[--[[
@@ -43068,7 +44215,7 @@ return MenuLeaderboards
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="88">
+        <Item class="ModuleScript" referent="89">
           <Properties>
             <string name="Name">MenuParty</string>
             <string name="Source"><![CDATA[--[[
@@ -43078,8 +44225,9 @@ return MenuLeaderboards
 	once, up to the mode's size (server PartyService + RunManager; nothing here is trusted).
 
 	  left    YOUR PARTY n/max: open invites to you (ACCEPT / DECLINE), the members (round
-	          head shot, display name, LEADER pill, KICK for the leader), open slots, a line on
-	          how party starts work and LEAVE PARTY
+	          head shot, display name, LEADER / READY / NOT READY pills, KICK for the leader,
+	          your own READY toggle), open slots, a line on how party starts work, LEAVE PARTY
+	          and the leader's START (the mode that fits the party; only when all are READY)
 	  right   tabs THIS SERVER (everyone else on this server: status and INVITE / ACCEPT)
 	          and FRIENDS (INVITE FRIENDS = Roblox's own invite prompt through SocialService,
 	          and the friends online list; a friend playing SWARM on another server has JOIN,
@@ -43088,7 +44236,8 @@ return MenuLeaderboards
 	          during a run): who invites you, ACCEPT / DECLINE and the time left
 	Only Roblox display names are shown, and there is no text input. The friends list comes
 	from Player:GetFriendsOnline (pcall'd, cached Config.Party.FriendsCacheSeconds).
-	MenuParty.Summary() feeds the home screen's PARTY button (size, pending invites).
+	MenuParty.Summary() feeds the home screen's PARTY button (size, pending invites, ready
+	count) and its READY button (MenuParty.SetReady).
 ]]
 
 local Players = game:GetService("Players")
@@ -43111,7 +44260,7 @@ local player = Players.LocalPlayer
 local ROW_H = 56
 local ROW_GAP = 6
 
-type State = { LeaderId: number, Members: { { UserId: number, Name: string } }, Max: number, Invites: { { FromId: number, FromName: string, Seconds: number } }, Sent: { number } }
+type State = { LeaderId: number, Members: { { UserId: number, Name: string, Ready: boolean? } }, Max: number, Invites: { { FromId: number, FromName: string, Seconds: number } }, Sent: { number } }
 
 local state: State = { LeaderId = 0, Members = {}, Max = 3, Invites = {}, Sent = {} }
 local deadlines: { [number]: number } = {} -- invite from userId -> os.clock() it expires
@@ -43133,8 +44282,35 @@ local function openInvites(): { { FromId: number, FromName: string, Seconds: num
 end
 
 -- For the home PARTY button: members (0 = no party), max size, open invites, leader?
-function MenuParty.Summary(): { Count: number, Max: number, Invites: number, Leader: boolean }
-	return { Count = #state.Members, Max = state.Max, Invites = #openInvites(), Leader = state.LeaderId == player.UserId }
+function MenuParty.Summary(): { Count: number, Max: number, Invites: number, Leader: boolean, MyReady: boolean, Ready: number, Others: number }
+	local ready, others, mine = 0, 0, false
+	for _, m in ipairs(state.Members) do
+		if m.UserId ~= state.LeaderId then
+			others += 1
+			if m.Ready == true then
+				ready += 1
+				mine = mine or m.UserId == player.UserId
+			end
+		end
+	end
+	return { Count = #state.Members, Max = state.Max, Invites = #openInvites(), Leader = state.LeaderId == player.UserId, MyReady = mine, Ready = ready, Others = others }
+end
+
+-- A member's READY toggle (the home screen's READY button and the PARTY screen).
+function MenuParty.SetReady(on: boolean)
+	Remotes.Get("Party"):FireServer("Ready", on)
+end
+
+-- The lobby mode that takes the whole party (2 → Duo, 3 → Trio), or nil.
+function MenuParty.PartyMode(): string?
+	local n = #state.Members
+	for _, id in ipairs(Config.Modes.Order) do
+		local def = (Config.Modes :: any)[id]
+		if def and def.MaxPlayers == n then
+			return id
+		end
+	end
+	return nil
 end
 
 local function inParty(): boolean
@@ -43449,6 +44625,22 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		end,
 	})
 
+	-- the leader's START: the mode that takes the whole party, once everyone is ready
+	ui.Start = UIKit.Button(left, {
+		Kind = "Primary",
+		Title = "START",
+		Icon = "play",
+		IconSize = 18,
+		Align = "Center",
+		Name = "PartyStart",
+		OnClick = function()
+			local mode = MenuParty.PartyMode()
+			if mode then
+				Remotes.Get("StartRun"):FireServer(mode)
+			end
+		end,
+	})
+
 	-- right: this server / friends
 	local right = new("Frame", { Name = "Find", BackgroundTransparency = 1 }, face)
 	ui.Right = right
@@ -43503,7 +44695,6 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	local function fillParty()
 		clear(plist)
 		local order = 0
-		local full = #state.Members >= state.Max
 		-- invites to you first
 		for _, inv in ipairs(openInvites()) do
 			order += 1
@@ -43527,17 +44718,33 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			order += 1
 			local me = m.UserId == player.UserId
 			local leads = m.UserId == state.LeaderId
-			local sub = leads and "Leader · starts the runs" or (inParty() and "Member" or "Not in a party yet")
+			local ready = m.Ready == true
+			local sub = leads and "Leader · starts the runs" or (inParty() and (ready and "Ready" or "Not ready") or "Not in a party yet")
 			local canKick = isLeader() and not me
-			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, leads and P.gold_300 or nil, canKick and (bw(100, "KICK") + 12 + (leads and 96 or 0)) or (leads and 96 or 0), me)
-			if leads then
-				local pill = UIKit.StatusPill(f, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, canKick and -(bw(100, "KICK") + 20) or -12, 0.5, 0), Name = "Leader" })
-				UIKit.SetStatus(pill, "READY", "LEADER")
+			local toggle = me and not leads and inParty()
+			-- right side: [pill] [KICK | READY toggle]
+			local btnW = canKick and bw(100, "KICK") or (toggle and bw(120, ready and "UNREADY" or "READY") or 0)
+			local pillW = (leads or (inParty() and not toggle)) and (ready and 84 or 112) or 0
+			local right = (btnW > 0 and btnW + 12 or 0) + (pillW > 0 and pillW + 8 or 0)
+			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and P.gold_300 or nil, right, me)
+			if pillW > 0 then
+				local pill = UIKit.StatusPill(f, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -(btnW > 0 and btnW + 20 or 12), 0.5, 0), Name = leads and "Leader" or "ReadyPill" })
+				if leads then
+					UIKit.SetStatus(pill, "READY", "LEADER")
+				elseif ready then
+					UIKit.SetStatus(pill, "UNLOCKED", "READY")
+				else
+					UIKit.SetStatus(pill, "WAITING", "NOT READY")
+				end
 			end
 			if canKick then
 				rowButton(f, "KICK", nil, "Secondary", 100, 8, function()
 					send("Kick", m.UserId)
 				end)
+			elseif toggle then
+				rowButton(f, ready and "UNREADY" or "READY", if ready then nil else "check", ready and "Secondary" or "Primary", 120, 8, function()
+					MenuParty.SetReady(not ready)
+				end).Instance.Name = "ReadyToggle"
 			end
 		end
 		-- open slots
@@ -43557,11 +44764,19 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		if not inParty() then
 			ui.Hint.Text = "Invite players on this server or your friends. When the leader starts SOLO, DUO or TRIO, the party joins that run together."
 		elseif isLeader() then
-			ui.Hint.Text = full and "Party full. Start DUO or TRIO from the home screen: everyone joins your run." or "Start a run from the home screen: your party joins it. DUO takes 2, TRIO takes 3."
+			ui.Hint.Text = "When everyone is READY, press START (or a mode on the home screen): your party joins your run."
 		else
-			ui.Hint.Text = "Your leader starts the runs; you join them automatically. Leave the party to start your own."
+			ui.Hint.Text = "Tap READY when you're set. Your leader starts the run and you join it automatically."
 		end
 		ui.Leave.Instance.Visible = inParty()
+		local sum = MenuParty.Summary()
+		local mode = MenuParty.PartyMode()
+		ui.Start.Instance.Visible = inParty() and isLeader() and mode ~= nil
+		if ui.Start.Instance.Visible then
+			local allReady = sum.Ready >= sum.Others
+			ui.Start.SetText(allReady and ("START " .. string.upper((Config.Modes :: any)[mode :: string].DisplayName)) or string.format("READY %d/%d", sum.Ready, sum.Others))
+			ui.Start.SetEnabled(allReady)
+		end
 	end
 
 	local function serverRows(): number
@@ -43693,7 +44908,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		local y = labelH + 8 + math.min(listH, listWant) + 8
 		place(ui.Hint, 0, y, lw, hintH)
 		if leaveH > 0 then
-			place(ui.Leave.Instance, 0, y + hintH + 4, math.min(lw, 260), leaveH)
+			local bwid = ui.Start.Instance.Visible and math.min(220, math.floor((lw - 12) / 2)) or math.min(lw, 260)
+			place(ui.Leave.Instance, 0, y + hintH + 4, bwid, leaveH)
+			place(ui.Start.Instance, bwid + 12, y + hintH + 4, bwid, leaveH)
 		end
 		place(ui.Right, rx, ry, rw, rh)
 		-- narrow lists: compact row buttons (rows are rebuilt when this flips)
@@ -43828,7 +45045,7 @@ return MenuParty
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="89">
+        <Item class="ModuleScript" referent="90">
           <Properties>
             <string name="Name">MenuStats</string>
             <string name="Source"><![CDATA[--[[
@@ -44243,7 +45460,7 @@ return MenuStats
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="90">
+        <Item class="ModuleScript" referent="91">
           <Properties>
             <string name="Name">MenuTrack</string>
             <string name="Source"><![CDATA[--[[
@@ -44475,7 +45692,7 @@ return MenuTrack
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="92">
           <Properties>
             <string name="Name">MenuUpgrades</string>
             <string name="Source"><![CDATA[--[[
@@ -44827,7 +46044,7 @@ return MenuUpgrades
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="92">
+        <Item class="ModuleScript" referent="93">
           <Properties>
             <string name="Name">MobileControls</string>
             <string name="Source"><![CDATA[--[[
@@ -45164,7 +46381,7 @@ return MobileControls
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="93">
+        <Item class="ModuleScript" referent="94">
           <Properties>
             <string name="Name">ModelLibrary</string>
             <string name="Source"><![CDATA[--[[
@@ -46657,7 +47874,7 @@ return ModelLibrary
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="94">
+        <Item class="ModuleScript" referent="95">
           <Properties>
             <string name="Name">Occlusion</string>
             <string name="Source"><![CDATA[--[[
@@ -47049,7 +48266,7 @@ return Occlusion
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="95">
+        <Item class="ModuleScript" referent="96">
           <Properties>
             <string name="Name">Showcase</string>
             <string name="Source"><![CDATA[--[[
@@ -47063,6 +48280,10 @@ return Occlusion
 	has one, the lobby spawn emblem (SwarmState "LobbySpawn") is used.
 	Which model: the player's own live character when it matches (it carries the VIP crown),
 	otherwise the server-built template ReplicatedStorage.CharacterPreviews["<Id>|<Skin>"].
+	A source is only copied once its whole rig is there (six body parts + their Motor6Ds),
+	and it is copied again when its parts / joints change: after a run the new lobby
+	character is still replicating when the menu shows, and a copy taken then kept the
+	hero without arms for good.
 	Pose: src/shared/HeroPoses.lua (HeroPoses.Apply(model, "Showcase", t): the stance plus
 	idle breathing; the copy is fully anchored and re-placed from its rest pose each
 	frame). If that module is missing, a small built-in idle drives the Motor6Ds.
@@ -47321,12 +48542,52 @@ local function idOf(inst: Instance): number
 	return id
 end
 
+-- The six body parts and the Motor6D that joins each one (ModelBuilder's hero rig).
+local RIG_JOINTS = {
+	RootJoint = "Torso",
+	Neck = "Head",
+	["Left Shoulder"] = "Left Arm",
+	["Right Shoulder"] = "Right Arm",
+	["Left Hip"] = "Left Leg",
+	["Right Hip"] = "Right Leg",
+}
+
+--[[
+	True when every body part of the rig is there and joined. A model can be seen while it
+	is still arriving: right after a run the new lobby character replicates in the same
+	moment the menu shows again, and a copy taken then has no arms (or no shoulder joints).
+]]
+local function rigReady(source: Model): boolean
+	for jointName, partName in pairs(RIG_JOINTS) do
+		local j = source:FindFirstChild(jointName, true)
+		if not (j and j:IsA("Motor6D") and j.Part0 and j.Part1 and j.Part1.Name == partName and j.Part1:IsDescendantOf(source)) then
+			return false
+		end
+	end
+	return true
+end
+
+-- Parts and joints of a source: when this grows (pieces still arriving), copy it again.
+local function signature(source: Model): number
+	local n = 0
+	for _, d in ipairs(source:GetDescendants()) do
+		if d:IsA("BasePart") or d:IsA("JointInstance") or d:IsA("WeldConstraint") then
+			n += 1
+		end
+	end
+	return n
+end
+
 local function sourceFor(characterId: string, skinId: string): Model?
 	local own = player.Character
-	if own and own.PrimaryPart and own:GetAttribute("CharacterId") == characterId and (own:GetAttribute("SkinId") or "Default") == skinId then
+	if own and own.PrimaryPart and own:GetAttribute("CharacterId") == characterId and (own:GetAttribute("SkinId") or "Default") == skinId and rigReady(own) then
 		return own
 	end
-	return ViewportPreview.Template(characterId, skinId)
+	local template = ViewportPreview.Template(characterId, skinId)
+	if template and rigReady(template) then
+		return template
+	end
+	return nil
 end
 
 local function cloneOf(source: Model): Model?
@@ -47460,9 +48721,9 @@ local function refresh()
 	end
 	local source = sourceFor(wantChar, wantSkin)
 	if not source then
-		return -- template not built yet; CharacterPreviews.ChildAdded calls again
+		return -- not built / not fully arrived yet; the 0.25 s check calls again
 	end
-	local key = wantChar .. "|" .. wantSkin .. "|" .. tostring(idOf(source))
+	local key = wantChar .. "|" .. wantSkin .. "|" .. tostring(idOf(source)) .. "|" .. tostring(signature(source))
 	if model and modelKey == key and model.Parent then
 		return
 	end
@@ -47949,9 +49210,9 @@ function Showcase.Init()
 			if model and standCF and before and (standCF.Position - before.Position).Magnitude > 0.05 then
 				model:PivotTo(placeAt(standCF, rootOffset))
 			end
-			if not model or not model.Parent then
-				refresh()
-			end
+			-- also picks up a source that was still arriving (more parts / joints now) and
+			-- the live character once it is complete
+			refresh()
 			refreshRing()
 			updateHidden()
 		end
@@ -47992,7 +49253,7 @@ return Showcase
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="96">
+        <Item class="ModuleScript" referent="97">
           <Properties>
             <string name="Name">StageUI</string>
             <string name="Source"><![CDATA[--[[
@@ -48588,7 +49849,7 @@ return StageUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="97">
+        <Item class="ModuleScript" referent="98">
           <Properties>
             <string name="Name">TeamUI</string>
             <string name="Source"><![CDATA[--[[
@@ -49161,7 +50422,7 @@ return TeamUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="98">
+        <Item class="ModuleScript" referent="99">
           <Properties>
             <string name="Name">Telegraphs</string>
             <string name="Source"><![CDATA[--[[
@@ -50694,7 +51955,7 @@ return Telegraphs
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="99">
+        <Item class="ModuleScript" referent="100">
           <Properties>
             <string name="Name">TerrainFx</string>
             <string name="Source"><![CDATA[--[[
@@ -50784,7 +52045,215 @@ return TerrainFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="100">
+        <Item class="ModuleScript" referent="101">
+          <Properties>
+            <string name="Name">TravelOverlay</string>
+            <string name="Source"><![CDATA[--[[
+	TravelOverlay.lua
+	The client side of private run servers (server RunServers.lua, Config.RunServers).
+
+	Cover (full screen, blocks taps on the menu under it):
+	  player attribute Travel = "ToRun"    "TRAVELLING TO YOUR RUN"  (lobby: saving, teleporting)
+	                   Travel = "ToLobby"  "BACK TO THE LOBBY"       (run server: saving, teleporting)
+	  SwarmState RunServer + RunServerStatus = "Waiting"  "STARTING YOUR RUN" with
+	                   "Heroes ready: N / M" (RunServerHere / RunServerExpected)
+	Banner (top centre, small, the results panel stays readable):
+	  player attribute TravelHomeIn = seconds  "Back to the lobby in Ns" with GO NOW / STAY
+	  (remote TravelHome "Go" | "Stay").
+	Nothing shows in Studio or on a lobby server that never teleports. Reduced effects: no
+	dot animation, no fades.
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local UIKit = require(script.Parent:WaitForChild("UIKit"))
+local ClientSettings = require(script.Parent:WaitForChild("ClientSettings"))
+
+local TravelOverlay = {}
+
+local player = Players.LocalPlayer
+local C = Theme.Color
+local new = UIKit.new
+
+local gui: ScreenGui
+local scale: UIScale
+local root: Frame
+local cover: Frame
+local coverTitle: TextLabel
+local coverLine: TextLabel
+local coverDots: TextLabel
+local banner: Frame
+local bannerText: TextLabel
+local shownCover = false
+
+local function fit()
+	local cam = workspace.CurrentCamera
+	local size = cam and cam.ViewportSize or Vector2.new(1280, 720)
+	if size.X < 1 or size.Y < 1 then
+		return
+	end
+	local ref = Config.UI.ReferenceSize
+	local refX, refY = ref.X, ref.Y
+	if size.Y > size.X then
+		refX, refY = ref.Y, ref.X
+	end
+	local s = math.clamp(math.min(size.X / refX, size.Y / refY), Config.UI.MinScale, Config.UI.MaxScale)
+	scale.Scale = s
+	root.Size = UDim2.fromScale(1 / s, 1 / s)
+end
+
+local function build()
+	gui = new("ScreenGui", {
+		Name = "TravelOverlay",
+		IgnoreGuiInset = true,
+		ResetOnSpawn = false,
+		DisplayOrder = 90, -- over the menu and HUD, under the first-join loading picture
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	})
+	root = new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, gui)
+	scale = new("UIScale", { Scale = 1 }, root)
+
+	-- the cover: a dark full-screen plate with one panel in the middle
+	cover = new("Frame", {
+		Name = "Cover",
+		BackgroundColor3 = C.Backdrop,
+		BackgroundTransparency = 0.12,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Active = true, -- the menu under it is not tapped blind
+		Visible = false,
+	}, root)
+	local panel = UIKit.Panel(cover, {
+		Name = "Panel",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(460, 170),
+	})
+	UIKit.pad(panel, 20)
+	UIKit.list(panel, { HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	coverTitle = UIKit.Role(panel, "Title", "", { Name = "Title", LayoutOrder = 1, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.GoldLight, Size = UDim2.new(1, 0, 0, 34) })
+	UIKit.Divider(panel, 220, { LayoutOrder = 2 })
+	coverLine = UIKit.Role(panel, "Body", "", { Name = "Line", LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, TextWrapped = true, Size = UDim2.new(1, 0, 0, 44) })
+	coverDots = UIKit.Role(panel, "Heading", "• • •", { Name = "Dots", LayoutOrder = 4, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Gold, Size = UDim2.new(1, 0, 0, 24) })
+
+	-- the go-home banner (run server lobby, after a run)
+	banner = UIKit.Panel(root, {
+		Name = "HomeBanner",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 64),
+		Size = UDim2.fromOffset(560, 64),
+		Visible = false,
+		ZIndex = 5,
+	})
+	UIKit.padding(banner, 6, 8, 6, 16)
+	UIKit.list(banner, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) })
+	bannerText = UIKit.Role(banner, "Body", "", { Name = "Text", LayoutOrder = 1, Size = UDim2.new(1, -290, 1, 0), TextWrapped = true })
+	UIKit.Button(banner, {
+		Kind = "Primary",
+		Title = "GO NOW",
+		Name = "GoNow",
+		Size = UDim2.fromOffset(140, Theme.Size.TapMin),
+		LayoutOrder = 2,
+		OnClick = function()
+			Remotes.Get("TravelHome"):FireServer("Go")
+		end,
+	})
+	UIKit.Button(banner, {
+		Kind = "Secondary",
+		Title = "STAY",
+		Name = "Stay",
+		Size = UDim2.fromOffset(120, Theme.Size.TapMin),
+		LayoutOrder = 3,
+		OnClick = function()
+			Remotes.Get("TravelHome"):FireServer("Stay")
+		end,
+	})
+
+	gui.Parent = player:WaitForChild("PlayerGui")
+	fit()
+	local cam = workspace.CurrentCamera
+	if cam then
+		cam:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+	end
+end
+
+-- What the cover says now, or nil when it is hidden.
+local function coverText(state: Configuration): (string?, string?)
+	local travel = player:GetAttribute("Travel")
+	if travel == "ToRun" then
+		return "TRAVELLING TO YOUR RUN", "Saving your progress and opening your own server…"
+	elseif travel == "ToLobby" then
+		return "BACK TO THE LOBBY", "Saving your progress…"
+	end
+	if state:GetAttribute("RunServer") == true and state:GetAttribute("RunServerStatus") == "Waiting" then
+		local here = tonumber(state:GetAttribute("RunServerHere")) or 0
+		local want = tonumber(state:GetAttribute("RunServerExpected")) or 0
+		if want > 1 then
+			return "STARTING YOUR RUN", string.format("Heroes ready: %d / %d", here, want)
+		end
+		return "STARTING YOUR RUN", "Loading your hero…"
+	end
+	return nil, nil
+end
+
+local function update(state: Configuration, t: number)
+	local title, line = coverText(state)
+	local show = title ~= nil
+	if show then
+		coverTitle.Text = title :: string
+		coverLine.Text = line or ""
+		if ClientSettings.Reduced() then
+			coverDots.Text = "• • •"
+		else
+			local n = math.floor(t * 3) % 3
+			coverDots.Text = n == 0 and "•  ·  ·" or n == 1 and "·  •  ·" or "·  ·  •"
+		end
+	end
+	if show ~= shownCover then
+		shownCover = show
+		cover.Visible = show
+		if show and not ClientSettings.Reduced() then
+			cover.BackgroundTransparency = 1
+			TweenService:Create(cover, TweenInfo.new(0.25), { BackgroundTransparency = 0.12 }):Play()
+		else
+			cover.BackgroundTransparency = 0.12
+		end
+	end
+	local left = player:GetAttribute("TravelHomeIn")
+	local bannerOn = not show and type(left) == "number"
+	banner.Visible = bannerOn
+	if bannerOn then
+		bannerText.Text = string.format("Back to the lobby in %ds", left)
+	end
+end
+
+function TravelOverlay.Init()
+	build()
+	local state = Remotes.State()
+	task.spawn(function()
+		local t0 = os.clock()
+		while gui.Parent do
+			update(state, os.clock() - t0)
+			task.wait(0.1)
+		end
+	end)
+end
+
+-- Preview / tests: the cover's and banner's current state.
+function TravelOverlay.Debug(): { Cover: boolean, Title: string, Line: string, Banner: boolean, BannerText: string }
+	return { Cover = cover.Visible, Title = coverTitle.Text, Line = coverLine.Text, Banner = banner.Visible, BannerText = bannerText.Text }
+end
+
+return TravelOverlay
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="102">
           <Properties>
             <string name="Name">Tutorial</string>
             <string name="Source"><![CDATA[--[[
@@ -51378,7 +52847,7 @@ return Tutorial
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="101">
+        <Item class="ModuleScript" referent="103">
           <Properties>
             <string name="Name">UIAnim</string>
             <string name="Source"><![CDATA[--[[
@@ -51943,7 +53412,7 @@ return UIAnim
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="102">
+        <Item class="ModuleScript" referent="104">
           <Properties>
             <string name="Name">UIBuilder</string>
             <string name="Source"><![CDATA[--[[
@@ -52032,12 +53501,28 @@ local function setBlocking(name: string, on: boolean)
 	end
 end
 
+-- Modals that cover the HUD while open (Hud.SetCovered hides it under them).
+local COVERS_HUD = { LevelUp = true, Reward = true, Pause = true, Revive = true, Results = true, Portal = true, Items = true, BugReport = true }
+local covering: { [string]: true } = {}
+local function setCovering(name: string, on: boolean)
+	if not COVERS_HUD[name] or (covering[name] == true) == on then
+		return
+	end
+	if on then
+		covering[name] = true
+	else
+		covering[name] = nil
+	end
+	Hud.SetCovered(next(covering) ~= nil)
+end
+
 -- Opening: the dimmer fades in and the panel pops up with a little overshoot.
 local function show(overlay: GuiObject, name: string, blocks: boolean)
 	overlay:SetAttribute("AnimToken", (tonumber(overlay:GetAttribute("AnimToken")) or 0) + 1)
 	overlay:SetAttribute("Hiding", nil)
 	local wasVisible = overlay.Visible
 	overlay.Visible = true
+	setCovering(name, true)
 	if not wasVisible then
 		local dim = overlay:FindFirstChild("Dim")
 		if dim and dim:IsA("GuiObject") then
@@ -52058,6 +53543,7 @@ end
 -- (restarting it each frame used to keep the results screen on forever).
 local function hide(overlay: GuiObject, name: string)
 	setBlocking(name, false)
+	setCovering(name, false)
 	if not overlay.Visible or overlay:GetAttribute("Hiding") then
 		return
 	end
@@ -52087,10 +53573,18 @@ local function virtualSize(): Vector2
 	return gui.AbsoluteSize / math.max(0.01, uiScale.Scale)
 end
 
+-- Where the safe-area ScreenGui really sits on the screen. AbsolutePosition is reported in
+-- Roblox's "inset space" (y = 0 at the bottom of the top bar, so a full-screen
+-- IgnoreGuiInset gui reads y = -58 on a phone); fxGui covers the whole screen, so the
+-- difference of the two readings is the true offset whatever the space.
+local function guiScreenPos(): Vector2
+	return gui.AbsolutePosition - fxGui.AbsolutePosition
+end
+
 -- Room the Roblox topbar buttons take, in root (virtual) pixels.
 local function computeInsets()
 	local s = math.max(0.01, uiScale.Scale)
-	local pos, size = gui.AbsolutePosition, gui.AbsoluteSize
+	local pos, size = guiScreenPos(), gui.AbsoluteSize
 	local top, left, right = 0, 0, 0
 	local ok, rect = pcall(function()
 		return GuiService.TopbarInset
@@ -52114,13 +53608,26 @@ local function updateScale()
 	if portrait then
 		refX, refY = ref.Y, ref.X
 	end
-	local s = math.clamp(math.min(size.X / refX, size.Y / refY), Config.UI.MinScale, Config.UI.MaxScale)
+	local s
+	if UIKit.IsCompact() and not portrait then
+		-- phones in landscape: a smaller design space (PhoneReferenceSize) so text and
+		-- buttons come out readable / tappable; layouts reflow into it
+		local phone = Config.UI.PhoneReferenceSize
+		s = math.min(size.X / phone.X, size.Y / phone.Y, Config.UI.MaxScale)
+	else
+		s = math.clamp(math.min(size.X / refX, size.Y / refY), Config.UI.MinScale, Config.UI.MaxScale)
+	end
 	uiScale.Scale = s
 	root.Size = UDim2.fromScale(1 / s, 1 / s)
 	computeInsets()
-	-- full-bleed layers: the whole screen in root coordinates
+	-- full-bleed layers: the whole screen in root coordinates. fxGui is the whole screen;
+	-- the layer also reaches past it by the total inset on every side (harmless off
+	-- screen), so it still covers notches if a reading is off.
+	local full = fxGui.AbsoluteSize
 	local viewport = workspace.CurrentCamera.ViewportSize
-	UIKit.SetBleed(-gui.AbsolutePosition / s, Vector2.new(math.max(viewport.X, size.X), math.max(viewport.Y, size.Y)) / s)
+	full = Vector2.new(math.max(full.X, viewport.X, size.X), math.max(full.Y, viewport.Y, size.Y))
+	local extra = (full - size) + Vector2.new(8, 8)
+	UIKit.SetBleed((-guiScreenPos() - extra) / s, (full + extra * 2) / s)
 	for _, fn in ipairs(relayoutCallbacks) do
 		local ok, err = pcall(fn)
 		if not ok then
@@ -52161,6 +53668,17 @@ end
 
 local function margin(): number
 	return UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+end
+
+-- Width of a centred modal that reaches the top of the screen (pause, results): in
+-- landscape it stays clear of the Roblox buttons at the top left (insets.Left).
+local function tallModalWidth(maxW: number): number
+	local v = virtualSize()
+	local w = math.min(maxW, v.X - 32)
+	if not portrait and insets.Left > 0 then
+		w = math.min(w, math.max(480, v.X - 2 * (insets.Left + 8)))
+	end
+	return w
 end
 
 ------------------------------------------------------------------------------------------
@@ -52848,8 +54366,24 @@ local function headerHeight(): number
 	local subH = (portrait or not UIKit.IsCompact() or offerHint ~= nil) and TS(18) + 6 or 0
 	return TS(titleSize()) + 6 + 10 + 6 + subH + 6 + (Theme.Size.Badge + 14) + 8 + 7 + 16
 end
+-- Phones in landscape: lower reroll / skip buttons and no "Tap a card" hint line (each
+-- card's own footer says it), so the cards keep their height in the short screen.
+local function phoneLandscape(): boolean
+	return UIKit.IsCompact() and not portrait
+end
+local function actionH(): number
+	return phoneLandscape() and 52 or 60
+end
 local function footerHeight(): number
+	if phoneLandscape() then
+		return 12 + actionH() + 8
+	end
 	return 16 + 60 + 8 + (TS(15) + 6)
+end
+-- Top of the level-up block: the HUD is hidden under the overlay, so only the Roblox
+-- buttons (top left) matter, and the centred title clears them.
+local function levelUpTop(): number
+	return phoneLandscape() and 4 or insets.Top * 0.5 + 6
 end
 
 -- Card sizes for the current screen.
@@ -52870,8 +54404,8 @@ local function cardMetrics(count: number): (number, number)
 	for _, c in ipairs(choices) do
 		most = math.max(most, cardNeeds(c, w))
 	end
-	local room = v.Y - headerHeight() - footerHeight() - insets.Top * 0.5 - 12
-	return w, math.max(260, math.min(most, room, 440))
+	local room = v.Y - headerHeight() - footerHeight() - levelUpTop() - 6
+	return w, math.max(phoneLandscape() and 180 or 260, math.min(most, room, 440))
 end
 
 -- Card icon: the upgrade tile framed in the card's accent (rim + a soft halo that breathes
@@ -53307,10 +54841,11 @@ local function layoutLevelUp()
 			cardsH += math.min(cardNeedsPortrait(c), ch)
 		end
 	end
-	local hintH = TS(15) + 6
+	local showHint = not phoneLandscape()
+	local hintH = showHint and TS(15) + 6 or 0
 	local headH = titleH + 10 + 6 + subH + 6 + pillH + 8 + 7 + 16
-	local blockH = headH + cardsH + 16 + 60 + 8 + hintH
-	local top = math.max(insets.Top * 0.5 + 6, (v.Y - blockH) / 2)
+	local blockH = headH + cardsH + footerHeight()
+	local top = math.max(levelUpTop(), (v.Y - blockH) / 2)
 	local panel = levelUp.Panel :: Frame
 	panel.Position = UDim2.fromOffset(0, 0)
 	panel.Size = UDim2.fromOffset(v.X, v.Y)
@@ -53333,19 +54868,21 @@ local function layoutLevelUp()
 	levelUp.Layout.Padding = UDim.new(0, portrait and 12 or 18)
 	levelUp.Cards.Position = UDim2.fromOffset((v.X - cardsW) / 2, y)
 	levelUp.Cards.Size = UDim2.fromOffset(cardsW, cardsH)
-	y += cardsH + 16
+	y += cardsH + (showHint and 16 or 12)
+	local ah = actionH()
 	levelUp.Actions.Position = UDim2.fromOffset(0, y)
-	levelUp.Actions.Size = UDim2.new(1, 0, 0, 60)
+	levelUp.Actions.Size = UDim2.new(1, 0, 0, ah)
 	local bw = math.clamp(math.floor((v.X - 2 * margin() - 18) / 2), 150, 240)
-	levelUp.Reroll.Instance.Size = UDim2.fromOffset(bw, 60)
-	levelUp.Skip.Instance.Size = UDim2.fromOffset(bw, 60)
+	levelUp.Reroll.Instance.Size = UDim2.fromOffset(bw, ah)
+	levelUp.Skip.Instance.Size = UDim2.fromOffset(bw, ah)
 	-- the flanking rules only where there is room for them
 	local ruleW = math.floor((v.X - 2 * margin() - 2 * bw - 3 * 18) / 2)
 	levelUp.RuleL.Visible = ruleW >= 40
 	levelUp.RuleR.Visible = ruleW >= 40
 	levelUp.RuleL.Size = UDim2.fromOffset(math.min(ruleW, 140), 1)
 	levelUp.RuleR.Size = UDim2.fromOffset(math.min(ruleW, 140), 1)
-	y += 60 + 8
+	y += ah + 8
+	levelUp.Hint.Visible = showHint
 	levelUp.Hint.Position = UDim2.fromOffset(0, y)
 	levelUp.Hint.Size = UDim2.new(1, 0, 0, hintH)
 	levelUp.HintText.Text = choiceHint(count)
@@ -54247,10 +55784,10 @@ local function buildPause()
 	})
 	local function layoutOptions()
 		local v = virtualSize()
-		local w = math.min(760, v.X - 32)
+		local w = tallModalWidth(760)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
-		local twoCol = inner >= 600
+		local twoCol = inner >= 540
 		local gap = 20
 		local side = 2 -- the columns' padding keeps the slider knobs inside the scroll clip
 		local colW = twoCol and math.floor((inner - gap - 2 * side) / 2) or (inner - 2 * side)
@@ -54667,15 +56204,21 @@ local function buildResults()
 
 	local function layoutResults()
 		local v = virtualSize()
-		local w = math.min(680, v.X - 32)
+		local w = tallModalWidth(680)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
 		-- header height follows the text sizes (phones set text 20% bigger)
 		local headH = math.max(84, TS(44) + 6 + TS(12) + 8 + TS(15) + 8)
 		head.Size = UDim2.new(1, 0, 0, headH)
 		results.TitleCol.Size = UDim2.fromOffset(math.max(160, math.min(440, inner - 96)), headH)
-		-- six tiles in one row when they fit, otherwise two rows of three
-		local tileW = 94
+		-- six tiles in one row when they fit (a little narrower on phones), otherwise two
+		-- rows of three
+		local tileW = math.clamp(math.floor((inner + 8) / 6) - 8, 84, 94)
+		for _, tile in ipairs(grid:GetChildren()) do
+			if tile:IsA("GuiObject") then
+				tile.Size = UDim2.fromOffset(tileW, 104)
+			end
+		end
 		local perRow = math.max(1, math.floor((inner + 8) / (tileW + 8)))
 		local cols = perRow >= 6 and 6 or (perRow >= 3 and 3 or 2)
 		local rows = math.ceil(6 / cols)
@@ -55265,6 +56808,11 @@ function UIBuilder.Init(d: { [string]: any })
 	}, nil)
 	gui.IgnoreGuiInset = true
 	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	-- panels stay in the safe area, but dimmers / backdrops (UIKit.Bleed) must reach the
+	-- notch strips, so the gui must not clip to the safe area
+	pcall(function()
+		(gui :: any).ClipToDeviceSafeArea = false
+	end)
 	gui.Parent = player:WaitForChild("PlayerGui")
 	-- full-screen effects (hurt vignette, menu vignette) under the UI, over the 3D world
 	fxGui = new("ScreenGui", {
@@ -55276,6 +56824,16 @@ function UIBuilder.Init(d: { [string]: any })
 	fxGui.IgnoreGuiInset = true
 	fxGui.ScreenInsets = Enum.ScreenInsets.None
 	fxGui.Parent = player:WaitForChild("PlayerGui")
+	-- phones (short side under 560 px): compact layouts and the phone design space. The
+	-- full-screen gui's size is the most reliable reading; the camera viewport can still be
+	-- a placeholder this early.
+	do
+		local screen = fxGui.AbsoluteSize
+		if screen.X < 50 or screen.Y < 50 then
+			screen = viewport
+		end
+		UIKit.SetCompact(math.min(screen.X, screen.Y) < 560)
+	end
 
 	root = new("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, gui)
 	uiScale = new("UIScale", { Scale = 1 }, root)
@@ -55390,6 +56948,8 @@ function UIBuilder.Init(d: { [string]: any })
 
 	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
 	gui:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateScale)
+	fxGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateScale)
+	fxGui:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateScale)
 	pcall(function()
 		GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(updateScale)
 	end)
@@ -55476,7 +57036,7 @@ return UIBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="103">
+        <Item class="ModuleScript" referent="105">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[--[[
@@ -57655,7 +59215,7 @@ return UIKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="104">
+        <Item class="ModuleScript" referent="106">
           <Properties>
             <string name="Name">VFX</string>
             <string name="Source"><![CDATA[--[[
@@ -60794,7 +62354,7 @@ return VFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="105">
+        <Item class="ModuleScript" referent="107">
           <Properties>
             <string name="Name">ViewportPreview</string>
             <string name="Source"><![CDATA[--[[
@@ -60989,7 +62549,7 @@ return ViewportPreview
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="106">
+  <Item class="Workspace" referent="108">
     <Properties>
       <string name="Name">Workspace</string>
       <float name="FallenPartsDestroyHeight">-200</float>

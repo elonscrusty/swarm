@@ -465,14 +465,27 @@ if want("boss") then
 			line(string.format("\n=== boss %s: BLOCKED (phase %s) ===", id, SM.GetPhase()))
 			continue
 		end
+		local seen, order, peakLines, peakRings = {}, {}, 0, 0
 		onTick = function()
 			local b = Spawner.Boss
 			if b and b.Alive then
 				b.HP = math.max(b.HP, b.MaxHP * 0.4) -- phase 2, never dies
+				local st = tostring(b.BossState)
+				if not seen[st] then
+					seen[st] = true
+					table.insert(order, st)
+				end
+				peakLines = math.max(peakLines, b.BossLines and #b.BossLines or 0)
+				peakRings = math.max(peakRings, b.BossRings and #b.BossRings or 0)
 			end
 		end
 		run(6) -- entrance + first attacks
+		table.clear(seen)
+		table.clear(order)
 		phase("boss " .. id, 0, seconds)
+		local b = Spawner.Boss
+		line(string.format("boss %s: alive %s, phase %s, states seen [%s], peak boss lines %d, rings %d",
+			id, tostring(b ~= nil and b.Alive), tostring(b and b.PhaseIndex), table.concat(order, " "), peakLines, peakRings))
 		onTick = nil
 		SM.DevNextStage() -- the boss and its hazards go with the stage
 		toExplore()
