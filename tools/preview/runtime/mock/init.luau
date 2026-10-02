@@ -234,6 +234,12 @@ function Mock.api()
 		end)
 	end
 
+	-- InsertService:LoadAsset downloads at most `slots` assets at once (first come, first
+	-- served), `base` simulated seconds each (nil = instant, the default).
+	function api.setLoadLatency(base: number?, slots: number?)
+		R.loadLatency = base and { base = base, slots = slots or 6 } or nil
+	end
+
 	function api.forceMeshesUploaded()
 		return M.forceUploaded()
 	end

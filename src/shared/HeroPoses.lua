@@ -46,7 +46,9 @@ HeroPoses.Poses = {
 		Showcase = {
 			RootJoint = { 0, -12, 0 },
 			Neck = { 6, 8, 0 },
-			["Right Shoulder"] = { 122, 0, 16 }, -- sword up
+			-- sword held up in front, blade upright (a touch outward and forward): the twist (y)
+			-- cancels the blade's built-in outward angle so it doesn't lean off the fist
+			["Right Shoulder"] = { 112, 6, 14 },
 			["Left Shoulder"] = { 52, 0, 22 }, -- shield across the front
 			["Left Hip"] = { 16, 0, -7 },
 			["Right Hip"] = { -12, 0, 7 },
@@ -56,7 +58,7 @@ HeroPoses.Poses = {
 		Showcase = {
 			RootJoint = { 0, 10, 0 },
 			Neck = { 8, -6, 0 },
-			["Right Shoulder"] = { 34, 0, 18 }, -- staff lifted
+			["Right Shoulder"] = { 30, 0, 10 }, -- staff lifted, near upright
 			["Left Shoulder"] = { 78, 0, -18 }, -- casting hand forward
 			["Left Hip"] = { 8, 0, -4 },
 			["Right Hip"] = { -6, 0, 4 },
@@ -76,7 +78,7 @@ HeroPoses.Poses = {
 		Showcase = {
 			RootJoint = { 0, -8, 0 },
 			Neck = { 10, 0, 0 },
-			["Right Shoulder"] = { 26, 0, 16 }, -- sun staff raised
+			["Right Shoulder"] = { 24, 0, 9 }, -- sun staff raised, near upright
 			["Left Shoulder"] = { 72, 0, 8 }, -- book held up
 			["Left Hip"] = { 6, 0, -3 },
 			["Right Hip"] = { -4, 0, 3 },
@@ -116,7 +118,7 @@ HeroPoses.Poses = {
 		Showcase = {
 			RootJoint = { 0, -10, 0 },
 			Neck = { -4, 6, 0 },
-			["Right Shoulder"] = { 30, 0, 14 }, -- bone staff planted forward
+			["Right Shoulder"] = { 24, 0, 7 }, -- bone staff planted forward, near upright
 			["Left Shoulder"] = { 48, 0, -42 }, -- a hand stretched out to the side, calling souls
 			["Left Hip"] = { 8, 0, -4 },
 			["Right Hip"] = { -6, 0, 4 },
@@ -159,6 +161,10 @@ end
 -- Rest snapshots of anchored copies (weak keys: dropped with the model).
 local rest: { [Model]: any } = setmetatable({}, { __mode = "k" }) :: any
 
+-- The joints of an anchored copy are switched off: in Roblox, writing the CFrame of a part
+-- that is still joined to others (WeldConstraint / Motor6D) drags the joined parts along, so
+-- placing the parts one by one (in table order) left gear like the Knight's sword offset
+-- from its hand. Every part is placed explicitly instead.
 local function snapshot(model: Model, root: BasePart)
 	local s = { Rel = {}, Motors = {}, Welds = {} }
 	for _, d in ipairs(model:GetDescendants()) do
@@ -169,6 +175,12 @@ local function snapshot(model: Model, root: BasePart)
 		elseif d:IsA("WeldConstraint") and d.Part0 and d.Part1 then
 			table.insert(s.Welds, d)
 		end
+	end
+	for _, j in ipairs(s.Motors) do
+		j.Enabled = false
+	end
+	for _, w in ipairs(s.Welds) do
+		w.Enabled = false
 	end
 	rest[model] = s
 	return s

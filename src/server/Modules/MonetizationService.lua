@@ -88,6 +88,14 @@ function MonetizationService.OwnsPass(player: Player, key: string): boolean
 	return MonetizationService.OwnsPassId(player, Config.Monetization.GamePasses[key])
 end
 
+-- Dev panel "Unlock everything" in Studio: every skin for this session (never saved, never
+-- in live servers; the skins are Robux items).
+local devSkins: { [Player]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+
+function MonetizationService.DevGrantSkins(player: Player, on: boolean)
+	devSkins[player] = (on and game:GetService("RunService"):IsStudio()) or nil
+end
+
 function MonetizationService.OwnsSkin(player: Player, skinId: string): boolean
 	if skinId == "Default" then
 		return true
@@ -95,6 +103,9 @@ function MonetizationService.OwnsSkin(player: Player, skinId: string): boolean
 	local skin = CharacterData.Skins[skinId]
 	if not skin then
 		return false
+	end
+	if devSkins[player] then
+		return true
 	end
 	if skin.Pass == "StarterPack" then
 		return MonetizationService.OwnsPass(player, "StarterPack")

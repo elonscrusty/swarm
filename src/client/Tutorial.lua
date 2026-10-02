@@ -1,24 +1,29 @@
 --[[
 	Tutorial.lua
-	First-run tips that teach through play (Config.Tutorial). A small card shows one hint
-	at a time, dismisses itself after a few seconds and never pauses or blocks the run:
-	the card is not Active (a thumb landing on it still moves the hero); only its small
-	"Skip tips" button takes a tap.
+	First-run tips that teach through play (Config.Tutorial). One big callout at a time:
+	an icon, a short bold title, one line, "TIP 2 / 5" and a big SKIP TIPS button. It sits
+	next to what it explains with an arrow pointing at it (the XP bar for gems, the weapon
+	row for auto attack, the stage pill for the portal, the boss bar for the boss) and a
+	soft gold ring around that element; it slides in from that side and pops out. It
+	dismisses itself after a few seconds and never pauses or blocks the run: nothing in it
+	is Active (a thumb landing on it still moves the hero) except the SKIP TIPS button.
 
 	Tutorial tips (a player's first run; anyone with a run played before skips them):
 	  Move      at the start: drag anywhere / WASD / left stick (by input device); done
 	            early once the hero has walked a few steps
-	  Attack    "your weapon attacks on its own"
-	  Gems      after the first kill: gems are XP
+	  Attack    "your weapons attack on their own" → the weapon row
+	  Gems      after the first kill: gems are XP → the XP bar
 	  LevelUp   the first level-up offer: one line under LEVEL UP! explains the cards
-	            (UIBuilder asks LevelUpHint)
-	  Portal    after Config.Tutorial.PortalTipAt run seconds: the stage objective
-	  Boss      when the Queen appears: red floor shapes show where she strikes
-	Co-op tips (once ever, also for experienced players):
+	            (UIBuilder asks LevelUpHint; not a callout)
+	  Portal    after Config.Tutorial.PortalTipAt run seconds: the stage objective → the
+	            stage pill
+	  Boss      when the stage boss appears: red floor shapes show where it strikes → the
+	            boss bar
+	Co-op tips (once ever, also for experienced players; "TEAM TIP" instead of a count):
 	  TeamRules the first group run: what is shared and what is your own
 	  Revive    the first time a teammate falls: stand in the gold circle
 
-	Each hint shown is reported (Tutorial remote "Seen") so it never repeats; "Skip tips"
+	Each hint shown is reported (Tutorial remote "Seen") so it never repeats; SKIP TIPS
 	ends the tutorial ("Skip"); Settings > Show tips switches every hint off and Settings >
 	Replay tips ("Replay") shows them again from the next run. The server marks the
 	tutorial done when the first run ends.
@@ -46,12 +51,30 @@ local C, P = Theme.Color, Theme.Palette
 local T = Config.Tutorial
 
 local COOP = { TeamRules = true, Revive = true }
+-- the numbered tour of a first run ("TIP n / total")
+local TOUR = { "Move", "Attack", "Gems", "Portal", "Boss" }
+-- what each tip points at: Hud.Elements() keys, first visible one wins
+local TARGETS: { [string]: { string } } = {
+	Attack = { "WeaponRow", "Bar" },
+	Gems = { "XP", "Plate" },
+	Portal = { "Stage", "StageGoal" },
+	Boss = { "Boss", "BossMeter" },
+}
+
+local TITLE_SIZE = 24
+local BODY_SIZE = 18
+local ICON = 60
+local ARROW = 22
+local SKIP_W, SKIP_H = 150, 44
+
+type Tip = { Id: string, Text: string, Title: string, Icon: string, Seconds: number }
 
 local kit: { [string]: any } = {}
 local ui: { [string]: any } = {}
+local rootFrame: Frame? = nil
 local tutorialDone = true -- until the profile says otherwise
 local seen: { [string]: boolean } = {}
-local queue: { { Id: string, Text: string, Title: string, Icon: string, Seconds: number } } = {}
+local queue: { Tip } = {}
 local current: { [string]: any }? = nil
 local nextAt = 0
 local run: { [string]: any } = {} -- per-run trigger state
@@ -101,86 +124,188 @@ local function push(id: string, title: string, body: string, icon: string, secon
 end
 
 ------------------------------------------------------------------------------------------
--- The card
+-- The callout
 ------------------------------------------------------------------------------------------
 
 local function build(root: Frame)
-	local holder, face = UIKit.Surface(root, { Name = "TipCard", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.25, Visible = false, ZIndex = Theme.Z.Toast, AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(520, 92) })
+	rootFrame = root
+	-- the gold ring around the element a tip explains (under the card)
+	local focus = new("Frame", { Name = "TipFocus", BackgroundColor3 = P.gold_300, BackgroundTransparency = 0.9, Visible = false, Active = false, ZIndex = Theme.Z.Toast }, root)
+	UIKit.corner(focus, Theme.Radius.M)
+	ui.FocusStroke = UIKit.stroke(focus, P.gold_300, 3, 0.05)
+	UIAnim.PulseStroke(ui.FocusStroke, 2, 4)
+	ui.Focus = focus
+
+	local holder, face = UIKit.Surface(root, { Name = "TipCard", Radius = Theme.Radius.L, Transparency = 0.02, Edge = P.gold_400, EdgeThickness = 2, EdgeTransparency = 0.1, Visible = false, ZIndex = Theme.Z.Toast, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(560, 140) })
 	holder.Active = false
 	ui.Card = holder
 	ui.Face = face
-	UIKit.padding(face, 10, 12, 12, 12)
-	local iconWell = new("Frame", { Name = "IconWell", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.1, Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(0, 2) }, face)
+	-- the arrow: a diamond behind the face, half of it sticking out toward the target
+	local arrow = new("Frame", { Name = "Arrow", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(ARROW, ARROW), Rotation = 45, BackgroundColor3 = C.Panel, BorderSizePixel = 0, ZIndex = 0, Visible = false }, holder)
+	UIKit.stroke(arrow, P.gold_400, 2, 0.1)
+	ui.Arrow = arrow
+	UIKit.padding(face, 14, 16, 14, 16)
+
+	local iconWell = new("Frame", { Name = "IconWell", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.05, Size = UDim2.fromOffset(ICON, ICON) }, face)
 	UIKit.corner(iconWell, 999)
-	UIKit.stroke(iconWell, P.gold_500, 1.5, 0.3)
+	UIKit.stroke(iconWell, P.gold_400, 2, 0.15)
 	ui.IconWell = iconWell
-	ui.Title = text(face, "Label", "", { Name = "Title", Position = UDim2.fromOffset(52, 0), Size = UDim2.new(1, -52 - 140, 0, TS(12) + 4), TextColor3 = P.gold_300 }, 12)
+	ui.Step = UIKit.Badge(face, "TIP 1 / 5", "Gold", { Name = "Step", AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0) })
+	ui.Title = text(face, "H2", "", { Name = "Title", Position = UDim2.fromOffset(ICON + 14, 0), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd }, TITLE_SIZE)
 	ui.Body = text(face, "BodyStrong", "", {
 		Name = "Body",
-		Position = UDim2.fromOffset(52, TS(12) + 4),
-		Size = UDim2.new(1, -52, 1, -(TS(12) + 4)),
+		Position = UDim2.fromOffset(ICON + 14, TS(TITLE_SIZE) + 6),
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = C.Text,
-	}, 15)
+	}, BODY_SIZE)
 	ui.Skip = UIKit.Button(face, {
-		Kind = "Ghost",
+		Kind = "Outline",
 		Title = "SKIP TIPS",
-		TitleStyle = "Label",
+		Icon = "skip",
+		IconSize = 18,
 		Align = "Center",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, 4, 0, -6),
-		Size = UDim2.fromOffset(UIKit.IsCompact() and 136 or 112, 30),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.fromScale(1, 1),
+		Size = UDim2.fromOffset(SKIP_W, SKIP_H),
 		Shadow = false,
 		Name = "SkipTips",
 		OnClick = function()
 			Tutorial.Skip()
 		end,
 	})
-	-- time left: a thin gold line along the bottom edge
-	ui.Timer = new("Frame", { Name = "Timer", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 10), Size = UDim2.new(1, 0, 0, 2) }, face)
+	-- time left: a gold bar left of SKIP TIPS
+	local track = new("Frame", { Name = "TimerTrack", BackgroundColor3 = C.PanelInset, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1) }, face)
+	UIKit.corner(track, 999)
+	ui.TimerTrack = track
+	ui.Timer = new("Frame", { Name = "Timer", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, track)
+	UIKit.corner(ui.Timer, 999)
 end
 
-local function cardHeight(body: string, w: number): number
-	-- the body's wrapped height (1-3 lines), measured like Roblox lays it out
-	local lineH = TS(15) + 3
-	local lines = 2
+-- Wrapped height of the body text in px (1-3 lines), measured like Roblox lays it out.
+local function bodyLines(body: string, width: number): number
 	local ok, size = pcall(function()
-		return TextService:GetTextSize(body, TS(15), Enum.Font.SourceSansSemibold, Vector2.new(w - 76, 1000))
+		return TextService:GetTextSize(body, TS(BODY_SIZE), Enum.Font.SourceSansSemibold, Vector2.new(width, 1000))
 	end)
 	if ok and typeof(size) == "Vector2" then
-		lines = math.clamp(math.ceil(size.Y / TS(15) - 0.2), 1, 3)
+		return math.clamp(math.ceil(size.Y / TS(BODY_SIZE) - 0.2), 1, 3)
 	end
-	return 22 + TS(12) + 4 + lines * lineH
+	return 2
 end
 
+-- Rect of a HUD element in root (virtual) pixels, or nil when it is not on screen.
+local function targetRect(id: string): (Vector2?, Vector2?)
+	local keys = TARGETS[id]
+	local root = rootFrame
+	if not keys or not root then
+		return nil, nil
+	end
+	local ok, els = pcall(Hud.Elements)
+	if not ok or type(els) ~= "table" then
+		return nil, nil
+	end
+	local v: Vector2 = kit.VirtualSize()
+	local scale = v.X > 0 and root.AbsoluteSize.X / v.X or 1
+	for _, k in ipairs(keys) do
+		local g = els[k]
+		if type(g) == "table" then
+			g = g.Frame -- a UIKit component (Meter, Chip ...)
+		end
+		if typeof(g) == "Instance" and g:IsA("GuiObject") and g.Visible and g.AbsoluteSize.X > 4 then
+			local shown = true
+			local a: Instance? = g.Parent
+			while a and a ~= root do
+				if a:IsA("GuiObject") and not a.Visible then
+					shown = false
+					break
+				end
+				a = a.Parent
+			end
+			if shown then
+				local pos = (g.AbsolutePosition - root.AbsolutePosition) / scale
+				return pos, g.AbsoluteSize / scale
+			end
+		end
+	end
+	return nil, nil
+end
+
+-- Sizes the card's insides for width w; returns its height.
+local function sizeCard(w: number): number
+	local textW = w - 32 - ICON - 14
+	local lines = bodyLines(ui.Body.Text, textW)
+	local bodyH = lines * (TS(BODY_SIZE) + 3)
+	ui.Title.Size = UDim2.fromOffset(textW - 96, TS(TITLE_SIZE) + 4)
+	ui.Body.Size = UDim2.fromOffset(textW, bodyH)
+	ui.TimerTrack.Position = UDim2.new(0, ICON + 14, 1, -(SKIP_H / 2 - 3))
+	ui.TimerTrack.Size = UDim2.new(1, -(ICON + 14 + SKIP_W + 16), 0, 6)
+	local h = 28 + TS(TITLE_SIZE) + 6 + bodyH + 10 + SKIP_H
+	ui.Card.Size = UDim2.fromOffset(w, h)
+	return h
+end
+
+--[[
+	Places the card (and its arrow / focus ring) for the current tip: next to its target
+	(below an element in the top half, above one in the bottom half) with the arrow at the
+	target; without a target, above the ability bar (landscape) or under the hero
+	(portrait). The hero stands at the screen centre: when the card would cover it (short
+	landscape phones), the card moves to the side of the screen with more room, narrower.
+]]
 local function layout()
-	if not ui.Card then
+	if not ui.Card or not current then
 		return
 	end
 	local v: Vector2 = kit.VirtualSize()
 	local W, H = v.X, v.Y
 	local portrait: boolean = kit.IsPortrait()
-	local w = math.min(UIKit.IsCompact() and 600 or 540, W - 32)
-	local body = ui.Body.Text
-	local h = cardHeight(body, w)
-	ui.Card.Size = UDim2.fromOffset(w, h)
-	local bottom
-	if portrait then
-		-- under the hero, above the thumbs' usual spot
-		bottom = H * 0.72
-	else
-		-- over the ability bar (and over the status line when it shows)
-		bottom = Hud.BarTop() - 10
-		local els = Hud.Elements()
-		if els.Buff and els.Buff.Visible then
-			bottom -= 38
-		end
-		if els.Status and els.Status.Visible then
-			bottom = math.min(bottom, els.Status.Position.Y.Offset - els.Status.Size.Y.Offset / 2 - 8)
-		end
+	local w = portrait and (W - 24) or math.min(640, W - 48)
+	local h = sizeCard(w)
+
+	local pos, size = targetRect(current.Id)
+	local tx = W / 2
+	local y: number
+	local dir = 0 -- arrow: -1 up (target above), 1 down (target below), 0 none
+	if pos and size then
+		tx = pos.X + size.X / 2
+		dir = (pos.Y + size.Y / 2 < H / 2) and -1 or 1
 	end
-	ui.Card.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(bottom))
+	local function place(): number
+		if pos and size then
+			local yy = dir < 0 and (pos.Y + size.Y + ARROW / 2 + 14) or (pos.Y - h - ARROW / 2 - 14)
+			return math.clamp(yy, 8, H - h - 8)
+		elseif portrait then
+			return H * 0.6
+		end
+		return math.max(8, Hud.BarTop() - 12 - h)
+	end
+	y = place()
+	local x = math.clamp(tx, w / 2 + 12, W - w / 2 - 12)
+	-- keep the hero (screen centre) clear
+	local heroHalf = Vector2.new(70, 80)
+	local function coversHero(cx: number, cy: number, cw: number, ch: number): boolean
+		return math.abs(cx - W / 2) < cw / 2 + heroHalf.X and cy < H / 2 + heroHalf.Y and cy + ch > H / 2 - heroHalf.Y
+	end
+	if not portrait and coversHero(x, y, w, h) then
+		local w2 = math.max(300, math.min(w, W / 2 - heroHalf.X - 24))
+		h = sizeCard(w2)
+		w = w2
+		y = place()
+		local right = tx >= W / 2
+		x = right and (W - 12 - w / 2) or (12 + w / 2)
+	end
+	if pos and size then
+		local ax = math.clamp(tx - (x - w / 2), 28, w - 28)
+		ui.Arrow.Position = UDim2.fromOffset(ax, dir < 0 and 0 or h)
+		ui.Arrow.Visible = true
+		ui.Focus.Position = UDim2.fromOffset(pos.X - 6, pos.Y - 6)
+		ui.Focus.Size = UDim2.fromOffset(size.X + 12, size.Y + 12)
+		ui.Focus.Visible = true
+	else
+		ui.Arrow.Visible = false
+		ui.Focus.Visible = false
+	end
+	current.Dir = dir
+	ui.Card.Position = UDim2.fromOffset(math.floor(x), math.floor(y))
 end
 
 local function setIcon(name: string)
@@ -189,19 +314,38 @@ local function setIcon(name: string)
 			c:Destroy()
 		end
 	end
-	Icons.Draw(ui.IconWell, name, { Size = 24, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	Icons.Draw(ui.IconWell, name, { Size = 36, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
 end
 
 local function hideCard()
 	if current then
 		current = nil
 		local card = ui.Card :: Frame
+		ui.Focus.Visible = false
 		UIAnim.PopOut(card, function()
 			if not current then
 				card.Visible = false
 			end
 		end)
 	end
+end
+
+-- "TIP n / 5": n counts the tour tips already seen (this run or before) plus this one, so
+-- the count only goes up even when the portal tip comes before the gems one.
+local function stepText(id: string): string
+	if COOP[id] then
+		return "TEAM TIP"
+	end
+	if not table.find(TOUR, id) then
+		return "TIP"
+	end
+	local n = 1
+	for _, t in ipairs(TOUR) do
+		if t ~= id and seen[t] then
+			n += 1
+		end
+	end
+	return string.format("TIP %d / %d", math.min(n, #TOUR), #TOUR)
 end
 
 local function showNext(now: number)
@@ -213,12 +357,15 @@ local function showNext(now: number)
 		return
 	end
 	current = { Id = tip.Id, Until = now + tip.Seconds, Seconds = tip.Seconds, Since = now }
-	ui.Title.Text = UIKit.track(tip.Title)
+	ui.Title.Text = tip.Title
 	ui.Body.Text = tip.Text
+	ui.Step.Text = stepText(tip.Id)
 	setIcon(tip.Icon)
 	layout()
 	ui.Card.Visible = true
-	UIAnim.Pop(ui.Card, 0, 0.85)
+	-- slide in from the side of what it explains (or rise from below)
+	local d = (current :: any).Dir
+	UIAnim.SlideIn(ui.Card, Vector2.new(0, d < 0 and -28 or 28), 0)
 	markSeen(tip.Id)
 	if kit.Audio then
 		pcall(kit.Audio.Play, "Tip")
@@ -233,11 +380,11 @@ local function moveText(): string
 	local last = UserInputService:GetLastInputType()
 	local gamepad = string.find(tostring(last), "Gamepad") ~= nil
 	if gamepad then
-		return "Move with the left stick. That's all you control!"
+		return "Use the left stick to move. That's all you control!"
 	elseif UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
 		return "Drag anywhere on the screen to move. That's all you control!"
 	end
-	return "Move with WASD or the arrow keys. That's all you control!"
+	return "Use WASD or the arrow keys to move. That's all you control!"
 end
 
 local function heroPos(): Vector3?
@@ -246,13 +393,13 @@ local function heroPos(): Vector3?
 	return root and root.Position or nil
 end
 
-local function startRun(state: Configuration)
+local function startRun(_state: Configuration)
 	table.clear(run)
 	run.Start = os.clock()
 	run.StartPos = heroPos()
 	run.Kills0 = player:GetAttribute("Kills") or 0
-	push("Move", "How to play", moveText(), "boot")
-	push("Attack", "Auto attack", "Your weapon attacks on its own. Keep moving and stay out of reach!", "sword")
+	push("Move", "Move", moveText(), "boot")
+	push("Attack", "Auto attack", "Your weapons fire on their own. Just keep moving!", "sword")
 end
 
 local function triggers(state: Configuration)
@@ -260,19 +407,12 @@ local function triggers(state: Configuration)
 	-- arrive just after InRun)
 	if not run.Team and os.clock() - (run.Start or 0) < 8 and (state:GetAttribute("Participants") or 1) > 1 then
 		run.Team = true
-		push(
-			"TeamRules",
-			"Team run",
-			"XP from gems is shared by everyone still standing. Gold is your own: your kills and the Queen's reward. Items are your own too (the Guarded Altar gives one to each of you).",
-			"people2",
-			T.HintSeconds + 3,
-			true
-		)
+		push("TeamRules", "Team run", "Gem XP is shared by everyone standing. Gold and items are your own.", "people2", T.HintSeconds + 2, true)
 	end
 	-- gems after the first kill
 	if not run.Gems and (player:GetAttribute("Kills") or 0) > (run.Kills0 or 0) then
 		run.Gems = true
-		push("Gems", "Experience", "Defeated enemies drop gold gems. Walk over them to collect XP and level up.", "gem")
+		push("Gems", "Collect gems", "Walk over gems for XP. Fill this bar to level up!", "gem")
 	end
 	-- the objective, a while into the run
 	local runTime = state:GetAttribute("RunTime") or 0
@@ -280,19 +420,20 @@ local function triggers(state: Configuration)
 	if not run.Portal and stagePhase == "Explore" and runTime >= T.PortalTipAt then
 		run.Portal = true
 		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
-		local wake = lockLeft > 0 and string.format(" It wakes in %s.", UIKit.formatTime(lockLeft)) or ""
-		push("Portal", "Your goal", "Find the stone portal on this map." .. wake .. " Stand in its circle to summon the Scorpion Queen, then beat her to go deeper.", "portal", T.HintSeconds + 2)
+		local body = lockLeft > 0 and string.format("Find the stone portal (it wakes in %s). Stand in its circle to call the boss.", UIKit.formatTime(lockLeft))
+			or "Find the stone portal and stand in its circle to call the boss."
+		push("Portal", "Find the portal", body, "portal", T.HintSeconds + 1)
 	end
 	if not run.Boss and stagePhase == "Boss" then
 		run.Boss = true
-		push("Boss", "The Queen", "Red shapes on the floor show where she strikes next. Step out of them before they fill!", "skull")
+		push("Boss", "Dodge the red", "Red shapes on the floor show where the boss strikes. Step out!", "skull")
 	end
 	-- the first fallen teammate
 	if not run.Revive then
 		for _, p in ipairs(Players:GetPlayers()) do
 			if p ~= player and p:GetAttribute("InRun") == true and p:GetAttribute("Alive") == false and (tonumber(p:GetAttribute("PartnerRevivesLeft")) or 0) > 0 and p:GetAttribute("AwaitingRevive") ~= true then
 				run.Revive = true
-				push("Revive", "Revive", string.format("%s is down! Stand inside the gold circle around them for a few seconds to bring them back.", p.DisplayName), "revive")
+				push("Revive", "Revive " .. p.DisplayName, "Stand in the gold circle around them for a few seconds.", "revive")
 				break
 			end
 		end
@@ -362,7 +503,7 @@ end
 	Per frame. blocked = a modal is open (level-up cards, pause, results): the current hint
 	waits (its clock stops) and no new one starts.
 ]]
-function Tutorial.Update(_dt: number, state: Configuration, inRun: boolean, blocked: boolean)
+function Tutorial.Update(dt: number, state: Configuration, inRun: boolean, blocked: boolean)
 	if not ui.Card then
 		return
 	end
@@ -385,13 +526,20 @@ function Tutorial.Update(_dt: number, state: Configuration, inRun: boolean, bloc
 	triggers(state)
 	if current then
 		if blocked then
-			current.Until += _dt
+			current.Until += dt
 			ui.Card.Visible = false
+			ui.Focus.Visible = false
 			return
 		end
 		ui.Card.Visible = true
 		local left = math.max(0, current.Until - now)
-		ui.Timer.Size = UDim2.new(math.clamp(left / current.Seconds, 0, 1), 0, 0, 2)
+		ui.Timer.Size = UDim2.fromScale(math.clamp(left / current.Seconds, 0, 1), 1)
+		-- follow the element (the HUD may re-lay out), after the slide-in has finished
+		current.Relayout = (current.Relayout or 0) + dt
+		if current.Relayout > 0.25 and now - current.Since > 0.5 then
+			current.Relayout = 0
+			layout()
+		end
 		if left <= 0 then
 			hideCard()
 			nextAt = now + T.GapSeconds

@@ -40,7 +40,7 @@ function C.bootServer()
 	if Remotes then
 		C.try("Remotes.Setup", Remotes.Setup)
 	end
-	if preview.args.meshes ~= "uploaded" then
+	if preview.args.meshes ~= "uploaded" and preview.args.meshes ~= "none" then
 		local forced = preview.forceMeshesUploaded()
 		if #forced > 0 then
 			preview.note("not yet uploaded models shown from meshes/: " .. table.concat(forced, ", "))
@@ -49,7 +49,11 @@ function C.bootServer()
 	local MeshService = C.server("MeshService")
 	if MeshService then
 		C.try("MeshService.Init", MeshService.Init, {})
-		C.try("MeshService.Start", MeshService.Start, {})
+		if preview.args.meshes == "none" then
+			preview.note("--set meshes=none: no mesh loads, every model is its part-built fallback")
+		else
+			C.try("MeshService.Start", MeshService.Start, {})
+		end
 	end
 	preview.advance(0.05)
 	return {

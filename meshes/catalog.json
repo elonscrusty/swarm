@@ -6569,6 +6569,130 @@
   ]
  },
  {
+  "name": "GoldCoin",
+  "category": "Pickups",
+  "note": "Gold coin: one chunky faceted coin ~1.0 across x 0.22 thick, standing on its edge (face toward -Y), a raised rim and an embossed crown on both faces. Spun by the client.",
+  "tris": 252,
+  "pieces": [
+   {
+    "name": "Coin",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.5,
+     0.0
+    ],
+    "size": [
+     0.9659,
+     0.9659,
+     0.22
+    ]
+   },
+   {
+    "name": "Crown",
+    "slot": "Trim",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.5428,
+     0.0
+    ],
+    "size": [
+     0.589,
+     0.3895,
+     0.25
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Trim": [
+    0.9411764705882353,
+    0.8666666666666667,
+    0.6901960784313725
+   ]
+  },
+  "bounds": [
+   [
+    -0.483,
+    0.017,
+    -0.125
+   ],
+   [
+    0.483,
+    0.983,
+    0.125
+   ]
+  ]
+ },
+ {
+  "name": "GoldPile",
+  "category": "Pickups",
+  "note": "Small pile of gold: four coins stacked a little askew with a fifth leaning on them, ~1.5 x 1.2 x 1.0; crowns on the top coin and the leaning one.",
+  "tris": 840,
+  "pieces": [
+   {
+    "name": "Coins",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1434,
+     0.4364,
+     -0.1508
+    ],
+    "size": [
+     1.5818,
+     0.8728,
+     1.3353
+    ]
+   },
+   {
+    "name": "Crowns",
+    "slot": "Trim",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1996,
+     0.4949,
+     0.1588
+    ],
+    "size": [
+     1.1756,
+     0.3965,
+     0.5093
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Trim": [
+    0.9411764705882353,
+    0.8666666666666667,
+    0.6901960784313725
+   ]
+  },
+  "bounds": [
+   [
+    -0.934,
+    0.0,
+    -0.818
+   ],
+   [
+    0.648,
+    0.873,
+    0.517
+   ]
+  ]
+ },
+ {
   "name": "GrassTuft",
   "category": "World",
   "note": "Grass tuft, 1.2 x 0.8. Scatter decoration (<= 40 tris).",

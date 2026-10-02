@@ -5,6 +5,8 @@
 --   --set cards=Spear+ChainHook:4+evo:Turret   any cards (weapon id = NEW, id:N = upgrade to
 --                        level N, evo:id = evolution, passive:id[:N] = passive)
 --   --set rerolls=0 --set skips=0 --set rerollsMax=0 --set skipsMax=0   reroll / skip states
+--   --set at=<s>         seconds after the offer arrives (default 1.5; ~0.25 = cards flying in)
+--   --set pick=N         card N was just picked (its punch + flash), shown --set at later
 local A = lib("arena")
 local C = lib("common")
 A.build({ enemies = 90 })
@@ -101,4 +103,17 @@ C.fire("LevelUpOffer", {
 	Pending = 1,
 })
 C.setState({ Frozen = true, LevelUpPause = true })
-C.settle(1.5)
+local pick = tonumber(preview.args.pick)
+if pick then
+	C.settle(1.2)
+	local card = C.findText and nil
+	for _, d in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
+		if d.Name == "Card" .. pick and d:IsA("TextButton") then
+			card = d
+		end
+	end
+	if card then
+		preview.click(card)
+	end
+end
+C.settle(tonumber(preview.args.at) or 1.5)

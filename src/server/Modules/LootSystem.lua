@@ -752,7 +752,8 @@ local function openChest(rp, obj: Obj)
 	recolourGlow(obj, nil, 1)
 	local weights = Config.Chests.Weights[obj.Type] or Config.Chests.Weights.Small
 	local id = ctx.ItemSystem.Roll(weights, rp.Stats.Luck)
-	ctx.ItemSystem.Grant(rp, id, TITLES[obj.Type])
+	ctx.ItemSystem.Grant(rp, id, TITLES[obj.Type], true)
+	ctx.RunManager.HoldReward(rp)
 	Fx.Sound("Chest")
 	if obj.Type == "Golden" then
 		Events.Fire("GoldenChest", rp.Player)
@@ -774,7 +775,8 @@ local function useChance(rp, obj: Obj)
 	if rng:NextNumber() < S.ChanceSuccess then
 		obj.Found += 1
 		local id = ctx.ItemSystem.Roll(Config.Chests.Weights.Chance, rp.Stats.Luck)
-		ctx.ItemSystem.Grant(rp, id, TITLES.Chance)
+		ctx.ItemSystem.Grant(rp, id, TITLES.Chance, true)
+		ctx.RunManager.HoldReward(rp)
 		Fx.Ring(obj.Pos, 6, P.gold_300)
 	else
 		ctx.RunManager.Notify(rp.Player, "The shrine takes your gold... nothing this time.", Color3.fromRGB(200, 200, 210))
@@ -821,7 +823,8 @@ local function claimAltar(rp, obj: Obj)
 	Fx.Sound("Chest")
 	for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if other.Alive and not other.Returned and other.Stats then
-			ctx.ItemSystem.Grant(other, ctx.ItemSystem.Roll(Config.Chests.Weights.Guarded, other.Stats.Luck), TITLES.Guarded)
+			ctx.ItemSystem.Grant(other, ctx.ItemSystem.Roll(Config.Chests.Weights.Guarded, other.Stats.Luck), TITLES.Guarded, true)
+			ctx.RunManager.HoldReward(other)
 			Events.Fire("OptionalEvent", other.Player, { Kind = "Altar" })
 		end
 	end

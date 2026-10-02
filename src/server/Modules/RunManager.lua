@@ -42,6 +42,7 @@ local ModelBuilder = require(script.Parent.ModelBuilder)
 local MapBuilder = require(script.Parent.MapBuilder)
 local Fx = require(script.Parent.Fx)
 local Events = require(script.Parent.Events)
+local DevTools = require(script.Parent.DevTools)
 
 local RunManager = {}
 
@@ -97,21 +98,31 @@ function RunManager.IsMenuPaused(): boolean
 end
 
 --[[
-	The whole run freezes while the solo pause menu is open or while any player is choosing
-	a level-up card (enemies, projectiles, damage and the timer all stop for everyone).
-	Called whenever either source changes.
+	The whole run freezes while the solo pause menu is open, while any player is choosing
+	a level-up card or while a chest reward panel shows (enemies, projectiles, damage and
+	the timer all stop for everyone). Called whenever any source changes.
 ]]
 function RunManager.RefreshFrozen()
-	local choosing = false
+	local choosing, rewarding = false, false
 	local ids, names = {}, {}
+	local rewardIds, rewardNames = {}, {}
 	for _, rp in ipairs(runPlayers) do
 		if rp.Offer and rp.Alive and not rp.Returned then
 			choosing = true
 			table.insert(ids, tostring(rp.Player.UserId))
 			table.insert(names, rp.Player.DisplayName)
 		end
+		if rp.RewardUntil and rp.Alive and not rp.Returned then
+			rewarding = true
+			table.insert(rewardIds, tostring(rp.Player.UserId))
+			table.insert(rewardNames, rp.Player.DisplayName)
+		end
 	end
-	local newFrozen = phase == "Running" and (menuPaused or choosing)
+	rewarding = rewarding and phase == "Running"
+	-- who is opening a chest ("<Name> is opening a chest" on everyone else's HUD)
+	state:SetAttribute("RewardIds", rewarding and ("," .. table.concat(rewardIds, ",") .. ",") or "")
+	state:SetAttribute("RewardNames", rewarding and table.concat(rewardNames, ", ") or "")
+	local newFrozen = phase == "Running" and (menuPaused or choosing or rewarding)
 	-- who is choosing, so the HUD can say "<Name> is choosing an upgrade" to everyone else
 	-- (the chooser sees the cards instead); set before LevelUpPause so both arrive together
 	state:SetAttribute("ChoosingIds", (phase == "Running" and choosing) and ("," .. table.concat(ids, ",") .. ",") or "")
@@ -128,6 +139,33 @@ function RunManager.RefreshFrozen()
 		-- judged against the frozen limit of 0 (that snapped players back)
 		rp.SpeedCheckTimer = 0
 		rp.LastValidPos = rp.Root and rp.Root.Position
+	end
+end
+
+--[[
+	Chest rewards: a chest / shrine / altar paid this player an item (or an elite chest its
+	level-ups): the run pauses for Config.Chests.RewardPauseSeconds while the reward panel
+	shows. More rewards in a row extend it, never past RewardPauseMax from the first one.
+	The panel's tap (remote RewardClose) or the timer (Step) ends it. Not while travelling.
+]]
+function RunManager.HoldReward(rp)
+	if phase ~= "Running" or ctx.StageManager.IsHolding() or not rp.Alive or rp.Returned then
+		return
+	end
+	local C = Config.Chests
+	local now = os.clock()
+	if not rp.RewardUntil then
+		rp.RewardStart = now
+	end
+	rp.RewardUntil = math.min(now + (C.RewardPauseSeconds or 2.5), (rp.RewardStart or now) + (C.RewardPauseMax or 5))
+	RunManager.RefreshFrozen()
+end
+
+function RunManager.EndReward(rp)
+	if rp.RewardUntil then
+		rp.RewardUntil = nil
+		rp.RewardStart = nil
+		RunManager.RefreshFrozen()
 	end
 end
 
@@ -263,6 +301,24 @@ spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean): Mod
 	local crown = inLobby and ctx.MonetizationService.OwnsPass(player, "VIP")
 	local model = ModelBuilder.BuildCharacter(characterId, skinId, { Crown = crown })
 	model.Name = player.Name
+	-- built from the part fallback because the hero's meshes are still loading: load them
+	-- next and swap this lobby character (and the menu showcase that copies it) right away
+	local meshNames = ModelBuilder.MeshesFor(characterId, skinId)
+	local ms = ctx.MeshService
+	local waiting = false
+	for _, n in ipairs(meshNames) do
+		waiting = waiting or ms.MayLoad(n)
+	end
+	if waiting then
+		ms.Prioritize(meshNames)
+		if inLobby then
+			ms.WhenReady(meshNames, function()
+				if player.Parent and player.Character == model and model.Parent then
+					RunManager.RefreshLobbyCharacter(player)
+				end
+			end)
+		end
+	end
 
 	local old = player.Character
 	if old then
@@ -558,6 +614,10 @@ function RunManager.DamagePlayer(rp, amount: number)
 		return
 	end
 	if rp.Paused and Config.Player.LevelUpInvulnerable then
+		return
+	end
+	-- dev godmode (DevTools sets it only for isDev players)
+	if rp.Player:GetAttribute("DevGod") == true then
 		return
 	end
 	local now = os.clock()
@@ -1175,12 +1235,40 @@ local function startNow(player: Player)
 	beginRun()
 end
 
-local function cycleArena(player: Player)
+local function setArena(name: string)
+	selectedArena = name
+	state:SetAttribute("SelectedArena", name)
+	if lobby.ArenaLabel then
+		lobby.ArenaLabel.Text = "ARENA: " .. string.upper(Config.Arenas[name].DisplayName)
+	end
+	RunManager.Broadcast("Arena set to " .. Config.Arenas[name].DisplayName, Color3.fromRGB(255, 220, 120))
+end
+
+--[[
+	CycleArena(name?): with an arena name (the lobby's ARENA screen) picks that arena when it
+	exists, is in Config.Arenas.Order and is unlocked for this player; without one, the next
+	unlocked arena in order (the old cycling card).
+]]
+local function cycleArena(player: Player, wanted: any)
 	if phase ~= "Lobby" then
 		return
 	end
 	local data = ctx.DataService.GetData(player)
 	if not data then
+		return
+	end
+	if wanted ~= nil then
+		if type(wanted) ~= "string" or not table.find(Config.Arenas.Order, wanted) then
+			return
+		end
+		if not arenaUnlocked(data.Stats, wanted) then
+			local def = (Config.Arenas :: any)[wanted]
+			RunManager.Notify(player, string.format("Reach stage %d in a run to unlock the %s!", def.RequiredBestStage or 0, def.DisplayName), Color3.fromRGB(255, 200, 120))
+			return
+		end
+		if wanted ~= selectedArena then
+			setArena(wanted)
+		end
 		return
 	end
 	local order = Config.Arenas.Order
@@ -1191,12 +1279,7 @@ local function cycleArena(player: Player)
 			if name == selectedArena then
 				break
 			end
-			selectedArena = name
-			state:SetAttribute("SelectedArena", name)
-			if lobby.ArenaLabel then
-				lobby.ArenaLabel.Text = "ARENA: " .. string.upper(Config.Arenas[name].DisplayName)
-			end
-			RunManager.Broadcast("Arena set to " .. Config.Arenas[name].DisplayName, Color3.fromRGB(255, 220, 120))
+			setArena(name)
 			return
 		end
 	end
@@ -1228,7 +1311,7 @@ local function isDev(player: Player): boolean
 	return Config.Dev.ShowInLiveGame == true and game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
 end
 
-local function devCommand(player: Player, command: any)
+local function devCommand(player: Player, command: any, arg: any)
 	if type(command) ~= "string" or not isDev(player) then
 		return
 	end
@@ -1241,40 +1324,11 @@ local function devCommand(player: Player, command: any)
 				beginRun()
 			end
 		end
-	elseif command == "AddLevels" then
+		return
+	end
+	if DevTools.Knows(command) then
 		local rp = byPlayer[player]
-		if rp and not rp.Returned and rp.Alive and phase == "Running" then
-			for _ = 1, Config.Dev.AddLevels do
-				ctx.XPSystem.GiveXP(rp, math.max(0, rp.XPNeeded - rp.XP))
-			end
-		end
-	elseif command == "SpawnPortalBoss" or command == "SkipToBoss" then -- SkipToBoss: old clients
-		local rp = byPlayer[player]
-		if rp and not rp.Returned and phase == "Running" and ctx.StageManager.DevActivate() then
-			RunManager.Broadcast("DEV: portal boss summoned", Color3.fromRGB(255, 160, 255))
-		end
-	elseif command == "TeleportToPortal" then
-		local rp = byPlayer[player]
-		if rp and not rp.Returned and phase == "Running" then
-			ctx.StageManager.DevTeleport(rp)
-		end
-	elseif command == "GiveItems" then
-		local rp = byPlayer[player]
-		if rp and not rp.Returned and rp.Alive and phase == "Running" then
-			ctx.ItemSystem.DevGive(rp, 3)
-		end
-	elseif command == "AddGold" then
-		local rp = byPlayer[player]
-		if rp and not rp.Returned and phase == "Running" then
-			ctx.GoldSystem.AddRunGold(rp, 300)
-		end
-	elseif command == "NewWeapons" or command == "EvolveWeapons" then
-		-- every weapon added with the Alchemist / Engineer / Necromancer at level 8 (past the
-		-- slot limit), or evolve every owned weapon (LevelUpSystem.DevWeapons)
-		local rp = byPlayer[player]
-		if rp and not rp.Returned and rp.Alive and phase == "Running" then
-			ctx.LevelUpSystem.DevWeapons(rp, command == "EvolveWeapons")
-		end
+		DevTools.Handle(ctx, player, command, arg, not RunManager.IsParticipant(player), rp, phase == "Running")
 	end
 end
 
@@ -1412,6 +1466,9 @@ function RunManager.Step(dt: number)
 
 	local now = os.clock()
 	for _, rp in ipairs(runPlayers) do
+		if rp.RewardUntil and (now >= rp.RewardUntil or not rp.Alive) then
+			RunManager.EndReward(rp)
+		end
 		local root: BasePart? = rp.Root
 		if root and root.Parent then
 			local look = root.CFrame.LookVector * FLAT
@@ -1539,7 +1596,7 @@ function RunManager.Start()
 
 	Remotes.Listen("StartNow", startNow, 2)
 	Remotes.Listen("CycleArena", cycleArena, 3)
-	Remotes.Listen("DevCommand", devCommand, 3)
+	Remotes.Listen("DevCommand", devCommand, 6)
 
 	Remotes.Listen("JoinRun", function(player)
 		if phase == "Countdown" then
@@ -1562,6 +1619,13 @@ function RunManager.Start()
 		end
 		menuPaused = open and Config.Run.SoloPauseFreezesRun and #runPlayers == 1
 		RunManager.RefreshFrozen()
+	end, 4)
+
+	Remotes.Listen("RewardClose", function(player)
+		local rp = byPlayer[player]
+		if rp then
+			RunManager.EndReward(rp)
+		end
 	end, 4)
 
 	Remotes.Listen("ReviveDecline", function(player)

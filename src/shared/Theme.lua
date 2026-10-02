@@ -281,7 +281,16 @@ Theme.Fx = {
 	Bolt = Palette.fx_bolt,
 	Gold = Palette.gold_300,
 	Danger = Palette.crimson_400,
-	Gem = { Small = Palette.gold_300, Medium = Palette.gold_400, Large = Palette.amber_500 },
+	-- XP gems are blue-white crystals (never gold: gold means coins); Glow = the soft halo,
+	-- Core = the small ivory heart that shines through
+	Gem = {
+		Small = Palette.fx_arcane,
+		Medium = Palette.fx_arcane:Lerp(Palette.slate_400, 0.25),
+		Large = Palette.fx_holy,
+		Glow = Palette.fx_arcane,
+		Core = Palette.ivory_100,
+	},
+	Coin = Palette.gold_500, -- gold coins (GoldCoin / GoldPile meshes, part fallback)
 	PlayerRing = Palette.gold_300, -- marker under the local player
 	TeamRing = Palette.slate_300, -- marker under teammates
 }

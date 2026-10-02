@@ -8,7 +8,11 @@
 	                 DAILY on a Daily Challenge run, the curses' gold bonus), then a
 	                 "BARGAIN" chip while this stage's Bargain Shrine is sealed.
 	  item popup     remote ItemGained: icon tile in the rarity colour, name, rarity, what it
-	                 does and where it came from; stacks up to 3 under the strip
+	                 does and where it came from; stacks up to 3 under the strip. Items
+	                 from a chest / shrine / altar (Reward = true) go to the centred
+	                 reward panel instead (LootUI.OnReward, set by UIBuilder)
+	  purse hint     the price of the loot in reach goes to the HUD purse
+	                 (Hud.SetPurseHint; red "NEED N" after a press without enough gold)
 	  loot prompt    next to the nearest chest / shrine / altar in reach: title, state,
 	                 "+ benefit" / "- tradeoff" lines, the price (red when you can't afford
 	                 it) and HOLD (E, gamepad X, or press and hold the button on touch); the
@@ -37,6 +41,9 @@ local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 
 local LootUI = {}
+
+-- UIBuilder's chest reward panel: items with Reward = true go there instead of a popup.
+LootUI.OnReward = nil :: ((any) -> ())?
 
 local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
@@ -369,6 +376,10 @@ local function onGained(data)
 	if not def then
 		return
 	end
+	if data.Reward == true and LootUI.OnReward then
+		LootUI.OnReward(data)
+		return
+	end
 	local r = R[def.Rarity] or R.Common
 	popupOrder += 1
 	local holder, face = UIKit.Surface(ui.Popups, { Name = "ItemPopup", Size = UDim2.fromOffset(320, 84), Edge = r.Color, EdgeTransparency = def.Rarity == "Common" and 0.4 or 0.05, Transparency = 0.05, LayoutOrder = popupOrder })
@@ -436,6 +447,7 @@ function LootUI.Press()
 	end
 	if not canAfford(t) then
 		UIAnim.Punch(ui.Price.Frame, 0.3)
+		Hud.SetPurseHint(priceOf(t), false, true)
 		return
 	end
 	hold.Id = tonumber(t:GetAttribute("LootId")) or 0
@@ -462,6 +474,8 @@ local function onFeedback(data)
 	end
 	if data.State == "Cancel" and data.Reason == "gold" then
 		UIAnim.Punch(ui.Price.Frame, 0.3)
+		local t = target
+		Hud.SetPurseHint(t and priceOf(t) or 0, false, true)
 	end
 end
 
@@ -670,6 +684,7 @@ function LootUI.Update(_dt: number, inRun: boolean)
 		ui.Prompt.Visible = false
 		ui.Marker.Visible = false
 		ui.Bargain.Visible = false
+		Hud.SetPurseHint(0, true)
 		target = nil
 		if hold.Id ~= 0 then
 			hold.Id = 0
@@ -719,6 +734,12 @@ function LootUI.Update(_dt: number, inRun: boolean)
 	end
 	local shown = target ~= nil and target.Parent ~= nil
 	ui.Prompt.Visible = shown
+	if shown and usable(target :: Model) then
+		local t = target :: Model
+		Hud.SetPurseHint(priceOf(t), canAfford(t))
+	else
+		Hud.SetPurseHint(0, true)
+	end
 	if shown then
 		local t = target :: Model
 		local progress = 0

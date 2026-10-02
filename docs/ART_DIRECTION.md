@@ -25,7 +25,7 @@ random rainbow buttons, heavy bloom, glowing everything, decorative clutter in t
 | stone_900..100 | rocks, ruins, castle walls (500/600), paving (400/300), shadows (800) |
 | slate_950..200 | UI panels (900/800), roofs, blue banners (600), cool accents, night sky |
 | crimson_900..300 | knight cape/plume/shield, banners, health, danger, boss |
-| gold_900..200 | trims, crowns, coins/XP gems, primary button, borders (500), highlights (300) |
+| gold_900..200 | trims, crowns, coins, primary button, borders (500), highlights (300) |
 | ivory_100..500 | all UI text (100 primary, 300 secondary), bone/horn, cloth highlights |
 | wood_*, dirt_*, leather_* | fences, barrels, posts, paths (dirt_500/600), straps |
 | steel_* | armour (400 main, 600 shade, 300 edge), blades (300/200) |
@@ -122,8 +122,9 @@ brazier, round two-step stone dais. Props <= 700 tris, castle pieces <= 1500.
 ## 7. Effects
 
 Restrained and informative: ivory/pale-gold slash arcs, small gold sparks on hits, a white hit
-flash on enemies, soft heal sparkles, short thin projectile trails, gold XP gems with a tiny pop
-when collected, a gold ring under the local player (slate-blue rings under teammates). Effects
+flash on enemies, soft heal sparkles, short thin projectile trails, blue-white XP crystals
+(fx_arcane / slate, an ivory Neon core, a soft glow disc on the floor; never gold, gold means
+coins) with a sparkle when collected, chunky gold coins bursting from kills that pay gold, a gold ring under the local player (slate-blue rings under teammates). Effects
 must not cover the arena; keep alpha low, lifetimes short, sizes modest.
 
 ## 8. Interface system

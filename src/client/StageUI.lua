@@ -29,6 +29,7 @@ local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
+local ClientSettings = require(script.Parent.ClientSettings)
 
 local StageUI = {}
 
@@ -307,6 +308,21 @@ local function onOffer(data)
 	refreshChoiceButtons()
 	kit.Show(ui.Choice.Overlay, "Portal", true)
 	UIAnim.Pop(ui.ChoiceTitle, 0.05, 1.4)
+	-- the portal icon swirls in, the run's numbers land and count up, then the two doors
+	if not ClientSettings.Reduced() then
+		ui.ChoiceIcon.Rotation = -200
+		UIAnim.Tween(ui.ChoiceIcon, 0.6, { Rotation = 0 }, Enum.EasingStyle.Back)
+		for i, label in ipairs({ ui.StatStages, ui.StatTime, ui.StatKills, ui.StatGold }) do
+			local tile = label.Parent
+			if tile and tile:IsA("GuiObject") then
+				UIAnim.Pop(tile, 0.1 + 0.06 * i, 0.5)
+			end
+		end
+		UIAnim.Pop(ui.Next.Instance, 0.38, 0.6)
+		UIAnim.Pop(ui.Return.Instance, 0.46, 0.6)
+	end
+	UIAnim.CountTo(ui.StatKills, 0, tonumber(data.Kills) or 0, UIKit.formatNumber, 0.7)
+	UIAnim.CountTo(ui.StatGold, 0, tonumber(data.Gold) or 0, UIKit.formatNumber, 0.8)
 	UIKit.FocusIfGamepad(ui.Next.Instance)
 end
 

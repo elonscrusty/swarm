@@ -52,8 +52,8 @@ Remotes.ClientToServer = {
 	"JoinRun", -- join during the lobby countdown
 	"StartRun", -- (mode) lobby SOLO / DUO / TRIO button, or "Daily" (the DAILY card); during a countdown it joins
 	"StartNow", -- the countdown's starter skips the rest of the countdown
-	"CycleArena", -- lobby ARENA button (next unlocked arena)
-	"DevCommand", -- (command) Studio / creator only, re-checked on the server
+	"CycleArena", -- (arenaName?) lobby ARENA screen: pick that arena (unlocked), or the next unlocked one
+	"DevCommand", -- (command, arg?) Studio / creator only, re-checked on the server (DevTools)
 	"ReturnToLobby", -- leave the results screen early
 	"SelectCharacter", -- (characterId)
 	"BuyCharacter", -- (characterId)
@@ -63,6 +63,7 @@ Remotes.ClientToServer = {
 	"SaveSettings", -- ({ Music, Sfx, Shake = 0-1, ReducedEffects, DamageNumbers, Tips = bool }) any subset
 	"Tutorial", -- ("Seen", tipId) | ("Skip") | ("Replay") first-run tips (GoldSystem)
 	"ReviveDecline", -- close the revive offer early
+	"RewardClose", -- the chest reward panel was tapped closed (ends the reward pause early)
 	"RequestProfile", -- ask for a ProfileSync
 	"PortalChoice", -- ("Next" | "Return") answer to PortalOffer, validated by StageManager
 	"LootHold", -- (lootId, holding: boolean) start / stop holding a chest or shrine (LootSystem)

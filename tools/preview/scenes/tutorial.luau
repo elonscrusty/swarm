@@ -21,6 +21,10 @@ if tip == "LevelUp" or tip == "TeamRules" or tip == "Revive" then
 end
 local s = A.build({ enemies = 50, stage = 1, stagePhase = "Explore", lockLeft = 95 })
 C.setPlayer({ Kills = 0 })
+-- a first run is young (the arena scene sits at 8:24, past the portal tip time)
+if tip ~= "Portal" then
+	C.setState({ RunTime = 20 })
+end
 local settings = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = preview.args.tips ~= "off" }
 C.sendProfile(C.profile({ TutorialDone = false, SeenTips = seen, Settings = settings, Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 1, BestStage = 0 } }))
 C.settle(0.2)
@@ -71,5 +75,5 @@ end
 local Tutorial = C.try("require Tutorial", preview.client, "Tutorial")
 if Tutorial then
 	local els = Tutorial.Elements()
-	preview.log(string.format("tip card visible=%s title=%s body=%s", tostring(els.Card and els.Card.Visible), tostring(els.Title and els.Title.Text), tostring(els.Body and els.Body.Text)))
+	preview.log(string.format("tip card visible=%s step=%s title=%s body=%s", tostring(els.Card and els.Card.Visible), tostring(els.Step and els.Step.Text), tostring(els.Title and els.Title.Text), tostring(els.Body and els.Body.Text)))
 end

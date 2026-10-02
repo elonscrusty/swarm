@@ -345,8 +345,18 @@ ModelBuilder.ClassGear = {
 		gear(la, rig.Model, { Name = "ShieldCrossV", Size = Vector3.new(0.08, 1.5, 0.22), Color = c.Gold, Material = METAL }, CFrame.new(-0.76, -0.42, -0.42) * CFrame.Angles(0, math.rad(-36), 0))
 		gear(la, rig.Model, { Name = "ShieldCrossH", Size = Vector3.new(0.08, 0.22, 1.0), Color = c.Gold, Material = METAL }, CFrame.new(-0.76, -0.1, -0.42) * CFrame.Angles(0, math.rad(-36), 0))
 		local ra = rig.RightArm
-		gear(ra, rig.Model, { Name = "Guard", Size = Vector3.new(1.0, 0.2, 0.22), Color = c.Gold, Material = METAL }, CFrame.new(0.1, -1.1, -0.42))
-		gear(ra, rig.Model, { Name = "Blade", Size = Vector3.new(0.48, 0.14, 2.4), Color = BLADE, Material = METAL }, CFrame.new(0.15, -1.5, -1.6) * CFrame.Angles(math.rad(26), 0, 0))
+		-- longsword on one axis through the fist, forward and down like the mesh (heroes.py:
+		-- hand (0.08, -0.93, -0.04) from the arm centre, blade direction (0.1, -0.46, -0.86))
+		local hand = Vector3.new(0.08, -0.93, -0.04)
+		local d = Vector3.new(0.1, -0.46, -0.86).Unit
+		local function along(at: number): CFrame
+			local p = hand + d * at
+			return CFrame.lookAt(p, p + d)
+		end
+		gear(ra, rig.Model, { Name = "Grip", Size = Vector3.new(0.16, 0.16, 0.8), Color = LEATHER }, along(0.04))
+		gear(ra, rig.Model, { Name = "Pommel", Shape = Enum.PartType.Ball, Size = Vector3.new(0.3, 0.3, 0.3), Color = c.Gold, Material = METAL }, along(-0.44))
+		gear(ra, rig.Model, { Name = "Guard", Size = Vector3.new(1.0, 0.2, 0.22), Color = c.Gold, Material = METAL }, along(0.44))
+		gear(ra, rig.Model, { Name = "Blade", Size = Vector3.new(0.44, 0.14, 2.3), Color = BLADE, Material = METAL }, along(0.44 + 0.08 + 1.15))
 	end,
 	-- Mage: robe, mantle, beard, staff with a small arcane crystal.
 	Mage = function(rig: Rig, c)
@@ -726,11 +736,14 @@ local PickupTheme = require(game:GetService("ReplicatedStorage").Shared.Theme)
 local PP = PickupTheme.Palette
 
 -- XP gems are pooled cubes (clients stand them on a corner, or draw the Crystal mesh in
--- their place). Gold tones from Theme.Fx.Gem; a matte body, never Neon.
+-- their place, with a soft halo and an ivory core). Blue-white tones from Theme.Fx.Gem
+-- (gold is for coins only); sizes from Config.XP.GemSize: the client reads the kind back
+-- from the cube size.
+local GEM_SIZE = Config.XP.GemSize
 ModelBuilder.GemStyles = {
-	Small = { Size = Vector3.new(0.75, 0.75, 0.75), Color = PickupTheme.Fx.Gem.Small },
-	Medium = { Size = Vector3.new(1.0, 1.0, 1.0), Color = PickupTheme.Fx.Gem.Medium },
-	Large = { Size = Vector3.new(1.35, 1.35, 1.35), Color = PickupTheme.Fx.Gem.Large },
+	Small = { Size = Vector3.one * GEM_SIZE.Small, Color = PickupTheme.Fx.Gem.Small },
+	Medium = { Size = Vector3.one * GEM_SIZE.Medium, Color = PickupTheme.Fx.Gem.Medium },
+	Large = { Size = Vector3.one * GEM_SIZE.Large, Color = PickupTheme.Fx.Gem.Large },
 }
 
 function ModelBuilder.BuildGem(index: number, parent: Instance): BasePart

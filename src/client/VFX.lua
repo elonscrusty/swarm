@@ -14,8 +14,11 @@
 	  pools, explosions, shockwave rings, player events (telegraphs: Telegraphs.lua). One-shot effects
 	  run on a small pooled animator (no Tween objects, no Instance churn once warm) inside
 	  a part budget (Config.Graphics.MaxEffectParts); warnings and player events always play.
-	* Gems: gold faceted crystals (mesh "Crystal", or the server cube on its corner) with a
-	  gentle bob and a tiny sparkle when collected; floor pickups bob and spin; chests glow.
+	* Gems: blue-white crystals with an ivory core and a soft halo (mesh "Crystal", or the
+	  server cube on its corner), sized by value, with a gentle bob and a sparkle when
+	  collected; floor pickups bob and spin; chests glow.
+	* Gold: coins (GoldCoin / GoldPile meshes) burst out of an enemy whose kill paid gold,
+	  bounce once and fly to the player (FxBatch "g"); the HUD shows the "+N".
 	* Players: gold ring under the local player (slate-blue under teammates) with a facing
 	  chevron, a small overhead health bar, the garlic / soul eater aura ring.
 	* Heroes: procedural walk cycle (arm swing, body bob and lean), idle breathing and attack
@@ -460,10 +463,13 @@ end
 type Pose = { Kind: string, Start: number, Sweep: number, Back: boolean, Half: number }
 local poses: { [number]: Pose } = {}
 
-local SWING_WINDUP = 0.07 -- blade pulls back
-local SWING_SWEEP = 0.15 -- blade crosses the arc (ease-out)
-local SWING_FADE = 0.1 -- tip spark fades after the sweep
-local POSE_RECOVER = 0.18 -- arm blends back to the walk cycle
+-- A snappy cut: wind-up + sweep take 0.13 s (was 0.22). With the cubic ease-out the blade
+-- passes the middle of the arc ~0.06 s after the swing starts, so the drawn hit lines up
+-- with the server's damage (WeaponSystem SWING_HIT_DELAY 0.08 s, minus the Fx batch delay).
+local SWING_WINDUP = 0.04 -- blade pulls back
+local SWING_SWEEP = 0.09 -- blade crosses the arc (ease-out)
+local SWING_FADE = 0.07 -- tip spark fades after the sweep
+local POSE_RECOVER = 0.12 -- arm blends back to the walk cycle
 local THROW_TIME = 0.26
 local CAST_TIME = 0.24
 
@@ -1067,7 +1073,7 @@ local function slash(x: number, z: number, yaw: number, reach: number, sweep: nu
 	rig.Outer.Position = Vector3.new(0, 0, -reach)
 	rig.EdgeIn.Position = Vector3.new(0, 0, -(reach - st.EdgeWidth))
 	rig.EdgeOut.Position = Vector3.new(0, 0, -(reach + 0.06))
-	local life = 0.13 + tier * 0.012
+	local life = 0.09 + tier * 0.01
 	rig.Core.Lifetime = life
 	rig.Core.Color = st.Core
 	rig.Core.Transparency = st.CoreAlpha
@@ -1430,9 +1436,151 @@ local SPARKS_PER_BATCH = 6
 local FULL_DEATHS_PER_BATCH = 6 -- dust + bits; more deaths in one batch get dust only
 local DEATHS_PER_BATCH = 14
 
+------------------------------------------------------------------------------------------
+-- Gold coins (a kill that paid gold: FxBatch "g" = { x, z, amount, userId })
+------------------------------------------------------------------------------------------
+
+--[[
+	Purely visual: the gold is already in the counter when the server sends this. Coins
+	(GoldCoin mesh, or a gold disc) burst up out of the enemy, land with one small bounce
+	and then fly into the player they belong to, ending in a tiny gold sparkle. Big amounts
+	add a GoldPile. Pooled, at most MAX_COINS in flight; Reduced effects: one coin.
+]]
+type Coin = { Pieces: { any }, Pile: boolean, Start: number, From: Vector3, Land: Vector3, UserId: number, Phase: number, Fallback: BasePart? }
+local coinPool: { [string]: { Coin } } = { Coin = {}, Pile = {} }
+local coins: { Coin } = {}
+local MAX_COINS = 36
+local COIN_POP, COIN_BOUNCE, COIN_FLY = 0.38, 0.16, 0.34 -- seconds per leg
+local COIN_SCALE, PILE_SCALE = 2.1, 2.1 -- ~2 studs across: readable from the run camera
+
+local function newCoin(pile: boolean): Coin
+	local name = pile and "GoldPile" or "GoldCoin"
+	local pieces = ModelLibrary.MeshPieces(name, nil, pile and PILE_SCALE or COIN_SCALE, 0)
+	local fallback: BasePart? = nil
+	if not pieces then
+		-- part fallback: a thick gold disc (cylinder axis X: it spins like a coin)
+		local disc = newPart("Cylinder")
+		disc.Color = FX.Coin
+		disc.Size = pile and Vector3.new(0.9, 2.6, 2.6) or Vector3.new(0.45, 2.1, 2.1)
+		disc.Reflectance = 0.1
+		fallback = disc
+		pieces = { { Part = disc, Offset = CFrame.new(0, disc.Size.Y / 2, 0) } }
+	else
+		for _, piece in ipairs(pieces) do
+			piece.Part.CastShadow = false
+		end
+	end
+	return { Pieces = pieces :: { any }, Pile = pile, Start = 0, From = Vector3.zero, Land = Vector3.zero, UserId = 0, Phase = 0, Fallback = fallback }
+end
+
+local function takeCoin(pile: boolean): Coin
+	local list = coinPool[pile and "Pile" or "Coin"]
+	local c = table.remove(list)
+	if c and c.Fallback and ModelLibrary.MeshFolder(pile and "GoldPile" or "GoldCoin") then
+		-- the mesh arrived since this fallback was made: build a mesh coin instead
+		c.Fallback:Destroy()
+		c = nil
+	end
+	return c or newCoin(pile)
+end
+
+local function freeCoin(c: Coin)
+	for _, piece in ipairs(c.Pieces) do
+		piece.Part.CFrame = PARK
+	end
+	table.insert(coinPool[c.Pile and "Pile" or "Coin"], c)
+end
+
+local function goldBurst(x: number, z: number, amount: number, userId: number)
+	amount = math.max(1, math.floor(amount))
+	local count = math.clamp(amount, 1, 3)
+	local pile = amount >= 8
+	if ClientSettings.Reduced() then
+		count, pile = 1, false
+	end
+	local from = Vector3.new(x, FLOOR_Y + 1.6, z)
+	local now = os.clock()
+	for i = 1, count + (pile and 1 or 0) do
+		if #coins >= MAX_COINS then
+			break
+		end
+		local isPile = pile and i == 1
+		local c = takeCoin(isPile)
+		local a = math.random() * TAU
+		local r = isPile and 0.6 or (1.6 + math.random() * 1.6)
+		c.Start = now + (i - 1) * 0.05
+		c.From = from
+		c.Land = Vector3.new(x + math.cos(a) * r, FLOOR_Y, z + math.sin(a) * r)
+		c.UserId = userId
+		c.Phase = math.random() * TAU
+		table.insert(coins, c)
+	end
+	if userId == player.UserId then
+		Audio.Play("Coin")
+	end
+end
+
+local function renderCoins(now: number)
+	for i = #coins, 1, -1 do
+		local c = coins[i]
+		local t = now - c.Start
+		local pos: Vector3
+		local done = false
+		if t < 0 then
+			pos = c.From
+		elseif t < COIN_POP then
+			-- the burst: an arc up out of the body and down beside it
+			local u = t / COIN_POP
+			local flat = c.From:Lerp(c.Land, u)
+			pos = Vector3.new(flat.X, c.From.Y + (c.Land.Y - c.From.Y) * u + 4 * 3.2 * u * (1 - u), flat.Z)
+		elseif t < COIN_POP + COIN_BOUNCE then
+			local u = (t - COIN_POP) / COIN_BOUNCE
+			pos = c.Land + Vector3.new(0, 4 * 0.55 * u * (1 - u), 0)
+		else
+			local u = (t - COIN_POP - COIN_BOUNCE) / COIN_FLY
+			local root = characterRoot(c.UserId)
+			if root and root.Parent then
+				-- ease in: it lifts off slowly, then snaps into the player
+				local k = u * u
+				local to = root.Position + Vector3.new(0, 0.5, 0)
+				pos = c.Land:Lerp(to, k) + Vector3.new(0, math.sin(u * math.pi) * 1.5, 0)
+			else
+				pos = c.Land
+			end
+			done = u >= 1
+		end
+		if done then
+			if room(2) then
+				sparkle(pos, FX.Gold, 2, 0.4, 1.2, 0.3)
+			end
+			freeCoin(c)
+			coins[i] = coins[#coins]
+			coins[#coins] = nil
+		else
+			-- spinning on the vertical axis (fast in the air, slow once landed)
+			local spinRate = (t < COIN_POP) and 14 or 7
+			local cf = CFrame.new(pos) * CFrame.Angles(0, c.Phase + t * spinRate, 0)
+			if c.Pile then
+				cf = CFrame.new(pos) * CFrame.Angles(0, c.Phase, 0)
+			end
+			for _, piece in ipairs(c.Pieces) do
+				bulk(piece.Part, cf * piece.Offset)
+			end
+		end
+	end
+end
+
 local function onFxBatch(batch)
 	if type(batch) ~= "table" then
 		return
+	end
+	if type(batch.g) == "table" then
+		-- kills that paid gold: coins burst out and fly to their player
+		for _, v in ipairs(batch.g) do
+			if type(v) == "table" and type(v[1]) == "number" and type(v[2]) == "number" then
+				goldBurst(v[1], v[2], tonumber(v[3]) or 1, tonumber(v[4]) or 0)
+			end
+		end
 	end
 	if type(batch.h) == "table" then
 		local hits = batch.h
@@ -1727,19 +1875,34 @@ local function onWeaponFx(batch)
 end
 
 ------------------------------------------------------------------------------------------
--- Gems (gold faceted crystals, local bob / spin, a sparkle when collected)
+-- Gems (blue-white crystals with a soft halo, local bob / spin, a sparkle when collected)
 ------------------------------------------------------------------------------------------
 
+--[[
+	XP gems must never be mistaken for gold: they are blue-white crystals (Theme.Fx.Gem)
+	with an ivory core and a soft arcane glow on the floor under it, about 1.7 / 2.2 / 2.9
+	studs tall for the small / medium / large gem (value 1 / 5 / 25). The uploaded
+	"Crystal" mesh is drawn in place of the server cube; without it the cube itself stands
+	on its corner (glassy, with a Neon core inside). The glow is skipped with Reduced
+	effects.
+]]
 local gemState: { [BasePart]: Vector3 } = {} -- active gem → server base position
 local gemParts: { BasePart } = {}
 local gemCFrames: { CFrame } = {}
 local gemClock = 0
 local popsThisFrame = 0
 local GEM_TILT = CFrame.Angles(math.rad(45), 0, math.rad(35.26)) -- cube on its corner
+local GEM_SIZE = (Config.XP :: any).GemSize or { Small = 1.1, Medium = 1.45, Large = 1.9 }
+local GEM_HEIGHT: number = Config.XP.GemHeight
+local GEM_HOVER = 0.65 -- the crystal's tip floats this far over the floor (bob +-0.25)
+local GEM_SCALE = { Small = 1.45, Medium = 1.85, Large = 2.45 } -- Crystal mesh scale (1 = 1.16 tall)
+local GEM_HALO = { Small = 0.62, Medium = 0.56, Large = 0.5 } -- glow disc alpha (higher = fainter)
 
 type CrystalBase = { Size: Vector3, Offset: Vector3, Light: boolean }
 type Crystal = { Pieces: { any }, Base: { CrystalBase }, Kind: string, Scale: number }
 local crystals: { [BasePart]: Crystal } = {}
+type GemFx = { Halo: BasePart, Core: BasePart, Kind: string }
+local gemFx: { [BasePart]: GemFx } = {}
 
 -- Crystal mesh slots: the gem body takes the gem colour, the shine a lighter one.
 local CRYSTAL_SLOT: { [string]: string } = {}
@@ -1752,11 +1915,11 @@ do
 	end
 end
 
--- Gem size from the server cube (0.75 / 1.0 / 1.35 studs) → kind, scale, colour.
+-- Gem kind from the server cube size (Config.XP.GemSize) → kind, mesh scale, colour.
 local function gemLook(part: BasePart): (string, number, Color3)
 	local x = part.Size.X
-	local kind = x >= 1.175 and "Large" or (x >= 0.875 and "Medium" or "Small")
-	return kind, x / 0.75, FX.Gem[kind] or FX.Gold
+	local kind = x >= (GEM_SIZE.Medium + GEM_SIZE.Large) / 2 and "Large" or (x >= (GEM_SIZE.Small + GEM_SIZE.Medium) / 2 and "Medium" or "Small")
+	return kind, GEM_SCALE[kind], FX.Gem[kind] or FX.Arcane
 end
 
 -- One crystal per pooled gem part, resized / recoloured when the gem's kind changes.
@@ -1771,10 +1934,8 @@ local function crystalFor(part: BasePart, kind: string, scale: number, color: Co
 		for i, piece in ipairs(pieces) do
 			local slot = CRYSTAL_SLOT[piece.Part.Name]
 			base[i] = { Size = piece.Part.Size, Offset = piece.Offset.Position, Light = slot == "Light" or slot == "White" }
-			-- a lit body keeps the facets readable (Neon would flatten them)
-			if piece.Part.Material == NEON and not base[i].Light then
-				piece.Part.Material = SMOOTH
-			end
+			-- a lit body keeps the facets readable (Neon would flatten them); the core glows
+			piece.Part.Material = base[i].Light and NEON or SMOOTH
 			piece.Part.CastShadow = false
 		end
 		c = { Pieces = pieces, Base = base, Kind = "", Scale = 0 }
@@ -1785,26 +1946,61 @@ local function crystalFor(part: BasePart, kind: string, scale: number, color: Co
 		cr.Kind, cr.Scale = kind, scale
 		for i, piece in ipairs(cr.Pieces) do
 			local b = cr.Base[i]
-			piece.Part.Size = b.Size * scale
+			-- the core table is a touch wider so the ivory heart reads from the camera
+			local grow = b.Light and Vector3.new(1.35, 1.6, 1.35) or Vector3.one
+			piece.Part.Size = b.Size * scale * grow
 			piece.Offset = CFrame.new(b.Offset * scale)
-			piece.Part.Color = b.Light and color:Lerp(FX.Hit, 0.6) or color
+			piece.Part.Color = b.Light and FX.Gem.Core or color
 		end
 	end
 	return cr
 end
 
--- Tiny pop + four-point sparkle facing the camera where a gem was collected.
+-- The halo + core parts of a gem (local, made once per pooled gem part).
+local function gemFxFor(part: BasePart): GemFx
+	local g = gemFx[part]
+	if g then
+		return g
+	end
+	local halo = newPart("Cylinder") -- a flat glow disc on the floor
+	halo.Material = NEON
+	halo.Color = FX.Gem.Glow
+	halo.Transparency = 1
+	local core = newPart("Ball")
+	core.Material = NEON
+	core.Color = FX.Gem.Core
+	core.Transparency = 1
+	g = { Halo = halo, Core = core, Kind = "" }
+	gemFx[part] = g
+	return g
+end
+
+local function parkGem(part: BasePart)
+	local c = crystals[part]
+	if c then
+		for _, piece in ipairs(c.Pieces) do
+			piece.Part.CFrame = PARK
+		end
+	end
+	local g = gemFx[part]
+	if g then
+		g.Halo.CFrame = PARK
+		g.Core.CFrame = PARK
+	end
+end
+
+-- Pop + four-point sparkle facing the camera where a gem was collected.
 local function gemPop(pos: Vector3, color: Color3)
 	if popsThisFrame >= 6 or not room(3) then
 		return
 	end
 	popsThisFrame += 1
 	local at = pos + Vector3.new(0, 0.3, 0)
-	fx("Ball", color:Lerp(FX.Hit, 0.5), NEON, CFrame.new(at), nil, Vector3.one * 0.3, Vector3.one * 1, 0.1, 1, 0.14, EASE_OUT)
+	fx("Ball", color:Lerp(FX.Hit, 0.4), NEON, CFrame.new(at), nil, Vector3.one * 0.4, Vector3.one * 1.4, 0.1, 1, 0.16, EASE_OUT)
 	local cam = workspace.CurrentCamera
 	local face = cam and CFrame.lookAt(at, cam.CFrame.Position) or CFrame.new(at)
-	fx("Block", FX.Hit, NEON, face, nil, Vector3.new(0.08, 1.1, 0.04), Vector3.new(0.03, 0.3, 0.04), 0.1, 1, 0.16, EASE_OUT)
-	fx("Block", FX.Hit, NEON, face, nil, Vector3.new(1.1, 0.08, 0.04), Vector3.new(0.3, 0.03, 0.04), 0.1, 1, 0.16, EASE_OUT)
+	fx("Block", FX.Hit, NEON, face, nil, Vector3.new(0.1, 1.5, 0.04), Vector3.new(0.03, 0.4, 0.04), 0.1, 1, 0.18, EASE_OUT)
+	fx("Block", FX.Hit, NEON, face, nil, Vector3.new(1.5, 0.1, 0.04), Vector3.new(0.4, 0.03, 0.04), 0.1, 1, 0.18, EASE_OUT)
 end
 
 local function trackGem(gem: Instance)
@@ -1820,14 +2016,9 @@ local function trackGem(gem: Instance)
 		else
 			local last = gemState[part]
 			gemState[part] = nil
-			local c = crystals[part]
-			if c then
-				for _, piece in ipairs(c.Pieces) do
-					piece.Part.CFrame = PARK
-				end
-			end
+			parkGem(part)
 			if last then
-				-- collected next to a player: a tiny sparkle (and the pickup sound for me)
+				-- collected next to a player: a sparkle (and the pickup sound for me)
 				local near = math.huge
 				for _, other in ipairs(Players:GetPlayers()) do
 					local char = other.Character
@@ -1858,34 +2049,70 @@ local function renderGems(dt: number)
 	table.clear(gemCFrames)
 	local n = 0
 	local useMesh = ModelLibrary.MeshFolder("Crystal") ~= nil
+	local halos = not ClientSettings.Reduced()
 	for part, base in pairs(gemState) do
 		local kind, scale, color = gemLook(part)
 		local phase = base.X * 0.37 + base.Z * 0.21
-		local bob = math.sin(gemClock * 2.4 + phase) * 0.18
-		local spin = CFrame.Angles(0, gemClock * 1.3 + phase, 0)
+		local bob = math.sin(gemClock * 2.2 + phase) * 0.25
+		local spin = CFrame.Angles(0, gemClock * 1.2 + phase, 0)
+		local floorY = base.Y - GEM_HEIGHT + GEM_HOVER + bob -- the crystal's lowest point
+		local g = gemFxFor(part)
 		local crystal = useMesh and crystalFor(part, kind, scale, color) or nil
+		local centre, height
 		if crystal then
 			-- the uploaded crystal mesh drawn in place of the plain server cube
 			if part.LocalTransparencyModifier ~= 1 then
 				part.LocalTransparencyModifier = 1
 			end
-			local cf = CFrame.new(base.X, base.Y + bob - 0.65 * scale, base.Z) * spin
+			height = 1.16 * scale
+			local cf = CFrame.new(base.X, floorY, base.Z) * spin
 			for _, piece in ipairs(crystal.Pieces) do
 				n += 1
 				gemParts[n] = piece.Part
 				gemCFrames[n] = cf * piece.Offset
 			end
+			centre = Vector3.new(base.X, floorY + height * 0.5, base.Z)
 		else
-			-- part fallback: the server cube stood on its corner, in the gem colour (local)
+			-- part fallback: the server cube stood on its corner, glassy in the gem colour,
+			-- with the Neon core inside
+			if part.LocalTransparencyModifier ~= 0.25 then
+				part.LocalTransparencyModifier = 0.25
+			end
 			if part.Color ~= color then
 				part.Color = color
 			end
 			if part.Material ~= SMOOTH then
 				part.Material = SMOOTH
 			end
+			height = part.Size.X * 1.732
+			centre = Vector3.new(base.X, floorY + height * 0.5, base.Z)
 			n += 1
 			gemParts[n] = part
-			gemCFrames[n] = CFrame.new(base.X, base.Y + bob, base.Z) * spin * GEM_TILT
+			gemCFrames[n] = CFrame.new(centre) * spin * GEM_TILT
+			-- the core shows through the glassy cube (the mesh has its own core)
+			n += 1
+			gemParts[n] = g.Core
+			gemCFrames[n] = CFrame.new(centre)
+		end
+		if g.Kind ~= kind then
+			g.Kind = kind
+			g.Halo.Size = Vector3.new(0.06, height * 0.95, height * 0.95)
+			g.Core.Size = Vector3.one * height * 0.3
+		end
+		local wantCore = crystal and 1 or 0
+		if g.Core.Transparency ~= wantCore then
+			g.Core.Transparency = wantCore
+		end
+		-- the floor glow stays on the floor; a gem flying up to a player leaves it behind
+		local resting = base.Y <= FLOOR_Y + GEM_HEIGHT + 0.5
+		local wantHalo = (halos and resting) and GEM_HALO[kind] or 1
+		if g.Halo.Transparency ~= wantHalo then
+			g.Halo.Transparency = wantHalo
+		end
+		if halos and resting then
+			n += 1
+			gemParts[n] = g.Halo
+			gemCFrames[n] = CFrame.new(base.X, FLOOR_Y + 0.42, base.Z) * DISC -- over the dirt paths
 		end
 	end
 	if n > 0 then
@@ -2601,6 +2828,7 @@ function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
 		renderChains(now)
 		renderPickups(now)
 		renderGems(dt)
+		renderCoins(now)
 		updateFlashes(now)
 		updateDecos(now, dt)
 		flushBulk()

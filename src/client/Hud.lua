@@ -5,9 +5,13 @@
 	                pill ("STAGE 2 · Find the portal" → "Defeat the Queen" → "Survive the
 	                surge" → "Portal open"), a plate with health (heart + crimson bar) and
 	                level / XP (gold bar), then the boss bar while the boss lives
-	  top right     kills and gold counters (gold = run gold: earned this run, minus what
-	                chests and shrines took), pause button; a steel band on the health bar
-	                is the Guardian Ward shield
+	  top right     kills counter, pause button; a steel band on the health bar is the
+	                Guardian Ward shield
+	  purse         the run gold (earned this run, minus what chests and shrines took),
+	                big and bold just above the ability bar (portrait: just under it):
+	                coin + number that counts up and punches, a "+N" that floats off it,
+	                and next to a chest / shrine its price (red "NEED N" after trying
+	                to open one without enough gold, set by LootUI through SetPurseHint)
 	  centre        status line (paused, "<Name> is choosing an upgrade", fallen, partner
 	                revive progress)
 	The portal arrow, the charge ring, the portal choice panel and the travel fade live in
@@ -47,6 +51,8 @@ local ui: { [string]: any } = {}
 local anim: { [string]: any } = { XP = 0, HP = 1, HPTrail = 1 }
 local inventory: { [string]: any }? = nil
 local shownLevels: { [string]: number } = {}
+
+local updatePurse: (number) -> ()
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -142,7 +148,6 @@ local function buildTop(frame: Frame)
 	UIKit.list(counters, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
 	ui.Counters = counters
 	ui.Kills = UIKit.Chip(counters, "skull", nil, "0", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 44) }, { Size = 20, Color = P.ivory_200, Back = P.slate_950 })
-	ui.Gold = UIKit.Chip(counters, "coin", nil, "0", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 44) }, { Size = 20 })
 	ui.Pause = UIKit.IconButton(frame, {
 		Icon = "pause",
 		Size = 52,
@@ -153,6 +158,40 @@ local function buildTop(frame: Frame)
 			end
 		end,
 	})
+end
+
+-- The purse: the run gold, big, in the middle just over the ability bar.
+local function buildPurse(frame: Frame)
+	local holder, face = UIKit.Surface(frame, { Name = "Purse", Transparency = 0.18, Radius = 999, Edge = P.gold_500, EdgeTransparency = 0.35, Size = UDim2.fromOffset(0, 50) })
+	holder.AnchorPoint = Vector2.new(0.5, 0)
+	holder.AutomaticSize = Enum.AutomaticSize.X
+	face.AutomaticSize = Enum.AutomaticSize.X
+	face.Size = UDim2.fromScale(0, 1)
+	UIKit.padding(face, 0, 20, 0, 12)
+	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	ui.Purse = holder
+	ui.PurseFace = face
+	ui.PurseStroke = face:FindFirstChildOfClass("UIStroke")
+	ui.PurseCoin = Icons.Draw(face, "coin", { Size = 32, LayoutOrder = 1 })
+	ui.PurseValue = text(face, "Number", "0", {
+		Name = "Value",
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(0, 50),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextColor3 = P.gold_200,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.45,
+	}, 34)
+	ui.PurseHint = text(face, "Label", "", {
+		Name = "Hint",
+		LayoutOrder = 3,
+		Size = UDim2.fromOffset(0, 50),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextColor3 = C.TextMuted,
+		Visible = false,
+	}, Theme.TextSize.Caption + 2)
+	-- "+N" floaters rise from the purse
+	ui.PurseFloat = new("Frame", { Name = "PurseFloat", BackgroundTransparency = 1, Size = UDim2.fromOffset(1, 1), ZIndex = 5 }, frame)
 end
 
 -- Buff chip (Ranger's Steady Aim): a small pill over the ability bar. Shown only for a
@@ -377,15 +416,30 @@ local function layout()
 	place(ui.Bar, W / 2 - barW / 2, barY, barW, barH)
 	place(ui.WeaponRow, pad, pad, rowW, wt)
 	place(ui.PassiveRow, pad, pad + wt + gap, rowW, pt)
-	ui.BarTop = barY
-	ui.BarBottom = barY + barH
+
+	-- the purse: centred just over the bar (portrait: just under it, the bar is up top).
+	-- BarTop / BarBottom include it, so everything that keeps clear of the bar keeps
+	-- clear of the purse too.
+	local purseH = compact and 44 or 50
+	ui.Purse.Size = UDim2.fromOffset(0, purseH)
+	local clusterTop, clusterBottom
+	if portrait then
+		ui.Purse.Position = UDim2.fromOffset(math.floor(W / 2), barY + barH + 6)
+		clusterTop, clusterBottom = barY, barY + barH + 6 + purseH
+	else
+		ui.Purse.Position = UDim2.fromOffset(math.floor(W / 2), barY - 8 - purseH)
+		clusterTop, clusterBottom = barY - 8 - purseH, barY + barH
+	end
+	ui.PurseFloat.Position = UDim2.fromOffset(math.floor(W / 2), ui.Purse.Position.Y.Offset)
+	ui.BarTop = clusterTop
+	ui.BarBottom = clusterBottom
 	if ui.Buff then
 		if portrait then
 			ui.Buff.AnchorPoint = Vector2.new(0.5, 0)
-			ui.Buff.Position = UDim2.fromOffset(math.floor(W / 2), barY + barH + 6)
+			ui.Buff.Position = UDim2.fromOffset(math.floor(W / 2), clusterBottom + 6)
 		else
 			ui.Buff.AnchorPoint = Vector2.new(0.5, 1)
-			ui.Buff.Position = UDim2.fromOffset(math.floor(W / 2), barY - 8)
+			ui.Buff.Position = UDim2.fromOffset(math.floor(W / 2), clusterTop - 6)
 		end
 	end
 
@@ -393,9 +447,9 @@ local function layout()
 	local statusW = math.min(640, W - 2 * M)
 	ui.Status.Size = UDim2.fromOffset(statusW, compact and 58 or 50)
 	if portrait then
-		ui.Status.Position = UDim2.fromOffset(W / 2, barY + barH + 40)
+		ui.Status.Position = UDim2.fromOffset(W / 2, clusterBottom + 40)
 	else
-		ui.Status.Position = UDim2.fromOffset(W / 2, math.min(H * 0.66, barY - 44))
+		ui.Status.Position = UDim2.fromOffset(W / 2, math.min(H * 0.66, clusterTop - 44))
 	end
 end
 Hud.Layout = layout
@@ -516,6 +570,124 @@ local function setStatus(str: string, icon: string?, progress: number?)
 end
 
 ------------------------------------------------------------------------------------------
+-- Purse (run gold)
+------------------------------------------------------------------------------------------
+
+local purse = { Shown = nil :: number?, Target = 0, LastPunch = 0, Float = nil :: TextLabel?, FloatAt = 0, FloatSum = 0, Price = 0, Afford = true, AlarmUntil = 0, Need = 0, Red = false }
+
+-- "+N" rising off the purse; gains close together add up on one label.
+local function purseFloat(gain: number)
+	local now = os.clock()
+	local f = purse.Float
+	if f and f.Parent and now - purse.FloatAt < 0.4 then
+		purse.FloatSum += gain
+		f.Text = "+" .. UIKit.formatNumber(purse.FloatSum)
+		UIAnim.Punch(f, 0.2)
+		return
+	end
+	purse.FloatSum = gain
+	purse.FloatAt = now
+	local half = (ui.Purse.AbsoluteSize.X / math.max(0.01, host.Scale())) / 2
+	local label = text(ui.PurseFloat, "Number", "+" .. UIKit.formatNumber(gain), {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromOffset(math.floor(half - 30), 4),
+		Size = UDim2.fromOffset(120, 34),
+		TextColor3 = P.gold_200,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.4,
+		ZIndex = 6,
+	}, 28)
+	purse.Float = label
+	UIAnim.Pop(label, 0, 0.5)
+	local rise = ClientSettings.Reduced() and 10 or 30
+	UIAnim.Tween(label, 0.9, { Position = label.Position - UDim2.fromOffset(0, rise), TextTransparency = 1, TextStrokeTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.delay(0.95, function()
+		label:Destroy()
+	end)
+end
+
+--[[
+	Chest / shrine price next to the purse (LootUI calls this every frame): price 0 = no
+	priced loot in reach. alarm = the player just tried to open it without enough gold:
+	the purse flashes red with "NEED N" for a moment and shakes.
+]]
+function Hud.SetPurseHint(price: number, afford: boolean, alarm: boolean?)
+	purse.Price, purse.Afford = price, afford
+	if alarm and ui.Purse then
+		purse.AlarmUntil = os.clock() + 1.4
+		purse.Need = math.max(0, price - (tonumber(player:GetAttribute("RunGold")) or 0))
+		UIAnim.Punch(ui.Purse, 0.12)
+		if not ClientSettings.Reduced() then
+			local face = ui.PurseFace :: Frame
+			face.Rotation = 4
+			TweenService:Create(face, TweenInfo.new(0.05, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 3, true), { Rotation = -4 }):Play()
+			task.delay(0.42, function()
+				face.Rotation = 0
+			end)
+		end
+	end
+end
+
+updatePurse = function(dt: number)
+	local gold = tonumber(player:GetAttribute("RunGold")) or 0
+	local shown = purse.Shown
+	if shown == nil then
+		shown = gold
+	elseif gold > purse.Target then
+		purseFloat(gold - purse.Target)
+		local now = os.clock()
+		if now - purse.LastPunch > 0.12 then
+			purse.LastPunch = now
+			UIAnim.Punch(ui.Purse, 0.14)
+			UIAnim.Punch(ui.PurseCoin, 0.35)
+		end
+	elseif gold < purse.Target then
+		-- spent at a chest / shrine: the number drops quickly, no fanfare
+		shown = math.min(shown, gold + (purse.Target - gold) * 0.5)
+	end
+	purse.Target = gold
+	-- count up: quick at first, never slower than a few coins a frame
+	local diff = gold - shown
+	if math.abs(diff) < 0.5 then
+		shown = gold
+	else
+		local step = diff * math.min(1, dt * 9)
+		if math.abs(step) < 1 then
+			step = diff > 0 and math.min(diff, 1) or math.max(diff, -1)
+		end
+		shown += step
+	end
+	purse.Shown = shown
+	ui.PurseValue.Text = UIKit.formatNumber(math.floor(shown + 0.5))
+
+	-- chest affordability
+	local now = os.clock()
+	local alarm = now < purse.AlarmUntil
+	local hint, hintColor = "", C.TextMuted
+	if alarm then
+		hint, hintColor = "NEED " .. UIKit.formatNumber(math.max(1, purse.Need)), P.crimson_300
+	elseif purse.Price > 0 then
+		if purse.Afford then
+			hint, hintColor = "/ " .. UIKit.formatNumber(purse.Price), P.moss_200
+		else
+			hint, hintColor = "NEED " .. UIKit.formatNumber(purse.Price - gold), P.crimson_300
+		end
+	end
+	ui.PurseHint.Visible = hint ~= ""
+	ui.PurseHint.Text = hint
+	ui.PurseHint.TextColor3 = hintColor
+	local red = alarm
+	if purse.Red ~= red then
+		purse.Red = red
+		ui.PurseValue.TextColor3 = red and P.crimson_300 or P.gold_200
+		if ui.PurseStroke then
+			ui.PurseStroke.Color = red and P.crimson_400 or P.gold_500
+			ui.PurseStroke.Transparency = red and 0 or 0.35
+		end
+	end
+end
+
+------------------------------------------------------------------------------------------
 -- Per frame (only while in a run)
 ------------------------------------------------------------------------------------------
 
@@ -632,13 +804,9 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	ui.Level.Text = "Lv. " .. tostring(lvl)
 
 	-- counters
-	local kills, gold = player:GetAttribute("Kills") or 0, player:GetAttribute("RunGold") or 0
-	if anim.Gold ~= nil and gold > anim.Gold then
-		UIAnim.Punch(ui.Gold.Value, 0.2)
-	end
-	anim.Gold = gold
+	local kills = player:GetAttribute("Kills") or 0
 	ui.Kills.SetValue(UIKit.formatNumber(kills))
-	ui.Gold.SetValue(UIKit.formatNumber(gold))
+	updatePurse(dt)
 
 	-- boss
 	local bossMax = state:GetAttribute("BossMaxHP") or 0
@@ -669,7 +837,17 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	end
 
 	-- status line
-	if state:GetAttribute("Frozen") then
+	local rewardNames = tostring(state:GetAttribute("RewardNames") or "")
+	local rewardMine = string.find(tostring(state:GetAttribute("RewardIds") or ""), "," .. tostring(player.UserId) .. ",", 1, true) ~= nil
+	if state:GetAttribute("Frozen") and rewardNames ~= "" and not state:GetAttribute("LevelUpPause") then
+		-- someone's chest reward pauses the run (the opener sees the reward panel)
+		if rewardMine then
+			setStatus("")
+		else
+			local several = string.find(rewardNames, ",", 1, true) ~= nil
+			setStatus(string.format("Paused: %s %s opening a chest", rewardNames, several and "are" or "is"), "chest")
+		end
+	elseif state:GetAttribute("Frozen") then
 		if state:GetAttribute("LevelUpPause") then
 			-- only someone else choosing is news; the chooser has the level-up cards
 			local ids = state:GetAttribute("ChoosingIds") or ""
@@ -703,6 +881,9 @@ end
 -- Resets per-run animation state (a new run starts from a clean HUD).
 function Hud.Reset()
 	anim = { XP = 0, HP = 1, HPTrail = 1 }
+	purse.Shown = nil
+	purse.Target = tonumber(player:GetAttribute("RunGold")) or 0
+	purse.Price, purse.AlarmUntil = 0, 0
 	Hud.SetInventory(nil)
 	if ui.VignetteLevel then
 		ui.VignetteLevel.Value = 1
@@ -736,6 +917,7 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	buildStage(frame)
 	buildBuffChip(frame)
 	buildBar(frame)
+	buildPurse(frame)
 	buildStatus(frame)
 	buildVignette(fxGui)
 	h.OnRelayout(layout)

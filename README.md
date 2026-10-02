@@ -96,10 +96,19 @@ run ends). Code: `LootSystem.lua` (server), `ItemSystem.lua` (server), `ItemData
   the world and on a floating marker: dormant / guards left / unguarded / claimed. If the
   guards are swept away (the Queen's arrival, the portal), it goes dormant again and only
   the guards that were not killed come back.
-* **Run gold**: the HUD coin counter is gold this run has banked (it goes into your save the
-  moment it is earned). Chests and shrines spend it and take the same amount back out of
-  the save, so a run can only spend what it earned; older savings are never touched. The
-  results screen shows the gold you took home and the items you found.
+* **Run gold**: the big purse in the middle of the HUD, just over the ability bar (portrait:
+  under it), is gold this run has banked (it goes into your save the moment it is earned).
+  It counts up with a "+N" on every gain; a kill that pays gold throws chunky gold coins
+  (GoldCoin / GoldPile meshes, a client-side visual from FxBatch "g") that fly into the
+  player. Next to a chest or shrine the purse shows its price, and turns red with "NEED N"
+  after a press without enough gold. Chests and shrines spend it and take the same amount
+  back out of the save, so a run can only spend what it earned; older savings are never
+  touched. The results screen shows the gold you took home and the items you found.
+* **Chest rewards pause the run**: an item from a chest / shrine / altar, or an elite chest's
+  level-ups and gold, shows in a compact centred TREASURE panel while the whole run freezes
+  like a level-up (`RunManager.HoldReward`; teammates see "<Name> is opening a chest"). It
+  closes after `Config.Chests.RewardPauseSeconds` (2.5 s) or on a tap; rewards in a row
+  join the same panel and never hold the run longer than `RewardPauseMax` (5 s).
 
 **Items** (19, stacking, kept across stages, lost when the run ends; ivory common,
 slate-blue uncommon, gold legendary). "Linear" = every copy adds the same, "hyperbolic" =
@@ -528,6 +537,7 @@ src/server/
   Modules/
     RunManager.lua      lobby → countdown → run → results, HP, death, revive, characters,
                         portal wins, travel between stages
+    DevTools.lua        the dev panel's commands (RunManager checks isDev first)
     StageManager.lua    the stage loop: portal, charge, Queen, surge, NEXT / RETURN, travel
     EnemySpawner.lua    enemy pool, spawning, damage, deaths, drops, boss spawn
     EnemyAI.lua         batched movement, obstacle raycasts, contact damage, behaviours
@@ -580,7 +590,8 @@ src/client/   → StarterPlayerScripts.SwarmClient
   MenuTrack.lua         TRACK screen (account level, cosmetic rewards to wear)
   Cosmetics.lua         portrait frames, name colours, the level badge
   ViewportPreview.lua   turning 3D character previews (ViewportFrames)
-  DevPanel.lua          DEV button, Studio only by default (§10)
+  DevPanel.lua          DEV button + tabbed tools panel, Studio only by default (§10)
+  MenuArenas.lua        the ARENAS screen (§10)
   UIKit.lua             shared UI helpers, colours, upgrade icon tiles
   UIAnim.lua            UI motion: pop-ins, screen slides, punches, count-ups, button feedback
   Audio.lua             pooled sound effects + music
@@ -766,14 +777,33 @@ partner-revive rules (`PartnerRevive`: 3 s next to a fallen teammate, 40% HP, 3 
 `Config.Run.MaxPlayers` (4) stays the hard cap; the old "Squad" (1-4) mode is still accepted
 from old clients but not shown.
 
+**ARENAS screen** (`MenuArenas.lua`, the ARENA card): every arena as a card with a small
+painted preview of the biome, its hazard, LOCKED / UNLOCKED with the exact rule ("Reach
+stage 4") and your progress toward it. Tap an unlocked arena to pick it for stage 1
+(`CycleArena(name)`: the server checks the lobby phase, the name and your best stage).
+
+**Loading**: the server loads the uploaded meshes in priority order (`MeshService`, at most
+6 InsertService loads at a time): the lobby / castle kit and whatever is standing in with a
+fallback first, then the heroes and hats (your own hero first), then the selected arena's
+kit and the run's creatures, then the other biomes. The menu works at once; a small
+"Loading models… n%" pill under the stats chip shows until the lobby and heroes are in, and
+every fallback (props, previews, your lobby hero) swaps to its mesh as soon as it loads.
+
 **DEV button** (bottom right): only in Studio by default, so it never shows in normal play.
 Set `Config.Dev.ShowInLiveGame = true` to also show it to the game's creator in live servers.
-Lobby: *Start solo now*. In a run: *+5 levels*, *Spawn portal boss* (charges this stage's
-portal at once), *Teleport to portal*, *+3 random items*, *+300 gold*, *All new weapons Lv 8*
-(the eight weapons of the new heroes at level 8, past the slot limit: a test loadout) and
-*Evolve all weapons*. The server checks
-the same rule again for every request (`RunManager` "DevCommand"). Turn it off with
-`Config.Dev.Enabled = false`.
+It opens a tabbed panel (`DevPanel.lua`; the x folds it away):
+- SAVE: *Start solo now*, **UNLOCK EVERYTHING** (+1,000,000 gold, every character, every
+  achievement and its rewards, every arena, account level 50 with its rings / frames /
+  titles; in Studio also every skin for the session, never saved), +gold, +account levels,
+  damage numbers on / off, *Reset progress* (tap twice; purchases and settings are kept).
+- RUN: +1 / +5 levels, run gold, **godmode** on / off, damage numbers, *Teleport to portal*,
+  *Portal boss now*, *Next stage* (opens the portal and sends everyone on).
+- MOBS: any stage boss (the portal summons it; *Normal rotation* undoes it), 5 of any enemy
+  type, 1 elite of any type.
+- ITEMS: *All weapons Lv 8*, *Evolve all*, any single weapon at level 8, *+3 random items*,
+  any item.
+The server checks the same rule again for every request and re-validates every argument
+(`RunManager` "DevCommand" → `DevTools.lua`). Turn it off with `Config.Dev.Enabled = false`.
 
 ## 11. Upgrade icons
 
@@ -808,15 +838,18 @@ upload them as Decals/Images, and paste each asset id into `src/shared/IconData.
   The first group run shows this once as a tip.
 
 **First-run tips (`Tutorial.lua`, `Config.Tutorial`)**: a brand-new player's first run gets
-short hints that teach through play: how to move (by device: drag / WASD / left stick; it
-closes early once you walk), "your weapon attacks on its own", gems are XP (after the first
-kill), the level-up cards (one line under LEVEL UP!), the portal objective (after 40 s) and
-the Queen's floor warnings. Co-op tips (once ever, also for experienced players): team
-rules and "stand in the gold circle" when a teammate first falls. Each hint shows once
-(saved), closes itself after ~6 s, never pauses or blocks (only its SKIP TIPS button takes
-a tap) and waits while a menu is open. Anyone with a run played before this update skips
-the tutorial (schema 5 migration: `TutorialDone = Runs > 0`); the server also marks it
-done when the first run ends. Settings: **Show tips** on / off, **Replay tips**.
+big callouts that teach through play: an icon, a bold title, one line, "TIP 2 / 5" and a big
+SKIP TIPS button, placed next to what they explain with an arrow and a gold ring around it:
+how to move (by device: drag / WASD / left stick; it closes early once you walk), auto
+attack (the weapon row), gems are XP (the XP bar, after the first kill), the level-up cards
+(one line under LEVEL UP!), the portal objective (the stage pill, after 40 s) and the
+boss's red floor warnings (the boss bar). Co-op tips (once ever, also for experienced
+players): team rules and "stand in the gold circle" when a teammate first falls. Each hint
+shows once (saved), slides in, closes itself after ~6 s, never pauses or blocks (only SKIP
+TIPS takes a tap; on short phone screens the callout moves aside so the hero stays visible)
+and waits while a menu is open. Anyone with a run played before this update skips the
+tutorial (schema 5 migration: `TutorialDone = Runs > 0`); the server also marks it done when
+the first run ends. Settings: **Show tips** on / off, **Replay tips**.
 
 **Results screen**: the verdict (VICTORY / ESCAPED / DEFEATED), the hero's medallion, the
 arena and mode, damage dealt; tiles for time survived, enemies defeated, Queens slain (or

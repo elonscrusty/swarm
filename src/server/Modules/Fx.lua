@@ -18,6 +18,8 @@
 	  x = { id, ... }                              cancel warnings by id (0 = all of them)
 	  u = { {userId, kind} }                       player events: "hurt" | "heal" | "levelup" | "die" | "revive"
 	  n = { soundName, ... }                       global one-shot sounds
+	  g = { {x, z, amount, userId} }               gold coins burst from a kill that paid gold
+	                                               (visual only; the gold is already paid)
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -41,7 +43,7 @@ end
 
 -- Caps per flush keep a single packet small even in huge fights.
 -- Warnings (w / x) are gameplay-critical: their caps are far above what a fight produces.
-local CAPS = { h = 120, d = 60, s = 16, b = 24, c = 40, p = 16, e = 16, r = 8, u = 24, n = 16, w = 64, x = 64 }
+local CAPS = { g = 24, h = 120, d = 60, s = 16, b = 24, c = 40, p = 16, e = 16, r = 8, u = 24, n = 16, w = 64, x = 64 }
 local warnId = 0
 
 local function pushCapped(key: string, value: any)
@@ -67,6 +69,11 @@ end
 -- tier = visual strength 0-3 (3 = evolved); the client draws the swing on that player.
 function Fx.Slash(pos: Vector3, yaw: number, reach: number, sweep: number, tier: number, userId: number)
 	pushCapped("s", { r1(pos.X), r1(pos.Z), math.floor(yaw * 100 + 0.5) / 100, r1(reach), sweep, tier, userId })
+end
+
+-- A kill paid `amount` gold to `userId`: coins pop out at pos and fly to that player.
+function Fx.Gold(pos: Vector3, amount: number, userId: number)
+	pushCapped("g", { r1(pos.X), r1(pos.Z), math.floor(amount + 0.5), userId })
 end
 
 function Fx.Bolt(pos: Vector3, radius: number, tier: number?)

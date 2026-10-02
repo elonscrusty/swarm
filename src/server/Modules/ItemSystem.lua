@@ -92,7 +92,9 @@ end
 	Gives one copy of `id` to the player: stats, the client's strip and an item popup.
 	source = what it came from ("Small chest", "Shrine of Chance", ...), shown in the popup.
 ]]
-function ItemSystem.Grant(rp, id: string, source: string?): boolean
+-- reward = a chest / shrine / altar paid it: the item goes in the reward panel and the run
+-- pauses briefly (RunManager.HoldReward); otherwise it is a corner popup.
+function ItemSystem.Grant(rp, id: string, source: string?, reward: boolean?): boolean
 	local def = ItemData.Items[id]
 	if not def or not rp.Items then
 		return false
@@ -122,7 +124,7 @@ function ItemSystem.Grant(rp, id: string, source: string?): boolean
 	ItemSystem.Send(rp)
 	local player: Player = rp.Player
 	if player.Parent then
-		Remotes.FireClient("ItemGained", player, { Id = id, Count = n, Source = source })
+		Remotes.FireClient("ItemGained", player, { Id = id, Count = n, Source = source, Reward = reward == true })
 	end
 	if rp.Root then
 		local color = def.Rarity == "Legendary" and Palette.gold_300 or (def.Rarity == "Uncommon" and Palette.slate_300 or Palette.ivory_200)

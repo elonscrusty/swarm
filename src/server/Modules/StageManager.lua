@@ -761,6 +761,28 @@ function StageManager.DevTeleport(rp): boolean
 	return true
 end
 
+-- "Next stage": opens the portal now (leftovers burn up, a live boss too) and sends every
+-- living player on to the next stage.
+function StageManager.DevNextStage(): boolean
+	if sub ~= "Explore" and sub ~= "Boss" and sub ~= "Surge" and sub ~= "Open" then
+		return false
+	end
+	if sub ~= "Open" then
+		openPortal()
+	end
+	local now: string = sub
+	if now ~= "Open" then
+		return now == "Travel" -- openPortal's own check already sent everyone on
+	end
+	for _, rp in ipairs(participants()) do
+		if rp.Alive then
+			rp.PortalChoice = "Next"
+		end
+	end
+	checkChoices(false)
+	return true
+end
+
 ------------------------------------------------------------------------------------------
 -- Lifecycle
 ------------------------------------------------------------------------------------------

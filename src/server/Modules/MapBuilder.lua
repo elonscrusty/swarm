@@ -503,10 +503,12 @@ local function catalogFallback(name: string): ((Model, CFrame, number, Pal, bool
 	return build
 end
 
--- One MeshService.WhenReady per model name while meshes are still loading.
+-- One MeshService.WhenReady per model name while meshes are still loading. A model that
+-- is standing in with its fallback right now moves to the front of the load queue.
 local waitingSwaps: { [string]: { () -> () } } = {}
 
 local function whenMeshLoads(name: string, fn: () -> ())
+	MeshService.Prioritize({ name })
 	local list = waitingSwaps[name]
 	if not list then
 		local newList: { () -> () } = {}

@@ -7,7 +7,19 @@
 
 	Models whose AssetId is 0 (not uploaded yet) or that fail to load are simply missing,
 	and every caller falls back to its part-built model. Loading runs in the background,
-	so the game starts instantly; ready models get the attribute Ready = true.
+	so the game starts instantly; ready models get the attribute Ready = true and the
+	callers swap their fallbacks (MapBuilder props, character previews, lobby characters).
+
+	Load order: a priority queue with at most MAX_CONCURRENT InsertService loads in flight
+	(firing every LoadAsset at once made all of them finish late):
+	  tier 1  what is on screen now: the lobby / castle kit, anything a builder had to
+	          stand in with a fallback (MeshService.Prioritize), the player's own hero
+	  tier 2  the heroes and hats (character select, showcase, skins)
+	  tier 3  the selected arena's kit + the run's enemies, projectiles, pickups, fx
+	  tier 4  everything else (the other biomes)
+	SwarmMeshes attributes for the client: Loaded / Failed / Total (models), PriorityDone /
+	PriorityTotal and PriorityReady (tiers 1-2 finished: the lobby's "Loading models" pill
+	hides), AllReady.
 ]]
 
 local InsertService = game:GetService("InsertService")
@@ -17,10 +29,42 @@ local MeshCatalog = require(ReplicatedStorage.Shared.MeshCatalog)
 
 local MeshService = {}
 
+local MAX_CONCURRENT = 6
+local PRIORITY_TIERS = 2 -- tiers counted for PriorityReady
+-- default tier per catalog Category (lower loads first)
+local CATEGORY_TIER = {
+	Castle = 1,
+	Heroes = 2,
+	Hats = 2,
+	Enemies = 3,
+	Projectiles = 3,
+	Pickups = 3,
+	Fx = 3,
+	Abilities = 3,
+	Events = 3,
+}
+-- the biome kit of each arena (World holds the Forest / Ruins props)
+local ARENA_CATEGORIES = {
+	Forest = { "World" },
+	Ruins = { "World" },
+	Swamp = { "Swamp" },
+	Snow = { "Snow" },
+	Desert = { "Desert" },
+	Lava = { "Lava" },
+}
+
 local root: Folder
 local readyEvent = Instance.new("BindableEvent")
-local pending = 0
+local pending = 0 -- models queued or loading
 local started = false
+
+type Job = { Name: string, Tier: number, Seq: number, State: string } -- queued | loading | done | failed
+local jobs: { [string]: Job } = {}
+local seq = 0
+local active = 0
+local startClock = 0
+local loadedCount, failedCount, totalCount = 0, 0, 0
+local priorityReported = false
 
 MeshService.Ready = readyEvent.Event -- fires (modelName) each time a model finishes
 
@@ -54,13 +98,13 @@ local function localSize(size: Vector3, template: Instance): Vector3
 	return Vector3.new(math.abs(v.X), math.abs(v.Y), math.abs(v.Z))
 end
 
-local function loadModel(name: string, entry)
+local function loadModel(name: string, entry): boolean
 	local ok, asset = pcall(function()
 		return InsertService:LoadAsset(entry.AssetId)
 	end)
 	if not ok or not asset then
 		warn(string.format("[MeshService] could not load %s (%d): %s", name, entry.AssetId, tostring(asset)))
-		return
+		return false
 	end
 	local folder = Instance.new("Folder")
 	folder.Name = name
@@ -112,9 +156,10 @@ local function loadModel(name: string, entry)
 		folder:SetAttribute("Ready", true)
 		folder.Parent = root
 		readyEvent:Fire(name)
-	else
-		folder:Destroy()
+		return true
 	end
+	folder:Destroy()
+	return false
 end
 
 -- Template folder for a model, or nil when it isn't loaded.
@@ -133,11 +178,11 @@ end
 -- True while model `name` is not loaded yet but still might be (uploaded, and loading has
 -- not started or not finished). Callers use it to swap a fallback for the mesh later.
 function MeshService.MayLoad(name: string): boolean
-	local entry = MeshCatalog.Models[name]
-	if not entry or not entry.AssetId or entry.AssetId == 0 or MeshService.Get(name) then
+	if MeshService.Get(name) then
 		return false
 	end
-	return not started or pending > 0
+	local job = jobs[name]
+	return job ~= nil and (job.State == "queued" or job.State == "loading")
 end
 
 --[[
@@ -196,23 +241,164 @@ function MeshService.WhenReady(names: { string }, fn: () -> ())
 	end)
 end
 
+------------------------------------------------------------------------------------------
+-- Load queue
+------------------------------------------------------------------------------------------
+
+local function publish()
+	if not root then
+		return
+	end
+	root:SetAttribute("Loaded", loadedCount)
+	root:SetAttribute("Failed", failedCount)
+	root:SetAttribute("Total", totalCount)
+	root:SetAttribute("AllReady", started and pending == 0)
+	if not priorityReported and started then
+		local prio, prioDone = 0, 0
+		for _, job in pairs(jobs) do
+			if job.Tier <= PRIORITY_TIERS then
+				prio += 1
+				if job.State == "done" or job.State == "failed" then
+					prioDone += 1
+				end
+			end
+		end
+		root:SetAttribute("PriorityTotal", prio)
+		root:SetAttribute("PriorityDone", prioDone)
+		if prioDone < prio then
+			return
+		end
+		priorityReported = true
+		root:SetAttribute("PriorityReady", true)
+		print(string.format("[MeshService] lobby + heroes ready in %.1f s (%d / %d models loaded)", os.clock() - startClock, loadedCount, totalCount))
+	end
+end
+
+local pump: () -> ()
+
+local function nextJob(): Job?
+	local best: Job? = nil
+	for _, job in pairs(jobs) do
+		if job.State == "queued" and (not best or job.Tier < best.Tier or (job.Tier == best.Tier and job.Seq < best.Seq)) then
+			best = job
+		end
+	end
+	return best
+end
+
+local function run(job: Job)
+	job.State = "loading"
+	active += 1
+	task.spawn(function()
+		local ok, loaded = pcall(loadModel, job.Name, MeshCatalog.Models[job.Name])
+		active -= 1
+		pending -= 1
+		if ok and loaded then
+			job.State = "done"
+			loadedCount += 1
+		else
+			job.State = "failed"
+			failedCount += 1
+			if not ok then
+				warn("[MeshService] " .. job.Name .. ": " .. tostring(loaded))
+			end
+		end
+		publish()
+		if pending == 0 then
+			print(string.format("[MeshService] all models done in %.1f s (%d loaded, %d failed)", os.clock() - startClock, loadedCount, failedCount))
+		end
+		pump()
+	end)
+end
+
+pump = function()
+	if not started then
+		return
+	end
+	while active < MAX_CONCURRENT do
+		local job = nextJob()
+		if not job then
+			return
+		end
+		run(job)
+	end
+end
+
+local function bump(name: string, tier: number)
+	local job = jobs[name]
+	if job and job.State == "queued" and tier < job.Tier then
+		seq += 1
+		job.Tier = tier
+		job.Seq = seq
+	end
+end
+
+--[[
+	Moves models up the load queue (tier 1 = load next; default 1). Used for whatever is on
+	screen with a fallback right now (MapBuilder props, the player's hero). Loaded or loading
+	models are left alone.
+]]
+function MeshService.Prioritize(names: { string }, tier: number?)
+	for _, name in ipairs(names) do
+		bump(name, tier or 1)
+	end
+end
+
+-- The kit of arena `arenaName` (the lobby's selected arena, the next stage) to tier 3.
+function MeshService.PrioritizeArena(arenaName: string, tier: number?)
+	local cats = ARENA_CATEGORIES[arenaName]
+	if not cats then
+		return
+	end
+	for name, entry in pairs(MeshCatalog.Models) do
+		if table.find(cats, (entry :: any).Category) then
+			bump(name, tier or 3)
+		end
+	end
+end
+
+-- { Loaded, Failed, Total, Pending, PriorityReady } for logs / the dev panel.
+function MeshService.Progress()
+	return { Loaded = loadedCount, Failed = failedCount, Total = totalCount, Pending = pending, PriorityReady = priorityReported }
+end
+
 function MeshService.Init(_ctx)
 	root = Instance.new("Folder")
 	root.Name = "SwarmMeshes"
 	root.Parent = ReplicatedStorage
+	-- every uploaded model gets a queue slot now, so builders that run before Start (the
+	-- lobby is built in RunManager.Init) can already move their models to the front
+	for name, entry in pairs(MeshCatalog.Models) do
+		if entry.AssetId and entry.AssetId ~= 0 then
+			seq += 1
+			jobs[name] = { Name = name, Tier = CATEGORY_TIER[(entry :: any).Category] or 4, Seq = seq, State = "queued" }
+			totalCount += 1
+		end
+	end
+	MeshService.PrioritizeArena("Forest")
+	root:SetAttribute("Total", totalCount)
 end
 
 function MeshService.Start()
 	started = true
-	for name, entry in pairs(MeshCatalog.Models) do
-		if entry.AssetId and entry.AssetId ~= 0 then
-			pending += 1
-			task.spawn(function()
-				loadModel(name, entry)
-				pending -= 1
-			end)
+	startClock = os.clock()
+	pending = totalCount
+	-- the lobby's selected arena (stage 1) follows the heroes
+	local state = ReplicatedStorage:FindFirstChild("SwarmState")
+	if state then
+		local arena = state:GetAttribute("SelectedArena")
+		if type(arena) == "string" then
+			MeshService.PrioritizeArena(arena)
 		end
+		state:GetAttributeChangedSignal("SelectedArena"):Connect(function()
+			local a = state:GetAttribute("SelectedArena")
+			if type(a) == "string" then
+				MeshService.PrioritizeArena(a)
+			end
+		end)
 	end
+	publish()
+	pump()
 end
 
 return MeshService

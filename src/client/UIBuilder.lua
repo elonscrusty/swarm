@@ -44,6 +44,7 @@ local TeamUI = require(script.Parent.TeamUI)
 local Tutorial = require(script.Parent.Tutorial)
 local Cosmetics = require(script.Parent.Cosmetics)
 local CurseData = require(Shared:WaitForChild("CurseData"))
+local ItemData = require(Shared:WaitForChild("ItemData"))
 
 local UIBuilder = {}
 
@@ -451,13 +452,83 @@ local function cardRichLines(c, sep: string): string
 	return table.concat(out, sep)
 end
 
+local pickedAt = 0 -- when a card was last picked (its punch plays before the close)
+
+-- The picked card punches and flashes, the others sink back.
+local function pickAnimation(index: number)
+	pickedAt = os.clock()
+	for _, card in ipairs(levelUp.Cards:GetChildren()) do
+		if card:IsA("GuiObject") then
+			local s = UIAnim.ScaleOf(card)
+			if card.Name == "Card" .. index then
+				s.Scale = 1.12
+				UIAnim.Tween(s, 0.22, { Scale = 1.04 }, Enum.EasingStyle.Back)
+				local face = card:FindFirstChild("Face")
+				if face and face:IsA("GuiObject") and not ClientSettings.Reduced() then
+					local flash = new("Frame", { Name = "PickFlash", BackgroundColor3 = P.ivory_100, BackgroundTransparency = 0.25, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 60 }, face)
+					UIKit.corner(flash, Theme.Radius.L)
+					TweenService:Create(flash, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+				end
+			else
+				UIAnim.Tween(s, 0.18, { Scale = 0.9 })
+			end
+		end
+	end
+end
+
 local function chooseCard(index: number)
 	if not offerOpen then
 		return
 	end
 	offerOpen = false
 	UIKit.Click()
+	pickAnimation(index)
 	Remotes.Get("LevelUpChoose"):FireServer(index)
+end
+
+-- A one-shot light streak across a card face (clipped to the card).
+local function cardSweep(face: GuiObject, delay: number, color: Color3)
+	local clip = new("Frame", { Name = "Sweep", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = 40 }, face)
+	local streak = new("Frame", { BackgroundColor3 = color, BackgroundTransparency = 0.55, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(-0.3, 0.5), Size = UDim2.new(0.22, 0, 1.6, 0), Rotation = 18, ZIndex = 40, Visible = false }, clip)
+	new("UIGradient", { Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.2), NumberSequenceKeypoint.new(1, 1) }) }, streak)
+	task.delay(delay, function()
+		if streak.Parent then
+			streak.Visible = true
+			local tw = TweenService:Create(streak, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), { Position = UDim2.fromScale(1.3, 0.5) })
+			tw.Completed:Once(function()
+				clip:Destroy()
+			end)
+			tw:Play()
+		end
+	end)
+end
+
+-- Evolution card: a gold burst (ring + rays) behind it as it lands.
+local function goldBurst(hit: GuiObject, delay: number)
+	local holder = new("Frame", { Name = "Burst", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(10, 10), ZIndex = 0 }, hit)
+	local ring = new("Frame", { BackgroundColor3 = P.gold_300, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(40, 40), ZIndex = 0 }, holder)
+	UIKit.corner(ring, 999)
+	local rays = {}
+	for i = 0, 7 do
+		local ray = new("Frame", { BackgroundColor3 = P.gold_200, BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(6, 20), Rotation = i * 45, ZIndex = 0 }, holder)
+		UIKit.corner(ray, 3)
+		table.insert(rays, ray)
+	end
+	task.delay(delay, function()
+		if not holder.Parent then
+			return
+		end
+		local w = hit.AbsoluteSize.X / math.max(0.01, uiScale.Scale)
+		ring.BackgroundTransparency = 0.25
+		TweenService:Create(ring, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(w * 1.5, w * 1.5), BackgroundTransparency = 1 }):Play()
+		for _, ray in ipairs(rays) do
+			ray.BackgroundTransparency = 0.1
+			TweenService:Create(ray, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(4, w * 0.95), BackgroundTransparency = 1 }):Play()
+		end
+		task.delay(0.7, function()
+			holder:Destroy()
+		end)
+	end)
 end
 
 local function buildLevelUp()
@@ -612,7 +683,12 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 	if legendary then
 		UIAnim.PulseStroke(edge, 2, 4)
 	end
-	UIKit.AttachStates(hit, face, Theme.Radius.L)
+	UIKit.AttachStates(hit, face, Theme.Radius.L, function(on: boolean)
+		-- hover: the card lifts (AttachStates) and grows a touch
+		if offerOpen then
+			UIAnim.Tween(UIAnim.ScaleOf(hit), Theme.Motion.Fast, { Scale = on and 1.03 or 1 })
+		end
+	end)
 
 	local iconId = cardIconId(c)
 	if portrait then
@@ -650,8 +726,19 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		end
 	else
 		-- rarity band
-		local band = new("Frame", { Name = "Band", BackgroundColor3 = bandColor, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 34), ZIndex = 2 }, face)
+		local band = new("Frame", { Name = "Band", BackgroundColor3 = bandColor, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 34), ZIndex = 2, ClipsDescendants = true }, face)
 		UIKit.corner(band, Theme.Radius.L)
+		if c.Rarity == "Rare" or c.Rarity == "Epic" or legendary or c.Type == "Evolve" then
+			-- the rarer bands shine now and then (started once the card has landed level:
+			-- Roblox does not clip inside a rotated card)
+			if not ClientSettings.Reduced() then
+				task.delay(animate and (0.08 * (index - 1) + 0.5) or 0, function()
+					if band.Parent then
+						UIAnim.Shine(band, legendary and 1.8 or 2.8, legendary and 0.6 or 0.75)
+					end
+				end)
+			end
+		end
 		new("Frame", { BackgroundColor3 = bandColor, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -Theme.Radius.L), Size = UDim2.new(1, 0, 0, Theme.Radius.L), ZIndex = 2 }, band)
 		text(band, "Label", UIKit.track(bandText), {
 			Size = UDim2.fromScale(1, 1),
@@ -741,12 +828,26 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 	end
 
 	if animate then
-		-- cards rise in one after another
-		UIAnim.Pop(hit, 0.07 * (index - 1), 0.5)
-		hit.Rotation = (index % 2 == 0) and 4 or -4
-		task.delay(0.07 * (index - 1), function()
-			UIAnim.Tween(hit, 0.4, { Rotation = 0 }, Enum.EasingStyle.Back)
-		end)
+		-- cards fly in one after another: up from below, flipping from a tilt and growing
+		-- from small, then a glow sweeps across; an evolution lands with a gold burst
+		local delay = 0.08 * (index - 1)
+		if ClientSettings.Reduced() then
+			UIAnim.Pop(hit, delay, 0.85)
+		else
+			UIAnim.Pop(hit, delay, 0.35)
+			hit.Rotation = (index % 2 == 0) and 12 or -12
+			local home = face.Position
+			face.Position = home + UDim2.fromOffset(0, 70)
+			task.delay(delay, function()
+				UIAnim.Tween(hit, 0.42, { Rotation = 0 }, Enum.EasingStyle.Back)
+				UIAnim.Tween(face, 0.38, { Position = home }, Enum.EasingStyle.Quint)
+			end)
+			-- the sweep waits until the tilt has settled (no clipping inside rotated frames)
+			cardSweep(face, delay + 0.46, legendary and P.gold_200 or P.ivory_100)
+			if c.Type == "Evolve" then
+				goldBurst(hit, delay + 0.18)
+			end
+		end
 	end
 	hit.Activated:Connect(function()
 		chooseCard(index)
@@ -834,6 +935,16 @@ end
 local function closeOffer()
 	offerOpen = false
 	offerHint = nil
+	-- let the picked card's punch play first (unless a new offer opens meanwhile)
+	local wait = 0.22 - (os.clock() - pickedAt)
+	if wait > 0 and levelUp.Overlay.Visible then
+		task.delay(wait, function()
+			if not offerOpen then
+				hide(levelUp.Overlay, "LevelUp")
+			end
+		end)
+		return
+	end
 	hide(levelUp.Overlay, "LevelUp")
 end
 
@@ -855,118 +966,240 @@ for id, def in pairs(PassiveData.Passives) do
 	nameToId[def.Name] = id
 end
 
+--[[
+	Chest reward panel: a compact panel in the middle of the screen for everything a chest /
+	shrine / altar pays (ChestOpened from an elite chest: level-ups + gold; ItemGained with
+	Reward = true: an item). The server pauses the whole run meanwhile (RunManager
+	.HoldReward, same freeze as a level-up). Several rewards in a row go into the same panel
+	(the oldest rows drop out past MAX_ROWS) and extend it, but never past
+	Config.Chests.RewardPauseMax from the first one. It closes after RewardPauseSeconds, or
+	on a tap / click / gamepad A anywhere (remote RewardClose ends the pause sooner).
+]]
+local REWARD_ROW_H = 46
+local MAX_ROWS = 4
+local reward = { Open = false, Started = 0, Deadline = 0, Rows = 0, Order = 0, Sources = {} :: { [string]: boolean } }
+local closeReward: (boolean) -> ()
+
+local function layoutChest()
+	local v = virtualSize()
+	local w = math.min(340, v.X - 2 * margin())
+	local rows = math.max(1, reward.Rows)
+	local h = 14 + 34 + TS(12) + 10 + rows * (REWARD_ROW_H + 6) + 6 + 30
+	chest.Panel.Size = UDim2.fromOffset(w, h)
+	-- centred on the hero's spot, a touch high so the bottom HUD stays readable
+	chest.Panel.Position = UDim2.fromOffset(math.floor(v.X / 2), math.floor(math.clamp(v.Y * 0.45, h / 2 + insets.Top + 8, v.Y - h / 2 - 8)))
+end
+
 local function buildChest()
-	local holder, face = UIKit.Surface(root, {
-		Name = "Chest",
-		Size = UDim2.fromOffset(420, 318),
-		AnchorPoint = Vector2.new(0.5, 0),
+	local overlay = new("Frame", { Name = "Reward", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = Theme.Z.Chest }, root)
+	overlay:SetAttribute("BackdropTransparency", 0.6)
+	chest.Overlay = overlay
+	-- the dimmer is the tap target (the run is paused, so it may take the whole screen)
+	local dim = new("TextButton", { Name = "Dim", Text = "", AutoButtonColor = false, BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.6, BorderSizePixel = 0, ZIndex = 1 }, overlay)
+	UIKit.Bleed(dim)
+	dim.Activated:Connect(function()
+		closeReward(true)
+	end)
+	local holder, face = UIKit.Surface(overlay, {
+		Name = "Panel",
+		Size = UDim2.fromOffset(340, 220),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		Radius = Theme.Radius.L,
 		Edge = P.gold_400,
-		EdgeTransparency = 0.2,
+		EdgeTransparency = 0.15,
 		Transparency = 0.04,
-		Visible = false,
-		ZIndex = Theme.Z.Chest,
+		ZIndex = 2,
 	})
 	chest.Panel = holder
-	text(face, "H1", "TREASURE!", { Position = UDim2.fromOffset(0, 14), Size = UDim2.new(1, 0, 0, TS(30) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300 })
-	UIKit.Divider(face, 220, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 18 + TS(30) + 6) })
-	-- the chest: a glow, the box and a lid that pops open
-	local stage = new("Frame", { Name = "Stage", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 30 + TS(30)), Size = UDim2.fromOffset(160, 96) }, face)
-	chest.Glow = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.55), Size = UDim2.fromOffset(10, 10), BackgroundColor3 = P.gold_300, BackgroundTransparency = 1 }, stage)
+	chest.Face = face
+	-- burst of light behind the header when the panel opens / gets a new reward
+	chest.Glow = new("Frame", { Name = "Glow", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 30), Size = UDim2.fromOffset(10, 10), BackgroundColor3 = P.gold_300, BackgroundTransparency = 1, ZIndex = 2 }, face)
 	UIKit.corner(chest.Glow, 999)
-	local box = new("Frame", { Name = "Box", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.fromOffset(140, 64), BackgroundColor3 = Color3.new(1, 1, 1) }, stage)
-	UIKit.corner(box, 6)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.wood_500, P.wood_700) }, box)
-	UIKit.stroke(box, P.gold_500, 2, 0)
-	for _, x in ipairs({ 0.18, 0.82 }) do
-		new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(x, 0), Size = UDim2.new(0, 8, 1, 0), BackgroundColor3 = P.gold_500, BorderSizePixel = 0 }, box)
-	end
-	local lock = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.fromOffset(18, 22), BackgroundColor3 = P.gold_400 }, box)
-	UIKit.corner(lock, 4)
-	chest.Box = box
-	local lid = new("Frame", { Name = "Lid", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -62), Size = UDim2.fromOffset(150, 34), BackgroundColor3 = Color3.new(1, 1, 1) }, stage)
-	UIKit.corner(lid, 12)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.wood_400, P.wood_600) }, lid)
-	UIKit.stroke(lid, P.gold_500, 2, 0)
-	chest.Lid = lid
-	chest.LidHome = lid.Position
-	chest.Rewards = new("Frame", { Name = "Rewards", BackgroundTransparency = 1, Position = UDim2.fromOffset(20, 134 + TS(30)), Size = UDim2.new(1, -40, 0, 130) }, face)
+	local header = new("Frame", { Name = "Header", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 12), Size = UDim2.new(1, 0, 0, 34), ZIndex = 3 }, face)
+	UIKit.list(header, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	chest.Icon = Icons.Draw(header, "chest", { Size = 30, LayoutOrder = 1 })
+	chest.Title = text(header, "H1", "TREASURE!", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, ZIndex = 3 }, 26)
+	chest.Source = text(face, "Caption", "", { Position = UDim2.fromOffset(0, 46), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
+	chest.Rewards = new("Frame", { Name = "Rewards", BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 56 + TS(12)), Size = UDim2.new(1, -32, 0, MAX_ROWS * (REWARD_ROW_H + 6)), ZIndex = 3 }, face)
 	UIKit.list(chest.Rewards, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center })
-	onRelayout(function()
-		local v = virtualSize()
-		local h = 290 + TS(30)
-		holder.Size = UDim2.fromOffset(420, h)
-		-- under the HUD top cluster, never over the ability bar (landscape)
-		local x = v.X / 2
-		local y = math.max(Hud.TopBottom() + 8, v.Y * 0.2)
-		if not portrait and y + h > Hud.BarTop() - 8 then
-			-- short landscape screens: the right side, under the pause button
-			x = v.X - margin() - 210
-			y = math.min(insets.Top + 80, Hud.BarTop() - 8 - h)
+	-- footer: the time left as a draining bar + "TAP TO CONTINUE"
+	chest.Timer = UIKit.Meter(face, { Gradient = ColorSequence.new(P.gold_500, P.gold_300), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -26), Size = UDim2.fromOffset(160, 4) })
+	chest.Hint = text(face, "Caption", UIKit.track("TAP TO CONTINUE"), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -6), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
+	onRelayout(layoutChest)
+	layoutChest()
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not reward.Open or processed then
+			return
 		end
-		holder.Position = UDim2.fromOffset(x, y)
+		local k = input.KeyCode
+		if k == Enum.KeyCode.ButtonA or k == Enum.KeyCode.Return or k == Enum.KeyCode.Space or k == Enum.KeyCode.E then
+			-- E opens chests: only a fresh press long after the panel opened closes it
+			if k ~= Enum.KeyCode.E or os.clock() - reward.Started > 0.6 then
+				closeReward(true)
+			end
+		end
+	end)
+	RunService.RenderStepped:Connect(function()
+		if not reward.Open then
+			return
+		end
+		local now = os.clock()
+		local total = math.max(0.1, reward.Deadline - reward.Started)
+		chest.Timer.Set(math.clamp((reward.Deadline - now) / total, 0, 1))
+		if now >= reward.Deadline then
+			closeReward(false)
+		end
 	end)
 end
 
-local function rewardRow(icon: string?, title: string, detail: string, color: Color3, isUpgrade: boolean)
-	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X }, chest.Rewards)
-	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) })
-	if icon then
-		if isUpgrade then
-			UIKit.Tile(row, { Id = icon, Size = 32 }).LayoutOrder = 1
-		else
-			Icons.Draw(row, icon, { Size = 26, LayoutOrder = 1 })
-		end
+closeReward = function(tapped: boolean)
+	if not reward.Open then
+		return
 	end
-	text(row, "BodyStrong", title, { LayoutOrder = 2, Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.Text }, Theme.TextSize.H3)
-	text(row, "Label", detail, { LayoutOrder = 3, Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = color })
-	UIAnim.Pop(row, 0, 0.5)
+	reward.Open = false
+	hide(chest.Overlay, "Reward")
+	if tapped then
+		UIKit.Click()
+		Remotes.Get("RewardClose"):FireServer()
+	end
 end
 
-local chestToken = 0
-function UIBuilder.ShowChest(data)
-	chestToken += 1
-	local token = chestToken
+-- Light burst behind the header (new panel / new reward); bigger and gold for legendaries.
+local function rewardBurst(big: boolean)
+	if ClientSettings.Reduced() then
+		return
+	end
+	local g = chest.Glow :: Frame
+	g.Size = UDim2.fromOffset(10, 10)
+	g.BackgroundColor3 = big and P.gold_200 or P.gold_300
+	g.BackgroundTransparency = big and 0.1 or 0.3
+	local size = big and 360 or 240
+	TweenService:Create(g, TweenInfo.new(big and 0.7 or 0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(size, size), BackgroundTransparency = 1 }):Play()
+end
+
+-- Opens the panel (or adds to the one showing) and gives the reward time to be read.
+local function openReward(source: string)
+	local now = os.clock()
+	local C2 = Config.Chests :: any
+	if not reward.Open then
+		reward.Open = true
+		reward.Started = now
+		reward.Rows = 0
+		table.clear(reward.Sources)
+		for _, c in ipairs(chest.Rewards:GetChildren()) do
+			if c:IsA("GuiObject") then
+				c:Destroy()
+			end
+		end
+		show(chest.Overlay, "Reward", false)
+		if not ClientSettings.Reduced() then
+			-- the panel lands with a little tilt
+			local panel = chest.Panel :: Frame
+			panel.Rotation = -5
+			UIAnim.Tween(panel, 0.35, { Rotation = 0 }, Enum.EasingStyle.Back)
+		end
+		UIAnim.Punch(chest.Icon, 0.45)
+		UIAnim.Punch(chest.Title, 0.25)
+	else
+		UIAnim.Punch(chest.Panel, 0.05)
+	end
+	reward.Sources[source] = true
+	local n = 0
+	for _ in pairs(reward.Sources) do
+		n += 1
+	end
+	chest.Source.Text = UIKit.track(n > 1 and "SEVERAL CHESTS" or string.upper(source))
+	reward.Deadline = math.min(now + (C2.RewardPauseSeconds or 2.5), reward.Started + (C2.RewardPauseMax or 5))
+end
+
+-- One reward row: tile, name and what it gives. Old rows drop out past MAX_ROWS.
+local function rewardRow(makeTile: (Frame) -> (), title: string, titleColor: Color3, detail: string, detailColor: Color3, legendary: boolean)
+	reward.Order += 1
+	local rows = {}
 	for _, c in ipairs(chest.Rewards:GetChildren()) do
 		if c:IsA("GuiObject") then
-			c:Destroy()
+			table.insert(rows, c)
 		end
 	end
-	chest.Panel.Visible = true
-	UIAnim.Pop(chest.Panel, 0, 0.5)
-	chest.Lid.Position = chest.LidHome
-	chest.Lid.Rotation = 0
-	chest.Glow.Size = UDim2.fromOffset(10, 10)
-	chest.Glow.BackgroundTransparency = 1
-	-- shake, pop the lid, burst of light, then list the rewards
-	TweenService:Create(chest.Box, TweenInfo.new(0.06, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 5, true), { Rotation = 5 }):Play()
-	task.delay(0.4, function()
-		chest.Box.Rotation = 0
-		TweenService:Create(chest.Lid, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Position = chest.LidHome + UDim2.fromOffset(52, 10), Rotation = 16 }):Play()
-		chest.Glow.BackgroundTransparency = 0.25
-		TweenService:Create(chest.Glow, TweenInfo.new(0.55), { Size = UDim2.fromOffset(240, 240), BackgroundTransparency = 1 }):Play()
-		for i, r in ipairs(data.Rewards) do
-			task.delay(0.15 * i, function()
-				if token == chestToken then
-					rewardRow(nameToId[r.Name], r.Name, string.upper(r.Text), P.gold_300, true)
+	table.sort(rows, function(a, b)
+		return a.LayoutOrder < b.LayoutOrder
+	end)
+	-- phones keep the panel short: three rows
+	local maxRows = UIKit.IsCompact() and MAX_ROWS - 1 or MAX_ROWS
+	while #rows >= maxRows do
+		local old = table.remove(rows, 1)
+		if old then
+			old:Destroy()
+		end
+	end
+	reward.Rows = #rows + 1
+	layoutChest()
+	local row = new("Frame", { Name = "Row", BackgroundColor3 = P.slate_800, BackgroundTransparency = 0.35, Size = UDim2.new(1, 0, 0, REWARD_ROW_H), LayoutOrder = reward.Order, ClipsDescendants = true, ZIndex = 3 }, chest.Rewards)
+	UIKit.corner(row, Theme.Radius.M)
+	if legendary then
+		UIKit.stroke(row, P.gold_400, 1.5, 0.1)
+	end
+	local tileHolder = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(5, 4), Size = UDim2.fromOffset(38, 38), ZIndex = 4 }, row)
+	makeTile(tileHolder)
+	text(row, "BodyStrong", title, { Position = UDim2.fromOffset(52, 4), Size = UDim2.new(1, -60, 0, 20), TextColor3 = titleColor, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4 }, Theme.TextSize.H3 - 1)
+	text(row, "Small", detail, { Position = UDim2.fromOffset(52, 24), Size = UDim2.new(1, -60, 0, 18), TextColor3 = detailColor, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4 }, 13)
+	UIAnim.Pop(row, 0, 0.6)
+	if not ClientSettings.Reduced() then
+		-- a quick flash and a shine across the new row
+		local flash = new("Frame", { BackgroundColor3 = legendary and P.gold_200 or P.ivory_100, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 5 }, row)
+		TweenService:Create(flash, TweenInfo.new(0.45), { BackgroundTransparency = 1 }):Play()
+		local streak = new("Frame", { BackgroundColor3 = P.ivory_100, BackgroundTransparency = 0.6, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(-0.2, 0.5), Size = UDim2.new(0, 26, 2, 0), Rotation = 20, ZIndex = 5 }, row)
+		TweenService:Create(streak, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.fromScale(1.2, 0.5) }):Play()
+	end
+	rewardBurst(legendary)
+end
+
+-- Elite chest (remote ChestOpened): level-ups and gold.
+function UIBuilder.ShowChest(data)
+	if type(data) ~= "table" then
+		return
+	end
+	openReward("Elite chest")
+	local list = type(data.Rewards) == "table" and data.Rewards or {}
+	for i, r in ipairs(list) do
+		if type(r) == "table" then
+			task.delay(0.12 * (i - 1), function()
+				if reward.Open then
+					rewardRow(function(holder)
+						UIKit.Tile(holder, { Id = nameToId[tostring(r.Name)] or "", Size = 38 })
+					end, tostring(r.Name), C.Text, string.upper(tostring(r.Text)), P.gold_300, false)
 				end
 			end)
 		end
-		task.delay(0.15 * (#data.Rewards + 1), function()
-			if token == chestToken then
-				rewardRow("coin", "+" .. UIKit.formatNumber(data.Gold), "GOLD", P.gold_300, false)
+	end
+	local gold = tonumber(data.Gold) or 0
+	if gold > 0 then
+		task.delay(0.12 * #list, function()
+			if reward.Open then
+				rewardRow(function(holder)
+					Icons.Draw(holder, "coin", { Size = 34, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+				end, "+" .. UIKit.formatNumber(gold) .. " gold", P.gold_200, "Added to your purse", C.TextMuted, false)
 			end
 		end)
-	end)
-	task.delay(3.4, function()
-		if token == chestToken then
-			UIAnim.PopOut(chest.Panel, function()
-				if token == chestToken then
-					chest.Panel.Visible = false
-				end
-			end)
-		end
-	end)
+	end
+end
+
+-- An item from a chest / shrine / altar (LootUI → ItemGained with Reward = true).
+local function showItemReward(data)
+	local def = ItemData.Items[tostring(data.Id)]
+	if not def then
+		return
+	end
+	local r = Theme.ItemRarity[def.Rarity] or Theme.ItemRarity.Common
+	openReward(type(data.Source) == "string" and data.Source or "Chest")
+	local n = tonumber(data.Count) or 1
+	rewardRow(function(holder)
+		LootUI.ItemTile(holder, def.Id, 38, n)
+	end, def.Name .. (n > 1 and ("  x" .. n) or ""), r.Color, def.Text, C.Text, def.Rarity == "Legendary")
+	if deps.Audio and deps.Audio.Play then
+		pcall(deps.Audio.Play, "Item")
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -1647,8 +1880,23 @@ local function onRunResult(data)
 	if data.Won and deps.Audio then
 		pcall(deps.Audio.Play, "Victory")
 	end
-	-- title drops in, then the numbers count up one after another
+	-- title drops in, the medal flips round, the stat tiles land one after another and
+	-- their numbers count up
 	UIAnim.Pop(results.Title, 0.1, 1.6)
+	if not ClientSettings.Reduced() then
+		local medal = results.Medal :: GuiObject
+		medal.Rotation = -160
+		UIAnim.Pop(medal, 0.05, 0.3)
+		task.delay(0.05, function()
+			UIAnim.Tween(medal, 0.55, { Rotation = 0 }, Enum.EasingStyle.Back)
+		end)
+		for i, label in ipairs({ results.Stages, results.Time, results.Kills, results.Boss, results.Gold, results.Level }) do
+			local tile = label and label.Parent
+			if tile and tile:IsA("GuiObject") then
+				UIAnim.Pop(tile, 0.2 + 0.06 * i, 0.55)
+			end
+		end
+	end
 	UIAnim.CountUp(results.Kills, data.Kills, "%d", 0.8, 0.4)
 	UIAnim.CountUp(results.Gold, data.Gold, "%d", 0.8, 0.6)
 	UIAnim.CountUp(results.Level, data.Level, "%d", 0.6, 0.8)
@@ -1924,6 +2172,7 @@ function UIBuilder.Init(d: { [string]: any })
 	buildToasts()
 	buildLevelUp()
 	buildChest()
+	LootUI.OnReward = showItemReward
 	buildPause()
 	buildRevive()
 	buildResults()
@@ -2039,8 +2288,7 @@ function UIBuilder.Init(d: { [string]: any })
 			Hud.SetInventory(nil)
 			closeOffer()
 			hide(revive.Overlay, "Revive")
-			chestToken += 1
-			chest.Panel.Visible = false
+			closeReward(false)
 			Tutorial.Clear()
 			if deps.Audio and deps.Audio.StopEffects then
 				deps.Audio.StopEffects()

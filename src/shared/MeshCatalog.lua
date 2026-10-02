@@ -676,6 +676,26 @@ MeshCatalog.Models = {
 			{ Name = "Snow", Slot = "Snow", Material = "SmoothPlastic", Offset = {0.1392, 0.3296, 0.0056}, Size = {10.5477, 0.6592, 9.1653} },
 		},
 	},
+	GoldCoin = {
+		AssetId = 125114914335114,
+		Category = "Pickups",
+		Bounds = { {-0.483, 0.017, -0.125}, {0.483, 0.983, 0.125} },
+		Palette = { Gold = Color3.fromRGB(191, 151, 70), Trim = Color3.fromRGB(240, 221, 176) },
+		Pieces = {
+			{ Name = "Coin", Slot = "Gold", Material = "SmoothPlastic", Offset = {0, 0.5, 0}, Size = {0.9659, 0.9659, 0.22} },
+			{ Name = "Crown", Slot = "Trim", Material = "SmoothPlastic", Offset = {0, 0.5428, 0}, Size = {0.589, 0.3895, 0.25} },
+		},
+	},
+	GoldPile = {
+		AssetId = 85288904885942,
+		Category = "Pickups",
+		Bounds = { {-0.934, 0, -0.818}, {0.648, 0.873, 0.517} },
+		Palette = { Gold = Color3.fromRGB(191, 151, 70), Trim = Color3.fromRGB(240, 221, 176) },
+		Pieces = {
+			{ Name = "Coins", Slot = "Gold", Material = "SmoothPlastic", Offset = {-0.1434, 0.4364, -0.1508}, Size = {1.5818, 0.8728, 1.3353} },
+			{ Name = "Crowns", Slot = "Trim", Material = "SmoothPlastic", Offset = {-0.1996, 0.4949, 0.1588}, Size = {1.1756, 0.3965, 0.5093} },
+		},
+	},
 	GrassTuft = {
 		AssetId = 104726831603153,
 		Category = "World",

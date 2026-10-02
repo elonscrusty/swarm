@@ -185,6 +185,9 @@ Config.XP = {
 	MagnetAcceleration = 90,
 	CollectDistance = 3, -- studs from the player's root
 	GemHeight = 1.2, -- resting height above the floor
+	-- Server gem cube edge per kind (studs). The client reads the kind back from the size
+	-- and draws a blue-white crystal about 1.5x / 1.9x / 2.5x as tall (VFX).
+	GemSize = { Small = 1.1, Medium = 1.45, Large = 1.9 },
 	-- Gems are only checked against players every N frames in chunks (perf).
 	CheckChunks = 2,
 }
@@ -287,6 +290,11 @@ Config.Chests = {
 	Cost = { Small = 25, Large = 60, Golden = 150 }, -- on stage 1
 	CostExponent = 1.2, -- stage 2 = x2.3, stage 3 = x3.7, stage 5 = x6.9
 	HoldSeconds = { Small = 0.8, Large = 1.1, Golden = 1.4, Guarded = 1.2 },
+	-- A chest / shrine / altar reward pauses the whole run (like a level-up) while its panel
+	-- shows: RewardPauseSeconds after the last reward (the opener can tap to close sooner),
+	-- never more than RewardPauseMax in a row however many rewards arrive.
+	RewardPauseSeconds = 2.5,
+	RewardPauseMax = 5,
 	-- item rarity weights per chest (luck raises Uncommon / Legendary by x(1 + luck))
 	Weights = {
 		Small = { Common = 80, Uncommon = 19, Legendary = 1 },
@@ -657,6 +665,7 @@ Config.Sounds = {
 	Revive = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Category = "Player", MinGap = 0.3, Pitch = 1.3, PitchVar = 0 },
 	-- pickups and rewards
 	GemPickup = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.25, Category = "Pickup", MinGap = 0.05, Pitch = 1.1, PitchVar = 0.12 },
+	Coin = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.18, Category = "Pickup", MinGap = 0.08, Pitch = 2.2, PitchVar = 0.1 },
 	Chest = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Category = "Pickup", MinGap = 0.2, PitchVar = 0 },
 	Item = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.5, Category = "Pickup", MinGap = 0.15, Pitch = 1.15, PitchVar = 0 },
 	Shrine = { Id = "rbxasset://sounds/button.wav", Volume = 0.6, Category = "Pickup", MinGap = 0.2, PitchVar = 0 },

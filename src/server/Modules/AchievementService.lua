@@ -86,6 +86,32 @@ local function unlock(player: Player, data, id: string)
 	end
 end
 
+-- Dev panel (RunManager checks isDev): every achievement and its reward, without toasts.
+function AchievementService.DevUnlockAll(player: Player): number
+	local data = ctx.DataService.GetData(player)
+	if not data then
+		return 0
+	end
+	local a = store(data)
+	local n = 0
+	for _, id in ipairs(AchievementData.Order) do
+		local def = AchievementData.Achievements[id]
+		if not a.Unlocked[id] then
+			n += 1
+			a.Unlocked[id] = os.time()
+			a.Progress[id] = def.Goal
+			local r = def.Reward
+			if r.Gold and r.Gold > 0 then
+				data.Gold += r.Gold
+			end
+			if r.Character and CharacterData.Characters[r.Character] then
+				data.OwnedCharacters[r.Character] = true
+			end
+		end
+	end
+	return n
+end
+
 local function matches(filter: { [string]: any }?, data: { [string]: any }): boolean
 	if not filter then
 		return true

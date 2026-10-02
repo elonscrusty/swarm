@@ -17,6 +17,8 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 
+local Fx = require(script.Parent.Fx)
+
 local GoldSystem = {}
 
 local ctx
@@ -71,10 +73,13 @@ function GoldSystem.SpendRunGold(rp, amount: number): boolean
 end
 
 -- Normal kill: 1-3 gold with Config.Gold.KillGoldChance (x the run's GoldMult: items, the
--- Bargain Shrine).
-function GoldSystem.OnKill(rp)
+-- Bargain Shrine). pos (where the enemy died) only feeds the coin burst clients draw.
+function GoldSystem.OnKill(rp, pos: Vector3?)
 	if rng:NextNumber() < Config.Gold.KillGoldChance then
-		GoldSystem.AddRunGold(rp, rng:NextInteger(Config.Gold.MinPerKill, Config.Gold.MaxPerKill) * (rp.Stats and rp.Stats.GoldMult or 1))
+		local paid = GoldSystem.AddRunGold(rp, rng:NextInteger(Config.Gold.MinPerKill, Config.Gold.MaxPerKill) * (rp.Stats and rp.Stats.GoldMult or 1))
+		if paid > 0 and pos then
+			Fx.Gold(pos, paid, rp.Player.UserId)
+		end
 	end
 end
 

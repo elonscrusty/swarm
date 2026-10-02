@@ -524,6 +524,7 @@ function LevelUpSystem.OpenChest(rp)
 	afterChange(rp)
 	Remotes.FireClient("ChestOpened", rp.Player, { Rewards = rewards, Gold = gold })
 	Fx.Sound("Chest")
+	ctx.RunManager.HoldReward(rp)
 end
 
 ------------------------------------------------------------------------------------------
@@ -534,10 +535,11 @@ end
 LevelUpSystem.NewWeapons = { "Spear", "Crossbow", "FrostNova", "FireTrail", "HealingTotem", "ChainHook", "Turret", "SoulBolt" }
 
 --[[
-	evolve = false: gives every weapon in NewWeapons at level 8 (past Config.Slots.Weapons:
-	a test loadout). evolve = true: evolves every owned weapon (its passive is not needed).
+	evolve = false: gives every weapon in `list` (default NewWeapons; WeaponData.Order = all
+	of them) at level 8 (past Config.Slots.Weapons: a test loadout). evolve = true: evolves
+	every owned weapon (its passive is not needed).
 ]]
-function LevelUpSystem.DevWeapons(rp, evolve: boolean)
+function LevelUpSystem.DevWeapons(rp, evolve: boolean, list: { string }?)
 	if evolve then
 		for _, id in ipairs(rp.WeaponOrder) do
 			local w = rp.Weapons[id]
@@ -547,7 +549,7 @@ function LevelUpSystem.DevWeapons(rp, evolve: boolean)
 			end
 		end
 	else
-		for _, id in ipairs(LevelUpSystem.NewWeapons) do
+		for _, id in ipairs(list or LevelUpSystem.NewWeapons) do
 			if not rp.Weapons[id] and WeaponData.Weapons[id] then
 				rp.Weapons[id] = { Id = id, Level = WeaponData.MaxLevel, Evolved = false, Timer = 0.3, Live = {}, Growth = 0 }
 				table.insert(rp.WeaponOrder, id)

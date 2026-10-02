@@ -963,6 +963,24 @@ R.defineClass("InsertService", {
 			if not R.loadAsset then
 				error("InsertService:LoadAsset is not available in the preview", 2)
 			end
+			-- simulated download (scenes: preview.setLoadLatency): at most `slots` assets
+			-- download at once (first come, first served), each takes `base` simulated
+			-- seconds; a rough model of the engine's limited asset fetches
+			local lat = R.loadLatency
+			if lat then
+				R.loadTicket = (R.loadTicket or 0) + 1
+				local ticket = R.loadTicket
+				R.loadQueue = R.loadQueue or {}
+				table.insert(R.loadQueue, ticket)
+				R.loadActive = R.loadActive or 0
+				while not (R.loadQueue[1] == ticket and R.loadActive < lat.slots) do
+					R.S.wait(0.02)
+				end
+				table.remove(R.loadQueue, 1)
+				R.loadActive += 1
+				R.S.wait(lat.base)
+				R.loadActive -= 1
+			end
 			return R.loadAsset(id)
 		end,
 		LoadAssetVersion = function()

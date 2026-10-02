@@ -744,7 +744,10 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 			local gold = math.floor(R.Gold + R.GoldPerStage * math.max(0, ctx.StageManager.GetStage() - 1))
 			for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
 				if other.Alive and not other.Returned then
-					ctx.GoldSystem.AddRunGold(other, gold * (other.Stats and other.Stats.GoldMult or 1))
+					local paid = ctx.GoldSystem.AddRunGold(other, gold * (other.Stats and other.Stats.GoldMult or 1))
+					if paid > 0 then
+						Fx.Gold(pos, paid, other.Player.UserId)
+					end
 				end
 			end
 			for k = 1, R.Gems or 0 do
@@ -756,7 +759,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		Fx.Warn("pop", pos.X, pos.Z, e.Radius * 2, "dust")
 	else
 		if rp then
-			ctx.GoldSystem.OnKill(rp)
+			ctx.GoldSystem.OnKill(rp, pos)
 		end
 		ctx.XPSystem.RollFloorPickup(pos, rp and rp.Stats.Luck or 0)
 	end

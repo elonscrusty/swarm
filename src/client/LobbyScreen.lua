@@ -6,7 +6,8 @@
 
 	  top left      SWARM logo (sword behind the letters) + "SURVIVE · UPGRADE · CONQUER"
 	  top right     stats chip: best time, wins, gold (stays on every menu screen)
-	  left column   feature cards CHARACTERS / UPGRADES / ARENA: <name> / DAILY CHALLENGE
+	  left column   feature cards CHARACTERS / UPGRADES / ARENA: <name> (opens the ARENAS screen,
+	                MenuArenas) / DAILY CHALLENGE
 	  bottom centre nameplate of the hero with gold arrows to browse characters
 	                (owned → selected at once; locked → price, UNLOCK / DETAILS)
 	  right column  SOLO (primary gold), DUO, TRIO, then CURSES (the run modifiers picked,
@@ -43,6 +44,7 @@ local MenuCurses = require(script.Parent.MenuCurses)
 local MenuDaily = require(script.Parent.MenuDaily)
 local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
 local MenuTrack = require(script.Parent.MenuTrack)
+local MenuArenas = require(script.Parent.MenuArenas)
 local Cosmetics = require(script.Parent.Cosmetics)
 local CurseData = require(Shared:WaitForChild("CurseData"))
 
@@ -63,7 +65,7 @@ local profile: { [string]: any }? = nil
 local joinedCountdown = false
 local ui: { [string]: any } = {}
 local current = "Home"
-local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Stats = 4, Curses = 5, Daily = 6, Ranks = 7, Track = 8 }
+local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Arenas = 3.5, Stats = 4, Curses = 5, Daily = 6, Ranks = 7, Track = 8 }
 local screens: { [string]: any } = {}
 local shownGold: number? = nil
 local lastStatus = ""
@@ -182,6 +184,54 @@ local function buildChip(frame: Frame)
 	sep(4)
 	ui.Gold = UIKit.Chip(face, "coin", "Gold", "0", { LayoutOrder = 5, Size = UDim2.fromOffset(0, 48) }, { Size = 22 })
 	ui.Gold.Value.TextColor3 = P.gold_200
+end
+
+--[[
+	"Loading models…" pill under the stats chip while the server is still loading the
+	lobby / hero meshes (ReplicatedStorage.SwarmMeshes: Loaded / Total, PriorityReady). The
+	menu works the whole time; the pill only says why things still look plain. It fades
+	out once the lobby and heroes are in.
+]]
+local function buildLoadingPill()
+	local pill = new("Frame", { Name = "LoadingPill", BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.25, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X, Position = UDim2.new(1, 0, 0, 56), AnchorPoint = Vector2.new(1, 0), Visible = false }, ui.Chip)
+	UIKit.corner(pill, 999)
+	UIKit.stroke(pill, P.gold_500, 1, 0.55)
+	UIKit.padding(pill, 0, 14, 0, 12)
+	UIKit.list(pill, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	local dot = new("Frame", { Name = "Dot", BackgroundColor3 = P.gold_300, Size = UDim2.fromOffset(8, 8), LayoutOrder = 1 }, pill)
+	UIKit.corner(dot, 999)
+	UIAnim.Glow(dot, "BackgroundTransparency", 0, 0.75, 0.7)
+	ui.LoadingText = text(pill, "Small", "Loading models…", { Name = "Text", AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 30), LayoutOrder = 2, TextColor3 = P.ivory_200 })
+	ui.LoadingPill = pill
+end
+
+local function updateLoadingPill()
+	local pill = ui.LoadingPill
+	if not pill then
+		return
+	end
+	local folder = ReplicatedStorage:FindFirstChild("SwarmMeshes")
+	local total = folder and tonumber(folder:GetAttribute("Total")) or 0
+	local show = folder ~= nil and total > 0 and folder:GetAttribute("PriorityReady") ~= true
+	if show then
+		-- progress of what the menu needs (lobby + heroes), else of everything
+		local need = tonumber(folder:GetAttribute("PriorityTotal")) or 0
+		local done = tonumber(folder:GetAttribute("PriorityDone")) or 0
+		if need <= 0 then
+			need = total
+			done = (tonumber(folder:GetAttribute("Loaded")) or 0) + (tonumber(folder:GetAttribute("Failed")) or 0)
+		end
+		ui.LoadingText.Text = string.format("Loading models… %d%%", math.floor(100 * math.clamp(done / need, 0, 1)))
+		pill.AnchorPoint = Vector2.new(ui.Chip.AnchorPoint.X, 0)
+		pill.Position = UDim2.new(ui.Chip.AnchorPoint.X, 0, 0, 56)
+		pill.Visible = true
+		ui.LoadingShown = true
+	elseif ui.LoadingShown then
+		ui.LoadingShown = false
+		UIAnim.PopOut(pill, function()
+			pill.Visible = false
+		end)
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -501,7 +551,7 @@ local function buildHome(screen: Frame)
 		Subtitle = "Face the swarm",
 		LayoutOrder = 3,
 		OnClick = function()
-			Remotes.Get("CycleArena"):FireServer()
+			LobbyScreen.Show("Arenas")
 		end,
 	})
 	ui.CardDaily = UIKit.Card(ui.Cards, {
@@ -912,6 +962,7 @@ function LobbyScreen.Update(_dt: number?)
 	if not ui.Frame or not ui.Frame.Visible then
 		return
 	end
+	updateLoadingPill()
 	local state = Remotes.State()
 	local phase = state:GetAttribute("Phase") or "Lobby"
 	local kind = "Modes"
@@ -1041,6 +1092,7 @@ function LobbyScreen.Init(h: { [string]: any })
 	end
 	buildHome(screen("Home"))
 	buildChip(frame)
+	buildLoadingPill()
 	local ctx = {
 		Host = h,
 		Back = function()
@@ -1064,6 +1116,7 @@ function LobbyScreen.Init(h: { [string]: any })
 	screens.Daily = MenuDaily.Build(screen("Daily"), ctx)
 	screens.Ranks = MenuLeaderboards.Build(screen("Ranks"), ctx)
 	screens.Track = MenuTrack.Build(screen("Track"), ctx)
+	screens.Arenas = MenuArenas.Build(screen("Arenas"), ctx)
 	h.OnRelayout(relayout)
 	relayout()
 end
