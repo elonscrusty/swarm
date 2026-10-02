@@ -44,6 +44,8 @@ Remotes.ServerToClient = {
 	"BugReportResult", -- { Ok, Message } answer to BugReport (BugReportService)
 	"BugInboxData", -- DEV inbox: { Kind = "Page", Rows, Next?, Status } | { Kind = "Status", Id, Status, Ok }
 	"LeaderboardData", -- { Board, Rows = { {Rank, Name, Value, Me} }, Status, Age, MyRank?, MyBest } (LeaderboardService)
+	"PartyState", -- this player's party: { LeaderId, Members = { {UserId, Name} }, Max, Invites = { {FromId, FromName, Seconds} }, Sent = {userId} } (PartyService)
+	"PartyInvite", -- a new invite: { FromId, FromName, Seconds } (PartyService): the ACCEPT / DECLINE card
 }
 
 -- Client → server
@@ -76,6 +78,8 @@ Remotes.ClientToServer = {
 	"BugReport", -- ({ Category, Text, Client }) player bug report, filtered and rate limited (BugReportService)
 	"BugInbox", -- ("Page", cursor?) | ("SetStatus", id, status) DEV inbox, server-side allowlist
 	"LeaderboardRequest", -- (boardId) a Config.Leaderboards.Order id (LeaderboardService)
+	"Party", -- ("Invite" | "Accept" | "Decline" | "Kick", userId) | ("Leave") | ("Sync") lobby PARTY screen (PartyService)
+	"PartyFollow", -- (friendUserId) JOIN a friend's server: server-side teleport, friends only (PartyService)
 }
 
 local folder: Folder? = nil

@@ -6,7 +6,9 @@
 	                 Roblox buttons; portrait: under the ability bar). Not Active, so the
 	                 thumbstick works on top of it. Under it: the run's curse chips (and
 	                 DAILY on a Daily Challenge run, the curses' gold bonus), then a
-	                 "BARGAIN" chip while this stage's Bargain Shrine is sealed.
+	                 "BARGAIN" chip while this stage's Bargain Shrine is sealed, then a
+	                 "SYNERGY" chip naming the build synergies that are active (player
+	                 attribute Synergies, SynergyData).
 	  item popup     remote ItemGained: icon tile in the rarity colour, name, rarity, what it
 	                 does and where it came from; stacks up to 3 under the strip. Items
 	                 from a chest / shrine / altar (Reward = true) go to the centred
@@ -21,8 +23,15 @@
 	                 LootFeedback); nothing is opened by the client.
 	  altar marker   a small floating pill over the guarded altar on screen (dormant /
 	                 guards left / unguarded / claimed)
-	  items list     LootUI.OpenItems() (pause menu "ITEMS" button): every item with its
+	  items list     LootUI.OpenItems() (pause menu "ITEMS" button): the active synergies
+	                 first (what they give, what they need), then every item with its
 	                 stack count and full text
+	  caravan        the Lost Caravan (server CaravanEvent, workspace.SwarmEvents): a pill
+	                 over the cart on screen (LOST CARAVAN / DEFEND / SAVED / LOST), an
+	                 edge arrow when it is off screen (while defending, or within
+	                 CARAVAN_HINT studs before), and a defence bar under the top HUD while
+	                 it is defended: time still to hold, or "RETURN TO THE CARAVAN" with the
+	                 seconds left before it is lost.
 	UIBuilder builds it (LootUI.Build) and calls LootUI.Update every frame.
 ]]
 
@@ -36,8 +45,10 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local ItemData = require(Shared:WaitForChild("ItemData"))
 local CurseData = require(Shared:WaitForChild("CurseData"))
+local SynergyData = require(Shared:WaitForChild("SynergyData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
+local ClientSettings = require(script.Parent.ClientSettings)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 
@@ -67,6 +78,8 @@ local target: Model? = nil
 local lastTouch = false
 
 local KIND_ICON = { Chest = "reward_ChestLarge", Shrine = "shrine", Altar = "altar" }
+local CARAVAN_HINT = 110 -- studs: the caravan's edge arrow shows this close before it starts
+local synergies: { string } = {}
 
 local function rarityOf(id: string): string
 	local def = ItemData.Items[id]
@@ -131,6 +144,17 @@ local function buildStrip(root: Frame)
 	Icons.Draw(face, "shrine", { Size = 18, LayoutOrder = 1, Color = P.crimson_300 })
 	ui.BargainText = text(face, "Label", "BARGAIN", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.crimson_300 }, 12)
 	ui.Bargain = holder
+	-- the active build synergies (a pill under the bargain)
+	local sh, sf = UIKit.Surface(root, { Name = "SynergyChip", Radius = 999, Transparency = 0.15, Edge = P.moss_400, EdgeTransparency = 0.25, Shadow = false, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(0, 28) })
+	sh.AutomaticSize = Enum.AutomaticSize.X
+	sh.Active = false
+	sf.AutomaticSize = Enum.AutomaticSize.X
+	sf.Size = UDim2.fromScale(0, 1)
+	UIKit.padding(sf, 0, 12, 0, 8)
+	UIKit.list(sf, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
+	Icons.Draw(sf, "sparkle", { Size = 18, LayoutOrder = 1, Color = P.moss_200 })
+	ui.SynergyText = text(sf, "Label", "SYNERGY", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.moss_200 }, 12)
+	ui.Synergy = sh
 	-- the run's curses (and DAILY): small chips under the strip (SwarmState Curses / DailyRun)
 	local row = new("Frame", { Name = "CurseChips", BackgroundTransparency = 1, Active = false, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(400, 26) }, root)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 5), Wraps = true })
@@ -263,6 +287,43 @@ local function buildMarker(root: Frame)
 	ui.MarkerFace = face
 end
 
+-- Lost Caravan: the world pill, the edge arrow and the defence bar.
+local function buildCaravan(root: Frame)
+	local holder, face = UIKit.Surface(root, { Name = "CaravanMarker", Radius = 999, Transparency = 0.15, Shadow = false, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(0, 30), AnchorPoint = Vector2.new(0.5, 1) })
+	holder.AutomaticSize = Enum.AutomaticSize.X
+	face.AutomaticSize = Enum.AutomaticSize.X
+	face.Size = UDim2.fromScale(0, 1)
+	UIKit.padding(face, 0, 12, 0, 8)
+	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
+	Icons.Draw(face, "flag", { Size = 18, LayoutOrder = 1 })
+	ui.CaravanText = text(face, "Label", "", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X }, 13)
+	ui.CaravanMarker = holder
+	ui.CaravanMarkerFace = face
+	-- edge arrow: a badge with the banner icon and a diamond tip that turns toward the cart
+	local arrow = new("Frame", { Name = "CaravanArrow", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(52, 52), Visible = false, ZIndex = Theme.Z.Hud }, root)
+	local pivot = new("Frame", { Name = "Pivot", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(52, 52) }, arrow)
+	local tip = new("Frame", { Name = "Tip", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.fromOffset(18, 18), Rotation = 45, BackgroundColor3 = P.crimson_400, BorderSizePixel = 0 }, pivot)
+	UIKit.corner(tip, 3)
+	local _, bface = UIKit.Surface(arrow, { Name = "Badge", Radius = 999, Transparency = 0.1, Edge = P.crimson_400, EdgeTransparency = 0.2, Size = UDim2.fromOffset(40, 40), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	Icons.Draw(bface, "flag", { Size = 24, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	ui.CaravanArrowDist = text(arrow, "Label", "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 1, -2), Size = UDim2.fromOffset(80, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.4 }, 12)
+	ui.CaravanArrow = arrow
+	ui.CaravanPivot = pivot
+	ui.CaravanTip = tip
+	-- defence bar
+	local bar, bf = UIKit.Surface(root, { Name = "CaravanBar", Radius = Theme.Radius.M, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.3, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(340, 50), AnchorPoint = Vector2.new(0.5, 0) })
+	bar.Active = false
+	Icons.Draw(bf, "flag", { Size = 26, Position = UDim2.fromOffset(10, 8) })
+	ui.CaravanBarTitle = text(bf, "Label", "DEFEND THE CARAVAN", { Position = UDim2.fromOffset(44, 5), Size = UDim2.new(1, -110, 0, TS(13) + 6), TextColor3 = P.gold_200 }, 13)
+	ui.CaravanBarTime = text(bf, "Label", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 5), Size = UDim2.fromOffset(70, TS(13) + 6), TextXAlignment = Enum.TextXAlignment.Right }, 13)
+	local track = new("Frame", { Name = "Track", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.2, BorderSizePixel = 0, Position = UDim2.new(0, 44, 1, -16), Size = UDim2.new(1, -56, 0, 8) }, bf)
+	UIKit.corner(track, 999)
+	local fill = new("Frame", { Name = "Fill", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1) }, track)
+	UIKit.corner(fill, 999)
+	ui.CaravanBar = bar
+	ui.CaravanFill = fill
+end
+
 local function buildItemsModal(root: Frame)
 	local m = UIKit.Modal(root, "Items", 560, 520, Theme.Z.Pause + 2)
 	ui.Items = m
@@ -322,6 +383,17 @@ local function refreshList()
 		if ch:IsA("GuiObject") then
 			ch:Destroy()
 		end
+	end
+	for i, id in ipairs(synergies) do
+		local s = SynergyData.Synergies[id]
+		local row = UIKit.Panel(ui.ItemsList, { Name = "Synergy_" .. id, LayoutOrder = i - 100, Size = UDim2.new(1, -8, 0, 62) }, true)
+		local tile = new("Frame", { BackgroundColor3 = P.slate_900, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(46, 46) }, row)
+		UIKit.corner(tile, Theme.Radius.M)
+		UIKit.stroke(tile, s.Color, 1.5, 0.2)
+		Icons.Draw(tile, s.Icon, { Size = 34, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+		text(row, "BodyStrong", s.Name, { Position = UDim2.fromOffset(64, 6), Size = UDim2.new(1, -150, 0, TS(16) + 4), TextColor3 = P.moss_200 })
+		text(row, "Caption", UIKit.track("SYNERGY"), { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 8), Size = UDim2.fromOffset(90, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.moss_200 })
+		text(row, "Small", s.Text .. "  ·  " .. s.Desc, { Position = UDim2.fromOffset(64, 8 + TS(16)), Size = UDim2.new(1, -72, 0, 62 - 12 - TS(16)), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top })
 	end
 	local total = 0
 	for i, it in ipairs(items) do
@@ -521,6 +593,12 @@ function LootUI.Layout()
 		yy += 31
 	end
 	ui.Bargain.Position = UDim2.fromOffset(math.floor(x), math.floor(yy))
+	-- the synergy chip under the bargain (or in its place); the popups below both
+	local chipY = yy + (ui.Bargain.Visible and 33 or 0)
+	ui.Synergy.Position = UDim2.fromOffset(math.floor(x), math.floor(chipY))
+	if ui.Synergy.Visible then
+		yy = math.max(yy, chipY + 33 - 36)
+	end
 	-- popups: left column under the strip / bargain chip (landscape; the right side is the
 	-- loot prompt's), centre (portrait)
 	if portrait then
@@ -674,6 +752,142 @@ local function updateMarker(altar: Model?, promptShown: boolean)
 	ui.Marker.Position = UDim2.fromOffset(math.floor(p.X + 0.5), math.floor(p.Y + math.sin(os.clock() * 2.5) * 3 + 0.5))
 end
 
+-- The active synergies changed (player attribute Synergies): chip text, the ITEMS list.
+local function refreshSynergies()
+	synergies = SynergyData.FromString(player:GetAttribute("Synergies"))
+	local names = {}
+	for _, id in ipairs(synergies) do
+		table.insert(names, string.upper(SynergyData.Synergies[id].Name))
+	end
+	ui.SynergyText.Text = #names > 0 and ("SYNERGY  " .. table.concat(names, "  ·  ")) or "SYNERGY"
+	if ui.Items.Overlay.Visible then
+		refreshList()
+	end
+end
+
+local function caravanModel(): Model?
+	local f = workspace:FindFirstChild("SwarmEvents")
+	local m = f and f:FindFirstChild("Caravan")
+	return (m and m:IsA("Model")) and m or nil
+end
+
+-- Edge arrow toward world point `pos` when it is off screen (false when on screen).
+local function caravanArrow(pos: Vector3, root: BasePart?): boolean
+	local v: Vector2 = kit.VirtualSize()
+	local W, H = v.X, v.Y
+	local p, on = project(pos + Vector3.new(0, 4, 0))
+	local portrait: boolean = kit.IsPortrait()
+	local els = Hud.Elements()
+	local yMin = math.max(70, Hud.TopBottom() + 44)
+	if portrait and els.BarBottom then
+		yMin = math.max(yMin, els.BarBottom + 44)
+	end
+	local yMax = portrait and (H - 110) or (Hud.BarTop() - 40)
+	local xMin, xMax = 48, W - 48
+	if on and p.X > xMin and p.X < xMax and p.Y > yMin and p.Y < yMax then
+		return false
+	end
+	local c = Vector2.new(W / 2, (yMin + yMax) / 2)
+	local d = p - c
+	if not on and root then
+		-- behind the camera: use the ground direction
+		local cam = workspace.CurrentCamera
+		local flat = (pos - root.Position) * FLAT
+		local right = cam.CFrame.RightVector * FLAT
+		local fwd = cam.CFrame.LookVector * FLAT
+		if right.Magnitude > 0.01 and fwd.Magnitude > 0.01 then
+			d = Vector2.new(flat:Dot(right.Unit), -flat:Dot(fwd.Unit))
+		end
+	end
+	if d.Magnitude < 1 then
+		d = Vector2.new(0, -1)
+	end
+	local kx = d.X ~= 0 and ((d.X > 0 and (xMax - c.X) or (xMin - c.X)) / d.X) or math.huge
+	local ky = d.Y ~= 0 and ((d.Y > 0 and (yMax - c.Y) or (yMin - c.Y)) / d.Y) or math.huge
+	local at = c + d * math.min(kx, ky)
+	ui.CaravanArrow.Position = UDim2.fromOffset(math.floor(at.X + 0.5), math.floor(at.Y + 0.5))
+	ui.CaravanPivot.Rotation = math.deg(math.atan2(d.Y, d.X))
+	return true
+end
+
+-- The Lost Caravan's pill, edge arrow and defence bar.
+local function updateCaravan(root: BasePart?, alive: boolean)
+	local m = caravanModel()
+	local pos = m and m:GetAttribute("Pos")
+	if not m or typeof(pos) ~= "Vector3" then
+		ui.CaravanMarker.Visible = false
+		ui.CaravanArrow.Visible = false
+		ui.CaravanBar.Visible = false
+		return
+	end
+	local st = m:GetAttribute("State")
+	local grace = tonumber(m:GetAttribute("Grace")) or -1
+	local dist = root and ((root.Position - pos) * FLAT).Magnitude or math.huge
+	local defending = st == "Defending"
+	-- defence bar
+	if defending ~= ui.CaravanBar.Visible then
+		ui.CaravanBar.Visible = defending
+		if defending then
+			UIAnim.Pop(ui.CaravanBar, 0, 0.6)
+		end
+	end
+	if defending then
+		local v: Vector2 = kit.VirtualSize()
+		local w = math.min(360, v.X - 32)
+		local top = Hud.TopBottom() + 8
+		if kit.IsPortrait() then
+			local els = Hud.Elements()
+			top = math.max(top, (els.BarBottom or 0) + 8)
+		end
+		ui.CaravanBar.Size = UDim2.fromOffset(w, 50)
+		ui.CaravanBar.Position = UDim2.fromOffset(math.floor(v.X / 2), math.floor(top))
+		local away = grace >= 0
+		ui.CaravanBarTitle.Text = away and "RETURN TO THE CARAVAN!" or "DEFEND THE CARAVAN"
+		ui.CaravanBarTitle.TextColor3 = away and P.crimson_300 or P.gold_200
+		ui.CaravanBarTime.Text = away and string.format("LOST IN %d", grace) or string.format("%d s", tonumber(m:GetAttribute("Left")) or 0)
+		ui.CaravanBarTime.TextColor3 = away and P.crimson_300 or P.ivory_100
+		ui.CaravanFill.Size = UDim2.fromScale(math.clamp(tonumber(m:GetAttribute("Progress")) or 0, 0, 1), 1)
+		ui.CaravanFill.BackgroundColor3 = away and P.crimson_400 or P.gold_400
+	end
+	-- world pill over the cart
+	local label, color, edge
+	if defending then
+		label, color, edge = grace >= 0 and "UNDEFENDED" or "DEFEND", grace >= 0 and P.crimson_300 or P.gold_200, P.crimson_400
+	elseif st == "Saved" then
+		label, color, edge = "SAVED", P.gold_200, P.gold_400
+	elseif st == "Lost" then
+		label, color, edge = "LOST", C.TextMuted, P.stone_600
+	else
+		label, color, edge = "LOST CARAVAN · STAND IN THE RING", P.ivory_200, P.gold_400
+	end
+	local p, on = project(pos + Vector3.new(0, 9, 0))
+	local v: Vector2 = kit.VirtualSize()
+	local onScreen = on and p.X > 40 and p.X < v.X - 40 and p.Y > Hud.TopBottom() and p.Y < v.Y - 30
+	ui.CaravanMarker.Visible = onScreen and st ~= "Lost"
+	if ui.CaravanMarker.Visible then
+		ui.CaravanText.Text = label
+		ui.CaravanText.TextColor3 = color
+		local stroke = ui.CaravanMarkerFace:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Color = edge
+			stroke.Transparency = 0.15
+		end
+		local bob = ClientSettings.Reduced() and 0 or math.sin(os.clock() * 2.5) * 3
+		ui.CaravanMarker.Position = UDim2.fromOffset(math.floor(p.X + 0.5), math.floor(p.Y + bob + 0.5))
+	end
+	-- edge arrow: while defending (from outside the ring), or near it before it starts
+	local want = alive and ((defending and dist > Config.Caravan.ZoneRadius) or (st == "Waiting" and dist < CARAVAN_HINT))
+	local shown = want and caravanArrow(pos, root) or false
+	if shown and not ui.CaravanArrow.Visible then
+		UIAnim.Pop(ui.CaravanArrow, 0, 0.5)
+	end
+	ui.CaravanArrow.Visible = shown
+	if shown then
+		ui.CaravanArrowDist.Text = string.format("%d m", math.floor(dist + 0.5))
+		ui.CaravanTip.BackgroundColor3 = defending and P.crimson_400 or P.gold_400
+	end
+end
+
 function LootUI.Update(_dt: number, inRun: boolean)
 	local folder = lootFolder()
 	local char = player.Character
@@ -685,6 +899,10 @@ function LootUI.Update(_dt: number, inRun: boolean)
 		ui.Prompt.Visible = false
 		ui.Marker.Visible = false
 		ui.Bargain.Visible = false
+		ui.Synergy.Visible = false
+		ui.CaravanMarker.Visible = false
+		ui.CaravanArrow.Visible = false
+		ui.CaravanBar.Visible = false
 		Hud.SetPurseHint(0, true)
 		target = nil
 		if hold.Id ~= 0 then
@@ -722,7 +940,17 @@ function LootUI.Update(_dt: number, inRun: boolean)
 			ui.BargainText.Text = string.format("BARGAIN  +%d%% DMG  +%d%% GOLD  ·  ENEMIES +%d%% HP", math.floor(S.BargainDamage * 100 + 0.5), math.floor(S.BargainGold * 100 + 0.5), math.floor(S.BargainEnemyHP * 100 + 0.5))
 			UIAnim.Pop(ui.Bargain, 0, 0.7)
 		end
+		LootUI.Layout()
 	end
+	local syn = #synergies > 0
+	if ui.Synergy.Visible ~= syn then
+		ui.Synergy.Visible = syn
+		if syn then
+			UIAnim.Pop(ui.Synergy, 0, 0.7)
+		end
+		LootUI.Layout()
+	end
+	updateCaravan(root, alive)
 	if best ~= target then
 		-- walked to another one (or away): drop the hold
 		if hold.Id ~= 0 then
@@ -790,6 +1018,7 @@ function LootUI.Build(root: Frame, k: { [string]: any })
 	buildPopups(root)
 	buildPrompt(root)
 	buildMarker(root)
+	buildCaravan(root)
 	buildItemsModal(root)
 	kit.OnRelayout(LootUI.Layout)
 	Remotes.Get("Items").OnClientEvent:Connect(onItems)
@@ -806,6 +1035,8 @@ function LootUI.Build(root: Frame, k: { [string]: any })
 			LootUI.Release()
 		end
 	end)
+	player:GetAttributeChangedSignal("Synergies"):Connect(refreshSynergies)
+	refreshSynergies()
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
 		if not player:GetAttribute("InRun") then
 			items = {}

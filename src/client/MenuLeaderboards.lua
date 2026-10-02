@@ -1,7 +1,9 @@
 --[[
 	MenuLeaderboards.lua
 	The LEADERBOARDS screen: one compact panel, only as tall as its rows need.
-	  tabs      HIGH SCORE, BEST STAGE, DAILY, MOST KILLS
+	  tabs      HIGH SCORE, BEST STAGE, DAILY, MOST KILLS, TOP LEVEL (narrow panels: one-word
+	            titles, no icons). HIGH SCORE has a STANDARD / ENDLESS switch under its
+	            title: the boards "Score" and "ScoreEndless" (Config.Endless).
 	  title     the board's name between two gold rules, a subtitle and a short line on
 	            what the value means
 	  table     RANK / PLAYER / SCORE: a gold / silver / bronze medal for places 1-3 ("#n"
@@ -33,10 +35,13 @@ local C, P = Theme.Color, Theme.Palette
 local player = Players.LocalPlayer
 
 local BOARDS = {
-	{ Id = "Score", Title = "High score", Short = "SCORE", Icon = "trophy", Heading = "Global high scores", Sub = "Best run score across all servers", Explain = "Score reflects stages, bosses, kills, level and time.", Column = "Score" },
+	{ Id = "Score", Title = "High score", Short = "SCORE", Icon = "trophy", Heading = "Global high scores", Sub = "Best Standard run score across all servers", Explain = "Score reflects stages, bosses, kills, level and time.", Column = "Score" },
+	-- not a tab: the HIGH SCORE tab's ENDLESS side
+	{ Id = "ScoreEndless", Tab = "Score", Title = "High score", Short = "SCORE", Icon = "trophy", Heading = "Endless high scores", Sub = "Best Endless run score across all servers", Explain = "Same score as Standard; Endless runs go on until you fall.", Column = "Score" },
 	{ Id = "BestStage", Title = "Best stage", Short = "STAGE", Icon = "portal", Heading = "Best stage", Sub = "Furthest stage reached in one run", Explain = "All time, across all servers.", Column = "Stage" },
 	{ Id = "Daily", Title = "Daily", Short = "DAILY", Icon = "calendar", Heading = "Today's daily", Sub = "Today's scored Daily Challenge attempts (UTC)", Explain = "Ranked by stages cleared, then time. One scored attempt a day.", Column = "Result" },
 	{ Id = "Kills", Title = "Most kills", Short = "KILLS", Icon = "stat_Kills", Heading = "Most kills", Sub = "Most enemies defeated in one run", Explain = "All time, across all servers.", Column = "Kills" },
+	{ Id = "Level", Title = "Top level", Short = "LEVEL", Icon = "chevronsUp", Heading = "Highest level", Sub = "Highest level reached in one run", Explain = "Any mode, all time, across all servers.", Column = "Level" },
 }
 
 local ROW_H = 52
@@ -62,6 +67,8 @@ end
 function MenuLeaderboards.ValueText(board: string, value: number): string
 	if board == "BestStage" then
 		return "Stage " .. UIKit.formatNumber(value)
+	elseif board == "Level" then
+		return "Lv " .. UIKit.formatNumber(value)
 	elseif board == "Daily" then
 		return CurseData.ScoreText(value)
 	end
@@ -70,8 +77,10 @@ end
 
 -- A board value with its unit, for the YOUR BEST card ("143 POINTS", "STAGE 5").
 function MenuLeaderboards.BestText(board: string, value: number): string
-	if board == "Score" then
+	if board == "Score" or board == "ScoreEndless" then
 		return UIKit.formatNumber(value) .. " POINTS"
+	elseif board == "Level" then
+		return "LEVEL " .. UIKit.formatNumber(value)
 	elseif board == "Kills" then
 		return UIKit.formatNumber(value) .. " KILLS"
 	end
@@ -92,8 +101,11 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.padding(face, 16, 20, 16, 20)
 	local items = {}
 	for _, b in ipairs(BOARDS) do
-		table.insert(items, { Id = b.Id, Title = b.Title, Icon = b.Icon })
+		if not b.Tab then
+			table.insert(items, { Id = b.Id, Title = b.Title, Icon = b.Icon })
+		end
 	end
+	local scoreSide = "Score" -- the HIGH SCORE tab's side: "Score" | "ScoreEndless"
 	local function ask(id: string, force: boolean?)
 		if force or os.clock() - (asked[id] or -100) > 4 then
 			asked[id] = os.clock()
@@ -101,10 +113,18 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		end
 	end
 	ui.Tabs = UIKit.Tabs(face, items, function(id)
+		board = id == "Score" and scoreSide or id
+		MenuLeaderboards._fill(true)
+		ask(board)
+	end)
+	-- HIGH SCORE: STANDARD / ENDLESS
+	ui.Side = UIKit.Tabs(face, { { Id = "Score", Title = "Standard" }, { Id = "ScoreEndless", Title = "Endless", Icon = "cycle" } }, function(id)
+		scoreSide = id
 		board = id
 		MenuLeaderboards._fill(true)
 		ask(id)
 	end)
+	ui.Side.Frame.Name = "ScoreSide"
 	ui.Title = UIKit.TitleRule(face, "")
 	ui.Sub = text(face, "Body", "", { Name = "BoardSub", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text })
 	ui.Explain = text(face, "Small", "", { Name = "BoardCaption", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextFaint, TextWrapped = true })
@@ -264,6 +284,14 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		y += titleH
 		place(ui.Sub, 0, y, iw, TS(16) + 6)
 		y += TS(16) + 6
+		-- the STANDARD / ENDLESS switch on the HIGH SCORE tab
+		local scoreTab = boardOf(board).Id == "Score" or boardOf(board).Tab == "Score"
+		ui.Side.Frame.Visible = scoreTab
+		if scoreTab then
+			local sideW = math.min(iw, 300)
+			place(ui.Side.Frame, (iw - sideW) / 2, y + 6, sideW, 40)
+			y += 50
+		end
 		ui.Explain.Visible = not short
 		if not short then
 			local lines = narrow and 2 or 1
@@ -324,9 +352,9 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 			ui.YouValue.Size = UDim2.new(0.5, -56, 1, 0)
 			ui.YouValue.TextXAlignment = Enum.TextXAlignment.Right
 		end
-		-- narrow panels: tabs without icons and with one-word titles, so all four fit
+		-- narrow panels: tabs without icons and with one-word titles, so all five fit
 		for _, b in ipairs(BOARDS) do
-			local hit = ui.Tabs.Frame:FindFirstChild(string.upper(b.Title))
+			local hit = not b.Tab and ui.Tabs.Frame:FindFirstChild(string.upper(b.Title))
 			local icon = hit and hit:FindFirstChild("IconHolder", true)
 			local title = hit and hit:FindFirstChild("Title", true)
 			if icon and icon:IsA("GuiObject") then
@@ -367,7 +395,11 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 				for _, b in ipairs(BOARDS) do
 					if b.Id == arg then
 						board = arg
-						ui.Tabs.Select(arg)
+						ui.Tabs.Select(b.Tab or arg)
+						if b.Tab == "Score" or arg == "Score" then
+							scoreSide = arg
+							ui.Side.Select(arg)
+						end
 					end
 				end
 			end

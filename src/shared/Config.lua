@@ -962,6 +962,21 @@ Config.Modes = {
 	Daily = { DisplayName = "Daily", MaxPlayers = 1, Countdown = false },
 }
 
+-- Parties (server PartyService.lua, lobby PARTY screen MenuParty.lua). Friends on this
+-- server form a party; when the leader starts SOLO / DUO / TRIO (or the Daily) the
+-- members join that run at once, up to the mode's size. A party is never bigger than
+-- the largest lobby mode (and Config.Run.MaxPlayers). Friends on other servers: Roblox's
+-- invite prompt and a JOIN (teleport to the friend's server) that lands in their party.
+Config.Party = {
+	Enabled = true,
+	InviteSeconds = 30, -- an invite expires after this
+	ReinviteSeconds = 8, -- the same player can't be invited again sooner
+	MaxPendingInvites = 6, -- open invites one player may have sent
+	FriendsCacheSeconds = 30, -- the client asks Roblox for online friends at most this often
+	FollowCooldown = 6, -- seconds between JOIN (teleport) attempts per player
+	ActionRate = 4, -- "Party" remote calls per second per player
+}
+
 ------------------------------------------------------------------------------------------
 -- LEADERBOARDS (server LeaderboardService.lua, OrderedDataStores)
 --   High Score (Standard), High Score Endless, Best Stage (all time), Daily Challenge

@@ -16,6 +16,8 @@
 	return and never a win; the run ends by defeat or the pause menu's MAIN MENU
 	(AbandonRun). Its score goes to the "ScoreEndless" board instead of "Score"; the
 	"Level" board (highest level in one run) takes every mode.
+	Parties (PartyService): only a party's leader starts runs, and that start brings the
+	members in at once up to the mode's size (joinParty); others still JOIN the countdown.
 	SOLO skips the countdown. Modes live in Config.Modes; "Squad" (old 1-4 mode) is still
 	accepted from old clients. The lobby's ProximityPrompts are switched off: the 2D lobby
 	screen (UIBuilder / LobbyScreen) sends StartRun / StartNow / CycleArena instead.
@@ -1290,6 +1292,20 @@ local function tryJoin(player: Player)
 	end
 end
 
+-- The starter's party (PartyService) joins at once, up to the mode's size; a member
+-- left out (full run, SOLO, Daily) is told why. Others still use the countdown's JOIN.
+local function joinParty(player: Player)
+	local members = ctx.PartyService and ctx.PartyService.MembersOf(player) or {}
+	for _, member in ipairs(members) do
+		if phase == "Countdown" then
+			tryJoin(member)
+		end
+		if not joined[member] and phase ~= "Countdown" then
+			RunManager.Notify(member, player.DisplayName .. " started a " .. string.upper(modeDef().DisplayName) .. " run with no room for you.", Color3.fromRGB(255, 200, 120))
+		end
+	end
+end
+
 --[[
 	A lobby mode button. Solo starts at once; Duo / Trio (and the old Squad) count down
 	so others can join. During a countdown any mode button just joins it.
@@ -1306,6 +1322,10 @@ local function startRun(player: Player, newMode: string)
 	if phase ~= "Lobby" or not ctx.DataService.GetData(player) or not isMode(newMode) then
 		return
 	end
+	if ctx.PartyService and not ctx.PartyService.CanStart(player) then
+		RunManager.Notify(player, "Your party leader starts the runs (or leave the party).", Color3.fromRGB(255, 200, 120))
+		return
+	end
 	mode = newMode
 	state:SetAttribute("Mode", mode)
 	table.clear(joined)
@@ -1314,6 +1334,7 @@ local function startRun(player: Player, newMode: string)
 		joined[player] = true
 		table.insert(joinedOrder, player)
 		beginRun()
+		joinParty(player)
 		return
 	end
 	starter = player
@@ -1322,6 +1343,7 @@ local function startRun(player: Player, newMode: string)
 	state:SetAttribute("Countdown", countdown)
 	publishJoined()
 	tryJoin(player)
+	joinParty(player)
 	if (phase :: string) == "Countdown" then -- tryJoin may have started a full run
 		RunManager.Broadcast(player.DisplayName .. " is starting a " .. string.upper(modeDef().DisplayName) .. " run! Tap JOIN to play.", Color3.fromRGB(120, 255, 160))
 	end

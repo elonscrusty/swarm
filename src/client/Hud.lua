@@ -65,7 +65,7 @@ local C, P = Theme.Color, Theme.Palette
 
 export type Insets = { Top: number, Left: number, Right: number }
 
-local PLATE_HP, PLATE_XP = 24, 16 -- plate row heights (reference px)
+local PLATE_HP, PLATE_XP = 26, 16 -- plate row heights (reference px)
 
 local host: { [string]: any } = {}
 local ui: { [string]: any } = {}

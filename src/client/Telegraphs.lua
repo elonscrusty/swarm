@@ -17,15 +17,18 @@
 	    the server's cancel (boss death, travel, run end); a part's alpha is only rewritten
 	    when it changed, and spawn puffs thin out in a big swarm (perf-sim scene).
 
-	Kinds: circle (venom | acid | blast | burrow | pulse | hatch | nest | glimmer), lane,
+	Kinds: circle (venom | acid | blast | burrow | pulse | hatch | nest | glimmer | frost), lane,
 	spokes, glob (the Spitter's acid / the Hive Mother's eggs in flight), egg (the Queen's
 	summons crack open), emerge (soil cracks: a summon climbs out), patch (a Burning elite's
 	fire, the Hive Mother's acid pools), band (the Rhino Warlord's ground-pound rings, each
 	fills outward), wave (the Moth Matriarch's dust ring rolling out with one safe gap; the
 	gap lane is marked while it gathers), mine (her glimmer motes drifting down, blinking
 	faster), gust (her wind cone: a push, no damage, so ivory instead of crimson), aura (the
-	War Banner's rally zone), pop (impact bursts: acid, venom, burrow, dust, shield, egg,
-	pound, glimmer, gust, heal, slam, hatch, pulse).
+	War Banner's rally zone), bramble (the Briar Sentinel's thorn ring closing in with one
+	gap; the way out is marked while it gathers), pop (impact bursts: acid, venom, burrow,
+	dust, shield, egg, pound, glimmer, gust, heal, slam, hatch, pulse, thorn, ice, frost).
+	The Colossus's breath is a "gust" with style "frost" (crimson edges: it hurts); root
+	lines and ice lanes are lanes whose eruption pops run along them.
 	Sound cues for the new shapes play here (VFX plays the older ones).
 	EnemyRenderer also calls Telegraphs.Puff (spawn dust) and Telegraphs.Dust (burrow trail).
 ]]
@@ -78,6 +81,8 @@ local STYLES = {
 	hatch = { Zone = P.gold_800, Fill = P.amber_500, Edge = P.amber_300, Dash = 0.45 },
 	nest = { Zone = P.dirt_700, Fill = P.amber_500, Edge = P.amber_300, Dash = 0.5 },
 	pound = { Zone = P.crimson_700, Fill = P.crimson_400, Edge = P.crimson_300, Dash = 1 },
+	-- an ice shard about to land (Frostbound Colossus): crimson like every hit, an icy rim
+	frost = { Zone = P.crimson_700, Fill = P.crimson_400, Edge = P.ice_100, Dash = 0.7, Inner = true },
 }
 
 -- Sound for a new warning shape (the older shapes' cues are played by VFX).
@@ -437,6 +442,46 @@ POP.egg = function(x, z, _r)
 		anim("Block", P.ivory_200, SMOOTH, CFrame.new(from), CFrame.new(to) * CFrame.Angles(math.random() * 4, 0, math.random() * 4), Vector3.new(0.7, 0.12, 0.6), Vector3.new(0.5, 0.1, 0.4), 0, 1, 0.45, 1.5)
 	end
 	anim("Cylinder", P.crimson_300, SMOOTH, flatDisc(x, z, 0.1), nil, Vector3.new(0.04, 1, 1), Vector3.new(0.04, 4, 4), 0.4, 1, 0.3)
+end
+
+-- Thorns bursting out of the soil along a root line (Briar Sentinel).
+POP.thorn = function(x, z, r)
+	local d = r * 2
+	anim("Cylinder", P.dirt_600, SMOOTH, flatDisc(x, z, 0.12), nil, Vector3.new(0.04, d * 0.5, d * 0.5), Vector3.new(0.04, d * 1.1, d * 1.1), 0.3, 1, 0.5)
+	for i = 1, 4 do
+		local a = i * TAU / 4 + math.random() * 0.8
+		local rr = r * (0.15 + math.random() * 0.5)
+		local h = 2.4 + math.random() * 1.6
+		local tilt = CFrame.Angles(math.cos(a) * 0.35, a, math.sin(a) * 0.35)
+		local base = CFrame.new(x + math.cos(a) * rr, FLOOR_Y - h / 2, z + math.sin(a) * rr) * tilt
+		anim("Wedge", (i % 2 == 0) and P.crimson_800 or P.wood_700, SMOOTH, base, base + Vector3.new(0, h * 0.9, 0), Vector3.new(0.5, h, 0.8), nil, 0, 1, 0.65)
+	end
+end
+
+-- Ice spikes bursting out of a lane (Frostbound Colossus).
+POP.ice = function(x, z, r)
+	local d = r * 2
+	anim("Cylinder", P.ice_300, SMOOTH, flatDisc(x, z, 0.12), nil, Vector3.new(0.04, d * 0.5, d * 0.5), Vector3.new(0.04, d * 1.05, d * 1.05), 0.3, 1, 0.45)
+	for i = 1, 4 do
+		local a = i * TAU / 4 + math.random() * 0.8
+		local rr = r * (0.1 + math.random() * 0.5)
+		local h = 2.6 + math.random() * 1.8
+		local base = CFrame.new(x + math.cos(a) * rr, FLOOR_Y - h / 2, z + math.sin(a) * rr) * CFrame.Angles(math.cos(a) * 0.25, a, math.sin(a) * 0.25)
+		anim("Wedge", (i % 2 == 0) and P.ice_100 or P.ice_500, SMOOTH, base, base + Vector3.new(0, h * 0.9, 0), Vector3.new(0.7, h, 1.0), nil, 0, 1, 0.6)
+	end
+end
+
+-- An ice shard landing / the frost armour forming or shattering: pale shards fly out.
+POP.frost = function(x, z, r)
+	local d = r * 2
+	anim("Cylinder", P.ice_100, SMOOTH, flatDisc(x, z, 0.14), nil, Vector3.new(0.04, d * 0.4, d * 0.4), Vector3.new(0.04, d * 1.1, d * 1.1), 0.25, 1, 0.35)
+	anim("Cylinder", P.ice_500, SMOOTH, flatDisc(x, z, 0.12), nil, Vector3.new(0.04, d * 0.8, d * 0.8), Vector3.new(0.04, d * 1.15, d * 1.15), 0.35, 1, 0.4)
+	for i = 1, 7 do
+		local a = i * TAU / 7 + math.random() * 0.5
+		local from = Vector3.new(x, FLOOR_Y + 1.4, z)
+		local to = Vector3.new(x + math.cos(a) * r * 1.1, FLOOR_Y + 0.2, z + math.sin(a) * r * 1.1)
+		anim("Block", (i % 2 == 0) and P.ice_100 or P.ice_300, SMOOTH, CFrame.new(from), CFrame.new(to) * CFrame.Angles(math.random() * 4, math.random() * 4, 0), Vector3.new(0.5, 0.5, 1.1), Vector3.new(0.3, 0.3, 0.6), 0, 1, 0.5, 1.6)
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -1043,6 +1088,104 @@ Kind.wave = function(x: number, z: number, r0: number, delay: number, speed: num
 	return rec
 end
 
+--[[
+	Bramble ring (Briar Sentinel): while it gathers (delay) a thorny ring of radius r0
+	shows with one opening, and ivory lines + gold chevrons point the way out through the
+	gap; then the ring closes in (speed studs/s) down to minR, the gap kept open. The
+	ring is dark bramble with a crimson inner edge (the side that hits you first).
+]]
+Kind.bramble = function(x: number, z: number, r0: number, delay: number, speed: number, minR: number, width: number, gap: number, gapHalf: number)
+	local rec: any = { X = x, Z = z, R0 = r0, Delay = math.max(0, delay), Speed = math.max(1, speed), MinR = minR, W = math.max(0.5, width), Gap = gap, Half = gapHalf }
+	rec.Dur = rec.Delay + math.max(0, r0 - minR) / rec.Speed
+	local n = 64
+	rec.N = n
+	rec.Angles = {}
+	for i = 1, n do
+		local a = (i - 0.5) * TAU / n
+		if angleGap(a, gap) > gapHalf then
+			table.insert(rec.Angles, a)
+		end
+	end
+	local y = FLOOR_Y
+	-- the way out: two lines along the gap edges and chevrons pointing outward
+	rec.Lane = {}
+	local laneIn = math.max(minR, r0 - 14)
+	for _, side in ipairs({ -1, 1 }) do
+		local a = gap + side * gapHalf * 0.9
+		local dir = Vector3.new(math.cos(a), 0, math.sin(a))
+		local mid = Vector3.new(x, y + Y_MARK, z) + dir * ((laneIn + r0 + 3) / 2)
+		local p = take("Block", P.ivory_200, Vector3.new(0.3, 0.04, r0 + 3 - laneIn), 1)
+		p.CFrame = CFrame.lookAt(mid, mid + dir)
+		table.insert(rec.Lane, p)
+	end
+	local gdir = Vector3.new(math.cos(gap), 0, math.sin(gap))
+	for k = 0, 2 do
+		local at = Vector3.new(x, y + Y_MARK, z) + gdir * (r0 - 8 + k * 4.5)
+		for side = -1, 1, 2 do
+			local p = take("Block", P.gold_300, Vector3.new(0.3, 0.04, 2.2), 1)
+			p.CFrame = CFrame.lookAt(at, at + gdir) * CFrame.Angles(0, side * math.rad(38), 0) * CFrame.new(0, 0, 0.9)
+			table.insert(rec.Lane, p)
+		end
+	end
+	-- the closing ring: dark outline, bramble body, crimson inner edge, thorn ticks
+	rec.Dark, rec.Body, rec.Edge, rec.Ticks = {}, {}, {}, {}
+	for k = 1, #rec.Angles do
+		table.insert(rec.Dark, take("Block", C.Outline, Vector3.new(1, 0.04, 1), 1))
+		table.insert(rec.Body, take("Block", P.wood_700:Lerp(P.moss_700, 0.35), Vector3.new(1, 0.04, 1), 1))
+		table.insert(rec.Edge, take("Block", P.crimson_400, Vector3.new(1, 0.04, 0.4), 1))
+		if k % 2 == 0 then
+			table.insert(rec.Ticks, { Part = take("Wedge", P.crimson_800, Vector3.new(0.35, 1.1, 0.8), 1), A = rec.Angles[k] })
+		end
+	end
+	function rec.Update(t: number): boolean
+		if t >= rec.Dur + FADE_OUT then
+			return false
+		end
+		local vin = math.min(1, t / FADE_IN)
+		local gather = math.clamp(t / math.max(0.1, rec.Delay), 0, 1)
+		local after = math.clamp((t - rec.Delay) / 1.0, 0, 1)
+		setAlpha(rec.Lane, 1 - 0.85 * vin * (1 - after * 0.6))
+		local rr = math.max(rec.MinR, rec.R0 - math.max(0, t - rec.Delay) * rec.Speed)
+		local fade = vin * (1 - math.clamp((t - rec.Dur) / FADE_OUT, 0, 1))
+		local before = t < rec.Delay
+		-- while it gathers the ring pulses in place; then it closes
+		local pulse = before and (0.55 + 0.35 * math.sin(t * (6 + 12 * gather))) or 1
+		local len = 2 * (rr + rec.W / 2) * math.tan(math.pi / rec.N) * 1.05
+		for i, a in ipairs(rec.Angles) do
+			local dark = rec.Dark[i]
+			dark.Size = Vector3.new(math.max(0.05, len), 0.04, rec.W + 0.7)
+			dark.Transparency = 1 - 0.55 * fade
+			bulk(dark, segCF(rec.X, FLOOR_Y + Y_RIM, rec.Z, a, rr))
+			local body = rec.Body[i]
+			body.Size = Vector3.new(math.max(0.05, len), 0.04, rec.W)
+			body.Transparency = 1 - 0.75 * fade * pulse
+			bulk(body, segCF(rec.X, FLOOR_Y + Y_FILL, rec.Z, a, rr))
+			local edge = rec.Edge[i]
+			edge.Size = Vector3.new(math.max(0.05, len), 0.04, 0.45)
+			edge.Transparency = 1 - 0.9 * fade * pulse
+			bulk(edge, segCF(rec.X, FLOOR_Y + Y_EDGE, rec.Z, a, rr - rec.W / 2 + 0.25))
+		end
+		for _, tk in ipairs(rec.Ticks) do
+			local c, s = math.cos(tk.A), math.sin(tk.A)
+			tk.Part.Transparency = 1 - 0.9 * fade
+			-- a thorn standing up out of the ring, leaning inward
+			local at = Vector3.new(rec.X + c * rr, FLOOR_Y + 0.5, rec.Z + s * rr)
+			bulk(tk.Part, CFrame.lookAt(at, at - Vector3.new(c, 0, s)) * CFrame.Angles(-0.35, 0, 0))
+		end
+		return true
+	end
+	function rec.Release()
+		giveAll("Block", rec.Lane)
+		giveAll("Block", rec.Dark)
+		giveAll("Block", rec.Body)
+		giveAll("Block", rec.Edge)
+		for _, tk in ipairs(rec.Ticks) do
+			give("Wedge", tk.Part)
+		end
+	end
+	return rec
+end
+
 -- Glimmer mine: a pale mote drifts from the Matriarch to its spot, hovers and blinks
 -- (slow, then fast) over a dashed circle that fills until it pops.
 Kind.mine = function(x: number, z: number, radius: number, seconds: number, fromX: number?, fromZ: number?)
@@ -1078,7 +1221,13 @@ end
 
 -- Wing gust: an ivory wind cone (edges, end arc, streaks drifting outward); it pushes,
 -- it never hurts, so it stays out of the crimson family. yaw = math.atan2(z, x).
-Kind.gust = function(x: number, z: number, yaw: number, length: number, halfAngle: number, seconds: number, blow: number?)
+-- style "frost": the same cone for the Colossus's freezing breath, crimson-edged.
+Kind.gust = function(x: number, z: number, yaw: number, length: number, halfAngle: number, seconds: number, blow: number?, style: string?)
+	-- "frost" (the Colossus's freezing breath): it hurts, so crimson edges over an icy wash
+	local frost = style == "frost"
+	local lineC = frost and P.crimson_300 or P.ivory_200
+	local washC = frost and P.ice_300:Lerp(P.crimson_700, 0.35) or P.slate_300
+	local streakC = frost and P.ice_100 or P.ivory_100
 	local rec: any = { Dur = math.max(0.1, seconds) + (tonumber(blow) or 0.5), Wind = math.max(0.1, seconds), X = x, Z = z, Yaw = yaw, Len = length, Half = halfAngle }
 	local y = FLOOR_Y
 	local origin = Vector3.new(x, y + Y_EDGE, z)
@@ -1087,7 +1236,7 @@ Kind.gust = function(x: number, z: number, yaw: number, length: number, halfAngl
 		local a = yaw + side * halfAngle
 		local dir = Vector3.new(math.cos(a), 0, math.sin(a))
 		local mid = origin + dir * (length / 2 + 2)
-		local p = take("Block", P.ivory_200, Vector3.new(0.35, 0.04, length - 4), 1)
+		local p = take("Block", lineC, Vector3.new(0.35, 0.04, length - 4), 1)
 		p.CFrame = CFrame.lookAt(mid, mid + dir)
 		table.insert(rec.Lines, p)
 		local d = take("Block", C.Outline, Vector3.new(0.75, 0.04, length - 4), 1)
@@ -1098,7 +1247,7 @@ Kind.gust = function(x: number, z: number, yaw: number, length: number, halfAngl
 	for k = 1, arcN do
 		local a = yaw - halfAngle + (k - 0.5) * (2 * halfAngle / arcN)
 		local len = 2 * length * math.tan(halfAngle / arcN) * 0.8
-		local p = take("Block", P.ivory_200, Vector3.new(len, 0.04, 0.35), 1)
+		local p = take("Block", lineC, Vector3.new(len, 0.04, 0.35), 1)
 		p.CFrame = segCF(x, y + Y_EDGE, z, a, length)
 		table.insert(rec.Lines, p)
 	end
@@ -1109,14 +1258,14 @@ Kind.gust = function(x: number, z: number, yaw: number, length: number, halfAngl
 		local dir = Vector3.new(math.cos(a), 0, math.sin(a))
 		local mid = Vector3.new(x, y + Y_ZONE, z) + dir * (length / 2 + 1)
 		local wdt = 2 * (length / 2 + 1) * math.tan(halfAngle / 7) * 1.1
-		local p = take("Block", P.slate_300, Vector3.new(wdt, 0.04, length - 2), 1)
+		local p = take("Block", washC, Vector3.new(wdt, 0.04, length - 2), 1)
 		p.CFrame = CFrame.lookAt(mid, mid + dir)
 		table.insert(rec.Wash, p)
 	end
 	-- streaks that drift outward (faster once it blows)
 	rec.Streaks = {}
 	for k = 1, 9 do
-		local p = take("Block", P.ivory_100, Vector3.new(0.25, 0.04, 2.6), 1)
+		local p = take("Block", streakC, Vector3.new(0.25, 0.04, 2.6), 1)
 		table.insert(rec.Streaks, { Part = p, A = yaw + (math.random() * 2 - 1) * halfAngle * 0.85, Off = math.random() })
 	end
 	function rec.Update(t: number): boolean
@@ -1251,6 +1400,7 @@ local CUES: { [string]: string } = {
 	gust = "BossGust",
 	emerge = "BossEmerge",
 	aura = "BossBanner",
+	bramble = "BossWave",
 }
 
 ------------------------------------------------------------------------------------------

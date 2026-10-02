@@ -753,6 +753,30 @@ R.defineClass("PlayerGui", {
 		GetTopbarTransparency = function()
 			return 0
 		end,
+		-- visible GuiObjects whose rectangle holds the point (rotation ignored), topmost first
+		GetGuiObjectsAtPosition = function(pg, x, y)
+			local out = {}
+			for _, d in ipairs(pg:GetDescendants()) do
+				if d:IsA("GuiObject") and d.Visible then
+					local shown, up = true, d.Parent
+					while up and up ~= pg do
+						if (up:IsA("GuiObject") and not up.Visible) or (up:IsA("ScreenGui") and not up.Enabled) then
+							shown = false
+							break
+						end
+						up = up.Parent
+					end
+					local p, sz = d.AbsolutePosition, d.AbsoluteSize
+					if shown and x >= p.X and x <= p.X + sz.X and y >= p.Y and y <= p.Y + sz.Y then
+						table.insert(out, d)
+					end
+				end
+			end
+			table.sort(out, function(l, r)
+				return l.ZIndex > r.ZIndex
+			end)
+			return out
+		end,
 	},
 })
 

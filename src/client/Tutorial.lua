@@ -67,7 +67,7 @@ local TITLE_SIZE = Theme.Type.Title.Size
 local BODY_SIZE = Theme.Type.Body.Size
 local ICON = 48
 local ARROW = 22
-local SKIP_W, SKIP_H = 130, 38
+local SKIP_W, SKIP_H = 150, 38
 
 type Tip = { Id: string, Text: string, Title: string, Icon: string, Seconds: number }
 

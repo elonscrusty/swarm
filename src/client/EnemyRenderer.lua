@@ -30,7 +30,11 @@
 	the Moth Matriarch flies down from the sky, gathers (wings shaking), lifts and swoops,
 	lands grounded, rears for a gust; the Rhino Warlord rears and slams, sticks his horn in
 	an obstacle (stars), plants his banner (hidden on his back while it stands: body
-	attribute "BannerOut"); the Hive Mother heaves her egg sac and spews.
+	attribute "BannerOut"); the Hive Mother heaves her egg sac and spews; the Briar Sentinel
+	sinks her arms into the soil (root lines, bramble ring), stays rooted while they erupt
+	and leans back to fling thorns; the Frostbound Colossus raises both fists and slams,
+	stomps (ice lanes), inhales and breathes, calls the shard rain, and wears ice plates
+	while his frost armour is on (body attribute "FrostArmor").
 	Creatures: a tunnelling Burrower is only its soil ring with a dust trail (the "Mound"
 	piece; hidden once it is out), a Healer glows and swells while it channels, a Nest
 	throbs before mites climb out, a Brood Egg wobbles harder until it hatches. Beetles
@@ -86,6 +90,7 @@ type Slot = {
 	HPBar: BillboardGui?,
 	RallyRing: BasePart?,
 	BannerOut: boolean,
+	FrostArmor: boolean,
 }
 
 type PooledModel = { Pieces: { any }, Motion: string, Scale: number, Type: string, Elite: boolean }
@@ -119,6 +124,9 @@ local PLAIN: { [string]: Color3 } = {
 	MothBoss = Palette.moth_300,
 	RhinoBoss = Palette.slate_600,
 	HiveBoss = Palette.ivory_300,
+	BriarBoss = Palette.moss_600,
+	FrostBoss = Palette.slate_500,
+	ThornSprout = Palette.moss_500,
 	Burrower = Palette.sand_400,
 	Healer = Palette.ivory_200,
 	Nest = Palette.wood_500,
@@ -383,6 +391,7 @@ local function track(model: Instance)
 		HPBar = nil,
 		RallyRing = nil,
 		BannerOut = false,
+		FrostArmor = body:GetAttribute("FrostArmor") == true,
 	}
 	local slot = slots[id]
 	local function readAct()
@@ -403,6 +412,9 @@ local function track(model: Instance)
 	end
 	body:GetAttributeChangedSignal("BannerOut"):Connect(function()
 		slot.BannerOut = body:GetAttribute("BannerOut") == true
+	end)
+	body:GetAttributeChangedSignal("FrostArmor"):Connect(function()
+		slot.FrostArmor = body:GetAttribute("FrostArmor") == true
 	end)
 	body:GetAttributeChangedSignal("Act"):Connect(readAct)
 	body:GetAttributeChangedSignal("Affix"):Connect(readAffix)
@@ -586,6 +598,40 @@ local function actPose(typeId: string, act: string?, t: number, halfH: number, f
 			local u = math.clamp(t / 0.4, 0, 1)
 			return CFrame.new(0, -0.2 * u, -0.3 * u) * CFrame.Angles(-0.16 * u, 0, 0) * tremble(0.08 * u, t), 1, false
 		end
+	elseif typeId == "BriarBoss" then
+		if act == "Root" then
+			-- leans in and sinks her arms into the soil
+			local u = math.clamp(t / 0.5, 0, 1)
+			return CFrame.new(0, -0.8 * u, -0.4 * u) * CFrame.Angles(-0.22 * u, 0, 0) * tremble(0.08 * u, t), 1, false
+		elseif act == "Rooted" then
+			return CFrame.new(0, -0.8, -0.4) * CFrame.Angles(-0.22, 0, 0) * tremble(0.05, t), 1, false
+		elseif act == "Volley" then
+			local u = math.clamp(t / 0.5, 0, 1)
+			return CFrame.new(0, 0.3 * u, 0.6 * u) * CFrame.Angles(0.3 * u, 0, 0) * tremble(0.05 * u, t), 1, false
+		elseif act == "Fling" then
+			local k = math.max(0, 1 - t / 0.3)
+			return CFrame.new(0, 0, -0.5 * k) * CFrame.Angles(-0.2 * k, 0, 0), 1, false
+		end
+	elseif typeId == "FrostBoss" then
+		if act == "SlamWindup" then
+			local u = math.clamp(t / 0.6, 0, 1)
+			return CFrame.new(0, 1.2 * u, 0.9 * u) * CFrame.Angles(0.35 * u, 0, 0) * tremble(0.08 * u, t), 1, false
+		elseif act == "Slam" then
+			local k = math.max(0, 1 - t / 0.6)
+			return CFrame.new(0, -0.9 * k, -0.6 * k) * CFrame.Angles(-0.3 * k, 0, 0) * tremble(0.25 * k, t), 1, false
+		elseif act == "Stomp" then
+			local u = math.clamp(t / 0.5, 0, 1)
+			local k = math.max(0, 1 - math.abs(t - 0.7) / 0.3)
+			return CFrame.new(0, 0.6 * u - 0.8 * k, 0) * CFrame.Angles(0, 0, 0.12 * u) * tremble(0.2 * k, t), 1, false
+		elseif act == "Inhale" then
+			local u = math.clamp(t / 0.8, 0, 1)
+			return CFrame.new(0, 0.5 * u, 0.7 * u) * CFrame.Angles(0.28 * u, 0, 0), 1 + 0.05 * u, false
+		elseif act == "Breathe" then
+			return CFrame.new(0, -0.2, -0.5) * CFrame.Angles(-0.2, 0, 0) * tremble(0.06, t), 1, false
+		elseif act == "ShardCall" then
+			local u = math.clamp(t / 0.5, 0, 1)
+			return CFrame.new(0, 0.8 * u, 0.3 * u) * CFrame.Angles(0.18 * u, 0, 0) * tremble(0.05 * u, t), 1, false
+		end
 	elseif typeId == "Burrower" then
 		if act == "Tunnel" then
 			return CFrame.identity, 1, false -- only the soil ring shows (hiddenGroup)
@@ -659,15 +705,19 @@ local function actPose(typeId: string, act: string?, t: number, halfH: number, f
 end
 
 -- Pieces a pose hides: a tunnelling Burrower shows only its soil ring (and loses it once
--- it is out); the Warlord's banner leaves his back while it is planted.
+-- it is out); the Warlord's banner leaves his back while it is planted; the Colossus's
+-- ice plates show only while his frost armour is on.
 local MOUND = ModelLibrary.PieceGroups.Mound
 local BANNER = ModelLibrary.PieceGroups.Banner
+local FROST = ModelLibrary.PieceGroups.Frost
 local function pieceHidden(typeId: string, slot: Slot, name: string): boolean
 	if typeId == "Burrower" then
 		local under = slot.Act == "Tunnel" or slot.Act == "Surface"
 		return (MOUND[name] == true) ~= under
 	elseif typeId == "RhinoBoss" then
 		return slot.BannerOut and BANNER[name] == true
+	elseif typeId == "FrostBoss" then
+		return not slot.FrostArmor and FROST[name] == true
 	end
 	return false
 end
@@ -962,7 +1012,7 @@ local function step(dt: number)
 				if hidden then
 					bodyCF = CFrame.new(render.Position.X, -60, render.Position.Z) -- underground
 				end
-				local filtered = typeId == "Burrower" or typeId == "RhinoBoss"
+				local filtered = typeId == "Burrower" or typeId == "RhinoBoss" or typeId == "FrostBoss"
 				for _, piece in ipairs(slot.Pieces) do
 					n += 1
 					partsBuf[n] = piece.Part

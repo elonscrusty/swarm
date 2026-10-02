@@ -1,7 +1,8 @@
 --[[
 	BossAI.lua
 	Runs a boss encounter described in src/shared/BossData.lua: the Scorpion Queen, the
-	Moth Matriarch, the Rhino Warlord and the Hive Mother. Called every frame by EnemyAI
+	Moth Matriarch, the Rhino Warlord, the Hive Mother, the Briar Sentinel and the
+	Frostbound Colossus. Called every frame by EnemyAI
 	for the boss record (after think() picked its target); started by
 	EnemySpawner.SpawnBoss (Begin, with the stage's BossData entry) and ended by
 	EnemySpawner.Damage (StartCollapse).
@@ -19,10 +20,19 @@
 	  Matriarch    Gather (storm / mines), Lift + Swoop + Grounded (dive), GustWindup + Gust
 	  Warlord      Windup + Charge (+ Stuck in an obstacle), Rear + Pound, Plant
 	  Hive Mother  Heave (egg barrage), Spew (acid pools)
-	Body attribute "BannerOut" = the Warlord's banner is planted (hidden on his back).
+	  Briar        Root (root lines / bramble ring wind-up) + Rooted, Volley + Fling
+	  Colossus     SlamWindup + Slam, Stomp (ice lanes), Inhale + Breathe, ShardCall
+	Body attribute "BannerOut" = the Warlord's banner is planted (hidden on his back);
+	"FrostArmor" = the Colossus wears his phase-2 frost armour (e.Shield soaks the hits in
+	EnemySpawner.Damage; breaking it staggers him, it grows back after a while).
+	Line hazards (root lines, ice lanes) and closing rings (the bramble ring) are kept on
+	the boss record and stepped here; the freezing breath chills players (walk speed
+	lowered on top of RunManager.ApplyMovement, player attribute "Chilled"). Every hit
+	goes through RunManager.DamagePlayer (invulnerability, armor, shields, DEV god mode).
 	SwarmState attributes for the HUD: BossName, BossPhase, BossPhaseAt, BossIntro.
 	Every attack only hits through its telegraph (lanes, filling circles, spokes, ring
-	bands, a rolling wave with a gap, mines); targets are living players only, so deaths,
+	bands, a rolling wave with a gap, mines, lanes that erupt, a closing ring with a gap, a
+	breath cone); targets are living players only, so deaths,
 	revives and players leaving never leave a boss aiming at nobody.
 ]]
 
@@ -489,6 +499,348 @@ function Start.AcidPools(e)
 	setState(e, "SpewWindup", A.Windup)
 end
 
+-- Line hazards (the Briar Sentinel's root lines, the Colossus's ice lanes): a lane
+-- telegraph, then after `delay` the line hits once, either all at once (travel nil) or as
+-- an eruption running outward along it at `travel` studs/s. Stepped in BossAI.Step;
+-- removed with the boss's other hazards. Returns nothing (the lane id is in BossWarns).
+local function lineHazard(e, from: Vector3, dir: Vector3, len: number, width: number, delay: number, travel: number?, dmg: number, pop: string)
+	-- stop at the fence (a lane drawn through the wall would lie)
+	local c = Config.ArenaOrigin
+	local half = Config.Arenas.Size / 2 - 1
+	for d = 2, len, 2 do
+		local p = from + dir * d
+		if math.abs(p.X - c.X) > half or math.abs(p.Z - c.Z) > half then
+			len = math.max(4, d - 2)
+			break
+		end
+	end
+	addWarn(e, Fx.Telegraph(from + dir * (len / 2), math.atan2(-dir.X, -dir.Z), len, width, delay))
+	e.BossLines = e.BossLines or {}
+	table.insert(e.BossLines, {
+		From = Vector3.new(from.X, Config.ArenaOrigin.Y, from.Z),
+		Dir = dir,
+		Len = len,
+		Half = width / 2,
+		Delay = delay,
+		Travel = travel,
+		Damage = dmg,
+		Pop = pop,
+		NextPop = width / 2,
+		PopEvery = math.max(5, width * 1.6),
+		Hit = {},
+	})
+end
+
+local function stepLines(e, dt: number)
+	local list = e.BossLines
+	if not list or #list == 0 then
+		return
+	end
+	local players = living()
+	for i = #list, 1, -1 do
+		local L = list[i]
+		L.Delay -= dt
+		if L.Delay <= 0 then
+			local front = L.Travel and math.min(L.Len, -L.Delay * L.Travel) or L.Len
+			for _, rp in ipairs(players) do
+				if not L.Hit[rp] then
+					local rel = (rp.Root.Position - L.From) * FLAT
+					local t = rel:Dot(L.Dir)
+					if t >= -0.8 and t <= front + 0.6 and (rel - L.Dir * t).Magnitude <= L.Half + 0.6 then
+						L.Hit[rp] = true
+						ctx.RunManager.DamagePlayer(rp, L.Damage)
+					end
+				end
+			end
+			while L.NextPop <= front do
+				local p = L.From + L.Dir * L.NextPop
+				Fx.Warn("pop", p.X, p.Z, L.Half + 0.6, L.Pop)
+				L.NextPop += L.PopEvery
+			end
+			if front >= L.Len then
+				table.remove(list, i)
+			end
+		end
+	end
+end
+
+-- Closing rings (the Briar Sentinel's bramble ring): a ring of radius StartRadius around
+-- Pos closes in at Speed after Delay; it hits a player once where it touches them unless
+-- they stand in its gap. Drawn by the client from the same numbers ("bramble").
+local function closingRing(e, delay: number, gap: number)
+	local A = e.BossData.Attacks.BrambleRing
+	local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+	local minR = e.Radius + 1.5
+	local gapHalf = math.rad(A.GapHalf)
+	local g = math.floor(gap * 1000 + 0.5) / 1000
+	addWarn(e, Fx.Warn("bramble", at.X, at.Z, A.StartRadius, delay, A.Speed, minR, A.Width, g, math.floor(gapHalf * 1000 + 0.5) / 1000))
+	e.BossRings = e.BossRings or {}
+	table.insert(e.BossRings, { Pos = at, R = A.StartRadius, MinR = minR, Speed = A.Speed, Half = A.Width / 2, Gap = g, GapHalf = gapHalf, Delay = delay, Damage = damage(A.Damage), Hit = {} })
+end
+
+local function stepRings(e, dt: number)
+	local list = e.BossRings
+	if not list or #list == 0 then
+		return
+	end
+	local players = living()
+	for i = #list, 1, -1 do
+		local R = list[i]
+		if R.Delay > 0 then
+			R.Delay -= dt
+		else
+			R.R -= R.Speed * dt
+			if R.R < R.MinR then
+				table.remove(list, i)
+			else
+				for _, rp in ipairs(players) do
+					if not R.Hit[rp] then
+						local dx, dz = rp.Root.Position.X - R.Pos.X, rp.Root.Position.Z - R.Pos.Z
+						local d = math.sqrt(dx * dx + dz * dz)
+						if math.abs(d - R.R) <= R.Half + 0.6 then
+							local off = (math.atan2(dz, dx) - R.Gap) % TAU
+							if math.min(off, TAU - off) > R.GapHalf then
+								R.Hit[rp] = true
+								ctx.RunManager.DamagePlayer(rp, R.Damage)
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+-- Chill (the Colossus's freezing breath): walk speed x mult until the time runs out.
+-- RunManager.ApplyMovement sets the normal speed; this only lowers it on top, and gives
+-- it back through ApplyMovement when the chill ends (or the boss is gone).
+local chilled: { [any]: { Until: number, Mult: number } } = {}
+
+local function chill(rp, mult: number, seconds: number)
+	local c = chilled[rp]
+	if c then
+		c.Until = math.max(c.Until, clock + seconds)
+		c.Mult = math.min(c.Mult, mult)
+	else
+		chilled[rp] = { Until = clock + seconds, Mult = mult }
+		rp.Player:SetAttribute("Chilled", true)
+	end
+end
+
+local function unchill(rp)
+	chilled[rp] = nil
+	if rp.Player and rp.Player.Parent then
+		rp.Player:SetAttribute("Chilled", nil)
+	end
+	if valid(rp) then
+		ctx.RunManager.ApplyMovement(rp)
+	end
+end
+
+local function stepChill()
+	for rp, c in pairs(chilled) do
+		if clock >= c.Until or not valid(rp) then
+			unchill(rp)
+		else
+			local hum = rp.Humanoid
+			if hum and hum.Parent and hum.WalkSpeed > 0 and rp.Stats then
+				local want = rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * c.Mult
+				if hum.WalkSpeed > want + 0.05 then
+					hum.WalkSpeed = want
+				end
+			end
+		end
+	end
+end
+
+local function clearChill()
+	for rp in pairs(chilled) do
+		unchill(rp)
+	end
+end
+
+-- Briar Sentinel: root lanes toward the players (+ spread ones); thorns erupt along them.
+local function rootSet(e, windup: number)
+	local A = e.BossData.Attacks.RootLines
+	local n = BossData.ForParty(A.Lines, A.PerExtraPlayer, A.MaxLines, partySize())
+	local angles: { number } = {}
+	local function free(a: number): boolean
+		for _, b in ipairs(angles) do
+			local d = (a - b) % TAU
+			if math.min(d, TAU - d) < math.rad(28) then
+				return false
+			end
+		end
+		return true
+	end
+	for _, rp in ipairs(living()) do
+		local to = (rp.Root.Position - e.Pos) * FLAT
+		if #angles < n and to.Magnitude > 0.5 then
+			local a = math.atan2(to.Z, to.X)
+			if free(a) then
+				table.insert(angles, a)
+			end
+		end
+	end
+	local base = #angles > 0 and angles[1] or rng:NextNumber(0, TAU)
+	for k = 1, 40 do
+		if #angles >= n then
+			break
+		end
+		-- the rest fan out around the first lane, never closer than 28 degrees
+		local a = base + (k % 2 == 0 and 1 or -1) * math.rad(35 + rng:NextNumber(0, 110))
+		if free(a) then
+			table.insert(angles, a)
+		end
+	end
+	local dmg = damage(A.Damage)
+	for _, a in ipairs(angles) do
+		local dir = Vector3.new(math.cos(a), 0, math.sin(a))
+		lineHazard(e, e.Pos + dir * (e.Radius * 0.5), dir, A.Length, A.Width, windup, A.Travel, dmg, "thorn")
+	end
+	Fx.Sound("BossEmerge")
+end
+
+function Start.RootLines(e)
+	local A = e.BossData.Attacks.RootLines
+	e.SecondRoots = false
+	rootSet(e, A.Windup)
+	e.SpeedOverride = 0
+	setAct(e, "Root")
+	setState(e, "RootWindup", A.Windup)
+end
+
+-- Briar Sentinel: a fan of thorns at the nearest player, the same spokes each volley.
+function Start.ThornVolley(e)
+	local A = e.BossData.Attacks.ThornVolley
+	local dir = aimDir(e)
+	local mid = math.atan2(dir.Z, dir.X)
+	local spread = math.rad(A.Spread)
+	local angles = {}
+	for i = 0, A.Count - 1 do
+		local a = mid - spread / 2 + spread * i / math.max(1, A.Count - 1)
+		table.insert(angles, math.floor(a * 1000 + 0.5) / 1000)
+	end
+	e.VolleyAngles = angles
+	e.VolleyLeft = A.Volleys
+	e.Dir = dir
+	e.SpeedOverride = 0
+	setAct(e, "Volley")
+	local shown = A.Windup + (A.Volleys - 1) * A.VolleyGap + 0.35
+	addWarn(e, Fx.Warn("spokes", e.Pos.X, e.Pos.Z, e.Radius + 0.5, 22, shown, angles))
+	setState(e, "Volley", A.Windup)
+end
+
+-- Briar Sentinel: the bramble ring closes in on her (one gap; two rings in phase 2).
+function Start.BrambleRing(e)
+	local A = e.BossData.Attacks.BrambleRing
+	e.RingLeft = (twist(e) == "Overgrowth" and A.TwistRings or A.Rings) - 1
+	e.RingGap = rng:NextNumber(0, TAU)
+	e.RingTurn = rng:NextNumber() < 0.5 and -1 or 1
+	closingRing(e, A.Windup, e.RingGap)
+	e.SpeedOverride = 0
+	setAct(e, "Root")
+	setState(e, "Bramble", A.Windup)
+end
+
+function Start.Sproutling(e)
+	Start.Summon(e, "Sproutling")
+end
+
+-- Colossus: slow shockwave rings roll out of his slam, each with a turning gap.
+function Start.GroundSlam(e)
+	local A = e.BossData.Attacks.GroundSlam
+	e.StormLeft = A.Waves - 1
+	e.StormGap = rng:NextNumber(0, TAU)
+	e.StormTurn = rng:NextNumber() < 0.5 and -1 or 1
+	stormWave(e, A.Windup, e.StormGap, A)
+	e.SpeedOverride = 0
+	setAct(e, "SlamWindup")
+	setState(e, "Slam", A.Windup)
+end
+
+-- Colossus: parallel ice lanes along his aim, one through the nearest player.
+function Start.IceLanes(e)
+	local A = e.BossData.Attacks.IceLanes
+	local dir = aimDir(e)
+	local right = Vector3.new(-dir.Z, 0, dir.X)
+	local target = nearest(e.Pos)
+	local s = target and ((target.Root.Position - e.Pos) * FLAT):Dot(right) or 0
+	local j = rng:NextInteger(1, A.Lanes) -- which lane runs through the target
+	local dmg = damage(A.Damage)
+	for k = 1, A.Lanes do
+		local off = s + (k - j) * A.Spacing
+		local from = e.Pos + right * off - dir * 4
+		lineHazard(e, from, dir, A.Length, A.Width, A.Windup, nil, dmg, "ice")
+	end
+	e.Dir = dir
+	e.SpeedOverride = 0
+	setAct(e, "Stomp")
+	Fx.Sound("BossPound")
+	setState(e, "LaneWindup", A.Windup)
+end
+
+-- Colossus: a freezing cone toward the nearest player (hurts a little, slows).
+function Start.FrostBreath(e)
+	local A = e.BossData.Attacks.FrostBreath
+	local dir = aimDir(e)
+	e.BreathDir = dir
+	e.BreathHit = {}
+	e.Dir = dir
+	e.SpeedOverride = 0
+	setAct(e, "Inhale")
+	addWarn(e, Fx.Warn("gust", e.Pos.X, e.Pos.Z, math.floor(math.atan2(dir.Z, dir.X) * 1000 + 0.5) / 1000, A.Length, math.floor(math.rad(A.HalfAngle) * 1000 + 0.5) / 1000, A.Windup, A.Breath, "frost"))
+	setState(e, "BreathWindup", A.Windup)
+end
+
+-- Colossus: ice shards fall on circles around the players, one after another.
+function Start.ShardRain(e)
+	local A = e.BossData.Attacks.ShardRain
+	e.SpeedOverride = 0
+	setAct(e, "ShardCall")
+	setState(e, "ShardWindup", A.Windup)
+end
+
+-- Frost armour (the Colossus in phase 2): EnemySpawner.Damage lets e.Shield soak hits;
+-- the body attribute "FrostArmor" shows the ice plates on the client.
+local function growArmor(e)
+	local F = e.BossData.FrostArmor
+	if not F or e.Dying then
+		return
+	end
+	e.Shield = e.MaxHP * F.Share
+	e.FrostArmorOn = true
+	e.ArmorRegrowAt = nil
+	e.Part:SetAttribute("FrostArmor", true)
+	Fx.Warn("pop", e.Pos.X, e.Pos.Z, e.Radius * 1.4, "frost")
+end
+
+local function stepArmor(e)
+	local F = e.BossData.FrostArmor
+	if not F or e.Dying then
+		return
+	end
+	if e.FrostArmorOn then
+		if e.Shield <= 0 then
+			-- broken: he staggers (a free punish window); it grows back later
+			e.FrostArmorOn = false
+			e.ArmorRegrowAt = clock + F.Regrow
+			e.Part:SetAttribute("FrostArmor", nil)
+			Fx.Warn("pop", e.Pos.X, e.Pos.Z, e.Radius * 1.8, "frost")
+			Fx.Ring(e.Pos, 16, Color3.fromRGB(190, 225, 255))
+			Fx.Sound("BossRoar")
+			ctx.RunManager.Broadcast("FROST ARMOUR SHATTERED!", Color3.fromRGB(190, 225, 255))
+			if e.BossState ~= "Entrance" and e.BossState ~= "Roar" then
+				e.SlamHit = nil
+				stunned(e, F.Stun)
+			end
+		end
+	elseif e.ArmorRegrowAt and clock >= e.ArmorRegrowAt and e.BossState == "Chase" and twist(e) == "FrostArmor" then
+		growArmor(e)
+		ctx.RunManager.Broadcast("THE FROST ARMOUR GROWS BACK!", Color3.fromRGB(190, 225, 255))
+	end
+end
+
 ------------------------------------------------------------------------------------------
 -- Active moments
 ------------------------------------------------------------------------------------------
@@ -659,6 +1011,9 @@ State.Chase = function(e, _dt)
 		end
 		Fx.Sound("BossRoar")
 		Fx.Ring(e.Pos, 26, Color3.fromRGB(255, 60, 70))
+		if p.Twist == "FrostArmor" then
+			growArmor(e)
+		end
 		e.SpeedOverride = 0
 		setAct(e, "Roar")
 		setState(e, "Roar", p.Roar or 1)
@@ -957,6 +1312,154 @@ State.SpewWindup = function(e, _dt)
 	end
 end
 
+-- Briar Sentinel -------------------------------------------------------------------------
+
+State.RootWindup = function(e, _dt)
+	local A = e.BossData.Attacks.RootLines
+	e.SpeedOverride = 0
+	if e.BossTimer > 0 then
+		return
+	end
+	if twist(e) == "Overgrowth" and not e.SecondRoots and #living() > 0 then
+		-- phase 2: the second set shows as the first one erupts
+		e.SecondRoots = true
+		rootSet(e, A.SecondWindup)
+		setState(e, "RootWindup", A.SecondWindup)
+		return
+	end
+	setAct(e, "Rooted")
+	setState(e, "Rooted", A.Length / A.Travel)
+end
+
+State.Rooted = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		setAct(e, nil)
+		recover(e, paced(e, e.BossData.Attacks.RootLines.Recover))
+	end
+end
+
+State.Volley = function(e, _dt)
+	local A = e.BossData.Attacks.ThornVolley
+	e.SpeedOverride = 0
+	if e.BossTimer > 0 then
+		return
+	end
+	setAct(e, "Fling")
+	for _, a in ipairs(e.VolleyAngles or {}) do
+		local dir = Vector3.new(math.cos(a), 0, math.sin(a))
+		ctx.WeaponSystem.SpawnHostile(e.Pos + dir * e.Radius, dir, A.Speed, damage(A.Damage), A.ProjectileRadius, A.Life, STINGER_VISUAL)
+	end
+	e.VolleyLeft = (e.VolleyLeft or 1) - 1
+	if e.VolleyLeft > 0 then
+		e.BossTimer = A.VolleyGap
+	else
+		setAct(e, nil)
+		recover(e, paced(e, A.Recover))
+	end
+end
+
+State.Bramble = function(e, _dt)
+	local A = e.BossData.Attacks.BrambleRing
+	e.SpeedOverride = 0
+	if e.BossTimer > 0 then
+		return
+	end
+	if (e.RingLeft or 0) > 0 then
+		-- the next ring: its gap turns, and it shows at once
+		e.RingLeft -= 1
+		e.RingGap += math.rad(A.TurnGap) * (e.RingTurn or 1)
+		closingRing(e, A.RingGap, e.RingGap)
+		e.BossTimer = A.RingGap
+		return
+	end
+	-- she stays rooted while the last ring closes (a free window for the brave)
+	setAct(e, "Rooted")
+	setState(e, "Rooted", (A.StartRadius - e.Radius - 1.5) / A.Speed)
+end
+
+-- Frostbound Colossus ---------------------------------------------------------------------
+
+State.Slam = function(e, _dt)
+	local A = e.BossData.Attacks.GroundSlam
+	e.SpeedOverride = 0
+	if e.BossTimer > 0 then
+		return
+	end
+	if not e.SlamHit then
+		e.SlamHit = true
+		setAct(e, "Slam")
+		Fx.Warn("pop", e.Pos.X, e.Pos.Z, e.Radius * 1.6, "frost")
+		Fx.Sound("BossPound")
+	end
+	if (e.StormLeft or 0) > 0 then
+		e.StormLeft -= 1
+		e.StormGap += math.rad(A.TurnGap) * (e.StormTurn or 1)
+		stormWave(e, A.WaveGap, e.StormGap, A)
+		e.BossTimer = A.WaveGap
+		return
+	end
+	e.SlamHit = nil
+	setAct(e, nil)
+	recover(e, paced(e, A.Recover))
+end
+
+State.LaneWindup = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		setAct(e, nil)
+		recover(e, paced(e, e.BossData.Attacks.IceLanes.Recover))
+	end
+end
+
+State.BreathWindup = function(e, _dt)
+	local A = e.BossData.Attacks.FrostBreath
+	e.SpeedOverride = 0
+	e.Dir = e.BreathDir or e.Dir
+	if e.BossTimer <= 0 then
+		setAct(e, "Breathe")
+		Fx.Sound("BossGust")
+		setState(e, "Breathing", A.Breath)
+	end
+end
+
+State.Breathing = function(e, _dt)
+	local A = e.BossData.Attacks.FrostBreath
+	e.SpeedOverride = 0
+	local dir = e.BreathDir or Vector3.new(0, 0, 1)
+	e.Dir = dir
+	local cosHalf = math.cos(math.rad(A.HalfAngle))
+	local hit = e.BreathHit or {}
+	for _, rp in ipairs(living()) do
+		local to = (rp.Root.Position - e.Pos) * FLAT
+		local d = to.Magnitude
+		if d > 0.5 and d <= A.Length + 0.8 and to.Unit:Dot(dir) >= cosHalf and clock >= (hit[rp] or 0) then
+			hit[rp] = clock + A.Tick
+			ctx.RunManager.DamagePlayer(rp, damage(A.Damage))
+			chill(rp, A.Chill, A.ChillTime)
+		end
+	end
+	if e.BossTimer <= 0 then
+		e.BreathHit = nil
+		setAct(e, nil)
+		recover(e, paced(e, A.Recover))
+	end
+end
+
+State.ShardWindup = function(e, _dt)
+	local A = e.BossData.Attacks.ShardRain
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		local n = BossData.ForParty(A.Count, A.PerExtraPlayer, A.MaxCount, partySize())
+		for i, p in ipairs(spotsNearPlayers(n, 0, 2, 5, 13, A.Radius * 1.7)) do
+			Hazards.Strike(p, A.Radius, A.Fall + (i - 1) * A.Stagger, damage(A.Damage), { Group = GROUP, Style = "frost" })
+		end
+		Fx.Sound("BossMine")
+		setAct(e, nil)
+		recover(e, paced(e, A.Recover))
+	end
+end
+
 ------------------------------------------------------------------------------------------
 -- Public
 ------------------------------------------------------------------------------------------
@@ -972,6 +1475,12 @@ function BossAI.Begin(e, data: any?)
 	e.BossObjects = nil
 	e.SecondCharge = false
 	e.SecondPound = false
+	e.SecondRoots = false
+	e.SlamHit = nil
+	e.BossLines = nil
+	e.BossRings = nil
+	e.FrostArmorOn = false
+	e.ArmorRegrowAt = nil
 	e.HitSum = 0
 	e.HitAt = clock
 	e.PulseReady = clock + 4
@@ -1005,9 +1514,20 @@ function BossAI.ClearHazards(e)
 		table.clear(e.BossWarns)
 	end
 	clearObjects(e)
+	if e then
+		e.BossLines = nil
+		e.BossRings = nil
+		if e.FrostArmorOn then
+			e.FrostArmorOn = false
+			e.Shield = 0
+		end
+		e.ArmorRegrowAt = nil
+	end
 	if e and e.Part then
 		e.Part:SetAttribute("BannerOut", nil)
+		e.Part:SetAttribute("FrostArmor", nil)
 	end
+	clearChill()
 	ctx.WeaponSystem.ClearHostile()
 end
 
@@ -1063,6 +1583,13 @@ function BossAI.Step(e, dt: number)
 			e.PendingPhase = want
 		end
 	end
+	-- line / closing-ring hazards, the breath's chill, the Colossus's frost armour
+	if not e.Dying then
+		stepLines(e, dt)
+		stepRings(e, dt)
+		stepArmor(e)
+	end
+	stepChill()
 	-- the Warlord's banner fell: it is back on his back
 	if e.Part:GetAttribute("BannerOut") and liveObjects(e, "WarBanner") == 0 then
 		e.Part:SetAttribute("BannerOut", nil)

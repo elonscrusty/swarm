@@ -7,12 +7,17 @@
 --                  | dive | mines | summon | gust (phase 2) | grounded | collapse
 --   RhinoWarlord   entrance | charge | stuck | pound | banner | summon | collapse
 --   HiveMother     entrance | eggs | pools | trails (phase 2) | brood | pulse | collapse
+--   BriarSentinel  entrance | roots | erupt (thorns running along the lanes) | volley |
+--                  bramble (gathering: the way out) | closing | summon | collapse
+--   FrostboundColossus  entrance | slam | wave | lanes | spikes | breath | shards |
+--                  armor (phase 2, frost armour on) | stunned (armour shattered) | collapse
 -- --set t=<seconds> changes how long after the warnings the picture is taken.
 local A = lib("arena")
 local C = lib("common")
 local E = lib("encounter")
 local bossId = preview.args.boss or "ScorpionQueen"
-local moment = preview.args.moment or (bossId == "ScorpionQueen" and "charge" or bossId == "MothMatriarch" and "storm" or bossId == "RhinoWarlord" and "pound" or "eggs")
+local DEFAULT_MOMENT = { ScorpionQueen = "charge", MothMatriarch = "storm", RhinoWarlord = "pound", HiveMother = "eggs", BriarSentinel = "roots", FrostboundColossus = "lanes" }
+local moment = preview.args.moment or DEFAULT_MOMENT[bossId] or "entrance"
 local s = A.build({ swarm = false })
 local c = s.centre
 local hero = Vector3.new(c.X, c.Y, c.Z)
@@ -22,12 +27,12 @@ local function at(dx, dz)
 end
 local BossData = C.shared("BossData")
 local data = BossData and BossData.Get(bossId)
-local typeOf = { ScorpionQueen = "Boss", MothMatriarch = "MothBoss", RhinoWarlord = "RhinoBoss", HiveMother = "HiveBoss" }
+local typeOf = { ScorpionQueen = "Boss", MothMatriarch = "MothBoss", RhinoWarlord = "RhinoBoss", HiveMother = "HiveBoss", BriarSentinel = "BriarBoss", FrostboundColossus = "FrostBoss" }
 local bossType = typeOf[bossId] or "Boss"
-local radius = ({ Boss = 6, MothBoss = 5, RhinoBoss = 6, HiveBoss = 5.5 })[bossType]
-local phase2 = moment == "stunned" or moment == "gust" or moment == "trails" or moment == "collapse"
+local radius = ({ Boss = 6, MothBoss = 5, RhinoBoss = 6, HiveBoss = 5.5, BriarBoss = 5.5, FrostBoss = 6 })[bossType]
+local phase2 = moment == "stunned" or moment == "gust" or moment == "trails" or moment == "collapse" or moment == "closing" or moment == "armor"
 local hpShare = moment == "collapse" and 0 or (phase2 and 0.42 or 0.78)
-C.setState({ BossMaxHP = 2700, BossHP = math.floor(2700 * hpShare), BossName = data and data.DisplayName or "Scorpion Queen", BossIntro = moment == "entrance" and 2.5 or 0.05, BossPhaseAt = hpShare < 0.5 and 0 or 0.5, BossPhase = hpShare < 0.5 and 2 or 1, StagePhase = "Boss", Stage = bossId == "ScorpionQueen" and 1 or 3 })
+C.setState({ BossMaxHP = 2700, BossHP = math.floor(2700 * hpShare), BossName = data and data.DisplayName or "Scorpion Queen", BossId = bossId, BossIntro = moment == "entrance" and 2.5 or 0.05, BossPhaseAt = hpShare < 0.5 and 0 or 0.5, BossPhase = hpShare < 0.5 and 2 or 1, StagePhase = "Boss", Stage = bossId == "ScorpionQueen" and 1 or 3 })
 for i, off in ipairs({ { -30, 8 }, { 26, 12 }, { -22, -18 }, { 34, -4 } }) do
 	E.enemy(s, i % 2 == 0 and "Skeleton" or "Slime", at(off[1], off[2]), hero)
 end
@@ -37,8 +42,13 @@ local acts = {
 	MothMatriarch = { entrance = "Emerge", storm = "Gather", dive = "Lift", mines = "Gather", summon = "Summon", gust = "GustWindup", grounded = "Grounded", collapse = "Collapse" },
 	RhinoWarlord = { entrance = "Emerge", charge = "Windup", stuck = "Stuck", pound = "Pound", summon = "Summon", collapse = "Collapse" },
 	HiveMother = { entrance = "Emerge", eggs = "Heave", pools = "Spew", trails = "Spew", brood = "Summon", collapse = "Collapse" },
+	BriarSentinel = { entrance = "Emerge", roots = "Root", erupt = "Rooted", volley = "Volley", bramble = "Root", closing = "Rooted", summon = "Summon", collapse = "Collapse" },
+	FrostboundColossus = { entrance = "Emerge", slam = "SlamWindup", wave = "Slam", lanes = "Stomp", spikes = "Stomp", breath = "Inhale", shards = "ShardCall", stunned = "Stunned", collapse = "Collapse" },
 }
 local bossBody = E.enemy(s, bossType, bossAt, hero, { Act = (acts[bossId] or {})[moment] })
+if bossBody and bossId == "FrostboundColossus" and moment == "armor" then
+	bossBody:SetAttribute("FrostArmor", true)
+end
 preview.advance(0.1)
 local warns = {}
 local wait = 0.5
@@ -218,6 +228,131 @@ elseif bossId == "HiveMother" then
 		wait = 0.5
 	elseif moment == "collapse" then
 		warns = { { "pop", bossAt.X, bossAt.Z, 12, "dust" } }
+		wait = 0.8
+	end
+elseif bossId == "BriarSentinel" then
+	local A2 = data.Attacks
+	local d = (hero - bossAt).Unit
+	local function rootLanes(seconds)
+		local R = A2.RootLines
+		local out = {}
+		local base = math.atan2(d.Z, d.X)
+		for _, off in ipairs({ 0, 0.75, -0.8 }) do
+			local a = base + off
+			local dir = Vector3.new(math.cos(a), 0, math.sin(a))
+			local from = bossAt + dir * (radius * 0.5)
+			local mid = from + dir * (R.Length / 2)
+			table.insert(out, { "lane", mid.X, mid.Z, math.atan2(-dir.X, -dir.Z), R.Length, R.Width, seconds })
+		end
+		return out
+	end
+	if moment == "entrance" then
+		warns = { { "pop", bossAt.X, bossAt.Z, 18, "dust" }, { "circle", bossAt.X, bossAt.Z, radius + 2, 2.5, "burrow" } }
+		wait = 1.3
+	elseif moment == "roots" then
+		warns = rootLanes(A2.RootLines.Windup)
+		wait = 0.7
+	elseif moment == "erupt" then
+		-- the lanes have filled; thorns burst along them, running away from her
+		warns = rootLanes(0.25)
+		local base = math.atan2(d.Z, d.X)
+		for _, off in ipairs({ 0, 0.75, -0.8 }) do
+			local dir = Vector3.new(math.cos(base + off), 0, math.sin(base + off))
+			for k = 0, 4 do
+				local p = bossAt + dir * (radius * 0.5 + 2.2 + k * 7)
+				table.insert(warns, { "pop", p.X, p.Z, 2.8, "thorn" })
+			end
+		end
+		wait = 0.3
+	elseif moment == "volley" then
+		local V = A2.ThornVolley
+		local mid = math.atan2(d.Z, d.X)
+		local angles = {}
+		for i = 0, V.Count - 1 do
+			table.insert(angles, mid - math.rad(V.Spread) / 2 + math.rad(V.Spread) * i / (V.Count - 1))
+		end
+		warns = { { "spokes", bossAt.X, bossAt.Z, radius + 0.5, 22, 1.8, angles } }
+		wait = 0.6
+	elseif moment == "bramble" or moment == "closing" then
+		local B = A2.BrambleRing
+		-- the gap opens toward the hero's lower side, so the way out is on screen
+		local gap = math.atan2(hero.Z - 6 - bossAt.Z, hero.X - bossAt.X)
+		warns = { { "bramble", bossAt.X, bossAt.Z, B.StartRadius, B.Windup, B.Speed, radius + 1.5, B.Width, gap, math.rad(B.GapHalf) } }
+		wait = moment == "closing" and (B.Windup + 1.1) or 0.7
+	elseif moment == "summon" then
+		for i = 1, 4 do
+			local a = i * math.pi * 2 / 4 + 0.3
+			table.insert(warns, { "emerge", bossAt.X + math.cos(a) * 13, bossAt.Z + math.sin(a) * 13, 1.1 })
+		end
+		for _, off in ipairs({ { -14, 6 }, { -8, -10 } }) do
+			E.enemy(s, "ThornSprout", at(off[1], off[2]), hero)
+		end
+		wait = 0.7
+	elseif moment == "collapse" then
+		warns = { { "pop", bossAt.X, bossAt.Z, 12, "dust" } }
+		wait = 0.8
+	end
+elseif bossId == "FrostboundColossus" then
+	local A2 = data.Attacks
+	local d = (hero - bossAt).Unit
+	local right = Vector3.new(-d.Z, 0, d.X)
+	local function lanes(seconds)
+		local L = A2.IceLanes
+		local out = {}
+		local s0 = (hero - bossAt):Dot(right)
+		for k = 1, L.Lanes do
+			local off = s0 + (k - 2) * L.Spacing
+			local from = bossAt + right * off - d * 4
+			local mid = from + d * (L.Length / 2)
+			table.insert(out, { "lane", mid.X, mid.Z, math.atan2(-d.X, -d.Z), L.Length, L.Width, seconds })
+		end
+		return out
+	end
+	if moment == "entrance" then
+		warns = { { "pop", bossAt.X, bossAt.Z, 22, "dust" }, { "circle", bossAt.X, bossAt.Z, radius + 2, 2.5, "burrow" } }
+		wait = 1.3
+	elseif moment == "slam" or moment == "wave" then
+		local W = A2.GroundSlam
+		local gap = math.atan2(hero.Z - 8 - bossAt.Z, hero.X - bossAt.X)
+		warns = { { "wave", bossAt.X, bossAt.Z, radius * 0.8, W.Windup, W.Speed, W.MaxRadius, W.Width, gap, math.rad(W.GapHalf) } }
+		if moment == "wave" then
+			table.insert(warns, { "pop", bossAt.X, bossAt.Z, radius * 1.6, "frost" })
+		end
+		wait = moment == "wave" and (W.Windup + 1.0) or 0.6
+	elseif moment == "lanes" then
+		warns = lanes(A2.IceLanes.Windup)
+		wait = 0.7
+	elseif moment == "spikes" then
+		warns = lanes(0.2)
+		local s0 = (hero - bossAt):Dot(right)
+		for k = 1, A2.IceLanes.Lanes do
+			local from = bossAt + right * (s0 + (k - 2) * A2.IceLanes.Spacing) - d * 4
+			for j = 0, 5 do
+				local p = from + d * (2.2 + j * 7)
+				table.insert(warns, { "pop", p.X, p.Z, 2.8, "ice" })
+			end
+		end
+		wait = 0.3
+	elseif moment == "breath" then
+		local B = A2.FrostBreath
+		warns = { { "gust", bossAt.X, bossAt.Z, math.atan2(d.Z, d.X), B.Length, math.rad(B.HalfAngle), B.Windup, B.Breath, "frost" } }
+		wait = 0.7
+	elseif moment == "shards" then
+		local S = A2.ShardRain
+		for i, off in ipairs({ { 1, 0 }, { -8, 6 }, { 9, 5 }, { -4, -9 }, { 10, -7 }, { -12, -2 } }) do
+			table.insert(warns, { "circle", hero.X + off[1], hero.Z + off[2], S.Radius, S.Fall + (i - 1) * S.Stagger, "frost" })
+		end
+		wait = 0.8
+	elseif moment == "armor" then
+		warns = { { "pop", bossAt.X, bossAt.Z, radius * 1.4, "frost" } }
+		C.fire("Notify", { Text = "THE COLOSSUS GROWS FROST ARMOUR! Break it!", Color = Color3.fromRGB(255, 90, 80) })
+		wait = 0.3
+	elseif moment == "stunned" then
+		warns = { { "pop", bossAt.X, bossAt.Z, radius * 1.8, "frost" } }
+		C.fire("Notify", { Text = "FROST ARMOUR SHATTERED!", Color = Color3.fromRGB(190, 225, 255) })
+		wait = 0.3
+	elseif moment == "collapse" then
+		warns = { { "pop", bossAt.X, bossAt.Z, 13, "dust" } }
 		wait = 0.8
 	end
 end

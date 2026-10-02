@@ -166,10 +166,12 @@ local MESH_EXTRA: { [string]: { Scale: number?, Only: { string }?, Shift: Vector
 	WarBanner = { Scale = 1.45, Only = { "BannerPole", "BannerTrim", "Banner", "BannerCrown" }, Shift = Vector3.new(0, -4.95, -3.9) },
 }
 
--- Pieces some poses hide (EnemyRenderer): the Burrower's soil ring, the Warlord's banner.
+-- Pieces some poses hide (EnemyRenderer): the Burrower's soil ring, the Warlord's banner,
+-- the Colossus's frost armour (shown only while it is on).
 ModelLibrary.PieceGroups = {
 	Mound = { Mound = true },
 	Banner = { BannerPole = true, BannerTrim = true, Banner = true, BannerCrown = true },
+	Frost = { FrostChest = true, FrostShoulder = true, FrostArm = true, FrostSpike = true },
 }
 
 ------------------------------------------------------------------------------------------
@@ -292,6 +294,37 @@ local LOOKS: { [string]: { [string]: Color3 } } = {
 		Wood = Palette.wood_700,
 		Stone = Palette.stone_600,
 	},
+	-- the Briar Sentinel (part-built only), her sprouts and the Frostbound Colossus
+	BriarBoss = {
+		Base = Palette.wood_600,
+		Bark = Palette.wood_700,
+		Light = Palette.wood_500,
+		Moss = Palette.moss_600,
+		Leaf = Palette.moss_400,
+		Vine = Palette.moss_700,
+		Thorn = Palette.crimson_800,
+		Berry = Palette.crimson_400,
+		Gold = Palette.gold_400,
+		Eye = Palette.amber_500,
+	},
+	ThornSprout = {
+		Base = Palette.moss_500,
+		Light = Palette.moss_400,
+		Leaf = Palette.moss_300,
+		Thorn = Palette.crimson_700,
+		Dark = Palette.wood_700,
+		Eye = Palette.amber_500,
+	},
+	FrostBoss = {
+		Base = Palette.slate_500:Lerp(Palette.ice_500, 0.35),
+		Dark = Palette.slate_700,
+		Stone = Palette.slate_600:Lerp(Palette.stone_500, 0.3),
+		Ice = Palette.ice_300,
+		IceLight = Palette.ice_100,
+		Gold = Palette.gold_500,
+		Glow = Palette.ice_100,
+		Eye = Palette.ice_100,
+	},
 	BroodEgg = {
 		Base = Palette.ivory_200,
 		Accent = Palette.gold_400,
@@ -348,6 +381,7 @@ local function ball(b, d: number, color: Color3, pos: Vector3, opts: { [string]:
 end
 
 local V = Vector3.new
+local TAU_ML = math.pi * 2
 
 -- Fallbacks are authored with the origin on the ground (like the meshes; front = -Z, the
 -- creature's left = -X) and lifted onto the body centre by ModelLibrary.Enemy.
@@ -638,6 +672,155 @@ ENEMIES.HiveBoss = function(b, c)
 		end
 	end
 	return "Prowl"
+end
+
+-- Briar Sentinel: a bramble treant on two root legs; a bark trunk wrapped in thorny
+-- vines, a moss mantle, a carved bark mask with amber eyes under a crown of thorns, long
+-- branch arms with twig claws and a few crimson berries and gold blossoms (part-built:
+-- no mesh yet).
+ENEMIES.BriarBoss = function(b, c)
+	-- root legs, each splaying into three roots on the ground
+	for _, side in ipairs({ -1, 1 }) do
+		local hip = V(side * 1.7, 5.2, 0.2)
+		local anim = side < 0 and "SwingA" or "SwingB"
+		bar(b, hip, V(side * 2.1, 1.6, 0), 1.6, c.Bark, { Anim = anim, Joint = hip })
+		for k, r in ipairs({ { -1.6, -1.4 }, { 1.2, -0.3 }, { 0.1, 1.5 } }) do
+			bar(b, V(side * 2.1, 1.7, 0), V(side * 2.1 + side * r[1] * 0.6 + r[1] * 0.3, 0.15, r[2] * 1.2), 0.75 - k * 0.08, c.Bark, { Anim = anim, Joint = hip })
+		end
+	end
+	-- trunk and bark plates
+	egg(b, V(5.2, 6.6, 4.2), c.Base, CFrame.new(0, 7.6, 0.2))
+	egg(b, V(4.2, 3.0, 3.4), c.Light, CFrame.new(0, 8.4, -1.0))
+	for i, y in ipairs({ 6.0, 7.6, 9.2 }) do
+		b.add("Block", V(0.35, 1.2, 0.4), c.Bark, CFrame.new((i - 2) * 0.9, y, -2.25) * CFrame.Angles(0, 0, 0.3 * (i - 2)))
+	end
+	-- moss mantle over the shoulders
+	egg(b, V(6.8, 2.2, 4.8), c.Moss, CFrame.new(0, 10.3, 0.3))
+	egg(b, V(2.6, 1.6, 2.6), c.Leaf, CFrame.new(-2.6, 10.6, 0.4))
+	egg(b, V(2.4, 1.5, 2.4), c.Leaf, CFrame.new(2.7, 10.5, 0.2))
+	-- thorny vines spiralling up the trunk
+	for k = 0, 9 do
+		local a = k * 1.15
+		local y = 4.8 + k * 0.62
+		local r = 2.35 - math.abs(k - 4.5) * 0.08
+		local at = V(math.cos(a) * r, y, math.sin(a) * r * 0.85 + 0.2)
+		ball(b, 0.55, c.Vine, at)
+		if k % 2 == 0 then
+			local out = V(math.cos(a), 0.15, math.sin(a)).Unit
+			bar(b, at, at + out * 1.1, 0.22, c.Thorn)
+		end
+	end
+	-- the mask, eyes and the thorn crown
+	egg(b, V(3.0, 3.2, 2.6), c.Light, CFrame.new(0, 12.3, -0.7))
+	b.add("Block", V(2.4, 0.35, 0.5), c.Bark, CFrame.new(0, 12.9, -1.95))
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.55, c.Eye, V(side * 0.62, 12.35, -1.92), { Material = NEON })
+	end
+	b.add("Block", V(0.4, 1.2, 0.4), c.Bark, CFrame.new(0, 11.5, -1.95))
+	for k = 0, 6 do
+		local a = math.rad(-75 + k * 25)
+		local base = V(math.sin(a) * 1.2, 13.4, -0.6 + math.cos(a) * 0.2)
+		bar(b, base, base + V(math.sin(a) * 0.9, 1.4 + (k % 2) * 0.6, 0.3), 0.3, k % 3 == 1 and c.Gold or c.Thorn, k % 3 == 1 and { Material = METAL } or nil)
+	end
+	-- branch arms with twig claws
+	for _, side in ipairs({ -1, 1 }) do
+		local shoulder = V(side * 3.0, 10.0, 0)
+		local reach = { Anim = side < 0 and "SwingB" or "SwingA", Joint = shoulder }
+		local elbow = V(side * 4.7, 7.6, -0.9)
+		local hand = V(side * 5.3, 4.4, -2.0)
+		bar(b, shoulder, elbow, 1.15, c.Base, reach)
+		bar(b, elbow, hand, 0.95, c.Bark, reach)
+		egg(b, V(1.5, 1.4, 1.5), c.Moss, CFrame.new(elbow), reach)
+		for k = -1, 1 do
+			bar(b, hand, hand + V(side * 0.35 * k, -1.5, -0.6 + k * 0.5), 0.3, c.Bark, reach)
+		end
+		bar(b, elbow, elbow + V(side * 0.9, 0.8, -0.2), 0.22, c.Thorn, reach)
+		ball(b, 0.6, c.Berry, V(side * 3.2, 11.1, -1.3))
+		ball(b, 0.45, c.Berry, V(side * 2.2, 9.0, -2.1))
+		egg(b, V(1.0, 0.3, 1.0), c.Gold, CFrame.new(side * 1.8, 11.3, -1.6), { Material = METAL })
+	end
+	return "Stomp"
+end
+
+-- Frostbound Colossus: a hunched giant of dark blue-grey stone, ice crystals jutting from
+-- his shoulders and back, a small head sunk between them with pale glowing eyes and an
+-- icicle beard, huge arms and fists bound in gold bands. "Frost*" pieces are the phase-2
+-- frost armour (shown only while the body attribute FrostArmor is set).
+ENEMIES.FrostBoss = function(b, c)
+	-- pillar legs
+	for _, side in ipairs({ -1, 1 }) do
+		local hip = V(side * 2.3, 5.4, 0.4)
+		local anim = side < 0 and "SwingA" or "SwingB"
+		bar(b, hip, V(side * 2.5, 1.2, 0.2), 2.4, c.Dark, { Anim = anim, Joint = hip })
+		egg(b, V(3.0, 1.6, 3.4), c.Stone, CFrame.new(side * 2.5, 0.8, -0.2), { Anim = anim, Joint = hip })
+	end
+	-- the hunched torso
+	egg(b, V(7.6, 5.0, 6.0), c.Dark, CFrame.new(0, 6.6, 0.6))
+	egg(b, V(8.8, 5.2, 6.4), c.Base, CFrame.new(0, 9.4, 0.4))
+	egg(b, V(5.6, 3.2, 2.4), c.Stone, CFrame.new(0, 8.6, -2.1))
+	b.add("Block", V(7.0, 0.5, 0.6), c.Gold, CFrame.new(0, 6.8, -2.2), { Material = METAL })
+	-- ice crystals on the shoulders and back
+	for k, s in ipairs({ { -3.4, 11.6, 0.8, -0.35 }, { -2.2, 12.4, 1.6, -0.15 }, { 2.4, 12.3, 1.4, 0.2 }, { 3.5, 11.5, 0.6, 0.4 }, { 0, 12.0, 2.6, 0 }, { -1.0, 11.0, 3.2, -0.2 }, { 1.4, 10.8, 3.3, 0.25 } }) do
+		local base = V(s[1], s[2] - 0.6, s[3])
+		bar(b, base, base + V(s[4] * 2.4, 2.4 + (k % 3) * 0.7, 0.4), 0.9 - (k % 2) * 0.2, k % 2 == 0 and c.IceLight or c.Ice)
+	end
+	-- the head, sunk between the shoulders
+	egg(b, V(2.8, 2.4, 2.6), c.Stone, CFrame.new(0, 10.9, -2.6))
+	b.add("Block", V(2.6, 0.5, 0.8), c.Dark, CFrame.new(0, 11.6, -3.6))
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.5, c.Eye, V(side * 0.6, 11.15, -3.75), { Material = NEON })
+	end
+	for k = -2, 2 do
+		local top = V(k * 0.45, 10.2, -3.55)
+		bar(b, top, top + V(0, -1.2 + math.abs(k) * 0.3, -0.25), 0.3, c.IceLight)
+	end
+	ball(b, 1.1, c.Glow, V(0, 8.4, -3.3), { Material = NEON, Anim = "Pulse" })
+	-- huge arms, gold-banded wrists, fists
+	for _, side in ipairs({ -1, 1 }) do
+		local shoulder = V(side * 4.4, 10.2, 0.2)
+		local swing = { Anim = side < 0 and "SwingB" or "SwingA", Joint = shoulder }
+		egg(b, V(3.4, 3.0, 3.4), c.Base, CFrame.new(side * 4.6, 10.4, 0.2), swing)
+		local elbow = V(side * 5.6, 6.9, -0.6)
+		local wrist = V(side * 5.5, 3.9, -1.6)
+		bar(b, shoulder, elbow, 2.0, c.Dark, swing)
+		bar(b, elbow, wrist, 1.9, c.Base, swing)
+		bar(b, wrist + V(0, 0.6, 0.2), wrist + V(0, 0.1, 0.05), 2.3, c.Gold, { Anim = swing.Anim, Joint = shoulder, Material = METAL })
+		egg(b, V(2.8, 2.6, 2.8), c.Stone, CFrame.new(wrist + V(0, -1.2, -0.4)), swing)
+		bar(b, elbow, elbow + V(side * 1.2, 1.1, 0.4), 0.6, c.Ice, swing)
+	end
+	-- frost armour (phase 2): ice plates over the chest, shoulders and forearms
+	local function frost(part: BasePart, name: string)
+		part.Name = name
+	end
+	frost(egg(b, V(6.4, 3.6, 1.4), c.IceLight, CFrame.new(0, 8.4, -3.0), { Transparency = 0.15 }), "FrostChest")
+	for _, side in ipairs({ -1, 1 }) do
+		local shoulder = V(side * 4.4, 10.2, 0.2)
+		local swing = { Anim = side < 0 and "SwingB" or "SwingA", Joint = shoulder, Transparency = 0.15 }
+		frost(egg(b, V(3.8, 1.6, 3.8), c.IceLight, CFrame.new(side * 4.7, 11.9, 0.2), swing), "FrostShoulder")
+		frost(egg(b, V(2.6, 3.4, 2.6), c.Ice, CFrame.new(side * 5.55, 5.4, -1.1), swing), "FrostArm")
+		frost(bar(b, V(side * 4.7, 12.4, 0.2), V(side * 5.6, 14.4, 0.6), 0.7, c.IceLight, swing), "FrostSpike")
+	end
+	return "Stomp"
+end
+
+-- Thorn Sprout: a small moss bulb with crimson thorns, two leaf blades and root feet.
+ENEMIES.ThornSprout = function(b, c)
+	egg(b, V(2.2, 2.0, 2.2), c.Base, CFrame.new(0, 1.2, 0))
+	egg(b, V(1.6, 0.8, 1.6), c.Light, CFrame.new(0, 2.1, 0))
+	for k = 0, 5 do
+		local a = k * TAU_ML / 6 + 0.3
+		local at = V(math.cos(a) * 1.0, 1.3 + (k % 2) * 0.35, math.sin(a) * 1.0)
+		bar(b, at, at + V(math.cos(a) * 0.7, 0.25, math.sin(a) * 0.7), 0.2, c.Thorn)
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		local root = V(side * 0.3, 2.4, 0.1)
+		egg(b, V(0.3, 0.12, 1.6), c.Leaf, CFrame.new(side * 0.8, 2.9, 0.1) * CFrame.Angles(0, 0, side * 0.6), { Anim = "Wiggle", Joint = root })
+		ball(b, 0.38, c.Eye, V(side * 0.42, 1.45, -1.0), { Material = NEON })
+		local hip = V(side * 0.6, 0.6, 0)
+		bar(b, hip, V(side * 1.1, 0.05, -0.3), 0.3, c.Dark, { Anim = side < 0 and "SwingA" or "SwingB", Joint = hip })
+		bar(b, hip, V(side * 1.0, 0.05, 0.6), 0.3, c.Dark, { Anim = side < 0 and "SwingB" or "SwingA", Joint = hip })
+	end
+	return "Scuttle"
 end
 
 -- Burrower: a sandy mole-cricket with digging claws, sitting in a ring of loose soil

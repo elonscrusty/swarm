@@ -53,6 +53,8 @@ AchievementData.Order = {
 	"MothBane",
 	"WarlordFall",
 	"HiveCleanser",
+	"BriarBane",
+	"Frostbreaker",
 }
 
 AchievementData.Achievements = {
@@ -252,6 +254,28 @@ AchievementData.Achievements = {
 		Goal = 1,
 		Filter = { Boss = "HiveMother" },
 		Reward = { Gold = 120 },
+	},
+	BriarBane = {
+		Id = "BriarBane",
+		Name = "Briar Bane",
+		Description = "Defeat the Briar Sentinel.",
+		Icon = "sprout", -- drawn icon until art/icons/achievements/ach_BriarBane.png exists
+		Event = "BossDefeated",
+		Kind = "Count",
+		Goal = 1,
+		Filter = { Boss = "BriarSentinel" },
+		Reward = { Gold = 120 },
+	},
+	Frostbreaker = {
+		Id = "Frostbreaker",
+		Name = "Frostbreaker",
+		Description = "Defeat the Frostbound Colossus.",
+		Icon = "FrostNova", -- drawn icon until ach_Frostbreaker.png exists
+		Event = "BossDefeated",
+		Kind = "Count",
+		Goal = 1,
+		Filter = { Boss = "FrostboundColossus" },
+		Reward = { Gold = 120, Title = "Frostbreaker" },
 	},
 }
 

@@ -12,6 +12,12 @@
 	Pose: src/shared/HeroPoses.lua (HeroPoses.Apply(model, "Showcase", t): the stance plus
 	idle breathing; the copy is fully anchored and re-placed from its rest pose each
 	frame). If that module is missing, a small built-in idle drives the Motor6Ds.
+	Drag to turn: pressing on empty screen over the hero (touch, mouse; the right stick on a
+	gamepad) and dragging spins it around its vertical axis with a little inertia; after
+	SPIN.IdleSeconds without input it eases back to its idle stance. A press that lands on a
+	button, panel, list or text box is never taken (checked with GetGuiObjectsAtPosition),
+	and the camera / menu are not touched. The input hooks live only while the menu shows.
+	"Reduced effects" shortens the inertia and the ease back.
 
 	Real lobby characters near the dais (and always your own) are hidden locally with
 	LocalTransparencyModifier while the menu shows, so only the showcase hero stands there.
@@ -29,6 +35,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -37,6 +45,7 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local AccountData = require(Shared:WaitForChild("AccountData"))
 local ViewportPreview = require(script.Parent.ViewportPreview)
+local ClientSettings = require(script.Parent.ClientSettings)
 
 local Showcase = {}
 
@@ -57,6 +66,27 @@ local nextStandSearch = 0
 local appearStart = 0
 local poseClock = 0
 local hidden: { [Model]: boolean } = {}
+
+-- Drag to turn
+local SPIN = {
+	RadPerPixel = 0.012, -- turn per pixel dragged
+	StickRadPerSec = 3.2, -- gamepad right stick at full tilt
+	IdleSeconds = 2.5, -- no input this long, then ease back to the idle stance
+	IdleSecondsReduced = 1,
+	Friction = 3.5, -- inertia decay per second
+	FrictionReduced = 9,
+	EaseRate = 3, -- ease-back speed per second
+	EaseRateReduced = 8,
+	MaxSpeed = 14, -- rad/s cap on the flick
+}
+local yaw = 0 -- extra turn about the vertical axis (radians)
+local spinVel = 0 -- rad/s while coasting
+local lastInput = 0 -- os.clock() of the last drag / stick input
+local dragInput: InputObject? = nil
+local dragLast = Vector2.zero
+local dragSamples: { { number } } = {} -- { time, dx } of the last moments, for the flick
+local stickX = 0
+local spinConns: { RBXScriptConnection } = {}
 
 ------------------------------------------------------------------------------------------
 -- HeroPoses (optional shared module, made by the models pass)
@@ -339,6 +369,11 @@ local function appearEffect(at: CFrame)
 	end)
 end
 
+-- Hero pivot on the dais: feet on the stand, turned by the drag yaw.
+local function placeAt(stand: CFrame, lift: number): CFrame
+	return stand * CFrame.Angles(0, yaw, 0) * CFrame.new(0, lift, 0)
+end
+
 local function dropModel(fade: boolean)
 	local old = model
 	model = nil
@@ -393,7 +428,7 @@ local function refresh()
 	local bbCF, bbSize = m:GetBoundingBox()
 	rootOffset = math.clamp(root.Position.Y - (bbCF.Position.Y - bbSize.Y / 2), 2.4, 4.2)
 	m.Name = "ShowcaseHero"
-	m:PivotTo(stand * CFrame.new(0, rootOffset, 0))
+	m:PivotTo(placeAt(stand, rootOffset))
 	-- a soft warm key light so the hero is the brightest thing on screen
 	local keyLight = Instance.new("PointLight")
 	keyLight.Name = "ShowcaseLight"
@@ -562,8 +597,217 @@ local function refreshRing()
 end
 
 ------------------------------------------------------------------------------------------
+-- Drag to turn
+------------------------------------------------------------------------------------------
+
+-- The hero's rectangle on screen (viewport pixels), widened so a thumb can start beside the
+-- figure. nil when it is off screen.
+local function heroRegion(): (Vector2?, Vector2?)
+	local m = model
+	local cam = workspace.CurrentCamera
+	if not m or not m.Parent or not cam then
+		return nil, nil
+	end
+	local cf, size = m:GetBoundingBox()
+	local lo, hi = Vector2.new(math.huge, math.huge), Vector2.new(-math.huge, -math.huge)
+	for ix = -1, 1, 2 do
+		for iy = -1, 1, 2 do
+			for iz = -1, 1, 2 do
+				local p = cam:WorldToViewportPoint((cf * CFrame.new(size.X / 2 * ix, size.Y / 2 * iy, size.Z / 2 * iz)).Position)
+				if p.Z > 0 then
+					lo = Vector2.new(math.min(lo.X, p.X), math.min(lo.Y, p.Y))
+					hi = Vector2.new(math.max(hi.X, p.X), math.max(hi.Y, p.Y))
+				end
+			end
+		end
+	end
+	if lo.X == math.huge then
+		return nil, nil
+	end
+	local h = hi.Y - lo.Y
+	local cx = (lo.X + hi.X) / 2
+	local halfW = math.max((hi.X - lo.X) / 2 + h * 0.35, h * 0.6)
+	return Vector2.new(cx - halfW, lo.Y - h * 0.12), Vector2.new(cx + halfW, hi.Y + h * 0.12)
+end
+
+-- True when something that wants the press is under this point: a button, list, text box, an
+-- Active panel, or a dimmed full-screen cover. Transparent full-screen frames are ignored.
+local function blockedAt(pos: Vector2): boolean
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	local cam = workspace.CurrentCamera
+	if not pg or not cam then
+		return false
+	end
+	local view = cam.ViewportSize
+	local inset = GuiService:GetGuiInset()
+	-- ScreenGuis may or may not ignore the top inset: look at both readings
+	for _, q in ipairs({ pos, pos - inset }) do
+		local ok, objs = pcall(function()
+			return pg:GetGuiObjectsAtPosition(q.X, q.Y)
+		end)
+		if ok and type(objs) == "table" then
+			for _, o in ipairs(objs) do
+				local gui = o :: GuiObject
+				if gui:IsA("GuiButton") or gui:IsA("TextBox") or gui:IsA("ScrollingFrame") then
+					return true
+				end
+				if gui.Active then
+					local big = gui.AbsoluteSize.X >= view.X * 0.9 and gui.AbsoluteSize.Y >= view.Y * 0.9
+					if not big or gui.BackgroundTransparency < 0.9 then
+						return true
+					end
+				end
+			end
+		end
+	end
+	return false
+end
+
+local function stopDrag(flick: boolean)
+	if dragInput == nil then
+		return
+	end
+	dragInput = nil
+	spinVel = 0
+	if flick then
+		local now = os.clock()
+		local sum, first = 0, now
+		for _, s in ipairs(dragSamples) do
+			if now - s[1] <= 0.12 then
+				sum += s[2]
+				first = math.min(first, s[1])
+			end
+		end
+		if sum ~= 0 then
+			spinVel = math.clamp(sum * SPIN.RadPerPixel / math.max(now - first, 1 / 30), -SPIN.MaxSpeed, SPIN.MaxSpeed)
+		end
+	end
+	table.clear(dragSamples)
+	lastInput = os.clock()
+end
+
+local function dragBy(dx: number)
+	yaw += dx * SPIN.RadPerPixel
+	local now = os.clock()
+	lastInput = now
+	table.insert(dragSamples, { now, dx })
+	while #dragSamples > 0 and now - dragSamples[1][1] > 0.25 do
+		table.remove(dragSamples, 1)
+	end
+end
+
+local function onInputBegan(input: InputObject, _processed: boolean)
+	if dragInput or not visible or not model then
+		return
+	end
+	local t = input.UserInputType
+	if t ~= Enum.UserInputType.MouseButton1 and t ~= Enum.UserInputType.Touch then
+		return
+	end
+	if UserInputService:GetFocusedTextBox() then
+		return
+	end
+	local pos = Vector2.new(input.Position.X, input.Position.Y)
+	local lo, hi = heroRegion()
+	if not lo or not hi or pos.X < lo.X or pos.X > hi.X or pos.Y < lo.Y or pos.Y > hi.Y then
+		return
+	end
+	if blockedAt(pos) then
+		return
+	end
+	dragInput = input
+	dragLast = pos
+	spinVel = 0
+	table.clear(dragSamples)
+	lastInput = os.clock()
+end
+
+local function onInputChanged(input: InputObject, _processed: boolean)
+	if input.KeyCode == Enum.KeyCode.Thumbstick2 then
+		stickX = math.abs(input.Position.X) > 0.15 and input.Position.X or 0
+		return
+	end
+	local d = dragInput
+	if not d then
+		return
+	end
+	local moved = input == d or (d.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement)
+	if not moved then
+		return
+	end
+	local pos = Vector2.new(input.Position.X, input.Position.Y)
+	dragBy(pos.X - dragLast.X)
+	dragLast = pos
+end
+
+local function onInputEnded(input: InputObject, _processed: boolean)
+	local d = dragInput
+	if d and (input == d or (d.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseButton1)) then
+		stopDrag(true)
+	end
+	if input.KeyCode == Enum.KeyCode.Thumbstick2 then
+		stickX = 0
+	end
+end
+
+-- Hooks the drag input (only while the menu shows) / releases it and the turn.
+local function setSpinInput(on: boolean)
+	for _, c in ipairs(spinConns) do
+		c:Disconnect()
+	end
+	table.clear(spinConns)
+	dragInput = nil
+	stickX = 0
+	spinVel = 0
+	table.clear(dragSamples)
+	if on then
+		table.insert(spinConns, UserInputService.InputBegan:Connect(onInputBegan))
+		table.insert(spinConns, UserInputService.InputChanged:Connect(onInputChanged))
+		table.insert(spinConns, UserInputService.InputEnded:Connect(onInputEnded))
+	else
+		yaw = 0
+	end
+end
+
+-- Per frame: stick turn, inertia, then the ease back to the idle stance. True while turned.
+local function stepSpin(dt: number): boolean
+	if dragInput ~= nil then
+		return true
+	end
+	local reduced = ClientSettings.Reduced()
+	if stickX ~= 0 then
+		yaw += stickX * SPIN.StickRadPerSec * dt
+		spinVel = 0
+		lastInput = os.clock()
+	elseif spinVel ~= 0 then
+		yaw += spinVel * dt
+		spinVel *= math.exp(-dt * (reduced and SPIN.FrictionReduced or SPIN.Friction))
+		if math.abs(spinVel) < 0.02 then
+			spinVel = 0
+		end
+	end
+	local idle = reduced and SPIN.IdleSecondsReduced or SPIN.IdleSeconds
+	if stickX == 0 and spinVel == 0 and yaw ~= 0 and os.clock() - lastInput >= idle then
+		-- shortest way round to the idle stance
+		local a = (yaw + math.pi) % (math.pi * 2) - math.pi
+		a *= math.exp(-dt * (reduced and SPIN.EaseRateReduced or SPIN.EaseRate))
+		yaw = math.abs(a) < 0.002 and 0 or a
+		return true
+	end
+	return yaw ~= 0
+end
+
+------------------------------------------------------------------------------------------
 -- Public
 ------------------------------------------------------------------------------------------
+
+-- Turns the hero by this many degrees as if dragged (for the preview scenes and tools); it
+-- then eases back like a real drag.
+function Showcase.Spin(degrees: number)
+	yaw += math.rad(degrees)
+	spinVel = 0
+	lastInput = os.clock()
+end
 
 function Showcase.SetRing(ringId: string?)
 	local id = type(ringId) == "string" and ringId or ""
@@ -579,6 +823,7 @@ function Showcase.SetVisible(on: boolean)
 		return
 	end
 	visible = on
+	setSpinInput(on)
 	if on then
 		nextStandSearch = 0
 		refresh()
@@ -624,16 +869,20 @@ function Showcase.Init()
 		end
 		poseClock += dt
 		local m = model
+		local turned = stepSpin(dt)
 		if m and m.Parent then
 			local stand = standCF
 			if appearStart > 0 and stand then
 				-- rise onto the dais
 				local a = math.clamp((os.clock() - appearStart) / 0.42, 0, 1)
 				local e = 1 - (1 - a) ^ 4
-				m:PivotTo(stand * CFrame.new(0, rootOffset - 0.9 * (1 - e), 0))
+				m:PivotTo(placeAt(stand, rootOffset - 0.9 * (1 - e)))
 				if a >= 1 then
 					appearStart = 0
 				end
+			end
+			if turned and standCF and appearStart == 0 then
+				m:PivotTo(placeAt(standCF, rootOffset))
 			end
 			applyPose(m, poseClock)
 		end
@@ -644,7 +893,7 @@ function Showcase.Init()
 			local before = standCF
 			findStand()
 			if model and standCF and before and (standCF.Position - before.Position).Magnitude > 0.05 then
-				model:PivotTo(standCF * CFrame.new(0, rootOffset, 0))
+				model:PivotTo(placeAt(standCF, rootOffset))
 			end
 			if not model or not model.Parent then
 				refresh()
@@ -673,6 +922,7 @@ function Showcase.Init()
 	end)
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
 		if player:GetAttribute("InRun") then
+			setSpinInput(false)
 			-- the run spawns a fresh character; never leave anything hidden
 			for char in pairs(hidden) do
 				if char.Parent then

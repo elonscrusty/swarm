@@ -2,6 +2,7 @@
 -- verdict, hero, numbers, the build, items, rewards, REPLAY / MAIN MENU.
 --   --set outcome=defeat   a defeat during the Queen fight (no rewards lines)
 --   --set daily=on         a scored Daily Challenge run (daily line, its curses)
+--   --set outcome=endless  an Endless run left from the pause menu on stage 9 (endless score)
 -- The progress block shows the account XP / level ("+340 XP · Level 7 → 8"), the run's
 -- curses and a track reward; the medallion wears the Gold portrait frame.
 local A = lib("arena")
@@ -23,6 +24,11 @@ local build = {
 	Weapons = { { Id = "Whip", Level = 8, Evolved = true }, { Id = "MagicOrb", Level = 6, Evolved = false }, { Id = "Knives", Level = 4, Evolved = false }, { Id = "Garlic", Level = 2, Evolved = false } },
 	Passives = { { Id = "Might", Level = 5 }, { Id = "Armor", Level = 3 }, { Id = "Heart", Level = 2 }, { Id = "Luck", Level = 1 } },
 }
+if preview.args.outcome == "endless" then
+	C.fire("RunResult", { Curses = {}, CurseGold = 1, Account = { Gained = 610, From = 7, To = 8, Into = 60, Need = 500, Rewards = {} }, Won = false, Portal = false, Abandoned = true, Endless = true, Score = 13840, ScoreBoard = "ScoreEndless", NewBestLevel = true, Time = 2410, Kills = 5210, Gold = 960, Level = 46, Damage = 912400, Arena = "Snow", Mode = "Solo", CharacterId = "Knight", Build = build, BossKills = 8, BossFight = false, Seconds = 25, StagesCleared = 8, Stage = 9, Items = { { Id = "Whetstone", Count = 4 }, { Id = "IronPlate", Count = 2 } } })
+	C.settle(3)
+	return
+end
 if preview.args.outcome == "defeat" then
 	C.fire("RunResult", { Curses = progress.Curses, CurseGold = progress.CurseGold, Account = { Gained = 118, From = 7, To = 7, Into = 210, Need = 450, Rewards = {} }, Won = false, Portal = false, Time = 412, Kills = 655, Gold = 138, Level = 17, Damage = 64210, Arena = "Ruins (Duo)", Mode = "Duo", CharacterId = "Mage", Build = build, BossKills = 0, BossFight = true, Seconds = 25, StagesCleared = 0, Stage = 1, Items = { { Id = "Whetstone", Count = 1 }, { Id = "Bandage", Count = 2 } } })
 	C.settle(3)

@@ -478,7 +478,7 @@ local function buildModes(frame: Frame)
 	ui.EndlessRow = holder
 	ui.EndlessEdge = face:FindFirstChildOfClass("UIStroke")
 	UIKit.padding(face, 0, 12, 0, 12)
-	ui.EndlessToggle = UIKit.Toggle(face, "Endless", "cycle", "No win · deeper, harder stages", player:GetAttribute("Endless") == true, function(on)
+	ui.EndlessToggle = UIKit.Toggle(face, "Endless", "cycle", "No win · stages get ever harder", player:GetAttribute("Endless") == true, function(on)
 		endlessSentAt = os.clock()
 		Remotes.Get("SetEndless"):FireServer(on)
 	end, { Size = UDim2.fromScale(1, 1) })
@@ -530,7 +530,7 @@ local function buildQueue(frame: Frame)
 	UIKit.corner(endlessRow, Theme.Radius.S)
 	UIKit.stroke(endlessRow, P.gold_400, 1, 0.45)
 	Icons.Draw(endlessRow, "cycle", { Size = 20, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Back = C.PanelInset })
-	text(endlessRow, "Label", string.format('<font color="%s">ENDLESS</font>  no win, the portal only goes deeper', UIKit.hex(P.gold_300)), { Position = UDim2.fromOffset(36, 0), Size = UDim2.new(1, -44, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, RichText = true }, 13)
+	text(endlessRow, "Label", string.format('<font color="%s">ENDLESS</font>  no win, only deeper stages', UIKit.hex(P.gold_300)), { Position = UDim2.fromOffset(36, 0), Size = UDim2.new(1, -44, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, RichText = true }, 13)
 	ui.QueueEndless = endlessRow
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 52) }, face)
 	ui.QueueRow = row
@@ -892,7 +892,9 @@ local function relayout()
 	-- queue panel: a short panel (portrait) folds the player list into the note
 	local qh = ui.Queue.Size.Y.Offset
 	local busy = lastStatus == "Busy"
-	local short = qh < 280 and not busy
+	-- the full panel needs the player list, the curse / endless lines, the note and buttons
+	local extraLines = (ui.QueueCurses:GetAttribute("Has") == true and 46 or 0) + (ui.QueueEndless:GetAttribute("Has") == true and 38 or 0)
+	local short = qh < math.max(280, 72 + 4 * 30 + extraLines + TS(16) * 3 + 8 + 52 + 36) and not busy
 	ui.QueueList.Visible = not short and not busy
 	local noteY = (short or busy) and 68 or (72 + 4 * 30)
 	-- the curse line sits under the note (above the buttons)

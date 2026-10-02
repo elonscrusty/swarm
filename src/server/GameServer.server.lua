@@ -53,6 +53,7 @@ local ORDER = {
 	"CaravanEvent",
 	"StageManager",
 	"RunManager",
+	"PartyService",
 	"AchievementService",
 	"DamageNumbers",
 	"BugReportService",
