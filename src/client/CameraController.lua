@@ -93,6 +93,29 @@ local function canSpectate(p: Player?): boolean
 	return p ~= nil and p.Parent ~= nil and p:GetAttribute("InRun") == true and p:GetAttribute("Alive") == true and rootOf(p) ~= nil
 end
 
+-- Reduced camera motion for jumps: while the local hero is in the air (a hop) the camera
+-- keeps the height it had on the ground, so bunny hops never bob the view. A long fall
+-- (over AirHoldSeconds) is followed normally.
+local AIR_HOLD_SECONDS = 1.2
+local groundY: number? = nil
+local airSince = 0
+local function steadyHeight(root: BasePart): Vector3
+	local pos = root.Position
+	local hum = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
+	local now = os.clock()
+	local airborne = hum ~= nil and hum.FloorMaterial == Enum.Material.Air
+	if not airborne or groundY == nil then
+		groundY = pos.Y
+		airSince = now
+		return pos
+	end
+	if now - airSince > AIR_HOLD_SECONDS or math.abs(pos.Y - (groundY :: number)) > 12 then
+		groundY = pos.Y
+		return pos
+	end
+	return Vector3.new(pos.X, groundY :: number, pos.Z)
+end
+
 -- Who the follow camera is on (and where): the local player, or while they are down the
 -- same living teammate for as long as that teammate stays up.
 local function subjectPosition(): (Vector3?, any)
@@ -119,7 +142,7 @@ local function subjectPosition(): (Vector3?, any)
 	end
 	local root = rootOf(player)
 	if root then
-		return root.Position, player
+		return steadyHeight(root), player
 	end
 	return nil, nil
 end

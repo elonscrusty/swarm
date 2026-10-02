@@ -9,7 +9,7 @@
 	is Active (a thumb landing on it still moves the hero) except the SKIP TIPS button.
 
 	Tutorial tips (a player's first run; anyone with a run played before skips them):
-	  Move      at the start: drag anywhere / WASD / left stick (by input device); done
+	  Move      at the start: drag anywhere / WASD / left stick and how to jump (by input device); done
 	            early once the hero has walked a few steps
 	  Attack    "your weapons attack on their own" → the weapon row
 	  Gems      after the first kill: gems are XP → the XP bar
@@ -380,11 +380,11 @@ local function moveText(): string
 	local last = UserInputService:GetLastInputType()
 	local gamepad = string.find(tostring(last), "Gamepad") ~= nil
 	if gamepad then
-		return "Use the left stick to move. That's all you control!"
+		return "Move with the left stick, A to jump. Chain hops for a bit of speed!"
 	elseif UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
-		return "Drag anywhere on the screen to move. That's all you control!"
+		return "Drag anywhere to move, tap JUMP to hop over trouble."
 	end
-	return "Use WASD or the arrow keys to move. That's all you control!"
+	return "Move with WASD or the arrow keys, Space to jump. Chain hops for a bit of speed!"
 end
 
 local function heroPos(): Vector3?
