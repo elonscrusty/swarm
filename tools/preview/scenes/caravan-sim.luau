@@ -6,6 +6,9 @@
 --      the grace countdown → Lost (no reward)
 --   3) stage 3: start it, then MAIN MENU (AbandonRun) mid-defence → the cart is removed,
 --      CaravanEvent.Get() is nil, nothing errors
+-- --set part=1|2|3|4 runs one part on stage 1 (4 = DEV next stage while defending: the cart
+--                    is removed on travel, the next stage has a new one); default: 1, 2, 3
+--                    in a row as above (slow: about 15 minutes on a busy machine)
 -- --set show=defend  stops in stage 1 while defending, the hero in the ring (marker + bar)
 -- --set show=away    stops in stage 1 while defending, the hero 40 studs out (arrow +
 --                    "RETURN TO THE CARAVAN" bar)
@@ -25,6 +28,7 @@ local ES = preview.server("EnemySpawner")
 local Config = C.shared("Config")
 local advance = preview.advance
 local show = preview.args.show
+local part = tonumber(preview.args.part)
 
 local function levelUps()
 	for _ = 1, 30 do
@@ -109,11 +113,45 @@ local function nextStage(label: string)
 	preview.log(string.format("%s: stage=%d phase=%s old cart removed=%s", label, SM.GetStage(), SM.GetPhase(), tostring(oldModel == nil or oldModel.Parent == nil)))
 end
 
--- 1) success --------------------------------------------------------------------------
 local c = caravanOrFail("stage 1")
 if not c then
 	return
 end
+if part == 2 or part == 3 or part == 4 then
+	standAt(c.Pos + Vector3.new(3, 0, 0))
+	advance(1.5)
+	levelUps()
+	line("started")
+	if part == 2 then
+		local items1 = itemCount(rp)
+		for s = 1, 12 do
+			standAt(c.Pos + Vector3.new(45, 0, 0))
+			advance(1)
+			levelUps()
+			line(string.format("away %ds", s))
+			if c.State ~= "Defending" then
+				break
+			end
+		end
+		preview.log(string.format("RESULT 2: state=%s (want Lost) items +%d (want 0)", c.State, itemCount(rp) - items1))
+	elseif part == 3 then
+		local model = c.Model
+		preview.remote("AbandonRun"):FireServer()
+		advance(2)
+		local ev = workspace:FindFirstChild("SwarmEvents")
+		preview.log(string.format("RESULT 3: after MAIN MENU: Get()=%s model removed=%s SwarmEvents children=%d running=%s",
+			tostring(CE.Get()), tostring(model.Parent == nil), ev and #ev:GetChildren() or -1, tostring(RM.IsRunning())))
+		advance(2)
+	else
+		nextStage("travel mid-defence")
+		local c2 = caravanOrFail("stage 2")
+		preview.log(string.format("RESULT 4: new caravan=%s state=%s", tostring(c2 ~= nil and c2 ~= c), c2 and c2.State or "-"))
+	end
+	preview.log("done")
+	return
+end
+
+-- 1) success --------------------------------------------------------------------------
 line("before")
 standAt(c.Pos + Vector3.new(4, 0, 0))
 advance(0.2)
@@ -146,6 +184,10 @@ preview.log(string.format("RESULT 1: state=%s (want Saved) items +%d gold +%d (w
 advance(1)
 closeRewards(rp)
 advance(4)
+if part == 1 then
+	preview.log("done")
+	return
+end
 
 -- 2) fail ------------------------------------------------------------------------------
 nextStage("travel")

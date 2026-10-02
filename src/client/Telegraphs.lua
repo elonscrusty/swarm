@@ -1226,9 +1226,9 @@ Kind.gust = function(x: number, z: number, yaw: number, length: number, halfAngl
 	-- "frost" (the Colossus's freezing breath): it hurts, so crimson edges over an icy wash
 	local frost = style == "frost"
 	local lineC = frost and P.crimson_300 or P.ivory_200
-	local washC = frost and P.ice_300:Lerp(P.crimson_700, 0.35) or P.slate_300
+	local washC = frost and P.crimson_700:Lerp(P.ice_500, 0.3) or P.slate_300
 	local streakC = frost and P.ice_100 or P.ivory_100
-	local rec: any = { Dur = math.max(0.1, seconds) + (tonumber(blow) or 0.5), Wind = math.max(0.1, seconds), X = x, Z = z, Yaw = yaw, Len = length, Half = halfAngle }
+	local rec: any = { Dur = math.max(0.1, seconds) + (tonumber(blow) or 0.5), Wind = math.max(0.1, seconds), X = x, Z = z, Yaw = yaw, Len = length, Half = halfAngle, WashK = frost and 1.6 or 1 }
 	local y = FLOOR_Y
 	local origin = Vector3.new(x, y + Y_EDGE, z)
 	rec.Lines = {}
@@ -1276,7 +1276,7 @@ Kind.gust = function(x: number, z: number, yaw: number, length: number, halfAngl
 		local v = vis(t, dur)
 		local blowing = t >= rec.Wind
 		setAlpha(rec.Lines, 1 - (blowing and 0.55 or 0.8) * v)
-		setAlpha(rec.Wash, 1 - (blowing and 0.3 or 0.18 + 0.1 * math.sin(t * 10)) * v)
+		setAlpha(rec.Wash, 1 - (blowing and 0.3 or 0.18 + 0.1 * math.sin(t * 10)) * v * rec.WashK)
 		local speed = blowing and 1.6 or 0.6
 		for _, s in ipairs(rec.Streaks) do
 			local f = (s.Off + t * speed) % 1

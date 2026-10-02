@@ -6,6 +6,7 @@ that reuse them (Max HP, Might, Armor, Speed, Luck, Growth, Revive). Everything 
 the game still draws with simple vector shapes, borrows from another icon, or doesn't have.
 
 **Total: 136 images** in 17 groups. Work top to bottom: groups 1-9 matter most in play.
+**New requests: 4 images** in group 18 (the two new stage bosses; not made yet).
 
 How to use:
 1. Paste the **STYLE BLOCK** first in every ChatGPT chat (or once at the top of a chat).
@@ -260,6 +261,27 @@ outline and a tiny gold accent, no scene, readable at 20 px.
 - **sym_skull.png**: a cartoon skull.
 - **sym_sparkle.png**: a four-point sparkle star.
 - **sym_curse.png**: a purple flame over a skull.
+
+## 18. New requests: the two new stage bosses, 4 images
+
+Not made yet. Until they exist the boss bar shows the plain full-width bar (no portrait
+disc) and the achievements show a drawn sprout / frost icon. Same STYLE BLOCK.
+
+Boss portraits (`art/bosses/`): square 1024x1024, menacing but kid-friendly, dramatic low
+angle, transparent background (like group 3).
+
+- **BriarSentinel.png**: a towering bramble treant guardian, bark body wrapped in thorny crimson-dark vines, a moss mantle on its shoulders, a carved bark mask with glowing amber eyes under a crown of thorns, long branch arms with twig claws, a few crimson berries and small gold blossoms, roots splitting the ground at its feet.
+- **FrostboundColossus.png**: a hunched giant of dark blue-grey stone with pale ice crystals jutting from its shoulders and back, a small head sunk between the shoulders with glowing pale-blue eyes and an icicle beard, huge fists bound in antique gold bands, frost mist at its feet.
+
+Achievement medals (`art/icons/achievements/`): square 1024x1024, transparent background, on
+a round bronze medal (like group 11).
+
+- **ach_BriarBane.png** (Briar Bane, beat the Briar Sentinel): a sword cutting through a coil of thorny vines with a small crimson berry.
+- **ach_Frostbreaker.png** (Frostbreaker, beat the Frostbound Colossus): a hammer shattering a block of pale blue ice, shards flying.
+
+When these come in: upload them, regenerate ArtData, and switch the two achievements' Icon
+in `src/shared/AchievementData.lua` to `ach_BriarBane` / `ach_Frostbreaker` (adding both to
+the ART_FALLBACK list in `src/client/Icons.lua`). The boss portraits are picked up by id.
 
 ---
 

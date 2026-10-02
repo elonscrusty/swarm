@@ -1328,6 +1328,7 @@ State.RootWindup = function(e, _dt)
 		return
 	end
 	setAct(e, "Rooted")
+	e.RootedRecover = A.Recover
 	setState(e, "Rooted", A.Length / A.Travel)
 end
 
@@ -1335,7 +1336,7 @@ State.Rooted = function(e, _dt)
 	e.SpeedOverride = 0
 	if e.BossTimer <= 0 then
 		setAct(e, nil)
-		recover(e, paced(e, e.BossData.Attacks.RootLines.Recover))
+		recover(e, paced(e, e.RootedRecover or 1))
 	end
 end
 
@@ -1375,6 +1376,7 @@ State.Bramble = function(e, _dt)
 	end
 	-- she stays rooted while the last ring closes (a free window for the brave)
 	setAct(e, "Rooted")
+	e.RootedRecover = A.Recover
 	setState(e, "Rooted", (A.StartRadius - e.Radius - 1.5) / A.Speed)
 end
 

@@ -578,14 +578,14 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		-- landscape: only as tall as the longer column needs (at least four rows)
 		local leftWant = labelH + 8 + listWant + 8 + hintH + (leaveH > 0 and leaveH + 8 or 0)
 		local rightWant = tabsH + 10 + (tab == "Friends" and 58 or 0) + math.max(4, rightRows) * (ROW_H + ROW_GAP)
-		local panelH = stacked and maxH or math.min(maxH, math.max(leftWant, rightWant) + 36)
+		local panelH = math.min(maxH, (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + 36)
 		local iw, ih = w - 36, panelH - 32
 		place(ui.Panel, (W - w) / 2, top, w, panelH)
 		local lw, lh, rx, ry, rw, rh
 		if stacked then
 			-- stacked: the party (as tall as it needs, up to half), then the lists
 			lw = iw
-			lh = math.min(labelH + 8 + listWant + 8 + hintH + leaveH, math.floor(ih * 0.62))
+			lh = math.min(leftWant, math.max(math.floor(ih * 0.45), ih - 14 - rightWant))
 			rx, ry, rw, rh = 0, lh + 14, iw, ih - lh - 14
 		else
 			lw = math.floor(iw * 0.44)

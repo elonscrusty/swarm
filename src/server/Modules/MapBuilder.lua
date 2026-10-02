@@ -645,14 +645,17 @@ local LIGHTING = {
 		Rays = { Intensity = 0.02, Spread = 0.5 },
 		Clouds = { Cover = 0.55, Density = 0.45, Color = rgb(232, 238, 226) },
 	},
-	-- crisp late-morning snowfield: lower sun brightness (the floor is white), cool fill
+	-- crisp late-morning snowfield: lower sun brightness (the floor is white), cool fill.
+	-- Readability on snow: a dimmer sun, less haze and bloom, crisper shadows and a bit
+	-- more contrast and colour, so pale creatures, gems, warnings and the hero stand out
+	-- from the floor (the floor itself is a greyer packed snow, see buildSnow).
 	Snow = {
-		Clock = 11.4, Brightness = 2.3, Latitude = 44, Shadow = 0.4,
-		Ambient = rgb(116, 124, 140), Outdoor = rgb(148, 158, 178), Top = rgb(255, 250, 240), Bottom = rgb(118, 132, 152),
-		Diffuse = 0.45, Specular = 0.35,
-		Atmo = { Density = 0.24, Offset = 0.05, Color = rgb(216, 228, 242), Decay = rgb(150, 172, 198), Glare = 0, Haze = 0.8 },
-		Bloom = { Intensity = 0.18, Size = 20, Threshold = 2.3 },
-		Grade = { Brightness = -0.01, Contrast = 0.1, Saturation = -0.02, Tint = rgb(244, 248, 255) },
+		Clock = 11.4, Brightness = 2.2, Latitude = 44, Shadow = 0.3,
+		Ambient = rgb(108, 116, 132), Outdoor = rgb(140, 150, 170), Top = rgb(255, 248, 236), Bottom = rgb(110, 122, 140),
+		Diffuse = 0.42, Specular = 0.3,
+		Atmo = { Density = 0.22, Offset = 0.05, Color = rgb(210, 222, 238), Decay = rgb(146, 166, 192), Glare = 0, Haze = 0.55 },
+		Bloom = { Intensity = 0.14, Size = 20, Threshold = 2.7 },
+		Grade = { Brightness = -0.02, Contrast = 0.15, Saturation = 0.05, Tint = rgb(246, 248, 255) },
 		Rays = { Intensity = 0.02, Spread = 0.5 },
 		Clouds = { Cover = 0.45, Density = 0.4, Color = rgb(255, 255, 255) },
 	},
@@ -2343,9 +2346,12 @@ end
 local function buildSnow(arena: Arena)
 	arena.DecorDensity = 0.65
 	arena.PortalPalette = { Moss = P.snow_100 }
-	local base = mix(P.snow_200, P.snow_300, 0.25)
-	biomeGround(arena, P.snow_300, base)
-	local blue, white, grey = mix(P.snow_300, P.ice_300, 0.08), P.snow_100, mix(P.snow_300, P.snow_400, 0.3)
+	-- packed snow a step darker than fresh snow (value 0.78, not 0.9): white-ish creatures,
+	-- ice-blue gems, warnings and the hero need a floor they can stand out from; the
+	-- brightest white is kept for drifts, rims and props
+	local base = mix(P.snow_300, P.stone_300, 0.3)
+	biomeGround(arena, mix(P.snow_300, P.stone_300, 0.15), base)
+	local blue, white, grey = mix(P.snow_400, P.ice_300, 0.25), mix(P.snow_200, P.snow_300, 0.4), mix(P.snow_400, P.stone_400, 0.35)
 	groundPatches(arena, {
 		{ -150, -150, 26, blue }, { 120, -165, 22, blue }, { -170, 60, 24, blue }, { 160, 120, 26, blue },
 		{ 30, -126, 20, grey }, { -60, 150, 22, blue }, { -110, -40, 18, grey },
@@ -2353,11 +2359,11 @@ local function buildSnow(arena: Arena)
 		{ 140, -110, 18, white }, { -140, 120, 20, white }, { 0, 140, 24, white }, { -175, -90, 20, white },
 		{ 120, 175, 16, grey }, { 175, 10, 18, grey },
 	})
-	patch(arena, 0, 0, 24, P.snow_100, 0.05)
-	patch(arena, 3, 2, 13, mix(P.snow_200, P.snow_300, 0.5), 0.07)
+	patch(arena, 0, 0, 24, mix(P.snow_300, P.stone_300, 0.15), 0.05)
+	patch(arena, 3, 2, 13, mix(P.snow_400, P.stone_300, 0.4), 0.07)
 
-	-- packed-snow trails
-	local core, edge = mix(P.snow_400, P.ice_300, 0.2), mix(P.snow_300, base, 0.4)
+	-- packed-snow trails: a warm trodden grey (blue gems and frost beetles read on it)
+	local core, edge = mix(P.stone_400, P.dirt_300, 0.3), mix(P.snow_400, P.stone_300, 0.5)
 	dirtPath(arena, {
 		Vector2.new(-262, 18), Vector2.new(-196, 30), Vector2.new(-150, 12), Vector2.new(-96, 22),
 		Vector2.new(-44, 6), Vector2.new(0, 0), Vector2.new(40, -12), Vector2.new(90, -4),
