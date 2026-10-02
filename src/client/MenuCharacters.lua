@@ -163,7 +163,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local equipped = text(marks, "Label", "EQUIPPED", { Name = "Equipped", LayoutOrder = 2, Size = UDim2.fromOffset(0, TS(13) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200 }, 13)
 		local lock = Icons.Draw(marks, "lock", { Size = 18, Color = P.stone_300, Back = P.slate_900 })
 		lock.LayoutOrder = 3
-		local preview = UIKit.StatusPill(marks, "PREVIEW", { LayoutOrder = 4 })
+		local preview = UIKit.StatusPill(marks, "PREVIEW", { LayoutOrder = 4, Size = UDim2.fromOffset(0, TS(11) + 12) })
+		preview.TextSize = TS(11)
 		UIKit.SetStatus(preview, "PREVIEW")
 		preview.TextColor3 = P.gold_200
 		preview.BackgroundColor3 = P.slate_950
@@ -473,8 +474,15 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		-- the name takes the room the marks leave
 		if full then
 			local nx = row.Name.Position.X.Offset
-			local reserve = sel and 124 or ((insp and 130 or 0) + (own and 0 or 30))
+			local reserve = sel and 124 or ((insp and 96 or 0) + (own and 0 or 26))
 			row.Name.Size = UDim2.new(1, -(nx + reserve + 8), 1, 0)
+			-- a long name beside the marks a little smaller instead of cut off
+			local room = (ui.RowW or 300) - nx - reserve - 8
+			local size = Theme.TextSize.H2
+			while size > 13 and #CharacterData.Characters[id].Name * TS(size) * 0.58 > room do
+				size -= 1
+			end
+			row.Name.TextSize = TS(size)
 		end
 	end
 
@@ -558,7 +566,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			local a = AchievementData.Achievements[def.Unlock.Achievement]
 			local goal = shortGoal(a)
 			ui.Action.SetKind("Secondary")
-			ui.Action.SetText(goal and (string.upper(goal) .. " TO UNLOCK") or ("EARN " .. string.upper(a and a.Name or "its achievement") .. " TO UNLOCK"))
+			-- (phones: just the goal when "TO UNLOCK" would not fit)
+			local tail = (UIKit.IsCompact() and goal and #goal > 14) and "" or " TO UNLOCK"
+			ui.Action.SetText(goal and (string.upper(goal) .. tail) or ("EARN " .. string.upper(a and a.Name or "its achievement") .. " TO UNLOCK"))
 			ui.Action.SetIcon("lock")
 			ui.Action.SetEnabled(false)
 		elseif not own then
@@ -729,7 +739,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		else
 			-- one column of rows split by lines; when rows get too short (phones in
 			-- landscape) two columns of tiles
-			local lw = math.clamp(W * 0.25, 290, 340)
+			local lw = math.clamp(W * 0.27, 300, 350)
 			local inner = H - M - top - 20
 			local rowH = math.floor(inner / n)
 			local cols = 1
@@ -746,6 +756,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			ui.ListLayout.Wraps = cols == 2
 			ui.ListLayout.Padding = UDim.new(0, gap)
 			place(ui.List, M, top, lw, rows * rowH + (rows - 1) * gap + 20)
+			ui.RowW = cols == 2 and (lw - 20 - gap) / 2 or (lw - 20)
 			for id, row in pairs(ui.Rows) do
 				row.Instance.Size = cols == 2 and UDim2.new(0.5, -gap / 2, 0, rowH) or UDim2.new(1, 0, 0, rowH)
 				rowStyle(id, cols == 2 and "tile" or "row", rowH)

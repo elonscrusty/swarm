@@ -31,7 +31,7 @@ from mathutils import Vector
 
 from models._biomekit import shard
 from models._propkit import blob_points, hull, loft, ring
-from models.enemies import X, gem, tube
+from models.enemies import X, ellipsoid, gem, tube
 from style import P, mix
 from swarmkit import register
 
@@ -85,6 +85,7 @@ def frostbound_colossus(m):
         "Glow": CYAN_GLOW, "Eye": CYAN_GLOW,
         "White": mix("ice_100", TEAL, 0.3),              # phase-2 frost armour
     }
+    m.extra["render_hide"] = ["FrostChest", "FrostBack", "FrostShoulderL", "FrostShoulderR", "FrostArmL", "FrostArmR"]
     # ---- legs: short rock pillars with an ice knee cap and a broad flat foot
     for s, side in ((1, "L"), (-1, "R")):
         anim = "SwingA" if s > 0 else "SwingB"
@@ -110,17 +111,17 @@ def frostbound_colossus(m):
     gem(heart, (0, -2.45, 8.7), 0.8, scale=(0.8, 0.6, 1.25))
     # ---- head: a small rock skull sunk forward between the shoulders, ice brow, glowing eyes
     head = m.piece("Head", "Dark")
-    rock(head, (0, -2.0, 11.0), (1.35, 1.25, 1.15), seed=61, n=14)
+    rock(head, (0, -2.2, 11.3), (1.45, 1.3, 1.2), seed=61, n=14)
     brow = m.piece("Brow", "Base")
-    rock(brow, (0, -2.65, 11.65), (1.6, 0.75, 0.5), seed=62, n=10)
+    rock(brow, (0, -2.95, 11.95), (1.7, 0.75, 0.5), seed=62, n=10)
     for s in (-1, 1):  # brow horns sweeping back
-        thorn(brow, (s * 1.1, -2.4, 11.8), (s * 0.6, 0.5, 0.6), 1.5, 0.35, curl=(0, 0.5, 0.2))
+        thorn(brow, (s * 1.2, -2.7, 12.1), (s * 0.6, 0.5, 0.6), 1.5, 0.35, curl=(0, 0.5, 0.2))
     eyes = m.piece("Eyes", "Eye", "Neon")
     for s in (-1, 1):
-        gem(eyes, (s * 0.52, -3.12, 11.15), 0.26, scale=(1.3, 0.6, 0.75))
+        gem(eyes, (s * 0.55, -3.4, 11.45), 0.28, scale=(1.3, 0.6, 0.75))
     beard = m.piece("Beard", "Light")
     for x, h in ((0, 1.6), (0.45, 1.25), (-0.45, 1.25), (0.85, 0.85), (-0.85, 0.85)):
-        spike(beard, (x, -2.9, 10.45), (x * 0.1, -0.25, -1), h, 0.3)
+        spike(beard, (x, -3.2, 10.75), (x * 0.1, -0.25, -1), h, 0.3)
     # ---- crystal spikes on the back (static)
     back = m.piece("BackSpikes", "Accent")
     for base, h, r, tilt in (((0, 2.5, 11.4), 3.4, 0.6, (-30, 0)), ((-1.5, 2.2, 11.0), 2.6, 0.5, (-25, -22)),
@@ -184,26 +185,28 @@ def briar_sentinel(m):
         "Leaf": mix("moss_500", "moss_400", 0.4),       # bramble armour
         "Accent": P("moss_700"),                        # vines
         "Light": mix("gold_200", "wood_400", 0.3),      # bone thorns
+        "Wood": P("wood_500"),                          # the crown's branches
         "Glow": P("amber_300"), "Eye": AMBER,
     }
     # ---- root legs: twisted roots that split into three toes on the ground
     for s, side in ((1, "L"), (-1, "R")):
         anim = "SwingA" if s > 0 else "SwingB"
-        hip = (s * 1.6, 0.4, 4.6)
+        hip = (s * 1.7, 0.4, 4.6)
         leg = m.piece("Leg" + side, "Base", anim=anim, pivot=hip)
-        tube(leg, [hip, (s * 2.15, 0.1, 2.7), (s * 2.25, 0.0, 0.9)], [1.05, 0.85, 0.95], seg=6)
+        tube(leg, [hip, (s * 2.15, 0.1, 2.7), (s * 2.25, 0.0, 0.9)], [1.25, 1.05, 1.1], seg=6)
         for dx, dy in ((0.9, -1.6), (1.3, 0.3), (0.1, 1.4), (-0.6, -1.3)):
             tube(leg, [(s * 2.25, 0.0, 1.1), (s * (2.25 + dx * 0.6), dy * 0.6, 0.55), (s * (2.25 + dx), dy, 0.0)],
-                 [0.5, 0.36, 0.0], seg=4)
+                 [0.6, 0.42, 0.0], seg=4)
         knee = m.piece("KneeThorns" + side, "Light", anim=anim, pivot=hip)
         thorn(knee, (s * 2.1, -0.75, 2.9), (s * 0.3, -1, 0.3), 1.0, 0.25, curl=(0, 0, 0.3))
     # ---- the trunk: a twisted bark body, wider at the chest, with spiral grooves
     body = m.piece("Body", "Base", shadow=True)
     rings = []
-    for k, (z, r, cy) in enumerate(((3.6, 1.7, 0.4), (5.4, 2.0, 0.4), (7.2, 2.4, 0.3), (9.0, 2.7, 0.5), (10.6, 2.3, 0.6),
-                                    (11.4, 1.3, 0.6))):
+    for k, (z, r, cy) in enumerate(((3.8, 2.0, 0.4), (5.4, 2.2, 0.4), (7.2, 2.6, 0.3), (9.0, 3.0, 0.5), (10.6, 2.6, 0.6),
+                                    (11.5, 1.5, 0.6))):
         rings.append(ring(8, r, z, phase=k * 0.32, cy=cy, sx=1.08, sy=0.88, wobble=0.07, seed=200 + k))
     loft(body, rings)
+    rock(body, (0, 0.4, 4.3), (2.4, 1.8, 1.0), seed=205, n=12)  # pelvis knot
     grooves = m.piece("Grooves", "Dark")
     for k in range(5):  # spiral bark ridges
         a0 = k * math.tau / 5
@@ -217,7 +220,7 @@ def briar_sentinel(m):
     # ---- bramble armour: breastplate halves around the heart-knot, pauldrons, a back mantle
     armour = m.piece("Armour", "Leaf", shadow=True)
     for s in (-1, 1):
-        rock(armour, (s * 1.35, -1.6, 8.6), (1.3, 0.85, 1.7), seed=211 + s, n=12)
+        rock(armour, (s * 1.55, -1.75, 8.7), (1.55, 1.0, 2.0), seed=211 + s, n=12)
     rock(armour, (0, 1.9, 9.6), (2.6, 1.0, 1.5), seed=214, n=12)
     rock(armour, (0, -1.1, 5.4), (1.9, 0.9, 0.8), seed=215, n=10)  # belt plate
     heart = m.piece("Heart", "Glow", "Neon", anim="Pulse")
@@ -240,23 +243,23 @@ def briar_sentinel(m):
         thorn(thorns, (s * 1.6, 2.6, 9.9), (s * 0.7, 1, 0.5), 1.3, 0.28, curl=(0, 0, 0.3))
     # ---- helm: a bark head with a dark visor slit, amber eyes, under a crown of thorny branches
     head = m.piece("Head", "Base")
-    rock(head, (0, -0.55, 12.1), (1.35, 1.3, 1.45), seed=231, n=14)
+    rock(head, (0, -0.8, 12.3), (1.65, 1.5, 1.6), seed=231, n=14)
     visor = m.piece("Visor", "Dark")
-    rock(visor, (0, -1.7, 12.15), (1.15, 0.35, 0.38), seed=232, n=8)
-    rock(visor, (0, -1.75, 11.45), (0.28, 0.3, 0.55), seed=233, n=6)  # nasal ridge
+    rock(visor, (0, -2.15, 12.4), (1.3, 0.38, 0.4), seed=232, n=8)
+    rock(visor, (0, -2.2, 11.6), (0.3, 0.32, 0.6), seed=233, n=6)  # nasal ridge
     eyes = m.piece("Eyes", "Eye", "Neon")
     for s in (-1, 1):
-        gem(eyes, (s * 0.5, -2.0, 12.2), 0.26, scale=(1.3, 0.6, 0.7))
-    crown = m.piece("Crown", "Dark")
+        gem(eyes, (s * 0.55, -2.5, 12.45), 0.3, scale=(1.3, 0.6, 0.7))
+    crown = m.piece("Crown", "Wood")
     berries = m.piece("Berries", "Glow", "Neon")
     for k in range(7):
         a = math.radians(-90 + (k - 3) * 34)
         ox, oy = math.cos(a), math.sin(a)
-        base = Vector((ox * 0.95, -0.5 + oy * 0.9, 13.1))
-        h = 2.0 if k == 3 else (1.6 if k % 2 else 1.3)
+        base = Vector((ox * 1.15, -0.75 + oy * 1.05, 13.4))
+        h = 2.6 if k == 3 else (2.1 if k % 2 else 1.7)
         mid = base + Vector((ox * 0.45, oy * 0.3, h * 0.6))
         tip = base + Vector((ox * 1.0, oy * 0.6 + 0.3, h))
-        tube(crown, [base, mid, tip], [0.3, 0.2, 0.0], seg=4)
+        tube(crown, [base, mid, tip], [0.38, 0.24, 0.0], seg=4)
         if k % 2 == 0:
             spike(crown, mid, (ox, oy, 0.3), 0.7, 0.13, seg=3)
             gem(berries, tuple(mid + Vector((ox, oy, 0.3)).normalized() * 0.15), 0.2)
@@ -266,13 +269,13 @@ def briar_sentinel(m):
         sh = (s * 3.0, 0.4, 10.0)
         arm = m.piece("Arm" + side, "Base", anim=anim, pivot=sh)
         elbow, wrist = (s * 4.4, -0.4, 7.4), (s * 4.85, -1.3, 4.0)
-        tube(arm, [sh, elbow, wrist, (s * 4.95, -1.7, 2.3)], [0.95, 0.8, 0.72, 0.75], seg=6)
+        tube(arm, [sh, elbow, wrist, (s * 4.95, -1.7, 2.3)], [1.3, 1.1, 0.95, 1.0], seg=6)
         for dx, dy in ((0.9, -1.4), (0.2, -1.9), (-0.6, -1.4), (1.2, -0.2)):  # root fingers to the ground
             tube(arm, [(s * 4.95, -1.7, 2.4), (s * (4.95 + dx * 0.55), -1.7 + dy * 0.55, 1.0), (s * (4.95 + dx), -1.7 + dy, 0.05)],
-                 [0.4, 0.3, 0.0], seg=4)
+                 [0.5, 0.36, 0.0], seg=4)
         pauldron = m.piece("Pauldron" + side, "Leaf", anim=anim, pivot=sh)
-        rock(pauldron, (s * 3.2, 0.4, 10.75), (1.75, 1.7, 1.05), seed=241 + s, n=12)
-        rock(pauldron, (s * 4.75, -0.75, 5.9), (0.95, 0.95, 1.1), seed=244 + s, n=10)  # bracer
+        rock(pauldron, (s * 3.3, 0.4, 10.85), (2.0, 1.9, 1.2), seed=241 + s, n=12)
+        rock(pauldron, (s * 4.75, -0.8, 5.9), (1.15, 1.15, 1.3), seed=244 + s, n=10)  # bracer
         at = m.piece("ArmThorns" + side, "Light", anim=anim, pivot=sh)
         for base, d, ln in (((3.5, 0.2, 11.6), (0.35, 0.1, 1), 1.6), ((4.4, -0.4, 11.0), (1, -0.2, 0.6), 1.3),
                             ((2.7, 1.3, 11.3), (0.1, 0.9, 0.8), 1.2), ((5.5, -0.9, 6.3), (1, -0.3, 0.3), 1.0)):
@@ -291,9 +294,14 @@ def thorn_sprout(m):
     m.extra["palette"] = {"Base": P("wood_500"), "Leaf": mix("moss_400", "moss_300", 0.3), "Light": mix("gold_200", "wood_400", 0.3),
                           "Dark": P("wood_900"), "Eye": AMBER}
     shell = m.piece("Shell", "Base", shadow=True)
-    rock(shell, (0, 0.25, 0.85), (1.12, 1.25, 0.72), seed=301, n=14, jitter=0.08, floor=-0.35)
+    c = (0, 0.25, 0.55)
+    for s in (-1, 1):  # two domed elytra; the dark underside shows through the seam
+        ellipsoid(shell, c, (1.15, 1.3, 1.0), seg=8, rings=5, axis="Y",
+                  keep=[(c, (0, 0, 1)), (c, (s, 0, 0))], shift=(s * 0.05, 0, 0))
+    under = m.piece("Under", "Dark")
+    ellipsoid(under, (0, 0.25, 0.6), (1.0, 1.2, 0.35), seg=8, rings=4)
     moss = m.piece("Moss", "Leaf")
-    rock(moss, (0, 0.15, 1.42), (0.8, 0.85, 0.28), seed=302, n=10, jitter=0.12)
+    rock(moss, (0, 0.2, 1.42), (0.75, 0.85, 0.25), seed=302, n=10, jitter=0.12)
     thorns = m.piece("Thorns", "Light")
     for base, d, ln in (((0, 0.1, 1.55), (0, 0.45, 1), 1.15), ((0.55, 0.65, 1.3), (0.6, 0.5, 0.8), 0.85),
                         ((-0.55, 0.65, 1.3), (-0.6, 0.5, 0.8), 0.85)):
@@ -307,7 +315,7 @@ def thorn_sprout(m):
         gem(eyes, (s * 0.3, -1.35, 0.86), 0.12)
     for s, name, anim in ((1, "LegsL", "SwingA"), (-1, "LegsR", "SwingB")):
         legs = m.piece(name, "Dark", anim=anim, pivot=(s * 0.7, 0.1, 0.5))
-        for hip, knee, foot in (((0.7, -0.5, 0.5), (1.25, -0.85, 0.75), (1.4, -1.15, 0.0)),
-                                ((0.75, 0.15, 0.48), (1.35, 0.2, 0.78), (1.5, 0.3, 0.0)),
-                                ((0.7, 0.75, 0.48), (1.25, 1.1, 0.75), (1.38, 1.45, 0.0))):
-            tube(legs, X(s, [hip, knee, foot]), [0.13, 0.11, 0.0], seg=4)
+        for hip, knee, foot in (((0.7, -0.5, 0.5), (1.1, -0.8, 0.62), (1.22, -1.05, 0.0)),
+                                ((0.75, 0.15, 0.48), (1.18, 0.2, 0.65), (1.3, 0.3, 0.0)),
+                                ((0.7, 0.75, 0.48), (1.1, 1.0, 0.62), (1.2, 1.3, 0.0))):
+            tube(legs, X(s, [hip, knee, foot]), [0.15, 0.12, 0.0], seg=4)

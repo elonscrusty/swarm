@@ -459,29 +459,46 @@ local function cardIconId(c): string
 	return c.Id
 end
 
-local function cardBand(c): (string, Color3, Color3)
+-- Header band colours: (band fill, accent). The accent rims the card and its icon tile.
+local function cardBand(c): (Color3, Color3)
 	if c.Type == "Gold" or c.Type == "Heal" then
-		return "BONUS", P.moss_600, P.moss_200
+		return P.moss_700, P.moss_200
 	end
 	local r = Theme.Rarity[c.Rarity] or Theme.Rarity.Common
 	if c.Rarity == "Rare" then
 		-- NEW cards read cool ice-blue next to the slate upgrades
-		return string.upper(r.Label), P.ice_500:Lerp(P.slate_800, 0.45), P.ice_300
+		return P.ice_500:Lerp(P.slate_800, 0.55), P.ice_300
+	elseif c.Rarity == "Legendary" then
+		return r.Band, r.Color
 	end
-	return string.upper(r.Label), r.Band, r.Color
+	return r.Band:Lerp(P.slate_900, 0.35), r.Color
 end
 
--- Rank line under the card name: "NEW WEAPON", "LV 3 → 4 / 8", "EVOLUTION" (the server
--- sends Rank; older servers only sent Level).
-local function cardLevelText(c): string
+-- Small caps in the header band: what kind of card this is.
+local function cardKind(c): string
 	if c.Type == "WeaponNew" then
 		return "NEW WEAPON"
 	elseif c.Type == "PassiveNew" then
 		return "NEW PASSIVE"
 	elseif c.Type == "Evolve" then
+		return "EVOLUTION"
+	elseif c.Type == "Gold" or c.Type == "Heal" then
+		return "BONUS"
+	elseif c.Rarity == "Epic" then
+		return "MAX LEVEL"
+	end
+	return "UPGRADE"
+end
+
+-- Line under the card name: "LV 3 → 4 / 8", "LONGBOW EVOLVES"; nothing on NEW cards (the
+-- server sends Rank; older servers only sent Level).
+local function cardLevelText(c): string
+	if c.Type == "WeaponNew" or c.Type == "PassiveNew" then
+		return ""
+	elseif c.Type == "Evolve" then
 		local def = WeaponData.Weapons[c.Id]
 		return string.upper((def and def.Name or "Weapon") .. " evolves")
-	elseif c.Rank then
+	elseif c.Rank and c.Rank ~= "NEW" then
 		return string.upper(c.Rank)
 	elseif c.Type == "WeaponUp" then
 		return string.format("LV %d → %d / %d", c.Level - 1, c.Level, WeaponData.MaxLevel)
@@ -500,52 +517,94 @@ local function hex(c: Color3): string
 end
 
 --[[
-	What the card changes, as RichText lines ("Damage 10 → 15" with the new value bright):
-	the server's Lines, or the plain Description for older servers / bonus cards.
-	New cards start with their short description.
+	What a card says, split for the card layout:
+	  Desc     the short description (a weapon upgrade shows its new perk, or the weapon's
+	           own description)
+	  Stats    starting stats of a NEW weapon ({ Label, To }): a table of rows
+	  Changes  stat changes ({ Label, From, To }): the first is the boxed highlight, the
+	           rest small rows under it
+	From the server's Lines (real StatSheet / WeaponData values); bonus cards and older
+	servers fall back to the plain Description.
 ]]
-local function cardRichLines(c, sep: string): string
-	local out = {}
-	local isNew = c.Type == "WeaponNew" or c.Type == "PassiveNew" or c.Type == "PassiveUp" or c.Type == "Evolve"
-	if isNew and c.Description and c.Description ~= "" then
-		table.insert(out, string.format('<font color="%s">%s</font>', hex(C.TextMuted), c.Description))
-	end
+local function cardContent(c): (string?, { any }, { any })
 	local lines = type(c.Lines) == "table" and c.Lines or {}
-	if c.Type == "WeaponNew" then
-		-- starting stats of a new weapon on one line: "Damage 22 · Arrows 1 · Cooldown 1.70s"
-		local parts = {}
-		for _, line in ipairs(lines) do
-			if line.To and not line.From and not line.Text then
-				table.insert(parts, string.format('%s <font color="%s"><b>%s</b></font>', tostring(line.Label), hex(C.Text), tostring(line.To)))
-			end
-		end
-		if #parts > 0 then
-			table.insert(out, table.concat(parts, "  ·  "))
-		end
-		return table.concat(out, sep)
-	end
+	local stats, changes = {}, {}
+	local perk: string? = nil
 	for _, line in ipairs(lines) do
 		if line.Text then
-			table.insert(out, string.format('<font color="%s"><b>%s</b></font> %s', hex(P.gold_300), tostring(line.Label), tostring(line.Text)))
+			perk = string.format('<font color="%s"><b>%s</b></font> %s', hex(P.gold_300), tostring(line.Label), tostring(line.Text))
 		elseif line.From then
-			table.insert(out, string.format('%s %s → <font color="%s"><b>%s</b></font>', tostring(line.Label), tostring(line.From), hex(P.moss_200), tostring(line.To)))
+			table.insert(changes, line)
 		elseif line.To then
-			table.insert(out, string.format('%s <font color="%s"><b>%s</b></font>', tostring(line.Label), hex(C.Text), tostring(line.To)))
+			table.insert(stats, line)
 		end
 	end
-	if #out == 0 and c.Description then
-		table.insert(out, c.Description)
+	local desc: string? = nil
+	if c.Type == "WeaponUp" then
+		local def = WeaponData.Weapons[c.Id]
+		desc = perk or (def and def.Description)
+	elseif c.Description and c.Description ~= "" then
+		desc = c.Description
 	end
-	return table.concat(out, sep)
+	return desc, stats, changes
+end
+
+-- Icon for a stat label (Icons names); amount stats ("Arrows", "Strikes") use the weapon.
+local STAT_ICONS = {
+	{ "projectile speed", "arrowFast" },
+	{ "projectiles", "duplicate" },
+	{ "cooldown", "clock" },
+	{ "duration", "hourglass" },
+	{ "area", "area" },
+	{ "pierce", "arrowFast" },
+	{ "regen", "plus" },
+	{ "heal", "plus" },
+	{ "hp", "heart" },
+	{ "armor", "shield" },
+	{ "speed", "boot" },
+	{ "knockback", "chevronRight" },
+	{ "luck", "clover" },
+	{ "crit", "aim" },
+	{ "pickup", "magnet" },
+	{ "xp", "sprout" },
+	{ "gold", "coin" },
+	{ "damage", "sparkle" },
+}
+local function statIcon(parent: Instance, label: string, c, size: number): Frame
+	local l = string.lower(label)
+	for _, pair in ipairs(STAT_ICONS) do
+		if string.find(l, pair[1], 1, true) then
+			return Icons.Draw(parent, pair[2], { Size = size, Color = P.gold_300 })
+		end
+	end
+	if WeaponData.Weapons[c.Id] then
+		return Icons.Upgrade(parent, cardIconId(c), { Size = size })
+	end
+	return Icons.Draw(parent, "chevronsUp", { Size = size, Color = P.gold_300 })
+end
+
+-- "Synergy: Elemental Trinity 2/3" → "ELEMENTAL TRINITY • 2 / 3" (the server's card text).
+local function synergyText(c): string
+	local s = tostring(c.Synergy)
+	s = string.gsub(s, "^Synergy:%s*", "")
+	local name, have, need = string.match(s, "^(.-)%s+(%d+)%s*/%s*(%d+)$")
+	if name then
+		return string.upper(name) .. "  •  " .. have .. " / " .. need
+	end
+	return string.upper(s)
 end
 
 local pickedAt = 0 -- when a card was last picked (its punch plays before the close)
 
--- Selection: the picked card punches up with a quick flash of its accent colour, the
+-- Selection: the picked card turns gold (focus look), punches up with a quick flash, the
 -- others shrink and dim; the overlay closes right after (closeOffer).
 local function pickAnimation(index: number)
 	pickedAt = os.clock()
 	local reduced = ClientSettings.Reduced()
+	local focus = levelUp.Focus[index]
+	if focus then
+		focus(true)
+	end
 	for _, card in ipairs(levelUp.Cards:GetChildren()) do
 		if card:IsA("GuiObject") then
 			local s = UIAnim.ScaleOf(card)
@@ -553,17 +612,10 @@ local function pickAnimation(index: number)
 			if card.Name == "Card" .. index then
 				s.Scale = reduced and 1.03 or 1.09
 				UIAnim.Tween(s, 0.14, { Scale = 1.04 }, Enum.EasingStyle.Quad)
-				if face and face:IsA("GuiObject") then
-					local edge = face:FindFirstChildOfClass("UIStroke")
-					if edge then
-						edge.Thickness = 3
-						edge.Transparency = 0
-					end
-					if not reduced then
-						local flash = new("Frame", { Name = "PickFlash", BackgroundColor3 = card:GetAttribute("Legendary") == true and P.gold_200 or P.ivory_100, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 60 }, face)
-						UIKit.corner(flash, Theme.Radius.L)
-						TweenService:Create(flash, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
-					end
+				if face and face:IsA("GuiObject") and not reduced then
+					local flash = new("Frame", { Name = "PickFlash", BackgroundColor3 = P.gold_200, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 60 }, face)
+					UIKit.corner(flash, Theme.Radius.L)
+					TweenService:Create(flash, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
 				end
 			else
 				UIAnim.Tween(s, 0.14, { Scale = 0.93 })
@@ -633,6 +685,34 @@ local function goldBurst(hit: GuiObject, delay: number)
 	end)
 end
 
+-- A thin gold rule fading out towards `fadeLeft`'s side (flanks the buttons and hint).
+local function goldRule(parent: Instance, width: number, fadeLeft: boolean, order: number): Frame
+	local r = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromOffset(width, 1), LayoutOrder = order }, parent)
+	new("UIGradient", { Transparency = NumberSequence.new(fadeLeft and 1 or 0.25, fadeLeft and 0.25 or 1) }, r)
+	return r
+end
+
+-- How to choose with the device in hand ("Press 1, 2 or 3 to choose" / tap / gamepad).
+local function choiceHint(count: number): string
+	local last = UserInputService:GetLastInputType()
+	if last == Enum.UserInputType.Gamepad1 or last == Enum.UserInputType.Gamepad2 then
+		return "Press A to choose"
+	elseif last == Enum.UserInputType.Touch or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled) then
+		return "Tap a card to choose"
+	end
+	local keys = {}
+	for i = 1, math.max(1, count) do
+		table.insert(keys, tostring(i))
+	end
+	local last1 = table.remove(keys)
+	return #keys > 0 and string.format("Press %s or %s to choose", table.concat(keys, ", "), last1) or string.format("Press %s to choose", last1)
+end
+
+--[[
+	Layout (owner mockup): big serif LEVEL UP! over a gold rule with a diamond, "Choose one
+	upgrade", an AUTO-PICK pill and the gold countdown bar; the cards; REROLL / SKIP
+	flanked by thin gold rules; a hint line on how to choose with the current device.
+]]
 local function buildLevelUp()
 	local overlay = new("Frame", {
 		Name = "LevelUp",
@@ -642,9 +722,10 @@ local function buildLevelUp()
 		Visible = false,
 		ZIndex = Theme.Z.LevelUp,
 	}, root)
-	overlay:SetAttribute("BackdropTransparency", 0.15)
+	overlay:SetAttribute("BackdropTransparency", 0.2)
 	levelUp.Overlay = overlay
-	local dim = new("Frame", { Name = "Dim", BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.15, BorderSizePixel = 0, Active = true, ZIndex = 1 }, overlay)
+	levelUp.Focus = {}
+	local dim = new("Frame", { Name = "Dim", BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.2, BorderSizePixel = 0, Active = true, ZIndex = 1 }, overlay)
 	UIKit.Bleed(dim)
 	-- "Panel" is what show() pops in: here the whole content block
 	local panel = new("Frame", { Name = "Panel", BackgroundTransparency = 1, ZIndex = 2 }, overlay)
@@ -654,11 +735,14 @@ local function buildLevelUp()
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.gold_300,
 		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.5,
-	}, 44)
-	levelUp.Divider = UIKit.Divider(panel, 300)
-	levelUp.Sub = text(panel, "BodyStrong", "Choose an upgrade", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted })
-	levelUp.Timer = UIKit.Meter(panel, { Gradient = ColorSequence.new(P.gold_500, P.gold_300), Size = UDim2.fromOffset(240, 5) })
+		TextStrokeTransparency = 0.45,
+	}, 46)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.gold_200, P.gold_400) }, levelUp.Title)
+	levelUp.Divider = UIKit.Divider(panel, 460)
+	levelUp.Sub = text(panel, "H3", "Choose one upgrade", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text })
+	levelUp.Pill = UIKit.IconPill(panel, "clock", "AUTO-PICK IN 25s", { AnchorPoint = Vector2.new(0.5, 0) })
+	levelUp.Pill.Label.TextColor3 = C.Text
+	levelUp.Timer = UIKit.Meter(panel, { Gradient = ColorSequence.new(P.gold_500, P.gold_300), Size = UDim2.fromOffset(330, 7) })
 	levelUp.Cards = new("Frame", { Name = "Cards", BackgroundTransparency = 1 }, panel)
 	levelUp.Layout = UIKit.list(levelUp.Cards, {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -668,15 +752,18 @@ local function buildLevelUp()
 	})
 	local actions = new("Frame", { Name = "Actions", BackgroundTransparency = 1 }, panel)
 	levelUp.Actions = actions
-	UIKit.list(actions, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 16) })
+	UIKit.list(actions, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 18) })
+	levelUp.RuleL = goldRule(actions, 110, true, 0)
+	levelUp.RuleR = goldRule(actions, 110, false, 3)
 	-- REROLL: 3 new cards; SKIP: no card, a little run gold. Both show what is left this
 	-- run (permanent upgrades / VIP give them); with none bought they say where to get them.
 	levelUp.Reroll = UIKit.Button(actions, {
+		Kind = "Outline",
 		Title = "REROLL",
 		Subtitle = "New cards",
 		TitleStyle = "H3",
 		Icon = "cycle",
-		IconSize = 20,
+		IconSize = 26,
 		Size = UDim2.fromOffset(230, 60),
 		Align = "Left",
 		LayoutOrder = 1,
@@ -698,11 +785,12 @@ local function buildLevelUp()
 		end,
 	})
 	levelUp.Skip = UIKit.Button(actions, {
+		Kind = "Outline",
 		Title = "SKIP",
 		Subtitle = "No card",
 		TitleStyle = "H3",
 		Icon = "skip",
-		IconSize = 20,
+		IconSize = 26,
 		Size = UDim2.fromOffset(230, 60),
 		Align = "Left",
 		LayoutOrder = 2,
@@ -716,6 +804,18 @@ local function buildLevelUp()
 			end)
 		end,
 	})
+	-- how to choose (keyboard / touch / gamepad), between two short rules
+	local hint = new("Frame", { Name = "Hint", BackgroundTransparency = 1 }, panel)
+	UIKit.list(hint, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
+	goldRule(hint, 90, true, 0)
+	levelUp.HintText = text(hint, "Body", "", { Size = UDim2.fromOffset(0, TS(15) + 6), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.TextMuted, LayoutOrder = 1 }, 15)
+	goldRule(hint, 90, false, 2)
+	levelUp.Hint = hint
+	UserInputService.LastInputTypeChanged:Connect(function()
+		if overlay.Visible and lastOffer then
+			levelUp.HintText.Text = choiceHint(#lastOffer.Choices)
+		end
+	end)
 
 	-- keyboard: 1 / 2 / 3 pick a card. Every confirm-type press is timed here (also when
 	-- the GUI took it: gamepad A on a selected card) for the fresh-press rule.
@@ -736,35 +836,73 @@ local function buildLevelUp()
 	end)
 end
 
+-- Fixed parts of a card (reference px).
+local CARD = { Pad = 14, Band = 30, Tile = 62, Row = 30, Box = 76, Syn = 30, Foot = 48, PBand = 26, PTile = 56, PRow = 28 }
+
+local function descHeight(): number
+	return TS(14) * 2 + 8
+end
+
+-- Height a landscape card needs for everything it has to show.
+local function cardNeeds(c): number
+	local desc, stats, changes = cardContent(c)
+	local h = CARD.Band + 12 + CARD.Tile + 10 + (desc and descHeight() + 4 or 0) + 14
+	if #changes > 0 then
+		h += CARD.Box + 6 + (#changes - 1) * (CARD.Row - 2)
+	else
+		h += #stats * CARD.Row
+	end
+	if c.Synergy then
+		h += CARD.Syn + 10
+	end
+	if c.Hint then
+		h += TS(13) * 2 + 8
+	end
+	return h + 10 + CARD.Foot
+end
+
+-- Height a wide portrait card needs.
+local function cardNeedsPortrait(c): number
+	local _, stats, changes = cardContent(c)
+	local rows = #changes > 0 and math.min(#changes, 2) or math.min(#stats, 3)
+	local h = CARD.PBand + 10 + CARD.PTile + TS(14) + 14 + rows * CARD.PRow
+	if c.Synergy then
+		h += CARD.Syn - 4 + 6
+	end
+	if c.Hint then
+		h += TS(13) + 6
+	end
+	return h + 10
+end
+
+-- Room left for the cards under the header and above the buttons (landscape).
+local function headerHeight(): number
+	return TS(46) + 6 + 10 + 6 + (TS(18) + 6) + 6 + (Theme.Size.Badge + 14) + 8 + 7 + 16
+end
+local function footerHeight(): number
+	return 16 + 60 + 8 + (TS(15) + 6)
+end
+
 -- Card sizes for the current screen.
 local function cardMetrics(count: number): (number, number)
 	local v = virtualSize()
 	local m = margin()
+	local choices = lastOffer and lastOffer.Choices or {}
 	if portrait then
-		-- tall enough for the busiest card of this offer (one line per stat change)
-		local most = 0
-		for _, c in ipairs(lastOffer and lastOffer.Choices or {}) do
-			local n = type(c.Lines) == "table" and #c.Lines or 1
-			if c.Type == "WeaponNew" then
-				n = 1
-			end
-			if c.Type == "WeaponNew" or c.Type == "PassiveNew" or c.Type == "PassiveUp" or c.Type == "Evolve" then
-				n += 1 -- the short description
-			end
-			if c.Hint then
-				n += 1
-			end
-			if c.Synergy then
-				n += 1
-			end
-			most = math.max(most, n)
+		-- tall enough for the busiest card of this offer
+		local most = 120
+		for _, c in ipairs(choices) do
+			most = math.max(most, cardNeedsPortrait(c))
 		end
-		local lineH = TS(Theme.TextSize.Small) + 5
-		return math.min(v.X - 2 * m, 600), math.clamp(78 + TS(22) + most * lineH, UIKit.IsCompact() and 150 or 136, 300)
+		return math.min(v.X - 2 * m, 600), math.min(most, 320)
 	end
 	local w = math.min(290, (v.X - 2 * m - (count - 1) * 18) / math.max(1, count))
-	local h = math.clamp(v.Y - 290, 300, 400)
-	return w, h
+	local most = 300
+	for _, c in ipairs(choices) do
+		most = math.max(most, cardNeeds(c))
+	end
+	local room = v.Y - headerHeight() - footerHeight() - insets.Top * 0.5 - 12
+	return w, math.max(260, math.min(most, room, 440))
 end
 
 -- Card icon: the upgrade tile framed in the card's accent (rim + a soft halo that breathes
@@ -776,11 +914,11 @@ local function cardTile(face: GuiObject, c, size: number, accent: Color3, popDel
 	local halo = new("Frame", {
 		Name = "Halo",
 		BackgroundColor3 = accent,
-		BackgroundTransparency = 0.86,
+		BackgroundTransparency = 0.88,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(1.3, 1.3),
+		Size = UDim2.fromScale(1.25, 1.25),
 	}, holder)
 	UIKit.corner(halo, 999)
 	local tile = UIKit.Tile(holder, { Id = id, Size = size, Evolved = c.Type == "Evolve" })
@@ -794,7 +932,7 @@ local function cardTile(face: GuiObject, c, size: number, accent: Color3, popDel
 	-- under it and is all there is when the frame is not uploaded
 	ArtImage.Frame(tile, ArtImage.CardBand(c), math.max(6, math.floor(size * 0.1)))
 	if not ClientSettings.Reduced() then
-		offerArm.Fx.Add(UIAnim.Glow(halo, "BackgroundTransparency", 0.84, 0.94, 1.8))
+		offerArm.Fx.Add(UIAnim.Glow(halo, "BackgroundTransparency", 0.86, 0.95, 1.8))
 		if popDelay then
 			local s = UIAnim.ScaleOf(holder)
 			s.Scale = 0.6
@@ -808,10 +946,80 @@ local function cardTile(face: GuiObject, c, size: number, accent: Color3, popDel
 	return holder
 end
 
+-- One stat row: icon, caps label, right-aligned value (RichText). Returns its height.
+local function statRow(parent: Instance, c, line, x: number, y: number, w: number, h: number, value: string): number
+	local row = new("Frame", { Name = "Row", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.55, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h - 2) }, parent)
+	UIKit.corner(row, 6)
+	local icon = statIcon(row, tostring(line.Label), c, 18)
+	icon.AnchorPoint = Vector2.new(0, 0.5)
+	icon.Position = UDim2.new(0, 8, 0.5, 0)
+	text(row, "Caption", UIKit.track(tostring(line.Label)), {
+		Position = UDim2.fromOffset(34, 0),
+		Size = UDim2.new(0.55, -34, 1, 0),
+		TextColor3 = P.ivory_300,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, 13)
+	text(row, "Number", value, {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -10, 0, 0),
+		Size = UDim2.new(0.45, 0, 1, 0),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		RichText = true,
+	}, 16)
+	return h
+end
+
+local function changeValue(line): string
+	return string.format('%s <font color="%s">→</font> <font color="%s">%s</font>', tostring(line.From), hex(P.gold_400), hex(P.fx_heal), tostring(line.To))
+end
+
+-- The boxed highlight of a card's main change: icon + caps stat, big "From → To".
+local function changeBox(parent: Instance, c, line, x: number, y: number, w: number)
+	local box = new("Frame", { Name = "Highlight", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, CARD.Box) }, parent)
+	UIKit.corner(box, 8)
+	UIKit.stroke(box, P.slate_600, 1, 0.35)
+	local head = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 22) }, box)
+	UIKit.list(head, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	statIcon(head, tostring(line.Label), c, 18).LayoutOrder = 1
+	text(head, "Caption", UIKit.track(tostring(line.Label)), { Size = UDim2.fromOffset(0, 22), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, LayoutOrder = 2 }, 14)
+	text(box, "Number", string.format('%s  <font color="%s">→</font>  <font color="%s">%s</font>', tostring(line.From), hex(P.gold_400), hex(P.fx_heal), tostring(line.To)), {
+		Position = UDim2.fromOffset(6, 32),
+		Size = UDim2.new(1, -12, 0, 36),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		RichText = true,
+		TextScaled = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, 26)
+end
+
+-- Green rounded bar: the synergy this card advances / completes (SynergyData).
+local function synergyBar(parent: Instance, c, x: number, y: number, w: number, h: number)
+	local ready = c.SynergyReady == true
+	local bar = new("Frame", { Name = "Synergy", BackgroundColor3 = ready and P.moss_600 or P.moss_800, BackgroundTransparency = 0.1, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h) }, parent)
+	UIKit.corner(bar, 6)
+	UIKit.stroke(bar, ready and P.moss_200 or P.moss_400, 1, 0.2)
+	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, bar)
+	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	Icons.Draw(row, "sparkle", { Size = h - 12, Color = P.fx_heal }).LayoutOrder = 1
+	text(row, "Caption", synergyText(c), { Size = UDim2.fromOffset(0, h), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.fx_heal, LayoutOrder = 2, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+end
+
+--[[
+	One card. Landscape (tall, owner mockup): header band with the card kind in small caps;
+	icon tile left + serif name (+ LV a → b / max) right; the description; a gold rule with
+	a diamond; then a NEW weapon's stat table (icon, caps label, value) or an upgrade's boxed
+	main change (big "From → To", the new value green) with the other changes as rows; the
+	synergy bar; the evolution hint; and a footer with the number badge + "Choose".
+	Portrait (wide, stacked): band with kind + number, icon left, name / level / description
+	right, the rows under it. Hover / gamepad focus / the pick turn the card gold-rimmed and
+	warm-tinted (Focus[index]).
+]]
 local function makeCard(c, index: number, count: number, animate: boolean)
 	local w, h = cardMetrics(count)
-	local bandText, bandColor, edgeColor = cardBand(c)
-	local legendary = c.Rarity == "Legendary"
+	local bandColor, edgeColor = cardBand(c)
+	local legendary = c.Rarity == "Legendary" or c.Type == "Evolve"
+	local desc, stats, changes = cardContent(c)
+	local pad = CARD.Pad
 	local hit = new("TextButton", {
 		Name = "Card" .. index,
 		Text = "",
@@ -827,14 +1035,14 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		local glow = new("Frame", {
 			Name = "Glow",
 			BackgroundColor3 = P.gold_300,
-			BackgroundTransparency = 0.7,
+			BackgroundTransparency = 0.75,
 			BorderSizePixel = 0,
-			Position = UDim2.fromOffset(-8, -8),
-			Size = UDim2.new(1, 16, 1, 16),
+			Position = UDim2.fromOffset(-7, -7),
+			Size = UDim2.new(1, 14, 1, 14),
 			ZIndex = 0,
 		}, hit)
-		UIKit.corner(glow, Theme.Radius.L + 8)
-		offerArm.Fx.Add(UIAnim.Glow(glow, "BackgroundTransparency", 0.65, 0.88, 1.1))
+		UIKit.corner(glow, Theme.Radius.L + 7)
+		offerArm.Fx.Add(UIAnim.Glow(glow, "BackgroundTransparency", 0.72, 0.9, 1.1))
 	end
 	local face = new("Frame", {
 		Name = "Face",
@@ -845,178 +1053,221 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		ClipsDescendants = false,
 	}, hit)
 	UIKit.corner(face, Theme.Radius.L)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_800, P.slate_900) }, face)
-	-- a soft wash of the rarity colour from the top (left on the wide phone cards)
-	local wash = new("Frame", { Name = "Wash", BackgroundColor3 = edgeColor, BorderSizePixel = 0, Size = portrait and UDim2.fromScale(0.5, 1) or UDim2.fromScale(1, 0.55) }, face)
-	UIKit.corner(wash, Theme.Radius.L)
-	new("UIGradient", { Rotation = portrait and 0 or 90, Transparency = NumberSequence.new(0.84, 1) }, wash)
-	local edge = UIKit.stroke(face, edgeColor, legendary and 2.5 or 1.5, legendary and 0 or 0.25)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_800, P.slate_950) }, face)
+	-- warm gold tint of the focused / picked card
+	local warm = new("Frame", { Name = "Warm", BackgroundColor3 = P.gold_600, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, face)
+	UIKit.corner(warm, Theme.Radius.L)
+	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.2, 0.75) }, warm)
+	local edge = UIKit.stroke(face, legendary and P.gold_400 or edgeColor, legendary and 2.5 or 1.5, legendary and 0 or 0.45)
 	if legendary then
-		offerArm.Fx.Add(UIAnim.PulseStroke(edge, 2, 4))
+		offerArm.Fx.Add(UIAnim.PulseStroke(edge, 2, 3.5))
 	end
+
+	-- header band
+	local bandH = portrait and CARD.PBand or CARD.Band
+	local band = new("Frame", { Name = "Band", BackgroundColor3 = bandColor, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, bandH), ZIndex = 2, ClipsDescendants = true }, face)
+	UIKit.corner(band, Theme.Radius.L)
+	new("Frame", { BackgroundColor3 = bandColor, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -Theme.Radius.L), Size = UDim2.new(1, 0, 0, Theme.Radius.L), ZIndex = 2 }, band)
+	new("Frame", { Name = "Line", BackgroundColor3 = legendary and P.gold_300 or edgeColor, BackgroundTransparency = 0.6, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 3 }, band)
+	local labelColor = legendary and P.gold_900 or edgeColor:Lerp(P.ivory_100, 0.45)
+	local bandLabel = text(band, "Label", UIKit.track(cardKind(c)), {
+		Position = UDim2.fromOffset(portrait and pad or 0, 0),
+		Size = portrait and UDim2.new(1, -pad * 2, 1, 0) or UDim2.fromScale(1, 1),
+		TextXAlignment = portrait and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center,
+		TextColor3 = labelColor,
+		ZIndex = 3,
+	}, Theme.TextSize.Caption + 1)
+	if (c.Rarity == "Rare" or c.Rarity == "Epic" or legendary) and not ClientSettings.Reduced() then
+		-- the rarer bands shine now and then (started once the card has landed level:
+		-- Roblox does not clip inside a rotated card)
+		task.delay(animate and (offerArm.Stagger * (index - 1) + 0.32) or 0, function()
+			if band.Parent then
+				offerArm.Fx.Add(UIAnim.Shine(band, legendary and 1.8 or 2.8, legendary and 0.6 or 0.8))
+			end
+		end)
+	end
+
+	-- focus look (hover, gamepad selection, the pick)
+	local focused = false
+	local function setFocus(on: boolean)
+		if focused == on then
+			return
+		end
+		focused = on
+		local t = Theme.Motion.Fast
+		UIAnim.Tween(warm, t, { BackgroundTransparency = on and 0.82 or 1 })
+		if not legendary then
+			UIAnim.Tween(edge, t, { Color = on and P.gold_400 or edgeColor, Thickness = on and 2.5 or 1.5, Transparency = on and 0 or 0.45 })
+			bandLabel.TextColor3 = on and P.gold_300 or labelColor
+		end
+	end
+	levelUp.Focus[index] = setFocus
 	UIKit.AttachStates(hit, face, Theme.Radius.L, function(on: boolean)
-		-- hover / gamepad focus: the card lifts (AttachStates), grows a touch and its rim
-		-- lights up in the rarity colour
+		-- the card lifts (AttachStates), grows a touch and turns gold
 		if offerOpen then
 			UIAnim.Tween(UIAnim.ScaleOf(hit), Theme.Motion.Fast, { Scale = on and 1.03 or 1 })
-			if not legendary then
-				UIAnim.Tween(edge, Theme.Motion.Fast, { Thickness = on and 2.5 or 1.5, Transparency = on and 0 or 0.25 })
-			end
+			setFocus(on)
 		end
 	end)
 	local delay = offerArm.Stagger * (index - 1) -- this card's entrance delay
+	local sub = cardLevelText(c)
 
 	if portrait then
-		-- horizontal card: icon left, text right, rarity pill top right
-		local tileSize = 84
-		cardTile(face, c, tileSize, edgeColor, animate and delay + 0.08 or nil).Position = UDim2.new(0, 18, 0.5, -tileSize / 2)
-		local x = 18 + tileSize + 16
-		local badge = UIKit.Badge(face, bandText, legendary and "Gold" or "Slate", { Position = UDim2.fromOffset(x, 14) })
-		badge.BackgroundColor3 = bandColor
-		badge.TextColor3 = legendary and P.gold_900 or P.ivory_100
-		text(face, "H2", c.Name, { Position = UDim2.fromOffset(x, 38), Size = UDim2.new(1, -x - 16, 0, TS(22) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
-		text(face, "Caption", cardLevelText(c), {
-			Position = UDim2.fromOffset(x, 40 + TS(22) + 2),
-			Size = UDim2.new(1, -x - 16, 0, TS(12) + 4),
-			TextColor3 = edgeColor,
-		})
-		local hintH = c.Hint and (TS(13) + 4) or 0
-		local synH = c.Synergy and (TS(13) + 4) or 0
-		text(face, "Body", cardRichLines(c, "\n"), {
-			Position = UDim2.fromOffset(x, 46 + TS(22) + TS(12) + 4),
-			Size = UDim2.new(1, -x - 16, 1, -(52 + TS(22) + TS(12) + 4 + hintH + synH)),
-			TextWrapped = true,
-			RichText = true,
-			TextColor3 = C.Text,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-		}, Theme.TextSize.Small)
+		-- number badge at the band's right end
+		local num = text(band, "Number", tostring(index), {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -pad, 0.5, 0),
+			Size = UDim2.fromOffset(20, 20),
+			TextXAlignment = Enum.TextXAlignment.Center,
+			BackgroundColor3 = P.slate_950,
+			BackgroundTransparency = 0.3,
+			ZIndex = 4,
+		}, 13)
+		UIKit.corner(num, 999)
+		UIKit.stroke(num, P.ivory_300, 1, 0.3).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		local y = bandH + 10
+		cardTile(face, c, CARD.PTile, edgeColor, animate and delay + 0.08 or nil).Position = UDim2.fromOffset(pad, y)
+		local x = pad + CARD.PTile + 12
+		text(face, "H2", c.Name, { Position = UDim2.fromOffset(x, y - 2), Size = UDim2.new(0.6, -x, 0, TS(22) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
+		if sub ~= "" then
+			text(face, "Caption", UIKit.track(sub), {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -pad, 0, y + 2),
+				Size = UDim2.new(0.4, -pad, 0, TS(13) + 4),
+				TextXAlignment = Enum.TextXAlignment.Right,
+				TextColor3 = legendary and P.gold_300 or P.ivory_300,
+			}, 13)
+		end
+		if desc then
+			text(face, "Small", desc, {
+				Position = UDim2.fromOffset(x, y + TS(22) + 4),
+				Size = UDim2.new(1, -x - pad, 0, CARD.PTile + 4 - TS(22)),
+				TextWrapped = true,
+				RichText = true,
+				TextYAlignment = Enum.TextYAlignment.Top,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+			}, 14)
+		end
+		y += CARD.PTile + 10
+		local rw = w - 2 * pad
+		if #changes > 0 then
+			for i = 1, math.min(#changes, 2) do
+				y += statRow(face, c, changes[i], pad, y, rw, CARD.PRow, changeValue(changes[i]))
+			end
+		else
+			for i = 1, math.min(#stats, 3) do
+				y += statRow(face, c, stats[i], pad, y, rw, CARD.PRow, tostring(stats[i].To))
+			end
+		end
+		if c.Synergy then
+			synergyBar(face, c, pad, y + 4, rw, CARD.Syn - 4)
+			y += CARD.Syn + 4
+		end
 		if c.Hint then
 			text(face, "Small", tostring(c.Hint), {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0, x, 1, -8),
-				Size = UDim2.new(1, -x - 16, 0, TS(13) + 2),
+				Position = UDim2.fromOffset(pad, y + 2),
+				Size = UDim2.new(1, -2 * pad, 0, TS(13) + 4),
+				TextXAlignment = Enum.TextXAlignment.Center,
 				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, 13)
 		end
-		if c.Synergy then
-			-- the synergy this NEW card completes / advances (SynergyData), above the hint
-			text(face, "Small", tostring(c.Synergy), {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0, x, 1, -8 - hintH),
-				Size = UDim2.new(1, -x - 16, 0, TS(13) + 2),
-				TextColor3 = c.SynergyReady and P.moss_200 or P.moss_300,
+	else
+		local y = bandH + 12
+		local tile = cardTile(face, c, CARD.Tile, edgeColor, animate and delay + 0.08 or nil)
+		tile.Position = UDim2.fromOffset(pad, y)
+		local x = pad + CARD.Tile + 12
+		local nameH = TS(22) + 6
+		local subH = sub ~= "" and TS(13) + 4 or 0
+		local ny = y + math.floor((CARD.Tile - nameH - subH) / 2)
+		text(face, "H2", c.Name, {
+			Position = UDim2.fromOffset(x, ny),
+			Size = UDim2.new(1, -x - 8, 0, nameH),
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		}, 23)
+		if sub ~= "" then
+			text(face, "Label", UIKit.track(sub), {
+				Position = UDim2.fromOffset(x, ny + nameH),
+				Size = UDim2.new(1, -x - 8, 0, subH),
+				TextColor3 = legendary and P.gold_300 or P.ivory_300,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, 13)
 		end
-	else
-		-- rarity band
-		local band = new("Frame", { Name = "Band", BackgroundColor3 = bandColor, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 34), ZIndex = 2, ClipsDescendants = true }, face)
-		UIKit.corner(band, Theme.Radius.L)
-		if c.Rarity == "Rare" or c.Rarity == "Epic" or legendary or c.Type == "Evolve" then
-			-- the rarer bands shine now and then (started once the card has landed level:
-			-- Roblox does not clip inside a rotated card)
-			if not ClientSettings.Reduced() then
-				task.delay(animate and (delay + 0.32) or 0, function()
-					if band.Parent then
-						offerArm.Fx.Add(UIAnim.Shine(band, legendary and 1.8 or 2.8, legendary and 0.6 or 0.75))
-					end
-				end)
-			end
-		end
-		new("Frame", { BackgroundColor3 = bandColor, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -Theme.Radius.L), Size = UDim2.new(1, 0, 0, Theme.Radius.L), ZIndex = 2 }, band)
-		text(band, "Label", UIKit.track(bandText), {
-			Size = UDim2.fromScale(1, 1),
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextColor3 = legendary and P.gold_900 or P.ivory_100,
-			ZIndex = 3,
-		}, Theme.TextSize.Caption + 1)
-		-- header: big centred icon on tall cards; on short ones (phones) the icon sits left
-		-- of the name so the lines below keep their room
-		local y
-		local tall = h >= 380 and not UIKit.IsCompact()
-		if tall then
-			local tileSize = 76
-			local tile = cardTile(face, c, tileSize, edgeColor, animate and delay + 0.08 or nil)
-			tile.AnchorPoint = Vector2.new(0.5, 0)
-			tile.Position = UDim2.new(0.5, 0, 0, 48)
-			y = 48 + tileSize + 10
-			text(face, "H2", c.Name, {
-				Position = UDim2.fromOffset(12, y),
-				Size = UDim2.new(1, -24, 0, TS(22) + 6),
+		y += CARD.Tile + 10
+		if desc then
+			text(face, "Body", desc, {
+				Position = UDim2.fromOffset(pad, y),
+				Size = UDim2.new(1, -2 * pad, 0, descHeight()),
 				TextXAlignment = Enum.TextXAlignment.Center,
+				TextWrapped = true,
+				RichText = true,
+				TextColor3 = P.ivory_200,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-			})
-			y += TS(22) + 6
-			text(face, "Caption", UIKit.track(cardLevelText(c)), {
-				Position = UDim2.fromOffset(12, y),
-				Size = UDim2.new(1, -24, 0, TS(12) + 6),
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextColor3 = edgeColor,
-			})
-			y += TS(12) + 8
-		else
-			local tileSize = 58
-			local tile = cardTile(face, c, tileSize, edgeColor, animate and delay + 0.08 or nil)
-			tile.Position = UDim2.fromOffset(12, 44)
-			local x = 12 + tileSize + 10
-			text(face, "H2", c.Name, {
-				Position = UDim2.fromOffset(x, 44),
-				Size = UDim2.new(1, -x - 8, 0, TS(22) + 6),
-				TextTruncate = Enum.TextTruncate.AtEnd,
-			})
-			text(face, "Caption", UIKit.track(cardLevelText(c)), {
-				Position = UDim2.fromOffset(x, 44 + TS(22) + 6),
-				Size = UDim2.new(1, -x - 8, 0, TS(12) + 6),
-				TextColor3 = edgeColor,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-			})
-			y = 44 + math.max(tileSize, TS(22) + TS(12) + 12) + 8
+			}, 14)
+			y += descHeight() + 4
 		end
-		UIKit.Divider(face, 120, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, y) })
-		y += 12
-		local keyRoom = (UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled) and 34 or 12
-		local hintH = c.Hint and (TS(13) * 2 + 8) or 0
-		local synH = c.Synergy and (TS(13) + 6) or 0
-		text(face, "Body", cardRichLines(c, "\n"), {
-			Position = UDim2.fromOffset(14, y),
-			Size = UDim2.new(1, -28, 1, -(y + keyRoom + hintH + synH)),
+		UIKit.Divider(face, w - 2 * pad - 20, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, y) })
+		y += 14
+		-- footer: a hairline, the number badge and "Choose"
+		local footY = h - CARD.Foot
+		new("Frame", { Name = "FootLine", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0, Position = UDim2.fromOffset(pad, footY), Size = UDim2.new(1, -2 * pad, 0, 1) }, face)
+		local num = text(face, "Number", tostring(index), {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, -34, 0, footY + CARD.Foot / 2),
+			Size = UDim2.fromOffset(30, 30),
 			TextXAlignment = Enum.TextXAlignment.Center,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			TextWrapped = true,
-			RichText = true,
-			TextColor3 = C.Text,
-			LineHeight = 1.12,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-		}, Theme.TextSize.Small + 1)
+		}, 16)
+		UIKit.corner(num, 999)
+		UIKit.stroke(num, P.ivory_200, 1.5, 0.15).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		text(face, "BodyStrong", "Choose", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0.5, -8, 0, footY + CARD.Foot / 2),
+			Size = UDim2.fromOffset(90, TS(16) + 6),
+		}, 16)
+		-- bottom-up: hint, synergy; the rows fill what is left above them
+		local bottom = footY - 8
 		if c.Hint then
+			local hh = TS(13) * 2 + 6
 			text(face, "Small", tostring(c.Hint), {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0, 14, 1, -keyRoom),
-				Size = UDim2.new(1, -28, 0, hintH),
+				Position = UDim2.fromOffset(pad, bottom - hh),
+				Size = UDim2.new(1, -2 * pad, 0, hh),
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextYAlignment = Enum.TextYAlignment.Bottom,
 				TextWrapped = true,
 				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
 			}, 13)
+			bottom -= hh + 4
 		end
 		if c.Synergy then
-			-- the synergy this NEW card completes / advances (SynergyData), above the hint
-			text(face, "Small", tostring(c.Synergy), {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0, 14, 1, -(keyRoom + hintH)),
-				Size = UDim2.new(1, -28, 0, synH),
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextYAlignment = Enum.TextYAlignment.Bottom,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextColor3 = c.SynergyReady and P.moss_200 or P.moss_300,
-			}, 13)
+			synergyBar(face, c, pad, bottom - CARD.Syn, w - 2 * pad, CARD.Syn)
+			bottom -= CARD.Syn + 8
 		end
-		if UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled then
-			local key = UIKit.Badge(face, tostring(index), "Dark", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10) })
-			key.Size = UDim2.fromOffset(22, 22)
-			key.AutomaticSize = Enum.AutomaticSize.None
+		local rw = w - 2 * pad
+		if #changes > 0 then
+			if y + CARD.Box <= bottom then
+				changeBox(face, c, changes[1], pad, y, rw)
+				y += CARD.Box + 6
+				for i = 2, #changes do
+					if y + CARD.Row - 2 > bottom then
+						break
+					end
+					y += statRow(face, c, changes[i], pad, y, rw, CARD.Row - 2, changeValue(changes[i]))
+				end
+			else
+				for i = 1, #changes do
+					if y + CARD.Row - 2 > bottom then
+						break
+					end
+					y += statRow(face, c, changes[i], pad, y, rw, CARD.Row - 2, changeValue(changes[i]))
+				end
+			end
+		else
+			for _, line in ipairs(stats) do
+				if y + CARD.Row > bottom then
+					break
+				end
+				y += statRow(face, c, line, pad, y, rw, CARD.Row, tostring(line.To))
+			end
 		end
 	end
 
@@ -1064,32 +1315,53 @@ local function layoutLevelUp()
 	local v = virtualSize()
 	local count = lastOffer and #lastOffer.Choices or 3
 	local cw, ch = cardMetrics(count)
-	local titleH = TS(44) + 8
+	local titleH = TS(46) + 6
+	local subH = TS(18) + 6
+	local pillH = Theme.Size.Badge + 14
 	local cardsW = portrait and cw or (count * cw + (count - 1) * 18)
 	local cardsH = portrait and (count * ch + (count - 1) * 12) or ch
-	local blockH = titleH + 12 + 26 + 16 + cardsH + 20 + 60
+	local hintH = TS(15) + 6
+	local headH = titleH + 10 + 6 + subH + 6 + pillH + 8 + 7 + 16
+	local blockH = headH + cardsH + 16 + 60 + 8 + hintH
 	local top = math.max(insets.Top * 0.5 + 6, (v.Y - blockH) / 2)
 	local panel = levelUp.Panel :: Frame
 	panel.Position = UDim2.fromOffset(0, 0)
 	panel.Size = UDim2.fromOffset(v.X, v.Y)
 	levelUp.Title.Position = UDim2.fromOffset(0, top)
 	levelUp.Title.Size = UDim2.new(1, 0, 0, titleH)
+	local y = top + titleH
 	levelUp.Divider.AnchorPoint = Vector2.new(0.5, 0)
-	levelUp.Divider.Position = UDim2.new(0.5, 0, 0, top + titleH)
-	levelUp.Sub.Position = UDim2.fromOffset(0, top + titleH + 12)
-	levelUp.Sub.Size = UDim2.new(1, 0, 0, TS(16) + 6)
+	levelUp.Divider.Position = UDim2.new(0.5, 0, 0, y)
+	levelUp.Divider.Size = UDim2.fromOffset(math.min(460, v.X - 2 * margin()), 10)
+	y += 16
+	levelUp.Sub.Position = UDim2.fromOffset(0, y)
+	levelUp.Sub.Size = UDim2.new(1, 0, 0, subH)
+	y += subH + 6
+	levelUp.Pill.Frame.Position = UDim2.new(0.5, 0, 0, y)
+	y += pillH + 8
 	levelUp.Timer.Frame.AnchorPoint = Vector2.new(0.5, 0)
-	levelUp.Timer.Frame.Position = UDim2.new(0.5, 0, 0, top + titleH + 12 + TS(16) + 8)
-	local cardsY = top + titleH + 12 + 26 + 16
+	levelUp.Timer.Frame.Position = UDim2.new(0.5, 0, 0, y)
+	y += 7 + 16
 	levelUp.Layout.FillDirection = portrait and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
 	levelUp.Layout.Padding = UDim.new(0, portrait and 12 or 18)
-	levelUp.Cards.Position = UDim2.fromOffset((v.X - cardsW) / 2, cardsY)
+	levelUp.Cards.Position = UDim2.fromOffset((v.X - cardsW) / 2, y)
 	levelUp.Cards.Size = UDim2.fromOffset(cardsW, cardsH)
-	levelUp.Actions.Position = UDim2.fromOffset(0, cardsY + cardsH + 20)
+	y += cardsH + 16
+	levelUp.Actions.Position = UDim2.fromOffset(0, y)
 	levelUp.Actions.Size = UDim2.new(1, 0, 0, 60)
-	local bw = math.clamp(math.floor((v.X - 2 * margin() - 16) / 2), 150, 240)
+	local bw = math.clamp(math.floor((v.X - 2 * margin() - 18) / 2), 150, 240)
 	levelUp.Reroll.Instance.Size = UDim2.fromOffset(bw, 60)
 	levelUp.Skip.Instance.Size = UDim2.fromOffset(bw, 60)
+	-- the flanking rules only where there is room for them
+	local ruleW = math.floor((v.X - 2 * margin() - 2 * bw - 3 * 18) / 2)
+	levelUp.RuleL.Visible = ruleW >= 40
+	levelUp.RuleR.Visible = ruleW >= 40
+	levelUp.RuleL.Size = UDim2.fromOffset(math.min(ruleW, 140), 1)
+	levelUp.RuleR.Size = UDim2.fromOffset(math.min(ruleW, 140), 1)
+	y += 60 + 8
+	levelUp.Hint.Position = UDim2.fromOffset(0, y)
+	levelUp.Hint.Size = UDim2.new(1, 0, 0, hintH)
+	levelUp.HintText.Text = choiceHint(count)
 end
 
 local function clearCards()
@@ -2912,7 +3184,8 @@ local function updateFrame(dt: number)
 
 	if levelUp.Overlay.Visible then
 		local left = math.max(0, offerDeadline - os.clock())
-		levelUp.Sub.Text = string.format("%s  ·  auto-pick in %ds", offerHint or "Choose an upgrade", math.ceil(left))
+		levelUp.Sub.Text = offerHint or "Choose one upgrade"
+		levelUp.Pill.SetText(string.format("AUTO-PICK IN %ds", math.ceil(left)))
 		levelUp.Timer.Set(left / offerSeconds)
 	end
 	if revive.Overlay.Visible then

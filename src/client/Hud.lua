@@ -3,24 +3,25 @@
 	The in-run HUD (built and driven by UIBuilder), laid out after the owner's approved
 	mockup:
 	  top centre    the run timer (total run time over every stage) big in a dark pill with a
-	                thin gold rim; under it a smaller stage pill "STAGE 3 • PORTAL DORMANT •
-	                0:26" (goal and countdown of the stage loop; Endless runs: "ENDLESS •
-	                STAGE 9 • ..."), then the boss bar with the boss's portrait while the
-	                boss lives
+	                thin gold rim; right under it one dark gold-rimmed panel: heart + big
+	                crimson health bar ("100 / 100 HP"; a steel band on it is the Guardian
+	                Ward shield), then a level medallion, "LV. 86" and the gold XP bar
+	                ("29 / 110 XP"); under that the boss bar with the boss's portrait while
+	                the boss lives
+	  top left      the stage pill under the Roblox menu buttons: "STAGE 3 • PORTAL DORMANT
+	                • 0:26" (goal and countdown of the stage loop; Endless runs: "ENDLESS •
+	                STAGE 9 • ..."); portrait: centred between the timer and the health panel
 	  top right     gold pill (coin + run gold: earned this run, minus what chests and shrines
 	                took), kills pill (skull + count), then the square gold-rimmed pause
 	                button. The gold number counts up and punches, a "+N" floats into the
 	                pill, and next to a chest / shrine its price shows in the pill (red "NEED
 	                N" after trying to open one without enough gold, set by LootUI through
 	                SetPurseHint)
-	  bottom centre one dark gold-rimmed panel: heart + big crimson health bar ("100 / 100
-	                HP"; a steel band on it is the Guardian Ward shield), then a level
-	                medallion, "LV. 86" and the gold XP bar ("29 / 110 XP"). Right under it
-	                the ability panel: "WEAPONS" and "PASSIVES" rows of square tiles (item art,
-	                a round gold level badge, a gold rim once evolved / maxed, faint empty
-	                slots). Phones (compact): both panels scale down and stay centred,
-	                between the thumbstick side and the JUMP button. Portrait: the two panels
-	                stack under the top cluster, away from the thumbs.
+	  bottom centre only the ability panel (more of the arena in view): "WEAPONS" and
+	                "PASSIVES" rows of square tiles (item art, a round gold level badge, a
+	                gold rim once evolved / maxed, faint empty slots). Phones (compact): it
+	                scales down and stays centred, between the thumbstick side and the JUMP
+	                button. Portrait: it sits under the top cluster, away from the thumbs.
 	  centre        status line (paused, "<Name> is choosing an upgrade", fallen, partner
 	                revive progress)
 	The portal arrow, the charge ring, the portal choice panel and the travel fade live in
@@ -73,7 +74,7 @@ local C, P = Theme.Color, Theme.Palette
 
 export type Insets = { Top: number, Left: number, Right: number }
 
--- Bottom panels, designed at full size (reference px) and fitted with a UIScale.
+-- Health panel and ability panel, designed at full size (reference px), fitted with a UIScale.
 local VIT = { W = 420, PadX = 10, PadY = 9, HP = 26, XP = 20, Gap = 8 } -- health / level panel
 VIT.H = VIT.PadY * 2 + VIT.HP + VIT.Gap + VIT.XP
 local INV = { Pad = 10, Label = 84, Tile = 64, Gap = 8, RowGap = 14 } -- ability panel
@@ -284,7 +285,7 @@ local function medallion(parent: Instance, size: number, x: number): Frame
 	return m
 end
 
--- Health + level panel (bottom centre). ui.Plate is the placed holder; its Body is drawn
+-- Health + level panel (top centre, under the timer). ui.Plate is the placed holder; its Body is drawn
 -- at full size and fitted by a UIScale.
 local function buildVitals(frame: Frame)
 	local holder = new("Frame", { Name = "Plate", BackgroundTransparency = 1, Active = false }, frame)
@@ -339,7 +340,7 @@ local function invSize(): (number, number, number)
 	return w, h, slots
 end
 
--- Ability panel (under the health panel): labels + two rows of tiles.
+-- Ability panel (bottom centre): labels + two rows of tiles.
 local function buildBar(frame: Frame)
 	local holder = new("Frame", { Name = "AbilityBar", BackgroundTransparency = 1, Active = false }, frame)
 	ui.Bar = holder
@@ -365,7 +366,7 @@ local function buildBar(frame: Frame)
 	UIKit.list(ui.PassiveRow, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, INV.Gap) })
 end
 
--- Buff chip (Ranger's Steady Aim): a small pill over the bottom panels. Shown only for a
+-- Buff chip (Ranger's Steady Aim): a small pill over the ability panel. Shown only for a
 -- hero with the trait (player attribute SteadyAim exists): dim "Stand still to aim" while
 -- moving, lit "Steady Aim +30%" once the bonus is on.
 local function buildBuffChip(frame: Frame)
@@ -1377,7 +1378,7 @@ function Hud.SetVisible(on: boolean)
 	end
 end
 
--- Top of the bottom panels (landscape; portrait: of the stacked panels).
+-- Top of the ability panel.
 function Hud.BarTop(): number
 	return ui.BarTop or 600
 end

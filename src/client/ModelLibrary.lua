@@ -154,6 +154,9 @@ local ENEMY_MESH = {
 	Healer = { "Healer", "Scuttle" },
 	Nest = { "Nest", "Static" },
 	WarBanner = { "RhinoWarlord", "Static" },
+	BriarBoss = { "BriarSentinel", "Stomp" },
+	FrostBoss = { "FrostboundColossus", "Stomp" },
+	ThornSprout = { "ThornSprout", "Scuttle" },
 }
 
 --[[
@@ -167,11 +170,22 @@ local MESH_EXTRA: { [string]: { Scale: number?, Only: { string }?, Shift: Vector
 }
 
 -- Pieces some poses hide (EnemyRenderer): the Burrower's soil ring, the Warlord's banner,
--- the Colossus's frost armour (shown only while it is on).
+-- the Colossus's frost armour (shown only while it is on; mesh piece names from
+-- blender/models/bosses2.py and the part-built fallback's names).
 ModelLibrary.PieceGroups = {
 	Mound = { Mound = true },
 	Banner = { BannerPole = true, BannerTrim = true, Banner = true, BannerCrown = true },
-	Frost = { FrostChest = true, FrostShoulder = true, FrostArm = true, FrostSpike = true },
+	Frost = {
+		FrostChest = true,
+		FrostBack = true,
+		FrostShoulder = true,
+		FrostShoulderL = true,
+		FrostShoulderR = true,
+		FrostArm = true,
+		FrostArmL = true,
+		FrostArmR = true,
+		FrostSpike = true,
+	},
 }
 
 ------------------------------------------------------------------------------------------
@@ -294,7 +308,8 @@ local LOOKS: { [string]: { [string]: Color3 } } = {
 		Wood = Palette.wood_700,
 		Stone = Palette.stone_600,
 	},
-	-- the Briar Sentinel (part-built only), her sprouts and the Frostbound Colossus
+	-- the Briar Sentinel, her sprouts and the Frostbound Colossus (part-built fallbacks of the
+	-- BriarSentinel / ThornSprout / FrostboundColossus meshes)
 	BriarBoss = {
 		Base = Palette.wood_600,
 		Bark = Palette.wood_700,
