@@ -581,6 +581,7 @@ Config.Graphics = {
 ------------------------------------------------------------------------------------------
 Config.Data = {
 	StoreName = "SwarmPlayerData",
+	StudioStoreName = "SwarmPlayerData_Studio", -- used instead in Studio: tests never touch live saves
 	KeyPrefix = "Player_",
 	SchemaVersion = 6, -- bump and add a migration step in DataService when the save shape changes
 	AutoSaveSeconds = 60,
@@ -874,6 +875,7 @@ Config.Modes = {
 Config.Leaderboards = {
 	Enabled = true,
 	StorePrefix = "SwarmLB_", -- OrderedDataStore names: SwarmLB_BestStage, SwarmLB_Kills, SwarmLB_Daily_<day>
+	StudioStorePrefix = "SwarmLB_Studio_", -- used instead in Studio: tests never touch live boards
 	Order = { "BestStage", "Daily", "Kills" },
 	Top = 50, -- entries shown
 	RefreshSeconds = 60, -- a board's cache is re-read at most this often

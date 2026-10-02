@@ -13,7 +13,8 @@
 	         two servers overwriting each other = item duplication).
 	Release: on leave / shutdown the final save clears the lock.
 	Retry:   every DataStore call is pcall'd with exponential backoff.
-	Studio:  if DataStores are unavailable (no API access) data is kept in memory only.
+	Studio:  uses Config.Data.StudioStoreName (never the live store); if DataStores are
+	         unavailable (no API access) data is kept in memory only.
 
 	Save shape (Config.Data.SchemaVersion = 6):
 	  Version, Gold, Meta {id → level}, OwnedCharacters {id → true}, SelectedCharacter,
@@ -498,7 +499,12 @@ DataService.ReleasePlayer = onPlayerRemoving
 
 function DataService.Init(_ctx)
 	local ok, result = pcall(function()
-		return DataStoreService:GetDataStore(Config.Data.StoreName)
+		-- Studio (tests, DEV commands) uses its own store: live saves are never touched
+		local name = Config.Data.StoreName
+		if RunService:IsStudio() then
+			name = Config.Data.StudioStoreName or (Config.Data.StoreName .. "_Studio")
+		end
+		return DataStoreService:GetDataStore(name)
 	end)
 	if ok then
 		store = result

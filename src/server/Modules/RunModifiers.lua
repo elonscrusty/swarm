@@ -205,7 +205,7 @@ function RunModifiers.CommitDaily(rp, cleared: number, clearTime: number, surviv
 		end
 		info.Best = D.BestScore
 		if ctx.LeaderboardService then
-			ctx.LeaderboardService.Submit(rp.Player, "Daily", score, rp.DailyDay)
+			ctx.LeaderboardService.Submit(rp.Player, "Daily", score, rp.DailyDay, rp.RunId)
 		end
 	end
 	return info
