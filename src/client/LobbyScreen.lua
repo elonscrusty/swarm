@@ -482,7 +482,7 @@ local function buildModes(frame: Frame)
 	ui.EndlessRow = holder
 	ui.EndlessEdge = face:FindFirstChildOfClass("UIStroke")
 	UIKit.padding(face, 0, 12, 0, 12)
-	ui.EndlessToggle = UIKit.Toggle(face, "Endless", "cycle", "No win · stages get ever harder", player:GetAttribute("Endless") == true, function(on)
+	ui.EndlessToggle = UIKit.Toggle(face, "Endless", "cycle", "Stages never end · harder each stage", player:GetAttribute("Endless") == true, function(on)
 		endlessSentAt = os.clock()
 		Remotes.Get("SetEndless"):FireServer(on)
 	end, { Size = UDim2.fromScale(1, 1) })
