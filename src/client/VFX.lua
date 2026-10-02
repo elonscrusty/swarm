@@ -1695,18 +1695,19 @@ end
 
 --[[
 	Fire Trail patches: the burning ground the server damages (WeaponFx "fp": x, z, radius,
-	life, evolved). Each patch is a scorched, half see-through bed exactly as wide as its damage
-	circle plus a few flame licks standing inside it. A lick is a small four-wedge spire
-	(like a gem's crown) in two alternating tones, a warm outer flame and a lighter core; it
-	sways, leans and flickers, grows in one after the other, shifts from gold-orange through
-	orange to dull red as the patch ages and shrinks away in its last half second. Walking
-	leaves a continuous ribbon of flames, never a chain of blobs. Spacing and lifetime are the
+	life, evolved). Each patch is a scorched, half see-through bed exactly as wide as its
+	damage circle plus a small crown of flame licks standing in it. A lick is a tall pointed
+	flame card (two mirrored wedges) turned to face the camera, with a smaller, brighter core
+	card in front: a clean flame silhouette from the overhead view. Licks sway, lean and
+	flicker, grow in one after the other, shift from gold-orange through orange to dull red
+	as the patch ages and shrink away in its last half second, so walking leaves a
+	continuous ribbon of flames instead of a chain of blobs. Spacing and lifetime are the
 	server's; the client only caps how much it draws (K.FIRE_MAX_PARTS, 40% with Reduced
 	effects): the oldest patch goes first, licks per patch drop as the trail gets long (one
 	lick, no embers with Reduced effects), and patches far from the hero are skipped.
 	Never the crimson and dark outline of enemy warnings: these never hurt heroes.
 ]]
-type FireLick = { Wedges: { BasePart }, Ox: number, Oz: number, Yaw: number, D: number, H: number, Delay: number, Speed: number, Phase: number }
+type FireLick = { Cards: { BasePart }, Ox: number, Oz: number, W: number, H: number, Tilt: number, Delay: number, Speed: number, Phase: number, Vis: number }
 type FirePatch = { Bed: BasePart, Licks: { FireLick }, Parts: number, X: number, Z: number, R: number, Start: number, Life: number, Evo: boolean, Stage: number }
 local firePatches: { FirePatch } = {}
 K.FIRE_MAX_PATCHES = 40
@@ -1714,11 +1715,12 @@ K.FIRE_MAX_PARTS = 300 -- flame parts in use (own budget, apart from the one-sho
 K.FIRE_NEAR = 110 -- patches farther than this from the hero are not drawn
 K.fireParts = 0
 K.fireEmber = 0
+K.fireFace = CFrame.identity -- turns a flame card to face the camera (set each frame)
 -- outer flame / core colours at the start, middle and end of a patch's life
-K.FIRE_OUTER = { Color3.fromRGB(255, 112, 26), Color3.fromRGB(222, 70, 24), Color3.fromRGB(128, 36, 24) }
-K.FIRE_CORE = { Color3.fromRGB(255, 176, 52), Color3.fromRGB(255, 124, 40), Color3.fromRGB(180, 70, 34) }
-K.FIRE_OUTER_EVO = { Color3.fromRGB(255, 168, 40), Color3.fromRGB(255, 112, 30), Color3.fromRGB(190, 64, 30) }
-K.FIRE_CORE_EVO = { Color3.fromRGB(255, 226, 120), Color3.fromRGB(255, 176, 66), Color3.fromRGB(230, 118, 48) }
+K.FIRE_OUTER = { Color3.fromRGB(255, 122, 28), Color3.fromRGB(226, 76, 26), Color3.fromRGB(140, 40, 26) }
+K.FIRE_CORE = { Color3.fromRGB(255, 200, 70), Color3.fromRGB(255, 150, 50), Color3.fromRGB(196, 84, 38) }
+K.FIRE_OUTER_EVO = { Color3.fromRGB(255, 178, 44), Color3.fromRGB(255, 124, 34), Color3.fromRGB(200, 70, 32) }
+K.FIRE_CORE_EVO = { Color3.fromRGB(255, 236, 140), Color3.fromRGB(255, 190, 80), Color3.fromRGB(238, 128, 52) }
 K.FIRE_STAGES = 6
 
 local function fireRamp(stops: { Color3 }, u: number): Color3
@@ -1731,8 +1733,8 @@ end
 local function freeFirePatch(fp: FirePatch)
 	givePart("Cylinder", fp.Bed)
 	for _, lick in ipairs(fp.Licks) do
-		for _, w in ipairs(lick.Wedges) do
-			givePart("Wedge", w)
+		for _, card in ipairs(lick.Cards) do
+			givePart("Wedge", card)
 		end
 	end
 	K.fireParts -= fp.Parts
@@ -1745,8 +1747,8 @@ local function colourFire(fp: FirePatch, stage: number)
 	local outer = fireRamp(fp.Evo and K.FIRE_OUTER_EVO or K.FIRE_OUTER, u)
 	local core = fireRamp(fp.Evo and K.FIRE_CORE_EVO or K.FIRE_CORE, u)
 	for _, lick in ipairs(fp.Licks) do
-		for i, w in ipairs(lick.Wedges) do
-			w.Color = i % 2 == 1 and outer or core
+		for i, card in ipairs(lick.Cards) do
+			card.Color = i <= 2 and outer or core
 		end
 	end
 	fp.Bed.Color = outer:Lerp(Color3.fromRGB(40, 14, 8), 0.65) -- scorched floor
@@ -1763,37 +1765,35 @@ local function firePatch(x: number, z: number, radius: number, life: number, evo
 	if root and Vector2.new(root.Position.X - x, root.Position.Z - z).Magnitude > K.FIRE_NEAR then
 		return
 	end
-	-- licks per patch: 4 while the trail is light, 3 once it is busy, 2 near the cap
-	local count = reduced and 1 or ((K.fireParts < cap * 0.45 and 4) or (K.fireParts < cap * 0.7 and 3) or 2)
+	-- licks per patch: 3 while the trail is light, 2 once it is busy, 1 near the cap
+	local count = reduced and 1 or ((K.fireParts < cap * 0.5 and 3) or (K.fireParts < cap * 0.75 and 2) or 1)
 	if K.fireParts + 1 + count * 4 > cap then
 		return
 	end
-	-- the ember bed is exactly the damage circle; later patches sit a hair higher
+	-- the bed is exactly the damage circle (above the dirt paths); later patches sit a hair higher
 	local bed = takePart("Cylinder", P.crimson_700, SMOOTH, Vector3.new(0.05, radius * 2, radius * 2), 1)
-	bed.CFrame = CFrame.new(x, FLOOR_Y + 0.05 + (K.fireParts % 7) * 0.006, z) * DISC
+	bed.CFrame = CFrame.new(x, FLOOR_Y + 0.44 + (K.fireParts % 7) * 0.004, z) * DISC
 	local licks: { FireLick } = {}
 	local scale = math.clamp(radius / 3.2, 0.8, 1.6)
-	local spin = math.random() * TAU
+	local offsets = count == 1 and { 0 } or (count == 2 and { -0.3, 0.3 } or { 0, -0.5, 0.5 })
 	for k = 1, count do
-		-- one tall flame in the middle, smaller ones either side of the walking line
-		local main = k == 1
-		local a = spin + (k - 2) * TAU / 3
-		local r = main and 0 or radius * 0.36
-		local wedges = {}
+		local main = k == 1 and count ~= 2
+		local cards = {}
 		for i = 1, 4 do
-			-- facets alternate: lit orange plastic (shaded by the sun) and a glowing core tone
-			wedges[i] = takePart("Wedge", WHITE, i % 2 == 1 and SMOOTH or NEON, Vector3.new(0.1, 0.1, 0.1), 0)
+			-- outer pair plastic, core pair glowing
+			cards[i] = takePart("Wedge", WHITE, i <= 2 and SMOOTH or NEON, Vector3.new(0.1, 0.1, 0.1), 0)
 		end
 		licks[k] = {
-			Wedges = wedges,
-			Ox = math.cos(a) * r,
-			Oz = math.sin(a) * r,
-			Yaw = math.random() * TAU,
-			D = (main and 0.5 or 0.3) * scale * (0.9 + math.random() * 0.2),
-			H = (main and 1.8 or 1.05) * scale * (0.9 + math.random() * 0.2),
-			Delay = (k - 1) * 0.1 + math.random() * 0.05,
+			Cards = cards,
+			Ox = offsets[k] * radius,
+			Oz = (math.random() - 0.5) * 0.5,
+			W = (main and 1.7 or 1.15) * scale * (0.9 + math.random() * 0.2),
+			H = (main and 2.6 or 1.8) * scale * (0.9 + math.random() * 0.2),
+			Tilt = (math.random() - 0.5) * 0.3,
+			Delay = (k - 1) * 0.09 + math.random() * 0.05,
 			Speed = 5 + math.random() * 4,
 			Phase = math.random() * TAU,
+			Vis = -1,
 		}
 	end
 	local parts = 1 + count * 4
@@ -1815,8 +1815,23 @@ local function fireEmber(fp: FirePatch, t: number)
 	fx("Block", color, NEON, CFrame.new(from), CFrame.new(to), Vector3.one * 0.14, Vector3.one * 0.04, 0.15, 1, 0.55 + math.random() * 0.3, EASE_OUT)
 end
 
+-- Sizes a flame card pair: a left and a right wedge sharing the tall centre line (the
+-- wedge's tall face leans on it), `lean` moves the tip sideways.
+local function sizeLick(lick: FireLick, vis: number)
+	lick.Vis = vis
+	local h, w = lick.H * vis, lick.W * (0.5 + 0.5 * vis)
+	local lean = lick.Tilt * 0.5
+	local wl, wr = w * (0.5 + lean), w * (0.5 - lean)
+	local c = lick.Cards
+	c[1].Size = Vector3.new(0.12, h, wl)
+	c[2].Size = Vector3.new(0.12, h, wr)
+	c[3].Size = Vector3.new(0.16, h * 0.62, wl * 0.55)
+	c[4].Size = Vector3.new(0.16, h * 0.62, wr * 0.55)
+end
+
 local function stepFirePatches(now: number)
-	if #firePatches > 0 and not ClientSettings.Reduced() and now >= K.fireEmber then
+	local reduced = ClientSettings.Reduced()
+	if #firePatches > 0 and not reduced and now >= K.fireEmber then
 		K.fireEmber = now + 0.16
 		local fp = firePatches[math.random(1, #firePatches)]
 		local t = now - fp.Start
@@ -1824,6 +1839,18 @@ local function stepFirePatches(now: number)
 			fireEmber(fp, t)
 		end
 	end
+	if #firePatches == 0 then
+		return
+	end
+	local cam = workspace.CurrentCamera
+	if cam then
+		local look = cam.CFrame.LookVector
+		local flat = Vector3.new(look.X, 0, look.Z)
+		if flat.Magnitude > 1e-3 then
+			K.fireFace = CFrame.lookAt(Vector3.zero, flat.Unit) -- local -Z = the camera's heading
+		end
+	end
+	local face: CFrame = K.fireFace
 	for i = #firePatches, 1, -1 do
 		local fp = firePatches[i]
 		local t = now - fp.Start
@@ -1837,28 +1864,31 @@ local function stepFirePatches(now: number)
 			end
 			local left = math.clamp((fp.Life - t) / 0.5, 0, 1) -- 1 → 0 over the last half second
 			-- half see-through: the floor stays readable under a long trail
-			fp.Bed.Transparency = 1 - 0.5 * math.min(1, t / 0.2) * left
+			fp.Bed.Transparency = 1 - 0.26 * math.min(1, t / 0.2) * left
+			local origin = CFrame.new(fp.X, FLOOR_Y + 0.1, fp.Z) * face
 			for _, lick in ipairs(fp.Licks) do
 				local grow = math.clamp((t - lick.Delay) / 0.3, 0, 1)
 				local vis = (1 - (1 - grow) * (1 - grow)) * left -- eases out, shrinks at the end
 				if vis <= 0.02 then
-					for _, w in ipairs(lick.Wedges) do
-						w.CFrame = PARK
+					for _, card in ipairs(lick.Cards) do
+						card.CFrame = PARK
 					end
 				else
-					local flick = 1 + math.sin(t * lick.Speed + lick.Phase) * 0.12 + math.sin(t * lick.Speed * 1.9 + lick.Phase * 2) * 0.06
-					local h, d = lick.H * vis * flick, lick.D * (0.5 + 0.5 * vis)
-					local lean = math.sin(t * lick.Speed * 0.55 + lick.Phase) * 0.22
-					local base = CFrame.new(fp.X + lick.Ox, FLOOR_Y, fp.Z + lick.Oz) * CFrame.Angles(0, lick.Yaw + t * 0.7, 0) * CFrame.Angles(lean, 0, math.cos(t * lick.Speed * 0.4 + lick.Phase) * 0.18)
-					local size = Vector3.new(d * 2, h, d)
-					for k, w in ipairs(lick.Wedges) do
-						if w.Size ~= size then
-							w.Size = size
-						end
-						w.Transparency = (1 - left) * 0.6
-						-- a wedge's tall face (+Z) leans on the axis: four make a spire
-						bulk(w, base * CFrame.Angles(0, (k - 1) * math.pi / 2, 0) * CFrame.new(0, h / 2, -d / 2))
+					if math.abs(vis - lick.Vis) > 0.01 then
+						sizeLick(lick, vis)
 					end
+					-- flicker: a small bob and roll, never a size change
+					local flick = math.sin(t * lick.Speed + lick.Phase) * 0.1 + math.sin(t * lick.Speed * 1.9 + lick.Phase * 2) * 0.05
+					local roll = math.sin(t * lick.Speed * 0.55 + lick.Phase) * 0.14 + lick.Tilt * 0.4
+					local base = origin * CFrame.new(lick.Ox, flick, lick.Oz) * CFrame.Angles(0, 0, roll)
+					local h = lick.H * vis
+					local wl, wr = lick.W * (0.5 + 0.5 * vis) * (0.5 + lick.Tilt * 0.5), lick.W * (0.5 + 0.5 * vis) * (0.5 - lick.Tilt * 0.5)
+					local c = lick.Cards
+					-- left card: tall face (+Z) toward +X; right card: toward -X
+					bulk(c[1], base * CFrame.new(-wl / 2, h / 2, 0) * CFrame.Angles(0, math.pi / 2, 0))
+					bulk(c[2], base * CFrame.new(wr / 2, h / 2, 0) * CFrame.Angles(0, -math.pi / 2, 0))
+					bulk(c[3], base * CFrame.new(-wl * 0.275, h * 0.31, 0.05) * CFrame.Angles(0, math.pi / 2, 0))
+					bulk(c[4], base * CFrame.new(wr * 0.275, h * 0.31, 0.05) * CFrame.Angles(0, -math.pi / 2, 0))
 				end
 			end
 		end

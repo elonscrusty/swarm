@@ -396,6 +396,11 @@ Config.Enemies = {
 	ThinkChunks = 3,
 	ContactCooldown = 0.6, -- seconds between contact hits from the same enemy
 	SeparationRadius = 1.1, -- multiplier on the two radii when pushing enemies apart
+	SeparationCell = 8, -- studs: cell of EnemyAI's fine separation grid (perf only)
+	-- Body sync (perf only, no gameplay effect): enemy bodies within BodySyncNear studs of
+	-- a player move every frame, farther ones every BodyFarEvery frames (clients smooth).
+	BodySyncNear = 30,
+	BodyFarEvery = 3,
 	SeparationStrength = 10,
 	AvoidRayLength = 9, -- obstacle look-ahead in studs
 	AvoidTurnStrength = 1.4,

@@ -37,6 +37,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Palette = require(Shared:WaitForChild("Palette"))
 local ModelLibrary = require(script.Parent.ModelLibrary)
 local Audio = require(script.Parent.Audio)
+local ClientSettings = require(script.Parent.ClientSettings)
 
 local Telegraphs = {}
 
@@ -177,7 +178,18 @@ local function ring(n: number, color: Color3, alpha: number, x: number, y: numbe
 	return parts
 end
 
+-- One alpha for a whole group (ring segments, marks). Most warnings hold a steady alpha
+-- for most of their life (a blinking edge only changes on its toggles), so an unchanged
+-- (to 1/200) value is not written again: a crowd of Bomb Tick rings otherwise rewrote
+-- every segment every frame.
+local groupAlpha: { [any]: number } = setmetatable({}, { __mode = "k" }) :: any
+
 local function setAlpha(parts: { BasePart }, alpha: number)
+	alpha = math.floor(alpha * 200 + 0.5) / 200
+	if groupAlpha[parts] == alpha then
+		return
+	end
+	groupAlpha[parts] = alpha
 	for _, p in ipairs(parts) do
 		p.Transparency = alpha
 	end
@@ -198,6 +210,7 @@ end
 type Anim = { Part: BasePart, Shape: string, Start: number, Dur: number, CF0: CFrame, CF1: CFrame?, Arc: number, S0: Vector3, S1: Vector3?, A0: number, A1: number }
 local anims: { Anim } = {}
 local MAX_ANIMS = 160
+local PUFF_BUSY = 40 -- past this many live one-shots a spawn puff is its dust disc only
 
 local function anim(shape: string, color: Color3, material: Enum.Material, cf0: CFrame, cf1: CFrame?, s0: Vector3, s1: Vector3?, a0: number, a1: number, dur: number, arc: number?)
 	if #anims >= MAX_ANIMS then
@@ -239,10 +252,14 @@ local function flatDisc(x: number, z: number, y: number): CFrame
 	return CFrame.new(x, FLOOR_Y + 0.33 + y, z) * DISC
 end
 
--- Small dust puff where an enemy climbs out (EnemyRenderer, on spawn).
+-- Small dust puff where an enemy climbs out (EnemyRenderer, on spawn, on screen only).
+-- In a big swarm (many one-shots alive) or with Reduced effects it is the dust disc alone.
 function Telegraphs.Puff(x: number, z: number, radius: number)
 	local d = radius * 2
 	anim("Cylinder", C.Dust, SMOOTH, flatDisc(x, z, 0.05), nil, Vector3.new(0.04, d * 0.5, d * 0.5), Vector3.new(0.04, d * 1.6, d * 1.6), 0.45, 1, 0.4)
+	if #anims > PUFF_BUSY or ClientSettings.Reduced() then
+		return
+	end
 	for i = 1, 3 do
 		local a = i * TAU / 3 + math.random() * 0.8
 		local from = Vector3.new(x + math.cos(a) * radius * 0.5, FLOOR_Y + 0.4, z + math.sin(a) * radius * 0.5)
