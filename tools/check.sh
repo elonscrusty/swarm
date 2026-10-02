@@ -19,6 +19,19 @@ if [ -n "$OUT" ]; then
 fi
 echo "TYPECHECK: ok"
 
+# Compile every script unoptimised, as Studio does: catches compile-only errors such as
+# "Out of local registers" (more than 200 locals alive in one function or module chunk).
+COMPILE="$T/luau/luau-compile"
+if [ -x "$COMPILE" ]; then
+	CERR="$(find src -name '*.lua' -o -name '*.luau' | while read -r f; do "$COMPILE" -O0 --null "$f" 2>&1 | grep -i error || true; done)"
+	if [ -n "$CERR" ]; then
+		echo "$CERR"
+		echo "COMPILE: failed"
+		exit 1
+	fi
+	echo "COMPILE: ok"
+fi
+
 if [ "${1:-}" != "--quick" ]; then
 	"$ROJO" build default.project.json -o "$(dirname "$SM")/Swarm.rbxlx" >/dev/null
 	echo "BUILD: ok"

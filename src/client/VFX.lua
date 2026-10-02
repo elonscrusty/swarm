@@ -43,6 +43,8 @@ local CameraController = require(script.Parent.CameraController)
 local Occlusion = require(script.Parent.Occlusion)
 
 local VFX = {}
+-- Tuning constants live in one table: a module chunk may hold at most 200 locals.
+local K: any = {}
 
 local P = Theme.Palette
 local FX = Theme.Fx
@@ -466,19 +468,19 @@ local poses: { [number]: Pose } = {}
 -- A snappy cut: wind-up + sweep take 0.13 s (was 0.22). With the cubic ease-out the blade
 -- passes the middle of the arc ~0.06 s after the swing starts, so the drawn hit lines up
 -- with the server's damage (WeaponSystem SWING_HIT_DELAY 0.08 s, minus the Fx batch delay).
-local SWING_WINDUP = 0.04 -- blade pulls back
-local SWING_SWEEP = 0.09 -- blade crosses the arc (ease-out)
-local SWING_FADE = 0.07 -- tip spark fades after the sweep
-local POSE_RECOVER = 0.12 -- arm blends back to the walk cycle
-local THROW_TIME = 0.26
-local CAST_TIME = 0.24
+K.SWING_WINDUP = 0.04 -- blade pulls back
+K.SWING_SWEEP = 0.09 -- blade crosses the arc (ease-out)
+K.SWING_FADE = 0.07 -- tip spark fades after the sweep
+K.POSE_RECOVER = 0.12 -- arm blends back to the walk cycle
+K.THROW_TIME = 0.26
+K.CAST_TIME = 0.24
 
 local function startPose(userId: number, kind: string, sweep: number?, back: boolean?, half: number?)
 	local now = os.clock()
 	local cur = poses[userId]
 	if cur and kind ~= "Swing" then
 		-- throws never interrupt a swing or a throw that is still playing
-		local busy = cur.Kind == "Swing" and (SWING_WINDUP + SWING_SWEEP + POSE_RECOVER) or THROW_TIME
+		local busy = cur.Kind == "Swing" and (K.SWING_WINDUP + K.SWING_SWEEP + K.POSE_RECOVER) or K.THROW_TIME
 		if now - cur.Start < busy then
 			return
 		end
@@ -989,9 +991,9 @@ type SwingRig = { Carrier: BasePart, Core: Trail, Edge: Trail, Inner: Attachment
 type Swing = { Rig: SwingRig, Root: BasePart?, X: number, Z: number, Yaw: number, Reach: number, Sweep: number, Start: number, Trailing: boolean, Life: number }
 type SlashStyle = { Core: ColorSequence, CoreAlpha: NumberSequence, Edge: ColorSequence, EdgeAlpha: NumberSequence, EdgeWidth: number, Tip: Color3 }
 
-local SWING_ARC = math.rad(WeaponData.Weapons.Whip.Params.Arc)
-local SWING_PULL = math.rad(22) -- extra wind-up beyond the arc start
-local SWING_HEIGHT = 2.2
+K.SWING_ARC = math.rad(WeaponData.Weapons.Whip.Params.Arc)
+K.SWING_PULL = math.rad(22) -- extra wind-up beyond the arc start
+K.SWING_HEIGHT = 2.2
 
 local function slashStyle(core: Color3, edge: Color3, coreAlpha: number, edgeAlpha: number, edgeWidth: number, tip: Color3): SlashStyle
 	return {
@@ -1103,7 +1105,7 @@ local function slash(x: number, z: number, yaw: number, reach: number, sweep: nu
 		local dir = Vector3.new(-math.sin(yaw), 0, -math.cos(yaw))
 		back = look.X * dir.X + look.Z * dir.Z < 0
 	end
-	startPose(userId, "Swing", sweep, back, SWING_ARC / 2)
+	startPose(userId, "Swing", sweep, back, K.SWING_ARC / 2)
 	if userId == player.UserId then
 		Audio.Play("Swing")
 	end
@@ -1111,16 +1113,16 @@ end
 
 -- Relative blade angle (radians from the swing direction) at time t since the swing began.
 local function swingAngle(sweep: number, t: number): number
-	local half = SWING_ARC / 2
-	local from = sweep * (half + SWING_PULL)
-	if t < SWING_WINDUP then
-		return sweep * half + sweep * SWING_PULL * easeOut(t / SWING_WINDUP)
+	local half = K.SWING_ARC / 2
+	local from = sweep * (half + K.SWING_PULL)
+	if t < K.SWING_WINDUP then
+		return sweep * half + sweep * K.SWING_PULL * easeOut(t / K.SWING_WINDUP)
 	end
-	return from + (-sweep * half - from) * easeOut((t - SWING_WINDUP) / SWING_SWEEP)
+	return from + (-sweep * half - from) * easeOut((t - K.SWING_WINDUP) / K.SWING_SWEEP)
 end
 
 local function renderSwings(now: number)
-	local swingEnd = SWING_WINDUP + SWING_SWEEP
+	local swingEnd = K.SWING_WINDUP + K.SWING_SWEEP
 	for i = #swings, 1, -1 do
 		local sw = swings[i]
 		local rig = sw.Rig
@@ -1129,7 +1131,7 @@ local function renderSwings(now: number)
 		if root and root.Parent then
 			sw.X, sw.Z = root.Position.X, root.Position.Z
 		end
-		if t >= swingEnd + SWING_FADE + sw.Life then
+		if t >= swingEnd + K.SWING_FADE + sw.Life then
 			-- done: park and recycle
 			rig.Core.Enabled = false
 			rig.Edge.Enabled = false
@@ -1142,9 +1144,9 @@ local function renderSwings(now: number)
 			table.insert(swingRigs, rig)
 		else
 			local a = swingAngle(sw.Sweep, math.min(t, swingEnd))
-			local pivot = CFrame.new(sw.X, FLOOR_Y + SWING_HEIGHT, sw.Z) * CFrame.Angles(0, sw.Yaw + a, 0)
+			local pivot = CFrame.new(sw.X, FLOOR_Y + K.SWING_HEIGHT, sw.Z) * CFrame.Angles(0, sw.Yaw + a, 0)
 			bulk(rig.Carrier, pivot)
-			if t >= SWING_WINDUP and not sw.Trailing and t < swingEnd then
+			if t >= K.SWING_WINDUP and not sw.Trailing and t < swingEnd then
 				-- the sweep starts: trails on from where the blade is now
 				sw.Trailing = true
 				rig.Core:Clear()
@@ -1152,12 +1154,12 @@ local function renderSwings(now: number)
 				rig.Core.Enabled = true
 				rig.Edge.Enabled = true
 			end
-			if t >= SWING_WINDUP then
+			if t >= K.SWING_WINDUP then
 				if t >= swingEnd and rig.Core.Enabled then
 					rig.Core.Enabled = false
 					rig.Edge.Enabled = false
 				end
-				local f = math.clamp((t - swingEnd) / SWING_FADE, 0, 1)
+				local f = math.clamp((t - swingEnd) / K.SWING_FADE, 0, 1)
 				rig.Tip.Transparency = 0.2 + 0.8 * f
 				bulk(rig.Tip, pivot * CFrame.new(0, 0, -sw.Reach))
 			end
@@ -1216,11 +1218,11 @@ end
 ]]
 type PoolFx = { Fill: BasePart, Ripples: { BasePart }, Embers: { BasePart }, X: number, Z: number, R: number, Start: number, Life: number, FillAlpha: number }
 local poolList: { PoolFx } = {}
-local MAX_POOLS = 24
-local RIPPLE_PERIOD = 1.1
+K.MAX_POOLS = 24
+K.RIPPLE_PERIOD = 1.1
 
 local function pool(x: number, z: number, radius: number, seconds: number, evo: boolean)
-	if type(x) ~= "number" or type(radius) ~= "number" or #poolList >= MAX_POOLS then
+	if type(x) ~= "number" or type(radius) ~= "number" or #poolList >= K.MAX_POOLS then
 		return
 	end
 	local count = evo and 5 or 3
@@ -1282,7 +1284,7 @@ local function stepPools(now: number)
 			end
 			pl.Fill.Transparency = 1 - (1 - pl.FillAlpha) * vis
 			for k, rp in ipairs(pl.Ripples) do
-				local ph = (t / RIPPLE_PERIOD + (k - 1) / #pl.Ripples) % 1
+				local ph = (t / K.RIPPLE_PERIOD + (k - 1) / #pl.Ripples) % 1
 				local rr = pl.R * (0.2 + 0.8 * ph)
 				rp.Size = Vector3.new(0.05, rr * 2, rr * 2)
 				rp.Transparency = 1 - 0.4 * (1 - ph) * vis
@@ -1432,9 +1434,9 @@ local function warningSound(w: { any })
 	end
 end
 
-local SPARKS_PER_BATCH = 6
-local FULL_DEATHS_PER_BATCH = 6 -- dust + bits; more deaths in one batch get dust only
-local DEATHS_PER_BATCH = 14
+K.SPARKS_PER_BATCH = 6
+K.FULL_DEATHS_PER_BATCH = 6 -- dust + bits; more deaths in one batch get dust only
+K.DEATHS_PER_BATCH = 14
 
 ------------------------------------------------------------------------------------------
 -- Gold coins (a kill that paid gold: FxBatch "g" = { x, z, amount, userId })
@@ -1444,12 +1446,12 @@ local DEATHS_PER_BATCH = 14
 	Purely visual: the gold is already in the counter when the server sends this. Coins
 	(GoldCoin mesh, or a gold disc) burst up out of the enemy, land with one small bounce
 	and then fly into the player they belong to, ending in a tiny gold sparkle. Big amounts
-	add a GoldPile. Pooled, at most MAX_COINS in flight; Reduced effects: one coin.
+	add a GoldPile. Pooled, at most K.MAX_COINS in flight; Reduced effects: one coin.
 ]]
 type Coin = { Pieces: { any }, Pile: boolean, Start: number, From: Vector3, Land: Vector3, UserId: number, Phase: number, Fallback: BasePart? }
 local coinPool: { [string]: { Coin } } = { Coin = {}, Pile = {} }
 local coins: { Coin } = {}
-local MAX_COINS = 36
+K.MAX_COINS = 36
 local COIN_POP, COIN_BOUNCE, COIN_FLY = 0.38, 0.16, 0.34 -- seconds per leg
 local COIN_SCALE, PILE_SCALE = 2.1, 2.1 -- ~2 studs across: readable from the run camera
 
@@ -1501,7 +1503,7 @@ local function goldBurst(x: number, z: number, amount: number, userId: number)
 	local from = Vector3.new(x, FLOOR_Y + 1.6, z)
 	local now = os.clock()
 	for i = 1, count + (pile and 1 or 0) do
-		if #coins >= MAX_COINS then
+		if #coins >= K.MAX_COINS then
 			break
 		end
 		local isPile = pile and i == 1
@@ -1584,7 +1586,7 @@ local function onFxBatch(batch)
 	end
 	if type(batch.h) == "table" then
 		local hits = batch.h
-		local sparkEvery = math.max(1, math.ceil(#hits / SPARKS_PER_BATCH))
+		local sparkEvery = math.max(1, math.ceil(#hits / K.SPARKS_PER_BATCH))
 		for i, id in ipairs(hits) do
 			if type(id) == "number" then
 				flash(id)
@@ -1597,11 +1599,11 @@ local function onFxBatch(batch)
 	end
 	if type(batch.d) == "table" then
 		for i, d in ipairs(batch.d) do
-			if i > DEATHS_PER_BATCH then
+			if i > K.DEATHS_PER_BATCH then
 				break
 			end
 			if type(d) == "table" and type(d[1]) == "number" and type(d[2]) == "number" then
-				local bits = (i <= FULL_DEATHS_PER_BATCH) and ((tonumber(d[4]) or 2) > 5 and 4 or 2) or 0
+				local bits = (i <= K.FULL_DEATHS_PER_BATCH) and ((tonumber(d[4]) or 2) > 5 and 4 or 2) or 0
 				if room(1 + bits) then
 					local dust, chitin = creatureLook(typeof(d[3]) == "Color3" and d[3] or P.stone_300)
 					deathPuff(d[1], d[2], dust, chitin, tonumber(d[4]) or 2.5, bits)
@@ -1667,18 +1669,18 @@ end
 -- patches, Healing Totem pulses, Chain Hook chains, flak / lance bursts, harvested souls
 ------------------------------------------------------------------------------------------
 
-local ICE = P.ice_100
-local ICE_DEEP = P.ice_300
+K.ICE = P.ice_100
+K.ICE_DEEP = P.ice_300
 
 -- Frost Nova: a pale ice ring racing out to the burst's edge, a frosty floor flash and ice
 -- spikes thrown outward (Absolute Zero: a second, brighter ring and more spikes).
 local function nova(x: number, z: number, radius: number, evo: boolean)
-	wave(x, z, radius * 0.15, radius, 0.45 + (evo and 0.15 or 0), ICE, 0.12, 0.34, true)
+	wave(x, z, radius * 0.15, radius, 0.45 + (evo and 0.15 or 0), K.ICE, 0.12, 0.34, true)
 	if evo then
 		wave(x, z, radius * 0.1, radius * 0.75, 0.3, FX.Holy, 0.25, 0.42, true)
 	end
 	if room(1, true) then
-		fx("Cylinder", ICE_DEEP, SMOOTH, CFrame.new(x, FLOOR_Y + 0.07, z) * DISC, nil, Vector3.new(0.05, radius * 0.5, radius * 0.5), Vector3.new(0.05, radius * 2, radius * 2), 0.55, 1, 0.32, EASE_OUT)
+		fx("Cylinder", K.ICE_DEEP, SMOOTH, CFrame.new(x, FLOOR_Y + 0.07, z) * DISC, nil, Vector3.new(0.05, radius * 0.5, radius * 0.5), Vector3.new(0.05, radius * 2, radius * 2), 0.55, 1, 0.32, EASE_OUT)
 	end
 	local spikes = evo and 10 or 7
 	if room(spikes) then
@@ -1687,7 +1689,7 @@ local function nova(x: number, z: number, radius: number, evo: boolean)
 			local a = i * TAU / spikes + math.random() * 0.4
 			local dir = Vector3.new(math.cos(a), 0, math.sin(a))
 			local to = from + dir * radius * (0.65 + math.random() * 0.25) + Vector3.new(0, 0.4, 0)
-			fx("Wedge", i % 2 == 0 and ICE or ICE_DEEP, SMOOTH, CFrame.lookAt(from, from + dir), CFrame.lookAt(to, to + dir), Vector3.new(0.3, 0.5, 1.1), Vector3.new(0.12, 0.2, 0.5), 0.15, 1, 0.3, EASE_OUT)
+			fx("Wedge", i % 2 == 0 and K.ICE or K.ICE_DEEP, SMOOTH, CFrame.lookAt(from, from + dir), CFrame.lookAt(to, to + dir), Vector3.new(0.3, 0.5, 1.1), Vector3.new(0.12, 0.2, 0.5), 0.15, 1, 0.3, EASE_OUT)
 		end
 	end
 end
@@ -1700,8 +1702,8 @@ end
 ]]
 type FirePatch = { Fill: BasePart, Rim: BasePart, Flame: { any }, Visual: number, X: number, Z: number, R: number, Start: number, Life: number, Phase: number }
 local firePatches: { FirePatch } = {}
-local MAX_FIRE_PATCHES = 96
-local FLAME_UP = CFrame.Angles(-math.pi / 2, 0, 0) -- the flame mesh's tail (+Z) points up
+K.MAX_FIRE_PATCHES = 96
+K.FLAME_UP = CFrame.Angles(-math.pi / 2, 0, 0) -- the flame mesh's tail (+Z) points up
 
 local function freeFirePatch(fp: FirePatch)
 	givePart("Cylinder", fp.Fill)
@@ -1719,7 +1721,7 @@ local function freeFirePatch(fp: FirePatch)
 end
 
 local function firePatch(x: number, z: number, radius: number, life: number, evo: boolean)
-	if #firePatches >= MAX_FIRE_PATCHES then
+	if #firePatches >= K.MAX_FIRE_PATCHES then
 		freeFirePatch(table.remove(firePatches, 1) :: FirePatch)
 	end
 	if not room(5) then
@@ -1751,7 +1753,7 @@ local function stepFirePatches(now: number)
 			fp.Rim.Transparency = 1 - 0.45 * vis
 			local flicker = 1 + math.sin(t * 13 + fp.Phase) * 0.08 + math.sin(t * 7.3 + fp.Phase) * 0.06
 			local h = math.clamp(fp.R / 3.2, 0.8, 1.6) * vis * flicker
-			local cf = CFrame.new(fp.X, FLOOR_Y, fp.Z) * CFrame.Angles(0, t * 0.6 + fp.Phase, 0) * CFrame.new(0, 0.75 * h, 0) * FLAME_UP
+			local cf = CFrame.new(fp.X, FLOOR_Y, fp.Z) * CFrame.Angles(0, t * 0.6 + fp.Phase, 0) * CFrame.new(0, 0.75 * h, 0) * K.FLAME_UP
 			for _, piece in ipairs(fp.Flame) do
 				bulk(piece.Part, cf * CFrame.new(piece.Offset.Position * h) * piece.Offset.Rotation)
 			end
@@ -1783,7 +1785,7 @@ end
 ]]
 type Chain = { UserId: number, Id: number, Seq: number, Born: number, Links: { BasePart } }
 local chains: { [number]: Chain } = {}
-local CHAIN_MAX_LINKS = 30
+K.CHAIN_MAX_LINKS = 30
 
 local function dropChain(id: number)
 	local c = chains[id]
@@ -1818,7 +1820,7 @@ local function renderChains(now: number)
 			local from = Vector3.new(root.Position.X, to.Y, root.Position.Z)
 			local d = to - from
 			local len = d.Magnitude
-			local count = math.clamp(math.floor(len / 0.85), 1, CHAIN_MAX_LINKS)
+			local count = math.clamp(math.floor(len / 0.85), 1, K.CHAIN_MAX_LINKS)
 			local look = len > 0.05 and CFrame.lookAt(from, to) or CFrame.new(from)
 			for k = 1, count do
 				local link = c.Links[k]
@@ -1891,12 +1893,12 @@ local gemParts: { BasePart } = {}
 local gemCFrames: { CFrame } = {}
 local gemClock = 0
 local popsThisFrame = 0
-local GEM_TILT = CFrame.Angles(math.rad(45), 0, math.rad(35.26)) -- cube on its corner
-local GEM_SIZE = (Config.XP :: any).GemSize or { Small = 1.1, Medium = 1.45, Large = 1.9 }
+K.GEM_TILT = CFrame.Angles(math.rad(45), 0, math.rad(35.26)) -- cube on its corner
+K.GEM_SIZE = (Config.XP :: any).GemSize or { Small = 1.1, Medium = 1.45, Large = 1.9 }
 local GEM_HEIGHT: number = Config.XP.GemHeight
-local GEM_HOVER = 0.65 -- the crystal's tip floats this far over the floor (bob +-0.25)
-local GEM_SCALE = { Small = 1.45, Medium = 1.85, Large = 2.45 } -- Crystal mesh scale (1 = 1.16 tall)
-local GEM_HALO = { Small = 0.62, Medium = 0.56, Large = 0.5 } -- glow disc alpha (higher = fainter)
+K.GEM_HOVER = 0.65 -- the crystal's tip floats this far over the floor (bob +-0.25)
+K.GEM_SCALE = { Small = 1.45, Medium = 1.85, Large = 2.45 } -- Crystal mesh scale (1 = 1.16 tall)
+K.GEM_HALO = { Small = 0.62, Medium = 0.56, Large = 0.5 } -- glow disc alpha (higher = fainter)
 
 type CrystalBase = { Size: Vector3, Offset: Vector3, Light: boolean }
 type Crystal = { Pieces: { any }, Base: { CrystalBase }, Kind: string, Scale: number }
@@ -1918,8 +1920,8 @@ end
 -- Gem kind from the server cube size (Config.XP.GemSize) → kind, mesh scale, colour.
 local function gemLook(part: BasePart): (string, number, Color3)
 	local x = part.Size.X
-	local kind = x >= (GEM_SIZE.Medium + GEM_SIZE.Large) / 2 and "Large" or (x >= (GEM_SIZE.Small + GEM_SIZE.Medium) / 2 and "Medium" or "Small")
-	return kind, GEM_SCALE[kind], FX.Gem[kind] or FX.Arcane
+	local kind = x >= (K.GEM_SIZE.Medium + K.GEM_SIZE.Large) / 2 and "Large" or (x >= (K.GEM_SIZE.Small + K.GEM_SIZE.Medium) / 2 and "Medium" or "Small")
+	return kind, K.GEM_SCALE[kind], FX.Gem[kind] or FX.Arcane
 end
 
 -- One crystal per pooled gem part, resized / recoloured when the gem's kind changes.
@@ -2055,7 +2057,7 @@ local function renderGems(dt: number)
 		local phase = base.X * 0.37 + base.Z * 0.21
 		local bob = math.sin(gemClock * 2.2 + phase) * 0.25
 		local spin = CFrame.Angles(0, gemClock * 1.2 + phase, 0)
-		local floorY = base.Y - GEM_HEIGHT + GEM_HOVER + bob -- the crystal's lowest point
+		local floorY = base.Y - GEM_HEIGHT + K.GEM_HOVER + bob -- the crystal's lowest point
 		local g = gemFxFor(part)
 		local crystal = useMesh and crystalFor(part, kind, scale, color) or nil
 		local centre, height
@@ -2088,7 +2090,7 @@ local function renderGems(dt: number)
 			centre = Vector3.new(base.X, floorY + height * 0.5, base.Z)
 			n += 1
 			gemParts[n] = part
-			gemCFrames[n] = CFrame.new(centre) * spin * GEM_TILT
+			gemCFrames[n] = CFrame.new(centre) * spin * K.GEM_TILT
 			-- the core shows through the glassy cube (the mesh has its own core)
 			n += 1
 			gemParts[n] = g.Core
@@ -2105,7 +2107,7 @@ local function renderGems(dt: number)
 		end
 		-- the floor glow stays on the floor; a gem flying up to a player leaves it behind
 		local resting = base.Y <= FLOOR_Y + GEM_HEIGHT + 0.5
-		local wantHalo = (halos and resting) and GEM_HALO[kind] or 1
+		local wantHalo = (halos and resting) and K.GEM_HALO[kind] or 1
 		if g.Halo.Transparency ~= wantHalo then
 			g.Halo.Transparency = wantHalo
 		end
@@ -2196,14 +2198,14 @@ type Deco = {
 	ShowUntil: number,
 }
 local decos: { [Player]: Deco } = {}
-local AURA_MOTES = 5
+K.AURA_MOTES = 5
 
 -- Facing chevron: two short bars forming a ">" just outside the ring, pointing forward.
-local CHEV_LEN = 0.62
-local CHEV_TIP = 3.5
-local CHEV_ANGLE = math.rad(40)
-local CHEV_L = CFrame.new(-math.sin(CHEV_ANGLE) * CHEV_LEN / 2, 0, -CHEV_TIP + math.cos(CHEV_ANGLE) * CHEV_LEN / 2) * CFrame.Angles(0, -CHEV_ANGLE, 0)
-local CHEV_R = CFrame.new(math.sin(CHEV_ANGLE) * CHEV_LEN / 2, 0, -CHEV_TIP + math.cos(CHEV_ANGLE) * CHEV_LEN / 2) * CFrame.Angles(0, CHEV_ANGLE, 0)
+K.CHEV_LEN = 0.62
+K.CHEV_TIP = 3.5
+K.CHEV_ANGLE = math.rad(40)
+K.CHEV_L = CFrame.new(-math.sin(K.CHEV_ANGLE) * K.CHEV_LEN / 2, 0, -K.CHEV_TIP + math.cos(K.CHEV_ANGLE) * K.CHEV_LEN / 2) * CFrame.Angles(0, -K.CHEV_ANGLE, 0)
+K.CHEV_R = CFrame.new(math.sin(K.CHEV_ANGLE) * K.CHEV_LEN / 2, 0, -K.CHEV_TIP + math.cos(K.CHEV_ANGLE) * K.CHEV_LEN / 2) * CFrame.Angles(0, K.CHEV_ANGLE, 0)
 
 local function newDeco(): Deco
 	return {
@@ -2283,8 +2285,8 @@ local function buildBar(deco: Deco, root: BasePart, team: boolean)
 	deco.TrailFrac = 1
 end
 
-local BAR_HEALTH = ColorSequence.new(P.crimson_400, P.crimson_600)
-local BAR_REVIVE = ColorSequence.new(P.gold_300, P.gold_500)
+K.BAR_HEALTH = ColorSequence.new(P.crimson_400, P.crimson_600)
+K.BAR_REVIVE = ColorSequence.new(P.gold_300, P.gold_500)
 
 --[[
 	Local player: shown only while hurt (and a moment after healing to full); the HUD has
@@ -2325,7 +2327,7 @@ local function updateBar(deco: Deco, other: Player, root: BasePart, isLocal: boo
 	local revive = not alive
 	if deco.BarRevive ~= revive then
 		deco.BarRevive = revive
-		grad.Color = revive and BAR_REVIVE or BAR_HEALTH
+		grad.Color = revive and K.BAR_REVIVE or K.BAR_HEALTH
 		deco.Frac = -1
 	end
 	local value = frac
@@ -2390,7 +2392,7 @@ local function updateMarker(deco: Deco, root: BasePart, isLocal: boolean, alive:
 		end
 		for _, c in ipairs(chev) do
 			c.Color = color
-			c.Size = Vector3.new(0.17, 0.05, CHEV_LEN)
+			c.Size = Vector3.new(0.17, 0.05, K.CHEV_LEN)
 			c.Transparency = style == "local" and 0.06 or 0.25
 			if style == "down" then
 				c.CFrame = PARK
@@ -2413,8 +2415,8 @@ local function updateMarker(deco: Deco, root: BasePart, isLocal: boolean, alive:
 	if style ~= "down" then
 		local look = root.CFrame.LookVector
 		local cf = CFrame.new(pos.X, y, pos.Z) * CFrame.Angles(0, math.atan2(-look.X, -look.Z), 0)
-		bulk(chev[1], cf * CHEV_L)
-		bulk(chev[2], cf * CHEV_R)
+		bulk(chev[1], cf * K.CHEV_L)
+		bulk(chev[2], cf * K.CHEV_R)
 	end
 end
 
@@ -2444,7 +2446,7 @@ local function updateAura(deco: Deco, root: BasePart, radius: number, evo: boole
 		deco.Aura = newRing(28)
 		deco.AuraFill = newPart("Cylinder")
 		local motes = {}
-		for i = 1, AURA_MOTES do
+		for i = 1, K.AURA_MOTES do
 			local m = newPart("Ball")
 			m.Material = NEON
 			m.Size = Vector3.one * 0.26
@@ -2470,7 +2472,7 @@ local function updateAura(deco: Deco, root: BasePart, radius: number, evo: boole
 	fill.Transparency = 0.93 + 0.02 * math.sin(now * TAU)
 	bulk(fill, CFrame.new(pos.X, FLOOR_Y + 0.05, pos.Z) * DISC)
 	local motes = deco.Motes :: { BasePart }
-	local shown = evo and AURA_MOTES or 3
+	local shown = evo and K.AURA_MOTES or 3
 	for i, mote in ipairs(motes) do
 		if i <= shown then
 			local a = now * (evo and 2.2 or 1.1) + i * TAU / shown
@@ -2654,16 +2656,16 @@ local function poseTransform(pose: Pose, t: number): (CFrame?, number, number, n
 	local off = CFrame.identity
 	local spin, twist = 0, 0
 	if pose.Kind == "Swing" then
-		length = SWING_WINDUP + SWING_SWEEP
+		length = K.SWING_WINDUP + K.SWING_SWEEP
 		local tt = math.min(t, length)
 		local s = pose.Sweep
 		local yawA
-		if tt < SWING_WINDUP then
-			local u = easeOut(tt / SWING_WINDUP)
+		if tt < K.SWING_WINDUP then
+			local u = easeOut(tt / K.SWING_WINDUP)
 			yawA = s * (0.5 + 0.6 * u)
 			twist = s * 0.3 * u
 		else
-			local u = easeOut((tt - SWING_WINDUP) / SWING_SWEEP)
+			local u = easeOut((tt - K.SWING_WINDUP) / K.SWING_SWEEP)
 			yawA = s * 1.1 - s * 2.3 * u
 			twist = s * 0.3 - s * 0.65 * u
 		end
@@ -2674,12 +2676,12 @@ local function poseTransform(pose: Pose, t: number): (CFrame?, number, number, n
 		end
 		armCF = CFrame.Angles(0, yawA, 0) * CFrame.Angles(1.45, 0, 0)
 		off = CFrame.Angles(0.55, 0, -0.3) -- shield arm up as a guard
-		if pose.Back and tt >= SWING_WINDUP then
+		if pose.Back and tt >= K.SWING_WINDUP then
 			-- a full turn over the sweep and the recovery
-			spin = s * TAU * easeOut((t - SWING_WINDUP) / (SWING_SWEEP + POSE_RECOVER))
+			spin = s * TAU * easeOut((t - K.SWING_WINDUP) / (K.SWING_SWEEP + K.POSE_RECOVER))
 		end
 	elseif pose.Kind == "Throw" then
-		length = THROW_TIME
+		length = K.THROW_TIME
 		local u = math.min(t, length) / length
 		local pitch
 		if u < 0.4 then
@@ -2694,16 +2696,16 @@ local function poseTransform(pose: Pose, t: number): (CFrame?, number, number, n
 		armCF = CFrame.Angles(pitch, 0, 0.1)
 		off = CFrame.Angles(0.5, 0, -0.15)
 	else
-		length = CAST_TIME
+		length = K.CAST_TIME
 		local k = easeOut(math.min(t, length) / (length * 0.45))
 		armCF = CFrame.Angles(1.65 * k, 0, 0.12 * k)
 		off = CFrame.Angles(0.7 * k, 0, -0.2 * k)
 		twist = -0.12 * k
 	end
-	if t > length + POSE_RECOVER then
+	if t > length + K.POSE_RECOVER then
 		return nil, 0, 0, 0, off
 	end
-	local w = t <= length and 1 or 1 - (t - length) / POSE_RECOVER
+	local w = t <= length and 1 or 1 - (t - length) / K.POSE_RECOVER
 	if pose.Back and pose.Kind == "Swing" and t > length then
 		w = 1 -- keep the spin going until it has turned all the way round
 	end
