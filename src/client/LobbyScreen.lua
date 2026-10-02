@@ -6,16 +6,19 @@
 
 	  top left      SWARM logo (sword behind the letters) + "SURVIVE · UPGRADE · CONQUER"
 	  top right     stats chip: best time, wins, gold (stays on every menu screen)
-	  left column   feature cards CHARACTERS / UPGRADES / ARENA: <name>
+	  left column   feature cards CHARACTERS / UPGRADES / ARENA: <name> / DAILY CHALLENGE
 	  bottom centre nameplate of the hero with gold arrows to browse characters
 	                (owned → selected at once; locked → price, UNLOCK / DETAILS)
-	  right column  SOLO (primary gold), DUO, TRIO. A countdown (who joined, JOIN,
-	                START NOW, the number) or "run in progress" replaces this column.
-	  bottom left   SETTINGS and STATS
-	Portrait stacks: logo, stats, hero, nameplate, modes, cards, settings / stats.
+	  right column  SOLO (primary gold), DUO, TRIO, then CURSES (the run modifiers picked,
+	                their gold bonus). A countdown (who joined, the curses, JOIN, START NOW,
+	                the number) or "run in progress" replaces this column.
+	  bottom left   SETTINGS, STATS, RANKS (leaderboards), TRACK (account level)
+	  nameplate     your level, name, worn title / colour above the hero's plate
+	Portrait stacks: logo, stats, hero, nameplate, curses, modes, cards, corner buttons.
 
 	Sub-screens slide in: Characters (MenuCharacters), Upgrades (MenuUpgrades), Stats
-	(MenuStats); Settings is UIBuilder's modal. Everything sent to the server is an id or a
+	(MenuStats), Curses (MenuCurses), Daily (MenuDaily), Ranks (MenuLeaderboards), Track
+	(MenuTrack); Settings is UIBuilder's modal. Everything sent to the server is an id or a
 	mode name; the server validates it (RunManager: StartRun / JoinRun / StartNow /
 	CycleArena, GoldSystem: purchases and selection).
 ]]
@@ -36,6 +39,12 @@ local Showcase = require(script.Parent.Showcase)
 local MenuCharacters = require(script.Parent.MenuCharacters)
 local MenuUpgrades = require(script.Parent.MenuUpgrades)
 local MenuStats = require(script.Parent.MenuStats)
+local MenuCurses = require(script.Parent.MenuCurses)
+local MenuDaily = require(script.Parent.MenuDaily)
+local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
+local MenuTrack = require(script.Parent.MenuTrack)
+local Cosmetics = require(script.Parent.Cosmetics)
+local CurseData = require(Shared:WaitForChild("CurseData"))
 
 local LobbyScreen = {}
 
@@ -54,7 +63,7 @@ local profile: { [string]: any }? = nil
 local joinedCountdown = false
 local ui: { [string]: any } = {}
 local current = "Home"
-local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Stats = 4 }
+local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Stats = 4, Curses = 5, Daily = 6, Ranks = 7, Track = 8 }
 local screens: { [string]: any } = {}
 local shownGold: number? = nil
 local lastStatus = ""
@@ -354,6 +363,47 @@ local function buildModes(frame: Frame)
 		end
 		ui.ModeButtons[i] = b
 	end
+	-- the run modifiers (MenuCurses): what is picked and the gold it adds
+	ui.CurseBtn = UIKit.Button(frame, {
+		Kind = "Secondary",
+		Title = "CURSES",
+		Subtitle = "Harder runs, more gold",
+		Icon = "curse",
+		IconSize = 28,
+		Chevron = true,
+		Align = "Left",
+		Name = "Curses",
+		OnClick = function()
+			LobbyScreen.Show("Curses")
+		end,
+	})
+	-- portrait: the daily sits next to CURSES (the card row keeps three tiles)
+	ui.DailyBtn = UIKit.Button(frame, {
+		Kind = "Secondary",
+		Title = "DAILY",
+		Subtitle = "Ready",
+		Icon = "calendar",
+		IconSize = 28,
+		Chevron = true,
+		Align = "Left",
+		Name = "DailyPortrait",
+		OnClick = function()
+			LobbyScreen.Show("Daily")
+		end,
+	})
+	ui.DailyBtn.Instance.Visible = false
+end
+
+-- "Frenzy, Horde · +45% gold" (or the empty text) for a curse list.
+local function curseLine(list: { string }, empty: string): string
+	if #list == 0 then
+		return empty
+	end
+	local names = {}
+	for _, id in ipairs(list) do
+		table.insert(names, CurseData.Curses[id].Name)
+	end
+	return table.concat(names, ", ") .. " · " .. CurseData.GoldText(CurseData.GoldMult(list)) .. " gold"
 end
 
 -- Countdown (who joined, JOIN / START NOW, the number) or "run in progress".
@@ -371,6 +421,17 @@ local function buildQueue(frame: Frame)
 	ui.QueueList = new("Frame", { Name = "Players", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 72), Size = UDim2.new(1, 0, 0, 116) }, face)
 	UIKit.list(ui.QueueList, { Padding = UDim.new(0, 4) })
 	ui.QueueNote = text(face, "Body", "", { Name = "Note", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Size = UDim2.new(1, 0, 0, TS(16) * 3 + 8) })
+	-- the run's curses (the starter's pick): a tap opens the CURSES screen
+	local curseRow = new("TextButton", { Name = "QueueCurses", Text = "", AutoButtonColor = false, BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.25, Size = UDim2.new(1, 0, 0, 40) }, face)
+	UIKit.corner(curseRow, Theme.Radius.S)
+	UIKit.stroke(curseRow, P.crimson_400, 1, 0.45)
+	Icons.Draw(curseRow, "curse", { Size = 22, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Back = C.PanelInset })
+	ui.QueueCurseText = text(curseRow, "Label", "", { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -46, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, RichText = true }, 13)
+	curseRow.Activated:Connect(function()
+		UIKit.Click()
+		LobbyScreen.Show("Curses")
+	end)
+	ui.QueueCurses = curseRow
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 52) }, face)
 	ui.QueueRow = row
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 10) })
@@ -443,6 +504,16 @@ local function buildHome(screen: Frame)
 			Remotes.Get("CycleArena"):FireServer()
 		end,
 	})
+	ui.CardDaily = UIKit.Card(ui.Cards, {
+		Icon = "calendar",
+		Title = "DAILY CHALLENGE",
+		Subtitle = "One scored try a day",
+		LayoutOrder = 4,
+		Name = "DAILY",
+		OnClick = function()
+			LobbyScreen.Show("Daily")
+		end,
+	})
 	ui.Corner = new("Frame", { Name = "CornerButtons", BackgroundTransparency = 1 }, screen)
 	ui.CornerLayout = UIKit.list(ui.Corner, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, Theme.Layout.Gutter) })
 	ui.SettingsBtn = UIKit.IconButton(ui.Corner, {
@@ -465,6 +536,26 @@ local function buildHome(screen: Frame)
 			LobbyScreen.Show("Stats")
 		end,
 	})
+	ui.RanksBtn = UIKit.IconButton(ui.Corner, {
+		Icon = "podium",
+		Caption = "Ranks",
+		Size = 76,
+		LayoutOrder = 3,
+		Name = "Ranks",
+		OnClick = function()
+			LobbyScreen.Show("Ranks")
+		end,
+	})
+	ui.TrackBtn = UIKit.IconButton(ui.Corner, {
+		Icon = "medal",
+		Caption = "Track",
+		Size = 76,
+		LayoutOrder = 4,
+		Name = "Track",
+		OnClick = function()
+			LobbyScreen.Show("Track")
+		end,
+	})
 	buildNameplate(screen)
 	buildModes(screen)
 	buildQueue(screen)
@@ -480,7 +571,7 @@ local function setCardsCompact(on: boolean)
 		return
 	end
 	ui.CardsCompact = on
-	for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
+	for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
 		local layout = b.Content:FindFirstChildOfClass("UIListLayout")
 		local column = b.Content:FindFirstChild("Text") :: Frame?
 		local right = b.Content:FindFirstChild("Right") :: Frame?
@@ -541,25 +632,29 @@ local function relayout()
 		local cornerH = 64
 		local y = H - M - cornerH
 		place(ui.Corner, M, y, w, cornerH)
-		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn }) do
-			b.Instance.Size = UDim2.fromOffset(math.floor((w - G) / 2), cornerH)
+		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn }) do
+			b.Instance.Size = UDim2.fromOffset(math.floor((w - 3 * G) / 4), cornerH)
 		end
 		local cardH = compact and 96 or 88
 		setCardsCompact(true)
 		y -= G + cardH
 		ui.CardsLayout.FillDirection = Enum.FillDirection.Horizontal
 		place(ui.Cards, M, y, w, cardH)
+		ui.CardDaily.Instance.Visible = false
 		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
 			b.Instance.Size = UDim2.fromOffset(math.floor((w - 2 * G) / 3), cardH)
 		end
-		local soloH, smallH = 84, 76
+		local soloH, smallH, curseH = 84, 76, 64
 		y -= G + smallH
 		local half = math.floor((w - G) / 2)
 		place(ui.ModeButtons[2].Instance, M, y, half, smallH)
 		place(ui.ModeButtons[3].Instance, M + half + G, y, half, smallH)
 		y -= G + soloH
 		place(ui.ModeButtons[1].Instance, M, y, w, soloH)
-		place(ui.Queue, M, y, w, soloH + G + smallH)
+		y -= G + curseH
+		place(ui.CurseBtn.Instance, M, y, half, curseH)
+		place(ui.DailyBtn.Instance, M + half + G, y, half, curseH)
+		place(ui.Queue, M, y, w, curseH + G + soloH + G + smallH)
 		y -= 18 + plateH
 		local plateW = math.min(w - 2 * 62, 460)
 		place(ui.Nameplate, (W - plateW) / 2, y, plateW, plateH)
@@ -572,30 +667,36 @@ local function relayout()
 		ui.Chip.AnchorPoint = Vector2.new(1, 0)
 		ui.Chip.Position = UDim2.fromOffset(W - M, chipY)
 		local logoBottom = logoY + 126 * logoScale
-		place(ui.Corner, M, H - M - 76, 200, 76)
-		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn }) do
-			b.Instance.Size = UDim2.fromOffset(76, 76)
+		local cw = math.clamp(W * 0.27, 290, 360)
+		local cornerW = 4 * 76 + 3 * G
+		local cornerSize = cornerW <= cw + 40 and 76 or 64
+		place(ui.Corner, M, H - M - cornerSize, 4 * cornerSize + 3 * G, cornerSize)
+		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn }) do
+			b.Instance.Size = UDim2.fromOffset(cornerSize, cornerSize)
 		end
 		-- left cards, centred between the logo and the corner buttons
-		local cw = math.clamp(W * 0.27, 290, 360)
-		local cardH = compact and 86 or 80
+		local top, bottom = logoBottom + 12, H - M - cornerSize - 12
+		local cardH = math.min(compact and 86 or 80, math.floor((bottom - top - 3 * G) / 4))
 		setCardsCompact(false)
 		ui.CardsLayout.FillDirection = Enum.FillDirection.Vertical
-		local cardsH = 3 * cardH + 2 * G
-		local top, bottom = logoBottom + 12, H - M - 76 - 12
+		local cardsH = 4 * cardH + 3 * G
 		place(ui.Cards, M, math.max(top, (top + bottom - cardsH) / 2), cw, cardsH)
-		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
+		ui.CardDaily.Instance.Visible = true
+		ui.DailyBtn.Instance.Visible = false
+		ui.CardDaily.SetText(compact and "DAILY" or "DAILY CHALLENGE")
+		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
 			b.Instance.Size = UDim2.fromOffset(cw, cardH)
 		end
-		-- right column: SOLO / DUO / TRIO
+		-- right column: SOLO / DUO / TRIO, then CURSES
 		local rw = math.clamp(W * 0.25, 280, 340)
-		local soloH, smallH = 96, 80
-		local colH = soloH + 2 * smallH + 2 * G
+		local soloH, smallH, curseH = 96, 80, 68
+		local colH = soloH + 2 * smallH + curseH + 3 * G
 		local colTop = math.max(chipY + 64, (H - colH) / 2)
 		place(ui.ModeButtons[1].Instance, W - M - rw, colTop, rw, soloH)
 		place(ui.ModeButtons[2].Instance, W - M - rw, colTop + soloH + G, rw, smallH)
 		place(ui.ModeButtons[3].Instance, W - M - rw, colTop + soloH + smallH + 2 * G, rw, smallH)
-		place(ui.Queue, W - M - rw, colTop - 10, rw, math.min(colH + 60, H - colTop - M))
+		place(ui.CurseBtn.Instance, W - M - rw, colTop + soloH + 2 * smallH + 3 * G, rw, curseH)
+		place(ui.Queue, W - M - rw, colTop - 10, rw, math.min(colH + 40, H - colTop - M))
 		-- nameplate bottom centre, between the columns
 		local gapL, gapR = M + cw + 16, W - M - rw - 16
 		local plateW = math.clamp(gapR - gapL - 2 * 64, 300, 460)
@@ -613,9 +714,17 @@ local function relayout()
 	-- queue panel: a short panel (portrait) folds the player list into the note
 	local qh = ui.Queue.Size.Y.Offset
 	local busy = lastStatus == "Busy"
-	local short = qh < 240 and not busy
+	local short = qh < 280 and not busy
 	ui.QueueList.Visible = not short and not busy
-	ui.QueueNote.Position = UDim2.fromOffset(0, (short or busy) and 68 or (72 + 4 * 30))
+	local noteY = (short or busy) and 68 or (72 + 4 * 30)
+	-- the curse line sits under the note (above the buttons)
+	ui.QueueCurses.Visible = ui.QueueCurses:GetAttribute("Has") == true
+	local curseY = noteY
+	if ui.QueueCurses.Visible then
+		ui.QueueCurses.Position = UDim2.fromOffset(0, curseY)
+		noteY += 46
+	end
+	ui.QueueNote.Position = UDim2.fromOffset(0, noteY)
 	ui.QueueNote.Size = UDim2.new(1, 0, 0, short and (TS(16) + 6) or (TS(16) * 3 + 8))
 	ui.QueueNote.TextTruncate = short and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
 	-- where the hero should sit on screen (read by CameraController's menu shot)
@@ -637,7 +746,7 @@ local function homeEntrance()
 		i += 1
 		UIAnim.Pop(b.Instance, Theme.Motion.Stagger * i, 0.85)
 	end
-	for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
+	for _, b in ipairs({ ui.CurseBtn, ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
 		i += 1
 		UIAnim.Pop(b.Instance, Theme.Motion.Stagger * i, 0.85)
 	end
@@ -645,8 +754,10 @@ local function homeEntrance()
 	UIAnim.Pop(ui.Logo, 0, 0.9)
 end
 
--- Slides to "Home" | "Characters" | "Upgrades" | "Stats" (old panel name "Shop" = Upgrades).
-function LobbyScreen.Show(name: string)
+-- Slides to "Home" | "Characters" | "Upgrades" | "Stats" | "Curses" | "Daily" | "Ranks" |
+-- "Track" (old panel name "Shop" = Upgrades). arg goes to the screen's OnShow (Ranks: the
+-- board to open).
+function LobbyScreen.Show(name: string, arg: any?)
 	if name == "Shop" then
 		name = "Upgrades"
 	end
@@ -654,6 +765,10 @@ function LobbyScreen.Show(name: string)
 		return
 	end
 	if name == current and ui[name].Visible then
+		local s = screens[name]
+		if s and s.OnShow and arg ~= nil then
+			s.OnShow(profile, arg)
+		end
 		return
 	end
 	local direction = SCREEN_ORDER[name] >= SCREEN_ORDER[current] and 1 or -1
@@ -661,7 +776,7 @@ function LobbyScreen.Show(name: string)
 	local from = current
 	current = name
 	relayout()
-	UIAnim.Tween(ui.Dim, Theme.Motion.Base, { BackgroundTransparency = (name == "Upgrades" or name == "Stats") and 0.4 or 1 })
+	UIAnim.Tween(ui.Dim, Theme.Motion.Base, { BackgroundTransparency = (name ~= "Home" and name ~= "Characters") and 0.4 or 1 })
 	if from == "Characters" or name == "Characters" then
 		local target = browse
 		browse = nil
@@ -674,7 +789,7 @@ function LobbyScreen.Show(name: string)
 	end
 	local s = screens[name]
 	if s and s.OnShow then
-		s.OnShow(profile)
+		s.OnShow(profile, arg)
 		Remotes.Get("RequestProfile"):FireServer()
 	end
 	if name == "Home" then
@@ -763,11 +878,13 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 	ui.Best.SetValue(UIKit.formatTime(p.Stats.BestTime))
 	ui.Wins.SetValue(UIKit.formatNumber(p.Stats.Wins))
 	if ui.PlayerTag then
-		local colorDef = AchievementData.Colors[p.NameColor or ""]
-		local nameColor = colorDef and colorDef.Color or P.ivory_200
+		local nameColor = Cosmetics.NameColor(p.NameColor) or P.ivory_200
 		local title = (type(p.Title) == "string" and p.Title ~= "") and string.format('  <font color="%s">·  %s</font>', UIKit.hex(P.gold_300), string.upper(p.Title)) or ""
-		ui.PlayerTag.Text = string.format('<font color="%s">%s</font>%s', UIKit.hex(nameColor), Players.LocalPlayer.DisplayName, title)
+		local level = MenuTrack.Account(p)
+		ui.PlayerTag.Text = string.format('<font color="%s"><b>LV %d</b></font>  <font color="%s">%s</font>%s', UIKit.hex(P.gold_300), level, UIKit.hex(nameColor), Players.LocalPlayer.DisplayName, title)
 	end
+	-- the worn dais ring (level track) under the hero
+	Showcase.SetRing(type(p.Ring) == "string" and p.Ring or "")
 	if browse and owned(browse) then
 		browse = nil -- just bought it (the server also selects it)
 	end
@@ -866,6 +983,39 @@ function LobbyScreen.Update(_dt: number?)
 		relayout()
 	end
 
+	-- the curse button / queue line, the daily card
+	local myCurses = MenuCurses.Current()
+	local curseSub = curseLine(myCurses, "Harder runs, more gold")
+	if ui.CurseBtn.Subtitle and ui.CurseBtn.Subtitle.Text ~= curseSub then
+		ui.CurseBtn.SetText(nil, curseSub)
+		ui.CurseBtn.SetSelected(#myCurses > 0)
+	end
+	ui.CurseBtn.Instance.Visible = kind == "Modes"
+	ui.DailyBtn.Instance.Visible = kind == "Modes" and host.IsPortrait()
+	local shown = CurseData.FromString(state:GetAttribute("Curses"))
+	local has = kind ~= "Modes" and #shown > 0
+	if ui.QueueCurses:GetAttribute("Has") ~= has then
+		ui.QueueCurses:SetAttribute("Has", has)
+		relayout()
+	end
+	if has then
+		local line = string.format('<font color="%s">CURSES</font>  %s', UIKit.hex(P.crimson_300), curseLine(shown, ""))
+		if ui.QueueCurseText.Text ~= line then
+			ui.QueueCurseText.Text = line
+		end
+	end
+	local used, score = MenuDaily.Status(profile)
+	local dailySub = used and ("Done · " .. (score > 0 and CurseData.ScoreText(score) or "practice open")) or ("Ready · " .. MenuDaily.TimeLeft() .. " left")
+	if ui.CardDaily.Subtitle and ui.CardDaily.Subtitle.Text ~= dailySub then
+		ui.CardDaily.SetText(nil, dailySub)
+		ui.DailyBtn.SetText(nil, used and "Done · practice" or ("Ready · " .. MenuDaily.TimeLeft()))
+	end
+	for _, s in pairs(screens) do
+		if s.Update then
+			s.Update(_dt or 0)
+		end
+	end
+
 	local title, sub = arenaText()
 	if ui.CardArena.Title and ui.CardArena.Title.Text ~= title then
 		if ui.ArenaShown then
@@ -903,10 +1053,17 @@ function LobbyScreen.Init(h: { [string]: any })
 		Profile = function(): { [string]: any }?
 			return profile
 		end,
+		ShowScreen = function(name: string, arg: any?)
+			LobbyScreen.Show(name, arg)
+		end,
 	}
 	screens.Characters = MenuCharacters.Build(screen("Characters"), ctx)
 	screens.Upgrades = MenuUpgrades.Build(screen("Upgrades"), ctx)
 	screens.Stats = MenuStats.Build(screen("Stats"), ctx)
+	screens.Curses = MenuCurses.Build(screen("Curses"), ctx)
+	screens.Daily = MenuDaily.Build(screen("Daily"), ctx)
+	screens.Ranks = MenuLeaderboards.Build(screen("Ranks"), ctx)
+	screens.Track = MenuTrack.Build(screen("Track"), ctx)
 	h.OnRelayout(relayout)
 	relayout()
 end

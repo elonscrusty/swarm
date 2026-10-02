@@ -41,6 +41,7 @@ Remotes.ServerToClient = {
 	"LootFeedback", -- answer to LootHold: { Id, State = "Done" | "Cancel", Reason? }
 	"AchievementUnlocked", -- { Id, Name, Reward, Icon } (AchievementService): toast
 	"DamageNumbers", -- { enemyId, amount, crit (0/1), ... } summed hits (only with the setting on)
+	"LeaderboardData", -- { Board, Rows = { {Rank, Name, Value, Me} }, Status, Age, MyRank?, MyBest } (LeaderboardService)
 }
 
 -- Client → server
@@ -49,7 +50,7 @@ Remotes.ClientToServer = {
 	"LevelUpReroll",
 	"LevelUpSkip",
 	"JoinRun", -- join during the lobby countdown
-	"StartRun", -- (mode) lobby SOLO / DUO / TRIO button; during a countdown it joins
+	"StartRun", -- (mode) lobby SOLO / DUO / TRIO button, or "Daily" (the DAILY card); during a countdown it joins
 	"StartNow", -- the countdown's starter skips the rest of the countdown
 	"CycleArena", -- lobby ARENA button (next unlocked arena)
 	"DevCommand", -- (command) Studio / creator only, re-checked on the server
@@ -65,7 +66,9 @@ Remotes.ClientToServer = {
 	"RequestProfile", -- ask for a ProfileSync
 	"PortalChoice", -- ("Next" | "Return") answer to PortalOffer, validated by StageManager
 	"LootHold", -- (lootId, holding: boolean) start / stop holding a chest or shrine (LootSystem)
-	"EquipCosmetic", -- ("Title" | "Color", id or "") an earned achievement cosmetic
+	"EquipCosmetic", -- ("Title" | "Color" | "Ring" | "Frame", id or "") an earned achievement / level-track cosmetic
+	"SetCurses", -- ({curseId}) lobby curse pick, at most CurseData.MaxActive (RunModifiers)
+	"LeaderboardRequest", -- (boardId) "BestStage" | "Daily" | "Kills" (LeaderboardService)
 }
 
 local folder: Folder? = nil

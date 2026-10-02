@@ -574,7 +574,7 @@ Config.Graphics = {
 Config.Data = {
 	StoreName = "SwarmPlayerData",
 	KeyPrefix = "Player_",
-	SchemaVersion = 5, -- bump and add a migration step in DataService when the save shape changes
+	SchemaVersion = 6, -- bump and add a migration step in DataService when the save shape changes
 	AutoSaveSeconds = 60,
 	-- A session lock is considered dead (the server crashed) if it wasn't refreshed for
 	-- this long. Must be well above AutoSaveSeconds.
@@ -849,6 +849,30 @@ Config.Modes = {
 	Trio = { DisplayName = "Trio", MaxPlayers = 3, Countdown = true, PartnerRevive = PARTNER_REVIVE },
 	-- Old 1-4 player mode: no longer in the UI, still accepted from old clients (JoinRun).
 	Squad = { DisplayName = "Squad", MaxPlayers = 4, Countdown = true },
+	-- The Daily Challenge (lobby DAILY card): solo, fixed arena tour / bosses / curses /
+	-- starting bonus per UTC day (CurseData.Daily). Not in Order: it has its own card.
+	Daily = { DisplayName = "Daily", MaxPlayers = 1, Countdown = false },
+}
+
+------------------------------------------------------------------------------------------
+-- LEADERBOARDS (server LeaderboardService.lua, OrderedDataStores)
+--   Best Stage (all time), Daily Challenge (today's scored attempts), Most Kills (one run).
+--   Writes happen when a run is committed, queued and throttled per player and board, and
+--   only while the DataStore write budget allows; reads are cached and refreshed at most
+--   every RefreshSeconds while someone looks at them. Without DataStores (Studio without
+--   API access) the boards show this server's runs only, with a clear note.
+------------------------------------------------------------------------------------------
+Config.Leaderboards = {
+	Enabled = true,
+	StorePrefix = "SwarmLB_", -- OrderedDataStore names: SwarmLB_BestStage, SwarmLB_Kills, SwarmLB_Daily_<day>
+	Order = { "BestStage", "Daily", "Kills" },
+	Top = 50, -- entries shown
+	RefreshSeconds = 60, -- a board's cache is re-read at most this often
+	WatchSeconds = 180, -- boards nobody asked for this long are not refreshed
+	WriteThrottleSeconds = 30, -- one write per player and board at most this often
+	FlushSeconds = 6, -- the write queue is checked this often
+	MinBudget = 3, -- keep this many DataStore requests of a type in reserve
+	MaxRetries = 5,
 }
 
 Config.ArenaOrigin = Vector3.new(0, 0, 0) -- floor top surface is at this height

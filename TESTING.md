@@ -319,3 +319,32 @@ Audio:
 Saving visibility:
 - [ ] Studio with API access OFF: the lobby shows "Progress isn't being saved in this session"; the pause / settings note says so too.
 - [ ] Live server with DataStores failing (or simulate with a failing UpdateAsync): after the retries a run toast "Progress isn't being saved right now" and the lobby notice; when a save works again, "Saving works again".
+
+## 7. Curses, Daily Challenge, leaderboards, account level (new)
+Offline first: `bash tools/preview/render.sh curses,daily,leaderboards,track,countdown,menu --devices pc,phone,phone-portrait`, `render.sh results --set daily=on`, `render.sh arena --set curses=Frenzy,Horde --set daily=on` (HUD chips) and the headless `render.sh stage-sim --studio --devices pc --max-time 260 --set daily=on` / `--set curses=Frenzy,Fragile`.
+
+Curses
+- [ ] Home: a CURSES button under TRIO (portrait: next to DAILY) reads "Harder runs, more gold"; it opens the CURSES screen with 6 cards (icon, name, effect, gold badge, ON / OFF).
+- [ ] Tap cards: they turn gold-bordered and ON; a 4th tap says "Up to 3 curses: drop one first."; the footer shows "2 / 3 curses · +35% gold"; CLEAR empties it; DONE goes back. Rejoin: the pick is still there.
+- [ ] Solo with Frenzy + Horde: start toasts "Curses: Frenzy, Horde · +45% gold"; HUD chips FRENZY / HORDE / +45% GOLD under the items strip; enemies are visibly faster and more numerous; the results list the curses; gold income is about 45% higher than the same run without.
+- [ ] Fragile: max HP 70% (100 → 70 on the health bar). Glass Cannon: damage numbers 30% higher, hits hurt more. Famine: no roast chickens drop. Elite Surge: noticeably more random elites.
+- [ ] Duo: the starter's curses show on the countdown panel for both players ("CURSES Frenzy, Horde · +45% gold"); the starter changing them during the countdown updates the panel; the other player's own pick does not change the run (the CURSES screen says so).
+- [ ] In a run SetCurses does nothing (a tap from an old client mid-run is ignored).
+
+Daily Challenge
+- [ ] The DAILY card reads "Ready · <time> left"; its screen shows today's date (UTC), the reset countdown, the route (stage 1-5 arena · boss), 2 curses + their gold, the starting bonus and PLAY "Scored attempt".
+- [ ] PLAY: a solo run starts on the route's first arena with "DAILY CHALLENGE" / "Scored attempt: make it count!", the DAILY + curse chips and the bonus (a second weapon / two items / level 4 cards / an extra life). The travel card names the route's next arena and boss.
+- [ ] Leave the run any way (die, portal, quit the game): the card now says "Done · 2 stages · 7:41"; the screen says the scored attempt is used and PLAY reads PRACTICE. A practice run says "Practice run: not scored." and its results say "DAILY · PRACTICE ... (not scored)"; the daily score does not change.
+- [ ] Two players on different servers see the same route, curses and bonus on the same UTC day; the next UTC day everything changes and the attempt is ready again.
+- [ ] REPLAY from a daily's results starts a practice daily run.
+
+Leaderboards (API access ON; Studio without it: the screen says "Global leaderboards need DataStores ... Showing runs on this server only.")
+- [ ] RANKS opens BEST STAGE / DAILY / MOST KILLS tabs; rows show rank (gold / silver / bronze discs for the top 3), name and value ("Stage 7", "3 stages · 9:12", "1,874"); your row is gold; the bottom bar shows "#4 ... Your best: Stage 10" or "Not in the top 50 · Your best: ...".
+- [ ] Finish a run: within about a minute the boards show the new values (writes are throttled; reads are cached 60 s). The DAILY tab only lists today's scored attempts. The DAILY screen's LEADERBOARD button opens the DAILY tab.
+- [ ] Output shows no DataStore errors or throttling warnings in a normal session.
+
+Account level
+- [ ] The nameplate reads "LV 1 <name>"; after a run the results show "+N XP · Level 1 → 2" with the XP bar and "UNLOCKED Title: Recruit (wear it in TRACK)"; the nameplate shows the new level and the title.
+- [ ] TRACK: level, XP bar "x / y XP to level n", how XP is earned, and every reward (LV 2 ... LV 50) with WEAR / WORN / LOCKED. WEAR a ring: a glowing ring appears on the lobby dais under your hero (some with sparkles); WEAR a frame: the results and TRACK medallions get it; tap WORN to take it off. Colours and titles also appear under STATS → ACHIEVEMENTS.
+- [ ] Nothing on the track changes run stats (compare a run before / after wearing everything).
+- [ ] Old save (schema 5) loads with gold, characters, achievements intact, level 1, no curses, daily ready (Output: no migration errors).

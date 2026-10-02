@@ -37,6 +37,227 @@
       </Properties>
       <Item class="ModuleScript" referent="4">
         <Properties>
+          <string name="Name">AccountData</string>
+          <string name="Source"><![CDATA[--[[
+	AccountData.lua
+	The account level: a COSMETIC track. Every run gives account XP (time survived, stages
+	cleared, kills, bosses, a win, curses and the daily as a bonus); levels 1-50 unlock
+	titles, nameplate colours, lobby dais rings and portrait frames. Never stats, never
+	anything sold for Robux, never anything that changes a run.
+
+	Pure data + functions, used by the server (AccountService.lua: awards XP, validates
+	EquipCosmetic) and the lobby (MenuTrack.lua, the nameplate, the results screen).
+
+	Save (DataService schema 6): data.Account = { XP = total XP ever, Level = level },
+	data.Ring / data.Frame = worn dais ring / portrait frame id ("" = none). Titles and
+	name colours share data.Title / data.NameColor with the achievements.
+]]
+
+local Palette = require(script.Parent.Palette)
+local AchievementData = require(script.Parent.AchievementData)
+
+local AccountData = {}
+
+AccountData.MaxLevel = 50
+
+-- XP from one run (all whole numbers; see RunXP).
+AccountData.XP = {
+	PerSecond = 1 / 5, -- 12 XP a minute survived
+	PerStage = 50, -- each stage cleared
+	PerKills = 10, -- 1 XP per this many kills
+	PerBoss = 40, -- each stage boss the team beat
+	Win = 60, -- left through the portal as a win
+	Daily = 100, -- the day's scored Daily Challenge attempt
+	MaxRun = 5000, -- safety cap for one run
+}
+
+-- XP needed to go from `level` to level + 1.
+function AccountData.XPToNext(level: number): number
+	return 150 + 50 * (math.max(1, level) - 1)
+end
+
+-- Total XP needed to reach `level` from level 1.
+function AccountData.TotalFor(level: number): number
+	local total = 0
+	for l = 1, math.clamp(level, 1, AccountData.MaxLevel) - 1 do
+		total += AccountData.XPToNext(l)
+	end
+	return total
+end
+
+-- Level for a total XP, plus the XP into that level and the XP the level needs
+-- (need = 0 at the max level).
+function AccountData.LevelFor(totalXP: number): (number, number, number)
+	local xp = math.max(0, math.floor(totalXP))
+	local level = 1
+	while level < AccountData.MaxLevel do
+		local need = AccountData.XPToNext(level)
+		if xp < need then
+			return level, xp, need
+		end
+		xp -= need
+		level += 1
+	end
+	return AccountData.MaxLevel, 0, 0
+end
+
+export type RunSummary = {
+	Seconds: number,
+	Stages: number, -- stages cleared
+	Kills: number,
+	Bosses: number,
+	Won: boolean,
+	CurseMult: number?, -- the run's curse gold multiplier (XP gets the same bonus)
+	DailyScored: boolean?,
+}
+
+-- XP of a run and its parts (for the results line).
+function AccountData.RunXP(s: RunSummary): (number, { [string]: number })
+	local X = AccountData.XP
+	local parts = {
+		Time = math.floor(math.max(0, s.Seconds) * X.PerSecond),
+		Stages = math.max(0, s.Stages) * X.PerStage,
+		Kills = math.floor(math.max(0, s.Kills) / X.PerKills),
+		Bosses = math.max(0, s.Bosses) * X.PerBoss,
+		Win = s.Won and X.Win or 0,
+	}
+	local base = parts.Time + parts.Stages + parts.Kills + parts.Bosses + parts.Win
+	local mult = math.clamp(s.CurseMult or 1, 1, 3)
+	parts.Curses = math.floor(base * (mult - 1) + 0.5)
+	parts.Daily = s.DailyScored and X.Daily or 0
+	local total = math.min(X.MaxRun, base + parts.Curses + parts.Daily)
+	return total, parts
+end
+
+------------------------------------------------------------------------------------------
+-- Cosmetics
+------------------------------------------------------------------------------------------
+
+-- Nameplate colours from the track (the achievement ones live in AchievementData.Colors).
+AccountData.Colors = {
+	Steel = { Name = "Steel", Color = Palette.steel_200 },
+	Azure = { Name = "Azure", Color = Color3.fromRGB(132, 182, 230) },
+	Rose = { Name = "Rose", Color = Color3.fromRGB(226, 150, 176) },
+	Sunfire = { Name = "Sunfire", Color = Color3.fromRGB(250, 176, 92) },
+	Starlight = { Name = "Starlight", Color = Color3.fromRGB(214, 226, 255) },
+}
+
+-- A nameplate colour from either source (achievements or the track), or nil.
+function AccountData.ColorOf(id: string?): { Name: string, Color: Color3 }?
+	if type(id) ~= "string" or id == "" then
+		return nil
+	end
+	return AchievementData.Colors[id] or AccountData.Colors[id]
+end
+
+-- Rings of light on the lobby dais under your hero (client Showcase, your own screen).
+-- Sparkles: rising motes; Glow: a soft light.
+AccountData.Rings = {
+	Ember = { Name = "Ember Ring", Color = Color3.fromRGB(240, 140, 70), Sparkles = false, Glow = 0.6 },
+	Frost = { Name = "Frost Ring", Color = Color3.fromRGB(150, 210, 245), Sparkles = false, Glow = 0.7 },
+	Verdant = { Name = "Verdant Ring", Color = Palette.moss_200, Sparkles = true, Glow = 0.7 },
+	Arcane = { Name = "Arcane Ring", Color = Color3.fromRGB(176, 150, 236), Sparkles = true, Glow = 0.9 },
+	Royal = { Name = "Royal Ring", Color = Palette.gold_300, Sparkles = true, Glow = 1.2, Double = true },
+}
+
+-- Portrait frames (the hero medallion on the results screen and the TRACK screen).
+AccountData.Frames = {
+	Bronze = { Name = "Bronze Frame", Color = Color3.fromRGB(196, 132, 82), Thickness = 3 },
+	Silver = { Name = "Silver Frame", Color = Palette.steel_200, Thickness = 3, Double = true },
+	Gold = { Name = "Gold Frame", Color = Palette.gold_300, Thickness = 3.5, Double = true },
+	Crimson = { Name = "Crimson Frame", Color = Palette.crimson_300, Thickness = 3.5, Double = true, Gems = 2 },
+	Royal = { Name = "Royal Frame", Color = Palette.gold_200, Thickness = 4, Double = true, Gems = 4 },
+	Sovereign = { Name = "Sovereign Frame", Color = Color3.fromRGB(214, 226, 255), Thickness = 4, Double = true, Gems = 4 },
+}
+
+export type Reward = { Kind: string, Id: string } -- Kind = "Title" | "Color" | "Ring" | "Frame"
+
+-- Level → rewards (levels without an entry give nothing but the level itself).
+AccountData.Rewards = {
+	[2] = { { Kind = "Title", Id = "Recruit" } },
+	[3] = { { Kind = "Color", Id = "Steel" } },
+	[5] = { { Kind = "Ring", Id = "Ember" } },
+	[7] = { { Kind = "Frame", Id = "Bronze" } },
+	[10] = { { Kind = "Title", Id = "Swarmbreaker" } },
+	[12] = { { Kind = "Color", Id = "Azure" } },
+	[15] = { { Kind = "Ring", Id = "Frost" } },
+	[18] = { { Kind = "Frame", Id = "Silver" } },
+	[20] = { { Kind = "Title", Id = "Hive Hunter" } },
+	[22] = { { Kind = "Color", Id = "Rose" } },
+	[25] = { { Kind = "Ring", Id = "Verdant" } },
+	[28] = { { Kind = "Frame", Id = "Gold" } },
+	[30] = { { Kind = "Title", Id = "Exterminator" } },
+	[33] = { { Kind = "Color", Id = "Sunfire" } },
+	[35] = { { Kind = "Ring", Id = "Arcane" } },
+	[38] = { { Kind = "Frame", Id = "Crimson" } },
+	[40] = { { Kind = "Title", Id = "Swarm Legend" } },
+	[43] = { { Kind = "Color", Id = "Starlight" } },
+	[45] = { { Kind = "Ring", Id = "Royal" } },
+	[48] = { { Kind = "Frame", Id = "Royal" } },
+	[50] = { { Kind = "Title", Id = "Sovereign" }, { Kind = "Frame", Id = "Sovereign" } },
+} :: { [number]: { Reward } }
+
+-- Levels that have a reward, ascending.
+AccountData.RewardLevels = {}
+for level in pairs(AccountData.Rewards) do
+	table.insert(AccountData.RewardLevels, level)
+end
+table.sort(AccountData.RewardLevels)
+
+-- The level that unlocks a cosmetic (nil = not a track cosmetic).
+function AccountData.LevelOf(kind: string, id: string): number?
+	for _, level in ipairs(AccountData.RewardLevels) do
+		for _, r in ipairs(AccountData.Rewards[level]) do
+			if r.Kind == kind and r.Id == id then
+				return level
+			end
+		end
+	end
+	return nil
+end
+
+-- True when a player of `level` has this cosmetic from the track.
+function AccountData.Has(level: number, kind: string, id: string): boolean
+	local need = AccountData.LevelOf(kind, id)
+	return need ~= nil and level >= need
+end
+
+-- Display name of a reward ("Title: Recruit", "Ember Ring").
+function AccountData.RewardName(r: Reward): string
+	if r.Kind == "Title" then
+		return "Title: " .. r.Id
+	elseif r.Kind == "Color" then
+		local c = AccountData.Colors[r.Id]
+		return (c and c.Name or r.Id) .. " name colour"
+	elseif r.Kind == "Ring" then
+		local c = AccountData.Rings[r.Id]
+		return c and c.Name or r.Id
+	elseif r.Kind == "Frame" then
+		local c = AccountData.Frames[r.Id]
+		return c and c.Name or r.Id
+	end
+	return r.Id
+end
+
+-- Rewards unlocked between two levels (from, to], in order.
+function AccountData.RewardsBetween(from: number, to: number): { Reward }
+	local out = {}
+	for _, level in ipairs(AccountData.RewardLevels) do
+		if level > from and level <= to then
+			for _, r in ipairs(AccountData.Rewards[level]) do
+				table.insert(out, r)
+			end
+		end
+	end
+	return out
+end
+
+return AccountData
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
           <string name="Name">AchievementData</string>
           <string name="Source"><![CDATA[--[[
 	AchievementData.lua
@@ -372,7 +593,7 @@ return AchievementData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="5">
+      <Item class="ModuleScript" referent="6">
         <Properties>
           <string name="Name">BossData</string>
           <string name="Source"><![CDATA[--[[
@@ -775,7 +996,7 @@ return BossData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="6">
+      <Item class="ModuleScript" referent="7">
         <Properties>
           <string name="Name">CharacterData</string>
           <string name="Source"><![CDATA[--[[
@@ -1370,7 +1591,7 @@ return CharacterData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="7">
+      <Item class="ModuleScript" referent="8">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[--[[
@@ -1949,7 +2170,7 @@ Config.Graphics = {
 Config.Data = {
 	StoreName = "SwarmPlayerData",
 	KeyPrefix = "Player_",
-	SchemaVersion = 5, -- bump and add a migration step in DataService when the save shape changes
+	SchemaVersion = 6, -- bump and add a migration step in DataService when the save shape changes
 	AutoSaveSeconds = 60,
 	-- A session lock is considered dead (the server crashed) if it wasn't refreshed for
 	-- this long. Must be well above AutoSaveSeconds.
@@ -2224,6 +2445,30 @@ Config.Modes = {
 	Trio = { DisplayName = "Trio", MaxPlayers = 3, Countdown = true, PartnerRevive = PARTNER_REVIVE },
 	-- Old 1-4 player mode: no longer in the UI, still accepted from old clients (JoinRun).
 	Squad = { DisplayName = "Squad", MaxPlayers = 4, Countdown = true },
+	-- The Daily Challenge (lobby DAILY card): solo, fixed arena tour / bosses / curses /
+	-- starting bonus per UTC day (CurseData.Daily). Not in Order: it has its own card.
+	Daily = { DisplayName = "Daily", MaxPlayers = 1, Countdown = false },
+}
+
+------------------------------------------------------------------------------------------
+-- LEADERBOARDS (server LeaderboardService.lua, OrderedDataStores)
+--   Best Stage (all time), Daily Challenge (today's scored attempts), Most Kills (one run).
+--   Writes happen when a run is committed, queued and throttled per player and board, and
+--   only while the DataStore write budget allows; reads are cached and refreshed at most
+--   every RefreshSeconds while someone looks at them. Without DataStores (Studio without
+--   API access) the boards show this server's runs only, with a clear note.
+------------------------------------------------------------------------------------------
+Config.Leaderboards = {
+	Enabled = true,
+	StorePrefix = "SwarmLB_", -- OrderedDataStore names: SwarmLB_BestStage, SwarmLB_Kills, SwarmLB_Daily_<day>
+	Order = { "BestStage", "Daily", "Kills" },
+	Top = 50, -- entries shown
+	RefreshSeconds = 60, -- a board's cache is re-read at most this often
+	WatchSeconds = 180, -- boards nobody asked for this long are not refreshed
+	WriteThrottleSeconds = 30, -- one write per player and board at most this often
+	FlushSeconds = 6, -- the write queue is checked this often
+	MinBudget = 3, -- keep this many DataStore requests of a type in reserve
+	MaxRetries = 5,
 }
 
 Config.ArenaOrigin = Vector3.new(0, 0, 0) -- floor top surface is at this height
@@ -2236,7 +2481,379 @@ return Config
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="8">
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">CurseData</string>
+          <string name="Source"><![CDATA[--[[
+	CurseData.lua
+	Run modifiers ("Curses") and the Daily Challenge, as pure data + pure functions so the
+	server (RunModifiers.lua), the lobby (MenuCurses / MenuDaily) and the HUD agree.
+
+	Curses: before a run the starter toggles up to MaxActive curses. Every curse makes the
+	run harder for the WHOLE team and adds its Gold share to the run's gold multiplier
+	(additive: two +20% curses = +40%). They are chosen in the lobby (remote SetCurses,
+	validated by the server: known ids, no duplicates, at most MaxActive) and fixed when the
+	run begins. Nothing is bought: curses are free and only ever make a run harder.
+
+	  Effect fields (read by the server):
+	    EnemySpeed     multiplier on normal enemy speed (bosses keep their patterns)
+	    MaxHP          multiplier on the heroes' max HP (stat sheet, after everything else)
+	    SpawnMult      multiplier on the live enemy target and mini-wave size (the enemy cap
+	                   Config.Enemies.MaxLive still holds)
+	    NoHealPickups  no Roast Chicken floor pickups drop
+	    Might          multiplier on damage dealt; DamageTaken: multiplier on damage taken
+	    EliteChance    multiplier on the random elite chance
+
+	Daily Challenge: one fixed setup per UTC day (CurseData.Daily(day)): the first arena,
+	the arena tour and the boss order of the run, a fixed curse set and a fixed starting
+	bonus. Solo only. The first daily run of the day is the scored attempt; later ones are
+	practice (unscored). Score = stages cleared, then time (CurseData.DailyScore).
+]]
+
+local CurseData = {}
+
+CurseData.MaxActive = 3
+
+CurseData.Order = { "Frenzy", "Fragile", "Horde", "Famine", "GlassCannon", "EliteSurge" }
+
+export type Curse = {
+	Id: string,
+	Name: string,
+	Icon: string, -- client Icons name
+	Short: string, -- one line for chips / cards
+	Text: string, -- full description
+	Gold: number, -- added to the run gold multiplier (0.2 = +20%)
+	EnemySpeed: number?,
+	MaxHP: number?,
+	SpawnMult: number?,
+	NoHealPickups: boolean?,
+	Might: number?,
+	DamageTaken: number?,
+	EliteChance: number?,
+}
+
+CurseData.Curses = {
+	Frenzy = {
+		Id = "Frenzy",
+		Name = "Frenzy",
+		Icon = "arrowFast",
+		Short = "Enemies +25% speed",
+		Text = "The swarm moves 25% faster.",
+		Gold = 0.20,
+		EnemySpeed = 1.25,
+	},
+	Fragile = {
+		Id = "Fragile",
+		Name = "Fragile",
+		Icon = "heart",
+		Short = "-30% max HP",
+		Text = "Heroes have 30% less max HP.",
+		Gold = 0.20,
+		MaxHP = 0.7,
+	},
+	Horde = {
+		Id = "Horde",
+		Name = "Horde",
+		Icon = "people3",
+		Short = "+40% enemies",
+		Text = "40% more enemies at once and bigger mini-waves.",
+		Gold = 0.25,
+		SpawnMult = 1.4,
+	},
+	Famine = {
+		Id = "Famine",
+		Name = "Famine",
+		Icon = "Heal",
+		Short = "No healing pickups",
+		Text = "Roast chickens never drop.",
+		Gold = 0.15,
+		NoHealPickups = true,
+	},
+	GlassCannon = {
+		Id = "GlassCannon",
+		Name = "Glass Cannon",
+		Icon = "sword",
+		Short = "+30% damage dealt and taken",
+		Text = "You hit 30% harder, and so does the swarm.",
+		Gold = 0.15,
+		Might = 1.3,
+		DamageTaken = 1.3,
+	},
+	EliteSurge = {
+		Id = "EliteSurge",
+		Name = "Elite Surge",
+		Icon = "crown",
+		Short = "Elites x3 as often",
+		Text = "Random elites appear three times as often.",
+		Gold = 0.30,
+		EliteChance = 3,
+	},
+} :: { [string]: Curse }
+
+-- A clean list from anything a client sent: known ids, no duplicates, at most MaxActive,
+-- in CurseData.Order. Returns nil when the input is not a list of strings at all.
+function CurseData.Sanitize(list: any): { string }?
+	if type(list) ~= "table" then
+		return nil
+	end
+	local want: { [string]: boolean } = {}
+	local n = 0
+	for k, v in pairs(list) do
+		if type(k) ~= "number" or type(v) ~= "string" or #v > 32 then
+			return nil
+		end
+		n += 1
+		if n > 16 then
+			return nil
+		end
+		if CurseData.Curses[v] then
+			want[v] = true
+		end
+	end
+	local out = {}
+	for _, id in ipairs(CurseData.Order) do
+		if want[id] and #out < CurseData.MaxActive then
+			table.insert(out, id)
+		end
+	end
+	return out
+end
+
+-- "Frenzy,Horde" <-> { "Frenzy", "Horde" } (attributes carry the string form).
+function CurseData.ToString(list: { string }): string
+	return table.concat(list, ",")
+end
+
+function CurseData.FromString(s: any): { string }
+	if type(s) ~= "string" or s == "" then
+		return {}
+	end
+	return CurseData.Sanitize(string.split(s, ",")) or {}
+end
+
+-- The run gold multiplier of a curse set (1 = no curses).
+function CurseData.GoldMult(list: { string }): number
+	local m = 1
+	for _, id in ipairs(list) do
+		local c = CurseData.Curses[id]
+		if c then
+			m += c.Gold
+		end
+	end
+	return m
+end
+
+-- "+45%" for a gold multiplier.
+function CurseData.GoldText(mult: number): string
+	return string.format("+%d%%", math.floor((mult - 1) * 100 + 0.5))
+end
+
+-- Combined effects of a curse set (multipliers start at 1).
+function CurseData.Effects(list: { string })
+	local e = { EnemySpeed = 1, MaxHP = 1, SpawnMult = 1, NoHealPickups = false, Might = 1, DamageTaken = 1, EliteChance = 1 }
+	for _, id in ipairs(list) do
+		local c = CurseData.Curses[id]
+		if c then
+			e.EnemySpeed *= c.EnemySpeed or 1
+			e.MaxHP *= c.MaxHP or 1
+			e.SpawnMult *= c.SpawnMult or 1
+			e.Might *= c.Might or 1
+			e.DamageTaken *= c.DamageTaken or 1
+			e.EliteChance *= c.EliteChance or 1
+			e.NoHealPickups = e.NoHealPickups or c.NoHealPickups == true
+		end
+	end
+	return e
+end
+
+------------------------------------------------------------------------------------------
+-- Daily Challenge
+------------------------------------------------------------------------------------------
+
+CurseData.DailyCurseCount = 2
+CurseData.DailyMode = "Daily"
+
+-- Starting bonuses of the daily (one per day; run-only, the same for every player).
+CurseData.BonusOrder = { "Armory", "Treasure", "HeadStart", "SecondWind" }
+CurseData.Bonuses = {
+	Armory = { Id = "Armory", Name = "Armory", Icon = "sword", Text = "Start with a second weapon: %s" },
+	Treasure = { Id = "Treasure", Name = "Treasure", Icon = "chest", Text = "Start with two items: %s" },
+	HeadStart = { Id = "HeadStart", Name = "Head Start", Icon = "chevronsUp", Text = "Start at level 4" },
+	SecondWind = { Id = "SecondWind", Name = "Second Wind", Icon = "revive", Text = "One extra life this run" },
+}
+-- the pools the seed picks from (base weapons / common items every hero can use)
+CurseData.ArmoryWeapons = { "MagicOrb", "Knives", "Garlic", "HolyWater", "Lightning", "Axe", "Boomerang", "Spear", "Crossbow", "FrostNova" }
+CurseData.TreasureItems = { "Whetstone", "QuickGloves", "SwiftFeather", "HeartyBread", "Bandage", "Lodestone", "KeenLens" }
+CurseData.HeadStartLevel = 4
+
+CurseData.Arenas = { "Forest", "Ruins", "Swamp", "Snow", "Desert", "Lava" }
+CurseData.Bosses = { "ScorpionQueen", "MothMatriarch", "RhinoWarlord", "HiveMother" }
+CurseData.DailyStages = 12 -- arenas / bosses planned ahead (the plan repeats after this)
+
+-- The UTC day number of a unix time (days since 1970-01-01).
+function CurseData.DayOf(unix: number): number
+	return math.floor(unix / 86400)
+end
+
+-- Seconds until the next UTC midnight.
+function CurseData.SecondsLeft(unix: number): number
+	return 86400 - (math.floor(unix) % 86400)
+end
+
+-- "2026-10-02" for a day number (proleptic Gregorian, civil-from-days).
+function CurseData.DateText(day: number): string
+	local z = day + 719468
+	local era = (z >= 0 and z or z - 146096) // 146097
+	local doe = z - era * 146097
+	local yoe = (doe - doe // 1460 + doe // 36524 - doe // 146096) // 365
+	local y = yoe + era * 400
+	local doy = doe - (365 * yoe + yoe // 4 - yoe // 100)
+	local mp = (5 * doy + 2) // 153
+	local d = doy - (153 * mp + 2) // 5 + 1
+	local m = mp < 10 and mp + 3 or mp - 9
+	if m <= 2 then
+		y += 1
+	end
+	return string.format("%04d-%02d-%02d", y, m, d)
+end
+
+local function shuffled(list: { string }, rng: Random): { string }
+	local bag = table.clone(list)
+	for i = #bag, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		bag[i], bag[j] = bag[j], bag[i]
+	end
+	return bag
+end
+
+-- A plan of n entries from shuffled bags of `pool`, never the same entry twice in a row.
+local function plan(pool: { string }, n: number, rng: Random, first: string?): { string }
+	local out: { string } = {}
+	if first then
+		table.insert(out, first)
+	end
+	while #out < n do
+		local bag = shuffled(pool, rng)
+		if #bag > 1 and bag[1] == out[#out] then
+			bag[1], bag[#bag] = bag[#bag], bag[1]
+		end
+		for _, id in ipairs(bag) do
+			if #out < n then
+				table.insert(out, id)
+			end
+		end
+	end
+	return out
+end
+
+export type Daily = {
+	Day: number,
+	Seed: number,
+	Date: string,
+	Arenas: { string }, -- stage n's arena
+	Bosses: { string }, -- stage n's boss (stage 1 is always the Scorpion Queen)
+	Curses: { string },
+	Bonus: string,
+	BonusWeapon: string?,
+	BonusItems: { string }?,
+}
+
+-- The fixed setup of a UTC day: the same for every server and every player.
+function CurseData.Daily(day: number): Daily
+	local seed = (day * 7919 + 104729) % 2147483647
+	local rng = Random.new(seed)
+	local arenas = plan(CurseData.Arenas, CurseData.DailyStages, rng)
+	local bosses = plan(CurseData.Bosses, CurseData.DailyStages, rng, "ScorpionQueen")
+	local curses = {}
+	for _, id in ipairs(shuffled(CurseData.Order, rng)) do
+		if #curses < CurseData.DailyCurseCount then
+			table.insert(curses, id)
+		end
+	end
+	curses = CurseData.Sanitize(curses) or {}
+	local bonus = CurseData.BonusOrder[rng:NextInteger(1, #CurseData.BonusOrder)]
+	local d: Daily = {
+		Day = day,
+		Seed = seed,
+		Date = CurseData.DateText(day),
+		Arenas = arenas,
+		Bosses = bosses,
+		Curses = curses,
+		Bonus = bonus,
+	}
+	if bonus == "Armory" then
+		d.BonusWeapon = CurseData.ArmoryWeapons[rng:NextInteger(1, #CurseData.ArmoryWeapons)]
+	elseif bonus == "Treasure" then
+		local items = shuffled(CurseData.TreasureItems, rng)
+		d.BonusItems = { items[1], items[2] }
+	end
+	return d
+end
+
+-- The starting bonus in one line ("Start with a second weapon: Spear").
+function CurseData.BonusText(d: Daily, nameOf: ((string) -> string)?): string
+	local def = CurseData.Bonuses[d.Bonus]
+	if not def then
+		return ""
+	end
+	local function name(id: string): string
+		if nameOf then
+			return nameOf(id)
+		end
+		-- "HolyWater" -> "Holy Water"
+		return (string.gsub(id, "(%l)(%u)", "%1 %2"))
+	end
+	if d.Bonus == "Armory" then
+		return string.format(def.Text, name(d.BonusWeapon or "?"))
+	elseif d.Bonus == "Treasure" then
+		local items = d.BonusItems or {}
+		return string.format(def.Text, name(items[1] or "?") .. " + " .. name(items[2] or "?"))
+	end
+	return def.Text
+end
+
+--[[
+	Daily score as one integer (OrderedDataStore values are integers, higher = better):
+	stages cleared first; then, with at least one stage cleared, the FASTER the last clear
+	the better (the run time when the last boss died); with none cleared, the LONGER you
+	survived the better. Times are clamped to MaxTime seconds.
+]]
+CurseData.MaxTime = 99999
+
+function CurseData.DailyScore(cleared: number, clearTime: number, survived: number): number
+	cleared = math.clamp(math.floor(cleared), 0, 999)
+	if cleared > 0 then
+		return cleared * 100000 + (CurseData.MaxTime - math.clamp(math.floor(clearTime), 0, CurseData.MaxTime))
+	end
+	return math.clamp(math.floor(survived), 0, CurseData.MaxTime)
+end
+
+-- (stages cleared, seconds, "cleared" | "survived") of a score.
+function CurseData.DecodeScore(score: number): (number, number, string)
+	score = math.max(0, math.floor(score))
+	local cleared = score // 100000
+	local rest = score % 100000
+	if cleared > 0 then
+		return cleared, CurseData.MaxTime - rest, "cleared"
+	end
+	return 0, rest, "survived"
+end
+
+-- "3 stages · 9:12" / "0 stages · survived 4:10".
+function CurseData.ScoreText(score: number): string
+	local cleared, t, kind = CurseData.DecodeScore(score)
+	local clock = string.format("%d:%02d", t // 60, t % 60)
+	if kind == "cleared" then
+		return string.format("%d stage%s · %s", cleared, cleared == 1 and "" or "s", clock)
+	end
+	return "0 stages · survived " .. clock
+end
+
+return CurseData
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">EnemyData</string>
           <string name="Source"><![CDATA[--[[
@@ -2657,7 +3274,7 @@ return EnemyData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="11">
         <Properties>
           <string name="Name">HeroPoses</string>
           <string name="Source"><![CDATA[--[[
@@ -2890,7 +3507,7 @@ return HeroPoses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="10">
+      <Item class="ModuleScript" referent="12">
         <Properties>
           <string name="Name">IconData</string>
           <string name="Source"><![CDATA[--[[
@@ -3054,7 +3671,7 @@ return IconData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">ItemData</string>
           <string name="Source"><![CDATA[--[[
@@ -3219,7 +3836,7 @@ return ItemData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="12">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">MeshCatalog</string>
           <string name="Source"><![CDATA[--[[
@@ -5294,7 +5911,7 @@ return MeshCatalog
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="15">
         <Properties>
           <string name="Name">MetaUpgradeData</string>
           <string name="Source"><![CDATA[--[[
@@ -5445,7 +6062,7 @@ return MetaUpgradeData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Palette</string>
           <string name="Source"><![CDATA[--[[
@@ -5592,7 +6209,7 @@ return Palette
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">PassiveData</string>
           <string name="Source"><![CDATA[--[[
@@ -5849,7 +6466,7 @@ return PassiveData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[--[[
@@ -5895,6 +6512,7 @@ Remotes.ServerToClient = {
 	"LootFeedback", -- answer to LootHold: { Id, State = "Done" | "Cancel", Reason? }
 	"AchievementUnlocked", -- { Id, Name, Reward, Icon } (AchievementService): toast
 	"DamageNumbers", -- { enemyId, amount, crit (0/1), ... } summed hits (only with the setting on)
+	"LeaderboardData", -- { Board, Rows = { {Rank, Name, Value, Me} }, Status, Age, MyRank?, MyBest } (LeaderboardService)
 }
 
 -- Client → server
@@ -5903,7 +6521,7 @@ Remotes.ClientToServer = {
 	"LevelUpReroll",
 	"LevelUpSkip",
 	"JoinRun", -- join during the lobby countdown
-	"StartRun", -- (mode) lobby SOLO / DUO / TRIO button; during a countdown it joins
+	"StartRun", -- (mode) lobby SOLO / DUO / TRIO button, or "Daily" (the DAILY card); during a countdown it joins
 	"StartNow", -- the countdown's starter skips the rest of the countdown
 	"CycleArena", -- lobby ARENA button (next unlocked arena)
 	"DevCommand", -- (command) Studio / creator only, re-checked on the server
@@ -5919,7 +6537,9 @@ Remotes.ClientToServer = {
 	"RequestProfile", -- ask for a ProfileSync
 	"PortalChoice", -- ("Next" | "Return") answer to PortalOffer, validated by StageManager
 	"LootHold", -- (lootId, holding: boolean) start / stop holding a chest or shrine (LootSystem)
-	"EquipCosmetic", -- ("Title" | "Color", id or "") an earned achievement cosmetic
+	"EquipCosmetic", -- ("Title" | "Color" | "Ring" | "Frame", id or "") an earned achievement / level-track cosmetic
+	"SetCurses", -- ({curseId}) lobby curse pick, at most CurseData.MaxActive (RunModifiers)
+	"LeaderboardRequest", -- (boardId) "BestStage" | "Daily" | "Kills" (LeaderboardService)
 }
 
 local folder: Folder? = nil
@@ -6030,7 +6650,7 @@ return Remotes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">StatSheet</string>
           <string name="Source"><![CDATA[--[[
@@ -6046,6 +6666,8 @@ return Remotes
 	    Passives = { [passiveId] = level },-- PassiveData.Values[level] (TOTAL bonus per level)
 	    Items = { [itemId] = count },      -- run items (ItemData.Bonus)
 	    Team = { might = 0.15, ... }?,     -- this stage's Bargain Shrine boon (LootSystem)
+	    Curse = { MaxHP = 0.7, Might = 1.3, DamageTaken = 1.3 }?, -- the run's curses
+	                                       -- (CurseData), final multipliers
 	  }
 	  sheet = { Might, Armor, MaxHP, Speed, CooldownMult, AreaMult, Amount, Pierce,
 	            PickupRadius, Luck, ProjSpeedMult, DurationMult, Growth, DamageTaken, Regen,
@@ -6077,6 +6699,7 @@ export type Input = {
 	Passives: { [string]: number }?,
 	Items: { [string]: number }?,
 	Team: { [string]: number }?,
+	Curse: { [string]: number }?,
 }
 
 function StatSheet.Compute(input: Input): { [string]: number }
@@ -6119,7 +6742,8 @@ function StatSheet.Compute(input: Input): { [string]: number }
 
 	local P = Config.Player
 	local I = Config.Items
-	return {
+	local curse = input.Curse or {}
+	local sheet = {
 		Might = 1 + b.might,
 		Armor = P.BaseArmor + b.armor,
 		MaxHP = math.floor((P.BaseMaxHP + b.maxHpFlat) * (1 + b.maxHpMult) + 0.5),
@@ -6140,6 +6764,11 @@ function StatSheet.Compute(input: Input): { [string]: number }
 		CritDamage = I.BaseCritDamage + b.critDamage,
 		GoldMult = 1 + b.goldGain, -- in-run gold (kills, elite chests, the Queen)
 	}
+	-- curses multiply the finished sheet (Fragile, Glass Cannon)
+	sheet.MaxHP = math.max(1, math.floor(sheet.MaxHP * (curse.MaxHP or 1) + 0.5))
+	sheet.Might *= curse.Might or 1
+	sheet.DamageTaken *= curse.DamageTaken or 1
+	return sheet
 end
 
 local function pct(mult: number): string
@@ -6235,7 +6864,7 @@ return StatSheet
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">Theme</string>
           <string name="Source"><![CDATA[--[[
@@ -6530,7 +7159,7 @@ return Theme
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">WeaponData</string>
           <string name="Source"><![CDATA[--[[
@@ -7460,11 +8089,11 @@ return WeaponData
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="20">
+  <Item class="ServerScriptService" referent="22">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="21">
+    <Item class="Script" referent="23">
       <Properties>
         <string name="Name">GameServer</string>
         <token name="RunContext">0</token>
@@ -7478,7 +8107,8 @@ return WeaponData
 	contact, grid rebuild) → WeaponSystem (firing, projectiles, sync) → XPSystem (gems,
 	pickups) → ItemSystem (regen, shields, magnet pulses) → LootSystem (chest / shrine
 	holds, the guarded altar) → LevelUpSystem (auto-pick timers) → AchievementService (run
-	time / level milestones, once a second) → DamageNumbers (optional numbers, per player)
+	time / level milestones, once a second) → RunModifiers (curses / daily state for the
+	lobby) → LeaderboardService (queued writes, cache refresh) → DamageNumbers (optional numbers, per player)
 	→ Fx (effect batch flush).
 ]]
 
@@ -7503,6 +8133,9 @@ local ctx = {
 -- Dependency order: data first, then world, then gameplay.
 local ORDER = {
 	"DataService",
+	"RunModifiers",
+	"AccountService",
+	"LeaderboardService",
 	"MonetizationService",
 	"GoldSystem",
 	"MeshService",
@@ -7564,6 +8197,8 @@ local STEPS = {
 	{ "LootSystem", ctx.LootSystem.Step },
 	{ "LevelUpSystem", ctx.LevelUpSystem.Step },
 	{ "AchievementService", ctx.AchievementService.Step },
+	{ "RunModifiers", ctx.RunModifiers.Step },
+	{ "LeaderboardService", ctx.LeaderboardService.Step },
 	{ "DamageNumbers", ctx.DamageNumbers.Step },
 	{ "Fx", ctx.Fx.Step },
 }
@@ -7588,11 +8223,133 @@ print(string.format("[SWARM] server ready (v%s)%s", Config.Version, ctx.DataServ
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Folder" referent="22">
+    <Item class="Folder" referent="24">
       <Properties>
         <string name="Name">Modules</string>
       </Properties>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="25">
+        <Properties>
+          <string name="Name">AccountService</string>
+          <string name="Source"><![CDATA[--[[
+	AccountService.lua
+	The account level (AccountData.lua): a cosmetic track. RunManager calls AwardRun once
+	per committed run (the same guard that writes the run stats, rp.Committed); the XP goes
+	into data.Account.XP, the level is derived from it, and the rewards of every level
+	passed unlock at once (the first title / colour / ring / frame earned is worn when
+	nothing is worn yet). Nothing here touches a run's stats.
+
+	Cosmetics are worn through the existing EquipCosmetic remote (AchievementService
+	validates titles and colours from either source; rings and frames are checked here with
+	CanWear). Player attributes for other clients: AccountLevel, Ring, Frame.
+]]
+
+local AccountData = require(game:GetService("ReplicatedStorage").Shared.AccountData)
+
+local AccountService = {}
+
+local ctx
+
+local function account(data)
+	if type(data.Account) ~= "table" then
+		data.Account = { XP = 0, Level = 1 }
+	end
+	return data.Account
+end
+
+function AccountService.Level(data): number
+	return (AccountData.LevelFor(account(data).XP or 0))
+end
+
+-- The profile view: total XP, level, XP into the level, XP the level needs.
+function AccountService.View(data): { [string]: number }
+	local a = account(data)
+	local level, into, need = AccountData.LevelFor(a.XP or 0)
+	return { XP = a.XP or 0, Level = level, Into = into, Need = need }
+end
+
+local function publish(player: Player, data)
+	player:SetAttribute("AccountLevel", AccountService.Level(data))
+	player:SetAttribute("Ring", data.Ring or "")
+	player:SetAttribute("Frame", data.Frame or "")
+end
+
+-- True when the player may wear this track cosmetic (or "" = nothing).
+function AccountService.CanWear(data, kind: string, id: string): boolean
+	if id == "" then
+		return true
+	end
+	return AccountData.Has(AccountService.Level(data), kind, id)
+end
+
+local WORN = { Title = "Title", Color = "NameColor", Ring = "Ring", Frame = "Frame" }
+
+--[[
+	Adds a run's XP. summary: AccountData.RunSummary. Returns the results-screen view:
+	{ Gained, Parts, From, To, Into, Need, Rewards = { "Title: Recruit", ... } }.
+]]
+function AccountService.AwardRun(player: Player, summary: AccountData.RunSummary): { [string]: any }?
+	local data = ctx.DataService.GetData(player)
+	if not data then
+		return nil
+	end
+	local a = account(data)
+	local gained, parts = AccountData.RunXP(summary)
+	local from = AccountData.LevelFor(a.XP or 0)
+	a.XP = (a.XP or 0) + gained
+	local to, into, need = AccountData.LevelFor(a.XP)
+	a.Level = to
+	local rewards = {}
+	for _, r in ipairs(AccountData.RewardsBetween(from, to)) do
+		table.insert(rewards, AccountData.RewardName(r))
+		local key = WORN[r.Kind]
+		if key and (data[key] == nil or data[key] == "") then
+			data[key] = r.Id -- the first one earned is worn at once
+		end
+	end
+	if player.Parent then
+		publish(player, data)
+	end
+	return { Gained = gained, Parts = parts, From = from, To = to, Into = into, Need = need, Rewards = rewards }
+end
+
+-- EquipCosmetic for rings and frames (AchievementService forwards them here).
+function AccountService.Equip(player: Player, kind: string, id: string): boolean
+	local data = ctx.DataService.GetData(player)
+	if not data or (kind ~= "Ring" and kind ~= "Frame") then
+		return false
+	end
+	if not AccountService.CanWear(data, kind, id) then
+		return false
+	end
+	data[kind] = id
+	publish(player, data)
+	return true
+end
+
+function AccountService.Init(c)
+	ctx = c
+end
+
+function AccountService.Start()
+	ctx.DataService.OnProfileLoaded(function(player)
+		local data = ctx.DataService.GetData(player)
+		if data then
+			-- a worn track cosmetic must still be earned (hand-edited saves)
+			for _, kind in ipairs({ "Ring", "Frame" }) do
+				if not AccountService.CanWear(data, kind, data[kind] or "") then
+					data[kind] = ""
+				end
+			end
+			publish(player, data)
+		end
+	end)
+end
+
+return AccountService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">AchievementService</string>
           <string name="Source"><![CDATA[--[[
@@ -7610,7 +8367,8 @@ print(string.format("[SWARM] server ready (v%s)%s", Config.Version, ctx.DataServ
 	Unlocking pays the reward at once into the save (gold, a character, a cosmetic) and
 	tells the player (AchievementUnlocked toast). Unlocks of the current run are listed on
 	the results screen (TakeRunUnlocks). Clients only ever send EquipCosmetic (a title /
-	colour they have earned, validated here).
+	colour they have earned from an achievement or the account level track, validated here;
+	rings and frames go to AccountService.Equip).
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -7743,12 +8501,24 @@ end
 
 local function onEquip(player: Player, kind: any, value: any)
 	local data = ctx.DataService.GetData(player)
-	if not data or (kind ~= "Title" and kind ~= "Color") or type(value) ~= "string" or #value > 40 then
+	if not data or type(value) ~= "string" or #value > 40 then
+		return
+	end
+	if kind == "Ring" or kind == "Frame" then
+		-- level-track cosmetics (AccountService checks the level)
+		if ctx.AccountService.Equip(player, kind, value) then
+			ctx.GoldSystem.SyncProfile(player)
+		end
+		return
+	end
+	if kind ~= "Title" and kind ~= "Color" then
 		return
 	end
 	if value ~= "" then
+		-- earned from an achievement, or from the account level track
 		local source = AchievementData.Source(kind, value)
-		if not source or not store(data).Unlocked[source] then
+		local fromAchievement = source ~= nil and store(data).Unlocked[source] ~= nil
+		if not fromAchievement and not ctx.AccountService.CanWear(data, kind, value) then
 			return
 		end
 	end
@@ -7819,7 +8589,7 @@ return AchievementService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="24">
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">BiomeHazards</string>
           <string name="Source"><![CDATA[--[[
@@ -8009,7 +8779,7 @@ return BiomeHazards
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">BossAI</string>
           <string name="Source"><![CDATA[--[[
@@ -9097,7 +9867,7 @@ return BossAI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="26">
+      <Item class="ModuleScript" referent="29">
         <Properties>
           <string name="Name">DamageNumbers</string>
           <string name="Source"><![CDATA[--[[
@@ -9190,7 +9960,7 @@ return DamageNumbers
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="30">
         <Properties>
           <string name="Name">DataService</string>
           <string name="Source"><![CDATA[--[[
@@ -9210,14 +9980,20 @@ return DamageNumbers
 	Retry:   every DataStore call is pcall'd with exponential backoff.
 	Studio:  if DataStores are unavailable (no API access) data is kept in memory only.
 
-	Save shape (Config.Data.SchemaVersion = 5):
+	Save shape (Config.Data.SchemaVersion = 6):
 	  Version, Gold, Meta {id → level}, OwnedCharacters {id → true}, SelectedCharacter,
-	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage},
+	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage,
+	  MostKills},
 	  PurchaseIds {string}, Settings {Music, Sfx, Shake, ReducedEffects, DamageNumbers,
 	  Tips} (Config.Settings.Defaults), ReviveTokens, SelectedArena,
 	  Achievements {Progress {id → number}, Unlocked {id → os.time()}} (AchievementService),
 	  Title (worn achievement title, "" = none), NameColor (AchievementData.Colors id, ""),
-	  TutorialDone (first-run tips finished / skipped), SeenTips {tipId → true}
+	  TutorialDone (first-run tips finished / skipped), SeenTips {tipId → true},
+	  Curses {curseId} (the run modifiers last picked in the lobby, CurseData),
+	  Daily {Day, Used, Score, Plays, BestScore, BestDay} (Daily Challenge: today's scored
+	  attempt and the best ever score, CurseData.DailyScore),
+	  Account {XP, Level} (cosmetic account level, AccountData), Ring, Frame (worn dais
+	  ring / portrait frame from the level track, "" = none)
 
 	Save health is shown to the player (never pretend saving works): the player attribute
 	"SaveStatus" is "ok", "memory" (DataStores unavailable: nothing is saved this session)
@@ -9230,6 +10006,8 @@ local RunService = game:GetService("RunService")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
+local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
+local AccountData = require(game:GetService("ReplicatedStorage").Shared.AccountData)
 
 local DataService = {}
 
@@ -9253,6 +10031,10 @@ local jobId = (game.JobId ~= "" and game.JobId) or ("studio-" .. tostring(math.r
 -- Defaults and migration
 ------------------------------------------------------------------------------------------
 
+local function defaultDaily()
+	return { Day = 0, Used = false, Score = 0, Plays = 0, BestScore = 0, BestDay = 0 }
+end
+
 local function defaultData()
 	return {
 		Version = Config.Data.SchemaVersion,
@@ -9261,7 +10043,7 @@ local function defaultData()
 		OwnedCharacters = { [CharacterData.Default] = true },
 		SelectedCharacter = CharacterData.Default,
 		Skins = {},
-		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0 },
+		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0, MostKills = 0 },
 		PurchaseIds = {},
 		Settings = table.clone(Config.Settings.Defaults),
 		ReviveTokens = 0,
@@ -9271,6 +10053,11 @@ local function defaultData()
 		NameColor = "",
 		TutorialDone = false,
 		SeenTips = {},
+		Curses = {},
+		Daily = defaultDaily(),
+		Account = { XP = 0, Level = 1 },
+		Ring = "",
+		Frame = "",
 	}
 end
 DataService.DefaultData = defaultData
@@ -9282,7 +10069,10 @@ DataService.DefaultData = defaultData
 	at 0, the furthest stage reached in a run from now on. Version 3 had no achievements: they
 	start empty (owned characters, gold and skins are untouched). Version 4 had no
 	accessibility settings and no first-run tips: settings get their defaults, and anyone
-	who has played a run already counts as having done the tutorial.
+	who has played a run already counts as having done the tutorial. Version 5 had no
+	retention systems: curses start unpicked, no daily played, account level 1 with 0 XP
+	(the level track starts for everyone from the next run; old progress is untouched),
+	no ring / frame worn, Stats.MostKills 0.
 ]]
 local MIGRATIONS: { [number]: (any) -> any } = {
 	[0] = function(data)
@@ -9340,6 +10130,19 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.TutorialDone = (runs or 0) > 0
 		data.SeenTips = {}
 		data.Version = 5
+		return data
+	end,
+	[5] = function(data)
+		-- curses, the daily challenge, the account level and its cosmetics (all new)
+		data.Curses = {}
+		data.Daily = defaultDaily()
+		data.Account = { XP = 0, Level = 1 }
+		data.Ring = ""
+		data.Frame = ""
+		if type(data.Stats) == "table" and type(data.Stats.MostKills) ~= "number" then
+			data.Stats.MostKills = 0
+		end
+		data.Version = 6
 		return data
 	end,
 }
@@ -9400,6 +10203,30 @@ function DataService.Migrate(data: any): { [string]: any }
 	end
 	if type(data.SeenTips) ~= "table" then
 		data.SeenTips = {}
+	end
+	-- schema 6: curses, daily, account level, cosmetics (hand edits / partial saves)
+	if type(data.Curses) ~= "table" then
+		data.Curses = {}
+	end
+	data.Curses = CurseData.Sanitize(data.Curses) or {}
+	if type(data.Daily) ~= "table" then
+		data.Daily = defaultDaily()
+	end
+	for k, v in pairs(defaultDaily()) do
+		if type(data.Daily[k]) ~= type(v) then
+			data.Daily[k] = v
+		end
+	end
+	if type(data.Account) ~= "table" then
+		data.Account = { XP = 0, Level = 1 }
+	end
+	local xp = tonumber(data.Account.XP)
+	data.Account.XP = (xp and xp == xp) and math.max(0, math.floor(xp)) or 0
+	data.Account.Level = (AccountData.LevelFor(data.Account.XP))
+	for _, key in ipairs({ "Ring", "Frame", "Title", "NameColor" }) do
+		if type(data[key]) ~= "string" then
+			data[key] = ""
+		end
 	end
 	if type(data.OwnedCharacters) ~= "table" then
 		data.OwnedCharacters = {}
@@ -9699,7 +10526,7 @@ return DataService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="28">
+      <Item class="ModuleScript" referent="31">
         <Properties>
           <string name="Name">EnemyAI</string>
           <string name="Source"><![CDATA[--[[
@@ -10473,7 +11300,7 @@ return EnemyAI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="29">
+      <Item class="ModuleScript" referent="32">
         <Properties>
           <string name="Name">EnemySpawner</string>
           <string name="Source"><![CDATA[--[[
@@ -10745,6 +11572,9 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.HP = hp
 	e.MaxHP = hp
 	e.Speed = def.Speed * math.min(1 + tier * D.SpeedPerMinute, D.SpeedCap)
+	if not isBoss then
+		e.Speed *= ctx.RunModifiers and ctx.RunModifiers.EnemySpeedMult() or 1 -- the Frenzy curse
+	end
 	e.Damage = damage
 	e.Dir = Vector3.zero
 	e.Knock = Vector3.zero
@@ -10943,7 +11773,7 @@ local function topUp()
 			end
 			break
 		end
-		local elite = eliteOk and rng:NextNumber() < Config.Enemies.EliteChance
+		local elite = eliteOk and rng:NextNumber() < Config.Enemies.EliteChance * (ctx.RunModifiers and ctx.RunModifiers.EliteChanceMult() or 1) -- Elite Surge
 		local pos = EnemySpawner.SpawnPoint(def.Radius * (elite and 2 or 1))
 		if pos then
 			EnemySpawner.Spawn(typeId, pos, { Elite = elite })
@@ -11440,7 +12270,7 @@ return EnemySpawner
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="30">
+      <Item class="ModuleScript" referent="33">
         <Properties>
           <string name="Name">Events</string>
           <string name="Source"><![CDATA[--[[
@@ -11488,7 +12318,7 @@ return Events
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="31">
+      <Item class="ModuleScript" referent="34">
         <Properties>
           <string name="Name">Fx</string>
           <string name="Source"><![CDATA[--[[
@@ -11674,7 +12504,7 @@ return Fx
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="32">
+      <Item class="ModuleScript" referent="35">
         <Properties>
           <string name="Name">GoldSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -11705,14 +12535,16 @@ local rng = Random.new()
 -- Run gold
 ------------------------------------------------------------------------------------------
 
--- Adds gold (after gamepass multipliers) to the run counter and the save. Returns amount.
+-- Adds gold (after gamepass multipliers and the run's curse bonus, CurseData) to the run
+-- counter and the save. Returns amount.
 function GoldSystem.AddRunGold(rp, base: number): number
 	local player: Player = rp.Player
 	local data = ctx.DataService.GetData(player)
 	if not data or base <= 0 then
 		return 0
 	end
-	local amount = math.floor(base * ctx.MonetizationService.GoldMultiplier(player) + 0.5)
+	local curse = ctx.RunModifiers and ctx.RunModifiers.GoldMult() or 1
+	local amount = math.floor(base * ctx.MonetizationService.GoldMultiplier(player) * curse + 0.5)
 	data.Gold += amount
 	rp.Gold += amount
 	player:SetAttribute("RunGold", rp.Gold)
@@ -11780,6 +12612,12 @@ function GoldSystem.SyncProfile(player: Player)
 		Achievements = ctx.AchievementService and ctx.AchievementService.ProfileView(data) or nil,
 		Title = data.Title or "",
 		NameColor = data.NameColor or "",
+		-- retention: curses picked, the daily, the account level and its cosmetics
+		Curses = data.Curses or {},
+		Daily = ctx.RunModifiers and ctx.RunModifiers.DailyView(data) or nil,
+		Account = ctx.AccountService and ctx.AccountService.View(data) or nil,
+		Ring = data.Ring or "",
+		Frame = data.Frame or "",
 		OwnedSkins = M.OwnedSkins(player),
 		Passes = {
 			StarterPack = M.OwnsPass(player, "StarterPack"),
@@ -11969,7 +12807,7 @@ return GoldSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="33">
+      <Item class="ModuleScript" referent="36">
         <Properties>
           <string name="Name">Hazards</string>
           <string name="Source"><![CDATA[--[[
@@ -12188,7 +13026,7 @@ return Hazards
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="34">
+      <Item class="ModuleScript" referent="37">
         <Properties>
           <string name="Name">ItemSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -12582,7 +13420,399 @@ return ItemSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="35">
+      <Item class="ModuleScript" referent="38">
+        <Properties>
+          <string name="Name">LeaderboardService</string>
+          <string name="Source"><![CDATA[--[[
+	LeaderboardService.lua
+	Global leaderboards on OrderedDataStores (Config.Leaderboards):
+	  BestStage  furthest stage reached in a run (all time)       SwarmLB_BestStage
+	  Daily      today's scored Daily Challenge attempts           SwarmLB_Daily_<UTC day>
+	             (CurseData.DailyScore: stages cleared, then time)
+	  Kills      most enemies defeated in one run (all time)       SwarmLB_Kills
+
+	Writes (Submit, called when a run is committed): a per player / board queue keeps the
+	best value; a flush every FlushSeconds writes entries whose throttle passed, with
+	UpdateAsync keeping the stored max, only while GetRequestBudgetForRequestType leaves
+	MinBudget in reserve; failures are retried (MaxRetries). Everything is pcall'd.
+
+	Reads (remote LeaderboardRequest(boardId)): the top Config.Leaderboards.Top from a cache
+	refreshed at most every RefreshSeconds (in the background, only for boards someone asked
+	for in the last WatchSeconds); the answer (remote LeaderboardData) carries the rows,
+	your rank when you are in the list, your own best from your save, and a status:
+	  "ok"       global board
+	  "loading"  first read still running (the client asks again)
+	  "local"    DataStores are unavailable (Studio without API access): this server's
+	             runs only, with a note saying so
+	  "error"    the read failed; the last good rows (if any) are kept
+
+	Names come from players on this server, else Players:GetNameFromUserIdAsync (cached,
+	pcall'd); unknown names show as "Player <id>".
+]]
+
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
+local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
+
+local LeaderboardService = {}
+
+local L = Config.Leaderboards
+local ctx
+
+type Entry = { UserId: number, Value: number }
+type Cache = {
+	Rows: { Entry },
+	Time: number, -- os.clock() of the last good read (0 = never)
+	Status: string,
+	Loading: boolean,
+	Asked: number, -- os.clock() of the last request
+}
+type Pending = { Board: string, Day: number, UserId: number, Value: number, Retries: number }
+
+local available = false -- OrderedDataStores can be used
+local stores: { [string]: OrderedDataStore } = {}
+local caches: { [string]: Cache } = {}
+local pending: { [string]: Pending } = {} -- key = storeName .. "|" .. userId
+local lastWrite: { [string]: number } = {}
+local localBoards: { [string]: { [number]: number } } = {} -- "local" mode (and recent writes)
+local names: { [number]: string } = {}
+local flushTimer = 0
+local flushing = false
+
+local function today(): number
+	return CurseData.DayOf(os.time())
+end
+
+-- Store name of a board (the daily board is one store per UTC day).
+local function storeName(board: string, day: number?): string
+	if board == "Daily" then
+		return L.StorePrefix .. "Daily_" .. tostring(day or today())
+	end
+	return L.StorePrefix .. board
+end
+
+local function isBoard(board: any): boolean
+	return type(board) == "string" and table.find(L.Order, board) ~= nil
+end
+
+local function storeFor(name: string): OrderedDataStore?
+	if not available then
+		return nil
+	end
+	local s = stores[name]
+	if s then
+		return s
+	end
+	local ok, result = pcall(function()
+		return DataStoreService:GetOrderedDataStore(name)
+	end)
+	if ok and result then
+		stores[name] = result
+		return result
+	end
+	return nil
+end
+
+local function budget(kind: Enum.DataStoreRequestType): number
+	local ok, n = pcall(function()
+		return DataStoreService:GetRequestBudgetForRequestType(kind)
+	end)
+	return ok and tonumber(n) or 0
+end
+
+local function remember(name: string, userId: number, value: number)
+	local board = localBoards[name]
+	if not board then
+		board = {}
+		localBoards[name] = board
+	end
+	board[userId] = math.max(board[userId] or 0, value)
+end
+
+------------------------------------------------------------------------------------------
+-- Writes
+------------------------------------------------------------------------------------------
+
+--[[
+	Queues a player's value for a board (kept when it beats what is queued). day: the daily
+	board's UTC day (the attempt's day, so a run crossing midnight scores on its own day).
+]]
+function LeaderboardService.Submit(player: Player, board: string, value: number, day: number?)
+	if not L.Enabled or not isBoard(board) or type(value) ~= "number" or value ~= value or value <= 0 then
+		return
+	end
+	value = math.floor(value)
+	local name = storeName(board, day)
+	remember(name, player.UserId, value)
+	local key = name .. "|" .. player.UserId
+	local p = pending[key]
+	if p then
+		p.Value = math.max(p.Value, value)
+	else
+		pending[key] = { Board = name, Day = day or today(), UserId = player.UserId, Value = value, Retries = 0 }
+	end
+end
+
+local function flush()
+	if not available then
+		table.clear(pending)
+		return
+	end
+	local now = os.clock()
+	local keys = {}
+	for key in pairs(pending) do
+		table.insert(keys, key)
+	end
+	for _, key in ipairs(keys) do
+		local p = pending[key]
+		if p and now - (lastWrite[key] or -math.huge) >= L.WriteThrottleSeconds then
+			if budget(Enum.DataStoreRequestType.SetIncrementSortedAsync) <= L.MinBudget then
+				return -- out of budget: the rest waits for the next flush
+			end
+			local store = storeFor(p.Board)
+			pending[key] = nil
+			lastWrite[key] = now
+			if store then
+				local value = p.Value
+				local ok, err = pcall(function()
+					store:UpdateAsync(tostring(p.UserId), function(old)
+						local before = tonumber(old) or 0
+						if value <= before then
+							return nil -- keep the better stored value (no write)
+						end
+						return value
+					end)
+				end)
+				if not ok then
+					p.Retries += 1
+					if p.Retries <= L.MaxRetries then
+						local again = pending[key]
+						if again then
+							again.Value = math.max(again.Value, p.Value)
+						else
+							pending[key] = p
+						end
+					else
+						warn("[Leaderboard] giving up on " .. key .. ": " .. tostring(err))
+					end
+				end
+			end
+		end
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- Reads
+------------------------------------------------------------------------------------------
+
+local function cacheFor(name: string): Cache
+	local c = caches[name]
+	if not c then
+		c = { Rows = {}, Time = 0, Status = available and "loading" or "local", Loading = false, Asked = 0 }
+		caches[name] = c
+	end
+	return c
+end
+
+local function refresh(name: string)
+	local c = cacheFor(name)
+	if c.Loading or not available then
+		return
+	end
+	if budget(Enum.DataStoreRequestType.GetSortedAsync) <= L.MinBudget then
+		return
+	end
+	c.Loading = true
+	task.spawn(function()
+		local store = storeFor(name)
+		local ok, rows = pcall(function()
+			local list: { Entry } = {}
+			if not store then
+				error("no store")
+			end
+			local pages = (store :: OrderedDataStore):GetSortedAsync(false, L.Top)
+			for _, item in ipairs(pages:GetCurrentPage()) do
+				local uid = tonumber(item.key)
+				local v = tonumber(item.value)
+				if uid and v then
+					table.insert(list, { UserId = uid, Value = v })
+				end
+			end
+			return list
+		end)
+		c.Loading = false
+		if ok then
+			c.Rows = rows
+			c.Time = os.clock()
+			c.Status = "ok"
+		else
+			c.Status = "error"
+			c.Time = os.clock() -- don't hammer a failing store; try again after RefreshSeconds
+			warn("[Leaderboard] read " .. name .. " failed: " .. tostring(rows))
+		end
+	end)
+end
+
+local function nameOf(userId: number): string
+	local p = Players:GetPlayerByUserId(userId)
+	if p then
+		names[userId] = p.DisplayName
+		return p.DisplayName
+	end
+	local known = names[userId]
+	if known then
+		return known
+	end
+	names[userId] = "Player " .. userId -- until the lookup below answers
+	task.spawn(function()
+		local ok, result = pcall(function()
+			return Players:GetNameFromUserIdAsync(userId)
+		end)
+		if ok and type(result) == "string" then
+			names[userId] = result
+		end
+	end)
+	return names[userId]
+end
+
+-- Rows of a board for the client: the global cache, or this server's runs ("local").
+local function rowsOf(name: string): ({ Entry }, string, number)
+	local c = cacheFor(name)
+	if not available then
+		local list: { Entry } = {}
+		for uid, v in pairs(localBoards[name] or {}) do
+			table.insert(list, { UserId = uid, Value = v })
+		end
+		table.sort(list, function(a, b)
+			return a.Value > b.Value
+		end)
+		while #list > L.Top do
+			table.remove(list)
+		end
+		return list, "local", 0
+	end
+	if c.Time == 0 then
+		return c.Rows, c.Loading and "loading" or c.Status, 0
+	end
+	return c.Rows, c.Status, math.floor(os.clock() - c.Time)
+end
+
+-- The player's own best for a board, from the save.
+local function ownBest(player: Player, board: string): number
+	local data = ctx.DataService.GetData(player)
+	if not data then
+		return 0
+	end
+	if board == "BestStage" then
+		return data.Stats.BestStage or 0
+	elseif board == "Kills" then
+		return data.Stats.MostKills or 0
+	elseif board == "Daily" then
+		local D = data.Daily or {}
+		return D.Day == today() and (D.Score or 0) or 0
+	end
+	return 0
+end
+
+local function onRequest(player: Player, board: any)
+	if not isBoard(board) then
+		return
+	end
+	local name = storeName(board)
+	local c = cacheFor(name)
+	c.Asked = os.clock()
+	if available and (c.Time == 0 or os.clock() - c.Time >= L.RefreshSeconds) then
+		refresh(name)
+	end
+	local rows, status, age = rowsOf(name)
+	local out = {}
+	local myRank = nil
+	for i, e in ipairs(rows) do
+		table.insert(out, { Rank = i, Name = nameOf(e.UserId), Value = e.Value, Me = e.UserId == player.UserId })
+		if e.UserId == player.UserId then
+			myRank = i
+		end
+	end
+	Remotes.FireClient("LeaderboardData", player, {
+		Board = board,
+		Day = board == "Daily" and today() or nil,
+		Rows = out,
+		Status = status,
+		Age = age,
+		MyRank = myRank,
+		MyBest = ownBest(player, board),
+		Top = L.Top,
+	})
+end
+
+------------------------------------------------------------------------------------------
+-- Lifecycle
+------------------------------------------------------------------------------------------
+
+function LeaderboardService.IsAvailable(): boolean
+	return available
+end
+
+function LeaderboardService.Step(dt: number)
+	if not L.Enabled then
+		return
+	end
+	flushTimer += dt
+	if flushTimer < L.FlushSeconds then
+		return
+	end
+	flushTimer = 0
+	-- the writes yield: never inside the server's frame loop
+	if not flushing and next(pending) ~= nil then
+		flushing = true
+		task.spawn(function()
+			local ok, err = pcall(flush)
+			flushing = false
+			if not ok then
+				warn("[Leaderboard] flush: " .. tostring(err))
+			end
+		end)
+	end
+	-- keep watched boards fresh in the background
+	local now = os.clock()
+	for name, c in pairs(caches) do
+		if available and now - c.Asked < L.WatchSeconds and now - c.Time >= L.RefreshSeconds then
+			refresh(name)
+		end
+	end
+end
+
+function LeaderboardService.Init(c)
+	ctx = c
+end
+
+function LeaderboardService.Start()
+	-- the same test DataService made: no DataStores (Studio without API access) = local
+	available = L.Enabled and not ctx.DataService.IsMemoryOnly()
+	if available then
+		local ok = pcall(function()
+			return DataStoreService:GetOrderedDataStore(storeName("BestStage"))
+		end)
+		available = ok
+	end
+	Remotes.Listen("LeaderboardRequest", onRequest, 3)
+	game:BindToClose(function()
+		-- last chance for queued writes (ignores the throttle, keeps the budget check)
+		if available then
+			table.clear(lastWrite)
+			pcall(flush)
+		end
+	end)
+end
+
+return LeaderboardService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="39">
         <Properties>
           <string name="Name">LevelUpSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -12623,6 +13853,7 @@ local function sheetFor(rp, passives: { [string]: number }?)
 		Passives = passives or rp.Passives,
 		Items = rp.Items or {},
 		Team = ctx.LootSystem and ctx.LootSystem.TeamBonus() or nil,
+		Curse = ctx.RunModifiers and ctx.RunModifiers.StatMults() or nil,
 	})
 end
 
@@ -13212,7 +14443,7 @@ return LevelUpSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="36">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">LootSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -14164,7 +15395,7 @@ return LootSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="37">
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">MapBuilder</string>
           <string name="Source"><![CDATA[--[[
@@ -17466,7 +18697,7 @@ return MapBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="38">
+      <Item class="ModuleScript" referent="42">
         <Properties>
           <string name="Name">MeshService</string>
           <string name="Source"><![CDATA[--[[
@@ -17690,7 +18921,7 @@ return MeshService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="39">
+      <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">ModelBuilder</string>
           <string name="Source"><![CDATA[--[[
@@ -18562,7 +19793,7 @@ return ModelBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="44">
         <Properties>
           <string name="Name">MonetizationService</string>
           <string name="Source"><![CDATA[--[[
@@ -18866,7 +20097,7 @@ return MonetizationService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="41">
+      <Item class="ModuleScript" referent="45">
         <Properties>
           <string name="Name">RunManager</string>
           <string name="Source"><![CDATA[--[[
@@ -18908,6 +20139,7 @@ local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
+local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local MapBuilder = require(script.Parent.MapBuilder)
 local Fx = require(script.Parent.Fx)
@@ -19043,9 +20275,10 @@ function RunManager.Broadcast(text: string, color: Color3?, big: boolean?)
 	Remotes.FireAllClients("Notify", { Text = text, Color = color, Big = big })
 end
 
--- True for a mode name a client may ask for (the lobby's modes plus the old "Squad").
+-- True for a mode name a client may ask for (the lobby's modes, the Daily Challenge and
+-- the old "Squad").
 local function isMode(name: any): boolean
-	return type(name) == "string" and (table.find(Config.Modes.Order, name) ~= nil or name == "Squad")
+	return type(name) == "string" and (table.find(Config.Modes.Order, name) ~= nil or name == "Squad" or name == "Daily")
 end
 
 local function modeDef()
@@ -19544,6 +20777,7 @@ local function placeOnArena(arena, i: number, n: number): Vector3
 end
 
 local function beginRun()
+	local runStarter = starter -- whose curses the run uses (Solo / Daily: the only player)
 	local list = {}
 	for player in pairs(joined) do
 		if player.Parent and ctx.DataService.GetData(player) and #list < maxPlayers() then
@@ -19559,8 +20793,11 @@ local function beginRun()
 		return
 	end
 
-	-- stage 1: the lobby's arena with its portal (StageManager also sets EnemyAI's arena)
-	local arena = ctx.StageManager.BeginRun(selectedArena)
+	-- curses (the starter's pick) or the Daily Challenge's fixed setup
+	local daily = ctx.RunModifiers.BeginRun(mode, runStarter or list[1])
+	-- stage 1: the lobby's arena with its portal (StageManager also sets EnemyAI's arena);
+	-- the daily has its own arena tour and boss order
+	local arena = ctx.StageManager.BeginRun(daily and daily.Arenas[1] or selectedArena, daily)
 
 	runTime = 0
 	frozen = false
@@ -19582,6 +20819,7 @@ local function beginRun()
 
 		local character = CharacterData.Characters[rp.CharacterId] or CharacterData.Characters[CharacterData.Default]
 		ctx.LevelUpSystem.AddWeapon(rp, character.StartWeapon)
+		ctx.RunModifiers.SetupRunPlayer(rp) -- daily: scored / practice + the starting bonus
 		ctx.LevelUpSystem.RecomputeStats(rp)
 		setHP(rp, rp.Stats.MaxHP)
 		player:SetAttribute("CharacterId", rp.CharacterId) -- the HUD's team list shows the hero
@@ -19600,6 +20838,7 @@ local function beginRun()
 		ctx.WeaponSystem.OnInventoryChanged(rp)
 		ctx.LevelUpSystem.SendInventory(rp)
 		RunManager.ApplyMovement(rp)
+		ctx.RunModifiers.AfterSetup(rp) -- daily Head Start: its level-ups
 
 		local data = ctx.DataService.GetData(player)
 		if data then
@@ -19607,8 +20846,28 @@ local function beginRun()
 		end
 	end
 	state:SetAttribute("Participants", #runPlayers)
-	RunManager.Broadcast("STAGE 1", Color3.fromRGB(255, 230, 150), true)
+	ctx.RunModifiers.Publish()
+	if daily then
+		local first = runPlayers[1]
+		RunManager.Broadcast("DAILY CHALLENGE", Color3.fromRGB(255, 230, 150), true)
+		RunManager.Broadcast(first and first.DailyScored and "Scored attempt: make it count!" or "Practice run: not scored.", Color3.fromRGB(255, 220, 120))
+	else
+		RunManager.Broadcast("STAGE 1", Color3.fromRGB(255, 230, 150), true)
+	end
+	local curses = ctx.RunModifiers.Active()
+	if #curses > 0 then
+		local names = {}
+		for _, id in ipairs(curses) do
+			table.insert(names, CurseData.Curses[id].Name)
+		end
+		RunManager.Broadcast(string.format("Curses: %s · %s gold", table.concat(names, ", "), CurseData.GoldText(ctx.RunModifiers.GoldMult())), Color3.fromRGB(230, 150, 160))
+	end
 	RunManager.Broadcast("Find the portal and summon the Scorpion Queen!", Color3.fromRGB(180, 200, 255))
+end
+
+-- Who started the countdown (their curses are on show), or nil.
+function RunManager.GetStarter(): Player?
+	return starter
 end
 
 -- Arena `name` may be picked in the lobby (Config.Arenas[name].RequiredBestStage).
@@ -19635,6 +20894,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	local newBest, unlocked = false, nil
 	local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
 	data.Stats.TotalKills += rp.Kills
+	data.Stats.MostKills = math.max(data.Stats.MostKills or 0, rp.Kills)
 	if t > data.Stats.BestTime then
 		data.Stats.BestTime = math.floor(t)
 		newBest = true
@@ -19654,6 +20914,21 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	end
 	-- the first run is the tutorial run: tips stop after it (Settings > Replay tips)
 	data.TutorialDone = true
+	-- retention: the daily score, account XP, the leaderboards (results show the first two)
+	local cleared = ctx.StageManager.StagesCleared()
+	local dailyInfo = ctx.RunModifiers.CommitDaily(rp, cleared, ctx.StageManager.LastClearTime(), t)
+	local accountInfo = ctx.AccountService.AwardRun(rp.Player, {
+		Seconds = t,
+		Stages = cleared,
+		Kills = rp.Kills,
+		Bosses = bossKills,
+		Won = won,
+		CurseMult = ctx.RunModifiers.GoldMult(),
+		DailyScored = rp.DailyScored == true,
+	})
+	ctx.LeaderboardService.Submit(rp.Player, "BestStage", ctx.StageManager.GetStage())
+	ctx.LeaderboardService.Submit(rp.Player, "Kills", rp.Kills)
+	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo }
 	return newBest, unlocked
 end
 
@@ -19696,6 +20971,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 	local data = ctx.DataService.GetData(player)
 	local bestStageBefore = data and (data.Stats.BestStage or 0) or 0
 	local newBest, unlocked = saveRunStats(rp, won)
+	local info = rp.CommitInfo
 	if won then
 		Events.Fire("RunWon", player, { Stages = cleared })
 	end
@@ -19718,7 +20994,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		Items = ctx.ItemSystem.Summary(rp),
 		Level = rp.Level,
 		Damage = math.floor(rp.DamageDealt),
-		Arena = ctx.StageManager.ArenaDisplayName() .. ((mode == "Duo" or mode == "Trio") and (" (" .. mode .. ")") or ""),
+		Arena = ctx.StageManager.ArenaDisplayName() .. ((mode == "Duo" or mode == "Trio" or mode == "Daily") and (" (" .. mode .. ")") or ""),
 		Mode = mode, -- REPLAY starts this mode again (StartRun from the lobby)
 		CharacterId = rp.CharacterId,
 		Build = buildSummary(rp),
@@ -19730,6 +21006,10 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		NewBestStage = data ~= nil and reached > bestStageBefore and reached > 1,
 		Unlocked = unlocked,
 		Achievements = achievements, -- unlocked this run: { {Id, Name, Reward, Icon} }
+		Curses = table.clone(ctx.RunModifiers.Active()), -- the run's curses (CurseData ids)
+		CurseGold = ctx.RunModifiers.GoldMult(),
+		Account = info and info.Account or nil, -- { Gained, Parts, From, To, Into, Need, Rewards }
+		Daily = info and info.Daily or nil, -- { Scored, Score, Text, NewBest, Best }
 		Seconds = Config.Run.ResultsSeconds,
 		InLobby = inLobby,
 	})
@@ -19782,6 +21062,7 @@ local function returnAll()
 	ctx.XPSystem.Clear()
 	ctx.EnemyAI.SetArena(nil)
 	ctx.StageManager.EndRun()
+	ctx.RunModifiers.EndRun()
 	MapBuilder.DestroyArena()
 	MapBuilder.ApplyLighting("Lobby")
 	frozen = false
@@ -19953,6 +21234,10 @@ end
 ]]
 local function startRun(player: Player, newMode: string)
 	if phase == "Countdown" then
+		if newMode == "Daily" then
+			RunManager.Notify(player, "A group run is starting: join it, or play the Daily after it.", Color3.fromRGB(255, 200, 120))
+			return
+		end
 		tryJoin(player)
 		return
 	end
@@ -20399,7 +21684,315 @@ return RunManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="42">
+      <Item class="ModuleScript" referent="46">
+        <Properties>
+          <string name="Name">RunModifiers</string>
+          <string name="Source"><![CDATA[--[[
+	RunModifiers.lua
+	Curses (run modifiers) and the Daily Challenge on the server (data: CurseData.lua).
+
+	Curses
+	  Lobby: remote SetCurses({ids}) stores the player's pick (CurseData.Sanitize: known
+	  ids, no duplicates, at most CurseData.MaxActive) in the save (data.Curses) and in the
+	  player attribute "Curses" ("Frenzy,Horde"). Ignored while the player is in a run.
+	  A run uses the curses of the player who STARTED it (Solo: you; Duo / Trio: the
+	  countdown's starter, who may still change them during the countdown). They are fixed
+	  when the run begins and apply to everyone in it.
+	  SwarmState "Curses" / "CurseGold": the curses on show (countdown: the starter's pick;
+	  running / results: the run's), "DailyRun" (the run is a Daily Challenge).
+	  Effects are read through the queries below by EnemySpawner (speed, elites),
+	  StageManager.SpawnMult (horde), XPSystem (no chickens), LevelUpSystem's stat sheet
+	  (max HP, damage dealt / taken) and GoldSystem.AddRunGold (the gold multiplier).
+
+	Daily Challenge
+	  StartRun("Daily") (RunManager) starts a solo run with CurseData.Daily(today): its
+	  arena tour and bosses (StageManager.BeginRun's fixed plan), its curses and its starting
+	  bonus (SetupRunPlayer). The first daily run of a UTC day is the scored attempt: it is
+	  marked used the moment it starts (quitting does not give a retry); later ones are
+	  practice. CommitDaily scores the attempt (CurseData.DailyScore), keeps today's score
+	  and the best ever in data.Daily and sends it to the Daily leaderboard.
+	  SwarmState "DailyDay": today's UTC day number (the lobby card shows that day).
+]]
+
+local Players = game:GetService("Players")
+
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
+local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
+local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponData)
+local ItemData = require(game:GetService("ReplicatedStorage").Shared.ItemData)
+
+local RunModifiers = {}
+
+local ctx
+local state: Configuration
+local active: { string } = {} -- curses of the running run
+local effects = CurseData.Effects({})
+local goldMult = 1
+local daily: CurseData.Daily? = nil -- the running run's daily setup (nil = not a daily)
+local publishTimer = 0
+
+------------------------------------------------------------------------------------------
+-- Queries (gameplay hooks)
+------------------------------------------------------------------------------------------
+
+function RunModifiers.Active(): { string }
+	return active
+end
+
+function RunModifiers.GoldMult(): number
+	return goldMult
+end
+
+function RunModifiers.EnemySpeedMult(): number
+	return effects.EnemySpeed
+end
+
+function RunModifiers.SpawnMult(): number
+	return effects.SpawnMult
+end
+
+function RunModifiers.EliteChanceMult(): number
+	return effects.EliteChance
+end
+
+function RunModifiers.NoHealPickups(): boolean
+	return effects.NoHealPickups
+end
+
+-- Final multipliers for the stat sheet (StatSheet.Compute input.Curse).
+function RunModifiers.StatMults(): { [string]: number }?
+	if #active == 0 then
+		return nil
+	end
+	return { MaxHP = effects.MaxHP, Might = effects.Might, DamageTaken = effects.DamageTaken }
+end
+
+function RunModifiers.IsDaily(): boolean
+	return daily ~= nil
+end
+
+function RunModifiers.Today(): number
+	return CurseData.DayOf(os.time())
+end
+
+------------------------------------------------------------------------------------------
+-- Run lifecycle (RunManager)
+------------------------------------------------------------------------------------------
+
+local function setActive(list: { string })
+	active = table.clone(list)
+	effects = CurseData.Effects(active)
+	goldMult = CurseData.GoldMult(active)
+end
+
+--[[
+	A run is starting. modeName "Daily" uses today's daily setup; any other mode the
+	starter's saved curses. Returns the daily setup (fixed arena / boss plan) or nil.
+]]
+function RunModifiers.BeginRun(modeName: string, starter: Player?): CurseData.Daily?
+	if modeName == CurseData.DailyMode then
+		daily = CurseData.Daily(RunModifiers.Today())
+		setActive((daily :: CurseData.Daily).Curses)
+	else
+		daily = nil
+		local data = starter and ctx.DataService.GetData(starter)
+		setActive(data and CurseData.Sanitize(data.Curses) or {})
+	end
+	RunModifiers.Publish()
+	return daily
+end
+
+function RunModifiers.EndRun()
+	setActive({})
+	daily = nil
+	RunModifiers.Publish()
+end
+
+-- Daily: the scored attempt (first daily run of the UTC day) or practice, and the
+-- starting bonus. Called once per run player after the start weapon is set.
+function RunModifiers.SetupRunPlayer(rp)
+	local d = daily
+	if not d then
+		return
+	end
+	rp.Daily = true
+	rp.DailyDay = d.Day
+	local data = ctx.DataService.GetData(rp.Player)
+	if data then
+		local D = data.Daily
+		if D.Day ~= d.Day then
+			D.Day = d.Day
+			D.Used = false
+			D.Score = 0
+			D.Plays = 0
+		end
+		D.Plays += 1
+		rp.DailyScored = not D.Used
+		D.Used = true -- the scored attempt is spent the moment it starts
+		task.spawn(ctx.DataService.ForceSave, rp.Player)
+	end
+	-- the starting bonus (run only, the same for everyone today)
+	if d.Bonus == "Armory" then
+		local id = d.BonusWeapon
+		if id and rp.Weapons[id] then
+			-- the hero already starts with it: the next weapon of the pool instead
+			local list = CurseData.ArmoryWeapons
+			local i = table.find(list, id) or 0
+			id = list[(i % #list) + 1]
+		end
+		if id and WeaponData.Weapons[id] then
+			ctx.LevelUpSystem.AddWeapon(rp, id)
+		end
+	elseif d.Bonus == "Treasure" then
+		for _, id in ipairs(d.BonusItems or {}) do
+			if ItemData.Items[id] then
+				ctx.ItemSystem.Grant(rp, id, "Daily bonus")
+			end
+		end
+	elseif d.Bonus == "SecondWind" then
+		rp.RevivesLeft += 1
+	end
+end
+
+-- After the run player is fully set up: the level bonus (its cards follow at once).
+function RunModifiers.AfterSetup(rp)
+	local d = daily
+	if d and d.Bonus == "HeadStart" then
+		for _ = 2, CurseData.HeadStartLevel do
+			ctx.XPSystem.GiveXP(rp, math.max(0, rp.XPNeeded - rp.XP))
+		end
+	end
+end
+
+--[[
+	Scores a daily run (once, from RunManager's commit). cleared = stages cleared,
+	clearTime = run time when the last of them was cleared, survived = run time survived.
+	Returns the results line data: { Scored, Score, Text, Best, NewBest, Practice }.
+]]
+function RunModifiers.CommitDaily(rp, cleared: number, clearTime: number, survived: number): { [string]: any }?
+	if not rp.Daily then
+		return nil
+	end
+	local score = CurseData.DailyScore(cleared, clearTime, survived)
+	local info: { [string]: any } = {
+		Scored = rp.DailyScored == true,
+		Score = score,
+		Text = CurseData.ScoreText(score),
+		Day = rp.DailyDay,
+	}
+	local data = ctx.DataService.GetData(rp.Player)
+	if data and rp.DailyScored then
+		local D = data.Daily
+		if D.Day == rp.DailyDay then
+			D.Score = math.max(D.Score or 0, score)
+		end
+		if score > (D.BestScore or 0) then
+			D.BestScore = score
+			D.BestDay = rp.DailyDay
+			info.NewBest = true
+		end
+		info.Best = D.BestScore
+		if ctx.LeaderboardService then
+			ctx.LeaderboardService.Submit(rp.Player, "Daily", score, rp.DailyDay)
+		end
+	end
+	return info
+end
+
+-- Profile view of the daily (lobby DAILY card / screen).
+function RunModifiers.DailyView(data): { [string]: any }
+	local D = data.Daily or {}
+	local today = RunModifiers.Today()
+	local isToday = D.Day == today
+	return {
+		Day = today,
+		Used = isToday and D.Used == true,
+		Score = isToday and (D.Score or 0) or 0,
+		Plays = isToday and (D.Plays or 0) or 0,
+		BestScore = D.BestScore or 0,
+		BestDay = D.BestDay or 0,
+	}
+end
+
+------------------------------------------------------------------------------------------
+-- Lobby: picking curses
+------------------------------------------------------------------------------------------
+
+local function onSetCurses(player: Player, list: any)
+	local data = ctx.DataService.GetData(player)
+	if not data or ctx.RunManager.IsParticipant(player) then
+		return
+	end
+	local clean = CurseData.Sanitize(list)
+	if not clean then
+		return
+	end
+	data.Curses = clean
+	player:SetAttribute("Curses", CurseData.ToString(clean))
+	RunModifiers.Publish()
+end
+
+-- SwarmState: the curses on show and today's daily day.
+function RunModifiers.Publish()
+	if not state then
+		return
+	end
+	local phase = state:GetAttribute("Phase")
+	local list: { string } = {}
+	if phase == "Running" or phase == "Results" then
+		list = active
+	elseif phase == "Countdown" then
+		local starter = ctx.RunManager.GetStarter and ctx.RunManager.GetStarter()
+		local data = starter and ctx.DataService.GetData(starter)
+		list = data and CurseData.Sanitize(data.Curses) or {}
+	end
+	local s = CurseData.ToString(list)
+	if state:GetAttribute("Curses") ~= s then
+		state:SetAttribute("Curses", s)
+	end
+	state:SetAttribute("CurseGold", CurseData.GoldMult(list))
+	state:SetAttribute("DailyRun", (phase == "Running" or phase == "Results") and daily ~= nil)
+	state:SetAttribute("DailyDay", RunModifiers.Today())
+end
+
+function RunModifiers.Step(dt: number)
+	publishTimer += dt
+	if publishTimer >= 0.5 then
+		publishTimer = 0
+		RunModifiers.Publish()
+	end
+end
+
+function RunModifiers.Init(c)
+	ctx = c
+	state = Remotes.State()
+	state:SetAttribute("Curses", "")
+	state:SetAttribute("CurseGold", 1)
+	state:SetAttribute("DailyRun", false)
+	state:SetAttribute("DailyDay", RunModifiers.Today())
+	state:SetAttribute("CurseMax", CurseData.MaxActive)
+	assert(Config.Data.SchemaVersion >= 6, "RunModifiers needs save schema 6")
+end
+
+function RunModifiers.Start()
+	Remotes.Listen("SetCurses", onSetCurses, 6)
+	ctx.DataService.OnProfileLoaded(function(player)
+		local data = ctx.DataService.GetData(player)
+		if data then
+			player:SetAttribute("Curses", CurseData.ToString(CurseData.Sanitize(data.Curses) or {}))
+		end
+	end)
+	Players.PlayerRemoving:Connect(function()
+		task.defer(RunModifiers.Publish)
+	end)
+end
+
+return RunModifiers
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="47">
         <Properties>
           <string name="Name">SpatialGrid</string>
           <string name="Source"><![CDATA[--[[
@@ -20569,7 +22162,7 @@ return SpatialGrid
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="43">
+      <Item class="ModuleScript" referent="48">
         <Properties>
           <string name="Name">StageManager</string>
           <string name="Source"><![CDATA[--[[
@@ -20641,6 +22234,7 @@ local choiceLeft = 0
 local shownChoice = -1
 local travelStep = ""
 local travelTimer = 0
+local lastClearTime = 0 -- run time when the last stage boss died (Daily Challenge score)
 
 ------------------------------------------------------------------------------------------
 -- Queries
@@ -20698,8 +22292,9 @@ function StageManager.DamageMult(): number
 	return perStage(Config.Stages.EnemyDamagePerStage)
 end
 
+-- Live-target / mini-wave multiplier: the stage share x the Horde curse.
 function StageManager.SpawnMult(): number
-	return perStage(Config.Stages.SpawnTargetPerStage)
+	return perStage(Config.Stages.SpawnTargetPerStage) * (ctx.RunModifiers and ctx.RunModifiers.SpawnMult() or 1)
 end
 
 -- Seconds of this stage before the portal can be charged (Config.Stages.PortalLockSeconds).
@@ -20785,8 +22380,13 @@ end
 local bossPlan: { string } = {}
 local stageBoss = "ScorpionQueen"
 local forcedBoss: string? = nil
+local fixedBosses: { string }? = nil -- the Daily Challenge's boss order (CurseData.Daily)
 
 local function bossFor(n: number): string
+	local fixed = fixedBosses
+	if fixed and fixed[n] and BossData.Bosses[fixed[n]] then
+		return fixed[n]
+	end
 	if n <= 1 or #bossPlan == 0 then
 		bossPlan = { BossData.Bosses[Config.Boss.First] and Config.Boss.First or "ScorpionQueen" }
 	end
@@ -20865,10 +22465,30 @@ end
 -- Run lifecycle (called by RunManager)
 ------------------------------------------------------------------------------------------
 
--- Stage 1 of a new run. Returns the arena (players are placed by RunManager).
-function StageManager.BeginRun(selectedArena: string)
+--[[
+	Stage 1 of a new run. Returns the arena (players are placed by RunManager).
+	fixed (the Daily Challenge): { Arenas = {...}, Bosses = {...} } the arena of every
+	stage (the first one is stage 1's) and the boss order; past their end the normal
+	shuffled tour takes over.
+]]
+function StageManager.BeginRun(selectedArena: string, fixed: { Arenas: { string }, Bosses: { string } }?)
 	firstArena = selectedArena
 	plan = { known(selectedArena) and selectedArena or "Forest" }
+	fixedBosses = nil
+	lastClearTime = 0
+	if fixed then
+		plan = {}
+		for _, name in ipairs(fixed.Arenas) do
+			if known(name) and name ~= plan[#plan] then
+				table.insert(plan, name)
+			end
+		end
+		if #plan == 0 then
+			plan = { "Forest" }
+		end
+		firstArena = plan[1]
+		fixedBosses = table.clone(fixed.Bosses)
+	end
 	table.clear(lastPortal)
 	local arena = buildStage(1)
 	setSub("Explore")
@@ -20878,6 +22498,7 @@ end
 -- The run is over (defeat, everyone returned, server cleanup).
 function StageManager.EndRun()
 	portal = nil
+	fixedBosses = nil
 	BiomeHazards.Clear()
 	ctx.LootSystem.Clear()
 	stage = 0
@@ -20920,11 +22541,17 @@ local function startBoss(): boolean
 	return true
 end
 
+-- Run time when the last stage was cleared (its boss died); 0 = none yet.
+function StageManager.LastClearTime(): number
+	return lastClearTime
+end
+
 -- Called by RunManager when the Queen dies (EnemySpawner.Kill → RunManager.OnBossKilled).
 function StageManager.OnBossKilled(_pos: Vector3)
 	if sub ~= "Boss" then
 		return
 	end
+	lastClearTime = ctx.RunManager.GetRunTime()
 	for _, rp in ipairs(participants()) do
 		if rp.Alive then
 			ctx.GoldSystem.AddRunGold(rp, Config.Gold.Boss * (rp.Stats and rp.Stats.GoldMult or 1))
@@ -20974,7 +22601,7 @@ local function sendOffer(rp)
 		NextStage = stage + 1,
 		NextArena = ((Config.Arenas :: any)[arenaFor(stage + 1)] or {}).DisplayName or arenaFor(stage + 1),
 		NextBoss = bossName(forcedBoss or bossFor(stage + 1)),
-		ReturnBonus = math.floor((Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared) * ctx.MonetizationService.GoldMultiplier(rp.Player) + 0.5),
+		ReturnBonus = math.floor((Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared) * ctx.MonetizationService.GoldMultiplier(rp.Player) * (ctx.RunModifiers and ctx.RunModifiers.GoldMult() or 1) + 0.5),
 		Gold = rp.Gold,
 		Kills = rp.Kills,
 		Level = rp.Level,
@@ -21321,7 +22948,7 @@ return StageManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="44">
+      <Item class="ModuleScript" referent="49">
         <Properties>
           <string name="Name">WeaponSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -23258,7 +24885,7 @@ return WeaponSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="45">
+      <Item class="ModuleScript" referent="50">
         <Properties>
           <string name="Name">XPSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -23494,12 +25121,18 @@ function XPSystem.RollFloorPickup(position: Vector3, luck: number)
 	if rng:NextNumber() >= Config.Drops.FloorPickupChance * (1 + luck) then
 		return
 	end
+	-- the Famine curse: no healing pickups
+	local weights = Config.Drops.Weights
+	if ctx.RunModifiers and ctx.RunModifiers.NoHealPickups() then
+		weights = table.clone(weights)
+		weights.Chicken = nil
+	end
 	local total = 0
-	for _, w in pairs(Config.Drops.Weights) do
+	for _, w in pairs(weights) do
 		total += w
 	end
 	local roll = rng:NextNumber() * total
-	for kind, w in pairs(Config.Drops.Weights) do
+	for kind, w in pairs(weights) do
 		roll -= w
 		if roll <= 0 then
 			XPSystem.SpawnPickup(kind, position)
@@ -23640,19 +25273,19 @@ return XPSystem
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="46">
+  <Item class="SoundService" referent="51">
     <Properties>
       <string name="Name">SoundService</string>
       <bool name="RespectFilteringEnabled">true</bool>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="47">
+  <Item class="StarterGui" referent="52">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="48">
+  <Item class="StarterPlayer" referent="53">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <float name="CameraMaxZoomDistance">120</float>
@@ -23665,15 +25298,15 @@ return XPSystem
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="49">
+    <Item class="StarterPlayerScripts" referent="54">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="50">
+      <Item class="Folder" referent="55">
         <Properties>
           <string name="Name">SwarmClient</string>
         </Properties>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">Audio</string>
             <string name="Source"><![CDATA[--[[
@@ -24014,7 +25647,7 @@ return Audio
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">CameraController</string>
             <string name="Source"><![CDATA[--[[
@@ -24257,7 +25890,7 @@ return CameraController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="53">
+        <Item class="LocalScript" referent="58">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[--[[
@@ -24343,7 +25976,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">ClientSettings</string>
             <string name="Source"><![CDATA[--[[
@@ -24439,7 +26072,84 @@ return ClientSettings
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="60">
+          <Properties>
+            <string name="Name">Cosmetics</string>
+            <string name="Source"><![CDATA[--[[
+	Cosmetics.lua
+	Draws the level-track cosmetics (AccountData.lua) on the client:
+	  Cosmetics.Frame(medal, frameId)    a portrait frame around a round hero medallion
+	                                      (results screen, TRACK screen): coloured ring,
+	                                      an optional second hairline and small gems
+	  Cosmetics.NameColor(id)            nameplate colour (achievement or track), or nil
+	  Cosmetics.LevelBadge(parent, lvl)  the small gold "LV 7" pill
+	Rings on the lobby dais are drawn by Showcase.SetRing.
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local AccountData = require(Shared:WaitForChild("AccountData"))
+local UIKit = require(script.Parent.UIKit)
+
+local Cosmetics = {}
+
+local P = Theme.Palette
+local new = UIKit.new
+
+-- Decorates a round medallion frame (removes an earlier decoration). Returns the main
+-- ring stroke so callers may tint it (defeat = crimson when no frame is worn).
+function Cosmetics.Frame(medal: GuiObject, frameId: string?): UIStroke?
+	for _, ch in ipairs(medal:GetChildren()) do
+		if ch.Name == "CosmeticFrame" then
+			ch:Destroy()
+		end
+	end
+	local def = frameId and AccountData.Frames[frameId]
+	if not def then
+		return nil
+	end
+	local holder = new("Frame", { Name = "CosmeticFrame", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, medal)
+	local main = new("Frame", { Name = "Ring", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, 6, 1, 6), ZIndex = 3 }, holder)
+	UIKit.corner(main, 999)
+	local stroke = UIKit.stroke(main, def.Color, def.Thickness, 0)
+	if def.Double then
+		local outer = new("Frame", { Name = "Outer", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, 14, 1, 14), ZIndex = 3 }, holder)
+		UIKit.corner(outer, 999)
+		UIKit.stroke(outer, def.Color, 1.2, 0.35)
+	end
+	local gems = def.Gems or 0
+	for i = 1, gems do
+		local a = (i - 1) / gems * math.pi * 2 - math.pi / 2
+		local gem = new("Frame", {
+			Name = "Gem",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5 + math.cos(a) * 0.5, math.cos(a) * 3, 0.5 + math.sin(a) * 0.5, math.sin(a) * 3),
+			Size = UDim2.fromOffset(9, 9),
+			Rotation = 45,
+			BackgroundColor3 = i % 2 == 1 and P.crimson_400 or P.gold_200,
+			BorderSizePixel = 0,
+			ZIndex = 4,
+		}, holder)
+		UIKit.stroke(gem, P.slate_950, 1, 0.2)
+	end
+	return stroke
+end
+
+function Cosmetics.NameColor(id: string?): Color3?
+	local c = AccountData.ColorOf(id)
+	return c and c.Color or nil
+end
+
+-- "LV 7" pill (gold) for nameplates and headers.
+function Cosmetics.LevelBadge(parent: Instance?, level: number, props: { [string]: any }?): TextLabel
+	return UIKit.Badge(parent, "LV " .. tostring(level), "Gold", props)
+end
+
+return Cosmetics
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">DamageText</string>
             <string name="Source"><![CDATA[--[[
@@ -24668,7 +26378,7 @@ return DamageText
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">DevPanel</string>
             <string name="Source"><![CDATA[--[[
@@ -24828,7 +26538,7 @@ return DevPanel
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">EnemyRenderer</string>
             <string name="Source"><![CDATA[--[[
@@ -25851,7 +27561,7 @@ return EnemyRenderer
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--[[
@@ -26607,7 +28317,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">Icons</string>
             <string name="Source"><![CDATA[--[[
@@ -26952,6 +28662,11 @@ local DEFAULT: { [string]: Colors } = {
 	minerHelm = { Main = P.steel_300, Accent = P.gold_500, Extra = P.fx_gold },
 	skullHood = { Main = P.slate_700, Accent = P.ivory_200, Extra = P.fx_heal },
 	aim = { Main = P.moss_200, Accent = P.gold_300, Extra = P.moss_300 },
+	-- retention screens (curses, daily, leaderboards, account level)
+	curse = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.crimson_300 },
+	calendar = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.gold_400 },
+	podium = { Main = P.gold_400, Accent = P.slate_300, Extra = P.gold_200 },
+	medal = { Main = P.gold_400, Accent = P.crimson_400, Extra = P.gold_200 },
 	-- weapons
 	Whip = { Main = P.steel_200, Accent = P.gold_400, Extra = P.crimson_300 },
 	MagicOrb = { Main = ARCANE, Accent = ARCANE_LIGHT, Extra = P.fx_arcane },
@@ -27125,6 +28840,59 @@ DRAW.skull = function(c)
 	box(c, 12, 15.2, 2, 2, c.back, 45, 0.3)
 	box(c, 10.3, 19.6, 1, 2.6, c.back, 0, 0.4)
 	box(c, 13.7, 19.6, 1, 2.6, c.back, 0, 0.4)
+end
+
+-- Curse: a horned skull (crimson horns).
+DRAW.curse = function(c)
+	local horn = c.mono and c.main or c.accent
+	box(c, 5.6, 5.6, 2.6, 7.4, horn, -32, 1.2)
+	box(c, 18.4, 5.6, 2.6, 7.4, horn, 32, 1.2)
+	dot(c, 12, 11.4, 7.6, c.main)
+	box(c, 12, 18, 8.6, 5.8, c.main, 0, 2)
+	box(c, 8.9, 11.6, 3.6, 2.2, c.back, 18, 1)
+	box(c, 15.1, 11.6, 3.6, 2.2, c.back, -18, 1)
+	box(c, 12, 15.4, 1.8, 1.8, c.back, 45, 0.3)
+	box(c, 10.4, 19.8, 1, 2.4, c.back, 0, 0.4)
+	box(c, 13.6, 19.8, 1, 2.4, c.back, 0, 0.4)
+end
+
+-- Calendar page with a red header and a gold day mark.
+DRAW.calendar = function(c)
+	box(c, 12, 13.4, 17.6, 15.6, c.main, 0, 2.2)
+	box(c, 12, 7.4, 17.6, 4.2, c.mono and c.main or c.accent, 0, 1.6)
+	box(c, 7.6, 4.2, 2, 4.4, c.mono and c.main or c.light, 0, 1)
+	box(c, 16.4, 4.2, 2, 4.4, c.mono and c.main or c.light, 0, 1)
+	for row = 0, 2 do
+		for col = 0, 3 do
+			local x, y = 6.9 + col * 3.4, 12 + row * 3.2
+			if row == 1 and col == 2 then
+				box(c, x, y, 2.6, 2.4, c.mono and c.back or c.extra, 0, 0.6)
+			else
+				box(c, x, y, 2.2, 1.8, c.back, 0, 0.5, 0.35)
+			end
+		end
+	end
+end
+
+-- Podium: three steps, a star over the top one.
+DRAW.podium = function(c)
+	box(c, 12, 16.4, 6.4, 11.2, c.main, 0, 0.8)
+	box(c, 5.6, 18.4, 6, 7.2, c.mono and c.main or c.accent, 0, 0.8)
+	box(c, 18.4, 19.4, 6, 5.2, c.mono and c.main or c.accent, 0, 0.8)
+	box(c, 12, 15, 2, 4.6, c.back, 0, 0.5, 0.3)
+	box(c, 12, 5.6, 4.6, 4.6, c.mono and c.main or c.extra, 45, 0.6)
+	box(c, 12, 5.6, 4.6, 4.6, c.mono and c.main or c.extra, 0, 0.6)
+end
+
+-- Medal: two ribbons and a gold disc with a star mark (the account level).
+DRAW.medal = function(c)
+	local ribbon = c.mono and c.main or c.accent
+	box(c, 9, 6, 3.6, 9, ribbon, -24, 0.6)
+	box(c, 15, 6, 3.6, 9, ribbon, 24, 0.6)
+	dot(c, 12, 15, 7, c.main)
+	ring(c, 12, 15, 4.9, 1.2, c.mono and c.back or c.extra)
+	box(c, 12, 15, 3.6, 3.6, c.mono and c.back or c.extra, 45, 0.4)
+	box(c, 12, 15, 3.6, 3.6, c.mono and c.back or c.extra, 0, 0.4)
 end
 
 DRAW.coin = function(c)
@@ -28311,7 +30079,7 @@ return Icons
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">LobbyScreen</string>
             <string name="Source"><![CDATA[--[[
@@ -28322,16 +30090,19 @@ return Icons
 
 	  top left      SWARM logo (sword behind the letters) + "SURVIVE · UPGRADE · CONQUER"
 	  top right     stats chip: best time, wins, gold (stays on every menu screen)
-	  left column   feature cards CHARACTERS / UPGRADES / ARENA: <name>
+	  left column   feature cards CHARACTERS / UPGRADES / ARENA: <name> / DAILY CHALLENGE
 	  bottom centre nameplate of the hero with gold arrows to browse characters
 	                (owned → selected at once; locked → price, UNLOCK / DETAILS)
-	  right column  SOLO (primary gold), DUO, TRIO. A countdown (who joined, JOIN,
-	                START NOW, the number) or "run in progress" replaces this column.
-	  bottom left   SETTINGS and STATS
-	Portrait stacks: logo, stats, hero, nameplate, modes, cards, settings / stats.
+	  right column  SOLO (primary gold), DUO, TRIO, then CURSES (the run modifiers picked,
+	                their gold bonus). A countdown (who joined, the curses, JOIN, START NOW,
+	                the number) or "run in progress" replaces this column.
+	  bottom left   SETTINGS, STATS, RANKS (leaderboards), TRACK (account level)
+	  nameplate     your level, name, worn title / colour above the hero's plate
+	Portrait stacks: logo, stats, hero, nameplate, curses, modes, cards, corner buttons.
 
 	Sub-screens slide in: Characters (MenuCharacters), Upgrades (MenuUpgrades), Stats
-	(MenuStats); Settings is UIBuilder's modal. Everything sent to the server is an id or a
+	(MenuStats), Curses (MenuCurses), Daily (MenuDaily), Ranks (MenuLeaderboards), Track
+	(MenuTrack); Settings is UIBuilder's modal. Everything sent to the server is an id or a
 	mode name; the server validates it (RunManager: StartRun / JoinRun / StartNow /
 	CycleArena, GoldSystem: purchases and selection).
 ]]
@@ -28352,6 +30123,12 @@ local Showcase = require(script.Parent.Showcase)
 local MenuCharacters = require(script.Parent.MenuCharacters)
 local MenuUpgrades = require(script.Parent.MenuUpgrades)
 local MenuStats = require(script.Parent.MenuStats)
+local MenuCurses = require(script.Parent.MenuCurses)
+local MenuDaily = require(script.Parent.MenuDaily)
+local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
+local MenuTrack = require(script.Parent.MenuTrack)
+local Cosmetics = require(script.Parent.Cosmetics)
+local CurseData = require(Shared:WaitForChild("CurseData"))
 
 local LobbyScreen = {}
 
@@ -28370,7 +30147,7 @@ local profile: { [string]: any }? = nil
 local joinedCountdown = false
 local ui: { [string]: any } = {}
 local current = "Home"
-local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Stats = 4 }
+local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Stats = 4, Curses = 5, Daily = 6, Ranks = 7, Track = 8 }
 local screens: { [string]: any } = {}
 local shownGold: number? = nil
 local lastStatus = ""
@@ -28670,6 +30447,47 @@ local function buildModes(frame: Frame)
 		end
 		ui.ModeButtons[i] = b
 	end
+	-- the run modifiers (MenuCurses): what is picked and the gold it adds
+	ui.CurseBtn = UIKit.Button(frame, {
+		Kind = "Secondary",
+		Title = "CURSES",
+		Subtitle = "Harder runs, more gold",
+		Icon = "curse",
+		IconSize = 28,
+		Chevron = true,
+		Align = "Left",
+		Name = "Curses",
+		OnClick = function()
+			LobbyScreen.Show("Curses")
+		end,
+	})
+	-- portrait: the daily sits next to CURSES (the card row keeps three tiles)
+	ui.DailyBtn = UIKit.Button(frame, {
+		Kind = "Secondary",
+		Title = "DAILY",
+		Subtitle = "Ready",
+		Icon = "calendar",
+		IconSize = 28,
+		Chevron = true,
+		Align = "Left",
+		Name = "DailyPortrait",
+		OnClick = function()
+			LobbyScreen.Show("Daily")
+		end,
+	})
+	ui.DailyBtn.Instance.Visible = false
+end
+
+-- "Frenzy, Horde · +45% gold" (or the empty text) for a curse list.
+local function curseLine(list: { string }, empty: string): string
+	if #list == 0 then
+		return empty
+	end
+	local names = {}
+	for _, id in ipairs(list) do
+		table.insert(names, CurseData.Curses[id].Name)
+	end
+	return table.concat(names, ", ") .. " · " .. CurseData.GoldText(CurseData.GoldMult(list)) .. " gold"
 end
 
 -- Countdown (who joined, JOIN / START NOW, the number) or "run in progress".
@@ -28687,6 +30505,17 @@ local function buildQueue(frame: Frame)
 	ui.QueueList = new("Frame", { Name = "Players", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 72), Size = UDim2.new(1, 0, 0, 116) }, face)
 	UIKit.list(ui.QueueList, { Padding = UDim.new(0, 4) })
 	ui.QueueNote = text(face, "Body", "", { Name = "Note", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Size = UDim2.new(1, 0, 0, TS(16) * 3 + 8) })
+	-- the run's curses (the starter's pick): a tap opens the CURSES screen
+	local curseRow = new("TextButton", { Name = "QueueCurses", Text = "", AutoButtonColor = false, BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.25, Size = UDim2.new(1, 0, 0, 40) }, face)
+	UIKit.corner(curseRow, Theme.Radius.S)
+	UIKit.stroke(curseRow, P.crimson_400, 1, 0.45)
+	Icons.Draw(curseRow, "curse", { Size = 22, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Back = C.PanelInset })
+	ui.QueueCurseText = text(curseRow, "Label", "", { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -46, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, RichText = true }, 13)
+	curseRow.Activated:Connect(function()
+		UIKit.Click()
+		LobbyScreen.Show("Curses")
+	end)
+	ui.QueueCurses = curseRow
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 52) }, face)
 	ui.QueueRow = row
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 10) })
@@ -28759,6 +30588,16 @@ local function buildHome(screen: Frame)
 			Remotes.Get("CycleArena"):FireServer()
 		end,
 	})
+	ui.CardDaily = UIKit.Card(ui.Cards, {
+		Icon = "calendar",
+		Title = "DAILY CHALLENGE",
+		Subtitle = "One scored try a day",
+		LayoutOrder = 4,
+		Name = "DAILY",
+		OnClick = function()
+			LobbyScreen.Show("Daily")
+		end,
+	})
 	ui.Corner = new("Frame", { Name = "CornerButtons", BackgroundTransparency = 1 }, screen)
 	ui.CornerLayout = UIKit.list(ui.Corner, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, Theme.Layout.Gutter) })
 	ui.SettingsBtn = UIKit.IconButton(ui.Corner, {
@@ -28781,6 +30620,26 @@ local function buildHome(screen: Frame)
 			LobbyScreen.Show("Stats")
 		end,
 	})
+	ui.RanksBtn = UIKit.IconButton(ui.Corner, {
+		Icon = "podium",
+		Caption = "Ranks",
+		Size = 76,
+		LayoutOrder = 3,
+		Name = "Ranks",
+		OnClick = function()
+			LobbyScreen.Show("Ranks")
+		end,
+	})
+	ui.TrackBtn = UIKit.IconButton(ui.Corner, {
+		Icon = "medal",
+		Caption = "Track",
+		Size = 76,
+		LayoutOrder = 4,
+		Name = "Track",
+		OnClick = function()
+			LobbyScreen.Show("Track")
+		end,
+	})
 	buildNameplate(screen)
 	buildModes(screen)
 	buildQueue(screen)
@@ -28796,7 +30655,7 @@ local function setCardsCompact(on: boolean)
 		return
 	end
 	ui.CardsCompact = on
-	for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
+	for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
 		local layout = b.Content:FindFirstChildOfClass("UIListLayout")
 		local column = b.Content:FindFirstChild("Text") :: Frame?
 		local right = b.Content:FindFirstChild("Right") :: Frame?
@@ -28857,25 +30716,29 @@ local function relayout()
 		local cornerH = 64
 		local y = H - M - cornerH
 		place(ui.Corner, M, y, w, cornerH)
-		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn }) do
-			b.Instance.Size = UDim2.fromOffset(math.floor((w - G) / 2), cornerH)
+		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn }) do
+			b.Instance.Size = UDim2.fromOffset(math.floor((w - 3 * G) / 4), cornerH)
 		end
 		local cardH = compact and 96 or 88
 		setCardsCompact(true)
 		y -= G + cardH
 		ui.CardsLayout.FillDirection = Enum.FillDirection.Horizontal
 		place(ui.Cards, M, y, w, cardH)
+		ui.CardDaily.Instance.Visible = false
 		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
 			b.Instance.Size = UDim2.fromOffset(math.floor((w - 2 * G) / 3), cardH)
 		end
-		local soloH, smallH = 84, 76
+		local soloH, smallH, curseH = 84, 76, 64
 		y -= G + smallH
 		local half = math.floor((w - G) / 2)
 		place(ui.ModeButtons[2].Instance, M, y, half, smallH)
 		place(ui.ModeButtons[3].Instance, M + half + G, y, half, smallH)
 		y -= G + soloH
 		place(ui.ModeButtons[1].Instance, M, y, w, soloH)
-		place(ui.Queue, M, y, w, soloH + G + smallH)
+		y -= G + curseH
+		place(ui.CurseBtn.Instance, M, y, half, curseH)
+		place(ui.DailyBtn.Instance, M + half + G, y, half, curseH)
+		place(ui.Queue, M, y, w, curseH + G + soloH + G + smallH)
 		y -= 18 + plateH
 		local plateW = math.min(w - 2 * 62, 460)
 		place(ui.Nameplate, (W - plateW) / 2, y, plateW, plateH)
@@ -28888,30 +30751,36 @@ local function relayout()
 		ui.Chip.AnchorPoint = Vector2.new(1, 0)
 		ui.Chip.Position = UDim2.fromOffset(W - M, chipY)
 		local logoBottom = logoY + 126 * logoScale
-		place(ui.Corner, M, H - M - 76, 200, 76)
-		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn }) do
-			b.Instance.Size = UDim2.fromOffset(76, 76)
+		local cw = math.clamp(W * 0.27, 290, 360)
+		local cornerW = 4 * 76 + 3 * G
+		local cornerSize = cornerW <= cw + 40 and 76 or 64
+		place(ui.Corner, M, H - M - cornerSize, 4 * cornerSize + 3 * G, cornerSize)
+		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn }) do
+			b.Instance.Size = UDim2.fromOffset(cornerSize, cornerSize)
 		end
 		-- left cards, centred between the logo and the corner buttons
-		local cw = math.clamp(W * 0.27, 290, 360)
-		local cardH = compact and 86 or 80
+		local top, bottom = logoBottom + 12, H - M - cornerSize - 12
+		local cardH = math.min(compact and 86 or 80, math.floor((bottom - top - 3 * G) / 4))
 		setCardsCompact(false)
 		ui.CardsLayout.FillDirection = Enum.FillDirection.Vertical
-		local cardsH = 3 * cardH + 2 * G
-		local top, bottom = logoBottom + 12, H - M - 76 - 12
+		local cardsH = 4 * cardH + 3 * G
 		place(ui.Cards, M, math.max(top, (top + bottom - cardsH) / 2), cw, cardsH)
-		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
+		ui.CardDaily.Instance.Visible = true
+		ui.DailyBtn.Instance.Visible = false
+		ui.CardDaily.SetText(compact and "DAILY" or "DAILY CHALLENGE")
+		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
 			b.Instance.Size = UDim2.fromOffset(cw, cardH)
 		end
-		-- right column: SOLO / DUO / TRIO
+		-- right column: SOLO / DUO / TRIO, then CURSES
 		local rw = math.clamp(W * 0.25, 280, 340)
-		local soloH, smallH = 96, 80
-		local colH = soloH + 2 * smallH + 2 * G
+		local soloH, smallH, curseH = 96, 80, 68
+		local colH = soloH + 2 * smallH + curseH + 3 * G
 		local colTop = math.max(chipY + 64, (H - colH) / 2)
 		place(ui.ModeButtons[1].Instance, W - M - rw, colTop, rw, soloH)
 		place(ui.ModeButtons[2].Instance, W - M - rw, colTop + soloH + G, rw, smallH)
 		place(ui.ModeButtons[3].Instance, W - M - rw, colTop + soloH + smallH + 2 * G, rw, smallH)
-		place(ui.Queue, W - M - rw, colTop - 10, rw, math.min(colH + 60, H - colTop - M))
+		place(ui.CurseBtn.Instance, W - M - rw, colTop + soloH + 2 * smallH + 3 * G, rw, curseH)
+		place(ui.Queue, W - M - rw, colTop - 10, rw, math.min(colH + 40, H - colTop - M))
 		-- nameplate bottom centre, between the columns
 		local gapL, gapR = M + cw + 16, W - M - rw - 16
 		local plateW = math.clamp(gapR - gapL - 2 * 64, 300, 460)
@@ -28929,9 +30798,17 @@ local function relayout()
 	-- queue panel: a short panel (portrait) folds the player list into the note
 	local qh = ui.Queue.Size.Y.Offset
 	local busy = lastStatus == "Busy"
-	local short = qh < 240 and not busy
+	local short = qh < 280 and not busy
 	ui.QueueList.Visible = not short and not busy
-	ui.QueueNote.Position = UDim2.fromOffset(0, (short or busy) and 68 or (72 + 4 * 30))
+	local noteY = (short or busy) and 68 or (72 + 4 * 30)
+	-- the curse line sits under the note (above the buttons)
+	ui.QueueCurses.Visible = ui.QueueCurses:GetAttribute("Has") == true
+	local curseY = noteY
+	if ui.QueueCurses.Visible then
+		ui.QueueCurses.Position = UDim2.fromOffset(0, curseY)
+		noteY += 46
+	end
+	ui.QueueNote.Position = UDim2.fromOffset(0, noteY)
 	ui.QueueNote.Size = UDim2.new(1, 0, 0, short and (TS(16) + 6) or (TS(16) * 3 + 8))
 	ui.QueueNote.TextTruncate = short and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
 	-- where the hero should sit on screen (read by CameraController's menu shot)
@@ -28953,7 +30830,7 @@ local function homeEntrance()
 		i += 1
 		UIAnim.Pop(b.Instance, Theme.Motion.Stagger * i, 0.85)
 	end
-	for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
+	for _, b in ipairs({ ui.CurseBtn, ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
 		i += 1
 		UIAnim.Pop(b.Instance, Theme.Motion.Stagger * i, 0.85)
 	end
@@ -28961,8 +30838,10 @@ local function homeEntrance()
 	UIAnim.Pop(ui.Logo, 0, 0.9)
 end
 
--- Slides to "Home" | "Characters" | "Upgrades" | "Stats" (old panel name "Shop" = Upgrades).
-function LobbyScreen.Show(name: string)
+-- Slides to "Home" | "Characters" | "Upgrades" | "Stats" | "Curses" | "Daily" | "Ranks" |
+-- "Track" (old panel name "Shop" = Upgrades). arg goes to the screen's OnShow (Ranks: the
+-- board to open).
+function LobbyScreen.Show(name: string, arg: any?)
 	if name == "Shop" then
 		name = "Upgrades"
 	end
@@ -28970,6 +30849,10 @@ function LobbyScreen.Show(name: string)
 		return
 	end
 	if name == current and ui[name].Visible then
+		local s = screens[name]
+		if s and s.OnShow and arg ~= nil then
+			s.OnShow(profile, arg)
+		end
 		return
 	end
 	local direction = SCREEN_ORDER[name] >= SCREEN_ORDER[current] and 1 or -1
@@ -28977,7 +30860,7 @@ function LobbyScreen.Show(name: string)
 	local from = current
 	current = name
 	relayout()
-	UIAnim.Tween(ui.Dim, Theme.Motion.Base, { BackgroundTransparency = (name == "Upgrades" or name == "Stats") and 0.4 or 1 })
+	UIAnim.Tween(ui.Dim, Theme.Motion.Base, { BackgroundTransparency = (name ~= "Home" and name ~= "Characters") and 0.4 or 1 })
 	if from == "Characters" or name == "Characters" then
 		local target = browse
 		browse = nil
@@ -28990,7 +30873,7 @@ function LobbyScreen.Show(name: string)
 	end
 	local s = screens[name]
 	if s and s.OnShow then
-		s.OnShow(profile)
+		s.OnShow(profile, arg)
 		Remotes.Get("RequestProfile"):FireServer()
 	end
 	if name == "Home" then
@@ -29079,11 +30962,13 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 	ui.Best.SetValue(UIKit.formatTime(p.Stats.BestTime))
 	ui.Wins.SetValue(UIKit.formatNumber(p.Stats.Wins))
 	if ui.PlayerTag then
-		local colorDef = AchievementData.Colors[p.NameColor or ""]
-		local nameColor = colorDef and colorDef.Color or P.ivory_200
+		local nameColor = Cosmetics.NameColor(p.NameColor) or P.ivory_200
 		local title = (type(p.Title) == "string" and p.Title ~= "") and string.format('  <font color="%s">·  %s</font>', UIKit.hex(P.gold_300), string.upper(p.Title)) or ""
-		ui.PlayerTag.Text = string.format('<font color="%s">%s</font>%s', UIKit.hex(nameColor), Players.LocalPlayer.DisplayName, title)
+		local level = MenuTrack.Account(p)
+		ui.PlayerTag.Text = string.format('<font color="%s"><b>LV %d</b></font>  <font color="%s">%s</font>%s', UIKit.hex(P.gold_300), level, UIKit.hex(nameColor), Players.LocalPlayer.DisplayName, title)
 	end
+	-- the worn dais ring (level track) under the hero
+	Showcase.SetRing(type(p.Ring) == "string" and p.Ring or "")
 	if browse and owned(browse) then
 		browse = nil -- just bought it (the server also selects it)
 	end
@@ -29182,6 +31067,39 @@ function LobbyScreen.Update(_dt: number?)
 		relayout()
 	end
 
+	-- the curse button / queue line, the daily card
+	local myCurses = MenuCurses.Current()
+	local curseSub = curseLine(myCurses, "Harder runs, more gold")
+	if ui.CurseBtn.Subtitle and ui.CurseBtn.Subtitle.Text ~= curseSub then
+		ui.CurseBtn.SetText(nil, curseSub)
+		ui.CurseBtn.SetSelected(#myCurses > 0)
+	end
+	ui.CurseBtn.Instance.Visible = kind == "Modes"
+	ui.DailyBtn.Instance.Visible = kind == "Modes" and host.IsPortrait()
+	local shown = CurseData.FromString(state:GetAttribute("Curses"))
+	local has = kind ~= "Modes" and #shown > 0
+	if ui.QueueCurses:GetAttribute("Has") ~= has then
+		ui.QueueCurses:SetAttribute("Has", has)
+		relayout()
+	end
+	if has then
+		local line = string.format('<font color="%s">CURSES</font>  %s', UIKit.hex(P.crimson_300), curseLine(shown, ""))
+		if ui.QueueCurseText.Text ~= line then
+			ui.QueueCurseText.Text = line
+		end
+	end
+	local used, score = MenuDaily.Status(profile)
+	local dailySub = used and ("Done · " .. (score > 0 and CurseData.ScoreText(score) or "practice open")) or ("Ready · " .. MenuDaily.TimeLeft() .. " left")
+	if ui.CardDaily.Subtitle and ui.CardDaily.Subtitle.Text ~= dailySub then
+		ui.CardDaily.SetText(nil, dailySub)
+		ui.DailyBtn.SetText(nil, used and "Done · practice" or ("Ready · " .. MenuDaily.TimeLeft()))
+	end
+	for _, s in pairs(screens) do
+		if s.Update then
+			s.Update(_dt or 0)
+		end
+	end
+
 	local title, sub = arenaText()
 	if ui.CardArena.Title and ui.CardArena.Title.Text ~= title then
 		if ui.ArenaShown then
@@ -29219,10 +31137,17 @@ function LobbyScreen.Init(h: { [string]: any })
 		Profile = function(): { [string]: any }?
 			return profile
 		end,
+		ShowScreen = function(name: string, arg: any?)
+			LobbyScreen.Show(name, arg)
+		end,
 	}
 	screens.Characters = MenuCharacters.Build(screen("Characters"), ctx)
 	screens.Upgrades = MenuUpgrades.Build(screen("Upgrades"), ctx)
 	screens.Stats = MenuStats.Build(screen("Stats"), ctx)
+	screens.Curses = MenuCurses.Build(screen("Curses"), ctx)
+	screens.Daily = MenuDaily.Build(screen("Daily"), ctx)
+	screens.Ranks = MenuLeaderboards.Build(screen("Ranks"), ctx)
+	screens.Track = MenuTrack.Build(screen("Track"), ctx)
 	h.OnRelayout(relayout)
 	relayout()
 end
@@ -29231,7 +31156,7 @@ return LobbyScreen
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">LootUI</string>
             <string name="Source"><![CDATA[--[[
@@ -29240,8 +31165,9 @@ return LobbyScreen
 
 	  items strip    a compact wrap of item tiles with stack counts (HUD, top left under the
 	                 Roblox buttons; portrait: under the ability bar). Not Active, so the
-	                 thumbstick works on top of it. A "BARGAIN" chip shows while this stage's
-	                 Bargain Shrine is sealed.
+	                 thumbstick works on top of it. Under it: the run's curse chips (and
+	                 DAILY on a Daily Challenge run, the curses' gold bonus), then a
+	                 "BARGAIN" chip while this stage's Bargain Shrine is sealed.
 	  item popup     remote ItemGained: icon tile in the rarity colour, name, rarity, what it
 	                 does and where it came from; stacks up to 3 under the strip
 	  loot prompt    next to the nearest chest / shrine / altar in reach: title, state,
@@ -29265,6 +31191,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local ItemData = require(Shared:WaitForChild("ItemData"))
+local CurseData = require(Shared:WaitForChild("CurseData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -29357,6 +31284,57 @@ local function buildStrip(root: Frame)
 	Icons.Draw(face, "shrine", { Size = 18, LayoutOrder = 1, Color = P.crimson_300 })
 	ui.BargainText = text(face, "Label", "BARGAIN", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.crimson_300 }, 12)
 	ui.Bargain = holder
+	-- the run's curses (and DAILY): small chips under the strip (SwarmState Curses / DailyRun)
+	local row = new("Frame", { Name = "CurseChips", BackgroundTransparency = 1, Active = false, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(400, 26) }, root)
+	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 5), Wraps = true })
+	ui.Curses = row
+	ui.CurseKey = ""
+end
+
+-- One small chip: [icon] NAME (crimson for curses, gold for the daily / the gold bonus).
+local function curseChip(parent: Instance, icon: string, str: string, color: Color3, order: number)
+	local holder, face = UIKit.Surface(parent, { Name = "Chip", Radius = 999, Transparency = 0.15, Edge = color, EdgeTransparency = 0.35, Shadow = false, Size = UDim2.fromOffset(0, 26), LayoutOrder = order })
+	holder.AutomaticSize = Enum.AutomaticSize.X
+	holder.Active = false
+	face.AutomaticSize = Enum.AutomaticSize.X
+	face.Size = UDim2.fromScale(0, 1)
+	UIKit.padding(face, 0, 9, 0, 6)
+	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 4) })
+	Icons.Draw(face, icon, { Size = 16, LayoutOrder = 1, Color = color })
+	text(face, "Label", str, { LayoutOrder = 2, Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = color }, 11)
+end
+
+-- Rebuilds the chips when the run's curses change.
+local function refreshCurses(inRun: boolean)
+	local state = Remotes.State()
+	local list = inRun and CurseData.FromString(state:GetAttribute("Curses")) or {}
+	local daily = inRun and state:GetAttribute("DailyRun") == true
+	local key = (daily and "D|" or "") .. CurseData.ToString(list)
+	if key == ui.CurseKey then
+		return
+	end
+	ui.CurseKey = key
+	for _, ch in ipairs(ui.Curses:GetChildren()) do
+		if ch:IsA("GuiObject") then
+			ch:Destroy()
+		end
+	end
+	local order = 0
+	if daily then
+		order += 1
+		curseChip(ui.Curses, "calendar", "DAILY", P.gold_300, order)
+	end
+	for _, id in ipairs(list) do
+		local def = CurseData.Curses[id]
+		order += 1
+		curseChip(ui.Curses, def.Icon, string.upper(def.Name), P.crimson_300, order)
+	end
+	if #list > 0 then
+		order += 1
+		curseChip(ui.Curses, "coin", CurseData.GoldText(CurseData.GoldMult(list)) .. " GOLD", P.gold_300, order)
+	end
+	ui.Curses.Visible = order > 0
+	LootUI.Layout()
 end
 
 local function buildPopups(root: Frame)
@@ -29681,15 +31659,22 @@ function LootUI.Layout()
 	local rows = math.max(1, math.ceil(#items / per))
 	ui.Strip.Position = UDim2.fromOffset(math.floor(x), math.floor(y))
 	ui.Strip.Size = UDim2.fromOffset(math.floor(w), rows * 35)
-	ui.Bargain.Position = UDim2.fromOffset(math.floor(x), math.floor(y + (#items > 0 and rows * 35 + 4 or 0)))
+	-- under the strip: the curse chips, then the bargain chip, then the popups
+	local yy = y + (#items > 0 and rows * 35 + 4 or 0)
+	ui.Curses.Position = UDim2.fromOffset(math.floor(x), math.floor(yy))
+	ui.Curses.Size = UDim2.fromOffset(math.floor(math.max(w, 260)), 26)
+	if ui.Curses.Visible then
+		yy += 31
+	end
+	ui.Bargain.Position = UDim2.fromOffset(math.floor(x), math.floor(yy))
 	-- popups: left column under the strip / bargain chip (landscape; the right side is the
 	-- loot prompt's), centre (portrait)
 	if portrait then
 		ui.Popups.AnchorPoint = Vector2.new(0.5, 0)
-		ui.Popups.Position = UDim2.fromOffset(W / 2, math.floor(y + (#items > 0 and rows * 35 + 4 or 0) + 36))
+		ui.Popups.Position = UDim2.fromOffset(W / 2, math.floor(yy + 36))
 	else
 		ui.Popups.AnchorPoint = Vector2.new(0, 0)
-		ui.Popups.Position = UDim2.fromOffset(math.floor(x), math.floor(y + (#items > 0 and rows * 35 + 4 or 0) + 36))
+		ui.Popups.Position = UDim2.fromOffset(math.floor(x), math.floor(yy + 36))
 	end
 end
 
@@ -29841,6 +31826,7 @@ function LootUI.Update(_dt: number, inRun: boolean)
 	local root = char and char.PrimaryPart
 	local alive = player:GetAttribute("Alive") ~= false
 	ui.Strip.Visible = inRun and #items > 0
+	refreshCurses(inRun)
 	if not inRun then
 		ui.Prompt.Visible = false
 		ui.Marker.Visible = false
@@ -29972,7 +31958,7 @@ return LootUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">MenuCharacters</string>
             <string name="Source"><![CDATA[--[[
@@ -30475,7 +32461,829 @@ return MenuCharacters
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="69">
+          <Properties>
+            <string name="Name">MenuCurses</string>
+            <string name="Source"><![CDATA[--[[
+	MenuCurses.lua
+	The CURSES screen: pick up to CurseData.MaxActive run modifiers before a run. Every
+	card shows the curse, what it does and its gold bonus; tapping toggles it. The pick is
+	sent with SetCurses and the server's answer (player attribute "Curses") is what the
+	screen shows (a tap shows at once, the attribute confirms or corrects it).
+	A run uses the curses of whoever starts it: during someone else's countdown the screen
+	says so (your pick is still saved for your own runs).
+]]
+
+local Players = game:GetService("Players")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local CurseData = require(Shared:WaitForChild("CurseData"))
+local UIKit = require(script.Parent.UIKit)
+local UIAnim = require(script.Parent.UIAnim)
+local Icons = require(script.Parent.Icons)
+
+local MenuCurses = {}
+
+local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local C, P = Theme.Color, Theme.Palette
+local player = Players.LocalPlayer
+
+local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
+	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
+	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
+end
+
+-- The pick on show: a recent tap (until the server answers), else the attribute.
+local optimistic: { string }? = nil
+local optimisticUntil = 0
+
+function MenuCurses.Current(): { string }
+	if optimistic and os.clock() < optimisticUntil then
+		return optimistic
+	end
+	optimistic = nil
+	return CurseData.FromString(player:GetAttribute("Curses"))
+end
+
+function MenuCurses.Build(screen: Frame, ctx: { [string]: any })
+	local host = ctx.Host
+	local ui: { [string]: any } = { Cards = {} }
+	ui.Header = UIKit.ScreenHeader(screen, "CURSES", ctx.Back)
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06 })
+	ui.Panel = holder
+	UIKit.padding(face, 16, 16, 16, 16)
+	ui.Intro = text(face, "Body", string.format("Pick up to %d curses before a run. They make the run harder for everyone in it, and each one adds gold.", CurseData.MaxActive), {
+		Name = "Intro",
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Size = UDim2.new(1, 0, 0, TS(16) * 2 + 8),
+	})
+	ui.Note = text(face, "Small", "", { Name = "Note", TextColor3 = P.gold_300, TextWrapped = true, Visible = false })
+	local scroll = new("ScrollingFrame", {
+		Name = "Cards",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = P.gold_500,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+	}, face)
+	UIKit.padding(scroll, 4, 6, 4, 4)
+	ui.Scroll = scroll
+	ui.Grid = new("UIGridLayout", { CellSize = UDim2.fromOffset(300, 132), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, scroll)
+
+	local function send(list: { string })
+		optimistic = list
+		optimisticUntil = os.clock() + 2
+		Remotes.Get("SetCurses"):FireServer(list)
+		MenuCurses._refresh()
+	end
+
+	local function toggle(id: string)
+		local cur = MenuCurses.Current()
+		local list = {}
+		local had = false
+		for _, c in ipairs(cur) do
+			if c == id then
+				had = true
+			else
+				table.insert(list, c)
+			end
+		end
+		if not had then
+			if #cur >= CurseData.MaxActive then
+				ctx.Toast(string.format("Up to %d curses: drop one first.", CurseData.MaxActive), P.gold_300)
+				return
+			end
+			table.insert(list, id)
+		end
+		send(CurseData.Sanitize(list) or {})
+	end
+
+	for i, id in ipairs(CurseData.Order) do
+		local def = CurseData.Curses[id]
+		local b = UIKit.Button(scroll, { Kind = "Secondary", Name = id, LayoutOrder = i, Size = UDim2.fromOffset(300, 132), OnClick = function()
+			toggle(id)
+		end })
+		b.Instance.Text = def.Name
+		for _, ch in ipairs(b.Content:GetChildren()) do
+			if not ch:IsA("UIPadding") then
+				ch:Destroy()
+			end
+		end
+		local well = new("Frame", { Name = "Well", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.2, Position = UDim2.fromOffset(0, 14), Size = UDim2.fromOffset(46, 46) }, b.Content)
+		UIKit.corner(well, Theme.Radius.S + 2)
+		UIKit.stroke(well, P.crimson_400, 1, 0.4)
+		Icons.Draw(well, def.Icon, { Size = 28, Color = P.crimson_300, Back = C.PanelInset, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+		local name = text(b.Content, "H3", def.Name, { Name = "CurseName", Position = UDim2.fromOffset(58, 12), Size = UDim2.new(1, -58, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
+		text(b.Content, "Small", def.Short, { Name = "Short", Position = UDim2.fromOffset(58, 16 + TS(18)), Size = UDim2.new(1, -58, 0, TS(14) * 2 + 6), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted })
+		local gold = UIKit.Badge(b.Content, "+" .. math.floor(def.Gold * 100 + 0.5) .. "% GOLD", "Gold", { Name = "Gold", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -12) })
+		local state = UIKit.Badge(b.Content, "OFF", "Dark", { Name = "State", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, -12) })
+		ui.Cards[id] = { Button = b, Name = name, State = state, Gold = gold }
+	end
+
+	-- footer: the total, CLEAR, DONE
+	local foot = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, face)
+	ui.Footer = foot
+	ui.Total = text(foot, "BodyStrong", "", { Name = "Total", Size = UDim2.new(1, -330, 1, 0), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd, RichText = true })
+	ui.Clear = UIKit.Button(foot, { Kind = "Secondary", Title = "CLEAR", Icon = "close", IconSize = 18, Align = "Center", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -170, 0, 0), Size = UDim2.fromOffset(150, Theme.Size.Button), OnClick = function()
+		send({})
+	end })
+	ui.Done = UIKit.Button(foot, { Kind = "Primary", Title = "DONE", Icon = "check", IconSize = 20, Align = "Center", AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.fromOffset(160, Theme.Size.Button), OnClick = ctx.Back })
+
+	MenuCurses._refresh = function()
+		local cur = MenuCurses.Current()
+		local on: { [string]: boolean } = {}
+		for _, id in ipairs(cur) do
+			on[id] = true
+		end
+		for id, card in pairs(ui.Cards) do
+			local was = card.On
+			card.On = on[id] == true
+			card.Button.SetSelected(card.On)
+			card.State.Text = card.On and "ON" or "OFF"
+			card.State.BackgroundColor3 = card.On and P.crimson_600 or C.PanelInset
+			card.Name.TextColor3 = card.On and P.crimson_300 or C.Text
+			if was ~= nil and was ~= card.On and card.On then
+				UIAnim.Punch(card.Button.Instance, 0.06)
+			end
+		end
+		local mult = CurseData.GoldMult(cur)
+		if #cur == 0 then
+			ui.Total.Text = "No curses · normal gold"
+		else
+			ui.Total.Text = string.format('%d / %d curses  ·  <font color="%s">%s gold</font>', #cur, CurseData.MaxActive, UIKit.hex(P.gold_300), CurseData.GoldText(mult))
+		end
+		ui.Clear.SetEnabled(#cur > 0)
+		-- someone else's countdown: their curses are the run's
+		local state = Remotes.State()
+		local starter = state:GetAttribute("Starter")
+		local note = ""
+		if state:GetAttribute("Phase") == "Countdown" then
+			if starter == player.UserId then
+				note = "Your countdown is running: these curses apply to everyone who joins."
+			else
+				note = "This countdown uses the curses of the player who started it. Your pick is used when you start a run."
+			end
+		end
+		ui.Note.Text = note
+		if ui.Note.Visible ~= (note ~= "") then
+			ui.Note.Visible = note ~= ""
+			MenuCurses._layout()
+		end
+	end
+
+	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
+		local W, H = v.X, v.Y
+		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+		local headY = math.max(ins.Top + 4, 12)
+		place(ui.Header.Frame, M, headY, math.min(520, W - 2 * M), 56)
+		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		local w = math.min(W - 2 * M, 1040)
+		local inner = w - 32 - 10
+		local cols = math.clamp(math.floor((inner + 12) / 290), 1, 3)
+		local cellW = math.floor((inner - (cols - 1) * 12) / cols)
+		local cellH = UIKit.IsCompact() and 118 or 112
+		ui.Grid.CellSize = UDim2.fromOffset(cellW, cellH)
+		local rows = math.ceil(#CurseData.Order / cols)
+		local introH = TS(16) * (w < 640 and 3 or 2) + 10
+		ui.Intro.Size = UDim2.new(1, 0, 0, introH)
+		local noteH = ui.Note.Visible and (TS(14) * 2 + 8) or 0
+		ui.Note.Position = UDim2.fromOffset(0, introH)
+		ui.Note.Size = UDim2.new(1, 0, 0, noteH)
+		local gridTop = introH + noteH + 6
+		local narrow = w < 560
+		local footH = narrow and (Theme.Size.Button * 2 + 10 + TS(16)) or Theme.Size.Button
+		local gridH = rows * (cellH + 12) + 8
+		local fit = 32 + gridTop + gridH + 12 + footH
+		local h = math.min(fit, H - top - M)
+		place(ui.Panel, (W - w) / 2, top, w, h)
+		ui.Scroll.Position = UDim2.fromOffset(0, gridTop)
+		ui.Scroll.Size = UDim2.new(1, 0, 1, -(gridTop + footH + 12))
+		ui.Footer.Position = UDim2.new(0, 0, 1, -footH)
+		ui.Footer.Size = UDim2.new(1, 0, 0, footH)
+		if narrow then
+			ui.Total.Size = UDim2.new(1, 0, 0, TS(16) + 6)
+			ui.Total.TextXAlignment = Enum.TextXAlignment.Center
+			local bw = math.floor((w - 32 - 10) / 2)
+			ui.Clear.Instance.AnchorPoint = Vector2.new(0, 1)
+			ui.Clear.Instance.Position = UDim2.fromScale(0, 1)
+			ui.Clear.Instance.Size = UDim2.fromOffset(bw, Theme.Size.Button)
+			ui.Done.Instance.AnchorPoint = Vector2.new(1, 1)
+			ui.Done.Instance.Position = UDim2.fromScale(1, 1)
+			ui.Done.Instance.Size = UDim2.fromOffset(bw, Theme.Size.Button)
+		else
+			ui.Total.Size = UDim2.new(1, -330, 1, 0)
+			ui.Total.TextXAlignment = Enum.TextXAlignment.Left
+			ui.Clear.Instance.AnchorPoint = Vector2.new(1, 0)
+			ui.Clear.Instance.Position = UDim2.new(1, -170, 0, 0)
+			ui.Clear.Instance.Size = UDim2.fromOffset(150, Theme.Size.Button)
+			ui.Done.Instance.AnchorPoint = Vector2.new(1, 0)
+			ui.Done.Instance.Position = UDim2.fromScale(1, 0)
+			ui.Done.Instance.Size = UDim2.fromOffset(160, Theme.Size.Button)
+		end
+	end
+	MenuCurses._layout = function()
+		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
+	end
+
+	player:GetAttributeChangedSignal("Curses"):Connect(function()
+		optimistic = nil
+		MenuCurses._refresh()
+	end)
+	Remotes.State():GetAttributeChangedSignal("Phase"):Connect(function()
+		MenuCurses._refresh()
+	end)
+	MenuCurses._refresh()
+
+	return {
+		Layout = layout,
+		Refresh = function(_p)
+			MenuCurses._refresh()
+		end,
+		OnShow = function(_p)
+			MenuCurses._refresh()
+			local i = 0
+			for _, id in ipairs(CurseData.Order) do
+				i += 1
+				UIAnim.Pop(ui.Cards[id].Button.Instance, 0.03 * i, 0.8)
+			end
+			MenuCurses._layout()
+		end,
+	}
+end
+
+MenuCurses._refresh = function() end
+MenuCurses._layout = function() end
+
+return MenuCurses
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="70">
+          <Properties>
+            <string name="Name">MenuDaily</string>
+            <string name="Source"><![CDATA[--[[
+	MenuDaily.lua
+	The DAILY CHALLENGE screen (lobby DAILY card): today's fixed setup, the same for every
+	player (CurseData.Daily(day), day = SwarmState "DailyDay", UTC): the arena route with
+	its bosses, the curses, the starting bonus; your scored attempt (or "ready"), your best
+	ever; PLAY (StartRun "Daily": the first run of the day is scored, later ones are
+	practice) and LEADERBOARD (the Daily board).
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local CurseData = require(Shared:WaitForChild("CurseData"))
+local BossData = require(Shared:WaitForChild("BossData"))
+local WeaponData = require(Shared:WaitForChild("WeaponData"))
+local ItemData = require(Shared:WaitForChild("ItemData"))
+local UIKit = require(script.Parent.UIKit)
+local UIAnim = require(script.Parent.UIAnim)
+local Icons = require(script.Parent.Icons)
+
+local MenuDaily = {}
+
+local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local C, P = Theme.Color, Theme.Palette
+
+local ROUTE_STAGES = 5 -- stages shown on the route row
+
+local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
+	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
+	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
+end
+
+-- Today's UTC day (the server's, so every player sees the same daily).
+function MenuDaily.Today(): number
+	local day = Remotes.State():GetAttribute("DailyDay")
+	if type(day) == "number" then
+		return day
+	end
+	return CurseData.DayOf(os.time())
+end
+
+-- Display name of a weapon / item id for the bonus line.
+function MenuDaily.NameOf(id: string): string
+	local w = WeaponData.Weapons[id]
+	if w then
+		return w.Name
+	end
+	local it = ItemData.Items[id]
+	if it then
+		return it.Name
+	end
+	return id
+end
+
+-- The profile's daily view for today: (used, score, best, bestDay).
+function MenuDaily.Status(profile: { [string]: any }?): (boolean, number, number, number)
+	local d = profile and profile.Daily
+	if type(d) ~= "table" then
+		return false, 0, 0, 0
+	end
+	local today = MenuDaily.Today()
+	local isToday = d.Day == today
+	return isToday and d.Used == true, isToday and (tonumber(d.Score) or 0) or 0, tonumber(d.BestScore) or 0, tonumber(d.BestDay) or 0
+end
+
+-- "7h 12m" until the next UTC midnight.
+function MenuDaily.TimeLeft(): string
+	local now = workspace:GetServerTimeNow()
+	local left = CurseData.SecondsLeft(now)
+	local h = left // 3600
+	local m = (left % 3600) // 60
+	if h > 0 then
+		return string.format("%dh %02dm", h, m)
+	end
+	return string.format("%dm", math.max(1, m))
+end
+
+local function chip(parent: Instance, icon: string, str: string, color: Color3?, order: number): Frame
+	local f = new("Frame", { Name = "Chip", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.15, Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = order }, parent)
+	UIKit.corner(f, 999)
+	UIKit.stroke(f, color or C.PanelEdge, 1, 0.35)
+	UIKit.padding(f, 0, 12, 0, 8)
+	UIKit.list(f, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
+	Icons.Draw(f, icon, { Size = 20, LayoutOrder = 1, Color = color, Back = C.PanelInset })
+	text(f, "Label", str, { LayoutOrder = 2, Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.Text }, 13)
+	return f
+end
+
+local function section(parent: Instance, caption: string, order: number): Frame
+	local f = new("Frame", { Name = caption, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, parent)
+	UIKit.list(f, { Padding = UDim.new(0, 6) })
+	text(f, "Caption", UIKit.track(caption), { LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(12) + 4), TextColor3 = P.gold_300 })
+	return f
+end
+
+local function row(parent: Instance, order: number): Frame
+	local r = new("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, parent)
+	UIKit.list(r, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), Wraps = true })
+	return r
+end
+
+function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
+	local host = ctx.Host
+	local ui: { [string]: any } = {}
+	ui.Header = UIKit.ScreenHeader(screen, "DAILY CHALLENGE", ctx.Back)
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	ui.Panel = holder
+	UIKit.padding(face, 16, 16, 16, 16)
+
+	-- top: date + reset, status badge
+	local top = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 56) }, face)
+	ui.Top = top
+	Icons.Draw(top, "calendar", { Size = 44, Position = UDim2.fromOffset(0, 4), Back = C.Panel })
+	ui.Date = text(top, "H2", "", { Name = "Date", Position = UDim2.fromOffset(56, 2), Size = UDim2.new(1, -56, 0, TS(22) + 6) })
+	ui.Reset = text(top, "Caption", "", { Name = "Reset", Position = UDim2.fromOffset(56, 8 + TS(22)), Size = UDim2.new(1, -56, 0, TS(12) + 4) })
+
+	local body = new("ScrollingFrame", {
+		Name = "Body",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = P.gold_500,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+	}, face)
+	UIKit.padding(body, 4, 8, 4, 2)
+	UIKit.list(body, { Padding = UDim.new(0, 14) })
+	ui.Body = body
+
+	-- your attempt
+	local status = section(body, "Your attempt", 1)
+	ui.StatusRow = row(status, 1)
+	ui.StatusNote = text(status, "Small", "", { LayoutOrder = 2, TextWrapped = true, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextColor3 = C.TextMuted })
+	-- the route
+	local route = section(body, "Route", 2)
+	ui.Route = row(route, 1)
+	-- curses
+	local curses = section(body, "Curses", 3)
+	ui.Curses = row(curses, 1)
+	-- starting bonus
+	local bonus = section(body, "Starting bonus", 4)
+	ui.Bonus = row(bonus, 1)
+
+	-- buttons
+	local foot = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 64) }, face)
+	ui.Footer = foot
+	ui.Play = UIKit.Button(foot, {
+		Kind = "Primary",
+		Glow = true,
+		Title = "PLAY",
+		Subtitle = "Scored attempt",
+		Icon = "play",
+		IconSize = 26,
+		Align = "Left",
+		Name = "PlayDaily",
+		OnClick = function()
+			local phase = Remotes.State():GetAttribute("Phase") or "Lobby"
+			if phase ~= "Lobby" then
+				ctx.Toast("Wait for the current run to end.", P.gold_300)
+				return
+			end
+			Remotes.Get("StartRun"):FireServer("Daily")
+		end,
+	})
+	ui.Board = UIKit.Button(foot, {
+		Kind = "Secondary",
+		Title = "LEADERBOARD",
+		Icon = "podium",
+		IconSize = 22,
+		Align = "Center",
+		Name = "DailyBoard",
+		OnClick = function()
+			ctx.ShowScreen("Ranks", "Daily")
+		end,
+	})
+
+	local shownDay = -1
+
+	local function fill()
+		local p = ctx.Profile()
+		local day = MenuDaily.Today()
+		local d = CurseData.Daily(day)
+		ui.Date.Text = "Daily · " .. d.Date
+		ui.Reset.Text = UIKit.track("UTC · new challenge in " .. MenuDaily.TimeLeft())
+		local used, score, best, bestDay = MenuDaily.Status(p)
+		-- status
+		for _, ch in ipairs(ui.StatusRow:GetChildren()) do
+			if ch:IsA("GuiObject") then
+				ch:Destroy()
+			end
+		end
+		if used then
+			UIKit.Badge(ui.StatusRow, "SCORED", "Moss", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 30) })
+			text(ui.StatusRow, "H3", score > 0 and CurseData.ScoreText(score) or "Played (no stage cleared yet)", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200 })
+			ui.StatusNote.Text = "Today's scored attempt is used. You can still practise: practice runs are not scored."
+		else
+			UIKit.Badge(ui.StatusRow, "READY", "Gold", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 30) })
+			text(ui.StatusRow, "H3", "Your scored attempt is waiting", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X })
+			ui.StatusNote.Text = "Solo. Your first daily run today is scored (stages cleared, then time); it counts the moment it starts."
+		end
+		if best > 0 then
+			ui.StatusNote.Text ..= string.format("  Best ever: %s (%s).", CurseData.ScoreText(best), CurseData.DateText(bestDay))
+		end
+		ui.Play.SetText(used and "PRACTICE" or "PLAY", used and "Unscored run" or "Scored attempt")
+		ui.Play.SetKind(used and "Secondary" or "Primary")
+		if shownDay == day then
+			return
+		end
+		shownDay = day
+		-- route, curses, bonus (fixed for the day)
+		for _, f in ipairs({ ui.Route, ui.Curses, ui.Bonus }) do
+			for _, ch in ipairs(f:GetChildren()) do
+				if ch:IsA("GuiObject") then
+					ch:Destroy()
+				end
+			end
+		end
+		for i = 1, ROUTE_STAGES do
+			local arena = (Config.Arenas :: any)[d.Arenas[i]]
+			local boss = BossData.Get(d.Bosses[i])
+			chip(ui.Route, i == 1 and "flag" or "portal", string.format("%d · %s · %s", i, arena and arena.DisplayName or d.Arenas[i], boss and boss.DisplayName or "?"), i == 1 and P.gold_400 or nil, i)
+		end
+		for i, id in ipairs(d.Curses) do
+			local def = CurseData.Curses[id]
+			chip(ui.Curses, def.Icon, def.Name .. " · " .. def.Short, P.crimson_300, i)
+		end
+		chip(ui.Curses, "coin", CurseData.GoldText(CurseData.GoldMult(d.Curses)) .. " gold", P.gold_400, 10)
+		local bdef = CurseData.Bonuses[d.Bonus]
+		chip(ui.Bonus, bdef and bdef.Icon or "gift", (bdef and bdef.Name or d.Bonus) .. " · " .. CurseData.BonusText(d, MenuDaily.NameOf), P.moss_300, 1)
+	end
+
+	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
+		local W, H = v.X, v.Y
+		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+		local headY = math.max(ins.Top + 4, 12)
+		place(ui.Header.Frame, M, headY, math.min(620, W - 2 * M), 56)
+		local topY = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		local w = math.min(W - 2 * M, 900)
+		local narrow = w < 600
+		local h = math.min(H - topY - M, portrait and 900 or 600)
+		local playH = h < 520 and 60 or 76 -- short landscape phones: a slimmer footer
+		local footH = narrow and (playH + 10 + Theme.Size.Button) or playH
+		local topH = TS(22) + TS(12) + 20
+		ui.Top.Size = UDim2.new(1, 0, 0, topH)
+		place(ui.Panel, (W - w) / 2, topY, w, h)
+		ui.Body.Position = UDim2.fromOffset(0, topH + 8)
+		ui.Body.Size = UDim2.new(1, 0, 1, -(topH + 8 + footH + 12))
+		ui.Footer.Position = UDim2.new(0, 0, 1, -footH)
+		ui.Footer.Size = UDim2.new(1, 0, 0, footH)
+		local inner = w - 32
+		if narrow then
+			place(ui.Play.Instance, 0, 0, inner, playH)
+			place(ui.Board.Instance, 0, playH + 10, inner, Theme.Size.Button)
+		else
+			local bw = math.min(320, math.floor((inner - 12) / 2))
+			local x0 = math.floor((inner - (2 * bw + 12)) / 2)
+			place(ui.Play.Instance, x0, 0, bw, playH)
+			place(ui.Board.Instance, x0 + bw + 12, math.floor((playH - Theme.Size.Button) / 2), bw, Theme.Size.Button)
+		end
+	end
+	MenuDaily._layout = function()
+		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
+	end
+
+	local clock = 0
+	return {
+		Layout = layout,
+		Refresh = function(_p)
+			fill()
+		end,
+		OnShow = function(_p)
+			shownDay = -1
+			fill()
+			UIAnim.Pop(holder, 0, 0.9)
+			MenuDaily._layout()
+		end,
+		Update = function(dt: number)
+			clock += dt
+			if clock >= 1 then
+				clock = 0
+				if screen.Visible then
+					ui.Reset.Text = UIKit.track("UTC · new challenge in " .. MenuDaily.TimeLeft())
+					if MenuDaily.Today() ~= shownDay then
+						fill()
+					end
+				end
+			end
+		end,
+	}
+end
+
+MenuDaily._layout = function() end
+
+return MenuDaily
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="71">
+          <Properties>
+            <string name="Name">MenuLeaderboards</string>
+            <string name="Source"><![CDATA[--[[
+	MenuLeaderboards.lua
+	The LEADERBOARDS screen: three tabs (BEST STAGE, DAILY, MOST KILLS). Opening a tab
+	asks the server (LeaderboardRequest); LeaderboardService answers with LeaderboardData:
+	the top 50 rows (your row highlighted), your rank when you are in them, your own best,
+	and a status. "loading" asks again shortly; "local" (no DataStores, e.g. Studio without
+	API access) shows this server's runs with a clear note; "error" keeps the last rows.
+]]
+
+local Players = game:GetService("Players")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local CurseData = require(Shared:WaitForChild("CurseData"))
+local UIKit = require(script.Parent.UIKit)
+local UIAnim = require(script.Parent.UIAnim)
+local Icons = require(script.Parent.Icons)
+
+local MenuLeaderboards = {}
+
+local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local C, P = Theme.Color, Theme.Palette
+local player = Players.LocalPlayer
+
+local BOARDS = {
+	{ Id = "BestStage", Title = "Best stage", Icon = "portal", Caption = "Furthest stage reached in a run · all time" },
+	{ Id = "Daily", Title = "Daily", Icon = "calendar", Caption = "Today's scored Daily Challenge attempts (UTC)" },
+	{ Id = "Kills", Title = "Most kills", Icon = "skull", Caption = "Most enemies defeated in one run · all time" },
+}
+
+local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
+	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
+	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
+end
+
+-- A board value as text.
+function MenuLeaderboards.ValueText(board: string, value: number): string
+	if board == "BestStage" then
+		return "Stage " .. UIKit.formatNumber(value)
+	elseif board == "Daily" then
+		return CurseData.ScoreText(value)
+	end
+	return UIKit.formatNumber(value)
+end
+
+function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
+	local host = ctx.Host
+	local ui: { [string]: any } = {}
+	local board = "BestStage"
+	local data: { [string]: any } = {} -- last answer per board
+	local asked: { [string]: number } = {}
+
+	ui.Header = UIKit.ScreenHeader(screen, "LEADERBOARDS", ctx.Back)
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06 })
+	ui.Panel = holder
+	UIKit.padding(face, 16, 16, 16, 16)
+	local items = {}
+	for _, b in ipairs(BOARDS) do
+		table.insert(items, { Id = b.Id, Title = b.Title, Icon = b.Icon })
+	end
+	local function ask(id: string, force: boolean?)
+		if force or os.clock() - (asked[id] or -100) > 4 then
+			asked[id] = os.clock()
+			Remotes.Get("LeaderboardRequest"):FireServer(id)
+		end
+	end
+	ui.Tabs = UIKit.Tabs(face, items, function(id)
+		board = id
+		MenuLeaderboards._fill(true)
+		ask(id)
+	end)
+	ui.Caption = text(face, "Caption", "", { Name = "BoardCaption", TextXAlignment = Enum.TextXAlignment.Center })
+	-- status note (loading / local / error)
+	local noteHolder, noteFace = UIKit.Surface(face, { Name = "Note", Radius = Theme.Radius.M, Transparency = 0.2, Edge = P.gold_400, EdgeTransparency = 0.5, Shadow = false, Visible = false })
+	ui.Note = noteHolder
+	ui.NoteIcon = Icons.Draw(noteFace, "info", { Size = 22, Position = UDim2.fromOffset(12, 10) })
+	ui.NoteText = text(noteFace, "Small", "", { Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -54, 1, 0), TextWrapped = true, TextColor3 = C.Text })
+	local list = new("ScrollingFrame", {
+		Name = "Rows",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = P.gold_500,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+	}, face)
+	UIKit.padding(list, 2, 8, 2, 2)
+	UIKit.list(list, { Padding = UDim.new(0, 4) })
+	ui.List = list
+	ui.Empty = text(face, "Body", "", { Name = "Empty", TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, Visible = false })
+	-- you: your rank / best
+	local youHolder, youFace = UIKit.Surface(face, { Name = "You", Radius = Theme.Radius.M, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.15, Shadow = false })
+	ui.You = youHolder
+	ui.YouRank = text(youFace, "Number", "-", { Name = "Rank", Position = UDim2.fromOffset(14, 0), Size = UDim2.new(0, 70, 1, 0), TextColor3 = P.gold_200 }, 22)
+	ui.YouName = text(youFace, "BodyStrong", "", { Name = "Name", Position = UDim2.fromOffset(90, 0), Size = UDim2.new(0.5, -90, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
+	ui.YouValue = text(youFace, "BodyStrong", "", { Name = "Value", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 0), Size = UDim2.new(0.5, -14, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd })
+
+	local function rowFor(r: { [string]: any }, order: number)
+		local me = r.Me == true
+		local f = UIKit.Panel(list, { Name = "Row" .. order, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 44) }, true)
+		if me then
+			UIKit.stroke(f, P.gold_400, 1.5, 0.1)
+			f.BackgroundTransparency = 0.05
+		end
+		local rank = tonumber(r.Rank) or order
+		local medal = rank <= 3 and ({ P.gold_300, P.steel_200, Color3.fromRGB(196, 132, 82) })[rank] or nil
+		if medal then
+			local disc = new("Frame", { Name = "Medal", BackgroundColor3 = medal, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(30, 30) }, f)
+			UIKit.corner(disc, 999)
+			text(disc, "Number", tostring(rank), { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.slate_950 }, 16)
+		else
+			text(f, "Number", "#" .. rank, { Position = UDim2.fromOffset(10, 0), Size = UDim2.new(0, 56, 1, 0), TextColor3 = C.TextMuted }, 16)
+		end
+		text(f, "BodyStrong", tostring(r.Name or "?"), { Name = "Name", Position = UDim2.fromOffset(72, 0), Size = UDim2.new(0.55, -72, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = me and P.gold_200 or C.Text })
+		text(f, "BodyStrong", MenuLeaderboards.ValueText(board, tonumber(r.Value) or 0), { Name = "Value", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 0), Size = UDim2.new(0.45, -12, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = me and P.gold_200 or C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
+		return f
+	end
+
+	MenuLeaderboards._fill = function(animate: boolean?)
+		for _, b in ipairs(BOARDS) do
+			if b.Id == board then
+				ui.Caption.Text = UIKit.track(b.Caption)
+			end
+		end
+		for _, ch in ipairs(list:GetChildren()) do
+			if ch:IsA("GuiObject") then
+				ch:Destroy()
+			end
+		end
+		local d = data[board]
+		local status = d and d.Status or "loading"
+		local note = ""
+		if status == "local" then
+			note = "Global leaderboards need DataStores, which are off in this session (Studio: Game Settings → Security → Enable Studio Access to API Services). Showing runs on this server only."
+		elseif status == "error" then
+			note = "The leaderboard could not be read right now. Showing the last rows we had; it tries again in a minute."
+		elseif status == "loading" then
+			note = "Loading the leaderboard..."
+		elseif d and (tonumber(d.Age) or 0) > 0 then
+			note = ""
+		end
+		ui.Note.Visible = note ~= ""
+		ui.NoteText.Text = note
+		local rows = d and type(d.Rows) == "table" and d.Rows or {}
+		for i, r in ipairs(rows) do
+			local f = rowFor(r, i)
+			if animate and i <= 12 then
+				UIAnim.Pop(f, 0.015 * i, 0.9)
+			end
+		end
+		ui.Empty.Visible = #rows == 0 and status ~= "loading"
+		ui.Empty.Text = status == "local" and "No runs finished on this server yet. Play one!" or "Nobody is on this board yet. Be the first!"
+		-- you
+		ui.YouName.Text = player.DisplayName
+		local myRank = d and tonumber(d.MyRank)
+		local best = d and tonumber(d.MyBest) or 0
+		ui.YouRank.Text = myRank and ("#" .. myRank) or "-"
+		if best > 0 then
+			ui.YouValue.Text = (myRank and "" or ("Not in the top " .. tostring(d and d.Top or 50) .. " · ")) .. "Your best: " .. MenuLeaderboards.ValueText(board, best)
+		elseif board == "Daily" then
+			ui.YouValue.Text = "No scored daily attempt today"
+		else
+			ui.YouValue.Text = "No runs yet"
+		end
+		MenuLeaderboards._layout()
+	end
+
+	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
+		local W, H = v.X, v.Y
+		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+		local headY = math.max(ins.Top + 4, 12)
+		place(ui.Header.Frame, M, headY, math.min(560, W - 2 * M), 56)
+		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		local w = math.min(W - 2 * M, 820)
+		place(ui.Panel, (W - w) / 2, top, w, H - top - M)
+		local tabsH = Theme.Size.TapMin + 4
+		local y = tabsH + 8
+		ui.Caption.Position = UDim2.fromOffset(0, y)
+		ui.Caption.Size = UDim2.new(1, 0, 0, TS(12) + 6)
+		y += TS(12) + 12
+		if ui.Note.Visible then
+			local noteH = TS(14) * (w < 600 and 4 or 2) + 18
+			ui.Note.Position = UDim2.fromOffset(0, y)
+			ui.Note.Size = UDim2.new(1, 0, 0, noteH)
+			y += noteH + 8
+		end
+		local youH = 52
+		ui.List.Position = UDim2.fromOffset(0, y)
+		ui.List.Size = UDim2.new(1, 0, 1, -(y + youH + 10))
+		ui.Empty.Position = UDim2.fromOffset(0, y + 20)
+		ui.Empty.Size = UDim2.new(1, 0, 0, TS(16) * 2 + 8)
+		ui.You.Position = UDim2.new(0, 0, 1, -youH)
+		ui.You.Size = UDim2.new(1, 0, 0, youH)
+		ui.YouName.Size = UDim2.new(w < 600 and 0.35 or 0.45, -90, 1, 0)
+		ui.YouValue.Size = UDim2.new(w < 600 and 0.65 or 0.55, -14, 1, 0)
+	end
+	MenuLeaderboards._layout = function()
+		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
+	end
+
+	Remotes.Get("LeaderboardData").OnClientEvent:Connect(function(d)
+		if type(d) ~= "table" or type(d.Board) ~= "string" then
+			return
+		end
+		data[d.Board] = d
+		if d.Board == board then
+			MenuLeaderboards._fill(false)
+		end
+		if d.Status == "loading" and screen.Visible then
+			task.delay(1.5, function()
+				if screen.Visible and board == d.Board then
+					ask(d.Board, true)
+				end
+			end)
+		end
+	end)
+
+	local clock = 0
+	return {
+		Layout = layout,
+		OnShow = function(_p, arg: string?)
+			if type(arg) == "string" then
+				for _, b in ipairs(BOARDS) do
+					if b.Id == arg then
+						board = arg
+						ui.Tabs.Select(arg)
+					end
+				end
+			end
+			MenuLeaderboards._fill(true)
+			ask(board, true)
+			MenuLeaderboards._layout()
+		end,
+		Update = function(dt: number)
+			-- keep an open board fresh (the server caches; this is cheap)
+			clock += dt
+			if clock >= 30 then
+				clock = 0
+				if screen.Visible then
+					ask(board, true)
+				end
+			end
+		end,
+	}
+end
+
+MenuLeaderboards._fill = function(_animate: boolean?) end
+MenuLeaderboards._layout = function() end
+
+return MenuLeaderboards
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">MenuStats</string>
             <string name="Source"><![CDATA[--[[
@@ -30496,6 +33304,7 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
 local AchievementData = require(Shared:WaitForChild("AchievementData"))
+local AccountData = require(Shared:WaitForChild("AccountData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -30659,6 +33468,16 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 				end
 			end
 		end
+		-- the account level track's titles / colours (TRACK screen)
+		local level = (p.Account and AccountData.LevelFor(tonumber(p.Account.XP) or 0)) or 1
+		for _, lv in ipairs(AccountData.RewardLevels) do
+			for _, r in ipairs(AccountData.Rewards[lv]) do
+				if r.Kind == kind and level >= lv then
+					local c = kind == "Color" and AccountData.Colors[r.Id] or nil
+					table.insert(options, { Id = r.Id, Name = c and c.Name or r.Id, Color = c and c.Color or nil })
+				end
+			end
+		end
 		local worn = (kind == "Title" and p.Title or p.NameColor) or ""
 		for i, o in ipairs(options) do
 			local b = UIKit.Button(chips, {
@@ -30678,7 +33497,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		if #options == 1 then
-			text(row, "Small", kind == "Title" and "Earn titles from achievements." or "Earn name colours from achievements.", {
+			text(row, "Small", kind == "Title" and "Earn titles from achievements and the TRACK." or "Earn name colours from achievements and the TRACK.", {
 				Position = UDim2.fromOffset(112, TS(12) + 8),
 				Size = UDim2.new(1, -112, 0, 40),
 				TextColor3 = C.TextFaint,
@@ -30814,7 +33633,232 @@ return MenuStats
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="73">
+          <Properties>
+            <string name="Name">MenuTrack</string>
+            <string name="Source"><![CDATA[--[[
+	MenuTrack.lua
+	The TRACK screen: your account level (AccountData.lua), the XP bar to the next level,
+	how XP is earned, and every cosmetic reward of levels 1-50 (titles, nameplate colours,
+	lobby dais rings, portrait frames). Earned ones can be worn (EquipCosmetic; tap a worn
+	one to take it off); locked ones say the level they need. Cosmetic only: nothing here
+	changes a run.
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local AccountData = require(Shared:WaitForChild("AccountData"))
+local CharacterData = require(Shared:WaitForChild("CharacterData"))
+local UIKit = require(script.Parent.UIKit)
+local UIAnim = require(script.Parent.UIAnim)
+local Icons = require(script.Parent.Icons)
+local Cosmetics = require(script.Parent.Cosmetics)
+
+local MenuTrack = {}
+
+local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local C, P = Theme.Color, Theme.Palette
+
+local KIND_ICON = { Title = "flag", Color = "sparkle", Ring = "area", Frame = "medal" }
+local KIND_LABEL = { Title = "Title", Color = "Name colour", Ring = "Dais ring", Frame = "Portrait frame" }
+local WORN_KEY = { Title = "Title", Color = "NameColor", Ring = "Ring", Frame = "Frame" }
+
+local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
+	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
+	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
+end
+
+-- The profile's account view (level 1 with no XP until the first sync).
+function MenuTrack.Account(profile: { [string]: any }?): (number, number, number, number)
+	local a = profile and profile.Account
+	if type(a) ~= "table" then
+		return 1, 0, AccountData.XPToNext(1), 0
+	end
+	local level, into, need = AccountData.LevelFor(tonumber(a.XP) or 0)
+	return level, into, need, tonumber(a.XP) or 0
+end
+
+function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
+	local host = ctx.Host
+	local ui: { [string]: any } = {}
+	ui.Header = UIKit.ScreenHeader(screen, "ACCOUNT LEVEL", ctx.Back)
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06 })
+	ui.Panel = holder
+	UIKit.padding(face, 16, 16, 16, 16)
+
+	-- head: framed hero medallion, level, XP bar, how XP is earned
+	local head = new("Frame", { Name = "Head", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 104) }, face)
+	ui.Head = head
+	local medal = new("Frame", { Name = "Portrait", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.05, Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(80, 80) }, head)
+	UIKit.corner(medal, 999)
+	ui.MedalStroke = UIKit.stroke(medal, P.gold_400, 2.5, 0.05)
+	ui.Medal = medal
+	ui.Level = text(head, "H1", "Level 1", { Name = "Level", Position = UDim2.fromOffset(110, 4), Size = UDim2.new(1, -110, 0, TS(30) + 6) })
+	ui.Meter = UIKit.Meter(head, {
+		Gradient = ColorSequence.new(P.gold_500, P.gold_300),
+		TextStyle = "Number",
+		TextSize = Theme.TextSize.Small,
+		Position = UDim2.fromOffset(110, TS(30) + 14),
+		Size = UDim2.new(1, -110, 0, 22),
+	})
+	ui.How = text(head, "Small", string.format("XP from every run: %d per minute survived, %d per stage cleared, 1 per %d kills, %d per boss, %d for a win; curses add their gold bonus, the daily's scored attempt +%d. Rewards are cosmetic only.", math.floor(60 * AccountData.XP.PerSecond + 0.5), AccountData.XP.PerStage, AccountData.XP.PerKills, AccountData.XP.PerBoss, AccountData.XP.Win, AccountData.XP.Daily), {
+		Name = "How",
+		Position = UDim2.fromOffset(110, TS(30) + 44),
+		Size = UDim2.new(1, -110, 0, TS(14) * 2 + 6),
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+	})
+
+	local list = new("ScrollingFrame", {
+		Name = "Rewards",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = P.gold_500,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+	}, face)
+	UIKit.padding(list, 2, 8, 6, 2)
+	UIKit.list(list, { Padding = UDim.new(0, 6) })
+	ui.List = list
+
+	local function preview(f: Frame, r: AccountData.Reward, unlocked: boolean)
+		local box = new("Frame", { Name = "Preview", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 84, 0.5, 0), Size = UDim2.fromOffset(40, 40) }, f)
+		if r.Kind == "Frame" then
+			local m = new("Frame", { BackgroundColor3 = C.PanelInset, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(30, 30) }, box)
+			UIKit.corner(m, 999)
+			Icons.Character(m, (ctx.Profile() or {}).SelectedCharacter or CharacterData.Default, { Size = 18, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+			Cosmetics.Frame(m, r.Id)
+		elseif r.Kind == "Ring" then
+			local def = AccountData.Rings[r.Id]
+			local ring = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(34, 14) }, box)
+			UIKit.corner(ring, 999)
+			UIKit.stroke(ring, def and def.Color or P.gold_300, 3, unlocked and 0 or 0.5)
+		elseif r.Kind == "Color" then
+			local c = AccountData.Colors[r.Id]
+			local dot = new("Frame", { BackgroundColor3 = c and c.Color or P.ivory_200, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(24, 24), BackgroundTransparency = unlocked and 0 or 0.4 }, box)
+			UIKit.corner(dot, 999)
+			UIKit.stroke(dot, P.slate_950, 1.5, 0.2)
+		else
+			Icons.Draw(box, KIND_ICON[r.Kind] or "gift", { Size = 26, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Color = (not unlocked) and P.stone_400 or nil, Back = C.PanelInset })
+		end
+	end
+
+	local function rewardRow(level: number, r: AccountData.Reward, have: number, order: number)
+		local p = ctx.Profile() or {}
+		local unlocked = have >= level
+		local worn = p[WORN_KEY[r.Kind]] == r.Id
+		local f = UIKit.Panel(list, { Name = "Lv" .. level .. r.Kind, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 64) }, true)
+		if worn then
+			UIKit.stroke(f, P.gold_400, 1.5, 0.1)
+		elseif not unlocked then
+			f.BackgroundTransparency = 0.45
+		end
+		local badge = UIKit.Badge(f, "LV " .. level, unlocked and "Gold" or "Dark", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(0, 26) })
+		badge.TextSize = TS(13)
+		preview(f, r, unlocked)
+		local nameColor = (r.Kind == "Color" and unlocked) and (Cosmetics.NameColor(r.Id) or C.Text) or (unlocked and C.Text or C.TextMuted)
+		text(f, "H3", r.Kind == "Title" and r.Id or AccountData.RewardName(r), { Name = "RewardName", Position = UDim2.fromOffset(136, 8), Size = UDim2.new(1, -136 - 150, 0, TS(18) + 4), TextColor3 = nameColor, TextTruncate = Enum.TextTruncate.AtEnd })
+		text(f, "Caption", UIKit.track(KIND_LABEL[r.Kind] or r.Kind), { Position = UDim2.fromOffset(136, 12 + TS(18)), Size = UDim2.new(1, -136 - 150, 0, TS(12) + 4) })
+		if unlocked then
+			UIKit.Button(f, {
+				Kind = worn and "Primary" or "Secondary",
+				Title = worn and "WORN" or "WEAR",
+				Icon = worn and "check" or nil,
+				IconSize = 16,
+				Align = "Center",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -10, 0.5, 0),
+				Size = UDim2.fromOffset(128, 46),
+				Shadow = false,
+				Name = "Wear",
+				OnClick = function()
+					local kind = r.Kind == "Color" and "Color" or r.Kind
+					Remotes.Get("EquipCosmetic"):FireServer(kind, worn and "" or r.Id)
+				end,
+			})
+		else
+			text(f, "Label", "LOCKED", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.5, 0), Size = UDim2.fromOffset(120, 30), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.TextFaint })
+		end
+		return f
+	end
+
+	local function fill(animate: boolean)
+		local p = ctx.Profile()
+		local level, into, need = MenuTrack.Account(p)
+		ui.Level.Text = level >= AccountData.MaxLevel and ("Level " .. level .. " · MAX") or ("Level " .. level)
+		if need > 0 then
+			ui.Meter.Set(into / need, string.format("%s / %s XP to level %d", UIKit.formatNumber(into), UIKit.formatNumber(need), level + 1))
+		else
+			ui.Meter.Set(1, "Max level reached")
+		end
+		for _, ch in ipairs(ui.Medal:GetChildren()) do
+			if ch:IsA("Frame") then
+				ch:Destroy()
+			end
+		end
+		Icons.Character(ui.Medal, p and p.SelectedCharacter or CharacterData.Default, { Size = 48, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+		local framed = Cosmetics.Frame(ui.Medal, p and p.Frame or "")
+		ui.MedalStroke.Transparency = framed and 1 or 0.05
+		for _, ch in ipairs(list:GetChildren()) do
+			if ch:IsA("GuiObject") then
+				ch:Destroy()
+			end
+		end
+		local order = 0
+		for _, lv in ipairs(AccountData.RewardLevels) do
+			for _, r in ipairs(AccountData.Rewards[lv]) do
+				order += 1
+				local f = rewardRow(lv, r, level, order)
+				if animate and order <= 10 then
+					UIAnim.Pop(f, 0.02 * order, 0.9)
+				end
+			end
+		end
+	end
+
+	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
+		local W, H = v.X, v.Y
+		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+		local headY = math.max(ins.Top + 4, 12)
+		place(ui.Header.Frame, M, headY, math.min(580, W - 2 * M), 56)
+		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		local w = math.min(W - 2 * M, 860)
+		place(ui.Panel, (W - w) / 2, top, w, H - top - M)
+		local lines = w < 640 and 4 or 2
+		ui.How.Size = UDim2.new(1, -110, 0, TS(14) * lines + 6)
+		local headH = math.max(100, TS(30) + 44 + TS(14) * lines + 10)
+		ui.Head.Size = UDim2.new(1, 0, 0, headH)
+		ui.List.Position = UDim2.fromOffset(0, headH + 8)
+		ui.List.Size = UDim2.new(1, 0, 1, -(headH + 8))
+	end
+	MenuTrack._layout = function()
+		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
+	end
+
+	return {
+		Layout = layout,
+		Refresh = function(_p)
+			if screen.Visible then
+				fill(false)
+			end
+		end,
+		OnShow = function(_p)
+			fill(true)
+			MenuTrack._layout()
+		end,
+	}
+end
+
+MenuTrack._layout = function() end
+
+return MenuTrack
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">MenuUpgrades</string>
             <string name="Source"><![CDATA[--[[
@@ -31141,7 +34185,7 @@ return MenuUpgrades
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">MobileControls</string>
             <string name="Source"><![CDATA[--[[
@@ -31396,7 +34440,7 @@ return MobileControls
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">ModelLibrary</string>
             <string name="Source"><![CDATA[--[[
@@ -32687,7 +35731,7 @@ return ModelLibrary
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">Occlusion</string>
             <string name="Source"><![CDATA[--[[
@@ -33079,7 +36123,7 @@ return Occlusion
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">Showcase</string>
             <string name="Source"><![CDATA[--[[
@@ -33103,6 +36147,10 @@ return Occlusion
 	Showcase.Init()                     once (UIBuilder)
 	Showcase.SetVisible(on)             menu shown / hidden
 	Showcase.Show(characterId, skinId)  what to show (selection, browsing, skin preview)
+	Showcase.SetRing(ringId)            the worn dais ring from the level track
+	                                    (AccountData.Rings; "" = none): a ring of glowing
+	                                    segments on the dais around the hero, optional
+	                                    rising sparkles and a soft light (your screen only)
 ]]
 
 local Players = game:GetService("Players")
@@ -33115,6 +36163,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
+local AccountData = require(Shared:WaitForChild("AccountData"))
 local ViewportPreview = require(script.Parent.ViewportPreview)
 
 local Showcase = {}
@@ -33549,8 +36598,109 @@ local function updateHidden()
 end
 
 ------------------------------------------------------------------------------------------
+-- Dais ring (level-track cosmetic)
+------------------------------------------------------------------------------------------
+
+local wantRing = ""
+local ringModel: Model? = nil
+local ringKey = ""
+local RING_SEGMENTS = 28
+
+local function dropRing()
+	if ringModel then
+		ringModel:Destroy()
+		ringModel = nil
+	end
+	ringKey = ""
+end
+
+local function ringPart(parent: Instance, size: Vector3, cf: CFrame, color: Color3, transparency: number): BasePart
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.Color = color
+	p.Transparency = transparency
+	p.Size = size
+	p.CFrame = cf
+	p.Parent = parent
+	return p
+end
+
+-- Builds / moves / removes the ring to match wantRing and the stand.
+local function refreshRing()
+	local def = AccountData.Rings[wantRing]
+	local stand = standCF
+	if not visible or not folder or not def or not stand then
+		dropRing()
+		return
+	end
+	local key = wantRing .. "|" .. tostring(stand.Position)
+	if ringModel and ringKey == key and ringModel.Parent then
+		return
+	end
+	dropRing()
+	local m = Instance.new("Model")
+	m.Name = "DaisRing"
+	local function circle(radius: number, thick: number, transparency: number)
+		local step = math.pi * 2 / RING_SEGMENTS
+		local len = 2 * radius * math.tan(step / 2) + 0.05
+		for i = 1, RING_SEGMENTS do
+			local a = i * step
+			local pos = stand * CFrame.new(math.cos(a) * radius, 0.07, math.sin(a) * radius)
+			ringPart(m, Vector3.new(len, 0.08, thick), CFrame.new(pos.Position) * CFrame.Angles(0, -a + math.pi / 2, 0), def.Color, transparency)
+		end
+	end
+	circle(3.3, 0.22, 0.15)
+	if def.Double then
+		circle(3.9, 0.1, 0.4)
+	end
+	local core = ringPart(m, Vector3.new(0.2, 0.2, 0.2), stand * CFrame.new(0, 0.3, 0), def.Color, 1)
+	core.Name = "Core"
+	local light = Instance.new("PointLight")
+	light.Color = def.Color
+	light.Range = 10
+	light.Brightness = def.Glow or 0.6
+	light.Shadows = false
+	light.Parent = core
+	if def.Sparkles then
+		local sparks = Instance.new("ParticleEmitter")
+		sparks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		sparks.Color = ColorSequence.new(def.Color)
+		sparks.LightEmission = 1
+		sparks.LightInfluence = 0
+		sparks.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0) })
+		sparks.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+		sparks.Lifetime = NumberRange.new(1.2, 2)
+		sparks.Speed = NumberRange.new(0.8, 1.6)
+		sparks.SpreadAngle = Vector2.new(10, 10)
+		sparks.Rate = 6
+		sparks.EmissionDirection = Enum.NormalId.Top
+		sparks.Shape = Enum.ParticleEmitterShape.Disc
+		sparks.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+		sparks.Parent = core
+		core.Size = Vector3.new(6.6, 0.05, 6.6)
+	end
+	m.Parent = folder
+	ringModel = m
+	ringKey = key
+end
+
+------------------------------------------------------------------------------------------
 -- Public
 ------------------------------------------------------------------------------------------
+
+function Showcase.SetRing(ringId: string?)
+	local id = type(ringId) == "string" and ringId or ""
+	if id == wantRing then
+		return
+	end
+	wantRing = id
+	refreshRing()
+end
 
 function Showcase.SetVisible(on: boolean)
 	if visible == on then
@@ -33563,6 +36713,7 @@ function Showcase.SetVisible(on: boolean)
 	else
 		dropModel(false)
 	end
+	refreshRing()
 	updateHidden()
 end
 
@@ -33626,6 +36777,7 @@ function Showcase.Init()
 			if not model or not model.Parent then
 				refresh()
 			end
+			refreshRing()
 			updateHidden()
 		end
 	end)
@@ -33664,7 +36816,7 @@ return Showcase
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">StageUI</string>
             <string name="Source"><![CDATA[--[[
@@ -34207,7 +37359,7 @@ return StageUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">TeamUI</string>
             <string name="Source"><![CDATA[--[[
@@ -34744,7 +37896,7 @@ return TeamUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">Telegraphs</string>
             <string name="Source"><![CDATA[--[[
@@ -36096,7 +39248,7 @@ return Telegraphs
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="82">
           <Properties>
             <string name="Name">TerrainFx</string>
             <string name="Source"><![CDATA[--[[
@@ -36186,7 +39338,7 @@ return TerrainFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="83">
           <Properties>
             <string name="Name">Tutorial</string>
             <string name="Source"><![CDATA[--[[
@@ -36612,7 +39764,7 @@ return Tutorial
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">UIAnim</string>
             <string name="Source"><![CDATA[--[[
@@ -36870,7 +40022,7 @@ return UIAnim
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">UIBuilder</string>
             <string name="Source"><![CDATA[--[[
@@ -36917,6 +40069,8 @@ local Showcase = require(script.Parent.Showcase)
 local ClientSettings = require(script.Parent.ClientSettings)
 local TeamUI = require(script.Parent.TeamUI)
 local Tutorial = require(script.Parent.Tutorial)
+local Cosmetics = require(script.Parent.Cosmetics)
+local CurseData = require(Shared:WaitForChild("CurseData"))
 
 local UIBuilder = {}
 
@@ -38233,8 +41387,21 @@ local function buildResults()
 	-- rewards first (new best, unlocks, achievements: what a short screen must not hide),
 	-- then the build and the items
 	results.Best = UIKit.Badge(body, "NEW BEST TIME!", "Gold", { LayoutOrder = 2, Visible = false })
-	results.BuildHolder = new("Frame", { Name = "Build", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 0) }, body)
-	results.ItemsHolder = new("Frame", { Name = "ItemsHolder", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
+	results.BuildHolder = new("Frame", { Name = "Build", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 0) }, body)
+	results.ItemsHolder = new("Frame", { Name = "ItemsHolder", BackgroundTransparency = 1, LayoutOrder = 7, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
+	-- progress: account XP and level, the run's curses, the daily score
+	local prog = UIKit.Panel(body, { Name = "Progress", LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 96) }, true)
+	results.Progress = prog
+	Icons.Draw(prog, "medal", { Size = 34, Position = UDim2.fromOffset(14, 12), Back = C.PanelInset })
+	results.XPText = text(prog, "H3", "", { Name = "XP", Position = UDim2.fromOffset(60, 8), Size = UDim2.new(1, -74, 0, TS(18) + 6), RichText = true, TextTruncate = Enum.TextTruncate.AtEnd })
+	results.XPMeter = UIKit.Meter(prog, {
+		Gradient = ColorSequence.new(P.gold_500, P.gold_300),
+		TextStyle = "Number",
+		TextSize = 12,
+		Position = UDim2.fromOffset(60, TS(18) + 18),
+		Size = UDim2.new(1, -74, 0, 18),
+	})
+	results.ProgLines = text(prog, "Small", "", { Name = "Lines", Position = UDim2.fromOffset(14, TS(18) + 44), Size = UDim2.new(1, -28, 0, 0), RichText = true, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextXAlignment = Enum.TextXAlignment.Center })
 	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Visible = false })
 	-- achievements unlocked this run (one line each: trophy, name, reward)
 	results.Achievements = text(body, "Small", "", {
@@ -38308,6 +41475,12 @@ local function buildResults()
 		local bw = math.clamp(math.floor((inner - 12) / 2), 140, 250)
 		results.Replay.Instance.Size = UDim2.fromOffset(bw, Theme.Size.Button)
 		results.Button.Instance.Size = UDim2.fromOffset(bw, Theme.Size.Button)
+		-- the progress block grows with its lines (wrapped on narrow screens)
+		local lineH = TS(Theme.TextSize.Small) + 4
+		local perLine = inner < 520 and 2 or 1
+		local nLines = (results.ProgLineCount or 0) * perLine
+		results.ProgLines.Size = UDim2.new(1, -28, 0, nLines * lineH)
+		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0))
 		local bodyH = stackHeight(body, 10)
 		local fixed = headH + 10 + Theme.Size.Button + (TS(12) + 4) + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(140, v.Y - 24 - fixed)
@@ -38318,6 +41491,57 @@ local function buildResults()
 	end
 	results.Layout = layoutResults
 	onRelayout(layoutResults)
+end
+
+--[[
+	The progress block: "+340 XP · Level 7 → 8" over the XP bar (account level), then one
+	line each for the run's curses, the daily score and track rewards unlocked.
+]]
+local function fillProgress(data: any)
+	local a = type(data.Account) == "table" and data.Account or nil
+	local lines = {}
+	local curses = type(data.Curses) == "table" and data.Curses or {}
+	if #curses > 0 then
+		local names = {}
+		for _, id in ipairs(curses) do
+			local def = CurseData.Curses[id]
+			table.insert(names, def and def.Name or tostring(id))
+		end
+		table.insert(lines, string.format('<font color="%s"><b>CURSES</b></font>  %s  ·  <font color="%s">%s gold</font>', hex(P.crimson_300), table.concat(names, " · "), hex(P.gold_300), CurseData.GoldText(tonumber(data.CurseGold) or CurseData.GoldMult(curses))))
+	end
+	local d = type(data.Daily) == "table" and data.Daily or nil
+	if d then
+		if d.Scored then
+			table.insert(lines, string.format('<font color="%s"><b>DAILY · SCORED</b></font>  %s%s', hex(P.gold_300), tostring(d.Text or ""), d.NewBest and string.format('  ·  <font color="%s">NEW DAILY BEST</font>', hex(P.moss_200)) or ""))
+		else
+			table.insert(lines, string.format('<font color="%s"><b>DAILY · PRACTICE</b></font>  %s  (not scored)', hex(P.gold_300), tostring(d.Text or "")))
+		end
+	end
+	if a and type(a.Rewards) == "table" and #a.Rewards > 0 then
+		local r = {}
+		for _, name in ipairs(a.Rewards) do
+			table.insert(r, tostring(name))
+		end
+		table.insert(lines, string.format('<font color="%s"><b>UNLOCKED</b></font>  %s  (wear it in TRACK)', hex(P.gold_300), table.concat(r, " · ")))
+	end
+	results.Progress.Visible = a ~= nil or #lines > 0
+	if a then
+		local from, to = tonumber(a.From) or 1, tonumber(a.To) or 1
+		local levelText = from ~= to and string.format("Level %d → %d", from, to) or ("Level " .. to)
+		results.XPText.Text = string.format('<font color="%s">+%s XP</font>  ·  %s', hex(P.gold_200), UIKit.formatNumber(tonumber(a.Gained) or 0), levelText)
+		local need = tonumber(a.Need) or 0
+		if need > 0 then
+			results.XPMeter.Set((tonumber(a.Into) or 0) / need, string.format("%s / %s XP", UIKit.formatNumber(tonumber(a.Into) or 0), UIKit.formatNumber(need)))
+		else
+			results.XPMeter.Set(1, "MAX LEVEL")
+		end
+		results.XPMeter.Frame.Visible = true
+	else
+		results.XPText.Text = "Run progress"
+		results.XPMeter.Frame.Visible = false
+	end
+	results.ProgLines.Text = table.concat(lines, "\n")
+	results.ProgLineCount = #lines
 end
 
 -- Weapons (with levels / evolutions) and passives of the run, as tiles.
@@ -38393,6 +41617,10 @@ local function onRunResult(data)
 	local heroId = type(data.CharacterId) == "string" and data.CharacterId or CharacterData.Default
 	local heroDef = CharacterData.Characters[heroId]
 	Icons.Character(results.Medal, heroId, { Size = 48, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+	-- the worn portrait frame (level track)
+	local framed = Cosmetics.Frame(results.Medal, profile and profile.Frame or "")
+	results.MedalStroke.Transparency = framed and 1 or 0.05
+	fillProgress(data)
 	local damage = tonumber(data.Damage) or 0
 	results.Hero.Text = string.format("%s  ·  %s damage dealt", heroDef and heroDef.Name or heroId, UIKit.formatNumber(math.floor(damage)))
 	-- numbers
@@ -38875,7 +42103,7 @@ return UIBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[--[[
@@ -40589,7 +43817,7 @@ return UIKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">VFX</string>
             <string name="Source"><![CDATA[--[[
@@ -43207,7 +46435,7 @@ return VFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">ViewportPreview</string>
             <string name="Source"><![CDATA[--[[
@@ -43402,7 +46630,7 @@ return ViewportPreview
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="79">
+  <Item class="Workspace" referent="89">
     <Properties>
       <string name="Name">Workspace</string>
       <float name="FallenPartsDestroyHeight">-200</float>

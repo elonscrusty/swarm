@@ -15,14 +15,20 @@
 	Retry:   every DataStore call is pcall'd with exponential backoff.
 	Studio:  if DataStores are unavailable (no API access) data is kept in memory only.
 
-	Save shape (Config.Data.SchemaVersion = 5):
+	Save shape (Config.Data.SchemaVersion = 6):
 	  Version, Gold, Meta {id → level}, OwnedCharacters {id → true}, SelectedCharacter,
-	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage},
+	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage,
+	  MostKills},
 	  PurchaseIds {string}, Settings {Music, Sfx, Shake, ReducedEffects, DamageNumbers,
 	  Tips} (Config.Settings.Defaults), ReviveTokens, SelectedArena,
 	  Achievements {Progress {id → number}, Unlocked {id → os.time()}} (AchievementService),
 	  Title (worn achievement title, "" = none), NameColor (AchievementData.Colors id, ""),
-	  TutorialDone (first-run tips finished / skipped), SeenTips {tipId → true}
+	  TutorialDone (first-run tips finished / skipped), SeenTips {tipId → true},
+	  Curses {curseId} (the run modifiers last picked in the lobby, CurseData),
+	  Daily {Day, Used, Score, Plays, BestScore, BestDay} (Daily Challenge: today's scored
+	  attempt and the best ever score, CurseData.DailyScore),
+	  Account {XP, Level} (cosmetic account level, AccountData), Ring, Frame (worn dais
+	  ring / portrait frame from the level track, "" = none)
 
 	Save health is shown to the player (never pretend saving works): the player attribute
 	"SaveStatus" is "ok", "memory" (DataStores unavailable: nothing is saved this session)
@@ -35,6 +41,8 @@ local RunService = game:GetService("RunService")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
+local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
+local AccountData = require(game:GetService("ReplicatedStorage").Shared.AccountData)
 
 local DataService = {}
 
@@ -58,6 +66,10 @@ local jobId = (game.JobId ~= "" and game.JobId) or ("studio-" .. tostring(math.r
 -- Defaults and migration
 ------------------------------------------------------------------------------------------
 
+local function defaultDaily()
+	return { Day = 0, Used = false, Score = 0, Plays = 0, BestScore = 0, BestDay = 0 }
+end
+
 local function defaultData()
 	return {
 		Version = Config.Data.SchemaVersion,
@@ -66,7 +78,7 @@ local function defaultData()
 		OwnedCharacters = { [CharacterData.Default] = true },
 		SelectedCharacter = CharacterData.Default,
 		Skins = {},
-		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0 },
+		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0, MostKills = 0 },
 		PurchaseIds = {},
 		Settings = table.clone(Config.Settings.Defaults),
 		ReviveTokens = 0,
@@ -76,6 +88,11 @@ local function defaultData()
 		NameColor = "",
 		TutorialDone = false,
 		SeenTips = {},
+		Curses = {},
+		Daily = defaultDaily(),
+		Account = { XP = 0, Level = 1 },
+		Ring = "",
+		Frame = "",
 	}
 end
 DataService.DefaultData = defaultData
@@ -87,7 +104,10 @@ DataService.DefaultData = defaultData
 	at 0, the furthest stage reached in a run from now on. Version 3 had no achievements: they
 	start empty (owned characters, gold and skins are untouched). Version 4 had no
 	accessibility settings and no first-run tips: settings get their defaults, and anyone
-	who has played a run already counts as having done the tutorial.
+	who has played a run already counts as having done the tutorial. Version 5 had no
+	retention systems: curses start unpicked, no daily played, account level 1 with 0 XP
+	(the level track starts for everyone from the next run; old progress is untouched),
+	no ring / frame worn, Stats.MostKills 0.
 ]]
 local MIGRATIONS: { [number]: (any) -> any } = {
 	[0] = function(data)
@@ -145,6 +165,19 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.TutorialDone = (runs or 0) > 0
 		data.SeenTips = {}
 		data.Version = 5
+		return data
+	end,
+	[5] = function(data)
+		-- curses, the daily challenge, the account level and its cosmetics (all new)
+		data.Curses = {}
+		data.Daily = defaultDaily()
+		data.Account = { XP = 0, Level = 1 }
+		data.Ring = ""
+		data.Frame = ""
+		if type(data.Stats) == "table" and type(data.Stats.MostKills) ~= "number" then
+			data.Stats.MostKills = 0
+		end
+		data.Version = 6
 		return data
 	end,
 }
@@ -205,6 +238,30 @@ function DataService.Migrate(data: any): { [string]: any }
 	end
 	if type(data.SeenTips) ~= "table" then
 		data.SeenTips = {}
+	end
+	-- schema 6: curses, daily, account level, cosmetics (hand edits / partial saves)
+	if type(data.Curses) ~= "table" then
+		data.Curses = {}
+	end
+	data.Curses = CurseData.Sanitize(data.Curses) or {}
+	if type(data.Daily) ~= "table" then
+		data.Daily = defaultDaily()
+	end
+	for k, v in pairs(defaultDaily()) do
+		if type(data.Daily[k]) ~= type(v) then
+			data.Daily[k] = v
+		end
+	end
+	if type(data.Account) ~= "table" then
+		data.Account = { XP = 0, Level = 1 }
+	end
+	local xp = tonumber(data.Account.XP)
+	data.Account.XP = (xp and xp == xp) and math.max(0, math.floor(xp)) or 0
+	data.Account.Level = (AccountData.LevelFor(data.Account.XP))
+	for _, key in ipairs({ "Ring", "Frame", "Title", "NameColor" }) do
+		if type(data[key]) ~= "string" then
+			data[key] = ""
+		end
 	end
 	if type(data.OwnedCharacters) ~= "table" then
 		data.OwnedCharacters = {}

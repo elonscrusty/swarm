@@ -410,6 +410,80 @@ affordable, "Need N more gold" when not) or MAXED. A tap shows BUYING... until t
 ProfileSync; `BuyMeta` carries the level the player saw, so a double tap buys one level, and a
 rejected purchase re-syncs the real gold.
 
+## Curses, Daily Challenge, leaderboards, account level
+
+Four retention systems, all server-authoritative and cosmetic / opt-in (no pay-to-win:
+nothing is sold, nothing gives run stats outside the run it belongs to). Save schema 6
+(DataService migration 5 → 6, below).
+
+**Curses** (run modifiers; data `src/shared/CurseData.lua`, server `RunModifiers.lua`,
+lobby `MenuCurses.lua`). Before a run the starter toggles up to 3 on the CURSES screen
+(home: the button under TRIO; portrait: next to DAILY). Each one makes the run harder for
+everyone in it and adds gold (additive, shown on every card and as a total):
+
+| Curse | Effect | Gold |
+|---|---|---|
+| Frenzy | normal enemies +25% speed (bosses keep their patterns) | +20% |
+| Fragile | heroes -30% max HP | +20% |
+| Horde | +40% live enemies and mini-wave size (the enemy cap still holds) | +25% |
+| Famine | no Roast Chicken floor pickups | +15% |
+| Glass Cannon | +30% damage dealt and +30% damage taken | +15% |
+| Elite Surge | random elites x3 as often | +30% |
+
+The pick is sent with `SetCurses` (validated: known ids, no duplicates, max 3; ignored in a
+run) and saved (`data.Curses`, player attribute `Curses`). A run uses the curses of whoever
+started it (Solo: you; Duo / Trio: the countdown's starter, who can still change them
+during the countdown; joiners see them on the countdown panel and can open the screen).
+They are fixed when the run starts (SwarmState `Curses` / `CurseGold`), shown as small
+chips on the HUD (under the items strip), in a start toast and on the results. The gold
+bonus multiplies all run gold (`GoldSystem.AddRunGold`: kills, chests, the boss, nests,
+the portal bonus) and the account XP of the run. Hooks: `EnemySpawner.Spawn` (speed),
+`topUp` (elites), `StageManager.SpawnMult` (horde), `XPSystem.RollFloorPickup` (famine),
+the stat sheet's `Curse` input (`StatSheet.Compute`: max HP, Might, DamageTaken).
+
+**Daily Challenge** (`CurseData.Daily(day)`, lobby DAILY card → `MenuDaily.lua`). One fixed
+setup per UTC day, the same on every server: the first arena and the whole arena tour
+(stage n's arena), the boss order (stage 1 is always the Scorpion Queen), 2 curses and a
+starting bonus (Armory: a second weapon; Treasure: two common items; Head Start: start at
+level 4; Second Wind: one extra life). Solo only; you pick your hero. PLAY sends
+`StartRun("Daily")`. The FIRST daily run of the UTC day is the scored attempt and is spent
+the moment it starts (quitting gives no retry); later ones are PRACTICE (unscored, normal
+XP). Score = stages cleared, then time: with stages cleared, the run time when the last
+boss died (faster is better); with none, the time survived (`CurseData.DailyScore`, one
+integer for the leaderboard). Saved: today's score and the best ever (`data.Daily`); the
+results show "DAILY · SCORED 3 stages · 9:12 · NEW DAILY BEST" or "PRACTICE".
+
+**Leaderboards** (`LeaderboardService.lua`, lobby RANKS → `MenuLeaderboards.lua`, numbers in
+`Config.Leaderboards`). OrderedDataStores `SwarmLB_BestStage` (furthest stage reached),
+`SwarmLB_Daily_<UTC day>` (today's scored attempts), `SwarmLB_Kills` (most kills in one
+run). Written when a run is committed: a queue keeps each player's best, flushes every 6 s,
+at most one write per player and board every 30 s, `UpdateAsync` keeping the stored max,
+only while the write budget leaves 3 requests in reserve, retried up to 5 times, all
+pcall'd, and once more at shutdown. Read on request (`LeaderboardRequest`): the top 50 from
+a cache refreshed at most every 60 s (in the background, only for boards someone looked at
+in the last 3 minutes), your row highlighted, your rank when you are in the top 50, your
+own best from your save otherwise. Without DataStores (Studio without API access) the
+screen says so and shows this server's runs only.
+
+**Account level** (`AccountData.lua`, `AccountService.lua`, lobby TRACK → `MenuTrack.lua`).
+Every committed run gives account XP: 12 per minute survived, 50 per stage cleared, 1 per
+10 kills, 40 per stage boss, 60 for a win, x the curses' gold bonus, +100 for the day's
+scored daily attempt (capped at 5,000 per run). Level n → n+1 needs 150 + 50 x (n - 1) XP
+(level 50 = 66,150 XP, about 120 good runs). Rewards are cosmetic only: titles (2, 10, 20,
+30, 40, 50), nameplate colours (3, 12, 22, 33, 43), lobby dais rings (5, 15, 25, 35, 45:
+a glowing ring under your hero on the menu dais, some with sparkles) and portrait frames
+(7, 18, 28, 38, 48, 50: the hero medallion on the results and TRACK screens). The first one
+of each kind is worn automatically; TRACK lists every reward with WEAR / WORN / LOCKED
+(`EquipCosmetic` with "Title" / "Color" / "Ring" / "Frame", checked on the server); titles
+and colours from the track also show under STATS → ACHIEVEMENTS. The level shows on the
+lobby nameplate ("LV 7 Name · TITLE") and the results ("+340 XP · Level 7 → 8" with the XP
+bar and any reward unlocked).
+
+Save schema 6 (DataService migration 5 → 6): `Curses = {}`, `Daily = { Day, Used, Score,
+Plays, BestScore, BestDay }` (all 0 / false), `Account = { XP = 0, Level = 1 }`, `Ring = ""`,
+`Frame = ""`, `Stats.MostKills = 0`; everything else is untouched (the level track starts
+for everyone from their next run). Migrate also re-validates these fields on every load.
+
 ## 1. Sync with Rojo
 
 1. Install Rojo 7.x (the CLI and the Roblox Studio plugin).
@@ -424,7 +498,8 @@ To make a place file without Studio: `rojo build default.project.json -o Swarm.r
 
 Studio setup for saving:
 - **Game Settings → Security → Enable Studio Access to API Services** (DataStores). Without it the
-  game still runs, but progress is kept in memory only (the shop shows a red note).
+  game still runs, but progress is kept in memory only (the shop shows a red note) and the
+  leaderboards show this server's runs only (the RANKS screen says so).
 - **Game Settings → Places → Max Players**: 4 (matches `Config.Run.MaxPlayers`).
 
 ## 2. Project layout
@@ -438,6 +513,8 @@ src/shared/   → ReplicatedStorage.Shared
   PassiveData.lua       15 passives x 3-5 levels (PassiveData.MaxLevelOf)
   StatSheet.lua         the run stat sheet as a pure function + card lines for passives
   AchievementData.lua   achievements: event, goal, reward; titles / name colours, hero unlocks
+  CurseData.lua         curses (run modifiers), the Daily Challenge setup and score
+  AccountData.lua       account level: XP per run, the level curve, cosmetic rewards
   EnemyData.lua         enemy types (roles, behaviours, creatures, boss bodies and boss
                         objects) + per-minute spawn table
   BossData.lua          the 4 stage bosses: entrance, phases, attack timings, the rotation (data only)
@@ -467,7 +544,10 @@ src/server/
     ItemSystem.lua      run items: grant / roll, stat bonus, crits and item procs
     LootSystem.lua      chests, Shrine of Chance, Bargain Shrine, guarded altar per stage
     DataService.lua     DataStore with session locking, retry, autosave, migration
-                        (schema 4: achievements, title, name colour)
+                        (schema 6: curses, daily, account level, ring / frame)
+    RunModifiers.lua    curses (SetCurses, the run's modifiers) and the Daily Challenge
+    AccountService.lua  account XP / level per run, ring / frame cosmetics
+    LeaderboardService.lua  OrderedDataStore boards: queued writes, cached top 50
     Events.lua          tiny server event bus (Fire / On) for achievements
     AchievementService.lua  achievement progress, unlocks, rewards, EquipCosmetic
     MonetizationService.lua  gamepasses, developer products, ProcessReceipt
@@ -494,6 +574,11 @@ src/client/   → StarterPlayerScripts.SwarmClient
   StageUI.lua           portal arrow, charge ring, NEXT STAGE / RETURN TO LOBBY panel, travel fade
   LootUI.lua            items strip, item popups, chest / shrine / altar prompts, items list
   LobbyScreen.lua       the 2D lobby menu: home, characters, upgrades (§10)
+  MenuCurses.lua        CURSES screen (pick up to 3 run modifiers)
+  MenuDaily.lua         DAILY CHALLENGE screen (today's route, curses, bonus, PLAY)
+  MenuLeaderboards.lua  LEADERBOARDS screen (Best stage / Daily / Most kills)
+  MenuTrack.lua         TRACK screen (account level, cosmetic rewards to wear)
+  Cosmetics.lua         portrait frames, name colours, the level badge
   ViewportPreview.lua   turning 3D character previews (ViewportFrames)
   DevPanel.lua          DEV button, Studio only by default (§10)
   UIKit.lua             shared UI helpers, colours, upgrade icon tiles
@@ -657,7 +742,9 @@ ProximityPrompts are switched off).
 
 - **Home**: gold, best time and wins at the top, SETTINGS (sound, comfort, tips; see §12) top right; your own
   character turning in the middle (tap it to change character); your permanent upgrades
-  summarised; the big **SOLO / DUO / TRIO** buttons; CHARACTERS, UPGRADES and ARENA.
+  summarised; the big **SOLO / DUO / TRIO** buttons and CURSES; the cards CHARACTERS,
+  UPGRADES, ARENA and DAILY CHALLENGE; corner buttons SETTINGS, STATS, RANKS (leaderboards)
+  and TRACK (account level). The nameplate shows your level, name and worn title.
 - **Characters**: one card per character with a turning 3D preview, role, description,
   starting weapon, bonus, Buy / Select and the skins (tap a swatch to equip or buy).
 - **Upgrades**: permanent gold upgrades and the Robux shop (gold and cosmetics only).
@@ -671,6 +758,7 @@ Modes (`Config.Modes`):
 | Solo | 1 | at once, no countdown |
 | Duo | 2 | countdown (`Config.Run.CountdownSeconds`); others tap JOIN |
 | Trio | 3 | same as Duo |
+| Daily | 1 | the DAILY CHALLENGE card's PLAY (fixed route / curses / bonus; see "Curses, Daily Challenge ...") |
 
 During a countdown the lobby shows who joined; the player who started it can tap
 **START NOW** once someone joined, and a full run starts by itself. Duo and Trio share the

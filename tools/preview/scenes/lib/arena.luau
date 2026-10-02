@@ -194,6 +194,12 @@ function A.build(opts)
 	end
 	C.setState({ Phase = "Running", Mode = "Solo", RunTime = runSeconds, Participants = 1, Arena = arenaName, SelectedArena = arenaName, BossHP = 0, BossMaxHP = 0, Frozen = false, LobbySpawn = CFrame.new(1200, 3.5, -6) })
 	C.setPlayer({ InRun = true, Alive = true, HP = 82, MaxHP = 120, Level = 14, XP = 38, XPNeeded = 80, Kills = 412, RunGold = 57, PartnerRevivesLeft = 0, AuraRadius = 0 })
+	-- the run's curses / a daily run (HUD chips): --set curses=Frenzy,Horde --set daily=on
+	if preview.args.curses or preview.args.daily then
+		local list = preview.args.curses or ""
+		local CurseData = C.shared("CurseData")
+		C.setState({ Curses = list, CurseGold = CurseData and CurseData.GoldMult(CurseData.FromString(list)) or 1, DailyRun = preview.args.daily == "on" })
+	end
 	if preview.args.steadyaim then
 		-- the Ranger's buff chip (WeaponSystem sets SteadyAim): --set steadyaim=on|off
 		C.setPlayer({ SteadyAim = preview.args.steadyaim == "on" })

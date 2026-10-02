@@ -7,6 +7,10 @@
 -- Level-up offers are answered at once (card 1) so the run never stays frozen.
 -- --set weapons=new adds the dev loadout of the eight newer weapons (evolved on stage 2),
 -- --set character=<hero> plays as that hero.
+-- --set curses=Frenzy,Fragile picks curses first (SetCurses); --set daily=on plays today's
+-- Daily Challenge instead (its fixed route / curses / bonus; scored), then a second daily
+-- run (practice, ended by a defeat). Both print the curse effects, the daily, the account
+-- XP / level and the leaderboards (LeaderboardData answers) at the end.
 local C = lib("common")
 local Players = game:GetService("Players")
 preview.forceMeshesUploaded()
@@ -58,10 +62,38 @@ if preview.args.character then
 		data.SelectedCharacter = preview.args.character
 	end
 end
-send("StartRun", "Solo")
+-- retention: curses / daily (RunModifiers), the results' progress, the leaderboards
+local Mods = preview.server("RunModifiers")
+local results = {}
+preview.remote("RunResult").OnClientEvent:Connect(function(d)
+	table.insert(results, d)
+end)
+local boards = {}
+preview.remote("LeaderboardData").OnClientEvent:Connect(function(d)
+	boards[d.Board] = d
+end)
+local daily = preview.args.daily == "on"
+if preview.args.curses then
+	send("SetCurses", string.split(preview.args.curses, ","))
+	send("SetCurses", { "Bogus", "Frenzy", "Frenzy", 7 }) -- rejected (not all strings)
+	send("SetCurses", { "Horde", "Famine", "EliteSurge", "Fragile" }) -- trimmed to 3
+	preview.log("curses attr after spam", tostring(me:GetAttribute("Curses")))
+	send("SetCurses", string.split(preview.args.curses, ","))
+	preview.log("curses attr", tostring(me:GetAttribute("Curses")))
+end
+send("StartRun", daily and "Daily" or "Solo")
 preview.advance(2)
 log("started")
 local rp = RM.GetRunPlayer(me)
+local function logMods(label)
+	local r = RM.GetRunPlayer(me)
+	preview.log(label, "curses", table.concat(Mods.Active(), ","), "goldMult", Mods.GoldMult(), "spawnMult", Mods.SpawnMult(), "enemySpeed", Mods.EnemySpeedMult(),
+		"eliteMult", Mods.EliteChanceMult(), "noHeal", Mods.NoHealPickups(), "daily", Mods.IsDaily(), "scored", r and tostring(r.DailyScored),
+		"maxHP", r and r.Stats.MaxHP, "might", r and r.Stats.Might, "dmgTaken", r and r.Stats.DamageTaken,
+		"weapons", r and table.concat(r.WeaponOrder, "+"), "items", r and #r.ItemOrder, "level", r and r.Level, "revives", r and r.RevivesLeft,
+		"arena", tostring(st:GetAttribute("StageArena")), "boss", tostring(st:GetAttribute("StageBoss")), "state curses", tostring(st:GetAttribute("Curses")))
+end
+logMods("modifiers")
 if rp then
 	rp.InvulnUntil = math.huge -- the smoke test is about the loop, not survival
 end
@@ -226,6 +258,55 @@ log("returned")
 local DS = preview.server("DataService")
 local data = DS.GetData(me)
 if data then
-	preview.log("stats", "Wins", data.Stats.Wins, "BestStage", data.Stats.BestStage, "Runs", data.Stats.Runs, "Gold", data.Gold, "Version", data.Version)
+	preview.log("stats", "Wins", data.Stats.Wins, "BestStage", data.Stats.BestStage, "Runs", data.Stats.Runs, "Gold", data.Gold, "Version", data.Version, "MostKills", data.Stats.MostKills)
 end
+local function logResult(label)
+	local d = results[#results]
+	if not d then
+		preview.log(label, "no RunResult")
+		return
+	end
+	local a = d.Account or {}
+	preview.log(label, "won", tostring(d.Won), "portal", tostring(d.Portal), "arena", tostring(d.Arena), "curses", table.concat(d.Curses or {}, ","), "curseGold", tostring(d.CurseGold),
+		"XP +" .. tostring(a.Gained), "level", tostring(a.From) .. "->" .. tostring(a.To), "into", tostring(a.Into) .. "/" .. tostring(a.Need), "rewards", table.concat(a.Rewards or {}, ","),
+		"daily", d.Daily and (tostring(d.Daily.Scored) .. " " .. tostring(d.Daily.Text) .. " newBest=" .. tostring(d.Daily.NewBest)) or "-")
+end
+logResult("result")
+if data then
+	preview.log("save", "Account XP", data.Account.XP, "Level", data.Account.Level, "Title", data.Title, "NameColor", data.NameColor, "Ring", data.Ring, "Frame", data.Frame,
+		"Daily", data.Daily.Day, tostring(data.Daily.Used), data.Daily.Score, "best", data.Daily.BestScore, "plays", data.Daily.Plays, "Curses", table.concat(data.Curses, ","))
+end
+if daily then
+	-- a second daily run today: practice (unscored), ended by a defeat
+	send("StartRun", "Daily")
+	preview.advance(2)
+	logMods("practice run")
+	RM.EndRun(false)
+	preview.advance(1)
+	logResult("practice result")
+	preview.advance(26)
+	log("practice back")
+	if data then
+		preview.log("save after practice", "Daily", data.Daily.Day, tostring(data.Daily.Used), "score", data.Daily.Score, "plays", data.Daily.Plays, "XP", data.Account.XP)
+	end
+end
+-- the queued leaderboard writes flush (throttled), then the boards are read
+preview.advance(8)
+for _, id in ipairs({ "BestStage", "Daily", "Kills" }) do
+	send("LeaderboardRequest", id)
+end
+preview.advance(3)
+for _, id in ipairs({ "BestStage", "Daily", "Kills" }) do
+	send("LeaderboardRequest", id)
+end
+preview.advance(1)
+for _, id in ipairs({ "BestStage", "Daily", "Kills" }) do
+	local b = boards[id]
+	local rows = {}
+	for _, r in ipairs(b and b.Rows or {}) do
+		table.insert(rows, string.format("#%d %s=%d%s", r.Rank, r.Name, r.Value, r.Me and "(me)" or ""))
+	end
+	preview.log("board", id, "status", b and b.Status or "none", "myRank", b and tostring(b.MyRank) or "-", "myBest", b and tostring(b.MyBest) or "-", table.concat(rows, " "))
+end
+send("LeaderboardRequest", "Nope") -- ignored
 preview.advance(2)

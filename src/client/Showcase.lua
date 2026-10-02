@@ -19,6 +19,10 @@
 	Showcase.Init()                     once (UIBuilder)
 	Showcase.SetVisible(on)             menu shown / hidden
 	Showcase.Show(characterId, skinId)  what to show (selection, browsing, skin preview)
+	Showcase.SetRing(ringId)            the worn dais ring from the level track
+	                                    (AccountData.Rings; "" = none): a ring of glowing
+	                                    segments on the dais around the hero, optional
+	                                    rising sparkles and a soft light (your screen only)
 ]]
 
 local Players = game:GetService("Players")
@@ -31,6 +35,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
+local AccountData = require(Shared:WaitForChild("AccountData"))
 local ViewportPreview = require(script.Parent.ViewportPreview)
 
 local Showcase = {}
@@ -465,8 +470,109 @@ local function updateHidden()
 end
 
 ------------------------------------------------------------------------------------------
+-- Dais ring (level-track cosmetic)
+------------------------------------------------------------------------------------------
+
+local wantRing = ""
+local ringModel: Model? = nil
+local ringKey = ""
+local RING_SEGMENTS = 28
+
+local function dropRing()
+	if ringModel then
+		ringModel:Destroy()
+		ringModel = nil
+	end
+	ringKey = ""
+end
+
+local function ringPart(parent: Instance, size: Vector3, cf: CFrame, color: Color3, transparency: number): BasePart
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.Color = color
+	p.Transparency = transparency
+	p.Size = size
+	p.CFrame = cf
+	p.Parent = parent
+	return p
+end
+
+-- Builds / moves / removes the ring to match wantRing and the stand.
+local function refreshRing()
+	local def = AccountData.Rings[wantRing]
+	local stand = standCF
+	if not visible or not folder or not def or not stand then
+		dropRing()
+		return
+	end
+	local key = wantRing .. "|" .. tostring(stand.Position)
+	if ringModel and ringKey == key and ringModel.Parent then
+		return
+	end
+	dropRing()
+	local m = Instance.new("Model")
+	m.Name = "DaisRing"
+	local function circle(radius: number, thick: number, transparency: number)
+		local step = math.pi * 2 / RING_SEGMENTS
+		local len = 2 * radius * math.tan(step / 2) + 0.05
+		for i = 1, RING_SEGMENTS do
+			local a = i * step
+			local pos = stand * CFrame.new(math.cos(a) * radius, 0.07, math.sin(a) * radius)
+			ringPart(m, Vector3.new(len, 0.08, thick), CFrame.new(pos.Position) * CFrame.Angles(0, -a + math.pi / 2, 0), def.Color, transparency)
+		end
+	end
+	circle(3.3, 0.22, 0.15)
+	if def.Double then
+		circle(3.9, 0.1, 0.4)
+	end
+	local core = ringPart(m, Vector3.new(0.2, 0.2, 0.2), stand * CFrame.new(0, 0.3, 0), def.Color, 1)
+	core.Name = "Core"
+	local light = Instance.new("PointLight")
+	light.Color = def.Color
+	light.Range = 10
+	light.Brightness = def.Glow or 0.6
+	light.Shadows = false
+	light.Parent = core
+	if def.Sparkles then
+		local sparks = Instance.new("ParticleEmitter")
+		sparks.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		sparks.Color = ColorSequence.new(def.Color)
+		sparks.LightEmission = 1
+		sparks.LightInfluence = 0
+		sparks.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.18), NumberSequenceKeypoint.new(1, 0) })
+		sparks.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+		sparks.Lifetime = NumberRange.new(1.2, 2)
+		sparks.Speed = NumberRange.new(0.8, 1.6)
+		sparks.SpreadAngle = Vector2.new(10, 10)
+		sparks.Rate = 6
+		sparks.EmissionDirection = Enum.NormalId.Top
+		sparks.Shape = Enum.ParticleEmitterShape.Disc
+		sparks.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+		sparks.Parent = core
+		core.Size = Vector3.new(6.6, 0.05, 6.6)
+	end
+	m.Parent = folder
+	ringModel = m
+	ringKey = key
+end
+
+------------------------------------------------------------------------------------------
 -- Public
 ------------------------------------------------------------------------------------------
+
+function Showcase.SetRing(ringId: string?)
+	local id = type(ringId) == "string" and ringId or ""
+	if id == wantRing then
+		return
+	end
+	wantRing = id
+	refreshRing()
+end
 
 function Showcase.SetVisible(on: boolean)
 	if visible == on then
@@ -479,6 +585,7 @@ function Showcase.SetVisible(on: boolean)
 	else
 		dropModel(false)
 	end
+	refreshRing()
 	updateHidden()
 end
 
@@ -542,6 +649,7 @@ function Showcase.Init()
 			if not model or not model.Parent then
 				refresh()
 			end
+			refreshRing()
 			updateHidden()
 		end
 	end)

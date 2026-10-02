@@ -16,6 +16,7 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
 local AchievementData = require(Shared:WaitForChild("AchievementData"))
+local AccountData = require(Shared:WaitForChild("AccountData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -179,6 +180,16 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 				end
 			end
 		end
+		-- the account level track's titles / colours (TRACK screen)
+		local level = (p.Account and AccountData.LevelFor(tonumber(p.Account.XP) or 0)) or 1
+		for _, lv in ipairs(AccountData.RewardLevels) do
+			for _, r in ipairs(AccountData.Rewards[lv]) do
+				if r.Kind == kind and level >= lv then
+					local c = kind == "Color" and AccountData.Colors[r.Id] or nil
+					table.insert(options, { Id = r.Id, Name = c and c.Name or r.Id, Color = c and c.Color or nil })
+				end
+			end
+		end
 		local worn = (kind == "Title" and p.Title or p.NameColor) or ""
 		for i, o in ipairs(options) do
 			local b = UIKit.Button(chips, {
@@ -198,7 +209,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		if #options == 1 then
-			text(row, "Small", kind == "Title" and "Earn titles from achievements." or "Earn name colours from achievements.", {
+			text(row, "Small", kind == "Title" and "Earn titles from achievements and the TRACK." or "Earn name colours from achievements and the TRACK.", {
 				Position = UDim2.fromOffset(112, TS(12) + 8),
 				Size = UDim2.new(1, -112, 0, 40),
 				TextColor3 = C.TextFaint,

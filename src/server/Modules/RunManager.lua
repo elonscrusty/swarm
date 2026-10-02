@@ -37,6 +37,7 @@ local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
+local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local MapBuilder = require(script.Parent.MapBuilder)
 local Fx = require(script.Parent.Fx)
@@ -172,9 +173,10 @@ function RunManager.Broadcast(text: string, color: Color3?, big: boolean?)
 	Remotes.FireAllClients("Notify", { Text = text, Color = color, Big = big })
 end
 
--- True for a mode name a client may ask for (the lobby's modes plus the old "Squad").
+-- True for a mode name a client may ask for (the lobby's modes, the Daily Challenge and
+-- the old "Squad").
 local function isMode(name: any): boolean
-	return type(name) == "string" and (table.find(Config.Modes.Order, name) ~= nil or name == "Squad")
+	return type(name) == "string" and (table.find(Config.Modes.Order, name) ~= nil or name == "Squad" or name == "Daily")
 end
 
 local function modeDef()
@@ -673,6 +675,7 @@ local function placeOnArena(arena, i: number, n: number): Vector3
 end
 
 local function beginRun()
+	local runStarter = starter -- whose curses the run uses (Solo / Daily: the only player)
 	local list = {}
 	for player in pairs(joined) do
 		if player.Parent and ctx.DataService.GetData(player) and #list < maxPlayers() then
@@ -688,8 +691,11 @@ local function beginRun()
 		return
 	end
 
-	-- stage 1: the lobby's arena with its portal (StageManager also sets EnemyAI's arena)
-	local arena = ctx.StageManager.BeginRun(selectedArena)
+	-- curses (the starter's pick) or the Daily Challenge's fixed setup
+	local daily = ctx.RunModifiers.BeginRun(mode, runStarter or list[1])
+	-- stage 1: the lobby's arena with its portal (StageManager also sets EnemyAI's arena);
+	-- the daily has its own arena tour and boss order
+	local arena = ctx.StageManager.BeginRun(daily and daily.Arenas[1] or selectedArena, daily)
 
 	runTime = 0
 	frozen = false
@@ -711,6 +717,7 @@ local function beginRun()
 
 		local character = CharacterData.Characters[rp.CharacterId] or CharacterData.Characters[CharacterData.Default]
 		ctx.LevelUpSystem.AddWeapon(rp, character.StartWeapon)
+		ctx.RunModifiers.SetupRunPlayer(rp) -- daily: scored / practice + the starting bonus
 		ctx.LevelUpSystem.RecomputeStats(rp)
 		setHP(rp, rp.Stats.MaxHP)
 		player:SetAttribute("CharacterId", rp.CharacterId) -- the HUD's team list shows the hero
@@ -729,6 +736,7 @@ local function beginRun()
 		ctx.WeaponSystem.OnInventoryChanged(rp)
 		ctx.LevelUpSystem.SendInventory(rp)
 		RunManager.ApplyMovement(rp)
+		ctx.RunModifiers.AfterSetup(rp) -- daily Head Start: its level-ups
 
 		local data = ctx.DataService.GetData(player)
 		if data then
@@ -736,8 +744,28 @@ local function beginRun()
 		end
 	end
 	state:SetAttribute("Participants", #runPlayers)
-	RunManager.Broadcast("STAGE 1", Color3.fromRGB(255, 230, 150), true)
+	ctx.RunModifiers.Publish()
+	if daily then
+		local first = runPlayers[1]
+		RunManager.Broadcast("DAILY CHALLENGE", Color3.fromRGB(255, 230, 150), true)
+		RunManager.Broadcast(first and first.DailyScored and "Scored attempt: make it count!" or "Practice run: not scored.", Color3.fromRGB(255, 220, 120))
+	else
+		RunManager.Broadcast("STAGE 1", Color3.fromRGB(255, 230, 150), true)
+	end
+	local curses = ctx.RunModifiers.Active()
+	if #curses > 0 then
+		local names = {}
+		for _, id in ipairs(curses) do
+			table.insert(names, CurseData.Curses[id].Name)
+		end
+		RunManager.Broadcast(string.format("Curses: %s · %s gold", table.concat(names, ", "), CurseData.GoldText(ctx.RunModifiers.GoldMult())), Color3.fromRGB(230, 150, 160))
+	end
 	RunManager.Broadcast("Find the portal and summon the Scorpion Queen!", Color3.fromRGB(180, 200, 255))
+end
+
+-- Who started the countdown (their curses are on show), or nil.
+function RunManager.GetStarter(): Player?
+	return starter
 end
 
 -- Arena `name` may be picked in the lobby (Config.Arenas[name].RequiredBestStage).
@@ -764,6 +792,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	local newBest, unlocked = false, nil
 	local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
 	data.Stats.TotalKills += rp.Kills
+	data.Stats.MostKills = math.max(data.Stats.MostKills or 0, rp.Kills)
 	if t > data.Stats.BestTime then
 		data.Stats.BestTime = math.floor(t)
 		newBest = true
@@ -783,6 +812,21 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	end
 	-- the first run is the tutorial run: tips stop after it (Settings > Replay tips)
 	data.TutorialDone = true
+	-- retention: the daily score, account XP, the leaderboards (results show the first two)
+	local cleared = ctx.StageManager.StagesCleared()
+	local dailyInfo = ctx.RunModifiers.CommitDaily(rp, cleared, ctx.StageManager.LastClearTime(), t)
+	local accountInfo = ctx.AccountService.AwardRun(rp.Player, {
+		Seconds = t,
+		Stages = cleared,
+		Kills = rp.Kills,
+		Bosses = bossKills,
+		Won = won,
+		CurseMult = ctx.RunModifiers.GoldMult(),
+		DailyScored = rp.DailyScored == true,
+	})
+	ctx.LeaderboardService.Submit(rp.Player, "BestStage", ctx.StageManager.GetStage())
+	ctx.LeaderboardService.Submit(rp.Player, "Kills", rp.Kills)
+	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo }
 	return newBest, unlocked
 end
 
@@ -825,6 +869,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 	local data = ctx.DataService.GetData(player)
 	local bestStageBefore = data and (data.Stats.BestStage or 0) or 0
 	local newBest, unlocked = saveRunStats(rp, won)
+	local info = rp.CommitInfo
 	if won then
 		Events.Fire("RunWon", player, { Stages = cleared })
 	end
@@ -847,7 +892,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		Items = ctx.ItemSystem.Summary(rp),
 		Level = rp.Level,
 		Damage = math.floor(rp.DamageDealt),
-		Arena = ctx.StageManager.ArenaDisplayName() .. ((mode == "Duo" or mode == "Trio") and (" (" .. mode .. ")") or ""),
+		Arena = ctx.StageManager.ArenaDisplayName() .. ((mode == "Duo" or mode == "Trio" or mode == "Daily") and (" (" .. mode .. ")") or ""),
 		Mode = mode, -- REPLAY starts this mode again (StartRun from the lobby)
 		CharacterId = rp.CharacterId,
 		Build = buildSummary(rp),
@@ -859,6 +904,10 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		NewBestStage = data ~= nil and reached > bestStageBefore and reached > 1,
 		Unlocked = unlocked,
 		Achievements = achievements, -- unlocked this run: { {Id, Name, Reward, Icon} }
+		Curses = table.clone(ctx.RunModifiers.Active()), -- the run's curses (CurseData ids)
+		CurseGold = ctx.RunModifiers.GoldMult(),
+		Account = info and info.Account or nil, -- { Gained, Parts, From, To, Into, Need, Rewards }
+		Daily = info and info.Daily or nil, -- { Scored, Score, Text, NewBest, Best }
 		Seconds = Config.Run.ResultsSeconds,
 		InLobby = inLobby,
 	})
@@ -911,6 +960,7 @@ local function returnAll()
 	ctx.XPSystem.Clear()
 	ctx.EnemyAI.SetArena(nil)
 	ctx.StageManager.EndRun()
+	ctx.RunModifiers.EndRun()
 	MapBuilder.DestroyArena()
 	MapBuilder.ApplyLighting("Lobby")
 	frozen = false
@@ -1082,6 +1132,10 @@ end
 ]]
 local function startRun(player: Player, newMode: string)
 	if phase == "Countdown" then
+		if newMode == "Daily" then
+			RunManager.Notify(player, "A group run is starting: join it, or play the Daily after it.", Color3.fromRGB(255, 200, 120))
+			return
+		end
 		tryJoin(player)
 		return
 	end

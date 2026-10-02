@@ -4,8 +4,9 @@
 
 	  items strip    a compact wrap of item tiles with stack counts (HUD, top left under the
 	                 Roblox buttons; portrait: under the ability bar). Not Active, so the
-	                 thumbstick works on top of it. A "BARGAIN" chip shows while this stage's
-	                 Bargain Shrine is sealed.
+	                 thumbstick works on top of it. Under it: the run's curse chips (and
+	                 DAILY on a Daily Challenge run, the curses' gold bonus), then a
+	                 "BARGAIN" chip while this stage's Bargain Shrine is sealed.
 	  item popup     remote ItemGained: icon tile in the rarity colour, name, rarity, what it
 	                 does and where it came from; stacks up to 3 under the strip
 	  loot prompt    next to the nearest chest / shrine / altar in reach: title, state,
@@ -29,6 +30,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local ItemData = require(Shared:WaitForChild("ItemData"))
+local CurseData = require(Shared:WaitForChild("CurseData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -121,6 +123,57 @@ local function buildStrip(root: Frame)
 	Icons.Draw(face, "shrine", { Size = 18, LayoutOrder = 1, Color = P.crimson_300 })
 	ui.BargainText = text(face, "Label", "BARGAIN", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.crimson_300 }, 12)
 	ui.Bargain = holder
+	-- the run's curses (and DAILY): small chips under the strip (SwarmState Curses / DailyRun)
+	local row = new("Frame", { Name = "CurseChips", BackgroundTransparency = 1, Active = false, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(400, 26) }, root)
+	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 5), Wraps = true })
+	ui.Curses = row
+	ui.CurseKey = ""
+end
+
+-- One small chip: [icon] NAME (crimson for curses, gold for the daily / the gold bonus).
+local function curseChip(parent: Instance, icon: string, str: string, color: Color3, order: number)
+	local holder, face = UIKit.Surface(parent, { Name = "Chip", Radius = 999, Transparency = 0.15, Edge = color, EdgeTransparency = 0.35, Shadow = false, Size = UDim2.fromOffset(0, 26), LayoutOrder = order })
+	holder.AutomaticSize = Enum.AutomaticSize.X
+	holder.Active = false
+	face.AutomaticSize = Enum.AutomaticSize.X
+	face.Size = UDim2.fromScale(0, 1)
+	UIKit.padding(face, 0, 9, 0, 6)
+	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 4) })
+	Icons.Draw(face, icon, { Size = 16, LayoutOrder = 1, Color = color })
+	text(face, "Label", str, { LayoutOrder = 2, Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = color }, 11)
+end
+
+-- Rebuilds the chips when the run's curses change.
+local function refreshCurses(inRun: boolean)
+	local state = Remotes.State()
+	local list = inRun and CurseData.FromString(state:GetAttribute("Curses")) or {}
+	local daily = inRun and state:GetAttribute("DailyRun") == true
+	local key = (daily and "D|" or "") .. CurseData.ToString(list)
+	if key == ui.CurseKey then
+		return
+	end
+	ui.CurseKey = key
+	for _, ch in ipairs(ui.Curses:GetChildren()) do
+		if ch:IsA("GuiObject") then
+			ch:Destroy()
+		end
+	end
+	local order = 0
+	if daily then
+		order += 1
+		curseChip(ui.Curses, "calendar", "DAILY", P.gold_300, order)
+	end
+	for _, id in ipairs(list) do
+		local def = CurseData.Curses[id]
+		order += 1
+		curseChip(ui.Curses, def.Icon, string.upper(def.Name), P.crimson_300, order)
+	end
+	if #list > 0 then
+		order += 1
+		curseChip(ui.Curses, "coin", CurseData.GoldText(CurseData.GoldMult(list)) .. " GOLD", P.gold_300, order)
+	end
+	ui.Curses.Visible = order > 0
+	LootUI.Layout()
 end
 
 local function buildPopups(root: Frame)
@@ -445,15 +498,22 @@ function LootUI.Layout()
 	local rows = math.max(1, math.ceil(#items / per))
 	ui.Strip.Position = UDim2.fromOffset(math.floor(x), math.floor(y))
 	ui.Strip.Size = UDim2.fromOffset(math.floor(w), rows * 35)
-	ui.Bargain.Position = UDim2.fromOffset(math.floor(x), math.floor(y + (#items > 0 and rows * 35 + 4 or 0)))
+	-- under the strip: the curse chips, then the bargain chip, then the popups
+	local yy = y + (#items > 0 and rows * 35 + 4 or 0)
+	ui.Curses.Position = UDim2.fromOffset(math.floor(x), math.floor(yy))
+	ui.Curses.Size = UDim2.fromOffset(math.floor(math.max(w, 260)), 26)
+	if ui.Curses.Visible then
+		yy += 31
+	end
+	ui.Bargain.Position = UDim2.fromOffset(math.floor(x), math.floor(yy))
 	-- popups: left column under the strip / bargain chip (landscape; the right side is the
 	-- loot prompt's), centre (portrait)
 	if portrait then
 		ui.Popups.AnchorPoint = Vector2.new(0.5, 0)
-		ui.Popups.Position = UDim2.fromOffset(W / 2, math.floor(y + (#items > 0 and rows * 35 + 4 or 0) + 36))
+		ui.Popups.Position = UDim2.fromOffset(W / 2, math.floor(yy + 36))
 	else
 		ui.Popups.AnchorPoint = Vector2.new(0, 0)
-		ui.Popups.Position = UDim2.fromOffset(math.floor(x), math.floor(y + (#items > 0 and rows * 35 + 4 or 0) + 36))
+		ui.Popups.Position = UDim2.fromOffset(math.floor(x), math.floor(yy + 36))
 	end
 end
 
@@ -605,6 +665,7 @@ function LootUI.Update(_dt: number, inRun: boolean)
 	local root = char and char.PrimaryPart
 	local alive = player:GetAttribute("Alive") ~= false
 	ui.Strip.Visible = inRun and #items > 0
+	refreshCurses(inRun)
 	if not inRun then
 		ui.Prompt.Visible = false
 		ui.Marker.Visible = false

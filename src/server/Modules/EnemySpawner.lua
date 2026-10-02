@@ -267,6 +267,9 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.HP = hp
 	e.MaxHP = hp
 	e.Speed = def.Speed * math.min(1 + tier * D.SpeedPerMinute, D.SpeedCap)
+	if not isBoss then
+		e.Speed *= ctx.RunModifiers and ctx.RunModifiers.EnemySpeedMult() or 1 -- the Frenzy curse
+	end
 	e.Damage = damage
 	e.Dir = Vector3.zero
 	e.Knock = Vector3.zero
@@ -465,7 +468,7 @@ local function topUp()
 			end
 			break
 		end
-		local elite = eliteOk and rng:NextNumber() < Config.Enemies.EliteChance
+		local elite = eliteOk and rng:NextNumber() < Config.Enemies.EliteChance * (ctx.RunModifiers and ctx.RunModifiers.EliteChanceMult() or 1) -- Elite Surge
 		local pos = EnemySpawner.SpawnPoint(def.Radius * (elite and 2 or 1))
 		if pos then
 			EnemySpawner.Spawn(typeId, pos, { Elite = elite })

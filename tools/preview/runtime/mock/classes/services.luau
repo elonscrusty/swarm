@@ -40,6 +40,9 @@ R.defineClass("Players", {
 			end
 			return out
 		end,
+		GetNameFromUserIdAsync = function(_, id)
+			return "Hero" .. tostring(id)
+		end,
 		GetPlayerByUserId = function(p, id)
 			for _, c in ipairs(p:GetPlayers()) do
 				if c.UserId == id then
@@ -938,8 +941,15 @@ R.defineClass("DataStoreService", {
 			end
 			return stores[key]
 		end,
-		GetOrderedDataStore = function(svc, name, scope)
-			return svc:GetDataStore("ordered:" .. tostring(name), scope)
+		GetOrderedDataStore = function(_, name, scope)
+			local key = "ordered:" .. tostring(name) .. "/" .. tostring(scope or "global")
+			if not stores[key] then
+				local ds = R.create("OrderedDataStore")
+				states[ds].name = tostring(name)
+				states[ds].x.data = {}
+				stores[key] = ds
+			end
+			return stores[key]
 		end,
 		GetGlobalDataStore = function(svc)
 			return svc:GetDataStore("global")
@@ -975,6 +985,41 @@ R.defineClass("GlobalDataStore", {
 			local data = states[ds].x.data
 			data[key] = (data[key] or 0) + (delta or 1)
 			return data[key]
+		end,
+	},
+})
+
+-- OrderedDataStore: integer values, GetSortedAsync → a one-page DataStorePages stand-in
+-- ({ key, value } rows sorted by value) for the leaderboards.
+R.defineClass("OrderedDataStore", {
+	methods = {
+		GetSortedAsync = function(ds, ascending, pageSize)
+			local rows = {}
+			for k, v in pairs(states[ds].x.data) do
+				if type(v) == "number" then
+					table.insert(rows, { key = k, value = v })
+				end
+			end
+			table.sort(rows, function(a, b)
+				if a.value == b.value then
+					return a.key < b.key
+				end
+				if ascending then
+					return a.value < b.value
+				end
+				return a.value > b.value
+			end)
+			local page = {}
+			for i = 1, math.min(#rows, pageSize or 50) do
+				page[i] = rows[i]
+			end
+			return {
+				IsFinished = true,
+				GetCurrentPage = function()
+					return page
+				end,
+				AdvanceToNextPageAsync = function() end,
+			}
 		end,
 	},
 })

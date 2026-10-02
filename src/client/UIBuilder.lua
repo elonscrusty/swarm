@@ -42,6 +42,8 @@ local Showcase = require(script.Parent.Showcase)
 local ClientSettings = require(script.Parent.ClientSettings)
 local TeamUI = require(script.Parent.TeamUI)
 local Tutorial = require(script.Parent.Tutorial)
+local Cosmetics = require(script.Parent.Cosmetics)
+local CurseData = require(Shared:WaitForChild("CurseData"))
 
 local UIBuilder = {}
 
@@ -1358,8 +1360,21 @@ local function buildResults()
 	-- rewards first (new best, unlocks, achievements: what a short screen must not hide),
 	-- then the build and the items
 	results.Best = UIKit.Badge(body, "NEW BEST TIME!", "Gold", { LayoutOrder = 2, Visible = false })
-	results.BuildHolder = new("Frame", { Name = "Build", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 0) }, body)
-	results.ItemsHolder = new("Frame", { Name = "ItemsHolder", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
+	results.BuildHolder = new("Frame", { Name = "Build", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 0) }, body)
+	results.ItemsHolder = new("Frame", { Name = "ItemsHolder", BackgroundTransparency = 1, LayoutOrder = 7, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
+	-- progress: account XP and level, the run's curses, the daily score
+	local prog = UIKit.Panel(body, { Name = "Progress", LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 96) }, true)
+	results.Progress = prog
+	Icons.Draw(prog, "medal", { Size = 34, Position = UDim2.fromOffset(14, 12), Back = C.PanelInset })
+	results.XPText = text(prog, "H3", "", { Name = "XP", Position = UDim2.fromOffset(60, 8), Size = UDim2.new(1, -74, 0, TS(18) + 6), RichText = true, TextTruncate = Enum.TextTruncate.AtEnd })
+	results.XPMeter = UIKit.Meter(prog, {
+		Gradient = ColorSequence.new(P.gold_500, P.gold_300),
+		TextStyle = "Number",
+		TextSize = 12,
+		Position = UDim2.fromOffset(60, TS(18) + 18),
+		Size = UDim2.new(1, -74, 0, 18),
+	})
+	results.ProgLines = text(prog, "Small", "", { Name = "Lines", Position = UDim2.fromOffset(14, TS(18) + 44), Size = UDim2.new(1, -28, 0, 0), RichText = true, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextXAlignment = Enum.TextXAlignment.Center })
 	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Visible = false })
 	-- achievements unlocked this run (one line each: trophy, name, reward)
 	results.Achievements = text(body, "Small", "", {
@@ -1433,6 +1448,12 @@ local function buildResults()
 		local bw = math.clamp(math.floor((inner - 12) / 2), 140, 250)
 		results.Replay.Instance.Size = UDim2.fromOffset(bw, Theme.Size.Button)
 		results.Button.Instance.Size = UDim2.fromOffset(bw, Theme.Size.Button)
+		-- the progress block grows with its lines (wrapped on narrow screens)
+		local lineH = TS(Theme.TextSize.Small) + 4
+		local perLine = inner < 520 and 2 or 1
+		local nLines = (results.ProgLineCount or 0) * perLine
+		results.ProgLines.Size = UDim2.new(1, -28, 0, nLines * lineH)
+		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0))
 		local bodyH = stackHeight(body, 10)
 		local fixed = headH + 10 + Theme.Size.Button + (TS(12) + 4) + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(140, v.Y - 24 - fixed)
@@ -1443,6 +1464,57 @@ local function buildResults()
 	end
 	results.Layout = layoutResults
 	onRelayout(layoutResults)
+end
+
+--[[
+	The progress block: "+340 XP · Level 7 → 8" over the XP bar (account level), then one
+	line each for the run's curses, the daily score and track rewards unlocked.
+]]
+local function fillProgress(data: any)
+	local a = type(data.Account) == "table" and data.Account or nil
+	local lines = {}
+	local curses = type(data.Curses) == "table" and data.Curses or {}
+	if #curses > 0 then
+		local names = {}
+		for _, id in ipairs(curses) do
+			local def = CurseData.Curses[id]
+			table.insert(names, def and def.Name or tostring(id))
+		end
+		table.insert(lines, string.format('<font color="%s"><b>CURSES</b></font>  %s  ·  <font color="%s">%s gold</font>', hex(P.crimson_300), table.concat(names, " · "), hex(P.gold_300), CurseData.GoldText(tonumber(data.CurseGold) or CurseData.GoldMult(curses))))
+	end
+	local d = type(data.Daily) == "table" and data.Daily or nil
+	if d then
+		if d.Scored then
+			table.insert(lines, string.format('<font color="%s"><b>DAILY · SCORED</b></font>  %s%s', hex(P.gold_300), tostring(d.Text or ""), d.NewBest and string.format('  ·  <font color="%s">NEW DAILY BEST</font>', hex(P.moss_200)) or ""))
+		else
+			table.insert(lines, string.format('<font color="%s"><b>DAILY · PRACTICE</b></font>  %s  (not scored)', hex(P.gold_300), tostring(d.Text or "")))
+		end
+	end
+	if a and type(a.Rewards) == "table" and #a.Rewards > 0 then
+		local r = {}
+		for _, name in ipairs(a.Rewards) do
+			table.insert(r, tostring(name))
+		end
+		table.insert(lines, string.format('<font color="%s"><b>UNLOCKED</b></font>  %s  (wear it in TRACK)', hex(P.gold_300), table.concat(r, " · ")))
+	end
+	results.Progress.Visible = a ~= nil or #lines > 0
+	if a then
+		local from, to = tonumber(a.From) or 1, tonumber(a.To) or 1
+		local levelText = from ~= to and string.format("Level %d → %d", from, to) or ("Level " .. to)
+		results.XPText.Text = string.format('<font color="%s">+%s XP</font>  ·  %s', hex(P.gold_200), UIKit.formatNumber(tonumber(a.Gained) or 0), levelText)
+		local need = tonumber(a.Need) or 0
+		if need > 0 then
+			results.XPMeter.Set((tonumber(a.Into) or 0) / need, string.format("%s / %s XP", UIKit.formatNumber(tonumber(a.Into) or 0), UIKit.formatNumber(need)))
+		else
+			results.XPMeter.Set(1, "MAX LEVEL")
+		end
+		results.XPMeter.Frame.Visible = true
+	else
+		results.XPText.Text = "Run progress"
+		results.XPMeter.Frame.Visible = false
+	end
+	results.ProgLines.Text = table.concat(lines, "\n")
+	results.ProgLineCount = #lines
 end
 
 -- Weapons (with levels / evolutions) and passives of the run, as tiles.
@@ -1518,6 +1590,10 @@ local function onRunResult(data)
 	local heroId = type(data.CharacterId) == "string" and data.CharacterId or CharacterData.Default
 	local heroDef = CharacterData.Characters[heroId]
 	Icons.Character(results.Medal, heroId, { Size = 48, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+	-- the worn portrait frame (level track)
+	local framed = Cosmetics.Frame(results.Medal, profile and profile.Frame or "")
+	results.MedalStroke.Transparency = framed and 1 or 0.05
+	fillProgress(data)
 	local damage = tonumber(data.Damage) or 0
 	results.Hero.Text = string.format("%s  ·  %s damage dealt", heroDef and heroDef.Name or heroId, UIKit.formatNumber(math.floor(damage)))
 	-- numbers

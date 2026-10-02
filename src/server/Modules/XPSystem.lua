@@ -231,12 +231,18 @@ function XPSystem.RollFloorPickup(position: Vector3, luck: number)
 	if rng:NextNumber() >= Config.Drops.FloorPickupChance * (1 + luck) then
 		return
 	end
+	-- the Famine curse: no healing pickups
+	local weights = Config.Drops.Weights
+	if ctx.RunModifiers and ctx.RunModifiers.NoHealPickups() then
+		weights = table.clone(weights)
+		weights.Chicken = nil
+	end
 	local total = 0
-	for _, w in pairs(Config.Drops.Weights) do
+	for _, w in pairs(weights) do
 		total += w
 	end
 	local roll = rng:NextNumber() * total
-	for kind, w in pairs(Config.Drops.Weights) do
+	for kind, w in pairs(weights) do
 		roll -= w
 		if roll <= 0 then
 			XPSystem.SpawnPickup(kind, position)

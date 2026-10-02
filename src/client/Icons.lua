@@ -340,6 +340,11 @@ local DEFAULT: { [string]: Colors } = {
 	minerHelm = { Main = P.steel_300, Accent = P.gold_500, Extra = P.fx_gold },
 	skullHood = { Main = P.slate_700, Accent = P.ivory_200, Extra = P.fx_heal },
 	aim = { Main = P.moss_200, Accent = P.gold_300, Extra = P.moss_300 },
+	-- retention screens (curses, daily, leaderboards, account level)
+	curse = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.crimson_300 },
+	calendar = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.gold_400 },
+	podium = { Main = P.gold_400, Accent = P.slate_300, Extra = P.gold_200 },
+	medal = { Main = P.gold_400, Accent = P.crimson_400, Extra = P.gold_200 },
 	-- weapons
 	Whip = { Main = P.steel_200, Accent = P.gold_400, Extra = P.crimson_300 },
 	MagicOrb = { Main = ARCANE, Accent = ARCANE_LIGHT, Extra = P.fx_arcane },
@@ -513,6 +518,59 @@ DRAW.skull = function(c)
 	box(c, 12, 15.2, 2, 2, c.back, 45, 0.3)
 	box(c, 10.3, 19.6, 1, 2.6, c.back, 0, 0.4)
 	box(c, 13.7, 19.6, 1, 2.6, c.back, 0, 0.4)
+end
+
+-- Curse: a horned skull (crimson horns).
+DRAW.curse = function(c)
+	local horn = c.mono and c.main or c.accent
+	box(c, 5.6, 5.6, 2.6, 7.4, horn, -32, 1.2)
+	box(c, 18.4, 5.6, 2.6, 7.4, horn, 32, 1.2)
+	dot(c, 12, 11.4, 7.6, c.main)
+	box(c, 12, 18, 8.6, 5.8, c.main, 0, 2)
+	box(c, 8.9, 11.6, 3.6, 2.2, c.back, 18, 1)
+	box(c, 15.1, 11.6, 3.6, 2.2, c.back, -18, 1)
+	box(c, 12, 15.4, 1.8, 1.8, c.back, 45, 0.3)
+	box(c, 10.4, 19.8, 1, 2.4, c.back, 0, 0.4)
+	box(c, 13.6, 19.8, 1, 2.4, c.back, 0, 0.4)
+end
+
+-- Calendar page with a red header and a gold day mark.
+DRAW.calendar = function(c)
+	box(c, 12, 13.4, 17.6, 15.6, c.main, 0, 2.2)
+	box(c, 12, 7.4, 17.6, 4.2, c.mono and c.main or c.accent, 0, 1.6)
+	box(c, 7.6, 4.2, 2, 4.4, c.mono and c.main or c.light, 0, 1)
+	box(c, 16.4, 4.2, 2, 4.4, c.mono and c.main or c.light, 0, 1)
+	for row = 0, 2 do
+		for col = 0, 3 do
+			local x, y = 6.9 + col * 3.4, 12 + row * 3.2
+			if row == 1 and col == 2 then
+				box(c, x, y, 2.6, 2.4, c.mono and c.back or c.extra, 0, 0.6)
+			else
+				box(c, x, y, 2.2, 1.8, c.back, 0, 0.5, 0.35)
+			end
+		end
+	end
+end
+
+-- Podium: three steps, a star over the top one.
+DRAW.podium = function(c)
+	box(c, 12, 16.4, 6.4, 11.2, c.main, 0, 0.8)
+	box(c, 5.6, 18.4, 6, 7.2, c.mono and c.main or c.accent, 0, 0.8)
+	box(c, 18.4, 19.4, 6, 5.2, c.mono and c.main or c.accent, 0, 0.8)
+	box(c, 12, 15, 2, 4.6, c.back, 0, 0.5, 0.3)
+	box(c, 12, 5.6, 4.6, 4.6, c.mono and c.main or c.extra, 45, 0.6)
+	box(c, 12, 5.6, 4.6, 4.6, c.mono and c.main or c.extra, 0, 0.6)
+end
+
+-- Medal: two ribbons and a gold disc with a star mark (the account level).
+DRAW.medal = function(c)
+	local ribbon = c.mono and c.main or c.accent
+	box(c, 9, 6, 3.6, 9, ribbon, -24, 0.6)
+	box(c, 15, 6, 3.6, 9, ribbon, 24, 0.6)
+	dot(c, 12, 15, 7, c.main)
+	ring(c, 12, 15, 4.9, 1.2, c.mono and c.back or c.extra)
+	box(c, 12, 15, 3.6, 3.6, c.mono and c.back or c.extra, 45, 0.4)
+	box(c, 12, 15, 3.6, 3.6, c.mono and c.back or c.extra, 0, 0.4)
 end
 
 DRAW.coin = function(c)

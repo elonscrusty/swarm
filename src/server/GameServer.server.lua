@@ -8,7 +8,8 @@
 	contact, grid rebuild) → WeaponSystem (firing, projectiles, sync) → XPSystem (gems,
 	pickups) → ItemSystem (regen, shields, magnet pulses) → LootSystem (chest / shrine
 	holds, the guarded altar) → LevelUpSystem (auto-pick timers) → AchievementService (run
-	time / level milestones, once a second) → DamageNumbers (optional numbers, per player)
+	time / level milestones, once a second) → RunModifiers (curses / daily state for the
+	lobby) → LeaderboardService (queued writes, cache refresh) → DamageNumbers (optional numbers, per player)
 	→ Fx (effect batch flush).
 ]]
 
@@ -33,6 +34,9 @@ local ctx = {
 -- Dependency order: data first, then world, then gameplay.
 local ORDER = {
 	"DataService",
+	"RunModifiers",
+	"AccountService",
+	"LeaderboardService",
 	"MonetizationService",
 	"GoldSystem",
 	"MeshService",
@@ -94,6 +98,8 @@ local STEPS = {
 	{ "LootSystem", ctx.LootSystem.Step },
 	{ "LevelUpSystem", ctx.LevelUpSystem.Step },
 	{ "AchievementService", ctx.AchievementService.Step },
+	{ "RunModifiers", ctx.RunModifiers.Step },
+	{ "LeaderboardService", ctx.LeaderboardService.Step },
 	{ "DamageNumbers", ctx.DamageNumbers.Step },
 	{ "Fx", ctx.Fx.Step },
 }

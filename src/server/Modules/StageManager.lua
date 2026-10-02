@@ -67,6 +67,7 @@ local choiceLeft = 0
 local shownChoice = -1
 local travelStep = ""
 local travelTimer = 0
+local lastClearTime = 0 -- run time when the last stage boss died (Daily Challenge score)
 
 ------------------------------------------------------------------------------------------
 -- Queries
@@ -124,8 +125,9 @@ function StageManager.DamageMult(): number
 	return perStage(Config.Stages.EnemyDamagePerStage)
 end
 
+-- Live-target / mini-wave multiplier: the stage share x the Horde curse.
 function StageManager.SpawnMult(): number
-	return perStage(Config.Stages.SpawnTargetPerStage)
+	return perStage(Config.Stages.SpawnTargetPerStage) * (ctx.RunModifiers and ctx.RunModifiers.SpawnMult() or 1)
 end
 
 -- Seconds of this stage before the portal can be charged (Config.Stages.PortalLockSeconds).
@@ -211,8 +213,13 @@ end
 local bossPlan: { string } = {}
 local stageBoss = "ScorpionQueen"
 local forcedBoss: string? = nil
+local fixedBosses: { string }? = nil -- the Daily Challenge's boss order (CurseData.Daily)
 
 local function bossFor(n: number): string
+	local fixed = fixedBosses
+	if fixed and fixed[n] and BossData.Bosses[fixed[n]] then
+		return fixed[n]
+	end
 	if n <= 1 or #bossPlan == 0 then
 		bossPlan = { BossData.Bosses[Config.Boss.First] and Config.Boss.First or "ScorpionQueen" }
 	end
@@ -291,10 +298,30 @@ end
 -- Run lifecycle (called by RunManager)
 ------------------------------------------------------------------------------------------
 
--- Stage 1 of a new run. Returns the arena (players are placed by RunManager).
-function StageManager.BeginRun(selectedArena: string)
+--[[
+	Stage 1 of a new run. Returns the arena (players are placed by RunManager).
+	fixed (the Daily Challenge): { Arenas = {...}, Bosses = {...} } the arena of every
+	stage (the first one is stage 1's) and the boss order; past their end the normal
+	shuffled tour takes over.
+]]
+function StageManager.BeginRun(selectedArena: string, fixed: { Arenas: { string }, Bosses: { string } }?)
 	firstArena = selectedArena
 	plan = { known(selectedArena) and selectedArena or "Forest" }
+	fixedBosses = nil
+	lastClearTime = 0
+	if fixed then
+		plan = {}
+		for _, name in ipairs(fixed.Arenas) do
+			if known(name) and name ~= plan[#plan] then
+				table.insert(plan, name)
+			end
+		end
+		if #plan == 0 then
+			plan = { "Forest" }
+		end
+		firstArena = plan[1]
+		fixedBosses = table.clone(fixed.Bosses)
+	end
 	table.clear(lastPortal)
 	local arena = buildStage(1)
 	setSub("Explore")
@@ -304,6 +331,7 @@ end
 -- The run is over (defeat, everyone returned, server cleanup).
 function StageManager.EndRun()
 	portal = nil
+	fixedBosses = nil
 	BiomeHazards.Clear()
 	ctx.LootSystem.Clear()
 	stage = 0
@@ -346,11 +374,17 @@ local function startBoss(): boolean
 	return true
 end
 
+-- Run time when the last stage was cleared (its boss died); 0 = none yet.
+function StageManager.LastClearTime(): number
+	return lastClearTime
+end
+
 -- Called by RunManager when the Queen dies (EnemySpawner.Kill → RunManager.OnBossKilled).
 function StageManager.OnBossKilled(_pos: Vector3)
 	if sub ~= "Boss" then
 		return
 	end
+	lastClearTime = ctx.RunManager.GetRunTime()
 	for _, rp in ipairs(participants()) do
 		if rp.Alive then
 			ctx.GoldSystem.AddRunGold(rp, Config.Gold.Boss * (rp.Stats and rp.Stats.GoldMult or 1))
@@ -400,7 +434,7 @@ local function sendOffer(rp)
 		NextStage = stage + 1,
 		NextArena = ((Config.Arenas :: any)[arenaFor(stage + 1)] or {}).DisplayName or arenaFor(stage + 1),
 		NextBoss = bossName(forcedBoss or bossFor(stage + 1)),
-		ReturnBonus = math.floor((Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared) * ctx.MonetizationService.GoldMultiplier(rp.Player) + 0.5),
+		ReturnBonus = math.floor((Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared) * ctx.MonetizationService.GoldMultiplier(rp.Player) * (ctx.RunModifiers and ctx.RunModifiers.GoldMult() or 1) + 0.5),
 		Gold = rp.Gold,
 		Kills = rp.Kills,
 		Level = rp.Level,

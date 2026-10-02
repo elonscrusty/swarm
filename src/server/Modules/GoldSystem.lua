@@ -26,14 +26,16 @@ local rng = Random.new()
 -- Run gold
 ------------------------------------------------------------------------------------------
 
--- Adds gold (after gamepass multipliers) to the run counter and the save. Returns amount.
+-- Adds gold (after gamepass multipliers and the run's curse bonus, CurseData) to the run
+-- counter and the save. Returns amount.
 function GoldSystem.AddRunGold(rp, base: number): number
 	local player: Player = rp.Player
 	local data = ctx.DataService.GetData(player)
 	if not data or base <= 0 then
 		return 0
 	end
-	local amount = math.floor(base * ctx.MonetizationService.GoldMultiplier(player) + 0.5)
+	local curse = ctx.RunModifiers and ctx.RunModifiers.GoldMult() or 1
+	local amount = math.floor(base * ctx.MonetizationService.GoldMultiplier(player) * curse + 0.5)
 	data.Gold += amount
 	rp.Gold += amount
 	player:SetAttribute("RunGold", rp.Gold)
@@ -101,6 +103,12 @@ function GoldSystem.SyncProfile(player: Player)
 		Achievements = ctx.AchievementService and ctx.AchievementService.ProfileView(data) or nil,
 		Title = data.Title or "",
 		NameColor = data.NameColor or "",
+		-- retention: curses picked, the daily, the account level and its cosmetics
+		Curses = data.Curses or {},
+		Daily = ctx.RunModifiers and ctx.RunModifiers.DailyView(data) or nil,
+		Account = ctx.AccountService and ctx.AccountService.View(data) or nil,
+		Ring = data.Ring or "",
+		Frame = data.Frame or "",
 		OwnedSkins = M.OwnedSkins(player),
 		Passes = {
 			StarterPack = M.OwnsPass(player, "StarterPack"),

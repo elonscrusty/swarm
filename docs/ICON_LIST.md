@@ -1,0 +1,719 @@
+# SWARM icon list (for ChatGPT image generation)
+
+Every upgrade and item icon the game can show, ready to generate with ChatGPT's image generator.
+Each icon replaces the vector icon drawn in code (`src/client/Icons.lua`) once it is uploaded and
+its asset id is pasted into `src/shared/IconData.lua`.
+
+**75 icons in total:** 17 weapons, 17 evolutions, 15 passives, 19 run items (8 common,
+8 uncommon, 3 legendary) and 7 others (2 fallback cards, 5 loot / run markers).
+
+Colours come from `art/palette.json` (names like `gold_400` are the palette keys). The style
+follows `docs/ART_DIRECTION.md`: heroic low-poly fantasy, moss greens, stone grays, slate blues,
+crimson, antique gold and ivory.
+
+---
+
+## 1. MASTER STYLE prompt (paste once at the start of each ChatGPT chat)
+
+```text
+I am making a set of item icons for my Roblox game SWARM. Use this exact style for EVERY icon I ask for in this chat:
+- Heroic low-poly fantasy: chunky faceted shapes, bevelled edges, big simple forms, at most 2-3 levels of detail, no tiny details.
+- Flat soft shading: each facet one flat tone, light from the TOP-LEFT, the shadow side bottom-right, no shiny specular, no texture noise, no bloom, no lens flare.
+- ONE single object, centred, filling about 80% of the frame, at a consistent 3/4 angle (turned about 30 degrees, seen slightly from above).
+- A slight dark outline (thin, dark slate #141B24) around the silhouette so it reads on dark slate UI panels.
+- TRANSPARENT background (PNG with alpha). No ground, no cast shadow, no scene, no frame, no border, no badge, no text, no letters, no numbers, no watermark.
+- Square 1:1 image (512x512 or 1024x1024).
+- Muted, art-directed palette: moss greens, cool stone grays, slate blues, crimson, antique gold, ivory. Only small parts glow (gem cores, flames, sparks); never neon everywhere.
+- It must read instantly at 48x48 pixels: strong silhouette, clear contrast between the object and its details.
+I will send icon descriptions in batches. Make each one as a SEPARATE image and write its file name under it. Reply "Ready" and wait.
+```
+
+## 2. How to ask for a batch
+
+1. Paste the MASTER STYLE prompt, wait for "Ready".
+2. Send 4 to 6 icons per message, copying their prompts from the list below, like this:
+
+   ```text
+   Make these 4 icons as 4 separate images, same style as before:
+   1) Whip.png: <paste the Whip prompt>
+   2) MagicOrb.png: <paste the MagicOrb prompt>
+   3) Knives.png: <paste the Knives prompt>
+   4) Garlic.png: <paste the Garlic prompt>
+   ```
+
+3. Save each picture with the file name **exactly** as written (capital letters matter, e.g.
+   `MagicOrb.png`, not `magic orb.png`).
+4. Tips:
+   - If ChatGPT puts several icons on one sheet instead of separate images, say *"Please make
+     them separate images, one per icon"*. A clean, evenly spaced sheet is fine too: send it to
+     Claude, who can cut it up.
+   - If the background is not transparent, say *"Same icon, transparent background"*.
+   - If the style starts to drift (shading, angle, outline), say *"Match the style of the
+     first icon in this chat"* or start a new chat and paste the MASTER STYLE again. A new
+     chat every ~20 icons keeps things consistent.
+   - Keep each evolution next to its base weapon when you check them: the evolution should look
+     like the same object, upgraded (gold, crimson, doubled, glowing), never like a new thing.
+
+## 3. Upload steps (when the PNGs are ready)
+
+**Easiest: send the PNGs back to Claude.** Attach them in a Claude Code session (or a zip of
+all of them). Claude checks the names and sizes, uploads them with the Open Cloud key, pastes
+the asset ids into `src/shared/IconData.lua` and rebuilds.
+
+**By hand:** Creator Dashboard → Creations → Development Items → **Decals** → Upload Asset, one
+PNG at a time. Each upload gets an asset id (a number). Paste it next to its id in
+`src/shared/IconData.lua`, e.g. `Whip = 1234567890,`.
+- A Decal id and the Image id inside it are different numbers; the game needs the **Image** id.
+  In Studio, Asset Manager → Images → right-click → Copy Asset ID gives the Image id. If you only
+  have Decal ids, give them to Claude to convert.
+
+**Note:** weapons, evolutions, passives, Gold and Heal already have slots in `IconData.lua`.
+Run items and the loot / run markers (sections 4.4 and 4.5) do not yet: Claude adds those slots
+(a small code change) when it wires the uploaded pictures in.
+
+---
+
+## 4. The icons
+
+Rule of thumb for the whole set: **base weapons** are plain steel, wood and leather; their
+**evolutions** are the same object upgraded with gold, crimson or glow and often doubled or
+tripled. Passives are simple single symbols; items are small physical trinkets.
+
+### 4.1 Weapons (17)
+
+#### Whip.png
+- **Name:** Whip
+- **Effect:** Swings a wide sword arc in the direction you face.
+- **Prompt:**
+  ```text
+  A single heroic broadsword held diagonally (hilt bottom-left, tip top-right) with one wide pale slash arc curving around its tip. Bright steel blade #D7DCE1 with shaded facets #9EA7B2, antique gold crossguard #D5B062, brown leather grip #6E4C33, slash arc soft ivory #F3EDDF, half transparent. Only ONE sword (not crossed swords), no whip rope.
+  ```
+
+#### MagicOrb.png
+- **Name:** Magic Orb
+- **Effect:** Fires a homing orb at the nearest enemy.
+- **Prompt:**
+  ```text
+  A floating faceted crystal sphere of arcane magic: slate-blue outer facets #647C97 and #8DA1B7, a glowing pale arcane-blue core #9DB8E3, a small white glint top-left, a faint thin ring around it and two tiny diamond sparkles #B8C5D3 (one top-right, one bottom-left). No hand, no staff, no stand.
+  ```
+
+#### Knives.png
+- **Name:** Throwing Knives
+- **Effect:** Fast knives thrown in your movement direction.
+- **Prompt:**
+  ```text
+  Two small throwing knives flying side by side toward the top-right, parallel, with two short speed streaks behind them. Narrow leaf-shaped steel blades #D7DCE1 with #9EA7B2 shading, tiny antique gold guards #D5B062, leather-wrapped grips #6E4C33 ending in a ring pommel. Plain steel, no gold blades.
+  ```
+
+#### Garlic.png
+- **Name:** Garlic Aura
+- **Effect:** Damages and pushes back enemies near you.
+- **Prompt:**
+  ```text
+  A plump garlic bulb at the centre of two soft concentric aura rings. Bulb ivory #E5DCC7 with highlights #F3EDDF and faint vertical clove lines #A39A87, a short green sprout tip #7E9F58 on top. The two rings are pale ivory #F3EDDF, thin and half transparent, like a pulse spreading out.
+  ```
+
+#### HolyWater.png
+- **Name:** Holy Water
+- **Effect:** Throws bottles that leave burning pools.
+- **Prompt:**
+  ```text
+  A round glass potion flask with a short neck and a wooden cork #9A7752. Pale glass #B8C5D3 filled with glowing holy blue water #9DB8E3 (darker at the bottom #647C97), a small ivory cross #F3EDDF on the front of the flask, a white glint on the glass top-left. Calm, no flames.
+  ```
+
+#### Lightning.png
+- **Name:** Lightning
+- **Effect:** Strikes random enemies around you.
+- **Prompt:**
+  ```text
+  One thick zig-zag lightning bolt with three sharp segments, from top-right down to bottom-left, carved and faceted like a solid object. Gold core #E5C988, pale amber edges #F6DA7E, a soft blue-white glow #E4ECFF around it. Just the bolt: no cloud, no amulet, no ring.
+  ```
+
+#### Axe.png
+- **Name:** Axe
+- **Effect:** Thrown upward in an arc. Heavy damage.
+- **Prompt:**
+  ```text
+  A double-bitted battle axe standing upright, tilted slightly: two broad curved steel blades #BCC3CB with darker shade #67707B and bright edges #D7DCE1, a short sturdy wooden haft #9A7752, an antique gold band #D5B062 at the socket. One axe only.
+  ```
+
+#### Boomerang.png
+- **Name:** Boomerang
+- **Effect:** Flies out and comes back, piercing everything.
+- **Prompt:**
+  ```text
+  A chunky V-shaped wooden boomerang with thick rounded arms, honey wood #9A7752 with darker edges #654832, a carved gold inlay stripe #E5C988 along each arm, and one faint curved motion arc on its open side.
+  ```
+
+#### Longbow.png
+- **Name:** Longbow
+- **Effect:** Heavy piercing arrows fly far where you move, or at the nearest enemy while you stand still.
+- **Prompt:**
+  ```text
+  A tall wooden longbow standing upright, curved limbs #9A7752 with a leather grip wrap #6E4C33, a taut ivory string #E5DCC7, and one arrow nocked across it pointing right with a steel head #D7DCE1 and ivory fletching #E5DCC7. A tall vertical bow, not a crossbow.
+  ```
+
+#### Spear.png
+- **Name:** Spear
+- **Effect:** Thrusts a spear in the direction you face, piercing a line of enemies.
+- **Prompt:**
+  ```text
+  A long spear lying diagonally, tip at the top-right: a leaf-shaped steel spearhead #D7DCE1 with a raised centre ridge #9EA7B2, an antique gold collar #D5B062 under the head, a plain wooden shaft #9A7752 with a leather wrap #6E4C33 near the bottom. One spear, plain steel, no crimson.
+  ```
+
+#### Crossbow.png
+- **Name:** Crossbow
+- **Effect:** Fast bolts at the nearest enemies.
+- **Prompt:**
+  ```text
+  A compact crossbow pointing up and away, seen from above at 3/4: horizontal curved steel bow limbs #BCC3CB across the top, a taut ivory string #C9BEA6, a wooden stock #7E5C3F, and one short bolt loaded in the groove with a steel head #D7DCE1. A horizontal bow on a stock, clearly not a longbow.
+  ```
+
+#### FrostNova.png
+- **Name:** Frost Nova
+- **Effect:** A burst of frost around you every few seconds: damages and slows enemies.
+- **Prompt:**
+  ```text
+  A six-armed ice snowflake crystal, each arm with two small side branches, chunky and symmetrical. Pale ice facets #DCEAF1 with ice-blue shading #A9C6D8 and a small glowing pale arcane-blue centre #9DB8E3. Just the snowflake: no sphere, no burst ring.
+  ```
+
+#### FireTrail.png
+- **Name:** Fire Trail
+- **Effect:** Leaves burning ground behind you as you move. It never hurts heroes.
+- **Prompt:**
+  ```text
+  Three faceted flames in a diagonal row from bottom-left to top-right, growing in size so the last one is the biggest, joined by a thin dark ember streak #3A2A1F. Each flame: orange outer #E58A45, amber inner core #F6DA7E, crimson base #C9443F. No boot, no candle, no wood.
+  ```
+
+#### HealingTotem.png
+- **Name:** Healing Totem
+- **Effect:** Plants a totem that heals you and teammates nearby and hurts enemies around it.
+- **Prompt:**
+  ```text
+  A short carved wooden totem pole: two stacked blocky carved faces in wood #7E5C3F and #9A7752, small carved wings sticking out at the sides, a glowing soft green orb #B9DE8E on top, and a small floating green plus sign #B9DE8E at the lower right. One plain wooden totem, no gold.
+  ```
+
+#### ChainHook.png
+- **Name:** Chain Hook
+- **Effect:** Hooks the furthest enemy in front of you and drags it in, hurting everything along the chain.
+- **Prompt:**
+  ```text
+  A big curved steel grappling hook (one barbed hook) at the top-right, attached to a short chain of four chunky oval links trailing to the bottom-left. Steel #BCC3CB with link shading #67707B and #9EA7B2. Plain steel, no crimson, no skull.
+  ```
+
+#### Turret.png
+- **Name:** Turret
+- **Effect:** Builds a turret next to you that shoots nearby enemies (up to 2).
+- **Prompt:**
+  ```text
+  A small fantasy ballista turret: a squat round stone base #858A91, a short post, a box-shaped steel head #BCC3CB with dark steel plates #67707B and ONE barrel pointing right, a few antique gold rivets #BF9746, a tiny gold muzzle glint #F2D48A. Mostly steel and stone, not gilded.
+  ```
+
+#### SoulBolt.png
+- **Name:** Soul Bolt
+- **Effect:** Releases homing souls that seek out enemies around you.
+- **Prompt:**
+  ```text
+  One small ghostly ivory skull #E5DCC7 with glowing pale green eyes #B9DE8E, trailing a wispy pale green comet tail #A3B784 down to the bottom-left. Friendly-spooky, not gory, one skull only.
+  ```
+
+### 4.2 Evolutions (17)
+
+Each evolution is the weapon it comes from, upgraded. The recipe is shown as *weapon + passive*.
+
+#### Bloodwhip.png
+- **Name:** Bloodwhip (Whip + Heart)
+- **Effect:** Huge crimson slashes that heal you on every hit.
+- **Prompt:**
+  ```text
+  An evolved broadsword held diagonally (hilt bottom-left, tip top-right) with a crimson blade #DB6A5E shaded #C9443F, a bright gold crossguard #E5C988, and a big sweeping crimson slash arc #C9443F around it; a tiny glowing red heart #DB6A5E near the hilt. One sword, crimson and gold, a powered-up version of a plain steel sword.
+  ```
+
+#### TwinOrbs.png
+- **Name:** Twin Orbs (Magic Orb + Speed Boots)
+- **Effect:** Every shot fires twin orbs that pierce through crowds.
+- **Prompt:**
+  ```text
+  Two glowing faceted crystal spheres orbiting each other: one slate-blue #647C97 with a pale arcane-blue core #9DB8E3, one rose-crimson #DB6A5E with an ivory core #F3EDDF, linked by a curved light trail, with a few small gold sparkles #E5C988. Clearly two orbs.
+  ```
+
+#### ThousandEdge.png
+- **Name:** Thousand Edge (Throwing Knives + Ammo)
+- **Effect:** An unending stream of golden blades.
+- **Prompt:**
+  ```text
+  A fan of five golden throwing knives spreading out from the bottom-left toward the top-right, all with gold blades #E5C988 shaded #BF9746 and pale gold edges #F0DDB0, darker gold grips #7E5F27, little speed streaks behind them. All gold, many blades.
+  ```
+
+#### SoulEater.png
+- **Name:** Soul Eater (Garlic Aura + Vacuum)
+- **Effect:** A hungry ring that grows with every kill and pulls in XP.
+- **Prompt:**
+  ```text
+  A thick swirling vortex ring of arcane energy seen at 3/4, deep slate-blue #465C76 swirling into pale arcane-blue #9DB8E3, with small ivory sparks #F3EDDF and three little gold gems #E5C988 being sucked into the dark centre. No garlic, no magnet.
+  ```
+
+#### Hellfire.png
+- **Name:** Hellfire (Holy Water + Candle)
+- **Effect:** Huge, long-lasting pools of holy fire.
+- **Prompt:**
+  ```text
+  A round holy-water flask engulfed in tall holy fire: flask silhouette in pale glass #B8C5D3 with a gold cross #E5C988 on the front, wrapped in big flames, orange #E58A45 with gold tips #E5C988 and crimson base #C9443F. Fire is the dominant shape.
+  ```
+
+#### ThunderLoop.png
+- **Name:** Thunder Loop (Lightning + Duplicator)
+- **Effect:** Every strike chains to nearby enemies.
+- **Prompt:**
+  ```text
+  A closed ring made of three gold zig-zag lightning bolts #E5C988 linked end to end into a circle, pale amber edges #F6DA7E, small bright spark nodes #E4ECFF where they join, a faint blue glow #9DB8E3 inside the ring. A loop, not a single bolt.
+  ```
+
+#### DeathSpiral.png
+- **Name:** Death Spiral (Axe + Might)
+- **Effect:** Axes orbit you and spiral outward through everything.
+- **Prompt:**
+  ```text
+  Three axe heads spinning around a centre point like a whirling blade wheel: steel heads #BCC3CB with crimson edges #C9443F, curved crimson motion trails #DB6A5E spiralling outward. No handles, no person.
+  ```
+
+#### InfiniteReturn.png
+- **Name:** Infinite Return (Boomerang + Cooldown)
+- **Effect:** Boomerangs that never stop: they bounce between enemies and you forever.
+- **Prompt:**
+  ```text
+  A wooden boomerang #9A7752 with bright gold inlay #E5C988 flying along a glowing infinity-symbol (figure-eight) trail in pale ice-blue #A9C6D8 with a lighter core #DCEAF1. The infinity loop is the main shape around the boomerang.
+  ```
+
+#### Windpiercer.png
+- **Name:** Windpiercer (Longbow + Fletching)
+- **Effect:** Every shot is a volley of wind arrows that pierce everything.
+- **Prompt:**
+  ```text
+  A volley of three arrows flying to the right in a tight spread, with moss-green feather fletching #7E9F58, gold arrowheads #E5C988, and pale green wind swirls #A3B784 wrapping around the shafts. No bow.
+  ```
+
+#### DragonLance.png
+- **Name:** Dragon Lance (Spear + Might)
+- **Effect:** Three crimson lances pierce everything and burst at their tips.
+- **Prompt:**
+  ```text
+  Three crimson lances in a fan pointing to the top-right, crimson shafts #C9443F shaded #701A20, gold dragon-fin shaped heads #E5C988, a small burst of gold sparks #F2D48A at each tip.
+  ```
+
+#### Heartseeker.png
+- **Name:** Heartseeker (Crossbow + Precision)
+- **Effect:** Crimson bolts that ricochet three times.
+- **Prompt:**
+  ```text
+  A crimson crossbow bolt with a heart-shaped head #DB6A5E shaded #701A20 and gold fletching #E5C988, flying along a zig-zag ricochet line that bounces three times behind it (thin crimson trail #C9443F). No crossbow, just the bolt and its bouncing path.
+  ```
+
+#### AbsoluteZero.png
+- **Name:** Absolute Zero (Frost Nova + Area)
+- **Effect:** A huge blizzard burst that nearly freezes the swarm in place.
+- **Prompt:**
+  ```text
+  A large ornate snowflake sealed inside a glowing pale ice sphere, with sharp frost shards bursting outward all around in a ring. Ice #DCEAF1, holy white-blue glow #DCEAF7, deep ice-blue facets #7398B2. Bigger and more powerful than a simple snowflake.
+  ```
+
+#### PhoenixStride.png
+- **Name:** Phoenix Stride (Fire Trail + Speed Boots)
+- **Effect:** Golden flames: enemies that touch them keep burning for 2 seconds.
+- **Prompt:**
+  ```text
+  A boot shape made of golden flame (side view, toe to the right) with small fiery feather wings at the heel: gold flames #E5C988, ivory-white hot core #F3EDDF, an orange flame trail #E58A45 behind it. No leather, the boot is pure fire.
+  ```
+
+#### Lifebloom.png
+- **Name:** Lifebloom (Healing Totem + Renewal)
+- **Effect:** Three golden totems that pulse faster and heal more.
+- **Prompt:**
+  ```text
+  Three small golden totem poles grouped together (the middle one taller), gold #BF9746 with highlights #E5C988, each topped by a glowing green orb #B9DE8E, standing in a small blooming flower of soft green light #B9DE8E.
+  ```
+
+#### ReapersChain.png
+- **Name:** Reaper's Chain (Chain Hook + Vacuum)
+- **Effect:** Three crimson hooks reel in whole lines of the swarm.
+- **Prompt:**
+  ```text
+  Three crimson barbed hooks #C9443F with dark crimson shading #701A20, each on a short dark chain, fanning out from one point where a small ivory skull charm #E5DCC7 hangs.
+  ```
+
+#### Bastion.png
+- **Name:** Bastion (Turret + Armor)
+- **Effect:** Gilded turrets that fire almost twice as fast with piercing bolts.
+- **Prompt:**
+  ```text
+  A gilded fortress turret: gold-plated head #D5B062 with bright edges #E5C988 and TWIN barrels pointing right, a crimson shield emblem #AE2D31 on its front, dark steel base #67707B. Clearly the powered-up gold version of a steel turret.
+  ```
+
+#### SoulStorm.png
+- **Name:** Soul Storm (Soul Bolt + Growth)
+- **Effect:** A storm of crimson souls that pass through three enemies each.
+- **Prompt:**
+  ```text
+  Three ivory skulls #E5DCC7 of different sizes with glowing crimson eyes #DB6A5E, their crimson wispy tails #C9443F swirling around each other in a small storm.
+  ```
+
+### 4.3 Passives (15)
+
+#### Might.png
+- **Name:** Might
+- **Effect:** +10% damage per level.
+- **Prompt:**
+  ```text
+  Two steel swords crossed in an X, blades up: steel #D7DCE1 shaded #9EA7B2, antique gold crossguards #D5B062, crimson grips #C9443F. Two swords crossed, no slash arc.
+  ```
+
+#### Armor.png
+- **Name:** Armor
+- **Effect:** Take 1 less damage from every hit per level.
+- **Prompt:**
+  ```text
+  A classic kite shield standing upright: steel face #BCC3CB with darker facets #9EA7B2, a thick antique gold rim #D5B062, a slate-blue vertical band #465C76 down the middle with a round steel boss. Shield shape, no bubble, no rivets in corners.
+  ```
+
+#### Heart.png
+- **Name:** Heart
+- **Effect:** +20% max HP per level.
+- **Prompt:**
+  ```text
+  A plump faceted crimson heart, nothing else: main #C9443F, shadow facets #902229, highlight #DB6A5E top-left. No wings, no plus sign, no arrow.
+  ```
+
+#### SpeedBoots.png
+- **Name:** Speed Boots
+- **Effect:** +10% move speed per level.
+- **Prompt:**
+  ```text
+  One brown leather boot in side view, toe to the right: leather #A0815E, dark sole #4E3828, an antique gold buckle #E5C988, three short speed lines behind the heel. Plain leather, no flames, no wings.
+  ```
+
+#### Cooldown.png
+- **Name:** Cooldown
+- **Effect:** Weapons attack about 8% more often per level.
+- **Prompt:**
+  ```text
+  An hourglass: antique gold top and bottom caps #E5C988 shaded #BF9746, two wooden side pillars #9A7752, pale slate-blue glass #8DA1B7 with golden sand #D5B062 running down.
+  ```
+
+#### Area.png
+- **Name:** Area
+- **Effect:** +12% attack area per level.
+- **Prompt:**
+  ```text
+  A small glowing amber gem #E9B941 at the centre with two expanding concentric gold rings #E5C988 rippling outward, framed by four chunky gold corner brackets, like a zone growing bigger.
+  ```
+
+#### Duplicator.png
+- **Name:** Duplicator
+- **Effect:** +1 projectile, swing or strike per level (all weapons but the aura).
+- **Prompt:**
+  ```text
+  Two identical faceted lavender crystal cubes, one in front of the other and offset to the bottom-left, the front cube with an ivory plus sign #F3EDDF carved into its face. Lavender #B09CD6 with darker facets #7A6C9E.
+  ```
+
+#### Vacuum.png
+- **Name:** Vacuum
+- **Effect:** +50% pickup radius per level.
+- **Prompt:**
+  ```text
+  A classic horseshoe magnet, open end down: crimson body #C9443F shaded #902229 with steel tips #D7DCE1, three small gold gems #E5C988 flying toward it. Just the magnet, no post, no stone.
+  ```
+
+#### Luck.png
+- **Name:** Luck
+- **Effect:** More rare items and better cards.
+- **Prompt:**
+  ```text
+  A four-leaf clover with chunky heart-shaped leaves: moss green #7E9F58 with lighter veins #A3B784, a short darker stem #52763D.
+  ```
+
+#### Ammo.png
+- **Name:** Ammo
+- **Effect:** Faster projectiles; +1 projectile at max level.
+- **Prompt:**
+  ```text
+  A single arrow speeding to the right with three short speed streaks behind it: steel arrowhead #D7DCE1, wooden shaft #9A7752, antique gold fletching #E5C988. One arrow, no quiver, no feather close-up.
+  ```
+
+#### Candle.png
+- **Name:** Candle
+- **Effect:** Projectiles fly longer, pools burn longer.
+- **Prompt:**
+  ```text
+  A short ivory wax candle #E5DCC7 with wax drips, in a small antique gold holder #E5C988, with one lit orange flame #E58A45 and amber core #F6DA7E.
+  ```
+
+#### Growth.png
+- **Name:** Growth
+- **Effect:** More XP from every gem.
+- **Prompt:**
+  ```text
+  A young green sprout with two round leaves #7E9F58 (light edges #A3B784) growing from a small mound of brown soil #8A6A4C, with one tiny gold gem #E5C988 resting at its base.
+  ```
+
+#### Fletching.png
+- **Name:** Fletching
+- **Effect:** Orbs, knives, axes and arrows pierce 1 more enemy per level.
+- **Prompt:**
+  ```text
+  A long ivory feather #E5DCC7 with two crimson bands #C9443F, laid diagonally along a thin wooden arrow shaft #9A7752 whose tip pokes out past the feather. The feather is the main shape.
+  ```
+
+#### Precision.png
+- **Name:** Precision
+- **Effect:** +5% chance per level for any hit to crit (double damage).
+- **Prompt:**
+  ```text
+  A round archery target with ivory #E5DCC7 and crimson #C9443F rings, a single small arrow stuck dead centre with antique gold fletching #D5B062. A target board, not an eye, not a lens.
+  ```
+
+#### Renewal.png
+- **Name:** Renewal
+- **Effect:** Regenerate health over time.
+- **Prompt:**
+  ```text
+  A single fresh green leaf #7E9F58 with a lighter midrib #A3B784, with a small glowing soft green plus sign #B9DE8E beside it and a couple of gentle sparkles. One leaf, no stem with berries.
+  ```
+
+### 4.4 Run items (19)
+
+Items are small trinkets found in chests and shrines. Their rarity colour is shown by the game,
+so do not draw rarity frames.
+
+#### Common (8)
+
+##### Whetstone.png
+- **Name:** Whetstone
+- **Effect:** +10% damage.
+- **Prompt:**
+  ```text
+  A rectangular grey sharpening stone with rounded edges, lying at an angle: stone #858A91 with a lighter top face #BABCBE and one fine diagonal groove, a small gold four-point sparkle #E5C988 above it. Just the stone: no blade, no glass, no metal.
+  ```
+
+##### QuickGloves.png
+- **Name:** Quick Gloves
+- **Effect:** +6% attack speed.
+- **Prompt:**
+  ```text
+  One brown leather glove, open hand, fingers up: leather #6E4C33 with lighter stitching, an antique gold cuff band #D5B062, three short ivory speed streaks #C9BEA6 to its left.
+  ```
+
+##### SwiftFeather.png
+- **Name:** Swift Feather
+- **Effect:** +5% move speed.
+- **Prompt:**
+  ```text
+  A single light feather angled diagonally with two small wind swirls around it: ivory vane #E5DCC7 fading to slate-blue tips #8DA1B7, an antique gold quill #D5B062. Calm and airy, no fire, no crimson bands.
+  ```
+
+##### HeartyBread.png
+- **Name:** Hearty Bread
+- **Effect:** +15 max HP.
+- **Prompt:**
+  ```text
+  A round crusty bread loaf with three diagonal scores across the top: golden-brown crust #A07B35, lighter top #D5B062, dark scoring #5E461C.
+  ```
+
+##### Bandage.png
+- **Name:** Bandage Roll
+- **Effect:** Regenerate 1 HP per second.
+- **Prompt:**
+  ```text
+  A rolled cloth bandage with a loose tail unrolling to one side: ivory cloth #E5DCC7 with soft shading #A39A87, a small crimson cross #C9443F on the roll.
+  ```
+
+##### Lodestone.png
+- **Name:** Lodestone
+- **Effect:** +20% gem pickup radius.
+- **Prompt:**
+  ```text
+  A rough, jagged dark magnetic rock: dark stone #5A6068 with lighter facets #858A91, two small gold gems #E5C988 floating toward it along faint curved pull lines. Irregular rock, not a smooth block, no horseshoe magnet.
+  ```
+
+##### KeenLens.png
+- **Name:** Keen Lens
+- **Effect:** +5% critical chance.
+- **Prompt:**
+  ```text
+  A round magnifying glass: thick antique gold rim #D5B062, pale slate-blue glass #8DA1B7 with a white glint, a short curved gold handle #E5C988 to the bottom-right. Glass and gold only, no stone, no eye.
+  ```
+
+##### HealingHerb.png
+- **Name:** Healing Herb
+- **Effect:** Kills have about a 5% chance to heal 3 HP.
+- **Prompt:**
+  ```text
+  A sprig of three moss-green leaves #7E9F58 on one thin stem #52763D, with two small round crimson berries #C9443F and a tiny crimson plus spark above it.
+  ```
+
+#### Uncommon (8)
+
+##### IronPlate.png
+- **Name:** Iron Plate
+- **Effect:** Take 6% less damage (more per stack).
+- **Prompt:**
+  ```text
+  A square, slightly curved riveted steel armour plate: steel #9EA7B2 with a raised inner panel #BCC3CB, four antique gold rivets #D5B062 at the corners. A square plate, not a shield shape, no spikes.
+  ```
+
+##### BarbedMail.png
+- **Name:** Barbed Mail
+- **Effect:** When hit, hit back at nearby enemies for 1.5x the damage taken.
+- **Prompt:**
+  ```text
+  A square steel chest-piece #9EA7B2 with a cross seam #D7DCE1, sharp crimson spikes #C9443F sticking out on all four sides.
+  ```
+
+##### StormCharm.png
+- **Name:** Storm Charm
+- **Effect:** Hits have about a 10% chance to call lightning on 3 enemies.
+- **Prompt:**
+  ```text
+  A round amulet with a small gold loop on top: dark slate-blue disc #33445A, antique gold rim #D5B062, a small white-blue lightning bolt #E4ECFF inlaid in the middle.
+  ```
+
+##### VolatileSpore.png
+- **Name:** Volatile Spore
+- **Effect:** Kills have a 20% chance to explode and damage enemies nearby.
+- **Prompt:**
+  ```text
+  A bloated round spore pod: moss green #648A47 with pale spots #A3B784, ringed by short orange sparks #E58A45 as if about to burst.
+  ```
+
+##### GuardianWard.png
+- **Name:** Guardian Ward
+- **Effect:** After 5 s without damage, gain a shield of 8% max HP.
+- **Prompt:**
+  ```text
+  A glowing translucent slate-blue bubble dome #8DA1B7 with a pale rim #B8C5D3 and a small antique gold shield emblem #D5B062 floating inside, a white highlight top-left.
+  ```
+
+##### SpareQuiver.png
+- **Name:** Spare Quiver
+- **Effect:** Every 6th attack of each weapon fires one extra projectile.
+- **Prompt:**
+  ```text
+  A leather quiver #6E4C33 tilted slightly, with an antique gold band #D5B062 near the top and three arrows sticking out with steel heads #D7DCE1, the middle one higher.
+  ```
+
+##### MagnetTotem.png
+- **Name:** Magnet Totem
+- **Effect:** Pulls in gems within 45 studs every 10 seconds.
+- **Prompt:**
+  ```text
+  A short wooden post #7E5C3F on a small base, topped by a crimson horseshoe magnet #C9443F with steel tips #D7DCE1, a faint slate-blue pulse ring #8DA1B7 around the top.
+  ```
+
+##### HuntersEye.png
+- **Name:** Hunter's Eye
+- **Effect:** +30% critical damage and +3% critical chance.
+- **Prompt:**
+  ```text
+  A single stylised eye: ivory almond shape #E5DCC7, moss-green iris #648A47, dark pupil #141B24, with four small crimson crosshair ticks #DB6A5E at top, bottom, left and right.
+  ```
+
+#### Legendary (3)
+
+##### PhoenixFeather.png
+- **Name:** Phoenix Feather
+- **Effect:** When you fall, rise again at 50% HP (used up).
+- **Prompt:**
+  ```text
+  A large flame-shaped phoenix tail feather: orange outer #E58A45, gold middle #E5C988, ivory-white core #F3EDDF, a few small flame flecks around it, a gold quill. Single feather, majestic.
+  ```
+
+##### CrownOfAges.png
+- **Name:** Crown of Ages
+- **Effect:** +12% damage, +8% attack speed, +8% move speed and +10% max HP.
+- **Prompt:**
+  ```text
+  A heavy five-pointed antique gold crown #D5B062 shaded #A07B35, a large crimson gem #C9443F in the front, small ivory pearls #F3EDDF on the points.
+  ```
+
+##### SunMedallion.png
+- **Name:** Sun Medallion
+- **Effect:** +18% damage, +12% attack area and +12% effect duration.
+- **Prompt:**
+  ```text
+  A round gold medallion shaped like a sun: gold disc #E5C988 with eight short triangular rays #BF9746, an inner ring and a dark gold centre boss #7E5F27.
+  ```
+
+### 4.5 Other (7)
+
+The five loot / run markers use lower-case file names on purpose (they match their names in
+`src/client/Icons.lua`).
+
+#### Gold.png
+- **Name:** Gold (fallback level-up card, when every slot is maxed)
+- **Effect:** +25 run gold.
+- **Prompt:**
+  ```text
+  Two stacked gold coins, a big one in front and a smaller one behind: gold #D5B062 with pale highlight #F0DDB0 and an embossed diamond mark #7E5F27 on the front coin.
+  ```
+
+#### Heal.png
+- **Name:** Heal (fallback level-up card, when every slot is maxed)
+- **Effect:** Heal 30 HP.
+- **Prompt:**
+  ```text
+  A roasted meat drumstick: golden-brown meat #A0815E with darker roast facets #735740, an ivory bone end #F3EDDF, a small gold sparkle #E5C988.
+  ```
+
+#### chest.png
+- **Name:** Chest (loot prompt, rewards)
+- **Effect:** Costs run gold, gives one item.
+- **Prompt:**
+  ```text
+  A sturdy wooden treasure chest, closed: wood #7E5C3F with a lighter lid #9A7752, antique gold bands and a lock plate #D5B062.
+  ```
+
+#### shrine.png
+- **Name:** Shrine (Shrine of Chance and Bargain Shrine prompts)
+- **Effect:** Pay gold for a chance at an item, or take a bargain for the stage.
+- **Prompt:**
+  ```text
+  A tall stone pillar shrine on a wide slab base, light stone #9EA2A7 with shaded facets #858A91, a gold diamond sigil #D5B062 on its front, a stone cap on top.
+  ```
+
+#### altar.png
+- **Name:** Guarded Altar
+- **Effect:** Defeat its guards to open a free rare chest for every living teammate.
+- **Prompt:**
+  ```text
+  A wide stepped stone altar #9EA2A7 with two short stone posts at the sides, a small wooden reliquary box #9A7752 on top with a gold lock #E5C988.
+  ```
+
+#### portal.png
+- **Name:** Portal (stage portal, Stages stat)
+- **Effect:** Travel to the next stage.
+- **Prompt:**
+  ```text
+  A stone arch portal, stone #9EA2A7 with a gold keystone #D5B062 at the top, filled with a swirling pale arcane-blue glow #9DB8E3.
+  ```
+
+#### revive.png
+- **Name:** Revive (Revive upgrade, Second Wind curse, revive achievement)
+- **Effect:** One extra life.
+- **Prompt:**
+  ```text
+  A crimson heart #C9443F with small ivory angel wings #F3EDDF and a soft gold glow #F2D48A rising above it.
+  ```
+
+---
+
+## 5. Look-alike check
+Things that must never look alike (check them side by side):
+- Sword icons: **Whip** (one steel sword + slash arc), **Bloodwhip** (one crimson sword), **Might** (two crossed swords).
+- Grey things: **Whetstone** (smooth light block), **Lodestone** (jagged dark rock), **IronPlate** (riveted steel square).
+- Crit things: **KeenLens** (magnifying glass), **Precision** (archery target), **HuntersEye** (eye).
+- Defence: **Armor** (kite shield), **IronPlate** (square plate), **BarbedMail** (spiked plate), **GuardianWard** (bubble), **Bastion** (gold turret).
+- Magnets: **Vacuum** (magnet alone), **MagnetTotem** (magnet on a post), **Lodestone** (rock).
+- Feathers: **SwiftFeather** (ivory/blue), **Fletching** (ivory with crimson bands on a shaft), **PhoenixFeather** (fire), **Windpiercer** (green arrows).
+- Hearts: **Heart** (plain), **revive** (with wings), **Heartseeker** (heart-tipped bolt), **HeartyBread** (bread).
+- Greens: **Luck** (clover), **Growth** (sprout in soil), **HealingHerb** (sprig with berries), **Renewal** (one leaf + plus).
+- Lightning: **Lightning** (one bolt), **ThunderLoop** (ring of bolts), **StormCharm** (amulet).
+- Fire: **FireTrail** (three flames), **PhoenixStride** (flame boot), **Hellfire** (burning flask), **Candle**.

@@ -13,7 +13,8 @@
 	Unlocking pays the reward at once into the save (gold, a character, a cosmetic) and
 	tells the player (AchievementUnlocked toast). Unlocks of the current run are listed on
 	the results screen (TakeRunUnlocks). Clients only ever send EquipCosmetic (a title /
-	colour they have earned, validated here).
+	colour they have earned from an achievement or the account level track, validated here;
+	rings and frames go to AccountService.Equip).
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -146,12 +147,24 @@ end
 
 local function onEquip(player: Player, kind: any, value: any)
 	local data = ctx.DataService.GetData(player)
-	if not data or (kind ~= "Title" and kind ~= "Color") or type(value) ~= "string" or #value > 40 then
+	if not data or type(value) ~= "string" or #value > 40 then
+		return
+	end
+	if kind == "Ring" or kind == "Frame" then
+		-- level-track cosmetics (AccountService checks the level)
+		if ctx.AccountService.Equip(player, kind, value) then
+			ctx.GoldSystem.SyncProfile(player)
+		end
+		return
+	end
+	if kind ~= "Title" and kind ~= "Color" then
 		return
 	end
 	if value ~= "" then
+		-- earned from an achievement, or from the account level track
 		local source = AchievementData.Source(kind, value)
-		if not source or not store(data).Unlocked[source] then
+		local fromAchievement = source ~= nil and store(data).Unlocked[source] ~= nil
+		if not fromAchievement and not ctx.AccountService.CanWear(data, kind, value) then
 			return
 		end
 	end

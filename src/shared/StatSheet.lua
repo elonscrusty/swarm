@@ -11,6 +11,8 @@
 	    Passives = { [passiveId] = level },-- PassiveData.Values[level] (TOTAL bonus per level)
 	    Items = { [itemId] = count },      -- run items (ItemData.Bonus)
 	    Team = { might = 0.15, ... }?,     -- this stage's Bargain Shrine boon (LootSystem)
+	    Curse = { MaxHP = 0.7, Might = 1.3, DamageTaken = 1.3 }?, -- the run's curses
+	                                       -- (CurseData), final multipliers
 	  }
 	  sheet = { Might, Armor, MaxHP, Speed, CooldownMult, AreaMult, Amount, Pierce,
 	            PickupRadius, Luck, ProjSpeedMult, DurationMult, Growth, DamageTaken, Regen,
@@ -42,6 +44,7 @@ export type Input = {
 	Passives: { [string]: number }?,
 	Items: { [string]: number }?,
 	Team: { [string]: number }?,
+	Curse: { [string]: number }?,
 }
 
 function StatSheet.Compute(input: Input): { [string]: number }
@@ -84,7 +87,8 @@ function StatSheet.Compute(input: Input): { [string]: number }
 
 	local P = Config.Player
 	local I = Config.Items
-	return {
+	local curse = input.Curse or {}
+	local sheet = {
 		Might = 1 + b.might,
 		Armor = P.BaseArmor + b.armor,
 		MaxHP = math.floor((P.BaseMaxHP + b.maxHpFlat) * (1 + b.maxHpMult) + 0.5),
@@ -105,6 +109,11 @@ function StatSheet.Compute(input: Input): { [string]: number }
 		CritDamage = I.BaseCritDamage + b.critDamage,
 		GoldMult = 1 + b.goldGain, -- in-run gold (kills, elite chests, the Queen)
 	}
+	-- curses multiply the finished sheet (Fragile, Glass Cannon)
+	sheet.MaxHP = math.max(1, math.floor(sheet.MaxHP * (curse.MaxHP or 1) + 0.5))
+	sheet.Might *= curse.Might or 1
+	sheet.DamageTaken *= curse.DamageTaken or 1
+	return sheet
 end
 
 local function pct(mult: number): string

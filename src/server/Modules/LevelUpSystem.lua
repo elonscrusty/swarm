@@ -36,6 +36,7 @@ local function sheetFor(rp, passives: { [string]: number }?)
 		Passives = passives or rp.Passives,
 		Items = rp.Items or {},
 		Team = ctx.LootSystem and ctx.LootSystem.TeamBonus() or nil,
+		Curse = ctx.RunModifiers and ctx.RunModifiers.StatMults() or nil,
 	})
 end
 
