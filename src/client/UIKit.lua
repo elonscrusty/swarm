@@ -188,6 +188,42 @@ function UIKit.text(parent: Instance?, style: string, str: string, props: { [str
 end
 local text = UIKit.text
 
+--[[
+	A TextLabel in a Theme.Type role (Display, Title, Heading, Body, Label, Number, Stat,
+	Caption): the role's font, size and stroke; colour defaults to ivory (muted for Caption).
+	`props` are applied last. `world` = the text sits straight over the 3D world, so roles
+	without a stroke get a light one for legibility.
+]]
+function UIKit.Role(parent: Instance?, role: string, str: string, props: { [string]: any }?, world: boolean?): TextLabel
+	local def = Theme.Type[role] or Theme.Type.Body
+	local px = TS(def.Size)
+	local l = new("TextLabel", {
+		Name = role,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Text = str,
+		FontFace = def.Font,
+		TextSize = px,
+		TextColor3 = role == "Caption" and C.TextMuted or C.Text,
+		Size = UDim2.new(1, 0, 0, px + 6),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		Active = false,
+	})
+	local stroke = def.Stroke or (world and 0.5 or nil)
+	if stroke then
+		l.TextStrokeColor3 = C.Shadow
+		l.TextStrokeTransparency = stroke
+	end
+	if props then
+		for k, v in pairs(props) do
+			(l :: any)[k] = v
+		end
+	end
+	l.Parent = parent
+	return l
+end
+
 -- Older helper: centred bold label of `size` px.
 function UIKit.label(parent: Instance, str: string, size: number, props: { [string]: any }?): TextLabel
 	local l = text(nil, "Label", str, { TextXAlignment = Enum.TextXAlignment.Center }, size)

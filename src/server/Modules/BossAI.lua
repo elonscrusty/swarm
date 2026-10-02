@@ -394,8 +394,9 @@ function Start.BroodCall(e)
 end
 
 -- Matriarch: a dust ring rolls outward from her with one safe gap.
-local function stormWave(e, delay: number, gap: number)
-	local A = e.BossData.Attacks.DustStorm
+-- (the Colossus's Ground Slam rings use the same rolling wave: A = its attack entry)
+local function stormWave(e, delay: number, gap: number, A: any?)
+	A = A or e.BossData.Attacks.DustStorm
 	local r0 = e.Radius * 0.8
 	local gapHalf = math.rad(A.GapHalf)
 	local g = math.floor(gap * 1000 + 0.5) / 1000

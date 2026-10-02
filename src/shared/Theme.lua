@@ -164,6 +164,31 @@ Theme.TextSize = {
 	Caption = 12, -- labels like "BEST TIME"
 }
 
+--[[
+	Named text roles: one font + size + stroke rule per job, so the same kind of text has the
+	same look on every screen (UIKit.Role builds a label from one). Sizes are reference px
+	(UIKit.TS adds the phone boost). Stroke = text stroke transparency (nil = no stroke:
+	text on a panel); text drawn straight over the 3D world gets a stroke.
+	  Display  the run timer, stage banners, big results words      Merriweather Heavy 40
+	  Title    panel / tip / boss titles                            Merriweather Bold 22
+	  Heading  section and status lines                             Merriweather Bold 18
+	  Body     sentences, objectives, toasts                        Source Sans SemiBold 16
+	  Label    caps labels, chips, pills, names                     Source Sans Bold 14
+	  Number   HUD figures: HP, kills, gold, XP                     Source Sans Bold 18
+	  Stat     the big figure of a counter (the gold purse)         Source Sans Bold 30
+	  Caption  small print under a figure, badges                   Source Sans Bold 12
+]]
+Theme.Type = {
+	Display = { Font = Theme.Font.Display, Size = Theme.TextSize.Display, Stroke = 0.55 },
+	Title = { Font = Theme.Font.Title, Size = Theme.TextSize.H2, Stroke = nil },
+	Heading = { Font = Theme.Font.Heading, Size = Theme.TextSize.H3, Stroke = 0.5 },
+	Body = { Font = Theme.Font.BodyStrong, Size = Theme.TextSize.Body, Stroke = nil },
+	Label = { Font = Theme.Font.Label, Size = Theme.TextSize.Small, Stroke = nil },
+	Number = { Font = Theme.Font.Number, Size = Theme.TextSize.H3, Stroke = 0.55 },
+	Stat = { Font = Theme.Font.Number, Size = 30, Stroke = 0.45 },
+	Caption = { Font = Theme.Font.Label, Size = Theme.TextSize.Caption, Stroke = nil },
+}
+
 -- Phones render the reference pixels small (UIScale ~0.6), so text there is set this much
 -- bigger to stay readable (UIKit applies it; layouts leave room for it).
 Theme.TextScaleCompact = 1.2

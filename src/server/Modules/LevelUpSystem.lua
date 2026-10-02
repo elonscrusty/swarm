@@ -9,6 +9,9 @@
 	is taken for them.
 
 	Card types: WeaponNew, WeaponUp, Evolve, PassiveNew, PassiveUp, Gold, Heal.
+	Synergies (SynergyData): complete sets add their bonus to the stat sheet here; the
+	player attribute "Synergies" lists the active ids; a NEW card that completes or
+	advances one says so (card fields Synergy, SynergyReady).
 	Only the card index comes from the client; the server owns the card list.
 ]]
 
@@ -17,6 +20,7 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponData)
 local PassiveData = require(game:GetService("ReplicatedStorage").Shared.PassiveData)
 local StatSheet = require(game:GetService("ReplicatedStorage").Shared.StatSheet)
+local SynergyData = require(game:GetService("ReplicatedStorage").Shared.SynergyData)
 local Fx = require(script.Parent.Fx)
 
 local LevelUpSystem = {}
@@ -28,6 +32,25 @@ local rng = Random.new()
 -- Stats
 ------------------------------------------------------------------------------------------
 
+-- What the player owns, for SynergyData (optionally with other passive levels: cards).
+local function ownedOf(rp, passives: { [string]: number }?): SynergyData.Owned
+	return { Weapons = rp.Weapons or {}, Passives = passives or rp.Passives or {}, Items = rp.Items or {} }
+end
+
+-- The stage's team boon plus the player's complete synergies (both additive stat keys).
+local function teamAndSynergy(rp, passives: { [string]: number }?): { [string]: number }?
+	local team = ctx.LootSystem and ctx.LootSystem.TeamBonus() or nil
+	local active = SynergyData.Active(ownedOf(rp, passives))
+	if #active == 0 then
+		return team
+	end
+	local b = SynergyData.Bonus(active)
+	for k, v in pairs(team or {}) do
+		b[k] = (b[k] or 0) + v
+	end
+	return b
+end
+
 -- The stat sheet for this run player, optionally with other passive levels (cards).
 local function sheetFor(rp, passives: { [string]: number }?)
 	return StatSheet.Compute({
@@ -35,16 +58,37 @@ local function sheetFor(rp, passives: { [string]: number }?)
 		Meta = rp.Meta,
 		Passives = passives or rp.Passives,
 		Items = rp.Items or {},
-		Team = ctx.LootSystem and ctx.LootSystem.TeamBonus() or nil,
+		Team = teamAndSynergy(rp, passives),
 		Curse = ctx.RunModifiers and ctx.RunModifiers.StatMults() or nil,
 	})
 end
 
+-- Publishes the active synergies (attribute "Synergies") and announces a new one.
+local function updateSynergies(rp)
+	local active = SynergyData.Active(ownedOf(rp))
+	local key = table.concat(active, ",")
+	if key == rp.SynergyKey then
+		return
+	end
+	local before = SynergyData.FromString(rp.SynergyKey)
+	rp.SynergyKey = key
+	local player: Player = rp.Player
+	player:SetAttribute("Synergies", key)
+	for _, id in ipairs(active) do
+		if not table.find(before, id) then
+			local s = SynergyData.Synergies[id]
+			ctx.RunManager.Notify(player, string.format("Synergy: %s! %s", s.Name, s.Text), s.Color)
+		end
+	end
+end
+
 -- Rebuilds rp.Stats from base config + character + meta upgrades + passives + run items
--- (ItemData) + this stage's team boon (Bargain Shrine, LootSystem.TeamBonus): StatSheet.
+-- (ItemData) + this stage's team boon (Bargain Shrine, LootSystem.TeamBonus) + complete
+-- synergies (SynergyData): StatSheet.
 function LevelUpSystem.RecomputeStats(rp)
 	local oldMax = rp.Stats and rp.Stats.MaxHP or nil
 	rp.Stats = sheetFor(rp)
+	updateSynergies(rp)
 	-- Max HP increases also heal by the same amount.
 	if oldMax and rp.Stats.MaxHP > oldMax then
 		rp.HP += rp.Stats.MaxHP - oldMax
@@ -252,10 +296,21 @@ local function evolveHint(rp, c, def)
 	end
 end
 
+-- NEW weapon / passive cards: the synergy this piece completes or advances.
+local function synergyHint(rp, c, kind: string)
+	local s, have, need = SynergyData.Advances(ownedOf(rp), kind, c.Id)
+	if not s then
+		return
+	end
+	c.SynergyReady = have >= need
+	c.Synergy = c.SynergyReady and string.format("Synergy: completes %s", s.Name) or string.format("Synergy: %s %d/%d", s.Name, have, need)
+end
+
 -- Adds display fields for the client:
 --   Name, Rank ("NEW" | "Lv 3 → 4 / 8" | "EVOLUTION"), Lines (what changes, real numbers),
 --   Description (short text; also the joined lines for older clients), Hint (evolution
---   requirement on weapon cards when close), Rarity / RarityLabel / RarityColor.
+--   requirement on weapon cards when close), Synergy / SynergyReady (NEW cards that complete
+--   or advance a synergy), Rarity / RarityLabel / RarityColor.
 local function decorate(rp, c)
 	local rarity = "Common"
 	if c.Type == "WeaponNew" or c.Type == "WeaponUp" then
@@ -267,6 +322,7 @@ local function decorate(rp, c)
 			c.Rank = "NEW"
 			c.Description = def.Description
 			c.Lines = WeaponData.CardLines(c.Id, 0, 1)
+			synergyHint(rp, c, "Weapon")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, WeaponData.MaxLevel)
 			c.Lines = WeaponData.CardLines(c.Id, c.Level - 1, c.Level)
@@ -294,6 +350,7 @@ local function decorate(rp, c)
 			rarity = "Rare"
 			c.Rank = "NEW"
 			c.Description = def.Description
+			synergyHint(rp, c, "Passive")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, maxLevel)
 			c.Description = def.Description -- the lines carry the real numbers

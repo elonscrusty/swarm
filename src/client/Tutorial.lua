@@ -48,7 +48,7 @@ local ClientSettings = require(script.Parent.ClientSettings)
 local Tutorial = {}
 
 local player = Players.LocalPlayer
-local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local new, TS = UIKit.new, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 local T = Config.Tutorial
 
@@ -63,11 +63,11 @@ local TARGETS: { [string]: { string } } = {
 	Boss = { "Boss", "BossMeter" },
 }
 
-local TITLE_SIZE = 24
-local BODY_SIZE = 18
-local ICON = 60
+local TITLE_SIZE = Theme.Type.Title.Size
+local BODY_SIZE = Theme.Type.Body.Size
+local ICON = 48
 local ARROW = 22
-local SKIP_W, SKIP_H = 150, 44
+local SKIP_W, SKIP_H = 130, 38
 
 type Tip = { Id: string, Text: string, Title: string, Icon: string, Seconds: number }
 
@@ -153,19 +153,19 @@ local function build(root: Frame)
 	UIKit.stroke(iconWell, P.gold_400, 2, 0.15)
 	ui.IconWell = iconWell
 	ui.Step = UIKit.Badge(face, "TIP 1 / 5", "Gold", { Name = "Step", AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0) })
-	ui.Title = text(face, "H2", "", { Name = "Title", Position = UDim2.fromOffset(ICON + 14, 0), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd }, TITLE_SIZE)
-	ui.Body = text(face, "BodyStrong", "", {
+	ui.Title = UIKit.Role(face, "Title", "", { Name = "Title", Position = UDim2.fromOffset(ICON + 14, 0), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd })
+	ui.Body = UIKit.Role(face, "Body", "", {
 		Name = "Body",
 		Position = UDim2.fromOffset(ICON + 14, TS(TITLE_SIZE) + 6),
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = C.Text,
-	}, BODY_SIZE)
+	})
 	ui.Skip = UIKit.Button(face, {
 		Kind = "Outline",
 		Title = "SKIP TIPS",
 		Icon = "skip",
-		IconSize = 18,
+		IconSize = 16,
 		Align = "Center",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.fromScale(1, 1),
@@ -260,7 +260,7 @@ local function layout()
 	local v: Vector2 = kit.VirtualSize()
 	local W, H = v.X, v.Y
 	local portrait: boolean = kit.IsPortrait()
-	local w = portrait and (W - 24) or math.min(640, W - 48)
+	local w = portrait and (W - 24) or math.min(520, W - 48)
 	local h = sizeCard(w)
 
 	local pos, size = targetRect(current.Id)
@@ -316,7 +316,7 @@ local function setIcon(name: string)
 			c:Destroy()
 		end
 	end
-	Icons.Draw(ui.IconWell, name, { Size = 36, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	Icons.Draw(ui.IconWell, name, { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
 end
 
 local function hideCard()

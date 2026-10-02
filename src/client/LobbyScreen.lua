@@ -11,11 +11,15 @@
 	  bottom centre nameplate of the hero with gold arrows to browse characters
 	                (owned → selected at once; locked → price, UNLOCK / DETAILS)
 	  right column  SOLO (primary gold), DUO, TRIO, then CURSES (the run modifiers picked,
-	                their gold bonus). A countdown (who joined, the curses, JOIN, START NOW,
-	                the number) or "run in progress" replaces this column.
+	                their gold bonus) and the ENDLESS switch (Config.Endless: no win, the
+	                portal only goes deeper; remote SetEndless, the server's answer is the
+	                player attribute "Endless"). A countdown (who joined, the curses, an
+	                ENDLESS line, JOIN, START NOW, the number) or "run in progress" replaces
+	                this column.
 	  bottom left   SETTINGS, STATS, RANKS (leaderboards), TRACK (account level)
 	  nameplate     your level, name, worn title / colour above the hero's plate
-	Portrait stacks: logo, stats, hero, nameplate, curses, modes, cards, corner buttons.
+	Portrait stacks: logo, stats, hero, nameplate, curses + daily, endless, modes, cards,
+	corner buttons.
 
 	Sub-screens slide in: Characters (MenuCharacters), Upgrades (MenuUpgrades), Stats
 	(MenuStats), Curses (MenuCurses), Daily (MenuDaily), Ranks (MenuLeaderboards), Track
@@ -71,6 +75,7 @@ local screens: { [string]: any } = {}
 local shownGold: number? = nil
 local lastStatus = ""
 local browse: string? = nil -- a locked character being looked at from the nameplate
+local endlessSentAt = -100 -- os.clock() of the last SetEndless (the switch waits for the answer)
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -468,6 +473,18 @@ local function buildModes(frame: Frame)
 		end,
 	})
 	ui.DailyBtn.Instance.Visible = false
+	-- ENDLESS: a switch under the modes (the server keeps it per player, like curses)
+	local holder, face = UIKit.Surface(frame, { Name = "EndlessRow", Radius = Theme.Radius.M, Transparency = 0.12, Edge = C.PanelEdge, EdgeTransparency = Theme.Alpha.Edge })
+	ui.EndlessRow = holder
+	ui.EndlessEdge = face:FindFirstChildOfClass("UIStroke")
+	UIKit.padding(face, 0, 12, 0, 12)
+	ui.EndlessToggle = UIKit.Toggle(face, "Endless", "cycle", "No win · deeper, harder stages", player:GetAttribute("Endless") == true, function(on)
+		endlessSentAt = os.clock()
+		Remotes.Get("SetEndless"):FireServer(on)
+	end, { Size = UDim2.fromScale(1, 1) })
+	if Config.Endless == nil or not Config.Endless.Enabled then
+		holder.Visible = false
+	end
 end
 
 -- "Frenzy, Horde · +45% gold" (or the empty text) for a curse list.
@@ -508,6 +525,13 @@ local function buildQueue(frame: Frame)
 		LobbyScreen.Show("Curses")
 	end)
 	ui.QueueCurses = curseRow
+	-- an Endless run (the starter's switch, SwarmState Endless)
+	local endlessRow = new("Frame", { Name = "QueueEndless", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.25, Size = UDim2.new(1, 0, 0, 32), Visible = false }, face)
+	UIKit.corner(endlessRow, Theme.Radius.S)
+	UIKit.stroke(endlessRow, P.gold_400, 1, 0.45)
+	Icons.Draw(endlessRow, "cycle", { Size = 20, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Back = C.PanelInset })
+	text(endlessRow, "Label", string.format('<font color="%s">ENDLESS</font>  no win, the portal only goes deeper', UIKit.hex(P.gold_300)), { Position = UDim2.fromOffset(36, 0), Size = UDim2.new(1, -44, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, RichText = true }, 13)
+	ui.QueueEndless = endlessRow
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 52) }, face)
 	ui.QueueRow = row
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 10) })
@@ -793,10 +817,13 @@ local function relayout()
 		place(ui.ModeButtons[3].Instance, M + half + G, y, half, smallH)
 		y -= G + soloH
 		place(ui.ModeButtons[1].Instance, M, y, w, soloH)
+		local endH = 60
+		y -= G + endH
+		place(ui.EndlessRow, M, y, w, endH)
 		y -= G + curseH
 		place(ui.CurseBtn.Instance, M, y, half, curseH)
 		place(ui.DailyBtn.Instance, M + half + G, y, half, curseH)
-		place(ui.Queue, M, y, w, curseH + G + soloH + G + smallH)
+		place(ui.Queue, M, y, w, curseH + endH + 2 * G + soloH + G + smallH)
 		y -= 18 + plateH
 		local plateW = math.min(w - 2 * 62, 460)
 		place(ui.Nameplate, (W - plateW) / 2, y, plateW, plateH)
@@ -831,13 +858,22 @@ local function relayout()
 		end
 		-- right column: SOLO / DUO / TRIO, then CURSES
 		local rw = math.clamp(W * 0.25, 280, 340)
-		local soloH, smallH, curseH = 96, 80, 68
-		local colH = soloH + 2 * smallH + curseH + 3 * G
+		local soloH, smallH, curseH, endH = 96, 80, 68, 60
+		local colH = soloH + 2 * smallH + curseH + endH + 4 * G
 		local colTop = math.max(chipY + 64, (H - colH) / 2)
+		-- short screens (phones in landscape): the column shrinks to fit above the bottom
+		local room = H - M - colTop
+		if colH > room then
+			local k = math.max(0.72, (room - 4 * G) / (colH - 4 * G))
+			soloH, smallH, curseH = math.floor(soloH * k), math.floor(smallH * k), math.floor(curseH * k)
+			endH = math.max(Theme.Size.TapMin, math.floor(endH * k))
+			colH = soloH + 2 * smallH + curseH + endH + 4 * G
+		end
 		place(ui.ModeButtons[1].Instance, W - M - rw, colTop, rw, soloH)
 		place(ui.ModeButtons[2].Instance, W - M - rw, colTop + soloH + G, rw, smallH)
 		place(ui.ModeButtons[3].Instance, W - M - rw, colTop + soloH + smallH + 2 * G, rw, smallH)
 		place(ui.CurseBtn.Instance, W - M - rw, colTop + soloH + 2 * smallH + 3 * G, rw, curseH)
+		place(ui.EndlessRow, W - M - rw, colTop + soloH + 2 * smallH + curseH + 4 * G, rw, endH)
 		place(ui.Queue, W - M - rw, colTop - 10, rw, math.min(colH + 40, H - colTop - M))
 		-- nameplate bottom centre, between the columns
 		local gapL, gapR = M + cw + 16, W - M - rw - 16
@@ -865,6 +901,11 @@ local function relayout()
 	if ui.QueueCurses.Visible then
 		ui.QueueCurses.Position = UDim2.fromOffset(0, curseY)
 		noteY += 46
+	end
+	ui.QueueEndless.Visible = ui.QueueEndless:GetAttribute("Has") == true
+	if ui.QueueEndless.Visible then
+		ui.QueueEndless.Position = UDim2.fromOffset(0, noteY)
+		noteY += 38
 	end
 	ui.QueueNote.Position = UDim2.fromOffset(0, noteY)
 	ui.QueueNote.Size = UDim2.new(1, 0, 0, short and (TS(16) + 6) or (TS(16) * 3 + 8))
@@ -918,6 +959,7 @@ local function homeEntrance()
 		i += 1
 		UIAnim.Pop(b.Instance, Theme.Motion.Stagger * i, 0.85)
 	end
+	UIAnim.Pop(ui.EndlessRow, Theme.Motion.Stagger * 4, 0.85)
 	UIAnim.Pop(ui.Nameplate, 0.1, 0.85)
 	UIAnim.Pop(ui.Logo, 0, 0.9)
 end
@@ -1174,7 +1216,7 @@ function LobbyScreen.Update(_dt: number?)
 		ui.QueueRing.Visible = false
 		ui.QueueTitle.Text = "RUN IN PROGRESS"
 		local stageNo = state:GetAttribute("Stage") or 0
-		ui.QueueCaption.Text = UIKit.track((stageNo > 0 and ("Stage " .. stageNo .. " · ") or "") .. "Time " .. UIKit.formatTime(state:GetAttribute("RunTime") or 0))
+		ui.QueueCaption.Text = UIKit.track((state:GetAttribute("Endless") == true and "Endless · " or "") .. (stageNo > 0 and ("Stage " .. stageNo .. " · ") or "") .. "Time " .. UIKit.formatTime(state:GetAttribute("RunTime") or 0))
 		ui.QueueNote.Text = "Wait here for the next one! Pick a character or buy upgrades meanwhile."
 		ui.QueueRow.Visible = false
 		if ui.QueueKey ~= "busy" then
@@ -1204,6 +1246,23 @@ function LobbyScreen.Update(_dt: number?)
 	end
 	ui.CurseBtn.Instance.Visible = kind == "Modes"
 	ui.DailyBtn.Instance.Visible = kind == "Modes" and host.IsPortrait()
+	-- the ENDLESS switch follows the server's answer (after a short wait for our own tap)
+	local endlessOn = player:GetAttribute("Endless") == true
+	ui.EndlessRow.Visible = kind == "Modes" and Config.Endless ~= nil and Config.Endless.Enabled == true
+	if os.clock() - endlessSentAt > 1.5 and ui.EndlessToggle.Get() ~= endlessOn then
+		ui.EndlessToggle.Set(endlessOn)
+	end
+	local endlessLit = ui.EndlessToggle.Get()
+	if ui.EndlessEdge and ui.EndlessRow:GetAttribute("Lit") ~= endlessLit then
+		ui.EndlessRow:SetAttribute("Lit", endlessLit)
+		ui.EndlessEdge.Color = endlessLit and P.gold_400 or C.PanelEdge
+		ui.EndlessEdge.Transparency = endlessLit and 0.1 or Theme.Alpha.Edge
+	end
+	local endlessShown = kind == "Countdown" and state:GetAttribute("Endless") == true
+	if ui.QueueEndless:GetAttribute("Has") ~= endlessShown then
+		ui.QueueEndless:SetAttribute("Has", endlessShown)
+		relayout()
+	end
 	local shown = CurseData.FromString(state:GetAttribute("Curses"))
 	local has = kind ~= "Modes" and #shown > 0
 	if ui.QueueCurses:GetAttribute("Has") ~= has then

@@ -26,6 +26,8 @@
 	Flags read by the hero traits (CharacterData): Area = true for burning / area weapons
 	(the Alchemist's Volatile Mix), Deployable = true for things you plant (the Engineer's
 	Tinkerer). Params.MaxAmount caps the amount (turrets, totems: Duplicator can't go past it).
+	Element = "Fire" | "Frost" | "Storm" tags the elemental weapons for the build synergies
+	(SynergyData.lua); it changes nothing else.
 
 	To add a weapon: add an entry to Weapons + its id to Order, then add a behaviour
 	function in ServerScriptService/Modules/WeaponSystem.lua (Fire[Behavior]) and list
@@ -294,6 +296,7 @@ WeaponData.Weapons = {
 
 	HolyWater = {
 		Id = "HolyWater",
+		Element = "Fire", -- SynergyData (Elemental Trinity, Ember Field)
 		Name = "Holy Water",
 		Description = "Throws bottles that leave burning pools.",
 		Color = Color3.fromRGB(80, 160, 255),
@@ -322,6 +325,7 @@ WeaponData.Weapons = {
 
 	Lightning = {
 		Id = "Lightning",
+		Element = "Storm", -- SynergyData (Elemental Trinity)
 		Name = "Lightning",
 		Description = "Strikes random enemies around you.",
 		Color = Color3.fromRGB(255, 240, 90),
@@ -530,6 +534,7 @@ WeaponData.Weapons = {
 	-- FROST NOVA: a periodic burst of ice around you that damages and slows (not bosses).
 	FrostNova = {
 		Id = "FrostNova",
+		Element = "Frost", -- SynergyData (Elemental Trinity)
 		Name = "Frost Nova",
 		Description = "A burst of frost around you every few seconds: damages and slows enemies.",
 		Color = Color3.fromRGB(150, 200, 230),
@@ -563,6 +568,7 @@ WeaponData.Weapons = {
 	-- FIRE TRAIL: burning ground behind you as you move. Never hurts players.
 	FireTrail = {
 		Id = "FireTrail",
+		Element = "Fire", -- SynergyData (Elemental Trinity, Ember Field)
 		Name = "Fire Trail",
 		Description = "Leaves burning ground behind you as you move. It never hurts heroes.",
 		Color = Color3.fromRGB(230, 130, 60),

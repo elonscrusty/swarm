@@ -15,6 +15,17 @@
 	  StageManager.SpawnMult (horde), XPSystem (no chickens), LevelUpSystem's stat sheet
 	  (max HP, damage dealt / taken) and GoldSystem.AddRunGold (the gold multiplier).
 
+	Endless (Config.Endless)
+	  Lobby: remote SetEndless(boolean) stores the switch in the save (data.Endless) and the
+	  player attribute "Endless". Ignored while the player is in a run. Like curses, a run
+	  uses the STARTER's switch (the countdown's starter may still flip it), fixed when the
+	  run begins, and only for Config.Endless.Modes (never the Daily Challenge). Every run
+	  player gets rp.Endless. StageManager reads IsEndless (no RETURN at the portal, the
+	  extra difficulty past LastNormalStage: EndlessStage); RunManager scores the run on
+	  "ScoreEndless" instead of "Score" and never counts it as a win.
+	  SwarmState "Endless": the switch on show (countdown: the starter's; running /
+	  results: the run's; lobby: false).
+
 	Daily Challenge
 	  StartRun("Daily") (RunManager) starts a solo run with CurseData.Daily(today): its
 	  arena tour and bosses (StageManager.BeginRun's fixed plan), its curses and its starting
@@ -41,6 +52,7 @@ local active: { string } = {} -- curses of the running run
 local effects = CurseData.Effects({})
 local goldMult = 1
 local daily: CurseData.Daily? = nil -- the running run's daily setup (nil = not a daily)
+local endless = false -- the running run is an Endless run (Config.Endless)
 local publishTimer = 0
 
 ------------------------------------------------------------------------------------------
@@ -83,6 +95,25 @@ function RunModifiers.IsDaily(): boolean
 	return daily ~= nil
 end
 
+function RunModifiers.IsEndless(): boolean
+	return endless
+end
+
+-- Stages past Config.Endless.LastNormalStage that add Endless difficulty (0 in Standard
+-- runs and before that stage; at most MaxExtraStages).
+function RunModifiers.EndlessStage(stage: number): number
+	if not endless then
+		return 0
+	end
+	local E = Config.Endless
+	return math.clamp(stage - E.LastNormalStage, 0, E.MaxExtraStages)
+end
+
+-- True when a run of `modeName` started by a player whose save says `wanted` is Endless.
+local function endlessFor(modeName: string, wanted: any): boolean
+	return Config.Endless.Enabled == true and wanted == true and table.find(Config.Endless.Modes, modeName) ~= nil
+end
+
 function RunModifiers.Today(): number
 	return CurseData.DayOf(os.time())
 end
@@ -105,10 +136,12 @@ function RunModifiers.BeginRun(modeName: string, starter: Player?): CurseData.Da
 	if modeName == CurseData.DailyMode then
 		daily = CurseData.Daily(RunModifiers.Today())
 		setActive((daily :: CurseData.Daily).Curses)
+		endless = false
 	else
 		daily = nil
 		local data = starter and ctx.DataService.GetData(starter)
 		setActive(data and CurseData.Sanitize(data.Curses) or {})
+		endless = endlessFor(modeName, data and data.Endless)
 	end
 	RunModifiers.Publish()
 	return daily
@@ -117,12 +150,14 @@ end
 function RunModifiers.EndRun()
 	setActive({})
 	daily = nil
+	endless = false
 	RunModifiers.Publish()
 end
 
 -- Daily: the scored attempt (first daily run of the UTC day) or practice, and the
 -- starting bonus. Called once per run player after the start weapon is set.
 function RunModifiers.SetupRunPlayer(rp)
+	rp.Endless = endless
 	local d = daily
 	if not d then
 		return
@@ -244,19 +279,35 @@ local function onSetCurses(player: Player, list: any)
 	RunModifiers.Publish()
 end
 
--- SwarmState: the curses on show and today's daily day.
+local function onSetEndless(player: Player, on: any)
+	local data = ctx.DataService.GetData(player)
+	if type(on) ~= "boolean" or not data or ctx.RunManager.IsParticipant(player) then
+		return
+	end
+	data.Endless = on and Config.Endless.Enabled == true
+	player:SetAttribute("Endless", data.Endless)
+	RunModifiers.Publish()
+end
+
+-- SwarmState: the curses and Endless switch on show and today's daily day.
 function RunModifiers.Publish()
 	if not state then
 		return
 	end
 	local phase = state:GetAttribute("Phase")
 	local list: { string } = {}
+	local endlessShown = false
 	if phase == "Running" or phase == "Results" then
 		list = active
+		endlessShown = endless
 	elseif phase == "Countdown" then
 		local starter = ctx.RunManager.GetStarter and ctx.RunManager.GetStarter()
 		local data = starter and ctx.DataService.GetData(starter)
 		list = data and CurseData.Sanitize(data.Curses) or {}
+		endlessShown = data ~= nil and endlessFor(tostring(state:GetAttribute("Mode")), data.Endless)
+	end
+	if state:GetAttribute("Endless") ~= endlessShown then
+		state:SetAttribute("Endless", endlessShown)
 	end
 	local s = CurseData.ToString(list)
 	if state:GetAttribute("Curses") ~= s then
@@ -283,15 +334,18 @@ function RunModifiers.Init(c)
 	state:SetAttribute("DailyRun", false)
 	state:SetAttribute("DailyDay", RunModifiers.Today())
 	state:SetAttribute("CurseMax", CurseData.MaxActive)
+	state:SetAttribute("Endless", false)
 	assert(Config.Data.SchemaVersion >= 6, "RunModifiers needs save schema 6")
 end
 
 function RunModifiers.Start()
 	Remotes.Listen("SetCurses", onSetCurses, 6)
+	Remotes.Listen("SetEndless", onSetEndless, 6)
 	ctx.DataService.OnProfileLoaded(function(player)
 		local data = ctx.DataService.GetData(player)
 		if data then
 			player:SetAttribute("Curses", CurseData.ToString(CurseData.Sanitize(data.Curses) or {}))
+			player:SetAttribute("Endless", data.Endless == true and Config.Endless.Enabled == true)
 		end
 	end)
 	Players.PlayerRemoving:Connect(function()

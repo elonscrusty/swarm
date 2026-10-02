@@ -28,6 +28,13 @@
 	this module adds per-stage multipliers (EnemyHPMult, DamageMult, SpawnMult, BossHPMult);
 	stage 1 multiplies by exactly 1, so the early game plays as before.
 
+	Endless runs (Config.Endless, RunModifiers.IsEndless): the open portal offers NEXT
+	STAGE only (a "Return" choice is refused; the panel gets Endless = true), so the run
+	ends only when everyone falls or leaves through the pause menu. Arenas and bosses keep
+	rotating (arenaFor / bossFor grow without end). Past Config.Endless.LastNormalStage
+	the four multipliers grow further (endlessMult; bounded by MaxExtraStages, spawns by
+	SpawnMultCap and Config.Enemies.MaxLive). Standard runs are unchanged.
+
 	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, StageBoss, PortalPos,
 	PortalHint, PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total").
 ]]
@@ -117,17 +124,28 @@ local function perStage(k: number): number
 	return 1 + k * math.max(0, stage - 1)
 end
 
+-- Endless: x(1 + k * extra stages past Config.Endless.LastNormalStage), at most cap
+-- (1 in Standard runs and up to that stage).
+local function endlessMult(k: number, cap: number?): number
+	local extra = ctx.RunModifiers and ctx.RunModifiers.EndlessStage(stage) or 0
+	return math.min(1 + k * extra, cap or math.huge)
+end
+
 function StageManager.EnemyHPMult(): number
-	return perStage(Config.Stages.EnemyHPPerStage)
+	return perStage(Config.Stages.EnemyHPPerStage) * endlessMult(Config.Endless.HPPerStage)
 end
 
 function StageManager.DamageMult(): number
-	return perStage(Config.Stages.EnemyDamagePerStage)
+	return perStage(Config.Stages.EnemyDamagePerStage) * endlessMult(Config.Endless.DamagePerStage)
 end
 
--- Live-target / mini-wave multiplier: the stage share x the Horde curse.
+-- Live-target / mini-wave multiplier: the stage share x the Horde curse (x Endless).
 function StageManager.SpawnMult(): number
-	return perStage(Config.Stages.SpawnTargetPerStage) * (ctx.RunModifiers and ctx.RunModifiers.SpawnMult() or 1)
+	return perStage(Config.Stages.SpawnTargetPerStage) * endlessMult(Config.Endless.SpawnPerStage, Config.Endless.SpawnMultCap) * (ctx.RunModifiers and ctx.RunModifiers.SpawnMult() or 1)
+end
+
+function StageManager.IsEndless(): boolean
+	return ctx.RunModifiers ~= nil and ctx.RunModifiers.IsEndless()
 end
 
 -- Seconds of this stage before the portal can be charged (Config.Stages.PortalLockSeconds).
@@ -142,7 +160,7 @@ function StageManager.BossHPMult(): number
 	if s <= #list then
 		return list[s]
 	end
-	return list[#list] + (s - #list) * Config.Stages.BossHPPerExtraStage
+	return (list[#list] + (s - #list) * Config.Stages.BossHPPerExtraStage) * endlessMult(Config.Endless.BossHPPerStage)
 end
 
 ------------------------------------------------------------------------------------------
@@ -426,15 +444,17 @@ end
 local function sendOffer(rp)
 	rp.PortalOffered = true
 	local cleared = StageManager.StagesCleared()
+	local endless = StageManager.IsEndless()
 	Remotes.FireClient("PortalOffer", rp.Player, {
-		CountsAsWin = cleared >= Config.Stages.WinMinStages,
+		Endless = endless, -- NEXT STAGE only (no RETURN TO LOBBY, no win)
+		CountsAsWin = not endless and cleared >= Config.Stages.WinMinStages,
 		WinMinStages = Config.Stages.WinMinStages,
 		Stage = stage,
 		StagesCleared = cleared,
 		NextStage = stage + 1,
 		NextArena = ((Config.Arenas :: any)[arenaFor(stage + 1)] or {}).DisplayName or arenaFor(stage + 1),
 		NextBoss = bossName(forcedBoss or bossFor(stage + 1)),
-		ReturnBonus = math.floor((Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared) * ctx.MonetizationService.GoldMultiplier(rp.Player) * (ctx.RunModifiers and ctx.RunModifiers.GoldMult() or 1) + 0.5),
+		ReturnBonus = endless and 0 or math.floor((Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared) * ctx.MonetizationService.GoldMultiplier(rp.Player) * (ctx.RunModifiers and ctx.RunModifiers.GoldMult() or 1) + 0.5),
 		Gold = rp.Gold,
 		Kills = rp.Kills,
 		Level = rp.Level,
@@ -565,6 +585,9 @@ local function onChoice(player: Player, choice: any)
 	local rp = ctx.RunManager.GetRunPlayer(player)
 	if not rp or rp.Returned or not rp.Alive or rp.PortalChoice == choice then
 		return
+	end
+	if choice == "Return" and StageManager.IsEndless() then
+		return -- Endless: the portal only leads deeper (leaving = the pause menu's MAIN MENU)
 	end
 	if choice == "Return" then
 		ctx.RunManager.ReturnThroughPortal(rp)

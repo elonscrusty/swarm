@@ -12,6 +12,8 @@
 	  Guarded Altar            a free rare chest. Dormant until a living player comes near,
 	  (Config.Guarded)         then elite guards climb out around it; when they are dead the
 	                           chest unlocks and opening it gives EVERY living teammate an item.
+	  Lost Caravan             placed here (Config.Caravan, far from the spawn like the altar),
+	  (CaravanEvent.lua)       run by CaravanEvent: hold its ring while waves come.
 	Every shrine / the altar says what it gives ("Benefit") and what it costs ("Tradeoff")
 	before it is used, and shows its state afterwards.
 
@@ -495,6 +497,9 @@ function LootSystem.Clear()
 	table.clear(objects)
 	table.clear(list)
 	table.clear(holds)
+	if ctx.CaravanEvent then
+		ctx.CaravanEvent.Clear()
+	end
 	local hadBargain = teamBonus.might ~= 0 or teamBonus.goldGain ~= 0 or enemyHPMult ~= 1
 	teamBonus.might = 0
 	teamBonus.goldGain = 0
@@ -540,6 +545,14 @@ function LootSystem.BuildStage(arena, stage: number, portalPos: Vector3?)
 	local altarAt = spot({ MinDistance = Config.Guarded.MinDistance, Clearance = 7 })
 	if altarAt then
 		buildAltar(arena, altarAt)
+	end
+	-- the Lost Caravan (at most one): also far out, away from the altar
+	if ctx.CaravanEvent and ctx.CaravanEvent.Roll() then
+		local K = Config.Caravan
+		local caravanAt = spot({ MinDistance = K.MinDistance, Clearance = K.Clearance, Spacing = math.max(C.Spacing, K.ZoneRadius * 2 + 10) })
+		if caravanAt then
+			ctx.CaravanEvent.Build(arena, caravanAt, stageNo)
+		end
 	end
 	-- shrines
 	local S = Config.Shrines

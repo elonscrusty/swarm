@@ -1,11 +1,15 @@
 --[[
 	LeaderboardService.lua
 	Global leaderboards on OrderedDataStores (Config.Leaderboards):
-	  Score      best run score (all time; RunScore below)          SwarmLB_Score
-	  BestStage  furthest stage reached in a run (all time)       SwarmLB_BestStage
-	  Daily      today's scored Daily Challenge attempts           SwarmLB_Daily_<UTC day>
-	             (CurseData.DailyScore: stages cleared, then time)
-	  Kills      most enemies defeated in one run (all time)       SwarmLB_Kills
+	  Score         best Standard run score (all time; RunScore below)  SwarmLB_Score
+	  ScoreEndless  best Endless run score (same formula; Config.Endless) SwarmLB_ScoreEndless
+	  BestStage     furthest stage reached in a run (all time)          SwarmLB_BestStage
+	  Daily         today's scored Daily Challenge attempts              SwarmLB_Daily_<UTC day>
+	                (CurseData.DailyScore: stages cleared, then time)
+	  Kills         most enemies defeated in one run (all time)          SwarmLB_Kills
+	  Level         highest level reached in one run (any mode)          SwarmLB_Level
+	Your own best comes from the save: Stats.BestScore / BestScoreEndless / BestStage /
+	MostKills / BestLevel, Daily.Score (today).
 
 	Writes (Submit, called when a run is committed): a per player / board queue keeps the
 	best value; a flush every FlushSeconds writes entries whose throttle passed, with
@@ -317,6 +321,10 @@ local function ownBest(player: Player, board: string): number
 	end
 	if board == "Score" then
 		return data.Stats.BestScore or 0
+	elseif board == "ScoreEndless" then
+		return data.Stats.BestScoreEndless or 0
+	elseif board == "Level" then
+		return data.Stats.BestLevel or 0
 	elseif board == "BestStage" then
 		return data.Stats.BestStage or 0
 	elseif board == "Kills" then

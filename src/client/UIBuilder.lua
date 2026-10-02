@@ -260,16 +260,15 @@ local function buildToasts()
 		}),
 	}, band)
 	banner.Band = band
-	banner.Text = text(band, "Display", "", {
+	banner.Text = UIKit.Role(band, "Display", "", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.45),
-		Size = UDim2.new(1, -40, 0, TS(52) + 8),
+		Size = UDim2.new(1, -40, 0, TS(Theme.Type.Display.Size) + 8),
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextStrokeColor3 = C.Shadow,
 		TextStrokeTransparency = 0.5,
 		ZIndex = 2,
-	}, 52)
-	banner.Divider = UIKit.Divider(band, 260, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.45, TS(52) / 2 + 8), ZIndex = 2 })
+	})
+	banner.Divider = UIKit.Divider(band, 260, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.45, TS(Theme.Type.Display.Size) / 2 + 8), ZIndex = 2 })
 	onRelayout(function()
 		local v = virtualSize()
 		local inRun = player:GetAttribute("InRun") == true
@@ -348,7 +347,7 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 	end
 	local holder, face = UIKit.Surface(toastList, {
 		Name = "Toast",
-		Size = UDim2.fromOffset(0, TS(16) + 22),
+		Size = UDim2.fromOffset(0, TS(Theme.Type.Body.Size) + 22),
 		Radius = 999,
 		Transparency = 0.12,
 		LayoutOrder = toastOrder,
@@ -373,9 +372,9 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 		dotFrame = new("Frame", { BackgroundColor3 = accentOf(color), Size = UDim2.fromOffset(8, 8), LayoutOrder = 1 }, face)
 		UIKit.corner(dotFrame, 999)
 	end
-	local l = text(face, "BodyStrong", str, {
+	local l = UIKit.Role(face, "Body", str, {
 		LayoutOrder = 2,
-		Size = UDim2.fromOffset(0, TS(16) + 22),
+		Size = UDim2.fromOffset(0, TS(Theme.Type.Body.Size) + 22),
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextColor3 = C.Text,
 	})
@@ -755,6 +754,9 @@ local function cardMetrics(count: number): (number, number)
 			if c.Hint then
 				n += 1
 			end
+			if c.Synergy then
+				n += 1
+			end
 			most = math.max(most, n)
 		end
 		local lineH = TS(Theme.TextSize.Small) + 5
@@ -879,9 +881,10 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			TextColor3 = edgeColor,
 		})
 		local hintH = c.Hint and (TS(13) + 4) or 0
+		local synH = c.Synergy and (TS(13) + 4) or 0
 		text(face, "Body", cardRichLines(c, "\n"), {
 			Position = UDim2.fromOffset(x, 46 + TS(22) + TS(12) + 4),
-			Size = UDim2.new(1, -x - 16, 1, -(52 + TS(22) + TS(12) + 4 + hintH)),
+			Size = UDim2.new(1, -x - 16, 1, -(52 + TS(22) + TS(12) + 4 + hintH + synH)),
 			TextWrapped = true,
 			RichText = true,
 			TextColor3 = C.Text,
@@ -894,6 +897,16 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				Position = UDim2.new(0, x, 1, -8),
 				Size = UDim2.new(1, -x - 16, 0, TS(13) + 2),
 				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+			}, 13)
+		end
+		if c.Synergy then
+			-- the synergy this NEW card completes / advances (SynergyData), above the hint
+			text(face, "Small", tostring(c.Synergy), {
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.new(0, x, 1, -8 - hintH),
+				Size = UDim2.new(1, -x - 16, 0, TS(13) + 2),
+				TextColor3 = c.SynergyReady and P.moss_200 or P.moss_300,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, 13)
 		end
@@ -965,9 +978,10 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		y += 12
 		local keyRoom = (UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled) and 34 or 12
 		local hintH = c.Hint and (TS(13) * 2 + 8) or 0
+		local synH = c.Synergy and (TS(13) + 6) or 0
 		text(face, "Body", cardRichLines(c, "\n"), {
 			Position = UDim2.fromOffset(14, y),
-			Size = UDim2.new(1, -28, 1, -(y + keyRoom + hintH)),
+			Size = UDim2.new(1, -28, 1, -(y + keyRoom + hintH + synH)),
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextYAlignment = Enum.TextYAlignment.Top,
 			TextWrapped = true,
@@ -985,6 +999,18 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				TextYAlignment = Enum.TextYAlignment.Bottom,
 				TextWrapped = true,
 				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
+			}, 13)
+		end
+		if c.Synergy then
+			-- the synergy this NEW card completes / advances (SynergyData), above the hint
+			text(face, "Small", tostring(c.Synergy), {
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.new(0, 14, 1, -(keyRoom + hintH)),
+				Size = UDim2.new(1, -28, 0, synH),
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextYAlignment = Enum.TextYAlignment.Bottom,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				TextColor3 = c.SynergyReady and P.moss_200 or P.moss_300,
 			}, 13)
 		end
 		if UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled then
@@ -2585,6 +2611,10 @@ local function onRunResult(data)
 	local cleared = tonumber(data.StagesCleared) or 0
 	local where = (data.Won or data.Portal) and string.format("%d stage%s cleared", cleared, cleared == 1 and "" or "s")
 		or string.format(data.Abandoned and "Left on stage %d" or "Fell on stage %d", tonumber(data.Stage) or 1)
+	-- Endless runs never win: they say how deep they went ("ENDLESS · Reached stage 9")
+	if data.Endless then
+		where = string.format("ENDLESS · Reached stage %d", tonumber(data.Stage) or 1)
+	end
 	results.Arena.Text = UIKit.track(where .. " · " .. tostring(data.Arena))
 	-- the hero who played
 	for _, ch in ipairs(results.Medal:GetChildren()) do
@@ -2635,7 +2665,7 @@ local function onRunResult(data)
 	fillProgress(data)
 	local damage = tonumber(data.Damage) or 0
 	results.Hero.Text = string.format("%s  ·  %s damage dealt", heroDef and heroDef.Name or heroId, UIKit.formatNumber(math.floor(damage)))
-		.. (type(data.Score) == "number" and ("  ·  score " .. UIKit.formatNumber(data.Score)) or "")
+		.. (type(data.Score) == "number" and ((data.Endless and "  ·  endless score " or "  ·  score ") .. UIKit.formatNumber(data.Score)) or "")
 	-- numbers
 	results.Stages.Text = tostring(cleared)
 	results.Time.Text = formatTime(data.Time)
@@ -2650,8 +2680,9 @@ local function onRunResult(data)
 		results.Boss.Text = "-"
 		results.BossCaption.Text = UIKit.track("Not reached")
 	end
-	results.Best.Text = (data.NewBest and data.NewBestStage) and "NEW BEST TIME AND STAGE!" or (data.NewBestStage and "NEW BEST STAGE!" or "NEW BEST TIME!")
-	data.NewBest = data.NewBest == true or data.NewBestStage == true
+	results.Best.Text = (data.NewBest and data.NewBestStage) and "NEW BEST TIME AND STAGE!"
+		or (data.NewBestStage and "NEW BEST STAGE!" or (data.NewBest and "NEW BEST TIME!" or "NEW BEST LEVEL!"))
+	data.NewBest = data.NewBest == true or data.NewBestStage == true or data.NewBestLevel == true
 	results.Best.Visible = data.NewBest == true
 	results.Unlocked.Visible = data.Unlocked ~= nil
 	results.Unlocked.Text = data.Unlocked and ("Unlocked: " .. data.Unlocked .. " arena!") or ""

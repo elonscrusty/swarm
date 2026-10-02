@@ -47,7 +47,7 @@ local ClientSettings = require(script.Parent.ClientSettings)
 local TeamUI = {}
 
 local player = Players.LocalPlayer
-local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local new, TS = UIKit.new, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 
 local MARK_SEGMENTS = 20
@@ -143,19 +143,19 @@ local function buildRow(p: Player, order: number): Row
 	local iconHolder = new("Frame", { Name = "Hero", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(32, 32) }, face)
 	UIKit.corner(iconHolder, 999)
 	UIKit.stroke(iconHolder, Theme.Fx.TeamRing, 1.5, 0.2)
-	local nameLabel = text(face, "BodyStrong", p.DisplayName, {
+	local nameLabel = UIKit.Role(face, "Label", p.DisplayName, {
 		Name = "Name",
 		Position = UDim2.fromOffset(40, 0),
-		Size = UDim2.new(1, -40, 0, TS(15) + 2),
+		Size = UDim2.new(1, -40, 0, TS(Theme.Type.Label.Size) + 2),
 		TextTruncate = Enum.TextTruncate.AtEnd,
-	}, 15)
-	local stateLabel = text(face, "Label", "", {
+	})
+	local stateLabel = UIKit.Role(face, "Caption", "", {
 		Name = "State",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 0),
-		Size = UDim2.new(0.6, 0, 0, TS(15) + 2),
+		Size = UDim2.new(0.6, 0, 0, TS(Theme.Type.Label.Size) + 2),
 		TextXAlignment = Enum.TextXAlignment.Right,
-	}, 12)
+	})
 	local meter = UIKit.Meter(face, {
 		Gradient = Theme.Gradient.Health,
 		AnchorPoint = Vector2.new(0, 1),
@@ -294,15 +294,14 @@ local function buildMarker(p: Player): Marker
 	local arrow = new("Frame", { Name = "Tip", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -4, 0.5, 0), Size = UDim2.fromOffset(18, 18), Rotation = 45, BackgroundColor3 = P.crimson_400, BorderSizePixel = 0, Visible = false }, pivot)
 	UIKit.corner(arrow, 3)
 	UIKit.stroke(arrow, P.crimson_300, 1.5, 0.1)
-	local label = text(holder, "Label", "", {
+	local label = UIKit.Role(holder, "Label", "", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 1, 0),
-		Size = UDim2.fromOffset(200, TS(13) + 4),
+		Size = UDim2.fromOffset(200, TS(Theme.Type.Label.Size) + 4),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.ivory_100,
-		TextStrokeColor3 = C.Shadow,
 		TextStrokeTransparency = 0.3,
-	}, 13)
+	}, true)
 	return { Holder = holder, Segments = segs, Label = label, Arrow = arrow, Pivot = pivot, Ring = ring }
 end
 

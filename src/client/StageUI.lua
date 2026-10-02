@@ -11,6 +11,7 @@
 	                 NEXT STAGE (primary gold) or RETURN TO LOBBY (+ the win bonus), the
 	                 auto-continue countdown and who is ready (SwarmState ChoiceLeft /
 	                 PortalReady). Answers with the PortalChoice remote; the server decides.
+	                 Endless runs (offer.Endless): NEXT STAGE only, no RETURN TO LOBBY.
 	  travel fade    remote StageTravel: the screen fades to slate with "STAGE N · Arena"
 	                 (the title slams in with a ring and sparks), then fades back once the
 	                 new stage is running
@@ -82,15 +83,14 @@ local function buildArrow(root: Frame)
 	local badge, face = UIKit.Surface(holder, { Name = "Badge", Radius = 999, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.2, Size = UDim2.fromOffset(48, 48), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 	local _ = badge
 	Icons.Draw(face, "portal", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
-	ui.ArrowDistance = text(holder, "Label", "", {
+	ui.ArrowDistance = UIKit.Role(holder, "Label", "", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 1, 0),
-		Size = UDim2.fromOffset(90, TS(14) + 4),
+		Size = UDim2.fromOffset(90, TS(Theme.Type.Label.Size) + 4),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.ivory_100,
-		TextStrokeColor3 = C.Shadow,
 		TextStrokeTransparency = 0.4,
-	})
+	}, true)
 	UIAnim.Breathe(badge, 0.06, 1.6)
 end
 
@@ -133,32 +133,32 @@ local function buildRing(root: Frame)
 		UIKit.corner(seg, 999)
 		ui.Segments[i] = seg
 	end
-	ui.RingLabel = text(holder, "Label", "", {
+	ui.RingLabel = UIKit.Role(holder, "Label", "", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 1, 2),
-		Size = UDim2.fromOffset(220, TS(14) + 6),
+		Size = UDim2.fromOffset(220, TS(Theme.Type.Label.Size) + 6),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.gold_200,
-		TextStrokeColor3 = C.Shadow,
 		TextStrokeTransparency = 0.35,
-	})
+	}, true)
 end
 
 local function smallStat(parent: Instance, icon: string, caption: string, order: number): TextLabel
 	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(104, 74) }, true)
 	Icons.Draw(f, icon, { Size = 20, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Color = if icon == "coin" or icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
-	local value = text(f, "Number", "0", {
+	local value = UIKit.Role(f, "Number", "0", {
 		Name = "Value",
 		Position = UDim2.fromOffset(0, 28),
-		Size = UDim2.new(1, 0, 0, TS(20) + 2),
+		Size = UDim2.new(1, 0, 0, TS(Theme.Type.Number.Size) + 2),
 		TextXAlignment = Enum.TextXAlignment.Center,
-	}, 20)
-	text(f, "Caption", UIKit.track(caption), {
+		TextStrokeTransparency = 1,
+	})
+	UIKit.Role(f, "Caption", UIKit.track(caption), {
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 0, 1, -6),
-		Size = UDim2.new(1, 0, 0, TS(11) + 2),
+		Size = UDim2.new(1, 0, 0, TS(Theme.Type.Caption.Size) + 2),
 		TextXAlignment = Enum.TextXAlignment.Center,
-	}, 10)
+	})
 	return value
 end
 
@@ -262,8 +262,8 @@ local function buildFade(root: Frame)
 	local box = new("Frame", { Name = "Title", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(600, 150), ZIndex = 2 }, fade)
 	UIKit.list(box, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center })
 	Icons.Draw(box, "portal", { Size = 44, LayoutOrder = 1, Back = P.slate_950, ZIndex = 2 })
-	ui.FadeTitle = text(box, "Display", "STAGE 2", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(44) + 8), ZIndex = 2 }, 44)
-	ui.FadeSub = text(box, "Label", "", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 2 })
+	ui.FadeTitle = UIKit.Role(box, "Display", "STAGE 2", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(Theme.Type.Display.Size) + 8), ZIndex = 2 })
+	ui.FadeSub = UIKit.Role(box, "Body", "", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 2 })
 	ui.FadeLabels = { ui.FadeTitle, ui.FadeSub }
 end
 
@@ -301,7 +301,9 @@ local function onOffer(data)
 	offer = data
 	chosen = false
 	ui.ChoiceTitle.Text = string.format("STAGE %d CLEARED", data.Stage or 1)
-	ui.ChoiceSub.Text = data.Group and "The portal is open. Go deeper together, or take your winnings home." or "The portal is open. Go deeper, or take your winnings home."
+	ui.ChoiceSub.Text = data.Endless and "ENDLESS · The portal only leads deeper. Leave any time from the pause menu."
+		or (data.Group and "The portal is open. Go deeper together, or take your winnings home." or "The portal is open. Go deeper, or take your winnings home.")
+	ui.Return.Instance.Visible = data.Endless ~= true
 	ui.StatStages.Text = tostring(data.StagesCleared or 0)
 	ui.StatTime.Text = UIKit.formatTime(data.Time or 0)
 	ui.StatKills.Text = UIKit.formatNumber(data.Kills or 0)

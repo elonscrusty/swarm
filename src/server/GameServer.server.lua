@@ -7,7 +7,7 @@
 	travel) → EnemySpawner (spawns) → EnemyAI (movement,
 	contact, grid rebuild) → WeaponSystem (firing, projectiles, sync) → XPSystem (gems,
 	pickups) → ItemSystem (regen, shields, magnet pulses) → LootSystem (chest / shrine
-	holds, the guarded altar) → LevelUpSystem (auto-pick timers) → AchievementService (run
+	holds, the guarded altar) → CaravanEvent (the Lost Caravan defence) → LevelUpSystem (auto-pick timers) → AchievementService (run
 	time / level milestones, once a second) → RunModifiers (curses / daily state for the
 	lobby) → LeaderboardService (queued writes, cache refresh) → DamageNumbers (optional numbers, per player)
 	→ Fx (effect batch flush).
@@ -50,6 +50,7 @@ local ORDER = {
 	"WeaponSystem",
 	"ItemSystem",
 	"LootSystem",
+	"CaravanEvent",
 	"StageManager",
 	"RunManager",
 	"AchievementService",
@@ -98,6 +99,7 @@ local STEPS = {
 	{ "XPSystem", ctx.XPSystem.Step },
 	{ "ItemSystem", ctx.ItemSystem.Step },
 	{ "LootSystem", ctx.LootSystem.Step },
+	{ "CaravanEvent", ctx.CaravanEvent.Step },
 	{ "LevelUpSystem", ctx.LevelUpSystem.Step },
 	{ "AchievementService", ctx.AchievementService.Step },
 	{ "RunModifiers", ctx.RunModifiers.Step },

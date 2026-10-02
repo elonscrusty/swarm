@@ -72,9 +72,10 @@ Remotes.ClientToServer = {
 	"LootHold", -- (lootId, holding: boolean) start / stop holding a chest or shrine (LootSystem)
 	"EquipCosmetic", -- ("Title" | "Color" | "Ring" | "Frame", id or "") an earned achievement / level-track cosmetic
 	"SetCurses", -- ({curseId}) lobby curse pick, at most CurseData.MaxActive (RunModifiers)
+	"SetEndless", -- (boolean) lobby ENDLESS switch for SOLO / DUO / TRIO runs (RunModifiers, Config.Endless)
 	"BugReport", -- ({ Category, Text, Client }) player bug report, filtered and rate limited (BugReportService)
 	"BugInbox", -- ("Page", cursor?) | ("SetStatus", id, status) DEV inbox, server-side allowlist
-	"LeaderboardRequest", -- (boardId) "BestStage" | "Daily" | "Kills" (LeaderboardService)
+	"LeaderboardRequest", -- (boardId) a Config.Leaderboards.Order id (LeaderboardService)
 }
 
 local folder: Folder? = nil

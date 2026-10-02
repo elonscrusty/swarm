@@ -19,13 +19,14 @@
 	Save shape (Config.Data.SchemaVersion = 6):
 	  Version, Gold, Meta {id → level}, OwnedCharacters {id → true}, SelectedCharacter,
 	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage,
-	  MostKills},
+	  MostKills, BestScore, BestScoreEndless, BestLevel} (missing keys start at 0),
 	  PurchaseIds {string}, Settings {Music, Sfx, Shake, ReducedEffects, DamageNumbers,
 	  Tips} (Config.Settings.Defaults), ReviveTokens, SelectedArena,
 	  Achievements {Progress {id → number}, Unlocked {id → os.time()}} (AchievementService),
 	  Title (worn achievement title, "" = none), NameColor (AchievementData.Colors id, ""),
 	  TutorialDone (first-run tips finished / skipped), SeenTips {tipId → true},
 	  Curses {curseId} (the run modifiers last picked in the lobby, CurseData),
+	  Endless (boolean: the lobby ENDLESS switch, Config.Endless; old saves: false),
 	  Daily {Day, Used, Score, Plays, BestScore, BestDay} (Daily Challenge: today's scored
 	  attempt and the best ever score, CurseData.DailyScore),
 	  Account {XP, Level} (cosmetic account level, AccountData), Ring, Frame (worn dais
@@ -79,7 +80,7 @@ local function defaultData()
 		OwnedCharacters = { [CharacterData.Default] = true },
 		SelectedCharacter = CharacterData.Default,
 		Skins = {},
-		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0, MostKills = 0, BestScore = 0 },
+		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0, MostKills = 0, BestScore = 0, BestScoreEndless = 0, BestLevel = 0 },
 		PurchaseIds = {},
 		Settings = table.clone(Config.Settings.Defaults),
 		ReviveTokens = 0,
@@ -90,6 +91,7 @@ local function defaultData()
 		TutorialDone = false,
 		SeenTips = {},
 		Curses = {},
+		Endless = false,
 		Daily = defaultDaily(),
 		Account = { XP = 0, Level = 1 },
 		Ring = "",
@@ -245,6 +247,9 @@ function DataService.Migrate(data: any): { [string]: any }
 		data.Curses = {}
 	end
 	data.Curses = CurseData.Sanitize(data.Curses) or {}
+	if type(data.Endless) ~= "boolean" then
+		data.Endless = false
+	end
 	if type(data.Daily) ~= "table" then
 		data.Daily = defaultDaily()
 	end

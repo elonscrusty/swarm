@@ -33,6 +33,7 @@
 	  Attacks   per attack name (see each entry); "Move" picks the BossAI move when the
 	            name differs (Summon / BroodCall share one)
 	  OnHit     optional reaction to heavy damage (the Hive Mother's pulse)
+	  FrostArmor  optional phase-2 armour (the Frostbound Colossus): soaks hits until broken
 ]]
 
 local BossData = {}
@@ -368,10 +369,189 @@ BossData.Bosses = {
 		-- (Radius studs beyond her body), telegraphed for Warn seconds; once per Cooldown
 		OnHit = { Share = 0.07, Window = 1.5, Cooldown = 9, Warn = 0.9, Radius = 5, Damage = 14 },
 	},
+
+	------------------------------------------------------------------------------------
+	-- Briar Sentinel: a bramble treant; root lines, thorn volleys, a closing bramble
+	-- ring, thorn sprouts
+	------------------------------------------------------------------------------------
+	BriarSentinel = {
+		Id = "BriarSentinel",
+		EnemyType = "BriarBoss",
+		DisplayName = "Briar Sentinel",
+		Title = "THE BRIAR SENTINEL TAKES ROOT!",
+		HPMult = 1.1,
+		ContactDamage = 28,
+		Entrance = { Seconds = 2.5, Grace = 2.0, DustRadius = 18, From = "Ground" },
+		Collapse = 1.7,
+		Chase = 3.0,
+		Phases = {
+			{
+				Name = "Sentinel",
+				Above = 0.5,
+				Speed = 1,
+				Cycle = { "RootLines", "ThornVolley", "BrambleRing", "RootLines", "Sproutling" },
+			},
+			{
+				Name = "Overgrown",
+				Above = 0,
+				Speed = 1.3,
+				Cycle = { "RootLines", "ThornVolley", "BrambleRing", "RootLines", "Sproutling" },
+				-- the twist: root lines come in two sets (the second re-aimed, shown at once
+				-- after the first erupts) and the bramble ring closes twice, its gap turned
+				Twist = "Overgrowth",
+				Roar = 1.4,
+				Message = "THE BRIAR SENTINEL IS ENRAGED!",
+			},
+		},
+		Attacks = {
+			-- lanes from her roots toward the players fill, then thorns erupt along them,
+			-- travelling outward from her (only once the lane has filled)
+			RootLines = {
+				Windup = 1.1, -- arms sink into the soil; the lanes fill
+				SecondWindup = 0.9, -- phase 2: the second set
+				Lines = 3, -- one at each player first, the rest spread around
+				PerExtraPlayer = 1,
+				MaxLines = 5,
+				Length = 44,
+				Width = 4.4,
+				Travel = 70, -- studs/s the eruption runs along the lane
+				Damage = 22,
+				Recover = 1.0,
+			},
+			-- a fan of thorns at the nearest player, three volleys along the same spokes
+			-- (step out of the fan or between two spokes)
+			ThornVolley = {
+				Windup = 0.9, -- leans back, the spokes show
+				Count = 5, -- thorns per volley
+				Spread = 80, -- degrees, the whole fan
+				Volleys = 3,
+				VolleyGap = 0.45,
+				Speed = 30,
+				Damage = 13,
+				ProjectileRadius = 1.3,
+				Life = 2.6,
+				Recover = 0.9,
+			},
+			-- a ring of brambles around her closes in; one gap is the way out
+			BrambleRing = {
+				Windup = 1.2, -- the ring and its gap lane show, then it closes
+				StartRadius = 38,
+				Speed = 9, -- studs/s inward
+				Width = 3.2,
+				GapHalf = 28, -- degrees either side of the gap centre
+				Damage = 20,
+				Rings = 1,
+				TwistRings = 2, -- phase 2 ("Overgrowth")
+				RingGap = 1.5, -- seconds between the rings
+				TurnGap = 100, -- degrees the second ring's gap turns
+				Recover = 0.8,
+			},
+			-- thorn sprouts push out of the soil around her
+			Sproutling = {
+				Move = "Summon",
+				Windup = 1.1,
+				Count = 4,
+				PerExtraPlayer = 1,
+				MaxCount = 6,
+				Type = "ThornSprout",
+				Distance = 8,
+				Style = "emerge",
+			},
+		},
+	},
+
+	------------------------------------------------------------------------------------
+	-- Frostbound Colossus: an icy giant; slam rings, ice-spike lanes, a freezing breath,
+	-- shard rain; phase 2 grows a frost armour that must be broken
+	------------------------------------------------------------------------------------
+	FrostboundColossus = {
+		Id = "FrostboundColossus",
+		EnemyType = "FrostBoss",
+		DisplayName = "Frostbound Colossus",
+		Title = "THE FROSTBOUND COLOSSUS WAKES!",
+		HPMult = 1.2, -- a slow giant
+		ContactDamage = 32,
+		Entrance = { Seconds = 2.5, Grace = 2.0, DustRadius = 22, From = "Ground" },
+		Collapse = 1.8,
+		Chase = 3.2,
+		Phases = {
+			{
+				Name = "Colossus",
+				Above = 0.5,
+				Speed = 1,
+				Cycle = { "GroundSlam", "IceLanes", "FrostBreath", "ShardRain", "GroundSlam", "IceLanes" },
+			},
+			{
+				Name = "Frostbound",
+				Above = 0,
+				Speed = 1.2,
+				Cycle = { "GroundSlam", "IceLanes", "FrostBreath", "ShardRain", "GroundSlam", "IceLanes" },
+				-- the twist: a frost armour (FrostArmor below) soaks all damage until it is
+				-- broken; breaking it staggers him, and it grows back after a while
+				Twist = "FrostArmor",
+				Roar = 1.6,
+				Message = "THE COLOSSUS GROWS FROST ARMOUR! Break it!",
+			},
+		},
+		Attacks = {
+			-- he slams the ground; slow shockwave rings roll out, each with one gap that
+			-- turns a little from ring to ring
+			GroundSlam = {
+				Windup = 1.2, -- both fists raised; the first gap lane shows
+				Waves = 2,
+				WaveGap = 1.2, -- seconds between the rings (the next gap shows at once)
+				Speed = 15,
+				MaxRadius = 46,
+				Width = 3.0,
+				GapHalf = 32,
+				TurnGap = 55,
+				Damage = 20,
+				Recover = 1.1,
+			},
+			-- parallel lanes along his facing, one through the nearest player; spikes burst
+			-- out of every lane at once (the strips between them are safe)
+			IceLanes = {
+				Windup = 1.2,
+				Lanes = 4,
+				Spacing = 9.5, -- lane centre to centre (Spacing - Width = the safe strip)
+				Width = 4.4,
+				Length = 64,
+				Damage = 22,
+				Recover = 0.9,
+			},
+			-- a freezing cone toward the nearest player: small hits and a slow while in it
+			FrostBreath = {
+				Windup = 1.0, -- rears back, the cone fills
+				Length = 30,
+				HalfAngle = 30, -- degrees
+				Breath = 1.4, -- seconds it blows
+				Tick = 0.35,
+				Damage = 6, -- per tick
+				Chill = 0.6, -- walk speed x this ...
+				ChillTime = 2.0, -- ... for this long after the last tick
+				Recover = 1.0,
+			},
+			-- ice shards fall on filling circles around the players, one after another
+			ShardRain = {
+				Windup = 0.7, -- arms up, a cold glow
+				Count = 6,
+				PerExtraPlayer = 2,
+				MaxCount = 10,
+				Radius = 3.6,
+				Fall = 1.3, -- the first circle's fill
+				Stagger = 0.16, -- each next one lands this much later
+				Damage = 18,
+				Recover = 0.8,
+			},
+		},
+		-- phase 2 ("FrostArmor" twist): armour of Share x his max HP soaks every hit; when it
+		-- breaks he is staggered for Stun seconds; it grows back Regrow seconds later
+		FrostArmor = { Share = 0.07, Stun = 2.4, Regrow = 16 },
+	},
 }
 
 -- Bosses that rotate on later stages (stage 1 is Config.Boss.First).
-BossData.Rotation = { "ScorpionQueen", "MothMatriarch", "RhinoWarlord", "HiveMother" }
+BossData.Rotation = { "ScorpionQueen", "MothMatriarch", "RhinoWarlord", "HiveMother", "BriarSentinel", "FrostboundColossus" }
 
 -- The boss entry for an id, falling back to the Scorpion Queen.
 function BossData.Get(id: string?)
