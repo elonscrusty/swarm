@@ -1658,6 +1658,20 @@ end
 function Icons.Draw(parent: Instance?, name: string, opts: Opts?): Frame
 	local o: Opts = opts or {}
 	local f = container(name, o)
+	local image = IconData.Image(name)
+	if image then
+		-- an uploaded picture replaces the drawn icon (square, transparent, never tinted)
+		local img = Instance.new("ImageLabel")
+		img.Name = "Image"
+		img.BackgroundTransparency = 1
+		img.Image = image
+		img.ScaleType = Enum.ScaleType.Fit
+		img.Size = UDim2.fromScale(1, 1)
+		img.Active = false
+		img.Parent = f
+		f.Parent = parent
+		return f
+	end
 	local size = o.Size or Theme.Size.Icon
 	local def = DEFAULT[name]
 	local mono = o.Color ~= nil
