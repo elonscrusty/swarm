@@ -80,8 +80,23 @@ local function send(action: string, arg: number?)
 	Remotes.Get("Party"):FireServer(action, arg)
 end
 
+-- Narrow lists (phones, stacked columns): row buttons lose their icons and shrink so the
+-- name keeps room; set by the layout from the measured list widths.
+local narrow = false
+
+-- Width of a row button (narrow lists: smaller, icon-less unless it is icon-only).
+local function bw(w: number, title: string): number
+	if narrow and title ~= "" then
+		return math.max(76, w - 32)
+	end
+	return w
+end
+
 -- A small button on a row's right edge.
 local function rowButton(parent: Instance, title: string, icon: string?, kind: string, w: number, x: number, onClick: () -> ()): any
+	if narrow and title ~= "" then
+		icon = nil
+	end
 	return UIKit.Button(parent, {
 		Kind = kind,
 		Title = title,
@@ -89,7 +104,7 @@ local function rowButton(parent: Instance, title: string, icon: string?, kind: s
 		IconSize = 16,
 		Align = "Center",
 		Shadow = false,
-		Size = UDim2.fromOffset(w, 40),
+		Size = UDim2.fromOffset(bw(w, title), 40),
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -x, 0.5, 0),
 		Name = title,
@@ -99,7 +114,7 @@ end
 
 -- Head shot, name and a status line; `right` = room kept for buttons.
 local function personRow(parent: Instance, order: number, userId: number, name: string, sub: string, subColor: Color3?, right: number, gold: boolean?): Frame
-	local f = UIKit.Panel(parent, { Name = "Row" .. order, LayoutOrder = order, Size = UDim2.new(1, -6, 0, ROW_H) }, true)
+	local f = UIKit.Panel(parent, { Name = "Row" .. order, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H), ClipsDescendants = true }, true)
 	f.BackgroundColor3 = gold and P.slate_800 or P.slate_950
 	f.BackgroundTransparency = gold and 0.05 or 0.35
 	if gold then
@@ -345,6 +360,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, left)
+	UIKit.padding(plist, 2, 8, 2, 2) -- strokes stay inside the clip; room for the scroll bar
 	UIKit.list(plist, { Padding = UDim.new(0, ROW_GAP) })
 	ui.Members = plist
 	ui.Hint = text(left, "Small", "", { Name = "Hint", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted }, 14)
@@ -374,7 +390,6 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	end)
 	ui.InviteFriends = UIKit.Button(right, {
 		Kind = "Primary",
-		Glow = true,
 		Title = "INVITE FRIENDS",
 		Icon = "userPlus",
 		IconSize = 20,
@@ -404,6 +419,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, right)
+	UIKit.padding(list, 2, 8, 2, 2)
 	UIKit.list(list, { Padding = UDim.new(0, ROW_GAP) })
 	ui.List = list
 	ui.Empty = text(right, "Body", "", { Name = "Empty", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, Visible = false })
@@ -418,13 +434,13 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		-- invites to you first
 		for _, inv in ipairs(openInvites()) do
 			order += 1
-			local f = personRow(plist, order, inv.FromId, inv.FromName, "Invited you to their party", P.gold_300, 196, true)
+			local f = personRow(plist, order, inv.FromId, inv.FromName, "Invited you to their party", P.gold_300, bw(108, "ACCEPT") + 8 + 44 + 16, true)
 			rowButton(f, "ACCEPT", nil, "Primary", 108, 8, function()
 				send("Accept", inv.FromId)
 				deadlines[inv.FromId] = 0
 				dirty = true
 			end)
-			rowButton(f, "", "close", "Secondary", 44, 124, function()
+			rowButton(f, "", "close", "Secondary", 44, bw(108, "ACCEPT") + 16, function()
 				send("Decline", inv.FromId)
 				deadlines[inv.FromId] = 0
 				dirty = true
@@ -440,9 +456,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			local leads = m.UserId == state.LeaderId
 			local sub = leads and "Leader · starts the runs" or (inParty() and "Member" or "Not in a party yet")
 			local canKick = isLeader() and not me
-			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, leads and P.gold_300 or nil, canKick and 112 or (leads and 96 or 0), me)
+			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, leads and P.gold_300 or nil, canKick and (bw(100, "KICK") + 12 + (leads and 96 or 0)) or (leads and 96 or 0), me)
 			if leads then
-				local pill = UIKit.StatusPill(f, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, canKick and -120 or -12, 0.5, 0), Name = "Leader" })
+				local pill = UIKit.StatusPill(f, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, canKick and -(bw(100, "KICK") + 20) or -12, 0.5, 0), Name = "Leader" })
 				UIKit.SetStatus(pill, "READY", "LEADER")
 			end
 			if canKick then
@@ -455,7 +471,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		local slots = math.max(0, state.Max - #members)
 		for i = 1, slots do
 			order += 1
-			local f = UIKit.Panel(plist, { Name = "Slot" .. i, LayoutOrder = order, Size = UDim2.new(1, -6, 0, ROW_H) }, true)
+			local f = UIKit.Panel(plist, { Name = "Slot" .. i, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H) }, true)
 			f.BackgroundColor3 = P.slate_950
 			f.BackgroundTransparency = 0.6
 			UIKit.stroke(f, P.slate_500, 1, 0.5)
@@ -508,7 +524,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 				sub = "In a run"
 			end
 			local showInvite = not same and not invitedMe[p.UserId]
-			local f = personRow(list, i, p.UserId, p.DisplayName, sub, color, (showInvite or invitedMe[p.UserId]) and 152 or 0)
+			local f = personRow(list, i, p.UserId, p.DisplayName, sub, color, (showInvite or invitedMe[p.UserId]) and (bw(140, "INVITE") + 12) or 0)
 			if invitedMe[p.UserId] then
 				rowButton(f, "ACCEPT", "check", "Primary", 140, 8, function()
 					send("Accept", p.UserId)
@@ -528,7 +544,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	local function friendRows(): number
 		for i, f in ipairs(friends.Rows) do
 			local sub = f.Here and "On this server" or (f.InSwarm and "Playing SWARM" or "Online")
-			local r = personRow(list, i, f.UserId, f.Name, sub, f.InSwarm and P.moss_200 or nil, f.InSwarm and not f.Here and 124 or 0)
+			local r = personRow(list, i, f.UserId, f.Name, sub, f.InSwarm and P.moss_200 or nil, f.InSwarm and not f.Here and (bw(112, "JOIN") + 12) or 0)
 			if f.InSwarm and not f.Here then
 				rowButton(r, "JOIN", "play", "Primary", 112, 8, function()
 					Remotes.Get("PartyFollow"):FireServer(f.UserId)
@@ -560,6 +576,12 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
 		local W, H = v.X, v.Y
+		-- the real screen size in layout units (AbsoluteSize / the root UIScale), when known
+		local scale = host.Scale and host.Scale() or 1
+		local abs = screen.AbsoluteSize
+		if abs.X > 0 and scale > 0 then
+			W, H = math.min(W, abs.X / scale), math.min(H, abs.Y / scale)
+		end
 		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
 		local headY = math.max(ins.Top + 4, 12)
 		place(ui.Header.Frame, M, headY, math.min(560, W - 2 * M), 56)
@@ -569,15 +591,15 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		local labelH = TS(12) + 6
 		local stackedW = W - 2 * M - 36
 		local hintW = (portrait or stackedW < 620) and stackedW or math.floor(stackedW * 0.44)
-		local hintLines = math.clamp(math.ceil(#ui.Hint.Text * TS(14) * 0.5 / math.max(1, hintW)), 1, 4)
+		local hintLines = math.clamp(math.ceil(#ui.Hint.Text * TS(14) * 0.56 / math.max(1, hintW - 8)), 1, 5)
 		local hintH = hintLines * (TS(14) + 3) + 6
 		local leaveH = ui.Leave.Instance.Visible and Theme.Size.Button or 0
-		local listWant = leftRows * (ROW_H + ROW_GAP)
+		local listWant = leftRows * (ROW_H + ROW_GAP) + 4
 		local tabsH = Theme.Size.TapMin + 4
 		local stacked = portrait or w - 36 < 620
 		-- landscape: only as tall as the longer column needs (at least four rows)
 		local leftWant = labelH + 8 + listWant + 8 + hintH + (leaveH > 0 and leaveH + 8 or 0)
-		local rightWant = tabsH + 10 + (tab == "Friends" and 58 or 0) + math.max(4, rightRows) * (ROW_H + ROW_GAP)
+		local rightWant = tabsH + 10 + (tab == "Friends" and 58 or 0) + math.max(4, rightRows) * (ROW_H + ROW_GAP) + 4
 		local panelH = math.min(maxH, (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + 36)
 		local iw, ih = w - 36, panelH - 32
 		place(ui.Panel, (W - w) / 2, top, w, panelH)
@@ -601,6 +623,19 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			place(ui.Leave.Instance, 0, y + hintH + 4, math.min(lw, 260), leaveH)
 		end
 		place(ui.Right, rx, ry, rw, rh)
+		-- narrow lists: compact row buttons (rows are rebuilt when this flips)
+		local wasNarrow = narrow
+		narrow = math.min(lw, rw) < 440
+		if narrow ~= wasNarrow then
+			dirty = true
+		end
+		-- tabs: no icons when the column is narrow, so the titles fit
+		for _, b in ipairs(ui.Tabs.Frame:GetChildren()) do
+			local icon = b:FindFirstChild("IconHolder", true)
+			if icon and icon:IsA("GuiObject") then
+				icon.Visible = rw >= 420
+			end
+		end
 		ui.Tabs.Frame.Position = UDim2.new()
 		ui.Tabs.Frame.Size = UDim2.new(1, 0, 0, tabsH)
 		local ly = tabsH + 10

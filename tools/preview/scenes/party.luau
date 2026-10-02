@@ -16,6 +16,7 @@ local ava = preview.addPlayer("Ava", 2)
 local cal = preview.addPlayer("Cal", 4)
 local dee = preview.addPlayer("Dee", 5)
 local eve = preview.addPlayer("Eve", 6)
+preview.addPlayer("MaximilianTheVeryLongName", 7) -- name truncation
 dee:SetAttribute("InRun", true)
 C.startClient()
 C.sendProfile()
