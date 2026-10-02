@@ -4,6 +4,7 @@
 	Config.Dev.ShowInLiveGame is on, and then only to the creator of a user-owned game.
 	Normal players never see it. Config.Dev.Enabled = false removes it everywhere.
 
+	  Always: Bug inbox (DevInbox; the server re-checks access)
 	  Lobby:  Start solo now (no countdown)
 	  In run: +5 levels, Spawn portal boss (charges this stage's portal), Teleport to portal,
 	          +3 random items, +300 gold (to test chests / shrines)
@@ -21,6 +22,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
+local DevInbox = require(script.Parent.DevInbox)
 
 local DevPanel = {}
 
@@ -115,6 +117,11 @@ function DevPanel.Init(root: Instance, host: { [string]: any }?)
 	table.insert(runButtons, item("+300 gold", "AddGold", 6))
 	table.insert(runButtons, item("All new weapons Lv 8", "NewWeapons", 7))
 	table.insert(runButtons, item("Evolve all weapons", "EvolveWeapons", 8))
+	DevInbox.ClaimButton()
+	UIKit.Button(face, { Title = "Bug inbox", Size = UDim2.new(1, 0, 0, 48), LayoutOrder = 9, Shadow = false, Align = "Center", OnClick = function()
+		holder.Visible = false
+		DevInbox.Open()
+	end })
 	panel = holder
 
 	-- bottom right in landscape (clear of the menu columns and the ability bar), left edge

@@ -57,6 +57,9 @@ global Playwright install (`/opt/pw-browsers`); never run `playwright install`.
 | `arena-map` | top-down orthographic arena with obstacles (red), biome hazard pools (dashed: mud brown, ice blue, quicksand yellow, lava orange), the spawn clear radius and the 40/100/200 rings, plus metrics; `--set loot=1` adds the portal and the stage loot (chests, shrines, altar) |
 | `loot` | stage 2 with the real LootSystem placement: the hero at a chest / shrine / altar (`--set focus=Small\|Large\|Golden\|Chance\|Bargain\|Guarded`, `--set altar=Guarded`, `--set gold=N`) with its prompt, the items strip, item popups, a sealed Bargain |
 | `items` | the pause menu ITEMS list |
+| `bugreport` | the REPORT A BUG form over the pause menu with text typed (`--set result=fail`: the server's "could not be saved" answer) |
+| `dev-inbox` | the DEV bug inbox with a page of sample reports (`--set status=ok\|offline\|empty`); run with `--studio` |
+| `bugreport-sim` | boots the real server and drives BugReportService through its remotes (bad payloads, a report through the mock text filter, the cooldown, the DEV inbox page and a status change), printing every answer; run with `--studio` (the mock filter turns "badword" into hashes; the mock OrderedDataStore ignores min / max, so paging past page 1 is not exercised) |
 
 Scenes only use public entry points (`MapBuilder.BuildLobby / BuildArena`,
 `MeshService.Init / Start`, `ModelBuilder.BuildCharacter / BuildEnemyShell /

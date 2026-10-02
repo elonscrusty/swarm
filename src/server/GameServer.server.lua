@@ -53,6 +53,7 @@ local ORDER = {
 	"RunManager",
 	"AchievementService",
 	"DamageNumbers",
+	"BugReportService",
 }
 
 for _, name in ipairs(ORDER) do
