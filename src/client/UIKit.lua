@@ -12,7 +12,7 @@
 	            Toggle, Modal, ScreenHeader
 	Dashboard   TitleRule, SegmentBar, Avatar (head shot), Medal (ranks 1-3), Hairline
 	Lobby look  ArtPicture (art/ picture with a drawn stand-in), StatusPill / SetStatus,
-	            SectionLabel, IconPill
+	            SectionLabel, IconPill, spaced / TitleBar (spaced serif title + compact BACK)
 
 	States: hover lifts 2 px and brightens, press scales to 0.96, disabled desaturates,
 	selected gets a strong gold border, gamepad focus shows a gold outline. Buttons keep a
@@ -2110,6 +2110,64 @@ function UIKit.Hairline(parent: Instance?, props: { [string]: any }?): Frame
 	end
 	f.Parent = parent
 	return f
+end
+
+------------------------------------------------------------------------------------------
+-- Spaced titles (CHARACTERS mockup): "C H A R A C T E R S", compact BACK + title bar
+------------------------------------------------------------------------------------------
+
+-- Upper-case letters spread apart with spaces (words three spaces apart).
+function UIKit.spaced(str: string): string
+	local out = {}
+	for _, code in utf8.codes(string.upper(str)) do
+		local ch = utf8.char(code)
+		table.insert(out, ch == " " and " " or ch)
+	end
+	return table.concat(out, " ")
+end
+
+export type TitleBar = { Frame: Frame, Back: Button, Title: TextLabel, Rule: Frame, SetTitle: (s: string) -> () }
+
+--[[
+	A slim screen title bar: a compact BACK button, then the screen title in spaced serif
+	caps with a thin gold rule and diamond under it. Meant to sit in the Roblox top bar
+	row (the frame is 52 px tall; place it beside the Roblox buttons).
+]]
+function UIKit.TitleBar(parent: Instance, title: string, onBack: () -> ()): TitleBar
+	local f = new("Frame", { Name = "TitleBar", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 52) }, parent)
+	local back = UIKit.Button(f, {
+		Kind = "Secondary",
+		Title = "BACK",
+		Icon = "chevronLeft",
+		IconSize = 16,
+		Size = UDim2.fromOffset(108, 42),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		Align = "Center",
+		Shadow = false,
+		OnClick = onBack,
+		Name = "Back",
+	})
+	local px = TS(Theme.TextSize.H2 + 2)
+	local t = text(f, "H2", UIKit.spaced(title), {
+		Name = "Title",
+		FontFace = Theme.Font.Display,
+		Position = UDim2.fromOffset(126, 2),
+		Size = UDim2.fromOffset(0, px + 6),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextColor3 = P.ivory_100,
+	}, Theme.TextSize.H2 + 2)
+	-- the rule follows the title's width
+	local rule = UIKit.Divider(t, 10, { Name = "Rule", AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 10) })
+	return {
+		Frame = f,
+		Back = back,
+		Title = t,
+		Rule = rule,
+		SetTitle = function(s: string)
+			t.Text = UIKit.spaced(s)
+		end,
+	}
 end
 
 return UIKit
