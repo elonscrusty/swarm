@@ -2043,6 +2043,9 @@ end
 	rare glint are its only glow (no lights). Crystals are pooled "kits" handed out to the
 	nearest gems only (K.GEM_KITS, fewer with Reduced effects); every other gem is drawn
 	as the plain server cube standing on its corner, so a field of hundreds stays cheap.
+	A flying gem (attribute "Fly" = the collector's UserId) is animated here: it homes in
+	on that player's character with the server's speed rule (Config.XP MagnetSpeed /
+	MagnetAcceleration); the server only says when it is collected (Active = false).
 ]]
 local gemState: { [BasePart]: Vector3 } = {} -- active gem → server base position
 local gemParts: { BasePart } = {}
@@ -2063,6 +2066,7 @@ type GemFx = { Kit: GemKit?, Kind: string, Pulse: number, Glint: number }
 local gemFx: { [BasePart]: GemFx } = {}
 local spareKits: { GemKit } = {}
 K.kitsInUse = 0
+K.gemFly = {} :: { [BasePart]: { Id: number, Pos: Vector3, Speed: number } } -- flights in progress
 
 -- Gem kind from the server cube size (Config.XP.GemSize).
 local function gemKindOf(part: BasePart): string
@@ -2198,11 +2202,25 @@ local function trackGem(gem: Instance)
 	local function refresh()
 		local active = part:GetAttribute("Active") == true
 		local base = part:GetAttribute("Base")
+		local fly = part:GetAttribute("Fly")
 		if active and typeof(base) == "Vector3" then
-			gemState[part] = base
+			local flight = K.gemFly[part]
+			if type(fly) == "number" then
+				-- flying (or retargeted mid-flight): start from where it is drawn now
+				if flight then
+					flight.Id = fly
+				else
+					K.gemFly[part] = { Id = fly, Pos = gemState[part] or base, Speed = 0 }
+				end
+				gemState[part] = K.gemFly[part].Pos
+			else
+				K.gemFly[part] = nil
+				gemState[part] = base
+			end
 		else
 			local last = gemState[part]
 			gemState[part] = nil
+			K.gemFly[part] = nil
 			parkGem(part)
 			if last then
 				-- collected next to a player: a burst (and the pickup sound for me)
@@ -2226,11 +2244,34 @@ local function trackGem(gem: Instance)
 	end
 	part:GetAttributeChangedSignal("Active"):Connect(refresh)
 	part:GetAttributeChangedSignal("Base"):Connect(refresh)
+	part:GetAttributeChangedSignal("Fly"):Connect(refresh)
 	refresh()
+end
+
+-- Flying gems home in on their collector like the server flies them (XPSystem): speed
+-- at least half MagnetSpeed, +MagnetAcceleration per second, at most 3x MagnetSpeed; they
+-- wait at the player until the server's collect (Active = false) removes them.
+K.stepGemFlights = function(dt: number)
+	local X = Config.XP
+	for part, f in pairs(K.gemFly) do
+		local other = Players:GetPlayerByUserId(f.Id)
+		local char = other and other.Character
+		local root = char and char.PrimaryPart
+		if root then
+			local to = root.Position - f.Pos
+			local dist = to.Magnitude
+			f.Speed = math.min(math.max(f.Speed, X.MagnetSpeed * 0.5) + X.MagnetAcceleration * dt, X.MagnetSpeed * 3)
+			if dist > 0.05 then
+				f.Pos += to.Unit * math.min(dist, f.Speed * dt)
+			end
+		end
+		gemState[part] = f.Pos
+	end
 end
 
 local function renderGems(dt: number)
 	gemClock += dt
+	K.stepGemFlights(dt)
 	table.clear(gemParts)
 	table.clear(gemCFrames)
 	local n = 0

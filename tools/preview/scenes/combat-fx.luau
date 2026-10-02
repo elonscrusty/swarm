@@ -8,6 +8,7 @@
 --                         4 level-ups, 16 swings each), printing CombatFx.Stats() and the
 --                         effect instances alive every second: they must stay bounded
 --   --set t=0.06          seconds after the batch to render;  --set reduced=on  Reduced effects
+--   --set dump=on         also print the first CombatFx parts (position, size, transparency)
 local A = lib("arena")
 local C = lib("common")
 local Players = game:GetService("Players")

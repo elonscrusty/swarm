@@ -7,7 +7,12 @@
 	  * 500 Parts built once (Config.XP.GemPoolSize) and parked under the map.
 	  * Server owns positions; the client adds bob/spin locally using the gem's "Base"
 	    attribute (see client VFX). Active gems have attribute Active = true.
-	  * A player inside pickup radius makes the gem fly to them (server moves it).
+	  * A player inside pickup radius makes the gem fly to them. The flight is replicated
+	    ONCE: the gem's "Fly" attribute = the collector's UserId; clients animate the
+	    homing flight themselves (same speed rule) toward that player's character. The
+	    server still flies the gem's position every frame (not the part) and decides when
+	    it is collected, so XP timing stays server-side. A flight that loses its target
+	    writes the resting spot ("Base") once and clears "Fly".
 	  * XP is SHARED: whoever collects a gem, every living participant gets its value
 	    (times their own Growth stat).
 	  * A gem that lands within Config.XP.MergeRadius of a resting one is merged into it
@@ -133,10 +138,14 @@ local function gridRemove(gem: Gem)
 	end
 end
 
--- Sends a gem flying to a player (it leaves the merge grid).
+-- Sends a gem flying to a player (it leaves the merge grid); clients animate the flight.
 local function setTarget(gem: Gem, rp)
 	gem.Target = rp
 	gridRemove(gem)
+	local id = rp.Player and rp.Player.UserId or nil
+	if gem.Part:GetAttribute("Fly") ~= id then
+		gem.Part:SetAttribute("Fly", id)
+	end
 end
 
 -- A resting gem near `pos` that can take `value` more (nearest first), or nil.
@@ -204,6 +213,7 @@ local function releaseGem(i: number)
 	gem.Target = nil
 	gridRemove(gem)
 	gem.Part:SetAttribute("Active", false)
+	gem.Part:SetAttribute("Fly", nil)
 	gem.Part.CFrame = PARK
 	-- swap-remove from the dense list
 	activeGems[i] = activeGems[#activeGems]
@@ -266,7 +276,9 @@ local function updateGems(dt: number, runPlayers)
 		if target then
 			if not target.Alive or not target.Root or not target.Root.Parent then
 				gem.Target = nil
-				gridAdd(gem) -- rests where it hung (its position is the last flight step)
+				placeGem(gem, gem.Pos) -- rests where it hung (the last flight step) ...
+				gem.Part:SetAttribute("Fly", nil) -- ... written once, then the flight ends
+				gridAdd(gem)
 			else
 				local to = target.Root.Position - gem.Pos
 				local dist = to.Magnitude
@@ -278,7 +290,7 @@ local function updateGems(dt: number, runPlayers)
 					gem.Speed = math.max(gem.Speed, Config.XP.MagnetSpeed * 0.5) + Config.XP.MagnetAcceleration * dt
 					gem.Speed = math.min(gem.Speed, Config.XP.MagnetSpeed * 3)
 					local step = math.min(dist, gem.Speed * dt)
-					placeGem(gem, gem.Pos + to.Unit * step)
+					gem.Pos += to.Unit * step -- the part stays put: clients draw the flight
 				end
 			end
 		end
