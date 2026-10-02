@@ -154,6 +154,12 @@ local function summarize(v, depth): string
 end
 
 local function logRemote(remote, direction: string, args)
+	local P = R.prof
+	if P and P.on then
+		-- perf scenes: count and keep the payload for sizing; no text log (soak runs)
+		P.remote(states[remote].name .. " " .. direction, args)
+		return
+	end
 	local parts = {}
 	for i = 1, args.n do
 		table.insert(parts, summarize(args[i]))

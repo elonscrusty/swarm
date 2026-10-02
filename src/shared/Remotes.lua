@@ -57,6 +57,7 @@ Remotes.ClientToServer = {
 	"CycleArena", -- (arenaName?) lobby ARENA screen: pick that arena (unlocked), or the next unlocked one
 	"DevCommand", -- (command, arg?) Studio / creator only, re-checked on the server (DevTools)
 	"ReturnToLobby", -- leave the results screen early
+	"AbandonRun", -- pause menu MAIN MENU (confirmed): leave the running run for the lobby menu
 	"SelectCharacter", -- (characterId)
 	"BuyCharacter", -- (characterId)
 	"BuyMeta", -- (upgradeId, levelSeenByClient?) a stale second tap is ignored
@@ -65,7 +66,7 @@ Remotes.ClientToServer = {
 	"SaveSettings", -- ({ Music, Sfx, Shake = 0-1, ReducedEffects, DamageNumbers, Tips = bool }) any subset
 	"Tutorial", -- ("Seen", tipId) | ("Skip") | ("Replay") first-run tips (GoldSystem)
 	"ReviveDecline", -- close the revive offer early
-	"RewardClose", -- the chest reward panel was tapped closed (ends the reward pause early)
+	"RewardClose", -- (seq) the chest reward reel showed every reward up to seq (ends the reward pause)
 	"RequestProfile", -- ask for a ProfileSync
 	"PortalChoice", -- ("Next" | "Return") answer to PortalOffer, validated by StageManager
 	"LootHold", -- (lootId, holding: boolean) start / stop holding a chest or shrine (LootSystem)

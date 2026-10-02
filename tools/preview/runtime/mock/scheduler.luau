@@ -151,6 +151,19 @@ local function resumeDue()
 	table.sort(due, function(a, b)
 		return a.t < b.t
 	end)
+	local P = R.prof
+	if P and P.on then
+		for _, w in ipairs(due) do
+			P.enter("[resume] " .. P.threadLabel(w.thread))
+			if w.args then
+				S.resume(w.thread, table.unpack(w.args, 1, w.args.n))
+			else
+				S.resume(w.thread)
+			end
+			P.leave()
+		end
+		return
+	end
 	for _, w in ipairs(due) do
 		if w.args then
 			S.resume(w.thread, table.unpack(w.args, 1, w.args.n))
@@ -174,12 +187,32 @@ function S.step(dt)
 	if hooks.simulate then
 		hooks.simulate(dt)
 	end
+	local P = R.prof
+	local prof = P and P.on
 	if hooks.tweens then
+		if prof then
+			P.enter("[mock] tweens")
+		end
 		hooks.tweens(dt)
+		if prof then
+			P.leave()
+		end
+	end
+	if prof then
+		P.enter("[deferred threads]")
 	end
 	S.flushDeferred()
+	if prof then
+		P.leave()
+	end
 	if hooks.layout then
+		if prof then
+			P.enter("[mock] gui layout")
+		end
 		hooks.layout()
+		if prof then
+			P.leave()
+		end
 	end
 	S.stepping = false
 end

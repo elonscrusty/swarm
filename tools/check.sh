@@ -11,7 +11,7 @@ LSP="$T/lsp/luau-lsp"
 SM="$(mktemp -d)/sourcemap.json"
 
 "$ROJO" sourcemap default.project.json -o "$SM" >/dev/null
-OUT="$("$LSP" analyze --definitions="$T/globalTypes.d.luau" --sourcemap="$SM" src 2>&1 || true)"
+OUT="$("$LSP" analyze --definitions="$T/globalTypes.d.luau" --sourcemap="$SM" src 2>&1 | grep -v -E '^\[(INFO|WARN)\]' || true)"
 if [ -n "$OUT" ]; then
 	echo "$OUT"
 	echo "TYPECHECK: $(echo "$OUT" | wc -l) problem(s)"

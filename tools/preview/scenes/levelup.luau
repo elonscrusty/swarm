@@ -7,6 +7,8 @@
 --   --set rerolls=0 --set skips=0 --set rerollsMax=0 --set skipsMax=0   reroll / skip states
 --   --set at=<s>         seconds after the offer arrives (default 1.5; ~0.25 = cards flying in)
 --   --set pick=N         card N was just picked (its punch + flash), shown --set at later
+--   --set pickAt=<s>     when that click happens (default 1.2 s); under 0.35 s it lands inside
+--                        the arm delay and must be ignored (safe level-up input)
 local A = lib("arena")
 local C = lib("common")
 A.build({ enemies = 90 })
@@ -105,7 +107,7 @@ C.fire("LevelUpOffer", {
 C.setState({ Frozen = true, LevelUpPause = true })
 local pick = tonumber(preview.args.pick)
 if pick then
-	C.settle(1.2)
+	C.settle(tonumber(preview.args.pickAt) or 1.2)
 	local card = C.findText and nil
 	for _, d in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
 		if d.Name == "Card" .. pick and d:IsA("TextButton") then

@@ -23,6 +23,14 @@
 	                                  vector icon, else the IconData glyph letters
 	Icons.Character(parent, id, opts) class icon of a character (helmet, hat, hood, mitre)
 	Icons.MetaIcon(id)                icon name of a permanent upgrade
+	Icons.PreloadList()               "rbxassetid://" ids of the picture icons, most used first
+	                                  (for ContentProvider:PreloadAsync)
+
+	One lookup path: every screen (menu, HUD, level-up, rewards) calls Draw / Upgrade /
+	Character. A picture is drawn over its vector icon (or glyph letters): the vector shows
+	while the picture loads and stays if it cannot load, so a slot is never blank.
+	Names used by screens are listed in docs/ICON_CHECKLIST.md (tools/gen_icon_checklist.py).
+	  "castle" is the Return to Main Menu icon (pause + results); "cycle" reroll; "skip" skip.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,6 +38,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Theme = require(Shared:WaitForChild("Theme"))
 local IconData = require(Shared:WaitForChild("IconData"))
+local WeaponData = require(Shared:WaitForChild("WeaponData"))
+local PassiveData = require(Shared:WaitForChild("PassiveData"))
+local ItemData = require(Shared:WaitForChild("ItemData"))
 
 local P = Theme.Palette
 local G = Theme.Icon.Grid
@@ -1654,23 +1665,20 @@ local function container(name: string, o: Opts): Frame
 	return f
 end
 
--- Draws icon `name` (a menu icon or an upgrade id) into a new square frame.
-function Icons.Draw(parent: Instance?, name: string, opts: Opts?): Frame
-	local o: Opts = opts or {}
-	local f = container(name, o)
-	local image = IconData.Image(name)
-	if image then
-		-- an uploaded picture replaces the drawn icon (square, transparent, never tinted)
-		local img = Instance.new("ImageLabel")
-		img.Name = "Image"
-		img.BackgroundTransparency = 1
-		img.Image = image
-		img.ScaleType = Enum.ScaleType.Fit
-		img.Size = UDim2.fromScale(1, 1)
-		img.Active = false
-		img.Parent = f
-		f.Parent = parent
-		return f
+-- Draws the vector icon `name` (or, when there is none, `glyphId`'s letters) into frame f.
+local function drawVector(f: Frame, name: string, o: Opts, glyph: boolean?)
+	if glyph and not DRAW[name] then
+		local t = Instance.new("TextLabel")
+		t.Name = "Glyph"
+		t.BackgroundTransparency = 1
+		t.Size = UDim2.fromScale(1, 1)
+		t.Text = IconData.Glyph(name, name)
+		t.TextScaled = true
+		t.FontFace = Theme.Font.Heading
+		t.TextColor3 = o.Color or Theme.Icon.Main
+		t.Active = false
+		t.Parent = f
+		return
 	end
 	local size = o.Size or Theme.Size.Icon
 	local def = DEFAULT[name]
@@ -1700,13 +1708,56 @@ function Icons.Draw(parent: Instance?, name: string, opts: Opts?): Frame
 	if not ok then
 		warn("[Icons] " .. name .. ": " .. tostring(err))
 	end
+end
+
+-- A picture over its vector fallback: the fallback is only built while the picture is not
+-- loaded (and stays if it never loads); once loaded it is removed.
+local function picture(f: Frame, name: string, image: string, o: Opts, tint: Color3?)
+	local img = Instance.new("ImageLabel")
+	img.Name = "Image"
+	img.BackgroundTransparency = 1
+	img.Image = image
+	img.ScaleType = Enum.ScaleType.Fit
+	img.Size = UDim2.fromScale(1, 1)
+	img.Active = false
+	if tint then
+		img.ImageColor3 = tint
+	end
+	img.Parent = f
+	if img.IsLoaded == false then
+		local fb = Instance.new("Frame")
+		fb.Name = "Fallback"
+		fb.BackgroundTransparency = 1
+		fb.Size = UDim2.fromScale(1, 1)
+		fb.Active = false
+		fb.Parent = f
+		drawVector(fb, name, o, true)
+		img:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+			if img.IsLoaded then
+				fb:Destroy()
+			end
+		end)
+	end
+end
+
+-- Draws icon `name` (a menu icon or an upgrade id) into a new square frame.
+function Icons.Draw(parent: Instance?, name: string, opts: Opts?): Frame
+	local o: Opts = opts or {}
+	local f = container(name, o)
+	local image = IconData.Image(name)
+	if image then
+		-- an uploaded picture replaces the drawn icon (square, transparent, never tinted)
+		picture(f, name, image, o, nil)
+	else
+		drawVector(f, name, o)
+	end
 	f.Parent = parent
 	return f
 end
 
 --[[
-	Upgrade icon for a weapon / evolution / passive / Gold / Heal id. An IconData picture
-	(if someone uploads one) wins over the vector icon; an unknown id shows its glyph.
+	Upgrade icon for a weapon / evolution / passive / item / Gold / Heal id. The IconData
+	picture wins over the vector icon; an id with neither shows its glyph letters.
 ]]
 function Icons.Upgrade(parent: Instance?, id: string?, opts: Opts?): Frame
 	local o: Opts = opts or {}
@@ -1714,14 +1765,7 @@ function Icons.Upgrade(parent: Instance?, id: string?, opts: Opts?): Frame
 	local image = IconData.Image(id)
 	if image then
 		local f = container(key, o)
-		local img = Instance.new("ImageLabel")
-		img.Name = "Image"
-		img.BackgroundTransparency = 1
-		img.Image = image
-		img.ScaleType = Enum.ScaleType.Fit
-		img.Size = UDim2.fromScale(1, 1)
-		img.ImageColor3 = o.Color or WHITE
-		img.Parent = f
+		picture(f, key, image, o, o.Color or WHITE)
 		f.Parent = parent
 		return f
 	end
@@ -1729,16 +1773,49 @@ function Icons.Upgrade(parent: Instance?, id: string?, opts: Opts?): Frame
 		return Icons.Draw(parent, key, o)
 	end
 	local f = container(key, o)
-	local t = Instance.new("TextLabel")
-	t.BackgroundTransparency = 1
-	t.Size = UDim2.fromScale(1, 1)
-	t.Text = IconData.Glyph(id, id)
-	t.TextScaled = true
-	t.FontFace = Theme.Font.Heading
-	t.TextColor3 = o.Color or Theme.Icon.Main
-	t.Parent = f
+	drawVector(f, key, o, true)
 	f.Parent = parent
 	return f
+end
+
+--[[
+	Picture icons worth preloading (ContentProvider:PreloadAsync), as "rbxassetid://" strings,
+	most used first: level-up cards (weapons, evolutions, passives, items, Gold / Heal), then
+	loot and run markers. Only ids that really have an uploaded picture are listed.
+]]
+function Icons.PreloadList(): { string }
+	local list, seen = {}, {}
+	local function add(id: string?)
+		local image = IconData.Image(id)
+		if image and not seen[image] then
+			seen[image] = true
+			table.insert(list, image)
+		end
+	end
+	for _, w in ipairs(WeaponData.Order) do
+		add(w)
+	end
+	for _, pid in ipairs(PassiveData.Order) do
+		add(pid)
+	end
+	add("Gold")
+	add("Heal")
+	for _, w in ipairs(WeaponData.Order) do
+		local def = WeaponData.Weapons[w]
+		add(def and def.Evolution and def.Evolution.Id)
+	end
+	for _, item in ipairs(ItemData.Order) do
+		add(item)
+	end
+	local rest = {}
+	for id in pairs(IconData.Icons) do
+		table.insert(rest, id)
+	end
+	table.sort(rest)
+	for _, id in ipairs(rest) do
+		add(id)
+	end
+	return list
 end
 
 local CHARACTER_ICONS = { Knight = "helmet", Mage = "wizardHat", Rogue = "hood", Priest = "mitre", Ranger = "featherCap", Alchemist = "goggles", Engineer = "minerHelm", Necromancer = "skullHood" }

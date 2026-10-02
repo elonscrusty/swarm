@@ -1,15 +1,19 @@
 --[[
 	DevPanel.lua
-	The "DEV" button and its tools panel for testing. Shown in Studio only; in live servers
-	only when Config.Dev.ShowInLiveGame is on, and then only to the creator of a user-owned
-	game. Normal players never see it. Config.Dev.Enabled = false removes it everywhere.
+	The "DEV" button and its tools panel for testing. Shown in Studio, and in live servers to
+	developers: the server (DevAccess.lua: DevAllowlist UserIds, or the creator when
+	Config.Dev.ShowInLiveGame is on) marks them with the player attribute DevAccess, which
+	may arrive after this module starts, so the button is built when it shows up. The GUI
+	does not reset on respawn, so the button stays through runs, deaths and menus. Normal
+	players never see it. Config.Dev.Enabled = false removes it everywhere.
 
 	The DEV button opens / closes a tabbed panel (the x in its header folds it back to the
 	button):
 	  SAVE     Start solo now, UNLOCK EVERYTHING, gold, account levels, damage numbers,
 	           RESET PROGRESS (tap twice to confirm), Bug inbox (DevInbox; the server re-checks access)
-	  RUN      levels, run gold, godmode, damage numbers, teleport to portal, portal boss,
-	           next stage
+	  RUN      INVINCIBLE ON/OFF (no damage from any source; the run becomes a test run and
+	           the DEV button shows a red INVINCIBLE badge), levels, run gold, damage
+	           numbers, teleport to portal, portal boss, next stage
 	  MOBS     any stage boss (the portal summons it), 5 of an enemy type / 1 elite
 	  ITEMS    any item, 3 random items, any weapon at max level, all weapons, evolve all
 
@@ -54,15 +58,13 @@ local pages: { [string]: ScrollingFrame } = {}
 local note: TextLabel? = nil
 local refreshers: { () -> () } = {}
 
--- Same rule as the server (RunManager.isDev); the server is the one that decides.
+-- Whether to draw the DEV button: Studio, or the server's DevAccess mark. Only a hint:
+-- the server checks every command again (DevAccess.IsDev).
 function DevPanel.IsDev(): boolean
 	if not Config.Dev.Enabled then
 		return false
 	end
-	if RunService:IsStudio() then
-		return true
-	end
-	return Config.Dev.ShowInLiveGame == true and game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
+	return RunService:IsStudio() or player:GetAttribute("DevAccess") == true
 end
 
 local function send(command: string, arg: any?)
@@ -203,7 +205,7 @@ local function buildRun(p: Instance)
 	end)
 	table.insert(refreshers, function()
 		local on = player:GetAttribute("DevGod") == true
-		god.SetText("Godmode: " .. (on and "ON" or "OFF"))
+		god.SetText("Invincible: " .. (on and "ON" or "OFF"))
 		god.SetSelected(on)
 		dmg.SetText("Dmg numbers: " .. (player:GetAttribute("DamageNumbers") == true and "ON" or "OFF"))
 	end)
@@ -285,10 +287,13 @@ local function showTab(id: string)
 	end
 end
 
-function DevPanel.Init(root: Instance, host: { [string]: any }?)
-	if not DevPanel.IsDev() then
+local built = false
+
+local function build(root: Instance, host: { [string]: any }?)
+	if built then
 		return
 	end
+	built = true
 	local t = UIKit.Button(root, {
 		Kind = "Secondary",
 		Title = "DEV",
@@ -317,7 +322,7 @@ function DevPanel.Init(root: Instance, host: { [string]: any }?)
 	UIKit.pad(face, 10)
 	-- header: title + fold
 	local head = new("Frame", { Name = "Header", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30) }, face)
-	text(head, "Label", UIKit.track("Dev tools · Studio only"), { Size = UDim2.new(1, -44, 1, 0), TextColor3 = P.crimson_300 })
+	text(head, "Label", UIKit.track("Dev tools"), { Size = UDim2.new(1, -44, 1, 0), TextColor3 = P.crimson_300 })
 	UIKit.Button(head, {
 		Kind = "Ghost",
 		Icon = "close",
@@ -380,6 +385,47 @@ function DevPanel.Init(root: Instance, host: { [string]: any }?)
 	end)
 	showTab(player:GetAttribute("InRun") == true and "Run" or "Profile")
 	refresh()
+
+	-- INVINCIBLE badge on the DEV button while god mode is on (visible with the panel shut)
+	local badge = new("TextLabel", {
+		Name = "GodBadge",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 0, -4),
+		Size = UDim2.fromOffset(104, 20),
+		BackgroundColor3 = P.crimson_500,
+		Text = "INVINCIBLE",
+		TextColor3 = Color3.new(1, 1, 1),
+		FontFace = Theme.Font.Label,
+		TextSize = 13,
+		ZIndex = Theme.Z.Dev + 2,
+		Visible = false,
+	}, t.Instance)
+	new("UICorner", { CornerRadius = UDim.new(0, 6) }, badge)
+	local function syncBadge()
+		badge.Visible = player:GetAttribute("DevGod") == true
+	end
+	player:GetAttributeChangedSignal("DevGod"):Connect(syncBadge)
+	syncBadge()
+end
+
+function DevPanel.Init(root: Instance, host: { [string]: any }?)
+	if not Config.Dev.Enabled then
+		return
+	end
+	if DevPanel.IsDev() then
+		build(root, host)
+		return
+	end
+	-- live servers: the server's DevAccess mark can land after the GUI is built
+	local conn: RBXScriptConnection? = nil
+	conn = player:GetAttributeChangedSignal("DevAccess"):Connect(function()
+		if DevPanel.IsDev() then
+			if conn then
+				conn:Disconnect()
+			end
+			build(root, host)
+		end
+	end)
 end
 
 -- Opens the panel on a tab (preview scenes).

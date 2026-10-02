@@ -5,6 +5,8 @@
 	"AnimScale") so scaling never fights the layout or the global UI scale.
 
 	Timings come from Theme.Motion (press scale 0.96, quick 0.12 s hovers, 0.22 s moves).
+	The endless effects (PulseStroke, Glow, Shine) return their Tween so a screen can
+	Cancel them when it closes; UIAnim.Track collects tweens for that.
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -129,17 +131,21 @@ function UIAnim.CountUp(label: TextLabel, value: number, format: string, seconds
 end
 
 -- Endless gentle pulse of a UIStroke's thickness (legendary cards, glowing buttons).
-function UIAnim.PulseStroke(stroke: UIStroke, minThickness: number, maxThickness: number)
+function UIAnim.PulseStroke(stroke: UIStroke, minThickness: number, maxThickness: number): Tween
 	stroke.Thickness = minThickness
 	local info = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
-	TweenService:Create(stroke, info, { Thickness = maxThickness }):Play()
+	local t = TweenService:Create(stroke, info, { Thickness = maxThickness })
+	t:Play()
+	return t
 end
 
 -- Endless slow "breathing" of a glow (a stroke's or frame's transparency between a and b).
-function UIAnim.Glow(obj: Instance, property: string, a: number, b: number, seconds: number?)
+function UIAnim.Glow(obj: Instance, property: string, a: number, b: number, seconds: number?): Tween
 	(obj :: any)[property] = a
 	local info = TweenInfo.new(seconds or 1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
-	TweenService:Create(obj, info, { [property] = b }):Play()
+	local t = TweenService:Create(obj, info, { [property] = b })
+	t:Play()
+	return t
 end
 
 -- Number formatters by label (CountTo); a formatter turns the animated value into text.
@@ -185,7 +191,7 @@ function UIAnim.CountTo(label: TextLabel, from: number, to: number, format: stri
 end
 
 -- A light streak that sweeps across a button every few seconds (the parent should clip).
-function UIAnim.Shine(obj: GuiObject, period: number?, transparency: number?)
+function UIAnim.Shine(obj: GuiObject, period: number?, transparency: number?): Tween
 	local streak = Instance.new("Frame")
 	streak.Name = "Shine"
 	streak.BackgroundColor3 = Theme.Color.Hover
@@ -198,7 +204,37 @@ function UIAnim.Shine(obj: GuiObject, period: number?, transparency: number?)
 	streak.ZIndex = obj.ZIndex + 1
 	streak.Parent = obj
 	local info = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, false, period or 2.5)
-	TweenService:Create(streak, info, { Position = UDim2.fromScale(1.3, 0.5) }):Play()
+	local t = TweenService:Create(streak, info, { Position = UDim2.fromScale(1.3, 0.5) })
+	t:Play()
+	return t
+end
+
+--[[
+	A bag of tweens / connections owned by one screen: Add(x) keeps it, Clear() cancels
+	every tween and disconnects every connection (call it when the screen closes or
+	rebuilds, so endless effects never keep running on hidden UI).
+]]
+export type Track = { Add: (any) -> any, Clear: () -> () }
+function UIAnim.Track(): Track
+	local items: { any } = {}
+	local track = {}
+	function track.Add(x: any): any
+		if x ~= nil then
+			table.insert(items, x)
+		end
+		return x
+	end
+	function track.Clear()
+		for _, x in ipairs(items) do
+			if typeof(x) == "Instance" and x:IsA("Tween") then
+				x:Cancel()
+			elseif typeof(x) == "RBXScriptConnection" then
+				x:Disconnect()
+			end
+		end
+		table.clear(items)
+	end
+	return track
 end
 
 -- Endless loop toward `goal` that jumps back to the start.

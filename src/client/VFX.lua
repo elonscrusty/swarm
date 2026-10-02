@@ -14,9 +14,9 @@
 	  pools, explosions, shockwave rings, player events (telegraphs: Telegraphs.lua). One-shot effects
 	  run on a small pooled animator (no Tween objects, no Instance churn once warm) inside
 	  a part budget (Config.Graphics.MaxEffectParts); warnings and player events always play.
-	* Gems: blue-white crystals with an ivory core and a soft halo (mesh "Crystal", or the
-	  server cube on its corner), sized by value, with a gentle bob and a sparkle when
-	  collected; floor pickups bob and spin; chests glow.
+	* Gems: faceted octahedron crystals (eight pooled WedgeParts for the gems nearest the
+	  hero, the server cube on its corner for the rest), sized by value, with a gentle bob,
+	  a rare glint and a burst when collected; floor pickups bob and spin; chests glow.
 	* Gold: coins (GoldCoin / GoldPile meshes) burst out of an enemy whose kill paid gold,
 	  bounce once and fly to the player (FxBatch "g"); the HUD shows the "+N".
 	* Players: gold ring under the local player (slate-blue under teammates) with a facing
@@ -33,7 +33,6 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local EnemyData = require(Shared:WaitForChild("EnemyData"))
-local MeshCatalog = require(Shared:WaitForChild("MeshCatalog"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Audio = require(script.Parent.Audio)
 local ClientSettings = require(script.Parent.ClientSettings)
@@ -1695,50 +1694,136 @@ local function nova(x: number, z: number, radius: number, evo: boolean)
 end
 
 --[[
-	Fire Trail patches: a warm amber disc with a gold rim (never the crimson and dark outline
-	of enemy warnings: these never hurt heroes) and an upright flame (Shot_Fire mesh, or its
-	part-built stand-in) that flickers. Each appears with a short bright ring while it arms
-	and fades at the end of its life.
+	Fire Trail patches: the burning ground the server damages (WeaponFx "fp": x, z, radius,
+	life, evolved). Each patch is a scorched, half see-through bed exactly as wide as its damage
+	circle plus a few flame licks standing inside it. A lick is a small four-wedge spire
+	(like a gem's crown) in two alternating tones, a warm outer flame and a lighter core; it
+	sways, leans and flickers, grows in one after the other, shifts from gold-orange through
+	orange to dull red as the patch ages and shrinks away in its last half second. Walking
+	leaves a continuous ribbon of flames, never a chain of blobs. Spacing and lifetime are the
+	server's; the client only caps how much it draws (K.FIRE_MAX_PARTS, 40% with Reduced
+	effects): the oldest patch goes first, licks per patch drop as the trail gets long (one
+	lick, no embers with Reduced effects), and patches far from the hero are skipped.
+	Never the crimson and dark outline of enemy warnings: these never hurt heroes.
 ]]
-type FirePatch = { Fill: BasePart, Rim: BasePart, Flame: { any }, Visual: number, X: number, Z: number, R: number, Start: number, Life: number, Phase: number }
+type FireLick = { Wedges: { BasePart }, Ox: number, Oz: number, Yaw: number, D: number, H: number, Delay: number, Speed: number, Phase: number }
+type FirePatch = { Bed: BasePart, Licks: { FireLick }, Parts: number, X: number, Z: number, R: number, Start: number, Life: number, Evo: boolean, Stage: number }
 local firePatches: { FirePatch } = {}
-K.MAX_FIRE_PATCHES = 96
-K.FLAME_UP = CFrame.Angles(-math.pi / 2, 0, 0) -- the flame mesh's tail (+Z) points up
+K.FIRE_MAX_PATCHES = 40
+K.FIRE_MAX_PARTS = 300 -- flame parts in use (own budget, apart from the one-shot effects)
+K.FIRE_NEAR = 110 -- patches farther than this from the hero are not drawn
+K.fireParts = 0
+K.fireEmber = 0
+-- outer flame / core colours at the start, middle and end of a patch's life
+K.FIRE_OUTER = { Color3.fromRGB(255, 112, 26), Color3.fromRGB(222, 70, 24), Color3.fromRGB(128, 36, 24) }
+K.FIRE_CORE = { Color3.fromRGB(255, 176, 52), Color3.fromRGB(255, 124, 40), Color3.fromRGB(180, 70, 34) }
+K.FIRE_OUTER_EVO = { Color3.fromRGB(255, 168, 40), Color3.fromRGB(255, 112, 30), Color3.fromRGB(190, 64, 30) }
+K.FIRE_CORE_EVO = { Color3.fromRGB(255, 226, 120), Color3.fromRGB(255, 176, 66), Color3.fromRGB(230, 118, 48) }
+K.FIRE_STAGES = 6
+
+local function fireRamp(stops: { Color3 }, u: number): Color3
+	if u < 0.5 then
+		return stops[1]:Lerp(stops[2], u * 2)
+	end
+	return stops[2]:Lerp(stops[3], (u - 0.5) * 2)
+end
 
 local function freeFirePatch(fp: FirePatch)
-	givePart("Cylinder", fp.Fill)
-	givePart("Cylinder", fp.Rim)
-	for _, piece in ipairs(fp.Flame) do
-		piece.Part.CFrame = PARK
+	givePart("Cylinder", fp.Bed)
+	for _, lick in ipairs(fp.Licks) do
+		for _, w in ipairs(lick.Wedges) do
+			givePart("Wedge", w)
+		end
 	end
-	local list = projectilePools[fp.Visual]
-	if not list then
-		list = {}
-		projectilePools[fp.Visual] = list
+	K.fireParts -= fp.Parts
+end
+
+-- Colours for the patch's age stage (a few steps, not one change per frame).
+local function colourFire(fp: FirePatch, stage: number)
+	fp.Stage = stage
+	local u = stage / K.FIRE_STAGES
+	local outer = fireRamp(fp.Evo and K.FIRE_OUTER_EVO or K.FIRE_OUTER, u)
+	local core = fireRamp(fp.Evo and K.FIRE_CORE_EVO or K.FIRE_CORE, u)
+	for _, lick in ipairs(fp.Licks) do
+		for i, w in ipairs(lick.Wedges) do
+			w.Color = i % 2 == 1 and outer or core
+		end
 	end
-	table.insert(list, fp.Flame)
-	fxParts -= 2 + #fp.Flame
+	fp.Bed.Color = outer:Lerp(Color3.fromRGB(40, 14, 8), 0.65) -- scorched floor
 end
 
 local function firePatch(x: number, z: number, radius: number, life: number, evo: boolean)
-	if #firePatches >= K.MAX_FIRE_PATCHES then
+	local reduced = ClientSettings.Reduced()
+	local cap = reduced and K.FIRE_MAX_PARTS * (GRAPHICS.ReducedEffectsBudget or 0.4) or K.FIRE_MAX_PARTS
+	while #firePatches > 0 and (#firePatches >= K.FIRE_MAX_PATCHES or K.fireParts + 5 > cap) do
 		freeFirePatch(table.remove(firePatches, 1) :: FirePatch)
 	end
-	if not room(5) then
+	local char = player.Character
+	local root = char and char.PrimaryPart
+	if root and Vector2.new(root.Position.X - x, root.Position.Z - z).Magnitude > K.FIRE_NEAR then
 		return
 	end
-	local fill = takePart("Cylinder", evo and P.amber_500 or FX.Fire:Lerp(P.crimson_500, 0.15), SMOOTH, Vector3.new(0.05, radius * 1.84, radius * 1.84), 1)
-	fill.CFrame = CFrame.new(x, FLOOR_Y + 0.07, z) * DISC
-	local rim = takePart("Cylinder", evo and P.gold_300 or P.amber_300, SMOOTH, Vector3.new(0.05, radius * 2, radius * 2), 1)
-	rim.CFrame = CFrame.new(x, FLOOR_Y + 0.05, z) * DISC
-	local visual = evo and 38 or 37
-	local flame = getProjectileModel(visual)
-	fxParts += 2 + #flame
-	table.insert(firePatches, { Fill = fill, Rim = rim, Flame = flame, Visual = visual, X = x, Z = z, R = radius, Start = os.clock(), Life = math.max(0.5, life), Phase = math.random() * 6 })
-	wave(x, z, radius * 0.4, radius, 0.22, evo and P.gold_200 or P.gold_300, 0.3, 0.25)
+	-- licks per patch: 4 while the trail is light, 3 once it is busy, 2 near the cap
+	local count = reduced and 1 or ((K.fireParts < cap * 0.45 and 4) or (K.fireParts < cap * 0.7 and 3) or 2)
+	if K.fireParts + 1 + count * 4 > cap then
+		return
+	end
+	-- the ember bed is exactly the damage circle; later patches sit a hair higher
+	local bed = takePart("Cylinder", P.crimson_700, SMOOTH, Vector3.new(0.05, radius * 2, radius * 2), 1)
+	bed.CFrame = CFrame.new(x, FLOOR_Y + 0.05 + (K.fireParts % 7) * 0.006, z) * DISC
+	local licks: { FireLick } = {}
+	local scale = math.clamp(radius / 3.2, 0.8, 1.6)
+	local spin = math.random() * TAU
+	for k = 1, count do
+		-- one tall flame in the middle, smaller ones either side of the walking line
+		local main = k == 1
+		local a = spin + (k - 2) * TAU / 3
+		local r = main and 0 or radius * 0.36
+		local wedges = {}
+		for i = 1, 4 do
+			-- facets alternate: lit orange plastic (shaded by the sun) and a glowing core tone
+			wedges[i] = takePart("Wedge", WHITE, i % 2 == 1 and SMOOTH or NEON, Vector3.new(0.1, 0.1, 0.1), 0)
+		end
+		licks[k] = {
+			Wedges = wedges,
+			Ox = math.cos(a) * r,
+			Oz = math.sin(a) * r,
+			Yaw = math.random() * TAU,
+			D = (main and 0.5 or 0.3) * scale * (0.9 + math.random() * 0.2),
+			H = (main and 1.8 or 1.05) * scale * (0.9 + math.random() * 0.2),
+			Delay = (k - 1) * 0.1 + math.random() * 0.05,
+			Speed = 5 + math.random() * 4,
+			Phase = math.random() * TAU,
+		}
+	end
+	local parts = 1 + count * 4
+	K.fireParts += parts
+	local fp: FirePatch = { Bed = bed, Licks = licks, Parts = parts, X = x, Z = z, R = radius, Start = os.clock(), Life = math.max(0.5, life), Evo = evo, Stage = -1 }
+	table.insert(firePatches, fp)
+	colourFire(fp, 0)
+end
+
+-- A spark lifting off the fire (one at a time, none with Reduced effects).
+local function fireEmber(fp: FirePatch, t: number)
+	if not room(1) then
+		return
+	end
+	local a, r = math.random() * TAU, fp.R * math.sqrt(math.random()) * 0.7
+	local from = Vector3.new(fp.X + math.cos(a) * r, FLOOR_Y + 0.5, fp.Z + math.sin(a) * r)
+	local to = from + Vector3.new((math.random() - 0.5) * 1.2, 1.6 + math.random() * 1.2, (math.random() - 0.5) * 1.2)
+	local color = fireRamp(fp.Evo and K.FIRE_CORE_EVO or K.FIRE_CORE, math.clamp(t / fp.Life, 0, 1))
+	fx("Block", color, NEON, CFrame.new(from), CFrame.new(to), Vector3.one * 0.14, Vector3.one * 0.04, 0.15, 1, 0.55 + math.random() * 0.3, EASE_OUT)
 end
 
 local function stepFirePatches(now: number)
+	if #firePatches > 0 and not ClientSettings.Reduced() and now >= K.fireEmber then
+		K.fireEmber = now + 0.16
+		local fp = firePatches[math.random(1, #firePatches)]
+		local t = now - fp.Start
+		if t > 0.2 and t < fp.Life - 0.4 then
+			fireEmber(fp, t)
+		end
+	end
 	for i = #firePatches, 1, -1 do
 		local fp = firePatches[i]
 		local t = now - fp.Start
@@ -1746,16 +1831,35 @@ local function stepFirePatches(now: number)
 			freeFirePatch(fp)
 			table.remove(firePatches, i)
 		else
-			local appear = math.min(1, t / 0.15)
-			local vis = math.min(appear, math.clamp((fp.Life - t) / 0.4, 0, 1))
-			-- low alpha: the floor stays readable under a long trail
-			fp.Fill.Transparency = 1 - 0.3 * vis
-			fp.Rim.Transparency = 1 - 0.45 * vis
-			local flicker = 1 + math.sin(t * 13 + fp.Phase) * 0.08 + math.sin(t * 7.3 + fp.Phase) * 0.06
-			local h = math.clamp(fp.R / 3.2, 0.8, 1.6) * vis * flicker
-			local cf = CFrame.new(fp.X, FLOOR_Y, fp.Z) * CFrame.Angles(0, t * 0.6 + fp.Phase, 0) * CFrame.new(0, 0.75 * h, 0) * K.FLAME_UP
-			for _, piece in ipairs(fp.Flame) do
-				bulk(piece.Part, cf * CFrame.new(piece.Offset.Position * h) * piece.Offset.Rotation)
+			local stage = math.min(K.FIRE_STAGES, math.floor(t / fp.Life * K.FIRE_STAGES))
+			if stage ~= fp.Stage then
+				colourFire(fp, stage)
+			end
+			local left = math.clamp((fp.Life - t) / 0.5, 0, 1) -- 1 → 0 over the last half second
+			-- half see-through: the floor stays readable under a long trail
+			fp.Bed.Transparency = 1 - 0.5 * math.min(1, t / 0.2) * left
+			for _, lick in ipairs(fp.Licks) do
+				local grow = math.clamp((t - lick.Delay) / 0.3, 0, 1)
+				local vis = (1 - (1 - grow) * (1 - grow)) * left -- eases out, shrinks at the end
+				if vis <= 0.02 then
+					for _, w in ipairs(lick.Wedges) do
+						w.CFrame = PARK
+					end
+				else
+					local flick = 1 + math.sin(t * lick.Speed + lick.Phase) * 0.12 + math.sin(t * lick.Speed * 1.9 + lick.Phase * 2) * 0.06
+					local h, d = lick.H * vis * flick, lick.D * (0.5 + 0.5 * vis)
+					local lean = math.sin(t * lick.Speed * 0.55 + lick.Phase) * 0.22
+					local base = CFrame.new(fp.X + lick.Ox, FLOOR_Y, fp.Z + lick.Oz) * CFrame.Angles(0, lick.Yaw + t * 0.7, 0) * CFrame.Angles(lean, 0, math.cos(t * lick.Speed * 0.4 + lick.Phase) * 0.18)
+					local size = Vector3.new(d * 2, h, d)
+					for k, w in ipairs(lick.Wedges) do
+						if w.Size ~= size then
+							w.Size = size
+						end
+						w.Transparency = (1 - left) * 0.6
+						-- a wedge's tall face (+Z) leans on the axis: four make a spire
+						bulk(w, base * CFrame.Angles(0, (k - 1) * math.pi / 2, 0) * CFrame.new(0, h / 2, -d / 2))
+					end
+				end
 			end
 		end
 	end
@@ -1877,16 +1981,18 @@ local function onWeaponFx(batch)
 end
 
 ------------------------------------------------------------------------------------------
--- Gems (blue-white crystals with a soft halo, local bob / spin, a sparkle when collected)
+-- Gems (faceted octahedron crystals, local bob / spin, a burst when collected)
 ------------------------------------------------------------------------------------------
 
 --[[
-	XP gems must never be mistaken for gold: they are blue-white crystals (Theme.Fx.Gem)
-	with an ivory core and a soft arcane glow on the floor under it, about 1.7 / 2.2 / 2.9
-	studs tall for the small / medium / large gem (value 1 / 5 / 25). The uploaded
-	"Crystal" mesh is drawn in place of the server cube; without it the cube itself stands
-	on its corner (glassy, with a Neon core inside). The glow is skipped with Reduced
-	effects.
+	XP gems must never be mistaken for gold: they are saturated cyan / blue / violet
+	crystals (Theme.Fx.Gem), about 1.5 / 1.9 / 2.6 studs tall for the small / medium / large
+	gem (value 1 / 5 / 25; nearby small ones merge server-side, see XPSystem). A crystal is
+	a real octahedron built from eight WedgeParts (a pyramid up, a longer one down, every
+	facet its own tone) that bobs and turns slowly; a faint tinted disc on the floor and a
+	rare glint are its only glow (no lights). Crystals are pooled "kits" handed out to the
+	nearest gems only (K.GEM_KITS, fewer with Reduced effects); every other gem is drawn
+	as the plain server cube standing on its corner, so a field of hundreds stays cheap.
 ]]
 local gemState: { [BasePart]: Vector3 } = {} -- active gem → server base position
 local gemParts: { BasePart } = {}
@@ -1896,113 +2002,142 @@ local popsThisFrame = 0
 K.GEM_TILT = CFrame.Angles(math.rad(45), 0, math.rad(35.26)) -- cube on its corner
 K.GEM_SIZE = (Config.XP :: any).GemSize or { Small = 1.1, Medium = 1.45, Large = 1.9 }
 local GEM_HEIGHT: number = Config.XP.GemHeight
-K.GEM_HOVER = 0.65 -- the crystal's tip floats this far over the floor (bob +-0.25)
-K.GEM_SCALE = { Small = 1.45, Medium = 1.85, Large = 2.45 } -- Crystal mesh scale (1 = 1.16 tall)
-K.GEM_HALO = { Small = 0.62, Medium = 0.56, Large = 0.5 } -- glow disc alpha (higher = fainter)
-
-type CrystalBase = { Size: Vector3, Offset: Vector3, Light: boolean }
-type Crystal = { Pieces: { any }, Base: { CrystalBase }, Kind: string, Scale: number }
-local crystals: { [BasePart]: Crystal } = {}
-type GemFx = { Halo: BasePart, Core: BasePart, Kind: string }
+K.GEM_HOVER = 0.55 -- the crystal's tip floats this far over the floor (bob +-0.2)
+-- half width of the square equator, crown (up) height, pavilion (down) height
+K.GEM_DIM = { Small = { 0.5, 0.6, 0.95 }, Medium = { 0.65, 0.75, 1.2 }, Large = { 0.85, 1.0, 1.6 } }
+K.GEM_KITS = { 44, 24 } -- most crystals drawn at once: normal / Reduced effects
+K.GEM_NEAR = { 42, 26 } -- a gem gets a crystal inside this many studs (and keeps it up to +10)
+K.GEM_KIT_PARTS = 8
+type GemKit = { Wedges: { BasePart }, Halo: BasePart, Kind: string, Scaled: boolean }
+type GemFx = { Kit: GemKit?, Kind: string, Pulse: number, Glint: number }
 local gemFx: { [BasePart]: GemFx } = {}
+local spareKits: { GemKit } = {}
+K.kitsInUse = 0
 
--- Crystal mesh slots: the gem body takes the gem colour, the shine a lighter one.
-local CRYSTAL_SLOT: { [string]: string } = {}
-do
-	local entry = MeshCatalog.Models.Crystal
-	if entry then
-		for _, def in ipairs(entry.Pieces) do
-			CRYSTAL_SLOT[def.Name] = def.Slot
-		end
-	end
-end
-
--- Gem kind from the server cube size (Config.XP.GemSize) → kind, mesh scale, colour.
-local function gemLook(part: BasePart): (string, number, Color3)
+-- Gem kind from the server cube size (Config.XP.GemSize).
+local function gemKindOf(part: BasePart): string
 	local x = part.Size.X
-	local kind = x >= (K.GEM_SIZE.Medium + K.GEM_SIZE.Large) / 2 and "Large" or (x >= (K.GEM_SIZE.Small + K.GEM_SIZE.Medium) / 2 and "Medium" or "Small")
-	return kind, K.GEM_SCALE[kind], FX.Gem[kind] or FX.Arcane
+	return x >= (K.GEM_SIZE.Medium + K.GEM_SIZE.Large) / 2 and "Large" or (x >= (K.GEM_SIZE.Small + K.GEM_SIZE.Medium) / 2 and "Medium" or "Small")
 end
 
--- One crystal per pooled gem part, resized / recoloured when the gem's kind changes.
-local function crystalFor(part: BasePart, kind: string, scale: number, color: Color3): Crystal?
-	local c = crystals[part]
-	if not c then
-		local pieces = ModelLibrary.MeshPieces("Crystal", nil, 1, 0)
-		if not pieces then
-			return nil
-		end
-		local base: { CrystalBase } = {}
-		for i, piece in ipairs(pieces) do
-			local slot = CRYSTAL_SLOT[piece.Part.Name]
-			base[i] = { Size = piece.Part.Size, Offset = piece.Offset.Position, Light = slot == "Light" or slot == "White" }
-			-- a lit body keeps the facets readable (Neon would flatten them); the core glows
-			piece.Part.Material = base[i].Light and NEON or SMOOTH
-			piece.Part.CastShadow = false
-		end
-		c = { Pieces = pieces, Base = base, Kind = "", Scale = 0 }
-		crystals[part] = c
-	end
-	local cr = c :: Crystal
-	if cr.Kind ~= kind or math.abs(cr.Scale - scale) > 0.01 then
-		cr.Kind, cr.Scale = kind, scale
-		for i, piece in ipairs(cr.Pieces) do
-			local b = cr.Base[i]
-			-- the core table is a touch wider so the ivory heart reads from the camera
-			local grow = b.Light and Vector3.new(1.35, 1.6, 1.35) or Vector3.one
-			piece.Part.Size = b.Size * scale * grow
-			piece.Offset = CFrame.new(b.Offset * scale)
-			piece.Part.Color = b.Light and FX.Gem.Core or color
-		end
-	end
-	return cr
-end
-
--- The halo + core parts of a gem (local, made once per pooled gem part).
 local function gemFxFor(part: BasePart): GemFx
 	local g = gemFx[part]
-	if g then
-		return g
+	if not g then
+		g = { Kit = nil, Kind = "", Pulse = -10, Glint = math.floor(gemClock / 3.7) }
+		gemFx[part] = g
 	end
-	local halo = newPart("Cylinder") -- a flat glow disc on the floor
-	halo.Material = NEON
-	halo.Color = FX.Gem.Glow
-	halo.Transparency = 1
-	local core = newPart("Ball")
-	core.Material = NEON
-	core.Color = FX.Gem.Core
-	core.Transparency = 1
-	g = { Halo = halo, Core = core, Kind = "" }
-	gemFx[part] = g
 	return g
 end
 
-local function parkGem(part: BasePart)
-	local c = crystals[part]
-	if c then
-		for _, piece in ipairs(c.Pieces) do
-			piece.Part.CFrame = PARK
-		end
+local function takeKit(): GemKit
+	local kit = table.remove(spareKits)
+	if kit then
+		return kit
 	end
+	local wedges = {}
+	for i = 1, K.GEM_KIT_PARTS do
+		wedges[i] = takePart("Wedge", WHITE, SMOOTH, Vector3.one, 0)
+		wedges[i].Reflectance = 0.06
+	end
+	local halo = takePart("Cylinder", FX.Gem.Glow, Enum.Material.Neon, Vector3.new(0.05, 1, 1), 1)
+	return { Wedges = wedges, Halo = halo, Kind = "", Scaled = false }
+end
+
+local function parkKit(kit: GemKit)
+	for _, w in ipairs(kit.Wedges) do
+		w.CFrame = PARK
+	end
+	kit.Halo.CFrame = PARK
+	kit.Halo.Transparency = 1
+	table.insert(spareKits, kit)
+end
+
+local function parkGem(part: BasePart)
 	local g = gemFx[part]
-	if g then
-		g.Halo.CFrame = PARK
-		g.Core.CFrame = PARK
+	if g and g.Kit then
+		parkKit(g.Kit)
+		g.Kit = nil
+		K.kitsInUse -= 1
 	end
 end
 
--- Pop + four-point sparkle facing the camera where a gem was collected.
-local function gemPop(pos: Vector3, color: Color3)
-	if popsThisFrame >= 6 or not room(3) then
+-- Resizes and recolours a crystal for its kind: facets alternate light / dark, the crown
+-- lighter than the pavilion.
+local function styleKit(kit: GemKit, kind: string)
+	kit.Kind = kind
+	local d = K.GEM_DIM[kind]
+	local base: Color3 = FX.Gem[kind] or FX.Arcane
+	local dark = Color3.new(0, 0, 0)
+	for i, w in ipairs(kit.Wedges) do
+		local up = i <= 4
+		w.Size = Vector3.new(d[1] * 2, up and d[2] or d[3], d[1])
+		if up then
+			w.Color = base:Lerp(WHITE, i % 2 == 0 and 0.5 or 0.25)
+		else
+			w.Color = base:Lerp(dark, i % 2 == 0 and 0.32 or 0.14)
+		end
+	end
+	kit.Halo.Size = Vector3.new(0.05, d[1] * 2.8, d[1] * 2.8)
+	kit.Halo.Color = base
+end
+
+-- Poses a crystal whose lowest point is at (x, floorY, z); `scale` pulses it, `yaw` turns it.
+local function poseKit(kit: GemKit, kind: string, x: number, floorY: number, z: number, yaw: number, scale: number, n: number): number
+	local d = K.GEM_DIM[kind]
+	local half, crown, pavilion = d[1] * scale, d[2] * scale, d[3] * scale
+	local origin = CFrame.new(x, floorY + pavilion, z) * CFrame.Angles(0, yaw, 0) -- the equator's centre
+	for i = 1, 4 do
+		local turn = CFrame.Angles(0, (i - 1) * math.pi / 2, 0)
+		local up, down = kit.Wedges[i], kit.Wedges[i + 4]
+		-- a wedge's tall face (+Z) leans on the axis: four of them make a pyramid
+		n += 1
+		gemParts[n] = up
+		gemCFrames[n] = origin * turn * CFrame.new(0, crown / 2, -half / 2)
+		n += 1
+		gemParts[n] = down
+		gemCFrames[n] = origin * turn * CFrame.new(0, -pavilion / 2, -half / 2) * CFrame.Angles(0, 0, math.pi)
+		if scale ~= 1 then
+			up.Size = Vector3.new(half * 2, crown, half)
+			down.Size = Vector3.new(half * 2, pavilion, half)
+		end
+	end
+	return n
+end
+
+-- Burst where a gem was collected: a tinted flash, a four-point glint facing the camera
+-- and a few crystal splinters thrown out.
+local function gemPop(pos: Vector3, kind: string)
+	if popsThisFrame >= 5 or not room(6) then
 		return
 	end
 	popsThisFrame += 1
-	local at = pos + Vector3.new(0, 0.3, 0)
-	fx("Ball", color:Lerp(FX.Hit, 0.4), NEON, CFrame.new(at), nil, Vector3.one * 0.4, Vector3.one * 1.4, 0.1, 1, 0.16, EASE_OUT)
+	local color: Color3 = FX.Gem[kind] or FX.Arcane
+	local bright = color:Lerp(WHITE, 0.55)
+	local at = pos + Vector3.new(0, 0.5, 0)
+	fx("Ball", bright, NEON, CFrame.new(at), nil, Vector3.one * 0.35, Vector3.one * 1.5, 0.15, 1, 0.16, EASE_OUT)
 	local cam = workspace.CurrentCamera
 	local face = cam and CFrame.lookAt(at, cam.CFrame.Position) or CFrame.new(at)
-	fx("Block", FX.Hit, NEON, face, nil, Vector3.new(0.1, 1.5, 0.04), Vector3.new(0.03, 0.4, 0.04), 0.1, 1, 0.18, EASE_OUT)
-	fx("Block", FX.Hit, NEON, face, nil, Vector3.new(1.5, 0.1, 0.04), Vector3.new(0.4, 0.03, 0.04), 0.1, 1, 0.18, EASE_OUT)
+	fx("Block", bright, NEON, face, nil, Vector3.new(0.1, 1.7, 0.04), Vector3.new(0.03, 0.4, 0.04), 0.1, 1, 0.2, EASE_OUT)
+	fx("Block", bright, NEON, face, nil, Vector3.new(1.7, 0.1, 0.04), Vector3.new(0.4, 0.03, 0.04), 0.1, 1, 0.2, EASE_OUT)
+	if not ClientSettings.Reduced() then
+		for i = 1, 3 do
+			local a = i * TAU / 3 + math.random() * 0.8
+			local to = at + Vector3.new(math.cos(a) * 1.3, 0.5 + math.random() * 0.5, math.sin(a) * 1.3)
+			fx("Wedge", color, SMOOTH, CFrame.new(at) * CFrame.Angles(0, a, 0), CFrame.new(to) * CFrame.Angles(math.random() * 3, a, math.random() * 3), Vector3.new(0.12, 0.3, 0.2), Vector3.new(0.04, 0.12, 0.08), 0.05, 1, 0.3, EASE_OUT)
+		end
+	end
+end
+
+-- A rare four-point glint on the crystal's crown.
+local function gemGlint(at: Vector3, kind: string)
+	if not room(2) then
+		return
+	end
+	local cam = workspace.CurrentCamera
+	local face = cam and CFrame.lookAt(at, cam.CFrame.Position) or CFrame.new(at)
+	local color = (FX.Gem[kind] or FX.Arcane):Lerp(WHITE, 0.7)
+	fx("Block", color, NEON, face, nil, Vector3.new(0.05, 0.2, 0.03), Vector3.new(0.05, 1.1, 0.03), 0.2, 1, 0.45, EASE_OUT, nil, 0.4)
+	fx("Block", color, NEON, face, nil, Vector3.new(0.2, 0.05, 0.03), Vector3.new(1.1, 0.05, 0.03), 0.2, 1, 0.45, EASE_OUT, nil, 0.4)
 end
 
 local function trackGem(gem: Instance)
@@ -2020,7 +2155,7 @@ local function trackGem(gem: Instance)
 			gemState[part] = nil
 			parkGem(part)
 			if last then
-				-- collected next to a player: a sparkle (and the pickup sound for me)
+				-- collected next to a player: a burst (and the pickup sound for me)
 				local near = math.huge
 				for _, other in ipairs(Players:GetPlayers()) do
 					local char = other.Character
@@ -2034,8 +2169,7 @@ local function trackGem(gem: Instance)
 					end
 				end
 				if near < 6 then
-					local _, _, color = gemLook(part)
-					gemPop(last, color)
+					gemPop(last, gemKindOf(part))
 				end
 			end
 		end
@@ -2050,35 +2184,85 @@ local function renderGems(dt: number)
 	table.clear(gemParts)
 	table.clear(gemCFrames)
 	local n = 0
-	local useMesh = ModelLibrary.MeshFolder("Crystal") ~= nil
-	local halos = not ClientSettings.Reduced()
+	local reduced = ClientSettings.Reduced()
+	local slot = reduced and 2 or 1
+	local maxKits: number = K.GEM_KITS[slot]
+	local enter: number = K.GEM_NEAR[slot]
+	local leave = enter + 10
+	local char = player.Character
+	local root = char and char.PrimaryPart
+	local rx, rz = 0, 0
+	if root then
+		rx, rz = root.Position.X, root.Position.Z
+	end
+	local glints = 0
 	for part, base in pairs(gemState) do
-		local kind, scale, color = gemLook(part)
-		local phase = base.X * 0.37 + base.Z * 0.21
-		local bob = math.sin(gemClock * 2.2 + phase) * 0.25
-		local spin = CFrame.Angles(0, gemClock * 1.2 + phase, 0)
-		local floorY = base.Y - GEM_HEIGHT + K.GEM_HOVER + bob -- the crystal's lowest point
 		local g = gemFxFor(part)
-		local crystal = useMesh and crystalFor(part, kind, scale, color) or nil
-		local centre, height
-		if crystal then
-			-- the uploaded crystal mesh drawn in place of the plain server cube
+		local kind = gemKindOf(part)
+		if g.Kind ~= kind then
+			if g.Kind ~= "" then
+				g.Pulse = gemClock -- merged into a bigger gem: a small swell
+			end
+			g.Kind = kind
+		end
+		local phase = base.X * 0.37 + base.Z * 0.21
+		local bob = math.sin(gemClock * 2 + phase) * 0.2
+		local yaw = gemClock * 1.1 + phase
+		local floorY = base.Y - GEM_HEIGHT + K.GEM_HOVER + bob -- the crystal's lowest point
+		-- crystals go to the gems nearest the hero (hysteresis keeps them from flickering)
+		local dx, dz = base.X - rx, base.Z - rz
+		local d2 = dx * dx + dz * dz
+		local kit = g.Kit
+		if kit and d2 > leave * leave then
+			parkGem(part)
+			kit = nil
+		elseif not kit and d2 <= enter * enter and K.kitsInUse < maxKits then
+			kit = takeKit()
+			g.Kit = kit
+			K.kitsInUse += 1
+		end
+		local height
+		if kit then
 			if part.LocalTransparencyModifier ~= 1 then
 				part.LocalTransparencyModifier = 1
 			end
-			height = 1.16 * scale
-			local cf = CFrame.new(base.X, floorY, base.Z) * spin
-			for _, piece in ipairs(crystal.Pieces) do
-				n += 1
-				gemParts[n] = piece.Part
-				gemCFrames[n] = cf * piece.Offset
+			if kit.Kind ~= kind then
+				styleKit(kit, kind)
 			end
-			centre = Vector3.new(base.X, floorY + height * 0.5, base.Z)
+			local dim = K.GEM_DIM[kind]
+			local pop = 1 + 0.35 * math.max(0, 1 - (gemClock - g.Pulse) / 0.3)
+			if pop == 1 and kit.Scaled then
+				kit.Scaled = false
+				styleKit(kit, kind)
+			end
+			kit.Scaled = kit.Scaled or pop ~= 1
+			n = poseKit(kit, kind, base.X, floorY, base.Z, yaw, pop, n)
+			height = (dim[2] + dim[3]) * pop
+			-- the floor glow stays on the floor; a gem flying up to a player leaves it behind
+			local resting = base.Y <= FLOOR_Y + GEM_HEIGHT + 0.5
+			local wantHalo = (resting and not reduced) and 0.9 or 1
+			if kit.Halo.Transparency ~= wantHalo then
+				kit.Halo.Transparency = wantHalo
+			end
+			if wantHalo < 1 then
+				n += 1
+				gemParts[n] = kit.Halo
+				gemCFrames[n] = CFrame.new(base.X, FLOOR_Y + 0.42, base.Z) * DISC -- over the dirt paths
+			end
+			-- a rare glint, a different moment for every gem
+			local tick = math.floor((gemClock + phase * 3) / 3.7)
+			if tick ~= g.Glint then
+				g.Glint = tick
+				if not reduced and glints < 2 and d2 < 30 * 30 then
+					glints += 1
+					gemGlint(Vector3.new(base.X, floorY + height * 0.7, base.Z), kind)
+				end
+			end
 		else
-			-- part fallback: the server cube stood on its corner, glassy in the gem colour,
-			-- with the Neon core inside
-			if part.LocalTransparencyModifier ~= 0.25 then
-				part.LocalTransparencyModifier = 0.25
+			-- far away: the server cube stood on its corner, glassy in the gem colour
+			local color: Color3 = FX.Gem[kind] or FX.Arcane
+			if part.LocalTransparencyModifier ~= 0.1 then
+				part.LocalTransparencyModifier = 0.1
 			end
 			if part.Color ~= color then
 				part.Color = color
@@ -2086,35 +2270,10 @@ local function renderGems(dt: number)
 			if part.Material ~= SMOOTH then
 				part.Material = SMOOTH
 			end
-			height = part.Size.X * 1.732
-			centre = Vector3.new(base.X, floorY + height * 0.5, base.Z)
+			local centre = Vector3.new(base.X, floorY + part.Size.X * 0.866, base.Z)
 			n += 1
 			gemParts[n] = part
-			gemCFrames[n] = CFrame.new(centre) * spin * K.GEM_TILT
-			-- the core shows through the glassy cube (the mesh has its own core)
-			n += 1
-			gemParts[n] = g.Core
-			gemCFrames[n] = CFrame.new(centre)
-		end
-		if g.Kind ~= kind then
-			g.Kind = kind
-			g.Halo.Size = Vector3.new(0.06, height * 0.95, height * 0.95)
-			g.Core.Size = Vector3.one * height * 0.3
-		end
-		local wantCore = crystal and 1 or 0
-		if g.Core.Transparency ~= wantCore then
-			g.Core.Transparency = wantCore
-		end
-		-- the floor glow stays on the floor; a gem flying up to a player leaves it behind
-		local resting = base.Y <= FLOOR_Y + GEM_HEIGHT + 0.5
-		local wantHalo = (halos and resting) and K.GEM_HALO[kind] or 1
-		if g.Halo.Transparency ~= wantHalo then
-			g.Halo.Transparency = wantHalo
-		end
-		if halos and resting then
-			n += 1
-			gemParts[n] = g.Halo
-			gemCFrames[n] = CFrame.new(base.X, FLOOR_Y + 0.42, base.Z) * DISC -- over the dirt paths
+			gemCFrames[n] = CFrame.new(centre) * CFrame.Angles(0, yaw, 0) * K.GEM_TILT
 		end
 	end
 	if n > 0 then
@@ -2190,6 +2349,9 @@ type Deco = {
 	Bar: BillboardGui?,
 	BarFill: Frame?,
 	BarTrail: Frame?,
+	BarText: TextLabel?,
+	BarHp: number,
+	BarMax: number,
 	BarGrad: UIGradient?,
 	BarTeam: boolean,
 	BarRevive: boolean,
@@ -2215,6 +2377,8 @@ local function newDeco(): Deco
 		AuraShown = false,
 		BarTeam = false,
 		BarRevive = false,
+		BarHp = -1,
+		BarMax = -1,
 		Frac = -1,
 		TrailFrac = 1,
 		ShowUntil = 0,
@@ -2234,8 +2398,9 @@ local function buildBar(deco: Deco, root: BasePart, team: boolean)
 	end
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "SwarmHP"
-	gui.Size = team and UDim2.fromOffset(44, 7) or UDim2.fromOffset(50, 8)
-	gui.StudsOffsetWorldSpace = Vector3.new(0, 4.9, 0)
+	local bw, bh = team and 44 or 50, team and 7 or 8
+	gui.Size = UDim2.fromOffset(bw + 20, bh + 15)
+	gui.StudsOffsetWorldSpace = Vector3.new(0, 5.1, 0)
 	gui.AlwaysOnTop = true
 	gui.LightInfluence = 0
 	gui.ResetOnSpawn = false
@@ -2244,7 +2409,9 @@ local function buildBar(deco: Deco, root: BasePart, team: boolean)
 	gui.Enabled = false
 	local outline = Instance.new("Frame")
 	outline.Name = "Outline"
-	outline.Size = UDim2.fromScale(1, 1)
+	outline.AnchorPoint = Vector2.new(0.5, 1)
+	outline.Position = UDim2.fromScale(0.5, 1)
+	outline.Size = UDim2.fromOffset(bw, bh)
 	outline.BackgroundColor3 = P.slate_950
 	outline.BackgroundTransparency = 0.1
 	outline.BorderSizePixel = 0
@@ -2277,7 +2444,22 @@ local function buildBar(deco: Deco, root: BasePart, team: boolean)
 	grad.Color = ColorSequence.new(P.crimson_400, P.crimson_600)
 	grad.Rotation = 90
 	grad.Parent = fill
+	-- "85 / 100" above the bar; rewritten only when HP or MaxHP change
+	local num = Instance.new("TextLabel")
+	num.Name = "Number"
+	num.BackgroundTransparency = 1
+	num.AnchorPoint = Vector2.new(0.5, 0)
+	num.Position = UDim2.fromScale(0.5, 0)
+	num.Size = UDim2.new(1, 0, 0, 13)
+	num.FontFace = Theme.Font.Number
+	num.TextSize = 12
+	num.TextColor3 = P.ivory_100
+	num.TextStrokeColor3 = P.slate_950
+	num.TextStrokeTransparency = 0.35
+	num.Text = ""
+	num.Parent = gui
 	gui.Parent = fxFolder
+	deco.BarText, deco.BarHp, deco.BarMax = num, -1, -1
 	deco.Bar, deco.BarFill, deco.BarTrail, deco.BarGrad = gui, fill, trail, grad
 	deco.BarTeam = team
 	deco.BarRevive = false
@@ -2329,6 +2511,15 @@ local function updateBar(deco: Deco, other: Player, root: BasePart, isLocal: boo
 		deco.BarRevive = revive
 		grad.Color = revive and K.BAR_REVIVE or K.BAR_HEALTH
 		deco.Frac = -1
+	end
+	local num = deco.BarText :: TextLabel
+	if num.Visible == revive then
+		num.Visible = not revive
+	end
+	local hpShown, maxShown = math.ceil(hp), math.ceil(maxHp)
+	if not revive and (deco.BarHp ~= hpShown or deco.BarMax ~= maxShown) then
+		deco.BarHp, deco.BarMax = hpShown, maxShown
+		num.Text = string.format("%d / %d", hpShown, maxShown)
 	end
 	local value = frac
 	if revive then

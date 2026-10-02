@@ -13,6 +13,7 @@ local R = require("@self/R")
 local D = require("@self/datatypes")
 local S = require("@self/scheduler")
 require("@self/signal")
+local Prof = require("@self/profile")
 require("@self/instance")
 require("@self/classes/core")
 require("@self/classes/world")
@@ -328,6 +329,36 @@ function Mock.api()
 
 	function api.state(inst)
 		return states[inst]
+	end
+
+	-- Perf profiler (mock/profile.luau): scenes/perf-sim.luau.
+	function api.profile(on: boolean)
+		Prof.on = on == true
+		Prof.reset()
+	end
+	-- Per-frame GUI layout off (it still runs whenever game code reads AbsoluteSize etc.):
+	-- the mock's layout is far slower than Roblox's and is not game code.
+	function api.setFrameLayout(on: boolean)
+		R.skipFrameLayout = not on
+	end
+	api.realClock = os.clock -- the host clock (game code's os.clock is simulated time)
+	api.profileEnter = Prof.enter
+	api.profileLeave = Prof.leave
+	api.profileReport = Prof.report
+
+	-- Instances alive in the mock: in the DataModel tree, and all not destroyed (also
+	-- unparented ones not yet garbage collected: Luau has no forced collection here).
+	function api.liveInstances()
+		local inTree, notDestroyed = 0, 0
+		for _, st in pairs(states) do
+			if not st.destroyed then
+				notDestroyed += 1
+			end
+		end
+		R.walk(R.game, function()
+			inTree += 1
+		end)
+		return inTree, notDestroyed
 	end
 
 	api.Mock = Mock

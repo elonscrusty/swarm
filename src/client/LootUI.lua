@@ -10,13 +10,14 @@
 	  item popup     remote ItemGained: icon tile in the rarity colour, name, rarity, what it
 	                 does and where it came from; stacks up to 3 under the strip. Items
 	                 from a chest / shrine / altar (Reward = true) go to the centred
-	                 reward panel instead (LootUI.OnReward, set by UIBuilder)
+	                 reward reel instead (LootUI.OnReward, set by UIBuilder)
 	  purse hint     the price of the loot in reach goes to the HUD purse
 	                 (Hud.SetPurseHint; red "NEED N" after a press without enough gold)
 	  loot prompt    next to the nearest chest / shrine / altar in reach: title, state,
 	                 "+ benefit" / "- tradeoff" lines, the price (red when you can't afford
-	                 it) and HOLD (E, gamepad X, or press and hold the button on touch); the
-	                 ring around the icon fills while holding. The server decides (LootHold /
+	                 it) and HOLD (E, gamepad X, or press and hold the button on touch; a
+	                 short hold, the model's Hold attribute from Config.Chests.HoldSeconds);
+	                 the ring around the icon fills while holding. The server decides (LootHold /
 	                 LootFeedback); nothing is opened by the client.
 	  altar marker   a small floating pill over the guarded altar on screen (dormant /
 	                 guards left / unguarded / claimed)
@@ -42,7 +43,7 @@ local Hud = require(script.Parent.Hud)
 
 local LootUI = {}
 
--- UIBuilder's chest reward panel: items with Reward = true go there instead of a popup.
+-- UIBuilder's chest reward reel: items with Reward = true go there instead of a popup.
 LootUI.OnReward = nil :: ((any) -> ())?
 
 local player = Players.LocalPlayer

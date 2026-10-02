@@ -1,8 +1,9 @@
 --[[
 	ClientMain.client.lua
 	Starts every client module in order and wires the few things that span modules:
-	music per phase, the hurt flash, and the [VIP] chat tag. Player settings live in
-	ClientSettings (filled from the profile by UIBuilder).
+	music per phase, the hurt flash, the [VIP] chat tag and the background image preload
+	(AssetPreload). Player settings live in ClientSettings (filled from the profile by
+	UIBuilder).
 ]]
 
 local Players = game:GetService("Players")
@@ -18,9 +19,12 @@ local EnemyRenderer = require(script.Parent:WaitForChild("EnemyRenderer"))
 local VFX = require(script.Parent:WaitForChild("VFX"))
 local UIBuilder = require(script.Parent:WaitForChild("UIBuilder"))
 local DamageText = require(script.Parent:WaitForChild("DamageText"))
+local AssetPreload = require(script.Parent:WaitForChild("AssetPreload"))
 
 local player = Players.LocalPlayer
 
+-- warm the upgrade / item pictures in the background (level-up cards show them at once)
+AssetPreload.Start()
 Audio.Init()
 CameraController.Init()
 MobileControls.Init()

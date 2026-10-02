@@ -735,10 +735,11 @@ end
 local PickupTheme = require(game:GetService("ReplicatedStorage").Shared.Theme)
 local PP = PickupTheme.Palette
 
--- XP gems are pooled cubes (clients stand them on a corner, or draw the Crystal mesh in
--- their place, with a soft halo and an ivory core). Blue-white tones from Theme.Fx.Gem
--- (gold is for coins only); sizes from Config.XP.GemSize: the client reads the kind back
--- from the cube size.
+-- XP gems are pooled cubes: the server only needs a position and a size. Clients draw a
+-- faceted octahedron crystal in the gem colour over the nearest ones and stand the cube
+-- on its corner for the rest. Cyan / blue / violet tones from Theme.Fx.Gem (gold is for
+-- coins only); sizes from Config.XP.GemSize: the client reads the kind back from the cube
+-- size. Anchored, no collision / query / touch: gems never take part in physics.
 local GEM_SIZE = Config.XP.GemSize
 ModelBuilder.GemStyles = {
 	Small = { Size = Vector3.one * GEM_SIZE.Small, Color = PickupTheme.Fx.Gem.Small },
@@ -749,7 +750,7 @@ ModelBuilder.GemStyles = {
 function ModelBuilder.BuildGem(index: number, parent: Instance): BasePart
 	local style = ModelBuilder.GemStyles.Small
 	local gem = part({ Name = "G" .. index, Size = style.Size, Color = style.Color, Material = Enum.Material.SmoothPlastic, CFrame = CFrame.new(Config.Enemies.ParkPosition) })
-	gem.Reflectance = 0.08 -- a little sheen instead of a glow
+	gem.Reflectance = 0.08
 	gem:SetAttribute("Active", false)
 	gem.Parent = parent
 	return gem

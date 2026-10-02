@@ -30,7 +30,6 @@
 	HP lives here (not in the Humanoid): the Humanoid's Dead state is disabled.
 ]]
 
-local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -156,20 +155,30 @@ end
 
 --[[
 	Chest rewards: a chest / shrine / altar paid this player an item (or an elite chest its
-	level-ups): the run pauses for Config.Chests.RewardPauseSeconds while the reward panel
-	shows. More rewards in a row extend it, never past RewardPauseMax from the first one.
-	The panel's tap (remote RewardClose) or the timer (Step) ends it. Not while travelling.
+	level-ups): the run pauses while the client's reel spins and reveals it (UIBuilder).
+	RewardSeq counts the rewards sent to this player; the client answers RewardClose(seq)
+	when it has shown them all, and a close that hasn't seen the latest reward yet is
+	ignored (so a reward granted while the previous close was in flight keeps its pause).
+	Server limits whatever the client does: Config.Chests.RewardPauseSeconds after a reward
+	(+ RewardQueueSeconds per reward queued behind it), never past RewardPauseMax from the
+	first one (Step). Not while travelling. The item itself was granted before this is
+	called: closing, skipping or timing never changes what the player owns.
 ]]
 function RunManager.HoldReward(rp)
+	rp.RewardSeq = (rp.RewardSeq or 0) + 1
 	if phase ~= "Running" or ctx.StageManager.IsHolding() or not rp.Alive or rp.Returned then
 		return
 	end
 	local C = Config.Chests
 	local now = os.clock()
-	if not rp.RewardUntil then
+	local untilT = now + (C.RewardPauseSeconds or 3.2)
+	if rp.RewardUntil then
+		-- queued behind the reward being shown
+		untilT = math.max(untilT, rp.RewardUntil + (C.RewardQueueSeconds or 2.2))
+	else
 		rp.RewardStart = now
 	end
-	rp.RewardUntil = math.min(now + (C.RewardPauseSeconds or 2.5), (rp.RewardStart or now) + (C.RewardPauseMax or 5))
+	rp.RewardUntil = math.min(untilT, (rp.RewardStart or now) + (C.RewardPauseMax or 7))
 	RunManager.RefreshFrozen()
 end
 
@@ -917,9 +926,12 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 		CurseMult = ctx.RunModifiers.GoldMult(),
 		DailyScored = rp.DailyScored == true,
 	})
+	local score = ctx.LeaderboardService.RunScore({ Cleared = cleared, Bosses = bossKills, Level = rp.Level, Kills = rp.Kills, Seconds = t })
+	data.Stats.BestScore = math.max(data.Stats.BestScore or 0, score)
+	ctx.LeaderboardService.Submit(rp.Player, "Score", score, nil, rp.RunId)
 	ctx.LeaderboardService.Submit(rp.Player, "BestStage", ctx.StageManager.GetStage(), nil, rp.RunId)
 	ctx.LeaderboardService.Submit(rp.Player, "Kills", rp.Kills, nil, rp.RunId)
-	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo }
+	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Score = score }
 	return newBest, unlocked
 end
 
@@ -996,6 +1008,8 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		NewBest = newBest,
 		NewBestStage = data ~= nil and not rp.DevTainted and reached > bestStageBefore and reached > 1,
 		DevRun = rp.DevTainted == true, -- a DEV command was used: nothing public was recorded
+		Abandoned = rp.Abandoned == true, -- left from the pause menu (MAIN MENU)
+		Score = info and info.Score or nil, -- the run's high-score value (none for dev runs)
 		Unlocked = unlocked,
 		Achievements = achievements, -- unlocked this run: { {Id, Name, Reward, Icon} }
 		Curses = table.clone(ctx.RunModifiers.Active()), -- the run's curses (CurseData ids)
@@ -1035,6 +1049,7 @@ local function returnPlayerToLobby(rp)
 	end
 	rp.Returned = true
 	local player: Player = rp.Player
+	player:SetAttribute("DevGod", nil) -- invincibility lasts one run
 	if player.Parent then
 		resetPlayerAttributes(player)
 		spawnCharacter(player, lobbySpawnCFrame(), true)
@@ -1045,7 +1060,6 @@ end
 -- Clears the run world and goes back to the Lobby phase.
 local function returnAll()
 	for _, rp in ipairs(runPlayers) do
-		rp.Player:SetAttribute("DevGod", nil)
 		returnPlayerToLobby(rp)
 	end
 	table.clear(runPlayers)
@@ -1121,6 +1135,34 @@ function RunManager.ReturnThroughPortal(rp)
 	RunManager.Broadcast(string.format("%s left through the portal (%d stage%s cleared).", rp.Player.DisplayName, cleared, cleared == 1 and "" or "s"), Color3.fromRGB(255, 220, 120))
 	if #runPlayers == 0 then
 		returnAll()
+	end
+end
+
+--[[
+	MAIN MENU in the pause menu (confirmed on the client): the player gives up the run now.
+	It is committed like leaving the game (saveRunStats as a loss: kills, time, account XP
+	and gold already banked stay; no win, no win bonus, no portal), the results sit over
+	the lobby menu, and the player is taken out of the run. Teammates go on; the last one
+	out clears the run world (enemies, projectiles, gems, arena) through returnAll.
+]]
+function RunManager.AbandonRun(rp)
+	if phase ~= "Running" or rp.Returned or not byPlayer[rp.Player] then
+		return
+	end
+	ctx.LevelUpSystem.Cancel(rp)
+	RunManager.EndReward(rp)
+	Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
+	rp.Abandoned = true
+	finishPlayer(rp, false, true)
+	removeFromRun(rp)
+	rp.Root = nil
+	returnPlayerToLobby(rp)
+	if #runPlayers == 0 then
+		returnAll()
+	else
+		RunManager.Broadcast(rp.Player.DisplayName .. " returned to the main menu.", Color3.fromRGB(255, 200, 120))
+		ctx.StageManager.OnRosterChanged()
+		checkEnd() -- only fallen teammates left: their run ends as a defeat
 	end
 end
 
@@ -1333,18 +1375,16 @@ local function cycleArena(player: Player, wanted: any)
 end
 
 ------------------------------------------------------------------------------------------
--- Dev tools (Studio or the game's creator; the client button is only a shortcut)
+-- Dev tools (DevAccess decides who; the client button is only a shortcut)
 ------------------------------------------------------------------------------------------
 
+-- Studio, DevAllowlist UserIds (the owner, in live servers) or the creator (DevAccess.lua)
 local function isDev(player: Player): boolean
-	if not Config.Dev.Enabled then
-		return false
-	end
-	if RunService:IsStudio() then
-		return true
-	end
-	-- live servers: only when switched on, and only for the creator of a user-owned game
-	return Config.Dev.ShowInLiveGame == true and game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
+	return ctx.DevAccess.IsDev(player)
+end
+
+function RunManager.IsDev(player: Player): boolean
+	return isDev(player)
 end
 
 local function devCommand(player: Player, command: any, arg: any)
@@ -1684,6 +1724,13 @@ function RunManager.Start()
 		end
 	end, 2)
 
+	Remotes.Listen("AbandonRun", function(player)
+		local rp = byPlayer[player]
+		if rp then
+			RunManager.AbandonRun(rp)
+		end
+	end, 1)
+
 	Remotes.Listen("SetPause", function(player, open)
 		local rp = byPlayer[player]
 		if not rp or phase ~= "Running" or type(open) ~= "boolean" then
@@ -1693,9 +1740,10 @@ function RunManager.Start()
 		RunManager.RefreshFrozen()
 	end, 4)
 
-	Remotes.Listen("RewardClose", function(player)
+	Remotes.Listen("RewardClose", function(player, seq)
 		local rp = byPlayer[player]
-		if rp then
+		-- seq = rewards the client has shown; an older close leaves a newer reward's pause
+		if rp and (type(seq) ~= "number" or seq >= (rp.RewardSeq or 0)) then
 			RunManager.EndReward(rp)
 		end
 	end, 4)

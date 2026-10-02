@@ -1,6 +1,6 @@
 --[[
 	MenuLeaderboards.lua
-	The LEADERBOARDS screen: three tabs (BEST STAGE, DAILY, MOST KILLS). Opening a tab
+	The LEADERBOARDS screen: four tabs (HIGH SCORE, BEST STAGE, DAILY, MOST KILLS). Opening a tab
 	asks the server (LeaderboardRequest); LeaderboardService answers with LeaderboardData:
 	the top 50 rows (your row highlighted), your rank when you are in them, your own best,
 	and a status. "loading" asks again shortly; "local" (no DataStores, e.g. Studio without
@@ -24,6 +24,7 @@ local C, P = Theme.Color, Theme.Palette
 local player = Players.LocalPlayer
 
 local BOARDS = {
+	{ Id = "Score", Title = "High score", Icon = "trophy", Caption = "Best run score, all servers · stages, bosses, kills, level, time" },
 	{ Id = "BestStage", Title = "Best stage", Icon = "portal", Caption = "Furthest stage reached in a run · all time" },
 	{ Id = "Daily", Title = "Daily", Icon = "calendar", Caption = "Today's scored Daily Challenge attempts (UTC)" },
 	{ Id = "Kills", Title = "Most kills", Icon = "skull", Caption = "Most enemies defeated in one run · all time" },
@@ -47,7 +48,7 @@ end
 function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = {}
-	local board = "BestStage"
+	local board = "Score"
 	local data: { [string]: any } = {} -- last answer per board
 	local asked: { [string]: number } = {}
 

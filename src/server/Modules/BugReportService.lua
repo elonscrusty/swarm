@@ -36,7 +36,7 @@ local Shared = game:GetService("ReplicatedStorage").Shared
 local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 local B = require(Shared.BugReportData)
-local DevAllowlist = require(script.Parent.DevAllowlist)
+local DevAccess = require(script.Parent.DevAccess)
 
 local BugReportService = {}
 
@@ -54,19 +54,8 @@ local cacheCount = 0
 -- Access
 ------------------------------------------------------------------------------------------
 
--- The same rule as RunManager's dev tools.
-local function isDevRule(player: Player): boolean
-	if not Config.Dev.Enabled then
-		return false
-	end
-	if RunService:IsStudio() then
-		return true
-	end
-	return Config.Dev.ShowInLiveGame == true and game.CreatorType == Enum.CreatorType.User and player.UserId == game.CreatorId
-end
-
 function BugReportService.CanViewInbox(player: Player): boolean
-	return DevAllowlist[player.UserId] == true or isDevRule(player)
+	return DevAccess.IsDev(player)
 end
 
 ------------------------------------------------------------------------------------------

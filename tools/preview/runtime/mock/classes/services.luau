@@ -231,8 +231,15 @@ R.defineClass("RunService", {
 function R.installRunService(rs)
 	local st = states[rs]
 	S.frameHooks.render = function(dt)
+		local P = R.prof
 		for _, b in ipairs(table.clone(bound)) do
-			S.spawn(b.fn, dt)
+			if P and P.on then
+				P.enter(P.fnLabel(b.fn) .. " RenderStep " .. tostring(b.name))
+				S.spawn(b.fn, dt)
+				P.leave()
+			else
+				S.spawn(b.fn, dt)
+			end
 		end
 		R.fire(st, "PreRender", dt)
 		R.fire(st, "RenderStepped", dt)

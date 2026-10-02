@@ -98,8 +98,9 @@ Config.Stages = {
 ------------------------------------------------------------------------------------------
 Config.Dev = {
 	Enabled = true, -- false hides the DEV button everywhere and ignores dev requests
-	-- Dev controls show in Studio only. true also shows them to the game's creator in live
-	-- servers (user-owned games); leave false for normal play.
+	-- Dev controls show in Studio, and in live servers to the UserIds in the server-only
+	-- DevAllowlist (the owner). true also gives them to the game's creator (user-owned
+	-- games). The server checks every command (DevAccess.lua); normal players never see it.
 	ShowInLiveGame = false,
 	AddLevels = 5, -- "+5 levels" button
 	SkipToTime = 14 * 60 + 30, -- unused since the stage loop (was "Skip to 14:30")
@@ -187,6 +188,11 @@ Config.XP = {
 	-- Server gem cube edge per kind (studs). The client reads the kind back from the size
 	-- and draws a blue-white crystal about 1.5x / 1.9x / 2.5x as tall (VFX).
 	GemSize = { Small = 1.1, Medium = 1.45, Large = 1.9 },
+	-- A new gem lands on a resting one within MergeRadius studs (their values add up, so no
+	-- XP is lost) as long as the total stays at most MergeMax; keeps big fights from
+	-- littering the floor with hundreds of crystals.
+	MergeRadius = 2.4,
+	MergeMax = 25,
 	-- Gems are only checked against players every N frames in chunks (perf).
 	CheckChunks = 2,
 }
@@ -288,12 +294,19 @@ Config.Chests = {
 	GoldenCount = 1,
 	Cost = { Small = 25, Large = 60, Golden = 150 }, -- on stage 1
 	CostExponent = 1.2, -- stage 2 = x2.3, stage 3 = x3.7, stage 5 = x6.9
-	HoldSeconds = { Small = 0.8, Large = 1.1, Golden = 1.4, Guarded = 1.2 },
-	-- A chest / shrine / altar reward pauses the whole run (like a level-up) while its panel
-	-- shows: RewardPauseSeconds after the last reward (the opener can tap to close sooner),
-	-- never more than RewardPauseMax in a row however many rewards arrive.
-	RewardPauseSeconds = 2.5,
-	RewardPauseMax = 5,
+	-- hold E / gamepad X / the touch button this long to open a chest (tune in playtesting)
+	HoldSeconds = { Small = 0.4, Large = 0.4, Golden = 0.4, Guarded = 0.4 },
+	-- A chest / shrine / altar reward pauses the whole run (like a level-up) while its reel
+	-- (Reel below) spins and the item is revealed. The client ends the pause when it is done
+	-- (remote RewardClose); the server never waits longer than RewardPauseSeconds after a
+	-- reward (+ RewardQueueSeconds for each one queued behind it), and never more than
+	-- RewardPauseMax in a row however many rewards arrive.
+	RewardPauseSeconds = 3.2,
+	RewardQueueSeconds = 2.2,
+	RewardPauseMax = 7,
+	-- the case-opening reel (client UIBuilder): seconds of spin for the first reward and for
+	-- each queued one, then the reveal; the reel lands on the server's item (tune in playtesting)
+	Reel = { Spin = 1.3, QueuedSpin = 0.8, Reveal = 1.3, QueuedReveal = 1.0, Tiles = 26 },
 	-- item rarity weights per chest (luck raises Uncommon / Legendary by x(1 + luck))
 	Weights = {
 		Small = { Common = 80, Uncommon = 19, Legendary = 1 },
@@ -691,6 +704,7 @@ Config.Sounds = {
 	Click = { Id = "rbxasset://sounds/button.wav", Volume = 0.45, Category = "UI", MinGap = 0.05, PitchVar = 0 },
 	Toggle = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Category = "UI", MinGap = 0.05, Pitch = 1.25, PitchVar = 0 },
 	Tip = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.2, Category = "UI", MinGap = 0.5, Pitch = 1.5, PitchVar = 0 },
+	ReelTick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.12, Category = "UI", MinGap = 0.03, Pitch = 1.35, PitchVar = 0.03 },
 	-- music slots (empty = silent; see the note above)
 	LobbyMusic = { Id = "", Volume = 0.35, Category = "Music" },
 	BattleMusic = { Id = "", Volume = 0.3, Category = "Music" },
@@ -873,9 +887,17 @@ Config.Modes = {
 ------------------------------------------------------------------------------------------
 Config.Leaderboards = {
 	Enabled = true,
-	StorePrefix = "SwarmLB_", -- OrderedDataStore names: SwarmLB_BestStage, SwarmLB_Kills, SwarmLB_Daily_<day>
+	StorePrefix = "SwarmLB_", -- OrderedDataStore names: SwarmLB_Score, SwarmLB_BestStage, SwarmLB_Kills, SwarmLB_Daily_<day>
 	StudioStorePrefix = "SwarmLB_Studio_", -- used instead in Studio: tests never touch live boards
-	Order = { "BestStage", "Daily", "Kills" },
+	Order = { "Score", "BestStage", "Daily", "Kills" },
+	-- High score of one run (board "Score"), worked out on the server from the run's own
+	-- numbers (LeaderboardService.RunScore), never sent by a client:
+	--   Stage * stages cleared + Boss * bosses beaten + Level * level reached + Kill * kills
+	--   + Second * whole seconds survived
+	-- Clearing stages counts most (the game's goal), bosses next; kills, levels and time
+	-- break ties between runs that got equally far. All runs are Standard runs (there is
+	-- no Endless mode yet; when one exists it gets its own board, e.g. "ScoreEndless").
+	Score = { Stage = 1000, Boss = 500, Level = 20, Kill = 1, Second = 0.5 },
 	Top = 50, -- entries shown
 	RefreshSeconds = 60, -- a board's cache is re-read at most this often
 	WatchSeconds = 180, -- boards nobody asked for this long are not refreshed

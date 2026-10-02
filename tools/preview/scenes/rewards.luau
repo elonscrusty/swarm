@@ -1,6 +1,11 @@
 -- rewards: gold and chest feedback in a run.
---   --set view=panel (default)  the centred chest reward panel (run paused): an elite
---                               chest's level-ups + gold, then two chest items queued in
+--   --set view=panel (default)  the chest reward reel (run paused): a Large Chest item,
+--                               the reel spinning / landing / revealed at --set t=<s>
+--                               after it arrived (default 2.0: the reveal; 0.4 mid-spin,
+--                               1.2 slowing down); --set item=<ItemData id> (default
+--                               StormCharm); --set queue=on: an elite chest's level-ups +
+--                               gold first, then two chest items queued behind it
+--                               (t counts from the first); --set reduced=on: Reduced effects
 --   --set view=coins            kills paying gold: coins bursting out and flying to the
 --                               hero, the purse over the ability bar counting up with "+N"
 --   --set view=need             standing at a chest without enough gold after pressing E:
@@ -42,16 +47,27 @@ elseif view == "other" then
 	C.settle(0.6)
 else
 	C.setState({ Frozen = true, LevelUpPause = false, RewardNames = "Player", RewardIds = "," .. tostring(uid) .. "," })
-	C.fire("ChestOpened", {
-		Rewards = {
-			{ Name = "Sword", Text = "Level 6", Color = Color3.fromRGB(220, 220, 230) },
-			{ Name = "Heart", Text = "Level 3", Color = Color3.fromRGB(220, 90, 90) },
-		},
-		Gold = 38,
-	})
-	C.settle(0.5)
-	C.fire("ItemGained", { Id = "StormCharm", Count = 1, Source = "Large Chest", Reward = true })
-	C.settle(0.2)
-	C.fire("ItemGained", { Id = "SunMedallion", Count = 1, Source = "Golden Chest", Reward = true })
-	C.settle(0.9)
+	if preview.args.reduced == "on" then
+		local ClientSettings = preview.client("ClientSettings")
+		if ClientSettings and ClientSettings.Set then
+			C.try("ClientSettings.Set", ClientSettings.Set, "ReducedEffects", true)
+		end
+	end
+	local t = tonumber(preview.args.t) or 2.0
+	if preview.args.queue == "on" then
+		C.fire("ChestOpened", {
+			Rewards = {
+				{ Name = "Whip", Text = "Level 6", Color = Color3.fromRGB(220, 220, 230) },
+				{ Name = "Heart", Text = "Level 3", Color = Color3.fromRGB(220, 90, 90) },
+			},
+			Gold = 38,
+		})
+		C.settle(0.2)
+		C.fire("ItemGained", { Id = "StormCharm", Count = 1, Source = "Large Chest", Reward = true })
+		C.fire("ItemGained", { Id = "SunMedallion", Count = 1, Source = "Golden Chest", Reward = true })
+		C.settle(math.max(0.05, t - 0.2))
+	else
+		C.fire("ItemGained", { Id = preview.args.item or "StormCharm", Count = 1, Source = "Large Chest", Reward = true })
+		C.settle(t)
+	end
 end

@@ -86,7 +86,7 @@ local function buildTop(frame: Frame)
 		Gradient = Theme.Gradient.Health,
 		Trail = true,
 		TextStyle = "Number",
-		TextSize = Theme.TextSize.Small,
+		TextSize = Theme.TextSize.Body,
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 32, 0.5, 0),
 		Size = UDim2.new(1, -32, 1, -2),
@@ -763,7 +763,7 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	end
 	anim.HP += (frac - anim.HP) * math.min(1, dt * 14)
 	local shield = player:GetAttribute("Shield") or 0
-	ui.HP.Set(anim.HP, shield > 0 and string.format("%d / %d  +%d", math.ceil(hp), maxHp, shield) or string.format("%d / %d", math.ceil(hp), maxHp))
+	ui.HP.Set(anim.HP)
 	ui.ShieldBar.Visible = shield > 0
 	if shield > 0 then
 		ui.ShieldBar.Size = UDim2.new(math.clamp(shield / maxHp, 0, 1), 0, 0, 4)
@@ -878,9 +878,22 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	end
 end
 
+-- Health number: rebuilt only when HP / MaxHP / Shield change (attribute signals on the
+-- player, which survive respawns and revives), never per frame.
+local function refreshHpText()
+	if not ui.HP or not ui.HP.Label then
+		return
+	end
+	local hp = math.ceil(tonumber(player:GetAttribute("HP")) or 0)
+	local maxHp = math.max(1, math.ceil(tonumber(player:GetAttribute("MaxHP")) or 1))
+	local shield = math.ceil(tonumber(player:GetAttribute("Shield")) or 0)
+	ui.HP.Label.Text = shield > 0 and string.format("%d / %d HP  +%d", hp, maxHp, shield) or string.format("%d / %d HP", hp, maxHp)
+end
+
 -- Resets per-run animation state (a new run starts from a clean HUD).
 function Hud.Reset()
 	anim = { XP = 0, HP = 1, HPTrail = 1 }
+	refreshHpText()
 	purse.Shown = nil
 	purse.Target = tonumber(player:GetAttribute("RunGold")) or 0
 	purse.Price, purse.AlarmUntil = 0, 0
@@ -920,6 +933,10 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	buildPurse(frame)
 	buildStatus(frame)
 	buildVignette(fxGui)
+	for _, name in ipairs({ "HP", "MaxHP", "Shield" }) do
+		player:GetAttributeChangedSignal(name):Connect(refreshHpText)
+	end
+	refreshHpText()
 	h.OnRelayout(layout)
 	layout()
 end
