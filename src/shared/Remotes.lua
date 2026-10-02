@@ -41,6 +41,8 @@ Remotes.ServerToClient = {
 	"LootFeedback", -- answer to LootHold: { Id, State = "Done" | "Cancel", Reason? }
 	"AchievementUnlocked", -- { Id, Name, Reward, Icon } (AchievementService): toast
 	"DamageNumbers", -- { enemyId, amount, crit (0/1), ... } summed hits (only with the setting on)
+	"BugReportResult", -- { Ok, Message } answer to BugReport (BugReportService)
+	"BugInboxData", -- DEV inbox: { Kind = "Page", Rows, Next?, Status } | { Kind = "Status", Id, Status, Ok }
 	"LeaderboardData", -- { Board, Rows = { {Rank, Name, Value, Me} }, Status, Age, MyRank?, MyBest } (LeaderboardService)
 }
 
@@ -69,6 +71,8 @@ Remotes.ClientToServer = {
 	"LootHold", -- (lootId, holding: boolean) start / stop holding a chest or shrine (LootSystem)
 	"EquipCosmetic", -- ("Title" | "Color" | "Ring" | "Frame", id or "") an earned achievement / level-track cosmetic
 	"SetCurses", -- ({curseId}) lobby curse pick, at most CurseData.MaxActive (RunModifiers)
+	"BugReport", -- ({ Category, Text, Client }) player bug report, filtered and rate limited (BugReportService)
+	"BugInbox", -- ("Page", cursor?) | ("SetStatus", id, status) DEV inbox, server-side allowlist
 	"LeaderboardRequest", -- (boardId) "BestStage" | "Daily" | "Kills" (LeaderboardService)
 }
 

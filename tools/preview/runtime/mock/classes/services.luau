@@ -927,6 +927,21 @@ R.defineClass("Team", {
 	},
 })
 
+-- Text filter stand-in (BugReportService): "badword" comes back as hashes, like Roblox's
+-- filter would; anything else passes unchanged.
+R.defineClass("TextService", {
+	methods = {
+		FilterStringAsync = function(_, text)
+			local filtered = (string.gsub(tostring(text), "[Bb]adword", "#######"))
+			return {
+				GetNonChatStringForBroadcastAsync = function()
+					return filtered
+				end,
+			}
+		end,
+	},
+})
+
 -- In-memory DataStores (only needed when a scene runs the full server).
 local stores = {}
 R.defineClass("DataStoreService", {

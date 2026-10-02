@@ -38,6 +38,8 @@ local StageUI = require(script.Parent.StageUI)
 local LootUI = require(script.Parent.LootUI)
 local LobbyScreen = require(script.Parent.LobbyScreen)
 local DevPanel = require(script.Parent.DevPanel)
+local DevInbox = require(script.Parent.DevInbox)
+local BugReportUI = require(script.Parent.BugReportUI)
 local Showcase = require(script.Parent.Showcase)
 local ClientSettings = require(script.Parent.ClientSettings)
 local TeamUI = require(script.Parent.TeamUI)
@@ -1306,6 +1308,18 @@ local function buildPause()
 			UIBuilder.Toast("Tips are on again: they show as you play.", P.gold_300)
 		end,
 	})
+	UIKit.Button(colB, {
+		Kind = "Outline",
+		Title = "REPORT A BUG",
+		Icon = "warning",
+		IconSize = 18,
+		Align = "Center",
+		Size = UDim2.new(1, 0, 0, 46),
+		LayoutOrder = 6,
+		OnClick = function()
+			BugReportUI.Open()
+		end,
+	})
 
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
@@ -1426,6 +1440,7 @@ end
 
 function UIBuilder.ClosePause()
 	hide(pause.Overlay, "Pause")
+	BugReportUI.Close()
 	if pauseMode == "Pause" then
 		Remotes.Get("SetPause"):FireServer(false)
 	end
@@ -2174,6 +2189,7 @@ function UIBuilder.Init(d: { [string]: any })
 	buildChest()
 	LootUI.OnReward = showItemReward
 	buildPause()
+	BugReportUI.Build(root, { Show = show, Hide = hide, FitModal = fitModal, OnRelayout = onRelayout, VirtualSize = virtualSize, Toast = UIBuilder.Toast })
 	buildRevive()
 	buildResults()
 	buildSaveNotice()
@@ -2234,6 +2250,7 @@ function UIBuilder.Init(d: { [string]: any })
 		Audio = deps.Audio,
 	})
 	DevPanel.Init(root, hostApi)
+	DevInbox.Init(root, { Show = show, Hide = hide, OnRelayout = onRelayout, VirtualSize = virtualSize, IsPortrait = hostApi.IsPortrait, Toast = UIBuilder.Toast })
 	onRelayout(function()
 		if levelUp.Overlay.Visible and lastOffer then
 			buildCards(false)

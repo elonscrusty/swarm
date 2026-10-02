@@ -7,7 +7,7 @@
 	The DEV button opens / closes a tabbed panel (the x in its header folds it back to the
 	button):
 	  SAVE     Start solo now, UNLOCK EVERYTHING, gold, account levels, damage numbers,
-	           RESET PROGRESS (tap twice to confirm)
+	           RESET PROGRESS (tap twice to confirm), Bug inbox (DevInbox; the server re-checks access)
 	  RUN      levels, run gold, godmode, damage numbers, teleport to portal, portal boss,
 	           next stage
 	  MOBS     any stage boss (the portal summons it), 5 of an enemy type / 1 elite
@@ -30,6 +30,7 @@ local ItemData = require(Shared:WaitForChild("ItemData"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
+local DevInbox = require(script.Parent.DevInbox)
 
 local DevPanel = {}
 
@@ -133,6 +134,12 @@ local function buildProfile(p: Instance)
 	button(g, "UNLOCK EVERYTHING", 2, function()
 		send("UnlockAll")
 	end, "Primary")
+	button(g, "Bug inbox", 3, function()
+		if panel then
+			panel.Visible = false
+		end
+		DevInbox.Open()
+	end)
 	g = section(p, "Gold & levels", 2)
 	button(g, "+1,000 gold", 1, function()
 		send("LobbyGold", 1000)
@@ -329,6 +336,7 @@ function DevPanel.Init(root: Instance, host: { [string]: any }?)
 	tabs = UIKit.Tabs(face, TABS, showTab, { Position = UDim2.fromOffset(0, 54) })
 	local top = 54 + Theme.Size.TapMin + 8
 	local body = new("Frame", { Name = "Body", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, top), Size = UDim2.new(1, 0, 1, -top) }, face)
+	DevInbox.ClaimButton()
 	buildProfile(page(body, "Profile"))
 	buildRun(page(body, "Run"))
 	buildSpawn(page(body, "Spawn"))

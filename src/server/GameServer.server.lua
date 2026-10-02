@@ -54,6 +54,7 @@ local ORDER = {
 	"AchievementService",
 	"DamageNumbers",
 	"MovementGuard", -- own Heartbeat: trims bunny-hop speed above Config.Movement caps
+	"BugReportService",
 }
 
 for _, name in ipairs(ORDER) do
