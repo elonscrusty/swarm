@@ -26,7 +26,7 @@ Config.Run = {
 	-- it is summoned at each stage's portal. Kept so old references keep compiling.
 	BossTime = 15 * 60,
 	MiniWaveInterval = 30, -- a burst of extra enemies every N seconds (while exploring)
-	ResultsSeconds = 25, -- defeat screen time before everyone is sent back automatically
+	ResultsSeconds = 12, -- defeat screen time before everyone is sent back automatically (MAIN MENU leaves at once)
 	MaxPlayers = 4, -- players per run (server MaxPlayers should match in game settings)
 	ArenaSpawnSpread = 10, -- players are placed in a circle of this radius at run start
 	-- A solo player who opens the pause menu freezes the whole run. In a group run the

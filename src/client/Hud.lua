@@ -652,7 +652,7 @@ local function layout()
 		k = math.min(compact and 0.86 or 1, (W - 2 * M) / invW, (H * 0.22) / invH)
 	else
 		local jumpClear = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26) / scale + ins.Right + 12
-		k = math.min(compact and 0.72 or 1, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.3) / invH)
+		k = math.min(compact and 0.72 or 0.78, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.24) / invH)
 	end
 	ui.BarFit.Scale = k
 	local barW, barH = invW * k, invH * k
@@ -1304,7 +1304,7 @@ local function updateStatus(state: Configuration, phase: string, stagePhase: str
 		elseif (player:GetAttribute("PartnerRevivesLeft") or 0) > 0 then
 			setStatus("You fell! A teammate can revive you by standing next to you.", "people2")
 		else
-			setStatus("You fell. Spectating your team...", "skull")
+			setStatus("You fell. Spectating your team · Pause → MAIN MENU to leave now", "skull")
 		end
 	else
 		setStatus("")
