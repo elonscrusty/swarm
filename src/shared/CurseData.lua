@@ -202,6 +202,10 @@ CurseData.HeadStartLevel = 4
 
 CurseData.Arenas = { "Forest", "Ruins", "Swamp", "Snow", "Desert", "Lava" }
 CurseData.Bosses = { "ScorpionQueen", "MothMatriarch", "RhinoWarlord", "HiveMother" }
+-- From this UTC day on, the daily route also uses the two newer bosses. Days before it keep
+-- the old list so a day's route never changes after players have scored on it.
+CurseData.BossesFromDay = 20729 -- 2026-10-03
+CurseData.BossesLater = { "ScorpionQueen", "MothMatriarch", "RhinoWarlord", "HiveMother", "BriarSentinel", "FrostboundColossus" }
 CurseData.DailyStages = 12 -- arenas / bosses planned ahead (the plan repeats after this)
 
 -- The UTC day number of a unix time (days since 1970-01-01).
@@ -277,7 +281,7 @@ function CurseData.Daily(day: number): Daily
 	local seed = (day * 7919 + 104729) % 2147483647
 	local rng = Random.new(seed)
 	local arenas = plan(CurseData.Arenas, CurseData.DailyStages, rng)
-	local bosses = plan(CurseData.Bosses, CurseData.DailyStages, rng, "ScorpionQueen")
+	local bosses = plan(day >= CurseData.BossesFromDay and CurseData.BossesLater or CurseData.Bosses, CurseData.DailyStages, rng, "ScorpionQueen")
 	local curses = {}
 	for _, id in ipairs(shuffled(CurseData.Order, rng)) do
 		if #curses < CurseData.DailyCurseCount then
