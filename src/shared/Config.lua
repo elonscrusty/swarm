@@ -916,7 +916,7 @@ Config.Movement = {
 	HopBonus = 0.06, -- speed multiplier added per chained hop
 	HopSpeedCap = 1.24, -- hard cap on the hop speed multiplier
 	HopDecay = 0.6, -- multiplier lost per second on the ground after HopWindow
-	ServerTolerance = 1.15, -- server speed check slack on top of the hop cap
+	ServerTolerance = 1.35, -- server speed check slack on top of the hop cap (lag, knockback)
 	ButtonSize = 84, -- touch JUMP button (pixels before UIScale)
 	ButtonMargin = 26, -- from the right and bottom safe-area edges
 }
