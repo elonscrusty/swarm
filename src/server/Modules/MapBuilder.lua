@@ -612,75 +612,80 @@ local LIGHTING = {
 		Rays = { Intensity = 0.02, Spread = 0.5 },
 		Clouds = { Cover = 0.55, Density = 0.55, Color = rgb(150, 136, 160) },
 	},
-	-- bright, clear late morning in a forest clearing
+	-- Arenas follow the bright "sunny storybook" look (docs/ART_DIRECTION.md): a warm
+	-- high sun with soft shadows, warm ambient and a green / sand ground bounce, little
+	-- haze, a positive Saturation grade and modest bloom (torches, lava and crystals glow,
+	-- nothing blows out to white). The grade lifts every colour together, so enemies,
+	-- gems and the hero keep their contrast against the brighter floors.
+	-- sunny late morning in a forest clearing: saturated meadow, warm light
 	Forest = {
-		Clock = 10.6, Brightness = 2.8, Latitude = 38, Shadow = 0.4,
-		Ambient = rgb(102, 108, 112), Outdoor = rgb(136, 142, 148), Top = rgb(255, 244, 226), Bottom = rgb(70, 80, 66),
+		Clock = 10.8, Brightness = 3.0, Latitude = 38, Shadow = 0.55,
+		Ambient = rgb(120, 122, 112), Outdoor = rgb(152, 158, 148), Top = rgb(255, 240, 212), Bottom = rgb(84, 104, 70),
 		Diffuse = 0.5, Specular = 0.35,
-		Atmo = { Density = 0.22, Offset = 0.05, Color = rgb(206, 222, 232), Decay = rgb(124, 150, 156), Glare = 0, Haze = 0.6 },
-		Bloom = { Intensity = 0.22, Size = 20, Threshold = 2 },
-		Grade = { Brightness = 0.01, Contrast = 0.08, Saturation = -0.06, Tint = rgb(255, 252, 244) },
+		Atmo = { Density = 0.18, Offset = 0.05, Color = rgb(198, 224, 242), Decay = rgb(120, 162, 192), Glare = 0, Haze = 0.35 },
+		Bloom = { Intensity = 0.25, Size = 22, Threshold = 1.7 },
+		Grade = { Brightness = 0.03, Contrast = 0.1, Saturation = 0.18, Tint = rgb(255, 250, 236) },
 		Rays = { Intensity = 0.03, Spread = 0.5 },
-		Clouds = { Cover = 0.42, Density = 0.45, Color = rgb(255, 255, 255) },
+		Clouds = { Cover = 0.4, Density = 0.42, Color = rgb(255, 255, 255) },
 	},
-	-- clear golden hour over the ruins (warm, still bright enough to read the swarm)
+	-- sunny afternoon over the ruins: light warm paving on bright grass (warm, not dusk)
 	Ruins = {
-		Clock = 16.2, Brightness = 2.8, Latitude = 30, Shadow = 0.4,
-		Ambient = rgb(104, 102, 108), Outdoor = rgb(140, 138, 146), Top = rgb(255, 232, 198), Bottom = rgb(78, 78, 68),
+		Clock = 14.6, Brightness = 3.0, Latitude = 32, Shadow = 0.55,
+		Ambient = rgb(122, 118, 112), Outdoor = rgb(156, 154, 150), Top = rgb(255, 236, 206), Bottom = rgb(90, 104, 72),
 		Diffuse = 0.5, Specular = 0.35,
-		Atmo = { Density = 0.25, Offset = 0.08, Color = rgb(226, 212, 196), Decay = rgb(160, 132, 118), Glare = 0.2, Haze = 0.9 },
-		Bloom = { Intensity = 0.25, Size = 22, Threshold = 1.8 },
-		Grade = { Brightness = 0.01, Contrast = 0.08, Saturation = 0.06, Tint = rgb(255, 248, 238) },
+		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(220, 226, 232), Decay = rgb(170, 152, 132), Glare = 0.1, Haze = 0.5 },
+		Bloom = { Intensity = 0.26, Size = 22, Threshold = 1.7 },
+		Grade = { Brightness = 0.03, Contrast = 0.1, Saturation = 0.16, Tint = rgb(255, 248, 236) },
 		Rays = { Intensity = 0.04, Spread = 0.55 },
-		Clouds = { Cover = 0.35, Density = 0.4, Color = rgb(255, 238, 220) },
+		Clouds = { Cover = 0.32, Density = 0.4, Color = rgb(255, 244, 230) },
 	},
-	-- humid green midday over the bog: soft haze, slightly cooler green fill, still bright
+	-- bright humid midday over the bog: lush moss greens, a light haze, warm sun
 	Swamp = {
-		Clock = 11.2, Brightness = 2.6, Latitude = 36, Shadow = 0.45,
-		Ambient = rgb(102, 112, 100), Outdoor = rgb(136, 150, 132), Top = rgb(246, 248, 226), Bottom = rgb(66, 78, 58),
+		Clock = 11.2, Brightness = 2.85, Latitude = 36, Shadow = 0.55,
+		Ambient = rgb(112, 124, 108), Outdoor = rgb(146, 164, 140), Top = rgb(255, 248, 222), Bottom = rgb(76, 96, 64),
 		Diffuse = 0.5, Specular = 0.3,
-		Atmo = { Density = 0.28, Offset = 0.06, Color = rgb(196, 212, 190), Decay = rgb(112, 132, 106), Glare = 0, Haze = 1.1 },
-		Bloom = { Intensity = 0.22, Size = 20, Threshold = 2 },
-		Grade = { Brightness = 0.01, Contrast = 0.08, Saturation = -0.04, Tint = rgb(248, 255, 240) },
+		Atmo = { Density = 0.22, Offset = 0.06, Color = rgb(202, 224, 204), Decay = rgb(118, 146, 110), Glare = 0, Haze = 0.7 },
+		Bloom = { Intensity = 0.24, Size = 20, Threshold = 1.8 },
+		Grade = { Brightness = 0.02, Contrast = 0.1, Saturation = 0.14, Tint = rgb(248, 255, 240) },
 		Rays = { Intensity = 0.02, Spread = 0.5 },
-		Clouds = { Cover = 0.55, Density = 0.45, Color = rgb(232, 238, 226) },
+		Clouds = { Cover = 0.5, Density = 0.45, Color = rgb(240, 244, 236) },
 	},
-	-- crisp late-morning snowfield: lower sun brightness (the floor is white), cool fill.
+	-- crisp sunny snowfield: lower sun brightness (the floor is white), cool fill.
 	-- Readability on snow: a dimmer sun, less haze and bloom, crisper shadows and a bit
 	-- more contrast and colour, so pale creatures, gems, warnings and the hero stand out
 	-- from the floor (the floor itself is a greyer packed snow, see buildSnow).
 	Snow = {
-		Clock = 11.4, Brightness = 2.2, Latitude = 44, Shadow = 0.3,
-		Ambient = rgb(108, 116, 132), Outdoor = rgb(140, 150, 170), Top = rgb(255, 248, 236), Bottom = rgb(110, 122, 140),
+		Clock = 11.4, Brightness = 2.25, Latitude = 44, Shadow = 0.3,
+		Ambient = rgb(108, 116, 132), Outdoor = rgb(140, 152, 174), Top = rgb(255, 244, 226), Bottom = rgb(110, 122, 140),
 		Diffuse = 0.42, Specular = 0.3,
-		Atmo = { Density = 0.22, Offset = 0.05, Color = rgb(210, 222, 238), Decay = rgb(146, 166, 192), Glare = 0, Haze = 0.55 },
+		Atmo = { Density = 0.2, Offset = 0.05, Color = rgb(204, 222, 246), Decay = rgb(140, 166, 200), Glare = 0, Haze = 0.45 },
 		Bloom = { Intensity = 0.14, Size = 20, Threshold = 2.7 },
-		Grade = { Brightness = -0.02, Contrast = 0.15, Saturation = 0.05, Tint = rgb(246, 248, 255) },
+		Grade = { Brightness = -0.02, Contrast = 0.15, Saturation = 0.1, Tint = rgb(248, 248, 255) },
 		Rays = { Intensity = 0.02, Spread = 0.5 },
-		Clouds = { Cover = 0.45, Density = 0.4, Color = rgb(255, 255, 255) },
+		Clouds = { Cover = 0.42, Density = 0.4, Color = rgb(255, 255, 255) },
 	},
-	-- high desert sun: short shadows, warm sand bounce, pale hazy sky
+	-- high desert sun: short soft shadows, warm sand bounce, a clear sky
 	Desert = {
-		Clock = 12.6, Brightness = 2.9, Latitude = 30, Shadow = 0.35,
-		Ambient = rgb(116, 106, 94), Outdoor = rgb(150, 140, 124), Top = rgb(255, 242, 216), Bottom = rgb(122, 102, 74),
+		Clock = 12.6, Brightness = 2.9, Latitude = 30, Shadow = 0.5,
+		Ambient = rgb(118, 108, 96), Outdoor = rgb(152, 144, 130), Top = rgb(255, 242, 216), Bottom = rgb(122, 102, 74),
 		Diffuse = 0.5, Specular = 0.3,
-		Atmo = { Density = 0.24, Offset = 0.06, Color = rgb(236, 222, 198), Decay = rgb(196, 162, 122), Glare = 0.15, Haze = 1.0 },
-		Bloom = { Intensity = 0.2, Size = 20, Threshold = 2.1 },
-		Grade = { Brightness = 0, Contrast = 0.09, Saturation = 0.02, Tint = rgb(255, 248, 238) },
+		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(226, 222, 210), Decay = rgb(190, 164, 128), Glare = 0.12, Haze = 0.7 },
+		Bloom = { Intensity = 0.2, Size = 20, Threshold = 2.0 },
+		Grade = { Brightness = 0.01, Contrast = 0.1, Saturation = 0.1, Tint = rgb(255, 248, 238) },
 		Rays = { Intensity = 0.03, Spread = 0.5 },
 		Clouds = { Cover = 0.2, Density = 0.35, Color = rgb(255, 250, 240) },
 	},
-	-- volcanic afternoon: warm smoky haze and red-orange bounce, but a clear bright sun so
-	-- the swarm, pickups and the lava glow stay readable
+	-- volcanic afternoon: warm light ash, red-orange bounce and glowing lava under a
+	-- clear bright sun, so the swarm, pickups and the lava glow stay readable
 	Lava = {
-		Clock = 13.8, Brightness = 2.9, Latitude = 34, Shadow = 0.4,
-		Ambient = rgb(134, 122, 118), Outdoor = rgb(170, 154, 146), Top = rgb(255, 236, 214), Bottom = rgb(124, 82, 62),
+		Clock = 13.8, Brightness = 3.0, Latitude = 34, Shadow = 0.5,
+		Ambient = rgb(142, 126, 118), Outdoor = rgb(178, 160, 148), Top = rgb(255, 236, 212), Bottom = rgb(128, 86, 62),
 		Diffuse = 0.45, Specular = 0.3,
-		Atmo = { Density = 0.24, Offset = 0.06, Color = rgb(214, 186, 168), Decay = rgb(176, 108, 76), Glare = 0.2, Haze = 1.1 },
-		Bloom = { Intensity = 0.28, Size = 22, Threshold = 1.7 },
-		Grade = { Brightness = 0.01, Contrast = 0.1, Saturation = 0.02, Tint = rgb(255, 242, 230) },
+		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(226, 198, 176), Decay = rgb(186, 112, 76), Glare = 0.15, Haze = 0.8 },
+		Bloom = { Intensity = 0.3, Size = 22, Threshold = 1.6 },
+		Grade = { Brightness = 0.02, Contrast = 0.12, Saturation = 0.14, Tint = rgb(255, 244, 232) },
 		Rays = { Intensity = 0.03, Spread = 0.5 },
-		Clouds = { Cover = 0.55, Density = 0.5, Color = rgb(164, 138, 130) },
+		Clouds = { Cover = 0.5, Density = 0.48, Color = rgb(198, 172, 160) },
 	},
 }
 
@@ -1467,11 +1472,11 @@ local function buildForest(arena: Arena)
 	local c, h = arena.Center, arena.Half
 	local m = arena.Model
 
-	-- ground: dark forest floor outside, moss meadow inside, big soft patches in two tones
-	local base = mix(P.moss_500, P.stone_400, 0.14)
-	deco(m, { Name = "ForestFloor", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = mix(P.moss_600, P.moss_700, 0.5), CanCollide = true, CanQuery = true })
+	-- ground: deeper meadow outside, a bright sunny meadow inside, big soft patches in two tones
+	local base = mix(P.meadow_500, P.meadow_400, 0.3)
+	deco(m, { Name = "ForestFloor", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = mix(P.meadow_600, P.meadow_700, 0.5), CanCollide = true, CanQuery = true })
 	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 20, 1, h * 2 + 20), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = base, CanCollide = true, CanQuery = true })
-	local darker, lighter, warm = mix(P.moss_600, P.stone_500, 0.1), mix(P.moss_400, P.stone_300, 0.14), mix(P.moss_400, P.dirt_400, 0.3)
+	local darker, lighter, warm = mix(P.meadow_600, P.meadow_500, 0.3), mix(P.meadow_400, P.meadow_300, 0.45), mix(P.meadow_400, P.dirt_300, 0.3)
 	for _, pt in ipairs({
 		{ -150, -150, 26, darker }, { 120, -165, 22, darker }, { -170, 60, 24, darker }, { 160, 120, 26, darker },
 		{ 30, -120, 20, darker }, { -60, 150, 22, darker }, { -110, -40, 18, darker },
@@ -1483,11 +1488,11 @@ local function buildForest(arena: Arena)
 	end
 
 	-- the clearing: worn lighter grass around the crossing (low, almost no decoration)
-	patch(arena, 0, 0, 24, mix(P.moss_400, P.stone_300, 0.12), 0.05)
-	patch(arena, 3, 2, 13, mix(P.moss_400, P.dirt_400, 0.35), 0.07)
+	patch(arena, 0, 0, 24, mix(P.meadow_400, P.meadow_300, 0.4), 0.05)
+	patch(arena, 3, 2, 13, mix(P.meadow_300, P.dirt_300, 0.35), 0.07)
 
 	-- paths: west-east and south-north, crossing in the clearing
-	local core, edge = P.dirt_500, mix(P.dirt_500, base, 0.55)
+	local core, edge = P.dirt_400, mix(P.dirt_400, base, 0.55)
 	dirtPath(arena, {
 		Vector2.new(-262, 30), Vector2.new(-205, 16), Vector2.new(-145, 30), Vector2.new(-88, 14),
 		Vector2.new(-40, 8), Vector2.new(0, 0), Vector2.new(42, -9), Vector2.new(92, -3),
@@ -1719,10 +1724,10 @@ local function buildRuins(arena: Arena)
 	local m = arena.Model
 	arena.DecorDensity = 0.5 -- the ruin pieces carry the detail here; less ground clutter
 
-	-- ground: grassy courtyard with stone-dust and darker moss patches
-	deco(m, { Name = "OuterGround", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = P.moss_700, CanCollide = true, CanQuery = true })
-	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 20, 1, h * 2 + 20), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = mix(P.moss_500, P.stone_400, 0.22), CanCollide = true, CanQuery = true })
-	local dust, deep, sun = mix(P.moss_400, P.stone_300, 0.45), mix(P.moss_500, P.moss_600, 0.6), mix(P.moss_400, P.stone_300, 0.2)
+	-- ground: bright grassy courtyard with stone-dust and deeper grass patches
+	deco(m, { Name = "OuterGround", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = P.meadow_700, CanCollide = true, CanQuery = true })
+	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 20, 1, h * 2 + 20), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = mix(P.meadow_500, P.meadow_600, 0.3), CanCollide = true, CanQuery = true })
+	local dust, deep, sun = mix(P.meadow_400, P.pave_300, 0.4), mix(P.meadow_600, P.meadow_700, 0.4), mix(P.meadow_400, P.meadow_300, 0.4)
 	for _, pt in ipairs({
 		{ -120, -60, 24, dust }, { 110, 60, 22, dust }, { 60, -150, 20, dust }, { -70, 150, 20, dust },
 		{ 150, -150, 22, deep }, { -160, -150, 24, deep }, { 165, 150, 20, deep }, { -150, 120, 22, deep },
@@ -1732,9 +1737,9 @@ local function buildRuins(arena: Arena)
 		patch(arena, pt[1], pt[2], pt[3], pt[4], 0.02)
 	end
 
-	-- plaza: cracked paving in two stone tones, grass where slabs are missing
-	local paveA, paveB, paveC = mix(P.stone_300, P.ivory_400, 0.15), mix(P.stone_400, P.ivory_500, 0.15), mix(P.stone_200, P.ivory_300, 0.15)
-	disc(arena.Decor, "PlazaBed", W(arena, 0, 0, 0.05), 31, mix(P.stone_500, P.moss_500, 0.5))
+	-- plaza: cracked light paving in three stone tones, grass where slabs are missing
+	local paveA, paveB, paveC = P.pave_300, P.pave_400, P.pave_200
+	disc(arena.Decor, "PlazaBed", W(arena, 0, 0, 0.05), 31, mix(P.pave_500, P.meadow_500, 0.5))
 	for ix = -5, 4 do
 		for iz = -5, 4 do
 			local x, z = ix * 6 + 3, iz * 6 + 3
@@ -1753,7 +1758,7 @@ local function buildRuins(arena: Arena)
 	end
 
 	-- avenues: rows of slabs out to the walls (a few missing), keep decoration off them
-	local slabA, slabB = mix(P.stone_400, P.ivory_500, 0.15), mix(P.stone_300, P.ivory_400, 0.15)
+	local slabA, slabB = P.pave_400, P.pave_300
 	for _, axis in ipairs({ Vector2.new(0, -1), Vector2.new(1, 0), Vector2.new(-1, 0), Vector2.new(0, 1) }) do
 		local d = 36
 		local stop = axis.Y > 0 and 150 or h - 6 -- the camera-side avenue fades out earlier
