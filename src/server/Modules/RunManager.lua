@@ -197,10 +197,18 @@ function RunManager.HoldReward(rp)
 	RunManager.RefreshFrozen()
 end
 
+-- A short invulnerability after a choice / reward closes (Config.Player.ChoiceGraceSeconds).
+function RunManager.GrantChoiceGrace(rp)
+	if rp.Alive then
+		rp.InvulnUntil = math.max(rp.InvulnUntil or 0, os.clock() + (Config.Player.ChoiceGraceSeconds or 0))
+	end
+end
+
 function RunManager.EndReward(rp)
 	if rp.RewardUntil then
 		rp.RewardUntil = nil
 		rp.RewardStart = nil
+		RunManager.GrantChoiceGrace(rp)
 		RunManager.RefreshFrozen()
 	end
 end

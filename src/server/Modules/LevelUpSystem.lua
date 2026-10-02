@@ -471,6 +471,7 @@ local function offerNext(rp)
 		end
 		Remotes.FireClient("LevelUpClose", rp.Player)
 		rp.Paused = false
+		ctx.RunManager.GrantChoiceGrace(rp) -- don't get hit the instant the cards close
 		ctx.RunManager.ApplyMovement(rp)
 		ctx.RunManager.RefreshFrozen()
 		return

@@ -154,6 +154,9 @@ Config.Player = {
 	HurtFlashSeconds = 0.15,
 	ReviveHPFraction = 0.5, -- revived players come back with this share of max HP
 	ReviveInvulnSeconds = 3,
+	-- grace after closing the level-up cards or a chest reward: can't be hurt this long, so
+	-- the swarm that closed in meanwhile doesn't land a hit the moment play resumes
+	ChoiceGraceSeconds = 1.5,
 	ReviveClearRadius = 22, -- non-boss enemies inside this radius die on revive
 	LevelUpInvulnerable = true, -- paused (choosing an upgrade) players can't be hurt
 	-- Movement sanity check: the server snaps players back if they move faster than their
@@ -975,6 +978,24 @@ Config.Party = {
 	FriendsCacheSeconds = 30, -- the client asks Roblox for online friends at most this often
 	FollowCooldown = 6, -- seconds between JOIN (teleport) attempts per player
 	ActionRate = 4, -- "Party" remote calls per second per player
+}
+
+-- Private run servers (server RunServers.lua, client TravelOverlay.lua). In the live game a
+-- run never plays on the public lobby server: its players are saved and teleported
+-- together to a fresh reserved server of this place, which starts the run by itself and
+-- sends everyone back to a public lobby afterwards. So a run can always start, whoever else
+-- is playing. Studio, an unpublished place (PlaceId 0) or Enabled = false keep runs on
+-- the lobby server as before; so does a teleport that fails twice.
+Config.RunServers = {
+	Enabled = true,
+	TicketVersion = 1, -- bump when the ticket shape changes (older tickets are refused)
+	WaitForTeamSeconds = 15, -- run server: wait this long for the whole team to arrive
+	WaitForLoadSeconds = 45, -- ...longer while someone who arrived is still loading their save
+	GiveUpSeconds = 60, -- nobody's save loaded by then: everyone goes back to the lobby
+	TeleportTimeoutSeconds = 40, -- still here this long after the teleport: it failed
+	HomeDelaySeconds = 20, -- results over the lobby (portal / MAIN MENU): back to a lobby after this
+	HomeDelayAfterResultsSeconds = 2, -- the defeat results already counted down
+	HandoffLoadAttempts = 12, -- DataService load retries for a player arriving by a SWARM teleport
 }
 
 ------------------------------------------------------------------------------------------
