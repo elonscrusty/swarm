@@ -51,7 +51,7 @@ local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 
 local LABEL_W = 96 -- width of the EFFECT / STRENGTH / TRADEOFF / UNLOCK column
-local ACTION_H = 48 -- the SELECT / UNLOCK button
+local ACTION_H = 46 -- the SELECT / UNLOCK button
 local PORTRAIT = 84 -- framed portrait in the details head
 local SKIN_GAP = 8
 
@@ -216,7 +216,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, detailFace)
 	UIKit.padding(scroll, 16, 18, 14, 18)
-	ui.DetailList = UIKit.list(scroll, { Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Left })
+	ui.DetailList = UIKit.list(scroll, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Left })
 	ui.Scroll = scroll
 	-- footer for the action button when the details don't fit (phones): always in view
 	ui.Footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Visible = false, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) }, detailFace)
@@ -248,7 +248,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.Divider(scroll, 10, { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 12) })
 
 	-- STARTING WEAPON | TRAIT, split by a thin vertical line
-	local factH = math.max(56, TS(12) + TS(18) + 18)
+	local factH = math.max(52, TS(12) + TS(18) + 16)
 	local facts = new("Frame", { Name = "Facts", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, factH), LayoutOrder = 3 }, scroll)
 	new("Frame", { Name = "Split", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 1, 1, -8) }, facts)
 	local function fact(x: number, caption: string): (TextLabel, Frame)
@@ -390,7 +390,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		table.clear(swatches)
-		local cardH = 40 + TS(14) + TS(10) + 34
+		local cardH = 34 + TS(14) + TS(10) + 32
 		for order, skinId in ipairs(CharacterData.SkinsFor(inspChar)) do
 			local look = CharacterData.ResolveLook(inspChar, skinId)
 			local hit = new("TextButton", {
@@ -406,14 +406,14 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			UIKit.Focusable(hit)
 			local st = UIKit.stroke(hit, P.slate_600, 1.5, 0.3)
 			-- the swatch: torso colour, hat band, trim
-			local sw = new("Frame", { Name = "Swatch", BackgroundColor3 = look.Colors.Torso, Position = UDim2.fromOffset(10, 8), Size = UDim2.new(1, -20, 0, 40), ClipsDescendants = true }, hit)
+			local sw = new("Frame", { Name = "Swatch", BackgroundColor3 = look.Colors.Torso, Position = UDim2.fromOffset(10, 8), Size = UDim2.new(1, -20, 0, 34), ClipsDescendants = true }, hit)
 			UIKit.corner(sw, 4)
 			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 170)) }, sw)
 			new("Frame", { BackgroundColor3 = look.Colors.Hat, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0.36, 0) }, sw)
 			new("Frame", { BackgroundColor3 = look.GoldTrim and P.gold_400 or look.Colors.Accent, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.66), Size = UDim2.new(1, 0, 0, 5) }, sw)
 			local lock = new("Frame", { Name = "Lock", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, sw)
 			Icons.Draw(lock, "lock", { Size = 18, Color = P.ivory_200, Back = P.slate_950, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
-			text(hit, "Small", skinName(skinId), { Name = "SkinName", Position = UDim2.fromOffset(4, 52), Size = UDim2.new(1, -8, 0, TS(14) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd })
+			text(hit, "Small", skinName(skinId), { Name = "SkinName", Position = UDim2.fromOffset(4, 45), Size = UDim2.new(1, -8, 0, TS(14) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd })
 			local pill = UIKit.StatusPill(hit, "OWNED", { Name = "State", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -7), Size = UDim2.fromOffset(0, TS(10) + 10) })
 			pill.TextSize = TS(10)
 			local pad = pill:FindFirstChildOfClass("UIPadding")
@@ -470,6 +470,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		row.Equipped.Visible = sel and full
 		row.Lock.Visible = not own
 		row.Preview.Visible = insp and not sel and full
+		-- the name takes the room the marks leave
+		if full then
+			local nx = row.Name.Position.X.Offset
+			local reserve = sel and 124 or ((insp and 130 or 0) + (own and 0 or 30))
+			row.Name.Size = UDim2.new(1, -(nx + reserve + 8), 1, 0)
+		end
 	end
 
 	local builtFor = ""
@@ -494,6 +500,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local own = p.OwnedCharacters[inspChar] == true
 		local selected = p.SelectedCharacter == inspChar
 		ui.Name.Text = string.upper(def.Name)
+		-- long names a step smaller so they fit beside the pill
+		local nameSize = 30
+		while nameSize > 20 and #def.Name * TS(nameSize) * 0.74 > (ui.NameRoom or 300) do
+			nameSize -= 2
+		end
+		ui.Name.TextSize = TS(nameSize)
 		ui.Role.Text = UIKit.track(def.Role or "")
 		ui.Desc.Text = def.Description
 		local weapon = WeaponData.Weapons[def.StartWeapon]
@@ -503,7 +515,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		ui.EffectBig.Text = big or ""
 		ui.EffectBig.Visible = big ~= nil
 		-- the text runs after the big number (its width estimated from the font size)
-		local bigW = big and math.ceil(#big * TS(26) * 0.62) + 12 or 0
+		local bigW = big and math.ceil(#big * TS(26) * 0.8) + 10 or 0
 		ui.Trait.Position = UDim2.fromOffset(bigW, big and 4 or 0)
 		ui.Trait.Size = UDim2.new(1, -bigW, 0, 0)
 		ui.Trait.Text = body
@@ -680,7 +692,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		place(ui.Header.Frame, barX, barY, math.min(560, W - barX - M), 52)
 		local barBottom = math.max(barY + 52, ins.Top)
 		-- portrait: the stats chip sits under the bar (LobbyScreen), the tabs under it
-		local top = portrait and (math.max(ins.Top + 4, 12) + 64 + 58) or (barBottom + 12)
+		local top = portrait and (math.max(ins.Top + 4, 12) + 64 + 58) or (barBottom + 8)
 		-- the details panel fits its content (measured with the action button in the list,
 		-- also while it is pinned below), up to the room there is
 		local measured = ui.DetailList.AbsoluteContentSize.Y / math.max(0.01, host.Scale())
@@ -706,6 +718,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 			local detailH = math.min(contentH, math.floor(H * 0.56) - (listH - 76))
 			local detailY = H - M - detailH
+			ui.NameRoom = w - 36 - PORTRAIT - 14 - 124
 			place(ui.Detail, M, detailY, w, detailH)
 			pinAction(contentH > detailH + 1)
 			fitSkins(w - 36)
@@ -738,6 +751,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				rowStyle(id, cols == 2 and "tile" or "row", rowH)
 			end
 			local rw = math.clamp(W * 0.37, 430, 530)
+			ui.NameRoom = rw - 36 - PORTRAIT - 14 - 124
 			place(ui.Detail, W - M - rw, top, rw, math.min(contentH, H - M - top))
 			pinAction(contentH > H - M - top + 1)
 			fitSkins(rw - 36)
