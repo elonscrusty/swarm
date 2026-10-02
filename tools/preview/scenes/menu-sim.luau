@@ -41,7 +41,7 @@ end)
 local function count(root: Instance): number
 	return #root:GetDescendants()
 end
-local gui = me:WaitForChild("PlayerGui")
+local gui = me:FindFirstChild("PlayerGui") or me
 local function log(label: string)
 	local r = results[#results]
 	preview.log(string.format("%-26s phase=%s InRun=%s Alive=%s enemies=%d workspace=%d gui=%d frozen=%s result=%s",

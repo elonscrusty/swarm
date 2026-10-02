@@ -181,7 +181,7 @@ end
 
 --[[
 	One pooled part: from cf0 (to cf1 when given, plus `arc` studs of hop), size s0 -> s1
-	(ease-out), transparency a0 -> a1 (linear) over dur seconds. The caller claims first.
+	(ease-out), transparency a0 -> a1 (quadratic: bright, then gone) over dur seconds. The caller claims first.
 ]]
 local function spawn(shape: string, color: Color3, material: Enum.Material, cf0: CFrame, cf1: CFrame?, s0: Vector3, s1: Vector3, a0: number, a1: number, dur: number, arc: number?)
 	local p = table.remove(pools[shape]) or newPart(shape)
@@ -227,7 +227,7 @@ local function step(now: number)
 			local e = 1 - v * v * v
 			local p = a.Part
 			p.Size = a.S0:Lerp(a.S1, e)
-			p.Transparency = a.A0 + (a.A1 - a.A0) * u
+			p.Transparency = a.A0 + (a.A1 - a.A0) * u * u -- holds bright, then drops
 			local cf1 = a.CF1
 			if cf1 then
 				local cf = a.CF0:Lerp(cf1, e)
@@ -344,8 +344,8 @@ end
 -- Crossed blades that snap open (impact / crit / pickup star).
 local function star(at: Vector3, color: Color3, size: number, dur: number)
 	local cf = facing(at)
-	local s0 = Vector3.new(size * 0.12, size * 0.3, 0.05)
-	local s1 = Vector3.new(size * 0.05, size, 0.05)
+	local s0 = Vector3.new(size * 0.16, size * 0.35, 0.05)
+	local s1 = Vector3.new(size * 0.07, size, 0.05)
 	spawn("Block", color, NEON, cf * CFrame.Angles(0, 0, math.rad(45)), nil, s0, s1, 0.05, 1, dur)
 	spawn("Block", color, NEON, cf * CFrame.Angles(0, 0, math.rad(-45)), nil, s0, s1, 0.05, 1, dur)
 end

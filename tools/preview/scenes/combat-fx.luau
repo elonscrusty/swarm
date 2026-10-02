@@ -112,4 +112,13 @@ elseif moment == "stress" then
 	stats("+2s idle")
 end
 stats(moment)
+if preview.args.dump == "on" then
+	local juice = workspace:FindFirstChild("SwarmCombatFx")
+	for i, part in ipairs(juice and juice:GetChildren() or {}) do
+		if i <= 12 then
+			local q = part.Position
+			preview.log(string.format("  %s %s pos=(%.1f,%.1f,%.1f) size=(%.1f,%.1f,%.1f) alpha=%.2f", part.ClassName, part.Material.Name, q.X - x, q.Y, q.Z - z, part.Size.X, part.Size.Y, part.Size.Z, part.Transparency))
+		end
+	end
+end
 preview.metrics.combatFx = CFX and CFX.Stats() or nil
