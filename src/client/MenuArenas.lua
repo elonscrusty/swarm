@@ -271,7 +271,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			card.Title.TextColor3 = isSel and P.gold_200 or (open and C.Text or P.ivory_300)
 			card.Hazard.TextColor3 = open and P.ivory_200 or P.ivory_300
 			UIKit.SetStatus(card.State, isSel and "SELECTED" or (open and "UNLOCKED" or "LOCKED"))
-			if not open then
+			if not open and not isSel then
 				-- locked: a dark outline pill (not red: nothing is wrong, it's just ahead)
 				card.State.TextColor3 = P.ivory_300
 				local edge = card.State:FindFirstChild("StatusEdge") :: UIStroke?

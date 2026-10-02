@@ -433,7 +433,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				ui.UnlockMeter.Set(math.clamp(progress / math.max(1, goal), 0, 1), "")
 			else
 				ui.UnlockName.Text = UIKit.formatNumber(def.Cost) .. " GOLD"
-				ui.UnlockCount.Text = UIKit.formatNumber(math.min(p.Gold, def.Cost)) .. " / " .. UIKit.formatNumber(def.Cost)
+				ui.UnlockCount.Text = p.Gold >= def.Cost and "READY" or (UIKit.formatNumber(p.Gold) .. " / " .. UIKit.formatNumber(def.Cost))
 				ui.UnlockRule.Text = "Buy with gold earned in runs. You have " .. UIKit.formatNumber(p.Gold) .. " gold."
 				ui.UnlockMeter.Set(math.clamp(p.Gold / math.max(1, def.Cost), 0, 1), "")
 			end
