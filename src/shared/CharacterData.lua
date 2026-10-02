@@ -83,7 +83,7 @@ CharacterData.Characters = {
 		Name = "Mage",
 		Role = "Area caster", -- one-line tag on the character select card
 		Description = "Arcane scholar. Starts with the Magic Orb. +10% area.",
-		Cost = 500,
+		Cost = 1000,
 		StartWeapon = "MagicOrb",
 		Bonus = { area = 0.10 },
 		BonusText = "+10% area",
@@ -110,7 +110,7 @@ CharacterData.Characters = {
 		Name = "Rogue",
 		Role = "Fast striker", -- one-line tag on the character select card
 		Description = "Quick and sharp. Starts with Throwing Knives. +15% speed.",
-		Cost = 1000,
+		Cost = 2000,
 		StartWeapon = "Knives",
 		Bonus = { speed = 0.15 },
 		BonusText = "+15% speed",
@@ -137,7 +137,7 @@ CharacterData.Characters = {
 		Name = "Priest",
 		Role = "Holy survivor", -- one-line tag on the character select card
 		Description = "Holy healer. Starts with the Garlic Aura. +20% max HP.",
-		Cost = 1500,
+		Cost = 3000,
 		StartWeapon = "Garlic",
 		Bonus = { maxHpMult = 0.20 },
 		BonusText = "+20% HP",
