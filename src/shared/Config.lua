@@ -555,6 +555,7 @@ Config.Camera = {
 	SpectatePanSeconds = 0.4, -- glide to the next teammate when the spectated one falls
 	ShakeScale = 1, -- multiplies every screen shake (0 = off)
 	ShakeMax = 0.6, -- studs; shakes stay small
+	KickMax = 4, -- studs: the most a camera punch (CombatFx big kills, evolution) pulls in
 }
 
 Config.Controls = {
@@ -580,6 +581,20 @@ Config.Graphics = {
 	-- Settings > Reduced effects (accessibility): the effect and trail budgets above are
 	-- multiplied by this, and screen flashes (hurt pulse, XP flash) are switched off.
 	ReducedEffectsBudget = 0.4,
+	-- Combat "juice" (src/client/CombatFx.lua): impact stars, kill shards, elite / boss kill
+	-- bursts, level-up pillar, evolution flash, pickup sparkles, crit stars, boss phase
+	-- edge flash. Its own pool, separate from MaxEffectParts above.
+	CombatFx = {
+		MaxParts = 110, -- juice parts alive at once; new effects past it are skipped
+		PartsPerSecond = 320, -- spawn budget refill rate (token bucket)
+		Burst = 48, -- bucket size: the most parts one frame can start
+		MidDistance = 45, -- studs from the hero: beyond this, effects use half their parts
+		FarDistance = 85, -- beyond this, only elite / boss kills still play
+		SlowFrame = 1 / 40, -- smoothed frame time past this halves the budget (past 1.6x: quarter)
+		BigKillSize = 4.6, -- death size (studs, the diameter) from which a kill gets the big burst (brutes, elites)
+		HugeKillSize = 9.5, -- boss / large elite: biggest burst + camera kick
+		ReducedBudget = 0.25, -- Reduced effects: budget share; only milestone effects play
+	},
 	-- Tall scenery fade (src/client/Occlusion.lua): Parts or Models tagged with Tag
 	-- (CollectionService) turn see-through while they cover the local player's
 	-- surroundings on screen, and fade back when they don't.
@@ -681,6 +696,9 @@ Config.Sounds = {
 	Death = { Id = "rbxasset://sounds/collide.wav", Volume = 0.8, Category = "Player", Pitch = 0.75, PitchVar = 0 },
 	LevelUp = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.7, Category = "Player", MinGap = 0.3, PitchVar = 0 },
 	Revive = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Category = "Player", MinGap = 0.3, Pitch = 1.3, PitchVar = 0 },
+	-- combat juice (CombatFx): built-in sounds re-pitched
+	BigKill = { Id = "rbxasset://sounds/collide.wav", Volume = 0.45, Category = "Combat", MinGap = 0.25, Pitch = 0.7, PitchVar = 0.05 },
+	Evolve = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.65, Category = "Player", MinGap = 0.5, Pitch = 0.8, PitchVar = 0 },
 	-- pickups and rewards
 	GemPickup = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.25, Category = "Pickup", MinGap = 0.05, Pitch = 1.1, PitchVar = 0.12 },
 	Coin = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.18, Category = "Pickup", MinGap = 0.08, Pitch = 2.2, PitchVar = 0.1 },

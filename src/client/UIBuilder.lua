@@ -280,6 +280,32 @@ end
 
 local bannerToken = 0
 local toastOrder = 0
+
+-- Icon for a toast by what it is about (portal / surge / boss / loot ...); nil = a dot.
+local TOAST_ICONS = {
+	{ "portal", "portal" },
+	{ "surge", "skull" },
+	{ "swarm", "skull" },
+	{ "horde", "skull" },
+	{ "boss", "crown" },
+	{ "queen", "crown" },
+	{ "achievement", "trophy" },
+	{ "chest", "chest" },
+	{ "shrine", "shrine" },
+	{ "curse", "curse" },
+	{ "revive", "heart" },
+	{ "gold", "coin" },
+}
+local function toastIcon(str: string): string?
+	local low = string.lower(str)
+	for _, pair in ipairs(TOAST_ICONS) do
+		if string.find(low, pair[1], 1, true) then
+			return pair[2]
+		end
+	end
+	return nil
+end
+
 function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 	if big then
 		bannerToken += 1
@@ -292,7 +318,14 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 		label.TextStrokeTransparency = 0.5
 		band.BackgroundTransparency = 0.25
 		band.Visible = true
-		UIAnim.Pop(label, 0, 1.25)
+		-- slams in: big, then settles, with a ring and sparks behind the words
+		UIAnim.Pop(label, 0, ClientSettings.Reduced() and 1.1 or 2.1)
+		if not ClientSettings.Reduced() then
+			local tint = Theme.Tint(color or P.gold_300, 0.45, 0.92)
+			UIAnim.Sparks(band, UDim2.fromScale(0.5, 0.45), tint, 12, 150, 0.6)
+			UIAnim.Ring(band, UDim2.fromScale(0.5, 0.45), tint, 260, 0.55)
+			UIAnim.Shake(label, 5, 0.3)
+		end
 		task.delay(2.2, function()
 			if token == bannerToken then
 				TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
@@ -324,8 +357,21 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 	face.Size = UDim2.fromScale(0, 1)
 	UIKit.padding(face, 0, 18, 0, 14)
 	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) })
-	local dotFrame = new("Frame", { BackgroundColor3 = accentOf(color), Size = UDim2.fromOffset(8, 8), LayoutOrder = 1 }, face)
-	UIKit.corner(dotFrame, 999)
+	local iconName = toastIcon(str)
+	local dotFrame
+	if iconName then
+		dotFrame = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(22, 22), LayoutOrder = 1 }, face)
+		Icons.Draw(dotFrame, iconName, { Size = 22, Back = P.slate_900 })
+		if not ClientSettings.Reduced() then
+			-- the icon pops with a little spin
+			dotFrame.Rotation = -25
+			UIAnim.Tween(dotFrame, 0.4, { Rotation = 0 }, Enum.EasingStyle.Back)
+		end
+		UIAnim.Pop(dotFrame, 0.05, 0.2)
+	else
+		dotFrame = new("Frame", { BackgroundColor3 = accentOf(color), Size = UDim2.fromOffset(8, 8), LayoutOrder = 1 }, face)
+		UIKit.corner(dotFrame, 999)
+	end
 	local l = text(face, "BodyStrong", str, {
 		LayoutOrder = 2,
 		Size = UDim2.fromOffset(0, TS(16) + 22),
@@ -333,7 +379,15 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 		TextColor3 = C.Text,
 	})
 	local _ = l
-	UIAnim.Pop(holder, 0, 0.7)
+	UIAnim.Pop(holder, 0, 0.5)
+	if not ClientSettings.Reduced() then
+		-- a colour flash fades off the pill as it pops in
+		local glow = new("Frame", { Name = "Glow", BackgroundColor3 = accentOf(color), BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, holder)
+		UIKit.corner(glow, 999)
+		UIAnim.Tween(glow, 0.6, { BackgroundTransparency = 1 }).Completed:Once(function()
+			glow:Destroy()
+		end)
+	end
 	-- keep the stack short
 	local toasts = {}
 	for _, ch in ipairs(toastList:GetChildren()) do
@@ -2022,8 +2076,8 @@ local function buildRevive()
 	revive.Overlay = m.Overlay
 	local content = m.Content
 	fitModal(m, UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }))
-	Icons.Draw(content, "heart", { Size = 48, LayoutOrder = 1 })
-	text(content, "H1", "YOU FELL!", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300 })
+	revive.Heart = Icons.Draw(content, "heart", { Size = 48, LayoutOrder = 1 })
+	revive.Title = text(content, "H1", "YOU FELL!", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300 })
 	revive.Text = text(content, "Body", "Revive and keep fighting?", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center })
 	local row = new("Frame", { Size = UDim2.new(1, 0, 0, Theme.Size.Button), BackgroundTransparency = 1, LayoutOrder = 4 }, content)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12) })
@@ -2078,6 +2132,20 @@ local function onReviveOffer(data)
 	end)
 	show(revive.Overlay, "Revive", true)
 	UIKit.FocusIfGamepad(revive.Buy.Instance)
+	-- the title slams in and the heart beats a few times (event-driven, no endless loop)
+	UIAnim.Pop(revive.Title, 0.05, 1.8)
+	if not ClientSettings.Reduced() then
+		revive.BeatToken = (revive.BeatToken or 0) + 1
+		local token = revive.BeatToken
+		for i = 0, 3 do
+			task.delay(0.15 + i * 0.7, function()
+				if token == revive.BeatToken and revive.Overlay.Visible then
+					UIAnim.Punch(revive.Heart, 0.3)
+				end
+			end)
+		end
+		UIAnim.Pop(revive.Buy.Instance, 0.3, 0.7)
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -2375,6 +2443,59 @@ local function fillBuild(build: any)
 	holder.Size = UDim2.new(1, 0, 0, TS(12) + 8 + rows * 48)
 end
 
+-- Account XP bar: fills up from where the run started; a level up fills it, bursts, and
+-- carries on from 0. Cancelled by a newer result (token).
+local function animateAccountXP(data: any)
+	local a = type(data.Account) == "table" and data.Account or nil
+	local meter = results.XPMeter
+	local need = a and tonumber(a.Need) or 0
+	results.XPToken = (results.XPToken or 0) + 1
+	if not a or need <= 0 or ClientSettings.Reduced() then
+		return
+	end
+	local token = results.XPToken
+	local into = math.clamp((tonumber(a.Into) or 0) / need, 0, 1)
+	local levelled = (tonumber(a.To) or 1) > (tonumber(a.From) or 1)
+	local start = levelled and 0 or math.clamp(((tonumber(a.Into) or 0) - (tonumber(a.Gained) or 0)) / need, 0, into)
+	local nv = Instance.new("NumberValue")
+	nv.Value = start
+	nv.Changed:Connect(function(v)
+		if token == results.XPToken and meter.Frame.Parent then
+			meter.Set(v)
+		end
+	end)
+	meter.Set(start)
+	task.delay(1.0, function()
+		if token ~= results.XPToken or not results.Overlay.Visible then
+			nv:Destroy()
+			return
+		end
+		if levelled then
+			UIAnim.Tween(nv, 0.7, { Value = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In).Completed:Wait()
+			if token ~= results.XPToken then
+				nv:Destroy()
+				return
+			end
+			-- level up: flash, ring and sparks on the bar, the text punches
+			meter.Set(1)
+			UIAnim.SweepOnce(meter.Frame, P.ivory_100, 0.4, 0.1)
+			UIAnim.Ring(results.Progress, UDim2.new(1, -40, 0, 30), P.gold_200, 120, 0.6)
+			UIAnim.Sparks(results.Progress, UDim2.new(1, -40, 0, 30), P.gold_200, 12, 70, 0.6)
+			UIAnim.Punch(results.XPText, 0.12)
+			task.wait(0.2)
+			nv.Value = 0
+		end
+		if token == results.XPToken then
+			UIAnim.Tween(nv, 0.7, { Value = into }, Enum.EasingStyle.Quart).Completed:Wait()
+		end
+		nv:Destroy()
+		if token == results.XPToken then
+			meter.Set(into)
+			UIAnim.SweepOnce(meter.Frame, P.ivory_100, 0.4, 0.5)
+		end
+	end)
+end
+
 local function onRunResult(data)
 	closeOffer()
 	hide(revive.Overlay, "Revive")
@@ -2463,7 +2584,21 @@ local function onRunResult(data)
 	end
 	-- title drops in, the medal flips round, the stat tiles land one after another and
 	-- their numbers count up
-	UIAnim.Pop(results.Title, 0.1, 1.6)
+	-- title slam: it drops in big and hard; a victory also throws sparks and a ring
+	local good = data.Won or data.Portal
+	UIAnim.Pop(results.Title, 0.1, ClientSettings.Reduced() and 1.2 or 2.4)
+	if not ClientSettings.Reduced() then
+		task.delay(0.3, function()
+			if results.Overlay.Visible then
+				UIAnim.Shake(results.Title, good and 5 or 9, 0.35)
+				if good then
+					UIAnim.Sparks(results.TitleCol, UDim2.new(0, 120, 0, 28), P.gold_200, 14, 120, 0.7)
+					UIAnim.Ring(results.TitleCol, UDim2.new(0, 120, 0, 28), P.gold_300, 200, 0.6)
+				end
+			end
+		end)
+	end
+	animateAccountXP(data)
 	if not ClientSettings.Reduced() then
 		local medal = results.Medal :: GuiObject
 		medal.Rotation = -160
@@ -2474,16 +2609,48 @@ local function onRunResult(data)
 		for i, label in ipairs({ results.Stages, results.Time, results.Kills, results.Boss, results.Gold, results.Level }) do
 			local tile = label and label.Parent
 			if tile and tile:IsA("GuiObject") then
-				UIAnim.Pop(tile, 0.2 + 0.06 * i, 0.55)
+				UIAnim.Pop(tile, 0.35 + 0.14 * i, 0.4)
+			end
+		end
+		-- the build tiles cascade in after the numbers
+		local tiles = results.BuildHolder:FindFirstChild("Tiles")
+		if tiles then
+			local i = 0
+			for _, t in ipairs(tiles:GetChildren()) do
+				if t.Name == "Tile" then
+					i += 1
+					UIAnim.Pop(t :: GuiObject, 1.3 + 0.07 * math.min(i, 12), 0.3)
+				end
 			end
 		end
 	end
-	UIAnim.CountUp(results.Kills, data.Kills, "%d", 0.8, 0.4)
-	UIAnim.CountUp(results.Gold, data.Gold, "%d", 0.8, 0.6)
-	UIAnim.CountUp(results.Level, data.Level, "%d", 0.6, 0.8)
+	-- the numbers count up one after another
+	local clockText = function(n: number): string
+		return formatTime(n)
+	end
+	UIAnim.CountTo(results.Time, 0, tonumber(data.Time) or 0, clockText, 0.9)
+	UIAnim.CountTo(results.Kills, 0, tonumber(data.Kills) or 0, UIKit.formatNumber, 0.9)
+	UIAnim.CountTo(results.Gold, 0, tonumber(data.Gold) or 0, UIKit.formatNumber, 0.9)
+	UIAnim.CountTo(results.Level, 0, tonumber(data.Level) or 0, "%d", 0.7)
+	UIAnim.CountTo(results.Stages, 0, cleared, "%d", 0.6)
 	if data.NewBest then
-		UIAnim.Pop(results.Best, 1.2, 0.4)
+		-- new best: the badge pops with a starburst
+		UIAnim.Pop(results.Best, 1.5, 0.3)
 		UIAnim.Punch(results.Time, 0.3)
+		if not ClientSettings.Reduced() then
+			task.delay(1.55, function()
+				local panel = results.Modal.Panel :: Frame
+				local best = results.Best :: GuiObject
+				if not (results.Overlay.Visible and best.Visible) then
+					return
+				end
+				local k = panel.AbsoluteSize.X / math.max(1, panel.Size.X.Offset)
+				local c = (best.AbsolutePosition - panel.AbsolutePosition + best.AbsoluteSize / 2) / math.max(0.01, k)
+				local at = UDim2.fromOffset(c.X, c.Y)
+				UIAnim.Sparks(panel, at, P.gold_200, 16, 110, 0.8)
+				UIAnim.Ring(panel, at, P.gold_300, 200, 0.6)
+			end)
+		end
 	end
 end
 

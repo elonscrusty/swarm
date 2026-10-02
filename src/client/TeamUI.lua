@@ -19,6 +19,10 @@
 	  revive ring   in the world: a dashed gold circle of PartnerRevive.Radius around
 	                each revivable fallen player (stand inside it to revive); its segments
 	                light up with the progress
+	Motion (event-driven, short, off with Reduced effects): a row flashes crimson with a
+	punch when its owner goes down, and gold sparks + a green flash when they
+	are back up; revive-marker segments pop as they light; the health bar glints when a
+	teammate heals.
 	Rows appear / disappear with the roster: a teammate who leaves the game is removed at
 	once (the server also toasts "<Name> left the run.").
 
@@ -37,6 +41,7 @@ local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local LootUI = require(script.Parent.LootUI)
+local ClientSettings = require(script.Parent.ClientSettings)
 
 local TeamUI = {}
 
@@ -50,7 +55,7 @@ local WORLD_SEGMENTS = 28
 local PARK = CFrame.new(0, -150, 0)
 local FLAT = Vector3.new(1, 0, 1)
 
-type Row = { Player: Player, Holder: Frame, Name: TextLabel, State: TextLabel, Meter: UIKit.Meter, IconHolder: Frame, Icon: string, StateKey: string }
+type Row = { Last: number?, Player: Player, Holder: Frame, Name: TextLabel, State: TextLabel, Meter: UIKit.Meter, IconHolder: Frame, Icon: string, StateKey: string }
 type Marker = { Holder: Frame, Segments: { Frame }, Label: TextLabel, Arrow: Frame, Pivot: Frame, Ring: Frame }
 type WorldRing = { Segments: { BasePart }, Disc: BasePart, Lit: number }
 
@@ -227,8 +232,27 @@ local function updateRow(r: Row, state: Configuration)
 		r.Name.TextColor3 = (s == "out" or s == "deciding") and C.TextMuted or C.Text
 		if old ~= "" and (s == "down" or (old ~= "alive" and old ~= "choosing" and s == "alive")) then
 			UIAnim.Punch(r.Holder, 0.12)
+			if not ClientSettings.Reduced() then
+				local down = s == "down"
+				local face = r.Holder:FindFirstChild("Face")
+				local f = new("Frame", { Name = "Glow", BackgroundColor3 = down and P.crimson_400 or P.moss_300, BackgroundTransparency = 0.4, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, r.Holder)
+				local corner = face and face:FindFirstChildWhichIsA("UICorner")
+				if corner then
+					corner:Clone().Parent = f
+				end
+				UIAnim.Tween(f, 0.6, { BackgroundTransparency = 1 }).Completed:Once(function()
+					f:Destroy()
+				end)
+				if not down then
+					UIAnim.Sparks(r.Holder, UDim2.new(0, 24, 0.5, 0), P.moss_200, 8, 36, 0.5)
+				end
+			end
 		end
 	end
+	if r.Last and value > r.Last + 0.04 and (s == "alive" or s == "choosing") then
+		UIAnim.SweepOnce(r.Meter.Frame, P.moss_200, 0.45, 0.4)
+	end
+	r.Last = value
 	r.Meter.Set(value)
 end
 
@@ -283,6 +307,8 @@ local function project(world: Vector3): (Vector2, boolean)
 	return Vector2.new((vp.X - off.X) / s, (vp.Y - off.Y) / s), onScreen and vp.Z > 0
 end
 
+local markLit: { [Frame]: number } = setmetatable({}, { __mode = "k" }) :: any
+
 local function updateMarker(m: Marker, p: Player, root: BasePart, progress: number)
 	local v: Vector2 = kit.VirtualSize()
 	local W, H = v.X, v.Y
@@ -291,6 +317,10 @@ local function updateMarker(m: Marker, p: Player, root: BasePart, progress: numb
 	local mine = rootOf(player)
 	local dist = (mine and not isMe) and ((pos - mine.Position) * FLAT).Magnitude or 0
 	local lit = math.floor(progress * MARK_SEGMENTS + 0.001)
+	if lit > (markLit[m.Holder] or 0) and not ClientSettings.Reduced() then
+		UIAnim.Punch(m.Segments[math.min(lit, MARK_SEGMENTS)], 0.8)
+	end
+	markLit[m.Holder] = lit
 	for i, seg in ipairs(m.Segments) do
 		local on = i <= lit
 		seg.BackgroundColor3 = on and P.gold_300 or P.slate_500

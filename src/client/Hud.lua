@@ -66,6 +66,24 @@ local shownLevels: { [string]: number } = {}
 
 local updatePurse: (number) -> ()
 
+-- A soft colour flash over a Surface holder's face (a sibling of the face, so it never
+-- joins the face's list layout); fades out and destroys itself.
+local function glow(holder: GuiObject, color: Color3)
+	if ClientSettings.Reduced() then
+		return
+	end
+	local face = holder:FindFirstChild("Face")
+	local f = new("Frame", { Name = "Glow", BackgroundColor3 = color, BackgroundTransparency = 0.45, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, holder)
+	local corner = face and face:FindFirstChildWhichIsA("UICorner")
+	if corner then
+		corner:Clone().Parent = f
+	end
+	local t = UIAnim.Tween(f, 0.5, { BackgroundTransparency = 1 })
+	t.Completed:Once(function()
+		f:Destroy()
+	end)
+end
+
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
@@ -283,6 +301,102 @@ local function buildStage(frame: Frame)
 	})
 end
 
+-- Stage banner: "STAGE 2" slams in over the arena for a moment (showStageBanner).
+local function buildBanner(frame: Frame)
+	local box = new("Frame", { Name = "StageBanner", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(520, 110), Visible = false, Active = false, ZIndex = 8 }, frame)
+	ui.Banner = box
+	ui.BannerTitle = text(box, "Display", "STAGE 1", {
+		Name = "Title",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
+		Size = UDim2.new(1, 0, 0, TS(52) + 6),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = P.gold_200,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.35,
+		ZIndex = 9,
+	}, 52)
+	ui.BannerLine = new("Frame", { Name = "Line", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, TS(52) + 10), Size = UDim2.fromOffset(0, 3), ZIndex = 9 }, box)
+	UIKit.corner(ui.BannerLine, 2)
+	ui.BannerSub = text(box, "Label", "", {
+		Name = "Sub",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, TS(52) + 18),
+		Size = UDim2.new(1, 0, 0, TS(16) + 4),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = P.ivory_200,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.4,
+		ZIndex = 9,
+	})
+end
+
+local bannerToken = 0
+local bannerTweens: { Tween } = {}
+
+local function stopBanner()
+	bannerToken += 1
+	for _, t in ipairs(bannerTweens) do
+		t:Cancel()
+	end
+	table.clear(bannerTweens)
+	if ui.Banner then
+		ui.Banner.Visible = false
+	end
+end
+
+-- Slides / scales in, holds ~1 s, fades. Reduced effects: a plain fade, no scale or sparks.
+local function showStageBanner(stageNo: number, goal: string)
+	stopBanner()
+	local token = bannerToken
+	local box, title, line, sub = ui.Banner :: Frame, ui.BannerTitle :: TextLabel, ui.BannerLine :: Frame, ui.BannerSub :: TextLabel
+	local reduced = ClientSettings.Reduced()
+	title.Text = UIKit.track("STAGE " .. tostring(stageNo))
+	sub.Text = goal
+	title.TextTransparency, title.TextStrokeTransparency = 1, 1
+	sub.TextTransparency, sub.TextStrokeTransparency = 1, 1
+	line.Size = UDim2.fromOffset(0, 3)
+	line.BackgroundTransparency = 0
+	box.Visible = true
+	local function tw(obj: Instance, seconds: number, goalProps: { [string]: any }, style: Enum.EasingStyle?, dir: Enum.EasingDirection?)
+		local t = UIAnim.Tween(obj, seconds, goalProps, style, dir)
+		table.insert(bannerTweens, t)
+		return t
+	end
+	local sc = UIAnim.ScaleOf(title)
+	sc.Scale = reduced and 1 or 2.4
+	tw(sc, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
+	tw(title, 0.25, { TextTransparency = 0, TextStrokeTransparency = 0.35 })
+	if not reduced then
+		local at = UDim2.new(0.5, 0, 0, TS(52) / 2)
+		UIAnim.Sparks(box, at, P.gold_200, 10, 120, 0.6)
+		UIAnim.Ring(box, at, P.gold_300, 220, 0.5)
+		task.delay(0.1, function()
+			if token == bannerToken then
+				tw(line, 0.45, { Size = UDim2.fromOffset(260, 3) }, Enum.EasingStyle.Quint)
+			end
+		end)
+	end
+	task.delay(reduced and 0 or 0.25, function()
+		if token == bannerToken then
+			tw(sub, 0.3, { TextTransparency = 0, TextStrokeTransparency = 0.4 })
+		end
+	end)
+	task.delay(1.5, function()
+		if token ~= bannerToken then
+			return
+		end
+		tw(title, 0.4, { TextTransparency = 1, TextStrokeTransparency = 1 })
+		tw(sub, 0.4, { TextTransparency = 1, TextStrokeTransparency = 1 })
+		tw(line, 0.4, { BackgroundTransparency = 1 })
+		task.delay(0.45, function()
+			if token == bannerToken then
+				box.Visible = false
+			end
+		end)
+	end)
+end
+
 local function buildStatus(frame: Frame)
 	local holder, face = UIKit.Surface(frame, { Name = "Status", Transparency = 0.12, Radius = 999, Visible = false })
 	holder.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -459,6 +573,10 @@ local function layout()
 			ui.Buff.Position = UDim2.fromOffset(math.floor(W / 2), clusterTop - 6)
 		end
 	end
+
+	-- stage banner: under the top cluster in landscape, mid-screen in portrait
+	ui.Banner.Size = UDim2.fromOffset(math.min(520, W - 2 * M), 110)
+	ui.Banner.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(portrait and H * 0.42 or math.max(H * 0.3, bossY + 90)))
 
 	-- status line: centre-low in landscape, below the ability bar in portrait
 	local statusW = math.min(640, W - 2 * M)
@@ -693,7 +811,6 @@ updatePurse = function(dt: number)
 			UIAnim.Punch(ui.Purse, 0.14)
 			UIAnim.Punch(ui.PurseCoin, 0.35)
 			if gold - purse.Target >= 5 then
-				UIAnim.SweepOnce(ui.PurseFace, P.gold_200, 0.45, 0.6)
 				UIAnim.Sparks(ui.PurseCoin, UDim2.fromScale(0.5, 0.5), P.gold_200, 5, 26, 0.45)
 			end
 		end
@@ -805,10 +922,7 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			ui.StageGoal.Text = goal
 			if anim.StagePhase ~= stagePhase and anim.StagePhase ~= nil then
 				UIAnim.Punch(ui.Stage, 0.2)
-				local face = ui.Stage:FindFirstChildWhichIsA("Frame")
-				if face then
-					UIAnim.Flash(face, (stagePhase == "Surge" or stagePhase == "Boss") and P.crimson_400 or P.gold_300)
-				end
+				glow(ui.Stage, (stagePhase == "Surge" or stagePhase == "Boss") and P.crimson_400 or P.gold_300)
 				if stagePhase == "Surge" or stagePhase == "Boss" then
 					UIAnim.Shake(ui.Stage, 4, 0.3)
 				end
@@ -911,9 +1025,13 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		ui.Kills.SetValue(UIKit.formatNumber(kills))
 		-- every 50th kill is a small celebration
 		if anim.Kills and kills > anim.Kills and math.floor(kills / 50) > math.floor(anim.Kills / 50) then
-			UIAnim.Punch(ui.Kills.Frame, 0.3)
-			UIAnim.Sparks(ui.Counters, UDim2.new(0, 28, 0.5, 0), P.ivory_200, 6, 30, 0.45)
-			UIAnim.SweepOnce(ui.Counters, P.ivory_100, 0.45, 0.6)
+			UIAnim.Punch(ui.Kills.Value, 0.35)
+			if not ClientSettings.Reduced() then
+				ui.Kills.Value.TextColor3 = P.gold_200
+				UIAnim.Tween(ui.Kills.Value, 0.8, { TextColor3 = C.Text })
+				local pos, w = ui.Counters.Position, ui.Counters.AbsoluteSize.X / math.max(0.01, host.Scale())
+				UIAnim.Sparks(ui.Frame, UDim2.fromOffset(pos.X.Offset - w + 28, pos.Y.Offset + 22), P.gold_200, 6, 30, 0.45)
+			end
 		end
 		anim.Kills = kills
 	end
@@ -1020,6 +1138,7 @@ end
 -- Resets per-run animation state (a new run starts from a clean HUD).
 function Hud.Reset()
 	anim = { XP = 0, HP = 1, HPTrail = 1 }
+	stopBanner()
 	refreshHpText()
 	purse.Shown = nil
 	purse.Target = tonumber(player:GetAttribute("RunGold")) or 0
@@ -1034,8 +1153,11 @@ function Hud.SetVisible(on: boolean)
 	if ui.Frame then
 		ui.Frame.Visible = on
 	end
-	if not on and ui.VignetteLevel then
-		ui.VignetteLevel.Value = 1
+	if not on then
+		stopBanner()
+		if ui.VignetteLevel then
+			ui.VignetteLevel.Value = 1
+		end
 	end
 end
 
@@ -1055,6 +1177,7 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	ui.Frame = frame
 	buildTop(frame)
 	buildStage(frame)
+	buildBanner(frame)
 	buildBuffChip(frame)
 	buildBar(frame)
 	buildPurse(frame)

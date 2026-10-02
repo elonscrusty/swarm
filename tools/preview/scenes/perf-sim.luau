@@ -220,12 +220,26 @@ local function line(s)
 	print(s)
 end
 
+-- what the warnings in the FxBatch are (Telegraphs draws each one; kind/style per second)
+local warnKinds = {}
+if withClient then
+	preview.remote("FxBatch").OnClientEvent:Connect(function(batch)
+		if type(batch) == "table" and type(batch.w) == "table" then
+			for _, w in ipairs(batch.w) do
+				local key = tostring(w[2]) .. (w[2] == "circle" and ("/" .. tostring(w[7])) or (w[2] == "pop" and ("/" .. tostring(w[6])) or ""))
+				warnKinds[key] = (warnKinds[key] or 0) + 1
+			end
+		end
+	end)
+end
+
 local results = {}
 local function phase(label: string, n: number, t: number)
 	target = n
 	topUp()
 	run(2) -- settle: the swarm closes in, weapons start killing
 	preview.profile(true)
+	table.clear(warnKinds)
 	frames = 0
 	local kills0 = me:GetAttribute("Kills") or 0
 	local alive, aliveSamples = 0, 0
@@ -238,6 +252,12 @@ local function phase(label: string, n: number, t: number)
 		aliveSamples += 1
 	end
 	local real = preview.realClock() - t0
+	local wk = {}
+	for k, v in pairs(warnKinds) do
+		table.insert(wk, string.format("%s %.1f", k, v / t))
+	end
+	table.sort(wk)
+	table.clear(warnKinds)
 	local rep = preview.profileReport()
 	preview.profile(false)
 	local inTree, all = preview.liveInstances()
@@ -249,9 +269,10 @@ local function phase(label: string, n: number, t: number)
 	local server, client, mock = 0, 0, 0
 	local srows, crows = {}, {}
 	for name, v in pairs(rep.time) do
-		if string.sub(name, 1, 2) == "S " then
+		if string.sub(name, 1, 2) == "S " or string.sub(name, 1, 8) == "[label] " then
+			-- server systems, and the MicroProfiler labels (debug.profilebegin) inside them
 			server += v.excl
-			table.insert(srows, { string.sub(name, 3), v.excl * per, v.calls / frames })
+			table.insert(srows, { string.sub(name, 1, 2) == "S " and string.sub(name, 3) or name, v.excl * per, v.calls / frames })
 		elseif string.sub(name, 1, 6) == "[mock]" then
 			mock += v.excl
 		else
@@ -292,6 +313,7 @@ local function phase(label: string, n: number, t: number)
 	for i = 1, math.min(top, #arows) do
 		table.insert(parts, arows[i][1] .. " " .. fmt(arows[i][2] / t))
 	end
+	line(string.format("warnings/s (Fx.Warn kinds): [%s]", table.concat(wk, ", ")))
 	line(string.format("attribute changes: %.0f/s  [%s]", attrTotal / t, table.concat(parts, ", ")))
 	local prows = sorted(rep.props, function(v)
 		return v

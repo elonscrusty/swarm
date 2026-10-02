@@ -159,12 +159,18 @@ end
 -- Thinking
 ------------------------------------------------------------------------------------------
 
+-- Living players' root positions, read once per frame (EnemyAI.Step) instead of once per
+-- enemy per use: rp -> position.
+local playerPos: { [any]: Vector3 } = {}
+
 local function nearestPlayer(pos: Vector3, runPlayers)
 	local best, bestD2 = nil, math.huge
+	local px, pz = pos.X, pos.Z
 	for _, rp in ipairs(runPlayers) do
-		if rp.Alive and rp.Root then
-			local d = rp.Root.Position - pos
-			local d2 = d.X * d.X + d.Z * d.Z
+		local p = playerPos[rp]
+		if p then
+			local dx, dz = p.X - px, p.Z - pz
+			local d2 = dx * dx + dz * dz
 			if d2 < bestD2 then
 				best, bestD2 = rp, d2
 			end
@@ -194,7 +200,7 @@ local function think(e, runPlayers)
 		e.Sep = Vector3.zero
 		return
 	end
-	local to = (target.Root.Position - e.Pos) * FLAT
+	local to = (playerPos[target] - e.Pos) * FLAT
 	if to.Magnitude < 0.1 then
 		e.Dir = Vector3.zero
 		return
@@ -225,27 +231,33 @@ local function think(e, runPlayers)
 	end
 	e.Dir = desired
 
-	-- Separation from neighbours (grid is from the previous frame, good enough).
-	local sep = Vector3.zero
+	-- Separation from neighbours (grid is from the previous frame, good enough); plain
+	-- number math, this is the hottest loop in a dense swarm.
+	local sx, sz = 0, 0
 	if not e.Ghost then
-		local n = sepGrid:QueryCircle(e.Pos.X, e.Pos.Z, e.Radius * Config.Enemies.SeparationRadius, queryBuf)
+		local sepMult = Config.Enemies.SeparationRadius
+		local ex, ez, er = e.Pos.X, e.Pos.Z, e.Radius
+		local n = sepGrid:QueryCircle(ex, ez, er * sepMult, queryBuf)
 		for i = 1, n do
 			local o = queryBuf[i]
 			if o ~= e and o.Alive and not o.Ghost then
-				local away = (e.Pos - o.Pos) * FLAT
-				local d = away.Magnitude
-				local minD = (e.Radius + o.Radius) * Config.Enemies.SeparationRadius
+				local op = o.Pos
+				local ax, az = ex - op.X, ez - op.Z
+				local d = math.sqrt(ax * ax + az * az)
+				local minD = (er + o.Radius) * sepMult
 				if d < minD then
 					if d < 1e-3 then
-						away = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1))
-						d = math.max(away.Magnitude, 1e-3)
+						ax, az = rng:NextNumber(-1, 1), rng:NextNumber(-1, 1)
+						d = math.max(math.sqrt(ax * ax + az * az), 1e-3)
 					end
-					sep += away / d * ((minD - d) / minD)
+					local k = (minD - d) / minD / d
+					sx += ax * k
+					sz += az * k
 				end
 			end
 		end
 	end
-	e.Sep = sep
+	e.Sep = (sx ~= 0 or sz ~= 0) and Vector3.new(sx, 0, sz) or Vector3.zero
 end
 
 ------------------------------------------------------------------------------------------
@@ -651,13 +663,16 @@ function EnemyAI.Step(dt: number)
 	table.clear(movedBuf)
 	table.clear(cframesBuf)
 	local n = 0
+	debug.profilebegin("EnemyAI.Enemies") -- MicroProfiler labels (Ctrl+F6 in a test)
 
 	local i = 1
 	while i <= #active do
 		local e = active[i]
 		local static = e.Def.Static == true
 		if not static and (e.ThinkSlot == slot or e.Target == nil or (e.Target and not e.Target.Alive)) then
+			debug.profilebegin("EnemyAI.Think")
 			think(e, runPlayers)
+			debug.profileend()
 		end
 		if e.Boss then
 			BossAI.Step(e, dt)
@@ -761,8 +776,11 @@ function EnemyAI.Step(dt: number)
 		-- re-check index i
 	end
 
+	debug.profileend()
+
 	-- An enemy can die after it was queued (a revive shockwave, an explosion chain), so
 	-- only move the ones still alive; a dead one must stay parked.
+	debug.profilebegin("EnemyAI.Sync")
 	table.clear(partsBuf)
 	local m = 0
 	for j = 1, n do
@@ -779,8 +797,10 @@ function EnemyAI.Step(dt: number)
 	if m > 0 then
 		workspace:BulkMoveTo(partsBuf, cframesBuf, Enum.BulkMoveMode.FireCFrameChanged)
 	end
+	debug.profileend()
 
 	-- Rebuild the enemy grid for this frame's hit detection (and the fine separation grid).
+	debug.profilebegin("EnemyAI.Grids")
 	local grid = ctx.EnemySpawner.Grid
 	grid:Clear()
 	sepGrid:Clear()
@@ -793,6 +813,7 @@ function EnemyAI.Step(dt: number)
 			end
 		end
 	end
+	debug.profileend()
 end
 
 -- Cancels every hazard (group nil = all; "Boss" = the Queen's).

@@ -49,8 +49,22 @@ local function makeDebug()
 	return {
 		traceback = debug.traceback,
 		info = debug.info,
-		profilebegin = function() end,
-		profileend = function() end,
+		-- MicroProfiler labels: timed by the perf profiler (mock/profile.luau) when it is on
+		profilebegin = function(label)
+			local P = R.prof
+			if P and P.on then
+				P.enter("[label] " .. tostring(label))
+			end
+		end,
+		profileend = function()
+			local P = R.prof
+			if P and P.on then
+				local top = P.stack[#P.stack]
+				if top and string.sub(top[1], 1, 8) == "[label] " then
+					P.leave()
+				end
+			end
+		end,
 		setmemorycategory = function() end,
 		resetmemorycategory = function() end,
 		dumpcodesize = function() end,

@@ -655,6 +655,7 @@ R.defineClass("Workspace", {
 			if P and P.on then
 				P.count("BulkMoveTo calls")
 				P.count("BulkMoveTo parts", #parts)
+				P.count("BulkMoveTo parts in " .. P.top(), #parts)
 			end
 			for i = 1, #parts do
 				local p = parts[i]

@@ -21,6 +21,9 @@
 	  bounce once and fly to the player (FxBatch "g"); the HUD shows the "+N".
 	* Players: gold ring under the local player (slate-blue under teammates) with a facing
 	  chevron, a small overhead health bar, the garlic / soul eater aura ring.
+	* Combat juice (impact / crit stars, kill shards, elite and boss kill bursts, level-up
+	  pillar, swing-tip sparks, pickup sparkles, evolution and boss phase flashes) lives in
+	  CombatFx.lua with its own pooled budget; VFX calls into it.
 	* Heroes: procedural walk cycle (arm swing, body bob and lean), idle breathing and attack
 	  poses (sword swing / throw / cast) through each rig's own Motor6Ds.
 ]]
@@ -40,6 +43,7 @@ local ModelLibrary = require(script.Parent.ModelLibrary)
 local EnemyRenderer = require(script.Parent.EnemyRenderer)
 local CameraController = require(script.Parent.CameraController)
 local Occlusion = require(script.Parent.Occlusion)
+local CombatFx = require(script.Parent.CombatFx)
 
 local VFX = {}
 -- Tuning constants live in one table: a module chunk may hold at most 200 locals.
@@ -950,6 +954,7 @@ local function hitSpark(id: number)
 		local cf0 = CFrame.lookAt(at, at + dir)
 		fx("Block", FX.Spark, NEON, cf0, cf0 + dir * (1 + math.random() * 0.6), Vector3.new(0.08, 0.08, 0.42), Vector3.new(0.05, 0.05, 0.16), 0.05, 1, 0.13, EASE_OUT)
 	end
+	CombatFx.Impact(pos)
 end
 
 ------------------------------------------------------------------------------------------
@@ -1096,6 +1101,7 @@ local function slash(x: number, z: number, yaw: number, reach: number, sweep: nu
 		Start = os.clock(),
 		Trailing = false,
 		Life = life,
+		Tier = tier,
 	})
 	-- attack pose: a back swing (behind the player's facing) becomes a spin slash
 	local back = false
@@ -1157,6 +1163,7 @@ local function renderSwings(now: number)
 				if t >= swingEnd and rig.Core.Enabled then
 					rig.Core.Enabled = false
 					rig.Edge.Enabled = false
+					CombatFx.SwingTip((pivot * CFrame.new(0, 0, -sw.Reach)).Position, sw.Tier)
 				end
 				local f = math.clamp((t - swingEnd) / K.SWING_FADE, 0, 1)
 				rig.Tip.Transparency = 0.2 + 0.8 * f
@@ -1377,6 +1384,7 @@ local function playerEvent(userId: number, kind: string)
 			local cf = CFrame.new(pos.X, FLOOR_Y + 3.5, pos.Z) * DISC
 			fx("Cylinder", P.gold_200, SMOOTH, cf, nil, Vector3.new(7, 3.6, 3.6), Vector3.new(7.5, 5.4, 5.4), 0.8, 1, 0.45, EASE_OUT)
 		end
+		CombatFx.LevelUp(pos, isLocal)
 		if isLocal then
 			Audio.Play("LevelUp")
 		end
@@ -1434,6 +1442,7 @@ local function warningSound(w: { any })
 end
 
 K.SPARKS_PER_BATCH = 6
+K.PICKUP_SPARKLE_RANGE = 10 -- studs: a pickup removed this close to the hero was taken by them
 K.FULL_DEATHS_PER_BATCH = 6 -- dust + bits; more deaths in one batch get dust only
 K.DEATHS_PER_BATCH = 14
 
@@ -1598,15 +1607,17 @@ local function onFxBatch(batch)
 	end
 	if type(batch.d) == "table" then
 		for i, d in ipairs(batch.d) do
-			if i > K.DEATHS_PER_BATCH then
-				break
-			end
 			if type(d) == "table" and type(d[1]) == "number" and type(d[2]) == "number" then
-				local bits = (i <= K.FULL_DEATHS_PER_BATCH) and ((tonumber(d[4]) or 2) > 5 and 4 or 2) or 0
-				if room(1 + bits) then
-					local dust, chitin = creatureLook(typeof(d[3]) == "Color3" and d[3] or P.stone_300)
-					deathPuff(d[1], d[2], dust, chitin, tonumber(d[4]) or 2.5, bits)
+				local tint = typeof(d[3]) == "Color3" and d[3] or P.stone_300
+				if i <= K.DEATHS_PER_BATCH then
+					local bits = (i <= K.FULL_DEATHS_PER_BATCH) and ((tonumber(d[4]) or 2) > 5 and 4 or 2) or 0
+					if room(1 + bits) then
+						local dust, chitin = creatureLook(tint)
+						deathPuff(d[1], d[2], dust, chitin, tonumber(d[4]) or 2.5, bits)
+					end
 				end
+				-- shards + pop; elite / boss kills always get their burst (CombatFx budget)
+				CombatFx.Kill(d[1], d[2], tint, tonumber(d[4]) or 2.5, i)
 			end
 		end
 	end
@@ -1638,6 +1649,15 @@ local function onFxBatch(batch)
 	if type(batch.r) == "table" then
 		for _, r in ipairs(batch.r) do
 			ring(r[1], r[2], r[3], r[4])
+		end
+	end
+	if type(batch.k) == "table" then
+		-- critical hits: a gold star on the enemy (a few per batch)
+		for i, id in ipairs(batch.k) do
+			local pos = i <= K.SPARKS_PER_BATCH and type(id) == "number" and EnemyRenderer.Position(id)
+			if pos then
+				CombatFx.Crit(pos)
+			end
 		end
 	end
 	if type(batch.u) == "table" then
@@ -2348,6 +2368,11 @@ local function renderPickups(now: number)
 	for m, pk in pairs(pickups) do
 		if not m.Parent then
 			pickups[m] = nil
+			-- taken next to the local hero: a sparkle where it sat
+			local root = player.Character and player.Character.PrimaryPart
+			if root and (root.Position - pk.Base.Position).Magnitude < K.PICKUP_SPARKLE_RANGE then
+				CombatFx.Pickup(pk.Base.Position, pk.Chest)
+			end
 		elseif pk.Chest then
 			if pk.Light then
 				pk.Light.Brightness = 0.9 + math.sin(now * 3 + pk.Phase) * 0.35
@@ -3020,6 +3045,7 @@ function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
 	fxFolder.Parent = workspace
 
 	Occlusion.Init()
+	CombatFx.Init(workspace)
 
 	Remotes.Get("ProjectileBatch").OnClientEvent:Connect(onProjectileBatch)
 	Remotes.Get("FxBatch").OnClientEvent:Connect(onFxBatch)

@@ -20,6 +20,7 @@
 	  n = { soundName, ... }                       global one-shot sounds
 	  g = { {x, z, amount, userId} }               gold coins burst from a kill that paid gold
 	                                               (visual only; the gold is already paid)
+	  k = { enemyId, ... }                         critical hits (gold star on the enemy; Fx.Crit)
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -43,7 +44,7 @@ end
 
 -- Caps per flush keep a single packet small even in huge fights.
 -- Warnings (w / x) are gameplay-critical: their caps are far above what a fight produces.
-local CAPS = { g = 24, h = 120, d = 60, s = 16, b = 24, c = 40, p = 16, e = 16, r = 8, u = 24, n = 16, w = 64, x = 64 }
+local CAPS = { k = 16, g = 24, h = 120, d = 60, s = 16, b = 24, c = 40, p = 16, e = 16, r = 8, u = 24, n = 16, w = 64, x = 64 }
 local warnId = 0
 
 local function pushCapped(key: string, value: any)
@@ -60,6 +61,11 @@ end
 
 function Fx.Hit(enemyId: number)
 	pushCapped("h", enemyId)
+end
+
+-- A critical hit landed on enemy `enemyId` (the client's CombatFx draws a gold star on it).
+function Fx.Crit(enemyId: number)
+	pushCapped("k", enemyId)
 end
 
 function Fx.Death(pos: Vector3, color: Color3, size: number)
