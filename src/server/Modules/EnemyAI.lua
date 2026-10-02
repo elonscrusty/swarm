@@ -59,6 +59,7 @@ local obstacleGrid = SpatialGrid.new(Config.Projectiles.CellSize)
 -- queries): in a dense swarm a 20-stud cell holds dozens of enemies, so every think would
 -- check them all; an 8-stud cell checks a handful. Same results, rebuilt with the other.
 local sepGrid = SpatialGrid.new(Config.Enemies.SeparationCell)
+local sepPad = 0 -- largest radius in sepGrid (its queries only widen by this much)
 local rayParams: RaycastParams? = nil
 local frame = 0
 local clock = 0
@@ -237,7 +238,7 @@ local function think(e, runPlayers)
 	if not e.Ghost then
 		local sepMult = Config.Enemies.SeparationRadius
 		local ex, ez, er = e.Pos.X, e.Pos.Z, e.Radius
-		local n = sepGrid:QueryCircle(ex, ez, er * sepMult, queryBuf)
+		local n = sepGrid:QueryCircle(ex, ez, er * sepMult, queryBuf, sepPad)
 		for i = 1, n do
 			local o = queryBuf[i]
 			if o ~= e and o.Alive and not o.Ghost then
@@ -811,15 +812,20 @@ function EnemyAI.Step(dt: number)
 	local grid = ctx.EnemySpawner.Grid
 	grid:Clear()
 	sepGrid:Clear()
+	local pad = 0
 	for j = 1, #active do
 		local e = active[j]
 		if not e.Untargetable then
 			grid:Insert(e)
 			if not e.Ghost then
 				sepGrid:Insert(e)
+				if e.Radius > pad then
+					pad = e.Radius
+				end
 			end
 		end
 	end
+	sepPad = pad
 	debug.profileend()
 end
 

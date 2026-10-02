@@ -83,8 +83,10 @@ if rp then
 end
 wait(2)
 log("after death")
-wait(12)
-log("results over")
+-- the results screen's MAIN MENU (ReturnToLobby), as a player taps it
+preview.remote("ReturnToLobby"):FireServer()
+wait(1)
+log("results closed")
 preview.remote("StartRun"):FireServer("Solo")
 wait(3)
 log("new run after death")

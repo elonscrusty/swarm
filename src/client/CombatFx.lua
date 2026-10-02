@@ -124,16 +124,22 @@ local function scale(): number
 end
 
 -- Room for `n` more parts this frame? Takes them from the bucket when there is. Minor
--- effects (hits, small kills, sparks) leave a reserve so elite / boss kills and milestones
--- in the same frame still fit.
+-- effects (hits, small kills, sparks) stop at 70% of the cap and leave a third of the
+-- bucket, so elite / boss kills and milestones still fit; a major one may borrow from the
+-- bucket (it refills before the next minor effect plays) but never passes MaxParts.
 local function claim(n: number, major: boolean?): boolean
 	local s = scale()
-	local share = major and 1 or 0.7
-	if #anims + n > MAX_PARTS * s * share or n > tokens - (major and 0 or BURST * 0.35) then
+	local ok
+	if major then
+		ok = #anims + n <= MAX_PARTS * s and tokens > 0
+	else
+		ok = #anims + n <= MAX_PARTS * s * 0.7 and n <= tokens - BURST * 0.35
+	end
+	if not ok then
 		stats.Skipped += 1
 		return false
 	end
-	tokens -= n
+	tokens = math.max(tokens - n, -BURST)
 	return true
 end
 
@@ -264,6 +270,7 @@ local function buildEdge()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "SwarmEdgeFlash"
 	gui.IgnoreGuiInset = true
+	gui.ScreenInsets = Enum.ScreenInsets.None -- to the true screen edge (past phone notches)
 	gui.ResetOnSpawn = false
 	gui.DisplayOrder = 2 -- above the world, under the HUD panels
 	gui.Enabled = false
@@ -419,12 +426,19 @@ function CombatFx.Kill(x: number, z: number, color: Color3, size: number, rank: 
 		rays = math.floor(rays / 2)
 		shards = math.floor(shards / 2)
 	end
+	-- a busy moment trims the burst instead of dropping it (flash + floor ring stay)
+	local free = math.floor(MAX_PARTS * scale() - #anims) - 2
+	if free < rays + shards then
+		local k = math.max(free, 0) / math.max(rays + shards, 1)
+		rays = math.floor(rays * k)
+		shards = math.floor(shards * k)
+	end
 	if not claim(2 + rays + shards, true) then
 		return
 	end
-	local flash = math.min(size * 0.9, 12)
-	spawn("Ball", WHITE, NEON, CFrame.new(towardCamera(pos, 1.5)), nil, Vector3.one * flash * 0.4, Vector3.one * flash * 1.3, 0.05, 1, huge and 0.2 or 0.14)
-	spawn("Cylinder", tint, NEON, CFrame.new(x, FLOOR_Y + 0.08, z) * DISC, nil, Vector3.new(0.05, size * 0.6, size * 0.6), Vector3.new(0.05, size * 3.2, size * 3.2), 0.35, 1, huge and 0.5 or 0.32)
+	local flash = math.min(size * 0.6, 8)
+	spawn("Ball", tint:Lerp(WHITE, 0.75), NEON, CFrame.new(towardCamera(pos, 1.5)), nil, Vector3.one * flash * 0.4, Vector3.one * flash * 1.3, 0.25, 1, huge and 0.2 or 0.14)
+	spawn("Cylinder", tint:Lerp(FX.Gold, 0.4), SMOOTH, CFrame.new(x, FLOOR_Y + 0.08, z) * DISC, nil, Vector3.new(0.05, size * 0.6, size * 0.6), Vector3.new(0.05, size * 3.2, size * 3.2), 0.45, 1, huge and 0.5 or 0.32)
 	for i = 1, rays do
 		local a = (i / rays) * TAU + math.random() * 0.3
 		local dir = Vector3.new(math.cos(a), 0.15 + math.random() * 0.25, math.sin(a)).Unit

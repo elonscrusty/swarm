@@ -52,21 +52,22 @@ if moment == "kills" then
 	local h, d, k = killBatch(8, 30, 5)
 	table.insert(d, { x + 10, z - 6, Color3.fromRGB(150, 70, 60), 5.2 }) -- brute / elite
 	table.insert(d, { x - 12, z - 9, Color3.fromRGB(190, 150, 70), 11 }) -- boss-sized
+	preview.advance(0.5, 60) -- 60 fps frames (30 fps halves the CombatFx budget)
 	C.fire("FxBatch", { h = h, d = d, k = k, s = { { x, z, 0.4, 7, 1, 3, me.UserId } } })
-	preview.advance(t, 30)
+	preview.advance(t, 60)
 elseif moment == "levelup" then
 	C.fire("FxBatch", { u = { { me.UserId, "levelup" } } })
-	preview.advance(t > 0.1 and t or 0.15, 30)
+	preview.advance(t > 0.1 and t or 0.15, 60)
 elseif moment == "evolve" then
 	local inv = A.inventory("new")
 	inv.Weapons[1].Evolved = true
 	C.fire("Inventory", inv)
-	preview.advance(t > 0.1 and t or 0.1, 30)
+	preview.advance(t > 0.1 and t or 0.1, 60)
 elseif moment == "phase" then
 	C.setState({ BossPhase = 1, BossMaxHP = 5000, BossHP = 2400, BossName = "Scorpion Queen" })
-	preview.advance(0.2, 30)
+	preview.advance(0.2, 60)
 	C.setState({ BossPhase = 2 })
-	preview.advance(t > 0.1 and t or 0.12, 30)
+	preview.advance(t > 0.1 and t or 0.12, 60)
 elseif moment == "pickup" then
 	local folder = workspace:FindFirstChild("SwarmPickups")
 	local root = me.Character and me.Character.PrimaryPart
@@ -83,11 +84,11 @@ elseif moment == "pickup" then
 		if near then
 			-- carry the hero next to it, then the server takes it
 			root.CFrame = CFrame.new(near:GetPivot().Position + Vector3.new(2, 3, 0))
-			preview.advance(0.3, 30)
+			preview.advance(0.3, 60)
 			near:Destroy()
 		end
 	end
-	preview.advance(t > 0.1 and t or 0.1, 30)
+	preview.advance(t > 0.1 and t or 0.1, 60)
 elseif moment == "stress" then
 	stats("start")
 	for sec = 1, 10 do
@@ -108,7 +109,7 @@ elseif moment == "stress" then
 		end
 		stats(sec .. "s")
 	end
-	preview.advance(2, 30)
+	preview.advance(2, 60)
 	stats("+2s idle")
 end
 stats(moment)

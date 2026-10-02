@@ -8,9 +8,9 @@ local s = A.build({ swarm = false })
 local Config = s.Config
 Config.Camera.RunDistance = tonumber(preview.args.dist) or 16
 if preview.args.reduced == "on" then
-	local CS = require(game:GetService("Players").LocalPlayer.PlayerScripts:WaitForChild("ClientSettings"))
-	if CS.Set then
-		CS.Set("ReducedEffects", true)
+	local Settings = C.try("require ClientSettings", preview.client, "ClientSettings")
+	if Settings then
+		Settings.Set("ReducedEffects", true)
 	end
 end
 local centre = s.centre
