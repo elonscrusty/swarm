@@ -1,10 +1,19 @@
 --[[
 	MenuLeaderboards.lua
-	The LEADERBOARDS screen: four tabs (HIGH SCORE, BEST STAGE, DAILY, MOST KILLS). Opening a tab
-	asks the server (LeaderboardRequest); LeaderboardService answers with LeaderboardData:
-	the top 50 rows (your row highlighted), your rank when you are in them, your own best,
-	and a status. "loading" asks again shortly; "local" (no DataStores, e.g. Studio without
-	API access) shows this server's runs with a clear note; "error" keeps the last rows.
+	The LEADERBOARDS screen: one compact panel, only as tall as its rows need.
+	  tabs      HIGH SCORE, BEST STAGE, DAILY, MOST KILLS
+	  title     the board's name between two gold rules, a subtitle and a short line on
+	            what the value means
+	  table     RANK / PLAYER / SCORE: a gold / silver / bronze medal for places 1-3 ("#n"
+	            after), the player's round head shot (UIKit.Avatar; a neutral silhouette
+	            until it loads or when it cannot), the name, the value in gold; your row is
+	            outlined. Only real rows (no filler), then a quiet "N ranked players" line
+	  YOUR BEST a pinned card: your rank, head shot, name and your own best
+	Opening a tab asks the server (LeaderboardRequest); LeaderboardService answers with
+	LeaderboardData: the top 50 rows (Rank, UserId, Name, Value, Me), your rank when you
+	are in them, your own best, and a status. "loading" asks again shortly; "local" (no
+	DataStores, e.g. Studio without API access) shows this server's runs with a clear
+	note; "error" keeps the last rows.
 ]]
 
 local Players = game:GetService("Players")
@@ -24,15 +33,29 @@ local C, P = Theme.Color, Theme.Palette
 local player = Players.LocalPlayer
 
 local BOARDS = {
-	{ Id = "Score", Title = "High score", Icon = "trophy", Caption = "Best run score, all servers · stages, bosses, kills, level, time" },
-	{ Id = "BestStage", Title = "Best stage", Icon = "portal", Caption = "Furthest stage reached in a run · all time" },
-	{ Id = "Daily", Title = "Daily", Icon = "calendar", Caption = "Today's scored Daily Challenge attempts (UTC)" },
-	{ Id = "Kills", Title = "Most kills", Icon = "stat_Kills", Caption = "Most enemies defeated in one run · all time" },
+	{ Id = "Score", Title = "High score", Icon = "trophy", Heading = "Global high scores", Sub = "Best run score across all servers", Explain = "Score reflects stages, bosses, kills, level and time.", Column = "Score" },
+	{ Id = "BestStage", Title = "Best stage", Icon = "portal", Heading = "Best stage", Sub = "Furthest stage reached in one run", Explain = "All time, across all servers.", Column = "Stage" },
+	{ Id = "Daily", Title = "Daily", Icon = "calendar", Heading = "Today's daily", Sub = "Today's scored Daily Challenge attempts (UTC)", Explain = "Ranked by stages cleared, then time. One scored attempt a day.", Column = "Result" },
+	{ Id = "Kills", Title = "Most kills", Icon = "stat_Kills", Heading = "Most kills", Sub = "Most enemies defeated in one run", Explain = "All time, across all servers.", Column = "Kills" },
 }
+
+local ROW_H = 52
+local ROW_GAP = 4
+local RANK_W = 84
+local SCORE_W = 170
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
+end
+
+local function boardOf(id: string)
+	for _, b in ipairs(BOARDS) do
+		if b.Id == id then
+			return b
+		end
+	end
+	return BOARDS[1]
 end
 
 -- A board value as text.
@@ -45,17 +68,28 @@ function MenuLeaderboards.ValueText(board: string, value: number): string
 	return UIKit.formatNumber(value)
 end
 
+-- A board value with its unit, for the YOUR BEST card ("143 POINTS", "STAGE 5").
+function MenuLeaderboards.BestText(board: string, value: number): string
+	if board == "Score" then
+		return UIKit.formatNumber(value) .. " POINTS"
+	elseif board == "Kills" then
+		return UIKit.formatNumber(value) .. " KILLS"
+	end
+	return string.upper(MenuLeaderboards.ValueText(board, value))
+end
+
 function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = {}
 	local board = "Score"
 	local data: { [string]: any } = {} -- last answer per board
 	local asked: { [string]: number } = {}
+	local rowCount = 0
 
 	ui.Header = UIKit.ScreenHeader(screen, "LEADERBOARDS", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
 	ui.Panel = holder
-	UIKit.padding(face, 16, 16, 16, 16)
+	UIKit.padding(face, 16, 20, 16, 20)
 	local items = {}
 	for _, b in ipairs(BOARDS) do
 		table.insert(items, { Id = b.Id, Title = b.Title, Icon = b.Icon })
@@ -71,12 +105,23 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		MenuLeaderboards._fill(true)
 		ask(id)
 	end)
-	ui.Caption = text(face, "Caption", "", { Name = "BoardCaption", TextXAlignment = Enum.TextXAlignment.Center })
+	ui.Title = UIKit.TitleRule(face, "")
+	ui.Sub = text(face, "Body", "", { Name = "BoardSub", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text })
+	ui.Explain = text(face, "Small", "", { Name = "BoardCaption", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextFaint, TextWrapped = true })
 	-- status note (loading / local / error)
 	local noteHolder, noteFace = UIKit.Surface(face, { Name = "Note", Radius = Theme.Radius.M, Transparency = 0.2, Edge = P.gold_400, EdgeTransparency = 0.5, Shadow = false, Visible = false })
 	ui.Note = noteHolder
-	ui.NoteIcon = Icons.Draw(noteFace, "info", { Size = 22, Position = UDim2.fromOffset(12, 10) })
+	ui.NoteIcon = Icons.Draw(noteFace, "info", { Size = 22, Position = UDim2.new(0, 12, 0.5, -11) })
 	ui.NoteText = text(noteFace, "Small", "", { Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -54, 1, 0), TextWrapped = true, TextColor3 = C.Text })
+
+	-- table header
+	local head = new("Frame", { Name = "TableHead", BackgroundTransparency = 1 }, face)
+	ui.Head = head
+	UIKit.SectionLabel(head, "Rank", nil, { Position = UDim2.fromOffset(14, 0), Size = UDim2.new(0, RANK_W, 1, -2) })
+	UIKit.SectionLabel(head, "Player", nil, { Position = UDim2.fromOffset(14 + RANK_W, 0), Size = UDim2.new(1, -(RANK_W + SCORE_W + 28), 1, -2) })
+	ui.ScoreHead = UIKit.SectionLabel(head, "Score", nil, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 0), Size = UDim2.new(0, SCORE_W, 1, -2), TextXAlignment = Enum.TextXAlignment.Right })
+	UIKit.Hairline(head, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) })
+
 	local list = new("ScrollingFrame", {
 		Name = "Rows",
 		BackgroundTransparency = 1,
@@ -88,43 +133,62 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
 	UIKit.padding(list, 2, 8, 2, 2)
-	UIKit.list(list, { Padding = UDim.new(0, 4) })
+	UIKit.list(list, { Padding = UDim.new(0, ROW_GAP) })
 	ui.List = list
 	ui.Empty = text(face, "Body", "", { Name = "Empty", TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, Visible = false })
-	-- you: your rank / best
+	ui.Count = text(face, "Small", "", { Name = "Count", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextFaint })
+
+	-- YOUR BEST: pinned personal card
 	local youHolder, youFace = UIKit.Surface(face, { Name = "You", Radius = Theme.Radius.M, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.15, Shadow = false })
 	ui.You = youHolder
-	ui.YouRank = text(youFace, "Number", "-", { Name = "Rank", Position = UDim2.fromOffset(14, 0), Size = UDim2.new(0, 70, 1, 0), TextColor3 = P.gold_200 }, 22)
-	ui.YouName = text(youFace, "BodyStrong", "", { Name = "Name", Position = UDim2.fromOffset(90, 0), Size = UDim2.new(0.5, -90, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
-	ui.YouValue = text(youFace, "BodyStrong", "", { Name = "Value", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 0), Size = UDim2.new(0.5, -14, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd })
+	Icons.Draw(youFace, "crown", { Size = 26, Position = UDim2.new(0, 14, 0.5, -13) })
+	ui.YouCaption = UIKit.SectionLabel(youFace, "Your best", nil, { Name = "Caption", Position = UDim2.fromOffset(48, 0), Size = UDim2.new(0, 90, 1, 0) })
+	ui.YouRank = text(youFace, "Number", "-", { Name = "Rank", Position = UDim2.fromOffset(140, 0), Size = UDim2.new(0, 64, 1, 0), TextColor3 = P.gold_200 }, 22)
+	ui.YouAvatarSlot = new("Frame", { Name = "AvatarSlot", BackgroundTransparency = 1, Position = UDim2.new(0, 206, 0.5, -18), Size = UDim2.fromOffset(36, 36) }, youFace)
+	UIKit.Avatar(ui.YouAvatarSlot, player.UserId, 36)
+	ui.YouName = text(youFace, "BodyStrong", "", { Name = "Name", Position = UDim2.fromOffset(252, 0), Size = UDim2.new(0.4, -252, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
+	ui.YouValue = text(youFace, "Number", "", { Name = "Value", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 0), Size = UDim2.new(0.6, -16, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd }, 18)
 
 	local function rowFor(r: { [string]: any }, order: number)
 		local me = r.Me == true
-		local f = UIKit.Panel(list, { Name = "Row" .. order, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 44) }, true)
+		local f = UIKit.Panel(list, { Name = "Row" .. order, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H) }, true)
+		f.BackgroundColor3 = me and P.slate_800 or P.slate_950
+		f.BackgroundTransparency = me and 0.05 or 0.35
 		if me then
 			UIKit.stroke(f, P.gold_400, 1.5, 0.1)
-			f.BackgroundTransparency = 0.05
 		end
 		local rank = tonumber(r.Rank) or order
-		local medal = rank <= 3 and ({ P.gold_300, P.steel_200, Color3.fromRGB(196, 132, 82) })[rank] or nil
-		if medal then
-			local disc = new("Frame", { Name = "Medal", BackgroundColor3 = medal, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(30, 30) }, f)
-			UIKit.corner(disc, 999)
-			text(disc, "Number", tostring(rank), { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.slate_950 }, 16)
+		if rank <= 3 then
+			UIKit.Medal(f, rank, 40, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0) })
 		else
-			text(f, "Number", "#" .. rank, { Position = UDim2.fromOffset(10, 0), Size = UDim2.new(0, 56, 1, 0), TextColor3 = C.TextMuted }, 16)
+			text(f, "Number", "#" .. rank, { Name = "Rank", Position = UDim2.fromOffset(14, 0), Size = UDim2.new(0, RANK_W - 14, 1, 0), TextColor3 = C.TextMuted }, 17)
 		end
-		text(f, "BodyStrong", tostring(r.Name or "?"), { Name = "Name", Position = UDim2.fromOffset(72, 0), Size = UDim2.new(0.55, -72, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = me and P.gold_200 or C.Text })
-		text(f, "BodyStrong", MenuLeaderboards.ValueText(board, tonumber(r.Value) or 0), { Name = "Value", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 0), Size = UDim2.new(0.45, -12, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = me and P.gold_200 or C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
+		UIKit.Avatar(f, tonumber(r.UserId), 36, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14 + RANK_W, 0.5, 0) })
+		text(f, "BodyStrong", tostring(r.Name or "?"), {
+			Name = "Name",
+			Position = UDim2.fromOffset(14 + RANK_W + 48, 0),
+			Size = UDim2.new(1, -(14 + RANK_W + 48 + SCORE_W + 20), 1, 0),
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextColor3 = me and P.gold_200 or C.Text,
+		}, 17)
+		text(f, "Number", MenuLeaderboards.ValueText(board, tonumber(r.Value) or 0), {
+			Name = "Value",
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -16, 0, 0),
+			Size = UDim2.new(0, SCORE_W, 1, 0),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			TextColor3 = P.gold_300,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		}, 18)
 		return f
 	end
 
 	MenuLeaderboards._fill = function(animate: boolean?)
-		for _, b in ipairs(BOARDS) do
-			if b.Id == board then
-				ui.Caption.Text = UIKit.track(b.Caption)
-			end
-		end
+		local b = boardOf(board)
+		ui.Title.Set(string.upper(b.Heading))
+		ui.Sub.Text = b.Sub
+		ui.Explain.Text = b.Explain
+		ui.ScoreHead.Text = UIKit.track(b.Column)
 		for _, ch in ipairs(list:GetChildren()) do
 			if ch:IsA("GuiObject") then
 				ch:Destroy()
@@ -139,33 +203,41 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 			note = "The leaderboard could not be read right now. Showing the last rows we had; it tries again in a minute."
 		elseif status == "loading" then
 			note = "Loading the leaderboard..."
-		elseif d and (tonumber(d.Age) or 0) > 0 then
-			note = ""
 		end
 		ui.Note.Visible = note ~= ""
 		ui.NoteText.Text = note
 		local rows = d and type(d.Rows) == "table" and d.Rows or {}
+		rowCount = #rows
+		local made = {}
 		for i, r in ipairs(rows) do
 			local f = rowFor(r, i)
-			if animate and i <= 12 then
-				UIAnim.Pop(f, 0.025 * i, 0.88)
-				if i <= 3 then
-					f.ClipsDescendants = true
-					UIAnim.Sweep(f, 0.25 + 0.15 * i, 0.55, 0.6)
-				end
+			table.insert(made, f)
+			if animate and i <= 3 then
+				f.ClipsDescendants = true
+				UIAnim.Sweep(f, 0.25 + 0.15 * i, 0.55, 0.6)
 			end
 		end
+		if animate then
+			UIAnim.Cascade(made, 0.025, 0.88, 12)
+		end
+		ui.Head.Visible = #rows > 0
 		ui.Empty.Visible = #rows == 0 and status ~= "loading"
 		ui.Empty.Text = status == "local" and "No runs finished on this server yet. Play one!" or "Nobody is on this board yet. Be the first!"
+		ui.Count.Visible = #rows > 0
+		if status == "local" then
+			ui.Count.Text = #rows == 1 and "1 player on this server" or (#rows .. " players on this server")
+		else
+			ui.Count.Text = #rows == 1 and "1 ranked player" or (UIKit.formatNumber(#rows) .. " ranked players")
+		end
 		-- you
 		ui.YouName.Text = player.DisplayName
 		local myRank = d and tonumber(d.MyRank)
 		local best = d and tonumber(d.MyBest) or 0
 		ui.YouRank.Text = myRank and ("#" .. myRank) or "-"
 		if best > 0 then
-			ui.YouValue.Text = (myRank and "" or ("Not in the top " .. tostring(d and d.Top or 50) .. " · ")) .. "Your best: " .. MenuLeaderboards.ValueText(board, best)
+			ui.YouValue.Text = (myRank and "" or ("Not in the top " .. tostring(d and d.Top or 50) .. " · ")) .. MenuLeaderboards.BestText(board, best)
 		elseif board == "Daily" then
-			ui.YouValue.Text = "No scored daily attempt today"
+			ui.YouValue.Text = "No scored attempt today"
 		else
 			ui.YouValue.Text = "No runs yet"
 		end
@@ -178,28 +250,66 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		local headY = math.max(ins.Top + 4, 12)
 		place(ui.Header.Frame, M, headY, math.min(560, W - 2 * M), 56)
 		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
-		local w = math.min(W - 2 * M, 820)
-		place(ui.Panel, (W - w) / 2, top, w, H - top - M)
+		local maxH = H - top - M
+		local w = math.min(W - 2 * M, 780)
+		local iw = w - 40
+		local narrow = iw < 560
+		local short = maxH < 470 -- phones in landscape: drop the explanation line
 		local tabsH = Theme.Size.TapMin + 4
-		local y = tabsH + 8
-		ui.Caption.Position = UDim2.fromOffset(0, y)
-		ui.Caption.Size = UDim2.new(1, 0, 0, TS(12) + 6)
-		y += TS(12) + 12
-		if ui.Note.Visible then
-			local noteH = TS(14) * (w < 600 and 4 or 2) + 18
-			ui.Note.Position = UDim2.fromOffset(0, y)
-			ui.Note.Size = UDim2.new(1, 0, 0, noteH)
-			y += noteH + 8
+		ui.Tabs.Frame.Position = UDim2.new()
+		ui.Tabs.Frame.Size = UDim2.new(1, 0, 0, tabsH)
+		local y = tabsH + (short and 8 or 14)
+		local titleH = TS(22) + 10
+		place(ui.Title.Frame, 0, y, iw, titleH)
+		y += titleH
+		place(ui.Sub, 0, y, iw, TS(16) + 6)
+		y += TS(16) + 6
+		ui.Explain.Visible = not short
+		if not short then
+			local lines = narrow and 2 or 1
+			place(ui.Explain, 0, y, iw, lines * (TS(14) + 2) + 4)
+			y += ui.Explain.Size.Y.Offset
 		end
-		local youH = 52
-		ui.List.Position = UDim2.fromOffset(0, y)
-		ui.List.Size = UDim2.new(1, 0, 1, -(y + youH + 10))
-		ui.Empty.Position = UDim2.fromOffset(0, y + 20)
-		ui.Empty.Size = UDim2.new(1, 0, 0, TS(16) * 2 + 8)
-		ui.You.Position = UDim2.new(0, 0, 1, -youH)
-		ui.You.Size = UDim2.new(1, 0, 0, youH)
-		ui.YouName.Size = UDim2.new(w < 600 and 0.35 or 0.45, -90, 1, 0)
-		ui.YouValue.Size = UDim2.new(w < 600 and 0.65 or 0.55, -14, 1, 0)
+		y += short and 6 or 12
+		if ui.Note.Visible then
+			local noteH = TS(14) * (narrow and 5 or 2) + 22
+			place(ui.Note, 0, y, iw, noteH)
+			y += noteH + 10
+		end
+		local headH = TS(12) + 12
+		if ui.Head.Visible then
+			place(ui.Head, 0, y, iw, headH)
+			y += headH + 6
+		end
+		-- rows: as many as fit, the rest scroll
+		local youH = narrow and 58 or 60
+		local countH = TS(14) + 8
+		local tail = (rowCount > 0 and countH or 0) + 10 + youH
+		local want = rowCount * (ROW_H + ROW_GAP) + 4
+		local room = maxH - 32 - y - tail
+		local listH = math.max(ROW_H + 8, math.min(want, room))
+		if rowCount == 0 then
+			listH = ui.Empty.Visible and (TS(16) * 2 + 24) or 24
+		end
+		place(ui.List, 0, y, iw, listH)
+		place(ui.Empty, 0, y + 6, iw, TS(16) * 2 + 8)
+		ui.List.ScrollBarThickness = want > listH + 1 and 4 or 0
+		y += listH
+		if rowCount > 0 then
+			place(ui.Count, 0, y + 2, iw, countH)
+			y += countH
+		end
+		y += 10
+		place(ui.You, 0, y, iw, youH)
+		y += youH
+		-- the YOUR BEST card: name column shrinks on narrow panels
+		ui.YouName.Size = UDim2.new(narrow and 0.3 or 0.42, -252 + (narrow and 60 or 0), 1, 0)
+		ui.YouValue.Size = UDim2.new(narrow and 0.7 or 0.58, -16, 1, 0)
+		ui.YouCaption.Visible = not narrow
+		ui.YouRank.Position = UDim2.fromOffset(narrow and 48 or 140, 0)
+		ui.YouAvatarSlot.Position = UDim2.new(0, narrow and 108 or 206, 0.5, -18)
+		ui.YouName.Position = UDim2.fromOffset(narrow and 154 or 252, 0)
+		place(ui.Panel, (W - w) / 2, top, w, math.min(maxH, y + 32))
 	end
 	MenuLeaderboards._layout = function()
 		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
@@ -236,7 +346,7 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 			end
 			MenuLeaderboards._fill(true)
 			ask(board, true)
-			MenuLeaderboards._layout()
+			UIAnim.Pop(holder, 0, 0.94)
 		end,
 		Update = function(dt: number)
 			-- keep an open board fresh (the server caches; this is cheap)

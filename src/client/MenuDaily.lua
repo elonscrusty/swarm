@@ -114,6 +114,28 @@ local function card(parent: Instance, name: string, edge: Color3, edgeT: number?
 	return f
 end
 
+-- Name (caps, accent colour) over a wrapped effect line, right of the card's icon.
+local function cardText(f: Frame, name: string, effect: string, color: Color3)
+	text(f, "Label", name, { Name = "Name", Position = UDim2.fromOffset(58, 10), Size = UDim2.new(1, -68, 0, TS(15) + 4), TextColor3 = color, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
+	text(f, "Small", effect, {
+		Name = "Effect",
+		Position = UDim2.fromOffset(58, 14 + TS(15)),
+		Size = UDim2.new(1, -68, 1, -(TS(15) + 20)),
+		TextColor3 = C.Text,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+	})
+end
+
+-- Height of an icon card whose effect text must fit `width` (rough: ~0.48 em a character).
+local function cardHeight(effects: { string }, width: number): number
+	local lines = 1
+	for _, e in ipairs(effects) do
+		lines = math.max(lines, math.ceil(#e * TS(14) * 0.48 / math.max(1, width - 68)))
+	end
+	return math.max(62, 24 + TS(15) + math.min(lines, 3) * (TS(14) + 3))
+end
+
 -- Arena picture with a painted stand-in (sky / ground bands + the arena icon).
 local function arenaPicture(parent: Instance, arena: string): Frame
 	local tint = ARENA_TINT[arena] or { P.slate_500, P.slate_700 }
@@ -256,8 +278,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			f.BackgroundColor3 = P.crimson_900
 			f.BackgroundTransparency = 0.45
 			Icons.Draw(f, def.Icon, { Size = 34, Position = UDim2.new(0, 12, 0.5, -17), Back = P.slate_950 })
-			text(f, "Label", string.upper(def.Name), { Name = "Name", Position = UDim2.new(0, 56, 0.5, -(TS(15) + 4)), Size = UDim2.new(1, -64, 0, TS(15) + 4), TextColor3 = P.crimson_300, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
-			text(f, "Small", def.Short, { Name = "Effect", Position = UDim2.new(0, 56, 0.5, 0), Size = UDim2.new(1, -64, 0, TS(14) + 6), TextColor3 = C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
+			cardText(f, string.upper(def.Name), def.Short, P.crimson_300)
 			table.insert(ui.CurseCards, f)
 		end
 		ui.GoldChip.SetText(UIKit.track(CurseData.GoldText(CurseData.GoldMult(d.Curses)) .. " gold"))
@@ -268,8 +289,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		b.BackgroundColor3 = P.moss_900
 		b.BackgroundTransparency = 0.4
 		Icons.Draw(b, bdef and bdef.Icon or "gift", { Size = 34, Position = UDim2.new(0, 12, 0.5, -17), Back = P.slate_950 })
-		text(b, "Label", string.upper(bdef and bdef.Name or d.Bonus), { Name = "Name", Position = UDim2.new(0, 56, 0.5, -(TS(15) + 4)), Size = UDim2.new(1, -64, 0, TS(15) + 4), TextColor3 = P.moss_200, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
-		text(b, "Small", CurseData.BonusText(d, MenuDaily.NameOf), { Name = "Effect", Position = UDim2.new(0, 56, 0.5, 0), Size = UDim2.new(1, -64, 0, TS(14) + 6), TextColor3 = C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
+		cardText(b, string.upper(bdef and bdef.Name or d.Bonus), CurseData.BonusText(d, MenuDaily.NameOf), P.moss_200)
 		ui.BonusCard = b
 	end
 
@@ -307,10 +327,10 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local headY = math.max(ins.Top + 4, 12)
 		place(ui.Header.Frame, M, headY, math.min(620, W - 2 * M), 56)
 		local topY = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
-		local w = math.min(W - 2 * M, 1000)
+		local maxH = H - topY - M
+		local w = math.min(W - 2 * M, maxH < 520 and 1160 or 1000) -- short phones: use the width
 		local iw = w - 40 -- inside the face padding
 		local narrow = iw < 640
-		local maxH = H - topY - M
 
 		-- header row
 		local topH = math.max(48, TS(22) + TS(12) + 12)
@@ -318,26 +338,20 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		place(ui.Rule, 0, topH + 10, iw, 1)
 		local bodyY = topH + 22
 
-		-- footer
-		local playH = (maxH < 520) and 58 or 70
+		-- short landscape screens (phones): the buttons and the info card move to a side
+		-- column so the route and curses keep the height
+		local side = not narrow and maxH < 520
+		local sideW = side and math.clamp(math.floor(iw * 0.3), 220, 300) or 0
+		local playH = side and 64 or 70
 		local boardH = Theme.Size.Button
-		local footH = narrow and (playH + 10 + boardH) or playH
-		if narrow then
-			place(ui.Play.Instance, 0, 0, iw, playH)
-			place(ui.Board.Instance, 0, playH + 10, iw, boardH)
-		else
-			local pw = math.min(400, math.floor(iw * 0.48))
-			local bw = math.min(260, math.floor(iw * 0.3))
-			local x0 = math.floor((iw - (pw + 14 + bw)) / 2)
-			place(ui.Play.Instance, x0, 0, pw, playH)
-			place(ui.Board.Instance, x0 + pw + 14, math.floor((playH - boardH) / 2), bw, boardH)
-		end
+		local footH = side and 0 or (narrow and (playH + 10 + boardH) or playH)
+		ui.Info.Parent = side and foot or body
 
 		-- body content (scroll canvas coordinates)
-		local bw = iw - 8 -- room for the scroll bar
+		local bw = (side and (iw - sideW - 18) or iw) - 8 -- room for the scroll bar
 		local y = 2
-		local infoW = narrow and bw or math.min(320, math.floor(bw * 0.36))
-		local textW = narrow and bw or (bw - infoW - 20)
+		local infoW = (narrow or side) and (side and sideW or bw) or math.min(320, math.floor(bw * 0.36))
+		local textW = (narrow or side) and bw or (bw - infoW - 20)
 		local headPx = TS(26)
 		local headLines = (#ui.Heading.Text * headPx * 0.5 > textW) and 2 or 1
 		place(ui.Heading, 0, y, textW, headLines * (headPx + 4) + 4)
@@ -345,9 +359,11 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local subLines = math.clamp(math.ceil(#ui.Sub.Text * subPx * 0.48 / math.max(1, textW)), 1, 4)
 		place(ui.Sub, 0, y + ui.Heading.Size.Y.Offset + 4, textW, subLines * (subPx + 3) + 4)
 		local heroH = ui.Heading.Size.Y.Offset + 4 + ui.Sub.Size.Y.Offset
-		local infoLines = math.clamp(math.ceil(#ui.InfoText.Text * TS(15) * 0.48 / math.max(1, infoW - 54)), 1, 3)
+		local infoLines = math.clamp(math.ceil(#ui.InfoText.Text * TS(15) * 0.48 / math.max(1, infoW - 54)), 1, 4)
 		local infoH = math.max(48, infoLines * (TS(15) + 4) + 18)
-		if narrow then
+		if side then
+			y += heroH + 16
+		elseif narrow then
 			place(ui.Info, 0, y + heroH + 10, infoW, infoH)
 			y += heroH + 10 + infoH + 16
 		else
@@ -355,17 +371,20 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			y += math.max(heroH, infoH) + 16
 		end
 
-		-- route
+		-- route: one row, or balanced rows (3 + 2) when the cards would get too small
 		local labelH = TS(12) + 6
 		place(ui.RouteLabel, 0, y, bw, labelH)
 		y += labelH + 6
 		local n = #ui.Stops
-		local perRow = n
+		local perRow = math.max(1, n)
 		while perRow > 2 and (bw - (perRow - 1) * CHEVRON) / perRow < 104 do
 			perRow -= 1
 		end
+		if perRow < n then
+			perRow = math.ceil(n / math.ceil(n / perRow))
+		end
 		local sw = math.floor((bw - (perRow - 1) * CHEVRON) / perRow)
-		local picH = math.clamp(math.floor(sw * 0.48), 52, 86)
+		local picH = math.clamp(math.floor(sw * 0.48), side and 44 or 52, side and 64 or 86)
 		local stopH = picH + 12 + TS(16) + TS(13) + 14
 		for i, f in ipairs(ui.Stops) do
 			local col = (i - 1) % perRow
@@ -381,6 +400,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			place(an, 6, picH + 10, sw - 12, TS(16) + 4)
 			local bn = f:FindFirstChild("Boss") :: TextLabel
 			place(bn, 6, picH + 12 + TS(16), sw - 12, TS(13) + 4)
+			bn.TextSize = sw < 150 and TS(11) or TS(13) -- long boss names on small cards
 			local chev = ui.Chevrons[i]
 			if chev then
 				chev.Visible = col < perRow - 1
@@ -388,47 +408,81 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		local routeRows = math.ceil(n / perRow)
-		y += routeRows * stopH + (routeRows - 1) * 10 + 16
+		y += math.max(0, routeRows * stopH + (routeRows - 1) * 10) + 16
 
 		-- curses (left) and the bonus (right); stacked when narrow
-		local cardH = math.max(60, TS(15) + TS(14) + 26)
-		local cursesW = narrow and bw or math.floor((bw - 20) * 0.64)
-		local bonusX = narrow and 0 or (cursesW + 20)
-		local bonusW = narrow and bw or (bw - cursesW - 20)
-		local cy = y
+		local stacked = narrow or bw < 700
+		local cursesW = stacked and bw or math.floor((bw - 20) * 0.64)
+		local bonusX = stacked and 0 or (cursesW + 20)
+		local bonusW = stacked and bw or (bw - cursesW - 20)
 		local nc = #ui.CurseCards
+		local perRowC = (nc > 0 and (cursesW - (nc - 1) * 10) / nc >= 190) and nc or 1
+		local cw = math.floor((cursesW - (perRowC - 1) * 10) / perRowC)
+		local curseTexts, bonusTexts = {}, {}
+		for _, f in ipairs(ui.CurseCards) do
+			table.insert(curseTexts, (f:FindFirstChild("Effect") :: TextLabel).Text)
+		end
+		if ui.BonusCard then
+			table.insert(bonusTexts, (ui.BonusCard:FindFirstChild("Effect") :: TextLabel).Text)
+		end
+		local curseH = cardHeight(curseTexts, cw)
+		local bonusH = cardHeight(bonusTexts, bonusW)
+		if not stacked then
+			curseH = math.max(curseH, bonusH)
+			bonusH = curseH
+		end
+		local chipH = Theme.Size.Badge + 14
+		local rowH = math.max(labelH, chipH) -- the label row holds the gold chip
+		local cy = y
 		if nc > 0 then
-			place(ui.CursesLabel, 0, cy, cursesW, labelH)
+			place(ui.CursesLabel, 0, cy + math.floor((rowH - labelH) / 2), cursesW, labelH)
 			ui.GoldChip.Frame.AnchorPoint = Vector2.new(1, 0)
-			ui.GoldChip.Frame.Position = UDim2.fromOffset(cursesW, cy - 6)
-			cy += labelH + 10
-			local perRowC = (cursesW - (nc - 1) * 10) / nc >= 190 and nc or 1
-			local cw = math.floor((cursesW - (perRowC - 1) * 10) / perRowC)
+			ui.GoldChip.Frame.Position = UDim2.fromOffset(cursesW, cy + math.floor((rowH - chipH) / 2))
+			cy += rowH + 8
 			for i, f in ipairs(ui.CurseCards) do
 				local col = (i - 1) % perRowC
 				local rowI = (i - 1) // perRowC
-				place(f, col * (cw + 10), cy + rowI * (cardH + 10), cw, cardH)
+				place(f, col * (cw + 10), cy + rowI * (curseH + 10), cw, curseH)
 			end
 			local rowsC = math.ceil(nc / perRowC)
-			cy += rowsC * cardH + (rowsC - 1) * 10
+			cy += rowsC * curseH + (rowsC - 1) * 10
 		end
-		local by = narrow and (nc > 0 and cy + 16 or y) or y
-		place(ui.BonusLabel, bonusX, by, bonusW, labelH)
+		local by = stacked and (nc > 0 and cy + 16 or y) or y
+		local labelY = stacked and by or (by + math.floor((rowH - labelH) / 2))
+		place(ui.BonusLabel, bonusX, labelY, bonusW, labelH)
+		local bonusTop = stacked and (by + labelH + 8) or (by + rowH + 8)
 		if ui.BonusCard then
-			place(ui.BonusCard, bonusX, by + labelH + 10, bonusW, cardH)
+			place(ui.BonusCard, bonusX, bonusTop, bonusW, bonusH)
 		end
-		local bonusBottom = by + labelH + 10 + cardH
-		y = math.max(cy, bonusBottom) + 8
+		y = math.max(cy, bonusTop + bonusH) + 8
 		body.CanvasSize = UDim2.fromOffset(0, y)
 
 		-- panel: as tall as the content needs, the body scrolls when it cannot fit
-		local chrome = 36 + bodyY + 16 + footH
-		local h = math.min(maxH, chrome + y)
+		local sideNeed = side and (infoH + 14 + playH + 10 + boardH) or 0
+		local chrome = 36 + bodyY + (side and 0 or (16 + footH))
+		local h = math.min(maxH, chrome + math.max(y, sideNeed))
 		local bodyH = h - chrome
 		place(ui.Panel, (W - w) / 2, topY, w, h)
-		place(body, 0, bodyY, iw, bodyH)
+		place(body, 0, bodyY, side and (iw - sideW - 18) or iw, bodyH)
 		body.ScrollBarThickness = y > bodyH + 1 and 4 or 0
-		place(foot, 0, h - 36 - footH, iw, footH)
+		if side then
+			place(foot, iw - sideW, bodyY, sideW, bodyH)
+			place(ui.Info, 0, 0, sideW, infoH)
+			place(ui.Board.Instance, 0, bodyH - boardH, sideW, boardH)
+			place(ui.Play.Instance, 0, bodyH - boardH - 10 - playH, sideW, playH)
+		else
+			place(foot, 0, h - 36 - footH, iw, footH)
+			if narrow then
+				place(ui.Play.Instance, 0, 0, iw, playH)
+				place(ui.Board.Instance, 0, playH + 10, iw, boardH)
+			else
+				local pw = math.min(400, math.floor(iw * 0.48))
+				local bw2 = math.min(260, math.floor(iw * 0.3))
+				local x0 = math.floor((iw - (pw + 14 + bw2)) / 2)
+				place(ui.Play.Instance, x0, 0, pw, playH)
+				place(ui.Board.Instance, x0 + pw + 14, math.floor((playH - boardH) / 2), bw2, boardH)
+			end
+		end
 	end
 	MenuDaily._layout = function()
 		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())

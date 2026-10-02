@@ -21,8 +21,9 @@ bash tools/preview/render.sh --check-meshes       # FBX pieces vs catalog offset
 
 Options: `--seed N` (default 1), `--studio` (RunService:IsStudio() = true, shows the DEV
 button), `--set key=value` (scene arguments, e.g. `arena=Ruins`, `enemies=200`,
-`meshes=uploaded` to show only really uploaded models, `meshes=none` for no meshes at all: every part-built fallback), `--no-coreui` (hide the ghost of
+`meshes=uploaded` to show only really uploaded models, `meshes=none` for no meshes at all: every part-built fallback; `images=loaded` makes every ImageLabel report IsLoaded so pictures hide their drawn fallbacks as in the game), `--no-coreui` (hide the ghost of
 Roblox's top-bar buttons), `--repo PATH` / `--ref GIT_REF` (render another checkout).
+Owner art uploaded through `tools/upload_art.py` (`art/uploaded_art.json`) is drawn for real (Fit / Crop / Stretch / 9-slice); other images stay hatched placeholders.
 Each PNG gets its scene JSON next to it (`--outdir` / `--json`) and a `*.metrics.json`.
 
 Setup installs Lune 0.10.4 into `/tmp/sh-tools/lune`, three.js (npm) and Google Fonts

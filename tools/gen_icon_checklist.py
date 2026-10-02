@@ -175,6 +175,8 @@ for dp, _, fs in os.walk(SRC):
         for ln, line in enumerate(open(p, encoding="utf-8"), 1):
             for m in pat.finditer(line):
                 k = next(g for g in m.groups() if g)
+                if k.endswith("_"):
+                    continue  # a built name such as "arena_" .. arena
                 used.setdefault(k, set()).add(fn[:-4])
 rows = []
 for k in sorted(used):

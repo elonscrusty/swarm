@@ -2,7 +2,7 @@
 	TeamUI.lua
 	Duo / Trio on the local client: who is on the team and who needs help.
 
-	  team list     one compact row per teammate (other players in the run): hero icon,
+	  team list     one compact row per teammate (other players in the run): hero portrait (painted bust, class icon fallback),
 	                name, a bar and a state word (never colour alone):
 	                  health bar (crimson)          alive; "CHOOSING" while they pick a card
 	                  "DOWN · 12 m" (crimson)       fallen, can be revived
@@ -39,6 +39,7 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
+local ArtImage = require(script.Parent.ArtImage)
 local Hud = require(script.Parent.Hud)
 local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
@@ -55,7 +56,7 @@ local WORLD_SEGMENTS = 28
 local PARK = CFrame.new(0, -150, 0)
 local FLAT = Vector3.new(1, 0, 1)
 
-type Row = { Last: number?, Player: Player, Holder: Frame, Name: TextLabel, State: TextLabel, Meter: UIKit.Meter, IconHolder: Frame, Icon: string, StateKey: string }
+type Row = { Last: number?, Player: Player, Holder: Frame, Name: TextLabel, State: TextLabel, Meter: UIKit.Meter, IconHolder: Frame, Icon: string, Bust: ImageLabel?, StateKey: string }
 type Marker = { Holder: Frame, Segments: { Frame }, Label: TextLabel, Arrow: Frame, Pivot: Frame, Ring: Frame }
 type WorldRing = { Segments: { BasePart }, Disc: BasePart, Lit: number }
 
@@ -202,7 +203,13 @@ local function updateRow(r: Row, state: Configuration)
 				c:Destroy()
 			end
 		end
-		Icons.Character(r.IconHolder, heroId, { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+		local icon = Icons.Character(r.IconHolder, heroId, { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+		-- the hero's painted bust in the ring (the class icon while it loads / without one)
+		r.Bust = ArtImage.RoundPortrait(r.IconHolder, ArtImage.Portrait(heroId), { icon })
+	end
+	if r.Bust then
+		-- greyed while down / out
+		r.Bust.ImageColor3 = (s == "down" or s == "out" or s == "deciding") and Color3.fromRGB(110, 110, 120) or Color3.new(1, 1, 1)
 	end
 	local word = STATE_TEXT[s] or ""
 	local value: number

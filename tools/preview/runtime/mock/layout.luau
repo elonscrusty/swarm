@@ -965,6 +965,12 @@ R.defineClass("GuiObject", {
 		GuiState = function()
 			return Enum.GuiState.Idle
 		end,
+		-- images never load here; `--set images=loaded` pretends they all did (pictures
+		-- that hide their drawn fallback once loaded then show the loaded look)
+		IsLoaded = function()
+			local a = R.options and R.options.sceneArgs
+			return a ~= nil and a.images == "loaded"
+		end,
 	},
 	setters = {
 		Transparency = function(obj, _, v)

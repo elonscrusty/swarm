@@ -2086,6 +2086,12 @@ local function buildRevive()
 	revive.Overlay = m.Overlay
 	local content = m.Content
 	fitModal(m, UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }))
+	-- the fallen hero's painted bust (greyed, in a crimson ring) with the heart on its
+	-- corner; just the heart when the hero has no portrait (onReviveOffer)
+	local hero = new("Frame", { Name = "Hero", BackgroundColor3 = P.slate_950, BorderSizePixel = 0, Size = UDim2.fromOffset(84, 84), LayoutOrder = 1, Visible = false }, content)
+	UIKit.corner(hero, 999)
+	UIKit.stroke(hero, P.crimson_400, 2.5, 0.05)
+	revive.Hero = hero
 	revive.Heart = Icons.Draw(content, "heart", { Size = 48, LayoutOrder = 1 })
 	revive.Title = text(content, "H1", "YOU FELL!", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300 })
 	revive.Text = text(content, "Body", "Revive and keep fighting?", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center })
@@ -2131,6 +2137,23 @@ local function onReviveOffer(data)
 	end
 	reviveSeconds = math.max(1, data.Seconds or 10)
 	reviveDeadline = os.clock() + reviveSeconds
+	-- the hero's portrait when there is one: the heart moves onto its corner
+	local heroId = tostring(player:GetAttribute("CharacterId") or (profile and profile.SelectedCharacter) or CharacterData.Default)
+	local bust = ArtImage.RoundPortrait(revive.Hero, ArtImage.Portrait(heroId), nil)
+	revive.Hero.Visible = bust ~= nil
+	if bust then
+		bust.ImageColor3 = Color3.fromRGB(150, 140, 145)
+		revive.Heart.Parent = revive.Hero
+		revive.Heart.AnchorPoint = Vector2.new(1, 1)
+		revive.Heart.Position = UDim2.new(1, 10, 1, 6)
+		revive.Heart.Size = UDim2.fromOffset(40, 40)
+		revive.Heart.ZIndex = 4
+	else
+		revive.Heart.Parent = revive.Hero.Parent
+		revive.Heart.AnchorPoint = Vector2.zero
+		revive.Heart.Position = UDim2.new()
+		revive.Heart.Size = UDim2.fromOffset(48, 48)
+	end
 	revive.Buy.SetText("REVIVE")
 	task.spawn(function()
 		local ok, info = pcall(function()
@@ -2214,6 +2237,26 @@ local function buildResults()
 	UIKit.corner(medal, 999)
 	results.MedalStroke = UIKit.stroke(medal, P.gold_400, 2.5, 0.05)
 	results.Medal = medal
+	-- the boss that ended the run (bosses/<id>), a small crimson disc on the medal's corner
+	local bossBadge = new("Frame", { Name = "BossBadge", BackgroundColor3 = P.slate_950, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 1, -6), Size = UDim2.fromOffset(40, 40), ZIndex = 6, Visible = false }, medal)
+	UIKit.corner(bossBadge, 999)
+	UIKit.stroke(bossBadge, P.crimson_400, 2, 0.05)
+	results.BossBadge = bossBadge
+	local stateFolder = Remotes.State()
+	local function noteBoss()
+		local id = stateFolder:GetAttribute("BossId")
+		if type(id) == "string" and id ~= "" then
+			results.LastBoss = id
+		end
+	end
+	stateFolder:GetAttributeChangedSignal("BossId"):Connect(noteBoss)
+	noteBoss()
+	-- painted backdrop by outcome (screens/victory, defeat, results_bg) behind the dimmer
+	if ArtImage.Image("screens/victory") or ArtImage.Image("screens/defeat") or ArtImage.Image("screens/results_bg") then
+		local back = new("ImageLabel", { Name = "Backdrop", BackgroundTransparency = 1, BorderSizePixel = 0, ScaleType = Enum.ScaleType.Crop, ZIndex = 0, Visible = false }, results.Overlay)
+		UIKit.Bleed(back)
+		results.Backdrop = back
+	end
 	local titleCol = new("Frame", { Name = "TitleCol", BackgroundTransparency = 1, Size = UDim2.fromOffset(420, 92), LayoutOrder = 2 }, head)
 	results.TitleCol = titleCol
 	results.Title = text(titleCol, "Display", "VICTORY!", { Position = UDim2.fromOffset(0, 2), Size = UDim2.new(1, 0, 0, TS(44) + 6) }, 44)
@@ -2527,13 +2570,47 @@ local function onRunResult(data)
 	results.Arena.Text = UIKit.track(where .. " · " .. tostring(data.Arena))
 	-- the hero who played
 	for _, ch in ipairs(results.Medal:GetChildren()) do
-		if ch:IsA("Frame") then
+		if ch:IsA("Frame") and ch ~= results.BossBadge then
 			ch:Destroy()
 		end
 	end
 	local heroId = type(data.CharacterId) == "string" and data.CharacterId or CharacterData.Default
 	local heroDef = CharacterData.Characters[heroId]
-	Icons.Character(results.Medal, heroId, { Size = 48, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+	local classIcon = Icons.Character(results.Medal, heroId, { Size = 48, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+	-- the hero's painted bust in the medal (the class icon while it loads / without one)
+	ArtImage.RoundPortrait(results.Medal, ArtImage.Portrait(heroId), { classIcon })
+	-- fell in a boss fight: that boss on the medal's corner
+	local badge = results.BossBadge
+	local bossKey = ArtImage.Boss(results.LastBoss or "ScorpionQueen")
+	local showBoss = data.BossFight == true and not data.Won and ArtImage.Image(bossKey) ~= nil
+	badge.Visible = showBoss
+	if showBoss then
+		if results.BossArt then
+			ArtImage.Set(results.BossArt, bossKey)
+		else
+			results.BossArt = ArtImage.Place(badge, bossKey, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1.25, 1.25), ZIndex = 7 })
+		end
+	end
+	-- the backdrop: victory, defeat, or the neutral hall for an escape / a run left early
+	local back = results.Backdrop
+	if back then
+		local key = data.Won and "screens/victory" or ((data.Portal or data.Abandoned) and "screens/results_bg" or "screens/defeat")
+		if not ArtImage.Image(key) then
+			key = "screens/results_bg"
+		end
+		local image = ArtImage.Image(key)
+		back.Visible = image ~= nil
+		results.Overlay:SetAttribute("BackdropTransparency", image and 0.5 or Theme.Alpha.Backdrop)
+		if image then
+			back.Image = image
+			if not results.Overlay.Visible and not ClientSettings.Reduced() then
+				back.ImageTransparency = 1
+				UIAnim.Tween(back, 0.5, { ImageTransparency = 0 })
+			else
+				back.ImageTransparency = 0
+			end
+		end
+	end
 	-- the worn portrait frame (level track)
 	local framed = Cosmetics.Frame(results.Medal, profile and profile.Frame or "")
 	results.MedalStroke.Transparency = framed and 1 or 0.05

@@ -606,7 +606,7 @@ local function buildHomeArt()
 	for b, name in pairs({ [ui.SettingsBtn] = "Settings", [ui.RanksBtn] = "Leaderboards", [ui.TrackBtn] = "Track" }) do
 		ArtImage.ButtonIcon(b.Content, "icons/ui/ui_" .. name, { Position = UDim2.new(0.5, 0, 0.5, glyphY), Size = UDim2.fromOffset(42, 42) }, "Glyph")
 	end
-	setArenaArt(Remotes.State():GetAttribute("SelectedArena") or "Forest")
+	setArenaArt(tostring(Remotes.State():GetAttribute("SelectedArena") or "Forest"))
 end
 
 local function buildHome(screen: Frame)
@@ -1228,7 +1228,7 @@ function LobbyScreen.Update(_dt: number?)
 		end
 	end
 
-	setArenaArt(state:GetAttribute("SelectedArena") or "Forest")
+	setArenaArt(tostring(state:GetAttribute("SelectedArena") or "Forest"))
 	local title, sub = arenaText()
 	if ui.CardArena.Title and ui.CardArena.Title.Text ~= title then
 		if ui.ArenaShown then

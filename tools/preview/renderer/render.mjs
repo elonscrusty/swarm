@@ -69,12 +69,21 @@ async function main() {
     '/three/': path.join(ROOT, 'node_modules', 'three'),
     '/fonts/': path.join(ROOT, '.cache', 'fonts'),
     '/meshes/': path.join(args.repo, 'meshes'),
+    '/art/': path.join(args.repo, 'art'),
   };
   let jobData = null;
   const serve = async (route) => {
     const url = new URL(route.request().url());
     const p = decodeURIComponent(url.pathname);
     if (p === '/job.json') return route.fulfill({ status: 200, contentType: 'application/json', body: jobData });
+    if (p === '/artmap.json') {
+      // uploaded owner art (art/uploaded_art.json: key -> id) as id -> key, so the page can
+      // draw the real picture for an "rbxassetid://<id>" image instead of a placeholder
+      const map = {};
+      const f = path.join(args.repo, 'art', 'uploaded_art.json');
+      try { for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(f, 'utf8')))) map[String(v)] = k; } catch (e) { /* no art */ }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(map) });
+    }
     for (const [prefix, dir] of Object.entries(files)) {
       if (p.startsWith(prefix)) {
         const file = path.join(dir, p.slice(prefix.length));

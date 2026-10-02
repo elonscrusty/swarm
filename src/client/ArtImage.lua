@@ -24,6 +24,9 @@
 	                                         kind): the picture survives the redraws and keeps
 	                                         the drawn glyph hidden under it. layout (Size,
 	                                         Position ...) lets it stand a little proud.
+	ArtImage.RoundPortrait(medal, key, fallbacks, props?)
+	                                         a bust clipped to a circle (CanvasGroup) filling a
+	                                         round medal; call again to change it
 	ArtImage.Frame(parent, band, border, props?)
 	                                         9-slice rarity frame (ui/frames/frame_<band>) around
 	                                         its parent: border = visible rim width in pixels.
@@ -84,7 +87,7 @@ end
 -- Watches one picture load: fallbacks hidden at first, shown after FALLBACK_DELAY if it is
 -- not in yet, hidden again once it is. A newer watch on the same label wins (token).
 local function watch(img: ImageLabel, fallbacks: Fallbacks, fadeIn: number?, target: number)
-	local token = (img:GetAttribute("ArtToken") or 0) + 1
+	local token = (tonumber(img:GetAttribute("ArtToken")) or 0) + 1
 	img:SetAttribute("ArtToken", token)
 	showFallbacks(fallbacks, false)
 	local fade = fadeIn and fadeIn > 0 and not ClientSettings.Reduced()
@@ -150,7 +153,7 @@ function ArtImage.Set(img: ImageLabel?, key: string?, fallbacks: Fallbacks)
 	end
 	local image = ArtData.Image(key)
 	if not image then
-		img:SetAttribute("ArtToken", (img:GetAttribute("ArtToken") or 0) + 1)
+		img:SetAttribute("ArtToken", (tonumber(img:GetAttribute("ArtToken")) or 0) + 1)
 		img.Visible = false
 		showFallbacks(fallbacks, true)
 		return
@@ -210,6 +213,53 @@ function ArtImage.ButtonIcon(holder: Instance?, key: string, layout: { [string]:
 			end)
 		end
 	end)
+	return img
+end
+
+--[[
+	Round portrait: a CanvasGroup with a full UICorner (it clips to the circle) holding the
+	bust, filling a medal frame. fallback = the drawn icon(s) shown while it loads. Call
+	again on the same medal to change hero; nil when the hero has no portrait (the clip is
+	hidden and the fallback shown).
+]]
+function ArtImage.RoundPortrait(medal: GuiObject, key: string, fallbacks: Fallbacks, props: { [string]: any }?): ImageLabel?
+	local clip = medal:FindFirstChild("PortraitClip") :: CanvasGroup?
+	local img = clip and clip:FindFirstChild("Art") :: ImageLabel?
+	if not ArtData.Image(key) then
+		if clip then
+			clip.Visible = false
+		end
+		showFallbacks(fallbacks, true)
+		return nil
+	end
+	if not clip then
+		local c = Instance.new("CanvasGroup")
+		c.Name = "PortraitClip"
+		c.BackgroundTransparency = 1
+		c.BorderSizePixel = 0
+		c.Size = UDim2.fromScale(1, 1)
+		c.ZIndex = 2
+		c.Active = false
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(1, 0)
+		corner.Parent = c
+		c.Parent = medal
+		clip = c
+	end
+	(clip :: CanvasGroup).Visible = true
+	if img then
+		ArtImage.Set(img, key, fallbacks)
+	else
+		local p = {
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromScale(0.5, 1.04),
+			Size = UDim2.fromScale(1.12, 1.12),
+		}
+		for k, v in pairs(props or {}) do
+			p[k] = v
+		end
+		img = ArtImage.Place(clip, key, p, fallbacks)
+	end
 	return img
 end
 

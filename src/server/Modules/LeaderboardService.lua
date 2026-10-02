@@ -23,7 +23,8 @@
 	  "error"    the read failed; the last good rows (if any) are kept
 
 	Names come from players on this server, else Players:GetNameFromUserIdAsync (cached,
-	pcall'd); unknown names show as "Player <id>".
+	pcall'd); unknown names show as "Player <id>". Rows carry the UserId too (the client
+	shows the player's head shot).
 
 	Studio uses its own stores (Config.Leaderboards.StudioStorePrefix): tests never write to
 	the live boards. Submit takes the run's id: one run is submitted at most once per board,
@@ -341,7 +342,7 @@ local function onRequest(player: Player, board: any)
 	local out = {}
 	local myRank = nil
 	for i, e in ipairs(rows) do
-		table.insert(out, { Rank = i, Name = nameOf(e.UserId), Value = e.Value, Me = e.UserId == player.UserId })
+		table.insert(out, { Rank = i, UserId = e.UserId, Name = nameOf(e.UserId), Value = e.Value, Me = e.UserId == player.UserId })
 		if e.UserId == player.UserId then
 			myRank = i
 		end

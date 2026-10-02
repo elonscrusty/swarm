@@ -46,6 +46,7 @@ local C, P = Theme.Color, Theme.Palette
 
 local SWATCH = 52 -- skin tile size (reference px)
 local LABEL_W = 86 -- width of the EFFECT / STRENGTH / TRADEOFF column
+local ACTION_H = 48 -- the SELECT / UNLOCK button
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -108,7 +109,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			Icon = Icons.CharacterIcon(id),
 			IconSize = 38,
 			TitleStyle = "H2",
-			TitleSize = Theme.TextSize.H2 + 2,
+			TitleSize = Theme.TextSize.H2,
 			Align = "Left",
 			Size = UDim2.new(1, 0, 0, 64),
 			LayoutOrder = i,
@@ -145,10 +146,15 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, detailFace)
 	UIKit.padding(scroll, 14, 18, 14, 18)
-	ui.DetailList = UIKit.list(scroll, { Padding = UDim.new(0, 7), HorizontalAlignment = Enum.HorizontalAlignment.Left })
+	ui.DetailList = UIKit.list(scroll, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Left })
+	ui.Scroll = scroll
+	-- footer for the action button when the details don't fit (phones): always in view
+	ui.Footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Visible = false, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) }, detailFace)
+	UIKit.padding(ui.Footer, 6, 18, 12, 18)
+	ui.FooterRule = new("Frame", { BackgroundColor3 = C.PanelEdge, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), Position = UDim2.fromOffset(0, -6) }, ui.Footer)
 
 	-- head: portrait | NAME / ROLE | status pill
-	local headH = math.max(56, TS(28) + TS(12) + 12)
+	local headH = math.max(52, TS(28) + TS(12) + 10)
 	local head = new("Frame", { Name = "Head", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, headH), LayoutOrder = 1 }, scroll)
 	ui.PortraitWell = new("Frame", {
 		Name = "Portrait",
@@ -177,16 +183,16 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		AutomaticSize = Enum.AutomaticSize.Y,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = P.ivory_200,
-	})
+	}, 15)
 
 	-- two mini cards: STARTING WEAPON (tile) and TRAIT
-	local factH = math.max(56, TS(11) + TS(16) + 22)
+	local factH = math.max(50, TS(11) + TS(16) + 18)
 	local facts = new("Frame", { Name = "Facts", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, factH), LayoutOrder = 3 }, scroll)
 	local function miniCard(x: number, caption: string): (Frame, TextLabel, Frame)
 		local card = UIKit.Panel(facts, { Name = caption, Position = UDim2.new(x, x > 0 and 5 or 0, 0, 0), Size = UDim2.new(0.5, -5, 1, 0) }, true)
 		local well = new("Frame", { Name = "Well", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(40, 40) }, card)
-		text(card, "Caption", UIKit.track(caption), { Position = UDim2.fromOffset(56, 8), Size = UDim2.new(1, -60, 0, TS(11) + 2), TextTruncate = Enum.TextTruncate.AtEnd }, 11)
-		local value = text(card, "BodyStrong", "", { Position = UDim2.fromOffset(56, 10 + TS(11)), Size = UDim2.new(1, -60, 0, TS(16) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
+		text(card, "Caption", UIKit.track(caption), { Position = UDim2.fromOffset(56, 6), Size = UDim2.new(1, -60, 0, TS(11) + 2), TextTruncate = Enum.TextTruncate.AtEnd }, 11)
+		local value = text(card, "BodyStrong", "", { Position = UDim2.fromOffset(56, 8 + TS(11)), Size = UDim2.new(1, -60, 0, TS(16) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
 		return card, value, well
 	end
 	local _, weaponName, weaponWell = miniCard(0, "Starting weapon")
@@ -236,7 +242,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		Icon = "play",
 		IconSize = 20,
 		Align = "Center",
-		Size = UDim2.new(1, 0, 0, Theme.Size.Button - 4),
+		Size = UDim2.new(1, 0, 0, ACTION_H),
 		LayoutOrder = 8,
 		Name = "Action",
 		OnClick = function()
@@ -262,14 +268,15 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	})
 	local div = new("Frame", { Name = "Rule", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 7), LayoutOrder = 9 }, scroll)
 	new("Frame", { BackgroundColor3 = C.PanelEdge, BackgroundTransparency = 0.55, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.new(1, 0, 0, 1) }, div)
-	UIKit.SectionLabel(scroll, "Skins", P.gold_300, { LayoutOrder = 10, Size = UDim2.new(1, 0, 0, TS(12) + 2) })
+	-- SKINS, the inspected skin's name, its state or its button (EQUIP / GET SKIN /
+	-- COMING SOON) on one line, the tiles under it
+	local skinRowH = math.max(36, TS(16) + 10)
+	local skinRow = new("Frame", { Name = "SkinRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, skinRowH), LayoutOrder = 10 }, scroll)
+	UIKit.SectionLabel(skinRow, "Skins", P.gold_300, { Size = UDim2.fromOffset(LABEL_W - 20, skinRowH) })
+	ui.SkinName = text(skinRow, "BodyStrong", "", { Position = UDim2.fromOffset(LABEL_W - 16, 0), Size = UDim2.new(1, -(LABEL_W - 16 + 168), 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
+	ui.SkinState = text(skinRow, "Caption", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 160, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 })
 	ui.Swatches = new("Frame", { Name = "Swatches", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), LayoutOrder = 11, AutomaticSize = Enum.AutomaticSize.Y }, scroll)
 	UIKit.list(ui.Swatches, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), Wraps = true })
-	-- skin name, its state, and its button (EQUIP / GET SKIN / COMING SOON) on one line
-	local skinRowH = math.max(40, TS(16) + 12)
-	local skinRow = new("Frame", { Name = "SkinRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, skinRowH), LayoutOrder = 12 }, scroll)
-	ui.SkinName = text(skinRow, "BodyStrong", "", { Size = UDim2.new(1, -190, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
-	ui.SkinState = text(skinRow, "Caption", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 180, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 })
 	ui.SkinAction = UIKit.Button(skinRow, {
 		Kind = "Outline",
 		Title = "GET SKIN",
@@ -278,7 +285,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		Align = "Center",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.fromScale(1, 0),
-		Size = UDim2.new(0, 180, 1, 0),
+		Size = UDim2.new(0, 160, 1, 0),
 		Shadow = false,
 		OnClick = function()
 			local p = profile()
@@ -532,6 +539,19 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		ui.Marks[id].Frame.Visible = not tile
 	end
 
+	-- the action button sits in the list under the details; when they don't fit (phones) it
+	-- is pinned in a footer at the bottom of the panel instead, so it is always in view
+	local function pinAction(on: boolean)
+		local b = ui.Action.Instance
+		if (b.Parent == ui.Footer) == on then
+			return
+		end
+		ui.Footer.Visible = on
+		ui.Footer.Size = UDim2.new(1, 0, 0, ACTION_H + 18)
+		ui.Scroll.Size = on and UDim2.new(1, 0, 1, -(ACTION_H + 18)) or UDim2.fromScale(1, 1)
+		b.Parent = on and ui.Footer or ui.Scroll
+	end
+
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
 		local W, H = v.X, v.Y
 		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
@@ -540,7 +560,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		-- portrait: the stats chip sits under the header (LobbyScreen), the tabs under it
 		local top = headY + 66 + (portrait and 58 or 0)
 		-- the details panel fits its content (measured), up to the room there is
+		-- (measured with the action button in the list, also while it is pinned below)
 		local measured = ui.DetailList.AbsoluteContentSize.Y / math.max(0.01, host.Scale())
+		if ui.Action.Instance.Parent == ui.Footer then
+			measured += ACTION_H + 6
+		end
 		local contentH = measured > 10 and (measured + 30) or (UIKit.IsCompact() and 640 or 590)
 		local n = #CharacterData.Order
 		if portrait then
@@ -558,15 +582,16 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				row.Instance.Size = UDim2.new(1 / perRow, -6, 0, 52)
 				rowStyle(id, true, perRow >= 4 and tileSize(id) or Theme.TextSize.Body + 1)
 			end
-			local detailH = math.min(contentH, math.floor(H * 0.54) - (listH - 76))
+			local detailH = math.min(contentH, math.floor(H * 0.56) - (listH - 76))
 			place(ui.Detail, M, H - M - detailH, w, detailH)
+			pinAction(contentH > detailH + 1)
 			if ctx.Current() == "Characters" then
 				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + listH) + (H - M - detailH)) / 2 / H)
 			end
 		else
 			-- one column of rows (shorter rows when needed); when even short rows don't fit
 			-- (phones in landscape) two columns of name tiles
-			local lw = math.clamp(W * 0.22, 260, 320)
+			local lw = math.clamp(W * 0.21, 250, 310)
 			local inner = H - M - top - 24
 			local rowH = math.floor((inner - (n - 1) * 8) / n)
 			local cols = 1
@@ -587,11 +612,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			place(ui.List, M, top, lw, rows * rowH + (rows - 1) * gap + 24)
 			for id, row in pairs(ui.Rows) do
 				row.Instance.Size = cols == 2 and UDim2.new(0.5, -gap / 2, 0, rowH) or UDim2.new(1, 0, 0, rowH)
-				rowStyle(id, cols == 2, cols == 2 and tileSize(id) or (rowH >= 56 and Theme.TextSize.H2 + 2 or Theme.TextSize.H2))
+				rowStyle(id, cols == 2, cols == 2 and tileSize(id) or (#CharacterData.Characters[id].Name > 9 and Theme.TextSize.H3 + 2 or Theme.TextSize.H2))
 			end
-			local rw = math.clamp(W * 0.36, 400, 500)
+			local rw = math.clamp(W * 0.37, 420, 520)
 			local dTop = math.max(top, 74)
 			place(ui.Detail, W - M - rw, dTop, rw, math.min(contentH, H - M - dTop))
+			pinAction(contentH > H - M - dTop + 1)
 			if ctx.Current() == "Characters" then
 				workspace.CurrentCamera:SetAttribute("MenuHeroY", 0.5)
 			end
