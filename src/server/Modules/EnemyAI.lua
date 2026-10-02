@@ -168,7 +168,7 @@ local function nearestPlayer(pos: Vector3, runPlayers)
 	local px, pz = pos.X, pos.Z
 	for _, rp in ipairs(runPlayers) do
 		local p = playerPos[rp]
-		if p then
+		if p and rp.Alive then
 			local dx, dz = p.X - px, p.Z - pz
 			local d2 = dx * dx + dz * dz
 			if d2 < bestD2 then
@@ -500,8 +500,9 @@ local function behave(e, dt: number)
 	local t = e.Target
 	local to: Vector3? = nil
 	local dist = math.huge
-	if t and t.Alive and t.Root then
-		to = (t.Root.Position - e.Pos) * FLAT
+	local tp = t and t.Alive and playerPos[t]
+	if tp then
+		to = (tp - e.Pos) * FLAT
 		dist = (to :: Vector3).Magnitude
 	end
 	if def.Static then
@@ -649,6 +650,12 @@ function EnemyAI.Step(dt: number)
 	Hazards.Step(dt)
 	local active = ctx.EnemySpawner.Active
 	local runPlayers = ctx.RunManager.GetRunPlayers()
+	table.clear(playerPos)
+	for _, rp in ipairs(runPlayers) do
+		if rp.Alive and rp.Root then
+			playerPos[rp] = rp.Root.Position
+		end
+	end
 	local chunks = Config.Enemies.ThinkChunks
 	local slot = frame % chunks
 	local now = os.clock()
@@ -725,8 +732,8 @@ function EnemyAI.Step(dt: number)
 		local nearest2 = math.huge
 		local harmless = e.Harmless or e.SpawnGrace > 0 or e.Damage <= 0
 		for _, rp in ipairs(runPlayers) do
-			if rp.Alive and rp.Root then
-				local rpos = rp.Root.Position
+			local rpos = playerPos[rp]
+			if rpos and rp.Alive then
 				local dx, dz = rpos.X - pos.X, rpos.Z - pos.Z
 				local d2 = dx * dx + dz * dz
 				if d2 < recycle2 then
