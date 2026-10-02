@@ -13,6 +13,7 @@ Outputs (repo root):
 """
 
 import argparse
+import fcntl
 import importlib
 import json
 import math
@@ -28,7 +29,9 @@ from mathutils import Vector  # noqa: E402
 
 import swarmkit as K  # noqa: E402
 
-MODULES = ["models.enemies", "models.heroes", "models.items", "models.world"]
+# Every blender/models/*.py module registers its models (new files are picked up automatically).
+MODULES = sorted("models." + f[:-3] for f in os.listdir(os.path.join(HERE, "models"))
+                 if f.endswith(".py") and not f.startswith("_"))
 OUT_MESH = os.path.join(ROOT, "meshes")
 OUT_RENDER = os.path.join(ROOT, "renders")
 
@@ -47,8 +50,8 @@ def parse():
 _mats = {}
 
 
-def preview_material(color, glow):
-    key = (tuple(round(c, 3) for c in color), glow)
+def preview_material(color, glow, alpha=1.0):
+    key = (tuple(round(c, 3) for c in color), glow, round(alpha, 2))
     if key in _mats:
         return _mats[key]
     m = bpy.data.materials.new("M_%d" % len(_mats))
@@ -59,6 +62,8 @@ def preview_material(color, glow):
     if glow:
         bsdf.inputs["Emission Color"].default_value = (*color, 1)
         bsdf.inputs["Emission Strength"].default_value = 0.8
+    if alpha < 1:
+        bsdf.inputs["Alpha"].default_value = alpha
     _mats[key] = m
     return m
 
@@ -81,7 +86,7 @@ def build_model(model, collection):
         for poly in me.polygons:
             poly.use_smooth = False  # faceted low-poly look
         col = palette.get(p.slot, (0.6, 0.6, 0.6))
-        me.materials.append(preview_material(srgb_to_linear(col), p.material == "Neon"))
+        me.materials.append(preview_material(srgb_to_linear(col), p.material == "Neon", 1 - p.transparency))
         ob = bpy.data.objects.new(p.name, me)
         ob.location = p.center
         collection.objects.link(ob)
@@ -114,6 +119,10 @@ def record(model, objs):
                    offset=K.to_roblox(p.center), size=K.roblox_size(p.size))
         if p.bone:
             rec["bone"] = p.bone
+        if p.transparency:
+            rec["transparency"] = round(p.transparency, 3)
+        if p.shadow:
+            rec["shadow"] = True
         if p.anim:
             rec["anim"] = p.anim
             pivot = p.pivot if p.pivot is not None else p.center
@@ -122,9 +131,14 @@ def record(model, objs):
     palette = dict(K.SLOT_PREVIEW)
     palette.update(model.extra.get("palette", {}))
     used = {p.slot for p in model.pieces}
+    extra = {k: v for k, v in model.extra.items() if k not in ("palette", "joints")}
+    if "joints" in model.extra:
+        extra["joints"] = {k: K.to_roblox(v) for k, v in model.extra["joints"].items()}
+    lo = [min(p["offset"][i] - p["size"][i] / 2 for p in pieces) for i in range(3)]
+    hi = [max(p["offset"][i] + p["size"][i] / 2 for p in pieces) for i in range(3)]
     return dict(name=model.name, category=model.category, note=model.note, tris=tris,
                 pieces=pieces, preview_palette={k: list(v) for k, v in palette.items() if k in used},
-                **{k: v for k, v in model.extra.items() if k != "palette"})
+                bounds=[[round(x, 3) for x in lo], [round(x, 3) for x in hi]], **extra)
 
 
 # ------------------------------------------------------------------ render
@@ -222,10 +236,7 @@ def main():
     renderer = None if args.no_render else Renderer(scene, args.samples)
 
     cat_path = os.path.join(OUT_MESH, "catalog.json")
-    catalog = {}
-    if os.path.exists(cat_path):
-        with open(cat_path) as f:
-            catalog = {m["name"]: m for m in json.load(f)}
+    built = {}
 
     sheets = {}
     for name, category, note, fn in todo:
@@ -236,7 +247,7 @@ def main():
         objs = build_model(model, col)
         export_fbx(objs, os.path.join(OUT_MESH, category, name + ".fbx"))
         rec = record(model, objs)
-        catalog[name] = rec
+        built[name] = rec
         print(f"{name:<22} {len(objs):>3} pieces {rec['tris']:>6} tris")
         if renderer:
             png = os.path.join(OUT_RENDER, category, name + ".png")
@@ -251,8 +262,22 @@ def main():
         bpy.data.collections.remove(col)
 
     os.makedirs(OUT_MESH, exist_ok=True)
-    with open(cat_path, "w") as f:
-        json.dump([catalog[k] for k in sorted(catalog)], f, indent=1)
+    # Merge this run's models into the shared catalog under a lock, so builds of
+    # different categories can run at the same time without losing entries.
+    with open(cat_path + ".lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        catalog = {}
+        if os.path.exists(cat_path):
+            with open(cat_path) as f:
+                catalog = {m["name"]: m for m in json.load(f)}
+        catalog.update(built)
+        known = {r[0] for r in K.REGISTRY}
+        catalog = {k: v for k, v in catalog.items() if k in known}  # drop removed models
+        tmp = cat_path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump([catalog[k] for k in sorted(catalog)], f, indent=1)
+        os.replace(tmp, cat_path)
+        fcntl.flock(lock, fcntl.LOCK_UN)
     for category, entries in sheets.items():
         contact_sheet(entries, os.path.join(OUT_RENDER, f"Sheet_{category}.png"), f"SWARM - {category}")
 

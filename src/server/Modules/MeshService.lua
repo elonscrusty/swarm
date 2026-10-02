@@ -163,6 +163,8 @@ function MeshService.Build(name: string, cframe: CFrame, palette: { [string]: Co
 			if color then
 				part.Color = color
 			end
+			part.Transparency = piece.Transparency or 0
+			part.CastShadow = piece.Shadow == true
 			-- piece centre in model space; an imported rotation (rare) keeps the mesh upright
 			part.CFrame = cframe * CFrame.new(vec(piece.Offset) * s) * (importRotation(template) or CFrame.identity)
 			part.Parent = model

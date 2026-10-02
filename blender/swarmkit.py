@@ -7,6 +7,11 @@ Conventions
     the game colours each one from its colour SLOT (so skins and elites can recolour)
     and gives it a Roblox material (Neon pieces glow).
   * Pieces that animate (legs, wings, jaws, tails) carry an Anim key and a joint PIVOT.
+  * transparency (0-1) is applied in game (wings, glows); shadow=True makes the piece cast
+    a shadow in game (use it on one or two big body pieces per creature, not on details).
+  * Heroes may set model.extra["joints"] = {"Neck": (x, y, z), "LeftShoulder": ...,
+    "RightShoulder": ..., "LeftHip": ..., "RightHip": ...} in Blender coordinates; the
+    game builds the Motor6D rig at those points (defaults: the classic blocky rig).
 """
 
 import math
@@ -45,8 +50,11 @@ def mat(loc=(0, 0, 0), rot=(0, 0, 0), scale=(1, 1, 1)):
 
 
 class Piece:
-    def __init__(self, name, slot="Base", material="SmoothPlastic", anim=None, pivot=None, bone=None):
+    def __init__(self, name, slot="Base", material="SmoothPlastic", anim=None, pivot=None, bone=None,
+                 transparency=0.0, shadow=False):
         self.name = name
+        self.transparency = transparency
+        self.shadow = shadow
         self.bone = bone  # hero pieces: which body part they are welded to
         self.slot = slot
         self.material = material
@@ -165,8 +173,9 @@ class Model:
         self.pieces = []
         self.extra = {}
 
-    def piece(self, name, slot="Base", material="SmoothPlastic", anim=None, pivot=None, bone=None):
-        p = Piece(name, slot, material, anim, pivot, bone)
+    def piece(self, name, slot="Base", material="SmoothPlastic", anim=None, pivot=None, bone=None,
+              transparency=0.0, shadow=False):
+        p = Piece(name, slot, material, anim, pivot, bone, transparency, shadow)
         self.pieces.append(p)
         return p
 

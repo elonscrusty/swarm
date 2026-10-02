@@ -44,6 +44,8 @@ def main():
         "\tcentre for standing models, centre for projectiles), Roblox axes. Pivot is the",
         "\tjoint an animated piece swings around, relative to the piece centre.",
         "\tAssetId = 0 means not uploaded yet: the game falls back to part-built models.",
+        "\tBounds = { min, max } of the whole model (studs, Roblox axes, from the origin).",
+        "\tTransparency / Shadow are per piece; Joints (heroes) are the rig joint points.",
         "]]",
         "",
         "local MeshCatalog = {}",
@@ -54,6 +56,10 @@ def main():
         lines.append(f"\t{m['name']} = {{")
         lines.append(f"\t\tAssetId = {int(ids.get(m['name'], 0))},")
         lines.append(f"\t\tCategory = \"{m['category']}\",")
+        if m.get("bounds"):
+            lines.append(f"\t\tBounds = {{ {vec(m['bounds'][0])}, {vec(m['bounds'][1])} }},")
+        if m.get("joints"):
+            lines.append("\t\tJoints = { " + ", ".join(f"{k} = {vec(v)}" for k, v in sorted(m["joints"].items())) + " },")
         pal = m.get("preview_palette", {})
         if pal:
             lines.append("\t\tPalette = { " + ", ".join(f"{k} = {color(v)}" for k, v in sorted(pal.items())) + " },")
@@ -66,6 +72,10 @@ def main():
                 parts.append(f"Pivot = {vec(p['pivot'])}")
             if p.get("bone"):
                 parts.append(f"Bone = \"{p['bone']}\"")
+            if p.get("transparency"):
+                parts.append(f"Transparency = {num(p['transparency'])}")
+            if p.get("shadow"):
+                parts.append("Shadow = true")
             lines.append("\t\t\t{ " + ", ".join(parts) + " },")
         lines.append("\t\t},")
         lines.append("\t},")

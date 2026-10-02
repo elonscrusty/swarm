@@ -128,6 +128,8 @@ function ModelLibrary.MeshPieces(name: string, palette: { [string]: Color3 }?, s
 			end
 			part.Color = color
 			part.Material = MATERIALS[def.Material] or Enum.Material.SmoothPlastic
+			part.Transparency = def.Transparency or 0
+			part.CastShadow = def.Shadow == true
 			part.CFrame = CFrame.new(0, -150, 0)
 			part.Parent = (ModelLibrary :: any)._folder
 			local offset = Vector3.new(def.Offset[1], def.Offset[2], def.Offset[3]) * s + Vector3.new(0, lift or 0, 0)

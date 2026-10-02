@@ -282,6 +282,7 @@ local function buildMeshCharacter(characterId: string, skinId: string?, crown: b
 			p.CastShadow = true
 			p.Size = Vector3.new(piece.Size[1], piece.Size[2], piece.Size[3])
 			p.Color = palette[piece.Slot] or (entry.Palette and entry.Palette[piece.Slot]) or p.Color
+			p.Transparency = piece.Transparency or 0
 			p.CFrame = CFrame.new(piece.Offset[1], piece.Offset[2], piece.Offset[3])
 			if piece.Bone and piece.Name == piece.Bone then
 				p.Name = BONE_NAMES[piece.Bone] or piece.Name
@@ -297,20 +298,26 @@ local function buildMeshCharacter(characterId: string, skinId: string?, crown: b
 		model:Destroy()
 		return nil
 	end
-	-- joints in model space (root centre at y = 3)
-	local function joint(name: string, parent: BasePart, child: BasePart?, at: Vector3)
+	-- joints in model space (root centre at y = 3); a model can move them (MeshCatalog
+	-- Joints, set in Blender) to fit its proportions, otherwise the classic blocky rig
+	local joints = (entry :: any).Joints or {}
+	local function at(key: string, default: Vector3): Vector3
+		local j = joints[key]
+		return j and Vector3.new(j[1], j[2], j[3]) or default
+	end
+	local function joint(name: string, parent: BasePart, child: BasePart?, point: Vector3)
 		if not child then
 			return
 		end
-		local world = CFrame.new(at)
+		local world = CFrame.new(point)
 		motor(name, parent, child, parent.CFrame:ToObjectSpace(world), child.CFrame:ToObjectSpace(world))
 	end
 	joint("RootJoint", root, torso, Vector3.new(0, 3, 0))
-	joint("Neck", torso, head, Vector3.new(0, 4, 0))
-	joint("Left Shoulder", torso, bones.LeftArm, Vector3.new(-1, 3.9, 0))
-	joint("Right Shoulder", torso, bones.RightArm, Vector3.new(1, 3.9, 0))
-	joint("Left Hip", torso, bones.LeftLeg, Vector3.new(-0.5, 2, 0))
-	joint("Right Hip", torso, bones.RightLeg, Vector3.new(0.5, 2, 0))
+	joint("Neck", torso, head, at("Neck", Vector3.new(0, 4, 0)))
+	joint("Left Shoulder", torso, bones.LeftArm, at("LeftShoulder", Vector3.new(-1, 3.9, 0)))
+	joint("Right Shoulder", torso, bones.RightArm, at("RightShoulder", Vector3.new(1, 3.9, 0)))
+	joint("Left Hip", torso, bones.LeftLeg, at("LeftHip", Vector3.new(-0.5, 2, 0)))
+	joint("Right Hip", torso, bones.RightLeg, at("RightHip", Vector3.new(0.5, 2, 0)))
 	for _, g in ipairs(gearList) do
 		weld(bones[g.Bone] or torso, g.Part)
 	end

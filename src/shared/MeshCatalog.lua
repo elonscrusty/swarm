@@ -5,6 +5,8 @@
 	centre for standing models, centre for projectiles), Roblox axes. Pivot is the
 	joint an animated piece swings around, relative to the piece centre.
 	AssetId = 0 means not uploaded yet: the game falls back to part-built models.
+	Bounds = { min, max } of the whole model (studs, Roblox axes, from the origin).
+	Transparency / Shadow are per piece; Joints (heroes) are the rig joint points.
 ]]
 
 local MeshCatalog = {}
