@@ -39,7 +39,10 @@ MAIN MENU (`AbandonRun`), High Score board (`LeaderboardService.RunScore`), HUD 
 checklist (`docs/ICON_CHECKLIST.md`, `tools/gen_icon_checklist.py`), icon preload (`AssetPreload`),
 livelier level-up cards + safe input, chest hold 0.4 s + reward reel, XP crystals + merging +
 once-per-flight replication, Fire Trail rebuild, CombatFx, lobby/HUD/results animation, perf pass
-(`perf-sim` scene). Missing art: `docs/IMAGE_PROMPTS.md`. Scenes: `menu-sim`, `perf-sim`,
+(`perf-sim` scene). Owner art (136 pictures) uploaded and wired (`ArtData`, `tools/upload_art.py`); lobby screens rebuilt
+to the owner's mockups. Monetization live and owner-verified in Studio: 3 passes + 4 products in
+`Config.Monetization` (owner chose to keep Revive and the VIP reroll as they are). Skin passes not
+set up yet. Scenes: `menu-sim`, `perf-sim`,
 `xp-sim`, `rewards-sim`, `combat-fx`, `pickups-close`, `icons`.
 
 Open / next (release-candidate brief, phases):
