@@ -73,11 +73,15 @@ R.defineClass("DataModel", {
 		CreatorType = function()
 			return D.Enum.CreatorType.User
 		end,
+		-- private run servers (scenes: preview.teleport() sets these)
 		PrivateServerId = function()
-			return ""
+			return R.teleport.privateServerId or ""
 		end,
 		PrivateServerOwnerId = function()
-			return 0
+			return R.teleport.privateServerOwnerId or 0
+		end,
+		PlaceId = function()
+			return R.teleport.placeId or 0
 		end,
 	},
 })

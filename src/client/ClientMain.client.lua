@@ -137,6 +137,7 @@ VFX.Init({
 })
 UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls })
 DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer
+require(script.Parent:WaitForChild("TravelOverlay")).Init() -- private run servers: travel cover + go-home banner
 
 -- Humanoid state switches don't replicate and the client owns its character, so the
 -- server's settings are repeated here: no tripping, ragdolling or dying (jumps: JumpController).

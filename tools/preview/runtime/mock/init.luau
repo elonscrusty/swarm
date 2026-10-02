@@ -259,6 +259,17 @@ function Mock.api()
 		R.fire(states[api.remote(name)], "OnServerEvent", player, ...)
 	end
 
+	-- The teleport mock's state (classes/services.luau): placeId, privateServerId,
+	-- privateServerOwnerId, joinData[UserId], reserveFails, teleportFails, calls.
+	function api.teleport()
+		return R.teleport
+	end
+
+	-- TeleportService.TeleportInitFailed for a player (a teleport that failed after the call).
+	function api.teleportInitFailed(p, message: string?)
+		R.fire(states[R.services.TeleportService], "TeleportInitFailed", p, roblox.Enum.TeleportResult.Failure, message or "mock failure")
+	end
+
 	-- Players.PlayerAdded / PlayerRemoving for an addPlayer player (removal also unparents).
 	function api.playerJoined(p)
 		R.fire(states[R.services.Players], "PlayerAdded", p)

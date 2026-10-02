@@ -133,8 +133,9 @@ R.defineClass("Player", {
 		GetFriendsOnline = function()
 			return {}
 		end,
-		GetJoinData = function()
-			return {}
+		GetJoinData = function(player)
+			local data = R.teleport.joinData[player.UserId]
+			return data and { TeleportData = data, SourcePlaceId = R.teleport.placeId } or {}
 		end,
 		RequestStreamAroundAsync = function() end,
 		DistanceFromCharacter = function(player, pos)
@@ -1200,11 +1201,66 @@ R.defineClass("AnalyticsService", {
 	end)(),
 })
 
+--[[
+	Teleports (scenes: preview.teleport() returns R.teleport). ReserveServer hands out
+	"access-N" codes; TeleportAsync records { PlaceId, UserIds, Code, Data } in calls. Set
+	reserveFails / teleportFails to N to make the next N calls throw (fallback paths).
+	Nothing moves: a scene removes / adds players itself to play the arrival.
+]]
+R.teleport = R.teleport or {
+	placeId = 0,
+	privateServerId = "",
+	privateServerOwnerId = 0,
+	joinData = {}, -- [UserId] = TeleportData
+	reserveFails = 0,
+	teleportFails = 0,
+	reserved = 0,
+	calls = {},
+}
+
+R.defineClass("TeleportOptions", {
+	methods = {
+		SetTeleportData = function(o, data)
+			states[o].x.teleportData = data
+		end,
+		GetTeleportData = function(o)
+			return states[o].x.teleportData
+		end,
+	},
+})
+
 R.defineClass("TeleportService", {
 	events = { "TeleportInitFailed", "LocalPlayerArrivedFromTeleport" },
 	methods = {
 		Teleport = function() end,
-		TeleportAsync = function() end,
+		ReserveServer = function(_, placeId)
+			local T = R.teleport
+			if T.reserveFails > 0 then
+				T.reserveFails -= 1
+				error("ReserveServer: HTTP 500 (mock failure)", 2)
+			end
+			T.reserved += 1
+			return "access-" .. T.reserved, "ps-" .. T.reserved
+		end,
+		TeleportAsync = function(_, placeId, players, options)
+			local T = R.teleport
+			if T.teleportFails > 0 then
+				T.teleportFails -= 1
+				error("TeleportAsync: teleport failed (mock failure)", 2)
+			end
+			local ids = {}
+			for _, p in ipairs(players) do
+				table.insert(ids, p.UserId)
+			end
+			local st = options and states[options]
+			table.insert(T.calls, {
+				PlaceId = placeId,
+				UserIds = ids,
+				Code = options and options.ReservedServerAccessCode or "",
+				Data = st and st.x.teleportData or nil,
+			})
+			return nil
+		end,
 		GetLocalPlayerTeleportData = function()
 			return nil
 		end,
