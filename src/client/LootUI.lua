@@ -576,10 +576,12 @@ function LootUI.Layout()
 		x, w = M, W - 2 * M
 		y = (els.BarBottom or 400) + 8
 	else
-		local plateLeft = els.Plate and els.Plate.Position.X.Offset or (W / 2 - 210)
+		-- left of the centred HP panel, under the HUD's top-left stage pill
+		local plate = els.Plate
+		local plateLeft = plate and (plate.Position.X.Offset - plate.AnchorPoint.X * plate.Size.X.Offset) or (W / 2 - 210)
 		x = M + 4
 		w = math.max(140, plateLeft - x - 16)
-		y = math.max(ins.Top, 0) + 10
+		y = math.max(math.max(ins.Top, 0) + 10, (els.LeftBottom or 0) + 8)
 	end
 	local per = math.max(1, math.floor((w + 5) / 35))
 	local rows = math.max(1, math.ceil(#items / per))

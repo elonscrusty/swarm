@@ -10,6 +10,8 @@ Outputs (repo root):
   meshes/<Category>/<Model>.fbx     one FBX per model, one mesh object per piece
   meshes/catalog.json               piece data used by tools/gen_mesh_catalog.py
   renders/<Model>.png, renders/Sheet_<Category>.png
+  renders/<Model>_All.png    also, for models with extra["render_hide"] (pieces left out of
+                             <Model>.png, e.g. the Colossus's phase-2 frost armour)
 """
 
 import argparse

@@ -191,7 +191,7 @@ MeshCatalog.Models = {
 		},
 	},
 	BriarSentinel = {
-		AssetId = 0,
+		AssetId = 84124549381754,
 		Category = "Enemies",
 		Bounds = { {-6.421, 0, -3.6}, {6.421, 16, 3.996} },
 		Palette = { Accent = Color3.fromRGB(54, 82, 47), Base = Color3.fromRGB(71, 51, 37), Dark = Color3.fromRGB(42, 30, 22), Eye = Color3.fromRGB(233, 185, 65), Glow = Color3.fromRGB(246, 218, 126), Leaf = Color3.fromRGB(89, 126, 65), Light = Color3.fromRGB(214, 190, 148), Wood = Color3.fromRGB(126, 92, 63) },
@@ -695,7 +695,7 @@ MeshCatalog.Models = {
 		},
 	},
 	FrostboundColossus = {
-		AssetId = 0,
+		AssetId = 131442552699565,
 		Category = "Enemies",
 		Bounds = { {-8.145, 0, -4.604}, {8.146, 14.893, 5.266} },
 		Palette = { Accent = Color3.fromRGB(74, 176, 199), Base = Color3.fromRGB(95, 125, 151), Dark = Color3.fromRGB(36, 43, 54), Eye = Color3.fromRGB(158, 245, 255), Glow = Color3.fromRGB(158, 245, 255), Light = Color3.fromRGB(145, 192, 212), Stone = Color3.fromRGB(51, 60, 71), White = Color3.fromRGB(176, 217, 228) },
@@ -2076,7 +2076,7 @@ MeshCatalog.Models = {
 		},
 	},
 	ThornSprout = {
-		AssetId = 0,
+		AssetId = 104306826393232,
 		Category = "Enemies",
 		Bounds = { {-1.3, 0, -1.85}, {1.3, 2.599, 1.55} },
 		Palette = { Base = Color3.fromRGB(126, 92, 63), Dark = Color3.fromRGB(42, 30, 22), Eye = Color3.fromRGB(233, 185, 65), Leaf = Color3.fromRGB(108, 144, 76), Light = Color3.fromRGB(214, 190, 148) },

@@ -310,35 +310,37 @@ local LOOKS: { [string]: { [string]: Color3 } } = {
 	},
 	-- the Briar Sentinel, her sprouts and the Frostbound Colossus (part-built fallbacks of the
 	-- BriarSentinel / ThornSprout / FrostboundColossus meshes)
+	-- dark bark, bone thorns and amber read on forest grass (no green-on-green)
 	BriarBoss = {
-		Base = Palette.wood_600,
-		Bark = Palette.wood_700,
-		Light = Palette.wood_500,
-		Moss = Palette.moss_600,
-		Leaf = Palette.moss_400,
+		Base = Palette.wood_700:Lerp(Palette.wood_800, 0.35),
+		Bark = Palette.wood_900,
+		Light = Palette.wood_600,
+		Moss = Palette.moss_500:Lerp(Palette.moss_400, 0.4),
+		Leaf = Palette.moss_500,
 		Vine = Palette.moss_700,
-		Thorn = Palette.crimson_800,
-		Berry = Palette.crimson_400,
-		Gold = Palette.gold_400,
+		Thorn = Palette.gold_200:Lerp(Palette.wood_400, 0.3),
+		Berry = Palette.amber_300,
+		Gold = Palette.wood_500,
 		Eye = Palette.amber_500,
 	},
 	ThornSprout = {
-		Base = Palette.moss_500,
-		Light = Palette.moss_400,
-		Leaf = Palette.moss_300,
-		Thorn = Palette.crimson_700,
-		Dark = Palette.wood_700,
+		Base = Palette.wood_500,
+		Light = Palette.moss_400:Lerp(Palette.moss_300, 0.3),
+		Leaf = Palette.moss_400,
+		Thorn = Palette.gold_200:Lerp(Palette.wood_400, 0.3),
+		Dark = Palette.wood_900,
 		Eye = Palette.amber_500,
 	},
+	-- deep blue ice, teal crystals and dark rock read on white snow
 	FrostBoss = {
-		Base = Palette.slate_500:Lerp(Palette.ice_500, 0.35),
-		Dark = Palette.slate_700,
-		Stone = Palette.slate_600:Lerp(Palette.stone_500, 0.3),
-		Ice = Palette.ice_300,
-		IceLight = Palette.ice_100,
-		Gold = Palette.gold_500,
-		Glow = Palette.ice_100,
-		Eye = Palette.ice_100,
+		Base = Palette.ice_500:Lerp(Palette.slate_500, 0.45),
+		Dark = Palette.slate_800:Lerp(Palette.stone_800, 0.3),
+		Stone = Palette.slate_700:Lerp(Palette.stone_700, 0.4),
+		Ice = Color3.fromRGB(74, 176, 199),
+		IceLight = Palette.ice_100:Lerp(Color3.fromRGB(74, 176, 199), 0.3),
+		Gold = Palette.ice_300:Lerp(Color3.fromRGB(74, 176, 199), 0.25),
+		Glow = Color3.fromRGB(158, 245, 255),
+		Eye = Color3.fromRGB(158, 245, 255),
 	},
 	BroodEgg = {
 		Base = Palette.ivory_200,
@@ -689,10 +691,10 @@ ENEMIES.HiveBoss = function(b, c)
 	return "Prowl"
 end
 
--- Briar Sentinel: a bramble treant on two root legs; a bark trunk wrapped in thorny
--- vines, a moss mantle, a carved bark mask with amber eyes under a crown of thorns, long
--- branch arms with twig claws and a few crimson berries and gold blossoms (part-built:
--- no mesh yet).
+-- Briar Sentinel (fallback for the BriarSentinel mesh): a bramble treant on two root legs;
+-- a dark bark trunk wrapped in vines with bone thorns, a moss mantle, a carved bark mask
+-- with amber eyes under a crown of thorns, an amber heart-knot, long branch arms with twig
+-- claws and a few amber berries.
 ENEMIES.BriarBoss = function(b, c)
 	-- root legs, each splaying into three roots on the ground
 	for _, side in ipairs({ -1, 1 }) do
@@ -706,6 +708,7 @@ ENEMIES.BriarBoss = function(b, c)
 	-- trunk and bark plates
 	egg(b, V(5.2, 6.6, 4.2), c.Base, CFrame.new(0, 7.6, 0.2))
 	egg(b, V(4.2, 3.0, 3.4), c.Light, CFrame.new(0, 8.4, -1.0))
+	ball(b, 1.0, c.Berry, V(0, 8.6, -2.6), { Material = NEON, Anim = "Pulse" })
 	for i, y in ipairs({ 6.0, 7.6, 9.2 }) do
 		b.add("Block", V(0.35, 1.2, 0.4), c.Bark, CFrame.new((i - 2) * 0.9, y, -2.25) * CFrame.Angles(0, 0, 0.3 * (i - 2)))
 	end
@@ -757,9 +760,9 @@ ENEMIES.BriarBoss = function(b, c)
 	return "Stomp"
 end
 
--- Frostbound Colossus: a hunched giant of dark blue-grey stone, ice crystals jutting from
--- his shoulders and back, a small head sunk between them with pale glowing eyes and an
--- icicle beard, huge arms and fists bound in gold bands. "Frost*" pieces are the phase-2
+-- Frostbound Colossus (fallback for the FrostboundColossus mesh): a hunched giant of dark
+-- blue-grey stone, teal ice crystals jutting from his shoulders and back, a small head sunk
+-- between them with pale glowing eyes and an icicle beard, huge arms and fists bound in ice. "Frost*" pieces are the phase-2
 -- frost armour (shown only while the body attribute FrostArmor is set).
 ENEMIES.FrostBoss = function(b, c)
 	-- pillar legs
@@ -812,13 +815,14 @@ ENEMIES.FrostBoss = function(b, c)
 		local shoulder = V(side * 4.4, 10.2, 0.2)
 		local swing = { Anim = side < 0 and "SwingB" or "SwingA", Joint = shoulder, Transparency = 0.15 }
 		frost(egg(b, V(3.8, 1.6, 3.8), c.IceLight, CFrame.new(side * 4.7, 11.9, 0.2), swing), "FrostShoulder")
-		frost(egg(b, V(2.6, 3.4, 2.6), c.Ice, CFrame.new(side * 5.55, 5.4, -1.1), swing), "FrostArm")
+		frost(egg(b, V(2.6, 3.4, 2.6), c.IceLight, CFrame.new(side * 5.55, 5.4, -1.1), swing), "FrostArm")
 		frost(bar(b, V(side * 4.7, 12.4, 0.2), V(side * 5.6, 14.4, 0.6), 0.7, c.IceLight, swing), "FrostSpike")
 	end
 	return "Stomp"
 end
 
--- Thorn Sprout: a small moss bulb with crimson thorns, two leaf blades and root feet.
+-- Thorn Sprout (fallback for the ThornSprout mesh): a small bark bulb with a moss cap,
+-- bone thorns, two leaf blades and root feet.
 ENEMIES.ThornSprout = function(b, c)
 	egg(b, V(2.2, 2.0, 2.2), c.Base, CFrame.new(0, 1.2, 0))
 	egg(b, V(1.6, 0.8, 1.6), c.Light, CFrame.new(0, 2.1, 0))

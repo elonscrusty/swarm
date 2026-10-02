@@ -839,6 +839,17 @@ end
 -- Fixed parts of a card (reference px).
 local CARD = { Pad = 14, Band = 30, Tile = 62, Row = 30, Box = 76, Syn = 30, Foot = 48, PBand = 26, PTile = 56, PRow = 28 }
 
+-- Phones (landscape) get a smaller tile, footer and title so the rows keep their room.
+local function cardTileSize(): number
+	return UIKit.IsCompact() and 50 or CARD.Tile
+end
+local function cardFootH(): number
+	return UIKit.IsCompact() and 40 or CARD.Foot
+end
+local function titleSize(): number
+	return UIKit.IsCompact() and 36 or 46
+end
+
 local function descHeight(): number
 	return TS(14) * 2 + 8
 end
@@ -846,7 +857,7 @@ end
 -- Height a landscape card needs for everything it has to show.
 local function cardNeeds(c): number
 	local desc, stats, changes = cardContent(c)
-	local h = CARD.Band + 12 + CARD.Tile + 10 + (desc and descHeight() + 4 or 0) + 14
+	local h = CARD.Band + 12 + cardTileSize() + 10 + (desc and descHeight() + 4 or 0) + 14
 	if #changes > 0 then
 		h += CARD.Box + 6 + (#changes - 1) * (CARD.Row - 2)
 	else
@@ -858,26 +869,26 @@ local function cardNeeds(c): number
 	if c.Hint then
 		h += TS(13) * 2 + 8
 	end
-	return h + 10 + CARD.Foot
+	return h + 10 + cardFootH()
 end
 
 -- Height a wide portrait card needs.
 local function cardNeedsPortrait(c): number
 	local _, stats, changes = cardContent(c)
 	local rows = #changes > 0 and math.min(#changes, 2) or math.min(#stats, 3)
-	local h = CARD.PBand + 10 + CARD.PTile + TS(14) + 14 + rows * CARD.PRow
+	local h = CARD.PBand + 10 + CARD.PTile + 10 + rows * CARD.PRow
 	if c.Synergy then
-		h += CARD.Syn - 4 + 6
+		h += CARD.Syn + 4
 	end
 	if c.Hint then
 		h += TS(13) + 6
 	end
-	return h + 10
+	return math.max(120, h + 8)
 end
 
 -- Room left for the cards under the header and above the buttons (landscape).
 local function headerHeight(): number
-	return TS(46) + 6 + 10 + 6 + (TS(18) + 6) + 6 + (Theme.Size.Badge + 14) + 8 + 7 + 16
+	return TS(titleSize()) + 6 + 10 + 6 + (TS(18) + 6) + 6 + (Theme.Size.Badge + 14) + 8 + 7 + 16
 end
 local function footerHeight(): number
 	return 16 + 60 + 8 + (TS(15) + 6)
@@ -1016,6 +1027,9 @@ end
 ]]
 local function makeCard(c, index: number, count: number, animate: boolean)
 	local w, h = cardMetrics(count)
+	if portrait then
+		h = math.min(cardNeedsPortrait(c), h) -- stacked cards each take what they need
+	end
 	local bandColor, edgeColor = cardBand(c)
 	local legendary = c.Rarity == "Legendary" or c.Type == "Evolve"
 	local desc, stats, changes = cardContent(c)
@@ -1174,12 +1188,13 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		end
 	else
 		local y = bandH + 12
-		local tile = cardTile(face, c, CARD.Tile, edgeColor, animate and delay + 0.08 or nil)
+		local tileSize = cardTileSize()
+		local tile = cardTile(face, c, tileSize, edgeColor, animate and delay + 0.08 or nil)
 		tile.Position = UDim2.fromOffset(pad, y)
-		local x = pad + CARD.Tile + 12
+		local x = pad + tileSize + 12
 		local nameH = TS(22) + 6
 		local subH = sub ~= "" and TS(13) + 4 or 0
-		local ny = y + math.floor((CARD.Tile - nameH - subH) / 2)
+		local ny = y + math.floor((tileSize - nameH - subH) / 2)
 		text(face, "H2", c.Name, {
 			Position = UDim2.fromOffset(x, ny),
 			Size = UDim2.new(1, -x - 8, 0, nameH),
@@ -1193,7 +1208,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, 13)
 		end
-		y += CARD.Tile + 10
+		y += tileSize + 10
 		if desc then
 			text(face, "Body", desc, {
 				Position = UDim2.fromOffset(pad, y),
@@ -1209,11 +1224,12 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		UIKit.Divider(face, w - 2 * pad - 20, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, y) })
 		y += 14
 		-- footer: a hairline, the number badge and "Choose"
-		local footY = h - CARD.Foot
+		local footH = cardFootH()
+		local footY = h - footH
 		new("Frame", { Name = "FootLine", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0, Position = UDim2.fromOffset(pad, footY), Size = UDim2.new(1, -2 * pad, 0, 1) }, face)
 		local num = text(face, "Number", tostring(index), {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, -34, 0, footY + CARD.Foot / 2),
+			Position = UDim2.new(0.5, -34, 0, footY + footH / 2),
 			Size = UDim2.fromOffset(30, 30),
 			TextXAlignment = Enum.TextXAlignment.Center,
 		}, 16)
@@ -1221,13 +1237,43 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		UIKit.stroke(num, P.ivory_200, 1.5, 0.15).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		text(face, "BodyStrong", "Choose", {
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0.5, -8, 0, footY + CARD.Foot / 2),
+			Position = UDim2.new(0.5, -8, 0, footY + footH / 2),
 			Size = UDim2.fromOffset(90, TS(16) + 6),
 		}, 16)
-		-- bottom-up: hint, synergy; the rows fill what is left above them
-		local bottom = footY - 8
-		if c.Hint then
-			local hh = TS(13) * 2 + 6
+		-- top-down under the rule: the rows (what the card does comes first), then the
+		-- synergy bar and the evolution hint while they fit above the footer
+		local bottom = footY - 6
+		local rw = w - 2 * pad
+		local function fits(hh: number): boolean
+			return y + hh <= bottom
+		end
+		if #changes > 0 then
+			local start = 1
+			if fits(CARD.Box) then
+				changeBox(face, c, changes[1], pad, y, rw)
+				y += CARD.Box + 6
+				start = 2
+			end
+			for i = start, #changes do
+				if not fits(CARD.Row - 2) then
+					break
+				end
+				y += statRow(face, c, changes[i], pad, y, rw, CARD.Row - 2, changeValue(changes[i]))
+			end
+		else
+			for _, line in ipairs(stats) do
+				if not fits(CARD.Row) then
+					break
+				end
+				y += statRow(face, c, line, pad, y, rw, CARD.Row, tostring(line.To))
+			end
+		end
+		if c.Synergy and fits(CARD.Syn + 4) then
+			synergyBar(face, c, pad, y + 4, rw, CARD.Syn)
+			y += CARD.Syn + 8
+		end
+		local hh = TS(13) * 2 + 6
+		if c.Hint and fits(hh) then
 			text(face, "Small", tostring(c.Hint), {
 				Position = UDim2.fromOffset(pad, bottom - hh),
 				Size = UDim2.new(1, -2 * pad, 0, hh),
@@ -1236,38 +1282,6 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				TextWrapped = true,
 				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
 			}, 13)
-			bottom -= hh + 4
-		end
-		if c.Synergy then
-			synergyBar(face, c, pad, bottom - CARD.Syn, w - 2 * pad, CARD.Syn)
-			bottom -= CARD.Syn + 8
-		end
-		local rw = w - 2 * pad
-		if #changes > 0 then
-			if y + CARD.Box <= bottom then
-				changeBox(face, c, changes[1], pad, y, rw)
-				y += CARD.Box + 6
-				for i = 2, #changes do
-					if y + CARD.Row - 2 > bottom then
-						break
-					end
-					y += statRow(face, c, changes[i], pad, y, rw, CARD.Row - 2, changeValue(changes[i]))
-				end
-			else
-				for i = 1, #changes do
-					if y + CARD.Row - 2 > bottom then
-						break
-					end
-					y += statRow(face, c, changes[i], pad, y, rw, CARD.Row - 2, changeValue(changes[i]))
-				end
-			end
-		else
-			for _, line in ipairs(stats) do
-				if y + CARD.Row > bottom then
-					break
-				end
-				y += statRow(face, c, line, pad, y, rw, CARD.Row, tostring(line.To))
-			end
 		end
 	end
 
@@ -1315,11 +1329,18 @@ local function layoutLevelUp()
 	local v = virtualSize()
 	local count = lastOffer and #lastOffer.Choices or 3
 	local cw, ch = cardMetrics(count)
-	local titleH = TS(46) + 6
+	local titleH = TS(titleSize()) + 6
 	local subH = TS(18) + 6
+	levelUp.Title.TextSize = TS(titleSize())
 	local pillH = Theme.Size.Badge + 14
 	local cardsW = portrait and cw or (count * cw + (count - 1) * 18)
-	local cardsH = portrait and (count * ch + (count - 1) * 12) or ch
+	local cardsH = ch
+	if portrait then
+		cardsH = (count - 1) * 12
+		for _, c in ipairs(lastOffer and lastOffer.Choices or {}) do
+			cardsH += math.min(cardNeedsPortrait(c), ch)
+		end
+	end
 	local hintH = TS(15) + 6
 	local headH = titleH + 10 + 6 + subH + 6 + pillH + 8 + 7 + 16
 	local blockH = headH + cardsH + 16 + 60 + 8 + hintH
