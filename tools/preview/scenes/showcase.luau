@@ -2,7 +2,8 @@
 --   --set hero=Ranger            which hero (default Knight; every hero is owned)
 --   --set view=front|side|back|three   camera angle (default front: the menu camera's side)
 --   --set skin=Knight_Crimson    wear that skin (a real CharacterData skin id; owned for the preview)
---   --set bg=slate               hero alone on a flat dark-slate background (store pictures, tools/make_skin_pass_images.py)
+--   --set bg=slate               hero alone on a flat dark-slate background (store pictures, tools/make_skin_pass_images.py);
+--                                 --set bgcolor=r,g,b picks that background colour
 --   --set meshes=none            the part-built fallbacks (before the meshes have loaded)
 local C = lib("common")
 local skinArg = preview.args.skin
@@ -51,7 +52,8 @@ if m and m:IsA("Model") and m.PrimaryPart then
 				d.Enabled = false
 			end
 		end
-		preview.render.background = Color3.fromRGB(30, 34, 42)
+		local r, g, b = string.match(preview.args.bgcolor or "", "^(%d+),(%d+),(%d+)$")
+		preview.render.background = r and Color3.fromRGB(tonumber(r) :: number, tonumber(g) :: number, tonumber(b) :: number) or Color3.fromRGB(30, 34, 42)
 		preview.render.hideCoreUi = true
 		local rim = Instance.new("Part")
 		rim.Name = "RimLight"

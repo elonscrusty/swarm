@@ -12,6 +12,14 @@
 	         If the lock was taken by another server we stop saving and kick (prevents
 	         two servers overwriting each other = item duplication).
 	Release: on leave / shutdown the final save clears the lock.
+	Handoff: a teleport to / from a private run server (RunServers) first saves and releases
+	         the profile (ReleaseForTeleport), so the next server loads the latest save at
+	         once; nothing is written by this server after that. A player who arrived by a
+	         SWARM teleport gets Config.RunServers.HandoffLoadAttempts load retries (a slow
+	         release on the other side is waited for, never stolen). If the teleport fails
+	         the player stays and Reclaim takes the lock back (keeping this server's data
+	         unless another server saved the profile meanwhile: then the stored save wins).
+	         Every save also writes LastJob (the JobId that wrote it) for that check.
 	Retry:   every DataStore call is pcall'd with exponential backoff.
 	Studio:  uses Config.Data.StudioStoreName (never the live store); if DataStores are
 	         unavailable (no API access) data is kept in memory only.
@@ -316,9 +324,24 @@ end
 -- Load
 ------------------------------------------------------------------------------------------
 
+-- True when the player came through a SWARM teleport (to or from a private run server):
+-- the other server released the save just before, so a lock still on it is worth waiting for.
+local function arrivedByHandoff(player: Player): boolean
+	local ok, data = pcall(function()
+		return player:GetJoinData()
+	end)
+	local td = ok and type(data) == "table" and data.TeleportData or nil
+	return type(td) == "table" and (td.SwarmRun ~= nil or td.SwarmReturn ~= nil)
+end
+
 local function loadProfile(player: Player): Profile?
 	local key = Config.Data.KeyPrefix .. player.UserId
-	for attempt = 1, Config.Data.LoadAttempts do
+	local attempts = Config.Data.LoadAttempts
+	local R = (Config :: any).RunServers
+	if R and arrivedByHandoff(player) then
+		attempts = math.max(attempts, R.HandoffLoadAttempts or attempts)
+	end
+	for attempt = 1, attempts do
 		local lockedByOther = false
 		local ok, record = update(key, function(old)
 			old = (type(old) == "table") and old or {}
@@ -342,7 +365,7 @@ local function loadProfile(player: Player): Profile?
 				LastSave = os.clock(),
 			}
 		end
-		if attempt < Config.Data.LoadAttempts then
+		if attempt < attempts then
 			task.wait(Config.Data.LoadRetryDelay)
 		end
 	end
@@ -379,6 +402,7 @@ function DataService.SaveProfile(profile: Profile, release: boolean?): boolean
 			return nil
 		end
 		old.Data = snapshot
+		old.LastJob = jobId
 		old.Lock = (not release) and { JobId = jobId, Time = os.time() } or nil
 		return old
 	end)
@@ -449,6 +473,80 @@ function DataService.RecordPurchase(player: Player, purchaseId: string)
 	while #data.PurchaseIds > Config.Data.MaxStoredPurchaseIds do
 		table.remove(data.PurchaseIds, 1)
 	end
+end
+
+--[[
+	Teleport handoff (RunServers): saves and releases the profile while the player is still
+	here, so the destination server can load it straight away. The profile stays readable
+	(GetData) but is never written again by this server unless Reclaim takes it back.
+	Returns true when the save is written and the lock cleared (only then teleport).
+]]
+function DataService.ReleaseForTeleport(player: Player): boolean
+	local p = profiles[player]
+	if not p then
+		return false
+	end
+	if p.Released then
+		return true
+	end
+	if store == nil then
+		-- memory only: nothing to hand over (the other server starts from defaults anyway)
+		p.Released = true
+		return true
+	end
+	return DataService.SaveProfile(p, true)
+end
+
+-- True while the profile is handed off (released for a teleport that has not failed).
+function DataService.IsReleased(player: Player): boolean
+	local p = profiles[player]
+	return p ~= nil and p.Released
+end
+
+--[[
+	The teleport failed and the player is still here: take the session lock back. When the
+	stored save was written by another server after our release (LastJob is not us), the
+	stored data replaces ours (it is newer). Returns false when another live server holds
+	the lock (the player is kicked to rejoin: two servers must never write one save).
+]]
+function DataService.Reclaim(player: Player): boolean
+	local p = profiles[player]
+	if not p then
+		return false
+	end
+	if not p.Released or p.LockLost then
+		return not p.LockLost
+	end
+	if store == nil then
+		p.Released = false
+		return true
+	end
+	local lockedByOther = false
+	local ok, record = update(p.Key, function(old)
+		old = (type(old) == "table") and old or {}
+		local lock = old.Lock
+		if lock and lock.JobId ~= jobId and type(lock.Time) == "number" and os.time() - lock.Time < Config.Data.LockStaleSeconds then
+			lockedByOther = true
+			return nil
+		end
+		old.Lock = { JobId = jobId, Time = os.time() }
+		return old
+	end)
+	if not ok or lockedByOther then
+		warn("[DataService] could not reclaim " .. p.Key .. (lockedByOther and " (locked by another server)" or ""))
+		if lockedByOther and player.Parent then
+			p.LockLost = true
+			player:Kick("Your save was opened on another server. Please rejoin.")
+		end
+		return false
+	end
+	if type(record) == "table" and record.LastJob ~= nil and record.LastJob ~= jobId and type(record.Data) == "table" then
+		p.Data = DataService.Migrate(record.Data)
+	end
+	p.Released = false
+	p.LastSave = os.clock()
+	DataService.SetSaveStatus(player, "ok")
+	return true
 end
 
 -- Set by GameServer: runs at shutdown before the final saves.

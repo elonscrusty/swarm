@@ -80,6 +80,7 @@ Remotes.ClientToServer = {
 	"LeaderboardRequest", -- (boardId) a Config.Leaderboards.Order id (LeaderboardService)
 	"Party", -- ("Invite" | "Accept" | "Decline" | "Kick", userId) | ("Ready", boolean) | ("Leave") | ("Sync") lobby PARTY screen (PartyService)
 	"PartyFollow", -- (friendUserId) JOIN a friend's server: server-side teleport, friends only (PartyService)
+	"TravelHome", -- ("Go" | "Stay") run server, back in its lobby: go to a public lobby now / stay and play here (RunServers)
 }
 
 local folder: Folder? = nil

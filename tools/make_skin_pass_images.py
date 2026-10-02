@@ -22,11 +22,11 @@ def skin_ids():
     return re.findall(r"^\s*([A-Za-z]+_[A-Za-z]+)\s*=", block, re.M)
 
 
-def render(skin, view):
+def render(skin, view, tag="dark", color="0,0,0"):
     os.makedirs(TMP, exist_ok=True)
-    path = os.path.join(TMP, skin + ".png")
+    path = os.path.join(TMP, skin + "_" + tag + ".png")
     subprocess.run(["bash", os.path.join(ROOT, "tools/preview/render.sh"), "showcase", "--device", "pc",
-                    "--set", "skin=" + skin, "--set", "view=" + view, "--set", "bg=slate", "--out", path],
+                    "--set", "skin=" + skin, "--set", "view=" + view, "--set", "bg=slate", "--set", "bgcolor=" + color, "--out", path],
                    check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return path
 
@@ -35,15 +35,21 @@ def grow(mask, r):
     return mask.filter(ImageFilter.MaxFilter(r))
 
 
-def compose(path, out):
-    img = Image.open(path).convert("RGB")
-    a = np.asarray(img).astype(np.int16)
-    bg = a[2:10, 2:10].reshape(-1, 3).mean(0)
-    diff = np.abs(a - bg).sum(2)
-    soft = np.clip((diff - 40) / 40.0, 0, 1)  # bloom halos stay transparent, edges stay soft
-    m = Image.fromarray(((diff > 60) * 255).astype(np.uint8))
+def compose(dark_path, light_path, out):
+    """Difference matting: the same render on a black and on a white background gives the
+    hero's alpha and true colour, so dark skins do not vanish into the dark picture."""
+    d_img = np.asarray(Image.open(dark_path).convert("RGB")).astype(np.float32)
+    l_img = np.asarray(Image.open(light_path).convert("RGB")).astype(np.float32)
+    bd = d_img[2:10, 2:10].reshape(-1, 3).mean(0)
+    bl = l_img[2:10, 2:10].reshape(-1, 3).mean(0)
+    span = np.abs(bl - bd).mean()
+    alpha = np.clip(1 - np.abs(l_img - d_img).mean(2) / span, 0, 1)
+    colour = np.clip((d_img - (1 - alpha[..., None]) * bd) / np.maximum(alpha[..., None], 0.02), 0, 255)
+    m = Image.fromarray(((alpha > 0.6) * 255).astype(np.uint8))
     core = grow(m.filter(ImageFilter.MinFilter(15)), 31)  # drops sparkles, keeps the hero
-    mask = (soft * (np.asarray(core) > 0) * 255).astype(np.uint8)
+    mask = (alpha * (np.asarray(core) > 0) * 255).astype(np.uint8)
+    colour = 255 * (colour / 255) ** 0.8 * 1.06  # the offline night lighting is dim: lift the hero a little
+    img = Image.fromarray(np.clip(colour, 0, 255).astype(np.uint8))
     ys, xs = np.where(np.asarray(m.filter(ImageFilter.MinFilter(15))) > 0)
     x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
     side = int(max(x1 - x0, y1 - y0) * 1.2)
@@ -55,7 +61,7 @@ def compose(path, out):
     # background: dark slate, brighter in the middle, soft gold glow behind the hero, vignette
     yy, xx = np.mgrid[0:SIZE, 0:SIZE].astype(np.float32)
     d = np.sqrt(((xx - SIZE / 2) / (SIZE / 2)) ** 2 + ((yy - SIZE * 0.52) / (SIZE / 2)) ** 2)
-    base = np.array([34, 44, 58], np.float32)  # slate_700-ish
+    base = np.array([48, 60, 78], np.float32)  # slate_700-ish
     dark = np.array([14, 19, 26], np.float32)  # slate_950
     gold = np.array([213, 176, 98], np.float32)
     t = np.clip(d, 0, 1.4)[..., None]
@@ -80,7 +86,7 @@ def main():
         if args.only and skin != args.only:
             continue
         print(skin, flush=True)
-        compose(render(skin, args.view), os.path.join(OUT, skin + ".png"))
+        compose(render(skin, args.view), render(skin, args.view, "light", "255,255,255"), os.path.join(OUT, skin + ".png"))
 
 
 if __name__ == "__main__":
