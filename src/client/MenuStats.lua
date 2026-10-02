@@ -1,9 +1,11 @@
 --[[
 	MenuStats.lua
 	The STATS screen (replaces the old in-world stats sign), two tabs:
-	  STATS         tiles with everything the profile knows: best time, best stage, wins,
-	                runs, win rate, total kills, gold, characters and skins owned, permanent
-	                upgrade levels, saved revives and passes
+	  STATS         everything the profile knows in three aligned groups of tiles (icon,
+	                gold caps caption, big value): RUN RECORDS (best time, best stage, wins,
+	                runs, win rate, total kills), COLLECTION (characters, skins, permanent
+	                upgrade levels, achievements, each with a proportional bar), RESOURCES
+	                (gold, saved revives) and the passes line
 	  ACHIEVEMENTS  every AchievementData milestone: icon, name, what to do, the reward,
 	                a progress bar (or DONE), plus the earned titles / name colours to wear
 	                (EquipCosmetic; shown on the lobby nameplate)
@@ -31,26 +33,45 @@ local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
 end
 
-local TILES = {
-	{ Key = "Best", Icon = "stat_BestTime", Caption = "Best time" },
-	{ Key = "Stage", Icon = "portal", Caption = "Best stage" },
-	{ Key = "Wins", Icon = "stat_Wins", Caption = "Wins" },
-	{ Key = "Runs", Icon = "stat_Runs", Caption = "Runs played" },
-	{ Key = "Rate", Icon = "stat_WinRate", Caption = "Win rate" },
-	{ Key = "Kills", Icon = "stat_Kills", Caption = "Total kills" },
-	{ Key = "Gold", Icon = "stat_Gold", Caption = "Gold" },
-	{ Key = "Heroes", Icon = "stat_Heroes", Caption = "Characters" },
-	{ Key = "Skins", Icon = "stat_Skins", Caption = "Skins owned" },
-	{ Key = "Meta", Icon = "stat_Upgrades", Caption = "Upgrade levels" },
-	{ Key = "Revives", Icon = "revive", Caption = "Saved revives" },
-	{ Key = "Ach", Icon = "ach_Badge", Caption = "Achievements" },
+-- The STATS tab's three groups; Bar = a proportional bar under the value (have / total).
+local GROUPS = {
+	{
+		Caption = "Run records",
+		Tiles = {
+			{ Key = "Best", Icon = "stat_BestTime", Caption = "Best time" },
+			{ Key = "Stage", Icon = "portal", Caption = "Best stage" },
+			{ Key = "Wins", Icon = "stat_Wins", Caption = "Wins" },
+			{ Key = "Runs", Icon = "stat_Runs", Caption = "Runs played" },
+			{ Key = "Rate", Icon = "stat_WinRate", Caption = "Win rate" },
+			{ Key = "Kills", Icon = "stat_Kills", Caption = "Total kills" },
+		},
+	},
+	{
+		Caption = "Collection",
+		Bars = true,
+		Tiles = {
+			{ Key = "Heroes", Icon = "stat_Heroes", Caption = "Characters" },
+			{ Key = "Skins", Icon = "stat_Skins", Caption = "Skins owned" },
+			{ Key = "Meta", Icon = "stat_Upgrades", Caption = "Upgrade levels" },
+			{ Key = "Ach", Icon = "ach_Badge", Caption = "Achievements" },
+		},
+	},
+	{
+		Caption = "Resources",
+		Tiles = {
+			{ Key = "Gold", Icon = "stat_Gold", Caption = "Gold" },
+			{ Key = "Revives", Icon = "revive", Caption = "Saved revives" },
+		},
+	},
 }
+local TILE_H = 88 -- a stat tile; +16 with a bar
+local GAP = 12
 
 function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = { Values = {} }
 	ui.Header = UIKit.ScreenHeader(screen, "YOUR STATS", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
 	ui.Panel = holder
 	UIKit.padding(face, 16, 16, 16, 16)
 	local tab = "Stats"
@@ -67,23 +88,38 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(0, TABS_H),
-		Size = UDim2.new(1, 0, 1, -40 - TABS_H),
+		Size = UDim2.new(1, 0, 1, -TABS_H),
 		ScrollBarThickness = 4,
 		ScrollBarImageColor3 = P.gold_500,
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
-	UIKit.padding(scroll, 4, 6, 4, 4)
-	ui.Grid = new("UIGridLayout", { CellSize = UDim2.fromOffset(200, 112), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, scroll)
 	ui.Tiles = {}
-	for i, t in ipairs(TILES) do
-		local f = UIKit.Panel(scroll, { Name = t.Key, LayoutOrder = i }, true)
-		Icons.Draw(f, t.Icon, { Size = 34, Position = UDim2.fromOffset(14, 14), Color = if t.Icon == "coin" or t.Icon == "revive" or t.Icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
-		ui.Values[t.Key] = text(f, "Number", "-", { Position = UDim2.fromOffset(14, 48), Size = UDim2.new(1, -28, 0, TS(28) + 4) }, 28)
-		text(f, "Caption", UIKit.track(t.Caption), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -10), Size = UDim2.new(1, -28, 0, TS(12) + 2) })
-		ui.Tiles[i] = f
+	ui.Bars = {}
+	ui.Groups = {}
+	for gi, g in ipairs(GROUPS) do
+		local group = { Label = UIKit.SectionLabel(scroll, g.Caption), Tiles = {}, Bars = g.Bars == true }
+		for _, t in ipairs(g.Tiles) do
+			local f = UIKit.Panel(scroll, { Name = t.Key }, true)
+			f.BackgroundColor3 = P.slate_950
+			f.BackgroundTransparency = 0.3
+			Icons.Draw(f, t.Icon, { Name = "Icon", Size = 30, Position = UDim2.fromOffset(14, 12), Back = P.slate_950 })
+			text(f, "Caption", UIKit.track(t.Caption), { Name = "Caption", Position = UDim2.fromOffset(52, 12), Size = UDim2.new(1, -60, 0, 30), TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd })
+			ui.Values[t.Key] = text(f, "Number", "-", { Name = "Value", Position = UDim2.fromOffset(14, 46), Size = UDim2.new(1, -28, 0, TS(26) + 4), TextTruncate = Enum.TextTruncate.AtEnd }, 26)
+			if g.Bars then
+				ui.Bars[t.Key] = UIKit.Meter(f, {
+					Gradient = ColorSequence.new(P.gold_500, P.gold_300),
+					AnchorPoint = Vector2.new(0, 1),
+					Position = UDim2.new(0, 14, 1, -14),
+					Size = UDim2.new(1, -28, 0, 8),
+				})
+			end
+			table.insert(group.Tiles, f)
+			table.insert(ui.Tiles, f)
+		end
+		ui.Groups[gi] = group
 	end
-	ui.Passes = text(face, "Small", "", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 30), TextXAlignment = Enum.TextXAlignment.Center })
+	ui.Passes = text(scroll, "Small", "", { Name = "Passes", TextXAlignment = Enum.TextXAlignment.Center })
 	ui.StatsScroll = scroll
 
 	-- achievements tab
@@ -125,6 +161,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		V.Heroes.Text = heroes .. " / " .. #CharacterData.Order
+		ui.Bars.Heroes.Set(heroes / math.max(1, #CharacterData.Order))
 		local skins, total = 0, 0
 		for skinId in pairs(CharacterData.Skins) do
 			total += 1
@@ -133,12 +170,14 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		V.Skins.Text = skins .. " / " .. total
+		ui.Bars.Skins.Set(skins / math.max(1, total))
 		local levels, maxLevels = 0, 0
 		for _, id in ipairs(MetaUpgradeData.Order) do
 			levels += p.Meta[id] or 0
 			maxLevels += MetaUpgradeData.Upgrades[id].MaxLevel
 		end
 		V.Meta.Text = levels .. " / " .. maxLevels
+		ui.Bars.Meta.Set(levels / math.max(1, maxLevels))
 		V.Revives.Text = tostring(p.ReviveTokens or 0)
 		local done = 0
 		for _, id in ipairs(AchievementData.Order) do
@@ -147,6 +186,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		V.Ach.Text = done .. " / " .. #AchievementData.Order
+		ui.Bars.Ach.Set(done / math.max(1, #AchievementData.Order))
 		local passes = {}
 		for _, key in ipairs({ "StarterPack", "VIP", "DoubleGold" }) do
 			if p.Passes and p.Passes[key] then
@@ -303,17 +343,40 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		place(ui.Header.Frame, M, headY, math.min(520, W - 2 * M), 56)
 		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
 		local w = math.min(W - 2 * M, 1100)
-		local inner = w - 32 - 10
-		local cols = math.clamp(math.floor((inner + 12) / 200), 2, 5)
-		local cellH = UIKit.IsCompact() and 124 or 112
+		local inner = w - 32 - 10 -- face padding and the scroll bar
 		ui.Narrow = w < 700
-		ui.Grid.CellSize = UDim2.fromOffset(math.floor((inner - (cols - 1) * 12) / cols), cellH)
-		local rows = math.ceil(#TILES / cols)
-		local fit = rows * (cellH + 12) + 32 + 8 + 40 + Theme.Size.TapMin + 10
+		-- groups: every tile row lines up on one column grid (6 / 3 / 2 columns)
+		local cols = inner >= 960 and 6 or (inner >= 520 and 3 or 2)
+		local colsC = inner >= 640 and 4 or 2 -- collection / resources
+		local y = 6
+		local labelH = TS(12) + 6
+		for gi, g in ipairs(ui.Groups) do
+			local n = gi == 1 and cols or colsC
+			local tw = math.floor((inner - (n - 1) * GAP) / n)
+			local th = TILE_H + (g.Bars and 16 or 0) + (UIKit.IsCompact() and 8 or 0)
+			place(g.Label, 2, y, inner, labelH)
+			y += labelH + 6
+			for i, f in ipairs(g.Tiles) do
+				local col = (i - 1) % n
+				local row = (i - 1) // n
+				place(f, 2 + col * (tw + GAP), y + row * (th + GAP), tw, th)
+				local value = f:FindFirstChild("Value") :: TextLabel
+				value.Position = UDim2.fromOffset(14, 14 + 30 + (UIKit.IsCompact() and 4 or 2))
+			end
+			local rows = math.ceil(#g.Tiles / n)
+			y += rows * th + (rows - 1) * GAP + 14
+		end
+		place(ui.Passes, 0, y - 4, inner, TS(14) + 10)
+		y += TS(14) + 8
+		ui.StatsScroll.CanvasSize = UDim2.fromOffset(0, y)
+		local TABS_H = Theme.Size.TapMin + 10
+		local fit = y + TABS_H + 34
 		if tab == "Achievements" then
 			fit = H -- the list scrolls: use the room there is
 		end
-		place(ui.Panel, (W - w) / 2, top, w, math.min(fit, H - top - M))
+		local h = math.min(fit, H - top - M)
+		place(ui.Panel, (W - w) / 2, top, w, h)
+		ui.StatsScroll.ScrollBarThickness = (tab == "Stats" and y > h - TABS_H - 32) and 4 or 0
 	end
 	MenuStats._layout = function()
 		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
@@ -330,12 +393,10 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		OnShow = function(_p)
 			refresh()
 			MenuStats._show(true)
-			for i, f in ipairs(ui.Tiles) do
-				UIAnim.Pop(f, 0.025 * i, 0.75)
-				if i <= 3 then
-					f.ClipsDescendants = true
-					UIAnim.Sweep(f, 0.2 + 0.1 * i, 0.8, 0.5)
-				end
+			UIAnim.Cascade(ui.Tiles, 0.025, 0.8)
+			for i = 1, 3 do
+				ui.Tiles[i].ClipsDescendants = true
+				UIAnim.Sweep(ui.Tiles[i], 0.2 + 0.1 * i, 0.8, 0.5)
 			end
 			layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
 		end,

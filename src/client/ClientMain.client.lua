@@ -58,6 +58,7 @@ task.spawn(function()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "LoadingScreen"
 	gui.IgnoreGuiInset = true
+	gui.ScreenInsets = Enum.ScreenInsets.None -- edge to edge, under notches too
 	gui.ResetOnSpawn = false
 	gui.DisplayOrder = 100
 	local back = Instance.new("Frame")

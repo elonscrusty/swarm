@@ -33,10 +33,10 @@ local C, P = Theme.Color, Theme.Palette
 local player = Players.LocalPlayer
 
 local BOARDS = {
-	{ Id = "Score", Title = "High score", Icon = "trophy", Heading = "Global high scores", Sub = "Best run score across all servers", Explain = "Score reflects stages, bosses, kills, level and time.", Column = "Score" },
-	{ Id = "BestStage", Title = "Best stage", Icon = "portal", Heading = "Best stage", Sub = "Furthest stage reached in one run", Explain = "All time, across all servers.", Column = "Stage" },
-	{ Id = "Daily", Title = "Daily", Icon = "calendar", Heading = "Today's daily", Sub = "Today's scored Daily Challenge attempts (UTC)", Explain = "Ranked by stages cleared, then time. One scored attempt a day.", Column = "Result" },
-	{ Id = "Kills", Title = "Most kills", Icon = "stat_Kills", Heading = "Most kills", Sub = "Most enemies defeated in one run", Explain = "All time, across all servers.", Column = "Kills" },
+	{ Id = "Score", Title = "High score", Short = "SCORE", Icon = "trophy", Heading = "Global high scores", Sub = "Best run score across all servers", Explain = "Score reflects stages, bosses, kills, level and time.", Column = "Score" },
+	{ Id = "BestStage", Title = "Best stage", Short = "STAGE", Icon = "portal", Heading = "Best stage", Sub = "Furthest stage reached in one run", Explain = "All time, across all servers.", Column = "Stage" },
+	{ Id = "Daily", Title = "Daily", Short = "DAILY", Icon = "calendar", Heading = "Today's daily", Sub = "Today's scored Daily Challenge attempts (UTC)", Explain = "Ranked by stages cleared, then time. One scored attempt a day.", Column = "Result" },
+	{ Id = "Kills", Title = "Most kills", Short = "KILLS", Icon = "stat_Kills", Heading = "Most kills", Sub = "Most enemies defeated in one run", Explain = "All time, across all servers.", Column = "Kills" },
 }
 
 local ROW_H = 52
@@ -253,7 +253,7 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		local maxH = H - top - M
 		local w = math.min(W - 2 * M, 780)
 		local iw = w - 40
-		local narrow = iw < 560
+		local narrow = iw < 660
 		local short = maxH < 470 -- phones in landscape: drop the explanation line
 		local tabsH = Theme.Size.TapMin + 4
 		ui.Tabs.Frame.Position = UDim2.new()
@@ -282,7 +282,7 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 			y += headH + 6
 		end
 		-- rows: as many as fit, the rest scroll
-		local youH = narrow and 58 or 60
+		local youH = narrow and 64 or 60
 		local countH = TS(14) + 8
 		local tail = (rowCount > 0 and countH or 0) + 10 + youH
 		local want = rowCount * (ROW_H + ROW_GAP) + 4
@@ -302,13 +302,40 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		y += 10
 		place(ui.You, 0, y, iw, youH)
 		y += youH
-		-- the YOUR BEST card: name column shrinks on narrow panels
-		ui.YouName.Size = UDim2.new(narrow and 0.3 or 0.42, -252 + (narrow and 60 or 0), 1, 0)
-		ui.YouValue.Size = UDim2.new(narrow and 0.7 or 0.58, -16, 1, 0)
+		-- the YOUR BEST card: on narrow panels the caption goes and the value moves under
+		-- the name
 		ui.YouCaption.Visible = not narrow
+		local nameX = narrow and 154 or 252
 		ui.YouRank.Position = UDim2.fromOffset(narrow and 48 or 140, 0)
 		ui.YouAvatarSlot.Position = UDim2.new(0, narrow and 108 or 206, 0.5, -18)
-		ui.YouName.Position = UDim2.fromOffset(narrow and 154 or 252, 0)
+		if narrow then
+			ui.YouName.AnchorPoint = Vector2.zero
+			ui.YouName.Position = UDim2.fromOffset(nameX, 6)
+			ui.YouName.Size = UDim2.new(1, -nameX - 12, 0.5, -6)
+			ui.YouValue.AnchorPoint = Vector2.zero
+			ui.YouValue.Position = UDim2.new(0, nameX, 0.5, 0)
+			ui.YouValue.Size = UDim2.new(1, -nameX - 12, 0.5, -6)
+			ui.YouValue.TextXAlignment = Enum.TextXAlignment.Left
+		else
+			ui.YouName.Position = UDim2.fromOffset(nameX, 0)
+			ui.YouName.Size = UDim2.new(0.5, -nameX + 40, 1, 0)
+			ui.YouValue.AnchorPoint = Vector2.new(1, 0)
+			ui.YouValue.Position = UDim2.new(1, -16, 0, 0)
+			ui.YouValue.Size = UDim2.new(0.5, -56, 1, 0)
+			ui.YouValue.TextXAlignment = Enum.TextXAlignment.Right
+		end
+		-- narrow panels: tabs without icons and with one-word titles, so all four fit
+		for _, b in ipairs(BOARDS) do
+			local hit = ui.Tabs.Frame:FindFirstChild(string.upper(b.Title))
+			local icon = hit and hit:FindFirstChild("IconHolder", true)
+			local title = hit and hit:FindFirstChild("Title", true)
+			if icon and icon:IsA("GuiObject") then
+				icon.Visible = not narrow
+			end
+			if title and title:IsA("TextLabel") then
+				title.Text = narrow and b.Short or string.upper(b.Title)
+			end
+		end
 		place(ui.Panel, (W - w) / 2, top, w, math.min(maxH, y + 32))
 	end
 	MenuLeaderboards._layout = function()

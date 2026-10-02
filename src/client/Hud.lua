@@ -179,7 +179,7 @@ local function buildTop(frame: Frame)
 	new("Frame", { BackgroundColor3 = P.ivory_200, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 1, 1, -4), ZIndex = 5 }, ui.BossMark)
 	-- the boss's painted portrait (bosses/<BossId>) in a crimson-rimmed disc at the bar's
 	-- left end; the bar starts after it. Hidden for a boss without a picture (setBossArt).
-	local disc = new("Frame", { Name = "Portrait", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0, 30), Size = UDim2.fromOffset(52, 52), ZIndex = 6, Visible = false }, boss)
+	local disc = new("Frame", { Name = "Portrait", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0, 34), Size = UDim2.fromOffset(52, 52), ZIndex = 6, Visible = false }, boss)
 	UIKit.corner(disc, 999)
 	UIKit.stroke(disc, P.crimson_400, 2, 0.05)
 	ui.BossSkull = Icons.Draw(disc, "skull", { Size = 26, Color = P.crimson_300, Back = P.slate_950, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })

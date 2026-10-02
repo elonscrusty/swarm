@@ -1724,7 +1724,8 @@ local ART_GIVE_UP = 20
 	draws the stand-in into a frame under the picture: shown at once when the key has no
 	upload, otherwise only when the picture has not loaded after 0.6 s (IsLoaded is polled,
 	as in Icons). The picture is the frame's "Image" child (dim it with ImageTransparency /
-	ImageColor3), the stand-in its "Fallback" child.
+	ImageColor3), the stand-in its "Fallback" child. props.CornerRadius rounds the picture
+	(ClipsDescendants does not follow a UICorner, so the image gets its own).
 ]]
 function UIKit.ArtPicture(parent: Instance?, key: string, props: { [string]: any }?, fallback: ((Frame) -> ())?, scaleType: Enum.ScaleType?): Frame
 	local f = new("Frame", { Name = "Art", BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true, Size = UDim2.fromScale(1, 1) })
@@ -1767,7 +1768,15 @@ function UIKit.ArtPicture(parent: Instance?, key: string, props: { [string]: any
 	end
 	if props then
 		for k, v in pairs(props) do
-			(f :: any)[k] = v
+			if k == "CornerRadius" then
+				corner(f, v)
+				local img = f:FindFirstChild("Image")
+				if img then
+					corner(img, v)
+				end
+			else
+				(f :: any)[k] = v
+			end
 		end
 	end
 	f.Parent = parent

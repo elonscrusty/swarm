@@ -365,7 +365,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				c:Destroy()
 			end
 		end
-		UIKit.ArtPicture(ui.PortraitWell, "portraits/" .. id, nil, function(fb: Frame)
+		UIKit.ArtPicture(ui.PortraitWell, "portraits/" .. id, { CornerRadius = Theme.Radius.M }, function(fb: Frame)
 			Icons.Character(fb, id, { Size = math.floor(headH * 0.7), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 		end)
 	end
@@ -510,6 +510,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 		Showcase.Show(inspChar, inspSkin)
 		refresh()
+		MenuCharacters._relayout()
 		UIAnim.Punch(ui.Detail, 0.03)
 		if screen.Visible then
 			UIAnim.Burst(ui.Detail, UDim2.fromScale(0.5, 0.12), { P.gold_300, P.ivory_100, P.steel_200 }, 12, 70)
@@ -602,7 +603,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 			rowH = math.min(68, rowH)
 			if cols == 2 then
-				lw += 36 -- room for "Necromancer" in a half-width tile
+				lw += 56 -- room for "Necromancer" in a half-width tile
 			end
 			local gap = cols == 2 and 6 or 8
 			local rows = math.ceil(n / cols)
@@ -624,11 +625,13 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 	end
 
-	ui.DetailList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	-- the details panel follows its content (another hero, a skin button shown / hidden)
+	MenuCharacters._relayout = function()
 		if ctx.Current() == "Characters" then
 			layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
 		end
-	end)
+	end
+	ui.DetailList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(MenuCharacters._relayout)
 
 	return {
 		Layout = layout,
@@ -656,5 +659,6 @@ end
 
 MenuCharacters._refresh = function() end
 MenuCharacters._inspect = function(_id: string) end
+MenuCharacters._relayout = function() end
 
 return MenuCharacters

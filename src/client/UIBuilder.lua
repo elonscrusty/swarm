@@ -1781,8 +1781,23 @@ local function stackHeight(frame: Instance, gap: number): number
 	return h + math.max(0, n - 1) * gap
 end
 
+-- A settings column heading: serif caps in gold over a hairline.
 local function sectionCaption(parent: Instance, str: string, order: number)
-	text(parent, "Caption", UIKit.track(str), { LayoutOrder = order, Size = UDim2.new(1, 0, 0, TS(12) + 8), TextColor3 = P.gold_300 })
+	local h = TS(18) + 14
+	local f = new("Frame", { Name = "Heading", BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.new(1, 0, 0, h) }, parent)
+	text(f, "H3", string.upper(str), { Size = UDim2.new(1, 0, 1, -6), TextColor3 = P.gold_200 })
+	UIKit.Hairline(f, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) })
+end
+
+-- The settings columns sit on charcoal cards with a thin gold edge (COLUMN_PAD inside).
+local COLUMN_PAD = 16
+local function settingsColumn(parent: Instance, name: string): Frame
+	local col = new("Frame", { Name = name, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, Size = UDim2.fromOffset(300, 300) }, parent)
+	UIKit.corner(col, Theme.Radius.M)
+	UIKit.stroke(col, P.gold_500, 1, 0.6)
+	UIKit.padding(col, COLUMN_PAD - 4, COLUMN_PAD, COLUMN_PAD, COLUMN_PAD)
+	UIKit.list(col, { Padding = UDim.new(0, 6) })
+	return col
 end
 
 -- One line under the options: where settings live and whether saving works right now.
@@ -1829,11 +1844,9 @@ local function buildPause()
 		ElasticBehavior = Enum.ElasticBehavior.Never,
 	}, content)
 	pause.Options = options
-	local colA = new("Frame", { Name = "Sound", BackgroundTransparency = 1, Size = UDim2.fromOffset(300, 300) }, options)
-	local colB = new("Frame", { Name = "Comfort", BackgroundTransparency = 1, Size = UDim2.fromOffset(300, 300) }, options)
+	local colA = settingsColumn(options, "Sound")
+	local colB = settingsColumn(options, "Comfort")
 	pause.ColA, pause.ColB = colA, colB
-	UIKit.list(colA, { Padding = UDim.new(0, 6) })
-	UIKit.list(colB, { Padding = UDim.new(0, 6) })
 
 	sectionCaption(colA, "Sound", 1)
 	pause.Music = UIKit.Slider(colA, "Music", "music", ClientSettings.Get("Music"), function(v)
@@ -1846,18 +1859,18 @@ local function buildPause()
 		ClientSettings.Set("Shake", v)
 	end, function() end, { LayoutOrder = 4 })
 
-	sectionCaption(colB, "Comfort and help", 1)
-	pause.Reduced = UIKit.Toggle(colB, "Reduced effects", "sparkle", "Fewer particles and trails, no screen flashes", ClientSettings.Get("ReducedEffects") == true, function(on)
+	sectionCaption(colB, "Comfort & help", 1)
+	pause.Reduced = UIKit.Toggle(colB, "Reduced effects", "sparkle", "Fewer particles and trails. No screen flashes.", ClientSettings.Get("ReducedEffects") == true, function(on)
 		ClientSettings.Set("ReducedEffects", on)
 	end, { LayoutOrder = 2 })
-	pause.Numbers = UIKit.Toggle(colB, "Damage numbers", "sword", "Totals over enemies, kept short in big fights", ClientSettings.Get("DamageNumbers") == true, function(on)
+	pause.Numbers = UIKit.Toggle(colB, "Damage numbers", "sword", "Totals over enemies, kept short in big fights.", ClientSettings.Get("DamageNumbers") == true, function(on)
 		ClientSettings.Set("DamageNumbers", on)
 	end, { LayoutOrder = 3 })
-	pause.Tips = UIKit.Toggle(colB, "Show tips", "info", "Short hints while you play", ClientSettings.Get("Tips") ~= false, function(on)
+	pause.Tips = UIKit.Toggle(colB, "Show tips", "info", "Short hints while you play.", ClientSettings.Get("Tips") ~= false, function(on)
 		ClientSettings.Set("Tips", on)
 	end, { LayoutOrder = 4 })
 	pause.ReplayTips = UIKit.Button(colB, {
-		Kind = "Outline",
+		Kind = "Secondary",
 		Title = "REPLAY TIPS",
 		Icon = "cycle",
 		IconSize = 18,
@@ -1872,7 +1885,7 @@ local function buildPause()
 		end,
 	})
 	UIKit.Button(colB, {
-		Kind = "Outline",
+		Kind = "Secondary",
 		Title = "REPORT A BUG",
 		Icon = "warning",
 		IconSize = 18,
@@ -1953,10 +1966,14 @@ local function buildPause()
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
 		local twoCol = inner >= 600
-		local gap = 28
-		local side = 14 -- slider knobs reach past their track: keep them inside the scroll clip
+		local gap = 20
+		local side = 2 -- the columns' padding keeps the slider knobs inside the scroll clip
 		local colW = twoCol and math.floor((inner - gap - 2 * side) / 2) or (inner - 2 * side)
-		local hA, hB = stackHeight(colA, 6), stackHeight(colB, 6)
+		local hA, hB = stackHeight(colA, 6) + 2 * COLUMN_PAD - 4, stackHeight(colB, 6) + 2 * COLUMN_PAD - 4
+		if twoCol then
+			hA = math.max(hA, hB) -- two cards of one height
+			hB = hA
+		end
 		colA.Size = UDim2.fromOffset(colW, hA)
 		colB.Size = UDim2.fromOffset(colW, hB)
 		colA.Position = UDim2.fromOffset(side, 0)
@@ -2237,8 +2254,9 @@ local function buildResults()
 	UIKit.corner(medal, 999)
 	results.MedalStroke = UIKit.stroke(medal, P.gold_400, 2.5, 0.05)
 	results.Medal = medal
-	-- the boss that ended the run (bosses/<id>), a small crimson disc on the medal's corner
-	local bossBadge = new("Frame", { Name = "BossBadge", BackgroundColor3 = P.slate_950, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 1, -6), Size = UDim2.fromOffset(40, 40), ZIndex = 6, Visible = false }, medal)
+	-- the boss that ended the run (bosses/<id>), a small crimson disc on the medal's
+	-- bottom-left (clear of the title column)
+	local bossBadge = new("Frame", { Name = "BossBadge", BackgroundColor3 = P.slate_950, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 4, 1, -6), Size = UDim2.fromOffset(40, 40), ZIndex = 6, Visible = false }, medal)
 	UIKit.corner(bossBadge, 999)
 	UIKit.stroke(bossBadge, P.crimson_400, 2, 0.05)
 	results.BossBadge = bossBadge
