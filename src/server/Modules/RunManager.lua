@@ -18,7 +18,11 @@
 	"Level" board (highest level in one run) takes every mode.
 	Parties (PartyService): only a party's leader starts runs (once every member is READY), and that start brings the
 	members in at once up to the mode's size (joinParty); others still JOIN the countdown.
-	SOLO skips the countdown. Modes live in Config.Modes; "Squad" (old 1-4 mode) is still
+	SOLO skips the countdown. Live game (RunServers, Config.RunServers): beginRun hands the
+	team to RunServers.SendToRun, which saves them and teleports them to their own private
+	run server; that server starts the run through StartTeamRun and sends everyone back to
+	a public lobby after it (OnBackInLobby). Studio / a failed teleport play here as before.
+	Modes live in Config.Modes; "Squad" (old 1-4 mode) is still
 	accepted from old clients. The lobby's ProximityPrompts are switched off: the 2D lobby
 	screen (UIBuilder / LobbyScreen) sends StartRun / StartNow / CycleArena instead.
 

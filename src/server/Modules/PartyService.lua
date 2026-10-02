@@ -28,6 +28,12 @@
 	           "party:<userId>", MenuParty's ExperienceInviteOptions) or by following a friend
 	           (Player.FollowUserId) joins the inviter's party when the inviter is on this
 	           server and they are friends (join data can be forged, friendship cannot).
+	  Run servers (RunServers): a party plays its run on a private reserved server; JOIN
+	           can't follow anyone there (Roblox refuses the teleport: a toast says so).
+	           Coming back, party mates who go home together land on one lobby server with
+	           TeleportData { SwarmReturn = { Party = { Leader, Members } } } and the party
+	           re-forms when BOTH sides agree: the leader's own return data lists the member
+	           and the member's names that leader (one forged side can't pull anyone in).
 
 	Every client request comes through Remotes.Listen (rate limited, pcall'd) and is
 	validated: ids must be players on this server, actions must make sense for the sender.
@@ -412,7 +418,43 @@ local function follow(player: Player, friendId: any)
 		TeleportService:TeleportAsync(game.PlaceId, { player }, options)
 	end)
 	if not sent then
-		notify(player, "Couldn't join that server. It may be full.", BAD)
+		notify(player, "Couldn't join that server. It may be full, or your friend is in a private run.", BAD)
+	end
+end
+
+-- Back from a private run server: { [Player] = { Leader = userId, Members = { [userId] = true } } }
+local returning: { [Player]: { Leader: number, Members: { [number]: boolean } } } = {}
+
+-- Re-forms a party that went home from a run server together (see the header).
+local function reformAfterRun(player: Player)
+	local rs = ctx.RunServers
+	local back = rs and rs.ReturnData(player)
+	local party = back and back.Party
+	if not party then
+		return
+	end
+	local set = {}
+	for _, id in ipairs(party.Members) do
+		set[id] = true
+	end
+	returning[player] = { Leader = party.Leader, Members = set }
+	task.delay(60, function()
+		returning[player] = nil
+	end)
+	local leader = playerById(party.Leader)
+	local mine = leader and returning[leader]
+	if not leader or not mine or mine.Leader ~= leader.UserId then
+		return -- the leader arrives later: their arrival pulls the members in
+	end
+	if player == leader then
+		for _, other in ipairs(Players:GetPlayers()) do
+			local theirs = returning[other]
+			if other ~= leader and theirs and theirs.Leader == leader.UserId and mine.Members[other.UserId] then
+				joinParty(other, leader)
+			end
+		end
+	elseif mine.Members[player.UserId] then
+		joinParty(player, leader)
 	end
 end
 
@@ -443,6 +485,7 @@ local function arrivalInviters(player: Player): { number }
 end
 
 local function onArrival(player: Player)
+	reformAfterRun(player)
 	for _, id in ipairs(arrivalInviters(player)) do
 		local inviter = playerById(id)
 		if inviter and inviter ~= player and isFriends(player, id) then
@@ -521,6 +564,7 @@ function PartyService.PartyOf(player: Player): Party?
 end
 
 local function onRemoving(player: Player)
+	returning[player] = nil
 	removeMember(player, "left the game")
 	invites[player] = nil
 	for target, map in pairs(invites) do
@@ -566,6 +610,9 @@ function PartyService.Start()
 	end)
 	pcall(function()
 		TeleportService.TeleportInitFailed:Connect(function(player, result)
+			if ctx.RunServers and ctx.RunServers.OwnsTeleport(player) then
+				return -- a run-server trip: RunServers retries and reports it
+			end
 			local full = result == Enum.TeleportResult.GameFull
 			notify(player, full and "That server is full." or "Couldn't join that server. Try again.", BAD)
 		end)
