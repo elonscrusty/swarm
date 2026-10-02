@@ -1,6 +1,6 @@
 --[[
 	WeaponData.lua
-	All 9 weapons, their 8 per-level stat rows, their evolutions, their behaviour perks and
+	All 17 weapons, their 8 per-level stat rows, their evolutions, their behaviour perks and
 	the projectile visuals.
 
 	Stat row fields (every level row has all of them):
@@ -12,6 +12,7 @@
 	  pierce     enemies a projectile can hit before it disappears (999 = unlimited)
 	  duration   projectile lifetime / pool lifetime / boomerang outbound time (seconds)
 	  knockback  push strength in studs/s added to the enemy
+	  heal       optional (Healing Totem): HP a pulse gives each player in range
 
 	Behaviour constants that never change with level live in `Params`.
 	An evolution needs the weapon at level 8 plus its `Passive` (any level). It replaces the
@@ -20,7 +21,11 @@
 	Perks: behaviour changes unlocked at a weapon level (and kept when evolved), e.g. the
 	Whip's Riposte. `Perks = { { Level, Id, Name, Text } }`; WeaponSystem asks
 	WeaponData.HasPerk(w, "Riposte"). Level-up cards show the perk as a NEW line.
-	AmountLabel names the amount stat on cards ("Swings", "Arrows", ...).
+	AmountLabel names the amount stat on cards ("Swings", "Arrows", ...); DurationLabel and
+	CooldownLabel rename those two the same way.
+	Flags read by the hero traits (CharacterData): Area = true for burning / area weapons
+	(the Alchemist's Volatile Mix), Deployable = true for things you plant (the Engineer's
+	Tinkerer). Params.MaxAmount caps the amount (turrets, totems: Duplicator can't go past it).
 
 	To add a weapon: add an entry to Weapons + its id to Order, then add a behaviour
 	function in ServerScriptService/Modules/WeaponSystem.lua (Fire[Behavior]) and list
@@ -31,7 +36,25 @@ local WeaponData = {}
 
 WeaponData.MaxLevel = 8
 
-WeaponData.Order = { "Whip", "MagicOrb", "Knives", "Garlic", "HolyWater", "Lightning", "Axe", "Boomerang", "Longbow" }
+WeaponData.Order = {
+	"Whip",
+	"MagicOrb",
+	"Knives",
+	"Garlic",
+	"HolyWater",
+	"Lightning",
+	"Axe",
+	"Boomerang",
+	"Longbow",
+	"Spear",
+	"Crossbow",
+	"FrostNova",
+	"FireTrail",
+	"HealingTotem",
+	"ChainHook",
+	"Turret",
+	"SoulBolt",
+}
 
 -- Display names for stat diffs on level-up cards.
 WeaponData.StatLabels = {
@@ -43,6 +66,7 @@ WeaponData.StatLabels = {
 	pierce = "Pierce",
 	duration = "Duration",
 	knockback = "Knockback",
+	heal = "Heal",
 }
 
 --[[
@@ -80,7 +104,50 @@ WeaponData.Visuals = {
 	[20] = { Name = "Arrow", Shape = "Block", Size = Vector3.new(0.73, 0.63, 3.24), Color = Palette.wood_400, Material = "Wood", Style = "Dart", Spin = 0, Trail = { Color = Palette.ivory_100, Tail = Palette.moss_300, Width = 0.16, Life = 0.1 }, Impact = Palette.ivory_200 },
 	[21] = { Name = "WindArrow", Shape = "Block", Size = Vector3.new(0.73, 0.63, 3.24), Color = Palette.moss_300, Material = "Neon", Style = "Dart", Spin = 0, Trail = { Color = Palette.moss_200, Tail = Palette.gold_300, Width = 0.24, Life = 0.14 }, Impact = Palette.moss_200 },
 	[11] = { Name = "HellBottle", Shape = "Ball", Size = Vector3.new(1.4, 1.8, 1.4), Color = Palette.fx_fire, Material = "Glass", Style = "Bottle", Tumble = 11, Trail = { Color = Palette.amber_300, Tail = Palette.fx_fire, Width = 0.3, Life = 0.14 }, Shatter = true },
+	--[[
+		22+: the weapons added with the Alchemist / Engineer / Necromancer (meshes Shot_Spear,
+		Shot_Bolt, Shot_FrostShard, Shot_Totem, Shot_Hook, Shot_Soul, Ability_Turret, Shot_Fire).
+		Indexes 32-63 are sent with bit 7 set (WeaponData.VisualByte), so the u8 still carries
+		the 2-bit tier. Styles: "Spear" points along its thrust, "Bolt" straight, "Shard"
+		tumbling ice, "Totem" / "Turret" stand on the floor (Ground = true: drawn at floor
+		height; the turret's head pieces turn toward its target), "Hook" points outward with
+		a chain back to its thrower (VFX), "Soul" faces where it flies with a slow bob.
+		NoPose = true: spawning one next to a hero is not that hero's attack (turret bolts).
+	]]
+	[22] = { Name = "Spear", Shape = "Block", Size = Vector3.new(0.4, 0.22, 3.04), Color = Palette.wood_500, Material = "Wood", Style = "Spear", Trail = { Color = Palette.ivory_100, Tail = Palette.steel_300, Width = 0.28, Life = 0.08 }, Impact = Palette.ivory_200 },
+	[23] = { Name = "DragonLance", Shape = "Block", Size = Vector3.new(0.4, 0.22, 3.04), Color = Palette.crimson_500, Material = "Metal", Style = "Spear", Trail = { Color = Palette.gold_200, Tail = Palette.crimson_400, Width = 0.36, Life = 0.1 }, Impact = Palette.gold_200 },
+	[24] = { Name = "Bolt", Shape = "Block", Size = Vector3.new(0.4, 0.34, 1.74), Color = Palette.wood_600, Material = "Wood", Style = "Bolt", Trail = { Color = Palette.ivory_100, Tail = Palette.crimson_300, Width = 0.12, Life = 0.07 }, Impact = Palette.ivory_200 },
+	[25] = { Name = "HeartBolt", Shape = "Block", Size = Vector3.new(0.4, 0.34, 1.74), Color = Palette.crimson_400, Material = "Neon", Style = "Bolt", Trail = { Color = Palette.crimson_300, Tail = Palette.gold_300, Width = 0.18, Life = 0.1 }, Impact = Palette.crimson_300 },
+	[26] = { Name = "FrostShard", Shape = "Block", Size = Vector3.new(0.65, 0.46, 1.6), Color = Palette.ice_300, Material = "Glass", Style = "Shard", Tumble = 14, Trail = { Color = Palette.ice_100, Tail = Palette.ice_300, Width = 0.16, Life = 0.08 }, Impact = Palette.ice_100 },
+	[27] = { Name = "Totem", Shape = "Block", Size = Vector3.new(1.8, 3.65, 0.95), Color = Palette.wood_500, Material = "Wood", Style = "Totem", Ground = true, NoPose = true, Impact = Palette.fx_heal },
+	[28] = { Name = "GroveTotem", Shape = "Block", Size = Vector3.new(1.8, 3.65, 0.95), Color = Palette.gold_500, Material = "Wood", Style = "Totem", Ground = true, NoPose = true, Impact = Palette.fx_heal },
+	[29] = { Name = "Hook", Shape = "Block", Size = Vector3.new(0.88, 0.25, 2.19), Color = Palette.steel_400, Material = "Metal", Style = "Hook", Impact = Palette.steel_200 },
+	[30] = { Name = "ReaperHook", Shape = "Block", Size = Vector3.new(0.88, 0.25, 2.19), Color = Palette.crimson_500, Material = "Metal", Style = "Hook", Impact = Palette.crimson_300 },
+	[31] = { Name = "Soul", Shape = "Ball", Size = Vector3.new(0.92, 0.95, 2.74), Color = Palette.ivory_200, Material = "SmoothPlastic", Style = "Soul", Trail = { Color = Palette.fx_heal, Tail = Palette.slate_400, Width = 0.5, Life = 0.22 }, Impact = Palette.fx_heal },
+	[32] = { Name = "SoulStorm", Shape = "Ball", Size = Vector3.new(0.92, 0.95, 2.74), Color = Palette.ivory_200, Material = "SmoothPlastic", Style = "Soul", Trail = { Color = Palette.crimson_300, Tail = Palette.slate_600, Width = 0.6, Life = 0.24 }, Impact = Palette.crimson_300 },
+	[33] = { Name = "Turret", Shape = "Block", Size = Vector3.new(2.28, 2.33, 2.6), Color = Palette.steel_600, Material = "Metal", Style = "Turret", Ground = true, NoPose = true, Impact = Palette.stone_300 },
+	[34] = { Name = "Bastion", Shape = "Block", Size = Vector3.new(2.28, 2.33, 2.6), Color = Palette.gold_500, Material = "Metal", Style = "Turret", Ground = true, NoPose = true, Impact = Palette.gold_200 },
+	[35] = { Name = "TurretShot", Shape = "Block", Size = Vector3.new(0.3, 0.26, 1.3), Color = Palette.gold_400, Material = "Metal", Style = "Bolt", NoPose = true, Trail = { Color = Palette.fx_gold, Tail = Palette.gold_500, Width = 0.12, Life = 0.06 }, Impact = Palette.fx_gold },
+	[36] = { Name = "ZeroShard", Shape = "Block", Size = Vector3.new(0.65, 0.46, 1.6), Color = Palette.ice_100, Material = "Glass", Style = "Shard", Tumble = 18, Trail = { Color = Palette.fx_holy, Tail = Palette.fx_arcane, Width = 0.22, Life = 0.1 }, Impact = Palette.fx_holy },
+	-- flames on the Fire Trail's burning patches (drawn by VFX from WeaponFx, never synced)
+	[37] = { Name = "Flame", Shape = "Ball", Size = Vector3.new(1.08, 0.82, 1.65), Color = Palette.fx_fire, Material = "Neon", Style = "Flame", Ground = true },
+	[38] = { Name = "PhoenixFlame", Shape = "Ball", Size = Vector3.new(1.08, 0.82, 1.65), Color = Palette.gold_300, Material = "Neon", Style = "Flame", Ground = true },
 }
+
+-- Projectile visual byte: index 1-31 in the low 5 bits, 32-63 as (index - 32) with bit 7
+-- set; bits 5-6 carry the cosmetic tier (0-3). VisualIndex / VisualTier decode it.
+function WeaponData.VisualByte(index: number, tier: number): number
+	local i = math.clamp(math.floor(index), 0, 63)
+	return (i % 32) + math.clamp(tier, 0, 3) * 32 + (i >= 32 and 128 or 0)
+end
+
+function WeaponData.VisualIndex(raw: number): number
+	return raw % 32 + (raw >= 128 and 32 or 0)
+end
+
+function WeaponData.VisualTier(raw: number): number
+	return (raw // 32) % 4
+end
 
 -- Shorthand for building a stat row.
 local function row(damage, cooldown, amount, area, speed, pierce, duration, knockback)
@@ -94,6 +161,12 @@ local function row(damage, cooldown, amount, area, speed, pierce, duration, knoc
 		duration = duration,
 		knockback = knockback,
 	}
+end
+
+-- A stat row with the Healing Totem's heal per pulse.
+local function healing(r, heal: number)
+	r.heal = heal
+	return r
 end
 
 WeaponData.Weapons = {
@@ -372,6 +445,281 @@ WeaponData.Weapons = {
 			Fan = true, -- every shot adds the two side arrows (the Volley perk on every shot)
 		},
 	},
+
+	--[[
+		The weapons below came with the Alchemist (Fire Trail), the Engineer (Turret) and the
+		Necromancer (Soul Bolt); every hero can find them on level-up cards. Per-target DPS
+		(damage x amount / cooldown, the same measure as the Longbow note above; area weapons
+		hit everything in range, so their per-target number is lower on purpose):
+		  Spear        L1 11.7  L8 64   Dragon Lance 140 + tip bursts (≈ 160)
+		  Crossbow     L1 8.4   L8 65   Heartseeker 131 + 3 ricochets (≈ 165)
+		  Frost Nova   L1 4.0   L8 13.6 Absolute Zero 22 (area + slow; Garlic L8 13, Soul Eater 19)
+		  Fire Trail   L1 8     L8 24   Phoenix Stride 32 + ignite (≈ 40) while in the flames
+		               (per 0.5 s tick; Holy Water L8 28, Hellfire 36)
+		  Healing Totem L1 4.7  L8 18   Lifebloom 32 (area pulses + heals; Garlic L8 13)
+		  Chain Hook   L1 7.5   L8 44 + the chain's 60% on the line   Reaper's Chain 118 + chain (≈ 160)
+		  Turret       L1 7.8   L8 62   Bastion 145 (bolts per turret every 0.55 s / 0.33 s,
+		               x turrets x uptime = min(1, life / rebuild))
+		  Soul Bolt    L1 6.4   L8 65   Soul Storm 153 (homing: every soul finds a target)
+		Reference: Longbow 10.6 / 60 / 166, Knives 7 / 65 / 150, Death Spiral 160.
+	]]
+
+	-- SPEAR: thrusts out and back in the direction you face, piercing a line of enemies.
+	Spear = {
+		Id = "Spear",
+		Name = "Spear",
+		Description = "Thrusts a spear in the direction you face, piercing a line of enemies.",
+		Color = Color3.fromRGB(190, 150, 90),
+		Behavior = "Spear",
+		AmountLabel = "Spears",
+		Perks = { { Level = 5, Id = "Impale", Name = "Impale", Text = "The first enemy each spear hits takes +50% damage." } },
+		-- Reach studs at area 1, Width = hit radius along the shaft, ThrustTime = out and back
+		Params = { Reach = 11, Width = 1.3, ThrustTime = 0.26, FanAngle = 14, ImpaleBonus = 0.5, BurstRadius = 4.5, BurstShare = 0.6, Visual = 22, EvoVisual = 23 },
+		Levels = {
+			--   dmg  cd    amt area spd prc dur kb
+			row(14, 1.20, 1, 1.0, 0, 3, 0, 10),
+			row(18, 1.20, 1, 1.0, 0, 3, 0, 10),
+			row(18, 1.20, 2, 1.0, 0, 3, 0, 10),
+			row(22, 1.15, 2, 1.1, 0, 4, 0, 11),
+			row(22, 1.15, 2, 1.1, 0, 5, 0, 11),
+			row(26, 1.10, 2, 1.2, 0, 5, 0, 12),
+			row(29, 1.05, 2, 1.2, 0, 6, 0, 12),
+			row(32, 1.00, 2, 1.3, 0, 6, 0, 13),
+		},
+		Evolution = {
+			Id = "DragonLance",
+			Name = "Dragon Lance",
+			Passive = "Might",
+			Description = "Three crimson lances pierce everything and burst at their tips.",
+			Stats = row(42, 0.90, 3, 1.5, 0, 999, 0, 14),
+			Burst = true, -- each thrust bursts at its full reach (BurstShare of the damage)
+		},
+	},
+
+	-- CROSSBOW: fast straight bolts at the nearest enemies.
+	Crossbow = {
+		Id = "Crossbow",
+		Name = "Crossbow",
+		Description = "Fast bolts at the nearest enemies.",
+		Color = Color3.fromRGB(170, 120, 90),
+		Behavior = "Crossbow",
+		AmountLabel = "Bolts",
+		DurationLabel = "Range",
+		Perks = { { Level = 4, Id = "Ricochet", Name = "Ricochet", Text = "A bolt that would stop bounces once to the nearest other enemy." } },
+		Params = { Radius = 0.7, Visual = 24, EvoVisual = 25 },
+		Levels = {
+			row(8, 0.95, 1, 1.0, 120, 1, 0.65, 3),
+			row(11, 0.95, 1, 1.0, 120, 1, 0.65, 3),
+			row(11, 0.90, 2, 1.0, 125, 1, 0.65, 3),
+			row(13, 0.90, 2, 1.0, 125, 1, 0.65, 3),
+			row(13, 0.85, 3, 1.0, 130, 1, 0.65, 3),
+			row(15, 0.85, 3, 1.0, 130, 2, 0.70, 4),
+			row(16, 0.80, 3, 1.0, 135, 2, 0.70, 4),
+			row(17, 0.78, 3, 1.1, 140, 2, 0.70, 4),
+		},
+		Evolution = {
+			Id = "Heartseeker",
+			Name = "Heartseeker",
+			Passive = "Precision",
+			Description = "Crimson bolts that ricochet three times.",
+			Stats = row(24, 0.55, 3, 1.1, 150, 2, 0.75, 4),
+			Bounces = 3,
+		},
+	},
+
+	-- FROST NOVA: a periodic burst of ice around you that damages and slows (not bosses).
+	FrostNova = {
+		Id = "FrostNova",
+		Name = "Frost Nova",
+		Description = "A burst of frost around you every few seconds: damages and slows enemies.",
+		Color = Color3.fromRGB(150, 200, 230),
+		Behavior = "Nova",
+		Area = true,
+		AmountLabel = nil, -- one burst: Amount does nothing for the nova
+		DurationLabel = "Slow time",
+		Perks = { { Level = 5, Id = "Shatter", Name = "Shatter", Text = "Enemies the nova kills burst into 3 ice shards (half damage)." } },
+		-- Slow = enemy speed multiplier while chilled (EnemyAI SlowMult)
+		Params = { Radius = 8, Slow = 0.6, EvoSlow = 0.3, ShardCount = 3, ShardShare = 0.5, ShardSpeed = 48, MaxShards = 12, Visual = 26, EvoVisual = 36 },
+		Levels = {
+			row(12, 3.0, 1, 1.0, 0, 999, 1.5, 4),
+			row(12, 3.0, 1, 1.15, 0, 999, 1.5, 4),
+			row(16, 3.0, 1, 1.15, 0, 999, 1.8, 4),
+			row(16, 2.7, 1, 1.15, 0, 999, 1.8, 5),
+			row(20, 2.7, 1, 1.3, 0, 999, 2.0, 5),
+			row(24, 2.5, 1, 1.3, 0, 999, 2.0, 5),
+			row(26, 2.4, 1, 1.45, 0, 999, 2.2, 6),
+			row(30, 2.2, 1, 1.6, 0, 999, 2.5, 6),
+		},
+		Evolution = {
+			Id = "AbsoluteZero",
+			Name = "Absolute Zero",
+			Passive = "Area",
+			Description = "A huge blizzard burst that nearly freezes the swarm in place.",
+			Stats = row(42, 1.9, 1, 2.0, 0, 999, 3.0, 6),
+			DeepFreeze = true, -- slow to EvoSlow instead of Slow
+		},
+	},
+
+	-- FIRE TRAIL: burning ground behind you as you move. Never hurts players.
+	FireTrail = {
+		Id = "FireTrail",
+		Name = "Fire Trail",
+		Description = "Leaves burning ground behind you as you move. It never hurts heroes.",
+		Color = Color3.fromRGB(230, 130, 60),
+		Behavior = "FireTrail",
+		Area = true,
+		AmountLabel = nil,
+		DurationLabel = "Burn time",
+		CooldownLabel = "Flame every",
+		Perks = { { Level = 5, Id = "Wildfire", Name = "Wildfire", Text = "Every 3rd flame patch is 60% wider." } },
+		-- damage per Tick to enemies in a patch; Spacing = studs walked between patches
+		Params = { Radius = 3.2, Tick = 0.5, Arm = 0.15, Spacing = 2.2, MaxPatches = 16, WildfireEvery = 3, WildfireScale = 1.6, IgniteSeconds = 2, IgniteShare = 0.5, Visual = 37, EvoVisual = 38 },
+		Levels = {
+			row(4, 0.45, 1, 1.0, 0, 999, 2.0, 0),
+			row(5, 0.45, 1, 1.0, 0, 999, 2.2, 0),
+			row(5, 0.40, 1, 1.15, 0, 999, 2.2, 0),
+			row(7, 0.40, 1, 1.15, 0, 999, 2.5, 0),
+			row(7, 0.40, 1, 1.25, 0, 999, 2.5, 0),
+			row(9, 0.35, 1, 1.25, 0, 999, 2.8, 0),
+			row(10, 0.35, 1, 1.35, 0, 999, 2.8, 0),
+			row(12, 0.30, 1, 1.4, 0, 999, 3.0, 0),
+		},
+		Evolution = {
+			Id = "PhoenixStride",
+			Name = "Phoenix Stride",
+			Passive = "SpeedBoots",
+			Description = "Golden flames: enemies that touch them keep burning for 2 seconds.",
+			Stats = row(16, 0.25, 1, 1.7, 0, 999, 3.5, 0),
+			Ignite = true,
+		},
+	},
+
+	-- HEALING TOTEM: plants a totem that pulses small heals to heroes and hurts enemies.
+	HealingTotem = {
+		Id = "HealingTotem",
+		Name = "Healing Totem",
+		Description = "Plants a totem that heals you and teammates nearby and hurts enemies around it.",
+		Color = Color3.fromRGB(140, 190, 110),
+		Behavior = "Totem",
+		Area = true,
+		Deployable = true,
+		AmountLabel = "Totems",
+		DurationLabel = "Totem life",
+		CooldownLabel = "Plant every",
+		Perks = { { Level = 5, Id = "Rooting", Name = "Rooting Pulse", Text = "Every 3rd pulse roots enemies in the ring for 0.5 s." } },
+		-- Pulse = seconds between pulses; a hero is healed by at most one totem per HealGap
+		Params = { Radius = 7, Pulse = 1.0, EvoPulse = 0.8, HealGap = 0.9, RootEvery = 3, RootSeconds = 0.5, MaxAmount = 3, Visual = 27, EvoVisual = 28 },
+		Levels = {
+			healing(row(6, 9.0, 1, 1.0, 0, 999, 7.0, 2), 1),
+			healing(row(8, 9.0, 1, 1.0, 0, 999, 7.0, 2), 1),
+			healing(row(8, 8.0, 1, 1.15, 0, 999, 8.0, 2), 1.5),
+			healing(row(10, 8.0, 1, 1.15, 0, 999, 8.0, 2), 1.5),
+			healing(row(10, 8.0, 2, 1.15, 0, 999, 8.0, 2), 2),
+			healing(row(13, 7.5, 2, 1.3, 0, 999, 8.5, 3), 2),
+			healing(row(15, 7.5, 2, 1.3, 0, 999, 9.0, 3), 2.5),
+			healing(row(18, 7.0, 2, 1.4, 0, 999, 9.0, 3), 2.5),
+		},
+		Evolution = {
+			Id = "Lifebloom",
+			Name = "Lifebloom",
+			Passive = "Renewal",
+			Description = "Three golden totems that pulse faster and heal more.",
+			Stats = healing(row(26, 6.0, 3, 1.7, 0, 999, 10, 3), 4),
+		},
+	},
+
+	-- CHAIN HOOK: hooks the furthest enemy in front of you and drags it in.
+	ChainHook = {
+		Id = "ChainHook",
+		Name = "Chain Hook",
+		Description = "Hooks the furthest enemy in front of you and drags it in, hurting everything along the chain.",
+		Color = Color3.fromRGB(150, 160, 175),
+		Behavior = "Hook",
+		AmountLabel = "Hooks",
+		DurationLabel = "Reach time",
+		Perks = { { Level = 4, Id = "Barbed", Name = "Barbed Chain", Text = "Enemies along the chain are dragged in too." } },
+		-- Cone = half-angle (degrees) around your facing; reach = speed x duration
+		Params = { Cone = 40, Radius = 1.0, PullTo = 5, ChainWidth = 1.6, ChainShare = 0.6, Visual = 29, EvoVisual = 30 },
+		Levels = {
+			row(18, 2.4, 1, 1.0, 75, 999, 0.42, 0),
+			row(22, 2.4, 1, 1.0, 75, 999, 0.42, 0),
+			row(22, 2.2, 1, 1.1, 80, 999, 0.45, 0),
+			row(26, 2.2, 1, 1.1, 80, 999, 0.45, 0),
+			row(26, 2.0, 2, 1.1, 85, 999, 0.45, 0),
+			row(32, 2.0, 2, 1.2, 85, 999, 0.48, 0),
+			row(36, 1.9, 2, 1.2, 90, 999, 0.50, 0),
+			row(40, 1.8, 2, 1.3, 90, 999, 0.50, 0),
+		},
+		Evolution = {
+			Id = "ReapersChain",
+			Name = "Reaper's Chain",
+			Passive = "Vacuum",
+			Description = "Three crimson hooks reel in whole lines of the swarm.",
+			Stats = row(55, 1.4, 3, 1.5, 100, 999, 0.55, 0),
+		},
+	},
+
+	-- TURRET (the Engineer's weapon): builds turrets that shoot the nearest enemies.
+	Turret = {
+		Id = "Turret",
+		Name = "Turret",
+		Description = "Builds a turret next to you that shoots nearby enemies (up to 2).",
+		Color = Color3.fromRGB(190, 160, 90),
+		Behavior = "Turret",
+		Deployable = true,
+		AmountLabel = "Turrets",
+		DurationLabel = "Turret life",
+		CooldownLabel = "Rebuild",
+		Perks = { { Level = 5, Id = "Flak", Name = "Flak Shells", Text = "Every 4th turret shot bursts for half damage around its target." } },
+		-- damage / speed / pierce are the turret's bolts; ShotEvery = seconds between shots
+		Params = { ShotEvery = 0.55, EvoShotEvery = 0.33, Range = 30, BoltRadius = 0.6, FlakEvery = 4, FlakRadius = 3.5, FlakShare = 0.5, MaxAmount = 2, Visual = 33, EvoVisual = 34, ShotVisual = 35 },
+		Levels = {
+			row(6, 7.0, 1, 1.0, 90, 1, 5.0, 2),
+			row(8, 7.0, 1, 1.0, 90, 1, 5.0, 2),
+			row(8, 6.5, 1, 1.1, 95, 1, 5.5, 2),
+			row(10, 6.5, 1, 1.1, 95, 1, 5.5, 2),
+			row(10, 6.5, 2, 1.1, 95, 1, 6.0, 2),
+			row(13, 6.0, 2, 1.2, 100, 2, 6.0, 3),
+			row(15, 6.0, 2, 1.2, 100, 2, 6.0, 3),
+			row(17, 6.0, 2, 1.3, 105, 2, 6.0, 3),
+		},
+		Evolution = {
+			Id = "Bastion",
+			Name = "Bastion",
+			Passive = "Armor",
+			Description = "Gilded turrets that fire almost twice as fast with piercing bolts.",
+			Stats = row(24, 5.0, 2, 1.5, 120, 3, 7.0, 3),
+		},
+	},
+
+	-- SOUL BOLT (the Necromancer's weapon): slow homing souls that find a new target.
+	SoulBolt = {
+		Id = "SoulBolt",
+		Name = "Soul Bolt",
+		Description = "Releases homing souls that seek out enemies around you.",
+		Color = Color3.fromRGB(170, 210, 160),
+		Behavior = "Soul",
+		AmountLabel = "Souls",
+		Perks = { { Level = 4, Id = "Wandering", Name = "Wandering Souls", Text = "A soul that kills its target flies on to another enemy." } },
+		Params = { Radius = 0.9, TurnRate = 5, Range = 55, Seek = 30, Visual = 31, EvoVisual = 32 },
+		Levels = {
+			row(9, 1.40, 1, 1.0, 30, 1, 4.0, 2),
+			row(9, 1.40, 2, 1.0, 30, 1, 4.0, 2),
+			row(12, 1.40, 2, 1.0, 32, 1, 4.0, 2),
+			row(12, 1.30, 2, 1.0, 32, 1, 4.0, 2),
+			row(12, 1.30, 3, 1.0, 34, 1, 4.0, 2),
+			row(15, 1.20, 3, 1.0, 34, 2, 4.0, 3),
+			row(17, 1.20, 3, 1.1, 36, 2, 4.0, 3),
+			row(18, 1.10, 4, 1.1, 36, 2, 4.5, 3),
+		},
+		Evolution = {
+			Id = "SoulStorm",
+			Name = "Soul Storm",
+			Passive = "Growth",
+			Description = "A storm of crimson souls that pass through three enemies each.",
+			Stats = row(26, 0.85, 5, 1.2, 42, 3, 5.0, 3),
+		},
+	},
 }
 
 -- Returns the stat row for a weapon at a level (evolved overrides the row).
@@ -401,6 +749,18 @@ WeaponData.StatUse = {
 	Axe = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
 	Boomerang = { damage = true, cooldown = true, amount = true, area = true, speed = true, duration = true, knockback = true },
 	Longbow = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
+	-- the thrust has a fixed out-and-back time: no speed / duration
+	Spear = { damage = true, cooldown = true, amount = true, area = true, pierce = true, knockback = true },
+	Crossbow = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
+	-- duration = how long enemies stay slowed
+	Nova = { damage = true, cooldown = true, area = true, duration = true, knockback = true },
+	-- cooldown = how often a flame patch is left, duration = how long it burns
+	FireTrail = { damage = true, cooldown = true, area = true, duration = true },
+	Totem = { damage = true, cooldown = true, amount = true, area = true, duration = true, knockback = true, heal = true },
+	-- reach = speed x duration; the chain hits everything on its line (no pierce)
+	Hook = { damage = true, cooldown = true, amount = true, area = true, speed = true, duration = true },
+	Turret = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
+	Soul = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
 }
 
 -- True when the weapon (id, level, evolved) uses stat-row key `stat`.
@@ -420,7 +780,18 @@ function WeaponData.UsesStat(weaponId: string, stat: string, evolved: boolean?):
 	if stat == "speed" and evolved and row and row.speed <= 0 then
 		return false -- Death Spiral orbits
 	end
+	local cap = def.Params and def.Params.MaxAmount
+	if stat == "amount" and cap and row and row.amount >= cap then
+		return false -- already at its turret / totem cap
+	end
 	return true
+end
+
+-- Amount after bonuses, never past the weapon's MaxAmount (turrets, totems).
+function WeaponData.CapAmount(weaponId: string, amount: number): number
+	local def = WeaponData.Weapons[weaponId]
+	local cap = def and def.Params and def.Params.MaxAmount
+	return cap and math.min(amount, cap) or amount
 end
 
 -- Perk unlocked at exactly `level` (nil if none).
@@ -466,11 +837,13 @@ local function labelOf(def, stat: string): string
 		return def.DurationLabel or "Duration"
 	elseif stat == "pierce" then
 		return "Pierce"
+	elseif stat == "cooldown" then
+		return def.CooldownLabel or "Cooldown"
 	end
 	return WeaponData.StatLabels[stat]
 end
 
-local DIFF_ORDER = { "damage", "amount", "cooldown", "area", "pierce", "speed", "duration", "knockback" }
+local DIFF_ORDER = { "damage", "heal", "amount", "cooldown", "area", "pierce", "speed", "duration", "knockback" }
 
 --[[
 	Card lines for a weapon going from one stat row to the next, in plain words:
@@ -488,8 +861,8 @@ function WeaponData.CardLines(weaponId: string, fromLevel: number, toLevel: numb
 	local use = WeaponData.StatUse[def.Behavior] or {}
 	if fromLevel <= 0 then
 		local r = def.Levels[1]
-		for _, stat in ipairs({ "damage", "amount", "cooldown" }) do
-			if use[stat] then
+		for _, stat in ipairs({ "damage", "heal", "amount", "cooldown" }) do
+			if use[stat] and r[stat] then
 				table.insert(out, { Label = labelOf(def, stat), To = fmt(stat, r[stat]) })
 			end
 		end
@@ -503,8 +876,8 @@ function WeaponData.CardLines(weaponId: string, fromLevel: number, toLevel: numb
 	for _, stat in ipairs(DIFF_ORDER) do
 		-- an evolution can stop using a stat (Death Spiral orbits: speed 0); never show it,
 		-- but keep "Pierce 5 → all" (unlimited pierce is a real change)
-		local used = use[stat] and (not evolve or WeaponData.UsesStat(weaponId, stat, true) or (stat == "pierce" and after.pierce >= 999))
-		if used and math.abs(after[stat] - before[stat]) > 1e-6 then
+		local used = use[stat] and (not evolve or WeaponData.UsesStat(weaponId, stat, true) or (stat == "pierce" and after.pierce >= 999) or (stat == "amount" and after.amount ~= before.amount))
+		if used and after[stat] and before[stat] and math.abs(after[stat] - before[stat]) > 1e-6 then
 			local from, to = fmt(stat, before[stat]), fmt(stat, after[stat])
 			if from ~= to then
 				table.insert(out, { Label = labelOf(def, stat), From = from, To = to })

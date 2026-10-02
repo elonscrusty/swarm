@@ -336,6 +336,9 @@ local DEFAULT: { [string]: Colors } = {
 	hood = { Main = P.moss_400, Accent = P.crimson_500, Extra = P.moss_500 },
 	mitre = { Main = P.ivory_100, Accent = P.gold_400, Extra = P.ivory_300 },
 	featherCap = { Main = P.moss_400, Accent = P.ivory_200, Extra = P.leather_500 },
+	goggles = { Main = P.leather_600, Accent = P.gold_500, Extra = P.amber_300 },
+	minerHelm = { Main = P.steel_300, Accent = P.gold_500, Extra = P.fx_gold },
+	skullHood = { Main = P.slate_700, Accent = P.ivory_200, Extra = P.fx_heal },
 	aim = { Main = P.moss_200, Accent = P.gold_300, Extra = P.moss_300 },
 	-- weapons
 	Whip = { Main = P.steel_200, Accent = P.gold_400, Extra = P.crimson_300 },
@@ -347,6 +350,14 @@ local DEFAULT: { [string]: Colors } = {
 	Axe = { Main = P.steel_300, Accent = P.wood_400, Extra = P.gold_400 },
 	Boomerang = { Main = P.wood_400, Accent = P.gold_300, Extra = P.wood_600 },
 	Longbow = { Main = P.wood_400, Accent = P.steel_200, Extra = P.ivory_200 },
+	Spear = { Main = P.steel_200, Accent = P.wood_400, Extra = P.gold_400 },
+	Crossbow = { Main = P.steel_200, Accent = P.wood_500, Extra = P.ivory_300 },
+	FrostNova = { Main = P.ice_100, Accent = P.fx_arcane, Extra = P.ice_300 },
+	FireTrail = { Main = P.fx_fire, Accent = P.amber_300, Extra = P.crimson_400 },
+	HealingTotem = { Main = P.wood_500, Accent = P.wood_400, Extra = P.fx_heal },
+	ChainHook = { Main = P.steel_300, Accent = P.steel_600, Extra = P.steel_400 },
+	Turret = { Main = P.steel_300, Accent = P.gold_500, Extra = P.steel_600 },
+	SoulBolt = { Main = P.ivory_200, Accent = P.fx_heal, Extra = P.moss_200 },
 	-- evolutions
 	Bloodwhip = { Main = P.crimson_300, Accent = P.gold_300, Extra = P.crimson_400 },
 	TwinOrbs = { Main = ARCANE, Accent = ROSE, Extra = ARCANE_LIGHT },
@@ -357,6 +368,14 @@ local DEFAULT: { [string]: Colors } = {
 	DeathSpiral = { Main = P.crimson_400, Accent = P.steel_300, Extra = P.crimson_300 },
 	InfiniteReturn = { Main = TEAL, Accent = P.wood_400, Extra = P.gold_300 },
 	Windpiercer = { Main = P.moss_300, Accent = P.gold_300, Extra = P.moss_200 },
+	DragonLance = { Main = P.crimson_400, Accent = P.gold_300, Extra = P.gold_200 },
+	Heartseeker = { Main = P.crimson_300, Accent = P.crimson_700, Extra = P.gold_300 },
+	AbsoluteZero = { Main = P.ice_100, Accent = P.fx_holy, Extra = P.ice_300 },
+	PhoenixStride = { Main = P.gold_300, Accent = P.ivory_100, Extra = P.fx_fire },
+	Lifebloom = { Main = P.gold_500, Accent = P.gold_300, Extra = P.fx_heal },
+	ReapersChain = { Main = P.crimson_400, Accent = P.crimson_700, Extra = P.ivory_200 },
+	Bastion = { Main = P.gold_400, Accent = P.crimson_500, Extra = P.steel_600 },
+	SoulStorm = { Main = P.ivory_200, Accent = P.crimson_300, Extra = P.crimson_400 },
 	-- passives
 	Might = { Main = P.steel_200, Accent = P.crimson_400, Extra = P.gold_400 },
 	Armor = { Main = P.steel_300, Accent = P.gold_400, Extra = P.slate_500 },
@@ -371,6 +390,8 @@ local DEFAULT: { [string]: Colors } = {
 	Candle = { Main = P.ivory_200, Accent = P.fx_fire, Extra = P.gold_300 },
 	Growth = { Main = P.moss_300, Accent = P.dirt_500, Extra = P.moss_200 },
 	Fletching = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.wood_400 },
+	Precision = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.gold_400 },
+	Renewal = { Main = P.moss_300, Accent = P.fx_heal, Extra = P.moss_500 },
 	-- fallback cards and permanent upgrades
 	Gold = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_600 },
 	Heal = { Main = P.dirt_400, Accent = P.ivory_100, Extra = P.gold_300 },
@@ -1071,6 +1092,230 @@ DRAW.featherCap = function(c)
 	end
 end
 
+-- Weapons added with the Alchemist / Engineer / Necromancer ---------------------------
+
+-- A spear along the diagonal, head toward the top right.
+local function spearIcon(c: Ctx, shaft: Color3, head: Color3, collar: Color3)
+	seg(c, 3.4, 20.6, 15.4, 8.6, 1.8, shaft)
+	seg(c, 4.6, 19.4, 7.4, 16.6, 2.6, c.mono and shaft or P.leather_600)
+	box(c, 18, 6, 7.6, 3.6, head, -45, 1.5)
+	box(c, 18.2, 5.8, 5.4, 0.9, c.mono and head or head:Lerp(WHITE, 0.45), -45, 0.4)
+	box(c, 14.8, 9.2, 4.4, 1.7, collar, 45, 0.6)
+end
+
+DRAW.Spear = function(c)
+	spearIcon(c, c.accent, c.main, c.extra)
+end
+
+DRAW.DragonLance = function(c)
+	spearIcon(c, c.mono and c.main or P.crimson_700, c.main, c.accent)
+	for _, d in ipairs({ { 21.4, 9.4, 1.3 }, { 14.6, 2.6, 1.3 }, { 22, 3, 1 } }) do
+		dot(c, d[1], d[2], d[3], c.extra)
+	end
+end
+
+-- Crossbow seen from above: curved limbs across the top, string, stock, a loaded bolt.
+local function crossbowIcon(c: Ctx, wood: Color3, metal: Color3, str: Color3)
+	curve(c, { V(2.8, 10.6), V(6.6, 7.2), V(12, 6.2), V(17.4, 7.2), V(21.2, 10.6) }, 2.2, wood)
+	seg(c, 3.2, 10.8, 12, 13.6, 0.7, str)
+	seg(c, 20.8, 10.8, 12, 13.6, 0.7, str)
+	box(c, 12, 15.4, 3.4, 13, wood, 0, 1.2)
+	box(c, 12, 20.6, 4.6, 2.6, c.mono and wood or P.leather_600, 0, 1)
+	seg(c, 12, 3.8, 12, 13.6, 1.2, metal)
+	tri(c, 12, 4.6, 3.6, "up", metal)
+end
+
+DRAW.Crossbow = function(c)
+	crossbowIcon(c, c.accent, c.main, c.extra)
+end
+
+DRAW.Heartseeker = function(c)
+	crossbowIcon(c, c.mono and c.main or P.crimson_700, c.main, c.extra)
+	for _, dx in ipairs({ -5, 5 }) do
+		seg(c, 12 + dx, 2.4, 12 + dx * 0.7, 5.6, 1, c.extra, 0.3)
+	end
+end
+
+-- Six-armed snowflake with side twigs.
+local function flake(c: Ctx, r: number, w: number, color: Color3, core: Color3)
+	for k = 0, 2 do
+		local a = k * math.pi / 3
+		seg(c, 12 + math.cos(a) * r, 12 + math.sin(a) * r, 12 - math.cos(a) * r, 12 - math.sin(a) * r, w, color)
+	end
+	for k = 0, 5 do
+		local a = k * math.pi / 3
+		local x, y = 12 + math.cos(a) * r * 0.62, 12 + math.sin(a) * r * 0.62
+		for _, sgn in ipairs({ -1, 1 }) do
+			local b = a + sgn * 0.85
+			seg(c, x, y, x + math.cos(b) * r * 0.32, y + math.sin(b) * r * 0.32, w * 0.62, color)
+		end
+	end
+	dot(c, 12, 12, w * 1.1, core)
+end
+
+DRAW.FrostNova = function(c)
+	ring(c, 12, 12, 10.4, 1.2, c.extra, 0.35)
+	flake(c, 8.4, 1.8, c.main, c.accent)
+end
+
+DRAW.AbsoluteZero = function(c)
+	ring(c, 12, 12, 10.6, 1.6, c.extra)
+	ring(c, 12, 12, 7.8, 0.8, c.accent, 0.4)
+	flake(c, 7.4, 1.9, c.main, c.accent)
+end
+
+-- Three flames along a path, the newest (top right) the biggest.
+local function flames(c: Ctx, outer: Color3, inner: Color3, tail: Color3)
+	drop(c, 5.4, 19.2, 2.1, tail)
+	drop(c, 5.4, 20, 1, c.mono and c.back or inner)
+	drop(c, 10.8, 15.4, 3, outer)
+	drop(c, 10.8, 16.4, 1.6, c.mono and c.back or inner)
+	drop(c, 17.2, 10, 4.2, outer)
+	drop(c, 17.2, 11.4, 2.3, c.mono and c.back or inner)
+end
+
+DRAW.FireTrail = function(c)
+	flames(c, c.main, c.accent, c.extra)
+	box(c, 12, 22, 20, 1.2, c.extra, -20, 0.6, 0.55)
+end
+
+DRAW.PhoenixStride = function(c)
+	-- a wing over the flames
+	curve(c, { V(3, 9), V(7, 4.4), V(13, 3.4), V(19.6, 4.6) }, 2, c.accent, false, 0.8)
+	curve(c, { V(5, 11), V(9, 7.6), V(14, 6.8) }, 1.4, c.accent, false, 0.55)
+	flames(c, c.main, c.accent, c.extra)
+end
+
+-- Totem pole: post, carved wings with a face, glowing orb on top, a small base.
+local function totemIcon(c: Ctx, wood: Color3, carving: Color3, glow: Color3)
+	box(c, 12, 14.4, 5, 14, wood, 0, 1)
+	box(c, 12, 12, 13, 4.4, carving, 0, 1.6)
+	box(c, 12, 12.2, 3, 1.6, c.back, 0, 0.6)
+	box(c, 12, 21.4, 9.4, 1.8, carving, 0, 0.9)
+	dot(c, 12, 4.6, 2.9, glow)
+end
+
+DRAW.HealingTotem = function(c)
+	totemIcon(c, c.main, c.accent, c.extra)
+	box(c, 20, 18.6, 1.5, 5.2, c.extra, 0, 0.6)
+	box(c, 20, 18.6, 5.2, 1.5, c.extra, 0, 0.6)
+end
+
+DRAW.Lifebloom = function(c)
+	ring(c, 12, 4.6, 4.6, 0.9, c.extra, 0.45)
+	totemIcon(c, c.main, c.accent, c.extra)
+	box(c, 4.4, 18.2, 4.6, 2.2, c.extra, -35, 1.1)
+	box(c, 19.6, 18.2, 4.6, 2.2, c.extra, 35, 1.1)
+end
+
+-- Hook (top right) on a chain of links (bottom left).
+local function hookIcon(c: Ctx, metal: Color3, chainColor: Color3)
+	for i = 0, 3 do
+		local x, y = 3.8 + i * 2.6, 20.2 - i * 2.6
+		box(c, x, y, 3.2, 1.8, chainColor, -45 + (i % 2) * 90, 0.9)
+	end
+	seg(c, 13.2, 11.2, 18.6, 5.4, 1.8, metal)
+	arc(c, 15.4, 9.6, 4.4, 2, metal, 9, 9.6, 22, 16)
+	seg(c, 19.8, 9.8, 19.8, 8.2, 2, metal)
+	tri(c, 11.2, 10.6, 3.2, "up", metal)
+end
+
+DRAW.ChainHook = function(c)
+	hookIcon(c, c.main, c.extra)
+end
+
+DRAW.ReapersChain = function(c)
+	hookIcon(c, c.main, c.accent)
+	dot(c, 6.2, 6.6, 3, c.extra)
+	box(c, 6.2, 9, 3.2, 1.8, c.extra, 0, 0.6)
+	dot(c, 5.2, 6.6, 0.8, c.mono and c.back or P.crimson_700)
+	dot(c, 7.2, 6.6, 0.8, c.mono and c.back or P.crimson_700)
+end
+
+-- Turret: base, post, head with a barrel to the right and a muzzle glint.
+local function turretIcon(c: Ctx, head: Color3, barrel: Color3, base: Color3)
+	box(c, 12, 19.4, 16, 4.2, base, 0, 1.4)
+	box(c, 12, 15.6, 4, 4, base, 0, 0.6)
+	box(c, 10.6, 11, 10.4, 6.6, head, 0, 2.4)
+	box(c, 18.4, 10.6, 7.6, 2.4, barrel, 0, 1)
+	dot(c, 22, 10.6, 1, c.mono and barrel or P.fx_gold)
+	dot(c, 8.4, 8.4, 1.1, c.mono and c.back or P.crimson_400)
+end
+
+DRAW.Turret = function(c)
+	turretIcon(c, c.main, c.accent, c.extra)
+end
+
+DRAW.Bastion = function(c)
+	turretIcon(c, c.main, c.accent, c.extra)
+	box(c, 4, 13, 3.6, 7.6, c.main, 0, 1.2)
+	box(c, 4, 13, 1.2, 4.6, c.accent, 0, 0.5)
+end
+
+-- Skull with a ghostly tail.
+local function soulIcon(c: Ctx, x: number, y: number, s: number, bone: Color3, glow: Color3, tail: Color3)
+	curve(c, { V(x - 11 * s, y + 11 * s), V(x - 8 * s, y + 6 * s), V(x - 5 * s, y + 3.6 * s), V(x - 2 * s, y + 1.6 * s) }, 3.4 * s, tail, false, 0.45)
+	dot(c, x, y, 5.6 * s, bone)
+	box(c, x, y + 4.6 * s, 6 * s, 3.4 * s, bone, 0, 1.2 * s)
+	dot(c, x - 2.1 * s, y + 0.2 * s, 1.5 * s, c.mono and c.back or glow)
+	dot(c, x + 2.1 * s, y + 0.2 * s, 1.5 * s, c.mono and c.back or glow)
+	box(c, x, y + 2.8 * s, 0.9 * s, 1.4 * s, c.mono and c.back or P.slate_900, 0, 0.3)
+end
+
+DRAW.SoulBolt = function(c)
+	soulIcon(c, 14.4, 10, 1, c.main, c.accent, c.extra)
+end
+
+DRAW.SoulStorm = function(c)
+	soulIcon(c, 8.6, 14.6, 0.7, c.main, c.accent, c.extra)
+	soulIcon(c, 16, 8.2, 0.85, c.main, c.accent, c.extra)
+end
+
+DRAW.Precision = function(c)
+	ring(c, 11, 13, 8.2, 1.6, c.main)
+	ring(c, 11, 13, 4.4, 1.6, c.main)
+	dot(c, 11, 13, 1.6, c.accent)
+	seg(c, 11.6, 12.4, 20, 4, 1.2, c.extra)
+	seg(c, 20, 4, 22.4, 4, 1, c.mono and c.extra or c.accent)
+	seg(c, 20, 4, 20, 1.6, 1, c.mono and c.extra or c.accent)
+end
+
+DRAW.Renewal = function(c)
+	box(c, 9.4, 12, 7.8, 15, c.main, 40, 3.9)
+	seg(c, 4.8, 19.4, 13.8, 4.8, 0.9, c.mono and c.back or c.extra)
+	box(c, 18, 16.4, 2.2, 8, c.accent, 0, 0.7)
+	box(c, 18, 16.4, 8, 2.2, c.accent, 0, 0.7)
+end
+
+-- Hero class icons: the Alchemist's goggled cap, the Engineer's lamp helmet, the
+-- Necromancer's hood with its bone mask.
+DRAW.goggles = function(c)
+	box(c, 12, 11.4, 16, 10.4, c.main, 0, 5.2)
+	box(c, 12, 16, 19, 2.6, c.main, 0, 1.3)
+	box(c, 12, 11.8, 17, 1.2, c.mono and c.main or P.slate_950, 0, 0.6)
+	for _, x in ipairs({ 7.6, 16.4 }) do
+		dot(c, x, 11.6, 3.6, c.accent)
+		dot(c, x, 11.6, 2.3, c.mono and c.back or c.extra)
+	end
+end
+
+DRAW.minerHelm = function(c)
+	box(c, 12, 12.8, 17, 11, c.main, 0, 5.5)
+	box(c, 12, 17.8, 20.4, 2.4, c.main, 0, 1.2)
+	box(c, 12, 9, 2.2, 8.4, c.accent, 0, 1)
+	dot(c, 12, 13, 3.4, c.accent)
+	dot(c, 12, 13, 2.2, c.mono and c.back or c.extra)
+end
+
+DRAW.skullHood = function(c)
+	box(c, 12, 13, 17.6, 17, c.main, 0, 7.4)
+	box(c, 12, 4.6, 5, 5, c.main, 45, 1)
+	dot(c, 12, 12.4, 4.6, c.accent)
+	box(c, 12, 16, 5, 3, c.accent, 0, 1)
+	dot(c, 10.3, 12.4, 1.2, c.mono and c.back or c.extra)
+	dot(c, 13.7, 12.4, 1.2, c.mono and c.back or c.extra)
+end
+
 DRAW.aim = function(c)
 	ring(c, 12, 12, 7.4, 1.8, c.main)
 	for _, d in ipairs({ { 0, -1 }, { 0, 1 }, { -1, 0 }, { 1, 0 } }) do
@@ -1424,7 +1669,7 @@ function Icons.Upgrade(parent: Instance?, id: string?, opts: Opts?): Frame
 	return f
 end
 
-local CHARACTER_ICONS = { Knight = "helmet", Mage = "wizardHat", Rogue = "hood", Priest = "mitre", Ranger = "featherCap" }
+local CHARACTER_ICONS = { Knight = "helmet", Mage = "wizardHat", Rogue = "hood", Priest = "mitre", Ranger = "featherCap", Alchemist = "goggles", Engineer = "minerHelm", Necromancer = "skullHood" }
 
 function Icons.CharacterIcon(characterId: string): string
 	return CHARACTER_ICONS[characterId] or "person"

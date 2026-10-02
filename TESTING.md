@@ -17,15 +17,16 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] Tap an owned skin swatch: it gets a gold border, the card's model and the home character change colour. Locked skins show "R$" (gamepass set) or "soon".
 - [ ] < BACK slides back to home. UPGRADES (or the upgrades summary) opens the shop with staggered cells; buying a level updates the summary bar on home.
 - [ ] Gold pill counts up/down smoothly after a purchase.
-- [ ] ARENA cycles to Ruins only after reaching stage 2 in a run (otherwise a toast says so and the card reads "Ruins: reach stage 2 to unlock"); the button shows the arena name.
+- [ ] ARENA cycles to Ruins only after reaching stage 2 in a run (otherwise a toast says so and the card reads "Ruins: reach stage 2 to unlock"); the button shows the arena name. Later unlocks: Swamp at stage 3, Snow 4, Desert 5, Lava 6 (the card names the next locked arena; once all are unlocked it shows the picked arena's hint, e.g. "Mud pools slow you").
 - [ ] SETTINGS opens the volume menu ("Close" button); sliders work and are saved.
 - [ ] No walking in the lobby: WASD / touch do nothing, no thumbstick appears.
 
 ## 0c. Characters, achievements, upgrades (new)
-- [ ] CHARACTERS lists 5 heroes; Ranger reads "Locked · Queen Slayer". Its details show Starts with Longbow, Trait Steady Aim, EFFECT / STRENGTH / TRADEOFF lines, "UNLOCK Queen Slayer: Defeat the Scorpion Queen. 0/1" and a disabled LOCKED · QUEEN SLAYER button (no gold purchase possible; the home nameplate shows LOCKED).
+- [ ] CHARACTERS lists 8 heroes (landscape PC: one column; phone landscape: two columns of names; portrait: two rows of four tabs, no "..."); the Alchemist / Engineer / Necromancer read "Locked · Deep Delver / Field Engineer / Reaper" with their progress (e.g. "2/4", "1/3", "318/500").
+- [ ] The Ranger reads "Locked · Queen Slayer". Its details show Starts with Longbow, Trait Steady Aim, EFFECT / STRENGTH / TRADEOFF lines, "UNLOCK Queen Slayer: Defeat the Scorpion Queen. 0/1" and a disabled LOCKED · QUEEN SLAYER button (no gold purchase possible; the home nameplate shows LOCKED).
 - [ ] Every other hero shows its trait, strength and tradeoff; Rogue / Priest still unlock for gold.
-- [ ] Portrait: the five hero tabs fit without "...".
-- [ ] STATS has STATS / ACHIEVEMENTS tabs; the Achievements tile shows n / 12. The list shows 12 rows with reward lines and progress bars (time ones as m:ss).
+- [ ] Portrait: the eight hero tabs (two rows) fit without "...".
+- [ ] STATS has STATS / ACHIEVEMENTS tabs; the Achievements tile shows n / (the number of achievements). The list shows one row each with reward lines and progress bars (time ones as m:ss).
 - [ ] Kill the Queen (DEV: spawn portal boss): toast "Achievement: Queen Slayer · Unlocks the Ranger · 150 gold"; the results screen lists it; back in the lobby the Ranger is owned and selectable.
 - [ ] Clearing a stage as the Knight unlocks Knight's Oath; opening a Golden Chest unlocks Golden Touch; a Duo partner revive counts toward Lifesaver (3).
 - [ ] Earned titles / name colours appear under WEAR TITLE / NAME COLOUR; picking one changes the name line above the hero nameplate on home.
@@ -64,6 +65,23 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] Ranger: arrows fly where you move; standing still they aim at the nearest enemy. After 0.8 s still (server-checked position, < 0.3 studs drift) the chip over the ability bar turns gold-green "STEADY AIM +30% DAMAGE" (+30% Longbow, +10% other weapons); moving turns it back to "STAND STILL TO AIM".
 - [ ] Longbow + Fletching at Lv 8 → Windpiercer (green wind arrows, pierce everything, 4-arrow volley). Arrows use the Shot_Arrow mesh once uploaded.
 
+## 1h. New weapons and heroes (Alchemist, Engineer, Necromancer)
+Tip: DEV → "All new weapons Lv 8" gives all eight at level 8 (past the slot limit), "Evolve all weapons" evolves everything. Offline: `bash tools/preview/render.sh weapons-sim --studio --devices pc --set character=Necromancer` (logic smoke test), `render.sh arena --set weapons=new [--set evolved=on]` (the effects), `render.sh levelup --set cards=Spear+ChainHook:4+evo:Turret`.
+- [ ] Level-up cards: the new weapons show with their icon and real numbers ("Damage 14", "Spears 1", "Heal 1 → 1.5", "Turrets 1 → 2", "Rebuild 7.00s → 6.50s", "Flame every 0.45s"); perks show as NEW lines at their level (Spear 5, Crossbow 4, Frost Nova 5, Fire Trail 5, Totem 5, Hook 4, Turret 5, Soul Bolt 4); "Evolves at Lv 8 with <passive>" from level 6. Precision / Renewal cards show "Crit chance 5% → 10%" / "HP regen 0.6 HP/s". New-weapon cards don't crowd out upgrades (about as often as before).
+- [ ] Spear: thrusts out and back where you face (the arm moves), hits a line of enemies (3 at Lv 1), Impale at Lv 5. Dragon Lance: three crimson lances with a small gold burst at their tips.
+- [ ] Crossbow: fast bolts at the nearest enemies; from Lv 4 a bolt bounces once; Heartseeker crimson bolts bounce three times.
+- [ ] Frost Nova: every ~3 s a pale ice ring and spikes burst around you; enemies inside take damage and walk slower (not the Queen); Lv 5 kills throw ice shards. Absolute Zero: bigger burst, almost frozen enemies.
+- [ ] Fire Trail: walking leaves warm amber patches with a gold rim and a flame; enemies chasing you through them take damage; standing still leaves nothing new; **the flames never hurt any hero** (walk through them, also in Duo). Lv 5: every 3rd patch is wider. Phoenix Stride: golden flames, enemies keep burning a moment after leaving them.
+- [ ] Healing Totem: a totem rises out of the ground behind you, pulses a green ring every second, hurts enemies in the ring and heals you and teammates standing in it (two totems never heal twice as fast); at most 1 (Lv 5+: 2, Lifebloom: 3) — the oldest is rebuilt next to you.
+- [ ] Chain Hook: a hook flies at the furthest enemy in front of you with a steel chain back to your hand, drags it in and hurts everything on the chain's line; the Queen barely moves. Lv 4: the chained enemies are dragged too. Reaper's Chain: crimson hooks, three at once.
+- [ ] Turret: a turret rises next to you and its head turns to shoot gold bolts at the nearest enemy (range ~30); max 1 (Lv 5+: 2); when you walk away the oldest is rebuilt next to you; Lv 5 every 4th shot bursts. Bastion: gilded turrets, much faster fire.
+- [ ] Soul Bolt: skull souls curl out and home in; a soul whose target died seeks another; Lv 4 a killing soul flies on. Soul Storm: crimson souls passing through three enemies.
+- [ ] Alchemist (Deep Delver: reach stage 4): starts with the Fire Trail; area / fire weapons do 20% more (compare Frost Nova numbers with damage numbers on).
+- [ ] Engineer (Field Engineer: 3 Guarded Altars / Bargain stages in total): starts with the Turret; turrets and totems last 30% longer.
+- [ ] Necromancer (Reaper: 500 kills in one run): starts with the Soul Bolt; now and then a small soul rises from a kill (green sparkle) and hunts another enemy.
+- [ ] Unlocking any of them: toast "Achievement: … · Unlocks the <hero> · 150 gold"; the hero is owned and selectable in the lobby; no gold purchase is possible before.
+- [ ] Travel to the next stage / end of run: every turret, totem, flame patch, hook and soul is gone.
+
 ## 1d. Stages and portal (solo first, then Duo)
 Tip: lower `Config.Stages.PortalLockSeconds` / `HintAfterSeconds` and use the DEV buttons to go faster.
 - [ ] Stage 1 is the lobby's arena; a stone ring PORTAL stands somewhere at least ~120 studs from the spawn, never inside a tree, wall, pond or landmark, with a dashed rune circle on the floor and a soft slate-blue light beam rising from it. Start several runs: the spot changes.
@@ -77,7 +95,7 @@ Tip: lower `Config.Stages.PortalLockSeconds` / `HintAfterSeconds` and use the DE
 - [ ] Travel right away (gems still flying, a chest on the floor): the gems' XP still arrives and the chest opens for you; nothing is lost.
 - [ ] The choice panel: "STAGE 1 CLEARED", stages / time / kills / gold, NEXT STAGE (gold, "Stage 2 · Ruins") and RETURN TO LOBBY ("+175 gold · win from stage 3" before 3 cleared stages, "· a win" from 3), "Next stage in 15s unless you return" with a bar. Phone landscape and portrait: buttons stack when narrow, nothing is cut off.
 - [ ] Leave it alone: after 15 s you travel on. Open the pause menu meanwhile (solo): the countdown stops ("paused") and resumes when you close it. A level-up during the open portal also stops it.
-- [ ] NEXT STAGE: the screen fades to slate with "STAGE 2 · RUINS", then comes back on the next arena (Forest → Ruins → Forest ...): you stand at the spawn with the same level, XP, weapons, passives and gold, HP topped up to at least 60%; no enemies, gems or projectiles from the old stage; the timer kept counting from where it was; "STAGE 2" banner and a new portal somewhere else.
+- [ ] NEXT STAGE: the screen fades to slate with "STAGE 2 · <BIOME>", then comes back on the next arena (stage 1 is the lobby's arena, then a shuffled tour of Ruins / Swamp / Snow / Desert / Lava, never the same arena twice in a row; the NEXT STAGE button names the same biome the fade shows): you stand at the spawn with the same level, XP, weapons, passives and gold, HP topped up to at least 60%; no enemies, gems or projectiles from the old stage; the timer kept counting from where it was; "STAGE 2" banner and a new portal somewhere else.
 - [ ] Stage 2 enemies are a bit tougher and more numerous; the stage 2 Queen has more HP than stage 1's.
 - [ ] RETURN TO LOBBY after 1-2 stages: back on the lobby menu at once with an ESCAPED panel ("2 stages cleared · Ruins", Stages tile, CONTINUE, closes by itself); gold includes the win bonus + stage bonus; Wins does NOT go up. After 3+ stages the panel says VICTORY! and STATS shows Wins +1. STATS shows "Best stage"; reaching stage 2 unlocks Ruins in the lobby ("Unlocked: Ruins arena!").
 - [ ] Die on stage 2+: DEFEATED with "Fell on stage 2" and the stages cleared; Best stage is updated.
@@ -106,7 +124,7 @@ Tip: DEV → "+300 gold" and "+3 random items" speed this up.
 - [ ] Duo: both stand at one chest and hold: only one opens it and pays; the other gets "Someone was faster" and keeps their gold. A player who leaves mid-hold: nothing breaks. Bargain applies to both. The altar gives both players an item.
 
 ## 1f. Enemies, elites and the Scorpion Queen (solo first, then Duo)
-Tip: `Config.Pacing.EliteFirst = 20` and a `SpawnTable` row 1 with `Spitter = 30, Bomber = 30, Brute = 30` show every enemy within a minute; DEV → "Spawn portal boss" for the Queen. Offline: `bash tools/preview/render.sh enemy-telegraphs,boss --devices pc,phone --set moment=charge` (moments: entrance, charge, venom, ring, burrow, summon, stunned, collapse) and the headless `boss-sim --studio`.
+Tip: `Config.Pacing.EliteFirst = 20` and a `SpawnTable` row 1 with `Spitter = 30, Bomber = 30, Brute = 30` show every enemy within a minute; DEV → "Spawn portal boss" for the Queen (stage 1). Offline: `bash tools/preview/render.sh enemy-telegraphs,boss --devices pc,phone --set moment=charge` (moments: entrance, charge, venom, ring, burrow, summon, stunned, collapse) and the headless `boss-sim --studio`. The other bosses and the later creatures: section 1i.
 
 Enemy roles and telegraphs
 - [ ] New enemies climb out of the ground (short rise + dust puff) and can't hurt you during it; deaths are the usual short poof.
@@ -141,6 +159,52 @@ The Scorpion Queen
 - [ ] Travel to the next stage or the end of the run with telegraphs on the floor: they all vanish; nothing lingers on the next stage.
 - [ ] Phone: telegraphs are readable at phone size; the boss bar fits under the plate.
 
+## 1i. Rotating bosses and the later creatures (solo first, then Duo / Trio)
+Tip: DEV → "Spawn portal boss" always summons the stage's boss; to test one boss on stage 1
+set `Config.Boss.First` to `MothMatriarch`, `RhinoWarlord` or `HiveMother`. Offline:
+`bash tools/preview/render.sh boss --devices pc,phone --set boss=RhinoWarlord --set moment=pound`
+(see docs/PREVIEW.md for every moment), `enemy-telegraphs --set view=creatures` and the headless
+`boss-sim --studio --set boss=<Name>`.
+
+Rotation
+- [ ] Stage 1 is always the Scorpion Queen. Stages 2-5 bring the other three and the Queen in a shuffled order; after that a new shuffle; never the same boss twice in a row.
+- [ ] The travel card reads "STAGE N" and "<ARENA> · <BOSS>"; during the fight the pill reads "Defeat the <boss>" and the boss bar shows its name and the 50% notch.
+- [ ] The awaken banner names the boss ("THE MOTH MATRIARCH DESCENDS!", "THE RHINO WARLORD CHARGES IN!", "THE HIVE MOTHER STIRS!") and "<BOSS> DEFEATED! SURVIVE THE SURGE!" follows its death.
+- [ ] Every boss: invulnerable and harmless during its 2.5 s entrance, no attack for 2 s after; HP scales with stage and players (Moth x0.85, Warlord x1.15, Hive x1.05 of the Queen's).
+- [ ] Achievements: Moth Bane / Banner Breaker / Hive Cleanser (120 gold each, Banner Breaker also a title) unlock the first time that boss dies; Queen Slayer still needs the Scorpion Queen.
+
+Moth Matriarch (flies)
+- [ ] Entrance: she flies down from high above onto an amber ring.
+- [ ] Dust Storm: wings up and shaking; a crimson ring at her feet with one opening, two ivory lines and gold chevrons marking the safe lane (1.1 s); then a dust ring rolls outward (21 studs/s). Standing in the gap lane = no damage; anywhere else the ring hits once (18).
+- [ ] Dive: she rises and leans back while a lane fills (1.1 s), swoops along it, then lands grounded for ~1.4 s (stars; touching her is safe).
+- [ ] Glimmer Mines: 5 motes (7 Duo, 9 Trio) drift down around the players and blink slowly, then faster, over dashed circles; they pop after 2.6 s (16). Stepping out is easy.
+- [ ] Summon: cocoons crack around her and Phase Moths flutter out.
+- [ ] Below 50%: "THE MATRIARCH WHIPS UP A TEMPEST!"; Wing Gust joins the cycle: she rears back while an ivory wind cone with drifting streaks shows (0.9 s), then players inside are pushed ~12 studs away (no damage, never into rocks or out of the fence, no rubber-banding). Dust Storm sends a second wave whose gap is turned ~70°, its gap lane shown as the first wave leaves.
+
+Rhino Warlord (heavy)
+- [ ] Horn Charge: a lane fills (1.1 s), he charges. If the lane ends at a tree / rock / the fence he slams into it and is stuck for ~2.2 s (stars, dust, free hits); otherwise a short 1 s recovery.
+- [ ] Ground Pound: he rears up (0.8 s), slams; three crimson bands (0-8, 8-15, 15-22 studs) each with a bright front rolling outward; they strike one after another (1.0 / 1.6 / 2.2 s): step into a band that already struck.
+- [ ] War Banner: he raises the banner from his back and plants it beside him (it disappears from his back); a dashed crimson zone (22 studs) with a gold ring at its foot; toast "WAR BANNER! Destroy it to break the rally"; two Beetle Warriors climb out with it. Beetles in the zone stand on crimson rings and are faster / hit harder. The banner has an HP bar; destroying it removes the zone and the buff and the banner returns to his back. With one standing, he summons instead.
+- [ ] Summon: the soil cracks open in 4 spots (5 Duo, 6 Trio) and Beetle Warriors climb out.
+- [ ] Below 50%: "THE WARLORD GOES BERSERK!"; every pound is a double pound: after the first, he rears again and the bands come back from the outside in.
+
+Hive Mother (slow)
+- [ ] Egg Barrage: the egg sac heaves, then 4 eggs (5 Duo, 6 Trio) tumble in arcs onto dashed acid circles near the players (12 on landing). Each egg then sits with an HP bar and an amber timer ring, wobbling harder; unless destroyed within 3.5 s it hatches 3 Mites.
+- [ ] Acid Pools: head down; dashed acid circles fill (1.2 s), then bubble as pools for 6 s (5 per 0.5 s while you stand in them).
+- [ ] Brood Call: soil cracks around her and Spitters climb out (never past the Spitter cap).
+- [ ] Hit her hard (a lot of damage in 1.5 s): a double-edged amber ring around her fills for 0.9 s and pulses (14), at most every 9 s.
+- [ ] Below 50%: "THE HIVE MOTHER SWELLS WITH ACID!"; each pool drips a trail of 3 small pools back toward her.
+
+Every boss
+- [ ] Kill it in the middle of an attack: every telegraph, wave, mine, band, pool, egg, banner and flying projectile disappears at once; the collapse; then gold, gems and the surge.
+- [ ] Duo / Trio: deaths, revives and a teammate leaving never leave a boss aiming at nobody; gusts only push living players.
+
+Later creatures
+- [ ] Healer (from 6:00, at most 4 + 1 per extra player): pale aphid with a spinning halo that hangs back 16-26 studs; every ~3.5 s it glows and a green pulse heals nearby enemies (not bosses or nests); dies in a hit or two. Callout "New: Healer - it heals the swarm, kill it first".
+- [ ] Burrower (from 7:00, at most 6 + 2 per extra player): only a soil ring with a dust trail moves toward you (it can't be hit); near you it stops, a crimson circle with inward ticks warns for 0.9 s, it bursts out (10), is dazed for 0.6 s and then bites like a normal bug. Callout "New: Burrower - watch for the dust trail".
+- [ ] Neither Healers nor Burrowers come in mini-wave rings.
+- [ ] Nest (stage 1 only after 6:00; from stage 2 50 s into the stage, then every 70 s; 2 per stage, 3 from stage 3; at most 2 at once; only while exploring): a wax-rimmed mound with an HP bar 30-46 studs from a player; every 4.5 s two small amber rings at its openings, then 2 Mites climb out (at most 8 of its mites alive). Destroying it: "Nest destroyed! +N gold each" (12 + 6 per stage after the first, to every living player) and extra gems. The open portal clears leftover nests without the reward.
+
 ## 1a. Weapon animations (use the lobby/run, level each weapon; Studio cheats or `Config` boosts help)
 - [ ] Whip: a glowing blade pulls back, then sweeps a ~150° arc in front of you with a white crescent trail; it flashes white mid-sweep and fades. The knight's right arm swings with it. The second (back) slash makes the hero spin once. Enemies inside the arc flash; enemies outside it don't.
 - [ ] Whip levels: trail turns pale gold (lv 4-6), gold and wider (lv 7-8). Bloodwhip: thicker crimson blade, red trail, bigger tip spark.
@@ -172,7 +236,12 @@ The Scorpion Queen
 - [ ] Ruins arena (stage 2 of any run, or picked in the lobby after reaching stage 2): mosaic plaza at the spawn, 4 flagstone avenues with colonnades (standing, broken and toppled pillars), 8 flickering torches at the plaza, a ruined building in each quadrant, 5 glowing purple crystal fields, autumn trees, rubble; a broken crenellated wall with corner towers (low on the south side), dark pines outside. Golden-dusk light with purple haze.
 - [ ] Ruins collision: pillars, stumps, toppled pillars, building walls, crystal centres, torches and corner towers block you and the bugs; enemies path around them.
 - [ ] Castle lobby (behind the menu): the shot shows the courtyard flagstones and the gold/blue emblem in the middle, the keep behind with a warm-lit arched gate and raised portcullis, steps, red wall banners, braziers with fire, two roofed towers with flags, blue pole banners, torches and planters on the sides, pine forest and hazy mountains in the background, drifting dust motes / fireflies. Torch lights flicker.
-- [ ] Lighting differs per place: warm golden hour (lobby), bright day with light haze (Forest), dusk with purple haze and stronger glow (Ruins).
+- [ ] Swamp arena: murky green bog, two bog tracks crossing at the spawn, a stilt hut with wisp lanterns (north-west), sunken mossy ruins with an arch (north-east), a ring of bog stones round a lantern (east), a low fisher camp (south-west), a deep bog pond with lilypads (impassable), mangrove and willow groves, reeds along the edge, mangrove tree line (low on the south side). 8 dark MUD pools: walking through one slows you clearly (~65%) and slows walking bugs too; wasps / moths fly over at full speed; the slow ends the moment you step out.
+- [ ] Snow arena: snowfield with packed-snow trails, the carved totem shrine with stone lamps (west), a snowed arch over the north trail, an ice-crystal ring with a frost glow (east), a trapper camp (south-west), a boulder field, two collapsed towers, snowy pine groves, a snowed fence and tall snowy pines outside. 7 pale-blue FROZEN PONDS: on the ice you run ~20% faster but turning and stopping drift (you slide a little after letting go of the stick); off the ice control is crisp again. Enemies are not affected.
+- [ ] Desert arena: warm sand, caravan tracks, the gold-capped obelisk court with braziers (north), a nomad camp with striped tents and torches (west), a ruined gate (east), giant bones among cacti (south-west), two big mesas, a dry oasis basin (impassable), cactus stands, sandstone ruins, mesas and rocks outside, dunes on the camera side. 7 swirling QUICKSAND pools: they slow you hard (~55%) and slow walking bugs.
+- [ ] Lava arena: ash plain with pale ash tracks, the brimstone altar with a big flame (north), a ruined basalt fort with an ember vent (west), an ember field of vents and obsidian (east), a lava lake behind rim rocks (impassable), basalt column clusters, charred trees. 7 LAVA pools with a breathing orange glow ring: standing in one costs 6 HP (minus armor) every half second after a short grace; level-up / revive invulnerability and shields still protect you; enemies walk through unharmed. Light stays bright enough to read the swarm.
+- [ ] In every biome: the portal and the chests / shrines / altar are never in or right next to a pool; nothing solid within ~40 studs of the spawn; pools are never in the spawn clearing; tall trees, mesas, columns and huts fade when they cover the hero.
+- [ ] Lighting differs per place: warm golden hour (lobby), bright day with light haze (Forest), dusk with purple haze and stronger glow (Ruins), humid green midday (Swamp), crisp cool late morning (Snow), high warm sun (Desert), warm smoky but bright afternoon (Lava).
 - [ ] Performance: in each arena View → Stats shows a steady FPS on the phone emulator (each arena is about 500 Parts + 300-450 MeshParts, all anchored).
 
 ## 2. Four-player run (Test tab → Clients and Servers → 4 players, Start)

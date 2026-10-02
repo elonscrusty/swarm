@@ -18,6 +18,9 @@ local CameraController = require(script.Parent.CameraController)
 
 local MobileControls = {}
 
+-- Optional move input filter (TerrainFx: slippery steering on ice), world dir in and out.
+MobileControls.Filter = nil :: ((Vector3, number) -> Vector3)?
+
 local player = Players.LocalPlayer
 local enabled = true
 local stickInput: InputObject? = nil
@@ -168,6 +171,9 @@ end
 
 function MobileControls.Init()
 	buildGui()
+	pcall(function()
+		require(script.Parent:WaitForChild("TerrainFx") :: ModuleScript).Init(MobileControls)
+	end)
 
 	-- Try to switch off the default control module too (belt and braces).
 	task.spawn(function()
@@ -223,7 +229,7 @@ function MobileControls.Init()
 		table.clear(keys)
 	end)
 
-	RunService:BindToRenderStep("SwarmMove", Enum.RenderPriority.Input.Value + 1, function()
+	RunService:BindToRenderStep("SwarmMove", Enum.RenderPriority.Input.Value + 1, function(dt: number)
 		local char = player.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		if not hum then
@@ -232,6 +238,10 @@ function MobileControls.Init()
 		local v = enabled and moveVector() or Vector2.zero
 		local forward, right = CameraController.GroundAxes()
 		local world = right * v.X + forward * -v.Y
+		local filter = MobileControls.Filter
+		if filter then
+			world = filter(world, dt)
+		end
 		hum:Move(world, false)
 	end)
 end

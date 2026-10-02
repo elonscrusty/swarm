@@ -366,6 +366,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		UIAnim.Punch(ui.Detail, 0.03)
 	end
 
+	-- title size on a compact tile: long names ("Necromancer") a step smaller so they fit
+	local function tileSize(id: string): number
+		local def = CharacterData.Characters[id]
+		return (def and #def.Name > 9) and Theme.TextSize.Small - 1 or Theme.TextSize.Body
+	end
+
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
 		local W, H = v.X, v.Y
 		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
@@ -376,13 +382,20 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		-- the details panel fits its content (measured), up to the room there is
 		local measured = ui.DetailList.AbsoluteContentSize.Y / math.max(0.01, host.Scale())
 		local contentH = measured > 10 and (measured + 36) or (UIKit.IsCompact() and 640 or 590)
+		local n = #CharacterData.Order
 		if portrait then
-			-- tabs row: one compact button per character
+			-- tabs: one compact button per character, in two rows of four when there are
+			-- more than five heroes (names stay readable)
+			local perRow = n > 5 and math.ceil(n / 2) or n
+			local tabRows = math.ceil(n / perRow)
+			local listH = 24 + tabRows * 52 + (tabRows - 1) * 6
 			ui.ListLayout.FillDirection = Enum.FillDirection.Horizontal
+			ui.ListLayout.Wraps = true
+			ui.ListLayout.Padding = UDim.new(0, 6)
 			local w = W - 2 * M
-			place(ui.List, M, top, w, 76)
-			for _, row in pairs(ui.Rows) do
-				row.Instance.Size = UDim2.new(1 / #CharacterData.Order, -6, 1, 0)
+			place(ui.List, M, top, w, listH)
+			for id, row in pairs(ui.Rows) do
+				row.Instance.Size = UDim2.new(1 / perRow, -6, 0, 52)
 				if row.Subtitle then
 					row.Subtitle.Visible = false
 				end
@@ -393,29 +406,50 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				end
 				if row.Title then
 					row.Title.TextXAlignment = Enum.TextXAlignment.Center
-					-- five names in one row: a smaller title so none is cut off
-					row.Title.TextSize = TS(Theme.TextSize.Body + 1)
+					-- four or five names in one row: a smaller title so none is cut off
+					row.Title.TextSize = TS(perRow >= 4 and tileSize(id) or Theme.TextSize.Body + 1)
 				end
 			end
-			local detailH = math.min(contentH, math.floor(H * 0.52))
+			local detailH = math.min(contentH, math.floor(H * 0.52) - (listH - 76))
 			place(ui.Detail, M, H - M - detailH, w, detailH)
 			if ctx.Current() == "Characters" then
-				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + 76) + (H - M - detailH)) / 2 / H)
+				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + listH) + (H - M - detailH)) / 2 / H)
 			end
 		else
-			ui.ListLayout.FillDirection = Enum.FillDirection.Vertical
+			-- one column of rows (shorter rows when needed); when even short rows don't fit
+			-- (phones in landscape) two columns of name tiles
 			local lw = math.clamp(W * 0.24, 270, 330)
-			local n = #CharacterData.Order
-			place(ui.List, M, top, lw, n * 72 + (n - 1) * 8 + 24)
+			local inner = H - M - top - 24
+			local rowH = math.floor((inner - (n - 1) * 8) / n)
+			local cols = 1
+			if rowH < 56 then
+				cols = 2
+				local rows = math.ceil(n / 2)
+				rowH = math.clamp(math.floor((inner - (rows - 1) * 6) / rows), 40, 72)
+			end
+			rowH = math.min(72, rowH)
+			if cols == 2 then
+				lw += 36 -- room for "Necromancer" in a half-width tile
+			end
+			local gap = cols == 2 and 6 or 8
+			local rows = math.ceil(n / cols)
+			ui.ListLayout.FillDirection = cols == 2 and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical
+			ui.ListLayout.Wraps = cols == 2
+			ui.ListLayout.Padding = UDim.new(0, gap)
+			place(ui.List, M, top, lw, rows * rowH + (rows - 1) * gap + 24)
 			for id, row in pairs(ui.Rows) do
-				row.Instance.Size = UDim2.new(1, 0, 0, 72)
+				row.Instance.Size = cols == 2 and UDim2.new(0.5, -gap / 2, 0, rowH) or UDim2.new(1, 0, 0, rowH)
 				if row.Subtitle then
-					row.Subtitle.Visible = true
+					row.Subtitle.Visible = cols == 1 and rowH >= 60
 				end
-				row.SetIcon(Icons.CharacterIcon(id))
+				row.SetIcon(cols == 1 and Icons.CharacterIcon(id) or nil)
+				local column = row.Content:FindFirstChild("Text") :: Frame?
+				if column and cols == 2 then
+					column.Size = UDim2.fromScale(1, 1)
+				end
 				if row.Title then
-					row.Title.TextXAlignment = Enum.TextXAlignment.Left
-					row.Title.TextSize = TS(Theme.TextSize.H2)
+					row.Title.TextXAlignment = cols == 2 and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+					row.Title.TextSize = TS(cols == 2 and tileSize(id) or Theme.TextSize.H2)
 				end
 			end
 			local rw = math.clamp(W * 0.32, 360, 440)

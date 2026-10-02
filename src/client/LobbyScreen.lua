@@ -185,14 +185,19 @@ local function arenaText(): (string, string)
 	local arena = (Config.Arenas :: any)[arenaId]
 	local title = "ARENA: " .. string.upper(arena and arena.DisplayName or tostring(arenaId))
 	local best = profile and (profile.Stats.BestStage or 0) or 0
+	-- the next arena still locked (lowest requirement first), else the picked arena's hint
+	local nextDef, nextNeed = nil, math.huge
 	for _, name in ipairs(Config.Arenas.Order) do
 		local def = (Config.Arenas :: any)[name]
-		local need = def.RequiredBestStage or 0
-		if best < need then
-			return title, string.format("%s: reach stage %d to unlock", def.DisplayName, need)
+		local need = def and def.RequiredBestStage or 0
+		if def and best < need and need < nextNeed then
+			nextDef, nextNeed = def, need
 		end
 	end
-	return title, "Face the swarm"
+	if nextDef then
+		return title, string.format("%s: reach stage %d to unlock", nextDef.DisplayName, nextNeed)
+	end
+	return title, (arena and arena.Hint) or "Face the swarm"
 end
 
 -- Nameplate arrows: browse characters in order.

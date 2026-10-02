@@ -13,7 +13,9 @@
 	  RootJoint       rotates the whole body around the root centre (y = 3); Pos moves it
 	Poses:
 	  Showcase  the heroic stance for the lobby dais (Knight: sword raised, shield forward;
-	            Ranger: longbow held out upright, drawing hand by the quiver)
+	            Ranger: longbow held out upright, drawing hand by the quiver; Alchemist: a
+	            flask held up; Engineer: wrench raised; Necromancer: staff forward, a hand
+	            calling souls)
 	  Idle      a subtle breathing loop (also layered on top of Showcase)
 
 	HeroPoses.Apply(model, poseName, t) poses a character built by ModelBuilder (it reads the
@@ -90,10 +92,40 @@ HeroPoses.Poses = {
 			["Right Hip"] = { -10, 0, 6 },
 		},
 	},
+	Alchemist = {
+		Showcase = {
+			RootJoint = { 0, -14, 0 },
+			Neck = { 4, 10, 0 },
+			["Right Shoulder"] = { 108, 0, 10 }, -- flask held up to the light
+			["Left Shoulder"] = { 24, 0, -20 }, -- other hand at the bandolier
+			["Left Hip"] = { 12, 0, -6 },
+			["Right Hip"] = { -8, 0, 5 },
+		},
+	},
+	Engineer = {
+		Showcase = {
+			RootJoint = { 0, 12, 0 },
+			Neck = { 4, -8, 0 },
+			["Right Shoulder"] = { 58, 0, 14 }, -- wrench raised, ready to build
+			["Left Shoulder"] = { 18, 0, -26 }, -- fist on the hip
+			["Left Hip"] = { 14, 0, -8 },
+			["Right Hip"] = { -10, 0, 8 },
+		},
+	},
+	Necromancer = {
+		Showcase = {
+			RootJoint = { 0, -10, 0 },
+			Neck = { -4, 6, 0 },
+			["Right Shoulder"] = { 30, 0, 14 }, -- bone staff planted forward
+			["Left Shoulder"] = { 48, 0, -42 }, -- a hand stretched out to the side, calling souls
+			["Left Hip"] = { 8, 0, -4 },
+			["Right Hip"] = { -6, 0, 4 },
+		},
+	},
 }
 
 -- body drops a little in wide stances so the feet stay on the ground
-HeroPoses.Drop = { Knight = 0.06, Mage = 0.02, Rogue = 0.16, Priest = 0.01, Ranger = 0.07 }
+HeroPoses.Drop = { Knight = 0.06, Mage = 0.02, Rogue = 0.16, Priest = 0.01, Ranger = 0.07, Alchemist = 0.04, Engineer = 0.07, Necromancer = 0.02 }
 
 local function angles(j: Joint?): CFrame
 	if not j then

@@ -12,10 +12,13 @@
 	  Ghost, Erratic, Phase, Slot (index in Active), Guard (guarded-altar id, LootSystem),
 	  Affix (elites: "Swift" | "Shielded" | "Burning"), Shield (HP the shield still soaks),
 	  DmgScale (attack damage multiplier), SpawnGrace, Act / ActTimer (EnemyAI behaviours),
-	  WarnId (its live telegraph), Harmless / Invulnerable / Untargetable / Dying (boss)
+	  WarnId (its live telegraph), Harmless / Invulnerable / Untargetable / Dying (boss,
+	  a tunnelling Burrower), Owner (the boss that made an object: War Banner, Brood Egg),
+	  Children (a nest's mites), RallyUntil (War Banner buff), HPShown (ShowHP bar)
 	Pacing (Config.Pacing): calm at run / stage start, build-up between mini-waves, a lull
 	after each mini-wave, first-appearance callouts with a small intro group, scheduled
-	elites. The boss encounter itself is BossAI (data: BossData).
+	elites, nests on later stages (Config.Pacing.Nests). The boss encounter itself is
+	BossAI (data: BossData); the stage's boss id comes from StageManager.
 	Run items hook in here (ItemSystem): crits and Storm Charm in Damage, kill procs in Kill;
 	the Bargain Shrine's enemy HP (LootSystem.EnemyHPMult) in Spawn.
 ]]
@@ -28,6 +31,7 @@ local SpatialGrid = require(script.Parent.SpatialGrid)
 local Fx = require(script.Parent.Fx)
 local DamageNumbers = require(script.Parent.DamageNumbers)
 local BossAI = require(script.Parent.BossAI)
+local BossData = require(game:GetService("ReplicatedStorage").Shared.BossData)
 
 local EnemySpawner = {}
 
@@ -53,6 +57,11 @@ local sinceWave = 0
 local lullLeft = 0
 local nextEliteAt = 0
 local seen: { [string]: boolean } = {}
+-- nests (Config.Pacing.Nests), per stage
+local nestStage = 0
+local nestStageTime = 0
+local nestsMade = 0
+local nextNestAt = 0
 
 ------------------------------------------------------------------------------------------
 -- Helpers
@@ -89,6 +98,18 @@ local function weightedPick(weights: { [string]: number }): string
 	end
 	return last
 end
+
+-- Living enemies matching a test (caps for Spitters, Healers, Burrowers, nests).
+local function liveCount(test: (any) -> boolean): number
+	local n = 0
+	for _, e in ipairs(EnemySpawner.Active) do
+		if e.Alive and e.Def and test(e.Def) then
+			n += 1
+		end
+	end
+	return n
+end
+EnemySpawner.LiveCount = liveCount
 
 -- Clamps a ground point inside the fence.
 local function clampToArena(x: number, z: number, margin: number): (number, number)
@@ -191,15 +212,17 @@ end
 --[[
 	Spawns an enemy of `typeId` at a ground position.
 	opts.Elite: 2x size, 5x HP, drops a chest, one affix (opts.Affix or random).
-	opts.Boss: boss stats.
+	opts.Boss: boss stats (opts.BossData = the BossData entry: HPMult, ContactDamage).
+	opts.Force: past the MaxLive cap (boss objects: a banner, eggs; the pool still limits).
+	opts.HP: a fixed max HP (a War Banner's share of the boss's HP).
 ]]
-function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: boolean?, Boss: boolean?, Affix: string? }?)
+function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: boolean?, Boss: boolean?, Affix: string?, Force: boolean?, HP: number?, BossData: any? }?)
 	local def = EnemyData.Enemies[typeId]
 	if not def then
 		return nil
 	end
 	local isBoss = opts and opts.Boss or false
-	if not isBoss and #EnemySpawner.Active >= Config.Enemies.MaxLive then
+	if not isBoss and not (opts and opts.Force) and #EnemySpawner.Active >= Config.Enemies.MaxLive then
 		return nil
 	end
 	local index = table.remove(free)
@@ -215,16 +238,21 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 
 	local stages = ctx.StageManager
 	local hp
+	local bossData = opts and opts.BossData
 	if isBoss then
-		hp = Config.Boss.HP * (1 + Config.Boss.HPPerExtraPlayer * (playerCount() - 1)) * stages.BossHPMult()
+		hp = Config.Boss.HP * (bossData and bossData.HPMult or 1) * (1 + Config.Boss.HPPerExtraPlayer * (playerCount() - 1)) * stages.BossHPMult()
+	elseif opts and opts.HP then
+		hp = opts.HP
 	else
 		hp = def.HP * (1 + statTier * D.HPPerMinute) * (1 + D.HPPerExtraPlayer * (playerCount() - 1)) * stages.EnemyHPMult()
 		if elite then
 			hp *= Config.Enemies.EliteHPMult
 		end
 	end
-	hp *= ctx.LootSystem.EnemyHPMult() -- the Bargain Shrine (1 unless sealed this stage)
-	local damage = (isBoss and Config.Boss.ContactDamage or def.Damage * (1 + statTier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1)) * stages.DamageMult()
+	if not (opts and opts.HP) then
+		hp *= ctx.LootSystem.EnemyHPMult() -- the Bargain Shrine (1 unless sealed this stage)
+	end
+	local damage = (isBoss and (bossData and bossData.ContactDamage or Config.Boss.ContactDamage) or def.Damage * (1 + statTier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1)) * stages.DamageMult()
 
 	uidCounter += 1
 	e.Uid = uidCounter
@@ -272,11 +300,48 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.BurnTimer = nil
 	e.SlowUntil = nil -- Chilling Aura (Garlic perk) slow
 	e.SlowMult = nil
+	e.TerrainSlow = nil -- mud / quicksand slow (BiomeHazards)
 	e.Harmless = false
 	e.Invulnerable = false
 	e.Untargetable = false
 	e.Dying = false
 	e.Killer = nil
+	e.Owner = nil
+	e.Children = nil
+	e.RallyUntil = nil
+	e.Rallied = nil
+	e.HPShown = nil
+	e.BossObjects = nil
+	e.Tunnel = nil
+	e.SurfaceAt = nil
+	e.HealTimer = nil
+	e.SpawnTimer = nil
+	e.HatchLeft = nil
+	e.HitLog = nil
+	e.PulseReady = nil
+	e.StaticFace = nil
+	e.Mines = nil
+	e.PoundQueue = nil
+	e.Throws = nil
+	e.GustDir = nil
+	e.GustLeft = nil
+	e.HatchCount = nil
+	e.SpawnedCount = nil
+	e.NestSpots = nil
+	e.RallyRadius = nil
+	e.RallySpeed = nil
+	e.RallyDamage = nil
+	e.RallyTick = nil
+	e.ChargeName = nil
+	e.ChargeBlocked = nil
+	e.ChargeTime = nil
+	e.SummonSpots = nil
+	e.SummonType = nil
+	e.StormLeft = nil
+	e.StormGap = nil
+	e.ThrowIndex = nil
+	e.HitSum = nil
+	e.HitAt = nil
 	e.SpawnGrace = isBoss and 0 or Config.Enemies.SpawnGrace
 	e.DmgScale = (1 + statTier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1) * stages.DamageMult()
 	-- elites: exactly one affix
@@ -299,6 +364,14 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.Part:SetAttribute("Affix", affix)
 	e.Part:SetAttribute("Shield", affix == "Shielded")
 	e.Part:SetAttribute("Act", nil)
+	e.Part:SetAttribute("Rallied", nil)
+	e.Part:SetAttribute("BannerOut", nil)
+	e.Part:SetAttribute("HPFrac", def.ShowHP and 1 or nil)
+	if def.Static then
+		-- stationary things face a random way (a nest's openings)
+		local a = rng:NextNumber(0, math.pi * 2)
+		e.StaticFace = Vector3.new(math.cos(a), 0, math.sin(a))
+	end
 	e.Part:SetAttribute("Type", typeId) -- set last: clients rebuild the model when it changes
 
 	table.insert(EnemySpawner.Active, e)
@@ -313,24 +386,41 @@ end
 
 -- Ranged enemies (Spitters) alive now; Config.Enemies.MaxLiveRanged caps them.
 local function liveRanged(): number
-	local n = 0
-	for _, e in ipairs(EnemySpawner.Active) do
-		if e.Alive and e.Def and e.Def.Ranged then
-			n += 1
-		end
-	end
-	return n
+	return liveCount(function(def)
+		return def.Ranged ~= nil
+	end)
+end
+EnemySpawner.LiveRanged = liveRanged
+
+-- Room for more Healers / Burrowers (Config.Enemies caps, a little more in a group).
+local function supportRoom(): boolean
+	local extra = playerCount() - 1
+	return liveCount(function(def)
+		return def.Support ~= nil
+	end) < Config.Enemies.MaxLiveSupport + extra
+end
+local function burrowRoom(): boolean
+	local extra = playerCount() - 1
+	return liveCount(function(def)
+		return def.Burrow ~= nil
+	end) < Config.Enemies.MaxLiveBurrowers + extra * 2
 end
 
--- weightedPick, leaving out Ranged types when allowRanged is false.
-local function pickType(weights: { [string]: number }, allowRanged: boolean): string
-	if allowRanged then
-		return weightedPick(weights)
-	end
+--[[
+	weightedPick, leaving out Ranged types when allowRanged is false, Healers / Burrowers
+	over their caps, and NoWave types in a mini-wave or the surge (wave = true).
+]]
+local function pickType(weights: { [string]: number }, allowRanged: boolean, wave: boolean?): string
+	local support, burrow = supportRoom(), burrowRoom()
 	local w = {}
 	for id, v in pairs(weights) do
 		local def = EnemyData.Enemies[id]
-		if not (def and def.Ranged) then
+		local ok = def ~= nil
+			and (allowRanged or not def.Ranged)
+			and (support or not def.Support)
+			and (burrow or not def.Burrow)
+			and not (wave and def.NoWave)
+		if ok then
 			w[id] = v
 		end
 	end
@@ -366,7 +456,8 @@ local function topUp()
 			introduce(typeId)
 			local pos = EnemySpawner.SpawnPoint(def.Radius)
 			if pos then
-				for k = 1, Config.Pacing.IntroGroup do
+				local group = (Config.Pacing.IntroGroupOf :: any)[typeId] or Config.Pacing.IntroGroup
+				for k = 1, group do
 					local a = k * 2.1
 					local x, z = clampToArena(pos.X + math.cos(a) * 3, pos.Z + math.sin(a) * 3, 4)
 					EnemySpawner.Spawn(typeId, Vector3.new(x, Config.ArenaOrigin.Y, z))
@@ -404,11 +495,76 @@ local function scheduledElite()
 	end
 end
 
+-- A nest (EnemyData.Nest) a little way from a random living player, on clear ground
+-- away from the portal. Returns the enemy or nil.
+local function spawnNest()
+	local rp = randomAlivePlayer()
+	if not rp then
+		return nil
+	end
+	local N = Config.Pacing.Nests
+	local def = EnemyData.Enemies.Nest
+	local portal = ctx.StageManager.PortalPosition()
+	for _ = 1, 10 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local d = rng:NextNumber(N.Distance[1], N.Distance[2])
+		local p = rp.Root.Position
+		local x, z = clampToArena(p.X + math.cos(a) * d, p.Z + math.sin(a) * d, 12)
+		local nearPortal = portal and ((Vector3.new(x, portal.Y, z) - portal).Magnitude < Config.Stages.PortalRadius + 8)
+		if not nearPortal and not ctx.EnemyAI.IsBlocked(x, z, def.Radius + 1.5) then
+			local e = EnemySpawner.Spawn("Nest", Vector3.new(x, Config.ArenaOrigin.Y, z))
+			if e then
+				if not introduce("Nest") then
+					ctx.RunManager.Broadcast("A Nest takes root nearby!", Color3.fromRGB(255, 205, 120))
+				end
+				Fx.Warn("pop", x, z, def.Radius * 2.5, "dust")
+				return e
+			end
+		end
+	end
+	return nil
+end
+EnemySpawner.SpawnNest = spawnNest
+
+-- Nests on later stages (Config.Pacing.Nests), only while exploring.
+local function stepNests(dt: number, runTime: number)
+	local N = Config.Pacing.Nests
+	local stage = ctx.StageManager.GetStage()
+	if stage ~= nestStage then
+		nestStage = stage
+		nestStageTime = 0
+		nestsMade = 0
+		nextNestAt = N.FirstStageTime
+	end
+	if ctx.StageManager.GetPhase() ~= "Explore" then
+		return
+	end
+	nestStageTime += dt
+	if nestStageTime < nextNestAt then
+		return
+	end
+	local cap = N.PerStage + (stage >= 3 and 1 or 0)
+	local alive = liveCount(function(def)
+		return def.Spawner ~= nil
+	end)
+	if (stage > 1 or runTime >= N.Stage1RunTime) and nestsMade < cap and alive < N.MaxAlive then
+		if spawnNest() then
+			nestsMade += 1
+			nextNestAt = nestStageTime + N.Every
+		else
+			nextNestAt = nestStageTime + 3 -- no clear spot right now: try again soon
+		end
+	else
+		nextNestAt = nestStageTime + 5
+	end
+end
+
 -- Burst of one enemy type surrounding a random player (every MiniWaveInterval).
 function EnemySpawner.MiniWave()
 	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
-	-- never a ring of Spitters (Ranged): a full circle of acid has no safe side
-	local typeId = pickType(row.Weights, false)
+	-- never a ring of Spitters (Ranged): a full circle of acid has no safe side; never
+	-- Healers / Burrowers either (NoWave)
+	local typeId = pickType(row.Weights, false, true)
 	local def = EnemyData.Enemies[typeId]
 	introduce(typeId)
 	sinceWave = 0
@@ -427,19 +583,22 @@ function EnemySpawner.MiniWave()
 	end
 end
 
--- The Scorpion Queen at `at` (the stage portal), or at a spawn point near a player.
-function EnemySpawner.SpawnBoss(at: Vector3?)
+-- The stage boss (BossData id, default the Scorpion Queen) at `at` (the stage portal),
+-- or at a spawn point near a player.
+function EnemySpawner.SpawnBoss(at: Vector3?, bossId: string?)
 	if Config.Boss.ClearMinionsOnSpawn then
 		for i = #EnemySpawner.Active, 1, -1 do
 			EnemySpawner.Despawn(EnemySpawner.Active[i])
 		end
 	end
-	local pos = at or EnemySpawner.SpawnPoint(EnemyData.Enemies.Boss.Radius) or Config.ArenaOrigin
-	local boss = EnemySpawner.Spawn("Boss", pos, { Boss = true })
+	local data = BossData.Get(bossId)
+	local typeId = EnemyData.Enemies[data.EnemyType] and data.EnemyType or "Boss"
+	local pos = at or EnemySpawner.SpawnPoint(EnemyData.Enemies[typeId].Radius) or Config.ArenaOrigin
+	local boss = EnemySpawner.Spawn(typeId, pos, { Boss = true, BossData = data })
 	Fx.Sound("BossRoar")
 	if boss then
 		Fx.Ring(boss.Pos, 30, Color3.fromRGB(255, 40, 60))
-		BossAI.Begin(boss) -- the entrance: rises out of the ground, then the fight
+		BossAI.Begin(boss, data) -- the entrance: rises out of the ground, then the fight
 	end
 	return boss
 end
@@ -454,7 +613,7 @@ function EnemySpawner.SpawnSurge(count: number, centre: Vector3): number
 	local made = 0
 	local ranged = liveRanged()
 	for _ = 1, count do
-		local typeId = pickType(row.Weights, ranged < Config.Enemies.MaxLiveRanged)
+		local typeId = pickType(row.Weights, ranged < Config.Enemies.MaxLiveRanged, true)
 		local def = EnemyData.Enemies[typeId]
 		if def.Ranged then
 			ranged += 1
@@ -547,6 +706,12 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 	release(e)
 	Fx.Death(pos + Vector3.new(0, e.Height, 0), e.Part:GetAttribute("BaseColor") or def.Color, e.Radius * 2)
 	Fx.Sound("EnemyDeath")
+	if def.Object then
+		-- a boss's banner / egg: no gems, gold, pickups, kill count or kill procs (no
+		-- farming). BossAI notices it is gone through its BossObjects list.
+		Fx.Warn("pop", pos.X, pos.Z, e.Radius * 1.6, def.Hatch and "hatch" or "slam")
+		return
+	end
 
 	if rng:NextNumber() < (def.GemChance or 1) then
 		ctx.XPSystem.SpawnGem(pos, gemValue(def.Gem, def.XPScale or 1))
@@ -568,6 +733,24 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 			ctx.XPSystem.SpawnChest(pos)
 		end
 		ctx.XPSystem.SpawnGem(pos + Vector3.new(2, 0, 0), gemValue(EnemyData.EliteGem, 1))
+	elseif def.Reward then
+		-- a destroyed nest (by a player, not swept away): gold for every living player
+		-- and a few extra gems
+		if rp then
+			local R = def.Reward
+			local gold = math.floor(R.Gold + R.GoldPerStage * math.max(0, ctx.StageManager.GetStage() - 1))
+			for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
+				if other.Alive and not other.Returned then
+					ctx.GoldSystem.AddRunGold(other, gold * (other.Stats and other.Stats.GoldMult or 1))
+				end
+			end
+			for k = 1, R.Gems or 0 do
+				local a = k * 2.4
+				ctx.XPSystem.SpawnGem(pos + Vector3.new(math.cos(a) * 3, 0, math.sin(a) * 3), gemValue(def.Gem, 1))
+			end
+			ctx.RunManager.Broadcast(string.format("Nest destroyed! +%d gold each", gold), Color3.fromRGB(255, 215, 120))
+		end
+		Fx.Warn("pop", pos.X, pos.Z, e.Radius * 2, "dust")
 	else
 		if rp then
 			ctx.GoldSystem.OnKill(rp)
@@ -629,6 +812,16 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 	end
 	if e.Boss then
 		bossDirty = true
+		if e.HP > 0 then
+			BossAI.OnDamaged(e, amount) -- the Hive Mother's pulse when hit hard
+		end
+	end
+	if e.Def.ShowHP then
+		local frac = math.clamp(math.ceil(e.HP / math.max(1, e.MaxHP) * 50) / 50, 0, 1)
+		if frac ~= e.HPShown then
+			e.HPShown = frac
+			e.Part:SetAttribute("HPFrac", frac)
+		end
 	end
 	local died = e.HP <= 0
 	if died and e.Boss then
@@ -667,12 +860,13 @@ function EnemySpawner.Explode(e)
 	EnemySpawner.Kill(e, nil)
 end
 
--- Bomb pickup / revive shockwave: kill every non-boss enemy in range.
+-- Bomb pickup / revive shockwave: kill every ordinary enemy in range (never bosses, their
+-- banners / eggs, nests or anything invulnerable such as a burrowed Burrower).
 function EnemySpawner.KillInRadius(pos: Vector3, radius: number, rp)
 	local r2 = radius * radius
 	for i = #EnemySpawner.Active, 1, -1 do
 		local e = EnemySpawner.Active[i]
-		if e and e.Alive and not e.Boss then
+		if e and e.Alive and not e.Boss and not e.Def.Object and not e.Def.Spawner and not e.Invulnerable then
 			local dx, dz = e.Pos.X - pos.X, e.Pos.Z - pos.Z
 			if dx * dx + dz * dz <= r2 then
 				EnemySpawner.Kill(e, rp)
@@ -729,6 +923,7 @@ function EnemySpawner.Step(dt: number)
 		sinceWave = 0
 		lullLeft = 0
 		nextEliteAt = Config.Pacing.EliteFirst
+		nestStage = 0 -- a new run: the nest schedule starts over
 	end
 	lastRunTime = runTime
 	calmLeft = math.max(0, calmLeft - dt)
@@ -738,6 +933,7 @@ function EnemySpawner.Step(dt: number)
 		nextEliteAt = runTime + Config.Pacing.EliteEvery
 		scheduledElite()
 	end
+	stepNests(dt, runTime)
 	spawnTimer += dt
 	if spawnTimer >= Config.Spawn.TickSeconds then
 		spawnTimer = 0

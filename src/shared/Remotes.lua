@@ -24,6 +24,7 @@ local Remotes = {}
 Remotes.ServerToClient = {
 	"ProjectileBatch", -- buffer of projectile positions, once per sync tick
 	"FxBatch", -- table of visual effects, once per flush tick
+	"WeaponFx", -- weapon effects that are not projectiles (nova, flame patches, totem pulses, hook chains)
 	"Inventory", -- this player's weapons / passives / run counters
 	"LevelUpOffer", -- 3 cards + reroll / skip counts
 	"LevelUpClose", -- the offer was resolved (auto-pick etc.)

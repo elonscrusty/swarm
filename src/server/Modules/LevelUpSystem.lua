@@ -184,9 +184,18 @@ local function buildPool(rp)
 		end
 	end
 	if #rp.WeaponOrder < Config.Slots.Weapons then
+		local unowned = 0
 		for _, id in ipairs(WeaponData.Order) do
 			if not rp.Weapons[id] then
-				table.insert(pool, card("WeaponNew", id, 1, L.WeightNewWeapon * luck))
+				unowned += 1
+			end
+		end
+		-- with many weapons the "new weapon" weight is shared, so the odds of a new weapon
+		-- card stay what they were with the first 9 weapons (Config.LevelUp.NewWeaponPoolRef)
+		local share = math.min(1, (L.NewWeaponPoolRef or unowned) / math.max(1, unowned))
+		for _, id in ipairs(WeaponData.Order) do
+			if not rp.Weapons[id] then
+				table.insert(pool, card("WeaponNew", id, 1, L.WeightNewWeapon * luck * share))
 			end
 		end
 	end
@@ -514,6 +523,39 @@ function LevelUpSystem.OpenChest(rp)
 	afterChange(rp)
 	Remotes.FireClient("ChestOpened", rp.Player, { Rewards = rewards, Gold = gold })
 	Fx.Sound("Chest")
+end
+
+------------------------------------------------------------------------------------------
+-- Dev tools (RunManager "DevCommand": Studio / creator only)
+------------------------------------------------------------------------------------------
+
+-- The weapons that came with the Alchemist, the Engineer and the Necromancer.
+LevelUpSystem.NewWeapons = { "Spear", "Crossbow", "FrostNova", "FireTrail", "HealingTotem", "ChainHook", "Turret", "SoulBolt" }
+
+--[[
+	evolve = false: gives every weapon in NewWeapons at level 8 (past Config.Slots.Weapons:
+	a test loadout). evolve = true: evolves every owned weapon (its passive is not needed).
+]]
+function LevelUpSystem.DevWeapons(rp, evolve: boolean)
+	if evolve then
+		for _, id in ipairs(rp.WeaponOrder) do
+			local w = rp.Weapons[id]
+			if WeaponData.Weapons[id].Evolution then
+				w.Level = WeaponData.MaxLevel
+				w.Evolved = true
+			end
+		end
+	else
+		for _, id in ipairs(LevelUpSystem.NewWeapons) do
+			if not rp.Weapons[id] and WeaponData.Weapons[id] then
+				rp.Weapons[id] = { Id = id, Level = WeaponData.MaxLevel, Evolved = false, Timer = 0.3, Live = {}, Growth = 0 }
+				table.insert(rp.WeaponOrder, id)
+			elseif rp.Weapons[id] then
+				rp.Weapons[id].Level = WeaponData.MaxLevel
+			end
+		end
+	end
+	afterChange(rp)
 end
 
 ------------------------------------------------------------------------------------------

@@ -594,6 +594,8 @@ type Entry = {
 	Seen: number,
 	Phase: number,
 	Trail: TrailSlot?,
+	BaseYaw: number?, -- planted models (totem, turret): the yaw they were built with
+	Aim: number?, -- turret: the drawn head yaw, turning toward Yaw
 }
 
 -- Each projectile is a small multi-part model from ModelLibrary, pooled per visual.
@@ -649,8 +651,8 @@ local function releaseProjectile(id: number, silent: boolean?)
 end
 
 -- A new projectile right next to a player = that player threw / cast it.
-local function poseFromSpawn(pos: Vector3, style: string?)
-	if style == nil or style == "Stinger" then
+local function poseFromSpawn(pos: Vector3, style: string?, noPose: boolean?)
+	if style == nil or style == "Stinger" or noPose then
 		return
 	end
 	for _, other in ipairs(Players:GetPlayers()) do
@@ -693,9 +695,9 @@ local function onProjectileBatch(b: buffer)
 			e = nil
 		end
 		if not e then
-			-- low 5 bits = visual index, the rest = cosmetic tier (see WeaponSystem)
-			local visual = raw % 32
-			local tier = raw // 32
+			-- visual index + cosmetic tier in one byte (WeaponData.VisualByte)
+			local visual = WeaponData.VisualIndex(raw)
+			local tier = WeaponData.VisualTier(raw)
 			local def = WeaponData.Visuals[visual] or WeaponData.Visuals[1]
 			if not WeaponData.Visuals[visual] then
 				visual = 1
@@ -722,8 +724,10 @@ local function onProjectileBatch(b: buffer)
 				Born = now,
 				Seen = batchCounter,
 				Trail = trail,
+				BaseYaw = yaw,
+				Aim = yaw,
 			}
-			poseFromSpawn(pos, def.Style)
+			poseFromSpawn(pos, def.Style, def.NoPose)
 		else
 			-- continue from where it is drawn now
 			local alpha = math.clamp(e.T, 0, 1)
@@ -777,6 +781,20 @@ local function projectileRotation(e: Entry, age: number): CFrame
 		return CFrame.Angles(0, e.Heading, 0) * CFrame.Angles(0.3, 0, 0) * CFrame.Angles(0, age * spin, 0)
 	elseif style == "Stinger" then
 		return CFrame.Angles(0, e.Yaw + age * spin, 0)
+	elseif style == "Spear" or style == "Bolt" or style == "Hook" then
+		-- points along its synced yaw (a spear thrusts, a hook's point faces its target)
+		return CFrame.Angles(0, e.Yaw, 0)
+	elseif style == "Shard" then
+		-- spinning ice sliver
+		return CFrame.Angles(0, e.Heading, 0) * CFrame.Angles(0, 0, age * tumble)
+	elseif style == "Soul" then
+		-- skull first, a slow bob and sway
+		return CFrame.new(0, math.sin(age * 5 + e.Phase) * 0.3, 0) * CFrame.Angles(0, e.Heading, 0) * CFrame.Angles(0, 0, math.sin(age * 3 + e.Phase) * 0.25)
+	elseif style == "Totem" or style == "Turret" then
+		-- planted: the base keeps the yaw it was built with (the turret's head aims, see
+		-- renderProjectiles); it rises out of the ground in its first 0.25 s
+		local rise = math.min(1, age / 0.25)
+		return CFrame.new(0, -1.2 * (1 - rise) * (1 - rise), 0) * CFrame.Angles(0, e.BaseYaw or e.Yaw, 0)
 	end
 	return CFrame.Angles(0, e.Yaw + age * spin, 0)
 end
@@ -795,10 +813,24 @@ local function renderProjectiles(dt: number, now: number)
 		local pos = e.From:Lerp(e.To, alpha)
 		e.Drawn = pos
 		local cf = CFrame.new(pos) * projectileRotation(e, now - e.Born)
+		local aim: CFrame? = nil
+		if e.Def.Style == "Turret" then
+			-- the head (pieces animated "Spin") turns toward the synced aim, the base stays put
+			local cur = e.Aim or e.Yaw
+			local diff = ((e.Yaw - cur + math.pi) % TAU) - math.pi
+			cur += diff * math.min(1, dt * 12)
+			e.Aim = cur
+			aim = CFrame.Angles(0, cur - (e.BaseYaw or 0), 0)
+		end
 		for _, piece in ipairs(e.Pieces) do
 			n += 1
 			projParts[n] = piece.Part
-			projCFrames[n] = ModelLibrary.PieceCFrame(cf, piece, spinClock, e.Phase, 1)
+			if aim and piece.Anim == "Spin" then
+				local pv = piece.Pivot or CFrame.identity
+				projCFrames[n] = cf * piece.Offset * pv * aim * pv:Inverse()
+			else
+				projCFrames[n] = ModelLibrary.PieceCFrame(cf, piece, spinClock, e.Phase, 1)
+			end
 		end
 		local trail = e.Trail
 		if trail then
@@ -1480,6 +1512,218 @@ local function onFxBatch(batch)
 			end
 		end
 	end
+end
+
+------------------------------------------------------------------------------------------
+-- Weapon effects (WeaponFx remote, see WeaponSystem): frost nova bursts, Fire Trail
+-- patches, Healing Totem pulses, Chain Hook chains, flak / lance bursts, harvested souls
+------------------------------------------------------------------------------------------
+
+local ICE = P.ice_100
+local ICE_DEEP = P.ice_300
+
+-- Frost Nova: a pale ice ring racing out to the burst's edge, a frosty floor flash and ice
+-- spikes thrown outward (Absolute Zero: a second, brighter ring and more spikes).
+local function nova(x: number, z: number, radius: number, evo: boolean)
+	wave(x, z, radius * 0.15, radius, 0.45 + (evo and 0.15 or 0), ICE, 0.12, 0.34, true)
+	if evo then
+		wave(x, z, radius * 0.1, radius * 0.75, 0.3, FX.Holy, 0.25, 0.42, true)
+	end
+	if room(1, true) then
+		fx("Cylinder", ICE_DEEP, SMOOTH, CFrame.new(x, FLOOR_Y + 0.07, z) * DISC, nil, Vector3.new(0.05, radius * 0.5, radius * 0.5), Vector3.new(0.05, radius * 2, radius * 2), 0.55, 1, 0.32, EASE_OUT)
+	end
+	local spikes = evo and 10 or 7
+	if room(spikes) then
+		local from = Vector3.new(x, FLOOR_Y + 0.6, z)
+		for i = 1, spikes do
+			local a = i * TAU / spikes + math.random() * 0.4
+			local dir = Vector3.new(math.cos(a), 0, math.sin(a))
+			local to = from + dir * radius * (0.65 + math.random() * 0.25) + Vector3.new(0, 0.4, 0)
+			fx("Wedge", i % 2 == 0 and ICE or ICE_DEEP, SMOOTH, CFrame.lookAt(from, from + dir), CFrame.lookAt(to, to + dir), Vector3.new(0.3, 0.5, 1.1), Vector3.new(0.12, 0.2, 0.5), 0.15, 1, 0.3, EASE_OUT)
+		end
+	end
+end
+
+--[[
+	Fire Trail patches: a warm amber disc with a gold rim (never the crimson and dark outline
+	of enemy warnings: these never hurt heroes) and an upright flame (Shot_Fire mesh, or its
+	part-built stand-in) that flickers. Each appears with a short bright ring while it arms
+	and fades at the end of its life.
+]]
+type FirePatch = { Fill: BasePart, Rim: BasePart, Flame: { any }, Visual: number, X: number, Z: number, R: number, Start: number, Life: number, Phase: number }
+local firePatches: { FirePatch } = {}
+local MAX_FIRE_PATCHES = 96
+local FLAME_UP = CFrame.Angles(-math.pi / 2, 0, 0) -- the flame mesh's tail (+Z) points up
+
+local function freeFirePatch(fp: FirePatch)
+	givePart("Cylinder", fp.Fill)
+	givePart("Cylinder", fp.Rim)
+	for _, piece in ipairs(fp.Flame) do
+		piece.Part.CFrame = PARK
+	end
+	local list = projectilePools[fp.Visual]
+	if not list then
+		list = {}
+		projectilePools[fp.Visual] = list
+	end
+	table.insert(list, fp.Flame)
+	fxParts -= 2 + #fp.Flame
+end
+
+local function firePatch(x: number, z: number, radius: number, life: number, evo: boolean)
+	if #firePatches >= MAX_FIRE_PATCHES then
+		freeFirePatch(table.remove(firePatches, 1) :: FirePatch)
+	end
+	if not room(5) then
+		return
+	end
+	local fill = takePart("Cylinder", evo and P.amber_500 or FX.Fire:Lerp(P.crimson_500, 0.15), SMOOTH, Vector3.new(0.05, radius * 1.84, radius * 1.84), 1)
+	fill.CFrame = CFrame.new(x, FLOOR_Y + 0.07, z) * DISC
+	local rim = takePart("Cylinder", evo and P.gold_300 or P.amber_300, SMOOTH, Vector3.new(0.05, radius * 2, radius * 2), 1)
+	rim.CFrame = CFrame.new(x, FLOOR_Y + 0.05, z) * DISC
+	local visual = evo and 38 or 37
+	local flame = getProjectileModel(visual)
+	fxParts += 2 + #flame
+	table.insert(firePatches, { Fill = fill, Rim = rim, Flame = flame, Visual = visual, X = x, Z = z, R = radius, Start = os.clock(), Life = math.max(0.5, life), Phase = math.random() * 6 })
+	wave(x, z, radius * 0.4, radius, 0.22, evo and P.gold_200 or P.gold_300, 0.3, 0.25)
+end
+
+local function stepFirePatches(now: number)
+	for i = #firePatches, 1, -1 do
+		local fp = firePatches[i]
+		local t = now - fp.Start
+		if t >= fp.Life then
+			freeFirePatch(fp)
+			table.remove(firePatches, i)
+		else
+			local appear = math.min(1, t / 0.15)
+			local vis = math.min(appear, math.clamp((fp.Life - t) / 0.4, 0, 1))
+			-- low alpha: the floor stays readable under a long trail
+			fp.Fill.Transparency = 1 - 0.3 * vis
+			fp.Rim.Transparency = 1 - 0.45 * vis
+			local flicker = 1 + math.sin(t * 13 + fp.Phase) * 0.08 + math.sin(t * 7.3 + fp.Phase) * 0.06
+			local h = math.clamp(fp.R / 3.2, 0.8, 1.6) * vis * flicker
+			local cf = CFrame.new(fp.X, FLOOR_Y, fp.Z) * CFrame.Angles(0, t * 0.6 + fp.Phase, 0) * CFrame.new(0, 0.75 * h, 0) * FLAME_UP
+			for _, piece in ipairs(fp.Flame) do
+				bulk(piece.Part, cf * CFrame.new(piece.Offset.Position * h) * piece.Offset.Rotation)
+			end
+		end
+	end
+end
+
+-- Healing Totem pulse: a soft green ring out to the totem's reach (brighter when it healed).
+local function totemPulseFx(x: number, z: number, radius: number, evo: boolean, healed: boolean)
+	local color = evo and FX.Heal:Lerp(FX.Gold, 0.35) or FX.Heal
+	wave(x, z, 1.2, radius, healed and 0.32 or 0.22, color, healed and 0.25 or 0.45, 0.55)
+	if healed then
+		sparkle(Vector3.new(x, FLOOR_Y + 4.2, z), color, 3, 0.6, 1.8, 0.5)
+	end
+end
+
+-- A small gold burst (turret flak) or a crimson-gold one (Dragon Lance tips).
+local function smallBurst(x: number, z: number, radius: number, core: Color3, ringColor: Color3)
+	if room(1) then
+		fx("Ball", core, SMOOTH, CFrame.new(x, FLOOR_Y + 1.2, z), nil, Vector3.one * 0.5, Vector3.one * radius * 0.55, 0.45, 1, 0.16, EASE_OUT)
+	end
+	wave(x, z, radius * 0.2, radius, 0.22, ringColor, 0.3, 0.22)
+end
+
+--[[
+	Chain Hook chains: steel links from the thrower's hand to the hook while it is out. The
+	server sends { userId, projectile id, seq } once; the chain follows that projectile
+	entry until it is gone.
+]]
+type Chain = { UserId: number, Id: number, Seq: number, Born: number, Links: { BasePart } }
+local chains: { [number]: Chain } = {}
+local CHAIN_MAX_LINKS = 30
+
+local function dropChain(id: number)
+	local c = chains[id]
+	if not c then
+		return
+	end
+	for _, link in ipairs(c.Links) do
+		givePart("Block", link)
+	end
+	chains[id] = nil
+end
+
+local function hookChain(userId: number, id: number, seq: number)
+	if type(userId) ~= "number" or type(id) ~= "number" then
+		return
+	end
+	dropChain(id)
+	chains[id] = { UserId = userId, Id = id, Seq = tonumber(seq) or -1, Born = os.clock(), Links = {} }
+end
+
+local function renderChains(now: number)
+	for id, c in pairs(chains) do
+		local e = entries[id]
+		local root = characterRoot(c.UserId)
+		if not e or e.Seq ~= c.Seq or not root then
+			-- not drawn yet (the batches can arrive in either order) or gone
+			if now - c.Born > 0.6 or (e and e.Seq ~= c.Seq) or not root then
+				dropChain(id)
+			end
+		else
+			local to = e.Drawn
+			local from = Vector3.new(root.Position.X, to.Y, root.Position.Z)
+			local d = to - from
+			local len = d.Magnitude
+			local count = math.clamp(math.floor(len / 0.85), 1, CHAIN_MAX_LINKS)
+			local look = len > 0.05 and CFrame.lookAt(from, to) or CFrame.new(from)
+			for k = 1, count do
+				local link = c.Links[k]
+				if not link then
+					link = takePart("Block", e.Visual == 30 and P.crimson_700 or P.steel_600, Enum.Material.Metal, Vector3.new(0.16, 0.34, 0.62), 0)
+					c.Links[k] = link
+				end
+				local along = (k - 0.5) / count * len
+				bulk(link, look * CFrame.new(0, -math.sin(math.pi * (k - 0.5) / count) * 0.25, -along) * CFrame.Angles(0, 0, k % 2 == 0 and math.pi / 2 or 0))
+			end
+			for k = #c.Links, count + 1, -1 do
+				givePart("Block", c.Links[k])
+				c.Links[k] = nil
+			end
+		end
+	end
+end
+
+local function onWeaponFx(batch)
+	if type(batch) ~= "table" then
+		return
+	end
+	local function each(key: string, fn: ({ any }) -> ())
+		local list = batch[key]
+		if type(list) == "table" then
+			for _, v in ipairs(list) do
+				if type(v) == "table" and type(v[1]) == "number" and type(v[2]) == "number" then
+					fn(v)
+				end
+			end
+		end
+	end
+	each("nv", function(v)
+		nova(v[1], v[2], tonumber(v[3]) or 8, v[4] == 1)
+	end)
+	each("fp", function(v)
+		firePatch(v[1], v[2], tonumber(v[3]) or 3, tonumber(v[4]) or 2, v[5] == 1)
+	end)
+	each("tp", function(v)
+		totemPulseFx(v[1], v[2], tonumber(v[3]) or 7, v[4] == 1, v[5] == 1)
+	end)
+	each("hk", function(v)
+		hookChain(v[1], v[2], v[3])
+	end)
+	each("fk", function(v)
+		smallBurst(v[1], v[2], tonumber(v[3]) or 3, FX.Gold, P.amber_300)
+	end)
+	each("lb", function(v)
+		smallBurst(v[1], v[2], tonumber(v[3]) or 4, P.gold_200, P.crimson_300)
+	end)
+	each("sh", function(v)
+		sparkle(Vector3.new(v[1], FLOOR_Y + 1, v[2]), FX.Heal, 4, 0.7, 2.6, 0.5)
+	end)
 end
 
 ------------------------------------------------------------------------------------------
@@ -2329,6 +2573,7 @@ function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
 
 	Remotes.Get("ProjectileBatch").OnClientEvent:Connect(onProjectileBatch)
 	Remotes.Get("FxBatch").OnClientEvent:Connect(onFxBatch)
+	Remotes.Get("WeaponFx").OnClientEvent:Connect(onWeaponFx)
 
 	task.spawn(function()
 		local folder = workspace:WaitForChild("SwarmPickups")
@@ -2352,6 +2597,8 @@ function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
 		stepAnims(now)
 		stepWaves(now)
 		stepPools(now)
+		stepFirePatches(now)
+		renderChains(now)
 		renderPickups(now)
 		renderGems(dt)
 		updateFlashes(now)

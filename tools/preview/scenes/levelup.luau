@@ -2,6 +2,8 @@
 -- described by the game's own data the way LevelUpSystem does it: stat lines with current
 -- → next values, rank, perks and evolution hints).
 --   --set cards=evolve   an evolution card + a weapon upgrade with a perk + a new passive
+--   --set cards=Spear+ChainHook:4+evo:Turret   any cards (weapon id = NEW, id:N = upgrade to
+--                        level N, evo:id = evolution, passive:id[:N] = passive)
 --   --set rerolls=0 --set skips=0 --set rerollsMax=0 --set skipsMax=0   reroll / skip states
 local A = lib("arena")
 local C = lib("common")
@@ -54,7 +56,26 @@ if WeaponData and PassiveData and Config and StatSheet then
 		local label, color = rarity("Rare")
 		return { Type = "WeaponNew", Id = id, Level = 1, Name = def.Name, Rank = "NEW", Lines = WeaponData.CardLines(id, 0, 1), Description = def.Description, Color = def.Color, Rarity = "Rare", RarityLabel = label, RarityColor = color }
 	end
-	if preview.args.cards == "evolve" then
+	local function evolveCard(id)
+		local label, color = rarity("Legendary")
+		local edef = WeaponData.Weapons[id]
+		return { Type = "Evolve", Id = id, Level = WeaponData.MaxLevel, Name = edef.Evolution.Name, Rank = "EVOLUTION", Lines = WeaponData.CardLines(id, WeaponData.MaxLevel, WeaponData.MaxLevel, true), Description = edef.Evolution.Description, Color = edef.Color, Rarity = "Legendary", RarityLabel = label, RarityColor = color }
+	end
+	local list = preview.args.cards
+	if list and (string.find(list, "+", 1, true) or string.find(list, ":", 1, true) or WeaponData.Weapons[list]) then
+		-- any cards: "Spear+HealingTotem:5+evo:FireTrail+passive:Precision" (a weapon id =
+		-- NEW, id:N = upgrade to level N, evo:id = its evolution, passive:id[:N])
+		for item in string.gmatch(list, "[^+]+") do
+			local a, b, c = string.match(item, "^([^:]+):?([^:]*):?([^:]*)$")
+			if a == "evo" and WeaponData.Weapons[b] then
+				table.insert(choices, evolveCard(b))
+			elseif a == "passive" and PassiveData.Passives[b] then
+				table.insert(choices, passiveCard(b, tonumber(c) or 1))
+			elseif WeaponData.Weapons[a] then
+				table.insert(choices, (tonumber(b) and weaponUp(a, tonumber(b)) or weaponNew(a)))
+			end
+		end
+	elseif preview.args.cards == "evolve" then
 		local label, color = rarity("Legendary")
 		local edef = WeaponData.Weapons.Longbow
 		table.insert(choices, { Type = "Evolve", Id = "Longbow", Level = WeaponData.MaxLevel, Name = edef.Evolution.Name, Rank = "EVOLUTION", Lines = WeaponData.CardLines("Longbow", WeaponData.MaxLevel, WeaponData.MaxLevel, true), Description = edef.Evolution.Description, Color = edef.Color, Rarity = "Legendary", RarityLabel = label, RarityColor = color })

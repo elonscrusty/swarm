@@ -550,7 +550,7 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			goal = "Find the portal"
 		end
 	elseif stagePhase == "Boss" then
-		goal, goalColor = "Defeat the Queen", P.crimson_300
+		goal, goalColor = "Defeat the " .. tostring(state:GetAttribute("BossName") or state:GetAttribute("StageBoss") or "Queen"), P.crimson_300
 	elseif stagePhase == "Surge" then
 		local left = state:GetAttribute("SurgeLeft") or 0
 		goal, goalColor = left > 0 and string.format("Survive the surge · %ds", left) or "Survive the surge", P.crimson_300

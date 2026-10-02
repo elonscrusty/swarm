@@ -1,6 +1,6 @@
 --[[
 	PassiveData.lua
-	13 passive items, 3-5 levels each (PassiveData.MaxLevelOf). `Values[level]` is the TOTAL bonus at that level
+	15 passive items, 3-5 levels each (PassiveData.MaxLevelOf). `Values[level]` is the TOTAL bonus at that level
 	(not the increment), so stat calculation is a single lookup.
 
 	Stat keys (summed into the player's stat sheet by LevelUpSystem.RecomputeStats):
@@ -17,6 +17,8 @@
 	  duration       +duration multiplier
 	  growth         +XP multiplier
 	  pierce         +enemies a stopping projectile passes through
+	  critChance     +chance for a hit to crit (an item stat, also used by Precision)
+	  regen          HP per second (an item stat, also used by Renewal)
 ]]
 
 local PassiveData = {}
@@ -38,6 +40,8 @@ PassiveData.Order = {
 	"Candle",
 	"Growth",
 	"Fletching",
+	"Precision",
+	"Renewal",
 }
 
 --[[
@@ -199,6 +203,32 @@ PassiveData.Passives = {
 			{ pierce = 1 },
 			{ pierce = 2 },
 			{ pierce = 3 },
+		},
+	},
+	-- Critical hits for every weapon (crits deal Config.Items.BaseCritDamage, x2; the total
+	-- chance is capped by Config.Items.MaxCritChance). Evolves the Crossbow.
+	Precision = {
+		Id = "Precision",
+		Name = "Precision",
+		Color = Color3.fromRGB(220, 120, 110),
+		Description = "+5% chance per level for any hit to crit (double damage).",
+		Values = {
+			{ critChance = 0.05 },
+			{ critChance = 0.10 },
+			{ critChance = 0.15 },
+		},
+	},
+	-- Slow, steady healing (the same regeneration as the Bandage Roll item). Evolves the
+	-- Healing Totem.
+	Renewal = {
+		Id = "Renewal",
+		Name = "Renewal",
+		Color = Color3.fromRGB(150, 210, 120),
+		Description = "Regenerate health over time.",
+		Values = {
+			{ regen = 0.6 },
+			{ regen = 1.2 },
+			{ regen = 2.0 },
 		},
 	},
 }

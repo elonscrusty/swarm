@@ -23,7 +23,17 @@
 	(swells and blinks faster and faster), Rhino rear-up / lunge / recover, and the
 	Queen's entrance (rises from the ground), crouch before a charge, dizzy stars when
 	stunned, raised claws, glowing raised tail, the dive and burrow (hidden, a dust trail
-	follows her), the roar and the collapse. Floor telegraphs live in Telegraphs.lua.
+	follows her), the roar and the collapse. The rotating bosses have their own poses:
+	the Moth Matriarch flies down from the sky, gathers (wings shaking), lifts and swoops,
+	lands grounded, rears for a gust; the Rhino Warlord rears and slams, sticks his horn in
+	an obstacle (stars), plants his banner (hidden on his back while it stands: body
+	attribute "BannerOut"); the Hive Mother heaves her egg sac and spews.
+	Creatures: a tunnelling Burrower is only its soil ring with a dust trail (the "Mound"
+	piece; hidden once it is out), a Healer glows and swells while it channels, a Nest
+	throbs before mites climb out, a Brood Egg wobbles harder until it hatches. Beetles
+	rallied by a War Banner (body attribute "Rallied") stand on a crimson ring. Nests, the
+	War Banner and Brood Eggs show a small HP bar (body attribute "HPFrac").
+	Floor telegraphs live in Telegraphs.lua.
 ]]
 
 local RunService = game:GetService("RunService")
@@ -68,6 +78,9 @@ type Slot = {
 	Extras: { BasePart }?,
 	DustAt: number,
 	ShieldBroke: number?,
+	HPBar: BillboardGui?,
+	RallyRing: BasePart?,
+	BannerOut: boolean,
 }
 
 type PooledModel = { Pieces: { any }, Motion: string, Scale: number }
@@ -97,7 +110,25 @@ local PLAIN: { [string]: Color3 } = {
 	Bomber = Palette.tick_500,
 	Spitter = Palette.crimson_500:Lerp(Palette.slate_400, 0.5),
 	Boss = Palette.crimson_500,
+	MothBoss = Palette.moth_300,
+	RhinoBoss = Palette.slate_600,
+	HiveBoss = Palette.ivory_300,
+	Burrower = Palette.sand_400,
+	Healer = Palette.ivory_200,
+	Nest = Palette.wood_500,
+	WarBanner = Palette.crimson_500,
+	BroodEgg = Palette.ivory_200,
 }
+
+-- Bosses (always detailed, their own entrance) and things that never get the plain body.
+local function isBoss(typeId: string): boolean
+	local def = EnemyData.Enemies[typeId]
+	return def ~= nil and def.IsBoss == true
+end
+local function alwaysDetailed(typeId: string): boolean
+	local def = EnemyData.Enemies[typeId]
+	return def ~= nil and (def.IsBoss == true or def.Static == true or def.Support ~= nil)
+end
 local ELITE_GOLD = Palette.gold_400
 
 ------------------------------------------------------------------------------------------
@@ -295,6 +326,9 @@ local function track(model: Instance)
 		Tag = nil,
 		Extras = nil,
 		DustAt = 0,
+		HPBar = nil,
+		RallyRing = nil,
+		BannerOut = false,
 	}
 	local slot = slots[id]
 	local function readAct()
@@ -313,6 +347,9 @@ local function track(model: Instance)
 		end
 		slot.ShieldUp = up
 	end
+	body:GetAttributeChangedSignal("BannerOut"):Connect(function()
+		slot.BannerOut = body:GetAttribute("BannerOut") == true
+	end)
 	body:GetAttributeChangedSignal("Act"):Connect(readAct)
 	body:GetAttributeChangedSignal("Affix"):Connect(readAffix)
 	body:GetAttributeChangedSignal("Shield"):Connect(readShield)
@@ -429,7 +466,77 @@ local function actPose(typeId: string, act: string?, t: number, halfH: number, f
 	if not act then
 		return CFrame.identity, 1, false
 	end
-	local boss = typeId == "Boss"
+	-- the rotating bosses and the new creatures first (their own act names)
+	if typeId == "MothBoss" then
+		if act == "Emerge" then
+			-- flies down from high above
+			local u = math.clamp(t / 2.5, 0, 1)
+			local k = (1 - u) ^ 2
+			return CFrame.new(0, k * 38, 0) * CFrame.Angles(-0.3 * k, 0, 0), 1, false
+		elseif act == "Gather" then
+			local u = math.clamp(t / 0.4, 0, 1)
+			return CFrame.new(0, 1.2 * u, 0) * CFrame.Angles(0.12 * u, 0, 0) * tremble(0.1 * u, t), 1, false
+		elseif act == "Lift" then
+			local u = math.clamp(t / 0.6, 0, 1)
+			return CFrame.new(0, 2.6 * u, 0.8 * u) * CFrame.Angles(0.3 * u, 0, 0) * tremble(0.06 * u, t), 1, false
+		elseif act == "Swoop" then
+			return CFrame.new(0, -1.6, 0) * CFrame.Angles(-0.38, 0, 0), 1, false
+		elseif act == "Grounded" then
+			local u = math.clamp(t / 0.3, 0, 1)
+			return CFrame.new(0, -3.0 * u, 0) * CFrame.Angles(-0.1 * u, 0, math.sin(t * 2) * 0.05), 1, false
+		elseif act == "GustWindup" then
+			local u = math.clamp(t / 0.5, 0, 1)
+			return CFrame.new(0, 1.4 * u, 1.0 * u) * CFrame.Angles(0.4 * u, 0, 0) * tremble(0.05 * u, t), 1, false
+		elseif act == "Gust" then
+			return CFrame.new(0, 0.6, -0.8) * CFrame.Angles(-0.3, 0, 0) * tremble(0.08, t), 1, false
+		end
+	elseif typeId == "RhinoBoss" then
+		if act == "Rear" then
+			local u = math.clamp(t / 0.5, 0, 1)
+			return CFrame.new(0, 1.6 * u, 1.2 * u) * CFrame.Angles(0.5 * u, 0, 0) * tremble(0.08 * u, t), 1, false
+		elseif act == "Pound" then
+			local k = math.max(0, 1 - t / 0.5)
+			return CFrame.new(0, -0.5 * k, 0) * CFrame.Angles(-0.14 * k, 0, 0) * tremble(0.25 * k, t), 1, false
+		elseif act == "Stuck" then
+			return CFrame.new(0, -0.6, -0.6) * CFrame.Angles(-0.32, 0, math.sin(t * 7) * 0.05) * tremble(0.05, t), 1, false
+		elseif act == "Plant" then
+			local u = math.clamp(t / 0.5, 0, 1)
+			return CFrame.new(0, 0.6 * u, 0) * CFrame.Angles(0.18 * u, 0, 0.08 * math.sin(t * 6) * u), 1, false
+		end
+	elseif typeId == "HiveBoss" then
+		if act == "Heave" then
+			local u = math.clamp(t / 0.6, 0, 1)
+			return CFrame.new(0, 0.5 * u, 0) * CFrame.Angles(-0.12 * u, 0, 0) * tremble(0.06 * u, t), 1 + 0.06 * u, false
+		elseif act == "Spew" then
+			local u = math.clamp(t / 0.4, 0, 1)
+			return CFrame.new(0, -0.2 * u, -0.3 * u) * CFrame.Angles(-0.16 * u, 0, 0) * tremble(0.08 * u, t), 1, false
+		end
+	elseif typeId == "Burrower" then
+		if act == "Tunnel" then
+			return CFrame.identity, 1, false -- only the soil ring shows (hiddenGroup)
+		elseif act == "Surface" then
+			return tremble(0.12, t), 1, false
+		elseif act == "Popped" then
+			local k = math.max(0, 1 - t / 0.3)
+			return CFrame.new(0, -k * 1.2, 0) * CFrame.Angles(0.3 * k, 0, 0), 1, false
+		end
+	elseif typeId == "Healer" then
+		if act == "Channel" then
+			local u = math.clamp(t / 0.6, 0, 1)
+			return CFrame.new(0, 0.3 * u, 0) * CFrame.Angles(0.2 * u, 0, 0) * tremble(0.03 * u, t), 1 + 0.15 * u, false
+		end
+	elseif typeId == "Nest" then
+		if act == "Pulse" then
+			return tremble(0.04, t), 1 + 0.05 * math.abs(math.sin(t * 9)), false
+		end
+	elseif typeId == "BroodEgg" then
+		if act == "Incubate" then
+			local u = math.clamp(t / 3.5, 0, 1)
+			local amp = 0.04 + 0.22 * u * u
+			return CFrame.Angles(math.sin(t * (8 + 16 * u)) * amp, 0, math.cos(t * (7 + 14 * u)) * amp), 1 + 0.08 * u, false
+		end
+	end
+	local boss = isBoss(typeId)
 	if act == "Windup" then
 		if typeId == "Spitter" then
 			local u = math.clamp(t / 0.7, 0, 1)
@@ -476,6 +583,20 @@ local function actPose(typeId: string, act: string?, t: number, halfH: number, f
 	return CFrame.identity, 1, false
 end
 
+-- Pieces a pose hides: a tunnelling Burrower shows only its soil ring (and loses it once
+-- it is out); the Warlord's banner leaves his back while it is planted.
+local MOUND = ModelLibrary.PieceGroups.Mound
+local BANNER = ModelLibrary.PieceGroups.Banner
+local function pieceHidden(typeId: string, slot: Slot, name: string): boolean
+	if typeId == "Burrower" then
+		local under = slot.Act == "Tunnel" or slot.Act == "Surface"
+		return (MOUND[name] == true) ~= under
+	elseif typeId == "RhinoBoss" then
+		return slot.BannerOut and BANNER[name] == true
+	end
+	return false
+end
+
 local function extraPart(shape: Enum.PartType, size: Vector3, color: Color3, material: Enum.Material): BasePart
 	local p = Instance.new("Part")
 	p.Shape = shape
@@ -513,6 +634,51 @@ local function parkExtras(slot: Slot)
 				p.CFrame = PARK
 			end
 		end
+	end
+end
+
+-- Small HP bar over nests, the War Banner and Brood Eggs (body attribute "HPFrac").
+local function ensureHPBar(slot: Slot): BillboardGui
+	local gui = slot.HPBar
+	if gui then
+		return gui
+	end
+	local g = Instance.new("BillboardGui")
+	g.Name = "HPBar"
+	g.Size = UDim2.fromOffset(64, 9)
+	g.LightInfluence = 0
+	g.MaxDistance = 260
+	g.AlwaysOnTop = false
+	local back = Instance.new("Frame")
+	back.Name = "Back"
+	back.BackgroundColor3 = Palette.slate_950
+	back.BackgroundTransparency = 0.15
+	back.BorderSizePixel = 0
+	back.Size = UDim2.fromScale(1, 1)
+	back.Parent = g
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 3)
+	corner.Parent = back
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.BackgroundColor3 = Palette.crimson_400
+	fill.BorderSizePixel = 0
+	fill.Position = UDim2.fromOffset(1, 1)
+	fill.Size = UDim2.new(1, -2, 1, -2)
+	fill.Parent = back
+	local c2 = Instance.new("UICorner")
+	c2.CornerRadius = UDim.new(0, 2)
+	c2.Parent = fill
+	local player = Players.LocalPlayer
+	local pg = player and player:FindFirstChildOfClass("PlayerGui")
+	g.Parent = pg or modelFolder
+	slot.HPBar = g
+	return g
+end
+
+local function hideHPBar(slot: Slot)
+	if slot.HPBar then
+		slot.HPBar.Enabled = false
 	end
 end
 
@@ -609,19 +775,23 @@ local function step(dt: number)
 				slot.Live = false
 				dropAura(slot)
 				parkExtras(slot)
+				hideHPBar(slot)
+				if slot.RallyRing then
+					slot.RallyRing.CFrame = PARK
+				end
 			end
 		else
 			if not slot.Live then
 				-- a fresh spawn: it climbs out of the ground (the Queen has her own entrance)
 				slot.Live = true
 				slot.SpawnAt = clock
-				if typeId ~= "Boss" then
+				if not isBoss(typeId) and typeId ~= "Burrower" then
 					local r = math.max(body.Size.X, body.Size.Z) / 2
 					Telegraphs.Puff(cf.Position.X, cf.Position.Z, r)
 				end
 			end
 			local elite = body:GetAttribute("Elite") == true
-			if budgeted and not detailed[slot] and typeId ~= "Boss" and not elite then
+			if budgeted and not detailed[slot] and not alwaysDetailed(typeId) and not elite then
 				-- over the detail budget: the plain server body in the creature's colour
 				park(slot)
 				dropHalo(slot)
@@ -659,7 +829,7 @@ local function step(dt: number)
 				local fuse = slot.Act == "Fuse" and fuseSeconds(typeId, slot.Elite == true) or nil
 				local pose, scale, hidden = actPose(typeId, slot.Act, actT, halfH, fuse)
 				local sinceSpawn = clock - slot.SpawnAt
-				if sinceSpawn < EMERGE and typeId ~= "Boss" then
+				if sinceSpawn < EMERGE and not isBoss(typeId) and typeId ~= "Burrower" then
 					local k = 1 - sinceSpawn / EMERGE
 					pose = CFrame.new(0, -k * k * halfH * 2, 0) * pose
 				end
@@ -694,23 +864,36 @@ local function step(dt: number)
 				if hidden then
 					bodyCF = CFrame.new(render.Position.X, -60, render.Position.Z) -- underground
 				end
+				local filtered = typeId == "Burrower" or typeId == "RhinoBoss"
 				for _, piece in ipairs(slot.Pieces) do
 					n += 1
 					partsBuf[n] = piece.Part
-					cframesBuf[n] = scale == 1 and ModelLibrary.PieceCFrame(bodyCF, piece, clock, slot.Phase, slot.Move)
-						or ModelLibrary.PieceCFrameScaled(bodyCF, piece, clock, slot.Phase, slot.Move, scale)
+					if filtered and pieceHidden(typeId, slot, piece.Part.Name) then
+						cframesBuf[n] = PARK
+					else
+						cframesBuf[n] = scale == 1 and ModelLibrary.PieceCFrame(bodyCF, piece, clock, slot.Phase, slot.Move)
+							or ModelLibrary.PieceCFrameScaled(bodyCF, piece, clock, slot.Phase, slot.Move, scale)
+					end
 				end
 
-				-- the Queen: dust trail while she burrows, dizzy stars, glowing raised tail
-				if typeId == "Boss" then
+				-- a tunnelling Burrower leaves a dust trail
+				if typeId == "Burrower" and slot.Act == "Tunnel" and clock >= slot.DustAt then
+					slot.DustAt = clock + 0.09
+					local p = render.Position
+					Telegraphs.Dust(p.X + (math.random() - 0.5) * 1.5, p.Z + (math.random() - 0.5) * 1.5, 1.5)
+				end
+
+				-- bosses: the Queen's dust trail while she burrows, dizzy stars (stunned,
+				-- stuck, grounded), the Queen's glowing raised tail
+				if isBoss(typeId) then
 					local act = slot.Act
-					if (act == "Burrow" or act == "Dive") and clock >= slot.DustAt then
+					if typeId == "Boss" and (act == "Burrow" or act == "Dive") and clock >= slot.DustAt then
 						slot.DustAt = clock + (act == "Burrow" and 0.06 or 0.12)
 						local p = render.Position
 						Telegraphs.Dust(p.X + (math.random() - 0.5) * 3, p.Z + (math.random() - 0.5) * 3, 2.6)
 					end
 					local extras = bossExtras(slot)
-					if act == "Stunned" then
+					if act == "Stunned" or act == "Stuck" or act == "Grounded" then
 						local top = render.Position + Vector3.new(0, halfH + 1.6, 0)
 						for k = 1, 3 do
 							local a = clock * 3.2 + k * math.pi * 2 / 3
@@ -725,7 +908,7 @@ local function step(dt: number)
 							end
 						end
 					end
-					if act == "TailRaise" then
+					if act == "TailRaise" and typeId == "Boss" then
 						local g = extras[4]
 						local u = math.clamp(actT / 0.9, 0, 1)
 						g.Size = Vector3.one * (1.2 + 1.4 * u + 0.3 * math.sin(clock * 18))
@@ -769,6 +952,40 @@ local function step(dt: number)
 					cframesBuf[n] = CFrame.new(p.X, FLOOR_Y + 0.34, p.Z) * DISC -- over the paths, under telegraphs
 				elseif slot.Halo then
 					dropHalo(slot)
+				end
+
+				-- a War Banner's rally: a crimson ring under the rallied beetle (and a
+				-- bigger one at the banner's foot, so the target is easy to spot)
+				local banner = typeId == "WarBanner"
+				if banner or body:GetAttribute("Rallied") == true then
+					local ring = slot.RallyRing
+					if not ring then
+						ring = extraPart(Enum.PartType.Cylinder, Vector3.one, Palette.crimson_400, Enum.Material.SmoothPlastic)
+						slot.RallyRing = ring
+					end
+					local d = banner and 7 or math.max(body.Size.X, body.Size.Z) * 1.2 + 1
+					ring.Size = Vector3.new(0.05, d, d)
+					ring.Color = banner and Palette.gold_400 or Palette.crimson_400
+					ring.Transparency = (banner and 0.3 or 0.45) + 0.15 * math.sin(clock * 6 + slot.Phase)
+					n += 1
+					partsBuf[n] = ring
+					local p = render.Position
+					cframesBuf[n] = CFrame.new(p.X, FLOOR_Y + 0.345, p.Z) * DISC
+				elseif slot.RallyRing and slot.RallyRing.CFrame.Y > ACTIVE_Y then
+					slot.RallyRing.CFrame = PARK
+				end
+
+				-- small HP bar (nests, the War Banner, Brood Eggs)
+				local frac = body:GetAttribute("HPFrac")
+				if type(frac) == "number" then
+					local bar = ensureHPBar(slot)
+					bar.Adornee = body
+					bar.StudsOffsetWorldSpace = Vector3.new(0, (slot.Type == "WarBanner" and 8.5 or halfH + 2.2), 0)
+					local fill = (bar :: any).Back.Fill :: Frame
+					fill.Size = UDim2.new(math.clamp(frac, 0, 1), -2, 1, -2)
+					bar.Enabled = not hidden
+				elseif slot.HPBar and slot.HPBar.Enabled then
+					hideHPBar(slot)
 				end
 			end
 		end

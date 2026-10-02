@@ -1,6 +1,6 @@
 --[[
 	CharacterData.lua
-	The 5 playable characters and their cosmetic skins.
+	The 8 playable characters and their cosmetic skins.
 
 	Character fields:
 	  Role          short tag shown on the character select card (descriptive only)
@@ -13,6 +13,11 @@
 	  SteadyAim     optional { Delay, Damage, OtherDamage }: standing still Delay s gives
 	                +Damage to the Longbow and +OtherDamage to every other weapon
 	                until the hero moves (WeaponSystem; HUD buff chip)
+	  AreaDamage    optional (Alchemist): +damage for weapons with WeaponData Area = true
+	  DeployLife    optional (Engineer): +life for weapons with WeaponData Deployable = true
+	  SoulHarvest   optional (Necromancer) { Chance, Damage, PerLevel, Gap }: a weapon kill
+	                may release a homing soul (Damage + PerLevel x run level, x Might) that
+	                seeks another enemy; at most one every Gap seconds (WeaponSystem)
 	  StartWeapon   weapon id from WeaponData
 	  Bonus         stat bonuses (same keys as PassiveData values) plus:
 	                  damageTaken  -0.1 = take 10% less damage
@@ -39,7 +44,7 @@ local Palette = require(script.Parent.Palette)
 
 local CharacterData = {}
 
-CharacterData.Order = { "Knight", "Mage", "Rogue", "Priest", "Ranger" }
+CharacterData.Order = { "Knight", "Mage", "Rogue", "Priest", "Ranger", "Alchemist", "Engineer", "Necromancer" }
 CharacterData.Default = "Knight"
 
 -- Slots a skin recolours on the hero meshes (everything else on a mesh keeps its own colour).
@@ -184,6 +189,98 @@ CharacterData.Characters = {
 			Skin = Palette.skin_500,
 		},
 		Swatch = "Hat",
+		Hat = "Hood",
+	},
+	--[[
+		The three heroes below are earned through achievements (never sold for gold). Their
+		meshes ("Alchemist", "Engineer", "Necromancer") carry their own headgear; the
+		part-built fallbacks are ModelBuilder.ClassGear + the hat shapes Goggles / Miner / Hood.
+		Colours: the same slots and values as the meshes.
+	]]
+	-- Alchemist: unlocked by "Deep Delver" (reach stage 4).
+	Alchemist = {
+		Id = "Alchemist",
+		Name = "Alchemist",
+		Role = "Fire brewer", -- one-line tag on the character select card
+		Description = "Brews trouble. Starts with the Fire Trail. Fire and area weapons hit 20% harder.",
+		Cost = 0,
+		Unlock = { Achievement = "DeepDelver" },
+		StartWeapon = "FireTrail",
+		Bonus = {},
+		BonusText = "Volatile Mix",
+		Trait = { Name = "Volatile Mix", Text = "+20% damage for burning and area weapons: Fire Trail, Frost Nova, Healing Totem, Holy Water, Garlic Aura, Lightning." },
+		Strengths = "Kites the swarm through a wall of fire; every area weapon burns hotter.",
+		Tradeoff = "Damage stays behind you: standing still or charging in leaves the flames idle.",
+		AreaDamage = 0.20,
+		Colors = {
+			Metal = Palette.leather_500,
+			Cloth = Palette.slate_600,
+			Cloth2 = Palette.slate_800,
+			Accent = Palette.crimson_600,
+			Gold = Palette.gold_500,
+			Hat = Palette.leather_600,
+			HatAccent = Palette.gold_600,
+			Skin = Palette.skin_400,
+		},
+		Swatch = "Cloth",
+		Hat = "Goggles",
+	},
+	-- Engineer: unlocked by "Field Engineer" (3 optional events: Guarded Altars / Bargains).
+	Engineer = {
+		Id = "Engineer",
+		Name = "Engineer",
+		Role = "Turret builder", -- one-line tag on the character select card
+		Description = "Builds what he needs. Starts with the Turret. Turrets and totems last 30% longer.",
+		Cost = 0,
+		Unlock = { Achievement = "FieldEngineer" },
+		StartWeapon = "Turret",
+		Bonus = {},
+		BonusText = "Tinkerer",
+		Trait = { Name = "Tinkerer", Text = "Turrets and Healing Totems last 30% longer." },
+		Strengths = "Turrets hold a spot on their own: shooting while you loot, kite or revive.",
+		Tradeoff = "Turrets stay where they were built: run off and you fight alone; a slow start.",
+		DeployLife = 0.30,
+		Colors = {
+			Metal = Palette.steel_400,
+			MetalDark = Palette.steel_600,
+			Cloth = Palette.slate_500,
+			Cloth2 = Palette.stone_600,
+			Accent = Palette.crimson_500,
+			Gold = Palette.gold_500,
+			Hat = Palette.steel_400,
+			HatAccent = Palette.gold_500,
+			Skin = Palette.skin_500,
+		},
+		Swatch = "Cloth",
+		Hat = "Miner",
+	},
+	-- Necromancer: unlocked by "Reaper" (defeat 500 enemies in one run).
+	Necromancer = {
+		Id = "Necromancer",
+		Name = "Necromancer",
+		Role = "Soul reaper", -- one-line tag on the character select card
+		Description = "Commands the dead. Starts with the Soul Bolt. Kills can release hunting souls.",
+		Cost = 0,
+		Unlock = { Achievement = "Reaper" },
+		StartWeapon = "SoulBolt",
+		Bonus = {},
+		BonusText = "Soul Harvest",
+		Trait = { Name = "Soul Harvest", Text = "Every weapon kill has a 15% chance to release a soul that hunts another enemy." },
+		Strengths = "Homing souls never miss, and big crowds feed a chain of new souls.",
+		Tradeoff = "Slow souls and small hits: tough single targets (elites, the Queen) take long.",
+		SoulHarvest = { Chance = 0.15, Damage = 10, PerLevel = 0.6, Gap = 0.12 },
+		Colors = {
+			Metal = Palette.ivory_300,
+			Cloth = Palette.slate_800,
+			Cloth2 = Palette.slate_700,
+			Accent = Palette.crimson_600,
+			AccentDark = Palette.crimson_800,
+			Gold = Palette.gold_600,
+			Hat = Palette.slate_900,
+			HatAccent = Palette.crimson_600,
+			Skin = Palette.stone_300,
+		},
+		Swatch = "Cloth",
 		Hat = "Hood",
 	},
 }

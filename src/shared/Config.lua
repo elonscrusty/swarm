@@ -37,7 +37,7 @@ Config.Run = {
 ------------------------------------------------------------------------------------------
 -- STAGES (Risk of Rain style loop)
 --   A run is a series of stages. Each stage is an arena (stage 1 = the lobby's arena, then
---   Config.Arenas.Order alternates: Forest, Ruins, Forest ...) with a PORTAL at a random
+--   a shuffled tour of Config.Arenas.Rotation, never the same twice in a row) with a PORTAL at a random
 --   clear spot. Explore while the swarm comes as usual; stand in the portal's rune circle
 --   to charge it (ChargeSeconds); that summons the Scorpion Queen at the portal. When she
 --   dies a SURGE pours out of the portal; survive it and the portal opens: every living
@@ -149,6 +149,9 @@ Config.LevelUp = {
 	WeightUpgradeWeapon = 10,
 	WeightUpgradePassive = 7,
 	WeightNewWeapon = 6,
+	-- the new-weapon weight is shared out as if there were at most this many weapons you
+	-- don't own yet (17 weapons must not crowd out upgrades: same odds as with 9)
+	NewWeaponPoolRef = 8,
 	WeightNewPassive = 5,
 	WeightEvolution = 40, -- an available evolution is almost always offered
 	-- a passive that evolves a weapon you own (and don't have yet) is this much likelier
@@ -346,6 +349,8 @@ Config.Enemies = {
 	MaxLive = 200, -- hard cap on living enemies (must be <= PoolSize)
 	PoolSize = 300, -- enemy models pre-built at server start
 	MaxLiveRanged = 12, -- at most this many Ranged enemies (Spitters) alive; mini-waves never use them
+	MaxLiveSupport = 4, -- at most this many Healers alive (+1 per extra player)
+	MaxLiveBurrowers = 6, -- at most this many Burrowers alive (+2 per extra player)
 	EliteChance = 1 / 80, -- random elites (after Config.Pacing.EliteMinTime); scheduled ones: Pacing
 	EliteSizeMult = 2,
 	EliteHPMult = 5,
@@ -420,10 +425,14 @@ Config.Spawn = {
 -- BOSS
 ------------------------------------------------------------------------------------------
 Config.Boss = {
-	-- Which BossData entry is the stage boss. Attack patterns, timings and the entrance /
+	-- Which BossData entry guards each stage's portal. Stage 1 is always First; later
+	-- stages go through BossData.Rotation (Scorpion Queen, Moth Matriarch, Rhino Warlord,
+	-- Hive Mother) in a shuffled order that visits every boss before any repeats and never
+	-- puts the same boss on two stages in a row. Attack patterns, timings and the entrance /
 	-- collapse live in src/shared/BossData.lua; HP and crowd rules stay here.
-	Id = "ScorpionQueen",
-	HP = 9000, -- x Config.Stages.BossHPByStage[stage]
+	First = "ScorpionQueen",
+	Id = "ScorpionQueen", -- fallback for old callers (BossAI uses the stage's pick)
+	HP = 9000, -- x BossData HPMult x Config.Stages.BossHPByStage[stage]
 	HPPerExtraPlayer = 0.6, -- x(1 + this * (players - 1))
 	ClearMinionsOnSpawn = true, -- normal enemies vanish when the boss arrives
 	MinionCapDuringBoss = 60, -- regular spawning keeps this many alive during the fight
@@ -457,6 +466,22 @@ Config.Pacing = {
 	EliteEvery = 165,
 	EliteMinTime = 60,
 	EliteTypes = { "Slime", "Skeleton", "Brute", "Ghost", "Spitter" }, -- scheduled elites (never a bomb tick)
+	-- smaller intro groups for the later creatures (Healer from 6:00, Burrower from 7:00
+	-- in EnemyData.SpawnTable)
+	IntroGroupOf = { Healer = 2, Burrower = 2 },
+	-- Nests (EnemyData.Nest): stationary spawners on later stages / late in stage 1. The
+	-- first one comes FirstStageTime seconds into a stage (stage 1: not before
+	-- Stage1RunTime of run time), then every Every seconds, at most PerStage (+1 from
+	-- stage 3) per stage and MaxAlive at once, Distance studs from a living player.
+	-- Only while exploring (never during the boss fight or the surge).
+	Nests = {
+		Stage1RunTime = 360,
+		FirstStageTime = 50,
+		Every = 70,
+		PerStage = 2,
+		MaxAlive = 2,
+		Distance = { 30, 46 },
+	},
 }
 
 ------------------------------------------------------------------------------------------
@@ -644,6 +669,15 @@ Config.Sounds = {
 	BossRoar = { Id = "rbxasset://sounds/Launching rocket.wav", Volume = 0.9, Category = "Boss", MinGap = 1, PitchVar = 0.04 },
 	BossWarn = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.45, Category = "Boss", MinGap = 0.4, Pitch = 0.7, PitchVar = 0.04, World = true },
 	BossSummon = { Id = "rbxasset://sounds/splat.wav", Volume = 0.45, Category = "Boss", MinGap = 0.4, Pitch = 0.6, PitchVar = 0.05, World = true },
+	-- the rotating bosses (Telegraphs plays these for their new warning shapes)
+	BossWave = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.5, Category = "Boss", MinGap = 0.5, Pitch = 0.55, PitchVar = 0.04, World = true },
+	BossGust = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.5, Category = "Boss", MinGap = 0.5, Pitch = 0.42, PitchVar = 0.03, World = true },
+	BossPound = { Id = "rbxasset://sounds/collide.wav", Volume = 0.6, Category = "Boss", MinGap = 0.3, Pitch = 0.6, PitchVar = 0.04, World = true },
+	BossMine = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.25, Category = "Warning", MinGap = 0.15, Pitch = 1.8, PitchVar = 0.1, World = true },
+	BossEmerge = { Id = "rbxasset://sounds/splat.wav", Volume = 0.4, Category = "Boss", MinGap = 0.4, Pitch = 0.45, PitchVar = 0.05, World = true },
+	BossBanner = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.5, Category = "Boss", MinGap = 0.5, Pitch = 0.6, PitchVar = 0.03, World = true },
+	BurrowWarn = { Id = "rbxasset://sounds/splat.wav", Volume = 0.3, Category = "Warning", MinGap = 0.25, Pitch = 0.7, PitchVar = 0.08, World = true },
+	HealPulse = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.2, Category = "Combat", MinGap = 0.3, Pitch = 0.75, PitchVar = 0.05, World = true },
 	-- interface
 	Click = { Id = "rbxasset://sounds/button.wav", Volume = 0.45, Category = "UI", MinGap = 0.05, PitchVar = 0 },
 	Toggle = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Category = "UI", MinGap = 0.05, Pitch = 1.25, PitchVar = 0 },
@@ -755,15 +789,46 @@ Config.UI = {
 -- ARENAS AND LOBBY
 ------------------------------------------------------------------------------------------
 Config.Arenas = {
-	Order = { "Forest", "Ruins" },
+	-- Lobby picker order (the ARENA card cycles through the unlocked ones).
+	Order = { "Forest", "Ruins", "Swamp", "Snow", "Desert", "Lava" },
+	-- Stage runs: stage 1 is the lobby's arena, later stages tour Rotation (shuffled per
+	-- run when ShuffleRotation; when the tour runs out it reshuffles every arena). Never
+	-- the same arena twice in a row.
+	Rotation = { "Ruins", "Swamp", "Snow", "Desert", "Lava" },
+	ShuffleRotation = true,
 	-- RequiredBestStage: the arena can be picked in the lobby once the player has reached
 	-- this stage in a run (Stats.BestStage). Stage runs visit every arena regardless.
-	Forest = { DisplayName = "Forest", RequiredBestStage = 0 },
-	Ruins = { DisplayName = "Ruins", RequiredBestStage = 2 },
+	-- Hint: the lobby ARENA card subtitle for the picked arena.
+	Forest = { DisplayName = "Forest", RequiredBestStage = 0, Hint = "A mossy clearing" },
+	Ruins = { DisplayName = "Ruins", RequiredBestStage = 2, Hint = "Sunlit old stones" },
+	Swamp = { DisplayName = "Swamp", RequiredBestStage = 3, Hint = "Mud pools slow you" },
+	Snow = { DisplayName = "Snow", RequiredBestStage = 4, Hint = "Ice ponds are slippery" },
+	Desert = { DisplayName = "Desert", RequiredBestStage = 5, Hint = "Beware the quicksand" },
+	Lava = { DisplayName = "Lava", RequiredBestStage = 6, Hint = "Lava pools burn" },
 	Size = 400, -- square arena, centred on ArenaOrigin
 	ClearRadius = 40, -- nothing collidable this close to the centre (player spawn)
 	-- Layouts (landmarks, groves, paths) are designed in MapBuilder with a fixed seed per
 	-- arena; obstacle coverage is kept close to the old builder (see MapBuilder header).
+
+	-- Biome floor hazards (server-authoritative, src/server/Modules/BiomeHazards.lua):
+	-- fixed pools in the designed layouts, shown by their own meshes (lava also glows),
+	-- never in the spawn clearing and never under the portal or the loot. A player is in
+	-- a pool while their root is within its radius. Flyers and bosses ignore all of them.
+	Hazards = {
+		CheckInterval = 0.1, -- seconds between checks
+		-- Swamp: mud slows players and walking enemies
+		Mud = { PlayerSpeed = 0.65, EnemySpeed = 0.65 },
+		-- Desert: quicksand slows harder
+		Quicksand = { PlayerSpeed = 0.55, EnemySpeed = 0.55 },
+		-- Snow: frozen ponds are slippery: faster, but turning and stopping drift (the
+		-- client smooths the move input with this time constant); enemies keep their footing
+		Ice = { PlayerSpeed = 1.2, DriftSeconds = 0.35 },
+		-- Lava: burns players (Damage before armor, every Tick seconds, the first tick
+		-- Grace seconds after stepping in; respects invulnerability); enemies are at home
+		Lava = { Damage = 6, Tick = 0.5, Grace = 0.25 },
+		-- the portal and the loot keep at least this much floor from a pool's edge
+		LootPad = 4,
+	},
 }
 
 -- Run modes, picked with the big SOLO / DUO / TRIO buttons on the lobby screen.

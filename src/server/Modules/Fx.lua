@@ -93,13 +93,22 @@ end
 	Warnings: every telegraph / hazard visual is ONE entry sent once (the client animates
 	it from its start time); the id lets the server cancel it early (Fx.ClearWarn).
 	kind and its fields (all positions are floor x, z; seconds = how long it shows):
-	  "circle"  x, z, radius, seconds, style ("venom" | "acid" | "blast" | "burrow")
+	  "circle"  x, z, radius, seconds, style ("venom" | "acid" | "blast" | "burrow" | "pulse"
+	            | "hatch" (a Brood Egg's timer, no damage) | "nest" (mites about to climb out))
 	  "lane"    x, z (lane centre), yaw, length, width, seconds
 	  "spokes"  x, z, innerRadius, length, seconds, { angle, ... } (stinger lanes; gaps = safe)
-	  "glob"    x1, z1, x2, z2, seconds (flight), arc height
+	  "glob"    x1, z1, x2, z2, seconds (flight), arc height, style (nil = acid | "egg")
 	  "egg"     x, z, seconds (a summon egg that cracks at the end)
-	  "patch"   x, z, radius, arm, life (an elite's fire patch)
-	  "pop"     x, z, radius, style (impact burst: "acid" | "venom" | "burrow" | "dust" | "shield")
+	  "emerge"  x, z, seconds (soil cracks open: a summon climbs out at the end)
+	  "patch"   x, z, radius, arm, life, style ("fire" | "acid")
+	  "band"    x, z, inner, outer, seconds (a ground-pound ring band that fills outward)
+	  "wave"    x, z, startRadius, delay, speed, maxRadius, width, gapAngle, gapHalf (a ring
+	            rolling outward after delay with one safe gap; the gap lane shows meanwhile)
+	  "mine"    x, z, radius, seconds, fromX, fromZ (a glimmer mote drifting down, blinking)
+	  "gust"    x, z, yaw, length, halfAngle, seconds, blow (a wind cone; pushes, no damage)
+	  "aura"    x, z, radius, seconds (the War Banner's rally zone while it stands)
+	  "pop"     x, z, radius, style (impact burst: "acid" | "venom" | "burrow" | "dust" |
+	            "shield" | "pound" | "glimmer" | "gust" | "heal" | "slam" | "hatch"), inner
 	Returns the id.
 ]]
 function Fx.Warn(kind: string, ...: any): number

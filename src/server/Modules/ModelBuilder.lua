@@ -198,6 +198,23 @@ ModelBuilder.HatShapes = {
 			hatPart(head, model, { Name = "Tail", Size = Vector3.new(0.16, 0.06, 1.1), Color = accent }, CFrame.new(s * 0.22, -0.48, 1.3) * CFrame.Angles(math.rad(-10), math.rad(s * 12), 0))
 		end
 	end,
+	-- the Alchemist's leather cap with brass goggles pushed up on the forehead
+	Goggles = function(head, model, color, accent)
+		hatPart(head, model, { Name = "Cap", Shape = Enum.PartType.Ball, Size = Vector3.new(1.85, 1.2, 1.8), Color = color, CastShadow = true }, CFrame.new(0, -0.12, 0.04))
+		hatPart(head, model, { Name = "GoggleStrap", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.16, 1.86, 1.86), Color = DARK }, CFrame.new(0, -0.32, 0) * UP)
+		for _, x in ipairs({ -0.34, 0.34 }) do
+			hatPart(head, model, { Name = "Goggles", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.18, 0.56, 0.56), Color = accent, Material = METAL }, CFrame.new(x, -0.3, -0.86) * CFrame.Angles(0, math.rad(90), 0))
+			hatPart(head, model, { Name = "GoggleLens", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, 0.42, 0.42), Color = Palette.amber_300 }, CFrame.new(x, -0.3, -0.96) * CFrame.Angles(0, math.rad(90), 0))
+		end
+	end,
+	-- the Engineer's steel helmet with a gold ridge and a lamp
+	Miner = function(head, model, color, accent)
+		hatPart(head, model, { Name = "Helm", Shape = Enum.PartType.Ball, Size = Vector3.new(2.0, 1.25, 2.0), Color = color, Material = METAL, CastShadow = true }, CFrame.new(0, -0.22, 0))
+		hatPart(head, model, { Name = "HelmBrim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 2.3, 2.3), Color = color, Material = METAL }, CFrame.new(0, -0.58, 0) * UP)
+		hatPart(head, model, { Name = "HelmTrim", Size = Vector3.new(0.3, 0.3, 1.85), Color = accent, Material = METAL }, CFrame.new(0, 0.32, 0))
+		hatPart(head, model, { Name = "HelmLamp", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.36, 0.56, 0.56), Color = accent, Material = METAL }, CFrame.new(0, -0.18, -0.98) * CFrame.Angles(0, math.rad(90), 0))
+		hatPart(head, model, { Name = "HelmLight", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, 0.42, 0.42), Color = Palette.fx_gold, Material = Enum.Material.Neon }, CFrame.new(0, -0.18, -1.17) * CFrame.Angles(0, math.rad(90), 0))
+	end,
 	Cap = function(head, model, color, accent)
 		hatPart(head, model, { Name = "Cap", Shape = Enum.PartType.Ball, Size = Vector3.new(1.78, 1.0, 1.9), Color = color, CastShadow = true }, CFrame.new(0, -0.05, 0.12))
 		hatPart(head, model, { Name = "CapTip", Wedge = true, Size = Vector3.new(0.5, 0.45, 0.9), Color = color }, CFrame.new(0, 0.3, 0.85))
@@ -299,6 +316,8 @@ end
 type Rig = { Model: Model, Torso: BasePart, Head: BasePart, LeftArm: BasePart, RightArm: BasePart, LeftLeg: BasePart, RightLeg: BasePart }
 
 local LEATHER = Palette.leather_600
+-- heroes whose part-built fallback wears leather gloves
+local GLOVED = { Rogue = true, Ranger = true, Alchemist = true, Engineer = true }
 local WOOD = Palette.wood_500
 local BLADE = Palette.steel_300
 
@@ -383,6 +402,60 @@ ModelBuilder.ClassGear = {
 			gear(la, rig.Model, { Name = "BowTip", Size = Vector3.new(0.16, 0.2, 0.16), Color = c.Gold, Material = METAL }, grip * CFrame.new(0, sign * 1.5, 0.53))
 		end
 		gear(la, rig.Model, { Name = "BowString", Size = Vector3.new(0.04, 2.95, 0.04), Color = Palette.ivory_100 }, grip * CFrame.new(0, 0, 0.55))
+	end,
+	-- Alchemist: long slate coat, leather apron, crimson cravat, a bandolier of glowing
+	-- flasks across the chest and a flask in the right hand. Fallback for the "Alchemist" mesh.
+	Alchemist = function(rig: Rig, c)
+		robe(rig, c, 2.45)
+		gear(rig.Torso, rig.Model, { Name = "Apron", Size = Vector3.new(1.3, 2.7, 0.1), Color = c.Metal }, CFrame.new(0, -1.3, -0.8))
+		gear(rig.Torso, rig.Model, { Name = "Cravat", Size = Vector3.new(0.45, 0.8, 0.12), Color = c.Accent }, CFrame.new(0, 0.72, -0.76))
+		gear(rig.Torso, rig.Model, { Name = "Bandolier", Size = Vector3.new(0.24, 3.0, 0.1), Color = LEATHER }, CFrame.new(0, 0.05, -0.76) * CFrame.Angles(0, 0, math.rad(38)))
+		for i, t in ipairs({ -0.75, 0, 0.75 }) do
+			local at = CFrame.new(-0.62 * t, 0.05 + 0.79 * t, -0.86)
+			gear(rig.Torso, rig.Model, { Name = "Flask", Shape = Enum.PartType.Ball, Size = Vector3.new(0.4, 0.4, 0.4), Color = i == 2 and Palette.fx_arcane or Palette.fx_heal, Material = Enum.Material.Neon }, at)
+			gear(rig.Torso, rig.Model, { Name = "FlaskCap", Size = Vector3.new(0.18, 0.12, 0.18), Color = c.Gold, Material = METAL }, at * CFrame.new(0, 0.24, 0))
+		end
+		local ra = rig.RightArm
+		gear(ra, rig.Model, { Name = "HeldFlask", Shape = Enum.PartType.Ball, Size = Vector3.new(0.8, 0.85, 0.8), Color = Palette.ivory_100, Transparency = 0.4 }, CFrame.new(0.1, -1.25, -0.5))
+		gear(ra, rig.Model, { Name = "HeldPotion", Shape = Enum.PartType.Ball, Size = Vector3.new(0.6, 0.5, 0.6), Color = Palette.fx_heal, Material = Enum.Material.Neon }, CFrame.new(0.1, -1.38, -0.5))
+		gear(ra, rig.Model, { Name = "HeldFlaskCap", Size = Vector3.new(0.26, 0.18, 0.26), Color = c.Gold, Material = METAL }, CFrame.new(0.1, -0.78, -0.5))
+	end,
+	-- Engineer: steel pauldrons with gold trim, crimson kerchief, a red beard, a tool pack
+	-- with a pipe on the back, a belt of gears and a big wrench in the right hand.
+	Engineer = function(rig: Rig, c)
+		for _, arm in ipairs({ rig.LeftArm, rig.RightArm }) do
+			local s = arm.Position.X < 0 and -1 or 1
+			gear(arm, rig.Model, { Name = "Pauldron", Shape = Enum.PartType.Ball, Size = Vector3.new(1.3, 0.8, 1.2), Color = c.Metal, Material = METAL, CastShadow = true }, CFrame.new(s * 0.05, 0.8, 0))
+			gear(arm, rig.Model, { Name = "PadTrim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 1.3, 1.25), Color = c.Gold, Material = METAL }, CFrame.new(s * 0.05, 0.48, 0) * UP)
+		end
+		gear(rig.Torso, rig.Model, { Name = "Kerchief", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 2.2, 1.6), Color = c.Accent }, CFrame.new(0, 1.05, 0) * UP)
+		gear(rig.Head, rig.Model, { Name = "FaceBeard", Wedge = true, Size = Vector3.new(1.3, 1.1, 0.55), Color = Palette.clay_500 }, CFrame.new(0, -0.85, -0.62) * CFrame.Angles(0, 0, math.rad(180)))
+		gear(rig.Torso, rig.Model, { Name = "Pack", Size = Vector3.new(1.1, 1.8, 0.9), Color = c.Metal, Material = METAL, CastShadow = true }, CFrame.new(0, 0.2, 1.05))
+		gear(rig.Torso, rig.Model, { Name = "PackPipe", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.9, 0.34, 0.34), Color = c.MetalDark, Material = METAL }, CFrame.new(0.36, 1.25, 1.2) * UP)
+		for _, x in ipairs({ -0.7, 0.75 }) do
+			gear(rig.Torso, rig.Model, { Name = "Gear", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.14, 0.55, 0.55), Color = c.Gold, Material = METAL }, CFrame.new(x, -0.95, -0.78) * CFrame.Angles(0, math.rad(90), 0))
+		end
+		local ra = rig.RightArm
+		gear(ra, rig.Model, { Name = "WrenchGrip", Size = Vector3.new(0.3, 0.7, 0.3), Color = c.Accent }, CFrame.new(0.1, -1.05, -0.2))
+		gear(ra, rig.Model, { Name = "Wrench", Size = Vector3.new(0.26, 0.3, 2.4), Color = BLADE, Material = METAL, CastShadow = true }, CFrame.new(0.15, -1.25, -1.4))
+		gear(ra, rig.Model, { Name = "WrenchJaw", Size = Vector3.new(0.3, 0.75, 0.5), Color = BLADE, Material = METAL }, CFrame.new(0.15, -1.25, -2.6))
+		gear(ra, rig.Model, { Name = "WrenchGear", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 0.5, 0.5), Color = c.Gold, Material = METAL }, CFrame.new(0.32, -1.25, -1.6))
+	end,
+	-- Necromancer: dark robe with a crimson front, a bone collar, a bone mask with glowing
+	-- eyes under the hood and a bone staff topped with a small skull.
+	Necromancer = function(rig: Rig, c)
+		robe(rig, c, 2.7)
+		gear(rig.Torso, rig.Model, { Name = "RobeFront", Size = Vector3.new(0.85, 2.3, 0.12), Color = c.Accent }, CFrame.new(0, -2.05, -1.16))
+		gear(rig.Torso, rig.Model, { Name = "BoneCollar", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.5, 2.3, 2.0), Color = c.Metal, CastShadow = true }, CFrame.new(0, 1.15, 0.15) * UP)
+		gear(rig.Head, rig.Model, { Name = "FaceMask", Size = Vector3.new(1.3, 1.05, 0.2), Color = Palette.ivory_200 }, CFrame.new(0, 0, -0.7))
+		gear(rig.Head, rig.Model, { Name = "FaceGlow", Size = Vector3.new(0.7, 0.14, 0.08), Color = Palette.fx_heal, Material = Enum.Material.Neon }, CFrame.new(0, 0.07, -0.82))
+		for _, arm in ipairs({ rig.LeftArm, rig.RightArm }) do
+			gear(arm, rig.Model, { Name = "Ribs", Size = Vector3.new(0.8, 0.55, 0.8), Color = c.Metal }, CFrame.new(0, 0.75, 0))
+		end
+		local ra = rig.RightArm
+		gear(ra, rig.Model, { Name = "Staff", Shape = Enum.PartType.Cylinder, Size = Vector3.new(5.2, 0.26, 0.26), Color = Palette.ivory_300 }, CFrame.new(0.15, 0.3, -0.35) * UP)
+		gear(ra, rig.Model, { Name = "StaffSkull", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), Color = Palette.ivory_200 }, CFrame.new(0.15, 2.95, -0.4))
+		gear(ra, rig.Model, { Name = "StaffCore", Shape = Enum.PartType.Ball, Size = Vector3.new(0.3, 0.3, 0.3), Color = Palette.fx_heal, Material = Enum.Material.Neon }, CFrame.new(0.15, 3.35, -0.4))
 	end,
 }
 
@@ -540,7 +613,7 @@ function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts:
 	end
 	for _, arm in ipairs({ leftArm, rightArm }) do
 		local s = arm.Position.X < 0 and -1 or 1
-		gear(arm, model, { Name = "Hand", Size = Vector3.new(0.58, 0.56, 0.6), Color = armour and c.Metal or ((characterId == "Rogue" or characterId == "Ranger") and LEATHER or c.Skin), Material = armour and METAL or nil }, CFrame.new(s * 0.07, -0.93, -0.04))
+		gear(arm, model, { Name = "Hand", Size = Vector3.new(0.58, 0.56, 0.6), Color = armour and c.Metal or (GLOVED[characterId] and LEATHER or c.Skin), Material = armour and METAL or nil }, CFrame.new(s * 0.07, -0.93, -0.04))
 	end
 	for _, leg in ipairs({ leftLeg, rightLeg }) do
 		gear(leg, model, { Name = "Boot", Size = Vector3.new(0.84, 0.5, 1.15), Color = armour and c.Metal or LEATHER, Material = armour and METAL or nil }, CFrame.new(0, -1.0, -0.14))

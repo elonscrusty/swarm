@@ -1,28 +1,36 @@
 --[[
 	BossAI.lua
-	Runs a boss encounter described in src/shared/BossData.lua (the Scorpion Queen). Called
-	every frame by EnemyAI for the boss record (after think() picked her target); started by
-	EnemySpawner.SpawnBoss (Begin) and ended by EnemySpawner.Damage (StartCollapse).
+	Runs a boss encounter described in src/shared/BossData.lua: the Scorpion Queen, the
+	Moth Matriarch, the Rhino Warlord and the Hive Mother. Called every frame by EnemyAI
+	for the boss record (after think() picked its target); started by
+	EnemySpawner.SpawnBoss (Begin, with the stage's BossData entry) and ended by
+	EnemySpawner.Damage (StartCollapse).
 
-	Flow: Entrance (rises out of the ground, invulnerable and harmless, then Grace seconds
-	of walking without attacks) → Chase → attack from the phase's Cycle → its recovery →
-	Chase → ... Crossing a phase's HP share queues the next phase: at the next Chase she
-	roars (banner, boss bar marker) and the new phase's speed and twist apply.
-	Defeat: Collapse seconds (every boss hazard, telegraph and stinger removed at once,
-	no slow motion), then EnemySpawner.Kill pays the rewards and the surge begins.
+	Flow: Entrance (rises out of the ground / flies down, invulnerable and harmless, then
+	Grace seconds of walking without attacks) → Chase → attack from the phase's Cycle → its
+	recovery → Chase → ... Crossing a phase's HP share queues the next phase: at the next
+	Chase the boss roars (banner, boss bar marker) and the new phase's speed and twist apply.
+	Defeat: Collapse seconds (every boss hazard, telegraph, stinger, banner and egg removed
+	at once, no slow motion), then EnemySpawner.Kill pays the rewards and the surge begins.
 
-	Her current pose is the body attribute "Act" (client poses + effects): Emerge, Windup,
-	Charge, Stunned, Claws, TailRaise, Dive, Burrow, Summon, Roar, Collapse.
+	The current pose is the body attribute "Act" (client poses + effects):
+	  every boss   Emerge, Roar, Collapse, Summon
+	  Queen        Windup, Charge, Stunned, Claws, TailRaise, Dive, Burrow
+	  Matriarch    Gather (storm / mines), Lift + Swoop + Grounded (dive), GustWindup + Gust
+	  Warlord      Windup + Charge (+ Stuck in an obstacle), Rear + Pound, Plant
+	  Hive Mother  Heave (egg barrage), Spew (acid pools)
+	Body attribute "BannerOut" = the Warlord's banner is planted (hidden on his back).
 	SwarmState attributes for the HUD: BossName, BossPhase, BossPhaseAt, BossIntro.
-	Every attack only hits through its telegraph: lanes (charge), filling circles (venom,
-	burrow) and spokes with gaps (stinger ring); targets are living players only, so deaths,
-	revives and players leaving never leave her aiming at nobody.
+	Every attack only hits through its telegraph (lanes, filling circles, spokes, ring
+	bands, a rolling wave with a gap, mines); targets are living players only, so deaths,
+	revives and players leaving never leave a boss aiming at nobody.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local BossData = require(ReplicatedStorage.Shared.BossData)
+local EnemyData = require(ReplicatedStorage.Shared.EnemyData)
 local Fx = require(script.Parent.Fx)
 local Hazards = require(script.Parent.Hazards)
 
@@ -34,6 +42,7 @@ local FLAT = Vector3.new(1, 0, 1)
 local TAU = math.pi * 2
 local GROUP = "Boss"
 local STINGER_VISUAL = 7 -- WeaponData.Visuals index of the boss stinger
+local clock = 0 -- boss time (only runs while the run simulates)
 
 ------------------------------------------------------------------------------------------
 -- Helpers
@@ -48,18 +57,18 @@ local function setState(e, name: string, seconds: number)
 	e.BossTimer = seconds
 end
 
+local function valid(rp): boolean
+	return rp ~= nil and rp.Alive and rp.Root ~= nil and rp.Root.Parent ~= nil and not rp.Returned
+end
+
 local function living(): { any }
 	local out = {}
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
-		if rp.Alive and rp.Root and not rp.Returned then
+		if valid(rp) then
 			table.insert(out, rp)
 		end
 	end
 	return out
-end
-
-local function valid(rp): boolean
-	return rp ~= nil and rp.Alive and rp.Root ~= nil and not rp.Returned
 end
 
 local function floorPos(rp): Vector3
@@ -82,6 +91,10 @@ local function phase(e)
 	return e.BossData.Phases[e.PhaseIndex] or e.BossData.Phases[1]
 end
 
+local function twist(e): string?
+	return phase(e).Twist
+end
+
 -- Chase / recovery times shrink in faster phases; telegraph times never do.
 local function paced(e, seconds: number): number
 	return seconds / (phase(e).Speed or 1)
@@ -95,8 +108,8 @@ local function addWarn(e, id: number)
 	table.insert(e.BossWarns, id)
 end
 
-local function clamp(pos: Vector3): Vector3
-	local x, z = ctx.EnemySpawner.ClampToArena(pos.X, pos.Z, 4)
+local function clamp(pos: Vector3, margin: number?): Vector3
+	local x, z = ctx.EnemySpawner.ClampToArena(pos.X, pos.Z, margin or 4)
 	return Vector3.new(x, Config.ArenaOrigin.Y, z)
 end
 
@@ -112,9 +125,10 @@ local function chase(e, seconds: number)
 	setState(e, "Chase", seconds)
 end
 
-local function stunned(e, seconds: number)
-	setAct(e, "Stunned")
-	e.Harmless = true -- dizzy: walking into her is safe, hitting her is free
+-- dizzy / stuck / grounded: walking into the boss is safe, hitting it is free
+local function stunned(e, seconds: number, act: string?)
+	setAct(e, act or "Stunned")
+	e.Harmless = true
 	e.SpeedOverride = 0
 	setState(e, "Recover", seconds)
 end
@@ -124,24 +138,181 @@ local function recover(e, seconds: number)
 	setState(e, "Recover", seconds)
 end
 
+local function partySize(): number
+	return math.max(1, #living())
+end
+
+-- Unit floor direction from the boss to the nearest player (or its facing).
+local function aimDir(e): Vector3
+	local target = nearest(e.Pos)
+	local dir = target and ((target.Root.Position - e.Pos) * FLAT) or e.Dir
+	return (dir and dir.Magnitude > 0.1) and dir.Unit or Vector3.new(0, 0, 1)
+end
+
+-- Objects the boss made (War Banner, Brood Eggs): tracked by uid (pool slots are reused).
+local function trackObject(e, o)
+	o.Owner = e
+	e.BossObjects = e.BossObjects or {}
+	table.insert(e.BossObjects, { o, o.Uid })
+end
+
+local function liveObjects(e, typeId: string?): number
+	local list = e.BossObjects
+	if not list then
+		return 0
+	end
+	local n = 0
+	for i = #list, 1, -1 do
+		local o, uid = list[i][1], list[i][2]
+		if not (o.Alive and o.Uid == uid) then
+			table.remove(list, i)
+		elseif typeId == nil or o.Type == typeId then
+			n += 1
+		end
+	end
+	return n
+end
+
+local function clearObjects(e)
+	local list = e and e.BossObjects
+	if not list then
+		return
+	end
+	e.BossObjects = nil
+	for _, item in ipairs(list) do
+		local o, uid = item[1], item[2]
+		if o.Alive and o.Uid == uid then
+			ctx.EnemySpawner.Despawn(o)
+		end
+	end
+end
+
+-- A free floor spot around `centre` at distance `dist` (tries several angles).
+local function freeSpot(centre: Vector3, dist: number, radius: number, angle: number?): Vector3?
+	local a0 = angle or rng:NextNumber(0, TAU)
+	for k = 0, 7 do
+		local a = a0 + k * TAU / 8 * ((k % 2 == 0) and 1 or -1) * 0.5
+		local p = clamp(centre + Vector3.new(math.cos(a) * dist, 0, math.sin(a) * dist), 6)
+		if not ctx.EnemyAI.IsBlocked(p.X, p.Z, radius) then
+			return p
+		end
+	end
+	return nil
+end
+
+-- Spots near the players: one close to each (offset minOff..maxOff), the rest around
+-- random players (near..far), at least `apart` from each other.
+local function spotsNearPlayers(n: number, minOff: number, maxOff: number, near: number, far: number, apart: number): { Vector3 }
+	local players = living()
+	local spots: { Vector3 } = {}
+	if #players == 0 then
+		return spots
+	end
+	local function free(p: Vector3): boolean
+		for _, q in ipairs(spots) do
+			if ((p - q) * FLAT).Magnitude < apart then
+				return false
+			end
+		end
+		return true
+	end
+	for _, rp in ipairs(players) do
+		local a, d = rng:NextNumber(0, TAU), rng:NextNumber(minOff, maxOff)
+		local p = clamp(floorPos(rp) + Vector3.new(math.cos(a) * d, 0, math.sin(a) * d))
+		if free(p) and #spots < n then
+			table.insert(spots, p)
+		end
+	end
+	for _ = 1, 50 do
+		if #spots >= n then
+			break
+		end
+		local rp = players[rng:NextInteger(1, #players)]
+		local a, d = rng:NextNumber(0, TAU), rng:NextNumber(near, far)
+		local p = clamp(floorPos(rp) + Vector3.new(math.cos(a) * d, 0, math.sin(a) * d))
+		if free(p) then
+			table.insert(spots, p)
+		end
+	end
+	return spots
+end
+
+-- Pushes a living player along the floor (the Matriarch's wing gust): never into an
+-- obstacle or out of the fence; the anti-cheat speed check is moved along with them.
+local function pushPlayer(rp, delta: Vector3)
+	local root: BasePart? = rp.Root
+	if not root or not root.Parent or root.Anchored then
+		return
+	end
+	local p = root.Position
+	local x, z = ctx.EnemySpawner.ClampToArena(p.X + delta.X, p.Z + delta.Z, 3)
+	if ctx.EnemyAI.IsBlocked(x, z, 1.2) then
+		return
+	end
+	local move = Vector3.new(x - p.X, 0, z - p.Z)
+	root.CFrame += move
+	if rp.LastValidPos then
+		rp.LastValidPos += move
+	end
+end
+
 ------------------------------------------------------------------------------------------
 -- Attacks: start functions (anticipation + telegraph)
 ------------------------------------------------------------------------------------------
 
 local Start = {}
 
-function Start.Charge(e, windup: number?)
-	local A = e.BossData.Attacks.Charge
-	local target = nearest(e.Pos)
-	local dir = target and ((target.Root.Position - e.Pos) * FLAT) or e.Dir
-	dir = (dir and dir.Magnitude > 0.1) and dir.Unit or Vector3.new(0, 0, 1)
+--[[
+	A lane rush: the Queen's Charge, the Matriarch's Dive, the Warlord's Horn Charge.
+	A.Stuck (Horn Charge): the lane stops at the first obstacle / the fence and he sticks
+	there. Acts: Queen Windup / Charge, Matriarch Lift / Swoop, Warlord Windup / Charge.
+]]
+function Start.Rush(e, name: string, windup: number?)
+	local A = e.BossData.Attacks[name]
+	local dir = aimDir(e)
 	e.ChargeDir = dir
+	e.ChargeName = name
 	local w = windup or A.Windup
-	local length = A.Speed * A.Duration
-	addWarn(e, Fx.Telegraph(e.Pos + dir * (length / 2), math.atan2(-dir.X, -dir.Z), length, e.Radius * 2, w))
+	local full = A.Speed * A.Duration
+	local len, blocked = full, false
+	if A.Stuck then
+		-- where would his horn hit something? (the lane shows exactly that)
+		local c = Config.ArenaOrigin
+		local half = Config.Arenas.Size / 2 - e.Radius - 1
+		local reach = e.Radius * 0.6
+		for d = 2, full, 1 do
+			local p = e.Pos + dir * d
+			local tip = p + dir * reach
+			if math.abs(p.X - c.X) > half or math.abs(p.Z - c.Z) > half or ctx.EnemyAI.IsBlocked(tip.X, tip.Z, 1.2) then
+				len, blocked = math.max(2, d - 1), true
+				break
+			end
+		end
+	end
+	if blocked and len < 10 and e.BossData.Attacks.GroundPound then
+		-- facing a wall right in front of him: a charge would be silly, pound instead
+		Start.GroundPound(e)
+		return
+	end
+	e.ChargeBlocked = blocked
+	e.ChargeTime = len / A.Speed
+	local shown = len + (blocked and e.Radius * 0.6 or 0)
+	addWarn(e, Fx.Telegraph(e.Pos + dir * (shown / 2), math.atan2(-dir.X, -dir.Z), shown, e.Radius * 2, w))
 	e.SpeedOverride = 0
-	setAct(e, "Windup")
+	setAct(e, name == "Dive" and "Lift" or "Windup")
 	setState(e, "ChargeWindup", w)
+end
+
+function Start.Charge(e)
+	Start.Rush(e, "Charge")
+end
+
+function Start.Dive(e)
+	Start.Rush(e, "Dive")
+end
+
+function Start.HornCharge(e)
+	Start.Rush(e, "HornCharge")
 end
 
 function Start.VenomBurst(e)
@@ -187,23 +358,134 @@ function Start.Burrow(e)
 	setState(e, "Dive", A.Dive)
 end
 
-function Start.Summon(e)
-	local A = e.BossData.Attacks.Summon
+-- Summons (Queen eggs, Matriarch cocoons, Warlord beetles, Hive Mother's Brood Call).
+function Start.Summon(e, name: string?)
+	local A = e.BossData.Attacks[name or "Summon"]
+	local n = BossData.ForParty(A.Count, A.PerExtraPlayer, A.MaxCount, partySize())
+	local def = EnemyData.Enemies[A.Type]
+	if def and def.Ranged then
+		-- Spitters keep their own cap (Config.Enemies.MaxLiveRanged)
+		n = math.min(n, math.max(0, Config.Enemies.MaxLiveRanged - ctx.EnemySpawner.LiveRanged()))
+	end
 	local spots = {}
 	local offset = rng:NextNumber(0, TAU)
 	local r = e.Radius + A.Distance
-	for i = 1, A.Count do
-		local a = offset + (i / A.Count) * TAU
+	for i = 1, n do
+		local a = offset + (i / n) * TAU
 		local p = clamp(e.Pos + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r))
 		if not ctx.EnemyAI.IsBlocked(p.X, p.Z, 1.5) then
 			table.insert(spots, p)
-			addWarn(e, Fx.Warn("egg", p.X, p.Z, A.Windup))
+			addWarn(e, Fx.Warn(A.Style == "emerge" and "emerge" or "egg", p.X, p.Z, A.Windup))
 		end
 	end
+	if #spots == 0 then
+		chase(e, paced(e, e.BossData.Chase) * 0.5) -- nothing to call (caps): keep walking
+		return
+	end
 	e.SummonSpots = spots
+	e.SummonType = A.Type
 	e.SpeedOverride = 0
 	setAct(e, "Summon")
 	setState(e, "SummonWindup", A.Windup)
+end
+
+function Start.BroodCall(e)
+	Start.Summon(e, "BroodCall")
+end
+
+-- Matriarch: a dust ring rolls outward from her with one safe gap.
+local function stormWave(e, delay: number, gap: number)
+	local A = e.BossData.Attacks.DustStorm
+	local r0 = e.Radius * 0.8
+	local gapHalf = math.rad(A.GapHalf)
+	local g = math.floor(gap * 1000 + 0.5) / 1000
+	local id = Fx.Warn("wave", e.Pos.X, e.Pos.Z, r0, delay, A.Speed, A.MaxRadius, A.Width, g, math.floor(gapHalf * 1000 + 0.5) / 1000)
+	local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+	Hazards.Wave(at, delay, A.Speed, A.MaxRadius, A.Width, g, gapHalf, damage(A.Damage), { Group = GROUP, Warn = id, Start = r0 })
+end
+
+function Start.DustStorm(e)
+	local A = e.BossData.Attacks.DustStorm
+	e.StormLeft = (twist(e) == "Gusts" and A.TwistWaves or A.Waves) - 1
+	e.StormGap = rng:NextNumber(0, TAU)
+	e.StormTurn = rng:NextNumber() < 0.5 and -1 or 1
+	stormWave(e, A.Windup, e.StormGap)
+	e.SpeedOverride = 0
+	setAct(e, "Gather")
+	setState(e, "Storm", A.Windup)
+end
+
+-- Matriarch: glimmer motes drift down around the players and pop after a fuse.
+function Start.GlimmerMines(e)
+	local A = e.BossData.Attacks.GlimmerMines
+	e.SpeedOverride = 0
+	setAct(e, "Gather")
+	setState(e, "MineWindup", A.Windup)
+end
+
+-- Matriarch (phase 2): a wind cone toward the nearest player pushes everyone in it away.
+function Start.WingGust(e)
+	local A = e.BossData.Attacks.WingGust
+	local dir = aimDir(e)
+	e.GustDir = dir
+	e.SpeedOverride = 0
+	setAct(e, "GustWindup")
+	addWarn(e, Fx.Warn("gust", e.Pos.X, e.Pos.Z, math.floor(math.atan2(dir.Z, dir.X) * 1000 + 0.5) / 1000, A.Length, math.floor(math.rad(A.HalfAngle) * 1000 + 0.5) / 1000, A.Windup, A.Blow))
+	setState(e, "GustWindup", A.Windup)
+end
+
+-- Warlord: rears up, slams; ring bands fill one after another.
+function Start.GroundPound(e)
+	local A = e.BossData.Attacks.GroundPound
+	e.SecondPound = false
+	e.SpeedOverride = 0
+	setAct(e, "Rear")
+	setState(e, "PoundWindup", A.Windup)
+end
+
+local function poundBands(e, outsideIn: boolean): number
+	local A = e.BossData.Attacks.GroundPound
+	local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+	local bands = A.Bands
+	local n = #bands
+	for i, outer in ipairs(bands) do
+		local inner = i > 1 and bands[i - 1] or 0
+		local order = outsideIn and (n - i) or (i - 1)
+		local delay = A.First + order * A.Gap
+		local id = Fx.Warn("band", at.X, at.Z, inner, outer, delay)
+		Hazards.Strike(at, outer, delay, damage(A.Damage), { Group = GROUP, Style = "pound", Warn = id, Inner = inner > 0 and inner or nil })
+	end
+	Fx.Sound("BossPound")
+	return A.First + (n - 1) * A.Gap
+end
+
+-- Warlord: plants a banner (rallies beetles nearby) or, with one still standing, summons.
+function Start.WarBanner(e)
+	if liveObjects(e, "WarBanner") > 0 then
+		Start.Summon(e)
+		return
+	end
+	local A = e.BossData.Attacks.WarBanner
+	e.SpeedOverride = 0
+	setAct(e, "Plant")
+	setState(e, "PlantWindup", A.Windup)
+end
+
+-- Hive Mother: eggs are lobbed at the players (landing markers), then sit and hatch.
+function Start.EggBarrage(e)
+	local A = e.BossData.Attacks.EggBarrage
+	local n = BossData.ForParty(A.Count, A.PerExtraPlayer, A.MaxCount, partySize())
+	e.Throws = spotsNearPlayers(n, 2, 5, 6, 13, 4.5)
+	e.SpeedOverride = 0
+	setAct(e, "Heave")
+	setState(e, "Heave", A.Windup)
+end
+
+function Start.AcidPools(e)
+	local A = e.BossData.Attacks.AcidPools
+	e.SpeedOverride = 0
+	setAct(e, "Spew")
+	setState(e, "SpewWindup", A.Windup)
 end
 
 ------------------------------------------------------------------------------------------
@@ -212,41 +494,10 @@ end
 
 local function venomCircles(e)
 	local A = e.BossData.Attacks.VenomBurst
-	local players = living()
-	if #players == 0 then
-		return
-	end
-	local n = math.min(A.MaxCircles, A.Circles + #players - 1)
-	local spots: { Vector3 } = {}
-	local function free(p: Vector3): boolean
-		for _, q in ipairs(spots) do
-			if ((p - q) * FLAT).Magnitude < A.Radius * 1.3 then
-				return false
-			end
-		end
-		return true
-	end
-	-- one circle right where each player stands (a small random offset) ...
-	for _, rp in ipairs(players) do
-		local a, d = rng:NextNumber(0, TAU), rng:NextNumber(0, 1.5)
-		local p = clamp(floorPos(rp) + Vector3.new(math.cos(a) * d, 0, math.sin(a) * d))
-		if free(p) and #spots < n then
-			table.insert(spots, p)
-		end
-	end
-	-- ... and the rest close around them, so the safe ground is a short step away
-	for _ = 1, 40 do
-		if #spots >= n then
-			break
-		end
-		local rp = players[rng:NextInteger(1, #players)]
-		local a, d = rng:NextNumber(0, TAU), rng:NextNumber(8, 14)
-		local p = clamp(floorPos(rp) + Vector3.new(math.cos(a) * d, 0, math.sin(a) * d))
-		if free(p) then
-			table.insert(spots, p)
-		end
-	end
-	for _, p in ipairs(spots) do
+	local n = math.min(A.MaxCircles, A.Circles + partySize() - 1)
+	-- one circle right where each player stands (a small random offset), the rest close
+	-- around them, so the safe ground is a short step away
+	for _, p in ipairs(spotsNearPlayers(n, 0, 1.5, 8, 14, A.Radius * 1.3)) do
 		Hazards.Strike(p, A.Radius, A.Fill, damage(A.Damage), { Group = GROUP, Style = "venom" })
 	end
 	Fx.Sound("Explosion")
@@ -258,6 +509,100 @@ local function fireRing(e)
 		local dir = Vector3.new(math.cos(a), 0, math.sin(a))
 		ctx.WeaponSystem.SpawnHostile(e.Pos + dir * e.Radius, dir, A.Speed, damage(A.Damage), A.ProjectileRadius, A.Life, STINGER_VISUAL)
 	end
+end
+
+local function dropMines(e)
+	local A = e.BossData.Attacks.GlimmerMines
+	local n = BossData.ForParty(A.Count, A.PerExtraPlayer, A.MaxCount, partySize())
+	for _, p in ipairs(spotsNearPlayers(n, 3, 6, 6, 16, A.Radius * 1.5)) do
+		local id = Fx.Warn("mine", p.X, p.Z, A.Radius, A.Fuse, math.floor(e.Pos.X * 10) / 10, math.floor(e.Pos.Z * 10) / 10)
+		Hazards.Strike(p, A.Radius, A.Fuse, damage(A.Damage), { Group = GROUP, Style = "glimmer", Warn = id })
+	end
+end
+
+local function throwEgg(e, spot: Vector3)
+	local A = e.BossData.Attacks.EggBarrage
+	local dist = ((spot - e.Pos) * FLAT).Magnitude
+	addWarn(e, Fx.Warn("glob", e.Pos.X, e.Pos.Z, spot.X, spot.Z, A.Flight, 6 + dist * 0.15, "egg"))
+	Hazards.Strike(spot, A.Splash, A.Flight, damage(A.Damage), {
+		Group = GROUP,
+		Style = "acid",
+		OnStrike = function()
+			if not e.Alive or e.Dying then
+				return
+			end
+			local egg = ctx.EnemySpawner.Spawn(A.Type, spot, { Force = true })
+			if egg then
+				egg.HatchLeft = A.Hatch
+				egg.HatchCount = A.Hatchlings
+				egg.WarnId = Fx.Warn("circle", spot.X, spot.Z, 2.3, A.Hatch, "hatch")
+				trackObject(e, egg)
+			end
+		end,
+	})
+end
+
+local function acidPools(e)
+	local A = e.BossData.Attacks.AcidPools
+	local n = BossData.ForParty(A.Count, A.PerExtraPlayer, A.MaxCount, partySize())
+	local trails = twist(e) == "Trails"
+	local dmg = damage(A.Damage)
+	for _, p in ipairs(spotsNearPlayers(n, 0, 3, 7, 14, A.Radius * 2)) do
+		Hazards.Patch(p, A.Radius, A.Fill, A.Life, A.Tick, dmg, GROUP, "acid")
+		if trails then
+			-- phase 2: drips of acid back toward her (smaller pools on the same timer)
+			local back = (e.Pos - p) * FLAT
+			if back.Magnitude > A.Radius + A.TrailSpacing then
+				local dir = back.Unit
+				for k = 1, A.TrailCount do
+					local q = p + dir * (A.Radius + A.TrailSpacing * (k - 0.4))
+					if ((q - e.Pos) * FLAT).Magnitude > e.Radius + A.TrailRadius then
+						Hazards.Patch(clamp(q), A.TrailRadius, A.Fill + 0.1 * k, A.Life * 0.7, A.Tick, dmg, GROUP, "acid")
+					end
+				end
+			end
+		end
+	end
+	Fx.Sound("SpitterWindup")
+end
+
+local function plantBanner(e)
+	local A = e.BossData.Attacks.WarBanner
+	local dir = e.Dir.Magnitude > 0.1 and e.Dir.Unit or aimDir(e)
+	local right = Vector3.new(-dir.Z, 0, dir.X)
+	local spot = nil
+	for _, side in ipairs({ right, -right, -dir }) do
+		local p = clamp(e.Pos + side * (e.Radius + A.Distance), 10)
+		if not ctx.EnemyAI.IsBlocked(p.X, p.Z, 2.5) then
+			spot = p
+			break
+		end
+	end
+	spot = spot or freeSpot(e.Pos, e.Radius + A.Distance, 2.5)
+	if not spot then
+		return false
+	end
+	local banner = ctx.EnemySpawner.Spawn(A.Type, spot, { Force = true, HP = math.max(40, e.MaxHP * A.HPShare) })
+	if not banner then
+		return false
+	end
+	banner.RallyRadius = A.Radius
+	banner.RallySpeed = A.SpeedMult
+	banner.RallyDamage = A.DamageMult
+	banner.WarnId = Fx.Warn("aura", spot.X, spot.Z, A.Radius, 900) -- cleared with the banner
+	trackObject(e, banner)
+	e.Part:SetAttribute("BannerOut", true)
+	Fx.Warn("pop", spot.X, spot.Z, 4, "slam")
+	Fx.Sound("BossBanner")
+	for k = 1, A.Escort do
+		local a = k * TAU / math.max(1, A.Escort) + rng:NextNumber(0, 1)
+		local p = clamp(spot + Vector3.new(math.cos(a) * 4, 0, math.sin(a) * 4))
+		if not ctx.EnemyAI.IsBlocked(p.X, p.Z, 1.5) then
+			ctx.EnemySpawner.Spawn("Skeleton", p)
+		end
+	end
+	ctx.RunManager.Broadcast("WAR BANNER! Destroy it to break the rally", Color3.fromRGB(255, 190, 110))
+	return true
 end
 
 local function nextAttack(e)
@@ -281,33 +626,375 @@ local function publishPhase(e)
 end
 
 ------------------------------------------------------------------------------------------
+-- States (one handler per BossState; each runs every frame while it is current)
+------------------------------------------------------------------------------------------
+
+local State: { [string]: (any, number) -> () } = {}
+
+State.Entrance = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		setVulnerable(e, true)
+		chase(e, e.BossData.Entrance.Grace) -- no attack for Grace seconds after it is up
+	end
+end
+
+State.Dying = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		ctx.EnemySpawner.Kill(e, valid(e.Killer) and e.Killer or nil)
+	end
+end
+
+State.Chase = function(e, _dt)
+	e.SpeedOverride = nil
+	if e.PendingPhase then
+		e.PhaseIndex = e.PendingPhase
+		e.PendingPhase = nil
+		publishPhase(e)
+		local p = phase(e)
+		if p.Message then
+			ctx.RunManager.Broadcast(p.Message, Color3.fromRGB(255, 90, 80), true)
+		end
+		Fx.Sound("BossRoar")
+		Fx.Ring(e.Pos, 26, Color3.fromRGB(255, 60, 70))
+		e.SpeedOverride = 0
+		setAct(e, "Roar")
+		setState(e, "Roar", p.Roar or 1)
+	elseif e.BossTimer <= 0 then
+		nextAttack(e)
+	end
+end
+
+State.Roar = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		chase(e, paced(e, e.BossData.Chase) * 0.5)
+	end
+end
+
+State.Recover = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		chase(e, paced(e, e.BossData.Chase))
+	end
+end
+
+-- lane rushes ----------------------------------------------------------------------------
+
+State.ChargeWindup = function(e, _dt)
+	e.SpeedOverride = 0
+	e.Dir = e.ChargeDir
+	if e.BossTimer <= 0 then
+		setAct(e, e.ChargeName == "Dive" and "Swoop" or "Charge")
+		setState(e, "Charging", e.ChargeTime or e.BossData.Attacks[e.ChargeName].Duration)
+	end
+end
+
+State.Charging = function(e, _dt)
+	local name = e.ChargeName or "Charge"
+	local A = e.BossData.Attacks[name]
+	e.Dir = e.ChargeDir
+	e.SpeedOverride = A.Speed
+	if e.BossTimer > 0 then
+		return
+	end
+	e.SpeedOverride = 0
+	if name == "Charge" and twist(e) == "DoubleCharge" and not e.SecondCharge and #living() > 0 then
+		e.SecondCharge = true
+		Start.Rush(e, "Charge", A.SecondWindup)
+		return
+	end
+	e.SecondCharge = false
+	if name == "HornCharge" then
+		if e.ChargeBlocked then
+			-- the horn is stuck in a tree / rock / the fence: a long free punish window
+			local tip = e.Pos + e.ChargeDir * e.Radius
+			Fx.Warn("pop", tip.X, tip.Z, 6, "slam")
+			Fx.Ring(tip, 10, Color3.fromRGB(200, 170, 120))
+			Fx.Sound("BossPound")
+			stunned(e, paced(e, A.Stuck), "Stuck")
+		else
+			setAct(e, nil)
+			recover(e, paced(e, A.Recover))
+		end
+	elseif name == "Dive" then
+		Fx.Warn("pop", e.Pos.X, e.Pos.Z, e.Radius * 1.6, "dust")
+		stunned(e, paced(e, A.Recover), "Grounded")
+	else
+		stunned(e, paced(e, A.Recover))
+	end
+end
+
+-- Queen ---------------------------------------------------------------------------------
+
+State.VenomWindup = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		venomCircles(e)
+		setState(e, "VenomHold", e.BossData.Attacks.VenomBurst.Fill)
+	end
+end
+
+State.VenomHold = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		setAct(e, nil)
+		recover(e, paced(e, e.BossData.Attacks.VenomBurst.Recover))
+	end
+end
+
+State.Ring = function(e, _dt)
+	local A = e.BossData.Attacks.StingerRing
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		fireRing(e)
+		e.RingWave += 1
+		if e.RingWave >= A.Waves then
+			setAct(e, nil)
+			recover(e, paced(e, A.Recover))
+		else
+			e.BossTimer = A.WaveGap
+		end
+	end
+end
+
+State.Dive = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		setAct(e, "Burrow")
+		setVulnerable(e, false)
+		e.Harmless = true
+		setState(e, "Burrowed", e.BossData.Attacks.Burrow.Track)
+	end
+end
+
+State.Burrowed = function(e, dt)
+	local B = e.BossData.Attacks.Burrow
+	if not valid(e.BurrowTarget) then
+		e.BurrowTarget = nearest(e.Pos)
+	end
+	local t = e.BurrowTarget
+	if t then
+		local to = (t.Root.Position - e.Pos) * FLAT
+		local d = to.Magnitude
+		if d > 0.5 then
+			e.Dir = to.Unit
+			e.SpeedOverride = math.min(B.TrackSpeed, d / math.max(dt, 1e-3))
+		else
+			e.SpeedOverride = 0
+		end
+	else
+		e.SpeedOverride = 0
+	end
+	if e.BossTimer <= 0 then
+		e.SpeedOverride = 0
+		local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+		Hazards.Strike(at, B.Radius, B.Warn, damage(B.Damage), { Group = GROUP, Style = "burrow" })
+		setState(e, "Surface", B.Warn)
+	end
+end
+
+State.Surface = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		setVulnerable(e, true)
+		stunned(e, paced(e, e.BossData.Attacks.Burrow.Recover))
+	end
+end
+
+State.SummonWindup = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		local typeId = e.SummonType or "Skeleton"
+		for _, p in ipairs(e.SummonSpots or {}) do
+			ctx.EnemySpawner.Spawn(typeId, p)
+		end
+		e.SummonSpots = nil
+		Fx.Sound("BossSummon")
+		chase(e, paced(e, e.BossData.Chase))
+	end
+end
+
+-- Matriarch -----------------------------------------------------------------------------
+
+State.Storm = function(e, _dt)
+	local A = e.BossData.Attacks.DustStorm
+	e.SpeedOverride = 0
+	if e.BossTimer > 0 then
+		return
+	end
+	if (e.StormLeft or 0) > 0 then
+		-- the next wave: its gap turns, and its marker shows at once
+		e.StormLeft -= 1
+		e.StormGap += math.rad(A.TurnGap) * (e.StormTurn or 1)
+		stormWave(e, A.WaveGap, e.StormGap)
+		e.BossTimer = A.WaveGap
+		return
+	end
+	setAct(e, nil)
+	recover(e, paced(e, A.Recover))
+end
+
+State.MineWindup = function(e, _dt)
+	local A = e.BossData.Attacks.GlimmerMines
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		dropMines(e)
+		setAct(e, nil)
+		recover(e, paced(e, A.Recover))
+	end
+end
+
+State.GustWindup = function(e, _dt)
+	local A = e.BossData.Attacks.WingGust
+	e.SpeedOverride = 0
+	e.Dir = e.GustDir or e.Dir
+	if e.BossTimer <= 0 then
+		setAct(e, "Gust")
+		Fx.Sound("BossGust")
+		setState(e, "Gusting", A.Blow)
+	end
+end
+
+State.Gusting = function(e, dt)
+	local A = e.BossData.Attacks.WingGust
+	e.SpeedOverride = 0
+	local dir = e.GustDir or Vector3.new(0, 0, 1)
+	local cosHalf = math.cos(math.rad(A.HalfAngle))
+	for _, rp in ipairs(living()) do
+		local to = (rp.Root.Position - e.Pos) * FLAT
+		local d = to.Magnitude
+		if d > 0.5 and d <= A.Length + 1 and to.Unit:Dot(dir) >= cosHalf then
+			pushPlayer(rp, to.Unit * A.Push * dt)
+		end
+	end
+	if e.BossTimer <= 0 then
+		Fx.Warn("pop", e.Pos.X + dir.X * A.Length * 0.6, e.Pos.Z + dir.Z * A.Length * 0.6, A.Length * 0.4, "gust")
+		setAct(e, nil)
+		recover(e, paced(e, A.Recover))
+	end
+end
+
+-- Warlord -------------------------------------------------------------------------------
+
+State.PoundWindup = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		setAct(e, "Pound")
+		Fx.Warn("pop", e.Pos.X, e.Pos.Z, e.Radius * 1.5, "pound")
+		setState(e, "Pounding", poundBands(e, e.SecondPound == true) + 0.05)
+	end
+end
+
+State.Pounding = function(e, _dt)
+	local A = e.BossData.Attacks.GroundPound
+	e.SpeedOverride = 0
+	if e.BossTimer > 0 then
+		return
+	end
+	if twist(e) == "DoublePound" and not e.SecondPound and #living() > 0 then
+		-- phase 2: he rears again and the bands come back from the outside in
+		e.SecondPound = true
+		setAct(e, "Rear")
+		setState(e, "PoundWindup", A.SecondWindup)
+		return
+	end
+	setAct(e, nil)
+	recover(e, paced(e, A.Recover))
+end
+
+State.PlantWindup = function(e, _dt)
+	local A = e.BossData.Attacks.WarBanner
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		if plantBanner(e) then
+			setAct(e, nil)
+			recover(e, paced(e, A.Recover))
+		else
+			Start.Summon(e) -- nowhere to plant it: call warriors instead
+		end
+	end
+end
+
+-- Hive Mother ---------------------------------------------------------------------------
+
+State.Heave = function(e, _dt)
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		e.ThrowIndex = 0
+		setState(e, "Throwing", 0) -- the first egg flies next frame, then every Stagger
+	end
+end
+
+State.Throwing = function(e, _dt)
+	local A = e.BossData.Attacks.EggBarrage
+	e.SpeedOverride = 0
+	if e.BossTimer > 0 then
+		return
+	end
+	local list = e.Throws or {}
+	e.ThrowIndex = (e.ThrowIndex or 0) + 1
+	local spot = list[e.ThrowIndex]
+	if spot then
+		throwEgg(e, spot)
+		e.BossTimer = A.Stagger
+	else
+		e.Throws = nil
+		setAct(e, nil)
+		recover(e, paced(e, A.Recover))
+	end
+end
+
+State.SpewWindup = function(e, _dt)
+	local A = e.BossData.Attacks.AcidPools
+	e.SpeedOverride = 0
+	if e.BossTimer <= 0 then
+		acidPools(e)
+		setAct(e, nil)
+		recover(e, paced(e, A.Recover))
+	end
+end
+
+------------------------------------------------------------------------------------------
 -- Public
 ------------------------------------------------------------------------------------------
 
 -- The boss just spawned (EnemySpawner.SpawnBoss): start the entrance.
-function BossAI.Begin(e)
-	local data = BossData.Get(Config.Boss.Id)
-	e.BossData = data
+function BossAI.Begin(e, data: any?)
+	local boss = data or BossData.Get(Config.Boss.First)
+	e.BossData = boss
 	e.PhaseIndex = 1
 	e.PendingPhase = nil
 	e.BossCycle = 0
 	e.BossWarns = {}
+	e.BossObjects = nil
 	e.SecondCharge = false
+	e.SecondPound = false
+	e.HitSum = 0
+	e.HitAt = clock
+	e.PulseReady = clock + 4
 	e.Dying = false
 	e.Harmless = true
 	setVulnerable(e, false)
 	e.SpeedOverride = 0
 	setAct(e, "Emerge")
-	setState(e, "Entrance", data.Entrance.Seconds)
+	setState(e, "Entrance", boss.Entrance.Seconds)
 	local state = Remotes.State()
-	state:SetAttribute("BossName", data.DisplayName)
-	state:SetAttribute("BossIntro", data.Entrance.Seconds)
+	state:SetAttribute("BossName", boss.DisplayName)
+	state:SetAttribute("BossId", boss.Id)
+	state:SetAttribute("BossIntro", boss.Entrance.Seconds)
 	publishPhase(e)
-	Fx.Warn("pop", e.Pos.X, e.Pos.Z, data.Entrance.DustRadius, "dust")
-	Fx.Warn("circle", e.Pos.X, e.Pos.Z, e.Radius + 2, data.Entrance.Seconds, "burrow")
+	if boss.Entrance.From == "Sky" then
+		Fx.Warn("circle", e.Pos.X, e.Pos.Z, e.Radius + 2, boss.Entrance.Seconds, "pulse")
+		Fx.Warn("pop", e.Pos.X, e.Pos.Z, boss.Entrance.DustRadius * 0.6, "gust")
+	else
+		Fx.Warn("pop", e.Pos.X, e.Pos.Z, boss.Entrance.DustRadius, "dust")
+		Fx.Warn("circle", e.Pos.X, e.Pos.Z, e.Radius + 2, boss.Entrance.Seconds, "burrow")
+	end
 end
 
--- Removes the boss's hazards, telegraphs and stingers at once.
+-- Removes the boss's hazards, telegraphs, stingers, banner and eggs at once.
 function BossAI.ClearHazards(e)
 	Hazards.Clear(GROUP)
 	if e and e.BossWarns then
@@ -316,10 +1003,14 @@ function BossAI.ClearHazards(e)
 		end
 		table.clear(e.BossWarns)
 	end
+	clearObjects(e)
+	if e and e.Part then
+		e.Part:SetAttribute("BannerOut", nil)
+	end
 	ctx.WeaponSystem.ClearHostile()
 end
 
--- Her HP reached 0 (EnemySpawner.Damage): the collapse, then the real kill.
+-- Its HP reached 0 (EnemySpawner.Damage): the collapse, then the real kill.
 function BossAI.StartCollapse(e, rp)
 	if e.Dying then
 		return
@@ -337,153 +1028,48 @@ function BossAI.StartCollapse(e, rp)
 	Fx.Warn("pop", e.Pos.X, e.Pos.Z, e.Radius * 2.2, "dust")
 end
 
+-- A hit landed (EnemySpawner.Damage, HP still above 0): the Hive Mother pulses when a
+-- lot of damage arrives quickly (BossData OnHit), telegraphed like every attack.
+function BossAI.OnDamaged(e, amount: number)
+	local H = e.BossData and e.BossData.OnHit
+	if not H or e.Dying or e.BossState == "Entrance" then
+		return
+	end
+	-- damage within the window, fading linearly
+	local since = clock - (e.HitAt or clock)
+	e.HitAt = clock
+	e.HitSum = math.max(0, (e.HitSum or 0) * (1 - since / H.Window)) + amount
+	if e.HitSum >= e.MaxHP * H.Share and clock >= (e.PulseReady or 0) then
+		e.HitSum = 0
+		e.PulseReady = clock + H.Cooldown
+		local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+		Hazards.Strike(at, e.Radius + H.Radius, H.Warn, damage(H.Damage), { Group = GROUP, Style = "pulse" })
+	end
+end
+
 function BossAI.Step(e, dt: number)
 	if not e.BossData then
 		BossAI.Begin(e)
 	end
+	clock += dt
 	e.BossTimer -= dt
-	local stateName = e.BossState
 	local data = e.BossData
-	local A = data.Attacks
 
 	-- phase thresholds (applied at the next Chase so an attack is never cut in half)
-	if not e.Dying and stateName ~= "Entrance" and e.PhaseIndex < #data.Phases then
+	if not e.Dying and e.BossState ~= "Entrance" and e.PhaseIndex < #data.Phases then
 		local want = BossData.PhaseFor(data, e.HP / math.max(1, e.MaxHP))
 		if want > e.PhaseIndex then
 			e.PendingPhase = want
 		end
 	end
+	-- the Warlord's banner fell: it is back on his back
+	if e.Part:GetAttribute("BannerOut") and liveObjects(e, "WarBanner") == 0 then
+		e.Part:SetAttribute("BannerOut", nil)
+	end
 
-	if stateName == "Entrance" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			setVulnerable(e, true)
-			chase(e, data.Entrance.Grace) -- no attack for Grace seconds after she is up
-		end
-	elseif stateName == "Dying" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			ctx.EnemySpawner.Kill(e, valid(e.Killer) and e.Killer or nil)
-		end
-	elseif stateName == "Chase" then
-		e.SpeedOverride = nil
-		if e.PendingPhase then
-			e.PhaseIndex = e.PendingPhase
-			e.PendingPhase = nil
-			publishPhase(e)
-			local p = phase(e)
-			if p.Message then
-				ctx.RunManager.Broadcast(p.Message, Color3.fromRGB(255, 90, 80), true)
-			end
-			Fx.Sound("BossRoar")
-			Fx.Ring(e.Pos, 26, Color3.fromRGB(255, 60, 70))
-			e.SpeedOverride = 0
-			setAct(e, "Roar")
-			setState(e, "Roar", p.Roar or 1)
-		elseif e.BossTimer <= 0 then
-			nextAttack(e)
-		end
-	elseif stateName == "Roar" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			chase(e, paced(e, data.Chase) * 0.5)
-		end
-	elseif stateName == "Recover" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			chase(e, paced(e, data.Chase))
-		end
-	elseif stateName == "ChargeWindup" then
-		e.SpeedOverride = 0
-		e.Dir = e.ChargeDir
-		if e.BossTimer <= 0 then
-			setAct(e, "Charge")
-			setState(e, "Charging", A.Charge.Duration)
-		end
-	elseif stateName == "Charging" then
-		e.Dir = e.ChargeDir
-		e.SpeedOverride = A.Charge.Speed
-		if e.BossTimer <= 0 then
-			e.SpeedOverride = 0
-			if phase(e).Twist == "DoubleCharge" and not e.SecondCharge and #living() > 0 then
-				e.SecondCharge = true
-				Start.Charge(e, A.Charge.SecondWindup)
-			else
-				e.SecondCharge = false
-				stunned(e, paced(e, A.Charge.Recover))
-			end
-		end
-	elseif stateName == "VenomWindup" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			venomCircles(e)
-			setState(e, "VenomHold", A.VenomBurst.Fill)
-		end
-	elseif stateName == "VenomHold" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			setAct(e, nil)
-			recover(e, paced(e, A.VenomBurst.Recover))
-		end
-	elseif stateName == "Ring" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			fireRing(e)
-			e.RingWave += 1
-			if e.RingWave >= A.StingerRing.Waves then
-				setAct(e, nil)
-				recover(e, paced(e, A.StingerRing.Recover))
-			else
-				e.BossTimer = A.StingerRing.WaveGap
-			end
-		end
-	elseif stateName == "Dive" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			setAct(e, "Burrow")
-			setVulnerable(e, false)
-			e.Harmless = true
-			setState(e, "Burrowed", A.Burrow.Track)
-		end
-	elseif stateName == "Burrowed" then
-		local B = A.Burrow
-		if not valid(e.BurrowTarget) then
-			e.BurrowTarget = nearest(e.Pos)
-		end
-		local t = e.BurrowTarget
-		if t then
-			local to = (t.Root.Position - e.Pos) * FLAT
-			local d = to.Magnitude
-			if d > 0.5 then
-				e.Dir = to.Unit
-				e.SpeedOverride = math.min(B.TrackSpeed, d / math.max(dt, 1e-3))
-			else
-				e.SpeedOverride = 0
-			end
-		else
-			e.SpeedOverride = 0
-		end
-		if e.BossTimer <= 0 then
-			e.SpeedOverride = 0
-			local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
-			Hazards.Strike(at, B.Radius, B.Warn, damage(B.Damage), { Group = GROUP, Style = "burrow" })
-			setState(e, "Surface", B.Warn)
-		end
-	elseif stateName == "Surface" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			setVulnerable(e, true)
-			stunned(e, paced(e, A.Burrow.Recover))
-		end
-	elseif stateName == "SummonWindup" then
-		e.SpeedOverride = 0
-		if e.BossTimer <= 0 then
-			for _, p in ipairs(e.SummonSpots or {}) do
-				ctx.EnemySpawner.Spawn(A.Summon.Type, p)
-			end
-			e.SummonSpots = nil
-			chase(e, paced(e, data.Chase))
-		end
+	local handler = State[e.BossState]
+	if handler then
+		handler(e, dt)
 	else
 		chase(e, data.Chase)
 	end

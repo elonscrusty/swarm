@@ -13,18 +13,20 @@ Models come from two places:
 
 - Third-person top-down camera. You only move; weapons fire on their own.
 - Runs are a series of STAGES (Risk of Rain / Megabonk style, see "Gameplay loop" below):
-  find the portal, summon and kill the Scorpion Queen, survive the surge, then go deeper or
+  find the portal, summon and kill its boss, survive the surge, then go deeper or
   cash out with a win. The lobby is a full-screen menu with three modes:
   **Solo** (starts at once), **Duo** (2 players) and **Trio** (3 players). In Duo and Trio
   you revive a fallen teammate by standing next to them for 3 s (see §10).
-- 9 weapons (8 levels + evolution each, 5 of them with a behaviour perk), 13 passives, 7 enemy types with clear roles + elites with affixes + the Scorpion Queen encounter.
-- 5 characters (the Ranger is earned through an achievement), 12 achievements, permanent gold upgrades, gamepasses, developer products, cosmetic skins.
+- 17 weapons (8 levels + evolution each, 13 of them with a behaviour perk), 15 passives, 9 enemy types with clear roles + nests + elites with affixes + 4 stage bosses (Scorpion Queen, Moth Matriarch, Rhino Warlord, Hive Mother).
+- 8 characters (the Ranger, Alchemist, Engineer and Necromancer are earned through achievements), achievements, permanent gold upgrades, gamepasses, developer products, cosmetic skins.
 - Mobile first: a floating thumbstick is the only control during a run.
 
 ## Gameplay loop
 
-1. **Stage 1** is the lobby's arena (Forest or Ruins); later stages alternate through
-   `Config.Arenas.Order` (Forest → Ruins → Forest ...). Each stage has a stone-ring
+1. **Stage 1** is the lobby's arena (Forest by default); later stages tour the other
+   biomes (`Config.Arenas.Rotation`: Ruins, Swamp, Snow, Desert, Lava, shuffled per run,
+   then every arena reshuffled; never the same arena twice in a row; the travel banner
+   names the biome). Swamp, Snow, Desert and Lava have floor **hazards** (below). Each stage has a stone-ring
    **portal** at a random clear spot at least 120 studs from the spawn (a new spot every
    stage), with a soft light beam and a rune circle on the floor.
 2. **Explore** while the swarm comes as always. Difficulty keeps scaling with the **total
@@ -33,8 +35,8 @@ Models come from two places:
    growing with time after minute 12 (`Config.Difficulty.MaxTier`). After 90 s (and not
    before the portal wakes) an arrow at the screen edge points every player to the portal.
 3. **Charge the portal**: stand in its rune circle for ~2 s (any living player; on a phone
-   just stand there) once it wakes up (dormant for 2:30 on stage 1, 0:45 later). That summons the **Scorpion Queen** behind the portal (HP scaled by
-   stage and player count, the normal boss-fight spawning rules).
+   just stand there) once it wakes up (dormant for 2:30 on stage 1, 0:45 later). That summons the stage's **boss** behind the portal: the **Scorpion Queen** on stage 1, later stages rotate the Queen, the **Moth Matriarch**, the **Rhino Warlord** and the **Hive Mother** (HP scaled by
+   stage and player count, the normal boss-fight spawning rules; see "Stage bosses").
 4. **Surge**: when she dies, every living player gets the boss gold and a burst of enemies
    pours out of the portal (25 + 15 per stage); survive 20 s or kill most of them. Gems,
    chests and chickens left on the floor when the group travels are collected for them.
@@ -43,11 +45,25 @@ Models come from two places:
    * Return = that player's run ends at once: `WinBonus` (100) + `StageClearBonus` (150) per stage
      cleared, best time / furthest stage saved, results over the lobby menu. It counts as a
      WIN (Stats.Wins) only with `Config.Stages.WinMinStages` (3) stages cleared.
-   * Reaching stage 2 unlocks Ruins in the lobby (`Config.Arenas.<name>.RequiredBestStage`).
+   * Reaching a stage unlocks arenas in the lobby (`Config.Arenas.<name>.RequiredBestStage`):
+     Ruins at stage 2, Swamp 3, Snow 4, Desert 5, Lava 6.
    * Next stage = everyone who stays travels (fade, "STAGE N"): new arena, enemies / gems /
      projectiles cleared, level / XP / weapons / passives / gold kept, HP topped up,
      fallen teammates revived. If nobody goes on, the run ends cleanly.
 6. Dying still ends your run (results show the stage you fell on); everyone down = defeat.
+
+### Biome hazards (`Config.Arenas.Hazards`, `BiomeHazards.lua`)
+
+Fixed pools in the designed layouts (7-8 per arena, 55+ studs from the spawn, never under
+the portal or loot: `FindPortalSpot` / `FindOpenSpot` keep `LootPad` studs from a pool's
+edge). The server decides everything; the pool meshes are the telegraph.
+
+| Arena | Hazard | Players | Enemies |
+|---|---|---|---|
+| Swamp | 8 mud pools | move at 65% | walkers 65% (flyers, bosses unaffected) |
+| Snow | 7 frozen ponds | +20% speed but the steering drifts (client input smoothing, 0.35 s) | unaffected |
+| Desert | 7 quicksand pools | move at 55% | walkers 55% (flyers, bosses unaffected) |
+| Lava | 7 lava pools (glowing rims) | 6 damage every 0.5 s (first tick after 0.25 s; armor, shields and invulnerability apply) | unaffected |
    The timer shows the total run time; there is no 15:00 end any more.
 
 Code: `StageManager.lua` (server, the loop and the portal), `RunManager.lua` (players,
@@ -143,7 +159,11 @@ just above the ground and under every character.
 | Spitter (new) | ranged: keeps 22-30 studs away | 14 | 8.5 | 4 | acid glob 12 dmg, 4.5 splash; 0.7 s wind-up + 1.05 s flight, every 3.2 s | gem (25% medium) | 4:00 |
 | Bomb Tick (Bomber) | suicide bomber | 12 | 11.5 | 0 | stops next to you, 0.7 s fuse, 22 dmg in 8 studs | gem (30% medium) | 4:00 |
 | Rhino Beetle (Brute) | slow and durable, blocks paths | 90 | 6 | 16 | 0.65 s rear-up + lane, 0.45 s lunge (13.5 studs), 0.8 s recovery, every 4.5 s | gem (30% large) | 5:00 |
+| Healer | support: hangs back 16-26 studs, every 3.5 s a 0.6 s glow then a green pulse heals enemies within 14 studs by 15% of their max HP (never bosses or nests); fragile priority target | 12 | 8 | 3 | heal pulse | gem (50% medium) | 6:00 |
+| Burrower | ambusher: tunnels as a dust trail (untargetable, harmless, 12 studs/s, max 8 s), stops within 5 studs of a player, 0.9 s warning circle (r 3.2), bursts out (10), 0.6 s daze, then melee | 22 | 7.5 | 8 | burst 10 | gem (30% medium) | 7:00 |
+| Nest | stationary spawner with an HP bar: every 4.5 s two small rings at its openings, then 2 Mites (max 8 of its own alive) | 140 | 0 | 0 | - | 12 + 6/stage gold to every living player + 3 gems | stage 2+ (stage 1 after 6:00) |
 | Scorpion Queen (Boss) | the stage boss at the portal | 9000 x stage share | 8 | 30 | see below | 200 gold each + 12 large gems + the surge | portal |
+| Moth Matriarch / Rhino Warlord / Hive Mother | the rotating stage bosses | 9000 x 0.85 / 1.15 / 1.05 x stage share | 9.5 / 7.5 / 5.5 | 26 / 32 / 26 | see "Stage bosses" | as the Queen | portal, stage 2+ |
 
 Spawn: enemies climb out of the ground (0.35 s, dust puff) and can't hurt anyone for
 `Config.Enemies.SpawnGrace` (0.45 s). Death: the same creature-coloured poof for everyone.
@@ -172,12 +192,20 @@ and a small tag over the crown:
   55% of the target, so once the wave is beaten there is a short recovery.
 * **Introductions**: Beetle Warrior 1:00, Phase Moth 3:00, Spitter and Bomb Tick 4:00
   (Spitter weight 4 → 12 by 12:00, at most 12 alive: `Config.Enemies.MaxLiveRanged`), Rhino
-  5:00, each with its callout.
+  5:00, Healer 6:00 (at most 4 + 1 per extra player: `MaxLiveSupport`), Burrower 7:00 (at
+  most 6 + 2 per extra player: `MaxLiveBurrowers`), each with its callout (intro groups of
+  2 for the last two: `Config.Pacing.IntroGroupOf`). Healers and Burrowers never come in
+  mini-wave rings or the surge.
+* **Nests** (`Config.Pacing.Nests`): on stage 1 only after 6:00 of run time; from stage 2
+  the first one 50 s into the stage, then every 70 s; 2 per stage (3 from stage 3), at most
+  2 at once, 30-46 studs from a living player, only while exploring. The first one has the
+  callout "New: Nest - destroy it to stop the mites", later ones "A Nest takes root nearby!".
+  The open portal burns leftover nests (no reward).
 * **Elites**: a scheduled, announced elite at 2:30 run time and every 2:45 after
   ("An elite Shielded Rhino Beetle hunts you!"), random elites (1 in 80 spawns) only
   after 1:00. An elite Bomb Tick's blast is x1.4 wider (12 studs) with a 1.0 s fuse.
-* **Boss milestone**: the portal (dormant 2:30 on stage 1) summons the Queen; the crowd
-  drops to half (15-60) during the fight; the surge follows her death.
+* **Boss milestone**: the portal (dormant 2:30 on stage 1) summons the stage's boss; the
+  crowd drops to half (15-60) during the fight; the surge follows its death.
 
 ### The Scorpion Queen (BossData.Bosses.ScorpionQueen)
 
@@ -203,6 +231,65 @@ and a small tag over the crown:
   telegraph (`Fx.ClearWarn(0)`).
 * Party scaling is unchanged (`Config.Boss.HPPerExtraPlayer`, `Config.Stages.BossHPByStage`);
   extra players add Venom Burst circles.
+
+### Stage bosses (BossData: rotation, entrances, patterns)
+
+Stage 1 is always the Scorpion Queen (`Config.Boss.First`). Later stages take
+`BossData.Rotation` (Queen, Moth Matriarch, Rhino Warlord, Hive Mother) as shuffled bags:
+every boss once before any repeats, never the same boss on two stages in a row
+(`StageManager` bossFor; the plan grows on demand so the NEXT STAGE panel and the stage
+agree). HP = `Config.Boss.HP` x the boss's `HPMult` x the stage share x the party scaling.
+The boss's name is on the boss bar, the awaken banner, the "Defeat the <boss>" pill and the
+travel card ("RUINS · MOTH MATRIARCH"). Every boss has the Queen's frame: a 2.5 s entrance
+(invulnerable, harmless) + 2 s without attacks, the 50% notch and a phase-2 roar, chase /
+recovery shrinking in phase 2 while telegraphs keep their length, a collapse that removes
+every hazard / telegraph / projectile / banner / egg at once, damage ignored after 0 HP.
+Defeating each one is an achievement (Queen Slayer, Moth Bane, Banner Breaker, Hive
+Cleanser). Times in seconds, damage before the stage multiplier.
+
+**Moth Matriarch** (flies; HP x0.85, contact 26, speed 9.5; chase 2.8 s): flies down from
+the sky. Cycle: Dust Storm → Dive → Glimmer Mines → Summon.
+
+| Attack | Anticipation | Telegraph | Active | Recovery |
+|---|---|---|---|---|
+| Dust Storm | wings up, shaking (1.1) | crimson ring at her feet with one opening + ivory lines and gold chevrons marking the safe lane (gap 60°) | a dust ring rolls out at 21 studs/s to 64 studs (3 thick): 18 to anyone it passes outside the gap | 0.9 |
+| Dive | rises and leans back | 1.1 s lane (10 wide, 54 long) | swoop at 64 studs/s, contact 26 | 1.4 grounded (stars, harmless) |
+| Glimmer Mines | wings up (0.7) | 5 motes (+2 per extra player, max 9) drift onto dashed circles (r 4.2) near the players, blinking slow → fast | pop after 2.6 s: 16 | 0.8 |
+| Summon | raises up | 4 cocoons (+1 per extra player, max 6) crack around her (1.1) | Phase Moths flutter out | - |
+
+Phase 2 ("THE MATRIARCH WHIPS UP A TEMPEST!", x1.25 pace): **Wing Gust** joins the cycle
+twice (she rears back 0.9 s over an ivory wind cone 34 long / 76° wide with drifting
+streaks; for 0.6 s players inside are pushed 20 studs/s away, about 12 studs, no damage,
+never into an obstacle or out of the fence, the anti-cheat speed check moves with them) and
+Dust Storm sends a **second wave** 1.6 s later with its gap turned 70° (its gap lane shows
+as the first wave leaves).
+
+**Rhino Warlord** (heavy; HP x1.15, contact 32, speed 7.5; chase 3 s). Cycle: Horn Charge →
+Ground Pound → War Banner → Horn Charge → Ground Pound → Summon.
+
+| Attack | Anticipation | Telegraph | Active | Recovery |
+|---|---|---|---|---|
+| Horn Charge | crouches, trembles | 1.1 s lane (12 wide, up to 62 long); the lane stops at the first tree / rock / the fence | charge at 62 studs/s, contact 32 | blocked: horn stuck 2.2 (stars, harmless, free hits); else 1.0 |
+| Ground Pound | rears up (0.8) | three bands 0-8 / 8-15 / 15-22 studs, each with a front rolling outward | they strike at 1.0 / 1.6 / 2.2 s: 22 each (step into a band that already struck) | 1.0 |
+| War Banner | raises the banner from his back (0.9) | plants it 10 studs to his side: a dashed crimson rally zone (r 22) with a gold ring at its foot, toast "WAR BANNER! Destroy it to break the rally"; 2 Beetle Warriors climb out | beetles in the zone (crimson ring under them): x1.3 speed, x1.4 contact damage; the banner has 3.5% of his max HP and an HP bar; only one at a time (else he summons) | 0.6 |
+| Summon | raises up | the soil cracks in 4 spots (+1 per extra player, max 6) (1.1) | Beetle Warriors climb out | - |
+
+Phase 2 ("THE WARLORD GOES BERSERK!", x1.25 pace): every pound is a **double pound**: after
+the first he rears again (0.5 s) and the bands come back from the outside in.
+
+**Hive Mother** (slow; HP x1.05, contact 26, speed 5.5; chase 3.2 s; the mesh is shown at
+0.8 scale, ~14 studs long). Cycle: Egg Barrage → Acid Pools → Brood Call → Egg Barrage →
+Acid Pools.
+
+| Attack | Anticipation | Telegraph | Active | Recovery |
+|---|---|---|---|---|
+| Egg Barrage | egg sac heaves (0.8) | 4 eggs (+1 per extra player, max 7), 0.15 s apart, tumble in arcs onto dashed acid circles (r 3) near the players (1.1 s flight) | landing: 12; each egg then sits (30 HP, HP bar, amber timer ring, wobbling harder) and hatches 3 Mites after 3.5 s unless destroyed | 0.8 |
+| Acid Pools | head down (0.7) | 3 dashed acid circles (+1 per extra player, max 5, r 5) fill for 1.2 s | they bubble for 6 s: 5 per 0.5 s while you stand in them | 0.9 |
+| Brood Call | raises up | the soil cracks in 3 spots (+1 per extra player, max 5; never past the Spitter cap) (1.2) | Spitters climb out | - |
+| (when hit hard) | - | 7% of her max HP within 1.5 s: a double-edged amber ring around her (5 studs past her body) fills 0.9 s | pulse: 14 | at most every 9 s |
+
+Phase 2 ("THE HIVE MOTHER SWELLS WITH ACID!", x1.2 pace): each acid pool drips a **trail**
+of 3 small pools (r 2.4, 70% of the life) back toward her.
 
 ## Level-ups, characters, achievements
 
@@ -233,6 +320,14 @@ projectiles that stop on a hit; it evolves the Longbow.
 | Throwing Knives | 4 | Ricochet: a knife that would stop bounces once to the nearest enemy (20 studs) |
 | Garlic Aura | 4 | Chilling Aura: non-boss enemies inside move 25% slower |
 | Longbow | 6 | Volley: every 3rd shot adds 2 arrows at ±12° |
+| Spear | 5 | Impale: the first enemy each spear hits takes +50% |
+| Crossbow | 4 | Ricochet: a bolt that would stop bounces once to the nearest other enemy |
+| Frost Nova | 5 | Shatter: enemies the nova kills burst into 3 ice shards (half damage) |
+| Fire Trail | 5 | Wildfire: every 3rd flame patch is 60% wider |
+| Healing Totem | 5 | Rooting Pulse: every 3rd pulse roots enemies in the ring for 0.5 s |
+| Chain Hook | 4 | Barbed Chain: enemies along the chain are dragged in too |
+| Turret | 5 | Flak Shells: every 4th turret shot bursts for half damage around its target |
+| Soul Bolt | 4 | Wandering Souls: a soul that kills its target flies on to another enemy |
 
 **Characters** (CharacterData: Trait, Strengths, Tradeoff, Unlock), shown on CHARACTERS:
 
@@ -243,6 +338,9 @@ projectiles that stop on a hit; it evolves the Longbow.
 | Rogue | Throwing Knives | Fleet Foot: +15% speed | knives only fly where you move | 1,000 gold |
 | Priest | Garlic Aura | Blessed: +20% max HP | no reach | 1,500 gold |
 | Ranger | Longbow | Steady Aim: stand still 0.8 s for +30% Longbow damage (+10% other weapons) until you move | slow shots, one direction, bonus needs standing still | achievement Queen Slayer |
+| Alchemist | Fire Trail | Volatile Mix: +20% damage for burning / area weapons (Fire Trail, Frost Nova, Healing Totem, Holy Water, Garlic, Lightning) | damage stays behind you: needs to keep moving | achievement Deep Delver (reach stage 4) |
+| Engineer | Turret | Tinkerer: turrets and Healing Totems last 30% longer | turrets stay where they were built; slow start | achievement Field Engineer (3 optional events) |
+| Necromancer | Soul Bolt | Soul Harvest: every weapon kill has a 15% chance to release a homing soul (10 + 0.6 x level damage, x Might) | slow souls, small hits: tough single targets take long | achievement Reaper (500 kills in one run) |
 
 **Longbow** (Ranger's weapon, also a normal weapon card for everyone): heavy arrows in the
 movement direction (at the nearest enemy while standing still), range ≈ 90-125 studs, pierce
@@ -252,8 +350,36 @@ pierce, a 4-arrow volley every shot (≈ 166). Projectile mesh `Shot_Arrow` (par
 until it loads); hero mesh `Ranger` (part-built fallback with longbow and quiver). The HUD
 shows a buff chip over the ability bar: "STAND STILL TO AIM" / "STEADY AIM +30% DAMAGE".
 
+**New weapons** (WeaponData; every hero can find them on cards, the start weapons of the
+three new heroes included). Per-target DPS = damage x amount / cooldown (area weapons hit
+everything in range, so their number is lower on purpose; reference: Longbow 10.6 / 60 /
+166, Knives 7 / 65 / 150, Death Spiral 160):
+
+| Weapon | What it does | Lv1 | Lv8 | Evolution (passive) | Evolved |
+|---|---|---|---|---|---|
+| Spear | thrusts out and back in your facing direction (reach 11 x area), pierces 3 → 6 | 11.7 | 64 | Dragon Lance (Might): 3 lances, pierce all, tip bursts 60% | 140 (+ bursts ≈ 160) |
+| Crossbow | fast bolts at the nearest enemies, range ≈ 80 | 8.4 | 65 | Heartseeker (Precision): 3 ricochets | 131 (+ ricochets ≈ 165) |
+| Frost Nova | ice burst around you every 3.0 → 2.2 s, slows non-boss enemies to 60% | 4.0 | 13.6 | Absolute Zero (Area): huge burst, slow to 30% | 22 |
+| Fire Trail | burning patches behind you while you walk (none while standing still), 0.5 s ticks, never hurts heroes | 8 | 24 | Phoenix Stride (Speed Boots): golden flames, enemies keep burning 2 s | 32 (+ ignite ≈ 40) |
+| Healing Totem | plants a totem (max 1 → 2, evolved 3) that pulses: damage around it and 1 → 2.5 HP to every hero in range (no stacking between totems) | 4.7 | 18 | Lifebloom (Renewal): faster pulses, 4 HP | 32 |
+| Chain Hook | hooks the furthest enemy in a 40° cone, drags it to you; 60% to everything on the chain | 7.5 | 44 (+ chain) | Reaper's Chain (Vacuum): 3 hooks | 118 (+ chain ≈ 160) |
+| Turret | builds a turret next to you (max 1 → 2; the oldest is rebuilt next to you) that shoots the nearest enemy every 0.55 s | 7.8 | 62 | Bastion (Armor): fires every 0.33 s, bolts pierce 3 | 145 |
+| Soul Bolt | slow homing souls; a soul whose target died seeks another | 6.4 | 65 | Soul Storm (Growth): 5 souls, pierce 3 | 153 |
+
+New passives: **Precision** (+5 / 10 / 15% crit chance, evolves the Crossbow) and **Renewal**
+(0.6 / 1.2 / 2 HP/s, evolves the Healing Totem). With 17 weapons the "new weapon" card
+weight is shared (`Config.LevelUp.NewWeaponPoolRef`), so new-weapon cards are as likely as
+with 9 weapons; turrets / totems have a hard cap (`Params.MaxAmount`, Duplicator stops
+counting there). Projectile meshes Shot_Spear / Shot_Bolt / Shot_FrostShard / Shot_Totem /
+Shot_Hook / Shot_Soul / Ability_Turret (head aims at its target) / Shot_Fire (the trail's
+flames), with part-built stand-ins in ModelLibrary. Visual ids 32-63 go in the same byte
+(bit 7, `WeaponData.VisualByte`). Effects that are not projectiles (nova burst, flame
+patches, totem pulses, hook chains, flak / lance bursts, harvested souls) come in the
+`WeaponFx` remote, flushed with the projectile sync.
+
 **Achievements** (server-authoritative: AchievementService + AchievementData; game systems only
-fire bus events: RunManager BossKilled / RunWon / PartnerRevive, StageManager StageCleared /
+fire bus events: RunManager BossKilled / RunWon / PartnerRevive, StageManager BossDefeated
+{ Boss } / StageCleared /
 OptionalEvent (Bargain), LootSystem GoldenChest / OptionalEvent (altar); run time and level are
 polled once a second). A toast shows the unlock in the run; the results screen lists the run's
 unlocks; STATS → ACHIEVEMENTS shows progress bars and lets you wear earned titles and name
@@ -264,12 +390,16 @@ colours (lobby nameplate, above the hero name).
 | Hold the Line | survive 5:00 in one run | 100 gold |
 | Unbroken | survive 10:00 in one run | 250 gold, title Unbroken |
 | Queen Slayer | defeat the Scorpion Queen | **unlocks the Ranger**, 150 gold |
+| Moth Bane / Banner Breaker / Hive Cleanser | defeat the Moth Matriarch / Rhino Warlord / Hive Mother | 120 gold each (+ title Banner Breaker) |
 | Conqueror | clear stage 3 and leave through the portal (a win) | 400 gold, title, Gold name colour |
 | Daredevil | open a Guarded Altar or clear a stage under a Bargain | 150 gold, title, Crimson name colour |
 | Knight's Oath / Arcane Mastery / Shadow Run / Holy Light | clear a stage as Knight / Mage / Rogue / Priest | 100 gold each (+ Arcane / Ivory colour for Mage / Priest) |
 | Lifesaver | revive teammates 3 times (total) | 200 gold, title, Moss name colour |
 | Veteran | reach level 30 in one run | 200 gold, title Veteran |
 | Golden Touch | open a Golden Chest | 100 gold, title Treasure Hunter |
+| Deep Delver | reach stage 4 in one run | **unlocks the Alchemist**, 150 gold |
+| Field Engineer | complete 3 optional events (Guarded Altars / Bargain stages, total) | **unlocks the Engineer**, 150 gold |
+| Reaper | defeat 500 enemies in one run | **unlocks the Necromancer**, 150 gold |
 
 Save schema 4 (DataService migration 3 → 4): `Achievements = { Progress, Unlocked }`, `Title`,
 `NameColor`, all starting empty; gold, owned characters, skins and stats are untouched.
@@ -303,14 +433,15 @@ Studio setup for saving:
 default.project.json
 src/shared/   → ReplicatedStorage.Shared
   Config.lua            every tunable number
-  WeaponData.lua        9 weapons x 8 levels + evolutions + perks + projectile visuals,
+  WeaponData.lua        17 weapons x 8 levels + evolutions + perks + projectile visuals,
                         card lines ("Damage 10 → 15") and which stats each behaviour uses
-  PassiveData.lua       13 passives x 3-5 levels (PassiveData.MaxLevelOf)
+  PassiveData.lua       15 passives x 3-5 levels (PassiveData.MaxLevelOf)
   StatSheet.lua         the run stat sheet as a pure function + card lines for passives
-  AchievementData.lua   12 achievements: event, goal, reward; titles / name colours
-  EnemyData.lua         enemy types (roles, behaviours) + per-minute spawn table
-  BossData.lua          boss encounters: entrance, phases, attack timings (data only)
-  CharacterData.lua     5 characters (trait, strengths, tradeoff, unlock) + 13 skins
+  AchievementData.lua   achievements: event, goal, reward; titles / name colours, hero unlocks
+  EnemyData.lua         enemy types (roles, behaviours, creatures, boss bodies and boss
+                        objects) + per-minute spawn table
+  BossData.lua          the 4 stage bosses: entrance, phases, attack timings, the rotation (data only)
+  CharacterData.lua     8 characters (trait, strengths, tradeoff, unlock) + 13 skins
   ItemData.lua          19 run items (rarity, text, stacking, stat bonus), item rolls, prices
   MetaUpgradeData.lua   lobby shop upgrades
   IconData.lua          upgrade icon pictures (weapon / evolution / passive id → asset id)
@@ -324,8 +455,11 @@ src/server/
     EnemySpawner.lua    enemy pool, spawning, damage, deaths, drops, boss spawn
     EnemyAI.lua         batched movement, obstacle raycasts, contact damage, behaviours
                         (ranged wind-up, lunge, fuse, burning patches)
-    BossAI.lua          runs a BossData encounter (entrance, attacks, phases, collapse)
-    Hazards.lua         delayed ground strikes and fire patches (server-decided damage)
+    BossAI.lua          runs a BossData encounter (entrance, attacks, phases, twists, boss
+                        objects, collapse) for all four bosses
+    Hazards.lua         delayed ground strikes (circles, ring bands), fire / acid patches and
+                        rolling ring waves with a gap (server-decided damage)
+    BiomeHazards.lua    biome floor pools: mud / quicksand slow, ice slip, lava burn
     WeaponSystem.lua    all weapons, projectile simulation, hit detection, sync batches
     XPSystem.lua        XP gems (pooled), shared XP, floor pickups, chests
     LevelUpSystem.lua   stat sheet, level-up cards, reroll/skip, evolutions, chest rewards
@@ -337,7 +471,8 @@ src/server/
     Events.lua          tiny server event bus (Fire / On) for achievements
     AchievementService.lua  achievement progress, unlocks, rewards, EquipCosmetic
     MonetizationService.lua  gamepasses, developer products, ProcessReceipt
-    MapBuilder.lua      castle lobby (+ MenuCamera shot), Forest + Ruins arenas, lighting,
+    MapBuilder.lua      castle lobby (+ MenuCamera shot), the six arenas (Forest, Ruins,
+                        Swamp, Snow, Desert, Lava) with their hazard pools, lighting,
                         the stage portal (spot, model, beam, rune circle, state colours)
     ModelBuilder.lua    characters, hats, enemy shells, gems, pickups, chests
     SpatialGrid.lua     20-stud bucket grid for hit detection / neighbour queries
@@ -346,8 +481,11 @@ src/client/   → StarterPlayerScripts.SwarmClient
   ClientMain.client.lua starts everything, music, VIP chat tag
   CameraController.lua  fixed-angle follow camera (+ spectate when dead)
   MobileControls.lua    floating thumbstick, WASD, gamepad
+  TerrainFx.lua         biome hazard feel: slippery steering on ice, breathing lava glow
   Telegraphs.lua        every enemy floor warning (circles, lanes, spokes, acid globs, eggs,
-                        fire patches, impact bursts), pooled, from the FxBatch "w" / "x" keys
+                        fire / acid patches, ring bands, dust waves with a gap, glimmer mines,
+                        wind cones, emerge cracks, the banner's zone, impact bursts), pooled,
+                        from the FxBatch "w" / "x" keys
   VFX.lua               projectile rendering + spin/trails/impacts, sword swings, effects, gem/pickup
                         bob, aura rings, HP bars, walk cycle + attack poses
   ModelLibrary.lua      detailed animated 3D models for every enemy, the boss and every projectile
@@ -389,13 +527,14 @@ Purchases are cosmetic or convenience (gold and skins). There are no loot boxes.
 | Bigger mini-waves | `Config.Spawn.MiniWaveBaseCount`, `MiniWavePerMinute`, `Config.Run.MiniWaveInterval` |
 | Enemy cap (performance) | `Config.Enemies.MaxLive` (≤ `PoolSize`), `MaxLiveRanged` (Spitters) |
 | Elites | `Config.Enemies.EliteChance`, `EliteHPMult`, `EliteSizeMult`, `EliteBlastMult`, `EliteFuse`, `EliteAffixes`, `Affix`; chest gold `Config.Gold.Elite`, `EliteStageScale` |
-| Pacing (calm, lulls, build-up, elites) | `Config.Pacing` |
-| Boss | `Config.Boss` (HP, crowd), `BossData.lua` (entrance, phases, attack timings), `Config.Stages.BossHPByStage` |
+| Pacing (calm, lulls, build-up, elites, intro groups, nests) | `Config.Pacing` (`Nests`, `IntroGroupOf`), caps `Config.Enemies.MaxLiveSupport` / `MaxLiveBurrowers` |
+| Boss | `Config.Boss` (HP, crowd, `First` = stage 1's boss), `BossData.lua` (entrance, phases, attack timings, `HPMult`, `Rotation`), `Config.Stages.BossHPByStage` |
 | Stage difficulty | `Config.Stages.EnemyHPPerStage`, `EnemyDamagePerStage`, `SpawnTargetPerStage` |
 | Portal | `Config.Stages.PortalMinDistance`, `PortalRadius`, `ChargeSeconds`, `PortalLockSeconds`, `HintAfterSeconds` |
 | Queen fight crowd | `Config.Stages.BossMinionShare`, `BossMinionMin`, `Config.Boss.MinionCapDuringBoss` |
 | Surge / choice | `Config.Stages.SurgeBase`, `SurgePerStage`, `SurgeSeconds`, `ChoiceSeconds`, `TravelHealFraction` |
 | What counts as a win | `Config.Stages.WinMinStages`; arena unlocks: `Config.Arenas.<name>.RequiredBestStage` |
+| Arena order / biome hazards | `Config.Arenas.Order` (lobby), `Rotation`, `ShuffleRotation`; `Config.Arenas.Hazards` (Mud, Quicksand, Ice, Lava numbers, `LootPad`) |
 | Leveling speed | `Config.XP.Base`, `PerLevel`, `CapLevel` |
 | Gold income | `Config.Gold.KillGoldChance`, `MinPerKill`, `MaxPerKill`, `Boss`, `WinBonus`, `StageClearBonus` |
 | Player survivability | `Config.Player.BaseMaxHP`, `ReviveHPFraction` |
@@ -411,11 +550,18 @@ Purchases are cosmetic or convenience (gold and skins). There are no loot boxes.
    Fill 8 rows in `Levels` (`row(damage, cooldown, amount, area, speed, pierce, duration, knockback)`)
    and an `Evolution` with a `Passive` id and evolved `Stats`.
 2. If it needs a new look, add a visual to `WeaponData.Visuals` and use its index in `Params.Visual`.
-   Its `Style` (Orb, Knife, Dart, Axe, Bottle, Boomerang, Saw, Stinger), `Trail` and `Impact` fields
-   set how the client animates it; all of that is client-side and costs no network.
+   Its `Style` (Orb, Knife, Dart, Axe, Bottle, Boomerang, Saw, Stinger, Spear, Bolt, Shard, Hook,
+   Soul, Totem, Turret, Flame), `Trail` and `Impact` fields set how the client animates it; all of
+   that is client-side and costs no network. Indexes 1-63 work (32+ use bit 7 of the visual byte:
+   always build it with `WeaponData.VisualByte`); 12-19 stay free for enemy shots. A mesh goes in
+   `ModelLibrary` `SHOT_MESH` (+ a part-built stand-in in `SHOTS`).
 3. `WeaponSystem.lua`: write `Fire.<Behavior>(rp, w, s, def)` where `Behavior` matches the entry.
    Use `allocProjectile()` for projectiles (pick an existing `Kind`: Straight, Homing, Arc, Lob,
-   Orbit, Boomerang) or damage directly with `hitEnemy` after a `grid():QueryCircle` lookup.
+   Orbit, Boomerang, Thrust, Hook, Soul, Totem, Turret) or damage directly with `hitEnemy` /
+   `damageEnemy` after a `grid():QueryCircle` lookup (never `EnemySpawner.Damage` directly:
+   `damageEnemy` also runs the hero kill traits). Effects that are not projectiles go through
+   `pushFx` (the `WeaponFx` remote, drawn in VFX `onWeaponFx`). Hero traits read weapon flags:
+   `Area = true` (Volatile Mix), `Deployable = true` (Tinkerer); `Params.MaxAmount` caps amount.
    Level-up card text is generated from the row differences automatically ("Damage 10 → 15"):
    list the stats the behaviour really uses in `WeaponData.StatUse[Behavior]` (unused stats are
    never shown, and passives that only touch unused stats are not offered), and name the amount
@@ -535,7 +681,9 @@ from old clients but not shown.
 **DEV button** (bottom right): only in Studio by default, so it never shows in normal play.
 Set `Config.Dev.ShowInLiveGame = true` to also show it to the game's creator in live servers.
 Lobby: *Start solo now*. In a run: *+5 levels*, *Spawn portal boss* (charges this stage's
-portal at once) and *Teleport to portal*. The server checks
+portal at once), *Teleport to portal*, *+3 random items*, *+300 gold*, *All new weapons Lv 8*
+(the eight weapons of the new heroes at level 8, past the slot limit: a test loadout) and
+*Evolve all weapons*. The server checks
 the same rule again for every request (`RunManager` "DevCommand"). Turn it off with
 `Config.Dev.Enabled = false`.
 

@@ -3,8 +3,9 @@
 	Server-authoritative achievements (src/shared/AchievementData.lua).
 
 	Game systems only fire bus events (Modules/Events.lua): RunManager (BossKilled, RunWon,
-	PartnerRevive), StageManager (StageCleared), LootSystem (GoldenChest, OptionalEvent).
-	RunTime and Level are read here once a second from the run players.
+	PartnerRevive), StageManager (StageCleared, BossDefeated { Boss } per stage boss),
+	LootSystem (GoldenChest, OptionalEvent).
+	RunTime, Level, StageReached and RunKills are read here once a second from the run players.
 
 	Save (DataService schema 4):
 	  data.Achievements = { Progress = { [id] = number }, Unlocked = { [id] = os.time() } }
@@ -179,6 +180,18 @@ function AchievementService.Step(dt: number)
 		if (rp.Level or 1) > (rp.AchievedLevel or 1) then
 			rp.AchievedLevel = rp.Level
 			Events.Fire("Level", rp.Player, { Level = rp.Level })
+		end
+		-- hero unlocks: the stage the run reached (Deep Delver) and kills this run (Reaper)
+		if not rp.Returned then
+			local stage = ctx.StageManager and ctx.StageManager.GetStage() or 0
+			if stage > (rp.AchievedStage or 0) then
+				rp.AchievedStage = stage
+				Events.Fire("StageReached", rp.Player, { Stage = stage })
+			end
+			if (rp.Kills or 0) > (rp.AchievedKills or 0) then
+				rp.AchievedKills = rp.Kills
+				Events.Fire("RunKills", rp.Player, { Kills = rp.Kills })
+			end
 		end
 	end
 end

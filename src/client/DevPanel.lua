@@ -113,6 +113,8 @@ function DevPanel.Init(root: Instance, host: { [string]: any }?)
 	table.insert(runButtons, item("Teleport to portal", "TeleportToPortal", 4))
 	table.insert(runButtons, item("+3 random items", "GiveItems", 5))
 	table.insert(runButtons, item("+300 gold", "AddGold", 6))
+	table.insert(runButtons, item("All new weapons Lv 8", "NewWeapons", 7))
+	table.insert(runButtons, item("Evolve all weapons", "EvolveWeapons", 8))
 	panel = holder
 
 	-- bottom right in landscape (clear of the menu columns and the ability bar), left edge

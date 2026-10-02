@@ -335,11 +335,12 @@ function RunManager.RefreshLobbyCharacter(player: Player)
 end
 
 -- Sets WalkSpeed from state: 0 when paused, dead, downed, frozen or travelling.
+-- rp.TerrainSpeedMult: the biome floor under the player (mud, quicksand, ice; BiomeHazards).
 function RunManager.ApplyMovement(rp)
 	local hum: Humanoid? = rp.Humanoid
 	local canMove = rp.Alive and not rp.Paused and not frozen and phase == "Running" and not ctx.StageManager.IsHolding()
 	if hum and hum.Parent then
-		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed or 0
+		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) or 0
 	end
 	rp.Player:SetAttribute("Paused", rp.Paused == true)
 end
@@ -1145,7 +1146,17 @@ local function cycleArena(player: Player)
 			return
 		end
 	end
-	RunManager.Notify(player, "Reach stage 2 in a run to unlock the next arena!", Color3.fromRGB(255, 200, 120))
+	-- nothing else unlocked yet: name the next arena and the stage it needs
+	local need, needName = math.huge, nil
+	for _, name in ipairs(order) do
+		local def = (Config.Arenas :: any)[name]
+		if def and not arenaUnlocked(data.Stats, name) and (def.RequiredBestStage or 0) < need then
+			need, needName = def.RequiredBestStage or 0, def.DisplayName
+		end
+	end
+	if needName then
+		RunManager.Notify(player, string.format("Reach stage %d in a run to unlock the %s!", need, needName), Color3.fromRGB(255, 200, 120))
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -1202,6 +1213,13 @@ local function devCommand(player: Player, command: any)
 		local rp = byPlayer[player]
 		if rp and not rp.Returned and phase == "Running" then
 			ctx.GoldSystem.AddRunGold(rp, 300)
+		end
+	elseif command == "NewWeapons" or command == "EvolveWeapons" then
+		-- every weapon added with the Alchemist / Engineer / Necromancer at level 8 (past the
+		-- slot limit), or evolve every owned weapon (LevelUpSystem.DevWeapons)
+		local rp = byPlayer[player]
+		if rp and not rp.Returned and rp.Alive and phase == "Running" then
+			ctx.LevelUpSystem.DevWeapons(rp, command == "EvolveWeapons")
 		end
 	end
 end
@@ -1299,7 +1317,8 @@ local function speedCheck(rp, dt: number)
 	end
 	local moved = ((pos - last) * FLAT).Magnitude
 	-- paused (level-up), frozen or downed players may not travel at all
-	local maxSpeed = (rp.Paused or frozen or not rp.Alive) and 0 or math.max(rp.Stats.Speed, Config.Player.BaseSpeed)
+	-- (ice makes players faster: BiomeHazards' TerrainSpeedMult > 1)
+	local maxSpeed = (rp.Paused or frozen or not rp.Alive) and 0 or math.max(rp.Stats.Speed, Config.Player.BaseSpeed) * math.max(1, rp.TerrainSpeedMult or 1)
 	local allowed = maxSpeed * elapsed * Config.Player.SpeedCheckTolerance + Config.Player.SpeedCheckAllowance
 	if moved > allowed or pos.Y < Config.ArenaOrigin.Y - 20 then
 		root.CFrame = CFrame.new(last + Vector3.new(0, 0.5, 0)) * root.CFrame.Rotation

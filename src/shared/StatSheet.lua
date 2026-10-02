@@ -162,6 +162,20 @@ local LINES = {
 			return pct(1 + v)
 		end,
 	},
+	{
+		Key = "CritChance",
+		Label = "Crit chance",
+		Fmt = function(v: number): string
+			return math.floor(v * 100 + 0.5) .. "%"
+		end,
+	},
+	{
+		Key = "Regen",
+		Label = "HP regen",
+		Fmt = function(v: number): string
+			return num(v) .. " HP/s"
+		end,
+	},
 	{ Key = "ProjSpeedMult", Label = "Projectile speed", Fmt = pct },
 	{ Key = "DurationMult", Label = "Duration", Fmt = pct },
 	{ Key = "Growth", Label = "XP gain", Fmt = pct },

@@ -21,7 +21,17 @@
 	  Fuse (Bomb Tick)   next to a player: "Fuse" (swells and blinks inside its blast ring),
 	                     then explodes where it stands; killing it first defuses it
 	  Burning elites     drop fire patches behind them while walking (Hazards patches)
-	The boss runs BossAI (data in BossData). Hazards (strikes / patches) step here too.
+	  Burrow (Burrower)  "Tunnel" underground (a dust trail on clients; untargetable,
+	                     invulnerable, harmless) toward the nearest player → "Surface" (a
+	                     circle warns where it bursts out, it holds still) → bursts out
+	                     (Hazards strike), "Popped" (a short daze), then a normal melee bug
+	  Support (Healer)   keeps its distance like a Spitter; "Channel" (glows) → a green pulse
+	                     heals nearby enemies (never bosses or stationary things)
+	  Static             nests, the War Banner, Brood Eggs never move. A nest ("Pulse") warns
+	                     at its openings, then mites climb out; a Brood Egg ("Incubate")
+	                     hatches Mites when its timer ends; the War Banner rallies beetles in
+	                     its zone (faster, harder contact hits; body attribute "Rallied")
+	The boss runs BossAI (data in BossData). Hazards (strikes / patches / waves) step here too.
 	Fresh spawns are harmless for Config.Enemies.SpawnGrace (they fade in on clients);
 	Harmless / Untargetable enemies (the Queen's entrance, burrow, collapse) neither touch
 	players nor enter the hit grid.
@@ -218,6 +228,208 @@ end
 
 local setAct -- EnemySpawner.SetAct (bound in Init)
 
+-- Spawns `count` of `typeId` at the given floor spots (cycled), respecting MaxLive.
+-- Returns the enemies made.
+local function spawnAt(typeId: string, spots: { Vector3 }, count: number): { any }
+	local made = {}
+	for k = 1, count do
+		local p = spots[(k - 1) % math.max(1, #spots) + 1]
+		if p then
+			local e = ctx.EnemySpawner.Spawn(typeId, p)
+			if e then
+				table.insert(made, e)
+			end
+		end
+	end
+	return made
+end
+
+-- Burrower: tunnel → surface warning → burst out → fights as a normal melee bug.
+local function behaveBurrow(e, dt: number, to: Vector3?, dist: number)
+	local B = e.Def.Burrow
+	local act = e.Act
+	if act == nil and e.Tunnel == nil then
+		-- just spawned: it starts underground
+		e.Tunnel = true
+		e.Untargetable = true
+		e.Invulnerable = true
+		e.Harmless = true
+		e.Ghost = true -- underground: no obstacles
+		setAct(e, "Tunnel", B.MaxTunnel)
+		return
+	end
+	if act == "Tunnel" then
+		e.ActTimer -= dt
+		e.SpeedOverride = B.TunnelSpeed
+		if (to and dist <= B.SurfaceRange) or e.ActTimer <= 0 then
+			-- the circle shows where it bursts out; it holds still under it
+			e.SpeedOverride = 0
+			e.PinPos = e.Pos
+			local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+			Hazards.Strike(at, B.Radius, B.Warn, B.Damage * (e.DmgScale or 1), { Style = "burrow" })
+			setAct(e, "Surface", B.Warn)
+		end
+	elseif act == "Surface" then
+		e.ActTimer -= dt
+		e.SpeedOverride = 0
+		if e.ActTimer <= 0 then
+			e.Tunnel = false
+			e.Untargetable = false
+			e.Invulnerable = false
+			e.Ghost = e.Def.Ghost == true
+			e.PinPos = nil
+			setAct(e, "Popped", 0.6)
+		end
+	elseif act == "Popped" then
+		e.ActTimer -= dt
+		e.SpeedOverride = 0
+		if e.ActTimer <= 0 then
+			e.Harmless = false
+			e.SpeedOverride = nil
+			setAct(e, nil)
+		end
+	else
+		e.SpeedOverride = nil
+	end
+end
+
+-- Healer: hangs back, glows, then a green pulse heals nearby enemies.
+local function behaveSupport(e, dt: number, to: Vector3?, dist: number)
+	local S = e.Def.Support
+	if e.Act == "Channel" then
+		e.ActTimer -= dt
+		e.SpeedOverride = 0
+		if to and dist > 0.1 then
+			e.Face = (to :: Vector3).Unit
+		end
+		if e.ActTimer <= 0 then
+			local n = ctx.EnemySpawner.Grid:QueryCircle(e.Pos.X, e.Pos.Z, S.Radius, queryBuf)
+			for i = 1, n do
+				local o = queryBuf[i]
+				if o.Alive and not o.Boss and not o.Def.Static and o.HP < o.MaxHP then
+					o.HP = math.min(o.MaxHP, o.HP + o.MaxHP * S.HealShare)
+				end
+			end
+			Fx.Warn("pop", e.Pos.X, e.Pos.Z, S.Radius, "heal")
+			Fx.Sound("HealPulse")
+			e.HealTimer = S.Every
+			e.SpeedOverride = nil
+			setAct(e, nil)
+		end
+		return
+	end
+	e.HealTimer = (e.HealTimer or S.Every * (0.5 + rng:NextNumber() * 0.5)) - dt
+	e.SpeedOverride = nil
+	if to and dist > 0.1 then
+		local dir = (to :: Vector3).Unit
+		if dist < S.MinRange - 3 then
+			e.Dir = -dir -- too close: back away, still facing the player
+			e.SpeedOverride = e.Speed * 0.8
+			e.Face = dir
+		elseif dist <= S.MaxRange then
+			e.SpeedOverride = 0
+			e.Face = dir
+		end
+	end
+	if e.HealTimer <= 0 and e.SpawnGrace <= 0 then
+		setAct(e, "Channel", S.Windup)
+	end
+end
+
+-- The two openings of a nest (model local -Z and -X), as floor points just outside it.
+local function nestSpots(e): { Vector3 }
+	local look = e.StaticFace or Vector3.new(0, 0, -1)
+	local side = Vector3.new(look.Z, 0, -look.X)
+	local r = e.Radius + 1.8
+	local out = {}
+	for _, d in ipairs({ look, side }) do
+		local x, z = ctx.EnemySpawner.ClampToArena(e.Pos.X + d.X * r, e.Pos.Z + d.Z * r, 4)
+		table.insert(out, Vector3.new(x, Config.ArenaOrigin.Y, z))
+	end
+	return out
+end
+
+-- Living enemies in a tracked list ({ e, uid }), pruning the dead / recycled ones.
+local function liveIn(list: { any }): number
+	for i = #list, 1, -1 do
+		local item = list[i]
+		if not (item[1].Alive and item[1].Uid == item[2]) then
+			table.remove(list, i)
+		end
+	end
+	return #list
+end
+
+-- Nests, Brood Eggs and the War Banner: they stand still and do their one job.
+local function behaveStatic(e, dt: number)
+	local def = e.Def
+	e.SpeedOverride = 0
+	e.Face = e.StaticFace
+	if def.Spawner then
+		local S = def.Spawner
+		e.SpawnTimer = (e.SpawnTimer or S.Every * 0.6) - dt
+		if e.Act ~= "Pulse" and e.SpawnTimer <= S.Warn then
+			local children = e.Children or {}
+			e.Children = children
+			if liveIn(children) < S.MaxChildren then
+				e.NestSpots = nestSpots(e)
+				for _, p in ipairs(e.NestSpots) do
+					Fx.Warn("circle", p.X, p.Z, 1.7, math.max(0.1, e.SpawnTimer), "nest")
+				end
+				setAct(e, "Pulse", e.SpawnTimer)
+			else
+				e.SpawnTimer = S.Every -- full: wait for the next cycle
+			end
+		end
+		if e.Act == "Pulse" and e.SpawnTimer <= 0 then
+			local children = e.Children or {}
+			e.Children = children
+			local room = math.max(0, S.MaxChildren - liveIn(children))
+			for _, m in ipairs(spawnAt(S.Type, e.NestSpots or nestSpots(e), math.min(S.Count, room))) do
+				table.insert(children, { m, m.Uid })
+				e.SpawnedCount = (e.SpawnedCount or 0) + 1
+			end
+			e.NestSpots = nil
+			e.SpawnTimer = S.Every
+			setAct(e, nil)
+		end
+	elseif def.Hatch then
+		local H = def.Hatch
+		if e.Act ~= "Incubate" then
+			e.HatchLeft = e.HatchLeft or H.Seconds
+			setAct(e, "Incubate", e.HatchLeft)
+		end
+		e.HatchLeft = (e.HatchLeft or H.Seconds) - dt
+		if e.HatchLeft <= 0 then
+			local count = e.HatchCount or H.Count
+			local spots = {}
+			for k = 1, count do
+				local a = k * math.pi * 2 / count + rng:NextNumber(0, 1)
+				local x, z = ctx.EnemySpawner.ClampToArena(e.Pos.X + math.cos(a) * 2.2, e.Pos.Z + math.sin(a) * 2.2, 4)
+				table.insert(spots, Vector3.new(x, Config.ArenaOrigin.Y, z))
+			end
+			Fx.Warn("pop", e.Pos.X, e.Pos.Z, 2, "hatch")
+			ctx.EnemySpawner.Despawn(e) -- hatched: the shell is gone (no reward)
+			spawnAt(H.Type, spots, count)
+		end
+	elseif def.Rally then
+		e.RallyTick = (e.RallyTick or 0) - dt
+		if e.RallyTick <= 0 then
+			e.RallyTick = 0.25
+			local radius = e.RallyRadius or 22
+			local n = ctx.EnemySpawner.Grid:QueryCircle(e.Pos.X, e.Pos.Z, radius, queryBuf)
+			for i = 1, n do
+				local o = queryBuf[i]
+				if o.Alive and o.Def.Beetle and not o.Boss then
+					o.RallyUntil = clock + 0.6
+					o.RallySpeed = e.RallySpeed or 1.3
+					o.RallyDamage = e.RallyDamage or 1.4
+				end
+			end
+		end
+	end
+end
+
 local function startWindupRanged(e, R, to: Vector3)
 	local t = e.Target
 	local p = t.Root.Position
@@ -253,6 +465,18 @@ local function behave(e, dt: number)
 	if t and t.Alive and t.Root then
 		to = (t.Root.Position - e.Pos) * FLAT
 		dist = (to :: Vector3).Magnitude
+	end
+	if def.Static then
+		behaveStatic(e, dt)
+		return
+	elseif def.Burrow then
+		behaveBurrow(e, dt, to, dist)
+		if e.Act ~= nil then
+			return
+		end
+	elseif def.Support then
+		behaveSupport(e, dt, to, dist)
+		return
 	end
 
 	local act = e.Act
@@ -348,7 +572,7 @@ local function behave(e, dt: number)
 	end
 
 	-- Burning elites leave short-lived fire patches behind them while they walk.
-	if e.Affix == "Burning" then
+	if e.Affix == "Burning" and not e.Untargetable then
 		local B = Config.Enemies.Affix.Burning
 		e.BurnTimer = (e.BurnTimer or B.Every) - dt
 		if e.BurnTimer <= 0 then
@@ -403,7 +627,8 @@ function EnemyAI.Step(dt: number)
 	local i = 1
 	while i <= #active do
 		local e = active[i]
-		if e.ThinkSlot == slot or e.Target == nil or (e.Target and not e.Target.Alive) then
+		local static = e.Def.Static == true
+		if not static and (e.ThinkSlot == slot or e.Target == nil or (e.Target and not e.Target.Alive)) then
 			think(e, runPlayers)
 		end
 		if e.Boss then
@@ -419,15 +644,27 @@ function EnemyAI.Step(dt: number)
 		if e.SlowUntil and e.SlowUntil > now then
 			speed *= e.SlowMult or 1 -- Chilling Aura (Garlic perk, WeaponSystem)
 		end
+		-- a War Banner's rally (BossData WarBanner): faster beetles, harder contact hits
+		local rallied = e.RallyUntil ~= nil and e.RallyUntil > clock
+		if rallied ~= (e.Rallied == true) then
+			e.Rallied = rallied
+			e.Part:SetAttribute("Rallied", rallied or nil)
+		end
+		if rallied and not e.SpeedOverride then
+			speed *= e.RallySpeed or 1
+		end
 		-- A fuse / lunge wind-up stays exactly where its telegraph was drawn (no
 		-- separation or knockback drift).
 		local pin = e.PinPos
-		if pin and not (e.Act == "Fuse" or (e.Act == "Windup" and e.Def.Lunge)) then
+		if pin and not (e.Act == "Fuse" or e.Act == "Surface" or (e.Act == "Windup" and e.Def.Lunge)) then
 			pin = nil
 			e.PinPos = nil
 		end
 		local pos
-		if pin then
+		if static then
+			e.Knock = Vector3.zero
+			pos = e.Pos
+		elseif pin then
 			e.Knock = Vector3.zero
 			pos = pin
 		else
@@ -454,12 +691,12 @@ function EnemyAI.Step(dt: number)
 				local reach = e.Radius + PLAYER_RADIUS
 				if not harmless and d2 <= reach * reach and now >= e.NextContact then
 					e.NextContact = now + Config.Enemies.ContactCooldown
-					ctx.RunManager.DamagePlayer(rp, e.Damage)
+					ctx.RunManager.DamagePlayer(rp, e.Damage * (rallied and e.RallyDamage or 1))
 				end
 			end
 		end
 
-		if far and not e.Boss and not e.Act and #runPlayers > 0 then
+		if far and not e.Boss and not e.Act and not static and #runPlayers > 0 then
 			-- left far behind: bring it back to the edge of someone's screen
 			local spawnAt = ctx.EnemySpawner.SpawnPoint(e.Radius)
 			if spawnAt then

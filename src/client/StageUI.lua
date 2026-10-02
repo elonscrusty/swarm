@@ -340,7 +340,12 @@ local function onTravel(data)
 	travel.Active = true
 	travel.Since = os.clock()
 	ui.FadeTitle.Text = "STAGE " .. tostring(data.Stage or "?")
-	ui.FadeSub.Text = UIKit.track(tostring(data.Arena or ""))
+	-- "RUINS · MOTH MATRIARCH": the arena and the boss that guards its portal
+	local sub = tostring(data.Arena or "")
+	if type(data.Boss) == "string" and data.Boss ~= "" then
+		sub ..= "  ·  " .. data.Boss
+	end
+	ui.FadeSub.Text = UIKit.track(sub)
 	offer = nil
 	kit.Hide(ui.Choice.Overlay, "Portal")
 	fadeTo(0.02, math.max(0.2, (data.Seconds or 0.8) * 0.9))

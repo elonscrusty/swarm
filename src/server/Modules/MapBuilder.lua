@@ -1,8 +1,9 @@
 --[[
 	MapBuilder.lua
-	Builds the castle lobby (the menu backdrop) and the two arenas (Forest, Ruins) from the
-	Blender world / castle kit (MeshService + MeshCatalog) with part-built fallbacks, so the
-	maps read the same before and after the meshes are uploaded.
+	Builds the castle lobby (the menu backdrop) and the six arenas (Forest, Ruins, Swamp,
+	Snow, Desert, Lava) from the Blender world / castle / biome kits (MeshService +
+	MeshCatalog) with part-built fallbacks (biome kit pieces fall back to one block per
+	catalog piece), so the maps read the same before and after the meshes are uploaded.
 
 	BuildLobby()        → lobby table (menu camera, spawn, legacy prompts), built once at boot
 	BuildArena(name, variant?) → arena table, replaces any previous arena (variant > 0
@@ -18,7 +19,12 @@
 	BuildPortal(arena, pos) → the stage portal (kit mesh "Portal" or a part fallback, its
 	                      collider, rune circle, light beam) with :SetState(state, charge)
 	DestroyArena()
-	ApplyLighting(name) → "Lobby" | "Forest" | "Ruins" (sun, sky, atmosphere, clouds, grade)
+	ApplyLighting(name) → "Lobby" | an arena name (sun, sky, atmosphere, clouds, grade)
+
+	Biome arenas also list their floor HAZARDS in arena.Hazards = { { Kind = "Mud" |
+	"Quicksand" | "Ice" | "Lava", Pos, Radius } } (BiomeHazards applies them); FindPortalSpot
+	and FindOpenSpot keep Config.Arenas.Hazards.LootPad studs from every pool's edge, and
+	arena.PortalPalette tints the portal's moss slot for the biome.
 
 	Layouts are DESIGNED, not scattered: every landmark, grove, path and outcrop has a fixed
 	place, and small decoration uses a fixed seed per map, so every server builds the same
@@ -40,7 +46,8 @@
 
 	Navigation budget (measured with `bash tools/preview/render.sh arena-map --print-metrics`):
 	blocked area and the blocked area per ring (40-100, 100-200, corners) stay within about
-	15% of the previous random builder (Forest ~1160 studs², Ruins ~1370 studs²).
+	15% of the previous random builder (Forest ~1130 studs², Ruins ~1300 studs²; the biome
+	arenas are tuned to Forest: Swamp ~1140, Snow ~1040, Desert ~1130, Lava ~1140).
 	Phone budget per arena: everything anchored, about <= 650 MeshParts + 450 Parts, <= 12
 	lights, shadows only on big pieces (grass, flowers, ferns and clutter cast none).
 ]]
@@ -71,7 +78,7 @@ local TAU = math.pi * 2
 local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- turns a Cylinder's axis (X) upward
 local SMOOTH = Enum.Material.SmoothPlastic
 
-local SEEDS = { Lobby = 20250, Forest = 41207, Ruins = 93011 }
+local SEEDS = { Lobby = 20250, Forest = 41207, Ruins = 93011, Swamp = 52361, Snow = 63127, Desert = 74471, Lava = 85219 }
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -468,6 +475,34 @@ FALLBACK.Dais = function(m, cf, s, pal, sh)
 	fcyl(m, cf, s, "Top", 2.9, 0.04, 0, 1.2, 0, c3(pal, "Top", P.stone_300))
 end
 
+-- Biome kit pieces (Swamp / Snow / Desert / Lava) have no hand-made fallback: until the
+-- mesh loads they are drawn as one block per catalog piece (its box, slot colour and
+-- material), which keeps sizes, colours and the hazard pools readable.
+local BIOME_KITS = { Swamp = true, Snow = true, Desert = true, Lava = true }
+local catalogFallbacks: { [string]: (Model, CFrame, number, Pal, boolean) -> () } = {}
+
+local function catalogFallback(name: string): ((Model, CFrame, number, Pal, boolean) -> ())?
+	local cached = catalogFallbacks[name]
+	if cached then
+		return cached
+	end
+	local entry = (MeshCatalog.Models :: any)[name]
+	if not (entry and entry.Pieces and BIOME_KITS[entry.Category]) then
+		return nil
+	end
+	local build = function(m: Model, cf: CFrame, s: number, pal: Pal, sh: boolean)
+		for _, pc in ipairs(entry.Pieces) do
+			local o, z = pc.Offset, pc.Size
+			local p = fpart(m, cf, s, pc.Name, Vector3.new(z[1], z[2], z[3]) * 0.9, CFrame.new(o[1], o[2], o[3]), pal[pc.Slot] or P.stone_500, sh and pc.Shadow == true, nil, pc.Material == "Neon" and NEON or nil)
+			if pc.Transparency then
+				p.Transparency = pc.Transparency
+			end
+		end
+	end
+	catalogFallbacks[name] = build
+	return build
+end
+
 -- One MeshService.WhenReady per model name while meshes are still loading.
 local waitingSwaps: { [string]: { () -> () } } = {}
 
@@ -519,7 +554,7 @@ local function prop(parent: Instance, name: string, cf: CFrame, scale: number?, 
 	local container = Instance.new("Model")
 	container.Name = name
 	if not fillMesh(container, name, cf, s, palette, o) then
-		local build = FALLBACK[name] or o.fallback
+		local build = FALLBACK[name] or o.fallback or catalogFallback(name)
 		if build then
 			build(container, cf, s, kitPalette(name, palette), o.shadow ~= false)
 			for _, d in ipairs(container:GetChildren()) do
@@ -596,6 +631,51 @@ local LIGHTING = {
 		Grade = { Brightness = 0.01, Contrast = 0.08, Saturation = 0.06, Tint = rgb(255, 248, 238) },
 		Rays = { Intensity = 0.04, Spread = 0.55 },
 		Clouds = { Cover = 0.35, Density = 0.4, Color = rgb(255, 238, 220) },
+	},
+	-- humid green midday over the bog: soft haze, slightly cooler green fill, still bright
+	Swamp = {
+		Clock = 11.2, Brightness = 2.6, Latitude = 36, Shadow = 0.45,
+		Ambient = rgb(102, 112, 100), Outdoor = rgb(136, 150, 132), Top = rgb(246, 248, 226), Bottom = rgb(66, 78, 58),
+		Diffuse = 0.5, Specular = 0.3,
+		Atmo = { Density = 0.28, Offset = 0.06, Color = rgb(196, 212, 190), Decay = rgb(112, 132, 106), Glare = 0, Haze = 1.1 },
+		Bloom = { Intensity = 0.22, Size = 20, Threshold = 2 },
+		Grade = { Brightness = 0.01, Contrast = 0.08, Saturation = -0.04, Tint = rgb(248, 255, 240) },
+		Rays = { Intensity = 0.02, Spread = 0.5 },
+		Clouds = { Cover = 0.55, Density = 0.45, Color = rgb(232, 238, 226) },
+	},
+	-- crisp late-morning snowfield: lower sun brightness (the floor is white), cool fill
+	Snow = {
+		Clock = 11.4, Brightness = 2.3, Latitude = 44, Shadow = 0.4,
+		Ambient = rgb(116, 124, 140), Outdoor = rgb(148, 158, 178), Top = rgb(255, 250, 240), Bottom = rgb(118, 132, 152),
+		Diffuse = 0.45, Specular = 0.35,
+		Atmo = { Density = 0.24, Offset = 0.05, Color = rgb(216, 228, 242), Decay = rgb(150, 172, 198), Glare = 0, Haze = 0.8 },
+		Bloom = { Intensity = 0.18, Size = 20, Threshold = 2.3 },
+		Grade = { Brightness = -0.01, Contrast = 0.1, Saturation = -0.02, Tint = rgb(244, 248, 255) },
+		Rays = { Intensity = 0.02, Spread = 0.5 },
+		Clouds = { Cover = 0.45, Density = 0.4, Color = rgb(255, 255, 255) },
+	},
+	-- high desert sun: short shadows, warm sand bounce, pale hazy sky
+	Desert = {
+		Clock = 12.6, Brightness = 2.9, Latitude = 30, Shadow = 0.35,
+		Ambient = rgb(116, 106, 94), Outdoor = rgb(150, 140, 124), Top = rgb(255, 242, 216), Bottom = rgb(122, 102, 74),
+		Diffuse = 0.5, Specular = 0.3,
+		Atmo = { Density = 0.24, Offset = 0.06, Color = rgb(236, 222, 198), Decay = rgb(196, 162, 122), Glare = 0.15, Haze = 1.0 },
+		Bloom = { Intensity = 0.2, Size = 20, Threshold = 2.1 },
+		Grade = { Brightness = 0, Contrast = 0.09, Saturation = 0.02, Tint = rgb(255, 248, 238) },
+		Rays = { Intensity = 0.03, Spread = 0.5 },
+		Clouds = { Cover = 0.2, Density = 0.35, Color = rgb(255, 250, 240) },
+	},
+	-- volcanic afternoon: warm smoky haze and red-orange bounce, but a clear bright sun so
+	-- the swarm, pickups and the lava glow stay readable
+	Lava = {
+		Clock = 13.8, Brightness = 2.9, Latitude = 34, Shadow = 0.4,
+		Ambient = rgb(134, 122, 118), Outdoor = rgb(170, 154, 146), Top = rgb(255, 236, 214), Bottom = rgb(124, 82, 62),
+		Diffuse = 0.45, Specular = 0.3,
+		Atmo = { Density = 0.24, Offset = 0.06, Color = rgb(214, 186, 168), Decay = rgb(176, 108, 76), Glare = 0.2, Haze = 1.1 },
+		Bloom = { Intensity = 0.28, Size = 22, Threshold = 1.7 },
+		Grade = { Brightness = 0.01, Contrast = 0.1, Saturation = 0.02, Tint = rgb(255, 242, 230) },
+		Rays = { Intensity = 0.03, Spread = 0.5 },
+		Clouds = { Cover = 0.55, Density = 0.5, Color = rgb(164, 138, 130) },
 	},
 }
 
@@ -953,6 +1033,7 @@ local function newArena(name: string): Arena
 		ObstacleFolder = obstacleFolder,
 		Obstacles = {},
 		Keepout = {}, -- { X, Z, R } circles that scattered decoration avoids
+		Hazards = {}, -- { Kind, Pos (world floor point), Radius } biome floor hazards (BiomeHazards)
 		Paths = {}, -- { {A = Vector3, B = Vector3, W = halfWidth} } path segments
 		Root = root,
 		Half = Config.Arenas.Size / 2,
@@ -988,8 +1069,9 @@ local function pathDistance(arena: Arena, x: number, z: number): number
 	return best
 end
 
--- Is (x, z) (arena-relative) clear of obstacles, keepouts and paths by `clear` studs?
-local function isFree(arena: Arena, x: number, z: number, clear: number, pathPad: number?): boolean
+-- Is (x, z) (arena-relative) clear of obstacles, keepouts, hazard pools and paths by
+-- `clear` studs? hazardPad: extra floor kept from a pool's edge (portal, loot).
+local function isFree(arena: Arena, x: number, z: number, clear: number, pathPad: number?, hazardPad: number?): boolean
 	if math.abs(x) > arena.Half - 3 or math.abs(z) > arena.Half - 3 then
 		return false
 	end
@@ -1010,6 +1092,13 @@ local function isFree(arena: Arena, x: number, z: number, clear: number, pathPad
 		local kx, kz = k.X - x, k.Z - z
 		local r = k.R + clear * 0.5
 		if kx * kx + kz * kz < r * r then
+			return false
+		end
+	end
+	for _, hz in ipairs(arena.Hazards) do
+		local hx, hzz = hz.Pos.X - wx, hz.Pos.Z - wz
+		local r = hz.Radius + clear + (hazardPad or 0)
+		if hx * hx + hzz * hzz < r * r then
 			return false
 		end
 	end
@@ -1117,7 +1206,7 @@ local function boulder(arena: Arena, x: number, z: number, s: number, palette: P
 end
 
 -- Ground clutter is drawn bigger than life so it reads from the high run camera.
-local CLUTTER_SCALE: { [string]: number } = { GrassTuft = 1.6, Flowers = 1.5, Fern = 1.35, Rock_Small = 1.3, Mushroom = 1.3 }
+local CLUTTER_SCALE: { [string]: number } = { GrassTuft = 1.6, Flowers = 1.5, Fern = 1.35, Rock_Small = 1.3, Mushroom = 1.3, Reeds = 1.3, Lilypads = 1.2, Snow_Drift = 1.1, Snow_Bush = 1.1, Ash_Pile = 1.2 }
 
 -- Small clutter scattered in a disc around (cx, cz): { {name, sMin, sMax, palette?} }.
 local function scatter(arena: Arena, cx: number, cz: number, radius: number, count: number, kinds: { { any } }, clear: number?, pathPad: number?)
@@ -1848,6 +1937,1054 @@ local function buildRuins(arena: Arena)
 end
 
 ------------------------------------------------------------------------------------------
+-- BIOME TOOLKIT (Swamp, Snow, Desert, Lava): the same rules as the forest (designed
+-- layout, fixed seed, nothing collidable in the clearing, tall things in groves and
+-- outside the boundary, low south side, occluder tags, one collider per obstacle) plus
+-- the biome's floor HAZARDS: fixed pools listed in arena.Hazards for BiomeHazards (the
+-- server decides slow / slip / burn; the pool meshes are the telegraph).
+------------------------------------------------------------------------------------------
+
+-- Outer ground + the play floor (both collide and are raycast-able, like the forest's).
+local function biomeGround(arena: Arena, outer: Color3, floor: Color3)
+	local c, h = arena.Center, arena.Half
+	deco(arena.Model, { Name = "OuterGround", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = outer, CanCollide = true, CanQuery = true })
+	deco(arena.Model, { Name = "Floor", Size = Vector3.new(h * 2 + 20, 1, h * 2 + 20), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = floor, CanCollide = true, CanQuery = true })
+end
+
+local function groundPatches(arena: Arena, list: { { any } })
+	for _, pt in ipairs(list) do
+		patch(arena, pt[1], pt[2], pt[3], pt[4], 0.02)
+	end
+end
+
+-- A boulder-like obstacle of any kit rock (counted as a rock).
+local function stone(arena: Arena, name: string, x: number, z: number, s: number, palette: Pal?, opts: PropOpts?): Model
+	arena.Rocks += 1
+	return obstacle(arena, name, x, z, rng:NextNumber(0, 360), s, palette, opts)
+end
+
+-- Trees of a grove: { {kit, dx, dz, scale, palette?} } around (cx, cz), shade decor under them.
+local function kitGrove(arena: Arena, cx: number, cz: number, spots: { { any } }, shade: { { any } }?, extra: { any }?)
+	for _, t in ipairs(spots) do
+		tree(arena, t[1], cx + t[2], cz + t[3], t[4], t[5])
+	end
+	if shade then
+		scatter(arena, cx, cz, 16, 3, shade, 1)
+	end
+	if extra then
+		scatter(arena, cx, cz, 20, 1, { extra }, 1.5)
+	end
+end
+
+-- Decoration around a ring (pool rims, ponds): n pieces between radius r0 and r1.
+local function rimDecor(arena: Arena, x: number, z: number, r0: number, r1: number, n: number, kinds: { { any } })
+	local a0 = rng:NextNumber(0, TAU)
+	for k = 1, n do
+		local a = a0 + k / n * TAU + jitter(0.35)
+		local d = rng:NextNumber(r0, r1)
+		local kind = pick(kinds)
+		decor(arena, kind[1], x + math.cos(a) * d, z + math.sin(a) * d, nil, rng:NextNumber(kind[2], kind[3]) * (CLUTTER_SCALE[kind[1]] or 1), kind[4])
+	end
+end
+
+-- Hazard pools: kit mesh (hazard radius from the catalog note, at scale 1) per kind.
+local HAZARD_KIT: { [string]: { Model: string, Radius: number } } = {
+	Mud = { Model = "Mud_Pool", Radius = 3.6 },
+	Quicksand = { Model = "Quicksand", Radius = 3.6 },
+	Ice = { Model = "Frozen_Pond", Radius = 4.4 },
+	Lava = { Model = "Lava_Pool", Radius = 3.6 },
+}
+local HAZARD_GLOW_TAG = "SwarmHazardGlow" -- the client (TerrainFx) makes these breathe
+
+--[[
+	A hazard pool of `kind` at (x, z) (arena-relative), scale s: the kit mesh in the arena
+	model (not Decor, so loot / portal decor clearing never removes it) and its record in
+	arena.Hazards. Never in the spawn clearing (+10 studs); warns when it touches a path.
+]]
+local function hazardPool(arena: Arena, kind: string, x: number, z: number, s: number, yawDeg: number, palette: Pal?): Model?
+	local kit = HAZARD_KIT[kind]
+	local r = kit.Radius * s
+	if math.sqrt(x * x + z * z) - r < arena.Clear + 10 then
+		warn(string.format("[MapBuilder] %s pool at (%.0f, %.0f) skipped: too close to the spawn", kind, x, z))
+		return nil
+	end
+	if pathDistance(arena, x, z) < r then
+		warn(string.format("[MapBuilder] %s pool at (%.0f, %.0f) touches a path", kind, x, z))
+	end
+	local pos = W(arena, x, z)
+	local model = prop(arena.Model, kit.Model, CFrame.new(pos) * yawCF(yawDeg), s, palette, { shadow = false })
+	model.Name = "Hazard_" .. kind
+	model:SetAttribute("HazardKind", kind)
+	model:SetAttribute("HazardRadius", r)
+	table.insert(arena.Hazards, { Kind = kind, Pos = pos, Radius = r })
+	return model
+end
+
+-- Lava pool: the hazard, a warning glow ring just outside its burn radius and (some
+-- of them) a warm light.
+local function lavaPool(arena: Arena, x: number, z: number, s: number, yawDeg: number, lit: boolean)
+	local model = hazardPool(arena, "Lava", x, z, s, yawDeg)
+	if not model then
+		return
+	end
+	local r = HAZARD_KIT.Lava.Radius * s
+	local glow = disc(arena.Model, "HazardGlow", W(arena, x, z, 0.05), r + 1.1, P.lava_500, 0.06)
+	glow.Material = NEON
+	glow.Transparency = 0.5
+	CollectionService:AddTag(glow, HAZARD_GLOW_TAG)
+	if lit then
+		local cf = CFrame.new(W(arena, x, z))
+		pointLight(arena.Model, (kitLightPoint("Lava_Pool", cf, s) or cf.Position) + Vector3.new(0, 2.2, 0), 16, 1.1, P.lava_300, true)
+		arena.Lights += 1
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- SWAMP: a misty bog (unlocked at stage 3).
+--
+--   centre      a firm mossy clearing where two bog tracks cross (spawn)
+--   north-west  the STILT HUT with its wisp lanterns, barrels and a log pile
+--   north-east  SUNKEN RUINS: a mossy arch, walls and broken pillars
+--   east        a WISP CIRCLE: bog stones around a crooked lantern
+--   south-west  a low FISHER CAMP (fence, logs, crates, a lantern)
+--   mid / outer MUD POOLS (8, slow 35%), a deep bog pond (impassable), mangrove and
+--               willow groves, mossy boulders, rotting logs and stumps
+--   border      reeds along the edge, a dense mangrove / willow line (low on the south)
+------------------------------------------------------------------------------------------
+
+local SWAMP_RUIN: Pal = { Stone = mix(P.stone_500, P.murk_500, 0.35), Stone2 = mix(P.stone_400, P.murk_400, 0.35), Stone3 = mix(P.stone_600, P.murk_600, 0.35), Moss = mix(P.moss_500, P.murk_400, 0.5), Trim = mix(P.stone_400, P.murk_400, 0.35) }
+local SWAMP_PILLAR: Pal = { Base = SWAMP_RUIN.Stone3, Shaft = SWAMP_RUIN.Stone2, Shaft2 = SWAMP_RUIN.Stone, Moss = SWAMP_RUIN.Moss }
+local SWAMP_WOOD: Pal = { Wood = mix(P.wood_600, P.murk_600, 0.3), Frame = P.wood_700, Iron = P.steel_700, Lid = P.wood_600, Post = P.wood_700, Rail = mix(P.wood_600, P.murk_500, 0.3) }
+local SWAMP_GRASS: Pal = { Grass = P.murk_400 }
+local SWAMP_FERN: Pal = { Fern = mix(P.murk_400, P.moss_500, 0.4) }
+local SWAMP_PEBBLE: Pal = { Stone = mix(P.stone_600, P.murk_600, 0.3) }
+local SWAMP_WISP = rgb(196, 232, 150)
+local SWAMP_SMALL = {
+	{ "GrassTuft", 1.0, 1.6, SWAMP_GRASS },
+	{ "GrassTuft", 1.0, 1.6, SWAMP_GRASS },
+	{ "GrassTuft", 1.0, 1.6, SWAMP_GRASS },
+	{ "Fern", 0.9, 1.3, SWAMP_FERN },
+	{ "Rock_Small", 0.7, 1.1, SWAMP_PEBBLE },
+}
+local SWAMP_SHADE = {
+	{ "Fern", 1.0, 1.5, SWAMP_FERN },
+	{ "Mushroom", 0.9, 1.3 },
+	{ "GrassTuft", 1.0, 1.4, SWAMP_GRASS },
+}
+local SWAMP_POOL_RIM = { { "Reeds", 1.0, 1.4 }, { "GrassTuft", 1.0, 1.5, SWAMP_GRASS }, { "GrassTuft", 1.0, 1.5, SWAMP_GRASS }, { "Rock_Small", 0.7, 1.0, SWAMP_PEBBLE } }
+
+-- Deep bog pond (impassable water, one circle collider), lilypads and reeds.
+local function bogPond(arena: Arena, x: number, z: number, r: number)
+	local m = arena.Decor
+	disc(m, "PondBank", W(arena, x, z, 0.08), r + 2.8, mix(P.bog_600, P.murk_600, 0.4))
+	disc(m, "PondBed", W(arena, x, z, 0.12), r + 0.6, P.murk_800)
+	local water = disc(m, "Water", W(arena, x, z, 0.2), r, mix(P.murk_600, P.slate_600, 0.3))
+	water.Transparency = 0.1
+	water.Reflectance = 0.08
+	for k = 1, 3 do
+		local a, d = k * 2.1 + jitter(0.3), rng:NextNumber(3, r - 3)
+		prop(m, "Lilypads", CFrame.new(W(arena, x + math.cos(a) * d, z + math.sin(a) * d, 0.1)) * randomYaw(), rng:NextNumber(1.2, 1.6), nil, { shadow = false })
+	end
+	for k = 1, 5 do
+		local a = math.rad(150) + k * 0.42 + jitter(0.08)
+		local d = r + jitter(0.8)
+		prop(m, "Reeds", CFrame.new(W(arena, x + math.cos(a) * d, z + math.sin(a) * d)) * randomYaw(), rng:NextNumber(1.3, 1.8), nil, { shadow = false })
+	end
+	local wp = W(arena, x, z)
+	circleCollider(arena, wp.X, wp.Z, r, 4)
+	keepout(arena, x, z, r + 3)
+end
+
+-- A mud pool with reeds on its rim and now and then a lilypad.
+local function mudPool(arena: Arena, x: number, z: number, s: number, yawDeg: number)
+	if hazardPool(arena, "Mud", x, z, s, yawDeg) then
+		local r = HAZARD_KIT.Mud.Radius * s
+		rimDecor(arena, x, z, r + 1.2, r + 3, 3, SWAMP_POOL_RIM)
+		if rng:NextNumber() < 0.5 then
+			local a = rng:NextNumber(0, TAU)
+			prop(arena.Decor, "Lilypads", CFrame.new(W(arena, x + math.cos(a) * r * 0.4, z + math.sin(a) * r * 0.4, 0.05)) * randomYaw(), 1.1, nil, { shadow = false })
+		end
+	end
+end
+
+local function buildSwamp(arena: Arena)
+	arena.DecorDensity = 0.7
+	arena.PortalPalette = { Moss = P.murk_400 }
+	local base = mix(P.murk_500, P.murk_400, 0.45)
+	biomeGround(arena, P.murk_600, base)
+	local dark, light, mud = mix(P.murk_600, P.murk_500, 0.5), mix(P.murk_400, P.murk_300, 0.35), mix(P.bog_500, P.murk_500, 0.45)
+	groundPatches(arena, {
+		{ -150, -150, 26, dark }, { 124, -160, 22, dark }, { -170, 60, 24, dark }, { 160, 120, 26, dark },
+		{ 30, -130, 20, dark }, { -60, 150, 22, dark }, { -110, -36, 18, dark },
+		{ -84, 96, 22, light }, { 92, 72, 22, light }, { -36, -96, 20, light }, { 74, -86, 18, light },
+		{ 140, -108, 18, light }, { -140, 116, 20, light }, { 4, 140, 22, light }, { -176, -88, 20, light },
+		{ 116, 174, 16, mud }, { 176, 12, 18, mud }, { -20, -170, 16, mud },
+	})
+	-- the clearing: firm lighter moss
+	patch(arena, 0, 0, 24, mix(P.murk_400, P.murk_300, 0.3), 0.05)
+	patch(arena, -3, 2, 13, mix(P.murk_400, P.bog_500, 0.3), 0.07)
+
+	-- bog tracks: west-east and south-north, crossing in the clearing
+	local core, edge = mix(P.bog_500, P.bog_600, 0.3), mix(P.bog_500, base, 0.55)
+	dirtPath(arena, {
+		Vector2.new(-262, -24), Vector2.new(-200, -10), Vector2.new(-140, -30), Vector2.new(-86, -14),
+		Vector2.new(-40, -6), Vector2.new(0, 0), Vector2.new(44, 10), Vector2.new(96, 4),
+		Vector2.new(146, 24), Vector2.new(204, 14), Vector2.new(262, 26),
+	}, 7, core, edge, 0.12)
+	dirtPath(arena, {
+		Vector2.new(20, 262), Vector2.new(12, 196), Vector2.new(28, 132), Vector2.new(8, 84),
+		Vector2.new(6, 40), Vector2.new(0, 0), Vector2.new(-8, -36), Vector2.new(-16, -70),
+		Vector2.new(-6, -108), Vector2.new(14, -150), Vector2.new(4, -200), Vector2.new(12, -262),
+	}, 6, core, edge, 0.16)
+
+	boundaryWalls(arena)
+
+	-- clearing decor (low, sparse, off the tracks)
+	scatter(arena, 0, 0, 34, 22, { { "GrassTuft", 1.0, 1.6, SWAMP_GRASS }, { "GrassTuft", 1.2, 1.8, SWAMP_GRASS }, { "Reeds", 0.9, 1.2 }, { "Rock_Small", 0.7, 1.1, SWAMP_PEBBLE } }, 1.2, 0.4)
+	scatter(arena, 0, 0, 40, 6, { { "Fern", 1, 1.4, SWAMP_FERN }, { "Mushroom", 1, 1.3 } }, 1.5, 0.5)
+
+	--------------------------------------------------------------------------------------
+	-- LANDMARKS (mid ring)
+
+	-- 1. Stilt hut (north-west), porch toward the camera; wisp lanterns either side
+	local hx, hz = -66, -52
+	local hut = obstacle(arena, "Swamp_Hut", hx, hz, 180, 1.15, nil, { occluder = true })
+	hut.Name = "Landmark_Hut"
+	kitLight(arena, "Swamp_Hut", hx, hz, 180, 1.15, 14, 1.0, SWAMP_WISP)
+	for _, l in ipairs({ { hx - 8, hz + 6, 0 }, { hx + 8.5, hz + 5, 180 } }) do
+		obstacle(arena, "Swamp_Lantern", l[1], l[2], l[3], 1.0)
+	end
+	kitLight(arena, "Swamp_Lantern", hx + 8.5, hz + 5, 180, 1.0, 13, 1.1, SWAMP_WISP)
+	obstacle(arena, "Barrel", hx + 6.5, hz - 5, 0, 1.05, SWAMP_WOOD)
+	obstacle(arena, "Crate", hx + 6.8, hz - 2.4, 90, 0.95, SWAMP_WOOD)
+	decor(arena, "Swamp_Log", hx - 7.5, hz - 4, 90, 0.9, nil, { shadow = true })
+	patch(arena, hx, hz + 1, 10, mix(P.bog_500, P.murk_500, 0.5), 0.05)
+	keepout(arena, hx, hz, 13)
+	scatter(arena, hx, hz, 20, 7, { { "Reeds", 1, 1.4 }, { "Fern", 1, 1.4, SWAMP_FERN }, { "Mushroom", 1, 1.2 }, { "GrassTuft", 1, 1.5, SWAMP_GRASS } }, 0.6)
+
+	-- 2. Sunken ruins (north-east): a mossy arch with walls and broken pillars
+	obstacle(arena, "Ruin_Arch", 70, -64, 0, 1, SWAMP_RUIN, { occluder = true }).Name = "Landmark_Arch"
+	obstacle(arena, "Ruin_Wall", 79.4, -64.4, 0, 1, SWAMP_RUIN, { occluder = true })
+	obstacle(arena, "Ruin_WallLow", 60.2, -63.6, 180, 1, SWAMP_RUIN)
+	obstacle(arena, "Pillar", 58, -77, 30, 1.05, SWAMP_PILLAR, { occluder = true })
+	obstacle(arena, "Pillar", 85, -52, 200, 0.95, SWAMP_PILLAR, { occluder = true })
+	decor(arena, "Ruin_Block", 82, -75, 35, 0.9, SWAMP_RUIN, { shadow = true })
+	keepout(arena, 70, -64, 13)
+	scatter(arena, 70, -64, 22, 8, { { "Reeds", 1, 1.4 }, { "Fern", 1, 1.4, SWAMP_FERN }, { "Rock_Small", 0.8, 1.2, SWAMP_PEBBLE }, { "GrassTuft", 1, 1.5, SWAMP_GRASS } }, 0.6)
+
+	-- 3. Wisp circle (east): bog stones in a ring around a crooked lantern
+	local wx, wz = 88, 32
+	for k = 0, 5 do
+		local a = k / 6 * TAU + 0.4
+		stone(arena, "Swamp_Rock", wx + math.cos(a) * 9, wz + math.sin(a) * 9, rng:NextNumber(0.62, 0.78))
+	end
+	obstacle(arena, "Swamp_Lantern", wx, wz, 0, 1.1)
+	kitLight(arena, "Swamp_Lantern", wx, wz, 0, 1.1, 15, 1.2, SWAMP_WISP)
+	patch(arena, wx, wz, 8, mix(P.murk_400, P.murk_300, 0.4), 0.05)
+	keepout(arena, wx, wz, 11)
+	scatter(arena, wx, wz, 14, 6, { { "Mushroom", 1, 1.3 }, { "GrassTuft", 1.1, 1.6, SWAMP_GRASS }, { "Reeds", 1, 1.3 } }, 0.5)
+
+	-- 4. Fisher camp (south-west, all low)
+	local kx, kz = -56, 54
+	obstacle(arena, "Fence_Section", kx - 6, kz + 8, 0, 1, SWAMP_WOOD)
+	obstacle(arena, "Fence_Section", kx - 10.2, kz + 3.8, 90, 1, SWAMP_WOOD)
+	obstacle(arena, "Swamp_Log", kx + 6, kz - 6, 0, 1.0)
+	obstacle(arena, "Swamp_Stump", kx - 1, kz - 3, 0, 1.0)
+	obstacle(arena, "Crate", kx - 6, kz - 2, 90, 1.0, SWAMP_WOOD)
+	prop(arena.Decor, "Crate", CFrame.new(W(arena, kx - 6, kz - 1.9, 2)) * yawCF(25), 0.8, SWAMP_WOOD)
+	obstacle(arena, "Barrel", kx - 8.6, kz - 5.6, 0, 1.0, SWAMP_WOOD)
+	obstacle(arena, "Swamp_Lantern", kx + 3, kz + 3, 0, 1.0)
+	kitLight(arena, "Swamp_Lantern", kx + 3, kz + 3, 0, 1.0, 13, 1.1, SWAMP_WISP)
+	patch(arena, kx - 2, kz - 1, 9, mix(P.bog_500, P.murk_500, 0.55), 0.05)
+	keepout(arena, kx - 2, kz, 13)
+	scatter(arena, kx - 2, kz, 18, 6, { { "GrassTuft", 1, 1.5, SWAMP_GRASS }, { "Reeds", 1, 1.3 }, { "Rock_Small", 0.7, 1.0, SWAMP_PEBBLE } }, 0.5)
+
+	--------------------------------------------------------------------------------------
+	-- MUD POOLS (hazards: slow players and walking enemies)
+	for _, mp in ipairs({
+		{ -40, -90, 1.6, 20 }, { 50, -106, 1.55, 110 }, { 114, -40, 1.6, 60 }, { 62, 94, 1.55, 200 },
+		{ -102, 32, 1.6, 140 }, { -142, -64, 1.5, 300 }, { 150, 122, 1.55, 30 }, { -62, 150, 1.6, 250 },
+	}) do
+		mudPool(arena, mp[1], mp[2], mp[3], mp[4])
+	end
+
+	--------------------------------------------------------------------------------------
+	-- OUTER RING
+
+	bogPond(arena, -118, -116, 12)
+	tree(arena, "Swamp_Willow", -104, -104, 1.1)
+	stone(arena, "Swamp_Rock", -131, -103, 0.95)
+
+	local T, Wl = "Swamp_Tree", "Swamp_Willow"
+	kitGrove(arena, -48, -152, { { T, 0, 0, 1.2 }, { Wl, 10, 6, 1.1 }, { T, -9, 7, 1.0 }, { Wl, 5, -10, 1.0 }, { T, -12, -6, 0.95 } }, SWAMP_SHADE)
+	kitGrove(arena, 118, -128, { { Wl, 0, 0, 1.2 }, { T, 10, 5, 1.1 }, { T, -9, 8, 1.0 }, { Wl, 6, -9, 1.0 }, { T, -8, -8, 0.95 } }, SWAMP_SHADE)
+	kitGrove(arena, 156, 62, { { T, 0, 0, 1.2 }, { Wl, 11, -5, 1.05 }, { T, -6, 9, 1.0 }, { Wl, 8, 10, 1.0 }, { T, -10, -7, 0.95 } }, SWAMP_SHADE)
+	kitGrove(arena, -164, 30, { { Wl, 0, 0, 1.15 }, { T, -8, 8, 1.0 }, { T, 9, 4, 1.05 }, { Wl, 2, -10, 0.95 } }, SWAMP_SHADE)
+	kitGrove(arena, 108, 152, { { T, 0, 0, 0.95 }, { Wl, 10, 6, 0.85 }, { T, -6, 9, 0.85 } }, SWAMP_SHADE)
+	kitGrove(arena, -126, 124, { { Wl, 0, 0, 1.0 }, { T, 9, -5, 0.9 }, { T, -8, 7, 0.85 } }, SWAMP_SHADE)
+
+	local function swampOutcrop(x: number, z: number, big: number, medium: { number }?)
+		stone(arena, "Swamp_Rock", x, z, big)
+		if medium then
+			stone(arena, "Swamp_Rock", x + medium[1], z + medium[2], medium[3])
+		end
+		scatter(arena, x, z, big * 5, 3, { { "Rock_Small", 0.8, 1.3, SWAMP_PEBBLE }, { "Reeds", 1, 1.4 }, { "Fern", 0.9, 1.2, SWAMP_FERN } }, 0.6)
+	end
+	swampOutcrop(66, -142, 1.45, { 5.5, 3, 1.0 })
+	swampOutcrop(172, -36, 1.4, { -4, 5, 1.0 })
+	swampOutcrop(-176, 86, 1.45, { 5, -4, 1.0 })
+	swampOutcrop(34, 160, 1.35, { -5, -3, 0.95 })
+	swampOutcrop(-74, -122, 1.35, { 5, 4, 0.95 })
+
+	-- rotting logs and stumps
+	obstacle(arena, "Swamp_Log", -96, 100, 0, 1.15)
+	obstacle(arena, "Swamp_Log", 134, -64, 90, 1.1)
+	obstacle(arena, "Swamp_Log", -30, 128, 4, 1.05)
+	for _, st in ipairs({ { -32, -136 }, { 130, -100 }, { 136, 88 }, { -146, 6 } }) do
+		obstacle(arena, "Swamp_Stump", st[1], st[2], rng:NextNumber(0, 360), rng:NextNumber(1.0, 1.25))
+	end
+
+	-- corners: a mossy boulder and two trees each (small round ones on the camera side)
+	for _, q in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+		local south = q[2] == 1
+		local bx, bz = q[1] * 172, q[2] * 172
+		stone(arena, "Swamp_Rock", bx + q[1] * 6, bz - q[2] * 10, 1.35)
+		tree(arena, south and Wl or T, bx - q[1] * 4, bz + q[2] * 8, south and 0.85 or 1.15)
+		tree(arena, south and T or Wl, bx + q[1] * 12, bz + q[2] * 2, south and 0.8 or 1.05)
+		scatter(arena, bx, bz, 18, 3, SWAMP_SHADE, 1)
+	end
+
+	-- bog meadow scatter
+	for _ = 1, 7 do
+		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(44, 190)
+		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, SWAMP_SMALL, 1.5, 0.5)
+	end
+
+	-- BORDER: reeds along the edge, then the mangrove / willow line
+	local h = arena.Half
+	alongSides(-h + 10, h - 10, 40, function(_side, along, out, t)
+		if rng:NextNumber() < 0.38 then
+			local p = along * (t + jitter(6)) + out * (h - 2 - rng:NextNumber(0, 3))
+			decor(arena, "Reeds", p.X, p.Y, nil, rng:NextNumber(1.4, 1.9))
+		end
+	end)
+	treeLine(arena, {
+		{ "Swamp_Tree", 1.35, 1.8, nil },
+		{ "Swamp_Willow", 1.35, 1.75, nil },
+		{ "Swamp_Tree", 1.3, 1.7, nil },
+	}, {
+		{ "Bush", 1.4, 2.0, { Leaves = P.murk_600, Leaves2 = P.murk_500 } },
+		{ "Swamp_Willow", 0.7, 0.85, nil },
+	}, 37, mix(P.murk_600, P.murk_700, 0.6))
+end
+
+------------------------------------------------------------------------------------------
+-- SNOW: a frozen pine valley (unlocked at stage 4).
+--
+--   centre      a trodden snow clearing where two packed-snow trails cross (spawn)
+--   west        the TOTEM SHRINE: the carved totem on its plinth, stone lamps, slabs
+--   north       a snowed RUINED ARCH over the north trail, walls and pillars
+--   east        an ICE CRYSTAL ring with a frost glow
+--   south-west  a low TRAPPER CAMP (fence, crates, barrels, a log, a stone lamp)
+--   mid / outer FROZEN PONDS (7, slippery: faster but drifting), a boulder field, a
+--               collapsed watchtower, snowy pine groves, boulders, logs, stumps
+--   border      a snowed split-rail fence, then tall snowy pines (low on the south)
+------------------------------------------------------------------------------------------
+
+local SNOW_RUIN: Pal = { Stone = mix(P.stone_400, P.slate_400, 0.15), Stone2 = mix(P.stone_300, P.slate_300, 0.15), Stone3 = mix(P.stone_500, P.slate_500, 0.15), Moss = P.snow_100, Trim = P.stone_300 }
+local SNOW_PILLAR: Pal = { Base = SNOW_RUIN.Stone3, Shaft = SNOW_RUIN.Stone2, Shaft2 = SNOW_RUIN.Stone, Moss = P.snow_100 }
+local SNOW_WOOD: Pal = { Wood = P.wood_600, Frame = P.wood_700, Iron = P.steel_700, Lid = P.snow_200, Post = P.wood_700, Rail = P.wood_600, Bark = P.wood_600, Heart = P.dirt_300, Moss = P.snow_100 }
+local SNOW_PEBBLE: Pal = { Stone = mix(P.stone_400, P.snow_400, 0.4) }
+local SNOW_SLAB: Pal = { Slab = mix(P.stone_400, P.slate_400, 0.2), Moss = P.snow_100 }
+local FROST = rgb(188, 222, 255)
+local LAMP = rgb(255, 204, 140)
+local SNOW_SMALL = {
+	{ "Snow_Drift", 0.8, 1.3 },
+	{ "Rock_Small", 0.7, 1.1, SNOW_PEBBLE },
+	{ "Rock_Small", 0.7, 1.1, SNOW_PEBBLE },
+	{ "Snow_Bush", 0.8, 1.1 },
+}
+local SNOW_SHADE = {
+	{ "Snow_Bush", 0.9, 1.3 },
+	{ "Rock_Small", 0.8, 1.2, SNOW_PEBBLE },
+	{ "Rock_Small", 0.8, 1.2, SNOW_PEBBLE },
+}
+local ICE_RIM = { { "Snow_Drift", 0.8, 1.2 }, { "Rock_Small", 0.7, 1.1, SNOW_PEBBLE }, { "Snow_Bush", 0.7, 1.0 } }
+
+-- Collapsed watchtower: a broken ring of snowed stone (one circle collider).
+local function snowTower(arena: Arena, x: number, z: number, r: number)
+	local m = Instance.new("Model")
+	m.Name = "CollapsedTower"
+	local n = 10
+	for k = 0, n - 1 do
+		local a = k / n * TAU
+		local hgt = (k % 3 == 0) and rng:NextNumber(1.2, 2) or rng:NextNumber(3, 6)
+		local cf = CFrame.new(W(arena, x + math.cos(a) * (r - 1), z + math.sin(a) * (r - 1), hgt / 2)) * CFrame.Angles(0, -a, 0)
+		deco(m, { Name = "Stone", Size = Vector3.new(2.2, hgt, r * TAU / n + 0.4), CFrame = cf, Color = mix(SNOW_RUIN.Stone, SNOW_RUIN.Stone3, rng:NextNumber(0, 1)), CastShadow = true })
+		deco(m, { Name = "Snow", Size = Vector3.new(2.3, 0.35, r * TAU / n + 0.45), CFrame = cf * CFrame.new(0, hgt / 2 + 0.1, 0), Color = P.snow_100 })
+	end
+	disc(m, "Rubble", W(arena, x, z, 0.4), r - 1.6, P.snow_200, 0.8)
+	tag(m)
+	m.Parent = arena.Model
+	local wp = W(arena, x, z)
+	circleCollider(arena, wp.X, wp.Z, r, 6)
+	keepout(arena, x, z, r + 4)
+end
+
+local function icePond(arena: Arena, x: number, z: number, s: number, yawDeg: number)
+	if hazardPool(arena, "Ice", x, z, s, yawDeg) then
+		local r = HAZARD_KIT.Ice.Radius * s
+		rimDecor(arena, x, z, r + 2, r + 4, 3, ICE_RIM)
+	end
+end
+
+local function buildSnow(arena: Arena)
+	arena.DecorDensity = 0.65
+	arena.PortalPalette = { Moss = P.snow_100 }
+	local base = mix(P.snow_200, P.snow_300, 0.25)
+	biomeGround(arena, P.snow_300, base)
+	local blue, white, grey = mix(P.snow_300, P.ice_300, 0.08), P.snow_100, mix(P.snow_300, P.snow_400, 0.3)
+	groundPatches(arena, {
+		{ -150, -150, 26, blue }, { 120, -165, 22, blue }, { -170, 60, 24, blue }, { 160, 120, 26, blue },
+		{ 30, -126, 20, grey }, { -60, 150, 22, blue }, { -110, -40, 18, grey },
+		{ -80, 90, 22, white }, { 90, 70, 24, white }, { -40, -90, 22, white }, { 70, -80, 18, white },
+		{ 140, -110, 18, white }, { -140, 120, 20, white }, { 0, 140, 24, white }, { -175, -90, 20, white },
+		{ 120, 175, 16, grey }, { 175, 10, 18, grey },
+	})
+	patch(arena, 0, 0, 24, P.snow_100, 0.05)
+	patch(arena, 3, 2, 13, mix(P.snow_200, P.snow_300, 0.5), 0.07)
+
+	-- packed-snow trails
+	local core, edge = mix(P.snow_400, P.ice_300, 0.2), mix(P.snow_300, base, 0.4)
+	dirtPath(arena, {
+		Vector2.new(-262, 18), Vector2.new(-196, 30), Vector2.new(-150, 12), Vector2.new(-96, 22),
+		Vector2.new(-44, 6), Vector2.new(0, 0), Vector2.new(40, -12), Vector2.new(90, -4),
+		Vector2.new(140, -24), Vector2.new(198, -10), Vector2.new(262, -18),
+	}, 7, core, edge, 0.12)
+	dirtPath(arena, {
+		Vector2.new(-18, 262), Vector2.new(-24, 190), Vector2.new(-8, 130), Vector2.new(-20, 84),
+		Vector2.new(-4, 40), Vector2.new(0, 0), Vector2.new(8, -38), Vector2.new(16, -76),
+		Vector2.new(8, -118), Vector2.new(-10, -160), Vector2.new(0, -210), Vector2.new(-6, -262),
+	}, 6, core, edge, 0.16)
+
+	boundaryWalls(arena)
+
+	scatter(arena, 0, 0, 34, 14, { { "Snow_Drift", 0.8, 1.2 }, { "Rock_Small", 0.7, 1.0, SNOW_PEBBLE }, { "Rock_Small", 0.7, 1.1, SNOW_PEBBLE } }, 1.2, 0.4)
+	scatter(arena, 0, 0, 40, 6, { { "Snow_Bush", 0.8, 1.1 } }, 1.5, 0.5)
+
+	--------------------------------------------------------------------------------------
+	-- LANDMARKS (mid ring)
+
+	-- 1. Totem shrine (west), facing the clearing; stone lamps either side, a slab apron
+	local sx, sz = -72, -30
+	obstacle(arena, "Snow_Shrine_Totem", sx, sz, 180, 1.2, nil, { occluder = true }).Name = "Landmark_Totem"
+	kitLight(arena, "Snow_Shrine_Totem", sx, sz, 180, 1.2, 14, 1.0, FROST)
+	for _, dx in ipairs({ -5.6, 5.6 }) do
+		obstacle(arena, "Snow_Lamp", sx + dx, sz + 2, 0, 1.05)
+	end
+	kitLight(arena, "Snow_Lamp", sx + 5.6, sz + 2, 0, 1.05, 15, 1.3, LAMP)
+	for _, sp in ipairs({ { sx, sz + 4.6 }, { sx + 3.4, sz + 5.4 }, { sx - 3.3, sz + 5.1 } }) do
+		prop(arena.Decor, "Rock_Slab", CFrame.new(W(arena, sp[1], sp[2], -0.45)) * yawCF(jitter(14)), 0.95, SNOW_SLAB, { shadow = false })
+	end
+	stone(arena, "Snow_Rock", sx - 9, sz + 9, 1.05)
+	stone(arena, "Snow_Rock", sx - 8, sz - 12, 0.9)
+	keepout(arena, sx, sz, 9)
+	scatter(arena, sx, sz, 16, 6, { { "Snow_Drift", 0.9, 1.3 }, { "Snow_Bush", 0.9, 1.2 } }, 0.5)
+
+	-- 2. Snowed ruined arch over the north trail, walls running off, broken pillars
+	obstacle(arena, "Ruin_Arch", 15, -70, 0, 1, SNOW_RUIN, { occluder = true }).Name = "Landmark_Arch"
+	obstacle(arena, "Snow_Ruin_Wall", 24.4, -70.4, 0, 1, nil, { occluder = true })
+	obstacle(arena, "Ruin_WallLow", 5.2, -69.6, 180, 1, SNOW_RUIN)
+	obstacle(arena, "Pillar", 2, -83, 30, 1.1, SNOW_PILLAR, { occluder = true })
+	obstacle(arena, "Pillar", 30, -58, 200, 1.0, SNOW_PILLAR, { occluder = true })
+	obstacle(arena, "Ruin_Block", 26, -81, 35, 1.0, SNOW_RUIN)
+	keepout(arena, 15, -70, 13)
+	scatter(arena, 15, -70, 22, 7, { { "Rock_Small", 0.8, 1.3, SNOW_PEBBLE }, { "Snow_Drift", 0.9, 1.3 }, { "Snow_Bush", 0.9, 1.2 } }, 0.6)
+
+	-- 3. Ice crystal ring (east) around a frost light
+	local ix, iz = 86, 30
+	for k = 0, 4 do
+		local a = k / 5 * TAU + 0.5
+		obstacle(arena, "Ice_Crystal", ix + math.cos(a) * 9, iz + math.sin(a) * 9, rng:NextNumber(0, 360), rng:NextNumber(1.0, 1.25))
+	end
+	kitLight(arena, "Ice_Crystal", ix + math.cos(0.5) * 9, iz + math.sin(0.5) * 9, 0, 1.1, 14, 1.0, FROST)
+	pointLight(arena.Model, W(arena, ix, iz, 3), 14, 0.7, FROST, false)
+	arena.Lights += 1
+	prop(arena.Decor, "Rock_Slab", CFrame.new(W(arena, ix, iz, -0.3)) * yawCF(20), 1.2, SNOW_SLAB, { shadow = false })
+	keepout(arena, ix, iz, 11)
+	scatter(arena, ix, iz, 14, 5, { { "Snow_Drift", 0.9, 1.3 }, { "Rock_Small", 0.8, 1.1, SNOW_PEBBLE } }, 0.5)
+
+	-- 4. Trapper camp (south-west, all low)
+	local kx, kz = -56, 54
+	obstacle(arena, "Fence_Section", kx - 6, kz + 8, 0, 1, SNOW_WOOD)
+	obstacle(arena, "Fence_Section", kx + 2.2, kz + 8.3, 3, 1, SNOW_WOOD)
+	obstacle(arena, "Fence_Section", kx - 10.2, kz + 3.8, 90, 1, SNOW_WOOD)
+	obstacle(arena, "Log", kx + 6, kz - 6, 0, 1.1, SNOW_WOOD)
+	obstacle(arena, "Stump", kx - 1, kz - 3, 0, 1.15, SNOW_WOOD)
+	obstacle(arena, "Crate", kx - 6, kz - 2, 90, 1.0, SNOW_WOOD)
+	prop(arena.Decor, "Crate", CFrame.new(W(arena, kx - 6, kz - 1.9, 2)) * yawCF(30), 0.85, SNOW_WOOD)
+	obstacle(arena, "Barrel", kx - 8.6, kz - 5.6, 0, 1.05, SNOW_WOOD)
+	obstacle(arena, "Snow_Lamp", kx + 3, kz + 3, 0, 1.0)
+	kitLight(arena, "Snow_Lamp", kx + 3, kz + 3, 0, 1.0, 14, 1.2, LAMP)
+	patch(arena, kx - 2, kz - 1, 9, mix(P.snow_300, P.dirt_300, 0.25), 0.05)
+	keepout(arena, kx - 2, kz, 13)
+	scatter(arena, kx - 2, kz, 18, 5, { { "Snow_Drift", 0.9, 1.2 }, { "Rock_Small", 0.7, 1.0, SNOW_PEBBLE } }, 0.5)
+
+	--------------------------------------------------------------------------------------
+	-- FROZEN PONDS (hazards: slippery)
+	for _, fp in ipairs({
+		{ -40, -94, 1.35, 15 }, { 58, -120, 1.3, 100 }, { 124, 46, 1.35, 70 }, { 40, 100, 1.3, 160 },
+		{ -106, 66, 1.35, 220 }, { 152, -96, 1.3, 300 }, { -150, 142, 1.3, 40 },
+	}) do
+		icePond(arena, fp[1], fp[2], fp[3], fp[4])
+	end
+
+	--------------------------------------------------------------------------------------
+	-- OUTER RING
+
+	-- boulder field with ice crystals (north-west)
+	for _, b in ipairs({ { -118, -112, 2.0 }, { -107, -123, 1.6 }, { -129, -100, 1.7 }, { -104, -100, 1.3 }, { -133, -123, 1.4 } }) do
+		stone(arena, "Snow_Rock", b[1], b[2], b[3])
+	end
+	obstacle(arena, "Ice_Crystal", -116, -96, 40, 1.3)
+	obstacle(arena, "Ice_Crystal", -96, -114, 160, 1.1)
+	keepout(arena, -116, -110, 18)
+	scatter(arena, -116, -110, 24, 6, SNOW_SHADE, 0.8)
+
+	snowTower(arena, 150, -46, 6.4)
+	snowTower(arena, -146, 56, 5.6)
+
+	local SP, ST = "Snow_Pine", "Snow_PineTall"
+	kitGrove(arena, -48, -152, { { SP, 0, 0, 1.2 }, { SP, 9, 6, 1.1 }, { SP, -8, 7, 1.0 }, { ST, 4, -10, 1.0 }, { SP, -12, -6, 0.95 } }, SNOW_SHADE)
+	kitGrove(arena, 112, -134, { { ST, 0, 0, 1.0 }, { SP, 10, 5, 1.15 }, { SP, -9, 8, 1.0 }, { SP, 6, -9, 1.05 }, { SP, -7, -8, 0.95 } }, SNOW_SHADE)
+	kitGrove(arena, 152, 76, { { SP, 0, 0, 1.2 }, { SP, 11, -5, 1.05 }, { SP, -6, 9, 1.0 }, { ST, 8, 10, 0.95 }, { SP, -10, -7, 0.95 } }, SNOW_SHADE)
+	kitGrove(arena, -158, -12, { { SP, 0, 0, 1.2 }, { ST, -8, 8, 1.0 }, { SP, 9, 4, 1.1 }, { SP, 2, -10, 1.0 } }, SNOW_SHADE)
+	kitGrove(arena, 104, 152, { { SP, 0, 0, 0.9 }, { SP, 10, 6, 0.8 }, { SP, -6, 9, 0.8 } }, SNOW_SHADE)
+	kitGrove(arena, -112, 126, { { SP, 0, 0, 0.95 }, { SP, 9, -5, 0.9 }, { SP, -8, 7, 0.85 } }, SNOW_SHADE)
+
+	local function snowOutcrop(x: number, z: number, big: number, medium: { number }?)
+		stone(arena, "Snow_Rock", x, z, big)
+		if medium then
+			stone(arena, "Snow_Rock", x + medium[1], z + medium[2], medium[3])
+		end
+		scatter(arena, x, z, big * 5, 3, { { "Rock_Small", 0.8, 1.3, SNOW_PEBBLE }, { "Snow_Drift", 0.9, 1.2 } }, 0.6)
+	end
+	snowOutcrop(62, -150, 1.5, { 5.5, 3, 1.0 })
+	snowOutcrop(176, 10, 1.45, { -4, 5, 1.0 })
+	snowOutcrop(-176, 84, 1.5, { 5, -4, 1.0 })
+	snowOutcrop(42, 156, 1.4, { -5, -3, 0.95 })
+	snowOutcrop(-64, -122, 1.4, { 5, 4, 0.95 })
+
+	-- old snowed foundation (north-east)
+	obstacle(arena, "Snow_Ruin_Wall", 40, -176, 0, 1, nil, { occluder = true })
+	obstacle(arena, "Snow_Ruin_Wall", 48.7, -176.2, 0, 1, nil, { occluder = true })
+	obstacle(arena, "Snow_Ruin_Wall", 53.4, -170.6, 90, 1, nil, { occluder = true })
+	obstacle(arena, "Ruin_WallLow", 33.5, -168, 90, 1, SNOW_RUIN)
+	obstacle(arena, "Pillar", 44, -160, 0, 1.0, SNOW_PILLAR, { occluder = true })
+	keepout(arena, 45, -168, 12)
+
+	-- logs and stumps under snow
+	obstacle(arena, "Log", -96, 100, 0, 1.15, SNOW_WOOD)
+	obstacle(arena, "Log", 134, -64, 90, 1.1, SNOW_WOOD)
+	obstacle(arena, "Log", -28, 134, 4, 1.05, SNOW_WOOD)
+	for _, st in ipairs({ { -36, -136 }, { 128, -108 }, { 140, 92 }, { -142, 2 } }) do
+		obstacle(arena, "Stump", st[1], st[2], rng:NextNumber(0, 360), rng:NextNumber(1.0, 1.25), SNOW_WOOD)
+	end
+
+	-- corners
+	for _, q in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+		local south = q[2] == 1
+		local bx, bz = q[1] * 172, q[2] * 172
+		stone(arena, "Snow_Rock", bx + q[1] * 6, bz - q[2] * 10, 1.35)
+		tree(arena, SP, bx - q[1] * 4, bz + q[2] * 8, south and 0.75 or 1.15)
+		tree(arena, south and SP or ST, bx + q[1] * 12, bz + q[2] * 2, south and 0.7 or 1.0)
+		scatter(arena, bx, bz, 18, 3, SNOW_SHADE, 1)
+	end
+
+	for _ = 1, 5 do
+		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(44, 190)
+		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, SNOW_SMALL, 1.5, 0.5)
+	end
+
+	-- BORDER: snowed split-rail fence, then tall snowy pines
+	brokenFence(arena, 1.3, SNOW_WOOD, 30)
+	treeLine(arena, {
+		{ "Snow_PineTall", 1.25, 1.7, nil },
+		{ "Snow_PineTall", 1.2, 1.6, nil },
+		{ "Snow_Pine", 1.35, 1.8, nil },
+	}, {
+		{ "Snow_Bush", 1.5, 2.1, nil },
+		{ "Snow_Drift", 1.4, 2.0, nil },
+		{ "Snow_Pine", 0.6, 0.75, nil },
+	}, 38, mix(P.snow_300, P.ice_300, 0.35))
+end
+
+------------------------------------------------------------------------------------------
+-- DESERT: sun-baked dunes and old sandstone (unlocked at stage 5).
+--
+--   centre      a hard-packed sand clearing where two caravan tracks cross (spawn)
+--   north       the OBELISK COURT: the gold-capped obelisk, a ring of broken columns,
+--               two braziers and a wall
+--   west        a NOMAD CAMP: two striped tents, crates, barrels and torches
+--   east        a RUINED GATE: sandstone walls and pillars across an old road
+--   south-west  low BEAST BONES among rocks and cacti
+--   mid / outer QUICKSAND (7, slows 45%), two big MESAS, a dry oasis basin
+--               (impassable), cactus stands, sandstone outcrops and ruins
+--   border      tall mesas and rocks on three sides, dunes on the camera side
+------------------------------------------------------------------------------------------
+
+local DESERT_PEBBLE: Pal = { Stone = P.sand_600 }
+local DESERT_WOOD: Pal = { Wood = mix(P.wood_500, P.sand_600, 0.3), Frame = P.wood_600, Iron = P.steel_700, Lid = P.wood_500 }
+local DESERT_FIRE: Pal = { Stone = P.sand_500, Base = P.sand_600, Iron = P.steel_700 }
+local DESERT_SMALL = {
+	{ "Dune", 0.5, 0.8 },
+	{ "Rock_Small", 0.8, 1.2, DESERT_PEBBLE },
+	{ "Rock_Small", 0.7, 1.0, DESERT_PEBBLE },
+	{ "Cactus", 0.45, 0.6 },
+}
+local DESERT_SHADE = {
+	{ "Rock_Small", 0.8, 1.3, DESERT_PEBBLE },
+	{ "Dune", 0.5, 0.8 },
+	{ "Bones", 0.6, 0.8 },
+}
+local SAND_RIM = { { "Rock_Small", 0.7, 1.1, DESERT_PEBBLE }, { "Dune", 0.45, 0.6 } }
+
+-- Dry oasis basin: a cracked clay bed with a last puddle, reeds and rocks (impassable).
+local function oasis(arena: Arena, x: number, z: number, r: number)
+	local m = arena.Decor
+	disc(m, "Bank", W(arena, x, z, 0.08), r + 2.6, P.sand_500)
+	disc(m, "ClayBed", W(arena, x, z, 0.12), r + 0.5, mix(P.clay_600, P.sand_600, 0.4))
+	local water = disc(m, "Water", W(arena, x, z, 0.18), r * 0.6, mix(P.slate_500, P.ice_500, 0.4))
+	water.Transparency = 0.1
+	water.Reflectance = 0.06
+	for k = 1, 6 do
+		local a = math.rad(200) + k * 0.4 + jitter(0.1)
+		local d = r * 0.6 + jitter(0.6)
+		prop(m, "Reeds", CFrame.new(W(arena, x + math.cos(a) * d, z + math.sin(a) * d, 0.1)) * randomYaw(), rng:NextNumber(1.2, 1.6), { Reed = mix(P.moss_500, P.sand_500, 0.3), Reed2 = P.sand_400 }, { shadow = false })
+	end
+	local wp = W(arena, x, z)
+	circleCollider(arena, wp.X, wp.Z, r, 3)
+	keepout(arena, x, z, r + 3)
+	stone(arena, "Desert_Rock", x + r + 1.5, z - 2, 0.9)
+	stone(arena, "Desert_Rock", x - r * 0.7, z + r * 0.75, 0.85)
+	tree(arena, "Cactus_Tall", x + 2, z - r - 3, 1.0)
+	tree(arena, "Cactus", x - r - 2.5, z - 4, 1.0)
+end
+
+local function quicksand(arena: Arena, x: number, z: number, s: number, yawDeg: number)
+	if hazardPool(arena, "Quicksand", x, z, s, yawDeg) then
+		local r = HAZARD_KIT.Quicksand.Radius * s
+		rimDecor(arena, x, z, r + 1.8, r + 3.5, 3, SAND_RIM)
+	end
+end
+
+local function buildDesert(arena: Arena)
+	arena.DecorDensity = 0.7
+	arena.PortalPalette = { Moss = P.sand_300 }
+	local base = mix(P.sand_400, P.sand_300, 0.4)
+	biomeGround(arena, P.sand_500, base)
+	local deep, pale, clay = mix(P.sand_400, P.sand_500, 0.4), mix(P.sand_300, P.sand_200, 0.4), mix(P.sand_400, P.clay_500, 0.18)
+	groundPatches(arena, {
+		{ -150, -150, 26, deep }, { 120, -165, 22, deep }, { -170, 60, 24, deep }, { 160, 120, 26, deep },
+		{ 30, -126, 20, clay }, { -60, 150, 22, deep }, { -110, -40, 18, clay },
+		{ -80, 90, 22, pale }, { 90, 70, 24, pale }, { -40, -90, 22, pale }, { 74, -84, 18, pale },
+		{ 140, -110, 18, pale }, { -140, 120, 20, pale }, { 0, 140, 24, pale }, { -175, -90, 20, pale },
+		{ 120, 175, 16, clay }, { 175, 10, 18, clay },
+	})
+	patch(arena, 0, 0, 24, mix(P.sand_300, P.sand_200, 0.3), 0.05)
+	patch(arena, 3, 2, 13, mix(P.sand_400, P.sand_500, 0.3), 0.07)
+
+	-- caravan tracks
+	local core, edge = mix(P.sand_500, P.clay_500, 0.22), mix(P.sand_500, base, 0.5)
+	dirtPath(arena, {
+		Vector2.new(-262, -30), Vector2.new(-204, -16), Vector2.new(-146, -34), Vector2.new(-90, -12),
+		Vector2.new(-42, -8), Vector2.new(0, 0), Vector2.new(46, 6), Vector2.new(98, -6),
+		Vector2.new(150, 14), Vector2.new(204, 2), Vector2.new(262, 16),
+	}, 7, core, edge, 0.12)
+	dirtPath(arena, {
+		Vector2.new(14, 262), Vector2.new(4, 200), Vector2.new(22, 140), Vector2.new(6, 88),
+		Vector2.new(8, 42), Vector2.new(0, 0), Vector2.new(-6, -40), Vector2.new(-14, -84),
+		Vector2.new(-4, -130), Vector2.new(-16, -180), Vector2.new(-8, -230), Vector2.new(-12, -262),
+	}, 6, core, edge, 0.16)
+
+	boundaryWalls(arena)
+
+	scatter(arena, 0, 0, 34, 14, { { "Rock_Small", 0.7, 1.1, DESERT_PEBBLE }, { "Rock_Small", 0.8, 1.2, DESERT_PEBBLE }, { "Dune", 0.4, 0.6 } }, 1.2, 0.4)
+	scatter(arena, 0, 0, 40, 4, { { "Cactus", 0.45, 0.6 } }, 1.5, 0.5)
+
+	--------------------------------------------------------------------------------------
+	-- LANDMARKS (mid ring)
+
+	-- 1. Obelisk court (north): the obelisk facing the clearing, columns around it
+	local ox, oz = 28, -78
+	obstacle(arena, "Desert_Obelisk", ox, oz, 180, 1.15, nil, { occluder = true }).Name = "Landmark_Obelisk"
+	for k = 0, 3 do
+		local a = k / 4 * TAU + math.rad(45)
+		local px, pz = ox + math.cos(a) * 10, oz + math.sin(a) * 10
+		if k == 1 then
+			decor(arena, "Desert_Ruin_Pillar", px + 1.5, pz, 90, 0.8, nil, { shadow = true })
+		else
+			obstacle(arena, "Desert_Ruin_Pillar", px, pz, rng:NextNumber(0, 360), rng:NextNumber(1.0, 1.15), nil, { occluder = true })
+		end
+	end
+	obstacle(arena, "Desert_Ruin_Wall", ox, oz - 15, 0, 1.0, nil, { occluder = true })
+	for _, dx in ipairs({ -5.5, 5.5 }) do
+		obstacle(arena, "Brazier", ox + dx, oz + 6, 0, 0.9, DESERT_FIRE)
+	end
+	kitLight(arena, "Brazier", ox - 5.5, oz + 6, 0, 0.9, 15, 1.2, FIRE)
+	kitLight(arena, "Brazier", ox + 5.5, oz + 6, 0, 0.9, 15, 1.2, FIRE)
+	for ix = -1, 1 do
+		for iz = -1, 1 do
+			if (ix + iz) % 2 == 0 then
+				slab(arena.Decor, "Paving", W(arena, ox + ix * 5.6, oz + iz * 5.6, 0.1), 5.2, 5.2, math.rad(jitter(3)), pick({ P.sand_300, P.sand_200, mix(P.sand_300, P.clay_500, 0.15) }), 0.1)
+			end
+		end
+	end
+	keepout(arena, ox, oz, 15)
+	scatter(arena, ox, oz, 22, 6, { { "Rock_Small", 0.8, 1.3, DESERT_PEBBLE }, { "Dune", 0.5, 0.7 } }, 0.6)
+
+	-- 2. Nomad camp (west): two tents facing the track, crates, barrels, torches
+	local nx, nz = -74, -40
+	obstacle(arena, "Desert_Tent", nx - 4, nz, 160, 0.95, nil, nil)
+	obstacle(arena, "Desert_Tent", nx + 6, nz - 4, 200, 0.9, nil, nil)
+	obstacle(arena, "Crate", nx + 12, nz + 3, 90, 1.0, DESERT_WOOD)
+	prop(arena.Decor, "Crate", CFrame.new(W(arena, nx + 12, nz + 3.1, 2)) * yawCF(25), 0.8, DESERT_WOOD)
+	obstacle(arena, "Barrel", nx - 11, nz + 2, 0, 1.0, DESERT_WOOD)
+	for _, t in ipairs({ { nx - 3, nz + 8 }, { nx + 7, nz + 7 } }) do
+		obstacle(arena, "Torch", t[1], t[2], 0, 1.0)
+	end
+	kitLight(arena, "Torch", nx + 2, nz + 7.5, 0, 1.0, 16, 1.3, FIRE)
+	patch(arena, nx + 1, nz + 1, 10, mix(P.sand_500, P.clay_500, 0.2), 0.05)
+	keepout(arena, nx + 1, nz, 14)
+	scatter(arena, nx, nz, 18, 5, { { "Rock_Small", 0.8, 1.2, DESERT_PEBBLE }, { "Dune", 0.5, 0.7 } }, 0.6)
+
+	-- 3. Ruined gate (east): two wall stubs and pillars across an old road
+	local gx, gz = 86, 34
+	obstacle(arena, "Desert_Ruin_Wall", gx, gz - 7, 90, 1.0, nil, { occluder = true })
+	obstacle(arena, "Desert_Ruin_Wall", gx, gz + 9, 90, 0.9, nil, { occluder = true })
+	obstacle(arena, "Desert_Ruin_Pillar", gx + 0.5, gz + 1, 0, 1.15, nil, { occluder = true })
+	decor(arena, "Desert_Ruin_Pillar", gx + 5, gz + 3, 80, 0.8, nil, { shadow = true })
+	decor(arena, "Desert_Rock", gx + 9, gz - 10, nil, 0.8, nil, { shadow = true })
+	keepout(arena, gx, gz, 12)
+	scatter(arena, gx, gz, 16, 5, { { "Rock_Small", 0.8, 1.2, DESERT_PEBBLE }, { "Dune", 0.5, 0.7 }, { "Bones", 0.6, 0.8 } }, 0.5)
+
+	-- 4. Beast bones among rocks and cacti (south-west, low)
+	local bx, bz = -56, 56
+	decor(arena, "Bones", bx, bz, 25, 2.0, nil, { shadow = true })
+	stone(arena, "Desert_Rock", bx - 8, bz - 5, 1.1)
+	decor(arena, "Desert_Rock", bx + 7, bz + 6, nil, 0.8, nil, { shadow = true })
+	tree(arena, "Cactus", bx + 9, bz - 6, 1.0)
+	tree(arena, "Cactus", bx - 6, bz + 8, 0.9)
+	keepout(arena, bx, bz, 12)
+	scatter(arena, bx, bz, 18, 5, { { "Rock_Small", 0.7, 1.1, DESERT_PEBBLE }, { "Dune", 0.5, 0.7 } }, 0.5)
+
+	--------------------------------------------------------------------------------------
+	-- QUICKSAND (hazards)
+	for _, q in ipairs({
+		{ -50, -104, 1.6, 20 }, { 70, -132, 1.55, 110 }, { 126, 52, 1.6, 60 }, { 52, 104, 1.55, 200 },
+		{ -104, 46, 1.6, 140 }, { -150, -64, 1.5, 300 }, { 140, 142, 1.55, 30 },
+	}) do
+		quicksand(arena, q[1], q[2], q[3], q[4])
+	end
+
+	--------------------------------------------------------------------------------------
+	-- OUTER RING
+
+	obstacle(arena, "Desert_Mesa", -120, -116, 20, 1.35, nil, { occluder = true }).Name = "Landmark_Mesa"
+	stone(arena, "Desert_Rock", -104, -106, 1.1)
+	stone(arena, "Desert_Rock", -136, -100, 0.95)
+	keepout(arena, -120, -116, 14)
+	obstacle(arena, "Desert_Mesa", 160, -44, 200, 1.2, nil, { occluder = true })
+	stone(arena, "Desert_Rock", 148, -56, 1.0)
+	keepout(arena, 160, -44, 13)
+
+	oasis(arena, -62, -156, 8)
+
+	local C, CT = "Cactus", "Cactus_Tall"
+	kitGrove(arena, 130, -112, { { CT, 0, 0, 1.1 }, { C, 8, 5, 1.1 }, { C, -7, 6, 1.0 }, { CT, 5, -8, 0.95 } }, DESERT_SHADE)
+	kitGrove(arena, 152, 82, { { CT, 0, 0, 1.15 }, { C, 9, -5, 1.0 }, { C, -6, 8, 1.0 }, { CT, 8, 9, 0.9 } }, DESERT_SHADE)
+	kitGrove(arena, -160, -2, { { CT, 0, 0, 1.1 }, { C, -7, 7, 1.0 }, { CT, 8, 4, 1.0 } }, DESERT_SHADE)
+	kitGrove(arena, 100, 160, { { C, 0, 0, 1.0 }, { C, 8, 5, 0.9 }, { CT, -6, 8, 0.85 } }, DESERT_SHADE)
+	kitGrove(arena, -104, 150, { { CT, 0, 0, 1.0 }, { C, 8, -4, 0.9 }, { C, -7, 6, 0.9 } }, DESERT_SHADE)
+	kitGrove(arena, 20, -168, { { CT, 0, 0, 1.1 }, { C, 8, 4, 1.0 }, { C, -8, 5, 1.0 } }, DESERT_SHADE)
+
+	local function sandOutcrop(x: number, z: number, big: number, medium: { number }?)
+		stone(arena, "Desert_Rock", x, z, big)
+		if medium then
+			stone(arena, "Desert_Rock", x + medium[1], z + medium[2], medium[3])
+		end
+		scatter(arena, x, z, big * 5, 3, { { "Rock_Small", 0.8, 1.3, DESERT_PEBBLE }, { "Dune", 0.5, 0.7 } }, 0.6)
+	end
+	sandOutcrop(62, -160, 1.5, { 5.5, 3, 1.0 })
+	sandOutcrop(178, 8, 1.45, { -4, 5, 1.0 })
+	sandOutcrop(-176, 86, 1.5, { 5, -4, 1.0 })
+	sandOutcrop(36, 158, 1.4, { -5, -3, 0.95 })
+	sandOutcrop(-70, -120, 1.4, { 5, 4, 0.95 })
+
+	-- sandstone ruins (a half-buried house north-east, a wall corner south-west)
+	obstacle(arena, "Desert_Ruin_Wall", 104, -156, 0, 1.1, nil, { occluder = true })
+	obstacle(arena, "Desert_Ruin_Wall", 113.5, -156.2, 0, 1.1, nil, { occluder = true })
+	obstacle(arena, "Desert_Ruin_Wall", 118.4, -150, 90, 1.1, nil, { occluder = true })
+	obstacle(arena, "Desert_Ruin_Pillar", 100, -146, 0, 1.0, nil, { occluder = true })
+	keepout(arena, 110, -152, 12)
+	obstacle(arena, "Desert_Ruin_Wall", -136, 136, 0, 1.0)
+	obstacle(arena, "Desert_Ruin_Wall", -140.4, 130, 90, 1.0)
+	obstacle(arena, "Desert_Ruin_Pillar", -126, 140, 0, 0.95)
+	keepout(arena, -134, 134, 10)
+
+	-- corners
+	for _, q in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+		local south = q[2] == 1
+		local cx, cz = q[1] * 172, q[2] * 172
+		stone(arena, "Desert_Rock", cx + q[1] * 6, cz - q[2] * 10, 1.35)
+		tree(arena, south and C or CT, cx - q[1] * 4, cz + q[2] * 8, south and 1.0 or 1.15)
+		decor(arena, "Dune", cx + q[1] * 12, cz + q[2] * 2, nil, 1.2, nil, { shadow = false })
+		scatter(arena, cx, cz, 18, 3, DESERT_SHADE, 1)
+	end
+
+	for _ = 1, 6 do
+		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(44, 190)
+		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, DESERT_SMALL, 1.5, 0.5)
+	end
+	for _, d in ipairs({ { -96, 12 }, { 60, -40 }, { 110, 120 }, { -30, 176 }, { 170, -130 }, { -176, -150 } }) do
+		decor(arena, "Dune", d[1], d[2], nil, rng:NextNumber(1.1, 1.5), nil, { shadow = false })
+	end
+
+	-- BORDER: mesas and big rocks on three sides, dunes and small rocks on the camera side
+	treeLine(arena, {
+		{ "Desert_Mesa", 1.2, 1.7, nil },
+		{ "Desert_Rock", 1.9, 2.6, nil },
+		{ "Cactus_Tall", 1.2, 1.5, nil },
+		{ "Desert_Mesa", 1.0, 1.4, nil },
+	}, {
+		{ "Dune", 1.3, 1.9, nil },
+		{ "Desert_Rock", 1.0, 1.4, nil },
+	}, 30, mix(P.sand_500, P.sand_600, 0.35))
+end
+
+------------------------------------------------------------------------------------------
+-- LAVA: a volcanic ash plain (unlocked at stage 6).
+--
+--   centre      a pale ash clearing where two ash tracks cross (spawn)
+--   north       the BRIMSTONE ALTAR with its fire bowl, basalt columns behind it
+--   west        a RUINED BASALT FORT: wall runs with glowing seams, an ember vent
+--   east        an EMBER FIELD: vents and obsidian shards
+--   south-west  low basalt rocks and ash heaps around a small vent
+--   mid / outer LAVA POOLS (7, burn 6 / 0.5 s, glowing rims), a lava lake (impassable),
+--               basalt column clusters, charred tree stands, basalt outcrops
+--   border      basalt columns and charred trees, low rocks and ash on the camera side
+------------------------------------------------------------------------------------------
+
+local LAVA_PEBBLE: Pal = { Stone = P.basalt_500 }
+local EMBER = rgb(255, 150, 80)
+local LAVA_SMALL = {
+	{ "Ash_Pile", 0.8, 1.2 },
+	{ "Ash_Pile", 0.8, 1.2 },
+	{ "Rock_Small", 0.8, 1.2, LAVA_PEBBLE },
+}
+local LAVA_SHADE = {
+	{ "Ash_Pile", 0.9, 1.3 },
+	{ "Rock_Small", 0.8, 1.3, LAVA_PEBBLE },
+}
+
+-- Lava lake: a big pool behind a ring of basalt rocks (impassable, one circle collider).
+local function lavaLake(arena: Arena, x: number, z: number, r: number)
+	local m = arena.Model
+	disc(arena.Decor, "Crust", W(arena, x, z, 0.06), r + 3, P.basalt_800)
+	prop(m, "Lava_Pool", CFrame.new(W(arena, x, z, 0.05)) * yawCF(30), r / 3.6, nil, { shadow = false }).Name = "LavaLake"
+	local glow = disc(m, "HazardGlow", W(arena, x, z, 0.04), r + 1.6, P.lava_500, 0.06)
+	glow.Material = NEON
+	glow.Transparency = 0.5
+	CollectionService:AddTag(glow, HAZARD_GLOW_TAG)
+	pointLight(m, W(arena, x, z, 4), 26, 1.4, P.lava_300, true)
+	arena.Lights += 1
+	-- the rim rocks say "wall", not "pool"
+	for k = 0, 8 do
+		local a = k / 9 * TAU + jitter(0.15)
+		decor(arena, "Basalt_Rock", x + math.cos(a) * (r + 2.4), z + math.sin(a) * (r + 2.4), nil, rng:NextNumber(0.9, 1.25), nil, { shadow = true })
+	end
+	local wp = W(arena, x, z)
+	circleCollider(arena, wp.X, wp.Z, r + 1.2, 4)
+	keepout(arena, x, z, r + 5)
+end
+
+local function buildLava(arena: Arena)
+	arena.DecorDensity = 0.7
+	arena.PortalPalette = { Moss = P.ash_300 }
+	local base = mix(P.ash_400, P.basalt_500, 0.35)
+	biomeGround(arena, P.basalt_600, base)
+	local dark, pale, ash = mix(P.basalt_500, P.basalt_600, 0.4), mix(P.ash_400, P.ash_300, 0.45), mix(P.ash_400, P.basalt_500, 0.6)
+	groundPatches(arena, {
+		{ -150, -150, 26, dark }, { 120, -165, 22, dark }, { -170, 60, 24, dark }, { 160, 120, 26, dark },
+		{ 30, -126, 20, ash }, { -60, 150, 22, dark }, { -110, -40, 18, ash },
+		{ -80, 90, 22, pale }, { 90, 70, 24, pale }, { -40, -90, 22, ash }, { 74, -84, 18, pale },
+		{ 140, -110, 18, pale }, { -140, 120, 20, ash }, { 0, 140, 24, pale }, { -175, -90, 20, pale },
+		{ 120, 175, 16, ash }, { 175, 10, 18, dark },
+	})
+	patch(arena, 0, 0, 24, mix(P.ash_400, P.ash_300, 0.55), 0.05)
+	patch(arena, 3, 2, 13, mix(P.ash_400, P.ash_300, 0.3), 0.07)
+
+	-- ash tracks
+	local core, edge = mix(P.ash_300, P.ash_400, 0.25), mix(P.ash_400, base, 0.5)
+	dirtPath(arena, {
+		Vector2.new(-262, 26), Vector2.new(-200, 10), Vector2.new(-142, 28), Vector2.new(-90, 10),
+		Vector2.new(-40, 4), Vector2.new(0, 0), Vector2.new(44, -10), Vector2.new(94, -2),
+		Vector2.new(144, -20), Vector2.new(202, -8), Vector2.new(262, -20),
+	}, 7, core, edge, 0.12)
+	dirtPath(arena, {
+		Vector2.new(-20, 262), Vector2.new(-12, 194), Vector2.new(-28, 134), Vector2.new(-8, 84),
+		Vector2.new(-6, 40), Vector2.new(0, 0), Vector2.new(10, -34), Vector2.new(-6, -80),
+		Vector2.new(-20, -124), Vector2.new(-4, -170), Vector2.new(-12, -214), Vector2.new(-6, -262),
+	}, 6, core, edge, 0.16)
+
+	boundaryWalls(arena)
+
+	scatter(arena, 0, 0, 34, 14, { { "Ash_Pile", 0.7, 1.1 }, { "Rock_Small", 0.7, 1.1, LAVA_PEBBLE }, { "Rock_Small", 0.8, 1.2, LAVA_PEBBLE } }, 1.2, 0.4)
+
+	--------------------------------------------------------------------------------------
+	-- LANDMARKS (mid ring)
+
+	-- 1. Brimstone altar (north) facing the clearing, basalt columns and obsidian behind
+	local ax, az = 28, -72
+	obstacle(arena, "Brimstone_Altar", ax, az, 180, 1.15, nil, { occluder = true }).Name = "Landmark_Altar"
+	kitLight(arena, "Brimstone_Altar", ax, az, 180, 1.15, 20, 1.6, FIRE)
+	obstacle(arena, "Basalt_Column", ax + 4, az - 13, 20, 1.0, nil, { occluder = true })
+	obstacle(arena, "Obsidian_Crystal", ax - 9, az - 7, 40, 1.1)
+	obstacle(arena, "Obsidian_Crystal", ax + 11, az - 3, 200, 0.95)
+	keepout(arena, ax, az, 14)
+	scatter(arena, ax, az, 20, 6, { { "Ash_Pile", 0.9, 1.3 }, { "Rock_Small", 0.8, 1.2, LAVA_PEBBLE } }, 0.6)
+
+	-- 2. Ruined basalt fort (west): an L of walls with glowing seams and a vent
+	local fx, fz = -74, -36
+	for i = 0, 2 do
+		obstacle(arena, "Lava_Ruin_Wall", fx - 8 + i * 7.8, fz - 8, 0, 1.0, nil, { occluder = true })
+	end
+	obstacle(arena, "Lava_Ruin_Wall", fx - 12, fz - 0.5, 90, 1.0, nil, { occluder = true })
+	obstacle(arena, "Ember_Vent", fx + 4, fz + 2, 0, 1.1)
+	kitLight(arena, "Ember_Vent", fx + 4, fz + 2, 0, 1.1, 14, 1.2, EMBER)
+	stone(arena, "Basalt_Rock", fx + 13, fz - 3, 0.9)
+	keepout(arena, fx, fz - 3, 13)
+	scatter(arena, fx, fz, 18, 6, { { "Ash_Pile", 0.9, 1.3 }, { "Rock_Small", 0.8, 1.2, LAVA_PEBBLE } }, 0.6)
+
+	-- 3. Ember field (east): vents and obsidian shards in a loose ring
+	local ex, ez = 88, 30
+	for k = 0, 5 do
+		local a = k / 6 * TAU + 0.3
+		local px, pz = ex + math.cos(a) * 9, ez + math.sin(a) * 9
+		if k % 2 == 0 then
+			obstacle(arena, "Ember_Vent", px, pz, rng:NextNumber(0, 360), rng:NextNumber(1.0, 1.15))
+		else
+			obstacle(arena, "Obsidian_Crystal", px, pz, rng:NextNumber(0, 360), rng:NextNumber(0.95, 1.15))
+		end
+	end
+	kitLight(arena, "Ember_Vent", ex + math.cos(0.3) * 9, ez + math.sin(0.3) * 9, 0, 1.0, 14, 1.1, EMBER)
+	pointLight(arena.Model, W(arena, ex, ez, 3), 14, 0.8, EMBER, true)
+	arena.Lights += 1
+	keepout(arena, ex, ez, 11)
+	scatter(arena, ex, ez, 14, 5, { { "Ash_Pile", 0.9, 1.3 }, { "Rock_Small", 0.8, 1.1, LAVA_PEBBLE } }, 0.5)
+
+	-- 4. Basalt rocks and ash heaps around a small vent (south-west, low)
+	local sx, sz = -56, 56
+	stone(arena, "Basalt_Rock", sx - 7, sz - 4, 1.1)
+	stone(arena, "Basalt_Rock", sx + 6, sz + 6, 0.95)
+	stone(arena, "Basalt_Rock", sx + 8, sz - 7, 0.8)
+	obstacle(arena, "Ember_Vent", sx, sz, 0, 1.0)
+	decor(arena, "Ash_Pile", sx - 4, sz + 6, nil, 1.6, nil, { shadow = false })
+	keepout(arena, sx, sz, 12)
+	scatter(arena, sx, sz, 18, 5, LAVA_SHADE, 0.5)
+
+	--------------------------------------------------------------------------------------
+	-- LAVA POOLS (hazards: burn)
+	for i, lp in ipairs({
+		{ -56, -102, 1.5, 20 }, { 72, -124, 1.45, 110 }, { 124, 50, 1.5, 60 }, { 48, 106, 1.45, 200 },
+		{ -106, 58, 1.5, 140 }, { 152, -88, 1.4, 300 }, { -140, 150, 1.45, 30 },
+	}) do
+		lavaPool(arena, lp[1], lp[2], lp[3], lp[4], i <= 4)
+	end
+
+	--------------------------------------------------------------------------------------
+	-- OUTER RING
+
+	lavaLake(arena, -118, -150, 10)
+
+	for _, bc in ipairs({ { -128, -96, 1.2, 0 }, { 156, -38, 1.15, 70 }, { 138, 138, 1.05, 140 }, { -170, 18, 1.15, 200 } }) do
+		obstacle(arena, "Basalt_Column", bc[1], bc[2], bc[4], bc[3], nil, { occluder = true })
+		scatter(arena, bc[1], bc[2], 10, 3, LAVA_SHADE, 0.8)
+	end
+
+	local CT = "Charred_Tree"
+	kitGrove(arena, -48, -158, { { CT, 0, 0, 1.15 }, { CT, 9, 6, 1.0 }, { CT, -8, 7, 0.95 }, { CT, 4, -10, 1.05 } }, LAVA_SHADE)
+	kitGrove(arena, 116, -150, { { CT, 0, 0, 1.15 }, { CT, 10, 5, 1.0 }, { CT, -9, 8, 0.95 }, { CT, 6, -9, 1.0 } }, LAVA_SHADE)
+	kitGrove(arena, 160, 80, { { CT, 0, 0, 1.1 }, { CT, 11, -5, 1.0 }, { CT, -6, 9, 0.95 } }, LAVA_SHADE)
+	kitGrove(arena, -164, -48, { { CT, 0, 0, 1.15 }, { CT, -8, 8, 1.0 }, { CT, 9, 4, 1.0 } }, LAVA_SHADE)
+	kitGrove(arena, 96, 156, { { CT, 0, 0, 0.9 }, { CT, 9, 6, 0.8 } }, LAVA_SHADE)
+
+	local function basaltOutcrop(x: number, z: number, big: number, medium: { number }?)
+		stone(arena, "Basalt_Rock", x, z, big)
+		if medium then
+			stone(arena, "Basalt_Rock", x + medium[1], z + medium[2], medium[3])
+		end
+		scatter(arena, x, z, big * 5, 3, LAVA_SHADE, 0.6)
+	end
+	basaltOutcrop(62, -160, 1.5, { 5.5, 3, 1.0 })
+	basaltOutcrop(178, 6, 1.45, { -4, 5, 1.0 })
+	basaltOutcrop(-176, 92, 1.5, { 5, -4, 1.0 })
+	basaltOutcrop(30, 160, 1.4, { -5, -3, 0.95 })
+	basaltOutcrop(-80, -126, 1.4, { 5, 4, 0.95 })
+	basaltOutcrop(-112, 112, 1.4, { -5, 4, 1.0 })
+
+	-- obsidian outcrops (a little glow)
+	for i, oc in ipairs({ { 112, -96, 1.3 }, { -150, 112, 1.2 }, { 24, -178, 1.25 } }) do
+		obstacle(arena, "Obsidian_Crystal", oc[1], oc[2], rng:NextNumber(0, 360), oc[3])
+		decor(arena, "Obsidian_Crystal", oc[1] + 2.6, oc[2] + 1.4, nil, oc[3] * 0.55, nil, { shadow = false })
+		if i == 1 then
+			kitLight(arena, "Obsidian_Crystal", oc[1], oc[2], 0, oc[3], 12, 0.9, EMBER)
+		end
+	end
+
+	-- a broken outpost (north-east)
+	obstacle(arena, "Lava_Ruin_Wall", 40, -176, 0, 1, nil, { occluder = true })
+	obstacle(arena, "Lava_Ruin_Wall", 48.7, -176.2, 0, 1, nil, { occluder = true })
+	obstacle(arena, "Lava_Ruin_Wall", 53.4, -170.6, 90, 1, nil, { occluder = true })
+	keepout(arena, 46, -172, 10)
+
+	-- corners
+	for _, q in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+		local south = q[2] == 1
+		local bx, bz = q[1] * 172, q[2] * 172
+		stone(arena, "Basalt_Rock", bx + q[1] * 6, bz - q[2] * 10, 1.35)
+		if not south then
+			tree(arena, CT, bx - q[1] * 4, bz + q[2] * 8, 1.1)
+		end
+		scatter(arena, bx, bz, 18, 3, LAVA_SHADE, 1)
+	end
+
+	for _ = 1, 6 do
+		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(44, 190)
+		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, LAVA_SMALL, 1.5, 0.5)
+	end
+
+	-- BORDER: basalt columns and charred trees, low rocks and ash on the camera side
+	treeLine(arena, {
+		{ "Basalt_Column", 1.15, 1.6, nil },
+		{ "Charred_Tree", 1.25, 1.6, nil },
+		{ "Basalt_Rock", 1.7, 2.3, nil },
+	}, {
+		{ "Basalt_Rock", 1.0, 1.4, nil },
+		{ "Ash_Pile", 1.6, 2.2, nil },
+	}, 28, mix(P.basalt_600, P.basalt_700, 0.55))
+end
+
+------------------------------------------------------------------------------------------
+
+local BUILDERS: { [string]: (Arena) -> () } = {
+	Forest = buildForest,
+	Ruins = buildRuins,
+	Swamp = buildSwamp,
+	Snow = buildSnow,
+	Desert = buildDesert,
+	Lava = buildLava,
+}
 
 -- Builds an arena by name, destroying the previous one. `variant` (stage - 1) re-seeds
 -- the scattered decoration so later stages look a little different; 0 = the classic map.
@@ -1855,11 +2992,8 @@ function MapBuilder.BuildArena(name: string, variant: number?)
 	MapBuilder.DestroyArena()
 	rng = Random.new((SEEDS[name] or SEEDS.Forest) + (variant or 0) * 7919)
 	local arena = newArena(name)
-	if name == "Ruins" then
-		buildRuins(arena)
-	else
-		buildForest(arena)
-	end
+	local build = BUILDERS[name] or buildForest
+	build(arena)
 	arena.Model.Parent = arena.Root
 	MapBuilder.ApplyLighting(name)
 	currentArena = arena
@@ -1877,6 +3011,8 @@ end
 	PortalRepeatDistance from `avoid` (the last portal in this arena). The rules relax step
 	by step if nothing fits; the last resort is a fixed spot on the north side.
 ]]
+local HAZARD_PAD: number = ((Config.Arenas :: any).Hazards or {}).LootPad or 4
+
 function MapBuilder.FindPortalSpot(arena: Arena, rand: Random, avoid: Vector3?): Vector3
 	local S = Config.Stages
 	local half = arena.Half - S.PortalEdgeMargin
@@ -1884,7 +3020,7 @@ function MapBuilder.FindPortalSpot(arena: Arena, rand: Random, avoid: Vector3?):
 	local function try(minDist: number, clear: number, avoidDist: number): Vector3?
 		for _ = 1, 400 do
 			local x, z = rand:NextNumber(-half, half), rand:NextNumber(-half, half)
-			if math.sqrt(x * x + z * z) >= minDist and isFree(arena, x, z, clear) then
+			if math.sqrt(x * x + z * z) >= minDist and isFree(arena, x, z, clear, nil, HAZARD_PAD) then
 				local far = true
 				if avoid and avoidDist > 0 then
 					local dx, dz = c.X + x - avoid.X, c.Z + z - avoid.Z
@@ -1942,7 +3078,7 @@ export type Portal = {
 function MapBuilder.BuildPortal(arena: Arena, pos: Vector3): Portal
 	local S = Config.Stages
 	local cf = CFrame.new(pos) * yawCF(180) -- the mesh's front (-Z) turned toward the camera
-	local model = prop(arena.Model, "Portal", cf, 1, nil, { occluder = true })
+	local model = prop(arena.Model, "Portal", cf, 1, arena.PortalPalette, { occluder = true }) -- biome moss / snow / sand tint
 	kitCollider(arena, "Portal", cf, 1)
 	table.insert(arena.Keepout, { X = pos.X - arena.Center.X, Z = pos.Z - arena.Center.Z, R = S.PortalRadius })
 	-- scattered clutter (grass, ferns, bushes) would poke through the dais and the circle
@@ -2080,7 +3216,7 @@ function MapBuilder.FindOpenSpot(arena: Arena, rand: Random, opts: SpotOpts): Ve
 	local function try(spacing: number, tries: number): Vector3?
 		for _ = 1, tries do
 			local x, z = rand:NextNumber(-half, half), rand:NextNumber(-half, half)
-			if math.sqrt(x * x + z * z) >= minDist and isFree(arena, x, z, clear, opts.PathPad) then
+			if math.sqrt(x * x + z * z) >= minDist and isFree(arena, x, z, clear, opts.PathPad, HAZARD_PAD) then
 				local ok = true
 				if keep then
 					local kx, kz = c.X + x - keep.X, c.Z + z - keep.Z

@@ -112,14 +112,28 @@ function A.drops(s, centre: Vector3)
 	end
 end
 
--- Inventory payload like LevelUpSystem.SendInventory.
-function A.inventory()
+-- Inventory payload like LevelUpSystem.SendInventory ("new": the weapons added with the
+-- Alchemist / Engineer / Necromancer).
+function A.inventory(which: string?)
 	local WeaponData = C.shared("WeaponData")
 	local PassiveData = C.shared("PassiveData")
 	if not WeaponData or not PassiveData then
 		return nil
 	end
 	local weapons = {}
+	if which == "new" then
+		for i, id in ipairs({ "FireTrail", "Turret", "SoulBolt", "Spear", "ChainHook", "HealingTotem" }) do
+			local def = WeaponData.Weapons[id]
+			local evolved = preview.args.evolved == "on" and i <= 3
+			table.insert(weapons, { Id = id, Name = evolved and def.Evolution.Name or def.Name, Level = evolved and WeaponData.MaxLevel or (9 - i), Evolved = evolved, Color = def.Color })
+		end
+		local passives = {}
+		for i, id in ipairs({ "Precision", "Renewal", "Might" }) do
+			local def = PassiveData.Passives[id]
+			table.insert(passives, { Id = id, Name = def.Name, Level = 4 - i, Color = def.Color })
+		end
+		return { Weapons = weapons, Passives = passives, Rerolls = 1, Skips = 1, WeaponSlots = 6, PassiveSlots = 6 }
+	end
 	for i, id in ipairs(WeaponData.Order) do
 		if i > 4 then
 			break
@@ -201,7 +215,7 @@ function A.build(opts)
 	if opts.client ~= false then
 		C.startClient()
 		C.sendProfile()
-		local inv = A.inventory()
+		local inv = A.inventory(opts.inventory)
 		if inv then
 			C.fire("Inventory", inv)
 		end

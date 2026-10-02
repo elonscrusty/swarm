@@ -147,6 +147,29 @@ local ENEMY_MESH = {
 	Bomber = { "BombTick", "Waddle" },
 	Spitter = { "Spitter", "Scuttle" },
 	Boss = { "ScorpionQueen", "Prowl" },
+	MothBoss = { "MothMatriarch", "Flutter" },
+	RhinoBoss = { "RhinoWarlord", "Stomp" },
+	HiveBoss = { "HiveMother", "Prowl" },
+	Burrower = { "Burrower", "Scuttle" },
+	Healer = { "Healer", "Scuttle" },
+	Nest = { "Nest", "Static" },
+	WarBanner = { "RhinoWarlord", "Static" },
+}
+
+--[[
+	Extra mesh rules per enemy type: Scale (the Hive Mother's mesh is ~17 studs long, her
+	body ~14), Only (keep just these pieces) and Shift (studs, model space, before Scale):
+	the War Banner is the banner from the Warlord's back, stood on the ground.
+]]
+local MESH_EXTRA: { [string]: { Scale: number?, Only: { string }?, Shift: Vector3? } } = {
+	HiveBoss = { Scale = 0.8 },
+	WarBanner = { Scale = 1.45, Only = { "BannerPole", "BannerTrim", "Banner", "BannerCrown" }, Shift = Vector3.new(0, -4.95, -3.9) },
+}
+
+-- Pieces some poses hide (EnemyRenderer): the Burrower's soil ring, the Warlord's banner.
+ModelLibrary.PieceGroups = {
+	Mound = { Mound = true },
+	Banner = { BannerPole = true, BannerTrim = true, Banner = true, BannerCrown = true },
 }
 
 ------------------------------------------------------------------------------------------
@@ -204,6 +227,76 @@ local LOOKS: { [string]: { [string]: Color3 } } = {
 		Light = Palette.amber_500,
 		Glow = Palette.amber_300,
 		Eye = Palette.amber_500,
+	},
+	-- the new creatures and bosses (the same slot colours as their Blender palettes)
+	MothBoss = {
+		Base = Palette.ivory_200:Lerp(Palette.stone_300, 0.2),
+		Light = Palette.moth_300,
+		Accent = Palette.slate_600,
+		Metal = Palette.slate_500,
+		Gold = Palette.gold_400,
+		Dark = Palette.chitin_800,
+		White = Palette.ivory_100,
+		Glow = Palette.moth_glow,
+		Eye = Palette.amber_500,
+	},
+	RhinoBoss = {
+		Base = Palette.slate_600,
+		Accent = Palette.steel_600,
+		Metal = Palette.steel_400,
+		Gold = Palette.gold_500,
+		Dark = Palette.chitin_900,
+		White = Palette.ivory_200,
+		Cloth = Palette.crimson_500,
+		Wood = Palette.wood_700,
+		Eye = Palette.amber_500,
+	},
+	HiveBoss = {
+		Base = Palette.ivory_200,
+		Accent = Palette.gold_400:Lerp(Palette.ivory_300, 0.4),
+		Light = Palette.ivory_100,
+		Metal = Palette.wasp_500:Lerp(Palette.chitin_800, 0.5),
+		Gold = Palette.gold_500,
+		Dark = Palette.chitin_900,
+		Glow = Palette.amber_300,
+		Eye = Palette.amber_500,
+	},
+	Burrower = {
+		Base = Palette.sand_400,
+		Light = Palette.sand_300,
+		Accent = Palette.dirt_500,
+		Dark = Palette.chitin_900,
+		Stone = Palette.dirt_600,
+		Eye = Palette.amber_500,
+	},
+	Healer = {
+		Base = Palette.ivory_200,
+		Light = Palette.moss_200,
+		Accent = Palette.moss_300,
+		Dark = Palette.chitin_800,
+		White = Palette.ivory_100,
+		Glow = Palette.fx_heal,
+		Eye = Palette.amber_500,
+	},
+	Nest = {
+		Base = Palette.wood_500,
+		Accent = Palette.gold_600,
+		Light = Palette.gold_200,
+		Dark = Palette.chitin_900,
+		Stone = Palette.wood_700,
+		Glow = Palette.amber_300,
+	},
+	WarBanner = {
+		Cloth = Palette.crimson_500,
+		Gold = Palette.gold_500,
+		Wood = Palette.wood_700,
+		Stone = Palette.stone_600,
+	},
+	BroodEgg = {
+		Base = Palette.ivory_200,
+		Accent = Palette.gold_400,
+		Dark = Palette.chitin_900,
+		Glow = Palette.amber_300,
 	},
 }
 
@@ -464,6 +557,162 @@ ENEMIES.Boss = function(b, c)
 	return "Prowl"
 end
 
+-- Moth Matriarch: pale furred body hovering ~4 studs up, four broad wings with gold eye
+-- spots, a gold coronet, a glowing heart.
+ENEMIES.MothBoss = function(b, c)
+	egg(b, V(2.5, 2.6, 3.8), c.Base, CFrame.new(0, 4.2, -1.1))
+	egg(b, V(2.0, 2.4, 4.0), c.Base, CFrame.new(0, 3.9, 2.3), { Anim = "Tail", Joint = V(0, 4.2, 0.6) })
+	egg(b, V(2.1, 0.5, 2.8), c.Gold, CFrame.new(0, 4.0, 2.4), { Material = METAL, Anim = "Tail", Joint = V(0, 4.2, 0.6) })
+	egg(b, V(1.3, 0.8, 1.4), c.Gold, CFrame.new(0, 4.9, -2.5), { Material = METAL })
+	ball(b, 0.6, c.Glow, V(0, 5.45, -0.7), { Material = NEON, Anim = "Pulse" })
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.38, c.Eye, V(side * 0.4, 4.35, -2.95), { Material = NEON })
+		bar(b, V(side * 0.3, 5.0, -2.9), V(side * 2.2, 6.6, -4.4), 0.16, c.White, { Anim = "Wiggle", Joint = V(0, 5.0, -2.9) })
+		local root = V(side * 0.7, 5.3, -0.6)
+		local anim = side < 0 and "FlutterL" or "FlutterR"
+		local wing = CFrame.new(root) * CFrame.Angles(0, 0, side * math.rad(10))
+		egg(b, V(6.4, 0.12, 3.9), c.Light, wing * CFrame.new(side * 3.1, 0.2, -0.9), { Anim = anim, Joint = root, Transparency = 0.3 })
+		egg(b, V(5.6, 0.12, 5.6), c.Accent, wing * CFrame.new(side * 2.7, 0, 2.4), { Anim = anim, Joint = root, Transparency = 0.18 })
+		egg(b, V(1.6, 0.16, 1.6), c.Gold, wing * CFrame.new(side * 3.6, 0.25, -0.6), { Anim = anim, Joint = root, Material = METAL })
+		for i, z in ipairs({ -1.2, -0.6, 0 }) do
+			local hip = V(side * 0.6, 3.4, z)
+			bar(b, hip, V(side * 1.3, 2.0, z + ({ -0.6, 0, 0.5 })[i]), 0.16, c.Dark, { Anim = side < 0 and "SwingA" or "SwingB", Joint = hip })
+		end
+	end
+	return "Flutter"
+end
+
+-- Rhino Warlord: a huge slate-blue rhino beetle in steel plates with a crimson war banner.
+ENEMIES.RhinoBoss = function(b, c)
+	egg(b, V(8.4, 3.4, 8.6), c.Base, CFrame.new(0, 4.8, 1.4))
+	egg(b, V(6.8, 2.6, 10.8), c.Dark, CFrame.new(0, 2.6, -0.2))
+	egg(b, V(6.7, 2.4, 6.2), c.Metal, CFrame.new(0, 5.4, 1.35), { Material = METAL })
+	egg(b, V(6.4, 2.6, 3.8), c.Accent, CFrame.new(0, 4.5, -2.5), { Material = METAL })
+	local neck = V(0, 3.4, -4.4)
+	local toss = { Anim = "Jaw", Joint = neck }
+	bar(b, V(0, 3.2, -4.6), V(0, 4.9, -6.8), 1.4, c.White, toss)
+	bar(b, V(0, 4.7, -6.8), V(0, 8.0, -6.4), 1.0, c.White, toss)
+	bar(b, V(0, 4.5, -6.4), V(0, 4.5, -6.4) + V(0, 0.4, 0), 1.6, c.Gold, { Anim = "Jaw", Joint = neck, Material = METAL })
+	bar(b, V(0, 5.6, -3.6), V(0, 6.3, -4.2), 0.7, c.White)
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.45, c.Eye, V(side * 1.1, 2.9, -5.2), { Material = NEON })
+		for i, z in ipairs({ -2.96, 0.62, 4.07 }) do
+			local anim = (((i - 1) % 2 == 0) == (side < 0)) and "SwingA" or "SwingB"
+			local hip = V(side * 2.6, 2.4, z)
+			local knee = V(side * 4.6, 3.6, z)
+			bar(b, hip, knee, 1.1, c.Dark, { Anim = anim, Joint = hip })
+			bar(b, knee, V(side * 5.3, 0.05, z), 0.85, c.Dark, { Anim = anim, Joint = hip })
+		end
+	end
+	local pole = b.add("Block", V(0.35, 8, 0.6), c.Wood, CFrame.new(0, 9, 3.7), { Anim = "Tail", Pivot = CFrame.new(0, -3.4, 0) })
+	pole.Name = "BannerPole"
+	local cloth = b.add("Block", V(3.6, 4.8, 0.14), c.Cloth, CFrame.new(0, 9.9, 4.05), { Anim = "Tail", Pivot = CFrame.new(0, -4.3, -0.4) })
+	cloth.Name = "Banner"
+	local trim = b.add("Block", V(4.4, 0.4, 0.5), c.Gold, CFrame.new(0, 12.6, 3.9), { Anim = "Tail", Pivot = CFrame.new(0, -7, -0.2), Material = METAL })
+	trim.Name = "BannerTrim"
+	local crown = b.add("Block", V(1.6, 1.0, 0.3), c.Gold, CFrame.new(0, 11.1, 4.0), { Anim = "Tail", Pivot = CFrame.new(0, -5.5, -0.35), Material = METAL })
+	crown.Name = "BannerCrown"
+	return "Stomp"
+end
+
+-- Hive Mother: a bloated ivory egg sac with glowing pods behind a gold-crowned thorax.
+ENEMIES.HiveBoss = function(b, c)
+	local tail = { Anim = "Tail", Joint = V(0, 2.4, -0.4) }
+	egg(b, V(5.1, 4.7, 7.8), c.Base, CFrame.new(0, 2.35, 3.3), tail)
+	egg(b, V(4.4, 4.4, 1.0), c.Accent, CFrame.new(0, 2.2, 2.2), tail)
+	egg(b, V(4.4, 4.4, 1.0), c.Accent, CFrame.new(0, 2.2, 4.6), tail)
+	for i = 1, 5 do
+		local a = i * 1.25
+		ball(b, 0.9, c.Glow, V(math.cos(a) * 1.6, 3.6 + math.sin(a) * 0.6, 2.4 + i * 0.7), { Material = NEON, Anim = "Throb" })
+	end
+	egg(b, V(3.5, 3.0, 4.6), c.Metal, CFrame.new(0, 2.0, -2.5))
+	egg(b, V(3.3, 1.6, 4.0), c.Gold, CFrame.new(0, 3.0, -2.8), { Material = METAL })
+	bar(b, V(0, 1.7, -4.8), V(0, 1.6, -5.6), 1.4, c.Dark, { Anim = "Jaw", Joint = V(0, 1.8, -4.6) })
+	for _, side in ipairs({ -1, 1 }) do
+		ball(b, 0.5, c.Eye, V(side * 0.8, 2.36, -4.6), { Material = NEON })
+		bar(b, V(side * 0.5, 2.9, -4.6), V(side * 1.7, 3.6, -5.6), 0.2, c.Dark, { Anim = "Wiggle", Joint = V(0, 2.9, -4.6) })
+		for i, z in ipairs({ -3.4, -2.2, -1.0 }) do
+			local anim = (((i - 1) % 2 == 0) == (side < 0)) and "SwingA" or "SwingB"
+			local hip = V(side * 1.5, 1.4, z)
+			bar(b, hip, V(side * 2.6, 0.05, z + ({ -0.6, 0, 0.6 })[i]), 0.45, c.Dark, { Anim = anim, Joint = hip })
+		end
+	end
+	return "Prowl"
+end
+
+-- Burrower: a sandy mole-cricket with digging claws, sitting in a ring of loose soil
+-- ("Mound": shown while it tunnels, hidden once it is out).
+ENEMIES.Burrower = function(b, c)
+	egg(b, V(1.4, 1.3, 2.6), c.Base, CFrame.new(0, 0.8, 1.0))
+	egg(b, V(1.7, 1.1, 1.6), c.Accent, CFrame.new(0, 1.0, -0.6))
+	egg(b, V(1.0, 0.8, 0.9), c.Dark, CFrame.new(0, 0.75, -1.5))
+	ball(b, 0.22, c.Eye, V(-0.3, 0.9, -1.85), { Material = NEON })
+	ball(b, 0.22, c.Eye, V(0.3, 0.9, -1.85), { Material = NEON })
+	for _, side in ipairs({ -1, 1 }) do
+		local shoulder = V(side * 0.7, 0.7, -1.2)
+		egg(b, V(1.3, 0.7, 1.2), c.Accent, CFrame.new(side * 1.25, 0.6, -1.7), { Anim = "Jaw", Joint = shoulder })
+		local hip = V(side * 0.6, 0.6, 0.4)
+		bar(b, hip, V(side * 1.4, 0.05, 0.9), 0.2, c.Dark, { Anim = side < 0 and "SwingA" or "SwingB", Joint = hip })
+	end
+	local mound = b.add("Cylinder", V(0.45, 4.4, 4.4), c.Stone, CFrame.new(0, 0.22, 0) * CYL_UP)
+	mound.Name = "Mound"
+	return "Scuttle"
+end
+
+-- Healer: a pale aphid with green stripes and a slowly spinning glowing halo.
+ENEMIES.Healer = function(b, c)
+	egg(b, V(1.8, 1.6, 2.5), c.Base, CFrame.new(0, 1.0, 0.1))
+	egg(b, V(1.85, 0.6, 0.75), c.Light, CFrame.new(0, 1.5, 0.4))
+	egg(b, V(0.6, 0.64, 0.66), c.Dark, CFrame.new(0, 0.8, -1.27))
+	ball(b, 0.16, c.Eye, V(-0.18, 0.92, -1.45), { Material = NEON })
+	ball(b, 0.16, c.Eye, V(0.18, 0.92, -1.45), { Material = NEON })
+	ball(b, 0.7, c.Glow, V(0, 1.82, 0.8), { Material = NEON, Anim = "Pulse" })
+	local halo = b.add("Cylinder", V(0.2, 2.0, 2.0), c.Glow, CFrame.new(0, 2.62, 0.1) * CYL_UP, { Material = NEON, Anim = "Spin" })
+	halo.Name = "Halo"
+	for _, side in ipairs({ -1, 1 }) do
+		egg(b, V(1.0, 0.1, 0.6), c.White, CFrame.new(side * 0.8, 1.67, -0.7), { Anim = side < 0 and "FlutterL" or "FlutterR", Joint = V(side * 0.3, 1.67, -0.7), Transparency = 0.45 })
+		local hip = V(side * 0.5, 0.6, -0.4)
+		bar(b, hip, V(side * 1.2, 0.05, -0.8), 0.15, c.Dark, { Anim = side < 0 and "SwingA" or "SwingB", Joint = hip })
+	end
+	return "Scuttle"
+end
+
+-- Nest: a wax-rimmed mound of earth with two dark openings and glowing eggs at its foot.
+ENEMIES.Nest = function(b, c)
+	b.add("Cylinder", V(0.4, 5.2, 4.7), c.Stone, CFrame.new(0, 0.2, 0) * CYL_UP)
+	egg(b, V(4.4, 3.8, 4.0), c.Base, CFrame.new(0, 1.9, 0.2))
+	egg(b, V(4.0, 1.4, 3.9), c.Accent, CFrame.new(0, 1.5, 0.16))
+	egg(b, V(1.4, 1.6, 0.6), c.Dark, CFrame.new(0, 1.4, -1.85))
+	egg(b, V(0.6, 1.6, 1.4), c.Dark, CFrame.new(-1.95, 1.4, -0.2))
+	for i = -1, 1 do
+		ball(b, 0.7, c.Light, V(i * 1.2, 0.5, -1.6), { Anim = "Pulse" })
+		ball(b, 0.4, c.Glow, V(i * 1.2, 0.62, -1.75), { Material = NEON, Anim = "Pulse" })
+	end
+	b.add("Cylinder", V(0.2, 0.6, 0.6), c.Glow, CFrame.new(0, 3.86, 0.05) * CYL_UP, { Material = NEON, Anim = "Throb" })
+	return "Static"
+end
+
+-- War Banner: a crimson banner on a wooden pole with a gold crown, in a stone foot.
+ENEMIES.WarBanner = function(b, c)
+	b.add("Cylinder", V(0.6, 3.0, 3.0), c.Stone, CFrame.new(0, 0.3, 0) * CYL_UP)
+	b.add("Block", V(0.4, 9.2, 0.4), c.Wood, CFrame.new(0, 4.6, 0))
+	b.add("Block", V(4.4, 0.35, 0.4), c.Gold, CFrame.new(0, 8.6, 0), { Material = METAL })
+	b.add("Block", V(3.8, 5.0, 0.14), c.Cloth, CFrame.new(0, 6.0, 0.2), { Anim = "Tail", Pivot = CFrame.new(0, 2.6, 0) })
+	b.add("Block", V(1.6, 1.0, 0.3), c.Gold, CFrame.new(0, 7.2, 0.3), { Material = METAL, Anim = "Tail", Pivot = CFrame.new(0, 1.4, 0) })
+	ball(b, 0.7, c.Gold, V(0, 9.4, 0), { Material = METAL })
+	return "Static"
+end
+
+-- Brood Egg: an ivory egg with gold spots and a glowing core showing through.
+ENEMIES.BroodEgg = function(b, c)
+	egg(b, V(2.0, 2.6, 2.0), c.Base, CFrame.new(0, 1.3, 0))
+	ball(b, 0.55, c.Accent, V(0.72, 1.6, -0.5))
+	ball(b, 0.5, c.Accent, V(-0.78, 1.15, -0.3))
+	ball(b, 0.45, c.Accent, V(0.15, 2.1, 0.7))
+	egg(b, V(1.1, 1.4, 1.1), c.Glow, CFrame.new(0, 1.3, 0), { Material = NEON, Transparency = 0.55 })
+	return "Static"
+end
+
 -- Elite marker: a small antique-gold crown (band, five points, a crimson stone) that bobs
 -- and slowly turns above the creature.
 local function eliteCrown(b)
@@ -491,13 +740,29 @@ function ModelLibrary.Enemy(typeId: string, elite: boolean): ({ Piece }, string,
 	local lift = -def.Size.Y * scale / 2 -- model origin (ground centre) under the body centre
 	local top = def.Size.Y * scale / 2
 	local meshInfo = ENEMY_MESH[typeId]
+	local extra = MESH_EXTRA[typeId]
+	local meshScale = scale * (extra and extra.Scale or 1)
 	local motion = meshInfo and meshInfo[2] or "Scuttle"
-	local pieces: { Piece }? = meshInfo and ModelLibrary.MeshPieces(meshInfo[1], nil, scale, lift) or nil
+	local pieces: { Piece }? = meshInfo and ModelLibrary.MeshPieces(meshInfo[1], nil, meshScale, lift) or nil
+	if pieces and extra and extra.Only then
+		-- one part of a bigger model (the War Banner from the Warlord's back)
+		local keep: { Piece } = {}
+		local shift = (extra.Shift or Vector3.zero) * meshScale
+		for _, piece in ipairs(pieces) do
+			if table.find(extra.Only, piece.Part.Name) then
+				piece.Offset = CFrame.new(shift) * piece.Offset
+				table.insert(keep, piece)
+			else
+				piece.Part:Destroy()
+			end
+		end
+		pieces = keep
+	end
 	if pieces and meshInfo then
 		local entry = MeshCatalog.Models[meshInfo[1]]
 		local bounds = (entry :: any).Bounds
 		if bounds then
-			top = lift + bounds[2][2] * scale
+			top = lift + bounds[2][2] * meshScale
 		end
 		if elite then
 			local slotOf: { [string]: string } = {}
@@ -673,6 +938,120 @@ SHOTS[21] = function(b, _def)
 	arrow(b, ShotPalette.moss_300, ShotPalette.gold_300, ShotPalette.moss_200, true)
 end
 
+--[[
+	Part-built stand-ins for the weapons added with the Alchemist / Engineer / Necromancer
+	(the meshes Shot_Spear, Shot_Bolt, Shot_FrostShard, Shot_Totem, Shot_Hook, Shot_Soul,
+	Ability_Turret, Shot_Fire replace them once loaded). Same orientation as the meshes:
+	front = -Z; the totem and the turret stand on the ground (origin = ground centre); the
+	turret's head pieces carry Anim = "Spin" with a pivot on its turning axis (VFX aims them).
+]]
+local function spear(b, shaft: Color3, tip: Color3, collar: Color3, glow: boolean)
+	b.add("Cylinder", Vector3.new(2.4, 0.14, 0.14), shaft, CFrame.new(0, 0, 0.35) * CFrame.Angles(0, math.rad(90), 0))
+	b.add("Wedge", Vector3.new(0.12, 0.4, 0.8), tip, CFrame.new(0, 0, -1.12) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(-90), 0, 0), { Material = glow and SHOT_NEON or SHOT_METAL })
+	b.add("Cylinder", Vector3.new(0.18, 0.22, 0.22), collar, CFrame.new(0, 0, -0.62) * CFrame.Angles(0, math.rad(90), 0), { Material = SHOT_METAL })
+	b.add("Cylinder", Vector3.new(0.5, 0.2, 0.2), ShotPalette.leather_600, CFrame.new(0, 0, 0.45) * CFrame.Angles(0, math.rad(90), 0))
+end
+
+local function bolt(b, shaft: Color3, head: Color3, fletch: Color3, s: number, glow: boolean)
+	b.add("Cylinder", Vector3.new(1.3 * s, 0.1 * s, 0.1 * s), shaft, CFrame.new(0, 0, 0.16 * s) * CFrame.Angles(0, math.rad(90), 0))
+	b.add("Wedge", Vector3.new(0.1 * s, 0.22 * s, 0.43 * s), head, CFrame.new(0, 0, -0.66 * s) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(-90), 0, 0), { Material = glow and SHOT_NEON or SHOT_METAL })
+	b.add("Block", Vector3.new(0.04 * s, 0.34 * s, 0.5 * s), fletch, CFrame.new(0, 0.05 * s, 0.61 * s))
+	b.add("Block", Vector3.new(0.38 * s, 0.04 * s, 0.5 * s), fletch, CFrame.new(0, 0.05 * s, 0.61 * s))
+end
+
+local function shard(b, ice: Color3, glow: Color3)
+	b.add("Wedge", Vector3.new(0.46, 0.58, 1.6), ice, CFrame.new(0, 0, -0.05) * CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.rad(-90), 0, 0), { Transparency = 0.2 })
+	b.add("Ball", Vector3.new(0.24, 0.26, 0.4), glow, CFrame.new(0, 0, -0.3), { Material = SHOT_NEON })
+end
+
+local function totem(b, wood: Color3, carving: Color3, gold: Color3, glow: Color3)
+	b.add("Block", Vector3.new(0.76, 2.85, 0.74), wood, CFrame.new(0, 0.82, 0))
+	b.add("Block", Vector3.new(1.8, 0.95, 0.65), carving, CFrame.new(0, 1.46, 0))
+	b.add("Block", Vector3.new(0.43, 0.38, 0.06), ShotPalette.chitin_900, CFrame.new(0, 1.38, -0.34))
+	b.add("Block", Vector3.new(0.64, 0.5, 0.55), gold, CFrame.new(0, 2.5, 0), { Material = SHOT_METAL })
+	b.add("Ball", Vector3.new(0.56, 0.6, 0.56), glow, CFrame.new(0, 2.85, 0), { Material = SHOT_NEON })
+end
+
+local function hook(b, metal: Color3, chain: Color3)
+	b.add("Block", Vector3.new(0.18, 0.2, 1.1), metal, CFrame.new(0, 0, 0.1), { Material = SHOT_METAL })
+	b.add("Block", Vector3.new(0.6, 0.2, 0.18), metal, CFrame.new(-0.25, 0, -0.45), { Material = SHOT_METAL })
+	b.add("Wedge", Vector3.new(0.2, 0.18, 0.5), metal, CFrame.new(-0.5, 0, -0.25) * CFrame.Angles(0, math.rad(180), 0), { Material = SHOT_METAL })
+	b.add("Cylinder", Vector3.new(0.12, 0.25, 0.25), chain, CFrame.new(0, 0, 0.75) * CFrame.Angles(0, 0, math.rad(90)), { Material = SHOT_METAL })
+end
+
+local function soul(b, glow: Color3, wisp: Color3)
+	b.add("Ball", Vector3.new(0.9, 0.9, 0.95), ShotPalette.ivory_200, CFrame.new(0, 0.05, -0.45))
+	b.add("Block", Vector3.new(0.52, 0.16, 0.12), glow, CFrame.new(0, 0.12, -0.9), { Material = SHOT_NEON })
+	b.add("Ball", Vector3.new(0.62, 0.58, 2.0), wisp, CFrame.new(0, 0.23, 0.7), { Transparency = 0.45 })
+end
+
+local function turret(b, metal: Color3, dark: Color3, gold: Color3, glow: Color3)
+	local aim = { Anim = "Spin" }
+	b.add("Cylinder", Vector3.new(1.0, 2.2, 2.2), dark, CFrame.new(0, 0.5, 0.1) * CYL_UP, { Material = SHOT_METAL })
+	b.add("Block", Vector3.new(0.6, 0.6, 0.6), dark, CFrame.new(0, 1.3, 0), { Material = SHOT_METAL })
+	b.add("Block", Vector3.new(1.25, 0.85, 1.25), metal, CFrame.new(0, 1.84, 0), { Material = SHOT_METAL, Anim = aim.Anim, Pivot = CFrame.new(0, -0.24, 0) })
+	b.add("Cylinder", Vector3.new(1.2, 0.36, 0.36), gold, CFrame.new(0, 1.8, -0.9) * CFrame.Angles(0, math.rad(90), 0), { Material = SHOT_METAL, Anim = aim.Anim, Pivot = CFrame.new(0, -0.2, 0.9) })
+	b.add("Ball", Vector3.new(0.22, 0.22, 0.22), glow, CFrame.new(0, 1.8, -1.52), { Material = SHOT_NEON, Anim = aim.Anim, Pivot = CFrame.new(0, -0.2, 1.52) })
+	b.add("Block", Vector3.new(0.25, 0.28, 0.24), ShotPalette.crimson_500, CFrame.new(0, 2.38, -0.4), { Anim = aim.Anim, Pivot = CFrame.new(0, -0.78, 0.4) })
+end
+
+local function flame(b, outer: Color3, core: Color3)
+	b.add("Ball", Vector3.new(0.82, 0.82, 1.6), outer, CFrame.new(0, 0, 0.23), { Material = SHOT_NEON, Transparency = 0.15 })
+	b.add("Ball", Vector3.new(0.43, 0.48, 1.0), core, CFrame.new(0, 0, 0.05), { Material = SHOT_NEON })
+end
+
+SHOTS[22] = function(b, _def)
+	spear(b, SHOT.Haft, SHOT.Steel, SHOT.Gold, false)
+end
+SHOTS[23] = function(b, _def)
+	spear(b, SHOT.CrimsonDark, ShotPalette.gold_200, SHOT.Gold, true)
+end
+SHOTS[24] = function(b, _def)
+	bolt(b, ShotPalette.wood_600, SHOT.Steel, SHOT.Crimson, 1, false)
+end
+SHOTS[25] = function(b, _def)
+	bolt(b, SHOT.CrimsonDark, ShotPalette.crimson_300, ShotPalette.gold_300, 1, true)
+end
+SHOTS[26] = function(b, _def)
+	shard(b, ShotPalette.ice_300, ShotPalette.ice_100)
+end
+SHOTS[27] = function(b, _def)
+	totem(b, ShotPalette.wood_500, ShotPalette.wood_400, SHOT.Gold, ShotPalette.fx_heal)
+end
+SHOTS[28] = function(b, _def)
+	totem(b, ShotPalette.wood_500, ShotPalette.gold_500, ShotPalette.gold_300, ShotPalette.fx_gold)
+end
+SHOTS[29] = function(b, _def)
+	hook(b, ShotPalette.steel_400, ShotPalette.steel_600)
+end
+SHOTS[30] = function(b, _def)
+	hook(b, ShotPalette.crimson_400, ShotPalette.crimson_800)
+end
+SHOTS[31] = function(b, _def)
+	soul(b, ShotPalette.fx_heal, ShotPalette.moss_100)
+end
+SHOTS[32] = function(b, _def)
+	soul(b, ShotPalette.crimson_300, ShotPalette.crimson_300)
+end
+SHOTS[33] = function(b, _def)
+	turret(b, ShotPalette.steel_400, ShotPalette.steel_600, SHOT.Gold, ShotPalette.fx_gold)
+end
+SHOTS[34] = function(b, _def)
+	turret(b, ShotPalette.gold_400, ShotPalette.steel_600, SHOT.Crimson, ShotPalette.fx_gold)
+end
+SHOTS[35] = function(b, _def)
+	bolt(b, ShotPalette.steel_600, ShotPalette.gold_300, SHOT.Gold, 0.75, false)
+end
+SHOTS[36] = function(b, _def)
+	shard(b, ShotPalette.ice_100, ShotPalette.fx_holy)
+end
+SHOTS[37] = function(b, _def)
+	flame(b, ShotPalette.fx_fire, ShotPalette.amber_300)
+end
+SHOTS[38] = function(b, _def)
+	flame(b, ShotPalette.gold_300, ShotPalette.ivory_100)
+end
+
 -- Projectile visual index → mesh model + slot colour overrides (slots: see blender/models/items.py).
 local SHOT_MESH: { [number]: { any } } = {
 	[1] = { "Shot_Orb", { Core = SHOT.Arcane, Shard = SHOT.Arcane, Shell = SHOT.Shell } },
@@ -690,6 +1069,25 @@ local SHOT_MESH: { [number]: { any } } = {
 	-- else SHOTS[20] / SHOTS[21] (MeshPieces returns nil for a missing model)
 	[20] = { "Shot_Arrow", nil },
 	[21] = { "Shot_Arrow", { Wood = ShotPalette.moss_300, Blade = ShotPalette.gold_300, Accent = ShotPalette.moss_200, Gold = ShotPalette.gold_200 } },
+	-- the Alchemist / Engineer / Necromancer weapons (a third value = model scale: spears,
+	-- totems and turrets are drawn larger than their catalog size so they read next to a hero)
+	[22] = { "Shot_Spear", nil, 1.5 },
+	[23] = { "Shot_Spear", { Tip = ShotPalette.gold_200, Shaft = SHOT.CrimsonDark, Gold = SHOT.Gold, Wrap = ShotPalette.crimson_500 }, 1.6 },
+	[24] = { "Shot_Bolt", nil },
+	[25] = { "Shot_Bolt", { Head = ShotPalette.crimson_300, Shaft = SHOT.CrimsonDark, Fletch = ShotPalette.gold_300 } },
+	[26] = { "Shot_FrostShard", nil },
+	[27] = { "Shot_Totem", nil, 1.5 },
+	[28] = { "Shot_Totem", { Wood2 = ShotPalette.gold_500, Gold = ShotPalette.gold_300, Leaf = ShotPalette.gold_400, Glow = ShotPalette.fx_gold }, 1.6 },
+	[29] = { "Shot_Hook", nil },
+	[30] = { "Shot_Hook", { Hook = ShotPalette.crimson_400, Chain = ShotPalette.crimson_800 } },
+	[31] = { "Shot_Soul", nil },
+	[32] = { "Shot_Soul", { Glow = ShotPalette.crimson_300, Light = ShotPalette.crimson_300 } },
+	[33] = { "Ability_Turret", nil, 1.6 },
+	[34] = { "Ability_Turret", { Metal = ShotPalette.gold_400, MetalDark = ShotPalette.steel_600, Gold = ShotPalette.crimson_500, Glow = ShotPalette.fx_gold }, 1.7 },
+	[35] = { "Shot_Bolt", { Head = ShotPalette.gold_300, Shaft = ShotPalette.steel_600, Fletch = ShotPalette.gold_500 }, 0.75 },
+	[36] = { "Shot_FrostShard", { Ice = ShotPalette.ice_100, Ice2 = ShotPalette.fx_holy, Glow = ShotPalette.fx_holy } },
+	[37] = { "Shot_Fire", nil },
+	[38] = { "Shot_Fire", { Flame = ShotPalette.gold_300, Core = ShotPalette.ivory_100, Ember = ShotPalette.fx_gold } },
 }
 
 -- Mesh model name used for a projectile visual (nil = part-built only).
@@ -702,13 +1100,13 @@ function ModelLibrary.Projectile(visual: number): { Piece }
 	local mesh = SHOT_MESH[visual]
 	if mesh then
 		-- meshes are modelled at their WeaponData.Visuals size, so no extra scale
-		local meshPieces = ModelLibrary.MeshPieces(mesh[1], mesh[2], 1, 0)
+		local meshPieces = ModelLibrary.MeshPieces(mesh[1], mesh[2], mesh[3] or 1, 0)
 		if meshPieces then
 			return meshPieces
 		end
 	end
 	local def = WeaponData.Visuals[visual] or WeaponData.Visuals[1]
-	local b = builder(1)
+	local b = builder(mesh and mesh[3] or 1) -- stand-ins match the mesh scale
 	local fn = SHOTS[visual]
 	if fn then
 		fn(b, def)

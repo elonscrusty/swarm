@@ -8,9 +8,11 @@
 	           HintAfterSeconds (never before the lock ends) the HUD shows an arrow to the
 	           portal. The portal is dormant for PortalLockSeconds; after that any living
 	           player standing in its rune circle charges it (ChargeSeconds).
-	  Boss     charging summons the Scorpion Queen in front of the portal (HP scaled by
-	           stage and player count); regular spawning follows the boss-phase rules.
-	  Surge    the Queen died: SurgeBase + SurgePerStage x stage enemies pour out; survive
+	  Boss     charging summons the stage's boss behind the portal (stage 1: the Scorpion
+	           Queen; later stages rotate the Queen, Moth Matriarch, Rhino Warlord and Hive
+	           Mother, never the same one twice in a row: bossFor); HP scaled by stage and
+	           player count; regular spawning follows the boss-phase rules.
+	  Surge    the boss died: SurgeBase + SurgePerStage x stage enemies pour out; survive
 	           SurgeSeconds or kill most of them.
 	  Open     the leftovers die, the gems fly to the players and every living player
 	           chooses NEXT STAGE or RETURN TO LOBBY (remote "PortalChoice"). Returning
@@ -18,7 +20,7 @@
 	           WinMinStages cleared stages, the gold bonus always). When all
 	           living players chose (or ChoiceSeconds ran out: undecided = next stage) the
 	           rest travel; if nobody is left to go on, the run ends cleanly.
-	  Travel   fade, new arena (alternating through Config.Arenas.Order), enemies, gems
+	  Travel   fade, new arena (a shuffled biome tour, see arenaFor), enemies, gems
 	           and projectiles cleared, players moved to the new spawn, healed, fallen
 	           teammates revived (RunManager.TravelPlayers). Nothing simulates meanwhile.
 
@@ -26,7 +28,7 @@
 	this module adds per-stage multipliers (EnemyHPMult, DamageMult, SpawnMult, BossHPMult);
 	stage 1 multiplies by exactly 1, so the early game plays as before.
 
-	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, PortalPos,
+	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, StageBoss, PortalPos,
 	PortalHint, PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total").
 ]]
 
@@ -35,6 +37,8 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local MapBuilder = require(script.Parent.MapBuilder)
 local Fx = require(script.Parent.Fx)
 local Events = require(script.Parent.Events)
+local BiomeHazards = require(script.Parent.BiomeHazards)
+local BossData = require(game:GetService("ReplicatedStorage").Shared.BossData)
 
 local StageManager = {}
 
@@ -148,11 +152,88 @@ local function setSub(newSub: string)
 	state:SetAttribute("StagePhase", newSub)
 end
 
--- Arena of stage n: the lobby's choice first, then the next arenas in Config.Arenas.Order.
+--[[
+	Arena of stage n: the lobby's choice first, then a tour of Config.Arenas.Rotation
+	(without the first arena; shuffled per run when ShuffleRotation), then reshuffled
+	tours of every arena in Config.Arenas.Order. Never the same arena twice in a row.
+	The plan grows on demand, so the NEXT STAGE panel and the travel agree.
+]]
+local plan: { string } = {}
+
+local function known(name: string): boolean
+	return (Config.Arenas :: any)[name] ~= nil
+end
+
+local function extendPlan(n: number)
+	local A = Config.Arenas :: any
+	while #plan < n do
+		local bag: { string } = {}
+		local source = (#plan <= 1 and A.Rotation) or A.Order
+		for _, name in ipairs(source or A.Order) do
+			if known(name) and not (#plan <= 1 and name == plan[1]) then
+				table.insert(bag, name)
+			end
+		end
+		if #bag == 0 then
+			for _, name in ipairs(A.Order) do
+				table.insert(bag, name)
+			end
+		end
+		if A.ShuffleRotation then
+			for i = #bag, 2, -1 do
+				local j = rng:NextInteger(1, i)
+				bag[i], bag[j] = bag[j], bag[i]
+			end
+		end
+		if #bag > 1 and bag[1] == plan[#plan] then
+			bag[1], bag[2] = bag[2], bag[1]
+		end
+		for _, name in ipairs(bag) do
+			table.insert(plan, name)
+		end
+	end
+end
+
 local function arenaFor(n: number): string
-	local order = Config.Arenas.Order
-	local start = table.find(order, firstArena) or 1
-	return order[((start - 1) + (n - 1)) % #order + 1]
+	if #plan == 0 then
+		plan = { known(firstArena) and firstArena or "Forest" }
+	end
+	extendPlan(n)
+	return plan[n]
+end
+
+--[[
+	Boss of stage n: Config.Boss.First on stage 1, then BossData.Rotation as shuffled bags
+	(every boss once before any repeats), never the same boss on two stages in a row.
+	Like the arena plan it grows on demand, so the NEXT STAGE panel and the stage agree.
+	forcedBoss (dev / preview: StageManager.ForceBoss) replaces the pick.
+]]
+local bossPlan: { string } = {}
+local stageBoss = "ScorpionQueen"
+local forcedBoss: string? = nil
+
+local function bossFor(n: number): string
+	if n <= 1 or #bossPlan == 0 then
+		bossPlan = { BossData.Bosses[Config.Boss.First] and Config.Boss.First or "ScorpionQueen" }
+	end
+	while #bossPlan < n do
+		local bag = table.clone(BossData.Rotation)
+		for i = #bag, 2, -1 do
+			local j = rng:NextInteger(1, i)
+			bag[i], bag[j] = bag[j], bag[i]
+		end
+		if #bag > 1 and bag[1] == bossPlan[#bossPlan] then
+			bag[1], bag[#bag] = bag[#bag], bag[1]
+		end
+		for _, id in ipairs(bag) do
+			table.insert(bossPlan, id)
+		end
+	end
+	return bossPlan[n]
+end
+
+local function bossName(id: string): string
+	return BossData.Get(id).DisplayName
 end
 
 local function portalState(name: string, c: number?)
@@ -184,6 +265,7 @@ local function buildStage(n: number)
 	-- chests, shrines and the guarded altar (new spots every stage; the old ones are gone)
 	ctx.LootSystem.BuildStage(arena, n, spot)
 	ctx.EnemyAI.SetArena(arena) -- after the portal and the loot: their colliders count too
+	BiomeHazards.SetArena(arena) -- mud / ice / quicksand / lava pools of a biome arena
 	stageTime = 0
 	hinted = false
 	shownLock = -1
@@ -193,6 +275,8 @@ local function buildStage(n: number)
 	state:SetAttribute("Stage", n)
 	state:SetAttribute("Arena", arenaName)
 	state:SetAttribute("StageArena", StageManager.ArenaDisplayName())
+	stageBoss = forcedBoss or bossFor(n)
+	state:SetAttribute("StageBoss", bossName(stageBoss))
 	state:SetAttribute("PortalPos", spot)
 	state:SetAttribute("PortalHint", false)
 	state:SetAttribute("PortalCharge", 0)
@@ -210,6 +294,7 @@ end
 -- Stage 1 of a new run. Returns the arena (players are placed by RunManager).
 function StageManager.BeginRun(selectedArena: string)
 	firstArena = selectedArena
+	plan = { known(selectedArena) and selectedArena or "Forest" }
 	table.clear(lastPortal)
 	local arena = buildStage(1)
 	setSub("Explore")
@@ -219,6 +304,7 @@ end
 -- The run is over (defeat, everyone returned, server cleanup).
 function StageManager.EndRun()
 	portal = nil
+	BiomeHazards.Clear()
 	ctx.LootSystem.Clear()
 	stage = 0
 	setSub("None")
@@ -227,6 +313,7 @@ function StageManager.EndRun()
 	state:SetAttribute("PortalCharge", 0)
 	state:SetAttribute("PortalLockLeft", 0)
 	state:SetAttribute("PortalPos", nil)
+	state:SetAttribute("StageBoss", nil)
 	state:SetAttribute("SurgeLeft", 0)
 	state:SetAttribute("ChoiceLeft", 0)
 	state:SetAttribute("PortalReady", "")
@@ -246,7 +333,7 @@ local function startBoss(): boolean
 	local toCentre = (Config.ArenaOrigin - p.Pos) * FLAT
 	local dir = toCentre.Magnitude > 1 and -toCentre.Unit or Vector3.new(0, 0, -1)
 	local x, z = ctx.EnemySpawner.ClampToArena(p.Pos.X + dir.X * Config.Stages.BossSpawnOffset, p.Pos.Z + dir.Z * Config.Stages.BossSpawnOffset, 8)
-	local boss = ctx.EnemySpawner.SpawnBoss(Vector3.new(x, Config.ArenaOrigin.Y, z))
+	local boss = ctx.EnemySpawner.SpawnBoss(Vector3.new(x, Config.ArenaOrigin.Y, z), forcedBoss or stageBoss)
 	if not boss then
 		return false
 	end
@@ -255,7 +342,7 @@ local function startBoss(): boolean
 	publishCharge()
 	portalState("Boss")
 	Fx.Ring(p.Pos, Config.Stages.PortalRadius * 2, Color3.fromRGB(255, 60, 70))
-	ctx.RunManager.Broadcast("THE SCORPION QUEEN AWAKENS!", Color3.fromRGB(255, 60, 60), true)
+	ctx.RunManager.Broadcast(BossData.Get(forcedBoss or stageBoss).Title, Color3.fromRGB(255, 60, 60), true)
 	return true
 end
 
@@ -284,7 +371,14 @@ function StageManager.OnBossKilled(_pos: Vector3)
 	setSub("Surge")
 	portalState("Surge")
 	state:SetAttribute("SurgeLeft", math.ceil(surgeTimer))
-	ctx.RunManager.Broadcast("QUEEN DEFEATED! SURVIVE THE SURGE!", Color3.fromRGB(255, 200, 80), true)
+	local bossId = forcedBoss or stageBoss
+	ctx.RunManager.Broadcast(string.upper(bossName(bossId)) .. " DEFEATED! SURVIVE THE SURGE!", Color3.fromRGB(255, 200, 80), true)
+	-- achievements per boss (Queen Slayer, Moth Bane ...): the whole team (fallen too)
+	for _, rp in ipairs(participants()) do
+		if not rp.Returned then
+			Events.Fire("BossDefeated", rp.Player, { Boss = bossId, Stage = stage })
+		end
+	end
 	if portal then
 		Fx.Ring(portal.Pos, 34, Color3.fromRGB(255, 90, 80))
 	end
@@ -305,6 +399,7 @@ local function sendOffer(rp)
 		StagesCleared = cleared,
 		NextStage = stage + 1,
 		NextArena = ((Config.Arenas :: any)[arenaFor(stage + 1)] or {}).DisplayName or arenaFor(stage + 1),
+		NextBoss = bossName(forcedBoss or bossFor(stage + 1)),
 		ReturnBonus = math.floor((Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared) * ctx.MonetizationService.GoldMultiplier(rp.Player) + 0.5),
 		Gold = rp.Gold,
 		Kills = rp.Kills,
@@ -333,7 +428,7 @@ local function startTravel()
 	local display = ((Config.Arenas :: any)[nextName] or {}).DisplayName or nextName
 	for _, rp in ipairs(participants()) do
 		if rp.Player.Parent then
-			Remotes.FireClient("StageTravel", rp.Player, { Stage = stage + 1, Arena = display, Seconds = Config.Stages.TravelFadeSeconds })
+			Remotes.FireClient("StageTravel", rp.Player, { Stage = stage + 1, Arena = display, Boss = bossName(forcedBoss or bossFor(stage + 1)), Seconds = Config.Stages.TravelFadeSeconds })
 		end
 	end
 	ctx.RunManager.ApplyMovementAll()
@@ -563,7 +658,10 @@ local function stepTravel(dt: number)
 		portalState("Idle", 0)
 		ctx.RunManager.ApplyMovementAll()
 		ctx.RunManager.Broadcast("STAGE " .. stage, Color3.fromRGB(255, 230, 150), true)
-		ctx.RunManager.Broadcast(StageManager.ArenaDisplayName() .. " · find the portal", Color3.fromRGB(180, 200, 255))
+		-- biome arenas with floor hazards name them ("Swamp · Mud pools slow you · ...")
+		local def = (Config.Arenas :: any)[arenaName]
+		local hint = (BiomeHazards.Count() > 0 and def and def.Hint) and (" · " .. def.Hint) or ""
+		ctx.RunManager.Broadcast(StageManager.ArenaDisplayName() .. hint .. " · find the portal", Color3.fromRGB(180, 200, 255))
 	end
 end
 
@@ -582,6 +680,7 @@ function StageManager.Step(dt: number)
 	if not ctx.RunManager.IsSimulating() then
 		return
 	end
+	BiomeHazards.Step(dt)
 	if sub == "Explore" then
 		stepExplore(dt)
 	elseif sub == "Surge" then
@@ -600,6 +699,19 @@ function StageManager.DevActivate(): boolean
 	end
 	charge = 1
 	return startBoss()
+end
+
+-- The boss id of the current stage (BossData).
+function StageManager.StageBoss(): string
+	return forcedBoss or stageBoss
+end
+
+-- Dev / preview: every portal summons this boss (nil = the normal rotation again).
+function StageManager.ForceBoss(id: string?)
+	forcedBoss = (id and BossData.Bosses[id]) and id or nil
+	if state and stage > 0 then
+		state:SetAttribute("StageBoss", bossName(forcedBoss or stageBoss))
+	end
 end
 
 -- "Teleport to portal": next to the portal's rune circle (the charge then starts).
@@ -621,6 +733,7 @@ end
 
 function StageManager.Init(c)
 	ctx = c
+	BiomeHazards.Init(c)
 	state = Remotes.State()
 	state:SetAttribute("Stage", 0)
 	state:SetAttribute("StagePhase", "None")

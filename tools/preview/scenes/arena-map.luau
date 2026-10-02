@@ -171,6 +171,13 @@ for _, ob in ipairs(arena.Obstacles) do
 		preview.overlay({ kind = "box", minX = ob.MinX, maxX = ob.MaxX, minZ = ob.MinZ, maxZ = ob.MaxZ, y = c.Y + 0.3, color = "#ff2a2a", fill = "rgba(255,40,40,0.35)", width = 1.5 })
 	end
 end
+-- biome floor hazards (mud / ice / quicksand / lava: BiomeHazards), outlined per kind
+local HAZARD_COLORS = { Mud = "#c08a4a", Ice = "#8fd3ff", Quicksand = "#ffcf6a", Lava = "#ff7a2a" }
+for _, hz in ipairs(arena.Hazards or {}) do
+	local col = HAZARD_COLORS[hz.Kind] or "#ffffff"
+	preview.overlay({ kind = "circle", x = hz.Pos.X, z = hz.Pos.Z, y = c.Y + 0.35, r = hz.Radius, color = col, width = 2.5, dash = "5 4" })
+end
+preview.metrics.hazards = #(arena.Hazards or {})
 preview.overlay({ kind = "box", minX = c.X - HALF, maxX = c.X + HALF, minZ = c.Z - HALF, maxZ = c.Z + HALF, color = "#ffffff", width = 2, dash = "10 6" })
 preview.overlay({ kind = "circle", x = c.X, z = c.Z, r = Config.Arenas.ClearRadius or 40, color = "#ffe066", width = 2.5, fill = "rgba(255,224,102,0.12)" })
 for _, r in ipairs({ 100, 200 }) do

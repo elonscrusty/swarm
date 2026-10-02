@@ -7,18 +7,23 @@
 	  Event    event name fired by the game systems, with a data table:
 	             RunTime        { Seconds }        every second while you are alive in a run
 	             Level          { Level }          your run level went up
-	             BossKilled     {}                 the Scorpion Queen died (everyone in the run)
+	             BossKilled     {}                 a stage boss died (everyone in the run)
+	             BossDefeated   { Boss, Stage }    a stage boss died (BossData id; everyone
+	                                               in the run, fallen teammates too)
 	             RunWon         { Stages }         left through the portal with WinMinStages+
 	             StageCleared   { Stage, Character, Bargain }  the portal opened (alive players)
 	             OptionalEvent  { Kind }           a Guarded Altar opened / a Bargain stage cleared
 	             PartnerRevive  {}                 you revived a fallen teammate
 	             GoldenChest    {}                 you opened a Golden Chest
+	             StageReached   { Stage }          the run reached a new stage (polled once a second)
+	             RunKills       { Kills }          your kills this run (polled once a second)
 	  Kind     "Max"   progress = best value seen (data[Field])
 	           "Count" progress += 1 each time (kept across runs)
 	  Field    data field read by Max achievements
 	  Goal     progress needed
 	  Filter   optional { field = value } the event data must match
-	  Reward   { Gold?, Character?, Title?, Color? }: modest gold, the Ranger, and cosmetic
+	  Reward   { Gold?, Character?, Title?, Color? }: modest gold, a hero (Ranger, Alchemist,
+	           Engineer, Necromancer), and cosmetic
 	           lobby titles / nameplate colours (never stats, never anything sold for Robux)
 
 	Titles and nameplate colours are equipped in the achievements panel (EquipCosmetic) and
@@ -42,6 +47,12 @@ AchievementData.Order = {
 	"Lifesaver",
 	"Veteran",
 	"GoldenTouch",
+	"DeepDelver",
+	"FieldEngineer",
+	"Reaper",
+	"MothBane",
+	"WarlordFall",
+	"HiveCleanser",
 }
 
 AchievementData.Achievements = {
@@ -74,9 +85,10 @@ AchievementData.Achievements = {
 		Name = "Queen Slayer",
 		Description = "Defeat the Scorpion Queen.",
 		Icon = "skull",
-		Event = "BossKilled",
+		Event = "BossDefeated",
 		Kind = "Count",
 		Goal = 1,
+		Filter = { Boss = "ScorpionQueen" },
 		Reward = { Gold = 150, Character = "Ranger" },
 	},
 	Conqueror = {
@@ -173,6 +185,73 @@ AchievementData.Achievements = {
 		Kind = "Count",
 		Goal = 1,
 		Reward = { Gold = 100, Title = "Treasure Hunter" },
+	},
+	-- hero unlocks (the Alchemist, the Engineer, the Necromancer)
+	DeepDelver = {
+		Id = "DeepDelver",
+		Name = "Deep Delver",
+		Description = "Reach stage 4 in one run.",
+		Icon = "portal",
+		Event = "StageReached",
+		Kind = "Max",
+		Field = "Stage",
+		Goal = 4,
+		Reward = { Gold = 150, Character = "Alchemist" },
+	},
+	FieldEngineer = {
+		Id = "FieldEngineer",
+		Name = "Field Engineer",
+		Description = "Complete 3 optional events: open Guarded Altars or clear stages under a Bargain (total).",
+		Icon = "gear",
+		Event = "OptionalEvent",
+		Kind = "Count",
+		Goal = 3,
+		Reward = { Gold = 150, Character = "Engineer" },
+	},
+	Reaper = {
+		Id = "Reaper",
+		Name = "Reaper",
+		Description = "Defeat 500 enemies in one run.",
+		Icon = "skull",
+		Event = "RunKills",
+		Kind = "Max",
+		Field = "Kills",
+		Goal = 500,
+		Reward = { Gold = 150, Character = "Necromancer" },
+	},
+	-- the rotating stage bosses (modest gold, one title)
+	MothBane = {
+		Id = "MothBane",
+		Name = "Moth Bane",
+		Description = "Defeat the Moth Matriarch.",
+		Icon = "skull",
+		Event = "BossDefeated",
+		Kind = "Count",
+		Goal = 1,
+		Filter = { Boss = "MothMatriarch" },
+		Reward = { Gold = 120 },
+	},
+	WarlordFall = {
+		Id = "WarlordFall",
+		Name = "Banner Breaker",
+		Description = "Defeat the Rhino Warlord.",
+		Icon = "flag",
+		Event = "BossDefeated",
+		Kind = "Count",
+		Goal = 1,
+		Filter = { Boss = "RhinoWarlord" },
+		Reward = { Gold = 120, Title = "Banner Breaker" },
+	},
+	HiveCleanser = {
+		Id = "HiveCleanser",
+		Name = "Hive Cleanser",
+		Description = "Defeat the Hive Mother.",
+		Icon = "skull",
+		Event = "BossDefeated",
+		Kind = "Count",
+		Goal = 1,
+		Filter = { Boss = "HiveMother" },
+		Reward = { Gold = 120 },
 	},
 }
 
