@@ -1710,9 +1710,23 @@ local function drawVector(f: Frame, name: string, o: Opts, glyph: boolean?)
 	end
 end
 
--- A picture over its vector fallback: the fallback is only built while the picture is not
--- loaded (and stays if it never loads); once loaded it is removed.
+-- A picture with a vector fallback under it. The fallback stays hidden while the picture
+-- may still be on its way (FALLBACK_DELAY) and only shows if it has not loaded by then; it
+-- goes for good once the picture is in. IsLoaded is polled as well as watched, because the
+-- change signal is not reliable for pictures that load before the frame is on screen (the
+-- picture and the drawn icon used to show together).
+local FALLBACK_DELAY = 0.6
+local FALLBACK_POLL = 0.25
+local FALLBACK_GIVE_UP = 20
+
 local function picture(f: Frame, name: string, image: string, o: Opts, tint: Color3?)
+	local fb = Instance.new("Frame")
+	fb.Name = "Fallback"
+	fb.BackgroundTransparency = 1
+	fb.Size = UDim2.fromScale(1, 1)
+	fb.Active = false
+	fb.Visible = false
+	fb.Parent = f -- under the picture (earlier sibling)
 	local img = Instance.new("ImageLabel")
 	img.Name = "Image"
 	img.BackgroundTransparency = 1
@@ -1724,20 +1738,24 @@ local function picture(f: Frame, name: string, image: string, o: Opts, tint: Col
 		img.ImageColor3 = tint
 	end
 	img.Parent = f
-	if img.IsLoaded == false then
-		local fb = Instance.new("Frame")
-		fb.Name = "Fallback"
-		fb.BackgroundTransparency = 1
-		fb.Size = UDim2.fromScale(1, 1)
-		fb.Active = false
-		fb.Parent = f
-		drawVector(fb, name, o, true)
-		img:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+	local drawn = false
+	task.spawn(function()
+		local waited = 0
+		while fb.Parent and img.Parent and waited < FALLBACK_GIVE_UP do
 			if img.IsLoaded then
 				fb:Destroy()
+				return
 			end
-		end)
-	end
+			if waited >= FALLBACK_DELAY and not drawn then
+				drawn = true
+				drawVector(fb, name, o, true)
+				fb.Visible = true
+			end
+			task.wait(FALLBACK_POLL)
+			waited += FALLBACK_POLL
+		end
+		-- never loaded: the drawn icon stays (it is visible by now)
+	end)
 end
 
 -- Draws icon `name` (a menu icon or an upgrade id) into a new square frame.

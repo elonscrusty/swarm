@@ -691,7 +691,7 @@ local function stepTravel(dt: number)
 		setSub("Explore")
 		portalState("Idle", 0)
 		ctx.RunManager.ApplyMovementAll()
-		ctx.RunManager.Broadcast("STAGE " .. stage, Color3.fromRGB(255, 230, 150), true)
+		-- the "STAGE n" title is the client HUD's stage banner (Hud.lua)
 		-- biome arenas with floor hazards name them ("Swamp · Mud pools slow you · ...")
 		local def = (Config.Arenas :: any)[arenaName]
 		local hint = (BiomeHazards.Count() > 0 and def and def.Hint) and (" · " .. def.Hint) or ""

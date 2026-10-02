@@ -845,9 +845,8 @@ local function beginRun()
 		local first = runPlayers[1]
 		RunManager.Broadcast("DAILY CHALLENGE", Color3.fromRGB(255, 230, 150), true)
 		RunManager.Broadcast(first and first.DailyScored and "Scored attempt: make it count!" or "Practice run: not scored.", Color3.fromRGB(255, 220, 120))
-	else
-		RunManager.Broadcast("STAGE 1", Color3.fromRGB(255, 230, 150), true)
 	end
+	-- "STAGE 1" itself is the client HUD's stage banner (Hud.lua), not a broadcast
 	local curses = ctx.RunModifiers.Active()
 	if #curses > 0 then
 		local names = {}
