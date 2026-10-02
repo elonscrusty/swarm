@@ -1,7 +1,7 @@
 --[[
 	WeaponData.lua
-	All 17 weapons, their 8 per-level stat rows, their evolutions, their behaviour perks and
-	the projectile visuals.
+	All 17 weapons, their 8 per-level stat rows, their evolutions, their mastery ranks, their
+	behaviour perks and the projectile visuals.
 
 	Stat row fields (every level row has all of them):
 	  damage     damage per hit (before Might)
@@ -17,6 +17,13 @@
 	Behaviour constants that never change with level live in `Params`.
 	An evolution needs the weapon at level 8 plus its `Passive` (any level). It replaces the
 	level-8 row with `Evolution.Stats` and switches on the evolution flags.
+
+	Mastery: past level 8 (evolved or not) a weapon keeps growing through MaxMastery ranks
+	(the weapon record's `Mastery`, 0 = none). `Mastery[rank]` holds the TOTAL bonus at that
+	rank: damage / area multipliers, a cooldown cut and the +1 amount capstone; MasteryBonus
+	applies it to a stat row (WeaponSystem.weaponStats) and MasteryLines prints the change for
+	a level-up card. Steps shrink rank by rank so late Endless builds don't explode: x1.30
+	damage, x0.88 cooldown, x1.20 area and +1 amount at rank 10.
 
 	Perks: behaviour changes unlocked at a weapon level (and kept when evolved), e.g. the
 	Whip's Riposte. `Perks = { { Level, Id, Name, Text } }`; WeaponSystem asks
@@ -37,6 +44,22 @@
 local WeaponData = {}
 
 WeaponData.MaxLevel = 8
+
+-- Mastery ranks after max level: cumulative bonus at each rank (see the header).
+WeaponData.MaxMastery = 10
+WeaponData.Mastery = {
+	--  damage  cooldown  area  amount
+	{ damage = 0.08, cooldown = 0.00, area = 0.00, amount = 0 },
+	{ damage = 0.08, cooldown = 0.03, area = 0.00, amount = 0 },
+	{ damage = 0.08, cooldown = 0.03, area = 0.06, amount = 0 },
+	{ damage = 0.15, cooldown = 0.03, area = 0.06, amount = 0 },
+	{ damage = 0.15, cooldown = 0.06, area = 0.06, amount = 0 },
+	{ damage = 0.15, cooldown = 0.06, area = 0.12, amount = 0 },
+	{ damage = 0.21, cooldown = 0.06, area = 0.12, amount = 0 },
+	{ damage = 0.21, cooldown = 0.09, area = 0.12, amount = 0 },
+	{ damage = 0.26, cooldown = 0.09, area = 0.16, amount = 0 },
+	{ damage = 0.30, cooldown = 0.12, area = 0.20, amount = 1 },
+}
 
 WeaponData.Order = {
 	"Whip",
@@ -894,6 +917,42 @@ function WeaponData.CardLines(weaponId: string, fromLevel: number, toLevel: numb
 		local perk = WeaponData.PerkAt(weaponId, toLevel)
 		if perk then
 			table.insert(out, { Label = "NEW", Text = perk.Name .. ": " .. perk.Text })
+		end
+	end
+	return out
+end
+
+-- Stat row `r` with mastery rank `rank` applied (a new table; rank 0 / nil = a copy).
+function WeaponData.MasteryBonus(weaponId: string, r, rank: number?)
+	local m = WeaponData.Mastery[math.clamp(rank or 0, 0, WeaponData.MaxMastery)]
+	local out = table.clone(r)
+	if not m then
+		return out
+	end
+	out.damage = r.damage * (1 + m.damage)
+	out.cooldown = r.cooldown * (1 - m.cooldown)
+	out.area = r.area * (1 + m.area)
+	out.amount = WeaponData.CapAmount(weaponId, r.amount + m.amount)
+	return out
+end
+
+-- Card lines for a weapon's mastery going from rank `fromRank` to `toRank` (same shape as
+-- CardLines; the base row is the evolution row or the max-level row).
+function WeaponData.MasteryLines(weaponId: string, fromRank: number, toRank: number, evolved: boolean?): { { [string]: string } }
+	local def = WeaponData.Weapons[weaponId]
+	local out = {}
+	local base = WeaponData.GetStats(weaponId, WeaponData.MaxLevel, evolved)
+	if not def or not base then
+		return out
+	end
+	local before = WeaponData.MasteryBonus(weaponId, base, fromRank)
+	local after = WeaponData.MasteryBonus(weaponId, base, toRank)
+	for _, stat in ipairs({ "damage", "amount", "cooldown", "area" }) do
+		if WeaponData.UsesStat(weaponId, stat, evolved) and math.abs(after[stat] - before[stat]) > 1e-6 then
+			local from, to = fmt(stat, before[stat]), fmt(stat, after[stat])
+			if from ~= to then
+				table.insert(out, { Label = labelOf(def, stat), From = from, To = to })
+			end
 		end
 	end
 	return out

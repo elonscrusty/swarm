@@ -6,7 +6,7 @@
 
 	Timings come from Theme.Motion (press scale 0.96, quick 0.12 s hovers, 0.22 s moves).
 	The endless effects (PulseStroke, Glow, Shine) return their Tween so a screen can
-	Cancel them when it closes; UIAnim.Track collects tweens for that.
+	Cancel them when it closes; UIAnim.Track collects tweens (and IdleFx handles) for that.
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -231,6 +231,8 @@ function UIAnim.Track(): Track
 				x:Cancel()
 			elseif typeof(x) == "RBXScriptConnection" then
 				x:Disconnect()
+			elseif type(x) == "table" and type(x.Stop) == "function" then
+				x.Stop() -- an IdleFx handle
 			end
 		end
 		table.clear(items)

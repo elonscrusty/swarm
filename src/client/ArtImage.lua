@@ -15,7 +15,8 @@
 	                                         loaded after 0.6 s, hidden for good once it is in (the
 	                                         same rule as Icons' pictures; IsLoaded is polled too).
 	                                         props.FadeIn = seconds fades the picture in once loaded
-	                                         (instant with Reduced effects).
+	                                         (instant with Reduced effects). props.Idle =
+	                                         { Kind, Opts? } gives it an IdleFx idle motion.
 	ArtImage.Set(label, key, fallbacks?)     re-points a Place()d label at another key (nil key:
 	                                         label hidden, fallbacks shown)
 	ArtImage.ButtonIcon(holder, key, layout?, glyphName?)
@@ -23,7 +24,8 @@
 	                                         drawn icon is redrawn on state changes (enable /
 	                                         kind): the picture survives the redraws and keeps
 	                                         the drawn glyph hidden under it. layout (Size,
-	                                         Position ...) lets it stand a little proud.
+	                                         Position ...) lets it stand a little proud;
+	                                         layout.Idle = { Kind, Opts? } survives redraws too.
 	ArtImage.RoundPortrait(medal, key, fallbacks, props?)
 	                                         a bust clipped to a circle (CanvasGroup) filling a
 	                                         round medal; call again to change it
@@ -43,6 +45,7 @@ local ItemData = require(Shared:WaitForChild("ItemData"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local BossData = require(Shared:WaitForChild("BossData"))
 local ClientSettings = require(script.Parent.ClientSettings)
+local IdleFx = require(script.Parent.IdleFx)
 
 local ArtImage = {}
 
@@ -134,9 +137,12 @@ function ArtImage.Place(parent: Instance?, key: string?, props: { [string]: any 
 	img.Size = UDim2.fromScale(1, 1)
 	img.Active = false
 	local fadeIn: number? = nil
+	local idle: { any }? = nil
 	for k, v in pairs(props or {}) do
 		if k == "FadeIn" then
 			fadeIn = v
+		elseif k == "Idle" then
+			idle = v
 		else
 			(img :: any)[k] = v
 		end
@@ -144,6 +150,9 @@ function ArtImage.Place(parent: Instance?, key: string?, props: { [string]: any 
 	img.Image = image
 	img.Parent = parent
 	watch(img, fallbacks, fadeIn, img.ImageTransparency)
+	if idle then
+		IdleFx.Attach(img, idle[1] or idle.Kind, idle[2] or idle.Opts)
+	end
 	return img
 end
 
