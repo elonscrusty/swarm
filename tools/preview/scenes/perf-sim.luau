@@ -16,6 +16,15 @@
 --   --set client=off            server only (no client scripts)
 --   --set weapons=Whip,Garlic   the build (default six classic weapons, evolved; all = every weapon)
 --   --set top=14                rows per table
+--   --set scenario=swarm        what to measure, comma list (default swarm; all = every one):
+--       swarm     the N-enemy ring phases above (stage 1)
+--       caravan   the Lost Caravan defence with its waves, the hero in the ring
+--       boss      each new boss (BriarSentinel, FrostboundColossus; --set bosses=Id,Id)
+--                 held in phase 2 (HP kept at 40%) with its hazards live
+--       endless   an Endless run moved to stage --set stage=12 (DEV next stage), the real
+--                 spawner at its Endless multipliers
+--     these use the real spawner (the normal MaxLive) instead of the benchmark ring, and
+--     add live counts per phase: server hazards, client telegraphs, CombatFx parts.
 local Players = game:GetService("Players")
 local Config = preview.shared("Config")
 local args = preview.args
@@ -31,6 +40,11 @@ local seconds = tonumber(args.seconds) or 10
 local soak = tonumber(args.soak) or 0
 local top = tonumber(args.top) or 14
 local withClient = args.client ~= "off"
+local scenario = args.scenario or "swarm"
+local function want(name: string): boolean
+	return scenario == "all" or string.find("," .. scenario .. ",", "," .. name .. ",", 1, true) ~= nil
+end
+local normalMaxLive = Config.Enemies.MaxLive
 
 -- room for the benchmark swarm (the real game caps MaxLive at 200)
 Config.Enemies.PoolSize = math.max(Config.Enemies.PoolSize, maxN + 10)
@@ -38,6 +52,8 @@ Config.Enemies.MaxLive = maxN
 
 -- time every server system: wrapped before GameServer captures the Step functions
 local P = preview
+local Hazards = preview.server("Hazards")
+local Telegraphs, CombatFx = nil, nil
 local function wrap(mod, field, label)
 	local f = mod[field]
 	if type(f) ~= "function" then
@@ -74,6 +90,8 @@ if withClient then
 	-- totals as these separate rows; calls/frame tells how often models are built)
 	wrap(preview.client("ModelLibrary"), "Enemy", "C ModelLibrary.Enemy (new enemy model)")
 	wrap(preview.client("Telegraphs"), "Puff", "C Telegraphs.Puff (spawn dust)")
+	Telegraphs = preview.client("Telegraphs")
+	CombatFx = preview.client("CombatFx")
 end
 local me = Players.LocalPlayer
 local RM = preview.server("RunManager")
@@ -101,6 +119,9 @@ local function send(name, ...)
 	pickLevels()
 end
 
+if want("endless") then
+	send("SetEndless", true)
+end
 send("StartRun", "Solo")
 preview.advance(1)
 pickLevels()
@@ -171,9 +192,17 @@ end
 -- the hero walks a 40-stud circle around the arena centre at ~16 studs/s
 local angle = 0
 local c = Config.ArenaOrigin
+local holdAt: Vector3? = nil -- scenarios: stand here instead of walking
 local function moveHero(dt: number)
 	local root = rp.Root
 	if not root then
+		return
+	end
+	if holdAt then
+		rp.MoveDir = Vector3.zero
+		root.CFrame = CFrame.new(holdAt + Vector3.new(0, 3, 0))
+		rp.LastValidPos = root.Position
+		rp.SpeedCheckTimer = 0
 		return
 	end
 	angle += dt * 16 / 40
@@ -184,6 +213,7 @@ local function moveHero(dt: number)
 	root.CFrame = CFrame.lookAt(pos, pos + dir)
 end
 local frames = 0
+local onTick: (() -> ())? = nil -- scenarios: per-0.1 s hook (keep the boss alive ...)
 local function run(t: number)
 	local left = t
 	while left > 0 do
@@ -195,6 +225,9 @@ local function run(t: number)
 			pickLevels()
 		end
 		topUp()
+		if onTick then
+			onTick()
+		end
 	end
 end
 
@@ -243,6 +276,7 @@ local function phase(label: string, n: number, t: number)
 	frames = 0
 	local kills0 = rp.Kills
 	local alive, aliveSamples = 0, 0
+	local live = { haz = 0, tel = 0, fx = {} }
 	local t0 = preview.realClock()
 	local left = t
 	while left > 0 do
@@ -250,6 +284,18 @@ local function phase(label: string, n: number, t: number)
 		left -= 1
 		alive += #Spawner.Active
 		aliveSamples += 1
+		live.haz = math.max(live.haz, Hazards.Count())
+		if Telegraphs then
+			live.tel = math.max(live.tel, Telegraphs.Count())
+		end
+		if CombatFx then
+			local st = CombatFx.Stats()
+			for k, v in pairs(st) do
+				if type(v) == "number" then
+					live.fx[k] = math.max(live.fx[k] or 0, v)
+				end
+			end
+		end
 	end
 	local real = preview.realClock() - t0
 	local wk = {}
@@ -286,6 +332,12 @@ local function phase(label: string, n: number, t: number)
 	table.sort(crows, function(a, b)
 		return a[2] > b[2]
 	end)
+	local fxParts = {}
+	for k, v in pairs(live.fx) do
+		table.insert(fxParts, k .. " " .. fmt(v))
+	end
+	table.sort(fxParts)
+	line(string.format("live peaks: server hazards %d, client telegraphs %d, CombatFx [%s]", live.haz, live.tel, table.concat(fxParts, ", ")))
 	line(string.format("server systems: %.3f ms/frame (exclusive)", server * per))
 	for i = 1, math.min(top, #srows) do
 		line(string.format("  %-36s %8.3f ms/frame  %6.2f calls/frame", srows[i][1], srows[i][2], srows[i][3]))
@@ -358,8 +410,89 @@ local function phase(label: string, n: number, t: number)
 end
 
 line(string.format("perf-sim: hero %s, loadout %s; mix %d types; client %s", tostring(rp.CharacterId), table.concat(loadout, " "), #mix, withClient and "on" or "off"))
-for _, n in ipairs(counts) do
-	phase(tostring(n), n, seconds)
+if want("swarm") then
+	for _, n in ipairs(counts) do
+		phase(tostring(n), n, seconds)
+	end
+end
+
+-- the scenarios: the real spawner, normal cap
+local SM = preview.server("StageManager")
+local function clearSwarm()
+	target = 0
+	Config.Enemies.MaxLive = normalMaxLive
+	for i = #Spawner.Active, 1, -1 do
+		local e = Spawner.Active[i]
+		if e and not e.Boss then
+			Spawner.Despawn(e)
+		end
+	end
+end
+local function toExplore()
+	for _ = 1, 80 do
+		run(0.5)
+		if SM.GetPhase() == "Explore" then
+			return true
+		end
+	end
+	return false
+end
+
+if want("caravan") then
+	clearSwarm()
+	local CE = preview.server("CaravanEvent")
+	local cv = CE.Get()
+	if not cv then
+		line("\n=== caravan: BLOCKED (no caravan on this stage) ===")
+	else
+		holdAt = cv.Pos + Vector3.new(3, 0, 0)
+		run(1)
+		phase(string.format("caravan (%s)", tostring(cv.State)), 0, math.min(seconds, Config.Caravan.HoldSeconds - 4))
+		line(string.format("caravan: state %s, waves %d", tostring(cv.State), cv.Waves))
+		holdAt = nil
+	end
+end
+
+if want("boss") then
+	for _, id in ipairs(string.split(args.bosses or "BriarSentinel,FrostboundColossus", ",")) do
+		clearSwarm()
+		SM.ForceBoss(id)
+		if SM.GetPhase() ~= "Explore" then
+			SM.DevNextStage()
+			toExplore()
+		end
+		if not SM.DevActivate() then
+			line(string.format("\n=== boss %s: BLOCKED (phase %s) ===", id, SM.GetPhase()))
+			continue
+		end
+		onTick = function()
+			local b = Spawner.Boss
+			if b and b.Alive then
+				b.HP = math.max(b.HP, b.MaxHP * 0.4) -- phase 2, never dies
+			end
+		end
+		run(6) -- entrance + first attacks
+		phase("boss " .. id, 0, seconds)
+		onTick = nil
+		SM.DevNextStage() -- the boss and its hazards go with the stage
+		toExplore()
+	end
+	SM.ForceBoss(nil)
+end
+
+if want("endless") then
+	clearSwarm()
+	local goal = tonumber(args.stage) or 12
+	for _ = 1, goal + 2 do
+		if SM.GetStage() >= goal then
+			break
+		end
+		SM.DevNextStage()
+		toExplore()
+	end
+	run(8) -- the spawner fills to its target
+	line(string.format("\nendless: stage %d, HP x%.2f damage x%.2f spawn x%.2f (endless %s)", SM.GetStage(), SM.EnemyHPMult(), SM.DamageMult(), SM.SpawnMult(), tostring(SM.IsEndless())))
+	phase("endless s" .. SM.GetStage(), 0, seconds)
 end
 
 if soak > 0 then

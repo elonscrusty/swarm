@@ -12,7 +12,11 @@
 	  Decline, Leave, Kick (leader only). When the leader leaves, the next member leads;
 	           a party of one closes.
 	  Size     at most the largest lobby mode (Config.Modes.Order) and Config.Run.MaxPlayers.
-	RunManager asks CanStart (only the leader starts runs for a party) and MembersOf (the
+	READY: each member toggles READY ("Ready", PartyState Members[i].Ready); the leader's
+	start only goes when every member is ready (StartBlocked: "Waiting for N to ready up",
+	a nudge toast to the others). READY clears when someone joins / leaves and when a run
+	starts or ends (SwarmState Phase).
+	RunManager asks StartBlocked (only the leader starts, everyone ready) and MembersOf (the
 	leader's start pulls the members into that run, up to the mode's size; everyone else
 	keeps the normal countdown JOIN).
 
@@ -40,7 +44,7 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 
 local PartyService = {}
 
-type Party = { Id: number, Leader: Player, Members: { Player } }
+type Party = { Id: number, Leader: Player, Members: { Player }, Ready: { [Player]: boolean } }
 
 local ctx
 local nextId = 0
@@ -142,7 +146,7 @@ local function push(player: Player)
 	local members = {}
 	if party then
 		for _, m in ipairs(party.Members) do
-			table.insert(members, { UserId = m.UserId, Name = m.DisplayName })
+			table.insert(members, { UserId = m.UserId, Name = m.DisplayName, Ready = party.Ready[m] == true })
 		end
 	end
 	local incoming = {}
@@ -181,6 +185,7 @@ local function removeMember(player: Player, why: string)
 		return
 	end
 	partyOf[player] = nil
+	table.clear(party.Ready) -- the line-up changed: everyone readies again
 	local i = table.find(party.Members, player)
 	if i then
 		table.remove(party.Members, i)
@@ -221,13 +226,14 @@ local function joinParty(player: Player, inviter: Player): string?
 	removeMember(player, "left the party")
 	if not party then
 		nextId += 1
-		local fresh: Party = { Id = nextId, Leader = inviter, Members = { inviter } }
+		local fresh: Party = { Id = nextId, Leader = inviter, Members = { inviter }, Ready = {} }
 		party = fresh
 		partyOf[inviter] = fresh
 	end
 	local p = party :: Party
 	table.insert(p.Members, player)
 	partyOf[player] = p
+	table.clear(p.Ready)
 	-- invites to this player are settled; the inviter's open invite to them too
 	if invites[player] then
 		table.clear(invites[player])
@@ -345,6 +351,17 @@ local ACTIONS: { [string]: (Player, any) -> () } = {
 			removeMember(player, "left the party")
 		end
 	end,
+	-- (on: boolean) a member's READY toggle (the leader is ready by starting)
+	Ready = function(player, on)
+		local party = partyOf[player]
+		if not party or type(on) ~= "boolean" or party.Leader == player then
+			return
+		end
+		if (party.Ready[player] == true) ~= on then
+			party.Ready[player] = on or nil
+			pushParty(party)
+		end
+	end,
 	Sync = function(player)
 		push(player)
 	end,
@@ -443,6 +460,43 @@ end
 ------------------------------------------------------------------------------------------
 
 -- False for a party member who is not the leader (the leader starts the party's runs).
+-- Why `player` can't start a run now (a member, or members not ready: they get a nudge),
+-- or nil. RunManager shows the text to the starter.
+function PartyService.StartBlocked(player: Player): string?
+	local party = partyOf[player]
+	if not party then
+		return nil
+	end
+	if party.Leader ~= player then
+		return "Your party leader starts the runs (or leave the party)."
+	end
+	local waiting = 0
+	for _, m in ipairs(party.Members) do
+		if m ~= player and m.Parent and not party.Ready[m] then
+			waiting += 1
+			notify(m, player.DisplayName .. " wants to start: tap READY!", WARN)
+		end
+	end
+	if waiting > 0 then
+		return string.format("Waiting for %d to ready up.", waiting)
+	end
+	return nil
+end
+
+-- Clears every party's READY (a run started or ended: ready again for the next one).
+local function resetAllReady()
+	local seen: { [Party]: boolean } = {}
+	for _, party in pairs(partyOf) do
+		if not seen[party] then
+			seen[party] = true
+			if next(party.Ready) then
+				table.clear(party.Ready)
+				pushParty(party)
+			end
+		end
+	end
+end
+
 function PartyService.CanStart(player: Player): boolean
 	local party = partyOf[player]
 	return party == nil or party.Leader == player
@@ -498,6 +552,14 @@ function PartyService.Start()
 		end
 	end, cfg().ActionRate)
 	Remotes.Listen("PartyFollow", follow, 1)
+	-- READY lasts one start: cleared when a run begins and when it ends
+	local state = Remotes.State()
+	state:GetAttributeChangedSignal("Phase"):Connect(function()
+		local phase = state:GetAttribute("Phase")
+		if phase == "Lobby" or phase == "Running" then
+			resetAllReady()
+		end
+	end)
 	Players.PlayerRemoving:Connect(onRemoving)
 	Players.PlayerAdded:Connect(function(player)
 		task.spawn(onArrival, player)

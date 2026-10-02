@@ -16,7 +16,7 @@
 	return and never a win; the run ends by defeat or the pause menu's MAIN MENU
 	(AbandonRun). Its score goes to the "ScoreEndless" board instead of "Score"; the
 	"Level" board (highest level in one run) takes every mode.
-	Parties (PartyService): only a party's leader starts runs, and that start brings the
+	Parties (PartyService): only a party's leader starts runs (once every member is READY), and that start brings the
 	members in at once up to the mode's size (joinParty); others still JOIN the countdown.
 	SOLO skips the countdown. Modes live in Config.Modes; "Squad" (old 1-4 mode) is still
 	accepted from old clients. The lobby's ProximityPrompts are switched off: the 2D lobby
@@ -1322,8 +1322,9 @@ local function startRun(player: Player, newMode: string)
 	if phase ~= "Lobby" or not ctx.DataService.GetData(player) or not isMode(newMode) then
 		return
 	end
-	if ctx.PartyService and not ctx.PartyService.CanStart(player) then
-		RunManager.Notify(player, "Your party leader starts the runs (or leave the party).", Color3.fromRGB(255, 200, 120))
+	local partyBlock = ctx.PartyService and ctx.PartyService.StartBlocked(player)
+	if partyBlock then
+		RunManager.Notify(player, partyBlock, Color3.fromRGB(255, 200, 120))
 		return
 	end
 	mode = newMode
