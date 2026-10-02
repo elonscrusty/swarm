@@ -71,6 +71,7 @@ local ui: { [string]: any } = {}
 local items: { { Id: string, Count: number } } = {}
 local popups: { GuiObject } = {}
 local popupOrder = 0
+local maxPopups = 3 -- fewer when the column would run into the ability panel (Layout)
 
 -- the hold in progress (client view; the server completes it)
 local hold = { Id = 0, Start = 0, Seconds = 1, Waiting = false }
@@ -470,7 +471,7 @@ local function onGained(data)
 	end
 	UIAnim.Pop(holder, 0, 0.6)
 	table.insert(popups, holder)
-	while #popups > 3 do
+	while #popups > maxPopups do
 		local old = table.remove(popups, 1)
 		if old then
 			old:Destroy()
@@ -609,6 +610,17 @@ function LootUI.Layout()
 	else
 		ui.Popups.AnchorPoint = Vector2.new(0, 0)
 		ui.Popups.Position = UDim2.fromOffset(math.floor(x), math.floor(yy + 36))
+	end
+	-- landscape phones: the 320-wide column must stop above the bottom ability panel when
+	-- the two share columns (only as many popups as fit; the newest stay)
+	maxPopups = 3
+	local bar = els.Bar
+	if not portrait and bar and els.BarTop then
+		local barLeft = bar.Position.X.Offset - bar.AnchorPoint.X * bar.Size.X.Offset
+		if x + 320 > barLeft then
+			local room = els.BarTop - 8 - (yy + 36)
+			maxPopups = math.clamp(math.floor((room + 8) / 92), 1, 3)
+		end
 	end
 end
 

@@ -282,10 +282,14 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		local titleH = TS(22) + 10
 		place(ui.Title.Frame, 0, y, iw, titleH)
 		y += titleH
-		place(ui.Sub, 0, y, iw, TS(16) + 6)
-		y += TS(16) + 6
-		-- the STANDARD / ENDLESS switch on the HIGH SCORE tab
+		-- the STANDARD / ENDLESS switch on the HIGH SCORE tab; on short screens it takes the
+		-- subtitle's place (the heading and the switch already say which board this is)
 		local scoreTab = boardOf(board).Id == "Score" or boardOf(board).Tab == "Score"
+		ui.Sub.Visible = not (short and scoreTab)
+		if ui.Sub.Visible then
+			place(ui.Sub, 0, y, iw, TS(16) + 6)
+			y += TS(16) + 6
+		end
 		ui.Side.Frame.Visible = scoreTab
 		if scoreTab then
 			local sideW = math.min(iw, 300)

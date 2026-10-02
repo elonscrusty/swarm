@@ -469,7 +469,7 @@ if want("boss") then
 		onTick = function()
 			local b = Spawner.Boss
 			if b and b.Alive then
-				b.HP = math.max(b.HP, b.MaxHP * 0.4) -- phase 2, never dies
+				b.HP = b.MaxHP * 0.4 -- phase 2, never dies
 				local st = tostring(b.BossState)
 				if not seen[st] then
 					seen[st] = true
@@ -512,6 +512,23 @@ if soak > 0 then
 	local n = counts[#counts]
 	line(string.format("\n=== soak: %d enemies for %d s (instances in tree / all / Lua heap MB every 20 s) ===", n, soak))
 	target = n
+	-- where instances grow: descendants per top-level container (workspace children, the
+	-- local PlayerGui's ScreenGuis), printed as the change since the soak began
+	local function buckets(): { [string]: number }
+		local out = {}
+		local roots = workspace:GetChildren()
+		local gui = me:FindFirstChildOfClass("PlayerGui")
+		if gui then
+			for _, g in ipairs(gui:GetChildren()) do
+				table.insert(roots, g)
+			end
+		end
+		for _, r in ipairs(roots) do
+			out[r.Name] = (out[r.Name] or 0) + #r:GetDescendants() + 1
+		end
+		return out
+	end
+	local base = buckets()
 	local done = 0
 	while done < soak do
 		local step = math.min(20, soak - done)
@@ -519,6 +536,21 @@ if soak > 0 then
 		done += step
 		local inTree, all = preview.liveInstances()
 		line(string.format("  t+%3ds  alive %3d  tree %6d  all %6d  heap %6.1f MB  kills %s", done, #Spawner.Active, inTree, all, collectgarbage("count") / 1024, tostring(rp.Kills)))
+		local grew = {}
+		for k, v in pairs(buckets()) do
+			local d = v - (base[k] or 0)
+			if d ~= 0 then
+				table.insert(grew, { k, d })
+			end
+		end
+		table.sort(grew, function(a, b)
+			return math.abs(a[2]) > math.abs(b[2])
+		end)
+		local parts = {}
+		for i = 1, math.min(6, #grew) do
+			table.insert(parts, string.format("%s %+d", grew[i][1], grew[i][2]))
+		end
+		line("           growth since start: " .. table.concat(parts, ", "))
 	end
 end
 
