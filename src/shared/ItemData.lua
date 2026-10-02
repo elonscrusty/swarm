@@ -25,6 +25,9 @@
 	  goldGain     +gold from kills (also used by the Bargain Shrine)
 	Hyperbolic stats: DamageReduce (damage taken x 1 / (1 + K x copies)), the proc chances.
 
+	Synergies: Keen Lens / Hunter's Eye (Deadeye) and Iron Plate / Barbed Mail (Bulwark) are
+	pieces of the build synergies in SynergyData.lua.
+
 	Balance rule: no single item breaks a run. Ten copies of a common are about one maxed
 	passive; the procs have internal cooldowns (Config.Items) so huge swarms stay cheap.
 ]]

@@ -1131,7 +1131,7 @@ Kind.bramble = function(x: number, z: number, r0: number, delay: number, speed: 
 	rec.Dark, rec.Body, rec.Edge, rec.Ticks = {}, {}, {}, {}
 	for k = 1, #rec.Angles do
 		table.insert(rec.Dark, take("Block", C.Outline, Vector3.new(1, 0.04, 1), 1))
-		table.insert(rec.Body, take("Block", P.wood_700:Lerp(P.moss_700, 0.35), Vector3.new(1, 0.04, 1), 1))
+		table.insert(rec.Body, take("Block", P.crimson_800:Lerp(P.wood_700, 0.45), Vector3.new(1, 0.04, 1), 1))
 		table.insert(rec.Edge, take("Block", P.crimson_400, Vector3.new(1, 0.04, 0.4), 1))
 		if k % 2 == 0 then
 			table.insert(rec.Ticks, { Part = take("Wedge", P.crimson_800, Vector3.new(0.35, 1.1, 0.8), 1), A = rec.Angles[k] })

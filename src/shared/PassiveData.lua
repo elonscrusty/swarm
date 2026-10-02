@@ -19,6 +19,9 @@
 	  pierce         +enemies a stopping projectile passes through
 	  critChance     +chance for a hit to crit (an item stat, also used by Precision)
 	  regen          HP per second (an item stat, also used by Renewal)
+
+	Synergies: Area, Candle, Precision and Armor are pieces of the build synergies in
+	SynergyData.lua (a small extra bonus once the whole set is owned).
 ]]
 
 local PassiveData = {}

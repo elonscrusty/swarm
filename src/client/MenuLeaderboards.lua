@@ -352,16 +352,29 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 			ui.YouValue.Size = UDim2.new(0.5, -56, 1, 0)
 			ui.YouValue.TextXAlignment = Enum.TextXAlignment.Right
 		end
-		-- narrow panels: tabs without icons and with one-word titles, so all five fit
+		-- five tabs: one-word titles below 900 wide, and on narrow panels no icons, tight
+		-- padding and a smaller title, so all five fit a phone
+		local oneWord = iw < 900
 		for _, b in ipairs(BOARDS) do
 			local hit = not b.Tab and ui.Tabs.Frame:FindFirstChild(string.upper(b.Title))
 			local icon = hit and hit:FindFirstChild("IconHolder", true)
 			local title = hit and hit:FindFirstChild("Title", true)
+			local content = hit and hit:FindFirstChild("Content", true)
+			local column = content and content:FindFirstChild("Text")
+			local pad = content and content:FindFirstChildOfClass("UIPadding")
 			if icon and icon:IsA("GuiObject") then
 				icon.Visible = not narrow
 			end
+			if narrow and column and column:IsA("GuiObject") then
+				column.Size = UDim2.fromScale(1, 1)
+			end
+			if pad then
+				pad.PaddingLeft = UDim.new(0, narrow and 2 or Theme.Space.L)
+				pad.PaddingRight = UDim.new(0, narrow and 2 or Theme.Space.L)
+			end
 			if title and title:IsA("TextLabel") then
-				title.Text = narrow and b.Short or string.upper(b.Title)
+				title.Text = oneWord and b.Short or string.upper(b.Title)
+				title.TextSize = narrow and TS(13) or TS(Theme.TextSize.Body)
 			end
 		end
 		place(ui.Panel, (W - w) / 2, top, w, math.min(maxH, y + 32))

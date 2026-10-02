@@ -16,14 +16,17 @@
 	                player attribute "Endless"). A countdown (who joined, the curses, an
 	                ENDLESS line, JOIN, START NOW, the number) or "run in progress" replaces
 	                this column.
-	  bottom left   SETTINGS, STATS, RANKS (leaderboards), TRACK (account level)
+	  bottom left   SETTINGS, STATS, RANKS (leaderboards), TRACK (account level); portrait
+	                adds PARTY to this row
+	  top right     PARTY (landscape: left of the stats chip): party size, a red badge for
+	                open invites; opens the PARTY screen (MenuParty)
 	  nameplate     your level, name, worn title / colour above the hero's plate
 	Portrait stacks: logo, stats, hero, nameplate, curses + daily, endless, modes, cards,
 	corner buttons.
 
 	Sub-screens slide in: Characters (MenuCharacters), Upgrades (MenuUpgrades), Stats
 	(MenuStats), Curses (MenuCurses), Daily (MenuDaily), Ranks (MenuLeaderboards), Track
-	(MenuTrack); Settings is UIBuilder's modal. Everything sent to the server is an id or a
+	(MenuTrack), Party (MenuParty); Settings is UIBuilder's modal. Everything sent to the server is an id or a
 	mode name; the server validates it (RunManager: StartRun / JoinRun / StartNow /
 	CycleArena, GoldSystem: purchases and selection).
 ]]
@@ -50,6 +53,7 @@ local MenuDaily = require(script.Parent.MenuDaily)
 local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
 local MenuTrack = require(script.Parent.MenuTrack)
 local MenuArenas = require(script.Parent.MenuArenas)
+local MenuParty = require(script.Parent.MenuParty)
 local Cosmetics = require(script.Parent.Cosmetics)
 local CurseData = require(Shared:WaitForChild("CurseData"))
 
@@ -70,7 +74,7 @@ local profile: { [string]: any }? = nil
 local joinedCountdown = false
 local ui: { [string]: any } = {}
 local current = "Home"
-local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Arenas = 3.5, Stats = 4, Curses = 5, Daily = 6, Ranks = 7, Track = 8 }
+local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Arenas = 3.5, Stats = 4, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9 }
 local screens: { [string]: any } = {}
 local shownGold: number? = nil
 local lastStatus = ""
@@ -633,6 +637,40 @@ local function buildHomeArt()
 	setArenaArt(tostring(Remotes.State():GetAttribute("SelectedArena") or "Forest"))
 end
 
+-- PARTY: a pill beside the stats chip (landscape) or a fifth corner button (portrait),
+-- each with a red badge counting open invites.
+local function partyBadge(parent: Instance): TextLabel
+	return UIKit.Badge(parent, "", "Crimson", { Name = "InviteBadge", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 6, 0, -6), ZIndex = 6, Visible = false })
+end
+
+local function buildParty(screen: Frame)
+	ui.PartyBtn = UIKit.Button(screen, {
+		Kind = "Secondary",
+		Title = "PARTY",
+		Subtitle = "Play with friends",
+		Icon = "people2",
+		IconSize = 26,
+		TitleSize = 18,
+		Align = "Left",
+		Name = "Party",
+		OnClick = function()
+			LobbyScreen.Show("Party")
+		end,
+	})
+	ui.PartyBadge = partyBadge(ui.PartyBtn.Instance)
+	ui.PartyCornerBtn = UIKit.IconButton(ui.Corner, {
+		Icon = "people2",
+		Caption = "Party",
+		Size = 76,
+		LayoutOrder = 5,
+		Name = "PartyCorner",
+		OnClick = function()
+			LobbyScreen.Show("Party")
+		end,
+	})
+	ui.PartyCornerBadge = partyBadge(ui.PartyCornerBtn.Instance)
+end
+
 local function buildHome(screen: Frame)
 	ui.Logo = buildLogo(screen)
 	ui.Cards = new("Frame", { Name = "Cards", BackgroundTransparency = 1 }, screen)
@@ -719,6 +757,7 @@ local function buildHome(screen: Frame)
 	buildNameplate(screen)
 	buildModes(screen)
 	buildQueue(screen)
+	buildParty(screen)
 	buildHomeArt()
 end
 
@@ -798,8 +837,11 @@ local function relayout()
 		local cornerH = 64
 		local y = H - M - cornerH
 		place(ui.Corner, M, y, w, cornerH)
-		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn }) do
-			b.Instance.Size = UDim2.fromOffset(math.floor((w - 3 * G) / 4), cornerH)
+		ui.PartyCornerBtn.Instance.Visible = true
+		ui.PartyBtn.Instance.Visible = false
+		ui.PlaceParty = nil
+		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn, ui.PartyCornerBtn }) do
+			b.Instance.Size = UDim2.fromOffset(math.floor((w - 4 * G) / 5), cornerH)
 		end
 		local cardH = compact and 96 or 88
 		setCardsCompact(true)
@@ -835,6 +877,15 @@ local function relayout()
 		ui.Logo.Position = UDim2.fromOffset(M, logoY)
 		ui.Chip.AnchorPoint = Vector2.new(1, 0)
 		ui.Chip.Position = UDim2.fromOffset(W - M, chipY)
+		-- PARTY pill left of the stats chip
+		ui.PartyCornerBtn.Instance.Visible = false
+		ui.PartyBtn.Instance.Visible = true
+		ui.PlaceParty = function()
+			local chipW = ui.Chip.AbsoluteSize.X / math.max(0.01, host.Scale())
+			local pw = compact and 180 or 210
+			place(ui.PartyBtn.Instance, W - M - chipW - G - pw, chipY - 2, pw, 52)
+		end
+		ui.PlaceParty()
 		local logoBottom = logoY + (ui.LogoH - 4) * logoScale
 		local cw = math.clamp(W * 0.27, 290, 360)
 		local cornerW = 4 * 76 + 3 * G
@@ -1239,6 +1290,21 @@ function LobbyScreen.Update(_dt: number?)
 		relayout()
 	end
 
+	-- PARTY: size and open invites
+	local party = MenuParty.Summary()
+	local partySub = party.Count > 0 and string.format("%d/%d · %s", party.Count, party.Max, party.Leader and "Leader" or "Member") or "Play with friends"
+	if ui.PartyBtn.Subtitle and ui.PartyBtn.Subtitle.Text ~= partySub then
+		ui.PartyBtn.SetText(nil, partySub)
+		ui.PartyBtn.SetSelected(party.Count > 0)
+	end
+	local badge = party.Invites > 0 and tostring(party.Invites) or ""
+	if ui.PartyBadge.Text ~= badge then
+		ui.PartyBadge.Text = badge
+		ui.PartyCornerBadge.Text = badge
+		ui.PartyBadge.Visible = badge ~= ""
+		ui.PartyCornerBadge.Visible = badge ~= ""
+	end
+
 	-- the curse button / queue line, the daily card
 	local myCurses = MenuCurses.Current()
 	local curseSub = curseLine(myCurses, "Harder runs, more gold")
@@ -1315,6 +1381,12 @@ function LobbyScreen.Init(h: { [string]: any })
 	end
 	buildHome(screen("Home"))
 	buildChip(frame)
+	-- the PARTY pill follows the chip's width (it changes with the numbers in it)
+	ui.Chip:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if ui.PlaceParty then
+			ui.PlaceParty()
+		end
+	end)
 	buildLoadingPill()
 	local ctx = {
 		Host = h,
@@ -1340,6 +1412,7 @@ function LobbyScreen.Init(h: { [string]: any })
 	screens.Ranks = MenuLeaderboards.Build(screen("Ranks"), ctx)
 	screens.Track = MenuTrack.Build(screen("Track"), ctx)
 	screens.Arenas = MenuArenas.Build(screen("Arenas"), ctx)
+	screens.Party = MenuParty.Build(screen("Party"), ctx)
 	h.OnRelayout(relayout)
 	relayout()
 end

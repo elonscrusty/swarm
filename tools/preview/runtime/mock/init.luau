@@ -254,6 +254,20 @@ function Mock.api()
 		return r
 	end
 
+	-- Another player's client → server call (co-op sims): fires OnServerEvent as `player`.
+	function api.fireServerAs(player, name: string, ...)
+		R.fire(states[api.remote(name)], "OnServerEvent", player, ...)
+	end
+
+	-- Players.PlayerAdded / PlayerRemoving for an addPlayer player (removal also unparents).
+	function api.playerJoined(p)
+		R.fire(states[R.services.Players], "PlayerAdded", p)
+	end
+	function api.removePlayer(p)
+		R.fire(states[R.services.Players], "PlayerRemoving", p)
+		p.Parent = nil
+	end
+
 	-- Server → this client, through the real RemoteEvent (logged).
 	function api.fireClient(name: string, ...)
 		api.remote(name):FireClient(R.localPlayer, ...)

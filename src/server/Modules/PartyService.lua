@@ -95,7 +95,7 @@ local function isFriends(player: Player, userId: number): boolean
 	end)
 	if not ok then
 		ok, res = pcall(function()
-			return player:IsFriendsWith(userId)
+			return (player :: any):IsFriendsWith(userId) -- older engines / the preview mock
 		end)
 	end
 	return ok and res == true
