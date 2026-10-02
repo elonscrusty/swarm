@@ -4,3 +4,4 @@ __pycache__/
 tools/preview/node_modules/
 tools/preview/.cache/
 tools/preview/out/
+art/.upload_tmp/

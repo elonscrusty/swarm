@@ -1,0 +1,1233 @@
+{
+  "expected": 136,
+  "completed": 136,
+  "blocked": 0,
+  "previous_original_item_icons_excluded": 75,
+  "regenerated_original_item_icons": 0,
+  "files": [
+    {
+      "file": "SWARM/art/portraits/Knight.png",
+      "group": 1,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "3d34d5e3e5255a85bad6a7266e5f604d1f9c36a5c4d79392af6aa30a6be50374",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/portraits/Mage.png",
+      "group": 1,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "51f3e4fb06d58b96b3c0dbd9e69eeacfb0dcaf5e610d038ccd83d8c828405649",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/portraits/Rogue.png",
+      "group": 1,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "9524b1417f4f66f4eb0133ba3b12f701f8be20d9b4a17ccdee2487a1a0dbc120",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/portraits/Priest.png",
+      "group": 1,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "d7a83746f3f0dc94022e97c71e233ee8ab5168e141a9665e731a4c9cf38cf4e5",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/portraits/Ranger.png",
+      "group": 1,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "dc2a956d13192eaeed81a903dfa14212072a66b427502495cc1ec3696c0241b3",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/portraits/Alchemist.png",
+      "group": 1,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "5ac67ae96f9c67ef5e1881cfbc10d73b40c93735086e3c174a143abd613da0d7",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/portraits/Engineer.png",
+      "group": 1,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "2126cde3334ba6e12ed2e27259d88977df02397b43abeafa4db3ba7bbff0eebb",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/portraits/Necromancer.png",
+      "group": 1,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "f449d7848c31b2e7e436c24aa82913e064e72f5b3b35bf7a9a9ba62d442f0de7",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/arenas/Forest.png",
+      "group": 2,
+      "width": 1536,
+      "height": 864,
+      "transparent_background": false,
+      "sha256": "c9fdcafd59d420f79109890864383c52f11caf35ed126746b8dc1b4217b6efc9",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/arenas/Ruins.png",
+      "group": 2,
+      "width": 1536,
+      "height": 864,
+      "transparent_background": false,
+      "sha256": "fd0688a36e2bf956b12e8b9128c632975e48933240bb7ffd0b0fb6c22a220a0c",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/arenas/Swamp.png",
+      "group": 2,
+      "width": 1536,
+      "height": 864,
+      "transparent_background": false,
+      "sha256": "83d73f0f9c424e0247baae5ba1d6ef7a7d2ac92803918df55678775e8de88fb8",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/arenas/Snow.png",
+      "group": 2,
+      "width": 1536,
+      "height": 864,
+      "transparent_background": false,
+      "sha256": "8d1ba201bf96e711d79c7d9621e45bbbccc622bb4c7f1e06c40e8199f93e1c52",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/arenas/Desert.png",
+      "group": 2,
+      "width": 1536,
+      "height": 864,
+      "transparent_background": false,
+      "sha256": "9eef92fb98df7ad31ed225f8487f4fcd2d428b876e9c4ac9789ae13e04b33352",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/arenas/Lava.png",
+      "group": 2,
+      "width": 1536,
+      "height": 864,
+      "transparent_background": false,
+      "sha256": "e5155a7d924cadcf1a532f9bbcb58a3b5b8ccebb481b65d7f43cbe6b8ec62efd",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/bosses/ScorpionQueen.png",
+      "group": 3,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "8e2e8f9997a89abfce4217cbb04d15eeeffbf5949de56a11d08296c2ed7f3d67",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/bosses/MothMatriarch.png",
+      "group": 3,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "626f98e211489a6de9eb03f5956cf407992b9b1399783ce0e51b0c269133867e",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/bosses/RhinoWarlord.png",
+      "group": 3,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "0ee9c5966b36f155d9f6c4289bbfbe9e6dc1edbae2bbc89c699ceecb37762a84",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/bosses/HiveMother.png",
+      "group": 3,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "d7df646c47cf1af6f2433f7cadf6f8c6eb6e83632e806ae2016fd98b8bcbc762",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Play.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "75ac54dcf8a7e1da21ae46275f9f8b537e37ca174b32d735b2704c946f5783f5",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Solo.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "9120336725a614fbd52832a92eb6d7f6167f0f9d91cd2d330ea8390c5af05a45",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Duo.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "de0372cbd9e58c90a4dc6b692fc50e858b7d8cd6f94d826069f55f2c558af50e",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Trio.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "e304cfa6cdb4d6149fa2a82e412e24b6141bada76449a47e3dc2db33eccead48",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Characters.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "e1aafcd2d83f94d405e68e75d7c145c1aba9dfe20776b2763cec911f7e78af3e",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Upgrades.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "5517cef235b9fea475089fac0ac2c9ea2366eb354faa7a5afef5decb6a6f9a99",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Arenas.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "356453a5f303d166411ebbfe93331bdc595c39f246d2ea5140abaf5672e9ed6d",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Daily.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "770ba01f49216bc8ea9b26e6ea852d9e0cdd13848ad23b64f1f559d63c7f81c1",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Curses.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "431bb4900b9b25ac4ebfa97220c5ba08cd29dd887496a5abc1d0b5bf0e7bb42b",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Leaderboards.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "b2a92ad0b014776a276d369f899fc33cee3550afdbb5282869f576d6c834426b",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Track.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "e72e5e5e7b951992d19ea0c1e6e3b31a5a7373c579345e38fc358dba6257532d",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/ui_Settings.png",
+      "group": 4,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "9782f3f5a39f1ffdbc7d829ccead0b009de270064ef7d22eeb75243aea90a085",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/meta/meta_Reroll.png",
+      "group": 5,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "f203db5e5894a6789a35b5ba755abc7e7fc41fad58fabfd7c36c3e4117ef556c",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/meta/meta_Skip.png",
+      "group": 5,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "715bdad4359a8934d8cf102749ea1b709c0f0faa7d46736189528d0c7ac562d7",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/curses/curse_Frenzy.png",
+      "group": 6,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "81dda60a213d49df16c163321d66ccbab05c25e0d6f1dddbdc7d94b3a9a3ba24",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/curses/curse_Fragile.png",
+      "group": 6,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "5a941c3b3035bda5f496d5ddfb0d23ca036d92ce55f9cfafe5cf6e0e466aa7bf",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/curses/curse_Horde.png",
+      "group": 6,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "fa8a6237ae1a79e7ddb56c1bc9d7d487978ccdab79f6d4774d1f3525c0846028",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/curses/curse_Famine.png",
+      "group": 6,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "3fa755b31d9ed618fc54e2ab33a2dbb546f30ebc09841ceb366fd6282eb2812a",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/curses/curse_GlassCannon.png",
+      "group": 6,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "1f6602d944f54e542688289a701078bb0f21c9428a409eb6d7f9ef59bbdac11e",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/curses/curse_EliteSurge.png",
+      "group": 6,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "e57b7c969e46a48861f53815965167a5e3879fa1fb8f4764d6d466a40f2393ad",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/curses/opt_Armory.png",
+      "group": 6,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "833f362ab31c5bf8b1befb900d44fe406a7a884127b4b32ac5d16198ce62c948",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/curses/opt_HeadStart.png",
+      "group": 6,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "c7636574dc34704d0341dbb0c8e0ef378c448b67a0f126c5c8bd0c7d091adfae",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/rewards/reward_ChestLarge.png",
+      "group": 7,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "97e61e819e2f2337c9e39bcfdd1283d7a2b0419677e3f90f8c9d0583c8001ce4",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/rewards/reward_ChestGolden.png",
+      "group": 7,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "5581be28133be1b5d2833b12e901756291e4d86abb63911ae6d56b9228cb9f0d",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/rewards/reward_ChestOpen.png",
+      "group": 7,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "b6c90c89b1b0942779ae361cb681c28f37aaf1a8692abbce70b58f14992e5175",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/rewards/reward_XPGem.png",
+      "group": 7,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "885569d17b73419b9c91dd184cbce5691e9bf6a95d5ad44bad40dadd1f0d1531",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/rewards/reward_XPGemBig.png",
+      "group": 7,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "9899a2a39fa372bd9096039523925fbd2d714db2a8b074fe084fbfd117501474",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/rewards/reward_Bomb.png",
+      "group": 7,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "0b0de1590cf5e5fc19b913f9110f519addf7a9deab54e18e86a315126a027483",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/ui/frames/frame_Common.png",
+      "group": 8,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "e3674e8eecc6443cf3f21067b3d359ce393c34702809d11a90f4b3bf23ba0ff7",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/ui/frames/frame_Uncommon.png",
+      "group": 8,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "c14f20f456b6c0fb7754d8ff90037d6198638c3dc00e56dee5d59c9a4fc4c6b4",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/ui/frames/frame_Rare.png",
+      "group": 8,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "c35712bc49029648a854d4f0ea478dea98193634901e7572a9c8e844af2d61ad",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/ui/frames/frame_Epic.png",
+      "group": 8,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "88a5c9de3de01e140a09e69bfab1ac5055c1ac680ad326284e08f5ed534bfe48",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/ui/frames/frame_Legendary.png",
+      "group": 8,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "f14fc8acadc89d11704a2abe703d4cf65260d7edeb89c6200cd5320ee5170d2d",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/heroes/hero_Knight.png",
+      "group": 9,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "7f213c6d552e38754b4c3e0a649c44264c71ff304d2be1cc5c790ab9c786dc4e",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/heroes/hero_Mage.png",
+      "group": 9,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "54856cd73f3c81cf0f43b2dd0385bb6b7c0768fe5c49330438e8d8b92919c356",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/heroes/hero_Rogue.png",
+      "group": 9,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "1ce4d05c9398131e90d9525ec27e097a4a7dbea4d96a77972ef23f4166aa233e",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/heroes/hero_Priest.png",
+      "group": 9,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "b13bfe3ecb7aee2e738019442442219c8f8d910605f39371fa6e9f1253b054ba",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/heroes/hero_Ranger.png",
+      "group": 9,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "34969ecdb6c5cb39fbcc49729dd4f3e7406fa1d23a506e95fc6592b3be613e54",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/heroes/hero_Alchemist.png",
+      "group": 9,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "2650292abb259c9ecc0b7c83e171021d8f6ceeb668d8c9c770a6d865c475abeb",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/heroes/hero_Engineer.png",
+      "group": 9,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "a7b963f70c1226eca211041b666fa5c4078c03ccd807f918559e370e5769322c",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/heroes/hero_Necromancer.png",
+      "group": 9,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "4791bb007a4e2024056d090bbd0945211336dff7cc4f136bd7fd5ddc8d619f01",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/arenas/arena_Forest.png",
+      "group": 10,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "f8f745a363bc2dab8dd9aa55d7c35660da43e38d33e9ca8d63d6524d6e13c03f",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/arenas/arena_Ruins.png",
+      "group": 10,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "63e03a0203c9dc1d823dc5c17382cf20b326eb4c8856b0ed12bf5deb41b38249",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/arenas/arena_Swamp.png",
+      "group": 10,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "e2fd10abf1a19a2b5e74a608f79b9560b61d1ddf1d8729522c8cf310b5133083",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/arenas/arena_Snow.png",
+      "group": 10,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "268938cf5acd2156a7af1cde348d123258cfa8a5692a7fe41fc47d4b7aa2348f",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/arenas/arena_Desert.png",
+      "group": 10,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "b757ec253f7660fd32782b2f9528ffa83a76295472c4cc7dc0acc0f617b2f8f5",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/arenas/arena_Lava.png",
+      "group": 10,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "11410a41f86bc559230c958eeca8ceb5297f854a154bf51230e60dc503ced22b",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_Survivor5.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "7aa3fd476b87a43c9cb89ba4ad1ddb80f0b699465b08a46fe34725e65c025caf",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_Survivor10.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "6ef1936111f71372b7cde8bbfc540fc1e37b46a716fc5c2215f35df7ca6b32b5",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_QueenSlayer.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "2be71afaf37c592ec5d7f89731f5448dfb9d8f3be3208bd4bea500c8ec1c6d11",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_Conqueror.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "27098f7964aec349c194224d6929b45b43df1baafce37885c8e2df7c94ccc933",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_KnightClear.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "a9ead4082f2174951d9af8a529c24fbe03ee6acd417cb93e969bd3c3ff25e053",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_MageClear.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "2256b51acc9063cfcfd0774b5dbb2b58bafd19ef76066a7b7880f3d209a8cb32",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_RogueClear.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "e9fe302eb58837c68e61c3f69a1f0471560f33c528deb4e789c7a34899047c78",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_PriestClear.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "ef91b48082e7b39cb0786300e0dff6faac84c74846f02ab1c4077e694919b5f3",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_Veteran.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "cba3643419ac83830c3ed749eb0993c4ef927756c4b210c86ca535706aee1a1f",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_FieldEngineer.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "c2863771e06985e1721fea9c0f750451ed66612faa31adf00b6a892f475be7d3",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_Reaper.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "362d508a42d356cf412c39820d1297bad6c065c8abb7a18b7318c0af79beae6b",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_MothBane.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "b91b4ce26b864efa60856e78c952700cfaf92ad993b49a9b539a309adda63fef",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_WarlordFall.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "bfb39fa401c71244736af486018038565fb2a38d4d6e0b71edcb66deb823a07a",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_HiveCleanser.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "91fb946b4482bb26de3a512bd086ca8a74d6831bd0e3e4aa71f9b736f40f1968",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/achievements/ach_Badge.png",
+      "group": 11,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "5c1d89b9ec00020cf224ab4bd1b2509cc6b298bbb9b68feb369588f0dddde9e5",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/track/track_Title.png",
+      "group": 12,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "02d8372893b2132c0f197afa1f65385349c3c3e0eaa89a60f0a99765b54ab2c0",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/track/track_Color.png",
+      "group": 12,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "02598ae93eb51841ed315a1243994729d7e575925131852662b70e237daeb137",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/track/track_Ring.png",
+      "group": 12,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "ce1ff1c632bac46a54af8d4f1eeee069cde4ade0ad9b929f9b7ac537ae1a4ced",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/track/track_Frame.png",
+      "group": 12,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "d4e249ad6c1544a3c4b3a1fe6822b74e4da6aeb17144086f39a78db1aa6a1ebf",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/track/track_Level.png",
+      "group": 12,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "54d3f21655d2c40e04a00fd31dfc8f64f227f9bc94d73551625c4587202e4ee5",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/shop/shop_GoldPouch.png",
+      "group": 13,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "3e9233dc47fc0004f569ec75b5458361408a711bf4502032995eaeeeb75266d0",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/shop/shop_StarterPack.png",
+      "group": 13,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "6adf0ea6867410ba09703ede31906490b210851bb8eb2987eb8fee1c96c8ab2f",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/shop/shop_VIP.png",
+      "group": 13,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "5f573d802933abeeeeb28fbc9764dd92c090d4bc0a9029101c58066666befb44",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/shop/shop_DoubleGold.png",
+      "group": 13,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "8ebd03041977138bf6d1882e7881ea0540c2c3052bff6cb79a1b4e8c03019485",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/stats/stat_BestTime.png",
+      "group": 14,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "2708cac1e1f5d2f17b4e4bf86ccc1d81c847787d77b8143855a1f424888c40a2",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/stats/stat_Wins.png",
+      "group": 14,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "4f58c3f3c7067ad6175ef94a7fccc2fad099a5b65c0f1893baa3eb29d61cb890",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/stats/stat_Runs.png",
+      "group": 14,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "e3dff3fa2c4d137c2685749c1a0fb89466d6d91a6096920a60da6e5d862ea957",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/stats/stat_WinRate.png",
+      "group": 14,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "e47d6de5762a9da916b9c24fb218695d9104d8e6606a114bbc26c37ded7e3bd5",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/stats/stat_Kills.png",
+      "group": 14,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "54ae6cce1693c662b3496d6c2d596fe7484ba6fea4e26ac4bf8a75a13c380058",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/stats/stat_Gold.png",
+      "group": 14,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "5054367e4b83c28c3e1f88d7b8c2178e4f3778407ba1a492542bad2525585ee0",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/stats/stat_Heroes.png",
+      "group": 14,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "26af96bb490a6fd758ab9a9f061218241bb9f5d8347b7f8d87537f04760dc2ee",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/stats/stat_Skins.png",
+      "group": 14,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "50f336090d943226e628edf2ce23ec130abbd98c165e4a1392079ac773b42860",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/stats/stat_Upgrades.png",
+      "group": 14,
+      "width": 1024,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "43054a2dd5501d5127c96b1a4d47c20ddd95101f45bcc0923de1a11f93bb76d3",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/screens/logo_SWARM.png",
+      "group": 15,
+      "width": 2048,
+      "height": 1024,
+      "transparent_background": true,
+      "sha256": "0e09841ac948518a02c3bf4e6ab793376645eee1533ee8be4e69f0d13bdb94f7",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/screens/loading.png",
+      "group": 15,
+      "width": 1920,
+      "height": 1080,
+      "transparent_background": false,
+      "sha256": "453e5f673fcf60794facd7e6744a9e52e0fa1d1edd26fc71797a2c227dc5a9aa",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/screens/victory.png",
+      "group": 15,
+      "width": 1920,
+      "height": 1080,
+      "transparent_background": false,
+      "sha256": "cfdc79691d2b92ff8af28addeaa555e851cdf7e3902dd636587d63de405cef40",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/screens/defeat.png",
+      "group": 15,
+      "width": 1920,
+      "height": 1080,
+      "transparent_background": false,
+      "sha256": "291b71093df34e700a254593f29f09951a7cada89a3f173bc96cdf533511496f",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/screens/results_bg.png",
+      "group": 15,
+      "width": 1920,
+      "height": 1080,
+      "transparent_background": false,
+      "sha256": "f5228c8e5196eb6b0088ded99046e51822f8073f3ef48fb86c8dbc915dff9b33",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/store/store_Icon.png",
+      "group": 16,
+      "width": 512,
+      "height": 512,
+      "transparent_background": false,
+      "sha256": "f02181836a194797da7f90edb9661cd6dd12a157f820f731a12627e75bb3845a",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/store/store_Thumb1.png",
+      "group": 16,
+      "width": 1920,
+      "height": 1080,
+      "transparent_background": false,
+      "sha256": "05c75cbda2921ce6cb832ab35c152f44301c38936a4b43a10e4bcd0a7b9c22c9",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/store/store_Thumb2.png",
+      "group": 16,
+      "width": 1920,
+      "height": 1080,
+      "transparent_background": false,
+      "sha256": "40d21fa70c0b5e650db9574f9402e1a985211dce07bc31ac1cefff997a6dfe07",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/store/store_Thumb3.png",
+      "group": 16,
+      "width": 1920,
+      "height": 1080,
+      "transparent_background": false,
+      "sha256": "d189f1e5090ed6ee7e1a98adae5bf1a9f2132ad0771030c2c98cda3901b366d1",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_play.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "0408a06429141450530bc4290a06b82c2020b9b1048d5eda267e40f91f44189f",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_pause.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "b5b1e935bceb140c920999ec876cf841102317ccc6891696e195c385c1369197",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_close.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "ed7719c2878c42aab9eab278a372811415f82a84bf12737be07e213a42bfe4f0",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_check.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "97d2ef8c7be291b0655238365f5152bbb432ace5a77c68f2b0558c9bc47f46b0",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_warning.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "fe19856dbc87bf25c5445a16c51e4105e848b4d4e10ca69bbd70afefd007353c",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_info.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "0d916eb143703400d4a527de7b619e02c3e7f2c22adda8c42125d40c4e05d1c4",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_lock.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "671f88f7decf4317f752ae9791a6fd67d439e5ae79c89e2026a25a684cf255f5",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_gear.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "e8b6c649ff04da6cd977a116035ab311ff6eb3b6c1a9e81452c4f742e7d2b71c",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_music.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "f9016f358e3eed64cc9b21320c2f17f0ae8aadf4039d0b261c7a4cd4a717a945",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_speaker.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "5bb78345e6abd2ad9d097f159ae889780e1756b66301986f87ccf8838ac54182",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_calendar.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "bf1aff73a1b26dccbeae18d884787a6850252ada90f9cc0429220f03b4a2f8f6",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_clock.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "7fc28d850b23b71e22e079b600ca8121eb8077b33b77bb4a54f7e400a4810d09",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_hourglass.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "6ac655b0d9a1a186544a61605464d7b6ba416c17494c34e2a59dc52db2197552",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_cycle.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "3930e5e5caf61caf97f97ce36a859aea442ad5c79d840383950f15d0d7ca3e69",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_skip.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "07f021f9ac9c7daa992955683cbcbb6190332ba05b20f8144965ffae2da9b66f",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_chevronsUp.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "37dfe0be1ea7aac086e368ece0235f541b0d8de90a1871cafb149c282a863a1c",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_arrowFast.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "07e0e8de0cdb8a823c74f11184518de62e333939dc05e166c2822fbf45870d6d",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_person.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "ca4089d1c0eb7b4400bc94eb466d70a91461cdd0f17bc80b65ccde0e9127bda8",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_people2.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "fa897c6bd83e899076cb446de0a244622aa2fd26971ffeb45f9ef4be0ea4809b",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_people3.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "ac5ea38c3410a4880494e8a614f7bec3377d093fbf14ce98015e4491c262a777",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_userPlus.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "3bfce88b86cb88ed33b75f7c99beea8aa6329d954e03b94b5e33b30f750d23c5",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_podium.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "a4c1bdab6d80fa20cfdf118d123e424b956230bf1d68a5ef0e8a8f4067ee1db7",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_trophy.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "2293facc3cee8d78af813f1a44613980d9c77705bc1e6d429ba630ab5521d9db",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_crown.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "8d40e3670d8b03ca84bb1972e22037707ba86e009305c3c27c3f5cb29a98071e",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_medal.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "9b5aaedc7ce503f9a75aa601c6d485c41fe2c2bdd1a480facd0d8ead6dddd6c2",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_flag.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "261153ad60640644e0cd87b02bd5b5d9c51f32acb60bc90d40bc5d484b5a27de",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_skull.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "b673b1bcb114acdf31cd6f147597ca0783e4c9d36b0979107569d90b316569eb",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_sparkle.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "44c8ff43379687b7f7d28107ae4ab67b8aed3a92bf55a5cfa877c195f0e2153b",
+      "status": "complete"
+    },
+    {
+      "file": "SWARM/art/icons/ui/sym_curse.png",
+      "group": 17,
+      "width": 512,
+      "height": 512,
+      "transparent_background": true,
+      "sha256": "26804b72fd2e168d9b5b4068d510e48fdc1dd802869a28e8c539bd69e468d17a",
+      "status": "complete"
+    }
+  ]
+}
