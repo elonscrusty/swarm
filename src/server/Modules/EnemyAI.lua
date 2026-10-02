@@ -260,7 +260,7 @@ local function bossStep(e, dt: number)
 			for i = 1, B.RingProjectiles do
 				local a = offset + (i / B.RingProjectiles) * math.pi * 2
 				local dir = Vector3.new(math.cos(a), 0, math.sin(a))
-				ctx.WeaponSystem.SpawnHostile(e.Pos + dir * e.Radius, dir, B.RingProjectileSpeed, B.RingProjectileDamage, B.RingProjectileRadius, B.RingProjectileLife, 7)
+				ctx.WeaponSystem.SpawnHostile(e.Pos + dir * e.Radius, dir, B.RingProjectileSpeed, B.RingProjectileDamage * ctx.StageManager.DamageMult(), B.RingProjectileRadius, B.RingProjectileLife, 7)
 			end
 			if e.RingWave >= B.RingWaves then
 				bossSetState(e, "Chase", B.ChaseSeconds)

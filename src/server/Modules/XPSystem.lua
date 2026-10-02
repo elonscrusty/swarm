@@ -287,6 +287,51 @@ function XPSystem.Step(dt: number)
 	updatePickups(runPlayers)
 end
 
+--[[
+	Before the arena is swapped (travel to the next stage) nothing on the floor is lost:
+	the XP of every gem left goes to the team (shared, like a pickup), every chest is
+	opened for a living participant (taking turns), a chicken heals the first living one.
+	Magnets and bombs have nothing left to do and just vanish. Call Clear() afterwards.
+	includeFallen: when nobody is alive (the run ends at the portal) chests go to fallen
+	participants instead.
+]]
+function XPSystem.CollectAll(includeFallen: boolean?)
+	local total = 0
+	for _, gem in ipairs(activeGems) do
+		total += gem.Value
+	end
+	local alive = {}
+	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if rp.Alive and rp.Root then
+			table.insert(alive, rp)
+		end
+	end
+	if #alive == 0 and includeFallen then
+		-- the run ends with only fallen teammates left: their chests still pay out
+		for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+			if rp.Stats then
+				table.insert(alive, rp)
+			end
+		end
+	end
+	if #alive == 0 then
+		return
+	end
+	if total > 0 then
+		XPSystem.GiveSharedXP(total)
+	end
+	local turn = 0
+	for i = #pickups, 1, -1 do
+		local p = pickups[i]
+		if p.Kind == "Chest" or p.Kind == "Chicken" then
+			turn += 1
+			local rp = alive[(turn - 1) % #alive + 1]
+			table.remove(pickups, i)
+			collectPickup(p, rp)
+		end
+	end
+end
+
 -- Removes every gem, pickup and chest (run cleanup).
 function XPSystem.Clear()
 	for i = #activeGems, 1, -1 do

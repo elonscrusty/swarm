@@ -33,6 +33,8 @@ Remotes.ServerToClient = {
 	"ProfileSync", -- lobby data: gold, owned, meta levels, stats, settings, passes
 	"OpenPanel", -- "Joined" after joining a countdown (old: lobby board prompt → panel name)
 	"ReviveOffer", -- died: offer the Revive product for N seconds
+	"PortalOffer", -- the stage portal opened: NEXT STAGE / RETURN TO LOBBY panel (or Close / Chosen)
+	"StageTravel", -- the group is travelling to the next stage: fade + "Stage N" banner
 }
 
 -- Client → server
@@ -54,6 +56,7 @@ Remotes.ClientToServer = {
 	"SaveSettings", -- ({ Music = 0-1, Sfx = 0-1 })
 	"ReviveDecline", -- close the revive offer early
 	"RequestProfile", -- ask for a ProfileSync
+	"PortalChoice", -- ("Next" | "Return") answer to PortalOffer, validated by StageManager
 }
 
 local folder: Folder? = nil

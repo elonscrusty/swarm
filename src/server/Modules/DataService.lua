@@ -15,9 +15,9 @@
 	Retry:   every DataStore call is pcall'd with exponential backoff.
 	Studio:  if DataStores are unavailable (no API access) data is kept in memory only.
 
-	Save shape (Config.Data.SchemaVersion = 2):
+	Save shape (Config.Data.SchemaVersion = 3):
 	  Version, Gold, Meta {id → level}, OwnedCharacters {id → true}, SelectedCharacter,
-	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs},
+	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage},
 	  PurchaseIds {string}, Settings {Music, Sfx}, ReviveTokens, SelectedArena
 ]]
 
@@ -58,7 +58,7 @@ local function defaultData()
 		OwnedCharacters = { [CharacterData.Default] = true },
 		SelectedCharacter = CharacterData.Default,
 		Skins = {},
-		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0 },
+		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0 },
 		PurchaseIds = {},
 		Settings = { Music = 0.6, Sfx = 0.8 },
 		ReviveTokens = 0,
@@ -70,7 +70,8 @@ DataService.DefaultData = defaultData
 --[[
 	Migration steps: MIGRATIONS[n] upgrades a version-n save to version n+1.
 	Version 1 (early test builds) stored owned characters as an array and had no
-	settings / revive tokens.
+	settings / revive tokens. Version 2 had no Stats.BestStage (the stage loop): it starts
+	at 0, the furthest stage reached in a run from now on.
 ]]
 local MIGRATIONS: { [number]: (any) -> any } = {
 	[0] = function(data)
@@ -89,6 +90,16 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.Settings = data.Settings or { Music = 0.6, Sfx = 0.8 }
 		data.ReviveTokens = data.ReviveTokens or 0
 		data.Version = 2
+		return data
+	end,
+	[2] = function(data)
+		if type(data.Stats) ~= "table" then
+			data.Stats = {}
+		end
+		if type(data.Stats.BestStage) ~= "number" then
+			data.Stats.BestStage = 0
+		end
+		data.Version = 3
 		return data
 	end,
 }
@@ -113,6 +124,9 @@ function DataService.Migrate(data: any): { [string]: any }
 		if data[k] == nil then
 			data[k] = v
 		end
+	end
+	if type(data.Stats) ~= "table" then
+		data.Stats = defaults.Stats
 	end
 	for k, v in pairs(defaults.Stats) do
 		if type(data.Stats[k]) ~= "number" then

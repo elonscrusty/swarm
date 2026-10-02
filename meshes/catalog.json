@@ -5139,6 +5139,204 @@
   }
  },
  {
+  "name": "Portal",
+  "category": "World",
+  "note": "Stage portal: ancient horseshoe stone ring on a round rune dais, ~10.4 wide x 11 tall. Front = -Y (the game turns it to face the camera). Surface = the arcane membrane inside the ring and Glyphs = small rune lights; both are recoloured in game by portal state (idle, charging, boss, open). Collider = the two plinths; the passage between them stays open.",
+  "tris": 2412,
+  "pieces": [
+   {
+    "name": "Dais",
+    "slot": "Base",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.26,
+     0.0
+    ],
+    "size": [
+     10.3632,
+     0.52,
+     10.3632
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Runes",
+    "slot": "Gold",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.6402,
+     0.0
+    ],
+    "size": [
+     8.7926,
+     10.2803,
+     5.8919
+    ]
+   },
+   {
+    "name": "Stone",
+    "slot": "Stone",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     6.004,
+     0.0
+    ],
+    "size": [
+     9.4715,
+     10.058,
+     1.794
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Stone2",
+    "slot": "Stone2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.57,
+     0.0
+    ],
+    "size": [
+     9.8,
+     10.14,
+     2.1
+    ],
+    "shadow": true
+   },
+   {
+    "name": "Glyphs",
+    "slot": "Glyph",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     7.7671,
+     0.0
+    ],
+    "size": [
+     9.2416,
+     5.3618,
+     1.8776
+    ]
+   },
+   {
+    "name": "Surface",
+    "slot": "Surface",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     6.026,
+     0.0
+    ],
+    "size": [
+     6.814,
+     6.788,
+     0.14
+    ],
+    "transparency": 0.3
+   },
+   {
+    "name": "Moss",
+    "slot": "Moss",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.2032,
+     1.855,
+     0.379
+    ],
+    "size": [
+     9.6116,
+     3.17,
+     4.0462
+    ]
+   }
+  ],
+  "preview_palette": {
+   "Base": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Stone": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "Stone2": [
+    0.5215686274509804,
+    0.5411764705882353,
+    0.5686274509803921
+   ],
+   "Glyph": [
+    0.615686274509804,
+    0.7215686274509804,
+    0.8901960784313725
+   ],
+   "Surface": [
+    0.39215686274509803,
+    0.48627450980392156,
+    0.592156862745098
+   ],
+   "Moss": [
+    0.39215686274509803,
+    0.5411764705882353,
+    0.2784313725490196
+   ]
+  },
+  "bounds": [
+   [
+    -5.182,
+    0.0,
+    -5.182
+   ],
+   [
+    5.182,
+    11.033,
+    5.182
+   ]
+  ],
+  "collider": {
+   "kind": "multi",
+   "shapes": [
+    {
+     "kind": "circle",
+     "radius": 1.3,
+     "height": 5,
+     "offset": [
+      3.55,
+      0.0
+     ]
+    },
+    {
+     "kind": "circle",
+     "radius": 1.3,
+     "height": 5,
+     "offset": [
+      -3.55,
+      0.0
+     ]
+    }
+   ]
+  },
+  "light": [
+   0.0,
+   6.0,
+   -0.8
+  ],
+  "passage": {
+   "width": 4.4,
+   "height": 3.6
+  }
+ },
+ {
   "name": "Priest",
   "category": "Heroes",
   "note": "Ivory robes with a gold stole, mitre, golden sun staff and a small book.",

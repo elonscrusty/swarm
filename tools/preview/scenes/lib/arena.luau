@@ -6,7 +6,10 @@
 	through the real attributes and the Inventory remote.
 
 	options: arena ("Forest" | "Ruins"), enemies (120), seconds (run time, 504),
-	         swarm (false = no enemies), client (false = no UI / client modules)
+	         swarm (false = no enemies), client (false = no UI / client modules),
+	         portal (place the stage portal like StageManager: MapBuilder.FindPortalSpot +
+	         BuildPortal; s.portal), heroNearPortal (studs south of the portal to stand,
+	         the hero and the swarm then centre there), stage (Stage attributes: number)
 ]]
 
 local C = lib("common")
@@ -151,6 +154,18 @@ function A.build(opts)
 	end
 	s.arena = arena
 	local centre = (arena and arena.Center) or (s.Config and s.Config.ArenaOrigin) or Vector3.zero
+	if opts.portal and arena and s.MapBuilder and s.MapBuilder.BuildPortal then
+		local spot = C.try("MapBuilder.FindPortalSpot", s.MapBuilder.FindPortalSpot, arena, Random.new(preview.seed * 13 + 5), nil)
+		if spot then
+			s.portal = C.try("MapBuilder.BuildPortal", s.MapBuilder.BuildPortal, arena, spot)
+			if s.portal and opts.portalState then
+				C.try("portal SetState", s.portal.SetState, opts.portalState, opts.portalCharge or 0)
+			end
+			if opts.heroNearPortal then
+				centre = Vector3.new(spot.X, centre.Y, spot.Z + opts.heroNearPortal)
+			end
+		end
+	end
 	s.centre = centre
 	if opts.hero ~= false then
 		C.spawnCharacter(s.ModelBuilder, CFrame.new(centre + Vector3.new(0, 3.5, 0)), opts.character or "Knight")
@@ -161,6 +176,20 @@ function A.build(opts)
 	end
 	C.setState({ Phase = "Running", Mode = "Solo", RunTime = runSeconds, Participants = 1, Arena = arenaName, SelectedArena = arenaName, BossHP = 0, BossMaxHP = 0, Frozen = false, LobbySpawn = CFrame.new(1200, 3.5, -6) })
 	C.setPlayer({ InRun = true, Alive = true, HP = 82, MaxHP = 120, Level = 14, XP = 38, XPNeeded = 80, Kills = 412, RunGold = 57, PartnerRevivesLeft = 0, AuraRadius = 0 })
+	if opts.stage then
+		C.setState({
+			Stage = opts.stage,
+			StagePhase = opts.stagePhase or "Explore",
+			StageArena = arenaName,
+			PortalPos = s.portal and s.portal.Pos or nil,
+			PortalHint = opts.portalHint == true,
+			PortalCharge = opts.portalCharge or 0,
+			PortalLockLeft = opts.lockLeft or 0,
+			SurgeLeft = opts.surgeLeft or 0,
+			ChoiceLeft = opts.choiceLeft or 0,
+			PortalReady = opts.portalReady or "",
+		})
+	end
 	if opts.client ~= false then
 		C.startClient()
 		C.sendProfile()

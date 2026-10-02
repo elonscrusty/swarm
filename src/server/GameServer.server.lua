@@ -3,7 +3,8 @@
 	Bootstraps SWARM: creates the remotes, initialises every module in dependency order,
 	then drives all per-frame systems from ONE Heartbeat connection.
 
-	Frame order: RunManager (timer, deaths) → EnemySpawner (spawns) → EnemyAI (movement,
+	Frame order: RunManager (timer, deaths) → StageManager (portal, boss, surge, choice,
+	travel) → EnemySpawner (spawns) → EnemyAI (movement,
 	contact, grid rebuild) → WeaponSystem (firing, projectiles, sync) → XPSystem (gems,
 	pickups) → LevelUpSystem (auto-pick timers) → Fx (effect batch flush).
 ]]
@@ -39,6 +40,7 @@ local ORDER = {
 	"EnemySpawner",
 	"EnemyAI",
 	"WeaponSystem",
+	"StageManager",
 	"RunManager",
 }
 
@@ -76,6 +78,7 @@ end
 -- The single server loop.
 local STEPS = {
 	{ "RunManager", ctx.RunManager.Step },
+	{ "StageManager", ctx.StageManager.Step },
 	{ "EnemySpawner", ctx.EnemySpawner.Step },
 	{ "EnemyAI", ctx.EnemyAI.Step },
 	{ "WeaponSystem", ctx.WeaponSystem.Step },

@@ -1,8 +1,8 @@
 --[[
 	UIBuilder.lua
-	Hosts every screen and builds the in-run ones: HUD (Hud.lua), toasts and banners,
-	level-up cards, chest reward, pause / settings menu, revive offer and the results
-	screen. It also hosts the lobby menu (LobbyScreen), the hero on the dais (Showcase) and
+	Hosts every screen and builds the in-run ones: HUD (Hud.lua), the stage loop's arrow,
+	charge ring, portal choice and travel fade (StageUI.lua), toasts and banners, level-up
+	cards, chest reward, pause / settings menu, revive offer and the results screen. It also hosts the lobby menu (LobbyScreen), the hero on the dais (Showcase) and
 	the Studio dev tools (DevPanel). Components come from UIKit, icons from Icons, tokens
 	from Theme.
 
@@ -32,6 +32,7 @@ local UIAnim = require(script.Parent.UIAnim)
 local UIKit = require(script.Parent.UIKit)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
+local StageUI = require(script.Parent.StageUI)
 local LobbyScreen = require(script.Parent.LobbyScreen)
 local DevPanel = require(script.Parent.DevPanel)
 local Showcase = require(script.Parent.Showcase)
@@ -993,8 +994,8 @@ local results: { [string]: any } = {}
 local resultsDeadline = 0
 
 local function statTile(parent: Instance, icon: string, caption: string, order: number): TextLabel
-	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(112, 104) }, true)
-	Icons.Draw(f, icon, { Size = 26, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Color = if icon == "coin" then nil else P.gold_400, Back = P.slate_950 })
+	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(94, 104) }, true)
+	Icons.Draw(f, icon, { Size = 26, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Color = if icon == "coin" or icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
 	local value = text(f, "Number", "0", {
 		Name = "Value",
 		Position = UDim2.fromOffset(0, 42),
@@ -1022,6 +1023,7 @@ local function buildResults()
 	local grid = new("Frame", { Name = "Stats", BackgroundTransparency = 1, LayoutOrder = 4, Size = UDim2.new(1, 0, 0, 104) }, content)
 	results.Grid = grid
 	results.GridLayout = UIKit.list(grid, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
+	results.Stages = statTile(grid, "portal", "Stages", 0)
 	results.Time = statTile(grid, "clock", "Time", 1)
 	results.Kills = statTile(grid, "skull", "Kills", 2)
 	results.Gold = statTile(grid, "coin", "Gold", 3)
@@ -1038,7 +1040,9 @@ local function buildResults()
 		Size = UDim2.fromOffset(300, Theme.Size.Button),
 		LayoutOrder = 7,
 		OnClick = function()
-			Remotes.Get("ReturnToLobby"):FireServer()
+			if not results.InLobby then
+				Remotes.Get("ReturnToLobby"):FireServer()
+			end
 			hide(results.Overlay, "Results")
 		end,
 	})
@@ -1056,10 +1060,21 @@ local function onRunResult(data)
 	closeOffer()
 	hide(revive.Overlay, "Revive")
 	hide(pause.Overlay, "Pause")
-	results.Title.Text = data.Won and "VICTORY!" or "DEFEATED"
-	results.Title.TextColor3 = data.Won and P.gold_300 or P.crimson_300
-	results.Arena.Text = UIKit.track("Arena: " .. tostring(data.Arena))
+	-- InLobby: the player left through a portal and is back at the menu already; the
+	-- panel then sits over the lobby until closed (or its timer runs out)
+	results.InLobby = data.InLobby == true
+	-- portal returns before WinMinStages stages are a safe escape, not a win
+	results.Title.Text = data.Won and "VICTORY!" or (data.Portal and "ESCAPED" or "DEFEATED")
+	results.Title.TextColor3 = (data.Won or data.Portal) and P.gold_300 or P.crimson_300
+	local cleared = tonumber(data.StagesCleared) or 0
+	local where = (data.Won or data.Portal) and string.format("%d stage%s cleared", cleared, cleared == 1 and "" or "s") or string.format("Fell on stage %d", tonumber(data.Stage) or 1)
+	results.Arena.Text = UIKit.track(where .. " · " .. tostring(data.Arena))
+	results.Stages.Text = tostring(cleared)
 	results.Time.Text = formatTime(data.Time)
+	results.Button.SetText(results.InLobby and "CONTINUE" or "RETURN TO LOBBY")
+	results.Button.SetIcon(results.InLobby and "check" or "castle")
+	results.Best.Text = (data.NewBest and data.NewBestStage) and "NEW BEST TIME AND STAGE!" or (data.NewBestStage and "NEW BEST STAGE!" or "NEW BEST TIME!")
+	data.NewBest = data.NewBest == true or data.NewBestStage == true
 	results.Best.Visible = data.NewBest == true
 	results.Unlocked.Visible = data.Unlocked ~= nil
 	results.Unlocked.Text = data.Unlocked and ("Unlocked: " .. data.Unlocked .. " arena!") or ""
@@ -1156,11 +1171,21 @@ local function updateFrame(dt: number)
 		end
 	end
 	if results.Overlay.Visible then
-		results.Timer.Text = UIKit.track("Back to the lobby in " .. math.max(0, math.ceil(resultsDeadline - os.clock())) .. "s")
-		if not inRun then
-			hide(results.Overlay, "Results")
+		local left = math.max(0, math.ceil(resultsDeadline - os.clock()))
+		if results.InLobby then
+			results.Timer.Text = UIKit.track("Closes in " .. left .. "s")
+			if left <= 0 or inRun then
+				hide(results.Overlay, "Results")
+				results.InLobby = false
+			end
+		else
+			results.Timer.Text = UIKit.track("Back to the lobby in " .. left .. "s")
+			if not inRun then
+				hide(results.Overlay, "Results")
+			end
 		end
 	end
+	StageUI.Update(dt, state, inRun)
 	-- the pause menu belongs to the run, the settings menu to the lobby
 	if pause.Overlay.Visible and (pauseMode == "Pause") ~= inRun then
 		hide(pause.Overlay, "Pause")
@@ -1249,6 +1274,23 @@ function UIBuilder.Init(d: { [string]: any })
 	buildPause()
 	buildRevive()
 	buildResults()
+	StageUI.Build(root, {
+		Show = show,
+		Hide = hide,
+		FitModal = fitModal,
+		OnRelayout = onRelayout,
+		VirtualSize = virtualSize,
+		IsPortrait = function(): boolean
+			return portrait
+		end,
+		Scale = function(): number
+			return uiScale.Scale
+		end,
+		-- top-left of the safe-area GUI on the screen (world → GUI projection)
+		GuiOffset = function(): Vector2
+			return gui.AbsolutePosition
+		end,
+	})
 	DevPanel.Init(root, hostApi)
 	onRelayout(function()
 		if levelUp.Overlay.Visible and lastOffer then

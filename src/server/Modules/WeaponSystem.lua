@@ -787,6 +787,16 @@ function WeaponSystem.ClearOwner(rp)
 	end
 end
 
+-- Removes every hostile (boss) projectile (the portal opening).
+function WeaponSystem.ClearHostile()
+	for i = #live, 1, -1 do
+		local p = live[i]
+		if p.Hostile then
+			p.Cancelled = true
+		end
+	end
+end
+
 function WeaponSystem.Clear()
 	WeaponSystem.ClearOwner(nil)
 	sync()

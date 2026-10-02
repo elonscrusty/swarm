@@ -12,12 +12,47 @@ Models come from two places:
 - **Part-built fallbacks** in code, used for anything not uploaded yet, so the game always runs.
 
 - Third-person top-down camera. You only move; weapons fire on their own.
-- 15-minute runs, a boss at 15:00. The lobby is a full-screen menu with three modes:
+- Runs are a series of STAGES (Risk of Rain / Megabonk style, see "Gameplay loop" below):
+  find the portal, summon and kill the Scorpion Queen, survive the surge, then go deeper or
+  cash out with a win. The lobby is a full-screen menu with three modes:
   **Solo** (starts at once), **Duo** (2 players) and **Trio** (3 players). In Duo and Trio
   you revive a fallen teammate by standing next to them for 3 s (see §10).
 - 8 weapons (8 levels + evolution each), 12 passives, 6 enemy types + elites + boss.
 - 4 characters, permanent gold upgrades, gamepasses, developer products, cosmetic skins.
 - Mobile first: a floating thumbstick is the only control during a run.
+
+## Gameplay loop
+
+1. **Stage 1** is the lobby's arena (Forest or Ruins); later stages alternate through
+   `Config.Arenas.Order` (Forest → Ruins → Forest ...). Each stage has a stone-ring
+   **portal** at a random clear spot at least 120 studs from the spawn (a new spot every
+   stage), with a soft light beam and a rune circle on the floor.
+2. **Explore** while the swarm comes as always. Difficulty keeps scaling with the **total
+   run time** (the per-minute tiers and spawn table), plus a per-stage multiplier
+   (`Config.Stages`); stage 1 plays exactly like the old early game. HP / damage stop
+   growing with time after minute 12 (`Config.Difficulty.MaxTier`). After 90 s (and not
+   before the portal wakes) an arrow at the screen edge points every player to the portal.
+3. **Charge the portal**: stand in its rune circle for ~2 s (any living player; on a phone
+   just stand there) once it wakes up (dormant for 2:30 on stage 1, 0:45 later). That summons the **Scorpion Queen** behind the portal (HP scaled by
+   stage and player count, the normal boss-fight spawning rules).
+4. **Surge**: when she dies, every living player gets the boss gold and a burst of enemies
+   pours out of the portal (25 + 15 per stage); survive 20 s or kill most of them. Gems,
+   chests and chickens left on the floor when the group travels are collected for them.
+5. **The portal opens**: leftovers burn up, the gems fly to you, and each living player
+   picks **NEXT STAGE** or **RETURN TO LOBBY** (15 s, undecided = next stage).
+   * Return = that player's run ends at once: `WinBonus` + `StageClearBonus` per stage
+     cleared, best time / furthest stage saved, results over the lobby menu. It counts as a
+     WIN (Stats.Wins) only with `Config.Stages.WinMinStages` (3) stages cleared.
+   * Reaching stage 2 unlocks Ruins in the lobby (`Config.Arenas.<name>.RequiredBestStage`).
+   * Next stage = everyone who stays travels (fade, "STAGE N"): new arena, enemies / gems /
+     projectiles cleared, level / XP / weapons / passives / gold kept, HP topped up,
+     fallen teammates revived. If nobody goes on, the run ends cleanly.
+6. Dying still ends your run (results show the stage you fell on); everyone down = defeat.
+   The timer shows the total run time; there is no 15:00 end any more.
+
+Code: `StageManager.lua` (server, the loop and the portal), `RunManager.lua` (players,
+results, travel), `MapBuilder.FindPortalSpot / BuildPortal`, client `StageUI.lua` (arrow,
+charge ring, choice panel, travel fade) and the stage pill in `Hud.lua`.
 
 ## 1. Sync with Rojo
 
@@ -52,7 +87,9 @@ src/shared/   → ReplicatedStorage.Shared
 src/server/
   GameServer.server.lua bootstraps modules, runs the single Heartbeat loop
   Modules/
-    RunManager.lua      lobby → countdown → run → results, HP, death, revive, characters
+    RunManager.lua      lobby → countdown → run → results, HP, death, revive, characters,
+                        portal wins, travel between stages
+    StageManager.lua    the stage loop: portal, charge, Queen, surge, NEXT / RETURN, travel
     EnemySpawner.lua    enemy pool, spawning, damage, deaths, drops, boss spawn
     EnemyAI.lua         batched movement, obstacle raycasts, contact damage, boss patterns
     WeaponSystem.lua    all weapons, projectile simulation, hit detection, sync batches
@@ -61,7 +98,8 @@ src/server/
     GoldSystem.lua      run gold, lobby purchases (characters, skins, meta), settings
     DataService.lua     DataStore with session locking, retry, autosave, migration
     MonetizationService.lua  gamepasses, developer products, ProcessReceipt
-    MapBuilder.lua      castle lobby (+ MenuCamera shot), Forest + Ruins arenas, lighting
+    MapBuilder.lua      castle lobby (+ MenuCamera shot), Forest + Ruins arenas, lighting,
+                        the stage portal (spot, model, beam, rune circle, state colours)
     ModelBuilder.lua    characters, hats, enemy shells, gems, pickups, chests
     SpatialGrid.lua     20-stud bucket grid for hit detection / neighbour queries
     Fx.lua              batches visual effects into one remote call per tick
@@ -74,6 +112,7 @@ src/client/   → StarterPlayerScripts.SwarmClient
   ModelLibrary.lua      detailed animated 3D models for every enemy, the boss and every projectile
   EnemyRenderer.lua     draws those models on the server's enemy bodies (client only)
   UIBuilder.lua         in-run screens (HUD + upgrade bar, level-up, pause, results), scaling
+  StageUI.lua           portal arrow, charge ring, NEXT STAGE / RETURN TO LOBBY panel, travel fade
   LobbyScreen.lua       the 2D lobby menu: home, characters, upgrades (§10)
   ViewportPreview.lua   turning 3D character previews (ViewportFrames)
   DevPanel.lua          DEV button, Studio only by default (§10)
@@ -104,15 +143,20 @@ Purchases are cosmetic or convenience (gold and skins). There are no loot boxes.
 | Want | Change |
 |---|---|
 | More / fewer enemies | `EnemyData.SpawnTable[minute].Target`, `Config.Difficulty.PlayerCountMult` |
-| Tougher enemies over time | `Config.Difficulty.HPPerMinute`, `DamagePerMinute`, `SpeedPerMinute` |
+| Tougher enemies over time | `Config.Difficulty.HPPerMinute`, `DamagePerMinute`, `SpeedPerMinute`, `MaxTier` |
 | Bigger mini-waves | `Config.Spawn.MiniWaveBaseCount`, `MiniWavePerMinute`, `Config.Run.MiniWaveInterval` |
 | Enemy cap (performance) | `Config.Enemies.MaxLive` (≤ `PoolSize`) |
 | Elites | `Config.Enemies.EliteChance`, `EliteHPMult`, `EliteSizeMult` |
-| Boss | `Config.Boss.*` (HP, attack timings, projectile count) |
+| Boss | `Config.Boss.*` (HP, attack timings, projectile count), `Config.Stages.BossHPByStage` |
+| Stage difficulty | `Config.Stages.EnemyHPPerStage`, `EnemyDamagePerStage`, `SpawnTargetPerStage` |
+| Portal | `Config.Stages.PortalMinDistance`, `PortalRadius`, `ChargeSeconds`, `PortalLockSeconds`, `HintAfterSeconds` |
+| Queen fight crowd | `Config.Stages.BossMinionShare`, `BossMinionMin`, `Config.Boss.MinionCapDuringBoss` |
+| Surge / choice | `Config.Stages.SurgeBase`, `SurgePerStage`, `SurgeSeconds`, `ChoiceSeconds`, `TravelHealFraction` |
+| What counts as a win | `Config.Stages.WinMinStages`; arena unlocks: `Config.Arenas.<name>.RequiredBestStage` |
 | Leveling speed | `Config.XP.Base`, `PerLevel`, `CapLevel` |
-| Gold income | `Config.Gold.KillGoldChance`, `MinPerKill`, `MaxPerKill`, `Boss`, `WinBonus` |
+| Gold income | `Config.Gold.KillGoldChance`, `MinPerKill`, `MaxPerKill`, `Boss`, `WinBonus`, `StageClearBonus` |
 | Player survivability | `Config.Player.BaseMaxHP`, `ReviveHPFraction` |
-| Run length | `Config.Run.BossTime` |
+| Run length | the players decide (portal); `Config.Run.BossTime` is no longer used |
 | Camera | `Config.Camera.RunDistance`, `Pitch` |
 
 ## 5. Adding a weapon
@@ -173,6 +217,10 @@ Preview pictures of every model are in `renders/` (`renders/Sheet_*.png`).
 4. Rebuild the place (`rojo build`). On start the server loads each uploaded model with
    InsertService; anything missing keeps its part-built fallback.
 
+The stage portal (`Portal`, World category: stone ring, rune dais, membrane and glyphs
+recoloured per portal state) is built and in the catalog but not uploaded yet; until it is,
+`MapBuilder` uses its part-built fallback with the same look and collider.
+
 Each model is split into pieces (one MeshPart each) that are coloured in game by "slot"
 (skins and elites recolour them) and animated by the client (legs, wings, claws, tail).
 
@@ -207,7 +255,8 @@ from old clients but not shown.
 
 **DEV button** (bottom right): only in Studio by default, so it never shows in normal play.
 Set `Config.Dev.ShowInLiveGame = true` to also show it to the game's creator in live servers.
-Lobby: *Start solo now*. In a run: *+5 levels* and *Skip to 14:30 (boss)*. The server checks
+Lobby: *Start solo now*. In a run: *+5 levels*, *Spawn portal boss* (charges this stage's
+portal at once) and *Teleport to portal*. The server checks
 the same rule again for every request (`RunManager` "DevCommand"). Turn it off with
 `Config.Dev.Enabled = false`.
 

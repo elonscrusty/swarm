@@ -6,8 +6,12 @@
 	  Lobby      everyone sees the lobby menu screen (characters, shop, mode buttons)
 	  Countdown  someone pressed DUO / TRIO; 10 s for others to join (JOIN button); the
 	             starter may START NOW once someone joined, a full run starts at once
-	  Running    the run: timer counts up, mini-waves every 30 s, boss at 15:00
-	  Results    win / lose screen; everyone returns after Config.Run.ResultsSeconds
+	  Running    the run: a series of stages (StageManager: explore, portal boss, surge,
+	             NEXT STAGE / RETURN TO LOBBY, travel); the timer counts the whole run
+	  Results    defeat screen (everyone fell); everyone returns after ResultsSeconds
+	A player who leaves through an open portal ends their run as a win at once
+	(ReturnThroughPortal: results over the lobby menu); when nobody goes on, the run ends
+	straight back to the Lobby phase (FinishFromPortal).
 	SOLO skips the countdown. Modes live in Config.Modes; "Squad" (old 1-4 mode) is still
 	accepted from old clients. The lobby's ProximityPrompts are switched off: the 2D lobby
 	screen (UIBuilder / LobbyScreen) sends StartRun / StartNow / CycleArena instead.
@@ -21,7 +25,7 @@
 	  Player, Character, Root, Humanoid, CharacterId, Meta, Stats, HP, Level, XP, XPNeeded,
 	  Weapons, WeaponOrder, Passives, PassiveOrder, PendingLevels, Offer, Paused, Alive,
 	  AwaitingRevive, RevivesLeft, Rerolls, Skips, Kills, Gold, DamageDealt, TimeSurvived,
-	  Facing, MoveDir, InvulnUntil, Returned
+	  Facing, MoveDir, InvulnUntil, Returned, PortalChoice, PortalOffered, Committed, WinPaid
 	HP lives here (not in the Humanoid): the Humanoid's Dead state is disabled.
 ]]
 
@@ -54,15 +58,10 @@ local byPlayer: { [Player]: any } = {}
 local runTime = 0
 local frozen = false -- the whole run is paused (menuPaused or someone is choosing a level-up)
 local menuPaused = false -- the solo pause menu is open
-local miniWaveTimer = 0
-local bossWarned = false
-local bossSpawned = false
-local endPending = false
 local resultsTimer = 0
 local totalKills = 0
 local attrTimer = 0
 local selectedArena = "Forest"
-local currentArena = "Forest"
 local mode = "Solo" -- a Config.Modes key: "Solo" | "Duo" | "Trio" (or the old "Squad")
 local expectedRemoval: { [Model]: boolean } = {}
 
@@ -100,12 +99,19 @@ end
 ]]
 function RunManager.RefreshFrozen()
 	local choosing = false
+	local ids, names = {}, {}
 	for _, rp in ipairs(runPlayers) do
 		if rp.Offer and rp.Alive and not rp.Returned then
 			choosing = true
+			table.insert(ids, tostring(rp.Player.UserId))
+			table.insert(names, rp.Player.DisplayName)
 		end
 	end
 	local newFrozen = phase == "Running" and (menuPaused or choosing)
+	-- who is choosing, so the HUD can say "<Name> is choosing an upgrade" to everyone else
+	-- (the chooser sees the cards instead); set before LevelUpPause so both arrive together
+	state:SetAttribute("ChoosingIds", (phase == "Running" and choosing) and ("," .. table.concat(ids, ",") .. ",") or "")
+	state:SetAttribute("ChoosingNames", (phase == "Running" and choosing) and table.concat(names, ", ") or "")
 	state:SetAttribute("LevelUpPause", phase == "Running" and choosing and not menuPaused)
 	if newFrozen == frozen then
 		return
@@ -121,13 +127,20 @@ function RunManager.RefreshFrozen()
 	end
 end
 
--- True when the world should move: a run is going and it isn't solo-paused.
+-- True when the world should move: a run is going, it isn't paused and the group isn't
+-- travelling to the next stage.
 function RunManager.IsSimulating(): boolean
-	return phase == "Running" and not frozen
+	return phase == "Running" and not frozen and not ctx.StageManager.IsHolding()
 end
 
+-- True while a run is in progress (any stage sub-phase, paused or not).
+function RunManager.IsRunning(): boolean
+	return phase == "Running"
+end
+
+-- Kept for older callers: true during a stage's Scorpion Queen fight.
 function RunManager.IsBossPhase(): boolean
-	return bossSpawned
+	return ctx.StageManager.IsBossFight()
 end
 
 function RunManager.GetRunTime(): number
@@ -318,14 +331,22 @@ function RunManager.RefreshLobbyCharacter(player: Player)
 	spawnCharacter(player, cf, true)
 end
 
--- Sets WalkSpeed from state: 0 when paused, dead, downed or the run is frozen.
+-- Sets WalkSpeed from state: 0 when paused, dead, downed, frozen or travelling.
 function RunManager.ApplyMovement(rp)
 	local hum: Humanoid? = rp.Humanoid
-	local canMove = rp.Alive and not rp.Paused and not frozen and phase == "Running"
+	local canMove = rp.Alive and not rp.Paused and not frozen and phase == "Running" and not ctx.StageManager.IsHolding()
 	if hum and hum.Parent then
 		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed or 0
 	end
 	rp.Player:SetAttribute("Paused", rp.Paused == true)
+end
+
+function RunManager.ApplyMovementAll()
+	for _, rp in ipairs(runPlayers) do
+		RunManager.ApplyMovement(rp)
+		rp.SpeedCheckTimer = 0
+		rp.LastValidPos = rp.Root and rp.Root.Position
+	end
 end
 
 local function setDownedLook(rp, downed: boolean)
@@ -377,7 +398,12 @@ function RunManager.Heal(rp, amount: number, silent: boolean?)
 end
 
 local function checkEnd()
-	if phase ~= "Running" or endPending then
+	if phase ~= "Running" then
+		return
+	end
+	-- an open portal ends through StageManager (FinishFromPortal: a portal result, not a
+	-- defeat), even when the last living player just left through it
+	if ctx.StageManager.GetPhase() == "Open" then
 		return
 	end
 	for _, rp in ipairs(runPlayers) do
@@ -431,6 +457,7 @@ local function finalizeDeath(rp)
 	else
 		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen!", Color3.fromRGB(255, 90, 90))
 	end
+	ctx.StageManager.OnRosterChanged() -- first: an open portal may finish the run as a win
 	checkEnd()
 end
 
@@ -508,7 +535,7 @@ end
 
 -- Server-only damage entry point (enemy contact, explosions, boss projectiles).
 function RunManager.DamagePlayer(rp, amount: number)
-	if phase ~= "Running" or frozen or not rp.Alive or endPending then
+	if not RunManager.IsSimulating() or not rp.Alive then
 		return
 	end
 	if rp.Paused and Config.Player.LevelUpInvulnerable then
@@ -535,7 +562,7 @@ function RunManager.OnReviveTokenGranted(player: Player)
 	local data = ctx.DataService.GetData(player)
 	-- Also revive a player whose offer timed out while Roblox's purchase dialog was open.
 	local fallen = rp and not rp.Alive and (rp.AwaitingRevive or not rp.ProductReviveUsed)
-	if rp and fallen and not rp.Returned and phase == "Running" and not endPending and data and data.ReviveTokens > 0 then
+	if rp and fallen and not rp.Returned and phase == "Running" and data and data.ReviveTokens > 0 then
 		data.ReviveTokens -= 1
 		rp.ProductReviveUsed = true
 		revive(rp, "Revived!")
@@ -589,6 +616,10 @@ local function newRunPlayer(player: Player)
 		MoveDir = Vector3.zero,
 		SpeedCheckTimer = 0,
 		Returned = false,
+		PortalChoice = nil :: string?, -- "Next" while the stage portal is open
+		PortalOffered = false,
+		Committed = false, -- run stats are in the save (results, leaving, shutdown)
+		WinPaid = false,
 	}
 	return rp
 end
@@ -603,6 +634,11 @@ local function resetPlayerAttributes(player: Player)
 	player:SetAttribute("AuraEvo", nil)
 	player:SetAttribute("ReviveProgress", nil)
 	player:SetAttribute("PartnerRevivesLeft", nil)
+end
+
+local function placeOnArena(arena, i: number, n: number): Vector3
+	local a = (i / n) * math.pi * 2
+	return arena.Center + Vector3.new(math.cos(a), 0, math.sin(a)) * (n > 1 and Config.Run.ArenaSpawnSpread or 0)
 end
 
 local function beginRun()
@@ -621,18 +657,12 @@ local function beginRun()
 		return
 	end
 
-	currentArena = selectedArena
-	local arena = MapBuilder.BuildArena(currentArena)
-	ctx.EnemyAI.SetArena(arena)
-	state:SetAttribute("Arena", currentArena)
+	-- stage 1: the lobby's arena with its portal (StageManager also sets EnemyAI's arena)
+	local arena = ctx.StageManager.BeginRun(selectedArena)
 
 	runTime = 0
 	frozen = false
 	menuPaused = false
-	miniWaveTimer = 0
-	bossWarned = false
-	bossSpawned = false
-	endPending = false
 	totalKills = 0
 	state:SetAttribute("Frozen", false)
 	state:SetAttribute("RunTime", 0)
@@ -642,8 +672,7 @@ local function beginRun()
 		local rp = newRunPlayer(player)
 		table.insert(runPlayers, rp)
 		byPlayer[player] = rp
-		local a = (i / #list) * math.pi * 2
-		local pos = arena.Center + Vector3.new(math.cos(a), 0, math.sin(a)) * (#list > 1 and Config.Run.ArenaSpawnSpread or 0) + Vector3.new(0, 3.5, 0)
+		local pos = placeOnArena(arena, i, #list) + Vector3.new(0, 3.5, 0)
 		local model = spawnCharacter(player, CFrame.new(pos), false)
 		RunManager.AttachCharacter(rp, model)
 
@@ -670,9 +699,103 @@ local function beginRun()
 		end
 	end
 	state:SetAttribute("Participants", #runPlayers)
-	RunManager.Broadcast("Survive until 15:00!", Color3.fromRGB(255, 230, 120), true)
+	RunManager.Broadcast("STAGE 1", Color3.fromRGB(255, 230, 150), true)
+	RunManager.Broadcast("Find the portal and summon the Scorpion Queen!", Color3.fromRGB(180, 200, 255))
 end
 
+-- Arena `name` may be picked in the lobby (Config.Arenas[name].RequiredBestStage).
+local function arenaUnlocked(stats, name: string): boolean
+	local def = (Config.Arenas :: any)[name]
+	return def ~= nil and (stats.BestStage or 0) >= (def.RequiredBestStage or 0)
+end
+
+--[[
+	Writes a player's run into their save once (kills, best time, furthest stage, a win
+	with the arena unlocks it brings). Returns (newBestTime, unlockedArenaName?).
+	Leaving, shutdown, defeat and the portal all go through here; rp.Committed keeps a
+	run from being counted twice.
+]]
+local function saveRunStats(rp, won: boolean): (boolean, string?)
+	if rp.Committed then
+		return false, nil
+	end
+	rp.Committed = true
+	local data = ctx.DataService.GetData(rp.Player)
+	if not data then
+		return false, nil
+	end
+	local newBest, unlocked = false, nil
+	local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
+	data.Stats.TotalKills += rp.Kills
+	if t > data.Stats.BestTime then
+		data.Stats.BestTime = math.floor(t)
+		newBest = true
+	end
+	local lockedBefore = {}
+	for _, name in ipairs(Config.Arenas.Order) do
+		lockedBefore[name] = not arenaUnlocked(data.Stats, name)
+	end
+	data.Stats.BestStage = math.max(data.Stats.BestStage or 0, ctx.StageManager.GetStage())
+	for _, name in ipairs(Config.Arenas.Order) do
+		if lockedBefore[name] and arenaUnlocked(data.Stats, name) then
+			unlocked = Config.Arenas[name].DisplayName
+		end
+	end
+	if won then
+		data.Stats.Wins += 1
+	end
+	return newBest, unlocked
+end
+
+--[[
+	Commits a finished run and shows the results screen. portal = left through an open
+	portal (WinBonus + StageClearBonus per cleared stage, always paid); it counts as a WIN
+	only with Config.Stages.WinMinStages stages cleared. inLobby = the player is going
+	straight back to the lobby menu (the results panel then sits over the menu).
+]]
+local function finishPlayer(rp, portal: boolean, inLobby: boolean)
+	local player: Player = rp.Player
+	local cleared = ctx.StageManager.StagesCleared()
+	local reached = math.max(1, ctx.StageManager.GetStage())
+	local won = portal and cleared >= Config.Stages.WinMinStages
+	if rp.Alive or rp.AwaitingRevive then
+		rp.TimeSurvived = runTime
+	end
+	if portal and not rp.WinPaid then
+		rp.WinPaid = true
+		ctx.GoldSystem.AddRunGold(rp, Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared)
+	end
+	local data = ctx.DataService.GetData(player)
+	local bestStageBefore = data and (data.Stats.BestStage or 0) or 0
+	local newBest, unlocked = saveRunStats(rp, won)
+	if data then
+		task.spawn(ctx.DataService.ForceSave, player)
+	end
+	if not player.Parent then
+		return
+	end
+	Remotes.FireClient("PortalOffer", player, { Close = true })
+	Remotes.FireClient("RunResult", player, {
+		Won = won,
+		Portal = portal, -- left through the portal (a win only from WinMinStages)
+		WinMinStages = Config.Stages.WinMinStages,
+		Time = math.floor(rp.TimeSurvived),
+		Kills = rp.Kills,
+		Gold = rp.Gold,
+		Level = rp.Level,
+		Damage = math.floor(rp.DamageDealt),
+		Arena = ctx.StageManager.ArenaDisplayName() .. ((mode == "Duo" or mode == "Trio") and (" (" .. mode .. ")") or ""),
+		Stage = reached,
+		StagesCleared = cleared,
+		NewBest = newBest,
+		NewBestStage = data ~= nil and reached > bestStageBefore and reached > 1,
+		Unlocked = unlocked,
+		Seconds = Config.Run.ResultsSeconds,
+		InLobby = inLobby,
+	})
+end
+
+-- Everyone fell (won = false). A portal win never comes through here.
 function RunManager.EndRun(won: boolean)
 	if phase ~= "Running" then
 		return
@@ -686,49 +809,11 @@ function RunManager.EndRun(won: boolean)
 
 	for _, rp in ipairs(runPlayers) do
 		ctx.LevelUpSystem.Cancel(rp)
-		if rp.Alive or rp.AwaitingRevive then
-			rp.TimeSurvived = runTime
-			rp.AwaitingRevive = false
-		end
+		finishPlayer(rp, won, false)
+		rp.AwaitingRevive = false
 		RunManager.ApplyMovement(rp)
-		local player: Player = rp.Player
-		local data = ctx.DataService.GetData(player)
-		if won then
-			ctx.GoldSystem.AddRunGold(rp, Config.Gold.WinBonus)
-		end
-		local newBest = false
-		local unlocked = nil
-		if data then
-			data.Stats.TotalKills += rp.Kills
-			if rp.TimeSurvived > data.Stats.BestTime then
-				data.Stats.BestTime = math.floor(rp.TimeSurvived)
-				newBest = true
-			end
-			if won then
-				local before = data.Stats.Wins
-				data.Stats.Wins += 1
-				for _, name in ipairs(Config.Arenas.Order) do
-					local req = Config.Arenas[name].RequiredWins
-					if before < req and data.Stats.Wins >= req then
-						unlocked = Config.Arenas[name].DisplayName
-					end
-				end
-			end
-			task.spawn(ctx.DataService.ForceSave, player)
-		end
-		Remotes.FireClient("RunResult", player, {
-			Won = won,
-			Time = math.floor(rp.TimeSurvived),
-			Kills = rp.Kills,
-			Gold = rp.Gold,
-			Level = rp.Level,
-			Damage = math.floor(rp.DamageDealt),
-			Arena = Config.Arenas[currentArena].DisplayName .. ((mode == "Duo" or mode == "Trio") and (" (" .. mode .. ")") or ""),
-			NewBest = newBest,
-			Unlocked = unlocked,
-			Seconds = Config.Run.ResultsSeconds,
-		})
 	end
+	ctx.StageManager.EndRun() -- the results are out: the stage loop stops here
 	RunManager.Broadcast(won and "VICTORY!" or "THE SWARM WINS...", won and Color3.fromRGB(255, 220, 80) or Color3.fromRGB(255, 80, 80), true)
 end
 
@@ -745,6 +830,7 @@ local function returnPlayerToLobby(rp)
 	end
 end
 
+-- Clears the run world and goes back to the Lobby phase.
 local function returnAll()
 	for _, rp in ipairs(runPlayers) do
 		returnPlayerToLobby(rp)
@@ -755,28 +841,130 @@ local function returnAll()
 	ctx.WeaponSystem.Clear()
 	ctx.XPSystem.Clear()
 	ctx.EnemyAI.SetArena(nil)
+	ctx.StageManager.EndRun()
 	MapBuilder.DestroyArena()
 	MapBuilder.ApplyLighting("Lobby")
+	frozen = false
+	menuPaused = false
+	state:SetAttribute("Frozen", false)
+	state:SetAttribute("LevelUpPause", false)
+	state:SetAttribute("ChoosingIds", "")
+	state:SetAttribute("ChoosingNames", "")
 	state:SetAttribute("Participants", 0)
 	state:SetAttribute("RunTime", 0)
 	setPhase("Lobby")
 end
 
-function RunManager.OnBossKilled(_pos: Vector3)
-	if endPending or phase ~= "Running" then
+-- Takes a record out of the running run (portal return, leaving the game). Other
+-- systems may still hold it (enemy targets, delayed whip slashes), so it is made inert.
+local function removeFromRun(rp)
+	rp.Alive = false
+	rp.AwaitingRevive = false
+	ctx.WeaponSystem.ClearOwner(rp)
+	local i = table.find(runPlayers, rp)
+	if i then
+		table.remove(runPlayers, i)
+	end
+	if byPlayer[rp.Player] == rp then
+		byPlayer[rp.Player] = nil
+	end
+	state:SetAttribute("Participants", #runPlayers)
+	if menuPaused and #runPlayers > 1 then
+		menuPaused = false
+	end
+	RunManager.RefreshFrozen()
+end
+
+function RunManager.OnBossKilled(pos: Vector3)
+	if phase ~= "Running" then
 		return
 	end
-	endPending = true
-	for _, rp in ipairs(runPlayers) do
-		if rp.Alive then
-			ctx.GoldSystem.AddRunGold(rp, Config.Gold.Boss)
-		end
+	ctx.StageManager.OnBossKilled(pos)
+end
+
+--[[
+	RETURN TO LOBBY at an open portal: the player's run ends as a win right now (gold
+	bonus, stats, results over the lobby menu) while the others may go on. The last one
+	out closes the run.
+]]
+function RunManager.ReturnThroughPortal(rp)
+	if phase ~= "Running" or rp.Returned or not byPlayer[rp.Player] then
+		return
 	end
-	RunManager.Broadcast("BOSS DEFEATED!", Color3.fromRGB(255, 220, 80), true)
-	task.delay(2.5, function()
-		endPending = false
-		RunManager.EndRun(true)
-	end)
+	ctx.LevelUpSystem.Cancel(rp)
+	finishPlayer(rp, true, true)
+	removeFromRun(rp)
+	rp.Root = nil
+	returnPlayerToLobby(rp)
+	local cleared = ctx.StageManager.StagesCleared()
+	RunManager.Broadcast(string.format("%s left through the portal (%d stage%s cleared).", rp.Player.DisplayName, cleared, cleared == 1 and "" or "s"), Color3.fromRGB(255, 220, 120))
+	if #runPlayers == 0 then
+		returnAll()
+	end
+end
+
+-- Nobody living goes on: everyone still listed (fallen teammates) finishes as a win.
+function RunManager.FinishFromPortal()
+	if phase ~= "Running" then
+		return
+	end
+	for _, rp in ipairs(runPlayers) do
+		ctx.LevelUpSystem.Cancel(rp)
+		Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
+		finishPlayer(rp, true, true)
+	end
+	returnAll()
+end
+
+-- Moves a run player to a floor point (travel, dev teleport) without the speed check
+-- snapping them back.
+function RunManager.TeleportPlayer(rp, floorPos: Vector3)
+	local pos = floorPos + Vector3.new(0, 3.5, 0)
+	local char: Model? = rp.Character
+	local root: BasePart? = rp.Root
+	if char and root and root.Parent and char.Parent then
+		char:PivotTo(CFrame.new(pos) * root.CFrame.Rotation)
+		root.AssemblyLinearVelocity = Vector3.zero
+	else
+		local m = spawnCharacter(rp.Player, CFrame.new(pos), false)
+		RunManager.AttachCharacter(rp, m)
+	end
+	rp.LastValidPos = pos
+	rp.SpeedCheckTimer = 0
+end
+
+--[[
+	Travel to the next stage (StageManager, behind the fade): everyone left in the run
+	moves to the new arena's spawn ring, living players are healed to at least
+	TravelHealFraction, fallen ones (also those still on the revive offer) stand up with
+	ReviveOnTravelHPFraction. Level, XP, weapons, passives and gold are kept.
+]]
+function RunManager.TravelPlayers(arena)
+	local S = Config.Stages
+	local n = #runPlayers
+	for i, rp in ipairs(runPlayers) do
+		rp.PortalChoice = nil
+		rp.PortalOffered = false
+		if not rp.Alive then
+			if rp.AwaitingRevive then
+				Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
+			end
+			rp.Alive = true
+			rp.AwaitingRevive = false
+			rp.ReviveProgress = 0
+			rp.TimeSurvived = 0
+			rp.Player:SetAttribute("ReviveProgress", 0)
+			rp.Player:SetAttribute("Alive", true)
+			setDownedLook(rp, false)
+			setHP(rp, rp.Stats.MaxHP * S.ReviveOnTravelHPFraction)
+		else
+			setHP(rp, math.max(rp.HP, rp.Stats.MaxHP * S.TravelHealFraction))
+		end
+		rp.InvulnUntil = os.clock() + Config.Player.ReviveInvulnSeconds
+		RunManager.TeleportPlayer(rp, placeOnArena(arena, i, n))
+		RunManager.ApplyMovement(rp)
+	end
+	RunManager.RefreshFrozen()
 end
 
 ------------------------------------------------------------------------------------------
@@ -870,7 +1058,7 @@ local function cycleArena(player: Player)
 	local index = table.find(order, selectedArena) or 1
 	for step = 1, #order do
 		local name = order[((index - 1 + step) % #order) + 1]
-		if data.Stats.Wins >= Config.Arenas[name].RequiredWins then
+		if arenaUnlocked(data.Stats, name) then
 			if name == selectedArena then
 				break
 			end
@@ -883,7 +1071,7 @@ local function cycleArena(player: Player)
 			return
 		end
 	end
-	RunManager.Notify(player, "Win a run to unlock the next arena!", Color3.fromRGB(255, 200, 120))
+	RunManager.Notify(player, "Reach stage 2 in a run to unlock the next arena!", Color3.fromRGB(255, 200, 120))
 end
 
 ------------------------------------------------------------------------------------------
@@ -921,13 +1109,15 @@ local function devCommand(player: Player, command: any)
 				ctx.XPSystem.GiveXP(rp, math.max(0, rp.XPNeeded - rp.XP))
 			end
 		end
-	elseif command == "SkipToBoss" then
+	elseif command == "SpawnPortalBoss" or command == "SkipToBoss" then -- SkipToBoss: old clients
 		local rp = byPlayer[player]
-		if rp and not rp.Returned and phase == "Running" and not bossSpawned and runTime < Config.Dev.SkipToTime then
-			runTime = Config.Dev.SkipToTime
-			miniWaveTimer = 0
-			state:SetAttribute("RunTime", runTime)
-			RunManager.Broadcast("DEV: skipped to " .. string.format("%d:%02d", runTime // 60, runTime % 60), Color3.fromRGB(255, 160, 255))
+		if rp and not rp.Returned and phase == "Running" and ctx.StageManager.DevActivate() then
+			RunManager.Broadcast("DEV: portal boss summoned", Color3.fromRGB(255, 160, 255))
+		end
+	elseif command == "TeleportToPortal" then
+		local rp = byPlayer[player]
+		if rp and not rp.Returned and phase == "Running" then
+			ctx.StageManager.DevTeleport(rp)
 		end
 	end
 end
@@ -1086,11 +1276,12 @@ function RunManager.Step(dt: number)
 			end
 		end
 	end
-	if reviveRules() and not frozen and not endPending then
+	local holding = ctx.StageManager.IsHolding()
+	if reviveRules() and not frozen and not holding then
 		partnerRevives(dt)
 	end
 
-	if frozen then
+	if frozen or holding then
 		return
 	end
 
@@ -1100,22 +1291,7 @@ function RunManager.Step(dt: number)
 		attrTimer = 0
 		state:SetAttribute("RunTime", math.floor(runTime * 10) / 10)
 	end
-
-	if not bossSpawned then
-		miniWaveTimer += dt
-		if miniWaveTimer >= Config.Run.MiniWaveInterval then
-			miniWaveTimer = 0
-			ctx.EnemySpawner.MiniWave()
-		end
-		if not bossWarned and runTime >= Config.Run.BossTime - Config.Boss.SpawnWarningSeconds then
-			bossWarned = true
-			RunManager.Broadcast("THE BOSS IS COMING!", Color3.fromRGB(255, 60, 60), true)
-		end
-		if runTime >= Config.Run.BossTime then
-			bossSpawned = true
-			ctx.EnemySpawner.SpawnBoss()
-		end
-	end
+	-- mini-waves, the portal, the Queen and the surge: StageManager.Step
 end
 
 ------------------------------------------------------------------------------------------
@@ -1139,34 +1315,16 @@ function RunManager.OnPlayerRemoving(player: Player)
 		return
 	end
 	if phase == "Running" and not rp.Returned then
-		local data = ctx.DataService.GetData(player)
-		if data then
-			data.Stats.TotalKills += rp.Kills
-			local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
-			if t > data.Stats.BestTime then
-				data.Stats.BestTime = math.floor(t)
-			end
-		end
+		saveRunStats(rp, false)
 	end
 	-- other systems may still hold this record (enemy targets, delayed whip slashes)
-	rp.Alive = false
-	rp.AwaitingRevive = false
+	removeFromRun(rp)
 	rp.Root = nil
-	ctx.WeaponSystem.ClearOwner(rp)
-	local i = table.find(runPlayers, rp)
-	if i then
-		table.remove(runPlayers, i)
-	end
-	byPlayer[player] = nil
-	state:SetAttribute("Participants", #runPlayers)
-	if menuPaused and #runPlayers > 1 then
-		menuPaused = false
-	end
-	RunManager.RefreshFrozen()
 	if phase == "Running" then
 		if #runPlayers == 0 then
 			RunManager.EndRun(false)
 		else
+			ctx.StageManager.OnRosterChanged()
 			checkEnd()
 		end
 	end
@@ -1175,12 +1333,8 @@ end
 -- Commits stats of everyone in a run (server shutdown).
 function RunManager.CommitAll()
 	for _, rp in ipairs(runPlayers) do
-		if not rp.Returned then
-			local data = ctx.DataService.GetData(rp.Player)
-			if data and phase == "Running" then
-				data.Stats.TotalKills += rp.Kills
-				rp.Kills = 0
-			end
+		if not rp.Returned and phase == "Running" then
+			saveRunStats(rp, false)
 		end
 	end
 end

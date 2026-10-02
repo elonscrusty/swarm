@@ -367,6 +367,7 @@ local DEFAULT: { [string]: Colors } = {
 	Gold = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_600 },
 	Heal = { Main = P.dirt_400, Accent = P.ivory_100, Extra = P.gold_300 },
 	revive = { Main = P.crimson_400, Accent = P.ivory_100, Extra = P.crimson_300 },
+	portal = { Main = P.stone_300, Accent = P.fx_arcane, Extra = P.gold_400 },
 }
 
 ------------------------------------------------------------------------------------------
@@ -706,6 +707,17 @@ DRAW.clock = function(c)
 	ring(c, 12, 12, 8.4, 2.4, c.main)
 	seg(c, 12, 12, 12, 7, 2.2, c.main)
 	seg(c, 12, 12, 15.6, 14, 2.2, c.main)
+end
+
+-- Stage portal: stone ring on two plinths with a glowing membrane and a gold keystone.
+DRAW.portal = function(c)
+	dot(c, 12, 10.6, 5.6, c.accent, c.mono and 0.6 or 0.25)
+	ring(c, 12, 10.6, 7.6, 2.6, c.main)
+	box(c, 5.6, 19, 4.4, 4.4, c.main, 0, 0.8)
+	box(c, 18.4, 19, 4.4, 4.4, c.main, 0, 0.8)
+	box(c, 12, 22.2, 21, 1.8, c.main, 0, 0.8)
+	box(c, 12, 3.1, 3.2, 3.2, c.mono and c.main or c.extra, 45, 0.5)
+	dot(c, 12, 10.6, 2.2, c.mono and c.back or c.light, c.mono and 0 or 0.35)
 end
 
 DRAW.castle = function(c)

@@ -1,10 +1,15 @@
 --[[
 	Hud.lua
 	The in-run HUD (built and driven by UIBuilder):
-	  top centre    big run timer, under it a plate with health (heart + crimson bar) and
+	  top centre    big run timer (total run time over every stage), under it the stage
+	                pill ("STAGE 2 · Find the portal" → "Defeat the Queen" → "Survive the
+	                surge" → "Portal open"), a plate with health (heart + crimson bar) and
 	                level / XP (gold bar), then the boss bar while the boss lives
 	  top right     kills and gold counters, pause button
-	  centre        status line (paused, teammate choosing, fallen, partner revive progress)
+	  centre        status line (paused, "<Name> is choosing an upgrade", fallen, partner
+	                revive progress)
+	The portal arrow, the charge ring, the portal choice panel and the travel fade live in
+	StageUI.lua.
 	  bottom centre ability bar: weapons row + passives row with level badges (portrait:
 	                under the health plate, away from the thumbs)
 	  screen edges  crimson vignette pulse when hurt, slow pulse at low health
@@ -138,6 +143,32 @@ local function buildTop(frame: Frame)
 	})
 end
 
+-- Stage pill under the timer: portal icon, "STAGE 2", objective.
+local function buildStage(frame: Frame)
+	local holder, face = UIKit.Surface(frame, { Name = "Stage", Transparency = 0.2, Radius = 999, Shadow = false, Size = UDim2.fromOffset(0, 30) })
+	holder.AnchorPoint = Vector2.new(0.5, 0)
+	holder.AutomaticSize = Enum.AutomaticSize.X
+	face.AutomaticSize = Enum.AutomaticSize.X
+	face.Size = UDim2.fromScale(0, 1)
+	UIKit.padding(face, 0, 14, 0, 10)
+	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 7) })
+	ui.Stage = holder
+	ui.StageIcon = Icons.Draw(face, "portal", { Size = 18, LayoutOrder = 1, Back = P.slate_900 })
+	ui.StageNumber = text(face, "Label", "STAGE 1", {
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(0, 30),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextColor3 = P.gold_300,
+	})
+	ui.StageDot = new("Frame", { BackgroundColor3 = P.gold_500, Size = UDim2.fromOffset(4, 4), LayoutOrder = 3, BorderSizePixel = 0 }, face)
+	UIKit.corner(ui.StageDot, 999)
+	ui.StageGoal = text(face, "BodyStrong", "Find the portal", {
+		LayoutOrder = 4,
+		Size = UDim2.fromOffset(0, 30),
+		AutomaticSize = Enum.AutomaticSize.X,
+	})
+end
+
 local function buildStatus(frame: Frame)
 	local holder, face = UIKit.Surface(frame, { Name = "Status", Transparency = 0.12, Radius = 999, Visible = false })
 	holder.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -237,10 +268,16 @@ local function layout()
 	end
 	place(ui.Timer, W / 2 - timerW / 2, timerY, timerW, timerH)
 
+	-- stage pill under the timer
+	local stageH = compact and 34 or 30
+	ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(timerY + timerH - 2))
+	ui.Stage.Size = UDim2.fromOffset(0, stageH)
+	local stageBottom = ui.Stage.Visible and (timerY + timerH - 2 + stageH + 6) or (timerY + timerH + 2)
+
 	-- plate
 	local plateW = math.min(Theme.Layout.HudPlate.X, W - 2 * M)
 	local plateH = compact and 78 or Theme.Layout.HudPlate.Y
-	local plateY = timerY + timerH + 2
+	local plateY = stageBottom
 	if portrait then
 		-- keep the plate clear of the counters / pause row
 		plateY = math.max(plateY, pauseY + 58)
@@ -417,11 +454,51 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		end
 		anim.Minute = minute
 	end
-	local toBoss = Config.Run.BossTime - runTime
-	if toBoss > 0 and toBoss <= 10 then
-		ui.Timer.TextColor3 = C.Text:Lerp(P.crimson_300, 0.5 + 0.5 * math.sin(os.clock() * 10))
-	else
-		ui.Timer.TextColor3 = C.Text
+	ui.Timer.TextColor3 = C.Text
+
+	-- stage pill: what to do on this stage
+	local stageNo = state:GetAttribute("Stage") or 0
+	local stagePhase = state:GetAttribute("StagePhase") or "None"
+	local goal, goalColor = "", C.Text
+	if stagePhase == "Explore" then
+		local chargeNow = state:GetAttribute("PortalCharge") or 0
+		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
+		if chargeNow > 0 then
+			goal = string.format("Opening the portal %d%%", math.floor(chargeNow * 100))
+		elseif lockLeft > 0 then
+			goal, goalColor = "The portal is dormant: " .. UIKit.formatTime(lockLeft), C.TextMuted
+		else
+			goal = "Find the portal"
+		end
+	elseif stagePhase == "Boss" then
+		goal, goalColor = "Defeat the Queen", P.crimson_300
+	elseif stagePhase == "Surge" then
+		local left = state:GetAttribute("SurgeLeft") or 0
+		goal, goalColor = left > 0 and string.format("Survive the surge · %ds", left) or "Survive the surge", P.crimson_300
+	elseif stagePhase == "Open" then
+		goal, goalColor = "Portal open", P.gold_300
+	elseif stagePhase == "Travel" then
+		goal = "Travelling..."
+	end
+	local stageShown = stageNo > 0 and goal ~= ""
+	if ui.Stage.Visible ~= stageShown then
+		ui.Stage.Visible = stageShown
+		layout()
+	end
+	if stageShown then
+		local num = "STAGE " .. tostring(stageNo)
+		if ui.StageNumber.Text ~= num then
+			ui.StageNumber.Text = num
+			UIAnim.Pop(ui.Stage, 0, 0.7)
+		end
+		if ui.StageGoal.Text ~= goal then
+			ui.StageGoal.Text = goal
+			if anim.StagePhase ~= stagePhase and anim.StagePhase ~= nil then
+				UIAnim.Punch(ui.Stage, 0.2)
+			end
+		end
+		anim.StagePhase = stagePhase
+		ui.StageGoal.TextColor3 = goalColor
 	end
 
 	-- health: the fill follows at once, the ivory trail slides down behind it
@@ -502,14 +579,21 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	-- status line
 	if state:GetAttribute("Frozen") then
 		if state:GetAttribute("LevelUpPause") then
-			if player:GetAttribute("Paused") then
-				setStatus("") -- you are the one choosing: the level-up screen says it all
+			-- only someone else choosing is news; the chooser has the level-up cards
+			local ids = state:GetAttribute("ChoosingIds") or ""
+			local mine = string.find(ids, "," .. tostring(player.UserId) .. ",", 1, true) ~= nil
+			local names = state:GetAttribute("ChoosingNames") or ""
+			if mine or player:GetAttribute("Paused") or names == "" then
+				setStatus("")
 			else
-				setStatus("Paused: a teammate is choosing an upgrade", "hourglass")
+				local several = string.find(names, ",", 1, true) ~= nil
+				setStatus(string.format("Paused: %s %s choosing an upgrade", names, several and "are" or "is"), "hourglass")
 			end
 		else
 			setStatus("Paused", "pause")
 		end
+	elseif not alive and not reviveOpen and phase == "Running" and stagePhase == "Open" then
+		setStatus("The portal is open. Your team is choosing...", "portal")
 	elseif not alive and not reviveOpen and phase == "Running" then
 		local progress = player:GetAttribute("ReviveProgress") or 0
 		if progress > 0 then
@@ -557,6 +641,7 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	local frame = new("Frame", { Name = "HUD", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = Theme.Z.Hud }, root)
 	ui.Frame = frame
 	buildTop(frame)
+	buildStage(frame)
 	buildBar(frame)
 	buildStatus(frame)
 	buildVignette(fxGui)

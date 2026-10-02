@@ -506,14 +506,75 @@ Config.Debug = false
 ------------------------------------------------------------------------------------------
 Config.Run = {
 	CountdownSeconds = 10, -- lobby countdown after someone presses Start
-	BossTime = 15 * 60, -- seconds into the run when the boss spawns (15:00)
-	MiniWaveInterval = 30, -- a burst of extra enemies every N seconds
-	ResultsSeconds = 25, -- win/lose screen time before everyone is sent back automatically
+	-- UNUSED since the stage loop (Config.Stages): the boss no longer comes at a fixed time,
+	-- it is summoned at each stage's portal. Kept so old references keep compiling.
+	BossTime = 15 * 60,
+	MiniWaveInterval = 30, -- a burst of extra enemies every N seconds (while exploring)
+	ResultsSeconds = 25, -- defeat screen time before everyone is sent back automatically
 	MaxPlayers = 4, -- players per run (server MaxPlayers should match in game settings)
 	ArenaSpawnSpread = 10, -- players are placed in a circle of this radius at run start
 	-- A solo player who opens the pause menu freezes the whole run. In a group run the
 	-- menu is only an overlay (the run keeps going), so nobody can stall a shared run.
 	SoloPauseFreezesRun = true,
+}
+
+------------------------------------------------------------------------------------------
+-- STAGES (Risk of Rain style loop)
+--   A run is a series of stages. Each stage is an arena (stage 1 = the lobby's arena, then
+--   Config.Arenas.Order alternates: Forest, Ruins, Forest ...) with a PORTAL at a random
+--   clear spot. Explore while the swarm comes as usual; stand in the portal's rune circle
+--   to charge it (ChargeSeconds); that summons the Scorpion Queen at the portal. When she
+--   dies a SURGE pours out of the portal; survive it and the portal opens: every living
+--   player picks NEXT STAGE or RETURN TO LOBBY (a win, paid StageClearBonus per stage).
+--   Enemy scaling keeps counting TOTAL run time (Config.Difficulty, the spawn table) and
+--   adds the per-stage multipliers below; stage 1 multiplies by exactly 1.
+------------------------------------------------------------------------------------------
+Config.Stages = {
+	-- portal placement (rejection sampling, a new spot every stage)
+	PortalMinDistance = 120, -- studs from the spawn centre
+	PortalEdgeMargin = 24, -- studs inside the fence
+	PortalClearance = 9, -- free radius around the portal (colliders, landmarks, ponds)
+	PortalRepeatDistance = 80, -- a new portal is this far from the last one in that arena
+	-- activation: any living player standing in the rune circle charges it (touch friendly)
+	PortalRadius = 9, -- studs from the portal centre
+	ChargeSeconds = 2,
+	ChargeDecay = 0.5, -- share of a full charge lost per second while nobody stands there
+	-- The portal sleeps for a while after a stage starts: it can't be charged before this
+	-- many seconds on the stage (stage 1, later stages); the HUD says "The portal is
+	-- dormant: m:ss". Stops a rush to the boss with a starting build.
+	PortalLockSeconds = { 150, 45 },
+	-- the HUD arrow toward the portal appears after this long (never before the lock ends)
+	HintAfterSeconds = 90,
+	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
+	EnemyHPPerStage = 0.25,
+	EnemyDamagePerStage = 0.08, -- also the boss's contact / orb damage and bomb ticks
+	SpawnTargetPerStage = 0.1, -- live-enemy target and mini-wave size
+	-- Scorpion Queen HP = Config.Boss.HP x this (x the player-count scaling). She comes
+	-- much earlier than the old 15:00 boss, so stage 1 is lighter; then +BossHPPerExtraStage
+	-- per stage past the list.
+	BossHPByStage = { 0.3, 0.75, 1.1, 1.5, 2.0 },
+	BossHPPerExtraStage = 0.5,
+	BossSpawnOffset = 12, -- the Queen climbs out this far behind the portal
+	-- regular enemies kept alive during the Queen fight: this share of the normal live
+	-- target, at most Config.Boss.MinionCapDuringBoss and at least BossMinionMin
+	BossMinionShare = 0.5,
+	BossMinionMin = 15,
+	-- surge after the Queen dies
+	-- surge size = SurgeBase + SurgePerStage x stage (x Config.Difficulty.PlayerCountMult,
+	-- capped by MaxLive): 40 on stage 1, 55 on stage 2 ...
+	SurgeBase = 25,
+	SurgePerStage = 15,
+	SurgeSpawnSeconds = 4, -- they pour out over this long
+	SurgeSeconds = 20, -- survive this long ...
+	SurgeEndRemaining = 0.2, -- ... or until at most this share of the surge is still alive
+	-- the open portal
+	ChoiceSeconds = 15, -- undecided living players go to the next stage after this
+	TravelFadeSeconds = 0.8, -- screen fade before / after the arena swap
+	TravelHealFraction = 0.6, -- living players are healed up to at least this share of max HP
+	ReviveOnTravelHPFraction = 0.5, -- fallen teammates stand up again on the next stage
+	-- RETURN TO LOBBY counts as a WIN (Stats.Wins) only with at least this many stages
+	-- cleared; the gold bonus (Config.Gold.WinBonus + StageClearBonus) is paid either way.
+	WinMinStages = 3,
 }
 
 ------------------------------------------------------------------------------------------
@@ -525,7 +586,9 @@ Config.Dev = {
 	-- servers (user-owned games); leave false for normal play.
 	ShowInLiveGame = false,
 	AddLevels = 5, -- "+5 levels" button
-	SkipToTime = 14 * 60 + 30, -- "Skip to 14:30" button (30 s before the boss)
+	SkipToTime = 14 * 60 + 30, -- unused since the stage loop (was "Skip to 14:30")
+	-- In a run: "Spawn portal boss" charges the stage portal at once, "Teleport to portal"
+	-- puts you next to it.
 }
 
 ------------------------------------------------------------------------------------------
@@ -612,10 +675,11 @@ Config.Gold = {
 	MaxPerKill = 3,
 	KillGoldChance = 0.12,
 	Elite = 25, -- extra gold from an elite's chest (on top of ChestGold)
-	Boss = 200, -- every surviving player gets this when the boss dies
+	Boss = 200, -- every living player gets this each time the Scorpion Queen dies
 	ChestGoldMin = 15,
 	ChestGoldMax = 40,
-	WinBonus = 100, -- every participant gets this on a win
+	WinBonus = 100, -- paid when a player leaves through an open portal (a win)
+	StageClearBonus = 75, -- plus this per stage cleared, on that same return
 }
 
 ------------------------------------------------------------------------------------------
@@ -673,6 +737,9 @@ Config.Difficulty = {
 	PlayerCountMult = { 1, 1.6, 2.1, 2.5 },
 	-- Enemy HP multiplier per extra player.
 	HPPerExtraPlayer = 0.25,
+	-- HP and damage stop growing with time after this many minutes (long stage runs lean
+	-- on the per-stage multipliers in Config.Stages instead).
+	MaxTier = 12,
 }
 
 ------------------------------------------------------------------------------------------
@@ -803,7 +870,7 @@ Config.Graphics = {
 Config.Data = {
 	StoreName = "SwarmPlayerData",
 	KeyPrefix = "Player_",
-	SchemaVersion = 2, -- bump and add a migration step in DataService when the save shape changes
+	SchemaVersion = 3, -- bump and add a migration step in DataService when the save shape changes
 	AutoSaveSeconds = 60,
 	-- A session lock is considered dead (the server crashed) if it wasn't refreshed for
 	-- this long. Must be well above AutoSaveSeconds.
@@ -905,8 +972,10 @@ Config.UI = {
 ------------------------------------------------------------------------------------------
 Config.Arenas = {
 	Order = { "Forest", "Ruins" },
-	Forest = { DisplayName = "Forest", RequiredWins = 0 },
-	Ruins = { DisplayName = "Ruins", RequiredWins = 1 },
+	-- RequiredBestStage: the arena can be picked in the lobby once the player has reached
+	-- this stage in a run (Stats.BestStage). Stage runs visit every arena regardless.
+	Forest = { DisplayName = "Forest", RequiredBestStage = 0 },
+	Ruins = { DisplayName = "Ruins", RequiredBestStage = 2 },
 	Size = 400, -- square arena, centred on ArenaOrigin
 	ClearRadius = 40, -- nothing collidable this close to the centre (player spawn)
 	-- Layouts (landmarks, groves, paths) are designed in MapBuilder with a fixed seed per
@@ -2034,6 +2103,24 @@ MeshCatalog.Models = {
 			{ Name = "Moss", Slot = "Moss", Material = "SmoothPlastic", Offset = {0.0112, 2.7186, -0.0644}, Size = {2.2008, 4.4573, 1.9979} },
 		},
 	},
+	Portal = {
+		AssetId = 127644177682069,
+		Category = "World",
+		Bounds = { {-5.182, 0, -5.182}, {5.182, 11.033, 5.182} },
+		Collider = { Kind = "Multi", Shapes = { { Kind = "Circle", Radius = 1.3, Height = 5, Offset = {3.55, 0} }, { Kind = "Circle", Radius = 1.3, Height = 5, Offset = {-3.55, 0} } } },
+		Light = {0, 6, -0.8},
+		Passage = { Width = 4.4, Height = 3.6 },
+		Palette = { Base = Color3.fromRGB(90, 96, 104), Glyph = Color3.fromRGB(157, 184, 227), Gold = Color3.fromRGB(191, 151, 70), Moss = Color3.fromRGB(100, 138, 71), Stone = Color3.fromRGB(110, 116, 124), Stone2 = Color3.fromRGB(133, 138, 145), Surface = Color3.fromRGB(100, 124, 151) },
+		Pieces = {
+			{ Name = "Dais", Slot = "Base", Material = "SmoothPlastic", Offset = {0, 0.26, 0}, Size = {10.3632, 0.52, 10.3632}, Shadow = true },
+			{ Name = "Runes", Slot = "Gold", Material = "SmoothPlastic", Offset = {0, 5.6402, 0}, Size = {8.7926, 10.2803, 5.8919} },
+			{ Name = "Stone", Slot = "Stone", Material = "SmoothPlastic", Offset = {0, 6.004, 0}, Size = {9.4715, 10.058, 1.794}, Shadow = true },
+			{ Name = "Stone2", Slot = "Stone2", Material = "SmoothPlastic", Offset = {0, 5.57, 0}, Size = {9.8, 10.14, 2.1}, Shadow = true },
+			{ Name = "Glyphs", Slot = "Glyph", Material = "Neon", Offset = {0, 7.7671, 0}, Size = {9.2416, 5.3618, 1.8776} },
+			{ Name = "Surface", Slot = "Surface", Material = "SmoothPlastic", Offset = {0, 6.026, 0}, Size = {6.814, 6.788, 0.14}, Transparency = 0.3 },
+			{ Name = "Moss", Slot = "Moss", Material = "SmoothPlastic", Offset = {0.2032, 1.855, 0.379}, Size = {9.6116, 3.17, 4.0462} },
+		},
+	},
 	Priest = {
 		AssetId = 122737747893902,
 		Category = "Heroes",
@@ -2906,6 +2993,8 @@ Remotes.ServerToClient = {
 	"ProfileSync", -- lobby data: gold, owned, meta levels, stats, settings, passes
 	"OpenPanel", -- "Joined" after joining a countdown (old: lobby board prompt → panel name)
 	"ReviveOffer", -- died: offer the Revive product for N seconds
+	"PortalOffer", -- the stage portal opened: NEXT STAGE / RETURN TO LOBBY panel (or Close / Chosen)
+	"StageTravel", -- the group is travelling to the next stage: fade + "Stage N" banner
 }
 
 -- Client → server
@@ -2927,6 +3016,7 @@ Remotes.ClientToServer = {
 	"SaveSettings", -- ({ Music = 0-1, Sfx = 0-1 })
 	"ReviveDecline", -- close the revive offer early
 	"RequestProfile", -- ask for a ProfileSync
+	"PortalChoice", -- ("Next" | "Return") answer to PortalOffer, validated by StageManager
 }
 
 local folder: Folder? = nil
@@ -3706,7 +3796,8 @@ return WeaponData
 	Bootstraps SWARM: creates the remotes, initialises every module in dependency order,
 	then drives all per-frame systems from ONE Heartbeat connection.
 
-	Frame order: RunManager (timer, deaths) → EnemySpawner (spawns) → EnemyAI (movement,
+	Frame order: RunManager (timer, deaths) → StageManager (portal, boss, surge, choice,
+	travel) → EnemySpawner (spawns) → EnemyAI (movement,
 	contact, grid rebuild) → WeaponSystem (firing, projectiles, sync) → XPSystem (gems,
 	pickups) → LevelUpSystem (auto-pick timers) → Fx (effect batch flush).
 ]]
@@ -3742,6 +3833,7 @@ local ORDER = {
 	"EnemySpawner",
 	"EnemyAI",
 	"WeaponSystem",
+	"StageManager",
 	"RunManager",
 }
 
@@ -3779,6 +3871,7 @@ end
 -- The single server loop.
 local STEPS = {
 	{ "RunManager", ctx.RunManager.Step },
+	{ "StageManager", ctx.StageManager.Step },
 	{ "EnemySpawner", ctx.EnemySpawner.Step },
 	{ "EnemyAI", ctx.EnemyAI.Step },
 	{ "WeaponSystem", ctx.WeaponSystem.Step },
@@ -3831,9 +3924,9 @@ print(string.format("[SWARM] server ready (v%s)%s", Config.Version, ctx.DataServ
 	Retry:   every DataStore call is pcall'd with exponential backoff.
 	Studio:  if DataStores are unavailable (no API access) data is kept in memory only.
 
-	Save shape (Config.Data.SchemaVersion = 2):
+	Save shape (Config.Data.SchemaVersion = 3):
 	  Version, Gold, Meta {id → level}, OwnedCharacters {id → true}, SelectedCharacter,
-	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs},
+	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage},
 	  PurchaseIds {string}, Settings {Music, Sfx}, ReviveTokens, SelectedArena
 ]]
 
@@ -3874,7 +3967,7 @@ local function defaultData()
 		OwnedCharacters = { [CharacterData.Default] = true },
 		SelectedCharacter = CharacterData.Default,
 		Skins = {},
-		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0 },
+		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0 },
 		PurchaseIds = {},
 		Settings = { Music = 0.6, Sfx = 0.8 },
 		ReviveTokens = 0,
@@ -3886,7 +3979,8 @@ DataService.DefaultData = defaultData
 --[[
 	Migration steps: MIGRATIONS[n] upgrades a version-n save to version n+1.
 	Version 1 (early test builds) stored owned characters as an array and had no
-	settings / revive tokens.
+	settings / revive tokens. Version 2 had no Stats.BestStage (the stage loop): it starts
+	at 0, the furthest stage reached in a run from now on.
 ]]
 local MIGRATIONS: { [number]: (any) -> any } = {
 	[0] = function(data)
@@ -3905,6 +3999,16 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.Settings = data.Settings or { Music = 0.6, Sfx = 0.8 }
 		data.ReviveTokens = data.ReviveTokens or 0
 		data.Version = 2
+		return data
+	end,
+	[2] = function(data)
+		if type(data.Stats) ~= "table" then
+			data.Stats = {}
+		end
+		if type(data.Stats.BestStage) ~= "number" then
+			data.Stats.BestStage = 0
+		end
+		data.Version = 3
 		return data
 	end,
 }
@@ -3929,6 +4033,9 @@ function DataService.Migrate(data: any): { [string]: any }
 		if data[k] == nil then
 			data[k] = v
 		end
+	end
+	if type(data.Stats) ~= "table" then
+		data.Stats = defaults.Stats
 	end
 	for k, v in pairs(defaults.Stats) do
 		if type(data.Stats[k]) ~= "number" then
@@ -4481,7 +4588,7 @@ local function bossStep(e, dt: number)
 			for i = 1, B.RingProjectiles do
 				local a = offset + (i / B.RingProjectiles) * math.pi * 2
 				local dir = Vector3.new(math.cos(a), 0, math.sin(a))
-				ctx.WeaponSystem.SpawnHostile(e.Pos + dir * e.Radius, dir, B.RingProjectileSpeed, B.RingProjectileDamage, B.RingProjectileRadius, B.RingProjectileLife, 7)
+				ctx.WeaponSystem.SpawnHostile(e.Pos + dir * e.Radius, dir, B.RingProjectileSpeed, B.RingProjectileDamage * ctx.StageManager.DamageMult(), B.RingProjectileRadius, B.RingProjectileLife, 7)
 			end
 			if e.RingWave >= B.RingWaves then
 				bossSetState(e, "Chase", B.ChaseSeconds)
@@ -4640,7 +4747,8 @@ return EnemyAI
           <string name="Source"><![CDATA[--[[
 	EnemySpawner.lua
 	Owns every enemy: the object pool (Config.Enemies.PoolSize single-Part models built at
-	boot), spawning (per-minute table, mini-waves, elites, boss), damage and death/drops.
+	boot), spawning (per-minute table, mini-waves, elites, boss, the portal surge), damage
+	and death/drops. Stats scale with run time (tier) and with the stage (StageManager).
 	Movement and AI live in EnemyAI, which reads EnemySpawner.Active every Heartbeat.
 
 	Enemy record fields:
@@ -4793,18 +4901,20 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	local elite = (opts and opts.Elite) and not isBoss or false
 	local tier = ctx.RunManager.GetTier()
 	local D = Config.Difficulty
+	local statTier = math.min(tier, D.MaxTier or tier) -- HP / damage stop growing at MaxTier
 	local sizeMult = elite and Config.Enemies.EliteSizeMult or 1
 
+	local stages = ctx.StageManager
 	local hp
 	if isBoss then
-		hp = Config.Boss.HP * (1 + Config.Boss.HPPerExtraPlayer * (playerCount() - 1))
+		hp = Config.Boss.HP * (1 + Config.Boss.HPPerExtraPlayer * (playerCount() - 1)) * stages.BossHPMult()
 	else
-		hp = def.HP * (1 + tier * D.HPPerMinute) * (1 + D.HPPerExtraPlayer * (playerCount() - 1))
+		hp = def.HP * (1 + statTier * D.HPPerMinute) * (1 + D.HPPerExtraPlayer * (playerCount() - 1)) * stages.EnemyHPMult()
 		if elite then
 			hp *= Config.Enemies.EliteHPMult
 		end
 	end
-	local damage = isBoss and Config.Boss.ContactDamage or def.Damage * (1 + tier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1)
+	local damage = (isBoss and Config.Boss.ContactDamage or def.Damage * (1 + statTier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1)) * stages.DamageMult()
 
 	uidCounter += 1
 	e.Uid = uidCounter
@@ -4855,9 +4965,11 @@ end
 -- Normal spawning toward the live target for this minute.
 local function topUp()
 	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
-	local target = math.floor(row.Target * countMult())
+	local target = math.floor(row.Target * countMult() * ctx.StageManager.SpawnMult())
 	if EnemySpawner.Boss then
-		target = Config.Boss.MinionCapDuringBoss
+		-- during the Queen fight: a share of the normal target, within [min, boss cap]
+		local S = Config.Stages
+		target = math.max(S.BossMinionMin, math.min(Config.Boss.MinionCapDuringBoss, math.floor(target * S.BossMinionShare)))
 	end
 	target = math.min(target, Config.Enemies.MaxLive)
 	local missing = math.min(Config.Spawn.MaxPerTick, target - #EnemySpawner.Active)
@@ -4877,7 +4989,7 @@ function EnemySpawner.MiniWave()
 	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
 	local typeId = weightedPick(row.Weights)
 	local def = EnemyData.Enemies[typeId]
-	local count = math.floor((Config.Spawn.MiniWaveBaseCount + ctx.RunManager.GetTier() * Config.Spawn.MiniWavePerMinute) * countMult())
+	local count = math.floor((Config.Spawn.MiniWaveBaseCount + ctx.RunManager.GetTier() * Config.Spawn.MiniWavePerMinute) * countMult() * ctx.StageManager.SpawnMult())
 	count = math.min(count, Config.Enemies.MaxLive - #EnemySpawner.Active)
 	local offset = rng:NextNumber(0, math.pi * 2)
 	for i = 1, count do
@@ -4891,19 +5003,49 @@ function EnemySpawner.MiniWave()
 	end
 end
 
-function EnemySpawner.SpawnBoss()
+-- The Scorpion Queen at `at` (the stage portal), or at a spawn point near a player.
+function EnemySpawner.SpawnBoss(at: Vector3?)
 	if Config.Boss.ClearMinionsOnSpawn then
 		for i = #EnemySpawner.Active, 1, -1 do
 			EnemySpawner.Despawn(EnemySpawner.Active[i])
 		end
 	end
-	local pos = EnemySpawner.SpawnPoint(EnemyData.Enemies.Boss.Radius) or Config.ArenaOrigin
+	local pos = at or EnemySpawner.SpawnPoint(EnemyData.Enemies.Boss.Radius) or Config.ArenaOrigin
 	local boss = EnemySpawner.Spawn("Boss", pos, { Boss = true })
 	Fx.Sound("BossRoar")
 	if boss then
 		Fx.Ring(boss.Pos, 30, Color3.fromRGB(255, 40, 60))
 	end
 	return boss
+end
+
+--[[
+	Portal surge: `count` enemies of this minute's mix climb out around `centre` (the
+	portal) in a ring just outside its plinths. Returns how many spawned (the MaxLive cap
+	or blocked spots can stop some).
+]]
+function EnemySpawner.SpawnSurge(count: number, centre: Vector3): number
+	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
+	local made = 0
+	for _ = 1, count do
+		local typeId = weightedPick(row.Weights)
+		local def = EnemyData.Enemies[typeId]
+		for _attempt = 1, 4 do
+			local a = rng:NextNumber(0, math.pi * 2)
+			local r = rng:NextNumber(6, 14)
+			local x, z = clampToArena(centre.X + math.cos(a) * r, centre.Z + math.sin(a) * r, 4)
+			if def.Ghost or not ctx.EnemyAI.IsBlocked(x, z, def.Radius) then
+				if EnemySpawner.Spawn(typeId, Vector3.new(x, Config.ArenaOrigin.Y, z)) then
+					made += 1
+				end
+				break
+			end
+		end
+	end
+	if made > 0 then
+		Fx.Ring(centre, 16, Color3.fromRGB(255, 90, 80))
+	end
+	return made
 end
 
 ------------------------------------------------------------------------------------------
@@ -5020,7 +5162,8 @@ function EnemySpawner.Explode(e)
 	end
 	local ex = e.Def.Explode
 	local radius = ex.Radius * (e.Elite and Config.Enemies.EliteSizeMult or 1)
-	local tierMult = 1 + ctx.RunManager.GetTier() * Config.Difficulty.DamagePerMinute
+	local D = Config.Difficulty
+	local tierMult = (1 + math.min(ctx.RunManager.GetTier(), D.MaxTier or math.huge) * D.DamagePerMinute) * ctx.StageManager.DamageMult()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Alive and rp.Root then
 			local d = (rp.Root.Position - e.Pos) * Vector3.new(1, 0, 1)
@@ -5081,7 +5224,7 @@ function EnemySpawner.Step(dt: number)
 	spawnTimer += dt
 	if spawnTimer >= Config.Spawn.TickSeconds then
 		spawnTimer = 0
-		if not ctx.RunManager.IsBossPhase() or EnemySpawner.Boss then
+		if ctx.StageManager.AllowSpawning() then
 			topUp()
 		end
 	end
@@ -5945,7 +6088,12 @@ return LevelUpSystem
 	maps read the same before and after the meshes are uploaded.
 
 	BuildLobby()        → lobby table (menu camera, spawn, legacy prompts), built once at boot
-	BuildArena(name)    → arena table, replaces any previous arena
+	BuildArena(name, variant?) → arena table, replaces any previous arena (variant > 0
+	                      re-seeds the small decoration for later stages; the designed
+	                      layout stays the same, variant 0 = the classic map)
+	FindPortalSpot(arena, rng, avoid?) → a clear spot for the stage portal (Config.Stages)
+	BuildPortal(arena, pos) → the stage portal (kit mesh "Portal" or a part fallback, its
+	                      collider, rune circle, light beam) with :SetState(state, charge)
 	DestroyArena()
 	ApplyLighting(name) → "Lobby" | "Forest" | "Ruins" (sun, sky, atmosphere, clouds, grade)
 
@@ -6305,6 +6453,39 @@ FALLBACK.Shrine = function(m, cf, s, pal, sh)
 	fblock(m, cf, s, "Plinth", Vector3.new(3, 0.6, 2), 0, 0.3, 0, c3(pal, "Base", P.stone_600), sh)
 	fblock(m, cf, s, "Stone", Vector3.new(2.1, 4.2, 1.2), 0, 2.7, 0, c3(pal, "Stone", P.stone_500), sh)
 	fblock(m, cf, s, "Sigil", Vector3.new(0.8, 0.8, 0.08), 0, 3.2, -0.62, c3(pal, "Gold", P.gold_500))
+end
+-- Stage portal: dais, two plinths, a horseshoe ring of 13 stones and the membrane. Piece
+-- names match the mesh ("Surface", "Glyphs") so BuildPortal can recolour either.
+FALLBACK.Portal = function(m, cf, s, pal, sh)
+	local base, stone, stone2 = c3(pal, "Base", P.stone_600), c3(pal, "Stone", P.stone_500), c3(pal, "Stone2", P.stone_400)
+	fcyl(m, cf, s, "Dais", 5.2, 0.32, 0, 0, 0, base, sh)
+	fcyl(m, cf, s, "Dais", 4.0, 0.5, 0, 0, 0, base, false)
+	fcyl(m, cf, s, "Runes", 2.95, 0.04, 0, 0.5, 0, c3(pal, "Gold", P.gold_500))
+	fcyl(m, cf, s, "Dais", 2.7, 0.06, 0, 0.5, 0, base, false)
+	for _, x in ipairs({ -3.55, 3.55 }) do
+		fblock(m, cf, s, "Stone2", Vector3.new(2.7, 0.5, 2.1), x, 0.75, 0, stone2, sh)
+		fblock(m, cf, s, "Stone", Vector3.new(2.35, 2.15, 1.8), x, 2.05, 0, stone, sh)
+		fblock(m, cf, s, "Stone2", Vector3.new(2.6, 0.4, 2.0), x, 3.15, 0, stone2, sh)
+	end
+	for k = 0, 12 do
+		local a = math.rad(-30 + k * 20)
+		local key = k == 6
+		local rm = 4.15
+		local x, y = math.cos(a) * rm, 6 + math.sin(a) * rm
+		fblock(m, cf, s, k % 2 == 0 and "Stone" or "Stone2", Vector3.new(key and 1.6 or 1.2, 1.38, key and 1.72 or 1.56), x, y, 0, k % 2 == 0 and stone or stone2, sh, CFrame.Angles(0, 0, a))
+		if k % 2 == 1 or key then
+			for _, z in ipairs({ -0.82, 0.82 }) do
+				fblock(m, cf, s, "Glyphs", Vector3.new(0.24, 0.24, 0.1), x + math.cos(a) * 0.42, y + math.sin(a) * 0.42, z, c3(pal, "Glyph", P.fx_arcane), false, CFrame.Angles(0, 0, math.rad(45)))
+			end
+		end
+	end
+	local surface = fpart(m, cf, s, "Surface", Vector3.new(0.14, 6.84, 6.84), CFrame.new(0, 6, 0) * CFrame.Angles(0, math.rad(90), 0), c3(pal, "Surface", P.slate_400), false, Enum.PartType.Cylinder)
+	surface.Transparency = 0.3
+	for _, d in ipairs(m:GetChildren()) do
+		if d:IsA("BasePart") and d.Name == "Glyphs" then
+			d.Material = NEON
+		end
+	end
 end
 FALLBACK.Castle_Wall = function(m, cf, s, pal, sh)
 	fblock(m, cf, s, "Wall", Vector3.new(12, 8.8, 3), 0, 4.4, 0, c3(pal, "Stone", P.stone_500), sh)
@@ -7440,7 +7621,7 @@ local function buildForest(arena: Arena)
 end
 
 ------------------------------------------------------------------------------------------
--- RUINS: a sunlit, overgrown ruined courtyard (unlocked after a win).
+-- RUINS: a sunlit, overgrown ruined courtyard (unlocked by reaching stage 2; every stage run visits it).
 --
 --   centre      a cracked paved plaza (grass in the gaps) with a compass inlay (spawn)
 --   avenues     four slab avenues to the walls; broken columns flank their mouths
@@ -7744,10 +7925,11 @@ end
 
 ------------------------------------------------------------------------------------------
 
--- Builds an arena by name, destroying the previous one.
-function MapBuilder.BuildArena(name: string)
+-- Builds an arena by name, destroying the previous one. `variant` (stage - 1) re-seeds
+-- the scattered decoration so later stages look a little different; 0 = the classic map.
+function MapBuilder.BuildArena(name: string, variant: number?)
 	MapBuilder.DestroyArena()
-	rng = Random.new(SEEDS[name] or SEEDS.Forest)
+	rng = Random.new((SEEDS[name] or SEEDS.Forest) + (variant or 0) * 7919)
 	local arena = newArena(name)
 	if name == "Ruins" then
 		buildRuins(arena)
@@ -7758,6 +7940,190 @@ function MapBuilder.BuildArena(name: string)
 	MapBuilder.ApplyLighting(name)
 	currentArena = arena
 	return arena
+end
+
+------------------------------------------------------------------------------------------
+-- STAGE PORTAL
+------------------------------------------------------------------------------------------
+
+--[[
+	A random clear spot for the stage portal (rejection sampling, world position on the
+	floor): inside the fence by Config.Stages.PortalEdgeMargin, at least PortalMinDistance
+	from the spawn centre, PortalClearance from every collider / landmark keepout, and
+	PortalRepeatDistance from `avoid` (the last portal in this arena). The rules relax step
+	by step if nothing fits; the last resort is a fixed spot on the north side.
+]]
+function MapBuilder.FindPortalSpot(arena: Arena, rand: Random, avoid: Vector3?): Vector3
+	local S = Config.Stages
+	local half = arena.Half - S.PortalEdgeMargin
+	local c = arena.Center
+	local function try(minDist: number, clear: number, avoidDist: number): Vector3?
+		for _ = 1, 400 do
+			local x, z = rand:NextNumber(-half, half), rand:NextNumber(-half, half)
+			if math.sqrt(x * x + z * z) >= minDist and isFree(arena, x, z, clear) then
+				local far = true
+				if avoid and avoidDist > 0 then
+					local dx, dz = c.X + x - avoid.X, c.Z + z - avoid.Z
+					far = dx * dx + dz * dz >= avoidDist * avoidDist
+				end
+				if far then
+					return W(arena, x, z)
+				end
+			end
+		end
+		return nil
+	end
+	return try(S.PortalMinDistance, S.PortalClearance, S.PortalRepeatDistance)
+		or try(S.PortalMinDistance, S.PortalClearance, 0)
+		or try(S.PortalMinDistance * 0.8, S.PortalClearance * 0.6, 0)
+		or W(arena, 0, -(arena.Half - S.PortalEdgeMargin))
+end
+
+-- Portal looks per state (UI and world share the palette).
+local PORTAL_LOOK = {
+	Idle = { Surface = P.slate_400, SurfaceT = 0.3, Glyph = P.fx_arcane, Beam = P.fx_arcane, BeamT = 0.86, Core = P.slate_200, Light = P.fx_arcane, Bright = 1.2, Mark = P.slate_300, MarkT = 0.35 },
+	Charged = { Surface = P.gold_300, SurfaceT = 0.2, Glyph = P.gold_300, Beam = P.gold_300, BeamT = 0.8, Core = P.gold_200, Light = P.gold_300, Bright = 2, Mark = P.gold_400, MarkT = 0.1 },
+	Boss = { Surface = P.crimson_600, SurfaceT = 0.22, Glyph = P.crimson_300, Beam = P.crimson_400, BeamT = 0.84, Core = P.crimson_300, Light = P.crimson_400, Bright = 1.6, Mark = P.crimson_400, MarkT = 0.25 },
+	Surge = { Surface = P.crimson_500, SurfaceT = 0.15, Glyph = P.crimson_300, Beam = P.crimson_400, BeamT = 0.78, Core = P.crimson_300, Light = P.crimson_400, Bright = 2.2, Mark = P.crimson_300, MarkT = 0.15 },
+	Open = { Surface = P.gold_200, SurfaceT = 0.15, Glyph = P.ivory_100, Beam = P.gold_300, BeamT = 0.74, Core = P.ivory_100, Light = P.gold_300, Bright = 2.4, Mark = P.gold_300, MarkT = 0.05 },
+}
+
+local function lerpLook(a, b, t: number)
+	local out = {}
+	for k, v in pairs(a) do
+		local w = b[k]
+		if typeof(v) == "Color3" then
+			out[k] = (v :: Color3):Lerp(w, t)
+		else
+			out[k] = v + (w - v) * t
+		end
+	end
+	return out
+end
+
+export type Portal = {
+	Model: Model,
+	Pos: Vector3,
+	Radius: number,
+	SetState: (state: string, charge: number?) -> (),
+}
+
+--[[
+	Builds the stage portal at `pos` (floor point), facing the run camera (south). Adds
+	its plinth colliders to the arena (call before EnemyAI.SetArena). Extras built here:
+	a dashed rune circle on the floor showing where to stand (Config.Stages.PortalRadius;
+	its marks light up with the charge), a tall soft light beam and a PointLight.
+	SetState("Idle" | "Charging" | "Boss" | "Surge" | "Open", charge) recolours all of it.
+]]
+function MapBuilder.BuildPortal(arena: Arena, pos: Vector3): Portal
+	local S = Config.Stages
+	local cf = CFrame.new(pos) * yawCF(180) -- the mesh's front (-Z) turned toward the camera
+	local model = prop(arena.Model, "Portal", cf, 1, nil, { occluder = true })
+	kitCollider(arena, "Portal", cf, 1)
+	table.insert(arena.Keepout, { X = pos.X - arena.Center.X, Z = pos.Z - arena.Center.Z, R = S.PortalRadius })
+	-- scattered clutter (grass, ferns, bushes) would poke through the dais and the circle
+	for _, d in ipairs(arena.Decor:GetChildren()) do
+		if d:IsA("Model") and #d:GetChildren() > 0 then
+			local at = d:GetPivot().Position
+			local dx, dz = at.X - pos.X, at.Z - pos.Z
+			if dx * dx + dz * dz < (S.PortalRadius + 1) ^ 2 then
+				d:Destroy()
+			end
+		end
+	end
+
+	local fx = Instance.new("Folder")
+	fx.Name = "PortalFx"
+	fx.Parent = arena.Model
+	local marks: { BasePart } = {}
+	local n = 24
+	local radius = S.PortalRadius
+	for i = 1, n do
+		local a = (i - 0.5) / n * TAU
+		local at = Vector3.new(pos.X + math.cos(a) * radius, pos.Y + 0.08, pos.Z + math.sin(a) * radius)
+		local mark = slab(fx, "RuneMark", at, 0.55, TAU * radius / n * 0.55, -a, P.slate_300, 0.12)
+		mark.Transparency = 0.35
+		table.insert(marks, mark)
+	end
+	local lightAt = kitLightPoint("Portal", cf, 1) or (pos + Vector3.new(0, 6, 0))
+	local light = pointLight(fx, lightAt, 26, 1.2, P.fx_arcane, false)
+	arena.Lights += 1
+	local beamH = 70
+	local beam = deco(fx, {
+		Name = "Beam",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(beamH, 4.4, 4.4),
+		CFrame = CFrame.new(pos + Vector3.new(0, 6 + beamH / 2, 0)) * UPRIGHT,
+		Color = P.fx_arcane,
+		Transparency = 0.86,
+		CastShadow = false,
+	})
+	local core = deco(fx, {
+		Name = "BeamCore",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(beamH, 1.4, 1.4),
+		CFrame = CFrame.new(pos + Vector3.new(0, 6 + beamH / 2, 0)) * UPRIGHT,
+		Color = P.slate_200,
+		Transparency = 0.7,
+		CastShadow = false,
+	})
+
+	local lastKey = ""
+	local lastState, lastCharge = "Idle", 0
+	local function setState(state: string, charge: number?)
+		local c = math.clamp(charge or 0, 0, 1)
+		lastState, lastCharge = state, c
+		local key = state .. "|" .. tostring(math.floor(c * n))
+		if key == lastKey then
+			return
+		end
+		lastKey = key
+		local look
+		if state == "Charging" then
+			look = lerpLook(PORTAL_LOOK.Idle, PORTAL_LOOK.Charged, c)
+		else
+			look = PORTAL_LOOK[state] or PORTAL_LOOK.Idle
+		end
+		-- the mesh may have replaced the fallback since the last call: look parts up again
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				if d.Name == "Surface" then
+					d.Color = look.Surface
+					d.Transparency = look.SurfaceT
+				elseif d.Name == "Glyphs" then
+					d.Color = look.Glyph
+				end
+			end
+		end
+		beam.Color = look.Beam
+		beam.Transparency = look.BeamT
+		core.Color = look.Core
+		light.Color = look.Light
+		light.Brightness = look.Bright
+		local lit = state == "Charging" and math.floor(c * n) or (state == "Idle" and 0 or n)
+		for i, mark in ipairs(marks) do
+			local on = i <= lit
+			mark.Color = on and (state == "Charging" and P.gold_300 or look.Mark) or PORTAL_LOOK.Idle.Mark
+			mark.Transparency = on and 0.05 or PORTAL_LOOK.Idle.MarkT
+		end
+	end
+	setState("Idle", 0)
+	-- the uploaded mesh may replace the part fallback later (prop() registered that swap
+	-- first, so this runs after it): paint the new pieces in the current state
+	if MeshService.MayLoad("Portal") then
+		whenMeshLoads("Portal", function()
+			if model.Parent then
+				lastKey = ""
+				setState(lastState, lastCharge)
+			end
+		end)
+	end
+	return {
+		Model = model,
+		Pos = pos,
+		Radius = radius,
+		SetState = setState,
+	}
 end
 
 function MapBuilder.DestroyArena()
@@ -9088,8 +9454,12 @@ return MonetizationService
 	  Lobby      everyone sees the lobby menu screen (characters, shop, mode buttons)
 	  Countdown  someone pressed DUO / TRIO; 10 s for others to join (JOIN button); the
 	             starter may START NOW once someone joined, a full run starts at once
-	  Running    the run: timer counts up, mini-waves every 30 s, boss at 15:00
-	  Results    win / lose screen; everyone returns after Config.Run.ResultsSeconds
+	  Running    the run: a series of stages (StageManager: explore, portal boss, surge,
+	             NEXT STAGE / RETURN TO LOBBY, travel); the timer counts the whole run
+	  Results    defeat screen (everyone fell); everyone returns after ResultsSeconds
+	A player who leaves through an open portal ends their run as a win at once
+	(ReturnThroughPortal: results over the lobby menu); when nobody goes on, the run ends
+	straight back to the Lobby phase (FinishFromPortal).
 	SOLO skips the countdown. Modes live in Config.Modes; "Squad" (old 1-4 mode) is still
 	accepted from old clients. The lobby's ProximityPrompts are switched off: the 2D lobby
 	screen (UIBuilder / LobbyScreen) sends StartRun / StartNow / CycleArena instead.
@@ -9103,7 +9473,7 @@ return MonetizationService
 	  Player, Character, Root, Humanoid, CharacterId, Meta, Stats, HP, Level, XP, XPNeeded,
 	  Weapons, WeaponOrder, Passives, PassiveOrder, PendingLevels, Offer, Paused, Alive,
 	  AwaitingRevive, RevivesLeft, Rerolls, Skips, Kills, Gold, DamageDealt, TimeSurvived,
-	  Facing, MoveDir, InvulnUntil, Returned
+	  Facing, MoveDir, InvulnUntil, Returned, PortalChoice, PortalOffered, Committed, WinPaid
 	HP lives here (not in the Humanoid): the Humanoid's Dead state is disabled.
 ]]
 
@@ -9136,15 +9506,10 @@ local byPlayer: { [Player]: any } = {}
 local runTime = 0
 local frozen = false -- the whole run is paused (menuPaused or someone is choosing a level-up)
 local menuPaused = false -- the solo pause menu is open
-local miniWaveTimer = 0
-local bossWarned = false
-local bossSpawned = false
-local endPending = false
 local resultsTimer = 0
 local totalKills = 0
 local attrTimer = 0
 local selectedArena = "Forest"
-local currentArena = "Forest"
 local mode = "Solo" -- a Config.Modes key: "Solo" | "Duo" | "Trio" (or the old "Squad")
 local expectedRemoval: { [Model]: boolean } = {}
 
@@ -9182,12 +9547,19 @@ end
 ]]
 function RunManager.RefreshFrozen()
 	local choosing = false
+	local ids, names = {}, {}
 	for _, rp in ipairs(runPlayers) do
 		if rp.Offer and rp.Alive and not rp.Returned then
 			choosing = true
+			table.insert(ids, tostring(rp.Player.UserId))
+			table.insert(names, rp.Player.DisplayName)
 		end
 	end
 	local newFrozen = phase == "Running" and (menuPaused or choosing)
+	-- who is choosing, so the HUD can say "<Name> is choosing an upgrade" to everyone else
+	-- (the chooser sees the cards instead); set before LevelUpPause so both arrive together
+	state:SetAttribute("ChoosingIds", (phase == "Running" and choosing) and ("," .. table.concat(ids, ",") .. ",") or "")
+	state:SetAttribute("ChoosingNames", (phase == "Running" and choosing) and table.concat(names, ", ") or "")
 	state:SetAttribute("LevelUpPause", phase == "Running" and choosing and not menuPaused)
 	if newFrozen == frozen then
 		return
@@ -9203,13 +9575,20 @@ function RunManager.RefreshFrozen()
 	end
 end
 
--- True when the world should move: a run is going and it isn't solo-paused.
+-- True when the world should move: a run is going, it isn't paused and the group isn't
+-- travelling to the next stage.
 function RunManager.IsSimulating(): boolean
-	return phase == "Running" and not frozen
+	return phase == "Running" and not frozen and not ctx.StageManager.IsHolding()
 end
 
+-- True while a run is in progress (any stage sub-phase, paused or not).
+function RunManager.IsRunning(): boolean
+	return phase == "Running"
+end
+
+-- Kept for older callers: true during a stage's Scorpion Queen fight.
 function RunManager.IsBossPhase(): boolean
-	return bossSpawned
+	return ctx.StageManager.IsBossFight()
 end
 
 function RunManager.GetRunTime(): number
@@ -9400,14 +9779,22 @@ function RunManager.RefreshLobbyCharacter(player: Player)
 	spawnCharacter(player, cf, true)
 end
 
--- Sets WalkSpeed from state: 0 when paused, dead, downed or the run is frozen.
+-- Sets WalkSpeed from state: 0 when paused, dead, downed, frozen or travelling.
 function RunManager.ApplyMovement(rp)
 	local hum: Humanoid? = rp.Humanoid
-	local canMove = rp.Alive and not rp.Paused and not frozen and phase == "Running"
+	local canMove = rp.Alive and not rp.Paused and not frozen and phase == "Running" and not ctx.StageManager.IsHolding()
 	if hum and hum.Parent then
 		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed or 0
 	end
 	rp.Player:SetAttribute("Paused", rp.Paused == true)
+end
+
+function RunManager.ApplyMovementAll()
+	for _, rp in ipairs(runPlayers) do
+		RunManager.ApplyMovement(rp)
+		rp.SpeedCheckTimer = 0
+		rp.LastValidPos = rp.Root and rp.Root.Position
+	end
 end
 
 local function setDownedLook(rp, downed: boolean)
@@ -9459,7 +9846,12 @@ function RunManager.Heal(rp, amount: number, silent: boolean?)
 end
 
 local function checkEnd()
-	if phase ~= "Running" or endPending then
+	if phase ~= "Running" then
+		return
+	end
+	-- an open portal ends through StageManager (FinishFromPortal: a portal result, not a
+	-- defeat), even when the last living player just left through it
+	if ctx.StageManager.GetPhase() == "Open" then
 		return
 	end
 	for _, rp in ipairs(runPlayers) do
@@ -9513,6 +9905,7 @@ local function finalizeDeath(rp)
 	else
 		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen!", Color3.fromRGB(255, 90, 90))
 	end
+	ctx.StageManager.OnRosterChanged() -- first: an open portal may finish the run as a win
 	checkEnd()
 end
 
@@ -9590,7 +9983,7 @@ end
 
 -- Server-only damage entry point (enemy contact, explosions, boss projectiles).
 function RunManager.DamagePlayer(rp, amount: number)
-	if phase ~= "Running" or frozen or not rp.Alive or endPending then
+	if not RunManager.IsSimulating() or not rp.Alive then
 		return
 	end
 	if rp.Paused and Config.Player.LevelUpInvulnerable then
@@ -9617,7 +10010,7 @@ function RunManager.OnReviveTokenGranted(player: Player)
 	local data = ctx.DataService.GetData(player)
 	-- Also revive a player whose offer timed out while Roblox's purchase dialog was open.
 	local fallen = rp and not rp.Alive and (rp.AwaitingRevive or not rp.ProductReviveUsed)
-	if rp and fallen and not rp.Returned and phase == "Running" and not endPending and data and data.ReviveTokens > 0 then
+	if rp and fallen and not rp.Returned and phase == "Running" and data and data.ReviveTokens > 0 then
 		data.ReviveTokens -= 1
 		rp.ProductReviveUsed = true
 		revive(rp, "Revived!")
@@ -9671,6 +10064,10 @@ local function newRunPlayer(player: Player)
 		MoveDir = Vector3.zero,
 		SpeedCheckTimer = 0,
 		Returned = false,
+		PortalChoice = nil :: string?, -- "Next" while the stage portal is open
+		PortalOffered = false,
+		Committed = false, -- run stats are in the save (results, leaving, shutdown)
+		WinPaid = false,
 	}
 	return rp
 end
@@ -9685,6 +10082,11 @@ local function resetPlayerAttributes(player: Player)
 	player:SetAttribute("AuraEvo", nil)
 	player:SetAttribute("ReviveProgress", nil)
 	player:SetAttribute("PartnerRevivesLeft", nil)
+end
+
+local function placeOnArena(arena, i: number, n: number): Vector3
+	local a = (i / n) * math.pi * 2
+	return arena.Center + Vector3.new(math.cos(a), 0, math.sin(a)) * (n > 1 and Config.Run.ArenaSpawnSpread or 0)
 end
 
 local function beginRun()
@@ -9703,18 +10105,12 @@ local function beginRun()
 		return
 	end
 
-	currentArena = selectedArena
-	local arena = MapBuilder.BuildArena(currentArena)
-	ctx.EnemyAI.SetArena(arena)
-	state:SetAttribute("Arena", currentArena)
+	-- stage 1: the lobby's arena with its portal (StageManager also sets EnemyAI's arena)
+	local arena = ctx.StageManager.BeginRun(selectedArena)
 
 	runTime = 0
 	frozen = false
 	menuPaused = false
-	miniWaveTimer = 0
-	bossWarned = false
-	bossSpawned = false
-	endPending = false
 	totalKills = 0
 	state:SetAttribute("Frozen", false)
 	state:SetAttribute("RunTime", 0)
@@ -9724,8 +10120,7 @@ local function beginRun()
 		local rp = newRunPlayer(player)
 		table.insert(runPlayers, rp)
 		byPlayer[player] = rp
-		local a = (i / #list) * math.pi * 2
-		local pos = arena.Center + Vector3.new(math.cos(a), 0, math.sin(a)) * (#list > 1 and Config.Run.ArenaSpawnSpread or 0) + Vector3.new(0, 3.5, 0)
+		local pos = placeOnArena(arena, i, #list) + Vector3.new(0, 3.5, 0)
 		local model = spawnCharacter(player, CFrame.new(pos), false)
 		RunManager.AttachCharacter(rp, model)
 
@@ -9752,9 +10147,103 @@ local function beginRun()
 		end
 	end
 	state:SetAttribute("Participants", #runPlayers)
-	RunManager.Broadcast("Survive until 15:00!", Color3.fromRGB(255, 230, 120), true)
+	RunManager.Broadcast("STAGE 1", Color3.fromRGB(255, 230, 150), true)
+	RunManager.Broadcast("Find the portal and summon the Scorpion Queen!", Color3.fromRGB(180, 200, 255))
 end
 
+-- Arena `name` may be picked in the lobby (Config.Arenas[name].RequiredBestStage).
+local function arenaUnlocked(stats, name: string): boolean
+	local def = (Config.Arenas :: any)[name]
+	return def ~= nil and (stats.BestStage or 0) >= (def.RequiredBestStage or 0)
+end
+
+--[[
+	Writes a player's run into their save once (kills, best time, furthest stage, a win
+	with the arena unlocks it brings). Returns (newBestTime, unlockedArenaName?).
+	Leaving, shutdown, defeat and the portal all go through here; rp.Committed keeps a
+	run from being counted twice.
+]]
+local function saveRunStats(rp, won: boolean): (boolean, string?)
+	if rp.Committed then
+		return false, nil
+	end
+	rp.Committed = true
+	local data = ctx.DataService.GetData(rp.Player)
+	if not data then
+		return false, nil
+	end
+	local newBest, unlocked = false, nil
+	local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
+	data.Stats.TotalKills += rp.Kills
+	if t > data.Stats.BestTime then
+		data.Stats.BestTime = math.floor(t)
+		newBest = true
+	end
+	local lockedBefore = {}
+	for _, name in ipairs(Config.Arenas.Order) do
+		lockedBefore[name] = not arenaUnlocked(data.Stats, name)
+	end
+	data.Stats.BestStage = math.max(data.Stats.BestStage or 0, ctx.StageManager.GetStage())
+	for _, name in ipairs(Config.Arenas.Order) do
+		if lockedBefore[name] and arenaUnlocked(data.Stats, name) then
+			unlocked = Config.Arenas[name].DisplayName
+		end
+	end
+	if won then
+		data.Stats.Wins += 1
+	end
+	return newBest, unlocked
+end
+
+--[[
+	Commits a finished run and shows the results screen. portal = left through an open
+	portal (WinBonus + StageClearBonus per cleared stage, always paid); it counts as a WIN
+	only with Config.Stages.WinMinStages stages cleared. inLobby = the player is going
+	straight back to the lobby menu (the results panel then sits over the menu).
+]]
+local function finishPlayer(rp, portal: boolean, inLobby: boolean)
+	local player: Player = rp.Player
+	local cleared = ctx.StageManager.StagesCleared()
+	local reached = math.max(1, ctx.StageManager.GetStage())
+	local won = portal and cleared >= Config.Stages.WinMinStages
+	if rp.Alive or rp.AwaitingRevive then
+		rp.TimeSurvived = runTime
+	end
+	if portal and not rp.WinPaid then
+		rp.WinPaid = true
+		ctx.GoldSystem.AddRunGold(rp, Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared)
+	end
+	local data = ctx.DataService.GetData(player)
+	local bestStageBefore = data and (data.Stats.BestStage or 0) or 0
+	local newBest, unlocked = saveRunStats(rp, won)
+	if data then
+		task.spawn(ctx.DataService.ForceSave, player)
+	end
+	if not player.Parent then
+		return
+	end
+	Remotes.FireClient("PortalOffer", player, { Close = true })
+	Remotes.FireClient("RunResult", player, {
+		Won = won,
+		Portal = portal, -- left through the portal (a win only from WinMinStages)
+		WinMinStages = Config.Stages.WinMinStages,
+		Time = math.floor(rp.TimeSurvived),
+		Kills = rp.Kills,
+		Gold = rp.Gold,
+		Level = rp.Level,
+		Damage = math.floor(rp.DamageDealt),
+		Arena = ctx.StageManager.ArenaDisplayName() .. ((mode == "Duo" or mode == "Trio") and (" (" .. mode .. ")") or ""),
+		Stage = reached,
+		StagesCleared = cleared,
+		NewBest = newBest,
+		NewBestStage = data ~= nil and reached > bestStageBefore and reached > 1,
+		Unlocked = unlocked,
+		Seconds = Config.Run.ResultsSeconds,
+		InLobby = inLobby,
+	})
+end
+
+-- Everyone fell (won = false). A portal win never comes through here.
 function RunManager.EndRun(won: boolean)
 	if phase ~= "Running" then
 		return
@@ -9768,49 +10257,11 @@ function RunManager.EndRun(won: boolean)
 
 	for _, rp in ipairs(runPlayers) do
 		ctx.LevelUpSystem.Cancel(rp)
-		if rp.Alive or rp.AwaitingRevive then
-			rp.TimeSurvived = runTime
-			rp.AwaitingRevive = false
-		end
+		finishPlayer(rp, won, false)
+		rp.AwaitingRevive = false
 		RunManager.ApplyMovement(rp)
-		local player: Player = rp.Player
-		local data = ctx.DataService.GetData(player)
-		if won then
-			ctx.GoldSystem.AddRunGold(rp, Config.Gold.WinBonus)
-		end
-		local newBest = false
-		local unlocked = nil
-		if data then
-			data.Stats.TotalKills += rp.Kills
-			if rp.TimeSurvived > data.Stats.BestTime then
-				data.Stats.BestTime = math.floor(rp.TimeSurvived)
-				newBest = true
-			end
-			if won then
-				local before = data.Stats.Wins
-				data.Stats.Wins += 1
-				for _, name in ipairs(Config.Arenas.Order) do
-					local req = Config.Arenas[name].RequiredWins
-					if before < req and data.Stats.Wins >= req then
-						unlocked = Config.Arenas[name].DisplayName
-					end
-				end
-			end
-			task.spawn(ctx.DataService.ForceSave, player)
-		end
-		Remotes.FireClient("RunResult", player, {
-			Won = won,
-			Time = math.floor(rp.TimeSurvived),
-			Kills = rp.Kills,
-			Gold = rp.Gold,
-			Level = rp.Level,
-			Damage = math.floor(rp.DamageDealt),
-			Arena = Config.Arenas[currentArena].DisplayName .. ((mode == "Duo" or mode == "Trio") and (" (" .. mode .. ")") or ""),
-			NewBest = newBest,
-			Unlocked = unlocked,
-			Seconds = Config.Run.ResultsSeconds,
-		})
 	end
+	ctx.StageManager.EndRun() -- the results are out: the stage loop stops here
 	RunManager.Broadcast(won and "VICTORY!" or "THE SWARM WINS...", won and Color3.fromRGB(255, 220, 80) or Color3.fromRGB(255, 80, 80), true)
 end
 
@@ -9827,6 +10278,7 @@ local function returnPlayerToLobby(rp)
 	end
 end
 
+-- Clears the run world and goes back to the Lobby phase.
 local function returnAll()
 	for _, rp in ipairs(runPlayers) do
 		returnPlayerToLobby(rp)
@@ -9837,28 +10289,130 @@ local function returnAll()
 	ctx.WeaponSystem.Clear()
 	ctx.XPSystem.Clear()
 	ctx.EnemyAI.SetArena(nil)
+	ctx.StageManager.EndRun()
 	MapBuilder.DestroyArena()
 	MapBuilder.ApplyLighting("Lobby")
+	frozen = false
+	menuPaused = false
+	state:SetAttribute("Frozen", false)
+	state:SetAttribute("LevelUpPause", false)
+	state:SetAttribute("ChoosingIds", "")
+	state:SetAttribute("ChoosingNames", "")
 	state:SetAttribute("Participants", 0)
 	state:SetAttribute("RunTime", 0)
 	setPhase("Lobby")
 end
 
-function RunManager.OnBossKilled(_pos: Vector3)
-	if endPending or phase ~= "Running" then
+-- Takes a record out of the running run (portal return, leaving the game). Other
+-- systems may still hold it (enemy targets, delayed whip slashes), so it is made inert.
+local function removeFromRun(rp)
+	rp.Alive = false
+	rp.AwaitingRevive = false
+	ctx.WeaponSystem.ClearOwner(rp)
+	local i = table.find(runPlayers, rp)
+	if i then
+		table.remove(runPlayers, i)
+	end
+	if byPlayer[rp.Player] == rp then
+		byPlayer[rp.Player] = nil
+	end
+	state:SetAttribute("Participants", #runPlayers)
+	if menuPaused and #runPlayers > 1 then
+		menuPaused = false
+	end
+	RunManager.RefreshFrozen()
+end
+
+function RunManager.OnBossKilled(pos: Vector3)
+	if phase ~= "Running" then
 		return
 	end
-	endPending = true
-	for _, rp in ipairs(runPlayers) do
-		if rp.Alive then
-			ctx.GoldSystem.AddRunGold(rp, Config.Gold.Boss)
-		end
+	ctx.StageManager.OnBossKilled(pos)
+end
+
+--[[
+	RETURN TO LOBBY at an open portal: the player's run ends as a win right now (gold
+	bonus, stats, results over the lobby menu) while the others may go on. The last one
+	out closes the run.
+]]
+function RunManager.ReturnThroughPortal(rp)
+	if phase ~= "Running" or rp.Returned or not byPlayer[rp.Player] then
+		return
 	end
-	RunManager.Broadcast("BOSS DEFEATED!", Color3.fromRGB(255, 220, 80), true)
-	task.delay(2.5, function()
-		endPending = false
-		RunManager.EndRun(true)
-	end)
+	ctx.LevelUpSystem.Cancel(rp)
+	finishPlayer(rp, true, true)
+	removeFromRun(rp)
+	rp.Root = nil
+	returnPlayerToLobby(rp)
+	local cleared = ctx.StageManager.StagesCleared()
+	RunManager.Broadcast(string.format("%s left through the portal (%d stage%s cleared).", rp.Player.DisplayName, cleared, cleared == 1 and "" or "s"), Color3.fromRGB(255, 220, 120))
+	if #runPlayers == 0 then
+		returnAll()
+	end
+end
+
+-- Nobody living goes on: everyone still listed (fallen teammates) finishes as a win.
+function RunManager.FinishFromPortal()
+	if phase ~= "Running" then
+		return
+	end
+	for _, rp in ipairs(runPlayers) do
+		ctx.LevelUpSystem.Cancel(rp)
+		Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
+		finishPlayer(rp, true, true)
+	end
+	returnAll()
+end
+
+-- Moves a run player to a floor point (travel, dev teleport) without the speed check
+-- snapping them back.
+function RunManager.TeleportPlayer(rp, floorPos: Vector3)
+	local pos = floorPos + Vector3.new(0, 3.5, 0)
+	local char: Model? = rp.Character
+	local root: BasePart? = rp.Root
+	if char and root and root.Parent and char.Parent then
+		char:PivotTo(CFrame.new(pos) * root.CFrame.Rotation)
+		root.AssemblyLinearVelocity = Vector3.zero
+	else
+		local m = spawnCharacter(rp.Player, CFrame.new(pos), false)
+		RunManager.AttachCharacter(rp, m)
+	end
+	rp.LastValidPos = pos
+	rp.SpeedCheckTimer = 0
+end
+
+--[[
+	Travel to the next stage (StageManager, behind the fade): everyone left in the run
+	moves to the new arena's spawn ring, living players are healed to at least
+	TravelHealFraction, fallen ones (also those still on the revive offer) stand up with
+	ReviveOnTravelHPFraction. Level, XP, weapons, passives and gold are kept.
+]]
+function RunManager.TravelPlayers(arena)
+	local S = Config.Stages
+	local n = #runPlayers
+	for i, rp in ipairs(runPlayers) do
+		rp.PortalChoice = nil
+		rp.PortalOffered = false
+		if not rp.Alive then
+			if rp.AwaitingRevive then
+				Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
+			end
+			rp.Alive = true
+			rp.AwaitingRevive = false
+			rp.ReviveProgress = 0
+			rp.TimeSurvived = 0
+			rp.Player:SetAttribute("ReviveProgress", 0)
+			rp.Player:SetAttribute("Alive", true)
+			setDownedLook(rp, false)
+			setHP(rp, rp.Stats.MaxHP * S.ReviveOnTravelHPFraction)
+		else
+			setHP(rp, math.max(rp.HP, rp.Stats.MaxHP * S.TravelHealFraction))
+		end
+		rp.InvulnUntil = os.clock() + Config.Player.ReviveInvulnSeconds
+		RunManager.TeleportPlayer(rp, placeOnArena(arena, i, n))
+		RunManager.ApplyMovement(rp)
+	end
+	RunManager.RefreshFrozen()
 end
 
 ------------------------------------------------------------------------------------------
@@ -9952,7 +10506,7 @@ local function cycleArena(player: Player)
 	local index = table.find(order, selectedArena) or 1
 	for step = 1, #order do
 		local name = order[((index - 1 + step) % #order) + 1]
-		if data.Stats.Wins >= Config.Arenas[name].RequiredWins then
+		if arenaUnlocked(data.Stats, name) then
 			if name == selectedArena then
 				break
 			end
@@ -9965,7 +10519,7 @@ local function cycleArena(player: Player)
 			return
 		end
 	end
-	RunManager.Notify(player, "Win a run to unlock the next arena!", Color3.fromRGB(255, 200, 120))
+	RunManager.Notify(player, "Reach stage 2 in a run to unlock the next arena!", Color3.fromRGB(255, 200, 120))
 end
 
 ------------------------------------------------------------------------------------------
@@ -10003,13 +10557,15 @@ local function devCommand(player: Player, command: any)
 				ctx.XPSystem.GiveXP(rp, math.max(0, rp.XPNeeded - rp.XP))
 			end
 		end
-	elseif command == "SkipToBoss" then
+	elseif command == "SpawnPortalBoss" or command == "SkipToBoss" then -- SkipToBoss: old clients
 		local rp = byPlayer[player]
-		if rp and not rp.Returned and phase == "Running" and not bossSpawned and runTime < Config.Dev.SkipToTime then
-			runTime = Config.Dev.SkipToTime
-			miniWaveTimer = 0
-			state:SetAttribute("RunTime", runTime)
-			RunManager.Broadcast("DEV: skipped to " .. string.format("%d:%02d", runTime // 60, runTime % 60), Color3.fromRGB(255, 160, 255))
+		if rp and not rp.Returned and phase == "Running" and ctx.StageManager.DevActivate() then
+			RunManager.Broadcast("DEV: portal boss summoned", Color3.fromRGB(255, 160, 255))
+		end
+	elseif command == "TeleportToPortal" then
+		local rp = byPlayer[player]
+		if rp and not rp.Returned and phase == "Running" then
+			ctx.StageManager.DevTeleport(rp)
 		end
 	end
 end
@@ -10168,11 +10724,12 @@ function RunManager.Step(dt: number)
 			end
 		end
 	end
-	if reviveRules() and not frozen and not endPending then
+	local holding = ctx.StageManager.IsHolding()
+	if reviveRules() and not frozen and not holding then
 		partnerRevives(dt)
 	end
 
-	if frozen then
+	if frozen or holding then
 		return
 	end
 
@@ -10182,22 +10739,7 @@ function RunManager.Step(dt: number)
 		attrTimer = 0
 		state:SetAttribute("RunTime", math.floor(runTime * 10) / 10)
 	end
-
-	if not bossSpawned then
-		miniWaveTimer += dt
-		if miniWaveTimer >= Config.Run.MiniWaveInterval then
-			miniWaveTimer = 0
-			ctx.EnemySpawner.MiniWave()
-		end
-		if not bossWarned and runTime >= Config.Run.BossTime - Config.Boss.SpawnWarningSeconds then
-			bossWarned = true
-			RunManager.Broadcast("THE BOSS IS COMING!", Color3.fromRGB(255, 60, 60), true)
-		end
-		if runTime >= Config.Run.BossTime then
-			bossSpawned = true
-			ctx.EnemySpawner.SpawnBoss()
-		end
-	end
+	-- mini-waves, the portal, the Queen and the surge: StageManager.Step
 end
 
 ------------------------------------------------------------------------------------------
@@ -10221,34 +10763,16 @@ function RunManager.OnPlayerRemoving(player: Player)
 		return
 	end
 	if phase == "Running" and not rp.Returned then
-		local data = ctx.DataService.GetData(player)
-		if data then
-			data.Stats.TotalKills += rp.Kills
-			local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
-			if t > data.Stats.BestTime then
-				data.Stats.BestTime = math.floor(t)
-			end
-		end
+		saveRunStats(rp, false)
 	end
 	-- other systems may still hold this record (enemy targets, delayed whip slashes)
-	rp.Alive = false
-	rp.AwaitingRevive = false
+	removeFromRun(rp)
 	rp.Root = nil
-	ctx.WeaponSystem.ClearOwner(rp)
-	local i = table.find(runPlayers, rp)
-	if i then
-		table.remove(runPlayers, i)
-	end
-	byPlayer[player] = nil
-	state:SetAttribute("Participants", #runPlayers)
-	if menuPaused and #runPlayers > 1 then
-		menuPaused = false
-	end
-	RunManager.RefreshFrozen()
 	if phase == "Running" then
 		if #runPlayers == 0 then
 			RunManager.EndRun(false)
 		else
+			ctx.StageManager.OnRosterChanged()
 			checkEnd()
 		end
 	end
@@ -10257,12 +10781,8 @@ end
 -- Commits stats of everyone in a run (server shutdown).
 function RunManager.CommitAll()
 	for _, rp in ipairs(runPlayers) do
-		if not rp.Returned then
-			local data = ctx.DataService.GetData(rp.Player)
-			if data and phase == "Running" then
-				data.Stats.TotalKills += rp.Kills
-				rp.Kills = 0
-			end
+		if not rp.Returned and phase == "Running" then
+			saveRunStats(rp, false)
 		end
 	end
 end
@@ -10519,6 +11039,630 @@ return SpatialGrid
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="31">
+        <Properties>
+          <string name="Name">StageManager</string>
+          <string name="Source"><![CDATA[--[[
+	StageManager.lua
+	The Risk of Rain style stage loop inside a run (Config.Stages). RunManager owns the
+	run itself (players, lives, results); this module owns what happens on each stage:
+
+	  Explore  the arena of this stage with a PORTAL at a random clear spot. The swarm
+	           comes as usual (mini-waves every Config.Run.MiniWaveInterval). After
+	           HintAfterSeconds (never before the lock ends) the HUD shows an arrow to the
+	           portal. The portal is dormant for PortalLockSeconds; after that any living
+	           player standing in its rune circle charges it (ChargeSeconds).
+	  Boss     charging summons the Scorpion Queen in front of the portal (HP scaled by
+	           stage and player count); regular spawning follows the boss-phase rules.
+	  Surge    the Queen died: SurgeBase + SurgePerStage x stage enemies pour out; survive
+	           SurgeSeconds or kill most of them.
+	  Open     the leftovers die, the gems fly to the players and every living player
+	           chooses NEXT STAGE or RETURN TO LOBBY (remote "PortalChoice"). Returning
+	           ends that player's run (RunManager.ReturnThroughPortal; a win from
+	           WinMinStages cleared stages, the gold bonus always). When all
+	           living players chose (or ChoiceSeconds ran out: undecided = next stage) the
+	           rest travel; if nobody is left to go on, the run ends cleanly.
+	  Travel   fade, new arena (alternating through Config.Arenas.Order), enemies, gems
+	           and projectiles cleared, players moved to the new spawn, healed, fallen
+	           teammates revived (RunManager.TravelPlayers). Nothing simulates meanwhile.
+
+	Difficulty keeps scaling with TOTAL run time (RunManager.GetTier / the spawn table) and
+	this module adds per-stage multipliers (EnemyHPMult, DamageMult, SpawnMult, BossHPMult);
+	stage 1 multiplies by exactly 1, so the early game plays as before.
+
+	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, PortalPos,
+	PortalHint, PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total").
+]]
+
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
+local MapBuilder = require(script.Parent.MapBuilder)
+local Fx = require(script.Parent.Fx)
+
+local StageManager = {}
+
+local ctx
+local state: Configuration
+local rng = Random.new()
+local FLAT = Vector3.new(1, 0, 1)
+
+local stage = 0
+local sub = "None" -- "None" | "Explore" | "Boss" | "Surge" | "Open" | "Travel"
+local firstArena = "Forest"
+local arenaName = "Forest"
+local portal: MapBuilder.Portal? = nil
+local lastPortal: { [string]: Vector3 } = {} -- last portal spot per arena (a new one differs)
+local stageTime = 0
+local hinted = false
+local shownLock = -1
+local charge = 0
+local shownCharge = -1
+local miniWaveTimer = 0
+local surgeTotal = 0
+local surgeQueued = 0
+local surgeBudget = 0
+local surgeTimer = 0
+local choiceLeft = 0
+local shownChoice = -1
+local travelStep = ""
+local travelTimer = 0
+
+------------------------------------------------------------------------------------------
+-- Queries
+------------------------------------------------------------------------------------------
+
+function StageManager.GetStage(): number
+	return stage
+end
+
+function StageManager.GetPhase(): string
+	return sub
+end
+
+-- Stages whose Queen is dead (the current one counts once the surge started).
+function StageManager.StagesCleared(): number
+	if sub == "Surge" or sub == "Open" or sub == "Travel" then
+		return stage
+	end
+	return math.max(0, stage - 1)
+end
+
+-- Display name of the current stage's arena.
+function StageManager.ArenaDisplayName(): string
+	local def = (Config.Arenas :: any)[arenaName]
+	return def and def.DisplayName or arenaName
+end
+
+-- Travel: nothing moves, nobody can be hurt, the timer stops.
+function StageManager.IsHolding(): boolean
+	return sub == "Travel"
+end
+
+-- Regular top-up spawning runs while exploring and during the boss fight (boss rules).
+function StageManager.AllowSpawning(): boolean
+	return sub == "Explore" or sub == "Boss"
+end
+
+function StageManager.IsBossFight(): boolean
+	return sub == "Boss"
+end
+
+function StageManager.PortalPosition(): Vector3?
+	return portal and portal.Pos or nil
+end
+
+local function perStage(k: number): number
+	return 1 + k * math.max(0, stage - 1)
+end
+
+function StageManager.EnemyHPMult(): number
+	return perStage(Config.Stages.EnemyHPPerStage)
+end
+
+function StageManager.DamageMult(): number
+	return perStage(Config.Stages.EnemyDamagePerStage)
+end
+
+function StageManager.SpawnMult(): number
+	return perStage(Config.Stages.SpawnTargetPerStage)
+end
+
+-- Seconds of this stage before the portal can be charged (Config.Stages.PortalLockSeconds).
+local function lockSeconds(): number
+	local list = Config.Stages.PortalLockSeconds
+	return list[math.clamp(stage, 1, #list)] or 0
+end
+
+function StageManager.BossHPMult(): number
+	local list = Config.Stages.BossHPByStage
+	local s = math.max(1, stage)
+	if s <= #list then
+		return list[s]
+	end
+	return list[#list] + (s - #list) * Config.Stages.BossHPPerExtraStage
+end
+
+------------------------------------------------------------------------------------------
+-- Helpers
+------------------------------------------------------------------------------------------
+
+local function setSub(newSub: string)
+	sub = newSub
+	state:SetAttribute("StagePhase", newSub)
+end
+
+-- Arena of stage n: the lobby's choice first, then the next arenas in Config.Arenas.Order.
+local function arenaFor(n: number): string
+	local order = Config.Arenas.Order
+	local start = table.find(order, firstArena) or 1
+	return order[((start - 1) + (n - 1)) % #order + 1]
+end
+
+local function portalState(name: string, c: number?)
+	if portal then
+		portal.SetState(name, c)
+	end
+end
+
+local function participants()
+	return ctx.RunManager.GetRunPlayers()
+end
+
+local function publishCharge()
+	local q = math.floor(charge * 50 + 0.5) / 50
+	if q ~= shownCharge then
+		shownCharge = q
+		state:SetAttribute("PortalCharge", q)
+	end
+end
+
+-- Builds stage n: its arena, the portal and the obstacle grid. Returns the arena.
+local function buildStage(n: number)
+	stage = n
+	arenaName = arenaFor(n)
+	local arena = MapBuilder.BuildArena(arenaName, n - 1)
+	local spot = MapBuilder.FindPortalSpot(arena, rng, lastPortal[arenaName])
+	lastPortal[arenaName] = spot
+	portal = MapBuilder.BuildPortal(arena, spot)
+	ctx.EnemyAI.SetArena(arena) -- after the portal: its plinths are obstacles too
+	stageTime = 0
+	hinted = false
+	shownLock = -1
+	charge = 0
+	shownCharge = -1
+	miniWaveTimer = 0
+	state:SetAttribute("Stage", n)
+	state:SetAttribute("Arena", arenaName)
+	state:SetAttribute("StageArena", StageManager.ArenaDisplayName())
+	state:SetAttribute("PortalPos", spot)
+	state:SetAttribute("PortalHint", false)
+	state:SetAttribute("PortalCharge", 0)
+	state:SetAttribute("PortalLockLeft", math.ceil(lockSeconds()))
+	state:SetAttribute("SurgeLeft", 0)
+	state:SetAttribute("ChoiceLeft", 0)
+	state:SetAttribute("PortalReady", "")
+	return arena
+end
+
+------------------------------------------------------------------------------------------
+-- Run lifecycle (called by RunManager)
+------------------------------------------------------------------------------------------
+
+-- Stage 1 of a new run. Returns the arena (players are placed by RunManager).
+function StageManager.BeginRun(selectedArena: string)
+	firstArena = selectedArena
+	table.clear(lastPortal)
+	local arena = buildStage(1)
+	setSub("Explore")
+	return arena
+end
+
+-- The run is over (defeat, everyone returned, server cleanup).
+function StageManager.EndRun()
+	portal = nil
+	stage = 0
+	setSub("None")
+	state:SetAttribute("Stage", 0)
+	state:SetAttribute("PortalHint", false)
+	state:SetAttribute("PortalCharge", 0)
+	state:SetAttribute("PortalLockLeft", 0)
+	state:SetAttribute("PortalPos", nil)
+	state:SetAttribute("SurgeLeft", 0)
+	state:SetAttribute("ChoiceLeft", 0)
+	state:SetAttribute("PortalReady", "")
+end
+
+------------------------------------------------------------------------------------------
+-- Boss
+------------------------------------------------------------------------------------------
+
+local function startBoss(): boolean
+	local p = portal
+	if not p then
+		return false
+	end
+	-- the Queen climbs out behind the portal (away from the arena centre, where the
+	-- players who charged it usually stand), so she never lands on top of them
+	local toCentre = (Config.ArenaOrigin - p.Pos) * FLAT
+	local dir = toCentre.Magnitude > 1 and -toCentre.Unit or Vector3.new(0, 0, -1)
+	local x, z = ctx.EnemySpawner.ClampToArena(p.Pos.X + dir.X * Config.Stages.BossSpawnOffset, p.Pos.Z + dir.Z * Config.Stages.BossSpawnOffset, 8)
+	local boss = ctx.EnemySpawner.SpawnBoss(Vector3.new(x, Config.ArenaOrigin.Y, z))
+	if not boss then
+		return false
+	end
+	setSub("Boss")
+	charge = 1
+	publishCharge()
+	portalState("Boss")
+	Fx.Ring(p.Pos, Config.Stages.PortalRadius * 2, Color3.fromRGB(255, 60, 70))
+	ctx.RunManager.Broadcast("THE SCORPION QUEEN AWAKENS!", Color3.fromRGB(255, 60, 60), true)
+	return true
+end
+
+-- Called by RunManager when the Queen dies (EnemySpawner.Kill → RunManager.OnBossKilled).
+function StageManager.OnBossKilled(_pos: Vector3)
+	if sub ~= "Boss" then
+		return
+	end
+	for _, rp in ipairs(participants()) do
+		if rp.Alive then
+			ctx.GoldSystem.AddRunGold(rp, Config.Gold.Boss)
+		end
+	end
+	local list = Config.Difficulty.PlayerCountMult
+	local n = 0
+	for _, rp in ipairs(participants()) do
+		if rp.Alive or rp.AwaitingRevive then
+			n += 1
+		end
+	end
+	local S = Config.Stages
+	surgeTotal = math.floor((S.SurgeBase + S.SurgePerStage * stage) * list[math.clamp(math.max(1, n), 1, #list)] + 0.5)
+	surgeQueued = surgeTotal
+	surgeBudget = 0
+	surgeTimer = Config.Stages.SurgeSeconds
+	setSub("Surge")
+	portalState("Surge")
+	state:SetAttribute("SurgeLeft", math.ceil(surgeTimer))
+	ctx.RunManager.Broadcast("QUEEN DEFEATED! SURVIVE THE SURGE!", Color3.fromRGB(255, 200, 80), true)
+	if portal then
+		Fx.Ring(portal.Pos, 34, Color3.fromRGB(255, 90, 80))
+	end
+	Fx.Sound("BossRoar")
+end
+
+------------------------------------------------------------------------------------------
+-- Open portal: the choice
+------------------------------------------------------------------------------------------
+
+local function sendOffer(rp)
+	rp.PortalOffered = true
+	local cleared = StageManager.StagesCleared()
+	Remotes.FireClient("PortalOffer", rp.Player, {
+		CountsAsWin = cleared >= Config.Stages.WinMinStages,
+		WinMinStages = Config.Stages.WinMinStages,
+		Stage = stage,
+		StagesCleared = cleared,
+		NextStage = stage + 1,
+		NextArena = ((Config.Arenas :: any)[arenaFor(stage + 1)] or {}).DisplayName or arenaFor(stage + 1),
+		ReturnBonus = math.floor((Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared) * ctx.MonetizationService.GoldMultiplier(rp.Player) + 0.5),
+		Gold = rp.Gold,
+		Kills = rp.Kills,
+		Level = rp.Level,
+		Time = math.floor(ctx.RunManager.GetRunTime()),
+		Seconds = choiceLeft,
+		Group = #participants() > 1,
+	})
+end
+
+local function closeOffers()
+	for _, rp in ipairs(participants()) do
+		if rp.PortalOffered and rp.Player.Parent then
+			Remotes.FireClient("PortalOffer", rp.Player, { Close = true })
+		end
+		rp.PortalOffered = false
+	end
+end
+
+local function startTravel()
+	closeOffers()
+	setSub("Travel")
+	travelStep = "FadeIn"
+	travelTimer = Config.Stages.TravelFadeSeconds
+	local nextName = arenaFor(stage + 1)
+	local display = ((Config.Arenas :: any)[nextName] or {}).DisplayName or nextName
+	for _, rp in ipairs(participants()) do
+		if rp.Player.Parent then
+			Remotes.FireClient("StageTravel", rp.Player, { Stage = stage + 1, Arena = display, Seconds = Config.Stages.TravelFadeSeconds })
+		end
+	end
+	ctx.RunManager.ApplyMovementAll()
+end
+
+--[[
+	Resolves the open portal once every living player decided (timeout = undecided ones
+	go on). Waits while nobody living is left but someone is still deciding on the revive
+	offer (they may come back and choose).
+]]
+local function checkChoices(timeout: boolean)
+	if sub ~= "Open" then
+		return
+	end
+	local alive, ready, awaiting = 0, 0, false
+	for _, rp in ipairs(participants()) do
+		if rp.Alive then
+			alive += 1
+			if rp.PortalChoice then
+				ready += 1
+			end
+		elseif rp.AwaitingRevive then
+			awaiting = true
+		end
+	end
+	state:SetAttribute("PortalReady", alive > 0 and (ready .. "/" .. alive) or "")
+	if alive == 0 and awaiting then
+		return
+	end
+	if ready < alive and not timeout then
+		return
+	end
+	if alive > 0 then
+		for _, rp in ipairs(participants()) do
+			if rp.Alive and not rp.PortalChoice then
+				rp.PortalChoice = "Next"
+			end
+		end
+		startTravel()
+	else
+		-- every living player went back to the lobby: the run ends here
+		closeOffers()
+		ctx.XPSystem.CollectAll(true)
+		ctx.RunManager.FinishFromPortal()
+	end
+end
+
+-- Someone left the run, returned, fell or was revived: the choice may be complete now.
+function StageManager.OnRosterChanged()
+	if sub == "Open" then
+		checkChoices(false)
+	end
+end
+
+local function openPortal()
+	setSub("Open")
+	portalState("Open")
+	state:SetAttribute("SurgeLeft", 0)
+	local p = portal
+	-- the leftovers burn up (they still drop their gems) and every gem flies to the team
+	ctx.EnemySpawner.KillInRadius(p and p.Pos or Config.ArenaOrigin, 100000, nil)
+	ctx.WeaponSystem.ClearHostile()
+	for _, rp in ipairs(participants()) do
+		if rp.Alive then
+			ctx.XPSystem.MagnetAll(rp)
+			break
+		end
+	end
+	if p then
+		Fx.Ring(p.Pos, 40, Color3.fromRGB(255, 220, 130))
+	end
+	choiceLeft = Config.Stages.ChoiceSeconds
+	shownChoice = -1
+	for _, rp in ipairs(participants()) do
+		rp.PortalChoice = nil
+		rp.PortalOffered = false
+	end
+	ctx.RunManager.Broadcast("THE PORTAL IS OPEN", Color3.fromRGB(255, 220, 120), true)
+	checkChoices(false)
+end
+
+local function onChoice(player: Player, choice: any)
+	if choice ~= "Next" and choice ~= "Return" then
+		return
+	end
+	if sub ~= "Open" then
+		return
+	end
+	local rp = ctx.RunManager.GetRunPlayer(player)
+	if not rp or rp.Returned or not rp.Alive or rp.PortalChoice == choice then
+		return
+	end
+	if choice == "Return" then
+		ctx.RunManager.ReturnThroughPortal(rp)
+	else
+		rp.PortalChoice = "Next"
+		Remotes.FireClient("PortalOffer", player, { Chosen = "Next" })
+	end
+	checkChoices(false)
+end
+
+------------------------------------------------------------------------------------------
+-- Per frame
+------------------------------------------------------------------------------------------
+
+local function stepExplore(dt: number)
+	stageTime += dt
+	local locked = math.max(0, lockSeconds() - stageTime)
+	local lockShown = math.ceil(locked)
+	if lockShown ~= shownLock then
+		shownLock = lockShown
+		state:SetAttribute("PortalLockLeft", lockShown)
+		if lockShown == 0 and stageTime > 0.5 then
+			ctx.RunManager.Broadcast("The portal awakens!", Color3.fromRGB(180, 200, 255))
+		end
+	end
+	if not hinted and stageTime >= math.max(Config.Stages.HintAfterSeconds, lockSeconds()) then
+		hinted = true
+		state:SetAttribute("PortalHint", true)
+		ctx.RunManager.Broadcast("The portal is marked on your screen.", Color3.fromRGB(180, 200, 255))
+	end
+	miniWaveTimer += dt
+	if miniWaveTimer >= Config.Run.MiniWaveInterval then
+		miniWaveTimer = 0
+		ctx.EnemySpawner.MiniWave()
+	end
+	local p = portal
+	if not p then
+		return
+	end
+	local inside = false
+	local r2 = p.Radius * p.Radius
+	for _, rp in ipairs(participants()) do
+		local root: BasePart? = rp.Root
+		if rp.Alive and root then
+			local d = (root.Position - p.Pos) * FLAT
+			if d.X * d.X + d.Z * d.Z <= r2 then
+				inside = true
+			end
+		end
+	end
+	if inside and locked <= 0 then
+		charge = math.min(1, charge + dt / Config.Stages.ChargeSeconds)
+	else
+		charge = math.max(0, charge - dt * Config.Stages.ChargeDecay)
+	end
+	publishCharge()
+	portalState("Charging", charge)
+	if charge >= 1 and not startBoss() then
+		charge = 0.98 -- no free enemy slot this frame: try again next frame
+	end
+end
+
+local function stepSurge(dt: number)
+	local S = Config.Stages
+	if surgeQueued > 0 then
+		surgeBudget += dt * surgeTotal / math.max(0.1, S.SurgeSpawnSeconds)
+		local k = math.min(surgeQueued, math.floor(surgeBudget))
+		if k > 0 then
+			surgeBudget -= k
+			local p = portal
+			local made = ctx.EnemySpawner.SpawnSurge(k, p and p.Pos or Config.ArenaOrigin)
+			surgeQueued -= k
+			if made == 0 and #ctx.EnemySpawner.Active >= Config.Enemies.MaxLive then
+				surgeQueued = 0 -- the enemy cap is full: the surge is as big as it gets
+			end
+		end
+	end
+	surgeTimer -= dt
+	state:SetAttribute("SurgeLeft", math.max(0, math.ceil(surgeTimer)))
+	local left = #ctx.EnemySpawner.Active
+	if surgeTimer <= 0 or (surgeQueued == 0 and left <= math.max(3, math.floor(surgeTotal * S.SurgeEndRemaining))) then
+		openPortal()
+	end
+end
+
+local function stepOpen(dt: number)
+	-- send the panel to players who are (or came back) alive
+	for _, rp in ipairs(participants()) do
+		if rp.Alive and not rp.PortalOffered and not rp.PortalChoice then
+			sendOffer(rp)
+		end
+	end
+	-- the countdown stops while the run is frozen (pause menu, level-up choice)
+	if not ctx.RunManager.IsFrozen() then
+		choiceLeft -= dt
+	end
+	local shown = math.max(0, math.ceil(choiceLeft))
+	if shown ~= shownChoice then
+		shownChoice = shown
+		state:SetAttribute("ChoiceLeft", shown)
+	end
+	if choiceLeft <= 0 then
+		checkChoices(true)
+	end
+end
+
+local function stepTravel(dt: number)
+	travelTimer -= dt
+	if travelTimer > 0 then
+		return
+	end
+	if travelStep == "FadeIn" then
+		-- the screens are dark: bank what is still on the floor, then swap the arena
+		ctx.XPSystem.CollectAll()
+		ctx.EnemySpawner.DespawnAll()
+		ctx.WeaponSystem.Clear()
+		ctx.XPSystem.Clear()
+		local arena = buildStage(stage + 1)
+		ctx.RunManager.TravelPlayers(arena)
+		travelStep = "FadeOut"
+		travelTimer = 0.5
+	else
+		travelStep = ""
+		setSub("Explore")
+		portalState("Idle", 0)
+		ctx.RunManager.ApplyMovementAll()
+		ctx.RunManager.Broadcast("STAGE " .. stage, Color3.fromRGB(255, 230, 150), true)
+		ctx.RunManager.Broadcast(StageManager.ArenaDisplayName() .. " · find the portal", Color3.fromRGB(180, 200, 255))
+	end
+end
+
+function StageManager.Step(dt: number)
+	if sub == "None" or not ctx.RunManager.IsRunning() then
+		return
+	end
+	if sub == "Travel" then
+		stepTravel(dt)
+		return
+	end
+	if sub == "Open" then
+		stepOpen(dt)
+		return
+	end
+	if not ctx.RunManager.IsSimulating() then
+		return
+	end
+	if sub == "Explore" then
+		stepExplore(dt)
+	elseif sub == "Surge" then
+		stepSurge(dt)
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- Dev tools (RunManager checks who may use them)
+------------------------------------------------------------------------------------------
+
+-- "Spawn portal boss": charges the portal at once (also while it is dormant).
+function StageManager.DevActivate(): boolean
+	if sub ~= "Explore" then
+		return false
+	end
+	charge = 1
+	return startBoss()
+end
+
+-- "Teleport to portal": next to the portal's rune circle (the charge then starts).
+function StageManager.DevTeleport(rp): boolean
+	local p = portal
+	local root: BasePart? = rp.Root
+	if not p or not root or not rp.Alive or sub == "Travel" then
+		return false
+	end
+	local toCentre = (Config.ArenaOrigin - p.Pos) * FLAT
+	local dir = toCentre.Magnitude > 1 and toCentre.Unit or Vector3.new(0, 0, 1)
+	ctx.RunManager.TeleportPlayer(rp, p.Pos + dir * (p.Radius - 2))
+	return true
+end
+
+------------------------------------------------------------------------------------------
+-- Lifecycle
+------------------------------------------------------------------------------------------
+
+function StageManager.Init(c)
+	ctx = c
+	state = Remotes.State()
+	state:SetAttribute("Stage", 0)
+	state:SetAttribute("StagePhase", "None")
+end
+
+function StageManager.Start()
+	Remotes.Listen("PortalChoice", onChoice, 3)
+end
+
+return StageManager
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="32">
         <Properties>
           <string name="Name">WeaponSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -11310,6 +12454,16 @@ function WeaponSystem.ClearOwner(rp)
 	end
 end
 
+-- Removes every hostile (boss) projectile (the portal opening).
+function WeaponSystem.ClearHostile()
+	for i = #live, 1, -1 do
+		local p = live[i]
+		if p.Hostile then
+			p.Cancelled = true
+		end
+	end
+end
+
 function WeaponSystem.Clear()
 	WeaponSystem.ClearOwner(nil)
 	sync()
@@ -11368,7 +12522,7 @@ return WeaponSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="32">
+      <Item class="ModuleScript" referent="33">
         <Properties>
           <string name="Name">XPSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -11660,6 +12814,51 @@ function XPSystem.Step(dt: number)
 	updatePickups(runPlayers)
 end
 
+--[[
+	Before the arena is swapped (travel to the next stage) nothing on the floor is lost:
+	the XP of every gem left goes to the team (shared, like a pickup), every chest is
+	opened for a living participant (taking turns), a chicken heals the first living one.
+	Magnets and bombs have nothing left to do and just vanish. Call Clear() afterwards.
+	includeFallen: when nobody is alive (the run ends at the portal) chests go to fallen
+	participants instead.
+]]
+function XPSystem.CollectAll(includeFallen: boolean?)
+	local total = 0
+	for _, gem in ipairs(activeGems) do
+		total += gem.Value
+	end
+	local alive = {}
+	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if rp.Alive and rp.Root then
+			table.insert(alive, rp)
+		end
+	end
+	if #alive == 0 and includeFallen then
+		-- the run ends with only fallen teammates left: their chests still pay out
+		for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+			if rp.Stats then
+				table.insert(alive, rp)
+			end
+		end
+	end
+	if #alive == 0 then
+		return
+	end
+	if total > 0 then
+		XPSystem.GiveSharedXP(total)
+	end
+	local turn = 0
+	for i = #pickups, 1, -1 do
+		local p = pickups[i]
+		if p.Kind == "Chest" or p.Kind == "Chicken" then
+			turn += 1
+			local rp = alive[(turn - 1) % #alive + 1]
+			table.remove(pickups, i)
+			collectPickup(p, rp)
+		end
+	end
+end
+
 -- Removes every gem, pickup and chest (run cleanup).
 function XPSystem.Clear()
 	for i = #activeGems, 1, -1 do
@@ -11694,19 +12893,19 @@ return XPSystem
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="33">
+  <Item class="SoundService" referent="34">
     <Properties>
       <string name="Name">SoundService</string>
       <bool name="RespectFilteringEnabled">true</bool>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="34">
+  <Item class="StarterGui" referent="35">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="35">
+  <Item class="StarterPlayer" referent="36">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <float name="CameraMaxZoomDistance">120</float>
@@ -11719,15 +12918,15 @@ return XPSystem
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="36">
+    <Item class="StarterPlayerScripts" referent="37">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="37">
+      <Item class="Folder" referent="38">
         <Properties>
           <string name="Name">SwarmClient</string>
         </Properties>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">Audio</string>
             <string name="Source"><![CDATA[--[[
@@ -11833,7 +13032,7 @@ return Audio
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">CameraController</string>
             <string name="Source"><![CDATA[--[[
@@ -12070,7 +13269,7 @@ return CameraController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="40">
+        <Item class="LocalScript" referent="41">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[--[[
@@ -12153,7 +13352,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">DevPanel</string>
             <string name="Source"><![CDATA[--[[
@@ -12163,7 +13362,7 @@ end
 	Normal players never see it. Config.Dev.Enabled = false removes it everywhere.
 
 	  Lobby:  Start solo now (no countdown)
-	  In run: +5 levels, Skip to 14:30 (boss)
+	  In run: +5 levels, Spawn portal boss (charges this stage's portal), Teleport to portal
 
 	The button is only a shortcut: the server (RunManager "DevCommand") applies the same
 	rule again and ignores everyone else.
@@ -12266,7 +13465,8 @@ function DevPanel.Init(root: Instance, host: { [string]: any }?)
 	end
 	table.insert(lobbyButtons, item("Start solo now", "StartSolo", 1))
 	table.insert(runButtons, item("+" .. Config.Dev.AddLevels .. " levels", "AddLevels", 2))
-	table.insert(runButtons, item(string.format("Skip to %s (boss)", UIKit.formatTime(Config.Dev.SkipToTime)), "SkipToBoss", 3))
+	table.insert(runButtons, item("Spawn portal boss", "SpawnPortalBoss", 3))
+	table.insert(runButtons, item("Teleport to portal", "TeleportToPortal", 4))
 	panel = holder
 
 	-- bottom right in landscape (clear of the menu columns and the ability bar), left edge
@@ -12307,7 +13507,7 @@ return DevPanel
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">EnemyRenderer</string>
             <string name="Source"><![CDATA[--[[
@@ -12752,16 +13952,21 @@ return EnemyRenderer
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--[[
 	Hud.lua
 	The in-run HUD (built and driven by UIBuilder):
-	  top centre    big run timer, under it a plate with health (heart + crimson bar) and
+	  top centre    big run timer (total run time over every stage), under it the stage
+	                pill ("STAGE 2 · Find the portal" → "Defeat the Queen" → "Survive the
+	                surge" → "Portal open"), a plate with health (heart + crimson bar) and
 	                level / XP (gold bar), then the boss bar while the boss lives
 	  top right     kills and gold counters, pause button
-	  centre        status line (paused, teammate choosing, fallen, partner revive progress)
+	  centre        status line (paused, "<Name> is choosing an upgrade", fallen, partner
+	                revive progress)
+	The portal arrow, the charge ring, the portal choice panel and the travel fade live in
+	StageUI.lua.
 	  bottom centre ability bar: weapons row + passives row with level badges (portrait:
 	                under the health plate, away from the thumbs)
 	  screen edges  crimson vignette pulse when hurt, slow pulse at low health
@@ -12895,6 +14100,32 @@ local function buildTop(frame: Frame)
 	})
 end
 
+-- Stage pill under the timer: portal icon, "STAGE 2", objective.
+local function buildStage(frame: Frame)
+	local holder, face = UIKit.Surface(frame, { Name = "Stage", Transparency = 0.2, Radius = 999, Shadow = false, Size = UDim2.fromOffset(0, 30) })
+	holder.AnchorPoint = Vector2.new(0.5, 0)
+	holder.AutomaticSize = Enum.AutomaticSize.X
+	face.AutomaticSize = Enum.AutomaticSize.X
+	face.Size = UDim2.fromScale(0, 1)
+	UIKit.padding(face, 0, 14, 0, 10)
+	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 7) })
+	ui.Stage = holder
+	ui.StageIcon = Icons.Draw(face, "portal", { Size = 18, LayoutOrder = 1, Back = P.slate_900 })
+	ui.StageNumber = text(face, "Label", "STAGE 1", {
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(0, 30),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextColor3 = P.gold_300,
+	})
+	ui.StageDot = new("Frame", { BackgroundColor3 = P.gold_500, Size = UDim2.fromOffset(4, 4), LayoutOrder = 3, BorderSizePixel = 0 }, face)
+	UIKit.corner(ui.StageDot, 999)
+	ui.StageGoal = text(face, "BodyStrong", "Find the portal", {
+		LayoutOrder = 4,
+		Size = UDim2.fromOffset(0, 30),
+		AutomaticSize = Enum.AutomaticSize.X,
+	})
+end
+
 local function buildStatus(frame: Frame)
 	local holder, face = UIKit.Surface(frame, { Name = "Status", Transparency = 0.12, Radius = 999, Visible = false })
 	holder.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -12994,10 +14225,16 @@ local function layout()
 	end
 	place(ui.Timer, W / 2 - timerW / 2, timerY, timerW, timerH)
 
+	-- stage pill under the timer
+	local stageH = compact and 34 or 30
+	ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(timerY + timerH - 2))
+	ui.Stage.Size = UDim2.fromOffset(0, stageH)
+	local stageBottom = ui.Stage.Visible and (timerY + timerH - 2 + stageH + 6) or (timerY + timerH + 2)
+
 	-- plate
 	local plateW = math.min(Theme.Layout.HudPlate.X, W - 2 * M)
 	local plateH = compact and 78 or Theme.Layout.HudPlate.Y
-	local plateY = timerY + timerH + 2
+	local plateY = stageBottom
 	if portrait then
 		-- keep the plate clear of the counters / pause row
 		plateY = math.max(plateY, pauseY + 58)
@@ -13174,11 +14411,51 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		end
 		anim.Minute = minute
 	end
-	local toBoss = Config.Run.BossTime - runTime
-	if toBoss > 0 and toBoss <= 10 then
-		ui.Timer.TextColor3 = C.Text:Lerp(P.crimson_300, 0.5 + 0.5 * math.sin(os.clock() * 10))
-	else
-		ui.Timer.TextColor3 = C.Text
+	ui.Timer.TextColor3 = C.Text
+
+	-- stage pill: what to do on this stage
+	local stageNo = state:GetAttribute("Stage") or 0
+	local stagePhase = state:GetAttribute("StagePhase") or "None"
+	local goal, goalColor = "", C.Text
+	if stagePhase == "Explore" then
+		local chargeNow = state:GetAttribute("PortalCharge") or 0
+		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
+		if chargeNow > 0 then
+			goal = string.format("Opening the portal %d%%", math.floor(chargeNow * 100))
+		elseif lockLeft > 0 then
+			goal, goalColor = "The portal is dormant: " .. UIKit.formatTime(lockLeft), C.TextMuted
+		else
+			goal = "Find the portal"
+		end
+	elseif stagePhase == "Boss" then
+		goal, goalColor = "Defeat the Queen", P.crimson_300
+	elseif stagePhase == "Surge" then
+		local left = state:GetAttribute("SurgeLeft") or 0
+		goal, goalColor = left > 0 and string.format("Survive the surge · %ds", left) or "Survive the surge", P.crimson_300
+	elseif stagePhase == "Open" then
+		goal, goalColor = "Portal open", P.gold_300
+	elseif stagePhase == "Travel" then
+		goal = "Travelling..."
+	end
+	local stageShown = stageNo > 0 and goal ~= ""
+	if ui.Stage.Visible ~= stageShown then
+		ui.Stage.Visible = stageShown
+		layout()
+	end
+	if stageShown then
+		local num = "STAGE " .. tostring(stageNo)
+		if ui.StageNumber.Text ~= num then
+			ui.StageNumber.Text = num
+			UIAnim.Pop(ui.Stage, 0, 0.7)
+		end
+		if ui.StageGoal.Text ~= goal then
+			ui.StageGoal.Text = goal
+			if anim.StagePhase ~= stagePhase and anim.StagePhase ~= nil then
+				UIAnim.Punch(ui.Stage, 0.2)
+			end
+		end
+		anim.StagePhase = stagePhase
+		ui.StageGoal.TextColor3 = goalColor
 	end
 
 	-- health: the fill follows at once, the ivory trail slides down behind it
@@ -13259,14 +14536,21 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	-- status line
 	if state:GetAttribute("Frozen") then
 		if state:GetAttribute("LevelUpPause") then
-			if player:GetAttribute("Paused") then
-				setStatus("") -- you are the one choosing: the level-up screen says it all
+			-- only someone else choosing is news; the chooser has the level-up cards
+			local ids = state:GetAttribute("ChoosingIds") or ""
+			local mine = string.find(ids, "," .. tostring(player.UserId) .. ",", 1, true) ~= nil
+			local names = state:GetAttribute("ChoosingNames") or ""
+			if mine or player:GetAttribute("Paused") or names == "" then
+				setStatus("")
 			else
-				setStatus("Paused: a teammate is choosing an upgrade", "hourglass")
+				local several = string.find(names, ",", 1, true) ~= nil
+				setStatus(string.format("Paused: %s %s choosing an upgrade", names, several and "are" or "is"), "hourglass")
 			end
 		else
 			setStatus("Paused", "pause")
 		end
+	elseif not alive and not reviveOpen and phase == "Running" and stagePhase == "Open" then
+		setStatus("The portal is open. Your team is choosing...", "portal")
 	elseif not alive and not reviveOpen and phase == "Running" then
 		local progress = player:GetAttribute("ReviveProgress") or 0
 		if progress > 0 then
@@ -13314,6 +14598,7 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	local frame = new("Frame", { Name = "HUD", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = Theme.Z.Hud }, root)
 	ui.Frame = frame
 	buildTop(frame)
+	buildStage(frame)
 	buildBar(frame)
 	buildStatus(frame)
 	buildVignette(fxGui)
@@ -13330,7 +14615,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">Icons</string>
             <string name="Source"><![CDATA[--[[
@@ -13702,6 +14987,7 @@ local DEFAULT: { [string]: Colors } = {
 	Gold = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_600 },
 	Heal = { Main = P.dirt_400, Accent = P.ivory_100, Extra = P.gold_300 },
 	revive = { Main = P.crimson_400, Accent = P.ivory_100, Extra = P.crimson_300 },
+	portal = { Main = P.stone_300, Accent = P.fx_arcane, Extra = P.gold_400 },
 }
 
 ------------------------------------------------------------------------------------------
@@ -14041,6 +15327,17 @@ DRAW.clock = function(c)
 	ring(c, 12, 12, 8.4, 2.4, c.main)
 	seg(c, 12, 12, 12, 7, 2.2, c.main)
 	seg(c, 12, 12, 15.6, 14, 2.2, c.main)
+end
+
+-- Stage portal: stone ring on two plinths with a glowing membrane and a gold keystone.
+DRAW.portal = function(c)
+	dot(c, 12, 10.6, 5.6, c.accent, c.mono and 0.6 or 0.25)
+	ring(c, 12, 10.6, 7.6, 2.6, c.main)
+	box(c, 5.6, 19, 4.4, 4.4, c.main, 0, 0.8)
+	box(c, 18.4, 19, 4.4, 4.4, c.main, 0, 0.8)
+	box(c, 12, 22.2, 21, 1.8, c.main, 0, 0.8)
+	box(c, 12, 3.1, 3.2, 3.2, c.mono and c.main or c.extra, 45, 0.5)
+	dot(c, 12, 10.6, 2.2, c.mono and c.back or c.light, c.mono and 0 or 0.35)
 end
 
 DRAW.castle = function(c)
@@ -14482,7 +15779,7 @@ return Icons
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">LobbyScreen</string>
             <string name="Source"><![CDATA[--[[
@@ -14670,12 +15967,12 @@ local function arenaText(): (string, string)
 	local arenaId = state:GetAttribute("SelectedArena") or "Forest"
 	local arena = (Config.Arenas :: any)[arenaId]
 	local title = "ARENA: " .. string.upper(arena and arena.DisplayName or tostring(arenaId))
-	local wins = profile and profile.Stats.Wins or 0
+	local best = profile and (profile.Stats.BestStage or 0) or 0
 	for _, name in ipairs(Config.Arenas.Order) do
 		local def = (Config.Arenas :: any)[name]
-		if wins < def.RequiredWins then
-			local need = def.RequiredWins - wins
-			return title, string.format("%s: win %d run%s to unlock", def.DisplayName, need, need == 1 and "" or "s")
+		local need = def.RequiredBestStage or 0
+		if best < need then
+			return title, string.format("%s: reach stage %d to unlock", def.DisplayName, need)
 		end
 	end
 	return title, "Face the swarm"
@@ -15299,7 +16596,8 @@ function LobbyScreen.Update(_dt: number?)
 		kind = "Busy"
 		ui.QueueRing.Visible = false
 		ui.QueueTitle.Text = "RUN IN PROGRESS"
-		ui.QueueCaption.Text = UIKit.track("Time " .. UIKit.formatTime(state:GetAttribute("RunTime") or 0))
+		local stageNo = state:GetAttribute("Stage") or 0
+		ui.QueueCaption.Text = UIKit.track((stageNo > 0 and ("Stage " .. stageNo .. " · ") or "") .. "Time " .. UIKit.formatTime(state:GetAttribute("RunTime") or 0))
 		ui.QueueNote.Text = "Wait here for the next one! Pick a character or buy upgrades meanwhile."
 		ui.QueueRow.Visible = false
 		if ui.QueueKey ~= "busy" then
@@ -15369,7 +16667,7 @@ return LobbyScreen
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">MenuCharacters</string>
             <string name="Source"><![CDATA[--[[
@@ -15778,13 +17076,13 @@ return MenuCharacters
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">MenuStats</string>
             <string name="Source"><![CDATA[--[[
 	MenuStats.lua
 	The STATS screen (replaces the old in-world stats sign): a panel of tiles with
-	everything the profile knows: best time, wins, runs, win rate, total kills, gold,
+	everything the profile knows: best time, best stage, wins, runs, win rate, total kills, gold,
 	characters and skins owned, permanent upgrade levels, saved revives and passes.
 ]]
 
@@ -15808,6 +17106,7 @@ end
 
 local TILES = {
 	{ Key = "Best", Icon = "crown", Caption = "Best time" },
+	{ Key = "Stage", Icon = "portal", Caption = "Best stage" },
 	{ Key = "Wins", Icon = "trophy", Caption = "Wins" },
 	{ Key = "Runs", Icon = "flag", Caption = "Runs played" },
 	{ Key = "Rate", Icon = "chevronsUp", Caption = "Win rate" },
@@ -15840,7 +17139,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	ui.Tiles = {}
 	for i, t in ipairs(TILES) do
 		local f = UIKit.Panel(scroll, { Name = t.Key, LayoutOrder = i }, true)
-		Icons.Draw(f, t.Icon, { Size = 28, Position = UDim2.fromOffset(14, 14), Color = if t.Icon == "coin" or t.Icon == "revive" then nil else P.gold_400, Back = P.slate_950 })
+		Icons.Draw(f, t.Icon, { Size = 28, Position = UDim2.fromOffset(14, 14), Color = if t.Icon == "coin" or t.Icon == "revive" or t.Icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
 		ui.Values[t.Key] = text(f, "Number", "-", { Position = UDim2.fromOffset(14, 48), Size = UDim2.new(1, -28, 0, TS(28) + 4) }, 28)
 		text(f, "Caption", UIKit.track(t.Caption), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -10), Size = UDim2.new(1, -28, 0, TS(12) + 2) })
 		ui.Tiles[i] = f
@@ -15855,6 +17154,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		local s = p.Stats
 		local V = ui.Values
 		V.Best.Text = UIKit.formatTime(s.BestTime)
+		V.Stage.Text = (s.BestStage or 0) > 0 and ("Stage " .. tostring(s.BestStage)) or "-"
 		V.Wins.Text = UIKit.formatNumber(s.Wins)
 		V.Runs.Text = UIKit.formatNumber(s.Runs)
 		V.Rate.Text = s.Runs > 0 and string.format("%d%%", math.floor(s.Wins / s.Runs * 100 + 0.5)) or "-"
@@ -15927,7 +17227,7 @@ return MenuStats
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">MenuUpgrades</string>
             <string name="Source"><![CDATA[--[[
@@ -16202,7 +17502,7 @@ return MenuUpgrades
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">MobileControls</string>
             <string name="Source"><![CDATA[--[[
@@ -16447,7 +17747,7 @@ return MobileControls
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">ModelLibrary</string>
             <string name="Source"><![CDATA[--[[
@@ -17214,7 +18514,7 @@ return ModelLibrary
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">Occlusion</string>
             <string name="Source"><![CDATA[--[[
@@ -17606,7 +18906,7 @@ return Occlusion
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">Showcase</string>
             <string name="Source"><![CDATA[--[[
@@ -18191,7 +19491,545 @@ return Showcase
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
+          <Properties>
+            <string name="Name">StageUI</string>
+            <string name="Source"><![CDATA[--[[
+	StageUI.lua
+	The client side of the stage loop (server: StageManager), in the HUD's style:
+
+	  portal arrow   after Config.Stages.HintAfterSeconds (SwarmState PortalHint) an arrow
+	                 at the screen edge points at this stage's portal, with the distance;
+	                 when the portal is on screen a small marker floats over it instead
+	  charge ring    24 rune segments over the portal that fill while someone stands in
+	                 its circle ("Stand here to open" / "Opening 60%")
+	  choice panel   the portal opened (remote PortalOffer): stage cleared, the run so far,
+	                 NEXT STAGE (primary gold) or RETURN TO LOBBY (+ the win bonus), the
+	                 auto-continue countdown and who is ready (SwarmState ChoiceLeft /
+	                 PortalReady). Answers with the PortalChoice remote; the server decides.
+	  travel fade    remote StageTravel: the screen fades to slate with "STAGE N · Arena",
+	                 then fades back once the new stage is running
+
+	Nothing here is Active except the choice panel, so the thumbstick keeps working.
+	UIBuilder builds it (StageUI.Build) and calls StageUI.Update every frame in a run.
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local UIKit = require(script.Parent.UIKit)
+local UIAnim = require(script.Parent.UIAnim)
+local Icons = require(script.Parent.Icons)
+local Hud = require(script.Parent.Hud)
+
+local StageUI = {}
+
+local player = Players.LocalPlayer
+local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local C, P = Theme.Color, Theme.Palette
+
+local SEGMENTS = 24
+local RING_R = 30
+
+local kit: { [string]: any } = {}
+local ui: { [string]: any } = {}
+local offer: { [string]: any }? = nil
+local chosen = false
+local travel = { Active = false, Since = 0 }
+
+------------------------------------------------------------------------------------------
+-- Build
+------------------------------------------------------------------------------------------
+
+local function buildArrow(root: Frame)
+	local holder = new("Frame", {
+		Name = "PortalArrow",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(64, 64),
+		Visible = false,
+		ZIndex = Theme.Z.Hud,
+	}, root)
+	ui.Arrow = holder
+	-- the pointer: a gold chevron on a ring that turns toward the portal
+	local pivot = new("Frame", { Name = "Pivot", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(64, 64) }, holder)
+	ui.ArrowPivot = pivot
+	-- a gold diamond half hidden behind the badge reads as the arrow's point
+	local tip = new("Frame", {
+		Name = "Tip",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.fromOffset(22, 22),
+		Rotation = 45,
+		BackgroundColor3 = P.gold_400,
+		BorderSizePixel = 0,
+	}, pivot)
+	UIKit.corner(tip, 3)
+	UIKit.stroke(tip, P.gold_200, 1.5, 0.2)
+	local badge, face = UIKit.Surface(holder, { Name = "Badge", Radius = 999, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.2, Size = UDim2.fromOffset(48, 48), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	local _ = badge
+	Icons.Draw(face, "portal", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	ui.ArrowDistance = text(holder, "Label", "", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 1, 0),
+		Size = UDim2.fromOffset(90, TS(14) + 4),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = P.ivory_100,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.4,
+	})
+	UIAnim.Breathe(badge, 0.06, 1.6)
+end
+
+local function buildRing(root: Frame)
+	local holder = new("Frame", {
+		Name = "PortalRing",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(RING_R * 2 + 24, RING_R * 2 + 24),
+		Visible = false,
+		ZIndex = Theme.Z.Hud,
+	}, root)
+	ui.Ring = holder
+	local disc = new("Frame", {
+		Name = "Disc",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(RING_R * 2 - 8, RING_R * 2 - 8),
+		BackgroundColor3 = C.Panel,
+		BackgroundTransparency = 0.25,
+		BorderSizePixel = 0,
+	}, holder)
+	UIKit.corner(disc, 999)
+	UIKit.stroke(disc, P.gold_500, 1, 0.5)
+	Icons.Draw(disc, "portal", { Size = 28, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	ui.Segments = {}
+	local c = RING_R + 12
+	for i = 1, SEGMENTS do
+		local a = (i - 1) / SEGMENTS * math.pi * 2 - math.pi / 2
+		local seg = new("Frame", {
+			Name = "Seg",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(c + math.cos(a) * RING_R, c + math.sin(a) * RING_R),
+			Size = UDim2.fromOffset(4, 9),
+			Rotation = math.deg(a) + 90,
+			BackgroundColor3 = P.slate_500,
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+		}, holder)
+		UIKit.corner(seg, 999)
+		ui.Segments[i] = seg
+	end
+	ui.RingLabel = text(holder, "Label", "", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 1, 2),
+		Size = UDim2.fromOffset(220, TS(14) + 6),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = P.gold_200,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.35,
+	})
+end
+
+local function smallStat(parent: Instance, icon: string, caption: string, order: number): TextLabel
+	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(104, 74) }, true)
+	Icons.Draw(f, icon, { Size = 20, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Color = if icon == "coin" or icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
+	local value = text(f, "Number", "0", {
+		Name = "Value",
+		Position = UDim2.fromOffset(0, 28),
+		Size = UDim2.new(1, 0, 0, TS(20) + 2),
+		TextXAlignment = Enum.TextXAlignment.Center,
+	}, 20)
+	text(f, "Caption", UIKit.track(caption), {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, -6),
+		Size = UDim2.new(1, 0, 0, TS(11) + 2),
+		TextXAlignment = Enum.TextXAlignment.Center,
+	}, 10)
+	return value
+end
+
+local function choose(choice: string)
+	if not offer then
+		return
+	end
+	Remotes.Get("PortalChoice"):FireServer(choice)
+	if choice == "Return" then
+		-- the server sends the results screen next; close at once so it never flickers
+		kit.Hide(ui.Choice.Overlay, "Portal")
+		offer = nil
+	end
+end
+
+local function buildChoice(root: Frame)
+	local m = UIKit.Modal(root, "Portal", 560, 480, Theme.Z.LevelUp - 2)
+	m.Overlay:SetAttribute("BackdropTransparency", 0.5)
+	ui.Choice = m
+	local content = m.Content
+	local list = UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center })
+	kit.FitModal(m, list)
+	ui.ChoiceIcon = Icons.Draw(content, "portal", { Size = 46, LayoutOrder = 1, Back = P.slate_900 })
+	ui.ChoiceTitle = text(content, "H1", "STAGE 1 CLEARED", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300 })
+	UIKit.Divider(content, 240, { LayoutOrder = 3 })
+	ui.ChoiceSub = text(content, "Body", "The portal is open. Go deeper, or take your winnings home.", {
+		LayoutOrder = 4,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = true,
+		Size = UDim2.new(1, 0, 0, TS(16) * 2 + 6),
+	})
+	local stats = new("Frame", { Name = "Stats", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 74) }, content)
+	ui.ChoiceStats = stats
+	UIKit.list(stats, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
+	ui.StatStages = smallStat(stats, "portal", "Stages", 1)
+	ui.StatTime = smallStat(stats, "clock", "Time", 2)
+	ui.StatKills = smallStat(stats, "skull", "Kills", 3)
+	ui.StatGold = smallStat(stats, "coin", "Gold", 4)
+
+	local buttons = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 92) }, content)
+	ui.ChoiceButtons = buttons
+	ui.ChoiceButtonsList = UIKit.list(buttons, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12) })
+	ui.Next = UIKit.Button(buttons, {
+		Kind = "Primary",
+		Title = "NEXT STAGE",
+		Subtitle = "Stage 2",
+		Icon = "portal",
+		IconSize = 30,
+		TitleSize = 15,
+		Size = UDim2.fromOffset(240, 76),
+		LayoutOrder = 1,
+		Glow = true,
+		OnClick = function()
+			choose("Next")
+		end,
+	})
+	ui.Return = UIKit.Button(buttons, {
+		Kind = "Secondary",
+		Title = "RETURN TO LOBBY",
+		Subtitle = "+0 gold · a win",
+		Icon = "castle",
+		IconSize = 26,
+		TitleSize = 15,
+		Size = UDim2.fromOffset(240, 76),
+		LayoutOrder = 2,
+		OnClick = function()
+			choose("Return")
+		end,
+	})
+	ui.ChoiceNote = text(content, "Caption", "", { LayoutOrder = 7, TextXAlignment = Enum.TextXAlignment.Center })
+	ui.ChoiceMeter = UIKit.Meter(content, { Gradient = Theme.Gradient.XP, Size = UDim2.fromOffset(280, 5), LayoutOrder = 8 })
+
+	kit.OnRelayout(function()
+		local v: Vector2 = kit.VirtualSize()
+		local w = math.min(560, v.X - 32)
+		local stacked = w < 540
+		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
+		ui.ChoiceButtonsList.FillDirection = stacked and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
+		ui.ChoiceButtonsList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		ui.ChoiceButtonsList.Padding = UDim.new(0, stacked and 8 or 12)
+		local bw = stacked and math.min(320, w - 48) or math.floor((w - 48 - 12) / 2)
+		ui.Next.Instance.Size = UDim2.fromOffset(bw, stacked and 66 or 76)
+		ui.Return.Instance.Size = UDim2.fromOffset(bw, stacked and 66 or 76)
+		buttons.Size = UDim2.new(1, 0, 0, stacked and 140 or 80)
+		local narrow = w < 470
+		stats.Size = UDim2.new(1, 0, 0, narrow and 156 or 74)
+	end)
+end
+
+local function buildFade(root: Frame)
+	local fade = new("Frame", {
+		Name = "StageFade",
+		BackgroundColor3 = P.slate_950,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = Theme.Z.Toast - 1,
+	}, root)
+	UIKit.Bleed(fade)
+	ui.Fade = fade
+	local box = new("Frame", { Name = "Title", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(600, 150), ZIndex = 2 }, fade)
+	UIKit.list(box, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center })
+	Icons.Draw(box, "portal", { Size = 44, LayoutOrder = 1, Back = P.slate_950, ZIndex = 2 })
+	ui.FadeTitle = text(box, "Display", "STAGE 2", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(44) + 8), ZIndex = 2 }, 44)
+	ui.FadeSub = text(box, "Label", "", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 2 })
+	ui.FadeLabels = { ui.FadeTitle, ui.FadeSub }
+end
+
+------------------------------------------------------------------------------------------
+-- Choice panel
+------------------------------------------------------------------------------------------
+
+local function refreshChoiceButtons()
+	if chosen then
+		ui.Next.SetText("READY", "Waiting for your team")
+		ui.Next.SetIcon("check")
+		ui.Next.SetEnabled(false)
+	else
+		ui.Next.SetText("NEXT STAGE", offer and string.format("Stage %d · %s", offer.NextStage or 2, tostring(offer.NextArena or "")) or nil)
+		ui.Next.SetIcon("portal")
+		ui.Next.SetEnabled(true)
+	end
+end
+
+local function onOffer(data)
+	if type(data) ~= "table" then
+		return
+	end
+	if data.Close then
+		offer = nil
+		chosen = false
+		kit.Hide(ui.Choice.Overlay, "Portal")
+		return
+	end
+	if data.Chosen then
+		chosen = data.Chosen == "Next"
+		refreshChoiceButtons()
+		return
+	end
+	offer = data
+	chosen = false
+	ui.ChoiceTitle.Text = string.format("STAGE %d CLEARED", data.Stage or 1)
+	ui.ChoiceSub.Text = data.Group and "The portal is open. Go deeper together, or take your winnings home." or "The portal is open. Go deeper, or take your winnings home."
+	ui.StatStages.Text = tostring(data.StagesCleared or 0)
+	ui.StatTime.Text = UIKit.formatTime(data.Time or 0)
+	ui.StatKills.Text = UIKit.formatNumber(data.Kills or 0)
+	ui.StatGold.Text = UIKit.formatNumber(data.Gold or 0)
+	-- a return counts as a win only from Config.Stages.WinMinStages cleared stages
+	local winNote = data.CountsAsWin and " · a win" or string.format(" · win from stage %d", data.WinMinStages or 3)
+	ui.Return.SetText("RETURN TO LOBBY", string.format("+%s gold", UIKit.formatNumber(data.ReturnBonus or 0)) .. winNote)
+	refreshChoiceButtons()
+	kit.Show(ui.Choice.Overlay, "Portal", true)
+	UIAnim.Pop(ui.ChoiceTitle, 0.05, 1.4)
+	UIKit.FocusIfGamepad(ui.Next.Instance)
+end
+
+------------------------------------------------------------------------------------------
+-- Travel
+------------------------------------------------------------------------------------------
+
+local function fadeTo(target: number, seconds: number)
+	local f = ui.Fade :: Frame
+	if target < 1 then
+		f.Visible = true
+	end
+	local tw = TweenService:Create(f, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), { BackgroundTransparency = target })
+	tw:Play()
+	for _, l in ipairs(ui.FadeLabels) do
+		TweenService:Create(l, TweenInfo.new(seconds), { TextTransparency = target < 1 and 0 or 1 }):Play()
+	end
+	if target >= 1 then
+		tw.Completed:Once(function()
+			if not travel.Active then
+				f.Visible = false
+			end
+		end)
+	end
+end
+
+local function onTravel(data)
+	if type(data) ~= "table" then
+		return
+	end
+	travel.Active = true
+	travel.Since = os.clock()
+	ui.FadeTitle.Text = "STAGE " .. tostring(data.Stage or "?")
+	ui.FadeSub.Text = UIKit.track(tostring(data.Arena or ""))
+	offer = nil
+	kit.Hide(ui.Choice.Overlay, "Portal")
+	fadeTo(0.02, math.max(0.2, (data.Seconds or 0.8) * 0.9))
+	UIAnim.Pop(ui.FadeTitle, 0.1, 0.7)
+end
+
+local function endTravel()
+	travel.Active = false
+	fadeTo(1, 0.6)
+end
+
+------------------------------------------------------------------------------------------
+-- Per frame
+------------------------------------------------------------------------------------------
+
+local function project(world: Vector3): (Vector2, boolean)
+	local cam = workspace.CurrentCamera
+	local vp, onScreen = cam:WorldToViewportPoint(world)
+	local s = math.max(0.01, kit.Scale())
+	local off: Vector2 = kit.GuiOffset()
+	return Vector2.new((vp.X - off.X) / s, (vp.Y - off.Y) / s), onScreen and vp.Z > 0
+end
+
+local function localRoot(): BasePart?
+	local char = player.Character
+	return char and char.PrimaryPart or nil
+end
+
+local function updateArrowAndRing(state: Configuration, stagePhase: string)
+	local pos = state:GetAttribute("PortalPos")
+	local root = localRoot()
+	local alive = player:GetAttribute("Alive") ~= false
+	if typeof(pos) ~= "Vector3" or not root or travel.Active then
+		ui.Arrow.Visible = false
+		ui.Ring.Visible = false
+		return
+	end
+	local v: Vector2 = kit.VirtualSize()
+	local W, H = v.X, v.Y
+	local flat = Vector3.new(pos.X - root.Position.X, 0, pos.Z - root.Position.Z)
+	local dist = flat.Magnitude
+
+	-- charge ring over the portal
+	local charge = state:GetAttribute("PortalCharge") or 0
+	local inside = alive and dist <= Config.Stages.PortalRadius
+	local top, topOn = project(pos + Vector3.new(0, 12, 0))
+	local showRing = stagePhase == "Explore" and (inside or charge > 0) and topOn
+	ui.Ring.Visible = showRing
+	if showRing then
+		-- beside the portal (right, or left near the edge), so the portal stays visible
+		local base = project(pos)
+		local side = (top.X + 150 > W - 60) and -1 or 1
+		local x = math.clamp(top.X + side * 150, 60, W - 60)
+		local y = math.clamp((top.Y + base.Y) / 2, Hud.TopBottom() + 50, H - 90)
+		ui.Ring.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
+		local lit = math.floor(charge * SEGMENTS + 0.001)
+		for i, seg in ipairs(ui.Segments) do
+			local on = i <= lit
+			seg.BackgroundColor3 = on and P.gold_300 or P.slate_500
+			seg.BackgroundTransparency = on and 0 or 0.25
+			seg.Size = on and UDim2.fromOffset(5, 11) or UDim2.fromOffset(4, 9)
+		end
+		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
+		if charge > 0 then
+			ui.RingLabel.Text = UIKit.track(string.format("Opening %d%%", math.floor(charge * 100)))
+		elseif lockLeft > 0 then
+			ui.RingLabel.Text = UIKit.track("Dormant " .. UIKit.formatTime(lockLeft))
+		else
+			ui.RingLabel.Text = UIKit.track(inside and "Stand here to open" or "Portal")
+		end
+	end
+
+	-- edge arrow (after the hint time, while exploring)
+	local showArrow = stagePhase == "Explore" and state:GetAttribute("PortalHint") == true and not inside and not showRing
+	if not showArrow then
+		ui.Arrow.Visible = false
+		return
+	end
+	local p, on = project(pos + Vector3.new(0, 6, 0))
+	local portrait: boolean = kit.IsPortrait()
+	local els = Hud.Elements()
+	local yMin = math.max(70, Hud.TopBottom() + 44)
+	if portrait and els.BarBottom then
+		yMin = math.max(yMin, els.BarBottom + 44)
+	end
+	local yMax = portrait and (H - 110) or (H - 70)
+	local xMin, xMax = 56, W - 56
+	-- landscape: the ability bar takes the bottom centre; keep the arrow above it there
+	local barTop, barL, barR = math.huge, 0, 0
+	if not portrait and els.Bar then
+		barTop = Hud.BarTop() - 48
+		barL = els.Bar.Position.X.Offset - 40
+		barR = barL + els.Bar.Size.X.Offset + 80
+	end
+	ui.ArrowDistance.Text = string.format("%d m", math.floor(dist + 0.5))
+	local overBar = p.Y > barTop and p.X > barL and p.X < barR
+	if on and p.X > xMin and p.X < xMax and p.Y > yMin and p.Y < yMax and not overBar then
+		-- on screen: a marker floats over the portal, pointing down at it
+		ui.Arrow.Visible = true
+		ui.Arrow.Position = UDim2.fromOffset(math.floor(p.X + 0.5), math.floor(p.Y - 40 + math.sin(os.clock() * 3) * 4 + 0.5))
+		ui.ArrowPivot.Rotation = 90
+		return
+	end
+	-- off screen: clamp the direction from the screen centre onto the safe rectangle
+	local c = Vector2.new(W / 2, (yMin + yMax) / 2)
+	local d = p - c
+	if not on then
+		-- behind the camera (or projected backwards): use the ground direction instead
+		local cam = workspace.CurrentCamera
+		local right = cam.CFrame.RightVector * Vector3.new(1, 0, 1)
+		local fwd = cam.CFrame.LookVector * Vector3.new(1, 0, 1)
+		if right.Magnitude > 0.01 and fwd.Magnitude > 0.01 then
+			d = Vector2.new(flat:Dot(right.Unit), -flat:Dot(fwd.Unit))
+		end
+	end
+	if d.Magnitude < 1 then
+		d = Vector2.new(0, -1)
+	end
+	local function clampTo(bottom: number): Vector2
+		local kx = d.X ~= 0 and ((d.X > 0 and (xMax - c.X) or (xMin - c.X)) / d.X) or math.huge
+		local ky = d.Y ~= 0 and ((d.Y > 0 and (bottom - c.Y) or (yMin - c.Y)) / d.Y) or math.huge
+		return c + d * math.min(kx, ky)
+	end
+	local at = clampTo(yMax)
+	if at.Y > barTop and at.X > barL and at.X < barR then
+		at = clampTo(barTop)
+	end
+	ui.Arrow.Visible = true
+	ui.Arrow.Position = UDim2.fromOffset(math.floor(at.X + 0.5), math.floor(at.Y + 0.5))
+	ui.ArrowPivot.Rotation = math.deg(math.atan2(d.Y, d.X))
+end
+
+function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
+	local stagePhase = state:GetAttribute("StagePhase") or "None"
+	if not inRun then
+		ui.Arrow.Visible = false
+		ui.Ring.Visible = false
+		if ui.Choice.Overlay.Visible then
+			offer = nil
+			kit.Hide(ui.Choice.Overlay, "Portal")
+		end
+		if travel.Active then
+			endTravel()
+		end
+		return
+	end
+	-- the travel fade lifts once the next stage runs (or after a safety timeout)
+	if travel.Active and ((stagePhase ~= "Travel" and os.clock() - travel.Since > 0.5) or os.clock() - travel.Since > 8) then
+		endTravel()
+	end
+	updateArrowAndRing(state, stagePhase)
+	if ui.Choice.Overlay.Visible then
+		if stagePhase ~= "Open" then
+			offer = nil
+			kit.Hide(ui.Choice.Overlay, "Portal")
+		else
+			local left = state:GetAttribute("ChoiceLeft") or 0
+			local ready = state:GetAttribute("PortalReady") or ""
+			local note
+			if chosen then
+				note = ready ~= "" and string.format("Waiting for your team (%s ready) · %ds", ready, left) or string.format("Travelling in %ds", left)
+			else
+				note = string.format("Next stage in %ds unless you return", left)
+			end
+			if state:GetAttribute("Frozen") then
+				note ..= "  ·  paused"
+			end
+			ui.ChoiceNote.Text = UIKit.track(note)
+			ui.ChoiceMeter.Set(left / math.max(1, Config.Stages.ChoiceSeconds))
+		end
+	end
+end
+
+-- For the preview tool / tests.
+function StageUI.Elements(): { [string]: any }
+	return ui
+end
+
+function StageUI.Build(root: Frame, k: { [string]: any })
+	kit = k
+	buildArrow(root)
+	buildRing(root)
+	buildChoice(root)
+	buildFade(root)
+	Remotes.Get("PortalOffer").OnClientEvent:Connect(onOffer)
+	Remotes.Get("StageTravel").OnClientEvent:Connect(onTravel)
+end
+
+return StageUI
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">UIAnim</string>
             <string name="Source"><![CDATA[--[[
@@ -18449,14 +20287,14 @@ return UIAnim
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">UIBuilder</string>
             <string name="Source"><![CDATA[--[[
 	UIBuilder.lua
-	Hosts every screen and builds the in-run ones: HUD (Hud.lua), toasts and banners,
-	level-up cards, chest reward, pause / settings menu, revive offer and the results
-	screen. It also hosts the lobby menu (LobbyScreen), the hero on the dais (Showcase) and
+	Hosts every screen and builds the in-run ones: HUD (Hud.lua), the stage loop's arrow,
+	charge ring, portal choice and travel fade (StageUI.lua), toasts and banners, level-up
+	cards, chest reward, pause / settings menu, revive offer and the results screen. It also hosts the lobby menu (LobbyScreen), the hero on the dais (Showcase) and
 	the Studio dev tools (DevPanel). Components come from UIKit, icons from Icons, tokens
 	from Theme.
 
@@ -18486,6 +20324,7 @@ local UIAnim = require(script.Parent.UIAnim)
 local UIKit = require(script.Parent.UIKit)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
+local StageUI = require(script.Parent.StageUI)
 local LobbyScreen = require(script.Parent.LobbyScreen)
 local DevPanel = require(script.Parent.DevPanel)
 local Showcase = require(script.Parent.Showcase)
@@ -19447,8 +21286,8 @@ local results: { [string]: any } = {}
 local resultsDeadline = 0
 
 local function statTile(parent: Instance, icon: string, caption: string, order: number): TextLabel
-	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(112, 104) }, true)
-	Icons.Draw(f, icon, { Size = 26, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Color = if icon == "coin" then nil else P.gold_400, Back = P.slate_950 })
+	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(94, 104) }, true)
+	Icons.Draw(f, icon, { Size = 26, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Color = if icon == "coin" or icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
 	local value = text(f, "Number", "0", {
 		Name = "Value",
 		Position = UDim2.fromOffset(0, 42),
@@ -19476,6 +21315,7 @@ local function buildResults()
 	local grid = new("Frame", { Name = "Stats", BackgroundTransparency = 1, LayoutOrder = 4, Size = UDim2.new(1, 0, 0, 104) }, content)
 	results.Grid = grid
 	results.GridLayout = UIKit.list(grid, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
+	results.Stages = statTile(grid, "portal", "Stages", 0)
 	results.Time = statTile(grid, "clock", "Time", 1)
 	results.Kills = statTile(grid, "skull", "Kills", 2)
 	results.Gold = statTile(grid, "coin", "Gold", 3)
@@ -19492,7 +21332,9 @@ local function buildResults()
 		Size = UDim2.fromOffset(300, Theme.Size.Button),
 		LayoutOrder = 7,
 		OnClick = function()
-			Remotes.Get("ReturnToLobby"):FireServer()
+			if not results.InLobby then
+				Remotes.Get("ReturnToLobby"):FireServer()
+			end
 			hide(results.Overlay, "Results")
 		end,
 	})
@@ -19510,10 +21352,21 @@ local function onRunResult(data)
 	closeOffer()
 	hide(revive.Overlay, "Revive")
 	hide(pause.Overlay, "Pause")
-	results.Title.Text = data.Won and "VICTORY!" or "DEFEATED"
-	results.Title.TextColor3 = data.Won and P.gold_300 or P.crimson_300
-	results.Arena.Text = UIKit.track("Arena: " .. tostring(data.Arena))
+	-- InLobby: the player left through a portal and is back at the menu already; the
+	-- panel then sits over the lobby until closed (or its timer runs out)
+	results.InLobby = data.InLobby == true
+	-- portal returns before WinMinStages stages are a safe escape, not a win
+	results.Title.Text = data.Won and "VICTORY!" or (data.Portal and "ESCAPED" or "DEFEATED")
+	results.Title.TextColor3 = (data.Won or data.Portal) and P.gold_300 or P.crimson_300
+	local cleared = tonumber(data.StagesCleared) or 0
+	local where = (data.Won or data.Portal) and string.format("%d stage%s cleared", cleared, cleared == 1 and "" or "s") or string.format("Fell on stage %d", tonumber(data.Stage) or 1)
+	results.Arena.Text = UIKit.track(where .. " · " .. tostring(data.Arena))
+	results.Stages.Text = tostring(cleared)
 	results.Time.Text = formatTime(data.Time)
+	results.Button.SetText(results.InLobby and "CONTINUE" or "RETURN TO LOBBY")
+	results.Button.SetIcon(results.InLobby and "check" or "castle")
+	results.Best.Text = (data.NewBest and data.NewBestStage) and "NEW BEST TIME AND STAGE!" or (data.NewBestStage and "NEW BEST STAGE!" or "NEW BEST TIME!")
+	data.NewBest = data.NewBest == true or data.NewBestStage == true
 	results.Best.Visible = data.NewBest == true
 	results.Unlocked.Visible = data.Unlocked ~= nil
 	results.Unlocked.Text = data.Unlocked and ("Unlocked: " .. data.Unlocked .. " arena!") or ""
@@ -19610,11 +21463,21 @@ local function updateFrame(dt: number)
 		end
 	end
 	if results.Overlay.Visible then
-		results.Timer.Text = UIKit.track("Back to the lobby in " .. math.max(0, math.ceil(resultsDeadline - os.clock())) .. "s")
-		if not inRun then
-			hide(results.Overlay, "Results")
+		local left = math.max(0, math.ceil(resultsDeadline - os.clock()))
+		if results.InLobby then
+			results.Timer.Text = UIKit.track("Closes in " .. left .. "s")
+			if left <= 0 or inRun then
+				hide(results.Overlay, "Results")
+				results.InLobby = false
+			end
+		else
+			results.Timer.Text = UIKit.track("Back to the lobby in " .. left .. "s")
+			if not inRun then
+				hide(results.Overlay, "Results")
+			end
 		end
 	end
+	StageUI.Update(dt, state, inRun)
 	-- the pause menu belongs to the run, the settings menu to the lobby
 	if pause.Overlay.Visible and (pauseMode == "Pause") ~= inRun then
 		hide(pause.Overlay, "Pause")
@@ -19703,6 +21566,23 @@ function UIBuilder.Init(d: { [string]: any })
 	buildPause()
 	buildRevive()
 	buildResults()
+	StageUI.Build(root, {
+		Show = show,
+		Hide = hide,
+		FitModal = fitModal,
+		OnRelayout = onRelayout,
+		VirtualSize = virtualSize,
+		IsPortrait = function(): boolean
+			return portrait
+		end,
+		Scale = function(): number
+			return uiScale.Scale
+		end,
+		-- top-left of the safe-area GUI on the screen (world → GUI projection)
+		GuiOffset = function(): Vector2
+			return gui.AbsolutePosition
+		end,
+	})
 	DevPanel.Init(root, hostApi)
 	onRelayout(function()
 		if levelUp.Overlay.Visible and lastOffer then
@@ -19764,7 +21644,7 @@ return UIBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[--[[
@@ -21359,7 +23239,7 @@ return UIKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">VFX</string>
             <string name="Source"><![CDATA[--[[
@@ -23738,7 +25618,7 @@ return VFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">ViewportPreview</string>
             <string name="Source"><![CDATA[--[[
@@ -23933,7 +25813,7 @@ return ViewportPreview
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="58">
+  <Item class="Workspace" referent="60">
     <Properties>
       <string name="Name">Workspace</string>
       <float name="FallenPartsDestroyHeight">-200</float>

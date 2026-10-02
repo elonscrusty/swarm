@@ -17,13 +17,13 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] Tap an owned skin swatch: it gets a gold border, the card's model and the home character change colour. Locked skins show "R$" (gamepass set) or "soon".
 - [ ] < BACK slides back to home. UPGRADES (or the upgrades summary) opens the shop with staggered cells; buying a level updates the summary bar on home.
 - [ ] Gold pill counts up/down smoothly after a purchase.
-- [ ] ARENA cycles to Ruins only after a win (otherwise a toast says to win a run first); the button shows the arena name.
+- [ ] ARENA cycles to Ruins only after reaching stage 2 in a run (otherwise a toast says so and the card reads "Ruins: reach stage 2 to unlock"); the button shows the arena name.
 - [ ] SETTINGS opens the volume menu ("Close" button); sliders work and are saved.
 - [ ] No walking in the lobby: WASD / touch do nothing, no thumbstick appears.
 
 ## 1. Solo run (Play, 1 player)
 - [ ] The lobby menu shows a grey Knight with a helmet turning in the middle.
-- [ ] Tap SOLO: the run starts at once (no countdown); the timer counts up from 0:00.
+- [ ] Tap SOLO: the run starts at once (no countdown); the timer counts up from 0:00, the pill under it says "STAGE 1 · Find the portal" and a "STAGE 1" banner shows.
 - [ ] In the run WASD / arrows / the thumbstick move you; there is no jump.
 - [ ] The Whip swings a sword arc in front of you (and behind at level 2+) automatically; slimes and bats come from off-screen.
 - [ ] Enemies go around trees and rocks instead of through them; ghosts drift through.
@@ -31,17 +31,43 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] Level up: the whole run pauses, 3 cards appear, each with an icon (placeholder letters until IconData has pictures); picking one closes the screen.
 - [ ] Upgrade bar: weapons (top row) and passives (bottom row) sit at the bottom centre. A new item pops in; levelling it shows an "x2", "x3"... badge in its corner; an evolved weapon gets a gold border and its evolution's icon.
 - [ ] Touching on top of the upgrade bar still moves you (the tiles don't block the thumbstick).
-- [ ] DEV button in a run: "+5 levels" gives 5 level-ups in a row; "Skip to 14:30 (boss)" jumps the timer, the boss warning follows and the boss comes at 15:00.
+- [ ] DEV button in a run: "+5 levels" gives 5 level-ups in a row; "Spawn portal boss" summons the Scorpion Queen at this stage's portal; "Teleport to portal" puts you next to the portal's rune circle.
 - [ ] Leave the level-up screen alone: a card is auto-picked after 25 s.
-- [ ] Every 30 s a "swarm approaches" toast and a ring of enemies.
+- [ ] Every 30 s (while exploring, not during the boss / surge) a "swarm approaches" toast and a ring of enemies.
 - [ ] Pause button (II): menu opens, "The run is paused", enemies freeze; sliders change volume; Resume continues.
 - [ ] Take damage: red flash, HP bar over your head drops. Chicken heals, Magnet pulls every gem, Bomb clears the screen.
 - [ ] An elite (big, shiny) drops a chest; touching it plays the chest animation and lists a weapon level + gold.
 - [ ] Get a weapon to level 8 + its passive: the next level-up offers a gold EVOLUTION card (or a chest evolves it).
-- [ ] Quick boss test: DEV → "Skip to 14:30 (boss)" (or set `Config.Run.BossTime = 60` temporarily). Boss appears with a red HP bar; it charges (red floor warning), fires rings of red orbs, summons skeletons. Killing it shows VICTORY with stats; you return to the lobby after 25 s or "Return to lobby".
-- [ ] Die (stand still at minute 5+): DEFEATED screen with time/kills/gold/level.
+- [ ] Quick boss test: DEV → "Spawn portal boss". The boss appears behind the portal with a red HP bar; it charges (red floor warning), fires rings of red orbs, summons skeletons. Killing it starts the surge (section 1d).
+- [ ] The run no longer ends at 15:00: past 15:00 the timer keeps counting and nothing special happens.
+- [ ] Die (stand still at minute 5+): DEFEATED screen with "Fell on stage N", stages, time/kills/gold/level/damage.
 - [ ] After the results screen you are back on the lobby menu (home screen), no walking.
-- [ ] After a win, the ARENA button can switch to the next arena.
+- [ ] After reaching stage 2, the ARENA button can switch to the next arena.
+
+## 1d. Stages and portal (solo first, then Duo)
+Tip: lower `Config.Stages.PortalLockSeconds` / `HintAfterSeconds` and use the DEV buttons to go faster.
+- [ ] Stage 1 is the lobby's arena; a stone ring PORTAL stands somewhere at least ~120 studs from the spawn, never inside a tree, wall, pond or landmark, with a dashed rune circle on the floor and a soft slate-blue light beam rising from it. Start several runs: the spot changes.
+- [ ] The early game feels like before (same swarm sizes and toughness in stage 1).
+- [ ] The portal is dormant for 2:30 on stage 1 (0:45 on later stages): the pill says "The portal is dormant: m:ss", standing in the circle shows "DORMANT m:ss" and does not charge; then "The portal awakens!".
+- [ ] When the lock ends (stage 1) or after 90 s (later stages) a toast says the portal is marked, and an arrow badge with the distance ("120 m") sits at the screen edge pointing at the portal; it stays clear of the timer, plates and the ability bar; when the portal is on screen it becomes a small marker floating over it. Each player's arrow points from their own position.
+- [ ] Stand inside the rune circle: a ring of 24 gold segments over the portal fills in ~2 s ("Opening 60%"), the stage pill says "Opening the portal 60%", the portal and its circle warm to gold. Step out early: the charge drains slowly. It works by just standing (phone: no button needed).
+- [ ] Charged: the Scorpion Queen climbs out behind the portal, the portal turns crimson, "Defeat the Queen", boss bar and boss music; regular enemies keep coming, but only about half the normal crowd (15-60); no mini-waves.
+- [ ] Queen dies: every living player gets the boss gold; "QUEEN DEFEATED! SURVIVE THE SURGE!", the pill shows "Survive the surge · 20s" and a burst of enemies pours out of the portal over ~4 s (40 on stage 1, 15 more each stage).
+- [ ] The surge ends after 20 s or when most of it is dead: the leftovers burn up, every gem flies to you, the portal glows gold, "THE PORTAL IS OPEN".
+- [ ] Travel right away (gems still flying, a chest on the floor): the gems' XP still arrives and the chest opens for you; nothing is lost.
+- [ ] The choice panel: "STAGE 1 CLEARED", stages / time / kills / gold, NEXT STAGE (gold, "Stage 2 · Ruins") and RETURN TO LOBBY ("+175 gold · win from stage 3" before 3 cleared stages, "· a win" from 3), "Next stage in 15s unless you return" with a bar. Phone landscape and portrait: buttons stack when narrow, nothing is cut off.
+- [ ] Leave it alone: after 15 s you travel on. Open the pause menu meanwhile (solo): the countdown stops ("paused") and resumes when you close it. A level-up during the open portal also stops it.
+- [ ] NEXT STAGE: the screen fades to slate with "STAGE 2 · RUINS", then comes back on the next arena (Forest → Ruins → Forest ...): you stand at the spawn with the same level, XP, weapons, passives and gold, HP topped up to at least 60%; no enemies, gems or projectiles from the old stage; the timer kept counting from where it was; "STAGE 2" banner and a new portal somewhere else.
+- [ ] Stage 2 enemies are a bit tougher and more numerous; the stage 2 Queen has more HP than stage 1's.
+- [ ] RETURN TO LOBBY after 1-2 stages: back on the lobby menu at once with an ESCAPED panel ("2 stages cleared · Ruins", Stages tile, CONTINUE, closes by itself); gold includes the win bonus + stage bonus; Wins does NOT go up. After 3+ stages the panel says VICTORY! and STATS shows Wins +1. STATS shows "Best stage"; reaching stage 2 unlocks Ruins in the lobby ("Unlocked: Ruins arena!").
+- [ ] Die on stage 2+: DEFEATED with "Fell on stage 2" and the stages cleared; Best stage is updated.
+- [ ] Duo: both get the panel; one taps NEXT STAGE → their button turns to READY and the note says "Waiting for your team (1/2 ready)"; the other taps RETURN TO LOBBY → that player gets their VICTORY panel in the lobby, the first travels on alone. If both return, the run ends and the lobby is free for a new run.
+- [ ] Duo: a teammate who is down when the Queen dies is revived on the next stage (50% HP). If the only living player returns while the teammate is down (also while the teammate is still on the revive offer and then declines), the run ends and both get the same portal result (ESCAPED, or VICTORY from 3 stages), never DEFEATED.
+- [ ] Duo: a player who leaves the game mid-boss or while the portal is open doesn't block the other (the choice completes without them).
+- [ ] Everyone falls during the surge: DEFEATED for all, as before.
+- [ ] Level-up during travel: the cards stay up on the next stage and the run stays paused until picked.
+- [ ] While a run is going, the lobby (for players who returned or joined late) shows "Run in progress · Stage N · Time m:ss".
+- [ ] HUD status: in SOLO a level-up never says "a teammate is choosing"; in Duo/Trio the others see "Paused: <Name> is choosing an upgrade" and the chooser sees only the cards.
 
 ## 1a. Weapon animations (use the lobby/run, level each weapon; Studio cheats or `Config` boosts help)
 - [ ] Whip: a glowing blade pulls back, then sweeps a ~150° arc in front of you with a white crescent trail; it flashes white mid-sweep and fades. The knight's right arm swings with it. The second (back) slash makes the hero spin once. Enemies inside the arc flash; enemies outside it don't.
@@ -62,7 +88,7 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] TRIO with 3 players: after player 2 joins, player 1 (the starter) gets START NOW; tapping it starts the run with 2. Without anyone else joined, START NOW does not show.
 - [ ] A player who joins too late (run full) gets "This run is full".
 - [ ] Let player 1 fall: toast says to stand next to them; a teammate stands close for 3 s → player 1 revives at 40% HP (works in Duo and Trio).
-- [ ] All fall → DEFEATED; the results line says "Forest (Duo)" / "(Trio)".
+- [ ] All fall → DEFEATED; the results line says "Fell on stage N · Forest (Duo)" / "(Trio)".
 - [ ] DEV → "Start solo now" during someone's countdown starts the run immediately with the players already in.
 
 ## 1c. Uploaded 3D models (after tools/upload_meshes.py)
@@ -71,7 +97,7 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] No mesh lies on its side or floats/sinks: trees, mushrooms, rocks, bushes, pillars, crystals, torches and banners stand upright on the ground (Output has no "imported rotated" warnings; if it does, heroes/bugs need the same fix).
 - [ ] Forest arena: a dirt clearing with a stone ring at the spawn (nothing solid within ~40 studs), 4 dirt paths leading out, tree groves with red mushrooms in their shade, two fairy rings, a reed pond, rock outcrops, fallen logs, flowers, 3 purple alien nests with egg pods. The edge is a broken wooden fence with bushes and a dense tree line outside; the south (camera) side has only low trees, so the hero is never hidden there.
 - [ ] Forest collision: you can't walk through trunks, big mushrooms, big rocks, logs, hive mounds or the pond; small mushrooms, bushes and flowers are walk-through decoration.
-- [ ] Ruins arena (after a win): mosaic plaza at the spawn, 4 flagstone avenues with colonnades (standing, broken and toppled pillars), 8 flickering torches at the plaza, a ruined building in each quadrant, 5 glowing purple crystal fields, autumn trees, rubble; a broken crenellated wall with corner towers (low on the south side), dark pines outside. Golden-dusk light with purple haze.
+- [ ] Ruins arena (stage 2 of any run, or picked in the lobby after reaching stage 2): mosaic plaza at the spawn, 4 flagstone avenues with colonnades (standing, broken and toppled pillars), 8 flickering torches at the plaza, a ruined building in each quadrant, 5 glowing purple crystal fields, autumn trees, rubble; a broken crenellated wall with corner towers (low on the south side), dark pines outside. Golden-dusk light with purple haze.
 - [ ] Ruins collision: pillars, stumps, toppled pillars, building walls, crystal centres, torches and corner towers block you and the bugs; enemies path around them.
 - [ ] Castle lobby (behind the menu): the shot shows the courtyard flagstones and the gold/blue emblem in the middle, the keep behind with a warm-lit arched gate and raised portcullis, steps, red wall banners, braziers with fire, two roofed towers with flags, blue pole banners, torches and planters on the sides, pine forest and hazy mountains in the background, drifting dust motes / fireflies. Torch lights flicker.
 - [ ] Lighting differs per place: warm golden hour (lobby), bright day with light haze (Forest), dusk with purple haze and stronger glow (Ruins).
@@ -82,7 +108,7 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] A 4th player tapping JOIN too late gets "This run is full".
 - [ ] Everyone spawns in a circle; more enemies than solo.
 - [ ] A gem picked up by one player gives XP to all living players.
-- [ ] Each player levels separately; one player's level-up screen doesn't stop the others.
+- [ ] Each player levels separately; a level-up pauses everyone's game (the others see "Paused: <Name> is choosing an upgrade"; auto-pick after 10 s in groups).
 - [ ] Pause in a group: menu says the swarm keeps coming; the run is NOT frozen.
 - [ ] A player who dies becomes see-through, the camera follows a teammate; when everyone is dead → DEFEATED for all.
 - [ ] A player who leaves mid-run doesn't break the run for the others.

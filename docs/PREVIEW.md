@@ -39,6 +39,10 @@ global Playwright install (`/opt/pw-browsers`); never run `playwright install`.
 | `countdown` | Duo countdown started by the player, a teammate joined (`SwarmState` attributes) |
 | `arena` | Forest (or `--set arena=Ruins`) at 8:24, hero at the centre, 120 enemies, gems, pickups, chest, HUD with weapons / passives; the real CameraController run camera |
 | `levelup`, `results`, `pause` | in-run overlays over the arena (`LevelUpOffer`, `RunResult`, the pause entry point) |
+| `stage-portal` | stage 2: the hero by the portal while it charges (charge ring, stage pill); `--set charge=0` idle portal, `--set look=Boss\|Surge\|Open` other portal states |
+| `stage-arrow` | stage 2 at the centre after the hint time: stage pill and the edge arrow to the off-screen portal |
+| `stage-choice` | the open portal's NEXT STAGE / RETURN TO LOBBY panel (`PortalOffer` remote) |
+| `stage-sim` | boots the real server (`preview.startServer`) and plays the stage loop through the remotes (start, dev portal boss, surge, NEXT STAGE, travel, RETURN TO LOBBY), printing the state; a slow logic smoke test |
 | `models` | contact sheet of every catalog model in game colours, front 3/4 view (ViewportFrames) |
 | `arena-map` | top-down orthographic arena with obstacles (red), the spawn clear radius and the 40/100/200 rings, plus metrics |
 

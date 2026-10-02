@@ -1,7 +1,8 @@
 --[[
 	EnemySpawner.lua
 	Owns every enemy: the object pool (Config.Enemies.PoolSize single-Part models built at
-	boot), spawning (per-minute table, mini-waves, elites, boss), damage and death/drops.
+	boot), spawning (per-minute table, mini-waves, elites, boss, the portal surge), damage
+	and death/drops. Stats scale with run time (tier) and with the stage (StageManager).
 	Movement and AI live in EnemyAI, which reads EnemySpawner.Active every Heartbeat.
 
 	Enemy record fields:
@@ -154,18 +155,20 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	local elite = (opts and opts.Elite) and not isBoss or false
 	local tier = ctx.RunManager.GetTier()
 	local D = Config.Difficulty
+	local statTier = math.min(tier, D.MaxTier or tier) -- HP / damage stop growing at MaxTier
 	local sizeMult = elite and Config.Enemies.EliteSizeMult or 1
 
+	local stages = ctx.StageManager
 	local hp
 	if isBoss then
-		hp = Config.Boss.HP * (1 + Config.Boss.HPPerExtraPlayer * (playerCount() - 1))
+		hp = Config.Boss.HP * (1 + Config.Boss.HPPerExtraPlayer * (playerCount() - 1)) * stages.BossHPMult()
 	else
-		hp = def.HP * (1 + tier * D.HPPerMinute) * (1 + D.HPPerExtraPlayer * (playerCount() - 1))
+		hp = def.HP * (1 + statTier * D.HPPerMinute) * (1 + D.HPPerExtraPlayer * (playerCount() - 1)) * stages.EnemyHPMult()
 		if elite then
 			hp *= Config.Enemies.EliteHPMult
 		end
 	end
-	local damage = isBoss and Config.Boss.ContactDamage or def.Damage * (1 + tier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1)
+	local damage = (isBoss and Config.Boss.ContactDamage or def.Damage * (1 + statTier * D.DamagePerMinute) * (elite and Config.Enemies.EliteDamageMult or 1)) * stages.DamageMult()
 
 	uidCounter += 1
 	e.Uid = uidCounter
@@ -216,9 +219,11 @@ end
 -- Normal spawning toward the live target for this minute.
 local function topUp()
 	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
-	local target = math.floor(row.Target * countMult())
+	local target = math.floor(row.Target * countMult() * ctx.StageManager.SpawnMult())
 	if EnemySpawner.Boss then
-		target = Config.Boss.MinionCapDuringBoss
+		-- during the Queen fight: a share of the normal target, within [min, boss cap]
+		local S = Config.Stages
+		target = math.max(S.BossMinionMin, math.min(Config.Boss.MinionCapDuringBoss, math.floor(target * S.BossMinionShare)))
 	end
 	target = math.min(target, Config.Enemies.MaxLive)
 	local missing = math.min(Config.Spawn.MaxPerTick, target - #EnemySpawner.Active)
@@ -238,7 +243,7 @@ function EnemySpawner.MiniWave()
 	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
 	local typeId = weightedPick(row.Weights)
 	local def = EnemyData.Enemies[typeId]
-	local count = math.floor((Config.Spawn.MiniWaveBaseCount + ctx.RunManager.GetTier() * Config.Spawn.MiniWavePerMinute) * countMult())
+	local count = math.floor((Config.Spawn.MiniWaveBaseCount + ctx.RunManager.GetTier() * Config.Spawn.MiniWavePerMinute) * countMult() * ctx.StageManager.SpawnMult())
 	count = math.min(count, Config.Enemies.MaxLive - #EnemySpawner.Active)
 	local offset = rng:NextNumber(0, math.pi * 2)
 	for i = 1, count do
@@ -252,19 +257,49 @@ function EnemySpawner.MiniWave()
 	end
 end
 
-function EnemySpawner.SpawnBoss()
+-- The Scorpion Queen at `at` (the stage portal), or at a spawn point near a player.
+function EnemySpawner.SpawnBoss(at: Vector3?)
 	if Config.Boss.ClearMinionsOnSpawn then
 		for i = #EnemySpawner.Active, 1, -1 do
 			EnemySpawner.Despawn(EnemySpawner.Active[i])
 		end
 	end
-	local pos = EnemySpawner.SpawnPoint(EnemyData.Enemies.Boss.Radius) or Config.ArenaOrigin
+	local pos = at or EnemySpawner.SpawnPoint(EnemyData.Enemies.Boss.Radius) or Config.ArenaOrigin
 	local boss = EnemySpawner.Spawn("Boss", pos, { Boss = true })
 	Fx.Sound("BossRoar")
 	if boss then
 		Fx.Ring(boss.Pos, 30, Color3.fromRGB(255, 40, 60))
 	end
 	return boss
+end
+
+--[[
+	Portal surge: `count` enemies of this minute's mix climb out around `centre` (the
+	portal) in a ring just outside its plinths. Returns how many spawned (the MaxLive cap
+	or blocked spots can stop some).
+]]
+function EnemySpawner.SpawnSurge(count: number, centre: Vector3): number
+	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
+	local made = 0
+	for _ = 1, count do
+		local typeId = weightedPick(row.Weights)
+		local def = EnemyData.Enemies[typeId]
+		for _attempt = 1, 4 do
+			local a = rng:NextNumber(0, math.pi * 2)
+			local r = rng:NextNumber(6, 14)
+			local x, z = clampToArena(centre.X + math.cos(a) * r, centre.Z + math.sin(a) * r, 4)
+			if def.Ghost or not ctx.EnemyAI.IsBlocked(x, z, def.Radius) then
+				if EnemySpawner.Spawn(typeId, Vector3.new(x, Config.ArenaOrigin.Y, z)) then
+					made += 1
+				end
+				break
+			end
+		end
+	end
+	if made > 0 then
+		Fx.Ring(centre, 16, Color3.fromRGB(255, 90, 80))
+	end
+	return made
 end
 
 ------------------------------------------------------------------------------------------
@@ -381,7 +416,8 @@ function EnemySpawner.Explode(e)
 	end
 	local ex = e.Def.Explode
 	local radius = ex.Radius * (e.Elite and Config.Enemies.EliteSizeMult or 1)
-	local tierMult = 1 + ctx.RunManager.GetTier() * Config.Difficulty.DamagePerMinute
+	local D = Config.Difficulty
+	local tierMult = (1 + math.min(ctx.RunManager.GetTier(), D.MaxTier or math.huge) * D.DamagePerMinute) * ctx.StageManager.DamageMult()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Alive and rp.Root then
 			local d = (rp.Root.Position - e.Pos) * Vector3.new(1, 0, 1)
@@ -442,7 +478,7 @@ function EnemySpawner.Step(dt: number)
 	spawnTimer += dt
 	if spawnTimer >= Config.Spawn.TickSeconds then
 		spawnTimer = 0
-		if not ctx.RunManager.IsBossPhase() or EnemySpawner.Boss then
+		if ctx.StageManager.AllowSpawning() then
 			topUp()
 		end
 	end

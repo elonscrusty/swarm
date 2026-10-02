@@ -1,0 +1,532 @@
+--[[
+	StageUI.lua
+	The client side of the stage loop (server: StageManager), in the HUD's style:
+
+	  portal arrow   after Config.Stages.HintAfterSeconds (SwarmState PortalHint) an arrow
+	                 at the screen edge points at this stage's portal, with the distance;
+	                 when the portal is on screen a small marker floats over it instead
+	  charge ring    24 rune segments over the portal that fill while someone stands in
+	                 its circle ("Stand here to open" / "Opening 60%")
+	  choice panel   the portal opened (remote PortalOffer): stage cleared, the run so far,
+	                 NEXT STAGE (primary gold) or RETURN TO LOBBY (+ the win bonus), the
+	                 auto-continue countdown and who is ready (SwarmState ChoiceLeft /
+	                 PortalReady). Answers with the PortalChoice remote; the server decides.
+	  travel fade    remote StageTravel: the screen fades to slate with "STAGE N · Arena",
+	                 then fades back once the new stage is running
+
+	Nothing here is Active except the choice panel, so the thumbstick keeps working.
+	UIBuilder builds it (StageUI.Build) and calls StageUI.Update every frame in a run.
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local UIKit = require(script.Parent.UIKit)
+local UIAnim = require(script.Parent.UIAnim)
+local Icons = require(script.Parent.Icons)
+local Hud = require(script.Parent.Hud)
+
+local StageUI = {}
+
+local player = Players.LocalPlayer
+local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local C, P = Theme.Color, Theme.Palette
+
+local SEGMENTS = 24
+local RING_R = 30
+
+local kit: { [string]: any } = {}
+local ui: { [string]: any } = {}
+local offer: { [string]: any }? = nil
+local chosen = false
+local travel = { Active = false, Since = 0 }
+
+------------------------------------------------------------------------------------------
+-- Build
+------------------------------------------------------------------------------------------
+
+local function buildArrow(root: Frame)
+	local holder = new("Frame", {
+		Name = "PortalArrow",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(64, 64),
+		Visible = false,
+		ZIndex = Theme.Z.Hud,
+	}, root)
+	ui.Arrow = holder
+	-- the pointer: a gold chevron on a ring that turns toward the portal
+	local pivot = new("Frame", { Name = "Pivot", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(64, 64) }, holder)
+	ui.ArrowPivot = pivot
+	-- a gold diamond half hidden behind the badge reads as the arrow's point
+	local tip = new("Frame", {
+		Name = "Tip",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -8, 0.5, 0),
+		Size = UDim2.fromOffset(22, 22),
+		Rotation = 45,
+		BackgroundColor3 = P.gold_400,
+		BorderSizePixel = 0,
+	}, pivot)
+	UIKit.corner(tip, 3)
+	UIKit.stroke(tip, P.gold_200, 1.5, 0.2)
+	local badge, face = UIKit.Surface(holder, { Name = "Badge", Radius = 999, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.2, Size = UDim2.fromOffset(48, 48), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	local _ = badge
+	Icons.Draw(face, "portal", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	ui.ArrowDistance = text(holder, "Label", "", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 1, 0),
+		Size = UDim2.fromOffset(90, TS(14) + 4),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = P.ivory_100,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.4,
+	})
+	UIAnim.Breathe(badge, 0.06, 1.6)
+end
+
+local function buildRing(root: Frame)
+	local holder = new("Frame", {
+		Name = "PortalRing",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(RING_R * 2 + 24, RING_R * 2 + 24),
+		Visible = false,
+		ZIndex = Theme.Z.Hud,
+	}, root)
+	ui.Ring = holder
+	local disc = new("Frame", {
+		Name = "Disc",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(RING_R * 2 - 8, RING_R * 2 - 8),
+		BackgroundColor3 = C.Panel,
+		BackgroundTransparency = 0.25,
+		BorderSizePixel = 0,
+	}, holder)
+	UIKit.corner(disc, 999)
+	UIKit.stroke(disc, P.gold_500, 1, 0.5)
+	Icons.Draw(disc, "portal", { Size = 28, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	ui.Segments = {}
+	local c = RING_R + 12
+	for i = 1, SEGMENTS do
+		local a = (i - 1) / SEGMENTS * math.pi * 2 - math.pi / 2
+		local seg = new("Frame", {
+			Name = "Seg",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(c + math.cos(a) * RING_R, c + math.sin(a) * RING_R),
+			Size = UDim2.fromOffset(4, 9),
+			Rotation = math.deg(a) + 90,
+			BackgroundColor3 = P.slate_500,
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+		}, holder)
+		UIKit.corner(seg, 999)
+		ui.Segments[i] = seg
+	end
+	ui.RingLabel = text(holder, "Label", "", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 1, 2),
+		Size = UDim2.fromOffset(220, TS(14) + 6),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = P.gold_200,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.35,
+	})
+end
+
+local function smallStat(parent: Instance, icon: string, caption: string, order: number): TextLabel
+	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(104, 74) }, true)
+	Icons.Draw(f, icon, { Size = 20, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Color = if icon == "coin" or icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
+	local value = text(f, "Number", "0", {
+		Name = "Value",
+		Position = UDim2.fromOffset(0, 28),
+		Size = UDim2.new(1, 0, 0, TS(20) + 2),
+		TextXAlignment = Enum.TextXAlignment.Center,
+	}, 20)
+	text(f, "Caption", UIKit.track(caption), {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, -6),
+		Size = UDim2.new(1, 0, 0, TS(11) + 2),
+		TextXAlignment = Enum.TextXAlignment.Center,
+	}, 10)
+	return value
+end
+
+local function choose(choice: string)
+	if not offer then
+		return
+	end
+	Remotes.Get("PortalChoice"):FireServer(choice)
+	if choice == "Return" then
+		-- the server sends the results screen next; close at once so it never flickers
+		kit.Hide(ui.Choice.Overlay, "Portal")
+		offer = nil
+	end
+end
+
+local function buildChoice(root: Frame)
+	local m = UIKit.Modal(root, "Portal", 560, 480, Theme.Z.LevelUp - 2)
+	m.Overlay:SetAttribute("BackdropTransparency", 0.5)
+	ui.Choice = m
+	local content = m.Content
+	local list = UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center })
+	kit.FitModal(m, list)
+	ui.ChoiceIcon = Icons.Draw(content, "portal", { Size = 46, LayoutOrder = 1, Back = P.slate_900 })
+	ui.ChoiceTitle = text(content, "H1", "STAGE 1 CLEARED", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300 })
+	UIKit.Divider(content, 240, { LayoutOrder = 3 })
+	ui.ChoiceSub = text(content, "Body", "The portal is open. Go deeper, or take your winnings home.", {
+		LayoutOrder = 4,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = true,
+		Size = UDim2.new(1, 0, 0, TS(16) * 2 + 6),
+	})
+	local stats = new("Frame", { Name = "Stats", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 74) }, content)
+	ui.ChoiceStats = stats
+	UIKit.list(stats, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
+	ui.StatStages = smallStat(stats, "portal", "Stages", 1)
+	ui.StatTime = smallStat(stats, "clock", "Time", 2)
+	ui.StatKills = smallStat(stats, "skull", "Kills", 3)
+	ui.StatGold = smallStat(stats, "coin", "Gold", 4)
+
+	local buttons = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 92) }, content)
+	ui.ChoiceButtons = buttons
+	ui.ChoiceButtonsList = UIKit.list(buttons, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12) })
+	ui.Next = UIKit.Button(buttons, {
+		Kind = "Primary",
+		Title = "NEXT STAGE",
+		Subtitle = "Stage 2",
+		Icon = "portal",
+		IconSize = 30,
+		TitleSize = 15,
+		Size = UDim2.fromOffset(240, 76),
+		LayoutOrder = 1,
+		Glow = true,
+		OnClick = function()
+			choose("Next")
+		end,
+	})
+	ui.Return = UIKit.Button(buttons, {
+		Kind = "Secondary",
+		Title = "RETURN TO LOBBY",
+		Subtitle = "+0 gold · a win",
+		Icon = "castle",
+		IconSize = 26,
+		TitleSize = 15,
+		Size = UDim2.fromOffset(240, 76),
+		LayoutOrder = 2,
+		OnClick = function()
+			choose("Return")
+		end,
+	})
+	ui.ChoiceNote = text(content, "Caption", "", { LayoutOrder = 7, TextXAlignment = Enum.TextXAlignment.Center })
+	ui.ChoiceMeter = UIKit.Meter(content, { Gradient = Theme.Gradient.XP, Size = UDim2.fromOffset(280, 5), LayoutOrder = 8 })
+
+	kit.OnRelayout(function()
+		local v: Vector2 = kit.VirtualSize()
+		local w = math.min(560, v.X - 32)
+		local stacked = w < 540
+		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
+		ui.ChoiceButtonsList.FillDirection = stacked and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
+		ui.ChoiceButtonsList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		ui.ChoiceButtonsList.Padding = UDim.new(0, stacked and 8 or 12)
+		local bw = stacked and math.min(320, w - 48) or math.floor((w - 48 - 12) / 2)
+		ui.Next.Instance.Size = UDim2.fromOffset(bw, stacked and 66 or 76)
+		ui.Return.Instance.Size = UDim2.fromOffset(bw, stacked and 66 or 76)
+		buttons.Size = UDim2.new(1, 0, 0, stacked and 140 or 80)
+		local narrow = w < 470
+		stats.Size = UDim2.new(1, 0, 0, narrow and 156 or 74)
+	end)
+end
+
+local function buildFade(root: Frame)
+	local fade = new("Frame", {
+		Name = "StageFade",
+		BackgroundColor3 = P.slate_950,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = Theme.Z.Toast - 1,
+	}, root)
+	UIKit.Bleed(fade)
+	ui.Fade = fade
+	local box = new("Frame", { Name = "Title", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(600, 150), ZIndex = 2 }, fade)
+	UIKit.list(box, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center })
+	Icons.Draw(box, "portal", { Size = 44, LayoutOrder = 1, Back = P.slate_950, ZIndex = 2 })
+	ui.FadeTitle = text(box, "Display", "STAGE 2", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(44) + 8), ZIndex = 2 }, 44)
+	ui.FadeSub = text(box, "Label", "", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 2 })
+	ui.FadeLabels = { ui.FadeTitle, ui.FadeSub }
+end
+
+------------------------------------------------------------------------------------------
+-- Choice panel
+------------------------------------------------------------------------------------------
+
+local function refreshChoiceButtons()
+	if chosen then
+		ui.Next.SetText("READY", "Waiting for your team")
+		ui.Next.SetIcon("check")
+		ui.Next.SetEnabled(false)
+	else
+		ui.Next.SetText("NEXT STAGE", offer and string.format("Stage %d · %s", offer.NextStage or 2, tostring(offer.NextArena or "")) or nil)
+		ui.Next.SetIcon("portal")
+		ui.Next.SetEnabled(true)
+	end
+end
+
+local function onOffer(data)
+	if type(data) ~= "table" then
+		return
+	end
+	if data.Close then
+		offer = nil
+		chosen = false
+		kit.Hide(ui.Choice.Overlay, "Portal")
+		return
+	end
+	if data.Chosen then
+		chosen = data.Chosen == "Next"
+		refreshChoiceButtons()
+		return
+	end
+	offer = data
+	chosen = false
+	ui.ChoiceTitle.Text = string.format("STAGE %d CLEARED", data.Stage or 1)
+	ui.ChoiceSub.Text = data.Group and "The portal is open. Go deeper together, or take your winnings home." or "The portal is open. Go deeper, or take your winnings home."
+	ui.StatStages.Text = tostring(data.StagesCleared or 0)
+	ui.StatTime.Text = UIKit.formatTime(data.Time or 0)
+	ui.StatKills.Text = UIKit.formatNumber(data.Kills or 0)
+	ui.StatGold.Text = UIKit.formatNumber(data.Gold or 0)
+	-- a return counts as a win only from Config.Stages.WinMinStages cleared stages
+	local winNote = data.CountsAsWin and " · a win" or string.format(" · win from stage %d", data.WinMinStages or 3)
+	ui.Return.SetText("RETURN TO LOBBY", string.format("+%s gold", UIKit.formatNumber(data.ReturnBonus or 0)) .. winNote)
+	refreshChoiceButtons()
+	kit.Show(ui.Choice.Overlay, "Portal", true)
+	UIAnim.Pop(ui.ChoiceTitle, 0.05, 1.4)
+	UIKit.FocusIfGamepad(ui.Next.Instance)
+end
+
+------------------------------------------------------------------------------------------
+-- Travel
+------------------------------------------------------------------------------------------
+
+local function fadeTo(target: number, seconds: number)
+	local f = ui.Fade :: Frame
+	if target < 1 then
+		f.Visible = true
+	end
+	local tw = TweenService:Create(f, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), { BackgroundTransparency = target })
+	tw:Play()
+	for _, l in ipairs(ui.FadeLabels) do
+		TweenService:Create(l, TweenInfo.new(seconds), { TextTransparency = target < 1 and 0 or 1 }):Play()
+	end
+	if target >= 1 then
+		tw.Completed:Once(function()
+			if not travel.Active then
+				f.Visible = false
+			end
+		end)
+	end
+end
+
+local function onTravel(data)
+	if type(data) ~= "table" then
+		return
+	end
+	travel.Active = true
+	travel.Since = os.clock()
+	ui.FadeTitle.Text = "STAGE " .. tostring(data.Stage or "?")
+	ui.FadeSub.Text = UIKit.track(tostring(data.Arena or ""))
+	offer = nil
+	kit.Hide(ui.Choice.Overlay, "Portal")
+	fadeTo(0.02, math.max(0.2, (data.Seconds or 0.8) * 0.9))
+	UIAnim.Pop(ui.FadeTitle, 0.1, 0.7)
+end
+
+local function endTravel()
+	travel.Active = false
+	fadeTo(1, 0.6)
+end
+
+------------------------------------------------------------------------------------------
+-- Per frame
+------------------------------------------------------------------------------------------
+
+local function project(world: Vector3): (Vector2, boolean)
+	local cam = workspace.CurrentCamera
+	local vp, onScreen = cam:WorldToViewportPoint(world)
+	local s = math.max(0.01, kit.Scale())
+	local off: Vector2 = kit.GuiOffset()
+	return Vector2.new((vp.X - off.X) / s, (vp.Y - off.Y) / s), onScreen and vp.Z > 0
+end
+
+local function localRoot(): BasePart?
+	local char = player.Character
+	return char and char.PrimaryPart or nil
+end
+
+local function updateArrowAndRing(state: Configuration, stagePhase: string)
+	local pos = state:GetAttribute("PortalPos")
+	local root = localRoot()
+	local alive = player:GetAttribute("Alive") ~= false
+	if typeof(pos) ~= "Vector3" or not root or travel.Active then
+		ui.Arrow.Visible = false
+		ui.Ring.Visible = false
+		return
+	end
+	local v: Vector2 = kit.VirtualSize()
+	local W, H = v.X, v.Y
+	local flat = Vector3.new(pos.X - root.Position.X, 0, pos.Z - root.Position.Z)
+	local dist = flat.Magnitude
+
+	-- charge ring over the portal
+	local charge = state:GetAttribute("PortalCharge") or 0
+	local inside = alive and dist <= Config.Stages.PortalRadius
+	local top, topOn = project(pos + Vector3.new(0, 12, 0))
+	local showRing = stagePhase == "Explore" and (inside or charge > 0) and topOn
+	ui.Ring.Visible = showRing
+	if showRing then
+		-- beside the portal (right, or left near the edge), so the portal stays visible
+		local base = project(pos)
+		local side = (top.X + 150 > W - 60) and -1 or 1
+		local x = math.clamp(top.X + side * 150, 60, W - 60)
+		local y = math.clamp((top.Y + base.Y) / 2, Hud.TopBottom() + 50, H - 90)
+		ui.Ring.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
+		local lit = math.floor(charge * SEGMENTS + 0.001)
+		for i, seg in ipairs(ui.Segments) do
+			local on = i <= lit
+			seg.BackgroundColor3 = on and P.gold_300 or P.slate_500
+			seg.BackgroundTransparency = on and 0 or 0.25
+			seg.Size = on and UDim2.fromOffset(5, 11) or UDim2.fromOffset(4, 9)
+		end
+		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
+		if charge > 0 then
+			ui.RingLabel.Text = UIKit.track(string.format("Opening %d%%", math.floor(charge * 100)))
+		elseif lockLeft > 0 then
+			ui.RingLabel.Text = UIKit.track("Dormant " .. UIKit.formatTime(lockLeft))
+		else
+			ui.RingLabel.Text = UIKit.track(inside and "Stand here to open" or "Portal")
+		end
+	end
+
+	-- edge arrow (after the hint time, while exploring)
+	local showArrow = stagePhase == "Explore" and state:GetAttribute("PortalHint") == true and not inside and not showRing
+	if not showArrow then
+		ui.Arrow.Visible = false
+		return
+	end
+	local p, on = project(pos + Vector3.new(0, 6, 0))
+	local portrait: boolean = kit.IsPortrait()
+	local els = Hud.Elements()
+	local yMin = math.max(70, Hud.TopBottom() + 44)
+	if portrait and els.BarBottom then
+		yMin = math.max(yMin, els.BarBottom + 44)
+	end
+	local yMax = portrait and (H - 110) or (H - 70)
+	local xMin, xMax = 56, W - 56
+	-- landscape: the ability bar takes the bottom centre; keep the arrow above it there
+	local barTop, barL, barR = math.huge, 0, 0
+	if not portrait and els.Bar then
+		barTop = Hud.BarTop() - 48
+		barL = els.Bar.Position.X.Offset - 40
+		barR = barL + els.Bar.Size.X.Offset + 80
+	end
+	ui.ArrowDistance.Text = string.format("%d m", math.floor(dist + 0.5))
+	local overBar = p.Y > barTop and p.X > barL and p.X < barR
+	if on and p.X > xMin and p.X < xMax and p.Y > yMin and p.Y < yMax and not overBar then
+		-- on screen: a marker floats over the portal, pointing down at it
+		ui.Arrow.Visible = true
+		ui.Arrow.Position = UDim2.fromOffset(math.floor(p.X + 0.5), math.floor(p.Y - 40 + math.sin(os.clock() * 3) * 4 + 0.5))
+		ui.ArrowPivot.Rotation = 90
+		return
+	end
+	-- off screen: clamp the direction from the screen centre onto the safe rectangle
+	local c = Vector2.new(W / 2, (yMin + yMax) / 2)
+	local d = p - c
+	if not on then
+		-- behind the camera (or projected backwards): use the ground direction instead
+		local cam = workspace.CurrentCamera
+		local right = cam.CFrame.RightVector * Vector3.new(1, 0, 1)
+		local fwd = cam.CFrame.LookVector * Vector3.new(1, 0, 1)
+		if right.Magnitude > 0.01 and fwd.Magnitude > 0.01 then
+			d = Vector2.new(flat:Dot(right.Unit), -flat:Dot(fwd.Unit))
+		end
+	end
+	if d.Magnitude < 1 then
+		d = Vector2.new(0, -1)
+	end
+	local function clampTo(bottom: number): Vector2
+		local kx = d.X ~= 0 and ((d.X > 0 and (xMax - c.X) or (xMin - c.X)) / d.X) or math.huge
+		local ky = d.Y ~= 0 and ((d.Y > 0 and (bottom - c.Y) or (yMin - c.Y)) / d.Y) or math.huge
+		return c + d * math.min(kx, ky)
+	end
+	local at = clampTo(yMax)
+	if at.Y > barTop and at.X > barL and at.X < barR then
+		at = clampTo(barTop)
+	end
+	ui.Arrow.Visible = true
+	ui.Arrow.Position = UDim2.fromOffset(math.floor(at.X + 0.5), math.floor(at.Y + 0.5))
+	ui.ArrowPivot.Rotation = math.deg(math.atan2(d.Y, d.X))
+end
+
+function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
+	local stagePhase = state:GetAttribute("StagePhase") or "None"
+	if not inRun then
+		ui.Arrow.Visible = false
+		ui.Ring.Visible = false
+		if ui.Choice.Overlay.Visible then
+			offer = nil
+			kit.Hide(ui.Choice.Overlay, "Portal")
+		end
+		if travel.Active then
+			endTravel()
+		end
+		return
+	end
+	-- the travel fade lifts once the next stage runs (or after a safety timeout)
+	if travel.Active and ((stagePhase ~= "Travel" and os.clock() - travel.Since > 0.5) or os.clock() - travel.Since > 8) then
+		endTravel()
+	end
+	updateArrowAndRing(state, stagePhase)
+	if ui.Choice.Overlay.Visible then
+		if stagePhase ~= "Open" then
+			offer = nil
+			kit.Hide(ui.Choice.Overlay, "Portal")
+		else
+			local left = state:GetAttribute("ChoiceLeft") or 0
+			local ready = state:GetAttribute("PortalReady") or ""
+			local note
+			if chosen then
+				note = ready ~= "" and string.format("Waiting for your team (%s ready) · %ds", ready, left) or string.format("Travelling in %ds", left)
+			else
+				note = string.format("Next stage in %ds unless you return", left)
+			end
+			if state:GetAttribute("Frozen") then
+				note ..= "  ·  paused"
+			end
+			ui.ChoiceNote.Text = UIKit.track(note)
+			ui.ChoiceMeter.Set(left / math.max(1, Config.Stages.ChoiceSeconds))
+		end
+	end
+end
+
+-- For the preview tool / tests.
+function StageUI.Elements(): { [string]: any }
+	return ui
+end
+
+function StageUI.Build(root: Frame, k: { [string]: any })
+	kit = k
+	buildArrow(root)
+	buildRing(root)
+	buildChoice(root)
+	buildFade(root)
+	Remotes.Get("PortalOffer").OnClientEvent:Connect(onOffer)
+	Remotes.Get("StageTravel").OnClientEvent:Connect(onTravel)
+end
+
+return StageUI

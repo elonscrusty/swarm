@@ -697,3 +697,83 @@ def shrine(m):
     cap_of(moss, top_pts, plane_co=(0.05, 0, 4.48), plane_no=(-0.3, 0.2, 1.0), grow=1.07, lift=0.02, centre=(0.05, 0, 4.3))
     moss_pad(moss, 0.75, 1.42, -0.95, -0.35, 0.39, seed=181, thick=0.12, inset=0.06)
     moss_pad(moss, -1.42, -0.85, 0.3, 0.95, 0.39, seed=182, thick=0.12, inset=0.06)
+
+
+@register("Portal", "World", "Stage portal: ancient horseshoe stone ring on a round rune dais, ~10.4 wide x 11 tall. "
+          "Front = -Y (the game turns it to face the camera). Surface = the arcane membrane inside the ring "
+          "and Glyphs = small rune lights; both are recoloured in game by portal state (idle, charging, "
+          "boss, open). Collider = the two plinths; the passage between them stays open.")
+def portal(m):
+    m.extra["palette"] = {"Base": P("stone_600"), "Stone": P("stone_500"), "Stone2": P("stone_400"),
+                          "Gold": P("gold_500"), "Glyph": P("fx_arcane"), "Surface": P("slate_400"),
+                          "Moss": P("moss_400")}
+    m.extra["collider"] = {"kind": "multi", "shapes": [
+        {"kind": "circle", "radius": 1.3, "height": 5, "offset": roblox_xz(-3.55, 0)},
+        {"kind": "circle", "radius": 1.3, "height": 5, "offset": roblox_xz(3.55, 0)},
+    ]}
+    m.extra["light"] = light_at(0, -0.8, 6.0)
+    m.extra["passage"] = {"width": 4.4, "height": 3.6}
+    rng = random.Random(211)
+    CZ, R_IN, R_OUT, D = 6.0, 3.55, 4.75, 0.78  # ring centre height, radii, half depth
+
+    # round dais: two stepped tiers of curved blocks, a gold rune circle on the top
+    base = m.piece("Dais", "Base", shadow=True)
+    for k in range(12):
+        a0, a1 = k * 30 + 0.6, (k + 1) * 30 - 0.6
+        annular_block(base, 3.9, 5.2, a0, a1, 0.0, 0.32 + rng.uniform(-0.03, 0.03), bevel=0.07)
+    for k in range(10):
+        a0, a1 = k * 36 + 0.8, (k + 1) * 36 - 0.8
+        annular_block(base, 0.0001, 4.0, a0, a1, 0.0, 0.52, bevel=0.06, mid=True)
+    gold = m.piece("Runes", "Gold")
+    for k in range(16):
+        a0, a1 = k * 22.5 + 3, (k + 1) * 22.5 - 3
+        annular_block(gold, 2.7, 2.95, a0, a1, 0.5, 0.57, bevel=0.0)
+
+    # plinths under the two legs of the ring
+    stone, stone2 = m.piece("Stone", "Stone", shadow=True), m.piece("Stone2", "Stone2", shadow=True)
+    for sx in (-1, 1):
+        stone2.box((2.7, 2.1, 0.5), loc=(sx * 3.55, 0, 0.75), bevel=0.1)
+        stone.box((2.35, 1.8, 2.15), loc=(sx * 3.55, 0, 2.05), bevel=0.12, taper=(0.94, 0.94))
+        stone2.box((2.6, 2.0, 0.4), loc=(sx * 3.55, 0, 3.15), bevel=0.08)
+        # gold band on the front and back of each plinth
+        for y in (-0.93, 0.93):
+            gold.box((1.4, 0.06, 0.16), loc=(sx * 3.55, y, 2.35), bevel=0.0)
+
+    # horseshoe ring: 13 voussoirs from -40 to 220 degrees, the keystone a little prouder
+    glyph = m.piece("Glyphs", "Glyph", "Neon")
+    n = 13
+    for k in range(n):
+        a0, a1 = -40 + k * 20, -40 + (k + 1) * 20
+        key = k == 6
+        piece = stone if k % 2 == 0 else stone2
+        voussoir(piece, 0, CZ, R_IN - (0.12 if key else 0), R_OUT + (0.35 if key else 0),
+                 a0 + 0.7, a1 - 0.7, -D - (0.08 if key else 0), D + (0.08 if key else 0), bevel=0.08)
+        am = math.radians((a0 + a1) / 2)
+        rm = (R_IN + R_OUT) / 2
+        cx, cz = math.cos(am) * rm, CZ + math.sin(am) * rm
+        if key:
+            # gold crown plate on the keystone (both faces)
+            for y in (-D - 0.1, D + 0.1):
+                gold.box((0.75, 0.08, 0.75), loc=(cx, y, cz + 0.1), rot=(0, 45, 0), bevel=0.0)
+                glyph.box((0.28, 0.1, 0.28), loc=(cx, y * 1.01, cz + 0.1), rot=(0, 45, 0), bevel=0.0)
+            continue
+        # one small rune per stone on both faces: a gold tick with an arcane dot
+        for y in (-D - 0.03, D + 0.03):
+            gold.box((0.16, 0.07, 0.6), loc=(cx, y, cz), rot=(0, -math.degrees(am) + 90, 0), bevel=0.0)
+            if k % 2 == 1:
+                ox, oz = math.cos(am) * 0.42, math.sin(am) * 0.42
+                glyph.box((0.17, 0.08, 0.17), loc=(cx + ox, y, cz + oz), rot=(0, 45, 0), bevel=0.0)
+
+    # the membrane: a thin disc filling the ring, cut flat just above the dais
+    surface = m.piece("Surface", "Surface", transparency=0.3)
+    prof = []
+    for i in range(25):
+        a = math.radians(-80 + i * (340 / 24))
+        prof.append((math.cos(a) * 3.42, CZ + math.sin(a) * 3.42))
+    prism_xz(surface, prof, -0.07, 0.07)
+
+    # a little moss on the dais rim and the left plinth
+    moss = m.piece("Moss", "Moss")
+    moss_pad(moss, -4.9, -4.0, -1.6, -0.6, 0.31, seed=212, thick=0.1, inset=0.08)
+    moss_pad(moss, 3.4, 4.6, 1.4, 2.4, 0.31, seed=213, thick=0.1, inset=0.08)
+    moss_pad(moss, -4.6, -2.6, -0.9, 0.9, 3.34, seed=214, thick=0.1, inset=0.1)

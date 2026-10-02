@@ -1,7 +1,7 @@
 --[[
 	MenuStats.lua
 	The STATS screen (replaces the old in-world stats sign): a panel of tiles with
-	everything the profile knows: best time, wins, runs, win rate, total kills, gold,
+	everything the profile knows: best time, best stage, wins, runs, win rate, total kills, gold,
 	characters and skins owned, permanent upgrade levels, saved revives and passes.
 ]]
 
@@ -25,6 +25,7 @@ end
 
 local TILES = {
 	{ Key = "Best", Icon = "crown", Caption = "Best time" },
+	{ Key = "Stage", Icon = "portal", Caption = "Best stage" },
 	{ Key = "Wins", Icon = "trophy", Caption = "Wins" },
 	{ Key = "Runs", Icon = "flag", Caption = "Runs played" },
 	{ Key = "Rate", Icon = "chevronsUp", Caption = "Win rate" },
@@ -57,7 +58,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	ui.Tiles = {}
 	for i, t in ipairs(TILES) do
 		local f = UIKit.Panel(scroll, { Name = t.Key, LayoutOrder = i }, true)
-		Icons.Draw(f, t.Icon, { Size = 28, Position = UDim2.fromOffset(14, 14), Color = if t.Icon == "coin" or t.Icon == "revive" then nil else P.gold_400, Back = P.slate_950 })
+		Icons.Draw(f, t.Icon, { Size = 28, Position = UDim2.fromOffset(14, 14), Color = if t.Icon == "coin" or t.Icon == "revive" or t.Icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
 		ui.Values[t.Key] = text(f, "Number", "-", { Position = UDim2.fromOffset(14, 48), Size = UDim2.new(1, -28, 0, TS(28) + 4) }, 28)
 		text(f, "Caption", UIKit.track(t.Caption), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -10), Size = UDim2.new(1, -28, 0, TS(12) + 2) })
 		ui.Tiles[i] = f
@@ -72,6 +73,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		local s = p.Stats
 		local V = ui.Values
 		V.Best.Text = UIKit.formatTime(s.BestTime)
+		V.Stage.Text = (s.BestStage or 0) > 0 and ("Stage " .. tostring(s.BestStage)) or "-"
 		V.Wins.Text = UIKit.formatNumber(s.Wins)
 		V.Runs.Text = UIKit.formatNumber(s.Runs)
 		V.Rate.Text = s.Runs > 0 and string.format("%d%%", math.floor(s.Wins / s.Runs * 100 + 0.5)) or "-"

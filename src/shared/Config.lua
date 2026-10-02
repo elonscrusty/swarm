@@ -20,14 +20,75 @@ Config.Debug = false
 ------------------------------------------------------------------------------------------
 Config.Run = {
 	CountdownSeconds = 10, -- lobby countdown after someone presses Start
-	BossTime = 15 * 60, -- seconds into the run when the boss spawns (15:00)
-	MiniWaveInterval = 30, -- a burst of extra enemies every N seconds
-	ResultsSeconds = 25, -- win/lose screen time before everyone is sent back automatically
+	-- UNUSED since the stage loop (Config.Stages): the boss no longer comes at a fixed time,
+	-- it is summoned at each stage's portal. Kept so old references keep compiling.
+	BossTime = 15 * 60,
+	MiniWaveInterval = 30, -- a burst of extra enemies every N seconds (while exploring)
+	ResultsSeconds = 25, -- defeat screen time before everyone is sent back automatically
 	MaxPlayers = 4, -- players per run (server MaxPlayers should match in game settings)
 	ArenaSpawnSpread = 10, -- players are placed in a circle of this radius at run start
 	-- A solo player who opens the pause menu freezes the whole run. In a group run the
 	-- menu is only an overlay (the run keeps going), so nobody can stall a shared run.
 	SoloPauseFreezesRun = true,
+}
+
+------------------------------------------------------------------------------------------
+-- STAGES (Risk of Rain style loop)
+--   A run is a series of stages. Each stage is an arena (stage 1 = the lobby's arena, then
+--   Config.Arenas.Order alternates: Forest, Ruins, Forest ...) with a PORTAL at a random
+--   clear spot. Explore while the swarm comes as usual; stand in the portal's rune circle
+--   to charge it (ChargeSeconds); that summons the Scorpion Queen at the portal. When she
+--   dies a SURGE pours out of the portal; survive it and the portal opens: every living
+--   player picks NEXT STAGE or RETURN TO LOBBY (a win, paid StageClearBonus per stage).
+--   Enemy scaling keeps counting TOTAL run time (Config.Difficulty, the spawn table) and
+--   adds the per-stage multipliers below; stage 1 multiplies by exactly 1.
+------------------------------------------------------------------------------------------
+Config.Stages = {
+	-- portal placement (rejection sampling, a new spot every stage)
+	PortalMinDistance = 120, -- studs from the spawn centre
+	PortalEdgeMargin = 24, -- studs inside the fence
+	PortalClearance = 9, -- free radius around the portal (colliders, landmarks, ponds)
+	PortalRepeatDistance = 80, -- a new portal is this far from the last one in that arena
+	-- activation: any living player standing in the rune circle charges it (touch friendly)
+	PortalRadius = 9, -- studs from the portal centre
+	ChargeSeconds = 2,
+	ChargeDecay = 0.5, -- share of a full charge lost per second while nobody stands there
+	-- The portal sleeps for a while after a stage starts: it can't be charged before this
+	-- many seconds on the stage (stage 1, later stages); the HUD says "The portal is
+	-- dormant: m:ss". Stops a rush to the boss with a starting build.
+	PortalLockSeconds = { 150, 45 },
+	-- the HUD arrow toward the portal appears after this long (never before the lock ends)
+	HintAfterSeconds = 90,
+	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
+	EnemyHPPerStage = 0.25,
+	EnemyDamagePerStage = 0.08, -- also the boss's contact / orb damage and bomb ticks
+	SpawnTargetPerStage = 0.1, -- live-enemy target and mini-wave size
+	-- Scorpion Queen HP = Config.Boss.HP x this (x the player-count scaling). She comes
+	-- much earlier than the old 15:00 boss, so stage 1 is lighter; then +BossHPPerExtraStage
+	-- per stage past the list.
+	BossHPByStage = { 0.3, 0.75, 1.1, 1.5, 2.0 },
+	BossHPPerExtraStage = 0.5,
+	BossSpawnOffset = 12, -- the Queen climbs out this far behind the portal
+	-- regular enemies kept alive during the Queen fight: this share of the normal live
+	-- target, at most Config.Boss.MinionCapDuringBoss and at least BossMinionMin
+	BossMinionShare = 0.5,
+	BossMinionMin = 15,
+	-- surge after the Queen dies
+	-- surge size = SurgeBase + SurgePerStage x stage (x Config.Difficulty.PlayerCountMult,
+	-- capped by MaxLive): 40 on stage 1, 55 on stage 2 ...
+	SurgeBase = 25,
+	SurgePerStage = 15,
+	SurgeSpawnSeconds = 4, -- they pour out over this long
+	SurgeSeconds = 20, -- survive this long ...
+	SurgeEndRemaining = 0.2, -- ... or until at most this share of the surge is still alive
+	-- the open portal
+	ChoiceSeconds = 15, -- undecided living players go to the next stage after this
+	TravelFadeSeconds = 0.8, -- screen fade before / after the arena swap
+	TravelHealFraction = 0.6, -- living players are healed up to at least this share of max HP
+	ReviveOnTravelHPFraction = 0.5, -- fallen teammates stand up again on the next stage
+	-- RETURN TO LOBBY counts as a WIN (Stats.Wins) only with at least this many stages
+	-- cleared; the gold bonus (Config.Gold.WinBonus + StageClearBonus) is paid either way.
+	WinMinStages = 3,
 }
 
 ------------------------------------------------------------------------------------------
@@ -39,7 +100,9 @@ Config.Dev = {
 	-- servers (user-owned games); leave false for normal play.
 	ShowInLiveGame = false,
 	AddLevels = 5, -- "+5 levels" button
-	SkipToTime = 14 * 60 + 30, -- "Skip to 14:30" button (30 s before the boss)
+	SkipToTime = 14 * 60 + 30, -- unused since the stage loop (was "Skip to 14:30")
+	-- In a run: "Spawn portal boss" charges the stage portal at once, "Teleport to portal"
+	-- puts you next to it.
 }
 
 ------------------------------------------------------------------------------------------
@@ -126,10 +189,11 @@ Config.Gold = {
 	MaxPerKill = 3,
 	KillGoldChance = 0.12,
 	Elite = 25, -- extra gold from an elite's chest (on top of ChestGold)
-	Boss = 200, -- every surviving player gets this when the boss dies
+	Boss = 200, -- every living player gets this each time the Scorpion Queen dies
 	ChestGoldMin = 15,
 	ChestGoldMax = 40,
-	WinBonus = 100, -- every participant gets this on a win
+	WinBonus = 100, -- paid when a player leaves through an open portal (a win)
+	StageClearBonus = 75, -- plus this per stage cleared, on that same return
 }
 
 ------------------------------------------------------------------------------------------
@@ -187,6 +251,9 @@ Config.Difficulty = {
 	PlayerCountMult = { 1, 1.6, 2.1, 2.5 },
 	-- Enemy HP multiplier per extra player.
 	HPPerExtraPlayer = 0.25,
+	-- HP and damage stop growing with time after this many minutes (long stage runs lean
+	-- on the per-stage multipliers in Config.Stages instead).
+	MaxTier = 12,
 }
 
 ------------------------------------------------------------------------------------------
@@ -317,7 +384,7 @@ Config.Graphics = {
 Config.Data = {
 	StoreName = "SwarmPlayerData",
 	KeyPrefix = "Player_",
-	SchemaVersion = 2, -- bump and add a migration step in DataService when the save shape changes
+	SchemaVersion = 3, -- bump and add a migration step in DataService when the save shape changes
 	AutoSaveSeconds = 60,
 	-- A session lock is considered dead (the server crashed) if it wasn't refreshed for
 	-- this long. Must be well above AutoSaveSeconds.
@@ -419,8 +486,10 @@ Config.UI = {
 ------------------------------------------------------------------------------------------
 Config.Arenas = {
 	Order = { "Forest", "Ruins" },
-	Forest = { DisplayName = "Forest", RequiredWins = 0 },
-	Ruins = { DisplayName = "Ruins", RequiredWins = 1 },
+	-- RequiredBestStage: the arena can be picked in the lobby once the player has reached
+	-- this stage in a run (Stats.BestStage). Stage runs visit every arena regardless.
+	Forest = { DisplayName = "Forest", RequiredBestStage = 0 },
+	Ruins = { DisplayName = "Ruins", RequiredBestStage = 2 },
 	Size = 400, -- square arena, centred on ArenaOrigin
 	ClearRadius = 40, -- nothing collidable this close to the centre (player spawn)
 	-- Layouts (landmarks, groves, paths) are designed in MapBuilder with a fixed seed per

@@ -183,12 +183,12 @@ local function arenaText(): (string, string)
 	local arenaId = state:GetAttribute("SelectedArena") or "Forest"
 	local arena = (Config.Arenas :: any)[arenaId]
 	local title = "ARENA: " .. string.upper(arena and arena.DisplayName or tostring(arenaId))
-	local wins = profile and profile.Stats.Wins or 0
+	local best = profile and (profile.Stats.BestStage or 0) or 0
 	for _, name in ipairs(Config.Arenas.Order) do
 		local def = (Config.Arenas :: any)[name]
-		if wins < def.RequiredWins then
-			local need = def.RequiredWins - wins
-			return title, string.format("%s: win %d run%s to unlock", def.DisplayName, need, need == 1 and "" or "s")
+		local need = def.RequiredBestStage or 0
+		if best < need then
+			return title, string.format("%s: reach stage %d to unlock", def.DisplayName, need)
 		end
 	end
 	return title, "Face the swarm"
@@ -812,7 +812,8 @@ function LobbyScreen.Update(_dt: number?)
 		kind = "Busy"
 		ui.QueueRing.Visible = false
 		ui.QueueTitle.Text = "RUN IN PROGRESS"
-		ui.QueueCaption.Text = UIKit.track("Time " .. UIKit.formatTime(state:GetAttribute("RunTime") or 0))
+		local stageNo = state:GetAttribute("Stage") or 0
+		ui.QueueCaption.Text = UIKit.track((stageNo > 0 and ("Stage " .. stageNo .. " · ") or "") .. "Time " .. UIKit.formatTime(state:GetAttribute("RunTime") or 0))
 		ui.QueueNote.Text = "Wait here for the next one! Pick a character or buy upgrades meanwhile."
 		ui.QueueRow.Visible = false
 		if ui.QueueKey ~= "busy" then

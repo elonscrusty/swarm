@@ -5,7 +5,12 @@
 	maps read the same before and after the meshes are uploaded.
 
 	BuildLobby()        → lobby table (menu camera, spawn, legacy prompts), built once at boot
-	BuildArena(name)    → arena table, replaces any previous arena
+	BuildArena(name, variant?) → arena table, replaces any previous arena (variant > 0
+	                      re-seeds the small decoration for later stages; the designed
+	                      layout stays the same, variant 0 = the classic map)
+	FindPortalSpot(arena, rng, avoid?) → a clear spot for the stage portal (Config.Stages)
+	BuildPortal(arena, pos) → the stage portal (kit mesh "Portal" or a part fallback, its
+	                      collider, rune circle, light beam) with :SetState(state, charge)
 	DestroyArena()
 	ApplyLighting(name) → "Lobby" | "Forest" | "Ruins" (sun, sky, atmosphere, clouds, grade)
 
@@ -365,6 +370,39 @@ FALLBACK.Shrine = function(m, cf, s, pal, sh)
 	fblock(m, cf, s, "Plinth", Vector3.new(3, 0.6, 2), 0, 0.3, 0, c3(pal, "Base", P.stone_600), sh)
 	fblock(m, cf, s, "Stone", Vector3.new(2.1, 4.2, 1.2), 0, 2.7, 0, c3(pal, "Stone", P.stone_500), sh)
 	fblock(m, cf, s, "Sigil", Vector3.new(0.8, 0.8, 0.08), 0, 3.2, -0.62, c3(pal, "Gold", P.gold_500))
+end
+-- Stage portal: dais, two plinths, a horseshoe ring of 13 stones and the membrane. Piece
+-- names match the mesh ("Surface", "Glyphs") so BuildPortal can recolour either.
+FALLBACK.Portal = function(m, cf, s, pal, sh)
+	local base, stone, stone2 = c3(pal, "Base", P.stone_600), c3(pal, "Stone", P.stone_500), c3(pal, "Stone2", P.stone_400)
+	fcyl(m, cf, s, "Dais", 5.2, 0.32, 0, 0, 0, base, sh)
+	fcyl(m, cf, s, "Dais", 4.0, 0.5, 0, 0, 0, base, false)
+	fcyl(m, cf, s, "Runes", 2.95, 0.04, 0, 0.5, 0, c3(pal, "Gold", P.gold_500))
+	fcyl(m, cf, s, "Dais", 2.7, 0.06, 0, 0.5, 0, base, false)
+	for _, x in ipairs({ -3.55, 3.55 }) do
+		fblock(m, cf, s, "Stone2", Vector3.new(2.7, 0.5, 2.1), x, 0.75, 0, stone2, sh)
+		fblock(m, cf, s, "Stone", Vector3.new(2.35, 2.15, 1.8), x, 2.05, 0, stone, sh)
+		fblock(m, cf, s, "Stone2", Vector3.new(2.6, 0.4, 2.0), x, 3.15, 0, stone2, sh)
+	end
+	for k = 0, 12 do
+		local a = math.rad(-30 + k * 20)
+		local key = k == 6
+		local rm = 4.15
+		local x, y = math.cos(a) * rm, 6 + math.sin(a) * rm
+		fblock(m, cf, s, k % 2 == 0 and "Stone" or "Stone2", Vector3.new(key and 1.6 or 1.2, 1.38, key and 1.72 or 1.56), x, y, 0, k % 2 == 0 and stone or stone2, sh, CFrame.Angles(0, 0, a))
+		if k % 2 == 1 or key then
+			for _, z in ipairs({ -0.82, 0.82 }) do
+				fblock(m, cf, s, "Glyphs", Vector3.new(0.24, 0.24, 0.1), x + math.cos(a) * 0.42, y + math.sin(a) * 0.42, z, c3(pal, "Glyph", P.fx_arcane), false, CFrame.Angles(0, 0, math.rad(45)))
+			end
+		end
+	end
+	local surface = fpart(m, cf, s, "Surface", Vector3.new(0.14, 6.84, 6.84), CFrame.new(0, 6, 0) * CFrame.Angles(0, math.rad(90), 0), c3(pal, "Surface", P.slate_400), false, Enum.PartType.Cylinder)
+	surface.Transparency = 0.3
+	for _, d in ipairs(m:GetChildren()) do
+		if d:IsA("BasePart") and d.Name == "Glyphs" then
+			d.Material = NEON
+		end
+	end
 end
 FALLBACK.Castle_Wall = function(m, cf, s, pal, sh)
 	fblock(m, cf, s, "Wall", Vector3.new(12, 8.8, 3), 0, 4.4, 0, c3(pal, "Stone", P.stone_500), sh)
@@ -1500,7 +1538,7 @@ local function buildForest(arena: Arena)
 end
 
 ------------------------------------------------------------------------------------------
--- RUINS: a sunlit, overgrown ruined courtyard (unlocked after a win).
+-- RUINS: a sunlit, overgrown ruined courtyard (unlocked by reaching stage 2; every stage run visits it).
 --
 --   centre      a cracked paved plaza (grass in the gaps) with a compass inlay (spawn)
 --   avenues     four slab avenues to the walls; broken columns flank their mouths
@@ -1804,10 +1842,11 @@ end
 
 ------------------------------------------------------------------------------------------
 
--- Builds an arena by name, destroying the previous one.
-function MapBuilder.BuildArena(name: string)
+-- Builds an arena by name, destroying the previous one. `variant` (stage - 1) re-seeds
+-- the scattered decoration so later stages look a little different; 0 = the classic map.
+function MapBuilder.BuildArena(name: string, variant: number?)
 	MapBuilder.DestroyArena()
-	rng = Random.new(SEEDS[name] or SEEDS.Forest)
+	rng = Random.new((SEEDS[name] or SEEDS.Forest) + (variant or 0) * 7919)
 	local arena = newArena(name)
 	if name == "Ruins" then
 		buildRuins(arena)
@@ -1818,6 +1857,190 @@ function MapBuilder.BuildArena(name: string)
 	MapBuilder.ApplyLighting(name)
 	currentArena = arena
 	return arena
+end
+
+------------------------------------------------------------------------------------------
+-- STAGE PORTAL
+------------------------------------------------------------------------------------------
+
+--[[
+	A random clear spot for the stage portal (rejection sampling, world position on the
+	floor): inside the fence by Config.Stages.PortalEdgeMargin, at least PortalMinDistance
+	from the spawn centre, PortalClearance from every collider / landmark keepout, and
+	PortalRepeatDistance from `avoid` (the last portal in this arena). The rules relax step
+	by step if nothing fits; the last resort is a fixed spot on the north side.
+]]
+function MapBuilder.FindPortalSpot(arena: Arena, rand: Random, avoid: Vector3?): Vector3
+	local S = Config.Stages
+	local half = arena.Half - S.PortalEdgeMargin
+	local c = arena.Center
+	local function try(minDist: number, clear: number, avoidDist: number): Vector3?
+		for _ = 1, 400 do
+			local x, z = rand:NextNumber(-half, half), rand:NextNumber(-half, half)
+			if math.sqrt(x * x + z * z) >= minDist and isFree(arena, x, z, clear) then
+				local far = true
+				if avoid and avoidDist > 0 then
+					local dx, dz = c.X + x - avoid.X, c.Z + z - avoid.Z
+					far = dx * dx + dz * dz >= avoidDist * avoidDist
+				end
+				if far then
+					return W(arena, x, z)
+				end
+			end
+		end
+		return nil
+	end
+	return try(S.PortalMinDistance, S.PortalClearance, S.PortalRepeatDistance)
+		or try(S.PortalMinDistance, S.PortalClearance, 0)
+		or try(S.PortalMinDistance * 0.8, S.PortalClearance * 0.6, 0)
+		or W(arena, 0, -(arena.Half - S.PortalEdgeMargin))
+end
+
+-- Portal looks per state (UI and world share the palette).
+local PORTAL_LOOK = {
+	Idle = { Surface = P.slate_400, SurfaceT = 0.3, Glyph = P.fx_arcane, Beam = P.fx_arcane, BeamT = 0.86, Core = P.slate_200, Light = P.fx_arcane, Bright = 1.2, Mark = P.slate_300, MarkT = 0.35 },
+	Charged = { Surface = P.gold_300, SurfaceT = 0.2, Glyph = P.gold_300, Beam = P.gold_300, BeamT = 0.8, Core = P.gold_200, Light = P.gold_300, Bright = 2, Mark = P.gold_400, MarkT = 0.1 },
+	Boss = { Surface = P.crimson_600, SurfaceT = 0.22, Glyph = P.crimson_300, Beam = P.crimson_400, BeamT = 0.84, Core = P.crimson_300, Light = P.crimson_400, Bright = 1.6, Mark = P.crimson_400, MarkT = 0.25 },
+	Surge = { Surface = P.crimson_500, SurfaceT = 0.15, Glyph = P.crimson_300, Beam = P.crimson_400, BeamT = 0.78, Core = P.crimson_300, Light = P.crimson_400, Bright = 2.2, Mark = P.crimson_300, MarkT = 0.15 },
+	Open = { Surface = P.gold_200, SurfaceT = 0.15, Glyph = P.ivory_100, Beam = P.gold_300, BeamT = 0.74, Core = P.ivory_100, Light = P.gold_300, Bright = 2.4, Mark = P.gold_300, MarkT = 0.05 },
+}
+
+local function lerpLook(a, b, t: number)
+	local out = {}
+	for k, v in pairs(a) do
+		local w = b[k]
+		if typeof(v) == "Color3" then
+			out[k] = (v :: Color3):Lerp(w, t)
+		else
+			out[k] = v + (w - v) * t
+		end
+	end
+	return out
+end
+
+export type Portal = {
+	Model: Model,
+	Pos: Vector3,
+	Radius: number,
+	SetState: (state: string, charge: number?) -> (),
+}
+
+--[[
+	Builds the stage portal at `pos` (floor point), facing the run camera (south). Adds
+	its plinth colliders to the arena (call before EnemyAI.SetArena). Extras built here:
+	a dashed rune circle on the floor showing where to stand (Config.Stages.PortalRadius;
+	its marks light up with the charge), a tall soft light beam and a PointLight.
+	SetState("Idle" | "Charging" | "Boss" | "Surge" | "Open", charge) recolours all of it.
+]]
+function MapBuilder.BuildPortal(arena: Arena, pos: Vector3): Portal
+	local S = Config.Stages
+	local cf = CFrame.new(pos) * yawCF(180) -- the mesh's front (-Z) turned toward the camera
+	local model = prop(arena.Model, "Portal", cf, 1, nil, { occluder = true })
+	kitCollider(arena, "Portal", cf, 1)
+	table.insert(arena.Keepout, { X = pos.X - arena.Center.X, Z = pos.Z - arena.Center.Z, R = S.PortalRadius })
+	-- scattered clutter (grass, ferns, bushes) would poke through the dais and the circle
+	for _, d in ipairs(arena.Decor:GetChildren()) do
+		if d:IsA("Model") and #d:GetChildren() > 0 then
+			local at = d:GetPivot().Position
+			local dx, dz = at.X - pos.X, at.Z - pos.Z
+			if dx * dx + dz * dz < (S.PortalRadius + 1) ^ 2 then
+				d:Destroy()
+			end
+		end
+	end
+
+	local fx = Instance.new("Folder")
+	fx.Name = "PortalFx"
+	fx.Parent = arena.Model
+	local marks: { BasePart } = {}
+	local n = 24
+	local radius = S.PortalRadius
+	for i = 1, n do
+		local a = (i - 0.5) / n * TAU
+		local at = Vector3.new(pos.X + math.cos(a) * radius, pos.Y + 0.08, pos.Z + math.sin(a) * radius)
+		local mark = slab(fx, "RuneMark", at, 0.55, TAU * radius / n * 0.55, -a, P.slate_300, 0.12)
+		mark.Transparency = 0.35
+		table.insert(marks, mark)
+	end
+	local lightAt = kitLightPoint("Portal", cf, 1) or (pos + Vector3.new(0, 6, 0))
+	local light = pointLight(fx, lightAt, 26, 1.2, P.fx_arcane, false)
+	arena.Lights += 1
+	local beamH = 70
+	local beam = deco(fx, {
+		Name = "Beam",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(beamH, 4.4, 4.4),
+		CFrame = CFrame.new(pos + Vector3.new(0, 6 + beamH / 2, 0)) * UPRIGHT,
+		Color = P.fx_arcane,
+		Transparency = 0.86,
+		CastShadow = false,
+	})
+	local core = deco(fx, {
+		Name = "BeamCore",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(beamH, 1.4, 1.4),
+		CFrame = CFrame.new(pos + Vector3.new(0, 6 + beamH / 2, 0)) * UPRIGHT,
+		Color = P.slate_200,
+		Transparency = 0.7,
+		CastShadow = false,
+	})
+
+	local lastKey = ""
+	local lastState, lastCharge = "Idle", 0
+	local function setState(state: string, charge: number?)
+		local c = math.clamp(charge or 0, 0, 1)
+		lastState, lastCharge = state, c
+		local key = state .. "|" .. tostring(math.floor(c * n))
+		if key == lastKey then
+			return
+		end
+		lastKey = key
+		local look
+		if state == "Charging" then
+			look = lerpLook(PORTAL_LOOK.Idle, PORTAL_LOOK.Charged, c)
+		else
+			look = PORTAL_LOOK[state] or PORTAL_LOOK.Idle
+		end
+		-- the mesh may have replaced the fallback since the last call: look parts up again
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				if d.Name == "Surface" then
+					d.Color = look.Surface
+					d.Transparency = look.SurfaceT
+				elseif d.Name == "Glyphs" then
+					d.Color = look.Glyph
+				end
+			end
+		end
+		beam.Color = look.Beam
+		beam.Transparency = look.BeamT
+		core.Color = look.Core
+		light.Color = look.Light
+		light.Brightness = look.Bright
+		local lit = state == "Charging" and math.floor(c * n) or (state == "Idle" and 0 or n)
+		for i, mark in ipairs(marks) do
+			local on = i <= lit
+			mark.Color = on and (state == "Charging" and P.gold_300 or look.Mark) or PORTAL_LOOK.Idle.Mark
+			mark.Transparency = on and 0.05 or PORTAL_LOOK.Idle.MarkT
+		end
+	end
+	setState("Idle", 0)
+	-- the uploaded mesh may replace the part fallback later (prop() registered that swap
+	-- first, so this runs after it): paint the new pieces in the current state
+	if MeshService.MayLoad("Portal") then
+		whenMeshLoads("Portal", function()
+			if model.Parent then
+				lastKey = ""
+				setState(lastState, lastCharge)
+			end
+		end)
+	end
+	return {
+		Model = model,
+		Pos = pos,
+		Radius = radius,
+		SetState = setState,
+	}
 end
 
 function MapBuilder.DestroyArena()
