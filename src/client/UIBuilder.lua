@@ -850,16 +850,25 @@ local function titleSize(): number
 	return UIKit.IsCompact() and 36 or 46
 end
 
-local function descHeight(): number
-	return TS(14) * 2 + 8
+-- Height of a description on a card `w` wide: one or two lines (a rough width estimate;
+-- the label wraps and truncates for real).
+local function descHeight(desc: string?, w: number): number
+	local plain = string.gsub(desc or "", "<[^>]+>", "")
+	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.5 / math.max(1, w - 2 * CARD.Pad)), 1, 2)
+	return TS(14) * lines + 8
+end
+
+-- The boxed highlight: shorter on phones.
+local function boxHeight(): number
+	return UIKit.IsCompact() and 62 or CARD.Box
 end
 
 -- Height a landscape card needs for everything it has to show.
-local function cardNeeds(c): number
+local function cardNeeds(c, w: number): number
 	local desc, stats, changes = cardContent(c)
-	local h = CARD.Band + 12 + cardTileSize() + 10 + (desc and descHeight() + 4 or 0) + 14
+	local h = CARD.Band + 12 + cardTileSize() + 10 + (desc and descHeight(desc, w) + 4 or 0) + 14
 	if #changes > 0 then
-		h += CARD.Box + 6 + (#changes - 1) * (CARD.Row - 2)
+		h += boxHeight() + 6 + (#changes - 1) * (CARD.Row - 2)
 	else
 		h += #stats * CARD.Row
 	end
@@ -888,7 +897,8 @@ end
 
 -- Room left for the cards under the header and above the buttons (landscape).
 local function headerHeight(): number
-	return TS(titleSize()) + 6 + 10 + 6 + (TS(18) + 6) + 6 + (Theme.Size.Badge + 14) + 8 + 7 + 16
+	local subH = (portrait or not UIKit.IsCompact() or offerHint ~= nil) and TS(18) + 6 or 0
+	return TS(titleSize()) + 6 + 10 + 6 + subH + 6 + (Theme.Size.Badge + 14) + 8 + 7 + 16
 end
 local function footerHeight(): number
 	return 16 + 60 + 8 + (TS(15) + 6)
@@ -910,7 +920,7 @@ local function cardMetrics(count: number): (number, number)
 	local w = math.min(290, (v.X - 2 * m - (count - 1) * 18) / math.max(1, count))
 	local most = 300
 	for _, c in ipairs(choices) do
-		most = math.max(most, cardNeeds(c))
+		most = math.max(most, cardNeeds(c, w))
 	end
 	local room = v.Y - headerHeight() - footerHeight() - insets.Top * 0.5 - 12
 	return w, math.max(260, math.min(most, room, 440))
@@ -986,21 +996,22 @@ end
 
 -- The boxed highlight of a card's main change: icon + caps stat, big "From → To".
 local function changeBox(parent: Instance, c, line, x: number, y: number, w: number)
-	local box = new("Frame", { Name = "Highlight", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, CARD.Box) }, parent)
+	local box = new("Frame", { Name = "Highlight", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, boxHeight()) }, parent)
 	UIKit.corner(box, 8)
 	UIKit.stroke(box, P.slate_600, 1, 0.35)
-	local head = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 22) }, box)
+	local compact = UIKit.IsCompact()
+	local head = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, compact and 5 or 8), Size = UDim2.new(1, 0, 0, 22) }, box)
 	UIKit.list(head, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
 	statIcon(head, tostring(line.Label), c, 18).LayoutOrder = 1
 	text(head, "Caption", UIKit.track(tostring(line.Label)), { Size = UDim2.fromOffset(0, 22), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, LayoutOrder = 2 }, 14)
 	text(box, "Number", string.format('%s  <font color="%s">→</font>  <font color="%s">%s</font>', tostring(line.From), hex(P.gold_400), hex(P.fx_heal), tostring(line.To)), {
-		Position = UDim2.fromOffset(6, 32),
-		Size = UDim2.new(1, -12, 0, 36),
+		Position = UDim2.fromOffset(6, compact and 27 or 32),
+		Size = UDim2.new(1, -12, 0, compact and 32 or 36),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		RichText = true,
 		TextScaled = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-	}, 26)
+	}, compact and 22 or 26)
 end
 
 -- Green rounded bar: the synergy this card advances / completes (SynergyData).
@@ -1212,14 +1223,14 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		if desc then
 			text(face, "Body", desc, {
 				Position = UDim2.fromOffset(pad, y),
-				Size = UDim2.new(1, -2 * pad, 0, descHeight()),
+				Size = UDim2.new(1, -2 * pad, 0, descHeight(desc, w)),
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextWrapped = true,
 				RichText = true,
 				TextColor3 = P.ivory_200,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, 14)
-			y += descHeight() + 4
+			y += descHeight(desc, w) + 4
 		end
 		UIKit.Divider(face, w - 2 * pad - 20, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, y) })
 		y += 14
@@ -1249,9 +1260,9 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		end
 		if #changes > 0 then
 			local start = 1
-			if fits(CARD.Box) then
+			if fits(boxHeight()) then
 				changeBox(face, c, changes[1], pad, y, rw)
-				y += CARD.Box + 6
+				y += boxHeight() + 6
 				start = 2
 			end
 			for i = start, #changes do
@@ -1330,7 +1341,11 @@ local function layoutLevelUp()
 	local count = lastOffer and #lastOffer.Choices or 3
 	local cw, ch = cardMetrics(count)
 	local titleH = TS(titleSize()) + 6
-	local subH = TS(18) + 6
+	-- phones (landscape) drop "Choose one upgrade" (the cards need the room) unless the
+	-- tutorial has something to say there
+	local showSub = portrait or not UIKit.IsCompact() or offerHint ~= nil
+	local subH = showSub and TS(18) + 6 or 0
+	levelUp.Sub.Visible = showSub
 	levelUp.Title.TextSize = TS(titleSize())
 	local pillH = Theme.Size.Badge + 14
 	local cardsW = portrait and cw or (count * cw + (count - 1) * 18)
