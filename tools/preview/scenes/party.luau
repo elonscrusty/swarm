@@ -3,7 +3,9 @@
 --   --set view=home       the home screen: the PARTY button (you lead a party of 2) (default)
 --   --set view=panel      the PARTY screen, THIS SERVER tab: you lead a party of 2, an
 --                         invite from Cal waiting, Dee in a run, Eve invited
---   --set view=member     the PARTY screen as a member (no KICK, the member hint)
+--   --set view=member     the PARTY screen as a member (your READY toggle, the member hint)
+--   --set view=memberhome the home screen as a member: the READY button beside PARTY
+--   --set ready=on        party members are READY (leader: START DUO enabled)
 --   --set view=solo       the PARTY screen with no party yet
 --   --set view=friends    the FRIENDS tab (the mock friends list is empty: the empty note)
 --   --set view=card       the invite card over the home screen (and the PARTY badge)
@@ -22,10 +24,11 @@ C.startClient()
 C.sendProfile()
 C.settle(1)
 
-local leader = view ~= "member"
-local members = { { UserId = me.UserId, Name = me.DisplayName }, { UserId = 2, Name = "Ava" } }
+local leader = view ~= "member" and view ~= "memberhome"
+local readyOn = preview.args.ready == "on"
+local members = { { UserId = me.UserId, Name = me.DisplayName }, { UserId = 2, Name = "Ava", Ready = readyOn } }
 if not leader then
-	members = { { UserId = 2, Name = "Ava" }, { UserId = me.UserId, Name = me.DisplayName } }
+	members = { { UserId = 2, Name = "Ava" }, { UserId = me.UserId, Name = me.DisplayName, Ready = readyOn } }
 end
 if view == "solo" then
 	members = {}
@@ -60,7 +63,7 @@ end
 local MenuParty = preview.client("MenuParty")
 local sum = MenuParty.Summary()
 preview.log(string.format("party view=%s count=%d max=%d invites=%d leader=%s", view, sum.Count, sum.Max, sum.Invites, tostring(sum.Leader)))
-for _, pat in ipairs({ "^INVITE$", "^SENT$", "^ACCEPT$", "^KICK$", "^LEAVE PARTY$", "^INVITE FRIENDS$", "^PARTY$" }) do
+for _, pat in ipairs({ "^INVITE$", "^SENT$", "^ACCEPT$", "^KICK$", "^LEAVE PARTY$", "^INVITE FRIENDS$", "^PARTY$", "^READY$", "^UNREADY$", "^START", "^NOT READY$" }) do
 	local g = C.findText(pat)
 	preview.log(string.format("  %-16s %s", pat, g and (g:IsA("GuiObject") and tostring(g.Visible) or "found") or "-"))
 end

@@ -5,8 +5,9 @@
 	once, up to the mode's size (server PartyService + RunManager; nothing here is trusted).
 
 	  left    YOUR PARTY n/max: open invites to you (ACCEPT / DECLINE), the members (round
-	          head shot, display name, LEADER pill, KICK for the leader), open slots, a line on
-	          how party starts work and LEAVE PARTY
+	          head shot, display name, LEADER / READY / NOT READY pills, KICK for the leader,
+	          your own READY toggle), open slots, a line on how party starts work, LEAVE PARTY
+	          and the leader's START (the mode that fits the party; only when all are READY)
 	  right   tabs THIS SERVER (everyone else on this server: status and INVITE / ACCEPT)
 	          and FRIENDS (INVITE FRIENDS = Roblox's own invite prompt through SocialService,
 	          and the friends online list; a friend playing SWARM on another server has JOIN,
@@ -15,7 +16,8 @@
 	          during a run): who invites you, ACCEPT / DECLINE and the time left
 	Only Roblox display names are shown, and there is no text input. The friends list comes
 	from Player:GetFriendsOnline (pcall'd, cached Config.Party.FriendsCacheSeconds).
-	MenuParty.Summary() feeds the home screen's PARTY button (size, pending invites).
+	MenuParty.Summary() feeds the home screen's PARTY button (size, pending invites, ready
+	count) and its READY button (MenuParty.SetReady).
 ]]
 
 local Players = game:GetService("Players")
@@ -38,7 +40,7 @@ local player = Players.LocalPlayer
 local ROW_H = 56
 local ROW_GAP = 6
 
-type State = { LeaderId: number, Members: { { UserId: number, Name: string } }, Max: number, Invites: { { FromId: number, FromName: string, Seconds: number } }, Sent: { number } }
+type State = { LeaderId: number, Members: { { UserId: number, Name: string, Ready: boolean? } }, Max: number, Invites: { { FromId: number, FromName: string, Seconds: number } }, Sent: { number } }
 
 local state: State = { LeaderId = 0, Members = {}, Max = 3, Invites = {}, Sent = {} }
 local deadlines: { [number]: number } = {} -- invite from userId -> os.clock() it expires
@@ -60,8 +62,35 @@ local function openInvites(): { { FromId: number, FromName: string, Seconds: num
 end
 
 -- For the home PARTY button: members (0 = no party), max size, open invites, leader?
-function MenuParty.Summary(): { Count: number, Max: number, Invites: number, Leader: boolean }
-	return { Count = #state.Members, Max = state.Max, Invites = #openInvites(), Leader = state.LeaderId == player.UserId }
+function MenuParty.Summary(): { Count: number, Max: number, Invites: number, Leader: boolean, MyReady: boolean, Ready: number, Others: number }
+	local ready, others, mine = 0, 0, false
+	for _, m in ipairs(state.Members) do
+		if m.UserId ~= state.LeaderId then
+			others += 1
+			if m.Ready == true then
+				ready += 1
+				mine = mine or m.UserId == player.UserId
+			end
+		end
+	end
+	return { Count = #state.Members, Max = state.Max, Invites = #openInvites(), Leader = state.LeaderId == player.UserId, MyReady = mine, Ready = ready, Others = others }
+end
+
+-- A member's READY toggle (the home screen's READY button and the PARTY screen).
+function MenuParty.SetReady(on: boolean)
+	Remotes.Get("Party"):FireServer("Ready", on)
+end
+
+-- The lobby mode that takes the whole party (2 → Duo, 3 → Trio), or nil.
+function MenuParty.PartyMode(): string?
+	local n = #state.Members
+	for _, id in ipairs(Config.Modes.Order) do
+		local def = (Config.Modes :: any)[id]
+		if def and def.MaxPlayers == n then
+			return id
+		end
+	end
+	return nil
 end
 
 local function inParty(): boolean
@@ -376,6 +405,22 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		end,
 	})
 
+	-- the leader's START: the mode that takes the whole party, once everyone is ready
+	ui.Start = UIKit.Button(left, {
+		Kind = "Primary",
+		Title = "START",
+		Icon = "play",
+		IconSize = 18,
+		Align = "Center",
+		Name = "PartyStart",
+		OnClick = function()
+			local mode = MenuParty.PartyMode()
+			if mode then
+				Remotes.Get("StartRun"):FireServer(mode)
+			end
+		end,
+	})
+
 	-- right: this server / friends
 	local right = new("Frame", { Name = "Find", BackgroundTransparency = 1 }, face)
 	ui.Right = right
@@ -430,7 +475,6 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	local function fillParty()
 		clear(plist)
 		local order = 0
-		local full = #state.Members >= state.Max
 		-- invites to you first
 		for _, inv in ipairs(openInvites()) do
 			order += 1
@@ -454,17 +498,33 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			order += 1
 			local me = m.UserId == player.UserId
 			local leads = m.UserId == state.LeaderId
-			local sub = leads and "Leader · starts the runs" or (inParty() and "Member" or "Not in a party yet")
+			local ready = m.Ready == true
+			local sub = leads and "Leader · starts the runs" or (inParty() and (ready and "Ready" or "Not ready") or "Not in a party yet")
 			local canKick = isLeader() and not me
-			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, leads and P.gold_300 or nil, canKick and (bw(100, "KICK") + 12 + (leads and 96 or 0)) or (leads and 96 or 0), me)
-			if leads then
-				local pill = UIKit.StatusPill(f, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, canKick and -(bw(100, "KICK") + 20) or -12, 0.5, 0), Name = "Leader" })
-				UIKit.SetStatus(pill, "READY", "LEADER")
+			local toggle = me and not leads and inParty()
+			-- right side: [pill] [KICK | READY toggle]
+			local btnW = canKick and bw(100, "KICK") or (toggle and bw(120, ready and "UNREADY" or "READY") or 0)
+			local pillW = (leads or (inParty() and not toggle)) and (ready and 84 or 112) or 0
+			local right = (btnW > 0 and btnW + 12 or 0) + (pillW > 0 and pillW + 8 or 0)
+			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and P.gold_300 or nil, right, me)
+			if pillW > 0 then
+				local pill = UIKit.StatusPill(f, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -(btnW > 0 and btnW + 20 or 12), 0.5, 0), Name = leads and "Leader" or "ReadyPill" })
+				if leads then
+					UIKit.SetStatus(pill, "READY", "LEADER")
+				elseif ready then
+					UIKit.SetStatus(pill, "UNLOCKED", "READY")
+				else
+					UIKit.SetStatus(pill, "WAITING", "NOT READY")
+				end
 			end
 			if canKick then
 				rowButton(f, "KICK", nil, "Secondary", 100, 8, function()
 					send("Kick", m.UserId)
 				end)
+			elseif toggle then
+				rowButton(f, ready and "UNREADY" or "READY", if ready then nil else "check", ready and "Secondary" or "Primary", 120, 8, function()
+					MenuParty.SetReady(not ready)
+				end).Instance.Name = "ReadyToggle"
 			end
 		end
 		-- open slots
@@ -484,11 +544,19 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		if not inParty() then
 			ui.Hint.Text = "Invite players on this server or your friends. When the leader starts SOLO, DUO or TRIO, the party joins that run together."
 		elseif isLeader() then
-			ui.Hint.Text = full and "Party full. Start DUO or TRIO from the home screen: everyone joins your run." or "Start a run from the home screen: your party joins it. DUO takes 2, TRIO takes 3."
+			ui.Hint.Text = "When everyone is READY, press START (or a mode on the home screen): your party joins your run."
 		else
-			ui.Hint.Text = "Your leader starts the runs; you join them automatically. Leave the party to start your own."
+			ui.Hint.Text = "Tap READY when you're set. Your leader starts the run and you join it automatically."
 		end
 		ui.Leave.Instance.Visible = inParty()
+		local sum = MenuParty.Summary()
+		local mode = MenuParty.PartyMode()
+		ui.Start.Instance.Visible = inParty() and isLeader() and mode ~= nil
+		if ui.Start.Instance.Visible then
+			local allReady = sum.Ready >= sum.Others
+			ui.Start.SetText(allReady and ("START " .. string.upper((Config.Modes :: any)[mode :: string].DisplayName)) or string.format("READY %d/%d", sum.Ready, sum.Others))
+			ui.Start.SetEnabled(allReady)
+		end
 	end
 
 	local function serverRows(): number
@@ -620,7 +688,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		local y = labelH + 8 + math.min(listH, listWant) + 8
 		place(ui.Hint, 0, y, lw, hintH)
 		if leaveH > 0 then
-			place(ui.Leave.Instance, 0, y + hintH + 4, math.min(lw, 260), leaveH)
+			local bwid = ui.Start.Instance.Visible and math.min(220, math.floor((lw - 12) / 2)) or math.min(lw, 260)
+			place(ui.Leave.Instance, 0, y + hintH + 4, bwid, leaveH)
+			place(ui.Start.Instance, bwid + 12, y + hintH + 4, bwid, leaveH)
 		end
 		place(ui.Right, rx, ry, rw, rh)
 		-- narrow lists: compact row buttons (rows are rebuilt when this flips)

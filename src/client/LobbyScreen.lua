@@ -18,8 +18,9 @@
 	                this column.
 	  bottom left   SETTINGS, STATS, RANKS (leaderboards), TRACK (account level); portrait
 	                adds PARTY to this row
-	  top right     PARTY (landscape: left of the stats chip): party size, a red badge for
-	                open invites; opens the PARTY screen (MenuParty)
+	  top right     PARTY (landscape: left of the stats chip): party size / ready count, a red
+	                badge for open invites; opens the PARTY screen (MenuParty). A party member
+	                also gets READY / UNREADY beside it (portrait: under the stats chip)
 	  nameplate     your level, name, worn title / colour above the hero's plate
 	Portrait stacks: logo, stats, hero, nameplate, curses + daily, endless, modes, cards,
 	corner buttons.
@@ -671,7 +672,7 @@ local function buildParty(screen: Frame)
 	ui.PartyBtn = UIKit.Button(screen, {
 		Kind = "Secondary",
 		Title = "PARTY",
-		Subtitle = "Play with friends",
+		Subtitle = "With friends",
 		Icon = "people2",
 		IconSize = 26,
 		TitleSize = 18,
@@ -693,6 +694,19 @@ local function buildParty(screen: Frame)
 		end,
 	})
 	ui.PartyCornerBadge = partyBadge(ui.PartyCornerBtn.Instance)
+	-- a party member's READY toggle (the leader's start waits for everyone)
+	ui.ReadyBtn = UIKit.Button(screen, {
+		Kind = "Primary",
+		Title = "READY",
+		Icon = "check",
+		IconSize = 18,
+		Align = "Center",
+		Name = "PartyReady",
+		OnClick = function()
+			MenuParty.SetReady(not MenuParty.Summary().MyReady)
+		end,
+	})
+	ui.ReadyBtn.Instance.Visible = false
 end
 
 local function buildHome(screen: Frame)
@@ -865,6 +879,7 @@ local function relayout()
 		ui.PartyCornerBtn.Instance.Visible = true
 		ui.PartyBtn.Instance.Visible = false
 		ui.PlaceParty = nil
+		place(ui.ReadyBtn.Instance, W - M - 132, chipTop + 58, 132, 48)
 		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn, ui.PartyCornerBtn }) do
 			b.Instance.Size = UDim2.fromOffset(math.floor((w - 4 * G) / 5), cornerH)
 		end
@@ -909,6 +924,7 @@ local function relayout()
 			local chipW = ui.Chip.AbsoluteSize.X / math.max(0.01, host.Scale())
 			local pw = compact and 180 or 210
 			place(ui.PartyBtn.Instance, W - M - chipW - G - pw, chipY - 2, pw, 52)
+			place(ui.ReadyBtn.Instance, W - M - chipW - 2 * G - pw - 132, chipY, 132, 48)
 		end
 		ui.PlaceParty()
 		local logoBottom = logoY + (ui.LogoH - 4) * logoScale
@@ -1317,7 +1333,20 @@ function LobbyScreen.Update(_dt: number?)
 
 	-- PARTY: size and open invites
 	local party = MenuParty.Summary()
-	local partySub = party.Count > 0 and string.format("%d/%d · %s", party.Count, party.Max, party.Leader and "Leader" or "Member") or "Play with friends"
+	local partySub = "With friends"
+	if party.Count > 0 then
+		partySub = party.Others > 0 and string.format("%d/%d · %d/%d ready", party.Count, party.Max, party.Ready, party.Others) or string.format("%d/%d · %s", party.Count, party.Max, party.Leader and "Leader" or "Member")
+	end
+	-- READY: members only, while the mode buttons show
+	local showReady = party.Count > 0 and not party.Leader and kind == "Modes"
+	ui.ReadyBtn.Instance.Visible = showReady
+	local readyText = party.MyReady and "UNREADY" or "READY"
+	if showReady and ui.ReadyBtn.Instance:GetAttribute("Shown") ~= readyText then
+		ui.ReadyBtn.Instance:SetAttribute("Shown", readyText)
+		ui.ReadyBtn.SetText(readyText)
+		ui.ReadyBtn.SetKind(party.MyReady and "Secondary" or "Primary")
+		ui.ReadyBtn.SetIcon(not party.MyReady and "check" or nil)
+	end
 	if ui.PartyBtn.Subtitle and ui.PartyBtn.Subtitle.Text ~= partySub then
 		ui.PartyBtn.SetText(nil, partySub)
 		ui.PartyBtn.SetSelected(party.Count > 0)

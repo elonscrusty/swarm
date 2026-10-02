@@ -3,7 +3,7 @@
 -- the "Party" remote as each of them (preview.fireServerAs): invite / decline / re-invite
 -- cooldown / accept / expiry / full party / kick / leave, invalid and spammed calls, a
 -- non-leader start (refused), the leader's DUO (both in the run at once), TRIO with a party
--- of two (countdown, an outsider JOINs to fill it), DUO with a party of three (one left out)
+-- of two (countdown; every start first needs the members' READY, an outsider JOINs to fill it), DUO with a party of three (one left out)
 -- and a member leaving the game. Prints PASS / FAIL lines.
 -- Run: render.sh party-sim --devices pc --max-time 400 (no PNG worth looking at)
 local C = lib("common")
@@ -190,6 +190,15 @@ drain(ava)
 as(ava, "StartRun", "Solo")
 wait()
 check("member's start refused", st:GetAttribute("Phase") == "Lobby", lastNote(drain(ava)))
+drain(me) drain(ava)
+as(me, "StartRun", "Duo")
+wait()
+check("leader's start waits for READY", st:GetAttribute("Phase") == "Lobby" and string.find(lastNote(drain(me)), "Waiting for 1") ~= nil and string.find(lastNote(drain(ava)), "READY") ~= nil)
+as(ava, "Party", "Ready", "yes") -- not a boolean: ignored
+as(me, "Party", "Ready", true) -- the leader has no READY
+wait()
+as(ava, "Party", "Ready", true)
+wait()
 as(me, "StartRun", "Duo")
 wait(1)
 check("leader's DUO starts at once with the party", st:GetAttribute("Phase") == "Running" and RM.IsParticipant(me) and RM.IsParticipant(ava) and not RM.IsParticipant(ben),
@@ -200,6 +209,9 @@ wait(3)
 check("back in the lobby", st:GetAttribute("Phase") == "Lobby", tostring(st:GetAttribute("Phase")))
 
 -- 9. TRIO with a party of two: countdown with both joined; an outsider JOINs and fills it
+check("READY cleared after the run", PS.PartyOf(ava) ~= nil and PS.PartyOf(ava).Ready[ava] == nil)
+as(ava, "Party", "Ready", true)
+wait()
 as(me, "StartRun", "Trio")
 wait()
 check("TRIO countdown, party joined", st:GetAttribute("Phase") == "Countdown" and st:GetAttribute("Joined") == 2, string.format("phase=%s joined=%s", tostring(st:GetAttribute("Phase")), tostring(st:GetAttribute("Joined"))))
@@ -218,6 +230,9 @@ wait()
 as(cal, "Party", "Accept", me.UserId)
 wait()
 drain(cal)
+as(ava, "Party", "Ready", true)
+as(cal, "Party", "Ready", true)
+wait()
 as(me, "StartRun", "Duo")
 wait(1)
 local calNote = lastNote(drain(cal))
