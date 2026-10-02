@@ -918,6 +918,8 @@ local function relayout()
 		local plateW = math.min(w - 2 * 62, 460)
 		place(ui.Nameplate, (W - plateW) / 2, y, plateW, plateH)
 		heroFrac = ((chipTop + 52 + y) / 2) / H
+		ui.PrevArrow.Instance.Visible = true
+		ui.NextArrow.Instance.Visible = true
 	else
 		local logoScale = math.clamp(H / 760, 0.7, 1)
 		ui.LogoScale.Scale = logoScale
@@ -977,8 +979,18 @@ local function relayout()
 		place(ui.Queue, W - M - rw, colTop - 10, rw, math.min(colH + 40, H - colTop - M))
 		-- nameplate bottom centre, between the columns
 		local gapL, gapR = M + cw + 16, W - M - rw - 16
-		local plateW = math.clamp(gapR - gapL - 2 * 64, 300, 460)
-		place(ui.Nameplate, W / 2 - plateW / 2, H - M - plateH, plateW, plateH)
+		-- the browse arrows only where they fit beside the plate (phones in landscape have
+		-- no room; the plate itself still opens CHARACTERS there)
+		local arrows = gapR - gapL - 2 * 64 >= 300
+		ui.PrevArrow.Instance.Visible = arrows
+		ui.NextArrow.Instance.Visible = arrows
+		if arrows then
+			local plateW = math.clamp(gapR - gapL - 2 * 64, 300, 460)
+			place(ui.Nameplate, W / 2 - plateW / 2, H - M - plateH, plateW, plateH)
+		else
+			local plateW = math.max(260, gapR - gapL)
+			place(ui.Nameplate, (gapL + gapR) / 2 - plateW / 2, H - M - plateH, plateW, plateH)
+		end
 	end
 	ui.PlateSurface.Size = UDim2.fromScale(1, 1)
 	ui.PrevArrow.Instance.AnchorPoint = Vector2.new(1, 0.5)
