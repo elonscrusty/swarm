@@ -1847,7 +1847,14 @@ local function picture(f: Frame, name: string, image: string, o: Opts, tint: Col
 			task.wait(FALLBACK_POLL)
 			waited += FALLBACK_POLL
 		end
-		-- never loaded: the drawn icon stays (it is visible by now)
+		-- not loaded yet: the drawn icon stays until the picture arrives, never under it
+		if fb.Parent and img.Parent then
+			img:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+				if img.IsLoaded and fb.Parent then
+					fb:Destroy()
+				end
+			end)
+		end
 	end)
 end
 
