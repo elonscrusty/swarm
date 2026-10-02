@@ -279,9 +279,15 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		ui.Tabs.Frame.Position = UDim2.new()
 		ui.Tabs.Frame.Size = UDim2.new(1, 0, 0, tabsH)
 		local y = tabsH + (short and 8 or 14)
+		-- very short screens (phones in landscape) also drop the heading: the tabs and the
+		-- switch say which board this is, and YOUR BEST must stay inside the panel
+		local tight = maxH < 420
 		local titleH = TS(22) + 10
-		place(ui.Title.Frame, 0, y, iw, titleH)
-		y += titleH
+		ui.Title.Frame.Visible = not tight
+		if not tight then
+			place(ui.Title.Frame, 0, y, iw, titleH)
+			y += titleH
+		end
 		-- the STANDARD / ENDLESS switch on the HIGH SCORE tab; on short screens it takes the
 		-- subtitle's place (the heading and the switch already say which board this is)
 		local scoreTab = boardOf(board).Id == "Score" or boardOf(board).Tab == "Score"

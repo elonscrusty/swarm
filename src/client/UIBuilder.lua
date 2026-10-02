@@ -2620,7 +2620,8 @@ local pendingReplay: { Mode: string, Until: number, Waited: boolean }? = nil
 
 local function statTile(parent: Instance, icon: string, caption: string, order: number): (TextLabel, TextLabel)
 	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(94, 104) }, true)
-	Icons.Draw(f, icon, { Size = 26, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Color = if icon == "coin" or icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
+	local glyph = Icons.Draw(f, icon, { Size = 26, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Color = if icon == "coin" or icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
+	glyph.Name = "TileIcon" -- hidden on phones in landscape (slim tiles)
 	local value = text(f, "Number", "0", {
 		Name = "Value",
 		Position = UDim2.fromOffset(4, 42),
@@ -2752,6 +2753,7 @@ local function buildResults()
 
 	-- actions: REPLAY (same mode) and MAIN MENU
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 4, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
+	results.ButtonRow = row
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 	results.Replay = UIKit.Button(row, {
 		Kind = "Primary",
@@ -2796,8 +2798,21 @@ local function buildResults()
 		local w = tallModalWidth(680)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
+		-- phones in landscape: a smaller title, slim tiles without icons, lower buttons and
+		-- the XP block right under the tiles, so the main numbers and the account XP show
+		-- without scrolling
+		local slim = UIKit.IsCompact() and not portrait
+		local titleSize = TS(slim and 34 or 44)
+		results.Title.TextSize = titleSize
+		results.Title.Size = UDim2.new(1, 0, 0, titleSize + 6)
+		results.Arena.Position = UDim2.fromOffset(0, titleSize + 10)
+		results.Hero.Position = UDim2.fromOffset(0, titleSize + TS(12) + 18)
+		local tileH = slim and 72 or 104
+		local btnH = slim and 48 or Theme.Size.Button
+		grid.LayoutOrder = slim and 0 or 1
+		results.Progress.LayoutOrder = slim and 1 or 5
 		-- header height follows the text sizes (phones set text 20% bigger)
-		local headH = math.max(84, TS(44) + 6 + TS(12) + 8 + TS(15) + 8)
+		local headH = math.max(84, titleSize + 6 + TS(12) + 8 + TS(15) + 8)
 		head.Size = UDim2.new(1, 0, 0, headH)
 		results.TitleCol.Size = UDim2.fromOffset(math.max(160, math.min(440, inner - 96)), headH)
 		-- six tiles in one row when they fit (a little narrower on phones), otherwise two
@@ -2805,16 +2820,25 @@ local function buildResults()
 		local tileW = math.clamp(math.floor((inner + 8) / 6) - 8, 84, 94)
 		for _, tile in ipairs(grid:GetChildren()) do
 			if tile:IsA("GuiObject") then
-				tile.Size = UDim2.fromOffset(tileW, 104)
+				tile.Size = UDim2.fromOffset(tileW, tileH)
+				local glyph = tile:FindFirstChild("TileIcon")
+				if glyph and glyph:IsA("GuiObject") then
+					glyph.Visible = not slim
+				end
+				local value = tile:FindFirstChild("Value")
+				if value and value:IsA("GuiObject") then
+					value.Position = UDim2.fromOffset(4, slim and 8 or 42)
+				end
 			end
 		end
 		local perRow = math.max(1, math.floor((inner + 8) / (tileW + 8)))
 		local cols = perRow >= 6 and 6 or (perRow >= 3 and 3 or 2)
 		local rows = math.ceil(6 / cols)
-		grid.Size = UDim2.fromOffset(cols * (tileW + 8) - 8, rows * 104 + (rows - 1) * 8)
+		grid.Size = UDim2.fromOffset(cols * (tileW + 8) - 8, rows * tileH + (rows - 1) * 8)
 		local bw = math.clamp(math.floor((inner - 12) / 2), 140, 250)
-		results.Replay.Instance.Size = UDim2.fromOffset(bw, Theme.Size.Button)
-		results.Button.Instance.Size = UDim2.fromOffset(bw, Theme.Size.Button)
+		results.ButtonRow.Size = UDim2.new(1, 0, 0, btnH)
+		results.Replay.Instance.Size = UDim2.fromOffset(bw, btnH)
+		results.Button.Instance.Size = UDim2.fromOffset(bw, btnH)
 		-- the progress block grows with its lines (wrapped on narrow screens)
 		local lineH = TS(Theme.TextSize.Small) + 4
 		local perLine = inner < 520 and 2 or 1
@@ -2822,7 +2846,7 @@ local function buildResults()
 		results.ProgLines.Size = UDim2.new(1, -28, 0, nLines * lineH)
 		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0))
 		local bodyH = stackHeight(body, 10)
-		local fixed = headH + 10 + Theme.Size.Button + (TS(12) + 4) + 4 * 10 + 2 * Theme.Space.XL + 8
+		local fixed = headH + 10 + btnH + (TS(12) + 4) + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(140, v.Y - 24 - fixed)
 		local h = math.min(bodyH, room)
 		body.Size = UDim2.new(1, 0, 0, h)

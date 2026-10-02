@@ -921,7 +921,7 @@ local function relayout()
 		ui.PrevArrow.Instance.Visible = true
 		ui.NextArrow.Instance.Visible = true
 	else
-		local logoScale = math.clamp(H / 760, 0.7, 1)
+		local logoScale = math.clamp(H / 760, compact and 0.56 or 0.7, 1) -- phones: room for the cards
 		ui.LogoScale.Scale = logoScale
 		local logoY = math.max(ins.Top + 2, 14)
 		ui.Logo.Position = UDim2.fromOffset(M, logoY)
@@ -957,6 +957,10 @@ local function relayout()
 		ui.CardDaily.SetText(compact and "DAILY" or "DAILY CHALLENGE")
 		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
 			b.Instance.Size = UDim2.fromOffset(cw, cardH)
+			-- cards too short for title + subtitle show the title alone
+			if b.Subtitle then
+				b.Subtitle.Visible = cardH >= TS(Theme.TextSize.H2) + TS(15) + 22
+			end
 		end
 		-- right column: SOLO / DUO / TRIO, then CURSES
 		local rw = math.clamp(W * 0.25, 280, 340)

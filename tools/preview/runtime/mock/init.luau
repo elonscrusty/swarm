@@ -298,6 +298,63 @@ function Mock.api()
 		end
 	end
 
+	--[[
+		Simulates one finger: a touch that begins at `opts.at` (screen px, default the
+		button's centre), optionally drags `opts.drag` px and is held `opts.hold` seconds
+		(the clock advances), then lifts. UserInputService InputBegan / Changed / Ended get
+		a Touch input object; `button` (when the touch began on it and did not leave it)
+		gets InputBegan / MouseButton1Down, then InputEnded / Activated(input) like a
+		real tap. Returns the input object.
+	]]
+	function api.touch(button, opts)
+		opts = opts or {}
+		local uis = R.services.UserInputService
+		local ust = uis and states[uis]
+		local pos = opts.at
+		if not pos and button then
+			local l = api.layoutOf(button)
+			pos = Vector2.new(l.x + l.w / 2, l.y + l.h / 2)
+		end
+		pos = pos or Vector2.zero
+		local input = {
+			UserInputType = Enum.UserInputType.Touch,
+			UserInputState = Enum.UserInputState.Begin,
+			KeyCode = Enum.KeyCode.Unknown,
+			Position = Vector3.new(pos.X, pos.Y, 0),
+			Delta = Vector3.zero,
+		}
+		local onButton = button ~= nil and opts.at == nil
+		if ust then
+			R.fire(ust, "InputBegan", input, onButton)
+		end
+		if onButton then
+			R.fire(states[button], "InputBegan", input)
+			R.fire(states[button], "MouseButton1Down", pos.X, pos.Y)
+		end
+		local drag = opts.drag or 0
+		if drag ~= 0 then
+			input.UserInputState = Enum.UserInputState.Change
+			input.Position = Vector3.new(pos.X + drag, pos.Y, 0)
+			input.Delta = Vector3.new(drag, 0, 0)
+			if ust then
+				R.fire(ust, "InputChanged", input, onButton)
+			end
+		end
+		api.advance(opts.hold or 0.08)
+		input.UserInputState = Enum.UserInputState.End
+		if ust then
+			R.fire(ust, "InputEnded", input, onButton)
+		end
+		if button and (opts.endOn or onButton) then
+			R.fire(states[button], "InputEnded", input)
+			-- a button only activates for a touch that began on it, or (opts.endOn) one
+			-- that Roblox routes to it anyway (worst case for the level-up guard)
+			R.fire(states[button], "MouseButton1Up", pos.X, pos.Y)
+			R.fire(states[button], "Activated", input, 1)
+		end
+		return input
+	end
+
 	-- GuiObjects under PlayerGui whose Text (or Name) matches.
 	function api.findGui(match)
 		local out = {}
