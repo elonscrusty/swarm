@@ -76,8 +76,7 @@ export type Insets = { Top: number, Left: number, Right: number }
 -- Bottom panels, designed at full size (reference px) and fitted with a UIScale.
 local VIT = { W = 420, PadX = 10, PadY = 9, HP = 26, XP = 20, Gap = 8 } -- health / level panel
 VIT.H = VIT.PadY * 2 + VIT.HP + VIT.Gap + VIT.XP
-local INV = { Pad = 10, Label = 84, Tile = 58, Gap = 8, RowGap = 14 } -- ability panel
-local PANEL_GAP = 6 -- between the two bottom panels
+local INV = { Pad = 10, Label = 84, Tile = 64, Gap = 8, RowGap = 14 } -- ability panel
 local PILL_H, PAUSE = 44, 50 -- top right counters / pause button
 local TIMER_W, TIMER_H = 150, 52
 local STAGE_H = 30
@@ -610,51 +609,55 @@ local function layout()
 		timerY = math.max(timerY, pauseY + PAUSE + 6)
 	end
 	place(ui.TimerPill, W / 2 - TIMER_W / 2, timerY, TIMER_W, TIMER_H)
+	local y = timerY + TIMER_H + 6
 
-	-- stage pill under the timer
-	local stageY = timerY + TIMER_H + 4
-	if portrait and ins.Left > 8 then
-		-- the pill is wide: on a narrow screen it goes below the Roblox menu buttons
-		stageY = math.max(stageY, ins.Top + 4)
+	-- stage pill: top left under the Roblox menu buttons (landscape); portrait has no room
+	-- beside the timer, so it sits centred under it
+	if portrait then
+		ui.Stage.AnchorPoint = Vector2.new(0.5, 0)
+		ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(y))
+		if ui.Stage.Visible then
+			y += STAGE_H + 6
+		end
+		ui.LeftBottom = nil
+	else
+		local sy = math.max(ins.Top, 0) + 6
+		ui.Stage.AnchorPoint = Vector2.new(0, 0)
+		ui.Stage.Position = UDim2.fromOffset(M, math.floor(sy))
+		ui.LeftBottom = ui.Stage.Visible and (sy + STAGE_H) or nil
 	end
-	ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(stageY))
-	local stageBottom = ui.Stage.Visible and (stageY + STAGE_H) or (timerY + TIMER_H)
 
-	-- boss bar under the stage pill
+	-- health / level panel under the timer (one fit factor; phones a bit smaller)
+	local kv = compact and 0.85 or 1
+	kv = math.min(kv, (W - 2 * M) / VIT.W)
+	ui.PlateFit.Scale = kv
+	local vitW, vitH = VIT.W * kv, VIT.H * kv
+	place(ui.Plate, W / 2 - vitW / 2, y, vitW, vitH)
+	y += vitH
+
+	-- boss bar under the health panel
 	local bossW = math.min(560, W - 2 * M)
-	local bossY = stageBottom + 10
+	local bossY = y + 10
 	place(ui.Boss, W / 2 - bossW / 2, bossY, bossW, 46)
-	local topBottom = ui.Boss.Visible and (bossY + 62) or (stageBottom + 4)
+	local topBottom = ui.Boss.Visible and (bossY + 62) or (y + 4)
 	ui.TopBottom = topBottom
 
-	-- bottom panels: one fit factor k for both (phones smaller; never wider than the gap
-	-- between the thumb side and the JUMP button, never taller than ~40% of the screen)
+	-- ability panel: bottom centre (landscape), between the thumb side and the JUMP button
+	-- and never taller than ~30% of the screen; portrait: under the top cluster, away from
+	-- the thumbs
 	local invW, invH = invSize()
-	local stackH = VIT.H + PANEL_GAP + invH
-	local k = compact and 0.72 or 1
+	local k
 	if portrait then
-		k = compact and 0.86 or 1
-		k = math.min(k, (W - 2 * M) / invW, (H * 0.3) / stackH)
+		k = math.min(compact and 0.86 or 1, (W - 2 * M) / invW, (H * 0.22) / invH)
 	else
 		local jumpClear = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26) / scale + ins.Right + 12
-		k = math.min(k, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.4) / stackH)
+		k = math.min(compact and 0.72 or 1, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.3) / invH)
 	end
-	ui.PlateFit.Scale = k
 	ui.BarFit.Scale = k
-	local vitW, vitH = VIT.W * k, VIT.H * k
 	local barW, barH = invW * k, invH * k
-	local vitY, barY
-	if portrait then
-		-- under the top cluster, away from the thumbs
-		vitY = topBottom + 8
-		barY = vitY + vitH + PANEL_GAP * k
-	else
-		barY = H - M - barH
-		vitY = barY - PANEL_GAP * k - vitH
-	end
-	place(ui.Plate, W / 2 - vitW / 2, vitY, vitW, vitH)
+	local barY = portrait and (topBottom + 8) or (H - M - barH)
 	place(ui.Bar, W / 2 - barW / 2, barY, barW, barH)
-	local clusterTop, clusterBottom = vitY, barY + barH
+	local clusterTop, clusterBottom = barY, barY + barH
 	ui.BarTop = clusterTop
 	ui.BarBottom = clusterBottom
 	if ui.Buff then
@@ -669,7 +672,7 @@ local function layout()
 
 	-- stage banner: under the top cluster in landscape, mid-screen in portrait
 	ui.Banner.Size = UDim2.fromOffset(math.min(520, W - 2 * M), 110)
-	ui.Banner.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(portrait and H * 0.5 or math.max(H * 0.3, bossY + 90)))
+	ui.Banner.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(portrait and H * 0.5 or math.max(H * 0.3, topBottom + 70)))
 
 	-- status line: centre-low in landscape, below the panels in portrait
 	local statusW = math.min(640, W - 2 * M)
@@ -718,7 +721,7 @@ local function hudTile(parent: Instance, size: number, id: string?, level: numbe
 		UIKit.stroke(tile, empty and P.slate_600 or P.slate_500, 1, empty and 0.55 or 0.15)
 	end
 	if not empty then
-		local inset = math.floor(size * 0.12)
+		local inset = math.floor(size * 0.08)
 		Icons.Upgrade(tile, id, { Size = size - inset * 2, Position = UDim2.fromOffset(inset, inset), Back = P.slate_800, Name = "Icon" })
 		if level and level > 0 then
 			local d = math.max(16, math.floor(size * 0.38))
