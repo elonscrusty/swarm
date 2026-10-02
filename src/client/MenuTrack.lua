@@ -156,6 +156,13 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 		else
 			ui.Meter.Set(1, "Max level reached")
 		end
+		if animate then
+			if level < AccountData.MaxLevel then
+				UIAnim.CountTo(ui.Level, 0, level, "Level %d", 0.7)
+			end
+			ui.Meter.Frame.ClipsDescendants = true
+			UIAnim.Sweep(ui.Meter.Frame, 0.35, 0.5, 0.7)
+		end
 		for _, ch in ipairs(ui.Medal:GetChildren()) do
 			if ch:IsA("Frame") then
 				ch:Destroy()

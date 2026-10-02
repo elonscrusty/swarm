@@ -143,6 +143,8 @@ function MenuCurses.Build(screen: Frame, ctx: { [string]: any })
 			card.Name.TextColor3 = card.On and P.crimson_300 or C.Text
 			if was ~= nil and was ~= card.On and card.On then
 				UIAnim.Punch(card.Button.Instance, 0.06)
+				UIAnim.Flash(card.Button.Instance, P.crimson_300)
+				UIAnim.Burst(card.Button.Instance, UDim2.fromScale(0.5, 0.5), { P.crimson_300, P.gold_300 }, 10, 60)
 			end
 		end
 		local mult = CurseData.GoldMult(cur)

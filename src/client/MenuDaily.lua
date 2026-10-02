@@ -274,6 +274,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			shownDay = -1
 			fill()
 			UIAnim.Pop(holder, 0, 0.9)
+			holder.ClipsDescendants = true
+			UIAnim.Sweep(holder, 0.2, 0.8, 0.8)
 			MenuDaily._layout()
 		end,
 		Update = function(dt: number)

@@ -185,6 +185,8 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		if lastLevels[id] ~= nil and level > lastLevels[id] then
 			UIAnim.Punch(f, 0.06)
 			UIAnim.Pop(rank, 0, 1.4)
+			UIAnim.Flash(f, P.gold_300)
+			UIAnim.Burst(f, UDim2.fromScale(0.5, 0.45), { P.gold_300, P.gold_500, P.ivory_100 }, 18, 80)
 		end
 		lastLevels[id] = level
 		return f

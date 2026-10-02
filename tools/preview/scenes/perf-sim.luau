@@ -45,9 +45,9 @@ local function wrap(mod, field, label)
 	end
 	mod[field] = function(...)
 		P.profileEnter(label)
-		local a, b = f(...)
+		local out = table.pack(f(...))
 		P.profileLeave()
-		return a, b
+		return table.unpack(out, 1, out.n)
 	end
 end
 for _, name in ipairs({ "RunManager", "StageManager", "EnemySpawner", "EnemyAI", "WeaponSystem", "XPSystem", "ItemSystem", "LootSystem", "LevelUpSystem", "AchievementService", "RunModifiers", "LeaderboardService", "DamageNumbers", "Fx" }) do

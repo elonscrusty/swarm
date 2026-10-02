@@ -790,7 +790,33 @@ end
 -- Screens
 ------------------------------------------------------------------------------------------
 
+-- Ambient life on the home screen: drifting motes and a light sweep over the logo every few
+-- seconds. Only runs while Home is showing (stopped when another screen or the run opens).
+local ambientStop: (() -> ())?
+local ambientToken = 0
+local function homeAmbient(on: boolean)
+	ambientToken += 1
+	if ambientStop then
+		ambientStop()
+		ambientStop = nil
+	end
+	if not on or not ui.Frame then
+		return
+	end
+	local token = ambientToken
+	ambientStop = UIAnim.Motes(ui.Home, 14, P.gold_300)
+	ui.Logo.ClipsDescendants = true
+	task.spawn(function()
+		task.wait(0.7)
+		while token == ambientToken and ui.Home.Visible and ui.Frame.Visible do
+			UIAnim.Sweep(ui.Logo, 0, 0.6, 0.7)
+			task.wait(6)
+		end
+	end)
+end
+
 local function homeEntrance()
+	homeAmbient(true)
 	local i = 0
 	for _, b in ipairs(ui.ModeButtons) do
 		i += 1
@@ -825,6 +851,9 @@ function LobbyScreen.Show(name: string, arg: any?)
 	UIAnim.SwapScreens(ui[current], ui[name], direction, Config.UI.ScreenSlideSeconds)
 	local from = current
 	current = name
+	if from == "Home" then
+		homeAmbient(false)
+	end
 	relayout()
 	UIAnim.Tween(ui.Dim, Theme.Motion.Base, { BackgroundTransparency = (name ~= "Home" and name ~= "Characters") and 0.4 or 1 })
 	if from == "Characters" or name == "Characters" then
@@ -859,6 +888,9 @@ function LobbyScreen.SetVisible(on: boolean)
 	end
 	ui.Frame.Visible = on
 	ui.Vignette.Visible = on
+	if not on then
+		homeAmbient(false)
+	end
 	if on then
 		-- always come back to the home screen
 		for name in pairs(SCREEN_ORDER) do

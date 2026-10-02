@@ -12,6 +12,7 @@
 local TweenService = game:GetService("TweenService")
 
 local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Theme"))
+local ClientSettings = require(script.Parent.ClientSettings)
 
 local UIAnim = {}
 
@@ -283,6 +284,276 @@ function UIAnim.Float(obj: GuiObject, pixels: number, seconds: number)
 	local base = obj.Position
 	local info = TweenInfo.new(seconds, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 	TweenService:Create(obj, info, { Position = base + UDim2.fromOffset(0, pixels) }):Play()
+end
+
+--[[
+	Flashy extras for the menus. All of them honour ClientSettings.Reduced() (they do
+	little or nothing) and clean up after themselves: Burst and Sweep are one-shot,
+	Motes returns a stop function the screen calls when it hides.
+]]
+
+-- One light streak sweeps across `obj` once (the parent should clip). Returns nothing.
+function UIAnim.Sweep(obj: GuiObject, delay: number?, transparency: number?, seconds: number?)
+	if ClientSettings.Reduced() then
+		return
+	end
+	local streak = Instance.new("Frame")
+	streak.Name = "SweepOnce"
+	streak.BackgroundColor3 = Color3.new(1, 1, 1)
+	streak.BackgroundTransparency = transparency or 0.7
+	streak.BorderSizePixel = 0
+	streak.AnchorPoint = Vector2.new(0.5, 0.5)
+	streak.Size = UDim2.new(0, 26, 2, 0)
+	streak.Rotation = 20
+	streak.Position = UDim2.fromScale(-0.2, 0.5)
+	streak.ZIndex = obj.ZIndex + 5
+	streak.Visible = false
+	streak.Parent = obj
+	task.delay(delay or 0, function()
+		if not streak.Parent then
+			return
+		end
+		streak.Visible = true
+		local t = UIAnim.Tween(streak, seconds or 0.55, { Position = UDim2.fromScale(1.2, 0.5) }, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+		t.Completed:Once(function()
+			streak:Destroy()
+		end)
+	end)
+end
+
+--[[
+	Confetti / sparkle burst of small frames from a point (`center` is a UDim2 inside
+	`parent`). `colors` is a list of Color3. Pieces fly out, spin, drop and fade in about
+	0.8 s, then destroy themselves. Reduced effects: a handful, no spin.
+]]
+function UIAnim.Burst(parent: GuiObject, center: UDim2, colors: { Color3 }, count: number?, spread: number?)
+	local n = count or 18
+	local reduced = ClientSettings.Reduced()
+	if reduced then
+		n = math.min(n, 5)
+	end
+	local reach = spread or 90
+	local rng = Random.new()
+	for i = 1, n do
+		local star = i % 3 == 0
+		local size = star and rng:NextInteger(8, 14) or rng:NextInteger(4, 8)
+		local piece = Instance.new("Frame")
+		piece.Name = "BurstPiece"
+		piece.BackgroundColor3 = colors[(i - 1) % #colors + 1]
+		piece.BorderSizePixel = 0
+		piece.AnchorPoint = Vector2.new(0.5, 0.5)
+		piece.Size = UDim2.fromOffset(size, star and size or size * 1.6)
+		piece.Position = center
+		piece.Rotation = star and 45 or rng:NextInteger(0, 90)
+		piece.ZIndex = parent.ZIndex + 20
+		piece.Parent = parent
+		local angle = rng:NextNumber(0, math.pi * 2)
+		local dist = rng:NextNumber(0.4, 1) * reach
+		local life = rng:NextNumber(0.55, 0.9)
+		local goal = UDim2.new(center.X.Scale, center.X.Offset + math.cos(angle) * dist, center.Y.Scale, center.Y.Offset + math.sin(angle) * dist + (star and 0 or 26))
+		UIAnim.Tween(piece, life, { Position = goal }, Enum.EasingStyle.Quart)
+		local fade = UIAnim.Tween(piece, life, { BackgroundTransparency = 1, Rotation = reduced and piece.Rotation or piece.Rotation + rng:NextInteger(-200, 200) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		fade.Completed:Once(function()
+			piece:Destroy()
+		end)
+	end
+end
+
+--[[
+	Slow drifting light motes behind a screen (embers / fireflies). Returns a stop
+	function that cancels the tweens and removes the layer: call it when the screen hides.
+	Reduced effects: no motes at all.
+]]
+function UIAnim.Motes(parent: GuiObject, count: number?, color: Color3?): () -> ()
+	if ClientSettings.Reduced() then
+		return function() end
+	end
+	local layer = Instance.new("Frame")
+	layer.Name = "Motes"
+	layer.BackgroundTransparency = 1
+	layer.Size = UDim2.fromScale(1, 1)
+	layer.Active = false
+	layer.ZIndex = math.max(parent.ZIndex - 1, 0)
+	layer.Parent = parent
+	local rng = Random.new()
+	local tweens: { Tween } = {}
+	for _ = 1, count or 12 do
+		local size = rng:NextInteger(2, 5)
+		local mote = Instance.new("Frame")
+		mote.Name = "Mote"
+		mote.BackgroundColor3 = color or Theme.Color.Hover
+		mote.BackgroundTransparency = rng:NextNumber(0.55, 0.85)
+		mote.BorderSizePixel = 0
+		mote.Size = UDim2.fromOffset(size, size)
+		mote.Rotation = 45
+		local x = rng:NextNumber(0.02, 0.98)
+		mote.Position = UDim2.fromScale(x, rng:NextNumber(0, 1))
+		mote.Parent = layer
+		-- first leg finishes the current climb, then loops over the whole height
+		local seconds = rng:NextNumber(9, 16)
+		local info = TweenInfo.new(seconds, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1, false, 0)
+		mote.Position = UDim2.fromScale(x, 1.04)
+		local t = TweenService:Create(mote, info, { Position = UDim2.fromScale(x + rng:NextNumber(-0.06, 0.06), -0.04) })
+		task.delay(rng:NextNumber(0, seconds), function()
+			if layer.Parent then
+				t:Play()
+			end
+		end)
+		table.insert(tweens, t)
+	end
+	return function()
+		for _, t in ipairs(tweens) do
+			t:Cancel()
+		end
+		layer:Destroy()
+	end
+end
+
+-- Staggered pop-in for a list of objects (each `step` seconds later), one call per screen.
+function UIAnim.Cascade(objs: { GuiObject }, step: number?, from: number?, limit: number?)
+	local reduced = ClientSettings.Reduced()
+	for i, o in ipairs(objs) do
+		if i > (limit or 14) then
+			break
+		end
+		UIAnim.Pop(o, reduced and 0 or (step or 0.03) * i, reduced and 0.97 or from or 0.85)
+	end
+end
+
+-- A glow flash (a bright frame that fades) over `obj`: purchase / unlock feedback.
+function UIAnim.Flash(obj: GuiObject, color: Color3?)
+	if ClientSettings.Reduced() then
+		return
+	end
+	local f = Instance.new("Frame")
+	f.Name = "Flash"
+	f.BackgroundColor3 = color or Color3.new(1, 1, 1)
+	f.BackgroundTransparency = 0.55
+	f.BorderSizePixel = 0
+	f.Size = UDim2.fromScale(1, 1)
+	f.ZIndex = obj.ZIndex + 6
+	f.Parent = obj
+	local corner = obj:FindFirstChildWhichIsA("UICorner")
+	if corner then
+		corner:Clone().Parent = f
+	end
+	local t = UIAnim.Tween(f, 0.45, { BackgroundTransparency = 1 })
+	t.Completed:Once(function()
+		f:Destroy()
+	end)
+end
+
+------------------------------------------------------------------------------------------
+-- One-shot flourishes (event-driven; each cleans itself up; skipped with Reduced effects)
+------------------------------------------------------------------------------------------
+
+-- A bright streak that crosses `obj` once (the parent should clip: bars, tiles).
+function UIAnim.SweepOnce(obj: GuiObject, color: Color3?, seconds: number?, transparency: number?)
+	if ClientSettings.Reduced() then
+		return
+	end
+	local streak = Instance.new("Frame")
+	streak.Name = "SweepOnce"
+	streak.BackgroundColor3 = color or Theme.Color.Hover
+	streak.BackgroundTransparency = transparency or 0.35
+	streak.BorderSizePixel = 0
+	streak.AnchorPoint = Vector2.new(0.5, 0.5)
+	streak.Size = UDim2.new(0.18, 0, 2, 0)
+	streak.Rotation = 20
+	streak.Position = UDim2.fromScale(-0.2, 0.5)
+	streak.ZIndex = obj.ZIndex + 4
+	streak.Parent = obj
+	local t = UIAnim.Tween(streak, seconds or 0.55, { Position = UDim2.fromScale(1.2, 0.5), BackgroundTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	t.Completed:Once(function()
+		streak:Destroy()
+	end)
+end
+
+-- Radial sparks flying out of `center` (a UDim2 inside `parent`) and fading.
+function UIAnim.Sparks(parent: GuiObject, center: UDim2, color: Color3, count: number?, distance: number?, seconds: number?)
+	if ClientSettings.Reduced() then
+		return
+	end
+	local n = count or 10
+	local dist = distance or 46
+	local dur = seconds or 0.55
+	for i = 1, n do
+		local a = (i / n) * math.pi * 2 + (i % 3) * 0.2
+		local d = dist * (0.65 + 0.35 * ((i * 7) % 5) / 4)
+		local size = 4 + (i % 3) * 2
+		local spark = Instance.new("Frame")
+		spark.Name = "Spark"
+		spark.BackgroundColor3 = color
+		spark.BorderSizePixel = 0
+		spark.AnchorPoint = Vector2.new(0.5, 0.5)
+		spark.Size = UDim2.fromOffset(size, size)
+		spark.Rotation = 45
+		spark.Position = center
+		spark.ZIndex = parent.ZIndex + 5
+		spark.Parent = parent
+		local t = UIAnim.Tween(spark, dur, {
+			Position = center + UDim2.fromOffset(math.cos(a) * d, math.sin(a) * d),
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(1, 1),
+		}, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		t.Completed:Once(function()
+			spark:Destroy()
+		end)
+	end
+end
+
+-- A ring that expands from `center` to `endSize` pixels while fading (level-up pulse).
+function UIAnim.Ring(parent: GuiObject, center: UDim2, color: Color3, endSize: number?, seconds: number?)
+	if ClientSettings.Reduced() then
+		return
+	end
+	local ring = Instance.new("Frame")
+	ring.Name = "RingPulse"
+	ring.BackgroundTransparency = 1
+	ring.AnchorPoint = Vector2.new(0.5, 0.5)
+	ring.Size = UDim2.fromOffset(8, 8)
+	ring.Position = center
+	ring.ZIndex = parent.ZIndex + 4
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = ring
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = color
+	stroke.Thickness = 3
+	stroke.Parent = ring
+	ring.Parent = parent
+	local dur = seconds or 0.5
+	local e = endSize or 90
+	local t = UIAnim.Tween(ring, dur, { Size = UDim2.fromOffset(e, e) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	UIAnim.Tween(stroke, dur, { Transparency = 1, Thickness = 0.5 })
+	t.Completed:Once(function()
+		ring:Destroy()
+	end)
+end
+
+-- Quick positional jitter that settles back where it started.
+function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
+	if ClientSettings.Reduced() then
+		return
+	end
+	local home = obj.Position
+	local amp = pixels or 6
+	local steps = 6
+	local each = (seconds or 0.3) / steps
+	task.spawn(function()
+		for i = 1, steps do
+			if not obj.Parent then
+				return
+			end
+			local k = (1 - i / steps) * amp
+			local dir = (i % 2 == 0) and 1 or -1
+			obj.Position = home + UDim2.fromOffset(dir * k, (i % 3 - 1) * k * 0.5)
+			task.wait(each)
+		end
+		if obj.Parent then
+			obj.Position = home
+		end
+	end)
 end
 
 return UIAnim

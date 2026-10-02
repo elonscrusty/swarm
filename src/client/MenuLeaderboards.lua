@@ -148,7 +148,11 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		for i, r in ipairs(rows) do
 			local f = rowFor(r, i)
 			if animate and i <= 12 then
-				UIAnim.Pop(f, 0.015 * i, 0.9)
+				UIAnim.Pop(f, 0.025 * i, 0.88)
+				if i <= 3 then
+					f.ClipsDescendants = true
+					UIAnim.Sweep(f, 0.25 + 0.15 * i, 0.55, 0.6)
+				end
 			end
 		end
 		ui.Empty.Visible = #rows == 0 and status ~= "loading"

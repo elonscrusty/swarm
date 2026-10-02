@@ -364,6 +364,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		Showcase.Show(inspChar, inspSkin)
 		refresh()
 		UIAnim.Punch(ui.Detail, 0.03)
+		if screen.Visible then
+			UIAnim.Burst(ui.Detail, UDim2.fromScale(0.5, 0.18), { P.gold_300, P.ivory_100, P.steel_200 }, 12, 70)
+		end
 	end
 
 	-- title size on a compact tile: long names ("Necromancer") a step smaller so they fit

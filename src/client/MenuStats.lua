@@ -332,6 +332,10 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			MenuStats._show(true)
 			for i, f in ipairs(ui.Tiles) do
 				UIAnim.Pop(f, 0.025 * i, 0.75)
+				if i <= 3 then
+					f.ClipsDescendants = true
+					UIAnim.Sweep(f, 0.2 + 0.1 * i, 0.8, 0.5)
+				end
 			end
 			layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
 		end,
