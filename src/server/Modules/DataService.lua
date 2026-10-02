@@ -534,6 +534,7 @@ function DataService.Reclaim(player: Player): boolean
 	end)
 	if not ok or lockedByOther then
 		warn("[DataService] could not reclaim " .. p.Key .. (lockedByOther and " (locked by another server)" or ""))
+		DataService.SetSaveStatus(player, "failing")
 		if lockedByOther and player.Parent then
 			p.LockLost = true
 			player:Kick("Your save was opened on another server. Please rejoin.")

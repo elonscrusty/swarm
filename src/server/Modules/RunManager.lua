@@ -783,7 +783,7 @@ local function placeOnArena(arena, i: number, n: number): Vector3
 	return arena.Center + Vector3.new(math.cos(a), 0, math.sin(a)) * (n > 1 and Config.Run.ArenaSpawnSpread or 0)
 end
 
-local function beginRun()
+local function beginRun(here: boolean?)
 	local runStarter = starter -- whose curses the run uses (Solo / Daily: the only player)
 	local list = {}
 	for player in pairs(joined) do
@@ -796,6 +796,12 @@ local function beginRun()
 	starter = nil
 	publishJoined()
 	if #list == 0 then
+		setPhase("Lobby")
+		return
+	end
+	-- live game: the team plays on its own private run server (RunServers saves and
+	-- teleports them; this lobby is free again at once). `here` = play on this server.
+	if not here and ctx.RunServers and ctx.RunServers.SendToRun(list, mode, runStarter or list[1], selectedArena) then
 		setPhase("Lobby")
 		return
 	end
@@ -1079,7 +1085,10 @@ function RunManager.EndRun(won: boolean)
 	RunManager.Broadcast(won and "VICTORY!" or "THE SWARM WINS...", won and Color3.fromRGB(255, 220, 80) or Color3.fromRGB(255, 80, 80), true)
 end
 
-local function returnPlayerToLobby(rp)
+-- `how` (RunServers: when a run server sends the player home): "results" (the defeat
+-- results counted down), "menu" (MAIN MENU on the results) or "portal" (the results sit
+-- over the lobby menu: portal return, pause MAIN MENU).
+local function returnPlayerToLobby(rp, how: string?)
 	if rp.Returned then
 		return
 	end
@@ -1090,13 +1099,16 @@ local function returnPlayerToLobby(rp)
 		resetPlayerAttributes(player)
 		spawnCharacter(player, lobbySpawnCFrame(), true)
 		ctx.GoldSystem.SyncProfile(player)
+		if ctx.RunServers then
+			ctx.RunServers.OnBackInLobby(player, how or "portal")
+		end
 	end
 end
 
 -- Clears the run world and goes back to the Lobby phase.
-local function returnAll()
+local function returnAll(how: string?)
 	for _, rp in ipairs(runPlayers) do
-		returnPlayerToLobby(rp)
+		returnPlayerToLobby(rp, how)
 	end
 	table.clear(runPlayers)
 	table.clear(byPlayer)
@@ -1284,6 +1296,9 @@ local function tryJoin(player: Player)
 	if phase ~= "Countdown" or joined[player] or not ctx.DataService.GetData(player) then
 		return
 	end
+	if ctx.RunServers and ctx.RunServers.Blocks(player) then
+		return -- on the way to a run server, or this run server is starting its run
+	end
 	local n = joinedCount()
 	if n >= maxPlayers() then
 		RunManager.Notify(player, "This run is full.", Color3.fromRGB(255, 120, 120))
@@ -1319,6 +1334,9 @@ end
 	so others can join. During a countdown any mode button just joins it.
 ]]
 local function startRun(player: Player, newMode: string)
+	if ctx.RunServers and ctx.RunServers.Blocks(player) then
+		return -- on the way to a run server, or this run server is starting its run
+	end
 	if phase == "Countdown" then
 		if newMode == "Daily" then
 			RunManager.Notify(player, "A group run is starting: join it, or play the Daily after it.", Color3.fromRGB(255, 200, 120))
@@ -1356,6 +1374,41 @@ local function startRun(player: Player, newMode: string)
 	if (phase :: string) == "Countdown" then -- tryJoin may have started a full run
 		RunManager.Broadcast(player.DisplayName .. " is starting a " .. string.upper(modeDef().DisplayName) .. " run! Tap JOIN to play.", Color3.fromRGB(120, 255, 160))
 	end
+end
+
+--[[
+	Starts a run on THIS server for `players` (RunServers: a run server's ticket, or the
+	lobby's fallback when the teleport failed): the mode, the arena (already validated) and
+	the starter whose curses / Endless switch it uses. Only from the Lobby phase; returns
+	true when the run is running.
+]]
+function RunManager.StartTeamRun(players: { Player }, newMode: string, arena: string?, startPlayer: Player?): boolean
+	if phase ~= "Lobby" or not isMode(newMode) then
+		return false
+	end
+	mode = newMode
+	state:SetAttribute("Mode", mode)
+	if arena and arena ~= selectedArena and table.find(Config.Arenas.Order, arena) then
+		selectedArena = arena
+		state:SetAttribute("SelectedArena", arena)
+		if lobby.ArenaLabel then
+			lobby.ArenaLabel.Text = "ARENA: " .. string.upper(Config.Arenas[arena].DisplayName)
+		end
+	end
+	table.clear(joined)
+	table.clear(joinedOrder)
+	for _, p in ipairs(players) do
+		if p.Parent and ctx.DataService.GetData(p) and not joined[p] then
+			joined[p] = true
+			table.insert(joinedOrder, p)
+		end
+	end
+	if #joinedOrder == 0 then
+		return false
+	end
+	starter = (startPlayer and joined[startPlayer]) and startPlayer or joinedOrder[1]
+	beginRun(true)
+	return (phase :: string) == "Running"
 end
 
 -- The starter skips the rest of the countdown once someone else has joined.
@@ -1622,7 +1675,7 @@ function RunManager.Step(dt: number)
 			end
 		end
 		if resultsTimer <= 0 or not anyoneWaiting then
-			returnAll()
+			returnAll("results")
 		end
 		return
 	end
@@ -1777,7 +1830,7 @@ function RunManager.Start()
 	Remotes.Listen("ReturnToLobby", function(player)
 		local rp = byPlayer[player]
 		if rp and phase == "Results" then
-			returnPlayerToLobby(rp)
+			returnPlayerToLobby(rp, "menu")
 		end
 	end, 2)
 
