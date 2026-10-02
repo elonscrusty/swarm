@@ -277,7 +277,7 @@ Later creatures
 - [ ] Decline / let the timer run out → you stay dead (spectate).
 
 ## 5. Data save / load (API access ON)
-- [ ] Earn gold in a run, buy a meta upgrade, buy Mage (500 gold), equip a skin. Stop.
+- [ ] Earn gold in a run, buy a meta upgrade, buy Mage (1,000 gold), equip a skin. Stop.
 - [ ] Play again: gold, upgrade levels, Mage owned and selected, skin, settings sliders and stats are back.
 - [ ] Gold collected before dying in a run is kept.
 - [ ] Session lock: run two Studio sessions with the same account (or Team Test) → the second one waits and then gets the "data is still in use" kick unless the first one left.

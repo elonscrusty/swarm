@@ -343,9 +343,9 @@ projectiles that stop on a hit; it evolves the Longbow.
 | Character | Starts with | Trait | Tradeoff | Unlock |
 |---|---|---|---|---|
 | Knight | Whip | Iron Skin: -10% damage taken | short reach (~7 studs) | free |
-| Mage | Magic Orb | Arcane Reach: +10% area | fragile, orbs stop at the first enemy early | 500 gold |
-| Rogue | Throwing Knives | Fleet Foot: +15% speed | knives only fly where you move | 1,000 gold |
-| Priest | Garlic Aura | Blessed: +20% max HP | no reach | 1,500 gold |
+| Mage | Magic Orb | Arcane Reach: +10% area | fragile, orbs stop at the first enemy early | 1,000 gold |
+| Rogue | Throwing Knives | Fleet Foot: +15% speed | knives only fly where you move | 2,000 gold |
+| Priest | Garlic Aura | Blessed: +20% max HP | no reach | 3,000 gold |
 | Ranger | Longbow | Steady Aim: stand still 0.8 s for +30% Longbow damage (+10% other weapons) until you move | slow shots, one direction, bonus needs standing still | achievement Queen Slayer |
 | Alchemist | Fire Trail | Volatile Mix: +20% damage for burning / area weapons (Fire Trail, Frost Nova, Healing Totem, Holy Water, Garlic, Lightning) | damage stays behind you: needs to keep moving | achievement Deep Delver (reach stage 4) |
 | Engineer | Turret | Tinkerer: turrets and Healing Totems last 30% longer | turrets stay where they were built; slow start | achievement Field Engineer (3 optional events) |
