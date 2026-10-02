@@ -241,7 +241,7 @@ local function phase(label: string, n: number, t: number)
 	preview.profile(true)
 	table.clear(warnKinds)
 	frames = 0
-	local kills0 = me:GetAttribute("Kills") or 0
+	local kills0 = rp.Kills
 	local alive, aliveSamples = 0, 0
 	local t0 = preview.realClock()
 	local left = t
@@ -262,7 +262,7 @@ local function phase(label: string, n: number, t: number)
 	preview.profile(false)
 	local inTree, all = preview.liveInstances()
 	local heap = collectgarbage("count")
-	local kills = (me:GetAttribute("Kills") or 0) - kills0
+	local kills = rp.Kills - kills0
 	local per = 1000 / frames -- ms per frame from seconds
 	line(string.format("\n=== %s: %d enemies target, %.0f alive avg, %d frames, %.1f s real (%.1f ms/frame all-in), kills %d (%.0f/s) ===",
 		label, n, alive / math.max(1, aliveSamples), frames, real, real * 1000 / frames, kills, kills / t))
@@ -372,7 +372,7 @@ if soak > 0 then
 		run(step)
 		done += step
 		local inTree, all = preview.liveInstances()
-		line(string.format("  t+%3ds  alive %3d  tree %6d  all %6d  heap %6.1f MB  kills %s", done, #Spawner.Active, inTree, all, collectgarbage("count") / 1024, tostring(me:GetAttribute("Kills"))))
+		line(string.format("  t+%3ds  alive %3d  tree %6d  all %6d  heap %6.1f MB  kills %s", done, #Spawner.Active, inTree, all, collectgarbage("count") / 1024, tostring(rp.Kills)))
 	end
 end
 
