@@ -275,7 +275,7 @@ spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean): Mod
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+	-- Jumping stays enabled: JumpController (client) jumps, MovementGuard caps speed
 	-- the lobby is a menu screen: lobby characters stand still
 	humanoid.WalkSpeed = inLobby and 0 or Config.Player.BaseSpeed
 	player.Character = model

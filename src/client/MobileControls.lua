@@ -1,7 +1,9 @@
 --[[
 	MobileControls.lua
 	Movement only: a floating virtual thumbstick (appears wherever the thumb lands),
-	WASD / arrow keys and a gamepad left stick. No jump, no attack buttons.
+	WASD / arrow keys and a gamepad left stick, plus a JUMP button for touch screens
+	(bottom right, clear of the inventory bar; the jump itself is JumpController.lua).
+	No attack buttons.
 
 	The default Roblox control scripts are disabled (StarterPlayer movement modes are
 	"Scriptable" in default.project.json); this module calls Humanoid:Move every frame
@@ -20,6 +22,10 @@ local MobileControls = {}
 
 -- Optional move input filter (TerrainFx: slippery steering on ice), world dir in and out.
 MobileControls.Filter = nil :: ((Vector3, number) -> Vector3)?
+-- Air control filter (JumpController), applied after Filter.
+MobileControls.AirFilter = nil :: ((Vector3, number) -> Vector3)?
+-- Called when the touch JUMP button is pressed (JumpController.Request).
+MobileControls.OnJump = nil :: (() -> ())?
 
 local player = Players.LocalPlayer
 local enabled = true
@@ -33,6 +39,8 @@ local gui: ScreenGui
 local base: Frame
 local knob: Frame
 local uiScale: UIScale? = nil
+local jumpButton: TextButton? = nil
+local jumpUsable: boolean? = nil
 
 -- Lets other UI stop movement (level-up screen, panels, results).
 function MobileControls.SetEnabled(on: boolean)
@@ -41,6 +49,28 @@ function MobileControls.SetEnabled(on: boolean)
 		stickInput = nil
 		stickVector = Vector2.zero
 		base.Visible = false
+	end
+end
+
+function MobileControls.IsEnabled(): boolean
+	return enabled
+end
+
+-- JumpController sets this every frame: shown during a run on touch screens (hidden while
+-- a panel disabled the controls), dimmed while a jump is not allowed (frozen, paused).
+function MobileControls.SetJumpButton(show: boolean, usable: boolean)
+	local b = jumpButton
+	if not b then
+		return
+	end
+	local visible = show and enabled and UserInputService.TouchEnabled
+	if b.Visible ~= visible then
+		b.Visible = visible
+	end
+	if jumpUsable ~= usable then
+		jumpUsable = usable
+		b.BackgroundTransparency = usable and 0.15 or 0.6
+		b.TextTransparency = usable and 0 or 0.5
 	end
 end
 
@@ -137,9 +167,54 @@ local function buildGui()
 	ks.Thickness = 2
 	ks.Parent = knob
 
+	-- JUMP button (touch): bottom right, inside the safe area, thumb sized; it sinks its
+	-- touches so they never start the stick
+	local M = Config.Movement
+	local jump = Instance.new("TextButton")
+	jump.Name = "JumpButton"
+	jump.AnchorPoint = Vector2.new(1, 1)
+	jump.Position = UDim2.new(1, -M.ButtonMargin, 1, -M.ButtonMargin)
+	jump.Size = UDim2.fromOffset(M.ButtonSize, M.ButtonSize)
+	jump.BackgroundColor3 = P.slate_900
+	jump.BackgroundTransparency = 0.15
+	jump.AutoButtonColor = false
+	jump.Text = "JUMP"
+	jump.TextColor3 = P.ivory_100
+	jump.TextScaled = false
+	jump.TextSize = 20
+	jump.FontFace = Theme.Font.Label
+	jump.Visible = false
+	jump.Parent = gui
+	local jc = Instance.new("UICorner")
+	jc.CornerRadius = UDim.new(1, 0)
+	jc.Parent = jump
+	local js = Instance.new("UIStroke")
+	js.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	js.Color = P.gold_400
+	js.Thickness = 2.5
+	js.Parent = jump
+	local jumpScale = Instance.new("UIScale")
+	jumpScale.Parent = jump
+	jump.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			local cb = MobileControls.OnJump
+			if cb then
+				cb()
+			end
+			js.Thickness = 4
+		end
+	end)
+	jump.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			js.Thickness = 2.5
+		end
+	end)
+	jumpButton = jump
+
 	-- keep the stick graphic scaled like the rest of the UI
 	RunService.RenderStepped:Connect(function()
 		scale.Scale = uiScale and uiScale.Scale or 1
+		jumpScale.Scale = uiScale and uiScale.Scale or 1
 	end)
 end
 
@@ -173,6 +248,9 @@ function MobileControls.Init()
 	buildGui()
 	pcall(function()
 		require(script.Parent:WaitForChild("TerrainFx") :: ModuleScript).Init(MobileControls)
+	end)
+	pcall(function()
+		require(script.Parent:WaitForChild("JumpController") :: ModuleScript).Init(MobileControls)
 	end)
 
 	-- Try to switch off the default control module too (belt and braces).
@@ -241,6 +319,10 @@ function MobileControls.Init()
 		local filter = MobileControls.Filter
 		if filter then
 			world = filter(world, dt)
+		end
+		local air = MobileControls.AirFilter
+		if air then
+			world = air(world, dt)
 		end
 		hum:Move(world, false)
 	end)

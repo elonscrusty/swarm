@@ -645,7 +645,7 @@ function ModelBuilder.AddHumanoid(model: Model, characterId: string, skinId: str
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 	humanoid.UseJumpPower = true
-	humanoid.JumpPower = 0
+	humanoid.JumpPower = Config.Movement.JumpPower -- the client JumpController decides when (Config.Movement)
 	humanoid.WalkSpeed = Config.Player.BaseSpeed
 	humanoid.AutoRotate = true
 	humanoid.Parent = model

@@ -21,7 +21,7 @@
       "$className": "StarterPlayer",
       "$properties": {
         "CharacterWalkSpeed": 16,
-        "CharacterJumpPower": 0,
+        "CharacterJumpPower": 38,
         "CharacterUseJumpPower": true,
         "LoadCharacterAppearance": false,
         "EnableMouseLockOption": false,

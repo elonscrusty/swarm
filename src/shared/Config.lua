@@ -881,4 +881,37 @@ Config.Lobby = {
 	MenuFieldOfView = 55, -- FOV of the menu shot (MenuCamera attribute; portrait widens it)
 }
 
+------------------------------------------------------------------------------------------
+-- MOVEMENT: jump and bunny hop (client JumpController.lua, server MovementGuard.lua)
+--   Jump: Space / gamepad A / the JUMP button (touch). A press shortly before landing is
+--   kept (BufferSeconds) and a press just after walking off an edge still jumps
+--   (CoyoteSeconds). No jumping while the run is frozen (level-up, pause), downed or in
+--   the lobby.
+--   Bunny hop: jumping again within HopWindow of landing (while moving) adds HopBonus to
+--   a speed multiplier, never above HopSpeedCap. On the ground it decays back to 1 at
+--   HopDecay per second (and resets at once when the player stops).
+--   Air control: in the air the move input only steers the takeoff direction at
+--   AirControl per second (modest; no full mid-air turns).
+--   Server: MovementGuard trims horizontal velocity that stays above
+--   WalkSpeed * HopSpeedCap * ServerTolerance + ServerAllowance for ServerGraceSeconds
+--   (lag tolerant, never kicks). RunManager's position check still applies on top.
+------------------------------------------------------------------------------------------
+Config.Movement = {
+	JumpEnabled = true,
+	JumpPower = 38, -- studs/s upward (about 3.7 studs high, 0.39 s in the air at 196.2 gravity)
+	BufferSeconds = 0.12,
+	CoyoteSeconds = 0.1,
+	JumpCooldown = 0.2, -- minimum time between two jumps
+	AirControl = 3.5, -- how fast the air direction follows the stick (per second)
+	HopWindow = 0.15, -- seconds after landing in which a jump counts as a chained hop
+	HopBonus = 0.06, -- speed multiplier added per chained hop
+	HopSpeedCap = 1.24, -- hard cap on the hop speed multiplier
+	HopDecay = 0.6, -- multiplier lost per second on the ground after HopWindow
+	ServerTolerance = 1.15,
+	ServerAllowance = 3, -- studs/s
+	ServerGraceSeconds = 0.35, -- over-speed must last this long before it is trimmed
+	ButtonSize = 84, -- touch JUMP button (pixels before UIScale)
+	ButtonMargin = 26, -- from the right and bottom safe-area edges
+}
+
 return Config
