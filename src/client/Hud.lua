@@ -19,6 +19,18 @@
 	  bottom centre ability bar: weapons row + passives row with level badges (portrait:
 	                under the health plate, away from the thumbs)
 	  screen edges  crimson vignette pulse when hurt, slow pulse at low health
+	Motion (all event-driven, short, skipped or reduced with ClientSettings.Reduced()):
+	  XP bar        shine sweep per gem burst; level up = white flash, sweep, ring + sparks
+	  health        white damage chip that holds a beat before it drains, heal shimmer, a
+	                heart beat at low health
+	  counters      kills punch + sweep on every 50th, timer flashes gold each minute
+	  purse         bounce + coin sparkle on gains
+	  ability bar   a new weapon / passive pops with a shine sweep and sparks, a level up
+	                with a flash
+	  stage         "STAGE 2" banner slams in under the timer for ~1.5 s (after the travel
+	                fade), the pill flashes when the objective changes (red for the surge)
+	  boss bar      drops in with a shake, the name fades in under a sweep, shakes again at
+	                the phase marker
 
 	Nothing in the ability bar or the plates is Active, so a thumb landing on them still
 	drives the floating thumbstick.
@@ -103,6 +115,7 @@ local function buildTop(frame: Frame)
 		Size = UDim2.new(0, 56, 1, 0),
 		TextXAlignment = Enum.TextXAlignment.Left,
 	}, Theme.TextSize.Body)
+	ui.XPRow = xpRow
 	ui.XP = UIKit.Meter(xpRow, {
 		Gradient = Theme.Gradient.XP,
 		TextStyle = "Number",
@@ -111,6 +124,10 @@ local function buildTop(frame: Frame)
 		Position = UDim2.new(0, 60, 0.5, 0),
 		Size = UDim2.new(1, -60, 1, -6),
 	})
+
+	-- bright leading edge on the XP fill (reads as the bar's "spark")
+	local edge = new("Frame", { Name = "Edge", BackgroundColor3 = P.ivory_100, BackgroundTransparency = 0.55, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(1, 0.5), Size = UDim2.new(0, 6, 1, 0), ZIndex = 3 }, ui.XP.Fill)
+	UIKit.corner(edge, 999)
 
 	-- boss bar
 	local boss = new("Frame", { Name = "BossBar", BackgroundTransparency = 1, Visible = false }, frame)
@@ -467,6 +484,28 @@ local function weaponIconId(id: string, evolved: boolean): string
 	return id
 end
 
+-- Shine sweep inside the tile's rounded shape, plus sparks (new) or a flash (level up).
+local function tileShine(tile: GuiObject, isNew: boolean)
+	if ClientSettings.Reduced() then
+		return
+	end
+	local clip = new("Frame", { Name = "ShineClip", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = 4 }, tile)
+	local corner = tile:FindFirstChildWhichIsA("UICorner")
+	if corner then
+		corner:Clone().Parent = clip
+	end
+	UIAnim.SweepOnce(clip, P.ivory_100, 0.5, 0.2)
+	if isNew then
+		UIAnim.Sparks(tile, UDim2.fromScale(0.5, 0.5), P.gold_200, 8, 36, 0.5)
+		UIAnim.Ring(tile, UDim2.fromScale(0.5, 0.5), P.gold_300, 70, 0.45)
+	else
+		UIAnim.Flash(tile, P.gold_200)
+	end
+	task.delay(0.7, function()
+		clip:Destroy()
+	end)
+end
+
 function Hud.SetInventory(inv: { [string]: any }?)
 	inventory = inv
 	for _, row in ipairs({ ui.WeaponRow, ui.PassiveRow }) do
@@ -478,6 +517,7 @@ function Hud.SetInventory(inv: { [string]: any }?)
 	end
 	if not inv then
 		table.clear(shownLevels)
+		anim.BarReady = false
 		return
 	end
 	layout()
@@ -485,8 +525,13 @@ function Hud.SetInventory(inv: { [string]: any }?)
 	-- tiles that are new or just levelled up pop in
 	local function popIfChanged(tile: GuiObject, key: string, level: number)
 		if shownLevels[key] ~= level then
-			UIAnim.Pop(tile, 0, shownLevels[key] and 1.35 or 0.3)
+			local isNew = shownLevels[key] == nil
+			UIAnim.Pop(tile, 0, isNew and 0.3 or 1.35)
 			shownLevels[key] = level
+			-- the very first SetInventory of a run just fills the bar; only later changes shine
+			if anim.BarReady then
+				tileShine(tile, isNew)
+			end
 		end
 	end
 	local maxW = WeaponData.MaxLevel
@@ -512,6 +557,7 @@ function Hud.SetInventory(inv: { [string]: any }?)
 		end
 		tile.LayoutOrder = i
 	end
+	anim.BarReady = true
 end
 
 ------------------------------------------------------------------------------------------
@@ -530,6 +576,12 @@ function Hud.Hurt()
 	if ClientSettings.Reduced() then
 		UIAnim.Punch(ui.Heart, 0.25)
 		return
+	end
+	-- the bar flashes white for a frame or two (throttled so a swarm of hits stays calm)
+	local now = os.clock()
+	if now - (anim.HurtFlashAt or 0) > 0.25 then
+		anim.HurtFlashAt = now
+		UIAnim.Flash(ui.HP.Frame, P.ivory_100)
 	end
 	if vignetteTween then
 		vignetteTween:Cancel()
@@ -640,6 +692,10 @@ updatePurse = function(dt: number)
 			purse.LastPunch = now
 			UIAnim.Punch(ui.Purse, 0.14)
 			UIAnim.Punch(ui.PurseCoin, 0.35)
+			if gold - purse.Target >= 5 then
+				UIAnim.SweepOnce(ui.PurseFace, P.gold_200, 0.45, 0.6)
+				UIAnim.Sparks(ui.PurseCoin, UDim2.fromScale(0.5, 0.5), P.gold_200, 5, 26, 0.45)
+			end
 		end
 	elseif gold < purse.Target then
 		-- spent at a chest / shrine: the number drops quickly, no fanfare
@@ -702,10 +758,13 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	if minute ~= anim.Minute then
 		if anim.Minute ~= nil then
 			UIAnim.Punch(ui.Timer, 0.25)
+			if not ClientSettings.Reduced() then
+				ui.Timer.TextColor3 = P.gold_200
+				UIAnim.Tween(ui.Timer, 0.9, { TextColor3 = C.Text })
+			end
 		end
 		anim.Minute = minute
 	end
-	ui.Timer.TextColor3 = C.Text
 
 	-- stage pill: what to do on this stage
 	local stageNo = state:GetAttribute("Stage") or 0
@@ -746,19 +805,45 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			ui.StageGoal.Text = goal
 			if anim.StagePhase ~= stagePhase and anim.StagePhase ~= nil then
 				UIAnim.Punch(ui.Stage, 0.2)
+				local face = ui.Stage:FindFirstChildWhichIsA("Frame")
+				if face then
+					UIAnim.Flash(face, (stagePhase == "Surge" or stagePhase == "Boss") and P.crimson_400 or P.gold_300)
+				end
+				if stagePhase == "Surge" or stagePhase == "Boss" then
+					UIAnim.Shake(ui.Stage, 4, 0.3)
+				end
 			end
 		end
 		anim.StagePhase = stagePhase
 		ui.StageGoal.TextColor3 = goalColor
 	end
 
-	-- health: the fill follows at once, the ivory trail slides down behind it
+	-- stage banner: once per stage, after the travel fade has lifted
+	if stageNo > 0 and anim.BannerStage ~= stageNo then
+		if stagePhase ~= "Travel" and not state:GetAttribute("Frozen") then
+			anim.BannerStage = stageNo
+			showStageBanner(stageNo, goal)
+		end
+	end
+
+	-- health: the fill follows at once; the ivory trail (the damage chip) holds a beat
+	-- and then slides down behind it
 	local hp = player:GetAttribute("HP") or 0
 	local maxHp = math.max(1, player:GetAttribute("MaxHP") or 1)
 	local frac = math.clamp(hp / maxHp, 0, 1)
+	local nowT = os.clock()
+	if anim.LastFrac and frac < anim.LastFrac - 0.005 then
+		anim.TrailHoldUntil = nowT + 0.3
+	elseif anim.LastFrac and frac > anim.LastFrac + 0.01 and nowT - (anim.HealAt or 0) > 0.5 then
+		-- heal shimmer: a soft green-white sweep over the bar, the heart swells
+		anim.HealAt = nowT
+		UIAnim.SweepOnce(ui.HP.Frame, P.moss_200, 0.5, 0.35)
+		UIAnim.Punch(ui.Heart, 0.3)
+	end
+	anim.LastFrac = frac
 	if frac > anim.HPTrail then
 		anim.HPTrail = frac
-	else
+	elseif nowT >= (anim.TrailHoldUntil or 0) then
 		anim.HPTrail = math.max(frac, anim.HPTrail - dt * 0.45)
 	end
 	anim.HP += (frac - anim.HP) * math.min(1, dt * 14)
@@ -774,6 +859,10 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	local level = ui.VignetteLevel :: NumberValue
 	local alive = player:GetAttribute("Alive") ~= false
 	if alive and frac > 0 and frac <= (Config.UI.LowHealthFraction or 0.3) then
+		if nowT >= (anim.NextBeat or 0) then
+			anim.NextBeat = nowT + 0.9
+			UIAnim.Punch(ui.Heart, 0.18)
+		end
 		if not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing then
 			-- reduced effects: a steady edge instead of a breathing one
 			level.Value = ClientSettings.Reduced() and 0.8 or (0.72 + 0.18 * (0.5 + 0.5 * math.sin(os.clock() * 4)))
@@ -797,7 +886,20 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			end)
 		end
 		UIAnim.Punch(ui.Level, 0.4)
+		-- level-up burst: a bright sweep along the bar, a ring and gold sparks
+		UIAnim.SweepOnce(ui.XP.Frame, P.ivory_100, 0.45, 0.1)
+		UIAnim.Ring(ui.XPRow, UDim2.new(0, 28, 0.5, 0), P.gold_200, 80, 0.5)
+		UIAnim.Sparks(ui.XPRow, UDim2.new(0, 28, 0.5, 0), P.gold_200, 8, 40, 0.55)
+		if not ClientSettings.Reduced() then
+			ui.Level.TextColor3 = P.ivory_100
+			UIAnim.Tween(ui.Level, 0.8, { TextColor3 = P.gold_300 })
+		end
+	elseif anim.LastXPFrac and target > anim.LastXPFrac + 0.015 and nowT - (anim.XPSweepAt or 0) > 0.6 then
+		-- a gem burst: a quick glint along the bar
+		anim.XPSweepAt = nowT
+		UIAnim.SweepOnce(ui.XP.Frame, P.ivory_100, 0.4, 0.6)
 	end
+	anim.LastXPFrac = target
 	anim.Level = lvl
 	anim.XP += (target - anim.XP) * math.min(1, dt * 10)
 	ui.XP.Set(anim.XP, string.format("%d / %d XP", xp, need))
@@ -805,7 +907,16 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 
 	-- counters
 	local kills = player:GetAttribute("Kills") or 0
-	ui.Kills.SetValue(UIKit.formatNumber(kills))
+	if kills ~= anim.Kills then
+		ui.Kills.SetValue(UIKit.formatNumber(kills))
+		-- every 50th kill is a small celebration
+		if anim.Kills and kills > anim.Kills and math.floor(kills / 50) > math.floor(anim.Kills / 50) then
+			UIAnim.Punch(ui.Kills.Frame, 0.3)
+			UIAnim.Sparks(ui.Counters, UDim2.new(0, 28, 0.5, 0), P.ivory_200, 6, 30, 0.45)
+			UIAnim.SweepOnce(ui.Counters, P.ivory_100, 0.45, 0.6)
+		end
+		anim.Kills = kills
+	end
 	updatePurse(dt)
 
 	-- boss
@@ -823,6 +934,14 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 			anim.BossFill = 0 -- the bar fills with her name while she rises (BossIntro s)
 			ui.BossName.Text = string.upper(tostring(state:GetAttribute("BossName") or "Scorpion Queen"))
 			UIAnim.Pop(ui.Boss, 0, 0.3)
+			UIAnim.Shake(ui.Boss, 7, 0.45)
+			if not ClientSettings.Reduced() then
+				ui.BossName.TextTransparency = 1
+				ui.BossName.TextStrokeTransparency = 1
+				UIAnim.Tween(ui.BossName, 0.7, { TextTransparency = 0, TextStrokeTransparency = 0.5 })
+				UIAnim.Pop(ui.BossName, 0.15, 1.6)
+			end
+			UIAnim.SweepOnce(ui.BossMeter.Frame, P.crimson_200, 0.8, 0.4)
 		end
 		anim.BossFill = math.min(1, (anim.BossFill or 1) + dt / math.max(0.3, tonumber(state:GetAttribute("BossIntro")) or 2))
 		bfrac = math.min(bfrac, anim.BossFill)
@@ -831,9 +950,17 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		ui.BossMeter.SetTrail(anim.BossTrail)
 		local markAt = tonumber(state:GetAttribute("BossPhaseAt")) or 0
 		ui.BossMark.Visible = markAt > 0 and markAt < 1
+		-- crossing the phase marker: the bar shudders
+		if markAt > 0 and markAt < 1 and bfrac < markAt and anim.BossPhaseHit ~= true and anim.BossFill >= 1 then
+			anim.BossPhaseHit = true
+			UIAnim.Shake(ui.Boss, 8, 0.4)
+			UIAnim.SweepOnce(ui.BossMeter.Frame, P.ivory_100, 0.5, 0.3)
+			UIAnim.Punch(ui.BossName, 0.25)
+		end
 		ui.BossMark.Position = UDim2.new(markAt, 0, 0, 36)
 	else
 		anim.BossShown = false
+		anim.BossPhaseHit = false
 	end
 
 	-- status line
