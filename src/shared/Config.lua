@@ -635,9 +635,9 @@ Config.Data = {
 ------------------------------------------------------------------------------------------
 Config.Monetization = {
 	GamePasses = {
-		StarterPack = 0, -- +25% gold forever, Gold Trim skin for every character
-		VIP = 0, -- +1 reroll per run, [VIP] chat tag, lobby crown
-		DoubleGold = 0, -- 2x gold
+		StarterPack = 2008346507, -- +25% gold forever, Gold Trim skin for every character
+		VIP = 2006432550, -- +1 reroll per run, [VIP] chat tag, lobby crown
+		DoubleGold = 2005460551, -- 2x gold
 	},
 	Products = {
 		Gold500 = 0,
