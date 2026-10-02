@@ -671,6 +671,21 @@ Config.Graphics = {
 		InnerRadius = 6, -- studs: ground ring around the player that must stay visible
 		OuterRadius = 11, -- second ring (enemies about to reach the player)
 	},
+	-- Ground detail (src/client/GroundDetail.lua): small grass tufts, flowers, clover /
+	-- moss discs and pebbles drawn by each client only in the camera's footprint and
+	-- recycled as it moves (nothing replicates). Pooled one-part pieces, anchored, no
+	-- collision / queries / shadows. The cell grid and what each cell holds are fixed by
+	-- the arena's seed, so every client sees the same floor.
+	GroundDetail = {
+		MaxParts = 300, -- pool size on desktop / console
+		MaxPartsTouch = 170, -- phones and tablets
+		ReducedShare = 0.5, -- Settings > Reduced effects: this share of the pool
+		Cell = 8, -- studs; a cell holds 0-4 pieces
+		UpdateHz = 8, -- how often the footprint is re-checked
+		ClearingDensity = 0.4, -- density share inside the spawn clearing (combat stays readable)
+		EdgeBoost = 1.7, -- density near obstacles and path edges (clutter gathers there)
+		OuterDensity = 0.55, -- density share on the outer ground past the boundary walls
+	},
 }
 
 ------------------------------------------------------------------------------------------
@@ -730,73 +745,76 @@ Config.Monetization = {
 }
 
 ------------------------------------------------------------------------------------------
--- AUDIO (swap freely; rbxasset:// sounds ship with every Roblox client)
--- Music needs Creator Store IDs: open the Creator Store, Audio, filter by "Roblox"
--- (free, licensed), copy the ID and paste it as "rbxassetid://<id>". Empty = silent.
+-- AUDIO (every Id below is a verified free Creator Store asset or a built-in rbxasset)
+-- Verified 2026-10-02 through apis.roblox.com (toolbox-service item details + Open Cloud
+-- assets): creator, free, public, type and duration are recorded in docs/AUDIO.md.
+--   "Roblox" (user 1)            = Roblox's own sound-effect uploads (GUI / UI packs)
+--   "APMOfficial" (7462718749)   = the APM Music library Roblox licenses for free use in
+--                                  any Roblox experience (the Creator Store music catalogue)
 ------------------------------------------------------------------------------------------
 --[[
-	Sound effects and music. Every effect uses a sound that ships with Roblox
-	(rbxasset://sounds/...) until licensed audio is chosen: put an uploaded asset in Id
-	("rbxassetid://123") to replace one. Music slots are empty on purpose (no licensed
-	tracks yet): set LobbyMusic / BattleMusic / BossMusic Id to an audio asset you own or
-	that is free to use, and the client plays it (looped) in the lobby, during a run and
-	during the Queen fight. Volume is the sound's own volume; the player's Music / Effects
-	sliders scale everything on top.
+	Sound effects and music. Volume is the sound's own volume; the player's Music / Effects
+	sliders scale everything on top (their meaning never changes here).
 
 	Fields: Category (Config.Audio.Categories: voice limit, priority, ducking), MinGap (s
 	between two plays of this sound), Pitch (base playback speed) and PitchVar (random
 	+/- around it, so repeats don't sound mechanical), World = played at a world position
 	(3D, quieter far away) when the caller gives one.
+
+	Mixing goal (owner feedback: "less annoying"): the frequent sounds (hits, deaths, gems,
+	coins, clicks) are quiet, soft-timbred and rate-limited; the rare cues that carry
+	information (hurt, level-up, chest, boss, warnings) stay clear above them.
 ]]
 Config.Sounds = {
-	-- combat (lowest priority: there is always a lot of it)
-	Hit = { Id = "rbxasset://sounds/swordslash.wav", Volume = 0.22, Category = "Combat", MinGap = 0.06, PitchVar = 0.08 },
-	EnemyDeath = { Id = "rbxasset://sounds/snap.mp3", Volume = 0.2, Category = "Combat", MinGap = 0.06, PitchVar = 0.1 },
-	Lightning = { Id = "rbxasset://sounds/Rocket shot.wav", Volume = 0.3, Category = "Combat", MinGap = 0.1, PitchVar = 0.08 },
-	Explosion = { Id = "rbxasset://sounds/collide.wav", Volume = 0.55, Category = "Combat", MinGap = 0.12, PitchVar = 0.06, World = true },
+	-- combat (lowest priority: there is always a lot of it; VFX plays Hit once per batch)
+	Hit = { Id = "rbxassetid://16480568821", Volume = 0.13, Category = "Combat", MinGap = 0.11, Pitch = 1.05, PitchVar = 0.12 }, -- Roblox_Pinball_Bumper_Soft_Click_01 (Roblox)
+	EnemyDeath = { Id = "rbxassetid://17208204604", Volume = 0.16, Category = "Combat", MinGap = 0.12, Pitch = 0.95, PitchVar = 0.16 }, -- Roblox GUI - Bubble (Roblox)
+	Lightning = { Id = "rbxassetid://15930283552", Volume = 0.16, Category = "Combat", MinGap = 0.2, Pitch = 1.15, PitchVar = 0.1 }, -- Roblox_RetroSFX_05 (Roblox)
+	Explosion = { Id = "rbxassetid://3149249837", Volume = 0.3, Category = "Combat", MinGap = 0.25, Pitch = 1.1, PitchVar = 0.08, World = true }, -- Cannon_Explode (Roblox)
 	-- the local hero's own attacks and body
-	Swing = { Id = "rbxasset://sounds/swordlunge.wav", Volume = 0.16, Category = "Player", MinGap = 0.14, PitchVar = 0.08 },
-	Throw = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.08, Category = "Player", MinGap = 0.2, Pitch = 1.3, PitchVar = 0.1 },
-	Hurt = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.6, Category = "Player", MinGap = 0.25, Pitch = 0.85, PitchVar = 0.05 },
-	Death = { Id = "rbxasset://sounds/collide.wav", Volume = 0.8, Category = "Player", Pitch = 0.75, PitchVar = 0 },
-	LevelUp = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.7, Category = "Player", MinGap = 0.3, PitchVar = 0 },
-	Revive = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Category = "Player", MinGap = 0.3, Pitch = 1.3, PitchVar = 0 },
-	-- combat juice (CombatFx): built-in sounds re-pitched
-	BigKill = { Id = "rbxasset://sounds/collide.wav", Volume = 0.45, Category = "Combat", MinGap = 0.25, Pitch = 0.7, PitchVar = 0.05 },
-	Evolve = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.65, Category = "Player", MinGap = 0.5, Pitch = 0.8, PitchVar = 0 },
+	Swing = { Id = "rbxasset://sounds/swordlunge.wav", Volume = 0.11, Category = "Player", MinGap = 0.18, PitchVar = 0.1 },
+	Throw = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.06, Category = "Player", MinGap = 0.25, Pitch = 1.3, PitchVar = 0.1 },
+	Hurt = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.55, Category = "Player", MinGap = 0.3, Pitch = 0.85, PitchVar = 0.05 },
+	Death = { Id = "rbxasset://sounds/collide.wav", Volume = 0.6, Category = "Player", Pitch = 0.6, PitchVar = 0 },
+	LevelUp = { Id = "rbxassetid://15675043410", Volume = 0.6, Category = "Player", MinGap = 0.4, PitchVar = 0 }, -- Roblox_UI_Tonal_Stinger (Roblox)
+	Revive = { Id = "rbxassetid://15675043410", Volume = 0.55, Category = "Player", MinGap = 0.4, Pitch = 1.2, PitchVar = 0 }, -- Roblox_UI_Tonal_Stinger (Roblox)
+	-- combat juice (CombatFx)
+	BigKill = { Id = "rbxasset://sounds/collide.wav", Volume = 0.28, Category = "Combat", MinGap = 0.35, Pitch = 0.6, PitchVar = 0.05 },
+	Evolve = { Id = "rbxassetid://17208327798", Volume = 0.55, Category = "Player", MinGap = 0.6, PitchVar = 0 }, -- Roblox GUI - Aura (Roblox)
 	-- pickups and rewards
-	GemPickup = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.25, Category = "Pickup", MinGap = 0.05, Pitch = 1.1, PitchVar = 0.12 },
-	Coin = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.18, Category = "Pickup", MinGap = 0.08, Pitch = 2.2, PitchVar = 0.1 },
-	Chest = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Category = "Pickup", MinGap = 0.2, PitchVar = 0 },
-	Item = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.5, Category = "Pickup", MinGap = 0.15, Pitch = 1.15, PitchVar = 0 },
-	Shrine = { Id = "rbxasset://sounds/button.wav", Volume = 0.6, Category = "Pickup", MinGap = 0.2, PitchVar = 0 },
-	Victory = { Id = "rbxasset://sounds/victory.wav", Volume = 0.5, Category = "UI", PitchVar = 0 },
+	GemPickup = { Id = "rbxassetid://15675032796", Volume = 0.14, Category = "Pickup", MinGap = 0.09, Pitch = 1.1, PitchVar = 0.18 }, -- Roblox_UI_Small_Click (Roblox)
+	Coin = { Id = "rbxassetid://17208319162", Volume = 0.16, Category = "Pickup", MinGap = 0.12, Pitch = 1.1, PitchVar = 0.12 }, -- Roblox GUI - Pickup (Roblox)
+	Chest = { Id = "rbxassetid://17208380755", Volume = 0.55, Category = "Pickup", MinGap = 0.25, PitchVar = 0 }, -- Roblox GUI - Purchase (Roblox)
+	Item = { Id = "rbxassetid://17208323435", Volume = 0.45, Category = "Pickup", MinGap = 0.2, PitchVar = 0.03 }, -- Roblox GUI - Equip (Roblox)
+	Shrine = { Id = "rbxassetid://17208372272", Volume = 0.5, Category = "Pickup", MinGap = 0.3, PitchVar = 0 }, -- Roblox GUI - Notification Low (Roblox)
+	Victory = { Id = "rbxasset://sounds/victory.wav", Volume = 0.45, Category = "UI", PitchVar = 0 },
 	-- warnings: telegraphs that ask the player to move (never dropped for combat noise)
-	FuseTick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.45, Category = "Warning", MinGap = 0.09, Pitch = 1.6, PitchVar = 0.03, World = true },
-	SpitterWindup = { Id = "rbxasset://sounds/splat.wav", Volume = 0.3, Category = "Warning", MinGap = 0.25, Pitch = 1.3, PitchVar = 0.08, World = true },
-	Lunge = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.35, Category = "Warning", MinGap = 0.2, Pitch = 0.8, PitchVar = 0.06, World = true },
+	FuseTick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.35, Category = "Warning", MinGap = 0.09, Pitch = 1.6, PitchVar = 0.03, World = true },
+	SpitterWindup = { Id = "rbxasset://sounds/splat.wav", Volume = 0.26, Category = "Warning", MinGap = 0.25, Pitch = 1.3, PitchVar = 0.08, World = true },
+	Lunge = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.3, Category = "Warning", MinGap = 0.2, Pitch = 0.8, PitchVar = 0.06, World = true },
 	-- the Queen
-	BossRoar = { Id = "rbxasset://sounds/Launching rocket.wav", Volume = 0.9, Category = "Boss", MinGap = 1, PitchVar = 0.04 },
-	BossWarn = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.45, Category = "Boss", MinGap = 0.4, Pitch = 0.7, PitchVar = 0.04, World = true },
-	BossSummon = { Id = "rbxasset://sounds/splat.wav", Volume = 0.45, Category = "Boss", MinGap = 0.4, Pitch = 0.6, PitchVar = 0.05, World = true },
+	BossRoar = { Id = "rbxassetid://9120031442", Volume = 0.7, Category = "Boss", MinGap = 1, Pitch = 0.9, PitchVar = 0.04 }, -- Thunder With Lion Roar Searing Blast Growl 3 (Roblox)
+	BossWarn = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.4, Category = "Boss", MinGap = 0.4, Pitch = 0.7, PitchVar = 0.04, World = true },
+	BossSummon = { Id = "rbxasset://sounds/splat.wav", Volume = 0.4, Category = "Boss", MinGap = 0.4, Pitch = 0.6, PitchVar = 0.05, World = true },
 	-- the rotating bosses (Telegraphs plays these for their new warning shapes)
-	BossWave = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.5, Category = "Boss", MinGap = 0.5, Pitch = 0.55, PitchVar = 0.04, World = true },
-	BossGust = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.5, Category = "Boss", MinGap = 0.5, Pitch = 0.42, PitchVar = 0.03, World = true },
-	BossPound = { Id = "rbxasset://sounds/collide.wav", Volume = 0.6, Category = "Boss", MinGap = 0.3, Pitch = 0.6, PitchVar = 0.04, World = true },
-	BossMine = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.25, Category = "Warning", MinGap = 0.15, Pitch = 1.8, PitchVar = 0.1, World = true },
+	BossWave = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.45, Category = "Boss", MinGap = 0.5, Pitch = 0.55, PitchVar = 0.04, World = true },
+	BossGust = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.45, Category = "Boss", MinGap = 0.5, Pitch = 0.42, PitchVar = 0.03, World = true },
+	BossPound = { Id = "rbxassetid://3149249837", Volume = 0.5, Category = "Boss", MinGap = 0.3, Pitch = 0.7, PitchVar = 0.04, World = true }, -- Cannon_Explode (Roblox)
+	BossMine = { Id = "rbxassetid://15675032796", Volume = 0.3, Category = "Warning", MinGap = 0.15, Pitch = 1.6, PitchVar = 0.1, World = true }, -- Roblox_UI_Small_Click (Roblox)
 	BossEmerge = { Id = "rbxasset://sounds/splat.wav", Volume = 0.4, Category = "Boss", MinGap = 0.4, Pitch = 0.45, PitchVar = 0.05, World = true },
-	BossBanner = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.5, Category = "Boss", MinGap = 0.5, Pitch = 0.6, PitchVar = 0.03, World = true },
-	BurrowWarn = { Id = "rbxasset://sounds/splat.wav", Volume = 0.3, Category = "Warning", MinGap = 0.25, Pitch = 0.7, PitchVar = 0.08, World = true },
-	HealPulse = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.2, Category = "Combat", MinGap = 0.3, Pitch = 0.75, PitchVar = 0.05, World = true },
+	BossBanner = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.45, Category = "Boss", MinGap = 0.5, Pitch = 0.6, PitchVar = 0.03, World = true },
+	BurrowWarn = { Id = "rbxasset://sounds/splat.wav", Volume = 0.26, Category = "Warning", MinGap = 0.25, Pitch = 0.7, PitchVar = 0.08, World = true },
+	HealPulse = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.12, Category = "Combat", MinGap = 0.4, Pitch = 0.75, PitchVar = 0.05, World = true },
 	-- interface
-	Click = { Id = "rbxasset://sounds/button.wav", Volume = 0.45, Category = "UI", MinGap = 0.05, PitchVar = 0 },
-	Toggle = { Id = "rbxasset://sounds/button.wav", Volume = 0.4, Category = "UI", MinGap = 0.05, Pitch = 1.25, PitchVar = 0 },
-	Tip = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.2, Category = "UI", MinGap = 0.5, Pitch = 1.5, PitchVar = 0 },
-	ReelTick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.12, Category = "UI", MinGap = 0.03, Pitch = 1.35, PitchVar = 0.03 },
-	-- music slots (empty = silent; see the note above)
-	LobbyMusic = { Id = "", Volume = 0.35, Category = "Music" },
-	BattleMusic = { Id = "", Volume = 0.3, Category = "Music" },
-	BossMusic = { Id = "", Volume = 0.35, Category = "Music" },
+	Click = { Id = "rbxassetid://17208396156", Volume = 0.28, Category = "UI", MinGap = 0.06, PitchVar = 0.02 }, -- Roblox GUI - Select (Roblox)
+	Toggle = { Id = "rbxassetid://17208408337", Volume = 0.26, Category = "UI", MinGap = 0.06, PitchVar = 0.02 }, -- Roblox GUI - Tab (Roblox)
+	Tip = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.14, Category = "UI", MinGap = 0.6, Pitch = 1.5, PitchVar = 0 },
+	ReelTick = { Id = "rbxassetid://15675032796", Volume = 0.09, Category = "UI", MinGap = 0.04, Pitch = 1.3, PitchVar = 0.05 }, -- Roblox_UI_Small_Click (Roblox)
+	-- music (APMOfficial, free in any Roblox experience; looped, crossfaded by Audio.lua).
+	-- Swap: paste another Creator Store id as "rbxassetid://<id>"; "" = silent.
+	LobbyMusic = { Id = "rbxassetid://1836939228", Volume = 0.3, Category = "Music" }, -- Celtic Adventures, Bob Bradley, 2:16
+	BattleMusic = { Id = "rbxassetid://9047425352", Volume = 0.26, Category = "Music" }, -- Drums of Battle, Gabriel Saban, 2:47
+	BossMusic = { Id = "rbxassetid://1838623501", Volume = 0.3, Category = "Music" }, -- Hell Ride, Thomas Parisch, 2:21
 }
 
 --[[
@@ -805,21 +823,28 @@ Config.Sounds = {
 	              steals the voice of the oldest lower-priority one, a lower one is dropped
 	  Categories  per category: Volume (sub-mix), MaxVoices, Priority (higher wins)
 	  Duck        while a Warning / Boss sound plays, Combat is turned down this much
+	  Crowd       density ceiling: when more than Start sounds of the listed categories
+	              begin within Window seconds, those groups fade towards Floor (x their
+	              volume) and recover once the swarm thins; keeps 200 kills a murmur
 	  World       3D sounds: full volume up to RollOffMin studs from the camera (the run
 	              camera sits ~78 studs from the hero), fading out by RollOffMax
+	  Music       Fade = crossfade seconds between tracks; Resume = a track continues
+	              where it left off (battle music is not restarted after a boss)
 ]]
 Config.Audio = {
-	MaxVoices = 14,
+	MaxVoices = 12,
 	Categories = {
-		Combat = { Volume = 0.9, MaxVoices = 4, Priority = 1 },
-		Pickup = { Volume = 1, MaxVoices = 3, Priority = 2 },
-		UI = { Volume = 1, MaxVoices = 2, Priority = 3 },
+		Combat = { Volume = 0.7, MaxVoices = 3, Priority = 1 },
+		Pickup = { Volume = 0.8, MaxVoices = 2, Priority = 2 },
+		UI = { Volume = 0.75, MaxVoices = 2, Priority = 3 },
 		Player = { Volume = 1, MaxVoices = 3, Priority = 4 },
 		Warning = { Volume = 1, MaxVoices = 3, Priority = 5 },
 		Boss = { Volume = 1, MaxVoices = 2, Priority = 5 },
 	},
 	Duck = { Triggers = { "Warning", "Boss" }, Target = "Combat", Volume = 0.45, Seconds = 0.5 },
+	Crowd = { Categories = { "Combat", "Pickup" }, Window = 0.6, Start = 4, Full = 14, Floor = 0.35 },
 	World = { RollOffMin = 90, RollOffMax = 280, Emitters = 10 },
+	Music = { Fade = 1.5, Resume = true },
 	DefaultPitchVar = 0.05,
 }
 

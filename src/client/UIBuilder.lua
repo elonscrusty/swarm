@@ -2,7 +2,7 @@
 	UIBuilder.lua
 	Hosts every screen and builds the in-run ones: HUD (Hud.lua), the stage loop's arrow,
 	charge ring, portal choice and travel fade (StageUI.lua), run items and map loot (item
-	strip, item popups, chest / shrine prompts, items list: LootUI.lua), toasts and banners, level-up
+	strip, item popups, chest / shrine prompts, items list: LootUI.lua), the minimap (MiniMap.lua), toasts and banners, level-up
 	cards, chest reward, pause / settings menu, revive offer and the results screen. It also hosts the lobby menu (LobbyScreen), the hero on the dais (Showcase) and
 	the Studio dev tools (DevPanel). Components come from UIKit, icons from Icons, tokens
 	from Theme.
@@ -48,6 +48,7 @@ local BugReportUI = require(script.Parent.BugReportUI)
 local Showcase = require(script.Parent.Showcase)
 local ClientSettings = require(script.Parent.ClientSettings)
 local TeamUI = require(script.Parent.TeamUI)
+local MiniMap = require(script.Parent.MiniMap)
 local Tutorial = require(script.Parent.Tutorial)
 local Cosmetics = require(script.Parent.Cosmetics)
 local CurseData = require(Shared:WaitForChild("CurseData"))
@@ -100,6 +101,7 @@ local function setCovering(name: string, on: boolean)
 		covering[name] = nil
 	end
 	Hud.SetCovered(next(covering) ~= nil)
+	MiniMap.SetCovered(next(covering) ~= nil)
 end
 
 -- Opening: the dimmer fades in and the panel pops up with a little overshoot.
@@ -2404,6 +2406,9 @@ local function buildPause()
 	pause.Tips = UIKit.Toggle(colB, "Show tips", "info", "Short hints while you play.", ClientSettings.Get("Tips") ~= false, function(on)
 		ClientSettings.Set("Tips", on)
 	end, { LayoutOrder = 4 })
+	pause.Minimap = UIKit.Toggle(colB, "Minimap", "area", "A small map of the arena during runs.", ClientSettings.Get("Minimap") ~= false, function(on)
+		ClientSettings.Set("Minimap", on)
+	end, { LayoutOrder = 5 })
 	pause.ReplayTips = UIKit.Button(colB, {
 		Kind = "Secondary",
 		Title = "REPLAY TIPS",
@@ -2411,7 +2416,7 @@ local function buildPause()
 		IconSize = 18,
 		Align = "Center",
 		Size = UDim2.new(1, 0, 0, 46),
-		LayoutOrder = 5,
+		LayoutOrder = 6,
 		OnClick = function()
 			Tutorial.Replay()
 			ClientSettings.Set("Tips", true)
@@ -2426,7 +2431,7 @@ local function buildPause()
 		IconSize = 18,
 		Align = "Center",
 		Size = UDim2.new(1, 0, 0, 46),
-		LayoutOrder = 6,
+		LayoutOrder = 7,
 		OnClick = function()
 			BugReportUI.Open()
 		end,
@@ -3500,6 +3505,7 @@ local function updateFrame(dt: number)
 	StageUI.Update(dt, state, inRun)
 	LootUI.Update(dt, inRun)
 	TeamUI.Update(dt, state, inRun)
+	MiniMap.Update(dt, state, inRun)
 	local modalOpen = levelUp.Overlay.Visible or pause.Overlay.Visible or revive.Overlay.Visible or results.Overlay.Visible
 	if not modalOpen then
 		for name in pairs(blocking) do
@@ -3663,6 +3669,16 @@ function UIBuilder.Init(d: { [string]: any })
 		end,
 		GuiOffset = function(): Vector2
 			return gui.AbsolutePosition
+		end,
+	})
+	MiniMap.Build(root, {
+		OnRelayout = onRelayout,
+		VirtualSize = virtualSize,
+		IsPortrait = function(): boolean
+			return portrait
+		end,
+		Insets = function(): Hud.Insets
+			return insets
 		end,
 	})
 	Tutorial.Build(root, {

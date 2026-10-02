@@ -1,7 +1,7 @@
 --[[
 	ClientSettings.lua
 	The player's settings on this client (Config.Settings.Defaults: Music, Sfx, Shake,
-	ReducedEffects, DamageNumbers, Tips) and who wants to know when they change.
+	ReducedEffects, DamageNumbers, Tips, Minimap) and who wants to know when they change.
 
 	The profile (ProfileSync) is the source: UIBuilder calls Apply(profile.Settings). The
 	settings menu calls Set(key, value), which applies at once and saves (debounced:
@@ -9,7 +9,7 @@
 	toggles never runs into the server's rate limit). The server validates every value.
 
 	Readers: Audio (volumes), CameraController (Shake), VFX / Hud (ReducedEffects),
-	DamageText (DamageNumbers), Tutorial (Tips).
+	DamageText (DamageNumbers), Tutorial (Tips), MiniMap (Minimap).
 ]]
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")

@@ -1047,6 +1047,7 @@ local function newArena(name: string): Arena
 		ObstacleFolder = obstacleFolder,
 		Obstacles = {},
 		Keepout = {}, -- { X, Z, R } circles that scattered decoration avoids
+		Bare = {}, -- { X, Z, R } floor the client ground detail leaves clean (paved plazas)
 		Hazards = {}, -- { Kind, Pos (world floor point), Radius } biome floor hazards (BiomeHazards)
 		Paths = {}, -- { {A = Vector3, B = Vector3, W = halfWidth} } path segments
 		Root = root,
@@ -1744,6 +1745,7 @@ local function buildRuins(arena: Arena)
 	-- plaza: cracked light paving in three stone tones, grass where slabs are missing
 	local paveA, paveB, paveC = P.pave_300, P.pave_400, P.pave_200
 	disc(arena.Decor, "PlazaBed", W(arena, 0, 0, 0.05), 31, mix(P.pave_500, P.meadow_500, 0.5))
+	table.insert(arena.Bare, { X = 0, Z = 0, R = 32 })
 	for ix = -5, 4 do
 		for iz = -5, 4 do
 			local x, z = ix * 6 + 3, iz * 6 + 3
@@ -3005,12 +3007,40 @@ local BUILDERS: { [string]: (Arena) -> () } = {
 
 -- Builds an arena by name, destroying the previous one. `variant` (stage - 1) re-seeds
 -- the scattered decoration so later stages look a little different; 0 = the classic map.
+-- Floor layout for the client ground detail (src/client/GroundDetail.lua), as compact
+-- attributes on the arena model (arena-relative studs, one decimal): path segments
+-- "ax,az,bx,bz,halfWidth;...", and "x,z,r;..." circles of landmark keepouts, bare floor
+-- and hazard pools. Colliders are read from the Obstacles folder, so they are not repeated.
+local function writeDetailLayout(arena: Arena)
+	local c = arena.Center
+	local function num(v: number): string
+		return string.format("%.1f", v)
+	end
+	local paths = {}
+	for _, seg in ipairs(arena.Paths) do
+		table.insert(paths, num(seg.A.X) .. "," .. num(seg.A.Z) .. "," .. num(seg.B.X) .. "," .. num(seg.B.Z) .. "," .. num(seg.W))
+	end
+	local circles = {}
+	for _, k in ipairs(arena.Keepout) do
+		table.insert(circles, num(k.X) .. "," .. num(k.Z) .. "," .. num(k.R))
+	end
+	for _, b in ipairs(arena.Bare) do
+		table.insert(circles, num(b.X) .. "," .. num(b.Z) .. "," .. num(b.R))
+	end
+	for _, hz in ipairs(arena.Hazards) do
+		table.insert(circles, num(hz.Pos.X - c.X) .. "," .. num(hz.Pos.Z - c.Z) .. "," .. num(hz.Radius + 2))
+	end
+	arena.Model:SetAttribute("DetailPaths", table.concat(paths, ";"))
+	arena.Model:SetAttribute("DetailBare", table.concat(circles, ";"))
+end
+
 function MapBuilder.BuildArena(name: string, variant: number?)
 	MapBuilder.DestroyArena()
 	rng = Random.new((SEEDS[name] or SEEDS.Forest) + (variant or 0) * 7919)
 	local arena = newArena(name)
 	local build = BUILDERS[name] or buildForest
 	build(arena)
+	writeDetailLayout(arena)
 	arena.Model.Parent = arena.Root
 	MapBuilder.ApplyLighting(name)
 	currentArena = arena
