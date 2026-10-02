@@ -12,6 +12,10 @@
 	A player who leaves through an open portal ends their run as a win at once
 	(ReturnThroughPortal: results over the lobby menu); when nobody goes on, the run ends
 	straight back to the Lobby phase (FinishFromPortal).
+	Endless (Config.Endless, the starter's lobby switch via RunModifiers): no portal
+	return and never a win; the run ends by defeat or the pause menu's MAIN MENU
+	(AbandonRun). Its score goes to the "ScoreEndless" board instead of "Score"; the
+	"Level" board (highest level in one run) takes every mode.
 	SOLO skips the countdown. Modes live in Config.Modes; "Squad" (old 1-4 mode) is still
 	accepted from old clients. The lobby's ProximityPrompts are switched off: the 2D lobby
 	screen (UIBuilder / LobbyScreen) sends StartRun / StartNow / CycleArena instead.
@@ -130,15 +134,24 @@ function RunManager.RefreshFrozen()
 		end
 	end
 	rewarding = rewarding and phase == "Running"
+	-- group runs: a choice or a reward protects that player only (DamagePlayer), the rest
+	-- of the team keeps playing; with one fighter left it freezes the world as before
+	local fighters = 0
+	for _, rp in ipairs(runPlayers) do
+		if rp.Alive and not rp.Returned then
+			fighters += 1
+		end
+	end
+	local choiceFreezes = fighters <= 1 or Config.Run.CoopChoiceFreezesRun == true
 	-- who is opening a chest ("<Name> is opening a chest" on everyone else's HUD)
 	state:SetAttribute("RewardIds", rewarding and ("," .. table.concat(rewardIds, ",") .. ",") or "")
 	state:SetAttribute("RewardNames", rewarding and table.concat(rewardNames, ", ") or "")
-	local newFrozen = phase == "Running" and (menuPaused or choosing or rewarding)
+	local newFrozen = phase == "Running" and (menuPaused or (choiceFreezes and (choosing or rewarding)))
 	-- who is choosing, so the HUD can say "<Name> is choosing an upgrade" to everyone else
 	-- (the chooser sees the cards instead); set before LevelUpPause so both arrive together
 	state:SetAttribute("ChoosingIds", (phase == "Running" and choosing) and ("," .. table.concat(ids, ",") .. ",") or "")
 	state:SetAttribute("ChoosingNames", (phase == "Running" and choosing) and table.concat(names, ", ") or "")
-	state:SetAttribute("LevelUpPause", phase == "Running" and choosing and not menuPaused)
+	state:SetAttribute("LevelUpPause", phase == "Running" and choosing and choiceFreezes and not menuPaused)
 	if newFrozen == frozen then
 		return
 	end
@@ -634,7 +647,9 @@ function RunManager.DamagePlayer(rp, amount: number)
 	if not RunManager.IsSimulating() or not rp.Alive then
 		return
 	end
-	if rp.Paused and Config.Player.LevelUpInvulnerable then
+	-- choosing an upgrade or watching a chest reward: that player can't be hurt (in a group
+	-- run the world keeps moving around them, see RefreshFrozen)
+	if (rp.Paused or rp.RewardUntil) and Config.Player.LevelUpInvulnerable then
 		return
 	end
 	-- dev godmode (DevTools sets it only for isDev players)
@@ -855,6 +870,9 @@ local function beginRun()
 		end
 		RunManager.Broadcast(string.format("Curses: %s · %s gold", table.concat(names, ", "), CurseData.GoldText(ctx.RunModifiers.GoldMult())), Color3.fromRGB(230, 150, 160))
 	end
+	if ctx.RunModifiers.IsEndless() then
+		RunManager.Broadcast("ENDLESS: no way home, only deeper.", Color3.fromRGB(190, 160, 255), true)
+	end
 	RunManager.Broadcast("Find the portal and summon the Scorpion Queen!", Color3.fromRGB(180, 200, 255))
 end
 
@@ -925,12 +943,18 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 		CurseMult = ctx.RunModifiers.GoldMult(),
 		DailyScored = rp.DailyScored == true,
 	})
+	-- the same score formula for both modes; Standard and Endless rank on separate boards
 	local score = ctx.LeaderboardService.RunScore({ Cleared = cleared, Bosses = bossKills, Level = rp.Level, Kills = rp.Kills, Seconds = t })
-	data.Stats.BestScore = math.max(data.Stats.BestScore or 0, score)
-	ctx.LeaderboardService.Submit(rp.Player, "Score", score, nil, rp.RunId)
+	local scoreBoard = rp.Endless and "ScoreEndless" or "Score"
+	local bestKey = rp.Endless and "BestScoreEndless" or "BestScore"
+	data.Stats[bestKey] = math.max(data.Stats[bestKey] or 0, score)
+	local levelBefore = data.Stats.BestLevel or 0
+	data.Stats.BestLevel = math.max(levelBefore, rp.Level or 1)
+	ctx.LeaderboardService.Submit(rp.Player, scoreBoard, score, nil, rp.RunId)
 	ctx.LeaderboardService.Submit(rp.Player, "BestStage", ctx.StageManager.GetStage(), nil, rp.RunId)
 	ctx.LeaderboardService.Submit(rp.Player, "Kills", rp.Kills, nil, rp.RunId)
-	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Score = score }
+	ctx.LeaderboardService.Submit(rp.Player, "Level", rp.Level or 1, nil, rp.RunId)
+	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0 }
 	return newBest, unlocked
 end
 
@@ -962,7 +986,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 	local player: Player = rp.Player
 	local cleared = ctx.StageManager.StagesCleared()
 	local reached = math.max(1, ctx.StageManager.GetStage())
-	local won = portal and cleared >= Config.Stages.WinMinStages
+	local won = portal and not rp.Endless and cleared >= Config.Stages.WinMinStages
 	if rp.Alive or rp.AwaitingRevive then
 		rp.TimeSurvived = runTime
 	end
@@ -997,6 +1021,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		Level = rp.Level,
 		Damage = math.floor(rp.DamageDealt),
 		Arena = ctx.StageManager.ArenaDisplayName() .. ((mode == "Duo" or mode == "Trio" or mode == "Daily") and (" (" .. mode .. ")") or ""),
+		Endless = rp.Endless == true, -- an Endless run (no win; scored on ScoreEndless)
 		Mode = mode, -- REPLAY starts this mode again (StartRun from the lobby)
 		CharacterId = rp.CharacterId,
 		Build = buildSummary(rp),
@@ -1009,6 +1034,8 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		DevRun = rp.DevTainted == true, -- a DEV command was used: nothing public was recorded
 		Abandoned = rp.Abandoned == true, -- left from the pause menu (MAIN MENU)
 		Score = info and info.Score or nil, -- the run's high-score value (none for dev runs)
+		ScoreBoard = info and info.ScoreBoard or nil, -- "Score" | "ScoreEndless"
+		NewBestLevel = info and info.NewBestLevel or nil, -- beat the saved highest level
 		Unlocked = unlocked,
 		Achievements = achievements, -- unlocked this run: { {Id, Name, Reward, Icon} }
 		Curses = table.clone(ctx.RunModifiers.Active()), -- the run's curses (CurseData ids)

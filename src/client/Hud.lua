@@ -3,7 +3,7 @@
 	The in-run HUD (built and driven by UIBuilder):
 	  top centre    big run timer (total run time over every stage), under it the stage
 	                pill ("STAGE 2 · Find the portal" → "Defeat the Queen" → "Survive the
-	                surge" → "Portal open"), a plate with health (heart + crimson bar) and
+	                surge" → "Portal open"; Endless runs: "ENDLESS · STAGE 9"), a plate with health (heart + crimson bar) and
 	                level / XP (gold bar), then the boss bar while the boss lives
 	  top right     kills counter, pause button; a steel band on the health bar is the
 	                Guardian Ward shield
@@ -32,6 +32,11 @@
 	  boss bar      drops in with a shake, the name fades in under a sweep, shakes again at
 	                the phase marker
 
+	Calm layout: the plate is one slim HP + XP block (the XP numbers show for a few seconds
+	after XP changes, then only the bar and "Lv. N" remain), the stage pill keeps its
+	objective only while it is news or urgent (afterwards just "STAGE N"), empty ability
+	slots are small faint pips, text uses the Theme.Type roles (UIKit.Role).
+
 	Nothing in the ability bar or the plates is Active, so a thumb landing on them still
 	drives the floating thumbstick.
 ]]
@@ -54,10 +59,13 @@ local ClientSettings = require(script.Parent.ClientSettings)
 local Hud = {}
 
 local player = Players.LocalPlayer
-local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local new, role, TS = UIKit.new, UIKit.Role, UIKit.TS
+local TY = Theme.Type
 local C, P = Theme.Color, Theme.Palette
 
 export type Insets = { Top: number, Left: number, Right: number }
+
+local PLATE_HP, PLATE_XP = 24, 16 -- plate row heights (reference px)
 
 local host: { [string]: any } = {}
 local ui: { [string]: any } = {}
@@ -69,6 +77,11 @@ local updatePurse: (number) -> ()
 
 -- A soft colour flash over a Surface holder's face (a sibling of the face, so it never
 -- joins the face's list layout); fades out and destroys itself.
+-- A stage goal that keeps changing (portal charge, dormant countdown) is never collapsed.
+local function stageGoalMoving(goal: string): boolean
+	return string.find(goal, "%d") ~= nil
+end
+
 local function glow(holder: GuiObject, color: Color3)
 	if ClientSettings.Reduced() then
 		return
@@ -96,52 +109,49 @@ end
 
 local function buildTop(frame: Frame)
 	-- timer
-	ui.Timer = text(frame, "Number", "00:00", {
+	ui.Timer = role(frame, "Display", "00:00", {
 		Name = "Timer",
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.55,
-		TextColor3 = C.Text,
-	}, Theme.TextSize.Display + 4)
+	})
 
 	-- health + level plate
-	local plateHolder, plate = UIKit.Surface(frame, { Name = "Plate", Transparency = Theme.Alpha.PanelSoft, Radius = Theme.Radius.M, Shadow = true })
+	local plateHolder, plate = UIKit.Surface(frame, { Name = "Plate", Transparency = 0.38, Radius = Theme.Radius.M, Shadow = false })
 	ui.Plate = plateHolder
-	UIKit.padding(plate, 8, 12, 8, 12)
+	UIKit.padding(plate, 6, 12, 6, 12)
 	local rows = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, plate)
-	UIKit.list(rows, { Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center })
+	UIKit.list(rows, { Padding = UDim.new(0, 4), VerticalAlignment = Enum.VerticalAlignment.Center })
 
-	local hpRow = new("Frame", { Name = "HP", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0.5, -3), LayoutOrder = 1 }, rows)
-	ui.Heart = Icons.Draw(hpRow, "heart", { Size = 22, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5) })
+	local hpRow = new("Frame", { Name = "HP", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, PLATE_HP), LayoutOrder = 1 }, rows)
+	ui.Heart = Icons.Draw(hpRow, "heart", { Size = 20, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5) })
 	ui.HP = UIKit.Meter(hpRow, {
 		Gradient = Theme.Gradient.Health,
 		Trail = true,
 		TextStyle = "Number",
-		TextSize = Theme.TextSize.Body,
+		TextSize = TY.Number.Size,
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 32, 0.5, 0),
-		Size = UDim2.new(1, -32, 1, -2),
+		Position = UDim2.new(0, 30, 0.5, 0),
+		Size = UDim2.new(1, -30, 1, -2),
 	})
 
 	-- Guardian Ward shield: a steel band along the top of the health bar
 	ui.ShieldBar = new("Frame", { Name = "Shield", BackgroundColor3 = P.steel_200, BorderSizePixel = 0, Size = UDim2.new(0, 0, 0, 4), Visible = false, ZIndex = 6 }, ui.HP.Frame)
 	UIKit.corner(ui.ShieldBar, 2)
 
-	local xpRow = new("Frame", { Name = "XP", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0.5, -3), LayoutOrder = 2 }, rows)
-	ui.Level = text(xpRow, "Label", "Lv. 1", {
+	local xpRow = new("Frame", { Name = "XP", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, PLATE_XP), LayoutOrder = 2 }, rows)
+	ui.Level = role(xpRow, "Label", "Lv. 1", {
 		Name = "Level",
 		TextColor3 = P.gold_300,
 		Size = UDim2.new(0, 56, 1, 0),
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, Theme.TextSize.Body)
+	}, true)
 	ui.XPRow = xpRow
 	ui.XP = UIKit.Meter(xpRow, {
 		Gradient = Theme.Gradient.XP,
 		TextStyle = "Number",
-		TextSize = Theme.TextSize.Caption,
+		TextSize = TY.Caption.Size,
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 60, 0.5, 0),
-		Size = UDim2.new(1, -60, 1, -6),
+		Size = UDim2.new(1, -60, 1, -2),
 	})
 
 	-- bright leading edge on the XP fill (reads as the bar's "spark")
@@ -159,13 +169,11 @@ local function buildTop(frame: Frame)
 		Padding = UDim.new(0, 8),
 	})
 	Icons.Draw(bossTitle, "skull", { Size = 20, Color = P.crimson_300, Back = P.slate_950, LayoutOrder = 1 })
-	ui.BossName = text(bossTitle, "H3", "SCORPION QUEEN", {
+	ui.BossName = role(bossTitle, "Heading", "SCORPION QUEEN", {
 		LayoutOrder = 2,
 		Size = UDim2.fromOffset(0, 24),
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextColor3 = P.crimson_300,
-		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.5,
 	})
 	ui.BossMeter = UIKit.Meter(boss, {
 		Gradient = Theme.Gradient.Boss,
@@ -217,23 +225,21 @@ local function buildPurse(frame: Frame)
 	ui.PurseFace = face
 	ui.PurseStroke = face:FindFirstChildOfClass("UIStroke")
 	ui.PurseCoin = Icons.Draw(face, "coin", { Size = 32, LayoutOrder = 1 })
-	ui.PurseValue = text(face, "Number", "0", {
+	ui.PurseValue = role(face, "Stat", "0", {
 		Name = "Value",
 		LayoutOrder = 2,
 		Size = UDim2.fromOffset(0, 50),
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextColor3 = P.gold_200,
-		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.45,
-	}, 34)
-	ui.PurseHint = text(face, "Label", "", {
+	})
+	ui.PurseHint = role(face, "Label", "", {
 		Name = "Hint",
 		LayoutOrder = 3,
 		Size = UDim2.fromOffset(0, 50),
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextColor3 = C.TextMuted,
 		Visible = false,
-	}, Theme.TextSize.Caption + 2)
+	})
 	-- "+N" floaters rise from the purse
 	ui.PurseFloat = new("Frame", { Name = "PurseFloat", BackgroundTransparency = 1, Size = UDim2.fromOffset(1, 1), ZIndex = 5 }, frame)
 end
@@ -251,7 +257,7 @@ local function buildBuffChip(frame: Frame)
 	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
 	ui.Buff = holder
 	ui.BuffIcon = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(18, 18), LayoutOrder = 1 }, face)
-	ui.BuffText = text(face, "Label", "", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X })
+	ui.BuffText = role(face, "Label", "", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X })
 	ui.BuffStroke = UIKit.stroke(face, P.moss_300, 1.5, 0.2)
 end
 
@@ -295,7 +301,7 @@ local function buildStage(frame: Frame)
 	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 7) })
 	ui.Stage = holder
 	ui.StageIcon = Icons.Draw(face, "portal", { Size = 18, LayoutOrder = 1, Back = P.slate_900 })
-	ui.StageNumber = text(face, "Label", "STAGE 1", {
+	ui.StageNumber = role(face, "Label", "STAGE 1", {
 		LayoutOrder = 2,
 		Size = UDim2.fromOffset(0, 30),
 		AutomaticSize = Enum.AutomaticSize.X,
@@ -303,7 +309,7 @@ local function buildStage(frame: Frame)
 	})
 	ui.StageDot = new("Frame", { BackgroundColor3 = P.gold_500, Size = UDim2.fromOffset(4, 4), LayoutOrder = 3, BorderSizePixel = 0 }, face)
 	UIKit.corner(ui.StageDot, 999)
-	ui.StageGoal = text(face, "BodyStrong", "Find the portal", {
+	ui.StageGoal = role(face, "Body", "Find the portal", {
 		LayoutOrder = 4,
 		Size = UDim2.fromOffset(0, 30),
 		AutomaticSize = Enum.AutomaticSize.X,
@@ -314,27 +320,25 @@ end
 local function buildBanner(frame: Frame)
 	local box = new("Frame", { Name = "StageBanner", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(520, 110), Visible = false, Active = false, ZIndex = 8 }, frame)
 	ui.Banner = box
-	ui.BannerTitle = text(box, "Display", "STAGE 1", {
+	ui.BannerTitle = role(box, "Display", "STAGE 1", {
 		Name = "Title",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromScale(0.5, 0),
-		Size = UDim2.new(1, 0, 0, TS(52) + 6),
+		Size = UDim2.new(1, 0, 0, TS(TY.Display.Size) + 6),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.gold_200,
-		TextStrokeColor3 = C.Shadow,
 		TextStrokeTransparency = 0.35,
 		ZIndex = 9,
-	}, 52)
-	ui.BannerLine = new("Frame", { Name = "Line", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, TS(52) + 10), Size = UDim2.fromOffset(0, 3), ZIndex = 9 }, box)
+	})
+	ui.BannerLine = new("Frame", { Name = "Line", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, TS(TY.Display.Size) + 10), Size = UDim2.fromOffset(0, 3), ZIndex = 9 }, box)
 	UIKit.corner(ui.BannerLine, 2)
-	ui.BannerSub = text(box, "Label", "", {
+	ui.BannerSub = role(box, "Body", "", {
 		Name = "Sub",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, TS(52) + 18),
-		Size = UDim2.new(1, 0, 0, TS(16) + 4),
+		Position = UDim2.new(0.5, 0, 0, TS(TY.Display.Size) + 18),
+		Size = UDim2.new(1, 0, 0, TS(TY.Body.Size) + 4),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.ivory_200,
-		TextStrokeColor3 = C.Shadow,
 		TextStrokeTransparency = 0.4,
 		ZIndex = 9,
 	})
@@ -377,7 +381,7 @@ local function showStageBanner(stageNo: number, goal: string)
 	tw(sc, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
 	tw(title, 0.25, { TextTransparency = 0, TextStrokeTransparency = 0.35 })
 	if not reduced then
-		local at = UDim2.new(0.5, 0, 0, TS(52) / 2)
+		local at = UDim2.new(0.5, 0, 0, TS(TY.Display.Size) / 2)
 		UIAnim.Sparks(box, at, P.gold_200, 10, 120, 0.6)
 		UIAnim.Ring(box, at, P.gold_300, 220, 0.5)
 		task.delay(0.1, function()
@@ -414,11 +418,11 @@ local function buildStatus(frame: Frame)
 	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, face)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) })
 	ui.StatusIconHolder = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(22, 22), LayoutOrder = 1 }, row)
-	ui.StatusText = text(row, "BodyStrong", "", {
+	ui.StatusText = role(row, "Body", "", {
 		LayoutOrder = 2,
 		Size = UDim2.new(1, -32, 1, 0),
 		TextWrapped = true,
-	}, Theme.TextSize.H3)
+	})
 	ui.StatusMeter = UIKit.Meter(face, {
 		Gradient = ColorSequence.new(P.moss_300, P.moss_500),
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -430,12 +434,12 @@ local function buildStatus(frame: Frame)
 end
 
 local function buildBar(frame: Frame)
-	local bar = UIKit.Panel(frame, { Name = "AbilityBar", Active = false, BackgroundTransparency = 0.45 }, true)
+	local bar = UIKit.Panel(frame, { Name = "AbilityBar", Active = false, BackgroundTransparency = 0.6 }, true)
 	ui.Bar = bar
 	ui.WeaponRow = new("Frame", { Name = "Weapons", BackgroundTransparency = 1, Active = false }, bar)
-	UIKit.list(ui.WeaponRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6) })
+	UIKit.list(ui.WeaponRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
 	ui.PassiveRow = new("Frame", { Name = "Passives", BackgroundTransparency = 1, Active = false }, bar)
-	UIKit.list(ui.PassiveRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6) })
+	UIKit.list(ui.PassiveRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
 end
 
 -- Screen-edge vignette (its own full-screen ScreenGui, so it also covers notches).
@@ -494,6 +498,12 @@ local function setBossArt(id: any)
 	end
 end
 
+-- Width of an ability row: `owned` full tiles, the other slots small pips.
+local function barRowWidth(slots: number, owned: number, tile: number, gap: number): number
+	owned = math.clamp(owned, 0, slots)
+	return owned * tile + (slots - owned) * math.floor(tile * 0.4) + math.max(0, slots - 1) * gap
+end
+
 local function layout()
 	if not ui.Frame then
 		return
@@ -512,7 +522,7 @@ local function layout()
 	ui.Counters.Position = UDim2.fromOffset(W - M - 52 - 10, pauseY + 4)
 
 	-- timer (top centre; below the topbar if its buttons would touch it)
-	local timerH = TS(Theme.TextSize.Display + 4) + 6
+	local timerH = TS(TY.Display.Size) + 6
 	local timerW = 220
 	local timerY = 6
 	if ins.Left + 8 > W / 2 - 70 then
@@ -535,13 +545,17 @@ local function layout()
 		-- would run into the Roblox menu buttons, so it goes below them
 		stageY = math.max(stageY, ins.Top + 4)
 	end
+	if portrait then
+		-- and below the kills / pause row at the right
+		stageY = math.max(stageY, pauseY + 58)
+	end
 	ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(stageY))
 	ui.Stage.Size = UDim2.fromOffset(0, stageH)
 	local stageBottom = ui.Stage.Visible and (stageY + stageH + 6) or (timerY + timerH + 2)
 
 	-- plate
-	local plateW = math.min(Theme.Layout.HudPlate.X, W - 2 * M)
-	local plateH = compact and 78 or Theme.Layout.HudPlate.Y
+	local plateW = math.min(380, W - 2 * M)
+	local plateH = PLATE_HP + PLATE_XP + 4 + 12
 	local plateY = stageBottom
 	if portrait then
 		-- keep the plate clear of the counters / pause row
@@ -559,11 +573,14 @@ local function layout()
 	local slotsW = (inventory and inventory.WeaponSlots) or Config.Slots.Weapons
 	local slotsP = (inventory and inventory.PassiveSlots) or Config.Slots.Passives
 	local wt, pt = Config.UI.BarWeaponTile, Config.UI.BarPassiveTile
-	if portrait then
+	if portrait or compact then
 		wt, pt = math.min(wt, 46), math.min(pt, 38)
 	end
 	local gap = 6
-	local rowW = math.max(slotsW * wt + (slotsW - 1) * gap, slotsP * pt + (slotsP - 1) * gap)
+	-- owned slots are full tiles, empty ones small pips (barRowWidth)
+	local ownW = inventory and #inventory.Weapons or 0
+	local ownP = inventory and #inventory.Passives or 0
+	local rowW = math.max(barRowWidth(slotsW, ownW, wt, gap), barRowWidth(slotsP, ownP, pt, gap))
 	local pad = 8
 	local barW = rowW + pad * 2
 	local barH = wt + pt + gap + pad * 2
@@ -691,7 +708,7 @@ function Hud.SetInventory(inv: { [string]: any }?)
 			tile = UIKit.Tile(ui.WeaponRow, { Id = weaponIconId(w.Id, w.Evolved), Size = wt, Level = w.Level, Evolved = w.Evolved, Max = w.Level >= maxW })
 			popIfChanged(tile, "W" .. w.Id, w.Level + (w.Evolved and 10 or 0))
 		else
-			tile = UIKit.Tile(ui.WeaponRow, { Size = wt, Empty = true })
+			tile = UIKit.Tile(ui.WeaponRow, { Size = math.floor(wt * 0.4), Empty = true })
 		end
 		tile.LayoutOrder = i
 	end
@@ -702,7 +719,7 @@ function Hud.SetInventory(inv: { [string]: any }?)
 			tile = UIKit.Tile(ui.PassiveRow, { Id = p.Id, Size = pt, Level = p.Level, Max = p.Level >= (p.MaxLevel or PassiveData.MaxLevelOf(p.Id)) })
 			popIfChanged(tile, "P" .. p.Id, p.Level)
 		else
-			tile = UIKit.Tile(ui.PassiveRow, { Size = pt, Empty = true })
+			tile = UIKit.Tile(ui.PassiveRow, { Size = math.floor(pt * 0.4), Empty = true })
 		end
 		tile.LayoutOrder = i
 	end
@@ -789,15 +806,13 @@ local function purseFloat(gain: number)
 	purse.FloatSum = gain
 	purse.FloatAt = now
 	local half = (ui.Purse.AbsoluteSize.X / math.max(0.01, host.Scale())) / 2
-	local label = text(ui.PurseFloat, "Number", "+" .. UIKit.formatNumber(gain), {
+	local label = role(ui.PurseFloat, "Number", "+" .. UIKit.formatNumber(gain), {
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromOffset(math.floor(half - 30), 4),
 		Size = UDim2.fromOffset(120, 34),
 		TextColor3 = P.gold_200,
-		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.4,
 		ZIndex = 6,
-	}, 28)
+	})
 	purse.Float = label
 	UIAnim.Pop(label, 0, 0.5)
 	local rise = ClientSettings.Reduced() and 10 or 30
@@ -944,13 +959,15 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		layout()
 	end
 	if stageShown then
-		local num = "STAGE " .. tostring(stageNo)
+		-- Endless runs say so on the pill ("ENDLESS · STAGE 9", SwarmState Endless)
+		local num = (state:GetAttribute("Endless") == true and "ENDLESS · STAGE " or "STAGE ") .. tostring(stageNo)
 		if ui.StageNumber.Text ~= num then
 			ui.StageNumber.Text = num
 			UIAnim.Pop(ui.Stage, 0, 0.7)
 		end
 		if ui.StageGoal.Text ~= goal then
 			ui.StageGoal.Text = goal
+			anim.StageNewsAt = os.clock()
 			if anim.StagePhase ~= stagePhase and anim.StagePhase ~= nil then
 				UIAnim.Punch(ui.Stage, 0.2)
 				glow(ui.Stage, (stagePhase == "Surge" or stagePhase == "Boss") and P.crimson_400 or P.gold_300)
@@ -961,6 +978,14 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		end
 		anim.StagePhase = stagePhase
 		ui.StageGoal.TextColor3 = goalColor
+		-- calm: a plain objective is news for a few seconds, then the pill is just
+		-- "STAGE N"; boss / surge / open portal and counting goals stay (urgent or moving)
+		local urgent = stagePhase ~= "Explore" or stageGoalMoving(goal)
+		local compactPill = not urgent and os.clock() - (anim.StageNewsAt or 0) > 8
+		if ui.StageGoal.Visible == compactPill then
+			ui.StageGoal.Visible = not compactPill
+			ui.StageDot.Visible = not compactPill
+		end
 	end
 
 	-- stage banner: once per stage, after the travel fade has lifted
@@ -1050,6 +1075,14 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	anim.LastXPFrac = target
 	anim.Level = lvl
 	anim.XP += (target - anim.XP) * math.min(1, dt * 10)
+	if anim.XPShown ~= xp .. "/" .. need then
+		anim.XPShown = xp .. "/" .. need
+		anim.XPShowUntil = nowT + 3.5
+	end
+	local showXP = nowT < (anim.XPShowUntil or 0)
+	if ui.XP.Label.Visible ~= showXP then
+		ui.XP.Label.Visible = showXP
+	end
 	ui.XP.Set(anim.XP, string.format("%d / %d XP", xp, need))
 	ui.Level.Text = "Lv. " .. tostring(lvl)
 
@@ -1142,6 +1175,12 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 		else
 			setStatus("Paused", "pause")
 		end
+	elseif tostring(state:GetAttribute("ChoosingNames") or "") ~= "" and not player:GetAttribute("Paused")
+		and not string.find(tostring(state:GetAttribute("ChoosingIds") or ""), "," .. tostring(player.UserId) .. ",", 1, true) then
+		-- group run: a teammate picks a card while the world keeps going (they can't be hurt)
+		local names = tostring(state:GetAttribute("ChoosingNames"))
+		local several = string.find(names, ",", 1, true) ~= nil
+		setStatus(string.format("%s %s choosing an upgrade", names, several and "are" or "is"), "hourglass")
 	elseif not alive and not reviveOpen and phase == "Running" and stagePhase == "Open" then
 		setStatus("The portal is open. Your team is choosing...", "portal")
 	elseif not alive and not reviveOpen and phase == "Running" then

@@ -9,7 +9,7 @@
 	                   every arena (best stage), account level 50 (its rings, frames, titles)
 	                   and, in Studio only, every skin for this session (skins are Robux
 	                   items: never saved, never granted in live servers)
-	  ResetProgress    a fresh save (purchases and settings kept); lobby only, Studio only
+	  ResetProgress    a fresh save of the developer's own profile (purchases and settings kept); lobby only
 	  LobbyGold n      + n gold to the save (n = 1..1,000,000)
 	  AccountLevels n  + n account levels (1..50)
 	  DamageNumbers    toggles the damage numbers setting
@@ -147,11 +147,8 @@ function DevTools.Handle(ctx, player: Player, command: string, arg: any, inLobby
 	if command == "UnlockAll" then
 		unlockAll(ctx, player, data)
 	elseif command == "ResetProgress" then
-		-- wiping a save cannot be undone: Studio's separate stores only, never a live save
-		if arg ~= "CONFIRM" or not game:GetService("RunService"):IsStudio() then
-			if arg == "CONFIRM" then
-				ctx.RunManager.Notify(player, "DEV: reset progress works in Studio only", DEV_COLOR)
-			end
+		-- wipes only the developer's own save (tap twice on the client to confirm)
+		if arg ~= "CONFIRM" then
 			return
 		end
 		resetProgress(ctx, player, data)

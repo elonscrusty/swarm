@@ -32,6 +32,10 @@ Config.Run = {
 	-- A solo player who opens the pause menu freezes the whole run. In a group run the
 	-- menu is only an overlay (the run keeps going), so nobody can stall a shared run.
 	SoloPauseFreezesRun = true,
+	-- Level-up cards and chest rewards freeze the world only when one player is left
+	-- fighting. In a group run the chooser / opener stands still and can't be hurt
+	-- (Player.LevelUpInvulnerable) while everyone else keeps playing.
+	CoopChoiceFreezesRun = false,
 }
 
 ------------------------------------------------------------------------------------------
@@ -55,10 +59,10 @@ Config.Stages = {
 	PortalRadius = 9, -- studs from the portal centre
 	ChargeSeconds = 2,
 	ChargeDecay = 0.5, -- share of a full charge lost per second while nobody stands there
-	-- The portal sleeps for a while after a stage starts: it can't be charged before this
-	-- many seconds on the stage (stage 1, later stages); the HUD says "The portal is
-	-- dormant: m:ss". Stops a rush to the boss with a starting build.
-	PortalLockSeconds = { 150, 45 },
+	-- The portal can sleep for a while after a stage starts: it can't be charged before
+	-- this many seconds on the stage (stage 1, later stages); the HUD says "The portal is
+	-- dormant: m:ss". 0 = the portal can be charged at any time (owner's choice).
+	PortalLockSeconds = { 0, 0 },
 	-- the HUD arrow toward the portal appears after this long (never before the lock ends)
 	HintAfterSeconds = 90,
 	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
@@ -91,6 +95,35 @@ Config.Stages = {
 	-- RETURN TO LOBBY counts as a WIN (Stats.Wins) only with at least this many stages
 	-- cleared; the gold bonus (Config.Gold.WinBonus + StageClearBonus) is paid either way.
 	WinMinStages = 3,
+}
+
+------------------------------------------------------------------------------------------
+-- ENDLESS (an option on SOLO / DUO / TRIO; never the Daily Challenge)
+--   The run's starter switches ENDLESS on in the lobby (remote SetEndless, saved as
+--   data.Endless; RunModifiers fixes it when the run begins, like curses). An Endless run
+--   has no win: the open portal only offers NEXT STAGE (StageManager), the run ends when
+--   everyone falls or leaves through the pause menu's MAIN MENU. Biomes and bosses keep
+--   rotating as in any long run. Score goes to its own board "ScoreEndless".
+--   Difficulty: up to LastNormalStage it is exactly the Standard curve. Past it every
+--   stage adds, on top of the Standard per-stage multipliers (Config.Stages):
+--     extra      = min(stage - LastNormalStage, MaxExtraStages)   (0 before that)
+--     enemy HP   x(1 + HPPerStage * extra)          → at most x7 at the cap
+--     damage     x(1 + DamagePerStage * extra)      → at most x4
+--     boss HP    x(1 + BossHPPerStage * extra)      → at most x5.5
+--     spawns     x min(1 + SpawnPerStage * extra, SpawnMultCap) (live target, mini-waves)
+--   Live enemies stay capped by Config.Enemies.MaxLive (and the surge by it too), so the
+--   server load is bounded however deep a run goes; past the cap only HP / damage grow.
+------------------------------------------------------------------------------------------
+Config.Endless = {
+	Enabled = true,
+	Modes = { "Solo", "Duo", "Trio" }, -- modes that may run Endless
+	LastNormalStage = 5, -- the Standard curve's last tuned stage (#Config.Stages.BossHPByStage)
+	HPPerStage = 0.2,
+	DamagePerStage = 0.1,
+	BossHPPerStage = 0.15,
+	SpawnPerStage = 0.05,
+	SpawnMultCap = 1.5,
+	MaxExtraStages = 30, -- growth stops this many stages past LastNormalStage (stage 35)
 }
 
 ------------------------------------------------------------------------------------------
@@ -360,6 +393,32 @@ Config.Guarded = {
 	MaxGuards = 8, -- ... at most this many
 	SpawnRadius = { 12, 20 }, -- ring around the altar
 	MinDistance = 90, -- studs from the spawn centre
+}
+
+------------------------------------------------------------------------------------------
+-- LOST CARAVAN (CaravanEvent.lua): an optional encounter, at most one per stage. A stranded
+-- supply cart away from the centre; stepping into its ring starts the defence: stay in the
+-- ring HoldSeconds in total while waves climb out around it. Nobody in the ring for
+-- LeaveGrace seconds in a row = the caravan is lost. Saved = every living teammate gets
+-- one item (Weights) and run gold (Gold x (1 + GoldStageScale x (stage - 1))).
+------------------------------------------------------------------------------------------
+Config.Caravan = {
+	Chance = 1, -- chance per stage that a caravan is placed (needs an open spot)
+	MinDistance = 75, -- studs from the spawn centre
+	Clearance = 8, -- free radius for the cart
+	ZoneRadius = 12, -- the ring to hold (studs)
+	HoldSeconds = 20, -- seconds in the ring to save it (they add up; leaving pauses)
+	LeaveGrace = 8, -- seconds the ring may stand empty before the caravan is lost
+	WaveEvery = 5, -- a wave on start and then every this many seconds of defence
+	WaveBase = 4, -- + WavePerStage x stage + WavePerExtraPlayer x (players - 1) ...
+	WavePerStage = 2,
+	WavePerExtraPlayer = 3,
+	WaveMax = 18, -- ... at most this many per wave
+	WaveRadius = { 18, 26 }, -- ring around the cart
+	LastWaveElite = true, -- the final wave brings one elite
+	Gold = 60, -- per living teammate on stage 1 (before their gold multiplier)
+	GoldStageScale = 0.35,
+	Weights = { Common = 30, Uncommon = 60, Legendary = 10 }, -- the item each
 }
 
 ------------------------------------------------------------------------------------------
@@ -905,7 +964,8 @@ Config.Modes = {
 
 ------------------------------------------------------------------------------------------
 -- LEADERBOARDS (server LeaderboardService.lua, OrderedDataStores)
---   Best Stage (all time), Daily Challenge (today's scored attempts), Most Kills (one run).
+--   High Score (Standard), High Score Endless, Best Stage (all time), Daily Challenge
+--   (today's scored attempts), Most Kills (one run), Highest Level (one run).
 --   Writes happen when a run is committed, queued and throttled per player and board, and
 --   only while the DataStore write budget allows; reads are cached and refreshed at most
 --   every RefreshSeconds while someone looks at them. Without DataStores (Studio without
@@ -913,16 +973,17 @@ Config.Modes = {
 ------------------------------------------------------------------------------------------
 Config.Leaderboards = {
 	Enabled = true,
-	StorePrefix = "SwarmLB_", -- OrderedDataStore names: SwarmLB_Score, SwarmLB_BestStage, SwarmLB_Kills, SwarmLB_Daily_<day>
+	StorePrefix = "SwarmLB_", -- OrderedDataStore names: SwarmLB_Score, SwarmLB_ScoreEndless, SwarmLB_BestStage, SwarmLB_Kills, SwarmLB_Level, SwarmLB_Daily_<day>
 	StudioStorePrefix = "SwarmLB_Studio_", -- used instead in Studio: tests never touch live boards
-	Order = { "Score", "BestStage", "Daily", "Kills" },
+	Order = { "Score", "ScoreEndless", "BestStage", "Daily", "Kills", "Level" },
 	-- High score of one run (board "Score"), worked out on the server from the run's own
 	-- numbers (LeaderboardService.RunScore), never sent by a client:
 	--   Stage * stages cleared + Boss * bosses beaten + Level * level reached + Kill * kills
 	--   + Second * whole seconds survived
 	-- Clearing stages counts most (the game's goal), bosses next; kills, levels and time
-	-- break ties between runs that got equally far. All runs are Standard runs (there is
-	-- no Endless mode yet; when one exists it gets its own board, e.g. "ScoreEndless").
+	-- break ties between runs that got equally far. "Score" takes Standard runs only;
+	-- Endless runs (Config.Endless) score with the same formula on "ScoreEndless".
+	-- "Level" is the highest level reached in one run (any mode, Daily included).
 	Score = { Stage = 1000, Boss = 500, Level = 20, Kill = 1, Second = 0.5 },
 	Top = 50, -- entries shown
 	RefreshSeconds = 60, -- a board's cache is re-read at most this often
