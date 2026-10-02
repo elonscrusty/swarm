@@ -14,7 +14,8 @@
 	    moss, dirt and stone; strong but never Neon-bright on big surfaces;
 	  * drawn just above the ground decoration (y + 0.36 .. 0.43), under every character;
 	  * pooled parts, one BulkMoveTo per frame, everything removed on its own timer and on
-	    the server's cancel (boss death, travel, run end).
+	    the server's cancel (boss death, travel, run end); a part's alpha is only rewritten
+	    when it changed, and spawn puffs thin out in a big swarm (perf-sim scene).
 
 	Kinds: circle (venom | acid | blast | burrow | pulse | hatch | nest | glimmer), lane,
 	spokes, glob (the Spitter's acid / the Hive Mother's eggs in flight), egg (the Queen's
@@ -37,6 +38,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Palette = require(Shared:WaitForChild("Palette"))
 local ModelLibrary = require(script.Parent.ModelLibrary)
 local Audio = require(script.Parent.Audio)
+local ClientSettings = require(script.Parent.ClientSettings)
 
 local Telegraphs = {}
 
@@ -115,13 +117,26 @@ local function newPart(shape: string): BasePart
 	return p
 end
 
+-- Last alpha written per part by setT (cleared when the part is taken again).
+local partAlpha: { [BasePart]: number } = setmetatable({}, { __mode = "k" }) :: any
+
 local function take(shape: string, color: Color3, size: Vector3, alpha: number, material: Enum.Material?): BasePart
 	local p = table.remove(pools[shape]) or newPart(shape)
 	p.Color = color
 	p.Material = material or SMOOTH
 	p.Size = size
 	p.Transparency = alpha
+	partAlpha[p] = nil
 	return p
+end
+
+-- Transparency of one warning part, written only when it changed (to 1/200).
+local function setT(p: BasePart, alpha: number)
+	alpha = math.floor(alpha * 200 + 0.5) / 200
+	if partAlpha[p] ~= alpha then
+		partAlpha[p] = alpha
+		p.Transparency = alpha
+	end
 end
 
 local function give(shape: string, p: BasePart)
@@ -177,7 +192,18 @@ local function ring(n: number, color: Color3, alpha: number, x: number, y: numbe
 	return parts
 end
 
+-- One alpha for a whole group (ring segments, marks). Most warnings hold a steady alpha
+-- for most of their life (a blinking edge only changes on its toggles), so an unchanged
+-- (to 1/200) value is not written again: a crowd of Bomb Tick rings otherwise rewrote
+-- every segment every frame.
+local groupAlpha: { [any]: number } = setmetatable({}, { __mode = "k" }) :: any
+
 local function setAlpha(parts: { BasePart }, alpha: number)
+	alpha = math.floor(alpha * 200 + 0.5) / 200
+	if groupAlpha[parts] == alpha then
+		return
+	end
+	groupAlpha[parts] = alpha
 	for _, p in ipairs(parts) do
 		p.Transparency = alpha
 	end
@@ -198,6 +224,7 @@ end
 type Anim = { Part: BasePart, Shape: string, Start: number, Dur: number, CF0: CFrame, CF1: CFrame?, Arc: number, S0: Vector3, S1: Vector3?, A0: number, A1: number }
 local anims: { Anim } = {}
 local MAX_ANIMS = 160
+local PUFF_BUSY = 40 -- past this many live one-shots a spawn puff is its dust disc only
 
 local function anim(shape: string, color: Color3, material: Enum.Material, cf0: CFrame, cf1: CFrame?, s0: Vector3, s1: Vector3?, a0: number, a1: number, dur: number, arc: number?)
 	if #anims >= MAX_ANIMS then
@@ -239,10 +266,14 @@ local function flatDisc(x: number, z: number, y: number): CFrame
 	return CFrame.new(x, FLOOR_Y + 0.33 + y, z) * DISC
 end
 
--- Small dust puff where an enemy climbs out (EnemyRenderer, on spawn).
+-- Small dust puff where an enemy climbs out (EnemyRenderer, on spawn, on screen only).
+-- In a big swarm (many one-shots alive) or with Reduced effects it is the dust disc alone.
 function Telegraphs.Puff(x: number, z: number, radius: number)
 	local d = radius * 2
 	anim("Cylinder", C.Dust, SMOOTH, flatDisc(x, z, 0.05), nil, Vector3.new(0.04, d * 0.5, d * 0.5), Vector3.new(0.04, d * 1.6, d * 1.6), 0.45, 1, 0.4)
+	if #anims > PUFF_BUSY or ClientSettings.Reduced() then
+		return
+	end
 	for i = 1, 3 do
 		local a = i * TAU / 3 + math.random() * 0.8
 		local from = Vector3.new(x + math.cos(a) * radius * 0.5, FLOOR_Y + 0.4, z + math.sin(a) * radius * 0.5)
@@ -462,10 +493,10 @@ Kind.circle = function(x: number, z: number, radius: number, seconds: number, st
 		end
 		local v = vis(t, dur)
 		local u = math.clamp(t / dur, 0, 1)
-		rec.Rim.Transparency = 1 - 0.62 * v
-		rec.Zone.Transparency = 1 - 0.42 * v
+		setT(rec.Rim, 1 - 0.62 * v)
+		setT(rec.Zone, 1 - 0.42 * v)
 		setDisc(rec.Fill, rec.R * 2 * (0.12 + 0.88 * u))
-		rec.Fill.Transparency = 1 - (0.42 + 0.3 * u) * v
+		setT(rec.Fill, 1 - (0.42 + 0.3 * u) * v)
 		local edge
 		if rec.St.Blink then
 			local hz = 5 + 12 * u
@@ -529,16 +560,16 @@ Kind.lane = function(x: number, z: number, yaw: number, length: number, width: n
 		local v = vis(t, dur)
 		local u = math.clamp(t / dur, 0, 1)
 		local pulse = 0.78 + 0.22 * math.sin(t * (8 + 18 * u))
-		rec.Rim.Transparency = 1 - 0.5 * v
-		rec.Base.Transparency = 1 - 0.38 * v
+		setT(rec.Rim, 1 - 0.5 * v)
+		setT(rec.Base, 1 - 0.38 * v)
 		local ea = 1 - 0.9 * pulse * v
-		rec.L.Transparency = ea
-		rec.R.Transparency = ea
-		rec.Cap.Transparency = ea
+		setT(rec.L, ea)
+		setT(rec.R, ea)
+		setT(rec.Cap, ea)
 		setAlpha(rec.Chev, 1 - 0.7 * v)
 		local len = math.max(0.1, rec.Len * u)
 		rec.Fill.Size = Vector3.new(rec.W, 0.04, len)
-		rec.Fill.Transparency = 1 - (0.35 + 0.3 * u) * v
+		setT(rec.Fill, 1 - (0.35 + 0.3 * u) * v)
 		bulk(rec.Fill, rec.CF * CFrame.new(0, Y_FILL, rec.Len / 2 - len / 2))
 		return true
 	end

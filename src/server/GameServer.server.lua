@@ -34,6 +34,7 @@ local ctx = {
 -- Dependency order: data first, then world, then gameplay.
 local ORDER = {
 	"DataService",
+	"DevAccess",
 	"RunModifiers",
 	"AccountService",
 	"LeaderboardService",

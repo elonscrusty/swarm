@@ -1,6 +1,7 @@
 --[[
 	LeaderboardService.lua
 	Global leaderboards on OrderedDataStores (Config.Leaderboards):
+	  Score      best run score (all time; RunScore below)          SwarmLB_Score
 	  BestStage  furthest stage reached in a run (all time)       SwarmLB_BestStage
 	  Daily      today's scored Daily Challenge attempts           SwarmLB_Daily_<UTC day>
 	             (CurseData.DailyScore: stages cleared, then time)
@@ -22,7 +23,8 @@
 	  "error"    the read failed; the last good rows (if any) are kept
 
 	Names come from players on this server, else Players:GetNameFromUserIdAsync (cached,
-	pcall'd); unknown names show as "Player <id>".
+	pcall'd); unknown names show as "Player <id>". Rows carry the UserId too (the client
+	shows the player's head shot).
 
 	Studio uses its own stores (Config.Leaderboards.StudioStorePrefix): tests never write to
 	the live boards. Submit takes the run's id: one run is submitted at most once per board,
@@ -292,13 +294,30 @@ local function rowsOf(name: string): ({ Entry }, string, number)
 	return c.Rows, c.Status, math.floor(os.clock() - c.Time)
 end
 
+--[[
+	The score of one run (Config.Leaderboards.Score): computed here from what the server
+	counted itself (RunManager's run record), so a client can never send a score. run =
+	{ Cleared, Bosses, Level, Kills, Seconds }.
+]]
+function LeaderboardService.RunScore(run: { [string]: number }): number
+	local S = L.Score
+	local score = S.Stage * math.max(0, run.Cleared or 0)
+		+ S.Boss * math.max(0, run.Bosses or 0)
+		+ S.Level * math.max(0, (run.Level or 1) - 1)
+		+ S.Kill * math.max(0, run.Kills or 0)
+		+ S.Second * math.max(0, math.floor(run.Seconds or 0))
+	return math.floor(score)
+end
+
 -- The player's own best for a board, from the save.
 local function ownBest(player: Player, board: string): number
 	local data = ctx.DataService.GetData(player)
 	if not data then
 		return 0
 	end
-	if board == "BestStage" then
+	if board == "Score" then
+		return data.Stats.BestScore or 0
+	elseif board == "BestStage" then
 		return data.Stats.BestStage or 0
 	elseif board == "Kills" then
 		return data.Stats.MostKills or 0
@@ -323,7 +342,7 @@ local function onRequest(player: Player, board: any)
 	local out = {}
 	local myRank = nil
 	for i, e in ipairs(rows) do
-		table.insert(out, { Rank = i, Name = nameOf(e.UserId), Value = e.Value, Me = e.UserId == player.UserId })
+		table.insert(out, { Rank = i, UserId = e.UserId, Name = nameOf(e.UserId), Value = e.Value, Me = e.UserId == player.UserId })
 		if e.UserId == player.UserId then
 			myRank = i
 		end

@@ -7,11 +7,14 @@
 	network updates so movement looks fluid even at a low replication rate. All model
 	pieces move with a single workspace:BulkMoveTo per frame.
 
-	Detail budget (Config.Graphics.MaxDetailedEnemies): when more enemies are alive than
-	the budget, the ones nearest the camera focus get the full model (ranked a few times a
-	second) and the rest show their plain body, restyled locally in the creature's palette
-	colour. The boss and elites are always detailed. Models are pooled per enemy type, so
-	a recycled body reuses parts instead of building new ones.
+	Detail budget (Config.Graphics.MaxDetailedEnemies, stepping down to MinDetailedEnemies
+	while frames are slow): when more enemies are alive than the budget, the ones nearest
+	the camera focus get the full model (ranked a few times a second) and the rest show
+	their plain body, restyled locally in the creature's palette colour. The boss and
+	elites are always detailed. Models are pooled per enemy type and go back to the pool
+	when their enemy dies or drops out of the budget, so models exist only for detailed
+	enemies (plus the pools) and a recycled body reuses parts instead of building new ones.
+	Spawn dust puffs only for spawns on screen.
 
 	Readability: Flash() gives a brief white hit flash (model or plain body); elites stand
 	on a soft gold ground ring on top of their bigger, gold-tinted model with its crown,
@@ -72,6 +75,8 @@ type Slot = {
 	SpawnAt: number,
 	Scaled: number,
 	Blink: boolean,
+	Speed: number,
+	LastAt: number,
 	Aura: { any }?,
 	AuraAffix: string?,
 	Tag: BillboardGui?,
@@ -83,7 +88,7 @@ type Slot = {
 	BannerOut: boolean,
 }
 
-type PooledModel = { Pieces: { any }, Motion: string, Scale: number }
+type PooledModel = { Pieces: { any }, Motion: string, Scale: number, Type: string, Elite: boolean }
 
 local slots: { [number]: Slot } = {}
 local PARK = CFrame.new(0, -150, 0)
@@ -94,6 +99,7 @@ local FLAT = Vector3.new(1, 0, 1)
 local WHITE = Color3.new(1, 1, 1)
 local RANK_EVERY = 0.3 -- seconds between nearest-first detail rankings
 local POOL_CAP = 48 -- spare models kept per enemy type
+local PROBE_EVERY = 4 -- seconds between checks whether a part-built type has its meshes now
 
 local partsBuf: { BasePart } = {}
 local cframesBuf: { CFrame } = {}
@@ -136,6 +142,9 @@ local ELITE_GOLD = Palette.gold_400
 ------------------------------------------------------------------------------------------
 
 local modelPool: { [string]: { PooledModel } } = {}
+-- keys whose uploaded meshes have loaded: their part-built fallbacks are no longer pooled
+local meshSeen: { [string]: boolean } = {}
+local probeTimer = PROBE_EVERY
 
 local function modelKey(typeId: string, elite: boolean): string
 	return elite and (typeId .. "*") or typeId
@@ -147,8 +156,20 @@ local function restoreColors(pieces: { any })
 	end
 end
 
--- Takes the slot's model away: kept for reuse when it is built from the uploaded meshes
--- (its final look); part-built fallbacks are dropped so they get replaced by meshes.
+local function isMesh(pieces: { any }): boolean
+	return pieces[1] ~= nil and pieces[1].Part:IsA("MeshPart")
+end
+
+local function destroyPieces(pieces: { any })
+	for _, piece in ipairs(pieces) do
+		piece.Part:Destroy()
+	end
+end
+
+-- Takes the slot's model away into the pool of its type (an enemy died, or it dropped out
+-- of the detail budget): models live only on detailed enemies plus the pools, so a huge
+-- swarm never keeps one parked model per enemy body. Part-built fallbacks are pooled too
+-- until that type's meshes have loaded (then they are dropped and replaced by meshes).
 local function releaseModel(slot: Slot)
 	local pieces = slot.Pieces
 	if #pieces == 0 then
@@ -173,30 +194,36 @@ local function releaseModel(slot: Slot)
 		list = {}
 		modelPool[key] = list
 	end
-	if list and #list < POOL_CAP and pieces[1].Part:IsA("MeshPart") then
+	if key and list and #list < POOL_CAP and (isMesh(pieces) or not meshSeen[key]) then
 		if slot.FlashUntil > 0 then
 			restoreColors(pieces)
 		end
 		for _, piece in ipairs(pieces) do
 			piece.Part.CFrame = PARK
 		end
-		table.insert(list, { Pieces = pieces, Motion = slot.Motion, Scale = slot.Scale })
+		table.insert(list, { Pieces = pieces, Motion = slot.Motion, Scale = slot.Scale, Type = slot.Type :: string, Elite = slot.Elite })
 	else
-		for _, piece in ipairs(pieces) do
-			piece.Part:Destroy()
-		end
+		destroyPieces(pieces)
 	end
 end
 
 local function rebuild(slot: Slot, typeId: string, elite: boolean)
 	releaseModel(slot)
-	local list = modelPool[modelKey(typeId, elite)]
+	local key = modelKey(typeId, elite)
+	local list = modelPool[key]
 	local spare = list and table.remove(list)
+	while spare and meshSeen[key] and not isMesh(spare.Pieces) do
+		destroyPieces(spare.Pieces) -- a fallback left from before the meshes loaded
+		spare = table.remove(list)
+	end
 	if spare then
 		slot.Pieces, slot.Motion, slot.Scale = spare.Pieces, spare.Motion, spare.Scale
 	else
 		local pieces, motion, scale = ModelLibrary.Enemy(typeId, elite)
 		slot.Pieces, slot.Motion, slot.Scale = pieces, motion, scale
+		if isMesh(pieces) then
+			meshSeen[key] = true
+		end
 	end
 	slot.Type = typeId
 	slot.Elite = elite
@@ -206,15 +233,40 @@ local function rebuild(slot: Slot, typeId: string, elite: boolean)
 	slot.Parked = false
 end
 
+-- Every few seconds: does a type whose pool holds part-built fallbacks have its meshes
+-- now? One fresh build tells; if it is a mesh model the fallbacks go.
+local function probeMeshes()
+	for key, list in pairs(modelPool) do
+		local last = list[#list]
+		if not meshSeen[key] and last and not isMesh(last.Pieces) then
+			local pieces, motion, scale = ModelLibrary.Enemy(last.Type, last.Elite)
+			if isMesh(pieces) then
+				meshSeen[key] = true
+				for i = #list, 1, -1 do
+					if not isMesh(list[i].Pieces) then
+						destroyPieces(list[i].Pieces)
+						table.remove(list, i)
+					end
+				end
+				for _, piece in ipairs(pieces) do
+					piece.Part.CFrame = PARK
+				end
+				table.insert(list, { Pieces = pieces, Motion = motion, Scale = scale, Type = last.Type, Elite = last.Elite })
+			else
+				destroyPieces(pieces)
+			end
+		end
+	end
+end
+
+-- Hides the slot's model: back to the pool (dead, or over the detail budget).
 local function park(slot: Slot)
-	if slot.Parked then
+	if slot.Parked and #slot.Pieces == 0 then
 		return
 	end
 	slot.Parked = true
 	slot.Render = nil
-	for _, piece in ipairs(slot.Pieces) do
-		piece.Part.CFrame = PARK
-	end
+	releaseModel(slot)
 end
 
 ------------------------------------------------------------------------------------------
@@ -321,6 +373,8 @@ local function track(model: Instance)
 		SpawnAt = -10,
 		Scaled = 1,
 		Blink = false,
+		Speed = 0,
+		LastAt = 0,
 		Aura = nil,
 		AuraAffix = nil,
 		Tag = nil,
@@ -406,6 +460,27 @@ end
 local detailed: { [Slot]: boolean } = {}
 local rankList: { Slot } = {}
 local rankTimer = 0
+local liveCount = 0 -- live enemies seen last frame (decides whether the budget applies)
+-- Adaptive detail budget: between Config.Graphics.MinDetailedEnemies and MaxDetailedEnemies,
+-- lowered while frames are slow (smoothed frame time over 1/40 s), raised again when fast.
+local budget = Config.Graphics.MaxDetailedEnemies
+local frameTime = 1 / 60
+local budgetTimer = 1
+
+local function adaptBudget(dt: number)
+	frameTime += (math.min(dt, 0.2) - frameTime) * 0.05
+	budgetTimer -= dt
+	if budgetTimer > 0 then
+		return
+	end
+	budgetTimer = 1
+	local G = Config.Graphics
+	if frameTime > 1 / 40 then
+		budget = math.max(G.MinDetailedEnemies, budget - 10)
+	elseif frameTime < 1 / 55 then
+		budget = math.min(G.MaxDetailedEnemies, budget + 5)
+	end
+end
 
 local function rank()
 	local cam = workspace.CurrentCamera
@@ -422,7 +497,7 @@ local function rank()
 		return a.Dist < b.Dist
 	end)
 	table.clear(detailed)
-	local limit = Config.Graphics.MaxDetailedEnemies
+	local limit = budget
 	for i, slot in ipairs(rankList) do
 		if i > limit then
 			break
@@ -750,27 +825,33 @@ local function step(dt: number)
 	table.clear(cframesBuf)
 	local n = 0
 
-	-- the budget only matters when more enemies are alive than it allows
-	local live = 0
-	for _, slot in pairs(slots) do
-		if slot.Body.Parent and slot.Body.CFrame.Y >= ACTIVE_Y then
-			live += 1
-		end
-	end
-	local budgeted = live > Config.Graphics.MaxDetailedEnemies
+	-- the budget only matters when more enemies are alive than it allows (last frame's
+	-- count: one loop over the bodies instead of two)
+	adaptBudget(dt)
+	local budgeted = liveCount > budget
 	rankTimer -= dt
 	if budgeted and rankTimer <= 0 then
 		rankTimer = RANK_EVERY
 		rank()
 	end
+	probeTimer -= dt
+	if probeTimer <= 0 then
+		probeTimer = PROBE_EVERY
+		probeMeshes()
+	end
+	local cam = workspace.CurrentCamera
+	local live = 0
 
 	for _, slot in pairs(slots) do
 		local body = slot.Body
 		local cf = body.CFrame
-		local typeId = body:GetAttribute("Type")
-		if cf.Y < ACTIVE_Y or not body.Parent or typeof(typeId) ~= "string" then
-			park(slot)
-			dropHalo(slot)
+		local typeId = cf.Y >= ACTIVE_Y and body.Parent and body:GetAttribute("Type") or nil
+		if typeof(typeId) ~= "string" then
+			-- pooled on the server (parked): nothing to draw; tidy up once
+			if slot.Live or not slot.Parked or slot.Halo then
+				park(slot)
+				dropHalo(slot)
+			end
 			if slot.Live then
 				slot.Live = false
 				dropAura(slot)
@@ -781,13 +862,20 @@ local function step(dt: number)
 				end
 			end
 		else
+			live += 1
 			if not slot.Live then
-				-- a fresh spawn: it climbs out of the ground (the Queen has her own entrance)
+				-- a fresh spawn: it climbs out of the ground (the Queen has her own entrance);
+				-- the dust puff only where it can be seen (most spawns are off-screen)
 				slot.Live = true
 				slot.SpawnAt = clock
+				slot.Speed = 0
+				slot.LastPos = nil
 				if not isBoss(typeId) and typeId ~= "Burrower" then
-					local r = math.max(body.Size.X, body.Size.Z) / 2
-					Telegraphs.Puff(cf.Position.X, cf.Position.Z, r)
+					local _, onScreen = (cam :: Camera):WorldToViewportPoint(cf.Position)
+					if onScreen then
+						local r = math.max(body.Size.X, body.Size.Z) / 2
+						Telegraphs.Puff(cf.Position.X, cf.Position.Z, r)
+					end
 				end
 			end
 			local elite = body:GetAttribute("Elite") == true
@@ -814,10 +902,20 @@ local function step(dt: number)
 				end
 				slot.Render = render
 
+				-- walk speed from the body's movement, measured between position updates (the
+				-- server moves far bodies every few frames and replication is not per frame)
+				local pos = cf.Position
 				local last = slot.LastPos
-				local speed = last and ((cf.Position - last) * FLAT).Magnitude / math.max(dt, 1e-3) or 0
-				slot.LastPos = cf.Position
-				slot.Move += (math.clamp(speed / 10, 0, 1) - slot.Move) * math.min(1, dt * 6)
+				if last ~= pos then
+					if last then
+						slot.Speed = ((pos - last) * FLAT).Magnitude / math.max(clock - slot.LastAt, 1e-3)
+					end
+					slot.LastPos = pos
+					slot.LastAt = clock
+				elseif clock - slot.LastAt > 0.25 then
+					slot.Speed = 0 -- no update for a while: standing still
+				end
+				slot.Move += (math.clamp(slot.Speed / 10, 0, 1) - slot.Move) * math.min(1, dt * 6)
 
 				if slot.FlashUntil > 0 and now >= slot.FlashUntil then
 					slot.FlashUntil = 0
@@ -990,6 +1088,7 @@ local function step(dt: number)
 			end
 		end
 	end
+	liveCount = live
 	if n > 0 then
 		workspace:BulkMoveTo(partsBuf, cframesBuf, Enum.BulkMoveMode.FireCFrameChanged)
 	end

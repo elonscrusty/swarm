@@ -23,6 +23,8 @@
 	  TeamRules the first group run: what is shared and what is your own
 	  Revive    the first time a teammate falls: stand in the gold circle
 
+	Each card slides in with its icon spinning, a glint across the card and a ring pulse
+	around the element it explains (plain with Reduced effects).
 	Each hint shown is reported (Tutorial remote "Seen") so it never repeats; SKIP TIPS
 	ends the tutorial ("Skip"); Settings > Show tips switches every hint off and Settings >
 	Replay tips ("Replay") shows them again from the next run. The server marks the
@@ -366,6 +368,24 @@ local function showNext(now: number)
 	-- slide in from the side of what it explains (or rise from below)
 	local d = (current :: any).Dir
 	UIAnim.SlideIn(ui.Card, Vector2.new(0, d < 0 and -28 or 28), 0)
+	if not ClientSettings.Reduced() then
+		-- the icon spins in, the TIP badge pops, a glint crosses the card, and the ring
+		-- around the explained element pulses out once
+		ui.IconWell.Rotation = -180
+		UIAnim.Tween(ui.IconWell, 0.55, { Rotation = 0 }, Enum.EasingStyle.Back)
+		UIAnim.Pop(ui.IconWell, 0.1, 0.4)
+		UIAnim.Pop(ui.Step, 0.3, 0.3)
+		local clip = new("Frame", { Name = "ShineClip", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = 20 }, ui.Card)
+		UIKit.corner(clip, Theme.Radius.L)
+		UIAnim.SweepOnce(clip, P.ivory_100, 0.6, 0.8)
+		task.delay(0.8, function()
+			clip:Destroy()
+		end)
+		if ui.Focus.Visible then
+			UIAnim.Pop(ui.Focus, 0.15, 1.25)
+			UIAnim.Ring(rootFrame :: Frame, ui.Focus.Position + UDim2.fromOffset(ui.Focus.Size.X.Offset / 2, ui.Focus.Size.Y.Offset / 2), P.gold_300, math.max(ui.Focus.Size.X.Offset, ui.Focus.Size.Y.Offset) + 40, 0.5)
+		end
+	end
 	markSeen(tip.Id)
 	if kit.Audio then
 		pcall(kit.Audio.Play, "Tip")

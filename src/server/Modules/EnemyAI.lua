@@ -5,13 +5,16 @@
 
 	Per frame, for every living enemy:
 	  * "Think" (only for 1/ThinkChunks of the enemies each frame): pick the nearest
-	    living player, steer around obstacles with a short raycast, add a separation
-	    push from neighbours (via the enemy spatial grid), add bat wobble.
+	    living player, steer around obstacles with a short raycast (skipped on open ground:
+	    no obstacle cell or fence near the ray), add a separation push from neighbours (via
+	    a fine separation grid), add bat wobble.
 	  * Integrate movement + knockback, push out of obstacle shapes, clamp to the fence.
 	  * Distance-based contact damage against the (max 4) players.
 	  * Recycle enemies left far behind back to the screen edge.
-	Then all parts move with a single workspace:BulkMoveTo call, and the enemy grid used
-	by WeaponSystem hit detection is rebuilt.
+	Then the bodies move with a single workspace:BulkMoveTo call (those near a player every
+	frame, farther ones every Config.Enemies.BodyFarEvery frames, staggered: fewer CFrame
+	writes to replicate; clients smooth), and the enemy grid used by WeaponSystem hit
+	detection is rebuilt.
 
 	Behaviours with a readable rhythm (anticipation → telegraph → active → recovery), each
 	enemy's current one published as the body attribute "Act" for the client's poses:
@@ -52,6 +55,11 @@ local FLAT = Vector3.new(1, 0, 1)
 local PLAYER_RADIUS = 1.2
 
 local obstacleGrid = SpatialGrid.new(Config.Projectiles.CellSize)
+-- Fine grid for the separation push only (the coarse EnemySpawner.Grid serves weapon hit
+-- queries): in a dense swarm a 20-stud cell holds dozens of enemies, so every think would
+-- check them all; an 8-stud cell checks a handful. Same results, rebuilt with the other.
+local sepGrid = SpatialGrid.new(Config.Enemies.SeparationCell)
+local sepPad = 0 -- largest radius in sepGrid (its queries only widen by this much)
 local rayParams: RaycastParams? = nil
 local frame = 0
 local clock = 0
@@ -152,18 +160,37 @@ end
 -- Thinking
 ------------------------------------------------------------------------------------------
 
+-- Living players' root positions, read once per frame (EnemyAI.Step) instead of once per
+-- enemy per use: rp -> position.
+local playerPos: { [any]: Vector3 } = {}
+
 local function nearestPlayer(pos: Vector3, runPlayers)
 	local best, bestD2 = nil, math.huge
+	local px, pz = pos.X, pos.Z
 	for _, rp in ipairs(runPlayers) do
-		if rp.Alive and rp.Root then
-			local d = rp.Root.Position - pos
-			local d2 = d.X * d.X + d.Z * d.Z
+		local p = playerPos[rp]
+		if p and rp.Alive then
+			local dx, dz = p.X - px, p.Z - pz
+			local d2 = dx * dx + dz * dz
 			if d2 < bestD2 then
 				best, bestD2 = rp, d2
 			end
 		end
 	end
 	return best, math.sqrt(bestD2)
+end
+
+-- Could the look-ahead ray (from pos along dir, `reach` studs) hit anything? Only obstacle
+-- footprints (obstacle grid cells around the ray) and the fence's boundary walls can be hit,
+-- so on open ground the raycast is skipped (most of a swarm, most of the time).
+local function obstacleAhead(pos: Vector3, dir: Vector3, reach: number): boolean
+	local c = Config.ArenaOrigin
+	local edge = Config.Arenas.Size / 2 - reach - 2
+	if math.abs(pos.X - c.X) > edge or math.abs(pos.Z - c.Z) > edge then
+		return true -- near the fence
+	end
+	local half = reach / 2
+	return obstacleGrid:QueryCells(pos.X + dir.X * half, pos.Z + dir.Z * half, half + 2, obstacleBuf) > 0
 end
 
 local function think(e, runPlayers)
@@ -174,7 +201,7 @@ local function think(e, runPlayers)
 		e.Sep = Vector3.zero
 		return
 	end
-	local to = (target.Root.Position - e.Pos) * FLAT
+	local to = (playerPos[target] - e.Pos) * FLAT
 	if to.Magnitude < 0.1 then
 		e.Dir = Vector3.zero
 		return
@@ -186,7 +213,7 @@ local function think(e, runPlayers)
 		desired = CFrame.fromAxisAngle(UP, angle):VectorToWorldSpace(desired)
 	end
 
-	if not e.Ghost and rayParams then
+	if not e.Ghost and rayParams and obstacleAhead(e.Pos, desired, Config.Enemies.AvoidRayLength + e.Radius) then
 		local origin = e.Pos + Vector3.new(0, 2.5, 0)
 		local hit = workspace:Raycast(origin, desired * (Config.Enemies.AvoidRayLength + e.Radius), rayParams)
 		if hit then
@@ -205,27 +232,33 @@ local function think(e, runPlayers)
 	end
 	e.Dir = desired
 
-	-- Separation from neighbours (grid is from the previous frame, good enough).
-	local sep = Vector3.zero
+	-- Separation from neighbours (grid is from the previous frame, good enough); plain
+	-- number math, this is the hottest loop in a dense swarm.
+	local sx, sz = 0, 0
 	if not e.Ghost then
-		local n = ctx.EnemySpawner.Grid:QueryCircle(e.Pos.X, e.Pos.Z, e.Radius * Config.Enemies.SeparationRadius, queryBuf)
+		local sepMult = Config.Enemies.SeparationRadius
+		local ex, ez, er = e.Pos.X, e.Pos.Z, e.Radius
+		local n = sepGrid:QueryCircle(ex, ez, er * sepMult, queryBuf, sepPad)
 		for i = 1, n do
 			local o = queryBuf[i]
-			if o ~= e and not o.Ghost then
-				local away = (e.Pos - o.Pos) * FLAT
-				local d = away.Magnitude
-				local minD = (e.Radius + o.Radius) * Config.Enemies.SeparationRadius
+			if o ~= e and o.Alive and not o.Ghost then
+				local op = o.Pos
+				local ax, az = ex - op.X, ez - op.Z
+				local d = math.sqrt(ax * ax + az * az)
+				local minD = (er + o.Radius) * sepMult
 				if d < minD then
 					if d < 1e-3 then
-						away = Vector3.new(rng:NextNumber(-1, 1), 0, rng:NextNumber(-1, 1))
-						d = math.max(away.Magnitude, 1e-3)
+						ax, az = rng:NextNumber(-1, 1), rng:NextNumber(-1, 1)
+						d = math.max(math.sqrt(ax * ax + az * az), 1e-3)
 					end
-					sep += away / d * ((minD - d) / minD)
+					local k = (minD - d) / minD / d
+					sx += ax * k
+					sz += az * k
 				end
 			end
 		end
 	end
-	e.Sep = sep
+	e.Sep = (sx ~= 0 or sz ~= 0) and Vector3.new(sx, 0, sz) or Vector3.zero
 end
 
 ------------------------------------------------------------------------------------------
@@ -468,8 +501,9 @@ local function behave(e, dt: number)
 	local t = e.Target
 	local to: Vector3? = nil
 	local dist = math.huge
-	if t and t.Alive and t.Root then
-		to = (t.Root.Position - e.Pos) * FLAT
+	local tp = t and t.Alive and playerPos[t]
+	if tp then
+		to = (tp - e.Pos) * FLAT
 		dist = (to :: Vector3).Magnitude
 	end
 	if def.Static then
@@ -617,6 +651,12 @@ function EnemyAI.Step(dt: number)
 	Hazards.Step(dt)
 	local active = ctx.EnemySpawner.Active
 	local runPlayers = ctx.RunManager.GetRunPlayers()
+	table.clear(playerPos)
+	for _, rp in ipairs(runPlayers) do
+		if rp.Alive and rp.Root then
+			playerPos[rp] = rp.Root.Position
+		end
+	end
 	local chunks = Config.Enemies.ThinkChunks
 	local slot = frame % chunks
 	local now = os.clock()
@@ -625,17 +665,22 @@ function EnemyAI.Step(dt: number)
 	local recycle2 = Config.Enemies.RecycleDistance ^ 2
 	local half = Config.Arenas.Size / 2
 	local c = Config.ArenaOrigin
+	local syncNear2 = Config.Enemies.BodySyncNear ^ 2
+	local farEvery = Config.Enemies.BodyFarEvery
 
 	table.clear(movedBuf)
 	table.clear(cframesBuf)
 	local n = 0
+	debug.profilebegin("EnemyAI.Enemies") -- MicroProfiler labels (Ctrl+F6 in a test)
 
 	local i = 1
 	while i <= #active do
 		local e = active[i]
 		local static = e.Def.Static == true
 		if not static and (e.ThinkSlot == slot or e.Target == nil or (e.Target and not e.Target.Alive)) then
+			debug.profilebegin("EnemyAI.Think")
 			think(e, runPlayers)
+			debug.profileend()
 		end
 		if e.Boss then
 			BossAI.Step(e, dt)
@@ -685,14 +730,18 @@ function EnemyAI.Step(dt: number)
 		e.Pos = pos
 
 		local far = true
+		local nearest2 = math.huge
 		local harmless = e.Harmless or e.SpawnGrace > 0 or e.Damage <= 0
 		for _, rp in ipairs(runPlayers) do
-			if rp.Alive and rp.Root then
-				local rpos = rp.Root.Position
+			local rpos = playerPos[rp]
+			if rpos and rp.Alive then
 				local dx, dz = rpos.X - pos.X, rpos.Z - pos.Z
 				local d2 = dx * dx + dz * dz
 				if d2 < recycle2 then
 					far = false
+				end
+				if d2 < nearest2 then
+					nearest2 = d2
 				end
 				local reach = e.Radius + PLAYER_RADIUS
 				if not harmless and d2 <= reach * reach and now >= e.NextContact then
@@ -708,10 +757,16 @@ function EnemyAI.Step(dt: number)
 			if spawnAt then
 				e.Pos = spawnAt
 				e.Knock = Vector3.zero
+				nearest2 = 0 -- moved: sync the body now
 			end
 		end
 
-		if e.Alive then
+		-- Body sync: enemies near a player (and bosses, enemies mid-behaviour, fresh
+		-- spawns) move their body every frame; the rest every BodyFarEvery frames, staggered
+		-- by id. Clients smooth between updates, so this only cuts CFrame writes and their
+		-- replication; the simulation (e.Pos, hits, contact damage) still runs every frame.
+		local sync = nearest2 <= syncNear2 or (frame + e.Id) % farEvery == 0 or e.Boss or e.Act ~= nil or e.SpawnGrace > 0
+		if e.Alive and sync then
 			local look = e.Face or (e.Dir.Magnitude > 0.1 and e.Dir) or Vector3.new(0, 0, -1)
 			local bob = 0
 			if e.Def.FlyHeight then
@@ -721,14 +776,19 @@ function EnemyAI.Step(dt: number)
 			n += 1
 			movedBuf[n] = e
 			cframesBuf[n] = CFrame.lookAt(center, center + look)
+		end
+		if e.Alive then
 			i += 1
 		end
 		-- when an enemy died this frame (a revive shockwave), Active was swap-removed:
 		-- re-check index i
 	end
 
+	debug.profileend()
+
 	-- An enemy can die after it was queued (a revive shockwave, an explosion chain), so
 	-- only move the ones still alive; a dead one must stay parked.
+	debug.profilebegin("EnemyAI.Sync")
 	table.clear(partsBuf)
 	local m = 0
 	for j = 1, n do
@@ -745,16 +805,28 @@ function EnemyAI.Step(dt: number)
 	if m > 0 then
 		workspace:BulkMoveTo(partsBuf, cframesBuf, Enum.BulkMoveMode.FireCFrameChanged)
 	end
+	debug.profileend()
 
-	-- Rebuild the enemy grid for this frame's hit detection.
+	-- Rebuild the enemy grid for this frame's hit detection (and the fine separation grid).
+	debug.profilebegin("EnemyAI.Grids")
 	local grid = ctx.EnemySpawner.Grid
 	grid:Clear()
+	sepGrid:Clear()
+	local pad = 0
 	for j = 1, #active do
 		local e = active[j]
 		if not e.Untargetable then
 			grid:Insert(e)
+			if not e.Ghost then
+				sepGrid:Insert(e)
+				if e.Radius > pad then
+					pad = e.Radius
+				end
+			end
 		end
 	end
+	sepPad = pad
+	debug.profileend()
 end
 
 -- Cancels every hazard (group nil = all; "Boss" = the Queen's).

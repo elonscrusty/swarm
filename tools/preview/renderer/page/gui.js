@@ -113,7 +113,24 @@ function paintItem(container, it, viewportImages) {
   if (it.border) shadows.push(it.border.mode === 'Inset' ? `inset 0 0 0 ${it.border.w}px ${css(it.border.color)}` : `0 0 0 ${it.border.w}px ${css(it.border.color)}`);
   if (it.stroke && it.stroke.thickness > 0 && it.stroke.color[3] > 0) shadows.push(strokeShadow(it.stroke));
   if (shadows.length) el.style.boxShadow = shadows.join(', ');
-  if (it.image) {
+  const artKey = it.image && window.__artMap && (/rbxassetid:\/\/(\d+)/.exec(it.image.src || '') || [])[1];
+  if (artKey && window.__artMap[artKey]) {
+    // an uploaded owner picture (art/): drawn for real, tint as brightness, alpha as opacity
+    const url = '/art/' + window.__artMap[artKey] + '.png';
+    const c = it.image.color;
+    const img = document.createElement('div');
+    const fit = { Fit: 'contain', Crop: 'cover', Stretch: '100% 100%', Tile: 'auto' }[it.image.scaleType] || '100% 100%';
+    let style = `left:0;top:0;width:100%;height:100%;border-radius:inherit;opacity:${c[3]};filter:brightness(${((c[0] + c[1] + c[2]) / 3).toFixed(3)});`;
+    if (it.image.slice) {
+      const [x0, y0, x1, y1, k] = it.image.slice;
+      style += `border-style:solid;border-image:url(${url}) ${y0} ${512 - x1} ${512 - y1} ${x0} fill;border-width:${y0 * k}px ${(512 - x1) * k}px ${(512 - y1) * k}px ${x0 * k}px;box-sizing:border-box;`;
+    } else {
+      style += `background:url(${url}) center/${fit} no-repeat;`;
+    }
+    img.style.cssText = style;
+    el.appendChild(img);
+    window.__imgLoads.push(new Promise((r) => { const p = new Image(); p.onload = p.onerror = r; p.src = url; }));
+  } else if (it.image) {
     const img = document.createElement('div');
     img.style.cssText = `left:0;top:0;width:100%;height:100%;border-radius:inherit;background:repeating-linear-gradient(45deg, ${css(it.image.color, 0.55)} 0 6px, ${css(it.image.color, 0.35)} 6px 12px);outline:1px dashed ${css(it.image.color, 0.8)};outline-offset:-1px;`;
     el.appendChild(img);

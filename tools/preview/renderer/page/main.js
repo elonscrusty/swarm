@@ -179,11 +179,14 @@ async function render() {
   const viewportImages = await renderViewports(job.gui.viewports, dpr);
   await fontsReady;
   const gui = document.getElementById('gui');
+  try { window.__artMap = await (await fetch('/artmap.json')).json(); } catch (e) { window.__artMap = {}; }
+  window.__imgLoads = [];
   paintGui(gui, job.gui, d, viewportImages, { hideCoreUi: job.render && job.render.hideCoreUi });
   paintOverlays(gui, job.overlays, (x, y, z) => {
     const v = new THREE.Vector3(x, y, z).project(cam);
     return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H];
   });
+  await Promise.all(window.__imgLoads);
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   window.__report = { warnings: [...new Set(worldWarnings())] };
   window.__done = true;

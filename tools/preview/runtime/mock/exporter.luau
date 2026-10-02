@@ -615,6 +615,10 @@ local function guiItem(obj, st, alphaMul, ctx)
 		local imageT = gp(st, "ImageTransparency")
 		if image ~= "" and imageT < 1 then
 			item.image = { src = image, color = rgba(gp(st, "ImageColor3"), 1 - (1 - imageT) * alphaMul), scaleType = gp(st, "ScaleType").Name }
+			local sc = gp(st, "SliceCenter")
+			if item.image.scaleType == "Slice" and typeof(sc) == "Rect" then
+				item.image.slice = { sc.Min.X, sc.Min.Y, sc.Max.X, sc.Max.Y, gp(st, "SliceScale") or 1 }
+			end
 			R.note("Images (rbxassetid / rbxasset) are drawn as neutral placeholders")
 		end
 	end

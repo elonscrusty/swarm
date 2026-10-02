@@ -2,7 +2,9 @@
 	CameraController.lua
 	Fixed-angle, slightly top-down follow camera. No rotation or zoom input: on a phone
 	every touch is movement. Zooms out further during runs and in portrait orientation.
-	When the local player is dead it follows a living teammate (spectate).
+	When the local player is dead it follows a living teammate (spectate). Shake (smooth
+	noise) and Kick (a short pull toward the hero) add combat punch, both scaled by the
+	Screen shake setting.
 
 	Lobby (not in a run): the 2D lobby screen covers the screen and the camera is a fixed
 	scenic shot. If workspace has a Model/Folder "Lobby" (directly or inside "SwarmMap")
@@ -24,6 +26,7 @@ local player = Players.LocalPlayer
 local focus: Vector3? = nil
 local distance = Config.Camera.LobbyDistance
 local shake = 0
+local kick = 0 -- studs of camera punch (Kick), eased out
 local spectated: Player? = nil -- teammate followed while the local player is down
 local subjectKey: any = nil -- who the follow camera is on (a change = glide, not snap)
 local panUntil = 0 -- while > now, the follow camera glides to a new subject
@@ -82,6 +85,18 @@ function CameraController.Shake(amount: number)
 	end
 	local a = math.min(amount * (cam.ShakeScale or 1) * setting, (cam.ShakeMax or 0.6) * setting)
 	shake = math.max(shake, a)
+end
+
+-- Short camera punch toward the hero (big kills, evolution, boss phase): the "hit-stop"
+-- beat. `amount` = studs pulled in, capped at KickMax, scaled by the Screen shake setting
+-- like Shake, eased back out within ~0.2 s.
+function CameraController.Kick(amount: number)
+	local cam = Config.Camera :: any
+	local setting = tonumber(ClientSettings.Get("Shake")) or 1
+	if setting <= 0 then
+		return
+	end
+	kick = math.max(kick, math.min(amount * (cam.ShakeScale or 1), cam.KickMax or 2) * setting)
 end
 
 local function rootOf(p: Player): BasePart?
@@ -243,6 +258,13 @@ function CameraController.Init()
 			shake *= math.exp(-dt * 7)
 		else
 			shake = 0
+		end
+		if kick > 0.02 then
+			-- the punch: pulled in along the view line, eased back out
+			offset *= 1 - kick / distance
+			kick *= math.exp(-dt * 16)
+		else
+			kick = 0
 		end
 		cam.CFrame = CFrame.lookAt(look + offset + jitter, look + jitter)
 		cam.Focus = CFrame.new(look)

@@ -84,11 +84,27 @@ function Signal:HasConnections(): boolean
 	return #self._conns > 0
 end
 
--- Internal: fire every connected handler.
+-- Internal: fire every connected handler (timed per handler when profiling).
+local function fireProfiled(self, P, ...)
+	local list = table.clone(self._conns)
+	for _, c in ipairs(list) do
+		if c.Connected then
+			P.enter(P.fnLabel(c._fn) .. " " .. tostring(self._name))
+			S.spawn(c._fn, ...)
+			P.leave()
+		end
+	end
+end
+
 function Signal:_fire(...)
 	local conns = self._conns
 	local n = #conns
 	if n == 0 then
+		return
+	end
+	local P = R.prof
+	if P and P.on then
+		fireProfiled(self, P, ...)
 		return
 	end
 	if n == 1 then

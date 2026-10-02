@@ -22,7 +22,7 @@ local MenuTrack = {}
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 
-local KIND_ICON = { Title = "flag", Color = "sparkle", Ring = "area", Frame = "medal" }
+local KIND_ICON = { Title = "track_Title", Color = "track_Color", Ring = "track_Ring", Frame = "track_Frame" }
 local KIND_LABEL = { Title = "Title", Color = "Name colour", Ring = "Dais ring", Frame = "Portrait frame" }
 local WORN_KEY = { Title = "Title", Color = "NameColor", Ring = "Ring", Frame = "Frame" }
 
@@ -104,7 +104,7 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 			UIKit.corner(dot, 999)
 			UIKit.stroke(dot, P.slate_950, 1.5, 0.2)
 		else
-			Icons.Draw(box, KIND_ICON[r.Kind] or "gift", { Size = 26, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Color = (not unlocked) and P.stone_400 or nil, Back = C.PanelInset })
+			Icons.Draw(box, KIND_ICON[r.Kind] or "gift", { Size = 26, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Color = (not unlocked) and P.stone_400 or nil, Dim = not unlocked, Back = C.PanelInset })
 		end
 	end
 
@@ -155,6 +155,13 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 			ui.Meter.Set(into / need, string.format("%s / %s XP to level %d", UIKit.formatNumber(into), UIKit.formatNumber(need), level + 1))
 		else
 			ui.Meter.Set(1, "Max level reached")
+		end
+		if animate then
+			if level < AccountData.MaxLevel then
+				UIAnim.CountTo(ui.Level, 0, level, "Level %d", 0.7)
+			end
+			ui.Meter.Frame.ClipsDescendants = true
+			UIAnim.Sweep(ui.Meter.Frame, 0.35, 0.5, 0.7)
 		end
 		for _, ch in ipairs(ui.Medal:GetChildren()) do
 			if ch:IsA("Frame") then

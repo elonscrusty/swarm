@@ -32,16 +32,22 @@ Studio access during sessions, so nothing is verified in Studio unless they say 
 - Never present a mock or unconnected feature as working. Report verified vs assumed (PASS/FAIL/BLOCKED).
 - Don't copy Megabonk characters, items, assets or text.
 
-## Where things stand (last batch: 8bcec96)
-Done, type-checked and built, NOT tested in Studio: playtest fixes round 1 (sword pose, priority model
-loading, DEV panel tabs + unlock everything, arena picker, tutorial callouts, blue XP gems, 3D gold coins
-+ purse, chest pause, UI animations), 75 icons wired in, Studio-separate stores + dev taint + idempotent
-leaderboard writes, jump/bunny hop (server cap in `speedCheck`, perch push-off), Report a Bug + DEV inbox.
+## Where things stand (last batch: fixes and polish pass, branch claude/relaxed-shannon-t6qo8p)
+Done, type-checked and built, offline-preview tested, NOT tested in Studio: DEV access via server
+`DevAccess` (Studio + `DevAllowlist`) with the DevAccess player attribute, Invincible toggle, pause
+MAIN MENU (`AbandonRun`), High Score board (`LeaderboardService.RunScore`), HUD HP numbers, icon
+checklist (`docs/ICON_CHECKLIST.md`, `tools/gen_icon_checklist.py`), icon preload (`AssetPreload`),
+livelier level-up cards + safe input, chest hold 0.4 s + reward reel, XP crystals + merging +
+once-per-flight replication, Fire Trail rebuild, CombatFx, lobby/HUD/results animation, perf pass
+(`perf-sim` scene). Owner art (136 pictures) uploaded and wired (`ArtData`, `tools/upload_art.py`); lobby screens rebuilt
+to the owner's mockups. Monetization live and owner-verified in Studio: 3 passes + 4 products in
+`Config.Monetization` (owner chose to keep Revive and the VIP reroll as they are). Skin passes not
+set up yet. Scenes: `menu-sim`, `perf-sim`,
+`xp-sim`, `rewards-sim`, `combat-fx`, `pickups-close`, `icons`.
 
 Open / next (release-candidate brief, phases):
-- B: safe level-up input (held movement can't confirm a card), Return to Main Menu in pause with confirm.
-- C: HUD declutter, typography/motion system, Reduced Motion setting.
-- D: leaderboards for highest level / kills in one run / farthest stage, Standard vs Endless split; Endless mode.
+- C: HUD declutter, typography system.
+- D: highest-level board, Endless mode (then its own score board).
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,
   final PASS/FAIL/BLOCKED handoff with release checklist and asset manifest.

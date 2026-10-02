@@ -584,15 +584,31 @@ R.defineClass("Workspace", {
 	},
 	methods = {
 		Raycast = function()
+			local P = R.prof
+			if P and P.on then
+				P.count("query Raycast")
+			end
 			return nil
 		end,
 		Blockcast = function()
+			local P = R.prof
+			if P and P.on then
+				P.count("query Blockcast")
+			end
 			return nil
 		end,
 		Spherecast = function()
+			local P = R.prof
+			if P and P.on then
+				P.count("query Spherecast")
+			end
 			return nil
 		end,
 		Shapecast = function()
+			local P = R.prof
+			if P and P.on then
+				P.count("query Shapecast")
+			end
 			return nil
 		end,
 		FindPartOnRay = function(_, ray)
@@ -608,12 +624,24 @@ R.defineClass("Workspace", {
 			return {}
 		end,
 		GetPartBoundsInBox = function()
+			local P = R.prof
+			if P and P.on then
+				P.count("query GetPartBoundsInBox")
+			end
 			return {}
 		end,
 		GetPartBoundsInRadius = function()
+			local P = R.prof
+			if P and P.on then
+				P.count("query GetPartBoundsInRadius")
+			end
 			return {}
 		end,
 		GetPartsInPart = function()
+			local P = R.prof
+			if P and P.on then
+				P.count("query GetPartsInPart")
+			end
 			return {}
 		end,
 		ArePartsTouchingOthers = function()
@@ -622,6 +650,12 @@ R.defineClass("Workspace", {
 		BulkMoveTo = function(_, parts, cframes, _mode)
 			if #parts ~= #cframes then
 				error("BulkMoveTo: part and CFrame lists differ in length", 2)
+			end
+			local P = R.prof
+			if P and P.on then
+				P.count("BulkMoveTo calls")
+				P.count("BulkMoveTo parts", #parts)
+				P.count("BulkMoveTo parts in " .. P.top(), #parts)
 			end
 			for i = 1, #parts do
 				local p = parts[i]

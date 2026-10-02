@@ -11,7 +11,7 @@ LSP="$T/lsp/luau-lsp"
 SM="$(mktemp -d)/sourcemap.json"
 
 "$ROJO" sourcemap default.project.json -o "$SM" >/dev/null
-OUT="$("$LSP" analyze --definitions="$T/globalTypes.d.luau" --sourcemap="$SM" src 2>&1 || true)"
+OUT="$("$LSP" analyze --definitions="$T/globalTypes.d.luau" --sourcemap="$SM" src 2>&1 | grep -v -E '^\[(INFO|WARN)\]' || true)"
 if [ -n "$OUT" ]; then
 	echo "$OUT"
 	echo "TYPECHECK: $(echo "$OUT" | wc -l) problem(s)"
@@ -31,6 +31,9 @@ if [ -x "$COMPILE" ]; then
 	fi
 	echo "COMPILE: ok"
 fi
+
+# Small-art icon keys: every key Icons.lua wires has its PNG and a drawn fallback.
+python3 tools/check_icon_art.py
 
 if [ "${1:-}" != "--quick" ]; then
 	"$ROJO" build default.project.json -o "$(dirname "$SM")/Swarm.rbxlx" >/dev/null

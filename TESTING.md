@@ -348,3 +348,32 @@ Account level
 - [ ] TRACK: level, XP bar "x / y XP to level n", how XP is earned, and every reward (LV 2 ... LV 50) with WEAR / WORN / LOCKED. WEAR a ring: a glowing ring appears on the lobby dais under your hero (some with sparkles); WEAR a frame: the results and TRACK medallions get it; tap WORN to take it off. Colours and titles also appear under STATS → ACHIEVEMENTS.
 - [ ] Nothing on the track changes run stats (compare a run before / after wearing everything).
 - [ ] Old save (schema 5) loads with gold, characters, achievements intact, level 1, no curses, daily ready (Output: no migration errors).
+
+## 8. Fixes and polish pass (DEV, main menu, chests, XP, fire, HP, high score, effects, performance)
+Publish the new `build/Swarm.rbxlx` first: a live game only changes after a publish.
+
+DEV and invincibility
+- [ ] Live game, owner account (UserId 20194281): the DEV button shows in the lobby and in a run, and is still there after dying, respawning and going back to the menu. A friend's account: no DEV button.
+- [ ] RUN tab → "Invincible: OFF" turns to ON; a red INVINCIBLE badge sits on the DEV button. Slimes, spitter globs, bombs, lava / biome pools and every boss attack do no damage.
+- [ ] The results of that run say it was a DEV run; no leaderboard, record, achievement or daily score changes. The next run starts with invincibility OFF.
+- [ ] SAVE tab → Reset progress in a live game only shows "works in Studio only".
+
+Pause → MAIN MENU
+- [ ] Pause → MAIN MENU asks "LEAVE THIS RUN?"; KEEP PLAYING goes back; LEAVE RUN returns to the menu with a "RUN ENDED" results panel. No enemies, sounds, camera or HUD left over.
+- [ ] Do it three times in a row, then die in a run, then start another run: everything starts clean. Duo: the partner keeps playing.
+
+Level-up cards, icons
+- [ ] Cards fly in one after another with their icons already showing (Vacuum too). Holding WASD / the stick / A when the cards appear does not pick one. Hover / gamepad focus lifts a card; picking punches it and the screen closes fast.
+
+Chests
+- [ ] Hold E about 0.4 s (touch / gamepad: hold the prompt). A reward strip slides past a gold marker, ticks, slows and lands on the item, shows it, and closes by itself (tap skips). Several chests queue ("1/3"). The item is owned even if you die or leave during the strip.
+
+XP, Fire Trail, HP
+- [ ] XP drops are blue / violet crystals (not coins), merge when close, fly to you; Vacuum / Magnet still collect all of them.
+- [ ] Fire Trail: tall flickering flames on a faint scorch; the floor and enemies stay visible.
+- [ ] HUD shows "85 / 100 HP" and stays right through damage, healing, max HP upgrades, death and revive.
+
+High score, effects, performance
+- [ ] LEADERBOARDS opens on HIGH SCORE; after a normal run your score (also on the results line) appears there; in Studio the note says this server's runs only.
+- [ ] Lobby screens, HUD, banners, results and combat effects animate; with "Reduced effects" on they calm down.
+- [ ] A dense swarm (stage 4+, 300+ enemies): compare FPS with the previous version (Ctrl+F6 MicroProfiler: EnemyAI.* bars).

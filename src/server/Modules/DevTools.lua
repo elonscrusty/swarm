@@ -9,7 +9,7 @@
 	                   every arena (best stage), account level 50 (its rings, frames, titles)
 	                   and, in Studio only, every skin for this session (skins are Robux
 	                   items: never saved, never granted in live servers)
-	  ResetProgress    a fresh save (purchases and settings kept); lobby only
+	  ResetProgress    a fresh save (purchases and settings kept); lobby only, Studio only
 	  LobbyGold n      + n gold to the save (n = 1..1,000,000)
 	  AccountLevels n  + n account levels (1..50)
 	  DamageNumbers    toggles the damage numbers setting
@@ -147,7 +147,11 @@ function DevTools.Handle(ctx, player: Player, command: string, arg: any, inLobby
 	if command == "UnlockAll" then
 		unlockAll(ctx, player, data)
 	elseif command == "ResetProgress" then
-		if arg ~= "CONFIRM" then
+		-- wiping a save cannot be undone: Studio's separate stores only, never a live save
+		if arg ~= "CONFIRM" or not game:GetService("RunService"):IsStudio() then
+			if arg == "CONFIRM" then
+				ctx.RunManager.Notify(player, "DEV: reset progress works in Studio only", DEV_COLOR)
+			end
 			return
 		end
 		resetProgress(ctx, player, data)
@@ -169,7 +173,7 @@ function DevTools.Handle(ctx, player: Player, command: string, arg: any, inLobby
 	elseif command == "God" then
 		local on = player:GetAttribute("DevGod") ~= true
 		player:SetAttribute("DevGod", on or nil)
-		ctx.RunManager.Notify(player, "DEV: godmode " .. (on and "on" or "off"), DEV_COLOR)
+		ctx.RunManager.Notify(player, "DEV: invincible " .. (on and "ON (this run is a test run: no records)" or "OFF"), DEV_COLOR)
 	elseif command == "AddLevels" then
 		if rp.Alive then
 			for _ = 1, count(arg, 1, 50, Config.Dev.AddLevels) do

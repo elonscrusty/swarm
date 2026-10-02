@@ -528,6 +528,10 @@ local function newindex(proxy, key, value)
 	if not ok then
 		error(v, 2)
 	end
+	local P = R.prof
+	if P and P.on then
+		P.prop(key)
+	end
 	local old = st.props[key]
 	if old == nil then
 		old = info.defaults[key]
@@ -561,6 +565,11 @@ local function create(className: string)
 	mt.__newindex = newindex
 	mt.__tostring = tostr
 	idCounter += 1
+	local P = R.prof
+	if P and P.on then
+		P.created += 1
+		P.count("new " .. className .. " in " .. P.top())
+	end
 	local st = {
 		info = info,
 		props = {},
@@ -711,6 +720,10 @@ local function destroy(proxy)
 	local st = states[proxy]
 	if not st or st.destroyed then
 		return
+	end
+	local P = R.prof
+	if P and P.on then
+		P.destroyed += 1
 	end
 	if st.sigs and st.sigs.Destroying then
 		st.sigs.Destroying:_fireSync()
@@ -1061,6 +1074,10 @@ R.defineClass("Instance", {
 			local old = attrs[name]
 			attrs[name] = value
 			if old ~= value then
+				local P = R.prof
+				if P and P.on then
+					P.attr(name)
+				end
 				if st.info.isGui then
 					R.guiDirty = true
 				end

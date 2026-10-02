@@ -1,8 +1,9 @@
 -- leaderboards: the lobby LEADERBOARDS screen with a LeaderboardData answer (as
 -- LeaderboardService sends it).
---   --set board=BestStage|Daily|Kills   the tab (default BestStage)
+--   --set board=Score|BestStage|Daily|Kills   the tab (default Score, the first tab)
 --   --set status=ok|local|loading|error the board's status (local = no DataStores)
 --   --set rank=out                      you are not in the top 50 (your best shows)
+--   --set rows=N                        N rows (default 12, 3 for local); rows=1 is you alone
 local C = lib("common")
 C.lobby()
 C.startClient()
@@ -15,10 +16,10 @@ else
 	preview.warn("leaderboards scene: no RANKS button")
 end
 C.settle(0.5)
-local board = preview.args.board or "BestStage"
-if board ~= "BestStage" then
+local board = preview.args.board or "Score"
+if board ~= "Score" then
 	-- the tab inside the Ranks screen (the home screen has a DAILY card too)
-	local want = board == "Kills" and "MOST KILLS" or "DAILY"
+	local want = board == "Kills" and "MOST KILLS" or (board == "BestStage" and "BEST STAGE" or "DAILY")
 	local screen = preview.findGui(function(obj)
 		return obj.Name == "Ranks" and obj:IsA("Frame")
 	end)[1]
@@ -42,17 +43,22 @@ local status = preview.args.status or "ok"
 local names = { "Ava", "Bramblewick", "Kestrel", "Moonpetal", "Ironjaw", "Thistle", "Corvin", "Saffi", "Rook", "Elowen", "Dax", "Pip" }
 local rows = {}
 local out = preview.args.rank == "out"
-local n = status == "local" and 3 or 12
+local n = tonumber(preview.args.rows) or (status == "local" and 3 or 12)
+local meAt = n < 4 and 1 or 4
 for i = 1, n do
 	local value
-	if board == "BestStage" then
+	if board == "Score" then
+		value = 15400 - i * 870
+	elseif board == "BestStage" then
 		value = 14 - i
 	elseif board == "Kills" then
 		value = 4200 - i * 213
 	else
 		value = CurseData.DailyScore(math.max(0, 6 - math.floor(i / 2)), 420 + i * 37, 600)
 	end
-	table.insert(rows, { Rank = i, Name = (i == 4 and not out) and game:GetService("Players").LocalPlayer.DisplayName or names[i], Value = value, Me = i == 4 and not out })
+	local me = i == meAt and not out
+	local lp = game:GetService("Players").LocalPlayer
+	table.insert(rows, { Rank = i, UserId = me and lp.UserId or 1000 + i, Name = me and lp.DisplayName or names[i], Value = value, Me = me })
 end
 if status == "loading" then
 	rows = {}
@@ -62,8 +68,8 @@ C.fire("LeaderboardData", {
 	Rows = rows,
 	Status = status,
 	Age = 12,
-	MyRank = (not out and status ~= "loading" and #rows >= 4) and 4 or nil,
-	MyBest = board == "BestStage" and (out and 3 or 10) or (board == "Kills" and 3348 or CurseData.DailyScore(4, 568, 600)),
+	MyRank = (not out and status ~= "loading" and #rows >= meAt) and meAt or nil,
+	MyBest = board == "Score" and (out and 2100 or 11920) or board == "BestStage" and (out and 3 or 10) or (board == "Kills" and 3348 or CurseData.DailyScore(4, 568, 600)),
 	Top = 50,
 })
 C.settle(2)

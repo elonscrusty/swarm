@@ -7,10 +7,19 @@
 	  * 500 Parts built once (Config.XP.GemPoolSize) and parked under the map.
 	  * Server owns positions; the client adds bob/spin locally using the gem's "Base"
 	    attribute (see client VFX). Active gems have attribute Active = true.
-	  * A player inside pickup radius makes the gem fly to them (server moves it).
+	  * A player inside pickup radius makes the gem fly to them. The flight is replicated
+	    ONCE: the gem's "Fly" attribute = the collector's UserId; clients animate the
+	    homing flight themselves (same speed rule) toward that player's character. The
+	    server still flies the gem's position every frame (not the part) and decides when
+	    it is collected, so XP timing stays server-side. A flight that loses its target
+	    writes the resting spot ("Base") once and clears "Fly".
 	  * XP is SHARED: whoever collects a gem, every living participant gets its value
 	    (times their own Growth stat).
+	  * A gem that lands within Config.XP.MergeRadius of a resting one is merged into it
+	    (values add up, capped at Config.XP.MergeMax), so piles stay a few bigger crystals.
+	    Resting gems sit in a coarse grid for that lookup; flying gems are not in it.
 	  * If the pool runs dry the value is merged into an existing active gem.
+	  * Gems are anchored parts with no collision, query or touch: no physics per gem.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -31,6 +40,7 @@ type Gem = {
 	Target: any?, -- run player it's flying to
 	Speed: number,
 	Index: number,
+	Cell: number?, -- grid cell key while resting (nil while flying or parked)
 }
 
 local gemFolder: Folder
@@ -39,6 +49,8 @@ local gems: { Gem } = {}
 local freeGems: { number } = {}
 local activeGems: { Gem } = {} -- dense list of active gems
 local frame = 0
+local MERGE_CELL = 3 -- studs: grid cell edge, at least Config.XP.MergeRadius
+local grid: { [number]: { Gem } } = {}
 
 type Pickup = { Model: Model, Kind: string, Pos: Vector3, Expires: number }
 local pickups: { Pickup } = {}
@@ -91,6 +103,73 @@ local function gemKind(value: number): string
 	return "Small"
 end
 
+local function cellKey(x: number, z: number): number
+	return math.floor(x / MERGE_CELL) * 100003 + math.floor(z / MERGE_CELL)
+end
+
+local function gridAdd(gem: Gem)
+	local key = cellKey(gem.Pos.X, gem.Pos.Z)
+	local list = grid[key]
+	if not list then
+		list = {}
+		grid[key] = list
+	end
+	table.insert(list, gem)
+	gem.Cell = key
+end
+
+local function gridRemove(gem: Gem)
+	local key = gem.Cell
+	if not key then
+		return
+	end
+	gem.Cell = nil
+	local list = grid[key]
+	if not list then
+		return
+	end
+	local i = table.find(list, gem)
+	if i then
+		list[i] = list[#list]
+		list[#list] = nil
+	end
+	if #list == 0 then
+		grid[key] = nil
+	end
+end
+
+-- Sends a gem flying to a player (it leaves the merge grid); clients animate the flight.
+local function setTarget(gem: Gem, rp)
+	gem.Target = rp
+	gridRemove(gem)
+	local id = rp.Player and rp.Player.UserId or nil
+	if gem.Part:GetAttribute("Fly") ~= id then
+		gem.Part:SetAttribute("Fly", id)
+	end
+end
+
+-- A resting gem near `pos` that can take `value` more (nearest first), or nil.
+local function findMergeTarget(pos: Vector3, value: number): Gem?
+	local radius = Config.XP.MergeRadius
+	local best, bestD = nil, radius * radius
+	local cx, cz = math.floor(pos.X / MERGE_CELL), math.floor(pos.Z / MERGE_CELL)
+	for dx = -1, 1 do
+		for dz = -1, 1 do
+			local list = grid[(cx + dx) * 100003 + (cz + dz)]
+			if list then
+				for _, gem in ipairs(list) do
+					local ox, oz = gem.Pos.X - pos.X, gem.Pos.Z - pos.Z
+					local d = ox * ox + oz * oz
+					if d <= bestD and gem.Value + value <= Config.XP.MergeMax then
+						best, bestD = gem, d
+					end
+				end
+			end
+		end
+	end
+	return best
+end
+
 local function placeGem(gem: Gem, pos: Vector3)
 	gem.Pos = pos
 	gem.Part.CFrame = CFrame.new(pos)
@@ -99,6 +178,13 @@ end
 
 function XPSystem.SpawnGem(position: Vector3, value: number)
 	local pos = Vector3.new(position.X, Config.ArenaOrigin.Y + Config.XP.GemHeight, position.Z)
+	local near = findMergeTarget(pos, value)
+	if near then
+		-- piles up: one gem carries the sum (same total XP, fewer crystals on the floor)
+		near.Value += value
+		ModelBuilder.StyleGem(near.Part, gemKind(near.Value))
+		return
+	end
 	local index = table.remove(freeGems)
 	if not index then
 		-- Pool exhausted: merge into a random active gem so no XP is ever lost.
@@ -118,13 +204,16 @@ function XPSystem.SpawnGem(position: Vector3, value: number)
 	placeGem(gem, pos)
 	gem.Part:SetAttribute("Active", true)
 	table.insert(activeGems, gem)
+	gridAdd(gem)
 end
 
 local function releaseGem(i: number)
 	local gem = activeGems[i]
 	gem.Active = false
 	gem.Target = nil
+	gridRemove(gem)
 	gem.Part:SetAttribute("Active", false)
+	gem.Part:SetAttribute("Fly", nil)
 	gem.Part.CFrame = PARK
 	-- swap-remove from the dense list
 	activeGems[i] = activeGems[#activeGems]
@@ -135,7 +224,7 @@ end
 -- Magnet pickup: every gem on the floor flies to this player.
 function XPSystem.MagnetAll(rp)
 	for _, gem in ipairs(activeGems) do
-		gem.Target = rp
+		setTarget(gem, rp)
 	end
 end
 
@@ -145,7 +234,7 @@ function XPSystem.MagnetRadius(rp, pos: Vector3, radius: number)
 	for _, gem in ipairs(activeGems) do
 		local dx, dz = gem.Pos.X - pos.X, gem.Pos.Z - pos.Z
 		if dx * dx + dz * dz <= r2 then
-			gem.Target = rp
+			setTarget(gem, rp)
 		end
 	end
 end
@@ -178,12 +267,18 @@ local function updateGems(dt: number, runPlayers)
 		local removed = false
 		-- idle gems look for a collector every few frames (chunked)
 		if not gem.Target and (gem.Index + frame) % chunks == 0 then
-			gem.Target = nearestCollector(gem.Pos, runPlayers)
+			local found = nearestCollector(gem.Pos, runPlayers)
+			if found then
+				setTarget(gem, found)
+			end
 		end
 		local target = gem.Target
 		if target then
 			if not target.Alive or not target.Root or not target.Root.Parent then
 				gem.Target = nil
+				placeGem(gem, gem.Pos) -- rests where it hung (the last flight step) ...
+				gem.Part:SetAttribute("Fly", nil) -- ... written once, then the flight ends
+				gridAdd(gem)
 			else
 				local to = target.Root.Position - gem.Pos
 				local dist = to.Magnitude
@@ -195,7 +290,7 @@ local function updateGems(dt: number, runPlayers)
 					gem.Speed = math.max(gem.Speed, Config.XP.MagnetSpeed * 0.5) + Config.XP.MagnetAcceleration * dt
 					gem.Speed = math.min(gem.Speed, Config.XP.MagnetSpeed * 3)
 					local step = math.min(dist, gem.Speed * dt)
-					placeGem(gem, gem.Pos + to.Unit * step)
+					gem.Pos += to.Unit * step -- the part stays put: clients draw the flight
 				end
 			end
 		end

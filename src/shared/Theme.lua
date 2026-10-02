@@ -281,13 +281,13 @@ Theme.Fx = {
 	Bolt = Palette.fx_bolt,
 	Gold = Palette.gold_300,
 	Danger = Palette.crimson_400,
-	-- XP gems are blue-white crystals (never gold: gold means coins); Glow = the soft halo,
-	-- Core = the small ivory heart that shines through
+	-- XP gems are saturated cyan / blue / violet crystals (never gold: gold means coins, and
+	-- never the red / orange / green of enemy attacks); Glow = the faint floor disc
 	Gem = {
-		Small = Palette.fx_arcane,
-		Medium = Palette.fx_arcane:Lerp(Palette.slate_400, 0.25),
-		Large = Palette.fx_holy,
-		Glow = Palette.fx_arcane,
+		Small = Color3.fromRGB(64, 200, 255),
+		Medium = Color3.fromRGB(86, 132, 255),
+		Large = Color3.fromRGB(180, 114, 255),
+		Glow = Color3.fromRGB(64, 200, 255),
 		Core = Palette.ivory_100,
 	},
 	Coin = Palette.gold_500, -- gold coins (GoldCoin / GoldPile meshes, part fallback)

@@ -11,8 +11,12 @@
 	                 NEXT STAGE (primary gold) or RETURN TO LOBBY (+ the win bonus), the
 	                 auto-continue countdown and who is ready (SwarmState ChoiceLeft /
 	                 PortalReady). Answers with the PortalChoice remote; the server decides.
-	  travel fade    remote StageTravel: the screen fades to slate with "STAGE N · Arena",
-	                 then fades back once the new stage is running
+	  travel fade    remote StageTravel: the screen fades to slate with "STAGE N · Arena"
+	                 (the title slams in with a ring and sparks), then fades back once the
+	                 new stage is running
+	Motion: the cleared title slams in with sparks, the portal icon swirls; charge-ring runes pop as they light and the ring flashes when full; the
+	arrow marker punches when it first appears. All event-driven, honouring
+	ClientSettings.Reduced().
 
 	Nothing here is Active except the choice panel, so the thumbstick keeps working.
 	UIBuilder builds it (StageUI.Build) and calls StageUI.Update every frame in a run.
@@ -307,7 +311,7 @@ local function onOffer(data)
 	ui.Return.SetText("RETURN TO LOBBY", string.format("+%s gold", UIKit.formatNumber(data.ReturnBonus or 0)) .. winNote)
 	refreshChoiceButtons()
 	kit.Show(ui.Choice.Overlay, "Portal", true)
-	UIAnim.Pop(ui.ChoiceTitle, 0.05, 1.4)
+	UIAnim.Pop(ui.ChoiceTitle, 0.05, 1.8)
 	-- the portal icon swirls in, the run's numbers land and count up, then the two doors
 	if not ClientSettings.Reduced() then
 		ui.ChoiceIcon.Rotation = -200
@@ -320,6 +324,13 @@ local function onOffer(data)
 		end
 		UIAnim.Pop(ui.Next.Instance, 0.38, 0.6)
 		UIAnim.Pop(ui.Return.Instance, 0.46, 0.6)
+		-- the title lands with sparks and the panel catches a glint
+		task.delay(0.2, function()
+			if offer == data and ui.ChoiceTitle.Parent then
+				UIAnim.Sparks(ui.Choice.Panel, UDim2.new(0.5, 0, 0, 90), P.gold_200, 12, 110, 0.65)
+				UIAnim.Ring(ui.Choice.Panel, UDim2.new(0.5, 0, 0, 50), P.gold_300, 140, 0.55)
+			end
+		end)
 	end
 	UIAnim.CountTo(ui.StatKills, 0, tonumber(data.Kills) or 0, UIKit.formatNumber, 0.7)
 	UIAnim.CountTo(ui.StatGold, 0, tonumber(data.Gold) or 0, UIKit.formatNumber, 0.8)
@@ -365,7 +376,14 @@ local function onTravel(data)
 	offer = nil
 	kit.Hide(ui.Choice.Overlay, "Portal")
 	fadeTo(0.02, math.max(0.2, (data.Seconds or 0.8) * 0.9))
-	UIAnim.Pop(ui.FadeTitle, 0.1, 0.7)
+	UIAnim.Pop(ui.FadeTitle, 0.1, 2.2)
+	UIAnim.Pop(ui.FadeSub, 0.3, 0.9)
+	task.delay(0.35, function()
+		if travel.Active then
+			UIAnim.Ring(ui.Fade, UDim2.fromScale(0.5, 0.45), P.gold_300, 360, 0.7)
+			UIAnim.Sparks(ui.Fade, UDim2.fromScale(0.5, 0.45), P.gold_200, 14, 160, 0.7)
+		end
+	end)
 end
 
 local function endTravel()
@@ -410,6 +428,9 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	local top, topOn = project(pos + Vector3.new(0, 12, 0))
 	local showRing = stagePhase == "Explore" and (inside or charge > 0) and topOn
 	ui.Ring.Visible = showRing
+	if not showRing then
+		ui.LitSegments = 0
+	end
 	if showRing then
 		-- beside the portal (right, or left near the edge), so the portal stays visible
 		local base = project(pos)
@@ -418,6 +439,15 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 		local y = math.clamp((top.Y + base.Y) / 2, Hud.TopBottom() + 50, H - 90)
 		ui.Ring.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 		local lit = math.floor(charge * SEGMENTS + 0.001)
+		if lit > (ui.LitSegments or 0) and not ClientSettings.Reduced() then
+			-- the rune that just lit pops
+			UIAnim.Punch(ui.Segments[math.min(lit, SEGMENTS)], 0.9)
+			if lit >= SEGMENTS then
+				UIAnim.Sparks(ui.Ring, UDim2.fromScale(0.5, 0.5), P.gold_200, 12, 60, 0.6)
+				UIAnim.Ring(ui.Ring, UDim2.fromScale(0.5, 0.5), P.gold_300, 130, 0.5)
+			end
+		end
+		ui.LitSegments = lit
 		for i, seg in ipairs(ui.Segments) do
 			local on = i <= lit
 			seg.BackgroundColor3 = on and P.gold_300 or P.slate_500
@@ -438,7 +468,12 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	local showArrow = stagePhase == "Explore" and state:GetAttribute("PortalHint") == true and not inside and not showRing
 	if not showArrow then
 		ui.Arrow.Visible = false
+		ui.ArrowShown = false
 		return
+	end
+	if not ui.ArrowShown then
+		ui.ArrowShown = true
+		UIAnim.Pop(ui.Arrow, 0, 0.4)
 	end
 	local p, on = project(pos + Vector3.new(0, 6, 0))
 	local portrait: boolean = kit.IsPortrait()

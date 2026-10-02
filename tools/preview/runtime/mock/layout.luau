@@ -794,10 +794,24 @@ end
 
 local prevAbs = setmetatable({}, { __mode = "k" })
 
+local layoutNow
+
 function L.update(force: boolean?)
 	if not R.guiDirty and not force then
 		return
 	end
+	local P = R.prof
+	if P and P.on then
+		-- on-demand layouts (AbsoluteSize reads) are mock cost, not the reader's
+		P.enter("[mock] gui layout")
+		layoutNow()
+		P.leave()
+		return
+	end
+	layoutNow()
+end
+
+layoutNow = function()
 	R.guiDirty = false
 	L.updating = true
 	for _, root in ipairs(L.roots()) do
@@ -861,6 +875,9 @@ function L.ensure()
 end
 
 S.frameHooks.layout = function()
+	if R.skipFrameLayout then
+		return -- perf scenes: layout only on demand (AbsoluteSize reads call L.ensure)
+	end
 	L.update()
 end
 
@@ -947,6 +964,12 @@ R.defineClass("GuiObject", {
 		end,
 		GuiState = function()
 			return Enum.GuiState.Idle
+		end,
+		-- images never load here; `--set images=loaded` pretends they all did (pictures
+		-- that hide their drawn fallback once loaded then show the loaded look)
+		IsLoaded = function()
+			local a = R.options and R.options.sceneArgs
+			return a ~= nil and a.images == "loaded"
 		end,
 	},
 	setters = {
