@@ -103,6 +103,10 @@ local function onEvent(eventName: string, player: Player, payload: { [string]: a
 	if not data then
 		return
 	end
+	-- a DEV command was used in this run: no achievement progress from it
+	if ctx.RunManager and ctx.RunManager.IsDevTainted and ctx.RunManager.IsDevTainted(player) then
+		return
+	end
 	local a = store(data)
 	for _, id in ipairs(AchievementData.Order) do
 		local def = AchievementData.Achievements[id]

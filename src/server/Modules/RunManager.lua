@@ -64,6 +64,12 @@ local menuPaused = false -- the solo pause menu is open
 local resultsTimer = 0
 local totalKills = 0
 local bossKills = 0 -- Scorpion Queens beaten this run (results screen)
+-- Run identity and dev taint: every run gets a fresh id (leaderboard submissions are once
+-- per run id). A DEV command used during a run taints it and everyone in it: no records,
+-- leaderboard entries, daily score, account XP or achievement progress are written.
+local runSerial = 0
+local runId = ""
+local runDevTainted = false
 local attrTimer = 0
 local selectedArena = "Forest"
 local mode = "Solo" -- a Config.Modes key: "Solo" | "Duo" | "Trio" (or the old "Squad")
@@ -85,6 +91,12 @@ end
 function RunManager.IsParticipant(player: Player): boolean
 	local rp = byPlayer[player]
 	return rp ~= nil and not rp.Returned
+end
+
+-- True when a DEV command was used in the player's current run (nothing public is written).
+function RunManager.IsDevTainted(player: Player): boolean
+	local rp = byPlayer[player]
+	return rp ~= nil and rp.DevTainted == true
 end
 
 function RunManager.IsFrozen(): boolean
@@ -649,6 +661,8 @@ local function newRunPlayer(player: Player)
 		PortalChoice = nil :: string?, -- "Next" while the stage portal is open
 		PortalOffered = false,
 		Committed = false, -- run stats are in the save (results, leaving, shutdown)
+		RunId = runId,
+		DevTainted = runDevTainted, -- a DEV command was used in this run (see devCommand)
 		WinPaid = false,
 	}
 	return rp
@@ -702,6 +716,9 @@ local function beginRun()
 	menuPaused = false
 	totalKills = 0
 	bossKills = 0
+	runSerial += 1
+	runId = string.format("%s:%d:%d", game.JobId, os.time(), runSerial)
+	runDevTainted = false
 	state:SetAttribute("Frozen", false)
 	state:SetAttribute("RunTime", 0)
 	setPhase("Running")
@@ -791,6 +808,12 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	end
 	local newBest, unlocked = false, nil
 	local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
+	if rp.DevTainted then
+		-- a DEV command was used: no records, unlocks, daily score, account XP or boards
+		data.TutorialDone = true
+		rp.CommitInfo = {}
+		return false, nil
+	end
 	data.Stats.TotalKills += rp.Kills
 	data.Stats.MostKills = math.max(data.Stats.MostKills or 0, rp.Kills)
 	if t > data.Stats.BestTime then
@@ -824,8 +847,8 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 		CurseMult = ctx.RunModifiers.GoldMult(),
 		DailyScored = rp.DailyScored == true,
 	})
-	ctx.LeaderboardService.Submit(rp.Player, "BestStage", ctx.StageManager.GetStage())
-	ctx.LeaderboardService.Submit(rp.Player, "Kills", rp.Kills)
+	ctx.LeaderboardService.Submit(rp.Player, "BestStage", ctx.StageManager.GetStage(), nil, rp.RunId)
+	ctx.LeaderboardService.Submit(rp.Player, "Kills", rp.Kills, nil, rp.RunId)
 	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo }
 	return newBest, unlocked
 end
@@ -901,7 +924,8 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		Stage = reached,
 		StagesCleared = cleared,
 		NewBest = newBest,
-		NewBestStage = data ~= nil and reached > bestStageBefore and reached > 1,
+		NewBestStage = data ~= nil and not rp.DevTainted and reached > bestStageBefore and reached > 1,
+		DevRun = rp.DevTainted == true, -- a DEV command was used: nothing public was recorded
 		Unlocked = unlocked,
 		Achievements = achievements, -- unlocked this run: { {Id, Name, Reward, Icon} }
 		Curses = table.clone(ctx.RunModifiers.Active()), -- the run's curses (CurseData ids)
@@ -1231,6 +1255,15 @@ end
 local function devCommand(player: Player, command: any)
 	if type(command) ~= "string" or not isDev(player) then
 		return
+	end
+	-- any DEV command during a run taints the whole run (everyone in it, and anyone the
+	-- run still adds): it then writes no records, boards, daily score or achievements
+	if phase == "Running" and not runDevTainted then
+		runDevTainted = true
+		for _, other in ipairs(runPlayers) do
+			other.DevTainted = true
+		end
+		warn("[RunManager] DEV command used: this run is dev-tainted (no records or leaderboards)")
 	end
 	if command == "StartSolo" then
 		if phase == "Lobby" then

@@ -23,10 +23,15 @@
 
 	Names come from players on this server, else Players:GetNameFromUserIdAsync (cached,
 	pcall'd); unknown names show as "Player <id>".
+
+	Studio uses its own stores (Config.Leaderboards.StudioStorePrefix): tests never write to
+	the live boards. Submit takes the run's id: one run is submitted at most once per board,
+	and RunManager never submits dev-tainted runs (a DEV command was used).
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
@@ -35,6 +40,8 @@ local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
 local LeaderboardService = {}
 
 local L = Config.Leaderboards
+-- Studio (tests, DEV commands) never reads or writes the live boards
+local PREFIX = if RunService:IsStudio() then (L.StudioStorePrefix or (L.StorePrefix .. "Studio_")) else L.StorePrefix
 local ctx
 
 type Entry = { UserId: number, Value: number }
@@ -54,6 +61,7 @@ local pending: { [string]: Pending } = {} -- key = storeName .. "|" .. userId
 local lastWrite: { [string]: number } = {}
 local localBoards: { [string]: { [number]: number } } = {} -- "local" mode (and recent writes)
 local names: { [number]: string } = {}
+local submitted: { [string]: boolean } = {} -- runId .. "|" .. board .. "|" .. userId already queued
 local flushTimer = 0
 local flushing = false
 
@@ -64,9 +72,9 @@ end
 -- Store name of a board (the daily board is one store per UTC day).
 local function storeName(board: string, day: number?): string
 	if board == "Daily" then
-		return L.StorePrefix .. "Daily_" .. tostring(day or today())
+		return PREFIX .. "Daily_" .. tostring(day or today())
 	end
-	return L.StorePrefix .. board
+	return PREFIX .. board
 end
 
 local function isBoard(board: any): boolean
@@ -114,10 +122,19 @@ end
 --[[
 	Queues a player's value for a board (kept when it beats what is queued). day: the daily
 	board's UTC day (the attempt's day, so a run crossing midnight scores on its own day).
+	runId: the run's id (RunManager); a second submission for the same run and board is
+	ignored.
 ]]
-function LeaderboardService.Submit(player: Player, board: string, value: number, day: number?)
+function LeaderboardService.Submit(player: Player, board: string, value: number, day: number?, runId: string?)
 	if not L.Enabled or not isBoard(board) or type(value) ~= "number" or value ~= value or value <= 0 then
 		return
+	end
+	if runId then
+		local once = runId .. "|" .. board .. "|" .. player.UserId
+		if submitted[once] then
+			return
+		end
+		submitted[once] = true
 	end
 	value = math.floor(value)
 	local name = storeName(board, day)
