@@ -34,6 +34,12 @@ Mock.DEVICES = {
 	laptop = { name = "laptop", width = 1366, height = 768, dpr = 1, touch = false, keyboard = true, mouse = true, safe = { left = 0, right = 0, top = 0, bottom = 0 }, topbar = 58 },
 	phone = { name = "phone", width = 844, height = 390, dpr = 2, touch = true, keyboard = false, mouse = false, safe = { left = 47, right = 47, top = 0, bottom = 21 }, topbar = 58 },
 	["phone-portrait"] = { name = "phone-portrait", width = 390, height = 844, dpr = 2, touch = true, keyboard = false, mouse = false, safe = { left = 0, right = 0, top = 47, bottom = 34 }, topbar = 58, topbarBelowSafeTop = true },
+	-- A real iPhone 15 Pro in landscape, as the Roblox app reports it: notch / rounded-corner
+	-- insets left and right, AbsolutePosition in "inset space" (y = 0 is the bottom of the
+	-- 58 px top bar, so an IgnoreGuiInset ScreenGui starts at y = -58, same space as
+	-- Camera:WorldToScreenPoint) and ScreenGuis with safe-area insets clip their descendants
+	-- to the safe area unless ClipToDeviceSafeArea = false.
+	iphone = { name = "iphone", width = 852, height = 393, dpr = 3, touch = true, keyboard = false, mouse = false, safe = { left = 59, right = 59, top = 0, bottom = 0 }, topbar = 58, insetSpace = true, clipSafe = true },
 	tablet = { name = "tablet", width = 1024, height = 768, dpr = 1.5, touch = true, keyboard = false, mouse = false, safe = { left = 0, right = 0, top = 0, bottom = 20 }, topbar = 58 },
 }
 

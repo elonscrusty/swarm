@@ -834,6 +834,8 @@ layoutNow = function()
 			local clip = nil
 			if info.isA.BillboardGui and gp(st, "ClipsDescendants") then
 				clip = { x, y, x + w, y + h }
+			elseif info.isA.ScreenGui and R.options.device.clipSafe and gp(st, "ScreenInsets") ~= Enum.ScreenInsets.None and gp(st, "ClipToDeviceSafeArea") ~= false then
+				clip = { x, y, x + w, y + h } -- devices with insetSpace: clip to the safe area
 			end
 			local box = { x = x, y = y, w = w, h = h, k = 1, chain = IDENTITY, rot = 0, clip = clip, visible = enabled, root = root }
 			st.x.layout.content = box
@@ -898,10 +900,12 @@ end
 
 local function absGetter(field)
 	return function(obj, st)
+		-- insetSpace devices report positions with y = 0 at the bottom of the top bar
+		local shift = R.options.device.insetSpace and R.options.device.topbar or 0
 		if st.info.isA.ScreenGui then
 			local x, y, w, h = L.screenRect(st)
 			if field == "pos" then
-				return Vector2.new(x, y)
+				return Vector2.new(x, y - shift)
 			end
 			return Vector2.new(w, h)
 		end
@@ -911,7 +915,7 @@ local function absGetter(field)
 			return Vector2.zero
 		end
 		if field == "pos" then
-			return Vector2.new(l.x, l.y)
+			return Vector2.new(l.x, l.y - shift)
 		end
 		return Vector2.new(l.w, l.h)
 	end
