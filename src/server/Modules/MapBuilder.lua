@@ -1368,7 +1368,7 @@ local function treeLine(arena: Arena, kinds: { { any } }, southKinds: { { any } 
 		if (south and rng:NextNumber() < 0.5) or (side >= 3 and math.abs(t) > h + 8) then
 			return -- the camera side stays low and open; corners come from the N / S rows
 		end
-		if topAt and not south and rng:NextNumber() < 0.35 then
+		if topAt and not south and rng:NextNumber() < 0.5 then
 			return
 		end
 		local depth = south and rng:NextNumber(12, 26) or (topAt and rng:NextNumber(11, 21) or rng:NextNumber(7, 17))
@@ -1421,7 +1421,8 @@ end
 --     colour (moss, snow, sand, ash); about half the chunks get a lower ledge in front, so
 --     the face steps like a real cliff; the tree line stands on the top (treeLine);
 --   * south (camera side): a low broken rim (style.South) the run camera sees over.
--- Cost: 2 parts per chunk (+2 for a ledge), a kit rock at the foot now and then. All
+-- Cost per tall chunk (~35 studs): block + cap + one kit rock face (3 mesh parts), Ruins
+-- a ledge (+2) instead of the rock; south rim one part per ~20 studs. All
 -- decoration: anchored, no collision / queries / touch; only the big bodies cast shadows.
 ------------------------------------------------------------------------------------------
 
@@ -1437,8 +1438,8 @@ type CliffStyle = {
 	Face: { any }?, -- { kit rock, palette }: the big low-poly rock in front of each tall chunk
 }
 
-local CLIFF_STEP = 25 -- studs between chunk centres on the tall sides
-local CLIFF_STEP_SOUTH = 16
+local CLIFF_STEP = 31 -- studs between chunk centres on the tall sides
+local CLIFF_STEP_SOUTH = 19
 local CLIFF_DEPTH = 24 -- depth of a tall chunk (its flat top carries the tree line)
 
 -- Top height of the cliff at `t` along `side` (smooth, seeded per side).
@@ -1461,7 +1462,7 @@ local function kitRadius(name: string): number
 end
 
 -- One rock block whose inner face is `inner` studs out from the centre line, plus its cap.
-local function cliffBlock(arena: Arena, style: CliffStyle, along: Vector2, out: Vector2, t: number, inner: number, len: number, depth: number, hgt: number, color: Color3, shadow: boolean): CFrame
+local function cliffBlock(arena: Arena, style: CliffStyle, along: Vector2, out: Vector2, t: number, inner: number, len: number, depth: number, hgt: number, color: Color3, shadow: boolean, noCap: boolean?): CFrame
 	local yawDeg = style.Masonry and 0 or jitter(7)
 	local tilt = style.Masonry and 0 or 3
 	-- a turned / tilted block pokes in by its half length * sin(yaw) and half height * sin(tilt)
@@ -1470,6 +1471,9 @@ local function cliffBlock(arena: Arena, style: CliffStyle, along: Vector2, out: 
 	local base = math.deg(math.atan2(-along.Y, along.X))
 	local cf = CFrame.new(W(arena, p.X, p.Y, hgt / 2 - 1)) * yawCF(base + yawDeg) * CFrame.Angles(math.rad(jitter(tilt)), 0, math.rad(jitter(tilt)))
 	deco(arena.Decor, { Name = "Cliff", Size = Vector3.new(len, hgt + 1, depth), CFrame = cf, Color = color, CastShadow = shadow })
+	if noCap then
+		return cf
+	end
 	local capT = style.CapThick or 0.8
 	deco(arena.Decor, { Name = "CliffCap", Size = Vector3.new(len - 0.5, capT, depth - 0.5), CFrame = cf * CFrame.new(0, (hgt + 1) / 2 + capT / 2 - 0.25, 0), Color = style.Cap, CastShadow = false })
 	return cf
@@ -1497,15 +1501,16 @@ local function cliffs(arena: Arena, style: CliffStyle)
 			local hgt = cliffTop(arena, side, t) + jitter(south and 0.5 or 1.5)
 			local color = pick(style.Rock)
 			if south then
-				local len = rng:NextNumber(13, 19)
-				cliffBlock(arena, style, along, out, t, h + rng:NextNumber(0.3, 1.0), len, rng:NextNumber(5, 8), hgt, color, false)
+				local len = rng:NextNumber(18, 23)
+				cliffBlock(arena, style, along, out, t, h + rng:NextNumber(0.3, 1.0), len, rng:NextNumber(5, 8), hgt, color, false, true)
 			else
-				local len = rng:NextNumber(26, 32)
+				local len = rng:NextNumber(33, 39)
 				local face = style.Face
 				-- Rocky face: a big kit rock (low-poly mesh, the biome's own) in front of
 				-- the block hides its flat front; the block behind gives the height and
 				-- the flat top. Masonry (Ruins) keeps cut blocks with stepped ledges.
-				local faceScale = face and hgt * rng:NextNumber(0.55, 0.85) / 2.9 or 0
+				-- (sized to cover most of the block's length, never taller than the block)
+				local faceScale = face and math.clamp(len * rng:NextNumber(0.62, 0.78) / 4.9, hgt * 0.5 / 2.9, hgt * 0.95 / 2.9) or 0
 				local ledge = not face and rng:NextNumber() < 0.45
 				local ledgeDepth = rng:NextNumber(6, 9)
 				local setback = face and faceScale * 1.2 or (ledge and ledgeDepth - 1.5 or rng:NextNumber(0.3, 2.4))
@@ -1535,7 +1540,7 @@ local function cliffs(arena: Arena, style: CliffStyle)
 					deco(arena.Decor, { Name = "CliffSeam", Size = Vector3.new(len * 0.55, 0.35, 0.7), CFrame = CFrame.new(W(arena, sp.X, sp.Y, 0.2)) * yawCF(math.deg(math.atan2(-along.Y, along.X))), Color = style.Seam, Material = NEON })
 				end
 				-- a kit rock at the foot (it pokes at most a stud into the play square)
-				if style.Foot and math.abs(t) < h - 6 and rng:NextNumber() < (face and 0.25 or 0.4) then
+				if style.Foot and math.abs(t) < h - 6 and rng:NextNumber() < (face and 0.15 or 0.3) then
 					local f = pick(style.Foot)
 					local s = rng:NextNumber(f[2], f[3])
 					local d = h + kitRadius(f[1]) * s - 1

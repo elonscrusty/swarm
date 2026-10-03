@@ -247,7 +247,7 @@ Config.XP = {
 	-- (the last entry for later stages), so every stage levels at a similar pace.
 	OpeningSeconds = 90,
 	OpeningMult = 1.5,
-	StageMult = { 1, 0.9, 0.75, 0.6, 0.5 },
+	StageMult = { 1, 1, 0.8, 0.65, 0.55 },
 	GemValues = { Small = 1, Medium = 5, Large = 25 },
 	GemPoolSize = 500,
 	MagnetSpeed = 45, -- studs/s a gem flies toward the player once inside pickup radius

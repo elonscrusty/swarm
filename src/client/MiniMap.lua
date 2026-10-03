@@ -463,10 +463,10 @@ local function buildSilhouette(model: Instance)
 				local size = p.Size
 				if p:IsA("Part") and p.Shape == Enum.PartType.Cylinder then
 					local d = math.max(3, size.Y * scale)
-					local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(d, d), BackgroundColor3 = P.slate_400, BackgroundTransparency = 0.2, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
+					local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(d, d), BackgroundColor3 = P.stone_500, BackgroundTransparency = 0.15, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
 					UIKit.corner(f, 999)
 				else
-					new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(math.max(2, size.X * scale), math.max(2, size.Z * scale)), BackgroundColor3 = P.slate_400, BackgroundTransparency = 0.2, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
+					new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(math.max(2, size.X * scale), math.max(2, size.Z * scale)), BackgroundColor3 = P.stone_500, BackgroundTransparency = 0.15, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
 				end
 			end
 		end

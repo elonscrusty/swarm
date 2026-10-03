@@ -80,7 +80,13 @@ local function stopTweens()
 end
 
 -- Wrapped line count of `str` at `size` px in `width`.
+-- (measured by TextService; a short line that clearly fits by its average glyph width
+-- stays one line, so a measuring quirk never opens a gap under the headline)
+local GLYPH = { [Enum.Font.Merriweather] = 0.7, [Enum.Font.SourceSansBold] = 0.56 }
 local function lines(str: string, size: number, font: Enum.Font, width: number): number
+	if #str * size * (GLYPH[font] or 0.52) <= width * 0.92 then
+		return 1
+	end
 	local ok, s = pcall(function()
 		return TextService:GetTextSize(str, size, font, Vector2.new(width, 1000))
 	end)
@@ -161,7 +167,7 @@ local function layout()
 	local v: Vector2 = kit.VirtualSize()
 	local W, H = v.X, v.Y
 	local portrait: boolean = kit.IsPortrait()
-	local w = portrait and math.min(W - 24, 420) or math.min(600, W - 48)
+	local w = portrait and math.min(W - 24, 420) or math.min(720, W - 48)
 	local inner = w - 2 * PAD
 	local y = PAD
 	local eyebrowH = TS(Theme.Type.Label.Size) + 4
@@ -206,19 +212,22 @@ local function layout()
 			local ch = math.max(iconBox + 12, 10 + (titlePx + 4) + (subPx2 + 4) + 10)
 			for i, h in ipairs(ui.Hints) do
 				local tl = lines(h.Title.Text, titlePx, Enum.Font.SourceSansBold, cw - tx - 8)
-				ch = math.max(ch, 10 + tl * (titlePx + 2) + (subPx2 + 4) + 10)
+				local sl = lines(h.Sub.Text, subPx2, Enum.Font.SourceSansBold, cw - tx - 8)
+				ch = math.max(ch, 10 + tl * (titlePx + 2) + sl * (subPx2 + 2) + 2 + 10)
 				h.Frame.Position = UDim2.fromOffset(PAD + (i - 1) * (cw + gap), y)
 				h.Frame.Size = UDim2.fromOffset(cw, ch)
 			end
 			for _, h in ipairs(ui.Hints) do
 				local tl = lines(h.Title.Text, titlePx, Enum.Font.SourceSansBold, cw - tx - 8)
 				local th = tl * (titlePx + 2)
-				local top = (ch - th - (subPx2 + 4)) / 2
+				local sh = lines(h.Sub.Text, subPx2, Enum.Font.SourceSansBold, cw - tx - 8) * (subPx2 + 2) + 2
+				local top = (ch - th - sh) / 2
 				h.Well.Position = UDim2.fromOffset(8, ch / 2)
 				h.Title.Position = UDim2.fromOffset(tx, top)
 				h.Title.Size = UDim2.new(1, -tx - 8, 0, th)
+				h.Sub.TextXAlignment = Enum.TextXAlignment.Left
 				h.Sub.Position = UDim2.fromOffset(tx, top + th)
-				h.Sub.Size = UDim2.new(1, -tx - 8, 0, subPx2 + 4)
+				h.Sub.Size = UDim2.new(1, -tx - 8, 0, sh)
 			end
 			y += ch + 8
 		else
