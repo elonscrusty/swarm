@@ -35,7 +35,7 @@ global Playwright install (`/opt/pw-browsers`); never run `playwright install`.
 | Scene | Shows |
 |---|---|
 | `menu` | lobby world + lighting, lobby home screen, camera at the lobby `MenuCamera` part; `--set save=failing\|memory` shows the "progress isn't being saved" notice; `--set endless=on` the ENDLESS switch on; `--set lastrun=won\|fell\|left [--set lastmode=Duo]` a saved LastRun (the LAST RUN card; hidden on phones in landscape), `--set retry=on` taps RETRY and checks the StartRun the server got; the PLAYTIME board gets a sample answer (`--set playtime=none`: none, "Loading...") |
-| `characters`, `upgrades` | lobby screens, opened with the `OpenPanel` remote; upgrades: `--set tab=shop` the SHOP tab; characters: `--set inspect=Ranger` taps a hero, `--set owned=all` owns every hero (Queen Slayer done) |
+| `characters`, `upgrades` | lobby screens, opened with the `OpenPanel` remote; upgrades: `--set tab=shop` the SHOP tab; characters: `--set inspect=Ranger` taps a hero, `--set owned=all` owns every hero (Queen Slayer done), `--set mastery=open` opens the Hero Mastery upgrade rows |
 | `settings`, `stats` | taps the button whose text is SETTINGS / STATS (stats is skipped with a note if the UI has none); `--set tab=achievements` opens the ACHIEVEMENTS tab |
 | `countdown` | Duo countdown started by the player, a teammate joined (`SwarmState` attributes), with the starter's curses on the panel (`--set curses=Frenzy,Horde\|none`; `--set endless=on` the ENDLESS line) |
 | `curses` | the CURSES screen (`--set curses=Frenzy,GlassCannon\|none` the pick, `--set countdown=other` someone else's countdown note) |
@@ -50,7 +50,7 @@ global Playwright install (`/opt/pw-browsers`); never run `playwright install`.
 | `tutorial` | a new player's first run (profile `TutorialDone = false`) with one tip showing: `--set tip=Move\|Attack\|Gems\|Portal\|Boss\|TeamRules\|Revive\|LevelUp`, `--set tips=off` |
 | `run-intro` | the stage objective card (client RunIntro) just after a stage begins: STAGE N · arena, OPEN THE PORTAL / BEFORE THE SWARM GROWS TOO STRONG, icon hints on stage 1; `--set stage=N` (2+ = short card), `--set first=on` (first run: long card), `--set at=SECONDS` (capture time, default 0.8), `--set endless=on` |
 | `stage-portal` | stage 2: the hero by the portal while it charges (charge ring, stage pill); `--set charge=0` idle portal, `--set look=Boss\|Surge\|Open` other portal states |
-| `stage-arrow` | stage 2 at the centre after the hint time: stage pill and the edge arrow to the off-screen portal |
+| `stage-arrow` | stage 2 at the centre after the hint time: stage pill and the edge arrow to the off-screen portal; `--set wave=N` adds the "WAVE N" banner, edge glow and pill (`--set wavenext=3` the breather countdown instead) |
 | `minimap` | the in-run minimap with every marker kind: portal pinned off range (pointer), chests / shrine / altar, a teammate, the caravan edge pin; asserts the markers (`--set portal=near`, `--set caravan=Defending`) |
 | `stage-choice` | the open portal's NEXT STAGE / RETURN TO LOBBY panel (`PortalOffer` remote); `--set endless=on` an Endless stage 9 (NEXT only, HUD pill "ENDLESS · STAGE 9") |
 | `rewards-sim` | boots the real server and opens chests through the remotes: the hold time, the item owned at once, the reel ending the run pause itself (RewardClose count) before the server limit, a stale RewardClose ignored, RewardPauseMax capping a burst, a spinning reel torn down when InRun goes false; prints PASS-style lines (~450 s real time) |

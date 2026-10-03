@@ -1224,6 +1224,11 @@ local function updateStage(state: Configuration)
 		if longGoal == "OPEN THE PORTAL" and string.sub(count, 1, 5) == "SWARM" then
 			count = "" -- phones: the amber / crimson goal and the banner carry the warning
 		end
+		-- the wave breather: "WAVE 4 IN 0:03" -> "NEXT 0:03" (the banner names the wave)
+		local nextIn = string.match(count, "^WAVE %d+ IN (.+)$")
+		if nextIn then
+			count = "NEXT " .. nextIn
+		end
 	end
 	local stageShown = stageNo > 0 and goal ~= ""
 	if ui.Stage.Visible ~= stageShown then

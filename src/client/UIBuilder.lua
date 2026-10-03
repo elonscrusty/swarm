@@ -3240,6 +3240,17 @@ local function buildResults()
 		local nLines = (results.ProgLineCount or 0) * perLine
 		results.ProgLines.Size = UDim2.new(1, -28, 0, nLines * lineH)
 		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0))
+		-- the defeat's damage review: two hits per line on landscape phones (half the height,
+		-- so it sits nearer the fold)
+		local recent = results.Recent :: { string }?
+		if results.SettlementBase and recent and #recent > 0 then
+			local reviewRows = {}
+			local step = slim and 2 or 1
+			for i = 1, #recent, step do
+				table.insert(reviewRows, slim and table.concat(recent, "      ", i, math.min(i + 1, #recent)) or recent[i])
+			end
+			results.Settlement.Text = results.SettlementBase .. "\nRecent damage (latest first):\n" .. table.concat(reviewRows, "\n")
+		end
 		local settlementLines = 0
 		for line in string.gmatch(results.Settlement.Text .. "\n", "([^\n]*)\n") do
 			settlementLines += math.max(1, math.ceil(#line * results.Settlement.TextSize * 0.6 / math.max(1, inner)))
@@ -3284,7 +3295,27 @@ local function buildResults()
 		body.Size = UDim2.new(1, 0, 0, h)
 		body.CanvasSize = UDim2.fromOffset(0, bodyH)
 		body.ScrollBarThickness = bodyH > h + 1 and 4 or 0
+		results.MoreHint()
 	end
+	-- "MORE BELOW" pill on the body's bottom edge while there is more to scroll to (the
+	-- damage review / build sit below the fold on landscape phones); event-driven
+	local more, moreFace = UIKit.Surface(m.Face, { Name = "MoreHint", Radius = 999, Transparency = 0.05, Edge = P.gold_400, EdgeTransparency = 0.3, Shadow = false, Visible = false, ZIndex = 6, AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(0, 26) })
+	more.Active = false
+	more.AutomaticSize = Enum.AutomaticSize.X
+	moreFace.AutomaticSize = Enum.AutomaticSize.X
+	moreFace.Size = UDim2.fromScale(0, 1)
+	UIKit.padding(moreFace, 0, 12, 0, 12)
+	text(moreFace, "Caption", UIKit.track("More below") .. "  \u{25BE}", { Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200, ZIndex = 7 }, 11)
+	function results.MoreHint()
+		local hidden = body.CanvasSize.Y.Offset - body.Size.Y.Offset - body.CanvasPosition.Y
+		more.Visible = hidden > 8
+		if more.Visible then
+			local at = body.AbsolutePosition - m.Face.AbsolutePosition
+			more.Position = UDim2.fromOffset(math.floor(at.X + body.AbsoluteSize.X / 2), math.floor(at.Y + body.Size.Y.Offset - 2))
+		end
+	end
+	body:GetPropertyChangedSignal("CanvasPosition"):Connect(results.MoreHint)
+	body:GetPropertyChangedSignal("AbsolutePosition"):Connect(results.MoreHint)
 	results.Layout = layoutResults
 	onRelayout(layoutResults)
 end
@@ -3477,6 +3508,9 @@ local function onRunResult(data)
 			end
 		end
 	end
+	-- the text itself is composed by results.Layout (two hits per line on landscape phones)
+	results.SettlementBase = results.Settlement.Text
+	results.Recent = recent
 	if #recent > 0 then
 		results.Settlement.Text ..= "\nRecent damage (latest first):\n" .. table.concat(recent, "\n")
 	end

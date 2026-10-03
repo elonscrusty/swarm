@@ -605,6 +605,7 @@ Config.Waves = {
 	-- gem XP of wave enemies x this: waves come in bursts with breathers, so fewer enemies
 	-- spawn than with the old continuous top-up; this keeps the level-up pace (pacing-sim)
 	XPMult = 1.8,
+	GoldChanceMult = 1.5, -- the same for the kill-gold chance (Config.Gold.KillGoldChance)
 	BurstSeconds = 4.5,
 	MaxPerStep = 6, -- enemies spawned per frame at most while a wave pours in (perf)
 	Base = 12,
@@ -621,7 +622,7 @@ Config.Waves = {
 	SidesAtWave = { 4, 9 },
 	ArcRadians = 0.6, -- each side spreads this far either way
 	EliteFromWave = 4,
-	EliteChance = 0.35,
+	EliteChance = 0.5,
 	ElitePerWaves = 8,
 	EliteMax = 3,
 	-- a share of each side is mixed from the whole spawn row (Spitters within

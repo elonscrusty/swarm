@@ -520,7 +520,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local track = type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[heroId]) == "table" and p.HeroUpgrades[heroId] or {}
 		local innerW = ui.DetailInnerW or 390
 		ui.BuiltInnerW = innerW
-		local bw = math.clamp(math.floor(innerW * 0.42), 140, 190)
+		local bw = math.clamp(math.floor(innerW * 0.37), 128, 190)
 		local withIcon = bw >= 175 -- narrow buttons (phones) keep the whole label instead
 		local lineH = TS(13) + 4
 		local rowH = math.max(58, lineH + 2 * (TS(13) + 2) + 10)
@@ -549,7 +549,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				tile.Position = UDim2.new(0, 8, 0.5, 0)
 			end
 			local textW = innerW - 52 - bw - 16
-			text(row, "Label", string.upper(def.Name) .. "  ·  LV " .. level .. " / " .. def.MaxLevel, {
+			text(row, "Label", string.upper(def.Name) .. " · LV " .. level .. "/" .. def.MaxLevel, {
 				Name = "Level", FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(52, 5), Size = UDim2.fromOffset(textW, lineH),
 				TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = maxed and P.gold_300 or P.ivory_100,
 			}, 13)

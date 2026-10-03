@@ -432,6 +432,16 @@ affordable, "Need N more gold" when not) or MAXED. A tap shows BUYING... until t
 ProfileSync; `BuyMeta` carries the level the player saw, so a double tap buys one level, and a
 rejected purchase re-syncs the real gold.
 
+**Hero Mastery** (save schema 7, `MetaUpgradeData`, `Config.HeroMastery`): the six stat upgrades
+(Max HP, Might, Armor, Speed, Luck, Growth) are bought per hero on the CHARACTERS screen (an owned
+hero's MASTERY block → UPGRADE <HERO>), same prices and max levels as before. Each committed run gives
+the hero played Mastery XP (the run's account XP, none for DEV runs); mastery level N allows stat
+levels up to 2N (max mastery 10). Each hero also has a 5-level signature upgrade of its trait (500 gold,
+x1.6 per level; level n needs mastery 2n). Revive / Reroll / Skip stay account-wide on UPGRADES. The v7
+migration copied the old shared stat levels to every hero (Meta kept unchanged for rollback). Gold
+buys these; Robux never buys stats or mastery. Server: `GoldSystem` `BuyHeroUpgrade`,
+`AccountService.AwardMastery`, `RunManager` merges the selected hero's track into the run.
+
 ## Curses, Daily Challenge, leaderboards, account level
 
 Four retention systems, all server-authoritative and cosmetic / opt-in (no pay-to-win:
@@ -542,7 +552,7 @@ src/shared/   → ReplicatedStorage.Shared
   BossData.lua          the 4 stage bosses: entrance, phases, attack timings, the rotation (data only)
   CharacterData.lua     8 characters (trait, strengths, tradeoff, unlock) + 13 skins
   ItemData.lua          19 run items (rarity, text, stacking, stat bonus), item rolls, prices
-  MetaUpgradeData.lua   lobby shop upgrades
+  MetaUpgradeData.lua   gold upgrades: account (Revive/Reroll/Skip), per-hero stats, signatures, mastery
   IconData.lua          upgrade icon pictures (weapon / evolution / passive id → asset id)
   Remotes.lua           creates/gets ReplicatedStorage.Remotes (server creates them at boot)
 src/server/

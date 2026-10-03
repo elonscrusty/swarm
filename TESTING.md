@@ -53,6 +53,17 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] Old save (schema 3) loads with gold, characters and skins intact and empty achievements (Output: no migration errors).
 - [ ] UPGRADES: rows show LV n/max, NOW / NEXT effect, BUY price (gold when affordable, "Need N more gold" when not) or MAXED. Double-tap BUY quickly: only ONE level is bought; the button reads BUYING... until gold updates; a toast confirms the new level.
 
+## 0d. Hero Mastery (new; offline-tested only)
+Offline evidence: `mastery-regression` (run reads the hero's own track, mastery only to the hero played,
+none on DEV runs, BuyHeroUpgrade refusals, every signature level changes its stat), `storage-sim` (schema
+6 → 7 migration seeded / idempotent / clamped), layout `characters` + `mastery=open` (iphone, phone-portrait).
+- [ ] Old save (schema 6) with bought upgrades: every hero's MASTERY rows show the same stat levels as before; gold unchanged; Revive / Reroll / Skip still on UPGRADES → PERMANENT.
+- [ ] CHARACTERS, an owned hero: MASTERY block (LEVEL n, "into / need XP", gold bar), UPGRADE <HERO> opens seven rows; BUY spends gold, BUYING... until gold updates, double tap buys one level; rows above the cap read MASTERY n (disabled).
+- [ ] Play a run as the Knight: results show "KNIGHT MASTERY +N XP"; only the Knight's mastery bar moved. A run with a DEV command gives none.
+- [ ] A hero's signature (e.g. Knight Iron Skin level 1) changes the run: the Knight takes less damage; the Mage's areas are bigger, etc.
+- [ ] UPGRADES → PERMANENT: three account cards + HERO UPGRADES (OPEN CHARACTERS goes to Characters).
+- [ ] Live only: the first join after release migrates real saves (DataStore); check a few players' upgrades survived.
+
 ## 1. Solo run (Play, 1 player)
 - [ ] The lobby menu shows a grey Knight with a helmet turning in the middle.
 - [ ] Tap SOLO: the run starts at once (no countdown); the timer counts up from 0:00, the pill under it says "STAGE 1 · Find the portal" and a "STAGE 1" banner shows.

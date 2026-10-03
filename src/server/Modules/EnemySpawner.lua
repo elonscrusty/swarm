@@ -1083,7 +1083,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		Fx.Warn("pop", pos.X, pos.Z, e.Radius * 2, "dust")
 	else
 		if rp then
-			local paid = ctx.GoldSystem.OnKill(rp, pos)
+			local paid = ctx.GoldSystem.OnKill(rp, pos, e.WaveId and Config.Waves.GoldChanceMult or 1)
 			if paid and paid > 0 then table.insert(drops, "Gold") end
 		end
 		local drop = ctx.XPSystem.RollFloorPickup(pos, rp and rp.Stats.Luck or 0)

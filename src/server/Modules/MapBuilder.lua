@@ -319,13 +319,14 @@ end
 -- Use native parts instead of the broad triangular faces in the uploaded tuft.
 FALLBACK.GrassTuft = function(m, cf, s, pal)
 	local color = c3(pal, "Grass", P.meadow_600)
-	for i = 1, 3 do
-		local height = 0.65 + (i % 3) * 0.18
+	-- two crossed blades (a third added nothing from the run camera; phones: part count)
+	for i = 1, 2 do
+		local height = 0.7 + (i % 2) * 0.2
 		local angle = i * 2.4
-		local blade = CFrame.new(math.cos(angle) * 0.16, 0.04, math.sin(angle) * 0.16)
-			* CFrame.Angles(0, angle, (i - 2) * 0.22) * CFrame.new(0, height / 2, 0)
-		fpart(m, cf, s, "GrassBlade", Vector3.new(0.10, height, 0.08), blade,
-			color:Lerp(P.meadow_700, (i - 1) * 0.10), false)
+		local blade = CFrame.new(math.cos(angle) * 0.14, 0.04, math.sin(angle) * 0.14)
+			* CFrame.Angles(0, angle, (i - 1.5) * 0.4) * CFrame.new(0, height / 2, 0)
+		fpart(m, cf, s, "GrassBlade", Vector3.new(0.12, height, 0.09), blade,
+			color:Lerp(P.meadow_700, (i - 1) * 0.12), false)
 	end
 end
 FALLBACK.Flowers = function(m, cf, s, pal)
@@ -1329,7 +1330,18 @@ end
 -- neighbours sit 0.06 studs apart in height (odd / even), so the overlaps never
 -- z-fight from the high run camera. Registered in arena.Paths (decoration keeps off it).
 local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Color3, edge: Color3, yBase: number)
-	local pts = smoothPath(ctrl, 18)
+	-- nearly straight runs (under 3° of turn, up to 40 studs) become one segment
+	local raw = smoothPath(ctrl, 18)
+	local pts: { Vector2 } = { raw[1] }
+	for i = 2, #raw - 1 do
+		local from, here, nxt = pts[#pts], raw[i], raw[i + 1]
+		local d0, d1 = here - from, nxt - here
+		local straight = d0.Magnitude > 1e-3 and d1.Magnitude > 1e-3 and d0.Unit:Dot(d1.Unit) > math.cos(math.rad(3))
+		if not (straight and (nxt - from).Magnitude <= 40) then
+			table.insert(pts, here)
+		end
+	end
+	table.insert(pts, raw[#raw])
 	local edgeW = width + 2.8
 	local h = arena.Half
 	-- the path runs into the cliffs on the north / west / east sides (it stops at their
@@ -1583,7 +1595,7 @@ local function cliffs(arena: Arena, style: CliffStyle)
 				if style.Masonry then
 					-- merlons on the wall top (a broken battlement)
 					for _, dx in ipairs({ -len * 0.3, len * 0.3 }) do
-						if rng:NextNumber() < 0.6 then
+						if rng:NextNumber() < 0.5 then
 							local at = cf * CFrame.new(dx + jitter(2), (hgt + 1) / 2 + 1.1, 0)
 							deco(arena.Decor, { Name = "Merlon", Size = Vector3.new(3.4, 2.2, 3), CFrame = at - out3 * (CLIFF_DEPTH / 2 - 2), Color = style.Rock[1], CastShadow = false })
 						end

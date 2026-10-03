@@ -158,8 +158,9 @@ end
 
 -- Normal kill: 1-3 gold with Config.Gold.KillGoldChance (x the run's GoldMult: items, the
 -- Bargain Shrine). pos (where the enemy died) only feeds the coin burst clients draw.
-function GoldSystem.OnKill(rp, pos: Vector3?)
-	if rng:NextNumber() < Config.Gold.KillGoldChance then
+-- chanceMult scales the chance (wave enemies: Config.Waves.GoldChanceMult).
+function GoldSystem.OnKill(rp, pos: Vector3?, chanceMult: number?)
+	if rng:NextNumber() < Config.Gold.KillGoldChance * (chanceMult or 1) then
 		local paid = GoldSystem.AddRunGold(rp, rng:NextInteger(Config.Gold.MinPerKill, Config.Gold.MaxPerKill) * (rp.Stats and rp.Stats.GoldMult or 1))
 		if paid > 0 and pos then
 			Fx.Gold(pos, paid, rp.Player.UserId)
