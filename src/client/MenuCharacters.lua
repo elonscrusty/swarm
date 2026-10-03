@@ -186,6 +186,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end)
 		hit.Activated:Connect(function()
 			UIKit.Click()
+			UIAnim.Bump(icon, 0.15)
 			MenuCharacters._inspect(id)
 		end)
 		ui.Rows[id] = { Instance = hit, Edge = edge, Accent = accent, Sep = sep, Icon = icon, Name = name, Marks = marks, Check = check, Equipped = equipped, Lock = lock, Preview = preview, Mode = "" }
@@ -436,6 +437,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			hit.Activated:Connect(function()
 				UIKit.Click()
 				inspSkin = skinId
+				UIAnim.Bump(sw, 0.1)
 				Showcase.Show(inspChar, inspSkin)
 				MenuCharacters._refresh()
 			end)
@@ -489,10 +491,55 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	end
 
 	local builtFor = ""
+	-- idle life while the screen shows: the inspected row's accent bar breathes
+	local idle = UIAnim.Track()
+	local pulsing = ""
+	local function startIdle()
+		if pulsing == inspChar or not screen.Visible then
+			return
+		end
+		idle.Clear()
+		pulsing = inspChar
+		local row = ui.Rows[inspChar]
+		if row then
+			row.Accent.BackgroundTransparency = 0
+			idle.Add(UIAnim.IdlePulse(row.Accent, "BackgroundTransparency", 0, 0.45, 1.2))
+		end
+	end
+	local function stopIdle()
+		idle.Clear()
+		pulsing = ""
+		for _, row in pairs(ui.Rows) do
+			row.Accent.BackgroundTransparency = 0
+		end
+	end
+	-- what was selected / equipped last time (a change pops the button and the check)
+	local lastSel: string? = nil
+	local lastSkin: string? = nil
+	local lastOwned: { [string]: boolean } = {}
 	local function refresh()
 		local p = profile()
 		if not p then
 			return
+		end
+		local skinNow = (p.Skins[inspChar] or "Default") .. "@" .. inspChar
+		local bought = lastOwned[inspChar] == false and p.OwnedCharacters[inspChar] == true
+		if screen.Visible and ((lastSel and lastSel ~= p.SelectedCharacter) or bought) then
+			local row = ui.Rows[p.SelectedCharacter]
+			UIAnim.Selected(ui.Action.Face)
+			if row then
+				UIAnim.Selected(row.Check)
+			end
+		end
+		if screen.Visible and lastSkin and lastSkin ~= skinNow and string.find(lastSkin, "@" .. inspChar, 1, true) then
+			local sw = swatches[p.Skins[inspChar] or "Default"]
+			if sw then
+				UIAnim.Selected(sw.Check)
+			end
+		end
+		lastSel, lastSkin = p.SelectedCharacter, skinNow
+		for id in pairs(ui.Rows) do
+			lastOwned[id] = p.OwnedCharacters[id] == true
 		end
 		local def = CharacterData.Characters[inspChar]
 		if builtFor ~= inspChar then
@@ -642,6 +689,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 		Showcase.Show(inspChar, inspSkin)
 		refresh()
+		startIdle()
 		MenuCharacters._relayout()
 		UIAnim.Punch(ui.Detail, 0.03)
 		if screen.Visible then
@@ -811,15 +859,18 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			local i = 0
 			for _, id in ipairs(CharacterData.Order) do
 				i += 1
-				UIAnim.Pop(ui.Rows[id].Instance, 0.04 * i, 0.8)
+				UIAnim.Pop(ui.Rows[id].Instance, 0.03 * i, 0.8)
 			end
 			UIAnim.Pop(ui.Detail, 0.1, 0.9)
 			UIKit.FocusIfGamepad(ui.Rows[inspChar] and ui.Rows[inspChar].Instance)
+			pulsing = ""
+			task.defer(startIdle) -- (the screen is visible once the swap has started)
 			layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
 		end,
 		Inspect = function(id: string)
 			MenuCharacters._inspect(id)
 		end,
+		OnHide = stopIdle,
 	}
 end
 

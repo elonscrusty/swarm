@@ -690,6 +690,7 @@ local function buildHomeArt()
 	onButton(ui.CurseBtn, "Curses", 1.55)
 	onButton(ui.DailyBtn, "Daily", 1.55)
 	onButton(ui.StartNow, "Play", 1.6)
+	onButton(ui.Details, "Characters", 1.35) -- the nameplate's DETAILS (locked hero)
 	-- corner buttons (STATS keeps its drawn bars: there is no ui_ picture for it)
 	local glyphY = -TS(Theme.TextSize.Caption) / 2 - 2
 	for b, name in pairs({ [ui.SettingsBtn] = "Settings", [ui.RanksBtn] = "Leaderboards", [ui.TrackBtn] = "Track" }) do
@@ -1143,18 +1144,20 @@ local function homeAmbient(on: boolean)
 	end)
 end
 
+-- staggered entrance: 0.03 s per item, the whole wave done within ~0.25 s
+local STAGGER = 0.03
 local function homeEntrance()
 	homeAmbient(true)
 	local i = 0
 	for _, b in ipairs(ui.ModeButtons) do
 		i += 1
-		UIAnim.Pop(b.Instance, Theme.Motion.Stagger * i, 0.85)
+		UIAnim.Pop(b.Instance, STAGGER * i, 0.85)
 	end
 	for _, b in ipairs({ ui.CurseBtn, ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
 		i += 1
-		UIAnim.Pop(b.Instance, Theme.Motion.Stagger * i, 0.85)
+		UIAnim.Pop(b.Instance, math.min(STAGGER * i, 0.24), 0.85)
 	end
-	UIAnim.Pop(ui.EndlessRow, Theme.Motion.Stagger * 4, 0.85)
+	UIAnim.Pop(ui.EndlessRow, STAGGER * 4, 0.85)
 	UIAnim.Pop(ui.Nameplate, 0.1, 0.85)
 	UIAnim.Pop(ui.Logo, 0, 0.9)
 end
@@ -1177,9 +1180,14 @@ function LobbyScreen.Show(name: string, arg: any?)
 		return
 	end
 	local direction = SCREEN_ORDER[name] >= SCREEN_ORDER[current] and 1 or -1
-	UIAnim.SwapScreens(ui[current], ui[name], direction, Config.UI.ScreenSlideSeconds)
+	UIAnim.SwapScreens(ui[current], ui[name], direction, math.min(0.2, Config.UI.ScreenSlideSeconds))
 	local from = current
 	current = name
+	-- the screen being left stops its idle loops (OnHide)
+	local left = screens[from]
+	if left and left.OnHide then
+		left.OnHide()
+	end
 	if from == "Home" then
 		homeAmbient(false)
 	end
@@ -1219,6 +1227,10 @@ function LobbyScreen.SetVisible(on: boolean)
 	ui.Vignette.Visible = on
 	if not on then
 		homeAmbient(false)
+		local s = screens[current]
+		if s and s.OnHide then
+			s.OnHide()
+		end
 	end
 	if on then
 		-- always come back to the home screen
@@ -1322,6 +1334,14 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 		return
 	end
 	UIAnim.CountTo(ui.Gold.Value, shownGold or p.Gold, p.Gold, UIKit.formatNumber, 0.7)
+	if shownGold and shownGold ~= p.Gold and ui.Frame.Visible then
+		-- the coin icon pops when gold changes (a buy, a run's haul)
+		for _, ch in ipairs(ui.Gold.Frame:GetChildren()) do
+			if ch:IsA("GuiObject") and ch.LayoutOrder == 1 then
+				UIAnim.Selected(ch, P.gold_300)
+			end
+		end
+	end
 	shownGold = p.Gold
 	ui.Best.SetValue(UIKit.formatTime(p.Stats.BestTime))
 	ui.Wins.SetValue(UIKit.formatNumber(p.Stats.Wins))
@@ -1465,6 +1485,11 @@ function LobbyScreen.Update(_dt: number?)
 		ui.PartyCornerBadge.Text = badge
 		ui.PartyBadge.Visible = badge ~= ""
 		ui.PartyCornerBadge.Visible = badge ~= ""
+		if badge ~= "" then
+			-- a new invite: the badge pops in
+			UIAnim.Pop(ui.PartyBadge, 0, 0.4)
+			UIAnim.Pop(ui.PartyCornerBadge, 0, 0.4)
+		end
 	end
 
 	-- the curse button / queue line, the daily card

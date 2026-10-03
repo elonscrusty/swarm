@@ -1432,6 +1432,7 @@ function UIKit.Tabs(parent: Instance?, items: { { Id: string, Title: string, Ico
 				if current ~= item.Id then
 					current = item.Id
 					refresh()
+					UIAnim.Bump(buttons[item.Id].Face, 0.06) -- the picked tab springs (inner face only)
 					onSelect(item.Id)
 				end
 			end,

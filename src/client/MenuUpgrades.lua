@@ -67,7 +67,8 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 	ui.Tabs = new("Frame", { Name = "Tabs", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, Theme.Size.TapMin) }, face)
 	UIKit.Hairline(ui.Tabs, { Position = UDim2.new(0, 0, 1, -1) })
 	local tabButtons: { [string]: TextButton } = {}
-	local tabLines: { [string]: Frame } = {}
+	-- one gold underline that slides to the picked tab
+	local underline = new("Frame", { Name = "Selected", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.25, 1), Size = UDim2.new(0.25, 0, 0, 2), ZIndex = 2 }, ui.Tabs)
 	for i, id in ipairs({ "Permanent", "Shop" }) do
 		local button = new("TextButton", {
 			Name = id,
@@ -82,14 +83,14 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		}, ui.Tabs)
 		UIKit.Focusable(button)
 		tabButtons[id] = button
-		tabLines[id] = new("Frame", { Name = "Selected", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.new(0.5, 0, 0, 2), Visible = id == tab }, button)
 		button.Activated:Connect(function()
 			if tab == id then return end
 			tab = id
 			for key, other in pairs(tabButtons) do
 				other.TextColor3 = key == tab and P.gold_300 or C.TextMuted
-				tabLines[key].Visible = key == tab
 			end
+			UIAnim.SlideTo(underline, UDim2.fromScale((i - 0.5) / 2, 1))
+			-- the new cards pop in (staggered) in place of the old ones
 			MenuUpgrades._rebuild(true)
 		end)
 	end
