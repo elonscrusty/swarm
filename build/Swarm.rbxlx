@@ -23261,10 +23261,8 @@ local function loadModel(name: string, entry): boolean
 			template.CanQuery = false
 			template.CanTouch = false
 			template.CastShadow = false
-			-- Roblox's Automatic fidelity swaps a MeshPart for a cruder level of detail as the
-			-- camera moves away (an overhead camera is always "away"): the models looked like
-			-- they kept turning low-poly. These meshes are small already, so draw them as is.
-			template.RenderFidelity = Enum.RenderFidelity.Precise
+			-- (RenderFidelity is plugin-only: a script cannot set it, so the level of detail
+			-- stays whatever the upload chose)
 			-- The FBX nodes carry a Y-up axis rotation (Lcl Rotation 90, 0, 180) over Z-up
 			-- vertex data. If the importer kept that rotation on the MeshPart instead of
 			-- baking it, the geometry's local axes are not the catalog's (Roblox) axes and the
@@ -23436,13 +23434,17 @@ local function run(job: Job)
 			seq += 1
 			job.Seq = seq
 			pending += 1
+			if not ok then
+				lastError = job.Name .. ": " .. tostring(loaded)
+			end
 			warn(string.format("[MeshService] %s failed (try %d of %d), retrying", job.Name, job.Tries, MAX_TRIES))
 			task.delay(RETRY_DELAY, pump)
 		else
 			job.State = "failed"
 			failedCount += 1
 			if not ok then
-				warn("[MeshService] " .. job.Name .. ": " .. tostring(loaded))
+				lastError = job.Name .. ": " .. tostring(loaded)
+				warn("[MeshService] " .. lastError)
 			end
 		end
 		publish()
