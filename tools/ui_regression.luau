@@ -189,7 +189,10 @@ local ok, err = S.runMain(function()
 	preview.advance(0.5)
 	UI.ShowChest({ Dramatic = false, Gold = 20, Rewards = {} })
 	preview.advance(0.05)
-	check("ordinary chest never opens reward overlay", guiRoot.Reward.Visible == false)
+	-- owner: every chest rolls; one the run is not paused for gets the mini reel, which never
+	-- dims or blocks the screen
+	local dim = guiRoot.Reward:FindFirstChild("Dim")
+	check("ordinary chest only plays the non-blocking mini reel", dim == nil or dim.Visible == false)
 	UI.ShowChest({ Dramatic = true, Gold = 50, Rewards = {} })
 	preview.advance(0.05)
 	check("rare chest opens established dramatic reel", guiRoot.Reward.Visible == true)

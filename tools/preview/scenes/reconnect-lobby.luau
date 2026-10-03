@@ -17,7 +17,7 @@ preview.advance(3)
 local loaded = assert(Data.GetData(player))
 if preview.args.fail then
 	assert(not Data.IsReleased(player) and not loaded.RunReconnect and not loaded.RunEscrow)
-	assert(loaded.Gold == 648, "failed or expired reconnect recovers stage-scaled retained coins")
+	assert(loaded.Gold == 660, "failed or expired reconnect recovers stage-scaled retained coins") -- 50% of 120 (0.35 + 1 x 0.15)
 	assert(player:GetAttribute("Travel") ~= "ToRun", "failed route returns lobby controls")
 else
 	assert(#T.calls == 1 and T.reserved == 0, "reconnect must not reserve a new server")

@@ -17,7 +17,9 @@ assert(normal.Active > 0 and normal.Active <= normal.Budget, "grass should fill 
 Settings.Apply({ ReducedEffects = true })
 preview.advance(0.5)
 local reduced = GroundDetail.Stats()
-assert(reduced.Active <= reduced.Budget and reduced.Pool <= reduced.Budget, "reduced grass must shrink its pool")
+-- a smaller budget parks the warm pool instead of destroying it (no churn): only the placed
+-- pieces must fit the reduced budget
+assert(reduced.Active <= reduced.Budget, "reduced grass must place fewer pieces")
 assert(reduced.Budget < normal.Budget, "reduced grass must use a smaller budget")
 player:SetAttribute("InRun", false)
 preview.advance(0.5)
