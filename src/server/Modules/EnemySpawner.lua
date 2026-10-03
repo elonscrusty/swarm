@@ -188,11 +188,8 @@ local function introduce(typeId: string): boolean
 	end
 	seen[typeId] = true
 	local def = EnemyData.Enemies[typeId]
-	if def and def.Intro then
-		ctx.RunManager.Broadcast(string.format("New: %s - %s", def.DisplayName or typeId, def.Intro), Color3.fromRGB(255, 205, 120))
-		return true
-	end
-	return false
+	-- Discovery clues live in the manual journal; this return still paces new enemy groups.
+	return def ~= nil and def.Intro ~= nil
 end
 
 -- Live-target multiplier from the pacing curve (calm, lull, build-up).
@@ -383,6 +380,7 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 
 	table.insert(EnemySpawner.Active, e)
 	e.Slot = #EnemySpawner.Active
+	if ctx.JournalService then ctx.JournalService.Observe(typeId, e.Pos) end
 
 	if isBoss then
 		EnemySpawner.Boss = e
@@ -722,6 +720,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 	local def = e.Def
 	local pos = e.Pos
 	local maxHP = e.MaxHP
+	local drops = {}
 	release(e)
 	Fx.Death(pos + Vector3.new(0, e.Height, 0), e.Part:GetAttribute("BaseColor") or def.Color, e.Radius * 2)
 	Fx.Sound("EnemyDeath")
@@ -734,6 +733,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 
 	if rng:NextNumber() < (def.GemChance or 1) then
 		ctx.XPSystem.SpawnGem(pos, gemValue(def.Gem, def.XPScale or 1))
+		table.insert(drops, "XP")
 	end
 	if rp then
 		rp.Kills += 1 -- the "Kills" attribute follows at 10 Hz (EnemySpawner.Step)
@@ -741,6 +741,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 	ctx.RunManager.AddTotalKill()
 
 	if e.Boss then
+		table.insert(drops, "XP")
 		for _ = 1, 12 do
 			ctx.XPSystem.SpawnGem(pos + Vector3.new(rng:NextNumber(-8, 8), 0, rng:NextNumber(-8, 8)), Config.XP.GemValues.Large)
 		end
@@ -749,13 +750,17 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		-- altar guards drop gems only: the altar's chest is their reward
 		if not e.Guard then
 			ctx.XPSystem.SpawnChest(pos)
+			table.insert(drops, "Chest")
 		end
 		ctx.XPSystem.SpawnGem(pos + Vector3.new(2, 0, 0), gemValue(EnemyData.EliteGem, 1))
+		table.insert(drops, "XP")
 	elseif def.Reward then
 		-- a destroyed nest (by a player, not swept away): gold for every living player
 		-- and a few extra gems
 		if rp then
 			local R = def.Reward
+			table.insert(drops, "Gold")
+			table.insert(drops, "XP")
 			local gold = math.floor(R.Gold + R.GoldPerStage * math.max(0, ctx.StageManager.GetStage() - 1))
 			for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
 				if other.Alive and not other.Returned then
@@ -774,10 +779,13 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		Fx.Warn("pop", pos.X, pos.Z, e.Radius * 2, "dust")
 	else
 		if rp then
-			ctx.GoldSystem.OnKill(rp, pos)
+			local paid = ctx.GoldSystem.OnKill(rp, pos)
+			if paid and paid > 0 then table.insert(drops, "Gold") end
 		end
-		ctx.XPSystem.RollFloorPickup(pos, rp and rp.Stats.Luck or 0)
+		local drop = ctx.XPSystem.RollFloorPickup(pos, rp and rp.Stats.Luck or 0)
+		if drop then table.insert(drops, drop) end
 	end
+	if ctx.JournalService then ctx.JournalService.Observe(e.Type, pos, drops) end
 	if e.Guard then
 		-- killed by a player (or blew itself up next to one); the portal burning the
 		-- leftovers (no killer) counts as swept away, not beaten

@@ -15,6 +15,7 @@ local Remotes = require(game:GetService("ReplicatedStorage"):WaitForChild("Share
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Theme = require(Shared:WaitForChild("Theme"))
+local Config = require(Shared:WaitForChild("Config"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
 local AchievementData = require(Shared:WaitForChild("AchievementData"))
@@ -79,7 +80,13 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	ui.Tabs = UIKit.Tabs(face, {
 		{ Id = "Stats", Title = "Stats", Icon = "bars" },
 		{ Id = "Achievements", Title = "Achievements", Icon = "ach_Badge" },
+		{ Id = "Journal", Title = "Journal", Icon = "bars" },
 	}, function(id)
+		if id == "Journal" then
+			ui.Tabs.Select(tab)
+			ctx.ShowScreen("Journal")
+			return
+		end
 		tab = id
 		MenuStats._show(true)
 	end)
@@ -197,11 +204,11 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		ui.Passes.TextColor3 = #passes > 0 and P.gold_300 or C.TextFaint
 	end
 
-	-- one row per achievement; built fresh on every refresh (12 rows)
+	-- Earned cosmetics remain explicit equip actions; rewards themselves need no claim.
 	local function cosmeticRow(p, kind: string, order: number)
 		local row = new("Frame", { Name = kind, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, ui.Ach)
-		text(row, "Caption", UIKit.track(kind == "Title" and "Wear title" or "Name colour"), { Size = UDim2.new(1, 0, 0, TS(12) + 4) })
-		local chips = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TS(12) + 8), Size = UDim2.new(1, 0, 0, 40), AutomaticSize = Enum.AutomaticSize.Y }, row)
+		text(row, "Caption", UIKit.track(kind == "Title" and "Choose your title" or "Choose your name colour"), { Size = UDim2.new(1, 0, 0, TS(12) + 4) })
+		local chips = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TS(12) + 8), Size = UDim2.new(1, 0, 0, Theme.Size.TapMin), AutomaticSize = Enum.AutomaticSize.Y }, row)
 		UIKit.list(chips, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), Wraps = true })
 		local unlocked = p.Achievements and p.Achievements.Unlocked or {}
 		local options = { { Id = "", Name = "None" } }
@@ -235,7 +242,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			local b = UIKit.Button(chips, {
 				Kind = o.Id == worn and "Primary" or "Ghost",
 				Title = string.upper(o.Name),
-				Size = UDim2.fromOffset(math.max(100, 44 + #o.Name * 14), 40),
+				Size = UDim2.fromOffset(math.clamp(36 + #o.Name * TS(13) * 0.7, 112, 260), Theme.Size.TapMin),
 				LayoutOrder = i,
 				Shadow = false,
 				Radius = Theme.Radius.S,
@@ -249,10 +256,11 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		if #options == 1 then
-			text(row, "Small", kind == "Title" and "Earn titles from achievements and the TRACK." or "Earn name colours from achievements and the TRACK.", {
-				Position = UDim2.fromOffset(112, TS(12) + 8),
-				Size = UDim2.new(1, -112, 0, 40),
-				TextColor3 = C.TextFaint,
+				text(row, "Small", "Unlock more through achievements or the Track.", {
+					Position = UDim2.fromOffset(124, TS(12) + 8),
+					Size = UDim2.new(1, -124, 0, Theme.Size.TapMin),
+					TextColor3 = C.TextFaint,
+					TextWrapped = true,
 			})
 		end
 	end
@@ -264,19 +272,20 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		if unlocked then
 			progress = def.Goal
 		end
-		-- the row grows with its text (narrow phones wrap the description / reward)
-		local right = ui.Narrow and 112 or 150
 		local f = UIKit.Panel(ui.Ach, { Name = id, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, true)
 		if unlocked then
 			UIKit.stroke(f, P.gold_400, 1.5, 0.25)
 		end
-		Icons.Draw(f, def.Icon or "ach_Badge", { Size = 36, Position = UDim2.fromOffset(14, 14), Color = (not unlocked) and P.stone_400 or nil, Dim = not unlocked, Back = P.slate_950 })
-		local column = new("Frame", { Name = "Text", BackgroundTransparency = 1, Position = UDim2.fromOffset(64, 0), Size = UDim2.new(1, -64 - right, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, f)
-		UIKit.list(column, { Padding = UDim.new(0, 2) })
-		UIKit.padding(column, 10, 0, 12, 0)
-		text(column, "H3", def.Name, { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, TS(18) + 4), TextColor3 = unlocked and P.gold_200 or C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
-		text(column, "Small", def.Description, { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
-		text(column, "Small", "Reward: " .. AchievementData.RewardText(id), {
+		local column = new("Frame", { Name = "Text", BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, f)
+		UIKit.list(column, { Padding = UDim.new(0, 7) })
+		UIKit.padding(column, 12, 0, 14, 0)
+		local heading = new("Frame", { Name = "Heading", LayoutOrder = 1, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40) }, column)
+		Icons.Draw(heading, def.Icon or "ach_Badge", { Size = 34, Position = UDim2.fromOffset(0, 2), Back = P.slate_950 })
+		text(heading, "H3", def.Name, { Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -44, 1, 0), TextColor3 = unlocked and P.gold_200 or C.Text, TextWrapped = true }, 18)
+		local goal = def.Event == "RunWon" and string.format("Clear %d stages and return through the portal to win.", Config.Stages.WinMinStages) or def.Description
+		text(column, "Small", goal, { Name = "Goal", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
+		text(column, "Small", (unlocked and "Earned: " or "Reward: ") .. AchievementData.RewardText(id), {
+			Name = "Reward",
 			LayoutOrder = 3,
 			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
@@ -284,17 +293,15 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			TextColor3 = P.gold_300,
 		})
 		if unlocked then
-			UIKit.Badge(f, "DONE", "Gold", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0) })
+			text(column, "Caption", "COMPLETED · REWARDS ADDED", { LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(12) + 4), TextColor3 = P.moss_200 })
 		else
-			local meter = UIKit.Meter(f, {
+			text(column, "Small", (def.Kind == "Max" and "Best run: " or "Progress: ") .. AchievementData.ProgressText(id, progress), { Name = "Progress", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(14) + 4), TextColor3 = C.Text })
+			local meter = UIKit.Meter(column, {
 				Gradient = ColorSequence.new(P.gold_500, P.gold_300),
-				TextStyle = "Number",
-				TextSize = Theme.TextSize.Small,
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -14, 0.5, 0),
-				Size = UDim2.fromOffset(right - 20, 22),
+				LayoutOrder = 5,
+				Size = UDim2.new(1, 0, 0, 8),
 			})
-			meter.Set(progress / math.max(1, def.Goal), AchievementData.ProgressText(id, progress))
+			meter.Set(progress / math.max(1, def.Goal))
 		end
 		return f
 	end
@@ -309,24 +316,47 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		if not p then
 			return
 		end
-		local done = 0
+		local pending, completed = {}, {}
 		for _, id in ipairs(AchievementData.Order) do
 			if p.Achievements and p.Achievements.Unlocked and p.Achievements.Unlocked[id] then
-				done += 1
+				table.insert(completed, id)
+			else
+				table.insert(pending, id)
 			end
 		end
-		text(ui.Ach, "Label", string.format("%d / %d ACHIEVEMENTS", done, #AchievementData.Order), { LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(15) + 6), TextColor3 = P.gold_300 })
-		cosmeticRow(p, "Title", 1)
-		cosmeticRow(p, "Color", 2)
-		for i, id in ipairs(AchievementData.Order) do
+		local progress = p.Achievements and p.Achievements.Progress or {}
+		table.sort(pending, function(a, b)
+			local pa = (tonumber(progress[a]) or 0) / AchievementData.Achievements[a].Goal
+			local pb = (tonumber(progress[b]) or 0) / AchievementData.Achievements[b].Goal
+			if pa ~= pb then return pa > pb end
+			return (table.find(AchievementData.Order, a) or 0) < (table.find(AchievementData.Order, b) or 0)
+		end)
+		local cosmeticsHeading: GuiObject?
+		local summary = new("Frame", { Name = "AchievementSummary", BackgroundTransparency = 1, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, Theme.Size.TapMin + 4) }, ui.Ach)
+		text(summary, "Label", string.format("%d / %d UNLOCKED", #completed, #AchievementData.Order), { Size = UDim2.new(1, -230, 1, 0), TextColor3 = P.gold_300 }, 14)
+		text(ui.Ach, "Small", "Rewards are added automatically. Equip earned titles and name colours with WEAR REWARDS.", { Name = "RewardHelp", LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
+		UIKit.Button(summary, { Title = "WEAR REWARDS", Kind = "Secondary", Size = UDim2.fromOffset(220, Theme.Size.TapMin), AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Icon = "sparkle", TitleSize = 14, OnClick = function()
+			if cosmeticsHeading then
+				ui.Ach.CanvasPosition = Vector2.new(0, math.max(0, cosmeticsHeading.AbsolutePosition.Y - ui.Ach.AbsolutePosition.Y + ui.Ach.CanvasPosition.Y))
+			end
+		end })
+		text(ui.Ach, "Caption", #pending > 0 and "NEXT GOALS · CLOSEST FIRST" or "ALL GOALS COMPLETE", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(12) + 8), TextColor3 = P.gold_300 })
+		for i, id in ipairs(pending) do
 			local f = achievementRow(p, id, 10 + i)
 			if animate then
-				UIAnim.Pop(f, 0.02 * i, 0.85)
+				UIAnim.Pop(f, math.min(0.2, 0.02 * i), 0.85)
 			end
 		end
+		cosmeticsHeading = text(ui.Ach, "Label", "YOUR COSMETICS", { Name = "CosmeticsHeading", LayoutOrder = 100, Size = UDim2.new(1, 0, 0, TS(15) + 8), TextColor3 = P.gold_300 })
+		text(ui.Ach, "Small", "Tap to equip. Gold and character rewards are already yours; cosmetic choices change your lobby nameplate.", { LayoutOrder = 101, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
+		cosmeticRow(p, "Title", 102)
+		cosmeticRow(p, "Color", 103)
+		text(ui.Ach, "Label", "COMPLETED · " .. #completed, { Name = "CompletedHeading", LayoutOrder = 110, Size = UDim2.new(1, 0, 0, TS(15) + 8), TextColor3 = P.moss_200 })
+		for i, id in ipairs(completed) do achievementRow(p, id, 110 + i) end
 	end
 
 	MenuStats._show = function(animate: boolean)
+		ui.Header.Title.Text = tab == "Achievements" and "ACHIEVEMENTS" or "YOUR STATS"
 		ui.StatsScroll.Visible = tab == "Stats"
 		ui.Passes.Visible = tab == "Stats"
 		ui.Ach.Visible = tab == "Achievements"
@@ -345,6 +375,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		local w = math.min(W - 2 * M, 1100)
 		local inner = w - 32 - 10 -- face padding and the scroll bar
 		ui.Narrow = w < 700
+		ui.Header.Title.TextSize = TS(tab == "Achievements" and (ui.Narrow and 22 or 26) or 30)
 		-- groups: every tile row lines up on one column grid (6 / 3 / 2 columns)
 		local cols = inner >= 960 and 6 or (inner >= 520 and 3 or 2)
 		local colsC = inner >= 640 and 4 or 2 -- collection / resources

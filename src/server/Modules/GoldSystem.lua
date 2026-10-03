@@ -139,7 +139,9 @@ function GoldSystem.OnKill(rp, pos: Vector3?)
 		if paid > 0 and pos then
 			Fx.Gold(pos, paid, rp.Player.UserId)
 		end
+		return paid
 	end
+	return 0
 end
 
 ------------------------------------------------------------------------------------------
@@ -172,6 +174,8 @@ function GoldSystem.SyncProfile(player: Player)
 		-- retention: curses picked, the daily, the account level and its cosmetics
 		Curses = data.Curses or {},
 		Daily = ctx.RunModifiers and ctx.RunModifiers.DailyView(data) or nil,
+		Journal = data.Journal,
+		LastRun = data.LastRun,
 		Account = ctx.AccountService and ctx.AccountService.View(data) or nil,
 		Ring = data.Ring or "",
 		Frame = data.Frame or "",
@@ -298,16 +302,9 @@ local function onSaveSettings(player: Player, settings: any)
 	if not data or type(settings) ~= "table" then
 		return
 	end
-	for key, default in pairs(Config.Settings.Defaults) do
-		local value = settings[key]
-		if type(default) == "number" then
-			local n = tonumber(value)
-			if n and n == n then
-				data.Settings[key] = math.clamp(n, 0, 1)
-			end
-		elseif type(default) == "boolean" and type(value) == "boolean" then
-			data.Settings[key] = value
-		end
+	for key in pairs(Config.Settings.Defaults) do
+		local value = Config.ValidateSetting(key, settings[key])
+		if value ~= nil then data.Settings[key] = value end
 	end
 	player:SetAttribute("DamageNumbers", data.Settings.DamageNumbers == true)
 end
@@ -357,7 +354,7 @@ function GoldSystem.Start()
 	end, 2)
 	ctx.DataService.OnProfileLoaded(function(player)
 		local data = ctx.DataService.GetData(player)
-		if data then
+		if data and not (ctx.RunServers and type(ctx.RunServers.HasPendingReconnect) == "function" and ctx.RunServers.HasPendingReconnect(data)) then
 			GoldSystem.RecoverEscrow(data)
 		end
 		GoldSystem.SyncProfile(player)

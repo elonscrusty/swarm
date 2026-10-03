@@ -305,14 +305,15 @@ end
 -- Floor pickups and chests
 ------------------------------------------------------------------------------------------
 
-function XPSystem.SpawnPickup(kind: string, position: Vector3)
+function XPSystem.SpawnPickup(kind: string, position: Vector3): boolean
 	if #pickups >= Config.Drops.MaxFloorPickups then
-		return
+		return false
 	end
 	local pos = Vector3.new(position.X, Config.ArenaOrigin.Y + 1.2, position.Z)
 	local model = ModelBuilder.BuildPickup(kind, pos)
 	model.Parent = pickupFolder
 	table.insert(pickups, { Model = model, Kind = kind, Pos = pos, Expires = os.clock() + Config.Drops.PickupLifetime })
+	return true
 end
 
 function XPSystem.SpawnChest(position: Vector3)
@@ -323,9 +324,9 @@ function XPSystem.SpawnChest(position: Vector3)
 end
 
 -- Rolls a rare floor pickup for a normal kill (luck of the killer helps).
-function XPSystem.RollFloorPickup(position: Vector3, luck: number)
+function XPSystem.RollFloorPickup(position: Vector3, luck: number): string?
 	if rng:NextNumber() >= Config.Drops.FloorPickupChance * (1 + luck) then
-		return
+		return nil
 	end
 	-- the Famine curse: no healing pickups
 	local weights = Config.Drops.Weights
@@ -341,10 +342,10 @@ function XPSystem.RollFloorPickup(position: Vector3, luck: number)
 	for kind, w in pairs(weights) do
 		roll -= w
 		if roll <= 0 then
-			XPSystem.SpawnPickup(kind, position)
-			return
+			return XPSystem.SpawnPickup(kind, position) and kind or nil
 		end
 	end
+	return nil
 end
 
 local function collectPickup(p: Pickup, rp)

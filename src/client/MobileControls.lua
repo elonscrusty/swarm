@@ -17,6 +17,7 @@ local UserInputService = game:GetService("UserInputService")
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
 local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Theme"))
 local CameraController = require(script.Parent.CameraController)
+local ClientSettings = require(script.Parent.ClientSettings)
 
 local MobileControls = {}
 
@@ -80,7 +81,14 @@ end
 
 local function radiusPixels(): number
 	local s = uiScale and uiScale.Scale or 1
-	return Config.Controls.StickRadius * s
+	return Config.Controls.StickRadius * s * (ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1)
+end
+
+function MobileControls.MovementSide(x: number, width: number): boolean
+	local left = ClientSettings.Get("TouchLayout") == "LeftHanded"
+	local zone = math.min(Config.Controls.TouchZone, 0.5)
+	return left and x >= width * (1 - zone)
+		or not left and x <= width * zone
 end
 
 local function updateStick(position: Vector2)
@@ -97,7 +105,8 @@ local function updateStick(position: Vector2)
 	end
 	-- InputObject positions and this ScreenGui (IgnoreGuiInset = false) share coordinates
 	base.Position = UDim2.fromOffset(stickOrigin.X, stickOrigin.Y)
-	knob.Position = UDim2.new(0.5, delta.X / (uiScale and uiScale.Scale or 1), 0.5, delta.Y / (uiScale and uiScale.Scale or 1))
+	local scale = (uiScale and uiScale.Scale or 1) * (ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1)
+	knob.Position = UDim2.new(0.5, delta.X / scale, 0.5, delta.Y / scale)
 end
 
 local function buildGui()
@@ -214,7 +223,12 @@ local function buildGui()
 	-- keep the stick graphic scaled like the rest of the UI
 	RunService.RenderStepped:Connect(function()
 		scale.Scale = uiScale and uiScale.Scale or 1
-		jumpScale.Scale = uiScale and uiScale.Scale or 1
+		local compact = ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1
+		scale.Scale *= compact
+		jumpScale.Scale = (uiScale and uiScale.Scale or 1) * compact
+		local left = ClientSettings.Get("TouchLayout") == "LeftHanded"
+		jump.AnchorPoint = Vector2.new(left and 0 or 1, 1)
+		jump.Position = UDim2.new(left and 0 or 1, left and M.ButtonMargin or -M.ButtonMargin, 1, -M.ButtonMargin)
 	end)
 end
 
@@ -246,6 +260,13 @@ end
 
 function MobileControls.Init()
 	buildGui()
+	ClientSettings.OnChanged(function(key)
+		if key == "TouchLayout" then
+			stickInput = nil
+			stickVector = Vector2.zero
+			base.Visible = false
+		end
+	end)
 	pcall(function()
 		require(script.Parent:WaitForChild("TerrainFx") :: ModuleScript).Init(MobileControls)
 	end)
@@ -271,7 +292,7 @@ function MobileControls.Init()
 				return
 			end
 			local viewport = workspace.CurrentCamera.ViewportSize
-			if input.Position.X > viewport.X * Config.Controls.TouchZone then
+			if not MobileControls.MovementSide(input.Position.X, viewport.X) then
 				return
 			end
 			stickInput = input

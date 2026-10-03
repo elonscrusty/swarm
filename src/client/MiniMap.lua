@@ -1,7 +1,7 @@
 --[[
 	MiniMap.lua
-	A small north-up minimap during runs, in the HUD's look (charcoal rounded square, thin
-	gold rim), centred on the player:
+	A north-up minimap during runs: a quiet charcoal field, thin slate frame, compass
+	header and a compact landmark key, centred on the player:
 
 	  silhouette    the arena fence (the square boundary) and every obstacle collider
 	                (workspace.SwarmMap.Arena_<Name>.Obstacles: cylinders as discs, blocks
@@ -15,7 +15,7 @@
 	                once opened / spent / claimed
 	  caravan       the Lost Caravan (workspace.SwarmEvents.Caravan: wood square, gold
 	                while it is being defended)
-	  boss          a red skull on the live boss (EnemyData IsBoss)
+	  boss          an ivory-edged red diamond on the live boss (EnemyData IsBoss)
 	  enemies       at most MAX_ENEMY_DOTS faint red dots sampled from the live swarm
 	                (every k-th enemy in range), refreshed at ENEMY_HZ
 
@@ -40,11 +40,11 @@ local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local UIKit = require(script.Parent.UIKit)
-local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local TeamUI = require(script.Parent.TeamUI)
 local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
 
 local MiniMap = {}
 
@@ -52,7 +52,8 @@ local player = Players.LocalPlayer
 local new = UIKit.new
 local P = Theme.Palette
 
-local SIZE_PC, SIZE_COMPACT = 150, 112 -- map square (px, design space)
+local SIZE_PC, SIZE_COMPACT = 150, 112 -- map width (px, design space)
+local MAP_INSET, HEADER_H, FOOTER_H = 7, 20, 18
 local VIEW_STUDS = 200 -- studs across the map
 local MAX_ENEMY_DOTS = 40
 -- Each optional location has at most three rune nodes; altar/caravan use separate markers.
@@ -85,7 +86,12 @@ local candidates: { BasePart } = {} -- reused per enemy pass
 ------------------------------------------------------------------------------------------
 
 local function dot(parent: Instance, name: string, size: number, color: Color3, z: number, round: boolean): Frame
+	color = Accessibility.Color(color, (name == "Enemy" or name == "Boss") and "Danger" or name == "Mate" and "Ally" or name == "Loot" and "Loot" or nil)
 	local f = new("Frame", { Name = name, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(size, size), BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = z, Visible = false }, parent)
+	if name == "Enemy" and ClientSettings.Get("Colorblind") ~= "Off" then
+		round = false
+		f.Rotation = 45
+	end
 	if round then
 		UIKit.corner(f, 999)
 	end
@@ -105,12 +111,14 @@ local function buildMarkers(world: Frame)
 	ui.Obstacles = new("Frame", { Name = "Obstacles", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, world)
 	ui.Enemies = {}
 	for i = 1, MAX_ENEMY_DOTS do
-		ui.Enemies[i] = dot(world, "Enemy", 3, P.crimson_500, 4, true)
-		ui.Enemies[i].BackgroundTransparency = 0.35
+		ui.Enemies[i] = dot(world, "Enemy", 3, P.crimson_400, 4, true)
+		ui.Enemies[i].BackgroundTransparency = 0.3
 	end
 	ui.Loot = {}
 	for i = 1, MAX_LOOT do
-		ui.Loot[i] = dot(world, "Loot", 6, P.gold_400, 5, false)
+		ui.Loot[i] = dot(world, "Loot", 6, P.gold_300, 5, false)
+		UIKit.corner(ui.Loot[i], 1)
+		UIKit.stroke(ui.Loot[i], P.slate_950, 1, 0)
 	end
 	ui.Mates = {}
 	for i = 1, MAX_MATES do
@@ -125,22 +133,26 @@ local function buildMarkers(world: Frame)
 	ui.PortalCore.Position = UDim2.fromScale(0.5, 0.5)
 	ui.PortalCore.Visible = true
 	ui.Altar, ui.AltarStroke = ring(world, "Altar", 9, P.amber_300, 5)
-	ui.Boss = Icons.Draw(world, "skull", { Name = "Boss", Size = 16, Color = P.crimson_400, Back = P.slate_950, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 8 })
+	ui.Boss = dot(world, "Boss", 11, P.crimson_500, 8, false)
+	ui.Boss.Rotation = 45
+	UIKit.stroke(ui.Boss, P.ivory_100, 1, 0.15)
 	ui.Boss.Visible = false
 end
 
 function MiniMap.Build(root: Frame, k: { [string]: any })
 	kit = k
-	local holder, face = UIKit.Surface(root, { Name = "MiniMap", Transparency = 0.12, Radius = Theme.Radius.M, Edge = P.gold_500, EdgeTransparency = 0.25, Shadow = false, Size = UDim2.fromOffset(SIZE_PC, SIZE_PC), ZIndex = Theme.Z.Hud, Visible = false })
+	local holder, face = UIKit.Surface(root, { Name = "MiniMap", Transparency = 0.03, Radius = Theme.Radius.M, Edge = P.slate_400, EdgeTransparency = 0.55, Shadow = false, Size = UDim2.fromOffset(SIZE_PC, SIZE_PC + HEADER_H + FOOTER_H), ZIndex = Theme.Z.Hud, Visible = false })
 	holder.Active = false
 	face.Active = false
 	ui.Holder, ui.Face = holder, face
 	-- the clipped viewport, inset so the rounded corners stay clean
-	local view = new("Frame", { Name = "View", BackgroundTransparency = 1, ClipsDescendants = true, Position = UDim2.fromOffset(3, 3), Size = UDim2.new(1, -6, 1, -6), ZIndex = 2 }, face)
+	local view = new("Frame", { Name = "View", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.08, BorderSizePixel = 0, ClipsDescendants = true, Position = UDim2.fromOffset(MAP_INSET, HEADER_H), Size = UDim2.fromOffset(SIZE_PC - 2 * MAP_INSET, SIZE_PC - 2 * MAP_INSET), ZIndex = 2 }, face)
+	UIKit.corner(view, 4)
+	UIKit.stroke(view, P.slate_500, 1, 0.65)
 	ui.View = view
 	-- the world: the whole arena at map scale; its stroke is the fence
-	local world = new("Frame", { Name = "World", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = P.slate_800, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 1), ZIndex = 2 }, view)
-	ui.WorldStroke = UIKit.stroke(world, P.gold_400, 1.5, 0.15)
+	local world = new("Frame", { Name = "World", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = P.slate_800, BackgroundTransparency = 0.25, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 1), ZIndex = 2 }, view)
+	ui.WorldStroke = UIKit.stroke(world, P.slate_400, 1, 0.3)
 	ui.World = world
 	buildMarkers(world)
 	-- the player: gold disc + facing tick in a pivot that turns with the heading
@@ -149,13 +161,34 @@ function MiniMap.Build(root: Frame, k: { [string]: any })
 	local body = new("Frame", { Name = "Body", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(8, 8), BackgroundColor3 = P.gold_300, BorderSizePixel = 0, ZIndex = 9 }, pivot)
 	UIKit.corner(body, 999)
 	UIKit.stroke(body, P.slate_950, 1.5, 0)
-	new("Frame", { Name = "Tick", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0.5, -4), Size = UDim2.fromOffset(3, 7), BackgroundColor3 = P.gold_200, BorderSizePixel = 0, ZIndex = 10 }, pivot)
-	-- "N" in the corner
-	UIKit.Role(face, "Label", "N", { Name = "North", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 1), Size = UDim2.fromOffset(16, 12), TextColor3 = P.gold_300, TextTransparency = 0.25, ZIndex = 3 })
+	for _, side in ipairs({ -1, 1 }) do
+		new("Frame", { Name = "Heading", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, side * 2, 0.5, -7), Size = UDim2.fromOffset(2, 6), Rotation = side * 35, BackgroundColor3 = P.gold_200, BorderSizePixel = 0, ZIndex = 10 }, pivot)
+	end
+	UIKit.text(face, "Label", "MAP", { Position = UDim2.fromOffset(MAP_INSET + 1, 2), Size = UDim2.new(1, -30, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_400, ZIndex = 3 }, 10)
+	UIKit.text(face, "Label", "N", { Name = "North", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -MAP_INSET, 0, 2), Size = UDim2.fromOffset(14, 16), TextColor3 = P.gold_300, ZIndex = 3 }, 11)
+	local legend = new("Frame", { Name = "Legend", BackgroundTransparency = 1, Position = UDim2.new(0, MAP_INSET, 1, -FOOTER_H - 2), Size = UDim2.new(1, -2 * MAP_INSET, 0, FOOTER_H), ZIndex = 3 }, face)
+	local keys = { { Name = "Loot", Color = P.gold_300 }, { Name = "Exit", Color = P.ivory_100 }, { Name = "Ally", Color = P.ice_300 } }
+	for i, entry in ipairs(keys) do
+		local cell = new("Frame", { Name = entry.Name, BackgroundTransparency = 1, Position = UDim2.fromScale((i - 1) / 3, 0), Size = UDim2.fromScale(1 / 3, 1) }, legend)
+		local marker = i == 2 and ring(cell, "Key", 5, entry.Color, 4) or dot(cell, "Key", 4, entry.Color, 4, i ~= 1)
+		marker.Position = UDim2.new(0, 3, 0.5, 0)
+		marker.Visible = true
+		UIKit.text(cell, "Small", entry.Name, { Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -8, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_400 }, 9)
+	end
 	ClientSettings.OnChanged(function(key, value)
 		if key == "Minimap" then
 			enabled = value ~= false
 			MiniMap.Refresh()
+		elseif key == "Colorblind" then
+			arenaModel = nil
+			for _, marker in ipairs(ui.Enemies) do
+				marker.BackgroundColor3 = Accessibility.Color(P.crimson_400, "Danger")
+				marker.Rotation = value ~= "Off" and 45 or 0
+				local corner = marker:FindFirstChildWhichIsA("UICorner")
+				if corner then corner.CornerRadius = UDim.new(value ~= "Off" and 0 or 1, 0) end
+			end
+			for _, marker in ipairs(ui.Mates) do marker.BackgroundColor3 = Accessibility.Color(P.ice_300, "Ally") end
+			ui.Boss.BackgroundColor3 = Accessibility.Color(P.crimson_500, "Danger")
 		end
 	end)
 	kit.OnRelayout(MiniMap.Layout)
@@ -216,8 +249,9 @@ function MiniMap.Layout()
 	local px = compact and SIZE_COMPACT or SIZE_PC
 	if px ~= mapPx or ui.World.Size.X.Offset <= 1 then
 		mapPx = px
-		scale = (mapPx - 6) / VIEW_STUDS
-		ui.Holder.Size = UDim2.fromOffset(mapPx, mapPx)
+			scale = (mapPx - 2 * MAP_INSET) / VIEW_STUDS
+			ui.Holder.Size = UDim2.fromOffset(mapPx, mapPx - 2 * MAP_INSET + HEADER_H + FOOTER_H + 4)
+			ui.View.Size = UDim2.fromOffset(mapPx - 2 * MAP_INSET, mapPx - 2 * MAP_INSET)
 		ui.World.Size = UDim2.fromOffset(math.floor(ARENA_SIZE * scale + 0.5), math.floor(ARENA_SIZE * scale + 0.5))
 		-- the silhouette is drawn at map scale: rebuild it for the new scale
 		arenaModel = nil
@@ -281,10 +315,10 @@ local function buildSilhouette(model: Instance)
 				local size = p.Size
 				if p:IsA("Part") and p.Shape == Enum.PartType.Cylinder then
 					local d = math.max(3, size.Y * scale)
-					local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(d, d), BackgroundColor3 = P.slate_400, BackgroundTransparency = 0.35, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
+					local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(d, d), BackgroundColor3 = P.slate_500, BackgroundTransparency = 0.25, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
 					UIKit.corner(f, 999)
 				else
-					new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(math.max(2, size.X * scale), math.max(2, size.Z * scale)), BackgroundColor3 = P.slate_400, BackgroundTransparency = 0.35, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
+					new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(math.max(2, size.X * scale), math.max(2, size.Z * scale)), BackgroundColor3 = P.slate_500, BackgroundTransparency = 0.25, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
 				end
 			end
 		end
@@ -296,8 +330,10 @@ local function buildSilhouette(model: Instance)
 			local pos = ch:GetPivot().Position
 			local mx, my = toMap(pos.X, pos.Z)
 			local d = math.max(3, r * 2 * scale)
-			local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(d, d), BackgroundColor3 = HAZARD_COLOR[kind] or P.slate_500, BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 2 }, ui.Hazards)
-			UIKit.corner(f, 999)
+				local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(d, d), BackgroundColor3 = HAZARD_COLOR[kind] or P.slate_500, BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 2 }, ui.Hazards)
+				UIKit.corner(f, 999)
+				UIKit.stroke(f, Accessibility.Color(P.amber_300, "Danger"), 1, 0.15)
+				UIKit.text(f, "Label", "!", { Size = UDim2.fromScale(1, 1), TextColor3 = P.ivory_100 }, 9)
 		end
 	end
 end
@@ -340,7 +376,7 @@ end
 local function updateMoving(state: Configuration, root: BasePart)
 	-- scroll the world so the player sits at the centre; turn the player tick
 	local pos = root.Position
-	local half = (mapPx - 6) / 2
+	local half = (mapPx - 2 * MAP_INSET) / 2
 	ui.World.Position = UDim2.fromOffset(math.floor(half - (pos.X - arenaCentre.X) * scale + 0.5), math.floor(half - (pos.Z - arenaCentre.Z) * scale + 0.5))
 	local look = root.CFrame.LookVector
 	if math.abs(look.X) + math.abs(look.Z) > 0.05 then
@@ -353,7 +389,7 @@ local function updateMoving(state: Configuration, root: BasePart)
 	setVisible(ui.Portal, portalOn)
 	if portalOn then
 		placeAt(ui.Portal, ppos.X, ppos.Z)
-		local c = portalColor(state)
+			local c = Accessibility.Color(portalColor(state), (state:GetAttribute("StagePhase") == "Boss" or state:GetAttribute("StagePhase") == "Surge") and "Danger" or "Loot")
 		if ui.PortalStroke.Color ~= c then
 			ui.PortalStroke.Color = c
 			ui.Portal.BackgroundColor3 = c
@@ -398,7 +434,7 @@ local function updateMoving(state: Configuration, root: BasePart)
 					local f = ui.Loot[used]
 					placeAt(f, lpos.X, lpos.Z)
 					local shrine = kind == "Shrine"
-					f.BackgroundColor3 = shrine and P.ivory_200 or P.gold_400
+						f.BackgroundColor3 = Accessibility.Color(shrine and P.ivory_200 or P.gold_400, shrine and "Neutral" or "Loot")
 					f.Rotation = shrine and 45 or 0
 					setVisible(f, true)
 				end

@@ -2425,9 +2425,22 @@ local function buildPause()
 	pause.Sfx = UIKit.Slider(colA, "Effects", "speaker", ClientSettings.Get("Sfx"), function(v)
 		ClientSettings.Set("Sfx", v)
 	end, function() end, { LayoutOrder = 3 })
+	pause.ChannelSliders = {}
+	for i, option in ipairs({ { "CombatVolume", "Combat" }, { "InterfaceVolume", "Interface" }, { "WarningVolume", "Warnings" } }) do
+		local key = option[1]
+		pause.ChannelSliders[key] = UIKit.Slider(colA, option[2], "speaker", ClientSettings.Get(key), function(v)
+			ClientSettings.Set(key, v)
+		end, function() end, { LayoutOrder = i + 3 })
+	end
+	pause.Mute = UIKit.Toggle(colA, "Mute all", "speaker", "Silence every audio channel.", ClientSettings.Get("MuteAll") == true, function(on)
+		ClientSettings.Set("MuteAll", on)
+	end, { LayoutOrder = 7 })
+	pause.SoundCues = UIKit.Toggle(colA, "Visual sound cues", "info", "Words and direction for attack warnings and player sounds.", ClientSettings.Get("VisualAudioCues") == true, function(on)
+		ClientSettings.Set("VisualAudioCues", on)
+	end, { LayoutOrder = 8 })
 	pause.Shake = UIKit.Slider(colA, "Screen shake", "area", ClientSettings.Get("Shake"), function(v)
 		ClientSettings.Set("Shake", v)
-	end, function() end, { LayoutOrder = 4 })
+	end, function() end, { LayoutOrder = 9 })
 
 	sectionCaption(colB, "Comfort & help", 1)
 	pause.Reduced = UIKit.Toggle(colB, "Reduced effects", "sparkle", "Fewer particles and trails. No screen flashes.", ClientSettings.Get("ReducedEffects") == true, function(on)
@@ -2442,6 +2455,25 @@ local function buildPause()
 	pause.Minimap = UIKit.Toggle(colB, "Minimap", "area", "A small map of the arena during runs.", ClientSettings.Get("Minimap") ~= false, function(on)
 		ClientSettings.Set("Minimap", on)
 	end, { LayoutOrder = 5 })
+	pause.Flashes = UIKit.Toggle(colB, "Reduce flashes", "sparkle", "Keep attack warnings; suppress bright hit and screen flashes.", ClientSettings.Get("ReduceFlashes") == true, function(on)
+		ClientSettings.Set("ReduceFlashes", on)
+	end, { LayoutOrder = 6 })
+	pause.Choices = {}
+	for i, option in ipairs({ { "Colorblind", "COLOURS" }, { "TouchLayout", "TOUCH LAYOUT" } }) do
+		local key, label = option[1], option[2]
+		local b
+		b = UIKit.Button(colB, {
+			Title = label .. ": " .. tostring(ClientSettings.Get(key)), Kind = "Outline", Icon = "cycle", IconSize = 18,
+			Size = UDim2.new(1, 0, 0, 46), LayoutOrder = i + 6,
+			OnClick = function()
+				local choices = (Config.Settings :: any).Enums[key]
+				local at = table.find(choices, ClientSettings.Get(key)) or 1
+				ClientSettings.Set(key, choices[at % #choices + 1])
+				b.SetText(label .. ": " .. tostring(ClientSettings.Get(key)))
+			end,
+		})
+		pause.Choices[key] = { Button = b, Label = label }
+	end
 	pause.ReplayTips = UIKit.Button(colB, {
 		Kind = "Secondary",
 		Title = "REPLAY TIPS",
@@ -2449,7 +2481,7 @@ local function buildPause()
 		IconSize = 18,
 		Align = "Center",
 		Size = UDim2.new(1, 0, 0, 46),
-		LayoutOrder = 6,
+		LayoutOrder = 10,
 		OnClick = function()
 			Tutorial.Replay()
 			ClientSettings.Set("Tips", true)
@@ -2464,7 +2496,7 @@ local function buildPause()
 		IconSize = 18,
 		Align = "Center",
 		Size = UDim2.new(1, 0, 0, 46),
-		LayoutOrder = 7,
+		LayoutOrder = 11,
 		OnClick = function()
 			BugReportUI.Open()
 		end,
@@ -2538,7 +2570,7 @@ local function buildPause()
 		local w = tallModalWidth(760)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
-		local twoCol = inner >= 540
+		local twoCol = inner >= 540 and not (UIKit.IsCompact() and v.Y > v.X)
 		local gap = 20
 		local side = 2 -- the columns' padding keeps the slider knobs inside the scroll clip
 		local colW = twoCol and math.floor((inner - gap - 2 * side) / 2) or (inner - 2 * side)
@@ -2617,6 +2649,12 @@ local function syncOptions()
 	pause.Reduced.Set(ClientSettings.Get("ReducedEffects") == true)
 	pause.Numbers.Set(ClientSettings.Get("DamageNumbers") == true)
 	pause.Tips.Set(ClientSettings.Get("Tips") ~= false)
+	pause.Minimap.Set(ClientSettings.Get("Minimap") ~= false)
+	pause.Flashes.Set(ClientSettings.Get("ReduceFlashes") == true)
+	pause.Mute.Set(ClientSettings.Get("MuteAll") == true)
+	pause.SoundCues.Set(ClientSettings.Get("VisualAudioCues") == true)
+	for key, slider in pairs(pause.ChannelSliders) do slider.Set(ClientSettings.Get(key)) end
+	for key, option in pairs(pause.Choices) do option.Button.SetText(option.Label .. ": " .. tostring(ClientSettings.Get(key))) end
 	pause.Layout()
 end
 
@@ -3008,6 +3046,11 @@ local function buildResults()
 		local nLines = (results.ProgLineCount or 0) * perLine
 		results.ProgLines.Size = UDim2.new(1, -28, 0, nLines * lineH)
 		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0))
+		local settlementLines = 0
+		for line in string.gmatch(results.Settlement.Text .. "\n", "([^\n]*)\n") do
+			settlementLines += math.max(1, math.ceil(#line * results.Settlement.TextSize * 0.6 / math.max(1, inner)))
+		end
+		results.Settlement.Size = UDim2.new(1, 0, 0, settlementLines * (results.Settlement.TextSize + 5) + 8)
 		local bodyH = stackHeight(body, 10)
 		local fixed = headH + 10 + btnH + (TS(12) + 4) + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(140, v.Y - 24 - fixed)
@@ -3186,6 +3229,23 @@ local function onRunResult(data)
 	local lost = tonumber(data.GoldLost) or 0
 	local cause = type(data.DeathCause) == "string" and data.DeathCause or ""
 	results.Settlement.Text = string.format("%s · %s coins earned · %s kept · %s lost", tostring(data.Difficulty or "Standard"), UIKit.formatNumber(coinsEarned), UIKit.formatNumber(retained), UIKit.formatNumber(lost)) .. (cause ~= "" and ("\nCause: " .. cause) or "")
+	local history = type(data.DamageHistory) == "table" and data.DamageHistory or {}
+	local recent = {}
+	if not data.Won and not data.Portal and not data.Abandoned then
+		for i = #history, math.max(1, #history - 5), -1 do
+			local hit = history[i]
+			if type(hit) == "table" and type(hit.Cause) == "string" and type(hit.Damage) == "number"
+				and hit.Damage > 0 and hit.Damage < math.huge and type(hit.Time) == "number" and hit.Time == hit.Time then
+				local age = math.max(0, (tonumber(data.Time) or 0) - hit.Time)
+				if age <= 15 then
+					table.insert(recent, string.format("%s · -%s HP · %ds ago", string.sub(hit.Cause, 1, 70), UIKit.formatNumber(math.ceil(hit.Damage)), math.floor(age)))
+				end
+			end
+		end
+	end
+	if #recent > 0 then
+		results.Settlement.Text ..= "\nRecent damage (latest first):\n" .. table.concat(recent, "\n")
+	end
 	-- portal returns before WinMinStages stages are a safe escape, not a win
 	-- Abandoned: left from the pause menu's MAIN MENU (counted as a loss)
 	results.Title.Text = data.Won and "VICTORY!" or (data.Portal and "ESCAPED" or (data.Abandoned and "RUN ENDED" or "DEFEATED"))

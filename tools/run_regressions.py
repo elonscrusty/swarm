@@ -31,19 +31,26 @@ def main():
         "BriarSentinel", "FrostboundColossus",
     )]
     checks += [("ui", ["phone"]), ("ui", ["phone-portrait"])]
+    checks += [("menu", ["phone"]), ("menu", ["phone-portrait"])]
+    checks += [("discovery", ["phone"]), ("discovery", ["phone-portrait"])]
+    checks += [("pings", ["phone"]), ("pings", ["phone-portrait"])]
+    checks += [("accessibility-sim", [])]
+    checks += [("coop-regression", ["rejoin=" + value]) for value in ("success", "expired", "ended", "forged")]
+    checks += [("reconnect-lobby", []), ("reconnect-lobby", ["fail=teleport"]), ("reconnect-lobby", ["fail=expired"])]
 
     def run(check):
         scene, settings = check
         name = scene + ("-" + "-".join(settings).replace("=", "-") if settings else "")
-        command = [args.lune, "run", "tools/ui_regression.luau", *settings] if scene == "ui" else [
+        scripts = {"ui": "ui_regression.luau", "menu": "menu_clarity_regression.luau", "discovery": "menu_discovery_regression.luau", "pings": "team_pings_regression.luau"}
+        command = [args.lune, "run", "tools/" + scripts[scene], *settings] if scene in scripts else [
             args.lune, "run", "tools/preview/runtime/main.luau", "--", "--scene", scene,
             "--studio", "--device", "pc", "--out", str(args.out / (name + ".json")),
             "--max-time", "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff"):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby"):
             command.remove("--studio")
-        if scene != "ui":
+        if scene not in scripts:
             for setting in settings:
                 command.extend(["--set", setting])
         try:

@@ -62,7 +62,7 @@ local function mix(a: Color3, b: Color3, t: number): Color3
 end
 
 ------------------------------------------------------------------------------------------
--- RECIPES: what grows on each floor. Kinds: Tuft (wedge blade cluster), Flower (small
+-- RECIPES: what grows on each floor. Kinds: Tuft (upright blade cluster), Flower (small
 -- ball on the grass), Disc (flat clover / moss / snow / ash patch), Pebble (tilted block).
 -- Tones stay one step from the floor so creatures and gems keep their contrast.
 ------------------------------------------------------------------------------------------
@@ -319,15 +319,18 @@ local function makePiece(a: Ctx, kind: Kind, x: number, z: number, r1: number, r
 	local yaw = r1 * TAU
 	local s = kind.S * (0.8 + r2 * 0.5)
 	if kind.K == "Tuft" then
-		local size = Vector3.new(0.55 * s, (0.7 + r3 * 0.45) * s, (1.0 + r2 * 0.4) * s)
-		local cf = CFrame.new(wx, FLOOR_Y + 0.08 + size.Y / 2, wz) * CFrame.Angles(0, yaw, 0)
-		return { Kind = kind, CF = cf, Size = size, Color = kind.C[1 + math.floor(r3 * #kind.C) % #kind.C], Shape = Enum.PartType.Wedge }
+		-- Slim upright blades, rooted together and splayed slightly. Their narrow depth
+		-- avoids the broad triangular faces of the old single-wedge decoration.
+		local height = (0.65 + r3 * 0.55) * s
+		local size = Vector3.new((0.10 + r2 * 0.05) * s, height, 0.09 * s)
+		local cf = CFrame.new(wx, FLOOR_Y + 0.07, wz) * CFrame.Angles(0, yaw, (r3 - 0.5) * 0.45) * CFrame.new(0, height / 2, 0)
+		return { Kind = kind, CF = cf, Size = size, Color = kind.C[1 + math.floor(r3 * #kind.C) % #kind.C], Shape = Enum.PartType.Block }
 	elseif kind.K == "Flower" then
 		local d = (0.42 + r3 * 0.2) * s
 		local cf = CFrame.new(wx, FLOOR_Y + 0.3 + d * 0.3, wz)
 		return { Kind = kind, CF = cf, Size = Vector3.new(d, d, d), Color = kind.C[1 + math.floor(r2 * #kind.C) % #kind.C], Shape = Enum.PartType.Ball }
 	elseif kind.K == "Disc" then
-		local d = (2.2 + r3 * 2.4) * s
+		local d = (0.7 + r3 * 0.8) * s
 		-- an upright-axis cylinder: Size.X is the thickness
 		local cf = CFrame.new(wx, FLOOR_Y + 0.1 - 0.03, wz) * CFrame.Angles(0, yaw, math.rad(90))
 		return { Kind = kind, CF = cf, Size = Vector3.new(0.06, d, d), Color = kind.C[1 + math.floor(r2 * #kind.C) % #kind.C], Shape = Enum.PartType.Cylinder }
@@ -353,7 +356,17 @@ local function cellPieces(a: Ctx, cx: number, cz: number): { Piece }
 		local z = z0 + frac(a, cx, cz, i * 4 + 2) * CELL
 		if densityAt(a, x, z) > 0 then
 			local kind = pickKind(a, frac(a, cx, cz, i * 4 + 3))
-			table.insert(out, makePiece(a, kind, x, z, frac(a, cx, cz, i * 4 + 4), frac(a, cx, cz, i * 4 + 5), frac(a, cx, cz, i * 4 + 6)))
+				local r1, r2, r3 = frac(a, cx, cz, i * 4 + 4), frac(a, cx, cz, i * 4 + 5), frac(a, cx, cz, i * 4 + 6)
+				if kind.K == "Tuft" then
+					for blade = 1, 4 do
+						local angle = r1 * TAU + blade * 2.4
+						local spread = 0.12 + 0.07 * (blade % 3)
+						table.insert(out, makePiece(a, kind, x + math.cos(angle) * spread, z + math.sin(angle) * spread,
+							(r1 + blade * 0.27) % 1, (r2 + blade * 0.31) % 1, (r3 + blade * 0.23) % 1))
+					end
+				else
+					table.insert(out, makePiece(a, kind, x, z, r1, r2, r3))
+				end
 		end
 	end
 	return out

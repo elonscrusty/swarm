@@ -2307,8 +2307,6 @@ Config.Slots = {
 ------------------------------------------------------------------------------------------
 Config.LevelUp = {
 	Choices = 3,
-	FirstOfferSeconds = 20,
-	OfferIntervalSeconds = 50,
 	ChoicesPerPanel = 4,
 	-- If a player doesn't pick in this many seconds a random card is chosen for them,
 	-- so nobody can stay paused (and protected) forever.
@@ -2347,10 +2345,10 @@ Config.LevelUp = {
 Config.XP = {
 	-- XP needed to go from level L to L+1 = Base + min(L, CapLevel) * PerLevel
 	-- Early costs grow by PerLevel; after CapLevel, each extra level adds AfterCapPerLevel.
-	Base = 10,
-	PerLevel = 5,
+	Base = 20,
+	PerLevel = 8,
 	CapLevel = 20,
-	AfterCapPerLevel = 2,
+	AfterCapPerLevel = 4,
 	GemValues = { Small = 1, Medium = 5, Large = 25 },
 	GemPoolSize = 500,
 	MagnetSpeed = 45, -- studs/s a gem flies toward the player once inside pickup radius
@@ -3003,8 +3001,27 @@ Config.Audio = {
 	  Tips             contextual hints (first run tutorial, co-op rules)
 ]]
 Config.Settings = {
-	Defaults = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = true, Minimap = true },
+	Defaults = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = true, Minimap = true,
+		Colorblind = "Off", ReduceFlashes = false, CombatVolume = 1, InterfaceVolume = 1, WarningVolume = 1,
+		MuteAll = false, VisualAudioCues = false, TouchLayout = "RightHanded" },
+	Enums = {
+		Colorblind = { "Off", "Protanopia", "Deuteranopia", "Tritanopia" },
+		TouchLayout = { "RightHanded", "LeftHanded", "Compact" },
+	},
 }
+
+function Config.ValidateSetting(key: string, value: any): any
+	local default = Config.Settings.Defaults[key]
+	if default == nil or type(value) ~= type(default) then return nil end
+	if type(value) == "number" then
+		if value ~= value or math.abs(value) == math.huge then return nil end
+		return math.clamp(value, 0, 1)
+	end
+	if type(value) == "string" and not (Config.Settings.Enums[key] and table.find(Config.Settings.Enums[key], value)) then return nil end
+	return value
+end
+
+Config.TeamPings = { Cooldown = 2, Duration = 6, MaxDistance = 100 }
 
 --[[
 	First-run tips (client Tutorial.lua): small hints that teach through play, each shown
@@ -3170,6 +3187,7 @@ Config.RunServers = {
 	HomeDelaySeconds = 20, -- results over the lobby (portal / MAIN MENU): back to a lobby after this
 	HomeDelayAfterResultsSeconds = 2, -- the defeat results already counted down
 	HandoffLoadAttempts = 12, -- DataService load retries for a player arriving by a SWARM teleport
+	RejoinGraceSeconds = 120, -- a disconnected co-op member can return while this run remains alive
 }
 
 ------------------------------------------------------------------------------------------
@@ -4145,6 +4163,44 @@ return EnemyData
       </Item>
       <Item class="ModuleScript" referent="14">
         <Properties>
+          <string name="Name">EnemyJournalData</string>
+          <string name="Source"><![CDATA[-- Manual journal presentation. Rewards are revealed only by authoritative observations.
+local EnemyData = require(script.Parent.EnemyData)
+local EnemyJournalData = {}
+local dropOrder = { "XP", "Gold", "Chest", "Chicken", "Magnet", "Bomb" }
+local dropNames = { XP = "XP gems", Gold = "Gold", Chest = "Chest", Chicken = "Chicken", Magnet = "Magnet", Bomb = "Bomb" }
+
+EnemyJournalData.Order = {}
+for id in pairs(EnemyData.Enemies) do table.insert(EnemyJournalData.Order, id) end
+table.sort(EnemyJournalData.Order, function(a, b)
+	return EnemyData.Enemies[a].DisplayName < EnemyData.Enemies[b].DisplayName
+end)
+
+function EnemyJournalData.Entry(profile: any, id: string): { [string]: any }
+	local def = EnemyData.Enemies[id]
+	local journal = type(profile) == "table" and profile.Journal
+	local known = def ~= nil and type(journal) == "table" and type(journal.Enemies) == "table" and journal.Enemies[id] == true
+	local drops = {}
+	if known then
+		local observed = type(journal.Drops) == "table" and journal.Drops[id]
+		if type(observed) == "table" then
+			for _, drop in ipairs(dropOrder) do if observed[drop] == true then table.insert(drops, dropNames[drop]) end end
+		end
+	end
+	return {
+		Known = known,
+		Name = known and def.DisplayName or "Undiscovered enemy",
+		Clue = known and (id == "Boss" and "Scorpion Queen: watch the ground warnings for stomps, dodge charge lanes, and clear her summoned beetles." or def.Role or "Watch its approach and ground warnings.") or "Encounter this enemy to record its attack clues.",
+		Drops = drops,
+	}
+end
+
+return EnemyJournalData
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="15">
+        <Properties>
           <string name="Name">HeroPoses</string>
           <string name="Source"><![CDATA[--[[
 	HeroPoses.lua
@@ -4388,7 +4444,7 @@ return HeroPoses
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">IconData</string>
           <string name="Source"><![CDATA[--[[
@@ -4580,7 +4636,7 @@ return IconData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">ItemData</string>
           <string name="Source"><![CDATA[--[[
@@ -4748,7 +4804,7 @@ return ItemData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">MeshCatalog</string>
           <string name="Source"><![CDATA[--[[
@@ -6927,7 +6983,7 @@ return MeshCatalog
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">MetaUpgradeData</string>
           <string name="Source"><![CDATA[--[[
@@ -7078,7 +7134,7 @@ return MetaUpgradeData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">Palette</string>
           <string name="Source"><![CDATA[--[[
@@ -7249,7 +7305,7 @@ return Palette
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">PassiveData</string>
           <string name="Source"><![CDATA[--[[
@@ -7509,7 +7565,7 @@ return PassiveData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[--[[
@@ -7536,6 +7592,7 @@ local Remotes = {}
 
 -- Server → client
 Remotes.ServerToClient = {
+	"TeamPingShown", -- brief validated co-op landmark/message marker
 	"ProjectileBatch", -- buffer of projectile positions, once per sync tick
 	"FxBatch", -- table of visual effects, once per flush tick
 	"WeaponFx", -- weapon effects that are not projectiles (nova, flame patches, totem pulses, hook chains)
@@ -7564,6 +7621,7 @@ Remotes.ServerToClient = {
 
 -- Client → server
 Remotes.ClientToServer = {
+	"TeamPing", -- (preset kind, server-resolved target) co-op teammates only
 	"LevelUpChoose", -- (index)
 	"LevelUpReroll",
 	"LevelUpSkip",
@@ -7707,7 +7765,7 @@ return Remotes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="23">
         <Properties>
           <string name="Name">StatSheet</string>
           <string name="Source"><![CDATA[--[[
@@ -7921,7 +7979,7 @@ return StatSheet
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">SynergyData</string>
           <string name="Source"><![CDATA[--[[
@@ -8168,7 +8226,7 @@ return SynergyData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="24">
+      <Item class="ModuleScript" referent="25">
         <Properties>
           <string name="Name">Theme</string>
           <string name="Source"><![CDATA[--[[
@@ -8499,7 +8557,7 @@ return Theme
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">WeaponData</string>
           <string name="Source"><![CDATA[--[[
@@ -9555,11 +9613,11 @@ return WeaponData
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="26">
+  <Item class="ServerScriptService" referent="27">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="27">
+    <Item class="Script" referent="28">
       <Properties>
         <string name="Name">GameServer</string>
         <token name="RunContext">0</token>
@@ -9620,6 +9678,8 @@ local ORDER = {
 	"RunManager",
 	"PartyService",
 	"RunServers", -- private run servers: lobby → run server → lobby teleports (live game only)
+	"JournalService",
+	"TeamPingService",
 	"AchievementService",
 	"DamageNumbers",
 	"BugReportService",
@@ -9695,11 +9755,11 @@ print(string.format("[SWARM] server ready (v%s)%s", Config.Version, ctx.DataServ
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Folder" referent="28">
+    <Item class="Folder" referent="29">
       <Properties>
         <string name="Name">Modules</string>
       </Properties>
-      <Item class="ModuleScript" referent="29">
+      <Item class="ModuleScript" referent="30">
         <Properties>
           <string name="Name">AccountService</string>
           <string name="Source"><![CDATA[--[[
@@ -9821,7 +9881,7 @@ return AccountService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="30">
+      <Item class="ModuleScript" referent="31">
         <Properties>
           <string name="Name">AchievementService</string>
           <string name="Source"><![CDATA[--[[
@@ -10091,7 +10151,7 @@ return AchievementService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="31">
+      <Item class="ModuleScript" referent="32">
         <Properties>
           <string name="Name">BiomeHazards</string>
           <string name="Source"><![CDATA[--[[
@@ -10310,7 +10370,7 @@ return BiomeHazards
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="32">
+      <Item class="ModuleScript" referent="33">
         <Properties>
           <string name="Name">BossAI</string>
           <string name="Source"><![CDATA[--[[
@@ -11938,7 +11998,7 @@ return BossAI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="33">
+      <Item class="ModuleScript" referent="34">
         <Properties>
           <string name="Name">BugReportService</string>
           <string name="Source"><![CDATA[--[[
@@ -12433,7 +12493,7 @@ return BugReportService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="34">
+      <Item class="ModuleScript" referent="35">
         <Properties>
           <string name="Name">CaravanEvent</string>
           <string name="Source"><![CDATA[--[[
@@ -12853,7 +12913,7 @@ return CaravanEvent
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="35">
+      <Item class="ModuleScript" referent="36">
         <Properties>
           <string name="Name">DamageNumbers</string>
           <string name="Source"><![CDATA[--[[
@@ -12946,7 +13006,7 @@ return DamageNumbers
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="36">
+      <Item class="ModuleScript" referent="37">
         <Properties>
           <string name="Name">DataService</string>
           <string name="Source"><![CDATA[--[[
@@ -13004,6 +13064,7 @@ local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
 local AccountData = require(game:GetService("ReplicatedStorage").Shared.AccountData)
+local EnemyData = require(game:GetService("ReplicatedStorage").Shared.EnemyData)
 
 local DataService = {}
 
@@ -13047,6 +13108,7 @@ local function defaultData()
 		ReviveTokens = 0,
 		SelectedArena = "Forest",
 		Achievements = { Progress = {}, Unlocked = {} },
+		Journal = { Enemies = {}, Drops = {} },
 		Title = "",
 		NameColor = "",
 		TutorialDone = false,
@@ -13241,6 +13303,47 @@ function DataService.Migrate(data: any): { [string]: any }
 	if data.Difficulty ~= "Standard" and data.Difficulty ~= "Veteran" and data.Difficulty ~= "Nightmare" then
 		data.Difficulty = "Standard"
 	end
+	local oldJournal = type(data.Journal) == "table" and data.Journal or {}
+	local journal = { Enemies = {}, Drops = {} }
+	for id in pairs(EnemyData.Enemies) do
+		if type(oldJournal.Enemies) == "table" and oldJournal.Enemies[id] == true then journal.Enemies[id] = true end
+		local drops = type(oldJournal.Drops) == "table" and oldJournal.Drops[id]
+		if type(drops) == "table" then
+			for _, drop in ipairs({ "XP", "Gold", "Chest", "Chicken", "Magnet", "Bomb" }) do
+				if drops[drop] == true then
+					journal.Enemies[id] = true
+					journal.Drops[id] = journal.Drops[id] or {}
+					journal.Drops[id][drop] = true
+				end
+			end
+		end
+	end
+	data.Journal = journal
+	local lastRun = data.LastRun
+	data.LastRun = nil
+	if type(lastRun) == "table" then
+		local clean = { Won = lastRun.Won == true, Portal = lastRun.Portal == true }
+		for _, key in ipairs({ "Time", "Stage", "StagesCleared", "Kills", "Level", "Gold" }) do
+			local value = lastRun[key]
+			clean[key] = type(value) == "number" and value == value and math.abs(value) < math.huge
+				and math.clamp(math.floor(value), 0, 1e12) or 0
+		end
+		clean.Mode = type(lastRun.Mode) == "string" and type((Config.Modes :: any)[lastRun.Mode]) == "table" and lastRun.Mode ~= "Order" and lastRun.Mode or "Solo"
+		clean.CharacterId = CharacterData.Characters[lastRun.CharacterId] and lastRun.CharacterId or CharacterData.Default
+		clean.Difficulty = (lastRun.Difficulty == "Veteran" or lastRun.Difficulty == "Nightmare") and lastRun.Difficulty or "Standard"
+		clean.DeathCause = type(lastRun.DeathCause) == "string" and string.sub(lastRun.DeathCause, 1, 100) or nil
+		data.LastRun = clean
+	end
+	local reconnect = data.RunReconnect
+	if type(reconnect) ~= "table" or type(reconnect.AccessCode) ~= "string" or #reconnect.AccessCode > 512
+		or type(reconnect.PrivateId) ~= "string" or #reconnect.PrivateId > 128
+		or type(reconnect.Id) ~= "string" or #reconnect.Id > 160
+		or type(reconnect.Expires) ~= "number" or reconnect.Expires ~= reconnect.Expires
+		or math.abs(reconnect.Expires) == math.huge then
+		data.RunReconnect = nil
+	else
+		data.RunReconnect = { AccessCode = reconnect.AccessCode, PrivateId = reconnect.PrivateId, Id = reconnect.Id, Expires = reconnect.Expires }
+	end
 	if type(data.DifficultyClears) ~= "table" then
 		data.DifficultyClears = {}
 	end
@@ -13310,7 +13413,7 @@ local function arrivedByHandoff(player: Player): boolean
 		return player:GetJoinData()
 	end)
 	local td = ok and type(data) == "table" and data.TeleportData or nil
-	return type(td) == "table" and (td.SwarmRun ~= nil or td.SwarmReturn ~= nil)
+	return type(td) == "table" and (td.SwarmRun ~= nil or td.SwarmReturn ~= nil or td.SwarmRejoin ~= nil)
 end
 
 local function loadProfile(player: Player): Profile?
@@ -13654,7 +13757,7 @@ return DataService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="37">
+      <Item class="ModuleScript" referent="38">
         <Properties>
           <string name="Name">DevAccess</string>
           <string name="Source"><![CDATA[--[[
@@ -13716,7 +13819,7 @@ return DevAccess
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="38">
+      <Item class="ModuleScript" referent="39">
         <Properties>
           <string name="Name">DevAllowlist</string>
           <string name="Source"><![CDATA[--[[
@@ -13732,7 +13835,7 @@ return {
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="39">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">DevTools</string>
           <string name="Source"><![CDATA[--[[
@@ -13974,7 +14077,7 @@ return DevTools
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">EnemyAI</string>
           <string name="Source"><![CDATA[--[[
@@ -14827,7 +14930,7 @@ return EnemyAI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="41">
+      <Item class="ModuleScript" referent="42">
         <Properties>
           <string name="Name">EnemySpawner</string>
           <string name="Source"><![CDATA[--[[
@@ -15020,11 +15123,8 @@ local function introduce(typeId: string): boolean
 	end
 	seen[typeId] = true
 	local def = EnemyData.Enemies[typeId]
-	if def and def.Intro then
-		ctx.RunManager.Broadcast(string.format("New: %s - %s", def.DisplayName or typeId, def.Intro), Color3.fromRGB(255, 205, 120))
-		return true
-	end
-	return false
+	-- Discovery clues live in the manual journal; this return still paces new enemy groups.
+	return def ~= nil and def.Intro ~= nil
 end
 
 -- Live-target multiplier from the pacing curve (calm, lull, build-up).
@@ -15215,6 +15315,7 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 
 	table.insert(EnemySpawner.Active, e)
 	e.Slot = #EnemySpawner.Active
+	if ctx.JournalService then ctx.JournalService.Observe(typeId, e.Pos) end
 
 	if isBoss then
 		EnemySpawner.Boss = e
@@ -15554,6 +15655,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 	local def = e.Def
 	local pos = e.Pos
 	local maxHP = e.MaxHP
+	local drops = {}
 	release(e)
 	Fx.Death(pos + Vector3.new(0, e.Height, 0), e.Part:GetAttribute("BaseColor") or def.Color, e.Radius * 2)
 	Fx.Sound("EnemyDeath")
@@ -15566,6 +15668,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 
 	if rng:NextNumber() < (def.GemChance or 1) then
 		ctx.XPSystem.SpawnGem(pos, gemValue(def.Gem, def.XPScale or 1))
+		table.insert(drops, "XP")
 	end
 	if rp then
 		rp.Kills += 1 -- the "Kills" attribute follows at 10 Hz (EnemySpawner.Step)
@@ -15573,6 +15676,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 	ctx.RunManager.AddTotalKill()
 
 	if e.Boss then
+		table.insert(drops, "XP")
 		for _ = 1, 12 do
 			ctx.XPSystem.SpawnGem(pos + Vector3.new(rng:NextNumber(-8, 8), 0, rng:NextNumber(-8, 8)), Config.XP.GemValues.Large)
 		end
@@ -15581,13 +15685,17 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		-- altar guards drop gems only: the altar's chest is their reward
 		if not e.Guard then
 			ctx.XPSystem.SpawnChest(pos)
+			table.insert(drops, "Chest")
 		end
 		ctx.XPSystem.SpawnGem(pos + Vector3.new(2, 0, 0), gemValue(EnemyData.EliteGem, 1))
+		table.insert(drops, "XP")
 	elseif def.Reward then
 		-- a destroyed nest (by a player, not swept away): gold for every living player
 		-- and a few extra gems
 		if rp then
 			local R = def.Reward
+			table.insert(drops, "Gold")
+			table.insert(drops, "XP")
 			local gold = math.floor(R.Gold + R.GoldPerStage * math.max(0, ctx.StageManager.GetStage() - 1))
 			for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
 				if other.Alive and not other.Returned then
@@ -15606,10 +15714,13 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		Fx.Warn("pop", pos.X, pos.Z, e.Radius * 2, "dust")
 	else
 		if rp then
-			ctx.GoldSystem.OnKill(rp, pos)
+			local paid = ctx.GoldSystem.OnKill(rp, pos)
+			if paid and paid > 0 then table.insert(drops, "Gold") end
 		end
-		ctx.XPSystem.RollFloorPickup(pos, rp and rp.Stats.Luck or 0)
+		local drop = ctx.XPSystem.RollFloorPickup(pos, rp and rp.Stats.Luck or 0)
+		if drop then table.insert(drops, drop) end
 	end
+	if ctx.JournalService then ctx.JournalService.Observe(e.Type, pos, drops) end
 	if e.Guard then
 		-- killed by a player (or blew itself up next to one); the portal burning the
 		-- leftovers (no killer) counts as swept away, not beaten
@@ -15831,7 +15942,7 @@ return EnemySpawner
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="42">
+      <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">Events</string>
           <string name="Source"><![CDATA[--[[
@@ -15879,7 +15990,7 @@ return Events
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="43">
+      <Item class="ModuleScript" referent="44">
         <Properties>
           <string name="Name">Fx</string>
           <string name="Source"><![CDATA[--[[
@@ -16078,7 +16189,7 @@ return Fx
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="44">
+      <Item class="ModuleScript" referent="45">
         <Properties>
           <string name="Name">GoldSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -16222,7 +16333,9 @@ function GoldSystem.OnKill(rp, pos: Vector3?)
 		if paid > 0 and pos then
 			Fx.Gold(pos, paid, rp.Player.UserId)
 		end
+		return paid
 	end
+	return 0
 end
 
 ------------------------------------------------------------------------------------------
@@ -16255,6 +16368,8 @@ function GoldSystem.SyncProfile(player: Player)
 		-- retention: curses picked, the daily, the account level and its cosmetics
 		Curses = data.Curses or {},
 		Daily = ctx.RunModifiers and ctx.RunModifiers.DailyView(data) or nil,
+		Journal = data.Journal,
+		LastRun = data.LastRun,
 		Account = ctx.AccountService and ctx.AccountService.View(data) or nil,
 		Ring = data.Ring or "",
 		Frame = data.Frame or "",
@@ -16381,16 +16496,9 @@ local function onSaveSettings(player: Player, settings: any)
 	if not data or type(settings) ~= "table" then
 		return
 	end
-	for key, default in pairs(Config.Settings.Defaults) do
-		local value = settings[key]
-		if type(default) == "number" then
-			local n = tonumber(value)
-			if n and n == n then
-				data.Settings[key] = math.clamp(n, 0, 1)
-			end
-		elseif type(default) == "boolean" and type(value) == "boolean" then
-			data.Settings[key] = value
-		end
+	for key in pairs(Config.Settings.Defaults) do
+		local value = Config.ValidateSetting(key, settings[key])
+		if value ~= nil then data.Settings[key] = value end
 	end
 	player:SetAttribute("DamageNumbers", data.Settings.DamageNumbers == true)
 end
@@ -16440,7 +16548,7 @@ function GoldSystem.Start()
 	end, 2)
 	ctx.DataService.OnProfileLoaded(function(player)
 		local data = ctx.DataService.GetData(player)
-		if data then
+		if data and not (ctx.RunServers and type(ctx.RunServers.HasPendingReconnect) == "function" and ctx.RunServers.HasPendingReconnect(data)) then
 			GoldSystem.RecoverEscrow(data)
 		end
 		GoldSystem.SyncProfile(player)
@@ -16451,7 +16559,7 @@ return GoldSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="45">
+      <Item class="ModuleScript" referent="46">
         <Properties>
           <string name="Name">Hazards</string>
           <string name="Source"><![CDATA[--[[
@@ -16686,7 +16794,7 @@ return Hazards
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="46">
+      <Item class="ModuleScript" referent="47">
         <Properties>
           <string name="Name">ItemSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -17083,7 +17191,53 @@ return ItemSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="47">
+      <Item class="ModuleScript" referent="48">
+        <Properties>
+          <string name="Name">JournalService</string>
+          <string name="Source"><![CDATA[-- Server-observed enemy and drop discoveries. The journal is opened manually.
+local EnemyData = require(game:GetService("ReplicatedStorage").Shared.EnemyData)
+local JournalService = {}
+local ctx
+local pending = {}
+local DROPS = { XP = true, Gold = true, Chest = true, Chicken = true, Magnet = true, Bomb = true }
+
+function JournalService.Record(player: Player, enemy: string, drops: { string }?)
+	if not EnemyData.Enemies[enemy] then return end
+	local data = ctx.DataService.GetData(player)
+	if not data then return end
+	local journal = data.Journal
+	local changed = journal.Enemies[enemy] ~= true
+	journal.Enemies[enemy] = true
+	for _, id in ipairs(drops or {}) do
+		if DROPS[id] then
+			journal.Drops[enemy] = journal.Drops[enemy] or {}
+			changed = changed or journal.Drops[enemy][id] ~= true
+			journal.Drops[enemy][id] = true
+		end
+	end
+	if changed and not pending[player] then
+		pending[player] = true
+		task.delay(1, function()
+			pending[player] = nil
+			if player.Parent then ctx.GoldSystem.SyncProfile(player) end
+		end)
+	end
+end
+
+function JournalService.Observe(enemy: string, position: Vector3, drops: { string }?)
+	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if not rp.Returned and rp.Root and (rp.Root.Position - position).Magnitude <= 120 then
+			JournalService.Record(rp.Player, enemy, drops)
+		end
+	end
+end
+
+function JournalService.Init(c) ctx = c end
+return JournalService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="49">
         <Properties>
           <string name="Name">LeaderboardService</string>
           <string name="Source"><![CDATA[--[[
@@ -17519,7 +17673,7 @@ return LeaderboardService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="48">
+      <Item class="ModuleScript" referent="50">
         <Properties>
           <string name="Name">LevelUpSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -17982,7 +18136,6 @@ local function closePanel(rp, grace: boolean?)
 	rp.BatchRemaining = 0
 	rp.Paused = false
 	if wasOpen then
-		rp.NextUpgradeCombatTime = (rp.UpgradeCombatTime or 0) + Config.LevelUp.OfferIntervalSeconds
 		Remotes.FireClient("LevelUpClose", rp.Player)
 		if grace then ctx.RunManager.GrantChoiceGrace(rp) end
 		ctx.RunManager.ApplyMovement(rp)
@@ -18013,8 +18166,6 @@ local function offerNext(rp)
 	if not rp.Paused then
 		if not ctx.RunManager.IsRunning() or ctx.RunManager.IsMenuPaused() or ctx.RunManager.IsFrozen()
 			or ctx.StageManager.IsHolding() or rp.RewardUntil then return end
-		local eligible = rp.NextUpgradeCombatTime or Config.LevelUp.FirstOfferSeconds
-		if (rp.UpgradeCombatTime or 0) < eligible then return end
 		rp.PanelId = (rp.PanelId or 0) + 1
 		rp.BatchRemaining = math.min(Config.LevelUp.ChoicesPerPanel, rp.PendingLevels)
 		rp.BatchTotal = rp.BatchRemaining
@@ -18034,6 +18185,8 @@ function LevelUpSystem.QueueLevels(rp, count: number)
 	if not rp.Offer then
 		offerNext(rp)
 	end
+	rp.Player:SetAttribute("PendingUpgrades", rp.PendingLevels)
+	rp.Player:SetAttribute("XPReward", #buildPool(rp) == 0 and "Coins" or "Upgrade")
 end
 
 local function choose(rp, index: number)
@@ -18051,6 +18204,8 @@ local function choose(rp, index: number)
 	-- offerNext must always run (it releases the whole-run freeze), even if apply fails
 	local ok, err = pcall(apply, rp, c)
 	offerNext(rp)
+	rp.Player:SetAttribute("PendingUpgrades", rp.PendingLevels)
+	rp.Player:SetAttribute("XPReward", #buildPool(rp) == 0 and "Coins" or "Upgrade")
 	if not ok then
 		warn("[LevelUpSystem] apply failed: " .. tostring(err))
 	end
@@ -18060,6 +18215,7 @@ end
 function LevelUpSystem.Cancel(rp, preserveLevels: boolean?)
 	closePanel(rp)
 	if not preserveLevels then rp.PendingLevels = 0 end
+	rp.Player:SetAttribute("PendingUpgrades", rp.PendingLevels)
 	if rp.Player.Parent then
 		Remotes.FireClient("LevelUpClose", rp.Player)
 	end
@@ -18178,10 +18334,6 @@ function LevelUpSystem.Step(dt: number)
 	local menuPaused = ctx.RunManager.IsMenuPaused()
 	local now = os.clock()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
-		local holding = ctx.StageManager.IsHolding()
-		if rp.Alive and not rp.Paused and not rp.RewardUntil and not menuPaused and not ctx.RunManager.IsFrozen() and not holding then
-			rp.UpgradeCombatTime = (rp.UpgradeCombatTime or 0) + dt
-		end
 		if rp.Offer then
 			if menuPaused then
 				rp.OfferDeadline += dt -- the solo pause menu also pauses the auto-pick timer
@@ -18192,7 +18344,7 @@ function LevelUpSystem.Step(dt: number)
 					choose(rp, rng:NextInteger(1, #rp.Offer))
 				end
 			end
-		elseif rp.Alive and not menuPaused and not holding and not ctx.RunManager.IsFrozen() then
+		elseif rp.Alive and not menuPaused and not ctx.RunManager.IsFrozen() then
 			offerNext(rp)
 		end
 	end
@@ -18246,7 +18398,7 @@ return LevelUpSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="49">
+      <Item class="ModuleScript" referent="51">
         <Properties>
           <string name="Name">LootSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -19266,7 +19418,7 @@ return LootSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="50">
+      <Item class="ModuleScript" referent="52">
         <Properties>
           <string name="Name">MapBuilder</string>
           <string name="Source"><![CDATA[--[[
@@ -19577,6 +19729,19 @@ end
 FALLBACK.Fern = function(m, cf, s, pal)
 	fball(m, cf, s, "Fronds", Vector3.new(2.4, 0.8, 2.4), 0, 0.35, 0, c3(pal, "Fern", P.moss_500))
 end
+-- A fixed three-blade patch keeps grass light and upright at every mesh quality.
+-- Use native parts instead of the broad triangular faces in the uploaded tuft.
+FALLBACK.GrassTuft = function(m, cf, s, pal)
+	local color = c3(pal, "Grass", P.meadow_600)
+	for i = 1, 3 do
+		local height = 0.65 + (i % 3) * 0.18
+		local angle = i * 2.4
+		local blade = CFrame.new(math.cos(angle) * 0.16, 0.04, math.sin(angle) * 0.16)
+			* CFrame.Angles(0, angle, (i - 2) * 0.22) * CFrame.new(0, height / 2, 0)
+		fpart(m, cf, s, "GrassBlade", Vector3.new(0.10, height, 0.08), blade,
+			color:Lerp(P.meadow_700, (i - 1) * 0.10), false)
+	end
+end
 FALLBACK.Flowers = function(m, cf, s, pal)
 	fball(m, cf, s, "Blooms", Vector3.new(1.2, 0.35, 1.0), 0, 0.25, 0, c3(pal, "Bloom", P.ivory_100))
 end
@@ -19837,7 +20002,11 @@ local function prop(parent: Instance, name: string, cf: CFrame, scale: number?, 
 	local o: PropOpts = opts or {}
 	local container = Instance.new("Model")
 	container.Name = name
-	if not fillMesh(container, name, cf, s, palette, o) then
+	if name == "GrassTuft" then
+		-- Keep the same seeded prop placement and palette without replacing these
+		-- narrow blades when the old mesh finishes loading.
+		FALLBACK.GrassTuft(container, cf, s, kitPalette(name, palette), false)
+	elseif not fillMesh(container, name, cf, s, palette, o) then
 		local build = FALLBACK[name] or o.fallback or catalogFallback(name)
 		if build then
 			build(container, cf, s, kitPalette(name, palette), o.shadow ~= false)
@@ -20499,7 +20668,7 @@ local function boulder(arena: Arena, x: number, z: number, s: number, palette: P
 end
 
 -- Ground clutter is drawn bigger than life so it reads from the high run camera.
-local CLUTTER_SCALE: { [string]: number } = { GrassTuft = 1.6, Flowers = 1.5, Fern = 1.35, Rock_Small = 1.3, Mushroom = 1.3, Reeds = 1.3, Lilypads = 1.2, Snow_Drift = 1.1, Snow_Bush = 1.1, Ash_Pile = 1.2 }
+local CLUTTER_SCALE: { [string]: number } = { GrassTuft = 1.0, Flowers = 1.5, Fern = 1.35, Rock_Small = 1.3, Mushroom = 1.3, Reeds = 1.3, Lilypads = 1.2, Snow_Drift = 1.1, Snow_Bush = 1.1, Ash_Pile = 1.2 }
 
 -- Small clutter scattered in a disc around (cx, cz): { {name, sMin, sMax, palette?} }.
 local function scatter(arena: Arena, cx: number, cz: number, radius: number, count: number, kinds: { { any } }, clear: number?, pathPad: number?)
@@ -22622,7 +22791,7 @@ return MapBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="51">
+      <Item class="ModuleScript" referent="53">
         <Properties>
           <string name="Name">MeshService</string>
           <string name="Source"><![CDATA[--[[
@@ -23032,7 +23201,7 @@ return MeshService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="52">
+      <Item class="ModuleScript" referent="54">
         <Properties>
           <string name="Name">ModelBuilder</string>
           <string name="Source"><![CDATA[--[[
@@ -23918,7 +24087,7 @@ return ModelBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="53">
+      <Item class="ModuleScript" referent="55">
         <Properties>
           <string name="Name">MonetizationService</string>
           <string name="Source"><![CDATA[--[[
@@ -24235,7 +24404,7 @@ return MonetizationService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="54">
+      <Item class="ModuleScript" referent="56">
         <Properties>
           <string name="Name">PartyService</string>
           <string name="Source"><![CDATA[--[[
@@ -24863,7 +25032,7 @@ return PartyService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="55">
+      <Item class="ModuleScript" referent="57">
         <Properties>
           <string name="Name">RunManager</string>
           <string name="Source"><![CDATA[--[[
@@ -24922,6 +25091,7 @@ local Events = require(script.Parent.Events)
 local DevTools = require(script.Parent.DevTools)
 
 local RunManager = {}
+local disconnected: { [number]: any } = {}
 
 local ctx
 local state: Configuration
@@ -25204,12 +25374,12 @@ end
 	Builds the player's blocky character (selected character + skin) and places it.
 	inLobby adds the VIP crown. Old characters are destroyed on purpose (not respawned).
 ]]
-spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean): Model?
+spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean, runCharacterId: string?): Model?
 	local data = ctx.DataService.GetData(player)
 	if not data or not player.Parent then
 		return nil
 	end
-	local characterId = data.SelectedCharacter
+	local characterId = runCharacterId or data.SelectedCharacter
 	if not CharacterData.Characters[characterId] then
 		characterId = CharacterData.Default
 	end
@@ -25532,6 +25702,7 @@ end
 
 -- Server-only damage entry point (enemy contact, explosions, boss projectiles).
 function RunManager.DamagePlayer(rp, amount: number, cause: string?)
+	if amount ~= amount or math.abs(amount) == math.huge or amount <= 0 then return end
 	if not RunManager.IsSimulating() or not rp.Alive then
 		return
 	end
@@ -25551,6 +25722,13 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?)
 	local dmg = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
 	local taken = dmg -- after armor / Iron Plate, before the shield (Barbed Mail scales on it)
 	dmg = ctx.ItemSystem.AbsorbHit(rp, dmg) -- Guardian Ward shield first
+	if dmg > 0 then
+		rp.DamageHistory = rp.DamageHistory or {}
+		table.insert(rp.DamageHistory, { Cause = cause or "Swarm damage", Damage = math.min(dmg, rp.HP), Time = runTime })
+		while #rp.DamageHistory > 6 or (#rp.DamageHistory > 0 and runTime - rp.DamageHistory[1].Time > 15) do
+			table.remove(rp.DamageHistory, 1)
+		end
+	end
 	setHP(rp, rp.HP - dmg)
 	if dmg > 0 and rp.HP <= 0 then
 		rp.DeathCause = cause or "Swarm damage"
@@ -25624,6 +25802,7 @@ local function newRunPlayer(player: Player)
 		Gold = 0, -- gold banked this run (earned minus spent at chests / shrines)
 		GoldSpent = 0,
 		LastDownTime = 0,
+		DamageHistory = {},
 		ReviveHeld = false,
 		Items = {}, -- run items { [id] = count } (ItemSystem)
 		ItemOrder = {},
@@ -25697,6 +25876,7 @@ local function beginRun(here: boolean?)
 	local arena = ctx.StageManager.BeginRun(daily and daily.Arenas[1] or selectedArena, daily)
 
 	runTime = 0
+	table.clear(disconnected)
 	frozen = false
 	menuPaused = false
 	totalKills = 0
@@ -25719,6 +25899,8 @@ local function beginRun(here: boolean?)
 
 	for i, player in ipairs(list) do
 		local rp = newRunPlayer(player)
+		if ctx.TeamPingService then ctx.TeamPingService.Assign(rp, i) end
+		if ctx.RunServers and ctx.RunServers.RegisterRun then ctx.RunServers.RegisterRun(rp) end
 		ctx.AchievementService.OnRunStart(player)
 		table.insert(runPlayers, rp)
 		byPlayer[player] = rp
@@ -25803,6 +25985,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 		return false, nil
 	end
 	ctx.GoldSystem.SettleRun(rp, rp.Extracted == true, ctx.StageManager.StagesCleared())
+	data.RunReconnect = nil
 	local newBest, unlocked = false, nil
 	local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
 	if rp.DevTainted then
@@ -25811,7 +25994,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 		rp.CommitInfo = {}
 		return false, nil
 	end
-	data.Stats.TotalKills += rp.Kills
+	data.Stats.TotalKills += math.max(0, rp.Kills - (rp.DisconnectRecordedKills or 0))
 	data.Stats.MostKills = math.max(data.Stats.MostKills or 0, rp.Kills)
 	if t > data.Stats.BestTime then
 		data.Stats.BestTime = math.floor(t)
@@ -25908,6 +26091,13 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 	end
 	local achievements = ctx.AchievementService.TakeRunUnlocks(player)
 	if data then
+		data.LastRun = {
+			Won = won, Portal = portal, Mode = mode, CharacterId = rp.CharacterId,
+			Time = math.floor(rp.TimeSurvived), Stage = reached, StagesCleared = cleared,
+			Kills = rp.Kills, Level = rp.Level, Gold = rp.GoldSettlement and rp.GoldSettlement.Retained or 0,
+			Difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard",
+			DeathCause = not portal and not rp.Abandoned and not rp.Alive and rp.DeathCause or nil,
+		}
 		task.spawn(ctx.DataService.ForceSave, player)
 	end
 	if not player.Parent then
@@ -25925,6 +26115,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		GoldLost = rp.GoldSettlement and rp.GoldSettlement.Lost or 0,
 		GoldRetention = rp.GoldSettlement and rp.GoldSettlement.Rate or 1,
 		DeathCause = not portal and not rp.Abandoned and not rp.Alive and rp.DeathCause or nil,
+		DamageHistory = not portal and not rp.Abandoned and rp.DamageHistory or {},
 		Difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard",
 		GoldSpent = rp.GoldSpent or 0,
 		Items = ctx.ItemSystem.Summary(rp),
@@ -26001,6 +26192,7 @@ end
 
 -- Clears the run world and goes back to the Lobby phase.
 local function returnAll(how: string?)
+	table.clear(disconnected)
 	for _, rp in ipairs(runPlayers) do
 		returnPlayerToLobby(rp, how)
 	end
@@ -26647,7 +26839,31 @@ function RunManager.OnPlayerRemoving(player: Player)
 		return
 	end
 	local wasInRun = phase == "Running" and not rp.Returned
-	if wasInRun then
+	local resumable = false
+	if wasInRun and rp.Alive and not rp.Committed and ctx.RunServers and ctx.RunServers.CanReconnect(rp) then
+		for _, other in ipairs(runPlayers) do
+			if other ~= rp and other.Alive and not other.Returned and other.Player.Parent then resumable = true; break end
+		end
+	end
+	if resumable then
+		ctx.LevelUpSystem.Cancel(rp, true)
+		local data = ctx.DataService.GetData(player)
+		-- Preserve lifetime progress even if reconnect never succeeds. Completion rewards
+		-- wait until the run actually ends; the kill delta prevents counting this twice.
+		if not rp.DevTainted then
+			data.Stats.TotalKills += math.max(0, rp.Kills - (rp.DisconnectRecordedKills or 0))
+			rp.DisconnectRecordedKills = rp.Kills
+			data.Stats.MostKills = math.max(data.Stats.MostKills or 0, rp.Kills)
+			data.Stats.BestTime = math.max(data.Stats.BestTime or 0, math.floor(runTime))
+			data.Stats.BestStage = math.max(data.Stats.BestStage or 0, ctx.StageManager.GetStage())
+			data.Stats.BestLevel = math.max(data.Stats.BestLevel or 0, rp.Level)
+		end
+		local snapshot = table.clone(rp)
+		snapshot.Root, snapshot.Character, snapshot.Humanoid = nil, nil, nil
+		snapshot.ReviveHeld, snapshot.RewardUntil, snapshot.RewardSeq = false, nil, 0
+		data.RunReconnect.Expires = os.time() + Config.RunServers.RejoinGraceSeconds
+		disconnected[player.UserId] = { Player = snapshot, Expires = data.RunReconnect.Expires }
+	elseif wasInRun then
 		saveRunStats(rp, false)
 	end
 	-- other systems may still hold this record (enemy targets, delayed whip slashes)
@@ -26665,6 +26881,61 @@ function RunManager.OnPlayerRemoving(player: Player)
 			checkEnd()
 		end
 	end
+end
+
+-- Restores only a server-held record from this same still-running expedition.
+-- The saved ledger must still match; a lobby settlement makes a stale replay fail closed.
+function RunManager.TryReconnect(player: Player, id: string): boolean
+	local saved = disconnected[player.UserId]
+	local data = ctx.DataService.GetData(player)
+	if phase ~= "Running" or byPlayer[player] or not saved or saved.Expires <= os.time()
+		or saved.Player.RunId ~= runId or id ~= runId or not data or not data.RunEscrow
+		or data.RunEscrow.Id ~= runId or not data.RunReconnect or data.RunReconnect.Id ~= runId
+		or saved.Player.Committed or #runPlayers >= maxPlayers() then return false end
+	local rp = saved.Player
+	-- Consume before callbacks or any operation that may yield.
+	disconnected[player.UserId] = nil
+	data.RunReconnect.Expires = 0
+	rp.Player = player
+	rp.Gold = data.RunEscrow.Gold
+	rp.DevTainted = rp.DevTainted or runDevTainted
+	rp.LastValidPos, rp.SpeedCheckTimer, rp.OnObstacleFor = nil, 0, 0
+	rp.ReviveHeld, rp.RewardUntil, rp.Paused = false, nil, false
+	rp.PortalChoice, rp.PortalOffered = nil, false
+	local arena = MapBuilder.GetArena()
+	local position = arena and arena.Center or Config.ArenaOrigin
+	for _, teammate in ipairs(runPlayers) do
+		if teammate.Alive and teammate.Root then position = teammate.Root.Position; break end
+	end
+	local model = spawnCharacter(player, CFrame.new(position + Vector3.new(3, 3.5, 0)), false, rp.CharacterId)
+	if not model then return false end
+	table.insert(runPlayers, rp)
+	byPlayer[player] = rp
+	RunManager.AttachCharacter(rp, model)
+	rp.InvulnUntil = runTime + 2
+	if ctx.TeamPingService then ctx.TeamPingService.Assign(rp, 1) end
+	ctx.LevelUpSystem.RecomputeStats(rp)
+	setHP(rp, rp.HP)
+	player:SetAttribute("CharacterId", rp.CharacterId)
+	player:SetAttribute("InRun", true)
+	player:SetAttribute("Alive", true)
+	player:SetAttribute("Level", rp.Level)
+	player:SetAttribute("XP", rp.XP)
+	player:SetAttribute("XPNeeded", rp.XPNeeded)
+	player:SetAttribute("Kills", rp.Kills)
+	player:SetAttribute("RunGold", rp.Gold)
+	player:SetAttribute("GoldMult", ctx.MonetizationService.GoldMultiplier(player))
+	local rules = reviveRules()
+	player:SetAttribute("PartnerRevivesLeft", rules and math.max(0, rules.PerRun - (rp.PartnerRevives or 0)) or 0)
+	ctx.ItemSystem.Send(rp)
+	ctx.WeaponSystem.OnInventoryChanged(rp)
+	ctx.LevelUpSystem.SendInventory(rp)
+	ctx.LevelUpSystem.QueueLevels(rp, 0)
+	state:SetAttribute("Participants", #runPlayers)
+	RunManager.RefreshFrozen()
+	ctx.StageManager.OnRosterChanged()
+	RunManager.Broadcast(player.DisplayName .. " rejoined the run.", Color3.fromRGB(120, 255, 160))
+	return true
 end
 
 -- Commits stats of everyone in a run (server shutdown).
@@ -26777,8 +27048,10 @@ function RunManager.Start()
 
 	ctx.DataService.OnProfileLoaded(function(player)
 		ctx.MonetizationService.RefreshAttributes(player)
-		resetPlayerAttributes(player)
-		spawnCharacter(player, lobbySpawnCFrame(), true)
+		if not RunManager.IsParticipant(player) then
+			resetPlayerAttributes(player)
+			spawnCharacter(player, lobbySpawnCFrame(), true)
+		end
 	end)
 end
 
@@ -26786,7 +27059,7 @@ return RunManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="56">
+      <Item class="ModuleScript" referent="58">
         <Properties>
           <string name="Name">RunModifiers</string>
           <string name="Source"><![CDATA[--[[
@@ -27220,7 +27493,7 @@ return RunModifiers
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="57">
+      <Item class="ModuleScript" referent="59">
         <Properties>
           <string name="Name">RunServers</string>
           <string name="Source"><![CDATA[--[[
@@ -27322,6 +27595,7 @@ local firstArrival = 0
 local status = "Waiting"
 local refused: { [Player]: string } = {} -- sent home once their save is loaded
 local homeAt: { [Player]: number } = {} -- back in the run server's lobby: goes home at (os.clock)
+local reconnecting: { [Player]: string } = {}
 
 local GOOD = Color3.fromRGB(120, 255, 160)
 local WARN = Color3.fromRGB(255, 200, 120)
@@ -27348,6 +27622,43 @@ end
 
 function RunServers.IsRunServer(): boolean
 	return role == "Run"
+end
+
+-- This server-only saved pointer contains the reserved access code. Never replicate it.
+function RunServers.HasPendingReconnect(data): boolean
+	local r = data and data.RunReconnect
+	return type(r) == "table" and type(r.AccessCode) == "string" and r.AccessCode ~= ""
+		and type(r.PrivateId) == "string" and r.PrivateId ~= "" and type(r.Id) == "string" and r.Id ~= ""
+		and type(r.Expires) == "number" and r.Expires > os.time()
+		and r.Expires <= os.time() + cfg().RejoinGraceSeconds + 5
+		and type(data.RunEscrow) == "table" and data.RunEscrow.Id == r.Id
+end
+
+function RunServers.RegisterRun(rp)
+	local data = ctx.DataService.GetData(rp.Player)
+	local r = data and data.RunReconnect
+	if role == "Run" and type(r) == "table" and r.PrivateId == game.PrivateServerId then
+		r.Id, r.Expires = rp.RunId, 0
+	elseif data then
+		data.RunReconnect = nil
+	end
+end
+
+function RunServers.CanReconnect(rp): boolean
+	local data = ctx.DataService.GetData(rp.Player)
+	local r = data and data.RunReconnect
+	return role == "Run" and ticket ~= nil and #ticket.Members > 1 and expected[rp.Player.UserId] == true
+		and type(r) == "table" and r.PrivateId == game.PrivateServerId and r.Id == rp.RunId
+		and type(r.AccessCode) == "string" and r.AccessCode ~= ""
+end
+
+local function endReconnect(player: Player)
+	local data = ctx.DataService.GetData(player)
+	if data then
+		data.RunReconnect = nil
+		ctx.GoldSystem.RecoverEscrow(data)
+		ctx.GoldSystem.SyncProfile(player)
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -27566,6 +27877,8 @@ local function fallbackHere(players: { Player }, t: Ticket, starter: Player?)
 	for _, p in ipairs(players) do
 		settle(p)
 		if takeBack(p) then
+			local data = ctx.DataService.GetData(p)
+			if data then data.RunReconnect = nil end
 			table.insert(back, p)
 		end
 	end
@@ -27598,6 +27911,11 @@ local function failOne(player: Player)
 			fallbackHere({ player }, t, player)
 		elseif takeBack(player) then
 			notify(player, "Couldn't reach your team's run server. Start a new run.", BAD)
+		end
+	elseif tr.Kind == "Rejoin" then
+		if takeBack(player) then
+			endReconnect(player)
+			notify(player, "Couldn't reconnect. Your retained coins are safe; you can start a new run.", WARN)
 		end
 	elseif takeBack(player) then
 		homeAt[player] = nil
@@ -27652,26 +27970,16 @@ end
 ------------------------------------------------------------------------------------------
 
 local function travelToRun(list: { Player }, t: Ticket, starter: Player)
-	-- 1. save and release every profile: the run server loads exactly this
-	local released = true
-	for _, p in ipairs(list) do
-		if p.Parent and not ctx.DataService.ReleaseForTeleport(p) then
-			released = false
-		end
-	end
-	if not released then
-		warn("[RunServers] a save could not be released: the run plays here")
-		fallbackHere(list, t, starter)
-		return
-	end
-	-- 2. a fresh reserved server of this place
+	-- Reserve first so the secret reconnect route is saved before profile release.
 	local code: string? = nil
+	local privateId: string? = nil
 	for attempt = 1, 2 do
-		local ok, result = pcall(function()
-			return TeleportService:ReserveServer(game.PlaceId)
+		local ok, result, reservedId = pcall(function()
+			return TeleportService:ReserveServerAsync(game.PlaceId)
 		end)
 		if ok and type(result) == "string" and result ~= "" then
 			code = result
+			privateId = type(reservedId) == "string" and reservedId or nil
 			break
 		end
 		warn("[RunServers] ReserveServer failed: " .. tostring(result))
@@ -27680,6 +27988,18 @@ local function travelToRun(list: { Player }, t: Ticket, starter: Player)
 		end
 	end
 	if not code then
+		fallbackHere(list, t, starter)
+		return
+	end
+	local released = true
+	for _, p in ipairs(list) do
+		local data = ctx.DataService.GetData(p)
+		if data then
+			data.RunReconnect = privateId and { AccessCode = code, PrivateId = privateId, Id = "", Expires = 0 } or nil
+		end
+		if p.Parent and not ctx.DataService.ReleaseForTeleport(p) then released = false end
+	end
+	if not released then
 		fallbackHere(list, t, starter)
 		return
 	end
@@ -27721,7 +28041,7 @@ end
 -- RunManager: this player may not start or join a run now (travelling, or this run
 -- server is still starting its own run).
 function RunServers.Blocks(player: Player): boolean
-	if travelling[player] then
+	if travelling[player] or reconnecting[player] or RunServers.HasPendingReconnect(ctx.DataService.GetData(player)) then
 		return true
 	end
 	return role == "Run" and status == "Waiting"
@@ -27948,6 +28268,10 @@ end
 
 local function onArrival(player: Player)
 	local td = joinTeleportData(player)
+	if type(td) == "table" and type(td.SwarmRejoin) == "table" and type(td.SwarmRejoin.Id) == "string" then
+		reconnecting[player] = td.SwarmRejoin.Id
+		return
+	end
 	local t = td and RunServers.SanitizeTicket(td.SwarmRun)
 	if not ticket and t and table.find(t.Members, player.UserId) then
 		ticket = t
@@ -27993,6 +28317,44 @@ function RunServers.Start()
 		ownTeleport[player] = nil
 		homeAt[player] = nil
 		refused[player] = nil
+		reconnecting[player] = nil
+	end)
+	ctx.DataService.OnProfileLoaded(function(player)
+		-- Other load callbacks may create the lobby character; resume after those finish.
+		task.defer(function()
+			if not player.Parent then return end
+			local data = ctx.DataService.GetData(player)
+			if role == "Run" then
+				local id = reconnecting[player]
+				if id then
+					reconnecting[player] = nil
+					if expected[player.UserId] and RunServers.HasPendingReconnect(data)
+						and data.RunReconnect.PrivateId == game.PrivateServerId and status == "Started"
+						and ctx.RunManager.TryReconnect(player, id) then
+						ctx.GoldSystem.SyncProfile(player)
+						return
+					end
+					if not ticket then setStatus("Failed") end
+					endReconnect(player)
+					refuse(player, "That run has ended or your reconnect window expired. Back to the lobby.")
+				end
+				return
+			end
+			if not RunServers.HasPendingReconnect(data) then
+				if data and data.RunReconnect then endReconnect(player) end
+				return
+			end
+			if not live() then endReconnect(player); return end
+			local r = data.RunReconnect
+			local tr: Travel = { Kind = "Rejoin", Players = { player }, Options = makeOptions(r.AccessCode, { SwarmRejoin = { Id = r.Id } }), Retried = {} }
+			travelling[player] = tr
+			setTravel(player, "ToRun")
+			if not ctx.DataService.ReleaseForTeleport(player) or not teleport({ player }, tr.Options) then
+				failOne(player)
+				return
+			end
+			watchTimeout(tr)
+		end)
 	end)
 	if role ~= "Run" then
 		return
@@ -28021,7 +28383,7 @@ return RunServers
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="58">
+      <Item class="ModuleScript" referent="60">
         <Properties>
           <string name="Name">SpatialGrid</string>
           <string name="Source"><![CDATA[--[[
@@ -28191,7 +28553,7 @@ return SpatialGrid
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="59">
+      <Item class="ModuleScript" referent="61">
         <Properties>
           <string name="Name">StageManager</string>
           <string name="Source"><![CDATA[--[[
@@ -29043,7 +29405,77 @@ return StageManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="60">
+      <Item class="ModuleScript" referent="62">
+        <Properties>
+          <string name="Name">TeamPingService</string>
+          <string name="Source"><![CDATA[-- Preset team communication. Clients provide targets, never text or recipients.
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
+local TeamPingService = {}
+local ctx
+local last = {}
+local COLORS = { Color3.fromRGB(98, 225, 209), Color3.fromRGB(255, 214, 115), Color3.fromRGB(192, 163, 255), Color3.fromRGB(125, 190, 255) }
+local KINDS = { Location = true, Enemy = true, Loot = true, Help = true, Regroup = true }
+
+function TeamPingService.Assign(rp, slot: number)
+	rp.TeamPingColor = rp.TeamPingColor or COLORS[(slot - 1) % #COLORS + 1]
+	rp.Player:SetAttribute("TeamPingColor", rp.TeamPingColor)
+end
+
+local function finite(v: Vector3): boolean
+	return v.X == v.X and v.Y == v.Y and v.Z == v.Z
+		and math.abs(v.X) < 1e6 and math.abs(v.Y) < 1e6 and math.abs(v.Z) < 1e6
+end
+
+function TeamPingService.Send(player: Player, kind: any, target: any): boolean
+	local rp = ctx.RunManager.GetRunPlayer(player)
+	if type(kind) ~= "string" or not KINDS[kind] or not rp or rp.Returned or not rp.Alive
+		or not rp.Root or not ctx.RunManager.IsRunning() then return false end
+	local now, rules = os.clock(), Config.TeamPings
+	if last[player] and now - last[player] < rules.Cooldown then return false end
+	local position: Vector3? = nil
+	if kind == "Help" or kind == "Regroup" then
+		position = rp.Root.Position
+	elseif kind == "Location" and typeof(target) == "Vector3" and finite(target) then
+		position = Vector3.new(target.X, rp.Root.Position.Y, target.Z)
+	elseif type(target) == "number" and target == target and target % 1 == 0 then
+		if kind == "Enemy" then
+			for _, enemy in ipairs(ctx.EnemySpawner.Active) do
+				if enemy.Id == target and enemy.Alive then position = enemy.Pos; break end
+			end
+		elseif kind == "Loot" then
+			for _, object in ipairs(ctx.LootSystem.Objects()) do
+				if object.Id == target and object.Model.Parent and object.State ~= "Opened" and object.State ~= "Claimed"
+					and object.State ~= "Spent" and object.State ~= "Active" then
+					position = object.Pos; break
+				end
+			end
+		end
+	end
+	if not position or not finite(position) or (position - rp.Root.Position).Magnitude > rules.MaxDistance then return false end
+	last[player] = now
+	local color = rp.TeamPingColor or COLORS[1]
+	player:SetAttribute("TeamPingColor", color)
+	for _, teammate in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if not teammate.Returned and teammate.Player.Parent then
+			Remotes.FireClient("TeamPingShown", teammate.Player, {
+				Kind = kind, Position = position, UserId = player.UserId, Color = color, Duration = rules.Duration,
+			})
+		end
+	end
+	return true
+end
+
+function TeamPingService.Init(c) ctx = c end
+function TeamPingService.Start()
+	Remotes.Listen("TeamPing", TeamPingService.Send, 4)
+	game:GetService("Players").PlayerRemoving:Connect(function(player) last[player] = nil end)
+end
+return TeamPingService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="63">
         <Properties>
           <string name="Name">WeaponSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -30983,7 +31415,7 @@ return WeaponSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="61">
+      <Item class="ModuleScript" referent="64">
         <Properties>
           <string name="Name">XPSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -31293,14 +31725,15 @@ end
 -- Floor pickups and chests
 ------------------------------------------------------------------------------------------
 
-function XPSystem.SpawnPickup(kind: string, position: Vector3)
+function XPSystem.SpawnPickup(kind: string, position: Vector3): boolean
 	if #pickups >= Config.Drops.MaxFloorPickups then
-		return
+		return false
 	end
 	local pos = Vector3.new(position.X, Config.ArenaOrigin.Y + 1.2, position.Z)
 	local model = ModelBuilder.BuildPickup(kind, pos)
 	model.Parent = pickupFolder
 	table.insert(pickups, { Model = model, Kind = kind, Pos = pos, Expires = os.clock() + Config.Drops.PickupLifetime })
+	return true
 end
 
 function XPSystem.SpawnChest(position: Vector3)
@@ -31311,9 +31744,9 @@ function XPSystem.SpawnChest(position: Vector3)
 end
 
 -- Rolls a rare floor pickup for a normal kill (luck of the killer helps).
-function XPSystem.RollFloorPickup(position: Vector3, luck: number)
+function XPSystem.RollFloorPickup(position: Vector3, luck: number): string?
 	if rng:NextNumber() >= Config.Drops.FloorPickupChance * (1 + luck) then
-		return
+		return nil
 	end
 	-- the Famine curse: no healing pickups
 	local weights = Config.Drops.Weights
@@ -31329,10 +31762,10 @@ function XPSystem.RollFloorPickup(position: Vector3, luck: number)
 	for kind, w in pairs(weights) do
 		roll -= w
 		if roll <= 0 then
-			XPSystem.SpawnPickup(kind, position)
-			return
+			return XPSystem.SpawnPickup(kind, position) and kind or nil
 		end
 	end
+	return nil
 end
 
 local function collectPickup(p: Pickup, rp)
@@ -31467,19 +31900,19 @@ return XPSystem
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="62">
+  <Item class="SoundService" referent="65">
     <Properties>
       <string name="Name">SoundService</string>
       <bool name="RespectFilteringEnabled">true</bool>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="63">
+  <Item class="StarterGui" referent="66">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="64">
+  <Item class="StarterPlayer" referent="67">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <float name="CameraMaxZoomDistance">120</float>
@@ -31492,15 +31925,185 @@ return XPSystem
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="65">
+    <Item class="StarterPlayerScripts" referent="68">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="66">
+      <Item class="Folder" referent="69">
         <Properties>
           <string name="Name">SwarmClient</string>
         </Properties>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="70">
+          <Properties>
+            <string name="Name">Accessibility</string>
+            <string name="Source"><![CDATA[-- Shared combat colours and optional readable sound cues. Hazard outlines are cosmetic,
+-- bounded, and never replace the real damaging area or the enemy's attack telegraph.
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Settings = require(script.Parent.ClientSettings)
+local Accessibility = {}
+local player = Players.LocalPlayer
+local colors = {
+	Danger = Color3.fromRGB(255, 155, 62), Heal = Color3.fromRGB(80, 225, 220),
+	Ally = Color3.fromRGB(105, 190, 255), Loot = Color3.fromRGB(250, 215, 95),
+	Magic = Color3.fromRGB(205, 155, 255), Neutral = Color3.fromRGB(242, 240, 226),
+}
+
+function Accessibility.Color(color: Color3, role: string?): Color3
+	local mode = Settings.Get("Colorblind")
+	if mode == nil or mode == "Off" then return color end
+	if not role then
+		local h, s, v = color:ToHSV()
+		if s < 0.18 or v < 0.28 then return color end
+		role = (h < 0.06 or h > 0.85) and "Danger" or h < 0.19 and "Loot"
+			or h < 0.46 and "Heal" or h < 0.70 and "Ally" or "Magic"
+	end
+	if mode == "Tritanopia" then
+		if role == "Danger" then return Color3.fromRGB(255, 105, 105) end
+		if role == "Heal" then return Color3.fromRGB(245, 245, 235) end
+		if role == "Loot" then return Color3.fromRGB(255, 175, 190) end
+	end
+	return colors[role] or color
+end
+
+local labels = { FuseTick = "BOMB FUSE", SpitterWindup = "ACID ATTACK", Lunge = "CHARGE",
+	BossWarn = "BOSS ATTACK", BossSummon = "ENEMIES SUMMONED", BurrowWarn = "BURROW ATTACK",
+	Hurt = "HIT", Revive = "REVIVED", LevelUp = "LEVEL UP", Death = "FALLEN" }
+local cue: TextLabel? = nil
+local lastCue = -math.huge
+local cueToken = 0
+local started = false
+
+function Accessibility.Cue(name: string, position: Vector3?)
+	if Settings.Get("VisualAudioCues") ~= true or player:GetAttribute("InRun") ~= true then return end
+	local label = labels[name]
+	if not label or os.clock() - lastCue < 0.3 then return end
+	lastCue = os.clock()
+	if not cue then
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "SwarmSoundCues"
+		gui.ResetOnSpawn = false
+		gui.DisplayOrder = 12
+		gui.Parent = player:WaitForChild("PlayerGui")
+		local text = Instance.new("TextLabel")
+		text.Name = "Cue"
+		text.AnchorPoint = Vector2.new(0.5, 1)
+		text.Position = UDim2.new(0.5, 0, 1, -120)
+		text.Size = UDim2.fromOffset(210, 28)
+		text.BackgroundColor3 = Color3.fromRGB(20, 27, 35)
+		text.BackgroundTransparency = 0.1
+		text.TextColor3 = colors.Neutral
+		text.TextSize = 15
+		text.Font = Enum.Font.SourceSansBold
+		text.Active = false
+		text.Parent = gui
+		cue = text
+	end
+	local char = player.Character
+	local root = char and char.PrimaryPart
+	if position and root then
+		local delta = position - root.Position
+		label ..= math.abs(delta.X) > math.abs(delta.Z) and (delta.X > 0 and " • EAST" or " • WEST")
+			or (delta.Z > 0 and " • SOUTH" or " • NORTH")
+	end
+	local display = cue :: TextLabel
+	display.Text = label
+	display.Visible = true
+	cueToken += 1
+	local token = cueToken
+	task.delay(1.2, function()
+		if token == cueToken and cue then cue.Visible = false end
+	end)
+end
+
+type Hazard = { Model: Model, Parts: { BasePart }, Label: TextLabel, Kind: string }
+local hazards: { Hazard } = {}
+local arena: Instance? = nil
+local detailFolder: Folder? = nil
+local function clearHazards()
+	for _, hazard in ipairs(hazards) do
+		for _, p in ipairs(hazard.Parts) do p:Destroy() end
+	end
+	table.clear(hazards)
+	if detailFolder then detailFolder:Destroy(); detailFolder = nil end
+end
+
+local function readHazards(model: Instance)
+	clearHazards()
+	local folder = Instance.new("Folder")
+	folder.Name = "SwarmHazardOutlines"
+	folder.Parent = workspace
+	detailFolder = folder
+	for _, child in ipairs(model:GetChildren()) do
+		local kind, radius = child:GetAttribute("HazardKind"), child:GetAttribute("HazardRadius")
+		if child:IsA("Model") and type(kind) == "string" and type(radius) == "number" and #hazards < 16 then
+			local pos = child:GetPivot().Position
+			local pieces = {}
+			for i = 1, 12 do
+				local a = i * math.pi / 6
+				local p = Instance.new("Part")
+				p.Name = "DangerOutline"
+				p.Size = Vector3.new(0.13, 0.05, radius * 0.40)
+				p.CFrame = CFrame.new(pos.X + math.cos(a) * radius, pos.Y + 0.43, pos.Z + math.sin(a) * radius) * CFrame.Angles(0, -a, 0)
+				p.Anchored = true
+				p.CanCollide, p.CanTouch, p.CanQuery, p.CastShadow = false, false, false, false
+				p.Parent = folder
+				table.insert(pieces, p)
+			end
+			local gui = Instance.new("BillboardGui")
+			gui.Name = "HazardName"
+			gui.Adornee = pieces[1]
+			gui.Size = UDim2.fromOffset(90, 18)
+			gui.StudsOffsetWorldSpace = Vector3.new(0, 0.4, 0)
+			gui.MaxDistance = 100
+			gui.Parent = pieces[1]
+			local text = Instance.new("TextLabel")
+			text.Size = UDim2.fromScale(1, 1)
+			text.BackgroundTransparency = 1
+			text.Text = "! " .. string.upper(kind)
+			text.TextColor3 = colors.Neutral
+			text.TextStrokeTransparency = 0.15
+			text.Font, text.TextSize = Enum.Font.SourceSansBold, 12
+			text.Parent = gui
+			table.insert(hazards, { Model = child, Parts = pieces, Label = text, Kind = kind })
+		end
+	end
+end
+
+function Accessibility.Init()
+	if started then return end
+	started = true
+	Settings.OnChanged(function(key, value)
+		if key == "VisualAudioCues" and value ~= true and cue then cue.Visible = false end
+	end)
+	local acc = 0
+	RunService.RenderStepped:Connect(function(dt)
+		acc += dt
+		if acc < 0.5 then return end
+		acc = 0
+		local map = workspace:FindFirstChild("SwarmMap")
+		local current = nil
+		if map and player:GetAttribute("InRun") == true then
+			for _, child in ipairs(map:GetChildren()) do
+				if string.sub(child.Name, 1, 6) == "Arena_" then current = child; break end
+			end
+		end
+		if current ~= arena then
+			arena = current
+			if current then readHazards(current) else clearHazards() end
+		end
+		for _, hazard in ipairs(hazards) do
+			local color = Accessibility.Color(Color3.fromRGB(240, 143, 80), "Danger")
+			for _, p in ipairs(hazard.Parts) do p.Color = color end
+		end
+	end)
+end
+
+return Accessibility
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">ArtImage</string>
             <string name="Source"><![CDATA[--[[
@@ -31879,7 +32482,7 @@ return ArtImage
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">AssetPreload</string>
             <string name="Source"><![CDATA[--[[
@@ -32030,7 +32633,7 @@ return AssetPreload
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">Audio</string>
             <string name="Source"><![CDATA[--[[
@@ -32063,6 +32666,8 @@ local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
+local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
 
 local Audio = {}
 
@@ -32070,6 +32675,7 @@ local A = Config.Audio
 local sfxGroup: SoundGroup
 local musicGroup: SoundGroup
 local groups: { [string]: SoundGroup } = {}
+local channels: { [string]: SoundGroup } = {}
 local pools: { [string]: { Sound } } = {}
 local nextIndex: { [string]: number } = {}
 local lastPlayed: { [string]: number } = {}
@@ -32129,11 +32735,17 @@ function Audio.Init()
 	musicGroup.Name = "SwarmMusic"
 	musicGroup.Volume = Config.Settings.Defaults.Music
 	musicGroup.Parent = SoundService
+	for _, name in ipairs({ "Combat", "Interface", "Warning" }) do
+		local group = Instance.new("SoundGroup")
+		group.Name = "Swarm" .. name
+		group.Parent = sfxGroup
+		channels[name] = group
+	end
 	for name, cat in pairs(A.Categories) do
 		local g = Instance.new("SoundGroup")
 		g.Name = name
 		g.Volume = cat.Volume or 1
-		g.Parent = sfxGroup -- nested: the Effects slider scales every category
+		g.Parent = channels[name == "UI" and "Interface" or (name == "Warning" or name == "Boss") and "Warning" or "Combat"]
 		groups[name] = g
 	end
 
@@ -32154,6 +32766,12 @@ function Audio.Init()
 			end
 		end
 	end
+	Audio.SetVolumes(ClientSettings.Get("Music"), ClientSettings.Get("Sfx"))
+	ClientSettings.OnChanged(function(key)
+		if key == "Music" or key == "Sfx" or key == "MuteAll" or string.find(key, "Volume") then
+			Audio.SetVolumes(ClientSettings.Get("Music"), ClientSettings.Get("Sfx"))
+		end
+	end)
 end
 
 -- Drops voices that have finished (Sound.IsPlaying, or their expected length is over).
@@ -32321,6 +32939,7 @@ end
 
 -- Plays an effect (2D). pitch overrides the playback speed (no random variation).
 function Audio.Play(name: string, pitch: number?)
+	Accessibility.Cue(name, nil)
 	local list = pools[name]
 	if not list then
 		return
@@ -32369,6 +32988,7 @@ end
 	back to Play). Telegraph cues use this, so a far-away warning is quieter.
 ]]
 function Audio.PlayAt(name: string, position: Vector3, pitch: number?)
+	Accessibility.Cue(name, position)
 	local def0 = Config.Sounds[name]
 	if not def0 or def0.Id == "" then
 		return
@@ -32455,8 +33075,12 @@ function Audio.SetMusic(name: string?)
 end
 
 function Audio.SetVolumes(music: number, sfx: number)
-	musicGroup.Volume = math.clamp(music, 0, 1)
-	sfxGroup.Volume = math.clamp(sfx, 0, 1)
+	local muted = ClientSettings.Get("MuteAll") == true
+	musicGroup.Volume = muted and 0 or math.clamp(music, 0, 1)
+	sfxGroup.Volume = muted and 0 or math.clamp(sfx, 0, 1)
+	for name, group in pairs(channels) do
+		group.Volume = math.clamp(tonumber(ClientSettings.Get(name .. "Volume")) or 1, 0, 1)
+	end
 end
 
 -- Stops every effect (run end / travel: no stray warning ticks).
@@ -32482,7 +33106,7 @@ return Audio
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">BugReportUI</string>
             <string name="Source"><![CDATA[--[[
@@ -32810,7 +33434,7 @@ return BugReportUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">CameraController</string>
             <string name="Source"><![CDATA[--[[
@@ -33098,7 +33722,7 @@ return CameraController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="72">
+        <Item class="LocalScript" referent="76">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[--[[
@@ -33239,6 +33863,7 @@ VFX.Init({
 	end,
 })
 UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls })
+require(script.Parent:WaitForChild("TeamPings")).Init()
 require(script.Parent:WaitForChild("ClientPerformance")).Init()
 require(script.Parent:WaitForChild("GroundDetail")).Init()
 DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer
@@ -33290,7 +33915,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">ClientPerformance</string>
             <string name="Source"><![CDATA[-- Reduce decoration after sustained slow frames; never change danger cues or saved settings.
@@ -33339,7 +33964,7 @@ return ClientPerformance
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">ClientSettings</string>
             <string name="Source"><![CDATA[--[[
@@ -33386,6 +34011,14 @@ function ClientSettings.Reduced(): boolean
 	return values.ReducedEffects == true
 end
 
+function ClientSettings.Flashes(): boolean
+	return values.ReduceFlashes == true or ClientSettings.Reduced()
+end
+
+local function valid(key: string, value: any): boolean
+	return Config.ValidateSetting(key, value) ~= nil
+end
+
 -- fn(key, value) after every change (also from the profile).
 function ClientSettings.OnChanged(fn: (string, any) -> ())
 	table.insert(listeners, fn)
@@ -33398,7 +34031,8 @@ function ClientSettings.Apply(saved: { [string]: any }?)
 	end
 	for key, default in pairs(Config.Settings.Defaults) do
 		local v = saved[key]
-		if type(v) == type(default) and dirty[key] == nil and values[key] ~= v then
+		if valid(key, v) and dirty[key] == nil and values[key] ~= v then
+			if type(v) == "number" then v = math.clamp(v, 0, 1) end
 			values[key] = v
 			notify(key, v)
 		end
@@ -33407,8 +34041,7 @@ end
 
 -- A change from the settings menu: applied now, saved a moment later.
 function ClientSettings.Set(key: string, value: any)
-	local default = Config.Settings.Defaults[key]
-	if default == nil or type(value) ~= type(default) then
+	if not valid(key, value) then
 		return
 	end
 	if type(value) == "number" then
@@ -33435,7 +34068,7 @@ return ClientSettings
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">CombatFx</string>
             <string name="Source"><![CDATA[--[[
@@ -33742,7 +34375,7 @@ local function buildEdge()
 end
 
 local function edgeFlash(color: Color3, peak: number, dur: number)
-	if ClientSettings.Reduced() then
+	if ClientSettings.Flashes() then
 		return
 	end
 	if not edge then
@@ -33764,7 +34397,7 @@ local function stepEdge(now: number)
 		return
 	end
 	local u = (now - e.Start) / e.Dur
-	if u >= 1 then
+	if u >= 1 or ClientSettings.Flashes() then
 		e.Gui.Enabled = false
 		return
 	end
@@ -34041,7 +34674,7 @@ return CombatFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">Cosmetics</string>
             <string name="Source"><![CDATA[--[[
@@ -34118,7 +34751,7 @@ return Cosmetics
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">DamageText</string>
             <string name="Source"><![CDATA[--[[
@@ -34347,7 +34980,7 @@ return DamageText
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="82">
           <Properties>
             <string name="Name">DevInbox</string>
             <string name="Source"><![CDATA[--[[
@@ -34727,7 +35360,7 @@ return DevInbox
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="83">
           <Properties>
             <string name="Name">DevPanel</string>
             <string name="Source"><![CDATA[--[[
@@ -35175,7 +35808,7 @@ return DevPanel
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">EnemyRenderer</string>
             <string name="Source"><![CDATA[--[[
@@ -35231,6 +35864,8 @@ local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local Palette = require(Shared:WaitForChild("Palette"))
 local ModelLibrary = require(script.Parent.ModelLibrary)
 local Telegraphs = require(script.Parent.Telegraphs)
+local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
 local Players = game:GetService("Players")
 
 local EnemyRenderer = {}
@@ -35340,7 +35975,7 @@ end
 
 local function restoreColors(pieces: { any })
 	for _, piece in ipairs(pieces) do
-		piece.Part.Color = piece.Color
+		piece.Part.Color = Accessibility.Color(piece.Color)
 	end
 end
 
@@ -35419,6 +36054,7 @@ local function rebuild(slot: Slot, typeId: string, elite: boolean)
 	slot.FlashUntil = 0
 	slot.Phase = math.random() * math.pi * 2
 	slot.Parked = false
+	restoreColors(slot.Pieces)
 end
 
 -- Every few seconds: does a type whose pool holds part-built fallbacks have its meshes
@@ -35516,6 +36152,7 @@ local function plainLook(slot: Slot, typeId: string, elite: boolean, now: number
 	if elite then
 		color = color:Lerp(ELITE_GOLD, 0.4)
 	end
+	color = Accessibility.Color(color)
 	-- the server restyles recycled bodies; re-apply the local look whenever it differs
 	if body.Color ~= color then
 		body.Color = color
@@ -35606,6 +36243,7 @@ end
 
 -- White hit flash on enemy `id` (its model, or its plain body over the detail budget).
 function EnemyRenderer.Flash(id: number): boolean
+	if ClientSettings.Flashes() then return true end
 	local slot = slots[id]
 	if not slot then
 		return false -- not tracked yet: VFX flashes the body itself
@@ -35911,7 +36549,7 @@ local function extraPart(shape: Enum.PartType, size: Vector3, color: Color3, mat
 	p.CanTouch = false
 	p.CastShadow = false
 	p.Size = size
-	p.Color = color
+	p.Color = Accessibility.Color(color)
 	p.Material = material
 	p.CFrame = PARK
 	p.Parent = modelFolder
@@ -35966,7 +36604,7 @@ local function ensureHPBar(slot: Slot): BillboardGui
 	corner.Parent = back
 	local fill = Instance.new("Frame")
 	fill.Name = "Fill"
-	fill.BackgroundColor3 = Palette.crimson_400
+	fill.BackgroundColor3 = Accessibility.Color(Palette.crimson_400, "Danger")
 	fill.BorderSizePixel = 0
 	fill.Position = UDim2.fromOffset(1, 1)
 	fill.Size = UDim2.new(1, -2, 1, -2)
@@ -36036,7 +36674,7 @@ local function ensureAura(slot: Slot, affix: string)
 	local label = tag:FindFirstChildOfClass("TextLabel")
 	if label and info and label.Text ~= info.Text then
 		label.Text = info.Text
-		label.TextColor3 = info.Color
+		label.TextColor3 = Accessibility.Color(info.Color)
 	end
 	tag.Adornee = slot.Body
 	tag.StudsOffsetWorldSpace = Vector3.new(0, slot.Body.Size.Y / 2 + 3.4, 0)
@@ -36173,7 +36811,7 @@ local function step(dt: number)
 				end
 				-- Bomb Tick fuse: blinks faster and faster
 				local blinkOn = false
-				if slot.Act == "Fuse" then
+				if slot.Act == "Fuse" and not ClientSettings.Flashes() then
 					local hz = 4 + 14 * math.clamp(actT / (fuse or 0.7), 0, 1)
 					blinkOn = math.sin(actT * hz * math.pi * 2) > 0.2
 				end
@@ -36293,8 +36931,8 @@ local function step(dt: number)
 					end
 					local d = banner and 7 or math.max(body.Size.X, body.Size.Z) * 1.2 + 1
 					ring.Size = Vector3.new(0.05, d, d)
-					ring.Color = banner and Palette.gold_400 or Palette.crimson_400
-					ring.Transparency = (banner and 0.3 or 0.45) + 0.15 * math.sin(clock * 6 + slot.Phase)
+					ring.Color = Accessibility.Color(banner and Palette.gold_400 or Palette.crimson_400, "Danger")
+					ring.Transparency = (banner and 0.3 or 0.45) + (ClientSettings.Flashes() and 0 or 0.15 * math.sin(clock * 6 + slot.Phase))
 					n += 1
 					partsBuf[n] = ring
 					local p = render.Position
@@ -36325,6 +36963,14 @@ local function step(dt: number)
 end
 
 function EnemyRenderer.Init()
+	ClientSettings.OnChanged(function(key)
+		if key == "Colorblind" or key == "ReduceFlashes" or key == "ReducedEffects" then
+			for _, slot in pairs(slots) do
+				slot.FlashUntil = 0
+				restoreColors(slot.Pieces)
+			end
+		end
+	end)
 	local folder = Instance.new("Folder")
 	folder.Name = "SwarmEnemyModels"
 	folder.Parent = workspace
@@ -36347,7 +36993,7 @@ return EnemyRenderer
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="81">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">GroundDetail</string>
             <string name="Source"><![CDATA[--[[
@@ -36414,7 +37060,7 @@ local function mix(a: Color3, b: Color3, t: number): Color3
 end
 
 ------------------------------------------------------------------------------------------
--- RECIPES: what grows on each floor. Kinds: Tuft (wedge blade cluster), Flower (small
+-- RECIPES: what grows on each floor. Kinds: Tuft (upright blade cluster), Flower (small
 -- ball on the grass), Disc (flat clover / moss / snow / ash patch), Pebble (tilted block).
 -- Tones stay one step from the floor so creatures and gems keep their contrast.
 ------------------------------------------------------------------------------------------
@@ -36671,15 +37317,18 @@ local function makePiece(a: Ctx, kind: Kind, x: number, z: number, r1: number, r
 	local yaw = r1 * TAU
 	local s = kind.S * (0.8 + r2 * 0.5)
 	if kind.K == "Tuft" then
-		local size = Vector3.new(0.55 * s, (0.7 + r3 * 0.45) * s, (1.0 + r2 * 0.4) * s)
-		local cf = CFrame.new(wx, FLOOR_Y + 0.08 + size.Y / 2, wz) * CFrame.Angles(0, yaw, 0)
-		return { Kind = kind, CF = cf, Size = size, Color = kind.C[1 + math.floor(r3 * #kind.C) % #kind.C], Shape = Enum.PartType.Wedge }
+		-- Slim upright blades, rooted together and splayed slightly. Their narrow depth
+		-- avoids the broad triangular faces of the old single-wedge decoration.
+		local height = (0.65 + r3 * 0.55) * s
+		local size = Vector3.new((0.10 + r2 * 0.05) * s, height, 0.09 * s)
+		local cf = CFrame.new(wx, FLOOR_Y + 0.07, wz) * CFrame.Angles(0, yaw, (r3 - 0.5) * 0.45) * CFrame.new(0, height / 2, 0)
+		return { Kind = kind, CF = cf, Size = size, Color = kind.C[1 + math.floor(r3 * #kind.C) % #kind.C], Shape = Enum.PartType.Block }
 	elseif kind.K == "Flower" then
 		local d = (0.42 + r3 * 0.2) * s
 		local cf = CFrame.new(wx, FLOOR_Y + 0.3 + d * 0.3, wz)
 		return { Kind = kind, CF = cf, Size = Vector3.new(d, d, d), Color = kind.C[1 + math.floor(r2 * #kind.C) % #kind.C], Shape = Enum.PartType.Ball }
 	elseif kind.K == "Disc" then
-		local d = (2.2 + r3 * 2.4) * s
+		local d = (0.7 + r3 * 0.8) * s
 		-- an upright-axis cylinder: Size.X is the thickness
 		local cf = CFrame.new(wx, FLOOR_Y + 0.1 - 0.03, wz) * CFrame.Angles(0, yaw, math.rad(90))
 		return { Kind = kind, CF = cf, Size = Vector3.new(0.06, d, d), Color = kind.C[1 + math.floor(r2 * #kind.C) % #kind.C], Shape = Enum.PartType.Cylinder }
@@ -36705,7 +37354,17 @@ local function cellPieces(a: Ctx, cx: number, cz: number): { Piece }
 		local z = z0 + frac(a, cx, cz, i * 4 + 2) * CELL
 		if densityAt(a, x, z) > 0 then
 			local kind = pickKind(a, frac(a, cx, cz, i * 4 + 3))
-			table.insert(out, makePiece(a, kind, x, z, frac(a, cx, cz, i * 4 + 4), frac(a, cx, cz, i * 4 + 5), frac(a, cx, cz, i * 4 + 6)))
+				local r1, r2, r3 = frac(a, cx, cz, i * 4 + 4), frac(a, cx, cz, i * 4 + 5), frac(a, cx, cz, i * 4 + 6)
+				if kind.K == "Tuft" then
+					for blade = 1, 4 do
+						local angle = r1 * TAU + blade * 2.4
+						local spread = 0.12 + 0.07 * (blade % 3)
+						table.insert(out, makePiece(a, kind, x + math.cos(angle) * spread, z + math.sin(angle) * spread,
+							(r1 + blade * 0.27) % 1, (r2 + blade * 0.31) % 1, (r3 + blade * 0.23) % 1))
+					end
+				else
+					table.insert(out, makePiece(a, kind, x, z, r1, r2, r3))
+				end
 		end
 	end
 	return out
@@ -37028,7 +37687,7 @@ return GroundDetail
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="82">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--[[
@@ -37127,7 +37786,7 @@ local updatePurse: (number) -> ()
 -- A soft colour flash over a Surface holder's face (a sibling of the face, so it never
 -- joins the face's list layout); fades out and destroys itself.
 local function glow(holder: GuiObject, color: Color3)
-	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+	if (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
 		return
 	end
 	local face = holder:FindFirstChild("Face")
@@ -37257,7 +37916,7 @@ local function buildCounters(frame: Frame)
 	ui.Purse = holder
 	ui.PurseFace = face
 	ui.PurseStroke = face:FindFirstChildOfClass("UIStroke")
-	ui.PurseCoin = Icons.Draw(face, "coin", { Size = 28, LayoutOrder = 1 })
+	ui.PurseCoin = Icons.Draw(face, "lobby_Gold", { Size = 28, LayoutOrder = 1 })
 	ui.PurseValue = role(face, "Number", "0", {
 		Name = "Value",
 		LayoutOrder = 2,
@@ -37876,7 +38535,9 @@ function Hud.Hurt()
 	if not level then
 		return
 	end
-	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+	if (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
+		if vignetteTween then vignetteTween:Cancel() end
+		level.Value = 1
 		UIAnim.Punch(ui.Heart, 0.25)
 		return
 	end
@@ -38184,6 +38845,9 @@ local function updateHealth(dt: number, nowT: number): (number, boolean)
 
 	-- low health: the screen edge breathes crimson
 	local level = ui.VignetteLevel :: NumberValue
+	if ClientSettings.Flashes() and vignetteTween and vignetteTween.PlaybackState == Enum.PlaybackState.Playing then
+		vignetteTween:Cancel()
+	end
 	local alive = player:GetAttribute("Alive") ~= false
 	if alive and frac > 0 and frac <= (Config.UI.LowHealthFraction or 0.3) then
 		if nowT >= (anim.NextBeat or 0) then
@@ -38199,7 +38863,7 @@ local function updateHealth(dt: number, nowT: number): (number, boolean)
 		end
 		if not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing then
 			-- reduced effects: a steady edge instead of a breathing one
-			level.Value = (ClientSettings.Reduced() or ClientPerformance.Reduced()) and 0.8 or (0.72 + 0.18 * (0.5 + 0.5 * math.sin(os.clock() * 4)))
+			level.Value = (ClientSettings.Flashes() or ClientPerformance.Reduced()) and 0.8 or (0.72 + 0.18 * (0.5 + 0.5 * math.sin(os.clock() * 4)))
 		end
 	elseif level.Value ~= 1 and (not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing) then
 		level.Value = 1
@@ -38216,7 +38880,7 @@ local function updateXP(dt: number, nowT: number)
 		anim.XP = 0
 		ui.XP.Fill.BackgroundTransparency = 0
 		local flash = ui.XP.Fill:FindFirstChildOfClass("UIGradient")
-		if flash and not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+		if flash and not (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
 			flash.Color = ColorSequence.new(P.ivory_100)
 			task.delay(0.25, function()
 				flash.Color = Theme.Gradient.XP
@@ -38226,14 +38890,16 @@ local function updateXP(dt: number, nowT: number)
 		UIAnim.Punch(ui.Medal, 0.4)
 		-- level-up burst: a bright sweep along the bar, a ring and gold sparks off the medallion
 		local at = UDim2.new(0, 13, 0.5, 0)
-		UIAnim.SweepOnce(ui.XP.Frame, P.ivory_100, 0.45, 0.1)
+		if not ClientSettings.Flashes() then
+			UIAnim.SweepOnce(ui.XP.Frame, P.ivory_100, 0.45, 0.1)
+		end
 		UIAnim.Ring(ui.XPRow, at, P.gold_200, 80, 0.5)
 		UIAnim.Sparks(ui.XPRow, at, P.gold_200, 8, 40, 0.55)
-		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+		if not (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
 			ui.Level.TextColor3 = P.gold_200
 			UIAnim.Tween(ui.Level, 0.8, { TextColor3 = P.ivory_100 })
 		end
-	elseif anim.LastXPFrac and target > anim.LastXPFrac + 0.015 and nowT - (anim.XPSweepAt or 0) > 0.6 then
+	elseif not ClientSettings.Flashes() and anim.LastXPFrac and target > anim.LastXPFrac + 0.015 and nowT - (anim.XPSweepAt or 0) > 0.6 then
 		-- a gem burst: a quick glint along the bar
 		anim.XPSweepAt = nowT
 		UIAnim.SweepOnce(ui.XP.Frame, P.ivory_100, 0.4, 0.6)
@@ -38245,7 +38911,9 @@ local function updateXP(dt: number, nowT: number)
 		anim.XPSet = anim.XP
 		ui.XP.Set(anim.XP)
 	end
-	local str = string.format("%d / %d XP", xp, need)
+	local pending = tonumber(player:GetAttribute("PendingUpgrades")) or 0
+	local str = pending > 0 and string.format("%d upgrade%s ready", pending, pending == 1 and "" or "s")
+		or string.format("%s: %d / %d XP", player:GetAttribute("XPReward") == "Coins" and "Coins" or "Upgrade", xp, need)
 	if anim.XPShown ~= str then
 		anim.XPShown = str
 		ui.XP.Label.Text = str
@@ -38487,7 +39155,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">Icons</string>
             <string name="Source"><![CDATA[--[[
@@ -38839,6 +39507,10 @@ local LAVENDER = Color3.fromRGB(176, 156, 214)
 type Colors = { Main: Color3, Accent: Color3, Extra: Color3? }
 
 local DEFAULT: { [string]: Colors } = {
+	lobby_Party = { Main = TEAL, Accent = LAVENDER, Extra = P.gold_300 },
+	lobby_BestTime = { Main = P.ivory_100, Accent = TEAL, Extra = P.gold_300 },
+	lobby_Wins = { Main = P.gold_400, Accent = P.crimson_400, Extra = P.gold_200 },
+	lobby_Gold = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_200 },
 	coin = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_200 },
 	info = { Main = P.gold_400, Accent = P.ivory_100 },
 	warning = { Main = P.crimson_300, Accent = P.ivory_100 },
@@ -38991,6 +39663,68 @@ DRAW.people3 = function(c)
 	figure(c, 18.6, 7.4, 0.68, c.dim)
 	figure(c, 12, 8.6, 0.88, c.back, 1.3)
 	figure(c, 12, 8.6, 0.88, c.main)
+end
+
+-- Lobby marks use broad silhouettes and large cut-outs so they survive 22 px chips.
+DRAW.lobby_Party = function(c)
+	-- A mage and hooded scout flank a gold-armoured party leader.
+	figure(c, 5.6, 7.3, 0.61, c.main)
+	tri(c, 5.6, 6.3, 7.6, "up", c.main)
+	box(c, 5.6, 6.4, 7.4, 1.5, c.main, 0, 0.6)
+	figure(c, 18.4, 7.3, 0.61, c.accent)
+	box(c, 18.4, 8.1, 3.1, 1.3, c.back, 0, 0.5)
+	figure(c, 12, 8.8, 0.83, c.back, 1.1)
+	figure(c, 12, 8.8, 0.83, c.extra)
+	box(c, 12, 5.3, 2.8, 3.5, c.mono and c.main or c.accent, 0, 0.9)
+	box(c, 12, 9, 5.2, 1.7, c.back, 0, 0.6)
+	box(c, 12, 17.3, 4.7, 4.7, c.mono and c.back or c.main, 45, 0.5)
+	box(c, 12, 17.3, 1.2, 3.8, c.extra, 0, 0.4)
+end
+
+DRAW.lobby_BestTime = function(c)
+	-- Stopwatch: gold crown, turquoise case, ivory dial, clear dark hands.
+	box(c, 12, 3.5, 2.5, 4.1, c.extra, 0, 0.6)
+	box(c, 12, 2.2, 6.6, 2.5, c.extra, 0, 0.8)
+	box(c, 19.2, 5.7, 4.5, 2.4, c.extra, 42, 0.7)
+	dot(c, 12, 13.4, 9.1, c.accent)
+	dot(c, 12, 13.4, 7.2, c.main)
+	box(c, 12, 7.5, 1.4, 1.8, c.mono and c.back or c.accent, 0, 0.5)
+	box(c, 6.1, 13.4, 1.8, 1.4, c.mono and c.back or c.accent, 0, 0.5)
+	box(c, 17.9, 13.4, 1.8, 1.4, c.mono and c.back or c.accent, 0, 0.5)
+	seg(c, 12, 13.4, 12, 9.6, 2, c.back)
+	seg(c, 12, 13.4, 15.2, 15.5, 2, c.back)
+	dot(c, 12, 13.4, 1.5, c.back)
+end
+
+DRAW.lobby_Wins = function(c)
+	-- A substantial handled cup with a medal inset and crimson award ribbons.
+	box(c, 9.1, 17.9, 3.4, 7.2, c.accent, 21, 0.5)
+	box(c, 14.9, 17.9, 3.4, 7.2, c.accent, -21, 0.5)
+	ring(c, 5.1, 8, 3.1, 2.1, c.main)
+	ring(c, 18.9, 8, 3.1, 2.1, c.main)
+	box(c, 12, 8.5, 12.6, 11.4, c.main, 0, 4.3)
+	box(c, 12, 3.9, 14.1, 2.5, c.extra, 0, 1)
+	box(c, 12, 16, 3.1, 4.7, c.main, 0, 0.6)
+	box(c, 12, 20.9, 11.2, 3, c.main, 0, 1)
+	box(c, 12, 19.5, 7.8, 1.6, c.extra, 0, 0.6)
+	dot(c, 12, 8.8, 3.2, c.mono and c.back or c.accent)
+	box(c, 12, 8.8, 2.5, 2.5, c.extra, 45, 0.3)
+end
+
+DRAW.lobby_Gold = function(c)
+	-- Staggered coin stacks plus a face-on minted coin; broad bands read at chip size.
+	for row = 0, 2 do
+		local y = 16.8 - row * 4.1
+		box(c, 16.2, y, 11.7, 4.8, c.accent, 0, 2.4)
+		box(c, 16.2, y - 1.2, 11.7, 3.1, c.main, 0, 1.5)
+		box(c, 16.2, y - 1.6, 7.2, 1.1, c.extra, 0, 0.5)
+	end
+	dot(c, 7.7, 15.9, 6.1, c.accent)
+	dot(c, 7.7, 15.9, 4.9, c.main)
+	ring(c, 7.7, 15.9, 3.5, 1.1, c.extra)
+	box(c, 7.7, 15.9, 2.3, 3.2, c.mono and c.back or c.accent, 0, 0.5)
+	seg(c, 4.6, 4.4, 4.6, 7.6, 1.4, c.extra)
+	seg(c, 3, 6, 6.2, 6, 1.4, c.extra)
 end
 
 DRAW.userPlus = function(c)
@@ -40501,7 +41235,7 @@ return Icons
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">IdleFx</string>
             <string name="Source"><![CDATA[--[[
@@ -41161,7 +41895,7 @@ return IdleFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="89">
           <Properties>
             <string name="Name">JumpController</string>
             <string name="Source"><![CDATA[--[[
@@ -41370,7 +42104,7 @@ return JumpController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="86">
+        <Item class="ModuleScript" referent="90">
           <Properties>
             <string name="Name">LobbyScreen</string>
             <string name="Source"><![CDATA[--[[
@@ -41427,6 +42161,7 @@ local MenuUpgrades = require(script.Parent.MenuUpgrades)
 local MenuStats = require(script.Parent.MenuStats)
 local MenuCurses = require(script.Parent.MenuCurses)
 local MenuDaily = require(script.Parent.MenuDaily)
+local MenuJournal = require(script.Parent.MenuJournal)
 local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
 local MenuTrack = require(script.Parent.MenuTrack)
 local MenuArenas = require(script.Parent.MenuArenas)
@@ -41451,7 +42186,7 @@ local profile: { [string]: any }? = nil
 local joinedCountdown = false
 local ui: { [string]: any } = {}
 local current = "Home"
-local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Arenas = 3.5, Stats = 4, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9 }
+local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Arenas = 3.5, Stats = 4, Journal = 4.5, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9 }
 local screens: { [string]: any } = {}
 local shownGold: number? = nil
 local lastStatus = ""
@@ -41585,11 +42320,11 @@ local function buildChip(frame: Frame)
 	local function sep(order: number)
 		new("Frame", { BackgroundColor3 = C.Gold, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 22), LayoutOrder = order }, face)
 	end
-	ui.Best = UIKit.Chip(face, "crown", "Best time", "0:00", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 48) }, { Size = 22, Color = P.gold_400, Accent = P.gold_200 })
+	ui.Best = UIKit.Chip(face, "lobby_BestTime", "Best time", "0:00", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 48) }, { Size = 26 })
 	sep(2)
-	ui.Wins = UIKit.Chip(face, "trophy", "Wins", "0", { LayoutOrder = 3, Size = UDim2.fromOffset(0, 48) }, { Size = 22, Color = P.gold_400, Accent = P.gold_200 })
+	ui.Wins = UIKit.Chip(face, "lobby_Wins", "Wins", "0", { LayoutOrder = 3, Size = UDim2.fromOffset(0, 48) }, { Size = 26 })
 	sep(4)
-	ui.Gold = UIKit.Chip(face, "coin", "Gold", "0", { LayoutOrder = 5, Size = UDim2.fromOffset(0, 48) }, { Size = 22 })
+	ui.Gold = UIKit.Chip(face, "lobby_Gold", "Gold", "0", { LayoutOrder = 5, Size = UDim2.fromOffset(0, 48) }, { Size = 26 })
 	ui.Gold.Value.TextColor3 = P.gold_200
 end
 
@@ -41884,18 +42619,11 @@ local function buildModes(frame: Frame)
 	ui.EndlessRow = holder
 	ui.EndlessEdge = face:FindFirstChildOfClass("UIStroke")
 	UIKit.padding(face, 0, 12, 0, 12)
-	local endlessOn = player:GetAttribute("Endless") == true
-	local endlessButton = UIKit.Button(face, { Title = "ENDLESS", Subtitle = endlessOn and "ON" or "OFF", TitleSize = 15, TitleStyle = "Label", Size = UDim2.new(0.48, 0, 1, 0), OnClick = function()
-		endlessOn = not endlessOn
-		ui.EndlessToggle.Set(endlessOn)
+	ui.EndlessToggle = UIKit.Toggle(face, "Endless", nil, nil, player:GetAttribute("Endless") == true, function(on)
 		endlessSentAt = os.clock()
-		Remotes.Get("SetEndless"):FireServer(endlessOn)
-	end })
-	ui.EndlessToggle = {
-		Set = function(on: boolean) endlessOn = on; endlessButton.SetText(nil, on and "ON" or "OFF"); endlessButton.SetSelected(on) end,
-		Get = function(): boolean return endlessOn end,
-	}
-	ui.Difficulty = UIKit.Button(face, { Name = "Difficulty", Title = "STANDARD", Subtitle = "Win: Veteran", TitleSize = 15, TitleStyle = "Label", Position = UDim2.fromScale(0.52, 0), Size = UDim2.new(0.48, 0, 1, 0), OnClick = function()
+		Remotes.Get("SetEndless"):FireServer(on)
+	end, { Size = UDim2.new(0.64, 0, 1, 0) })
+	ui.Difficulty = UIKit.Button(face, { Kind = "Secondary", Name = "Difficulty", Title = "STANDARD", TitleSize = 12, TitleStyle = "Label", Position = UDim2.fromScale(0.67, 0), Size = UDim2.new(0.33, 0, 1, 0), OnClick = function()
 		local currentTier = DifficultyData.Selected(profile)
 		local at = table.find(DifficultyData.Order, currentTier) or 1
 		for step = 1, #DifficultyData.Order - 1 do
@@ -41907,7 +42635,11 @@ local function buildModes(frame: Frame)
 		end
 		toast("Clear all five Standard stages to unlock Veteran.", P.gold_300)
 	end })
-	if ui.Difficulty.Subtitle then ui.Difficulty.Subtitle.TextSize = TS(12) end
+	local difficultyPadding = ui.Difficulty.Content:FindFirstChildOfClass("UIPadding")
+	if difficultyPadding then
+		difficultyPadding.PaddingLeft = UDim.new(0, 4)
+		difficultyPadding.PaddingRight = UDim.new(0, 4)
+	end
 	if Config.Endless == nil or not Config.Endless.Enabled then
 		holder.Visible = false
 	end
@@ -42056,7 +42788,7 @@ local function buildHomeArt()
 	-- corner buttons (STATS keeps its drawn bars: there is no ui_ picture for it)
 	local glyphY = -TS(Theme.TextSize.Caption) / 2 - 2
 	for b, name in pairs({ [ui.SettingsBtn] = "Settings", [ui.RanksBtn] = "Leaderboards", [ui.TrackBtn] = "Track" }) do
-		ArtImage.ButtonIcon(b.Content, "icons/ui/ui_" .. name, { Position = UDim2.new(0.5, 0, 0.5, glyphY), Size = UDim2.fromOffset(42, 42), Idle = { name == "Settings" and "Spin" or "Glint" } }, "Glyph")
+		ArtImage.ButtonIcon(b.Content, "icons/ui/ui_" .. name, { Position = UDim2.new(0.5, 0, 0.5, glyphY), Size = UDim2.fromOffset(42, 42), Idle = name ~= "Settings" and { "Glint" } or nil }, "Glyph")
 	end
 	setArenaArt(tostring(Remotes.State():GetAttribute("SelectedArena") or "Forest"))
 end
@@ -42072,7 +42804,7 @@ local function buildParty(screen: Frame)
 		Kind = "Secondary",
 		Title = "PARTY",
 		Subtitle = "With friends",
-		Icon = "people2",
+		Icon = "lobby_Party",
 		IconSize = 26,
 		TitleSize = 18,
 		Align = "Left",
@@ -42083,7 +42815,7 @@ local function buildParty(screen: Frame)
 	})
 	ui.PartyBadge = partyBadge(ui.PartyBtn.Instance)
 	ui.PartyCornerBtn = UIKit.IconButton(ui.Corner, {
-		Icon = "people2",
+		Icon = "lobby_Party",
 		Caption = "Party",
 		Size = 76,
 		LayoutOrder = 5,
@@ -42093,6 +42825,15 @@ local function buildParty(screen: Frame)
 		end,
 	})
 	ui.PartyCornerBadge = partyBadge(ui.PartyCornerBtn.Instance)
+	-- Keep the party emblem's designed colours on both lobby layouts.
+	local partyHolder = ui.PartyBtn.Content:FindFirstChild("IconHolder")
+	if partyHolder then
+		for _, child in ipairs(partyHolder:GetChildren()) do child:Destroy() end
+		Icons.Draw(partyHolder, "lobby_Party", { Size = 26, Back = C.Panel })
+	end
+	local partyGlyph = ui.PartyCornerBtn.Content:FindFirstChild("Glyph")
+	if partyGlyph then partyGlyph:Destroy() end
+	Icons.Draw(ui.PartyCornerBtn.Content, "lobby_Party", { Name = "Glyph", Size = 32, Back = C.Panel, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -TS(Theme.TextSize.Caption) / 2 - 2) })
 	-- a party member's READY toggle (the leader's start waits for everyone)
 	ui.ReadyBtn = UIKit.Button(screen, {
 		Kind = "Primary",
@@ -42263,6 +43004,7 @@ local function relayout()
 	setChipFlat(not portrait and current == "Characters")
 	-- phones in landscape: the CHARACTERS title shares the top row, so the chip keeps only GOLD
 	local slim = compact and not portrait and current == "Characters"
+	ui.Chip.Visible = not (compact and not portrait and current ~= "Home" and current ~= "Characters")
 	for _, ch in ipairs(ui.ChipFace:GetChildren()) do
 		if ch:IsA("GuiObject") and ch ~= ui.Gold.Frame then
 			ch.Visible = not slim
@@ -42806,7 +43548,7 @@ function LobbyScreen.Update(_dt: number?)
 	if ui.Difficulty.Instance:GetAttribute("Tier") ~= tierKey then
 		ui.Difficulty.Instance:SetAttribute("Tier", tierKey)
 		local tier = DifficultyData.Tiers[difficulty]
-		ui.Difficulty.SetText(string.upper(tier.Name), unlocked == 1 and "Win: Veteran" or unlocked == 2 and "Win: Nightmare" or string.format("x%.2g gold", tier.Gold))
+		ui.Difficulty.SetText(string.upper(tier.Name))
 	end
 	if ui.EndlessEdge and ui.EndlessRow:GetAttribute("Lit") ~= endlessLit then
 		ui.EndlessRow:SetAttribute("Lit", endlessLit)
@@ -42894,6 +43636,7 @@ function LobbyScreen.Init(h: { [string]: any })
 	screens.Characters = MenuCharacters.Build(screen("Characters"), ctx)
 	screens.Upgrades = MenuUpgrades.Build(screen("Upgrades"), ctx)
 	screens.Stats = MenuStats.Build(screen("Stats"), ctx)
+	screens.Journal = MenuJournal.Build(screen("Journal"), ctx)
 	screens.Curses = MenuCurses.Build(screen("Curses"), ctx)
 	screens.Daily = MenuDaily.Build(screen("Daily"), ctx)
 	screens.Ranks = MenuLeaderboards.Build(screen("Ranks"), ctx)
@@ -42908,7 +43651,7 @@ return LobbyScreen
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="87">
+        <Item class="ModuleScript" referent="91">
           <Properties>
             <string name="Name">LootUI</string>
             <string name="Source"><![CDATA[--[[
@@ -43980,7 +44723,7 @@ return LootUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="88">
+        <Item class="ModuleScript" referent="92">
           <Properties>
             <string name="Name">MenuArenas</string>
             <string name="Source"><![CDATA[--[[
@@ -44397,7 +45140,7 @@ return MenuArenas
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="89">
+        <Item class="ModuleScript" referent="93">
           <Properties>
             <string name="Name">MenuCharacters</string>
             <string name="Source"><![CDATA[--[[
@@ -44426,7 +45169,7 @@ return MenuArenas
 	Portrait: character tabs on top (two rows of four), the hero in between, the details
 	panel below.
 
-	Tapping a skin previews it on the dais; an owned skin is equipped at once (as before).
+	Tapping a skin only previews it on the dais; the separate action equips or buys it.
 	Server: BuyCharacter / SelectCharacter / EquipSkin (GoldSystem validates everything),
 	skin passes through MarketplaceService.
 ]]
@@ -44451,8 +45194,8 @@ local MenuCharacters = {}
 local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
+local DETAIL_HEADING = Font.fromEnum(Enum.Font.GothamBold)
 
-local LABEL_W = 96 -- width of the EFFECT / STRENGTH / TRADEOFF / UNLOCK column
 local ACTION_H = 46 -- the SELECT / UNLOCK button
 local PORTRAIT = 84 -- framed portrait in the details head
 local SKIN_GAP = 8
@@ -44618,8 +45361,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, detailFace)
-	UIKit.padding(scroll, 16, 18, 14, 18)
-	ui.DetailList = UIKit.list(scroll, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Left })
+	UIKit.padding(scroll, 20, 20, 20, 20)
+	ui.DetailList = UIKit.list(scroll, { Padding = UDim.new(0, 12), HorizontalAlignment = Enum.HorizontalAlignment.Left })
 	ui.Scroll = scroll
 	-- footer for the action button when the details don't fit (phones): always in view
 	ui.Footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Visible = false, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) }, detailFace)
@@ -44632,16 +45375,17 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.corner(ui.PortraitWell, Theme.Radius.M)
 	UIKit.stroke(ui.PortraitWell, P.gold_400, 2, 0.1)
 	local col = new("Frame", { Name = "Column", BackgroundTransparency = 1, Position = UDim2.fromOffset(PORTRAIT + 14, 0), Size = UDim2.new(1, -(PORTRAIT + 14), 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, head)
-	UIKit.list(col, { Padding = UDim.new(0, 2) })
+	UIKit.list(col, { Padding = UDim.new(0, 6) })
 	local nameRow = new("Frame", { Name = "NameRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, TS(30) + 6), LayoutOrder = 1 }, col)
-	ui.Name = text(nameRow, "H1", "", { Name = "CharName", FontFace = Theme.Font.Display, Size = UDim2.new(1, -120, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, 30)
-	ui.State = UIKit.StatusPill(nameRow, "OWNED", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(0, Theme.Size.Badge + 10) })
+	ui.Name = text(nameRow, "H1", "", { Name = "CharName", FontFace = DETAIL_HEADING, Size = UDim2.fromScale(1, 1), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, 28)
+	ui.State = UIKit.StatusPill(col, "OWNED", { LayoutOrder = 2, Size = UDim2.fromOffset(0, Theme.Size.Badge + 10) })
 	ui.StatePad = ui.State:FindFirstChildOfClass("UIPadding")
 	ui.StateLock = Icons.Draw(ui.State, "lock", { Size = 14, Color = P.crimson_300, Back = P.slate_950, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -4, 0.5, 0) })
-	ui.Role = text(col, "Label", "", { Name = "Role", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(15) + 4), TextColor3 = P.gold_300 }, 15)
+	ui.Role = text(col, "Label", "", { Name = "Role", FontFace = DETAIL_HEADING, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(13) + 4), TextColor3 = P.gold_300 }, 13)
 	ui.Desc = text(col, "Body", "", {
 		Name = "Intro",
-		LayoutOrder = 3,
+		LayoutOrder = 4,
+		LineHeight = 1.15,
 		TextWrapped = true,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
@@ -44650,14 +45394,13 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	}, 15)
 	UIKit.Divider(scroll, 10, { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 12) })
 
-	-- STARTING WEAPON | TRAIT, split by a thin vertical line
+	-- Starting weapon and trait each keep the full panel width.
 	local factH = math.max(52, TS(12) + TS(18) + 16)
-	local facts = new("Frame", { Name = "Facts", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, factH), LayoutOrder = 3 }, scroll)
-	new("Frame", { Name = "Split", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 1, 1, -8) }, facts)
+	local facts = new("Frame", { Name = "Facts", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 2 * factH + 8), LayoutOrder = 3 }, scroll)
 	local function fact(x: number, caption: string): (TextLabel, Frame)
-		local half = new("Frame", { Name = caption, BackgroundTransparency = 1, Position = UDim2.new(x, x > 0 and 14 or 0, 0, 0), Size = UDim2.new(0.5, -14, 1, 0) }, facts)
+		local half = new("Frame", { Name = caption, BackgroundTransparency = 1, Position = UDim2.fromOffset(0, x > 0 and factH + 8 or 0), Size = UDim2.new(1, 0, 0, factH) }, facts)
 		local well = new("Frame", { Name = "Well", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(48, 48) }, half)
-		UIKit.SectionLabel(half, caption, P.gold_300, { Position = UDim2.fromOffset(60, 4), Size = UDim2.new(1, -60, 0, TS(12) + 2) })
+		text(half, "Label", string.upper(caption), { FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(60, 4), Size = UDim2.new(1, -60, 0, TS(12) + 4), TextColor3 = P.gold_300 }, 12)
 		local value = text(half, "BodyStrong", "", { Position = UDim2.fromOffset(60, 8 + TS(12)), Size = UDim2.new(1, -60, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, 18)
 		return value, well
 	end
@@ -44673,8 +45416,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	-- EFFECT (big "+N%" + text + weapon list), STRENGTH, TRADEOFF
 	local function infoRow(order: number, caption: string, color: Color3): (Frame, Frame)
 		local row = new("Frame", { Name = caption, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, scroll)
-		UIKit.SectionLabel(row, caption, color, { Size = UDim2.fromOffset(LABEL_W, TS(15) + 6) })
-		local body = new("Frame", { Name = "Body", BackgroundTransparency = 1, Position = UDim2.fromOffset(LABEL_W, 0), Size = UDim2.new(1, -LABEL_W, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, row)
+		text(row, "Label", string.upper(caption), { FontFace = DETAIL_HEADING, TextColor3 = color, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
+		local body = new("Frame", { Name = "Body", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TS(13) + 10), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, row)
 		return row, body
 	end
 	local function wrapped(parent: Instance, style: string, color: Color3, size: number?, props: { [string]: any }?): TextLabel
@@ -44682,6 +45425,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			TextWrapped = true,
+			FontFace = Theme.Font.Body,
+			LineHeight = 1.15,
 			TextColor3 = color,
 			TextYAlignment = Enum.TextYAlignment.Top,
 		}, size)
@@ -44693,11 +45438,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		return l
 	end
 	local _, effBody = infoRow(5, "Effect", P.gold_300)
-	UIKit.list(effBody, { Padding = UDim.new(0, 2) })
+	UIKit.list(effBody, { Padding = UDim.new(0, 6) })
 	local effTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, effBody)
-	ui.EffectBig = text(effTop, "Display", "", { Name = "Big", Size = UDim2.fromOffset(0, TS(26) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, Position = UDim2.fromOffset(0, -6) }, 26)
+	ui.EffectBig = text(effTop, "Display", "", { Name = "Big", FontFace = DETAIL_HEADING, Size = UDim2.fromOffset(0, TS(24) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300 }, 24)
 	ui.Trait = wrapped(effTop, "Body", P.ivory_100, 15)
-	ui.EffectList = wrapped(effBody, "Small", P.ivory_300, 12, { LayoutOrder = 2, Name = "Weapons" })
+	ui.EffectList = wrapped(effBody, "Small", P.ivory_300, 14, { LayoutOrder = 2, Name = "Weapons" })
 	local _, strBody = infoRow(6, "Strength", P.gold_300)
 	ui.Strength = wrapped(strBody, "Body", P.ivory_100, 15)
 	local _, tradeBody = infoRow(7, "Tradeoff", P.crimson_300)
@@ -44708,12 +45453,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	ui.UnlockCard = unlock
 	UIKit.list(unlock, { Padding = UDim.new(0, 4) })
 	UIKit.Hairline(unlock, { LayoutOrder = 0 })
-	local uTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, TS(30) + 6), LayoutOrder = 1 }, unlock)
-	UIKit.SectionLabel(uTop, "Unlock", P.gold_300, { Size = UDim2.fromOffset(LABEL_W, TS(30) + 6) })
-	ui.UnlockName = text(uTop, "H2", "", { Position = UDim2.fromOffset(LABEL_W, 0), Size = UDim2.new(1, -(LABEL_W + 120), 1, 0), TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd }, Theme.TextSize.H2)
-	ui.UnlockCount = text(uTop, "Display", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 160, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 }, 28)
-	ui.UnlockRule = wrapped(unlock, "Body", P.ivory_200, 15, { Name = "Rule", LayoutOrder = 2 })
-	ui.UnlockMeter = UIKit.Meter(unlock, { Size = UDim2.new(1, 0, 0, 10), Color = P.gold_400, LayoutOrder = 3 } :: any)
+	local uTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, unlock)
+	text(uTop, "Label", "UNLOCK", { FontFace = DETAIL_HEADING, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
+	ui.UnlockName = text(uTop, "BodyStrong", "", { FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(0, TS(13) + 10), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.ivory_100 }, 16)
+	ui.UnlockCount = text(unlock, "Display", "", { FontFace = DETAIL_HEADING, LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(22) + 6), TextColor3 = P.gold_200 }, 22)
+	ui.UnlockRule = wrapped(unlock, "Body", P.ivory_200, 15, { Name = "Rule", LayoutOrder = 3 })
+	ui.UnlockMeter = UIKit.Meter(unlock, { Size = UDim2.new(1, 0, 0, 10), Color = P.gold_400, LayoutOrder = 4 } :: any)
 	ui.UnlockMeter.Frame.Name = "Progress"
 
 	ui.Action = UIKit.Button(scroll, {
@@ -44749,11 +45494,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	})
 
 	-- SKINS header (label, rule, the button for a skin not owned) and the skin cards
-	local skinHeadH = math.max(34, TS(14) + 14)
+	local skinHeadH = math.max(Theme.Size.TapMin, TS(14) + 14)
 	local skinHead = new("Frame", { Name = "SkinHead", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, skinHeadH), LayoutOrder = 10 }, scroll)
-	UIKit.SectionLabel(skinHead, "Skins", P.gold_300, { Size = UDim2.fromOffset(64, skinHeadH) }).TextSize = TS(15)
+	text(skinHead, "Label", "SKINS", { FontFace = DETAIL_HEADING, TextColor3 = P.gold_300, Size = UDim2.fromOffset(64, skinHeadH) }, 13)
 	ui.SkinRule = UIKit.Hairline(skinHead, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 70, 0.5, 0), Size = UDim2.new(1, -70, 0, 1) })
 	ui.SkinAction = UIKit.Button(skinHead, {
+		Name = "SkinAction",
 		Kind = "Outline",
 		Title = "GET SKIN",
 		Icon = "robux",
@@ -44769,7 +45515,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				return
 			end
 			if skinOwned(p, inspSkin) then
-				Remotes.Get("EquipSkin"):FireServer(inspChar, inspSkin)
+				if p.OwnedCharacters[inspChar] == true and (p.Skins[inspChar] or "Default") ~= inspSkin then
+					Remotes.Get("EquipSkin"):FireServer(inspChar, inspSkin)
+				end
 				return
 			end
 			local passId = skinPassId(inspSkin)
@@ -44833,10 +45581,6 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				UIKit.Click()
 				inspSkin = skinId
 				Showcase.Show(inspChar, inspSkin)
-				local p = profile()
-				if p and skinOwned(p, skinId) and (p.Skins[inspChar] or "Default") ~= skinId then
-					Remotes.Get("EquipSkin"):FireServer(inspChar, skinId)
-				end
 				MenuCharacters._refresh()
 			end)
 			swatches[skinId] = { Hit = hit, Stroke = st, Lock = lock, Pill = pill, Check = badge }
@@ -44911,12 +45655,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local selected = p.SelectedCharacter == inspChar
 		ui.Name.Text = string.upper(def.Name)
 		-- long names a step smaller so they fit beside the pill
-		local nameSize = 30
+		local nameSize = 28
 		while nameSize > 20 and #def.Name * TS(nameSize) * 0.74 > (ui.NameRoom or 300) do
 			nameSize -= 2
 		end
 		ui.Name.TextSize = TS(nameSize)
-		ui.Role.Text = UIKit.track(def.Role or "")
+		ui.Role.Text = string.upper(def.Role or "")
 		ui.Desc.Text = def.Description
 		local weapon = WeaponData.Weapons[def.StartWeapon]
 		ui.Weapon.Text = weapon and weapon.Name or def.StartWeapon
@@ -44924,10 +45668,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local big, body, list = splitEffect(def.Trait and def.Trait.Text or (def.BonusText or ""))
 		ui.EffectBig.Text = big or ""
 		ui.EffectBig.Visible = big ~= nil
-		-- the text runs after the big number (its width estimated from the font size)
-		local bigW = big and math.ceil(#big * TS(26) * 0.8) + 10 or 0
-		ui.Trait.Position = UDim2.fromOffset(bigW, big and 4 or 0)
-		ui.Trait.Size = UDim2.new(1, -bigW, 0, 0)
+		-- The trait sentence stays full width beneath its highlighted number.
+		ui.Trait.Position = UDim2.fromOffset(0, big and TS(24) + 8 or 0)
+		ui.Trait.Size = UDim2.new(1, 0, 0, 0)
 		ui.Trait.Text = body
 		ui.EffectList.Text = list or ""
 		ui.EffectList.Visible = list ~= nil
@@ -45008,20 +45751,25 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			s.Stroke.Thickness = (isEq or skinId == inspSkin) and 2 or 1.5
 			s.Stroke.Transparency = (isEq or skinId == inspSkin) and 0 or 0.3
 		end
-		-- the button for a skin not owned (owned skins equip on tap)
+		-- Preview never changes the equipped skin; only this explicit action does.
 		local skin = CharacterData.Skins[inspSkin]
 		local action = ui.SkinAction
+		action.Instance.Visible = true
 		if skinOwned(p, inspSkin) then
-			action.Instance.Visible = false
+			local isEquipped = equipped == inspSkin
+			action.SetKind(isEquipped and "Secondary" or "Outline")
+			action.SetIcon("check")
+			action.SetText(isEquipped and "EQUIPPED" or "EQUIP SKIN")
+			action.SetEnabled(own and not isEquipped)
 		else
 			local passId = skinPassId(inspSkin)
 			action.Instance.Visible = true
 			action.SetKind("Outline")
 			action.SetIcon("robux")
 			if skin and skin.Pass == "StarterPack" then
-				action.SetText(passId and "STARTER PACK" or "COMING SOON")
+				action.SetText(passId and "BUY PACK" or "COMING SOON")
 			else
-				action.SetText(passId and "GET SKIN" or "COMING SOON")
+				action.SetText(passId and "BUY SKIN" or "COMING SOON")
 			end
 			action.SetEnabled(passId ~= nil)
 		end
@@ -45130,10 +45878,10 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 			local detailH = math.min(contentH, math.floor(H * 0.56) - (listH - 76))
 			local detailY = H - M - detailH
-			ui.NameRoom = w - 36 - PORTRAIT - 14 - 124
+			ui.NameRoom = w - 40 - PORTRAIT - 14
 			place(ui.Detail, M, detailY, w, detailH)
 			pinAction(contentH > detailH + 1)
-			fitSkins(w - 36)
+			fitSkins(w - 40)
 			place(ui.Centre, (W - centreW) / 2, detailY - 64, centreW, 58)
 			if ctx.Current() == "Characters" then
 				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + listH) + (detailY - 50)) / 2 / H)
@@ -45164,10 +45912,10 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				rowStyle(id, cols == 2 and "tile" or "row", rowH)
 			end
 			local rw = math.clamp(W * 0.37, 430, 530)
-			ui.NameRoom = rw - 36 - PORTRAIT - 14 - 124
+			ui.NameRoom = rw - 40 - PORTRAIT - 14
 			place(ui.Detail, W - M - rw, top, rw, math.min(contentH, H - M - top))
 			pinAction(contentH > H - M - top + 1)
-			fitSkins(rw - 36)
+			fitSkins(rw - 40)
 			-- the hero's name between the panels, under the dais
 			local gapL, gapR = M + lw, W - M - rw
 			centreW = math.min(420, gapR - gapL - 16)
@@ -45223,7 +45971,7 @@ return MenuCharacters
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="90">
+        <Item class="ModuleScript" referent="94">
           <Properties>
             <string name="Name">MenuCurses</string>
             <string name="Source"><![CDATA[--[[
@@ -45487,7 +46235,7 @@ return MenuCurses
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="95">
           <Properties>
             <string name="Name">MenuDaily</string>
             <string name="Source"><![CDATA[--[[
@@ -45528,6 +46276,20 @@ local ROUTE_STAGES = 5 -- stages shown on the route row
 local CHEVRON = 22 -- room for the ">" between route cards
 local MONTHS = { "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC" }
 
+-- A cached board must describe this exact result before it can supply its rank.
+function MenuDaily.RankText(board: any, day: number, score: number, elapsed: number?): string?
+	if type(board) ~= "table" or board.Board ~= "Daily" or board.Day ~= day or board.Status ~= "ok" or score <= 0 or board.MyBest ~= score then
+		return nil
+	end
+	local rank = board.MyRank
+	if type(rank) ~= "number" or rank < 1 or rank == math.huge or rank % 1 ~= 0 or type(board.Rows) ~= "table" then return nil end
+	if type(board.Age) ~= "number" or board.Age < 0 or board.Age + (elapsed or 0) > Config.Leaderboards.RefreshSeconds then return nil end
+	for _, row in ipairs(board.Rows) do
+		if row.Me == true and row.Rank == rank and row.Value == score then return string.format("Global rank: #%d.", rank) end
+	end
+	return nil
+end
+
 -- Stand-in colours of each arena picture (sky, ground) while / if art is missing.
 local ARENA_TINT: { [string]: { Color3 } } = {
 	Forest = { P.moss_400, P.moss_700 },
@@ -45541,6 +46303,14 @@ local ARENA_TINT: { [string]: { Color3 } } = {
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
+end
+
+local function wrappedLines(value: string, pixels: number, width: number): number
+	local count = 0
+	for _, line in ipairs(string.split(value, "\n")) do
+		count += math.max(1, math.ceil(#line * pixels * 0.53 / math.max(1, width)))
+	end
+	return count
 end
 
 -- Today's UTC day (the server's, so every player sees the same daily).
@@ -45682,8 +46452,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	Icons.Draw(ui.Info, "info", { Size = 22, Position = UDim2.fromOffset(12, 12), Back = P.slate_950 })
 	ui.InfoText = text(ui.Info, "Small", "", { Name = "Text", Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -54, 1, 0), TextWrapped = true, TextColor3 = C.Text }, 15)
 
-	ui.RouteLabel = UIKit.SectionLabel(body, "Route")
-	ui.CursesLabel = UIKit.SectionLabel(body, "Curses")
+	ui.RouteLabel = UIKit.SectionLabel(body, "Today's shared route")
+	ui.CursesLabel = UIKit.SectionLabel(body, "Modifiers")
 	ui.BonusLabel = UIKit.SectionLabel(body, "Starting bonus", P.moss_200)
 	-- the gold multiplier chip (beside the CURSES label)
 	ui.GoldChip = UIKit.IconPill(body, "coin", "")
@@ -45694,8 +46464,10 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	ui.Play = UIKit.Button(foot, {
 		Kind = "Primary",
 		Glow = true,
-		Title = "PLAY DAILY",
-		Subtitle = "Scored attempt",
+		Title = "START RANKED",
+		TitleStyle = "Label",
+		TitleSize = 18,
+		Subtitle = "Uses today's attempt",
 		Icon = "play",
 		IconSize = 26,
 		Align = "Center",
@@ -45711,7 +46483,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	})
 	ui.Board = UIKit.Button(foot, {
 		Kind = "Secondary",
-		Title = "LEADERBOARD",
+		Title = "DAILY RANKS",
 		Icon = "podium",
 		IconSize = 22,
 		Align = "Center",
@@ -45722,6 +46494,16 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	})
 
 	local shownDay = -1
+	local rankData = nil
+	local rankReceivedAt = 0
+	local displayedRank: string? = nil
+	local askedAt = -math.huge
+	local resultKey = ""
+	local function askRank()
+		if not screen.Visible or os.clock() - askedAt < 3 then return end
+		askedAt = os.clock()
+		Remotes.Get("LeaderboardRequest"):FireServer("Daily")
+	end
 
 	local function clearDayCards()
 		for _, list in ipairs({ ui.Stops, ui.Chevrons, ui.CurseCards }) do
@@ -45741,7 +46523,6 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		clearDayCards()
 		for i = 1, ROUTE_STAGES do
 			local id = d.Arenas[i]
-			local arena = (Config.Arenas :: any)[id]
 			local boss = BossData.Get(d.Bosses[i])
 			local f = card(body, "Stop" .. i, i == 1 and P.gold_400 or P.gold_500, i == 1 and 0.2 or 0.55)
 			arenaPicture(f, id)
@@ -45756,8 +46537,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			}, 14)
 			UIKit.corner(num, 999)
 			UIKit.stroke(num, P.gold_300, 1, 0.3)
-			text(f, "H3", arena and arena.DisplayName or id, { Name = "Arena", TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 16)
-			text(f, "Small", boss and boss.DisplayName or "?", { Name = "Boss", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+			text(f, "H3", id, { Name = "Arena", TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 16)
+			text(f, "Small", "Boss: " .. (boss and boss.DisplayName or "?"), { Name = "Boss", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300, TextWrapped = true }, 13)
 			table.insert(ui.Stops, f)
 			if i < ROUTE_STAGES then
 				local chev = Icons.Draw(body, "chevronRight", { Size = 16, Color = P.gold_400 })
@@ -45790,21 +46571,27 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local day = MenuDaily.Today()
 		local d = CurseData.Daily(day)
 		ui.Date.Text = MenuDaily.LongDate(d.Date)
-		ui.Reset.Text = UIKit.track("UTC • Resets in " .. MenuDaily.TimeLeft())
+		ui.Reset.Text = UIKit.track("New challenge in " .. MenuDaily.TimeLeft())
 		local used, score, best, bestDay = MenuDaily.Status(p)
-		local bestLine = best > 0 and string.format(" Best ever: %s (%s).", CurseData.ScoreText(best), CurseData.DateText(bestDay)) or ""
+		local key = tostring(day) .. ":" .. tostring(score)
+		if key ~= resultKey then resultKey = key; askRank() end
+		local bestLine = best > 0 and string.format("\nPersonal best: %s (%s).", CurseData.ScoreText(best), CurseData.DateText(bestDay)) or ""
+		local rankLine = MenuDaily.RankText(rankData, day, score, os.clock() - rankReceivedAt)
+		displayedRank = rankLine
 		if used then
-			UIKit.SetStatus(ui.Pill, "USED")
-			ui.Heading.Text = score > 0 and ("Today's score: " .. CurseData.ScoreText(score)) or "Today's scored attempt is used"
-			ui.Sub.Text = "Solo • You can keep practising today; practice runs are not scored." .. bestLine
-			ui.InfoText.Text = "One scored attempt a day. A new challenge starts at UTC midnight."
+			UIKit.SetStatus(ui.Pill, "PRACTICE")
+			ui.Heading.Text = "Practise today's challenge"
+			ui.InfoText.Text = (score > 0 and ("Ranked result: " .. CurseData.ScoreText(score) .. ". ") or "Today's ranked attempt is used. ")
+				.. "Practice cannot replace your ranked score. New ranked try at 00:00 UTC." .. bestLine
+				.. (rankLine and ("\n" .. rankLine) or "")
 		else
-			UIKit.SetStatus(ui.Pill, "READY")
-			ui.Heading.Text = "Your scored attempt is ready"
-			ui.Sub.Text = "Solo • Your first daily run is scored by stages cleared, then time." .. bestLine
-			ui.InfoText.Text = "Your attempt counts as soon as the run starts."
+			UIKit.SetStatus(ui.Pill, "READY", "RANKED")
+			ui.Heading.Text = "Your ranked run is ready"
+			ui.InfoText.Text = "One ranked try today. Used when the run starts, even if you lose or leave. New try at 00:00 UTC." .. bestLine
 		end
-		ui.Play.SetText(used and "PRACTICE" or "PLAY DAILY", used and "Practice run • not scored" or "Scored attempt")
+		ui.Sub.Text = string.format("1. Play solo on today's shared route.\n2. Clear %d stages; more clears rank higher.\n3. Ties: faster last boss kill wins. No clears? Longer survival wins.", Config.Stages.WinMinStages)
+		ui.Play.SetKind(used and "Secondary" or "Primary")
+		ui.Play.SetText(used and "PRACTICE RUN" or "START RANKED", used and "No leaderboard score" or "Uses today's attempt")
 		if shownDay ~= day then
 			shownDay = day
 			buildDay(d)
@@ -45830,38 +46617,29 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		place(ui.Rule, 0, topH + 10, iw, 1)
 		local bodyY = topH + 22
 
-		-- short landscape screens (phones): the buttons and the info card move to a side
-		-- column so the route and curses keep the height
+		-- Short landscape screens keep the actions beside the scrolling explanation.
 		local side = not narrow and maxH < 520
 		local sideW = side and math.clamp(math.floor(iw * 0.3), 220, 300) or 0
 		local playH = side and 64 or 70
 		local boardH = Theme.Size.Button
 		local footH = side and 0 or (narrow and (playH + 10 + boardH) or playH)
-		ui.Info.Parent = side and foot or body
+		ui.Info.Parent = body
 
 		-- body content (scroll canvas coordinates)
 		local bw = (side and (iw - sideW - 18) or iw) - 8 -- room for the scroll bar
 		local y = 2
-		local infoW = (narrow or side) and (side and sideW or bw) or math.min(320, math.floor(bw * 0.36))
-		local textW = (narrow or side) and bw or (bw - infoW - 20)
+		local infoW, textW = bw, bw
 		local headPx = TS(26)
-		local headLines = (#ui.Heading.Text * headPx * 0.5 > textW) and 2 or 1
+		local headLines = wrappedLines(ui.Heading.Text, headPx, textW)
 		place(ui.Heading, 0, y, textW, headLines * (headPx + 4) + 4)
 		local subPx = TS(16)
-		local subLines = math.clamp(math.ceil(#ui.Sub.Text * subPx * 0.48 / math.max(1, textW)), 1, 4)
+		local subLines = wrappedLines(ui.Sub.Text, subPx, textW)
 		place(ui.Sub, 0, y + ui.Heading.Size.Y.Offset + 4, textW, subLines * (subPx + 3) + 4)
 		local heroH = ui.Heading.Size.Y.Offset + 4 + ui.Sub.Size.Y.Offset
-		local infoLines = math.clamp(math.ceil(#ui.InfoText.Text * TS(15) * 0.48 / math.max(1, infoW - 54)), 1, 4)
+		local infoLines = wrappedLines(ui.InfoText.Text, TS(15), infoW - 54)
 		local infoH = math.max(48, infoLines * (TS(15) + 4) + 18)
-		if side then
-			y += heroH + 16
-		elseif narrow then
-			place(ui.Info, 0, y + heroH + 10, infoW, infoH)
-			y += heroH + 10 + infoH + 16
-		else
-			place(ui.Info, bw - infoW, y + math.max(0, math.floor((heroH - infoH) / 2)), infoW, infoH)
-			y += math.max(heroH, infoH) + 16
-		end
+		place(ui.Info, 0, y + heroH + 10, infoW, infoH)
+		y += heroH + 10 + infoH + 16
 
 		-- route: one row, or balanced rows (3 + 2) when the cards would get too small
 		local labelH = TS(12) + 6
@@ -45869,7 +46647,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		y += labelH + 6
 		local n = #ui.Stops
 		local perRow = math.max(1, n)
-		while perRow > 2 and (bw - (perRow - 1) * CHEVRON) / perRow < 104 do
+		while perRow > 2 and (bw - (perRow - 1) * CHEVRON) / perRow < 152 do
 			perRow -= 1
 		end
 		if perRow < n then
@@ -45877,7 +46655,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		end
 		local sw = math.floor((bw - (perRow - 1) * CHEVRON) / perRow)
 		local picH = math.clamp(math.floor(sw * 0.48), side and 44 or 52, side and 64 or 86)
-		local stopH = picH + 12 + TS(16) + TS(13) + 14
+		local stopH = picH + 12 + TS(16) + 2 * (TS(13) + 3) + 10
 		for i, f in ipairs(ui.Stops) do
 			local col = (i - 1) % perRow
 			local rowI = (i - 1) // perRow
@@ -45891,8 +46669,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			local an = f:FindFirstChild("Arena") :: TextLabel
 			place(an, 6, picH + 10, sw - 12, TS(16) + 4)
 			local bn = f:FindFirstChild("Boss") :: TextLabel
-			place(bn, 6, picH + 12 + TS(16), sw - 12, TS(13) + 4)
-			bn.TextSize = sw < 150 and TS(11) or TS(13) -- long boss names on small cards
+			place(bn, 6, picH + 12 + TS(16), sw - 12, 2 * (TS(13) + 3))
+			bn.TextSize = TS(13)
 			local chev = ui.Chevrons[i]
 			if chev then
 				chev.Visible = col < perRow - 1
@@ -45950,7 +46728,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		body.CanvasSize = UDim2.fromOffset(0, y)
 
 		-- panel: as tall as the content needs, the body scrolls when it cannot fit
-		local sideNeed = side and (infoH + 14 + playH + 10 + boardH) or 0
+		local sideNeed = side and (playH + 10 + boardH) or 0
 		local chrome = 36 + bodyY + (side and 0 or (16 + footH))
 		local h = math.min(maxH, chrome + math.max(y, sideNeed))
 		local bodyH = h - chrome
@@ -45959,9 +46737,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		body.ScrollBarThickness = y > bodyH + 1 and 4 or 0
 		if side then
 			place(foot, iw - sideW, bodyY, sideW, bodyH)
-			place(ui.Info, 0, 0, sideW, infoH)
-			place(ui.Board.Instance, 0, bodyH - boardH, sideW, boardH)
-			place(ui.Play.Instance, 0, bodyH - boardH - 10 - playH, sideW, playH)
+			place(ui.Play.Instance, 0, 0, sideW, playH)
+			place(ui.Board.Instance, 0, playH + 10, sideW, boardH)
 		else
 			place(foot, 0, h - 36 - footH, iw, footH)
 			if narrow then
@@ -45979,6 +46756,12 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	MenuDaily._layout = function()
 		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
 	end
+	Remotes.Get("LeaderboardData").OnClientEvent:Connect(function(data)
+		if type(data) ~= "table" or data.Board ~= "Daily" or data.Day ~= MenuDaily.Today() then return end
+		rankData = data
+		rankReceivedAt = os.clock()
+		if screen.Visible then fill() end
+	end)
 
 	local clock = 0
 	return {
@@ -45989,6 +46772,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		OnShow = function(_p)
 			shownDay = -1
 			fill()
+			askRank()
 			UIAnim.Pop(holder, 0, 0.92)
 			holder.ClipsDescendants = true
 			UIAnim.Sweep(holder, 0.2, 0.8, 0.8)
@@ -46006,7 +46790,10 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			if clock >= 1 then
 				clock = 0
 				if screen.Visible then
-					ui.Reset.Text = UIKit.track("UTC • Resets in " .. MenuDaily.TimeLeft())
+					if os.clock() - askedAt >= 30 then askRank(); fill() end
+					local _, score = MenuDaily.Status(ctx.Profile())
+					if displayedRank and not MenuDaily.RankText(rankData, MenuDaily.Today(), score, os.clock() - rankReceivedAt) then fill() end
+					ui.Reset.Text = UIKit.track("New challenge in " .. MenuDaily.TimeLeft())
 					if MenuDaily.Today() ~= shownDay then
 						fill()
 					end
@@ -46022,7 +46809,78 @@ return MenuDaily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="92">
+        <Item class="ModuleScript" referent="96">
+          <Properties>
+            <string name="Name">MenuJournal</string>
+            <string name="Source"><![CDATA[-- Manually opened field notes; no automatic introductions or build recommendations.
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Theme = require(Shared:WaitForChild("Theme"))
+local Journal = require(Shared:WaitForChild("EnemyJournalData"))
+local UIKit = require(script.Parent.UIKit)
+local UIAnim = require(script.Parent.UIAnim)
+local MenuJournal = {}
+local P = Theme.Palette
+
+function MenuJournal.Build(screen: Frame, ctx: { [string]: any })
+	local header = UIKit.TitleBar(screen, "Enemy journal", ctx.Back)
+	local holder, face = UIKit.Surface(screen, { Name = "Journal", Radius = Theme.Radius.L, Transparency = 0.06 })
+	UIKit.padding(face, 20, 20, 20, 20)
+	local count = UIKit.text(face, "H3", "", { Name = "DiscoveryCount", Size = UDim2.new(1, 0, 0, 28), TextColor3 = P.gold_300 }, 18)
+	local note = UIKit.text(face, "Small", "Attack clues from enemies you have encountered. Drops appear only after you observe them.", { Position = UDim2.fromOffset(0, 34), Size = UDim2.new(1, 0, 0, 44), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top }, 14)
+	local scroll = UIKit.new("ScrollingFrame", { Name = "Entries", BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(0, 84), Size = UDim2.new(1, 0, 1, -84), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 4, ScrollBarImageColor3 = P.gold_500 }, face)
+	UIKit.list(scroll, { Padding = UDim.new(0, 16) })
+	local entries = {}
+	for i, id in ipairs(Journal.Order) do
+		local row = UIKit.new("Frame", { Name = id, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = i }, scroll)
+		UIKit.list(row, { Padding = UDim.new(0, 6) })
+		local name = UIKit.text(row, "H3", "", { Name = "EnemyName", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, FontFace = Font.fromEnum(Enum.Font.GothamBold), LayoutOrder = 1 }, 18)
+		local clue = UIKit.text(row, "Body", "", { Name = "AttackClue", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, LineHeight = 1.15, LayoutOrder = 2 }, 15)
+		local drops = UIKit.text(row, "Small", "", { Name = "ObservedDrops", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.gold_300, LayoutOrder = 3 }, 14)
+		UIKit.Hairline(row, { LayoutOrder = 4 })
+		entries[id] = { Name = name, Clue = clue, Drops = drops }
+	end
+	local function refresh()
+		local discovered = 0
+		local profile = ctx.Profile()
+		for id, row in pairs(entries) do
+			local entry = Journal.Entry(profile, id)
+			if entry.Known then discovered += 1 end
+			row.Name.Text = entry.Name
+			row.Name.TextColor3 = entry.Known and P.ivory_100 or P.stone_300
+			row.Clue.Text = entry.Clue
+			row.Clue.TextColor3 = entry.Known and P.ivory_200 or P.stone_300
+			row.Drops.Text = entry.Known and (#entry.Drops > 0 and "Observed drops: " .. table.concat(entry.Drops, " · ") or "No drops observed yet.") or ""
+			row.Drops.Visible = entry.Known
+		end
+		count.Text = string.format("%d / %d ENEMIES RECORDED", discovered, #Journal.Order)
+	end
+	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
+		local margin = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+		local headY = math.max(ins.Top + 4, 12)
+		header.Frame.Position = UDim2.fromOffset(margin, headY)
+		header.Frame.Size = UDim2.fromOffset(v.X - 2 * margin, 56)
+		local y = headY + 66 + (portrait and 58 or 0)
+		local w = math.min(1000, v.X - 2 * margin)
+		holder.Position = UDim2.fromOffset((v.X - w) / 2, y)
+		holder.Size = UDim2.fromOffset(w, math.max(100, v.Y - y - margin))
+		note.TextSize = UIKit.TS(14)
+	end
+	return {
+		Layout = layout,
+		Refresh = function(_profile) refresh() end,
+		OnShow = function(_profile)
+			refresh()
+			layout(ctx.Host.VirtualSize(), ctx.Host.IsPortrait(), ctx.Host.Insets())
+			UIAnim.Pop(holder, 0, 0.96)
+		end,
+	}
+end
+
+return MenuJournal
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="97">
           <Properties>
             <string name="Name">MenuLeaderboards</string>
             <string name="Source"><![CDATA[--[[
@@ -46477,7 +47335,7 @@ return MenuLeaderboards
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="93">
+        <Item class="ModuleScript" referent="98">
           <Properties>
             <string name="Name">MenuParty</string>
             <string name="Source"><![CDATA[--[[
@@ -47307,7 +48165,7 @@ return MenuParty
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="94">
+        <Item class="ModuleScript" referent="99">
           <Properties>
             <string name="Name">MenuStats</string>
             <string name="Source"><![CDATA[--[[
@@ -47327,6 +48185,7 @@ local Remotes = require(game:GetService("ReplicatedStorage"):WaitForChild("Share
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Theme = require(Shared:WaitForChild("Theme"))
+local Config = require(Shared:WaitForChild("Config"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
 local AchievementData = require(Shared:WaitForChild("AchievementData"))
@@ -47391,7 +48250,13 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	ui.Tabs = UIKit.Tabs(face, {
 		{ Id = "Stats", Title = "Stats", Icon = "bars" },
 		{ Id = "Achievements", Title = "Achievements", Icon = "ach_Badge" },
+		{ Id = "Journal", Title = "Journal", Icon = "bars" },
 	}, function(id)
+		if id == "Journal" then
+			ui.Tabs.Select(tab)
+			ctx.ShowScreen("Journal")
+			return
+		end
 		tab = id
 		MenuStats._show(true)
 	end)
@@ -47509,11 +48374,11 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		ui.Passes.TextColor3 = #passes > 0 and P.gold_300 or C.TextFaint
 	end
 
-	-- one row per achievement; built fresh on every refresh (12 rows)
+	-- Earned cosmetics remain explicit equip actions; rewards themselves need no claim.
 	local function cosmeticRow(p, kind: string, order: number)
 		local row = new("Frame", { Name = kind, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, ui.Ach)
-		text(row, "Caption", UIKit.track(kind == "Title" and "Wear title" or "Name colour"), { Size = UDim2.new(1, 0, 0, TS(12) + 4) })
-		local chips = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TS(12) + 8), Size = UDim2.new(1, 0, 0, 40), AutomaticSize = Enum.AutomaticSize.Y }, row)
+		text(row, "Caption", UIKit.track(kind == "Title" and "Choose your title" or "Choose your name colour"), { Size = UDim2.new(1, 0, 0, TS(12) + 4) })
+		local chips = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TS(12) + 8), Size = UDim2.new(1, 0, 0, Theme.Size.TapMin), AutomaticSize = Enum.AutomaticSize.Y }, row)
 		UIKit.list(chips, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), Wraps = true })
 		local unlocked = p.Achievements and p.Achievements.Unlocked or {}
 		local options = { { Id = "", Name = "None" } }
@@ -47547,7 +48412,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			local b = UIKit.Button(chips, {
 				Kind = o.Id == worn and "Primary" or "Ghost",
 				Title = string.upper(o.Name),
-				Size = UDim2.fromOffset(math.max(100, 44 + #o.Name * 14), 40),
+				Size = UDim2.fromOffset(math.clamp(36 + #o.Name * TS(13) * 0.7, 112, 260), Theme.Size.TapMin),
 				LayoutOrder = i,
 				Shadow = false,
 				Radius = Theme.Radius.S,
@@ -47561,10 +48426,11 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		if #options == 1 then
-			text(row, "Small", kind == "Title" and "Earn titles from achievements and the TRACK." or "Earn name colours from achievements and the TRACK.", {
-				Position = UDim2.fromOffset(112, TS(12) + 8),
-				Size = UDim2.new(1, -112, 0, 40),
-				TextColor3 = C.TextFaint,
+				text(row, "Small", "Unlock more through achievements or the Track.", {
+					Position = UDim2.fromOffset(124, TS(12) + 8),
+					Size = UDim2.new(1, -124, 0, Theme.Size.TapMin),
+					TextColor3 = C.TextFaint,
+					TextWrapped = true,
 			})
 		end
 	end
@@ -47576,19 +48442,20 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		if unlocked then
 			progress = def.Goal
 		end
-		-- the row grows with its text (narrow phones wrap the description / reward)
-		local right = ui.Narrow and 112 or 150
 		local f = UIKit.Panel(ui.Ach, { Name = id, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, true)
 		if unlocked then
 			UIKit.stroke(f, P.gold_400, 1.5, 0.25)
 		end
-		Icons.Draw(f, def.Icon or "ach_Badge", { Size = 36, Position = UDim2.fromOffset(14, 14), Color = (not unlocked) and P.stone_400 or nil, Dim = not unlocked, Back = P.slate_950 })
-		local column = new("Frame", { Name = "Text", BackgroundTransparency = 1, Position = UDim2.fromOffset(64, 0), Size = UDim2.new(1, -64 - right, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, f)
-		UIKit.list(column, { Padding = UDim.new(0, 2) })
-		UIKit.padding(column, 10, 0, 12, 0)
-		text(column, "H3", def.Name, { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, TS(18) + 4), TextColor3 = unlocked and P.gold_200 or C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
-		text(column, "Small", def.Description, { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
-		text(column, "Small", "Reward: " .. AchievementData.RewardText(id), {
+		local column = new("Frame", { Name = "Text", BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, f)
+		UIKit.list(column, { Padding = UDim.new(0, 7) })
+		UIKit.padding(column, 12, 0, 14, 0)
+		local heading = new("Frame", { Name = "Heading", LayoutOrder = 1, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40) }, column)
+		Icons.Draw(heading, def.Icon or "ach_Badge", { Size = 34, Position = UDim2.fromOffset(0, 2), Back = P.slate_950 })
+		text(heading, "H3", def.Name, { Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -44, 1, 0), TextColor3 = unlocked and P.gold_200 or C.Text, TextWrapped = true }, 18)
+		local goal = def.Event == "RunWon" and string.format("Clear %d stages and return through the portal to win.", Config.Stages.WinMinStages) or def.Description
+		text(column, "Small", goal, { Name = "Goal", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
+		text(column, "Small", (unlocked and "Earned: " or "Reward: ") .. AchievementData.RewardText(id), {
+			Name = "Reward",
 			LayoutOrder = 3,
 			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
@@ -47596,17 +48463,15 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			TextColor3 = P.gold_300,
 		})
 		if unlocked then
-			UIKit.Badge(f, "DONE", "Gold", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0) })
+			text(column, "Caption", "COMPLETED · REWARDS ADDED", { LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(12) + 4), TextColor3 = P.moss_200 })
 		else
-			local meter = UIKit.Meter(f, {
+			text(column, "Small", (def.Kind == "Max" and "Best run: " or "Progress: ") .. AchievementData.ProgressText(id, progress), { Name = "Progress", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(14) + 4), TextColor3 = C.Text })
+			local meter = UIKit.Meter(column, {
 				Gradient = ColorSequence.new(P.gold_500, P.gold_300),
-				TextStyle = "Number",
-				TextSize = Theme.TextSize.Small,
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -14, 0.5, 0),
-				Size = UDim2.fromOffset(right - 20, 22),
+				LayoutOrder = 5,
+				Size = UDim2.new(1, 0, 0, 8),
 			})
-			meter.Set(progress / math.max(1, def.Goal), AchievementData.ProgressText(id, progress))
+			meter.Set(progress / math.max(1, def.Goal))
 		end
 		return f
 	end
@@ -47621,24 +48486,47 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		if not p then
 			return
 		end
-		local done = 0
+		local pending, completed = {}, {}
 		for _, id in ipairs(AchievementData.Order) do
 			if p.Achievements and p.Achievements.Unlocked and p.Achievements.Unlocked[id] then
-				done += 1
+				table.insert(completed, id)
+			else
+				table.insert(pending, id)
 			end
 		end
-		text(ui.Ach, "Label", string.format("%d / %d ACHIEVEMENTS", done, #AchievementData.Order), { LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(15) + 6), TextColor3 = P.gold_300 })
-		cosmeticRow(p, "Title", 1)
-		cosmeticRow(p, "Color", 2)
-		for i, id in ipairs(AchievementData.Order) do
+		local progress = p.Achievements and p.Achievements.Progress or {}
+		table.sort(pending, function(a, b)
+			local pa = (tonumber(progress[a]) or 0) / AchievementData.Achievements[a].Goal
+			local pb = (tonumber(progress[b]) or 0) / AchievementData.Achievements[b].Goal
+			if pa ~= pb then return pa > pb end
+			return (table.find(AchievementData.Order, a) or 0) < (table.find(AchievementData.Order, b) or 0)
+		end)
+		local cosmeticsHeading: GuiObject?
+		local summary = new("Frame", { Name = "AchievementSummary", BackgroundTransparency = 1, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, Theme.Size.TapMin + 4) }, ui.Ach)
+		text(summary, "Label", string.format("%d / %d UNLOCKED", #completed, #AchievementData.Order), { Size = UDim2.new(1, -230, 1, 0), TextColor3 = P.gold_300 }, 14)
+		text(ui.Ach, "Small", "Rewards are added automatically. Equip earned titles and name colours with WEAR REWARDS.", { Name = "RewardHelp", LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
+		UIKit.Button(summary, { Title = "WEAR REWARDS", Kind = "Secondary", Size = UDim2.fromOffset(220, Theme.Size.TapMin), AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Icon = "sparkle", TitleSize = 14, OnClick = function()
+			if cosmeticsHeading then
+				ui.Ach.CanvasPosition = Vector2.new(0, math.max(0, cosmeticsHeading.AbsolutePosition.Y - ui.Ach.AbsolutePosition.Y + ui.Ach.CanvasPosition.Y))
+			end
+		end })
+		text(ui.Ach, "Caption", #pending > 0 and "NEXT GOALS · CLOSEST FIRST" or "ALL GOALS COMPLETE", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(12) + 8), TextColor3 = P.gold_300 })
+		for i, id in ipairs(pending) do
 			local f = achievementRow(p, id, 10 + i)
 			if animate then
-				UIAnim.Pop(f, 0.02 * i, 0.85)
+				UIAnim.Pop(f, math.min(0.2, 0.02 * i), 0.85)
 			end
 		end
+		cosmeticsHeading = text(ui.Ach, "Label", "YOUR COSMETICS", { Name = "CosmeticsHeading", LayoutOrder = 100, Size = UDim2.new(1, 0, 0, TS(15) + 8), TextColor3 = P.gold_300 })
+		text(ui.Ach, "Small", "Tap to equip. Gold and character rewards are already yours; cosmetic choices change your lobby nameplate.", { LayoutOrder = 101, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
+		cosmeticRow(p, "Title", 102)
+		cosmeticRow(p, "Color", 103)
+		text(ui.Ach, "Label", "COMPLETED · " .. #completed, { Name = "CompletedHeading", LayoutOrder = 110, Size = UDim2.new(1, 0, 0, TS(15) + 8), TextColor3 = P.moss_200 })
+		for i, id in ipairs(completed) do achievementRow(p, id, 110 + i) end
 	end
 
 	MenuStats._show = function(animate: boolean)
+		ui.Header.Title.Text = tab == "Achievements" and "ACHIEVEMENTS" or "YOUR STATS"
 		ui.StatsScroll.Visible = tab == "Stats"
 		ui.Passes.Visible = tab == "Stats"
 		ui.Ach.Visible = tab == "Achievements"
@@ -47657,6 +48545,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		local w = math.min(W - 2 * M, 1100)
 		local inner = w - 32 - 10 -- face padding and the scroll bar
 		ui.Narrow = w < 700
+		ui.Header.Title.TextSize = TS(tab == "Achievements" and (ui.Narrow and 22 or 26) or 30)
 		-- groups: every tile row lines up on one column grid (6 / 3 / 2 columns)
 		local cols = inner >= 960 and 6 or (inner >= 520 and 3 or 2)
 		local colsC = inner >= 640 and 4 or 2 -- collection / resources
@@ -47722,7 +48611,7 @@ return MenuStats
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="95">
+        <Item class="ModuleScript" referent="100">
           <Properties>
             <string name="Name">MenuTrack</string>
             <string name="Source"><![CDATA[--[[
@@ -47954,14 +48843,14 @@ return MenuTrack
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="96">
+        <Item class="ModuleScript" referent="101">
           <Properties>
             <string name="Name">MenuUpgrades</string>
             <string name="Source"><![CDATA[--[[
 	MenuUpgrades.lua
 	The UPGRADES screen: two tabs in one panel.
 	  PERMANENT  the gold upgrades (MetaUpgradeData) as a 3 x 2 card grid (the rest scroll):
-	             icon tile, name, what one level gives, LV n / max with a segmented bar,
+	             icon tile, name, what one level gives, LV n / max with rank tally marks,
 	             CURRENT / NEXT effect in plain words and a gold BUY • N GOLD button (an
 	             outlined "N GOLD • NEED M MORE" when short, MAXED when done). A tap marks the
 	             card BUYING... until the server's ProfileSync (the gold and levels always
@@ -48023,13 +48912,35 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
 	ui.Panel = holder
 	UIKit.padding(face, 14, 16, 14, 16)
-	ui.Tabs = UIKit.Tabs(face, {
-		{ Id = "Permanent", Title = "Permanent", Icon = "chevronsUp" },
-		{ Id = "Shop", Title = "Shop", Icon = "robux" },
-	}, function(id)
-		tab = id
-		MenuUpgrades._rebuild(true)
-	end)
+	ui.Tabs = new("Frame", { Name = "Tabs", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, Theme.Size.TapMin) }, face)
+	UIKit.Hairline(ui.Tabs, { Position = UDim2.new(0, 0, 1, -1) })
+	local tabButtons: { [string]: TextButton } = {}
+	local tabLines: { [string]: Frame } = {}
+	for i, id in ipairs({ "Permanent", "Shop" }) do
+		local button = new("TextButton", {
+			Name = id,
+			BackgroundTransparency = 1,
+			AutoButtonColor = false,
+			Text = string.upper(id),
+			FontFace = Theme.Font.Label,
+			TextSize = TS(16),
+			TextColor3 = id == tab and P.gold_300 or C.TextMuted,
+			Position = UDim2.fromScale((i - 1) / 2, 0),
+			Size = UDim2.fromScale(0.5, 1),
+		}, ui.Tabs)
+		UIKit.Focusable(button)
+		tabButtons[id] = button
+		tabLines[id] = new("Frame", { Name = "Selected", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.new(0.5, 0, 0, 2), Visible = id == tab }, button)
+		button.Activated:Connect(function()
+			if tab == id then return end
+			tab = id
+			for key, other in pairs(tabButtons) do
+				other.TextColor3 = key == tab and P.gold_300 or C.TextMuted
+				tabLines[key].Visible = key == tab
+			end
+			MenuUpgrades._rebuild(true)
+		end)
+	end
 	ui.Note = text(face, "Small", "", { Position = UDim2.fromOffset(0, Theme.Size.TapMin + 6), Size = UDim2.new(1, 0, 0, TS(14) + 6), TextColor3 = C.TextMuted, TextXAlignment = Enum.TextXAlignment.Center }, 15)
 	ui.Scroll = new("ScrollingFrame", {
 		Name = "Scroll",
@@ -48076,11 +48987,12 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local level = p.Meta[id] or 0
 		local cost = MetaUpgradeData.CostOf(id, level)
 		local maxed = cost == nil
+		local affordable = cost ~= nil and p.Gold >= cost
 		local f = card(order)
 		cardTop(f, function()
 			UIKit.Tile(f, { Id = Icons.MetaIcon(id), Size = 56 })
 		end, def.Name, def.Description, 0)
-		-- LV n / max over a segmented bar
+		-- Gold tallies are bought; the bright next tally is affordable; short dim lines remain.
 		local barY = math.max(64, TS(20) + 12 + 2 * TS(14)) -- under a two-line description
 		local rank = text(f, "Label", string.format("LV %d / %d", level, def.MaxLevel), {
 			Name = "Rank",
@@ -48088,7 +49000,19 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			Size = UDim2.new(0, 90, 0, TS(13) + 4),
 			TextColor3 = maxed and P.gold_300 or C.TextMuted,
 		}, 13)
-		UIKit.SegmentBar(f, level, def.MaxLevel, { Position = UDim2.fromOffset(92, barY + math.floor((TS(13) + 4 - 8) / 2)), Size = UDim2.new(1, -92, 0, 8) })
+		local marks = new("Frame", { Name = "RankMarks", BackgroundTransparency = 1, Position = UDim2.fromOffset(92, barY + math.floor((TS(13) + 4 - 8) / 2)), Size = UDim2.new(1, -92, 0, 8) }, f)
+		for i = 1, def.MaxLevel do
+			local bought = i <= level
+			local available = i == level + 1 and affordable
+			new("Frame", {
+				Name = "Rank" .. i,
+				BackgroundColor3 = bought and P.gold_400 or available and P.ivory_100 or P.slate_600,
+				BorderSizePixel = 0,
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.new((i - 0.5) / def.MaxLevel, 0, 1, 0),
+				Size = UDim2.fromOffset(2, (bought or available) and 8 or 4),
+			}, marks)
+		end
 		UIKit.Hairline(f, { Position = UDim2.fromOffset(0, barY + TS(13) + 14) })
 		-- current / next effect (what the next level really gives)
 		local rowY = barY + TS(13) + 22
@@ -48100,7 +49024,6 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		end
 		effectRow(rowY, "Current", MetaUpgradeData.EffectText(id, level), C.Text)
 		effectRow(rowY + rowH, "Next", maxed and "Fully upgraded" or MetaUpgradeData.EffectText(id, level + 1), maxed and P.gold_300 or P.moss_200)
-		local affordable = cost ~= nil and p.Gold >= cost
 		if cost then
 			local busy = pending[id] ~= nil
 			local b
@@ -48306,13 +49229,13 @@ return MenuUpgrades
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="97">
+        <Item class="ModuleScript" referent="102">
           <Properties>
             <string name="Name">MiniMap</string>
             <string name="Source"><![CDATA[--[[
 	MiniMap.lua
-	A small north-up minimap during runs, in the HUD's look (charcoal rounded square, thin
-	gold rim), centred on the player:
+	A north-up minimap during runs: a quiet charcoal field, thin slate frame, compass
+	header and a compact landmark key, centred on the player:
 
 	  silhouette    the arena fence (the square boundary) and every obstacle collider
 	                (workspace.SwarmMap.Arena_<Name>.Obstacles: cylinders as discs, blocks
@@ -48326,7 +49249,7 @@ return MenuUpgrades
 	                once opened / spent / claimed
 	  caravan       the Lost Caravan (workspace.SwarmEvents.Caravan: wood square, gold
 	                while it is being defended)
-	  boss          a red skull on the live boss (EnemyData IsBoss)
+	  boss          an ivory-edged red diamond on the live boss (EnemyData IsBoss)
 	  enemies       at most MAX_ENEMY_DOTS faint red dots sampled from the live swarm
 	                (every k-th enemy in range), refreshed at ENEMY_HZ
 
@@ -48351,11 +49274,11 @@ local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local UIKit = require(script.Parent.UIKit)
-local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local TeamUI = require(script.Parent.TeamUI)
 local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
 
 local MiniMap = {}
 
@@ -48363,7 +49286,8 @@ local player = Players.LocalPlayer
 local new = UIKit.new
 local P = Theme.Palette
 
-local SIZE_PC, SIZE_COMPACT = 150, 112 -- map square (px, design space)
+local SIZE_PC, SIZE_COMPACT = 150, 112 -- map width (px, design space)
+local MAP_INSET, HEADER_H, FOOTER_H = 7, 20, 18
 local VIEW_STUDS = 200 -- studs across the map
 local MAX_ENEMY_DOTS = 40
 -- Each optional location has at most three rune nodes; altar/caravan use separate markers.
@@ -48396,7 +49320,12 @@ local candidates: { BasePart } = {} -- reused per enemy pass
 ------------------------------------------------------------------------------------------
 
 local function dot(parent: Instance, name: string, size: number, color: Color3, z: number, round: boolean): Frame
+	color = Accessibility.Color(color, (name == "Enemy" or name == "Boss") and "Danger" or name == "Mate" and "Ally" or name == "Loot" and "Loot" or nil)
 	local f = new("Frame", { Name = name, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(size, size), BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = z, Visible = false }, parent)
+	if name == "Enemy" and ClientSettings.Get("Colorblind") ~= "Off" then
+		round = false
+		f.Rotation = 45
+	end
 	if round then
 		UIKit.corner(f, 999)
 	end
@@ -48416,12 +49345,14 @@ local function buildMarkers(world: Frame)
 	ui.Obstacles = new("Frame", { Name = "Obstacles", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, world)
 	ui.Enemies = {}
 	for i = 1, MAX_ENEMY_DOTS do
-		ui.Enemies[i] = dot(world, "Enemy", 3, P.crimson_500, 4, true)
-		ui.Enemies[i].BackgroundTransparency = 0.35
+		ui.Enemies[i] = dot(world, "Enemy", 3, P.crimson_400, 4, true)
+		ui.Enemies[i].BackgroundTransparency = 0.3
 	end
 	ui.Loot = {}
 	for i = 1, MAX_LOOT do
-		ui.Loot[i] = dot(world, "Loot", 6, P.gold_400, 5, false)
+		ui.Loot[i] = dot(world, "Loot", 6, P.gold_300, 5, false)
+		UIKit.corner(ui.Loot[i], 1)
+		UIKit.stroke(ui.Loot[i], P.slate_950, 1, 0)
 	end
 	ui.Mates = {}
 	for i = 1, MAX_MATES do
@@ -48436,22 +49367,26 @@ local function buildMarkers(world: Frame)
 	ui.PortalCore.Position = UDim2.fromScale(0.5, 0.5)
 	ui.PortalCore.Visible = true
 	ui.Altar, ui.AltarStroke = ring(world, "Altar", 9, P.amber_300, 5)
-	ui.Boss = Icons.Draw(world, "skull", { Name = "Boss", Size = 16, Color = P.crimson_400, Back = P.slate_950, AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 8 })
+	ui.Boss = dot(world, "Boss", 11, P.crimson_500, 8, false)
+	ui.Boss.Rotation = 45
+	UIKit.stroke(ui.Boss, P.ivory_100, 1, 0.15)
 	ui.Boss.Visible = false
 end
 
 function MiniMap.Build(root: Frame, k: { [string]: any })
 	kit = k
-	local holder, face = UIKit.Surface(root, { Name = "MiniMap", Transparency = 0.12, Radius = Theme.Radius.M, Edge = P.gold_500, EdgeTransparency = 0.25, Shadow = false, Size = UDim2.fromOffset(SIZE_PC, SIZE_PC), ZIndex = Theme.Z.Hud, Visible = false })
+	local holder, face = UIKit.Surface(root, { Name = "MiniMap", Transparency = 0.03, Radius = Theme.Radius.M, Edge = P.slate_400, EdgeTransparency = 0.55, Shadow = false, Size = UDim2.fromOffset(SIZE_PC, SIZE_PC + HEADER_H + FOOTER_H), ZIndex = Theme.Z.Hud, Visible = false })
 	holder.Active = false
 	face.Active = false
 	ui.Holder, ui.Face = holder, face
 	-- the clipped viewport, inset so the rounded corners stay clean
-	local view = new("Frame", { Name = "View", BackgroundTransparency = 1, ClipsDescendants = true, Position = UDim2.fromOffset(3, 3), Size = UDim2.new(1, -6, 1, -6), ZIndex = 2 }, face)
+	local view = new("Frame", { Name = "View", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.08, BorderSizePixel = 0, ClipsDescendants = true, Position = UDim2.fromOffset(MAP_INSET, HEADER_H), Size = UDim2.fromOffset(SIZE_PC - 2 * MAP_INSET, SIZE_PC - 2 * MAP_INSET), ZIndex = 2 }, face)
+	UIKit.corner(view, 4)
+	UIKit.stroke(view, P.slate_500, 1, 0.65)
 	ui.View = view
 	-- the world: the whole arena at map scale; its stroke is the fence
-	local world = new("Frame", { Name = "World", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = P.slate_800, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 1), ZIndex = 2 }, view)
-	ui.WorldStroke = UIKit.stroke(world, P.gold_400, 1.5, 0.15)
+	local world = new("Frame", { Name = "World", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = P.slate_800, BackgroundTransparency = 0.25, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 1), ZIndex = 2 }, view)
+	ui.WorldStroke = UIKit.stroke(world, P.slate_400, 1, 0.3)
 	ui.World = world
 	buildMarkers(world)
 	-- the player: gold disc + facing tick in a pivot that turns with the heading
@@ -48460,13 +49395,34 @@ function MiniMap.Build(root: Frame, k: { [string]: any })
 	local body = new("Frame", { Name = "Body", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(8, 8), BackgroundColor3 = P.gold_300, BorderSizePixel = 0, ZIndex = 9 }, pivot)
 	UIKit.corner(body, 999)
 	UIKit.stroke(body, P.slate_950, 1.5, 0)
-	new("Frame", { Name = "Tick", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0.5, -4), Size = UDim2.fromOffset(3, 7), BackgroundColor3 = P.gold_200, BorderSizePixel = 0, ZIndex = 10 }, pivot)
-	-- "N" in the corner
-	UIKit.Role(face, "Label", "N", { Name = "North", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 1), Size = UDim2.fromOffset(16, 12), TextColor3 = P.gold_300, TextTransparency = 0.25, ZIndex = 3 })
+	for _, side in ipairs({ -1, 1 }) do
+		new("Frame", { Name = "Heading", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, side * 2, 0.5, -7), Size = UDim2.fromOffset(2, 6), Rotation = side * 35, BackgroundColor3 = P.gold_200, BorderSizePixel = 0, ZIndex = 10 }, pivot)
+	end
+	UIKit.text(face, "Label", "MAP", { Position = UDim2.fromOffset(MAP_INSET + 1, 2), Size = UDim2.new(1, -30, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_400, ZIndex = 3 }, 10)
+	UIKit.text(face, "Label", "N", { Name = "North", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -MAP_INSET, 0, 2), Size = UDim2.fromOffset(14, 16), TextColor3 = P.gold_300, ZIndex = 3 }, 11)
+	local legend = new("Frame", { Name = "Legend", BackgroundTransparency = 1, Position = UDim2.new(0, MAP_INSET, 1, -FOOTER_H - 2), Size = UDim2.new(1, -2 * MAP_INSET, 0, FOOTER_H), ZIndex = 3 }, face)
+	local keys = { { Name = "Loot", Color = P.gold_300 }, { Name = "Exit", Color = P.ivory_100 }, { Name = "Ally", Color = P.ice_300 } }
+	for i, entry in ipairs(keys) do
+		local cell = new("Frame", { Name = entry.Name, BackgroundTransparency = 1, Position = UDim2.fromScale((i - 1) / 3, 0), Size = UDim2.fromScale(1 / 3, 1) }, legend)
+		local marker = i == 2 and ring(cell, "Key", 5, entry.Color, 4) or dot(cell, "Key", 4, entry.Color, 4, i ~= 1)
+		marker.Position = UDim2.new(0, 3, 0.5, 0)
+		marker.Visible = true
+		UIKit.text(cell, "Small", entry.Name, { Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -8, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_400 }, 9)
+	end
 	ClientSettings.OnChanged(function(key, value)
 		if key == "Minimap" then
 			enabled = value ~= false
 			MiniMap.Refresh()
+		elseif key == "Colorblind" then
+			arenaModel = nil
+			for _, marker in ipairs(ui.Enemies) do
+				marker.BackgroundColor3 = Accessibility.Color(P.crimson_400, "Danger")
+				marker.Rotation = value ~= "Off" and 45 or 0
+				local corner = marker:FindFirstChildWhichIsA("UICorner")
+				if corner then corner.CornerRadius = UDim.new(value ~= "Off" and 0 or 1, 0) end
+			end
+			for _, marker in ipairs(ui.Mates) do marker.BackgroundColor3 = Accessibility.Color(P.ice_300, "Ally") end
+			ui.Boss.BackgroundColor3 = Accessibility.Color(P.crimson_500, "Danger")
 		end
 	end)
 	kit.OnRelayout(MiniMap.Layout)
@@ -48527,8 +49483,9 @@ function MiniMap.Layout()
 	local px = compact and SIZE_COMPACT or SIZE_PC
 	if px ~= mapPx or ui.World.Size.X.Offset <= 1 then
 		mapPx = px
-		scale = (mapPx - 6) / VIEW_STUDS
-		ui.Holder.Size = UDim2.fromOffset(mapPx, mapPx)
+			scale = (mapPx - 2 * MAP_INSET) / VIEW_STUDS
+			ui.Holder.Size = UDim2.fromOffset(mapPx, mapPx - 2 * MAP_INSET + HEADER_H + FOOTER_H + 4)
+			ui.View.Size = UDim2.fromOffset(mapPx - 2 * MAP_INSET, mapPx - 2 * MAP_INSET)
 		ui.World.Size = UDim2.fromOffset(math.floor(ARENA_SIZE * scale + 0.5), math.floor(ARENA_SIZE * scale + 0.5))
 		-- the silhouette is drawn at map scale: rebuild it for the new scale
 		arenaModel = nil
@@ -48592,10 +49549,10 @@ local function buildSilhouette(model: Instance)
 				local size = p.Size
 				if p:IsA("Part") and p.Shape == Enum.PartType.Cylinder then
 					local d = math.max(3, size.Y * scale)
-					local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(d, d), BackgroundColor3 = P.slate_400, BackgroundTransparency = 0.35, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
+					local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(d, d), BackgroundColor3 = P.slate_500, BackgroundTransparency = 0.25, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
 					UIKit.corner(f, 999)
 				else
-					new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(math.max(2, size.X * scale), math.max(2, size.Z * scale)), BackgroundColor3 = P.slate_400, BackgroundTransparency = 0.35, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
+					new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(math.max(2, size.X * scale), math.max(2, size.Z * scale)), BackgroundColor3 = P.slate_500, BackgroundTransparency = 0.25, BorderSizePixel = 0, ZIndex = 3 }, ui.Obstacles)
 				end
 			end
 		end
@@ -48607,8 +49564,10 @@ local function buildSilhouette(model: Instance)
 			local pos = ch:GetPivot().Position
 			local mx, my = toMap(pos.X, pos.Z)
 			local d = math.max(3, r * 2 * scale)
-			local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(d, d), BackgroundColor3 = HAZARD_COLOR[kind] or P.slate_500, BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 2 }, ui.Hazards)
-			UIKit.corner(f, 999)
+				local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(mx, my), Size = UDim2.fromOffset(d, d), BackgroundColor3 = HAZARD_COLOR[kind] or P.slate_500, BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 2 }, ui.Hazards)
+				UIKit.corner(f, 999)
+				UIKit.stroke(f, Accessibility.Color(P.amber_300, "Danger"), 1, 0.15)
+				UIKit.text(f, "Label", "!", { Size = UDim2.fromScale(1, 1), TextColor3 = P.ivory_100 }, 9)
 		end
 	end
 end
@@ -48651,7 +49610,7 @@ end
 local function updateMoving(state: Configuration, root: BasePart)
 	-- scroll the world so the player sits at the centre; turn the player tick
 	local pos = root.Position
-	local half = (mapPx - 6) / 2
+	local half = (mapPx - 2 * MAP_INSET) / 2
 	ui.World.Position = UDim2.fromOffset(math.floor(half - (pos.X - arenaCentre.X) * scale + 0.5), math.floor(half - (pos.Z - arenaCentre.Z) * scale + 0.5))
 	local look = root.CFrame.LookVector
 	if math.abs(look.X) + math.abs(look.Z) > 0.05 then
@@ -48664,7 +49623,7 @@ local function updateMoving(state: Configuration, root: BasePart)
 	setVisible(ui.Portal, portalOn)
 	if portalOn then
 		placeAt(ui.Portal, ppos.X, ppos.Z)
-		local c = portalColor(state)
+			local c = Accessibility.Color(portalColor(state), (state:GetAttribute("StagePhase") == "Boss" or state:GetAttribute("StagePhase") == "Surge") and "Danger" or "Loot")
 		if ui.PortalStroke.Color ~= c then
 			ui.PortalStroke.Color = c
 			ui.Portal.BackgroundColor3 = c
@@ -48709,7 +49668,7 @@ local function updateMoving(state: Configuration, root: BasePart)
 					local f = ui.Loot[used]
 					placeAt(f, lpos.X, lpos.Z)
 					local shrine = kind == "Shrine"
-					f.BackgroundColor3 = shrine and P.ivory_200 or P.gold_400
+						f.BackgroundColor3 = Accessibility.Color(shrine and P.ivory_200 or P.gold_400, shrine and "Neutral" or "Loot")
 					f.Rotation = shrine and 45 or 0
 					setVisible(f, true)
 				end
@@ -48830,7 +49789,7 @@ return MiniMap
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="98">
+        <Item class="ModuleScript" referent="103">
           <Properties>
             <string name="Name">MobileControls</string>
             <string name="Source"><![CDATA[--[[
@@ -48852,6 +49811,7 @@ local UserInputService = game:GetService("UserInputService")
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
 local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Theme"))
 local CameraController = require(script.Parent.CameraController)
+local ClientSettings = require(script.Parent.ClientSettings)
 
 local MobileControls = {}
 
@@ -48915,7 +49875,14 @@ end
 
 local function radiusPixels(): number
 	local s = uiScale and uiScale.Scale or 1
-	return Config.Controls.StickRadius * s
+	return Config.Controls.StickRadius * s * (ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1)
+end
+
+function MobileControls.MovementSide(x: number, width: number): boolean
+	local left = ClientSettings.Get("TouchLayout") == "LeftHanded"
+	local zone = math.min(Config.Controls.TouchZone, 0.5)
+	return left and x >= width * (1 - zone)
+		or not left and x <= width * zone
 end
 
 local function updateStick(position: Vector2)
@@ -48932,7 +49899,8 @@ local function updateStick(position: Vector2)
 	end
 	-- InputObject positions and this ScreenGui (IgnoreGuiInset = false) share coordinates
 	base.Position = UDim2.fromOffset(stickOrigin.X, stickOrigin.Y)
-	knob.Position = UDim2.new(0.5, delta.X / (uiScale and uiScale.Scale or 1), 0.5, delta.Y / (uiScale and uiScale.Scale or 1))
+	local scale = (uiScale and uiScale.Scale or 1) * (ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1)
+	knob.Position = UDim2.new(0.5, delta.X / scale, 0.5, delta.Y / scale)
 end
 
 local function buildGui()
@@ -49049,7 +50017,12 @@ local function buildGui()
 	-- keep the stick graphic scaled like the rest of the UI
 	RunService.RenderStepped:Connect(function()
 		scale.Scale = uiScale and uiScale.Scale or 1
-		jumpScale.Scale = uiScale and uiScale.Scale or 1
+		local compact = ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1
+		scale.Scale *= compact
+		jumpScale.Scale = (uiScale and uiScale.Scale or 1) * compact
+		local left = ClientSettings.Get("TouchLayout") == "LeftHanded"
+		jump.AnchorPoint = Vector2.new(left and 0 or 1, 1)
+		jump.Position = UDim2.new(left and 0 or 1, left and M.ButtonMargin or -M.ButtonMargin, 1, -M.ButtonMargin)
 	end)
 end
 
@@ -49081,6 +50054,13 @@ end
 
 function MobileControls.Init()
 	buildGui()
+	ClientSettings.OnChanged(function(key)
+		if key == "TouchLayout" then
+			stickInput = nil
+			stickVector = Vector2.zero
+			base.Visible = false
+		end
+	end)
 	pcall(function()
 		require(script.Parent:WaitForChild("TerrainFx") :: ModuleScript).Init(MobileControls)
 	end)
@@ -49106,7 +50086,7 @@ function MobileControls.Init()
 				return
 			end
 			local viewport = workspace.CurrentCamera.ViewportSize
-			if input.Position.X > viewport.X * Config.Controls.TouchZone then
+			if not MobileControls.MovementSide(input.Position.X, viewport.X) then
 				return
 			end
 			stickInput = input
@@ -49171,7 +50151,7 @@ return MobileControls
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="99">
+        <Item class="ModuleScript" referent="104">
           <Properties>
             <string name="Name">ModelLibrary</string>
             <string name="Source"><![CDATA[--[[
@@ -50664,7 +51644,7 @@ return ModelLibrary
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="100">
+        <Item class="ModuleScript" referent="105">
           <Properties>
             <string name="Name">Occlusion</string>
             <string name="Source"><![CDATA[--[[
@@ -51056,7 +52036,7 @@ return Occlusion
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="101">
+        <Item class="ModuleScript" referent="106">
           <Properties>
             <string name="Name">Showcase</string>
             <string name="Source"><![CDATA[--[[
@@ -52043,7 +53023,7 @@ return Showcase
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="102">
+        <Item class="ModuleScript" referent="107">
           <Properties>
             <string name="Name">StageUI</string>
             <string name="Source"><![CDATA[--[[
@@ -52641,7 +53621,127 @@ return StageUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="103">
+        <Item class="ModuleScript" referent="108">
+          <Properties>
+            <string name="Name">TeamPings</string>
+            <string name="Source"><![CDATA[-- Preset team pings. Targets are replicated IDs; the server chooses recipients and positions.
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local UIKit = require(script.Parent.UIKit)
+local TeamPings = {}
+local player = Players.LocalPlayer
+local kinds = { "Location", "Enemy", "Loot", "Help", "Regroup" }
+local allowed = { Location = true, Enemy = true, Loot = true, Help = true, Regroup = true }
+local gui: ScreenGui? = nil
+local markers = {}
+local opened = false
+
+local function finite(v: Vector3): boolean
+	return v.X == v.X and v.Y == v.Y and v.Z == v.Z and math.abs(v.X) < 1e6 and math.abs(v.Y) < 1e6 and math.abs(v.Z) < 1e6
+end
+
+local function root(): BasePart?
+	return player.Character and player.Character.PrimaryPart
+end
+
+local function inTeamRun(): boolean
+	local state = Remotes.State()
+	local mode = (Config.Modes :: any)[state:GetAttribute("Mode")]
+	return player:GetAttribute("InRun") == true and state:GetAttribute("Phase") == "Running" and type(mode) == "table" and (mode.MaxPlayers or 1) > 1
+end
+
+local function usable(): boolean
+	return inTeamRun() and player:GetAttribute("Alive") == true and player:GetAttribute("Paused") ~= true and Remotes.State():GetAttribute("Frozen") ~= true
+end
+
+function TeamPings.Target(kind: string): any
+	local body = root()
+	if not body then return nil end
+	if kind == "Location" then return body.Position end
+	local folder = workspace:FindFirstChild(kind == "Enemy" and "SwarmEnemies" or "SwarmLoot")
+	if not folder then return nil end
+	local best, distance = nil, Config.TeamPings.MaxDistance + 0.001
+	for _, object in ipairs(folder:GetChildren()) do
+		local id = kind == "Enemy" and tonumber(string.match(object.Name, "^E(%d+)$")) or object:GetAttribute("LootId")
+		local part = object:IsA("Model") and (object.PrimaryPart or object:FindFirstChild("Body")) or nil
+		if type(id) == "number" and part and part:IsA("BasePart") and finite(part.Position) then
+			local state = object:GetAttribute("State")
+			local eligible = kind == "Enemy" or (state ~= "Opened" and state ~= "Claimed" and state ~= "Spent" and state ~= "Active")
+			local d = (part.Position - body.Position).Magnitude
+			if eligible and d < distance then best, distance = id, d end
+		end
+	end
+	return best
+end
+
+function TeamPings.Send(kind: string): boolean
+	if not allowed[kind] or not usable() then return false end
+	if kind == "Help" or kind == "Regroup" then Remotes.Get("TeamPing"):FireServer(kind); return true end
+	local target = TeamPings.Target(kind)
+	if target == nil then return false end
+	Remotes.Get("TeamPing"):FireServer(kind, target)
+	return true
+end
+
+function TeamPings.Clear()
+	opened = false
+	for _, marker in ipairs(markers) do marker.Until = 0; marker.Billboard.Enabled = false end
+end
+
+function TeamPings.Init()
+	if gui then return end
+	local pingGui: ScreenGui = UIKit.new("ScreenGui", { Name = "TeamPings", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = Theme.Z.Hud + 1, Enabled = false }, player:WaitForChild("PlayerGui"))
+	gui = pingGui
+	local frame = UIKit.new("Frame", { Name = "Controls", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, pingGui)
+	local panel = UIKit.new("Frame", { Name = "PingOptions", BackgroundColor3 = Theme.Palette.slate_900, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -148), Size = UDim2.fromOffset(248, 172), Visible = false }, frame)
+	UIKit.corner(panel, Theme.Radius.M)
+	UIKit.stroke(panel, Theme.Palette.gold_400, 1, 0.3)
+	local button = UIKit.Button(frame, { Name = "Ping", Title = "PING", Kind = "Secondary", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -90), Size = UDim2.fromOffset(88, 48), Shadow = false, OnClick = function() opened = not opened; panel.Visible = opened end })
+	for i, kind in ipairs(kinds) do
+		UIKit.Button(panel, { Name = kind, Title = string.upper(kind), Kind = "Secondary", Position = UDim2.fromOffset(8 + ((i - 1) % 2) * 120, 8 + math.floor((i - 1) / 2) * 54), Size = UDim2.fromOffset(112, 48), Shadow = false, OnClick = function() TeamPings.Send(kind); opened = false; panel.Visible = false end })
+	end
+	for _ = 1, 12 do
+		local anchor = UIKit.new("Part", { Name = "TeamPingMarker", Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false, Transparency = 1, Size = Vector3.one }, workspace)
+		local billboard = UIKit.new("BillboardGui", { Name = "Ping", Adornee = anchor, Size = UDim2.fromOffset(120, 44), StudsOffsetWorldSpace = Vector3.new(0, 4, 0), AlwaysOnTop = true, MaxDistance = 160, Enabled = false }, anchor)
+		local label = UIKit.text(billboard, "Label", "", { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.3, BackgroundColor3 = Theme.Palette.slate_950, BackgroundTransparency = 0.2 }, 14)
+		UIKit.corner(label, Theme.Radius.M)
+		table.insert(markers, { Anchor = anchor, Billboard = billboard, Label = label, Until = 0 })
+	end
+	Remotes.Get("TeamPingShown").OnClientEvent:Connect(function(payload)
+		if not inTeamRun() or type(payload) ~= "table" or not allowed[payload.Kind] or typeof(payload.Position) ~= "Vector3" or not finite(payload.Position) or typeof(payload.Color) ~= "Color3" then return end
+		local marker = markers[1]
+		for _, candidate in ipairs(markers) do if candidate.Until < marker.Until then marker = candidate end end
+		marker.Anchor.Position = payload.Position
+		marker.Label.Text = string.upper(payload.Kind)
+		marker.Label.TextColor3 = payload.Color
+		marker.Until = os.clock() + Config.TeamPings.Duration
+		marker.Billboard.Enabled = true
+	end)
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == Enum.KeyCode.G and usable() and not UserInputService:GetFocusedTextBox() then opened = not opened; panel.Visible = opened end
+	end)
+	UserInputService.WindowFocusReleased:Connect(function() opened = false; panel.Visible = false end)
+	RunService.RenderStepped:Connect(function()
+		local active = inTeamRun()
+		pingGui.Enabled = active
+		button.Instance.Visible = usable()
+		if not active then TeamPings.Clear() end
+		if not usable() then opened = false end
+		panel.Visible = opened
+		for _, marker in ipairs(markers) do if marker.Until <= os.clock() then marker.Billboard.Enabled = false end end
+	end)
+end
+
+return TeamPings
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="109">
           <Properties>
             <string name="Name">TeamUI</string>
             <string name="Source"><![CDATA[--[[
@@ -53290,7 +54390,7 @@ return TeamUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="104">
+        <Item class="ModuleScript" referent="110">
           <Properties>
             <string name="Name">Telegraphs</string>
             <string name="Source"><![CDATA[--[[
@@ -53337,6 +54437,7 @@ local Palette = require(Shared:WaitForChild("Palette"))
 local ModelLibrary = require(script.Parent.ModelLibrary)
 local Audio = require(script.Parent.Audio)
 local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
 
 local Telegraphs = {}
 
@@ -53422,7 +54523,9 @@ local partAlpha: { [BasePart]: number } = setmetatable({}, { __mode = "k" }) :: 
 
 local function take(shape: string, color: Color3, size: Vector3, alpha: number, material: Enum.Material?): BasePart
 	local p = table.remove(pools[shape]) or newPart(shape)
-	p.Color = color
+	local h, s, v = color:ToHSV()
+	local danger = s > 0.18 and v > 0.28 and (h < 0.19 or h > 0.85 or color == C.Acid or color == C.AcidLight)
+	p.Color = Accessibility.Color(color, danger and "Danger" or nil)
 	p.Material = material or SMOOTH
 	p.Size = size
 	p.Transparency = alpha
@@ -53838,7 +54941,7 @@ Kind.circle = function(x: number, z: number, radius: number, seconds: number, st
 		setDisc(rec.Fill, rec.R * 2 * (0.12 + 0.88 * u))
 		setT(rec.Fill, 1 - (0.42 + 0.3 * u) * v)
 		local edge
-		if rec.St.Blink then
+		if rec.St.Blink and not ClientSettings.Flashes() then
 			local hz = 5 + 12 * u
 			edge = (math.sin(t * hz * TAU) > -0.2) and 0.1 or 0.75
 		else
@@ -54002,7 +55105,7 @@ local function globPieces(): { any }
 	local function add(shape: string, size: Vector3, color: Color3, offset: CFrame, material: Enum.Material?, alpha: number?)
 		local p = newPart(shape)
 		p.Size = size
-		p.Color = color
+		p.Color = Accessibility.Color(color)
 		p.Material = material or SMOOTH
 		p.Transparency = alpha or 0
 		table.insert(list, { Part = p, Offset = offset, Color = color })
@@ -54025,7 +55128,7 @@ local function eggGlobPieces(): { any }
 	local function add(shape: string, size: Vector3, color: Color3, offset: CFrame, material: Enum.Material?)
 		local p = newPart(shape)
 		p.Size = size
-		p.Color = color
+		p.Color = Accessibility.Color(color)
 		p.Material = material or SMOOTH
 		p.Transparency = 0
 		table.insert(list, { Part = p, Offset = offset, Color = color })
@@ -54093,7 +55196,7 @@ local function eggParts(): { BasePart }
 	for k = 1, 3 do
 		local sp = newPart("Ball")
 		sp.Size = Vector3.one * 0.55
-		sp.Color = P.crimson_500
+		sp.Color = Accessibility.Color(P.crimson_500, "Danger")
 		spots[k] = sp
 	end
 	local crackA = newPart("Block")
@@ -54498,7 +55601,7 @@ Kind.mine = function(x: number, z: number, radius: number, seconds: number, from
 		local e = 1 - (1 - fly) * (1 - fly)
 		local pos = from:Lerp(to, e) + Vector3.new(0, 2.5 * 4 * e * (1 - e) + math.sin(t * 3) * 0.2 * fly, 0)
 		local hz = 1.2 + 7 * u * u
-		local on = math.sin(t * hz * TAU) > 0
+		local on = ClientSettings.Flashes() or math.sin(t * hz * TAU) > 0
 		core.Transparency = on and 0 or 0.45
 		halo.Transparency = on and 0.55 or 0.85
 		halo.Size = Vector3.one * (1.6 + 0.6 * u)
@@ -54823,7 +55926,7 @@ return Telegraphs
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="105">
+        <Item class="ModuleScript" referent="111">
           <Properties>
             <string name="Name">TerrainFx</string>
             <string name="Source"><![CDATA[--[[
@@ -54913,7 +56016,7 @@ return TerrainFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="106">
+        <Item class="ModuleScript" referent="112">
           <Properties>
             <string name="Name">TravelOverlay</string>
             <string name="Source"><![CDATA[--[[
@@ -55121,7 +56224,7 @@ return TravelOverlay
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="107">
+        <Item class="ModuleScript" referent="113">
           <Properties>
             <string name="Name">Tutorial</string>
             <string name="Source"><![CDATA[--[[
@@ -55715,7 +56818,7 @@ return Tutorial
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="108">
+        <Item class="ModuleScript" referent="114">
           <Properties>
             <string name="Name">UIAnim</string>
             <string name="Source"><![CDATA[--[[
@@ -55807,27 +56910,33 @@ function UIAnim.FadeIn(obj: GuiObject, target: number, seconds: number?)
 end
 
 --[[
-	Press / hover feedback for a plain button (swatches, small tiles): hover grows a touch,
-	press shrinks to Theme.Motion.PressScale. Bigger components (UIKit buttons and cards)
+	Press / hover feedback for a plain button (swatches, small tiles): brighten the fill
+	without scaling its hit target or changing a list's layout. Bigger components (UIKit buttons and cards)
 	use their own lift-and-brighten states instead.
 ]]
 function UIAnim.Button(b: GuiButton)
-	local s = scaleOf(b)
+	local resting = b.BackgroundTransparency
+	local hovering = false
+	local function show(amount: number)
+		UIAnim.Tween(b, Theme.Motion.Fast, { BackgroundTransparency = math.max(0, resting - amount) })
+	end
 	b.MouseEnter:Connect(function()
 		if b.Active then
-			UIAnim.Tween(s, Theme.Motion.Fast, { Scale = 1.04 })
+			hovering = true
+			show(0.1)
 		end
 	end)
 	b.MouseLeave:Connect(function()
-		UIAnim.Tween(s, Theme.Motion.Fast, { Scale = 1 })
+		hovering = false
+		show(0)
 	end)
 	b.MouseButton1Down:Connect(function()
 		if b.Active then
-			UIAnim.Tween(s, 0.08, { Scale = Theme.Motion.PressScale })
+			show(0.15)
 		end
 	end)
 	b.MouseButton1Up:Connect(function()
-		UIAnim.Tween(s, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+		show(hovering and 0.1 or 0)
 	end)
 end
 
@@ -56160,7 +57269,7 @@ end
 
 -- A glow flash (a bright frame that fades) over `obj`: purchase / unlock feedback.
 function UIAnim.Flash(obj: GuiObject, color: Color3?)
-	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+	if (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
 		return
 	end
 	local f = Instance.new("Frame")
@@ -56298,7 +57407,7 @@ return UIAnim
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="109">
+        <Item class="ModuleScript" referent="115">
           <Properties>
             <string name="Name">UIBuilder</string>
             <string name="Source"><![CDATA[--[[
@@ -58728,9 +59837,22 @@ local function buildPause()
 	pause.Sfx = UIKit.Slider(colA, "Effects", "speaker", ClientSettings.Get("Sfx"), function(v)
 		ClientSettings.Set("Sfx", v)
 	end, function() end, { LayoutOrder = 3 })
+	pause.ChannelSliders = {}
+	for i, option in ipairs({ { "CombatVolume", "Combat" }, { "InterfaceVolume", "Interface" }, { "WarningVolume", "Warnings" } }) do
+		local key = option[1]
+		pause.ChannelSliders[key] = UIKit.Slider(colA, option[2], "speaker", ClientSettings.Get(key), function(v)
+			ClientSettings.Set(key, v)
+		end, function() end, { LayoutOrder = i + 3 })
+	end
+	pause.Mute = UIKit.Toggle(colA, "Mute all", "speaker", "Silence every audio channel.", ClientSettings.Get("MuteAll") == true, function(on)
+		ClientSettings.Set("MuteAll", on)
+	end, { LayoutOrder = 7 })
+	pause.SoundCues = UIKit.Toggle(colA, "Visual sound cues", "info", "Words and direction for attack warnings and player sounds.", ClientSettings.Get("VisualAudioCues") == true, function(on)
+		ClientSettings.Set("VisualAudioCues", on)
+	end, { LayoutOrder = 8 })
 	pause.Shake = UIKit.Slider(colA, "Screen shake", "area", ClientSettings.Get("Shake"), function(v)
 		ClientSettings.Set("Shake", v)
-	end, function() end, { LayoutOrder = 4 })
+	end, function() end, { LayoutOrder = 9 })
 
 	sectionCaption(colB, "Comfort & help", 1)
 	pause.Reduced = UIKit.Toggle(colB, "Reduced effects", "sparkle", "Fewer particles and trails. No screen flashes.", ClientSettings.Get("ReducedEffects") == true, function(on)
@@ -58745,6 +59867,25 @@ local function buildPause()
 	pause.Minimap = UIKit.Toggle(colB, "Minimap", "area", "A small map of the arena during runs.", ClientSettings.Get("Minimap") ~= false, function(on)
 		ClientSettings.Set("Minimap", on)
 	end, { LayoutOrder = 5 })
+	pause.Flashes = UIKit.Toggle(colB, "Reduce flashes", "sparkle", "Keep attack warnings; suppress bright hit and screen flashes.", ClientSettings.Get("ReduceFlashes") == true, function(on)
+		ClientSettings.Set("ReduceFlashes", on)
+	end, { LayoutOrder = 6 })
+	pause.Choices = {}
+	for i, option in ipairs({ { "Colorblind", "COLOURS" }, { "TouchLayout", "TOUCH LAYOUT" } }) do
+		local key, label = option[1], option[2]
+		local b
+		b = UIKit.Button(colB, {
+			Title = label .. ": " .. tostring(ClientSettings.Get(key)), Kind = "Outline", Icon = "cycle", IconSize = 18,
+			Size = UDim2.new(1, 0, 0, 46), LayoutOrder = i + 6,
+			OnClick = function()
+				local choices = (Config.Settings :: any).Enums[key]
+				local at = table.find(choices, ClientSettings.Get(key)) or 1
+				ClientSettings.Set(key, choices[at % #choices + 1])
+				b.SetText(label .. ": " .. tostring(ClientSettings.Get(key)))
+			end,
+		})
+		pause.Choices[key] = { Button = b, Label = label }
+	end
 	pause.ReplayTips = UIKit.Button(colB, {
 		Kind = "Secondary",
 		Title = "REPLAY TIPS",
@@ -58752,7 +59893,7 @@ local function buildPause()
 		IconSize = 18,
 		Align = "Center",
 		Size = UDim2.new(1, 0, 0, 46),
-		LayoutOrder = 6,
+		LayoutOrder = 10,
 		OnClick = function()
 			Tutorial.Replay()
 			ClientSettings.Set("Tips", true)
@@ -58767,7 +59908,7 @@ local function buildPause()
 		IconSize = 18,
 		Align = "Center",
 		Size = UDim2.new(1, 0, 0, 46),
-		LayoutOrder = 7,
+		LayoutOrder = 11,
 		OnClick = function()
 			BugReportUI.Open()
 		end,
@@ -58841,7 +59982,7 @@ local function buildPause()
 		local w = tallModalWidth(760)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
-		local twoCol = inner >= 540
+		local twoCol = inner >= 540 and not (UIKit.IsCompact() and v.Y > v.X)
 		local gap = 20
 		local side = 2 -- the columns' padding keeps the slider knobs inside the scroll clip
 		local colW = twoCol and math.floor((inner - gap - 2 * side) / 2) or (inner - 2 * side)
@@ -58920,6 +60061,12 @@ local function syncOptions()
 	pause.Reduced.Set(ClientSettings.Get("ReducedEffects") == true)
 	pause.Numbers.Set(ClientSettings.Get("DamageNumbers") == true)
 	pause.Tips.Set(ClientSettings.Get("Tips") ~= false)
+	pause.Minimap.Set(ClientSettings.Get("Minimap") ~= false)
+	pause.Flashes.Set(ClientSettings.Get("ReduceFlashes") == true)
+	pause.Mute.Set(ClientSettings.Get("MuteAll") == true)
+	pause.SoundCues.Set(ClientSettings.Get("VisualAudioCues") == true)
+	for key, slider in pairs(pause.ChannelSliders) do slider.Set(ClientSettings.Get(key)) end
+	for key, option in pairs(pause.Choices) do option.Button.SetText(option.Label .. ": " .. tostring(ClientSettings.Get(key))) end
 	pause.Layout()
 end
 
@@ -59311,6 +60458,11 @@ local function buildResults()
 		local nLines = (results.ProgLineCount or 0) * perLine
 		results.ProgLines.Size = UDim2.new(1, -28, 0, nLines * lineH)
 		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0))
+		local settlementLines = 0
+		for line in string.gmatch(results.Settlement.Text .. "\n", "([^\n]*)\n") do
+			settlementLines += math.max(1, math.ceil(#line * results.Settlement.TextSize * 0.6 / math.max(1, inner)))
+		end
+		results.Settlement.Size = UDim2.new(1, 0, 0, settlementLines * (results.Settlement.TextSize + 5) + 8)
 		local bodyH = stackHeight(body, 10)
 		local fixed = headH + 10 + btnH + (TS(12) + 4) + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(140, v.Y - 24 - fixed)
@@ -59489,6 +60641,23 @@ local function onRunResult(data)
 	local lost = tonumber(data.GoldLost) or 0
 	local cause = type(data.DeathCause) == "string" and data.DeathCause or ""
 	results.Settlement.Text = string.format("%s · %s coins earned · %s kept · %s lost", tostring(data.Difficulty or "Standard"), UIKit.formatNumber(coinsEarned), UIKit.formatNumber(retained), UIKit.formatNumber(lost)) .. (cause ~= "" and ("\nCause: " .. cause) or "")
+	local history = type(data.DamageHistory) == "table" and data.DamageHistory or {}
+	local recent = {}
+	if not data.Won and not data.Portal and not data.Abandoned then
+		for i = #history, math.max(1, #history - 5), -1 do
+			local hit = history[i]
+			if type(hit) == "table" and type(hit.Cause) == "string" and type(hit.Damage) == "number"
+				and hit.Damage > 0 and hit.Damage < math.huge and type(hit.Time) == "number" and hit.Time == hit.Time then
+				local age = math.max(0, (tonumber(data.Time) or 0) - hit.Time)
+				if age <= 15 then
+					table.insert(recent, string.format("%s · -%s HP · %ds ago", string.sub(hit.Cause, 1, 70), UIKit.formatNumber(math.ceil(hit.Damage)), math.floor(age)))
+				end
+			end
+		end
+	end
+	if #recent > 0 then
+		results.Settlement.Text ..= "\nRecent damage (latest first):\n" .. table.concat(recent, "\n")
+	end
 	-- portal returns before WinMinStages stages are a safe escape, not a win
 	-- Abandoned: left from the pause menu's MAIN MENU (counted as a loss)
 	results.Title.Text = data.Won and "VICTORY!" or (data.Portal and "ESCAPED" or (data.Abandoned and "RUN ENDED" or "DEFEATED"))
@@ -60132,7 +61301,7 @@ return UIBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="110">
+        <Item class="ModuleScript" referent="116">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[--[[
@@ -62311,7 +63480,7 @@ return UIKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="111">
+        <Item class="ModuleScript" referent="117">
           <Properties>
             <string name="Name">VFX</string>
             <string name="Source"><![CDATA[--[[
@@ -62355,6 +63524,7 @@ local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Audio = require(script.Parent.Audio)
 local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
 local ModelLibrary = require(script.Parent.ModelLibrary)
 local EnemyRenderer = require(script.Parent.EnemyRenderer)
 local CameraController = require(script.Parent.CameraController)
@@ -62481,7 +63651,7 @@ end
 
 local function takePart(shape: string, color: Color3, material: Enum.Material, size: Vector3, alpha: number): BasePart
 	local p = table.remove(pools[shape]) or newPart(shape)
-	p.Color = color
+	p.Color = Accessibility.Color(color)
 	p.Material = material
 	p.Size = size
 	p.Transparency = alpha
@@ -62693,7 +63863,7 @@ local function styleRing(ring: Ring, radius: number, width: number, color: Color
 	if ring.Color ~= color then
 		ring.Color = color
 		for _, p in ipairs(ring.Parts) do
-			p.Color = color
+			p.Color = Accessibility.Color(color)
 		end
 	end
 	if ring.Alpha ~= alpha then
@@ -63231,6 +64401,7 @@ local function enemyBody(id: number): BasePart?
 end
 
 local function flash(id: number)
+	if ClientSettings.Flashes() then return end
 	if EnemyRenderer.Flash(id) then
 		return
 	end
@@ -63246,7 +64417,7 @@ end
 
 local function updateFlashes(now: number)
 	for body, untilTime in pairs(flashing) do
-		if now >= untilTime then
+		if now >= untilTime or ClientSettings.Flashes() then
 			flashing[body] = nil
 			local base = body:GetAttribute("BaseColor")
 			if typeof(base) == "Color3" then
@@ -63258,6 +64429,7 @@ end
 
 -- Small ivory flash and two gold sparks on a hit enemy (in front of its model).
 local function hitSpark(id: number)
+	if ClientSettings.Flashes() then return end
 	local pos = EnemyRenderer.Position(id)
 	if not pos or not room(3) then
 		return
@@ -63684,7 +64856,7 @@ local function playerEvent(userId: number, kind: string)
 			CameraController.Shake(0.22)
 			Audio.Play("Hurt")
 		end
-		if pos and room(1) then
+		if pos and not ClientSettings.Flashes() and room(1) then
 			-- a small crimson nick on the hero
 			local at = towardCamera(pos + Vector3.new(0, 0.8, 0), 1.2)
 			fx("Ball", P.crimson_300, NEON, CFrame.new(at), nil, Vector3.one * 0.4, Vector3.one * 1.1, 0.2, 1, 0.12, EASE_OUT)
@@ -65399,6 +66571,7 @@ end
 ------------------------------------------------------------------------------------------
 
 function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
+	Accessibility.Init()
 	onLocalEvent = opts and opts.OnLocalEvent or nil
 	fxFolder = Instance.new("Folder")
 	fxFolder.Name = "SwarmClientFx"
@@ -65450,7 +66623,7 @@ return VFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="112">
+        <Item class="ModuleScript" referent="118">
           <Properties>
             <string name="Name">ViewportPreview</string>
             <string name="Source"><![CDATA[--[[
@@ -65645,7 +66818,7 @@ return ViewportPreview
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="113">
+  <Item class="Workspace" referent="119">
     <Properties>
       <string name="Name">Workspace</string>
       <float name="FallenPartsDestroyHeight">-200</float>

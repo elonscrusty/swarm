@@ -28,6 +28,8 @@ local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
+local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
 
 local Audio = {}
 
@@ -35,6 +37,7 @@ local A = Config.Audio
 local sfxGroup: SoundGroup
 local musicGroup: SoundGroup
 local groups: { [string]: SoundGroup } = {}
+local channels: { [string]: SoundGroup } = {}
 local pools: { [string]: { Sound } } = {}
 local nextIndex: { [string]: number } = {}
 local lastPlayed: { [string]: number } = {}
@@ -94,11 +97,17 @@ function Audio.Init()
 	musicGroup.Name = "SwarmMusic"
 	musicGroup.Volume = Config.Settings.Defaults.Music
 	musicGroup.Parent = SoundService
+	for _, name in ipairs({ "Combat", "Interface", "Warning" }) do
+		local group = Instance.new("SoundGroup")
+		group.Name = "Swarm" .. name
+		group.Parent = sfxGroup
+		channels[name] = group
+	end
 	for name, cat in pairs(A.Categories) do
 		local g = Instance.new("SoundGroup")
 		g.Name = name
 		g.Volume = cat.Volume or 1
-		g.Parent = sfxGroup -- nested: the Effects slider scales every category
+		g.Parent = channels[name == "UI" and "Interface" or (name == "Warning" or name == "Boss") and "Warning" or "Combat"]
 		groups[name] = g
 	end
 
@@ -119,6 +128,12 @@ function Audio.Init()
 			end
 		end
 	end
+	Audio.SetVolumes(ClientSettings.Get("Music"), ClientSettings.Get("Sfx"))
+	ClientSettings.OnChanged(function(key)
+		if key == "Music" or key == "Sfx" or key == "MuteAll" or string.find(key, "Volume") then
+			Audio.SetVolumes(ClientSettings.Get("Music"), ClientSettings.Get("Sfx"))
+		end
+	end)
 end
 
 -- Drops voices that have finished (Sound.IsPlaying, or their expected length is over).
@@ -286,6 +301,7 @@ end
 
 -- Plays an effect (2D). pitch overrides the playback speed (no random variation).
 function Audio.Play(name: string, pitch: number?)
+	Accessibility.Cue(name, nil)
 	local list = pools[name]
 	if not list then
 		return
@@ -334,6 +350,7 @@ end
 	back to Play). Telegraph cues use this, so a far-away warning is quieter.
 ]]
 function Audio.PlayAt(name: string, position: Vector3, pitch: number?)
+	Accessibility.Cue(name, position)
 	local def0 = Config.Sounds[name]
 	if not def0 or def0.Id == "" then
 		return
@@ -420,8 +437,12 @@ function Audio.SetMusic(name: string?)
 end
 
 function Audio.SetVolumes(music: number, sfx: number)
-	musicGroup.Volume = math.clamp(music, 0, 1)
-	sfxGroup.Volume = math.clamp(sfx, 0, 1)
+	local muted = ClientSettings.Get("MuteAll") == true
+	musicGroup.Volume = muted and 0 or math.clamp(music, 0, 1)
+	sfxGroup.Volume = muted and 0 or math.clamp(sfx, 0, 1)
+	for name, group in pairs(channels) do
+		group.Volume = math.clamp(tonumber(ClientSettings.Get(name .. "Volume")) or 1, 0, 1)
+	end
 end
 
 -- Stops every effect (run end / travel: no stray warning ticks).

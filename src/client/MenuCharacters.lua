@@ -24,7 +24,7 @@
 	Portrait: character tabs on top (two rows of four), the hero in between, the details
 	panel below.
 
-	Tapping a skin previews it on the dais; an owned skin is equipped at once (as before).
+	Tapping a skin only previews it on the dais; the separate action equips or buys it.
 	Server: BuyCharacter / SelectCharacter / EquipSkin (GoldSystem validates everything),
 	skin passes through MarketplaceService.
 ]]
@@ -49,8 +49,8 @@ local MenuCharacters = {}
 local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
+local DETAIL_HEADING = Font.fromEnum(Enum.Font.GothamBold)
 
-local LABEL_W = 96 -- width of the EFFECT / STRENGTH / TRADEOFF / UNLOCK column
 local ACTION_H = 46 -- the SELECT / UNLOCK button
 local PORTRAIT = 84 -- framed portrait in the details head
 local SKIN_GAP = 8
@@ -216,8 +216,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, detailFace)
-	UIKit.padding(scroll, 16, 18, 14, 18)
-	ui.DetailList = UIKit.list(scroll, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Left })
+	UIKit.padding(scroll, 20, 20, 20, 20)
+	ui.DetailList = UIKit.list(scroll, { Padding = UDim.new(0, 12), HorizontalAlignment = Enum.HorizontalAlignment.Left })
 	ui.Scroll = scroll
 	-- footer for the action button when the details don't fit (phones): always in view
 	ui.Footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Visible = false, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) }, detailFace)
@@ -230,16 +230,17 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.corner(ui.PortraitWell, Theme.Radius.M)
 	UIKit.stroke(ui.PortraitWell, P.gold_400, 2, 0.1)
 	local col = new("Frame", { Name = "Column", BackgroundTransparency = 1, Position = UDim2.fromOffset(PORTRAIT + 14, 0), Size = UDim2.new(1, -(PORTRAIT + 14), 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, head)
-	UIKit.list(col, { Padding = UDim.new(0, 2) })
+	UIKit.list(col, { Padding = UDim.new(0, 6) })
 	local nameRow = new("Frame", { Name = "NameRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, TS(30) + 6), LayoutOrder = 1 }, col)
-	ui.Name = text(nameRow, "H1", "", { Name = "CharName", FontFace = Theme.Font.Display, Size = UDim2.new(1, -120, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, 30)
-	ui.State = UIKit.StatusPill(nameRow, "OWNED", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(0, Theme.Size.Badge + 10) })
+	ui.Name = text(nameRow, "H1", "", { Name = "CharName", FontFace = DETAIL_HEADING, Size = UDim2.fromScale(1, 1), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, 28)
+	ui.State = UIKit.StatusPill(col, "OWNED", { LayoutOrder = 2, Size = UDim2.fromOffset(0, Theme.Size.Badge + 10) })
 	ui.StatePad = ui.State:FindFirstChildOfClass("UIPadding")
 	ui.StateLock = Icons.Draw(ui.State, "lock", { Size = 14, Color = P.crimson_300, Back = P.slate_950, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -4, 0.5, 0) })
-	ui.Role = text(col, "Label", "", { Name = "Role", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(15) + 4), TextColor3 = P.gold_300 }, 15)
+	ui.Role = text(col, "Label", "", { Name = "Role", FontFace = DETAIL_HEADING, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(13) + 4), TextColor3 = P.gold_300 }, 13)
 	ui.Desc = text(col, "Body", "", {
 		Name = "Intro",
-		LayoutOrder = 3,
+		LayoutOrder = 4,
+		LineHeight = 1.15,
 		TextWrapped = true,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
@@ -248,14 +249,13 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	}, 15)
 	UIKit.Divider(scroll, 10, { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 12) })
 
-	-- STARTING WEAPON | TRAIT, split by a thin vertical line
+	-- Starting weapon and trait each keep the full panel width.
 	local factH = math.max(52, TS(12) + TS(18) + 16)
-	local facts = new("Frame", { Name = "Facts", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, factH), LayoutOrder = 3 }, scroll)
-	new("Frame", { Name = "Split", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 1, 1, -8) }, facts)
+	local facts = new("Frame", { Name = "Facts", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 2 * factH + 8), LayoutOrder = 3 }, scroll)
 	local function fact(x: number, caption: string): (TextLabel, Frame)
-		local half = new("Frame", { Name = caption, BackgroundTransparency = 1, Position = UDim2.new(x, x > 0 and 14 or 0, 0, 0), Size = UDim2.new(0.5, -14, 1, 0) }, facts)
+		local half = new("Frame", { Name = caption, BackgroundTransparency = 1, Position = UDim2.fromOffset(0, x > 0 and factH + 8 or 0), Size = UDim2.new(1, 0, 0, factH) }, facts)
 		local well = new("Frame", { Name = "Well", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(48, 48) }, half)
-		UIKit.SectionLabel(half, caption, P.gold_300, { Position = UDim2.fromOffset(60, 4), Size = UDim2.new(1, -60, 0, TS(12) + 2) })
+		text(half, "Label", string.upper(caption), { FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(60, 4), Size = UDim2.new(1, -60, 0, TS(12) + 4), TextColor3 = P.gold_300 }, 12)
 		local value = text(half, "BodyStrong", "", { Position = UDim2.fromOffset(60, 8 + TS(12)), Size = UDim2.new(1, -60, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, 18)
 		return value, well
 	end
@@ -271,8 +271,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	-- EFFECT (big "+N%" + text + weapon list), STRENGTH, TRADEOFF
 	local function infoRow(order: number, caption: string, color: Color3): (Frame, Frame)
 		local row = new("Frame", { Name = caption, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, scroll)
-		UIKit.SectionLabel(row, caption, color, { Size = UDim2.fromOffset(LABEL_W, TS(15) + 6) })
-		local body = new("Frame", { Name = "Body", BackgroundTransparency = 1, Position = UDim2.fromOffset(LABEL_W, 0), Size = UDim2.new(1, -LABEL_W, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, row)
+		text(row, "Label", string.upper(caption), { FontFace = DETAIL_HEADING, TextColor3 = color, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
+		local body = new("Frame", { Name = "Body", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TS(13) + 10), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, row)
 		return row, body
 	end
 	local function wrapped(parent: Instance, style: string, color: Color3, size: number?, props: { [string]: any }?): TextLabel
@@ -280,6 +280,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			TextWrapped = true,
+			FontFace = Theme.Font.Body,
+			LineHeight = 1.15,
 			TextColor3 = color,
 			TextYAlignment = Enum.TextYAlignment.Top,
 		}, size)
@@ -291,11 +293,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		return l
 	end
 	local _, effBody = infoRow(5, "Effect", P.gold_300)
-	UIKit.list(effBody, { Padding = UDim.new(0, 2) })
+	UIKit.list(effBody, { Padding = UDim.new(0, 6) })
 	local effTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, effBody)
-	ui.EffectBig = text(effTop, "Display", "", { Name = "Big", Size = UDim2.fromOffset(0, TS(26) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, Position = UDim2.fromOffset(0, -6) }, 26)
+	ui.EffectBig = text(effTop, "Display", "", { Name = "Big", FontFace = DETAIL_HEADING, Size = UDim2.fromOffset(0, TS(24) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300 }, 24)
 	ui.Trait = wrapped(effTop, "Body", P.ivory_100, 15)
-	ui.EffectList = wrapped(effBody, "Small", P.ivory_300, 12, { LayoutOrder = 2, Name = "Weapons" })
+	ui.EffectList = wrapped(effBody, "Small", P.ivory_300, 14, { LayoutOrder = 2, Name = "Weapons" })
 	local _, strBody = infoRow(6, "Strength", P.gold_300)
 	ui.Strength = wrapped(strBody, "Body", P.ivory_100, 15)
 	local _, tradeBody = infoRow(7, "Tradeoff", P.crimson_300)
@@ -306,12 +308,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	ui.UnlockCard = unlock
 	UIKit.list(unlock, { Padding = UDim.new(0, 4) })
 	UIKit.Hairline(unlock, { LayoutOrder = 0 })
-	local uTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, TS(30) + 6), LayoutOrder = 1 }, unlock)
-	UIKit.SectionLabel(uTop, "Unlock", P.gold_300, { Size = UDim2.fromOffset(LABEL_W, TS(30) + 6) })
-	ui.UnlockName = text(uTop, "H2", "", { Position = UDim2.fromOffset(LABEL_W, 0), Size = UDim2.new(1, -(LABEL_W + 120), 1, 0), TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd }, Theme.TextSize.H2)
-	ui.UnlockCount = text(uTop, "Display", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 160, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 }, 28)
-	ui.UnlockRule = wrapped(unlock, "Body", P.ivory_200, 15, { Name = "Rule", LayoutOrder = 2 })
-	ui.UnlockMeter = UIKit.Meter(unlock, { Size = UDim2.new(1, 0, 0, 10), Color = P.gold_400, LayoutOrder = 3 } :: any)
+	local uTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, unlock)
+	text(uTop, "Label", "UNLOCK", { FontFace = DETAIL_HEADING, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
+	ui.UnlockName = text(uTop, "BodyStrong", "", { FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(0, TS(13) + 10), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.ivory_100 }, 16)
+	ui.UnlockCount = text(unlock, "Display", "", { FontFace = DETAIL_HEADING, LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(22) + 6), TextColor3 = P.gold_200 }, 22)
+	ui.UnlockRule = wrapped(unlock, "Body", P.ivory_200, 15, { Name = "Rule", LayoutOrder = 3 })
+	ui.UnlockMeter = UIKit.Meter(unlock, { Size = UDim2.new(1, 0, 0, 10), Color = P.gold_400, LayoutOrder = 4 } :: any)
 	ui.UnlockMeter.Frame.Name = "Progress"
 
 	ui.Action = UIKit.Button(scroll, {
@@ -347,11 +349,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	})
 
 	-- SKINS header (label, rule, the button for a skin not owned) and the skin cards
-	local skinHeadH = math.max(34, TS(14) + 14)
+	local skinHeadH = math.max(Theme.Size.TapMin, TS(14) + 14)
 	local skinHead = new("Frame", { Name = "SkinHead", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, skinHeadH), LayoutOrder = 10 }, scroll)
-	UIKit.SectionLabel(skinHead, "Skins", P.gold_300, { Size = UDim2.fromOffset(64, skinHeadH) }).TextSize = TS(15)
+	text(skinHead, "Label", "SKINS", { FontFace = DETAIL_HEADING, TextColor3 = P.gold_300, Size = UDim2.fromOffset(64, skinHeadH) }, 13)
 	ui.SkinRule = UIKit.Hairline(skinHead, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 70, 0.5, 0), Size = UDim2.new(1, -70, 0, 1) })
 	ui.SkinAction = UIKit.Button(skinHead, {
+		Name = "SkinAction",
 		Kind = "Outline",
 		Title = "GET SKIN",
 		Icon = "robux",
@@ -367,7 +370,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				return
 			end
 			if skinOwned(p, inspSkin) then
-				Remotes.Get("EquipSkin"):FireServer(inspChar, inspSkin)
+				if p.OwnedCharacters[inspChar] == true and (p.Skins[inspChar] or "Default") ~= inspSkin then
+					Remotes.Get("EquipSkin"):FireServer(inspChar, inspSkin)
+				end
 				return
 			end
 			local passId = skinPassId(inspSkin)
@@ -431,10 +436,6 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				UIKit.Click()
 				inspSkin = skinId
 				Showcase.Show(inspChar, inspSkin)
-				local p = profile()
-				if p and skinOwned(p, skinId) and (p.Skins[inspChar] or "Default") ~= skinId then
-					Remotes.Get("EquipSkin"):FireServer(inspChar, skinId)
-				end
 				MenuCharacters._refresh()
 			end)
 			swatches[skinId] = { Hit = hit, Stroke = st, Lock = lock, Pill = pill, Check = badge }
@@ -509,12 +510,12 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local selected = p.SelectedCharacter == inspChar
 		ui.Name.Text = string.upper(def.Name)
 		-- long names a step smaller so they fit beside the pill
-		local nameSize = 30
+		local nameSize = 28
 		while nameSize > 20 and #def.Name * TS(nameSize) * 0.74 > (ui.NameRoom or 300) do
 			nameSize -= 2
 		end
 		ui.Name.TextSize = TS(nameSize)
-		ui.Role.Text = UIKit.track(def.Role or "")
+		ui.Role.Text = string.upper(def.Role or "")
 		ui.Desc.Text = def.Description
 		local weapon = WeaponData.Weapons[def.StartWeapon]
 		ui.Weapon.Text = weapon and weapon.Name or def.StartWeapon
@@ -522,10 +523,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local big, body, list = splitEffect(def.Trait and def.Trait.Text or (def.BonusText or ""))
 		ui.EffectBig.Text = big or ""
 		ui.EffectBig.Visible = big ~= nil
-		-- the text runs after the big number (its width estimated from the font size)
-		local bigW = big and math.ceil(#big * TS(26) * 0.8) + 10 or 0
-		ui.Trait.Position = UDim2.fromOffset(bigW, big and 4 or 0)
-		ui.Trait.Size = UDim2.new(1, -bigW, 0, 0)
+		-- The trait sentence stays full width beneath its highlighted number.
+		ui.Trait.Position = UDim2.fromOffset(0, big and TS(24) + 8 or 0)
+		ui.Trait.Size = UDim2.new(1, 0, 0, 0)
 		ui.Trait.Text = body
 		ui.EffectList.Text = list or ""
 		ui.EffectList.Visible = list ~= nil
@@ -606,20 +606,25 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			s.Stroke.Thickness = (isEq or skinId == inspSkin) and 2 or 1.5
 			s.Stroke.Transparency = (isEq or skinId == inspSkin) and 0 or 0.3
 		end
-		-- the button for a skin not owned (owned skins equip on tap)
+		-- Preview never changes the equipped skin; only this explicit action does.
 		local skin = CharacterData.Skins[inspSkin]
 		local action = ui.SkinAction
+		action.Instance.Visible = true
 		if skinOwned(p, inspSkin) then
-			action.Instance.Visible = false
+			local isEquipped = equipped == inspSkin
+			action.SetKind(isEquipped and "Secondary" or "Outline")
+			action.SetIcon("check")
+			action.SetText(isEquipped and "EQUIPPED" or "EQUIP SKIN")
+			action.SetEnabled(own and not isEquipped)
 		else
 			local passId = skinPassId(inspSkin)
 			action.Instance.Visible = true
 			action.SetKind("Outline")
 			action.SetIcon("robux")
 			if skin and skin.Pass == "StarterPack" then
-				action.SetText(passId and "STARTER PACK" or "COMING SOON")
+				action.SetText(passId and "BUY PACK" or "COMING SOON")
 			else
-				action.SetText(passId and "GET SKIN" or "COMING SOON")
+				action.SetText(passId and "BUY SKIN" or "COMING SOON")
 			end
 			action.SetEnabled(passId ~= nil)
 		end
@@ -728,10 +733,10 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 			local detailH = math.min(contentH, math.floor(H * 0.56) - (listH - 76))
 			local detailY = H - M - detailH
-			ui.NameRoom = w - 36 - PORTRAIT - 14 - 124
+			ui.NameRoom = w - 40 - PORTRAIT - 14
 			place(ui.Detail, M, detailY, w, detailH)
 			pinAction(contentH > detailH + 1)
-			fitSkins(w - 36)
+			fitSkins(w - 40)
 			place(ui.Centre, (W - centreW) / 2, detailY - 64, centreW, 58)
 			if ctx.Current() == "Characters" then
 				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + listH) + (detailY - 50)) / 2 / H)
@@ -762,10 +767,10 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				rowStyle(id, cols == 2 and "tile" or "row", rowH)
 			end
 			local rw = math.clamp(W * 0.37, 430, 530)
-			ui.NameRoom = rw - 36 - PORTRAIT - 14 - 124
+			ui.NameRoom = rw - 40 - PORTRAIT - 14
 			place(ui.Detail, W - M - rw, top, rw, math.min(contentH, H - M - top))
 			pinAction(contentH > H - M - top + 1)
-			fitSkins(rw - 36)
+			fitSkins(rw - 40)
 			-- the hero's name between the panels, under the dais
 			local gapL, gapR = M + lw, W - M - rw
 			centreW = math.min(420, gapR - gapL - 16)

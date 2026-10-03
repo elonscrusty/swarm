@@ -39,6 +39,7 @@ local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local Audio = require(script.Parent.Audio)
 local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
 local ModelLibrary = require(script.Parent.ModelLibrary)
 local EnemyRenderer = require(script.Parent.EnemyRenderer)
 local CameraController = require(script.Parent.CameraController)
@@ -165,7 +166,7 @@ end
 
 local function takePart(shape: string, color: Color3, material: Enum.Material, size: Vector3, alpha: number): BasePart
 	local p = table.remove(pools[shape]) or newPart(shape)
-	p.Color = color
+	p.Color = Accessibility.Color(color)
 	p.Material = material
 	p.Size = size
 	p.Transparency = alpha
@@ -377,7 +378,7 @@ local function styleRing(ring: Ring, radius: number, width: number, color: Color
 	if ring.Color ~= color then
 		ring.Color = color
 		for _, p in ipairs(ring.Parts) do
-			p.Color = color
+			p.Color = Accessibility.Color(color)
 		end
 	end
 	if ring.Alpha ~= alpha then
@@ -915,6 +916,7 @@ local function enemyBody(id: number): BasePart?
 end
 
 local function flash(id: number)
+	if ClientSettings.Flashes() then return end
 	if EnemyRenderer.Flash(id) then
 		return
 	end
@@ -930,7 +932,7 @@ end
 
 local function updateFlashes(now: number)
 	for body, untilTime in pairs(flashing) do
-		if now >= untilTime then
+		if now >= untilTime or ClientSettings.Flashes() then
 			flashing[body] = nil
 			local base = body:GetAttribute("BaseColor")
 			if typeof(base) == "Color3" then
@@ -942,6 +944,7 @@ end
 
 -- Small ivory flash and two gold sparks on a hit enemy (in front of its model).
 local function hitSpark(id: number)
+	if ClientSettings.Flashes() then return end
 	local pos = EnemyRenderer.Position(id)
 	if not pos or not room(3) then
 		return
@@ -1368,7 +1371,7 @@ local function playerEvent(userId: number, kind: string)
 			CameraController.Shake(0.22)
 			Audio.Play("Hurt")
 		end
-		if pos and room(1) then
+		if pos and not ClientSettings.Flashes() and room(1) then
 			-- a small crimson nick on the hero
 			local at = towardCamera(pos + Vector3.new(0, 0.8, 0), 1.2)
 			fx("Ball", P.crimson_300, NEON, CFrame.new(at), nil, Vector3.one * 0.4, Vector3.one * 1.1, 0.2, 1, 0.12, EASE_OUT)
@@ -3083,6 +3086,7 @@ end
 ------------------------------------------------------------------------------------------
 
 function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
+	Accessibility.Init()
 	onLocalEvent = opts and opts.OnLocalEvent or nil
 	fxFolder = Instance.new("Folder")
 	fxFolder.Name = "SwarmClientFx"

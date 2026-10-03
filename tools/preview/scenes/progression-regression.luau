@@ -15,8 +15,8 @@ end
 preview.startServer()
 preview.advance(1)
 local XP = preview.server("XPSystem")
-assert(XP.XPNeeded(20) == 110, "early XP costs changed")
-assert(XP.XPNeeded(21) == 112 and XP.XPNeeded(50) == 170, "late XP costs must keep growing")
+assert(XP.XPNeeded(1) == 28 and XP.XPNeeded(20) == 180, "early XP must make level-ups harder without timers")
+assert(XP.XPNeeded(21) == 184 and XP.XPNeeded(50) == 300, "late XP costs must keep growing")
 local RM = preview.server("RunManager")
 local LU = preview.server("LevelUpSystem")
 local player = game:GetService("Players").LocalPlayer
@@ -47,10 +47,7 @@ LU.Init({ RunManager = testRun, WeaponSystem = { OnInventoryChanged = function()
 rp.PendingLevels, rp.Offer, rp.UpgradeCombatTime = 0, nil, 0
 rp.Level = 8
 LU.QueueLevels(rp, 7)
-assert(rp.PendingLevels == 7 and not rp.Offer and not rp.Paused, "early XP must bank without protection")
-LU.Step(19)
-assert(not rp.Offer, "first panel must wait twenty combat seconds")
-LU.Step(1)
+assert(rp.PendingLevels == 7 and rp.Offer and rp.Paused, "earned levels must open immediately without a timer")
 assert(rp.Offer and rp.BatchRemaining == 4, "first panel must contain at most four choices")
 for _, choice in ipairs(rp.Offer) do
 	assert(choice.Synergy == nil and choice.SynergyReady == nil, "cards must not reveal hidden synergy recipes")
@@ -63,18 +60,14 @@ for i = 1, 4 do
 		assert(rp.Offer and rp.PanelId == panel and rp.OfferDeadline == deadline, "choices must share one panel and deadline")
 	end
 end
-assert(not rp.Offer and not rp.Paused and rp.PendingLevels == 3, "panel closes after four conserved choices")
-rp.UpgradeCombatTime = rp.NextUpgradeCombatTime - 49
-LU.Step(48)
-assert(not rp.Offer, "later panels need fifty combat seconds after close")
-LU.Step(1)
-assert(rp.Offer and rp.PanelId > panel and rp.BatchRemaining == 3, "next panel resumes banked levels")
+assert(rp.Offer and rp.Paused and rp.PendingLevels == 3 and rp.PanelId > panel and rp.BatchRemaining == 3,
+	"remaining earned levels resume immediately after four conserved choices")
 LU.Cancel(rp, true)
 assert(rp.PendingLevels == 3 and not rp.Offer and not rp.Paused, "temporary death must preserve earned levels")
 rp.Alive = false
 local combatTime = rp.UpgradeCombatTime
 LU.Step(100)
-assert(not rp.Offer and rp.UpgradeCombatTime == combatTime, "fallen time cannot advance panel cadence")
+assert(not rp.Offer and rp.UpgradeCombatTime == combatTime, "fallen players cannot open choices")
 rp.Alive = true
 rp.NextUpgradeCombatTime = 0
 LU.QueueLevels(rp, 4)
@@ -146,8 +139,8 @@ LU.OpenChest(rp)
 assert(holds == 0, "ordinary chest must not pause combat")
 rp.Level, rp.XP, rp.XPNeeded = 20, 0, XP.XPNeeded(20)
 local before = coins
-XP.GiveXP(rp, 224)
-assert(rp.Level == 22 and rp.XP == 2 and rp.XPNeeded == 114, "bulk XP must conserve remainder across late costs")
+XP.GiveXP(rp, 366)
+assert(rp.Level == 22 and rp.XP == 2 and rp.XPNeeded == 188, "bulk XP must conserve remainder across late costs")
 assert(math.abs(coins - before - 2 * 25 * 1.35) < 1e-6 and not rp.Offer and not rp.Paused,
 	"future bulk XP must become coins without any panel")
-preview.log("PASS: twelve ranks, XP curve, grouped cadence, evolution, coins and ordinary chest")
+preview.log("PASS: twelve ranks, harder XP, immediate choices, evolution, coins and ordinary chest")

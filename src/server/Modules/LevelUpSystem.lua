@@ -458,7 +458,6 @@ local function closePanel(rp, grace: boolean?)
 	rp.BatchRemaining = 0
 	rp.Paused = false
 	if wasOpen then
-		rp.NextUpgradeCombatTime = (rp.UpgradeCombatTime or 0) + Config.LevelUp.OfferIntervalSeconds
 		Remotes.FireClient("LevelUpClose", rp.Player)
 		if grace then ctx.RunManager.GrantChoiceGrace(rp) end
 		ctx.RunManager.ApplyMovement(rp)
@@ -489,8 +488,6 @@ local function offerNext(rp)
 	if not rp.Paused then
 		if not ctx.RunManager.IsRunning() or ctx.RunManager.IsMenuPaused() or ctx.RunManager.IsFrozen()
 			or ctx.StageManager.IsHolding() or rp.RewardUntil then return end
-		local eligible = rp.NextUpgradeCombatTime or Config.LevelUp.FirstOfferSeconds
-		if (rp.UpgradeCombatTime or 0) < eligible then return end
 		rp.PanelId = (rp.PanelId or 0) + 1
 		rp.BatchRemaining = math.min(Config.LevelUp.ChoicesPerPanel, rp.PendingLevels)
 		rp.BatchTotal = rp.BatchRemaining
@@ -510,6 +507,8 @@ function LevelUpSystem.QueueLevels(rp, count: number)
 	if not rp.Offer then
 		offerNext(rp)
 	end
+	rp.Player:SetAttribute("PendingUpgrades", rp.PendingLevels)
+	rp.Player:SetAttribute("XPReward", #buildPool(rp) == 0 and "Coins" or "Upgrade")
 end
 
 local function choose(rp, index: number)
@@ -527,6 +526,8 @@ local function choose(rp, index: number)
 	-- offerNext must always run (it releases the whole-run freeze), even if apply fails
 	local ok, err = pcall(apply, rp, c)
 	offerNext(rp)
+	rp.Player:SetAttribute("PendingUpgrades", rp.PendingLevels)
+	rp.Player:SetAttribute("XPReward", #buildPool(rp) == 0 and "Coins" or "Upgrade")
 	if not ok then
 		warn("[LevelUpSystem] apply failed: " .. tostring(err))
 	end
@@ -536,6 +537,7 @@ end
 function LevelUpSystem.Cancel(rp, preserveLevels: boolean?)
 	closePanel(rp)
 	if not preserveLevels then rp.PendingLevels = 0 end
+	rp.Player:SetAttribute("PendingUpgrades", rp.PendingLevels)
 	if rp.Player.Parent then
 		Remotes.FireClient("LevelUpClose", rp.Player)
 	end
@@ -654,10 +656,6 @@ function LevelUpSystem.Step(dt: number)
 	local menuPaused = ctx.RunManager.IsMenuPaused()
 	local now = os.clock()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
-		local holding = ctx.StageManager.IsHolding()
-		if rp.Alive and not rp.Paused and not rp.RewardUntil and not menuPaused and not ctx.RunManager.IsFrozen() and not holding then
-			rp.UpgradeCombatTime = (rp.UpgradeCombatTime or 0) + dt
-		end
 		if rp.Offer then
 			if menuPaused then
 				rp.OfferDeadline += dt -- the solo pause menu also pauses the auto-pick timer
@@ -668,7 +666,7 @@ function LevelUpSystem.Step(dt: number)
 					choose(rp, rng:NextInteger(1, #rp.Offer))
 				end
 			end
-		elseif rp.Alive and not menuPaused and not holding and not ctx.RunManager.IsFrozen() then
+		elseif rp.Alive and not menuPaused and not ctx.RunManager.IsFrozen() then
 			offerNext(rp)
 		end
 	end

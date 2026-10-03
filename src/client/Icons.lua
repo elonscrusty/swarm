@@ -347,6 +347,10 @@ local LAVENDER = Color3.fromRGB(176, 156, 214)
 type Colors = { Main: Color3, Accent: Color3, Extra: Color3? }
 
 local DEFAULT: { [string]: Colors } = {
+	lobby_Party = { Main = TEAL, Accent = LAVENDER, Extra = P.gold_300 },
+	lobby_BestTime = { Main = P.ivory_100, Accent = TEAL, Extra = P.gold_300 },
+	lobby_Wins = { Main = P.gold_400, Accent = P.crimson_400, Extra = P.gold_200 },
+	lobby_Gold = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_200 },
 	coin = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_200 },
 	info = { Main = P.gold_400, Accent = P.ivory_100 },
 	warning = { Main = P.crimson_300, Accent = P.ivory_100 },
@@ -499,6 +503,68 @@ DRAW.people3 = function(c)
 	figure(c, 18.6, 7.4, 0.68, c.dim)
 	figure(c, 12, 8.6, 0.88, c.back, 1.3)
 	figure(c, 12, 8.6, 0.88, c.main)
+end
+
+-- Lobby marks use broad silhouettes and large cut-outs so they survive 22 px chips.
+DRAW.lobby_Party = function(c)
+	-- A mage and hooded scout flank a gold-armoured party leader.
+	figure(c, 5.6, 7.3, 0.61, c.main)
+	tri(c, 5.6, 6.3, 7.6, "up", c.main)
+	box(c, 5.6, 6.4, 7.4, 1.5, c.main, 0, 0.6)
+	figure(c, 18.4, 7.3, 0.61, c.accent)
+	box(c, 18.4, 8.1, 3.1, 1.3, c.back, 0, 0.5)
+	figure(c, 12, 8.8, 0.83, c.back, 1.1)
+	figure(c, 12, 8.8, 0.83, c.extra)
+	box(c, 12, 5.3, 2.8, 3.5, c.mono and c.main or c.accent, 0, 0.9)
+	box(c, 12, 9, 5.2, 1.7, c.back, 0, 0.6)
+	box(c, 12, 17.3, 4.7, 4.7, c.mono and c.back or c.main, 45, 0.5)
+	box(c, 12, 17.3, 1.2, 3.8, c.extra, 0, 0.4)
+end
+
+DRAW.lobby_BestTime = function(c)
+	-- Stopwatch: gold crown, turquoise case, ivory dial, clear dark hands.
+	box(c, 12, 3.5, 2.5, 4.1, c.extra, 0, 0.6)
+	box(c, 12, 2.2, 6.6, 2.5, c.extra, 0, 0.8)
+	box(c, 19.2, 5.7, 4.5, 2.4, c.extra, 42, 0.7)
+	dot(c, 12, 13.4, 9.1, c.accent)
+	dot(c, 12, 13.4, 7.2, c.main)
+	box(c, 12, 7.5, 1.4, 1.8, c.mono and c.back or c.accent, 0, 0.5)
+	box(c, 6.1, 13.4, 1.8, 1.4, c.mono and c.back or c.accent, 0, 0.5)
+	box(c, 17.9, 13.4, 1.8, 1.4, c.mono and c.back or c.accent, 0, 0.5)
+	seg(c, 12, 13.4, 12, 9.6, 2, c.back)
+	seg(c, 12, 13.4, 15.2, 15.5, 2, c.back)
+	dot(c, 12, 13.4, 1.5, c.back)
+end
+
+DRAW.lobby_Wins = function(c)
+	-- A substantial handled cup with a medal inset and crimson award ribbons.
+	box(c, 9.1, 17.9, 3.4, 7.2, c.accent, 21, 0.5)
+	box(c, 14.9, 17.9, 3.4, 7.2, c.accent, -21, 0.5)
+	ring(c, 5.1, 8, 3.1, 2.1, c.main)
+	ring(c, 18.9, 8, 3.1, 2.1, c.main)
+	box(c, 12, 8.5, 12.6, 11.4, c.main, 0, 4.3)
+	box(c, 12, 3.9, 14.1, 2.5, c.extra, 0, 1)
+	box(c, 12, 16, 3.1, 4.7, c.main, 0, 0.6)
+	box(c, 12, 20.9, 11.2, 3, c.main, 0, 1)
+	box(c, 12, 19.5, 7.8, 1.6, c.extra, 0, 0.6)
+	dot(c, 12, 8.8, 3.2, c.mono and c.back or c.accent)
+	box(c, 12, 8.8, 2.5, 2.5, c.extra, 45, 0.3)
+end
+
+DRAW.lobby_Gold = function(c)
+	-- Staggered coin stacks plus a face-on minted coin; broad bands read at chip size.
+	for row = 0, 2 do
+		local y = 16.8 - row * 4.1
+		box(c, 16.2, y, 11.7, 4.8, c.accent, 0, 2.4)
+		box(c, 16.2, y - 1.2, 11.7, 3.1, c.main, 0, 1.5)
+		box(c, 16.2, y - 1.6, 7.2, 1.1, c.extra, 0, 0.5)
+	end
+	dot(c, 7.7, 15.9, 6.1, c.accent)
+	dot(c, 7.7, 15.9, 4.9, c.main)
+	ring(c, 7.7, 15.9, 3.5, 1.1, c.extra)
+	box(c, 7.7, 15.9, 2.3, 3.2, c.mono and c.back or c.accent, 0, 0.5)
+	seg(c, 4.6, 4.4, 4.6, 7.6, 1.4, c.extra)
+	seg(c, 3, 6, 6.2, 6, 1.4, c.extra)
 end
 
 DRAW.userPlus = function(c)

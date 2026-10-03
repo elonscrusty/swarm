@@ -27,7 +27,7 @@ end
 
 local sfx = SoundService:FindFirstChild("SwarmSFX")
 local function group(name: string): SoundGroup?
-	return sfx and sfx:FindFirstChild(name) :: SoundGroup?
+	return sfx and sfx:FindFirstChild(name, true) :: SoundGroup?
 end
 local function groupVolume(name: string): number
 	local g = group(name)

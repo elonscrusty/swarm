@@ -136,6 +136,7 @@ VFX.Init({
 	end,
 })
 UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls })
+require(script.Parent:WaitForChild("TeamPings")).Init()
 require(script.Parent:WaitForChild("ClientPerformance")).Init()
 require(script.Parent:WaitForChild("GroundDetail")).Init()
 DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer

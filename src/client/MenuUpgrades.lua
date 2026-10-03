@@ -2,7 +2,7 @@
 	MenuUpgrades.lua
 	The UPGRADES screen: two tabs in one panel.
 	  PERMANENT  the gold upgrades (MetaUpgradeData) as a 3 x 2 card grid (the rest scroll):
-	             icon tile, name, what one level gives, LV n / max with a segmented bar,
+	             icon tile, name, what one level gives, LV n / max with rank tally marks,
 	             CURRENT / NEXT effect in plain words and a gold BUY • N GOLD button (an
 	             outlined "N GOLD • NEED M MORE" when short, MAXED when done). A tap marks the
 	             card BUYING... until the server's ProfileSync (the gold and levels always
@@ -64,13 +64,35 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
 	ui.Panel = holder
 	UIKit.padding(face, 14, 16, 14, 16)
-	ui.Tabs = UIKit.Tabs(face, {
-		{ Id = "Permanent", Title = "Permanent", Icon = "chevronsUp" },
-		{ Id = "Shop", Title = "Shop", Icon = "robux" },
-	}, function(id)
-		tab = id
-		MenuUpgrades._rebuild(true)
-	end)
+	ui.Tabs = new("Frame", { Name = "Tabs", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, Theme.Size.TapMin) }, face)
+	UIKit.Hairline(ui.Tabs, { Position = UDim2.new(0, 0, 1, -1) })
+	local tabButtons: { [string]: TextButton } = {}
+	local tabLines: { [string]: Frame } = {}
+	for i, id in ipairs({ "Permanent", "Shop" }) do
+		local button = new("TextButton", {
+			Name = id,
+			BackgroundTransparency = 1,
+			AutoButtonColor = false,
+			Text = string.upper(id),
+			FontFace = Theme.Font.Label,
+			TextSize = TS(16),
+			TextColor3 = id == tab and P.gold_300 or C.TextMuted,
+			Position = UDim2.fromScale((i - 1) / 2, 0),
+			Size = UDim2.fromScale(0.5, 1),
+		}, ui.Tabs)
+		UIKit.Focusable(button)
+		tabButtons[id] = button
+		tabLines[id] = new("Frame", { Name = "Selected", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.new(0.5, 0, 0, 2), Visible = id == tab }, button)
+		button.Activated:Connect(function()
+			if tab == id then return end
+			tab = id
+			for key, other in pairs(tabButtons) do
+				other.TextColor3 = key == tab and P.gold_300 or C.TextMuted
+				tabLines[key].Visible = key == tab
+			end
+			MenuUpgrades._rebuild(true)
+		end)
+	end
 	ui.Note = text(face, "Small", "", { Position = UDim2.fromOffset(0, Theme.Size.TapMin + 6), Size = UDim2.new(1, 0, 0, TS(14) + 6), TextColor3 = C.TextMuted, TextXAlignment = Enum.TextXAlignment.Center }, 15)
 	ui.Scroll = new("ScrollingFrame", {
 		Name = "Scroll",
@@ -117,11 +139,12 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local level = p.Meta[id] or 0
 		local cost = MetaUpgradeData.CostOf(id, level)
 		local maxed = cost == nil
+		local affordable = cost ~= nil and p.Gold >= cost
 		local f = card(order)
 		cardTop(f, function()
 			UIKit.Tile(f, { Id = Icons.MetaIcon(id), Size = 56 })
 		end, def.Name, def.Description, 0)
-		-- LV n / max over a segmented bar
+		-- Gold tallies are bought; the bright next tally is affordable; short dim lines remain.
 		local barY = math.max(64, TS(20) + 12 + 2 * TS(14)) -- under a two-line description
 		local rank = text(f, "Label", string.format("LV %d / %d", level, def.MaxLevel), {
 			Name = "Rank",
@@ -129,7 +152,19 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			Size = UDim2.new(0, 90, 0, TS(13) + 4),
 			TextColor3 = maxed and P.gold_300 or C.TextMuted,
 		}, 13)
-		UIKit.SegmentBar(f, level, def.MaxLevel, { Position = UDim2.fromOffset(92, barY + math.floor((TS(13) + 4 - 8) / 2)), Size = UDim2.new(1, -92, 0, 8) })
+		local marks = new("Frame", { Name = "RankMarks", BackgroundTransparency = 1, Position = UDim2.fromOffset(92, barY + math.floor((TS(13) + 4 - 8) / 2)), Size = UDim2.new(1, -92, 0, 8) }, f)
+		for i = 1, def.MaxLevel do
+			local bought = i <= level
+			local available = i == level + 1 and affordable
+			new("Frame", {
+				Name = "Rank" .. i,
+				BackgroundColor3 = bought and P.gold_400 or available and P.ivory_100 or P.slate_600,
+				BorderSizePixel = 0,
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.new((i - 0.5) / def.MaxLevel, 0, 1, 0),
+				Size = UDim2.fromOffset(2, (bought or available) and 8 or 4),
+			}, marks)
+		end
 		UIKit.Hairline(f, { Position = UDim2.fromOffset(0, barY + TS(13) + 14) })
 		-- current / next effect (what the next level really gives)
 		local rowY = barY + TS(13) + 22
@@ -141,7 +176,6 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		end
 		effectRow(rowY, "Current", MetaUpgradeData.EffectText(id, level), C.Text)
 		effectRow(rowY + rowH, "Next", maxed and "Fully upgraded" or MetaUpgradeData.EffectText(id, level + 1), maxed and P.gold_300 or P.moss_200)
-		local affordable = cost ~= nil and p.Gold >= cost
 		if cost then
 			local busy = pending[id] ~= nil
 			local b

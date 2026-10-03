@@ -97,6 +97,7 @@ local firstArrival = 0
 local status = "Waiting"
 local refused: { [Player]: string } = {} -- sent home once their save is loaded
 local homeAt: { [Player]: number } = {} -- back in the run server's lobby: goes home at (os.clock)
+local reconnecting: { [Player]: string } = {}
 
 local GOOD = Color3.fromRGB(120, 255, 160)
 local WARN = Color3.fromRGB(255, 200, 120)
@@ -123,6 +124,43 @@ end
 
 function RunServers.IsRunServer(): boolean
 	return role == "Run"
+end
+
+-- This server-only saved pointer contains the reserved access code. Never replicate it.
+function RunServers.HasPendingReconnect(data): boolean
+	local r = data and data.RunReconnect
+	return type(r) == "table" and type(r.AccessCode) == "string" and r.AccessCode ~= ""
+		and type(r.PrivateId) == "string" and r.PrivateId ~= "" and type(r.Id) == "string" and r.Id ~= ""
+		and type(r.Expires) == "number" and r.Expires > os.time()
+		and r.Expires <= os.time() + cfg().RejoinGraceSeconds + 5
+		and type(data.RunEscrow) == "table" and data.RunEscrow.Id == r.Id
+end
+
+function RunServers.RegisterRun(rp)
+	local data = ctx.DataService.GetData(rp.Player)
+	local r = data and data.RunReconnect
+	if role == "Run" and type(r) == "table" and r.PrivateId == game.PrivateServerId then
+		r.Id, r.Expires = rp.RunId, 0
+	elseif data then
+		data.RunReconnect = nil
+	end
+end
+
+function RunServers.CanReconnect(rp): boolean
+	local data = ctx.DataService.GetData(rp.Player)
+	local r = data and data.RunReconnect
+	return role == "Run" and ticket ~= nil and #ticket.Members > 1 and expected[rp.Player.UserId] == true
+		and type(r) == "table" and r.PrivateId == game.PrivateServerId and r.Id == rp.RunId
+		and type(r.AccessCode) == "string" and r.AccessCode ~= ""
+end
+
+local function endReconnect(player: Player)
+	local data = ctx.DataService.GetData(player)
+	if data then
+		data.RunReconnect = nil
+		ctx.GoldSystem.RecoverEscrow(data)
+		ctx.GoldSystem.SyncProfile(player)
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -341,6 +379,8 @@ local function fallbackHere(players: { Player }, t: Ticket, starter: Player?)
 	for _, p in ipairs(players) do
 		settle(p)
 		if takeBack(p) then
+			local data = ctx.DataService.GetData(p)
+			if data then data.RunReconnect = nil end
 			table.insert(back, p)
 		end
 	end
@@ -373,6 +413,11 @@ local function failOne(player: Player)
 			fallbackHere({ player }, t, player)
 		elseif takeBack(player) then
 			notify(player, "Couldn't reach your team's run server. Start a new run.", BAD)
+		end
+	elseif tr.Kind == "Rejoin" then
+		if takeBack(player) then
+			endReconnect(player)
+			notify(player, "Couldn't reconnect. Your retained coins are safe; you can start a new run.", WARN)
 		end
 	elseif takeBack(player) then
 		homeAt[player] = nil
@@ -427,26 +472,16 @@ end
 ------------------------------------------------------------------------------------------
 
 local function travelToRun(list: { Player }, t: Ticket, starter: Player)
-	-- 1. save and release every profile: the run server loads exactly this
-	local released = true
-	for _, p in ipairs(list) do
-		if p.Parent and not ctx.DataService.ReleaseForTeleport(p) then
-			released = false
-		end
-	end
-	if not released then
-		warn("[RunServers] a save could not be released: the run plays here")
-		fallbackHere(list, t, starter)
-		return
-	end
-	-- 2. a fresh reserved server of this place
+	-- Reserve first so the secret reconnect route is saved before profile release.
 	local code: string? = nil
+	local privateId: string? = nil
 	for attempt = 1, 2 do
-		local ok, result = pcall(function()
-			return TeleportService:ReserveServer(game.PlaceId)
+		local ok, result, reservedId = pcall(function()
+			return TeleportService:ReserveServerAsync(game.PlaceId)
 		end)
 		if ok and type(result) == "string" and result ~= "" then
 			code = result
+			privateId = type(reservedId) == "string" and reservedId or nil
 			break
 		end
 		warn("[RunServers] ReserveServer failed: " .. tostring(result))
@@ -455,6 +490,18 @@ local function travelToRun(list: { Player }, t: Ticket, starter: Player)
 		end
 	end
 	if not code then
+		fallbackHere(list, t, starter)
+		return
+	end
+	local released = true
+	for _, p in ipairs(list) do
+		local data = ctx.DataService.GetData(p)
+		if data then
+			data.RunReconnect = privateId and { AccessCode = code, PrivateId = privateId, Id = "", Expires = 0 } or nil
+		end
+		if p.Parent and not ctx.DataService.ReleaseForTeleport(p) then released = false end
+	end
+	if not released then
 		fallbackHere(list, t, starter)
 		return
 	end
@@ -496,7 +543,7 @@ end
 -- RunManager: this player may not start or join a run now (travelling, or this run
 -- server is still starting its own run).
 function RunServers.Blocks(player: Player): boolean
-	if travelling[player] then
+	if travelling[player] or reconnecting[player] or RunServers.HasPendingReconnect(ctx.DataService.GetData(player)) then
 		return true
 	end
 	return role == "Run" and status == "Waiting"
@@ -723,6 +770,10 @@ end
 
 local function onArrival(player: Player)
 	local td = joinTeleportData(player)
+	if type(td) == "table" and type(td.SwarmRejoin) == "table" and type(td.SwarmRejoin.Id) == "string" then
+		reconnecting[player] = td.SwarmRejoin.Id
+		return
+	end
 	local t = td and RunServers.SanitizeTicket(td.SwarmRun)
 	if not ticket and t and table.find(t.Members, player.UserId) then
 		ticket = t
@@ -768,6 +819,44 @@ function RunServers.Start()
 		ownTeleport[player] = nil
 		homeAt[player] = nil
 		refused[player] = nil
+		reconnecting[player] = nil
+	end)
+	ctx.DataService.OnProfileLoaded(function(player)
+		-- Other load callbacks may create the lobby character; resume after those finish.
+		task.defer(function()
+			if not player.Parent then return end
+			local data = ctx.DataService.GetData(player)
+			if role == "Run" then
+				local id = reconnecting[player]
+				if id then
+					reconnecting[player] = nil
+					if expected[player.UserId] and RunServers.HasPendingReconnect(data)
+						and data.RunReconnect.PrivateId == game.PrivateServerId and status == "Started"
+						and ctx.RunManager.TryReconnect(player, id) then
+						ctx.GoldSystem.SyncProfile(player)
+						return
+					end
+					if not ticket then setStatus("Failed") end
+					endReconnect(player)
+					refuse(player, "That run has ended or your reconnect window expired. Back to the lobby.")
+				end
+				return
+			end
+			if not RunServers.HasPendingReconnect(data) then
+				if data and data.RunReconnect then endReconnect(player) end
+				return
+			end
+			if not live() then endReconnect(player); return end
+			local r = data.RunReconnect
+			local tr: Travel = { Kind = "Rejoin", Players = { player }, Options = makeOptions(r.AccessCode, { SwarmRejoin = { Id = r.Id } }), Retried = {} }
+			travelling[player] = tr
+			setTravel(player, "ToRun")
+			if not ctx.DataService.ReleaseForTeleport(player) or not teleport({ player }, tr.Options) then
+				failOne(player)
+				return
+			end
+			watchTimeout(tr)
+		end)
 	end)
 	if role ~= "Run" then
 		return

@@ -1239,6 +1239,9 @@ R.defineClass("TeleportService", {
 	events = { "TeleportInitFailed", "LocalPlayerArrivedFromTeleport" },
 	methods = {
 		Teleport = function() end,
+		ReserveServerAsync = function(self, placeId)
+			return self:ReserveServer(placeId)
+		end,
 		ReserveServer = function(_, placeId)
 			local T = R.teleport
 			if T.reserveFails > 0 then

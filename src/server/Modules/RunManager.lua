@@ -54,6 +54,7 @@ local Events = require(script.Parent.Events)
 local DevTools = require(script.Parent.DevTools)
 
 local RunManager = {}
+local disconnected: { [number]: any } = {}
 
 local ctx
 local state: Configuration
@@ -336,12 +337,12 @@ end
 	Builds the player's blocky character (selected character + skin) and places it.
 	inLobby adds the VIP crown. Old characters are destroyed on purpose (not respawned).
 ]]
-spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean): Model?
+spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean, runCharacterId: string?): Model?
 	local data = ctx.DataService.GetData(player)
 	if not data or not player.Parent then
 		return nil
 	end
-	local characterId = data.SelectedCharacter
+	local characterId = runCharacterId or data.SelectedCharacter
 	if not CharacterData.Characters[characterId] then
 		characterId = CharacterData.Default
 	end
@@ -664,6 +665,7 @@ end
 
 -- Server-only damage entry point (enemy contact, explosions, boss projectiles).
 function RunManager.DamagePlayer(rp, amount: number, cause: string?)
+	if amount ~= amount or math.abs(amount) == math.huge or amount <= 0 then return end
 	if not RunManager.IsSimulating() or not rp.Alive then
 		return
 	end
@@ -683,6 +685,13 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?)
 	local dmg = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
 	local taken = dmg -- after armor / Iron Plate, before the shield (Barbed Mail scales on it)
 	dmg = ctx.ItemSystem.AbsorbHit(rp, dmg) -- Guardian Ward shield first
+	if dmg > 0 then
+		rp.DamageHistory = rp.DamageHistory or {}
+		table.insert(rp.DamageHistory, { Cause = cause or "Swarm damage", Damage = math.min(dmg, rp.HP), Time = runTime })
+		while #rp.DamageHistory > 6 or (#rp.DamageHistory > 0 and runTime - rp.DamageHistory[1].Time > 15) do
+			table.remove(rp.DamageHistory, 1)
+		end
+	end
 	setHP(rp, rp.HP - dmg)
 	if dmg > 0 and rp.HP <= 0 then
 		rp.DeathCause = cause or "Swarm damage"
@@ -756,6 +765,7 @@ local function newRunPlayer(player: Player)
 		Gold = 0, -- gold banked this run (earned minus spent at chests / shrines)
 		GoldSpent = 0,
 		LastDownTime = 0,
+		DamageHistory = {},
 		ReviveHeld = false,
 		Items = {}, -- run items { [id] = count } (ItemSystem)
 		ItemOrder = {},
@@ -829,6 +839,7 @@ local function beginRun(here: boolean?)
 	local arena = ctx.StageManager.BeginRun(daily and daily.Arenas[1] or selectedArena, daily)
 
 	runTime = 0
+	table.clear(disconnected)
 	frozen = false
 	menuPaused = false
 	totalKills = 0
@@ -851,6 +862,8 @@ local function beginRun(here: boolean?)
 
 	for i, player in ipairs(list) do
 		local rp = newRunPlayer(player)
+		if ctx.TeamPingService then ctx.TeamPingService.Assign(rp, i) end
+		if ctx.RunServers and ctx.RunServers.RegisterRun then ctx.RunServers.RegisterRun(rp) end
 		ctx.AchievementService.OnRunStart(player)
 		table.insert(runPlayers, rp)
 		byPlayer[player] = rp
@@ -935,6 +948,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 		return false, nil
 	end
 	ctx.GoldSystem.SettleRun(rp, rp.Extracted == true, ctx.StageManager.StagesCleared())
+	data.RunReconnect = nil
 	local newBest, unlocked = false, nil
 	local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
 	if rp.DevTainted then
@@ -943,7 +957,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 		rp.CommitInfo = {}
 		return false, nil
 	end
-	data.Stats.TotalKills += rp.Kills
+	data.Stats.TotalKills += math.max(0, rp.Kills - (rp.DisconnectRecordedKills or 0))
 	data.Stats.MostKills = math.max(data.Stats.MostKills or 0, rp.Kills)
 	if t > data.Stats.BestTime then
 		data.Stats.BestTime = math.floor(t)
@@ -1040,6 +1054,13 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 	end
 	local achievements = ctx.AchievementService.TakeRunUnlocks(player)
 	if data then
+		data.LastRun = {
+			Won = won, Portal = portal, Mode = mode, CharacterId = rp.CharacterId,
+			Time = math.floor(rp.TimeSurvived), Stage = reached, StagesCleared = cleared,
+			Kills = rp.Kills, Level = rp.Level, Gold = rp.GoldSettlement and rp.GoldSettlement.Retained or 0,
+			Difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard",
+			DeathCause = not portal and not rp.Abandoned and not rp.Alive and rp.DeathCause or nil,
+		}
 		task.spawn(ctx.DataService.ForceSave, player)
 	end
 	if not player.Parent then
@@ -1057,6 +1078,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		GoldLost = rp.GoldSettlement and rp.GoldSettlement.Lost or 0,
 		GoldRetention = rp.GoldSettlement and rp.GoldSettlement.Rate or 1,
 		DeathCause = not portal and not rp.Abandoned and not rp.Alive and rp.DeathCause or nil,
+		DamageHistory = not portal and not rp.Abandoned and rp.DamageHistory or {},
 		Difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard",
 		GoldSpent = rp.GoldSpent or 0,
 		Items = ctx.ItemSystem.Summary(rp),
@@ -1133,6 +1155,7 @@ end
 
 -- Clears the run world and goes back to the Lobby phase.
 local function returnAll(how: string?)
+	table.clear(disconnected)
 	for _, rp in ipairs(runPlayers) do
 		returnPlayerToLobby(rp, how)
 	end
@@ -1779,7 +1802,31 @@ function RunManager.OnPlayerRemoving(player: Player)
 		return
 	end
 	local wasInRun = phase == "Running" and not rp.Returned
-	if wasInRun then
+	local resumable = false
+	if wasInRun and rp.Alive and not rp.Committed and ctx.RunServers and ctx.RunServers.CanReconnect(rp) then
+		for _, other in ipairs(runPlayers) do
+			if other ~= rp and other.Alive and not other.Returned and other.Player.Parent then resumable = true; break end
+		end
+	end
+	if resumable then
+		ctx.LevelUpSystem.Cancel(rp, true)
+		local data = ctx.DataService.GetData(player)
+		-- Preserve lifetime progress even if reconnect never succeeds. Completion rewards
+		-- wait until the run actually ends; the kill delta prevents counting this twice.
+		if not rp.DevTainted then
+			data.Stats.TotalKills += math.max(0, rp.Kills - (rp.DisconnectRecordedKills or 0))
+			rp.DisconnectRecordedKills = rp.Kills
+			data.Stats.MostKills = math.max(data.Stats.MostKills or 0, rp.Kills)
+			data.Stats.BestTime = math.max(data.Stats.BestTime or 0, math.floor(runTime))
+			data.Stats.BestStage = math.max(data.Stats.BestStage or 0, ctx.StageManager.GetStage())
+			data.Stats.BestLevel = math.max(data.Stats.BestLevel or 0, rp.Level)
+		end
+		local snapshot = table.clone(rp)
+		snapshot.Root, snapshot.Character, snapshot.Humanoid = nil, nil, nil
+		snapshot.ReviveHeld, snapshot.RewardUntil, snapshot.RewardSeq = false, nil, 0
+		data.RunReconnect.Expires = os.time() + Config.RunServers.RejoinGraceSeconds
+		disconnected[player.UserId] = { Player = snapshot, Expires = data.RunReconnect.Expires }
+	elseif wasInRun then
 		saveRunStats(rp, false)
 	end
 	-- other systems may still hold this record (enemy targets, delayed whip slashes)
@@ -1797,6 +1844,61 @@ function RunManager.OnPlayerRemoving(player: Player)
 			checkEnd()
 		end
 	end
+end
+
+-- Restores only a server-held record from this same still-running expedition.
+-- The saved ledger must still match; a lobby settlement makes a stale replay fail closed.
+function RunManager.TryReconnect(player: Player, id: string): boolean
+	local saved = disconnected[player.UserId]
+	local data = ctx.DataService.GetData(player)
+	if phase ~= "Running" or byPlayer[player] or not saved or saved.Expires <= os.time()
+		or saved.Player.RunId ~= runId or id ~= runId or not data or not data.RunEscrow
+		or data.RunEscrow.Id ~= runId or not data.RunReconnect or data.RunReconnect.Id ~= runId
+		or saved.Player.Committed or #runPlayers >= maxPlayers() then return false end
+	local rp = saved.Player
+	-- Consume before callbacks or any operation that may yield.
+	disconnected[player.UserId] = nil
+	data.RunReconnect.Expires = 0
+	rp.Player = player
+	rp.Gold = data.RunEscrow.Gold
+	rp.DevTainted = rp.DevTainted or runDevTainted
+	rp.LastValidPos, rp.SpeedCheckTimer, rp.OnObstacleFor = nil, 0, 0
+	rp.ReviveHeld, rp.RewardUntil, rp.Paused = false, nil, false
+	rp.PortalChoice, rp.PortalOffered = nil, false
+	local arena = MapBuilder.GetArena()
+	local position = arena and arena.Center or Config.ArenaOrigin
+	for _, teammate in ipairs(runPlayers) do
+		if teammate.Alive and teammate.Root then position = teammate.Root.Position; break end
+	end
+	local model = spawnCharacter(player, CFrame.new(position + Vector3.new(3, 3.5, 0)), false, rp.CharacterId)
+	if not model then return false end
+	table.insert(runPlayers, rp)
+	byPlayer[player] = rp
+	RunManager.AttachCharacter(rp, model)
+	rp.InvulnUntil = runTime + 2
+	if ctx.TeamPingService then ctx.TeamPingService.Assign(rp, 1) end
+	ctx.LevelUpSystem.RecomputeStats(rp)
+	setHP(rp, rp.HP)
+	player:SetAttribute("CharacterId", rp.CharacterId)
+	player:SetAttribute("InRun", true)
+	player:SetAttribute("Alive", true)
+	player:SetAttribute("Level", rp.Level)
+	player:SetAttribute("XP", rp.XP)
+	player:SetAttribute("XPNeeded", rp.XPNeeded)
+	player:SetAttribute("Kills", rp.Kills)
+	player:SetAttribute("RunGold", rp.Gold)
+	player:SetAttribute("GoldMult", ctx.MonetizationService.GoldMultiplier(player))
+	local rules = reviveRules()
+	player:SetAttribute("PartnerRevivesLeft", rules and math.max(0, rules.PerRun - (rp.PartnerRevives or 0)) or 0)
+	ctx.ItemSystem.Send(rp)
+	ctx.WeaponSystem.OnInventoryChanged(rp)
+	ctx.LevelUpSystem.SendInventory(rp)
+	ctx.LevelUpSystem.QueueLevels(rp, 0)
+	state:SetAttribute("Participants", #runPlayers)
+	RunManager.RefreshFrozen()
+	ctx.StageManager.OnRosterChanged()
+	RunManager.Broadcast(player.DisplayName .. " rejoined the run.", Color3.fromRGB(120, 255, 160))
+	return true
 end
 
 -- Commits stats of everyone in a run (server shutdown).
@@ -1909,8 +2011,10 @@ function RunManager.Start()
 
 	ctx.DataService.OnProfileLoaded(function(player)
 		ctx.MonetizationService.RefreshAttributes(player)
-		resetPlayerAttributes(player)
-		spawnCharacter(player, lobbySpawnCFrame(), true)
+		if not RunManager.IsParticipant(player) then
+			resetPlayerAttributes(player)
+			spawnCharacter(player, lobbySpawnCFrame(), true)
+		end
 	end)
 end
 

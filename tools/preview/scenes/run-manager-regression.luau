@@ -49,6 +49,9 @@ stand(2)
 preview.advance(2.1)
 assert(rp.Alive and rp.HP > 0 and rp.PartnerRevives == 1, "two-second held revive must succeed once")
 assert(rp.PendingLevels == 7, "revival must preserve earned upgrade bank")
+-- This fixture tests revive grace, not upgrade choices. Clear the earned menu
+-- so combat time advances after the immediate XP upgrade policy resumes it.
+preview.server("LevelUpSystem").Cancel(rp)
 local originalCleared = SM.StagesCleared
 SM.StagesCleared = function() return 2 end
 RM.Step(0)

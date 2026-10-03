@@ -87,27 +87,33 @@ function UIAnim.FadeIn(obj: GuiObject, target: number, seconds: number?)
 end
 
 --[[
-	Press / hover feedback for a plain button (swatches, small tiles): hover grows a touch,
-	press shrinks to Theme.Motion.PressScale. Bigger components (UIKit buttons and cards)
+	Press / hover feedback for a plain button (swatches, small tiles): brighten the fill
+	without scaling its hit target or changing a list's layout. Bigger components (UIKit buttons and cards)
 	use their own lift-and-brighten states instead.
 ]]
 function UIAnim.Button(b: GuiButton)
-	local s = scaleOf(b)
+	local resting = b.BackgroundTransparency
+	local hovering = false
+	local function show(amount: number)
+		UIAnim.Tween(b, Theme.Motion.Fast, { BackgroundTransparency = math.max(0, resting - amount) })
+	end
 	b.MouseEnter:Connect(function()
 		if b.Active then
-			UIAnim.Tween(s, Theme.Motion.Fast, { Scale = 1.04 })
+			hovering = true
+			show(0.1)
 		end
 	end)
 	b.MouseLeave:Connect(function()
-		UIAnim.Tween(s, Theme.Motion.Fast, { Scale = 1 })
+		hovering = false
+		show(0)
 	end)
 	b.MouseButton1Down:Connect(function()
 		if b.Active then
-			UIAnim.Tween(s, 0.08, { Scale = Theme.Motion.PressScale })
+			show(0.15)
 		end
 	end)
 	b.MouseButton1Up:Connect(function()
-		UIAnim.Tween(s, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+		show(hovering and 0.1 or 0)
 	end)
 end
 
@@ -440,7 +446,7 @@ end
 
 -- A glow flash (a bright frame that fades) over `obj`: purchase / unlock feedback.
 function UIAnim.Flash(obj: GuiObject, color: Color3?)
-	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+	if (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
 		return
 	end
 	local f = Instance.new("Frame")

@@ -36,6 +36,20 @@ local ROUTE_STAGES = 5 -- stages shown on the route row
 local CHEVRON = 22 -- room for the ">" between route cards
 local MONTHS = { "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC" }
 
+-- A cached board must describe this exact result before it can supply its rank.
+function MenuDaily.RankText(board: any, day: number, score: number, elapsed: number?): string?
+	if type(board) ~= "table" or board.Board ~= "Daily" or board.Day ~= day or board.Status ~= "ok" or score <= 0 or board.MyBest ~= score then
+		return nil
+	end
+	local rank = board.MyRank
+	if type(rank) ~= "number" or rank < 1 or rank == math.huge or rank % 1 ~= 0 or type(board.Rows) ~= "table" then return nil end
+	if type(board.Age) ~= "number" or board.Age < 0 or board.Age + (elapsed or 0) > Config.Leaderboards.RefreshSeconds then return nil end
+	for _, row in ipairs(board.Rows) do
+		if row.Me == true and row.Rank == rank and row.Value == score then return string.format("Global rank: #%d.", rank) end
+	end
+	return nil
+end
+
 -- Stand-in colours of each arena picture (sky, ground) while / if art is missing.
 local ARENA_TINT: { [string]: { Color3 } } = {
 	Forest = { P.moss_400, P.moss_700 },
@@ -49,6 +63,14 @@ local ARENA_TINT: { [string]: { Color3 } } = {
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
+end
+
+local function wrappedLines(value: string, pixels: number, width: number): number
+	local count = 0
+	for _, line in ipairs(string.split(value, "\n")) do
+		count += math.max(1, math.ceil(#line * pixels * 0.53 / math.max(1, width)))
+	end
+	return count
 end
 
 -- Today's UTC day (the server's, so every player sees the same daily).
@@ -190,8 +212,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	Icons.Draw(ui.Info, "info", { Size = 22, Position = UDim2.fromOffset(12, 12), Back = P.slate_950 })
 	ui.InfoText = text(ui.Info, "Small", "", { Name = "Text", Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -54, 1, 0), TextWrapped = true, TextColor3 = C.Text }, 15)
 
-	ui.RouteLabel = UIKit.SectionLabel(body, "Route")
-	ui.CursesLabel = UIKit.SectionLabel(body, "Curses")
+	ui.RouteLabel = UIKit.SectionLabel(body, "Today's shared route")
+	ui.CursesLabel = UIKit.SectionLabel(body, "Modifiers")
 	ui.BonusLabel = UIKit.SectionLabel(body, "Starting bonus", P.moss_200)
 	-- the gold multiplier chip (beside the CURSES label)
 	ui.GoldChip = UIKit.IconPill(body, "coin", "")
@@ -202,8 +224,10 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	ui.Play = UIKit.Button(foot, {
 		Kind = "Primary",
 		Glow = true,
-		Title = "PLAY DAILY",
-		Subtitle = "Scored attempt",
+		Title = "START RANKED",
+		TitleStyle = "Label",
+		TitleSize = 18,
+		Subtitle = "Uses today's attempt",
 		Icon = "play",
 		IconSize = 26,
 		Align = "Center",
@@ -219,7 +243,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	})
 	ui.Board = UIKit.Button(foot, {
 		Kind = "Secondary",
-		Title = "LEADERBOARD",
+		Title = "DAILY RANKS",
 		Icon = "podium",
 		IconSize = 22,
 		Align = "Center",
@@ -230,6 +254,16 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	})
 
 	local shownDay = -1
+	local rankData = nil
+	local rankReceivedAt = 0
+	local displayedRank: string? = nil
+	local askedAt = -math.huge
+	local resultKey = ""
+	local function askRank()
+		if not screen.Visible or os.clock() - askedAt < 3 then return end
+		askedAt = os.clock()
+		Remotes.Get("LeaderboardRequest"):FireServer("Daily")
+	end
 
 	local function clearDayCards()
 		for _, list in ipairs({ ui.Stops, ui.Chevrons, ui.CurseCards }) do
@@ -249,7 +283,6 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		clearDayCards()
 		for i = 1, ROUTE_STAGES do
 			local id = d.Arenas[i]
-			local arena = (Config.Arenas :: any)[id]
 			local boss = BossData.Get(d.Bosses[i])
 			local f = card(body, "Stop" .. i, i == 1 and P.gold_400 or P.gold_500, i == 1 and 0.2 or 0.55)
 			arenaPicture(f, id)
@@ -264,8 +297,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			}, 14)
 			UIKit.corner(num, 999)
 			UIKit.stroke(num, P.gold_300, 1, 0.3)
-			text(f, "H3", arena and arena.DisplayName or id, { Name = "Arena", TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 16)
-			text(f, "Small", boss and boss.DisplayName or "?", { Name = "Boss", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+			text(f, "H3", id, { Name = "Arena", TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 16)
+			text(f, "Small", "Boss: " .. (boss and boss.DisplayName or "?"), { Name = "Boss", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300, TextWrapped = true }, 13)
 			table.insert(ui.Stops, f)
 			if i < ROUTE_STAGES then
 				local chev = Icons.Draw(body, "chevronRight", { Size = 16, Color = P.gold_400 })
@@ -298,21 +331,27 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local day = MenuDaily.Today()
 		local d = CurseData.Daily(day)
 		ui.Date.Text = MenuDaily.LongDate(d.Date)
-		ui.Reset.Text = UIKit.track("UTC • Resets in " .. MenuDaily.TimeLeft())
+		ui.Reset.Text = UIKit.track("New challenge in " .. MenuDaily.TimeLeft())
 		local used, score, best, bestDay = MenuDaily.Status(p)
-		local bestLine = best > 0 and string.format(" Best ever: %s (%s).", CurseData.ScoreText(best), CurseData.DateText(bestDay)) or ""
+		local key = tostring(day) .. ":" .. tostring(score)
+		if key ~= resultKey then resultKey = key; askRank() end
+		local bestLine = best > 0 and string.format("\nPersonal best: %s (%s).", CurseData.ScoreText(best), CurseData.DateText(bestDay)) or ""
+		local rankLine = MenuDaily.RankText(rankData, day, score, os.clock() - rankReceivedAt)
+		displayedRank = rankLine
 		if used then
-			UIKit.SetStatus(ui.Pill, "USED")
-			ui.Heading.Text = score > 0 and ("Today's score: " .. CurseData.ScoreText(score)) or "Today's scored attempt is used"
-			ui.Sub.Text = "Solo • You can keep practising today; practice runs are not scored." .. bestLine
-			ui.InfoText.Text = "One scored attempt a day. A new challenge starts at UTC midnight."
+			UIKit.SetStatus(ui.Pill, "PRACTICE")
+			ui.Heading.Text = "Practise today's challenge"
+			ui.InfoText.Text = (score > 0 and ("Ranked result: " .. CurseData.ScoreText(score) .. ". ") or "Today's ranked attempt is used. ")
+				.. "Practice cannot replace your ranked score. New ranked try at 00:00 UTC." .. bestLine
+				.. (rankLine and ("\n" .. rankLine) or "")
 		else
-			UIKit.SetStatus(ui.Pill, "READY")
-			ui.Heading.Text = "Your scored attempt is ready"
-			ui.Sub.Text = "Solo • Your first daily run is scored by stages cleared, then time." .. bestLine
-			ui.InfoText.Text = "Your attempt counts as soon as the run starts."
+			UIKit.SetStatus(ui.Pill, "READY", "RANKED")
+			ui.Heading.Text = "Your ranked run is ready"
+			ui.InfoText.Text = "One ranked try today. Used when the run starts, even if you lose or leave. New try at 00:00 UTC." .. bestLine
 		end
-		ui.Play.SetText(used and "PRACTICE" or "PLAY DAILY", used and "Practice run • not scored" or "Scored attempt")
+		ui.Sub.Text = string.format("1. Play solo on today's shared route.\n2. Clear %d stages; more clears rank higher.\n3. Ties: faster last boss kill wins. No clears? Longer survival wins.", Config.Stages.WinMinStages)
+		ui.Play.SetKind(used and "Secondary" or "Primary")
+		ui.Play.SetText(used and "PRACTICE RUN" or "START RANKED", used and "No leaderboard score" or "Uses today's attempt")
 		if shownDay ~= day then
 			shownDay = day
 			buildDay(d)
@@ -338,38 +377,29 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		place(ui.Rule, 0, topH + 10, iw, 1)
 		local bodyY = topH + 22
 
-		-- short landscape screens (phones): the buttons and the info card move to a side
-		-- column so the route and curses keep the height
+		-- Short landscape screens keep the actions beside the scrolling explanation.
 		local side = not narrow and maxH < 520
 		local sideW = side and math.clamp(math.floor(iw * 0.3), 220, 300) or 0
 		local playH = side and 64 or 70
 		local boardH = Theme.Size.Button
 		local footH = side and 0 or (narrow and (playH + 10 + boardH) or playH)
-		ui.Info.Parent = side and foot or body
+		ui.Info.Parent = body
 
 		-- body content (scroll canvas coordinates)
 		local bw = (side and (iw - sideW - 18) or iw) - 8 -- room for the scroll bar
 		local y = 2
-		local infoW = (narrow or side) and (side and sideW or bw) or math.min(320, math.floor(bw * 0.36))
-		local textW = (narrow or side) and bw or (bw - infoW - 20)
+		local infoW, textW = bw, bw
 		local headPx = TS(26)
-		local headLines = (#ui.Heading.Text * headPx * 0.5 > textW) and 2 or 1
+		local headLines = wrappedLines(ui.Heading.Text, headPx, textW)
 		place(ui.Heading, 0, y, textW, headLines * (headPx + 4) + 4)
 		local subPx = TS(16)
-		local subLines = math.clamp(math.ceil(#ui.Sub.Text * subPx * 0.48 / math.max(1, textW)), 1, 4)
+		local subLines = wrappedLines(ui.Sub.Text, subPx, textW)
 		place(ui.Sub, 0, y + ui.Heading.Size.Y.Offset + 4, textW, subLines * (subPx + 3) + 4)
 		local heroH = ui.Heading.Size.Y.Offset + 4 + ui.Sub.Size.Y.Offset
-		local infoLines = math.clamp(math.ceil(#ui.InfoText.Text * TS(15) * 0.48 / math.max(1, infoW - 54)), 1, 4)
+		local infoLines = wrappedLines(ui.InfoText.Text, TS(15), infoW - 54)
 		local infoH = math.max(48, infoLines * (TS(15) + 4) + 18)
-		if side then
-			y += heroH + 16
-		elseif narrow then
-			place(ui.Info, 0, y + heroH + 10, infoW, infoH)
-			y += heroH + 10 + infoH + 16
-		else
-			place(ui.Info, bw - infoW, y + math.max(0, math.floor((heroH - infoH) / 2)), infoW, infoH)
-			y += math.max(heroH, infoH) + 16
-		end
+		place(ui.Info, 0, y + heroH + 10, infoW, infoH)
+		y += heroH + 10 + infoH + 16
 
 		-- route: one row, or balanced rows (3 + 2) when the cards would get too small
 		local labelH = TS(12) + 6
@@ -377,7 +407,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		y += labelH + 6
 		local n = #ui.Stops
 		local perRow = math.max(1, n)
-		while perRow > 2 and (bw - (perRow - 1) * CHEVRON) / perRow < 104 do
+		while perRow > 2 and (bw - (perRow - 1) * CHEVRON) / perRow < 152 do
 			perRow -= 1
 		end
 		if perRow < n then
@@ -385,7 +415,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		end
 		local sw = math.floor((bw - (perRow - 1) * CHEVRON) / perRow)
 		local picH = math.clamp(math.floor(sw * 0.48), side and 44 or 52, side and 64 or 86)
-		local stopH = picH + 12 + TS(16) + TS(13) + 14
+		local stopH = picH + 12 + TS(16) + 2 * (TS(13) + 3) + 10
 		for i, f in ipairs(ui.Stops) do
 			local col = (i - 1) % perRow
 			local rowI = (i - 1) // perRow
@@ -399,8 +429,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			local an = f:FindFirstChild("Arena") :: TextLabel
 			place(an, 6, picH + 10, sw - 12, TS(16) + 4)
 			local bn = f:FindFirstChild("Boss") :: TextLabel
-			place(bn, 6, picH + 12 + TS(16), sw - 12, TS(13) + 4)
-			bn.TextSize = sw < 150 and TS(11) or TS(13) -- long boss names on small cards
+			place(bn, 6, picH + 12 + TS(16), sw - 12, 2 * (TS(13) + 3))
+			bn.TextSize = TS(13)
 			local chev = ui.Chevrons[i]
 			if chev then
 				chev.Visible = col < perRow - 1
@@ -458,7 +488,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		body.CanvasSize = UDim2.fromOffset(0, y)
 
 		-- panel: as tall as the content needs, the body scrolls when it cannot fit
-		local sideNeed = side and (infoH + 14 + playH + 10 + boardH) or 0
+		local sideNeed = side and (playH + 10 + boardH) or 0
 		local chrome = 36 + bodyY + (side and 0 or (16 + footH))
 		local h = math.min(maxH, chrome + math.max(y, sideNeed))
 		local bodyH = h - chrome
@@ -467,9 +497,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		body.ScrollBarThickness = y > bodyH + 1 and 4 or 0
 		if side then
 			place(foot, iw - sideW, bodyY, sideW, bodyH)
-			place(ui.Info, 0, 0, sideW, infoH)
-			place(ui.Board.Instance, 0, bodyH - boardH, sideW, boardH)
-			place(ui.Play.Instance, 0, bodyH - boardH - 10 - playH, sideW, playH)
+			place(ui.Play.Instance, 0, 0, sideW, playH)
+			place(ui.Board.Instance, 0, playH + 10, sideW, boardH)
 		else
 			place(foot, 0, h - 36 - footH, iw, footH)
 			if narrow then
@@ -487,6 +516,12 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	MenuDaily._layout = function()
 		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
 	end
+	Remotes.Get("LeaderboardData").OnClientEvent:Connect(function(data)
+		if type(data) ~= "table" or data.Board ~= "Daily" or data.Day ~= MenuDaily.Today() then return end
+		rankData = data
+		rankReceivedAt = os.clock()
+		if screen.Visible then fill() end
+	end)
 
 	local clock = 0
 	return {
@@ -497,6 +532,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		OnShow = function(_p)
 			shownDay = -1
 			fill()
+			askRank()
 			UIAnim.Pop(holder, 0, 0.92)
 			holder.ClipsDescendants = true
 			UIAnim.Sweep(holder, 0.2, 0.8, 0.8)
@@ -514,7 +550,10 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			if clock >= 1 then
 				clock = 0
 				if screen.Visible then
-					ui.Reset.Text = UIKit.track("UTC • Resets in " .. MenuDaily.TimeLeft())
+					if os.clock() - askedAt >= 30 then askRank(); fill() end
+					local _, score = MenuDaily.Status(ctx.Profile())
+					if displayedRank and not MenuDaily.RankText(rankData, MenuDaily.Today(), score, os.clock() - rankReceivedAt) then fill() end
+					ui.Reset.Text = UIKit.track("New challenge in " .. MenuDaily.TimeLeft())
 					if MenuDaily.Today() ~= shownDay then
 						fill()
 					end

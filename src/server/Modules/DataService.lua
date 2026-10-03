@@ -53,6 +53,7 @@ local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
 local AccountData = require(game:GetService("ReplicatedStorage").Shared.AccountData)
+local EnemyData = require(game:GetService("ReplicatedStorage").Shared.EnemyData)
 
 local DataService = {}
 
@@ -96,6 +97,7 @@ local function defaultData()
 		ReviveTokens = 0,
 		SelectedArena = "Forest",
 		Achievements = { Progress = {}, Unlocked = {} },
+		Journal = { Enemies = {}, Drops = {} },
 		Title = "",
 		NameColor = "",
 		TutorialDone = false,
@@ -290,6 +292,47 @@ function DataService.Migrate(data: any): { [string]: any }
 	if data.Difficulty ~= "Standard" and data.Difficulty ~= "Veteran" and data.Difficulty ~= "Nightmare" then
 		data.Difficulty = "Standard"
 	end
+	local oldJournal = type(data.Journal) == "table" and data.Journal or {}
+	local journal = { Enemies = {}, Drops = {} }
+	for id in pairs(EnemyData.Enemies) do
+		if type(oldJournal.Enemies) == "table" and oldJournal.Enemies[id] == true then journal.Enemies[id] = true end
+		local drops = type(oldJournal.Drops) == "table" and oldJournal.Drops[id]
+		if type(drops) == "table" then
+			for _, drop in ipairs({ "XP", "Gold", "Chest", "Chicken", "Magnet", "Bomb" }) do
+				if drops[drop] == true then
+					journal.Enemies[id] = true
+					journal.Drops[id] = journal.Drops[id] or {}
+					journal.Drops[id][drop] = true
+				end
+			end
+		end
+	end
+	data.Journal = journal
+	local lastRun = data.LastRun
+	data.LastRun = nil
+	if type(lastRun) == "table" then
+		local clean = { Won = lastRun.Won == true, Portal = lastRun.Portal == true }
+		for _, key in ipairs({ "Time", "Stage", "StagesCleared", "Kills", "Level", "Gold" }) do
+			local value = lastRun[key]
+			clean[key] = type(value) == "number" and value == value and math.abs(value) < math.huge
+				and math.clamp(math.floor(value), 0, 1e12) or 0
+		end
+		clean.Mode = type(lastRun.Mode) == "string" and type((Config.Modes :: any)[lastRun.Mode]) == "table" and lastRun.Mode ~= "Order" and lastRun.Mode or "Solo"
+		clean.CharacterId = CharacterData.Characters[lastRun.CharacterId] and lastRun.CharacterId or CharacterData.Default
+		clean.Difficulty = (lastRun.Difficulty == "Veteran" or lastRun.Difficulty == "Nightmare") and lastRun.Difficulty or "Standard"
+		clean.DeathCause = type(lastRun.DeathCause) == "string" and string.sub(lastRun.DeathCause, 1, 100) or nil
+		data.LastRun = clean
+	end
+	local reconnect = data.RunReconnect
+	if type(reconnect) ~= "table" or type(reconnect.AccessCode) ~= "string" or #reconnect.AccessCode > 512
+		or type(reconnect.PrivateId) ~= "string" or #reconnect.PrivateId > 128
+		or type(reconnect.Id) ~= "string" or #reconnect.Id > 160
+		or type(reconnect.Expires) ~= "number" or reconnect.Expires ~= reconnect.Expires
+		or math.abs(reconnect.Expires) == math.huge then
+		data.RunReconnect = nil
+	else
+		data.RunReconnect = { AccessCode = reconnect.AccessCode, PrivateId = reconnect.PrivateId, Id = reconnect.Id, Expires = reconnect.Expires }
+	end
 	if type(data.DifficultyClears) ~= "table" then
 		data.DifficultyClears = {}
 	end
@@ -359,7 +402,7 @@ local function arrivedByHandoff(player: Player): boolean
 		return player:GetJoinData()
 	end)
 	local td = ok and type(data) == "table" and data.TeleportData or nil
-	return type(td) == "table" and (td.SwarmRun ~= nil or td.SwarmReturn ~= nil)
+	return type(td) == "table" and (td.SwarmRun ~= nil or td.SwarmReturn ~= nil or td.SwarmRejoin ~= nil)
 end
 
 local function loadProfile(player: Player): Profile?

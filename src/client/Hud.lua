@@ -94,7 +94,7 @@ local updatePurse: (number) -> ()
 -- A soft colour flash over a Surface holder's face (a sibling of the face, so it never
 -- joins the face's list layout); fades out and destroys itself.
 local function glow(holder: GuiObject, color: Color3)
-	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+	if (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
 		return
 	end
 	local face = holder:FindFirstChild("Face")
@@ -224,7 +224,7 @@ local function buildCounters(frame: Frame)
 	ui.Purse = holder
 	ui.PurseFace = face
 	ui.PurseStroke = face:FindFirstChildOfClass("UIStroke")
-	ui.PurseCoin = Icons.Draw(face, "coin", { Size = 28, LayoutOrder = 1 })
+	ui.PurseCoin = Icons.Draw(face, "lobby_Gold", { Size = 28, LayoutOrder = 1 })
 	ui.PurseValue = role(face, "Number", "0", {
 		Name = "Value",
 		LayoutOrder = 2,
@@ -843,7 +843,9 @@ function Hud.Hurt()
 	if not level then
 		return
 	end
-	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+	if (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
+		if vignetteTween then vignetteTween:Cancel() end
+		level.Value = 1
 		UIAnim.Punch(ui.Heart, 0.25)
 		return
 	end
@@ -1151,6 +1153,9 @@ local function updateHealth(dt: number, nowT: number): (number, boolean)
 
 	-- low health: the screen edge breathes crimson
 	local level = ui.VignetteLevel :: NumberValue
+	if ClientSettings.Flashes() and vignetteTween and vignetteTween.PlaybackState == Enum.PlaybackState.Playing then
+		vignetteTween:Cancel()
+	end
 	local alive = player:GetAttribute("Alive") ~= false
 	if alive and frac > 0 and frac <= (Config.UI.LowHealthFraction or 0.3) then
 		if nowT >= (anim.NextBeat or 0) then
@@ -1166,7 +1171,7 @@ local function updateHealth(dt: number, nowT: number): (number, boolean)
 		end
 		if not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing then
 			-- reduced effects: a steady edge instead of a breathing one
-			level.Value = (ClientSettings.Reduced() or ClientPerformance.Reduced()) and 0.8 or (0.72 + 0.18 * (0.5 + 0.5 * math.sin(os.clock() * 4)))
+			level.Value = (ClientSettings.Flashes() or ClientPerformance.Reduced()) and 0.8 or (0.72 + 0.18 * (0.5 + 0.5 * math.sin(os.clock() * 4)))
 		end
 	elseif level.Value ~= 1 and (not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing) then
 		level.Value = 1
@@ -1183,7 +1188,7 @@ local function updateXP(dt: number, nowT: number)
 		anim.XP = 0
 		ui.XP.Fill.BackgroundTransparency = 0
 		local flash = ui.XP.Fill:FindFirstChildOfClass("UIGradient")
-		if flash and not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+		if flash and not (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
 			flash.Color = ColorSequence.new(P.ivory_100)
 			task.delay(0.25, function()
 				flash.Color = Theme.Gradient.XP
@@ -1193,14 +1198,16 @@ local function updateXP(dt: number, nowT: number)
 		UIAnim.Punch(ui.Medal, 0.4)
 		-- level-up burst: a bright sweep along the bar, a ring and gold sparks off the medallion
 		local at = UDim2.new(0, 13, 0.5, 0)
-		UIAnim.SweepOnce(ui.XP.Frame, P.ivory_100, 0.45, 0.1)
+		if not ClientSettings.Flashes() then
+			UIAnim.SweepOnce(ui.XP.Frame, P.ivory_100, 0.45, 0.1)
+		end
 		UIAnim.Ring(ui.XPRow, at, P.gold_200, 80, 0.5)
 		UIAnim.Sparks(ui.XPRow, at, P.gold_200, 8, 40, 0.55)
-		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+		if not (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
 			ui.Level.TextColor3 = P.gold_200
 			UIAnim.Tween(ui.Level, 0.8, { TextColor3 = P.ivory_100 })
 		end
-	elseif anim.LastXPFrac and target > anim.LastXPFrac + 0.015 and nowT - (anim.XPSweepAt or 0) > 0.6 then
+	elseif not ClientSettings.Flashes() and anim.LastXPFrac and target > anim.LastXPFrac + 0.015 and nowT - (anim.XPSweepAt or 0) > 0.6 then
 		-- a gem burst: a quick glint along the bar
 		anim.XPSweepAt = nowT
 		UIAnim.SweepOnce(ui.XP.Frame, P.ivory_100, 0.4, 0.6)
@@ -1212,7 +1219,9 @@ local function updateXP(dt: number, nowT: number)
 		anim.XPSet = anim.XP
 		ui.XP.Set(anim.XP)
 	end
-	local str = string.format("%d / %d XP", xp, need)
+	local pending = tonumber(player:GetAttribute("PendingUpgrades")) or 0
+	local str = pending > 0 and string.format("%d upgrade%s ready", pending, pending == 1 and "" or "s")
+		or string.format("%s: %d / %d XP", player:GetAttribute("XPReward") == "Coins" and "Coins" or "Upgrade", xp, need)
 	if anim.XPShown ~= str then
 		anim.XPShown = str
 		ui.XP.Label.Text = str

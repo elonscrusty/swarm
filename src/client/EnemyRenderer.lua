@@ -51,6 +51,8 @@ local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local Palette = require(Shared:WaitForChild("Palette"))
 local ModelLibrary = require(script.Parent.ModelLibrary)
 local Telegraphs = require(script.Parent.Telegraphs)
+local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
 local Players = game:GetService("Players")
 
 local EnemyRenderer = {}
@@ -160,7 +162,7 @@ end
 
 local function restoreColors(pieces: { any })
 	for _, piece in ipairs(pieces) do
-		piece.Part.Color = piece.Color
+		piece.Part.Color = Accessibility.Color(piece.Color)
 	end
 end
 
@@ -239,6 +241,7 @@ local function rebuild(slot: Slot, typeId: string, elite: boolean)
 	slot.FlashUntil = 0
 	slot.Phase = math.random() * math.pi * 2
 	slot.Parked = false
+	restoreColors(slot.Pieces)
 end
 
 -- Every few seconds: does a type whose pool holds part-built fallbacks have its meshes
@@ -336,6 +339,7 @@ local function plainLook(slot: Slot, typeId: string, elite: boolean, now: number
 	if elite then
 		color = color:Lerp(ELITE_GOLD, 0.4)
 	end
+	color = Accessibility.Color(color)
 	-- the server restyles recycled bodies; re-apply the local look whenever it differs
 	if body.Color ~= color then
 		body.Color = color
@@ -426,6 +430,7 @@ end
 
 -- White hit flash on enemy `id` (its model, or its plain body over the detail budget).
 function EnemyRenderer.Flash(id: number): boolean
+	if ClientSettings.Flashes() then return true end
 	local slot = slots[id]
 	if not slot then
 		return false -- not tracked yet: VFX flashes the body itself
@@ -731,7 +736,7 @@ local function extraPart(shape: Enum.PartType, size: Vector3, color: Color3, mat
 	p.CanTouch = false
 	p.CastShadow = false
 	p.Size = size
-	p.Color = color
+	p.Color = Accessibility.Color(color)
 	p.Material = material
 	p.CFrame = PARK
 	p.Parent = modelFolder
@@ -786,7 +791,7 @@ local function ensureHPBar(slot: Slot): BillboardGui
 	corner.Parent = back
 	local fill = Instance.new("Frame")
 	fill.Name = "Fill"
-	fill.BackgroundColor3 = Palette.crimson_400
+	fill.BackgroundColor3 = Accessibility.Color(Palette.crimson_400, "Danger")
 	fill.BorderSizePixel = 0
 	fill.Position = UDim2.fromOffset(1, 1)
 	fill.Size = UDim2.new(1, -2, 1, -2)
@@ -856,7 +861,7 @@ local function ensureAura(slot: Slot, affix: string)
 	local label = tag:FindFirstChildOfClass("TextLabel")
 	if label and info and label.Text ~= info.Text then
 		label.Text = info.Text
-		label.TextColor3 = info.Color
+		label.TextColor3 = Accessibility.Color(info.Color)
 	end
 	tag.Adornee = slot.Body
 	tag.StudsOffsetWorldSpace = Vector3.new(0, slot.Body.Size.Y / 2 + 3.4, 0)
@@ -993,7 +998,7 @@ local function step(dt: number)
 				end
 				-- Bomb Tick fuse: blinks faster and faster
 				local blinkOn = false
-				if slot.Act == "Fuse" then
+				if slot.Act == "Fuse" and not ClientSettings.Flashes() then
 					local hz = 4 + 14 * math.clamp(actT / (fuse or 0.7), 0, 1)
 					blinkOn = math.sin(actT * hz * math.pi * 2) > 0.2
 				end
@@ -1113,8 +1118,8 @@ local function step(dt: number)
 					end
 					local d = banner and 7 or math.max(body.Size.X, body.Size.Z) * 1.2 + 1
 					ring.Size = Vector3.new(0.05, d, d)
-					ring.Color = banner and Palette.gold_400 or Palette.crimson_400
-					ring.Transparency = (banner and 0.3 or 0.45) + 0.15 * math.sin(clock * 6 + slot.Phase)
+					ring.Color = Accessibility.Color(banner and Palette.gold_400 or Palette.crimson_400, "Danger")
+					ring.Transparency = (banner and 0.3 or 0.45) + (ClientSettings.Flashes() and 0 or 0.15 * math.sin(clock * 6 + slot.Phase))
 					n += 1
 					partsBuf[n] = ring
 					local p = render.Position
@@ -1145,6 +1150,14 @@ local function step(dt: number)
 end
 
 function EnemyRenderer.Init()
+	ClientSettings.OnChanged(function(key)
+		if key == "Colorblind" or key == "ReduceFlashes" or key == "ReducedEffects" then
+			for _, slot in pairs(slots) do
+				slot.FlashUntil = 0
+				restoreColors(slot.Pieces)
+			end
+		end
+	end)
 	local folder = Instance.new("Folder")
 	folder.Name = "SwarmEnemyModels"
 	folder.Parent = workspace

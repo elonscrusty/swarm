@@ -26,3 +26,9 @@ else
 	preview.warn("daily scene: no DAILY button")
 end
 C.settle(2)
+if used and preview.args.rank then
+	local score = CurseData.DailyScore(3, 552, 700)
+	local rank = tonumber(preview.args.rank)
+	C.fire("LeaderboardData", { Board = "Daily", Day = day, Status = "ok", Age = 0, MyRank = rank, MyBest = score, Rows = { { Me = true, Rank = rank, Value = score } } })
+	C.settle(1)
+end

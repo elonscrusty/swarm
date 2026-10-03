@@ -52,6 +52,7 @@ local MenuUpgrades = require(script.Parent.MenuUpgrades)
 local MenuStats = require(script.Parent.MenuStats)
 local MenuCurses = require(script.Parent.MenuCurses)
 local MenuDaily = require(script.Parent.MenuDaily)
+local MenuJournal = require(script.Parent.MenuJournal)
 local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
 local MenuTrack = require(script.Parent.MenuTrack)
 local MenuArenas = require(script.Parent.MenuArenas)
@@ -76,7 +77,7 @@ local profile: { [string]: any }? = nil
 local joinedCountdown = false
 local ui: { [string]: any } = {}
 local current = "Home"
-local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Arenas = 3.5, Stats = 4, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9 }
+local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Arenas = 3.5, Stats = 4, Journal = 4.5, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9 }
 local screens: { [string]: any } = {}
 local shownGold: number? = nil
 local lastStatus = ""
@@ -210,11 +211,11 @@ local function buildChip(frame: Frame)
 	local function sep(order: number)
 		new("Frame", { BackgroundColor3 = C.Gold, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 22), LayoutOrder = order }, face)
 	end
-	ui.Best = UIKit.Chip(face, "crown", "Best time", "0:00", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 48) }, { Size = 22, Color = P.gold_400, Accent = P.gold_200 })
+	ui.Best = UIKit.Chip(face, "lobby_BestTime", "Best time", "0:00", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 48) }, { Size = 26 })
 	sep(2)
-	ui.Wins = UIKit.Chip(face, "trophy", "Wins", "0", { LayoutOrder = 3, Size = UDim2.fromOffset(0, 48) }, { Size = 22, Color = P.gold_400, Accent = P.gold_200 })
+	ui.Wins = UIKit.Chip(face, "lobby_Wins", "Wins", "0", { LayoutOrder = 3, Size = UDim2.fromOffset(0, 48) }, { Size = 26 })
 	sep(4)
-	ui.Gold = UIKit.Chip(face, "coin", "Gold", "0", { LayoutOrder = 5, Size = UDim2.fromOffset(0, 48) }, { Size = 22 })
+	ui.Gold = UIKit.Chip(face, "lobby_Gold", "Gold", "0", { LayoutOrder = 5, Size = UDim2.fromOffset(0, 48) }, { Size = 26 })
 	ui.Gold.Value.TextColor3 = P.gold_200
 end
 
@@ -509,18 +510,11 @@ local function buildModes(frame: Frame)
 	ui.EndlessRow = holder
 	ui.EndlessEdge = face:FindFirstChildOfClass("UIStroke")
 	UIKit.padding(face, 0, 12, 0, 12)
-	local endlessOn = player:GetAttribute("Endless") == true
-	local endlessButton = UIKit.Button(face, { Title = "ENDLESS", Subtitle = endlessOn and "ON" or "OFF", TitleSize = 15, TitleStyle = "Label", Size = UDim2.new(0.48, 0, 1, 0), OnClick = function()
-		endlessOn = not endlessOn
-		ui.EndlessToggle.Set(endlessOn)
+	ui.EndlessToggle = UIKit.Toggle(face, "Endless", nil, nil, player:GetAttribute("Endless") == true, function(on)
 		endlessSentAt = os.clock()
-		Remotes.Get("SetEndless"):FireServer(endlessOn)
-	end })
-	ui.EndlessToggle = {
-		Set = function(on: boolean) endlessOn = on; endlessButton.SetText(nil, on and "ON" or "OFF"); endlessButton.SetSelected(on) end,
-		Get = function(): boolean return endlessOn end,
-	}
-	ui.Difficulty = UIKit.Button(face, { Name = "Difficulty", Title = "STANDARD", Subtitle = "Win: Veteran", TitleSize = 15, TitleStyle = "Label", Position = UDim2.fromScale(0.52, 0), Size = UDim2.new(0.48, 0, 1, 0), OnClick = function()
+		Remotes.Get("SetEndless"):FireServer(on)
+	end, { Size = UDim2.new(0.64, 0, 1, 0) })
+	ui.Difficulty = UIKit.Button(face, { Kind = "Secondary", Name = "Difficulty", Title = "STANDARD", TitleSize = 12, TitleStyle = "Label", Position = UDim2.fromScale(0.67, 0), Size = UDim2.new(0.33, 0, 1, 0), OnClick = function()
 		local currentTier = DifficultyData.Selected(profile)
 		local at = table.find(DifficultyData.Order, currentTier) or 1
 		for step = 1, #DifficultyData.Order - 1 do
@@ -532,7 +526,11 @@ local function buildModes(frame: Frame)
 		end
 		toast("Clear all five Standard stages to unlock Veteran.", P.gold_300)
 	end })
-	if ui.Difficulty.Subtitle then ui.Difficulty.Subtitle.TextSize = TS(12) end
+	local difficultyPadding = ui.Difficulty.Content:FindFirstChildOfClass("UIPadding")
+	if difficultyPadding then
+		difficultyPadding.PaddingLeft = UDim.new(0, 4)
+		difficultyPadding.PaddingRight = UDim.new(0, 4)
+	end
 	if Config.Endless == nil or not Config.Endless.Enabled then
 		holder.Visible = false
 	end
@@ -681,7 +679,7 @@ local function buildHomeArt()
 	-- corner buttons (STATS keeps its drawn bars: there is no ui_ picture for it)
 	local glyphY = -TS(Theme.TextSize.Caption) / 2 - 2
 	for b, name in pairs({ [ui.SettingsBtn] = "Settings", [ui.RanksBtn] = "Leaderboards", [ui.TrackBtn] = "Track" }) do
-		ArtImage.ButtonIcon(b.Content, "icons/ui/ui_" .. name, { Position = UDim2.new(0.5, 0, 0.5, glyphY), Size = UDim2.fromOffset(42, 42), Idle = { name == "Settings" and "Spin" or "Glint" } }, "Glyph")
+		ArtImage.ButtonIcon(b.Content, "icons/ui/ui_" .. name, { Position = UDim2.new(0.5, 0, 0.5, glyphY), Size = UDim2.fromOffset(42, 42), Idle = name ~= "Settings" and { "Glint" } or nil }, "Glyph")
 	end
 	setArenaArt(tostring(Remotes.State():GetAttribute("SelectedArena") or "Forest"))
 end
@@ -697,7 +695,7 @@ local function buildParty(screen: Frame)
 		Kind = "Secondary",
 		Title = "PARTY",
 		Subtitle = "With friends",
-		Icon = "people2",
+		Icon = "lobby_Party",
 		IconSize = 26,
 		TitleSize = 18,
 		Align = "Left",
@@ -708,7 +706,7 @@ local function buildParty(screen: Frame)
 	})
 	ui.PartyBadge = partyBadge(ui.PartyBtn.Instance)
 	ui.PartyCornerBtn = UIKit.IconButton(ui.Corner, {
-		Icon = "people2",
+		Icon = "lobby_Party",
 		Caption = "Party",
 		Size = 76,
 		LayoutOrder = 5,
@@ -718,6 +716,15 @@ local function buildParty(screen: Frame)
 		end,
 	})
 	ui.PartyCornerBadge = partyBadge(ui.PartyCornerBtn.Instance)
+	-- Keep the party emblem's designed colours on both lobby layouts.
+	local partyHolder = ui.PartyBtn.Content:FindFirstChild("IconHolder")
+	if partyHolder then
+		for _, child in ipairs(partyHolder:GetChildren()) do child:Destroy() end
+		Icons.Draw(partyHolder, "lobby_Party", { Size = 26, Back = C.Panel })
+	end
+	local partyGlyph = ui.PartyCornerBtn.Content:FindFirstChild("Glyph")
+	if partyGlyph then partyGlyph:Destroy() end
+	Icons.Draw(ui.PartyCornerBtn.Content, "lobby_Party", { Name = "Glyph", Size = 32, Back = C.Panel, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -TS(Theme.TextSize.Caption) / 2 - 2) })
 	-- a party member's READY toggle (the leader's start waits for everyone)
 	ui.ReadyBtn = UIKit.Button(screen, {
 		Kind = "Primary",
@@ -888,6 +895,7 @@ local function relayout()
 	setChipFlat(not portrait and current == "Characters")
 	-- phones in landscape: the CHARACTERS title shares the top row, so the chip keeps only GOLD
 	local slim = compact and not portrait and current == "Characters"
+	ui.Chip.Visible = not (compact and not portrait and current ~= "Home" and current ~= "Characters")
 	for _, ch in ipairs(ui.ChipFace:GetChildren()) do
 		if ch:IsA("GuiObject") and ch ~= ui.Gold.Frame then
 			ch.Visible = not slim
@@ -1431,7 +1439,7 @@ function LobbyScreen.Update(_dt: number?)
 	if ui.Difficulty.Instance:GetAttribute("Tier") ~= tierKey then
 		ui.Difficulty.Instance:SetAttribute("Tier", tierKey)
 		local tier = DifficultyData.Tiers[difficulty]
-		ui.Difficulty.SetText(string.upper(tier.Name), unlocked == 1 and "Win: Veteran" or unlocked == 2 and "Win: Nightmare" or string.format("x%.2g gold", tier.Gold))
+		ui.Difficulty.SetText(string.upper(tier.Name))
 	end
 	if ui.EndlessEdge and ui.EndlessRow:GetAttribute("Lit") ~= endlessLit then
 		ui.EndlessRow:SetAttribute("Lit", endlessLit)
@@ -1519,6 +1527,7 @@ function LobbyScreen.Init(h: { [string]: any })
 	screens.Characters = MenuCharacters.Build(screen("Characters"), ctx)
 	screens.Upgrades = MenuUpgrades.Build(screen("Upgrades"), ctx)
 	screens.Stats = MenuStats.Build(screen("Stats"), ctx)
+	screens.Journal = MenuJournal.Build(screen("Journal"), ctx)
 	screens.Curses = MenuCurses.Build(screen("Curses"), ctx)
 	screens.Daily = MenuDaily.Build(screen("Daily"), ctx)
 	screens.Ranks = MenuLeaderboards.Build(screen("Ranks"), ctx)

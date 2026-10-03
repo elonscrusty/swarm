@@ -42,6 +42,14 @@ function ClientSettings.Reduced(): boolean
 	return values.ReducedEffects == true
 end
 
+function ClientSettings.Flashes(): boolean
+	return values.ReduceFlashes == true or ClientSettings.Reduced()
+end
+
+local function valid(key: string, value: any): boolean
+	return Config.ValidateSetting(key, value) ~= nil
+end
+
 -- fn(key, value) after every change (also from the profile).
 function ClientSettings.OnChanged(fn: (string, any) -> ())
 	table.insert(listeners, fn)
@@ -54,7 +62,8 @@ function ClientSettings.Apply(saved: { [string]: any }?)
 	end
 	for key, default in pairs(Config.Settings.Defaults) do
 		local v = saved[key]
-		if type(v) == type(default) and dirty[key] == nil and values[key] ~= v then
+		if valid(key, v) and dirty[key] == nil and values[key] ~= v then
+			if type(v) == "number" then v = math.clamp(v, 0, 1) end
 			values[key] = v
 			notify(key, v)
 		end
@@ -63,8 +72,7 @@ end
 
 -- A change from the settings menu: applied now, saved a moment later.
 function ClientSettings.Set(key: string, value: any)
-	local default = Config.Settings.Defaults[key]
-	if default == nil or type(value) ~= type(default) then
+	if not valid(key, value) then
 		return
 	end
 	if type(value) == "number" then

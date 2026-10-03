@@ -31,3 +31,7 @@ if preview.args.inspect then
 	end
 end
 C.settle(2)
+if preview.args.skin then
+	local hits = preview.findGui(function(g) return g:IsA("TextButton") and g.Name == preview.args.skin and g.Parent.Name == "Swatches" end)
+	if hits[1] then preview.click(hits[1]); C.settle(1) end
+end

@@ -306,6 +306,19 @@ end
 FALLBACK.Fern = function(m, cf, s, pal)
 	fball(m, cf, s, "Fronds", Vector3.new(2.4, 0.8, 2.4), 0, 0.35, 0, c3(pal, "Fern", P.moss_500))
 end
+-- A fixed three-blade patch keeps grass light and upright at every mesh quality.
+-- Use native parts instead of the broad triangular faces in the uploaded tuft.
+FALLBACK.GrassTuft = function(m, cf, s, pal)
+	local color = c3(pal, "Grass", P.meadow_600)
+	for i = 1, 3 do
+		local height = 0.65 + (i % 3) * 0.18
+		local angle = i * 2.4
+		local blade = CFrame.new(math.cos(angle) * 0.16, 0.04, math.sin(angle) * 0.16)
+			* CFrame.Angles(0, angle, (i - 2) * 0.22) * CFrame.new(0, height / 2, 0)
+		fpart(m, cf, s, "GrassBlade", Vector3.new(0.10, height, 0.08), blade,
+			color:Lerp(P.meadow_700, (i - 1) * 0.10), false)
+	end
+end
 FALLBACK.Flowers = function(m, cf, s, pal)
 	fball(m, cf, s, "Blooms", Vector3.new(1.2, 0.35, 1.0), 0, 0.25, 0, c3(pal, "Bloom", P.ivory_100))
 end
@@ -566,7 +579,11 @@ local function prop(parent: Instance, name: string, cf: CFrame, scale: number?, 
 	local o: PropOpts = opts or {}
 	local container = Instance.new("Model")
 	container.Name = name
-	if not fillMesh(container, name, cf, s, palette, o) then
+	if name == "GrassTuft" then
+		-- Keep the same seeded prop placement and palette without replacing these
+		-- narrow blades when the old mesh finishes loading.
+		FALLBACK.GrassTuft(container, cf, s, kitPalette(name, palette), false)
+	elseif not fillMesh(container, name, cf, s, palette, o) then
 		local build = FALLBACK[name] or o.fallback or catalogFallback(name)
 		if build then
 			build(container, cf, s, kitPalette(name, palette), o.shadow ~= false)
@@ -1228,7 +1245,7 @@ local function boulder(arena: Arena, x: number, z: number, s: number, palette: P
 end
 
 -- Ground clutter is drawn bigger than life so it reads from the high run camera.
-local CLUTTER_SCALE: { [string]: number } = { GrassTuft = 1.6, Flowers = 1.5, Fern = 1.35, Rock_Small = 1.3, Mushroom = 1.3, Reeds = 1.3, Lilypads = 1.2, Snow_Drift = 1.1, Snow_Bush = 1.1, Ash_Pile = 1.2 }
+local CLUTTER_SCALE: { [string]: number } = { GrassTuft = 1.0, Flowers = 1.5, Fern = 1.35, Rock_Small = 1.3, Mushroom = 1.3, Reeds = 1.3, Lilypads = 1.2, Snow_Drift = 1.1, Snow_Bush = 1.1, Ash_Pile = 1.2 }
 
 -- Small clutter scattered in a disc around (cx, cz): { {name, sMin, sMax, palette?} }.
 local function scatter(arena: Arena, cx: number, cz: number, radius: number, count: number, kinds: { { any } }, clear: number?, pathPad: number?)

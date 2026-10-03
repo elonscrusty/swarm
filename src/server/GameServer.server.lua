@@ -55,6 +55,8 @@ local ORDER = {
 	"RunManager",
 	"PartyService",
 	"RunServers", -- private run servers: lobby → run server → lobby teleports (live game only)
+	"JournalService",
+	"TeamPingService",
 	"AchievementService",
 	"DamageNumbers",
 	"BugReportService",

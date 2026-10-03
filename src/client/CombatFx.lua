@@ -302,7 +302,7 @@ local function buildEdge()
 end
 
 local function edgeFlash(color: Color3, peak: number, dur: number)
-	if ClientSettings.Reduced() then
+	if ClientSettings.Flashes() then
 		return
 	end
 	if not edge then
@@ -324,7 +324,7 @@ local function stepEdge(now: number)
 		return
 	end
 	local u = (now - e.Start) / e.Dur
-	if u >= 1 then
+	if u >= 1 or ClientSettings.Flashes() then
 		e.Gui.Enabled = false
 		return
 	end

@@ -175,8 +175,6 @@ Config.Slots = {
 ------------------------------------------------------------------------------------------
 Config.LevelUp = {
 	Choices = 3,
-	FirstOfferSeconds = 20,
-	OfferIntervalSeconds = 50,
 	ChoicesPerPanel = 4,
 	-- If a player doesn't pick in this many seconds a random card is chosen for them,
 	-- so nobody can stay paused (and protected) forever.
@@ -215,10 +213,10 @@ Config.LevelUp = {
 Config.XP = {
 	-- XP needed to go from level L to L+1 = Base + min(L, CapLevel) * PerLevel
 	-- Early costs grow by PerLevel; after CapLevel, each extra level adds AfterCapPerLevel.
-	Base = 10,
-	PerLevel = 5,
+	Base = 20,
+	PerLevel = 8,
 	CapLevel = 20,
-	AfterCapPerLevel = 2,
+	AfterCapPerLevel = 4,
 	GemValues = { Small = 1, Medium = 5, Large = 25 },
 	GemPoolSize = 500,
 	MagnetSpeed = 45, -- studs/s a gem flies toward the player once inside pickup radius
@@ -871,8 +869,27 @@ Config.Audio = {
 	  Tips             contextual hints (first run tutorial, co-op rules)
 ]]
 Config.Settings = {
-	Defaults = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = true, Minimap = true },
+	Defaults = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = true, Minimap = true,
+		Colorblind = "Off", ReduceFlashes = false, CombatVolume = 1, InterfaceVolume = 1, WarningVolume = 1,
+		MuteAll = false, VisualAudioCues = false, TouchLayout = "RightHanded" },
+	Enums = {
+		Colorblind = { "Off", "Protanopia", "Deuteranopia", "Tritanopia" },
+		TouchLayout = { "RightHanded", "LeftHanded", "Compact" },
+	},
 }
+
+function Config.ValidateSetting(key: string, value: any): any
+	local default = Config.Settings.Defaults[key]
+	if default == nil or type(value) ~= type(default) then return nil end
+	if type(value) == "number" then
+		if value ~= value or math.abs(value) == math.huge then return nil end
+		return math.clamp(value, 0, 1)
+	end
+	if type(value) == "string" and not (Config.Settings.Enums[key] and table.find(Config.Settings.Enums[key], value)) then return nil end
+	return value
+end
+
+Config.TeamPings = { Cooldown = 2, Duration = 6, MaxDistance = 100 }
 
 --[[
 	First-run tips (client Tutorial.lua): small hints that teach through play, each shown
@@ -1038,6 +1055,7 @@ Config.RunServers = {
 	HomeDelaySeconds = 20, -- results over the lobby (portal / MAIN MENU): back to a lobby after this
 	HomeDelayAfterResultsSeconds = 2, -- the defeat results already counted down
 	HandoffLoadAttempts = 12, -- DataService load retries for a player arriving by a SWARM teleport
+	RejoinGraceSeconds = 120, -- a disconnected co-op member can return while this run remains alive
 }
 
 ------------------------------------------------------------------------------------------

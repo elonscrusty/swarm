@@ -59,6 +59,22 @@ local ok, err = S.runMain(function()
 	root.Visible = true
 	settings.Set("ReducedEffects", false)
 	local UIAnim = preview.client("UIAnim")
+	local swatch = Instance.new("TextButton")
+	swatch.Size = UDim2.fromOffset(104, 100)
+	swatch.BackgroundTransparency = 0.15
+	swatch.Parent = root
+	UIAnim.Button(swatch)
+	swatch.MouseEnter:_fire()
+	preview.advance(0.3)
+	local swatchScale = swatch:FindFirstChild("AnimScale")
+	check("skin hover never scales the layout or hit target", swatchScale == nil or swatchScale.Scale == 1)
+	swatch.MouseButton1Down:_fire()
+	preview.advance(0.1)
+	check("skin press never scales the layout or hit target", swatchScale == nil or swatchScale.Scale == 1)
+	swatch.MouseButton1Up:_fire()
+	swatch.MouseLeave:_fire()
+	preview.advance(0.3)
+	check("skin feedback returns to its resting appearance", math.abs(swatch.BackgroundTransparency - 0.15) < 0.001)
 	local stopMotes = UIAnim.Motes(root, 3)
 	local performance = preview.client("ClientPerformance")
 	for _ = 1, 60 do performance.Step(0.1) end

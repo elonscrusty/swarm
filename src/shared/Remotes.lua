@@ -22,6 +22,7 @@ local Remotes = {}
 
 -- Server → client
 Remotes.ServerToClient = {
+	"TeamPingShown", -- brief validated co-op landmark/message marker
 	"ProjectileBatch", -- buffer of projectile positions, once per sync tick
 	"FxBatch", -- table of visual effects, once per flush tick
 	"WeaponFx", -- weapon effects that are not projectiles (nova, flame patches, totem pulses, hook chains)
@@ -50,6 +51,7 @@ Remotes.ServerToClient = {
 
 -- Client → server
 Remotes.ClientToServer = {
+	"TeamPing", -- (preset kind, server-resolved target) co-op teammates only
 	"LevelUpChoose", -- (index)
 	"LevelUpReroll",
 	"LevelUpSkip",

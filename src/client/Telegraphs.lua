@@ -42,6 +42,7 @@ local Palette = require(Shared:WaitForChild("Palette"))
 local ModelLibrary = require(script.Parent.ModelLibrary)
 local Audio = require(script.Parent.Audio)
 local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
 
 local Telegraphs = {}
 
@@ -127,7 +128,9 @@ local partAlpha: { [BasePart]: number } = setmetatable({}, { __mode = "k" }) :: 
 
 local function take(shape: string, color: Color3, size: Vector3, alpha: number, material: Enum.Material?): BasePart
 	local p = table.remove(pools[shape]) or newPart(shape)
-	p.Color = color
+	local h, s, v = color:ToHSV()
+	local danger = s > 0.18 and v > 0.28 and (h < 0.19 or h > 0.85 or color == C.Acid or color == C.AcidLight)
+	p.Color = Accessibility.Color(color, danger and "Danger" or nil)
 	p.Material = material or SMOOTH
 	p.Size = size
 	p.Transparency = alpha
@@ -543,7 +546,7 @@ Kind.circle = function(x: number, z: number, radius: number, seconds: number, st
 		setDisc(rec.Fill, rec.R * 2 * (0.12 + 0.88 * u))
 		setT(rec.Fill, 1 - (0.42 + 0.3 * u) * v)
 		local edge
-		if rec.St.Blink then
+		if rec.St.Blink and not ClientSettings.Flashes() then
 			local hz = 5 + 12 * u
 			edge = (math.sin(t * hz * TAU) > -0.2) and 0.1 or 0.75
 		else
@@ -707,7 +710,7 @@ local function globPieces(): { any }
 	local function add(shape: string, size: Vector3, color: Color3, offset: CFrame, material: Enum.Material?, alpha: number?)
 		local p = newPart(shape)
 		p.Size = size
-		p.Color = color
+		p.Color = Accessibility.Color(color)
 		p.Material = material or SMOOTH
 		p.Transparency = alpha or 0
 		table.insert(list, { Part = p, Offset = offset, Color = color })
@@ -730,7 +733,7 @@ local function eggGlobPieces(): { any }
 	local function add(shape: string, size: Vector3, color: Color3, offset: CFrame, material: Enum.Material?)
 		local p = newPart(shape)
 		p.Size = size
-		p.Color = color
+		p.Color = Accessibility.Color(color)
 		p.Material = material or SMOOTH
 		p.Transparency = 0
 		table.insert(list, { Part = p, Offset = offset, Color = color })
@@ -798,7 +801,7 @@ local function eggParts(): { BasePart }
 	for k = 1, 3 do
 		local sp = newPart("Ball")
 		sp.Size = Vector3.one * 0.55
-		sp.Color = P.crimson_500
+		sp.Color = Accessibility.Color(P.crimson_500, "Danger")
 		spots[k] = sp
 	end
 	local crackA = newPart("Block")
@@ -1203,7 +1206,7 @@ Kind.mine = function(x: number, z: number, radius: number, seconds: number, from
 		local e = 1 - (1 - fly) * (1 - fly)
 		local pos = from:Lerp(to, e) + Vector3.new(0, 2.5 * 4 * e * (1 - e) + math.sin(t * 3) * 0.2 * fly, 0)
 		local hz = 1.2 + 7 * u * u
-		local on = math.sin(t * hz * TAU) > 0
+		local on = ClientSettings.Flashes() or math.sin(t * hz * TAU) > 0
 		core.Transparency = on and 0 or 0.45
 		halo.Transparency = on and 0.55 or 0.85
 		halo.Size = Vector3.one * (1.6 + 0.6 * u)
