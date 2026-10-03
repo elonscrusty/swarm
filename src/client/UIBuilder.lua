@@ -1042,9 +1042,10 @@ local function descHeight(desc: string?, w: number, c): number
 	return TS(14) * lines + 8
 end
 
--- Height of the evolution hint under the rows (two wrapped lines, one on phone landscape).
+-- Height of the evolution hint under the rows (two wrapped lines; it keeps its room on
+-- phones, where a stat row gives way: the description line already sums up the gain).
 local function hintHeight(): number
-	return compactLandscape() and TS(13) + 4 or TS(13) * 2 + 6
+	return TS(13) * 2 + 6
 end
 
 -- The boxed highlight: shorter on phones.
@@ -1505,7 +1506,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				Size = UDim2.new(1, -2 * pad, 0, hh),
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextYAlignment = Enum.TextYAlignment.Bottom,
-				TextWrapped = not compactLandscape(),
+				TextWrapped = true,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
 			}, 13)
