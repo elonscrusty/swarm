@@ -761,6 +761,9 @@ local function fillPrompt(model: Model, progress: number): number
 	if not ok then
 		detail = (kind == "Altar" and detail ~= "") and detail or (STATE_TEXT[st] or detail)
 	end
+	if ok and model:GetAttribute("LootType") == "Chance" and model:GetAttribute("Odds") ~= nil then
+		detail = "Pay gold · maybe an item" -- the odds row below has the numbers
+	end
 	ui.PromptDetail.Text = UIKit.track(detail)
 	local benefit = tostring(model:GetAttribute("Benefit") or "")
 	local tradeoff = tostring(model:GetAttribute("Tradeoff") or "")
@@ -806,6 +809,9 @@ local function fillPrompt(model: Model, progress: number): number
 			return TextService:GetTextSize(str, px, Enum.Font.SourceSansSemibold, Vector2.new(lineW, 1000))
 		end)
 		local n = (ok2 and typeof(size) == "Vector2") and math.clamp(math.ceil(size.Y / px - 0.2), 1, 3) or 2
+		if #str * px * 0.5 <= lineW * 0.92 then
+			n = 1 -- clearly fits on one line (average glyph width): no measuring quirk gap
+		end
 		label.Size = UDim2.new(1, -36, 0, lineH * n)
 		y += lineH * n
 	end
