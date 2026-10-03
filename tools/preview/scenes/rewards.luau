@@ -5,7 +5,9 @@
 --                               1.2 slowing down); --set item=<ItemData id> (default
 --                               StormCharm); --set queue=on: an elite chest's level-ups +
 --                               gold first, then two chest items queued behind it
---                               (t counts from the first); --set reduced=on: Reduced effects
+--                               (t counts from the first); --set reduced=on: Reduced effects;
+--                               --set dramatic=off: a plain chest item (no reel: the server
+--                               only showcases big-chest and Legendary items, the rest toast)
 --   --set view=coins            kills paying gold: coins bursting out and flying to the
 --                               hero, the purse over the ability bar counting up with "+N"
 --   --set view=need             standing at a chest without enough gold after pressing E:
@@ -47,7 +49,9 @@ elseif view == "other" then
 	C.settle(0.6)
 else
 	local id = preview.args.item or "StormCharm"
-	local dramatic = preview.args.queue == "on" or C.shared("ItemData").Items[id].Rarity == "Legendary"
+	-- the server showcases (Dramatic) items from big chests and every Legendary
+	-- (ItemSystem.Grant); a plain chest item only toasts, so the reel needs Dramatic
+	local dramatic = preview.args.dramatic ~= "off" or preview.args.queue == "on" or C.shared("ItemData").Items[id].Rarity == "Legendary"
 	C.setState({ Frozen = dramatic, LevelUpPause = false, RewardNames = dramatic and "Player" or "", RewardIds = dramatic and ("," .. tostring(uid) .. ",") or "" })
 	if preview.args.reduced == "on" then
 		local ClientSettings = preview.client("ClientSettings")
@@ -70,7 +74,7 @@ else
 		C.fire("ItemGained", { Id = "SunMedallion", Count = 1, Source = "Golden Chest", Reward = true, Dramatic = true })
 		C.settle(math.max(0.05, t - 0.2))
 	else
-		C.fire("ItemGained", { Id = id, Count = 1, Source = "Chest", Reward = true, Dramatic = dramatic })
+		C.fire("ItemGained", { Id = id, Count = 1, Source = dramatic and "Large Chest" or "Chest", Reward = true, Dramatic = dramatic })
 		C.settle(t)
 	end
 end

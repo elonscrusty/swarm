@@ -11,6 +11,8 @@ reports, per scene and device:
   TOPBAR     visible text under Roblox's own top-bar buttons (menu / chat ghost)
   COVERED    visible text partly hidden under an opaque panel or button painted later
   TRUNCATED  text cut with "..." (information only; lists and long names truncate on purpose)
+  OVERFLOW   a text line wider than its own label running past the label's sides (text too
+             big for its box: drawn over neighbours, or cut by whatever is painted next)
   CLIPPED    a text line sliced by a clipping frame so only a sliver of it shows (information
              only; scroll lists clip their edge rows on purpose, a pinned button over a
              scroll area or a too-short panel shows up here)
@@ -20,7 +22,7 @@ Usage:
   python3 tools/preview/check_layout.py DIR [DIR ...] [--strict] [--quiet]
   python3 tools/preview/check_layout.py out/sweep/levelup-iphone.json
 
-Exit code 1 when any OVERLAP / OFFSCREEN / TOPBAR / COVERED finding is left after the allowlist
+Exit code 1 when any OVERLAP / OFFSCREEN / TOPBAR / COVERED / OVERFLOW finding is left after the allowlist
 (--strict also fails on TRUNCATED; CLIPPED / SMALL never fail). The allowlist below names known, intended cases.
 """
 from __future__ import annotations
@@ -39,6 +41,7 @@ MIN_OVERLAP_FRAC = 0.2  # of the smaller glyph box
 COVER_ALPHA = 0.55  # a box at least this opaque drawn between two texts covers the first
 CLIP_SLIVER = (0.05, 0.7)  # visible height fraction of a text line that reads as "sliced"
 SMALL_TEXT_PX = 10.0  # line height in device points (phones) below which text is hard to read
+OVERFLOW_PX = 6.0  # a text run this far past its label's left / right edge
 PHONES = ("iphone", "phone", "phone-portrait")
 INFO = ("TRUNCATED", "CLIPPED", "SMALL")
 
@@ -111,6 +114,7 @@ def collect(doc):
                     boxes.append((idx, r, img["color"][3] * galpha, it.get("name", "?")))
             t = it.get("text")
             if t:
+                full = " ".join("".join(sg.get("t", "") for sg in ln.get("segs", [])) for ln in t.get("lines", [])).strip()
                 for line in t.get("lines", []):
                     for seg in line.get("segs", []):
                         col = seg.get("color") or [0, 0, 0, 1]
@@ -131,6 +135,8 @@ def collect(doc):
                             "name": it.get("name", "?"),
                             "alpha": a,
                             "truncated": seg["t"].endswith("..."),
+                            "box": rect,
+                            "full": full,
                             "layer": L.get("name"),
                         })
     return boxes, texts, gui
@@ -189,6 +195,10 @@ def check_doc(path, strict=False):
         if t["truncated"]:
             findings.append(("TRUNCATED", t["name"], t["text"], r))
         raw = t["raw"]
+        bx = t["box"]
+        if (bx[0] - raw[0] > OVERFLOW_PX or raw[2] - bx[2] > OVERFLOW_PX) and ("O", t["index"]) not in info_seen:
+            info_seen.add(("O", t["index"]))
+            findings.append(("OVERFLOW", t["name"], t["full"], raw))
         rh = raw[3] - raw[1]
         if rh > 0:
             frac = (r[3] - r[1]) / rh
@@ -281,7 +291,7 @@ def main(argv):
         print(__doc__)
         return 2
     bad = 0
-    total = {"OVERLAP": 0, "OFFSCREEN": 0, "TOPBAR": 0, "COVERED": 0, "TRUNCATED": 0, "CLIPPED": 0, "SMALL": 0}
+    total = {"OVERLAP": 0, "OFFSCREEN": 0, "TOPBAR": 0, "COVERED": 0, "OVERFLOW": 0, "TRUNCATED": 0, "CLIPPED": 0, "SMALL": 0}
     for p in paths:
         try:
             scene, device, findings = check_doc(p, strict)
@@ -302,7 +312,7 @@ def main(argv):
             if not quiet:
                 for kind, name, text, r in soft:
                     print(f"   {kind:9s} {name}: {text!r}")
-    print(f"checked {len(paths)} scene(s): {total['OVERLAP']} overlap, {total['OFFSCREEN']} off-screen, {total['TOPBAR']} under top bar, {total['COVERED']} part-covered, {total['TRUNCATED']} truncated, {total['CLIPPED']} clipped, {total['SMALL']} small; {bad} scene(s) with problems")
+    print(f"checked {len(paths)} scene(s): {total['OVERLAP']} overlap, {total['OFFSCREEN']} off-screen, {total['TOPBAR']} under top bar, {total['COVERED']} part-covered, {total['OVERFLOW']} overflowing, {total['TRUNCATED']} truncated, {total['CLIPPED']} clipped, {total['SMALL']} small; {bad} scene(s) with problems")
     return 1 if bad else 0
 
 

@@ -74,19 +74,20 @@ Config.Stages = {
 	-- or the reveal delay); 0 = from the reveal on, always
 	HintAfterSeconds = 0,
 	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
-	-- 0.4 (was 0.25): owner playtest "by map 2 players instant kill everything"; stage 1
+	-- 0.35 (was 0.25): owner playtest "by map 2 players instant kill everything"; stage 1
 	-- stays as it was
-	EnemyHPPerStage = 0.4,
+	EnemyHPPerStage = 0.35,
 	EnemyDamagePerStage = 0.08, -- also the boss's contact / orb damage and bomb ticks
 	SpawnTargetPerStage = 0.1, -- live-enemy target and mini-wave size
 	-- Scorpion Queen HP = Config.Boss.HP x this (x the player-count scaling). She comes
 	-- much earlier than the old 15:00 boss, so stage 1 is lighter; then +BossHPPerExtraStage
 	-- per stage past the list.
-	-- { 0.3, 0.5, 0.8, 1.15, 1.6 } (was 0.3, 0.75, 1.1, 1.5, 2.0): stage 2's boss was a x2.5
-	-- jump (owner: "round two is way too hard"); now x1.67, x1.6, x1.44, x1.39
-	BossHPByStage = { 0.3, 0.5, 0.8, 1.15, 1.6 },
+	-- { 0.22, 0.4, 0.7, 1.05, 1.5 } (was 0.3, 0.75, 1.1, 1.5, 2.0): stage 2's boss was a x2.5
+	-- jump (owner: "round two is way too hard") and the stage-1 Queen took a level-6 hero
+	-- 3-4 minutes in pacing-sim; now steps of x1.8, x1.75, x1.5, x1.43
+	BossHPByStage = { 0.22, 0.4, 0.7, 1.05, 1.5 },
 	-- 0.4 (was 0.5): with the Endless boss growth on top, stage 6 was a x1.44 jump over
-	-- stage 5; now x1.25 (Standard) / x1.375 (Endless), then smaller steps
+	-- stage 5; now x1.27 (Standard) / x1.39 (Endless), then smaller steps
 	BossHPPerExtraStage = 0.4,
 	BossSpawnOffset = 12, -- the Queen climbs out this far behind the portal
 	-- regular enemies kept alive during the Queen fight: this share of the normal live
@@ -248,12 +249,13 @@ Config.XP = {
 	-- Gem XP pacing (the cost curve above stays as set). pacing-sim (real server, solo hero
 	-- in the swarm) measured the kill rate climbing ~7x from stage 1 to stage 4 while level
 	-- costs only grow ~5x: the first level-up came at 0:38 with 35-45 s gaps, stage 3-5
-	-- levelled every 5-15 s and finished in bursts of 15-20 levels. Collected gem XP is
+	-- levelled every 5-15 s and finished in bursts of 15-20 levels (with waves and the
+	-- per-stage spawn rows, Config.Spawn.StageRowSpan, kills grow less). Collected gem XP is
 	-- multiplied by OpeningMult for the first OpeningSeconds of a run and by StageMult[stage]
 	-- (the last entry for later stages), so every stage levels at a similar pace.
 	OpeningSeconds = 90,
 	OpeningMult = 1.5,
-	StageMult = { 1, 1, 0.8, 0.65, 0.55 },
+	StageMult = { 1, 1, 0.9, 0.8, 0.7 },
 	GemValues = { Small = 1, Medium = 5, Large = 25 },
 	GemPoolSize = 500,
 	MagnetSpeed = 45, -- studs/s a gem flies toward the player once inside pickup radius

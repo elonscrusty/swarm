@@ -38,6 +38,7 @@ if preview.args.legacy == "on" then
 	Config.Stages.EnemyHPPerStage = 0.25
 	Config.Stages.BossHPByStage = { 0.3, 0.75, 1.1, 1.5, 2.0 }
 	Config.Spawn.StageRowSpan = nil
+	Config.Stages.BossMinionShare, Config.Stages.BossMinionMin = 0.5, 15
 end
 if preview.args.waves == "off" then
 	Config.Waves.Enabled = false
