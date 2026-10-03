@@ -1,6 +1,6 @@
 --[[
 	PassiveData.lua
-	15 passive items, 3-5 levels each (PassiveData.MaxLevelOf). `Values[level]` is the TOTAL bonus at that level
+	25 passive items, 3-5 levels each (PassiveData.MaxLevelOf). `Values[level]` is the TOTAL bonus at that level
 	(not the increment), so stat calculation is a single lookup.
 
 	Stat keys (summed into the player's stat sheet by LevelUpSystem.RecomputeStats):
@@ -19,6 +19,16 @@
 	  pierce         +enemies a stopping projectile passes through
 	  critChance     +chance for a hit to crit (an item stat, also used by Precision)
 	  regen          HP per second (an item stat, also used by Renewal)
+	  eliteDamage    +damage to elites and bosses (Giant's Bane; ItemSystem.ModifyHit)
+	  thorns         share of a hit dealt back around you (Thornhide; ItemSystem.OnHurt)
+	  critHeal       HP healed by a critical hit (Blood Rune; ItemSystem.ModifyHit)
+	  ward           seconds for the one-hit ward to recharge (Aegis Charm; ItemSystem.AbsorbHit)
+	  killRush       +move speed for a moment after a kill (Windstep; ItemSystem.OnKill)
+	  goldGain       +gold (Gilded Purse; an item stat too)
+	  damageTaken    -damage taken (Stoneskin; negative = less)
+	  levelHeal      share of max HP healed on level-up (Second Wind; ItemSystem.OnLevelUp)
+	  burnChance     chance a hit sets the enemy burning (Ember Oil; ItemSystem.OnHit)
+	  lowHpMight     +damage while below Tuning.LionheartHp of max HP (Lionheart)
 
 	Synergies: Area, Candle, Precision and Armor are pieces of the build synergies in
 	SynergyData.lua (a small extra bonus once the whole set is owned).
@@ -45,6 +55,28 @@ PassiveData.Order = {
 	"Fletching",
 	"Precision",
 	"Renewal",
+	"GiantsBane",
+	"Thornhide",
+	"BloodRune",
+	"AegisCharm",
+	"Windstep",
+	"GildedPurse",
+	"Stoneskin",
+	"SecondWind",
+	"EmberOil",
+	"Lionheart",
+}
+
+-- Behaviour numbers of the passives that hook into ItemSystem (not stat bumps).
+PassiveData.Tuning = {
+	WindstepSeconds = 1.5, -- how long the speed lasts after a kill
+	BloodRuneCooldown = 0.2, -- seconds between two crit heals
+	BurnSeconds = 3, -- Ember Oil burn length
+	BurnTick = 0.5, -- seconds between burn ticks
+	BurnShare = 0.3, -- burn damage per second, as a share of the igniting hit
+	MaxBurns = 80, -- burning enemies at once (server-wide), so huge swarms stay cheap
+	MaxBurnChance = 0.5,
+	LionheartHp = 0.4, -- Lionheart works below this share of max HP
 }
 
 --[[
@@ -232,6 +264,120 @@ PassiveData.Passives = {
 			{ regen = 0.6 },
 			{ regen = 1.2 },
 			{ regen = 2.0 },
+		},
+	},
+	-- Damage against the big ones: elites (any affix) and bosses.
+	GiantsBane = {
+		Id = "GiantsBane",
+		Name = "Giant's Bane",
+		Color = Color3.fromRGB(200, 90, 70),
+		Description = "+15% damage to elites and bosses per level.",
+		Values = {
+			{ eliteDamage = 0.15 },
+			{ eliteDamage = 0.30 },
+			{ eliteDamage = 0.45 },
+		},
+	},
+	-- Thorns without the item: adds to Barbed Mail and shares its short cooldown.
+	Thornhide = {
+		Id = "Thornhide",
+		Name = "Thornhide",
+		Color = Color3.fromRGB(120, 160, 80),
+		Description = "When hit, strike back at nearby foes.",
+		Values = {
+			{ thorns = 0.8 },
+			{ thorns = 1.6 },
+			{ thorns = 2.5 },
+		},
+	},
+	BloodRune = {
+		Id = "BloodRune",
+		Name = "Blood Rune",
+		Color = Color3.fromRGB(200, 50, 70),
+		Description = "Critical hits heal you a little.",
+		Values = {
+			{ critHeal = 1 },
+			{ critHeal = 2 },
+			{ critHeal = 3 },
+		},
+	},
+	-- A ward that swallows one whole hit, then recharges.
+	AegisCharm = {
+		Id = "AegisCharm",
+		Name = "Aegis Charm",
+		Color = Color3.fromRGB(240, 200, 90),
+		Description = "A ward blocks one hit, then recharges.",
+		Values = {
+			{ ward = 14 },
+			{ ward = 11 },
+			{ ward = 8 },
+		},
+	},
+	Windstep = {
+		Id = "Windstep",
+		Name = "Windstep",
+		Color = Color3.fromRGB(150, 220, 230),
+		Description = "Each kill gives a short burst of speed.",
+		Values = {
+			{ killRush = 0.08 },
+			{ killRush = 0.15 },
+			{ killRush = 0.22 },
+		},
+	},
+	GildedPurse = {
+		Id = "GildedPurse",
+		Name = "Gilded Purse",
+		Color = Color3.fromRGB(255, 200, 70),
+		Description = "More gold from every source in the run.",
+		Values = {
+			{ goldGain = 0.15 },
+			{ goldGain = 0.30 },
+			{ goldGain = 0.50 },
+		},
+	},
+	Stoneskin = {
+		Id = "Stoneskin",
+		Name = "Stoneskin",
+		Color = Color3.fromRGB(160, 150, 135),
+		Description = "Take 6% less damage per level.",
+		Values = {
+			{ damageTaken = -0.06 },
+			{ damageTaken = -0.12 },
+			{ damageTaken = -0.18 },
+		},
+	},
+	SecondWind = {
+		Id = "SecondWind",
+		Name = "Second Wind",
+		Color = Color3.fromRGB(130, 220, 170),
+		Description = "Every level-up heals part of your HP.",
+		Values = {
+			{ levelHeal = 0.08 },
+			{ levelHeal = 0.14 },
+			{ levelHeal = 0.20 },
+		},
+	},
+	-- Burns deal BurnShare of the igniting hit per second for BurnSeconds (never crit).
+	EmberOil = {
+		Id = "EmberOil",
+		Name = "Ember Oil",
+		Color = Color3.fromRGB(255, 120, 40),
+		Description = "Hits may set foes on fire for 3 s.",
+		Values = {
+			{ burnChance = 0.08 },
+			{ burnChance = 0.14 },
+			{ burnChance = 0.20 },
+		},
+	},
+	Lionheart = {
+		Id = "Lionheart",
+		Name = "Lionheart",
+		Color = Color3.fromRGB(230, 150, 60),
+		Description = "Deal more damage while below 40% HP.",
+		Values = {
+			{ lowHpMight = 0.20 },
+			{ lowHpMight = 0.35 },
+			{ lowHpMight = 0.50 },
 		},
 	},
 }

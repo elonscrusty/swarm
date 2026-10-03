@@ -156,7 +156,14 @@ function MenuPlaytime.Build(parent: Instance, ctx: { [string]: any }): Board
 		end
 	end)
 
+	local placed = ""
 	local function place(x: number, y: number, w: number, rows: number): number
+		local pkey = string.format("%d|%d|%d|%d", math.floor(x + 0.5), math.floor(y + 0.5), math.floor(w + 0.5), rows)
+		if pkey == placed then
+			return holder.Size.Y.Offset -- relayouts are frequent: nothing changed
+		end
+		placed = pkey
+		local wasShape = tostring(chip) .. tostring(rowsWanted)
 		chip = rows <= 0
 		rowsWanted = math.max(0, math.min(5, rows))
 		-- (one more row for "You" when you are not in the top rows)
@@ -165,8 +172,9 @@ function MenuPlaytime.Build(parent: Instance, ctx: { [string]: any }): Board
 		holder.Size = UDim2.fromOffset(math.floor(w + 0.5), h)
 		icon.Position = UDim2.fromOffset(0, chip and 5 or 6)
 		title.Size = UDim2.new(1, -24, 0, chip and 28 or HEAD_H)
-		shownKey = "" -- the shape changed: rebuild
-		fill()
+		if wasShape ~= tostring(chip) .. tostring(rowsWanted) then
+			fill() -- the shape changed (the key includes it): rebuild
+		end
 		return h
 	end
 

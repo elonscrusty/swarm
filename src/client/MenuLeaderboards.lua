@@ -28,6 +28,7 @@ local CurseData = require(Shared:WaitForChild("CurseData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
+local MenuPlaytime = require(script.Parent.MenuPlaytime)
 
 local MenuLeaderboards = {}
 
@@ -43,6 +44,7 @@ local BOARDS = {
 	{ Id = "Daily", Title = "Daily", Short = "DAILY", Icon = "calendar", Heading = "Today's daily", Sub = "Today's scored Daily Challenge attempts (UTC)", Explain = "Ranked by stages cleared, then time. One scored attempt a day.", Column = "Result" },
 	{ Id = "Kills", Title = "Most kills", Short = "KILLS", Icon = "stat_Kills", Heading = "Most kills", Sub = "Most enemies defeated in one run", Explain = "All time, across all servers.", Column = "Kills" },
 	{ Id = "Level", Title = "Highest level", Short = "LEVEL", Icon = "chevronsUp", Heading = "Highest level", Sub = "Highest level reached in one run", Explain = "Any mode, all time, across all servers.", Column = "Level" },
+	{ Id = "Playtime", Title = "Playtime", Short = "TIME", Icon = "clock", Heading = "Most time played", Sub = "Total time played in runs", Explain = "All time, across all servers. Runs with DEV tools don't count.", Column = "Time" },
 }
 
 local ROW_H = 52
@@ -72,6 +74,8 @@ function MenuLeaderboards.ValueText(board: string, value: number): string
 		return "Lv " .. UIKit.formatNumber(value)
 	elseif board == "Daily" then
 		return CurseData.ScoreText(value)
+	elseif board == "Playtime" then
+		return MenuPlaytime.TimeText(value)
 	end
 	return UIKit.formatNumber(value)
 end
@@ -84,6 +88,8 @@ function MenuLeaderboards.BestText(board: string, value: number): string
 		return "LEVEL " .. UIKit.formatNumber(value)
 	elseif board == "Kills" then
 		return UIKit.formatNumber(value) .. " KILLS"
+	elseif board == "Playtime" then
+		return MenuPlaytime.TimeText(value) .. " PLAYED"
 	end
 	return string.upper(MenuLeaderboards.ValueText(board, value))
 end

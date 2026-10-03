@@ -60,6 +60,7 @@ local MenuTrack = require(script.Parent.MenuTrack)
 local MenuArenas = require(script.Parent.MenuArenas)
 local MenuParty = require(script.Parent.MenuParty)
 local MenuLastRun = require(script.Parent.MenuLastRun)
+local MenuPlaytime = require(script.Parent.MenuPlaytime)
 local Cosmetics = require(script.Parent.Cosmetics)
 local CurseData = require(Shared:WaitForChild("CurseData"))
 
@@ -935,6 +936,10 @@ local function relayout()
 		ui.PartyBtn.Instance.Visible = false
 		ui.PlaceParty = nil
 		place(ui.ReadyBtn.Instance, W - M - 132, chipTop + 58, 132, 48)
+		-- PLAYTIME as a one-line chip on the left of that row (READY keeps the right)
+		if ui.Playtime then
+			ui.Playtime.Place(M, chipTop + 62, math.min(300, W - 2 * M - 132 - G), 0)
+		end
 		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn, ui.PartyCornerBtn }) do
 			b.Instance.Size = UDim2.fromOffset(math.floor((w - 4 * G) / 5), cornerH)
 		end
@@ -997,6 +1002,17 @@ local function relayout()
 			local pw = compact and 180 or 210
 			place(ui.PartyBtn.Instance, W - M - chipW - G - pw, chipY - 2, pw, 52)
 			place(ui.ReadyBtn.Instance, W - M - chipW - 2 * G - pw - 132, chipY, 132, 48)
+			-- PLAYTIME under the PARTY pill, right-aligned with it, above the hero's head:
+			-- rows where there is room, else the one-line chip
+			if ui.Playtime then
+				local right = W - M - chipW - G
+				local logoRight = M + ui.LogoW * ui.LogoScale.Scale + G
+				local pwide = math.max(pw, math.min(compact and 260 or 320, right - logoRight))
+				local top = chipY + 58
+				local room = H * 0.29 - top
+				local rows = math.floor((room - 12 - 30) / 24) - 1
+				ui.Playtime.Place(right - pwide, top, pwide, rows >= 2 and rows or 0)
+			end
 		end
 		ui.PlaceParty()
 		local logoBottom = logoY + (ui.LogoH - 4) * logoScale
@@ -1212,6 +1228,9 @@ function LobbyScreen.Show(name: string, arg: any?)
 		homeEntrance()
 		UIKit.FocusIfGamepad(ui.ModeButtons[1].Instance)
 	end
+	if ui.Playtime then
+		ui.Playtime.Shown(name == "Home")
+	end
 end
 
 function LobbyScreen.Current(): string
@@ -1227,6 +1246,9 @@ function LobbyScreen.SetVisible(on: boolean)
 	ui.Vignette.Visible = on
 	if not on then
 		homeAmbient(false)
+		if ui.Playtime then
+			ui.Playtime.Shown(false)
+		end
 		local s = screens[current]
 		if s and s.OnHide then
 			s.OnHide()
@@ -1243,6 +1265,9 @@ function LobbyScreen.SetVisible(on: boolean)
 		UIAnim.SwapScreens(nil, ui.Home, 1, Config.UI.ScreenSlideSeconds)
 		UIAnim.SlideIn(ui.Chip, Vector2.new(0, -60), 0)
 		homeEntrance()
+		if ui.Playtime then
+			ui.Playtime.Shown(true)
+		end
 		lastStatus = ""
 		LobbyScreen.RefreshHero()
 		UIKit.FocusIfGamepad(ui.ModeButtons[1].Instance)
@@ -1552,6 +1577,9 @@ function LobbyScreen.Update(_dt: number?)
 			s.Update(_dt or 0)
 		end
 	end
+	if ui.Playtime then
+		ui.Playtime.Update(_dt or 0)
+	end
 
 	setArenaArt(tostring(state:GetAttribute("SelectedArena") or "Forest"))
 	local title, sub = arenaText()
@@ -1604,6 +1632,7 @@ function LobbyScreen.Init(h: { [string]: any })
 	}
 	ui.LastRun = MenuLastRun.Build(ui.Home, ctx)
 	ui.LastRun.Refresh(profile)
+	ui.Playtime = MenuPlaytime.Build(ui.Home, ctx)
 	screens.Characters = MenuCharacters.Build(screen("Characters"), ctx)
 	screens.Upgrades = MenuUpgrades.Build(screen("Upgrades"), ctx)
 	screens.Stats = MenuStats.Build(screen("Stats"), ctx)
