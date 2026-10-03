@@ -450,8 +450,10 @@ local function buildBanner(frame: Frame)
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.gold_200,
 		TextStrokeTransparency = 0.35,
+		TextScaled = true, -- long titles ("THE SWARM IS OVERWHELMING") shrink to fit phones
 		ZIndex = 9,
 	})
+	new("UITextSizeConstraint", { MaxTextSize = TS(TY.Display.Size), MinTextSize = 14 }, ui.BannerTitle)
 	ui.BannerLine = new("Frame", { Name = "Line", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, TS(TY.Display.Size) + 10), Size = UDim2.fromOffset(0, 3), ZIndex = 9 }, box)
 	UIKit.corner(ui.BannerLine, 2)
 	ui.BannerSub = role(box, "Body", "", {
@@ -488,6 +490,14 @@ local function placeBanner()
 	local box = ui.Banner :: Frame?
 	if not box then
 		return
+	end
+	-- never wider than the screen (portrait phones): the title scales down to fit
+	local parent = box.Parent :: GuiObject?
+	if parent and parent:IsA("GuiObject") and parent.AbsoluteSize.X > 0 then
+		local w = math.min(520, math.floor(parent.AbsoluteSize.X / math.max(0.01, host.Scale and host.Scale() or 1) - 24))
+		if box.Size.X.Offset ~= w then
+			box.Size = UDim2.fromOffset(w, box.Size.Y.Offset)
+		end
 	end
 	local half = box.Size.Y.Offset / 2
 	local y = bannerBaseY

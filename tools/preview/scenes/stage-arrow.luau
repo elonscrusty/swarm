@@ -15,7 +15,7 @@ if wave then
 	local nextIn = tonumber(preview.args.wavenext)
 	if nextIn then
 		C.setState({ Wave = wave - 1, WaveNext = 400 + nextIn })
-		C.settle(0.3)
+		C.settle(0.8)
 	else
 		local sides = preview.args.wavesides or "north"
 		C.setState({ Wave = wave, WaveNext = 0, WaveSides = sides, WaveAngle = -math.pi / 2, WaveBig = wave % 5 == 0, WaveSeq = 1 })
