@@ -61,7 +61,7 @@ local P = Theme.Palette
 
 local SIZE_PC, SIZE_COMPACT = 150, 128 -- panel width (px, design space)
 local MAP_INSET = 7
-local HEADER_PC, HEADER_COMPACT, FOOTER_PC = 20, 15, 18
+local HEADER_PC, HEADER_COMPACT, FOOTER_PC = 20, 16, 18
 local VIEW_STUDS = 200 -- studs across the map
 local MAX_ENEMY_DOTS = 40
 -- Each optional location has at most three rune nodes; altar/caravan use separate markers.
@@ -272,7 +272,7 @@ function MiniMap.Build(root: Frame, k: { [string]: any })
 	buildPins(view)
 	buildPlayer(view)
 	ui.Title = UIKit.text(face, "Label", "MAP", { Position = UDim2.fromOffset(MAP_INSET + 1, 2), Size = UDim2.new(1, -30, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_400, ZIndex = 3 }, 10)
-	ui.North = UIKit.text(face, "Label", "N", { Name = "North", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -MAP_INSET, 0, 2), Size = UDim2.fromOffset(14, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, ZIndex = 3 }, 11)
+	ui.North = UIKit.text(face, "Label", "N", { Name = "North", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -MAP_INSET, 0, 2), Size = UDim2.fromOffset(14, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, ZIndex = 3 }, 13)
 	buildLegend(face)
 	ClientSettings.OnChanged(function(key, value)
 		if key == "Minimap" then
