@@ -333,11 +333,12 @@ function Fire.Whip(rp, w, s, def)
 	local evo = w.Evolved and def.Evolution or nil
 	local reach = params.Reach * s.area
 	local half = math.rad(params.Arc) / 2
-	-- auto aim (owner): the forehand cut faces the nearest enemy in reach, else the facing
+	-- auto aim (owner): the forehand cut faces the nearest enemy (looking well past the
+	-- reach so the swing visibly turns toward incoming enemies), else the facing
 	local facing = rp.Facing
 	if rp.Root then
 		local origin = ground(rp.Root.Position)
-		local target = nearestEnemies(origin, reach + 2, 1)[1]
+		local target = nearestEnemies(origin, math.max(reach * 3, 30), 1)[1]
 		if target then
 			facing = flatDir(target.Pos - origin, rp.Facing)
 		end
