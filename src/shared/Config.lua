@@ -278,7 +278,7 @@ Config.XP = {
 -- GOLD
 ------------------------------------------------------------------------------------------
 Config.Gold = {
-	FailureRetainBase = 0.25,
+	FailureRetainBase = 0.35, -- owner: 0.35 (was 0.25), early defeats keep more gold
 	FailureRetainPerStage = 0.15,
 	FailureRetainCap = 0.85,
 	-- Normal enemies give 1-3 gold to the player who killed them. KillGoldChance is how
