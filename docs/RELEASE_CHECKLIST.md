@@ -23,6 +23,14 @@ Offline only; nothing below was tested in Studio or on a real phone.
 | Balance: opening, stage 2, player power | owner playtest | pacing-sim with an invincible hero; stages 3-4 numbers noisy; co-op pacing not simulated |
 | Held content | n/a | 10 weapons, 11 passives, 2 synergies and the wave rework are switched off for this release |
 
+### After every publish (owner)
+
+Running servers keep the old version. Lobby players returning from a run can land in an old
+lobby server. After publishing, open Creator Hub → the game → Servers (⋯ menu) and choose
+**Migrate to Latest Update** (players are moved, not kicked for good). This is REQUIRED for any
+update that bumps `Config.Data.SchemaVersion` (Hero Mastery: 6 → 7), because an old server
+cannot read a save written by the new version.
+
 ## 1. Verdicts
 
 | Area | Verdict | Evidence / what is left |

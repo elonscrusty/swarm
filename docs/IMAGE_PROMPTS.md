@@ -6,7 +6,7 @@ that reuse them (Max HP, Might, Armor, Speed, Luck, Growth, Revive). Everything 
 the game still draws with simple vector shapes, borrows from another icon, or doesn't have.
 
 **Total: 136 images** in 17 groups. Work top to bottom: groups 1-9 matter most in play.
-**New requests: 38 images** in groups 18-21 (the two new stage bosses, three small UI symbols, eleven new passives, ten new weapons and their ten evolutions; not made yet).
+**New requests: 38 images** in groups 18-21 (the two new stage bosses, three small UI symbols, eleven new passives, ten new weapons and their ten evolutions): DONE, made by the owner, uploaded (all 38 approved by moderation) and wired.
 
 How to use:
 1. Paste the **STYLE BLOCK** first in every ChatGPT chat (or once at the top of a chat).
@@ -262,10 +262,12 @@ outline and a tiny gold accent, no scene, readable at 20 px.
 - **sym_sparkle.png**: a four-point sparkle star.
 - **sym_curse.png**: a purple flame over a skull.
 
-## 18. New requests: the two new stage bosses, 4 images
+## 18. New requests: the two new stage bosses, 4 images (DONE)
 
-Not made yet. Until they exist the boss bar shows the plain full-width bar (no portrait
-disc) and the achievements show a drawn sprout / frost icon. Same STYLE BLOCK.
+**Done:** uploaded via `tools/upload_art.py` (ArtData); the boss bar picks the portraits up by id,
+the two achievements use `ach_BriarBane` / `ach_Frostbreaker` (drawn sprout / frost fallback kept).
+
+Same STYLE BLOCK.
 
 Boss portraits (`art/bosses/`): square 1024x1024, menacing but kid-friendly, dramatic low
 angle, transparent background (like group 3).
@@ -284,9 +286,12 @@ in `src/shared/AchievementData.lua` to `ach_BriarBane` / `ach_Frostbreaker` (add
 the ART_FALLBACK list in `src/client/Icons.lua`). The boss portraits are picked up by id.
 
 
-## 19. New requests: three small UI symbols, 3 images (`art/icons/ui/`)
+## 19. New requests: three small UI symbols, 3 images (`art/icons/ui/`) (DONE)
 
-Not made yet; the game draws these with code today. Same STYLE BLOCK, same format as group 17:
+**Done:** uploaded via `tools/upload_art.py`; `heart`, `castle` and `aim` are in the Icons.lua SYMBOLS
+list (drawn glyph stays as the fallback and for recoloured uses).
+
+Same STYLE BLOCK, same format as group 17:
 square 512x512, transparent background, ONE flat bold symbol, ivory with a thin dark outline
 and a tiny gold accent, no scene, readable at 20 px.
 
@@ -297,9 +302,11 @@ and a tiny gold accent, no scene, readable at 20 px.
 When these come in: upload them with `tools/upload_icons.py`, run `tools/gen_icon_data.py`, and
 map the keys `heart`, `castle` and `aim` to them in `src/client/Icons.lua`.
 
-## 20. New requests: eleven new passives, 11 images (`art/icons/`)
+## 20. New requests: eleven new passives, 11 images (`art/icons/`) (DONE)
 
-Not made yet; the game draws these with code today. Same STYLE BLOCK, same format as the
+**Done:** uploaded via `tools/upload_icons.py`, ids in IconData (held content, shows once released).
+
+Same STYLE BLOCK, same format as the
 passive icons in `art/icons` (see `docs/ICON_LIST.md`): square 512x512, transparent
 background, ONE chunky low-poly object centred, no text, readable at 40 px. Save each file
 under the passive's id.
@@ -319,9 +326,11 @@ under the passive's id.
 When these come in: upload them with `tools/upload_icons.py`, then run `tools/gen_icon_data.py`
 (the ids already match `PassiveData`, so the pictures replace the drawn icons automatically).
 
-## 21. New requests: ten new weapons and their evolutions, 20 images (`art/icons/`)
+## 21. New requests: ten new weapons and their evolutions, 20 images (`art/icons/`) (DONE)
 
-Not made yet; the game draws these with code today. Same STYLE BLOCK, same format as the
+**Done:** uploaded via `tools/upload_icons.py`, ids in IconData (held content, shows once released).
+
+Same STYLE BLOCK, same format as the
 weapon and evolution icons in `art/icons` (see `docs/ICON_LIST.md`): square 512x512,
 transparent background, ONE chunky low-poly object centred, no text, readable at 40 px. Save
 each file under the weapon's (or evolution's) id. Evolutions are the same object made grander,

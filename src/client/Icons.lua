@@ -2160,9 +2160,9 @@ end
 -- Drawn glyphs that have a sym_<name> picture (art/icons/ui).
 local SYMBOLS: { [string]: boolean } = {}
 for _, n in ipairs({
-	"arrowFast", "calendar", "check", "chevronsUp", "clock", "close", "crown", "curse", "cycle", "flag", "gear",
-	"hourglass", "info", "lock", "medal", "music", "pause", "people2", "people3", "person", "play", "podium",
-	"skip", "skull", "sparkle", "speaker", "trophy", "userPlus", "warning",
+	"aim", "arrowFast", "calendar", "castle", "check", "chevronsUp", "clock", "close", "crown", "curse", "cycle",
+	"flag", "gear", "heart", "hourglass", "info", "lock", "medal", "music", "pause", "people2", "people3", "person",
+	"play", "podium", "skip", "skull", "sparkle", "speaker", "trophy", "userPlus", "warning",
 }) do
 	SYMBOLS[n] = true
 end
@@ -2189,6 +2189,7 @@ local ART_FALLBACK: { [string]: string } = {
 	ach_Conqueror = "trophy", ach_KnightClear = "helmet", ach_MageClear = "wizardHat", ach_RogueClear = "hood",
 	ach_PriestClear = "mitre", ach_Veteran = "chevronsUp", ach_FieldEngineer = "gear", ach_Reaper = "skull",
 	ach_MothBane = "skull", ach_WarlordFall = "flag", ach_HiveCleanser = "skull",
+	ach_BriarBane = "sprout", ach_Frostbreaker = "FrostNova",
 	-- account track
 	track_Title = "flag", track_Color = "sparkle", track_Ring = "area", track_Frame = "medal", track_Level = "medal",
 	-- shop
