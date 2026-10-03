@@ -4,6 +4,8 @@
 --   --set moment=levelup  the level-up pillar      --set moment=evolve  a weapon evolving
 --   --set moment=phase    a boss phase change (screen-edge flash)
 --   --set moment=pickup   a floor pickup taken next to the hero
+--   --set moment=armoury  the armoury-batch weapons (shields, meteor, saws, crack, wisps, rift,
+--                         horn blast; --set evolved=on for the evolutions)
 --   --set moment=stress   15 heavy batches a second for 10 s (60 deaths, 120 hits, 16 crits,
 --                         4 level-ups, 16 swings each), printing CombatFx.Stats() and the
 --                         effect instances alive every second: they must stay bounded
@@ -90,6 +92,68 @@ elseif moment == "pickup" then
 		end
 	end
 	preview.advance(t > 0.1 and t or 0.1, 60)
+elseif moment == "armoury" then
+	-- the armoury-batch weapons drawn by the real VFX (ProjectileBatch + WeaponFx like the
+	-- server sends them): Ward Shields circling the hero, a Starfall meteor diving at its
+	-- warning ring, two sawblades, an Earthsplitter crack, spirit wisps, a Vortex rift and a
+	-- War Horn blast. --set evolved=on draws the evolved looks.
+	local WeaponData = C.shared("WeaponData")
+	local evo = preview.args.evolved == "on"
+	local y0 = s.Config.ArenaOrigin.Y
+	local tier = evo and 3 or 2
+	local function vb(normal, evolved)
+		return WeaponData.VisualByte(evo and evolved or normal, tier)
+	end
+	local items = {}
+	local function add(visual, dx, dy, dz, yaw)
+		table.insert(items, { visual, x + dx, y0 + dy, z + dz, yaw or 0 })
+	end
+	for i = 0, 3 do -- shields on their orbit (yaw = facing outward)
+		local a = i * math.pi / 2 + 0.4
+		local dir = Vector3.new(math.cos(a), 0, math.sin(a))
+		add(vb(39, 40), dir.X * 5, 2.5, dir.Z * 5, math.atan2(-dir.X, -dir.Z))
+	end
+	add(vb(43, 44), -8, 14, -14, 0.8) -- meteor falling toward (-12, -17)
+	add(vb(49, 50), 9, 1.4, -6, -1)
+	add(vb(49, 50), 13, 1.4, 2, -1.8)
+	add(vb(41, 42), -6, 0.6, 9, 2.6) -- crack head
+	for i = 1, 3 do
+		add(vb(53, 54), 3 + i * 1.6, 3, 6 + i * 0.8, 0)
+	end
+	add(vb(55, 56), 16, 0.15, 12, 0)
+	add(vb(47, 48), -16, 1.2, 4, 0)
+	local b = buffer.create(2 + #items * 11)
+	buffer.writeu16(b, 0, #items)
+	local o = 2
+	for i, it in ipairs(items) do
+		buffer.writeu16(b, o, 400 + i)
+		buffer.writeu8(b, o + 2, it[1])
+		buffer.writeu8(b, o + 3, 1)
+		buffer.writei16(b, o + 4, math.floor(it[2] * 10 + 0.5))
+		buffer.writei16(b, o + 6, math.floor(it[3] * 10 + 0.5))
+		buffer.writei16(b, o + 8, math.floor(it[4] * 10 + 0.5))
+		buffer.writeu8(b, o + 10, math.floor(((it[5] % (math.pi * 2)) / (math.pi * 2)) * 255 + 0.5) % 256)
+		o += 11
+	end
+	local e = evo and 1 or 0
+	C.fire("ProjectileBatch", b)
+	C.fire("WeaponFx", {
+		mt = { { x - 12, z - 17, 5.5, 0.9, e } },
+		vx = { { x + 16, z + 12, 6.5, 3, e } },
+		vn = { { x - 10, z - 4, 3.2, e } },
+	})
+	preview.advance(0.2, 60)
+	C.fire("ProjectileBatch", b)
+	local quake = {}
+	for i = 1, 4 do
+		table.insert(quake, { x - 1.5 * i, z + 2.2 * i, 2.4, e })
+	end
+	C.fire("WeaponFx", {
+		qk = quake,
+		hn = { { x, z, math.rad(-35), 11, evo and 180 or 55, e } },
+		wb = { { x + 4, z - 3, e } },
+	})
+	preview.advance(t > 0.1 and t or 0.12, 60)
 elseif moment == "stress" then
 	stats("start")
 	for sec = 1, 10 do

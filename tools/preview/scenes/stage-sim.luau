@@ -204,16 +204,22 @@ local function hazardCheck()
 	if not (hz and now and now.Root) then
 		return
 	end
+	-- a pending level-up pauses the hero (WalkSpeed 0, hazards skipped): answer it first
+	pickLevels()
 	local hpBefore = now.HP
 	now.InvulnUntil = 0
 	RM.TeleportPlayer(now, hz.Pos)
 	preview.advance(0.7)
+	pickLevels()
 	local hum = now.Humanoid
 	preview.log("  in", hz.Kind, "Terrain", tostring(me:GetAttribute("Terrain")), "WalkSpeed", hum and math.floor(hum.WalkSpeed * 10 + 0.5) / 10, "base", now.Stats.Speed, "HP", math.floor(hpBefore), "->", math.floor(now.HP))
 	now.InvulnUntil = math.huge
 	RM.TeleportPlayer(now, hz.Pos + Vector3.new(0, 0, hz.Radius + 12))
 	preview.advance(0.2)
-	preview.log("  out", "Terrain", tostring(me:GetAttribute("Terrain")), "WalkSpeed", hum and math.floor(hum.WalkSpeed * 10 + 0.5) / 10)
+	local pausedOut = me:GetAttribute("Paused")
+	pickLevels()
+	preview.advance(0.2)
+	preview.log("  out", "Terrain", tostring(me:GetAttribute("Terrain")), "WalkSpeed", hum and math.floor(hum.WalkSpeed * 10 + 0.5) / 10, "(paused on exit:", tostring(pausedOut) .. ", reward reel:", tostring(now.RewardUntil ~= nil) .. ", holding:", tostring(preview.server("StageManager").IsHolding()) .. ")")
 end
 hazardCheck()
 -- a normal run ends after Config.Endless.LastNormalStage stages (the expedition), so the
