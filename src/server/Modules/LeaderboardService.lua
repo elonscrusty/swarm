@@ -8,6 +8,8 @@
 	                (CurseData.DailyScore: stages cleared, then time)
 	  Kills         most enemies defeated in one run (all time)          SwarmLB_Kills
 	  Level         highest level reached in one run (any mode)          SwarmLB_Level
+	  Playtime      total seconds played in clean runs (Stats.TimePlayed) SwarmLB_Playtime
+	                (shown on the lobby home screen, MenuPlaytime)
 	Your own best comes from the save: Stats.BestScore / BestScoreEndless / BestStage /
 	MostKills / BestLevel, Daily.Score (today).
 
@@ -329,6 +331,8 @@ local function ownBest(player: Player, board: string): number
 		return data.Stats.BestStage or 0
 	elseif board == "Kills" then
 		return data.Stats.MostKills or 0
+	elseif board == "Playtime" then
+		return data.Stats.TimePlayed or 0
 	elseif board == "Daily" then
 		local D = data.Daily or {}
 		return D.Day == today() and (D.Score or 0) or 0

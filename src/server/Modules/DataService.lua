@@ -27,7 +27,8 @@
 	Save shape (Config.Data.SchemaVersion = 6):
 	  Version, Gold, Meta {id → level}, OwnedCharacters {id → true}, SelectedCharacter,
 	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage,
-	  MostKills, BestScore, BestScoreEndless, BestLevel} (missing keys start at 0),
+	  MostKills, BestScore, BestScoreEndless, BestLevel, TimePlayed (seconds in clean runs)}
+	  (missing keys start at 0),
 	  PurchaseIds {string}, Settings {Music, Sfx, Shake, ReducedEffects, DamageNumbers,
 	  Tips} (Config.Settings.Defaults), ReviveTokens, SelectedArena,
 	  Achievements {Progress {id → number}, Unlocked {id → os.time()}} (AchievementService),
@@ -94,7 +95,7 @@ local function defaultData()
 		OwnedCharacters = { [CharacterData.Default] = true },
 		SelectedCharacter = CharacterData.Default,
 		Skins = {},
-		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0, MostKills = 0, BestScore = 0, BestScoreEndless = 0, BestLevel = 0 },
+		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0, MostKills = 0, BestScore = 0, BestScoreEndless = 0, BestLevel = 0, TimePlayed = 0 },
 		PurchaseIds = {},
 		Settings = table.clone(Config.Settings.Defaults),
 		ReviveTokens = 0,

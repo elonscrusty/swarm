@@ -552,19 +552,18 @@ DRAW.lobby_Wins = function(c)
 end
 
 DRAW.lobby_Gold = function(c)
-	-- Staggered coin stacks plus a face-on minted coin; broad bands read at chip size.
-	for row = 0, 2 do
-		local y = 16.8 - row * 4.1
-		box(c, 16.2, y, 11.7, 4.8, c.accent, 0, 2.4)
-		box(c, 16.2, y - 1.2, 11.7, 3.1, c.main, 0, 1.5)
-		box(c, 16.2, y - 1.6, 7.2, 1.1, c.extra, 0, 0.5)
+	-- Upright and centred (owner: the old off-centre stack read as tilted): a face-on
+	-- minted coin over a short centred stack.
+	for row = 0, 1 do
+		local y = 19 - row * 3.6
+		box(c, 12, y, 15.4, 4.4, c.accent, 0, 2.2)
+		box(c, 12, y - 1.1, 15.4, 2.8, c.main, 0, 1.4)
+		box(c, 12, y - 1.5, 9.4, 1, c.extra, 0, 0.5)
 	end
-	dot(c, 7.7, 15.9, 6.1, c.accent)
-	dot(c, 7.7, 15.9, 4.9, c.main)
-	ring(c, 7.7, 15.9, 3.5, 1.1, c.extra)
-	box(c, 7.7, 15.9, 2.3, 3.2, c.mono and c.back or c.accent, 0, 0.5)
-	seg(c, 4.6, 4.4, 4.6, 7.6, 1.4, c.extra)
-	seg(c, 3, 6, 6.2, 6, 1.4, c.extra)
+	dot(c, 12, 9.4, 11.6, c.accent)
+	dot(c, 12, 9.4, 9.8, c.main)
+	ring(c, 12, 9.4, 7, 1.3, c.extra)
+	box(c, 12, 9.4, 2.8, 4.2, c.mono and c.back or c.accent, 0, 0.7)
 end
 
 DRAW.userPlus = function(c)

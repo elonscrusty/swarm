@@ -1016,6 +1016,10 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	ctx.LeaderboardService.Submit(rp.Player, "BestStage", ctx.StageManager.GetStage(), nil, rp.RunId)
 	ctx.LeaderboardService.Submit(rp.Player, "Kills", rp.Kills, nil, rp.RunId)
 	ctx.LeaderboardService.Submit(rp.Player, "Level", rp.Level or 1, nil, rp.RunId)
+	-- total time played (the lobby PLAYTIME board): seconds of clean runs only, counted
+	-- here by the server; DEV-tainted runs returned above and never add to it
+	data.Stats.TimePlayed = math.floor((tonumber(data.Stats.TimePlayed) or 0) + math.max(0, t))
+	ctx.LeaderboardService.Submit(rp.Player, "Playtime", data.Stats.TimePlayed, nil, rp.RunId)
 	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0 }
 	return newBest, unlocked
 end

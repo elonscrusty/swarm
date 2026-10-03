@@ -1105,7 +1105,7 @@ Config.Leaderboards = {
 	Enabled = true,
 	StorePrefix = "SwarmLB_", -- OrderedDataStore names: SwarmLB_Score, SwarmLB_ScoreEndless, SwarmLB_BestStage, SwarmLB_Kills, SwarmLB_Level, SwarmLB_Daily_<day>
 	StudioStorePrefix = "SwarmLB_Studio_", -- used instead in Studio: tests never touch live boards
-	Order = { "Score", "ScoreEndless", "BestStage", "Daily", "Kills", "Level" },
+	Order = { "Score", "ScoreEndless", "BestStage", "Daily", "Kills", "Level", "Playtime" }, -- Playtime: total seconds in clean runs (lobby home panel)
 	-- High score of one run (board "Score"), worked out on the server from the run's own
 	-- numbers (LeaderboardService.RunScore), never sent by a client:
 	--   Stage * stages cleared + Boss * bosses beaten + Level * level reached + Kill * kills

@@ -21,7 +21,7 @@
 	            boss bar
 	Co-op tips (once ever, also for experienced players; "TEAM TIP" instead of a count):
 	  TeamRules the first group run: what is shared and what is your own
-	  Revive    the first time a teammate falls: stand in the gold circle
+	  Revive    the first time a teammate falls: stand beside them to revive
 
 	Each card slides in with its icon spinning, a glint across the card and a ring pulse
 	around the element it explains (plain with Reduced effects).
