@@ -133,6 +133,10 @@ local function loadModel(name: string, entry): boolean
 			template.CanQuery = false
 			template.CanTouch = false
 			template.CastShadow = false
+			-- Roblox's Automatic fidelity swaps a MeshPart for a cruder level of detail as the
+			-- camera moves away (an overhead camera is always "away"): the models looked like
+			-- they kept turning low-poly. These meshes are small already, so draw them as is.
+			template.RenderFidelity = Enum.RenderFidelity.Precise
 			-- The FBX nodes carry a Y-up axis rotation (Lcl Rotation 90, 0, 180) over Z-up
 			-- vertex data. If the importer kept that rotation on the MeshPart instead of
 			-- baking it, the geometry's local axes are not the catalog's (Roblox) axes and the

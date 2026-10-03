@@ -446,10 +446,10 @@ EnemyData.EliteGem = { Large = 100 }
 	  Weights  relative spawn chance per enemy type this minute
 ]]
 EnemyData.SpawnTable = {
-	{ Target = 22, Weights = { Slime = 85, Bat = 15 } },
-	{ Target = 32, Weights = { Slime = 65, Bat = 25, Skeleton = 10 } },
-	{ Target = 42, Weights = { Slime = 50, Bat = 25, Skeleton = 25 } },
-	{ Target = 52, Weights = { Slime = 40, Bat = 25, Skeleton = 25, Ghost = 10 } },
+	{ Target = 16, Weights = { Slime = 90, Bat = 10 } },
+	{ Target = 26, Weights = { Slime = 70, Bat = 25, Skeleton = 5 } },
+	{ Target = 36, Weights = { Slime = 55, Bat = 25, Skeleton = 20 } },
+	{ Target = 48, Weights = { Slime = 40, Bat = 25, Skeleton = 25, Ghost = 10 } },
 	{ Target = 62, Weights = { Slime = 30, Bat = 25, Skeleton = 25, Ghost = 15, Bomber = 5, Spitter = 4 } },
 	{ Target = 72, Weights = { Slime = 25, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 5, Spitter = 6 } },
 	{ Target = 82, Weights = { Slime = 20, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 10, Spitter = 8, Healer = 3 } },

@@ -522,8 +522,10 @@ Config.Difficulty = {
 -- SPAWNING
 ------------------------------------------------------------------------------------------
 Config.Spawn = {
-	OpeningSeconds = 60,
-	OpeningMult = 0.65,
+	-- the first stage's live target and mini-waves start at OpeningMult of the table
+	-- and climb to full strength over OpeningSeconds (a gentle first two minutes)
+	OpeningSeconds = 120,
+	OpeningMult = 0.45,
 	StageProgressionSeconds = 120,
 	TickSeconds = 0.4, -- how often the spawner tops up toward the target count
 	MaxPerTick = 8,
@@ -570,7 +572,7 @@ Config.Boss = {
 --   boss      the Queen fight keeps a reduced crowd (Config.Stages.BossMinionShare)
 ------------------------------------------------------------------------------------------
 Config.Pacing = {
-	RunStartCalm = 6,
+	RunStartCalm = 12,
 	StageStartCalm = 10,
 	CalmMult = 0.35,
 	BuildUpFrom = 0.85,
@@ -664,10 +666,13 @@ Config.Graphics = {
 	-- Enemies drawn with the full animated 3D model. Past this many, extra enemies show
 	-- their simple one-part body (keeps phones smooth in huge swarms). The nearest ones
 	-- get the models; the boss and elites are always detailed.
-	MaxDetailedEnemies = 110,
-	-- ... and on a device that can't keep up (frames slower than 40 fps for a while) the
-	-- budget steps down toward this, and back up once frames are fast again.
-	MinDetailedEnemies = 60,
+	MaxDetailedEnemies = 150,
+	-- ... and on a device that can't keep up (frames slower than 30 fps for a while) the
+	-- budget steps down toward this, and back up once frames are fast again. Enemies that
+	-- already wear their model keep it a while longer than the ranking strictly allows
+	-- (StickyDetailStuds), so models don't pop in and out at the edge of the budget.
+	MinDetailedEnemies = 90,
+	StickyDetailStuds = 14,
 	-- Effect budget: pooled effect parts animating at once (sparks, dust, rings, bolts).
 	-- Cosmetic effects past it are skipped; boss warnings and player events never are.
 	MaxEffectParts = 220,

@@ -492,9 +492,9 @@ local function adaptBudget(dt: number)
 	end
 	budgetTimer = 1
 	local G = Config.Graphics
-	if frameTime > 1 / 40 then
+	if frameTime > 1 / 30 then
 		budget = math.max(G.MinDetailedEnemies, budget - 10)
-	elseif frameTime < 1 / 55 then
+	elseif frameTime < 1 / 50 then
 		budget = math.min(G.MaxDetailedEnemies, budget + 5)
 	end
 end
@@ -506,7 +506,10 @@ local function rank()
 	for _, slot in pairs(slots) do
 		local body = slot.Body
 		if body.Parent and body.CFrame.Y >= ACTIVE_Y then
-			slot.Dist = ((body.Position - focus) * FLAT).Magnitude
+			-- an enemy already wearing its model ranks as if it were a little nearer, so the
+			-- ones at the edge of the budget don't swap between model and plain body every rank
+			local sticky = detailed[slot] and (Config.Graphics.StickyDetailStuds or 0) or 0
+			slot.Dist = ((body.Position - focus) * FLAT).Magnitude - sticky
 			table.insert(rankList, slot)
 		end
 	end
