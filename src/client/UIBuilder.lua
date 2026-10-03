@@ -1887,7 +1887,7 @@ do
 
 	local function layoutChest()
 		local v = virtualSize()
-		local w = math.min(380, v.X - 2 * margin())
+		local w = math.min(chest.Mini and 340 or 380, v.X - 2 * margin())
 		local winW = w - 24
 		chest.WinW = winW
 		local y = 10
@@ -1924,7 +1924,8 @@ do
 				chest.Panel.Position = UDim2.fromOffset(math.floor(v.X / 2), math.floor(cy))
 			else
 				-- left of the hero, under the timer / health cluster, over the ability bar
-				local x = math.max(m + insets.Left + w / 2, math.min(v.X / 2 - 70 - w / 2, v.X * 0.25))
+				-- (under the top bar row, so only the margin matters on the left)
+				local x = math.max(m + w / 2, math.min(v.X / 2 - 60 - w / 2, v.X * 0.25))
 				local top = (Hud.TopBottom() or 0) + 8
 				local bottom = (Hud.BarTop() or v.Y) - 8
 				local cy = math.max(top + h / 2, math.min(v.Y * 0.42, bottom - h / 2))
