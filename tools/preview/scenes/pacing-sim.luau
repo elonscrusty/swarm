@@ -73,6 +73,37 @@ local function ps(stage, phase)
 	phaseStats[key] = phaseStats[key] or { Dmg = 0, Secs = 0, Alive = 0, MaxAlive = 0 }
 	return phaseStats[key]
 end
+-- hits to kill per enemy type and stage (a hit = one EnemySpawner.Damage call)
+local hitsOn, htk = {}, {}
+local rawEDamage = Spawner.Damage
+Spawner.Damage = function(e, amount, ...)
+	local alive = e.Alive and not e.Boss and not e.Elite and not (e.Def and (e.Def.Object or e.Def.Spawner))
+	local uid = e.Uid
+	local died = rawEDamage(e, amount, ...)
+	if alive then
+		hitsOn[uid] = (hitsOn[uid] or 0) + 1
+		if died then
+			local key = SM.GetStage() .. ":" .. e.Def.Id
+			local h = htk[key] or { Hits = 0, N = 0, One = 0 }
+			h.Hits += hitsOn[uid]
+			h.N += 1
+			if hitsOn[uid] == 1 then h.One += 1 end
+			htk[key] = h
+			hitsOn[uid] = nil
+		end
+	end
+	return died
+end
+local function logHits(stage)
+	local parts = {}
+	for _, id in ipairs({ "Slime", "Bat", "Skeleton", "Ghost", "Brute", "Bomber", "Spitter" }) do
+		local h = htk[stage .. ":" .. id]
+		if h and h.N >= 5 then
+			table.insert(parts, string.format("%s %.1f (1-hit %d%%)", id, h.Hits / h.N, math.floor(h.One / h.N * 100)))
+		end
+	end
+	preview.log(string.format("HITS S%d %s", stage, table.concat(parts, " | ")))
+end
 local rawDamage = RM.DamagePlayer
 RM.DamagePlayer = function(rp, amount, cause)
 	if rp == rps[1] and amount == amount and amount > 0 and rp.Stats then
@@ -207,6 +238,7 @@ for s = 1, stages do
 			if not st or st.Secs <= 0 then return phase .. " -" end
 			return string.format("%s %.0fs dmg/min %.0f alive avg %.0f max %d", phase, st.Secs, st.Dmg / st.Secs * 60, st.Alive / st.Secs, st.MaxAlive)
 		end
+		logHits(s)
 		preview.log(string.format("PRESSURE S%d maxHP %d charge %.1fs | %s | %s | %s", s, rps[1].Stats and rps[1].Stats.MaxHP or 0, chargeT, fmt("Explore"), fmt("Boss"), fmt("Surge")))
 	end
 	-- the next stage's calm start
