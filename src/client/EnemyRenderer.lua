@@ -492,10 +492,10 @@ local function adaptBudget(dt: number)
 	end
 	budgetTimer = 1
 	local G = Config.Graphics
-	if frameTime > 1 / 30 then
-		budget = math.max(G.MinDetailedEnemies, budget - 10)
-	elseif frameTime < 1 / 50 then
-		budget = math.min(G.MaxDetailedEnemies, budget + 5)
+	if frameTime > 1 / 45 then
+		budget = math.max(G.MinDetailedEnemies, budget - 15)
+	elseif frameTime < 1 / 58 then
+		budget = math.min(G.MaxDetailedEnemies, budget + 3)
 	end
 end
 

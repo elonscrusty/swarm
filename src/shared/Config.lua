@@ -666,12 +666,15 @@ Config.Graphics = {
 	-- Enemies drawn with the full animated 3D model. Past this many, extra enemies show
 	-- their simple one-part body (keeps phones smooth in huge swarms). The nearest ones
 	-- get the models; the boss and elites are always detailed.
-	MaxDetailedEnemies = 150,
-	-- ... and on a device that can't keep up (frames slower than 30 fps for a while) the
+	MaxDetailedEnemies = 90,
+	-- ... and on a device that can't keep up (frames slower than 45 fps for a while) the
 	-- budget steps down toward this, and back up once frames are fast again. Enemies that
 	-- already wear their model keep it a while longer than the ranking strictly allows
 	-- (StickyDetailStuds), so models don't pop in and out at the edge of the budget.
-	MinDetailedEnemies = 90,
+	MinDetailedEnemies = 30,
+	-- regular enemies' mesh pieces never cast shadows (bosses keep theirs): a hundred
+	-- moving shadow casters is the single biggest render cost in a big swarm
+	EnemyShadows = false,
 	StickyDetailStuds = 14,
 	-- Effect budget: pooled effect parts animating at once (sparks, dust, rings, bolts).
 	-- Cosmetic effects past it are skipped; boss warnings and player events never are.
