@@ -60,13 +60,14 @@ local sinceWave = 0
 local lullLeft = 0
 local nextEliteAt = 0
 local seen: { [string]: boolean } = {}
--- waves (Config.Waves): the stage's wave count and the burst still to pour in
-local waveStage = 0
-local waveNumber = 0
+-- waves (Config.Waves): numbered across the whole run
+local waveStage = 0 -- stage the wave state belongs to (a new stage starts with a breather)
+local runWave = 0 -- the current / last wave number of this run
+local wavePhase = "Off" -- "Off" | "Breather" | "Pouring" | "Fighting"
+local waveTimer = 0 -- Breather: seconds to the next wave; Fighting: seconds before it moves on anyway
+local waveTotal = 0 -- enemies queued for the current wave
 local waveQueue: { { Type: string, Angle: number, Spread: number, Elite: boolean, Rp: any } } = {}
-local waveDelay = 0 -- seconds until the announced wave pours in
 local burstLeft = 0 -- seconds left to pour the rest of it in
-local waveClock = 0 -- seconds until the next wave is announced (this stage, while exploring)
 local waveSeq = 0 -- every wave of the server's life (SwarmState WaveSeq: clients announce on change)
 -- nests (Config.Pacing.Nests), per stage
 local nestStage = 0
@@ -223,18 +224,13 @@ end
 -- Live-target multiplier from the pacing curve (calm, lull, build-up).
 local function pacingMult(): number
 	local P = Config.Pacing
-	local W = Config.Waves
 	if calmLeft > 0 then
 		return P.CalmMult
 	end
 	if lullLeft > 0 then
-		return W.Enabled and W.LullMult or P.LullMult
+		return P.LullMult
 	end
-	local u = math.clamp(sinceWave / math.max(1, W.Enabled and W.Interval or Config.Run.MiniWaveInterval), 0, 1)
-	if W.Enabled then
-		-- between waves only a light trickle, so kills and XP never fully stall
-		return (W.TrickleFrom + (W.TrickleTo - W.TrickleFrom) * u) * (nearPortal() and W.PortalCalmMult or 1)
-	end
+	local u = math.clamp(sinceWave / math.max(1, Config.Run.MiniWaveInterval), 0, 1)
 	return P.BuildUpFrom + (P.BuildUpTo - P.BuildUpFrom) * u
 end
 
@@ -483,6 +479,9 @@ local function openingMult(): number
 end
 
 local function topUp()
+	if Config.Waves.Enabled and not EnemySpawner.Boss then
+		return -- while exploring every enemy comes in a wave (stepWaves)
+	end
 	local row = EnemyData.GetSpawnRow(progressionTime())
 	local target = math.floor(row.Target * countMult() * ctx.StageManager.SpawnMult() * openingMult())
 	if EnemySpawner.Boss then
@@ -621,115 +620,101 @@ local function compass(a: number): string
 end
 
 --[[
-	A WAVE (Config.Waves), started by stepWaveClock (FirstDelay / StageFirstDelay into a
-	stage, then every Interval while exploring): announced at once (SwarmState Wave,
-	WaveSeq, WaveSides, WaveAngle: StageUI shows the "WAVE 3" banner, the horn and the edge
-	glow; the stage pill counts down to WaveNext), then after WarnSeconds
-	it pours in over BurstSeconds from 1-3 directions around one player, one enemy type per
-	direction (so it reads). Size = (Base + PerMinute x difficulty minute) x the player-count
-	density x the stage spawn multiplier (Endless included) x the opening ramp, growing by
-	GrowPerWave per wave of the stage (up to GrowCap). Afterwards a short lull; between
-	waves a light trickle keeps going (pacingMult). Config.Waves.Enabled = false brings
-	back the old ring-shaped mini-wave on top of continuous spawning.
+	WAVES (Config.Waves; owner: "ALL the enemies come in waves. Wave 1 is easy, wave 2 a
+	little harder, wave 3 even harder"). While exploring there is no continuous spawning:
+	  Breather  a short countdown (SwarmState WaveNext = the run time the wave starts); it
+	            waits while someone stands at the portal (charging it)
+	  Pouring   wave N (counted across the whole run, SwarmState Wave / WaveSeq) is
+	            announced (StageUI: big "WAVE N" banner, horn, red screen-edge glow from
+	            WaveSides / WaveAngle) and pours in over BurstSeconds from 1-3 sides
+	  Fighting  until at most ClearShare of it is alive (SwarmState WaveLeft), or MaxSeconds
+	            pass, then the next breather
+	Size = (Base + PerWave x (N - 1)) x player-count density x the stage spawn multiplier
+	(Horde curse, Endless) x BigMult on every BigEvery-th wave. The enemy mix is the spawn
+	table row at (N - 1) x RowSecondsPerWave. Elites lead waves from EliteFromWave on.
+	Boss fights keep their own crowd (topUp), the surge replaces waves; a new stage starts
+	with StageStartDelay of breather. Enemy HP / damage keep the run-clock scaling.
 ]]
+local function waveAlive(): number
+	local n = 0
+	for _, e in ipairs(EnemySpawner.Active) do
+		if e.Alive and e.WaveId == runWave then
+			n += 1
+		end
+	end
+	return n
+end
+
 local function startWave()
 	local W = Config.Waves
 	local P = Config.Pacing
-	local stage = ctx.StageManager.GetStage()
 	local rp = randomAlivePlayer()
-	if not rp or nearPortal() then
-		return -- someone is pushing into the portal: no wave on top of them
+	if not rp then
+		return false
 	end
-	waveNumber += 1
-	local runTime = ctx.RunManager.GetRunTime()
-	local row = EnemyData.GetSpawnRow(progressionTime())
-	local grow = math.min(W.GrowCap, 1 + W.GrowPerWave * (waveNumber - 1))
-	local total = (W.Base + ctx.RunManager.GetTier() * W.PerMinute) * countMult() * ctx.StageManager.SpawnMult() * openingMult() * grow
+	runWave += 1
+	local n = runWave
+	local row = EnemyData.GetSpawnRow((n - 1) * W.RowSecondsPerWave)
+	local big = W.BigEvery > 0 and n % W.BigEvery == 0
+	local total = (W.Base + W.PerWave * (n - 1)) * countMult() * ctx.StageManager.SpawnMult() * (big and W.BigMult or 1)
+	total = math.min(math.floor(total + 0.5), Config.Enemies.MaxLive)
 	local dirs = 1
-	for _, at in ipairs(W.DirectionsAt) do
-		if progressionTime() >= at then
+	for _, at in ipairs(W.SidesAtWave) do
+		if n >= at then
 			dirs += 1
 		end
 	end
 	dirs = math.min(dirs, 3)
+	local elites = 0
+	if n >= W.EliteFromWave and (big or rng:NextNumber() < W.EliteChance) then
+		elites = math.min(W.EliteMax, 1 + math.floor((n - W.EliteFromWave) / W.ElitePerWaves))
+	end
 	local base = rng:NextNumber(0, math.pi * 2)
-	local leadElite = runTime >= P.EliteMinTime and rng:NextNumber() < W.EliteLeadChance * (1 + Config.Enemies.EliteStageChanceGrowth * math.min(8, stage - 1))
 	local sides = {}
 	table.clear(waveQueue)
 	for d = 1, dirs do
 		local typeId = pickType(row.Weights, false, true)
-		if P.WaveMinTime and P.WaveMinTime[typeId] and runTime < P.WaveMinTime[typeId] then
+		if P.WaveMinTime and P.WaveMinTime[typeId] and n < (W.BeesFromWave or 0) then
 			typeId = "Slime"
 		end
 		introduce(typeId)
-		local count = math.floor(total / dirs * (P.WaveCountMult and P.WaveCountMult[typeId] or 1) + 0.5)
+		local count = math.max(1, math.floor(total / dirs * (P.WaveCountMult and P.WaveCountMult[typeId] or 1) + 0.5))
 		local angle = base + (d - 1) * (2 * math.pi / dirs) + rng:NextNumber(-0.3, 0.3)
 		table.insert(sides, compass(angle))
-		local eliteOk = leadElite and d == 1 and table.find(P.EliteTypes, typeId) ~= nil
 		for k = 1, count do
-			table.insert(waveQueue, { Type = typeId, Angle = angle, Spread = W.ArcRadians, Elite = eliteOk and k == 1, Rp = rp })
+			-- the elites lead (queued last, popped first) as one of the elite types
+			table.insert(waveQueue, { Type = typeId, Angle = angle, Spread = W.ArcRadians, Elite = false, Rp = rp })
 		end
 	end
-	waveDelay = W.WarnSeconds
-	burstLeft = W.BurstSeconds
-	sinceWave = 0
-	lullLeft = W.WarnSeconds + W.BurstSeconds + W.LullSeconds
-	if #waveQueue > 0 then
-		waveSeq += 1
-		local state = Remotes.State()
-		state:SetAttribute("Wave", waveNumber)
-		state:SetAttribute("WaveSides", table.concat(sides, ","))
-		state:SetAttribute("WaveAngle", math.floor(base * 100 + 0.5) / 100)
-		state:SetAttribute("WaveSeq", waveSeq) -- last: clients read the rest when it changes
-	end
-end
-
--- The wave clock: per stage, the first wave FirstDelay (stage 1) / StageFirstDelay
--- seconds in, then every Interval seconds, only while exploring (not during the boss,
--- surge or travel). Someone standing at the portal postpones it (nearPortal). SwarmState
--- WaveNext = the run time of the next announcement (0 = none coming).
-local function stepWaveClock(dt: number, runTime: number)
-	local W = Config.Waves
-	local stage = ctx.StageManager.GetStage()
-	if stage ~= waveStage then
-		waveStage = stage
-		waveNumber = 0
-		waveClock = stage <= 1 and W.FirstDelay or W.StageFirstDelay
-		Remotes.State():SetAttribute("Wave", 0)
-	end
-	local exploring = W.Enabled and ctx.StageManager.GetPhase() == "Explore"
-	local nextAt = 0
-	if exploring then
-		waveClock -= dt
-		if waveClock <= 0 then
-			if nearPortal() then
-				waveClock = W.PortalRetrySeconds
-			else
-				startWave()
-				waveClock = W.Interval
+	for k = 1, elites do
+		local typeId = weightedPick((function()
+			local w = {}
+			for _, id in ipairs(P.EliteTypes) do
+				if row.Weights[id] then
+					w[id] = row.Weights[id]
+				end
 			end
-		end
-		nextAt = math.floor((runTime + waveClock) * 10 + 0.5) / 10
+			return next(w) and w or { Slime = 1 }
+		end)())
+		table.insert(waveQueue, { Type = typeId, Angle = base, Spread = W.ArcRadians, Elite = true, Rp = rp })
 	end
+	waveTotal = #waveQueue
+	burstLeft = W.BurstSeconds
+	wavePhase = "Pouring"
+	waveTimer = W.MaxSeconds
+	waveSeq += 1
 	local state = Remotes.State()
-	if math.abs((state:GetAttribute("WaveNext") or 0) - nextAt) > 0.5 then
-		state:SetAttribute("WaveNext", nextAt)
-	end
+	state:SetAttribute("Wave", n)
+	state:SetAttribute("WaveBig", big)
+	state:SetAttribute("WaveSides", table.concat(sides, ","))
+	state:SetAttribute("WaveAngle", math.floor(base * 100 + 0.5) / 100)
+	state:SetAttribute("WaveNext", 0)
+	state:SetAttribute("WaveSeq", waveSeq) -- last: clients read the rest when it changes
+	return true
 end
 
 -- Pours the announced wave in over Config.Waves.BurstSeconds (a capped number per step).
-local function stepWave(dt: number)
-	if #waveQueue == 0 then
-		return
-	end
-	if waveDelay > 0 then
-		waveDelay -= dt
-		return
-	end
-	if not ctx.StageManager.AllowSpawning() or EnemySpawner.Boss then
-		table.clear(waveQueue) -- the boss came (or the stage ended): drop the rest
-		return
-	end
+local function pourWave(dt: number)
 	local W = Config.Waves
 	local per = math.min(W.MaxPerStep, math.max(1, math.ceil(#waveQueue * dt / math.max(dt, burstLeft))))
 	burstLeft -= dt
@@ -739,17 +724,82 @@ local function stepWave(dt: number)
 			break
 		end
 		if #EnemySpawner.Active >= Config.Enemies.MaxLive then
-			table.clear(waveQueue)
+			table.insert(waveQueue, q) -- the live cap is full: the rest waits for room
 			break
 		end
 		local def = EnemyData.Enemies[q.Type]
 		local pos = EnemySpawner.SpawnPoint(def.Radius * (q.Elite and Config.Enemies.EliteSizeMult or 1), q.Angle + rng:NextNumber(-q.Spread, q.Spread), q.Rp)
 		if pos then
 			local e = EnemySpawner.Spawn(q.Type, pos, { Elite = q.Elite })
-			if e and q.Elite then
-				ctx.RunManager.Broadcast(string.format("An elite %s %s leads the wave!", e.Affix or "", def.DisplayName or q.Type), Color3.fromRGB(255, 205, 120))
+			if e then
+				e.WaveId = runWave
+				if q.Elite then
+					ctx.RunManager.Broadcast(string.format("An elite %s %s leads the wave!", e.Affix or "", def.DisplayName or q.Type), Color3.fromRGB(255, 205, 120))
+				end
 			end
 		end
+	end
+end
+
+local function setWaveLeft(n: number)
+	local state = Remotes.State()
+	if state:GetAttribute("WaveLeft") ~= n then
+		state:SetAttribute("WaveLeft", n)
+	end
+end
+
+local function breather(seconds: number, runTime: number)
+	wavePhase = "Breather"
+	waveTimer = seconds
+	Remotes.State():SetAttribute("WaveNext", math.floor((runTime + seconds) * 10 + 0.5) / 10)
+end
+
+-- The wave state machine (only while exploring; Config.Waves.Enabled).
+local function stepWaves(dt: number, runTime: number)
+	local W = Config.Waves
+	local stage = ctx.StageManager.GetStage()
+	local exploring = W.Enabled and ctx.StageManager.GetPhase() == "Explore"
+	if not exploring then
+		if wavePhase ~= "Off" then
+			wavePhase = "Off"
+			table.clear(waveQueue)
+			Remotes.State():SetAttribute("WaveNext", 0)
+			setWaveLeft(0)
+		end
+		return
+	end
+	if stage ~= waveStage or wavePhase == "Off" then
+		waveStage = stage
+		breather(stage <= 1 and W.FirstDelay or W.StageStartDelay, runTime)
+		return
+	end
+	if wavePhase == "Breather" then
+		if nearPortal() then
+			-- someone is charging the portal: the next wave waits for them
+			if waveTimer < W.PortalHoldSeconds then
+				breather(W.PortalHoldSeconds, runTime)
+			end
+			return
+		end
+		waveTimer -= dt
+		if waveTimer <= 0 then
+			if not startWave() then
+				breather(1, runTime)
+			end
+		end
+		return
+	end
+	waveTimer -= dt
+	if wavePhase == "Pouring" then
+		pourWave(dt)
+		if #waveQueue == 0 then
+			wavePhase = "Fighting"
+		end
+	end
+	local alive = waveAlive() + #waveQueue
+	setWaveLeft(alive)
+	if wavePhase == "Fighting" and (alive <= math.floor(waveTotal * W.ClearShare) or waveTimer <= 0) then
+		breather(W.BreatherSeconds, runTime)
 	end
 end
 
@@ -757,7 +807,7 @@ end
 -- WAVE when Config.Waves.Enabled (startWave).
 function EnemySpawner.MiniWave()
 	if Config.Waves.Enabled then
-		return -- waves keep their own clock (stepWaveClock)
+		return -- waves keep their own state machine (stepWaves)
 	end
 	local row = EnemyData.GetSpawnRow(progressionTime())
 	-- never a ring of Spitters (Ranged): a full circle of acid has no safe side; never
@@ -1158,19 +1208,20 @@ function EnemySpawner.Step(dt: number)
 		nextEliteAt = Config.Pacing.EliteFirst
 		nestStage = 0 -- a new run: the nest schedule starts over
 		waveStage = 0
+		runWave = 0
+		wavePhase = "Off"
 		table.clear(waveQueue)
 	end
 	lastRunTime = runTime
 	calmLeft = math.max(0, calmLeft - dt)
 	lullLeft = math.max(0, lullLeft - dt)
 	sinceWave += dt
-	if runTime >= nextEliteAt and ctx.StageManager.GetPhase() == "Explore" then
+	if runTime >= nextEliteAt and ctx.StageManager.GetPhase() == "Explore" and not Config.Waves.Enabled then
 		nextEliteAt = runTime + Config.Pacing.EliteEvery / (1 + 0.12 * math.min(8, ctx.StageManager.GetStage() - 1))
 		scheduledElite()
 	end
 	stepNests(dt, runTime)
-	stepWaveClock(dt, runTime)
-	stepWave(dt)
+	stepWaves(dt, runTime)
 	spawnTimer += dt
 	if spawnTimer >= Config.Spawn.TickSeconds then
 		spawnTimer = 0
