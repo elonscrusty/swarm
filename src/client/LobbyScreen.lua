@@ -894,6 +894,7 @@ local function relayout()
 	local chipY = ins.Right > 4 and (ins.Top + 6) or 12
 	local plateH = (browse and 158 or 104) + (compact and 16 or 0)
 	local heroFrac = 0.5
+	local heroZoom = 1
 
 	setChipFlat(not portrait and current == "Characters")
 	-- phones in landscape: the CHARACTERS title shares the top row, so the chip keeps only GOLD
@@ -963,6 +964,10 @@ local function relayout()
 		local plateW = math.min(w - 2 * 62, 460)
 		place(ui.Nameplate, (W - plateW) / 2, y, plateW, plateH)
 		heroFrac = ((chipTop + 52 + y) / 2) / H
+		-- the LAST RUN card shortens the hero's room between the chip and the plate: the
+		-- menu camera widens its shot (CameraController: MenuHeroZoom) so the hero fits
+		local room = y - (chipTop + 52)
+		heroZoom = (lastShown and current == "Home") and math.clamp(205 / math.max(1, room), 1, 1.3) or 1
 		ui.PrevArrow.Instance.Visible = true
 		ui.NextArrow.Instance.Visible = true
 	else
@@ -1090,6 +1095,7 @@ local function relayout()
 	ui.QueueNote.TextTruncate = short and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
 	-- where the hero should sit on screen (read by CameraController's menu shot)
 	workspace.CurrentCamera:SetAttribute("MenuHeroY", heroFrac)
+	workspace.CurrentCamera:SetAttribute("MenuHeroZoom", heroZoom)
 	for _, s in pairs(screens) do
 		if s.Layout then
 			s.Layout(v, portrait, ins)

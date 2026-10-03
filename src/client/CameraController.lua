@@ -190,6 +190,12 @@ function CameraController.Init()
 					-- portrait: a taller view keeps the hero on the dais at a sensible size
 					menuFov = math.min(menuFov * 1.4, 80)
 				end
+				-- the lobby layout asks for a wider shot when the hero has little room on
+				-- screen (portrait with the LAST RUN card): MenuHeroZoom scales the view
+				local zoom = tonumber(cam:GetAttribute("MenuHeroZoom")) or 1
+				if zoom > 1 then
+					menuFov = math.min(math.deg(2 * math.atan(math.tan(math.rad(menuFov) / 2) * zoom)), 95)
+				end
 				cam.FieldOfView = menuFov
 				-- slow "breathing" sway so the backdrop feels alive
 				local t = os.clock()
