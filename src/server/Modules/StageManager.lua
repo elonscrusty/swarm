@@ -36,7 +36,9 @@
 	SpawnMultCap and Config.Enemies.MaxLive). Standard runs are unchanged.
 
 	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, StageBoss, PortalPos,
-	PortalHint, PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total").
+	PortalHint, PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total"),
+	PortalReveal (counts up each time a stage's portal becomes chargeable: the clients'
+	cue for the banner, sound, beacon burst and minimap ping; see Config.Stages.RevealDelaySeconds).
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -62,6 +64,8 @@ local portal: MapBuilder.Portal? = nil
 local lastPortal: { [string]: Vector3 } = {} -- last portal spot per arena (a new one differs)
 local stageTime = 0
 local hinted = false
+local revealed = false -- this stage's portal reveal happened (PortalReveal bumped)
+local reveals = 0
 local shownLock = -1
 local charge = 0
 local shownCharge = -1
@@ -296,6 +300,7 @@ local function buildStage(n: number)
 	BiomeHazards.SetArena(arena) -- mud / ice / quicksand / lava pools of a biome arena
 	stageTime = 0
 	hinted = false
+	revealed = false
 	shownLock = -1
 	charge = 0
 	shownCharge = -1
@@ -362,6 +367,8 @@ function StageManager.EndRun()
 	state:SetAttribute("PortalCharge", 0)
 	state:SetAttribute("PortalLockLeft", 0)
 	state:SetAttribute("PortalPos", nil)
+	state:SetAttribute("PortalReveal", 0)
+	reveals = 0
 	state:SetAttribute("StageBoss", nil)
 	state:SetAttribute("SurgeLeft", 0)
 	state:SetAttribute("ChoiceLeft", 0)
@@ -626,11 +633,21 @@ local function stepExplore(dt: number)
 	if lockShown ~= shownLock then
 		shownLock = lockShown
 		state:SetAttribute("PortalLockLeft", lockShown)
-		if lockShown == 0 and stageTime > 0.5 then
-			ctx.RunManager.Broadcast("The portal awakens!", Color3.fromRGB(180, 200, 255))
-		end
 	end
-	if not hinted and stageTime >= math.max(Config.Stages.HintAfterSeconds, lockSeconds()) then
+	-- the reveal: the portal can be charged (lock over), once the stage banner has gone
+	local revealDelay = Config.Stages.RevealDelaySeconds or 0
+	if not revealed and locked <= 0 and stageTime >= revealDelay then
+		revealed = true
+		reveals += 1
+		hinted = true
+		state:SetAttribute("PortalHint", true)
+		state:SetAttribute("PortalReveal", reveals)
+		if portal then
+			Fx.Ring(portal.Pos, Config.Stages.PortalRadius * 2.5, Color3.fromRGB(190, 210, 255))
+		end
+		ctx.RunManager.Broadcast("THE PORTAL HAS APPEARED", Color3.fromRGB(190, 210, 255), true)
+	end
+	if not hinted and stageTime >= math.max(Config.Stages.HintAfterSeconds, lockSeconds(), revealDelay) then
 		hinted = true
 		state:SetAttribute("PortalHint", true)
 		ctx.RunManager.Broadcast("The portal is marked on your screen.", Color3.fromRGB(180, 200, 255))

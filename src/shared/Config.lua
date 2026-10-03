@@ -63,8 +63,16 @@ Config.Stages = {
 	-- this many seconds on the stage (stage 1, later stages); the HUD says "The portal is
 	-- dormant: m:ss". 0 = the portal can be charged at any time (owner's choice).
 	PortalLockSeconds = { 0, 0 },
-	-- the HUD arrow toward the portal appears after this long (never before the lock ends)
-	HintAfterSeconds = 90,
+	-- The portal REVEAL (SwarmState PortalReveal counts up; PortalHint turns on): the
+	-- moment the portal can be charged, at the earliest RevealDelaySeconds into the stage
+	-- so the "STAGE N" banner has gone first. Clients make it unmistakable: a banner and a
+	-- sound, the tall beacon pillar + pulsing floor ring (client PortalBeacon), the edge
+	-- arrow with the distance (StageUI) and a minimap ping (MiniMap). Owner: "when the
+	-- portal spawns it needs to be very evident."
+	RevealDelaySeconds = 4,
+	-- the HUD arrow toward the portal appears after this long (never before the lock ends
+	-- or the reveal delay); 0 = from the reveal on, always
+	HintAfterSeconds = 0,
 	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
 	EnemyHPPerStage = 0.25,
 	EnemyDamagePerStage = 0.08, -- also the boss's contact / orb damage and bomb ticks
@@ -809,6 +817,9 @@ Config.Sounds = {
 	Chest = { Id = "rbxassetid://17208380755", Volume = 0.55, Category = "Pickup", MinGap = 0.25, PitchVar = 0 }, -- Roblox GUI - Purchase (Roblox)
 	Item = { Id = "rbxassetid://17208323435", Volume = 0.45, Category = "Pickup", MinGap = 0.2, PitchVar = 0.03 }, -- Roblox GUI - Equip (Roblox)
 	Shrine = { Id = "rbxassetid://17208372272", Volume = 0.5, Category = "Pickup", MinGap = 0.3, PitchVar = 0 }, -- Roblox GUI - Notification Low (Roblox)
+	-- the stage portal is revealed (client StageUI, with the banner); same Roblox-owned clip
+	-- as Shrine, lower and longer so it reads as a landmark, not a pickup
+	PortalAppear = { Id = "rbxassetid://17208372272", Volume = 0.7, Category = "UI", MinGap = 1, Pitch = 0.72, PitchVar = 0 }, -- Roblox GUI - Notification Low (Roblox)
 	Victory = { Id = "rbxasset://sounds/victory.wav", Volume = 0.45, Category = "UI", PitchVar = 0 },
 	-- warnings: telegraphs that ask the player to move (never dropped for combat noise)
 	FuseTick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.35, Category = "Warning", MinGap = 0.09, Pitch = 1.6, PitchVar = 0.03, World = true },

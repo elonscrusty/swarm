@@ -678,12 +678,19 @@ local function cardContent(c): (string?, { any }, { any })
 			table.insert(stats, line)
 		end
 	end
+	-- upgrade cards lead with the server's one-line gain summary ("+10 damage, +1 arrow",
+	-- or the new perk); NEW / evolution / bonus cards with their short description
+	local summary = type(c.Summary) == "string" and c.Summary ~= "" and c.Summary or nil
 	local desc: string? = nil
 	if c.Type == "WeaponUp" then
 		local def = WeaponData.Weapons[c.Id]
-		desc = perk or (def and def.Description)
+		desc = perk or summary or (def and def.Description)
+	elseif c.Type == "PassiveUp" and summary then
+		desc = summary
 	elseif c.Description and c.Description ~= "" then
 		desc = c.Description
+	elseif summary then
+		desc = summary
 	end
 	return desc, stats, changes
 end
@@ -1014,12 +1021,23 @@ local function titleSize(): number
 	return UIKit.IsCompact() and 36 or 46
 end
 
+-- Phones in landscape have the shortest cards: one description line and a one-line hint.
+local function compactLandscape(): boolean
+	return UIKit.IsCompact() and not portrait
+end
+
 -- Height of a description on a card `w` wide: one or two lines (a rough width estimate;
--- the label wraps and truncates for real).
+-- the label wraps and truncates for real), one on phones in landscape.
 local function descHeight(desc: string?, w: number): number
 	local plain = string.gsub(desc or "", "<[^>]+>", "")
-	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.44 / math.max(1, w - 2 * CARD.Pad)), 1, 2)
+	local maxLines = compactLandscape() and 1 or 2
+	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.44 / math.max(1, w - 2 * CARD.Pad)), 1, maxLines)
 	return TS(14) * lines + 8
+end
+
+-- Height of the evolution hint under the rows (two wrapped lines, one on phone landscape).
+local function hintHeight(): number
+	return compactLandscape() and TS(13) + 4 or TS(13) * 2 + 6
 end
 
 -- The boxed highlight: shorter on phones.
@@ -1040,7 +1058,7 @@ local function cardNeeds(c, w: number): number
 		h += CARD.Syn + 10
 	end
 	if c.Hint then
-		h += TS(13) * 2 + 8
+		h += hintHeight() + 2
 	end
 	return h + 10 + cardFootH()
 end
@@ -1470,14 +1488,15 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			synergyBar(face, c, pad, y + 4, rw, CARD.Syn)
 			y += CARD.Syn + 8
 		end
-		local hh = TS(13) * 2 + 6
+		local hh = hintHeight()
 		if c.Hint and fits(hh) then
 			text(face, "Small", tostring(c.Hint), {
 				Position = UDim2.fromOffset(pad, bottom - hh),
 				Size = UDim2.new(1, -2 * pad, 0, hh),
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextYAlignment = Enum.TextYAlignment.Bottom,
-				TextWrapped = true,
+				TextWrapped = not compactLandscape(),
+				TextTruncate = Enum.TextTruncate.AtEnd,
 				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
 			}, 13)
 		end

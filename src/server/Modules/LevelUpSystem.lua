@@ -377,57 +377,6 @@ local function evolveHint(rp, c, def)
 	end
 end
 
--- "+10 damage, +1 arrow, -0.10s cooldown": one short line of what a card gives now, from
--- its lines (From → To values with a unit suffix; a perk line names the perk).
-local function deltaText(line: { [string]: string }): string?
-	local label = tostring(line.Label or "")
-	-- "Damage" → "damage" but "HP regen" / "XP gain" keep their acronym
-	local second = string.sub(label, 2, 2)
-	if second ~= "" and second == string.lower(second) then
-		label = string.lower(string.sub(label, 1, 1)) .. string.sub(label, 2)
-	end
-	if line.Text then
-		local perk = string.match(tostring(line.Text), "^([^:]+):") or tostring(line.Text)
-		return "New: " .. perk
-	end
-	local to = tostring(line.To or "")
-	if not line.From then
-		return string.format("%s %s", to, label)
-	end
-	local a = tonumber(string.match(tostring(line.From), "^[+-]?%d+%.?%d*"))
-	local b, unit = string.match(to, "^([+-]?%d+%.?%d*)(.*)$")
-	local bn = tonumber(b)
-	if not a or not bn then
-		return string.format("%s %s", to, label) -- "all pierce"
-	end
-	local d = bn - a
-	if math.abs(d) < 1e-6 then
-		return nil
-	end
-	local num = math.abs(d - math.floor(d + 0.5)) < 1e-6 and tostring(math.floor(d + 0.5)) or string.format("%.2f", d):gsub("0+$", ""):gsub("%.$", "")
-	if math.abs(d) == 1 and string.sub(label, -1) == "s" and not string.find(label, " ") then
-		label = string.sub(label, 1, -2) -- "+1 arrow"
-	end
-	return string.format("%s%s%s %s", d > 0 and "+" or "-", num, unit or "", label)
-end
-
-local function summaryOf(lines: { { [string]: string } }?, fallback: string?): string
-	local parts = {}
-	for _, line in ipairs(lines or {}) do
-		local t = deltaText(line)
-		if t then
-			table.insert(parts, t)
-		end
-		if #parts >= 3 then
-			break
-		end
-	end
-	if #parts == 0 then
-		return fallback or ""
-	end
-	return table.concat(parts, ", ")
-end
-
 -- The synergy a NEW weapon / passive would complete or advance (the player already holds
 -- another piece): card fields Synergy ("Synergy: <name> have/need") and SynergyReady.
 -- The synergy is named only once the player has completed it before; otherwise "???".
@@ -464,7 +413,7 @@ local function decorate(rp, c)
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, WeaponData.MaxLevel)
 			c.Lines = WeaponData.CardLines(c.Id, c.Level - 1, c.Level)
 			c.Description = joinLines(c.Lines)
-			c.Summary = summaryOf(c.Lines, c.Description)
+			c.Summary = WeaponData.SummaryText(c.Lines, c.Description)
 			if c.Level >= WeaponData.MaxLevel then
 				rarity = "Epic"
 			end
@@ -490,12 +439,12 @@ local function decorate(rp, c)
 			rarity = "Rare"
 			c.Rank = "NEW"
 			c.Description = def.Description
-			c.Summary = summaryOf(c.Lines, def.Description)
+			c.Summary = WeaponData.SummaryText(c.Lines, def.Description)
 			synergyClue(rp, c, "Passive")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, maxLevel)
 			c.Description = def.Description -- the lines carry the real numbers
-			c.Summary = summaryOf(c.Lines, def.Description)
+			c.Summary = WeaponData.SummaryText(c.Lines, def.Description)
 			if c.Level >= maxLevel then
 				rarity = "Epic"
 			end

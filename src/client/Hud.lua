@@ -456,12 +456,15 @@ local function stopBanner()
 end
 
 -- Slides / scales in, holds ~1 s, fades. Reduced effects: a plain fade, no scale or sparks.
-local function showStageBanner(stageNo: number, goal: string)
+-- `color` tints the title (the stage banner is gold; the portal reveal is arcane blue).
+local function showBanner(titleText: string, goal: string, color: Color3?)
 	stopBanner()
 	local token = bannerToken
 	local box, title, line, sub = ui.Banner :: Frame, ui.BannerTitle :: TextLabel, ui.BannerLine :: Frame, ui.BannerSub :: TextLabel
 	local reduced = (ClientSettings.Reduced() or ClientPerformance.Reduced())
-	title.Text = UIKit.track("STAGE " .. tostring(stageNo))
+	title.Text = UIKit.track(titleText)
+	title.TextColor3 = color or P.gold_200
+	line.BackgroundColor3 = color or P.gold_400
 	sub.Text = goal
 	title.TextTransparency, title.TextStrokeTransparency = 1, 1
 	sub.TextTransparency, sub.TextStrokeTransparency = 1, 1
@@ -505,6 +508,22 @@ local function showStageBanner(stageNo: number, goal: string)
 			end
 		end)
 	end)
+end
+
+local function showStageBanner(stageNo: number, goal: string)
+	showBanner("STAGE " .. tostring(stageNo), goal, nil)
+end
+
+-- A one-off banner over the arena in the stage banner's style (StageUI: "THE PORTAL HAS
+-- APPEARED"). `sound` names a Config.Sounds entry to play with it (Audio).
+function Hud.Announce(title: string, sub: string, color: Color3?, sound: string?)
+	if not ui.Banner then
+		return
+	end
+	showBanner(title, sub, color)
+	if sound and host.Audio and host.Audio.Play then
+		host.Audio.Play(sound)
+	end
 end
 
 local function buildStatus(frame: Frame)

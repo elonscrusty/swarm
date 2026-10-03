@@ -126,17 +126,44 @@ local adv2, h2, n2 = SynergyData.Advances(owned(), "Passive", "Luck")
 preview.log(string.format("Advances(Luck) -> %s %d/%d (want nil)", adv2 and adv2.Name or "nil", h2, n2))
 preview.log("active:", tostring(me:GetAttribute("Synergies")))
 
--- Recipes stay hidden on real offers; the completed build still announces its bonus.
+-- Clues are discovery-gated on real offers: upgrade cards carry no synergy clue, a NEW
+-- card advancing the never-completed Ember Field says "???" and never names it; every
+-- card has a one-line Summary. The completed build still announces its bonus.
+local DS = preview.server("DiscoveryService")
 rp.NextUpgradeCombatTime = 0
 LU.QueueLevels(rp, 1)
 assert(rp.Offer, "expected a real offer")
 for _, choice in ipairs(rp.Offer) do
-    assert(choice.Synergy == nil and choice.SynergyReady == nil, "upgrade card exposed a hidden recipe")
+    assert(type(choice.Summary) == "string" and choice.Summary ~= "", "card without a Summary: " .. tostring(choice.Name))
+    preview.log(string.format("  card %s [%s] summary=%q hint=%q synergy=%q", tostring(choice.Name), tostring(choice.Type), choice.Summary, tostring(choice.Hint), tostring(choice.Synergy)))
+    if choice.Type ~= "WeaponNew" and choice.Type ~= "PassiveNew" then
+        assert(choice.Synergy == nil and choice.SynergyReady == nil, "upgrade card exposed a hidden recipe")
+    elseif choice.Synergy then
+        assert(string.find(choice.Synergy, "???", 1, true) and not string.find(choice.Synergy, "Ember", 1, true), "undiscovered synergy named on a card: " .. choice.Synergy)
+    end
 end
 LU.Cancel(rp)
+assert(not DS.Known(me, "Synergies", "EmberField"), "Ember Field discovered before completion")
+local clues = LU.SynergyClues(rp)
+local ember = nil
+for _, clue in ipairs(clues) do
+    preview.log(string.format("  clue %s %d/%d active=%s id=%s", clue.Name, clue.Have, clue.Need, tostring(clue.Active), tostring(clue.Id)))
+    if not clue.Active then ember = clue end
+end
+assert(ember and ember.Name == "???" and ember.Id == nil, "incomplete, undiscovered synergy was named in the ITEMS clues")
+for _, piece in ipairs(ember.Pieces) do
+    if not piece.Owned then
+        assert(piece.Label == "???", "undiscovered missing piece was named: " .. tostring(piece.Label))
+    end
+end
 assert(not table.find(SynergyData.Active(owned()), "EmberField"), "recipe completed before Candle")
 addPassive("Candle")
 assert(table.find(SynergyData.Active(owned()), "EmberField"), "discovered synergy did not activate")
 assert(string.find(me:GetAttribute("Synergies"), "EmberField", 1, true), "discovered synergy was not published")
+assert(DS.Known(me, "Synergies", "EmberField"), "completed synergy was not recorded as discovered")
+assert(DS.Known(me, "Weapons", "FireTrail") and DS.Known(me, "Items", "KeenLens"), "owned weapon / item not recorded as discovered")
+local data = preview.server("DataService").GetData(me)
+assert(data and data.Discovered and data.Discovered.Synergies.EmberField == true, "discovery missing from the save")
+preview.log("PASS discovery: clues gated, Ember Field revealed after completion")
 advance(1.6)
 preview.log("PASS: hidden recipes and discovered active synergies")

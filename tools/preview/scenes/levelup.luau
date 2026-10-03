@@ -9,6 +9,9 @@
 --   --set pick=N         card N was just picked (its punch + flash), shown --set at later
 --   --set pickAt=<s>     when that click happens (default 1.2 s); under 0.35 s it lands inside
 --                        the arm delay and must be ignored (safe level-up input)
+--   --set synergy=N      card N advances a synergy (bar "ELEMENTAL TRINITY • 2 / 3")
+--   --set hidden=on      the discovery-gated clues of a new player: the synergy and the
+--                        evolution partner / result read "???" (LevelUpSystem, DiscoveryService)
 local A = lib("arena")
 local C = lib("common")
 A.build({ enemies = 90 })
@@ -29,6 +32,7 @@ local function joined(lines)
 	return table.concat(parts, ", ")
 end
 local choices = {}
+local hidden = preview.args.hidden == "on"
 if WeaponData and PassiveData and Config and StatSheet then
 	-- the build the cards are for: Knight with Max HP 2 bought, Heart 1, Might 2
 	local passives = { Heart = 1, Might = 2 }
@@ -43,9 +47,14 @@ if WeaponData and PassiveData and Config and StatSheet then
 		if evo and level >= Config.LevelUp.EvolveHintLevel then
 			local required = math.min(3, PassiveData.MaxLevelOf(evo.Passive))
 			ready = (passives[evo.Passive] or 0) >= required
-			hint = string.format("Evolves at Lv %d with %s Lv %d%s", WeaponData.MaxLevel, PassiveData.Passives[evo.Passive].Name, required, ready and " (ready)" or "")
+			local partner = (hidden and not passives[evo.Passive]) and "???" or PassiveData.Passives[evo.Passive].Name
+			if level >= WeaponData.MaxLevel then
+				hint = string.format("Evolves into %s with %s Lv %d", hidden and "???" or evo.Name, partner, required)
+			else
+				hint = string.format("Evolves at Lv %d with %s Lv %d%s", WeaponData.MaxLevel, partner, required, ready and " (ready)" or "")
+			end
 		end
-		return { Type = "WeaponUp", Id = id, Level = level, Name = def.Name, Rank = string.format("Lv %d → %d / %d", level - 1, level, WeaponData.MaxLevel), Lines = lines, Description = joined(lines), Hint = hint, HintReady = ready, Color = def.Color, Rarity = r, RarityLabel = label, RarityColor = color }
+		return { Type = "WeaponUp", Id = id, Level = level, Name = def.Name, Rank = string.format("Lv %d → %d / %d", level - 1, level, WeaponData.MaxLevel), Lines = lines, Description = joined(lines), Summary = WeaponData.SummaryText(lines, joined(lines)), Hint = hint, HintReady = ready, Color = def.Color, Rarity = r, RarityLabel = label, RarityColor = color }
 	end
 	local function passiveCard(id, level)
 		local def = PassiveData.Passives[id]
@@ -54,17 +63,17 @@ if WeaponData and PassiveData and Config and StatSheet then
 		local lines = StatSheet.Lines(sheet, StatSheet.Compute({ CharacterId = "Knight", Meta = { MaxHP = 2 }, Passives = after }))
 		local new = level <= 1
 		local label, color = rarity(new and "Rare" or "Common")
-		return { Type = new and "PassiveNew" or "PassiveUp", Id = id, Level = level, Name = def.Name, Rank = new and "NEW" or string.format("Lv %d → %d / %d", level - 1, level, PassiveData.MaxLevelOf(id)), Lines = lines, Description = def.Description, Color = def.Color, Rarity = new and "Rare" or "Common", RarityLabel = label, RarityColor = color }
+		return { Type = new and "PassiveNew" or "PassiveUp", Id = id, Level = level, Name = def.Name, Rank = new and "NEW" or string.format("Lv %d → %d / %d", level - 1, level, PassiveData.MaxLevelOf(id)), Lines = lines, Description = def.Description, Summary = WeaponData.SummaryText(lines, def.Description), Color = def.Color, Rarity = new and "Rare" or "Common", RarityLabel = label, RarityColor = color }
 	end
 	local function weaponNew(id)
 		local def = WeaponData.Weapons[id]
 		local label, color = rarity("Rare")
-		return { Type = "WeaponNew", Id = id, Level = 1, Name = def.Name, Rank = "NEW", Lines = WeaponData.CardLines(id, 0, 1), Description = def.Description, Color = def.Color, Rarity = "Rare", RarityLabel = label, RarityColor = color }
+		return { Type = "WeaponNew", Id = id, Level = 1, Name = def.Name, Rank = "NEW", Lines = WeaponData.CardLines(id, 0, 1), Description = def.Description, Summary = def.Description, Color = def.Color, Rarity = "Rare", RarityLabel = label, RarityColor = color }
 	end
 	local function evolveCard(id)
 		local label, color = rarity("Legendary")
 		local edef = WeaponData.Weapons[id]
-		return { Type = "Evolve", Id = id, Level = WeaponData.MaxLevel, Name = edef.Evolution.Name, Rank = "EVOLUTION", Lines = WeaponData.CardLines(id, WeaponData.MaxLevel, WeaponData.MaxLevel, true), Description = edef.Evolution.Description, Color = edef.Color, Rarity = "Legendary", RarityLabel = label, RarityColor = color }
+		return { Type = "Evolve", Id = id, Level = WeaponData.MaxLevel, Name = edef.Evolution.Name, Rank = "EVOLUTION", Lines = WeaponData.CardLines(id, WeaponData.MaxLevel, WeaponData.MaxLevel, true), Description = edef.Evolution.Description, Summary = edef.Evolution.Description, Color = edef.Color, Rarity = "Legendary", RarityLabel = label, RarityColor = color }
 	end
 	local list = preview.args.cards
 	if list and (string.find(list, "+", 1, true) or string.find(list, ":", 1, true) or WeaponData.Weapons[list]) then
@@ -86,7 +95,7 @@ if WeaponData and PassiveData and Config and StatSheet then
 		table.insert(choices, { Type = "Evolve", Id = "Longbow", Level = WeaponData.MaxLevel, Name = edef.Evolution.Name, Rank = "EVOLUTION", Lines = WeaponData.CardLines("Longbow", WeaponData.MaxLevel, WeaponData.MaxLevel, true), Description = edef.Evolution.Description, Color = edef.Color, Rarity = "Legendary", RarityLabel = label, RarityColor = color })
 		table.insert(choices, weaponUp("MagicOrb", 5))
 		local fletch = passiveCard("Fletching", 1)
-		fletch.Hint = "Evolves Longbow at Lv 12 with Fletching Lv 3"
+		fletch.Hint = "Evolves Longbow at Lv 12 with this at Lv 3" .. (hidden and "" or " into Windpiercer")
 		table.insert(choices, fletch)
 	else
 		table.insert(choices, weaponUp("Whip", 6))
@@ -99,7 +108,7 @@ local synIndex = tonumber(preview.args.synergy)
 local SynergyData = C.shared("SynergyData")
 if synIndex and choices[synIndex] and SynergyData then
 	local s = SynergyData.Synergies[SynergyData.Order[1]]
-	choices[synIndex].Synergy = string.format("Synergy: %s %d/%d", s.Name, 2, 3)
+	choices[synIndex].Synergy = string.format("Synergy: %s %d/%d", hidden and "???" or s.Name, 2, 3)
 	choices[synIndex].SynergyReady = false
 end
 C.fire("LevelUpOffer", {

@@ -23,9 +23,12 @@
 	                 LootFeedback); nothing is opened by the client.
 	  altar marker   a small floating pill over the guarded altar on screen (dormant /
 	                 guards left / unguarded / claimed)
-	  items list     LootUI.OpenItems() (pause menu "ITEMS" button): the active synergies
-	                 first (what they give, what they need), then every item with its
-	                 stack count and full text
+	  items list     LootUI.OpenItems() (pause menu "ITEMS" button): the synergies first
+	                 (Inventory remote field Synergies, LevelUpSystem.SynergyClues): the
+	                 active ones (what they give, what they need), then the ones in
+	                 progress as clues (pieces held / "???" for pieces and names the
+	                 player has not discovered yet), then every item with its stack count
+	                 and full text
 	  caravan        the Lost Caravan (server CaravanEvent, workspace.SwarmEvents): a pill
 	                 over the cart on screen (LOST CARAVAN / DEFEND / SAVED / LOST), an
 	                 edge arrow when it is off screen (while defending, or within
@@ -81,6 +84,7 @@ local lastTouch = false
 local KIND_ICON = { Chest = "reward_ChestLarge", Shrine = "shrine", Altar = "altar" }
 local CARAVAN_HINT = 110 -- studs: the caravan's edge arrow shows this close before it starts
 local synergies: { string } = {}
+local clues: { { [string]: any } }? = nil -- Inventory.Synergies rows (nil: older server)
 
 local function rarityOf(id: string): string
 	local def = ItemData.Items[id]
@@ -385,16 +389,42 @@ local function refreshList()
 			ch:Destroy()
 		end
 	end
-	for i, id in ipairs(synergies) do
-		local s = SynergyData.Synergies[id]
-		local row = UIKit.Panel(ui.ItemsList, { Name = "Synergy_" .. id, LayoutOrder = i - 100, Size = UDim2.new(1, -8, 0, 62) }, true)
+	-- synergy rows: the server's clues (active first, then in progress), or, from an
+	-- older server, the active ids of the Synergies attribute
+	local rows = clues
+	if not rows then
+		rows = {}
+		for _, id in ipairs(synergies) do
+			local s = SynergyData.Synergies[id]
+			table.insert(rows, { Id = id, Name = s.Name, Text = s.Text, Have = #s.Pieces, Need = #s.Pieces, Active = true })
+		end
+	end
+	for i, clue in ipairs(rows) do
+		local s = type(clue.Id) == "string" and SynergyData.Synergies[clue.Id] or nil
+		local active = clue.Active == true
+		local color = active and P.moss_200 or P.ivory_300
+		local accent = s and s.Color or P.slate_400
+		local name = s and s.Name or (type(clue.Name) == "string" and clue.Name or "???")
+		local row = UIKit.Panel(ui.ItemsList, { Name = "Synergy_" .. (s and s.Id or tostring(i)), LayoutOrder = i - 100, Size = UDim2.new(1, -8, 0, 62) }, true)
 		local tile = new("Frame", { BackgroundColor3 = P.slate_900, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(46, 46) }, row)
 		UIKit.corner(tile, Theme.Radius.M)
-		UIKit.stroke(tile, s.Color, 1.5, 0.2)
-		Icons.Draw(tile, s.Icon, { Size = 34, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
-		text(row, "BodyStrong", s.Name, { Position = UDim2.fromOffset(64, 6), Size = UDim2.new(1, -150, 0, TS(16) + 4), TextColor3 = P.moss_200 })
-		text(row, "Caption", UIKit.track("SYNERGY"), { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 8), Size = UDim2.fromOffset(90, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.moss_200 })
-		text(row, "Small", s.Text .. "  ·  " .. s.Desc, { Position = UDim2.fromOffset(64, 8 + TS(16)), Size = UDim2.new(1, -72, 0, 62 - 12 - TS(16)), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top })
+		UIKit.stroke(tile, accent, 1.5, active and 0.2 or 0.5)
+		Icons.Draw(tile, s and s.Icon or "sparkle", { Size = 34, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900, Color = s and nil or P.slate_400 })
+		text(row, "BodyStrong", name, { Position = UDim2.fromOffset(64, 6), Size = UDim2.new(1, -150, 0, TS(16) + 4), TextColor3 = color })
+		local tag = active and "SYNERGY" or string.format("%d / %d", tonumber(clue.Have) or 0, tonumber(clue.Need) or 0)
+		text(row, "Caption", UIKit.track(tag), { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 8), Size = UDim2.fromOffset(90, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = color })
+		local body
+		if active then
+			body = tostring(clue.Text or (s and s.Text) or "") .. (s and ("  ·  " .. s.Desc) or "")
+		else
+			-- what the player holds and what is missing (the server hides undiscovered names)
+			local have, missing = {}, {}
+			for _, piece in ipairs(type(clue.Pieces) == "table" and clue.Pieces or {}) do
+				table.insert(piece.Owned and have or missing, tostring(piece.Label or "???"))
+			end
+			body = string.format("%s  ·  Have: %s  ·  Missing: %s", tostring(clue.Text or ""), #have > 0 and table.concat(have, ", ") or "-", #missing > 0 and table.concat(missing, ", ") or "-")
+		end
+		text(row, "Small", body, { Position = UDim2.fromOffset(64, 8 + TS(16)), Size = UDim2.new(1, -72, 0, 62 - 12 - TS(16)), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = active and C.Text or C.TextMuted })
 	end
 	local total = 0
 	for i, it in ipairs(items) do
@@ -1039,6 +1069,15 @@ function LootUI.Build(root: Frame, k: { [string]: any })
 	buildItemsModal(root)
 	kit.OnRelayout(LootUI.Layout)
 	Remotes.Get("Items").OnClientEvent:Connect(onItems)
+	Remotes.Get("Inventory").OnClientEvent:Connect(function(data)
+		if type(data) ~= "table" then
+			return
+		end
+		clues = type(data.Synergies) == "table" and data.Synergies or nil
+		if ui.Items.Overlay.Visible then
+			refreshList()
+		end
+	end)
 	Remotes.Get("ItemGained").OnClientEvent:Connect(onGained)
 	Remotes.Get("LootFeedback").OnClientEvent:Connect(onFeedback)
 	UserInputService.InputBegan:Connect(function(input, processed)
@@ -1057,6 +1096,7 @@ function LootUI.Build(root: Frame, k: { [string]: any })
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
 		if not player:GetAttribute("InRun") then
 			items = {}
+			clues = nil
 			refreshStrip()
 			kit.Hide(ui.Items.Overlay, "Items")
 		end

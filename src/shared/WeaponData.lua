@@ -454,7 +454,7 @@ WeaponData.Weapons = {
 			Id = "InfiniteReturn",
 			Name = "Infinite Return",
 			Passive = "Cooldown",
-			Description = "Boomerangs that never stop: they bounce between enemies and you forever.",
+			Description = "Boomerangs that never stop, bouncing between foes and you.",
 			Stats = row(30, 1.0, 4, 1.4, 46, 999, 0.9, 8),
 			Persistent = true,
 		},
@@ -472,7 +472,7 @@ WeaponData.Weapons = {
 	Longbow = {
 		Id = "Longbow",
 		Name = "Longbow",
-		Description = "Heavy piercing arrows fly far where you move, or at the nearest enemy while you stand still.",
+		Description = "Heavy arrows that pierce and fly far, aimed at the nearest enemy.",
 		Color = Color3.fromRGB(150, 190, 110),
 		Behavior = "Longbow",
 		AmountLabel = "Arrows",
@@ -497,7 +497,7 @@ WeaponData.Weapons = {
 			Id = "Windpiercer",
 			Name = "Windpiercer",
 			Passive = "Fletching",
-			Description = "Every shot is a volley of wind arrows that pierce everything.",
+			Description = "Every shot is a volley of wind arrows piercing everything.",
 			Stats = row(52, 1.25, 2, 1.3, 125, 999, 1.10, 12),
 			Fan = true, -- every shot adds the two side arrows (the Volley perk on every shot)
 		},
@@ -525,7 +525,7 @@ WeaponData.Weapons = {
 	Spear = {
 		Id = "Spear",
 		Name = "Spear",
-		Description = "Thrusts a spear in the direction you face, piercing a line of enemies.",
+		Description = "Thrusts a spear forward, piercing a line of enemies.",
 		Color = Color3.fromRGB(190, 150, 90),
 		Behavior = "Spear",
 		AmountLabel = "Spears",
@@ -550,7 +550,7 @@ WeaponData.Weapons = {
 			Id = "DragonLance",
 			Name = "Dragon Lance",
 			Passive = "Might",
-			Description = "Three crimson lances pierce everything and burst at their tips.",
+			Description = "Three crimson lances that pierce all and burst at the tip.",
 			Stats = row(42, 0.90, 3, 1.5, 0, 999, 0, 14),
 			Burst = true, -- each thrust bursts at its full reach (BurstShare of the damage)
 		},
@@ -596,7 +596,7 @@ WeaponData.Weapons = {
 		Id = "FrostNova",
 		Element = "Frost", -- SynergyData (Elemental Trinity)
 		Name = "Frost Nova",
-		Description = "A burst of frost around you every few seconds: damages and slows enemies.",
+		Description = "A frost burst around you that damages and slows enemies.",
 		Color = Color3.fromRGB(150, 200, 230),
 		Behavior = "Nova",
 		Area = true,
@@ -623,7 +623,7 @@ WeaponData.Weapons = {
 			Id = "AbsoluteZero",
 			Name = "Absolute Zero",
 			Passive = "Area",
-			Description = "A huge blizzard burst that nearly freezes the swarm in place.",
+			Description = "A huge blizzard burst that nearly freezes the swarm.",
 			Stats = row(42, 1.9, 1, 2.0, 0, 999, 3.0, 6),
 			DeepFreeze = true, -- slow to EvoSlow instead of Slow
 		},
@@ -634,7 +634,7 @@ WeaponData.Weapons = {
 		Id = "FireTrail",
 		Element = "Fire", -- SynergyData (Elemental Trinity, Ember Field)
 		Name = "Fire Trail",
-		Description = "Leaves burning ground behind you as you move. It never hurts heroes.",
+		Description = "Burning ground follows your steps. It never hurts heroes.",
 		Color = Color3.fromRGB(230, 130, 60),
 		Behavior = "FireTrail",
 		Area = true,
@@ -662,7 +662,7 @@ WeaponData.Weapons = {
 			Id = "PhoenixStride",
 			Name = "Phoenix Stride",
 			Passive = "SpeedBoots",
-			Description = "Golden flames: enemies that touch them keep burning for 2 seconds.",
+			Description = "Golden flames that keep burning enemies for 2 seconds.",
 			Stats = row(16, 0.25, 1, 1.7, 0, 999, 3.5, 0),
 			Ignite = true,
 		},
@@ -672,7 +672,7 @@ WeaponData.Weapons = {
 	HealingTotem = {
 		Id = "HealingTotem",
 		Name = "Healing Totem",
-		Description = "Plants a totem that heals you and teammates nearby and hurts enemies around it.",
+		Description = "Plants a totem that heals allies and hurts enemies near it.",
 		Color = Color3.fromRGB(140, 190, 110),
 		Behavior = "Totem",
 		Area = true,
@@ -710,7 +710,7 @@ WeaponData.Weapons = {
 	ChainHook = {
 		Id = "ChainHook",
 		Name = "Chain Hook",
-		Description = "Hooks the furthest enemy in front of you and drags it in, hurting everything along the chain.",
+		Description = "Hooks a far enemy and drags it in, hurting all along the chain.",
 		Color = Color3.fromRGB(150, 160, 175),
 		Behavior = "Hook",
 		AmountLabel = "Hooks",
@@ -745,7 +745,7 @@ WeaponData.Weapons = {
 	Turret = {
 		Id = "Turret",
 		Name = "Turret",
-		Description = "Builds a turret next to you that shoots nearby enemies (up to 2).",
+		Description = "Builds a turret beside you that shoots nearby enemies (max 2).",
 		Color = Color3.fromRGB(190, 160, 90),
 		Behavior = "Turret",
 		Deployable = true,
@@ -773,7 +773,7 @@ WeaponData.Weapons = {
 			Id = "Bastion",
 			Name = "Bastion",
 			Passive = "Armor",
-			Description = "Gilded turrets that fire almost twice as fast with piercing bolts.",
+			Description = "Gilded turrets, almost twice as fast, with piercing bolts.",
 			Stats = row(24, 5.0, 2, 1.5, 120, 3, 7.0, 3),
 		},
 	},
@@ -1027,6 +1027,59 @@ function WeaponData.LineText(line: { [string]: string }): string
 		return string.format("%s %s → %s", line.Label, line.From, line.To)
 	end
 	return string.format("%s %s", line.Label, line.To)
+end
+
+-- One card line as a short gain: {Label, From, To} → "+10 damage" / "-0.1s cooldown" /
+-- "all pierce"; a perk line → "New: Riposte"; nil when nothing changed.
+function WeaponData.DeltaText(line: { [string]: string }): string?
+	local label = tostring(line.Label or "")
+	-- "Damage" → "damage" but "HP regen" / "XP gain" keep their acronym
+	local second = string.sub(label, 2, 2)
+	if second ~= "" and second == string.lower(second) then
+		label = string.lower(string.sub(label, 1, 1)) .. string.sub(label, 2)
+	end
+	if line.Text then
+		local perk = string.match(tostring(line.Text), "^([^:]+):") or tostring(line.Text)
+		return "New: " .. perk
+	end
+	local to = tostring(line.To or "")
+	if not line.From then
+		return string.format("%s %s", to, label)
+	end
+	local a = tonumber(string.match(tostring(line.From), "^[+-]?%d+%.?%d*"))
+	local b, unit = string.match(to, "^([+-]?%d+%.?%d*)(.*)$")
+	local bn = tonumber(b)
+	if not a or not bn then
+		return string.format("%s %s", to, label) -- "all pierce"
+	end
+	local d = bn - a
+	if math.abs(d) < 1e-6 then
+		return nil
+	end
+	local num = math.abs(d - math.floor(d + 0.5)) < 1e-6 and tostring(math.floor(d + 0.5)) or string.format("%.2f", d):gsub("0+$", ""):gsub("%.$", "")
+	if math.abs(d) == 1 and string.sub(label, -1) == "s" and not string.find(label, " ") then
+		label = string.sub(label, 1, -2) -- "+1 arrow"
+	end
+	return string.format("%s%s%s %s", d > 0 and "+" or "-", num, unit or "", label)
+end
+
+-- "+10 damage, +1 arrow, -0.1s cooldown": one short line of what a card gives now (at
+-- most three gains), or `fallback` when the lines carry no change.
+function WeaponData.SummaryText(lines: { { [string]: string } }?, fallback: string?): string
+	local parts = {}
+	for _, line in ipairs(lines or {}) do
+		local t = WeaponData.DeltaText(line)
+		if t then
+			table.insert(parts, t)
+		end
+		if #parts >= 3 then
+			break
+		end
+	end
+	if #parts == 0 then
+		return fallback or ""
+	end
+	return table.concat(parts, ", ")
 end
 
 -- Plain text for a level-up card: what changes when going to `level` (1 = the weapon is new).
