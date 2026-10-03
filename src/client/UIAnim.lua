@@ -560,10 +560,13 @@ function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
 	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
-	local home = obj.Position
+	-- the shake is an offset on top of whatever position the object has right now, so a
+	-- relayout during the shake (the HUD placing a pill under a timer that just moved) is
+	-- kept instead of being undone when the shake ends
 	local amp = pixels or 6
 	local steps = 6
 	local each = (seconds or 0.3) / steps
+	local applied = UDim2.new()
 	task.spawn(function()
 		for i = 1, steps do
 			if not obj.Parent then
@@ -571,11 +574,13 @@ function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
 			end
 			local k = (1 - i / steps) * amp
 			local dir = (i % 2 == 0) and 1 or -1
-			obj.Position = home + UDim2.fromOffset(dir * k, (i % 3 - 1) * k * 0.5)
+			local offset = UDim2.fromOffset(dir * k, (i % 3 - 1) * k * 0.5)
+			obj.Position = obj.Position - applied + offset
+			applied = offset
 			task.wait(each)
 		end
 		if obj.Parent then
-			obj.Position = home
+			obj.Position = obj.Position - applied
 		end
 	end)
 end

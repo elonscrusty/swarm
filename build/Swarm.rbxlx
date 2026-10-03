@@ -2205,6 +2205,11 @@ Config.Stages = {
 	-- the HUD arrow toward the portal appears after this long (never before the lock ends
 	-- or the reveal delay); 0 = from the reveal on, always
 	HintAfterSeconds = 0,
+	-- SWARM PRESSURE: the swarm keeps growing until the portal is charged. While exploring,
+	-- SwarmState SwarmWarn steps to 1 ("SWARM GROWING") at WarnSeconds of stage time and to
+	-- 2 ("SWARM OVERWHELMING") at DangerSeconds, back to 0 once the portal charges. The HUD
+	-- turns the stage pill into OPEN THE PORTAL with the warning and a banner each step.
+	Pressure = { WarnSeconds = 75, DangerSeconds = 150 },
 	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
 	EnemyHPPerStage = 0.25,
 	EnemyDamagePerStage = 0.08, -- also the boss's contact / orb damage and bomb ticks
@@ -28946,7 +28951,7 @@ return SpatialGrid
 	SpawnMultCap and Config.Enemies.MaxLive). Standard runs are unchanged.
 
 	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, StageBoss, PortalPos,
-	PortalHint, PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total"),
+	PortalHint, SwarmWarn (0-2, Config.Stages.Pressure), PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total"),
 	PortalReveal (counts up each time a stage's portal becomes chargeable: the clients'
 	cue for the banner, sound, beacon burst and minimap ping; see Config.Stages.RevealDelaySeconds).
 ]]
@@ -28975,6 +28980,7 @@ local lastPortal: { [string]: Vector3 } = {} -- last portal spot per arena (a ne
 local stageTime = 0
 local hinted = false
 local revealed = false -- this stage's portal reveal happened (PortalReveal bumped)
+local swarmWarn = 0 -- Config.Stages.Pressure step shown (SwarmState SwarmWarn)
 local reveals = 0
 local shownLock = -1
 local charge = 0
@@ -29222,6 +29228,8 @@ local function buildStage(n: number)
 	state:SetAttribute("StageBoss", bossName(stageBoss))
 	state:SetAttribute("PortalPos", spot)
 	state:SetAttribute("PortalHint", false)
+	swarmWarn = 0
+	state:SetAttribute("SwarmWarn", 0)
 	state:SetAttribute("PortalCharge", 0)
 	state:SetAttribute("PortalLockLeft", math.ceil(lockSeconds()))
 	state:SetAttribute("SurgeLeft", 0)
@@ -29274,6 +29282,8 @@ function StageManager.EndRun()
 	setSub("None")
 	state:SetAttribute("Stage", 0)
 	state:SetAttribute("PortalHint", false)
+	swarmWarn = 0
+	state:SetAttribute("SwarmWarn", 0)
 	state:SetAttribute("PortalCharge", 0)
 	state:SetAttribute("PortalLockLeft", 0)
 	state:SetAttribute("PortalPos", nil)
@@ -29561,6 +29571,20 @@ local function stepExplore(dt: number)
 		hinted = true
 		state:SetAttribute("PortalHint", true)
 		ctx.RunManager.Broadcast("The portal is marked on your screen.", Color3.fromRGB(180, 200, 255))
+	end
+	-- swarm pressure: the longer the portal stays unopened, the louder the warning
+	local pressure = Config.Stages.Pressure
+	if pressure and revealed then
+		local step = stageTime >= pressure.DangerSeconds and 2 or (stageTime >= pressure.WarnSeconds and 1 or 0)
+		if step > swarmWarn then
+			swarmWarn = step
+			state:SetAttribute("SwarmWarn", step)
+			if step == 1 then
+				ctx.RunManager.Broadcast("The swarm is growing. Open the portal!", Color3.fromRGB(255, 190, 90), true)
+			else
+				ctx.RunManager.Broadcast("The swarm is overwhelming! Open the portal now!", Color3.fromRGB(255, 110, 90), true)
+			end
+		end
 	end
 	miniWaveTimer += dt
 	if miniWaveTimer >= Config.Run.MiniWaveInterval then
@@ -38725,6 +38749,9 @@ local function layout()
 	-- stage pill: top left under the Roblox menu buttons (landscape); portrait has no room
 	-- beside the timer, so it sits centred under it
 	if portrait then
+		-- a wide objective (OPEN THE PORTAL + the swarm warning) must clear Roblox's menu /
+		-- chat buttons (44 px tall in a 58 px bar from the top inset)
+		y = math.max(y, ins.Top + 58 + 4)
 		ui.Stage.AnchorPoint = Vector2.new(0.5, 0)
 		ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(y))
 		if ui.Stage.Visible then
@@ -39136,6 +39163,7 @@ end
 -- Short forms of the objectives for when the pill would run under the health panel.
 local STAGE_SHORT = {
 	["OPENING THE PORTAL"] = "OPENING",
+	["OPEN THE PORTAL"] = "OPEN PORTAL",
 	["PORTAL DORMANT"] = "DORMANT",
 	["SURVIVE THE SURGE"] = "SURGE",
 }
@@ -39148,6 +39176,13 @@ local function stageGoal(state: Configuration, stagePhase: string): (string, str
 			return "OPENING THE PORTAL", string.format("%d%%", math.floor(chargeNow * 100)), P.gold_200
 		elseif lockLeft > 0 then
 			return "PORTAL DORMANT", UIKit.formatTime(lockLeft), P.ivory_100
+		end
+		-- swarm pressure (SwarmState SwarmWarn): the objective turns into a warning
+		local warn = state:GetAttribute("SwarmWarn") or 0
+		if warn >= 2 then
+			return "OPEN THE PORTAL", "SWARM OVERWHELMING", P.crimson_300
+		elseif warn >= 1 then
+			return "OPEN THE PORTAL", "SWARM GROWING", P.amber_300
 		end
 		return "FIND THE PORTAL", "", P.ivory_100
 	elseif stagePhase == "Boss" then
@@ -39173,6 +39208,9 @@ local function updateStage(state: Configuration)
 	local longGoal = goal
 	if anim.StageTooWide == longGoal then
 		goal = STAGE_SHORT[longGoal] or (stagePhase == "Boss" and "DEFEAT THE BOSS") or goal
+		if longGoal == "OPEN THE PORTAL" then
+			count = "" -- phones: the amber / crimson goal and the banner carry the warning
+		end
 	end
 	local stageShown = stageNo > 0 and goal ~= ""
 	if ui.Stage.Visible ~= stageShown then
@@ -39189,6 +39227,11 @@ local function updateStage(state: Configuration)
 		if ui.StageGoal.Text ~= goal then
 			ui.StageGoal.Text = goal
 			anim.StageNewsAt = os.clock()
+			if goal == "OPEN THE PORTAL" or goal == "OPEN PORTAL" then
+				UIAnim.Punch(ui.Stage, 0.25)
+				UIAnim.Shake(ui.Stage, 4, 0.3)
+				glow(ui.Stage, P.crimson_400)
+			end
 			if anim.StagePhase ~= stagePhase and anim.StagePhase ~= nil then
 				UIAnim.Punch(ui.Stage, 0.2)
 				glow(ui.Stage, (stagePhase == "Surge" or stagePhase == "Boss") and P.crimson_400 or P.gold_300)
@@ -39202,7 +39245,7 @@ local function updateStage(state: Configuration)
 		setText(ui.StageCount, count)
 		-- calm: a plain objective is news for a few seconds, then the pill is just
 		-- "STAGE N"; boss / surge / open portal and counting goals stay (urgent or moving)
-		local urgent = stagePhase ~= "Explore" or count ~= ""
+		local urgent = stagePhase ~= "Explore" or count ~= "" or (state:GetAttribute("SwarmWarn") or 0) > 0
 		local calm = not urgent and os.clock() - (anim.StageNewsAt or 0) > 8
 		if ui.StageGoal.Visible == calm then
 			ui.StageGoal.Visible = not calm
@@ -54180,6 +54223,23 @@ local offer: { [string]: any }? = nil
 local chosen = false
 local travel = { Active = false, Since = 0 }
 local lastReveal: number? = nil -- SwarmState PortalReveal seen last (nil = not in a run)
+local lastWarn = 0 -- SwarmState SwarmWarn seen last (the swarm-pressure banner)
+
+-- Swarm pressure (SwarmState SwarmWarn, Config.Stages.Pressure): a banner each step up,
+-- so nobody wonders why the swarm keeps thickening while the portal waits.
+local function checkPressure(state: Configuration)
+	local warn = state:GetAttribute("SwarmWarn") or 0
+	if warn == lastWarn then
+		return
+	end
+	local up = warn > lastWarn
+	lastWarn = warn
+	if up and warn == 1 then
+		Hud.Announce("THE SWARM IS GROWING", "Open the portal before it gets worse", Accessibility.Color(Color3.fromRGB(246, 218, 126), "Loot"), "PortalAppear")
+	elseif up and warn >= 2 then
+		Hud.Announce("THE SWARM IS OVERWHELMING", "Open the portal now!", Accessibility.Color(Color3.fromRGB(219, 106, 94), "Danger"), "PortalAppear")
+	end
+end
 
 -- The portal reveal: banner + sound (the beacon and the minimap ping watch the attribute
 -- themselves). A mid-run joiner sees the banner too: it tells them where to go.
@@ -54191,7 +54251,7 @@ local function checkReveal(state: Configuration)
 	if reveal ~= lastReveal then
 		lastReveal = reveal
 		if reveal > 0 then
-			Hud.Announce("THE PORTAL HAS APPEARED", "Follow the arrow and stand in its circle to open it",
+			Hud.Announce("THE PORTAL HAS APPEARED", "Open it before the swarm grows too strong: follow the arrow, stand in its circle",
 				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear")
 		end
 	end
@@ -54698,6 +54758,7 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 		return
 	end
 	checkReveal(state)
+	checkPressure(state)
 	PortalBeacon.Update(state, not travel.Active)
 	-- the travel fade lifts once the next stage runs (or after a safety timeout)
 	if travel.Active and ((stagePhase ~= "Travel" and os.clock() - travel.Since > 0.5) or os.clock() - travel.Since > 8) then
@@ -57760,7 +57821,7 @@ local function triggers(state: Configuration)
 		run.Portal = true
 		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
 		local body = lockLeft > 0 and string.format("Find the stone portal (it wakes in %s). Stand in its circle to call the boss.", UIKit.formatTime(lockLeft))
-			or "Find the stone portal and stand in its circle to call the boss."
+			or "Find the stone portal and stand in its circle to call the boss. The swarm keeps growing until you do!"
 		push("Portal", "Find the portal", body, "portal", T.HintSeconds + 1)
 	end
 	if not run.Boss and stagePhase == "Boss" then
@@ -58473,10 +58534,13 @@ function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
 	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
-	local home = obj.Position
+	-- the shake is an offset on top of whatever position the object has right now, so a
+	-- relayout during the shake (the HUD placing a pill under a timer that just moved) is
+	-- kept instead of being undone when the shake ends
 	local amp = pixels or 6
 	local steps = 6
 	local each = (seconds or 0.3) / steps
+	local applied = UDim2.new()
 	task.spawn(function()
 		for i = 1, steps do
 			if not obj.Parent then
@@ -58484,11 +58548,13 @@ function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
 			end
 			local k = (1 - i / steps) * amp
 			local dir = (i % 2 == 0) and 1 or -1
-			obj.Position = home + UDim2.fromOffset(dir * k, (i % 3 - 1) * k * 0.5)
+			local offset = UDim2.fromOffset(dir * k, (i % 3 - 1) * k * 0.5)
+			obj.Position = obj.Position - applied + offset
+			applied = offset
 			task.wait(each)
 		end
 		if obj.Parent then
-			obj.Position = home
+			obj.Position = obj.Position - applied
 		end
 	end)
 end

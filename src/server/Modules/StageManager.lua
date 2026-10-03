@@ -36,7 +36,7 @@
 	SpawnMultCap and Config.Enemies.MaxLive). Standard runs are unchanged.
 
 	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, StageBoss, PortalPos,
-	PortalHint, PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total"),
+	PortalHint, SwarmWarn (0-2, Config.Stages.Pressure), PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total"),
 	PortalReveal (counts up each time a stage's portal becomes chargeable: the clients'
 	cue for the banner, sound, beacon burst and minimap ping; see Config.Stages.RevealDelaySeconds).
 ]]
@@ -65,6 +65,7 @@ local lastPortal: { [string]: Vector3 } = {} -- last portal spot per arena (a ne
 local stageTime = 0
 local hinted = false
 local revealed = false -- this stage's portal reveal happened (PortalReveal bumped)
+local swarmWarn = 0 -- Config.Stages.Pressure step shown (SwarmState SwarmWarn)
 local reveals = 0
 local shownLock = -1
 local charge = 0
@@ -312,6 +313,8 @@ local function buildStage(n: number)
 	state:SetAttribute("StageBoss", bossName(stageBoss))
 	state:SetAttribute("PortalPos", spot)
 	state:SetAttribute("PortalHint", false)
+	swarmWarn = 0
+	state:SetAttribute("SwarmWarn", 0)
 	state:SetAttribute("PortalCharge", 0)
 	state:SetAttribute("PortalLockLeft", math.ceil(lockSeconds()))
 	state:SetAttribute("SurgeLeft", 0)
@@ -364,6 +367,8 @@ function StageManager.EndRun()
 	setSub("None")
 	state:SetAttribute("Stage", 0)
 	state:SetAttribute("PortalHint", false)
+	swarmWarn = 0
+	state:SetAttribute("SwarmWarn", 0)
 	state:SetAttribute("PortalCharge", 0)
 	state:SetAttribute("PortalLockLeft", 0)
 	state:SetAttribute("PortalPos", nil)
@@ -651,6 +656,20 @@ local function stepExplore(dt: number)
 		hinted = true
 		state:SetAttribute("PortalHint", true)
 		ctx.RunManager.Broadcast("The portal is marked on your screen.", Color3.fromRGB(180, 200, 255))
+	end
+	-- swarm pressure: the longer the portal stays unopened, the louder the warning
+	local pressure = Config.Stages.Pressure
+	if pressure and revealed then
+		local step = stageTime >= pressure.DangerSeconds and 2 or (stageTime >= pressure.WarnSeconds and 1 or 0)
+		if step > swarmWarn then
+			swarmWarn = step
+			state:SetAttribute("SwarmWarn", step)
+			if step == 1 then
+				ctx.RunManager.Broadcast("The swarm is growing. Open the portal!", Color3.fromRGB(255, 190, 90), true)
+			else
+				ctx.RunManager.Broadcast("The swarm is overwhelming! Open the portal now!", Color3.fromRGB(255, 110, 90), true)
+			end
+		end
 	end
 	miniWaveTimer += dt
 	if miniWaveTimer >= Config.Run.MiniWaveInterval then

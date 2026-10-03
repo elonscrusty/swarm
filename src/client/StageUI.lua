@@ -59,6 +59,23 @@ local offer: { [string]: any }? = nil
 local chosen = false
 local travel = { Active = false, Since = 0 }
 local lastReveal: number? = nil -- SwarmState PortalReveal seen last (nil = not in a run)
+local lastWarn = 0 -- SwarmState SwarmWarn seen last (the swarm-pressure banner)
+
+-- Swarm pressure (SwarmState SwarmWarn, Config.Stages.Pressure): a banner each step up,
+-- so nobody wonders why the swarm keeps thickening while the portal waits.
+local function checkPressure(state: Configuration)
+	local warn = state:GetAttribute("SwarmWarn") or 0
+	if warn == lastWarn then
+		return
+	end
+	local up = warn > lastWarn
+	lastWarn = warn
+	if up and warn == 1 then
+		Hud.Announce("THE SWARM IS GROWING", "Open the portal before it gets worse", Accessibility.Color(Color3.fromRGB(246, 218, 126), "Loot"), "PortalAppear")
+	elseif up and warn >= 2 then
+		Hud.Announce("THE SWARM IS OVERWHELMING", "Open the portal now!", Accessibility.Color(Color3.fromRGB(219, 106, 94), "Danger"), "PortalAppear")
+	end
+end
 
 -- The portal reveal: banner + sound (the beacon and the minimap ping watch the attribute
 -- themselves). A mid-run joiner sees the banner too: it tells them where to go.
@@ -70,7 +87,7 @@ local function checkReveal(state: Configuration)
 	if reveal ~= lastReveal then
 		lastReveal = reveal
 		if reveal > 0 then
-			Hud.Announce("THE PORTAL HAS APPEARED", "Follow the arrow and stand in its circle to open it",
+			Hud.Announce("THE PORTAL HAS APPEARED", "Open it before the swarm grows too strong: follow the arrow, stand in its circle",
 				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear")
 		end
 	end
@@ -577,6 +594,7 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 		return
 	end
 	checkReveal(state)
+	checkPressure(state)
 	PortalBeacon.Update(state, not travel.Active)
 	-- the travel fade lifts once the next stage runs (or after a safety timeout)
 	if travel.Active and ((stagePhase ~= "Travel" and os.clock() - travel.Since > 0.5) or os.clock() - travel.Since > 8) then

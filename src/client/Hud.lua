@@ -635,6 +635,9 @@ local function layout()
 	-- stage pill: top left under the Roblox menu buttons (landscape); portrait has no room
 	-- beside the timer, so it sits centred under it
 	if portrait then
+		-- a wide objective (OPEN THE PORTAL + the swarm warning) must clear Roblox's menu /
+		-- chat buttons (44 px tall in a 58 px bar from the top inset)
+		y = math.max(y, ins.Top + 58 + 4)
 		ui.Stage.AnchorPoint = Vector2.new(0.5, 0)
 		ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(y))
 		if ui.Stage.Visible then
@@ -1046,6 +1049,7 @@ end
 -- Short forms of the objectives for when the pill would run under the health panel.
 local STAGE_SHORT = {
 	["OPENING THE PORTAL"] = "OPENING",
+	["OPEN THE PORTAL"] = "OPEN PORTAL",
 	["PORTAL DORMANT"] = "DORMANT",
 	["SURVIVE THE SURGE"] = "SURGE",
 }
@@ -1058,6 +1062,13 @@ local function stageGoal(state: Configuration, stagePhase: string): (string, str
 			return "OPENING THE PORTAL", string.format("%d%%", math.floor(chargeNow * 100)), P.gold_200
 		elseif lockLeft > 0 then
 			return "PORTAL DORMANT", UIKit.formatTime(lockLeft), P.ivory_100
+		end
+		-- swarm pressure (SwarmState SwarmWarn): the objective turns into a warning
+		local warn = state:GetAttribute("SwarmWarn") or 0
+		if warn >= 2 then
+			return "OPEN THE PORTAL", "SWARM OVERWHELMING", P.crimson_300
+		elseif warn >= 1 then
+			return "OPEN THE PORTAL", "SWARM GROWING", P.amber_300
 		end
 		return "FIND THE PORTAL", "", P.ivory_100
 	elseif stagePhase == "Boss" then
@@ -1083,6 +1094,9 @@ local function updateStage(state: Configuration)
 	local longGoal = goal
 	if anim.StageTooWide == longGoal then
 		goal = STAGE_SHORT[longGoal] or (stagePhase == "Boss" and "DEFEAT THE BOSS") or goal
+		if longGoal == "OPEN THE PORTAL" then
+			count = "" -- phones: the amber / crimson goal and the banner carry the warning
+		end
 	end
 	local stageShown = stageNo > 0 and goal ~= ""
 	if ui.Stage.Visible ~= stageShown then
@@ -1099,6 +1113,11 @@ local function updateStage(state: Configuration)
 		if ui.StageGoal.Text ~= goal then
 			ui.StageGoal.Text = goal
 			anim.StageNewsAt = os.clock()
+			if goal == "OPEN THE PORTAL" or goal == "OPEN PORTAL" then
+				UIAnim.Punch(ui.Stage, 0.25)
+				UIAnim.Shake(ui.Stage, 4, 0.3)
+				glow(ui.Stage, P.crimson_400)
+			end
 			if anim.StagePhase ~= stagePhase and anim.StagePhase ~= nil then
 				UIAnim.Punch(ui.Stage, 0.2)
 				glow(ui.Stage, (stagePhase == "Surge" or stagePhase == "Boss") and P.crimson_400 or P.gold_300)
@@ -1112,7 +1131,7 @@ local function updateStage(state: Configuration)
 		setText(ui.StageCount, count)
 		-- calm: a plain objective is news for a few seconds, then the pill is just
 		-- "STAGE N"; boss / surge / open portal and counting goals stay (urgent or moving)
-		local urgent = stagePhase ~= "Explore" or count ~= ""
+		local urgent = stagePhase ~= "Explore" or count ~= "" or (state:GetAttribute("SwarmWarn") or 0) > 0
 		local calm = not urgent and os.clock() - (anim.StageNewsAt or 0) > 8
 		if ui.StageGoal.Visible == calm then
 			ui.StageGoal.Visible = not calm

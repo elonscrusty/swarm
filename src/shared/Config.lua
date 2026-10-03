@@ -73,6 +73,11 @@ Config.Stages = {
 	-- the HUD arrow toward the portal appears after this long (never before the lock ends
 	-- or the reveal delay); 0 = from the reveal on, always
 	HintAfterSeconds = 0,
+	-- SWARM PRESSURE: the swarm keeps growing until the portal is charged. While exploring,
+	-- SwarmState SwarmWarn steps to 1 ("SWARM GROWING") at WarnSeconds of stage time and to
+	-- 2 ("SWARM OVERWHELMING") at DangerSeconds, back to 0 once the portal charges. The HUD
+	-- turns the stage pill into OPEN THE PORTAL with the warning and a banner each step.
+	Pressure = { WarnSeconds = 75, DangerSeconds = 150 },
 	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
 	EnemyHPPerStage = 0.25,
 	EnemyDamagePerStage = 0.08, -- also the boss's contact / orb damage and bomb ticks

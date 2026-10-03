@@ -455,7 +455,7 @@ local function triggers(state: Configuration)
 		run.Portal = true
 		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
 		local body = lockLeft > 0 and string.format("Find the stone portal (it wakes in %s). Stand in its circle to call the boss.", UIKit.formatTime(lockLeft))
-			or "Find the stone portal and stand in its circle to call the boss."
+			or "Find the stone portal and stand in its circle to call the boss. The swarm keeps growing until you do!"
 		push("Portal", "Find the portal", body, "portal", T.HintSeconds + 1)
 	end
 	if not run.Boss and stagePhase == "Boss" then
