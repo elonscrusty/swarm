@@ -2038,7 +2038,7 @@ function K.meteorMark(x: number, z: number, r: number, fall: number, evo: boolea
 	local col = evo and P.gold_300 or P.amber_300
 	wave(x, z, r * 1.05, r * 0.25, 0.3, col, 0.25, fall)
 	if room(1) then
-		fx("Cylinder", col, NEON, CFrame.new(x, FLOOR_Y + 0.06, z) * DISC, nil, Vector3.new(0.05, r * 2, r * 2), nil, 0.9, 0.6, fall, EASE_LINEAR)
+		fx("Cylinder", col, NEON, CFrame.new(x, FLOOR_Y + 0.06, z) * DISC, nil, Vector3.new(0.05, r * 2, r * 2), nil, 0.95, 0.78, fall, EASE_LINEAR)
 	end
 end
 
