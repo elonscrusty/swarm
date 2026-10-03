@@ -75,6 +75,11 @@ WeaponData.Order = {
 	"ChainHook",
 	"Turret",
 	"SoulBolt",
+}
+
+-- Held for the next update (owner): fully built and tested, but kept out of WeaponData.Order so
+-- no level-up card, chest, journal or DEV list offers them. Move ids into Order to release.
+WeaponData.HeldOrder = {
 	"WardShields",
 	"Earthsplitter",
 	"Starfall",

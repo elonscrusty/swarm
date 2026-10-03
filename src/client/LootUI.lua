@@ -363,6 +363,7 @@ local function buildCaravan(root: Frame)
 	local fill = new("Frame", { Name = "Fill", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1) }, track)
 	UIKit.corner(fill, 999)
 	ui.CaravanBar = bar
+	Hud.ReserveCentre(bar) -- centre banners stack under the defence bar
 	ui.CaravanFill = fill
 end
 
@@ -1168,6 +1169,15 @@ function LootUI.Update(_dt: number, inRun: boolean)
 					else
 						x = math.clamp(math.min(x, p.X - 60 - w), 16, math.max(16, mx - 8 - w))
 					end
+				end
+			end
+			-- touch: never under the JUMP button (bottom right); slide left of it instead
+			if UserInputService.TouchEnabled then
+				local Mv = Config.Movement
+				local ins = kit.Insets()
+				local jump = Mv.ButtonSize + Mv.ButtonMargin + math.max(0, ins.Right or 0) + 8
+				if x + w > v.X - jump and y + h / 2 > v.Y - jump then
+					x = math.max(16, v.X - jump - w)
 				end
 			end
 		end

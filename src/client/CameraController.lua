@@ -225,6 +225,11 @@ function CameraController.Init()
 		if not target then
 			return
 		end
+		if inRun and target.Y < Config.ArenaOrigin.Y + 1 then
+			-- never follow a hero under the floor (the server puts a fallen hero back,
+			-- RunManager fallRescue): the view stays above the arena meanwhile
+			target = Vector3.new(target.X, Config.ArenaOrigin.Y + 1, target.Z)
+		end
 		local now = os.clock()
 		if who ~= subjectKey then
 			-- spectate switch: glide over instead of cutting (the first subject snaps)

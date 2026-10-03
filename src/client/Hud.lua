@@ -469,8 +469,54 @@ end
 local bannerToken = 0
 local bannerTweens: { Tween } = {}
 
+--[[
+	One rule for every centre banner (stage banner, portal reveal, Hud.Announce callers):
+	  * queue: a banner asked for while another is on screen waits its turn (at most
+	    BANNER_QUEUE waiting, the same title never twice), so two never overlap or cut
+	    each other off;
+	  * stack: persistent top-centre bars register with Hud.ReserveCentre (the caravan's
+	    defence bar); while one is visible the banner drops below it.
+]]
+local BANNER_QUEUE = 3
+local bannerQueue: { { Title: string, Goal: string, Color: Color3?, OnShow: (() -> ())? } } = {}
+local bannerBusy = false
+local bannerBaseY = 0
+local centreBars: { GuiObject } = {}
+local showBanner: (string, string, Color3?, (() -> ())?) -> ()
+
+local function placeBanner()
+	local box = ui.Banner :: Frame?
+	if not box then
+		return
+	end
+	local half = box.Size.Y.Offset / 2
+	local y = bannerBaseY
+	for _ = 1, 2 do -- twice: dropping under one bar may land on another
+		for _, g in ipairs(centreBars) do
+			if g.Visible and g.Parent then
+				local gh = g.Size.Y.Offset
+				local top = g.Position.Y.Offset - g.AnchorPoint.Y * gh
+				if y - half < top + gh + 8 and y + half > top - 8 then
+					y = top + gh + 8 + half
+				end
+			end
+		end
+	end
+	local at = UDim2.fromOffset(box.Position.X.Offset, math.floor(y))
+	if box.Position ~= at then
+		box.Position = at
+	end
+end
+
+-- A persistent bar in the top centre (e.g. the caravan defence bar): banners stack under it.
+function Hud.ReserveCentre(g: GuiObject)
+	table.insert(centreBars, g)
+end
+
 local function stopBanner()
 	bannerToken += 1
+	bannerBusy = false
+	table.clear(bannerQueue)
 	for _, t in ipairs(bannerTweens) do
 		t:Cancel()
 	end
@@ -480,11 +526,38 @@ local function stopBanner()
 	end
 end
 
+local function nextBanner()
+	bannerBusy = false
+	local item = table.remove(bannerQueue, 1)
+	if item then
+		showBanner(item.Title, item.Goal, item.Color, item.OnShow)
+	end
+end
+
 -- Slides / scales in, holds ~1 s, fades. Reduced effects: a plain fade, no scale or sparks.
 -- `color` tints the title (the stage banner is gold; the portal reveal is arcane blue).
-local function showBanner(titleText: string, goal: string, color: Color3?)
-	stopBanner()
+function showBanner(titleText: string, goal: string, color: Color3?, onShow: (() -> ())?)
+	if bannerBusy then
+		if #bannerQueue < BANNER_QUEUE and ui.BannerTitle.Text ~= UIKit.track(titleText) then
+			for _, q in ipairs(bannerQueue) do
+				if q.Title == titleText then
+					return
+				end
+			end
+			table.insert(bannerQueue, { Title = titleText, Goal = goal, Color = color, OnShow = onShow })
+		end
+		return
+	end
+	bannerToken += 1
+	for _, t in ipairs(bannerTweens) do
+		t:Cancel()
+	end
+	table.clear(bannerTweens)
+	bannerBusy = true
 	local token = bannerToken
+	if onShow then
+		onShow()
+	end
 	local box, title, line, sub = ui.Banner :: Frame, ui.BannerTitle :: TextLabel, ui.BannerLine :: Frame, ui.BannerSub :: TextLabel
 	local reduced = (ClientSettings.Reduced() or ClientPerformance.Reduced())
 	title.Text = UIKit.track(titleText)
@@ -496,6 +569,7 @@ local function showBanner(titleText: string, goal: string, color: Color3?)
 	line.Size = UDim2.fromOffset(0, 3)
 	line.BackgroundTransparency = 0
 	box.Visible = true
+	placeBanner()
 	local function tw(obj: Instance, seconds: number, goalProps: { [string]: any }, style: Enum.EasingStyle?, dir: Enum.EasingDirection?)
 		local t = UIAnim.Tween(obj, seconds, goalProps, style, dir)
 		table.insert(bannerTweens, t)
@@ -530,6 +604,7 @@ local function showBanner(titleText: string, goal: string, color: Color3?)
 		task.delay(0.45, function()
 			if token == bannerToken then
 				box.Visible = false
+				nextBanner()
 			end
 		end)
 	end)
@@ -548,10 +623,11 @@ function Hud.Announce(title: string, sub: string, color: Color3?, sound: string?
 	if not ui.Banner then
 		return
 	end
-	showBanner(title, sub, color)
-	if sound and host.Audio and host.Audio.Play then
-		host.Audio.Play(sound)
-	end
+	showBanner(title, sub, color, sound and function()
+		if host.Audio and host.Audio.Play then
+			host.Audio.Play(sound)
+		end
+	end or nil)
 end
 
 local function buildStatus(frame: Frame)
@@ -723,7 +799,9 @@ local function layout()
 
 	-- stage banner: under the top cluster in landscape, mid-screen in portrait
 	ui.Banner.Size = UDim2.fromOffset(math.min(520, W - 2 * M), 110)
-	ui.Banner.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(portrait and H * 0.5 or math.max(H * 0.3, topBottom + 70)))
+	bannerBaseY = math.floor(portrait and H * 0.5 or math.max(H * 0.3, topBottom + 70))
+	ui.Banner.Position = UDim2.fromOffset(math.floor(W / 2), bannerBaseY)
+	placeBanner()
 
 	-- status line: centre-low in landscape, below the panels in portrait
 	local statusW = math.min(640, W - 2 * M)
@@ -1450,6 +1528,9 @@ end
 
 function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	refreshBuff()
+	if ui.Banner.Visible then
+		placeBanner() -- a centre bar may appear mid-banner
+	end
 	local phase = state:GetAttribute("Phase") or "Lobby"
 	local runTime = state:GetAttribute("RunTime") or 0
 

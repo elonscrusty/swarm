@@ -61,6 +61,7 @@ local state: Configuration
 local lobby
 local rng = Random.new()
 local FLAT = Vector3.new(1, 0, 1)
+local FLOOR_Y = Config.ArenaOrigin.Y -- every arena's floor top (MapBuilder biomeGround / buildForest)
 
 local phase = "Lobby"
 local countdown = 0
@@ -1337,6 +1338,7 @@ function RunManager.TeleportPlayer(rp, floorPos: Vector3)
 		RunManager.AttachCharacter(rp, m)
 	end
 	rp.LastValidPos = pos
+	rp.SafePos = pos
 	rp.SpeedCheckTimer = 0
 end
 
@@ -1369,6 +1371,9 @@ function RunManager.TravelPlayers(arena)
 		end
 		rp.InvulnUntil = runTime + Config.Player.ReviveInvulnSeconds
 		RunManager.TeleportPlayer(rp, placeOnArena(arena, i, n))
+		if rp.TravelHold and rp.Root then
+			rp.Root.Anchored = true -- held until the travel ends (see travelHold)
+		end
 		RunManager.ApplyMovement(rp)
 	end
 	RunManager.RefreshFrozen()
@@ -1745,11 +1750,90 @@ local function speedCheck(rp, dt: number)
 	local maxSpeed = (rp.Paused or rp.RewardUntil or frozen or not rp.Alive) and 0 or math.max(rp.Stats.Speed, Config.Player.BaseSpeed) * math.max(1, rp.TerrainSpeedMult or 1) * (rp.RushMult or 1)
 	-- hop cap: the client may raise its own WalkSpeed up to HopSpeedCap while chaining hops
 	local allowed = maxSpeed * Config.Movement.HopSpeedCap * Config.Movement.ServerTolerance * elapsed + Config.Player.SpeedCheckAllowance
-	if moved > allowed or pos.Y < Config.ArenaOrigin.Y - 20 then
+	if moved > allowed then
 		root.CFrame = CFrame.new(last + Vector3.new(0, 0.5, 0)) * root.CFrame.Rotation
 		root.AssemblyLinearVelocity = Vector3.zero
-	else
+	elseif pos.Y >= FLOOR_Y - 1 then
+		-- (a spot under the floor is never "valid": snapping back to it kept a player who
+		-- fell through the floor falling forever; fallRescue handles that case)
 		rp.LastValidPos = pos
+	end
+end
+
+--[[
+	Safety net against falling through the map (a floor that had not reached the client
+	yet after travel, a physics push through the thin floor): a run player whose root is
+	RESCUE_BELOW studs under the floor top, or well outside the arena, is put back on the
+	last safe floor spot (rp.SafePos: standing height, inside the arena) or the arena
+	centre. No damage; a living player gets RESCUE_GRACE seconds of invulnerability.
+	Downed (anchored) players are moved too, so teammates can still reach them.
+]]
+local RESCUE_BELOW = 4
+local RESCUE_GRACE = 1.5
+local function arenaHalf(): number
+	return ((Config.Arenas :: any).Size or 400) / 2
+end
+
+function RunManager.NeedsRescue(pos: Vector3): boolean
+	local c, h = Config.ArenaOrigin, arenaHalf() + 30
+	return pos.Y < FLOOR_Y - RESCUE_BELOW or math.abs(pos.X - c.X) > h or math.abs(pos.Z - c.Z) > h
+end
+
+local function fallRescue(rp): boolean
+	local root: BasePart? = rp.Root
+	if not root or not root.Parent then
+		return false
+	end
+	local pos = root.Position
+	if not RunManager.NeedsRescue(pos) then
+		local c, h = Config.ArenaOrigin, arenaHalf()
+		if not root.Anchored and pos.Y > FLOOR_Y + 0.5 and pos.Y < FLOOR_Y + 8
+			and math.abs(pos.X - c.X) <= h and math.abs(pos.Z - c.Z) <= h then
+			rp.SafePos = pos
+		end
+		return false
+	end
+	local safe: Vector3 = rp.SafePos or Config.ArenaOrigin
+	if RunManager.NeedsRescue(safe) then
+		safe = Config.ArenaOrigin
+	end
+	RunManager.TeleportPlayer(rp, Vector3.new(safe.X, FLOOR_Y, safe.Z))
+	if rp.Alive then
+		rp.InvulnUntil = math.max(rp.InvulnUntil or 0, runTime + RESCUE_GRACE)
+	end
+	rp.FallRescues = (rp.FallRescues or 0) + 1
+	warn(string.format("[RunManager] %s fell out of the arena at (%.0f, %.0f, %.0f); put back on the floor", rp.Player.Name, pos.X, pos.Y, pos.Z))
+	return true
+end
+
+--[[
+	Travel hold: from the first frame of the travel fade until it ends, run roots are
+	anchored. The old arena is destroyed and the new one built while the screens are dark;
+	the client simulates its own character, so without the hold it could fall through the
+	gap before the new floor reached it. Released (and physics handed back) once the
+	travel is over.
+]]
+local function travelHold(rp, holding: boolean)
+	local root: BasePart? = rp.Root
+	if holding then
+		-- re-asserted every frame (a revive or a swapped character model unanchors)
+		if root and root.Parent then
+			rp.TravelHold = true
+			if not root.Anchored then
+				root.AssemblyLinearVelocity = Vector3.zero
+				root.Anchored = true
+			end
+		end
+	elseif rp.TravelHold then
+		rp.TravelHold = nil
+		if root and root.Parent and rp.Alive then
+			root.Anchored = false
+			pcall(function()
+				root:SetNetworkOwner(rp.Player)
+			end)
+			rp.LastValidPos = root.Position
+			rp.SpeedCheckTimer = 0
+		end
 	end
 end
 
@@ -1796,6 +1880,8 @@ function RunManager.Step(dt: number)
 			local v = root.AssemblyLinearVelocity * FLAT
 			rp.MoveDir = v.Magnitude > 2 and v.Unit or Vector3.zero
 		end
+		travelHold(rp, ctx.StageManager.IsHolding())
+		fallRescue(rp)
 		if rp.Alive then
 			obstaclePerchCheck(rp, dt)
 			speedCheck(rp, dt)
