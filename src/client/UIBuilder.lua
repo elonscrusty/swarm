@@ -1804,6 +1804,10 @@ end
 	the run (InRun), the results show or the hero goes down.
 	Built once: a fixed ring of slot tiles is recycled as the strip moves (one slot changes
 	per tile passed) and item icons are pooled by id.
+	Every chest rolls (owner): a reward the server does NOT pause for (an ordinary item, a
+	one-level elite chest) plays the short "mini" reel instead (Mini = true: ~1.5 s, no
+	dimmer, the HUD stays, taps and keys go to the game, placed beside the hero), so a
+	teammate's or an ordinary chest never stops anyone. It queues with the others.
 ]]
 local closeReward: (boolean) -> ()
 local buildChest: () -> ()
@@ -1902,11 +1906,34 @@ do
 		y += TS(12) + 6
 		chest.Detail.Position = UDim2.fromOffset(16, y)
 		chest.Detail.Size = UDim2.new(1, -32, 0, TS(14) * 2 + 6)
-		y += TS(14) * 2 + 10
-		local h = y + 8 + TS(12) + 8
+		local mini = chest.Mini == true
+		if not mini then
+			y += TS(14) * 2 + 10
+		end
+		local h = y + (mini and 16 or 8 + TS(12) + 8)
 		chest.Panel.Size = UDim2.fromOffset(w, h)
-		-- centred on the hero's spot, a touch high so the bottom HUD stays readable
-		chest.Panel.Position = UDim2.fromOffset(math.floor(v.X / 2), math.floor(math.clamp(v.Y * 0.45, h / 2 + insets.Top + 8, v.Y - h / 2 - 8)))
+		-- the draining bar sits right under the reveal in the mini (no TAP TO SKIP line)
+		chest.Timer.Frame.Position = mini and UDim2.new(0.5, 0, 1, -8) or UDim2.new(0.5, 0, 1, -TS(12) - 10)
+		if mini then
+			-- the run goes on: beside the hero (left of centre in landscape, under the top
+			-- HUD in portrait), never over him
+			local m = margin()
+			if portrait then
+				-- under the hero (the top holds the timer, health and weapons panels)
+				local cy = math.min(v.Y * 0.5 + 80 + h / 2, v.Y - h / 2 - 8)
+				chest.Panel.Position = UDim2.fromOffset(math.floor(v.X / 2), math.floor(cy))
+			else
+				-- left of the hero, under the timer / health cluster, over the ability bar
+				local x = math.max(m + insets.Left + w / 2, math.min(v.X / 2 - 70 - w / 2, v.X * 0.25))
+				local top = (Hud.TopBottom() or 0) + 8
+				local bottom = (Hud.BarTop() or v.Y) - 8
+				local cy = math.max(top + h / 2, math.min(v.Y * 0.42, bottom - h / 2))
+				chest.Panel.Position = UDim2.fromOffset(math.floor(x), math.floor(cy))
+			end
+		else
+			-- centred on the hero's spot, a touch high so the bottom HUD stays readable
+			chest.Panel.Position = UDim2.fromOffset(math.floor(v.X / 2), math.floor(math.clamp(v.Y * 0.45, h / 2 + insets.Top + 8, v.Y - h / 2 - 8)))
+		end
 	end
 
 	-- Puts sequence index idx (its icon from the pool, its rarity rim) into slot s.
@@ -2007,6 +2034,7 @@ do
 		reward.Current = nil
 		reward.Phase = ""
 		table.clear(reward.Queue)
+		chest.ModeSet = false
 		hide(chest.Overlay, "Reward")
 		if send then
 			Remotes.Get("RewardClose"):FireServer(reward.Seq)
@@ -2051,6 +2079,20 @@ do
 		end
 	end
 
+	-- Mini (the run goes on) or full (the run is paused) presentation for this entry.
+	local function setMode(mini: boolean)
+		if chest.Mini == mini and chest.ModeSet then
+			return
+		end
+		chest.ModeSet = true
+		chest.Mini = mini
+		chest.Dim.Visible = not mini
+		chest.Detail.Visible = not mini
+		chest.Hint.Visible = not mini
+		setCovering("Reward", not mini)
+		layoutChest()
+	end
+
 	-- Next reward in the queue (or the end): its sequence, timings and the spin.
 	local function startNext(now: number)
 		local e = table.remove(reward.Queue, 1)
@@ -2060,11 +2102,19 @@ do
 		end
 		reward.Current = e
 		reward.Shown += 1
+		setMode(e.Mini == true)
+		if e.Mini then
+			layoutChest() -- follows the HUD as it is now (boss bar, team rows)
+		end
 		local R = (Config.Chests :: any).Reel or {}
 		local baseSpin = R.Spin or 1.3
 		local first = reward.Shown == 1
 		local spin = first and baseSpin or (R.QueuedSpin or 0.8)
 		local revealT = first and (R.Reveal or 1.3) or (R.QueuedReveal or 1)
+		if e.Mini then
+			spin = math.min(spin, R.MiniSpin or 0.7)
+			revealT = math.min(revealT, R.MiniReveal or 0.8)
+		end
 		-- keep this and everything queued behind it inside the server's pause limit
 		local need = (spin + revealT) * (1 + #reward.Queue)
 		local left = reward.Deadline - now
@@ -2073,7 +2123,7 @@ do
 			spin *= k
 			revealT = math.max(0.6, revealT * k)
 		end
-		if spin < 0.3 or (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+		if spin < (e.Mini and 0.25 or 0.3) or (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			spin = 0
 		end
 		local travel = spin > 0 and math.max(8, math.floor((R.Tiles or 26) * spin / baseSpin + 0.5)) or 0
@@ -2139,7 +2189,10 @@ do
 		reward.Deadline = now + ((Config.Chests :: any).RewardPauseMax or 7) - 0.3
 		reward.Shown = 0
 		reward.Total = 1
+		chest.ModeSet = false
+		setMode(e.Mini == true)
 		show(chest.Overlay, "Reward", false)
+		setCovering("Reward", e.Mini ~= true)
 		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			-- the panel lands with a little tilt
 			local panel = chest.Panel :: Frame
@@ -2167,6 +2220,7 @@ do
 		-- the dimmer is the skip target (the run is paused, so it may take the whole screen)
 		local dim = new("TextButton", { Name = "Dim", Text = "", AutoButtonColor = false, BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.6, BorderSizePixel = 0, ZIndex = 1 }, overlay)
 		UIKit.Bleed(dim)
+		chest.Dim = dim
 		dim.Activated:Connect(skip)
 		local holder, face = UIKit.Surface(overlay, {
 			Name = "Panel",
@@ -2232,7 +2286,7 @@ do
 		layoutChest()
 
 		UserInputService.InputBegan:Connect(function(input, processed)
-			if not reward.Open or processed then
+			if not reward.Open or processed or chest.Mini then
 				return
 			end
 			local k = input.KeyCode
@@ -2309,20 +2363,8 @@ do
 			end
 		end
 		local gold = tonumber(data.Gold) or 0
-		if data.Dramatic ~= true then
-			local lines = {}
-			for _, entry in ipairs(list) do
-				table.insert(lines, tostring(entry.Name) .. " " .. tostring(entry.Text))
-			end
-			if gold > 0 then
-				table.insert(lines, "+" .. UIKit.formatNumber(gold) .. " gold")
-			end
-			if #lines > 0 then
-				UIBuilder.Toast("Chest: " .. table.concat(lines, " · "), P.gold_300)
-			end
-			releaseIfIdle()
-			return
-		end
+		-- not paused for (one level): the short mini reel, the run goes on
+		local mini = data.Dramatic ~= true
 		local extras = {}
 		for i = 2, #list do
 			table.insert(extras, tostring(list[i].Name) .. " " .. tostring(list[i].Text))
@@ -2344,6 +2386,7 @@ do
 				Detail = #extras > 0 and ("Also: " .. table.concat(extras, "  ·  ")) or "A free level from the chest",
 				Big = evolved,
 				Source = "Elite chest",
+				Mini = mini,
 			}
 		elseif gold > 0 then
 			e = {
@@ -2356,6 +2399,7 @@ do
 				Detail = "Added to your purse",
 				Big = false,
 				Source = "Elite chest",
+				Mini = mini,
 			}
 		end
 		if e then
@@ -2375,11 +2419,6 @@ do
 		end
 		local r = RARITY[def.Rarity] or RARITY.Common
 		local n = tonumber(data.Count) or 1
-		if data.Dramatic ~= true then
-			UIBuilder.Toast(def.Name .. (n > 1 and string.format(" x%d", n) or ""), r.Color)
-			releaseIfIdle()
-			return
-		end
 		enqueue({
 			Land = def.Id,
 			Fill = itemFill,
@@ -2390,6 +2429,8 @@ do
 			Detail = def.Text,
 			Big = def.Rarity == "Legendary",
 			Source = type(data.Source) == "string" and data.Source or "Chest",
+			-- not paused for: the short mini reel while the run goes on
+			Mini = data.Dramatic ~= true,
 		})
 	end
 end
