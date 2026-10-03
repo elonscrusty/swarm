@@ -632,11 +632,11 @@ local LIGHTING = {
 	-- the fire pools and the key light on the dais do the rest
 	Lobby = {
 		Clock = 18.1, Brightness = 1.4, Latitude = 40, Shadow = 0.35,
-		Ambient = rgb(112, 122, 158), Outdoor = rgb(146, 158, 200), Top = rgb(178, 188, 228), Bottom = rgb(46, 52, 72),
+		Ambient = rgb(118, 124, 160), Outdoor = rgb(152, 160, 204), Top = rgb(190, 192, 230), Bottom = rgb(56, 54, 74),
 		Diffuse = 0.35, Specular = 0.3,
-		Atmo = { Density = 0.3, Offset = 0.2, Color = rgb(132, 148, 188), Decay = rgb(206, 140, 112), Glare = 0.2, Haze = 1.4 },
+		Atmo = { Density = 0.28, Offset = 0.2, Color = rgb(126, 146, 200), Decay = rgb(218, 138, 100), Glare = 0.2, Haze = 1.1 },
 		Bloom = { Intensity = 0.35, Size = 22, Threshold = 1.4 },
-		Grade = { Brightness = 0, Contrast = 0.1, Saturation = 0, Tint = rgb(240, 242, 255) },
+		Grade = { Brightness = 0.01, Contrast = 0.13, Saturation = 0.16, Tint = rgb(246, 244, 255) },
 		Rays = { Intensity = 0.02, Spread = 0.5 },
 		Clouds = { Cover = 0.55, Density = 0.55, Color = rgb(150, 136, 160) },
 	},
@@ -648,33 +648,33 @@ local LIGHTING = {
 	-- sunny late morning in a forest clearing: saturated meadow, warm light
 	Forest = {
 		Clock = 10.8, Brightness = 3.0, Latitude = 38, Shadow = 0.55,
-		Ambient = rgb(120, 122, 116), Outdoor = rgb(152, 158, 156), Top = rgb(255, 244, 222), Bottom = rgb(84, 104, 70),
+		Ambient = rgb(128, 126, 112), Outdoor = rgb(160, 162, 150), Top = rgb(255, 242, 212), Bottom = rgb(82, 112, 64),
 		Diffuse = 0.5, Specular = 0.35,
-		Atmo = { Density = 0.18, Offset = 0.05, Color = rgb(198, 224, 242), Decay = rgb(120, 162, 192), Glare = 0, Haze = 0.35 },
+		Atmo = { Density = 0.16, Offset = 0.05, Color = rgb(186, 220, 248), Decay = rgb(106, 160, 204), Glare = 0, Haze = 0.25 },
 		Bloom = { Intensity = 0.25, Size = 22, Threshold = 1.7 },
-		Grade = { Brightness = 0, Contrast = 0.08, Saturation = 0.03, Tint = rgb(255, 252, 244) },
+		Grade = { Brightness = 0, Contrast = 0.12, Saturation = 0.22, Tint = rgb(255, 251, 240) },
 		Rays = { Intensity = 0.03, Spread = 0.5 },
 		Clouds = { Cover = 0.4, Density = 0.42, Color = rgb(255, 255, 255) },
 	},
 	-- sunny afternoon over the ruins: light warm paving on bright grass (warm, not dusk)
 	Ruins = {
 		Clock = 14.6, Brightness = 3.0, Latitude = 32, Shadow = 0.55,
-		Ambient = rgb(122, 120, 116), Outdoor = rgb(156, 156, 156), Top = rgb(255, 240, 216), Bottom = rgb(90, 104, 72),
+		Ambient = rgb(130, 124, 112), Outdoor = rgb(162, 160, 150), Top = rgb(255, 238, 206), Bottom = rgb(88, 110, 66),
 		Diffuse = 0.5, Specular = 0.35,
-		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(220, 226, 232), Decay = rgb(170, 152, 132), Glare = 0.1, Haze = 0.5 },
+		Atmo = { Density = 0.18, Offset = 0.06, Color = rgb(204, 222, 242), Decay = rgb(178, 150, 120), Glare = 0.1, Haze = 0.35 },
 		Bloom = { Intensity = 0.26, Size = 22, Threshold = 1.7 },
-		Grade = { Brightness = 0, Contrast = 0.08, Saturation = 0.03, Tint = rgb(255, 250, 242) },
+		Grade = { Brightness = 0, Contrast = 0.12, Saturation = 0.2, Tint = rgb(255, 249, 238) },
 		Rays = { Intensity = 0.04, Spread = 0.55 },
 		Clouds = { Cover = 0.32, Density = 0.4, Color = rgb(255, 244, 230) },
 	},
 	-- bright humid midday over the bog: lush moss greens, a light haze, warm sun
 	Swamp = {
 		Clock = 11.2, Brightness = 2.85, Latitude = 36, Shadow = 0.55,
-		Ambient = rgb(112, 124, 108), Outdoor = rgb(146, 164, 140), Top = rgb(255, 248, 222), Bottom = rgb(76, 96, 64),
+		Ambient = rgb(118, 128, 104), Outdoor = rgb(152, 168, 136), Top = rgb(255, 246, 214), Bottom = rgb(72, 102, 58),
 		Diffuse = 0.5, Specular = 0.3,
-		Atmo = { Density = 0.22, Offset = 0.06, Color = rgb(202, 224, 204), Decay = rgb(118, 146, 110), Glare = 0, Haze = 0.7 },
+		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(190, 226, 200), Decay = rgb(104, 150, 98), Glare = 0, Haze = 0.5 },
 		Bloom = { Intensity = 0.24, Size = 20, Threshold = 1.8 },
-		Grade = { Brightness = 0, Contrast = 0.08, Saturation = 0.03, Tint = rgb(250, 255, 244) },
+		Grade = { Brightness = 0, Contrast = 0.12, Saturation = 0.2, Tint = rgb(250, 255, 240) },
 		Rays = { Intensity = 0.02, Spread = 0.5 },
 		Clouds = { Cover = 0.5, Density = 0.45, Color = rgb(240, 244, 236) },
 	},
@@ -686,20 +686,20 @@ local LIGHTING = {
 		Clock = 11.4, Brightness = 2.25, Latitude = 44, Shadow = 0.3,
 		Ambient = rgb(108, 116, 132), Outdoor = rgb(140, 152, 174), Top = rgb(255, 244, 226), Bottom = rgb(110, 122, 140),
 		Diffuse = 0.42, Specular = 0.3,
-		Atmo = { Density = 0.2, Offset = 0.05, Color = rgb(204, 222, 246), Decay = rgb(140, 166, 200), Glare = 0, Haze = 0.45 },
+		Atmo = { Density = 0.18, Offset = 0.05, Color = rgb(192, 218, 250), Decay = rgb(124, 162, 210), Glare = 0, Haze = 0.35 },
 		Bloom = { Intensity = 0.14, Size = 20, Threshold = 2.7 },
-		Grade = { Brightness = -0.02, Contrast = 0.15, Saturation = 0.1, Tint = rgb(248, 248, 255) },
+		Grade = { Brightness = -0.02, Contrast = 0.17, Saturation = 0.18, Tint = rgb(246, 248, 255) },
 		Rays = { Intensity = 0.02, Spread = 0.5 },
 		Clouds = { Cover = 0.42, Density = 0.4, Color = rgb(255, 255, 255) },
 	},
 	-- high desert sun: short soft shadows, warm sand bounce, a clear sky
 	Desert = {
 		Clock = 12.6, Brightness = 2.9, Latitude = 30, Shadow = 0.5,
-		Ambient = rgb(118, 108, 96), Outdoor = rgb(152, 144, 130), Top = rgb(255, 242, 216), Bottom = rgb(122, 102, 74),
+		Ambient = rgb(126, 112, 94), Outdoor = rgb(160, 148, 128), Top = rgb(255, 238, 206), Bottom = rgb(128, 102, 66),
 		Diffuse = 0.5, Specular = 0.3,
-		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(226, 222, 210), Decay = rgb(190, 164, 128), Glare = 0.12, Haze = 0.7 },
+		Atmo = { Density = 0.18, Offset = 0.06, Color = rgb(214, 220, 236), Decay = rgb(200, 164, 116), Glare = 0.12, Haze = 0.5 },
 		Bloom = { Intensity = 0.2, Size = 20, Threshold = 2.0 },
-		Grade = { Brightness = 0.01, Contrast = 0.09, Saturation = 0.06, Tint = rgb(255, 250, 242) },
+		Grade = { Brightness = 0.01, Contrast = 0.12, Saturation = 0.2, Tint = rgb(255, 248, 236) },
 		Rays = { Intensity = 0.03, Spread = 0.5 },
 		Clouds = { Cover = 0.2, Density = 0.35, Color = rgb(255, 250, 240) },
 	},
@@ -709,9 +709,9 @@ local LIGHTING = {
 		Clock = 13.8, Brightness = 3.0, Latitude = 34, Shadow = 0.5,
 		Ambient = rgb(142, 126, 118), Outdoor = rgb(178, 160, 148), Top = rgb(255, 236, 212), Bottom = rgb(128, 86, 62),
 		Diffuse = 0.45, Specular = 0.3,
-		Atmo = { Density = 0.2, Offset = 0.06, Color = rgb(226, 198, 176), Decay = rgb(186, 112, 76), Glare = 0.15, Haze = 0.8 },
+		Atmo = { Density = 0.18, Offset = 0.06, Color = rgb(222, 190, 166), Decay = rgb(196, 106, 64), Glare = 0.15, Haze = 0.6 },
 		Bloom = { Intensity = 0.3, Size = 22, Threshold = 1.6 },
-		Grade = { Brightness = 0.02, Contrast = 0.1, Saturation = 0.08, Tint = rgb(255, 246, 236) },
+		Grade = { Brightness = 0.02, Contrast = 0.13, Saturation = 0.2, Tint = rgb(255, 245, 232) },
 		Rays = { Intensity = 0.03, Spread = 0.5 },
 		Clouds = { Cover = 0.5, Density = 0.48, Color = rgb(198, 172, 160) },
 	},
@@ -1348,12 +1348,18 @@ local function alongSides(from: number, to: number, step: number, fn: (number, V
 end
 
 -- Dense tree line outside the boundary (decoration: the boundary walls block). The south
--- (camera) side gets low shrubs and small round trees only.
+-- (camera) side gets low shrubs and small round trees only. With cliffs (arena.Cliff,
+-- built first) the north / west / east trees stand on the cliff top, a little sparser
+-- (the rock already fills the edge), and only the south side keeps its shade discs.
 local function treeLine(arena: Arena, kinds: { { any } }, southKinds: { { any } }, step: number, shade: Color3)
 	local h = arena.Half
+	local topAt: ((number, number) -> number)? = arena.CliffTop
 	-- forest shade straddling the boundary: a wavy dark edge instead of a straight line
 	-- (the meadow floor ends at h + 10, under this row of discs)
-	alongSides(-h - 16, h + 16, 32, function(_side, along, out, t)
+	alongSides(-h - 16, h + 16, 32, function(side, along, out, t)
+		if topAt and side ~= 2 then
+			return
+		end
 		local p = along * (t + jitter(5)) + out * (h + 10 + jitter(2))
 		disc(arena.Decor, "Shade", W(arena, p.X, p.Y, 0.03), rng:NextNumber(18, 23), shade)
 	end)
@@ -1362,10 +1368,16 @@ local function treeLine(arena: Arena, kinds: { { any } }, southKinds: { { any } 
 		if (south and rng:NextNumber() < 0.5) or (side >= 3 and math.abs(t) > h + 8) then
 			return -- the camera side stays low and open; corners come from the N / S rows
 		end
-		local depth = south and rng:NextNumber(12, 26) or rng:NextNumber(7, 17)
-		local p = along * (t + jitter(step * 0.3)) + out * (h + depth)
+		if topAt and not south and rng:NextNumber() < 0.35 then
+			return
+		end
+		local depth = south and rng:NextNumber(12, 26) or (topAt and rng:NextNumber(11, 21) or rng:NextNumber(7, 17))
+		local tt = t + jitter(step * 0.3)
+		local p = along * tt + out * (h + depth)
+		local y = (topAt and not south) and topAt(side, tt) - 1.2 or 0
 		local k = pick(south and southKinds or kinds)
-		decor(arena, k[1], p.X, p.Y, nil, rng:NextNumber(k[2], k[3]), k[4], { occluder = true, shadow = not south })
+		local cf = CFrame.new(W(arena, p.X, p.Y, y)) * randomYaw()
+		prop(arena.Decor, k[1], cf, rng:NextNumber(k[2], k[3]), k[4], { occluder = true, shadow = not south })
 	end)
 end
 
@@ -1378,6 +1390,9 @@ local function brokenFence(arena: Arena, scale: number, palette: Pal?, period: n
 	alongSides(-h + len / 2, h - len / 2, len, function(side, along, out, t)
 		-- a short run (2, sometimes 3 sections) every `period` slots, offset per side
 		k += 1
+		if arena.Cliff and side ~= 2 then
+			return -- the cliffs line the other three sides
+		end
 		local phase = (k + side * 7) % period
 		if phase >= 2 and not (phase == 2 and rng:NextNumber() < 0.35) then
 			return
@@ -1394,6 +1409,133 @@ local function brokenFence(arena: Arena, scale: number, palette: Pal?, period: n
 		end
 		prop(arena.Decor, "Fence_Section", cf, scale, palette, { shadow = false })
 	end)
+end
+
+------------------------------------------------------------------------------------------
+-- CLIFFS: the arena edge as real 3D rock (owner: "make the edges actual cliffs you can't
+-- go through"). Chunky low-poly rock blocks stand all the way round the play square, their
+-- inner faces just outside it, so what you see is where you stop: the invisible Boundary
+-- walls (boundaryWalls) still do the blocking for players and enemy raycasts, and EnemyAI
+-- clamps enemies to the square on the server.
+--   * north / west / east: tall cliffs (style.Height) with a flat top in the biome's cap
+--     colour (moss, snow, sand, ash); about half the chunks get a lower ledge in front, so
+--     the face steps like a real cliff; the tree line stands on the top (treeLine);
+--   * south (camera side): a low broken rim (style.South) the run camera sees over.
+-- Cost: 2 parts per chunk (+2 for a ledge), a kit rock at the foot now and then. All
+-- decoration: anchored, no collision / queries / touch; only the big bodies cast shadows.
+------------------------------------------------------------------------------------------
+
+type CliffStyle = {
+	Rock: { Color3 }, -- body tones (one per chunk)
+	Cap: Color3, -- top surface
+	CapThick: number?, -- default 0.8 (snow lies thicker)
+	Height: { number }, -- { min, max } north / west / east
+	South: { number }, -- { min, max } camera side
+	Foot: { { any } }?, -- kit pieces at the foot: { name, sMin, sMax, palette? }
+	Masonry: boolean?, -- Ruins: square-cut blocks, merlons on top, no tilt
+	Seam: Color3?, -- Lava: a glowing crack at the foot of some chunks
+}
+
+local CLIFF_STEP = 22 -- studs between chunk centres on the tall sides
+local CLIFF_STEP_SOUTH = 16
+local CLIFF_DEPTH = 24 -- depth of a tall chunk (its flat top carries the tree line)
+
+-- Top height of the cliff at `t` along `side` (smooth, seeded per side).
+local function cliffTop(arena: Arena, side: number, t: number): number
+	local style: CliffStyle = arena.Cliff
+	local wave = arena.CliffWave[side]
+	local range = side == 2 and style.South or style.Height
+	local f = 0.5 + 0.3 * math.sin(t / 41 + wave[1]) + 0.2 * math.sin(t / 17 + wave[2])
+	return range[1] + (range[2] - range[1]) * f
+end
+
+-- Extent of a kit piece (max |x| / |z| of its catalog bounds) at scale 1.
+local function kitRadius(name: string): number
+	local entry = kitEntry(name)
+	local b = entry and entry.Bounds
+	if not b then
+		return 2
+	end
+	return math.max(math.abs(b[1][1]), math.abs(b[1][3]), math.abs(b[2][1]), math.abs(b[2][3]))
+end
+
+-- One rock block whose inner face is `inner` studs out from the centre line, plus its cap.
+local function cliffBlock(arena: Arena, style: CliffStyle, along: Vector2, out: Vector2, t: number, inner: number, len: number, depth: number, hgt: number, color: Color3, shadow: boolean): CFrame
+	local yawDeg = style.Masonry and 0 or jitter(7)
+	local tilt = style.Masonry and 0 or 3
+	-- a turned / tilted block pokes in by its half length * sin(yaw) and half height * sin(tilt)
+	local poke = math.abs(math.sin(math.rad(yawDeg))) * len / 2 + math.sin(math.rad(tilt)) * hgt / 2
+	local p = along * t + out * (inner + poke + depth / 2)
+	local base = math.deg(math.atan2(-along.Y, along.X))
+	local cf = CFrame.new(W(arena, p.X, p.Y, hgt / 2 - 1)) * yawCF(base + yawDeg) * CFrame.Angles(math.rad(jitter(tilt)), 0, math.rad(jitter(tilt)))
+	deco(arena.Decor, { Name = "Cliff", Size = Vector3.new(len, hgt + 1, depth), CFrame = cf, Color = color, CastShadow = shadow })
+	local capT = style.CapThick or 0.8
+	deco(arena.Decor, { Name = "CliffCap", Size = Vector3.new(len - 0.5, capT, depth - 0.5), CFrame = cf * CFrame.new(0, (hgt + 1) / 2 + capT / 2 - 0.25, 0), Color = style.Cap, CastShadow = false })
+	return cf
+end
+
+local function cliffs(arena: Arena, style: CliffStyle)
+	local h = arena.Half
+	arena.Cliff = style
+	arena.CliffWave = {}
+	for side = 1, 4 do
+		arena.CliffWave[side] = { rng:NextNumber(0, TAU), rng:NextNumber(0, TAU) }
+	end
+	local sides = { Vector2.new(0, -1), Vector2.new(0, 1), Vector2.new(-1, 0), Vector2.new(1, 0) }
+	for side, out in ipairs(sides) do
+		local along = (side <= 2) and Vector2.new(1, 0) or Vector2.new(0, 1)
+		local south = side == 2
+		local out3 = Vector3.new(out.X, 0, out.Y)
+		local step = south and CLIFF_STEP_SOUTH or CLIFF_STEP
+		-- north / south rows run past the corners; west / east rows fill between them
+		local reach = side <= 2 and h + 30 or h + 6
+		local t = -reach + jitter(3)
+		local k = 0
+		while t <= reach do
+			k += 1
+			local hgt = cliffTop(arena, side, t) + jitter(south and 0.5 or 1.5)
+			local color = pick(style.Rock)
+			if south then
+				local len = rng:NextNumber(13, 19)
+				cliffBlock(arena, style, along, out, t, h + rng:NextNumber(0.3, 1.0), len, rng:NextNumber(5, 8), hgt, color, false)
+			else
+				local len = rng:NextNumber(24, 30)
+				local ledge = rng:NextNumber() < 0.45
+				local ledgeDepth = rng:NextNumber(6, 9)
+				local setback = ledge and ledgeDepth - 1.5 or rng:NextNumber(0.3, 2.4)
+				local cf = cliffBlock(arena, style, along, out, t, h + setback, len, CLIFF_DEPTH + jitter(3), hgt, color, true)
+				if ledge then
+					local lh = hgt * rng:NextNumber(0.35, 0.6)
+					cliffBlock(arena, style, along, out, t + jitter(len * 0.2), h + 0.3, len * rng:NextNumber(0.5, 0.75), ledgeDepth, lh, pick(style.Rock), false)
+				end
+				if style.Masonry then
+					-- merlons on the wall top (a broken battlement)
+					for _, dx in ipairs({ -len * 0.3, len * 0.3 }) do
+						if rng:NextNumber() < 0.6 then
+							local at = cf * CFrame.new(dx + jitter(2), (hgt + 1) / 2 + 1.1, 0)
+							deco(arena.Decor, { Name = "Merlon", Size = Vector3.new(3.4, 2.2, 3), CFrame = at - out3 * (CLIFF_DEPTH / 2 - 2), Color = style.Rock[1], CastShadow = false })
+						end
+					end
+				end
+				if style.Seam and k % 3 == 0 then
+					local sp = along * t + out * (h + 0.5)
+					deco(arena.Decor, { Name = "CliffSeam", Size = Vector3.new(len * 0.55, 0.35, 0.7), CFrame = CFrame.new(W(arena, sp.X, sp.Y, 0.2)) * yawCF(math.deg(math.atan2(-along.Y, along.X))), Color = style.Seam, Material = NEON })
+				end
+				-- a kit rock at the foot (it pokes at most a stud into the play square)
+				if style.Foot and math.abs(t) < h - 6 and rng:NextNumber() < 0.3 then
+					local f = pick(style.Foot)
+					local s = rng:NextNumber(f[2], f[3])
+					local d = h + kitRadius(f[1]) * s - 1
+					local p = along * (t + jitter(8)) + out * d
+					decor(arena, f[1], p.X, p.Y, nil, s, f[4], { shadow = false })
+				end
+			end
+			t += step + jitter(step * 0.15)
+		end
+	end
+	arena.CliffTop = function(side: number, t: number): number
+		return cliffTop(arena, side, t)
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -1659,7 +1801,15 @@ local function buildForest(arena: Arena)
 		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, SMALL_DECOR, 1.5, 0.5)
 	end
 
-	-- BORDER: broken fence, then the tree line
+	-- BORDER: mossy rock cliffs on three sides, a low rocky rim and the broken fence on the
+	-- camera side, then the tree line (on the cliff tops)
+	cliffs(arena, {
+		Rock = { mix(P.stone_500, P.moss_700, 0.12), P.stone_600, mix(P.stone_500, P.stone_400, 0.5) },
+		Cap = mix(P.moss_600, P.meadow_600, 0.4),
+		Height = { 13, 21 },
+		South = { 2.6, 4.2 },
+		Foot = { { "Rock", 1.6, 2.4 }, { "Rock", 1.2, 1.8 }, { "Fern", 1.6, 2.2 } },
+	})
 	brokenFence(arena, 1.3, nil, 22)
 	treeLine(arena, {
 		{ "Tree_PineTall", 1.3, 1.8, FOREST_PINE[1] },
@@ -1945,27 +2095,16 @@ local function buildRuins(arena: Arena)
 		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, { { "GrassTuft", 1, 1.5 }, { "GrassTuft", 1, 1.5 }, { "Flowers", 1, 1.3, { Bloom = P.ivory_100 } }, { "Rock_Small", 0.7, 1.1 } }, 1.5, 0.3)
 	end
 
-	-- BORDER: broken crenellated wall just outside the boundary (low on the south side)
-	local wallTones = { RUIN_PAL.Stone, RUIN_PAL.Stone3, mix(RUIN_PAL.Stone, RUIN_PAL.Stone2, 0.5) }
-	alongSides(-h + 20, h - 20, 40, function(side, along, out, t)
-		local south = side == 2
-		if rng:NextNumber() < 0.12 then
-			local p = along * t + out * (h + 2)
-			decor(arena, "Rock", p.X, p.Y, nil, 1.3, { Stone = RUIN_PAL.Stone, Stone2 = RUIN_PAL.Stone3 }, { shadow = true })
-			return
-		end
-		local hgt = south and rng:NextNumber(2.6, 3.6) or rng:NextNumber(6, 9)
-		local p = along * t + out * (h + 2.6)
-		local cf = CFrame.new(W(arena, p.X, p.Y, hgt / 2)) * CFrame.Angles(0, math.atan2(-along.X, -along.Y), 0)
-		deco(arena.Decor, { Name = "OuterWall", Size = Vector3.new(3.2, hgt, 40.05), CFrame = cf, Color = pick(wallTones), CastShadow = not south })
-		if not south then
-			for _, k in ipairs({ -12, 12 }) do
-				if rng:NextNumber() < 0.65 then
-					deco(arena.Decor, { Name = "Merlon", Size = Vector3.new(3.4, 2, 4), CFrame = cf * CFrame.new(0, hgt / 2 + 1, k + jitter(3)), Color = RUIN_PAL.Stone2, CastShadow = true })
-				end
-			end
-		end
-	end)
+	-- BORDER: a tall broken curtain wall of cut stone on three sides (merlons on top), a low
+	-- broken wall on the camera side, then pines behind
+	cliffs(arena, {
+		Rock = { RUIN_PAL.Stone, RUIN_PAL.Stone3, mix(RUIN_PAL.Stone, RUIN_PAL.Stone2, 0.5) },
+		Cap = mix(RUIN_PAL.Stone2, P.moss_400, 0.35),
+		Height = { 9, 15 },
+		South = { 2.4, 3.6 },
+		Masonry = true,
+		Foot = { { "Ruin_Block", 1.0, 1.4 }, { "Rock", 1.2, 1.6, { Stone = RUIN_PAL.Stone, Stone2 = RUIN_PAL.Stone3 } } },
+	})
 	treeLine(arena, {
 		{ "Tree_PineTall", 1.1, 1.5, { Needles = P.moss_800, Needles2 = P.moss_700 } },
 		{ "Tree_Pine", 1.2, 1.6, { Needles = P.moss_900, Needles2 = P.moss_800 } },
@@ -2300,7 +2439,15 @@ local function buildSwamp(arena: Arena)
 		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, SWAMP_SMALL, 1.5, 0.5)
 	end
 
-	-- BORDER: reeds along the edge, then the mangrove / willow line
+	-- BORDER: dark mossy bog rock on three sides, a low root-tangled rim on the camera side,
+	-- reeds along the edge, then the mangrove / willow line
+	cliffs(arena, {
+		Rock = { mix(P.stone_600, P.murk_600, 0.4), mix(P.stone_700, P.murk_700, 0.35), mix(P.stone_500, P.fen_600, 0.3) },
+		Cap = mix(P.fen_500, P.murk_400, 0.35),
+		Height = { 10, 16 },
+		South = { 2.2, 3.6 },
+		Foot = { { "Swamp_Rock", 1.4, 2.0 }, { "Swamp_Log", 1.0, 1.3 }, { "Reeds", 1.5, 2.0 } },
+	})
 	local h = arena.Half
 	alongSides(-h + 10, h - 10, 40, function(_side, along, out, t)
 		if rng:NextNumber() < 0.38 then
@@ -2549,7 +2696,16 @@ local function buildSnow(arena: Arena)
 		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, SNOW_SMALL, 1.5, 0.5)
 	end
 
-	-- BORDER: snowed split-rail fence, then tall snowy pines
+	-- BORDER: icy blue-grey cliffs under thick snow on three sides, a low snowy rim and the
+	-- fence on the camera side, then tall snowy pines on the cliff tops
+	cliffs(arena, {
+		Rock = { mix(P.stone_400, P.slate_500, 0.35), mix(P.stone_500, P.slate_600, 0.3), mix(P.ice_300, P.slate_400, 0.55) },
+		Cap = P.snow_100,
+		CapThick = 1.6,
+		Height = { 13, 21 },
+		South = { 2.4, 3.8 },
+		Foot = { { "Snow_Rock", 1.5, 2.2 }, { "Ice_Crystal", 1.0, 1.5 }, { "Snow_Drift", 1.4, 2.0 } },
+	})
 	brokenFence(arena, 1.3, SNOW_WOOD, 30)
 	treeLine(arena, {
 		{ "Snow_PineTall", 1.25, 1.7, nil },
@@ -2793,7 +2949,15 @@ local function buildDesert(arena: Arena)
 		decor(arena, "Dune", d[1], d[2], nil, rng:NextNumber(1.1, 1.5), nil, { shadow = false })
 	end
 
-	-- BORDER: mesas and big rocks on three sides, dunes and small rocks on the camera side
+	-- BORDER: layered sandstone cliffs on three sides, a low sandstone rim on the camera
+	-- side, then mesas and big rocks on the cliff tops
+	cliffs(arena, {
+		Rock = { P.sand_600, mix(P.sand_600, P.clay_500, 0.45), mix(P.sand_500, P.clay_600, 0.3) },
+		Cap = P.sand_400,
+		Height = { 14, 22 },
+		South = { 2.4, 3.8 },
+		Foot = { { "Desert_Rock", 1.3, 1.9 }, { "Cactus", 1.0, 1.3 }, { "Dune", 0.9, 1.2 } },
+	})
 	treeLine(arena, {
 		{ "Desert_Mesa", 1.2, 1.7, nil },
 		{ "Desert_Rock", 1.9, 2.6, nil },
@@ -3007,7 +3171,16 @@ local function buildLava(arena: Arena)
 		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, LAVA_SMALL, 1.5, 0.5)
 	end
 
-	-- BORDER: basalt columns and charred trees, low rocks and ash on the camera side
+	-- BORDER: black basalt cliffs with glowing cracks at their foot on three sides, a low
+	-- basalt rim on the camera side, then columns and charred trees on the cliff tops
+	cliffs(arena, {
+		Rock = { P.basalt_700, P.basalt_600, mix(P.basalt_700, P.cinder_600, 0.4) },
+		Cap = mix(P.cinder_500, P.ash_400, 0.3),
+		Height = { 12, 20 },
+		South = { 2.4, 3.6 },
+		Seam = P.lava_500,
+		Foot = { { "Basalt_Rock", 1.3, 1.9 }, { "Obsidian_Crystal", 1.0, 1.4 }, { "Ash_Pile", 1.4, 2.0 } },
+	})
 	treeLine(arena, {
 		{ "Basalt_Column", 1.15, 1.6, nil },
 		{ "Charred_Tree", 1.25, 1.6, nil },

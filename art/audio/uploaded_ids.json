@@ -1,50 +1,106 @@
 {
  "BigKill": {
   "id": 79432466085613,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "BossRoar": {
   "id": 135802539734782,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "BossSlam": {
   "id": 114145211136875,
-  "status": "moderation: Reviewing"
+  "status": "ok"
+ },
+ "BossWhoosh": {
+  "id": 113336786346138,
+  "status": "ok"
  },
  "Chest": {
-  "id": 108846210232931,
-  "status": "moderation: Reviewing"
+  "id": 109507162178062,
+  "status": "ok"
  },
  "Click": {
-  "id": 110597616112633,
-  "status": "moderation: Reviewing"
+  "id": 130072904039232,
+  "status": "ok"
  },
  "Coin": {
-  "id": 114449544869708,
-  "status": "moderation: Reviewing"
+  "id": 86606172414417,
+  "status": "ok"
+ },
+ "Death": {
+  "id": 106619962538253,
+  "status": "ok"
  },
  "EnemyDeath": {
-  "id": 90139009200502,
-  "status": "moderation: Reviewing"
+  "id": 121753247942951,
+  "status": "ok"
+ },
+ "Evolve": {
+  "id": 93333085469531,
+  "status": "ok"
+ },
+ "Explosion": {
+  "id": 121247904139587,
+  "status": "ok"
  },
  "GemPickup": {
-  "id": 95483225770017,
-  "status": "moderation: Reviewing"
+  "id": 111456984593913,
+  "status": "ok"
+ },
+ "Heartbeat": {
+  "id": 106832514643917,
+  "status": "ok"
  },
  "Hit": {
-  "id": 108261514204700,
-  "status": "moderation: Reviewing"
+  "id": 132528923449580,
+  "status": "ok"
  },
  "Hurt": {
-  "id": 74889269081021,
+  "id": 103629944065626,
+  "status": "ok"
+ },
+ "Item": {
+  "id": 105588297309015,
   "status": "moderation: Reviewing"
  },
  "LevelUp": {
-  "id": 129470727336059,
+  "id": 131826585081742,
+  "status": "ok"
+ },
+ "Lightning": {
+  "id": 74962400988388,
   "status": "moderation: Reviewing"
  },
  "PortalAppear": {
-  "id": 76838198770269,
+  "id": 72802301491749,
+  "status": "moderation: Reviewing"
+ },
+ "ReelTick": {
+  "id": 111197240897473,
+  "status": "moderation: Reviewing"
+ },
+ "Revive": {
+  "id": 97435297484172,
+  "status": "moderation: Reviewing"
+ },
+ "Shrine": {
+  "id": 106727264178055,
+  "status": "moderation: Reviewing"
+ },
+ "Swing": {
+  "id": 110381677719056,
+  "status": "moderation: Reviewing"
+ },
+ "Tip": {
+  "id": 133320151991833,
+  "status": "moderation: Reviewing"
+ },
+ "Toggle": {
+  "id": 78864064038524,
+  "status": "moderation: Reviewing"
+ },
+ "Victory": {
+  "id": 71641610011777,
   "status": "moderation: Reviewing"
  }
 }

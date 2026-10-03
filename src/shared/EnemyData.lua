@@ -446,9 +446,10 @@ EnemyData.EliteGem = { Large = 100 }
 	  Weights  relative spawn chance per enemy type this minute
 ]]
 EnemyData.SpawnTable = {
-	{ Target = 22, Weights = { Slime = 85, Bat = 15 } },
-	{ Target = 32, Weights = { Slime = 65, Bat = 25, Skeleton = 10 } },
-	{ Target = 42, Weights = { Slime = 50, Bat = 25, Skeleton = 25 } },
+	-- Wasps (Bat) ease in over the first three minutes (owner: too many bees at the start)
+	{ Target = 22, Weights = { Slime = 92, Bat = 8 } },
+	{ Target = 32, Weights = { Slime = 75, Bat = 15, Skeleton = 10 } },
+	{ Target = 42, Weights = { Slime = 55, Bat = 20, Skeleton = 25 } },
 	{ Target = 52, Weights = { Slime = 40, Bat = 25, Skeleton = 25, Ghost = 10 } },
 	{ Target = 62, Weights = { Slime = 30, Bat = 25, Skeleton = 25, Ghost = 15, Bomber = 5, Spitter = 4 } },
 	{ Target = 72, Weights = { Slime = 25, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 5, Spitter = 6 } },

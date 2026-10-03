@@ -6,7 +6,7 @@ that reuse them (Max HP, Might, Armor, Speed, Luck, Growth, Revive). Everything 
 the game still draws with simple vector shapes, borrows from another icon, or doesn't have.
 
 **Total: 136 images** in 17 groups. Work top to bottom: groups 1-9 matter most in play.
-**New requests: 7 images** in groups 18-19 (the two new stage bosses, three small UI symbols; not made yet).
+**New requests: 17 images** in groups 18-20 (the two new stage bosses, three small UI symbols, ten new passives; not made yet).
 
 How to use:
 1. Paste the **STYLE BLOCK** first in every ChatGPT chat (or once at the top of a chat).
@@ -296,6 +296,27 @@ and a tiny gold accent, no scene, readable at 20 px.
 
 When these come in: upload them with `tools/upload_icons.py`, run `tools/gen_icon_data.py`, and
 map the keys `heart`, `castle` and `aim` to them in `src/client/Icons.lua`.
+
+## 20. New requests: ten new passives, 10 images (`art/icons/`)
+
+Not made yet; the game draws these with code today. Same STYLE BLOCK, same format as the
+passive icons in `art/icons` (see `docs/ICON_LIST.md`): square 512x512, transparent
+background, ONE chunky low-poly object centred, no text, readable at 40 px. Save each file
+under the passive's id.
+
+- **GiantsBane.png** (Giant's Bane, more damage to elites and bosses): a heavy steel great-axe #D5DCE3 with a dark wooden haft #9A7752, a small antique gold crown #D5B062 knocked askew beside the blade.
+- **Thornhide.png** (Thornhide, hit back when struck): a round moss-green hide buckler #648A47 ringed with sharp ivory thorns #E5DCC7 pointing outward, a lighter green boss in the middle.
+- **BloodRune.png** (Blood Rune, critical hits heal): an upright cool grey rune stone #858A91 with two carved rune strokes, a glossy crimson drop #C9443F set in its face.
+- **AegisCharm.png** (Aegis Charm, a ward blocks one hit): a small antique gold shield-shaped amulet #D5B062 on a short gold chain, a pale slate-blue gem #8DA1B7 glowing in its centre.
+- **Windstep.png** (Windstep, speed burst after a kill): three curling pale slate-blue wind streaks #B8C5D3 sweeping right, ending in a bold gold forward chevron #E5C988.
+- **GildedPurse.png** (Gilded Purse, more gold): a plump brown leather coin purse #8A5A3B tied with a gold cord, a few antique gold coins #D5B062 spilling from its mouth.
+- **Stoneskin.png** (Stoneskin, take less damage): a chunk of stacked grey stone plates #A7ABB0 fitted like armour scales, one thin crack, a faint ivory edge highlight.
+- **SecondWind.png** (Second Wind, level-ups heal): a curling pale slate-blue gust of wind #B8C5D3 wrapping around a soft glowing green plus sign #B9DE8E.
+- **EmberOil.png** (Ember Oil, hits may burn): a round slate glass flask #8DA1B7 filled with glowing orange oil #E58A45, a small flame dancing on its cork.
+- **Lionheart.png** (Lionheart, more damage at low health): a chunky crimson heart #C9443F wearing a small antique gold crown #E5C988, a short golden mane-like flare behind it.
+
+When these come in: upload them with `tools/upload_icons.py`, then run `tools/gen_icon_data.py`
+(the ids already match `PassiveData`, so the pictures replace the drawn icons automatically).
 
 ---
 

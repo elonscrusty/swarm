@@ -8,7 +8,8 @@
   Roblox moderates audio: an id is only pasted into Config.Sounds once its upload
   operation finished and the asset is approved (status "ok"). Anything else is listed as
   pending/failed and the current sound stays in place.
-* Already uploaded names are skipped unless --force.
+* Names that already have an id are not uploaded again unless --force (re-uploading
+  creates a second asset); --check only refreshes the moderation status of stored ids.
 """
 
 import argparse
@@ -85,10 +86,24 @@ def upload(path, name, key, user_id):
     return int(resp["assetId"]), "ok" if mod == "Approved" else "moderation: " + mod
 
 
+def check(ids, key):
+    for name, entry in sorted(ids.items()):
+        if not entry.get("id"):
+            continue
+        try:
+            info = request("GET", f"{API}/assets/{entry['id']}?readMask=moderationResult", key)
+            mod = (info.get("moderationResult") or {}).get("moderationState", "unknown")
+            entry["status"] = "ok" if mod == "Approved" else "moderation: " + mod
+        except Exception as err:
+            entry["status"] = f"check failed: {err}"
+        print(f"{name:<16} {entry['id']} {entry['status']}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default="")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--check", action="store_true", help="refresh moderation status only")
     args = ap.parse_args()
     key = os.environ.get("ROBLOX_API_KEY")
     user_id = os.environ.get("ROBLOX_USER_ID")
@@ -99,6 +114,12 @@ def main():
         with open(IDS) as f:
             ids = json.load(f)
     only = {x for x in args.only.split(",") if x}
+    if args.check:
+        check(ids, key)
+        with open(IDS, "w") as f:
+            json.dump(ids, f, indent=1, sort_keys=True)
+        pending = [n for n, e in ids.items() if e.get("status") != "ok"]
+        sys.exit(("Not approved yet: " + ", ".join(sorted(pending))) if pending else 0)
     failed = []
     for fn in sorted(os.listdir(AUDIO)):
         if not fn.endswith(".ogg"):
@@ -106,7 +127,7 @@ def main():
         name = fn[:-4]
         if only and name not in only:
             continue
-        if (ids.get(name) or {}).get("status") == "ok" and not args.force:
+        if (ids.get(name) or {}).get("id") and not args.force:
             continue
         try:
             asset_id, status = upload(os.path.join(AUDIO, fn), name, key, user_id)

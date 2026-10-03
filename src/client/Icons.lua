@@ -426,7 +426,7 @@ local DEFAULT: { [string]: Colors } = {
 	Fletching = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.wood_400 },
 	Precision = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.gold_400 },
 	Renewal = { Main = P.moss_300, Accent = P.fx_heal, Extra = P.moss_500 },
-	GiantsBane = { Main = P.steel_200, Accent = P.crimson_400, Extra = P.wood_400 },
+	GiantsBane = { Main = P.steel_200, Accent = P.gold_400, Extra = P.wood_400 },
 	Thornhide = { Main = P.moss_400, Accent = P.ivory_200, Extra = P.moss_200 },
 	BloodRune = { Main = P.stone_400, Accent = P.crimson_400, Extra = P.stone_200 },
 	AegisCharm = { Main = P.gold_400, Accent = P.slate_300, Extra = P.gold_300 },
@@ -1496,8 +1496,8 @@ DRAW.Growth = DRAW.sprout
 DRAW.GiantsBane = function(c)
 	-- a great axe over a small crown (the giants it fells)
 	seg(c, 6, 21, 17, 6, 1.8, c.mono and c.main or c.extra)
-	box(c, 16.4, 7.4, 7.6, 9.6, c.main, 37, 3.2)
-	box(c, 14.6, 5.4, 2.2, 3.6, c.mono and c.back or c.light, 37, 0.8, c.mono and 0 or 0.5)
+	box(c, 16.6, 7.2, 8.4, 10.4, c.main, 37, 1.4)
+	box(c, 19.6, 9.4, 1.4, 9.6, c.mono and c.back or c.extra, 37, 0.7, c.mono and 0 or 0.4)
 	box(c, 6.6, 7.4, 2.8, 2.8, c.accent, 45, 0.4)
 	box(c, 3.8, 8.6, 2.4, 2.4, c.accent, 45, 0.4)
 	box(c, 9.4, 8.6, 2.4, 2.4, c.accent, 45, 0.4)

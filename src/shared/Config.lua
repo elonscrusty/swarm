@@ -594,6 +594,12 @@ Config.Pacing = {
 	EliteEvery = 165,
 	EliteMinTime = 60,
 	EliteTypes = { "Slime", "Skeleton", "Brute", "Ghost", "Spitter" }, -- scheduled elites (never a bomb tick)
+	-- Mini-wave rings by type: no ring of this type before WaveMinTime seconds of run time
+	-- (a Mite ring instead), and its ring is WaveCountMult times the usual size. Wasps are
+	-- fast flyers: a full ring of them in the first minute was the "too many bees" start
+	-- (pacing-sim: up to 22 wasps alive in minute 1, 41 in minute 5).
+	WaveMinTime = { Bat = 150 },
+	WaveCountMult = { Bat = 0.6 },
 	-- smaller intro groups for the later creatures (Healer from 6:00, Burrower from 7:00
 	-- in EnemyData.SpawnTable)
 	IntroGroupOf = { Healer = 2, Burrower = 2 },

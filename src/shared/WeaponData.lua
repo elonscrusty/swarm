@@ -1,6 +1,6 @@
 --[[
 	WeaponData.lua
-	All 17 weapons, their 12 per-level stat rows, their evolutions, their
+	All 27 weapons, their 12 per-level stat rows, their evolutions, their
 	behaviour perks and the projectile visuals.
 
 	Stat row fields (every level row has all of them):
@@ -75,6 +75,16 @@ WeaponData.Order = {
 	"ChainHook",
 	"Turret",
 	"SoulBolt",
+	"WardShields",
+	"Earthsplitter",
+	"Starfall",
+	"Sling",
+	"PlagueCenser",
+	"Sawblade",
+	"VineSnare",
+	"WarHorn",
+	"SpiritWisps",
+	"Vortex",
 }
 
 -- Display names for stat diffs on level-up cards.
@@ -153,6 +163,30 @@ WeaponData.Visuals = {
 	-- flames on the Fire Trail's burning patches (drawn by VFX from WeaponFx, never synced)
 	[37] = { Name = "Flame", Shape = "Ball", Size = Vector3.new(1.08, 0.82, 1.65), Color = Palette.fx_fire, Material = "Neon", Style = "Flame", Ground = true },
 	[38] = { Name = "PhoenixFlame", Shape = "Ball", Size = Vector3.new(1.08, 0.82, 1.65), Color = Palette.gold_300, Material = "Neon", Style = "Flame", Ground = true },
+	--[[
+		39-56: the armoury batch (Ward Shields ... Vortex), part-built in ModelLibrary (SHOTS).
+		"Spear" style for shields (face outward along the synced yaw), "Rock" for fissure heads,
+		"Meteor" falls tumbling, "Knife" stones, "Cloud" / "Vortex" turn slowly in place,
+		"Saw" buzz saws, "Totem" vines rising out of the floor, "Orb" wisps.
+	]]
+	[39] = { Name = "WardShield", Shape = "Block", Size = Vector3.new(2.2, 2.4, 0.5), Color = Palette.steel_300, Material = "Metal", Style = "Spear", NoPose = true, Impact = Palette.ivory_200 },
+	[40] = { Name = "AegisShield", Shape = "Block", Size = Vector3.new(2.6, 2.8, 0.5), Color = Palette.gold_400, Material = "Metal", Style = "Spear", NoPose = true, Impact = Palette.gold_200 },
+	[41] = { Name = "Fissure", Shape = "Block", Size = Vector3.new(1.4, 1.2, 1.4), Color = Palette.stone_400, Material = "Slate", Style = "Rock", Tumble = 6, NoPose = true, Impact = Palette.stone_200 },
+	[42] = { Name = "WorldbreakerRock", Shape = "Block", Size = Vector3.new(1.6, 1.4, 1.6), Color = Palette.basalt_600, Material = "Slate", Style = "Rock", Tumble = 8, NoPose = true, Impact = Palette.lava_300 },
+	[43] = { Name = "Meteor", Shape = "Ball", Size = Vector3.new(2.4, 2.4, 2.4), Color = Palette.lava_500, Material = "Neon", Style = "Meteor", Tumble = 7, NoPose = true, Trail = { Color = Palette.amber_300, Tail = Palette.fx_fire, Width = 1.0, Life = 0.22 } },
+	[44] = { Name = "Comet", Shape = "Ball", Size = Vector3.new(3.0, 3.0, 3.0), Color = Palette.gold_300, Material = "Neon", Style = "Meteor", Tumble = 8, NoPose = true, Trail = { Color = Palette.ivory_100, Tail = Palette.amber_500, Width = 1.3, Life = 0.26 } },
+	[45] = { Name = "SlingStone", Shape = "Ball", Size = Vector3.new(0.9, 0.8, 0.9), Color = Palette.stone_300, Material = "Slate", Style = "Knife", Tumble = 18, Trail = { Color = Palette.ivory_200, Tail = Palette.stone_400, Width = 0.22, Life = 0.08 }, Impact = Palette.stone_200 },
+	[46] = { Name = "Starstone", Shape = "Ball", Size = Vector3.new(1.1, 1.0, 1.1), Color = Palette.gold_400, Material = "Neon", Style = "Knife", Tumble = 20, Trail = { Color = Palette.gold_200, Tail = Palette.crimson_400, Width = 0.3, Life = 0.1 }, Impact = Palette.gold_200 },
+	[47] = { Name = "PlagueCloud", Shape = "Ball", Size = Vector3.new(6, 3, 6), Color = Palette.moss_300, Material = "SmoothPlastic", Style = "Cloud", Spin = 0.8, NoPose = true },
+	[48] = { Name = "Pestilence", Shape = "Ball", Size = Vector3.new(7, 3.4, 7), Color = Palette.moss_200, Material = "SmoothPlastic", Style = "Cloud", Spin = 1.1, NoPose = true },
+	[49] = { Name = "Sawblade", Shape = "Cylinder", Size = Vector3.new(0.3, 2.6, 2.6), Color = Palette.steel_200, Material = "Metal", Style = "Saw", Spin = 26, Trail = { Color = Palette.ivory_100, Tail = Palette.steel_300, Width = 0.3, Life = 0.08 }, Impact = Palette.ivory_200 },
+	[50] = { Name = "Ruinwheel", Shape = "Cylinder", Size = Vector3.new(0.3, 3.2, 3.2), Color = Palette.crimson_400, Material = "Metal", Style = "Saw", Spin = 30, Trail = { Color = Palette.crimson_300, Tail = Palette.gold_400, Width = 0.4, Life = 0.1 }, Impact = Palette.crimson_300 },
+	[51] = { Name = "Snare", Shape = "Block", Size = Vector3.new(3, 2, 3), Color = Palette.moss_500, Material = "Grass", Style = "Totem", Ground = true, NoPose = true },
+	[52] = { Name = "Strangleroot", Shape = "Block", Size = Vector3.new(3.6, 2.4, 3.6), Color = Palette.moss_700, Material = "Grass", Style = "Totem", Ground = true, NoPose = true },
+	[53] = { Name = "Wisp", Shape = "Ball", Size = Vector3.new(0.9, 0.9, 0.9), Color = Palette.fx_holy, Material = "Neon", Style = "Orb", NoPose = true, Trail = { Color = Palette.fx_holy, Tail = Palette.ice_300, Width = 0.35, Life = 0.16 }, Impact = Palette.fx_holy },
+	[54] = { Name = "ChoirWisp", Shape = "Ball", Size = Vector3.new(1.1, 1.1, 1.1), Color = Palette.gold_200, Material = "Neon", Style = "Orb", NoPose = true, Trail = { Color = Palette.gold_200, Tail = Palette.fx_holy, Width = 0.45, Life = 0.18 }, Impact = Palette.gold_200 },
+	[55] = { Name = "Vortex", Shape = "Cylinder", Size = Vector3.new(0.3, 5, 5), Color = Palette.fx_arcane, Material = "Neon", Style = "Vortex", Spin = 5, Ground = true, NoPose = true },
+	[56] = { Name = "Singularity", Shape = "Cylinder", Size = Vector3.new(0.3, 6, 6), Color = Palette.slate_900, Material = "Neon", Style = "Vortex", Spin = 7, Ground = true, NoPose = true },
 }
 
 -- Projectile visual byte: index 1-31 in the low 5 bits, 32-63 as (index - 32) with bit 7
@@ -810,6 +844,392 @@ WeaponData.Weapons = {
 			Stats = row(26, 0.85, 5, 1.2, 42, 3, 5.0, 3),
 		},
 	},
+
+	--[[
+		The ten weapons of the "armoury" batch (every hero can find them on level-up cards).
+		Per-target DPS at L1 / L6 / L12 / evolved (same measure as the notes above; line and
+		area weapons are per target inside the effect):
+		  Ward Shields   6.8 / 20 / 51 / 125   orbiting, hits all around, Bulwark eats shots
+		  Earthsplitter  7 / 13 / 30 / 49      line of spikes (+ Aftershock eruptions)
+		  Starfall       10 / 17 / 30 / 50     delayed blast on the densest crowd + crater
+		  Sling          6.9 / 25 / 67 / 149   one stone bounces through 3-8 enemies
+		  Plague Censer  6 / 12 / 22 / 30      drifting cloud (+ Pestilence poison)
+		  Sawblade       7.5 / 30 / 70 / 160   grinds slowly through crowds (3 bites a pass)
+		  Vine Snare     8 / 14 / 22 / 30      roots a spot (inside the snare)
+		  War Horn       5 / 10 / 19 / 32      cone with big knockback (+ Echo 60%)
+		  Spirit Wisps   5.7 / 30 / 67 / 147   darting wisps that come back to orbit you
+		  Vortex         6 / 10 / 17.5 / 25    pulls a crowd together (+ Implosion)
+		tools/preview/weapon_balance.luau prints the full table.
+	]]
+
+	-- WARD SHIELDS: shields always circle you, hitting what they pass (cooldown = how often
+	-- the same enemy can be hit). Bulwark: they smash enemy projectiles.
+	WardShields = {
+		Id = "WardShields",
+		Name = "Ward Shields",
+		Description = "Shields circle you and bash every enemy they pass.",
+		Color = Color3.fromRGB(120, 160, 210),
+		Behavior = "Shields",
+		AmountLabel = "Shields",
+		CooldownLabel = "Hit every",
+		Perks = { { Level = 7, Id = "Bulwark", Name = "Bulwark", Text = "Shields smash enemy projectiles they touch." } },
+		-- OrbitRadius / ShieldRadius at area 1; speed = studs per second along the orbit
+		Params = { OrbitRadius = 4.2, ShieldRadius = 1.4, MaxAmount = 8, ReflectRadius = 4, Visual = 39, EvoVisual = 40 },
+		Levels = {
+			row(9, 0.90, 1, 1.0, 20, 999, 0, 6),
+			row(9, 0.90, 2, 1.0, 20, 999, 0, 6),
+			row(12, 0.90, 2, 1.0, 21, 999, 0, 6),
+			row(12, 0.85, 2, 1.1, 22, 999, 0, 7),
+			row(14, 0.85, 3, 1.1, 22, 999, 0, 7),
+			row(16, 0.80, 3, 1.1, 23, 999, 0, 7),
+			row(16, 0.80, 3, 1.15, 24, 999, 0, 8),
+			row(19, 0.75, 3, 1.15, 24, 999, 0, 8),
+			row(19, 0.70, 4, 1.2, 25, 999, 0, 8),
+			row(22, 0.65, 4, 1.2, 26, 999, 0, 9),
+			row(25, 0.60, 4, 1.25, 27, 999, 0, 9),
+			row(28, 0.55, 5, 1.3, 28, 999, 0, 10),
+		},
+		Evolution = {
+			Id = "AegisRing",
+			Name = "Aegis Ring",
+			Passive = "AegisCharm",
+			Description = "Six golden shields; every shot they smash bursts back at the swarm.",
+			Stats = row(50, 0.40, 6, 1.5, 32, 999, 0, 12),
+			Reflect = true, -- a smashed projectile bursts for full damage around it
+		},
+	},
+
+	-- EARTHSPLITTER: fissures race along the ground toward the nearest enemy, spikes bursting
+	-- up every few studs (each enemy is hit once per fissure). Aftershock: the end erupts.
+	Earthsplitter = {
+		Id = "Earthsplitter",
+		Name = "Earthsplitter",
+		Description = "Splits the ground toward enemies; stone spikes burst along the crack.",
+		Color = Color3.fromRGB(170, 130, 90),
+		Behavior = "Quake",
+		Area = true,
+		AmountLabel = "Fissures",
+		DurationLabel = "Length",
+		Perks = { { Level = 8, Id = "Aftershock", Name = "Aftershock", Text = "Each fissure ends in a big eruption." } },
+		-- reach = speed x duration; StepDist studs between spike bursts of SpikeRadius
+		Params = { StepDist = 2.4, SpikeRadius = 2.2, FanAngle = 25, Range = 40, AftershockRadius = 5, AftershockShare = 1.0, Visual = 41, EvoVisual = 42 },
+		Levels = {
+			row(14, 2.0, 1, 1.0, 30, 999, 0.8, 8),
+			row(18, 2.0, 1, 1.0, 30, 999, 0.8, 8),
+			row(18, 2.0, 2, 1.0, 30, 999, 0.8, 8),
+			row(21, 1.9, 2, 1.05, 31, 999, 0.85, 9),
+			row(24, 1.9, 2, 1.1, 32, 999, 0.9, 9),
+			row(24, 1.8, 3, 1.1, 32, 999, 0.9, 9),
+			row(28, 1.8, 3, 1.15, 33, 999, 0.95, 10),
+			row(31, 1.7, 3, 1.15, 34, 999, 1.0, 10),
+			row(34, 1.7, 3, 1.2, 35, 999, 1.0, 10),
+			row(37, 1.6, 3, 1.25, 36, 999, 1.05, 11),
+			row(41, 1.55, 3, 1.3, 37, 999, 1.1, 11),
+			row(45, 1.5, 4, 1.35, 38, 999, 1.1, 12),
+		},
+		Evolution = {
+			Id = "Worldbreaker",
+			Name = "Worldbreaker",
+			Passive = "Stoneskin",
+			Description = "Five fissures split the ground all around you.",
+			Stats = row(64, 1.3, 5, 1.6, 42, 999, 1.25, 14),
+			Ring = true, -- fissures spread evenly all around instead of a fan
+		},
+	},
+
+	-- STARFALL: meteors fall on the densest crowds near you after a short warning ring, then
+	-- leave a burning crater for `duration` s. Molten Core: craters are wider.
+	Starfall = {
+		Id = "Starfall",
+		Element = "Fire", -- SynergyData (Elemental Trinity, Ember Field)
+		Name = "Starfall",
+		Description = "Calls meteors down on the thickest crowds.",
+		Color = Color3.fromRGB(240, 140, 60),
+		Behavior = "Meteor",
+		Area = true,
+		AmountLabel = "Meteors",
+		DurationLabel = "Crater time",
+		Perks = { { Level = 7, Id = "Molten", Name = "Molten Core", Text = "Craters burn 50% wider." } },
+		-- crater: CraterShare of the damage every CraterTick s
+		Params = { BlastRadius = 4.5, FallTime = 0.7, Range = 36, CraterShare = 0.1, CraterTick = 0.5, CraterScale = 0.8, MoltenScale = 1.5, Visual = 43, EvoVisual = 44 },
+		Levels = {
+			row(30, 3.6, 1, 1.0, 0, 999, 1.5, 10),
+			row(36, 3.6, 1, 1.0, 0, 999, 1.5, 10),
+			row(36, 3.6, 2, 1.0, 0, 999, 1.5, 10),
+			row(40, 3.4, 2, 1.05, 0, 999, 1.75, 11),
+			row(44, 3.4, 2, 1.1, 0, 999, 1.75, 11),
+			row(48, 3.2, 2, 1.15, 0, 999, 2.0, 12),
+			row(52, 3.1, 2, 1.15, 0, 999, 2.0, 12),
+			row(52, 3.0, 3, 1.2, 0, 999, 2.0, 12),
+			row(56, 2.9, 3, 1.2, 0, 999, 2.25, 13),
+			row(60, 2.8, 3, 1.25, 0, 999, 2.25, 13),
+			row(65, 2.7, 3, 1.3, 0, 999, 2.5, 14),
+			row(70, 2.6, 3, 1.35, 0, 999, 2.5, 14),
+		},
+		Evolution = {
+			Id = "Cataclysm",
+			Name = "Cataclysm",
+			Passive = "EmberOil",
+			Description = "A rain of five great meteors that leave long-burning craters.",
+			Stats = row(95, 2.2, 5, 1.6, 0, 999, 3.0, 16),
+		},
+	},
+
+	-- SLING: a stone at the nearest enemy that bounces on to the next one (pierce = enemies
+	-- hit), a little harder each bounce. Stagger: hits stop enemies for a moment.
+	Sling = {
+		Id = "Sling",
+		Name = "Sling",
+		Description = "Hurls stones that bounce from enemy to enemy.",
+		Color = Color3.fromRGB(160, 150, 130),
+		Behavior = "Sling",
+		AmountLabel = "Stones",
+		DurationLabel = "Range",
+		Perks = { { Level = 6, Id = "Stagger", Name = "Stagger", Text = "Stones stop the enemies they hit for a moment." } },
+		Params = { Radius = 0.8, BounceGain = 0.1, EvoBounceGain = 0.2, StaggerSlow = 0.15, StaggerSeconds = 0.4, Visual = 45, EvoVisual = 46 },
+		Levels = {
+			row(9, 1.30, 1, 1.0, 55, 3, 0.6, 5),
+			row(11, 1.30, 1, 1.0, 55, 3, 0.6, 5),
+			row(11, 1.25, 2, 1.0, 57, 3, 0.6, 5),
+			row(12, 1.20, 2, 1.0, 58, 4, 0.6, 6),
+			row(13, 1.15, 2, 1.05, 60, 4, 0.65, 6),
+			row(14, 1.10, 2, 1.05, 60, 4, 0.65, 6),
+			row(14, 1.05, 3, 1.1, 62, 4, 0.65, 6),
+			row(16, 1.00, 3, 1.1, 62, 5, 0.7, 7),
+			row(17, 1.00, 3, 1.15, 64, 5, 0.7, 7),
+			row(18, 0.95, 3, 1.15, 65, 5, 0.7, 7),
+			row(19, 0.95, 3, 1.2, 66, 6, 0.75, 8),
+			row(20, 0.90, 3, 1.2, 68, 6, 0.75, 8),
+		},
+		Evolution = {
+			Id = "Giantfeller",
+			Name = "Giantfeller",
+			Passive = "GiantsBane",
+			Description = "Four heavy stones that hit 20% harder with every bounce.",
+			Stats = row(28, 0.75, 4, 1.4, 75, 8, 0.8, 10),
+		},
+	},
+
+	-- PLAGUE CENSER: a sickly cloud opens on an enemy and drifts after the crowd, hurting
+	-- everything inside every Tick s. Choking Fumes: enemies inside are slowed.
+	PlagueCenser = {
+		Id = "PlagueCenser",
+		Name = "Plague Censer",
+		Description = "Swings out a poison cloud that drifts after enemies.",
+		Color = Color3.fromRGB(140, 180, 80),
+		Behavior = "Cloud",
+		Area = true,
+		AmountLabel = "Clouds",
+		DurationLabel = "Cloud time",
+		Perks = { { Level = 6, Id = "Choking", Name = "Choking Fumes", Text = "Enemies inside a cloud move 30% slower." } },
+		-- speed = drift speed (studs/s); Pestilence: PoisonShare damage per Tick for PoisonSeconds after leaving
+		Params = { Radius = 4, Tick = 0.5, Range = 30, ChokeSlow = 0.7, PoisonSeconds = 2, PoisonShare = 0.5, Visual = 47, EvoVisual = 48 },
+		Levels = {
+			row(3, 4.5, 1, 1.0, 4, 999, 4.0, 0),
+			row(4, 4.5, 1, 1.0, 4, 999, 4.0, 0),
+			row(4, 4.5, 1, 1.1, 4, 999, 4.5, 0),
+			row(5, 4.3, 1, 1.1, 4.5, 999, 4.5, 0),
+			row(5, 4.3, 2, 1.1, 4.5, 999, 4.5, 0),
+			row(6, 4.1, 2, 1.15, 4.5, 999, 4.75, 0),
+			row(7, 4.0, 2, 1.2, 5, 999, 5.0, 0),
+			row(7, 3.9, 2, 1.25, 5, 999, 5.0, 0),
+			row(8, 3.8, 2, 1.3, 5.5, 999, 5.0, 0),
+			row(9, 3.7, 3, 1.3, 5.5, 999, 5.25, 0),
+			row(10, 3.6, 3, 1.35, 6, 999, 5.5, 0),
+			row(11, 3.5, 3, 1.4, 6, 999, 5.5, 0),
+		},
+		Evolution = {
+			Id = "Pestilence",
+			Name = "Pestilence",
+			Passive = "Candle",
+			Description = "Four great clouds whose poison keeps hurting after enemies escape.",
+			Stats = row(15, 3.0, 4, 1.8, 7, 999, 7.0, 0),
+			Poison = true,
+		},
+	},
+
+	-- SAWBLADE: a spinning blade rolls at an enemy and slows down to grind through crowds
+	-- (each enemy is bitten every Rehit s). Rebound: at the end it spins back at an enemy.
+	Sawblade = {
+		Id = "Sawblade",
+		Name = "Sawblade",
+		Description = "Rolls a buzzing saw that grinds slowly through crowds.",
+		Color = Color3.fromRGB(190, 195, 205),
+		Behavior = "Saw",
+		AmountLabel = "Saws",
+		DurationLabel = "Spin time",
+		Perks = { { Level = 7, Id = "Rebound", Name = "Rebound", Text = "A saw at the end of its run spins back at the nearest enemy." } },
+		Params = { Radius = 1.5, Rehit = 0.2, GrindSlow = 0.3, Range = 40, ReboundRange = 25, Visual = 49, EvoVisual = 50 },
+		Levels = {
+			row(4, 1.6, 1, 1.0, 30, 999, 1.2, 2),
+			row(5, 1.6, 1, 1.0, 30, 999, 1.2, 2),
+			row(5, 1.6, 2, 1.0, 30, 999, 1.2, 2),
+			row(6, 1.5, 2, 1.05, 31, 999, 1.25, 2),
+			row(6, 1.45, 2, 1.1, 32, 999, 1.3, 2),
+			row(7, 1.4, 2, 1.1, 32, 999, 1.3, 2.5),
+			row(7, 1.35, 2, 1.15, 33, 999, 1.35, 2.5),
+			row(7, 1.3, 3, 1.15, 34, 999, 1.4, 2.5),
+			row(8, 1.25, 3, 1.2, 34, 999, 1.4, 3),
+			row(8, 1.2, 3, 1.25, 35, 999, 1.45, 3),
+			row(9, 1.15, 3, 1.25, 36, 999, 1.5, 3),
+			row(9, 1.15, 3, 1.3, 37, 999, 1.5, 3),
+		},
+		Evolution = {
+			Id = "Ruinwheel",
+			Name = "Ruinwheel",
+			Passive = "Thornhide",
+			Description = "Four great saws that rebound three times.",
+			Stats = row(12, 0.9, 4, 1.6, 40, 999, 1.8, 3),
+			Rebounds = 3,
+		},
+	},
+
+	-- VINE SNARE: thorny vines burst up under enemies and root everything in the ring (not
+	-- bosses) while hurting it every Tick s. Thornbloom: enemies that die there burst.
+	VineSnare = {
+		Id = "VineSnare",
+		Name = "Vine Snare",
+		Description = "Thorny vines root enemies to the spot and hurt them.",
+		Color = Color3.fromRGB(110, 160, 80),
+		Behavior = "Vines",
+		Area = true,
+		AmountLabel = "Snares",
+		DurationLabel = "Root time",
+		Perks = { { Level = 8, Id = "Thornbloom", Name = "Thornbloom", Text = "Enemies that die in a snare burst into thorns (half damage)." } },
+		Params = { Radius = 2.6, Tick = 0.5, Range = 32, RootSlow = 0.1, ThornRadius = 3.5, ThornShare = 0.5, ThornsPerTick = 2, PullShare = 0.4, Visual = 51, EvoVisual = 52 },
+		Levels = {
+			row(4, 3.5, 1, 1.0, 0, 999, 2.0, 0),
+			row(5, 3.5, 1, 1.0, 0, 999, 2.0, 0),
+			row(5, 3.5, 2, 1.0, 0, 999, 2.0, 0),
+			row(6, 3.4, 2, 1.1, 0, 999, 2.25, 0),
+			row(6, 3.3, 2, 1.1, 0, 999, 2.5, 0),
+			row(7, 3.2, 2, 1.15, 0, 999, 2.5, 0),
+			row(7, 3.1, 3, 1.15, 0, 999, 2.5, 0),
+			row(8, 3.0, 3, 1.2, 0, 999, 2.75, 0),
+			row(9, 3.0, 3, 1.25, 0, 999, 2.75, 0),
+			row(9, 2.9, 3, 1.3, 0, 999, 3.0, 0),
+			row(10, 2.85, 3, 1.35, 0, 999, 3.0, 0),
+			row(11, 2.8, 4, 1.4, 0, 999, 3.0, 0),
+		},
+		Evolution = {
+			Id = "Strangleroot",
+			Name = "Strangleroot",
+			Passive = "Growth",
+			Description = "Five wide snares that drag nearby enemies into the thorns.",
+			Stats = row(15, 2.4, 5, 1.8, 0, 999, 3.5, 0),
+			Pull = true,
+		},
+	},
+
+	-- WAR HORN: a shockwave cone toward the nearest enemy: damage, a big push and a daze
+	-- (slow, not bosses) for `duration` s. More blasts point around you. Echo: a second blast.
+	WarHorn = {
+		Id = "WarHorn",
+		Name = "War Horn",
+		Description = "A booming blast that hurls enemies back and dazes them.",
+		Color = Color3.fromRGB(210, 170, 90),
+		Behavior = "Horn",
+		Area = true,
+		AmountLabel = "Blasts",
+		DurationLabel = "Daze time",
+		Perks = { { Level = 7, Id = "Echo", Name = "Echo", Text = "A second, softer blast follows each one (60% damage)." } },
+		-- Range studs at area 1, HalfAngle degrees each side of the aim
+		Params = { Range = 9, HalfAngle = 55, DazeSlow = 0.5, EchoDelay = 0.35, EchoShare = 0.6 },
+		Levels = {
+			row(12, 2.4, 1, 1.0, 0, 999, 0.8, 24),
+			row(15, 2.4, 1, 1.0, 0, 999, 0.8, 24),
+			row(15, 2.3, 1, 1.1, 0, 999, 0.9, 26),
+			row(18, 2.3, 1, 1.1, 0, 999, 1.0, 26),
+			row(18, 2.2, 2, 1.1, 0, 999, 1.0, 26),
+			row(21, 2.1, 2, 1.15, 0, 999, 1.0, 28),
+			row(21, 2.0, 2, 1.2, 0, 999, 1.1, 28),
+			row(24, 2.0, 2, 1.2, 0, 999, 1.2, 30),
+			row(26, 1.9, 2, 1.25, 0, 999, 1.2, 30),
+			row(28, 1.85, 2, 1.3, 0, 999, 1.3, 32),
+			row(30, 1.8, 2, 1.35, 0, 999, 1.4, 32),
+			row(33, 1.7, 3, 1.4, 0, 999, 1.5, 34),
+		},
+		Evolution = {
+			Id = "TitansRoar",
+			Name = "Titan's Roar",
+			Passive = "Lionheart",
+			Description = "A roar that blasts the whole ring around you.",
+			Stats = row(48, 1.5, 3, 1.7, 0, 999, 2.0, 38),
+			Roar = true, -- one full-circle blast (per amount: a little later, a little wider)
+		},
+	},
+
+	-- SPIRIT WISPS: wisps float around you; every cooldown each one darts at an enemy, hits
+	-- `pierce` enemies (or runs out of `duration`) and floats back. Glow: resting wisps sting.
+	SpiritWisps = {
+		Id = "SpiritWisps",
+		Name = "Spirit Wisps",
+		Description = "Wisps circle you and dart out at enemies, then come back.",
+		Color = Color3.fromRGB(150, 220, 230),
+		Behavior = "Wisps",
+		AmountLabel = "Wisps",
+		DurationLabel = "Dart time",
+		Perks = { { Level = 6, Id = "Glow", Name = "Glow", Text = "Resting wisps sting enemies that touch them (30% damage)." } },
+		Params = { Radius = 0.9, OrbitRadius = 3.2, OrbitSpin = 2.4, Range = 34, Retarget = 14, GlowShare = 0.3, EvoGlowShare = 0.6, GlowEvery = 0.6, MaxAmount = 8, Visual = 53, EvoVisual = 54 },
+		Levels = {
+			row(8, 1.4, 1, 1.0, 45, 1, 1.0, 3),
+			row(8, 1.4, 2, 1.0, 45, 1, 1.0, 3),
+			row(10, 1.35, 2, 1.0, 46, 1, 1.0, 3),
+			row(10, 1.3, 2, 1.05, 47, 2, 1.0, 3),
+			row(11, 1.25, 3, 1.05, 48, 2, 1.0, 3),
+			row(12, 1.2, 3, 1.1, 48, 2, 1.05, 3.5),
+			row(13, 1.15, 3, 1.1, 50, 2, 1.05, 3.5),
+			row(13, 1.1, 4, 1.15, 50, 2, 1.1, 3.5),
+			row(14, 1.05, 4, 1.15, 52, 2, 1.1, 4),
+			row(15, 1.0, 4, 1.2, 52, 3, 1.15, 4),
+			row(15, 0.975, 4, 1.2, 54, 3, 1.2, 4),
+			row(16, 0.95, 4, 1.25, 55, 3, 1.2, 4),
+		},
+		Evolution = {
+			Id = "WispChoir",
+			Name = "Wisp Choir",
+			Passive = "Luck",
+			Description = "Five bright wisps that dart through four enemies and sting hard at rest.",
+			Stats = row(22, 0.75, 5, 1.4, 60, 4, 1.4, 5),
+		},
+	},
+
+	-- VORTEX: a swirling rift opens on the densest crowd, dragging enemies to its centre and
+	-- hurting them every Tick s. Implosion: it collapses for a big hit when it ends.
+	Vortex = {
+		Id = "Vortex",
+		Name = "Vortex",
+		Description = "Opens a swirling rift that drags enemies together.",
+		Color = Color3.fromRGB(130, 100, 210),
+		Behavior = "Vortex",
+		Area = true,
+		AmountLabel = "Vortices",
+		DurationLabel = "Rift time",
+		Perks = { { Level = 8, Id = "Implosion", Name = "Implosion", Text = "The rift collapses at the end for 4x its damage." } },
+		-- Pull = most studs an enemy is dragged per tick
+		Params = { Radius = 5.5, Tick = 0.4, Range = 30, Pull = 3.5, EvoPull = 5.5, ImplodeMult = 4, EvoImplodeMult = 8, MaxAmount = 4, Visual = 55, EvoVisual = 56 },
+		Levels = {
+			row(2.5, 5.0, 1, 1.0, 0, 999, 2.5, 0),
+			row(3, 5.0, 1, 1.0, 0, 999, 2.5, 0),
+			row(3, 4.8, 1, 1.1, 0, 999, 2.75, 0),
+			row(3.5, 4.6, 1, 1.1, 0, 999, 2.75, 0),
+			row(4, 4.6, 1, 1.15, 0, 999, 3.0, 0),
+			row(4, 4.4, 2, 1.15, 0, 999, 3.0, 0),
+			row(4.5, 4.3, 2, 1.2, 0, 999, 3.0, 0),
+			row(5, 4.2, 2, 1.2, 0, 999, 3.25, 0),
+			row(5.5, 4.1, 2, 1.25, 0, 999, 3.25, 0),
+			row(6, 4.0, 2, 1.3, 0, 999, 3.5, 0),
+			row(6.5, 3.9, 2, 1.35, 0, 999, 3.5, 0),
+			row(7, 3.8, 3, 1.4, 0, 999, 3.5, 0),
+		},
+		Evolution = {
+			Id = "Singularity",
+			Name = "Singularity",
+			Passive = "Vacuum",
+			Description = "Three deep rifts that drag harder and collapse for 8x damage.",
+			Stats = row(10, 3.2, 3, 1.8, 0, 999, 4.0, 0),
+		},
+	},
 }
 
 -- Returns the stat row for a weapon at a level (evolved overrides the row).
@@ -851,6 +1271,24 @@ WeaponData.StatUse = {
 	Hook = { damage = true, cooldown = true, amount = true, area = true, speed = true, duration = true },
 	Turret = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
 	Soul = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
+	-- armoury batch. Shields: cooldown = re-hit time, speed = orbit speed (they never end)
+	Shields = { damage = true, cooldown = true, amount = true, area = true, speed = true, knockback = true },
+	-- fissure reach = speed x duration; every enemy on the line is hit once (no pierce)
+	Quake = { damage = true, cooldown = true, amount = true, area = true, speed = true, duration = true, knockback = true },
+	-- duration = how long the crater burns
+	Meteor = { damage = true, cooldown = true, amount = true, area = true, duration = true, knockback = true },
+	-- pierce = enemies one stone hits (bounces + 1); duration = flight time per bounce
+	Sling = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
+	-- damage per tick; speed = drift speed
+	Cloud = { damage = true, cooldown = true, amount = true, area = true, speed = true, duration = true },
+	Saw = { damage = true, cooldown = true, amount = true, area = true, speed = true, duration = true, knockback = true },
+	-- damage per tick; duration = how long the snare roots
+	Vines = { damage = true, cooldown = true, amount = true, area = true, duration = true },
+	-- duration = daze time
+	Horn = { damage = true, cooldown = true, amount = true, area = true, duration = true, knockback = true },
+	Wisps = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
+	-- damage per tick; the pull strength is fixed (Params)
+	Vortex = { damage = true, cooldown = true, amount = true, area = true, duration = true },
 }
 
 -- True when the weapon (id, level, evolved) uses stat-row key `stat`.

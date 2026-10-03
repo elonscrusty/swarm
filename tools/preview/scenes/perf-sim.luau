@@ -266,6 +266,41 @@ if withClient then
 	end)
 end
 
+-- Sampled once per simulated second: live enemies on screen, how many of those show
+-- their plain server body (a "blob": LocalTransparencyModifier < 1), the enemy model
+-- parts in the world and EnemyRenderer.Stats() when it has them.
+local function enemyLook(): { [string]: number }
+	local out = { onScreen = 0, blobsOnScreen = 0, live = 0 }
+	local cam = workspace.CurrentCamera
+	local folder = workspace:FindFirstChild("SwarmEnemies")
+	if folder and cam then
+		for _, m in ipairs(folder:GetChildren()) do
+			local body = m:FindFirstChild("Body")
+			if body and body.CFrame.Y >= -100 and type(body:GetAttribute("Type")) == "string" then
+				out.live += 1
+				local _, on = cam:WorldToViewportPoint(body.Position)
+				if on then
+					out.onScreen += 1
+					if body.LocalTransparencyModifier < 1 then
+						out.blobsOnScreen += 1
+					end
+				end
+			end
+		end
+	end
+	local models = workspace:FindFirstChild("SwarmEnemyModels")
+	out.modelParts = models and #models:GetChildren() or 0
+	local ER = preview.client("EnemyRenderer")
+	if ER and type(ER.Stats) == "function" then
+		for k, v in pairs(ER.Stats()) do
+			if type(v) == "number" then
+				out["ER." .. k] = v
+			end
+		end
+	end
+	return out
+end
+
 local results = {}
 local function phase(label: string, n: number, t: number)
 	target = n
@@ -276,7 +311,7 @@ local function phase(label: string, n: number, t: number)
 	frames = 0
 	local kills0 = rp.Kills
 	local alive, aliveSamples = 0, 0
-	local live = { haz = 0, tel = 0, fx = {} }
+	local live = { haz = 0, tel = 0, fx = {}, look = {}, lookN = 0 }
 	local t0 = preview.realClock()
 	local left = t
 	while left > 0 do
@@ -295,6 +330,14 @@ local function phase(label: string, n: number, t: number)
 					live.fx[k] = math.max(live.fx[k] or 0, v)
 				end
 			end
+		end
+		if withClient then
+			-- enemy look on screen: bodies drawn as their plain server part ("blobs") vs models
+			local s = enemyLook()
+			for k, v in pairs(s) do
+				live.look[k] = (live.look[k] or 0) + v
+			end
+			live.lookN += 1
 		end
 	end
 	local real = preview.realClock() - t0
@@ -338,6 +381,14 @@ local function phase(label: string, n: number, t: number)
 	end
 	table.sort(fxParts)
 	line(string.format("live peaks: server hazards %d, client telegraphs %d, CombatFx [%s]", live.haz, live.tel, table.concat(fxParts, ", ")))
+	if live.lookN > 0 then
+		local lk = {}
+		for k, v in pairs(live.look) do
+			table.insert(lk, k .. " " .. fmt(v / live.lookN))
+		end
+		table.sort(lk)
+		line(string.format("enemy look (avg per sample): [%s]", table.concat(lk, ", ")))
+	end
 	line(string.format("server systems: %.3f ms/frame (exclusive)", server * per))
 	for i = 1, math.min(top, #srows) do
 		line(string.format("  %-36s %8.3f ms/frame  %6.2f calls/frame", srows[i][1], srows[i][2], srows[i][3]))

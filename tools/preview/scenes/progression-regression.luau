@@ -52,7 +52,12 @@ LU.QueueLevels(rp, 7)
 assert(rp.PendingLevels == 7 and rp.Offer and rp.Paused, "earned levels must open immediately without a timer")
 assert(rp.Offer and rp.BatchRemaining == 4, "first panel must contain at most four choices")
 for _, choice in ipairs(rp.Offer) do
-	assert(choice.Synergy == nil and choice.SynergyReady == nil, "cards must not reveal hidden synergy recipes")
+	-- upgrade cards carry no clue; a NEW card may hint "???" but never names an undiscovered synergy
+	if choice.Type ~= "WeaponNew" and choice.Type ~= "PassiveNew" then
+		assert(choice.Synergy == nil and choice.SynergyReady == nil, "cards must not reveal hidden synergy recipes")
+	else
+		assert(choice.Synergy == nil or string.find(choice.Synergy, "???", 1, true), "cards must not reveal hidden synergy recipes")
+	end
 end
 local panel, deadline = rp.PanelId, rp.OfferDeadline
 for i = 1, 4 do

@@ -582,11 +582,16 @@ function EnemySpawner.MiniWave()
 	-- never a ring of Spitters (Ranged): a full circle of acid has no safe side; never
 	-- Healers / Burrowers either (NoWave)
 	local typeId = pickType(row.Weights, false, true)
+	local P = Config.Pacing
+	if P.WaveMinTime and P.WaveMinTime[typeId] and ctx.RunManager.GetRunTime() < P.WaveMinTime[typeId] then
+		typeId = "Slime"
+	end
 	local def = EnemyData.Enemies[typeId]
 	introduce(typeId)
 	sinceWave = 0
 	lullLeft = Config.Pacing.MiniWaveLull
-	local count = math.floor((Config.Spawn.MiniWaveBaseCount + ctx.RunManager.GetTier() * Config.Spawn.MiniWavePerMinute) * countMult() * ctx.StageManager.SpawnMult() * openingMult())
+	local count = math.floor((Config.Spawn.MiniWaveBaseCount + ctx.RunManager.GetTier() * Config.Spawn.MiniWavePerMinute) * countMult() * ctx.StageManager.SpawnMult() * openingMult()
+		* (P.WaveCountMult and P.WaveCountMult[typeId] or 1))
 	count = math.min(count, Config.Enemies.MaxLive - #EnemySpawner.Active)
 	local offset = rng:NextNumber(0, math.pi * 2)
 	for i = 1, count do

@@ -77,12 +77,43 @@ local function move(dt)
 	end
 end
 local t = 0
+-- Wasps ("bees", type Bat) alive in the opening: sampled every second for 6 minutes
+local bees, beeNext = {}, 1
+local function sampleBees()
+	if t < beeNext or beeNext > 360 then
+		return
+	end
+	beeNext += 1
+	local c = 0
+	for _, e in ipairs(Spawner.Active) do
+		if e.Alive and e.Def and e.Def.Id == "Bat" then
+			c += 1
+		end
+	end
+	local m = math.floor((beeNext - 2) / 60) + 1
+	local b = bees[m] or { Sum = 0, N = 0, Max = 0 }
+	b.Sum += c
+	b.N += 1
+	b.Max = math.max(b.Max, c)
+	bees[m] = b
+	if beeNext == 361 then
+		local parts = {}
+		for i = 1, 6 do
+			local r = bees[i]
+			if r then
+				table.insert(parts, string.format("m%d avg %.1f max %d", i, r.Sum / r.N, r.Max))
+			end
+		end
+		preview.log("BEES alive per run minute: " .. table.concat(parts, " | "))
+	end
+end
 local ups = {} -- { T, Stage, Phase, N }
 local last = rps[1].Level
 local function tick(dt)
 	preview.advance(dt)
 	t += dt
 	move(dt)
+	sampleBees()
 	for _, rp in ipairs(rps) do
 		if rp.Offer then
 			rp.OfferDeadline = 0

@@ -15,6 +15,10 @@
 	    short window, the further those groups fade towards a floor, so a dense swarm is a
 	    murmur instead of a wall of clicks; they recover as soon as it thins out.
 	  * Pitch variation (Pitch +/- PitchVar) so repeats don't sound mechanical.
+	    Sounds with Steps (semitones) pick a note from that scale instead; with Climb, quick
+	    repeats walk up the scale (a gem stream rises like a run of chimes), reset after a pause.
+	  * Music ducking: sounds with DuckMusic = seconds (level-up, chest, portal, boss roar,
+	    victory...) dip the music (Config.Audio.MusicDuck) so the big moments land.
 	  * 3D: sounds marked World can be played at a world position (PlayAt): full volume
 	    near the hero (the camera is ~78 studs up), quieter far away.
 	Music: LobbyMusic / BattleMusic / BossMusic slots (empty Id = silent), looped, in their
@@ -36,6 +40,10 @@ local Audio = {}
 local A = Config.Audio
 local sfxGroup: SoundGroup
 local musicGroup: SoundGroup
+local musicDuckGroup: SoundGroup
+local musicDuckUntil = 0
+local musicDuckTween: Tween? = nil
+local climbStep: { [string]: number } = {}
 local groups: { [string]: SoundGroup } = {}
 local channels: { [string]: SoundGroup } = {}
 local pools: { [string]: { Sound } } = {}
@@ -97,6 +105,11 @@ function Audio.Init()
 	musicGroup.Name = "SwarmMusic"
 	musicGroup.Volume = Config.Settings.Defaults.Music
 	musicGroup.Parent = SoundService
+	-- inner group: the settings slider sets musicGroup, ducking only ever touches this one
+	musicDuckGroup = Instance.new("SoundGroup")
+	musicDuckGroup.Name = "SwarmMusicDuck"
+	musicDuckGroup.Volume = 1
+	musicDuckGroup.Parent = musicGroup
 	for _, name in ipairs({ "Combat", "Interface", "Warning" }) do
 		local group = Instance.new("SoundGroup")
 		group.Name = "Swarm" .. name
@@ -114,7 +127,7 @@ function Audio.Init()
 	for name, def in pairs(Config.Sounds) do
 		if def.Id ~= "" then
 			if def.Category == "Music" or string.find(name, "Music") then
-				local s = newSound(name, def, SoundService, musicGroup)
+				local s = newSound(name, def, SoundService, musicDuckGroup)
 				s.Looped = true
 				musicSounds[name] = s
 			else
@@ -252,7 +265,63 @@ local function updateCrowd()
 	end
 end
 
-local function startVoice(s: Sound, def, category: string, priority: number, pitch: number?)
+--[[
+	Dips the music for `seconds` (Config.Audio.MusicDuck: fast down, slow recovery).
+	Overlapping calls extend the dip instead of stacking.
+]]
+function Audio.DuckMusic(seconds: number)
+	local D = A.MusicDuck
+	if not D or not musicDuckGroup then
+		return
+	end
+	local now = os.clock()
+	local untilT = now + seconds
+	if untilT <= musicDuckUntil then
+		return
+	end
+	local wasDucked = musicDuckUntil > now
+	musicDuckUntil = untilT
+	if not wasDucked then
+		if musicDuckTween then
+			musicDuckTween:Cancel()
+		end
+		local t = TweenService:Create(musicDuckGroup, TweenInfo.new(D.Attack), { Volume = D.Volume })
+		musicDuckTween = t
+		t:Play()
+	end
+	task.delay(seconds + 0.02, function()
+		if os.clock() + 0.01 >= musicDuckUntil and musicDuckGroup then
+			if musicDuckTween then
+				musicDuckTween:Cancel()
+			end
+			local t = TweenService:Create(musicDuckGroup, TweenInfo.new(D.Release, Enum.EasingStyle.Sine), { Volume = 1 })
+			musicDuckTween = t
+			t:Play()
+		end
+	end)
+end
+
+-- Playback speed for a sound: Steps (a scale, optionally climbing) or Pitch +/- PitchVar.
+local function pickSpeed(name: string, def, now: number): number
+	local base = def.Pitch or 1
+	local steps = def.Steps
+	if steps and #steps > 0 then
+		local idx
+		if def.Climb then
+			local last = lastPlayed[name] or -math.huge
+			idx = if now - last <= def.Climb then math.min((climbStep[name] or 0) + 1, #steps) else 1
+			climbStep[name] = idx
+		else
+			idx = math.random(1, #steps)
+		end
+		local jitter = (math.random() * 2 - 1) * (def.PitchVar or 0)
+		return base * 2 ^ (steps[idx] / 12) + jitter
+	end
+	local var = def.PitchVar or A.DefaultPitchVar
+	return base + (math.random() * 2 - 1) * var
+end
+
+local function startVoice(s: Sound, def, category: string, priority: number, pitch: number?, speed: number?)
 	-- A pool slot may still be playing while a different slot finished first.
 	-- Restarting that Sound replaces its voice; it cannot count twice against the mix.
 	for i = #voices, 1, -1 do
@@ -262,8 +331,7 @@ local function startVoice(s: Sound, def, category: string, priority: number, pit
 	end
 	local now = os.clock()
 	local var = def.PitchVar or A.DefaultPitchVar
-	local speed = pitch or ((def.Pitch or 1) + (math.random() * 2 - 1) * var)
-	s.PlaybackSpeed = math.max(0.1, speed)
+	s.PlaybackSpeed = math.max(0.1, pitch or speed or ((def.Pitch or 1) + (math.random() * 2 - 1) * var))
 	s.TimePosition = 0
 	s:Play()
 	local length = s.TimeLength > 0 and s.TimeLength / s.PlaybackSpeed or 1.5
@@ -271,6 +339,9 @@ local function startVoice(s: Sound, def, category: string, priority: number, pit
 	if A.Crowd and table.find(A.Crowd.Categories, category) then
 		table.insert(crowdStarts, now)
 		updateCrowd()
+	end
+	if def.DuckMusic then
+		Audio.DuckMusic(def.DuckMusic)
 	end
 	if table.find(A.Duck.Triggers, category) then
 		duckUntil = math.max(duckUntil, now + A.Duck.Seconds)
@@ -284,23 +355,24 @@ local function startVoice(s: Sound, def, category: string, priority: number, pit
 end
 
 -- Gate shared by Play / PlayAt: MinGap, then a voice. Returns the def and its category.
-local function gate(name: string): (any, string, number)
+local function gate(name: string): (any, string, number, number)
 	local def = Config.Sounds[name]
 	if not def then
-		return nil, "", 0
+		return nil, "", 0, 1
 	end
 	local now = os.clock()
 	if def.MinGap and now - (lastPlayed[name] or -math.huge) < def.MinGap then
-		return nil, "", 0
+		return nil, "", 0, 1
 	end
 	pruneVoices(now)
 	local category = categoryOf(def)
 	local priority = priorityOf(def)
 	if not claimVoice(category, priority) then
-		return nil, "", 0
+		return nil, "", 0, 1
 	end
+	local speed = pickSpeed(name, def, now) -- before lastPlayed moves (Climb reads it)
 	lastPlayed[name] = now
-	return def, category, priority
+	return def, category, priority, speed
 end
 
 -- Plays an effect (2D). pitch overrides the playback speed (no random variation).
@@ -310,13 +382,13 @@ function Audio.Play(name: string, pitch: number?)
 	if not list then
 		return
 	end
-	local def, category, priority = gate(name)
+	local def, category, priority, speed = gate(name)
 	if not def then
 		return
 	end
 	local i = nextIndex[name]
 	nextIndex[name] = (i % #list) + 1
-	startVoice(list[i], def, category, priority, pitch)
+	startVoice(list[i], def, category, priority, pitch, speed)
 end
 
 local function getEmitter(): Emitter
@@ -363,7 +435,7 @@ function Audio.PlayAt(name: string, position: Vector3, pitch: number?)
 		Audio.Play(name, pitch)
 		return
 	end
-	local def, category, priority = gate(name)
+	local def, category, priority, speed = gate(name)
 	if not def then
 		return
 	end
@@ -387,7 +459,7 @@ function Audio.PlayAt(name: string, position: Vector3, pitch: number?)
 	end
 	s.SoundGroup = groups[category]
 	e.Part.CFrame = CFrame.new(position)
-	startVoice(s, def, category, priority, pitch)
+	startVoice(s, def, category, priority, pitch, speed)
 end
 
 local function fadeMusic(name: string, s: Sound, target: number, seconds: number, onDone: (() -> ())?)
@@ -459,6 +531,14 @@ function Audio.StopEffects()
 	end
 	table.clear(voices)
 	setDuck(false)
+	musicDuckUntil = 0
+	if musicDuckGroup then
+		if musicDuckTween then
+			musicDuckTween:Cancel()
+			musicDuckTween = nil
+		end
+		musicDuckGroup.Volume = 1
+	end
 end
 
 -- For the preview tool / tests: effects playing now (name, category).
