@@ -3144,7 +3144,7 @@ export type Portal = {
 	its plinth colliders to the arena (call before EnemyAI.SetArena). Extras built here:
 	a dashed rune circle on the floor showing where to stand (Config.Stages.PortalRadius;
 	its marks light up with the charge), a tall soft light beam and a PointLight.
-	SetState("Idle" | "Charging" | "Boss" | "Surge" | "Open", charge) recolours all of it.
+	SetState("Idle" | "Charging" | "Boss" | "Surge" | "Open", charge) recolors all of it.
 ]]
 function MapBuilder.BuildPortal(arena: Arena, pos: Vector3): Portal
 	local S = Config.Stages

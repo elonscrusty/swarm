@@ -353,13 +353,26 @@ local function newObj(kind: string, typeName: string, pos: Vector3, cf: CFrame):
 	return obj
 end
 
+-- "1 item (80% common, 19% uncommon, 1% legendary)" from the chest's rarity weights
+-- (Config.Chests.Weights), so the prompt never drifts from the tuning.
 local function chestBenefit(typeName: string): string
-	if typeName == "Small" then
-		return "1 item (80% common, 19% uncommon, 1% legendary)"
-	elseif typeName == "Large" then
-		return "1 item: uncommon, or legendary (20%)"
+	local weights = Config.Chests.Weights[typeName] or Config.Chests.Weights.Small
+	local total = 0
+	for _, w in pairs(weights) do
+		total += w
 	end
-	return "1 legendary item"
+	local parts = {}
+	for _, rarity in ipairs({ "Common", "Uncommon", "Legendary" }) do
+		local w = weights[rarity] or 0
+		if w > 0 and total > 0 then
+			table.insert(parts, string.format("%d%% %s", math.floor(w / total * 100 + 0.5), string.lower(rarity)))
+		end
+	end
+	if #parts == 1 then
+		local space = string.find(parts[1], " ") or 0
+		return "1 " .. string.sub(parts[1], space + 1) .. " item"
+	end
+	return "1 item (" .. table.concat(parts, ", ") .. ")"
 end
 
 local function buildChest(typeName: string, pos: Vector3, yawJitter: number)
@@ -455,7 +468,7 @@ local function altarText(obj: Obj)
 	if st == "Dormant" then
 		local n = obj.GuardTotal > 0 and (obj.GuardTotal - obj.Killed) or guardCount()
 		setAttrs(obj, {
-			Benefit = "Free rare item for every teammate",
+			Benefit = "Free uncommon or legendary item for every teammate",
 			Tradeoff = string.format("Hold to awaken %d elite guards", n),
 			Detail = "Dormant · activate when ready",
 		})
@@ -517,7 +530,7 @@ local function buildRunes(arena, centre: Vector3)
 		obj.Rune, obj.Puzzle = i, puzzle
 		add(obj.Model, cf, "Stone", Vector3.new(2, 3, 2), Vector3.new(0, 1.5, 0), P.stone_500)
 		addGlow(obj, pos + Vector3.new(0, 3.5, 0), RUNE_COLORS[i], true, true)
-		setAttrs(obj, { Title = RUNE_NAMES[i] .. " rune", Hold = 0.4, State = "Ready", Benefit = "Complete the sequence for a team relic", Tradeoff = "Wrong rune resets the sequence" })
+		setAttrs(obj, { Title = RUNE_NAMES[i] .. " rune", Hold = 0.4, State = "Ready", Benefit = "Complete the sequence for a team item", Tradeoff = "Wrong rune resets the sequence" })
 		obj.Model.Parent = folder
 		table.insert(puzzle.Nodes, obj)
 	end
@@ -527,7 +540,7 @@ end
 local function buildTreasure(arena, pos: Vector3)
 	local obj = buildChest("Small", pos, 0)
 	obj.Type, obj.Price = "Treasure", 0
-	setAttrs(obj, { LootType = "Treasure", Title = TITLES.Treasure, Price = 0, Benefit = "Free uncommon or legendary relic", Detail = "Discovered cache · hold to claim" })
+	setAttrs(obj, { LootType = "Treasure", Title = TITLES.Treasure, Price = 0, Benefit = "Free uncommon or legendary item", Detail = "Discovered cache · hold to claim" })
 	addGlow(obj, pos + Vector3.new(0, 2.7, 0), P.gold_300, true, false)
 	MapBuilder.ClearDecor(arena, pos, 3)
 end
@@ -906,7 +919,7 @@ local function useRune(rp, obj: Obj)
 	puzzle.Solved = true
 	for _, node in ipairs(puzzle.Nodes) do
 		setState(node, "Spent")
-		setAttrs(node, { Detail = "Sequence complete · relic claimed" })
+		setAttrs(node, { Detail = "Sequence complete · item claimed" })
 		recolourGlow(node, P.gold_300, 0)
 	end
 	for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
