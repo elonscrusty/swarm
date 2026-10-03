@@ -851,7 +851,7 @@ WeaponData.Weapons = {
 		area weapons are per target inside the effect):
 		  Ward Shields   6.8 / 20 / 51 / 125   orbiting, hits all around, Bulwark eats shots
 		  Earthsplitter  7 / 13 / 30 / 49      line of spikes (+ Aftershock eruptions)
-		  Starfall       10 / 17 / 30 / 50     delayed blast on the densest crowd + crater
+		  Starfall       10 / 17 / 32 / 51     delayed blast on the densest crowd + crater
 		  Sling          6.9 / 25 / 67 / 149   one stone bounces through 3-8 enemies
 		  Plague Censer  6 / 12 / 22 / 30      drifting cloud (+ Pestilence poison)
 		  Sawblade       7.5 / 30 / 70 / 160   grinds slowly through crowds (3 bites a pass)

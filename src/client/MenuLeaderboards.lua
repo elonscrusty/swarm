@@ -354,9 +354,10 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		-- the YOUR BEST card: on narrow panels the caption goes and the value moves under
 		-- the name
 		ui.YouCaption.Visible = not narrow
-		local nameX = narrow and 154 or 252
-		ui.YouRank.Position = UDim2.fromOffset(narrow and 48 or 140, 0)
-		ui.YouAvatarSlot.Position = UDim2.new(0, narrow and 108 or 206, 0.5, -18)
+		local nameX = narrow and 160 or 252
+		ui.YouRank.Position = UDim2.fromOffset(narrow and 46 or 140, 0)
+		ui.YouRank.Size = UDim2.new(0, narrow and 62 or 64, 1, 0) -- clear of the head shot
+		ui.YouAvatarSlot.Position = UDim2.new(0, narrow and 114 or 206, 0.5, -18)
 		if narrow then
 			ui.YouName.AnchorPoint = Vector2.zero
 			ui.YouName.Position = UDim2.fromOffset(nameX, 6)

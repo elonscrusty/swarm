@@ -2037,10 +2037,23 @@ function UIKit.Avatar(parent: Instance?, userId: number?, size: number, props: {
 	corner(body, 999)
 	local img = new("ImageLabel", { Name = "HeadShot", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Active = false }, f)
 	corner(img, 999)
+	-- the head shot has a transparent background: once it is in, the drawn silhouette
+	-- must go, or it shows around / through the player's picture (owner: "stock photos
+	-- overlapping" on the leaderboard rows)
+	local function hideSilhouette()
+		if img.Image ~= "" and img.IsLoaded then
+			head.Visible = false
+			body.Visible = false
+			f.BackgroundColor3 = P.slate_800
+		end
+	end
+	img:GetPropertyChangedSignal("IsLoaded"):Connect(hideSilhouette)
+	img:GetPropertyChangedSignal("Image"):Connect(hideSilhouette)
 	if type(userId) == "number" and userId > 0 then
 		local cached = avatarCache[userId]
 		if cached then
 			img.Image = cached
+			hideSilhouette()
 		else
 			task.spawn(function()
 				local ok, content = pcall(function()

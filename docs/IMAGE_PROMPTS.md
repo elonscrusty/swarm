@@ -6,7 +6,7 @@ that reuse them (Max HP, Might, Armor, Speed, Luck, Growth, Revive). Everything 
 the game still draws with simple vector shapes, borrows from another icon, or doesn't have.
 
 **Total: 136 images** in 17 groups. Work top to bottom: groups 1-9 matter most in play.
-**New requests: 17 images** in groups 18-20 (the two new stage bosses, three small UI symbols, ten new passives; not made yet).
+**New requests: 37 images** in groups 18-21 (the two new stage bosses, three small UI symbols, ten new passives, ten new weapons and their ten evolutions; not made yet).
 
 How to use:
 1. Paste the **STYLE BLOCK** first in every ChatGPT chat (or once at the top of a chat).
@@ -317,6 +317,41 @@ under the passive's id.
 
 When these come in: upload them with `tools/upload_icons.py`, then run `tools/gen_icon_data.py`
 (the ids already match `PassiveData`, so the pictures replace the drawn icons automatically).
+
+## 21. New requests: ten new weapons and their evolutions, 20 images (`art/icons/`)
+
+Not made yet; the game draws these with code today. Same STYLE BLOCK, same format as the
+weapon and evolution icons in `art/icons` (see `docs/ICON_LIST.md`): square 512x512,
+transparent background, ONE chunky low-poly object centred, no text, readable at 40 px. Save
+each file under the weapon's (or evolution's) id. Evolutions are the same object made grander,
+gilded or glowing, so the pair reads as one family.
+
+Weapons:
+- **WardShields.png** (Ward Shields, shields circle you): a round cool steel shield #BCC3CB with a darker steel cross and rim #67707B and a small antique gold boss #D5B062, a second small shield floating at its top right.
+- **Earthsplitter.png** (Earthsplitter, a crack of stone spikes): three jagged grey stone spikes #9EA2A7 bursting up out of a short strip of brown earth #A0815E, a dark crack running between them, two pebbles flying.
+- **Starfall.png** (Starfall, meteors on crowds): a glowing orange-red meteor #D9542A with a molten amber core #E9B941 diving from the top left, a short flame tail #E58A45 behind it.
+- **Sling.png** (Sling, stones that bounce): a dark leather sling #6E4C33 with two cords and a cupped pouch, a round grey stone #9EA2A7 flying out of it to the top right.
+- **PlagueCenser.png** (Plague Censer, a drifting poison cloud): a small brass censer ball #D5B062 hanging from a short chain, a puffy sickly moss-green cloud #7E9F58 billowing from it.
+- **Sawblade.png** (Sawblade, a saw that grinds crowds): a round toothed steel saw blade #D7DCE1 with eight chunky teeth and a dark steel hub #67707B, a thin ivory edge glint.
+- **VineSnare.png** (Vine Snare, roots enemies): two thick moss-green thorny vines #648A47 curling up out of a small ring of earth, ivory thorns #E5DCC7 and two fresh leaves #A3B784.
+- **WarHorn.png** (War Horn, a booming blast): a curved ivory war horn #C9BEA6 with two antique gold bands #D5B062 and a dark wooden mouthpiece #654832, two pale sound arcs out of its bell.
+- **SpiritWisps.png** (Spirit Wisps, darting spirits): three small glowing pale-blue wisps #DCEAF7 with short curling tails circling a faint ring, each with a bright ivory core #F3EDDF.
+- **Vortex.png** (Vortex, a rift that drags enemies in): a flat two-armed spiral of soft arcane blue light #9DB8E3 swirling into a small bright ivory core #F3EDDF.
+
+Evolutions:
+- **AegisRing.png** (Aegis Ring = Ward Shields + Aegis Charm): a gilded round shield #D5B062 with an ivory boss #F3EDDF, three small gold shields orbiting it on a thin glowing ring.
+- **Worldbreaker.png** (Worldbreaker = Earthsplitter + Stoneskin): three tall black basalt spikes #433E42 with glowing lava cracks #F29A45, bursting from cracked ground.
+- **Cataclysm.png** (Cataclysm = Starfall + Ember Oil): three golden-white meteors #E5C988 of different sizes raining down at an angle, amber flame tails #E9B941.
+- **Giantfeller.png** (Giantfeller = Sling + Giant's Bane): the leather sling #6E4C33 hurling a big antique gold stone #D5B062 with two small crimson impact marks #C9443F.
+- **Pestilence.png** (Pestilence = Plague Censer + Candle): the brass censer with a darker, larger green cloud #535F41 to #A3B784 and a small ivory skull shape #E5DCC7 in the fumes.
+- **Ruinwheel.png** (Ruinwheel = Sawblade + Thornhide): a crimson saw blade #C9443F with antique gold teeth and hub #D5B062, a faint gold ring around it.
+- **Strangleroot.png** (Strangleroot = Vine Snare + Growth): dark green vines #52763D with crimson thorn buds #DB6A5E, twisting tighter around a ring of earth.
+- **TitansRoar.png** (Titan's Roar = War Horn + Lionheart): a golden war horn #E5C988 with crimson bands #C9443F inside two full amber shockwave rings #F6DA7E.
+- **WispChoir.png** (Wisp Choir = Spirit Wisps + Luck): five warm golden wisps #F0DDB0 with ivory cores circling a bright centre.
+- **Singularity.png** (Singularity = Vortex + Vacuum): a deep dark slate spiral #26323F with arcane blue arms #9DB8E3 around a black core rimmed in antique gold #E5C988.
+
+When these come in: upload them with `tools/upload_icons.py`, then run `tools/gen_icon_data.py`
+(the ids already match `WeaponData`, so the pictures replace the drawn icons automatically).
 
 ---
 
