@@ -1265,10 +1265,11 @@ end
 ]]
 local function wardShield(b, face: Color3, rim: Color3, boss: Color3)
 	local faceOut = CFrame.Angles(0, math.rad(90), 0) -- cylinder axis X → Z: a disc facing out
-	b.add("Cylinder", Vector3.new(0.22, 2.5, 2.5), rim, CFrame.new(0, 0, 0.06) * faceOut, { Material = SHOT_METAL })
+	-- smooth (not Metal) faces: metal reads almost black from the overhead camera
+	b.add("Cylinder", Vector3.new(0.22, 2.5, 2.5), rim, CFrame.new(0, 0, 0.06) * faceOut)
 	b.add("Cylinder", Vector3.new(0.24, 2.1, 2.1), face, faceOut)
-	b.add("Block", Vector3.new(0.3, 1.9, 0.28), rim, CFrame.new(0, 0, -0.04), { Material = SHOT_METAL })
-	b.add("Block", Vector3.new(1.9, 0.3, 0.28), rim, CFrame.new(0, 0, -0.04), { Material = SHOT_METAL })
+	b.add("Block", Vector3.new(0.3, 1.9, 0.28), rim, CFrame.new(0, 0, -0.04))
+	b.add("Block", Vector3.new(1.9, 0.3, 0.28), rim, CFrame.new(0, 0, -0.04))
 	b.add("Ball", Vector3.new(0.62, 0.62, 0.42), boss, CFrame.new(0, 0, -0.2), { Material = SHOT_METAL })
 end
 
@@ -1342,10 +1343,10 @@ local function vortexDisc(b, outer: Color3, inner: Color3, core: Color3, r: numb
 end
 
 SHOTS[39] = function(b, _def)
-	wardShield(b, ShotPalette.steel_300, ShotPalette.steel_600, SHOT.Gold)
+	wardShield(b, ShotPalette.ivory_200, ShotPalette.slate_400, ShotPalette.gold_400)
 end
 SHOTS[40] = function(b, _def)
-	wardShield(b, ShotPalette.gold_400, ShotPalette.gold_600, ShotPalette.ivory_100)
+	wardShield(b, ShotPalette.gold_300, ShotPalette.gold_500, ShotPalette.ivory_100)
 end
 SHOTS[41] = function(b, _def)
 	rockHead(b, ShotPalette.stone_400, ShotPalette.stone_600, nil)

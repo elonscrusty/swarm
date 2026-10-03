@@ -737,8 +737,9 @@ end
 -- Dev tools (RunManager "DevCommand": Studio / creator only)
 ------------------------------------------------------------------------------------------
 
--- The weapons that came with the Alchemist, the Engineer and the Necromancer.
-LevelUpSystem.NewWeapons = { "Spear", "Crossbow", "FrostNova", "FireTrail", "HealingTotem", "ChainHook", "Turret", "SoulBolt" }
+-- The weapons that came with the Alchemist, the Engineer and the Necromancer, then the armoury batch.
+LevelUpSystem.NewWeapons = { "Spear", "Crossbow", "FrostNova", "FireTrail", "HealingTotem", "ChainHook", "Turret", "SoulBolt",
+	"WardShields", "Earthsplitter", "Starfall", "Sling", "PlagueCenser", "Sawblade", "VineSnare", "WarHorn", "SpiritWisps", "Vortex" }
 
 --[[
 	evolve = false: gives every weapon in `list` (default NewWeapons; WeaponData.Order = all
