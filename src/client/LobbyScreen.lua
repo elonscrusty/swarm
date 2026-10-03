@@ -1273,7 +1273,10 @@ function LobbyScreen.SetVisible(on: boolean)
 		browse = nil
 		ui.Dim.BackgroundTransparency = 1
 		UIAnim.SwapScreens(nil, ui.Home, 1, Config.UI.ScreenSlideSeconds)
-		UIAnim.SlideIn(ui.Chip, Vector2.new(0, -60), 0)
+		-- scale-only entrance: relayout() owns the chip's Position (a Position tween captured
+		-- its target here and overrode any relayout during the tween, leaving the chip at a
+		-- stale spot, e.g. on the left when the first layout ran before the screen size was known)
+		UIAnim.Pop(ui.Chip, 0, 0.85)
 		homeEntrance()
 		if ui.Playtime then
 			ui.Playtime.Shown(true)
