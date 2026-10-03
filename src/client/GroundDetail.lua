@@ -427,13 +427,16 @@ local function newPart(): Part
 	return p
 end
 
-local function claim(): Part?
+-- A pooled part for `used` pieces already placed this update, or nil at the budget.
+-- Parts are never destroyed: a budget that shrank (Reduced effects, a slow device) only
+-- stops them being handed out, so a device at the edge never churns Instances.
+local function claim(used: number): Part?
+	if used >= budget then
+		return nil
+	end
 	local p = table.remove(free)
 	if p then
 		return p
-	end
-	if #pool >= budget then
-		return nil
 	end
 	p = newPart()
 	table.insert(pool, p)
@@ -554,14 +557,16 @@ local function update(cam: Camera)
 	end)
 	local moveParts: { Part } = parkParts
 	local moveCFs: { CFrame } = parkCFs
+	local used = activeCount
 	for _, cell in ipairs(toPlace) do
 		local pieces = cellPieces(a, cell[1], cell[2])
 		local placed = {}
 		for _, piece in ipairs(pieces) do
-			local p = claim()
+			local p = claim(used)
 			if not p then
 				break
 			end
+			used += 1
 			p.Shape = piece.Shape
 			p.Size = piece.Size
 			p.Color = piece.Color
@@ -624,19 +629,8 @@ local started = false
 local function resizeBudget()
 	local before = budget
 	refreshBudget()
-	if before == budget then
-		return
-	end
-	releaseAll()
-	while #pool > budget do
-		local p = table.remove(pool)
-		if p then
-			local i = table.find(free, p)
-			if i then
-				table.remove(free, i)
-			end
-			p:Destroy()
-		end
+	if budget < before and activeCount > budget then
+		releaseAll() -- the next update refills nearest-first within the new budget
 	end
 end
 

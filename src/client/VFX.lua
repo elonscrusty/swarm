@@ -543,11 +543,13 @@ end
 
 -- Takes a trail and starts it at `cf` (nil when the budget is used up).
 local function acquireTrail(cf: CFrame, st: TrailStyle): TrailSlot?
+	-- the budget counts trails drawing now (flying or still fading), not slots ever made,
+	-- so Reduced effects thins them even once the pool is warm
+	if trailCount - #freeTrails >= MAX_TRAILS * budgetScale() then
+		return nil
+	end
 	local slot = table.remove(freeTrails)
 	if not slot then
-		if trailCount >= MAX_TRAILS * budgetScale() then
-			return nil
-		end
 		trailCount += 1
 		slot = newTrailSlot()
 	end
@@ -2413,9 +2415,9 @@ local function renderPickups(now: number)
 	for m, pk in pairs(pickups) do
 		if not m.Parent then
 			pickups[m] = nil
-			-- taken next to the local hero: a sparkle where it sat
+			-- taken next to the local hero: a sparkle where it sat (not the run's end sweep)
 			local root = player.Character and player.Character.PrimaryPart
-			if root and (root.Position - pk.Base.Position).Magnitude < K.PICKUP_SPARKLE_RANGE then
+			if root and player:GetAttribute("InRun") == true and (root.Position - pk.Base.Position).Magnitude < K.PICKUP_SPARKLE_RANGE then
 				CombatFx.Pickup(pk.Base.Position, pk.Chest)
 			end
 		elseif pk.Chest then
