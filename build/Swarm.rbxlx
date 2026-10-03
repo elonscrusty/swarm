@@ -2195,8 +2195,16 @@ Config.Stages = {
 	-- this many seconds on the stage (stage 1, later stages); the HUD says "The portal is
 	-- dormant: m:ss". 0 = the portal can be charged at any time (owner's choice).
 	PortalLockSeconds = { 0, 0 },
-	-- the HUD arrow toward the portal appears after this long (never before the lock ends)
-	HintAfterSeconds = 90,
+	-- The portal REVEAL (SwarmState PortalReveal counts up; PortalHint turns on): the
+	-- moment the portal can be charged, at the earliest RevealDelaySeconds into the stage
+	-- so the "STAGE N" banner has gone first. Clients make it unmistakable: a banner and a
+	-- sound, the tall beacon pillar + pulsing floor ring (client PortalBeacon), the edge
+	-- arrow with the distance (StageUI) and a minimap ping (MiniMap). Owner: "when the
+	-- portal spawns it needs to be very evident."
+	RevealDelaySeconds = 4,
+	-- the HUD arrow toward the portal appears after this long (never before the lock ends
+	-- or the reveal delay); 0 = from the reveal on, always
+	HintAfterSeconds = 0,
 	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
 	EnemyHPPerStage = 0.25,
 	EnemyDamagePerStage = 0.08, -- also the boss's contact / orb damage and bomb ticks
@@ -2345,10 +2353,21 @@ Config.LevelUp = {
 Config.XP = {
 	-- XP needed to go from level L to L+1 = Base + min(L, CapLevel) * PerLevel
 	-- Early costs grow by PerLevel; after CapLevel, each extra level adds AfterCapPerLevel.
-	Base = 20,
-	PerLevel = 8,
+	-- Every filled bar offers an upgrade at once (no pacing timer): the ONLY brake on how
+	-- often the upgrade cards appear is this cost curve. levelrate-sim (real server, hero
+	-- walking in the swarm) measured ~3 level-ups per minute solo on the old 20 + 8/level
+	-- curve; these costs (x1.5) bring that to ~2 per minute. Level 1 costs 42, level 20
+	-- costs 270, level 21 costs 276, level 50 costs 450.
+	Base = 30,
+	PerLevel = 12,
 	CapLevel = 20,
-	AfterCapPerLevel = 4,
+	AfterCapPerLevel = 6,
+	-- Co-op: XP is shared (every living teammate gets every gem), while Duo / Trio spawn
+	-- Config.Difficulty.PlayerCountMult times the enemies and several heroes kill faster,
+	-- so without a brake a duo levelled about twice as fast per player as a solo hero and
+	-- everyone sat through everyone's upgrade panels. Shared gem XP is multiplied by this
+	-- (index = living participants) so each player's bar fills about as fast as solo.
+	CoopShare = { 1, 0.5, 0.36, 0.3 },
 	GemValues = { Small = 1, Medium = 5, Large = 25 },
 	GemPoolSize = 500,
 	MagnetSpeed = 45, -- studs/s a gem flies toward the player once inside pickup radius
@@ -2930,6 +2949,9 @@ Config.Sounds = {
 	Chest = { Id = "rbxassetid://17208380755", Volume = 0.55, Category = "Pickup", MinGap = 0.25, PitchVar = 0 }, -- Roblox GUI - Purchase (Roblox)
 	Item = { Id = "rbxassetid://17208323435", Volume = 0.45, Category = "Pickup", MinGap = 0.2, PitchVar = 0.03 }, -- Roblox GUI - Equip (Roblox)
 	Shrine = { Id = "rbxassetid://17208372272", Volume = 0.5, Category = "Pickup", MinGap = 0.3, PitchVar = 0 }, -- Roblox GUI - Notification Low (Roblox)
+	-- the stage portal is revealed (client StageUI, with the banner); same Roblox-owned clip
+	-- as Shrine, lower and longer so it reads as a landmark, not a pickup
+	PortalAppear = { Id = "rbxassetid://17208372272", Volume = 0.7, Category = "UI", MinGap = 1, Pitch = 0.72, PitchVar = 0 }, -- Roblox GUI - Notification Low (Roblox)
 	Victory = { Id = "rbxasset://sounds/victory.wav", Volume = 0.45, Category = "UI", PitchVar = 0 },
 	-- warnings: telegraphs that ask the player to move (never dropped for combat noise)
 	FuseTick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.35, Category = "Warning", MinGap = 0.09, Pitch = 1.6, PitchVar = 0.03, World = true },
@@ -4703,11 +4725,11 @@ local ITEMS: { Item } = {
 
 	-- Uncommon ----------------------------------------------------------------------------
 	{ Id = "IronPlate", Name = "Iron Plate", Rarity = "Uncommon", Stack = "Hyperbolic", K = 0.06, Text = "Take 6% less damage", Desc = "Take less damage (hyperbolic: 1 stack 6%, 3 stacks 15%, 10 stacks 38%)." },
-	{ Id = "BarbedMail", Name = "Barbed Mail", Rarity = "Uncommon", Stack = "Linear", Proc = "Thorns", Text = "When hit, hit back x1.5", Desc = "When hit, deal 150% of the damage you took (+100% per stack; at least half the raw hit counts) to enemies within 8 studs. Once every 0.5 s." },
-	{ Id = "StormCharm", Name = "Storm Charm", Rarity = "Uncommon", Stack = "Hyperbolic", K = 0.11, Proc = "Lightning", Text = "10% of hits call lightning", Desc = "Hits have a ~10% chance to strike 3 enemies (+1 per stack, max 5) for 40% of the hit (chance hyperbolic: 2 stacks 18%)." },
-	{ Id = "VolatileSpore", Name = "Volatile Spore", Rarity = "Uncommon", Stack = "Linear", Proc = "Explode", Text = "20% of kills explode", Desc = "Kills have a 20% chance to burst for 60% of the enemy's max HP (+30% per stack) within 7 studs (bosses take at most 5% of their max HP)." },
+	{ Id = "BarbedMail", Name = "Barbed Mail", Rarity = "Uncommon", Stack = "Linear", Proc = "Thorns", Text = "When hit, hit back x1.5", Desc = "When hit, deal 150% of the damage taken (+100% per stack) to enemies within 8 studs, once every 0.5 s." },
+	{ Id = "StormCharm", Name = "Storm Charm", Rarity = "Uncommon", Stack = "Hyperbolic", K = 0.11, Proc = "Lightning", Text = "10% of hits call lightning", Desc = "Hits have a ~10% chance to strike 3 enemies (+1 per stack, max 5) for 40% of the hit; 2 stacks 18%." },
+	{ Id = "VolatileSpore", Name = "Volatile Spore", Rarity = "Uncommon", Stack = "Linear", Proc = "Explode", Text = "20% of kills explode", Desc = "20% of kills burst for 60% of the enemy's max HP (+30% per stack) within 7 studs; bosses take at most 5%." },
 	{ Id = "GuardianWard", Name = "Guardian Ward", Rarity = "Uncommon", Stack = "Linear", Proc = "Shield", Text = "8% HP shield after 5 s unhurt", Desc = "After 5 s without damage, gain a shield of 8% max HP per stack (up to 40%)." },
-	{ Id = "SpareQuiver", Name = "Spare Quiver", Rarity = "Uncommon", Stack = "Special", Proc = "ExtraShot", Text = "+1 projectile every 6th attack", Desc = "Every 6th attack of each weapon fires +1 projectile (not Garlic Aura); each stack makes it 1 attack sooner (best: every 2nd)." },
+	{ Id = "SpareQuiver", Name = "Spare Quiver", Rarity = "Uncommon", Stack = "Special", Proc = "ExtraShot", Text = "+1 projectile every 6th attack", Desc = "Every 6th attack of each weapon fires +1 projectile (not Garlic Aura); each stack makes it 1 attack sooner (min every 2nd)." },
 	{ Id = "MagnetTotem", Name = "Magnet Totem", Rarity = "Uncommon", Stack = "Special", Proc = "MagnetPulse", Text = "Pull gems every 10 s", Desc = "Every 10 s pull gems within 45 studs. Each stack: -2 s (min 4 s) and +10 studs." },
 	{ Id = "HuntersEye", Name = "Hunter's Eye", Rarity = "Uncommon", Stack = "Linear", PerStack = { critDamage = 0.3, critChance = 0.03 }, Text = "+30% crit damage", Desc = "+30% critical damage and +3% critical chance per stack." },
 
@@ -7443,7 +7465,7 @@ PassiveData.Passives = {
 		Id = "Duplicator",
 		Name = "Duplicator",
 		Color = Color3.fromRGB(200, 120, 255),
-		Description = "+1 projectile, swing or strike per level (all weapons but the aura).",
+		Description = "+1 projectile, swing or strike per level (not the aura).",
 		Values = {
 			{ amount = 1 },
 			{ amount = 2 },
@@ -7511,7 +7533,7 @@ PassiveData.Passives = {
 		Id = "Fletching",
 		Name = "Fletching",
 		Color = Color3.fromRGB(150, 200, 120),
-		Description = "Orbs, knives, axes and arrows pierce 1 more enemy per level.",
+		Description = "Orbs, knives, axes and arrows pierce +1 enemy per level.",
 		Values = {
 			{ pierce = 1 },
 			{ pierce = 2 },
@@ -7524,7 +7546,7 @@ PassiveData.Passives = {
 		Id = "Precision",
 		Name = "Precision",
 		Color = Color3.fromRGB(220, 120, 110),
-		Description = "+5% chance per level for any hit to crit (double damage).",
+		Description = "+5% crit chance per level (crits deal double damage).",
 		Values = {
 			{ critChance = 0.05 },
 			{ critChance = 0.10 },
@@ -9016,7 +9038,7 @@ WeaponData.Weapons = {
 			Id = "InfiniteReturn",
 			Name = "Infinite Return",
 			Passive = "Cooldown",
-			Description = "Boomerangs that never stop: they bounce between enemies and you forever.",
+			Description = "Boomerangs that never stop, bouncing between foes and you.",
 			Stats = row(30, 1.0, 4, 1.4, 46, 999, 0.9, 8),
 			Persistent = true,
 		},
@@ -9034,7 +9056,7 @@ WeaponData.Weapons = {
 	Longbow = {
 		Id = "Longbow",
 		Name = "Longbow",
-		Description = "Heavy piercing arrows fly far where you move, or at the nearest enemy while you stand still.",
+		Description = "Heavy arrows that pierce and fly far, aimed at the nearest enemy.",
 		Color = Color3.fromRGB(150, 190, 110),
 		Behavior = "Longbow",
 		AmountLabel = "Arrows",
@@ -9059,7 +9081,7 @@ WeaponData.Weapons = {
 			Id = "Windpiercer",
 			Name = "Windpiercer",
 			Passive = "Fletching",
-			Description = "Every shot is a volley of wind arrows that pierce everything.",
+			Description = "Every shot is a volley of wind arrows piercing everything.",
 			Stats = row(52, 1.25, 2, 1.3, 125, 999, 1.10, 12),
 			Fan = true, -- every shot adds the two side arrows (the Volley perk on every shot)
 		},
@@ -9087,7 +9109,7 @@ WeaponData.Weapons = {
 	Spear = {
 		Id = "Spear",
 		Name = "Spear",
-		Description = "Thrusts a spear in the direction you face, piercing a line of enemies.",
+		Description = "Thrusts a spear forward, piercing a line of enemies.",
 		Color = Color3.fromRGB(190, 150, 90),
 		Behavior = "Spear",
 		AmountLabel = "Spears",
@@ -9112,7 +9134,7 @@ WeaponData.Weapons = {
 			Id = "DragonLance",
 			Name = "Dragon Lance",
 			Passive = "Might",
-			Description = "Three crimson lances pierce everything and burst at their tips.",
+			Description = "Three crimson lances that pierce all and burst at the tip.",
 			Stats = row(42, 0.90, 3, 1.5, 0, 999, 0, 14),
 			Burst = true, -- each thrust bursts at its full reach (BurstShare of the damage)
 		},
@@ -9158,7 +9180,7 @@ WeaponData.Weapons = {
 		Id = "FrostNova",
 		Element = "Frost", -- SynergyData (Elemental Trinity)
 		Name = "Frost Nova",
-		Description = "A burst of frost around you every few seconds: damages and slows enemies.",
+		Description = "A frost burst around you that damages and slows enemies.",
 		Color = Color3.fromRGB(150, 200, 230),
 		Behavior = "Nova",
 		Area = true,
@@ -9185,7 +9207,7 @@ WeaponData.Weapons = {
 			Id = "AbsoluteZero",
 			Name = "Absolute Zero",
 			Passive = "Area",
-			Description = "A huge blizzard burst that nearly freezes the swarm in place.",
+			Description = "A huge blizzard burst that nearly freezes the swarm.",
 			Stats = row(42, 1.9, 1, 2.0, 0, 999, 3.0, 6),
 			DeepFreeze = true, -- slow to EvoSlow instead of Slow
 		},
@@ -9196,7 +9218,7 @@ WeaponData.Weapons = {
 		Id = "FireTrail",
 		Element = "Fire", -- SynergyData (Elemental Trinity, Ember Field)
 		Name = "Fire Trail",
-		Description = "Leaves burning ground behind you as you move. It never hurts heroes.",
+		Description = "Burning ground follows your steps. It never hurts heroes.",
 		Color = Color3.fromRGB(230, 130, 60),
 		Behavior = "FireTrail",
 		Area = true,
@@ -9224,7 +9246,7 @@ WeaponData.Weapons = {
 			Id = "PhoenixStride",
 			Name = "Phoenix Stride",
 			Passive = "SpeedBoots",
-			Description = "Golden flames: enemies that touch them keep burning for 2 seconds.",
+			Description = "Golden flames that keep burning enemies for 2 seconds.",
 			Stats = row(16, 0.25, 1, 1.7, 0, 999, 3.5, 0),
 			Ignite = true,
 		},
@@ -9234,7 +9256,7 @@ WeaponData.Weapons = {
 	HealingTotem = {
 		Id = "HealingTotem",
 		Name = "Healing Totem",
-		Description = "Plants a totem that heals you and teammates nearby and hurts enemies around it.",
+		Description = "Plants a totem that heals allies and hurts enemies near it.",
 		Color = Color3.fromRGB(140, 190, 110),
 		Behavior = "Totem",
 		Area = true,
@@ -9272,7 +9294,7 @@ WeaponData.Weapons = {
 	ChainHook = {
 		Id = "ChainHook",
 		Name = "Chain Hook",
-		Description = "Hooks the furthest enemy in front of you and drags it in, hurting everything along the chain.",
+		Description = "Hooks a far enemy and drags it in, hurting all along the chain.",
 		Color = Color3.fromRGB(150, 160, 175),
 		Behavior = "Hook",
 		AmountLabel = "Hooks",
@@ -9307,7 +9329,7 @@ WeaponData.Weapons = {
 	Turret = {
 		Id = "Turret",
 		Name = "Turret",
-		Description = "Builds a turret next to you that shoots nearby enemies (up to 2).",
+		Description = "Builds a turret beside you that shoots nearby enemies (max 2).",
 		Color = Color3.fromRGB(190, 160, 90),
 		Behavior = "Turret",
 		Deployable = true,
@@ -9335,7 +9357,7 @@ WeaponData.Weapons = {
 			Id = "Bastion",
 			Name = "Bastion",
 			Passive = "Armor",
-			Description = "Gilded turrets that fire almost twice as fast with piercing bolts.",
+			Description = "Gilded turrets, almost twice as fast, with piercing bolts.",
 			Stats = row(24, 5.0, 2, 1.5, 120, 3, 7.0, 3),
 		},
 	},
@@ -9591,6 +9613,59 @@ function WeaponData.LineText(line: { [string]: string }): string
 	return string.format("%s %s", line.Label, line.To)
 end
 
+-- One card line as a short gain: {Label, From, To} → "+10 damage" / "-0.1s cooldown" /
+-- "all pierce"; a perk line → "New: Riposte"; nil when nothing changed.
+function WeaponData.DeltaText(line: { [string]: string }): string?
+	local label = tostring(line.Label or "")
+	-- "Damage" → "damage" but "HP regen" / "XP gain" keep their acronym
+	local second = string.sub(label, 2, 2)
+	if second ~= "" and second == string.lower(second) then
+		label = string.lower(string.sub(label, 1, 1)) .. string.sub(label, 2)
+	end
+	if line.Text then
+		local perk = string.match(tostring(line.Text), "^([^:]+):") or tostring(line.Text)
+		return "New: " .. perk
+	end
+	local to = tostring(line.To or "")
+	if not line.From then
+		return string.format("%s %s", to, label)
+	end
+	local a = tonumber(string.match(tostring(line.From), "^[+-]?%d+%.?%d*"))
+	local b, unit = string.match(to, "^([+-]?%d+%.?%d*)(.*)$")
+	local bn = tonumber(b)
+	if not a or not bn then
+		return string.format("%s %s", to, label) -- "all pierce"
+	end
+	local d = bn - a
+	if math.abs(d) < 1e-6 then
+		return nil
+	end
+	local num = math.abs(d - math.floor(d + 0.5)) < 1e-6 and tostring(math.floor(d + 0.5)) or string.format("%.2f", d):gsub("0+$", ""):gsub("%.$", "")
+	if math.abs(d) == 1 and string.sub(label, -1) == "s" and not string.find(label, " ") then
+		label = string.sub(label, 1, -2) -- "+1 arrow"
+	end
+	return string.format("%s%s%s %s", d > 0 and "+" or "-", num, unit or "", label)
+end
+
+-- "+10 damage, +1 arrow, -0.1s cooldown": one short line of what a card gives now (at
+-- most three gains), or `fallback` when the lines carry no change.
+function WeaponData.SummaryText(lines: { { [string]: string } }?, fallback: string?): string
+	local parts = {}
+	for _, line in ipairs(lines or {}) do
+		local t = WeaponData.DeltaText(line)
+		if t then
+			table.insert(parts, t)
+		end
+		if #parts >= 3 then
+			break
+		end
+	end
+	if #parts == 0 then
+		return fallback or ""
+	end
+	return table.concat(parts, ", ")
+end
+
 -- Plain text for a level-up card: what changes when going to `level` (1 = the weapon is new).
 function WeaponData.DescribeLevel(weaponId: string, level: number): string
 	local def = WeaponData.Weapons[weaponId]
@@ -9679,6 +9754,7 @@ local ORDER = {
 	"PartyService",
 	"RunServers", -- private run servers: lobby → run server → lobby teleports (live game only)
 	"JournalService",
+	"DiscoveryService", -- discovered weapons / passives / items / evolutions / synergies (card clues)
 	"TeamPingService",
 	"AchievementService",
 	"DamageNumbers",
@@ -13049,7 +13125,9 @@ return DamageNumbers
 	  Daily {Day, Used, Score, Plays, BestScore, BestDay} (Daily Challenge: today's scored
 	  attempt and the best ever score, CurseData.DailyScore),
 	  Account {XP, Level} (cosmetic account level, AccountData), Ring, Frame (worn dais
-	  ring / portrait frame from the level track, "" = none)
+	  ring / portrait frame from the level track, "" = none),
+	  Discovered {Weapons, Passives, Items, Evolutions, Synergies} ({id → true}: what the
+	  player has owned or seen; DiscoveryService, used to gate combination clues)
 
 	Save health is shown to the player (never pretend saving works): the player attribute
 	"SaveStatus" is "ok", "memory" (DataStores unavailable: nothing is saved this session)
@@ -13109,6 +13187,7 @@ local function defaultData()
 		SelectedArena = "Forest",
 		Achievements = { Progress = {}, Unlocked = {} },
 		Journal = { Enemies = {}, Drops = {} },
+		Discovered = { Weapons = {}, Passives = {}, Items = {}, Evolutions = {}, Synergies = {} },
 		Title = "",
 		NameColor = "",
 		TutorialDone = false,
@@ -13265,6 +13344,16 @@ function DataService.Migrate(data: any): { [string]: any }
 	end
 	if type(data.SeenTips) ~= "table" then
 		data.SeenTips = {}
+	end
+	-- discovered weapons / passives / items / evolutions / synergies (DiscoveryService):
+	-- every table present, nothing removed (additive, no schema bump)
+	if type(data.Discovered) ~= "table" then
+		data.Discovered = {}
+	end
+	for _, kind in ipairs({ "Weapons", "Passives", "Items", "Evolutions", "Synergies" }) do
+		if type(data.Discovered[kind]) ~= "table" then
+			data.Discovered[kind] = {}
+		end
 	end
 	-- schema 6: curses, daily, account level, cosmetics (hand edits / partial saves)
 	if type(data.Curses) ~= "table" then
@@ -14078,6 +14167,125 @@ return DevTools
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="41">
+        <Properties>
+          <string name="Name">DiscoveryService</string>
+          <string name="Source"><![CDATA[--[[
+	DiscoveryService.lua
+	What a player has discovered across runs: weapons, passives and run items they owned
+	or saw on a card, the evolutions they reached and the synergies they completed. Saved
+	in the profile as Discovered {Weapons, Passives, Items, Evolutions, Synergies}
+	({id → true}; DataService fills missing tables, nothing is ever wiped).
+
+	Presentation only: LevelUpSystem names a combination's other ingredient or result on a
+	card (and the ITEMS list names a synergy and its missing pieces) only once it has been
+	discovered; otherwise it shows "???". The server stays authoritative for the bonuses.
+]]
+
+local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponData)
+local PassiveData = require(game:GetService("ReplicatedStorage").Shared.PassiveData)
+local ItemData = require(game:GetService("ReplicatedStorage").Shared.ItemData)
+local SynergyData = require(game:GetService("ReplicatedStorage").Shared.SynergyData)
+
+local DiscoveryService = {}
+local ctx
+local pending: { [Player]: boolean } = {}
+
+DiscoveryService.Kinds = { "Weapons", "Passives", "Items", "Evolutions", "Synergies" }
+
+local VALID = {
+	Weapons = function(id: string): boolean return WeaponData.Weapons[id] ~= nil end,
+	Passives = function(id: string): boolean return PassiveData.Passives[id] ~= nil end,
+	Items = function(id: string): boolean return ItemData.Items[id] ~= nil end,
+	Evolutions = function(id: string): boolean -- keyed by the base weapon id
+		local def = WeaponData.Weapons[id]
+		return def ~= nil and def.Evolution ~= nil
+	end,
+	Synergies = function(id: string): boolean return SynergyData.Synergies[id] ~= nil end,
+}
+
+-- A fresh, empty record (DataService defaults).
+function DiscoveryService.Empty(): { [string]: { [string]: boolean } }
+	local out = {}
+	for _, kind in ipairs(DiscoveryService.Kinds) do
+		out[kind] = {}
+	end
+	return out
+end
+
+-- The player's record, with every table present (older saves, hand edits), or nil
+-- while the profile is not loaded.
+local function recordOf(player: Player): { [string]: { [string]: boolean } }?
+	local data = ctx.DataService.GetData(player)
+	if not data then
+		return nil
+	end
+	if type(data.Discovered) ~= "table" then
+		data.Discovered = DiscoveryService.Empty()
+	end
+	for _, kind in ipairs(DiscoveryService.Kinds) do
+		if type(data.Discovered[kind]) ~= "table" then
+			data.Discovered[kind] = {}
+		end
+	end
+	return data.Discovered
+end
+
+-- Has the player discovered `id` of `kind` ("Weapons" | "Passives" | "Items" |
+-- "Evolutions" (base weapon id) | "Synergies")? Unknown kinds / no profile: false.
+function DiscoveryService.Known(player: Player, kind: string, id: string): boolean
+	local rec = recordOf(player)
+	local t = rec and rec[kind]
+	return t ~= nil and t[id] == true
+end
+
+-- Records a discovery; returns true when it is new. The profile is re-sent to the client
+-- a moment later (debounced) so the lobby can show it.
+function DiscoveryService.Record(player: Player, kind: string, id: string): boolean
+	local valid = VALID[kind]
+	if not valid or type(id) ~= "string" or not valid(id) then
+		return false
+	end
+	local rec = recordOf(player)
+	if not rec or rec[kind][id] == true then
+		return false
+	end
+	rec[kind][id] = true
+	if not pending[player] then
+		pending[player] = true
+		task.delay(1, function()
+			pending[player] = nil
+			if player.Parent and ctx.GoldSystem then
+				ctx.GoldSystem.SyncProfile(player)
+			end
+		end)
+	end
+	return true
+end
+
+-- Has any id that would fill this synergy piece been discovered?
+function DiscoveryService.PieceKnown(player: Player, piece: SynergyData.Piece): boolean
+	local rec = recordOf(player)
+	if not rec then
+		return false
+	end
+	local kind = piece.Kind .. "s" -- "Weapon" → "Weapons"
+	for id in pairs(rec[kind] or {}) do
+		if SynergyData.PieceTakes(piece, piece.Kind, id) then
+			return true
+		end
+	end
+	return false
+end
+
+function DiscoveryService.Init(c)
+	ctx = c
+end
+
+return DiscoveryService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="42">
         <Properties>
           <string name="Name">EnemyAI</string>
           <string name="Source"><![CDATA[--[[
@@ -14930,7 +15138,7 @@ return EnemyAI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="42">
+      <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">EnemySpawner</string>
           <string name="Source"><![CDATA[--[[
@@ -15942,7 +16150,7 @@ return EnemySpawner
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="43">
+      <Item class="ModuleScript" referent="44">
         <Properties>
           <string name="Name">Events</string>
           <string name="Source"><![CDATA[--[[
@@ -15990,7 +16198,7 @@ return Events
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="44">
+      <Item class="ModuleScript" referent="45">
         <Properties>
           <string name="Name">Fx</string>
           <string name="Source"><![CDATA[--[[
@@ -16189,7 +16397,7 @@ return Fx
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="45">
+      <Item class="ModuleScript" referent="46">
         <Properties>
           <string name="Name">GoldSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -16559,7 +16767,7 @@ return GoldSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="46">
+      <Item class="ModuleScript" referent="47">
         <Properties>
           <string name="Name">Hazards</string>
           <string name="Source"><![CDATA[--[[
@@ -16794,7 +17002,7 @@ return Hazards
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="47">
+      <Item class="ModuleScript" referent="48">
         <Properties>
           <string name="Name">ItemSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -16918,6 +17126,9 @@ function ItemSystem.Grant(rp, id: string, source: string?, reward: boolean?, dra
 	rp.Items[id] = n
 	if not table.find(rp.ItemOrder, id) then
 		table.insert(rp.ItemOrder, id)
+	end
+	if ctx.DiscoveryService then
+		ctx.DiscoveryService.Record(rp.Player, "Items", id) -- combination clues may name it now
 	end
 	ItemSystem.Refresh(rp)
 	ItemSystem.Send(rp)
@@ -17191,7 +17402,7 @@ return ItemSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="48">
+      <Item class="ModuleScript" referent="49">
         <Properties>
           <string name="Name">JournalService</string>
           <string name="Source"><![CDATA[-- Server-observed enemy and drop discoveries. The journal is opened manually.
@@ -17237,7 +17448,7 @@ return JournalService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="49">
+      <Item class="ModuleScript" referent="50">
         <Properties>
           <string name="Name">LeaderboardService</string>
           <string name="Source"><![CDATA[--[[
@@ -17673,7 +17884,7 @@ return LeaderboardService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="50">
+      <Item class="ModuleScript" referent="51">
         <Properties>
           <string name="Name">LevelUpSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -17689,7 +17900,12 @@ return LeaderboardService
 
 	Card types: WeaponNew, WeaponUp, Evolve, PassiveNew, PassiveUp, Gold, Heal.
 	Synergies (SynergyData): complete sets add their bonus to the stat sheet here; the
-	player attribute "Synergies" lists discovered active ids. Cards keep recipes hidden.
+	player attribute "Synergies" lists discovered active ids.
+	Combination clues are gated by discovery (DiscoveryService, saved per player): a
+	weapon card names its evolution partner / result, a NEW card names the synergy it
+	advances, and the ITEMS list names a synergy's missing pieces only once the player has
+	owned or seen them; otherwise the clue says "???". Every card also carries Summary:
+	one short line of what it gives now ("+10 damage, +1 arrow").
 	Only the card index comes from the client; the server owns the card list.
 ]]
 
@@ -17705,6 +17921,24 @@ local LevelUpSystem = {}
 
 local ctx
 local rng = Random.new()
+
+------------------------------------------------------------------------------------------
+-- Discovery (DiscoveryService): what this player has owned or seen, across runs
+------------------------------------------------------------------------------------------
+
+local function known(rp, kind: string, id: string): boolean
+	local D = ctx.DiscoveryService
+	return D ~= nil and D.Known(rp.Player, kind, id)
+end
+
+local function discover(rp, kind: string, id: string)
+	local D = ctx.DiscoveryService
+	if D then
+		D.Record(rp.Player, kind, id)
+	end
+end
+
+local UNKNOWN = "???"
 
 ------------------------------------------------------------------------------------------
 -- Stats
@@ -17755,6 +17989,9 @@ local function updateSynergies(rp)
 	for _, id in ipairs(active) do
 		if not table.find(before, id) then
 			local s = SynergyData.Synergies[id]
+			if ctx.DiscoveryService then
+				ctx.DiscoveryService.Record(player, "Synergies", id)
+			end
 			ctx.RunManager.Notify(player, string.format("Synergy: %s! %s", s.Name, s.Text), s.Color)
 		end
 	end
@@ -17787,6 +18024,52 @@ end
 -- Inventory
 ------------------------------------------------------------------------------------------
 
+--[[
+	The ITEMS list's synergy rows: every synergy the player holds at least one piece of,
+	{ Id?, Name, Text, Have, Need, Active, Pieces = { { Label, Owned } } } in SynergyData
+	order (complete ones first). An undiscovered synergy (never completed before) has no Id
+	and is named "???"; a missing piece is labelled only when one of the pieces that would
+	fill it has been discovered, else "???".
+]]
+function LevelUpSystem.SynergyClues(rp): { { [string]: any } }
+	local owned = ownedOf(rp)
+	local D = ctx.DiscoveryService
+	local out = {}
+	for _, sid in ipairs(SynergyData.Order) do
+		local s = SynergyData.Synergies[sid]
+		local have, need = SynergyData.Progress(sid, owned)
+		if have >= 1 then
+			local active = have >= need
+			local revealed = active or known(rp, "Synergies", sid)
+			local pieces = {}
+			for _, piece in ipairs(s.Pieces) do
+				local has = SynergyData.PieceOwned(piece, owned)
+				local label = (has or (D and D.PieceKnown(rp.Player, piece))) and piece.Label or UNKNOWN
+				table.insert(pieces, { Label = label, Owned = has })
+			end
+			table.insert(out, {
+				Id = revealed and sid or nil,
+				Name = revealed and s.Name or UNKNOWN,
+				Text = s.Text,
+				Have = have,
+				Need = need,
+				Active = active,
+				Pieces = pieces,
+			})
+		end
+	end
+	-- complete ones first, each group in SynergyData order
+	local sorted = {}
+	for _, pass in ipairs({ true, false }) do
+		for _, row in ipairs(out) do
+			if row.Active == pass then
+				table.insert(sorted, row)
+			end
+		end
+	end
+	return sorted
+end
+
 function LevelUpSystem.SendInventory(rp)
 	local weapons = {}
 	for _, id in ipairs(rp.WeaponOrder) do
@@ -17809,6 +18092,7 @@ function LevelUpSystem.SendInventory(rp)
 	Remotes.FireClient("Inventory", rp.Player, {
 		Weapons = weapons,
 		Passives = passives,
+		Synergies = LevelUpSystem.SynergyClues(rp),
 		Rerolls = rp.Rerolls,
 		Skips = rp.Skips,
 		WeaponSlots = Config.Slots.Weapons,
@@ -17825,6 +18109,9 @@ function LevelUpSystem.AddWeapon(rp, weaponId: string): boolean
 	end
 	rp.Weapons[weaponId] = { Id = weaponId, Level = 1, Evolved = false, Timer = 0.3, Live = {}, Growth = 0 }
 	table.insert(rp.WeaponOrder, weaponId)
+	if ctx.DiscoveryService then
+		ctx.DiscoveryService.Record(rp.Player, "Weapons", weaponId)
+	end
 	return true
 end
 
@@ -17848,6 +18135,7 @@ end
 local function card(kind: string, id: string, level: number, weight: number)
 	return { Type = kind, Id = id, Level = level, Weight = weight }
 end
+
 
 -- Sheet stat → the weapon stat it feeds (a passive changing only stats no owned weapon
 -- uses does nothing for this build). Player stats (HP, armor, speed ...) always count.
@@ -17966,13 +18254,30 @@ local function evolveHint(rp, c, def)
 	local pdef = PassiveData.Passives[evo.Passive]
 	local needed = math.min(3, PassiveData.MaxLevelOf(evo.Passive))
 	local owned = (rp.Passives[evo.Passive] or 0) >= needed
-	local partner = string.format("%s Lv %d", pdef.Name, needed)
+	-- the partner passive is named once the player owns or has discovered it, the result
+	-- once they have evolved this weapon before; otherwise "???"
+	local partnerKnown = rp.Passives[evo.Passive] ~= nil or known(rp, "Passives", evo.Passive)
+	local result = known(rp, "Evolutions", c.Id) and evo.Name or UNKNOWN
+	local partner = string.format("%s Lv %d", partnerKnown and pdef.Name or UNKNOWN, needed)
 	c.HintReady = owned
 	if c.Level >= WeaponData.MaxLevel then
-		c.Hint = owned and string.format("Evolves into %s next level-up!", evo.Name) or string.format("Evolves into %s with %s", evo.Name, partner)
+		c.Hint = owned and string.format("Evolves into %s next level-up!", result) or string.format("Evolves into %s with %s", result, partner)
 	else
 		c.Hint = string.format("Evolves at Lv %d with %s%s", WeaponData.MaxLevel, partner, owned and " (ready)" or "")
 	end
+end
+
+-- The synergy a NEW weapon / passive would complete or advance (the player already holds
+-- another piece): card fields Synergy ("Synergy: <name> have/need") and SynergyReady.
+-- The synergy is named only once the player has completed it before; otherwise "???".
+local function synergyClue(rp, c, kind: string)
+	local s, have, need = SynergyData.Advances(ownedOf(rp), kind, c.Id)
+	if not s then
+		return
+	end
+	local name = known(rp, "Synergies", s.Id) and s.Name or UNKNOWN
+	c.Synergy = string.format("Synergy: %s %d/%d", name, have, need)
+	c.SynergyReady = have >= need
 end
 
 -- Adds display fields for the client:
@@ -17986,15 +18291,19 @@ local function decorate(rp, c)
 		local def = WeaponData.Weapons[c.Id]
 		c.Name = def.Name
 		c.Color = def.Color
+		discover(rp, "Weapons", c.Id) -- seen on a card counts
 		if c.Type == "WeaponNew" then
 			rarity = "Rare"
 			c.Rank = "NEW"
 			c.Description = def.Description
 			c.Lines = WeaponData.CardLines(c.Id, 0, 1)
+			c.Summary = def.Description
+			synergyClue(rp, c, "Weapon")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, WeaponData.MaxLevel)
 			c.Lines = WeaponData.CardLines(c.Id, c.Level - 1, c.Level)
 			c.Description = joinLines(c.Lines)
+			c.Summary = WeaponData.SummaryText(c.Lines, c.Description)
 			if c.Level >= WeaponData.MaxLevel then
 				rarity = "Epic"
 			end
@@ -18004,6 +18313,7 @@ local function decorate(rp, c)
 		local def = WeaponData.Weapons[c.Id]
 		c.Name = def.Evolution.Name
 		c.Description = def.Evolution.Description
+		c.Summary = def.Evolution.Description -- what it becomes, in a few words
 		c.Color = def.Color
 		c.Rank = "EVOLUTION"
 		c.Lines = WeaponData.CardLines(c.Id, WeaponData.MaxLevel, WeaponData.MaxLevel, true)
@@ -18014,13 +18324,17 @@ local function decorate(rp, c)
 		c.Name = def.Name
 		c.Color = def.Color
 		c.Lines = (passiveLines(rp, c.Id, c.Level))
+		discover(rp, "Passives", c.Id)
 		if c.Type == "PassiveNew" then
 			rarity = "Rare"
 			c.Rank = "NEW"
 			c.Description = def.Description
+			c.Summary = WeaponData.SummaryText(c.Lines, def.Description)
+			synergyClue(rp, c, "Passive")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, maxLevel)
 			c.Description = def.Description -- the lines carry the real numbers
+			c.Summary = WeaponData.SummaryText(c.Lines, def.Description)
 			if c.Level >= maxLevel then
 				rarity = "Epic"
 			end
@@ -18030,7 +18344,9 @@ local function decorate(rp, c)
 			local wdef = WeaponData.Weapons[id]
 			if not rp.Weapons[id].Evolved and wdef.Evolution and wdef.Evolution.Passive == c.Id then
 				local needed = math.min(3, PassiveData.MaxLevelOf(c.Id))
-				c.Hint = string.format("Evolves %s at Lv %d with this at Lv %d", wdef.Name, WeaponData.MaxLevel, needed)
+				-- the weapon is owned (discovered); its evolution is named once reached before
+				local into = known(rp, "Evolutions", id) and (" into " .. wdef.Evolution.Name) or ""
+				c.Hint = string.format("Evolves %s at Lv %d with this at Lv %d%s", wdef.Name, WeaponData.MaxLevel, needed, into)
 				c.HintReady = rp.Weapons[id].Level >= WeaponData.MaxLevel and c.Level >= needed
 				break
 			end
@@ -18039,12 +18355,14 @@ local function decorate(rp, c)
 		c.Name = "Gold Pouch"
 		c.Description = "Everything is maxed: take some gold."
 		c.Lines = { { Label = "Run gold", To = "+" .. Config.LevelUp.FallbackGold } }
+		c.Summary = string.format("+%d run gold", Config.LevelUp.FallbackGold)
 		c.Rank = "BONUS"
 		c.Color = Color3.fromRGB(255, 210, 60)
 	elseif c.Type == "Heal" then
 		c.Name = "Roast Chicken"
 		c.Description = "Everything is maxed: patch yourself up."
 		c.Lines = { { Label = "Heal", To = Config.LevelUp.FallbackHeal .. " HP" } }
+		c.Summary = string.format("Heal %d HP now", Config.LevelUp.FallbackHeal)
 		c.Rank = "BONUS"
 		c.Color = Color3.fromRGB(200, 120, 60)
 	end
@@ -18090,12 +18408,14 @@ local function apply(rp, c)
 	elseif c.Type == "Evolve" then
 		if canEvolve(rp, c.Id) then
 			rp.Weapons[c.Id].Evolved = true
+			discover(rp, "Evolutions", c.Id)
 			ctx.RunManager.Notify(rp.Player, WeaponData.Weapons[c.Id].Evolution.Name .. "!", Color3.fromRGB(255, 210, 60))
 		end
 	elseif c.Type == "PassiveNew" then
 		if not rp.Passives[c.Id] and #rp.PassiveOrder < Config.Slots.Passives then
 			rp.Passives[c.Id] = 1
 			table.insert(rp.PassiveOrder, c.Id)
+			discover(rp, "Passives", c.Id)
 		end
 	elseif c.Type == "PassiveUp" then
 		if rp.Passives[c.Id] then
@@ -18398,7 +18718,7 @@ return LevelUpSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="51">
+      <Item class="ModuleScript" referent="52">
         <Properties>
           <string name="Name">LootSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -19418,7 +19738,7 @@ return LootSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="52">
+      <Item class="ModuleScript" referent="53">
         <Properties>
           <string name="Name">MapBuilder</string>
           <string name="Source"><![CDATA[--[[
@@ -22791,7 +23111,7 @@ return MapBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="53">
+      <Item class="ModuleScript" referent="54">
         <Properties>
           <string name="Name">MeshService</string>
           <string name="Source"><![CDATA[--[[
@@ -23201,7 +23521,7 @@ return MeshService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="54">
+      <Item class="ModuleScript" referent="55">
         <Properties>
           <string name="Name">ModelBuilder</string>
           <string name="Source"><![CDATA[--[[
@@ -24087,7 +24407,7 @@ return ModelBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="55">
+      <Item class="ModuleScript" referent="56">
         <Properties>
           <string name="Name">MonetizationService</string>
           <string name="Source"><![CDATA[--[[
@@ -24404,7 +24724,7 @@ return MonetizationService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="56">
+      <Item class="ModuleScript" referent="57">
         <Properties>
           <string name="Name">PartyService</string>
           <string name="Source"><![CDATA[--[[
@@ -25032,7 +25352,7 @@ return PartyService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="57">
+      <Item class="ModuleScript" referent="58">
         <Properties>
           <string name="Name">RunManager</string>
           <string name="Source"><![CDATA[--[[
@@ -27059,7 +27379,7 @@ return RunManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="58">
+      <Item class="ModuleScript" referent="59">
         <Properties>
           <string name="Name">RunModifiers</string>
           <string name="Source"><![CDATA[--[[
@@ -27493,7 +27813,7 @@ return RunModifiers
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="59">
+      <Item class="ModuleScript" referent="60">
         <Properties>
           <string name="Name">RunServers</string>
           <string name="Source"><![CDATA[--[[
@@ -28383,7 +28703,7 @@ return RunServers
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="60">
+      <Item class="ModuleScript" referent="61">
         <Properties>
           <string name="Name">SpatialGrid</string>
           <string name="Source"><![CDATA[--[[
@@ -28553,7 +28873,7 @@ return SpatialGrid
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="61">
+      <Item class="ModuleScript" referent="62">
         <Properties>
           <string name="Name">StageManager</string>
           <string name="Source"><![CDATA[--[[
@@ -28594,7 +28914,9 @@ return SpatialGrid
 	SpawnMultCap and Config.Enemies.MaxLive). Standard runs are unchanged.
 
 	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, StageBoss, PortalPos,
-	PortalHint, PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total").
+	PortalHint, PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total"),
+	PortalReveal (counts up each time a stage's portal becomes chargeable: the clients'
+	cue for the banner, sound, beacon burst and minimap ping; see Config.Stages.RevealDelaySeconds).
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -28620,6 +28942,8 @@ local portal: MapBuilder.Portal? = nil
 local lastPortal: { [string]: Vector3 } = {} -- last portal spot per arena (a new one differs)
 local stageTime = 0
 local hinted = false
+local revealed = false -- this stage's portal reveal happened (PortalReveal bumped)
+local reveals = 0
 local shownLock = -1
 local charge = 0
 local shownCharge = -1
@@ -28854,6 +29178,7 @@ local function buildStage(n: number)
 	BiomeHazards.SetArena(arena) -- mud / ice / quicksand / lava pools of a biome arena
 	stageTime = 0
 	hinted = false
+	revealed = false
 	shownLock = -1
 	charge = 0
 	shownCharge = -1
@@ -28920,6 +29245,8 @@ function StageManager.EndRun()
 	state:SetAttribute("PortalCharge", 0)
 	state:SetAttribute("PortalLockLeft", 0)
 	state:SetAttribute("PortalPos", nil)
+	state:SetAttribute("PortalReveal", 0)
+	reveals = 0
 	state:SetAttribute("StageBoss", nil)
 	state:SetAttribute("SurgeLeft", 0)
 	state:SetAttribute("ChoiceLeft", 0)
@@ -29184,11 +29511,21 @@ local function stepExplore(dt: number)
 	if lockShown ~= shownLock then
 		shownLock = lockShown
 		state:SetAttribute("PortalLockLeft", lockShown)
-		if lockShown == 0 and stageTime > 0.5 then
-			ctx.RunManager.Broadcast("The portal awakens!", Color3.fromRGB(180, 200, 255))
-		end
 	end
-	if not hinted and stageTime >= math.max(Config.Stages.HintAfterSeconds, lockSeconds()) then
+	-- the reveal: the portal can be charged (lock over), once the stage banner has gone
+	local revealDelay = Config.Stages.RevealDelaySeconds or 0
+	if not revealed and locked <= 0 and stageTime >= revealDelay then
+		revealed = true
+		reveals += 1
+		hinted = true
+		state:SetAttribute("PortalHint", true)
+		state:SetAttribute("PortalReveal", reveals)
+		if portal then
+			Fx.Ring(portal.Pos, Config.Stages.PortalRadius * 2.5, Color3.fromRGB(190, 210, 255))
+		end
+		ctx.RunManager.Broadcast("THE PORTAL HAS APPEARED", Color3.fromRGB(190, 210, 255), true)
+	end
+	if not hinted and stageTime >= math.max(Config.Stages.HintAfterSeconds, lockSeconds(), revealDelay) then
 		hinted = true
 		state:SetAttribute("PortalHint", true)
 		ctx.RunManager.Broadcast("The portal is marked on your screen.", Color3.fromRGB(180, 200, 255))
@@ -29405,7 +29742,7 @@ return StageManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="62">
+      <Item class="ModuleScript" referent="63">
         <Properties>
           <string name="Name">TeamPingService</string>
           <string name="Source"><![CDATA[-- Preset team communication. Clients provide targets, never text or recipients.
@@ -29475,7 +29812,7 @@ return TeamPingService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="63">
+      <Item class="ModuleScript" referent="64">
         <Properties>
           <string name="Name">WeaponSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -31415,7 +31752,7 @@ return WeaponSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="64">
+      <Item class="ModuleScript" referent="65">
         <Properties>
           <string name="Name">XPSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -31434,7 +31771,8 @@ return WeaponSystem
 	    it is collected, so XP timing stays server-side. A flight that loses its target
 	    writes the resting spot ("Base") once and clears "Fly".
 	  * XP is SHARED: whoever collects a gem, every living participant gets its value
-	    (times their own Growth stat).
+	    (times their own Growth stat, times Config.XP.CoopShare for the team size, so a
+	    duo / trio does not level twice as fast as a solo hero).
 	  * A gem that lands within Config.XP.MergeRadius of a resting one is merged into it
 	    (values add up, capped at Config.XP.MergeMax), so piles stay a few bigger crystals.
 	    Resting gems sit in a coarse grid for that lookup; flying gems are not in it.
@@ -31484,8 +31822,27 @@ function XPSystem.XPNeeded(level: number): number
 		+ math.max(0, level - Config.XP.CapLevel) * Config.XP.AfterCapPerLevel
 end
 
--- Gives `amount` XP to every living run participant (each scaled by their Growth).
+-- Shared-XP multiplier for the current team size (Config.XP.CoopShare, by living
+-- participants): in Duo / Trio every gem is worth less to each player, since there are
+-- PlayerCountMult times as many gems and everyone receives every one of them.
+function XPSystem.CoopShare(): number
+	local alive = 0
+	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if rp.Alive then
+			alive += 1
+		end
+	end
+	local list = Config.XP.CoopShare
+	if not list or #list == 0 then
+		return 1
+	end
+	return list[math.clamp(alive, 1, #list)] or 1
+end
+
+-- Gives `amount` XP to every living run participant (each scaled by their Growth and by
+-- the team-size share, see CoopShare).
 function XPSystem.GiveSharedXP(amount: number)
+	amount *= XPSystem.CoopShare()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Alive then
 			XPSystem.GiveXP(rp, amount * rp.Stats.Growth)
@@ -31900,19 +32257,19 @@ return XPSystem
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="65">
+  <Item class="SoundService" referent="66">
     <Properties>
       <string name="Name">SoundService</string>
       <bool name="RespectFilteringEnabled">true</bool>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="66">
+  <Item class="StarterGui" referent="67">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="67">
+  <Item class="StarterPlayer" referent="68">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <float name="CameraMaxZoomDistance">120</float>
@@ -31925,15 +32282,15 @@ return XPSystem
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="68">
+    <Item class="StarterPlayerScripts" referent="69">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="69">
+      <Item class="Folder" referent="70">
         <Properties>
           <string name="Name">SwarmClient</string>
         </Properties>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">Accessibility</string>
             <string name="Source"><![CDATA[-- Shared combat colours and optional readable sound cues. Hazard outlines are cosmetic,
@@ -32103,7 +32460,7 @@ return Accessibility
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">ArtImage</string>
             <string name="Source"><![CDATA[--[[
@@ -32482,7 +32839,7 @@ return ArtImage
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">AssetPreload</string>
             <string name="Source"><![CDATA[--[[
@@ -32633,7 +32990,7 @@ return AssetPreload
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">Audio</string>
             <string name="Source"><![CDATA[--[[
@@ -33106,7 +33463,7 @@ return Audio
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">BugReportUI</string>
             <string name="Source"><![CDATA[--[[
@@ -33434,7 +33791,7 @@ return BugReportUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">CameraController</string>
             <string name="Source"><![CDATA[--[[
@@ -33629,6 +33986,12 @@ function CameraController.Init()
 					-- portrait: a taller view keeps the hero on the dais at a sensible size
 					menuFov = math.min(menuFov * 1.4, 80)
 				end
+				-- the lobby layout asks for a wider shot when the hero has little room on
+				-- screen (portrait with the LAST RUN card): MenuHeroZoom scales the view
+				local zoom = tonumber(cam:GetAttribute("MenuHeroZoom")) or 1
+				if zoom > 1 then
+					menuFov = math.min(math.deg(2 * math.atan(math.tan(math.rad(menuFov) / 2) * zoom)), 95)
+				end
 				cam.FieldOfView = menuFov
 				-- slow "breathing" sway so the backdrop feels alive
 				local t = os.clock()
@@ -33722,7 +34085,7 @@ return CameraController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="76">
+        <Item class="LocalScript" referent="77">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[--[[
@@ -33915,7 +34278,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">ClientPerformance</string>
             <string name="Source"><![CDATA[-- Reduce decoration after sustained slow frames; never change danger cues or saved settings.
@@ -33964,7 +34327,7 @@ return ClientPerformance
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">ClientSettings</string>
             <string name="Source"><![CDATA[--[[
@@ -34068,7 +34431,7 @@ return ClientSettings
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">CombatFx</string>
             <string name="Source"><![CDATA[--[[
@@ -34674,7 +35037,7 @@ return CombatFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">Cosmetics</string>
             <string name="Source"><![CDATA[--[[
@@ -34751,7 +35114,7 @@ return Cosmetics
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="81">
+        <Item class="ModuleScript" referent="82">
           <Properties>
             <string name="Name">DamageText</string>
             <string name="Source"><![CDATA[--[[
@@ -34980,7 +35343,7 @@ return DamageText
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="82">
+        <Item class="ModuleScript" referent="83">
           <Properties>
             <string name="Name">DevInbox</string>
             <string name="Source"><![CDATA[--[[
@@ -35360,7 +35723,7 @@ return DevInbox
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">DevPanel</string>
             <string name="Source"><![CDATA[--[[
@@ -35808,7 +36171,7 @@ return DevPanel
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">EnemyRenderer</string>
             <string name="Source"><![CDATA[--[[
@@ -36993,7 +37356,7 @@ return EnemyRenderer
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">GroundDetail</string>
             <string name="Source"><![CDATA[--[[
@@ -37687,7 +38050,7 @@ return GroundDetail
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="86">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--[[
@@ -38148,12 +38511,15 @@ local function stopBanner()
 end
 
 -- Slides / scales in, holds ~1 s, fades. Reduced effects: a plain fade, no scale or sparks.
-local function showStageBanner(stageNo: number, goal: string)
+-- `color` tints the title (the stage banner is gold; the portal reveal is arcane blue).
+local function showBanner(titleText: string, goal: string, color: Color3?)
 	stopBanner()
 	local token = bannerToken
 	local box, title, line, sub = ui.Banner :: Frame, ui.BannerTitle :: TextLabel, ui.BannerLine :: Frame, ui.BannerSub :: TextLabel
 	local reduced = (ClientSettings.Reduced() or ClientPerformance.Reduced())
-	title.Text = UIKit.track("STAGE " .. tostring(stageNo))
+	title.Text = UIKit.track(titleText)
+	title.TextColor3 = color or P.gold_200
+	line.BackgroundColor3 = color or P.gold_400
 	sub.Text = goal
 	title.TextTransparency, title.TextStrokeTransparency = 1, 1
 	sub.TextTransparency, sub.TextStrokeTransparency = 1, 1
@@ -38197,6 +38563,22 @@ local function showStageBanner(stageNo: number, goal: string)
 			end
 		end)
 	end)
+end
+
+local function showStageBanner(stageNo: number, goal: string)
+	showBanner("STAGE " .. tostring(stageNo), goal, nil)
+end
+
+-- A one-off banner over the arena in the stage banner's style (StageUI: "THE PORTAL HAS
+-- APPEARED"). `sound` names a Config.Sounds entry to play with it (Audio).
+function Hud.Announce(title: string, sub: string, color: Color3?, sound: string?)
+	if not ui.Banner then
+		return
+	end
+	showBanner(title, sub, color)
+	if sound and host.Audio and host.Audio.Play then
+		host.Audio.Play(sound)
+	end
 end
 
 local function buildStatus(frame: Frame)
@@ -39155,7 +39537,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="87">
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">Icons</string>
             <string name="Source"><![CDATA[--[[
@@ -41235,7 +41617,7 @@ return Icons
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="88">
+        <Item class="ModuleScript" referent="89">
           <Properties>
             <string name="Name">IdleFx</string>
             <string name="Source"><![CDATA[--[[
@@ -41895,7 +42277,7 @@ return IdleFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="89">
+        <Item class="ModuleScript" referent="90">
           <Properties>
             <string name="Name">JumpController</string>
             <string name="Source"><![CDATA[--[[
@@ -42104,7 +42486,7 @@ return JumpController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="90">
+        <Item class="ModuleScript" referent="91">
           <Properties>
             <string name="Name">LobbyScreen</string>
             <string name="Source"><![CDATA[--[[
@@ -42119,7 +42501,9 @@ return JumpController
 	                MenuArenas) / DAILY CHALLENGE
 	  bottom centre nameplate of the hero with gold arrows to browse characters
 	                (owned → selected at once; locked → price, UNLOCK / DETAILS)
-	  right column  SOLO (primary gold), DUO, TRIO, then CURSES (the run modifiers picked,
+	  right column  LAST RUN card (MenuLastRun: the saved LastRun summary + RETRY through
+	                StartRun; only where it fits above the column, so not on phones in
+	                landscape), SOLO (primary gold), DUO, TRIO, then CURSES (the run modifiers picked,
 	                their gold bonus) and the ENDLESS switch (Config.Endless: no win, the
 	                portal only goes deeper; remote SetEndless, the server's answer is the
 	                player attribute "Endless"). A countdown (who joined, the curses, an
@@ -42131,8 +42515,8 @@ return JumpController
 	                badge for open invites; opens the PARTY screen (MenuParty). A party member
 	                also gets READY / UNREADY beside it (portrait: under the stats chip)
 	  nameplate     your level, name, worn title / colour above the hero's plate
-	Portrait stacks: logo, stats, hero, nameplate, curses + daily, endless, modes, cards,
-	corner buttons.
+	Portrait stacks: logo, stats, hero, nameplate, last run, curses + daily, endless, modes,
+	cards, corner buttons.
 
 	Sub-screens slide in: Characters (MenuCharacters), Upgrades (MenuUpgrades), Stats
 	(MenuStats), Curses (MenuCurses), Daily (MenuDaily), Ranks (MenuLeaderboards), Track
@@ -42166,6 +42550,7 @@ local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
 local MenuTrack = require(script.Parent.MenuTrack)
 local MenuArenas = require(script.Parent.MenuArenas)
 local MenuParty = require(script.Parent.MenuParty)
+local MenuLastRun = require(script.Parent.MenuLastRun)
 local Cosmetics = require(script.Parent.Cosmetics)
 local CurseData = require(Shared:WaitForChild("CurseData"))
 
@@ -43000,6 +43385,7 @@ local function relayout()
 	local chipY = ins.Right > 4 and (ins.Top + 6) or 12
 	local plateH = (browse and 158 or 104) + (compact and 16 or 0)
 	local heroFrac = 0.5
+	local heroZoom = 1
 
 	setChipFlat(not portrait and current == "Characters")
 	-- phones in landscape: the CHARACTERS title shares the top row, so the chip keeps only GOLD
@@ -43054,10 +43440,25 @@ local function relayout()
 		place(ui.CurseBtn.Instance, M, y, half, curseH)
 		place(ui.DailyBtn.Instance, M + half + G, y, half, curseH)
 		place(ui.Queue, M, y, w, curseH + endH + 2 * G + soloH + G + smallH)
+		-- the LAST RUN card (when there is one) sits over the curse row
+		local lastShown = ui.LastRun ~= nil and ui.LastRun.Has() and lastStatus == "Modes"
+		if ui.LastRun then
+			local lastH = 76
+			if lastShown then
+				y -= G + lastH
+				place(ui.LastRun.Frame, M, y, w, lastH)
+				ui.LastRun.SetWidth(w)
+			end
+			ui.LastRun.Frame.Visible = lastShown
+		end
 		y -= 18 + plateH
 		local plateW = math.min(w - 2 * 62, 460)
 		place(ui.Nameplate, (W - plateW) / 2, y, plateW, plateH)
 		heroFrac = ((chipTop + 52 + y) / 2) / H
+		-- the LAST RUN card shortens the hero's room between the chip and the plate: the
+		-- menu camera widens its shot (CameraController: MenuHeroZoom) so the hero fits
+		local room = y - (chipTop + 52)
+		heroZoom = (lastShown and current == "Home") and math.clamp(H * 0.24 / math.max(1, room), 1, 1.3) or 1
 		ui.PrevArrow.Instance.Visible = true
 		ui.NextArrow.Instance.Visible = true
 	else
@@ -43115,6 +43516,21 @@ local function relayout()
 			endH = math.max(Theme.Size.TapMin, math.floor(endH * k))
 			colH = soloH + 2 * smallH + curseH + endH + 4 * G
 		end
+		-- the LAST RUN card above the column, centred with it, only where the whole column
+		-- still fits (phones in landscape have no room: the card stays hidden there)
+		if ui.LastRun then
+			local lastH = 78
+			local wanted = ui.LastRun.Has() and lastStatus == "Modes"
+			local withCard = colH + G + lastH
+			local cardTop = math.max(chipY + 64, (H - withCard) / 2)
+			local fits = wanted and H - M - cardTop >= withCard
+			if fits then
+				place(ui.LastRun.Frame, W - M - rw, cardTop, rw, lastH)
+				ui.LastRun.SetWidth(rw)
+				colTop = cardTop + lastH + G
+			end
+			ui.LastRun.Frame.Visible = fits
+		end
 		place(ui.ModeButtons[1].Instance, W - M - rw, colTop, rw, soloH)
 		place(ui.ModeButtons[2].Instance, W - M - rw, colTop + soloH + G, rw, smallH)
 		place(ui.ModeButtons[3].Instance, W - M - rw, colTop + soloH + smallH + 2 * G, rw, smallH)
@@ -43170,6 +43586,7 @@ local function relayout()
 	ui.QueueNote.TextTruncate = short and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
 	-- where the hero should sit on screen (read by CameraController's menu shot)
 	workspace.CurrentCamera:SetAttribute("MenuHeroY", heroFrac)
+	workspace.CurrentCamera:SetAttribute("MenuHeroZoom", heroZoom)
 	for _, s in pairs(screens) do
 		if s.Layout then
 			s.Layout(v, portrait, ins)
@@ -43396,6 +43813,13 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 	end
 	-- the worn dais ring (level track) under the hero
 	Showcase.SetRing(type(p.Ring) == "string" and p.Ring or "")
+	if ui.LastRun then
+		local had = ui.LastRun.Has()
+		ui.LastRun.Refresh(p)
+		if ui.LastRun.Has() ~= had then
+			relayout()
+		end
+	end
 	if browse and owned(browse) then
 		browse = nil -- just bought it (the server also selects it)
 	end
@@ -43633,6 +44057,8 @@ function LobbyScreen.Init(h: { [string]: any })
 			LobbyScreen.Show(name, arg)
 		end,
 	}
+	ui.LastRun = MenuLastRun.Build(ui.Home, ctx)
+	ui.LastRun.Refresh(profile)
 	screens.Characters = MenuCharacters.Build(screen("Characters"), ctx)
 	screens.Upgrades = MenuUpgrades.Build(screen("Upgrades"), ctx)
 	screens.Stats = MenuStats.Build(screen("Stats"), ctx)
@@ -43651,7 +44077,7 @@ return LobbyScreen
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="92">
           <Properties>
             <string name="Name">LootUI</string>
             <string name="Source"><![CDATA[--[[
@@ -43679,9 +44105,12 @@ return LobbyScreen
 	                 LootFeedback); nothing is opened by the client.
 	  altar marker   a small floating pill over the guarded altar on screen (dormant /
 	                 guards left / unguarded / claimed)
-	  items list     LootUI.OpenItems() (pause menu "ITEMS" button): the active synergies
-	                 first (what they give, what they need), then every item with its
-	                 stack count and full text
+	  items list     LootUI.OpenItems() (pause menu "ITEMS" button): the synergies first
+	                 (Inventory remote field Synergies, LevelUpSystem.SynergyClues): the
+	                 active ones (what they give, what they need), then the ones in
+	                 progress as clues (pieces held / "???" for pieces and names the
+	                 player has not discovered yet), then every item with its stack count
+	                 and full text
 	  caravan        the Lost Caravan (server CaravanEvent, workspace.SwarmEvents): a pill
 	                 over the cart on screen (LOST CARAVAN / DEFEND / SAVED / LOST), an
 	                 edge arrow when it is off screen (while defending, or within
@@ -43737,6 +44166,7 @@ local lastTouch = false
 local KIND_ICON = { Chest = "reward_ChestLarge", Shrine = "shrine", Altar = "altar" }
 local CARAVAN_HINT = 110 -- studs: the caravan's edge arrow shows this close before it starts
 local synergies: { string } = {}
+local clues: { { [string]: any } }? = nil -- Inventory.Synergies rows (nil: older server)
 
 local function rarityOf(id: string): string
 	local def = ItemData.Items[id]
@@ -44041,16 +44471,42 @@ local function refreshList()
 			ch:Destroy()
 		end
 	end
-	for i, id in ipairs(synergies) do
-		local s = SynergyData.Synergies[id]
-		local row = UIKit.Panel(ui.ItemsList, { Name = "Synergy_" .. id, LayoutOrder = i - 100, Size = UDim2.new(1, -8, 0, 62) }, true)
+	-- synergy rows: the server's clues (active first, then in progress), or, from an
+	-- older server, the active ids of the Synergies attribute
+	local rows = clues
+	if not rows then
+		rows = {}
+		for _, id in ipairs(synergies) do
+			local s = SynergyData.Synergies[id]
+			table.insert(rows, { Id = id, Name = s.Name, Text = s.Text, Have = #s.Pieces, Need = #s.Pieces, Active = true })
+		end
+	end
+	for i, clue in ipairs(rows) do
+		local s = type(clue.Id) == "string" and SynergyData.Synergies[clue.Id] or nil
+		local active = clue.Active == true
+		local color = active and P.moss_200 or P.ivory_300
+		local accent = s and s.Color or P.slate_400
+		local name = s and s.Name or (type(clue.Name) == "string" and clue.Name or "???")
+		local row = UIKit.Panel(ui.ItemsList, { Name = "Synergy_" .. (s and s.Id or tostring(i)), LayoutOrder = i - 100, Size = UDim2.new(1, -8, 0, 62) }, true)
 		local tile = new("Frame", { BackgroundColor3 = P.slate_900, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(46, 46) }, row)
 		UIKit.corner(tile, Theme.Radius.M)
-		UIKit.stroke(tile, s.Color, 1.5, 0.2)
-		Icons.Draw(tile, s.Icon, { Size = 34, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
-		text(row, "BodyStrong", s.Name, { Position = UDim2.fromOffset(64, 6), Size = UDim2.new(1, -150, 0, TS(16) + 4), TextColor3 = P.moss_200 })
-		text(row, "Caption", UIKit.track("SYNERGY"), { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 8), Size = UDim2.fromOffset(90, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.moss_200 })
-		text(row, "Small", s.Text .. "  ·  " .. s.Desc, { Position = UDim2.fromOffset(64, 8 + TS(16)), Size = UDim2.new(1, -72, 0, 62 - 12 - TS(16)), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top })
+		UIKit.stroke(tile, accent, 1.5, active and 0.2 or 0.5)
+		Icons.Draw(tile, s and s.Icon or "sparkle", { Size = 34, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900, Color = if s then nil else P.slate_400 })
+		text(row, "BodyStrong", name, { Position = UDim2.fromOffset(64, 6), Size = UDim2.new(1, -150, 0, TS(16) + 4), TextColor3 = color })
+		local tag = active and "SYNERGY" or string.format("%d / %d", tonumber(clue.Have) or 0, tonumber(clue.Need) or 0)
+		text(row, "Caption", UIKit.track(tag), { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 8), Size = UDim2.fromOffset(90, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = color })
+		local body
+		if active then
+			body = tostring(clue.Text or (s and s.Text) or "") .. (s and ("  ·  " .. s.Desc) or "")
+		else
+			-- what the player holds and what is missing (the server hides undiscovered names)
+			local have, missing = {}, {}
+			for _, piece in ipairs(type(clue.Pieces) == "table" and clue.Pieces or {}) do
+				table.insert(piece.Owned and have or missing, tostring(piece.Label or "???"))
+			end
+			body = string.format("%s  ·  Have: %s  ·  Missing: %s", tostring(clue.Text or ""), #have > 0 and table.concat(have, ", ") or "-", #missing > 0 and table.concat(missing, ", ") or "-")
+		end
+		text(row, "Small", body, { Position = UDim2.fromOffset(64, 8 + TS(16)), Size = UDim2.new(1, -72, 0, 62 - 12 - TS(16)), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = active and C.Text or C.TextMuted })
 	end
 	local total = 0
 	for i, it in ipairs(items) do
@@ -44695,6 +45151,15 @@ function LootUI.Build(root: Frame, k: { [string]: any })
 	buildItemsModal(root)
 	kit.OnRelayout(LootUI.Layout)
 	Remotes.Get("Items").OnClientEvent:Connect(onItems)
+	Remotes.Get("Inventory").OnClientEvent:Connect(function(data)
+		if type(data) ~= "table" then
+			return
+		end
+		clues = type(data.Synergies) == "table" and data.Synergies or nil
+		if ui.Items.Overlay.Visible then
+			refreshList()
+		end
+	end)
 	Remotes.Get("ItemGained").OnClientEvent:Connect(onGained)
 	Remotes.Get("LootFeedback").OnClientEvent:Connect(onFeedback)
 	UserInputService.InputBegan:Connect(function(input, processed)
@@ -44713,6 +45178,7 @@ function LootUI.Build(root: Frame, k: { [string]: any })
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
 		if not player:GetAttribute("InRun") then
 			items = {}
+			clues = nil
 			refreshStrip()
 			kit.Hide(ui.Items.Overlay, "Items")
 		end
@@ -44723,7 +45189,7 @@ return LootUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="92">
+        <Item class="ModuleScript" referent="93">
           <Properties>
             <string name="Name">MenuArenas</string>
             <string name="Source"><![CDATA[--[[
@@ -45140,7 +45606,7 @@ return MenuArenas
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="93">
+        <Item class="ModuleScript" referent="94">
           <Properties>
             <string name="Name">MenuCharacters</string>
             <string name="Source"><![CDATA[--[[
@@ -45971,7 +46437,7 @@ return MenuCharacters
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="94">
+        <Item class="ModuleScript" referent="95">
           <Properties>
             <string name="Name">MenuCurses</string>
             <string name="Source"><![CDATA[--[[
@@ -46235,7 +46701,7 @@ return MenuCurses
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="95">
+        <Item class="ModuleScript" referent="96">
           <Properties>
             <string name="Name">MenuDaily</string>
             <string name="Source"><![CDATA[--[[
@@ -46809,7 +47275,7 @@ return MenuDaily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="96">
+        <Item class="ModuleScript" referent="97">
           <Properties>
             <string name="Name">MenuJournal</string>
             <string name="Source"><![CDATA[-- Manually opened field notes; no automatic introductions or build recommendations.
@@ -46837,7 +47303,7 @@ function MenuJournal.Build(screen: Frame, ctx: { [string]: any })
 		local clue = UIKit.text(row, "Body", "", { Name = "AttackClue", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, LineHeight = 1.15, LayoutOrder = 2 }, 15)
 		local drops = UIKit.text(row, "Small", "", { Name = "ObservedDrops", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.gold_300, LayoutOrder = 3 }, 14)
 		UIKit.Hairline(row, { LayoutOrder = 4 })
-		entries[id] = { Name = name, Clue = clue, Drops = drops }
+		entries[id] = { Frame = row, Order = i, Name = name, Clue = clue, Drops = drops }
 	end
 	local function refresh()
 		local discovered = 0
@@ -46845,6 +47311,8 @@ function MenuJournal.Build(screen: Frame, ctx: { [string]: any })
 		for id, row in pairs(entries) do
 			local entry = Journal.Entry(profile, id)
 			if entry.Known then discovered += 1 end
+			-- recorded enemies first, the unknown placeholders after them (same order within each)
+			row.Frame.LayoutOrder = row.Order + (entry.Known and 0 or #Journal.Order)
 			row.Name.Text = entry.Name
 			row.Name.TextColor3 = entry.Known and P.ivory_100 or P.stone_300
 			row.Clue.Text = entry.Clue
@@ -46880,7 +47348,214 @@ return MenuJournal
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="97">
+        <Item class="ModuleScript" referent="98">
+          <Properties>
+            <string name="Name">MenuLastRun</string>
+            <string name="Source"><![CDATA[--[[
+	MenuLastRun.lua
+	The lobby home's LAST RUN card: one compact row (result and stage, hero / mode /
+	difficulty / time, kills and gold kept) built from the saved profile's LastRun (RunManager writes it
+	when a run ends, DataService sanitises it, ProfileSync carries it) and a RETRY button.
+
+	RETRY is the same validated start as the SOLO / DUO / TRIO buttons: it fires the
+	StartRun remote with a mode name and the server decides (RunManager.startRun: lobby
+	phase, party leader / READY rules through PartyService.StartBlocked, run servers,
+	the current character, difficulty, curses and the ENDLESS switch). The client only
+	explains in advance what it can see: a party member cannot start, a party plays its
+	own size, the Daily has its own screen. LobbyScreen places the card (relayout) and
+	hides it while a countdown or a run replaces the mode buttons.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local CharacterData = require(Shared:WaitForChild("CharacterData"))
+local DifficultyData = require(Shared:WaitForChild("DifficultyData"))
+local UIKit = require(script.Parent.UIKit)
+local MenuParty = require(script.Parent.MenuParty)
+
+local MenuLastRun = {}
+local C, P = Theme.Color, Theme.Palette
+
+export type Card = {
+	Frame: Frame,
+	Has: () -> boolean, -- the profile has a last run to show
+	Refresh: (profile: { [string]: any }?) -> (),
+	SetWidth: (w: number) -> (),
+}
+
+-- "Stage 3" for a run that ended on stage 3 (0 = never reached one).
+local function stageText(last: { [string]: any }): string
+	local stage = tonumber(last.Stage) or 0
+	return stage > 0 and ("Stage " .. stage) or "Stage 1"
+end
+
+function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
+	local holder, face = UIKit.Surface(parent, {
+		Name = "LastRun",
+		Radius = Theme.Radius.M,
+		Transparency = 0.12,
+		Edge = C.PanelEdge,
+		EdgeTransparency = Theme.Alpha.Edge,
+		Visible = false,
+	})
+	local profile: { [string]: any }? = nil
+	local buttonW = 112
+	-- three short lines: the result, the run (hero / mode / difficulty / time), the haul
+	local column = UIKit.new("Frame", { Name = "Text", BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, -(16 + buttonW + 22), 1, 0) }, face)
+	local lineH = { UIKit.TS(12) + 4, UIKit.TS(14) + 4, UIKit.TS(13) + 4 }
+	local textH = lineH[1] + lineH[2] + lineH[3] + 2
+	local title = UIKit.text(column, "Label", "", {
+		Name = "Title",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, -textH / 2 + lineH[1] / 2),
+		Size = UDim2.new(1, 0, 0, lineH[1]),
+		TextColor3 = P.gold_300,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, 12)
+	local sub = UIKit.text(column, "Small", "", {
+		Name = "Summary",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, -textH / 2 + lineH[1] + 1 + lineH[2] / 2),
+		Size = UDim2.new(1, 0, 0, lineH[2]),
+		TextColor3 = P.ivory_100,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, 14)
+	local haul = UIKit.text(column, "Small", "", {
+		Name = "Haul",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, textH / 2 - lineH[3] / 2),
+		Size = UDim2.new(1, 0, 0, lineH[3]),
+		TextColor3 = P.ivory_300,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, 13)
+
+	local function toast(str: string, color: Color3?)
+		if ctx.Toast then
+			ctx.Toast(str, color)
+		end
+	end
+
+	-- RETRY: the mode of the last run through the same remote as the mode buttons, with the
+	-- party rules the server would answer with explained first (it still decides).
+	local function retry()
+		local last = profile and profile.LastRun
+		if type(last) ~= "table" then
+			return
+		end
+		local mode = type(last.Mode) == "string" and last.Mode or "Solo"
+		if mode == "Daily" then
+			-- the Daily's scored try / practice is decided on its own screen (its START button
+			-- is the validated path for it)
+			ctx.ShowScreen("Daily")
+			toast("Your last run was the Daily Challenge: start it from here.", P.gold_300)
+			return
+		end
+		if not table.find(Config.Modes.Order, mode) then
+			-- a mode no longer offered in the lobby (old saves): the closest start is SOLO
+			toast(string.format("%s runs are no longer offered: starting SOLO instead.", string.upper(mode)), P.gold_300)
+			mode = "Solo"
+		end
+		local party = MenuParty.Summary()
+		if party.Count > 0 then
+			if not party.Leader then
+				toast("Your party leader starts the runs (or leave the party).", P.gold_300)
+				return
+			end
+			local partyMode = MenuParty.PartyMode()
+			if partyMode and partyMode ~= mode then
+				local def = (Config.Modes :: any)[partyMode]
+				toast(string.format("Your party of %d plays %s: starting that instead.", party.Count, string.upper(def and def.DisplayName or partyMode)), P.gold_300)
+				mode = partyMode
+			end
+		end
+		local now = DifficultyData.Selected(profile)
+		if last.Difficulty ~= now and DifficultyData.Tiers[now] then
+			toast(string.format("Difficulty is set to %s now (your last run was %s).", string.upper(DifficultyData.Tiers[now].Name), string.upper(tostring(last.Difficulty))), P.gold_300)
+		end
+		Remotes.Get("StartRun"):FireServer(mode)
+	end
+
+	local button = UIKit.Button(face, {
+		Kind = "Outline",
+		Title = "RETRY",
+		Icon = "cycle",
+		IconSize = 20,
+		TitleStyle = "Label",
+		TitleSize = 14,
+		Align = "Center",
+		Name = "Retry",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.fromOffset(buttonW, Theme.Size.TapMin),
+		OnClick = retry,
+	})
+
+	local function refresh(p: { [string]: any }?)
+		profile = p
+		local last = p and p.LastRun
+		if type(last) ~= "table" then
+			return
+		end
+		local won = last.Won == true
+		local fell = not won and type(last.DeathCause) == "string"
+		local modeDef = (Config.Modes :: any)[last.Mode]
+		local modeName = modeDef and modeDef.DisplayName or tostring(last.Mode or "Solo")
+		if won then
+			title.Text = UIKit.track("LAST RUN · VICTORY")
+			title.TextColor3 = P.gold_300
+		elseif fell then
+			title.Text = UIKit.track(string.upper("LAST RUN · FELL ON " .. stageText(last)))
+			title.TextColor3 = P.crimson_300
+		else
+			title.Text = UIKit.track(string.upper("LAST RUN · LEFT ON " .. stageText(last)))
+			title.TextColor3 = P.ivory_300
+		end
+		local hero = CharacterData.Characters[last.CharacterId]
+		local tier = DifficultyData.Tiers[last.Difficulty]
+		sub.Text = table.concat({
+			hero and hero.Name or "Hero",
+			modeName,
+			tier and tier.Name or "Standard",
+			UIKit.formatTime(tonumber(last.Time) or 0),
+		}, " · ")
+		local parts = {
+			UIKit.formatNumber(tonumber(last.Kills) or 0) .. " kills",
+			"+" .. UIKit.formatNumber(tonumber(last.Gold) or 0) .. " gold",
+		}
+		if fell then
+			table.insert(parts, "Fell to " .. tostring(last.DeathCause))
+		end
+		haul.Text = table.concat(parts, " · ")
+	end
+
+	return {
+		Frame = holder,
+		Has = function(): boolean
+			return profile ~= nil and type(profile.LastRun) == "table"
+		end,
+		Refresh = refresh,
+		SetWidth = function(w: number)
+			-- narrow cards (phones) keep RETRY to its icon-less core and give the text room
+			local bw = w < 420 and 92 or 112
+			if bw ~= buttonW then
+				buttonW = bw
+				button.Instance.Size = UDim2.fromOffset(bw, Theme.Size.TapMin)
+				button.SetIcon(bw >= 112 and "cycle" or nil)
+				column.Size = UDim2.new(1, -(16 + bw + 22), 1, 0)
+			end
+		end,
+	}
+end
+
+return MenuLastRun
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="99">
           <Properties>
             <string name="Name">MenuLeaderboards</string>
             <string name="Source"><![CDATA[--[[
@@ -47335,7 +48010,7 @@ return MenuLeaderboards
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="98">
+        <Item class="ModuleScript" referent="100">
           <Properties>
             <string name="Name">MenuParty</string>
             <string name="Source"><![CDATA[--[[
@@ -48165,7 +48840,7 @@ return MenuParty
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="99">
+        <Item class="ModuleScript" referent="101">
           <Properties>
             <string name="Name">MenuStats</string>
             <string name="Source"><![CDATA[--[[
@@ -48611,7 +49286,7 @@ return MenuStats
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="100">
+        <Item class="ModuleScript" referent="102">
           <Properties>
             <string name="Name">MenuTrack</string>
             <string name="Source"><![CDATA[--[[
@@ -48843,7 +49518,7 @@ return MenuTrack
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="101">
+        <Item class="ModuleScript" referent="103">
           <Properties>
             <string name="Name">MenuUpgrades</string>
             <string name="Source"><![CDATA[--[[
@@ -49229,7 +49904,7 @@ return MenuUpgrades
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="102">
+        <Item class="ModuleScript" referent="104">
           <Properties>
             <string name="Name">MiniMap</string>
             <string name="Source"><![CDATA[--[[
@@ -49243,7 +49918,10 @@ return MenuUpgrades
 	                into one "World" frame; scrolling the map moves only that frame
 	  player        a gold disc with a facing tick at the centre (the root's look direction)
 	  teammates     blue dots (dimmed while fallen)
-	  portal        a ring in the stage's colour: ivory while dormant / to find, gold while
+	  portal        a ring in the stage's colour (clamped to the map's edge while the portal
+	                is outside the view, so it is always on the map), pinged with expanding
+	                rings when the portal is revealed (SwarmState PortalReveal; not with
+	                Reduced effects): ivory while dormant / to find, gold while
 	                charging, crimson during the boss and the surge, bright gold once open
 	  loot          chests (gold squares), shrines (ivory), the altar (amber ring); gone
 	                once opened / spent / claimed
@@ -49366,6 +50044,14 @@ local function buildMarkers(world: Frame)
 	ui.PortalCore = dot(ui.Portal, "Core", 3, P.ivory_100, 7, true)
 	ui.PortalCore.Position = UDim2.fromScale(0.5, 0.5)
 	ui.PortalCore.Visible = true
+	-- the reveal ping: three rings that expand from the portal marker (pooled)
+	ui.Pings = {}
+	for i = 1, 3 do
+		local f, st = ring(ui.Portal, "Ping", 11, P.ivory_100, 5)
+		f.Position = UDim2.fromScale(0.5, 0.5)
+		f.BackgroundTransparency = 1
+		ui.Pings[i] = { Frame = f, Stroke = st }
+	end
 	ui.Altar, ui.AltarStroke = ring(world, "Altar", 9, P.amber_300, 5)
 	ui.Boss = dot(world, "Boss", 11, P.crimson_500, 8, false)
 	ui.Boss.Rotation = 45
@@ -49607,6 +50293,29 @@ local function portalColor(state: Configuration): Color3
 	return P.ivory_100
 end
 
+local lastReveal = 0
+local pingAt = -math.huge
+local PING_SECONDS = 2.4
+
+-- The portal reveal ping (three rings, 0.4 s apart, growing to ~40 px and fading).
+local function updatePing(now: number, color: Color3)
+	local pings = ui.Pings
+	if not pings then
+		return
+	end
+	for i, ping in ipairs(pings) do
+		local t = (now - pingAt - (i - 1) * 0.4) / (PING_SECONDS - 0.8)
+		local on = t >= 0 and t <= 1
+		setVisible(ping.Frame, on)
+		if on then
+			local d = 11 + 34 * t
+			ping.Frame.Size = UDim2.fromOffset(d, d)
+			ping.Stroke.Color = color
+			ping.Stroke.Transparency = t * t
+		end
+	end
+end
+
 local function updateMoving(state: Configuration, root: BasePart)
 	-- scroll the world so the player sits at the centre; turn the player tick
 	local pos = root.Position
@@ -49622,13 +50331,28 @@ local function updateMoving(state: Configuration, root: BasePart)
 	local portalOn = typeof(ppos) == "Vector3"
 	setVisible(ui.Portal, portalOn)
 	if portalOn then
-		placeAt(ui.Portal, ppos.X, ppos.Z)
-			local c = Accessibility.Color(portalColor(state), (state:GetAttribute("StagePhase") == "Boss" or state:GetAttribute("StagePhase") == "Surge") and "Danger" or "Loot")
+		-- outside the view: pinned to the map's edge in the portal's direction
+		local dx, dz = (ppos.X - pos.X) * scale, (ppos.Z - pos.Z) * scale
+		local edge = half - 7
+		local m = math.max(math.abs(dx), math.abs(dz))
+		if m > edge then
+			dx, dz = dx * edge / m, dz * edge / m
+		end
+		placeAt(ui.Portal, pos.X + dx / scale, pos.Z + dz / scale)
+		local c = Accessibility.Color(portalColor(state), (state:GetAttribute("StagePhase") == "Boss" or state:GetAttribute("StagePhase") == "Surge") and "Danger" or "Loot")
 		if ui.PortalStroke.Color ~= c then
 			ui.PortalStroke.Color = c
 			ui.Portal.BackgroundColor3 = c
 			ui.PortalCore.BackgroundColor3 = c
 		end
+		local reveal = state:GetAttribute("PortalReveal") or 0
+		if reveal ~= lastReveal then
+			lastReveal = reveal
+			if reveal > 0 and not ClientSettings.Reduced() then
+				pingAt = os.clock()
+			end
+		end
+		updatePing(os.clock(), c)
 	end
 
 	-- teammates
@@ -49748,6 +50472,8 @@ function MiniMap.Update(_dt: number, state: Configuration, inRun: boolean)
 		MiniMap.Refresh()
 		if not inRun then
 			arenaModel = nil
+			lastReveal = 0
+			pingAt = -math.huge
 		end
 	end
 	if not ui.Holder.Visible then
@@ -49789,7 +50515,7 @@ return MiniMap
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="103">
+        <Item class="ModuleScript" referent="105">
           <Properties>
             <string name="Name">MobileControls</string>
             <string name="Source"><![CDATA[--[[
@@ -50151,7 +50877,7 @@ return MobileControls
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="104">
+        <Item class="ModuleScript" referent="106">
           <Properties>
             <string name="Name">ModelLibrary</string>
             <string name="Source"><![CDATA[--[[
@@ -51644,7 +52370,7 @@ return ModelLibrary
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="105">
+        <Item class="ModuleScript" referent="107">
           <Properties>
             <string name="Name">Occlusion</string>
             <string name="Source"><![CDATA[--[[
@@ -52036,7 +52762,263 @@ return Occlusion
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="106">
+        <Item class="ModuleScript" referent="108">
+          <Properties>
+            <string name="Name">PortalBeacon</string>
+            <string name="Source"><![CDATA[--[[
+	PortalBeacon.lua
+	The stage portal's landmark, client side: ONE pooled beacon that makes the portal
+	unmistakable from the moment it is revealed (SwarmState PortalReveal, StageManager):
+
+	  pillar    a tall neon light pillar over the portal with a glowing cap, breathing
+	  ring      a pulsing floor ring (two rings of 16 slabs expanding from the rune circle)
+	  burst     at the reveal the pillar rises out of the ground and a bright shockwave
+	            ring runs out across the floor (skipped with Reduce flashes)
+
+	Colours follow the stage phase like the world portal (arcane while exploring, gold
+	while charging / open, crimson during the boss and the surge) through
+	Accessibility.Color, so the colorblind palettes apply. Reduced effects (or a slow
+	device, ClientPerformance): the pillar and one steady ring, no pulsing, no burst.
+	Everything is built once (anchored, no collision / query / touch) and parked when
+	there is no portal; the rings move with BulkMoveTo. StageUI calls Update every frame.
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
+local ClientSettings = require(script.Parent.ClientSettings)
+local ClientPerformance = require(script.Parent.ClientPerformance)
+local Accessibility = require(script.Parent.Accessibility)
+
+local PortalBeacon = {}
+
+local P = Theme.Palette
+local TAU = math.pi * 2
+local UPRIGHT = CFrame.Angles(0, 0, math.pi / 2) -- a cylinder's axis is X: stand it up
+
+local PILLAR_H = 140
+local PILLAR_D = 2.4
+local HALO_D = 7
+local RING_SLABS = 16
+local RING_FROM = Config.Stages.PortalRadius + 0.5
+local RING_TO = Config.Stages.PortalRadius + 14
+local PULSE_SECONDS = 2.2
+local BURST_SECONDS = 1.1
+local BURST_RADIUS = 46
+local PARK = CFrame.new(0, -400, 0)
+
+local folder: Folder? = nil
+local pillar: Part? = nil
+local halo: Part? = nil
+local cap: Part? = nil
+local rings: { { Part } } = {}
+local burst: { Part } = {}
+local ringParts: { BasePart } = {}
+local shown = false
+local lastReveal = 0
+local burstAt = -math.huge
+local lastColorKey = ""
+local lastReduced: boolean? = nil
+
+local function part(name: string, shape: Enum.PartType, size: Vector3, color: Color3, transparency: number): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Shape = shape
+	p.Size = size
+	p.Color = color
+	p.Material = Enum.Material.Neon
+	p.Transparency = transparency
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.CFrame = PARK
+	p.Parent = folder
+	return p
+end
+
+local function build()
+	if folder then
+		return
+	end
+	local f = Instance.new("Folder")
+	f.Name = "SwarmPortalBeacon"
+	f.Parent = workspace
+	folder = f
+	pillar = part("Pillar", Enum.PartType.Cylinder, Vector3.new(PILLAR_H, PILLAR_D, PILLAR_D), P.fx_arcane, 0.25)
+	halo = part("Halo", Enum.PartType.Cylinder, Vector3.new(PILLAR_H * 0.6, HALO_D, HALO_D), P.fx_arcane, 0.84)
+	cap = part("Cap", Enum.PartType.Ball, Vector3.new(6, 6, 6), P.ivory_100, 0.15)
+	for r = 1, 2 do
+		rings[r] = {}
+		for i = 1, RING_SLABS do
+			local slab = part("Ring", Enum.PartType.Block, Vector3.new(2.2, 0.16, 0.5), P.fx_arcane, 0.3)
+			rings[r][i] = slab
+			table.insert(ringParts, slab)
+		end
+	end
+	for i = 1, RING_SLABS do
+		local slab = part("Burst", Enum.PartType.Block, Vector3.new(4, 0.2, 0.7), P.ivory_100, 1)
+		burst[i] = slab
+		table.insert(ringParts, slab)
+	end
+end
+
+local function reduced(): boolean
+	return ClientSettings.Reduced() or ClientPerformance.Reduced()
+end
+
+-- The beacon's colour for the stage phase (the world portal's palette, colorblind-safe).
+local function colorFor(state: Configuration): (Color3, string)
+	local phase = state:GetAttribute("StagePhase") or "None"
+	if phase == "Boss" or phase == "Surge" then
+		return Accessibility.Color(P.crimson_400, "Danger"), "danger"
+	elseif phase == "Open" then
+		return Accessibility.Color(P.gold_200, "Loot"), "open"
+	elseif (state:GetAttribute("PortalCharge") or 0) > 0 then
+		return Accessibility.Color(P.gold_300, "Loot"), "charge"
+	end
+	return Accessibility.Color(P.fx_arcane, "Magic"), "idle"
+end
+
+local function park()
+	if not shown then
+		return
+	end
+	shown = false
+	local list = {}
+	local cfs = {}
+	for _, p in ipairs(ringParts) do
+		table.insert(list, p)
+		table.insert(cfs, PARK)
+	end
+	for _, p in ipairs({ pillar, halo, cap }) do
+		if p then
+			table.insert(list, p)
+			table.insert(cfs, PARK)
+		end
+	end
+	if #list > 0 then
+		workspace:BulkMoveTo(list, cfs, Enum.BulkMoveMode.FireCFrameChanged)
+	end
+	lastColorKey = ""
+end
+
+-- Places a ring of slabs at `radius` around `centre` (tangent slabs, like the rune circle).
+local function ringAt(slabs: { Part }, centre: Vector3, radius: number, y: number, transparency: number, list: { BasePart }, cfs: { CFrame })
+	for i, slab in ipairs(slabs) do
+		local a = (i - 0.5) / RING_SLABS * TAU
+		local at = Vector3.new(centre.X + math.cos(a) * radius, y, centre.Z + math.sin(a) * radius)
+		table.insert(list, slab)
+		table.insert(cfs, CFrame.new(at) * CFrame.Angles(0, -a, 0))
+		if slab.Transparency ~= transparency then
+			slab.Transparency = transparency
+		end
+	end
+end
+
+function PortalBeacon.Update(state: Configuration, inRun: boolean)
+	local ppos = state:GetAttribute("PortalPos")
+	local reveal = state:GetAttribute("PortalReveal") or 0
+	local phase = state:GetAttribute("StagePhase") or "None"
+	local on = inRun and typeof(ppos) == "Vector3" and reveal > 0 and phase ~= "Travel" and phase ~= "None"
+	if not on then
+		lastReveal = inRun and reveal or 0
+		park()
+		return
+	end
+	build()
+	local now = os.clock()
+	local isReduced = reduced()
+	if reveal ~= lastReveal then
+		-- a new reveal (a mid-run joiner gets the burst too: it shows them the portal)
+		burstAt = ClientSettings.Flashes() and -math.huge or now
+		lastReveal = reveal
+	end
+	shown = true
+	local base: Vector3 = ppos
+	local color, key = colorFor(state)
+	if key ~= lastColorKey or isReduced ~= lastReduced then
+		lastColorKey, lastReduced = key, isReduced
+		for _, p in ipairs(ringParts) do
+			if p.Name == "Ring" then
+				p.Color = color
+			end
+		end
+		if pillar then pillar.Color = color end
+		if halo then halo.Color = color end
+		if cap then cap.Color = key == "idle" and P.ivory_100 or color end
+	end
+	local list: { BasePart } = {}
+	local cfs: { CFrame } = {}
+	-- the pillar rises at the reveal (0.7 s), then breathes
+	local rise = math.clamp((now - burstAt) / 0.7, 0, 1)
+	local breathe = isReduced and 0 or math.sin(now * 2.1) * 0.5 + 0.5
+	local h = PILLAR_H * rise
+	local y = base.Y + 1
+	if pillar and halo and cap then
+		local size = Vector3.new(math.max(0.1, h), PILLAR_D, PILLAR_D)
+		if (pillar.Size - size).Magnitude > 0.05 then
+			pillar.Size = size
+			halo.Size = Vector3.new(math.max(0.1, h * 0.6), HALO_D, HALO_D)
+		end
+		table.insert(list, pillar)
+		table.insert(cfs, CFrame.new(base.X, y + h / 2, base.Z) * UPRIGHT)
+		table.insert(list, halo)
+		table.insert(cfs, CFrame.new(base.X, y + h * 0.3, base.Z) * UPRIGHT)
+		table.insert(list, cap)
+		table.insert(cfs, CFrame.new(base.X, y + h + 2, base.Z))
+		local t = 0.22 + breathe * 0.2
+		if math.abs(pillar.Transparency - t) > 0.01 then
+			pillar.Transparency = t
+			halo.Transparency = 0.8 + breathe * 0.08
+			cap.Transparency = 0.1 + breathe * 0.25
+		end
+	end
+	-- the floor rings: two pulses running outward, or one steady ring (reduced)
+	if isReduced then
+		ringAt(rings[1], base, RING_FROM + 1.5, base.Y + 0.12, 0.3, list, cfs)
+		ringAt(rings[2], base, RING_FROM + 1.5, base.Y + 0.12, 1, list, cfs)
+	else
+		for r = 1, 2 do
+			local f = ((now / PULSE_SECONDS) + (r - 1) * 0.5) % 1
+			local radius = RING_FROM + (RING_TO - RING_FROM) * f
+			ringAt(rings[r], base, radius, base.Y + 0.12, 0.2 + f * 0.8, list, cfs)
+		end
+	end
+	-- the reveal shockwave
+	local b = (now - burstAt) / BURST_SECONDS
+	if b >= 0 and b <= 1 then
+		ringAt(burst, base, 2 + BURST_RADIUS * b, base.Y + 0.2, b * b, list, cfs)
+	else
+		for _, slab in ipairs(burst) do
+			if slab.Transparency < 1 then
+				slab.Transparency = 1
+			end
+			table.insert(list, slab)
+			table.insert(cfs, PARK)
+		end
+	end
+	workspace:BulkMoveTo(list, cfs, Enum.BulkMoveMode.FireCFrameChanged)
+end
+
+-- Leaving a run: park everything (the parts stay pooled for the next run).
+function PortalBeacon.Clear()
+	lastReveal = 0
+	burstAt = -math.huge
+	park()
+end
+
+-- For the preview tool / tests.
+function PortalBeacon.Shown(): boolean
+	return shown
+end
+
+return PortalBeacon
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="109">
           <Properties>
             <string name="Name">Showcase</string>
             <string name="Source"><![CDATA[--[[
@@ -53023,16 +54005,22 @@ return Showcase
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="107">
+        <Item class="ModuleScript" referent="110">
           <Properties>
             <string name="Name">StageUI</string>
             <string name="Source"><![CDATA[--[[
 	StageUI.lua
 	The client side of the stage loop (server: StageManager), in the HUD's style:
 
-	  portal arrow   after Config.Stages.HintAfterSeconds (SwarmState PortalHint) an arrow
-	                 at the screen edge points at this stage's portal, with the distance;
-	                 when the portal is on screen a small marker floats over it instead
+	  portal reveal  SwarmState PortalReveal counts up when a stage's portal can be charged
+	                 (StageManager): a banner "THE PORTAL HAS APPEARED" with a sound
+	                 (Hud.Announce), the beacon pillar and pulsing floor ring over the
+	                 portal (PortalBeacon, updated from here every frame) and the minimap
+	                 ping (MiniMap). Owner: the portal must be very evident when it spawns.
+	  portal arrow   from the reveal on (SwarmState PortalHint; Config.Stages.HintAfterSeconds
+	                 can delay it) an arrow at the screen edge points at this stage's
+	                 portal, with the distance; when the portal is on screen a small
+	                 marker floats over it instead
 	  charge ring    24 rune segments over the portal that fill while someone stands in
 	                 its circle ("Stand here to open" / "Opening 60%")
 	  choice panel   the portal opened (remote PortalOffer): stage cleared, the run so far,
@@ -53063,6 +54051,8 @@ local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
+local PortalBeacon = require(script.Parent.PortalBeacon)
 
 local StageUI = {}
 
@@ -53078,6 +54068,23 @@ local ui: { [string]: any } = {}
 local offer: { [string]: any }? = nil
 local chosen = false
 local travel = { Active = false, Since = 0 }
+local lastReveal: number? = nil -- SwarmState PortalReveal seen last (nil = not in a run)
+
+-- The portal reveal: banner + sound (the beacon and the minimap ping watch the attribute
+-- themselves). A mid-run joiner sees the banner too: it tells them where to go.
+local function checkReveal(state: Configuration)
+	local reveal = state:GetAttribute("PortalReveal") or 0
+	if lastReveal == nil then
+		lastReveal = 0
+	end
+	if reveal ~= lastReveal then
+		lastReveal = reveal
+		if reveal > 0 then
+			Hud.Announce("THE PORTAL HAS APPEARED", "Follow the arrow and stand in its circle to open it",
+				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear")
+		end
+	end
+end
 
 ------------------------------------------------------------------------------------------
 -- Build
@@ -53573,8 +54580,14 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 		if travel.Active then
 			endTravel()
 		end
+		if lastReveal ~= nil then
+			lastReveal = nil
+			PortalBeacon.Clear()
+		end
 		return
 	end
+	checkReveal(state)
+	PortalBeacon.Update(state, not travel.Active)
 	-- the travel fade lifts once the next stage runs (or after a safety timeout)
 	if travel.Active and ((stagePhase ~= "Travel" and os.clock() - travel.Since > 0.5) or os.clock() - travel.Since > 8) then
 		endTravel()
@@ -53621,7 +54634,7 @@ return StageUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="108">
+        <Item class="ModuleScript" referent="111">
           <Properties>
             <string name="Name">TeamPings</string>
             <string name="Source"><![CDATA[-- Preset team pings. Targets are replicated IDs; the server chooses recipients and positions.
@@ -53741,7 +54754,7 @@ return TeamPings
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="109">
+        <Item class="ModuleScript" referent="112">
           <Properties>
             <string name="Name">TeamUI</string>
             <string name="Source"><![CDATA[--[[
@@ -54390,7 +55403,7 @@ return TeamUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="110">
+        <Item class="ModuleScript" referent="113">
           <Properties>
             <string name="Name">Telegraphs</string>
             <string name="Source"><![CDATA[--[[
@@ -55926,7 +56939,7 @@ return Telegraphs
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="111">
+        <Item class="ModuleScript" referent="114">
           <Properties>
             <string name="Name">TerrainFx</string>
             <string name="Source"><![CDATA[--[[
@@ -56016,7 +57029,7 @@ return TerrainFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="112">
+        <Item class="ModuleScript" referent="115">
           <Properties>
             <string name="Name">TravelOverlay</string>
             <string name="Source"><![CDATA[--[[
@@ -56224,7 +57237,7 @@ return TravelOverlay
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="113">
+        <Item class="ModuleScript" referent="116">
           <Properties>
             <string name="Name">Tutorial</string>
             <string name="Source"><![CDATA[--[[
@@ -56818,7 +57831,7 @@ return Tutorial
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="114">
+        <Item class="ModuleScript" referent="117">
           <Properties>
             <string name="Name">UIAnim</string>
             <string name="Source"><![CDATA[--[[
@@ -57407,7 +58420,7 @@ return UIAnim
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="115">
+        <Item class="ModuleScript" referent="118">
           <Properties>
             <string name="Name">UIBuilder</string>
             <string name="Source"><![CDATA[--[[
@@ -58090,12 +59103,19 @@ local function cardContent(c): (string?, { any }, { any })
 			table.insert(stats, line)
 		end
 	end
+	-- upgrade cards lead with the server's one-line gain summary ("+10 damage, +1 arrow",
+	-- or the new perk); NEW / evolution / bonus cards with their short description
+	local summary = type(c.Summary) == "string" and c.Summary ~= "" and c.Summary or nil
 	local desc: string? = nil
 	if c.Type == "WeaponUp" then
 		local def = WeaponData.Weapons[c.Id]
-		desc = perk or (def and def.Description)
+		desc = perk or summary or (def and def.Description)
+	elseif c.Type == "PassiveUp" and summary then
+		desc = summary
 	elseif c.Description and c.Description ~= "" then
 		desc = c.Description
+	elseif summary then
+		desc = summary
 	end
 	return desc, stats, changes
 end
@@ -58426,12 +59446,31 @@ local function titleSize(): number
 	return UIKit.IsCompact() and 36 or 46
 end
 
+-- Phones in landscape have the shortest cards: one description line and a one-line hint.
+local function compactLandscape(): boolean
+	return UIKit.IsCompact() and not portrait
+end
+
+-- Is this card's description line the one-line gain summary (an upgrade) rather than
+-- the weapon / passive text?
+local function summaryCard(c): boolean
+	return c.Type == "WeaponUp" or c.Type == "PassiveUp"
+end
+
 -- Height of a description on a card `w` wide: one or two lines (a rough width estimate;
--- the label wraps and truncates for real).
-local function descHeight(desc: string?, w: number): number
+-- the label wraps and truncates for real); an upgrade's summary line takes one line on
+-- phones in landscape.
+local function descHeight(desc: string?, w: number, c): number
 	local plain = string.gsub(desc or "", "<[^>]+>", "")
-	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.44 / math.max(1, w - 2 * CARD.Pad)), 1, 2)
+	local maxLines = (compactLandscape() and summaryCard(c)) and 1 or 2
+	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.44 / math.max(1, w - 2 * CARD.Pad)), 1, maxLines)
 	return TS(14) * lines + 8
+end
+
+-- Height of the evolution hint under the rows (two wrapped lines; it keeps its room on
+-- phones, where a stat row gives way: the description line already sums up the gain).
+local function hintHeight(): number
+	return TS(13) * 2 + 6
 end
 
 -- The boxed highlight: shorter on phones.
@@ -58442,7 +59481,7 @@ end
 -- Height a landscape card needs for everything it has to show.
 local function cardNeeds(c, w: number): number
 	local desc, stats, changes = cardContent(c)
-	local h = CARD.Band + 12 + cardTileSize() + 10 + (desc and descHeight(desc, w) + 4 or 0) + 14
+	local h = CARD.Band + 12 + cardTileSize() + 10 + (desc and descHeight(desc, w, c) + 4 or 0) + 14
 	if #changes > 0 then
 		h += boxHeight() + 6 + (#changes - 1) * (CARD.Row - 2)
 	else
@@ -58452,7 +59491,7 @@ local function cardNeeds(c, w: number): number
 		h += CARD.Syn + 10
 	end
 	if c.Hint then
-		h += TS(13) * 2 + 8
+		h += hintHeight() + 2
 	end
 	return h + 10 + cardFootH()
 end
@@ -58819,14 +59858,14 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		if desc then
 			text(face, "Body", desc, {
 				Position = UDim2.fromOffset(pad, y),
-				Size = UDim2.new(1, -2 * pad, 0, descHeight(desc, w)),
+				Size = UDim2.new(1, -2 * pad, 0, descHeight(desc, w, c)),
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextWrapped = true,
 				RichText = true,
 				TextColor3 = P.ivory_200,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, 14)
-			y += descHeight(desc, w) + 4
+			y += descHeight(desc, w, c) + 4
 		end
 		UIKit.Divider(face, w - 2 * pad - 20, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, y) })
 		y += 14
@@ -58851,10 +59890,12 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		-- synergy bar and the evolution hint while they fit above the footer
 		local bottom = footY - 6
 		local rw = w - 2 * pad
-		-- the synergy bar keeps its room (rows that do not fit are dropped instead)
+		-- the synergy bar and the evolution hint keep their room (rows that do not fit are
+		-- dropped instead: the description line already sums up the gain)
 		local synRoom = c.Synergy and CARD.Syn + 8 or 0
+		local hintRoom = c.Hint and hintHeight() + 4 or 0
 		local function fits(hh: number): boolean
-			return y + hh <= bottom - synRoom
+			return y + hh <= bottom - synRoom - hintRoom
 		end
 		if #changes > 0 then
 			local start = 1
@@ -58882,7 +59923,8 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			synergyBar(face, c, pad, y + 4, rw, CARD.Syn)
 			y += CARD.Syn + 8
 		end
-		local hh = TS(13) * 2 + 6
+		hintRoom = 0
+		local hh = hintHeight()
 		if c.Hint and fits(hh) then
 			text(face, "Small", tostring(c.Hint), {
 				Position = UDim2.fromOffset(pad, bottom - hh),
@@ -58890,6 +59932,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextYAlignment = Enum.TextYAlignment.Bottom,
 				TextWrapped = true,
+				TextTruncate = Enum.TextTruncate.AtEnd,
 				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
 			}, 13)
 		end
@@ -61301,7 +62344,7 @@ return UIBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="116">
+        <Item class="ModuleScript" referent="119">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[--[[
@@ -63480,7 +64523,7 @@ return UIKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="117">
+        <Item class="ModuleScript" referent="120">
           <Properties>
             <string name="Name">VFX</string>
             <string name="Source"><![CDATA[--[[
@@ -66623,7 +67666,7 @@ return VFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="118">
+        <Item class="ModuleScript" referent="121">
           <Properties>
             <string name="Name">ViewportPreview</string>
             <string name="Source"><![CDATA[--[[
@@ -66818,7 +67861,7 @@ return ViewportPreview
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="119">
+  <Item class="Workspace" referent="122">
     <Properties>
       <string name="Name">Workspace</string>
       <float name="FallenPartsDestroyHeight">-200</float>

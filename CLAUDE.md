@@ -52,6 +52,12 @@ Colossus bosses with Blender meshes (+ Thorn Sprout), synergy package (SynergyDa
 encounter (CaravanEvent), parties (PartyService, MenuParty), co-op level-up/chest no longer freezes the
 team, portal chargeable at once, drag-to-spin lobby hero, hero gold prices doubled (owner).
 
+Post-Codex batch (offline-tested, 45/45 regressions, NOT Studio-tested): XP curve x1.5 (Base 30,
+PerLevel 12, after-cap 6) + Config.XP.CoopShare (co-op per-player pace ~ solo), portal reveal
+(PortalBeacon, banner, sound, always-on arrow, minimap ping), discovery-gated combo clues
+(DiscoveryService, save field Discovered), one-line card summaries, last-run lobby card + validated
+RETRY (MenuLastRun), journal lists discovered first. Codex handoff notes: docs/CLAUDE_HANDOFF.md.
+
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,
