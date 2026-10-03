@@ -565,8 +565,11 @@ Config.Spawn = {
 
 ------------------------------------------------------------------------------------------
 -- WAVES (EnemySpawner; owner: "instead of constantly spawning enemies, do it in waves")
---   Every Config.Run.MiniWaveInterval seconds while exploring a WAVE is announced
---   ("WAVE 3 · from the north", SwarmState attribute Wave = its number on this stage);
+--   While exploring a WAVE is announced FirstDelay seconds into stage 1 (StageFirstDelay
+--   on later stages), then every Interval seconds: a big centre banner "WAVE 3 / from the
+--   north" with a horn and a red glow on that screen edge (client StageUI), and the stage
+--   pill counts down "WAVE 4 IN 0:08" (SwarmState Wave, WaveSeq, WaveSides, WaveAngle,
+--   WaveNext);
 --   WarnSeconds later it pours in over BurstSeconds from 1 direction, +1 at each
 --   DirectionsAt progression second (at most 3), each side one enemy type (wasps never
 --   before Config.Pacing.WaveMinTime, smaller per WaveCountMult). Size = (Base + PerMinute
@@ -581,19 +584,23 @@ Config.Spawn = {
 ------------------------------------------------------------------------------------------
 Config.Waves = {
 	Enabled = true,
-	WarnSeconds = 1.5,
+	FirstDelay = 22, -- stage 1: a new player sees the first wave early
+	StageFirstDelay = 15,
+	Interval = 30,
+	PortalRetrySeconds = 4,
+	WarnSeconds = 2.5, -- the banner and horn come this long before the burst
 	BurstSeconds = 3,
 	MaxPerStep = 6, -- enemies spawned per frame at most while a wave pours in (perf)
-	LullSeconds = 5,
-	LullMult = 0.3,
-	TrickleFrom = 0.55,
-	TrickleTo = 0.8,
+	LullSeconds = 10, -- quiet after the burst ...
+	LullMult = 0.2,
+	TrickleFrom = 0.3, -- ... then the trickle builds toward the next wave
+	TrickleTo = 0.55,
 	-- a living player within PortalCalmRadius studs of the portal while exploring: no new
 	-- wave starts and the trickle is x PortalCalmMult, so pushing to the portal works
 	PortalCalmRadius = 30,
 	PortalCalmMult = 0.5,
-	Base = 22,
-	PerMinute = 4,
+	Base = 32,
+	PerMinute = 5,
 	GrowPerWave = 0.06,
 	GrowCap = 1.5,
 	DirectionsAt = { 100, 300 }, -- seconds of progression time (stage n starts at (n-1) x 120)
@@ -911,6 +918,7 @@ Config.Sounds = {
 	Lunge = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.3, Category = "Warning", MinGap = 0.2, Pitch = 0.8, PitchVar = 0.06, World = true },
 	-- the Queen
 	BossRoar = { Id = "rbxassetid://135802539734782", Volume = 0.5, Category = "Boss", MinGap = 1, PitchVar = 0.04, DuckMusic = 2.2 }, -- SWARM SFX BossRoar: growl + sub hit
+	WaveHorn = { Id = "rbxassetid://135802539734782", Volume = 0.42, Category = "UI", MinGap = 2, Pitch = 1.35, PitchVar = 0, DuckMusic = 1.2 }, -- the BossRoar sound pitched up: a wave is coming (StageUI)
 	BossWarn = { Id = "rbxassetid://113336786346138", Volume = 0.35, Category = "Boss", MinGap = 0.4, Pitch = 1.1, PitchVar = 0.04, World = true }, -- SWARM SFX BossWhoosh
 	BossSummon = { Id = "rbxasset://sounds/splat.wav", Volume = 0.4, Category = "Boss", MinGap = 0.4, Pitch = 0.6, PitchVar = 0.05, World = true },
 	-- the rotating bosses (Telegraphs plays these for their new warning shapes)
