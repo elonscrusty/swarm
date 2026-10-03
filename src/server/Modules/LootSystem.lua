@@ -158,6 +158,8 @@ local CHEST_LOOK = {
 	Small = { W = 2.6, H = 1.2, D = 1.8, LidH = 0.6, Wood = P.wood_500, Lid = P.wood_400, Iron = P.steel_700, Trim = P.gold_500 },
 	Large = { W = 3.6, H = 1.6, D = 2.4, LidH = 0.8, Wood = P.wood_600, Lid = P.wood_500, Iron = P.steel_600, Trim = P.gold_400 },
 	Golden = { W = 3.0, H = 1.4, D = 2.1, LidH = 0.7, Wood = P.gold_600, Lid = P.gold_500, Iron = P.gold_700, Trim = P.ivory_100 },
+	-- free chests (the Buried Cache): plain weathered wood and iron, no gold anywhere
+	Plain = { W = 2.5, H = 1.15, D = 1.7, LidH = 0.55, Wood = P.wood_600, Lid = P.wood_500, Iron = P.steel_700, Trim = P.steel_600, Plain = true },
 }
 
 local function chestFallback(kind: string)
@@ -174,6 +176,19 @@ local function chestFallback(kind: string)
 			add(m, cf, "Straps", Vector3.new(0.22 * s, h + 0.02, d + 0.04), Vector3.new(x, h / 2, 0), L.Iron, METAL)
 		end
 		add(m, cf, "Fittings", Vector3.new(0.42 * s, 0.5 * s, 0.12), Vector3.new(0, h - 0.1 * s, -d / 2 - 0.05), L.Trim, METAL)
+		if not L.Plain then
+			-- paid chests: gold corner caps (the free cache has none)
+			for _, x in ipairs({ -w / 2, w / 2 }) do
+				for _, z in ipairs({ -d / 2, d / 2 }) do
+					add(m, cf, "Fittings", Vector3.new(0.3, 0.36, 0.3) * s, Vector3.new(x, h - 0.16 * s, z), L.Trim, METAL)
+				end
+			end
+		end
+		if kind == "Large" then
+			for _, x in ipairs({ -w * 0.3, w * 0.3 }) do
+				add(m, cf, "Gem", Vector3.new(0.24, 0.24, 0.24) * s, Vector3.new(x, h * 0.55, -d / 2 - 0.1), P.slate_300, NEON, nil, CFrame.Angles(0, 0, math.rad(45)))
+			end
+		end
 		if kind == "Golden" then
 			add(m, cf, "Gem", Vector3.new(0.3, 0.3, 0.3) * s, Vector3.new(0, h + lh + lh * 0.4, 0), P.crimson_400, NEON, nil, CFrame.Angles(0, math.rad(45), math.rad(45)))
 		end
@@ -376,12 +391,48 @@ local function chestBenefit(typeName: string): string
 	return "1 item (" .. table.concat(parts, ", ") .. ")"
 end
 
-local function buildChest(typeName: string, pos: Vector3, yawJitter: number)
+--[[
+	Paid chests read as premium from across the map (owner: "a chest you pay for and a
+	chest you pick up look identical"): the chest stands on a gold-ringed stone plinth,
+	a gold coin hangs over it (it costs gold) and a soft light beam rises from it, wider
+	and brighter per tier. The coin and the beam are glow pieces: they vanish when the
+	chest is opened. Free chests (the Buried Cache, elite drops) stay plain wood.
+]]
+local PLINTH_H = 0.35
+local PREMIUM = {
+	Small = { R = 2.2, Beam = 0.35, BeamH = 9, BeamT = 0.82, Color = P.gold_300 },
+	Large = { R = 2.8, Beam = 0.55, BeamH = 12, BeamT = 0.76, Color = P.gold_300 },
+	Golden = { R = 2.6, Beam = 0.9, BeamH = 16, BeamT = 0.68, Color = P.gold_200 },
+}
+
+local function premiumDressing(obj: Obj, typeName: string, pos: Vector3, cf: CFrame)
+	local L = PREMIUM[typeName] or PREMIUM.Small
+	local plinth = part({ Name = "Plinth", Shape = Enum.PartType.Cylinder, Size = Vector3.new(PLINTH_H, L.R * 2, L.R * 2), CFrame = CFrame.new(pos + Vector3.new(0, PLINTH_H / 2, 0)) * UPRIGHT, Color = P.stone_500 })
+	plinth.Parent = obj.Model
+	local ring = part({ Name = "PlinthTrim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(PLINTH_H * 0.6, L.R * 2 + 0.35, L.R * 2 + 0.35), CFrame = CFrame.new(pos + Vector3.new(0, PLINTH_H * 0.3, 0)) * UPRIGHT, Color = P.gold_500, Material = METAL })
+	ring.Parent = obj.Model
+	local beam = part({ Name = "Beam", Shape = Enum.PartType.Cylinder, Size = Vector3.new(L.BeamH, L.Beam * 2, L.Beam * 2), CFrame = CFrame.new(pos + Vector3.new(0, L.BeamH / 2 + 0.5, 0)) * UPRIGHT, Color = L.Color, Material = NEON, Transparency = L.BeamT })
+	beam.Parent = obj.Model
+	table.insert(obj.Glow, beam)
+	if typeName ~= "Golden" then -- the golden chest already wears its glowing orb up there
+		local coin = part({ Name = "Coin", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.22, 1.25, 1.25), CFrame = CFrame.new(pos + Vector3.new(0, typeName == "Large" and 4.2 or 3.6, 0)) * cf.Rotation * CFrame.Angles(0, math.rad(90), 0), Color = P.gold_400, Material = METAL })
+		coin.Parent = obj.Model
+		table.insert(obj.Glow, coin)
+	end
+end
+
+local function buildChest(typeName: string, pos: Vector3, yawJitter: number, free: boolean?)
 	local cf = CFrame.new(pos) * FACE_CAMERA * CFrame.Angles(0, yawJitter, 0)
 	local obj = newObj("Chest", typeName, pos, cf)
 	obj.Price = ItemData.StagePrice(Config.Chests.Cost[typeName] or 25, stageNo, Config.Chests.CostExponent)
-	local kit = "Chest_" .. typeName
-	obj.Chest = MapBuilder.PlaceProp(obj.Model, kit, cf, 1, nil, { fallback = chestFallback(typeName) })
+	if free then
+		-- a plain wooden chest straight on the ground (part look; no kit mesh for it)
+		obj.Chest = MapBuilder.PlaceProp(obj.Model, "Chest_Plain", cf, 1, nil, { fallback = chestFallback("Plain") })
+	else
+		premiumDressing(obj, typeName, pos, cf)
+		local kit = "Chest_" .. typeName
+		obj.Chest = MapBuilder.PlaceProp(obj.Model, kit, cf + Vector3.new(0, PLINTH_H, 0), 1, nil, { fallback = chestFallback(typeName) })
+	end
 	if typeName == "Golden" then
 		addGlow(obj, pos + Vector3.new(0, 3.4, 0), P.gold_300, true, false)
 	end
@@ -543,7 +594,7 @@ local function buildRunes(arena, centre: Vector3)
 end
 
 local function buildTreasure(arena, pos: Vector3)
-	local obj = buildChest("Small", pos, 0)
+	local obj = buildChest("Small", pos, 0, true)
 	obj.Type, obj.Price = "Treasure", 0
 	setAttrs(obj, { LootType = "Treasure", Title = TITLES.Treasure, Price = 0, Benefit = "Free uncommon or legendary item", Detail = "Discovered cache · hold to claim" })
 	addGlow(obj, pos + Vector3.new(0, 2.7, 0), P.gold_300, true, false)

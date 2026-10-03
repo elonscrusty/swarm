@@ -1257,6 +1257,145 @@ SHOTS[38] = function(b, _def)
 	flame(b, ShotPalette.gold_300, ShotPalette.ivory_100)
 end
 
+--[[
+	Armoury batch (WeaponData.Visuals 39-56): part-built only, front = -Z like the rest.
+	Shields face outward (the server syncs the outward yaw); the saw and the vortex lie flat
+	and spin about Y (VFX styles "Saw" / "Vortex"); the snare stands on the floor (origin =
+	ground centre, it rises like a totem); clouds are soft translucent puffs.
+]]
+local function wardShield(b, face: Color3, rim: Color3, boss: Color3)
+	local faceOut = CFrame.Angles(0, math.rad(90), 0) -- cylinder axis X → Z: a disc facing out
+	b.add("Cylinder", Vector3.new(0.22, 2.5, 2.5), rim, CFrame.new(0, 0, 0.06) * faceOut, { Material = SHOT_METAL })
+	b.add("Cylinder", Vector3.new(0.24, 2.1, 2.1), face, faceOut)
+	b.add("Block", Vector3.new(0.3, 1.9, 0.28), rim, CFrame.new(0, 0, -0.04), { Material = SHOT_METAL })
+	b.add("Block", Vector3.new(1.9, 0.3, 0.28), rim, CFrame.new(0, 0, -0.04), { Material = SHOT_METAL })
+	b.add("Ball", Vector3.new(0.62, 0.62, 0.42), boss, CFrame.new(0, 0, -0.2), { Material = SHOT_METAL })
+end
+
+local function rockHead(b, stone: Color3, dark: Color3, glow: Color3?)
+	b.add("Block", Vector3.new(1.2, 1.0, 1.3), stone, CFrame.Angles(0.3, 0.5, 0.2))
+	b.add("Block", Vector3.new(0.8, 0.9, 0.8), dark, CFrame.new(0.35, 0.3, 0.2) * CFrame.Angles(0.6, 0.1, 0.4))
+	b.add("Wedge", Vector3.new(0.6, 0.9, 0.7), stone, CFrame.new(-0.4, 0.45, -0.3) * CFrame.Angles(0, 0.8, 0))
+	if glow then
+		b.add("Ball", Vector3.new(0.6, 0.6, 0.6), glow, CFrame.new(-0.2, 0.1, -0.45), { Material = SHOT_NEON })
+	end
+end
+
+local function meteor(b, core: Color3, crust: Color3, flame: Color3)
+	b.add("Ball", Vector3.new(2.0, 2.0, 2.0), core, CFrame.new(), { Material = SHOT_NEON })
+	for i = 1, 4 do
+		local a = i * math.pi / 2
+		b.add("Block", Vector3.new(1.1, 0.9, 1.0), crust, CFrame.new(math.cos(a) * 0.75, (i % 2 - 0.5) * 0.6, math.sin(a) * 0.75) * CFrame.Angles(a, a * 0.7, 0.3))
+	end
+	b.add("Ball", Vector3.new(2.9, 2.9, 2.9), flame, CFrame.new(), { Material = SHOT_NEON, Transparency = 0.6 })
+end
+
+local function slingStone(b, stone: Color3, fleck: Color3, glow: boolean)
+	b.add("Ball", Vector3.new(0.9, 0.78, 0.9), stone, CFrame.new(), glow and { Material = SHOT_NEON } or nil)
+	b.add("Block", Vector3.new(0.36, 0.3, 0.36), fleck, CFrame.new(0.22, 0.18, -0.1) * CFrame.Angles(0.5, 0.6, 0))
+end
+
+local function cloud(b, light: Color3, mid: Color3, dark: Color3)
+	b.add("Ball", Vector3.new(4.6, 2.4, 4.6), mid, CFrame.new(0, 0.2, 0), { Transparency = 0.5 })
+	b.add("Ball", Vector3.new(3.4, 2.2, 3.4), light, CFrame.new(2.2, 0.5, 1.0), { Transparency = 0.55 })
+	b.add("Ball", Vector3.new(3.6, 2.0, 3.6), light, CFrame.new(-2.1, 0.3, -1.1), { Transparency = 0.55 })
+	b.add("Ball", Vector3.new(3.0, 1.8, 3.0), dark, CFrame.new(0.6, 0.9, -2.2), { Transparency = 0.6 })
+	b.add("Ball", Vector3.new(2.8, 1.7, 2.8), mid, CFrame.new(-0.8, 0.7, 2.3), { Transparency = 0.6 })
+	b.add("Ball", Vector3.new(0.5, 0.5, 0.5), light, CFrame.new(0.9, 1.4, 0.4), { Material = SHOT_NEON })
+	b.add("Ball", Vector3.new(0.4, 0.4, 0.4), light, CFrame.new(-1.0, 1.2, -0.3), { Material = SHOT_NEON })
+end
+
+local function sawblade(b, blade: Color3, hub: Color3, teeth: Color3)
+	b.add("Cylinder", Vector3.new(0.16, 2.3, 2.3), blade, CYL_UP, { Material = SHOT_METAL })
+	b.add("Cylinder", Vector3.new(0.3, 0.7, 0.7), hub, CYL_UP, { Material = SHOT_METAL })
+	for i = 1, 8 do
+		local a = i * math.pi / 4
+		b.add("Block", Vector3.new(0.42, 0.14, 0.42), teeth, CFrame.new(math.cos(a) * 1.18, 0, math.sin(a) * 1.18) * CFrame.Angles(0, -a + math.rad(45), 0), { Material = SHOT_METAL })
+	end
+end
+
+local function snare(b, vine: Color3, dark: Color3, thorn: Color3, r: number)
+	b.add("Cylinder", Vector3.new(0.1, r * 2, r * 2), dark, CFrame.new(0, 0.05, 0) * CYL_UP, { Transparency = 0.45 })
+	for i = 1, 6 do
+		local a = i * math.pi / 3
+		local x, z = math.cos(a) * r * 0.8, math.sin(a) * r * 0.8
+		local turn = CFrame.Angles(0, -a, 0)
+		b.add("Block", Vector3.new(0.32, 2.2, 0.32), i % 2 == 0 and vine or dark, CFrame.new(x, 0.9, z) * turn * CFrame.Angles(0, 0, math.rad(24)))
+		b.add("Wedge", Vector3.new(0.12, 0.4, 0.45), thorn, CFrame.new(x * 0.88, 1.5, z * 0.88) * turn)
+	end
+end
+
+local function wisp(b, core: Color3, halo: Color3)
+	b.add("Ball", Vector3.new(0.7, 0.7, 0.7), core, CFrame.new(), { Material = SHOT_NEON })
+	b.add("Ball", Vector3.new(1.3, 1.3, 1.3), halo, CFrame.new(), { Material = SHOT_NEON, Transparency = 0.65 })
+	b.add("Ball", Vector3.new(0.4, 0.4, 0.9), halo, CFrame.new(0, 0, 0.6), { Material = SHOT_NEON, Transparency = 0.4 })
+end
+
+local function vortexDisc(b, outer: Color3, inner: Color3, core: Color3, r: number)
+	b.add("Cylinder", Vector3.new(0.08, r * 2, r * 2), outer, CYL_UP, { Material = SHOT_NEON, Transparency = 0.78 })
+	b.add("Cylinder", Vector3.new(0.1, r * 1.1, r * 1.1), inner, CFrame.new(0, 0.03, 0) * CYL_UP, { Material = SHOT_NEON, Transparency = 0.55 })
+	b.add("Cylinder", Vector3.new(0.12, r * 0.36, r * 0.36), core, CFrame.new(0, 0.06, 0) * CYL_UP, { Material = SHOT_NEON })
+	for i = 1, 4 do
+		local a = i * math.pi / 2
+		b.add("Block", Vector3.new(r * 0.75, 0.1, 0.35), inner, CFrame.Angles(0, a, 0) * CFrame.new(r * 0.4, 0.08, 0) * CFrame.Angles(0, 0.6, 0), { Material = SHOT_NEON, Transparency = 0.3 })
+	end
+end
+
+SHOTS[39] = function(b, _def)
+	wardShield(b, ShotPalette.steel_300, ShotPalette.steel_600, SHOT.Gold)
+end
+SHOTS[40] = function(b, _def)
+	wardShield(b, ShotPalette.gold_400, ShotPalette.gold_600, ShotPalette.ivory_100)
+end
+SHOTS[41] = function(b, _def)
+	rockHead(b, ShotPalette.stone_400, ShotPalette.stone_600, nil)
+end
+SHOTS[42] = function(b, _def)
+	rockHead(b, ShotPalette.basalt_600, ShotPalette.basalt_800, ShotPalette.lava_300)
+end
+SHOTS[43] = function(b, _def)
+	meteor(b, ShotPalette.lava_300, ShotPalette.basalt_700, ShotPalette.fx_fire)
+end
+SHOTS[44] = function(b, _def)
+	meteor(b, ShotPalette.ivory_100, ShotPalette.gold_600, ShotPalette.gold_300)
+end
+SHOTS[45] = function(b, _def)
+	slingStone(b, ShotPalette.stone_300, ShotPalette.stone_500, false)
+end
+SHOTS[46] = function(b, _def)
+	slingStone(b, ShotPalette.gold_400, ShotPalette.crimson_400, true)
+end
+SHOTS[47] = function(b, _def)
+	cloud(b, ShotPalette.moss_200, ShotPalette.moss_300, ShotPalette.bog_500)
+end
+SHOTS[48] = function(b, _def)
+	cloud(b, ShotPalette.moss_100, ShotPalette.moss_200, ShotPalette.murk_500)
+end
+SHOTS[49] = function(b, _def)
+	sawblade(b, ShotPalette.steel_200, ShotPalette.steel_600, ShotPalette.ivory_100)
+end
+SHOTS[50] = function(b, _def)
+	sawblade(b, ShotPalette.crimson_400, ShotPalette.gold_500, ShotPalette.gold_200)
+end
+SHOTS[51] = function(b, _def)
+	snare(b, ShotPalette.moss_400, ShotPalette.moss_600, ShotPalette.ivory_300, 2.4)
+end
+SHOTS[52] = function(b, _def)
+	snare(b, ShotPalette.moss_300, ShotPalette.moss_700, ShotPalette.crimson_300, 3.2)
+end
+SHOTS[53] = function(b, _def)
+	wisp(b, ShotPalette.ivory_100, ShotPalette.fx_holy)
+end
+SHOTS[54] = function(b, _def)
+	wisp(b, ShotPalette.ivory_100, ShotPalette.gold_300)
+end
+SHOTS[55] = function(b, _def)
+	vortexDisc(b, ShotPalette.fx_arcane, ShotPalette.fx_arcane, ShotPalette.ivory_100, 5)
+end
+SHOTS[56] = function(b, _def)
+	vortexDisc(b, ShotPalette.slate_700, ShotPalette.fx_arcane, ShotPalette.slate_900, 6.5)
+end
+
 -- Projectile visual index → mesh model + slot colour overrides (slots: see blender/models/items.py).
 local SHOT_MESH: { [number]: { any } } = {
 	[1] = { "Shot_Orb", { Core = SHOT.Arcane, Shard = SHOT.Arcane, Shell = SHOT.Shell } },

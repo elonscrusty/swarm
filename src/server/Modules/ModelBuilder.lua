@@ -846,9 +846,15 @@ function ModelBuilder.BuildPickup(kind: string, position: Vector3): Model
 end
 
 -- Treasure chest dropped by elites (position = on the floor). "Box" is the primary part.
+-- A FREE pickup, so it stays plain wood and iron: the paid stage chests (LootSystem) are
+-- the ones with gold trim, a plinth, a coin and a light beam.
 function ModelBuilder.BuildChest(position: Vector3): Model
 	local meshModel = meshPickup("Chest", "Chest", CFrame.new(position) * FACE_CAMERA, "Box")
 	if meshModel then
+		local fittings = meshModel:FindFirstChild("Fittings")
+		if fittings and fittings:IsA("BasePart") then
+			fittings.Color = PP.steel_600
+		end
 		return meshModel
 	end
 	local model = Instance.new("Model")
@@ -867,10 +873,10 @@ function ModelBuilder.BuildChest(position: Vector3): Model
 	end
 	for _, x in ipairs({ -1.36, 1.36 }) do
 		for _, z in ipairs({ -0.88, 0.88 }) do
-			add({ Name = "Corner", Size = Vector3.new(0.22, 0.32, 0.22), Color = PP.gold_500, CFrame = base * CFrame.new(x, 0.3, z) })
+			add({ Name = "Corner", Size = Vector3.new(0.22, 0.32, 0.22), Color = PP.steel_600, CFrame = base * CFrame.new(x, 0.3, z) })
 		end
 	end
-	add({ Name = "Lock", Size = Vector3.new(0.48, 0.56, 0.12), Color = PP.gold_500, CFrame = base * CFrame.new(0, 1.15, -0.96) })
+	add({ Name = "Lock", Size = Vector3.new(0.48, 0.56, 0.12), Color = PP.steel_500, CFrame = base * CFrame.new(0, 1.15, -0.96) })
 	model.PrimaryPart = box
 	pickupLight(box, "Chest")
 	model:SetAttribute("Pickup", "Chest")

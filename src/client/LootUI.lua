@@ -21,6 +21,10 @@
 	                 short hold, the model's Hold attribute from Config.Chests.HoldSeconds);
 	                 the ring around the icon fills while holding. The server decides (LootHold /
 	                 LootFeedback); nothing is opened by the client.
+	                 Opaque panel, the lines in an inset well, phone-sized type. A Shrine of
+	                 Chance shows its odds as three big numbers (model attributes Odds /
+	                 ItemsLeft / TriesLeft) and, for a moment after each try, the outcome
+	                 (ITEM FOUND! / NO LUCK THIS TIME).
 	  altar marker   a small floating pill over the guarded altar on screen (dormant /
 	                 guards left / unguarded / claimed)
 	  items list     LootUI.OpenItems() (pause menu "ITEMS" button): the synergies first
@@ -41,6 +45,7 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -82,8 +87,18 @@ local target: Model? = nil
 local lastTouch = false
 
 local KIND_ICON = { Chest = "reward_ChestLarge", Shrine = "shrine", Altar = "altar" }
+local LINE_PX = 16 -- benefit / tradeoff text (reference px; phones get the compact boost)
+local function ODDS_H(): number
+	return TS(24) + TS(12) + 12
+end
 local CARAVAN_HINT = 110 -- studs: the caravan's edge arrow shows this close before it starts
 local synergies: { string } = {}
+-- Shrine of Chance: the last try's outcome, shown in its prompt for a moment. The item
+-- (ItemGained, Source "Shrine of Chance") reaches the client before the try's "Done".
+local CHANCE_SOURCE = "Shrine of Chance"
+local CHANCE_RESULT_SECONDS = 2.6
+local chanceItemAt = -math.huge
+local chanceResult = { Id = 0, Win = false, Until = 0 }
 local clues: { { [string]: any } }? = nil -- Inventory.Synergies rows (nil: older server)
 
 local function rarityOf(id: string): string
@@ -221,7 +236,7 @@ local function buildPopups(root: Frame)
 end
 
 local function buildPrompt(root: Frame)
-	local holder, face = UIKit.Surface(root, { Name = "LootPrompt", Radius = Theme.Radius.L, Transparency = 0.08, Visible = false, ZIndex = Theme.Z.Loot, Size = UDim2.fromOffset(300, 150), AnchorPoint = Vector2.new(0, 0.5) })
+	local holder, face = UIKit.Surface(root, { Name = "LootPrompt", Radius = Theme.Radius.L, Transparency = 0.02, Edge = P.gold_400, EdgeTransparency = 0.25, Visible = false, ZIndex = Theme.Z.Loot, Size = UDim2.fromOffset(300, 150), AnchorPoint = Vector2.new(0, 0.5) })
 	ui.Prompt = holder
 	ui.PromptFace = face
 	local c = RING_R + 8
@@ -248,8 +263,28 @@ local function buildPrompt(root: Frame)
 	local x0 = c * 2 + 18
 	ui.PromptTitle = text(face, "H3", "Small Chest", { Position = UDim2.fromOffset(x0, 8), Size = UDim2.new(1, -x0 - 10, 0, TS(18) + 4), TextColor3 = P.gold_200 })
 	ui.PromptDetail = text(face, "Caption", "", { Position = UDim2.fromOffset(x0, 10 + TS(18) + 2), Size = UDim2.new(1, -x0 - 10, 0, TS(12) + 4) })
-	ui.PromptBenefit = text(face, "Small", "", { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -24, 0, TS(14) + 4), TextColor3 = P.moss_200, TextWrapped = true })
-	ui.PromptTradeoff = text(face, "Small", "", { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -24, 0, TS(14) + 4), TextColor3 = P.crimson_300, TextWrapped = true })
+	-- an inset well behind the benefit / tradeoff lines (and the Shrine of Chance odds)
+	ui.PromptWell = new("Frame", { Name = "Well", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.05, BorderSizePixel = 0, Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -20, 0, 10), Visible = false }, face)
+	UIKit.corner(ui.PromptWell, Theme.Radius.M)
+	ui.PromptBenefit = text(face, "BodyStrong", "", { Position = UDim2.fromOffset(18, 0), Size = UDim2.new(1, -36, 0, TS(LINE_PX) + 4), TextColor3 = P.moss_100, TextWrapped = true }, LINE_PX)
+	ui.PromptTradeoff = text(face, "BodyStrong", "", { Position = UDim2.fromOffset(18, 0), Size = UDim2.new(1, -36, 0, TS(LINE_PX) + 4), TextColor3 = P.crimson_300:Lerp(P.ivory_100, 0.3), TextWrapped = true }, LINE_PX)
+	-- Shrine of Chance: three big numbers (odds, items left, tries left)
+	local odds = new("Frame", { Name = "Odds", BackgroundTransparency = 1, Position = UDim2.fromOffset(18, 0), Size = UDim2.new(1, -36, 0, ODDS_H()), Visible = false }, face)
+	ui.Odds = odds
+	ui.OddsCells = {}
+	for i, cap in ipairs({ "ODDS", "ITEMS LEFT", "TRIES LEFT" }) do
+		local cell = new("Frame", { Name = "Cell" .. i, BackgroundTransparency = 1, Position = UDim2.new((i - 1) / 3, 0, 0, 0), Size = UDim2.new(1 / 3, 0, 1, 0) }, odds)
+		local value = UIKit.Role(cell, "Number", "", { Name = "Value", Size = UDim2.new(1, 0, 0, TS(24) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 })
+		value.TextSize = TS(24)
+		local caption = UIKit.Role(cell, "Caption", cap, { Name = "Caption", Position = UDim2.fromOffset(0, TS(24) + 4), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_200 })
+		if i > 1 then
+			new("Frame", { Name = "Divider", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.6, BorderSizePixel = 0, Position = UDim2.new(0, 0, 0.15, 0), Size = UDim2.new(0, 1, 0.7, 0) }, cell)
+		end
+		ui.OddsCells[i] = { Value = value, Caption = caption }
+	end
+	-- the last try's outcome (ITEM FOUND! / NO LUCK THIS TIME)
+	ui.PromptResult = UIKit.Role(face, "Heading", "", { Name = "Result", Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -24, 0, TS(20) + 6), TextXAlignment = Enum.TextXAlignment.Center, Visible = false })
+	ui.PromptResult.TextSize = TS(20)
 	-- price + hold button
 	ui.Price = UIKit.Chip(face, "coin", nil, "25", { Position = UDim2.fromOffset(14, 0), Size = UDim2.fromOffset(0, 36) }, { Size = 18 })
 	local btn = new("TextButton", {
@@ -482,6 +517,9 @@ local function onGained(data)
 	if not def then
 		return
 	end
+	if data.Source == CHANCE_SOURCE then
+		chanceItemAt = os.clock()
+	end
 	if data.Reward == true and LootUI.OnReward then
 		LootUI.OnReward(data)
 		return
@@ -573,6 +611,27 @@ end
 local function onFeedback(data)
 	if type(data) ~= "table" then
 		return
+	end
+	-- a Shrine of Chance try finished: an item arrived just before "Done", or nothing did
+	if data.State == "Done" and type(data.Id) == "number" and data.Id ~= 0 then
+		local folder = workspace:FindFirstChild("SwarmLoot")
+		local model: Instance? = nil
+		if folder then
+			for _, m in ipairs(folder:GetChildren()) do
+				if m:GetAttribute("LootId") == data.Id then
+					model = m
+					break
+				end
+			end
+		end
+		if model and model:GetAttribute("LootType") == "Chance" then
+			local win = os.clock() - chanceItemAt < 1.5
+			chanceResult.Id, chanceResult.Win, chanceResult.Until = data.Id, win, os.clock() + CHANCE_RESULT_SECONDS
+			chanceItemAt = -math.huge
+			if ui.PromptResult then
+				UIAnim.Punch(ui.Prompt, win and 0.08 or 0.04)
+			end
+		end
 	end
 	if hold.Id ~= 0 and (data.Id == hold.Id or data.Id == 0) then
 		hold.Id = 0
@@ -707,22 +766,60 @@ local function fillPrompt(model: Model, progress: number): number
 	local tradeoff = tostring(model:GetAttribute("Tradeoff") or "")
 	local showLines = ok or st == "Dormant" or st == "Guarded"
 	local y = 10 + (RING_R + 8) * 2 + 4
-	ui.PromptBenefit.Visible = showLines and benefit ~= ""
+	-- the last Shrine of Chance try's outcome, big, right under the header
+	local id = tonumber(model:GetAttribute("LootId")) or 0
+	local result = chanceResult.Id ~= 0 and chanceResult.Id == id and os.clock() < chanceResult.Until
+	ui.PromptResult.Visible = result
+	if result then
+		ui.PromptResult.Text = chanceResult.Win and "ITEM FOUND!" or "NO LUCK THIS TIME"
+		ui.PromptResult.TextColor3 = chanceResult.Win and P.gold_200 or P.ivory_200
+		ui.PromptResult.Position = UDim2.fromOffset(12, y - 2)
+		y += TS(20) + 8
+	end
+	-- Shrine of Chance: the odds as three big numbers instead of the benefit sentence
+	local odds = tonumber(model:GetAttribute("Odds"))
+	local oddsRow = showLines and odds ~= nil and model:GetAttribute("LootType") == "Chance"
+	ui.Odds.Visible = oddsRow
+	ui.PromptBenefit.Visible = showLines and benefit ~= "" and not oddsRow
 	ui.PromptTradeoff.Visible = showLines and tradeoff ~= ""
-	local lineH = TS(14) + 4
+	local wellTop = y
+	ui.PromptWell.Visible = oddsRow or ui.PromptBenefit.Visible or ui.PromptTradeoff.Visible
+	if ui.PromptWell.Visible then
+		y += 6
+	end
+	if oddsRow then
+		local cells = ui.OddsCells
+		cells[1].Value.Text = string.format("%d%%", math.floor((odds :: number) * 100 + 0.5))
+		cells[2].Value.Text = tostring(tonumber(model:GetAttribute("ItemsLeft")) or 0)
+		cells[3].Value.Text = tostring(tonumber(model:GetAttribute("TriesLeft")) or 0)
+		ui.Odds.Position = UDim2.fromOffset(18, y)
+		ui.Odds.Size = UDim2.new(1, -36, 0, ODDS_H())
+		y += ODDS_H() + 4
+	end
+	local px = TS(LINE_PX)
+	local lineH = px + 4
+	local lineW = math.max(60, (ui.Prompt.Size.X.Offset > 0 and ui.Prompt.Size.X.Offset or 300) - 36)
+	local function place(label: TextLabel, str: string)
+		label.Text = str
+		label.Position = UDim2.fromOffset(18, y)
+		local ok2, size = pcall(function()
+			return TextService:GetTextSize(str, px, Enum.Font.SourceSansSemibold, Vector2.new(lineW, 1000))
+		end)
+		local n = (ok2 and typeof(size) == "Vector2") and math.clamp(math.ceil(size.Y / px - 0.2), 1, 3) or 2
+		label.Size = UDim2.new(1, -36, 0, lineH * n)
+		y += lineH * n
+	end
 	if ui.PromptBenefit.Visible then
-		ui.PromptBenefit.Text = "+  " .. benefit
-		ui.PromptBenefit.Position = UDim2.fromOffset(12, y)
-		local lines = (ui.PromptBenefit.TextBounds.Y > lineH + 2) and 2 or 1
-		ui.PromptBenefit.Size = UDim2.new(1, -24, 0, lineH * lines)
-		y += lineH * lines
+		place(ui.PromptBenefit, "+  " .. benefit)
 	end
 	if ui.PromptTradeoff.Visible then
-		ui.PromptTradeoff.Text = "-  " .. tradeoff
-		ui.PromptTradeoff.Position = UDim2.fromOffset(12, y)
-		local lines = (ui.PromptTradeoff.TextBounds.Y > lineH + 2) and 2 or 1
-		ui.PromptTradeoff.Size = UDim2.new(1, -24, 0, lineH * lines)
-		y += lineH * lines
+		place(ui.PromptTradeoff, "-  " .. tradeoff)
+	end
+	if ui.PromptWell.Visible then
+		y += 6
+		ui.PromptWell.Position = UDim2.fromOffset(10, wellTop)
+		ui.PromptWell.Size = UDim2.new(1, -20, 0, y - wellTop)
+		y += 2
 	end
 	local price = priceOf(model)
 	ui.Price.Frame.Visible = ok
@@ -1031,9 +1128,10 @@ function LootUI.Update(_dt: number, inRun: boolean)
 				end
 			end
 		end
-		local h = fillPrompt(t, progress)
 		local v: Vector2 = kit.VirtualSize()
-		local w = math.min(320, v.X - 32)
+		local w = math.min(kit.IsPortrait() and 360 or 340, v.X - 24)
+		ui.Prompt.Size = UDim2.fromOffset(w, ui.Prompt.Size.Y.Offset) -- fillPrompt wraps lines to this width
+		local h = fillPrompt(t, progress)
 		ui.Prompt.Size = UDim2.fromOffset(w, h)
 		local pos = t:GetAttribute("Pos")
 		local p = typeof(pos) == "Vector3" and project(pos + Vector3.new(0, 3, 0)) or Vector2.new(v.X / 2, v.Y / 2)
