@@ -51,6 +51,14 @@
 	Phone budget per arena: everything anchored, about <= 650 MeshParts + 450 Parts, <= 12
 	lights, shadows only on big pieces (grass, flowers, ferns and clutter cast none).
 
+	Edges: every arena is walled by low-poly rock CLIFFS just outside the play square
+	(cliffs(): tall on the north / west / east sides with the tree line on top, a low rim
+	on the camera side; Ruins a cut-stone curtain wall). They are decoration; the invisible
+	Boundary walls block players and enemy raycasts and EnemyAI clamps enemies, so the
+	rock face and the real limit line up. Small VIGNETTES (campfire, mushroom ring,
+	supplies, crystals, banner ...) dress the open meadow; path wear and edge stones are
+	drawn by the client (GroundDetail path detail).
+
 	Fine ground detail (small tufts, flowers, clover discs, pebbles) is NOT built here: each
 	client draws it around its own camera from a recycled pool (src/client/GroundDetail.lua,
 	Config.Graphics.GroundDetail). BuildArena only writes the floor layout it needs as
@@ -1299,10 +1307,15 @@ end
 local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Color3, edge: Color3, yBase: number)
 	local pts = smoothPath(ctrl, 18)
 	local edgeW = width + 2.8
-	local limit = arena.Half + 34 -- the path fades into the tree line
+	local h = arena.Half
+	-- the path runs into the cliffs on the north / west / east sides (it stops at their
+	-- foot) and fades into the tree line past the low south rim
+	local function beyond(p: Vector2): boolean
+		return math.abs(p.X) > h + 2 or p.Y < -h - 2 or p.Y > h + 34
+	end
 	for i = 1, #pts - 1 do
 		local a, b = pts[i], pts[i + 1]
-		if math.max(math.abs(a.X), math.abs(a.Y)) > limit and math.max(math.abs(b.X), math.abs(b.Y)) > limit then
+		if beyond(a) and beyond(b) then
 			continue
 		end
 		local d = b - a
@@ -1890,11 +1903,11 @@ local function buildForest(arena: Arena)
 	-- camera side, then the tree line (on the cliff tops)
 	vignettes(arena, {
 		function(a, x, z) campfire(a, x, z) end,
-		function(a, x, z) ring(a, x, z, "Mushroom", 7, 3.2, 1.2, 1.7) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 5, 3.2, 1.2, 1.7) end,
 		function(a, x, z) supplies(a, x, z) end,
 		function(a, x, z) cluster(a, x, z, { { "Mushroom", 1.1, 1.6 }, { "Fern", 1.3, 1.8 }, { "Stump", 0.8, 1.0 } }, 5, 3.5) end,
 		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Rock_Small", 0.8, 1.2 }, { "Flowers", 1.2, 1.5 } }, 3, 3) end,
-		function(a, x, z) ring(a, x, z, "Mushroom", 6, 2.6, 1.0, 1.4) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.6, 1.0, 1.4) end,
 		function(a, x, z) cluster(a, x, z, { { "Crystal", 0.8, 1.2 }, { "Rock_Small", 0.8, 1.2 } }, 4, 2.5) end,
 	})
 	cliffs(arena, {
@@ -1926,7 +1939,8 @@ end
 --               low walls with a crystal outcrop (SE), a shrine with torches (SW)
 --   outer ring  roofless buildings in the quadrants, a dry pool basin, a collapsed tower,
 --               colonnades along the avenues, boulders, crystal clusters, a few trees
---   border      broken crenellated wall (low on the south side), corner towers, pines
+--   border      a tall broken curtain wall (cliffs, Masonry: low on the south side), corner
+--               towers, pines
 ------------------------------------------------------------------------------------------
 
 local RUIN_PAL: Pal = { Stone = mix(P.stone_400, P.ivory_500, 0.25), Stone2 = mix(P.stone_300, P.ivory_400, 0.25), Stone3 = mix(P.stone_500, P.ivory_500, 0.2), Moss = P.moss_400 }
@@ -2197,7 +2211,7 @@ local function buildRuins(arena: Arena)
 		function(a, x, z) supplies(a, x, z) end,
 		function(a, x, z) cluster(a, x, z, { { "CrystalCluster", 0.8, 1.1 }, { "Crystal", 0.8, 1.2 }, { "Rock_Small", 0.8, 1.2 } }, 4, 3) end,
 		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Ruin_Block", 0.5, 0.8 }, { "Flowers", 1.2, 1.5 } }, 3, 3) end,
-		function(a, x, z) ring(a, x, z, "Mushroom", 6, 2.8, 1.0, 1.5) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.8, 1.0, 1.5) end,
 		function(a, x, z) cluster(a, x, z, { { "Ruin_Block", 0.5, 0.8 }, { "Rock_Small", 0.8, 1.2 }, { "Fern", 1.2, 1.6 } }, 5, 4) end,
 	})
 	cliffs(arena, {
@@ -2546,11 +2560,11 @@ local function buildSwamp(arena: Arena)
 	-- reeds along the edge, then the mangrove / willow line
 	vignettes(arena, {
 		function(a, x, z) campfire(a, x, z, SWAMP_PEBBLE, P.wood_700) end,
-		function(a, x, z) ring(a, x, z, "Mushroom", 7, 3.0, 1.2, 1.8) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 5, 3.0, 1.2, 1.8) end,
 		function(a, x, z) supplies(a, x, z, SWAMP_WOOD) end,
 		function(a, x, z) decor(a, "Swamp_Lantern", x, z, 0, 0.9); cluster(a, x, z, { { "Reeds", 1.2, 1.6 }, { "Mushroom", 1.0, 1.4 } }, 4, 3) end,
 		function(a, x, z) cluster(a, x, z, { { "Swamp_Stump", 0.7, 0.9 }, { "Mushroom", 1.1, 1.5 }, { "Fern", 1.1, 1.5, SWAMP_FERN } }, 5, 3.5) end,
-		function(a, x, z) ring(a, x, z, "Mushroom", 5, 2.4, 1.0, 1.4) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.4, 1.0, 1.4) end,
 	})
 	cliffs(arena, {
 		Rock = { mix(P.stone_600, P.murk_600, 0.4), mix(P.stone_700, P.murk_700, 0.35), mix(P.stone_500, P.fen_600, 0.3) },
