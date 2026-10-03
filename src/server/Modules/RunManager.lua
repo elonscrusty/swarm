@@ -195,6 +195,7 @@ function RunManager.HoldReward(rp, dramatic: boolean?)
 	local C = Config.Chests
 	local now = os.clock()
 	local untilT = now + (C.RewardPauseSeconds or 3.2)
+	local first = rp.RewardUntil == nil
 	if rp.RewardUntil then
 		-- queued behind the reward being shown
 		untilT = math.max(untilT, rp.RewardUntil + (C.RewardQueueSeconds or 2.2))
@@ -202,6 +203,12 @@ function RunManager.HoldReward(rp, dramatic: boolean?)
 		rp.RewardStart = now
 	end
 	rp.RewardUntil = math.min(untilT, (rp.RewardStart or now) + (C.RewardPauseMax or 7))
+	if first then
+		-- rooted from here: a fresh speed-check window so the run-up isn't judged against 0
+		rp.SpeedCheckTimer = 0
+		rp.LastValidPos = rp.Root and rp.Root.Position
+		RunManager.ApplyMovement(rp)
+	end
 	RunManager.RefreshFrozen()
 end
 
@@ -217,6 +224,7 @@ function RunManager.EndReward(rp)
 		rp.RewardUntil = nil
 		rp.RewardStart = nil
 		RunManager.GrantChoiceGrace(rp)
+		RunManager.ApplyMovement(rp)
 		RunManager.RefreshFrozen()
 	end
 end
@@ -448,7 +456,9 @@ end
 -- rp.TerrainSpeedMult: the biome floor under the player (mud, quicksand, ice; BiomeHazards).
 function RunManager.ApplyMovement(rp)
 	local hum: Humanoid? = rp.Humanoid
-	local canMove = rp.Alive and not rp.Paused and not frozen and phase == "Running" and not ctx.StageManager.IsHolding()
+	-- a chest reward reel (RewardUntil) roots the opener like a level-up: in a group run
+	-- they can't be hurt meanwhile (DamagePlayer), so they must not walk either
+	local canMove = rp.Alive and not rp.Paused and not rp.RewardUntil and not frozen and phase == "Running" and not ctx.StageManager.IsHolding()
 	if hum and hum.Parent then
 		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) or 0
 	end
@@ -1696,7 +1706,7 @@ local function speedCheck(rp, dt: number)
 	local moved = ((pos - last) * FLAT).Magnitude
 	-- paused (level-up), frozen or downed players may not travel at all
 	-- (ice makes players faster: BiomeHazards' TerrainSpeedMult > 1)
-	local maxSpeed = (rp.Paused or frozen or not rp.Alive) and 0 or math.max(rp.Stats.Speed, Config.Player.BaseSpeed) * math.max(1, rp.TerrainSpeedMult or 1)
+	local maxSpeed = (rp.Paused or rp.RewardUntil or frozen or not rp.Alive) and 0 or math.max(rp.Stats.Speed, Config.Player.BaseSpeed) * math.max(1, rp.TerrainSpeedMult or 1)
 	-- hop cap: the client may raise its own WalkSpeed up to HopSpeedCap while chaining hops
 	local allowed = maxSpeed * Config.Movement.HopSpeedCap * Config.Movement.ServerTolerance * elapsed + Config.Player.SpeedCheckAllowance
 	if moved > allowed or pos.Y < Config.ArenaOrigin.Y - 20 then
@@ -1845,7 +1855,8 @@ function RunManager.OnPlayerRemoving(player: Player)
 	rp.Root = nil
 	if phase == "Running" then
 		if #runPlayers == 0 then
-			RunManager.EndRun(false)
+			-- nobody is left to see results: clear the run world straight away
+			returnAll()
 		else
 			ctx.StageManager.OnRosterChanged()
 			checkEnd()
@@ -1902,6 +1913,11 @@ function RunManager.TryReconnect(player: Player, id: string): boolean
 	ctx.LevelUpSystem.SendInventory(rp)
 	ctx.LevelUpSystem.QueueLevels(rp, 0)
 	state:SetAttribute("Participants", #runPlayers)
+	-- the teammate's solo pause menu froze the world while they were alone: a group run
+	-- again, so nobody can hold the rejoined player frozen
+	if menuPaused and #runPlayers > 1 then
+		menuPaused = false
+	end
 	RunManager.RefreshFrozen()
 	ctx.StageManager.OnRosterChanged()
 	RunManager.Broadcast(player.DisplayName .. " rejoined the run.", Color3.fromRGB(120, 255, 160))

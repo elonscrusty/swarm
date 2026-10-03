@@ -829,7 +829,7 @@ local function stepArmor(e)
 			Fx.Warn("pop", e.Pos.X, e.Pos.Z, e.Radius * 1.8, "frost")
 			Fx.Ring(e.Pos, 16, Color3.fromRGB(190, 225, 255))
 			Fx.Sound("BossRoar")
-			ctx.RunManager.Broadcast("FROST ARMOUR SHATTERED!", Color3.fromRGB(190, 225, 255))
+			ctx.RunManager.Broadcast("FROST ARMOR SHATTERED!", Color3.fromRGB(190, 225, 255))
 			if e.BossState ~= "Entrance" and e.BossState ~= "Roar" then
 				e.SlamHit = nil
 				stunned(e, F.Stun)
@@ -837,7 +837,7 @@ local function stepArmor(e)
 		end
 	elseif e.ArmorRegrowAt and clock >= e.ArmorRegrowAt and e.BossState == "Chase" and twist(e) == "FrostArmor" then
 		growArmor(e)
-		ctx.RunManager.Broadcast("THE FROST ARMOUR GROWS BACK!", Color3.fromRGB(190, 225, 255))
+		ctx.RunManager.Broadcast("THE FROST ARMOR GROWS BACK!", Color3.fromRGB(190, 225, 255))
 	end
 end
 
@@ -954,7 +954,7 @@ local function plantBanner(e)
 			ctx.EnemySpawner.Spawn("Skeleton", p)
 		end
 	end
-	ctx.RunManager.Broadcast("WAR BANNER! Destroy it to break the rally", Color3.fromRGB(255, 190, 110))
+	ctx.RunManager.Broadcast("WAR BANNER! DESTROY IT TO BREAK THE RALLY!", Color3.fromRGB(255, 190, 110))
 	return true
 end
 

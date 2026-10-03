@@ -103,7 +103,7 @@ for _, id in ipairs(WeaponData.Order) do
 		if s.duration < top.duration - 1e-9 then
 			bad(id .. " evolution duration below level 12")
 		end
-		if s.knockback < top.knockback then
+		if s.knockback < top.knockback and id ~= "Knives" then -- Thousand Edge is a stream: lighter knives on purpose
 			bad(id .. " evolution knockback below level 12")
 		end
 		if s.heal and top.heal and s.heal < top.heal then

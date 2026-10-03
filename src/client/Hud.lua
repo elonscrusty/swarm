@@ -7,7 +7,9 @@
 	                crimson health bar ("100 / 100 HP"; a steel band on it is the Guardian
 	                Ward shield), then a level medallion, "LV. 86" and the gold XP bar
 	                ("29 / 110 XP"); under that the boss bar with the boss's portrait while
-	                the boss lives
+	                the boss lives; while the Frostbound Colossus wears his frost armour
+	                (boss body attribute FrostArmor, BossAI) the bar frosts over: an ice
+	                band on the fill, an ice rim and "FROST ARMOR" after the name
 	  top left      the stage pill under the Roblox menu buttons: "STAGE 3 • PORTAL DORMANT
 	                • 0:26" (goal and countdown of the stage loop; Endless runs: "ENDLESS •
 	                STAGE 9 • ..."); portrait: centred between the timer and the health panel
@@ -59,6 +61,7 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local PassiveData = require(Shared:WaitForChild("PassiveData"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
+local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -192,13 +195,25 @@ local function buildBoss(frame: Frame)
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextColor3 = P.crimson_300,
 	})
+	-- "FROST ARMOR" after the name while the Colossus is armoured (updateBoss)
+	ui.BossArmour = role(bossTitle, "Caption", "FROST ARMOR", {
+		LayoutOrder = 3,
+		Size = UDim2.fromOffset(0, 24),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextColor3 = P.ice_300,
+		Visible = false,
+	})
 	ui.BossMeter = UIKit.Meter(boss, {
 		Gradient = Theme.Gradient.Boss,
 		Trail = true,
 		Position = UDim2.fromOffset(0, 28),
 		Size = UDim2.new(1, 0, 0, 16),
 	})
-	UIKit.stroke(ui.BossMeter.Frame, P.crimson_400, 1.5, 0.2)
+	ui.BossStroke = UIKit.stroke(ui.BossMeter.Frame, P.crimson_400, 1.5, 0.2)
+	-- the ice band over the bar while the armour is on
+	ui.BossIce = new("Frame", { Name = "Ice", BackgroundColor3 = P.ice_300, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 5, Visible = false }, ui.BossMeter.Frame)
+	UIKit.corner(ui.BossIce, 999)
+	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.35), NumberSequenceKeypoint.new(1, 0.1) }) }, ui.BossIce)
 	-- phase marker (BossPhaseAt, e.g. 50%): a dark notch with an ivory core on the bar
 	ui.BossMark = new("Frame", { Name = "PhaseMark", BackgroundColor3 = P.slate_950, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 36), Size = UDim2.fromOffset(5, 22), ZIndex = 4, Visible = false }, boss)
 	new("Frame", { BackgroundColor3 = P.ivory_200, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 1, 1, -4), ZIndex = 5 }, ui.BossMark)
@@ -1274,6 +1289,51 @@ local function updateKills()
 	anim.Kills = kills
 end
 
+-- The live boss's body (workspace.SwarmEnemies, EnemyData IsBoss; pooled bodies park
+-- under y -100), looked up at most twice a second while the bar shows: its FrostArmor
+-- attribute (BossAI) frosts the bar over.
+local function bossBody(nowT: number): BasePart?
+	local body = anim.BossBody
+	if body and body.Parent and body.Position.Y > -100 then
+		return body
+	end
+	if nowT < (anim.BossBodyAt or 0) then
+		return nil
+	end
+	anim.BossBodyAt = nowT + 0.5
+	anim.BossBody = nil
+	local folder = workspace:FindFirstChild("SwarmEnemies")
+	if folder then
+		for _, m in ipairs(folder:GetChildren()) do
+			local b = m:FindFirstChild("Body")
+			if b and b:IsA("BasePart") and b.Position.Y > -100 then
+				local def = EnemyData.Enemies[tostring(b:GetAttribute("Type") or "")]
+				if def and def.IsBoss then
+					anim.BossBody = b
+					return b
+				end
+			end
+		end
+	end
+	return nil
+end
+
+-- Frost armour on / off: ice band, ice rim, "FROST ARMOR" tag (only on a change).
+local function setBossArmour(on: boolean)
+	if anim.BossArmour == on then
+		return
+	end
+	anim.BossArmour = on
+	ui.BossIce.Visible = on
+	ui.BossArmour.Visible = on
+	ui.BossStroke.Color = on and P.ice_300 or P.crimson_400
+	ui.BossStroke.Transparency = on and 0 or 0.2
+	if on and ui.Boss.Visible and not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+		UIAnim.Pop(ui.BossArmour, 0, 0.6)
+		UIAnim.SweepOnce(ui.BossMeter.Frame, P.ice_300, 0.6, 0.3)
+	end
+end
+
 local function updateBoss(dt: number, state: Configuration)
 	local bossMax = state:GetAttribute("BossMaxHP") or 0
 	local bossShown = bossMax > 0
@@ -1284,6 +1344,8 @@ local function updateBoss(dt: number, state: Configuration)
 	if not bossShown then
 		anim.BossShown = false
 		anim.BossPhaseHit = false
+		anim.BossBody = nil
+		setBossArmour(false)
 		return
 	end
 	local bfrac = math.clamp((state:GetAttribute("BossHP") or 0) / bossMax, 0, 1)
@@ -1318,6 +1380,8 @@ local function updateBoss(dt: number, state: Configuration)
 		UIAnim.Punch(ui.BossName, 0.25)
 	end
 	ui.BossMark.Position = UDim2.new(markAt, ui.BossInset * (1 - markAt), 0, 36)
+	local body = bossBody(os.clock())
+	setBossArmour(body ~= nil and body:GetAttribute("FrostArmor") == true)
 end
 
 local function updateStatus(state: Configuration, phase: string, stagePhase: string, alive: boolean, reviveOpen: boolean)

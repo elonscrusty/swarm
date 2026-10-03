@@ -592,7 +592,7 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 			local ready = state:GetAttribute("PortalReady") or ""
 			local note
 			if chosen then
-				note = ready ~= "" and string.format("Waiting for your team (%s ready) · %ds", ready, left) or string.format("Travelling in %ds", left)
+				note = ready ~= "" and string.format("Waiting for your team (%s ready) · %ds", ready, left) or string.format("Traveling in %ds", left)
 			else
 				note = string.format((offer and offer.Complete) and "Returning in %ds" or (offer and offer.Endless) and "Next stage in %ds" or "Next stage in %ds unless you return", left)
 			end

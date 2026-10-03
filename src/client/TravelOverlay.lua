@@ -3,7 +3,7 @@
 	The client side of private run servers (server RunServers.lua, Config.RunServers).
 
 	Cover (full screen, blocks taps on the menu under it):
-	  player attribute Travel = "ToRun"    "TRAVELLING TO YOUR RUN"  (lobby: saving, teleporting)
+	  player attribute Travel = "ToRun"    "TRAVELING TO YOUR RUN"  (lobby: saving, teleporting)
 	                   Travel = "ToLobby"  "BACK TO THE LOBBY"       (run server: saving, teleporting)
 	  SwarmState RunServer + RunServerStatus = "Waiting"  "STARTING YOUR RUN" with
 	                   "Heroes ready: N / M" (RunServerHere / RunServerExpected)

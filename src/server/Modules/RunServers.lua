@@ -412,6 +412,8 @@ local function failOne(player: Player)
 		if #t.Members == 1 then
 			fallbackHere({ player }, t, player)
 		elseif takeBack(player) then
+			local data = ctx.DataService.GetData(player)
+			if data then data.RunReconnect = nil end -- the reserved route never became a run
 			notify(player, "Couldn't reach your team's run server. Start a new run.", BAD)
 		end
 	elseif tr.Kind == "Rejoin" then

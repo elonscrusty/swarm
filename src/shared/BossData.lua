@@ -496,7 +496,7 @@ BossData.Bosses = {
 				Twist = "FrostArmor",
 				FollowUps = { IceLanes = "FrostBreath" }, -- keeps full recovery and the next move's telegraph
 				Roar = 1.6,
-				Message = "THE COLOSSUS GROWS FROST ARMOUR! Break it!",
+				Message = "THE COLOSSUS GROWS FROST ARMOR! BREAK IT!",
 			},
 		},
 		Attacks = {

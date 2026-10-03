@@ -64,7 +64,7 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 		Position = UDim2.fromOffset(110, TS(30) + 14),
 		Size = UDim2.new(1, -110, 0, 22),
 	})
-	ui.How = text(head, "Small", string.format("XP from every run: %d per minute survived, %d per stage cleared, 1 per %d kills, %d per boss, %d for a win; curses add their gold bonus, the daily's scored attempt +%d. Rewards are cosmetic only.", math.floor(60 * AccountData.XP.PerSecond + 0.5), AccountData.XP.PerStage, AccountData.XP.PerKills, AccountData.XP.PerBoss, AccountData.XP.Win, AccountData.XP.Daily), {
+	ui.How = text(head, "Small", string.format("XP for minutes survived, stages, kills, bosses and wins (%d per stage, %d for a win); curses and the Daily add more. Rewards are cosmetic only.", AccountData.XP.PerStage, AccountData.XP.Win), {
 		Name = "How",
 		Position = UDim2.fromOffset(110, TS(30) + 44),
 		Size = UDim2.new(1, -110, 0, TS(14) * 2 + 6),

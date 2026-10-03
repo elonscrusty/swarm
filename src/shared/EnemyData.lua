@@ -104,8 +104,8 @@ EnemyData.Enemies = {
 		Gem = { Small = 80, Medium = 20 },
 		GemChance = 1,
 		KnockbackResist = 0.2,
-		Role = "Armoured melee: tougher grunt, the Queen's summons",
-		Intro = "tougher, armoured grunts",
+		Role = "Armored melee: a tougher grunt, the Queen's summons",
+		Intro = "tougher, armored grunts",
 	},
 	Ghost = {
 		Id = "Ghost",
@@ -164,7 +164,7 @@ EnemyData.Enemies = {
 		KnockbackResist = 0.3,
 		Explode = { Radius = 8, Damage = 22 },
 		Fuse = 0.7,
-		Role = "Suicide bomber: stops next to you, swells for 0.7 s, then bursts",
+		Role = "Walking bomb: stops beside you, swells, then bursts; step out of its ring",
 		Intro = "step out of its ring",
 	},
 	Spitter = {
@@ -182,7 +182,7 @@ EnemyData.Enemies = {
 		Gem = { Small = 75, Medium = 25 },
 		GemChance = 1,
 		KnockbackResist = 0.1,
-		Role = "Ranged: keeps 22-30 studs away and lobs acid at where you stand",
+		Role = "Ranged: keeps its distance and lobs acid where you stand; move after the splash shows",
 		Intro = "dodge the acid",
 		Ranged = { MinRange = 22, MaxRange = 30, Windup = 0.7, Cooldown = 3.2, Flight = 1.05, Splash = 4.5, Damage = 12 },
 	},
@@ -203,7 +203,7 @@ EnemyData.Enemies = {
 		KnockbackResist = 1,
 		XPScale = 20,
 		IsBoss = true,
-		Role = "Boss: the stage's portal guardian (patterns in BossData)",
+		Role = "Scorpion Queen: dodge the charge lane, step off the venom circles, use the stinger gaps",
 	},
 	-- the rotating bosses of later stages (HP comes from Config.Boss x BossData HPMult)
 	MothBoss = {
@@ -224,7 +224,7 @@ EnemyData.Enemies = {
 		XPScale = 20,
 		IsBoss = true,
 		FlyHeight = 0.5, -- the model itself hovers ~4 studs up; this adds the bob
-		Role = "Boss: flies; dust waves with a gap, a swooping dive, glimmer mines, moths",
+		Role = "Moth Matriarch: slip through the dust wave's gap, step out of the dive lane, kill the moths first",
 	},
 	RhinoBoss = {
 		Id = "RhinoBoss",
@@ -243,7 +243,7 @@ EnemyData.Enemies = {
 		KnockbackResist = 1,
 		XPScale = 20,
 		IsBoss = true,
-		Role = "Boss: heavy; horn charge (sticks in obstacles), ground pound, war banner",
+		Role = "Rhino Warlord: sidestep the horn charge, stand in a band that already struck, destroy the war banner",
 	},
 	HiveBoss = {
 		Id = "HiveBoss",
@@ -262,7 +262,7 @@ EnemyData.Enemies = {
 		KnockbackResist = 1,
 		XPScale = 20,
 		IsBoss = true,
-		Role = "Boss: slow; egg barrage, acid pools, brood call, pulses when hit hard",
+		Role = "Hive Mother: smash the eggs before they hatch, avoid the acid pools, back off when she pulses",
 	},
 	BriarBoss = {
 		Id = "BriarBoss",
@@ -281,7 +281,7 @@ EnemyData.Enemies = {
 		KnockbackResist = 1,
 		XPScale = 20,
 		IsBoss = true,
-		Role = "Boss: a bramble treant; root lines, thorn volleys, a closing bramble ring, sprouts",
+		Role = "Briar Sentinel: step off the root lanes, slip between the thorn spokes, find the bramble ring's gap",
 	},
 	FrostBoss = {
 		Id = "FrostBoss",
@@ -300,7 +300,7 @@ EnemyData.Enemies = {
 		KnockbackResist = 1,
 		XPScale = 20,
 		IsBoss = true,
-		Role = "Boss: an icy giant; slam rings, ice-spike lanes, freezing breath, shard rain, frost armour",
+		Role = "Frostbound Colossus: use the slam ring gaps, stand between the ice lanes, break the frost armor",
 	},
 
 	-- creatures of the later minutes / stages
@@ -362,7 +362,7 @@ EnemyData.Enemies = {
 		Static = true,
 		ShowHP = true,
 		NoWave = true,
-		Role = "Spawner: mites climb out every few seconds until you destroy it (reward)",
+		Role = "Spawner: mites climb out every few seconds until you destroy it for gold and gems",
 		Intro = "destroy it to stop the mites",
 		Spawner = { Every = 4.5, Count = 2, Type = "Slime", MaxChildren = 8, Warn = 0.7 },
 		Reward = { Gold = 12, GoldPerStage = 6, Gems = 3 },

@@ -1060,7 +1060,7 @@ function WeaponData.DeltaText(line: { [string]: string }): string?
 	if math.abs(d) == 1 and string.sub(label, -1) == "s" and not string.find(label, " ") then
 		label = string.sub(label, 1, -2) -- "+1 arrow"
 	end
-	return string.format("%s%s%s %s", d > 0 and "+" or "-", num, unit or "", label)
+	return string.format("%s%s%s %s", d > 0 and "+" or "", num, unit or "", label) -- num carries its own minus
 end
 
 -- "+10 damage, +1 arrow, -0.1s cooldown": one short line of what a card gives now (at
