@@ -34,6 +34,24 @@ local ctx
 local rng = Random.new()
 
 ------------------------------------------------------------------------------------------
+-- Discovery (DiscoveryService): what this player has owned or seen, across runs
+------------------------------------------------------------------------------------------
+
+local function known(rp, kind: string, id: string): boolean
+	local D = ctx.DiscoveryService
+	return D ~= nil and D.Known(rp.Player, kind, id)
+end
+
+local function discover(rp, kind: string, id: string)
+	local D = ctx.DiscoveryService
+	if D then
+		D.Record(rp.Player, kind, id)
+	end
+end
+
+local UNKNOWN = "???"
+
+------------------------------------------------------------------------------------------
 -- Stats
 ------------------------------------------------------------------------------------------
 
@@ -229,23 +247,6 @@ local function card(kind: string, id: string, level: number, weight: number)
 	return { Type = kind, Id = id, Level = level, Weight = weight }
 end
 
-------------------------------------------------------------------------------------------
--- Discovery (DiscoveryService): what this player has owned or seen, across runs
-------------------------------------------------------------------------------------------
-
-local function known(rp, kind: string, id: string): boolean
-	local D = ctx.DiscoveryService
-	return D ~= nil and D.Known(rp.Player, kind, id)
-end
-
-local function discover(rp, kind: string, id: string)
-	local D = ctx.DiscoveryService
-	if D then
-		D.Record(rp.Player, kind, id)
-	end
-end
-
-local UNKNOWN = "???"
 
 -- Sheet stat → the weapon stat it feeds (a passive changing only stats no owned weapon
 -- uses does nothing for this build). Player stats (HP, armor, speed ...) always count.
