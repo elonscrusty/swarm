@@ -967,7 +967,7 @@ local function relayout()
 		-- the LAST RUN card shortens the hero's room between the chip and the plate: the
 		-- menu camera widens its shot (CameraController: MenuHeroZoom) so the hero fits
 		local room = y - (chipTop + 52)
-		heroZoom = (lastShown and current == "Home") and math.clamp(205 / math.max(1, room), 1, 1.3) or 1
+		heroZoom = (lastShown and current == "Home") and math.clamp(H * 0.24 / math.max(1, room), 1, 1.3) or 1
 		ui.PrevArrow.Instance.Visible = true
 		ui.NextArrow.Instance.Visible = true
 	else
