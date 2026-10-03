@@ -488,6 +488,8 @@ local bannerQueue: { { Title: string, Goal: string, Color: Color3?, OnShow: (() 
 local bannerBusy = false
 local bannerBaseY = 0
 local centreBars: { GuiObject } = {}
+local portraitBars: { GuiObject } = {} -- kept clear of the banner in portrait only
+local bannerPortrait = false
 local showBanner: (string, string, Color3?, (() -> ())?) -> ()
 
 local function placeBanner()
@@ -495,18 +497,18 @@ local function placeBanner()
 	if not box then
 		return
 	end
-	-- never wider than the screen (portrait phones): the title scales down to fit
-	local parent = box.Parent :: GuiObject?
-	if parent and parent:IsA("GuiObject") and parent.AbsoluteSize.X > 0 then
-		local w = math.min(520, math.floor(parent.AbsoluteSize.X / math.max(0.01, host.Scale and host.Scale() or 1) - 24))
-		if box.Size.X.Offset ~= w then
-			box.Size = UDim2.fromOffset(w, box.Size.Y.Offset)
-		end
-	end
 	local half = box.Size.Y.Offset / 2
 	local y = bannerBaseY
-	for _ = 1, 2 do -- twice: dropping under one bar may land on another
-		for _, g in ipairs(centreBars) do
+	-- portrait: the left-edge minimap (Hud.AvoidInPortrait) sits about mid-screen too
+	local list = centreBars
+	if bannerPortrait and #portraitBars > 0 then
+		list = table.clone(centreBars)
+		for _, g in ipairs(portraitBars) do
+			table.insert(list, g)
+		end
+	end
+	for _ = 1, 3 do -- again: dropping under one bar may land on another
+		for _, g in ipairs(list) do
 			if g.Visible and g.Parent then
 				local gh = g.Size.Y.Offset
 				local top = g.Position.Y.Offset - g.AnchorPoint.Y * gh
@@ -525,6 +527,12 @@ end
 -- A persistent bar in the top centre (e.g. the caravan defence bar): banners stack under it.
 function Hud.ReserveCentre(g: GuiObject)
 	table.insert(centreBars, g)
+end
+
+-- A panel the centre banners must keep clear of in portrait only (the minimap there sits
+-- at the left edge about mid-screen; in landscape it is in a corner).
+function Hud.AvoidInPortrait(g: GuiObject)
+	table.insert(portraitBars, g)
 end
 
 -- The reserved top-centre bars (visible or not), for other markers that must keep clear.
@@ -822,6 +830,7 @@ local function layout()
 	-- stage banner: under the top cluster in landscape, mid-screen in portrait
 	ui.Banner.Size = UDim2.fromOffset(math.min(520, W - 2 * M), 110)
 	bannerBaseY = math.floor(portrait and H * 0.5 or math.max(H * 0.3, topBottom + 70))
+	bannerPortrait = portrait
 	ui.Banner.Position = UDim2.fromOffset(math.floor(W / 2), bannerBaseY)
 	placeBanner()
 

@@ -260,6 +260,7 @@ function MiniMap.Build(root: Frame, k: { [string]: any })
 	holder.Active = false
 	face.Active = false
 	ui.Holder, ui.Face = holder, face
+	Hud.AvoidInPortrait(holder) -- portrait: the centre banners drop below the map
 	-- the clipped viewport (the dark "outside" of the arena), inset so the corners stay clean
 	local view = new("Frame", { Name = "View", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.05, BorderSizePixel = 0, ClipsDescendants = true, Position = UDim2.fromOffset(MAP_INSET, HEADER_PC), Size = UDim2.fromOffset(viewPx, viewPx), ZIndex = 2 }, face)
 	UIKit.corner(view, 5)
