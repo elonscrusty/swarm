@@ -563,16 +563,16 @@ function UIAnim.Ring(parent: GuiObject, center: UDim2, color: Color3, endSize: n
 	end)
 end
 
--- Quick positional jitter that settles back where it started.
-local shakeHome: { [GuiObject]: UDim2 } = setmetatable({}, { __mode = "k" }) :: any
+-- Quick positional jitter that settles back where it started. The shake is an offset on
+-- top of whatever position the object has right now, so a relayout during the shake (the
+-- HUD placing a pill under a timer that just moved) is kept instead of being undone when
+-- the shake ends; a shake started while another runs takes over its offset (no drift).
+local shakeApplied: { [GuiObject]: UDim2 } = setmetatable({}, { __mode = "k" }) :: any
 local shakeToken: { [GuiObject]: number } = setmetatable({}, { __mode = "k" }) :: any
 function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
 	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
-	-- a shake started while another runs reuses its home (no drifting off position)
-	local home = shakeHome[obj] or obj.Position
-	shakeHome[obj] = home
 	local token = (shakeToken[obj] or 0) + 1
 	shakeToken[obj] = token
 	local amp = pixels or 6
@@ -585,15 +585,17 @@ function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
 			end
 			local k = (1 - i / steps) * amp
 			local dir = (i % 2 == 0) and 1 or -1
-			obj.Position = home + UDim2.fromOffset(dir * k, (i % 3 - 1) * k * 0.5)
+			local offset = UDim2.fromOffset(dir * k, (i % 3 - 1) * k * 0.5)
+			obj.Position = obj.Position - (shakeApplied[obj] or UDim2.new()) + offset
+			shakeApplied[obj] = offset
 			task.wait(each)
 		end
 		if shakeToken[obj] == token then
-			shakeHome[obj] = nil
-			shakeToken[obj] = nil
 			if obj.Parent then
-				obj.Position = home
+				obj.Position = obj.Position - (shakeApplied[obj] or UDim2.new())
 			end
+			shakeApplied[obj] = nil
+			shakeToken[obj] = nil
 		end
 	end)
 end

@@ -173,9 +173,6 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 			UIKit.formatNumber(tonumber(last.Kills) or 0) .. " kills",
 			"+" .. UIKit.formatNumber(tonumber(last.Gold) or 0) .. " gold",
 		}
-		if fell then
-			table.insert(parts, "Fell to " .. tostring(last.DeathCause))
-		end
 		haul.Text = table.concat(parts, " · ")
 	end
 

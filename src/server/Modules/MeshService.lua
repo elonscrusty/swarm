@@ -69,6 +69,7 @@ local seq = 0
 local active = 0
 local startClock = 0
 local loadedCount, failedCount, totalCount = 0, 0, 0
+local lastError = "" -- the latest load failure, published for the DEV lobby note
 local priorityReported = false
 
 MeshService.Ready = readyEvent.Event -- fires (modelName) each time a model finishes
@@ -109,7 +110,8 @@ local function loadModel(name: string, entry): (boolean, boolean)
 		return InsertService:LoadAsset(entry.AssetId)
 	end)
 	if not ok or not asset then
-		warn(string.format("[MeshService] could not load %s (%d): %s", name, entry.AssetId, tostring(asset)))
+		lastError = string.format("%s (%d): %s", name, entry.AssetId, tostring(asset))
+		warn("[MeshService] could not load " .. lastError)
 		return false, true
 	end
 	local folder = Instance.new("Folder")
@@ -139,6 +141,8 @@ local function loadModel(name: string, entry): (boolean, boolean)
 			template.CanQuery = false
 			template.CanTouch = false
 			template.CastShadow = false
+			-- (RenderFidelity is plugin-only: a script cannot set it, so the level of detail
+			-- stays whatever the upload chose)
 			-- The FBX nodes carry a Y-up axis rotation (Lcl Rotation 90, 0, 180) over Z-up
 			-- vertex data. If the importer kept that rotation on the MeshPart instead of
 			-- baking it, the geometry's local axes are not the catalog's (Roblox) axes and the
@@ -154,7 +158,8 @@ local function loadModel(name: string, entry): (boolean, boolean)
 			template.Parent = folder
 			found += 1
 		else
-			warn(string.format("[MeshService] %s is missing piece %s", name, piece.Name))
+			lastError = string.format("%s is missing piece %s", name, piece.Name)
+			warn("[MeshService] " .. lastError)
 		end
 	end
 	asset:Destroy()
@@ -280,6 +285,7 @@ local function publish()
 	end
 	root:SetAttribute("Loaded", loadedCount)
 	root:SetAttribute("Failed", failedCount)
+	root:SetAttribute("LastError", string.sub(lastError, 1, 160))
 	root:SetAttribute("Total", totalCount)
 	root:SetAttribute("AllReady", started and pending == 0)
 	if not priorityReported and started then
@@ -341,7 +347,8 @@ local function run(job: Job)
 			job.State = "failed"
 			failedCount += 1
 			if not ok then
-				warn("[MeshService] " .. job.Name .. ": " .. tostring(loaded))
+				lastError = job.Name .. ": " .. tostring(loaded)
+				warn("[MeshService] " .. lastError)
 			end
 		end
 		publish()

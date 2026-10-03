@@ -211,6 +211,8 @@ function A.build(opts)
 			StageArena = arenaName,
 			PortalPos = s.portal and s.portal.Pos or nil,
 			PortalHint = opts.portalHint == true,
+			-- --set swarmwarn=1|2 shows the swarm-pressure warning on the stage pill
+			SwarmWarn = opts.swarmWarn or tonumber(preview.args.swarmwarn) or 0,
 			PortalReveal = opts.portalReveal or 0,
 			PortalCharge = opts.portalCharge or 0,
 			PortalLockLeft = opts.lockLeft or 0,
