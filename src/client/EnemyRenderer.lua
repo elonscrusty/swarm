@@ -7,16 +7,25 @@
 	network updates so movement looks fluid even at a low replication rate. All model
 	pieces move with a single workspace:BulkMoveTo per frame.
 
-	Detail budget (Config.Graphics.MaxDetailedEnemies, stepping down to MinDetailedEnemies
-	while frames are slow): when more enemies are alive than the budget, the ones nearest
-	the camera focus get the full model (ranked a few times a second) and the rest show
-	their plain body, restyled locally in the creature's palette colour. The boss and
-	elites are always detailed. Models are pooled per enemy type and go back to the pool
-	when their enemy dies or drops out of the budget, so models exist only for detailed
-	enemies (plus the pools) and a recycled body reuses parts instead of building new ones.
-	Spawn dust puffs only for spawns on screen.
+	Level of detail (no enemy ever shows its plain server body; that "blob" look is gone):
+	  * Screen culling: an enemy outside the camera view (plus Config.Graphics.CullMargin
+	    studs, a little more before it leaves, so edge walkers do not flicker) has no model
+	    and costs no CFrame updates; its hidden body is all there is, and nobody sees it.
+	  * Detail budget among ON-SCREEN enemies only (Config.Graphics.MaxDetailedEnemies,
+	    stepping down to MinDetailedEnemies while frames are slow): the nearest get the full
+	    animated model (ranked a few times a second); the rest get the low-detail variant:
+	    the same model cut to its LowDetailParts largest pieces (mirrored pairs kept whole)
+	    in their own colours, posed rigidly (no leg / wing animation, no bob, no shadow).
+	  * Update rate: when many enemies are on screen, only the FullRateEnemies nearest
+	    update every frame; the others (and every low-detail model) every 2nd frame,
+	    staggered so each frame moves half of them.
+	The boss, elites, static / support creatures and Burrowers are never culled, never
+	low-detail and always update every frame. Models (full and low) are pooled per enemy
+	type and go back to the pool when their enemy dies, leaves the screen or changes tier,
+	so models exist only for drawn enemies (plus the pools) and a recycled body reuses
+	parts instead of building new ones. Spawn dust puffs only for spawns on screen.
 
-	Readability: Flash() gives a brief white hit flash (model or plain body); elites stand
+	Readability: Flash() gives a brief white hit flash (full or low-detail model); elites stand
 	on a soft gold ground ring on top of their bigger, gold-tinted model with its crown,
 	wear their affix aura (EliteAura_* meshes or a part ring: flames, orbiting shield
 	plates that shatter when the shield breaks, wind streaks) and a small affix tag.
@@ -93,9 +102,14 @@ type Slot = {
 	RallyRing: BasePart?,
 	BannerOut: boolean,
 	FrostArmor: boolean,
+	-- level of detail
+	Low: boolean, -- the model in Pieces is the low-detail variant
+	OnScreen: boolean, -- in the camera view (with the cull margin) last frame
+	Stagger: number, -- 0 / 1: which frame of two a half-rate slot updates on
+	StepAt: number, -- clock of the last pose update (half-rate slots skip frames)
 }
 
-type PooledModel = { Pieces: { any }, Motion: string, Scale: number, Type: string, Elite: boolean }
+type PooledModel = { Pieces: { any }, Motion: string, Scale: number, Type: string, Elite: boolean, Low: boolean }
 
 local slots: { [number]: Slot } = {}
 local PARK = CFrame.new(0, -150, 0)
@@ -105,11 +119,18 @@ local DISC = CFrame.Angles(0, 0, math.rad(90)) -- cylinder axis X → Y (a flat 
 local FLAT = Vector3.new(1, 0, 1)
 local WHITE = Color3.new(1, 1, 1)
 local RANK_EVERY = 0.3 -- seconds between nearest-first detail rankings
+local G = Config.Graphics
+local LOW_PARTS: number = G.LowDetailParts or 4
+local CULL_MARGIN: number = G.CullMargin or 8
+local CULL_LEAVE = CULL_MARGIN + 8 -- an on-screen enemy is culled only this far outside
+local FULL_RATE: number = G.FullRateEnemies or 50
 -- Spare models kept per enemy type / in all while a run is on (a swarm of one type churns
--- through the detail budget, so a type may pool a full budget's worth) and the reserve
--- kept per type once the run is over (the rest is destroyed a few models per frame).
-local POOL_CAP: number = Config.Graphics.MaxDetailedEnemies
-local POOL_TOTAL: number = math.floor(Config.Graphics.MaxDetailedEnemies * 1.5)
+-- through the detail budget, so a type may pool a full budget's worth; low-detail
+-- variants up to the live cap) and the reserve kept per type once the run is over (the
+-- rest is destroyed a few models per frame).
+local POOL_CAP: number = G.MaxDetailedEnemies
+local LOW_POOL_CAP: number = Config.Enemies.MaxLive
+local POOL_TOTAL: number = math.floor(G.MaxDetailedEnemies * 1.5) + LOW_POOL_CAP
 local POOL_KEEP = 12
 local HALO_KEEP = 6
 local PROBE_EVERY = 4 -- seconds between checks whether a part-built type has its meshes now
@@ -121,37 +142,15 @@ local modelFolder: Instance? = nil
 local localPlayer = Players.LocalPlayer
 local trimming = false -- shedding pooled models after a run (see trimPools)
 
--- Plain bodies (over the detail budget) in the creature colours of the art direction.
-local PLAIN: { [string]: Color3 } = {
-	Slime = Palette.beetle_300,
-	Bat = Palette.wasp_500,
-	Skeleton = Palette.beetle_600,
-	Ghost = Palette.moth_300,
-	Brute = Palette.slate_400,
-	Bomber = Palette.tick_500,
-	Spitter = Palette.crimson_500:Lerp(Palette.slate_400, 0.5),
-	Boss = Palette.crimson_500,
-	MothBoss = Palette.moth_300,
-	RhinoBoss = Palette.slate_600,
-	HiveBoss = Palette.ivory_300,
-	BriarBoss = Palette.moss_600,
-	FrostBoss = Palette.slate_500,
-	ThornSprout = Palette.moss_500,
-	Burrower = Palette.sand_400,
-	Healer = Palette.ivory_200,
-	Nest = Palette.wood_500,
-	WarBanner = Palette.crimson_500,
-	BroodEgg = Palette.ivory_200,
-}
-
--- Bosses (always detailed, their own entrance) and things that never get the plain body.
+-- Bosses (their own entrance) and the creatures that are never culled nor low-detail:
+-- static / support ones and the Burrower (its soil ring is a piece the cut would drop).
 local function isBoss(typeId: string): boolean
 	local def = EnemyData.Enemies[typeId]
 	return def ~= nil and def.IsBoss == true
 end
 local function alwaysDetailed(typeId: string): boolean
 	local def = EnemyData.Enemies[typeId]
-	return def ~= nil and (def.IsBoss == true or def.Static == true or def.Support ~= nil)
+	return def ~= nil and (def.IsBoss == true or def.Static == true or def.Support ~= nil or typeId == "Burrower")
 end
 local ELITE_GOLD = Palette.gold_400
 
@@ -165,8 +164,66 @@ local pooledTotal = 0 -- models in every pool together
 local meshSeen: { [string]: boolean } = {}
 local probeTimer = PROBE_EVERY
 
-local function modelKey(typeId: string, elite: boolean): string
-	return elite and (typeId .. "*") or typeId
+local function modelKey(typeId: string, elite: boolean, low: boolean): string
+	return (elite and (typeId .. "*") or typeId) .. (low and "~" or "")
+end
+
+--[[
+	The low-detail variant of a model (in place): keeps its LOW_PARTS largest pieces by
+	volume, a mirrored pair (WingL / WingR, LegsL / LegsR ...) counted as one unit that
+	is kept whole or not at all, so the silhouette stays symmetric. The kept pieces lose
+	their animation (posed rigidly) and their shadow; the rest are destroyed (this runs
+	only when a pool is empty, never per frame).
+]]
+local function cutToLow(pieces: { any }): { any }
+	local units: { { Pieces: { any }, Volume: number } } = {}
+	local byKey: { [string]: { Pieces: { any }, Volume: number } } = {}
+	for _, piece in ipairs(pieces) do
+		local name = piece.Part.Name
+		local stem, digits = string.match(name, "^(.-)[LR](%d*)$")
+		local size = piece.Part.Size
+		local volume = size.X * size.Y * size.Z
+		local key = (stem and stem ~= "") and (stem .. "|" .. digits) or nil
+		local unit = key and byKey[key]
+		if unit then
+			table.insert(unit.Pieces, piece)
+			unit.Volume += volume
+		else
+			unit = { Pieces = { piece }, Volume = volume }
+			table.insert(units, unit)
+			if key then
+				byKey[key] = unit
+			end
+		end
+	end
+	table.sort(units, function(a, b)
+		return a.Volume > b.Volume
+	end)
+	local keep: { any } = {}
+	for _, unit in ipairs(units) do
+		if #keep + #unit.Pieces <= LOW_PARTS then
+			for _, piece in ipairs(unit.Pieces) do
+				table.insert(keep, piece)
+			end
+		else
+			for _, piece in ipairs(unit.Pieces) do
+				piece.Part:Destroy()
+			end
+		end
+	end
+	for _, piece in ipairs(keep) do
+		piece.Anim = nil
+		piece.Part.CastShadow = false
+	end
+	return keep
+end
+
+local function buildModel(typeId: string, elite: boolean, low: boolean): ({ any }, string, number)
+	local pieces, motion, scale = ModelLibrary.Enemy(typeId, elite)
+	if low then
+		pieces = cutToLow(pieces)
+	end
+	return pieces, motion, scale
 end
 
 local function restoreColors(pieces: { any })
@@ -207,29 +264,29 @@ local function releaseModel(slot: Slot)
 		slot.Blink = false
 	end
 	slot.Pieces = {}
-	local key = slot.Type and modelKey(slot.Type, slot.Elite) or nil
+	local key = slot.Type and modelKey(slot.Type, slot.Elite, slot.Low) or nil
 	local list = key and modelPool[key] or nil
 	if key and not list then
 		list = {}
 		modelPool[key] = list
 	end
-	if key and list and #list < POOL_CAP and pooledTotal < POOL_TOTAL and (isMesh(pieces) or not meshSeen[key]) then
+	if key and list and #list < (slot.Low and LOW_POOL_CAP or POOL_CAP) and pooledTotal < POOL_TOTAL and (isMesh(pieces) or not meshSeen[key]) then
 		if slot.FlashUntil > 0 then
 			restoreColors(pieces)
 		end
 		for _, piece in ipairs(pieces) do
 			piece.Part.CFrame = PARK
 		end
-		table.insert(list, { Pieces = pieces, Motion = slot.Motion, Scale = slot.Scale, Type = slot.Type :: string, Elite = slot.Elite })
+		table.insert(list, { Pieces = pieces, Motion = slot.Motion, Scale = slot.Scale, Type = slot.Type :: string, Elite = slot.Elite, Low = slot.Low })
 		pooledTotal += 1
 	else
 		destroyPieces(pieces)
 	end
 end
 
-local function rebuild(slot: Slot, typeId: string, elite: boolean)
+local function rebuild(slot: Slot, typeId: string, elite: boolean, low: boolean)
 	releaseModel(slot)
-	local key = modelKey(typeId, elite)
+	local key = modelKey(typeId, elite, low)
 	local list = modelPool[key]
 	local spare = list and table.remove(list)
 	if spare then
@@ -245,7 +302,7 @@ local function rebuild(slot: Slot, typeId: string, elite: boolean)
 	if spare then
 		slot.Pieces, slot.Motion, slot.Scale = spare.Pieces, spare.Motion, spare.Scale
 	else
-		local pieces, motion, scale = ModelLibrary.Enemy(typeId, elite)
+		local pieces, motion, scale = buildModel(typeId, elite, low)
 		slot.Pieces, slot.Motion, slot.Scale = pieces, motion, scale
 		if isMesh(pieces) then
 			meshSeen[key] = true
@@ -253,6 +310,7 @@ local function rebuild(slot: Slot, typeId: string, elite: boolean)
 	end
 	slot.Type = typeId
 	slot.Elite = elite
+	slot.Low = low
 	slot.Render = nil
 	slot.FlashUntil = 0
 	slot.Phase = math.random() * math.pi * 2
@@ -266,7 +324,7 @@ local function probeMeshes()
 	for key, list in pairs(modelPool) do
 		local last = list[#list]
 		if not meshSeen[key] and last and not isMesh(last.Pieces) then
-			local pieces, motion, scale = ModelLibrary.Enemy(last.Type, last.Elite)
+			local pieces, motion, scale = buildModel(last.Type, last.Elite, last.Low)
 			if isMesh(pieces) then
 				meshSeen[key] = true
 				for i = #list, 1, -1 do
@@ -279,7 +337,7 @@ local function probeMeshes()
 				for _, piece in ipairs(pieces) do
 					piece.Part.CFrame = PARK
 				end
-				table.insert(list, { Pieces = pieces, Motion = motion, Scale = scale, Type = last.Type, Elite = last.Elite })
+				table.insert(list, { Pieces = pieces, Motion = motion, Scale = scale, Type = last.Type, Elite = last.Elite, Low = last.Low })
 				pooledTotal += 1
 			else
 				destroyPieces(pieces)
@@ -288,7 +346,7 @@ local function probeMeshes()
 	end
 end
 
--- Hides the slot's model: back to the pool (dead, or over the detail budget).
+-- Hides the slot's model: back to the pool (dead, or off screen).
 local function park(slot: Slot)
 	if slot.Parked and #slot.Pieces == 0 then
 		return
@@ -361,40 +419,6 @@ local function trimPools(): boolean
 end
 
 ------------------------------------------------------------------------------------------
--- Plain bodies
-------------------------------------------------------------------------------------------
-
-local function plainLook(slot: Slot, typeId: string, elite: boolean, now: number)
-	local body = slot.Body
-	if body.LocalTransparencyModifier ~= 0 then
-		body.LocalTransparencyModifier = 0
-	end
-	if now < slot.FlashUntil then
-		return -- white hit flash on the body
-	end
-	local color = PLAIN[typeId]
-	if not color then
-		-- unknown type: keep the server's colour (undo a finished hit flash)
-		local base = body:GetAttribute("BaseColor")
-		if typeof(base) == "Color3" and body.Color ~= base then
-			body.Color = base
-		end
-		return
-	end
-	if elite then
-		color = color:Lerp(ELITE_GOLD, 0.4)
-	end
-	color = Accessibility.Color(color)
-	-- the server restyles recycled bodies; re-apply the local look whenever it differs
-	if body.Color ~= color then
-		body.Color = color
-	end
-	if body.Material ~= Enum.Material.SmoothPlastic then
-		body.Material = Enum.Material.SmoothPlastic
-	end
-end
-
-------------------------------------------------------------------------------------------
 -- Tracking
 ------------------------------------------------------------------------------------------
 
@@ -441,6 +465,10 @@ local function track(model: Instance)
 		RallyRing = nil,
 		BannerOut = false,
 		FrostArmor = body:GetAttribute("FrostArmor") == true,
+		Low = false,
+		OnScreen = false,
+		Stagger = id % 2,
+		StepAt = 0,
 	}
 	local slot = slots[id]
 	local function readAct()
@@ -473,7 +501,8 @@ local function track(model: Instance)
 	readShield()
 end
 
--- White hit flash on enemy `id` (its model, or its plain body over the detail budget).
+-- White hit flash on enemy `id` (its full or low-detail model; an off-screen enemy has
+-- neither and its body is hidden: nothing to flash).
 function EnemyRenderer.Flash(id: number): boolean
 	if ClientSettings.Flashes() then return true end
 	local slot = slots[id]
@@ -489,10 +518,10 @@ function EnemyRenderer.Flash(id: number): boolean
 		end
 	else
 		local body = slot.Body
-		if not body.Parent or body.CFrame.Y < ACTIVE_Y then
+		if not body.Parent or body.CFrame.Y < ACTIVE_Y or body.LocalTransparencyModifier >= 1 then
 			return true
 		end
-		body.Color = WHITE
+		return false -- not drawn yet (first frame): VFX flashes the visible body itself
 	end
 	slot.FlashUntil = now + Config.Enemies.HitFlashSeconds
 	return true
@@ -516,14 +545,51 @@ function EnemyRenderer.Position(id: number): Vector3?
 end
 
 ------------------------------------------------------------------------------------------
--- Detail ranking: nearest to the camera focus first
+-- Screen culling and detail ranking (on-screen enemies, nearest to the camera focus first)
 ------------------------------------------------------------------------------------------
+
+-- the camera view this frame: an enemy counts as on screen when its centre is inside the
+-- view frustum widened by `margin` studs (sideways, measured at its depth)
+local viewOk = false
+local viewPos, viewLook, viewRight, viewUp = Vector3.zero, Vector3.zAxis, Vector3.xAxis, Vector3.yAxis
+local tanH, tanV = 1, 1
+
+local function prepView(cam: Camera?)
+	if not cam then
+		viewOk = false
+		return
+	end
+	local cf = cam.CFrame
+	viewPos, viewLook, viewRight, viewUp = cf.Position, cf.LookVector, cf.RightVector, cf.UpVector
+	local vp = cam.ViewportSize
+	local aspect = (vp.Y > 0) and vp.X / vp.Y or 16 / 9
+	tanV = math.tan(math.rad(cam.FieldOfView) / 2)
+	tanH = tanV * aspect
+	viewOk = true
+end
+
+local function inView(p: Vector3, margin: number): boolean
+	if not viewOk then
+		return true
+	end
+	local d = p - viewPos
+	local z = d:Dot(viewLook)
+	if z < -margin then
+		return false
+	end
+	return math.abs(d:Dot(viewRight)) <= z * tanH + margin and math.abs(d:Dot(viewUp)) <= z * tanV + margin
+end
 
 local detailed: { [Slot]: boolean } = {}
 local nextDetailed: { [Slot]: boolean } = {}
+local fullRate: { [Slot]: boolean } = {} -- the nearest FULL_RATE: updated every frame
 local rankList: { Slot } = {}
 local rankTimer = 0
-local liveCount = 0 -- live enemies seen last frame (decides whether the budget applies)
+local screenCount = 0 -- of those, ranked enemies on screen last frame (decides the budget)
+local wasBudgeted = false
+local frameNo = 0
+-- Stats() for the benchmark: last frame's counts
+local stats = { live = 0, onScreen = 0, culled = 0, full = 0, low = 0, always = 0, parts = 0, skipped = 0, budget = 0, pooled = 0 }
 -- Adaptive detail budget: between Config.Graphics.MinDetailedEnemies and MaxDetailedEnemies,
 -- lowered while frames are slow (smoothed frame time over 1/40 s), raised again when fast.
 local budget = Config.Graphics.MaxDetailedEnemies
@@ -537,7 +603,6 @@ local function adaptBudget(dt: number)
 		return
 	end
 	budgetTimer = 1
-	local G = Config.Graphics
 	if frameTime > 1 / 40 then
 		budget = math.max(G.MinDetailedEnemies, budget - 10)
 	elseif frameTime < 1 / 55 then
@@ -551,7 +616,9 @@ local function rank()
 	table.clear(rankList)
 	for _, slot in pairs(slots) do
 		local body = slot.Body
-		if body.Parent and body.CFrame.Y >= ACTIVE_Y then
+		local typeId = slot.Type
+		-- only on-screen enemies compete; the always-detailed ones are outside the budget
+		if slot.OnScreen and body.Parent and body.CFrame.Y >= ACTIVE_Y and not (typeId and alwaysDetailed(typeId)) and not slot.Elite then
 			slot.Dist = ((body.Position - focus) * FLAT).Magnitude
 			table.insert(rankList, slot)
 		end
@@ -585,6 +652,10 @@ local function rank()
 	end
 	nextDetailed = detailed
 	detailed = fresh
+	table.clear(fullRate)
+	for i = 1, math.min(FULL_RATE, #rankList) do
+		fullRate[rankList[i]] = true
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -938,21 +1009,24 @@ end
 
 local function step(dt: number)
 	clock += dt
+	frameNo += 1
 	local now = os.clock()
-	local alpha = 1 - math.exp(-dt * 18)
 	table.clear(partsBuf)
 	table.clear(cframesBuf)
 	local n = 0
 
-	-- the budget only matters when more enemies are alive than it allows (last frame's
-	-- count: one loop over the bodies instead of two)
+	-- the budget only matters when more enemies are on screen than it allows (last frame's
+	-- count: one loop over the bodies instead of two); half-rate updates only when more
+	-- are on screen than FULL_RATE
 	adaptBudget(dt)
-	local budgeted = liveCount > budget
+	local budgeted = screenCount > budget
+	local crowded = screenCount > FULL_RATE
 	rankTimer -= dt
-	if budgeted and rankTimer <= 0 then
+	if (crowded or budgeted) and (rankTimer <= 0 or (budgeted and not wasBudgeted)) then
 		rankTimer = RANK_EVERY
 		rank()
 	end
+	wasBudgeted = budgeted
 	probeTimer -= dt
 	if probeTimer <= 0 then
 		probeTimer = PROBE_EVERY
@@ -963,7 +1037,8 @@ local function step(dt: number)
 		trimming = localPlayer:GetAttribute("InRun") ~= true and trimPools()
 	end
 	local cam = workspace.CurrentCamera
-	local live = 0
+	prepView(cam)
+	local live, shown, culled, nFull, nLow, nAlways, skipped = 0, 0, 0, 0, 0, 0, 0
 
 	for _, slot in pairs(slots) do
 		local body = slot.Body
@@ -975,6 +1050,7 @@ local function step(dt: number)
 				park(slot)
 				dropHalo(slot)
 			end
+			slot.OnScreen = false
 			if slot.Live then
 				slot.Live = false
 				dropAura(slot)
@@ -1002,20 +1078,59 @@ local function step(dt: number)
 				end
 			end
 			local elite = body:GetAttribute("Elite") == true
-			if budgeted and not detailed[slot] and not alwaysDetailed(typeId) and not elite then
-				-- over the detail budget: the plain server body in the creature's colour
-				park(slot)
-				dropHalo(slot)
-				plainLook(slot, typeId, elite, now)
+			local always = elite or alwaysDetailed(typeId)
+			-- the server body is never drawn: a model stands in for it, or nothing off screen
+			if body.LocalTransparencyModifier ~= 1 then
+				body.LocalTransparencyModifier = 1
+			end
+			local size = body.Size
+			local visible = always
+				or inView(cf.Position, (slot.OnScreen and CULL_LEAVE or CULL_MARGIN) + math.max(size.X, size.Y, size.Z))
+			slot.OnScreen = visible
+			if not visible then
+				-- off screen: no model, no updates (back to the pool)
+				culled += 1
+				if not slot.Parked or #slot.Pieces > 0 then
+					park(slot)
+				end
+				if slot.Halo then
+					dropHalo(slot)
+				end
+				if slot.Aura or (slot.Tag and slot.Tag.Enabled) then
+					dropAura(slot)
+				end
+				if slot.RallyRing and slot.RallyRing.CFrame.Y > ACTIVE_Y then
+					slot.RallyRing.CFrame = PARK
+				end
+				continue
+			end
+			if always then
+				nAlways += 1
 			else
-				if slot.Type ~= typeId or slot.Elite ~= elite or #slot.Pieces == 0 then
-					rebuild(slot, typeId, elite)
-				end
-				if body.LocalTransparencyModifier ~= 1 then
-					body.LocalTransparencyModifier = 1
-				end
-				slot.Parked = false
-
+				shown += 1
+			end
+			local low = not always and budgeted and not detailed[slot]
+			local fresh = false
+			if slot.Type ~= typeId or slot.Elite ~= elite or slot.Low ~= low or #slot.Pieces == 0 then
+				rebuild(slot, typeId, elite, low)
+				fresh = true
+			end
+			slot.Parked = false
+			if low then
+				nLow += 1
+			else
+				nFull += 1
+			end
+			-- update rate: the nearest (and the special ones) every frame, the rest every 2nd
+			-- frame, half of them on each (a fresh model is posed at once)
+			if crowded and not always and not fresh and (low or not fullRate[slot]) and (frameNo + slot.Stagger) % 2 ~= 0 then
+				skipped += 1
+				continue
+			end
+			local sdt = math.min(clock - slot.StepAt, 0.25)
+			slot.StepAt = clock
+			local alpha = 1 - math.exp(-sdt * 18)
+			do
 				-- smooth toward the server position; snap on big jumps (spawn, recycle)
 				local render = slot.Render
 				if not render or (render.Position - cf.Position).Magnitude > 12 then
@@ -1038,7 +1153,7 @@ local function step(dt: number)
 				elseif clock - slot.LastAt > 0.25 then
 					slot.Speed = 0 -- no update for a while: standing still
 				end
-				slot.Move += (math.clamp(slot.Speed / 10, 0, 1) - slot.Move) * math.min(1, dt * 6)
+				slot.Move += (math.clamp(slot.Speed / 10, 0, 1) - slot.Move) * math.min(1, sdt * 6)
 
 				if slot.FlashUntil > 0 and now >= slot.FlashUntil then
 					slot.FlashUntil = 0
@@ -1081,7 +1196,12 @@ local function step(dt: number)
 					end
 				end
 
-				local bodyCF = render * CFrame.new(0, (scale - 1) * halfH, 0) * ModelLibrary.Motion(slot.Motion, clock, slot.Phase, slot.Move, slot.Scale) * pose
+				-- (a low-detail model skips the whole-body bob / sway: posed rigidly)
+				local bodyCF = render * CFrame.new(0, (scale - 1) * halfH, 0)
+				if not low then
+					bodyCF *= ModelLibrary.Motion(slot.Motion, clock, slot.Phase, slot.Move, slot.Scale)
+				end
+				bodyCF *= pose
 				if hidden then
 					bodyCF = CFrame.new(render.Position.X, -60, render.Position.Z) -- underground
 				end
@@ -1211,10 +1331,27 @@ local function step(dt: number)
 			end
 		end
 	end
-	liveCount = live
+	stats.live = live
+	screenCount = shown
+	stats.onScreen = shown + nAlways
+	stats.culled = culled
+	stats.full = nFull
+	stats.low = nLow
+	stats.always = nAlways
+	stats.parts = n
+	stats.skipped = skipped
+	stats.budget = budget
+	stats.pooled = pooledTotal
 	if n > 0 then
 		workspace:BulkMoveTo(partsBuf, cframesBuf, Enum.BulkMoveMode.FireCFrameChanged)
 	end
+end
+
+-- Last frame's level-of-detail counts (for the benchmark scenes): enemies on screen and
+-- culled, full / low-detail / always-detailed models drawn, parts moved, half-rate slots
+-- skipped, the current detail budget and the pooled models.
+function EnemyRenderer.Stats(): { [string]: number }
+	return table.clone(stats)
 end
 
 function EnemyRenderer.Init()

@@ -3077,7 +3077,25 @@ local function buildResults()
 			hide(results.Overlay, "Results")
 		end,
 	})
-	results.Timer = text(content, "Caption", "", { LayoutOrder = 5, TextXAlignment = Enum.TextXAlignment.Center })
+	-- footer: the countdown and a quiet REPORT A BUG (the same form as the pause menu's,
+	-- opened over the results; the results wait while it is open)
+	local footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 44) }, content)
+	results.Footer = footer
+	results.FooterList = UIKit.list(footer, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
+	results.Timer = text(footer, "Caption", "", { LayoutOrder = 1, Size = UDim2.fromOffset(0, TS(12) + 6), AutomaticSize = Enum.AutomaticSize.X, TextXAlignment = Enum.TextXAlignment.Center })
+	results.Bug = UIKit.Button(footer, {
+		Kind = "Secondary",
+		Title = "REPORT A BUG",
+		Icon = "warning",
+		IconSize = 16,
+		Align = "Center",
+		Shadow = false,
+		Size = UDim2.fromOffset(190, 44),
+		LayoutOrder = 2,
+		OnClick = function()
+			BugReportUI.Open()
+		end,
+	})
 
 	local function layoutResults()
 		local v = virtualSize()
@@ -3137,9 +3155,41 @@ local function buildResults()
 		end
 		results.Settlement.Size = UDim2.new(1, 0, 0, settlementLines * (results.Settlement.TextSize + 5) + 8)
 		local bodyH = stackHeight(body, 10)
-		local fixed = headH + 10 + btnH + (TS(12) + 4) + 4 * 10 + 2 * Theme.Space.XL + 8
+		-- footer: countdown and REPORT A BUG side by side, stacked when narrow
+		local bugH = slim and 40 or 44
+		results.Bug.Instance.Size = UDim2.fromOffset(TS(12) * 8 + 74, bugH)
+		local stacked = inner < 470
+		results.FooterList.FillDirection = stacked and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
+		results.FooterList.Padding = UDim.new(0, stacked and 4 or 14)
+		local footH = stacked and (TS(12) + 6 + 4 + bugH) or bugH
+		results.Footer.Size = UDim2.new(1, 0, 0, footH)
+		local fixed = headH + 10 + btnH + footH + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(140, v.Y - 24 - fixed)
 		local h = math.min(bodyH, room)
+		if bodyH > room then
+			-- the scroll area ends between two blocks, never through a line of text
+			local parts = {}
+			for _, ch in ipairs(body:GetChildren()) do
+				if ch:IsA("GuiObject") and ch.Visible then
+					table.insert(parts, ch)
+				end
+			end
+			table.sort(parts, function(a, b)
+				return a.LayoutOrder < b.LayoutOrder
+			end)
+			local y, best = 0, 0
+			for i, ch in ipairs(parts) do
+				y += ch.Size.Y.Offset
+				if y > room then
+					break
+				end
+				best = y
+				y += 10
+			end
+			if best >= 140 then
+				h = best
+			end
+		end
 		body.Size = UDim2.new(1, 0, 0, h)
 		body.CanvasSize = UDim2.fromOffset(0, bodyH)
 		body.ScrollBarThickness = bodyH > h + 1 and 4 or 0
@@ -3662,7 +3712,13 @@ local function updateFrame(dt: number)
 		end
 		-- why REPLAY is off goes on the timer line (inside the button it would truncate)
 		local tail = (not canReplay and why ~= "") and ("  ·  " .. why) or ""
+		local reporting = BugReportUI.IsOpen()
 		if results.InLobby then
+			if reporting then
+				-- the bug form is open over the results: they wait for it
+				resultsDeadline = math.max(resultsDeadline, os.clock() + 8)
+				left = math.max(0, math.ceil(resultsDeadline - os.clock()))
+			end
 			results.Timer.Text = UIKit.track("Closes in " .. left .. "s" .. tail)
 			if left <= 0 or inRun then
 				hide(results.Overlay, "Results")
@@ -3671,7 +3727,14 @@ local function updateFrame(dt: number)
 		else
 			results.Timer.Text = UIKit.track("Back to the lobby in " .. left .. "s" .. tail)
 			if not inRun then
-				hide(results.Overlay, "Results")
+				if reporting then
+					-- back in the lobby while the bug form is open: keep the results
+					-- under it, then give them a short timer of their own
+					results.InLobby = true
+					resultsDeadline = os.clock() + 10
+				else
+					hide(results.Overlay, "Results")
+				end
 			end
 		end
 	end
@@ -3810,6 +3873,13 @@ function UIBuilder.Init(d: { [string]: any })
 	BugReportUI.Build(root, { Show = show, Hide = hide, FitModal = fitModal, OnRelayout = onRelayout, VirtualSize = virtualSize, Toast = UIBuilder.Toast })
 	buildRevive()
 	buildResults()
+	do
+		-- REPORT A BUG opens from the pause menu and the results: the form sits above both
+		local form = root:FindFirstChild("BugReport")
+		if form and form:IsA("GuiObject") then
+			form.ZIndex = Theme.Z.Results + 2
+		end
+	end
 	buildSaveNotice()
 	StageUI.Build(root, {
 		Show = show,
@@ -3947,7 +4017,10 @@ function UIBuilder.Init(d: { [string]: any })
 				-- the server already ended this player's run: no SetPause, just close
 				pause.Confirming = false
 				hide(pause.Overlay, "Pause")
-				BugReportUI.Close()
+				-- (a bug report written from the results screen stays open)
+				if not results.Overlay.Visible then
+					BugReportUI.Close()
+				end
 			end
 			Tutorial.Clear()
 			if deps.Audio and deps.Audio.StopEffects then

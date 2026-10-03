@@ -21,7 +21,7 @@ def main():
         "economy-sim", "storage-sim", "difficulty-sim", "ground-sim", "audio-sim",
         "progression-regression", "combat-regression", "data-regression", "passives-regression", "run-manager-regression",
         "settlement-lifecycle", "reward-regression", "encounters-sim", "encounter-placement",
-        "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim",
+        "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim", "chest-gold-sim",
     )]
     checks += [("storage-sim", ["outage=all"]), ("runserver-sim", ["role=lobby"]),
                ("runserver-sim", ["role=run"]), ("difficulty-handoff", []),

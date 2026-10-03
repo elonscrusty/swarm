@@ -123,7 +123,8 @@ function LootSystem.Objects(): { Obj }
 end
 
 local function goldMult(player: Player): number
-	return ctx.MonetizationService.GoldMultiplier(player)
+	-- the multiplier the client was shown (GoldSystem.PriceMult), so shown price == charged price
+	return ctx.GoldSystem.PriceMult(player)
 end
 
 local function priceFor(rp, obj: Obj): number

@@ -679,13 +679,21 @@ Config.Controls = {
 -- GRAPHICS (client only)
 ------------------------------------------------------------------------------------------
 Config.Graphics = {
-	-- Enemies drawn with the full animated 3D model. Past this many, extra enemies show
-	-- their simple one-part body (keeps phones smooth in huge swarms). The nearest ones
-	-- get the models; the boss and elites are always detailed.
+	-- Enemy level of detail (src/client/EnemyRenderer.lua). No enemy ever shows its plain
+	-- server body. Enemies outside the camera view (plus CullMargin studs) have no model and
+	-- cost nothing. Of the enemies ON SCREEN, the nearest MaxDetailedEnemies get the full
+	-- animated model; the rest get a low-detail variant (the model's LowDetailParts largest
+	-- pieces in their own colours, posed rigidly). The boss, elites and static / support
+	-- creatures are always full.
 	MaxDetailedEnemies = 110,
 	-- ... and on a device that can't keep up (frames slower than 40 fps for a while) the
-	-- budget steps down toward this, and back up once frames are fast again.
-	MinDetailedEnemies = 60,
+	-- budget steps down toward this (the rest low-detail), and back up once frames are fast.
+	MinDetailedEnemies = 40,
+	LowDetailParts = 4, -- pieces in a low-detail model (a mirrored pair counts as two)
+	CullMargin = 8, -- studs past the screen edge an enemy still gets its model
+	-- When more enemies are on screen than this, only the nearest this many update their
+	-- pose every frame; the others (and every low-detail model) every 2nd frame.
+	FullRateEnemies = 50,
 	-- Effect budget: pooled effect parts animating at once (sparks, dust, rings, bolts).
 	-- Cosmetic effects past it are skipped; boss warnings and player events never are.
 	MaxEffectParts = 220,

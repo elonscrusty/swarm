@@ -93,11 +93,35 @@ function GoldSystem.AddRunGold(rp, base: number): number
 	end
 	GoldSystem.BeginRun(rp)
 	local curse = ctx.RunModifiers and ctx.RunModifiers.GoldMult() or 1
-	local amount = math.floor(base * ctx.MonetizationService.GoldMultiplier(player) * curse + 0.5)
+	local amount = math.floor(base * GoldSystem.PublishGoldMult(player) * curse + 0.5)
 	data.RunEscrow.Gold += amount
 	rp.Gold += amount
 	player:SetAttribute("RunGold", rp.Gold)
 	return amount
+end
+
+--[[
+	The gamepass gold multiplier chests and shrines are priced with. The client shows prices
+	with the GoldMult attribute (LootUI.priceOf), so the server charges with that same
+	server-written value, never with a newer one the client has not seen: a pass lookup that
+	answers late (fresh run server, a slow or failed first lookup) or a pass bought mid-run
+	used to raise the charged price above the shown one ("Not enough gold." with enough gold
+	on the HUD). PublishGoldMult moves earnings and the shown price together.
+]]
+function GoldSystem.PublishGoldMult(player: Player): number
+	local mult = ctx.MonetizationService.GoldMultiplier(player)
+	if player:GetAttribute("GoldMult") ~= mult then
+		player:SetAttribute("GoldMult", mult)
+	end
+	return mult
+end
+
+function GoldSystem.PriceMult(player: Player): number
+	local shown = tonumber(player:GetAttribute("GoldMult"))
+	if shown and shown == shown and shown > 0 and shown < math.huge then
+		return shown
+	end
+	return GoldSystem.PublishGoldMult(player)
 end
 
 -- Only the current run's unspent escrow can pay for chests and shrines.

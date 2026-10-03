@@ -17,7 +17,7 @@ Loot.Init({
  },
  StageManager = { GetPhase = function() return "Explore" end },
  MonetizationService = { GoldMultiplier = function() return 1 end },
- GoldSystem = { RunWallet = function() return 1000 end, SpendRunGold = function() return true end },
+ GoldSystem = { RunWallet = function() return 1000 end, PriceMult = function() return 1 end, SpendRunGold = function() return true end },
  ItemSystem = { Roll = function() return "HealingHerb" end, Grant = function() rewards += 1 return true, false end },
  EnemyAI = { IsBlocked = function() return false end },
  EnemySpawner = { ProgressionTime = function() return 30 end, ClampToArena = function(x, z) return x, z end, Spawn = function() uid += 1 return { Uid = uid } end },
