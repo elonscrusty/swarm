@@ -44,7 +44,7 @@
 
 **Owner:** Progression worker. Only use anchored patches in Config, since other owners edit separate sections.
 
-**Interfaces:** Continue existing `LevelUpOffer` and `LevelUpClose`. Offers additionally carry `PanelId`, `BatchRemaining`, and `BatchTotal`; repeated offers with the same PanelId update the existing panel without replaying entrance/exit. Existing `Pending` remains total banked levels. `Config.LevelUp.FirstOfferSeconds=20`, `OfferIntervalSeconds=50`, `ChoicesPerPanel=4`. `LevelUpSystem` uses active run time; it never modifies RunManager directly without coordination.
+**Interfaces:** Continue existing `LevelUpOffer` and `LevelUpClose`. Offers additionally carry `PanelId`, `BatchRemaining`, and `BatchTotal`; repeated offers with the same PanelId update the existing panel without replaying entrance/exit. Existing `Pending` remains total banked levels. `ChoicesPerPanel=4`. (The `FirstOfferSeconds` / `OfferIntervalSeconds` combat-time gates planned here were dropped: the owner decided every filled XP bar opens the panel immediately, with pace coming from `Config.XP` costs and `Config.XP.CoopShare` only.) `LevelUpSystem` never modifies RunManager directly without coordination.
 
 - [x] Add assertions for all seventeen twelve-row weapons, actual useful changes, rank-three evolution rejection/acceptance, and nondecreasing XP costs after level twenty. Observe failure first.
 - [x] Extend each weapon with explicit meaningful stats while preserving early identity, perks and stronger evolution stats; update all rank hints and dev labels.

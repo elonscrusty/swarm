@@ -6,7 +6,7 @@ Continue work on `elonscrusty/swarm` from the latest `main`. Read `CLAUDE.md` an
 
 - Automatic aiming only. Do not add manual aiming or an aiming setting.
 - Every filled XP bar immediately offers an upgrade. Do not add an upgrade pacing timer or delayed menu gate. Slow progression through higher XP costs.
-- Current XP costs are base 20 plus 8 per level through level 20, then 4 per later level: level 1 costs 28, level 20 costs 180, level 21 costs 184, and level 50 costs 300. Playtest and tune; these numbers are not live balance evidence.
+- Current XP costs are base 30 plus 12 per level through level 20, then 6 per later level: level 1 costs 42, level 20 costs 270, level 21 costs 276, and level 50 costs 450 (raised x1.5 from 20 + 8 after the owner's "way too many upgrade pop-ups" feedback; `levelrate-sim` numbers in TESTING.md). Shared gem XP in Duo / Trio is multiplied by `Config.XP.CoopShare`. Playtest and tune; these numbers are not live balance evidence.
 - After all legal weapon, passive, and evolution upgrades are exhausted, further levels grant automatic coins scaled by difficulty and survival streak.
 - The owner likes substantial animation, but specifically rejected the spinning settings cog and skin hover jitter. Keep the cog still and hover targets stable.
 - Preserve six weapon slots, weapon milestones, matching-passive evolutions, distinct difficulty phases, exploration, stage-finale bosses, challenge unlocks, permanent progression, tougher co-op, and partial coin retention on defeat.
@@ -32,7 +32,7 @@ Recent damage history is bounded to six hits over fifteen combat seconds. Defeat
 1. Build the small last-run lobby summary and explicit retry action. LastRun data and ProfileSync are ready; this client UI is not implemented. Route retry through the existing validated start-run flow and honor current character, mode, difficulty, unlock and party rules.
 2. Finish/review weapon-combination clues gated by discovered ingredients. Existing evolution/synergy UI is present, but the requested discovery-gated behavior has not been claimed complete.
 3. Review upgrade cards for concise benefit summaries. Existing delta/evolution descriptions remain; a final wording pass is unfinished.
-4. Reconcile older planning and testing documents that still mention timed upgrade pacing. The latest decision is XP-only immediate upgrades. The accessibility/co-op plan already records this correction.
+4. Done: the planning and testing documents that mentioned timed upgrade pacing (TESTING.md, the full-game polish plan and spec) now carry the XP-only immediate-upgrade decision.
 5. Playtest full 20–30 minute standard runs and tune the XP curve, difficulty, rewards and late-game variety. Portable regressions verify logic; they do not establish real balance or real phone performance.
 6. Put discovered journal entries ahead of unknown placeholders. Final phone previews show alphabetical unknown rows burying known clues, especially in landscape. Keep unknown details hidden; change only row order and verify both orientations.
 

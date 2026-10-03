@@ -32,10 +32,17 @@ Models come from two places:
 2. **Explore** while the swarm comes as always. Difficulty keeps scaling with the **total
    run time** (the per-minute tiers and spawn table), plus a per-stage multiplier
    (`Config.Stages`); stage 1 plays exactly like the old early game. HP / damage stop
-   growing with time after minute 12 (`Config.Difficulty.MaxTier`). After 90 s (and not
-   before the portal wakes) an arrow at the screen edge points every player to the portal.
+   growing with time after minute 12 (`Config.Difficulty.MaxTier`). **The portal reveal**
+   (`SwarmState.PortalReveal`, a few seconds into the stage once the portal can be charged,
+   `Config.Stages.RevealDelaySeconds` / `PortalLockSeconds`) is made unmistakable: a banner
+   "THE PORTAL HAS APPEARED" with a sound, a tall light pillar with a pulsing floor ring over
+   the portal (client `PortalBeacon`, one pooled beacon; steady and without the burst under
+   Reduced effects / Reduce flashes; colorblind palette through `Accessibility`), an
+   always-on arrow at the screen edge with the distance (`StageUI`; `HintAfterSeconds` = 0)
+   and a minimap ping (the portal marker is pinned to the map's edge while it is out of view).
 3. **Charge the portal**: stand in its rune circle for ~2 s (any living player; on a phone
-   just stand there) once it wakes up (dormant for 2:30 on stage 1, 0:45 later). That summons the stage's **boss** behind the portal: the **Scorpion Queen** on stage 1, later stages rotate the Queen, the **Moth Matriarch**, the **Rhino Warlord** and the **Hive Mother** (HP scaled by
+   just stand there) once it is revealed (`PortalLockSeconds` can keep it dormant first; the
+   owner chose 0). That summons the stage's **boss** behind the portal: the **Scorpion Queen** on stage 1, later stages rotate the Queen, the **Moth Matriarch**, the **Rhino Warlord** and the **Hive Mother** (HP scaled by
    stage and player count, the normal boss-fight spawning rules; see "Stage bosses").
 4. **Surge**: when she dies, every living player gets the boss gold and a burst of enemies
    pours out of the portal (25 + 15 per stage); survive 20 s or kill most of them. Gems,
@@ -301,6 +308,12 @@ Phase 2 ("THE HIVE MOTHER SWELLS WITH ACID!", x1.2 pace): each acid pool drips a
 of 3 small pools (r 2.4, 70% of the life) back toward her.
 
 ## Level-ups, characters, achievements
+
+**Pace** (owner decision): every filled XP bar offers an upgrade at once; there is no pacing
+timer or delayed gate, and the only brake is the XP cost curve `Config.XP` (30 + 12 per level
+to level 20, then +6: level 1 costs 42, level 20 costs 270, level 50 costs 450). The offline
+`levelrate-sim` scene (real server, hero walking in the swarm, cards auto-picked) measures
+level-ups per player-minute solo / Duo / Trio; see TESTING.md for the latest numbers.
 
 **Level-up cards** (LevelUpSystem → UIBuilder): every card says exactly what changes with real
 numbers, current → next: weapons from their stat rows ("Damage 10 → 15", "Arrows 1 → 2",
@@ -626,7 +639,8 @@ Purchases are cosmetic or convenience (gold and skins). There are no loot boxes.
 | Pacing (calm, lulls, build-up, elites, intro groups, nests) | `Config.Pacing` (`Nests`, `IntroGroupOf`), caps `Config.Enemies.MaxLiveSupport` / `MaxLiveBurrowers` |
 | Boss | `Config.Boss` (HP, crowd, `First` = stage 1's boss), `BossData.lua` (entrance, phases, attack timings, `HPMult`, `Rotation`), `Config.Stages.BossHPByStage` |
 | Stage difficulty | `Config.Stages.EnemyHPPerStage`, `EnemyDamagePerStage`, `SpawnTargetPerStage` |
-| Portal | `Config.Stages.PortalMinDistance`, `PortalRadius`, `ChargeSeconds`, `PortalLockSeconds`, `HintAfterSeconds` |
+| Portal | `Config.Stages.PortalMinDistance`, `PortalRadius`, `ChargeSeconds`, `PortalLockSeconds`, `RevealDelaySeconds`, `HintAfterSeconds` |
+| XP pace | `Config.XP.Base` / `PerLevel` / `CapLevel` / `AfterCapPerLevel` (the cost curve), `CoopShare` (shared gem XP by team size) |
 | Queen fight crowd | `Config.Stages.BossMinionShare`, `BossMinionMin`, `Config.Boss.MinionCapDuringBoss` |
 | Surge / choice | `Config.Stages.SurgeBase`, `SurgePerStage`, `SurgeSeconds`, `ChoiceSeconds`, `TravelHealFraction` |
 | What counts as a win | `Config.Stages.WinMinStages`; arena unlocks: `Config.Arenas.<name>.RequiredBestStage` |
@@ -850,7 +864,10 @@ upload them as Decals/Images, and paste each asset id into `src/shared/IconData.
   "<Name> left the run." The level-up freeze and its "<Name> is choosing" line are
   unchanged.
 - What is shared (checked in code): **XP** from gems goes to every *living* teammate
-  (each scaled by their own Growth). **Gold** is per player: your kills (1-3 gold by
+  (each scaled by their own Growth), multiplied by `Config.XP.CoopShare` for the team size
+  (Duo 0.5, Trio 0.36): Duo / Trio spawn 1.6x / 2.1x the enemies and several heroes kill
+  faster, so without it a duo levelled about twice as fast per player as a solo hero (and
+  everyone sat through everyone's upgrade panels; `levelrate-sim`). **Gold** is per player: your kills (1-3 gold by
   chance), plus the Queen's reward paid to every living player, plus the portal bonus;
   chests and shrines spend your own run gold. **Items** are per player: a chest or shrine
   gives the item to whoever paid; the Guarded Altar gives one to every living teammate.

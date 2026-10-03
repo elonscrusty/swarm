@@ -1026,11 +1026,18 @@ local function compactLandscape(): boolean
 	return UIKit.IsCompact() and not portrait
 end
 
+-- Is this card's description line the one-line gain summary (an upgrade) rather than
+-- the weapon / passive text?
+local function summaryCard(c): boolean
+	return c.Type == "WeaponUp" or c.Type == "PassiveUp"
+end
+
 -- Height of a description on a card `w` wide: one or two lines (a rough width estimate;
--- the label wraps and truncates for real), one on phones in landscape.
-local function descHeight(desc: string?, w: number): number
+-- the label wraps and truncates for real); an upgrade's summary line takes one line on
+-- phones in landscape.
+local function descHeight(desc: string?, w: number, c): number
 	local plain = string.gsub(desc or "", "<[^>]+>", "")
-	local maxLines = compactLandscape() and 1 or 2
+	local maxLines = (compactLandscape() and summaryCard(c)) and 1 or 2
 	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.44 / math.max(1, w - 2 * CARD.Pad)), 1, maxLines)
 	return TS(14) * lines + 8
 end
@@ -1048,7 +1055,7 @@ end
 -- Height a landscape card needs for everything it has to show.
 local function cardNeeds(c, w: number): number
 	local desc, stats, changes = cardContent(c)
-	local h = CARD.Band + 12 + cardTileSize() + 10 + (desc and descHeight(desc, w) + 4 or 0) + 14
+	local h = CARD.Band + 12 + cardTileSize() + 10 + (desc and descHeight(desc, w, c) + 4 or 0) + 14
 	if #changes > 0 then
 		h += boxHeight() + 6 + (#changes - 1) * (CARD.Row - 2)
 	else
@@ -1425,14 +1432,14 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		if desc then
 			text(face, "Body", desc, {
 				Position = UDim2.fromOffset(pad, y),
-				Size = UDim2.new(1, -2 * pad, 0, descHeight(desc, w)),
+				Size = UDim2.new(1, -2 * pad, 0, descHeight(desc, w, c)),
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextWrapped = true,
 				RichText = true,
 				TextColor3 = P.ivory_200,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, 14)
-			y += descHeight(desc, w) + 4
+			y += descHeight(desc, w, c) + 4
 		end
 		UIKit.Divider(face, w - 2 * pad - 20, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, y) })
 		y += 14
@@ -1457,10 +1464,12 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		-- synergy bar and the evolution hint while they fit above the footer
 		local bottom = footY - 6
 		local rw = w - 2 * pad
-		-- the synergy bar keeps its room (rows that do not fit are dropped instead)
+		-- the synergy bar and the evolution hint keep their room (rows that do not fit are
+		-- dropped instead: the description line already sums up the gain)
 		local synRoom = c.Synergy and CARD.Syn + 8 or 0
+		local hintRoom = c.Hint and hintHeight() + 4 or 0
 		local function fits(hh: number): boolean
-			return y + hh <= bottom - synRoom
+			return y + hh <= bottom - synRoom - hintRoom
 		end
 		if #changes > 0 then
 			local start = 1
@@ -1488,6 +1497,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			synergyBar(face, c, pad, y + 4, rw, CARD.Syn)
 			y += CARD.Syn + 8
 		end
+		hintRoom = 0
 		local hh = hintHeight()
 		if c.Hint and fits(hh) then
 			text(face, "Small", tostring(c.Hint), {
