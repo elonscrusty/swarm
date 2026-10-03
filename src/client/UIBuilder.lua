@@ -79,6 +79,12 @@ local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 local formatTime = UIKit.formatTime
 
+-- Reduce flashes (or Reduced effects, or the performance governor): no bright fills that
+-- pop over the UI for a frame or two (pick flash, reel landing flash and burst).
+local function noFlashes(): boolean
+	return ClientSettings.Flashes() or ClientPerformance.Reduced()
+end
+
 local function setBlocking(name: string, on: boolean)
 	if on then
 		blocking[name] = true
@@ -324,6 +330,9 @@ local function buildToasts()
 		TextStrokeTransparency = 0.5,
 		ZIndex = 2,
 	})
+	-- a long banner ("THE PORTAL IS REVEALED!") shrinks to the band instead of running off it
+	banner.Text.TextScaled = true
+	new("UITextSizeConstraint", { MinTextSize = TS(18), MaxTextSize = TS(Theme.Type.Display.Size) }, banner.Text)
 	banner.Divider = UIKit.Divider(band, 260, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.45, TS(Theme.Type.Display.Size) / 2 + 8), ZIndex = 2 })
 	onRelayout(function()
 		local v = virtualSize()
@@ -368,6 +377,11 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 		local token = bannerToken
 		local band = banner.Band :: Frame
 		local label = banner.Text :: TextLabel
+		-- a banner still fading out: stop its tweens, or they would fade this one too
+		for _, tw in ipairs(banner.Fades or {}) do
+			tw:Cancel()
+		end
+		banner.Fades = nil
 		label.Text = str
 		label.TextColor3 = Theme.Tint(color or P.gold_300, 0.45, 0.92)
 		label.TextTransparency = 0
@@ -384,13 +398,16 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 		end
 		task.delay(2.2, function()
 			if token == bannerToken then
-				TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+				local fade = TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 })
 				local tw = TweenService:Create(band, TweenInfo.new(0.5), { BackgroundTransparency = 1 })
+				banner.Fades = { fade, tw }
 				tw.Completed:Once(function()
 					if token == bannerToken then
 						band.Visible = false
+						banner.Fades = nil
 					end
 				end)
+				fade:Play()
 				tw:Play()
 			end
 		end)
@@ -758,7 +775,7 @@ local function pickAnimation(index: number)
 			if card.Name == "Card" .. index then
 				s.Scale = reduced and 1.03 or 1.09
 				UIAnim.Tween(s, 0.14, { Scale = 1.04 }, Enum.EasingStyle.Quad)
-				if face and face:IsA("GuiObject") and not reduced then
+				if face and face:IsA("GuiObject") and not noFlashes() then
 					local flash = new("Frame", { Name = "PickFlash", BackgroundColor3 = P.gold_200, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 60 }, face)
 					UIKit.corner(flash, Theme.Radius.L)
 					TweenService:Create(flash, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
@@ -1652,6 +1669,9 @@ local function buildCards(animate: boolean)
 		layoutLevelUp()
 		return nil
 	end
+	-- a relayout rebuilds the cards: the gamepad selection stays on the same card
+	local selected = GuiService.SelectedObject
+	local keep = (selected and selected.Parent == levelUp.Cards) and selected.Name or nil
 	clearCards()
 	local offer = lastOffer
 	if not offer then
@@ -1661,6 +1681,9 @@ local function buildCards(animate: boolean)
 	for i, c in ipairs(offer.Choices) do
 		local card = makeCard(c, i, #offer.Choices, animate)
 		first = first or card
+		if keep == card.Name then
+			GuiService.SelectedObject = card
+		end
 	end
 	layoutLevelUp()
 	return first
@@ -2002,18 +2025,23 @@ do
 		chest.Detail.Text = e.Detail
 		chest.Marker.Color = e.Accent
 		local reduced = (ClientSettings.Reduced() or ClientPerformance.Reduced())
+		local flashes = not noFlashes()
 		setRevealAlpha(0, not reduced)
 		if not reduced then
 			for _, s in ipairs(slots) do
 				if s.Index == reward.Land then
 					UIAnim.Punch(s.Frame, e.Big and 0.24 or 0.14)
-					s.Flash.BackgroundColor3 = e.Big and P.gold_200 or P.ivory_100
-					s.Flash.BackgroundTransparency = 0.35
-					TweenService:Create(s.Flash, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
+					if flashes then
+						s.Flash.BackgroundColor3 = e.Big and P.gold_200 or P.ivory_100
+						s.Flash.BackgroundTransparency = 0.35
+						TweenService:Create(s.Flash, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
+					end
 				end
 			end
 			UIAnim.Punch(chest.Name, 0.12)
-			burst(e.Big, e.Accent)
+			if flashes then
+				burst(e.Big, e.Accent)
+			end
 		end
 		if deps.Audio and deps.Audio.Play then
 			pcall(deps.Audio.Play, "Item", e.Big and 0.9 or nil)
@@ -2409,6 +2437,11 @@ local function settingsNote(): string
 	return "Settings are saved with your progress."
 end
 
+-- An enum setting's value as words: "RightHanded" → "RIGHT HANDED".
+local function settingWord(value: any): string
+	return string.upper((string.gsub(tostring(value), "(%l)(%u)", "%1 %2")))
+end
+
 -- The same menu is the in-run pause menu and the lobby SETTINGS screen.
 local pauseMode = "Pause" -- "Pause" | "Settings"
 local setLeaveConfirm: (on: boolean) -> ()
@@ -2493,13 +2526,14 @@ local function buildPause()
 		local key, label = option[1], option[2]
 		local b
 		b = UIKit.Button(colB, {
-			Title = label .. ": " .. tostring(ClientSettings.Get(key)), Kind = "Outline", Icon = "cycle", IconSize = 18,
+			Title = label .. ": " .. settingWord(ClientSettings.Get(key)), Kind = "Outline", Icon = "cycle", IconSize = 18,
+			Shrink = true,
 			Size = UDim2.new(1, 0, 0, 46), LayoutOrder = i + 6,
 			OnClick = function()
 				local choices = (Config.Settings :: any).Enums[key]
 				local at = table.find(choices, ClientSettings.Get(key)) or 1
 				ClientSettings.Set(key, choices[at % #choices + 1])
-				b.SetText(label .. ": " .. tostring(ClientSettings.Get(key)))
+				b.SetText(label .. ": " .. settingWord(ClientSettings.Get(key)))
 			end,
 		})
 		pause.Choices[key] = { Button = b, Label = label }
@@ -2635,6 +2669,22 @@ local function buildPause()
 	end
 	pause.Layout = layoutOptions
 	onRelayout(layoutOptions)
+
+	-- gamepad B backs out: the LEAVE RUN step first, then the menu (not while the ITEMS
+	-- list or the bug report sit on top of it, or a text box has the input)
+	UserInputService.InputBegan:Connect(function(input)
+		if input.KeyCode ~= Enum.KeyCode.ButtonB or not pause.Overlay.Visible or pause.Overlay:GetAttribute("Hiding") then
+			return
+		end
+		if blocking.Items or blocking.BugReport or UserInputService:GetFocusedTextBox() then
+			return
+		end
+		if pause.Confirming then
+			setLeaveConfirm(false)
+		else
+			UIBuilder.ClosePause()
+		end
+	end)
 end
 
 -- The pause note: frozen or not, and whether saving works.
@@ -2684,7 +2734,9 @@ local function syncOptions()
 	pause.Mute.Set(ClientSettings.Get("MuteAll") == true)
 	pause.SoundCues.Set(ClientSettings.Get("VisualAudioCues") == true)
 	for key, slider in pairs(pause.ChannelSliders) do slider.Set(ClientSettings.Get(key)) end
-	for key, option in pairs(pause.Choices) do option.Button.SetText(option.Label .. ": " .. tostring(ClientSettings.Get(key))) end
+	for key, option in pairs(pause.Choices) do
+		option.Button.SetText(option.Label .. ": " .. settingWord(ClientSettings.Get(key)))
+	end
 	pause.Layout()
 end
 
@@ -2952,11 +3004,11 @@ local function buildResults()
 
 	-- rewards first (new best, unlocks, achievements: what a short screen must not hide),
 	-- then the build and the items
-	results.Best = UIKit.Badge(body, "NEW BEST TIME!", "Gold", { LayoutOrder = 2, Visible = false })
-	results.BuildHolder = new("Frame", { Name = "Build", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 0) }, body)
-	results.ItemsHolder = new("Frame", { Name = "ItemsHolder", BackgroundTransparency = 1, LayoutOrder = 7, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
+	results.Best = UIKit.Badge(body, "NEW BEST TIME!", "Gold", { LayoutOrder = 3, Visible = false })
+	results.BuildHolder = new("Frame", { Name = "Build", BackgroundTransparency = 1, LayoutOrder = 7, Size = UDim2.new(1, 0, 0, 0) }, body)
+	results.ItemsHolder = new("Frame", { Name = "ItemsHolder", BackgroundTransparency = 1, LayoutOrder = 8, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
 	-- progress: account XP and level, the run's curses, the daily score
-	local prog = UIKit.Panel(body, { Name = "Progress", LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 96) }, true)
+	local prog = UIKit.Panel(body, { Name = "Progress", LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 96) }, true)
 	results.Progress = prog
 	Icons.Draw(prog, "track_Level", { Size = 34, Position = UDim2.fromOffset(14, 12), Back = C.PanelInset })
 	results.XPText = text(prog, "H3", "", { Name = "XP", Position = UDim2.fromOffset(60, 8), Size = UDim2.new(1, -74, 0, TS(18) + 6), RichText = true, TextTruncate = Enum.TextTruncate.AtEnd })
@@ -2968,11 +3020,11 @@ local function buildResults()
 		Size = UDim2.new(1, -74, 0, 18),
 	})
 	results.ProgLines = text(prog, "Small", "", { Name = "Lines", Position = UDim2.fromOffset(14, TS(18) + 44), Size = UDim2.new(1, -28, 0, 0), RichText = true, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextXAlignment = Enum.TextXAlignment.Center })
-	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Visible = false })
+	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Visible = false })
 	-- achievements unlocked this run (one line each: trophy, name, reward)
 	results.Achievements = text(body, "Small", "", {
 		Name = "Achievements",
-		LayoutOrder = 4,
+		LayoutOrder = 5,
 		Size = UDim2.new(1, 0, 0, 0),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextYAlignment = Enum.TextYAlignment.Top,
@@ -3041,7 +3093,7 @@ local function buildResults()
 		local tileH = slim and 72 or 104
 		local btnH = slim and 48 or Theme.Size.Button
 		grid.LayoutOrder = slim and 0 or 1
-		results.Progress.LayoutOrder = slim and 1 or 5
+		results.Progress.LayoutOrder = slim and 1 or 6
 		-- header height follows the text sizes (phones set text 20% bigger)
 		local headH = math.max(84, titleSize + 6 + TS(12) + 8 + TS(15) + 8)
 		head.Size = UDim2.new(1, 0, 0, headH)
@@ -3387,7 +3439,9 @@ local function onRunResult(data)
 	resultsDeadline = os.clock() + (data.Seconds or 20)
 	results.Body.CanvasPosition = Vector2.zero
 	show(results.Overlay, "Results", true)
-	UIKit.FocusIfGamepad(results.Replay.Instance)
+	local canReplay = replayState()
+	results.Replay.SetEnabled(canReplay)
+	UIKit.FocusIfGamepad(canReplay and results.Replay.Instance or results.Button.Instance)
 	if data.Won and deps.Audio then
 		pcall(deps.Audio.Play, "Victory")
 	end
@@ -3602,16 +3656,17 @@ local function updateFrame(dt: number)
 		local canReplay, why = replayState()
 		if results.Replay.IsEnabled() ~= canReplay then
 			results.Replay.SetEnabled(canReplay)
-			results.Replay.SetText(canReplay and "REPLAY" or string.upper(why))
 		end
+		-- why REPLAY is off goes on the timer line (inside the button it would truncate)
+		local tail = (not canReplay and why ~= "") and ("  ·  " .. why) or ""
 		if results.InLobby then
-			results.Timer.Text = UIKit.track("Closes in " .. left .. "s")
+			results.Timer.Text = UIKit.track("Closes in " .. left .. "s" .. tail)
 			if left <= 0 or inRun then
 				hide(results.Overlay, "Results")
 				results.InLobby = false
 			end
 		else
-			results.Timer.Text = UIKit.track("Back to the lobby in " .. left .. "s")
+			results.Timer.Text = UIKit.track("Back to the lobby in " .. left .. "s" .. tail)
 			if not inRun then
 				hide(results.Overlay, "Results")
 			end

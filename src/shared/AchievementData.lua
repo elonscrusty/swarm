@@ -31,6 +31,7 @@
 ]]
 
 local Palette = require(script.Parent.Palette)
+local Config = require(script.Parent.Config)
 
 local AchievementData = {}
 
@@ -96,7 +97,8 @@ AchievementData.Achievements = {
 	Conqueror = {
 		Id = "Conqueror",
 		Name = "Conqueror",
-		Description = "Clear stage 3 and leave through the portal (a win).",
+		-- a win needs Config.Stages.WinMinStages cleared stages (RunManager fires RunWon)
+		Description = string.format("Clear %d stages and leave through the portal (a win).", Config.Stages.WinMinStages),
 		Icon = "ach_Conqueror",
 		Event = "RunWon",
 		Kind = "Count",

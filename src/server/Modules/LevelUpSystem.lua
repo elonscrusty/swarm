@@ -505,6 +505,10 @@ local function rollChoices(rp)
 			end
 		end
 	end
+	if #choices == 0 and #pool > 0 then
+		-- never an empty panel (a protected pause with nothing to pick): the first legal card
+		table.insert(choices, decorate(rp, pool[1]))
+	end
 	return choices
 end
 
@@ -582,21 +586,29 @@ local function convertMaxedLevels(rp): boolean
 	local value = Config.LevelUp.FallbackGold * math.min(3, 1 + 0.1 * minutes)
 	local count = rp.PendingLevels
 	rp.PendingLevels = 0
-	closePanel(rp)
+	closePanel(rp, true) -- the last card of a panel may have maxed the build: same grace as any close
 	ctx.GoldSystem.AddRunGold(rp, value * count)
 	return true
 end
 
 local function offerNext(rp)
 	if not rp.Alive then closePanel(rp); return end
+	if rp.PendingLevels <= 0 then
+		closePanel(rp, true)
+		return
+	end
+	-- Step retries every frame while levels wait: nothing may open (or be converted) during
+	-- a reward reel, a stage swap or the pause menu, so the pool is not built until it can.
+	if not rp.Paused and (not ctx.RunManager.IsRunning() or ctx.RunManager.IsMenuPaused() or ctx.RunManager.IsFrozen()
+		or ctx.StageManager.IsHolding() or rp.RewardUntil) then
+		return
+	end
 	if convertMaxedLevels(rp) then return end
-	if rp.PendingLevels <= 0 or (rp.Paused and rp.BatchRemaining <= 0) then
+	if rp.Paused and rp.BatchRemaining <= 0 then
 		closePanel(rp, true)
 		return
 	end
 	if not rp.Paused then
-		if not ctx.RunManager.IsRunning() or ctx.RunManager.IsMenuPaused() or ctx.RunManager.IsFrozen()
-			or ctx.StageManager.IsHolding() or rp.RewardUntil then return end
 		rp.PanelId = (rp.PanelId or 0) + 1
 		rp.BatchRemaining = math.min(Config.LevelUp.ChoicesPerPanel, rp.PendingLevels)
 		rp.BatchTotal = rp.BatchRemaining
@@ -662,6 +674,7 @@ local function chestLevelUp(rp, rewards)
 	for _, id in ipairs(rp.WeaponOrder) do
 		if canEvolve(rp, id) then
 			rp.Weapons[id].Evolved = true
+			discover(rp, "Evolutions", id) -- a chest evolution reveals the result on later cards too
 			local def = WeaponData.Weapons[id]
 			table.insert(rewards, { Name = def.Evolution.Name, Text = "EVOLVED!", Color = def.Color })
 			return true
@@ -772,6 +785,10 @@ function LevelUpSystem.Step(dt: number)
 				-- One deadline bounds the entire protected panel, including all queued choices.
 				for _ = 1, Config.LevelUp.ChoicesPerPanel do
 					if not rp.Offer then break end
+					if #rp.Offer == 0 then
+						closePanel(rp, true) -- nothing to pick: never a stuck protected pause
+						break
+					end
 					choose(rp, rng:NextInteger(1, #rp.Offer))
 				end
 			end

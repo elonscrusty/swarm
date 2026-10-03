@@ -187,7 +187,8 @@ Config.LevelUp = {
 	-- If a player doesn't pick in this many seconds a random card is chosen for them,
 	-- so nobody can stay paused (and protected) forever.
 	AutoPickSeconds = 25,
-	-- In Duo/Trio a level-up freezes everyone's game, so the auto-pick comes sooner.
+	-- In Duo/Trio the chooser stands still and can't be hurt while the team keeps playing
+	-- (Run.CoopChoiceFreezesRun), so the auto-pick comes sooner.
 	GroupAutoPickSeconds = 10,
 	SkipGold = 10, -- run gold granted when a level-up is skipped
 	-- Relative weights for building the 3 cards. Luck multiplies the "new" weights.
@@ -343,9 +344,9 @@ Config.Items = {
 --   portal and each other); everything is removed on travel and when the run ends.
 --   Price = Cost x stage^CostExponent, x the player's gold multiplier (gamepass owners
 --   earn more gold, so they pay the same share: a pass never buys extra items).
---   Run gold is spent: what you earned THIS run (the RunGold counter; it was banked into
---   your saved gold as you earned it, so spending takes it back out). Savings from earlier
---   runs are never touched.
+--   Run gold is spent: what you earned THIS run (the RunGold counter, kept in the save's
+--   RunEscrow ledger until the run settles: GoldSystem). Savings from earlier runs are
+--   never touched.
 --   Open: stand next to it and hold E / gamepad X / the on-screen button (touch).
 ------------------------------------------------------------------------------------------
 Config.Chests = {

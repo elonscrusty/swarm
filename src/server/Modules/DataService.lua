@@ -54,6 +54,7 @@ local RunService = game:GetService("RunService")
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
+local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 local AccountData = require(game:GetService("ReplicatedStorage").Shared.AccountData)
 local EnemyData = require(game:GetService("ReplicatedStorage").Shared.EnemyData)
 
@@ -222,13 +223,40 @@ function DataService.Migrate(data: any): { [string]: any }
 			data[k] = v
 		end
 	end
-	if type(data.Stats) ~= "table" then
-		data.Stats = defaults.Stats
+	-- a stored table field of the wrong shape (hand edits, a partial write) gets its default;
+	-- every other field of the save is left as it is
+	for k, v in pairs(defaults) do
+		if type(v) == "table" and type(data[k]) ~= "table" then
+			data[k] = v
+		end
 	end
 	for k, v in pairs(defaults.Stats) do
-		if type(data.Stats[k]) ~= "number" then
+		local n = data.Stats[k]
+		if type(n) ~= "number" or n ~= n or math.abs(n) == math.huge then
 			data.Stats[k] = v
 		end
+	end
+	-- permanent upgrades: whole levels inside each upgrade's range (the shop compares and
+	-- prices them as numbers); ids the game no longer knows are left untouched
+	for id, level in pairs(data.Meta) do
+		local def = MetaUpgradeData.Upgrades[id]
+		if def then
+			local n = tonumber(level)
+			n = (n and n == n and n < math.huge) and math.clamp(math.floor(n), 0, def.MaxLevel) or 0
+			data.Meta[id] = n > 0 and n or nil
+		end
+	end
+	local tokens = tonumber(data.ReviveTokens)
+	data.ReviveTokens = (tokens and tokens == tokens and tokens < math.huge) and math.max(0, math.floor(tokens)) or 0
+	local purchaseIds = {}
+	for _, id in ipairs(data.PurchaseIds) do
+		if type(id) == "string" then
+			table.insert(purchaseIds, id)
+		end
+	end
+	data.PurchaseIds = purchaseIds
+	if type(data.SelectedArena) ~= "string" or not table.find(Config.Arenas.Order, data.SelectedArena) then
+		data.SelectedArena = "Forest"
 	end
 	if type(data.Gold) ~= "number" or data.Gold ~= data.Gold or math.abs(data.Gold) == math.huge then
 		data.Gold = 0
@@ -301,6 +329,15 @@ function DataService.Migrate(data: any): { [string]: any }
 	data.OwnedCharacters[CharacterData.Default] = true
 	if not CharacterData.Characters[data.SelectedCharacter] or not data.OwnedCharacters[data.SelectedCharacter] then
 		data.SelectedCharacter = CharacterData.Default
+	end
+	-- worn skins: a known skin of that character (or the Starter Pack one); ownership is
+	-- checked again by MonetizationService when the look is built
+	for characterId, skinId in pairs(data.Skins) do
+		local skin = type(skinId) == "string" and CharacterData.Skins[skinId] or nil
+		local fits = skinId == "Default" or (skin ~= nil and (skin.Character == characterId or skin.Character == "*"))
+		if not CharacterData.Characters[characterId] or not fits then
+			data.Skins[characterId] = nil
+		end
 	end
 	if data.Difficulty ~= "Standard" and data.Difficulty ~= "Veteran" and data.Difficulty ~= "Nightmare" then
 		data.Difficulty = "Standard"

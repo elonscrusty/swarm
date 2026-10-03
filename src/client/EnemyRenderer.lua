@@ -105,13 +105,21 @@ local DISC = CFrame.Angles(0, 0, math.rad(90)) -- cylinder axis X → Y (a flat 
 local FLAT = Vector3.new(1, 0, 1)
 local WHITE = Color3.new(1, 1, 1)
 local RANK_EVERY = 0.3 -- seconds between nearest-first detail rankings
-local POOL_CAP = 48 -- spare models kept per enemy type
+-- Spare models kept per enemy type / in all while a run is on (a swarm of one type churns
+-- through the detail budget, so a type may pool a full budget's worth) and the reserve
+-- kept per type once the run is over (the rest is destroyed a few models per frame).
+local POOL_CAP: number = Config.Graphics.MaxDetailedEnemies
+local POOL_TOTAL: number = math.floor(Config.Graphics.MaxDetailedEnemies * 1.5)
+local POOL_KEEP = 12
+local HALO_KEEP = 6
 local PROBE_EVERY = 4 -- seconds between checks whether a part-built type has its meshes now
 
 local partsBuf: { BasePart } = {}
 local cframesBuf: { CFrame } = {}
 local clock = 0
 local modelFolder: Instance? = nil
+local localPlayer = Players.LocalPlayer
+local trimming = false -- shedding pooled models after a run (see trimPools)
 
 -- Plain bodies (over the detail budget) in the creature colours of the art direction.
 local PLAIN: { [string]: Color3 } = {
@@ -152,6 +160,7 @@ local ELITE_GOLD = Palette.gold_400
 ------------------------------------------------------------------------------------------
 
 local modelPool: { [string]: { PooledModel } } = {}
+local pooledTotal = 0 -- models in every pool together
 -- keys whose uploaded meshes have loaded: their part-built fallbacks are no longer pooled
 local meshSeen: { [string]: boolean } = {}
 local probeTimer = PROBE_EVERY
@@ -204,7 +213,7 @@ local function releaseModel(slot: Slot)
 		list = {}
 		modelPool[key] = list
 	end
-	if key and list and #list < POOL_CAP and (isMesh(pieces) or not meshSeen[key]) then
+	if key and list and #list < POOL_CAP and pooledTotal < POOL_TOTAL and (isMesh(pieces) or not meshSeen[key]) then
 		if slot.FlashUntil > 0 then
 			restoreColors(pieces)
 		end
@@ -212,6 +221,7 @@ local function releaseModel(slot: Slot)
 			piece.Part.CFrame = PARK
 		end
 		table.insert(list, { Pieces = pieces, Motion = slot.Motion, Scale = slot.Scale, Type = slot.Type :: string, Elite = slot.Elite })
+		pooledTotal += 1
 	else
 		destroyPieces(pieces)
 	end
@@ -222,9 +232,15 @@ local function rebuild(slot: Slot, typeId: string, elite: boolean)
 	local key = modelKey(typeId, elite)
 	local list = modelPool[key]
 	local spare = list and table.remove(list)
+	if spare then
+		pooledTotal -= 1
+	end
 	while spare and meshSeen[key] and not isMesh(spare.Pieces) do
 		destroyPieces(spare.Pieces) -- a fallback left from before the meshes loaded
 		spare = table.remove(list)
+		if spare then
+			pooledTotal -= 1
+		end
 	end
 	if spare then
 		slot.Pieces, slot.Motion, slot.Scale = spare.Pieces, spare.Motion, spare.Scale
@@ -257,12 +273,14 @@ local function probeMeshes()
 					if not isMesh(list[i].Pieces) then
 						destroyPieces(list[i].Pieces)
 						table.remove(list, i)
+						pooledTotal -= 1
 					end
 				end
 				for _, piece in ipairs(pieces) do
 					piece.Part.CFrame = PARK
 				end
 				table.insert(list, { Pieces = pieces, Motion = motion, Scale = scale, Type = last.Type, Elite = last.Elite })
+				pooledTotal += 1
 			else
 				destroyPieces(pieces)
 			end
@@ -313,6 +331,33 @@ local function dropHalo(slot: Slot)
 		halo.CFrame = PARK
 		table.insert(haloPool, halo)
 	end
+end
+
+-- Once the run is over: destroys pooled models past the per-type reserve and spare halos,
+-- a few per frame (no hitch); returns false when nothing is left to trim.
+local function trimPools(): boolean
+	local n = 0
+	for _, list in pairs(modelPool) do
+		while #list > POOL_KEEP and n < 3 do
+			local spare = table.remove(list)
+			if spare then
+				destroyPieces(spare.Pieces)
+				pooledTotal -= 1
+			end
+			n += 1
+		end
+		if n >= 3 then
+			return true
+		end
+	end
+	while #haloPool > HALO_KEEP and n < 6 do
+		local halo = table.remove(haloPool)
+		if halo then
+			halo:Destroy()
+		end
+		n += 1
+	end
+	return n > 0
 end
 
 ------------------------------------------------------------------------------------------
@@ -475,6 +520,7 @@ end
 ------------------------------------------------------------------------------------------
 
 local detailed: { [Slot]: boolean } = {}
+local nextDetailed: { [Slot]: boolean } = {}
 local rankList: { Slot } = {}
 local rankTimer = 0
 local liveCount = 0 -- live enemies seen last frame (decides whether the budget applies)
@@ -513,14 +559,32 @@ local function rank()
 	table.sort(rankList, function(a, b)
 		return a.Dist < b.Dist
 	end)
-	table.clear(detailed)
+	-- hysteresis: a slot that already has its model keeps it while it ranks within 1.3x
+	-- the budget, so enemies milling at the edge of the budget do not swap models in and
+	-- out (each swap parks and re-poses a whole model); the nearest others fill the rest
 	local limit = budget
-	for i, slot in ipairs(rankList) do
-		if i > limit then
+	local keep = math.min(#rankList, math.floor(budget * 1.3))
+	local fresh = nextDetailed
+	table.clear(fresh)
+	local count = 0
+	for i = 1, keep do
+		local slot = rankList[i]
+		if detailed[slot] and count < limit then
+			fresh[slot] = true
+			count += 1
+		end
+	end
+	for _, slot in ipairs(rankList) do
+		if count >= limit then
 			break
 		end
-		detailed[slot] = true
+		if not fresh[slot] then
+			fresh[slot] = true
+			count += 1
+		end
 	end
+	nextDetailed = detailed
+	detailed = fresh
 end
 
 ------------------------------------------------------------------------------------------
@@ -894,6 +958,10 @@ local function step(dt: number)
 		probeTimer = PROBE_EVERY
 		probeMeshes()
 	end
+	if trimming then
+		-- the run ended: shed the spare models a few per frame (stops when a run starts)
+		trimming = localPlayer:GetAttribute("InRun") ~= true and trimPools()
+	end
 	local cam = workspace.CurrentCamera
 	local live = 0
 
@@ -1163,6 +1231,11 @@ function EnemyRenderer.Init()
 	folder.Parent = workspace
 	modelFolder = folder
 	ModelLibrary.SetFolder(folder)
+	localPlayer:GetAttributeChangedSignal("InRun"):Connect(function()
+		if localPlayer:GetAttribute("InRun") ~= true then
+			trimming = true
+		end
+	end)
 	Telegraphs.Init() -- the floor warnings (started here so ClientMain stays unchanged)
 	task.spawn(function()
 		local enemies = workspace:WaitForChild("SwarmEnemies")

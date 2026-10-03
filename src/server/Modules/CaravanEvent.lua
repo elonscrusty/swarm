@@ -352,15 +352,21 @@ local function succeed(c: Caravan)
 	ctx.RunManager.Broadcast("The caravan is saved! An item and gold for everyone.", Color3.fromRGB(255, 220, 120))
 end
 
-local function fail(c: Caravan)
+local FIGHTING = { Explore = true, Boss = true, Surge = true }
+
+-- Nobody held the ring for LeaveGrace seconds. While the portal is open no wave came, so
+-- the team simply left it behind (a different line: nothing "overran" it).
+local function fail(c: Caravan, phase: string)
 	setState(c, "Lost")
 	setAttr(c, "Grace", -1)
 	recolour(c, P.stone_500, true)
 	Fx.Ring(c.Pos, 10, P.stone_500)
-	ctx.RunManager.Broadcast("The caravan was overrun... nobody held its ring.", Color3.fromRGB(255, 130, 110))
+	if FIGHTING[phase] then
+		ctx.RunManager.Broadcast("The caravan was overrun... nobody held its ring.", Color3.fromRGB(255, 130, 110))
+	else
+		ctx.RunManager.Broadcast("The caravan was left behind... nobody held its ring.", Color3.fromRGB(255, 130, 110))
+	end
 end
-
-local FIGHTING = { Explore = true, Boss = true, Surge = true }
 
 function CaravanEvent.Step(dt: number)
 	local c = current
@@ -384,7 +390,7 @@ function CaravanEvent.Step(dt: number)
 	else
 		c.Empty += dt
 		if c.Empty >= K.LeaveGrace then
-			fail(c)
+			fail(c, phase)
 			return
 		end
 	end

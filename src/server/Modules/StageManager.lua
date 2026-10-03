@@ -4,10 +4,11 @@
 	run itself (players, lives, results); this module owns what happens on each stage:
 
 	  Explore  the arena of this stage with a PORTAL at a random clear spot. The swarm
-	           comes as usual (mini-waves every Config.Run.MiniWaveInterval). After
-	           HintAfterSeconds (never before the lock ends) the HUD shows an arrow to the
-	           portal. The portal is dormant for PortalLockSeconds; after that any living
-	           player standing in its rune circle charges it (ChargeSeconds).
+	           comes as usual (mini-waves every Config.Run.MiniWaveInterval). The portal is
+	           dormant for PortalLockSeconds; when the lock ends (and the stage banner has
+	           gone: RevealDelaySeconds) it is REVEALED (PortalHint / PortalReveal: the HUD
+	           arrow, banner, beacon and minimap ping) and any living player standing in
+	           its rune circle charges it (ChargeSeconds).
 	  Boss     charging summons the stage's boss behind the portal (stage 1: the Scorpion
 	           Queen; later stages rotate the Queen, Moth Matriarch, Rhino Warlord and Hive
 	           Mother, never the same one twice in a row: bossFor); HP scaled by stage and
@@ -63,7 +64,6 @@ local arenaName = "Forest"
 local portal: MapBuilder.Portal? = nil
 local lastPortal: { [string]: Vector3 } = {} -- last portal spot per arena (a new one differs)
 local stageTime = 0
-local hinted = false
 local revealed = false -- this stage's portal reveal happened (PortalReveal bumped)
 local reveals = 0
 local shownLock = -1
@@ -299,7 +299,6 @@ local function buildStage(n: number)
 	ctx.EnemyAI.SetArena(arena) -- after the portal and the loot: their colliders count too
 	BiomeHazards.SetArena(arena) -- mud / ice / quicksand / lava pools of a biome arena
 	stageTime = 0
-	hinted = false
 	revealed = false
 	shownLock = -1
 	charge = 0
@@ -581,6 +580,10 @@ local function openPortal()
 		rp.PortalChoice = nil
 		rp.PortalOffered = false
 	end
+	-- the next arena's kit moves up the mesh queue now, so it is loaded by the travel
+	if ctx.MeshService and ctx.MeshService.PrioritizeArena then
+		ctx.MeshService.PrioritizeArena(arenaFor(stage + 1))
+	end
 	ctx.RunManager.Broadcast("THE PORTAL IS OPEN", Color3.fromRGB(255, 220, 120), true)
 	-- achievements: the stage is cleared for everyone standing (a Bargain stage counts as
 	-- an optional event)
@@ -639,18 +642,12 @@ local function stepExplore(dt: number)
 	if not revealed and locked <= 0 and stageTime >= revealDelay then
 		revealed = true
 		reveals += 1
-		hinted = true
 		state:SetAttribute("PortalHint", true)
 		state:SetAttribute("PortalReveal", reveals)
 		if portal then
 			Fx.Ring(portal.Pos, Config.Stages.PortalRadius * 2.5, Color3.fromRGB(190, 210, 255))
 		end
 		ctx.RunManager.Broadcast("THE PORTAL HAS APPEARED", Color3.fromRGB(190, 210, 255), true)
-	end
-	if not hinted and stageTime >= math.max(Config.Stages.HintAfterSeconds, lockSeconds(), revealDelay) then
-		hinted = true
-		state:SetAttribute("PortalHint", true)
-		ctx.RunManager.Broadcast("The portal is marked on your screen.", Color3.fromRGB(180, 200, 255))
 	end
 	miniWaveTimer += dt
 	if miniWaveTimer >= Config.Run.MiniWaveInterval then
@@ -765,12 +762,13 @@ function StageManager.Step(dt: number)
 		return
 	end
 	if sub == "Open" then
-		stepOpen(dt)
-		return
+		stepOpen(dt) -- offers go out even while the run is frozen
 	end
 	if not ctx.RunManager.IsSimulating() then
 		return
 	end
+	-- floor hazards keep working while the portal is open too: a player who walks off the
+	-- ice or out of the mud on the way to it gets their footing back at once
 	BiomeHazards.Step(dt)
 	if sub == "Explore" then
 		stepExplore(dt)

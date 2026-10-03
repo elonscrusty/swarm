@@ -117,6 +117,7 @@ function ItemSystem.Grant(rp, id: string, source: string?, reward: boolean?, dra
 	end
 	local n = count(rp, id) + 1
 	rp.Items[id] = n
+	rp.ItemOrder = rp.ItemOrder or {}
 	if not table.find(rp.ItemOrder, id) then
 		table.insert(rp.ItemOrder, id)
 	end

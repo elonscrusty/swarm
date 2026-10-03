@@ -276,12 +276,27 @@ local function addGlow(obj: Obj, at: Vector3, color: Color3, light: boolean, rin
 	end
 end
 
+-- Shrine pieces that glow in the sigil colour (fallback parts and the kit mesh alike).
+local GLOW_PIECES = { Sigil = true, Glow = true, Rune = true, Runes = true }
+
 local function recolourGlow(obj: Obj, color: Color3?, transparency: number?)
 	for _, g in ipairs(obj.Glow) do
 		if color then
 			g.Color = color
 		end
 		g.Transparency = transparency or 0
+	end
+	if obj.Kind == "Shrine" and obj.Type ~= "Rune" then
+		-- the mesh may have replaced the part fallback since the shrine was built: its
+		-- own sigil pieces are not in obj.Glow, so look them up now
+		for _, d in ipairs(obj.Model:GetDescendants()) do
+			if d:IsA("BasePart") and GLOW_PIECES[d.Name] and not table.find(obj.Glow, d) then
+				if color then
+					d.Color = color
+				end
+				d.Transparency = transparency or 0
+			end
+		end
 	end
 	if obj.Light then
 		obj.Light.Enabled = color ~= nil and (transparency or 0) < 1
@@ -596,7 +611,11 @@ function LootSystem.BuildStage(arena, stage: number, portalPos: Vector3?)
 	for _ = 1, count do
 		local kind = table.remove(kinds, rng:NextInteger(1, #kinds))
 		local K = Config.Caravan
-		local at = spot({ MinDistance = Config.Guarded.MinDistance, Clearance = kind == "Caravan" and K.Clearance or 11, Spacing = math.max(C.Spacing, K.ZoneRadius * 2 + 10) })
+		local at = spot({
+			MinDistance = kind == "Caravan" and K.MinDistance or Config.Guarded.MinDistance,
+			Clearance = kind == "Caravan" and K.Clearance or 11,
+			Spacing = math.max(C.Spacing, K.ZoneRadius * 2 + 10),
+		})
 		if at then
 			if kind == "Guarded" then buildAltar(arena, at)
 			elseif kind == "Runes" then buildRunes(arena, at)
@@ -874,7 +893,8 @@ local function useRune(rp, obj: Obj)
 	local puzzle = obj.Puzzle
 	if not puzzle or puzzle.Solved then return end
 	if obj.Rune ~= puzzle.Order[puzzle.Progress + 1] then
-		puzzle.Progress = 0
+		-- a wrong rune resets the sequence; the first rune pressed again starts it over
+		puzzle.Progress = obj.Rune == puzzle.Order[1] and 1 or 0
 		ctx.RunManager.Notify(rp.Player, "The rune sequence resets. Read the stones' order.", P.crimson_400)
 	else
 		puzzle.Progress += 1

@@ -946,6 +946,9 @@ function ModelLibrary.Enemy(typeId: string, elite: boolean): ({ Piece }, string,
 	local meshScale = scale * (extra and extra.Scale or 1)
 	local motion = meshInfo and meshInfo[2] or "Scuttle"
 	local pieces: { Piece }? = meshInfo and ModelLibrary.MeshPieces(meshInfo[1], nil, meshScale, lift) or nil
+	if pieces and #pieces == 0 then
+		pieces = nil -- a template folder without its pieces: the part-built fallback instead
+	end
 	if pieces and extra and extra.Only then
 		-- one part of a bigger model (the War Banner from the Warlord's back)
 		local keep: { Piece } = {}

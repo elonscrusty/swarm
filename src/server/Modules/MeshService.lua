@@ -175,14 +175,19 @@ function MeshService.IsLoading(): boolean
 	return pending > 0
 end
 
+-- True when model `name` can still finish loading (queued or in flight).
+local function stillComing(name: string): boolean
+	local job = jobs[name]
+	return job ~= nil and (job.State == "queued" or job.State == "loading")
+end
+
 -- True while model `name` is not loaded yet but still might be (uploaded, and loading has
 -- not started or not finished). Callers use it to swap a fallback for the mesh later.
 function MeshService.MayLoad(name: string): boolean
 	if MeshService.Get(name) then
 		return false
 	end
-	local job = jobs[name]
-	return job ~= nil and (job.State == "queued" or job.State == "loading")
+	return stillComing(name)
 end
 
 --[[
@@ -218,7 +223,12 @@ function MeshService.Build(name: string, cframe: CFrame, palette: { [string]: Co
 	return model
 end
 
--- Calls fn when every listed model is loaded (or immediately when already loaded).
+--[[
+	Calls fn when every listed model is loaded (or immediately when already loaded). A
+	model that is not in the catalog, not uploaded (AssetId 0) or that failed to load will
+	never be ready: fn is then never called and nothing stays connected (callers keep
+	their part-built fallback).
+]]
 function MeshService.WhenReady(names: { string }, fn: () -> ())
 	local function check(): boolean
 		for _, n in ipairs(names) do
@@ -228,8 +238,19 @@ function MeshService.WhenReady(names: { string }, fn: () -> ())
 		end
 		return true
 	end
+	local function possible(): boolean
+		for _, n in ipairs(names) do
+			if not MeshService.Get(n) and not stillComing(n) then
+				return false
+			end
+		end
+		return true
+	end
 	if check() then
 		task.spawn(fn)
+		return
+	end
+	if not possible() then
 		return
 	end
 	local conn
@@ -237,6 +258,8 @@ function MeshService.WhenReady(names: { string }, fn: () -> ())
 		if check() then
 			conn:Disconnect()
 			fn()
+		elseif not possible() then
+			conn:Disconnect() -- one of them failed: the fallback stays
 		end
 	end)
 end
