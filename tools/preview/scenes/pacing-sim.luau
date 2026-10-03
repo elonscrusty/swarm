@@ -63,14 +63,32 @@ for _, rp in ipairs(rps) do
 	rp.InvulnUntil = math.huge
 end
 local centre = Config.ArenaOrigin
+local radius = 24
 local angle = 0
+-- pressure per phase: the damage the (invulnerable) hero WOULD have taken (after armor),
+-- seconds and enemies alive, per stage and phase
+local phaseStats = {}
+local function ps(stage, phase)
+	local key = stage .. phase
+	phaseStats[key] = phaseStats[key] or { Dmg = 0, Secs = 0, Alive = 0, MaxAlive = 0 }
+	return phaseStats[key]
+end
+local rawDamage = RM.DamagePlayer
+RM.DamagePlayer = function(rp, amount, cause)
+	if rp == rps[1] and amount == amount and amount > 0 and rp.Stats then
+		local d = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
+		local st = ps(SM.GetStage(), SM.GetPhase())
+		st.Dmg += d
+	end
+	return rawDamage(rp, amount, cause)
+end
 local function move(dt)
 	angle += dt * 5 / 24
 	for i, rp in ipairs(rps) do
 		local root = rp.Root
 		if root and rp.Alive then
 			local a = angle + (i - 1) * (2 * math.pi / n)
-			local pos = Vector3.new(centre.X + math.cos(a) * 24, root.Position.Y, centre.Z + math.sin(a) * 24)
+			local pos = Vector3.new(centre.X + math.cos(a) * radius, root.Position.Y, centre.Z + math.sin(a) * radius)
 			local dir = Vector3.new(-math.sin(a), 0, math.cos(a))
 			rp.MoveDir, rp.Facing = dir, dir
 			root.CFrame = CFrame.lookAt(pos, pos + dir)
@@ -116,6 +134,16 @@ local function tick(dt)
 	preview.advance(dt)
 	t += dt
 	move(dt)
+	do
+		local st = ps(SM.GetStage(), SM.GetPhase())
+		st.Secs += dt
+		local alive = 0
+		for _, e in ipairs(Spawner.Active) do
+			if e.Alive and not e.Boss then alive += 1 end
+		end
+		st.Alive += alive * dt
+		st.MaxAlive = math.max(st.MaxAlive, alive)
+	end
 	sampleBees()
 	for _, rp in ipairs(rps) do
 		if rp.Offer then
@@ -148,7 +176,17 @@ for s = 1, stages do
 	if p then
 		centre = p
 	end
-	SM.DevActivate()
+	-- charge the portal by standing in it (through the crowd); DevActivate after 40 s
+	local c0 = t
+	radius = 2
+	while not SM.IsBossFight() and t - c0 < 40 and SM.GetStage() == s do
+		tick(0.25)
+	end
+	local chargeT = t - c0
+	radius = 24
+	if not SM.IsBossFight() then
+		SM.DevActivate()
+	end
 	local b0 = t
 	local killed = false
 	while SM.GetStage() == s and t - b0 < bossMax + 120 do
@@ -163,6 +201,14 @@ for s = 1, stages do
 		end
 	end
 	local bossT = t - b0
+	do
+		local function fmt(phase)
+			local st = phaseStats[s .. phase]
+			if not st or st.Secs <= 0 then return phase .. " -" end
+			return string.format("%s %.0fs dmg/min %.0f alive avg %.0f max %d", phase, st.Secs, st.Dmg / st.Secs * 60, st.Alive / st.Secs, st.MaxAlive)
+		end
+		preview.log(string.format("PRESSURE S%d maxHP %d charge %.1fs | %s | %s | %s", s, rps[1].Stats and rps[1].Stats.MaxHP or 0, chargeT, fmt("Explore"), fmt("Boss"), fmt("Surge")))
+	end
 	-- the next stage's calm start
 	table.insert(rows, string.format("stage %d: HPx%.2f  levels %d (explore %d) L%d->L%d  gold +%d  kills +%d  boss+surge+travel %.0fs%s",
 		s, hp, rps[1].Level - startLevel, exploreLevels, startLevel, rps[1].Level, rps[1].Gold - startGold,
