@@ -564,7 +564,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				local disc = new("Frame", { Name = "Icon", BackgroundColor3 = P.moss_700, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(36, 36) }, row)
 				UIKit.corner(disc, 999)
 				UIKit.stroke(disc, P.moss_300, 1.5, 0.3)
-				Icons.Draw(disc, "sparkle", { Size = 20, Color = P.ivory_100, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.moss_700 })
+				Icons.Draw(disc, Icons.MetaIcon("Signature"), { Size = 20, Color = P.ivory_100, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.moss_700 })
 			else
 				local tile = UIKit.Tile(row, { Id = Icons.MetaIcon(id), Size = 36 })
 				tile.AnchorPoint = Vector2.new(0, 0.5)
@@ -580,12 +580,14 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd,
 				TextColor3 = maxed and P.gold_300 or P.moss_200,
 			}, 13)
-			local title, kind, icon = "", "Primary", "coin"
+			local title, kind = "", "Primary"
+			local icon = "coin"
 			if maxed then
-				title, kind, icon = "MAXED", "Secondary", "check"
+				title, kind = "MAXED", "Secondary"
+				icon = "check"
 			elseif locked then
-				local need = MetaUpgradeData.RequiredMastery(id, level + 1)
-				title, kind, icon = "MASTERY " .. need, "Secondary", "lock"
+				title, kind = "MASTERY " .. MetaUpgradeData.RequiredMastery(id, level + 1), "Secondary"
+				icon = "lock"
 			elseif busy then
 				title = "BUYING..."
 			else

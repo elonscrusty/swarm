@@ -2429,6 +2429,7 @@ local META_ICONS = {
 	Revive = "revive",
 	Reroll = "meta_Reroll",
 	Skip = "meta_Skip",
+	Signature = "sparkle", -- a hero's signature trait upgrade (Hero Mastery; the trait badge)
 }
 
 function Icons.MetaIcon(upgradeId: string): string

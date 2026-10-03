@@ -2990,6 +2990,7 @@ end
 ------------------------------------------------------------------------------------------
 
 local results: { [string]: any } = {}
+local MORE_H = 18 -- the results' MORE BELOW row
 local resultsDeadline = 0
 -- REPLAY: start the same mode again once this client is back in the lobby
 local pendingReplay: { Mode: string, Until: number, Waited: boolean }? = nil
@@ -3128,8 +3129,11 @@ local function buildResults()
 		Visible = false,
 	})
 
+	-- the scroll hint row (shown only while the body scrolls; see results.MoreHint)
+	results.More = text(content, "Caption", UIKit.track("More below") .. "  \u{25BE}", { Name = "MoreHint", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, MORE_H), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, Visible = false }, 11)
+
 	-- actions: REPLAY (same mode) and MAIN MENU
-	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 4, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
+	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
 	results.ButtonRow = row
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 	results.Replay = UIKit.Button(row, {
@@ -3170,7 +3174,7 @@ local function buildResults()
 	})
 	-- footer: the countdown and a quiet REPORT A BUG (the same form as the pause menu's,
 	-- opened over the results; the results wait while it is open)
-	local footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 44) }, content)
+	local footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 44) }, content)
 	results.Footer = footer
 	results.FooterList = UIKit.list(footer, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
 	results.Timer = text(footer, "Caption", "", { LayoutOrder = 1, Size = UDim2.fromOffset(0, TS(12) + 6), AutomaticSize = Enum.AutomaticSize.X, TextXAlignment = Enum.TextXAlignment.Center })
@@ -3267,6 +3271,11 @@ local function buildResults()
 		results.Footer.Size = UDim2.new(1, 0, 0, footH)
 		local fixed = headH + 10 + btnH + footH + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(140, v.Y - 24 - fixed)
+		local scrolls = bodyH > room
+		if scrolls then
+			room = math.max(140, room - MORE_H - 10) -- the MORE BELOW row and its gap
+		end
+		results.More.Visible = scrolls
 		local h = math.min(bodyH, room)
 		if bodyH > room then
 			-- the scroll area ends between two blocks, never through a line of text
@@ -3297,25 +3306,14 @@ local function buildResults()
 		body.ScrollBarThickness = bodyH > h + 1 and 4 or 0
 		results.MoreHint()
 	end
-	-- "MORE BELOW" pill on the body's bottom edge while there is more to scroll to (the
-	-- damage review / build sit below the fold on landscape phones); event-driven
-	local more, moreFace = UIKit.Surface(m.Face, { Name = "MoreHint", Radius = 999, Transparency = 0.05, Edge = P.gold_400, EdgeTransparency = 0.3, Shadow = false, Visible = false, ZIndex = 6, AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(0, 26) })
-	more.Active = false
-	more.AutomaticSize = Enum.AutomaticSize.X
-	moreFace.AutomaticSize = Enum.AutomaticSize.X
-	moreFace.Size = UDim2.fromScale(0, 1)
-	UIKit.padding(moreFace, 0, 12, 0, 12)
-	text(moreFace, "Caption", UIKit.track("More below") .. "  \u{25BE}", { Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200, ZIndex = 7 }, 11)
+	-- "MORE BELOW" under the body while it scrolls (the damage review / build sit below
+	-- the fold on landscape phones): its own row, so it never covers a line; dimmed once
+	-- scrolled to the end; event-driven
 	function results.MoreHint()
 		local hidden = body.CanvasSize.Y.Offset - body.Size.Y.Offset - body.CanvasPosition.Y
-		more.Visible = hidden > 8
-		if more.Visible then
-			local at = body.AbsolutePosition - m.Face.AbsolutePosition
-			more.Position = UDim2.fromOffset(math.floor(at.X + body.AbsoluteSize.X / 2), math.floor(at.Y + body.Size.Y.Offset - 2))
-		end
+		results.More.TextTransparency = hidden > 8 and 0 or 0.65
 	end
 	body:GetPropertyChangedSignal("CanvasPosition"):Connect(results.MoreHint)
-	body:GetPropertyChangedSignal("AbsolutePosition"):Connect(results.MoreHint)
 	results.Layout = layoutResults
 	onRelayout(layoutResults)
 end

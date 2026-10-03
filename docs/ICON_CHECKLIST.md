@@ -6,7 +6,7 @@ Uploaded pictures live in `src/shared/IconData.lua` (filled by `tools/gen_icon_d
 If a picture cannot load, Icons draws the vector icon (or a framed glyph) underneath.
 Preload list for ContentProvider: `Icons.PreloadList()`.
 
-Entries: 289. Problems: 2.
+Entries: 288. Problems: 0.
 
 ## Weapons
 
@@ -190,7 +190,7 @@ UPGRADES screen (Icons.MetaIcon); reuse the passive pictures.
 | `revive` | Revive [Revive] | UPGRADES > Permanent | rbxassetid://140117129153655 | working (image) |
 | `meta_Reroll` | Reroll [Reroll] | UPGRADES > Permanent | rbxassetid://98523887076244 | working (image) |
 | `meta_Skip` | Skip [Skip] | UPGRADES > Permanent | rbxassetid://76939994277622 | working (image) |
-| `None` | Signature [Signature] | UPGRADES > Permanent | - | MISSING |
+| `sparkle` | Signature [Signature] | UPGRADES > Permanent | rbxassetid://111611145817346 | working (image) |
 
 ## Arenas / stages
 
@@ -312,7 +312,6 @@ Every icon name written in src (screens that use it).
 |---|---|---|---|---|
 | `EmberOil` | EmberOil | SynergyData | rbxassetid://112910906183463 | working (image) |
 | `Hellfire` | Hellfire | SynergyData | rbxassetid://87778137198245 | working (image) |
-| `MAXED` | MAXED | MenuCharacters | no picture, no drawn icon | INVALID |
 | `Thornhide` | Thornhide | SynergyData | rbxassetid://136143539357678 | working (image) |
 | `ach_Badge` | ach_Badge | MenuStats | rbxassetid://101875926496129 | working (image) |
 | `ach_BriarBane` | ach_BriarBane | AchievementData | rbxassetid://98289158673669 | working (image) |
@@ -349,7 +348,7 @@ Every icon name written in src (screens that use it).
 | `chevronsUp` | chevronsUp | Hud, LobbyScreen, MenuCharacters, MenuLeaderboards, MenuUpgrades, UIBuilder | rbxassetid://78081015628207 | working (image) |
 | `clock` | clock | MenuLeaderboards, MenuPlaytime | rbxassetid://75400395089147 | working (image) |
 | `close` | close | BugReportUI, DevInbox, DevPanel, MenuCurses, MenuParty, UIBuilder | rbxassetid://70434531884861 | working (image) |
-| `coin` | coin | LobbyScreen, MenuUpgrades | drawn: DRAW.coin | working (drawn) |
+| `coin` | coin | LobbyScreen, MenuCharacters, MenuUpgrades | drawn: DRAW.coin | working (drawn) |
 | `crown` | crown | MenuLeaderboards | rbxassetid://111893393943562 | working (image) |
 | `curse` | curse | LobbyScreen | rbxassetid://74035374082108 | working (image) |
 | `curse_EliteSurge` | curse_EliteSurge | CurseData | rbxassetid://109626819548762 | working (image) |
@@ -418,5 +417,4 @@ Intentional: text buttons.
 
 ## Problems
 
-- Meta upgrades (permanent): None (Signature [Signature]) -> MISSING
-- All literal UI icon keys: MAXED (MAXED) -> INVALID
+None: every catalog entry has a real icon.
