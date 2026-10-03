@@ -2,6 +2,7 @@
 -- bounded, and never replace the real damaging area or the enemy's attack telegraph.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Theme"))
 local Settings = require(script.Parent.ClientSettings)
 local Accessibility = {}
 local player = Players.LocalPlayer
@@ -55,8 +56,8 @@ function Accessibility.Cue(name: string, position: Vector3?)
 		text.BackgroundColor3 = Color3.fromRGB(20, 27, 35)
 		text.BackgroundTransparency = 0.1
 		text.TextColor3 = colors.Neutral
-		text.TextSize = 15
-		text.Font = Enum.Font.SourceSansBold
+		text.TextSize = Theme.TextSize.Small
+		text.FontFace = Theme.Font.Label
 		text.Active = false
 		text.Parent = gui
 		cue = text
@@ -65,8 +66,8 @@ function Accessibility.Cue(name: string, position: Vector3?)
 	local root = char and char.PrimaryPart
 	if position and root then
 		local delta = position - root.Position
-		label ..= math.abs(delta.X) > math.abs(delta.Z) and (delta.X > 0 and " • EAST" or " • WEST")
-			or (delta.Z > 0 and " • SOUTH" or " • NORTH")
+		label ..= math.abs(delta.X) > math.abs(delta.Z) and (delta.X > 0 and " · EAST" or " · WEST")
+			or (delta.Z > 0 and " · SOUTH" or " · NORTH")
 	end
 	local display = cue :: TextLabel
 	display.Text = label
@@ -82,11 +83,13 @@ type Hazard = { Model: Model, Parts: { BasePart }, Label: TextLabel, Kind: strin
 local hazards: { Hazard } = {}
 local arena: Instance? = nil
 local detailFolder: Folder? = nil
+local outlineColor: Color3? = nil -- colour the outline parts were last painted (recoloured only on change)
 local function clearHazards()
 	for _, hazard in ipairs(hazards) do
 		for _, p in ipairs(hazard.Parts) do p:Destroy() end
 	end
 	table.clear(hazards)
+	outlineColor = nil
 	if detailFolder then detailFolder:Destroy(); detailFolder = nil end
 end
 
@@ -125,7 +128,7 @@ local function readHazards(model: Instance)
 			text.Text = "! " .. string.upper(kind)
 			text.TextColor3 = colors.Neutral
 			text.TextStrokeTransparency = 0.15
-			text.Font, text.TextSize = Enum.Font.SourceSansBold, 12
+			text.FontFace, text.TextSize = Theme.Font.Label, Theme.TextSize.Caption
 			text.Parent = gui
 			table.insert(hazards, { Model = child, Parts = pieces, Label = text, Kind = kind })
 		end
@@ -154,9 +157,13 @@ function Accessibility.Init()
 			arena = current
 			if current then readHazards(current) else clearHazards() end
 		end
-		for _, hazard in ipairs(hazards) do
-			local color = Accessibility.Color(Color3.fromRGB(240, 143, 80), "Danger")
-			for _, p in ipairs(hazard.Parts) do p.Color = color end
+		-- paint the outlines once per colour change (a palette switch), not every tick
+		local color = Accessibility.Color(Color3.fromRGB(240, 143, 80), "Danger")
+		if #hazards > 0 and color ~= outlineColor then
+			outlineColor = color
+			for _, hazard in ipairs(hazards) do
+				for _, p in ipairs(hazard.Parts) do p.Color = color end
+			end
 		end
 	end)
 end

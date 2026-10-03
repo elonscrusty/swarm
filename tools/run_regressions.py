@@ -19,7 +19,7 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
     checks = [(name, []) for name in (
         "economy-sim", "storage-sim", "difficulty-sim", "ground-sim", "audio-sim",
-        "progression-regression", "combat-regression", "run-manager-regression",
+        "progression-regression", "combat-regression", "data-regression", "run-manager-regression",
         "settlement-lifecycle", "reward-regression", "encounters-sim", "encounter-placement",
         "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim",
     )]

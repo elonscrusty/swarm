@@ -97,17 +97,24 @@ local function watch(img: ImageLabel, fallbacks: Fallbacks, fadeIn: number?, tar
 	if fade then
 		img.ImageTransparency = 1
 	end
+	if fade then
+		img:SetAttribute("ArtFadeTarget", target)
+	end
+	local function loaded(shown: boolean)
+		if shown then
+			showFallbacks(fallbacks, false)
+		end
+		if fade then
+			img:SetAttribute("ArtFadeTarget", nil)
+			TweenService:Create(img, TweenInfo.new(fadeIn :: number), { ImageTransparency = target }):Play()
+		end
+	end
 	task.spawn(function()
 		local waited = 0
 		local shown = false
 		while img.Parent and img:GetAttribute("ArtToken") == token and waited < GIVE_UP do
 			if img.IsLoaded then
-				if shown then
-					showFallbacks(fallbacks, false)
-				end
-				if fade then
-					TweenService:Create(img, TweenInfo.new(fadeIn :: number), { ImageTransparency = target }):Play()
-				end
+				loaded(shown)
 				return
 			end
 			if waited >= FALLBACK_DELAY and not shown then
@@ -117,10 +124,27 @@ local function watch(img: ImageLabel, fallbacks: Fallbacks, fadeIn: number?, tar
 			task.wait(POLL)
 			waited += POLL
 		end
-		-- never loaded: the fallbacks stay (shown by now); a faded picture shows as it is
-		if fade and img.Parent and img:GetAttribute("ArtToken") == token then
+		if not (img.Parent and img:GetAttribute("ArtToken") == token) then
+			return
+		end
+		-- not loaded within GIVE_UP: the fallbacks stay for now, a faded picture shows as it
+		-- is, and the picture still arriving later (slow network) hides them when it is in,
+		-- so a fallback is never left over a loaded picture
+		if fade then
+			img:SetAttribute("ArtFadeTarget", nil)
 			img.ImageTransparency = target
 		end
+		local conn: RBXScriptConnection? = nil
+		conn = img:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+			if conn and (not img.Parent or img:GetAttribute("ArtToken") ~= token) then
+				conn:Disconnect()
+				conn = nil
+			elseif conn and img.IsLoaded then
+				conn:Disconnect()
+				conn = nil
+				showFallbacks(fallbacks, false)
+			end
+		end)
 	end)
 end
 
@@ -170,6 +194,12 @@ function ArtImage.Set(img: ImageLabel?, key: string?, fallbacks: Fallbacks)
 	img.Visible = true
 	if img.Image ~= image then
 		img.Image = image
+	end
+	-- re-pointed mid fade-in: the picture must not stay at the fade's transparent start
+	local pending = tonumber(img:GetAttribute("ArtFadeTarget"))
+	if pending then
+		img:SetAttribute("ArtFadeTarget", nil)
+		img.ImageTransparency = pending
 	end
 	watch(img, fallbacks, nil, img.ImageTransparency)
 end

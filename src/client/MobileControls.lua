@@ -42,6 +42,7 @@ local knob: Frame
 local uiScale: UIScale? = nil
 local jumpButton: TextButton? = nil
 local jumpUsable: boolean? = nil
+local relayout: (() -> ())? = nil -- re-applies scale and side (set by buildGui)
 
 -- Lets other UI stop movement (level-up screen, panels, results).
 function MobileControls.SetEnabled(on: boolean)
@@ -77,6 +78,9 @@ end
 
 function MobileControls.SetScale(scale: UIScale)
 	uiScale = scale
+	if relayout then
+		relayout()
+	end
 end
 
 local function radiusPixels(): number
@@ -220,15 +224,35 @@ local function buildGui()
 	end)
 	jumpButton = jump
 
-	-- keep the stick graphic scaled like the rest of the UI
-	RunService.RenderStepped:Connect(function()
-		scale.Scale = uiScale and uiScale.Scale or 1
+	-- keep the stick graphic and the JUMP button scaled like the rest of the UI and on the
+	-- side the touch layout asks for; event-driven (UI scale / setting changes), not per frame
+	local watchedScale: UIScale? = nil
+	local scaleConn: RBXScriptConnection? = nil
+	local function layout()
+		local base = uiScale and uiScale.Scale or 1
 		local compact = ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1
-		scale.Scale *= compact
-		jumpScale.Scale = (uiScale and uiScale.Scale or 1) * compact
+		scale.Scale = base * compact
+		jumpScale.Scale = base * compact
 		local left = ClientSettings.Get("TouchLayout") == "LeftHanded"
 		jump.AnchorPoint = Vector2.new(left and 0 or 1, 1)
 		jump.Position = UDim2.new(left and 0 or 1, left and M.ButtonMargin or -M.ButtonMargin, 1, -M.ButtonMargin)
+		if uiScale ~= watchedScale then
+			if scaleConn then
+				scaleConn:Disconnect()
+				scaleConn = nil
+			end
+			watchedScale = uiScale
+			if uiScale then
+				scaleConn = uiScale:GetPropertyChangedSignal("Scale"):Connect(layout)
+			end
+		end
+	end
+	relayout = layout
+	layout()
+	ClientSettings.OnChanged(function(key)
+		if key == "TouchLayout" then
+			layout()
+		end
 	end)
 end
 

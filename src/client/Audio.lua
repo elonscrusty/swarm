@@ -199,7 +199,11 @@ local function setDuck(on: boolean)
 		if crowdTween[A.Duck.Target] then
 			crowdTween[A.Duck.Target]:Cancel()
 		end
-		TweenService:Create(target, TweenInfo.new(on and 0.08 or 0.4), { Volume = on and base * A.Duck.Volume or base }):Play()
+		-- kept in crowdTween so the next crowd update cancels it (two tweens on one group
+		-- would fight over its volume)
+		local t = TweenService:Create(target, TweenInfo.new(on and 0.08 or 0.4), { Volume = on and base * A.Duck.Volume or base })
+		crowdTween[A.Duck.Target] = t
+		t:Play()
 	end
 end
 
@@ -394,11 +398,14 @@ local function fadeMusic(name: string, s: Sound, target: number, seconds: number
 	musicTweens[name] = t
 	t.Completed:Connect(function(state)
 		if state == Enum.PlaybackState.Completed then
-			musicTweens[name] = nil
+			if musicTweens[name] == t then
+				musicTweens[name] = nil
+			end
 			if onDone then
 				onDone()
 			end
 		end
+		t:Destroy() -- a cancelled or finished crossfade tween is not kept around
 	end)
 	t:Play()
 end

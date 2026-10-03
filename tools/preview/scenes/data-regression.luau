@@ -1,5 +1,5 @@
--- wf-data-sanity: pure data checks over WeaponData / EnemyData / BossData / Config
--- (temporary sweep helper; prints every finding, errors at the end if any).
+-- data-regression: pure data checks over WeaponData / EnemyData / BossData / Config
+-- (every weapon row, evolution, perk, visual, spawn table and boss cycle); errors on any finding.
 local WeaponData = preview.shared("WeaponData")
 local EnemyData = preview.shared("EnemyData")
 local BossData = preview.shared("BossData")
