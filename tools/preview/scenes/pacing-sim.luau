@@ -168,8 +168,7 @@ local function sampleBees()
 		preview.log("BEES alive per run minute: " .. table.concat(parts, " | "))
 	end
 end
-local ups = {}
-local lastSeq, waveLog = 0, {} -- { T, Stage, Phase, N }
+local ups = {} -- { T, Stage, Phase, N }
 local last = rps[1].Level
 local function tick(dt)
 	preview.advance(dt)
@@ -190,12 +189,6 @@ local function tick(dt)
 		if rp.Offer then
 			rp.OfferDeadline = 0
 		end
-	end
-	local st = game:GetService("ReplicatedStorage"):FindFirstChild("SwarmState")
-	local seq = st and st:GetAttribute("WaveSeq") or 0
-	if seq ~= lastSeq then
-		lastSeq = seq
-		waveLog[SM.GetStage()] = (waveLog[SM.GetStage()] or "") .. string.format(" %d@%d:%02d", st:GetAttribute("Wave") or 0, t // 60, t % 60)
 	end
 	local rp = rps[1]
 	if not rp then
@@ -263,7 +256,6 @@ for s = 1, stages do
 			return string.format("%s %.0fs dmg/min %.0f alive avg %.0f max %d", phase, st.Secs, st.Dmg / st.Secs * 60, st.Alive / st.Secs, st.MaxAlive)
 		end
 		logHits(s)
-		preview.log(string.format("WAVES S%d%s", s, waveLog[s] or " none"))
 		preview.log(string.format("PRESSURE S%d maxHP %d charge %.1fs | %s | %s | %s", s, rps[1].Stats and rps[1].Stats.MaxHP or 0, chargeT, fmt("Explore"), fmt("Boss"), fmt("Surge")))
 	end
 	-- the next stage's calm start
