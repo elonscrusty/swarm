@@ -38,7 +38,9 @@ local NEW = { "GiantsBane", "Thornhide", "BloodRune", "AegisCharm", "Windstep", 
 local base = StatSheet.Compute({ CharacterId = rp.CharacterId })
 for _, id in ipairs(NEW) do
 	local def = assert(PassiveData.Passives[id], id .. " missing")
-	assert(table.find(PassiveData.Order, id), id .. " not in Order (level-up pool)")
+	-- released (Order) or held for a later update (HeldOrder), never both
+	local released, held = table.find(PassiveData.Order, id) ~= nil, table.find(PassiveData.HeldOrder or {}, id) ~= nil
+	assert(released ~= held, id .. " must be in exactly one of Order / HeldOrder")
 	assert(#def.Description <= 48, id .. " card text too long")
 	local prev = base
 	for level = 1, PassiveData.MaxLevelOf(id) do
