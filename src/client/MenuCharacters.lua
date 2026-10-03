@@ -751,7 +751,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 		ui.Name.TextSize = TS(nameSize)
 		ui.Role.Text = string.upper(def.Role or "")
-		ui.Desc.Text = def.Description
+		ui.Desc.Text = def.Description -- (the trait's current value is set below)
 		local weapon = WeaponData.Weapons[def.StartWeapon]
 		ui.Weapon.Text = weapon and weapon.Name or def.StartWeapon
 		ui.Bonus.Text = def.Trait and def.Trait.Name or (def.BonusText or "")
@@ -759,6 +759,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		if own and type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[inspChar]) == "table" then
 			sigLevel = math.floor(tonumber(p.HeroUpgrades[inspChar].Signature) or 0)
 		end
+		ui.Desc.Text = currentTraitText(inspChar, def.Description, sigLevel)
 		local big, body, list = splitEffect(currentTraitText(inspChar, def.Trait and def.Trait.Text or (def.BonusText or ""), sigLevel))
 		ui.EffectBig.Text = big or ""
 		ui.EffectBig.Visible = big ~= nil
