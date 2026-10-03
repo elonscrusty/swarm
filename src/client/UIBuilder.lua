@@ -111,6 +111,7 @@ local function setCovering(name: string, on: boolean)
 	end
 	Hud.SetCovered(next(covering) ~= nil)
 	MiniMap.SetCovered(next(covering) ~= nil)
+	LootUI.SetCovered(next(covering) ~= nil)
 end
 
 -- Opening: the dimmer fades in and the panel pops up with a little overshoot.
@@ -2454,6 +2455,47 @@ local function stackHeight(frame: Instance, gap: number): number
 	return h + math.max(0, n - 1) * gap
 end
 
+-- The tallest cut (<= h, >= floor) through the stacked settings columns that splits no
+-- row: the columns' rows laid out as their UIListLayout does (COLUMN_PAD - 4 on top, 6
+-- between). Returns h when there is no such cut.
+local function snapToRows(cols: { Frame }, h: number, floor: number): number
+	local rows: { { number } } = {}
+	for _, col in ipairs(cols) do
+		local list = {}
+		for _, ch in ipairs(col:GetChildren()) do
+			if ch:IsA("GuiObject") and ch.Visible then
+				table.insert(list, ch)
+			end
+		end
+		table.sort(list, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		local y = col.Position.Y.Offset + 12
+		for _, ch in ipairs(list) do
+			table.insert(rows, { y, y + ch.Size.Y.Offset })
+			y += ch.Size.Y.Offset + 6
+		end
+	end
+	local best = nil
+	for _, r in ipairs(rows) do
+		for _, cut in ipairs({ r[1] - 2, r[2] + 3 }) do
+			if cut <= h and cut >= floor and (best == nil or cut > best) then
+				local ok = true
+				for _, o in ipairs(rows) do
+					if o[1] < cut and cut < o[2] then
+						ok = false
+						break
+					end
+				end
+				if ok then
+					best = cut
+				end
+			end
+		end
+	end
+	return best or h
+end
+
 -- A settings column heading: serif caps in gold over a hairline.
 local function sectionCaption(parent: Instance, str: string, order: number)
 	local h = TS(18) + 14
@@ -2704,6 +2746,10 @@ local function buildPause()
 		local fixed = (TS(30) + 6) + 10 + pause.Note.Size.Y.Offset + Theme.Size.Button + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(160, v.Y - 24 - fixed)
 		local h = math.min(contentH, room)
+		if contentH > h + 1 then
+			-- the scroll edge falls between rows, not through a title or its description
+			h = snapToRows({ colA, colB }, h, math.max(140, h - 140))
+		end
 		options.Size = UDim2.new(1, 0, 0, h)
 		options.CanvasSize = UDim2.fromOffset(0, contentH)
 		options.ScrollBarThickness = contentH > h + 1 and 4 or 0
@@ -3258,6 +3304,14 @@ local function fillProgress(data: any)
 			table.insert(names, def and def.Name or tostring(id))
 		end
 		table.insert(lines, string.format('<font color="%s"><b>CURSES</b></font>  %s  ·  <font color="%s">%s gold</font>', hex(P.crimson_300), table.concat(names, " · "), hex(P.gold_300), CurseData.GoldText(tonumber(data.CurseGold) or CurseData.GoldMult(curses))))
+	end
+	-- Hero Mastery: "KNIGHT MASTERY  +120 XP  ·  Level 3 → 4"
+	local m = type(data.Mastery) == "table" and data.Mastery or nil
+	if m and (tonumber(m.Gained) or 0) > 0 then
+		local hero = CharacterData.Characters[m.Hero]
+		local mf, mt = tonumber(m.From) or 1, tonumber(m.To) or 1
+		table.insert(lines, string.format('<font color="%s"><b>%s MASTERY</b></font>  +%s XP%s', hex(P.gold_300), string.upper(hero and hero.Name or "Hero"),
+			UIKit.formatNumber(tonumber(m.Gained) or 0), mf ~= mt and string.format('  ·  <font color="%s">Level %d → %d</font>', hex(P.moss_200), mf, mt) or ""))
 	end
 	local d = type(data.Daily) == "table" and data.Daily or nil
 	if d then

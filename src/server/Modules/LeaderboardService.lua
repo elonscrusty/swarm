@@ -70,6 +70,8 @@ local lastWrite: { [string]: number } = {}
 local localBoards: { [string]: { [number]: number } } = {} -- "local" mode (and recent writes)
 local names: { [number]: string } = {}
 local submitted: { [string]: boolean } = {} -- runId .. "|" .. board .. "|" .. userId already queued
+local submittedCount = 0 -- entries in `submitted` (cleared past MaxSubmitted: a long-lived lobby)
+local MaxSubmitted = 4096
 local flushTimer = 0
 local flushing = false
 
@@ -142,7 +144,14 @@ function LeaderboardService.Submit(player: Player, board: string, value: number,
 		if submitted[once] then
 			return
 		end
+		-- a run is committed once (RunManager), so this guard only matters within one
+		-- commit: forgetting old runs keeps a server that runs for days from growing
+		if submittedCount >= MaxSubmitted then
+			table.clear(submitted)
+			submittedCount = 0
+		end
 		submitted[once] = true
+		submittedCount += 1
 	end
 	value = math.floor(value)
 	local name = storeName(board, day)

@@ -19,9 +19,9 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
     checks = [(name, []) for name in (
         "economy-sim", "storage-sim", "difficulty-sim", "ground-sim", "audio-sim",
-        "progression-regression", "combat-regression", "data-regression", "passives-regression", "run-manager-regression", "fall-regression",
+        "progression-regression", "mastery-regression", "combat-regression", "data-regression", "passives-regression", "run-manager-regression", "fall-regression",
         "settlement-lifecycle", "reward-regression", "encounters-sim", "encounter-placement",
-        "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim", "chest-gold-sim",
+        "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim", "chest-gold-sim", "curses-sim",
     )]
     checks += [("storage-sim", ["outage=all"]), ("runserver-sim", ["role=lobby"]),
                ("runserver-sim", ["role=run"]), ("difficulty-handoff", []),
@@ -41,6 +41,8 @@ def main():
     # (text over text, text off screen or under the Roblox top bar, panels off screen)
     checks += [("layout", [scene, device]) for device in ("iphone", "phone-portrait")
                for scene in ("menu", "levelup", "results", "pause", "revive", "stage-choice", "characters", "countdown")]
+    # the CHARACTERS screen with the Hero Mastery upgrade rows open
+    checks += [("layout", ["characters", device, "mastery=open"]) for device in ("iphone", "phone-portrait")]
 
     def run(check):
         scene, settings = check
@@ -55,9 +57,11 @@ def main():
         if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby"):
             command.remove("--studio")
         if scene == "layout":
-            layout_scene, device = settings
+            layout_scene, device = settings[0], settings[1]
             command = [args.lune, "run", "tools/preview/runtime/main.luau", "--", "--scene", layout_scene,
                        "--device", device, "--out", str(args.out / (name + ".json")), "--set", "images=loaded"]
+            for setting in settings[2:]:
+                command.extend(["--set", setting])
         elif scene not in scripts:
             for setting in settings:
                 command.extend(["--set", setting])

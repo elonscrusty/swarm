@@ -17,7 +17,8 @@
 	                pinned to the edge with a pointer, pinged once when it appears
 	  caravan       the Lost Caravan (workspace.SwarmEvents.Caravan): wood square, gold
 	                edge while defended, pinned to the edge, pinged when the defence starts
-	  loot          chests (gold squares), shrines (ivory diamonds), the altar (amber ring),
+	  loot          paid chests (gold squares), free chests (Price 0: white squares), shrines
+	                (ivory diamonds), the altar (amber ring),
 	                in range only; gone once opened / spent / claimed
 	  teammates     blue discs (dimmed while fallen), eased between updates
 	  enemies       at most MAX_ENEMY_DOTS faint red dots sampled evenly from the enemies
@@ -701,8 +702,11 @@ local function updateSlow()
 					used += 1
 					local f = ui.Loot[used]
 					placeAt(f, lpos.X, lpos.Z)
+					-- paid chests gold squares, free ones (caches, Price 0) ivory squares,
+					-- shrines ivory diamonds
 					local shrine = kind == "Shrine"
-					local c = Accessibility.Color(shrine and P.ivory_200 or P.gold_400, shrine and "Neutral" or "Loot")
+					local paid = not shrine and (tonumber(m:GetAttribute("Price")) or 0) > 0
+					local c = if shrine then Accessibility.Color(P.ivory_200, "Neutral") elseif paid then Accessibility.Color(P.gold_400, "Loot") else P.ivory_50
 					if f.BackgroundColor3 ~= c then
 						f.BackgroundColor3 = c
 					end

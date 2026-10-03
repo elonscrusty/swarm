@@ -232,6 +232,7 @@ type PropOpts = {
 	occluder: boolean?, -- tag "SwarmOccluder"
 	query: boolean?, -- CanQuery on (the dais: the showcase finds its top by raycast)
 	fallback: ((Model, CFrame, number, { [string]: Color3 }, boolean) -> ())?, -- builder for models without a FALLBACK entry
+	stretch: number?, -- widen the piece along its own X axis (one long cliff-face rock instead of two)
 }
 
 local function kitEntry(name: string): any
@@ -556,6 +557,21 @@ local function whenMeshLoads(name: string, fn: () -> ())
 	table.insert(list :: { () -> () }, fn)
 end
 
+-- Widens every piece of a placed prop by k along the prop's X axis (positions and sizes).
+local function stretchX(container: Model, cf: CFrame, k: number)
+	for _, d in ipairs(container:GetChildren()) do
+		if d:IsA("BasePart") then
+			local rel = cf:ToObjectSpace(d.CFrame)
+			local p = rel.Position
+			d.CFrame = cf * CFrame.new(p.X * k, p.Y, p.Z) * rel.Rotation
+			-- the piece's own X runs along the prop's X (unrotated import): widen it
+			if math.abs(rel.RightVector.X) > 0.99 then
+				d.Size = Vector3.new(d.Size.X * k, d.Size.Y, d.Size.Z)
+			end
+		end
+	end
+end
+
 local function applyOpts(p: BasePart, opts: PropOpts)
 	if opts.shadow == false then
 		p.CastShadow = false
@@ -570,6 +586,9 @@ local function fillMesh(container: Model, name: string, cf: CFrame, scale: numbe
 	local model = MeshService.Build(name, cf, palette, scale)
 	if not model then
 		return false
+	end
+	if opts.stretch then
+		stretchX(model, cf, opts.stretch)
 	end
 	for _, d in ipairs(model:GetChildren()) do
 		if d:IsA("BasePart") then
@@ -595,6 +614,9 @@ local function prop(parent: Instance, name: string, cf: CFrame, scale: number?, 
 		local build = FALLBACK[name] or o.fallback or catalogFallback(name)
 		if build then
 			build(container, cf, s, kitPalette(name, palette), o.shadow ~= false)
+			if o.stretch then
+				stretchX(container, cf, o.stretch)
+			end
 			for _, d in ipairs(container:GetChildren()) do
 				if d:IsA("BasePart") then
 					applyOpts(d, o)
@@ -1301,9 +1323,11 @@ local function smoothPath(ctrl: { Vector2 }, step: number): { Vector2 }
 	return out
 end
 
--- Flat dirt path with a soft (grass-dirt) edge. Segments butt end to end (no overlap,
--- so no z-fighting seams from the high run camera); a disc a hair lower fills the outside
--- of every bend. Registered in arena.Paths (decoration keeps off it).
+-- Flat dirt path with a soft (grass-dirt) edge: two slabs per segment (edge + core), no
+-- extra parts at the bends. Each segment is lengthened at both ends by the mitre of its
+-- bend, so neighbours overlap and close the wedge on the outside of every bend;
+-- neighbours sit 0.06 studs apart in height (odd / even), so the overlaps never
+-- z-fight from the high run camera. Registered in arena.Paths (decoration keeps off it).
 local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Color3, edge: Color3, yBase: number)
 	local pts = smoothPath(ctrl, 18)
 	local edgeW = width + 2.8
@@ -1313,6 +1337,18 @@ local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Co
 	local function beyond(p: Vector2): boolean
 		return math.abs(p.X) > h + 2 or p.Y < -h - 2 or p.Y > h + 34
 	end
+	-- tan(half bend) at point i (0 at the ends; capped so a sharp bend cannot spike)
+	local function mitre(i: number): number
+		if i <= 1 or i >= #pts then
+			return 0
+		end
+		local d0, d1 = pts[i] - pts[i - 1], pts[i + 1] - pts[i]
+		if d0.Magnitude < 1e-3 or d1.Magnitude < 1e-3 then
+			return 0
+		end
+		local bend = math.acos(math.clamp(d0.Unit:Dot(d1.Unit), -1, 1))
+		return math.tan(math.min(bend, math.rad(70)) / 2)
+	end
 	for i = 1, #pts - 1 do
 		local a, b = pts[i], pts[i + 1]
 		if beyond(a) and beyond(b) then
@@ -1320,15 +1356,14 @@ local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Co
 		end
 		local d = b - a
 		local len = d.Magnitude
-		local mid = (a + b) / 2
+		local dir = d.Unit
 		local yaw = math.atan2(-d.X, -d.Y)
-		slab(arena.Decor, "PathEdge", W(arena, mid.X, mid.Y, yBase), edgeW, len, yaw, edge)
-		slab(arena.Decor, "Path", W(arena, mid.X, mid.Y, yBase + 0.16), width, len, yaw, core, 0.2)
-		-- bend fill only where the bend is wide enough to open a visible gap
-		local bend = i > 1 and math.acos(math.clamp(d.Unit:Dot((a - pts[i - 1]).Unit), -1, 1)) or 0
-		if bend > math.rad(4) then
-			disc(arena.Decor, "PathEdgeBend", W(arena, a.X, a.Y, yBase - 0.06), edgeW / 2, edge)
-			disc(arena.Decor, "PathBend", W(arena, a.X, a.Y, yBase + 0.08), width / 2, core)
+		local lift = (i % 2) * 0.06
+		local ma, mb = mitre(i), mitre(i + 1)
+		for _, layer in ipairs({ { "PathEdge", edgeW, edge, yBase, 0.1 }, { "Path", width, core, yBase + 0.16, 0.2 } }) do
+			local ea, eb = layer[2] / 2 * ma, layer[2] / 2 * mb
+			local mid = (a + b) / 2 + dir * ((eb - ea) / 2)
+			slab(arena.Decor, layer[1], W(arena, mid.X, mid.Y, layer[4] + lift), layer[2], len + ea + eb, yaw, layer[3], layer[5])
 		end
 		table.insert(arena.Paths, { A = Vector3.new(a.X, 0, a.Y), B = Vector3.new(b.X, 0, b.Y), W = edgeW / 2 })
 	end
@@ -1434,9 +1469,12 @@ end
 --     colour (moss, snow, sand, ash); about half the chunks get a lower ledge in front, so
 --     the face steps like a real cliff; the tree line stands on the top (treeLine);
 --   * south (camera side): a low broken rim (style.South) the run camera sees over.
--- Cost per tall chunk (~35 studs): block + cap + one kit rock face (3 mesh parts), Ruins
--- a ledge (+2) instead of the rock; south rim one part per ~20 studs. All
--- decoration: anchored, no collision / queries / touch; only the big bodies cast shadows.
+-- Cost per tall chunk (~48 studs): block + cap + one kit rock face (3 mesh parts, widened
+-- along the wall with PropOpts.stretch so one rock covers a long chunk), Ruins a capless
+-- ledge (+1) instead of the rock; south rim one part per ~27 studs. Long chunks keep the
+-- arena near its pre-cliff part count (phones; docs/PERFORMANCE.md "Arena part counts").
+-- All decoration: anchored, no collision / queries / touch (the invisible Boundary walls
+-- block); only the big bodies cast shadows.
 ------------------------------------------------------------------------------------------
 
 type CliffStyle = {
@@ -1451,8 +1489,8 @@ type CliffStyle = {
 	Face: { any }?, -- { kit rock, palette }: the big low-poly rock in front of each tall chunk
 }
 
-local CLIFF_STEP = 31 -- studs between chunk centres on the tall sides
-local CLIFF_STEP_SOUTH = 19
+local CLIFF_STEP = 43 -- studs between chunk centres on the tall sides
+local CLIFF_STEP_SOUTH = 26
 local CLIFF_DEPTH = 24 -- depth of a tall chunk (its flat top carries the tree line)
 
 -- Top height of the cliff at `t` along `side` (smooth, seeded per side).
@@ -1514,30 +1552,33 @@ local function cliffs(arena: Arena, style: CliffStyle)
 			local hgt = cliffTop(arena, side, t) + jitter(south and 0.5 or 1.5)
 			local color = pick(style.Rock)
 			if south then
-				local len = rng:NextNumber(18, 23)
+				local len = rng:NextNumber(25, 30)
 				cliffBlock(arena, style, along, out, t, h + rng:NextNumber(0.3, 1.0), len, rng:NextNumber(5, 8), hgt, color, false, true)
 			else
-				local len = rng:NextNumber(33, 39)
+				local len = rng:NextNumber(45, 52)
 				local face = style.Face
 				-- Rocky face: a big kit rock (low-poly mesh, the biome's own) in front of
 				-- the block hides its flat front; the block behind gives the height and
 				-- the flat top. Masonry (Ruins) keeps cut blocks with stepped ledges.
 				-- (sized to cover most of the block's length, never taller than the block)
-				local faceScale = face and math.clamp(len * rng:NextNumber(0.62, 0.78) / 4.9, hgt * 0.5 / 2.9, hgt * 0.95 / 2.9) or 0
+				local faceWidth = len * rng:NextNumber(0.62, 0.78)
+				local faceScale = face and math.clamp(faceWidth / 4.9, hgt * 0.5 / 2.9, hgt * 0.95 / 2.9) or 0
+				local faceStretch = face and math.clamp(faceWidth / (4.9 * faceScale), 1, 1.7) or 1
 				local ledge = not face and rng:NextNumber() < 0.45
 				local ledgeDepth = rng:NextNumber(6, 9)
 				local setback = face and faceScale * 1.2 or (ledge and ledgeDepth - 1.5 or rng:NextNumber(0.3, 2.4))
 				local cf = cliffBlock(arena, style, along, out, t, h + setback, len, CLIFF_DEPTH + jitter(3), hgt, color, true)
 				if face then
-					-- long side along the wall; turned up to 15°, its deepest point stays outside
-					local fyaw = math.deg(math.atan2(-along.Y, along.X)) + jitter(15) + (rng:NextNumber() < 0.5 and 180 or 0)
+					-- long side along the wall; turned up to 15° (less when widened), its deepest point stays outside
+					local fyaw = math.deg(math.atan2(-along.Y, along.X)) + jitter(15 / faceStretch) + (rng:NextNumber() < 0.5 and 180 or 0)
 					local fp = along * (t + jitter(4)) + out * (h + 2.25 * faceScale - 0.3)
 					local fcf = CFrame.new(W(arena, fp.X, fp.Y, -0.3)) * yawCF(fyaw)
-					prop(arena.Decor, face[1], fcf, faceScale, face[2], { shadow = true })
+					prop(arena.Decor, face[1], fcf, faceScale, face[2], { shadow = true, stretch = faceStretch > 1.02 and faceStretch or nil })
 				end
 				if ledge then
 					local lh = hgt * rng:NextNumber(0.35, 0.6)
-					cliffBlock(arena, style, along, out, t + jitter(len * 0.2), h + 0.3, len * rng:NextNumber(0.5, 0.75), ledgeDepth, lh, pick(style.Rock), false)
+					-- capless: a cut stone step (one part) under the wall's capped top
+					cliffBlock(arena, style, along, out, t + jitter(len * 0.2), h + 0.3, len * rng:NextNumber(0.45, 0.65), ledgeDepth, lh, pick(style.Rock), false, true)
 				end
 				if style.Masonry then
 					-- merlons on the wall top (a broken battlement)

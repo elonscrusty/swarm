@@ -179,9 +179,19 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		V.Skins.Text = skins .. " / " .. total
 		ui.Bars.Skins.Set(skins / math.max(1, total))
 		local levels, maxLevels = 0, 0
-		for _, id in ipairs(MetaUpgradeData.Order) do
-			levels += p.Meta[id] or 0
+		-- account upgrades + the selected hero's own track (Hero Mastery)
+		for _, id in ipairs(MetaUpgradeData.AccountOrder) do
+			levels += tonumber(p.Meta[id]) or 0
 			maxLevels += MetaUpgradeData.Upgrades[id].MaxLevel
+		end
+		local heroId = p.SelectedCharacter or "Knight"
+		local track = type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[heroId]) == "table" and p.HeroUpgrades[heroId] or {}
+		for _, id in ipairs(MetaUpgradeData.HeroOrder()) do
+			local def = MetaUpgradeData.HeroDef(heroId, id)
+			if def then
+				levels += tonumber(track[id]) or 0
+				maxLevels += def.MaxLevel
+			end
 		end
 		V.Meta.Text = levels .. " / " .. maxLevels
 		ui.Bars.Meta.Set(levels / math.max(1, maxLevels))

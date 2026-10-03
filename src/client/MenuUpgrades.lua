@@ -1,7 +1,10 @@
 --[[
 	MenuUpgrades.lua
 	The UPGRADES screen: two tabs in one panel.
-	  PERMANENT  the gold upgrades (MetaUpgradeData) as a 3 x 2 card grid (the rest scroll):
+	  PERMANENT  the account-wide gold upgrades (MetaUpgradeData.AccountOrder: Revive,
+	             Reroll, Skip) and a HERO UPGRADES card: the stat upgrades are bought per
+	             hero on the Characters screen now (Hero Mastery), its button goes there.
+	             Cards:
 	             icon tile, name, what one level gives, LV n / max with rank tally marks,
 	             CURRENT / NEXT effect in plain words and a gold BUY • N GOLD button (an
 	             outlined "N GOLD • NEED M MORE" when short, MAXED when done). A tap marks the
@@ -239,6 +242,31 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		return f
 	end
 
+	-- the stat upgrades moved to each hero (Characters screen, Hero Mastery)
+	local function heroCard(p, order: number)
+		local f = card(order)
+		local selected = p.SelectedCharacter or "Knight"
+		cardTop(f, function()
+			Icons.Character(f, selected, { Size = 56 })
+		end, "Hero upgrades", "Hero stats are now on each hero: Max HP, Might, Armor, Speed, Luck, Growth and a signature trait.", 0)
+		UIKit.Button(f, {
+			Kind = "Primary",
+			Title = "OPEN CHARACTERS",
+			Icon = "chevronsUp",
+			IconSize = 20,
+			Align = "Center",
+			Name = "HeroUpgrades",
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.fromScale(0, 1),
+			Size = UDim2.new(1, 0, 0, 46),
+			Shadow = false,
+			OnClick = function()
+				ctx.ShowScreen("Characters")
+			end,
+		})
+		return f
+	end
+
 	local function shopCard(p, item, order: number)
 		local f = card(order)
 		local id = itemId(item)
@@ -303,7 +331,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		-- a fresh profile answers every purchase in flight
 		table.clear(pending)
 		if tab == "Permanent" then
-			ui.Note.Text = "Buy permanent upgrades with gold. They last forever."
+			ui.Note.Text = "Account upgrades for every hero. Hero stats are bought on each hero."
 		else
 			ui.Note.Text = "Gold packs, gold boosts and VIP perks. Purchases go through Roblox."
 		end
@@ -314,12 +342,16 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		end
 		local n = 0
 		if tab == "Permanent" then
-			for order, id in ipairs(MetaUpgradeData.Order) do
+			for order, id in ipairs(MetaUpgradeData.AccountOrder) do
 				local f = metaCard(p, id, order)
 				n += 1
 				if animate then
 					UIAnim.Pop(f, 0.03 * n, 0.7)
 				end
+			end
+			local f = heroCard(p, #MetaUpgradeData.AccountOrder + 1)
+			if animate then
+				UIAnim.Pop(f, 0.03 * (n + 1), 0.7)
 			end
 		else
 			for order, item in ipairs(SHOP) do

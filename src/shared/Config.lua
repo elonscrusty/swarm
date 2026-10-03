@@ -604,14 +604,14 @@ Config.Waves = {
 	MaxSeconds = 30,
 	-- gem XP of wave enemies x this: waves come in bursts with breathers, so fewer enemies
 	-- spawn than with the old continuous top-up; this keeps the level-up pace (pacing-sim)
-	XPMult = 1.5,
-	BurstSeconds = 3,
+	XPMult = 1.8,
+	BurstSeconds = 4.5,
 	MaxPerStep = 6, -- enemies spawned per frame at most while a wave pours in (perf)
 	Base = 12,
-	PerWave = 4,
+	PerWave = 3,
 	-- past LateFromWave each wave adds PerWaveLate instead (late waves still grow, slower)
-	LateFromWave = 10,
-	PerWaveLate = 2.5,
+	LateFromWave = 8,
+	PerWaveLate = 1.5,
 	-- wave members' HP x(1 + HPPerWave x (N - 1)) on top of the run-clock / stage scaling
 	HPPerWave = 0.015,
 	BigEvery = 5,
@@ -619,7 +619,7 @@ Config.Waves = {
 	RowSecondsPerWave = 20,
 	BeesFromWave = 4,
 	SidesAtWave = { 4, 9 },
-	ArcRadians = 0.45, -- each side spreads this far either way
+	ArcRadians = 0.6, -- each side spreads this far either way
 	EliteFromWave = 4,
 	EliteChance = 0.35,
 	ElitePerWaves = 8,
@@ -686,7 +686,8 @@ Config.Pacing = {
 	-- WaveCountMult times the usual size. Wasps are fast flyers: a full ring of them in the
 	-- first minute was the "too many bees" start (pacing-sim: up to 22 alive in minute 1).
 	WaveMinTime = { Bat = 150 },
-	WaveCountMult = { Bat = 0.6 },
+	-- Bombers / Brutes: a whole side of them was most of the damage in pacing-sim waves
+	WaveCountMult = { Bat = 0.6, Bomber = 0.5, Brute = 0.5 },
 	-- smaller intro groups for the later creatures (Healer from 6:00, Burrower from 7:00
 	-- in EnemyData.SpawnTable)
 	IntroGroupOf = { Healer = 2, Burrower = 2 },

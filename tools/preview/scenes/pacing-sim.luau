@@ -138,6 +138,9 @@ RM.DamagePlayer = function(rp, amount, cause)
 		local d = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
 		local st = ps(SM.GetStage(), SM.GetPhase())
 		st.Dmg += d
+		st.By = st.By or {}
+		local c = typeof(cause) == "table" and (cause.Type or (cause.Def and cause.Def.Id)) or tostring(cause)
+		st.By[c] = (st.By[c] or 0) + d
 	end
 	return rawDamage(rp, amount, cause)
 end
@@ -304,7 +307,12 @@ for s = 1, stages do
 		local function fmt(phase)
 			local st = phaseStats[s .. phase]
 			if not st or st.Secs <= 0 then return phase .. " -" end
-			return string.format("%s %.0fs dmg/min %.0f alive avg %.0f max %d", phase, st.Secs, st.Dmg / st.Secs * 60, st.Alive / st.Secs, st.MaxAlive)
+			local by = {}
+			for c, d in pairs(st.By or {}) do table.insert(by, { c, d }) end
+			table.sort(by, function(x, y) return x[2] > y[2] end)
+			local top = {}
+			for i = 1, math.min(3, #by) do table.insert(top, string.format("%s %d%%", by[i][1], math.floor(by[i][2] / math.max(1, st.Dmg) * 100))) end
+			return string.format("%s %.0fs dmg/min %.0f (%s) alive avg %.0f max %d", phase, st.Secs, st.Dmg / st.Secs * 60, table.concat(top, ", "), st.Alive / st.Secs, st.MaxAlive)
 		end
 		logHits(s)
 		preview.log(string.format("WAVES S%d%s", s, waveLog[s] or " none"))

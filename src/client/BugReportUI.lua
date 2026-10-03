@@ -37,6 +37,7 @@ local category = B.Categories[1].Id
 local sending = false
 local sendToken = 0
 local relayout: () -> () = function() end
+local returnFocus: GuiObject? = nil
 
 -- "Phone" | "Tablet" | "Desktop" | "Console" | "VR"
 local function deviceType(): string
@@ -149,14 +150,47 @@ function BugReportUI.Open()
 	end
 	refreshCount()
 	relayout()
+	if not ui.Overlay.Visible then
+		-- the button that opened the form gets the gamepad focus back on close
+		local sel = GuiService.SelectedObject
+		returnFocus = (sel and not sel:IsDescendantOf(ui.Overlay)) and sel or nil
+	end
 	host.Show(ui.Overlay, "BugReport", true)
 	UIKit.FocusIfGamepad(ui.Box)
 end
 
+-- Shown on screen: parented under a ScreenGui with every ancestor visible.
+local function onScreen(obj: GuiObject): boolean
+	local o: Instance? = obj
+	while o and not o:IsA("LayerCollector") do
+		if o:IsA("GuiObject") and not o.Visible then
+			return false
+		end
+		o = o.Parent
+	end
+	return o ~= nil and (o :: LayerCollector).Enabled
+end
+
 function BugReportUI.Close()
-	if ui.Overlay then
-		ui.Box:ReleaseFocus()
-		host.Hide(ui.Overlay, "BugReport")
+	if not ui.Overlay then
+		return
+	end
+	local wasOpen = ui.Overlay.Visible
+	ui.Box:ReleaseFocus()
+	host.Hide(ui.Overlay, "BugReport")
+	if not wasOpen then
+		return
+	end
+	-- hand the gamepad focus back to the screen underneath (the button that opened the form)
+	local back = returnFocus
+	returnFocus = nil
+	local sel = GuiService.SelectedObject
+	if sel == nil or sel:IsDescendantOf(ui.Overlay) then
+		if back and back.Parent and onScreen(back) then
+			UIKit.FocusIfGamepad(back)
+		elseif sel then
+			GuiService.SelectedObject = nil
+		end
 	end
 end
 

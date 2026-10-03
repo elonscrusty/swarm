@@ -520,7 +520,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local track = type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[heroId]) == "table" and p.HeroUpgrades[heroId] or {}
 		local innerW = ui.DetailInnerW or 390
 		ui.BuiltInnerW = innerW
-		local bw = math.clamp(math.floor(innerW * 0.36), 118, 172)
+		local bw = math.clamp(math.floor(innerW * 0.42), 140, 190)
+		local withIcon = bw >= 175 -- narrow buttons (phones) keep the whole label instead
 		local lineH = TS(13) + 4
 		local rowH = math.max(58, lineH + 2 * (TS(13) + 2) + 10)
 		for order, id in ipairs(MetaUpgradeData.HeroOrder()) do
@@ -562,7 +563,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				title, kind, icon = "MAXED", "Secondary", "check"
 			elseif locked then
 				local need = MetaUpgradeData.RequiredMastery(id, level + 1)
-				title, kind, icon = (bw >= 160 and "LOCKED: MASTERY " or "MASTERY ") .. need, "Secondary", "lock"
+				title, kind, icon = "MASTERY " .. need, "Secondary", "lock"
 			elseif busy then
 				title = "BUYING..."
 			else
@@ -574,7 +575,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				Name = "Buy",
 				Kind = kind,
 				Title = title,
-				Icon = icon,
+				Icon = withIcon and icon or nil,
 				IconSize = 16,
 				Align = "Center",
 				AnchorPoint = Vector2.new(1, 0.5),

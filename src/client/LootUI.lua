@@ -145,7 +145,11 @@ end
 -- Build
 ------------------------------------------------------------------------------------------
 
-local function buildStrip(root: Frame)
+local function buildStrip(screen: Frame)
+	-- the strip and its chips share one full-size layer (same coordinates as the screen) so a
+	-- covering modal (ITEMS, pause, level-up, reel, results) hides them all at once
+	local root = new("Frame", { Name = "RunChips", BackgroundTransparency = 1, Active = false, Size = UDim2.fromScale(1, 1), ZIndex = Theme.Z.Hud }, screen)
+	ui.ChipLayer = root
 	local strip = new("Frame", { Name = "ItemStrip", BackgroundTransparency = 1, Active = false, Visible = false, ZIndex = Theme.Z.Hud }, root)
 	ui.Strip = strip
 	ui.StripGrid = new("UIGridLayout", {
@@ -1222,6 +1226,13 @@ function LootUI.Update(_dt: number, inRun: boolean)
 end
 
 -- For the preview tool / tests.
+-- UIBuilder: a HUD-covering modal opened or closed (the strip and chips hide under it).
+function LootUI.SetCovered(on: boolean)
+	if ui.ChipLayer then
+		ui.ChipLayer.Visible = not on
+	end
+end
+
 function LootUI.Elements(): { [string]: any }
 	return ui
 end
