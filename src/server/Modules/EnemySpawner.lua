@@ -716,7 +716,13 @@ local function startWave()
 	table.clear(waveQueue)
 	-- heavy types are capped per wave (Config.Waves.TypeCap: Base + PerWave x (N - 1)); the
 	-- rest of their share is re-picked (a sudden side of Brutes was the stage-3 damage spike)
+	-- (the ones still alive from earlier waves count: tanky Brutes piled up wave on wave)
 	local typeCount: { [string]: number } = {}
+	for id in pairs(W.TypeCap or {}) do
+		typeCount[id] = liveCount(function(def)
+			return def.Id == id
+		end)
+	end
 	local function capped(typeId: string): boolean
 		local c = W.TypeCap and W.TypeCap[typeId]
 		return c ~= nil and (typeCount[typeId] or 0) >= math.floor(c.Base + c.PerWave * (n - 1))

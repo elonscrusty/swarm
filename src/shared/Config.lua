@@ -614,10 +614,10 @@ Config.Waves = {
 	LateFromWave = 8,
 	PerWaveLate = 1.5,
 	-- wave members' HP x(1 + HPPerWave x (N - 1)) on top of the run-clock / stage scaling
-	HPPerWave = 0.015,
+	HPPerWave = 0.01,
 	BigEvery = 5,
 	BigMult = 1.35,
-	RowSecondsPerWave = 20,
+	RowSecondsPerWave = 15,
 	BeesFromWave = 4,
 	SidesAtWave = { 4, 9 },
 	ArcRadians = 0.6, -- each side spreads this far either way
@@ -628,8 +628,9 @@ Config.Waves = {
 	-- a share of each side is mixed from the whole spawn row (Spitters within
 	-- Config.Enemies.MaxLiveRanged, Healers / Burrowers within their caps), from MixFromWave
 	MixShare = 0.25,
-	-- at most Base + PerWave x (N - 1) of these per wave (the rest is re-picked)
-	TypeCap = { Brute = { Base = 2, PerWave = 0.3 }, Bomber = { Base = 4, PerWave = 0.5 } },
+	-- at most Base + PerWave x (N - 1) of these alive per wave, counting the ones left from
+	-- earlier waves (the rest is re-picked): piled-up Brutes made stage 3 the hardest stage
+	TypeCap = { Brute = { Base = 1, PerWave = 0.2 }, Bomber = { Base = 4, PerWave = 0.5 } },
 	MixFromWave = 3,
 	-- swarm pressure (Config.Stages.Pressure, SwarmWarn 1 / 2): waves x this
 	PressureMult = { 1.15, 1.35 },
