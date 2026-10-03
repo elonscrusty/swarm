@@ -1,6 +1,6 @@
 --[[
 	WeaponData.lua
-	All 27 weapons, their 12 per-level stat rows, their evolutions, their
+	All 27 weapons (17 released in Order, 10 held in HeldOrder), their 12 per-level stat rows, their evolutions, their
 	behaviour perks and the projectile visuals.
 
 	Stat row fields (every level row has all of them):
@@ -851,7 +851,8 @@ WeaponData.Weapons = {
 	},
 
 	--[[
-		The ten weapons of the "armoury" batch (every hero can find them on level-up cards).
+		The ten weapons of the "armoury" batch: HELD for the next update (WeaponData.HeldOrder,
+		not offered anywhere); moving their ids into Order releases them.
 		Per-target DPS at L1 / L6 / L12 / evolved (same measure as the notes above; line and
 		area weapons are per target inside the effect):
 		  Ward Shields   6.8 / 20 / 51 / 125   orbiting, hits all around, Bulwark eats shots

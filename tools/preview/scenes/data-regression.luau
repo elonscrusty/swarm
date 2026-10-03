@@ -19,7 +19,15 @@ local BEHAVIORS = { Whip = 1, Orb = 1, Knives = 1, Aura = 1, HolyWater = 1, Ligh
 local PERKS_USED = { Riposte = 1, Split = 1, Ricochet = 1, Chill = 1, Volley = 1, Impale = 1, Shatter = 1, Wildfire = 1, Rooting = 1, Barbed = 1, Flak = 1, Wandering = 1, Bulwark = 1, Aftershock = 1, Molten = 1, Stagger = 1, Choking = 1, Rebound = 1, Thornbloom = 1, Echo = 1, Glow = 1, Implosion = 1 }
 
 local seenOrder = {}
-for _, id in ipairs(WeaponData.Order) do
+-- released weapons (Order) and the ones held for a later update (HeldOrder) are both checked
+local allWeapons = table.clone(WeaponData.Order)
+for _, id in ipairs(WeaponData.HeldOrder or {}) do
+	if table.find(WeaponData.Order, id) then
+		bad("weapon " .. id .. " is in both Order and HeldOrder")
+	end
+	table.insert(allWeapons, id)
+end
+for _, id in ipairs(allWeapons) do
 	seenOrder[id] = true
 	local def = WeaponData.Weapons[id]
 	if not def then
@@ -141,7 +149,7 @@ for _, id in ipairs(WeaponData.Order) do
 end
 for id in pairs(WeaponData.Weapons) do
 	if not seenOrder[id] then
-		bad("weapon " .. id .. " missing from Order")
+		bad("weapon " .. id .. " missing from Order / HeldOrder")
 	end
 end
 -- visual byte round trip
