@@ -1434,9 +1434,10 @@ type CliffStyle = {
 	Foot: { { any } }?, -- kit pieces at the foot: { name, sMin, sMax, palette? }
 	Masonry: boolean?, -- Ruins: square-cut blocks, merlons on top, no tilt
 	Seam: Color3?, -- Lava: a glowing crack at the foot of some chunks
+	Face: { any }?, -- { kit rock, palette }: the big low-poly rock in front of each tall chunk
 }
 
-local CLIFF_STEP = 22 -- studs between chunk centres on the tall sides
+local CLIFF_STEP = 25 -- studs between chunk centres on the tall sides
 local CLIFF_STEP_SOUTH = 16
 local CLIFF_DEPTH = 24 -- depth of a tall chunk (its flat top carries the tree line)
 
@@ -1499,11 +1500,23 @@ local function cliffs(arena: Arena, style: CliffStyle)
 				local len = rng:NextNumber(13, 19)
 				cliffBlock(arena, style, along, out, t, h + rng:NextNumber(0.3, 1.0), len, rng:NextNumber(5, 8), hgt, color, false)
 			else
-				local len = rng:NextNumber(24, 30)
-				local ledge = rng:NextNumber() < 0.45
+				local len = rng:NextNumber(26, 32)
+				local face = style.Face
+				-- Rocky face: a big kit rock (low-poly mesh, the biome's own) in front of
+				-- the block hides its flat front; the block behind gives the height and
+				-- the flat top. Masonry (Ruins) keeps cut blocks with stepped ledges.
+				local faceScale = face and hgt * rng:NextNumber(0.55, 0.85) / 2.9 or 0
+				local ledge = not face and rng:NextNumber() < 0.45
 				local ledgeDepth = rng:NextNumber(6, 9)
-				local setback = ledge and ledgeDepth - 1.5 or rng:NextNumber(0.3, 2.4)
+				local setback = face and faceScale * 1.2 or (ledge and ledgeDepth - 1.5 or rng:NextNumber(0.3, 2.4))
 				local cf = cliffBlock(arena, style, along, out, t, h + setback, len, CLIFF_DEPTH + jitter(3), hgt, color, true)
+				if face then
+					-- long side along the wall; turned up to 15°, its deepest point stays outside
+					local fyaw = math.deg(math.atan2(-along.Y, along.X)) + jitter(15) + (rng:NextNumber() < 0.5 and 180 or 0)
+					local fp = along * (t + jitter(4)) + out * (h + 2.25 * faceScale - 0.3)
+					local fcf = CFrame.new(W(arena, fp.X, fp.Y, -0.3)) * yawCF(fyaw)
+					prop(arena.Decor, face[1], fcf, faceScale, face[2], { shadow = true })
+				end
 				if ledge then
 					local lh = hgt * rng:NextNumber(0.35, 0.6)
 					cliffBlock(arena, style, along, out, t + jitter(len * 0.2), h + 0.3, len * rng:NextNumber(0.5, 0.75), ledgeDepth, lh, pick(style.Rock), false)
@@ -1522,7 +1535,7 @@ local function cliffs(arena: Arena, style: CliffStyle)
 					deco(arena.Decor, { Name = "CliffSeam", Size = Vector3.new(len * 0.55, 0.35, 0.7), CFrame = CFrame.new(W(arena, sp.X, sp.Y, 0.2)) * yawCF(math.deg(math.atan2(-along.Y, along.X))), Color = style.Seam, Material = NEON })
 				end
 				-- a kit rock at the foot (it pokes at most a stud into the play square)
-				if style.Foot and math.abs(t) < h - 6 and rng:NextNumber() < 0.3 then
+				if style.Foot and math.abs(t) < h - 6 and rng:NextNumber() < (face and 0.25 or 0.4) then
 					local f = pick(style.Foot)
 					local s = rng:NextNumber(f[2], f[3])
 					local d = h + kitRadius(f[1]) * s - 1
@@ -1808,7 +1821,8 @@ local function buildForest(arena: Arena)
 		Cap = mix(P.moss_600, P.meadow_600, 0.4),
 		Height = { 13, 21 },
 		South = { 2.6, 4.2 },
-		Foot = { { "Rock", 1.6, 2.4 }, { "Rock", 1.2, 1.8 }, { "Fern", 1.6, 2.2 } },
+		Face = { "Rock", { Stone = mix(P.stone_500, P.moss_700, 0.12), Stone2 = P.stone_600, Moss = mix(P.moss_600, P.meadow_600, 0.4) } },
+		Foot = { { "Fern", 1.6, 2.2 }, { "Rock", 1.2, 1.8 }, { "Mushroom", 1.4, 1.8 } },
 	})
 	brokenFence(arena, 1.3, nil, 22)
 	treeLine(arena, {
@@ -2446,7 +2460,8 @@ local function buildSwamp(arena: Arena)
 		Cap = mix(P.fen_500, P.murk_400, 0.35),
 		Height = { 10, 16 },
 		South = { 2.2, 3.6 },
-		Foot = { { "Swamp_Rock", 1.4, 2.0 }, { "Swamp_Log", 1.0, 1.3 }, { "Reeds", 1.5, 2.0 } },
+		Face = { "Swamp_Rock", { Stone = mix(P.stone_600, P.murk_600, 0.4), Stone2 = mix(P.stone_700, P.murk_700, 0.35), Moss = mix(P.fen_500, P.murk_400, 0.35) } },
+		Foot = { { "Swamp_Log", 1.0, 1.3 }, { "Reeds", 1.5, 2.0 }, { "Mushroom", 1.3, 1.7 } },
 	})
 	local h = arena.Half
 	alongSides(-h + 10, h - 10, 40, function(_side, along, out, t)
@@ -2704,7 +2719,8 @@ local function buildSnow(arena: Arena)
 		CapThick = 1.6,
 		Height = { 13, 21 },
 		South = { 2.4, 3.8 },
-		Foot = { { "Snow_Rock", 1.5, 2.2 }, { "Ice_Crystal", 1.0, 1.5 }, { "Snow_Drift", 1.4, 2.0 } },
+		Face = { "Snow_Rock", { Stone = mix(P.stone_400, P.slate_500, 0.35), Stone2 = mix(P.stone_500, P.slate_600, 0.3), Snow = P.snow_100 } },
+		Foot = { { "Ice_Crystal", 1.0, 1.5 }, { "Snow_Drift", 1.4, 2.0 }, { "Snow_Bush", 1.2, 1.6 } },
 	})
 	brokenFence(arena, 1.3, SNOW_WOOD, 30)
 	treeLine(arena, {
@@ -2956,7 +2972,8 @@ local function buildDesert(arena: Arena)
 		Cap = P.sand_400,
 		Height = { 14, 22 },
 		South = { 2.4, 3.8 },
-		Foot = { { "Desert_Rock", 1.3, 1.9 }, { "Cactus", 1.0, 1.3 }, { "Dune", 0.9, 1.2 } },
+		Face = { "Desert_Rock", { Rock = P.sand_600, Band = mix(P.sand_600, P.clay_500, 0.55), Top = P.sand_400 } },
+		Foot = { { "Cactus", 1.0, 1.3 }, { "Dune", 0.9, 1.2 }, { "Desert_Rock", 0.9, 1.3 } },
 	})
 	treeLine(arena, {
 		{ "Desert_Mesa", 1.2, 1.7, nil },
@@ -3179,7 +3196,8 @@ local function buildLava(arena: Arena)
 		Height = { 12, 20 },
 		South = { 2.4, 3.6 },
 		Seam = P.lava_500,
-		Foot = { { "Basalt_Rock", 1.3, 1.9 }, { "Obsidian_Crystal", 1.0, 1.4 }, { "Ash_Pile", 1.4, 2.0 } },
+		Face = { "Basalt_Rock", { Stone = P.basalt_700, Stone2 = P.basalt_600, Ash = mix(P.cinder_500, P.ash_400, 0.3) } },
+		Foot = { { "Obsidian_Crystal", 1.0, 1.4 }, { "Ash_Pile", 1.4, 2.0 }, { "Basalt_Rock", 1.0, 1.4 } },
 	})
 	treeLine(arena, {
 		{ "Basalt_Column", 1.15, 1.6, nil },

@@ -7,6 +7,7 @@
 --   render.sh weapons-sim --studio --devices pc
 --   --set character=Necromancer|Engineer|Alchemist   the hero (owned for the test)
 --   --set seconds=12                                  seconds per phase
+--   --set weapons=armoury                             the ten armoury-batch weapons instead
 local C = lib("common")
 local Players = game:GetService("Players")
 preview.forceMeshesUploaded()
@@ -78,7 +79,14 @@ end
 
 local seconds = tonumber(preview.args.seconds) or 12
 report("start")
-send("DevCommand", "NewWeapons")
+if preview.args.weapons == "armoury" then
+	-- the armoury batch instead (GiveWeapon: each at level 12)
+	for _, id in ipairs({ "WardShields", "Earthsplitter", "Starfall", "Sling", "PlagueCenser", "Sawblade", "VineSnare", "WarHorn", "SpiritWisps", "Vortex" }) do
+		send("DevCommand", "GiveWeapon", id)
+	end
+else
+	send("DevCommand", "NewWeapons")
+end
 report("loadout")
 -- walk in a circle so the Fire Trail and the facing-based weapons work
 local function walk(t)

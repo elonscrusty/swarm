@@ -52,6 +52,7 @@ local ClientPerformance = require(script.Parent.ClientPerformance)
 local TeamUI = require(script.Parent.TeamUI)
 local MiniMap = require(script.Parent.MiniMap)
 local Tutorial = require(script.Parent.Tutorial)
+local RunIntro = require(script.Parent.RunIntro)
 local Cosmetics = require(script.Parent.Cosmetics)
 local CurseData = require(Shared:WaitForChild("CurseData"))
 local ItemData = require(Shared:WaitForChild("ItemData"))
@@ -3701,7 +3702,8 @@ local function updateFrame(dt: number)
 			end
 		end
 	end
-	Tutorial.Update(dt, state, inRun, modalOpen)
+	RunIntro.Update(dt, state, inRun)
+	Tutorial.Update(dt, state, inRun, modalOpen or RunIntro.Active())
 	updateSaveNotice(inRun)
 	-- the pause menu belongs to the run, the settings menu to the lobby
 	if pause.Overlay.Visible and (pauseMode == "Pause") ~= inRun then
@@ -3871,6 +3873,9 @@ function UIBuilder.Init(d: { [string]: any })
 			return uiScale.Scale
 		end,
 	})
+	RunIntro.Build(root, { OnRelayout = onRelayout, VirtualSize = virtualSize, IsPortrait = function(): boolean
+		return portrait
+	end })
 	Tutorial.Build(root, {
 		OnRelayout = onRelayout,
 		VirtualSize = virtualSize,

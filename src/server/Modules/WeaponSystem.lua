@@ -1,6 +1,6 @@
 --[[
 	WeaponSystem.lua
-	Server-authoritative auto-attacks for all 9 weapons + evolutions, their level perks
+	Server-authoritative auto-attacks for every weapon + evolution, their level perks
 	(WeaponData.Perks: Riposte, Splitting Orbs, Ricochet, Chilling Aura, Volley), the
 	Ranger's Steady Aim, the projectile simulation, holy water pools and hostile (boss)
 	projectiles.
@@ -43,6 +43,7 @@ local projectiles: { Projectile } = {}
 local freeIds: { number } = {}
 local live: { Projectile } = {} -- dense list of active projectiles
 local zones: { any } = {} -- holy water pools
+local wards: { [any]: boolean } = {} -- Ward Shields with Bulwark: hostile shots break on them
 local queryBuf = {}
 local syncTimer = 0
 local sentEmpty = true
@@ -81,6 +82,10 @@ local function allocProjectile(): Projectile?
 	p.Carry = nil
 	p.SeekAt = nil
 	p.Gravity = nil
+	-- armoury batch: per-kind data, Sling stagger / bounce gain
+	p.X = nil
+	p.Stagger = nil
+	p.BounceGain = nil
 	table.insert(live, p)
 	p.LiveIndex = #live
 	return p
@@ -91,6 +96,7 @@ local function freeProjectile(p: Projectile)
 		return
 	end
 	p.Active = false
+	wards[p] = nil
 	local i = p.LiveIndex
 	local last = live[#live]
 	live[i] = last
@@ -212,11 +218,17 @@ end
 --   fk = { {x, z, radius} }                 a turret's flak burst
 --   lb = { {x, z, radius} }                 a Dragon Lance tip burst
 --   sh = { {x, z} }                         Soul Harvest: a soul rises from a kill
+--   qk = { {x, z, radius, kind} }           Earthsplitter spikes (kind 0/1; 2/3 = Aftershock)
+--   mt = { {x, z, radius, fall, evo} }      Starfall warning ring (the meteor lands in `fall` s)
+--   vn = { {x, z, radius, evo} }            Vine Snare sprouting      vt = { {x, z, radius} } thorns
+--   hn = { {x, z, yaw, range, halfDeg, evo} } War Horn shockwave (halfDeg 180 = full ring)
+--   wb = { {x, z, reflect} }                a Ward Shield smashed an enemy projectile
+--   vx = { {x, z, radius, life, evo} }      a Vortex opens            vi = { {x, z, radius, evo} } implosion
 ------------------------------------------------------------------------------------------
 
 local wfx: { [string]: { any } } = {}
 local wfxAny = false
-local WFX_CAPS = { nv = 12, fp = 48, tp = 16, hk = 16, fk = 16, lb = 16, sh = 16 }
+local WFX_CAPS = { nv = 12, fp = 48, tp = 16, hk = 16, fk = 16, lb = 16, sh = 16, qk = 40, mt = 12, vn = 16, vt = 12, hn = 12, wb = 8, vx = 8, vi = 8 }
 
 local function r1(n: number): number
 	return math.floor(n * 10 + 0.5) / 10
@@ -1419,6 +1431,9 @@ local function ricochet(p: Projectile): boolean
 		return false
 	end
 	local speed = math.max(20, p.Vel.Magnitude)
+	if p.BounceGain then
+		p.Damage *= 1 + p.BounceGain -- Sling: a stone hits harder with every bounce
+	end
 	local d = flatDir(nextE.Pos - p.Pos, p.Vel.Unit)
 	p.Vel = d * speed
 	p.Yaw = yawOf(d)
@@ -1453,6 +1468,9 @@ local function collideEnemies(p: Projectile, now: number): boolean
 				else
 					local d = (e.Pos - p.Pos) * FLAT
 					died = damageEnemy(p.Owner, e, amount, d.Magnitude > 1e-3 and d.Unit or Vector3.zAxis, p.Knockback, false, p.NoHarvest)
+				end
+				if p.Stagger and e.Alive then
+					slowEnemy(e, p.Stagger[1], p.Stagger[2], now) -- Sling's Stagger perk
 				end
 				if died and p.Split then
 					splitOrb(p, e, now)
@@ -1496,12 +1514,938 @@ local function outOfArena(pos: Vector3): boolean
 	return math.abs(pos.X - c.X) > h or math.abs(pos.Z - c.Z) > h
 end
 
+------------------------------------------------------------------------------------------
+-- Armoury batch: Ward Shields, Earthsplitter, Starfall, Sling, Plague Censer, Sawblade,
+-- Vine Snare, War Horn, Spirit Wisps, Vortex. Helpers live in `Arm` (one local: this
+-- module is close to Luau's 200-locals limit). Per-kind data sits in p.X (cleared on alloc).
+------------------------------------------------------------------------------------------
+
+local Arm = {}
+
+-- Live projectiles of one weapon (persistent shields / wisps), oldest first.
+function Arm.liveList(w): { Projectile }
+	local list = {}
+	for p in pairs(w.Live) do
+		if p.Active and not p.Cancelled then
+			table.insert(list, p)
+		end
+	end
+	table.sort(list, function(a, b)
+		return a.Id < b.Id
+	end)
+	return list
+end
+
+-- The enemy (of the `samples` nearest within range) with the most others within `radius`,
+-- skipping enemies within `radius` of a spot in `taken`.
+function Arm.densest(origin: Vector3, range: number, samples: number, radius: number, taken: { Vector3 }?)
+	local cands = nearestEnemies(origin, range, samples)
+	local best, bestN = nil, -1
+	for _, e in ipairs(cands) do
+		local free = true
+		for _, at in ipairs(taken or {}) do
+			local d = (e.Pos - at) * FLAT
+			if d.Magnitude < radius then
+				free = false
+				break
+			end
+		end
+		if free then
+			local n = grid():QueryCircle(e.Pos.X, e.Pos.Z, radius, queryBuf)
+			if n > bestN then
+				best, bestN = e, n
+			end
+		end
+	end
+	return best
+end
+
+-- Direction from `origin` to the nearest enemy within range (else the hero's facing).
+function Arm.aim(rp, origin: Vector3, range: number): (Vector3, any)
+	local t = grid():Nearest(origin.X, origin.Z, range, skipDead)
+	return t and flatDir(t.Pos - origin, rp.Facing) or rp.Facing, t
+end
+
+--[[
+	WARD SHIELDS / AEGIS RING: persistent shields circling the hero (OrbitRadius x area) at
+	`speed` studs/s. Every attack tops them up to `amount`, spaces them evenly and refreshes
+	their stats; an enemy can be hit by each shield once per `cooldown` s. Bulwark: shields
+	smash hostile projectiles (Aegis Ring: the smashed shot bursts for full damage).
+]]
+function Fire.Shields(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local list = Arm.liveList(w)
+	for i = #list, s.amount + 1, -1 do -- fewer allowed (never normally): drop the extras
+		list[i].Cancelled = true
+		table.remove(list, i)
+	end
+	local base = list[1] and list[1].Angle or 0
+	for _ = #list + 1, s.amount do
+		local p = allocProjectile()
+		if not p then
+			break
+		end
+		p.Kind = "Ward"
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = ground(rp.Root.Position)
+		p.Vel = Vector3.zero
+		p.Life = math.huge
+		p.Pierce = 999
+		p.X = {}
+		w.Live[p] = true
+		table.insert(list, p)
+	end
+	local block = WeaponData.HasPerk(w, "Bulwark")
+	local orbit = params.OrbitRadius * s.area
+	for i, p in ipairs(list) do
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Angle = base + (i - 1) * TAU / #list
+		p.Damage = s.damage
+		p.Radius = params.ShieldRadius * s.area
+		p.Rehit = s.cooldown
+		p.Knockback = s.knockback
+		p.X.Orbit = orbit
+		p.X.Spin = s.speed / math.max(1, orbit)
+		p.X.Reflect = evo ~= nil and evo.Reflect == true
+		p.X.ReflectRadius = params.ReflectRadius * s.area
+		wards[p] = block or nil
+	end
+end
+
+function Arm.stepWard(p: Projectile, dt: number, now: number): boolean
+	local owner = p.Owner
+	if not owner.Alive or not owner.Root then
+		return true
+	end
+	local x = p.X
+	if now >= (x.ClearAt or 0) then
+		x.ClearAt = now + 10 -- forget old enemy ids now and then (shields never end)
+		table.clear(p.Hits)
+	end
+	p.Angle += x.Spin * dt
+	local dir = Vector3.new(math.cos(p.Angle), 0, math.sin(p.Angle))
+	p.Pos = ground(owner.Root.Position) + dir * x.Orbit
+	p.Vel = dir -- knockback pushes outward
+	p.Yaw = yawOf(dir)
+	return collideEnemies(p, now)
+end
+
+-- Bulwark: a hostile projectile touching a shield is smashed (true = remove it).
+function Arm.wardBlock(h: Projectile): boolean
+	for ward in pairs(wards) do
+		if ward.Active and not ward.Cancelled then
+			local d = (ward.Pos - h.Pos) * FLAT
+			if d.Magnitude <= ward.Radius + h.Radius + 0.3 then
+				if ward.X.Reflect and ward.Owner.Alive then
+					burstAround(ward.Owner, h.Pos, ward.X.ReflectRadius, ward.Damage)
+				end
+				pushFx("wb", { r1(h.Pos.X), r1(h.Pos.Z), ward.X.Reflect and 1 or 0 })
+				return true
+			end
+		end
+	end
+	return false
+end
+
+--[[
+	EARTHSPLITTER / WORLDBREAKER: fissures race along the floor (speed x duration studs)
+	toward the nearest enemy, fanned FanAngle degrees apart (Worldbreaker: evenly all around).
+	Every StepDist studs stone spikes burst (SpikeRadius x area); each enemy is hit once per
+	fissure. Aftershock perk: the end of each fissure erupts (AftershockRadius x area).
+]]
+function Fire.Quake(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local aim = Arm.aim(rp, origin, params.Range)
+	local after = WeaponData.HasPerk(w, "Aftershock")
+	for i = 1, s.amount do
+		local p = allocProjectile()
+		if not p then
+			return
+		end
+		local dir
+		if evo and evo.Ring then
+			dir = rotateY(aim, (i - 1) * TAU / s.amount)
+		else
+			dir = rotateY(aim, math.rad((i - (s.amount + 1) / 2) * params.FanAngle))
+		end
+		p.Kind = "Fissure"
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = origin + dir * 1.5
+		p.Y = Config.ArenaOrigin.Y + 0.6
+		p.Vel = dir * s.speed
+		p.Damage = s.damage
+		p.Pierce = 999
+		p.Radius = 0
+		p.Life = s.duration
+		p.Knockback = s.knockback
+		p.Yaw = yawOf(dir)
+		p.X = {
+			Step = params.StepDist * math.sqrt(s.area),
+			Next = 0,
+			Dist = 0,
+			R = params.SpikeRadius * s.area,
+			Evo = evo and 1 or 0,
+			After = after and params.AftershockRadius * s.area or nil,
+			AfterShare = params.AftershockShare,
+		}
+	end
+	Fx.Sound("Hit")
+end
+
+-- Stone spikes at a point of a fissure: every enemy there it has not hit yet.
+function Arm.spikes(p: Projectile, at: Vector3, radius: number, damage: number, now: number)
+	local n = grid():QueryCircle(at.X, at.Z, radius, queryBuf)
+	local hits = table.move(queryBuf, 1, n, 1, {})
+	for _, e in ipairs(hits) do
+		if e.Alive and p.Hits[e.Uid] == nil then
+			p.Hits[e.Uid] = now
+			hitEnemy(p.Owner, e, damage, at, p.Knockback)
+		end
+	end
+end
+
+function Arm.stepFissure(p: Projectile, dt: number, now: number): boolean
+	if not p.Owner.Alive then
+		return true
+	end
+	local x = p.X
+	p.Pos += p.Vel * dt
+	x.Dist += p.Vel.Magnitude * dt
+	if x.Dist >= x.Next then
+		x.Next += x.Step
+		Arm.spikes(p, p.Pos, x.R, p.Damage, now)
+		pushFx("qk", { r1(p.Pos.X), r1(p.Pos.Z), r1(x.R), x.Evo })
+	end
+	return outOfArena(p.Pos)
+end
+
+--[[
+	STARFALL / CATACLYSM: each meteor picks the densest crowd in Range (spread out: never two
+	on the same crowd), shows a warning ring and lands FallTime s later: full damage and a
+	push to everything within BlastRadius x area (crits and procs as a normal hit), then a
+	crater burns CraterShare of the damage every CraterTick s for `duration` s (Molten Core:
+	MoltenScale wider).
+]]
+function Fire.Meteor(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local radius = params.BlastRadius * s.area
+	local taken = {}
+	local molten = WeaponData.HasPerk(w, "Molten")
+	for i = 1, s.amount do
+		local t = Arm.densest(origin, params.Range, 10, radius, taken)
+		if not t then
+			if i == 1 then
+				w.Timer = math.min(w.Timer, 0.4) -- nothing in range: look again soon
+			end
+			return
+		end
+		local at = ground(t.Pos)
+		table.insert(taken, at)
+		local p = allocProjectile()
+		if not p then
+			return
+		end
+		local fall = params.FallTime + (i - 1) * 0.12
+		p.Kind = "Meteor"
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = at + Vector3.new(-9, 0, -5)
+		p.Vel = Vector3.zero
+		p.Y = Config.ArenaOrigin.Y + 36
+		p.Life = fall
+		p.Damage = s.damage
+		p.Pierce = 999
+		p.Radius = 0
+		p.Knockback = s.knockback
+		p.Yaw = yawOf(Vector3.new(9, 0, 5).Unit)
+		p.X = {
+			From = p.Pos,
+			To = at,
+			R = radius,
+			Crater = s.duration,
+			CraterR = radius * params.CraterScale * (molten and params.MoltenScale or 1),
+			CraterDamage = s.damage * params.CraterShare,
+			CraterTick = params.CraterTick,
+		}
+		pushFx("mt", { r1(at.X), r1(at.Z), r1(radius), r1(fall), evo and 1 or 0 })
+	end
+end
+
+function Arm.stepMeteor(p: Projectile, _dt: number, _now: number): boolean
+	local x = p.X
+	local u = math.clamp(p.Age / p.Life, 0, 1)
+	p.Pos = x.From:Lerp(x.To, u)
+	p.Y = Config.ArenaOrigin.Y + 0.8 + 35 * (1 - u * u)
+	return false
+end
+
+function Arm.landMeteor(p: Projectile)
+	local x = p.X
+	local owner = p.Owner
+	if not owner.Alive then
+		return
+	end
+	local at = x.To
+	local n = grid():QueryCircle(at.X, at.Z, x.R, queryBuf)
+	local hits = table.move(queryBuf, 1, n, 1, {})
+	for _, e in ipairs(hits) do
+		if e.Alive then
+			hitEnemy(owner, e, p.Damage, at, p.Knockback)
+		end
+	end
+	Fx.Explosion(at, x.R)
+	if x.Crater > 0 then
+		table.insert(zones, { Pos = at, Radius = x.CraterR, Life = x.Crater, Tick = x.CraterTick, Timer = x.CraterTick, Damage = x.CraterDamage, Owner = owner })
+		Fx.Pool(at, x.CraterR, x.Crater, true)
+	end
+	Fx.Sound("Hit")
+end
+
+--[[
+	SLING / GIANTFELLER: stones at the nearest enemies; a stone bounces on to the nearest
+	enemy it has not hit until it has hit `pierce` enemies (the Ricochet code), each bounce
+	BounceGain harder (Giantfeller EvoBounceGain). Stagger perk: hit enemies (not bosses)
+	almost stop for StaggerSeconds.
+]]
+function Fire.Sling(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local targets = nearestEnemies(origin, s.speed * s.duration * 1.2, s.amount)
+	local stagger = WeaponData.HasPerk(w, "Stagger") and { params.StaggerSlow, params.StaggerSeconds } or nil
+	for i = 1, s.amount do
+		local p = allocProjectile()
+		if not p then
+			return
+		end
+		local target = targets[((i - 1) % math.max(1, #targets)) + 1]
+		local dir = target and flatDir(target.Pos - origin, rp.Facing) or rotateY(rp.Facing, (i - (s.amount + 1) / 2) * math.rad(15))
+		if target and i > #targets then
+			dir = rotateY(dir, (i % 2 == 0 and 1 or -1) * math.rad(8))
+		end
+		p.Kind = "Straight"
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = origin + dir * 1.5
+		p.Vel = dir * s.speed
+		p.Damage = s.damage
+		p.Pierce = 1
+		p.Bounces = math.max(0, s.pierce - 1)
+		p.BounceGain = evo and params.EvoBounceGain or params.BounceGain
+		p.Stagger = stagger
+		p.Radius = params.Radius * s.area
+		p.Life = s.duration
+		p.Knockback = s.knockback
+		p.Yaw = yawOf(dir)
+	end
+	Fx.Sound("Hit")
+end
+
+--[[
+	PLAGUE CENSER / PESTILENCE: a cloud (Radius x area) opens on each of the nearest
+	enemies and drifts after the nearest enemy at `speed`, hurting everything inside every
+	Tick s for `duration` s. Choking Fumes: enemies inside are slowed (ChokeSlow).
+	Pestilence: enemies it hurts keep taking PoisonShare per tick for PoisonSeconds (the
+	Phoenix Stride burn list).
+]]
+function Fire.Cloud(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local targets = nearestEnemies(origin, params.Range, s.amount)
+	if #targets == 0 then
+		w.Timer = math.min(w.Timer, 0.4)
+		return
+	end
+	local choke = WeaponData.HasPerk(w, "Choking")
+	for i = 1, s.amount do
+		local target = targets[((i - 1) % #targets) + 1]
+		local p = allocProjectile()
+		if not p then
+			return
+		end
+		local off = i > #targets and rotateY(Vector3.xAxis, i * 2.4) * 3 or Vector3.zero
+		p.Kind = "Cloud"
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = ground(target.Pos) + off
+		p.Y = Config.ArenaOrigin.Y + 1.2
+		p.Vel = Vector3.zero
+		p.Speed = s.speed
+		p.Target = target
+		p.TargetUid = target.Uid
+		p.Damage = s.damage
+		p.Pierce = 999
+		p.Radius = 0
+		p.Life = s.duration
+		p.Knockback = 0
+		p.X = {
+			R = params.Radius * s.area,
+			Tick = params.Tick,
+			T = 0.2,
+			Choke = choke and params.ChokeSlow or nil,
+			Poison = evo ~= nil and evo.Poison == true,
+			PoisonSeconds = params.PoisonSeconds,
+			PoisonShare = params.PoisonShare,
+		}
+	end
+end
+
+function Arm.stepCloud(p: Projectile, dt: number, now: number): boolean
+	local owner = p.Owner
+	if not owner.Alive then
+		return true
+	end
+	local x = p.X
+	local t = p.Target
+	if not (t and t.Alive and t.Uid == p.TargetUid) then
+		t = nil
+		if now >= (p.SeekAt or 0) then
+			p.SeekAt = now + 0.3
+			t = grid():Nearest(p.Pos.X, p.Pos.Z, 14, skipDead)
+		end
+		p.Target = t
+		p.TargetUid = t and t.Uid or nil
+	end
+	if t then
+		local to = (t.Pos - p.Pos) * FLAT
+		local d = to.Magnitude
+		if d > 0.5 then
+			p.Pos += to / d * math.min(d, p.Speed * dt)
+			p.Yaw = yawOf(to / d)
+		end
+	end
+	x.T -= dt
+	if x.T <= 0 then
+		x.T = x.Tick
+		local n = grid():QueryCircle(p.Pos.X, p.Pos.Z, x.R, queryBuf)
+		local hits = table.move(queryBuf, 1, n, 1, {})
+		for _, e in ipairs(hits) do
+			if e.Alive then
+				if x.Choke then
+					slowEnemy(e, x.Choke, x.Tick + 0.15, now)
+				end
+				damageEnemy(owner, e, p.Damage, nil, 0)
+				if x.Poison and e.Alive then
+					burns[e] = { Uid = e.Uid, Until = now + x.PoisonSeconds, Next = now + x.Tick, Tick = x.Tick, Damage = p.Damage * x.PoisonShare, Owner = owner, Weapon = p.Weapon }
+				end
+			end
+		end
+	end
+	return false
+end
+
+--[[
+	SAWBLADE / RUINWHEEL: saws roll at the nearest enemies, biting every enemy they touch
+	every Rehit s and slowing to GrindSlow of their speed while touching any (they chew
+	through crowds). Rebound perk: at the end of its run a saw turns to the nearest enemy
+	within ReboundRange for half a run more (Ruinwheel: Rebounds times).
+]]
+function Fire.Saw(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local targets = nearestEnemies(origin, params.Range, s.amount)
+	local rebounds = (evo and evo.Rebounds) or (WeaponData.HasPerk(w, "Rebound") and 1 or 0)
+	for i = 1, s.amount do
+		local p = allocProjectile()
+		if not p then
+			return
+		end
+		local target = targets[((i - 1) % math.max(1, #targets)) + 1]
+		local dir = target and flatDir(target.Pos - origin, rp.Facing) or rotateY(rp.Facing, (i - 1) * TAU / s.amount)
+		if target and i > #targets then
+			dir = rotateY(dir, (i % 2 == 0 and 1 or -1) * math.rad(18))
+		end
+		p.Kind = "Saw"
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = origin + dir * 1.5
+		p.Y = Config.ArenaOrigin.Y + 1.4
+		p.Vel = dir * s.speed
+		p.Damage = s.damage
+		p.Pierce = 999
+		p.Rehit = params.Rehit
+		p.Radius = params.Radius * s.area
+		p.Life = s.duration
+		p.Knockback = s.knockback
+		p.Yaw = yawOf(dir)
+		p.X = { Grind = params.GrindSlow, Rebounds = rebounds, Range = params.ReboundRange }
+	end
+	Fx.Sound("Hit")
+end
+
+function Arm.stepSaw(p: Projectile, dt: number, now: number): boolean
+	local n = grid():QueryCircle(p.Pos.X, p.Pos.Z, p.Radius, queryBuf)
+	local grinding = false
+	for i = 1, n do
+		if queryBuf[i].Alive then
+			grinding = true
+			break
+		end
+	end
+	p.Pos += p.Vel * dt * (grinding and p.X.Grind or 1)
+	if outOfArena(p.Pos) then
+		return true
+	end
+	return collideEnemies(p, now)
+end
+
+-- Rebound: true = the saw keeps going (re-aimed, half a run left).
+function Arm.reboundSaw(p: Projectile): boolean
+	local x = p.X
+	if x.Rebounds <= 0 or not p.Owner.Alive then
+		return false
+	end
+	local t = grid():Nearest(p.Pos.X, p.Pos.Z, x.Range, skipDead)
+	if not t then
+		return false
+	end
+	x.Rebounds -= 1
+	local dir = flatDir(t.Pos - p.Pos, -p.Vel.Unit)
+	p.Vel = dir * p.Vel.Magnitude
+	p.Yaw = yawOf(dir)
+	p.Age = p.Life * 0.5
+	return true
+end
+
+--[[
+	VINE SNARE / STRANGLEROOT: vines burst up under the nearest enemies: every Tick s for
+	`duration` s everything in the ring (Radius x area) is rooted (RootSlow; bosses are never
+	slowed) and hurt. Thornbloom perk: an enemy that dies there bursts into thorns (ThornShare
+	damage around it, at most ThornsPerTick per tick). Strangleroot: enemies in the ring are
+	dragged toward its middle (PullShare of the way per tick).
+]]
+function Fire.Vines(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local radius = params.Radius * s.area
+	local taken = {}
+	local thorn = WeaponData.HasPerk(w, "Thornbloom")
+	local n = grid():QueryCircle(origin.X, origin.Z, params.Range, queryBuf)
+	if n == 0 then
+		w.Timer = math.min(w.Timer, 0.4)
+		return
+	end
+	for _ = 1, s.amount do
+		local t = Arm.densest(origin, params.Range, 8, radius, taken)
+		if not t then
+			break
+		end
+		local at = ground(t.Pos)
+		table.insert(taken, at)
+		local p = allocProjectile()
+		if not p then
+			return
+		end
+		p.Kind = "Snare"
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = at
+		p.Y = Config.ArenaOrigin.Y
+		p.Vel = Vector3.zero
+		p.Damage = s.damage
+		p.Pierce = 999
+		p.Radius = 0
+		p.Life = s.duration
+		p.Knockback = 0
+		p.Yaw = rng:NextNumber(0, TAU)
+		p.X = {
+			R = radius,
+			Tick = params.Tick,
+			T = 0,
+			Root = params.RootSlow,
+			Thorn = thorn and params.ThornRadius * s.area or nil,
+			ThornShare = params.ThornShare,
+			ThornsPerTick = params.ThornsPerTick,
+			Pull = evo ~= nil and evo.Pull == true and params.PullShare or nil,
+		}
+		pushFx("vn", { r1(at.X), r1(at.Z), r1(radius), evo and 1 or 0 })
+	end
+end
+
+function Arm.stepSnare(p: Projectile, dt: number, now: number): boolean
+	local owner = p.Owner
+	if not owner.Alive then
+		return true
+	end
+	local x = p.X
+	x.T -= dt
+	if x.T > 0 then
+		return false
+	end
+	x.T = x.Tick
+	local c = p.Pos
+	local n = grid():QueryCircle(c.X, c.Z, x.R, queryBuf)
+	local hits = table.move(queryBuf, 1, n, 1, {})
+	local thorns = 0
+	for _, e in ipairs(hits) do
+		if e.Alive then
+			slowEnemy(e, x.Root, x.Tick + 0.15, now)
+			local rel = (c - e.Pos) * FLAT
+			local d = rel.Magnitude
+			local kb = (x.Pull and d > 1) and pullSpeed(d * x.Pull) or 0
+			local at = e.Pos
+			if damageEnemy(owner, e, p.Damage, d > 1e-3 and rel / d or nil, kb) and x.Thorn and thorns < x.ThornsPerTick then
+				thorns += 1
+				burstAround(owner, at, x.Thorn, p.Damage * x.ThornShare)
+				pushFx("vt", { r1(at.X), r1(at.Z), r1(x.Thorn) })
+			end
+		end
+	end
+	return false
+end
+
+--[[
+	WAR HORN / TITAN'S ROAR: a shockwave cone (Range x area studs, HalfAngle degrees each
+	side) toward the nearest enemy; more blasts point evenly around. Everything in it is hit,
+	pushed hard (knockback) and dazed (DazeSlow for `duration` s, not bosses). Echo perk: a
+	second blast EchoDelay s later with EchoShare damage. Titan's Roar: full-circle blasts,
+	one after another, each a little wider.
+]]
+function Arm.hornBlast(rp, origin: Vector3, dir: Vector3, range: number, half: number, damage: number, knockback: number, daze: number, slow: number, evo: boolean)
+	local now = ctx.RunManager.GetRunTime()
+	local cosHalf = math.cos(half)
+	local n = grid():QueryCircle(origin.X, origin.Z, range, queryBuf)
+	local hits = table.move(queryBuf, 1, n, 1, {})
+	for _, e in ipairs(hits) do
+		if e.Alive then
+			local rel = (e.Pos - origin) * FLAT
+			local d = rel.Magnitude
+			if half >= math.pi or d <= 1.5 + e.Radius or (rel / d):Dot(dir) >= cosHalf then
+				slowEnemy(e, slow, daze, now)
+				hitEnemy(rp, e, damage, origin, knockback)
+			end
+		end
+	end
+	pushFx("hn", { r1(origin.X), r1(origin.Z), r1(yawOf(dir)), r1(range), math.floor(math.deg(math.min(half, math.pi)) + 0.5), evo and 1 or 0 })
+end
+
+function Fire.Horn(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local range = params.Range * s.area
+	local origin = ground(rp.Root.Position)
+	local aim = Arm.aim(rp, origin, range * 1.6)
+	local echo = WeaponData.HasPerk(w, "Echo")
+	local shots = {}
+	if evo and evo.Roar then
+		for i = 1, s.amount do
+			table.insert(shots, { Delay = (i - 1) * 0.18, Dir = aim, Half = math.pi, Range = range * (1 + (i - 1) * 0.15), Share = 1 })
+		end
+	else
+		for i = 1, s.amount do
+			table.insert(shots, { Delay = 0, Dir = rotateY(aim, (i - 1) * TAU / s.amount), Half = math.rad(params.HalfAngle), Range = range, Share = 1 })
+		end
+	end
+	if echo then
+		local n = #shots
+		for i = 1, n do
+			local sh = shots[i]
+			table.insert(shots, { Delay = sh.Delay + params.EchoDelay, Dir = sh.Dir, Half = sh.Half, Range = sh.Range * 0.85, Share = params.EchoShare })
+		end
+	end
+	for _, sh in ipairs(shots) do
+		local function blast()
+			if not rp.Alive or not rp.Root or not ctx.RunManager.IsSimulating() then
+				return
+			end
+			Arm.hornBlast(rp, ground(rp.Root.Position), sh.Dir, sh.Range, sh.Half, s.damage * sh.Share, s.knockback * sh.Share, s.duration, params.DazeSlow, evo ~= nil)
+		end
+		if sh.Delay <= 0 then
+			blast()
+		else
+			task.delay(sh.Delay, blast)
+		end
+	end
+	Fx.Sound("Hit")
+end
+
+--[[
+	SPIRIT WISPS / WISP CHOIR: persistent wisps circling the hero (OrbitRadius). Every
+	attack tops them up to `amount` and sends each resting wisp at a different near enemy
+	(within Range x area): it hits `pierce` enemies (re-targeting the nearest unhit one within
+	Retarget studs) or flies for `duration` s, then floats back. Glow perk: resting wisps sting
+	touching enemies for GlowShare damage every GlowEvery s (Wisp Choir EvoGlowShare).
+]]
+function Fire.Wisps(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local list = Arm.liveList(w)
+	for i = #list, s.amount + 1, -1 do
+		list[i].Cancelled = true
+		table.remove(list, i)
+	end
+	for _ = #list + 1, s.amount do
+		local p = allocProjectile()
+		if not p then
+			break
+		end
+		p.Kind = "Wisp"
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = ground(rp.Root.Position)
+		p.Vel = Vector3.zero
+		p.Life = math.huge
+		p.Pierce = 999
+		p.Phase = "Back"
+		p.X = { Glow = 0 }
+		w.Live[p] = true
+		table.insert(list, p)
+	end
+	local glow = WeaponData.HasPerk(w, "Glow") and (evo and params.EvoGlowShare or params.GlowShare) or nil
+	local resting = {}
+	for i, p in ipairs(list) do
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Damage = s.damage
+		p.Radius = params.Radius * s.area
+		p.Knockback = s.knockback
+		p.Speed = s.speed
+		local x = p.X
+		x.Slot = (i - 1) * TAU / #list
+		x.OrbitR = params.OrbitRadius
+		x.Spin = params.OrbitSpin
+		x.GlowShare = glow
+		x.GlowEvery = params.GlowEvery
+		x.Pierce = s.pierce
+		x.MaxDart = s.duration
+		x.Retarget = params.Retarget
+		if p.Phase ~= "Dart" then
+			table.insert(resting, p)
+		end
+	end
+	if #resting == 0 then
+		return
+	end
+	local origin = ground(rp.Root.Position)
+	local targets = nearestEnemies(origin, params.Range * s.area, #resting)
+	if #targets == 0 then
+		w.Timer = math.min(w.Timer, 0.3)
+		return
+	end
+	for i, p in ipairs(resting) do
+		local t = targets[((i - 1) % #targets) + 1]
+		p.Phase = "Dart"
+		p.Target = t
+		p.TargetUid = t.Uid
+		p.X.Left = p.X.Pierce
+		p.X.Dart = 0
+		table.clear(p.Hits)
+	end
+end
+
+function Arm.stepWisp(p: Projectile, dt: number, now: number): boolean
+	local owner = p.Owner
+	if not owner.Alive or not owner.Root then
+		return true
+	end
+	local x = p.X
+	local home = ground(owner.Root.Position)
+	local t = (now * x.Spin) + x.Slot
+	local slot = home + Vector3.new(math.cos(t), 0, math.sin(t)) * x.OrbitR
+	if p.Phase == "Dart" then
+		x.Dart += dt
+		local e = p.Target
+		if not (e and e.Alive and e.Uid == p.TargetUid) then
+			e = grid():Nearest(p.Pos.X, p.Pos.Z, x.Retarget, function(o)
+				return p.Hits[o.Uid] ~= nil or not o.Alive
+			end)
+			p.Target = e
+			p.TargetUid = e and e.Uid or nil
+		end
+		if not e or x.Dart > x.MaxDart then
+			p.Phase = "Back"
+		else
+			local to = (e.Pos - p.Pos) * FLAT
+			local d = to.Magnitude
+			if d <= p.Radius + e.Radius then
+				p.Hits[e.Uid] = now
+				damageEnemy(owner, e, p.Damage, d > 1e-3 and to / d or nil, p.Knockback)
+				x.Left -= 1
+				p.Target = nil
+				p.TargetUid = nil
+				if x.Left <= 0 then
+					p.Phase = "Back"
+				end
+			elseif d > 1e-3 then
+				p.Vel = to / d * p.Speed
+				p.Pos += p.Vel * math.min(dt, d / p.Speed)
+				p.Yaw = yawOf(to / d)
+			end
+		end
+	else
+		local to = (slot - p.Pos) * FLAT
+		local d = to.Magnitude
+		if p.Phase == "Back" and d <= 1.5 then
+			p.Phase = "Orbit"
+		end
+		if p.Phase == "Orbit" then
+			p.Pos = slot
+			if x.GlowShare and now >= x.Glow then
+				x.Glow = now + x.GlowEvery
+				local n = grid():QueryCircle(p.Pos.X, p.Pos.Z, p.Radius + 0.6, queryBuf)
+				for i = 1, math.min(n, 3) do
+					local e = queryBuf[i]
+					if e.Alive then
+						damageEnemy(owner, e, p.Damage * x.GlowShare, nil, 0, true)
+					end
+				end
+			end
+		elseif d > 1e-3 then
+			p.Pos += to / d * math.min(d, p.Speed * 1.2 * dt)
+		end
+	end
+	p.Y = Config.ArenaOrigin.Y + Config.Projectiles.Height + 0.4 + math.sin(now * 3 + p.Id) * 0.3
+	return false
+end
+
+--[[
+	VORTEX / SINGULARITY: rifts open on the densest crowds (Radius x area): every Tick s for
+	`duration` s everything inside is hurt and dragged toward the middle (at most Pull studs
+	a tick; Singularity EvoPull). Implosion perk: it collapses at the end for ImplodeMult x
+	the tick damage (Singularity EvoImplodeMult).
+]]
+function Fire.Vortex(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local radius = params.Radius * s.area
+	local taken = {}
+	local implode = WeaponData.HasPerk(w, "Implosion")
+	for i = 1, s.amount do
+		local t = Arm.densest(origin, params.Range, 10, radius * 1.5, taken)
+		if not t then
+			if i == 1 then
+				w.Timer = math.min(w.Timer, 0.4)
+			end
+			return
+		end
+		local at = ground(t.Pos)
+		table.insert(taken, at)
+		local p = allocProjectile()
+		if not p then
+			return
+		end
+		p.Kind = "Vortex"
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = at
+		p.Y = Config.ArenaOrigin.Y + 0.15
+		p.Vel = Vector3.zero
+		p.Damage = s.damage
+		p.Pierce = 999
+		p.Radius = 0
+		p.Life = s.duration
+		p.Knockback = 0
+		p.X = {
+			R = radius,
+			Tick = params.Tick,
+			T = 0.1,
+			Pull = evo and params.EvoPull or params.Pull,
+			Implode = implode and (evo and params.EvoImplodeMult or params.ImplodeMult) or nil,
+			Evo = evo and 1 or 0,
+		}
+		pushFx("vx", { r1(at.X), r1(at.Z), r1(radius), r1(s.duration), evo and 1 or 0 })
+	end
+end
+
+function Arm.stepVortex(p: Projectile, dt: number, now: number): boolean
+	local owner = p.Owner
+	if not owner.Alive then
+		return true
+	end
+	local x = p.X
+	p.Yaw += dt * 4
+	x.T -= dt
+	if x.T > 0 then
+		return false
+	end
+	x.T = x.Tick
+	local c = p.Pos
+	local n = grid():QueryCircle(c.X, c.Z, x.R, queryBuf)
+	local hits = table.move(queryBuf, 1, n, 1, {})
+	for _, e in ipairs(hits) do
+		if e.Alive then
+			local rel = (c - e.Pos) * FLAT
+			local d = rel.Magnitude
+			local kb = d > 0.8 and pullSpeed(math.min(d * 0.6, x.Pull)) or 0
+			damageEnemy(owner, e, p.Damage, d > 1e-3 and rel / d or nil, kb)
+		end
+	end
+	return false
+end
+
+function Arm.implode(p: Projectile)
+	local x = p.X
+	if not x.Implode or not p.Owner.Alive then
+		return
+	end
+	local c = p.Pos
+	local n = grid():QueryCircle(c.X, c.Z, x.R, queryBuf)
+	local hits = table.move(queryBuf, 1, n, 1, {})
+	for _, e in ipairs(hits) do
+		if e.Alive then
+			hitEnemy(p.Owner, e, p.Damage * x.Implode, c, 6)
+		end
+	end
+	pushFx("vi", { r1(c.X), r1(c.Z), r1(x.R), x.Evo })
+end
+
+-- Kind → step function for the armoury batch (true = remove the projectile).
+Arm.Step = {
+	Ward = Arm.stepWard,
+	Fissure = Arm.stepFissure,
+	Meteor = Arm.stepMeteor,
+	Cloud = Arm.stepCloud,
+	Saw = Arm.stepSaw,
+	Snare = Arm.stepSnare,
+	Wisp = Arm.stepWisp,
+	Vortex = Arm.stepVortex,
+}
+
+-- A projectile of the batch reached its Life: true = it keeps going (a saw's rebound).
+function Arm.expire(p: Projectile): boolean
+	local kind = p.Kind
+	if kind == "Fissure" then
+		local x = p.X
+		if x.After and p.Owner.Alive then
+			burstAround(p.Owner, p.Pos, x.After, p.Damage * x.AfterShare)
+			pushFx("qk", { r1(p.Pos.X), r1(p.Pos.Z), r1(x.After), 2 + x.Evo })
+		end
+	elseif kind == "Meteor" then
+		Arm.landMeteor(p)
+	elseif kind == "Saw" then
+		return Arm.reboundSaw(p)
+	elseif kind == "Vortex" then
+		Arm.implode(p)
+	end
+	return false
+end
+
 local function stepProjectile(p: Projectile, dt: number, now: number): boolean -- true = remove
 	if p.Cancelled then
 		return true
 	end
 	p.Age += dt
 	if p.Age >= p.Life then
+		if p.X and Arm.expire(p) then
+			return false -- a saw's rebound
+		end
 		if p.Kind == "Lob" then
 			-- landed: create a pool
 			table.insert(zones, {
@@ -1519,6 +2463,10 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 	end
 
 	local kind = p.Kind
+	local armStep = Arm.Step[kind]
+	if armStep then
+		return armStep(p, dt, now)
+	end
 	if kind == "Thrust" then
 		-- spear: out to full reach and back (sin curve), riding along with its thrower
 		local owner = p.Owner
@@ -1691,6 +2639,9 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 		return true
 	end
 	if p.Hostile then
+		if next(wards) ~= nil and Arm.wardBlock(p) then
+			return true -- smashed by a Ward Shield (Bulwark)
+		end
 		return collidePlayers(p)
 	end
 	return collideEnemies(p, now)

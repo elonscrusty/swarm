@@ -792,12 +792,14 @@ Config.Monetization = {
 }
 
 ------------------------------------------------------------------------------------------
--- AUDIO (existing Creator Store assets and built-in Roblox sounds)
--- Music metadata checked 2026-10-02 through apis.roblox.com toolbox-service; see
--- docs/AUDIO.md for verified metadata, inherited effect attribution and live checks.
---   "Roblox" (user 1)            = Roblox's own sound-effect uploads (GUI / UI packs)
---   "APMOfficial" (7462718749)   = the APM Music library Roblox licenses for free use in
---                                  any Roblox experience (the Creator Store music catalogue)
+-- AUDIO
+--   "SWARM SFX" = original effects synthesized for this game (tools/synth_sfx.py), uploaded
+--                 by the owner's account (user 20194281) with tools/upload_audio.py and
+--                 approved by Roblox moderation (art/audio/uploaded_ids.json).
+--   built-in    = rbxasset://sounds/... files that ship with every Roblox client.
+--   "APMOfficial" (7462718749) = the APM Music library Roblox licenses for free use in any
+--                 Roblox experience (the Creator Store music catalogue).
+-- Owner checklist, previous ids and how to swap a sound: docs/AUDIO.md.
 ------------------------------------------------------------------------------------------
 --[[
 	Sound effects and music. Volume is the sound's own volume; the player's Music / Effects
@@ -805,67 +807,71 @@ Config.Monetization = {
 
 	Fields: Category (Config.Audio.Categories: voice limit, priority, ducking), MinGap (s
 	between two plays of this sound), Pitch (base playback speed) and PitchVar (random
-	+/- around it, so repeats don't sound mechanical), World = played at a world position
-	(3D, quieter far away) when the caller gives one.
+	+/- around it, so repeats don't sound mechanical), Steps (semitone offsets: each play
+	picks a note of this scale instead) with Climb (seconds: quick repeats walk up the
+	scale, a pause resets it), DuckMusic (seconds the music dips under this sound),
+	World = played at a world position (3D, quieter far away) when the caller gives one.
 
 	Mixing goal (owner feedback: "less annoying"): the frequent sounds (hits, deaths, gems,
 	coins, clicks) are quiet, soft-timbred and rate-limited; the rare cues that carry
 	information (hurt, level-up, chest, boss, warnings) stay clear above them.
 ]]
 Config.Sounds = {
-	-- combat (lowest priority: there is always a lot of it; VFX plays Hit once per batch)
-	Hit = { Id = "rbxassetid://16480568821", Volume = 0.13, Category = "Combat", MinGap = 0.11, Pitch = 1.05, PitchVar = 0.12 }, -- Roblox_Pinball_Bumper_Soft_Click_01 (Roblox)
-	EnemyDeath = { Id = "rbxassetid://17208204604", Volume = 0.16, Category = "Combat", MinGap = 0.12, Pitch = 0.95, PitchVar = 0.16 }, -- Roblox GUI - Bubble (Roblox)
-	Lightning = { Id = "rbxassetid://15930283552", Volume = 0.16, Category = "Combat", MinGap = 0.2, Pitch = 1.15, PitchVar = 0.1 }, -- Roblox_RetroSFX_05 (Roblox)
-	Explosion = { Id = "rbxassetid://3149249837", Volume = 0.3, Category = "Combat", MinGap = 0.25, Pitch = 1.1, PitchVar = 0.08, World = true }, -- Cannon_Explode (Roblox)
+	-- combat (lowest priority: there is always a lot of it; VFX plays Hit once per batch).
+	-- Soft, low-mid and short so a swarm reads as a murmur; pitch spread kills repetition.
+	Hit = { Id = "rbxassetid://132528923449580", Volume = 0.1, Category = "Combat", MinGap = 0.09, PitchVar = 0.15 }, -- SWARM SFX Hit: muted thump
+	EnemyDeath = { Id = "rbxassetid://121753247942951", Volume = 0.12, Category = "Combat", MinGap = 0.1, PitchVar = 0.18 }, -- SWARM SFX EnemyDeath: soft poof
+	Lightning = { Id = "rbxassetid://74962400988388", Volume = 0.22, Category = "Combat", MinGap = 0.2, PitchVar = 0.12 }, -- SWARM SFX Lightning: crackle
+	Explosion = { Id = "rbxassetid://121247904139587", Volume = 0.15, Category = "Combat", MinGap = 0.25, PitchVar = 0.1, World = true }, -- SWARM SFX Explosion
 	-- the local hero's own attacks and body
-	Swing = { Id = "rbxasset://sounds/swordlunge.wav", Volume = 0.11, Category = "Player", MinGap = 0.18, PitchVar = 0.1 },
-	Throw = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.06, Category = "Player", MinGap = 0.25, Pitch = 1.3, PitchVar = 0.1 },
-	Hurt = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.55, Category = "Player", MinGap = 0.3, Pitch = 0.85, PitchVar = 0.05 },
-	Heartbeat = { Id = "rbxasset://sounds/collide.wav", Volume = 0.18, Category = "Player", MinGap = 0.4, Pitch = 0.45, PitchVar = 0 },
-	Death = { Id = "rbxasset://sounds/collide.wav", Volume = 0.6, Category = "Player", Pitch = 0.6, PitchVar = 0 },
-	LevelUp = { Id = "rbxassetid://15675043410", Volume = 0.6, Category = "Player", MinGap = 0.4, PitchVar = 0 }, -- Roblox_UI_Tonal_Stinger (Roblox)
-	Revive = { Id = "rbxassetid://15675043410", Volume = 0.55, Category = "Player", MinGap = 0.4, Pitch = 1.2, PitchVar = 0 }, -- Roblox_UI_Tonal_Stinger (Roblox)
+	Swing = { Id = "rbxassetid://110381677719056", Volume = 0.09, Category = "Player", MinGap = 0.18, PitchVar = 0.12 }, -- SWARM SFX Swing: airy whoosh
+	Throw = { Id = "rbxassetid://110381677719056", Volume = 0.06, Category = "Player", MinGap = 0.25, Pitch = 1.25, PitchVar = 0.1 }, -- SWARM SFX Swing, higher
+	Hurt = { Id = "rbxassetid://103629944065626", Volume = 0.32, Category = "Player", MinGap = 0.3, PitchVar = 0.06 }, -- SWARM SFX Hurt: punch + grunt
+	Heartbeat = { Id = "rbxassetid://106832514643917", Volume = 0.16, Category = "Player", MinGap = 0.4, PitchVar = 0 }, -- SWARM SFX Heartbeat: lub-dub
+	Death = { Id = "rbxassetid://106619962538253", Volume = 0.36, Category = "Player", PitchVar = 0, DuckMusic = 2.4 }, -- SWARM SFX Death: falling minor chord
+	LevelUp = { Id = "rbxassetid://131826585081742", Volume = 0.46, Category = "Player", MinGap = 0.4, PitchVar = 0, DuckMusic = 1.4 }, -- SWARM SFX LevelUp: C-major arpeggio
+	Revive = { Id = "rbxassetid://97435297484172", Volume = 0.36, Category = "Player", MinGap = 0.4, PitchVar = 0, DuckMusic = 1.6 }, -- SWARM SFX Revive: A-major rise
 	-- combat juice (CombatFx)
-	BigKill = { Id = "rbxasset://sounds/collide.wav", Volume = 0.28, Category = "Combat", MinGap = 0.35, Pitch = 0.6, PitchVar = 0.05 },
-	Evolve = { Id = "rbxassetid://17208327798", Volume = 0.55, Category = "Player", MinGap = 0.6, PitchVar = 0 }, -- Roblox GUI - Aura (Roblox)
-	-- pickups and rewards
-	GemPickup = { Id = "rbxassetid://15675032796", Volume = 0.14, Category = "Pickup", MinGap = 0.09, Pitch = 1.1, PitchVar = 0.18 }, -- Roblox_UI_Small_Click (Roblox)
-	Coin = { Id = "rbxassetid://17208319162", Volume = 0.16, Category = "Pickup", MinGap = 0.12, Pitch = 1.1, PitchVar = 0.12 }, -- Roblox GUI - Pickup (Roblox)
-	Chest = { Id = "rbxassetid://17208380755", Volume = 0.55, Category = "Pickup", MinGap = 0.25, PitchVar = 0 }, -- Roblox GUI - Purchase (Roblox)
-	Item = { Id = "rbxassetid://17208323435", Volume = 0.45, Category = "Pickup", MinGap = 0.2, PitchVar = 0.03 }, -- Roblox GUI - Equip (Roblox)
-	Shrine = { Id = "rbxassetid://17208372272", Volume = 0.5, Category = "Pickup", MinGap = 0.3, PitchVar = 0 }, -- Roblox GUI - Notification Low (Roblox)
-	-- the stage portal is revealed (client StageUI, with the banner); same Roblox-owned clip
-	-- as Shrine, lower and longer so it reads as a landmark, not a pickup
-	PortalAppear = { Id = "rbxassetid://17208372272", Volume = 0.7, Category = "UI", MinGap = 1, Pitch = 0.72, PitchVar = 0 }, -- Roblox GUI - Notification Low (Roblox)
-	Victory = { Id = "rbxasset://sounds/victory.wav", Volume = 0.45, Category = "UI", PitchVar = 0 },
+	BigKill = { Id = "rbxassetid://79432466085613", Volume = 0.16, Category = "Combat", MinGap = 0.35, PitchVar = 0.06 }, -- SWARM SFX BigKill: deep impact
+	Evolve = { Id = "rbxassetid://93333085469531", Volume = 0.43, Category = "Player", MinGap = 0.6, PitchVar = 0, DuckMusic = 2.2 }, -- SWARM SFX Evolve: shimmer swell
+	-- pickups and rewards. Gems climb a pentatonic scale while you keep collecting.
+	GemPickup = { Id = "rbxassetid://111456984593913", Volume = 0.07, Category = "Pickup", MinGap = 0.07, Pitch = 0.5, PitchVar = 0.008,
+		Steps = { 0, 2, 4, 7, 9, 12 }, Climb = 0.35 }, -- SWARM SFX GemPickup: crystal tink
+	Coin = { Id = "rbxassetid://86606172414417", Volume = 0.11, Category = "Pickup", MinGap = 0.12, PitchVar = 0.01, Steps = { 0, 2, 4 } }, -- SWARM SFX Coin: two-note ding
+	Chest = { Id = "rbxassetid://109507162178062", Volume = 0.6, Category = "Pickup", MinGap = 0.25, PitchVar = 0, DuckMusic = 1.6 }, -- SWARM SFX Chest: lid + treasure sparkle
+	Item = { Id = "rbxassetid://105588297309015", Volume = 0.2, Category = "Pickup", MinGap = 0.2, PitchVar = 0.02 }, -- SWARM SFX Item: rising chime
+	Shrine = { Id = "rbxassetid://106727264178055", Volume = 0.24, Category = "Pickup", MinGap = 0.3, PitchVar = 0, DuckMusic = 1.6 }, -- SWARM SFX Shrine: mystic chord
+	-- the stage portal is revealed (client StageUI, with the banner)
+	PortalAppear = { Id = "rbxassetid://72802301491749", Volume = 0.52, Category = "UI", MinGap = 1, PitchVar = 0, DuckMusic = 2.6 }, -- SWARM SFX PortalAppear: rising whoosh + drone
+	Victory = { Id = "rbxassetid://71641610011777", Volume = 0.55, Category = "UI", PitchVar = 0, DuckMusic = 3 }, -- SWARM SFX Victory: horn fanfare
 	-- warnings: telegraphs that ask the player to move (never dropped for combat noise)
 	FuseTick = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.35, Category = "Warning", MinGap = 0.09, Pitch = 1.6, PitchVar = 0.03, World = true },
 	SpitterWindup = { Id = "rbxasset://sounds/splat.wav", Volume = 0.26, Category = "Warning", MinGap = 0.25, Pitch = 1.3, PitchVar = 0.08, World = true },
 	Lunge = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.3, Category = "Warning", MinGap = 0.2, Pitch = 0.8, PitchVar = 0.06, World = true },
 	-- the Queen
-	BossRoar = { Id = "rbxassetid://9120031442", Volume = 0.7, Category = "Boss", MinGap = 1, Pitch = 0.9, PitchVar = 0.04 }, -- Thunder With Lion Roar Searing Blast Growl 3 (Roblox)
-	BossWarn = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.4, Category = "Boss", MinGap = 0.4, Pitch = 0.7, PitchVar = 0.04, World = true },
+	BossRoar = { Id = "rbxassetid://135802539734782", Volume = 0.5, Category = "Boss", MinGap = 1, PitchVar = 0.04, DuckMusic = 2.2 }, -- SWARM SFX BossRoar: growl + sub hit
+	BossWarn = { Id = "rbxassetid://113336786346138", Volume = 0.35, Category = "Boss", MinGap = 0.4, Pitch = 1.1, PitchVar = 0.04, World = true }, -- SWARM SFX BossWhoosh
 	BossSummon = { Id = "rbxasset://sounds/splat.wav", Volume = 0.4, Category = "Boss", MinGap = 0.4, Pitch = 0.6, PitchVar = 0.05, World = true },
 	-- the rotating bosses (Telegraphs plays these for their new warning shapes)
-	BossWave = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.45, Category = "Boss", MinGap = 0.5, Pitch = 0.55, PitchVar = 0.04, World = true },
-	BossGust = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.45, Category = "Boss", MinGap = 0.5, Pitch = 0.42, PitchVar = 0.03, World = true },
-	BossPound = { Id = "rbxassetid://3149249837", Volume = 0.5, Category = "Boss", MinGap = 0.3, Pitch = 0.7, PitchVar = 0.04, World = true }, -- Cannon_Explode (Roblox)
-	BossMine = { Id = "rbxassetid://15675032796", Volume = 0.3, Category = "Warning", MinGap = 0.15, Pitch = 1.6, PitchVar = 0.1, World = true }, -- Roblox_UI_Small_Click (Roblox)
-	BossEmerge = { Id = "rbxasset://sounds/splat.wav", Volume = 0.4, Category = "Boss", MinGap = 0.4, Pitch = 0.45, PitchVar = 0.05, World = true },
+	BossWave = { Id = "rbxassetid://113336786346138", Volume = 0.38, Category = "Boss", MinGap = 0.5, Pitch = 0.9, PitchVar = 0.04, World = true }, -- SWARM SFX BossWhoosh
+	BossGust = { Id = "rbxassetid://113336786346138", Volume = 0.38, Category = "Boss", MinGap = 0.5, Pitch = 0.75, PitchVar = 0.03, World = true }, -- SWARM SFX BossWhoosh, lower
+	BossPound = { Id = "rbxassetid://114145211136875", Volume = 0.26, Category = "Boss", MinGap = 0.3, PitchVar = 0.05, World = true }, -- SWARM SFX BossSlam: ground pound
+	BossMine = { Id = "rbxasset://sounds/clickfast.wav", Volume = 0.22, Category = "Warning", MinGap = 0.15, Pitch = 1.2, PitchVar = 0.08, World = true },
+	BossEmerge = { Id = "rbxassetid://114145211136875", Volume = 0.22, Category = "Boss", MinGap = 0.4, Pitch = 0.8, PitchVar = 0.05, World = true }, -- SWARM SFX BossSlam, lower
 	BossBanner = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.45, Category = "Boss", MinGap = 0.5, Pitch = 0.6, PitchVar = 0.03, World = true },
 	BurrowWarn = { Id = "rbxasset://sounds/splat.wav", Volume = 0.26, Category = "Warning", MinGap = 0.25, Pitch = 0.7, PitchVar = 0.08, World = true },
-	HealPulse = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.12, Category = "Combat", MinGap = 0.4, Pitch = 0.75, PitchVar = 0.05, World = true },
+	HealPulse = { Id = "rbxassetid://133320151991833", Volume = 0.06, Category = "Combat", MinGap = 0.4, Pitch = 0.75, PitchVar = 0.05, World = true }, -- SWARM SFX Tip, lower
 	-- interface
-	Click = { Id = "rbxassetid://17208396156", Volume = 0.28, Category = "UI", MinGap = 0.06, PitchVar = 0.02 }, -- Roblox GUI - Select (Roblox)
-	Toggle = { Id = "rbxassetid://17208408337", Volume = 0.26, Category = "UI", MinGap = 0.06, PitchVar = 0.02 }, -- Roblox GUI - Tab (Roblox)
-	Tip = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.14, Category = "UI", MinGap = 0.6, Pitch = 1.5, PitchVar = 0 },
-	ReelTick = { Id = "rbxassetid://15675032796", Volume = 0.09, Category = "UI", MinGap = 0.04, Pitch = 1.3, PitchVar = 0.05 }, -- Roblox_UI_Small_Click (Roblox)
-	-- music (APMOfficial, free in any Roblox experience; looped, crossfaded by Audio.lua).
-	-- Swap: paste another Creator Store id as "rbxassetid://<id>"; "" = silent.
-	LobbyMusic = { Id = "rbxassetid://1836939228", Volume = 0.3, Category = "Music" }, -- Celtic Adventures, Bob Bradley, 2:16
-	BattleMusic = { Id = "rbxassetid://9047425352", Volume = 0.26, Category = "Music" }, -- Drums of Battle, Gabriel Saban, 2:47
-	BossMusic = { Id = "rbxassetid://1838623501", Volume = 0.3, Category = "Music" }, -- Hell Ride, Thomas Parisch, 2:21
+	Click = { Id = "rbxassetid://130072904039232", Volume = 0.38, Category = "UI", MinGap = 0.06, PitchVar = 0.04 }, -- SWARM SFX Click: soft wooden tick
+	Toggle = { Id = "rbxassetid://78864064038524", Volume = 0.27, Category = "UI", MinGap = 0.06, PitchVar = 0.02 }, -- SWARM SFX Toggle: two-tone tick
+	Tip = { Id = "rbxassetid://133320151991833", Volume = 0.11, Category = "UI", MinGap = 0.6, PitchVar = 0 }, -- SWARM SFX Tip: two soft bells
+	ReelTick = { Id = "rbxassetid://111197240897473", Volume = 0.12, Category = "UI", MinGap = 0.04, PitchVar = 0.05 }, -- SWARM SFX ReelTick
+	-- music (APMOfficial, free in any Roblox experience; looped, crossfaded and ducked under
+	-- big moments by Audio.lua). Swap: paste another Creator Store id as "rbxassetid://<id>"
+	-- (docs/AUDIO.md lists candidates to audition); "" = silent.
+	LobbyMusic = { Id = "rbxassetid://1836939228", Volume = 0.26, Category = "Music" }, -- Celtic Adventures, Bob Bradley, 2:16
+	BattleMusic = { Id = "rbxassetid://9047425352", Volume = 0.22, Category = "Music" }, -- Drums of Battle, Gabriel Saban, 2:47
+	BossMusic = { Id = "rbxassetid://1838623501", Volume = 0.26, Category = "Music" }, -- Hell Ride, Thomas Parisch, 2:21
 }
 
 --[[
@@ -886,7 +892,7 @@ Config.Audio = {
 	MaxVoices = 12,
 	Categories = {
 		Combat = { Volume = 0.7, MaxVoices = 3, Priority = 1 },
-		Pickup = { Volume = 0.8, MaxVoices = 2, Priority = 2 },
+		Pickup = { Volume = 0.8, MaxVoices = 3, Priority = 2 },
 		UI = { Volume = 0.75, MaxVoices = 2, Priority = 3 },
 		Player = { Volume = 1, MaxVoices = 3, Priority = 4 },
 		Warning = { Volume = 1, MaxVoices = 3, Priority = 5 },
@@ -896,6 +902,8 @@ Config.Audio = {
 	Crowd = { Categories = { "Combat", "Pickup" }, Window = 0.6, Start = 4, Full = 14, Floor = 0.35 },
 	World = { RollOffMin = 90, RollOffMax = 280, Emitters = 10 },
 	Music = { Fade = 1.5, Resume = true },
+	-- music dip under big moments (sounds with DuckMusic): to Volume x in Attack s, back in Release s
+	MusicDuck = { Volume = 0.4, Attack = 0.12, Release = 1.2 },
 	DefaultPitchVar = 0.05,
 }
 

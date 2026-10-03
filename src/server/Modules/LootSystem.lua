@@ -20,7 +20,8 @@
 	World: models in workspace.SwarmLoot, one per object, with attributes the client reads
 	(LootUI): LootId, LootKind (Chest | Shrine | Altar), LootType (Small | Large | Golden |
 	Chance | Bargain | Guarded), Title, State, Price (this stage's price before the player's
-	gold multiplier; 0 = free), Hold (seconds), Benefit, Tradeoff, Detail, Pos.
+	gold multiplier; 0 = free), Hold (seconds), Benefit, Tradeoff, Detail, Pos; a Shrine of
+	Chance also Odds (0-1), ItemsLeft, TriesLeft.
 	States: chests Ready → Opened; Chance Ready → Spent; Bargain Ready → Active;
 	altar Dormant → Guarded → Claimable → Claimed (back to Dormant if its guards are
 	removed without being killed, e.g. the Queen's arrival clears the field).
@@ -408,6 +409,10 @@ local function chanceText(obj: Obj)
 		Benefit = string.format("%d%% chance of an item (%d left)", math.floor(S.ChanceSuccess * 100 + 0.5), left),
 		Tradeoff = string.format("Each try costs %d%% more gold", math.floor((S.ChanceCostGrowth - 1) * 100 + 0.5)),
 		Detail = string.format("Tries left: %d", math.max(0, S.ChanceMaxTries - obj.Tries)),
+		-- numbers for the client's odds row (LootUI)
+		Odds = S.ChanceSuccess,
+		ItemsLeft = math.max(0, left),
+		TriesLeft = math.max(0, S.ChanceMaxTries - obj.Tries),
 	})
 end
 

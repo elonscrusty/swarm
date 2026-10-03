@@ -120,9 +120,48 @@ if lobby and battle and boss then
 	check(battle.IsPlaying and math.abs(battle.TimePosition - 42) < 1, "battle music resumes where it stopped", string.format("%.1f", battle.TimePosition))
 	preview.advance(fade + 0.2)
 	check(not boss.IsPlaying, "boss music stopped after the fade")
+	-- 5. music ducks under a big moment (LevelUp has DuckMusic) and comes back
+	local duck = SoundService:FindFirstChild("SwarmMusicDuck", true) :: SoundGroup?
+	check(duck ~= nil and battle.SoundGroup == duck, "music plays through the duck group")
+	if duck and Config.Audio.MusicDuck and Config.Sounds.LevelUp.DuckMusic then
+		Audio.Play("LevelUp")
+		preview.advance(Config.Audio.MusicDuck.Attack + 0.1)
+		check(math.abs(duck.Volume - Config.Audio.MusicDuck.Volume) < 0.05, "LevelUp ducks the music", string.format("%.2f", duck.Volume))
+		preview.advance(Config.Sounds.LevelUp.DuckMusic + Config.Audio.MusicDuck.Release + 0.3)
+		check(math.abs(duck.Volume - 1) < 0.03, "music recovers after the duck", string.format("%.2f", duck.Volume))
+	end
 	Audio.SetMusic(nil)
 	preview.advance(fade + 0.2)
 	check(not battle.IsPlaying, "SetMusic(nil) fades everything out")
+end
+
+-- 6. gem chimes climb their scale on quick repeats and reset after a pause
+local gem = Config.Sounds.GemPickup
+if gem.Steps and gem.Climb then
+	Audio.StopEffects()
+	local speeds = {}
+	for i = 1, 4 do
+		Audio.Play("GemPickup")
+		local best = 0
+		for _, s in ipairs(SoundService:GetChildren()) do
+			if s:IsA("Sound") and s.Name:match("^GemPickup") and s.IsPlaying then
+				best = math.max(best, s.PlaybackSpeed)
+			end
+		end
+		speeds[i] = best
+		preview.advance(math.max(gem.MinGap or 0, 0.05) + 0.02)
+	end
+	check(speeds[4] > speeds[1] * 1.15, "quick gem pickups climb the scale", string.format("%.2f -> %.2f", speeds[1], speeds[4]))
+	preview.advance(gem.Climb + 0.5)
+	Audio.StopEffects()
+	Audio.Play("GemPickup")
+	local first = 0
+	for _, s in ipairs(SoundService:GetChildren()) do
+		if s:IsA("Sound") and s.Name:match("^GemPickup") and s.IsPlaying then
+			first = math.max(first, s.PlaybackSpeed)
+		end
+	end
+	check(math.abs(first - (gem.Pitch or 1)) < 0.03, "the climb resets after a pause", string.format("%.2f", first))
 end
 
 preview.log(fails == 0 and "audio-sim: all PASS" or string.format("audio-sim: %d FAIL", fails))

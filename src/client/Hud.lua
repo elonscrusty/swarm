@@ -71,6 +71,9 @@ local ClientPerformance = require(script.Parent.ClientPerformance)
 
 local Hud = {}
 
+-- RunIntro: the stage objective card replaces the plain stage banner (returns true when shown).
+Hud.StageIntro = nil :: ((number) -> boolean)?
+
 local player = Players.LocalPlayer
 local new, role, TS = UIKit.new, UIKit.Role, UIKit.TS
 local TY = Theme.Type
@@ -322,6 +325,13 @@ local function buildVitals(frame: Frame)
 	})
 	UIKit.stroke(ui.HP.Frame, P.crimson_700, 1.5, 0.1)
 
+	-- Aegis Charm ward (player attribute Ward): a small gold shield pip on the heart's
+	-- lower-right corner while the ward is up (refreshWard, attribute signal only)
+	ui.WardPip = new("Frame", { Name = "WardPip", BackgroundColor3 = P.gold_300, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 22, 0.5, 8), Size = UDim2.fromOffset(12, 12), ZIndex = 7, Visible = false }, hpRow)
+	UIKit.corner(ui.WardPip, 999)
+	UIKit.stroke(ui.WardPip, P.slate_950, 1.5, 0)
+	new("Frame", { BackgroundColor3 = P.ivory_100, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(4, 4), ZIndex = 8 }, ui.WardPip)
+
 	-- Guardian Ward shield: a steel band along the top of the health bar
 	ui.ShieldBar = new("Frame", { Name = "Shield", BackgroundColor3 = P.steel_200, BorderSizePixel = 0, Size = UDim2.new(0, 0, 0, 4), Visible = false, ZIndex = 6 }, ui.HP.Frame)
 	UIKit.corner(ui.ShieldBar, 2)
@@ -526,6 +536,9 @@ local function showBanner(titleText: string, goal: string, color: Color3?)
 end
 
 local function showStageBanner(stageNo: number, goal: string)
+	if Hud.StageIntro and Hud.StageIntro(stageNo) then
+		return
+	end
 	showBanner("STAGE " .. tostring(stageNo), goal, nil)
 end
 
@@ -1476,11 +1489,28 @@ local function refreshHpText()
 	ui.HP.Label.Text = shield > 0 and string.format("%d / %d HP  +%d", hp, maxHp, shield) or string.format("%d / %d HP", hp, maxHp)
 end
 
+-- Aegis Charm ward pip: shown while the player attribute Ward is true; pops when it
+-- comes up (only on a change, never per frame).
+local function refreshWard()
+	local pip = ui.WardPip
+	if not pip then
+		return
+	end
+	local on = player:GetAttribute("Ward") == true
+	if pip.Visible ~= on then
+		pip.Visible = on
+		if on and ui.Frame and ui.Frame.Visible and not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+			UIAnim.Pop(pip, 0, 1.6)
+		end
+	end
+end
+
 -- Resets per-run animation state (a new run starts from a clean HUD).
 function Hud.Reset()
 	anim = { XP = 0, HP = 1, HPTrail = 1 }
 	stopBanner()
 	refreshHpText()
+	refreshWard()
 	purse.Shown = nil
 	purse.Target = tonumber(player:GetAttribute("RunGold")) or 0
 	purse.Price, purse.AlarmUntil = 0, 0
@@ -1542,6 +1572,8 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 		player:GetAttributeChangedSignal(name):Connect(refreshHpText)
 	end
 	refreshHpText()
+	player:GetAttributeChangedSignal("Ward"):Connect(refreshWard)
+	refreshWard()
 	-- the counters grow with their numbers; keep the timer clear of them
 	ui.Counters:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
 	h.OnRelayout(layout)
