@@ -18,6 +18,10 @@
 	                 auto-continue countdown and who is ready (SwarmState ChoiceLeft /
 	                 PortalReady). Answers with the PortalChoice remote; the server decides.
 	                 Endless runs (offer.Endless): NEXT STAGE only, no RETURN TO LOBBY.
+	  waves          SwarmState WaveSeq changes when the server announces a wave
+	                 (EnemySpawner, Config.Waves): a big centre banner "WAVE 3" / "From the
+	                 north" with the horn (Hud.Announce, WaveHorn) and a red glow on the
+	                 screen edge(s) it comes from (SwarmState WaveAngle + WaveSides)
 	  travel fade    remote StageTravel: the screen fades to slate with "STAGE N · Arena"
 	                 (the title slams in with a ring and sparks), then fades back once the
 	                 new stage is running
@@ -59,6 +63,7 @@ local offer: { [string]: any }? = nil
 local chosen = false
 local travel = { Active = false, Since = 0 }
 local lastReveal: number? = nil -- SwarmState PortalReveal seen last (nil = not in a run)
+local lastWaveSeq: number? = nil -- SwarmState WaveSeq seen last (nil = not in a run)
 local lastWarn = 0 -- SwarmState SwarmWarn seen last (the swarm-pressure banner)
 
 -- Swarm pressure (SwarmState SwarmWarn, Config.Stages.Pressure): a banner each step up,
@@ -592,6 +597,110 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	ui.ArrowPivot.Rotation = math.deg(math.atan2(d.Y, d.X))
 end
 
+------------------------------------------------------------------------------------------
+-- Waves
+------------------------------------------------------------------------------------------
+
+local EDGE_SIDES = { "Left", "Right", "Top", "Bottom" }
+
+local function buildEdges(root: Frame)
+	ui.Edges = {}
+	for _, side in ipairs(EDGE_SIDES) do
+		local vertical = side == "Left" or side == "Right"
+		local f = new("Frame", {
+			Name = "WaveEdge" .. side,
+			BackgroundColor3 = P.crimson_400,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(side == "Right" and 1 or 0, side == "Bottom" and 1 or 0),
+			Position = UDim2.fromScale(side == "Right" and 1 or 0, side == "Bottom" and 1 or 0),
+			Size = vertical and UDim2.new(0, 90, 1, 0) or UDim2.new(1, 0, 0, 70),
+			Visible = false,
+			ZIndex = Theme.Z.Hud,
+		}, root)
+		-- solid at the screen edge, clear toward the middle
+		local rot = ({ Left = 0, Right = 180, Top = 90, Bottom = 270 })[side]
+		new("UIGradient", {
+			Rotation = rot,
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) }),
+		}, f)
+		ui.Edges[side] = f
+	end
+end
+
+-- Which screen edge a world direction (from the local hero) points at.
+local function screenSide(angle: number): string?
+	local root = localRoot()
+	if not root then
+		return nil
+	end
+	local p = root.Position
+	local a, _ = project(p)
+	local b, _ = project(p + Vector3.new(math.cos(angle), 0, math.sin(angle)) * 40)
+	local d = b - a
+	if d.Magnitude < 1 then
+		return nil
+	end
+	if math.abs(d.X) > math.abs(d.Y) then
+		return d.X > 0 and "Right" or "Left"
+	end
+	return d.Y > 0 and "Bottom" or "Top"
+end
+
+local function flashEdge(side: string)
+	local f = ui.Edges and ui.Edges[side]
+	if not f then
+		return
+	end
+	f.Visible = true
+	f.BackgroundTransparency = 1
+	local reduced = ClientSettings.Reduced()
+	-- in: quick (reduced: no pulse, one soft fade); hold; out
+	local fadeIn = TweenService:Create(f, TweenInfo.new(reduced and 0.4 or 0.15), { BackgroundTransparency = reduced and 0.45 or 0.25 })
+	fadeIn:Play()
+	task.delay(reduced and 2.4 or 0.45, function()
+		if not reduced then
+			TweenService:Create(f, TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 2, true), { BackgroundTransparency = 0.55 }):Play()
+		end
+		task.delay(reduced and 0 or 1.2, function()
+			local out = TweenService:Create(f, TweenInfo.new(0.8), { BackgroundTransparency = 1 })
+			out.Completed:Connect(function()
+				if f.BackgroundTransparency >= 0.99 then
+					f.Visible = false
+				end
+			end)
+			out:Play()
+		end)
+	end)
+end
+
+local function checkWave(state: Configuration)
+	local seq = state:GetAttribute("WaveSeq") or 0
+	if lastWaveSeq == nil then
+		lastWaveSeq = seq -- entering a run mid-wave: no stale banner
+		return
+	end
+	if seq == lastWaveSeq then
+		return
+	end
+	lastWaveSeq = seq
+	local n = state:GetAttribute("Wave") or 0
+	local sides = string.split(tostring(state:GetAttribute("WaveSides") or ""), ",")
+	local sub = #sides == 1 and sides[1] ~= "" and ("From the " .. sides[1]) or (#sides .. " sides at once!")
+	Hud.Announce("WAVE " .. tostring(n), sub, Accessibility.Color(P.crimson_300, "Danger"), "WaveHorn")
+	local base = state:GetAttribute("WaveAngle")
+	if type(base) == "number" and #sides >= 1 then
+		local lit = {}
+		for d = 1, #sides do
+			local side = screenSide(base + (d - 1) * (2 * math.pi / #sides))
+			if side and not lit[side] then
+				lit[side] = true
+				flashEdge(side)
+			end
+		end
+	end
+end
+
 function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 	local stagePhase = state:GetAttribute("StagePhase") or "None"
 	if not inRun then
@@ -608,9 +717,11 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 			lastReveal = nil
 			PortalBeacon.Clear()
 		end
+		lastWaveSeq = nil
 		return
 	end
 	checkReveal(state)
+	checkWave(state)
 	checkPressure(state)
 	PortalBeacon.Update(state, not travel.Active)
 	-- the travel fade lifts once the next stage runs (or after a safety timeout)
@@ -647,6 +758,7 @@ end
 
 function StageUI.Build(root: Frame, k: { [string]: any })
 	kit = k
+	buildEdges(root)
 	buildArrow(root)
 	buildRing(root)
 	buildChoice(root)
