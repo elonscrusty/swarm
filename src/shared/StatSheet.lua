@@ -16,7 +16,8 @@
 	  }
 	  sheet = { Might, Armor, MaxHP, Speed, CooldownMult, AreaMult, Amount, Pierce,
 	            PickupRadius, Luck, ProjSpeedMult, DurationMult, Growth, DamageTaken, Regen,
-	            CritChance, CritDamage, GoldMult }
+	            CritChance, CritDamage, GoldMult, EliteDamage, Thorns, CritHeal, WardSeconds,
+	            KillRush, LevelHeal, BurnChance, LowHpMight }
 
 	StatSheet.Lines(before, after) → { {Key, Label, From, To} } the stats that differ, in
 	plain words with display values (used by passive level-up cards).
@@ -30,7 +31,9 @@ local ItemData = require(script.Parent.ItemData)
 
 local StatSheet = {}
 
-local BONUS_KEYS = { "might", "armor", "maxHpMult", "maxHpFlat", "speed", "cooldown", "area", "amount", "pierce", "pickup", "luck", "projSpeed", "duration", "growth", "damageTaken" }
+local BONUS_KEYS = { "might", "armor", "maxHpMult", "maxHpFlat", "speed", "cooldown", "area", "amount", "pierce", "pickup", "luck", "projSpeed", "duration", "growth", "damageTaken",
+	-- behaviour passives (PassiveData; read by ItemSystem)
+	"eliteDamage", "thorns", "critHeal", "ward", "killRush", "levelHeal", "burnChance", "lowHpMight" }
 for _, k in ipairs(ItemData.StatKeys) do
 	if not table.find(BONUS_KEYS, k) then
 		table.insert(BONUS_KEYS, k) -- attackSpeed, regen, critChance, critDamage, goldGain
@@ -108,6 +111,15 @@ function StatSheet.Compute(input: Input): { [string]: number }
 		CritChance = math.clamp(I.BaseCritChance + b.critChance, 0, I.MaxCritChance),
 		CritDamage = I.BaseCritDamage + b.critDamage,
 		GoldMult = 1 + b.goldGain, -- in-run gold (kills, elite chests, the Queen)
+		-- behaviour passives (ItemSystem reads them)
+		EliteDamage = 1 + b.eliteDamage, -- damage multiplier against elites and bosses
+		Thorns = math.max(0, b.thorns), -- share of a hit dealt back around the player
+		CritHeal = math.max(0, b.critHeal), -- HP per critical hit
+		WardSeconds = math.max(0, b.ward), -- one-hit ward recharge (0 = no ward)
+		KillRush = math.max(0, b.killRush), -- +move speed for a moment after a kill
+		LevelHeal = math.clamp(b.levelHeal, 0, 1), -- share of max HP healed per level-up
+		BurnChance = math.clamp(b.burnChance, 0, PassiveData.Tuning.MaxBurnChance),
+		LowHpMight = 1 + b.lowHpMight, -- damage multiplier while badly hurt (Lionheart)
 	}
 	-- curses multiply the finished sheet (Fragile, Glass Cannon)
 	sheet.MaxHP = math.max(1, math.floor(sheet.MaxHP * (curse.MaxHP or 1) + 0.5))
@@ -188,6 +200,52 @@ local LINES = {
 	{ Key = "ProjSpeedMult", Label = "Projectile speed", Fmt = pct },
 	{ Key = "DurationMult", Label = "Duration", Fmt = pct },
 	{ Key = "Growth", Label = "XP gain", Fmt = pct },
+	{ Key = "EliteDamage", Label = "Elite and boss damage", Fmt = pct },
+	{
+		Key = "Thorns",
+		Label = "Thorns",
+		Fmt = function(v: number): string
+			return math.floor(v * 100 + 0.5) .. "% of hit"
+		end,
+	},
+	{
+		Key = "CritHeal",
+		Label = "Heal per crit",
+		Fmt = function(v: number): string
+			return num(v) .. " HP"
+		end,
+	},
+	{
+		Key = "WardSeconds",
+		Label = "Ward recharge",
+		Fmt = function(v: number): string
+			return v > 0 and (num(v) .. " s") or "none"
+		end,
+	},
+	{
+		Key = "KillRush",
+		Label = "Speed after a kill",
+		Fmt = function(v: number): string
+			return pct(1 + v)
+		end,
+	},
+	{ Key = "GoldMult", Label = "Gold", Fmt = pct },
+	{ Key = "DamageTaken", Label = "Damage taken", Fmt = pct },
+	{
+		Key = "LevelHeal",
+		Label = "Heal per level-up",
+		Fmt = function(v: number): string
+			return math.floor(v * 100 + 0.5) .. "% HP"
+		end,
+	},
+	{
+		Key = "BurnChance",
+		Label = "Burn chance",
+		Fmt = function(v: number): string
+			return math.floor(v * 100 + 0.5) .. "%"
+		end,
+	},
+	{ Key = "LowHpMight", Label = "Damage below 40% HP", Fmt = pct },
 }
 
 -- Stats that differ between two sheets, as display lines.
