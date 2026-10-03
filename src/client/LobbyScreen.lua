@@ -314,7 +314,7 @@ local function arenaText(): (string, string)
 		end
 	end
 	if nextDef then
-		return title, string.format("Reach stage %d in a run to unlock %s", nextNeed, nextDef.DisplayName)
+		return title, string.format("Unlock %s at stage %d", nextDef.DisplayName, nextNeed) -- short: the card is one line
 	end
 	return title, (arena and arena.Hint) or "Face the swarm"
 end
@@ -1007,9 +1007,10 @@ local function relayout()
 			if ui.Playtime then
 				local right = W - M - chipW - G
 				local logoRight = M + ui.LogoW * ui.LogoScale.Scale + G
-				local pwide = math.max(pw, math.min(compact and 260 or 320, right - logoRight))
+				-- (narrow and right-aligned: the hero's raised sword stays clear on its left)
+				local pwide = math.min(math.max(pw, compact and 260 or 300), right - logoRight)
 				local top = chipY + 58
-				local room = H * 0.29 - top
+				local room = H * 0.31 - top
 				local rows = math.floor((room - 12 - 30) / 24) - 1
 				ui.Playtime.Place(right - pwide, top, pwide, rows >= 2 and rows or 0)
 			end

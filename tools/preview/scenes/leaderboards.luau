@@ -74,7 +74,7 @@ C.fire("LeaderboardData", {
 	Status = status,
 	Age = 12,
 	MyRank = (not out and status ~= "loading" and #rows >= meAt) and meAt or nil,
-	MyBest = board == "Level" and 50 or board == "ScoreEndless" and (out and 2100 or 28560) or board == "Score" and (out and 2100 or 11920) or board == "BestStage" and (out and 3 or 10) or (board == "Kills" and 3348 or CurseData.DailyScore(4, 568, 600)),
+	MyBest = board == "Level" and 50 or board == "ScoreEndless" and (out and 2100 or 28560) or board == "Score" and (out and 2100 or 11920) or board == "BestStage" and (out and 3 or 10) or (board == "Kills" and 3348 or board == "Playtime" and 41500 or CurseData.DailyScore(4, 568, 600)),
 	Top = 50,
 })
 C.settle(2)
