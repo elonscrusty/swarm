@@ -2537,6 +2537,7 @@ local function buildPause()
 				local at = table.find(choices, ClientSettings.Get(key)) or 1
 				ClientSettings.Set(key, choices[at % #choices + 1])
 				b.SetText(label .. ": " .. settingWord(ClientSettings.Get(key)))
+				UIAnim.Bump(b.Face)
 			end,
 		})
 		pause.Choices[key] = { Button = b, Label = label }
@@ -2602,6 +2603,7 @@ local function buildPause()
 				UIBuilder.ClosePause()
 			else
 				setLeaveConfirm(true)
+				UIAnim.Bump(pause.MenuButton.Face, 0.08)
 			end
 		end,
 	})
@@ -2616,6 +2618,7 @@ local function buildPause()
 		OnClick = function()
 			if pause.Confirming then
 				setLeaveConfirm(false)
+				UIAnim.Bump(pause.MenuButton.Face)
 				return
 			end
 			UIBuilder.ClosePause()
@@ -3709,6 +3712,9 @@ local function updateFrame(dt: number)
 		local canReplay, why = replayState()
 		if results.Replay.IsEnabled() ~= canReplay then
 			results.Replay.SetEnabled(canReplay)
+			if canReplay then
+				UIAnim.Bump(results.Replay.Face, 0.08) -- REPLAY just became available
+			end
 		end
 		-- why REPLAY is off goes on the timer line (inside the button it would truncate)
 		local tail = (not canReplay and why ~= "") and ("  ·  " .. why) or ""

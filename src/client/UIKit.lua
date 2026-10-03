@@ -1661,6 +1661,7 @@ function UIKit.Toggle(parent: Instance?, title: string, icon: string?, descripti
 	row.Activated:Connect(function()
 		on = not on
 		show(true)
+		UIAnim.Bump(track, 0.08)
 		if audio then
 			audio.Play("Toggle")
 		end
