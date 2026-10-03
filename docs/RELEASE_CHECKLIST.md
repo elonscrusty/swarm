@@ -6,6 +6,23 @@ the mock Roblox API); **BLOCKED** = can only be verified in Studio or a live ser
 the owner's steps below; **FAIL** = a known problem left in the build. Nothing in this
 document was tested in Studio or on a real phone unless the owner's section says so.
 
+## 0. Full-game sweep (2026-10-03, later the same day)
+
+Offline only; nothing below was tested in Studio or on a real phone.
+
+| Area | Verdict | Evidence / what is left |
+|---|---|---|
+| Type check, compile, icons | PASS | `tools/check.sh --quick` clean |
+| Offline regressions | PASS | `tools/run_regressions.py`: 65/65 (new: data-regression, passives-regression, chest-gold-sim, fall-regression); three older checks updated to the owner's new rules (35% retention, mini chest reel, pooled ground detail) |
+| Chest "not enough gold" | PASS (offline) | chest-gold-sim reproduced the bug (pass bought / looked up after run start) and passes now |
+| Falling through the map on travel | PASS (offline) / BLOCKED (live) | fall-regression over all 6 arenas; real physics + replication timing only checkable live |
+| Knight model reverting on run servers | PASS (offline) / BLOCKED (live) | run character swapped to meshes once loaded; only live run servers show it |
+| Enemy look in big swarms | PASS (offline) | no plain bodies; culling + low-detail models; perf-sim table in docs/PERFORMANCE.md. Pop-in at the screen edge: owner phone check |
+| New SFX (26) | BLOCKED (owner) | uploaded + Approved; nobody has listened yet (docs/AUDIO.md). Group-owned place: grant asset access |
+| World: cliffs, props, paths, paid chests | PASS (renders) / owner check | arenas have 15-30 % more (static, anchored) parts: check phone FPS; props are the first thing to cut |
+| Balance: opening, stage 2, player power | owner playtest | pacing-sim with an invincible hero; stages 3-4 numbers noisy; co-op pacing not simulated |
+| Held content | n/a | 10 weapons, 11 passives, 2 synergies and the wave rework are switched off for this release |
+
 ## 1. Verdicts
 
 | Area | Verdict | Evidence / what is left |

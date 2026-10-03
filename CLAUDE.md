@@ -63,6 +63,22 @@ NOT Studio-tested): phone shrink-before-truncate toggles/tabs, short stage objec
 minimap/tip/shrine placement, level-up touch regressions, Priest_Angel pass picture fixed.
 Owner steps and per-area PASS/BLOCKED: docs/RELEASE_CHECKLIST.md.
 
+Full-game sweep (65/65 regressions, offline only, NOT Studio-tested; details in
+docs/RELEASE_CHECKLIST.md section 0): fixes across server, HUD, lobby and combat; chest
+"not enough gold" fix (server prices with the published GoldMult); run-server Knight mesh swap;
+fall-through rescue + travel hold (fall-regression); proximity partner revive (no button);
+new minimap; centre banner queue (Hud.Announce / Hud.ReserveCentre); stage-start card
+(RunIntro); readable Shrine of Chance; every chest plays the reel (mini reel when not paused);
+results REPORT A BUG; enemy screen culling + low-detail models instead of plain bodies;
+smoother stage scaling and gentler opening; 26 original SFX (tools/synth_sfx.py,
+docs/AUDIO.md); 3D cliff edges, path detail, props, premium paid chests; brighter lighting;
+Whip/Longbow auto aim; bigger Garlic Aura; stronger Healing Totem; gold kept on a loss 35%
+(owner); menu animation (UIAnim); playtime leaderboard tab (home board removed by owner).
+HELD for a later update (built + tested, switched off): 10 new weapons (WeaponData.HeldOrder),
+11 new passives + 2 synergies (PassiveData.HeldOrder, SynergyData Held), numbered-wave rework
+(patch kept outside the tree; re-do from the owner's spec: waves only, each harder).
+Next owner request: per-character upgrades instead of shared meta upgrades (plan first).
+
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,
