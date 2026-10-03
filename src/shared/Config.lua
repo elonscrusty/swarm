@@ -213,10 +213,21 @@ Config.LevelUp = {
 Config.XP = {
 	-- XP needed to go from level L to L+1 = Base + min(L, CapLevel) * PerLevel
 	-- Early costs grow by PerLevel; after CapLevel, each extra level adds AfterCapPerLevel.
-	Base = 20,
-	PerLevel = 8,
+	-- Every filled bar offers an upgrade at once (no pacing timer): the ONLY brake on how
+	-- often the upgrade cards appear is this cost curve. levelrate-sim (real server, hero
+	-- walking in the swarm) measured ~3 level-ups per minute solo on the old 20 + 8/level
+	-- curve; these costs (x1.5) bring that to ~2 per minute. Level 1 costs 42, level 20
+	-- costs 270, level 21 costs 276, level 50 costs 450.
+	Base = 30,
+	PerLevel = 12,
 	CapLevel = 20,
-	AfterCapPerLevel = 4,
+	AfterCapPerLevel = 6,
+	-- Co-op: XP is shared (every living teammate gets every gem), while Duo / Trio spawn
+	-- Config.Difficulty.PlayerCountMult times the enemies and several heroes kill faster,
+	-- so without a brake a duo levelled about twice as fast per player as a solo hero and
+	-- everyone sat through everyone's upgrade panels. Shared gem XP is multiplied by this
+	-- (index = living participants) so each player's bar fills about as fast as solo.
+	CoopShare = { 1, 0.5, 0.36, 0.3 },
 	GemValues = { Small = 1, Medium = 5, Large = 25 },
 	GemPoolSize = 500,
 	MagnetSpeed = 45, -- studs/s a gem flies toward the player once inside pickup radius

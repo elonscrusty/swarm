@@ -56,6 +56,7 @@ local ORDER = {
 	"PartyService",
 	"RunServers", -- private run servers: lobby → run server → lobby teleports (live game only)
 	"JournalService",
+	"DiscoveryService", -- discovered weapons / passives / items / evolutions / synergies (card clues)
 	"TeamPingService",
 	"AchievementService",
 	"DamageNumbers",

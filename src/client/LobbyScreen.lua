@@ -10,7 +10,9 @@
 	                MenuArenas) / DAILY CHALLENGE
 	  bottom centre nameplate of the hero with gold arrows to browse characters
 	                (owned → selected at once; locked → price, UNLOCK / DETAILS)
-	  right column  SOLO (primary gold), DUO, TRIO, then CURSES (the run modifiers picked,
+	  right column  LAST RUN card (MenuLastRun: the saved LastRun summary + RETRY through
+	                StartRun; only where it fits above the column, so not on phones in
+	                landscape), SOLO (primary gold), DUO, TRIO, then CURSES (the run modifiers picked,
 	                their gold bonus) and the ENDLESS switch (Config.Endless: no win, the
 	                portal only goes deeper; remote SetEndless, the server's answer is the
 	                player attribute "Endless"). A countdown (who joined, the curses, an
@@ -22,8 +24,8 @@
 	                badge for open invites; opens the PARTY screen (MenuParty). A party member
 	                also gets READY / UNREADY beside it (portrait: under the stats chip)
 	  nameplate     your level, name, worn title / colour above the hero's plate
-	Portrait stacks: logo, stats, hero, nameplate, curses + daily, endless, modes, cards,
-	corner buttons.
+	Portrait stacks: logo, stats, hero, nameplate, last run, curses + daily, endless, modes,
+	cards, corner buttons.
 
 	Sub-screens slide in: Characters (MenuCharacters), Upgrades (MenuUpgrades), Stats
 	(MenuStats), Curses (MenuCurses), Daily (MenuDaily), Ranks (MenuLeaderboards), Track
@@ -57,6 +59,7 @@ local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
 local MenuTrack = require(script.Parent.MenuTrack)
 local MenuArenas = require(script.Parent.MenuArenas)
 local MenuParty = require(script.Parent.MenuParty)
+local MenuLastRun = require(script.Parent.MenuLastRun)
 local Cosmetics = require(script.Parent.Cosmetics)
 local CurseData = require(Shared:WaitForChild("CurseData"))
 
@@ -945,6 +948,17 @@ local function relayout()
 		place(ui.CurseBtn.Instance, M, y, half, curseH)
 		place(ui.DailyBtn.Instance, M + half + G, y, half, curseH)
 		place(ui.Queue, M, y, w, curseH + endH + 2 * G + soloH + G + smallH)
+		-- the LAST RUN card (when there is one) sits over the curse row
+		local lastShown = ui.LastRun ~= nil and ui.LastRun.Has() and lastStatus == "Modes"
+		if ui.LastRun then
+			local lastH = 58
+			if lastShown then
+				y -= G + lastH
+				place(ui.LastRun.Frame, M, y, w, lastH)
+				ui.LastRun.SetWidth(w)
+			end
+			ui.LastRun.Frame.Visible = lastShown
+		end
 		y -= 18 + plateH
 		local plateW = math.min(w - 2 * 62, 460)
 		place(ui.Nameplate, (W - plateW) / 2, y, plateW, plateH)
@@ -1005,6 +1019,21 @@ local function relayout()
 			soloH, smallH, curseH = math.floor(soloH * k), math.floor(smallH * k), math.floor(curseH * k)
 			endH = math.max(Theme.Size.TapMin, math.floor(endH * k))
 			colH = soloH + 2 * smallH + curseH + endH + 4 * G
+		end
+		-- the LAST RUN card above the column, centred with it, only where the whole column
+		-- still fits (phones in landscape have no room: the card stays hidden there)
+		if ui.LastRun then
+			local lastH = 60
+			local wanted = ui.LastRun.Has() and lastStatus == "Modes"
+			local withCard = colH + G + lastH
+			local cardTop = math.max(chipY + 64, (H - withCard) / 2)
+			local fits = wanted and H - M - cardTop >= withCard
+			if fits then
+				place(ui.LastRun.Frame, W - M - rw, cardTop, rw, lastH)
+				ui.LastRun.SetWidth(rw)
+				colTop = cardTop + lastH + G
+			end
+			ui.LastRun.Frame.Visible = fits
 		end
 		place(ui.ModeButtons[1].Instance, W - M - rw, colTop, rw, soloH)
 		place(ui.ModeButtons[2].Instance, W - M - rw, colTop + soloH + G, rw, smallH)
@@ -1287,6 +1316,13 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 	end
 	-- the worn dais ring (level track) under the hero
 	Showcase.SetRing(type(p.Ring) == "string" and p.Ring or "")
+	if ui.LastRun then
+		local had = ui.LastRun.Has()
+		ui.LastRun.Refresh(p)
+		if ui.LastRun.Has() ~= had then
+			relayout()
+		end
+	end
 	if browse and owned(browse) then
 		browse = nil -- just bought it (the server also selects it)
 	end
@@ -1524,6 +1560,8 @@ function LobbyScreen.Init(h: { [string]: any })
 			LobbyScreen.Show(name, arg)
 		end,
 	}
+	ui.LastRun = MenuLastRun.Build(ui.Home, ctx)
+	ui.LastRun.Refresh(profile)
 	screens.Characters = MenuCharacters.Build(screen("Characters"), ctx)
 	screens.Upgrades = MenuUpgrades.Build(screen("Upgrades"), ctx)
 	screens.Stats = MenuStats.Build(screen("Stats"), ctx)

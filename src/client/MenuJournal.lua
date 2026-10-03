@@ -23,7 +23,7 @@ function MenuJournal.Build(screen: Frame, ctx: { [string]: any })
 		local clue = UIKit.text(row, "Body", "", { Name = "AttackClue", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, LineHeight = 1.15, LayoutOrder = 2 }, 15)
 		local drops = UIKit.text(row, "Small", "", { Name = "ObservedDrops", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.gold_300, LayoutOrder = 3 }, 14)
 		UIKit.Hairline(row, { LayoutOrder = 4 })
-		entries[id] = { Name = name, Clue = clue, Drops = drops }
+		entries[id] = { Frame = row, Order = i, Name = name, Clue = clue, Drops = drops }
 	end
 	local function refresh()
 		local discovered = 0
@@ -31,6 +31,8 @@ function MenuJournal.Build(screen: Frame, ctx: { [string]: any })
 		for id, row in pairs(entries) do
 			local entry = Journal.Entry(profile, id)
 			if entry.Known then discovered += 1 end
+			-- recorded enemies first, the unknown placeholders after them (same order within each)
+			row.Frame.LayoutOrder = row.Order + (entry.Known and 0 or #Journal.Order)
 			row.Name.Text = entry.Name
 			row.Name.TextColor3 = entry.Known and P.ivory_100 or P.stone_300
 			row.Clue.Text = entry.Clue

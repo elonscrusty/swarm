@@ -120,6 +120,9 @@ function ItemSystem.Grant(rp, id: string, source: string?, reward: boolean?, dra
 	if not table.find(rp.ItemOrder, id) then
 		table.insert(rp.ItemOrder, id)
 	end
+	if ctx.DiscoveryService then
+		ctx.DiscoveryService.Record(rp.Player, "Items", id) -- combination clues may name it now
+	end
 	ItemSystem.Refresh(rp)
 	ItemSystem.Send(rp)
 	local showcase = reward == true and (dramatic == true or def.Rarity == "Legendary")

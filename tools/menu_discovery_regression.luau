@@ -90,6 +90,13 @@ local ok, err = S.runMain(function()
 	local bat = journalScreen:FindFirstChild("Bat", true)
 	check("journal UI conceals undiscovered attack and drops", bat.EnemyName.Text == "Undiscovered enemy" and bat.ObservedDrops.Visible == false and not string.find(bat.AttackClue.Text, "Wasp"))
 	check("journal UI renders only recorded drops", slime.ObservedDrops.Text == "Observed drops: XP gems")
+	local lowestUnknown = math.huge
+	for _, row in ipairs(slime.Parent:GetChildren()) do
+		if row:IsA("Frame") and row ~= slime then
+			lowestUnknown = math.min(lowestUnknown, row.LayoutOrder)
+		end
+	end
+	check("journal UI lists discovered entries before unknown placeholders", slime.LayoutOrder < lowestUnknown)
 end, 10)
 assert(ok, err)
 assert(#R.log.errors == 0, "mock runtime errors")

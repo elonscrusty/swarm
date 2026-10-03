@@ -38,7 +38,9 @@
 	  Daily {Day, Used, Score, Plays, BestScore, BestDay} (Daily Challenge: today's scored
 	  attempt and the best ever score, CurseData.DailyScore),
 	  Account {XP, Level} (cosmetic account level, AccountData), Ring, Frame (worn dais
-	  ring / portrait frame from the level track, "" = none)
+	  ring / portrait frame from the level track, "" = none),
+	  Discovered {Weapons, Passives, Items, Evolutions, Synergies} ({id → true}: what the
+	  player has owned or seen; DiscoveryService, used to gate combination clues)
 
 	Save health is shown to the player (never pretend saving works): the player attribute
 	"SaveStatus" is "ok", "memory" (DataStores unavailable: nothing is saved this session)
@@ -98,6 +100,7 @@ local function defaultData()
 		SelectedArena = "Forest",
 		Achievements = { Progress = {}, Unlocked = {} },
 		Journal = { Enemies = {}, Drops = {} },
+		Discovered = { Weapons = {}, Passives = {}, Items = {}, Evolutions = {}, Synergies = {} },
 		Title = "",
 		NameColor = "",
 		TutorialDone = false,
@@ -254,6 +257,16 @@ function DataService.Migrate(data: any): { [string]: any }
 	end
 	if type(data.SeenTips) ~= "table" then
 		data.SeenTips = {}
+	end
+	-- discovered weapons / passives / items / evolutions / synergies (DiscoveryService):
+	-- every table present, nothing removed (additive, no schema bump)
+	if type(data.Discovered) ~= "table" then
+		data.Discovered = {}
+	end
+	for _, kind in ipairs({ "Weapons", "Passives", "Items", "Evolutions", "Synergies" }) do
+		if type(data.Discovered[kind]) ~= "table" then
+			data.Discovered[kind] = {}
+		end
 	end
 	-- schema 6: curses, daily, account level, cosmetics (hand edits / partial saves)
 	if type(data.Curses) ~= "table" then

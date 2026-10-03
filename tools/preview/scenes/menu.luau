@@ -5,10 +5,35 @@
 --   --set drag=input            a real drag over the hero through UserInputService events
 --                               (right across the hero; prints whether the press was taken)
 --   --set endless=on             the ENDLESS switch is on (player attribute Endless)
+--   --set lastrun=won|fell|left  the profile carries a LastRun (the LAST RUN card + RETRY);
+--                               --set lastmode=Duo its mode; --set retry=on taps RETRY and
+--                               prints the StartRun the server received
 local C = lib("common")
 C.lobby()
 C.startClient()
-C.sendProfile()
+local profile = C.profile()
+if preview.args.lastrun then
+	local kind = preview.args.lastrun
+	profile.LastRun = {
+		Won = kind == "won", Portal = kind == "won", Mode = preview.args.lastmode or "Solo", CharacterId = "Knight",
+		Time = 754, Stage = kind == "won" and 5 or 3, StagesCleared = kind == "won" and 5 or 2, Kills = 1284, Level = 19,
+		Gold = 215, Difficulty = "Standard", DeathCause = kind == "fell" and "Briar Sentinel" or nil,
+	}
+end
+C.sendProfile(profile)
+if preview.args.retry == "on" then
+	local got = nil
+	preview.remote("StartRun").OnServerEvent:Connect(function(_player, mode)
+		got = mode
+	end)
+	C.settle(1)
+	local retry = preview.findGui(function(g) return g:IsA("GuiButton") and g.Name == "Retry" and preview.isShown(g) end)
+	assert(retry[1], "the LAST RUN card must show a RETRY button")
+	preview.click(retry[1])
+	C.settle(0.5)
+	assert(got == (preview.args.lastmode or "Solo"), "RETRY must fire StartRun with the last mode, got " .. tostring(got))
+	preview.log("PASS RETRY fired StartRun(" .. tostring(got) .. ")")
+end
 if preview.args.save then
 	C.setPlayer({ SaveStatus = preview.args.save })
 end

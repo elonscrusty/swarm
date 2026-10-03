@@ -14,7 +14,8 @@
 	    it is collected, so XP timing stays server-side. A flight that loses its target
 	    writes the resting spot ("Base") once and clears "Fly".
 	  * XP is SHARED: whoever collects a gem, every living participant gets its value
-	    (times their own Growth stat).
+	    (times their own Growth stat, times Config.XP.CoopShare for the team size, so a
+	    duo / trio does not level twice as fast as a solo hero).
 	  * A gem that lands within Config.XP.MergeRadius of a resting one is merged into it
 	    (values add up, capped at Config.XP.MergeMax), so piles stay a few bigger crystals.
 	    Resting gems sit in a coarse grid for that lookup; flying gems are not in it.
@@ -64,8 +65,27 @@ function XPSystem.XPNeeded(level: number): number
 		+ math.max(0, level - Config.XP.CapLevel) * Config.XP.AfterCapPerLevel
 end
 
--- Gives `amount` XP to every living run participant (each scaled by their Growth).
+-- Shared-XP multiplier for the current team size (Config.XP.CoopShare, by living
+-- participants): in Duo / Trio every gem is worth less to each player, since there are
+-- PlayerCountMult times as many gems and everyone receives every one of them.
+function XPSystem.CoopShare(): number
+	local alive = 0
+	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if rp.Alive then
+			alive += 1
+		end
+	end
+	local list = Config.XP.CoopShare
+	if not list or #list == 0 then
+		return 1
+	end
+	return list[math.clamp(alive, 1, #list)] or 1
+end
+
+-- Gives `amount` XP to every living run participant (each scaled by their Growth and by
+-- the team-size share, see CoopShare).
 function XPSystem.GiveSharedXP(amount: number)
+	amount *= XPSystem.CoopShare()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Alive then
 			XPSystem.GiveXP(rp, amount * rp.Stats.Growth)

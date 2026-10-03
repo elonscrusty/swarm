@@ -11,7 +11,12 @@
 
 	Card types: WeaponNew, WeaponUp, Evolve, PassiveNew, PassiveUp, Gold, Heal.
 	Synergies (SynergyData): complete sets add their bonus to the stat sheet here; the
-	player attribute "Synergies" lists discovered active ids. Cards keep recipes hidden.
+	player attribute "Synergies" lists discovered active ids.
+	Combination clues are gated by discovery (DiscoveryService, saved per player): a
+	weapon card names its evolution partner / result, a NEW card names the synergy it
+	advances, and the ITEMS list names a synergy's missing pieces only once the player has
+	owned or seen them; otherwise the clue says "???". Every card also carries Summary:
+	one short line of what it gives now ("+10 damage, +1 arrow").
 	Only the card index comes from the client; the server owns the card list.
 ]]
 
@@ -77,6 +82,9 @@ local function updateSynergies(rp)
 	for _, id in ipairs(active) do
 		if not table.find(before, id) then
 			local s = SynergyData.Synergies[id]
+			if ctx.DiscoveryService then
+				ctx.DiscoveryService.Record(player, "Synergies", id)
+			end
 			ctx.RunManager.Notify(player, string.format("Synergy: %s! %s", s.Name, s.Text), s.Color)
 		end
 	end
@@ -109,6 +117,52 @@ end
 -- Inventory
 ------------------------------------------------------------------------------------------
 
+--[[
+	The ITEMS list's synergy rows: every synergy the player holds at least one piece of,
+	{ Id?, Name, Text, Have, Need, Active, Pieces = { { Label, Owned } } } in SynergyData
+	order (complete ones first). An undiscovered synergy (never completed before) has no Id
+	and is named "???"; a missing piece is labelled only when one of the pieces that would
+	fill it has been discovered, else "???".
+]]
+function LevelUpSystem.SynergyClues(rp): { { [string]: any } }
+	local owned = ownedOf(rp)
+	local D = ctx.DiscoveryService
+	local out = {}
+	for _, sid in ipairs(SynergyData.Order) do
+		local s = SynergyData.Synergies[sid]
+		local have, need = SynergyData.Progress(sid, owned)
+		if have >= 1 then
+			local active = have >= need
+			local revealed = active or known(rp, "Synergies", sid)
+			local pieces = {}
+			for _, piece in ipairs(s.Pieces) do
+				local has = SynergyData.PieceOwned(piece, owned)
+				local label = (has or (D and D.PieceKnown(rp.Player, piece))) and piece.Label or UNKNOWN
+				table.insert(pieces, { Label = label, Owned = has })
+			end
+			table.insert(out, {
+				Id = revealed and sid or nil,
+				Name = revealed and s.Name or UNKNOWN,
+				Text = s.Text,
+				Have = have,
+				Need = need,
+				Active = active,
+				Pieces = pieces,
+			})
+		end
+	end
+	-- complete ones first, each group in SynergyData order
+	local sorted = {}
+	for _, pass in ipairs({ true, false }) do
+		for _, row in ipairs(out) do
+			if row.Active == pass then
+				table.insert(sorted, row)
+			end
+		end
+	end
+	return sorted
+end
+
 function LevelUpSystem.SendInventory(rp)
 	local weapons = {}
 	for _, id in ipairs(rp.WeaponOrder) do
@@ -131,6 +185,7 @@ function LevelUpSystem.SendInventory(rp)
 	Remotes.FireClient("Inventory", rp.Player, {
 		Weapons = weapons,
 		Passives = passives,
+		Synergies = LevelUpSystem.SynergyClues(rp),
 		Rerolls = rp.Rerolls,
 		Skips = rp.Skips,
 		WeaponSlots = Config.Slots.Weapons,
@@ -147,6 +202,9 @@ function LevelUpSystem.AddWeapon(rp, weaponId: string): boolean
 	end
 	rp.Weapons[weaponId] = { Id = weaponId, Level = 1, Evolved = false, Timer = 0.3, Live = {}, Growth = 0 }
 	table.insert(rp.WeaponOrder, weaponId)
+	if ctx.DiscoveryService then
+		ctx.DiscoveryService.Record(rp.Player, "Weapons", weaponId)
+	end
 	return true
 end
 
@@ -170,6 +228,24 @@ end
 local function card(kind: string, id: string, level: number, weight: number)
 	return { Type = kind, Id = id, Level = level, Weight = weight }
 end
+
+------------------------------------------------------------------------------------------
+-- Discovery (DiscoveryService): what this player has owned or seen, across runs
+------------------------------------------------------------------------------------------
+
+local function known(rp, kind: string, id: string): boolean
+	local D = ctx.DiscoveryService
+	return D ~= nil and D.Known(rp.Player, kind, id)
+end
+
+local function discover(rp, kind: string, id: string)
+	local D = ctx.DiscoveryService
+	if D then
+		D.Record(rp.Player, kind, id)
+	end
+end
+
+local UNKNOWN = "???"
 
 -- Sheet stat → the weapon stat it feeds (a passive changing only stats no owned weapon
 -- uses does nothing for this build). Player stats (HP, armor, speed ...) always count.
@@ -288,13 +364,81 @@ local function evolveHint(rp, c, def)
 	local pdef = PassiveData.Passives[evo.Passive]
 	local needed = math.min(3, PassiveData.MaxLevelOf(evo.Passive))
 	local owned = (rp.Passives[evo.Passive] or 0) >= needed
-	local partner = string.format("%s Lv %d", pdef.Name, needed)
+	-- the partner passive is named once the player owns or has discovered it, the result
+	-- once they have evolved this weapon before; otherwise "???"
+	local partnerKnown = rp.Passives[evo.Passive] ~= nil or known(rp, "Passives", evo.Passive)
+	local result = known(rp, "Evolutions", c.Id) and evo.Name or UNKNOWN
+	local partner = string.format("%s Lv %d", partnerKnown and pdef.Name or UNKNOWN, needed)
 	c.HintReady = owned
 	if c.Level >= WeaponData.MaxLevel then
-		c.Hint = owned and string.format("Evolves into %s next level-up!", evo.Name) or string.format("Evolves into %s with %s", evo.Name, partner)
+		c.Hint = owned and string.format("Evolves into %s next level-up!", result) or string.format("Evolves into %s with %s", result, partner)
 	else
 		c.Hint = string.format("Evolves at Lv %d with %s%s", WeaponData.MaxLevel, partner, owned and " (ready)" or "")
 	end
+end
+
+-- "+10 damage, +1 arrow, -0.10s cooldown": one short line of what a card gives now, from
+-- its lines (From → To values with a unit suffix; a perk line names the perk).
+local function deltaText(line: { [string]: string }): string?
+	local label = tostring(line.Label or "")
+	-- "Damage" → "damage" but "HP regen" / "XP gain" keep their acronym
+	local second = string.sub(label, 2, 2)
+	if second ~= "" and second == string.lower(second) then
+		label = string.lower(string.sub(label, 1, 1)) .. string.sub(label, 2)
+	end
+	if line.Text then
+		local perk = string.match(tostring(line.Text), "^([^:]+):") or tostring(line.Text)
+		return "New: " .. perk
+	end
+	local to = tostring(line.To or "")
+	if not line.From then
+		return string.format("%s %s", to, label)
+	end
+	local a = tonumber(string.match(tostring(line.From), "^[+-]?%d+%.?%d*"))
+	local b, unit = string.match(to, "^([+-]?%d+%.?%d*)(.*)$")
+	local bn = tonumber(b)
+	if not a or not bn then
+		return string.format("%s %s", to, label) -- "all pierce"
+	end
+	local d = bn - a
+	if math.abs(d) < 1e-6 then
+		return nil
+	end
+	local num = math.abs(d - math.floor(d + 0.5)) < 1e-6 and tostring(math.floor(d + 0.5)) or string.format("%.2f", d):gsub("0+$", ""):gsub("%.$", "")
+	if math.abs(d) == 1 and string.sub(label, -1) == "s" and not string.find(label, " ") then
+		label = string.sub(label, 1, -2) -- "+1 arrow"
+	end
+	return string.format("%s%s%s %s", d > 0 and "+" or "-", num, unit or "", label)
+end
+
+local function summaryOf(lines: { { [string]: string } }?, fallback: string?): string
+	local parts = {}
+	for _, line in ipairs(lines or {}) do
+		local t = deltaText(line)
+		if t then
+			table.insert(parts, t)
+		end
+		if #parts >= 3 then
+			break
+		end
+	end
+	if #parts == 0 then
+		return fallback or ""
+	end
+	return table.concat(parts, ", ")
+end
+
+-- The synergy a NEW weapon / passive would complete or advance (the player already holds
+-- another piece): card fields Synergy ("Synergy: <name> have/need") and SynergyReady.
+-- The synergy is named only once the player has completed it before; otherwise "???".
+local function synergyClue(rp, c, kind: string)
+	local s, have, need = SynergyData.Advances(ownedOf(rp), kind, c.Id)
+	if not s then
+		return
+	end
+	local name = known(rp, "Synergies", s.Id) and s.Name or UNKNOWN
+	c.Synergy = string.format("Synergy: %s %d/%d", name, have, need)
+	c.SynergyReady = have >= need
 end
 
 -- Adds display fields for the client:
@@ -308,15 +452,19 @@ local function decorate(rp, c)
 		local def = WeaponData.Weapons[c.Id]
 		c.Name = def.Name
 		c.Color = def.Color
+		discover(rp, "Weapons", c.Id) -- seen on a card counts
 		if c.Type == "WeaponNew" then
 			rarity = "Rare"
 			c.Rank = "NEW"
 			c.Description = def.Description
 			c.Lines = WeaponData.CardLines(c.Id, 0, 1)
+			c.Summary = def.Description
+			synergyClue(rp, c, "Weapon")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, WeaponData.MaxLevel)
 			c.Lines = WeaponData.CardLines(c.Id, c.Level - 1, c.Level)
 			c.Description = joinLines(c.Lines)
+			c.Summary = summaryOf(c.Lines, c.Description)
 			if c.Level >= WeaponData.MaxLevel then
 				rarity = "Epic"
 			end
@@ -326,6 +474,7 @@ local function decorate(rp, c)
 		local def = WeaponData.Weapons[c.Id]
 		c.Name = def.Evolution.Name
 		c.Description = def.Evolution.Description
+		c.Summary = def.Evolution.Description -- what it becomes, in a few words
 		c.Color = def.Color
 		c.Rank = "EVOLUTION"
 		c.Lines = WeaponData.CardLines(c.Id, WeaponData.MaxLevel, WeaponData.MaxLevel, true)
@@ -336,13 +485,17 @@ local function decorate(rp, c)
 		c.Name = def.Name
 		c.Color = def.Color
 		c.Lines = (passiveLines(rp, c.Id, c.Level))
+		discover(rp, "Passives", c.Id)
 		if c.Type == "PassiveNew" then
 			rarity = "Rare"
 			c.Rank = "NEW"
 			c.Description = def.Description
+			c.Summary = summaryOf(c.Lines, def.Description)
+			synergyClue(rp, c, "Passive")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, maxLevel)
 			c.Description = def.Description -- the lines carry the real numbers
+			c.Summary = summaryOf(c.Lines, def.Description)
 			if c.Level >= maxLevel then
 				rarity = "Epic"
 			end
@@ -352,7 +505,9 @@ local function decorate(rp, c)
 			local wdef = WeaponData.Weapons[id]
 			if not rp.Weapons[id].Evolved and wdef.Evolution and wdef.Evolution.Passive == c.Id then
 				local needed = math.min(3, PassiveData.MaxLevelOf(c.Id))
-				c.Hint = string.format("Evolves %s at Lv %d with this at Lv %d", wdef.Name, WeaponData.MaxLevel, needed)
+				-- the weapon is owned (discovered); its evolution is named once reached before
+				local into = known(rp, "Evolutions", id) and (" into " .. wdef.Evolution.Name) or ""
+				c.Hint = string.format("Evolves %s at Lv %d with this at Lv %d%s", wdef.Name, WeaponData.MaxLevel, needed, into)
 				c.HintReady = rp.Weapons[id].Level >= WeaponData.MaxLevel and c.Level >= needed
 				break
 			end
@@ -361,12 +516,14 @@ local function decorate(rp, c)
 		c.Name = "Gold Pouch"
 		c.Description = "Everything is maxed: take some gold."
 		c.Lines = { { Label = "Run gold", To = "+" .. Config.LevelUp.FallbackGold } }
+		c.Summary = string.format("+%d run gold", Config.LevelUp.FallbackGold)
 		c.Rank = "BONUS"
 		c.Color = Color3.fromRGB(255, 210, 60)
 	elseif c.Type == "Heal" then
 		c.Name = "Roast Chicken"
 		c.Description = "Everything is maxed: patch yourself up."
 		c.Lines = { { Label = "Heal", To = Config.LevelUp.FallbackHeal .. " HP" } }
+		c.Summary = string.format("Heal %d HP now", Config.LevelUp.FallbackHeal)
 		c.Rank = "BONUS"
 		c.Color = Color3.fromRGB(200, 120, 60)
 	end
@@ -412,12 +569,14 @@ local function apply(rp, c)
 	elseif c.Type == "Evolve" then
 		if canEvolve(rp, c.Id) then
 			rp.Weapons[c.Id].Evolved = true
+			discover(rp, "Evolutions", c.Id)
 			ctx.RunManager.Notify(rp.Player, WeaponData.Weapons[c.Id].Evolution.Name .. "!", Color3.fromRGB(255, 210, 60))
 		end
 	elseif c.Type == "PassiveNew" then
 		if not rp.Passives[c.Id] and #rp.PassiveOrder < Config.Slots.Passives then
 			rp.Passives[c.Id] = 1
 			table.insert(rp.PassiveOrder, c.Id)
+			discover(rp, "Passives", c.Id)
 		end
 	elseif c.Type == "PassiveUp" then
 		if rp.Passives[c.Id] then
