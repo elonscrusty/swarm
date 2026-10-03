@@ -9,6 +9,7 @@
 	Cancel them when it closes; UIAnim.Track collects tweens (and IdleFx handles) for that.
 ]]
 
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Theme"))
@@ -28,6 +29,10 @@ local function scaleOf(obj: GuiObject): UIScale
 	return s :: UIScale
 end
 UIAnim.ScaleOf = scaleOf
+
+-- UIAnim.Punch's replayable tweens (weak keys: gone with their UIScale)
+local PUNCH_INFO = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local punchTweens: { [UIScale]: Tween } = setmetatable({}, { __mode = "k" }) :: any
 
 function UIAnim.Tween(obj: Instance, seconds: number, goal: { [string]: any }, style: Enum.EasingStyle?, dir: Enum.EasingDirection?): Tween
 	local t = TweenService:Create(obj, TweenInfo.new(seconds, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), goal)
@@ -72,7 +77,14 @@ function UIAnim.Punch(obj: GuiObject, amount: number?)
 	end
 	local s = scaleOf(obj)
 	s.Scale = 1 + (amount or 0.25)
-	UIAnim.Tween(s, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
+	-- one Tween per scale, replayed (a burst of gold / kills punches every frame: no
+	-- new Tween each time); Play restarts from the value just set, like a fresh tween
+	local t = punchTweens[s]
+	if not t then
+		t = TweenService:Create(s, PUNCH_INFO, { Scale = 1 })
+		punchTweens[s] = t
+	end
+	t:Play()
 end
 
 -- Slides in from an offset (in pixels) while growing to full size, staggered by `delay`.
@@ -501,6 +513,47 @@ function UIAnim.SweepOnce(obj: GuiObject, color: Color3?, seconds: number?, tran
 	end)
 end
 
+-- Sparks in flight, driven by one RenderStepped connection (only while any fly) and
+-- recycled through a small pool: a big swarm's gold / kill sparks create no Frames or
+-- Tweens per burst. Motion matches the old Quad-out tween (position, fade, shrink to 1 px).
+local SPARK_POOL_MAX = 64
+local sparkPool: { Frame } = {}
+local sparks: { { [string]: any } } = {}
+local sparkConn: RBXScriptConnection? = nil
+
+local function stepSparks()
+	local now = os.clock()
+	local i = 1
+	while i <= #sparks do
+		local s = sparks[i]
+		local f: Frame = s.Frame
+		local t = (now - s.T0) / s.Dur
+		if t >= 1 or f.Parent ~= s.Parent then
+			-- done (or its parent went away): back to the pool when still usable
+			local intact = f.Parent == s.Parent
+			sparks[i] = sparks[#sparks]
+			sparks[#sparks] = nil
+			if intact and #sparkPool < SPARK_POOL_MAX then
+				f.Parent = nil
+				table.insert(sparkPool, f)
+			else
+				f:Destroy()
+			end
+		else
+			local e = 1 - (1 - t) * (1 - t) -- Quad out
+			f.Position = (s.From :: UDim2):Lerp(s.To, e)
+			f.BackgroundTransparency = e
+			local px = s.Size + (1 - s.Size) * e
+			f.Size = UDim2.fromOffset(px, px)
+			i += 1
+		end
+	end
+	if #sparks == 0 and sparkConn then
+		sparkConn:Disconnect()
+		sparkConn = nil
+	end
+end
+
 -- Radial sparks flying out of `center` (a UDim2 inside `parent`) and fading.
 function UIAnim.Sparks(parent: GuiObject, center: UDim2, color: Color3, count: number?, distance: number?, seconds: number?)
 	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
@@ -509,28 +562,30 @@ function UIAnim.Sparks(parent: GuiObject, center: UDim2, color: Color3, count: n
 	local n = count or 10
 	local dist = distance or 46
 	local dur = seconds or 0.55
+	local now = os.clock()
 	for i = 1, n do
 		local a = (i / n) * math.pi * 2 + (i % 3) * 0.2
 		local d = dist * (0.65 + 0.35 * ((i * 7) % 5) / 4)
 		local size = 4 + (i % 3) * 2
-		local spark = Instance.new("Frame")
-		spark.Name = "Spark"
-		spark.BackgroundColor3 = color
-		spark.BorderSizePixel = 0
-		spark.AnchorPoint = Vector2.new(0.5, 0.5)
-		spark.Size = UDim2.fromOffset(size, size)
-		spark.Rotation = 45
-		spark.Position = center
-		spark.ZIndex = parent.ZIndex + 5
-		spark.Parent = parent
-		local t = UIAnim.Tween(spark, dur, {
-			Position = center + UDim2.fromOffset(math.cos(a) * d, math.sin(a) * d),
-			BackgroundTransparency = 1,
-			Size = UDim2.fromOffset(1, 1),
-		}, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		t.Completed:Once(function()
-			spark:Destroy()
-		end)
+		local spark = table.remove(sparkPool)
+		if not spark then
+			spark = Instance.new("Frame")
+			spark.Name = "Spark"
+			spark.BorderSizePixel = 0
+			spark.AnchorPoint = Vector2.new(0.5, 0.5)
+			spark.Rotation = 45
+		end
+		local f = spark :: Frame
+		f.BackgroundColor3 = color
+		f.BackgroundTransparency = 0
+		f.Size = UDim2.fromOffset(size, size)
+		f.Position = center
+		f.ZIndex = parent.ZIndex + 5
+		f.Parent = parent
+		table.insert(sparks, { Frame = f, Parent = parent, T0 = now, Dur = dur, From = center, To = center + UDim2.fromOffset(math.cos(a) * d, math.sin(a) * d), Size = size })
+	end
+	if not sparkConn then
+		sparkConn = RunService.RenderStepped:Connect(stepSparks)
 	end
 end
 

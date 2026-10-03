@@ -83,6 +83,9 @@ async function main() {
       const map = {};
       const f = path.join(args.repo, 'art', 'uploaded_art.json');
       try { for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(f, 'utf8')))) map[String(v)] = k; } catch (e) { /* no art */ }
+      // item icons (art/icons/uploaded_ids.json: name -> id, tools/upload_icons.py) as "icons/<name>"
+      const fi = path.join(args.repo, 'art', 'icons', 'uploaded_ids.json');
+      try { for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(fi, 'utf8')))) map[String(v)] = 'icons/' + k; } catch (e) { /* no icons */ }
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(map) });
     }
     for (const [prefix, dir] of Object.entries(files)) {

@@ -2857,6 +2857,7 @@ local function updateSteadyAim(rp, dt: number)
 			local bonus = traitValue(rp, trait.Damage)
 			rp.SteadyAimBonus = bonus
 			rp.SteadyAimOther = (trait.OtherDamage or trait.Damage) * bonus / trait.Damage
+			rp.Player:SetAttribute("SteadyAimBonus", bonus) -- the HUD chip's numbers (before SteadyAim flips)
 			setSteadyAim(rp, true)
 		end
 	end

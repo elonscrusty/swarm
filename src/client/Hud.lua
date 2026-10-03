@@ -427,8 +427,12 @@ local function refreshBuff()
 	-- every other weapon)
 	local heroDef = CharacterData.Characters[tostring(player:GetAttribute("CharacterId") or "")]
 	local trait = (heroDef and heroDef.SteadyAim) or (CharacterData.Characters.Ranger and CharacterData.Characters.Ranger.SteadyAim)
-	local bow = trait and math.floor((trait.Damage or 0) * 100 + 0.5) or 30
-	local other = trait and math.floor((trait.OtherDamage or 0) * 100 + 0.5) or 0
+	-- the server's live Longbow bonus (SteadyAimBonus: with the hero's Signature upgrade);
+	-- other weapons scale with it the way WeaponSystem does
+	local base = trait and trait.Damage or 0.30
+	local live = tonumber(player:GetAttribute("SteadyAimBonus")) or base
+	local bow = math.floor(live * 100 + 0.5)
+	local other = trait and math.floor((trait.OtherDamage or 0) * live / math.max(0.01, base) * 100 + 0.5) or 0
 	local onText = other > 0 and string.format("STEADY AIM +%d%% BOW · +%d%% OTHERS", bow, other) or string.format("STEADY AIM +%d%% DAMAGE", bow)
 	ui.BuffText.Text = state and onText or "STAND STILL TO AIM"
 	ui.BuffText.TextColor3 = state and P.moss_200 or C.TextMuted

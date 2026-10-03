@@ -122,6 +122,28 @@ local function effectStep(heroId: string, upgradeId: string, level: number, maxe
 	return now .. " → " .. string.format(numberPart, value(level + 1)) .. " " .. words
 end
 
+-- The trait sentence with the hero's current value (Hero Mastery: base + Signature level),
+-- e.g. "Takes 14% less damage" at Iron Skin level 2. The Ranger's "+10% other weapons"
+-- scales with the Longbow number the way WeaponSystem does.
+local function currentTraitText(heroId: string, textIn: string, level: number): string
+	local sig = MetaUpgradeData.Signature[heroId]
+	if not sig or level <= 0 then
+		return textIn
+	end
+	local base = sig.Trait.Base
+	local now = base + sig.Trait.Per * level
+	local out, n = string.gsub(textIn, "%f[%d]" .. base .. "%%", now .. "%%", 1)
+	if n > 0 then
+		local steady = CharacterData.Characters[heroId] and CharacterData.Characters[heroId].SteadyAim
+		if steady and steady.OtherDamage then
+			local other = math.floor(steady.OtherDamage * 100 + 0.5)
+			local otherNow = math.floor(steady.OtherDamage * now / base * 100 + 0.5)
+			out = string.gsub(out, "%(%+" .. other .. "%%", "(+" .. otherNow .. "%%", 1)
+		end
+	end
+	return out
+end
+
 -- Trait text split for the EFFECT row: a leading "+N%" (big number, or nil), the rest as
 -- a sentence, and the weapon list after a colon (" • " separated, or nil).
 local function splitEffect(s: string): (string?, string, string?)
@@ -731,7 +753,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local weapon = WeaponData.Weapons[def.StartWeapon]
 		ui.Weapon.Text = weapon and weapon.Name or def.StartWeapon
 		ui.Bonus.Text = def.Trait and def.Trait.Name or (def.BonusText or "")
-		local big, body, list = splitEffect(def.Trait and def.Trait.Text or (def.BonusText or ""))
+		local sigLevel = 0
+		if own and type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[inspChar]) == "table" then
+			sigLevel = math.floor(tonumber(p.HeroUpgrades[inspChar].Signature) or 0)
+		end
+		local big, body, list = splitEffect(currentTraitText(inspChar, def.Trait and def.Trait.Text or (def.BonusText or ""), sigLevel))
 		ui.EffectBig.Text = big or ""
 		ui.EffectBig.Visible = big ~= nil
 		-- The trait sentence stays full width beneath its highlighted number.
