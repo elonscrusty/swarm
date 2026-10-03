@@ -50,7 +50,7 @@ if n == 1 then
 	preview.remote("StartRun"):FireServer("Solo")
 	preview.advance(1.5)
 end
-local rps = RM.GetRunPlayers()
+local rps = table.clone(RM.GetRunPlayers()) -- the live list empties when the run ends
 assert(#rps == n, "expected " .. n .. " run players")
 for _, rp in ipairs(rps) do
 	rp.InvulnUntil = math.huge
@@ -85,6 +85,9 @@ local function tick(dt)
 		end
 	end
 	local rp = rps[1]
+	if not rp then
+		return
+	end
 	if rp.Level > last then
 		table.insert(ups, { T = t, Stage = SM.GetStage(), Phase = SM.GetPhase(), N = rp.Level - last })
 		preview.log(string.format("UP %d:%02d S%d %s L%d gold=%d", t // 60, t % 60, SM.GetStage(), SM.GetPhase(), rp.Level, rp.Gold))
