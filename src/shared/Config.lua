@@ -74,16 +74,20 @@ Config.Stages = {
 	-- or the reveal delay); 0 = from the reveal on, always
 	HintAfterSeconds = 0,
 	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
-	EnemyHPPerStage = 0.25,
+	-- 0.4 (was 0.25): owner playtest "by map 2 players instant kill everything"; stage 1
+	-- stays as it was
+	EnemyHPPerStage = 0.4,
 	EnemyDamagePerStage = 0.08, -- also the boss's contact / orb damage and bomb ticks
 	SpawnTargetPerStage = 0.1, -- live-enemy target and mini-wave size
 	-- Scorpion Queen HP = Config.Boss.HP x this (x the player-count scaling). She comes
 	-- much earlier than the old 15:00 boss, so stage 1 is lighter; then +BossHPPerExtraStage
 	-- per stage past the list.
-	BossHPByStage = { 0.3, 0.75, 1.1, 1.5, 2.0 },
-	-- 0.45 (was 0.5): with the Endless boss growth on top, stage 6 was a x1.44 jump over
-	-- stage 5 (stages 2-5 step x1.3-1.5); now x1.35, then x1.29, x1.25 ...
-	BossHPPerExtraStage = 0.45,
+	-- { 0.3, 0.5, 0.8, 1.15, 1.6 } (was 0.3, 0.75, 1.1, 1.5, 2.0): stage 2's boss was a x2.5
+	-- jump (owner: "round two is way too hard"); now x1.67, x1.6, x1.44, x1.39
+	BossHPByStage = { 0.3, 0.5, 0.8, 1.15, 1.6 },
+	-- 0.4 (was 0.5): with the Endless boss growth on top, stage 6 was a x1.44 jump over
+	-- stage 5; now x1.25 (Standard) / x1.375 (Endless), then smaller steps
+	BossHPPerExtraStage = 0.4,
 	BossSpawnOffset = 12, -- the Queen climbs out this far behind the portal
 	-- regular enemies kept alive during the Queen fight: this share of the normal live
 	-- target, at most Config.Boss.MinionCapDuringBoss and at least BossMinionMin
@@ -537,6 +541,12 @@ Config.Spawn = {
 	OpeningSeconds = 60,
 	OpeningMult = 0.65,
 	StageProgressionSeconds = 120,
+	-- The spawn-table minute (live target and enemy mix) on stage n stays within
+	-- [(n-1) x StageProgressionSeconds, that + StageRowSpan] whatever the run clock says.
+	-- Before, a slow stage 1 (a 4-minute boss fight) put stage 2 on the 6-7 minute rows:
+	-- ~90 enemies alive on arrival, three times stage 1 (owner: "round two ... mobs just keep
+	-- spawning"). Enemy HP / damage still follow the run clock (Config.Difficulty).
+	StageRowSpan = 180,
 	TickSeconds = 0.4, -- how often the spawner tops up toward the target count
 	MaxPerTick = 8,
 	-- "ScreenEdge": spawn on a ring just off-screen around a random player, clamped
@@ -572,8 +582,12 @@ Config.Waves = {
 	MaxPerStep = 6, -- enemies spawned per frame at most while a wave pours in (perf)
 	LullSeconds = 5,
 	LullMult = 0.3,
-	TrickleFrom = 0.45,
-	TrickleTo = 0.7,
+	TrickleFrom = 0.55,
+	TrickleTo = 0.8,
+	-- a living player within PortalCalmRadius studs of the portal while exploring: no new
+	-- wave starts and the trickle is x PortalCalmMult, so pushing to the portal works
+	PortalCalmRadius = 30,
+	PortalCalmMult = 0.5,
 	Base = 22,
 	PerMinute = 4,
 	GrowPerWave = 0.06,

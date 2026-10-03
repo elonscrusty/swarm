@@ -198,6 +198,26 @@ local function introduce(typeId: string): boolean
 	return def ~= nil and def.Intro ~= nil
 end
 
+-- A living player near the portal while exploring (Config.Waves.PortalCalmRadius).
+local function nearPortal(): boolean
+	local W = Config.Waves
+	local p = W.PortalCalmRadius and ctx.StageManager.GetPhase() == "Explore" and ctx.StageManager.PortalPosition()
+	if not p then
+		return false
+	end
+	local r2 = W.PortalCalmRadius * W.PortalCalmRadius
+	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+		local root = rp.Alive and rp.Root
+		if root then
+			local dx, dz = root.Position.X - p.X, root.Position.Z - p.Z
+			if dx * dx + dz * dz <= r2 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 -- Live-target multiplier from the pacing curve (calm, lull, build-up).
 local function pacingMult(): number
 	local P = Config.Pacing
@@ -211,7 +231,7 @@ local function pacingMult(): number
 	local u = math.clamp(sinceWave / math.max(1, Config.Run.MiniWaveInterval), 0, 1)
 	if W.Enabled then
 		-- between waves only a light trickle, so kills and XP never fully stall
-		return W.TrickleFrom + (W.TrickleTo - W.TrickleFrom) * u
+		return (W.TrickleFrom + (W.TrickleTo - W.TrickleFrom) * u) * (nearPortal() and W.PortalCalmMult or 1)
 	end
 	return P.BuildUpFrom + (P.BuildUpTo - P.BuildUpFrom) * u
 end
@@ -448,8 +468,10 @@ end
 
 -- Normal spawning toward the live target for this minute.
 local function progressionTime(): number
-	return math.max(ctx.RunManager.GetRunTime(), (ctx.StageManager.GetStage() - 1) * Config.Spawn.StageProgressionSeconds)
+	local from = (ctx.StageManager.GetStage() - 1) * Config.Spawn.StageProgressionSeconds
+	return math.clamp(ctx.RunManager.GetRunTime(), from, from + (Config.Spawn.StageRowSpan or math.huge))
 end
+
 EnemySpawner.ProgressionTime = progressionTime
 
 local function openingMult(): number
@@ -615,8 +637,8 @@ local function startWave()
 		waveNumber = 0
 	end
 	local rp = randomAlivePlayer()
-	if not rp then
-		return
+	if not rp or nearPortal() then
+		return -- someone is pushing into the portal: no wave on top of them
 	end
 	waveNumber += 1
 	local runTime = ctx.RunManager.GetRunTime()
