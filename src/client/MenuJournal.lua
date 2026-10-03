@@ -8,7 +8,10 @@ local MenuJournal = {}
 local P = Theme.Palette
 
 function MenuJournal.Build(screen: Frame, ctx: { [string]: any })
-	local header = UIKit.TitleBar(screen, "Enemy journal", ctx.Back)
+	-- opened from the STATS screen's JOURNAL tab: BACK returns there, not to the home screen
+	local header = UIKit.TitleBar(screen, "Enemy journal", function()
+		ctx.ShowScreen("Stats")
+	end)
 	local holder, face = UIKit.Surface(screen, { Name = "Journal", Radius = Theme.Radius.L, Transparency = 0.06 })
 	UIKit.padding(face, 20, 20, 20, 20)
 	local count = UIKit.text(face, "H3", "", { Name = "DiscoveryCount", Size = UDim2.new(1, 0, 0, 28), TextColor3 = P.gold_300 }, 18)

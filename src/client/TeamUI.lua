@@ -151,6 +151,12 @@ local function reviveRadius(state: Configuration): number
 	return rules and rules.Radius or 7
 end
 
+local function reviveSeconds(state: Configuration): number
+	local modeDef = (Config.Modes :: any)[state:GetAttribute("Mode") or ""]
+	local rules = modeDef and modeDef.PartnerRevive
+	return rules and rules.Seconds or 2
+end
+
 ------------------------------------------------------------------------------------------
 -- Team list
 ------------------------------------------------------------------------------------------
@@ -252,7 +258,9 @@ local function updateRow(r: Row, state: Configuration)
 			word = string.format("DOWN · %d m", math.floor(((theirs.Position - mine.Position) * FLAT).Magnitude + 0.5))
 		end
 	end
-	r.State.Text = word
+	if r.State.Text ~= word then
+		r.State.Text = word
+	end
 	if r.StateKey ~= s then
 		local old = r.StateKey
 		r.StateKey = s
@@ -368,13 +376,30 @@ local function updateMarker(m: Marker, p: Player, root: BasePart, progress: numb
 	local p2, on = project(pos + Vector3.new(0, 5.5, 0))
 	local top = math.max(60, Hud.TopBottom() + 30)
 	local bottom = H - 70
+	-- landscape: the ability panel takes the bottom centre; the ring and its label stay
+	-- above it there (the ring is 64 px tall, the label ~20 px under it)
+	local els = Hud.Elements()
+	local barTop, barL, barR = math.huge, 0, 0
+	if not kit.IsPortrait() and els.Bar and els.BarTop then
+		barTop = els.BarTop - 58
+		barL = els.Bar.Position.X.Offset - 40
+		barR = barL + els.Bar.Size.X.Offset + 80
+	end
+	local function settle(x: number, y: number)
+		if y > barTop and x > barL and x < barR then
+			y = barTop
+		end
+		-- the 200 px label is centred under the ring; near a screen edge it slides in so
+		-- it never runs off screen
+		m.Label.Position = UDim2.new(0.5, math.clamp(x, 108, W - 108) - x, 1, 0)
+		m.Holder.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
+	end
 	local inside = on and p2.X > 50 and p2.X < W - 50 and p2.Y > top and p2.Y < bottom
 	m.Holder.Visible = true
 	if inside or isMe then
 		m.Arrow.Visible = false
 		-- near a screen edge the ring slides in so its label stays readable
-		local x = math.clamp(p2.X, 104, W - 104)
-		m.Holder.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(p2.Y - 42 + 0.5))
+		settle(math.clamp(p2.X, 104, W - 104), p2.Y - 42)
 		return
 	end
 	-- off screen: clamp the direction from the screen centre onto the safe rectangle
@@ -398,7 +423,7 @@ local function updateMarker(m: Marker, p: Player, root: BasePart, progress: numb
 	local at = c + d * math.min(kx, ky)
 	m.Arrow.Visible = true
 	m.Pivot.Rotation = math.deg(math.atan2(d.Y, d.X))
-	m.Holder.Position = UDim2.fromOffset(math.floor(at.X + 0.5), math.floor(at.Y + 0.5))
+	settle(at.X, at.Y)
 end
 
 local function worldPart(shape: Enum.PartType): BasePart
@@ -541,8 +566,16 @@ function TeamUI.Update(_dt: number, state: Configuration, meInRun: boolean)
 		releaseRevive()
 		holdTarget = nearest
 	end
-	ui.HoldRevive.Visible = nearest ~= nil
-	ui.HoldRevive.Text = holding and string.format("REVIVING %d%%", math.floor((nearest and tonumber(nearest:GetAttribute("ReviveProgress")) or 0) * 100)) or "HOLD REVIVE · 2s"
+	if ui.HoldRevive.Visible ~= (nearest ~= nil) then
+		ui.HoldRevive.Visible = nearest ~= nil
+	end
+	if nearest then
+		local holdText = holding and string.format("REVIVING %d%%", math.floor((tonumber(nearest:GetAttribute("ReviveProgress")) or 0) * 100))
+			or string.format("HOLD REVIVE · %ss", tostring(reviveSeconds(state)))
+		if ui.HoldRevive.Text ~= holdText then
+			ui.HoldRevive.Text = holdText
+		end
+	end
 	local keyParts = {}
 	for _, p in ipairs(list) do
 		table.insert(keyParts, tostring(p.UserId))

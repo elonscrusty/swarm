@@ -1359,7 +1359,10 @@ local function updateStatus(state: Configuration, phase: string, stagePhase: str
 		if progress > 0 then
 			setStatus(string.format("A teammate is reviving you... %d%%", math.floor(progress * 100)), "heart", progress)
 		elseif (player:GetAttribute("PartnerRevivesLeft") or 0) > 0 then
-		setStatus("You fell! A teammate can hold REVIVE beside you for 2 seconds.", "people2")
+			-- the hold time comes from the mode's revive rules (Config.Modes.<Mode>.PartnerRevive)
+			local modeDef = (Config.Modes :: any)[state:GetAttribute("Mode") or ""]
+			local secs = (modeDef and modeDef.PartnerRevive and modeDef.PartnerRevive.Seconds) or 2
+			setStatus(string.format("You fell! A teammate can hold REVIVE beside you for %s second%s.", tostring(secs), secs == 1 and "" or "s"), "people2")
 		else
 			setStatus("You fell. Spectating your team · Pause → MAIN MENU to leave now", "skull")
 		end

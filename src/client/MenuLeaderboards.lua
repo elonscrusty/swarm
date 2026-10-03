@@ -398,7 +398,9 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 			return
 		end
 		data[d.Board] = d
-		if d.Board == board then
+		-- a hidden screen only keeps the answer (OnShow rebuilds the rows); the Daily
+		-- screen asks for the Daily board too
+		if d.Board == board and screen.Visible then
 			MenuLeaderboards._fill(false)
 		end
 		if d.Status == "loading" and screen.Visible then

@@ -340,6 +340,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				end
 				if p.Gold < def.Cost then
 					ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(def.Cost) .. " needed.", P.crimson_300)
+					return
 				end
 				Remotes.Get("BuyCharacter"):FireServer(inspChar)
 			elseif p.SelectedCharacter ~= inspChar then

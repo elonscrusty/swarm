@@ -1,4 +1,14 @@
--- Preset team pings. Targets are replicated IDs; the server chooses recipients and positions.
+--[[
+	TeamPings.lua
+	Preset team pings (Duo / Trio): a PING button opens five options (LOCATION, ENEMY,
+	LOOT, HELP, REGROUP); the server picks the recipients and the position and every
+	client shows a short billboard at it (TeamPingShown). Targets are replicated ids.
+	Its own ScreenGui, in real pixels: the button sits in the bottom-left corner (inside
+	the safe area), the options panel above it, clear of the ability panel (bottom
+	centre), the JUMP button (bottom right) and the thumbstick (any other touch). It is
+	drawn over the HUD gui (DisplayOrder 10) so the ability panel never hides it. Only in
+	a team run, while alive and not paused / frozen; keyboard G toggles the panel.
+]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -69,13 +79,15 @@ end
 
 function TeamPings.Init()
 	if gui then return end
-	local pingGui: ScreenGui = UIKit.new("ScreenGui", { Name = "TeamPings", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = Theme.Z.Hud + 1, Enabled = false }, player:WaitForChild("PlayerGui"))
+	-- DisplayOrder: over the main UI gui (10) so the ability panel never covers the button
+	local pingGui: ScreenGui = UIKit.new("ScreenGui", { Name = "TeamPings", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 11, Enabled = false }, player:WaitForChild("PlayerGui"))
 	gui = pingGui
 	local frame = UIKit.new("Frame", { Name = "Controls", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, pingGui)
-	local panel = UIKit.new("Frame", { Name = "PingOptions", BackgroundColor3 = Theme.Palette.slate_900, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -148), Size = UDim2.fromOffset(248, 172), Visible = false }, frame)
+	local M = Theme.Layout.Margin
+	local panel = UIKit.new("Frame", { Name = "PingOptions", BackgroundColor3 = Theme.Palette.slate_900, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, M, 1, -(M + 48 + 8)), Size = UDim2.fromOffset(248, 172), Visible = false }, frame)
 	UIKit.corner(panel, Theme.Radius.M)
 	UIKit.stroke(panel, Theme.Palette.gold_400, 1, 0.3)
-	local button = UIKit.Button(frame, { Name = "Ping", Title = "PING", Kind = "Secondary", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -90), Size = UDim2.fromOffset(88, 48), Shadow = false, OnClick = function() opened = not opened; panel.Visible = opened end })
+	local button = UIKit.Button(frame, { Name = "Ping", Title = "PING", Kind = "Secondary", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, M, 1, -M), Size = UDim2.fromOffset(88, 48), Shadow = false, OnClick = function() opened = not opened; panel.Visible = opened end })
 	for i, kind in ipairs(kinds) do
 		UIKit.Button(panel, { Name = kind, Title = string.upper(kind), Kind = "Secondary", Position = UDim2.fromOffset(8 + ((i - 1) % 2) * 120, 8 + math.floor((i - 1) / 2) * 54), Size = UDim2.fromOffset(112, 48), Shadow = false, OnClick = function() TeamPings.Send(kind); opened = false; panel.Visible = false end })
 	end
@@ -100,14 +112,19 @@ function TeamPings.Init()
 		if not processed and input.KeyCode == Enum.KeyCode.G and usable() and not UserInputService:GetFocusedTextBox() then opened = not opened; panel.Visible = opened end
 	end)
 	UserInputService.WindowFocusReleased:Connect(function() opened = false; panel.Visible = false end)
+	-- per frame: only property writes that change something (no churn in the lobby)
+	local wasActive = false
 	RunService.RenderStepped:Connect(function()
 		local active = inTeamRun()
-		pingGui.Enabled = active
-		button.Instance.Visible = usable()
-		if not active then TeamPings.Clear() end
-		if not usable() then opened = false end
-		panel.Visible = opened
-		for _, marker in ipairs(markers) do if marker.Until <= os.clock() then marker.Billboard.Enabled = false end end
+		if pingGui.Enabled ~= active then pingGui.Enabled = active end
+		local ok = active and usable()
+		if button.Instance.Visible ~= ok then button.Instance.Visible = ok end
+		if not active and wasActive then TeamPings.Clear() end
+		wasActive = active
+		if not ok then opened = false end
+		if panel.Visible ~= opened then panel.Visible = opened end
+		local now = os.clock()
+		for _, marker in ipairs(markers) do if marker.Billboard.Enabled and marker.Until <= now then marker.Billboard.Enabled = false end end
 	end)
 end
 

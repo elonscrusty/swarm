@@ -527,7 +527,10 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	return {
 		Layout = layout,
 		Refresh = function(_p)
-			fill()
+			-- (OnShow fills a hidden screen when it opens; the home card reads Status() itself)
+			if screen.Visible then
+				fill()
+			end
 		end,
 		OnShow = function(_p)
 			shownDay = -1

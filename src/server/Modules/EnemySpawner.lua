@@ -818,7 +818,8 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 		local soaked = math.min(e.Shield, amount)
 		e.Shield -= soaked
 		amount -= soaked
-		if e.Shield <= 0 then
+		if e.Shield <= 0 and not e.Boss then
+			-- (a boss's shield is the Colossus's frost armour: BossAI.stepArmor shatters it)
 			e.Part:SetAttribute("Shield", false)
 			Fx.Warn("pop", e.Pos.X, e.Pos.Z, e.Radius * 1.4, "shield")
 		end
@@ -877,13 +878,13 @@ function EnemySpawner.Explode(e)
 	if e.Act == "Fuse" and e.PinPos then
 		e.Pos = e.PinPos -- blast from the ring drawn at fuse start
 	end
-	local D = Config.Difficulty
-	local tierMult = (1 + math.min(ctx.RunManager.GetTier(), D.MaxTier or math.huge) * D.DamagePerMinute) * ctx.StageManager.DamageMult()
+	-- the same scale as every other enemy attack (tier, elite x1.5, stage, difficulty)
+	local scale = EnemySpawner.DamageScale(e)
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Alive and rp.Root then
 			local d = (rp.Root.Position - e.Pos) * Vector3.new(1, 0, 1)
 			if d.Magnitude <= radius then
-				ctx.RunManager.DamagePlayer(rp, ex.Damage * tierMult, (e.Def.DisplayName or e.Type) .. " explosion")
+				ctx.RunManager.DamagePlayer(rp, ex.Damage * scale, (e.Def.DisplayName or e.Type) .. " explosion")
 			end
 		end
 	end

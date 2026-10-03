@@ -291,7 +291,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			card.Rule.TextColor3 = open and P.moss_200 or P.gold_200
 			card.Meter.Frame.Visible = not open
 			card.Count.Visible = not open
-			if wasSel == false and isSel then
+			if wasSel == false and isSel and screen.Visible then
 				UIAnim.Punch(card.Button.Instance, 0.06)
 				UIAnim.Sweep(card.Button.Instance, 0, 0.6, 0.5)
 				UIAnim.Burst(card.Button.Instance, UDim2.fromScale(0.5, 0.5), { P.gold_300, P.ivory_100 }, 10, 70)

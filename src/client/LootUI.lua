@@ -180,16 +180,18 @@ local function curseChip(parent: Instance, icon: string, str: string, color: Col
 	text(face, "Label", str, { LayoutOrder = 2, Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = color }, 11)
 end
 
--- Rebuilds the chips when the run's curses change.
+-- Rebuilds the chips when the run's curses change (keyed on the raw attribute: a frame
+-- without a change parses nothing).
 local function refreshCurses(inRun: boolean)
 	local state = Remotes.State()
-	local list = inRun and CurseData.FromString(state:GetAttribute("Curses")) or {}
+	local raw = inRun and tostring(state:GetAttribute("Curses") or "") or ""
 	local daily = inRun and state:GetAttribute("DailyRun") == true
-	local key = (daily and "D|" or "") .. CurseData.ToString(list)
+	local key = (daily and "D|" or "") .. raw
 	if key == ui.CurseKey then
 		return
 	end
 	ui.CurseKey = key
+	local list = inRun and CurseData.FromString(state:GetAttribute("Curses")) or {}
 	for _, ch in ipairs(ui.Curses:GetChildren()) do
 		if ch:IsA("GuiObject") then
 			ch:Destroy()

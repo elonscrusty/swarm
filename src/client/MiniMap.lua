@@ -599,7 +599,10 @@ function MiniMap.Update(_dt: number, state: Configuration, inRun: boolean)
 			pingAt = -math.huge
 		end
 	end
-	if not ui.Holder.Visible then
+	-- off by the setting or under a modal: nothing to do. Hidden only because the team rows
+	-- pushed it onto the ability panel (cramped): keep placing it, so it comes back as soon
+	-- as there is room again (a teammate left, the rows went)
+	if not (shown and enabled and not covered) then
 		return
 	end
 	local now = os.clock()
@@ -607,6 +610,10 @@ function MiniMap.Update(_dt: number, state: Configuration, inRun: boolean)
 		return
 	end
 	moveAt = now + 1 / MOVE_HZ
+	place()
+	if not ui.Holder.Visible then
+		return
+	end
 	local model = findArena()
 	if model ~= arenaModel then
 		arenaModel = model
@@ -617,7 +624,6 @@ function MiniMap.Update(_dt: number, state: Configuration, inRun: boolean)
 			clearChildren(ui.Hazards)
 		end
 	end
-	place()
 	local root = localRoot()
 	if not root then
 		return
