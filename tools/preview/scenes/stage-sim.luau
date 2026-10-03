@@ -109,16 +109,31 @@ preview.advance(3)
 log("explore 5s")
 send("DevCommand", "TeleportToPortal")
 preview.advance(1.5)
-log("in circle (dormant)")
-preview.log("lock left", st:GetAttribute("PortalLockLeft"), "(charge must stay 0)")
+log("in circle")
+-- the portal is chargeable at once (owner decision): charge > 0 here, lock left 0
+preview.log("lock left", st:GetAttribute("PortalLockLeft"), "(portal chargeable at once: charge should rise)")
 send("DevCommand", "SpawnPortalBoss")
 preview.advance(0.5)
 log("dev boss")
+-- a boss ignores damage during its entrance + grace: hit it until the stage leaves Boss
+local function killBoss(label)
+	for i = 1, 30 do
+		if st:GetAttribute("StagePhase") ~= "Boss" then
+			preview.log(label, "boss down after", i - 1, "tries")
+			return true
+		end
+		if Spawner.Boss then
+			Spawner.Damage(Spawner.Boss, 1e9, RM.GetRunPlayer(me))
+		end
+		preview.advance(0.5)
+	end
+	preview.log(label, "boss NOT DOWN after 15 s")
+	return false
+end
 preview.log("boss alive:", Spawner.Boss ~= nil, "boss HP", Spawner.Boss and math.floor(Spawner.Boss.MaxHP) or 0, "enemies", #Spawner.Active)
 if Spawner.Boss then
-	Spawner.Damage(Spawner.Boss, 1e9, rp)
 end
-preview.advance(0.5)
+killBoss("stage 1")
 log("queen dead")
 preview.advance(2)
 preview.log("surge enemies alive", #Spawner.Active)
@@ -171,14 +186,14 @@ preview.advance(0.5)
 log("stage 2 boss")
 if Spawner.Boss then
 	preview.log("stage 2 boss HP", math.floor(Spawner.Boss.MaxHP))
-	Spawner.Damage(Spawner.Boss, 1e9, rp)
 end
+killBoss("stage 2")
 preview.advance(25)
 log("surge timed out")
 
 -- Every biome: stand in this stage's first floor hazard (BiomeHazards) and print what it
 -- did (Terrain attribute, WalkSpeed, HP), then go on through the portal. --set stages=N
--- (default 6: stage 1 + a full tour of the rotation, so every arena gets built).
+-- (default and maximum: the expedition's last stage, Config.Endless.LastNormalStage).
 local BH = preview.server("BiomeHazards")
 local MB = preview.server("MapBuilder")
 local function hazardCheck()
@@ -201,7 +216,10 @@ local function hazardCheck()
 	preview.log("  out", "Terrain", tostring(me:GetAttribute("Terrain")), "WalkSpeed", hum and math.floor(hum.WalkSpeed * 10 + 0.5) / 10)
 end
 hazardCheck()
-local stages = tonumber(preview.args.stages) or 6
+-- a normal run ends after Config.Endless.LastNormalStage stages (the expedition), so the
+-- tour stops there; Endless runs are covered by endless-sim.
+local lastStage = C.shared("Config").Endless.LastNormalStage
+local stages = math.min(tonumber(preview.args.stages) or lastStage, lastStage)
 -- drive the loop by phase until stage n is reached (the boss may need several hits)
 local function reach(n)
 	for _ = 1, 40 do

@@ -132,6 +132,7 @@ type Ctx = {
 	Bare: { Circle },
 	Circles: { Circle }, -- cylinder colliders (arena-relative)
 	Boxes: { Box }, -- box colliders (arena-relative)
+	Cliffs: boolean, -- rock cliffs line the north / west / east edges (MapBuilder)
 }
 
 local player = Players.LocalPlayer
@@ -198,6 +199,7 @@ local function readArena(model: Model): Ctx
 		Bare = parseCircles(model:GetAttribute("DetailBare")),
 		Circles = circles,
 		Boxes = boxes,
+		Cliffs = model:GetAttribute("Cliffs") == true,
 	}
 end
 
@@ -270,6 +272,10 @@ local function densityAt(a: Ctx, x: number, z: number): number
 		return 0
 	end
 	if outer then
+		-- past the cliffs (north / west / east) the floor is under rock: nothing to draw
+		if a.Cliffs and z < HALF - 2 then
+			return 0
+		end
 		return OUTER_DENSITY
 	end
 	local od = obstacleDistance(a, x, z)
@@ -340,9 +346,148 @@ local function makePiece(a: Ctx, kind: Kind, x: number, z: number, r1: number, r
 	return { Kind = kind, CF = cf, Size = size, Color = kind.C[1 + math.floor(r3 * #kind.C) % #kind.C], Shape = Enum.PartType.Block }
 end
 
+------------------------------------------------------------------------------------------
+-- PATH DETAIL (owner: "make the pathways more detailed"): stones lining the path edges and
+-- wear on the path itself, per arena: ruts, pebbles and roots in the Forest, puddles and
+-- boards in the Swamp, footprints in the Snow, cart tracks in the Desert, cinders on Lava.
+-- Same pool and the same deterministic cells as the rest; only cells on a path get them.
+------------------------------------------------------------------------------------------
+
+type PathRecipe = { Edge: { Color3 }, EdgeChance: number, Worn: { { K: string, C: { Color3 } } }, WornChance: number }
+
+local PATH_RECIPES: { [string]: PathRecipe } = {
+	Forest = {
+		Edge = { P.stone_400, P.stone_300, mix(P.stone_400, P.moss_500, 0.3) },
+		EdgeChance = 0.75,
+		Worn = { { K = "Rut", C = { mix(P.dirt_500, P.dirt_400, 0.4) } }, { K = "Pebble", C = { P.stone_400, P.dirt_300 } }, { K = "Root", C = { P.wood_600, P.wood_700 } } },
+		WornChance = 0.5,
+	},
+	Ruins = {
+		Edge = { P.pave_300, P.pave_400, P.stone_400 },
+		EdgeChance = 0.7,
+		Worn = { { K = "Rut", C = { mix(P.pave_400, P.dirt_400, 0.5) } }, { K = "Pebble", C = { P.pave_400, P.pave_300 } } },
+		WornChance = 0.4,
+	},
+	Swamp = {
+		Edge = { mix(P.stone_600, P.murk_600, 0.3), mix(P.stone_500, P.fen_600, 0.4) },
+		EdgeChance = 0.6,
+		Worn = { { K = "Puddle", C = { mix(P.fen_700, P.slate_600, 0.55), mix(P.murk_700, P.slate_500, 0.4) } }, { K = "Plank", C = { mix(P.wood_600, P.murk_600, 0.3), P.wood_700 } }, { K = "Rut", C = { mix(P.peat_500, P.fen_600, 0.3) } } },
+		WornChance = 0.55,
+	},
+	Snow = {
+		Edge = { mix(P.stone_400, P.snow_400, 0.4), P.snow_100, mix(P.stone_500, P.slate_400, 0.3) },
+		EdgeChance = 0.6,
+		Worn = { { K = "Print", C = { mix(P.snow_300, P.slate_400, 0.25) } }, { K = "Print", C = { mix(P.snow_300, P.slate_400, 0.25) } }, { K = "Rut", C = { mix(P.snow_300, P.ice_300, 0.4) } } },
+		WornChance = 0.6,
+	},
+	Desert = {
+		Edge = { P.sand_600, mix(P.sand_700, P.stone_500, 0.4), mix(P.sand_600, P.clay_500, 0.3) },
+		EdgeChance = 0.55,
+		Worn = { { K = "Track", C = { mix(P.sand_600, P.dirt_400, 0.35) } }, { K = "Pebble", C = { P.sand_700, P.stone_400 } } },
+		WornChance = 0.55,
+	},
+	Lava = {
+		Edge = { P.basalt_600, P.basalt_500, mix(P.cinder_600, P.basalt_700, 0.4) },
+		EdgeChance = 0.7,
+		Worn = { { K = "Rut", C = { mix(P.cinder_600, P.basalt_600, 0.5) } }, { K = "Pebble", C = { P.basalt_600, P.cinder_500 } } },
+		WornChance = 0.45,
+	},
+}
+local PATH_KIND: Kind = { K = "Path", W = 0, C = {}, S = 1 }
+local PATH_TOP = 0.34 -- the path slabs' top above the floor (MapBuilder dirtPath)
+
+-- Nearest path: signed distance to its outer edge and the segment's heading (radians).
+local function pathNear(a: Ctx, x: number, z: number): (number, number)
+	local best, heading = math.huge, 0
+	for _, seg in ipairs(a.Paths) do
+		local dx, dz = seg.BX - seg.AX, seg.BZ - seg.AZ
+		local len2 = dx * dx + dz * dz
+		local t = len2 > 0 and math.clamp(((x - seg.AX) * dx + (z - seg.AZ) * dz) / len2, 0, 1) or 0
+		local px, pz = seg.AX + dx * t - x, seg.AZ + dz * t - z
+		local d = math.sqrt(px * px + pz * pz) - seg.W
+		if d < best then
+			best, heading = d, math.atan2(dx, dz)
+		end
+	end
+	return best, heading
+end
+
+local function pathPiece(a: Ctx, kind: string, color: Color3, x: number, z: number, heading: number, r1: number, r2: number, out: { Piece })
+	local wx, wz = a.CX + x, a.CZ + z
+	local y = FLOOR_Y + PATH_TOP
+	local along = CFrame.Angles(0, heading, 0) -- local Z runs along the path
+	local function add(size: Vector3, cf: CFrame, shape: Enum.PartType?)
+		table.insert(out, { Kind = PATH_KIND, CF = cf, Size = size, Color = color, Shape = shape or Enum.PartType.Block })
+	end
+	if kind == "Edge" then
+		local s = 0.75 + r1 * 0.55
+		add(Vector3.new(1.0 * s, 0.45 * s, 0.8 * s), CFrame.new(wx, y + 0.02, wz) * CFrame.Angles(0.12, r2 * TAU, 0.1))
+	elseif kind == "Rut" then
+		local d = 1.0 + r1 * 1.1
+		add(Vector3.new(0.04, d, d), CFrame.new(wx, y + 0.02, wz) * CFrame.Angles(0, r2 * TAU, math.rad(90)), Enum.PartType.Cylinder)
+	elseif kind == "Pebble" then
+		local s = 0.35 + r1 * 0.3
+		add(Vector3.new(s, s * 0.5, s * 0.8), CFrame.new(wx, y + s * 0.15, wz) * CFrame.Angles(0.2, r2 * TAU, 0.15))
+	elseif kind == "Root" then
+		-- a root crossing the path, half buried
+		add(Vector3.new(3.2 + r1 * 2, 0.28, 0.32), CFrame.new(wx, y + 0.04, wz) * along * CFrame.Angles(0, (r2 - 0.5) * 0.8, (r1 - 0.5) * 0.08))
+	elseif kind == "Plank" then
+		-- boards laid across the soft track
+		local yaw = (r2 - 0.5) * 0.3
+		add(Vector3.new(3.4 + r1, 0.18, 0.75), CFrame.new(wx, y + 0.06, wz) * along * CFrame.Angles(0, yaw, 0))
+		add(Vector3.new(3.1 + r2, 0.18, 0.7), CFrame.new(wx, y + 0.06, wz) * along * CFrame.Angles(0, yaw + (r1 - 0.5) * 0.2, 0) * CFrame.new(0.2, 0, 0.95))
+	elseif kind == "Puddle" then
+		local d = 1.6 + r1 * 1.6
+		add(Vector3.new(0.05, d, d), CFrame.new(wx, y + 0.03, wz) * CFrame.Angles(0, r2 * TAU, math.rad(90)), Enum.PartType.Cylinder)
+	elseif kind == "Print" then
+		-- a pair of boot prints, heading along the path either way
+		local flip = r2 < 0.5 and 0 or math.pi
+		local base = CFrame.new(wx, y + 0.02, wz) * along * CFrame.Angles(0, flip + (r1 - 0.5) * 0.3, 0)
+		add(Vector3.new(0.42, 0.04, 0.75), base * CFrame.new(-0.3, 0, 0))
+		add(Vector3.new(0.42, 0.04, 0.75), base * CFrame.new(0.3, 0, 1.1))
+	elseif kind == "Track" then
+		-- two cart-wheel grooves along the path
+		local len = 4 + r1 * 3
+		add(Vector3.new(0.3, 0.04, len), CFrame.new(wx, y + 0.02, wz) * along * CFrame.new(-1.1, 0, 0))
+		add(Vector3.new(0.3, 0.04, len), CFrame.new(wx, y + 0.02, wz) * along * CFrame.new(1.1, 0, 0))
+	end
+end
+
+-- Path detail of one cell (appended to `out`).
+local function pathCellPieces(a: Ctx, cx: number, cz: number, out: { Piece })
+	local pr = PATH_RECIPES[a.Name]
+	if not pr or #a.Paths == 0 then
+		return
+	end
+	local x0, z0 = cx * CELL, cz * CELL
+	local near = pathDistance(a, x0 + CELL / 2, z0 + CELL / 2)
+	if near > CELL * 0.75 then
+		return
+	end
+	for i = 1, 3 do
+		local x = x0 + frac(a, cx, cz, 40 + i * 5) * CELL
+		local z = z0 + frac(a, cx, cz, 41 + i * 5) * CELL
+		local ax, az = math.abs(x), math.abs(z)
+		if ax > HALF - 1 or az > HALF - 1 then
+			continue
+		end
+		local pd, heading = pathNear(a, x, z)
+		local r0, r1, r2 = frac(a, cx, cz, 42 + i * 5), frac(a, cx, cz, 43 + i * 5), frac(a, cx, cz, 44 + i * 5)
+		if pd > -1.8 and pd < -0.5 then
+			if r0 < pr.EdgeChance then
+				pathPiece(a, "Edge", pr.Edge[1 + math.floor(r1 * #pr.Edge) % #pr.Edge], x, z, heading, r1, r2, out)
+			end
+		elseif pd < -2.4 and r0 < pr.WornChance and not inBare(a, x, z) then
+			local w = pr.Worn[1 + math.floor(r1 * 7.3 * #pr.Worn) % #pr.Worn]
+			pathPiece(a, w.K, w.C[1 + math.floor(r2 * #w.C) % #w.C], x, z, heading, r1, r2, out)
+		end
+	end
+end
+
 -- The pieces of one grid cell (empty when the floor there is bare).
 local function cellPieces(a: Ctx, cx: number, cz: number): { Piece }
 	local out = {}
+	pathCellPieces(a, cx, cz, out)
 	local x0, z0 = cx * CELL, cz * CELL
 	local density = a.Recipe.Density * densityAt(a, x0 + CELL / 2, z0 + CELL / 2)
 	if density <= 0 then

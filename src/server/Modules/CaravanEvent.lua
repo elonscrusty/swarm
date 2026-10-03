@@ -54,6 +54,7 @@ type Caravan = {
 	Light: PointLight?,
 	Ring: BasePart?,
 	Shown: { [string]: any },
+	StartPhase: string?, -- the stage phase the defence began in
 }
 
 local ctx
@@ -328,7 +329,7 @@ local function start(c: Caravan)
 	ctx.RunManager.Broadcast(string.format("Defend the caravan! Hold its ring for %d seconds.", Config.Caravan.HoldSeconds), Color3.fromRGB(255, 200, 120))
 end
 
-local function succeed(c: Caravan)
+local function succeed(c: Caravan, line: string?)
 	local K = Config.Caravan
 	setState(c, "Saved")
 	c.Progress = K.HoldSeconds
@@ -349,7 +350,7 @@ local function succeed(c: Caravan)
 			if granted then ctx.RunManager.HoldReward(rp, dramatic == true) end
 		end
 	end
-	ctx.RunManager.Broadcast("The caravan is saved! An item and gold for everyone.", Color3.fromRGB(255, 220, 120))
+	ctx.RunManager.Broadcast(line or "The caravan is saved! An item and gold for everyone.", Color3.fromRGB(255, 220, 120))
 end
 
 local FIGHTING = { Explore = true, Boss = true, Surge = true }
@@ -376,11 +377,19 @@ function CaravanEvent.Step(dt: number)
 	local phase = ctx.StageManager.GetPhase()
 	if c.State == "Waiting" then
 		if FIGHTING[phase] and anyInRing(c, true) then
+			c.StartPhase = phase
 			start(c)
 		end
 		return
 	end
 	if c.State ~= "Defending" then
+		return
+	end
+	-- The stage boss arriving clears every normal enemy (Config.Boss.ClearMinionsOnSpawn),
+	-- the caravan's attackers too: the defence ends there and counts as won (nobody can
+	-- hold a ring with the boss on the field, and the waves it was holding off are gone).
+	if phase == "Boss" and c.StartPhase ~= "Boss" and Config.Boss.ClearMinionsOnSpawn then
+		succeed(c, "The boss scattered the raiders: the caravan escapes! An item and gold for everyone.")
 		return
 	end
 	local K = Config.Caravan

@@ -4,7 +4,8 @@
 	starts that says: open the portal before the swarm gets too heavy"). It takes the
 	place of the HUD's plain "STAGE N" banner (Hud.StageIntro hook), so it shows exactly
 	when that banner did: once per stage, after the travel fade has lifted, never when
-	joining mid-fight.
+	joining mid-fight; and only for a stage this client saw begin (a reconnect mid-stage
+	keeps the plain banner).
 
 	  eyebrow   STAGE N · arena name (ENDLESS · STAGE N on Endless runs)
 	  headline  OPEN THE PORTAL / BEFORE THE SWARM GROWS TOO STRONG
@@ -56,6 +57,10 @@ local ui: { [string]: any } = {}
 local firstRun = false -- profile TutorialDone == false
 local show = { Token = 0, Until = 0, Since = 0, Seconds = 1, Reveal = 0, Full = false, Long = false }
 local tweens: { Tween } = {}
+-- the stage this client saw begin (SwarmState Stage changed while it watched) and when:
+-- a client that joins mid-stage (reconnect) gets the plain banner instead
+local begun = { Stage = 0, At = -math.huge }
+local BEGUN_WINDOW = 25 -- seconds from the Stage change to the banner moment (travel fade, countdown)
 
 local function reduced(): boolean
 	return UIAnim.Reduced()
@@ -315,6 +320,13 @@ function RunIntro.Show(stageNo: number): boolean
 		return false
 	end
 	local state = Remotes.State()
+	local saw = begun.Stage == stageNo and os.clock() - begun.At <= BEGUN_WINDOW
+	-- a private run server: the client may arrive after Stage was set; a fresh run counts
+	local fresh = stageNo == 1 and (tonumber(state:GetAttribute("RunTime")) or 0) < 15
+	if not saw and not fresh then
+		return false
+	end
+	begun.Stage = 0 -- once per stage
 	show.Full = stageNo <= 1 or firstRun
 	show.Long = firstRun
 	show.Seconds = firstRun and SECONDS_FIRST_RUN or (stageNo <= 1 and SECONDS_FIRST_STAGE or SECONDS_LATER)
@@ -417,6 +429,13 @@ function RunIntro.Build(root: Frame, k: { [string]: any })
 	Remotes.Get("ProfileSync").OnClientEvent:Connect(function(data)
 		if type(data) == "table" and data.TutorialDone ~= nil then
 			firstRun = data.TutorialDone == false
+		end
+	end)
+	local state = Remotes.State()
+	state:GetAttributeChangedSignal("Stage"):Connect(function()
+		local n = tonumber(state:GetAttribute("Stage")) or 0
+		if n > 0 then
+			begun.Stage, begun.At = n, os.clock()
 		end
 	end)
 	Hud.StageIntro = RunIntro.Show

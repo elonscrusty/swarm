@@ -804,6 +804,15 @@ local function projectileRotation(e: Entry, age: number): CFrame
 	elseif style == "Soul" then
 		-- skull first, a slow bob and sway
 		return CFrame.new(0, math.sin(age * 5 + e.Phase) * 0.3, 0) * CFrame.Angles(0, e.Heading, 0) * CFrame.Angles(0, 0, math.sin(age * 3 + e.Phase) * 0.25)
+	elseif style == "Rock" then
+		-- Earthsplitter: a stone head churning along its crack
+		return CFrame.Angles(0, e.Yaw, 0) * CFrame.Angles(-age * tumble, 0, 0)
+	elseif style == "Meteor" then
+		-- Starfall: a burning rock tumbling down
+		return CFrame.Angles(age * tumble, e.Phase, age * tumble * 0.6)
+	elseif style == "Cloud" or style == "Vortex" then
+		-- Plague Censer cloud / Vortex rift: turning slowly in place
+		return CFrame.Angles(0, age * spin + e.Phase, 0)
 	elseif style == "Totem" or style == "Turret" then
 		-- planted: the base keeps the yaw it was built with (the turret's head aims, see
 		-- renderProjectiles); it rises out of the ground in its first 0.25 s
@@ -1998,6 +2007,95 @@ local function renderChains(now: number)
 	end
 end
 
+--[[
+	Armoury batch (WeaponFx, see WeaponSystem): Earthsplitter spikes, the Starfall warning
+	ring, Vine Snare sprouts and thorn bursts, War Horn shockwaves, Ward Shield blocks and
+	Vortex rifts. One-shot pooled parts and rings only (fx / wave); never crimson-and-dark
+	enemy-warning looks: these are the hero's own attacks.
+]]
+-- Earthsplitter: stone shards jutting out of the floor and a dust ring. kind 0/1 = a spike
+-- step (1 = Worldbreaker: basalt and lava), 2/3 = the Aftershock eruption (bigger).
+function K.quakeSpikes(x: number, z: number, r: number, kind: number)
+	local big = kind >= 2
+	local evo = kind % 2 == 1
+	local spikes = big and 6 or 3
+	if room(spikes) then
+		for i = 1, spikes do
+			local a = i * TAU / spikes + math.random() * 0.8
+			local d = r * (big and 0.55 or 0.35) * math.random()
+			local px, pz = x + math.cos(a) * d, z + math.sin(a) * d
+			local h = (big and 2.6 or 1.7) * (0.75 + math.random() * 0.5)
+			local tilt = CFrame.Angles(math.random() * 0.5 - 0.25, a, math.random() * 0.5 - 0.25)
+			local col = evo and (i % 2 == 0 and P.basalt_600 or P.lava_300) or (i % 2 == 0 and P.stone_400 or P.stone_200)
+			fx("Wedge", col, SMOOTH, CFrame.new(px, FLOOR_Y - h * 0.5, pz) * tilt, CFrame.new(px, FLOOR_Y + h * 0.3, pz) * tilt, Vector3.new(0.7, h, 0.9), nil, 0, 1, big and 0.6 or 0.45, EASE_OUT, nil, nil, 3)
+		end
+	end
+	wave(x, z, r * 0.3, r * (big and 1.1 or 0.8), 0.25, evo and P.lava_300 or P.dirt_300, 0.35, big and 0.35 or 0.25)
+end
+
+-- Starfall: a shrinking amber ring and a faint disc where the meteor will land in `fall` s.
+function K.meteorMark(x: number, z: number, r: number, fall: number, evo: boolean)
+	local col = evo and P.gold_300 or P.amber_300
+	wave(x, z, r * 1.05, r * 0.25, 0.3, col, 0.25, fall)
+	if room(1) then
+		fx("Cylinder", col, NEON, CFrame.new(x, FLOOR_Y + 0.06, z) * DISC, nil, Vector3.new(0.05, r * 2, r * 2), nil, 0.9, 0.6, fall, EASE_LINEAR)
+	end
+end
+
+-- Vine Snare: a green ring and vines whipping up around the snare's edge.
+function K.vineSprout(x: number, z: number, r: number, evo: boolean)
+	wave(x, z, r * 0.2, r, 0.3, evo and P.moss_200 or P.moss_300, 0.3, 0.35)
+	local n = evo and 6 or 4
+	if room(n) then
+		for i = 1, n do
+			local a = i * TAU / n + math.random() * 0.5
+			local px, pz = x + math.cos(a) * r * 0.75, z + math.sin(a) * r * 0.75
+			local turn = CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, math.rad(25))
+			fx("Wedge", i % 2 == 0 and P.moss_500 or P.moss_400, SMOOTH, CFrame.new(px, FLOOR_Y - 1, pz) * turn, CFrame.new(px, FLOOR_Y + 0.7, pz) * turn, Vector3.new(0.35, 2, 0.6), nil, 0, 1, 0.6, EASE_OUT, nil, nil, 4)
+		end
+	end
+end
+
+-- War Horn: three bands of sound racing out across the cone (a full ring = Titan's Roar).
+function K.hornBlast(x: number, z: number, yaw: number, range: number, halfDeg: number, evo: boolean)
+	local col = evo and P.gold_300 or P.ivory_200
+	if halfDeg >= 180 then
+		wave(x, z, 1.5, range, 0.6, col, 0.2, 0.32)
+		wave(x, z, 1, range * 0.7, 0.35, evo and P.amber_300 or P.gold_300, 0.3, 0.26)
+		return
+	end
+	local half = math.rad(halfDeg)
+	local per = 5
+	if not room(3 * per) then
+		return
+	end
+	local origin = Vector3.new(x, FLOOR_Y + 0.9, z)
+	local step = 2 * half / per
+	for band = 1, 3 do
+		local reach = range * (0.7 + band * 0.1)
+		for i = 1, per do
+			local a = yaw - half + (i - 0.5) * step
+			local dir = Vector3.new(-math.sin(a), 0, -math.cos(a))
+			local p0, p1 = origin + dir * 1.2, origin + dir * reach
+			fx("Block", band == 2 and P.gold_300 or col, NEON, CFrame.lookAt(p0, p0 + dir), CFrame.lookAt(p1, p1 + dir), Vector3.new(1.2 * step, 0.18, 0.35), Vector3.new(reach * step, 0.1, 0.25), 0.3 + band * 0.12, 1, 0.18 + band * 0.06, EASE_OUT)
+		end
+	end
+end
+
+-- Vortex: a ring sucked inward when a rift opens; its collapse (Implosion) flashes.
+function K.vortexOpen(x: number, z: number, r: number, evo: boolean)
+	wave(x, z, r * 1.3, r * 0.3, 0.35, evo and P.fx_arcane or P.ivory_200, 0.3, 0.5)
+end
+
+function K.implosion(x: number, z: number, r: number, evo: boolean)
+	local col = evo and P.fx_arcane or P.ivory_100
+	wave(x, z, r, 0.4, 0.5, col, 0.2, 0.25)
+	if room(1) then
+		fx("Ball", col, NEON, CFrame.new(x, FLOOR_Y + 1.2, z), nil, Vector3.one * r * 0.9, Vector3.one * 0.4, 0.35, 1, 0.3, EASE_OUT)
+	end
+	smallBurst(x, z, r * 0.7, P.fx_arcane, P.ivory_200)
+end
+
 local function onWeaponFx(batch)
 	if type(batch) ~= "table" then
 		return
@@ -2032,6 +2130,33 @@ local function onWeaponFx(batch)
 	end)
 	each("sh", function(v)
 		sparkle(Vector3.new(v[1], FLOOR_Y + 1, v[2]), FX.Heal, 4, 0.7, 2.6, 0.5)
+	end)
+	each("qk", function(v)
+		K.quakeSpikes(v[1], v[2], tonumber(v[3]) or 2, tonumber(v[4]) or 0)
+	end)
+	each("mt", function(v)
+		K.meteorMark(v[1], v[2], tonumber(v[3]) or 4.5, math.clamp(tonumber(v[4]) or 0.7, 0.1, 2), v[5] == 1)
+	end)
+	each("vn", function(v)
+		K.vineSprout(v[1], v[2], tonumber(v[3]) or 2.6, v[4] == 1)
+	end)
+	each("vt", function(v)
+		smallBurst(v[1], v[2], tonumber(v[3]) or 3.5, P.moss_200, P.moss_400)
+	end)
+	each("hn", function(v)
+		K.hornBlast(v[1], v[2], tonumber(v[3]) or 0, tonumber(v[4]) or 9, tonumber(v[5]) or 55, v[6] == 1)
+	end)
+	each("wb", function(v)
+		sparkle(Vector3.new(v[1], FLOOR_Y + 2.5, v[2]), v[3] == 1 and FX.Gold or P.ivory_100, 5, 0.8, 1.2, 0.3)
+		if v[3] == 1 then
+			smallBurst(v[1], v[2], 4, FX.Gold, P.gold_300)
+		end
+	end)
+	each("vx", function(v)
+		K.vortexOpen(v[1], v[2], tonumber(v[3]) or 5.5, v[5] == 1)
+	end)
+	each("vi", function(v)
+		K.implosion(v[1], v[2], tonumber(v[3]) or 5.5, v[4] == 1)
 	end)
 end
 

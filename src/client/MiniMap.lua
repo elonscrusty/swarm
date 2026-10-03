@@ -145,14 +145,14 @@ end
 	World), so it is placed in view pixels every frame.
 ]]
 local function makePin(parent: Instance, name: string, size: number, color: Color3, edge: Color3, diamond: boolean, ringed: boolean, pings: number, z: number): Pin
-	local box = size + 12
+	local box = size + 18
 	local f = new("Frame", { Name = name, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(box, box), BackgroundTransparency = 1, ZIndex = z, Visible = false }, parent)
 	local pin: Pin = { Frame = f } :: any
 	pin.Size = size
 	pin.PingAt = -math.huge
 	local pointer = new("Frame", { Name = "Pointer", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = z, Visible = false }, f)
 	pin.Pointer = pointer
-	pin.Arrow = new("Frame", { Name = "Arrow", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 3), Size = UDim2.fromOffset(6, 6), Rotation = 45, BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = z }, pointer)
+	pin.Arrow = new("Frame", { Name = "Arrow", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 3), Size = UDim2.fromOffset(7, 7), Rotation = 45, BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = z }, pointer)
 	UIKit.stroke(pin.Arrow, P.slate_950, 1, 0.2)
 	if ringed then
 		local r, rs = ring(f, "Ring", size + 4, color, z)
@@ -391,6 +391,7 @@ function MiniMap.Layout()
 		ui.View.Position = UDim2.fromOffset(MAP_INSET, header)
 		ui.View.Size = UDim2.fromOffset(viewPx, viewPx)
 		ui.Legend.Visible = not compact
+		ui.Title.Visible = not compact -- too small to read on a phone; the N stays
 		ui.Legend.Position = UDim2.fromOffset(MAP_INSET, header + viewPx + 2)
 		ui.Title.Position = UDim2.fromOffset(MAP_INSET + 1, compact and 0 or 2)
 		ui.North.Position = UDim2.new(1, -MAP_INSET, 0, compact and 0 or 2)
@@ -572,7 +573,7 @@ end
 local function placePin(pin: Pin, wx: number, wz: number, px: number, pz: number)
 	local half = viewPx / 2
 	local dx, dz = (wx - px) * scale, (wz - pz) * scale
-	local edge = half - pin.Size / 2 - 5
+	local edge = half - pin.Size / 2 - 8
 	local m = math.max(math.abs(dx), math.abs(dz))
 	local pinned = m > edge
 	if pinned then

@@ -859,7 +859,6 @@ WeaponData.Weapons = {
 		  War Horn       5 / 10 / 19 / 32      cone with big knockback (+ Echo 60%)
 		  Spirit Wisps   5.7 / 30 / 67 / 147   darting wisps that come back to orbit you
 		  Vortex         6 / 10 / 17.5 / 25    pulls a crowd together (+ Implosion)
-		tools/preview/weapon_balance.luau prints the full table.
 	]]
 
 	-- WARD SHIELDS: shields always circle you, hitting what they pass (cooldown = how often
@@ -951,27 +950,27 @@ WeaponData.Weapons = {
 		DurationLabel = "Crater time",
 		Perks = { { Level = 7, Id = "Molten", Name = "Molten Core", Text = "Craters burn 50% wider." } },
 		-- crater: CraterShare of the damage every CraterTick s
-		Params = { BlastRadius = 4.5, FallTime = 0.7, Range = 36, CraterShare = 0.1, CraterTick = 0.5, CraterScale = 0.8, MoltenScale = 1.5, Visual = 43, EvoVisual = 44 },
+		Params = { BlastRadius = 4.5, FallTime = 0.7, Range = 36, CraterShare = 0.08, CraterTick = 0.5, CraterScale = 0.8, MoltenScale = 1.5, Visual = 43, EvoVisual = 44 },
 		Levels = {
 			row(30, 3.6, 1, 1.0, 0, 999, 1.5, 10),
-			row(36, 3.6, 1, 1.0, 0, 999, 1.5, 10),
-			row(36, 3.6, 2, 1.0, 0, 999, 1.5, 10),
-			row(40, 3.4, 2, 1.05, 0, 999, 1.75, 11),
-			row(44, 3.4, 2, 1.1, 0, 999, 1.75, 11),
-			row(48, 3.2, 2, 1.15, 0, 999, 2.0, 12),
-			row(52, 3.1, 2, 1.15, 0, 999, 2.0, 12),
-			row(52, 3.0, 3, 1.2, 0, 999, 2.0, 12),
-			row(56, 2.9, 3, 1.2, 0, 999, 2.25, 13),
-			row(60, 2.8, 3, 1.25, 0, 999, 2.25, 13),
-			row(65, 2.7, 3, 1.3, 0, 999, 2.5, 14),
-			row(70, 2.6, 3, 1.35, 0, 999, 2.5, 14),
+			row(33, 3.6, 1, 1.0, 0, 999, 1.5, 10),
+			row(33, 3.6, 2, 1.0, 0, 999, 1.5, 10),
+			row(36, 3.4, 2, 1.05, 0, 999, 1.75, 11),
+			row(39, 3.4, 2, 1.1, 0, 999, 1.75, 11),
+			row(42, 3.2, 2, 1.15, 0, 999, 2.0, 12),
+			row(45, 3.1, 2, 1.15, 0, 999, 2.0, 12),
+			row(45, 3.0, 3, 1.2, 0, 999, 2.0, 12),
+			row(49, 2.9, 3, 1.2, 0, 999, 2.25, 13),
+			row(52, 2.8, 3, 1.25, 0, 999, 2.25, 13),
+			row(56, 2.7, 3, 1.3, 0, 999, 2.5, 14),
+			row(60, 2.6, 3, 1.35, 0, 999, 2.5, 14),
 		},
 		Evolution = {
 			Id = "Cataclysm",
 			Name = "Cataclysm",
 			Passive = "EmberOil",
 			Description = "A rain of five great meteors that leave long-burning craters.",
-			Stats = row(95, 2.2, 5, 1.6, 0, 999, 3.0, 16),
+			Stats = row(80, 2.3, 5, 1.6, 0, 999, 3.0, 16),
 		},
 	},
 

@@ -392,6 +392,16 @@ local DEFAULT: { [string]: Colors } = {
 	ChainHook = { Main = P.steel_300, Accent = P.steel_600, Extra = P.steel_400 },
 	Turret = { Main = P.steel_300, Accent = P.gold_500, Extra = P.steel_600 },
 	SoulBolt = { Main = P.ivory_200, Accent = P.fx_heal, Extra = P.moss_200 },
+	WardShields = { Main = P.steel_300, Accent = P.steel_600, Extra = P.gold_400 },
+	Earthsplitter = { Main = P.stone_300, Accent = P.stone_500, Extra = P.dirt_400 },
+	Starfall = { Main = P.amber_500, Accent = P.fx_fire, Extra = P.gold_300 },
+	Sling = { Main = P.stone_300, Accent = P.leather_500, Extra = P.leather_600 },
+	PlagueCenser = { Main = P.moss_300, Accent = P.moss_500, Extra = P.gold_500 },
+	Sawblade = { Main = P.steel_200, Accent = P.steel_500, Extra = P.ivory_100 },
+	VineSnare = { Main = P.moss_400, Accent = P.moss_200, Extra = P.wood_500 },
+	WarHorn = { Main = P.ivory_300, Accent = P.gold_400, Extra = P.wood_600 },
+	SpiritWisps = { Main = P.fx_holy, Accent = P.ivory_100, Extra = P.ice_300 },
+	Vortex = { Main = ARCANE, Accent = ARCANE_LIGHT, Extra = P.ivory_100 },
 	-- evolutions
 	Bloodwhip = { Main = P.crimson_300, Accent = P.gold_300, Extra = P.crimson_400 },
 	TwinOrbs = { Main = ARCANE, Accent = ROSE, Extra = ARCANE_LIGHT },
@@ -410,6 +420,16 @@ local DEFAULT: { [string]: Colors } = {
 	ReapersChain = { Main = P.crimson_400, Accent = P.crimson_700, Extra = P.ivory_200 },
 	Bastion = { Main = P.gold_400, Accent = P.crimson_500, Extra = P.steel_600 },
 	SoulStorm = { Main = P.ivory_200, Accent = P.crimson_300, Extra = P.crimson_400 },
+	AegisRing = { Main = P.gold_400, Accent = P.gold_600, Extra = P.ivory_100 },
+	Worldbreaker = { Main = P.basalt_600, Accent = P.lava_300, Extra = P.basalt_800 },
+	Cataclysm = { Main = P.gold_300, Accent = P.amber_500, Extra = P.ivory_100 },
+	Giantfeller = { Main = P.gold_400, Accent = P.leather_500, Extra = P.crimson_400 },
+	Pestilence = { Main = P.moss_200, Accent = P.murk_500, Extra = P.ivory_200 },
+	Ruinwheel = { Main = P.crimson_400, Accent = P.gold_500, Extra = P.gold_200 },
+	Strangleroot = { Main = P.moss_500, Accent = P.crimson_300, Extra = P.wood_600 },
+	TitansRoar = { Main = P.gold_300, Accent = P.amber_300, Extra = P.crimson_400 },
+	WispChoir = { Main = P.gold_200, Accent = P.ivory_100, Extra = P.fx_holy },
+	Singularity = { Main = ARCANE, Accent = P.slate_900, Extra = P.gold_300 },
 	-- passives
 	Might = { Main = P.steel_200, Accent = P.crimson_400, Extra = P.gold_400 },
 	Armor = { Main = P.steel_300, Accent = P.gold_400, Extra = P.slate_500 },
@@ -1427,6 +1447,235 @@ end
 DRAW.SoulStorm = function(c)
 	soulIcon(c, 8.6, 14.6, 0.7, c.main, c.accent, c.extra)
 	soulIcon(c, 16, 8.2, 0.85, c.main, c.accent, c.extra)
+end
+
+-- Armoury batch: round shield on its orbit, stone spikes, meteor, sling, censer and
+-- cloud, saw, vines, war horn, wisps and a spiral rift (each evolution adds its twist).
+local function shieldIcon(c: Ctx, x: number, y: number, r: number, face: Color3, rim: Color3, boss: Color3)
+	dot(c, x, y, r, face)
+	ring(c, x, y, r - 0.6, 1.2, rim)
+	box(c, x, y, r * 0.3, r * 1.4, rim, 0, r * 0.12)
+	box(c, x, y, r * 1.4, r * 0.3, rim, 0, r * 0.12)
+	dot(c, x, y, r * 0.26, boss)
+end
+
+DRAW.WardShields = function(c)
+	ring(c, 12, 12, 10.2, 1.2, c.extra, 0.45)
+	shieldIcon(c, 11, 13, 7, c.main, c.accent, c.extra)
+	dot(c, 20.2, 5.4, 2.4, c.main)
+	dot(c, 20.2, 5.4, 1, c.accent)
+end
+
+DRAW.AegisRing = function(c)
+	ring(c, 12, 12, 9.8, 1.4, c.extra, 0.35)
+	for k = 0, 2 do
+		local a = -math.pi / 2 + k * (2 * math.pi) / 3
+		dot(c, 12 + math.cos(a) * 9.8, 12 + math.sin(a) * 9.8, 2.6, c.main)
+		dot(c, 12 + math.cos(a) * 9.8, 12 + math.sin(a) * 9.8, 1.1, c.accent)
+	end
+	shieldIcon(c, 12, 12, 5.6, c.main, c.accent, c.extra)
+end
+
+-- Stone spikes bursting out of the ground (two stacked triangles make a tall point).
+local function spike(c: Ctx, x: number, y: number, w: number, color: Color3)
+	tri(c, x, y, w, "up", color)
+	tri(c, x, y - w * 0.32, w * 0.62, "up", color)
+end
+
+DRAW.Earthsplitter = function(c)
+	box(c, 12, 21.6, 22, 1.8, c.extra, 0, 0.9)
+	spike(c, 5.6, 21, 6.4, c.accent)
+	spike(c, 12.4, 21, 10, c.main)
+	spike(c, 19, 21, 7.4, c.accent)
+	dot(c, 7.6, 7.6, 1.2, c.main)
+	dot(c, 17.4, 6.4, 0.9, c.main)
+	seg(c, 10.4, 21, 12.6, 18.4, 0.8, c.mono and c.back or c.extra)
+end
+
+DRAW.Worldbreaker = function(c)
+	box(c, 12, 21.6, 22, 1.8, c.extra, 0, 0.9)
+	spike(c, 4.6, 21, 6, c.main)
+	spike(c, 12, 21, 10.4, c.main)
+	spike(c, 19.4, 21, 7, c.main)
+	seg(c, 9.8, 20.6, 12.2, 17.6, 1, c.accent)
+	seg(c, 12.2, 17.6, 11.4, 15, 1, c.accent)
+	seg(c, 18.2, 20.6, 19.6, 18.6, 0.9, c.accent)
+	dot(c, 7, 6, 1.3, c.accent)
+	dot(c, 17.6, 5, 1, c.accent)
+end
+
+-- A burning meteor diving from the top left, its tail behind it.
+local function meteorIcon(c: Ctx, x: number, y: number, r: number, core: Color3, tail: Color3, hot: Color3)
+	seg(c, x - r * 2.2, y - r * 2.2, x - r * 0.4, y - r * 0.4, r * 1.3, tail, 0.45)
+	seg(c, x - r * 1.6, y - r * 1.9, x - r * 0.3, y - r * 0.5, r * 0.6, hot, 0.2)
+	dot(c, x, y, r, core)
+	dot(c, x - r * 0.3, y - r * 0.3, r * 0.42, hot)
+end
+
+DRAW.Starfall = function(c)
+	box(c, 13, 22, 16, 1.4, c.accent, 0, 0.7, 0.45)
+	meteorIcon(c, 14.6, 14.6, 5, c.main, c.accent, c.extra)
+end
+
+DRAW.Cataclysm = function(c)
+	box(c, 12, 22, 20, 1.4, c.accent, 0, 0.7, 0.45)
+	meteorIcon(c, 6.6, 9, 2.4, c.main, c.accent, c.extra)
+	meteorIcon(c, 19.4, 7, 2.2, c.main, c.accent, c.extra)
+	meteorIcon(c, 14, 16, 4.2, c.main, c.accent, c.extra)
+end
+
+-- Sling: two cords to a leather pouch, the stone flying off to the top right.
+local function slingIcon(c: Ctx, cord: Color3, pouch: Color3, stone: Color3, sr: number)
+	curve(c, { V(2.6, 4), V(5, 11), V(9.6, 16) }, 1.4, cord)
+	curve(c, { V(9, 2.4), V(10.6, 9.4), V(11.6, 14.6) }, 1.4, cord)
+	box(c, 11, 16.6, 5.6, 3.4, pouch, -35, 1.6)
+	dot(c, 15.2, 12.4, 0.9, stone, 0.5)
+	dot(c, 17.2, 10.2, 1.1, stone, 0.3)
+	dot(c, 19.4, 7.4, sr, stone)
+end
+
+DRAW.Sling = function(c)
+	slingIcon(c, c.accent, c.extra, c.main, 3.2)
+end
+
+DRAW.Giantfeller = function(c)
+	slingIcon(c, c.accent, c.extra, c.main, 3.8)
+	seg(c, 15.6, 2.4, 17.4, 4.2, 1, c.extra)
+	seg(c, 22.6, 11.6, 20.8, 13.4, 1, c.extra)
+end
+
+-- Censer on its chain trailing a cloud of puffs.
+local function censerIcon(c: Ctx, cloudA: Color3, cloudB: Color3, brass: Color3)
+	seg(c, 6.4, 1.8, 6.4, 6, 1, brass)
+	dot(c, 6.4, 9.4, 3.6, brass)
+	box(c, 6.4, 9.4, 7.2, 1.3, c.mono and c.back or cloudB, 0, 0.6)
+	dot(c, 14.6, 14.6, 4.2, cloudA)
+	dot(c, 19.4, 17.4, 3.4, cloudA)
+	dot(c, 11.4, 18.4, 3.4, cloudA)
+	dot(c, 16, 19.6, 3, cloudB, 0.35)
+end
+
+DRAW.PlagueCenser = function(c)
+	censerIcon(c, c.main, c.accent, c.extra)
+end
+
+DRAW.Pestilence = function(c)
+	censerIcon(c, c.main, c.accent, c.extra)
+	dot(c, 15.6, 15.6, 2.4, c.extra)
+	box(c, 15.6, 18, 2.6, 1.6, c.extra, 0, 0.5)
+	dot(c, 14.7, 15.6, 0.7, c.mono and c.back or c.accent)
+	dot(c, 16.5, 15.6, 0.7, c.mono and c.back or c.accent)
+end
+
+-- Toothed saw blade with a hub.
+local function sawIcon(c: Ctx, blade: Color3, line: Color3, hub: Color3)
+	for k = 0, 7 do
+		local a = k * math.pi / 4
+		box(c, 12 + math.cos(a) * 8.4, 12 + math.sin(a) * 8.4, 3.6, 3.6, blade, math.deg(a) + 45, 0.3)
+	end
+	dot(c, 12, 12, 8.4, blade)
+	ring(c, 12, 12, 5.4, 1, line, 0.25)
+	dot(c, 12, 12, 2.6, line)
+	dot(c, 12, 12, 1, c.mono and c.back or hub)
+end
+
+DRAW.Sawblade = function(c)
+	sawIcon(c, c.main, c.accent, c.extra)
+end
+
+DRAW.Ruinwheel = function(c)
+	sawIcon(c, c.main, c.accent, c.extra)
+	ring(c, 12, 12, 11.2, 1, c.extra, 0.45)
+end
+
+-- Two thorny vines curling up out of a snare ring.
+local function vineIcon(c: Ctx, vine: Color3, leaf: Color3, ringColor: Color3)
+	ring(c, 12, 16.4, 7.4, 1.2, ringColor, 0.4)
+	curve(c, { V(5, 21.4), V(6, 13.6), V(10, 8.4), V(8.6, 3) }, 2, vine)
+	curve(c, { V(19, 21.4), V(18, 13.6), V(14, 9.4), V(16, 3.6) }, 2, vine)
+	box(c, 11.6, 6, 3.8, 2, leaf, -30, 1)
+	box(c, 13, 10.4, 3.6, 1.8, leaf, 30, 0.9)
+	tri(c, 4.4, 15.4, 2.2, "left", vine)
+	tri(c, 19.8, 15.2, 2.2, "right", vine)
+end
+
+DRAW.VineSnare = function(c)
+	vineIcon(c, c.main, c.accent, c.extra)
+end
+
+DRAW.Strangleroot = function(c)
+	vineIcon(c, c.main, c.main, c.extra)
+	dot(c, 11.6, 6, 1.5, c.accent)
+	dot(c, 13, 10.4, 1.3, c.accent)
+	dot(c, 6.8, 11.8, 1.1, c.accent)
+end
+
+-- Curved war horn with sound arcs out of its bell.
+local function hornIcon(c: Ctx, horn: Color3, band: Color3)
+	curve(c, { V(2.6, 17.4), V(6.6, 19), V(11.4, 17.6), V(14.4, 13.4) }, 2.4, horn)
+	seg(c, 11.4, 16.6, 15.2, 11.6, 4, horn)
+	dot(c, 15.6, 10.6, 3.2, horn)
+	dot(c, 15.6, 10.6, 1.6, c.mono and c.back or band)
+	box(c, 7.4, 18.4, 1.2, 3.2, band, 15, 0.4)
+end
+
+DRAW.WarHorn = function(c)
+	hornIcon(c, c.main, c.accent)
+	arc(c, 15.6, 10.6, 6, 1.3, c.accent, 18.6, 1.6, 24, 16)
+	arc(c, 15.6, 10.6, 8.6, 1.3, c.accent, 20.6, 0, 24, 18, 0.4)
+end
+
+DRAW.TitansRoar = function(c)
+	ring(c, 12, 12, 10.6, 1.2, c.accent, 0.4)
+	ring(c, 12, 12, 8, 1.2, c.extra, 0.2)
+	hornIcon(c, c.main, c.extra)
+end
+
+-- Wisps (glowing dots with tails) circling a faint ring.
+local function wispIcon(c: Ctx, glow: Color3, core: Color3, ringColor: Color3, count: number, r: number)
+	ring(c, 12, 12, 7.6, 1, ringColor, 0.5)
+	for k = 0, count - 1 do
+		local a = -math.pi / 2 + k * (2 * math.pi) / count
+		local x, y = 12 + math.cos(a) * 7.6, 12 + math.sin(a) * 7.6
+		local tx, ty = 12 + math.cos(a - 0.6) * 7.6, 12 + math.sin(a - 0.6) * 7.6
+		seg(c, tx, ty, x, y, r * 0.9, glow, 0.5)
+		dot(c, x, y, r, glow)
+		dot(c, x, y, r * 0.45, core)
+	end
+end
+
+DRAW.SpiritWisps = function(c)
+	wispIcon(c, c.main, c.accent, c.extra, 3, 2.8)
+end
+
+DRAW.WispChoir = function(c)
+	wispIcon(c, c.main, c.accent, c.extra, 5, 2.3)
+	dot(c, 12, 12, 1.6, c.main)
+end
+
+-- A spiral rift (two arms), its core at the centre.
+local function spiralIcon(c: Ctx, arm: Color3, arm2: Color3, core: Color3)
+	for sgn = 0, 1 do
+		local pts = {}
+		for i = 0, 14 do
+			local t = i / 14
+			local a = t * (2 * math.pi) * 1.25 + sgn * math.pi
+			local r = 1.4 + t * 9
+			table.insert(pts, V(12 + math.cos(a) * r, 12 + math.sin(a) * r))
+		end
+		curve(c, pts, sgn == 0 and 2.2 or 1.6, sgn == 0 and arm or arm2, false, sgn == 0 and 0 or 0.25)
+	end
+	dot(c, 12, 12, 2.2, core)
+end
+
+DRAW.Vortex = function(c)
+	spiralIcon(c, c.main, c.accent, c.extra)
+end
+
+DRAW.Singularity = function(c)
+	spiralIcon(c, c.main, c.main, c.extra)
+	dot(c, 12, 12, 3.4, c.mono and c.back or c.accent)
+	ring(c, 12, 12, 3.6, 1, c.extra)
 end
 
 DRAW.Precision = function(c)

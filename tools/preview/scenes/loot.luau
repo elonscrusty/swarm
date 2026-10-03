@@ -4,12 +4,16 @@
 --   --set focus=Small|Large|Golden|Chance|Bargain|Guarded   what the hero stands at
 --   --set altar=Dormant|Guarded|Claimable                     the altar's state
 --   --set gold=N                                              run gold (default 140)
+--   --set result=win|lose   a Shrine of Chance try just finished (focus=Chance): the
+--                           prompt shows ITEM FOUND! / NO LUCK THIS TIME (the win's item
+--                           is sent as a plain popup here, not the centred reward reel)
 local A = lib("arena")
 local C = lib("common")
 local focus = preview.args.focus or "Chance"
 local Players = game:GetService("Players")
 
 local loot
+local focusId = 0
 local s = A.build({
 	enemies = 45,
 	seconds = 380,
@@ -42,6 +46,7 @@ local s = A.build({
 		end
 		preview.metrics.loot = #loot.Objects()
 		if target then
+			focusId = target.Id
 			-- stand just south of it (the camera side)
 			return Vector3.new(target.Pos.X + 1, centre.Y, target.Pos.Z + 5.2)
 		end
@@ -63,4 +68,11 @@ C.settle(0.5)
 C.fire("ItemGained", { Id = "StormCharm", Count = 1, Source = "Large Chest" })
 C.fire("ItemGained", { Id = "SunMedallion", Count = 1, Source = "Guarded Altar" })
 C.settle(1.2)
+if preview.args.result == "win" or preview.args.result == "lose" then
+	if preview.args.result == "win" then
+		C.fire("ItemGained", { Id = "KeenLens", Count = 1, Source = "Shrine of Chance" })
+	end
+	C.fire("LootFeedback", { Id = focusId, State = "Done" })
+	C.settle(0.5)
+end
 local _ = Players

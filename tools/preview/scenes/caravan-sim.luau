@@ -26,6 +26,10 @@ local SM = preview.server("StageManager")
 local CE = preview.server("CaravanEvent")
 local ES = preview.server("EnemySpawner")
 local Config = C.shared("Config")
+-- LootSystem draws the caravan as one of Config.Encounters.Types (Count per stage), so it
+-- is not on every stage; this test needs one on each stage it visits.
+Config.Encounters.Types = { "Caravan" }
+Config.Encounters.Count = { 1, 1 }
 local advance = preview.advance
 local show = preview.args.show
 local part = tonumber(preview.args.part)

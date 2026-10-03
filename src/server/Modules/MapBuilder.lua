@@ -1552,6 +1552,73 @@ local function cliffs(arena: Arena, style: CliffStyle)
 end
 
 ------------------------------------------------------------------------------------------
+-- VIGNETTES (owner: "objects in the world look pretty bland"): small clustered scenes
+-- dropped in the open meadow between the landmarks: a cold campfire, a mushroom ring, a
+-- supply stack, a crystal patch, a fallen banner ... Decoration only (no colliders), low,
+-- kept off the paths, the spawn clearing, landmarks and hazard pools; the loot / portal
+-- placement clears decor around its own spots anyway.
+------------------------------------------------------------------------------------------
+
+type Vignette = (Arena, number, number) -> ()
+
+local function campfire(arena: Arena, x: number, z: number, stone: Pal?, wood: Color3?)
+	local w = wood or P.wood_600
+	for k = 0, 5 do
+		local a = k / 6 * TAU + jitter(0.2)
+		decor(arena, "Rock_Small", x + math.cos(a) * 1.5, z + math.sin(a) * 1.5, nil, rng:NextNumber(0.55, 0.75), stone)
+	end
+	disc(arena.Decor, "Ash", W(arena, x, z, 0.06), 1.2, mix(P.cinder_500, P.dirt_500, 0.4))
+	for _, yaw in ipairs({ 30, -40 }) do
+		deco(arena.Decor, { Name = "FireLog", Size = Vector3.new(2.1, 0.35, 0.35), CFrame = CFrame.new(W(arena, x, z, 0.3)) * yawCF(yaw + jitter(10)) * CFrame.Angles(0, 0, math.rad(12)), Color = w })
+	end
+	deco(arena.Decor, { Name = "Embers", Shape = Enum.PartType.Ball, Size = Vector3.new(0.9, 0.4, 0.9), CFrame = CFrame.new(W(arena, x, z, 0.2)), Color = P.lava_300, Material = NEON })
+	decor(arena, "Log", x + 3.2, z + jitter(1), rng:NextNumber(0, 360), 0.7)
+end
+
+local function ring(arena: Arena, x: number, z: number, name: string, n: number, r: number, sMin: number, sMax: number, palette: Pal?)
+	local a0 = rng:NextNumber(0, TAU)
+	for k = 1, n do
+		local a = a0 + k / n * TAU + jitter(0.25)
+		local d = r + jitter(r * 0.25)
+		decor(arena, name, x + math.cos(a) * d, z + math.sin(a) * d, nil, rng:NextNumber(sMin, sMax), palette)
+	end
+end
+
+local function supplies(arena: Arena, x: number, z: number, wood: Pal?)
+	local yaw = rng:NextNumber(0, 360)
+	decor(arena, "Crate", x, z, yaw, 1.0, wood, { shadow = true })
+	decor(arena, "Crate", x + 2.1, z + jitter(0.4), yaw + jitter(15), 0.9, wood)
+	prop(arena.Decor, "Crate", CFrame.new(W(arena, x + 0.9, z, 1.95)) * yawCF(yaw + 25), 0.8, wood, { shadow = false })
+	decor(arena, "Barrel", x - 1.8, z + 1.2, nil, 1.0, wood)
+	if rng:NextNumber() < 0.5 then
+		decor(arena, "Barrel", x - 1.6, z - 0.9, nil, 0.9, wood)
+	end
+end
+
+local function cluster(arena: Arena, x: number, z: number, kinds: { { any } }, n: number, r: number)
+	for _ = 1, n do
+		local k = pick(kinds)
+		local a, d = rng:NextNumber(0, TAU), r * math.sqrt(rng:NextNumber())
+		decor(arena, k[1], x + math.cos(a) * d, z + math.sin(a) * d, nil, rng:NextNumber(k[2], k[3]), k[4])
+	end
+end
+
+-- Places each vignette once in a free meadow spot (radius 55-185 from the centre).
+local function vignettes(arena: Arena, list: { Vignette })
+	for _, build in ipairs(list) do
+		for _ = 1, 30 do
+			local a, r = rng:NextNumber(0, TAU), rng:NextNumber(55, 185)
+			local x, z = math.cos(a) * r, math.sin(a) * r
+			if isFree(arena, x, z, 6, 2.5, 3) then
+				build(arena, x, z)
+				keepout(arena, x, z, 5)
+				break
+			end
+		end
+	end
+end
+
+------------------------------------------------------------------------------------------
 -- FOREST: a mossy clearing in the woods (the main map).
 --
 --   centre      open clearing where two dirt paths cross (spawn), a little low decor
@@ -1816,6 +1883,15 @@ local function buildForest(arena: Arena)
 
 	-- BORDER: mossy rock cliffs on three sides, a low rocky rim and the broken fence on the
 	-- camera side, then the tree line (on the cliff tops)
+	vignettes(arena, {
+		function(a, x, z) campfire(a, x, z) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 7, 3.2, 1.2, 1.7) end,
+		function(a, x, z) supplies(a, x, z) end,
+		function(a, x, z) cluster(a, x, z, { { "Mushroom", 1.1, 1.6 }, { "Fern", 1.3, 1.8 }, { "Stump", 0.8, 1.0 } }, 5, 3.5) end,
+		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Rock_Small", 0.8, 1.2 }, { "Flowers", 1.2, 1.5 } }, 3, 3) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 6, 2.6, 1.0, 1.4) end,
+		function(a, x, z) cluster(a, x, z, { { "Crystal", 0.8, 1.2 }, { "Rock_Small", 0.8, 1.2 } }, 4, 2.5) end,
+	})
 	cliffs(arena, {
 		Rock = { mix(P.stone_500, P.moss_700, 0.12), P.stone_600, mix(P.stone_500, P.stone_400, 0.5) },
 		Cap = mix(P.moss_600, P.meadow_600, 0.4),
@@ -2111,6 +2187,14 @@ local function buildRuins(arena: Arena)
 
 	-- BORDER: a tall broken curtain wall of cut stone on three sides (merlons on top), a low
 	-- broken wall on the camera side, then pines behind
+	vignettes(arena, {
+		function(a, x, z) campfire(a, x, z) end,
+		function(a, x, z) supplies(a, x, z) end,
+		function(a, x, z) cluster(a, x, z, { { "CrystalCluster", 0.8, 1.1 }, { "Crystal", 0.8, 1.2 }, { "Rock_Small", 0.8, 1.2 } }, 4, 3) end,
+		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Ruin_Block", 0.5, 0.8 }, { "Flowers", 1.2, 1.5 } }, 3, 3) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 6, 2.8, 1.0, 1.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Ruin_Block", 0.5, 0.8 }, { "Rock_Small", 0.8, 1.2 }, { "Fern", 1.2, 1.6 } }, 5, 4) end,
+	})
 	cliffs(arena, {
 		Rock = { RUIN_PAL.Stone, RUIN_PAL.Stone3, mix(RUIN_PAL.Stone, RUIN_PAL.Stone2, 0.5) },
 		Cap = mix(RUIN_PAL.Stone2, P.moss_400, 0.35),
@@ -2455,6 +2539,14 @@ local function buildSwamp(arena: Arena)
 
 	-- BORDER: dark mossy bog rock on three sides, a low root-tangled rim on the camera side,
 	-- reeds along the edge, then the mangrove / willow line
+	vignettes(arena, {
+		function(a, x, z) campfire(a, x, z, SWAMP_PEBBLE, P.wood_700) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 7, 3.0, 1.2, 1.8) end,
+		function(a, x, z) supplies(a, x, z, SWAMP_WOOD) end,
+		function(a, x, z) decor(a, "Swamp_Lantern", x, z, 0, 0.9); cluster(a, x, z, { { "Reeds", 1.2, 1.6 }, { "Mushroom", 1.0, 1.4 } }, 4, 3) end,
+		function(a, x, z) cluster(a, x, z, { { "Swamp_Stump", 0.7, 0.9 }, { "Mushroom", 1.1, 1.5 }, { "Fern", 1.1, 1.5, SWAMP_FERN } }, 5, 3.5) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 5, 2.4, 1.0, 1.4) end,
+	})
 	cliffs(arena, {
 		Rock = { mix(P.stone_600, P.murk_600, 0.4), mix(P.stone_700, P.murk_700, 0.35), mix(P.stone_500, P.fen_600, 0.3) },
 		Cap = mix(P.fen_500, P.murk_400, 0.35),
@@ -2713,6 +2805,14 @@ local function buildSnow(arena: Arena)
 
 	-- BORDER: icy blue-grey cliffs under thick snow on three sides, a low snowy rim and the
 	-- fence on the camera side, then tall snowy pines on the cliff tops
+	vignettes(arena, {
+		function(a, x, z) campfire(a, x, z, SNOW_PEBBLE) end,
+		function(a, x, z) supplies(a, x, z, SNOW_WOOD) end,
+		function(a, x, z) cluster(a, x, z, { { "Ice_Crystal", 0.7, 1.1 }, { "Snow_Drift", 0.9, 1.2 }, { "Rock_Small", 0.8, 1.1, SNOW_PEBBLE } }, 5, 3.5) end,
+		function(a, x, z) decor(a, "Snow_Lamp", x, z, 0, 0.9); cluster(a, x, z, { { "Snow_Bush", 0.9, 1.2 }, { "Snow_Drift", 0.9, 1.3 } }, 3, 3) end,
+		function(a, x, z) cluster(a, x, z, { { "Ice_Crystal", 0.6, 1.0 }, { "Ice_Crystal", 0.8, 1.2 } }, 4, 2.5) end,
+		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Snow_Drift", 0.9, 1.2 } }, 2, 2.5) end,
+	})
 	cliffs(arena, {
 		Rock = { mix(P.stone_400, P.slate_500, 0.35), mix(P.stone_500, P.slate_600, 0.3), mix(P.ice_300, P.slate_400, 0.55) },
 		Cap = P.snow_100,
@@ -2967,6 +3067,14 @@ local function buildDesert(arena: Arena)
 
 	-- BORDER: layered sandstone cliffs on three sides, a low sandstone rim on the camera
 	-- side, then mesas and big rocks on the cliff tops
+	vignettes(arena, {
+		function(a, x, z) campfire(a, x, z, DESERT_PEBBLE) end,
+		function(a, x, z) supplies(a, x, z, DESERT_WOOD) end,
+		function(a, x, z) cluster(a, x, z, { { "Bones", 0.9, 1.2 }, { "Rock_Small", 0.8, 1.2, DESERT_PEBBLE }, { "Cactus", 0.7, 0.9 } }, 4, 3.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Cactus", 0.6, 0.9 }, { "Cactus", 0.5, 0.8 }, { "Rock_Small", 0.8, 1.1, DESERT_PEBBLE } }, 4, 3) end,
+		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Crate", 0.7, 0.9, DESERT_WOOD } }, 2, 2.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Crystal", 0.7, 1.0 }, { "Desert_Rock", 0.5, 0.7 } }, 3, 2.5) end,
+	})
 	cliffs(arena, {
 		Rock = { P.sand_600, mix(P.sand_600, P.clay_500, 0.45), mix(P.sand_500, P.clay_600, 0.3) },
 		Cap = P.sand_400,
@@ -3190,6 +3298,13 @@ local function buildLava(arena: Arena)
 
 	-- BORDER: black basalt cliffs with glowing cracks at their foot on three sides, a low
 	-- basalt rim on the camera side, then columns and charred trees on the cliff tops
+	vignettes(arena, {
+		function(a, x, z) cluster(a, x, z, { { "Obsidian_Crystal", 0.7, 1.1 }, { "Basalt_Rock", 0.5, 0.7 } }, 4, 3) end,
+		function(a, x, z) cluster(a, x, z, { { "Bones", 0.9, 1.2 }, { "Ash_Pile", 1.0, 1.4 }, { "Rock_Small", 0.8, 1.1, LAVA_PEBBLE } }, 4, 3.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Charred_Tree", 0.5, 0.7 }, { "Ash_Pile", 1.0, 1.4 } }, 3, 3) end,
+		function(a, x, z) supplies(a, x, z, { Wood = P.wood_700, Frame = P.basalt_700, Iron = P.steel_700, Lid = P.wood_700 }) end,
+		function(a, x, z) cluster(a, x, z, { { "Obsidian_Crystal", 0.5, 0.9 }, { "Obsidian_Crystal", 0.8, 1.2 } }, 3, 2.5) end,
+	})
 	cliffs(arena, {
 		Rock = { P.basalt_700, P.basalt_600, mix(P.basalt_700, P.cinder_600, 0.4) },
 		Cap = mix(P.cinder_500, P.ash_400, 0.3),
@@ -3247,6 +3362,7 @@ local function writeDetailLayout(arena: Arena)
 	end
 	arena.Model:SetAttribute("DetailPaths", table.concat(paths, ";"))
 	arena.Model:SetAttribute("DetailBare", table.concat(circles, ";"))
+	arena.Model:SetAttribute("Cliffs", arena.Cliff ~= nil)
 end
 
 function MapBuilder.BuildArena(name: string, variant: number?)
