@@ -188,7 +188,7 @@ function AccountData.RewardName(r: Reward): string
 		return "Title: " .. r.Id
 	elseif r.Kind == "Color" then
 		local c = AccountData.Colors[r.Id]
-		return (c and c.Name or r.Id) .. " name colour"
+		return (c and c.Name or r.Id) .. " name color"
 	elseif r.Kind == "Ring" then
 		local c = AccountData.Rings[r.Id]
 		return c and c.Name or r.Id
