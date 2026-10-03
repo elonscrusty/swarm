@@ -1,9 +1,10 @@
 -- minimap: the in-run minimap (MiniMap.lua) with every marker kind at once: stage 2 with the
 -- portal far off range (pinned to the map's edge with its pointer), two chests, a shrine and
--- the altar nearby, one teammate (eased blue disc), the Lost Caravan being defended (edge pin)
+-- the altar nearby, one teammate (eased blue disc), the Lost Caravan waiting (edge pin)
 -- and a light swarm. Asserts the pooled markers are shown. Markers are driven through the
 -- same replicated attributes the game uses (SwarmLoot / SwarmEvents models, SwarmState).
 --   --set portal=near        the portal in range instead (no pointer)
+--   --set caravan=Defending  the defence running (gold edge, ping; its banner also shows)
 local A = lib("arena")
 local C = lib("common")
 local s = A.build({ enemies = 50, seconds = 400, stage = 2, portalHint = true })
@@ -31,7 +32,7 @@ marker("SwarmLoot", "ChestB", { Pos = centre + Vector3.new(-40, 0, 35), LootKind
 marker("SwarmLoot", "ChestOpened", { Pos = centre + Vector3.new(10, 0, -10), LootKind = "Chest", State = "Opened" })
 marker("SwarmLoot", "Shrine", { Pos = centre + Vector3.new(45, 0, -30), LootKind = "Shrine", State = "Idle" })
 marker("SwarmLoot", "Altar", { Pos = centre + Vector3.new(-30, 0, -45), LootKind = "Altar", State = "Idle" })
-marker("SwarmEvents", "Caravan", { Pos = centre + Vector3.new(170, 0, 60), State = "Defending" })
+marker("SwarmEvents", "Caravan", { Pos = centre + Vector3.new(170, 0, 60), State = preview.args.caravan or "Waiting" })
 
 local p = preview.addPlayer("Ava", 2)
 local model = C.try("BuildCharacter Mage", s.ModelBuilder.BuildCharacter, "Mage", "Default")
