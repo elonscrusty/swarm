@@ -34,12 +34,13 @@ Recent damage history is bounded to six hits over fifteen combat seconds. Defeat
 3. Review upgrade cards for concise benefit summaries. Existing delta/evolution descriptions remain; a final wording pass is unfinished.
 4. Reconcile older planning and testing documents that still mention timed upgrade pacing. The latest decision is XP-only immediate upgrades. The accessibility/co-op plan already records this correction.
 5. Playtest full 20–30 minute standard runs and tune the XP curve, difficulty, rewards and late-game variety. Portable regressions verify logic; they do not establish real balance or real phone performance.
+6. Put discovered journal entries ahead of unknown placeholders. Final phone previews show alphabetical unknown rows burying known clues, especially in landscape. Keep unknown details hidden; change only row order and verify both orientations.
 
 ## Verification and delivery
 
 The final source passes the portable `tools/check.py --quick`: zero type diagnostics, all production scripts compile, and icon checks pass. `tools/run_regressions.py` passes 45/45 processes, including both phone orientations, immediate progression, menus, journal discoveries, client pings, accessibility, and successful/expired/ended/forged reconnect paths. The revive fixture now clears its earned upgrade menu before checking combat-clock grace, because immediate menus legitimately pause solo simulation.
 
-Focused damage-review tests and final journal navigation/previews are recorded separately when available; inspect the handoff report for their final outcomes. Source and XML place are rebuilt together at `build/Swarm.rbxlx`. Codex's delivery report records the final commit, place hash and evidence paths.
+Focused damage-review tests pass in both phone orientations. Real Stats-to-Journal navigation also passes in both orientations, with zero preview errors. The inspected journal previews identified the ordering issue listed above. Source and XML place are rebuilt together at `build/Swarm.rbxlx`; all 108 source files match the embedded XML scripts. Codex's delivery report records the final commit, place hash and evidence paths.
 
 The prior broad progression/polish baseline is commit `4fdac4f1974d7a7a3af36b38437eb7bdc08ed6b9`. Follow-up backups exist locally under the chat's `outputs/backups/`: the original full source/place/history backup, `swarm-before-lobby-adjustments`, and the 102-file hash-verified `swarm-before-accessibility-coop/src`. The handoff delivery also preserves a source snapshot and verification evidence.
 
