@@ -46,7 +46,7 @@ cannot read a save written by the new version.
 | Level-up, chests / reel, shrines / altar, caravan, synergies | PASS (offline) | `reward-regression`, `rewards-sim` (TESTING.md), `encounters-sim`, `expedition-sim`, `synergy-sim`, `caravan-sim` |
 | Bosses (Queen, Matriarch, Warlord, Hive Mother, Briar Sentinel, Frostbound Colossus) | PASS (offline) | `boss-sim` per boss: entrance, cycle, phase 2, kill mid-attack, collapse, surge, travel cleanup |
 | Portal / stage travel, revive, pause / main menu, results, return to lobby | PASS (offline) | `stage-sim`, `run-manager-regression`, `settlement-lifecycle`; revive hold rules in `ui_regression` |
-| Saves (schema 6, migrations, outage, settlement) | PASS (offline) | `storage-sim` incl. `outage=all`, `settlement-lifecycle`; live DataStores BLOCKED (Studio API access is the owner's step) |
+| Saves (schema 7, migrations, outage, settlement) | PASS (offline) | `storage-sim` incl. `outage=all`, `settlement-lifecycle`; live DataStores BLOCKED (Studio API access is the owner's step) |
 | Leaderboards / records / DEV taint | PASS (offline) | `endless-sim` and `stage-sim` print the boards; DEV-tainted runs never recorded |
 | Purchases (3 passes, 4 products in Config.Monetization) | BLOCKED | ids in Config, owner verified them in Studio earlier; receipts / retry only testable live. No prices or products were touched |
 | Skin passes (12) | BLOCKED (owner) | pictures in `art/store/skins/` (Priest_Angel now shows its halo); ids still 0, tiles read SOON until the owner creates the passes (docs/SKIN_PASSES.md) |

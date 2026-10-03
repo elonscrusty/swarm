@@ -108,7 +108,6 @@ local LIST: { Synergy } = {
 	},
 	{
 		Id = "Inferno",
-		Held = true, -- needs a held passive (PassiveData.HeldOrder): kept out of Order until released
 		Name = "Inferno",
 		Text = "+8% burn chance, +10% damage",
 		Desc = "A fire weapon, the Ember Oil passive and Volatile Spore or Storm Charm.",
@@ -123,7 +122,6 @@ local LIST: { Synergy } = {
 	},
 	{
 		Id = "IronThicket",
-		Held = true, -- needs held passives (PassiveData.HeldOrder): kept out of Order until released
 		Name = "Iron Thicket",
 		Text = "+60% thorns, +1 armor",
 		Desc = "The Thornhide and Stoneskin passives and Iron Plate or Barbed Mail.",

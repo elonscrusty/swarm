@@ -56,11 +56,6 @@ PassiveData.Order = {
 	"Fletching",
 	"Precision",
 	"Renewal",
-}
-
--- Held for a later update (owner): fully built and tested, but kept out of PassiveData.Order
--- so no level-up card, chest, journal or DEV list offers them. Move ids into Order to release.
-PassiveData.HeldOrder = {
 	"GiantsBane",
 	"Thornhide",
 	"BloodRune",
@@ -73,6 +68,10 @@ PassiveData.HeldOrder = {
 	"Lionheart",
 	"StillWaters",
 }
+
+-- Held for a later update: ids built and tested but kept out of Order (none right now).
+PassiveData.HeldOrder = {} :: { string }
+
 
 -- Behaviour numbers of the passives that hook into ItemSystem (not stat bumps).
 PassiveData.Tuning = {
