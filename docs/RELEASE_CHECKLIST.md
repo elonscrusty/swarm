@@ -19,7 +19,7 @@ Offline only; nothing below was tested in Studio or on a real phone.
 | Knight model reverting on run servers | PASS (offline) / BLOCKED (live) | run character swapped to meshes once loaded; only live run servers show it |
 | Enemy look in big swarms | PASS (offline) | no plain bodies; culling + low-detail models; perf-sim table in docs/PERFORMANCE.md. Pop-in at the screen edge: owner phone check |
 | New SFX (26) | BLOCKED (owner) | uploaded + Approved; nobody has listened yet (docs/AUDIO.md). Group-owned place: grant asset access |
-| World: cliffs, props, paths, paid chests | PASS (renders) / owner check | arenas have 15-30 % more (static, anchored) parts: check phone FPS; props are the first thing to cut |
+| World: cliffs, props, paths, paid chests | PASS (renders) / owner check | released with 15-30 % more parts; the next update trims every arena back to the old counts (within ~4 %, docs/PERFORMANCE.md). Check phone FPS |
 | Balance: opening, stage 2, player power | owner playtest | pacing-sim with an invincible hero; stages 3-4 numbers noisy; co-op pacing not simulated |
 | Held content | n/a | 10 weapons, 11 passives, 2 synergies and the wave rework are switched off for this release |
 
