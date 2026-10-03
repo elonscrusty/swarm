@@ -17,7 +17,7 @@
 	                crimson arrow at the screen edge points at a fallen teammate with the
 	                distance
 	  revive ring   in the world: a dashed gold circle of PartnerRevive.Radius around
-	                each revivable fallen player (hold REVIVE inside it); its segments
+	                each revivable fallen player (stand still inside it); its segments
 	                light up with the progress
 	Motion (event-driven, short, off with Reduced effects): a row flashes crimson with a
 	punch when its owner goes down, and gold sparks + a green flash when they
@@ -32,11 +32,9 @@
 ]]
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
-local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
@@ -70,27 +68,10 @@ local rosterKey = ""
 local markers: { [Player]: Marker } = {}
 local worldRings: { [Player]: WorldRing } = {}
 local worldFolder: Folder? = nil
-local holdTarget: Player? = nil
-local holdInput: InputObject? = nil
-local holding = false
-
-local function releaseRevive()
-	if holding then
-		Remotes.Get("ReviveHold"):FireServer(false)
-	end
-	holding, holdInput = false, nil
-end
-
-local function beginRevive(input: InputObject)
-	if not holdTarget or holding or not MobileControls.IsEnabled() then
-		return
-	end
-	holding, holdInput = true, input
-	Remotes.Get("ReviveHold"):FireServer(true)
-end
-
+-- Revives need no input any more (standing still in range does it), so the hold key is
+-- never claimed from the loot / chest hold.
 function TeamUI.CanRevive(): boolean
-	return holdTarget ~= nil and MobileControls.IsEnabled()
+	return false
 end
 
 ------------------------------------------------------------------------------------------
@@ -537,12 +518,9 @@ function TeamUI.Update(_dt: number, state: Configuration, meInRun: boolean)
 			end
 		end
 	end
-	if holdTarget ~= nearest then
-		releaseRevive()
-		holdTarget = nearest
-	end
 	ui.HoldRevive.Visible = nearest ~= nil
-	ui.HoldRevive.Text = holding and string.format("REVIVING %d%%", math.floor((nearest and tonumber(nearest:GetAttribute("ReviveProgress")) or 0) * 100)) or "HOLD REVIVE · 2s"
+	local reviving = nearest and tonumber(nearest:GetAttribute("ReviveProgress")) or 0
+	ui.HoldRevive.Text = reviving > 0 and string.format("REVIVING %d%%", math.floor(reviving * 100)) or "STAND STILL TO REVIVE"
 	local keyParts = {}
 	for _, p in ipairs(list) do
 		table.insert(keyParts, tostring(p.UserId))
@@ -594,37 +572,11 @@ end
 
 function TeamUI.Build(root: Frame, k: { [string]: any })
 	kit = k
-	ui.HoldRevive = new("TextButton", { Name = "HoldRevive", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -24, 1, -150), Size = UDim2.fromOffset(210, 56), BackgroundColor3 = P.slate_900, TextColor3 = P.gold_200, FontFace = Theme.Font.Label, TextSize = TS(17), AutoButtonColor = false, Visible = false, ZIndex = Theme.Z.Hud + 1 }, root)
+	-- a passive note while a fallen teammate is in range: "STAND STILL TO REVIVE", then
+	-- the progress (the server revives by itself after PartnerRevive.Seconds)
+	ui.HoldRevive = new("TextLabel", { Name = "HoldRevive", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -24, 1, -150), Size = UDim2.fromOffset(230, 56), BackgroundColor3 = P.slate_900, TextColor3 = P.gold_200, FontFace = Theme.Font.Label, TextSize = TS(17), Active = false, Visible = false, ZIndex = Theme.Z.Hud + 1 }, root)
 	UIKit.corner(ui.HoldRevive, Theme.Radius.M)
 	UIKit.stroke(ui.HoldRevive, P.gold_400, 2, 0.1)
-	ui.HoldRevive.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-			beginRevive(input)
-		end
-	end)
-	UserInputService.InputBegan:Connect(function(input, processed)
-		if not processed and (input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.ButtonX) then
-			beginRevive(input)
-		end
-	end)
-	UserInputService.InputEnded:Connect(function(input)
-		if input == holdInput then releaseRevive() end
-	end)
-	UserInputService.InputChanged:Connect(function(input)
-		if input == holdInput and input.UserInputType == Enum.UserInputType.Touch then
-			local pos = Vector2.new(input.Position.X, input.Position.Y)
-			local a, size = ui.HoldRevive.AbsolutePosition, ui.HoldRevive.AbsoluteSize
-			local function inside(p: Vector2): boolean
-				return p.X >= a.X and p.X <= a.X + size.X and p.Y >= a.Y and p.Y <= a.Y + size.Y
-			end
-			if not inside(pos) and not inside(pos - game:GetService("GuiService"):GetGuiInset()) then
-				releaseRevive()
-			end
-		end
-	end)
-	UserInputService.WindowFocusReleased:Connect(releaseRevive)
-	player:GetAttributeChangedSignal("InRun"):Connect(releaseRevive)
-	player:GetAttributeChangedSignal("Alive"):Connect(releaseRevive)
 	local list = new("Frame", { Name = "Team", BackgroundTransparency = 1, Active = false, Visible = false, ZIndex = Theme.Z.Hud }, root)
 	UIKit.list(list, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Right })
 	ui.List = list

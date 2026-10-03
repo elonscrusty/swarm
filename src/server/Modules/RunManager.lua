@@ -596,7 +596,8 @@ partnerRevives = function(dt: number)
 		if not rp.Alive and not rp.AwaitingRevive and not rp.Returned and rp.Root and (rp.PartnerRevives or 0) < D.PerRun then
 			local helper = nil
 			for _, other in ipairs(runPlayers) do
-				if other ~= rp and other.Alive and other.Root and other.ReviveHeld and not other.Paused
+				-- standing still next to a fallen teammate is enough: no held control
+				if other ~= rp and other.Alive and other.Root and not other.Paused
 					and (not other.MoveDir or other.MoveDir.Magnitude < 0.1) then
 					if ((other.Root.Position - rp.Root.Position) * FLAT).Magnitude <= D.Radius then
 						helper = other

@@ -1035,9 +1035,9 @@ Config.Arenas = {
 --   Solo  starts at once (no countdown).
 --   Duo / Trio  count down (Config.Run.CountdownSeconds) so others can join; the starter
 --   can press START NOW once someone joined, and a full run starts by itself.
--- A fallen player can be revived by a teammate holding the revive control nearby.
+-- A fallen player is revived by a teammate who stands still next to them (no button).
 local PARTNER_REVIVE = {
-	Seconds = 2, -- hold continuously in range; release or movement away resets progress
+	Seconds = 2, -- stand still in range this long; moving or leaving resets progress
 	Radius = 7,
 	HPFraction = 0.4,
 	PerRun = 3, -- per downed player
