@@ -89,7 +89,7 @@ CharacterData.Characters = {
 		BonusText = "+10% area",
 		Trait = { Name = "Arcane Reach", Text = "+10% area for every weapon." },
 		Strengths = "Homing orbs find targets on their own; bigger area on every weapon.",
-		Tradeoff = "Fragile: no defence bonus, and each orb stops at the first enemy early on.",
+		Tradeoff = "Fragile: no defense bonus, and each orb stops at the first enemy early on.",
 		Colors = {
 			Metal = Palette.slate_500,
 			MetalDark = Palette.slate_600,
@@ -136,7 +136,7 @@ CharacterData.Characters = {
 		Id = "Priest",
 		Name = "Priest",
 		Role = "Holy survivor", -- one-line tag on the character select card
-		Description = "Holy healer. Starts with the Garlic Aura. +20% max HP.",
+		Description = "Holy survivor. Starts with the Garlic Aura. +20% max HP.",
 		Cost = 3000,
 		StartWeapon = "Garlic",
 		Bonus = { maxHpMult = 0.20 },
@@ -230,7 +230,7 @@ CharacterData.Characters = {
 		Id = "Engineer",
 		Name = "Engineer",
 		Role = "Turret builder", -- one-line tag on the character select card
-		Description = "Builds what he needs. Starts with the Turret. Turrets and totems last 30% longer.",
+		Description = "Builds what's needed. Starts with the Turret. Turrets and totems last 30% longer.",
 		Cost = 0,
 		Unlock = { Achievement = "FieldEngineer" },
 		StartWeapon = "Turret",

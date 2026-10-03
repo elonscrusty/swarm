@@ -57,18 +57,18 @@ local ITEMS: { Item } = {
 	{ Id = "HeartyBread", Name = "Hearty Bread", Rarity = "Common", Stack = "Linear", PerStack = { maxHpFlat = 15 }, Text = "+15 max HP", Desc = "+15 max HP per stack (heals that much too)." },
 	{ Id = "Bandage", Name = "Bandage Roll", Rarity = "Common", Stack = "Linear", PerStack = { regen = 1.0 }, Text = "Regenerate 1 HP/s", Desc = "Regenerate 1 HP per second per stack." },
 	{ Id = "Lodestone", Name = "Lodestone", Rarity = "Common", Stack = "Linear", PerStack = { pickup = 0.2 }, Text = "+20% pickup radius", Desc = "+20% gem pickup radius per stack." },
-	{ Id = "KeenLens", Name = "Keen Lens", Rarity = "Common", Stack = "Linear", PerStack = { critChance = 0.05 }, Text = "+5% critical chance", Desc = "+5% chance per stack to land a critical hit (x2 damage; total chance max 60%)." },
-	{ Id = "HealingHerb", Name = "Healing Herb", Rarity = "Common", Stack = "Hyperbolic", K = 0.05, Proc = "HealOnKill", Text = "5% of kills heal 3 HP", Desc = "Kills have a ~5% chance to heal 3 HP (hyperbolic: 2 stacks 9%, 5 stacks 20%)." },
+	{ Id = "KeenLens", Name = "Keen Lens", Rarity = "Common", Stack = "Linear", PerStack = { critChance = 0.05 }, Text = "+5% crit chance", Desc = "+5% crit chance per stack (crits deal x2 damage; total chance max 60%)." },
+	{ Id = "HealingHerb", Name = "Healing Herb", Rarity = "Common", Stack = "Hyperbolic", K = 0.05, Proc = "HealOnKill", Text = "5% of kills heal 3 HP", Desc = "Kills have a ~5% chance to heal 3 HP Stacks add less each time: 2 stacks 9%, 5 stacks 20%." },
 
 	-- Uncommon ----------------------------------------------------------------------------
-	{ Id = "IronPlate", Name = "Iron Plate", Rarity = "Uncommon", Stack = "Hyperbolic", K = 0.06, Text = "Take 6% less damage", Desc = "Take less damage (hyperbolic: 1 stack 6%, 3 stacks 15%, 10 stacks 38%)." },
-	{ Id = "BarbedMail", Name = "Barbed Mail", Rarity = "Uncommon", Stack = "Linear", Proc = "Thorns", Text = "When hit, hit back x1.5", Desc = "When hit, deal 150% of the damage taken (+100% per stack) to enemies within 8 studs, once every 0.5 s." },
+	{ Id = "IronPlate", Name = "Iron Plate", Rarity = "Uncommon", Stack = "Hyperbolic", K = 0.06, Text = "Take 6% less damage", Desc = "Take less damage. Stacks add less each time: 1 stack 6%, 3 stacks 15%, 10 stacks 38%." },
+	{ Id = "BarbedMail", Name = "Barbed Mail", Rarity = "Uncommon", Stack = "Linear", Proc = "Thorns", Text = "When hit, hit back x1.5", Desc = "Hit back for 150% of damage taken (+100% per stack) to nearby enemies." },
 	{ Id = "StormCharm", Name = "Storm Charm", Rarity = "Uncommon", Stack = "Hyperbolic", K = 0.11, Proc = "Lightning", Text = "10% of hits call lightning", Desc = "Hits have a ~10% chance to strike 3 enemies (+1 per stack, max 5) for 40% of the hit; 2 stacks 18%." },
 	{ Id = "VolatileSpore", Name = "Volatile Spore", Rarity = "Uncommon", Stack = "Linear", Proc = "Explode", Text = "20% of kills explode", Desc = "20% of kills burst for 60% of the enemy's max HP (+30% per stack) within 7 studs; bosses take at most 5%." },
 	{ Id = "GuardianWard", Name = "Guardian Ward", Rarity = "Uncommon", Stack = "Linear", Proc = "Shield", Text = "8% HP shield after 5 s unhurt", Desc = "After 5 s without damage, gain a shield of 8% max HP per stack (up to 40%)." },
 	{ Id = "SpareQuiver", Name = "Spare Quiver", Rarity = "Uncommon", Stack = "Special", Proc = "ExtraShot", Text = "+1 projectile every 6th attack", Desc = "Every 6th attack of each weapon fires +1 projectile (not Garlic Aura); each stack makes it 1 attack sooner (min every 2nd)." },
 	{ Id = "MagnetTotem", Name = "Magnet Totem", Rarity = "Uncommon", Stack = "Special", Proc = "MagnetPulse", Text = "Pull gems every 10 s", Desc = "Every 10 s pull gems within 45 studs. Each stack: -2 s (min 4 s) and +10 studs." },
-	{ Id = "HuntersEye", Name = "Hunter's Eye", Rarity = "Uncommon", Stack = "Linear", PerStack = { critDamage = 0.3, critChance = 0.03 }, Text = "+30% crit damage", Desc = "+30% critical damage and +3% critical chance per stack." },
+	{ Id = "HuntersEye", Name = "Hunter's Eye", Rarity = "Uncommon", Stack = "Linear", PerStack = { critDamage = 0.3, critChance = 0.03 }, Text = "+30% crit damage", Desc = "+30% crit damage and +3% crit chance per stack." },
 
 	-- Legendary ---------------------------------------------------------------------------
 	{ Id = "PhoenixFeather", Name = "Phoenix Feather", Rarity = "Legendary", Stack = "Special", Proc = "Revive", MaxStacks = 2, Text = "Rise again once at 50% HP", Desc = "When you fall, rise again at 50% HP. Used up (each stack is one more life; hold at most 2)." },
