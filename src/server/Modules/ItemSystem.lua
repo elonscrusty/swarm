@@ -15,7 +15,13 @@
 	  ExtraShot           WeaponSystem: Spare Quiver
 	  TryRevive           RunManager (falling): Phoenix Feather (used up)
 	  Step                regeneration, shield refill, Magnet Totem pulses
+	  OnLevelUp           XPSystem.GiveXP: Second Wind heal
 	Proc damage is dealt with isProc = true, so procs never crit or trigger more procs.
+
+	Behaviour PASSIVES (PassiveData, numbers in the stat sheet) hook in at the same places:
+	Giant's Bane, Lionheart, Blood Rune (ModifyHit), Ember Oil burns (OnHit, Step),
+	Windstep (OnKill, Step: rp.RushMult, read by RunManager.ApplyMovement), Thornhide
+	(OnHurt), Aegis Charm ward (AbsorbHit, Step), Second Wind (OnLevelUp).
 
 	Player attributes for the HUD: Shield, ShieldMax.
 ]]
@@ -25,6 +31,7 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local ItemData = require(game:GetService("ReplicatedStorage").Shared.ItemData)
 local Palette = require(game:GetService("ReplicatedStorage").Shared.Palette)
 local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponData)
+local PassiveData = require(game:GetService("ReplicatedStorage").Shared.PassiveData)
 local Fx = require(script.Parent.Fx)
 
 local ItemSystem = {}
@@ -32,6 +39,10 @@ local ItemSystem = {}
 local ctx
 local rng = Random.new()
 local queryBuf = {}
+-- Ember Oil: burning enemy -> { Uid, Until, Next, Damage, Owner } (server-wide, capped)
+local burns: { [any]: { [string]: any } } = {}
+local burnCount = 0
+local T = PassiveData.Tuning
 
 local function count(rp, id: string): number
 	local items = rp.Items
@@ -42,7 +53,7 @@ ItemSystem.Count = count
 local function state(rp)
 	local s = rp.ItemState
 	if not s then
-		s = { Shots = {}, LightningAt = 0, ExplodeAt = 0, ThornsAt = 0, LastHurt = 0, Shield = 0, ShownShield = -1, Regen = 0, RegenTimer = 0, MagnetTimer = 0 }
+		s = { Shots = {}, LightningAt = 0, ExplodeAt = 0, ThornsAt = 0, LastHurt = 0, Shield = 0, ShownShield = -1, Regen = 0, RegenTimer = 0, MagnetTimer = 0, CritHealAt = 0, WardReady = false, WardAt = 0, RushUntil = 0 }
 		rp.ItemState = s
 	end
 	return s
@@ -143,17 +154,80 @@ end
 -- Damage hooks (EnemySpawner)
 ------------------------------------------------------------------------------------------
 
--- Critical hits: returns the (maybe multiplied) damage and whether it crit.
-function ItemSystem.ModifyHit(rp, amount: number): (number, boolean)
+-- Critical hits: returns the (maybe multiplied) damage and whether it crit. e = the enemy
+-- hit (Giant's Bane: elites and bosses take more); Lionheart: more damage while badly hurt;
+-- Blood Rune: a crit heals.
+function ItemSystem.ModifyHit(rp, amount: number, e: any?): (number, boolean)
 	local stats = rp.Stats
-	if stats and stats.CritChance > 0 and rng:NextNumber() < stats.CritChance then
+	if not stats then
+		return amount, false
+	end
+	if e and (e.Elite or e.Boss) and (stats.EliteDamage or 1) > 1 then
+		amount *= stats.EliteDamage
+	end
+	if (stats.LowHpMight or 1) > 1 and rp.HP and rp.HP < stats.MaxHP * T.LionheartHp then
+		amount *= stats.LowHpMight
+	end
+	if stats.CritChance > 0 and rng:NextNumber() < stats.CritChance then
+		if (stats.CritHeal or 0) > 0 and rp.Alive and rp.HP > 0 and rp.HP < stats.MaxHP then
+			local s = state(rp)
+			local now = os.clock()
+			if now >= s.CritHealAt then
+				s.CritHealAt = now + T.BloodRuneCooldown
+				ctx.RunManager.Heal(rp, stats.CritHeal, true)
+			end
+		end
 		return amount * stats.CritDamage, true
 	end
 	return amount, false
 end
 
+-- Ember Oil: sets `e` burning (a stronger hit refreshes it; the server-wide cap keeps
+-- big swarms cheap).
+local function ignite(rp, e, amount: number)
+	local b = burns[e]
+	local now = os.clock()
+	local dps = amount * T.BurnShare
+	if b then
+		b.Until = now + T.BurnSeconds
+		b.Damage = math.max(b.Damage, dps * T.BurnTick)
+		b.Owner = rp
+		return
+	end
+	if burnCount >= T.MaxBurns then
+		return
+	end
+	burns[e] = { Uid = e.Uid, Until = now + T.BurnSeconds, Next = now + T.BurnTick, Damage = dps * T.BurnTick, Owner = rp }
+	burnCount += 1
+end
+ItemSystem.Ignite = ignite
+
+local function stepBurns(now: number)
+	if burnCount == 0 then
+		return
+	end
+	for e, b in pairs(burns) do
+		if not e.Alive or e.Uid ~= b.Uid or now >= b.Until or not b.Owner.Alive then
+			burns[e] = nil
+			burnCount -= 1
+		elseif now >= b.Next then
+			b.Next += T.BurnTick
+			ctx.EnemySpawner.Damage(e, b.Damage, b.Owner, nil, 0, true)
+		end
+	end
+end
+
+-- Burning enemies right now (tests and the perf scene).
+function ItemSystem.BurnCount(): number
+	return burnCount
+end
+
 -- Storm Charm: a hit may call lightning that jumps to more enemies near the target.
 function ItemSystem.OnHit(rp, e, amount: number)
+	local burn = rp.Stats and rp.Stats.BurnChance or 0
+	if burn > 0 and e.Alive and rng:NextNumber() < burn then
+		ignite(rp, e, amount)
+	end
 	local n = count(rp, "StormCharm")
 	if n <= 0 then
 		return
@@ -192,6 +266,20 @@ function ItemSystem.OnKill(rp, pos: Vector3, maxHP: number, isProc: boolean?)
 		return
 	end
 	local I = Config.Items
+	-- Windstep: a short burst of speed, refreshed by every kill (movement is only re-applied
+	-- when the burst starts or ends, not per kill)
+	local rush = rp.Stats and rp.Stats.KillRush or 0
+	if rush > 0 then
+		state(rp).RushUntil = os.clock() + T.WindstepSeconds
+		if not rp.RushMult then
+			local cap = Config.Player.BaseSpeed * I.MaxSpeedMult / math.max(1, rp.Stats.Speed)
+			local mult = math.min(1 + rush, cap)
+			if mult > 1 then
+				rp.RushMult = mult
+				ctx.RunManager.ApplyMovement(rp)
+			end
+		end
+	end
 	-- Healing Herb
 	local herb = count(rp, "HealingHerb")
 	if herb > 0 and rng:NextNumber() < ItemData.Hyperbolic(ItemData.Items.HealingHerb.K or 0.05, herb) then
@@ -240,10 +328,22 @@ function ItemSystem.UpdateShieldMax(rp)
 	s.ShownShield = math.ceil(s.Shield)
 end
 
--- Guardian Ward: the shield takes what it can of a hit. Returns the damage left for HP.
+-- Aegis Charm: a ready ward swallows the whole hit. Guardian Ward: the shield takes what it
+-- can of a hit. Returns the damage left for HP.
 function ItemSystem.AbsorbHit(rp, dmg: number): number
 	local s = state(rp)
-	s.LastHurt = os.clock()
+	local now = os.clock()
+	s.LastHurt = now
+	local ward = rp.Stats and rp.Stats.WardSeconds or 0
+	if ward > 0 and s.WardReady and dmg > 0 then
+		s.WardReady = false
+		s.WardAt = now + ward
+		rp.Player:SetAttribute("Ward", false)
+		if rp.Root then
+			Fx.Ring(rp.Root.Position, 6, Palette.gold_300)
+		end
+		return 0
+	end
 	if s.Shield <= 0 then
 		return dmg
 	end
@@ -257,10 +357,12 @@ end
 -- ThornsRawShare, taken): what you really took, but never less than half the raw hit.
 function ItemSystem.OnHurt(rp, raw: number, taken: number?)
 	local n = count(rp, "BarbedMail")
-	if n <= 0 or not rp.Root then
+	local I = Config.Items
+	-- Barbed Mail's multiplier plus Thornhide's (they share one cooldown)
+	local mult = (n > 0 and (I.ThornsMult + I.ThornsPerStack * (n - 1)) or 0) + (rp.Stats and rp.Stats.Thorns or 0)
+	if mult <= 0 or not rp.Root then
 		return
 	end
-	local I = Config.Items
 	local s = state(rp)
 	local now = os.clock()
 	if now < s.ThornsAt then
@@ -268,7 +370,7 @@ function ItemSystem.OnHurt(rp, raw: number, taken: number?)
 	end
 	s.ThornsAt = now + I.ThornsCooldown
 	local base = math.max(raw * I.ThornsRawShare, taken or raw)
-	local damage = base * (I.ThornsMult + I.ThornsPerStack * (n - 1)) * (rp.Stats and rp.Stats.Might or 1)
+	local damage = base * mult * (rp.Stats and rp.Stats.Might or 1)
 	local pos = rp.Root.Position
 	local k = ctx.EnemySpawner.Grid:QueryCircle(pos.X, pos.Z, I.ThornsRadius, queryBuf)
 	local victims = table.move(queryBuf, 1, k, 1, {})
@@ -320,6 +422,14 @@ function ItemSystem.ExtraShot(rp, w): number
 	return 0
 end
 
+-- Second Wind: every level gained heals a share of max HP.
+function ItemSystem.OnLevelUp(rp, gained: number)
+	local share = rp.Stats and rp.Stats.LevelHeal or 0
+	if share > 0 and gained > 0 and rp.Alive and rp.HP > 0 then
+		ctx.RunManager.Heal(rp, rp.Stats.MaxHP * share * gained)
+	end
+end
+
 ------------------------------------------------------------------------------------------
 -- Per frame: regeneration, shield refill, magnet pulses
 ------------------------------------------------------------------------------------------
@@ -331,6 +441,19 @@ local function stepPlayer(rp, dt: number, now: number)
 	end
 	local I = Config.Items
 	local s = state(rp)
+	-- Windstep burst over
+	if rp.RushMult and now >= s.RushUntil then
+		rp.RushMult = nil
+		ctx.RunManager.ApplyMovement(rp)
+	end
+	-- Aegis Charm ward recharged (a small gold ring shows it is back)
+	if stats.WardSeconds > 0 and not s.WardReady and now >= s.WardAt then
+		s.WardReady = true
+		rp.Player:SetAttribute("Ward", true)
+		if rp.Root and s.WardAt > 0 then
+			Fx.Ring(rp.Root.Position, 4, Palette.gold_300)
+		end
+	end
 	-- regeneration in small ticks (one HP attribute write per tick, not per frame)
 	if stats.Regen > 0 then
 		s.RegenTimer += dt
@@ -372,11 +495,13 @@ function ItemSystem.Step(dt: number)
 		return
 	end
 	local now = os.clock()
+	-- every run player: passives (Renewal regen, Aegis Charm, Windstep) work without items
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
-		if rp.Items and next(rp.Items) ~= nil then
+		if rp.Items then
 			stepPlayer(rp, dt, now)
 		end
 	end
+	stepBurns(now)
 end
 
 -- Dev tool: `n` random items.

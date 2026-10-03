@@ -167,9 +167,12 @@ def note(n):
 
 def s_hit():
     # soft fleshy thump: pitched body + a short muted knock, no bright click
-    body = sine_sweep(210, 85, 0.14, 0.6) * env_ad(int(0.14 * SR), 0.002, 0.035)
-    knock = lp(bp(noise(0.14), 900, 1.5), 2500) * env_ad(int(0.14 * SR), 0.001, 0.012)
-    return fade(body * 0.9 + knock * 0.5, 0.001, 0.03)
+    # (phone speakers drop everything under ~250 Hz, so the body sits at 340 -> 150 Hz
+    # and is gently saturated for audible harmonics)
+    n = int(0.14 * SR)
+    body = soft_clip(sine_sweep(340, 150, 0.14, 0.6) * env_ad(n, 0.002, 0.03), 2.0)
+    knock = lp(bp(noise(0.14), 1100, 1.5), 2800) * env_ad(n, 0.001, 0.012)
+    return fade(body * 0.8 + knock * 0.6, 0.001, 0.03)
 
 
 def s_enemy_death():
@@ -177,16 +180,16 @@ def s_enemy_death():
     n = int(0.32 * SR)
     cut = 2600 * (380 / 2600) ** (np.arange(n) / n)
     puff = lp(noise(0.32), cut, 0.9) * env_ad(n, 0.004, 0.07)
-    pop = sine_sweep(160, 55, 0.32, 0.5) * env_ad(n, 0.002, 0.05)
+    pop = soft_clip(sine_sweep(300, 110, 0.32, 0.5) * env_ad(n, 0.002, 0.045), 1.8)
     return fade(puff * 0.8 + pop * 0.7, 0.001, 0.05)
 
 
 def s_big_kill():
     n = int(0.9 * SR)
-    sub = sine_sweep(95, 38, 0.9, 0.5) * env_ad(n, 0.003, 0.16)
-    cut = 1400 * (180 / 1400) ** (np.arange(n) / n)
-    rumble = lp(noise(0.9), cut, 0.8) * env_ad(n, 0.004, 0.18)
-    x = soft_clip(sub * 1.0 + rumble * 0.6, 1.4)
+    sub = sine_sweep(160, 50, 0.9, 0.5) * env_ad(n, 0.003, 0.16)
+    cut = 2200 * (220 / 2200) ** (np.arange(n) / n)
+    rumble = lp(noise(0.9), cut, 0.8) * env_ad(n, 0.004, 0.16)
+    x = soft_clip(sub * 1.0 + rumble * 0.8, 2.2)
     return trim_tail(reverb(x, 0.8, 0.18, 1500))
 
 
@@ -194,8 +197,8 @@ def s_explosion():
     n = int(1.1 * SR)
     cut = 3200 * (160 / 3200) ** ((np.arange(n) / n) ** 0.6)
     blast = lp(noise(1.1), cut, 0.8) * env_ad(n, 0.003, 0.22)
-    sub = sine_sweep(80, 32, 1.1, 0.5) * env_ad(n, 0.002, 0.2)
-    x = soft_clip(blast * 0.9 + sub * 0.9, 1.6)
+    sub = sine_sweep(130, 40, 1.1, 0.5) * env_ad(n, 0.002, 0.2)
+    x = soft_clip(blast * 0.9 + sub * 0.9, 2.0)
     return trim_tail(reverb(x, 1.0, 0.2, 1800))
 
 
@@ -205,9 +208,9 @@ def s_lightning():
     n = int(dur * SR)
     cr = noise(dur) * (rng.random(n) < 0.08)
     cr = bp(cr, 2400, 1.2) * env_ad(n, 0.001, 0.09) * 3
-    zap = sine_sweep(1400, 180, dur, 0.4) * env_ad(n, 0.001, 0.05) * 0.4
-    body = lp(noise(dur), 900) * env_ad(n, 0.002, 0.08) * 0.6
-    return trim_tail(reverb(fade(cr + zap + body, 0.001, 0.05), 0.6, 0.15, 3000))
+    zap = sine_sweep(1100, 160, dur, 0.4) * env_ad(n, 0.001, 0.05) * 0.4
+    body = lp(noise(dur), 900) * env_ad(n, 0.002, 0.08) * 0.8
+    return trim_tail(reverb(fade(lp(cr + zap + body, 4500), 0.001, 0.05), 0.6, 0.15, 3000))
 
 
 def s_swing():
@@ -216,13 +219,13 @@ def s_swing():
     n = int(dur * SR)
     k = np.arange(n) / n
     cut = 500 + 1600 * np.sin(np.pi * k) ** 1.5
-    w = bp(noise(dur), cut, 1.4) * np.sin(np.pi * k) ** 2
+    w = lp(bp(noise(dur), cut, 1.4), 3000) * np.sin(np.pi * k) ** 2
     return fade(w, 0.002, 0.02)
 
 
 def s_hurt():
     n = int(0.32 * SR)
-    punch = sine_sweep(170, 60, 0.32, 0.5) * env_ad(n, 0.002, 0.06)
+    punch = sine_sweep(280, 100, 0.32, 0.5) * env_ad(n, 0.002, 0.06)
     crunch = lp(noise(0.32), 1300) * env_ad(n, 0.001, 0.03)
     grunt = lp(np.sign(np.sin(sweep_phase(120, 85, n))), 700) * env_ad(n, 0.01, 0.07) * 0.35
     return fade(soft_clip(punch + crunch * 0.7 + grunt, 1.3), 0.001, 0.05)
@@ -231,7 +234,7 @@ def s_hurt():
 def s_heartbeat():
     def thump():
         n = int(0.16 * SR)
-        return lp(sine_sweep(75, 42, 0.16, 0.5) * env_ad(n, 0.006, 0.045), 300)
+        return lp(soft_clip(sine_sweep(120, 65, 0.16, 0.5) * env_ad(n, 0.006, 0.045), 2.5), 700)
     return fade(mix(0.5, (0, thump(), 1.0), (0.17, thump(), 0.7)), 0.001, 0.05)
 
 
@@ -244,8 +247,8 @@ def s_death():
         glide = f * (0.8 ** (t / dur))
         out += np.sin(2 * np.pi * np.cumsum(glide) / SR)
     out = lp(out, 1200) * np.clip(t / 0.03, 0, 1) * np.exp(-t / 0.7) / 3
-    thud = sine_sweep(90, 40, dur, 0.3) * env_ad(len(t), 0.002, 0.12)
-    return trim_tail(reverb(out + thud * 0.8, 1.6, 0.3, 2500))
+    thud = soft_clip(sine_sweep(150, 55, dur, 0.3) * env_ad(len(t), 0.002, 0.12), 2.0)
+    return trim_tail(reverb(out + thud * 0.5, 1.6, 0.3, 2500))
 
 
 def s_gem():
@@ -356,10 +359,10 @@ def s_boss_roar():
 def s_boss_slam():
     # heavy ground pound for boss telegraphs (BossPound)
     n = int(1.2 * SR)
-    sub = sine_sweep(70, 28, 1.2, 0.4) * env_ad(n, 0.002, 0.25)
-    cut = 1800 * (120 / 1800) ** ((np.arange(n) / n) ** 0.5)
+    sub = sine_sweep(120, 38, 1.2, 0.4) * env_ad(n, 0.002, 0.25)
+    cut = 2400 * (150 / 2400) ** ((np.arange(n) / n) ** 0.5)
     crack = lp(noise(1.2), cut) * env_ad(n, 0.002, 0.12)
-    x = soft_clip(sub + crack * 0.8, 1.8)
+    x = soft_clip(sub + crack * 0.9, 2.4)
     return trim_tail(reverb(x, 1.3, 0.22, 1500))
 
 
@@ -370,9 +373,9 @@ def s_evolve():
     p = pad([note(48), note(60), note(64), note(67)], dur, attack=0.5, release=1.0, bright=2200)
     n = int(dur * SR)
     k = np.arange(n) / n
-    shimmer = bp(noise(dur), 3000 + 3000 * k, 6.0) * np.clip(k / 0.4, 0, 1) * np.clip((1 - k) / 0.5, 0, 1) * 0.5
-    x = mix(dur, (0, run, 0.45), (0, p, 0.9), (0, shimmer, 0.5))
-    return trim_tail(reverb(fade(lp(x, 8000), 0.005, 0.15), 2.0, 0.35, 5000))
+    shimmer = lp(bp(noise(dur), 2200 + 1800 * k, 6.0), 5000) * np.clip(k / 0.4, 0, 1) * np.clip((1 - k) / 0.5, 0, 1) * 0.5
+    x = mix(dur, (0, run, 0.45), (0, p, 0.9), (0, shimmer, 0.3))
+    return trim_tail(reverb(fade(lp(x, 6500), 0.005, 0.15), 2.0, 0.35, 5000))
 
 
 def s_victory():
@@ -430,7 +433,7 @@ def s_boss_whoosh():
     cut = 200 + 900 * np.sin(np.pi * k) ** 1.2
     w = bp(noise(dur), cut, 1.2) * np.sin(np.pi * k) ** 1.5
     rumble = lp(noise(dur), 160) * np.sin(np.pi * k) * 2
-    return trim_tail(reverb(fade(w + rumble, 0.005, 0.05), 0.9, 0.2, 2000))
+    return trim_tail(reverb(fade(lp(w, 2500) + rumble, 0.005, 0.05), 0.9, 0.2, 2000))
 
 
 SOUNDS = {

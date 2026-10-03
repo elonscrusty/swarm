@@ -21,6 +21,16 @@ if preview.args.lastrun then
 	}
 end
 C.sendProfile(profile)
+-- the home screen's PLAYTIME board (MenuPlaytime): a server answer with five players and
+-- you outside them (--set playtime=none: no answer, "Loading...")
+if preview.args.playtime ~= "none" then
+	local names = { "Ava", "Bramblewick", "Kestrel", "Moonpetal", "Ironjaw", "Thistle" }
+	local rows = {}
+	for i, n in ipairs(names) do
+		table.insert(rows, { Rank = i, UserId = 2000 + i, Name = n, Value = 98000 - i * 9300, Me = false })
+	end
+	C.fire("LeaderboardData", { Board = "Playtime", Rows = rows, Status = "ok", Age = 5, MyRank = 12, MyBest = 11160, Top = 50 })
+end
 if preview.args.retry == "on" then
 	local got = nil
 	preview.remote("StartRun").OnServerEvent:Connect(function(_player, mode)

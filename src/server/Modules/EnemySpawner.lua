@@ -811,7 +811,7 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 	end
 	local crit = false
 	if rp and not isProc then
-		amount, crit = ctx.ItemSystem.ModifyHit(rp, amount)
+		amount, crit = ctx.ItemSystem.ModifyHit(rp, amount, e) -- e: Giant's Bane
 	end
 	if e.Shield > 0 then
 		-- Shielded elite: the orbiting plates soak damage first, then break

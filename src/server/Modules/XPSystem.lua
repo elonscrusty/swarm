@@ -122,6 +122,7 @@ function XPSystem.GiveXP(rp, amount: number)
 	player:SetAttribute("XPNeeded", rp.XPNeeded)
 	if gained > 0 then
 		player:SetAttribute("Level", rp.Level)
+		if ctx.ItemSystem then ctx.ItemSystem.OnLevelUp(rp, gained) end -- Second Wind
 		ctx.LevelUpSystem.QueueLevels(rp, gained)
 	end
 end

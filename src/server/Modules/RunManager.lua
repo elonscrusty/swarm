@@ -460,7 +460,8 @@ function RunManager.ApplyMovement(rp)
 	-- they can't be hurt meanwhile (DamagePlayer), so they must not walk either
 	local canMove = rp.Alive and not rp.Paused and not rp.RewardUntil and not frozen and phase == "Running" and not ctx.StageManager.IsHolding()
 	if hum and hum.Parent then
-		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) or 0
+		-- rp.RushMult: Windstep's short burst after a kill (ItemSystem)
+		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * (rp.RushMult or 1) or 0
 	end
 	rp.Player:SetAttribute("Paused", rp.Paused == true)
 end
@@ -1711,7 +1712,7 @@ local function speedCheck(rp, dt: number)
 	local moved = ((pos - last) * FLAT).Magnitude
 	-- paused (level-up), frozen or downed players may not travel at all
 	-- (ice makes players faster: BiomeHazards' TerrainSpeedMult > 1)
-	local maxSpeed = (rp.Paused or rp.RewardUntil or frozen or not rp.Alive) and 0 or math.max(rp.Stats.Speed, Config.Player.BaseSpeed) * math.max(1, rp.TerrainSpeedMult or 1)
+	local maxSpeed = (rp.Paused or rp.RewardUntil or frozen or not rp.Alive) and 0 or math.max(rp.Stats.Speed, Config.Player.BaseSpeed) * math.max(1, rp.TerrainSpeedMult or 1) * (rp.RushMult or 1)
 	-- hop cap: the client may raise its own WalkSpeed up to HopSpeedCap while chaining hops
 	local allowed = maxSpeed * Config.Movement.HopSpeedCap * Config.Movement.ServerTolerance * elapsed + Config.Player.SpeedCheckAllowance
 	if moved > allowed or pos.Y < Config.ArenaOrigin.Y - 20 then

@@ -1,6 +1,6 @@
 -- leaderboards: the lobby LEADERBOARDS screen with a LeaderboardData answer (as
 -- LeaderboardService sends it).
---   --set board=Score|ScoreEndless|BestStage|Daily|Kills|Level   the board (default Score;
+--   --set board=Score|ScoreEndless|BestStage|Daily|Kills|Level|Playtime   the board (default Score;
 --                                        ScoreEndless taps HIGH SCORE's ENDLESS switch)
 --   --set status=ok|local|loading|error the board's status (local = no DataStores)
 --   --set rank=out                      you are not in the top 50 (your best shows)
@@ -20,7 +20,7 @@ C.settle(0.5)
 local board = preview.args.board or "Score"
 if board ~= "Score" then
 	-- the tab inside the Ranks screen (the home screen has a DAILY card too)
-	local want = ({ Kills = "MOST KILLS", BestStage = "BEST STAGE", Daily = "DAILY", Level = "TOP LEVEL", ScoreEndless = "ENDLESS" })[board] or board
+	local want = ({ Kills = "MOST KILLS", BestStage = "BEST STAGE", Daily = "DAILY", Level = "HIGHEST LEVEL", Playtime = "PLAYTIME", ScoreEndless = "ENDLESS" })[board] or board
 	local screen = preview.findGui(function(obj)
 		return obj.Name == "Ranks" and obj:IsA("Frame")
 	end)[1]
@@ -56,6 +56,8 @@ for i = 1, n do
 		value = 14 - i
 	elseif board == "Kills" then
 		value = 4200 - i * 213
+	elseif board == "Playtime" then
+		value = 90000 - i * 4100
 	else
 		value = CurseData.DailyScore(math.max(0, 6 - math.floor(i / 2)), 420 + i * 37, 600)
 	end

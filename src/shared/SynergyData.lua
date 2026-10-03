@@ -5,7 +5,7 @@
 	piece; it needs no card of its own and is never lost for the run unless a piece is
 	(run items and weapons are kept, so in practice it stays once complete).
 
-	The package (4 synergies, each needs 3 pieces). Bonuses are modest on purpose: about
+	The package (6 synergies, each needs 3 pieces). Bonuses are modest on purpose: about
 	one level of a passive each, so a synergy rewards a plan without being the only way
 	to win, and none of them touch the hard caps (crit 60%, cooldown floor, speed cap):
 	  Elemental Trinity   a fire weapon + Frost Nova + Lightning
@@ -16,6 +16,10 @@
 	                      +5% crit chance, +25% crit damage (the crit build gets its kick)
 	  Bulwark             a close weapon (Whip, Garlic Aura, Spear) + Armor + Iron Plate or
 	                      Barbed Mail: +1 armor, +10% max HP (the stand-your-ground build)
+	  Inferno             a fire weapon + Ember Oil + Volatile Spore or Storm Charm
+	                      +8% burn chance, +10% damage (everything catches fire)
+	  Iron Thicket        Thornhide + Stoneskin + Iron Plate or Barbed Mail
+	                      +60% thorns, +1 armor (let them hit you)
 	Elements come from WeaponData (`Element` = "Fire" | "Frost" | "Storm"); "a fire weapon"
 	is any weapon with Element = "Fire" (Holy Water, Fire Trail). Evolved weapons count.
 
@@ -101,6 +105,34 @@ local LIST: { Synergy } = {
 			{ Kind = "Item", Any = { "IronPlate", "BarbedMail" }, Label = "Iron Plate or Barbed Mail" },
 		},
 		Bonus = { armor = 1, maxHpMult = 0.10 },
+	},
+	{
+		Id = "Inferno",
+		Name = "Inferno",
+		Text = "+8% burn chance, +10% damage",
+		Desc = "A fire weapon, the Ember Oil passive and Volatile Spore or Storm Charm.",
+		Color = Color3.fromRGB(255, 110, 40),
+		Icon = "EmberOil",
+		Pieces = {
+			{ Kind = "Weapon", Element = "Fire", Label = "a fire weapon" },
+			{ Kind = "Passive", Any = { "EmberOil" }, Label = "Ember Oil" },
+			{ Kind = "Item", Any = { "VolatileSpore", "StormCharm" }, Label = "Volatile Spore or Storm Charm" },
+		},
+		Bonus = { burnChance = 0.08, might = 0.10 },
+	},
+	{
+		Id = "IronThicket",
+		Name = "Iron Thicket",
+		Text = "+60% thorns, +1 armor",
+		Desc = "The Thornhide and Stoneskin passives and Iron Plate or Barbed Mail.",
+		Color = Color3.fromRGB(130, 150, 100),
+		Icon = "Thornhide",
+		Pieces = {
+			{ Kind = "Passive", Any = { "Thornhide" }, Label = "Thornhide" },
+			{ Kind = "Passive", Any = { "Stoneskin" }, Label = "Stoneskin" },
+			{ Kind = "Item", Any = { "IronPlate", "BarbedMail" }, Label = "Iron Plate or Barbed Mail" },
+		},
+		Bonus = { thorns = 0.6, armor = 1 },
 	},
 }
 

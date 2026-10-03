@@ -30,7 +30,7 @@
 	  burnChance     chance a hit sets the enemy burning (Ember Oil; ItemSystem.OnHit)
 	  lowHpMight     +damage while below Tuning.LionheartHp of max HP (Lionheart)
 
-	Synergies: Area, Candle, Precision and Armor are pieces of the build synergies in
+	Synergies: Area, Candle, Precision, Armor, Ember Oil, Thornhide and Stoneskin are pieces of the build synergies in
 	SynergyData.lua (a small extra bonus once the whole set is owned).
 ]]
 
@@ -328,7 +328,7 @@ PassiveData.Passives = {
 		Id = "GildedPurse",
 		Name = "Gilded Purse",
 		Color = Color3.fromRGB(255, 200, 70),
-		Description = "More gold from every source in the run.",
+		Description = "+15/30/50% gold from kills, chests and bosses.",
 		Values = {
 			{ goldGain = 0.15 },
 			{ goldGain = 0.30 },

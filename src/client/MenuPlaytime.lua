@@ -27,7 +27,7 @@ local Icons = require(script.Parent.Icons)
 
 local MenuPlaytime = {}
 
-local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
+local new, text = UIKit.new, UIKit.text
 local C, P = Theme.Color, Theme.Palette
 local player = Players.LocalPlayer
 

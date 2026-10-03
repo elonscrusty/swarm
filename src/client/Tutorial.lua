@@ -44,6 +44,8 @@ local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local MiniMap = require(script.Parent.MiniMap)
+local TeamUI = require(script.Parent.TeamUI)
+local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
 
 local Tutorial = {}
@@ -294,17 +296,33 @@ local function layout()
 		w = w2
 		y = place()
 		local right = tx >= W / 2
-		-- the right side holds the team rows and the minimap (phones): a card with no
-		-- target that would lie over the map goes left instead (the card lets touches
-		-- through, so a thumb landing on it still moves the hero)
-		if right and not (pos and size) then
-			local map = MiniMap.Elements().Holder :: Frame?
-			if map and map.Visible then
-				local mapBottom = map.Position.Y.Offset + map.Size.Y.Offset
-				local mapLeft = map.Position.X.Offset
-				if y < mapBottom + 8 and (W - 12) > mapLeft then
-					right = false
+		-- a card with no target takes the side where it covers nothing that matters: the
+		-- minimap (right, phones), a revive marker over a fallen teammate, the loot prompt
+		-- (the card lets touches through, so a thumb landing on it still moves the hero)
+		if not (pos and size) then
+			local function covers(cx: number): boolean
+				local l, r, t, b = cx - w / 2, cx + w / 2, y, y + h
+				local function hits(g: GuiObject?): boolean
+					if not g or not g.Visible then
+						return false
+					end
+					local gx, gy = g.Position.X.Offset - g.AnchorPoint.X * g.Size.X.Offset, g.Position.Y.Offset - g.AnchorPoint.Y * g.Size.Y.Offset
+					local gw, gh = g.Size.X.Offset, g.Size.Y.Offset + 24 -- + the label under a marker
+					return l < gx + gw and r > gx and t < gy + gh and b > gy
 				end
+				if hits(MiniMap.Elements().Holder :: Frame?) or hits(LootUI.Elements().Prompt :: Frame?) then
+					return true
+				end
+				for _, mk in pairs(TeamUI.Elements().Markers or {}) do
+					if hits(mk.Holder) then
+						return true
+					end
+				end
+				return false
+			end
+			local xr, xl = W - 12 - w / 2, 12 + w / 2
+			if covers(right and xr or xl) and not covers(right and xl or xr) then
+				right = not right
 			end
 		end
 		x = right and (W - 12 - w / 2) or (12 + w / 2)
