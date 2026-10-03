@@ -335,21 +335,99 @@ end
 ]]
 local SWING_HIT_DELAY = 0.08
 local SWING_INNER = 1.5 -- enemies this close are always inside the swing
+local SWING_AIM_CANDIDATES = 24 -- in-reach enemies tried as the aim direction
+
+-- True when enemy e (its body circle) is inside a swing from origin toward dir.
+local function inSwing(e, origin: Vector3, dir: Vector3, reach: number, half: number, full: boolean?): boolean
+	local rel = (e.Pos - origin) * FLAT
+	local d = rel.Magnitude
+	if d > reach + e.Radius then
+		return false
+	end
+	if d <= SWING_INNER + e.Radius or full then
+		return true
+	end
+	local off = math.acos(math.clamp(rel:Dot(dir) / d, -1, 1)) - half
+	-- inside the sector, or overlapping one of its edges
+	return off <= 0 or (off < math.pi / 2 and d * math.sin(off) <= e.Radius)
+end
+
+-- An enemy a weapon hit can actually hurt (a boss's collapse / a tunnelling Burrower can't).
+local function hittable(e): boolean
+	return e.Alive and not e.Invulnerable and not e.Dying and not e.Untargetable
+end
+local function skipUnhittable(e): boolean
+	return not hittable(e)
+end
+local function skipUnhittableOrStatic(e): boolean
+	return not hittable(e) or e.Def.Static == true
+end
+
+--[[
+	Auto aim for a swing (owner): the direction whose cut hits the most enemies that are in
+	reach NOW, measured by their body edge (a boss or a Nest whose centre is past the reach
+	still counts; the old aim at the nearest CENTRE turned the cut toward a small enemy just
+	out of reach and hit nothing). Each in-reach enemy's direction is a candidate; ties go
+	to the closer edge. `both`: the backhand cut (opposite) also lands. Nothing in reach:
+	the nearest hittable moving enemy within `look` studs, so the swing visibly turns toward
+	incoming enemies; nil = keep the facing.
+]]
+local function swingAim(origin: Vector3, reach: number, half: number, both: boolean, look: number): Vector3?
+	local n = grid():QueryCircle(origin.X, origin.Z, reach, queryBuf)
+	local cands = {}
+	for i = 1, n do
+		local e = queryBuf[i]
+		if hittable(e) then
+			cands[#cands + 1] = e
+		end
+	end
+	if #cands > 0 then
+		local function edge(e)
+			return ((e.Pos - origin) * FLAT).Magnitude - e.Radius
+		end
+		table.sort(cands, function(a, b)
+			return edge(a) < edge(b)
+		end)
+		local bestDir, bestScore = nil, -1
+		for i = 1, math.min(#cands, SWING_AIM_CANDIDATES) do
+			local dir = flatDir(cands[i].Pos - origin, Vector3.zero)
+			if dir.Magnitude > 0 then
+				local score = 0
+				for _, e in ipairs(cands) do
+					if inSwing(e, origin, dir, reach, half) or (both and inSwing(e, origin, -dir, reach, half)) then
+						score += 1
+					end
+				end
+				if score > bestScore then
+					bestDir, bestScore = dir, score
+				end
+			end
+		end
+		if bestDir then
+			return bestDir
+		end
+	end
+	local target = grid():Nearest(origin.X, origin.Z, look, skipUnhittableOrStatic)
+		or grid():Nearest(origin.X, origin.Z, look, skipUnhittable)
+	if target then
+		local dir = flatDir(target.Pos - origin, Vector3.zero)
+		return dir.Magnitude > 0 and dir or nil
+	end
+	return nil
+end
+WeaponSystem._SwingAim = swingAim -- (tests)
 
 function Fire.Whip(rp, w, s, def)
 	local params = def.Params
 	local evo = w.Evolved and def.Evolution or nil
 	local reach = params.Reach * s.area
 	local half = math.rad(params.Arc) / 2
-	-- auto aim (owner): the forehand cut faces the nearest enemy (looking well past the
-	-- reach so the swing visibly turns toward incoming enemies), else the facing
+	-- auto aim (owner): the forehand cut faces the enemies it can hit (swingAim), else
+	-- turns toward the nearest one within max(3 x reach, 30) studs, else the facing
 	local facing = rp.Facing
 	if rp.Root then
 		local origin = ground(rp.Root.Position)
-		local target = nearestEnemies(origin, math.max(reach * 3, 30), 1)[1]
-		if target then
-			facing = flatDir(target.Pos - origin, rp.Facing)
-		end
+		facing = swingAim(origin, reach, half, s.amount >= 2, math.max(reach * 3, 30)) or rp.Facing
 	end
 	local tier = visualTier(w)
 	-- Riposte perk: every 3rd attack the forehand cut covers the full circle
@@ -377,15 +455,7 @@ function Fire.Whip(rp, w, s, def)
 				local hits = table.move(queryBuf, 1, n, 1, {})
 				for _, e in ipairs(hits) do
 					if e.Alive then
-						local rel = (e.Pos - origin) * FLAT
-						local d = rel.Magnitude
-						local inside = d <= SWING_INNER + e.Radius or (full and d <= reach + e.Radius)
-						if not inside then
-							local off = math.acos(math.clamp(rel:Dot(dir) / d, -1, 1)) - half
-							-- inside the sector, or overlapping one of its edges
-							inside = off <= 0 or (off < math.pi / 2 and d * math.sin(off) <= e.Radius)
-						end
-						if inside then
+						if inSwing(e, origin, dir, reach, half, full) then
 							hitEnemy(rp, e, s.damage, origin, s.knockback)
 							if evo and healed < evo.LifestealCapPerSwing then
 								healed += evo.Lifesteal
@@ -2155,7 +2225,9 @@ function Fire.Horn(rp, w, s, def)
 	local evo = w.Evolved and def.Evolution or nil
 	local range = params.Range * s.area
 	local origin = ground(rp.Root.Position)
-	local aim = Arm.aim(rp, origin, range * 1.6)
+	-- the cone faces the enemies it can hit now (by body edge, like the Whip), else the
+	-- nearest hittable one within 1.6 x range, else the facing
+	local aim = swingAim(origin, range, math.rad(params.HalfAngle), s.amount == 2, range * 1.6) or rp.Facing
 	local echo = WeaponData.HasPerk(w, "Echo")
 	local shots = {}
 	if evo and evo.Roar then
