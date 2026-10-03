@@ -569,48 +569,48 @@ Config.Spawn = {
 }
 
 ------------------------------------------------------------------------------------------
--- WAVES (EnemySpawner; owner: "instead of constantly spawning enemies, do it in waves")
---   While exploring a WAVE is announced FirstDelay seconds into stage 1 (StageFirstDelay
---   on later stages), then every Interval seconds: a big centre banner "WAVE 3 / from the
---   north" with a horn and a red glow on that screen edge (client StageUI), and the stage
---   pill counts down "WAVE 4 IN 0:08" (SwarmState Wave, WaveSeq, WaveSides, WaveAngle,
---   WaveNext);
---   WarnSeconds later it pours in over BurstSeconds from 1 direction, +1 at each
---   DirectionsAt progression second (at most 3), each side one enemy type (wasps never
---   before Config.Pacing.WaveMinTime, smaller per WaveCountMult). Size = (Base + PerMinute
---   x difficulty minute) x player-count density x stage spawn multiplier (Endless too) x
---   the stage-1 opening ramp, x(1 + GrowPerWave per earlier wave of the stage, at most
---   GrowCap). An elite can lead a wave (EliteLeadChance, after Config.Pacing.EliteMinTime).
---   Between waves the normal spawning only keeps a trickle: TrickleFrom -> TrickleTo of
---   the live target over the interval, LullMult for LullSeconds after the burst. Boss
---   fights keep their own crowd rules (Config.Stages.BossMinionShare). The live cap
---   Config.Enemies.MaxLive still holds. Enabled = false: the old continuous spawning with
---   ring mini-waves.
+-- WAVES (EnemySpawner stepWaves; owner: "ALL the enemies come in waves. Wave 1 is easy,
+-- wave 2 a little harder, wave 3 even harder")
+--   While exploring nothing spawns between waves. Wave N (counted across the whole run:
+--   stage 2 goes on from where stage 1 ended) comes after a breather, is announced (big
+--   centre "WAVE N" banner, horn, red glow on the screen edge it comes from; the stage pill
+--   says "WAVE N" / "WAVE N IN 0:03") and pours in over BurstSeconds from 1 side, 2 from
+--   SidesAtWave[1], 3 from SidesAtWave[2]. The next breather starts when at most
+--   ClearShare of the wave is alive or after MaxSeconds (no stalling). The breather waits
+--   while someone stands at the portal. Boss fights keep their own crowd
+--   (Config.Stages.BossMinionShare), the surge replaces waves.
+--   size  = (Base + PerWave x (N - 1)) x Config.Difficulty.PlayerCountMult x the stage
+--           spawn multiplier (Horde, Endless) x BigMult on every BigEvery-th wave
+--   mix   = EnemyData.SpawnTable row at (N - 1) x RowSecondsPerWave seconds; wasps only
+--           from BeesFromWave (smaller, Config.Pacing.WaveCountMult)
+--   elites lead a wave from EliteFromWave on (EliteChance, always on big waves), one more
+--           every ElitePerWaves waves, at most EliteMax
+--   SwarmState: Wave, WaveSeq, WaveBig, WaveSides, WaveAngle, WaveNext (run time the next
+--   wave starts, 0 = none), WaveLeft (enemies of the current wave left).
+--   Enabled = false: the old continuous spawning with ring mini-waves.
 ------------------------------------------------------------------------------------------
 Config.Waves = {
 	Enabled = true,
-	FirstDelay = 22, -- stage 1: a new player sees the first wave early
-	StageFirstDelay = 15,
-	Interval = 30,
-	PortalRetrySeconds = 4,
-	WarnSeconds = 2.5, -- the banner and horn come this long before the burst
+	FirstDelay = 5, -- stage 1: wave 1 comes right after the stage card
+	StageStartDelay = 6, -- later stages, after the travel and the stage card
+	BreatherSeconds = 3.5,
+	PortalHoldSeconds = 3, -- the breather stays at least this long while someone is at the portal
+	ClearShare = 0.1,
+	MaxSeconds = 40,
 	BurstSeconds = 3,
 	MaxPerStep = 6, -- enemies spawned per frame at most while a wave pours in (perf)
-	LullSeconds = 10, -- quiet after the burst ...
-	LullMult = 0.2,
-	TrickleFrom = 0.3, -- ... then the trickle builds toward the next wave
-	TrickleTo = 0.55,
-	-- a living player within PortalCalmRadius studs of the portal while exploring: no new
-	-- wave starts and the trickle is x PortalCalmMult, so pushing to the portal works
-	PortalCalmRadius = 30,
-	PortalCalmMult = 0.5,
-	Base = 32,
-	PerMinute = 5,
-	GrowPerWave = 0.06,
-	GrowCap = 1.5,
-	DirectionsAt = { 100, 300 }, -- seconds of progression time (stage n starts at (n-1) x 120)
+	Base = 10,
+	PerWave = 4,
+	BigEvery = 5,
+	BigMult = 1.5,
+	RowSecondsPerWave = 30,
+	BeesFromWave = 4,
+	SidesAtWave = { 4, 9 },
 	ArcRadians = 0.45, -- each side spreads this far either way
-	EliteLeadChance = 0.15,
+	EliteFromWave = 4,
+	EliteChance = 0.35,
+	ElitePerWaves = 8,
+	EliteMax = 3,
 }
 
 ------------------------------------------------------------------------------------------
@@ -658,10 +658,10 @@ Config.Pacing = {
 	EliteEvery = 165,
 	EliteMinTime = 60,
 	EliteTypes = { "Slime", "Skeleton", "Brute", "Ghost", "Spitter" }, -- scheduled elites (never a bomb tick)
-	-- Mini-wave rings by type: no ring of this type before WaveMinTime seconds of run time
-	-- (a Mite ring instead), and its ring is WaveCountMult times the usual size. Wasps are
-	-- fast flyers: a full ring of them in the first minute was the "too many bees" start
-	-- (pacing-sim: up to 22 wasps alive in minute 1, 41 in minute 5).
+	-- Wave groups by type: no group of this type before WaveMinTime seconds of run time
+	-- (old mini-waves) / Config.Waves.BeesFromWave (waves); Mites instead. Its group is
+	-- WaveCountMult times the usual size. Wasps are fast flyers: a full ring of them in the
+	-- first minute was the "too many bees" start (pacing-sim: up to 22 alive in minute 1).
 	WaveMinTime = { Bat = 150 },
 	WaveCountMult = { Bat = 0.6 },
 	-- smaller intro groups for the later creatures (Healer from 6:00, Burrower from 7:00

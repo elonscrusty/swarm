@@ -201,14 +201,14 @@ local function introduce(typeId: string): boolean
 	return def ~= nil and def.Intro ~= nil
 end
 
--- A living player near the portal while exploring (Config.Waves.PortalCalmRadius).
+-- A living player in (or at the edge of) the portal circle while exploring: charging it.
 local function nearPortal(): boolean
-	local W = Config.Waves
-	local p = W.PortalCalmRadius and ctx.StageManager.GetPhase() == "Explore" and ctx.StageManager.PortalPosition()
+	local p = ctx.StageManager.GetPhase() == "Explore" and ctx.StageManager.PortalPosition()
 	if not p then
 		return false
 	end
-	local r2 = W.PortalCalmRadius * W.PortalCalmRadius
+	local r = Config.Stages.PortalRadius + 4
+	local r2 = r * r
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		local root = rp.Alive and rp.Root
 		if root then
@@ -259,6 +259,7 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 		return nil
 	end
 	local e = pool[index]
+	e.WaveId = nil -- set by pourWave for wave members
 	local elite = (opts and opts.Elite) and not isBoss or false
 	local tier = ctx.RunManager.GetTier()
 	local D = Config.Difficulty
