@@ -714,6 +714,13 @@ local function startWave()
 	-- the ones already queued), Healers / Burrowers within their caps (pickType)
 	local rangedRoom = Config.Enemies.MaxLiveRanged - liveRanged()
 	table.clear(waveQueue)
+	-- heavy types are capped per wave (Config.Waves.TypeCap: Base + PerWave x (N - 1)); the
+	-- rest of their share is re-picked (a sudden side of Brutes was the stage-3 damage spike)
+	local typeCount: { [string]: number } = {}
+	local function capped(typeId: string): boolean
+		local c = W.TypeCap and W.TypeCap[typeId]
+		return c ~= nil and (typeCount[typeId] or 0) >= math.floor(c.Base + c.PerWave * (n - 1))
+	end
 	for d = 1, dirs do
 		-- each side reads as one main type (never Ranged / NoWave) plus a mixed share
 		local mainType = waveType(row, n, false, true)
@@ -731,6 +738,16 @@ local function startWave()
 				end
 				introduce(typeId)
 			end
+			for _ = 1, 3 do
+				if not capped(typeId) then
+					break
+				end
+				typeId = waveType(row, n, false, true)
+			end
+			if capped(typeId) then
+				typeId = "Slime"
+			end
+			typeCount[typeId] = (typeCount[typeId] or 0) + 1
 			table.insert(waveQueue, { Type = typeId, Angle = angle, Spread = W.ArcRadians, Elite = false, Rp = rp })
 		end
 	end
