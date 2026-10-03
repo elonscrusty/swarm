@@ -35,6 +35,17 @@ preview.advance(2)
 local RM = preview.server("RunManager")
 local SM = preview.server("StageManager")
 local Spawner = preview.server("EnemySpawner")
+-- gold by source (caller file:line), to see where run gold comes from
+local GoldSys = preview.server("GoldSystem")
+local goldBy = {}
+local rawAdd = GoldSys.AddRunGold
+GoldSys.AddRunGold = function(rp, base)
+	local paid = rawAdd(rp, base)
+	local src, line = debug.info(2, "sl")
+	local key = string.match(src or "?", "([%w_]+)$") .. ":" .. tostring(line)
+	goldBy[key] = (goldBy[key] or 0) + paid
+	return paid
+end
 if n == 1 then
 	preview.remote("StartRun"):FireServer("Solo")
 	preview.advance(1.5)
@@ -145,5 +156,13 @@ for _, r in ipairs(rows) do
 end
 for _, g in ipairs(gaps) do
 	preview.log("GAP " .. g)
+end
+do
+	local keys = {}
+	for k in pairs(goldBy) do table.insert(keys, k) end
+	table.sort(keys, function(x, y) return goldBy[x] > goldBy[y] end)
+	local parts = {}
+	for _, k in ipairs(keys) do table.insert(parts, k .. "=" .. goldBy[k]) end
+	preview.log("GOLD BY SOURCE " .. table.concat(parts, " "))
 end
 preview.log(string.format("RESULT players=%d time=%.0fs level=%d gold=%d gaps>45s=%d bursts(3+ in 3s)=%d", n, t, rps[1].Level, rps[1].Gold, #gaps, bursts))

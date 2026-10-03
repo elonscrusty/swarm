@@ -24,7 +24,9 @@ MetaUpgradeData.Upgrades = {
 		Description = "+10 max HP per level.",
 		MaxLevel = 20,
 		BaseCost = 200,
-		CostGrowth = 1.5,
+		-- 1.2 (was 1.5): 20 levels at x1.5 ended at 443k gold for the last level
+		-- (a wall); x1.2 tops out near the other tracks' totals (~37k for all 20).
+		CostGrowth = 1.2,
 		PerLevel = { maxHpFlat = 10 },
 		Color = Color3.fromRGB(255, 90, 110),
 	},
@@ -35,7 +37,9 @@ MetaUpgradeData.Upgrades = {
 		Description = "+5% damage per level.",
 		MaxLevel = 20,
 		BaseCost = 300,
-		CostGrowth = 1.5,
+		-- 1.2 (was 1.5): 20 levels at x1.5 ended at 665k gold for the last level
+		-- (a wall); x1.2 tops out near the other tracks' totals (~56k for all 20).
+		CostGrowth = 1.2,
 		PerLevel = { might = 0.05 },
 		Color = Color3.fromRGB(230, 70, 60),
 	},

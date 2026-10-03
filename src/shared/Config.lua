@@ -81,7 +81,9 @@ Config.Stages = {
 	-- much earlier than the old 15:00 boss, so stage 1 is lighter; then +BossHPPerExtraStage
 	-- per stage past the list.
 	BossHPByStage = { 0.3, 0.75, 1.1, 1.5, 2.0 },
-	BossHPPerExtraStage = 0.5,
+	-- 0.45 (was 0.5): with the Endless boss growth on top, stage 6 was a x1.44 jump over
+	-- stage 5 (stages 2-5 step x1.3-1.5); now x1.35, then x1.29, x1.25 ...
+	BossHPPerExtraStage = 0.45,
 	BossSpawnOffset = 12, -- the Queen climbs out this far behind the portal
 	-- regular enemies kept alive during the Queen fight: this share of the normal live
 	-- target, at most Config.Boss.MinionCapDuringBoss and at least BossMinionMin
@@ -117,7 +119,7 @@ Config.Stages = {
 --     extra      = min(stage - LastNormalStage, MaxExtraStages)   (0 before that)
 --     enemy HP   x(1 + HPPerStage * extra)          → at most x7 at the cap
 --     damage     x(1 + DamagePerStage * extra)      → at most x4
---     boss HP    x(1 + BossHPPerStage * extra)      → at most x5.5
+--     boss HP    x(1 + BossHPPerStage * extra)      → at most x4
 --     spawns     x min(1 + SpawnPerStage * extra, SpawnMultCap) (live target, mini-waves)
 --   Live enemies stay capped by Config.Enemies.MaxLive (and the surge by it too), so the
 --   server load is bounded however deep a run goes; past the cap only HP / damage grow.
@@ -128,7 +130,7 @@ Config.Endless = {
 	LastNormalStage = 5, -- the Standard curve's last tuned stage (#Config.Stages.BossHPByStage)
 	HPPerStage = 0.2,
 	DamagePerStage = 0.1,
-	BossHPPerStage = 0.15,
+	BossHPPerStage = 0.1, -- was 0.15 (see Config.Stages.BossHPPerExtraStage)
 	SpawnPerStage = 0.05,
 	SpawnMultCap = 1.5,
 	MaxExtraStages = 30, -- growth stops this many stages past LastNormalStage (stage 35)

@@ -105,25 +105,18 @@ local ok, err = S.runMain(function()
 	state:SetAttribute("Phase", "Running")
 	state:SetAttribute("Participants", 2)
 	TeamUI.Update(0.1, state, true)
-	local revive = root:FindFirstChild("HoldRevive")
-	check("nearby fallen teammate exposes held revive control", revive ~= nil and revive.Visible)
-	if revive then
-		local active
-		preview.remote("ReviveHold").OnServerEvent:Connect(function(_player, on) active = on end)
-		local finger = { UserInputType = env.Enum.UserInputType.Touch }
-		revive.InputBegan:_fire(finger)
-		preview.advance(0.05)
-		check("revive starts only on a held press", active == true)
-		R.services.UserInputService.WindowFocusReleased:_fire()
-		preview.advance(0.05)
-		check("focus loss cancels held revive", active == false)
-		revive.InputBegan:_fire(finger)
-		preview.advance(0.05)
-		mate.Character.PrimaryPart.Position = env.Vector3.new(100, 0, 0)
-		TeamUI.Update(0.1, state, true)
-		preview.advance(0.05)
-		check("leaving revive range cancels held press", active == false and not revive.Visible)
-	end
+	-- partner revive is proximity only (owner): no button, the ring + hint over the fallen
+	-- teammate driven by ReviveProgress
+	check("no hold-revive button remains", root:FindFirstChild("HoldRevive") == nil)
+	local marker = TeamUI.Elements().Markers[mate]
+	check("fallen teammate in range shows the revive ring with the stand-here hint", marker ~= nil and marker.Holder.Visible and string.find(marker.Label.Text, "STAND HERE", 1, true) ~= nil)
+	mate:SetAttribute("ReviveProgress", 0.5)
+	TeamUI.Update(0.1, state, true)
+	check("revive progress labels the ring", marker ~= nil and string.find(marker.Label.Text, "50%", 1, true) ~= nil)
+	mate:SetAttribute("ReviveProgress", 0)
+	mate.Character.PrimaryPart.Position = env.Vector3.new(100, 0, 0)
+	TeamUI.Update(0.1, state, true)
+	check("out of range the marker shows the distance instead", marker ~= nil and string.find(marker.Label.Text, " M", 1, true) ~= nil and string.find(marker.Label.Text, "STAND HERE", 1, true) == nil)
 	local UI = preview.client("UIBuilder")
 	UI.Init({})
 	preview.advance(0.2)
