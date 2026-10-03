@@ -408,9 +408,9 @@ local function showNext(now: number)
 	setIcon(tip.Icon)
 	layout()
 	ui.Card.Visible = true
-	-- slide in from the side of what it explains (or rise from below)
-	local d = (current :: any).Dir
-	UIAnim.SlideIn(ui.Card, Vector2.new(0, d < 0 and -28 or 28), 0)
+	-- scale-only entrance: layout() owns the card's Position (a Position tween would
+	-- override any relayout during it and leave the card at a stale spot)
+	UIAnim.Pop(ui.Card, 0, 0.9)
 	if not ClientSettings.Reduced() then
 		-- the icon spins in, the TIP badge pops, a glint crosses the card, and the ring
 		-- around the explained element pulses out once

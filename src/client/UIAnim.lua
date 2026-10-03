@@ -87,18 +87,6 @@ function UIAnim.Punch(obj: GuiObject, amount: number?)
 	t:Play()
 end
 
--- Slides in from an offset (in pixels) while growing to full size, staggered by `delay`.
-function UIAnim.SlideIn(obj: GuiObject, offset: Vector2, delay: number?)
-	local target = obj.Position
-	obj.Position = target + UDim2.fromOffset(offset.X, offset.Y)
-	local s = scaleOf(obj)
-	s.Scale = 0.94
-	task.delay(delay or 0, function()
-		UIAnim.Tween(obj, 0.4, { Position = target }, Enum.EasingStyle.Quint)
-		UIAnim.Tween(s, 0.4, { Scale = 1 }, Enum.EasingStyle.Quint)
-	end)
-end
-
 -- Fades a frame's background from invisible to `target` transparency.
 function UIAnim.FadeIn(obj: GuiObject, target: number, seconds: number?)
 	obj.BackgroundTransparency = 1

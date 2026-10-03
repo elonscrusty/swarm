@@ -342,7 +342,8 @@ MenuParty._card = function()
 		card.Title.Text = inv.FromName .. " invites you to their party"
 		card.Total = math.max(1, (deadlines[inv.FromId] or 0) - os.clock())
 		card.Holder.Visible = true
-		UIAnim.SlideIn(card.Holder, Vector2.new(0, -40), 0)
+		-- scale-only entrance: the layout owns the card's Position
+		UIAnim.Pop(card.Holder, 0, 0.9)
 		-- ticks on every screen (the lobby's Update stops during a run)
 		if not card.Ticking then
 			card.Ticking = true
