@@ -34,7 +34,7 @@ global Playwright install (`/opt/pw-browsers`); never run `playwright install`.
 
 | Scene | Shows |
 |---|---|
-| `menu` | lobby world + lighting, lobby home screen, camera at the lobby `MenuCamera` part; `--set save=failing\|memory` shows the "progress isn't being saved" notice; `--set endless=on` the ENDLESS switch on |
+| `menu` | lobby world + lighting, lobby home screen, camera at the lobby `MenuCamera` part; `--set save=failing\|memory` shows the "progress isn't being saved" notice; `--set endless=on` the ENDLESS switch on; `--set lastrun=won\|fell\|left [--set lastmode=Duo]` a saved LastRun (the LAST RUN card; hidden on phones in landscape), `--set retry=on` taps RETRY and checks the StartRun the server got |
 | `characters`, `upgrades` | lobby screens, opened with the `OpenPanel` remote; upgrades: `--set tab=shop` the SHOP tab; characters: `--set inspect=Ranger` taps a hero, `--set owned=all` owns every hero (Queen Slayer done) |
 | `settings`, `stats` | taps the button whose text is SETTINGS / STATS (stats is skipped with a note if the UI has none); `--set tab=achievements` opens the ACHIEVEMENTS tab |
 | `countdown` | Duo countdown started by the player, a teammate joined (`SwarmState` attributes), with the starter's curses on the panel (`--set curses=Frenzy,Horde\|none`; `--set endless=on` the ENDLESS line) |

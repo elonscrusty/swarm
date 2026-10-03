@@ -951,7 +951,7 @@ local function relayout()
 		-- the LAST RUN card (when there is one) sits over the curse row
 		local lastShown = ui.LastRun ~= nil and ui.LastRun.Has() and lastStatus == "Modes"
 		if ui.LastRun then
-			local lastH = 58
+			local lastH = 76
 			if lastShown then
 				y -= G + lastH
 				place(ui.LastRun.Frame, M, y, w, lastH)
@@ -1023,7 +1023,7 @@ local function relayout()
 		-- the LAST RUN card above the column, centred with it, only where the whole column
 		-- still fits (phones in landscape have no room: the card stays hidden there)
 		if ui.LastRun then
-			local lastH = 60
+			local lastH = 78
 			local wanted = ui.LastRun.Has() and lastStatus == "Modes"
 			local withCard = colH + G + lastH
 			local cardTop = math.max(chipY + 64, (H - withCard) / 2)

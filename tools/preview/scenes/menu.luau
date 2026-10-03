@@ -28,11 +28,17 @@ if preview.args.retry == "on" then
 	end)
 	C.settle(1)
 	local retry = preview.findGui(function(g) return g:IsA("GuiButton") and g.Name == "Retry" and preview.isShown(g) end)
-	assert(retry[1], "the LAST RUN card must show a RETRY button")
-	preview.click(retry[1])
-	C.settle(0.5)
-	assert(got == (preview.args.lastmode or "Solo"), "RETRY must fire StartRun with the last mode, got " .. tostring(got))
-	preview.log("PASS RETRY fired StartRun(" .. tostring(got) .. ")")
+	local vp = workspace.CurrentCamera.ViewportSize
+	if not retry[1] and vp.X > vp.Y and vp.Y < 600 then
+		-- phones in landscape have no room for the card (LobbyScreen hides it there)
+		preview.log("SKIP LAST RUN card hidden on a short landscape screen (no room)")
+	else
+		assert(retry[1], "the LAST RUN card must show a RETRY button")
+		preview.click(retry[1])
+		C.settle(0.5)
+		assert(got == (preview.args.lastmode or "Solo"), "RETRY must fire StartRun with the last mode, got " .. tostring(got))
+		preview.log("PASS RETRY fired StartRun(" .. tostring(got) .. ")")
+	end
 end
 if preview.args.save then
 	C.setPlayer({ SaveStatus = preview.args.save })

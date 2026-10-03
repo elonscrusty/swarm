@@ -1,7 +1,7 @@
 --[[
 	MenuLastRun.lua
-	The lobby home's LAST RUN card: one compact row (result, hero, mode, difficulty, stage,
-	time, kills, gold kept) built from the saved profile's LastRun (RunManager writes it
+	The lobby home's LAST RUN card: one compact row (result and stage, hero / mode /
+	difficulty / time, kills and gold kept) built from the saved profile's LastRun (RunManager writes it
 	when a run ends, DataService sanitises it, ProfileSync carries it) and a RETRY button.
 
 	RETRY is the same validated start as the SOLO / DUO / TRIO buttons: it fires the
@@ -22,7 +22,6 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local DifficultyData = require(Shared:WaitForChild("DifficultyData"))
 local UIKit = require(script.Parent.UIKit)
-local Icons = require(script.Parent.Icons)
 local MenuParty = require(script.Parent.MenuParty)
 
 local MenuLastRun = {}
@@ -52,28 +51,34 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 	})
 	local profile: { [string]: any }? = nil
 	local buttonW = 112
-	local iconHolder = UIKit.new("Frame", { Name = "ResultIcon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.5, 0), Size = UDim2.fromOffset(30, 30) }, face)
-	local icons = {
-		Won = Icons.Draw(iconHolder, "trophy", { Size = 30, Color = P.gold_300 }),
-		Fell = Icons.Draw(iconHolder, "skull", { Size = 30, Color = P.crimson_300 }),
-		Left = Icons.Draw(iconHolder, "portal", { Size = 30, Color = P.ivory_300 }),
-	}
-	local column = UIKit.new("Frame", { Name = "Text", BackgroundTransparency = 1, Position = UDim2.fromOffset(54, 0), Size = UDim2.new(1, -(54 + buttonW + 22), 1, 0) }, face)
+	-- three short lines: the result, the run (hero / mode / difficulty / time), the haul
+	local column = UIKit.new("Frame", { Name = "Text", BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, -(16 + buttonW + 22), 1, 0) }, face)
+	local lineH = { UIKit.TS(12) + 4, UIKit.TS(14) + 4, UIKit.TS(13) + 4 }
+	local textH = lineH[1] + lineH[2] + lineH[3] + 2
 	local title = UIKit.text(column, "Label", "", {
 		Name = "Title",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 0, 0.5, -1),
-		Size = UDim2.new(1, 0, 0, UIKit.TS(13) + 4),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, -textH / 2 + lineH[1] / 2),
+		Size = UDim2.new(1, 0, 0, lineH[1]),
 		TextColor3 = P.gold_300,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-	}, 13)
+	}, 12)
 	local sub = UIKit.text(column, "Small", "", {
 		Name = "Summary",
-		Position = UDim2.new(0, 0, 0.5, 1),
-		Size = UDim2.new(1, 0, 0, UIKit.TS(14) + 4),
-		TextColor3 = P.ivory_200,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, -textH / 2 + lineH[1] + 1 + lineH[2] / 2),
+		Size = UDim2.new(1, 0, 0, lineH[2]),
+		TextColor3 = P.ivory_100,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, 14)
+	local haul = UIKit.text(column, "Small", "", {
+		Name = "Haul",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, textH / 2 - lineH[3] / 2),
+		Size = UDim2.new(1, 0, 0, lineH[3]),
+		TextColor3 = P.ivory_300,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, 13)
 
 	local function toast(str: string, color: Color3?)
 		if ctx.Toast then
@@ -144,10 +149,6 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 		end
 		local won = last.Won == true
 		local fell = not won and type(last.DeathCause) == "string"
-		local left = not won and not fell
-		icons.Won.Visible = won
-		icons.Fell.Visible = fell
-		icons.Left.Visible = left
 		local modeDef = (Config.Modes :: any)[last.Mode]
 		local modeName = modeDef and modeDef.DisplayName or tostring(last.Mode or "Solo")
 		if won then
@@ -162,18 +163,20 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 		end
 		local hero = CharacterData.Characters[last.CharacterId]
 		local tier = DifficultyData.Tiers[last.Difficulty]
-		local parts = {
+		sub.Text = table.concat({
 			hero and hero.Name or "Hero",
 			modeName,
 			tier and tier.Name or "Standard",
 			UIKit.formatTime(tonumber(last.Time) or 0),
+		}, " · ")
+		local parts = {
 			UIKit.formatNumber(tonumber(last.Kills) or 0) .. " kills",
 			"+" .. UIKit.formatNumber(tonumber(last.Gold) or 0) .. " gold",
 		}
 		if fell then
 			table.insert(parts, "Fell to " .. tostring(last.DeathCause))
 		end
-		sub.Text = table.concat(parts, " · ")
+		haul.Text = table.concat(parts, " · ")
 	end
 
 	return {
@@ -189,7 +192,7 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 				buttonW = bw
 				button.Instance.Size = UDim2.fromOffset(bw, Theme.Size.TapMin)
 				button.SetIcon(bw >= 112 and "cycle" or nil)
-				column.Size = UDim2.new(1, -(54 + bw + 22), 1, 0)
+				column.Size = UDim2.new(1, -(16 + bw + 22), 1, 0)
 			end
 		end,
 	}

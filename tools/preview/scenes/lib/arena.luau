@@ -211,6 +211,7 @@ function A.build(opts)
 			StageArena = arenaName,
 			PortalPos = s.portal and s.portal.Pos or nil,
 			PortalHint = opts.portalHint == true,
+			PortalReveal = opts.portalReveal or 0,
 			PortalCharge = opts.portalCharge or 0,
 			PortalLockLeft = opts.lockLeft or 0,
 			SurgeLeft = opts.surgeLeft or 0,

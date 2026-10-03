@@ -16,8 +16,6 @@
 	there is no portal; the rings move with BulkMoveTo. StageUI calls Update every frame.
 ]]
 
-local Players = game:GetService("Players")
-
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
@@ -27,7 +25,6 @@ local Accessibility = require(script.Parent.Accessibility)
 
 local PortalBeacon = {}
 
-local player = Players.LocalPlayer
 local P = Theme.Palette
 local TAU = math.pi * 2
 local UPRIGHT = CFrame.Angles(0, 0, math.pi / 2) -- a cylinder's axis is X: stand it up
@@ -49,12 +46,10 @@ local halo: Part? = nil
 local cap: Part? = nil
 local rings: { { Part } } = {}
 local burst: { Part } = {}
-local ringCFrames: { CFrame } = {}
 local ringParts: { BasePart } = {}
 local shown = false
 local lastReveal = 0
 local burstAt = -math.huge
-local pos: Vector3? = nil
 local lastColorKey = ""
 local lastReduced: boolean? = nil
 
@@ -139,7 +134,6 @@ local function park()
 	if #list > 0 then
 		workspace:BulkMoveTo(list, cfs, Enum.BulkMoveMode.FireCFrameChanged)
 	end
-	pos = nil
 	lastColorKey = ""
 end
 
@@ -170,14 +164,11 @@ function PortalBeacon.Update(state: Configuration, inRun: boolean)
 	local now = os.clock()
 	local isReduced = reduced()
 	if reveal ~= lastReveal then
-		-- a new reveal (not a mid-run join: lastReveal is 0 only before the first one)
-		if lastReveal ~= 0 or player:GetAttribute("InRun") == true then
-			burstAt = ClientSettings.Flashes() and -math.huge or now
-		end
+		-- a new reveal (a mid-run joiner gets the burst too: it shows them the portal)
+		burstAt = ClientSettings.Flashes() and -math.huge or now
 		lastReveal = reveal
 	end
 	shown = true
-	pos = ppos
 	local base: Vector3 = ppos
 	local color, key = colorFor(state)
 	if key ~= lastColorKey or isReduced ~= lastReduced then

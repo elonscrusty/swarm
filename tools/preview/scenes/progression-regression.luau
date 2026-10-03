@@ -15,8 +15,10 @@ end
 preview.startServer()
 preview.advance(1)
 local XP = preview.server("XPSystem")
-assert(XP.XPNeeded(1) == 28 and XP.XPNeeded(20) == 180, "early XP must make level-ups harder without timers")
-assert(XP.XPNeeded(21) == 184 and XP.XPNeeded(50) == 300, "late XP costs must keep growing")
+assert(XP.XPNeeded(1) == 42 and XP.XPNeeded(20) == 270, "early XP must make level-ups harder without timers")
+assert(XP.XPNeeded(21) == 276 and XP.XPNeeded(50) == 450, "late XP costs must keep growing")
+assert(XP.CoopShare() == 1, "a solo hero gets every gem's full XP")
+assert(Config.XP.CoopShare[2] < 1 and Config.XP.CoopShare[3] < Config.XP.CoopShare[2], "shared gem XP must shrink with the team size")
 local RM = preview.server("RunManager")
 local LU = preview.server("LevelUpSystem")
 local player = game:GetService("Players").LocalPlayer
@@ -139,8 +141,8 @@ LU.OpenChest(rp)
 assert(holds == 0, "ordinary chest must not pause combat")
 rp.Level, rp.XP, rp.XPNeeded = 20, 0, XP.XPNeeded(20)
 local before = coins
-XP.GiveXP(rp, 366)
-assert(rp.Level == 22 and rp.XP == 2 and rp.XPNeeded == 188, "bulk XP must conserve remainder across late costs")
+XP.GiveXP(rp, 270 + 276 + 2)
+assert(rp.Level == 22 and rp.XP == 2 and rp.XPNeeded == 282, "bulk XP must conserve remainder across late costs")
 assert(math.abs(coins - before - 2 * 25 * 1.35) < 1e-6 and not rp.Offer and not rp.Paused,
 	"future bulk XP must become coins without any panel")
 preview.log("PASS: twelve ranks, harder XP, immediate choices, evolution, coins and ordinary chest")

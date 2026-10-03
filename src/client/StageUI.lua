@@ -2,9 +2,15 @@
 	StageUI.lua
 	The client side of the stage loop (server: StageManager), in the HUD's style:
 
-	  portal arrow   after Config.Stages.HintAfterSeconds (SwarmState PortalHint) an arrow
-	                 at the screen edge points at this stage's portal, with the distance;
-	                 when the portal is on screen a small marker floats over it instead
+	  portal reveal  SwarmState PortalReveal counts up when a stage's portal can be charged
+	                 (StageManager): a banner "THE PORTAL HAS APPEARED" with a sound
+	                 (Hud.Announce), the beacon pillar and pulsing floor ring over the
+	                 portal (PortalBeacon, updated from here every frame) and the minimap
+	                 ping (MiniMap). Owner: the portal must be very evident when it spawns.
+	  portal arrow   from the reveal on (SwarmState PortalHint; Config.Stages.HintAfterSeconds
+	                 can delay it) an arrow at the screen edge points at this stage's
+	                 portal, with the distance; when the portal is on screen a small
+	                 marker floats over it instead
 	  charge ring    24 rune segments over the portal that fill while someone stands in
 	                 its circle ("Stand here to open" / "Opening 60%")
 	  choice panel   the portal opened (remote PortalOffer): stage cleared, the run so far,
@@ -35,6 +41,8 @@ local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local ClientSettings = require(script.Parent.ClientSettings)
+local Accessibility = require(script.Parent.Accessibility)
+local PortalBeacon = require(script.Parent.PortalBeacon)
 
 local StageUI = {}
 
@@ -50,6 +58,23 @@ local ui: { [string]: any } = {}
 local offer: { [string]: any }? = nil
 local chosen = false
 local travel = { Active = false, Since = 0 }
+local lastReveal: number? = nil -- SwarmState PortalReveal seen last (nil = not in a run)
+
+-- The portal reveal: banner + sound (the beacon and the minimap ping watch the attribute
+-- themselves). A mid-run joiner sees the banner too: it tells them where to go.
+local function checkReveal(state: Configuration)
+	local reveal = state:GetAttribute("PortalReveal") or 0
+	if lastReveal == nil then
+		lastReveal = 0
+	end
+	if reveal ~= lastReveal then
+		lastReveal = reveal
+		if reveal > 0 then
+			Hud.Announce("THE PORTAL HAS APPEARED", "Follow the arrow and stand in its circle to open it",
+				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear")
+		end
+	end
+end
 
 ------------------------------------------------------------------------------------------
 -- Build
@@ -545,8 +570,14 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 		if travel.Active then
 			endTravel()
 		end
+		if lastReveal ~= nil then
+			lastReveal = nil
+			PortalBeacon.Clear()
+		end
 		return
 	end
+	checkReveal(state)
+	PortalBeacon.Update(state, not travel.Active)
 	-- the travel fade lifts once the next stage runs (or after a safety timeout)
 	if travel.Active and ((stagePhase ~= "Travel" and os.clock() - travel.Since > 0.5) or os.clock() - travel.Since > 8) then
 		endTravel()

@@ -9,7 +9,10 @@
 	                into one "World" frame; scrolling the map moves only that frame
 	  player        a gold disc with a facing tick at the centre (the root's look direction)
 	  teammates     blue dots (dimmed while fallen)
-	  portal        a ring in the stage's colour: ivory while dormant / to find, gold while
+	  portal        a ring in the stage's colour (clamped to the map's edge while the portal
+	                is outside the view, so it is always on the map), pinged with expanding
+	                rings when the portal is revealed (SwarmState PortalReveal; not with
+	                Reduced effects): ivory while dormant / to find, gold while
 	                charging, crimson during the boss and the surge, bright gold once open
 	  loot          chests (gold squares), shrines (ivory), the altar (amber ring); gone
 	                once opened / spent / claimed
@@ -132,6 +135,14 @@ local function buildMarkers(world: Frame)
 	ui.PortalCore = dot(ui.Portal, "Core", 3, P.ivory_100, 7, true)
 	ui.PortalCore.Position = UDim2.fromScale(0.5, 0.5)
 	ui.PortalCore.Visible = true
+	-- the reveal ping: three rings that expand from the portal marker (pooled)
+	ui.Pings = {}
+	for i = 1, 3 do
+		local f, st = ring(ui.Portal, "Ping", 11, P.ivory_100, 5)
+		f.Position = UDim2.fromScale(0.5, 0.5)
+		f.BackgroundTransparency = 1
+		ui.Pings[i] = { Frame = f, Stroke = st }
+	end
 	ui.Altar, ui.AltarStroke = ring(world, "Altar", 9, P.amber_300, 5)
 	ui.Boss = dot(world, "Boss", 11, P.crimson_500, 8, false)
 	ui.Boss.Rotation = 45
@@ -373,6 +384,29 @@ local function portalColor(state: Configuration): Color3
 	return P.ivory_100
 end
 
+local lastReveal = 0
+local pingAt = -math.huge
+local PING_SECONDS = 2.4
+
+-- The portal reveal ping (three rings, 0.4 s apart, growing to ~40 px and fading).
+local function updatePing(now: number, color: Color3)
+	local pings = ui.Pings
+	if not pings then
+		return
+	end
+	for i, ping in ipairs(pings) do
+		local t = (now - pingAt - (i - 1) * 0.4) / (PING_SECONDS - 0.8)
+		local on = t >= 0 and t <= 1
+		setVisible(ping.Frame, on)
+		if on then
+			local d = 11 + 34 * t
+			ping.Frame.Size = UDim2.fromOffset(d, d)
+			ping.Stroke.Color = color
+			ping.Stroke.Transparency = t * t
+		end
+	end
+end
+
 local function updateMoving(state: Configuration, root: BasePart)
 	-- scroll the world so the player sits at the centre; turn the player tick
 	local pos = root.Position
@@ -388,13 +422,28 @@ local function updateMoving(state: Configuration, root: BasePart)
 	local portalOn = typeof(ppos) == "Vector3"
 	setVisible(ui.Portal, portalOn)
 	if portalOn then
-		placeAt(ui.Portal, ppos.X, ppos.Z)
-			local c = Accessibility.Color(portalColor(state), (state:GetAttribute("StagePhase") == "Boss" or state:GetAttribute("StagePhase") == "Surge") and "Danger" or "Loot")
+		-- outside the view: pinned to the map's edge in the portal's direction
+		local dx, dz = (ppos.X - pos.X) * scale, (ppos.Z - pos.Z) * scale
+		local edge = half - 7
+		local m = math.max(math.abs(dx), math.abs(dz))
+		if m > edge then
+			dx, dz = dx * edge / m, dz * edge / m
+		end
+		placeAt(ui.Portal, pos.X + dx / scale, pos.Z + dz / scale)
+		local c = Accessibility.Color(portalColor(state), (state:GetAttribute("StagePhase") == "Boss" or state:GetAttribute("StagePhase") == "Surge") and "Danger" or "Loot")
 		if ui.PortalStroke.Color ~= c then
 			ui.PortalStroke.Color = c
 			ui.Portal.BackgroundColor3 = c
 			ui.PortalCore.BackgroundColor3 = c
 		end
+		local reveal = state:GetAttribute("PortalReveal") or 0
+		if reveal ~= lastReveal then
+			lastReveal = reveal
+			if reveal > 0 and not ClientSettings.Reduced() then
+				pingAt = os.clock()
+			end
+		end
+		updatePing(os.clock(), c)
 	end
 
 	-- teammates
@@ -514,6 +563,8 @@ function MiniMap.Update(_dt: number, state: Configuration, inRun: boolean)
 		MiniMap.Refresh()
 		if not inRun then
 			arenaModel = nil
+			lastReveal = 0
+			pingAt = -math.huge
 		end
 	end
 	if not ui.Holder.Visible then
