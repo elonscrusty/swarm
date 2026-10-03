@@ -1,1 +1,22 @@
-{}
+{
+ "BossRoar": {
+  "id": 115727784015250,
+  "status": "moderation: Reviewing"
+ },
+ "Chest": {
+  "id": 108846210232931,
+  "status": "moderation: Reviewing"
+ },
+ "Click": {
+  "id": 110597616112633,
+  "status": "moderation: Reviewing"
+ },
+ "Coin": {
+  "id": 114449544869708,
+  "status": "moderation: Reviewing"
+ },
+ "EnemyDeath": {
+  "id": 90139009200502,
+  "status": "moderation: Reviewing"
+ }
+}

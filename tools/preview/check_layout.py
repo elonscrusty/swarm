@@ -11,13 +11,17 @@ reports, per scene and device:
   TOPBAR     visible text under Roblox's own top-bar buttons (menu / chat ghost)
   COVERED    visible text partly hidden under an opaque panel or button painted later
   TRUNCATED  text cut with "..." (information only; lists and long names truncate on purpose)
+  CLIPPED    a text line sliced by a clipping frame so only a sliver of it shows (information
+             only; scroll lists clip their edge rows on purpose, a pinned button over a
+             scroll area or a too-short panel shows up here)
+  SMALL      text under SMALL_TEXT_PX points tall on a phone device (information only)
 
 Usage:
   python3 tools/preview/check_layout.py DIR [DIR ...] [--strict] [--quiet]
   python3 tools/preview/check_layout.py out/sweep/levelup-iphone.json
 
 Exit code 1 when any OVERLAP / OFFSCREEN / TOPBAR / COVERED finding is left after the allowlist
-(--strict also fails on TRUNCATED). The allowlist below names known, intended cases.
+(--strict also fails on TRUNCATED; CLIPPED / SMALL never fail). The allowlist below names known, intended cases.
 """
 from __future__ import annotations
 
@@ -33,6 +37,10 @@ ALLOW = [
 MIN_OVERLAP_PX = 3.0  # both axes
 MIN_OVERLAP_FRAC = 0.2  # of the smaller glyph box
 COVER_ALPHA = 0.55  # a box at least this opaque drawn between two texts covers the first
+CLIP_SLIVER = (0.05, 0.7)  # visible height fraction of a text line that reads as "sliced"
+SMALL_TEXT_PX = 10.0  # line height in device points (phones) below which text is hard to read
+PHONES = ("iphone", "phone", "phone-portrait")
+INFO = ("TRUNCATED", "CLIPPED", "SMALL")
 
 
 def clip_rect(r, c):
@@ -166,6 +174,7 @@ def check_doc(path, strict=False):
             continue
         if not contains(screen, br, pad=4.0):
             findings.append(("OFFSCREEN", bn, "panel %.0fx%.0f" % (br[2] - br[0], br[3] - br[1]), br))
+    info_seen = set()  # CLIPPED / SMALL once per GUI object
     for t in texts:
         r = t["rect"]
         if t["alpha"] < 0.25:
@@ -179,6 +188,16 @@ def check_doc(path, strict=False):
                 break
         if t["truncated"]:
             findings.append(("TRUNCATED", t["name"], t["text"], r))
+        raw = t["raw"]
+        rh = raw[3] - raw[1]
+        if rh > 0:
+            frac = (r[3] - r[1]) / rh
+            if CLIP_SLIVER[0] <= frac <= CLIP_SLIVER[1] and rh >= 8 and ("C", t["index"]) not in info_seen:
+                info_seen.add(("C", t["index"]))
+                findings.append(("CLIPPED", t["name"], t["text"], r))
+        if device in PHONES and 0 < rh < SMALL_TEXT_PX and ("S", t["index"]) not in info_seen:
+            info_seen.add(("S", t["index"]))
+            findings.append(("SMALL", t["name"], "%s (%.1f pt)" % (t["text"], rh), r))
 
     # text partly hidden under an opaque panel painted later (a card or button lying over
     # the end of a caption); text fully under a later panel is simply covered, which is fine
@@ -262,7 +281,7 @@ def main(argv):
         print(__doc__)
         return 2
     bad = 0
-    total = {"OVERLAP": 0, "OFFSCREEN": 0, "TOPBAR": 0, "COVERED": 0, "TRUNCATED": 0}
+    total = {"OVERLAP": 0, "OFFSCREEN": 0, "TOPBAR": 0, "COVERED": 0, "TRUNCATED": 0, "CLIPPED": 0, "SMALL": 0}
     for p in paths:
         try:
             scene, device, findings = check_doc(p, strict)
@@ -270,20 +289,20 @@ def main(argv):
             print(f"{os.path.basename(p)}: could not read ({e})")
             bad += 1
             continue
-        hard = [f for f in findings if f[0] != "TRUNCATED" or strict]
-        soft = [f for f in findings if f[0] == "TRUNCATED" and not strict]
+        hard = [f for f in findings if f[0] not in INFO or (strict and f[0] == "TRUNCATED")]
+        soft = [f for f in findings if f not in hard]
         for f in findings:
             total[f[0]] += 1
         if hard:
             bad += 1
         if hard or (soft and not quiet):
-            print(f"== {scene} [{device}]: {len(hard)} problem(s), {len(soft)} truncated")
+            print(f"== {scene} [{device}]: {len(hard)} problem(s), {len(soft)} info (truncated / clipped / small)")
             for kind, name, text, r in hard:
                 print(f"   {kind:9s} {name}: {text!r} @ ({r[0]:.0f},{r[1]:.0f})-({r[2]:.0f},{r[3]:.0f})")
             if not quiet:
                 for kind, name, text, r in soft:
                     print(f"   {kind:9s} {name}: {text!r}")
-    print(f"checked {len(paths)} scene(s): {total['OVERLAP']} overlap, {total['OFFSCREEN']} off-screen, {total['TOPBAR']} under top bar, {total['COVERED']} part-covered, {total['TRUNCATED']} truncated; {bad} scene(s) with problems")
+    print(f"checked {len(paths)} scene(s): {total['OVERLAP']} overlap, {total['OFFSCREEN']} off-screen, {total['TOPBAR']} under top bar, {total['COVERED']} part-covered, {total['TRUNCATED']} truncated, {total['CLIPPED']} clipped, {total['SMALL']} small; {bad} scene(s) with problems")
     return 1 if bad else 0
 
 

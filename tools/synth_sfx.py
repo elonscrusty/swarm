@@ -226,8 +226,8 @@ def s_swing():
 def s_hurt():
     n = int(0.32 * SR)
     punch = sine_sweep(280, 100, 0.32, 0.5) * env_ad(n, 0.002, 0.06)
-    crunch = lp(noise(0.32), 1300) * env_ad(n, 0.001, 0.03)
-    grunt = lp(np.sign(np.sin(sweep_phase(120, 85, n))), 700) * env_ad(n, 0.01, 0.07) * 0.35
+    crunch = lp(bp(noise(0.32), 850, 1.2), 2500) * env_ad(n, 0.001, 0.035) * 1.6
+    grunt = lp(np.sign(np.sin(sweep_phase(190, 130, n))), 900) * env_ad(n, 0.01, 0.07) * 0.45
     return fade(soft_clip(punch + crunch * 0.7 + grunt, 1.3), 0.001, 0.05)
 
 

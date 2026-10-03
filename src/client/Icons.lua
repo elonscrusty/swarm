@@ -426,6 +426,16 @@ local DEFAULT: { [string]: Colors } = {
 	Fletching = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.wood_400 },
 	Precision = { Main = P.ivory_200, Accent = P.crimson_400, Extra = P.gold_400 },
 	Renewal = { Main = P.moss_300, Accent = P.fx_heal, Extra = P.moss_500 },
+	GiantsBane = { Main = P.steel_200, Accent = P.crimson_400, Extra = P.wood_400 },
+	Thornhide = { Main = P.moss_400, Accent = P.ivory_200, Extra = P.moss_200 },
+	BloodRune = { Main = P.stone_400, Accent = P.crimson_400, Extra = P.stone_200 },
+	AegisCharm = { Main = P.gold_400, Accent = P.slate_300, Extra = P.gold_300 },
+	Windstep = { Main = P.slate_200, Accent = P.gold_300, Extra = P.ivory_200 },
+	GildedPurse = { Main = P.leather_500, Accent = P.gold_300, Extra = P.gold_400 },
+	Stoneskin = { Main = P.stone_300, Accent = P.stone_600, Extra = P.stone_200 },
+	SecondWind = { Main = P.slate_200, Accent = P.fx_heal, Extra = P.ivory_200 },
+	EmberOil = { Main = P.slate_300, Accent = P.fx_fire, Extra = P.gold_300 },
+	Lionheart = { Main = P.crimson_400, Accent = P.gold_300, Extra = P.crimson_300 },
 	-- fallback cards and permanent upgrades
 	Gold = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_600 },
 	Heal = { Main = P.dirt_400, Accent = P.ivory_100, Extra = P.gold_300 },
@@ -1481,6 +1491,101 @@ DRAW.Luck = DRAW.clover
 DRAW.Ammo = DRAW.arrowFast
 DRAW.Candle = DRAW.candle
 DRAW.Growth = DRAW.sprout
+
+-- New passives (PassiveData): drawn fallbacks until their pictures are uploaded.
+DRAW.GiantsBane = function(c)
+	-- a great axe over a small crown (the giants it fells)
+	seg(c, 6, 21, 17, 6, 1.8, c.mono and c.main or c.extra)
+	box(c, 16.4, 7.4, 7.6, 9.6, c.main, 37, 3.2)
+	box(c, 14.6, 5.4, 2.2, 3.6, c.mono and c.back or c.light, 37, 0.8, c.mono and 0 or 0.5)
+	box(c, 6.6, 7.4, 2.8, 2.8, c.accent, 45, 0.4)
+	box(c, 3.8, 8.6, 2.4, 2.4, c.accent, 45, 0.4)
+	box(c, 9.4, 8.6, 2.4, 2.4, c.accent, 45, 0.4)
+	box(c, 6.6, 10.4, 7.4, 2.4, c.accent, 0, 0.6)
+end
+
+DRAW.Thornhide = function(c)
+	-- a round hide with thorns all around
+	for i = 0, 7 do
+		local a = math.rad(i * 45)
+		box(c, 12 + math.cos(a) * 8, 12 + math.sin(a) * 8, 3.4, 3.4, c.mono and c.main or c.accent, i * 45 + 45, 0.3)
+	end
+	dot(c, 12, 12, 7.4, c.main)
+	dot(c, 12, 12, 4, c.mono and c.back or c.extra)
+	dot(c, 12, 12, 1.8, c.main)
+end
+
+DRAW.BloodRune = function(c)
+	-- a rune stone with a blood drop
+	box(c, 12, 12.6, 14, 17, c.main, 0, 3.4)
+	box(c, 12, 12.6, 11, 14, c.mono and c.back or c.extra, 0, 2.6, c.mono and 0 or 0.55)
+	drop(c, 12, 13.6, 3.4, c.accent)
+	seg(c, 7, 6.4, 9, 8.4, 0.9, c.mono and c.main or c.accent)
+	seg(c, 17, 18.8, 15, 20.6, 0.9, c.mono and c.main or c.accent)
+end
+
+DRAW.AegisCharm = function(c)
+	-- a shield-shaped charm on a chain
+	arc(c, 12, 7, 5, 1.2, c.mono and c.main or c.extra, 6, 1, 18, 7)
+	box(c, 12, 11, 12, 7.6, c.main, 0, 1.8)
+	tri(c, 12, 14.4, 12, "down", c.main)
+	box(c, 12, 11.4, 8, 5, c.mono and c.back or c.accent, 0, 1.2)
+	tri(c, 12, 13.8, 8, "down", c.mono and c.back or c.accent)
+	dot(c, 12, 12.4, 1.8, c.mono and c.main or c.extra)
+end
+
+DRAW.Windstep = function(c)
+	-- three wind streaks and a forward chevron
+	seg(c, 3, 7, 13, 7, 1.8, c.main)
+	seg(c, 5, 12, 15, 12, 1.8, c.mono and c.main or c.extra)
+	seg(c, 3, 17, 13, 17, 1.8, c.main)
+	seg(c, 15.4, 6, 21, 12, 2.4, c.accent)
+	seg(c, 21, 12, 15.4, 18, 2.4, c.accent)
+end
+
+DRAW.GildedPurse = function(c)
+	DRAW.bag(c)
+	dot(c, 12, 15.4, 3.8, c.mono and c.back or c.accent)
+	box(c, 12, 15.4, 1.4, 4, c.mono and c.main or c.extra, 0, 0.5)
+end
+
+DRAW.Stoneskin = function(c)
+	-- stacked stone plates with a crack
+	box(c, 12, 7.4, 16, 6, c.main, 0, 1.8)
+	box(c, 8, 14, 9, 6, c.main, 0, 1.8)
+	box(c, 17, 14, 7.4, 6, c.mono and c.main or c.extra, 0, 1.8)
+	box(c, 12, 20.4, 14, 5, c.main, 0, 1.6)
+	seg(c, 10, 5.6, 12.6, 9.2, 0.8, c.mono and c.back or c.accent)
+	seg(c, 7, 12.4, 9.4, 15.4, 0.8, c.mono and c.back or c.accent)
+end
+
+DRAW.SecondWind = function(c)
+	-- a gust curling into a healing plus
+	arc(c, 10, 12, 7, 2, c.main, 2, 2, 18, 12)
+	seg(c, 3, 12, 3, 15, 2, c.main)
+	seg(c, 6, 18, 14, 18, 1.8, c.mono and c.main or c.extra)
+	box(c, 18, 16.4, 2.4, 8.4, c.accent, 0, 0.8)
+	box(c, 18, 16.4, 8.4, 2.4, c.accent, 0, 0.8)
+end
+
+DRAW.EmberOil = function(c)
+	-- a round flask with a flame over its neck
+	dot(c, 12, 15.4, 6.8, c.main)
+	box(c, 12, 7.8, 4, 4.4, c.main, 0, 0.8)
+	dot(c, 12, 16.4, 4.6, c.mono and c.back or c.accent, c.mono and 0 or 0.1)
+	drop(c, 12, 3.8, 2, c.mono and c.main or c.accent)
+	if not c.mono then
+		dot(c, 10.4, 13.8, 1.2, c.extra)
+	end
+end
+
+DRAW.Lionheart = function(c)
+	DRAW.heart(c)
+	box(c, 8.2, 3.8, 2.6, 2.6, c.accent, 45, 0.4)
+	box(c, 12, 2.8, 3, 3, c.accent, 45, 0.4)
+	box(c, 15.8, 3.8, 2.6, 2.6, c.accent, 45, 0.4)
+	box(c, 12, 5.4, 9, 2, c.accent, 0, 0.6)
+end
 
 -- Run items (ItemData) and loot ---------------------------------------------------------
 
