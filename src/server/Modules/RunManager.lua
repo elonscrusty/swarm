@@ -362,7 +362,10 @@ spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean, runC
 	local model = ModelBuilder.BuildCharacter(characterId, skinId, { Crown = crown })
 	model.Name = player.Name
 	-- built from the part fallback because the hero's meshes are still loading: load them
-	-- next and swap this lobby character (and the menu showcase that copies it) right away
+	-- next and swap the character for the mesh hero the moment they arrive. Lobby: the
+	-- lobby character (and the menu showcase that copies it). Run: the run character in
+	-- place. A run on a fresh private run server starts within seconds, before the hero
+	-- meshes are in, and without this swap the whole run showed the part-built stand-in.
 	local meshNames = ModelBuilder.MeshesFor(characterId, skinId)
 	local ms = ctx.MeshService
 	local waiting = false
@@ -371,13 +374,16 @@ spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean, runC
 	end
 	if waiting then
 		ms.Prioritize(meshNames)
-		if inLobby then
-			ms.WhenReady(meshNames, function()
-				if player.Parent and player.Character == model and model.Parent then
-					RunManager.RefreshLobbyCharacter(player)
-				end
-			end)
-		end
+		ms.WhenReady(meshNames, function()
+			if not (player.Parent and player.Character == model and model.Parent) then
+				return
+			end
+			if inLobby then
+				RunManager.RefreshLobbyCharacter(player)
+			else
+				RunManager.SwapRunCharacter(player, model)
+			end
+		end)
 	end
 
 	local old = player.Character
@@ -418,7 +424,7 @@ spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean, runC
 			if rp and not rp.Returned and phase ~= "Lobby" then
 				local arena = MapBuilder.GetArena()
 				local cf = CFrame.new((arena and arena.Center or Config.ArenaOrigin) + Vector3.new(0, 3.5, 0))
-				local m = spawnCharacter(player, cf, false)
+				local m = spawnCharacter(player, cf, false, rp.CharacterId)
 				RunManager.AttachCharacter(rp, m)
 			else
 				spawnCharacter(player, lobbySpawnCFrame(), true)
@@ -500,6 +506,30 @@ local function setDownedLook(rp, downed: boolean)
 				root:SetNetworkOwner(rp.Player)
 			end)
 		end
+	end
+end
+
+--[[
+	Replaces a run character built from the part fallback with the mesh hero (same hero,
+	skin, place and facing) once its meshes have loaded. Only while `old` is still the
+	player's run character; a fallen hero keeps its downed look.
+]]
+function RunManager.SwapRunCharacter(player: Player, old: Model)
+	local rp = byPlayer[player]
+	if not rp or rp.Returned or rp.Character ~= old or player.Character ~= old or not old.Parent then
+		return
+	end
+	local root = old.PrimaryPart
+	local cf = root and root.CFrame or old:GetPivot()
+	local m = spawnCharacter(player, cf, false, rp.CharacterId)
+	if not m then
+		return
+	end
+	RunManager.AttachCharacter(rp, m)
+	rp.LastValidPos = m.PrimaryPart and m.PrimaryPart.Position
+	rp.SpeedCheckTimer = 0
+	if not rp.Alive then
+		setDownedLook(rp, true)
 	end
 end
 
@@ -1303,7 +1333,7 @@ function RunManager.TeleportPlayer(rp, floorPos: Vector3)
 		char:PivotTo(CFrame.new(pos) * root.CFrame.Rotation)
 		root.AssemblyLinearVelocity = Vector3.zero
 	else
-		local m = spawnCharacter(rp.Player, CFrame.new(pos), false)
+		local m = spawnCharacter(rp.Player, CFrame.new(pos), false, rp.CharacterId)
 		RunManager.AttachCharacter(rp, m)
 	end
 	rp.LastValidPos = pos

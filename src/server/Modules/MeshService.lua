@@ -30,6 +30,11 @@ local MeshCatalog = require(ReplicatedStorage.Shared.MeshCatalog)
 local MeshService = {}
 
 local MAX_CONCURRENT = 6
+-- A failed InsertService load (throttled, timed out) is tried again after RETRY_DELAYS[n]
+-- seconds; only after the last retry does the model count as failed (callers then keep
+-- their part-built fallback for good). A model whose asset loaded but lacks pieces is not
+-- retried: that is a catalog / upload mismatch, not a slow load.
+local RETRY_DELAYS = { 3, 10 }
 local PRIORITY_TIERS = 2 -- tiers counted for PriorityReady
 -- default tier per catalog Category (lower loads first)
 local CATEGORY_TIER = {
@@ -58,7 +63,7 @@ local readyEvent = Instance.new("BindableEvent")
 local pending = 0 -- models queued or loading
 local started = false
 
-type Job = { Name: string, Tier: number, Seq: number, State: string } -- queued | loading | done | failed
+type Job = { Name: string, Tier: number, Seq: number, State: string, Attempts: number } -- queued | loading | retry | done | failed
 local jobs: { [string]: Job } = {}
 local seq = 0
 local active = 0
@@ -98,13 +103,14 @@ local function localSize(size: Vector3, template: Instance): Vector3
 	return Vector3.new(math.abs(v.X), math.abs(v.Y), math.abs(v.Z))
 end
 
-local function loadModel(name: string, entry): boolean
+-- Returns loaded, retryable (false + true: the asset request itself failed).
+local function loadModel(name: string, entry): (boolean, boolean)
 	local ok, asset = pcall(function()
 		return InsertService:LoadAsset(entry.AssetId)
 	end)
 	if not ok or not asset then
 		warn(string.format("[MeshService] could not load %s (%d): %s", name, entry.AssetId, tostring(asset)))
-		return false
+		return false, true
 	end
 	local folder = Instance.new("Folder")
 	folder.Name = name
@@ -156,10 +162,10 @@ local function loadModel(name: string, entry): boolean
 		folder:SetAttribute("Ready", true)
 		folder.Parent = root
 		readyEvent:Fire(name)
-		return true
+		return true, false
 	end
 	folder:Destroy()
-	return false
+	return false, false
 end
 
 -- Template folder for a model, or nil when it isn't loaded.
@@ -178,7 +184,7 @@ end
 -- True when model `name` can still finish loading (queued or in flight).
 local function stillComing(name: string): boolean
 	local job = jobs[name]
-	return job ~= nil and (job.State == "queued" or job.State == "loading")
+	return job ~= nil and (job.State == "queued" or job.State == "loading" or job.State == "retry")
 end
 
 -- True while model `name` is not loaded yet but still might be (uploaded, and loading has
@@ -313,8 +319,20 @@ local function run(job: Job)
 	job.State = "loading"
 	active += 1
 	task.spawn(function()
-		local ok, loaded = pcall(loadModel, job.Name, MeshCatalog.Models[job.Name])
+		local ok, loaded, retryable = pcall(loadModel, job.Name, MeshCatalog.Models[job.Name])
 		active -= 1
+		job.Attempts = (job.Attempts or 0) + 1
+		local delay = ok and not loaded and retryable and RETRY_DELAYS[job.Attempts]
+		if delay then
+			-- still coming (WhenReady callers keep waiting); back in the queue after the delay
+			job.State = "retry"
+			task.delay(delay, function()
+				job.State = "queued"
+				pump()
+			end)
+			pump()
+			return
+		end
 		pending -= 1
 		if ok and loaded then
 			job.State = "done"
@@ -394,7 +412,7 @@ function MeshService.Init(_ctx)
 	for name, entry in pairs(MeshCatalog.Models) do
 		if entry.AssetId and entry.AssetId ~= 0 then
 			seq += 1
-			jobs[name] = { Name = name, Tier = CATEGORY_TIER[(entry :: any).Category] or 4, Seq = seq, State = "queued" }
+			jobs[name] = { Name = name, Tier = CATEGORY_TIER[(entry :: any).Category] or 4, Seq = seq, State = "queued", Attempts = 0 }
 			totalCount += 1
 		end
 	end
