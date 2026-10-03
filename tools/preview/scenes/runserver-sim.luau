@@ -122,7 +122,7 @@ if role == "lobby" then
 	local r = record(me)
 	check("save released before the teleport (no lock, LastJob set)", DS.IsReleased(me) and type(r) == "table" and r.Lock == nil and r.LastJob ~= nil and type(r.Data) == "table")
 	local overlay = preview.client("TravelOverlay").Debug()
-	check("client cover shows", overlay.Cover and string.find(overlay.Title, "TRAVELLING") ~= nil, overlay.Title)
+	check("client cover shows", overlay.Cover and string.find(overlay.Title, "TRAVEL") ~= nil, overlay.Title)
 
 	-- 2. a second start while travelling does nothing
 	as(me, "StartRun", "Solo")

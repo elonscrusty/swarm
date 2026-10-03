@@ -321,7 +321,7 @@ local function onSetDifficulty(player: Player, id: any)
 		return
 	end
 	if not DifficultyData.IsUnlocked(data, id) then
-		ctx.RunManager.Notify(player, "Clear the previous difficulty to unlock this tier.", Color3.fromRGB(255, 210, 80))
+		ctx.RunManager.Notify(player, "Clear the previous difficulty to unlock this one.", Color3.fromRGB(255, 210, 80))
 		return
 	end
 	data.Difficulty = id
