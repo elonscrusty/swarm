@@ -229,10 +229,18 @@ for s = 1, stages do
 	local b0 = t
 	local killed = false
 	while SM.GetStage() == s and t - b0 < bossMax + 120 do
+		-- fight the boss up close (a player walks to it), else hold near the portal
+		local boss = Spawner.Boss
+		if boss and boss.Alive then
+			centre, radius = boss.Pos, 12
+		else
+			radius = 24
+		end
 		tick(0.25)
 		if not killed and SM.IsBossFight() and t - b0 >= bossMax then
 			for _, e in ipairs(Spawner.Active) do
 				if e.Alive and e.Boss then
+					preview.log(string.format("BOSS %s force-killed at %.0f%% HP (max %d) L%d", SM.StageBoss(), e.HP / e.MaxHP * 100, e.MaxHP, rps[1].Level))
 					Spawner.Kill(e, rps[1])
 					killed = true
 				end

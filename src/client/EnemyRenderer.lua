@@ -19,9 +19,9 @@
 	  * Update rate: when many enemies are on screen, only the FullRateEnemies nearest
 	    update every frame; the others (and every low-detail model) every 2nd frame,
 	    staggered so each frame moves half of them.
-	Elites, static / support creatures and Burrowers are never low-detail and always update
-	every frame (culled off screen like the rest); a boss is never culled (its entrance
-	starts in the sky). Models (full and low) are pooled per enemy
+	Elites, static / support creatures and Burrowers are never low-detail (but culled off
+	screen and half-rate past the nearest like the rest); a boss is never culled (its
+	entrance starts in the sky) and always updates every frame. Models (full and low) are pooled per enemy
 	type and go back to the pool when their enemy dies, leaves the screen or changes tier,
 	so models exist only for drawn enemies (plus the pools) and a recycled body reuses
 	parts instead of building new ones. Spawn dust puffs only for spawns on screen.
@@ -587,6 +587,7 @@ local fullRate: { [Slot]: boolean } = {} -- the nearest FULL_RATE: updated every
 local rankList: { Slot } = {}
 local rankTimer = 0
 local screenCount = 0 -- of those, ranked enemies on screen last frame (decides the budget)
+local crowdCount = 0 -- non-boss enemies on screen last frame (decides half-rate updates)
 local wasBudgeted = false
 local frameNo = 0
 -- Stats() for the benchmark: last frame's counts
@@ -618,8 +619,8 @@ local function rank()
 	for _, slot in pairs(slots) do
 		local body = slot.Body
 		local typeId = slot.Type
-		-- only on-screen enemies compete; the always-detailed ones are outside the budget
-		if slot.OnScreen and body.Parent and body.CFrame.Y >= ACTIVE_Y and not (typeId and alwaysDetailed(typeId)) and not slot.Elite then
+		-- only on-screen enemies compete (the boss always runs at full rate)
+		if slot.OnScreen and body.Parent and body.CFrame.Y >= ACTIVE_Y and not (typeId and isBoss(typeId)) then
 			slot.Dist = ((body.Position - focus) * FLAT).Magnitude
 			table.insert(rankList, slot)
 		end
@@ -635,9 +636,13 @@ local function rank()
 	local fresh = nextDetailed
 	table.clear(fresh)
 	local count = 0
+	-- (elites and static / support creatures are always full: outside the budget)
+	local function special(slot: Slot): boolean
+		return slot.Elite or (slot.Type ~= nil and alwaysDetailed(slot.Type :: string))
+	end
 	for i = 1, keep do
 		local slot = rankList[i]
-		if detailed[slot] and count < limit then
+		if detailed[slot] and count < limit and not special(slot) then
 			fresh[slot] = true
 			count += 1
 		end
@@ -646,7 +651,7 @@ local function rank()
 		if count >= limit then
 			break
 		end
-		if not fresh[slot] then
+		if not fresh[slot] and not special(slot) then
 			fresh[slot] = true
 			count += 1
 		end
@@ -1021,7 +1026,7 @@ local function step(dt: number)
 	-- are on screen than FULL_RATE
 	adaptBudget(dt)
 	local budgeted = screenCount > budget
-	local crowded = screenCount > FULL_RATE
+	local crowded = crowdCount > FULL_RATE
 	rankTimer -= dt
 	if (crowded or budgeted) and (rankTimer <= 0 or (budgeted and not wasBudgeted)) then
 		rankTimer = RANK_EVERY
@@ -1039,7 +1044,7 @@ local function step(dt: number)
 	end
 	local cam = workspace.CurrentCamera
 	prepView(cam)
-	local live, shown, culled, nFull, nLow, nAlways, skipped = 0, 0, 0, 0, 0, 0, 0
+	local live, shown, culled, nFull, nLow, nAlways, nBoss, skipped = 0, 0, 0, 0, 0, 0, 0, 0
 
 	for _, slot in pairs(slots) do
 		local body = slot.Body
@@ -1111,6 +1116,9 @@ local function step(dt: number)
 			end
 			if always then
 				nAlways += 1
+				if boss then
+					nBoss += 1
+				end
 			else
 				shown += 1
 			end
@@ -1128,7 +1136,7 @@ local function step(dt: number)
 			end
 			-- update rate: the nearest (and the special ones) every frame, the rest every 2nd
 			-- frame, half of them on each (a fresh model is posed at once)
-			if crowded and not always and not fresh and (low or not fullRate[slot]) and (frameNo + slot.Stagger) % 2 ~= 0 then
+			if crowded and not boss and not fresh and (low or not fullRate[slot]) and (frameNo + slot.Stagger) % 2 ~= 0 then
 				skipped += 1
 				continue
 			end
@@ -1338,6 +1346,7 @@ local function step(dt: number)
 	end
 	stats.live = live
 	screenCount = shown
+	crowdCount = shown + nAlways - nBoss
 	stats.onScreen = shown + nAlways
 	stats.culled = culled
 	stats.full = nFull
