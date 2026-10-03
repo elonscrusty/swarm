@@ -19,6 +19,7 @@
 ]]
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Theme = require(Shared:WaitForChild("Theme"))
@@ -41,7 +42,7 @@ local BOARDS = {
 	{ Id = "BestStage", Title = "Best stage", Short = "STAGE", Icon = "portal", Heading = "Best stage", Sub = "Furthest stage reached in one run", Explain = "All time, across all servers.", Column = "Stage" },
 	{ Id = "Daily", Title = "Daily", Short = "DAILY", Icon = "calendar", Heading = "Today's daily", Sub = "Today's scored Daily Challenge attempts (UTC)", Explain = "Ranked by stages cleared, then time. One scored attempt a day.", Column = "Result" },
 	{ Id = "Kills", Title = "Most kills", Short = "KILLS", Icon = "stat_Kills", Heading = "Most kills", Sub = "Most enemies defeated in one run", Explain = "All time, across all servers.", Column = "Kills" },
-	{ Id = "Level", Title = "Top level", Short = "LEVEL", Icon = "chevronsUp", Heading = "Highest level", Sub = "Highest level reached in one run", Explain = "Any mode, all time, across all servers.", Column = "Level" },
+	{ Id = "Level", Title = "Highest level", Short = "LEVEL", Icon = "chevronsUp", Heading = "Highest level", Sub = "Highest level reached in one run", Explain = "Any mode, all time, across all servers.", Column = "Level" },
 }
 
 local ROW_H = 52
@@ -218,7 +219,11 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		local status = d and d.Status or "loading"
 		local note = ""
 		if status == "local" then
-			note = "Global leaderboards need DataStores, which are off in this session (Studio: Game Settings → Security → Enable Studio Access to API Services). Showing runs on this server only."
+			if RunService:IsStudio() then
+				note = "Global leaderboards need DataStores, which are off in this session (Studio: Game Settings → Security → Enable Studio Access to API Services). Showing runs on this server only."
+			else
+				note = "Global boards are offline right now. Showing this server only."
+			end
 		elseif status == "error" then
 			note = "The leaderboard could not be read right now. Showing the last rows we had; it tries again in a minute."
 		elseif status == "loading" then

@@ -326,7 +326,7 @@ local function onOffer(data)
 	offer = data
 	chosen = false
 	ui.ChoiceTitle.Text = data.Complete and "EXPEDITION COMPLETE" or string.format("STAGE %d CLEARED", data.Stage or 1)
-	ui.ChoiceSub.Text = data.Complete and "Five stages cleared. Return safely with all your winnings."
+	ui.ChoiceSub.Text = data.Complete and string.format("%d stages cleared. Return safely with all your winnings.", tonumber(data.WinMinStages) or Config.Stages.WinMinStages or 5)
 		or data.Endless and "ENDLESS · The portal only leads deeper. Leave any time from the pause menu."
 		or (data.Group and "The portal is open. Go deeper together, or take your winnings home." or "The portal is open. Go deeper, or take your winnings home.")
 	ui.Return.Instance.Visible = data.Endless ~= true
@@ -336,7 +336,7 @@ local function onOffer(data)
 	ui.StatKills.Text = UIKit.formatNumber(data.Kills or 0)
 	ui.StatGold.Text = UIKit.formatNumber(data.Gold or 0)
 	-- a return counts as a win only from Config.Stages.WinMinStages cleared stages
-	local winNote = data.CountsAsWin and " · a win" or string.format(" · win from stage %d", data.WinMinStages or 3)
+	local winNote = data.CountsAsWin and " · a win" or string.format(" · win from stage %d", data.WinMinStages or Config.Stages.WinMinStages or 5)
 	ui.Return.SetText("RETURN TO LOBBY", string.format("+%s gold", UIKit.formatNumber(data.ReturnBonus or 0)) .. winNote)
 	refreshChoiceButtons()
 	kit.Show(ui.Choice.Overlay, "Portal", true)

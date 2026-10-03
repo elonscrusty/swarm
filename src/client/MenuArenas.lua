@@ -40,7 +40,7 @@ local PIC_R = Theme.Radius.S + 2 -- picture corners
 -- How each biome is painted when its picture is missing, its icon and its hazard line.
 local LOOK: { [string]: { [string]: any } } = {
 	Forest = { Sky = P.moss_200, Sky2 = P.moss_400, Far = P.moss_600, Ground = P.moss_700, Icon = "arena_Forest", Hazard = "No hazards" },
-	Ruins = { Sky = P.amber_300, Sky2 = P.stone_300, Far = P.stone_500, Ground = P.stone_600, Icon = "arena_Ruins", Hazard = "No hazards  •  Tight lanes" },
+	Ruins = { Sky = P.amber_300, Sky2 = P.stone_300, Far = P.stone_500, Ground = P.stone_600, Icon = "arena_Ruins", Hazard = "No hazards  ·  Tight lanes" },
 	Swamp = { Sky = P.murk_300, Sky2 = P.murk_500, Far = P.murk_700, Ground = P.bog_700, Pool = P.bog_500, Icon = "arena_Swamp", Hazard = "Mud slows you to " .. pct(H.Mud.PlayerSpeed) .. " speed" },
 	Snow = { Sky = P.ice_100, Sky2 = P.snow_300, Far = P.snow_400, Ground = P.snow_200, Pool = P.ice_300, Icon = "arena_Snow", Hazard = "Ice: " .. pct(H.Ice.PlayerSpeed) .. " speed, slippery" },
 	Desert = { Sky = P.amber_300, Sky2 = P.sand_300, Far = P.sand_600, Ground = P.sand_400, Pool = P.sand_700, Icon = "arena_Desert", Hazard = "Quicksand slows you to " .. pct(H.Quicksand.PlayerSpeed) .. " speed" },
@@ -120,7 +120,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 	local optimisticUntil = 0
 	ui.Header = UIKit.ScreenHeader(screen, "ARENAS", ctx.Back)
 	ui.Best = UIKit.IconPill(ui.Header.Frame, "crown", "BEST STAGE 0", { Name = "BestStage", AnchorPoint = Vector2.new(0, 0.5) })
-	ui.Intro = text(screen, "Body", "Choose where your run starts. Later stages visit every biome.", {
+	ui.Intro = text(screen, "Body", "Choose where your run starts. Later stages visit every arena.", {
 		Name = "Intro",
 		TextWrapped = true,
 		TextColor3 = P.ivory_200,
@@ -182,7 +182,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			OnClick = function()
 				local best = bestStage()
 				if not unlocked(best, name) then
-					ctx.Toast(string.format("%s: reach stage %d in a run to unlock it.", def.DisplayName, def.RequiredBestStage or 0), P.gold_300)
+					ctx.Toast(string.format("Reach stage %d in a run to unlock %s", def.RequiredBestStage or 0, def.DisplayName), P.gold_300)
 					return
 				end
 				if selected() ~= name then
@@ -284,7 +284,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			elseif open then
 				card.Rule.Text = string.format("Unlocked at stage %d", need)
 			else
-				card.Rule.Text = string.format("Reach stage %d  •  Best %d", need, best)
+				card.Rule.Text = string.format("Reach stage %d  ·  Best %d", need, best)
 				card.Meter.Set(math.clamp(best / need, 0, 1), "")
 				card.Count.Text = string.format("%d/%d", math.min(best, need), need)
 			end

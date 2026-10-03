@@ -92,9 +92,9 @@ function StatSheet.Compute(input: Input): { [string]: number }
 		Might = 1 + b.might,
 		Armor = P.BaseArmor + b.armor,
 		MaxHP = math.floor((P.BaseMaxHP + b.maxHpFlat) * (1 + b.maxHpMult) + 0.5),
-		Speed = P.BaseSpeed * math.min(1 + b.speed, I.MaxSpeedMult),
+		Speed = P.BaseSpeed * math.clamp(1 + b.speed, 0.5, I.MaxSpeedMult),
 		-- passive cooldown reduction, then item attack speed divides what is left
-		CooldownMult = math.max(I.MinCooldownMult, math.max(0.4, 1 - b.cooldown) / (1 + b.attackSpeed)),
+		CooldownMult = math.max(I.MinCooldownMult, math.max(0.4, 1 - b.cooldown) / math.max(0.1, 1 + b.attackSpeed)),
 		AreaMult = 1 + b.area,
 		Amount = b.amount,
 		Pierce = b.pierce, -- extra enemies a stopping projectile passes through (Fletching)

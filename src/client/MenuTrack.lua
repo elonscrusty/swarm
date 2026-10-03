@@ -23,7 +23,7 @@ local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 
 local KIND_ICON = { Title = "track_Title", Color = "track_Color", Ring = "track_Ring", Frame = "track_Frame" }
-local KIND_LABEL = { Title = "Title", Color = "Name colour", Ring = "Dais ring", Frame = "Portrait frame" }
+local KIND_LABEL = { Title = "Title", Color = "Name color", Ring = "Dais ring", Frame = "Portrait frame" }
 local WORN_KEY = { Title = "Title", Color = "NameColor", Ring = "Ring", Frame = "Frame" }
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)

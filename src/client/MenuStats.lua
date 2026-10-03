@@ -207,7 +207,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	-- Earned cosmetics remain explicit equip actions; rewards themselves need no claim.
 	local function cosmeticRow(p, kind: string, order: number)
 		local row = new("Frame", { Name = kind, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, ui.Ach)
-		text(row, "Caption", UIKit.track(kind == "Title" and "Choose your title" or "Choose your name colour"), { Size = UDim2.new(1, 0, 0, TS(12) + 4) })
+		text(row, "Caption", UIKit.track(kind == "Title" and "Choose your title" or "Choose your name color"), { Size = UDim2.new(1, 0, 0, TS(12) + 4) })
 		local chips = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TS(12) + 8), Size = UDim2.new(1, 0, 0, Theme.Size.TapMin), AutomaticSize = Enum.AutomaticSize.Y }, row)
 		UIKit.list(chips, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), Wraps = true })
 		local unlocked = p.Achievements and p.Achievements.Unlocked or {}
@@ -256,7 +256,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		if #options == 1 then
-				text(row, "Small", "Unlock more through achievements or the Track.", {
+				text(row, "Small", "Unlock more through achievements or ACCOUNT LEVEL.", {
 					Position = UDim2.fromOffset(124, TS(12) + 8),
 					Size = UDim2.new(1, -124, 0, Theme.Size.TapMin),
 					TextColor3 = C.TextFaint,
@@ -334,7 +334,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		local cosmeticsHeading: GuiObject?
 		local summary = new("Frame", { Name = "AchievementSummary", BackgroundTransparency = 1, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, Theme.Size.TapMin + 4) }, ui.Ach)
 		text(summary, "Label", string.format("%d / %d UNLOCKED", #completed, #AchievementData.Order), { Size = UDim2.new(1, -230, 1, 0), TextColor3 = P.gold_300 }, 14)
-		text(ui.Ach, "Small", "Rewards are added automatically. Equip earned titles and name colours with WEAR REWARDS.", { Name = "RewardHelp", LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
+		text(ui.Ach, "Small", "Rewards are added automatically. Equip earned titles and name colors with WEAR REWARDS.", { Name = "RewardHelp", LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
 		UIKit.Button(summary, { Title = "WEAR REWARDS", Kind = "Secondary", Size = UDim2.fromOffset(220, Theme.Size.TapMin), AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Icon = "sparkle", TitleSize = 14, OnClick = function()
 			if cosmeticsHeading then
 				ui.Ach.CanvasPosition = Vector2.new(0, math.max(0, cosmeticsHeading.AbsolutePosition.Y - ui.Ach.AbsolutePosition.Y + ui.Ach.CanvasPosition.Y))

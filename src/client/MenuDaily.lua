@@ -243,7 +243,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	})
 	ui.Board = UIKit.Button(foot, {
 		Kind = "Secondary",
-		Title = "DAILY RANKS",
+		Title = "DAILY LEADERBOARD",
 		Icon = "podium",
 		IconSize = 22,
 		Align = "Center",
@@ -340,7 +340,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		displayedRank = rankLine
 		if used then
 			UIKit.SetStatus(ui.Pill, "PRACTICE")
-			ui.Heading.Text = "Practise today's challenge"
+			ui.Heading.Text = "Practice today's challenge"
 			ui.InfoText.Text = (score > 0 and ("Ranked result: " .. CurseData.ScoreText(score) .. ". ") or "Today's ranked attempt is used. ")
 				.. "Practice cannot replace your ranked score. New ranked try at 00:00 UTC." .. bestLine
 				.. (rankLine and ("\n" .. rankLine) or "")

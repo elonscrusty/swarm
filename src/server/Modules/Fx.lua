@@ -44,7 +44,10 @@ end
 
 -- Caps per flush keep a single packet small even in huge fights.
 -- Warnings (w / x) are gameplay-critical: their caps are far above what a fight produces.
-local CAPS = { k = 16, g = 24, h = 120, d = 60, s = 16, b = 24, c = 40, p = 16, e = 16, r = 8, u = 24, n = 16, w = 64, x = 64 }
+-- Cancels (x) get the most room: a boss collapse cancels every boss hazard (up to
+-- Config.Enemies.MaxHazards), its telegraphs and its objects' circles in one flush, and a
+-- dropped cancel would leave a stale telegraph (a banner's rally zone lives 900 s).
+local CAPS = { k = 16, g = 24, h = 120, d = 60, s = 16, b = 24, c = 40, p = 16, e = 16, r = 8, u = 24, n = 16, w = 96, x = 192 }
 local warnId = 0
 
 local function pushCapped(key: string, value: any)

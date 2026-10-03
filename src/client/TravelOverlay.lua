@@ -136,7 +136,7 @@ end
 local function coverText(state: Configuration): (string?, string?)
 	local travel = player:GetAttribute("Travel")
 	if travel == "ToRun" then
-		return "TRAVELLING TO YOUR RUN", "Saving your progress and opening your own server…"
+		return "TRAVELING TO YOUR RUN", "Saving your progress and opening your own server…"
 	elseif travel == "ToLobby" then
 		return "BACK TO THE LOBBY", "Saving your progress…"
 	end

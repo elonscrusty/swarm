@@ -958,13 +958,30 @@ local function plantBanner(e)
 	return true
 end
 
+-- The start function of an attack name: its own, or the move its BossData entry names
+-- ("Move = Summon" for BroodCall / Sproutling), which is told the attack's name.
+local function startOf(e, name: string): ((any) -> ())?
+	local fn = Start[name]
+	if fn then
+		return fn
+	end
+	local A = e.BossData.Attacks[name]
+	local move = A and A.Move and Start[A.Move]
+	if move then
+		return function(boss)
+			move(boss, name)
+		end
+	end
+	return nil
+end
+
 local function nextAttack(e)
 	table.clear(e.BossWarns) -- the last attack's telegraphs are over by now
 	local cycle = phase(e).Cycle
 	e.BossCycle = (e.BossCycle % #cycle) + 1
 	local name = cycle[e.BossCycle]
 	e.BossFollowup = phase(e).FollowUps and phase(e).FollowUps[name] or nil
-	local fn = Start[name]
+	local fn = startOf(e, name)
 	if fn then
 		fn(e)
 	else
@@ -1035,10 +1052,11 @@ State.Recover = function(e, _dt)
 	if e.BossTimer <= 0 then
 		local followup = e.BossFollowup
 		e.BossFollowup = nil
-		if followup and not e.PendingPhase and #living() > 0 and Start[followup] then
+		local fn = followup and startOf(e, followup) or nil
+		if fn and not e.PendingPhase and #living() > 0 then
 			-- Keep the complete punish window, then telegraph the follow-up normally.
 			e.Harmless = false
-			Start[followup](e)
+			fn(e)
 		else
 			chase(e, paced(e, e.BossData.Chase))
 		end

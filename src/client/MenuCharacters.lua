@@ -100,7 +100,7 @@ local function splitEffect(s: string): (string?, string, string?)
 	local main, list = string.match(body, "^(.-):%s+(.+)$")
 	if main and list then
 		list = string.gsub(list, "%.$", "")
-		list = string.gsub(list, ",%s*", "  •  ")
+		list = string.gsub(list, ",%s*", "  ·  ")
 		body = main .. "."
 	else
 		list = nil
@@ -543,7 +543,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		-- centre caption
 		ui.CentreTitle.Set(UIKit.spaced(def.Name))
 		local previewSkin = inspSkin
-		ui.CentreSub.Text = "Preview  •  " .. skinName(previewSkin)
+		ui.CentreSub.Text = "Preview  ·  " .. skinName(previewSkin)
 		-- how to unlock it: the achievement and its progress, or the gold price
 		ui.UnlockCard.Visible = not own
 		if not own then
@@ -575,7 +575,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		elseif not own then
 			ui.Action.SetEnabled(p.Gold >= def.Cost)
 			ui.Action.SetKind("Primary")
-			ui.Action.SetText("UNLOCK  •  " .. UIKit.formatNumber(def.Cost) .. " GOLD")
+			ui.Action.SetText("UNLOCK  ·  " .. UIKit.formatNumber(def.Cost) .. " GOLD")
 			ui.Action.SetIcon("coin")
 		elseif selected then
 			ui.Action.SetKind("Secondary")

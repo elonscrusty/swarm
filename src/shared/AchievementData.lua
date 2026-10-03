@@ -171,7 +171,7 @@ AchievementData.Achievements = {
 	},
 	Veteran = {
 		Id = "Veteran",
-		Name = "Veteran",
+		Name = "Battle-Hardened",
 		Description = "Reach level 30 in one run.",
 		Icon = "ach_Veteran",
 		Event = "Level",
@@ -205,7 +205,7 @@ AchievementData.Achievements = {
 	FieldEngineer = {
 		Id = "FieldEngineer",
 		Name = "Field Engineer",
-		Description = "Complete 3 optional events: open Guarded Altars or clear stages under a Bargain (total).",
+		Description = "Open 3 Guarded Altars or seal 3 Bargains (any mix).",
 		Icon = "ach_FieldEngineer",
 		Event = "OptionalEvent",
 		Kind = "Count",
@@ -329,7 +329,7 @@ function AchievementData.RewardText(id: string): string
 	end
 	if r.Color then
 		local c = AchievementData.Colors[r.Color]
-		table.insert(parts, (c and c.Name or r.Color) .. " name colour")
+		table.insert(parts, (c and c.Name or r.Color) .. " name color")
 	end
 	if r.Gold then
 		table.insert(parts, r.Gold .. " gold")

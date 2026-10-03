@@ -314,7 +314,7 @@ local function buildVitals(frame: Frame)
 	local xpRow = new("Frame", { Name = "XP", BackgroundTransparency = 1, Position = UDim2.fromOffset(VIT.PadX, VIT.PadY + VIT.HP + VIT.Gap), Size = UDim2.new(1, -2 * VIT.PadX, 0, VIT.XP) }, face)
 	ui.XPRow = xpRow
 	ui.Medal = medallion(xpRow, 24, 1)
-	ui.Level = role(xpRow, "Number", "LV. 1", {
+	ui.Level = role(xpRow, "Number", "LV 1", {
 		Name = "Level",
 		Position = UDim2.fromOffset(32, 0),
 		Size = UDim2.new(0, 66, 1, 0),
@@ -1068,7 +1068,7 @@ local function stageGoal(state: Configuration, stagePhase: string): (string, str
 	elseif stagePhase == "Open" then
 		return "PORTAL OPEN", "", P.gold_200
 	elseif stagePhase == "Travel" then
-		return "TRAVELLING", "", P.ivory_100
+		return "TRAVELING", "", P.ivory_100
 	end
 	return "", "", P.ivory_100
 end
@@ -1091,7 +1091,7 @@ local function updateStage(state: Configuration)
 	end
 	if stageShown then
 		-- Endless runs say so on the pill ("ENDLESS • STAGE 9", SwarmState Endless)
-		local num = (state:GetAttribute("Endless") == true and "ENDLESS • STAGE " or "STAGE ") .. tostring(stageNo)
+		local num = (state:GetAttribute("Endless") == true and "ENDLESS · STAGE " or "STAGE ") .. tostring(stageNo)
 		if ui.StageNumber.Text ~= num then
 			ui.StageNumber.Text = num
 			UIAnim.Pop(ui.Stage, 0, 0.7)
@@ -1136,7 +1136,7 @@ local function updateStage(state: Configuration)
 			anim.BannerStage = stageNo
 			-- joining mid-fight (reconnect, boss already up): no banner over the action
 			if stagePhase == "Explore" or stagePhase == "None" then
-				local sub = count ~= "" and (goal .. " • " .. count) or goal
+				local sub = count ~= "" and (goal .. " · " .. count) or goal
 				showStageBanner(stageNo, sub)
 			end
 		end
@@ -1248,12 +1248,12 @@ local function updateXP(dt: number, nowT: number)
 	end
 	local pending = tonumber(player:GetAttribute("PendingUpgrades")) or 0
 	local str = pending > 0 and string.format("%d upgrade%s ready", pending, pending == 1 and "" or "s")
-		or string.format("%s: %d / %d XP", player:GetAttribute("XPReward") == "Coins" and "Coins" or "Upgrade", xp, need)
+		or string.format("%s: %d / %d XP", player:GetAttribute("XPReward") == "Coins" and "Gold" or "Upgrade", xp, need)
 	if anim.XPShown ~= str then
 		anim.XPShown = str
 		ui.XP.Label.Text = str
 	end
-	setText(ui.Level, "LV. " .. tostring(lvl))
+	setText(ui.Level, "LV " .. tostring(lvl))
 end
 
 local function updateKills()

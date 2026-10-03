@@ -181,7 +181,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			local b
 			b = UIKit.Button(f, {
 				Kind = affordable and "Primary" or "Outline",
-				Title = busy and "BUYING..." or (affordable and ("BUY • " .. UIKit.formatNumber(cost) .. " GOLD") or (UIKit.formatNumber(cost) .. " GOLD • NEED " .. UIKit.formatNumber(cost - p.Gold) .. " MORE")),
+				Title = busy and "BUYING..." or (affordable and ("BUY · " .. UIKit.formatNumber(cost) .. " GOLD") or (UIKit.formatNumber(cost) .. " GOLD · NEED " .. UIKit.formatNumber(cost - p.Gold) .. " MORE")),
 				Icon = "coin",
 				IconSize = 20,
 				Align = "Center",
@@ -251,7 +251,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		if ownedPass then
 			UIKit.Badge(f, "OWNED", "Moss", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14) })
 		elseif id == 0 then
-			text(f, "Caption", UIKit.track("Not set up yet"), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -14), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextFaint })
+			text(f, "Caption", UIKit.track("Coming soon"), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -14), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextFaint })
 		else
 			local b = UIKit.Button(f, {
 				Kind = "Outline",

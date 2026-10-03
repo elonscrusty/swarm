@@ -313,7 +313,7 @@ local function arenaText(): (string, string)
 		end
 	end
 	if nextDef then
-		return title, string.format("%s: reach stage %d to unlock", nextDef.DisplayName, nextNeed)
+		return title, string.format("Reach stage %d in a run to unlock %s", nextNeed, nextDef.DisplayName)
 	end
 	return title, (arena and arena.Hint) or "Face the swarm"
 end
@@ -527,7 +527,18 @@ local function buildModes(frame: Frame)
 				return
 			end
 		end
-		toast("Clear all five Standard stages to unlock Veteran.", P.gold_300)
+		-- the first tier still locked, and the one it needs cleared
+		local nextLocked = nil
+		for _, id in ipairs(DifficultyData.Order) do
+			if not DifficultyData.IsUnlocked(profile, id) then
+				nextLocked = DifficultyData.Tiers[id]
+				break
+			end
+		end
+		if nextLocked then
+			local needs = DifficultyData.Tiers[nextLocked.Requires]
+			toast(string.format("Clear all %d %s stages to unlock %s.", Config.Stages.WinMinStages, needs and needs.Name or "Standard", nextLocked.Name), P.gold_300)
+		end
 	end })
 	local difficultyPadding = ui.Difficulty.Content:FindFirstChildOfClass("UIPadding")
 	if difficultyPadding then
@@ -750,7 +761,7 @@ local function buildHome(screen: Frame)
 	ui.CardCharacters = UIKit.Card(ui.Cards, {
 		Icon = "helmet",
 		Title = "CHARACTERS",
-		Subtitle = "Choose your fighter",
+		Subtitle = "Choose your hero",
 		LayoutOrder = 1,
 		OnClick = function()
 			LobbyScreen.Show("Characters")
@@ -1408,7 +1419,7 @@ function LobbyScreen.Update(_dt: number?)
 		ui.QueueTitle.Text = "RUN IN PROGRESS"
 		local stageNo = state:GetAttribute("Stage") or 0
 		ui.QueueCaption.Text = UIKit.track((state:GetAttribute("Endless") == true and "Endless · " or "") .. (stageNo > 0 and ("Stage " .. stageNo .. " · ") or "") .. "Time " .. UIKit.formatTime(state:GetAttribute("RunTime") or 0))
-		ui.QueueNote.Text = "Wait here for the next one! Pick a character or buy upgrades meanwhile."
+		ui.QueueNote.Text = "Wait here for the next one! Pick a character or buy upgrades in the meantime."
 		ui.QueueRow.Visible = false
 		if ui.QueueKey ~= "busy" then
 			ui.QueueKey = "busy"

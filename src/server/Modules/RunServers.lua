@@ -417,7 +417,7 @@ local function failOne(player: Player)
 	elseif tr.Kind == "Rejoin" then
 		if takeBack(player) then
 			endReconnect(player)
-			notify(player, "Couldn't reconnect. Your retained coins are safe; you can start a new run.", WARN)
+			notify(player, "Couldn't reconnect. Your gold is safe; you can start a new run.", WARN)
 		end
 	elseif takeBack(player) then
 		homeAt[player] = nil

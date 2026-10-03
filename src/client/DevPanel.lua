@@ -207,7 +207,7 @@ local function buildRun(p: Instance)
 		local on = player:GetAttribute("DevGod") == true
 		god.SetText("Invincible: " .. (on and "ON" or "OFF"))
 		god.SetSelected(on)
-		dmg.SetText("Dmg numbers: " .. (player:GetAttribute("DamageNumbers") == true and "ON" or "OFF"))
+		dmg.SetText("Damage numbers: " .. (player:GetAttribute("DamageNumbers") == true and "ON" or "OFF"))
 	end)
 	player:GetAttributeChangedSignal("DevGod"):Connect(refresh)
 	g = section(p, "Stage", 2)

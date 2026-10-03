@@ -441,7 +441,7 @@ local function triggers(state: Configuration)
 	-- arrive just after InRun)
 	if not run.Team and os.clock() - (run.Start or 0) < 8 and (state:GetAttribute("Participants") or 1) > 1 then
 		run.Team = true
-		push("TeamRules", "Team run", "Gem XP is shared by everyone standing. Gold and items are your own.", "people2", T.HintSeconds + 2, true)
+		push("TeamRules", "Team run", "Gem XP is shared by every living teammate. Gold and items are your own.", "people2", T.HintSeconds + 2, true)
 	end
 	-- gems after the first kill
 	if not run.Gems and (player:GetAttribute("Kills") or 0) > (run.Kills0 or 0) then
@@ -467,7 +467,9 @@ local function triggers(state: Configuration)
 		for _, p in ipairs(Players:GetPlayers()) do
 			if p ~= player and p:GetAttribute("InRun") == true and p:GetAttribute("Alive") == false and (tonumber(p:GetAttribute("PartnerRevivesLeft")) or 0) > 0 and p:GetAttribute("AwaitingRevive") ~= true then
 				run.Revive = true
-				push("Revive", "Revive " .. p.DisplayName, "Stand in the gold circle around them for a few seconds.", "revive")
+				local modeDef = (Config.Modes :: any)[state:GetAttribute("Mode") or ""]
+				local secs = (modeDef and modeDef.PartnerRevive and modeDef.PartnerRevive.Seconds) or 2
+				push("Revive", "Revive " .. p.DisplayName, string.format("Stand beside them and hold REVIVE for %s second%s.", tostring(secs), secs == 1 and "" or "s"), "revive")
 				break
 			end
 		end

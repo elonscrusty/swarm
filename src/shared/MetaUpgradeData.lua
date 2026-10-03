@@ -99,7 +99,7 @@ MetaUpgradeData.Upgrades = {
 		Id = "Reroll",
 		Effect = { Format = "%d level-up rerolls per run", Per = 2 },
 		Name = "Reroll",
-		Description = "+2 level-up rerolls every run per level.",
+		Description = "+2 rerolls per run for every level.",
 		MaxLevel = 2,
 		BaseCost = 800,
 		CostGrowth = 2,

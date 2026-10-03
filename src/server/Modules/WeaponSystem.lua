@@ -164,18 +164,37 @@ local function grid()
 	return ctx.EnemySpawner.Grid
 end
 
--- k nearest distinct enemies to a point (small k, linear selection over a grid query).
+-- k nearest living enemies to a point (small k: a sort over a grid query; k = 1 walks the
+-- grid outward instead, so a long-range single target never sorts the whole swarm).
+local function skipDead(e): boolean
+	return not e.Alive
+end
+
 local function nearestEnemies(pos: Vector3, range: number, k: number): { any }
-	local n = grid():QueryCircle(pos.X, pos.Z, range, queryBuf)
 	local result = {}
+	if k <= 1 then
+		local e = grid():Nearest(pos.X, pos.Z, range, skipDead)
+		if e then
+			result[1] = e
+		end
+		return result
+	end
+	local n = grid():QueryCircle(pos.X, pos.Z, range, queryBuf)
 	if n == 0 then
 		return result
 	end
-	local list = table.move(queryBuf, 1, n, 1, {})
+	local list = {}
+	for i = 1, n do
+		local e = queryBuf[i]
+		if e.Alive then
+			list[#list + 1] = e
+		end
+	end
+	local px, pz = pos.X, pos.Z
 	table.sort(list, function(a, b)
-		local da = (a.Pos - pos) * FLAT
-		local db = (b.Pos - pos) * FLAT
-		return da.Magnitude < db.Magnitude
+		local ax, az = a.Pos.X - px, a.Pos.Z - pz
+		local bx, bz = b.Pos.X - px, b.Pos.Z - pz
+		return ax * ax + az * az < bx * bx + bz * bz
 	end)
 	for i = 1, math.min(k, #list) do
 		result[i] = list[i]

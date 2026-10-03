@@ -812,8 +812,9 @@ end
 local function beginRun(here: boolean?)
 	local runStarter = starter -- whose curses the run uses (Solo / Daily: the only player)
 	local list = {}
-	for player in pairs(joined) do
-		if player.Parent and ctx.DataService.GetData(player) and #list < maxPlayers() then
+	-- join order (not pairs order): the starter is list[1] and spawn spots are stable
+	for _, player in ipairs(joinedOrder) do
+		if joined[player] and player.Parent and ctx.DataService.GetData(player) and #list < maxPlayers() then
 			table.insert(list, player)
 		end
 	end
@@ -1501,7 +1502,7 @@ local function cycleArena(player: Player, wanted: any)
 		end
 		if not arenaUnlocked(data.Stats, wanted) then
 			local def = (Config.Arenas :: any)[wanted]
-			RunManager.Notify(player, string.format("Reach stage %d in a run to unlock the %s!", def.RequiredBestStage or 0, def.DisplayName), Color3.fromRGB(255, 200, 120))
+			RunManager.Notify(player, string.format("Reach stage %d in a run to unlock %s.", def.RequiredBestStage or 0, def.DisplayName), Color3.fromRGB(255, 200, 120))
 			return
 		end
 		if wanted ~= selectedArena then
@@ -1530,7 +1531,7 @@ local function cycleArena(player: Player, wanted: any)
 		end
 	end
 	if needName then
-		RunManager.Notify(player, string.format("Reach stage %d in a run to unlock the %s!", need, needName), Color3.fromRGB(255, 200, 120))
+		RunManager.Notify(player, string.format("Reach stage %d in a run to unlock %s.", need, needName), Color3.fromRGB(255, 200, 120))
 	end
 end
 
@@ -1796,6 +1797,12 @@ function RunManager.OnPlayerRemoving(player: Player)
 			starter = joinedOrder[1]
 		end
 		publishJoined()
+		-- the last joined player left: the countdown has nobody to start for
+		if phase == "Countdown" and joinedCount() == 0 then
+			starter = nil
+			setPhase("Lobby")
+			publishJoined()
+		end
 	end
 	local rp = byPlayer[player]
 	if not rp then

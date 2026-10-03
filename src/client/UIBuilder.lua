@@ -746,13 +746,13 @@ local function statIcon(parent: Instance, label: string, c, size: number): Frame
 	return Icons.Draw(parent, "chevronsUp", { Size = size, Color = P.gold_300 })
 end
 
--- "Synergy: Elemental Trinity 2/3" → "ELEMENTAL TRINITY • 2 / 3" (the server's card text).
+-- "Synergy: Elemental Trinity 2/3" → "ELEMENTAL TRINITY · 2 / 3" (the server's card text).
 local function synergyText(c): string
 	local s = tostring(c.Synergy)
 	s = string.gsub(s, "^Synergy:%s*", "")
 	local name, have, need = string.match(s, "^(.-)%s+(%d+)%s*/%s*(%d+)$")
 	if name then
-		return string.upper(name) .. "  •  " .. have .. " / " .. need
+		return string.upper(name) .. "  ·  " .. have .. " / " .. need
 	end
 	return string.upper(s)
 end
@@ -918,7 +918,7 @@ local function buildLevelUp()
 	UIKit.list(actions, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 18) })
 	levelUp.RuleL = goldRule(actions, 110, true, 0)
 	levelUp.RuleR = goldRule(actions, 110, false, 3)
-	-- REROLL: 3 new cards; SKIP: no card, a little run gold. Both show what is left this
+	-- REROLL: Config.LevelUp.Choices new cards; SKIP: no card, a little run gold. Both show what is left this
 	-- run (permanent upgrades / VIP give them); with none bought they say where to get them.
 	levelUp.Reroll = UIKit.Button(actions, {
 		Kind = "Outline",
@@ -1715,12 +1715,12 @@ local function showOffer(offer)
 	local skipGold = tonumber(offer.SkipGold) or Config.LevelUp.SkipGold
 	levelUp.Reroll.SetText(
 		"REROLL",
-		rerolls > 0 and string.format("%d left · 3 new cards", rerolls) or (rerollMax > 0 and "None left this run" or "Buy rerolls in Upgrades")
+		rerolls > 0 and string.format("%d left · %d new cards", rerolls, Config.LevelUp.Choices) or (rerollMax > 0 and "None left this run" or "Buy rerolls in the Shop")
 	)
 	levelUp.Reroll.SetEnabled(rerolls > 0)
 	levelUp.Skip.SetText(
 		"SKIP",
-		skips > 0 and string.format("%d left · +%d gold", skips, skipGold) or (skipMax > 0 and "None left this run" or "Buy skips in Upgrades")
+		skips > 0 and string.format("%d left · +%d gold", skips, skipGold) or (skipMax > 0 and "None left this run" or "Buy skips in the Shop")
 	)
 	levelUp.Skip.SetEnabled(skips > 0)
 	local total = tonumber(offer.BatchTotal) or 1
@@ -2522,7 +2522,7 @@ local function buildPause()
 		ClientSettings.Set("ReduceFlashes", on)
 	end, { LayoutOrder = 6 })
 	pause.Choices = {}
-	for i, option in ipairs({ { "Colorblind", "COLOURS" }, { "TouchLayout", "TOUCH LAYOUT" } }) do
+	for i, option in ipairs({ { "Colorblind", "COLORS" }, { "TouchLayout", "TOUCH LAYOUT" } }) do
 		local key, label = option[1], option[2]
 		local b
 		b = UIKit.Button(colB, {
@@ -2996,7 +2996,7 @@ local function buildResults()
 	results.GridLayout = UIKit.list(grid, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
 	results.Time = statTile(grid, "clock", "Survived", 1)
 	results.Kills = statTile(grid, "stat_Kills", "Defeated", 2)
-	results.Boss, results.BossCaption = statTile(grid, "crown", "Queens", 3)
+	results.Boss, results.BossCaption = statTile(grid, "crown", "Bosses", 3)
 	results.Stages = statTile(grid, "portal", "Stages", 4)
 	results.Gold = statTile(grid, "stat_Gold", "Gold", 5)
 	results.Level = statTile(grid, "chevronsUp", "Level", 6)
@@ -3174,7 +3174,7 @@ local function fillProgress(data: any)
 		for _, name in ipairs(a.Rewards) do
 			table.insert(r, tostring(name))
 		end
-		table.insert(lines, string.format('<font color="%s"><b>UNLOCKED</b></font>  %s  (wear it in TRACK)', hex(P.gold_300), table.concat(r, " · ")))
+		table.insert(lines, string.format('<font color="%s"><b>UNLOCKED</b></font>  %s  (wear it in ACCOUNT LEVEL)', hex(P.gold_300), table.concat(r, " · ")))
 	end
 	results.Progress.Visible = a ~= nil or #lines > 0
 	if a then
@@ -3310,7 +3310,7 @@ local function onRunResult(data)
 	local coinsEarned = tonumber(data.GoldEarned) or retained
 	local lost = tonumber(data.GoldLost) or 0
 	local cause = type(data.DeathCause) == "string" and data.DeathCause or ""
-	results.Settlement.Text = string.format("%s · %s coins earned · %s kept · %s lost", tostring(data.Difficulty or "Standard"), UIKit.formatNumber(coinsEarned), UIKit.formatNumber(retained), UIKit.formatNumber(lost)) .. (cause ~= "" and ("\nCause: " .. cause) or "")
+	results.Settlement.Text = string.format("%s · %s gold earned · %s kept · %s lost", tostring(data.Difficulty or "Standard"), UIKit.formatNumber(coinsEarned), UIKit.formatNumber(retained), UIKit.formatNumber(lost)) .. (cause ~= "" and ("\nCause: " .. cause) or "")
 	local history = type(data.DamageHistory) == "table" and data.DamageHistory or {}
 	local recent = {}
 	if not data.Won and not data.Portal and not data.Abandoned then
@@ -3397,10 +3397,10 @@ local function onRunResult(data)
 	local queens = tonumber(data.BossKills) or 0
 	if queens > 0 then
 		results.Boss.Text = tostring(queens)
-		results.BossCaption.Text = UIKit.track(queens == 1 and "Queen slain" or "Queens slain")
+		results.BossCaption.Text = UIKit.track(queens == 1 and "Boss slain" or "Bosses slain")
 	elseif data.BossFight then
 		results.Boss.Text = "-"
-		results.BossCaption.Text = UIKit.track("Fell to her")
+		results.BossCaption.Text = UIKit.track("Fell to the boss")
 	else
 		results.Boss.Text = "-"
 		results.BossCaption.Text = UIKit.track("Not reached")
