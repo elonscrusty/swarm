@@ -101,6 +101,7 @@ local function button(grid: Instance, title: string, order: number, onClick: () 
 		Kind = kind or "Secondary",
 		Title = title,
 		TitleStyle = "Label",
+		Shrink = true, -- narrow panels (phones): "+10 account levels" shrinks instead of truncating
 		LayoutOrder = order,
 		Shadow = false,
 		Radius = Theme.Radius.S,

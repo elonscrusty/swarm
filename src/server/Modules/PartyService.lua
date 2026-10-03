@@ -316,6 +316,14 @@ local function accept(player: Player, userId: any)
 		push(from)
 		return
 	end
+	local theirs = partyOf[from]
+	if theirs and theirs.Leader ~= from then
+		-- the inviter joined someone else's party since: their invite can't pull anyone in
+		notify(player, from.DisplayName .. "'s invite is no longer valid.", WARN)
+		push(player)
+		push(from)
+		return
+	end
 	local why = joinParty(player, from)
 	if why == "full" then
 		notify(player, from.DisplayName .. "'s party is full.", WARN)

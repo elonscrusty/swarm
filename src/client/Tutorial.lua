@@ -469,7 +469,7 @@ local function triggers(state: Configuration)
 				run.Revive = true
 				local modeDef = (Config.Modes :: any)[state:GetAttribute("Mode") or ""]
 				local secs = (modeDef and modeDef.PartnerRevive and modeDef.PartnerRevive.Seconds) or 2
-				push("Revive", "Revive " .. p.DisplayName, string.format("Stand beside them and hold REVIVE for %s second%s.", tostring(secs), secs == 1 and "" or "s"), "revive")
+				push("Revive", "Revive " .. p.DisplayName, string.format("Stand beside them for %s second%s to revive.", tostring(secs), secs == 1 and "" or "s"), "revive")
 				break
 			end
 		end

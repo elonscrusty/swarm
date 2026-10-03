@@ -1,4 +1,4 @@
--- Real server boundaries for held teammate revives, escrow progress and damage grace.
+-- Real server boundaries for proximity teammate revives, escrow progress and damage grace.
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local friend = preview.addPlayer("ReviveHelper", 2)
@@ -22,32 +22,29 @@ local function stand(distance)
 	helper.LastValidPos = helper.Root.Position
 	helper.SpeedCheckTimer = 0
 end
-stand(2)
-preview.advance(0.5)
-assert((rp.ReviveProgress or 0) == 0, "proximity alone must not revive")
-preview.fireServerAs(friend, "ReviveHold", true)
-preview.advance(0.6)
-assert(rp.ReviveProgress > 0 and not rp.Alive, "held input must build progress")
-helper.Root.AssemblyLinearVelocity = Vector3.new(4, 0, 0)
-preview.advance(0.1)
-assert(rp.ReviveProgress == 0, "moving must reset revive progress")
-stand(2)
-preview.advance(0.4)
-preview.fireServerAs(friend, "ReviveHold", false)
-preview.advance(0.1)
-assert(rp.ReviveProgress == 0, "release must reset revive progress")
 stand(25)
-preview.fireServerAs(friend, "ReviveHold", true)
 preview.advance(0.5)
-assert(rp.ReviveProgress == 0, "out-of-range input must not revive")
+assert((rp.ReviveProgress or 0) == 0, "a distant teammate must not revive")
+stand(2)
+preview.advance(0.6)
+assert(rp.ReviveProgress > 0 and not rp.Alive, "standing in range must build progress (no button)")
+local partial = rp.ReviveProgress
+helper.Root.AssemblyLinearVelocity = Vector3.new(4, 0, 0)
+preview.advance(0.3)
+assert(rp.ReviveProgress > partial, "moving inside the radius must keep filling")
+stand(25)
+preview.advance(0.3)
+local drained = rp.ReviveProgress
+assert(drained > 0 and drained < rp.ReviveProgress + 1 and drained < 0.9, "out of range drains, it does not reset at once")
+preview.advance(2)
+assert(rp.ReviveProgress == 0, "progress drains to zero while nobody is near")
 for _ = 1, 40 do preview.fireServerAs(friend, "ReviveHold", true) end
 preview.fireServerAs(friend, "ReviveHold", false)
-assert(not helper.ReviveHeld, "release must survive an exhausted press limiter")
-preview.advance(1.1)
-preview.fireServerAs(friend, "ReviveHold", true)
+preview.advance(0.1)
+assert(rp.ReviveProgress == 0, "the old hold remote alone must not revive")
 stand(2)
 preview.advance(2.1)
-assert(rp.Alive and rp.HP > 0 and rp.PartnerRevives == 1, "two-second held revive must succeed once")
+assert(rp.Alive and rp.HP > 0 and rp.PartnerRevives == 1, "two seconds beside the fallen teammate must revive once")
 assert(rp.PendingLevels == 7, "revival must preserve earned upgrade bank")
 -- This fixture tests revive grace, not upgrade choices. Clear the earned menu
 -- so combat time advances after the immediate XP upgrade policy resumes it.

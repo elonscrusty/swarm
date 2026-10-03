@@ -584,7 +584,7 @@ local function finalizeDeath(rp)
 	Fx.Sound("Death")
 	local rules = reviveRules()
 	if rules and #runPlayers > 1 and (rp.PartnerRevives or 0) < rules.PerRun then
-		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen! Hold REVIVE beside them.", Color3.fromRGB(255, 90, 90))
+		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen! Stand beside them to revive.", Color3.fromRGB(255, 90, 90))
 	else
 		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen!", Color3.fromRGB(255, 90, 90))
 	end
@@ -594,8 +594,9 @@ end
 
 --[[
 	DUO / TRIO: a fallen player (dead, not waiting on the revive offer) is revived when a
-	living teammate holds REVIVE nearby for PartnerRevive.Seconds. Moving, releasing
-	or leaving range resets progress. Each player has a limited number of revives.
+	living teammate stands within PartnerRevive.Radius for PartnerRevive.Seconds (no button;
+	moving inside the radius is fine). With nobody in range the progress drains at the same
+	rate instead of vanishing. Each player has a limited number of revives.
 ]]
 partnerRevives = function(dt: number)
 	local D = reviveRules()
@@ -606,18 +607,18 @@ partnerRevives = function(dt: number)
 		if not rp.Alive and not rp.AwaitingRevive and not rp.Returned and rp.Root and (rp.PartnerRevives or 0) < D.PerRun then
 			local helper = nil
 			for _, other in ipairs(runPlayers) do
-				if other ~= rp and other.Alive and other.Root and other.ReviveHeld and not other.Paused
-					and (not other.MoveDir or other.MoveDir.Magnitude < 0.1) then
+				if other ~= rp and other.Alive and other.Root and not other.Paused and not other.Returned then
 					if ((other.Root.Position - rp.Root.Position) * FLAT).Magnitude <= D.Radius then
 						helper = other
 					end
 				end
 			end
 			local before = rp.ReviveProgress or 0
+			-- fills while a teammate stands in range, drains at the same rate when nobody is
 			if helper then
-				rp.ReviveProgress = before + dt / D.Seconds
+				rp.ReviveProgress = math.min(1, before + dt / D.Seconds)
 			else
-				rp.ReviveProgress = 0
+				rp.ReviveProgress = math.max(0, before - dt / D.Seconds)
 			end
 			if math.abs((rp.ReviveProgress or 0) - before) > 0 then
 				rp.Player:SetAttribute("ReviveProgress", math.clamp(rp.ReviveProgress, 0, 1))
