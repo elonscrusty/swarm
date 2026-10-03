@@ -76,6 +76,7 @@ local function tick(dt)
 	local rp = rps[1]
 	if rp.Level > last then
 		table.insert(ups, { T = t, Stage = SM.GetStage(), Phase = SM.GetPhase(), N = rp.Level - last })
+		preview.log(string.format("UP %d:%02d S%d %s L%d gold=%d", t // 60, t % 60, SM.GetStage(), SM.GetPhase(), rp.Level, rp.Gold))
 		last = rp.Level
 	end
 end
@@ -114,6 +115,7 @@ for s = 1, stages do
 	table.insert(rows, string.format("stage %d: HPx%.2f  levels %d (explore %d) L%d->L%d  gold +%d  kills +%d  boss+surge+travel %.0fs%s",
 		s, hp, rps[1].Level - startLevel, exploreLevels, startLevel, rps[1].Level, rps[1].Gold - startGold,
 		rps[1].Kills - startKills, bossT, killed and " (boss force-killed)" or ""))
+	preview.log(rows[#rows])
 	if SM.GetStage() == s then
 		preview.log("stage did not advance; stopping")
 		break
