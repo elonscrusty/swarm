@@ -6,7 +6,7 @@ that reuse them (Max HP, Might, Armor, Speed, Luck, Growth, Revive). Everything 
 the game still draws with simple vector shapes, borrows from another icon, or doesn't have.
 
 **Total: 136 images** in 17 groups. Work top to bottom: groups 1-9 matter most in play.
-**New requests: 4 images** in group 18 (the two new stage bosses; not made yet).
+**New requests: 7 images** in groups 18-19 (the two new stage bosses, three small UI symbols; not made yet).
 
 How to use:
 1. Paste the **STYLE BLOCK** first in every ChatGPT chat (or once at the top of a chat).
@@ -282,6 +282,20 @@ a round bronze medal (like group 11).
 When these come in: upload them, regenerate ArtData, and switch the two achievements' Icon
 in `src/shared/AchievementData.lua` to `ach_BriarBane` / `ach_Frostbreaker` (adding both to
 the ART_FALLBACK list in `src/client/Icons.lua`). The boss portraits are picked up by id.
+
+
+## 19. New requests: three small UI symbols, 3 images (`art/icons/ui/`)
+
+Not made yet; the game draws these with code today. Same STYLE BLOCK, same format as group 17:
+square 512x512, transparent background, ONE flat bold symbol, ivory with a thin dark outline
+and a tiny gold accent, no scene, readable at 20 px.
+
+- **sym_heart.png** (health on the HUD and results): a chunky heart with a small gold highlight.
+- **sym_castle.png** (MAIN MENU button on pause and results): a small castle gatehouse with two towers and an arched door.
+- **sym_aim.png** (auto-aim / target buff on the HUD): a round crosshair target with four ticks and a gold centre dot.
+
+When these come in: upload them with `tools/upload_icons.py`, run `tools/gen_icon_data.py`, and
+map the keys `heart`, `castle` and `aim` to them in `src/client/Icons.lua`.
 
 ---
 

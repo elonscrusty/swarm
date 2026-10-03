@@ -38,6 +38,10 @@ end
 -- Grows from small to full size with a springy overshoot.
 function UIAnim.Pop(obj: GuiObject, delay: number?, from: number?)
 	local s = scaleOf(obj)
+	if ClientSettings.Reduced() then
+		s.Scale = 1 -- reduced motion: no grow-in
+		return
+	end
 	s.Scale = from or 0.6
 	local function go()
 		UIAnim.Tween(s, Theme.Motion.Slow, { Scale = 1 }, Enum.EasingStyle.Back)
@@ -63,6 +67,9 @@ end
 
 -- Quick "bump" (counters, timer at a new minute, level number).
 function UIAnim.Punch(obj: GuiObject, amount: number?)
+	if ClientSettings.Reduced() then
+		return
+	end
 	local s = scaleOf(obj)
 	s.Scale = 1 + (amount or 0.25)
 	UIAnim.Tween(s, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
@@ -269,7 +276,8 @@ end
 	full-size frames at 0,0).
 ]]
 function UIAnim.SwapScreens(old: GuiObject?, newScreen: GuiObject, direction: number, seconds: number?)
-	local t = seconds or 0.3
+	-- quick: at most 0.2 s (menus must feel fast), shorter still with reduced motion
+	local t = math.min(seconds or 0.2, ClientSettings.Reduced() and 0.1 or 0.2)
 	local home = UDim2.fromScale(0, 0)
 	if old and old ~= newScreen then
 		local token = (tonumber(old:GetAttribute("SwapToken")) or 0) + 1
@@ -578,6 +586,70 @@ function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
 			obj.Position = home
 		end
 	end)
+end
+
+--[[
+	Menu motion (lobby screens). Every helper scales an inner frame (a button's Face, a
+	pill, an icon) through its existing UIScale, never a hit box, and is skipped or cut
+	short with reduced effects. Idle loops return a Tween to put in a screen's Track so
+	they stop when the screen hides.
+]]
+
+function UIAnim.Reduced(): boolean
+	return ClientSettings.Reduced() or ClientPerformance.Reduced()
+end
+
+-- The UIScale to animate: a UIKit button face's "Press" scale, else the AnimScale.
+local function innerScale(obj: GuiObject): UIScale
+	local press = obj:FindFirstChild("Press")
+	if press and press:IsA("UIScale") then
+		return press
+	end
+	return scaleOf(obj)
+end
+
+-- Small springy bump on an inner frame (a tab or button face just selected).
+function UIAnim.Bump(obj: GuiObject?, amount: number?)
+	if not obj or ClientSettings.Reduced() then
+		return
+	end
+	local s = innerScale(obj)
+	s.Scale = 1 + (amount or 0.06)
+	UIAnim.Tween(s, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+end
+
+-- Something was selected / equipped / bought: a bump plus a few sparks around it.
+function UIAnim.Selected(obj: GuiObject?, color: Color3?)
+	if not obj then
+		return
+	end
+	UIAnim.Bump(obj, 0.12)
+	UIAnim.Sparks(obj, UDim2.fromScale(0.5, 0.5), color or Theme.Palette.gold_300, 6, 26, 0.45)
+end
+
+-- Slides an underline / highlight frame to a new position and size (tab switch).
+function UIAnim.SlideTo(obj: GuiObject, position: UDim2, size: UDim2?)
+	local goal: { [string]: any } = { Position = position }
+	if size then
+		goal.Size = size
+	end
+	if UIAnim.Reduced() then
+		obj.Position = position
+		if size then
+			obj.Size = size
+		end
+		return
+	end
+	UIAnim.Tween(obj, 0.18, goal, Enum.EasingStyle.Quint)
+end
+
+-- Endless gentle pulse of one property (a selected row's accent, a badge); nil with
+-- reduced effects. Put the tween in the screen's Track.
+function UIAnim.IdlePulse(obj: Instance, property: string, a: number, b: number, seconds: number?): Tween?
+	if UIAnim.Reduced() then
+		return nil
+	end
+	return UIAnim.Glow(obj, property, a, b, seconds or 1.4)
 end
 
 return UIAnim
