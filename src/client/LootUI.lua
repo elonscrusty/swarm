@@ -1048,6 +1048,22 @@ function LootUI.Update(_dt: number, inRun: boolean)
 			end
 			x = math.clamp(x, 16, v.X - 16 - w)
 			y = math.clamp(p.Y, Hud.TopBottom() + h / 2 + 4, v.Y - h / 2 - 16)
+			-- phones: a prompt on the right that would lie over the minimap goes left of
+			-- the loot instead (the map is a sibling in the same root)
+			local map = ui.Prompt.Parent and ui.Prompt.Parent:FindFirstChild("MiniMap")
+			if map and map:IsA("GuiObject") and map.Visible then
+				local mx, my = map.Position.X.Offset, map.Position.Y.Offset
+				local mw, mh = map.Size.X.Offset, map.Size.Y.Offset
+				local top, bottom = y - h / 2, y + h / 2
+				if x + w > mx and x < mx + mw and bottom > my and top < my + mh then
+					local below = my + mh + 8 + h / 2
+					if below <= v.Y - h / 2 - 16 then
+						y = below -- under the map, still beside the loot
+					else
+						x = math.clamp(math.min(x, p.X - 60 - w), 16, math.max(16, mx - 8 - w))
+					end
+				end
+			end
 		end
 		ui.Prompt.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	end

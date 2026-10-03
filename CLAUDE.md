@@ -58,6 +58,11 @@ PerLevel 12, after-cap 6) + Config.XP.CoopShare (co-op per-player pace ~ solo), 
 (DiscoveryService, save field Discovered), one-line card summaries, last-run lobby card + validated
 RETRY (MenuLastRun), journal lists discovered first. Codex handoff notes: docs/CLAUDE_HANDOFF.md.
 
+Publish-readiness pass (61/61 regressions incl. 16 layout checks via tools/preview/check_layout.py,
+NOT Studio-tested): phone shrink-before-truncate toggles/tabs, short stage objectives on phones,
+minimap/tip/shrine placement, level-up touch regressions, Priest_Angel pass picture fixed.
+Owner steps and per-area PASS/BLOCKED: docs/RELEASE_CHECKLIST.md.
+
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,

@@ -39098,6 +39098,13 @@ end
 
 -- What to do on this stage: goal (upper case), a countdown / progress ("" = none) and the
 -- goal's colour.
+-- Short forms of the objectives for when the pill would run under the health panel.
+local STAGE_SHORT = {
+	["OPENING THE PORTAL"] = "OPENING",
+	["PORTAL DORMANT"] = "DORMANT",
+	["SURVIVE THE SURGE"] = "SURGE",
+}
+
 local function stageGoal(state: Configuration, stagePhase: string): (string, string, Color3)
 	if stagePhase == "Explore" then
 		local chargeNow = state:GetAttribute("PortalCharge") or 0
@@ -39125,11 +39132,12 @@ local function updateStage(state: Configuration)
 	local stageNo = state:GetAttribute("Stage") or 0
 	local stagePhase = state:GetAttribute("StagePhase") or "None"
 	local goal, count, goalColor = stageGoal(state, stagePhase)
-	-- a boss objective measured too wide for the room left of the health panel (phones,
-	-- long boss names, Endless) is shortened; the boss bar right below names the boss
+	-- an objective measured too wide for the room left of the health panel (phones in
+	-- landscape, long boss names, Endless) is shortened: the boss bar right below names
+	-- the boss, and the count ("60%", "0:20") says the rest
 	local longGoal = goal
-	if stagePhase == "Boss" and anim.StageTooWide == longGoal then
-		goal = "DEFEAT THE BOSS"
+	if anim.StageTooWide == longGoal then
+		goal = STAGE_SHORT[longGoal] or (stagePhase == "Boss" and "DEFEAT THE BOSS") or goal
 	end
 	local stageShown = stageNo > 0 and goal ~= ""
 	if ui.Stage.Visible ~= stageShown then
@@ -39170,7 +39178,7 @@ local function updateStage(state: Configuration)
 			ui.StageCount.Visible = showCount
 			ui.StageDot2.Visible = showCount
 		end
-		if goal == longGoal and stagePhase == "Boss" and ui.StageRoom then
+		if goal == longGoal and ui.StageRoom and (stagePhase == "Boss" or STAGE_SHORT[longGoal]) then
 			if ui.Stage.AbsoluteSize.X / math.max(0.01, host.Scale()) > ui.StageRoom then
 				anim.StageTooWide = longGoal
 			end
@@ -45130,6 +45138,22 @@ function LootUI.Update(_dt: number, inRun: boolean)
 			end
 			x = math.clamp(x, 16, v.X - 16 - w)
 			y = math.clamp(p.Y, Hud.TopBottom() + h / 2 + 4, v.Y - h / 2 - 16)
+			-- phones: a prompt on the right that would lie over the minimap goes left of
+			-- the loot instead (the map is a sibling in the same root)
+			local map = ui.Prompt.Parent and ui.Prompt.Parent:FindFirstChild("MiniMap")
+			if map and map:IsA("GuiObject") and map.Visible then
+				local mx, my = map.Position.X.Offset, map.Position.Y.Offset
+				local mw, mh = map.Size.X.Offset, map.Size.Y.Offset
+				local top, bottom = y - h / 2, y + h / 2
+				if x + w > mx and x < mx + mw and bottom > my and top < my + mh then
+					local below = my + mh + 8 + h / 2
+					if below <= v.Y - h / 2 - 16 then
+						y = below -- under the map, still beside the loot
+					else
+						x = math.clamp(math.min(x, p.X - 60 - w), 16, math.max(16, mx - 8 - w))
+					end
+				end
+			end
 		end
 		ui.Prompt.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	end
@@ -46349,6 +46373,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			pinAction(contentH > detailH + 1)
 			fitSkins(w - 40)
 			place(ui.Centre, (W - centreW) / 2, detailY - 64, centreW, 58)
+			ui.Centre.Visible = true
 			if ctx.Current() == "Characters" then
 				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + listH) + (detailY - 50)) / 2 / H)
 			end
@@ -46386,6 +46411,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			local gapL, gapR = M + lw, W - M - rw
 			centreW = math.min(420, gapR - gapL - 16)
 			place(ui.Centre, (gapL + gapR - centreW) / 2, H - M - 58, centreW, 58)
+			-- phones in landscape leave no room between the panels: the details panel
+			-- already names the hero, so the caption hides instead of reading "KNI..."
+			ui.Centre.Visible = centreW >= 180
 			if ctx.Current() == "Characters" then
 				workspace.CurrentCamera:SetAttribute("MenuHeroY", 0.5)
 			end
@@ -49948,6 +49976,7 @@ return MenuUpgrades
 local Players = game:GetService("Players")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local UserInputService = game:GetService("UserInputService")
 local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local EnemyData = require(Shared:WaitForChild("EnemyData"))
@@ -49991,6 +50020,7 @@ local arenaModel: Instance? = nil
 local arenaCentre = Vector3.zero
 local moveAt, enemyAt = 0, 0
 local shown, covered, enabled = false, false, ClientSettings.Get("Minimap") ~= false
+local cramped = false -- phones: no room beside the JUMP button (place)
 local candidates: { BasePart } = {} -- reused per enemy pass
 
 ------------------------------------------------------------------------------------------
@@ -50133,9 +50163,17 @@ local function place()
 		-- keeps the right edge)
 		x = M
 		y = math.max((els.BarBottom or 0), Hud.TopBottom()) + 8
-		local strip = LootUI.Elements().Strip :: Frame?
+		local loot = LootUI.Elements()
+		local strip = loot.Strip :: Frame?
 		if strip and strip.Visible and strip.Size.Y.Offset > 0 and #strip:GetChildren() > 1 then
 			y = math.max(y, strip.Position.Y.Offset + strip.Size.Y.Offset + 8)
+		end
+		-- and under the curse / bargain / synergy chips that follow the strip
+		for _, key in ipairs({ "Curses", "Bargain", "Synergy" }) do
+			local chip = loot[key] :: Frame?
+			if chip and chip.Visible then
+				y = math.max(y, chip.Position.Y.Offset + chip.Size.Y.Offset + 8)
+			end
 		end
 	else
 		x = W - M - mapPx
@@ -50154,11 +50192,33 @@ local function place()
 				y = math.max(y, list.Position.Y.Offset + n * (h + 6) + 6)
 			end
 		end
+		-- phones: pushed down by the team rows, the map must not run under the JUMP button
+		-- (bottom right, MobileControls); it moves left of the button's column, and if it
+		-- then lands on the ability panel it hides until there is room again
+		cramped = false
+		if UserInputService.TouchEnabled and UIKit.IsCompact() then
+			local H = v.Y
+			local scale = math.max(0.01, kit.Scale())
+			local jumpW = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26) / scale + 12
+			local jumpTop = H - jumpW
+			local mapH = ui.Holder.Size.Y.Offset
+			if y + mapH > jumpTop - 8 then
+				x = W - M - jumpW - mapPx
+				local bar = els.Bar :: Frame?
+				if bar and els.BarTop and y + mapH > els.BarTop - 4 then
+					local barRight = bar.Position.X.Offset + (1 - bar.AnchorPoint.X) * bar.Size.X.Offset
+					if x < barRight then
+						cramped = true
+					end
+				end
+			end
+		end
 	end
 	local at = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	if ui.Holder.Position ~= at then
 		ui.Holder.Position = at
 	end
+	MiniMap.Refresh()
 end
 
 function MiniMap.Layout()
@@ -50181,7 +50241,7 @@ end
 
 function MiniMap.Refresh()
 	if ui.Holder then
-		ui.Holder.Visible = shown and enabled and not covered
+		ui.Holder.Visible = shown and enabled and not covered and not cramped
 	end
 end
 
@@ -57285,6 +57345,7 @@ local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
+local MiniMap = require(script.Parent.MiniMap)
 local ClientSettings = require(script.Parent.ClientSettings)
 
 local Tutorial = {}
@@ -57535,6 +57596,19 @@ local function layout()
 		w = w2
 		y = place()
 		local right = tx >= W / 2
+		-- the right side holds the team rows and the minimap (phones): a card with no
+		-- target that would lie over the map goes left instead (the card lets touches
+		-- through, so a thumb landing on it still moves the hero)
+		if right and not (pos and size) then
+			local map = MiniMap.Elements().Holder :: Frame?
+			if map and map.Visible then
+				local mapBottom = map.Position.Y.Offset + map.Size.Y.Offset
+				local mapLeft = map.Position.X.Offset
+				if y < mapBottom + 8 and (W - 12) > mapLeft then
+					right = false
+				end
+			end
+		end
 		x = right and (W - 12 - w / 2) or (12 + w / 2)
 	end
 	if pos and size then
@@ -62235,6 +62309,9 @@ function UIBuilder.Init(d: { [string]: any })
 		Insets = function(): Hud.Insets
 			return insets
 		end,
+		Scale = function(): number
+			return uiScale.Scale
+		end,
 	})
 	Tutorial.Build(root, {
 		OnRelayout = onRelayout,
@@ -62923,6 +63000,7 @@ export type ButtonOpts = {
 	TitleStyle: string?, -- text style of the title (default H2 for big, Label otherwise)
 	TitleSize: number?,
 	Align: string?, -- "Left" | "Center" (default Center unless an icon / subtitle is set)
+	Shrink: boolean?, -- the title scales down a little (never below ~10 px) before it truncates
 	Size: UDim2?,
 	Position: UDim2?,
 	AnchorPoint: Vector2?,
@@ -63101,6 +63179,10 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 			TextXAlignment = align == "Left" and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 		}, titleSize)
+		if o.Shrink and titleLabel then
+			titleLabel.TextScaled = true
+			new("UITextSizeConstraint", { MinTextSize = math.max(10, titleLabel.TextSize - 5), MaxTextSize = titleLabel.TextSize }, titleLabel)
+		end
 	end
 	if o.Subtitle then
 		subLabel = text(column, "BodyStrong", o.Subtitle, {
@@ -63771,6 +63853,7 @@ function UIKit.Tabs(parent: Instance?, items: { { Id: string, Title: string, Ico
 			Shadow = false,
 			Radius = Theme.Radius.S,
 			Align = "Center",
+			Shrink = true, -- narrow tab rows (phones): "ACHIEVEMENTS" shrinks instead of "ACHIEVEMEN..."
 			OnClick = function()
 				if current ~= item.Id then
 					current = item.Id
@@ -63936,13 +64019,17 @@ function UIKit.Toggle(parent: Instance?, title: string, icon: string?, descripti
 		Icons.Draw(row, icon, { Size = 20, Color = P.gold_400, Position = UDim2.fromOffset(0, description and 6 or 14) })
 		x = 28
 	end
-	text(row, "Label", string.upper(title), {
+	-- narrow columns (phones): the title shrinks a little instead of truncating, and the
+	-- description scales into its two lines instead of losing its last words
+	local titleLabel = text(row, "Label", string.upper(title), {
 		Position = UDim2.fromOffset(x, description and 2 or 0),
 		Size = UDim2.new(1, -x - 84, 0, description and (TS(Theme.TextSize.Caption) + 14) or h),
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextScaled = true,
 	})
+	new("UITextSizeConstraint", { MinTextSize = math.max(10, titleLabel.TextSize - 5), MaxTextSize = titleLabel.TextSize }, titleLabel)
 	if description then
-		text(row, "Small", description, {
+		local desc = text(row, "Small", description, {
 			Name = "Description",
 			Position = UDim2.fromOffset(x, TS(Theme.TextSize.Caption) + 14),
 			Size = UDim2.new(1, -x - 84, 0, h - TS(Theme.TextSize.Caption) - 14),
@@ -63950,7 +64037,9 @@ function UIKit.Toggle(parent: Instance?, title: string, icon: string?, descripti
 			TextWrapped = true,
 			TextYAlignment = Enum.TextYAlignment.Top,
 			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextScaled = true,
 		}, 13)
+		new("UITextSizeConstraint", { MinTextSize = math.max(9, desc.TextSize - 4), MaxTextSize = desc.TextSize }, desc)
 	end
 	local track = new("Frame", {
 		Name = "Switch",

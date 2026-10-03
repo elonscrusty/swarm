@@ -235,6 +235,14 @@ axes with the catalog Offset / Size (Blender (x, y, z) → Roblox (-x, z, y), fr
 It prints every mismatch or missing piece (exit code 1). The `models` scene is the visual
 check: heroes and creatures must show their faces in the front 3/4 view.
 
+`python3 tools/preview/check_layout.py <outdir or scene.json ...>` is the automatic layout
+check over rendered scene JSONs (`render.sh ... --outdir DIR` writes one per scene and
+device): visible text drawn over other text with nothing opaque between them (OVERLAP),
+text past the screen edge or under Roblox's top-bar buttons (OFFSCREEN / TOPBAR), panels
+running off the screen, and text cut with "..." (TRUNCATED, information only; `--strict`
+fails on it too). Exit code 1 when a hard finding is left. `run_regressions.py` runs it for
+the main screens on `iphone` and `phone-portrait` (the `layout-*` checks).
+
 ## Portable regression checks
 
 `python -X utf8 tools/run_regressions.py` runs the real-module server checks and the focused phone input/lifecycle checks. Pass `--lune <path>` and `--out <directory>` if needed. Server smoke scenes use `--set headless=on` to omit full UI layout; the run-server scene still initializes its travel overlay. Visual scenes retain the full client.

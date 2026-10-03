@@ -37,6 +37,10 @@ def main():
     checks += [("accessibility-sim", [])]
     checks += [("coop-regression", ["rejoin=" + value]) for value in ("success", "expired", "ended", "forged")]
     checks += [("reconnect-lobby", []), ("reconnect-lobby", ["fail=teleport"]), ("reconnect-lobby", ["fail=expired"])]
+    # phone layouts: the scene's GUI export goes through tools/preview/check_layout.py
+    # (text over text, text off screen or under the Roblox top bar, panels off screen)
+    checks += [("layout", [scene, device]) for device in ("iphone", "phone-portrait")
+               for scene in ("menu", "levelup", "results", "pause", "revive", "stage-choice", "characters", "countdown")]
 
     def run(check):
         scene, settings = check
@@ -50,12 +54,22 @@ def main():
         # Live-store and teleport fixtures intentionally run outside Studio.
         if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby"):
             command.remove("--studio")
-        if scene not in scripts:
+        if scene == "layout":
+            layout_scene, device = settings
+            command = [args.lune, "run", "tools/preview/runtime/main.luau", "--", "--scene", layout_scene,
+                       "--device", device, "--out", str(args.out / (name + ".json")), "--set", "images=loaded"]
+        elif scene not in scripts:
             for setting in settings:
                 command.extend(["--set", setting])
         try:
             result = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=360)
             output = result.stdout + result.stderr
+            if scene == "layout" and result.returncode == 0:
+                layout = subprocess.run([sys.executable, "tools/preview/check_layout.py", str(args.out / (name + ".json")), "--quiet"],
+                                        cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+                output += layout.stdout + layout.stderr
+                if layout.returncode != 0:
+                    output += "\nFAIL layout check\n"
             passed = result.returncode == 0 and not re.search(r"\bFAIL\b|Step error:|handler error|start client failed", output)
             code = result.returncode
         except subprocess.TimeoutExpired as error:

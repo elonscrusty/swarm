@@ -574,6 +574,7 @@ export type ButtonOpts = {
 	TitleStyle: string?, -- text style of the title (default H2 for big, Label otherwise)
 	TitleSize: number?,
 	Align: string?, -- "Left" | "Center" (default Center unless an icon / subtitle is set)
+	Shrink: boolean?, -- the title scales down a little (never below ~10 px) before it truncates
 	Size: UDim2?,
 	Position: UDim2?,
 	AnchorPoint: Vector2?,
@@ -752,6 +753,10 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 			TextXAlignment = align == "Left" and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 		}, titleSize)
+		if o.Shrink and titleLabel then
+			titleLabel.TextScaled = true
+			new("UITextSizeConstraint", { MinTextSize = math.max(10, titleLabel.TextSize - 5), MaxTextSize = titleLabel.TextSize }, titleLabel)
+		end
 	end
 	if o.Subtitle then
 		subLabel = text(column, "BodyStrong", o.Subtitle, {
@@ -1422,6 +1427,7 @@ function UIKit.Tabs(parent: Instance?, items: { { Id: string, Title: string, Ico
 			Shadow = false,
 			Radius = Theme.Radius.S,
 			Align = "Center",
+			Shrink = true, -- narrow tab rows (phones): "ACHIEVEMENTS" shrinks instead of "ACHIEVEMEN..."
 			OnClick = function()
 				if current ~= item.Id then
 					current = item.Id
@@ -1587,13 +1593,17 @@ function UIKit.Toggle(parent: Instance?, title: string, icon: string?, descripti
 		Icons.Draw(row, icon, { Size = 20, Color = P.gold_400, Position = UDim2.fromOffset(0, description and 6 or 14) })
 		x = 28
 	end
-	text(row, "Label", string.upper(title), {
+	-- narrow columns (phones): the title shrinks a little instead of truncating, and the
+	-- description scales into its two lines instead of losing its last words
+	local titleLabel = text(row, "Label", string.upper(title), {
 		Position = UDim2.fromOffset(x, description and 2 or 0),
 		Size = UDim2.new(1, -x - 84, 0, description and (TS(Theme.TextSize.Caption) + 14) or h),
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextScaled = true,
 	})
+	new("UITextSizeConstraint", { MinTextSize = math.max(10, titleLabel.TextSize - 5), MaxTextSize = titleLabel.TextSize }, titleLabel)
 	if description then
-		text(row, "Small", description, {
+		local desc = text(row, "Small", description, {
 			Name = "Description",
 			Position = UDim2.fromOffset(x, TS(Theme.TextSize.Caption) + 14),
 			Size = UDim2.new(1, -x - 84, 0, h - TS(Theme.TextSize.Caption) - 14),
@@ -1601,7 +1611,9 @@ function UIKit.Toggle(parent: Instance?, title: string, icon: string?, descripti
 			TextWrapped = true,
 			TextYAlignment = Enum.TextYAlignment.Top,
 			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextScaled = true,
 		}, 13)
+		new("UITextSizeConstraint", { MinTextSize = math.max(9, desc.TextSize - 4), MaxTextSize = desc.TextSize }, desc)
 	end
 	local track = new("Frame", {
 		Name = "Switch",

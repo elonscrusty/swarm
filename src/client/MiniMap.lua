@@ -39,6 +39,7 @@
 local Players = game:GetService("Players")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local UserInputService = game:GetService("UserInputService")
 local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local EnemyData = require(Shared:WaitForChild("EnemyData"))
@@ -82,6 +83,7 @@ local arenaModel: Instance? = nil
 local arenaCentre = Vector3.zero
 local moveAt, enemyAt = 0, 0
 local shown, covered, enabled = false, false, ClientSettings.Get("Minimap") ~= false
+local cramped = false -- phones: no room beside the JUMP button (place)
 local candidates: { BasePart } = {} -- reused per enemy pass
 
 ------------------------------------------------------------------------------------------
@@ -224,9 +226,17 @@ local function place()
 		-- keeps the right edge)
 		x = M
 		y = math.max((els.BarBottom or 0), Hud.TopBottom()) + 8
-		local strip = LootUI.Elements().Strip :: Frame?
+		local loot = LootUI.Elements()
+		local strip = loot.Strip :: Frame?
 		if strip and strip.Visible and strip.Size.Y.Offset > 0 and #strip:GetChildren() > 1 then
 			y = math.max(y, strip.Position.Y.Offset + strip.Size.Y.Offset + 8)
+		end
+		-- and under the curse / bargain / synergy chips that follow the strip
+		for _, key in ipairs({ "Curses", "Bargain", "Synergy" }) do
+			local chip = loot[key] :: Frame?
+			if chip and chip.Visible then
+				y = math.max(y, chip.Position.Y.Offset + chip.Size.Y.Offset + 8)
+			end
 		end
 	else
 		x = W - M - mapPx
@@ -245,11 +255,33 @@ local function place()
 				y = math.max(y, list.Position.Y.Offset + n * (h + 6) + 6)
 			end
 		end
+		-- phones: pushed down by the team rows, the map must not run under the JUMP button
+		-- (bottom right, MobileControls); it moves left of the button's column, and if it
+		-- then lands on the ability panel it hides until there is room again
+		cramped = false
+		if UserInputService.TouchEnabled and UIKit.IsCompact() then
+			local H = v.Y
+			local scale = math.max(0.01, kit.Scale())
+			local jumpW = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26) / scale + 12
+			local jumpTop = H - jumpW
+			local mapH = ui.Holder.Size.Y.Offset
+			if y + mapH > jumpTop - 8 then
+				x = W - M - jumpW - mapPx
+				local bar = els.Bar :: Frame?
+				if bar and els.BarTop and y + mapH > els.BarTop - 4 then
+					local barRight = bar.Position.X.Offset + (1 - bar.AnchorPoint.X) * bar.Size.X.Offset
+					if x < barRight then
+						cramped = true
+					end
+				end
+			end
+		end
 	end
 	local at = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	if ui.Holder.Position ~= at then
 		ui.Holder.Position = at
 	end
+	MiniMap.Refresh()
 end
 
 function MiniMap.Layout()
@@ -272,7 +304,7 @@ end
 
 function MiniMap.Refresh()
 	if ui.Holder then
-		ui.Holder.Visible = shown and enabled and not covered
+		ui.Holder.Visible = shown and enabled and not covered and not cramped
 	end
 end
 

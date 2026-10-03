@@ -3810,6 +3810,9 @@ function UIBuilder.Init(d: { [string]: any })
 		Insets = function(): Hud.Insets
 			return insets
 		end,
+		Scale = function(): number
+			return uiScale.Scale
+		end,
 	})
 	Tutorial.Build(root, {
 		OnRelayout = onRelayout,

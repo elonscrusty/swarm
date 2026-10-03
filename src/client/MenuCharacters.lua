@@ -738,6 +738,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			pinAction(contentH > detailH + 1)
 			fitSkins(w - 40)
 			place(ui.Centre, (W - centreW) / 2, detailY - 64, centreW, 58)
+			ui.Centre.Visible = true
 			if ctx.Current() == "Characters" then
 				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + listH) + (detailY - 50)) / 2 / H)
 			end
@@ -775,6 +776,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			local gapL, gapR = M + lw, W - M - rw
 			centreW = math.min(420, gapR - gapL - 16)
 			place(ui.Centre, (gapL + gapR - centreW) / 2, H - M - 58, centreW, 58)
+			-- phones in landscape leave no room between the panels: the details panel
+			-- already names the hero, so the caption hides instead of reading "KNI..."
+			ui.Centre.Visible = centreW >= 180
 			if ctx.Current() == "Characters" then
 				workspace.CurrentCamera:SetAttribute("MenuHeroY", 0.5)
 			end

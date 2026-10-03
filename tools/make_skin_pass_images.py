@@ -47,10 +47,15 @@ def compose(dark_path, light_path, out):
     colour = np.clip((d_img - (1 - alpha[..., None]) * bd) / np.maximum(alpha[..., None], 0.02), 0, 255)
     m = Image.fromarray(((alpha > 0.6) * 255).astype(np.uint8))
     core = grow(m.filter(ImageFilter.MinFilter(15)), 31)  # drops sparkles, keeps the hero
-    mask = (alpha * (np.asarray(core) > 0) * 255).astype(np.uint8)
+    # thin pieces close to the hero (the Angel's halo is a flat ring seen edge-on) count too;
+    # the floating gold sparkles are smaller than 9 px and far from the body, so they still go
+    near = np.asarray(grow(core, 61)) > 0
+    thin = np.asarray(m.filter(ImageFilter.MinFilter(9)).filter(ImageFilter.MaxFilter(9))) > 0
+    keep = (np.asarray(core) > 0) | (thin & near)
+    mask = (alpha * keep * 255).astype(np.uint8)
     colour = 255 * (colour / 255) ** 0.8 * 1.06  # the offline night lighting is dim: lift the hero a little
     img = Image.fromarray(np.clip(colour, 0, 255).astype(np.uint8))
-    ys, xs = np.where(np.asarray(m.filter(ImageFilter.MinFilter(15))) > 0)
+    ys, xs = np.where(keep)
     x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
     side = int(max(x1 - x0, y1 - y0) * 1.2)
     cx, cy = (x0 + x1) // 2, (y0 + y1) // 2 - int(side * 0.01)

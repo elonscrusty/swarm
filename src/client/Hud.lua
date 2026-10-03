@@ -1043,6 +1043,13 @@ end
 
 -- What to do on this stage: goal (upper case), a countdown / progress ("" = none) and the
 -- goal's colour.
+-- Short forms of the objectives for when the pill would run under the health panel.
+local STAGE_SHORT = {
+	["OPENING THE PORTAL"] = "OPENING",
+	["PORTAL DORMANT"] = "DORMANT",
+	["SURVIVE THE SURGE"] = "SURGE",
+}
+
 local function stageGoal(state: Configuration, stagePhase: string): (string, string, Color3)
 	if stagePhase == "Explore" then
 		local chargeNow = state:GetAttribute("PortalCharge") or 0
@@ -1070,11 +1077,12 @@ local function updateStage(state: Configuration)
 	local stageNo = state:GetAttribute("Stage") or 0
 	local stagePhase = state:GetAttribute("StagePhase") or "None"
 	local goal, count, goalColor = stageGoal(state, stagePhase)
-	-- a boss objective measured too wide for the room left of the health panel (phones,
-	-- long boss names, Endless) is shortened; the boss bar right below names the boss
+	-- an objective measured too wide for the room left of the health panel (phones in
+	-- landscape, long boss names, Endless) is shortened: the boss bar right below names
+	-- the boss, and the count ("60%", "0:20") says the rest
 	local longGoal = goal
-	if stagePhase == "Boss" and anim.StageTooWide == longGoal then
-		goal = "DEFEAT THE BOSS"
+	if anim.StageTooWide == longGoal then
+		goal = STAGE_SHORT[longGoal] or (stagePhase == "Boss" and "DEFEAT THE BOSS") or goal
 	end
 	local stageShown = stageNo > 0 and goal ~= ""
 	if ui.Stage.Visible ~= stageShown then
@@ -1115,7 +1123,7 @@ local function updateStage(state: Configuration)
 			ui.StageCount.Visible = showCount
 			ui.StageDot2.Visible = showCount
 		end
-		if goal == longGoal and stagePhase == "Boss" and ui.StageRoom then
+		if goal == longGoal and ui.StageRoom and (stagePhase == "Boss" or STAGE_SHORT[longGoal]) then
 			if ui.Stage.AbsoluteSize.X / math.max(0.01, host.Scale()) > ui.StageRoom then
 				anim.StageTooWide = longGoal
 			end

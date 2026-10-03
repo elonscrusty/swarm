@@ -165,6 +165,33 @@ local ok, err = S.runMain(function()
 	reroll.Activated:_fire(unsafe)
 	preview.advance(0.1)
 	check("ongoing movement touch cannot borrow another touch to reroll", rerolls == 0)
+
+	-- phone level-up safety: a card takes only a complete, deliberate tap made after the
+	-- cards have been on screen a moment, never a tap that began on the thumb side
+	local picks = 0
+	preview.remote("LevelUpChoose").OnServerEvent:Connect(function() picks += 1 end)
+	local function tap(x, y, hold)
+		local touch = { UserInputType = env.Enum.UserInputType.Touch, KeyCode = env.Enum.KeyCode.Unknown, Position = env.Vector3.new(x, y, 0) }
+		uis.InputBegan:_fire(touch, true)
+		preview.advance(hold or 0.05)
+		uis.InputEnded:_fire(touch)
+		cards.Card1.Activated:_fire(touch)
+		preview.advance(0.05)
+	end
+	offer.PanelId = 3
+	preview.fireClient("LevelUpOffer", offer)
+	preview.advance(0.3)
+	tap(500, 100)
+	check("tap before the cards armed never picks a card", picks == 0)
+	preview.advance(0.6) -- 0.95 s after the cards appeared: armed, but the thumb zone is still guarded
+	local dev = R.options.device
+	tap(dev.width * 0.1, dev.height * 0.9)
+	check("tap that began in the thumbstick zone is ignored while guarded", picks == 0)
+	preview.advance(0.6)
+	tap(500, 100, 0.9)
+	check("a long press never picks a card", picks == 0)
+	tap(500, 100)
+	check("a complete fresh tap picks the card once", picks == 1)
 	preview.fireClient("LevelUpClose")
 	preview.advance(0.5)
 	UI.ShowChest({ Dramatic = false, Gold = 20, Rewards = {} })
