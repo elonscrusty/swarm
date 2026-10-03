@@ -340,7 +340,7 @@ WeaponData.Weapons = {
 		Behavior = "Aura",
 		AmountLabel = nil, -- one ring: Amount does nothing for the aura
 		Perks = { { Level = 6, Id = "Chill", Name = "Chilling Aura", Text = "Enemies inside the aura move 25% slower." } },
-		Params = { Radius = 5.5 },
+		Params = { Radius = 8 }, -- was 5.5 (owner: the aura needs to be bigger)
 		Levels = {
 			row(5, 1.10, 1, 1.0, 0, 999, 0, 6),
 			row(5, 1.10, 1, 1.2, 0, 999, 0, 6),
