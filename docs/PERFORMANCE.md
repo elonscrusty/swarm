@@ -93,14 +93,48 @@ Fixes in this pass: none were needed (no measured regression). Not run on this m
 (too slow while shared): a before soak at commit `38f713a`, a party (Duo/Trio) swarm (the
 preview has one local player), and a stage-sim full run.
 
+## Enemy level of detail (2026-10-03)
+
+Owner report: in big late-run swarms many enemies turned into "blobs" (the plain server
+body, recoloured, shown for enemies over the old detail budget of 110 counted over every
+live enemy). That look is gone; `EnemyRenderer` now saves the time in other ways
+(values in `Config.Graphics`):
+
+| step | what it does | setting |
+|---|---|---|
+| screen culling | an enemy outside the camera view (plus a margin; a little more before it leaves, so edge walkers do not flicker) has no model and no CFrame updates; its hidden body is all there is. Bosses are never culled | `CullMargin` 6 |
+| on-screen budget | the nearest on-screen enemies get the full animated model, the rest a low-detail variant: the same model cut to its largest pieces (mirrored pairs kept whole) in their own colours, posed rigidly, no shadow, pooled per type | `MaxDetailedEnemies` 80, `LowDetailParts` 4 |
+| adaptive | on slow frames (under 40 fps) the budget steps down, back up when fast; the worst case is more low-detail models, never plain parts | `MinDetailedEnemies` 40 |
+| update rate | when crowded, only the nearest update every frame; the rest and all low-detail models every 2nd frame, staggered (half of them per frame) | `FullRateEnemies` 30 |
+
+Elites, static / support creatures, Burrowers and bosses are always full models (hit
+flash, elite rings / auras, fuse blink work on both variants). perf-sim now prints an
+"enemy look" line per phase: blobs on screen, model parts and `EnemyRenderer.Stats()`.
+
+perf-sim, iphone viewport, 3 s per phase (ms from runs made under the same machine load):
+
+| | before 200 | after 200 | before 300 | after 300 |
+|---|---|---|---|---|
+| EnemyRenderer ms/frame | 66.3 | 55.3 | 78.6 | 61.7 |
+| parts moved/frame | 1080 | 816 | 1164 | 1032 |
+| model parts alive (incl. pools) | 2068 | 2478 | 2461 | 3214 |
+| low-detail drawn / culled | – | 87 / 11 | – | 82 / 89 |
+| blobs on screen | 52 | 0 | 67 | 0 |
+
+The ms row and the parts row come from different runs: the parts and low-detail counts
+are from the final tuning, which ran alone on the machine, so its ms cannot be compared.
+
+In the real game enemies spawn off screen, so culling saves more than in this ring
+benchmark. Not yet checked on a device: whether models popping in at the screen edge
+are visible (raise `CullMargin` if so).
+
 ## Remaining limits
 
 - The swarm is capped by design: `Config.Enemies.MaxLive` 200 (pool 300). At 400-600 the
   server's `EnemyAI.Enemies` loop is the largest cost (about half the server time); it
   scales linearly with enemy count.
-- On the client, EnemyRenderer and VFX are the two big callbacks. EnemyRenderer moves every
-  detailed model each frame (BulkMoveTo); `Config.Graphics.MaxDetailedEnemies` 110 (down
-  to 60 on slow frames) bounds it. VFX's per-frame Transparency / Size tweening of pooled
+- On the client, EnemyRenderer and VFX are the two big callbacks. EnemyRenderer moves the
+  models of on-screen enemies only (see "Enemy level of detail" below); VFX's per-frame Transparency / Size tweening of pooled
   effect parts is the largest source of property writes (12-15 k/s at 600 enemies here).
 - Telegraph ground warnings scale with burrowers and lunges: up to ~40 k Transparency
   writes/s at 600 enemies (14/s warnings). Normal play (200) is a third of that.

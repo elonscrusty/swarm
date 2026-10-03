@@ -685,7 +685,7 @@ Purchases are cosmetic or convenience (gold and skins). There are no loot boxes.
    `Explode` + `Fuse`, and optional behaviours `Ranged` / `Lunge` (EnemyAI)).
 2. Give it weight in the `SpawnTable` rows for the minutes it should appear.
 3. Client look: a mesh name in `ModelLibrary` `ENEMY_MESH` and a part-built fallback in
-   `ENEMIES` (+ `LOOKS`, `EnemyRenderer` `PLAIN`); poses for its `Act` values in
+   `ENEMIES` (+ `LOOKS`; its low-detail variant is cut automatically); poses for its `Act` values in
    `EnemyRenderer.actPose`.
 That's all: pooling, movement, elites, affixes, drops and hit flashes work for every type.
 A new boss is a `BossData` entry (and `Config.Boss.Id`); new attack moves go in `BossAI`.
@@ -698,8 +698,20 @@ A new boss is a `BossData` entry (and `Config.Boss.Id`); new attack moves go in 
 - Projectiles are server data only; clients get one buffer of positions per sync tick (30 Hz)
   and draw pooled parts. Effects are batched into one remote per tick.
 - Gems are pooled Parts (500); bob/spin is local to each client.
-- Detailed enemy models exist only on clients: the server still replicates one part per
-  enemy. `Config.Graphics.MaxDetailedEnemies` caps how many get the full model on screen.
+- Enemy models exist only on clients: the server still replicates one part per enemy,
+  and the client always hides it (no enemy is ever drawn as that plain part). The client's
+  level of detail (`EnemyRenderer`, values in `Config.Graphics`):
+  - Screen culling: an enemy outside the camera view (plus `CullMargin` 6 studs, a little
+    more before it leaves) has no model and costs no updates. Only bosses are never culled.
+  - Detail budget among on-screen enemies: the nearest `MaxDetailedEnemies` (80) get the
+    full animated model; the rest get a low-detail variant (the model's `LowDetailParts`
+    (4) largest pieces, mirrored pairs kept whole, own colours, posed rigidly, no shadow).
+    On slow frames the budget steps down to `MinDetailedEnemies` (40); the worst case is
+    more low-detail models, never plain parts. Elites, static / support creatures,
+    Burrowers and bosses are always full models.
+  - Update rate: when more than `FullRateEnemies` (30) are on screen, only that many
+    nearest update every frame; the rest (and every low-detail model) every 2nd frame,
+    staggered. Full and low-detail models are pooled per type.
 
 Note: `SetNetworkOwner(nil)` is only called for unanchored enemy parts. Enemy bodies are
 anchored (moved by CFrame), and anchored parts are always server-owned; Roblox rejects the
