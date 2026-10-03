@@ -7,7 +7,7 @@
 -- gaps between them (dead stretches > 45 s, bursts of 3+ levels inside 3 s), and per
 -- stage: levels, run gold, kills, enemy HP multiplier.
 --   lune ... --scene pacing-sim --studio --set stages=6 --set explore=150 --set bossmax=90
---   --set players=2|3 (no --studio)
+--   --set players=2|3 (no --studio)   --set pace=off (no gem XP pacing, for a before/after)
 local Players = game:GetService("Players")
 local me = Players.LocalPlayer
 local n = math.clamp(tonumber(preview.args.players) or 1, 1, 3)
@@ -30,6 +30,10 @@ if n > 1 then
 	end
 end
 local Config = preview.shared("Config")
+-- --set pace=off: the gem XP pacing multipliers off (Config.XP.StageMult / OpeningMult)
+if preview.args.pace == "off" then
+	Config.XP.StageMult, Config.XP.OpeningMult = nil, nil
+end
 preview.startServer()
 preview.advance(2)
 local RM = preview.server("RunManager")
@@ -42,7 +46,7 @@ local rawAdd = GoldSys.AddRunGold
 GoldSys.AddRunGold = function(rp, base)
 	local paid = rawAdd(rp, base)
 	local src, line = debug.info(2, "sl")
-	local key = string.match(src or "?", "([%w_]+)$") .. ":" .. tostring(line)
+	local key = (string.match(tostring(src), "([%w_]+)[\"%]]*$") or tostring(src)) .. ":" .. tostring(line)
 	goldBy[key] = (goldBy[key] or 0) + paid
 	return paid
 end

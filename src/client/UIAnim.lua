@@ -564,17 +564,23 @@ function UIAnim.Ring(parent: GuiObject, center: UDim2, color: Color3, endSize: n
 end
 
 -- Quick positional jitter that settles back where it started.
+local shakeHome: { [GuiObject]: UDim2 } = setmetatable({}, { __mode = "k" }) :: any
+local shakeToken: { [GuiObject]: number } = setmetatable({}, { __mode = "k" }) :: any
 function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
 	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
-	local home = obj.Position
+	-- a shake started while another runs reuses its home (no drifting off position)
+	local home = shakeHome[obj] or obj.Position
+	shakeHome[obj] = home
+	local token = (shakeToken[obj] or 0) + 1
+	shakeToken[obj] = token
 	local amp = pixels or 6
 	local steps = 6
 	local each = (seconds or 0.3) / steps
 	task.spawn(function()
 		for i = 1, steps do
-			if not obj.Parent then
+			if not obj.Parent or shakeToken[obj] ~= token then
 				return
 			end
 			local k = (1 - i / steps) * amp
@@ -582,8 +588,12 @@ function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
 			obj.Position = home + UDim2.fromOffset(dir * k, (i % 3 - 1) * k * 0.5)
 			task.wait(each)
 		end
-		if obj.Parent then
-			obj.Position = home
+		if shakeToken[obj] == token then
+			shakeHome[obj] = nil
+			shakeToken[obj] = nil
+			if obj.Parent then
+				obj.Position = home
+			end
 		end
 	end)
 end

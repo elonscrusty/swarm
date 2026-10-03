@@ -1503,11 +1503,13 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				y += statRow(face, c, changes[i], pad, y, rw, CARD.Row - 2, changeValue(changes[i]))
 			end
 		else
+			-- slimmer rows on phones in landscape, so a NEW weapon keeps its third stat
+			local rowH = compactLandscape() and CARD.Row - 4 or CARD.Row
 			for _, line in ipairs(stats) do
-				if not fits(CARD.Row) then
+				if not fits(rowH) then
 					break
 				end
-				y += statRow(face, c, line, pad, y, rw, CARD.Row, tostring(line.To))
+				y += statRow(face, c, line, pad, y, rw, rowH, tostring(line.To))
 			end
 		end
 		synRoom = 0

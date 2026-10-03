@@ -82,10 +82,25 @@ function XPSystem.CoopShare(): number
 	return list[math.clamp(alive, 1, #list)] or 1
 end
 
--- Gives `amount` XP to every living run participant (each scaled by their Growth and by
--- the team-size share, see CoopShare).
+-- Gem XP pacing multiplier (Config.XP.OpeningMult / StageMult): a boost in the first
+-- seconds of a run, then less per gem on later stages, where the swarm is far bigger.
+function XPSystem.PaceMult(): number
+	local X = Config.XP
+	local mult = 1
+	local list = X.StageMult
+	if list and #list > 0 and ctx.StageManager then
+		mult = list[math.clamp(ctx.StageManager.GetStage(), 1, #list)] or 1
+	end
+	if X.OpeningSeconds and X.OpeningMult and ctx.RunManager.GetRunTime() < X.OpeningSeconds then
+		mult *= X.OpeningMult
+	end
+	return mult
+end
+
+-- Gives `amount` gem XP to every living run participant (each scaled by their Growth, by
+-- the team-size share, see CoopShare, and by the pacing multiplier, see PaceMult).
 function XPSystem.GiveSharedXP(amount: number)
-	amount *= XPSystem.CoopShare()
+	amount *= XPSystem.CoopShare() * XPSystem.PaceMult()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Alive then
 			XPSystem.GiveXP(rp, amount * rp.Stats.Growth)

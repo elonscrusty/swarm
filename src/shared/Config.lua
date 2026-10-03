@@ -239,6 +239,15 @@ Config.XP = {
 	-- everyone sat through everyone's upgrade panels. Shared gem XP is multiplied by this
 	-- (index = living participants) so each player's bar fills about as fast as solo.
 	CoopShare = { 1, 0.5, 0.36, 0.3 },
+	-- Gem XP pacing (the cost curve above stays as set). pacing-sim (real server, solo hero
+	-- in the swarm) measured the kill rate climbing ~7x from stage 1 to stage 4 while level
+	-- costs only grow ~5x: the first level-up came at 0:38 with 35-45 s gaps, stage 3-5
+	-- levelled every 5-15 s and finished in bursts of 15-20 levels. Collected gem XP is
+	-- multiplied by OpeningMult for the first OpeningSeconds of a run and by StageMult[stage]
+	-- (the last entry for later stages), so every stage levels at a similar pace.
+	OpeningSeconds = 90,
+	OpeningMult = 1.5,
+	StageMult = { 1, 0.9, 0.75, 0.6, 0.5 },
 	GemValues = { Small = 1, Medium = 5, Large = 25 },
 	GemPoolSize = 500,
 	MagnetSpeed = 45, -- studs/s a gem flies toward the player once inside pickup radius
