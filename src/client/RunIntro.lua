@@ -82,7 +82,7 @@ end
 -- Wrapped line count of `str` at `size` px in `width`.
 -- (measured by TextService; a short line that clearly fits by its average glyph width
 -- stays one line, so a measuring quirk never opens a gap under the headline)
-local GLYPH = { [Enum.Font.Merriweather] = 0.7, [Enum.Font.SourceSansBold] = 0.56 }
+local GLYPH = { [Enum.Font.Merriweather] = 0.7, [Enum.Font.SourceSansBold] = 0.52 }
 local function lines(str: string, size: number, font: Enum.Font, width: number): number
 	if #str * size * (GLYPH[font] or 0.52) <= width * 0.92 then
 		return 1

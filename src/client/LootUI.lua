@@ -809,7 +809,7 @@ local function fillPrompt(model: Model, progress: number): number
 			return TextService:GetTextSize(str, px, Enum.Font.SourceSansSemibold, Vector2.new(lineW, 1000))
 		end)
 		local n = (ok2 and typeof(size) == "Vector2") and math.clamp(math.ceil(size.Y / px - 0.2), 1, 3) or 2
-		if #str * px * 0.5 <= lineW * 0.92 then
+		if #str * px * 0.46 <= lineW * 0.95 then
 			n = 1 -- clearly fits on one line (average glyph width): no measuring quirk gap
 		end
 		label.Size = UDim2.new(1, -36, 0, lineH * n)

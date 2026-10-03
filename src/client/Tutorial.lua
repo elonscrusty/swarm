@@ -324,6 +324,17 @@ local function layout()
 			if covers(right and xr or xl) and not covers(right and xl or xr) then
 				right = not right
 			end
+			-- both sides blocked and the card would lie over the minimap: drop it under the
+			-- map when there is room (iphone with team rows)
+			local map = MiniMap.Elements().Holder :: Frame?
+			local cx = right and xr or xl
+			if map and map.Visible then
+				local mx, my = map.Position.X.Offset, map.Position.Y.Offset
+				local mw, mh = map.Size.X.Offset, map.Size.Y.Offset
+				if cx - w / 2 < mx + mw and cx + w / 2 > mx and y < my + mh and y + h > my and my + mh + 8 + h <= H - 8 then
+					y = my + mh + 8
+				end
+			end
 		end
 		x = right and (W - 12 - w / 2) or (12 + w / 2)
 	end
