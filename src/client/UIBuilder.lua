@@ -3406,8 +3406,8 @@ local function onRunResult(data)
 	local retained = tonumber(data.Gold) or 0
 	local coinsEarned = tonumber(data.GoldEarned) or retained
 	local lost = tonumber(data.GoldLost) or 0
-	local cause = type(data.DeathCause) == "string" and data.DeathCause or ""
-	results.Settlement.Text = string.format("%s · %s gold earned · %s kept · %s lost", tostring(data.Difficulty or "Standard"), UIKit.formatNumber(coinsEarned), UIKit.formatNumber(retained), UIKit.formatNumber(lost)) .. (cause ~= "" and ("\nCause: " .. cause) or "")
+	-- the cause of death is deliberately not shown on the results screen (owner request)
+	results.Settlement.Text = string.format("%s · %s gold earned · %s kept · %s lost", tostring(data.Difficulty or "Standard"), UIKit.formatNumber(coinsEarned), UIKit.formatNumber(retained), UIKit.formatNumber(lost))
 	local history = type(data.DamageHistory) == "table" and data.DamageHistory or {}
 	local recent = {}
 	if not data.Won and not data.Portal and not data.Abandoned then

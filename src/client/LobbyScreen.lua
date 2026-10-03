@@ -35,6 +35,7 @@
 ]]
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -272,7 +273,16 @@ local function updateLoadingPill()
 	local folder = ReplicatedStorage:FindFirstChild("SwarmMeshes")
 	local total = folder and tonumber(folder:GetAttribute("Total")) or 0
 	local show = folder ~= nil and total > 0 and folder:GetAttribute("PriorityReady") ~= true
-	if show then
+	-- DEV: models that failed to load stay reported (why heroes show their part stand-ins)
+	local failed = folder and tonumber(folder:GetAttribute("Failed")) or 0
+	local dev = RunService:IsStudio() or Players.LocalPlayer:GetAttribute("DevAccess") == true
+	if folder and not show and failed > 0 and dev then
+		ui.LoadingText.Text = string.format("DEV · %d of %d models failed · %s", failed, total, tostring(folder:GetAttribute("LastError") or ""))
+		pill.AnchorPoint = Vector2.new(ui.Chip.AnchorPoint.X, 0)
+		pill.Position = UDim2.new(ui.Chip.AnchorPoint.X, 0, 0, 56)
+		pill.Visible = true
+		ui.LoadingShown = true
+	elseif show then
 		-- progress of what the menu needs (lobby + heroes), else of everything
 		local need = tonumber(folder:GetAttribute("PriorityTotal")) or 0
 		local done = tonumber(folder:GetAttribute("PriorityDone")) or 0

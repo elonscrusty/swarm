@@ -37,7 +37,7 @@
 	SpawnMultCap and Config.Enemies.MaxLive). Standard runs are unchanged.
 
 	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, StageBoss, PortalPos,
-	PortalHint, PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total"),
+	PortalHint, SwarmWarn (0-2, Config.Stages.Pressure), PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total"),
 	PortalReveal (counts up each time a stage's portal becomes chargeable: the clients'
 	cue for the banner, sound, beacon burst and minimap ping; see Config.Stages.RevealDelaySeconds).
 ]]
@@ -65,6 +65,7 @@ local portal: MapBuilder.Portal? = nil
 local lastPortal: { [string]: Vector3 } = {} -- last portal spot per arena (a new one differs)
 local stageTime = 0
 local revealed = false -- this stage's portal reveal happened (PortalReveal bumped)
+local swarmWarn = 0 -- Config.Stages.Pressure step shown (SwarmState SwarmWarn)
 local reveals = 0
 local shownLock = -1
 local charge = 0
@@ -311,6 +312,8 @@ local function buildStage(n: number)
 	state:SetAttribute("StageBoss", bossName(stageBoss))
 	state:SetAttribute("PortalPos", spot)
 	state:SetAttribute("PortalHint", false)
+	swarmWarn = 0
+	state:SetAttribute("SwarmWarn", 0)
 	state:SetAttribute("PortalCharge", 0)
 	state:SetAttribute("PortalLockLeft", math.ceil(lockSeconds()))
 	state:SetAttribute("SurgeLeft", 0)
@@ -363,6 +366,8 @@ function StageManager.EndRun()
 	setSub("None")
 	state:SetAttribute("Stage", 0)
 	state:SetAttribute("PortalHint", false)
+	swarmWarn = 0
+	state:SetAttribute("SwarmWarn", 0)
 	state:SetAttribute("PortalCharge", 0)
 	state:SetAttribute("PortalLockLeft", 0)
 	state:SetAttribute("PortalPos", nil)
@@ -648,6 +653,16 @@ local function stepExplore(dt: number)
 			Fx.Ring(portal.Pos, Config.Stages.PortalRadius * 2.5, Color3.fromRGB(190, 210, 255))
 		end
 		ctx.RunManager.Broadcast("THE PORTAL HAS APPEARED", Color3.fromRGB(190, 210, 255), true)
+	end
+	-- swarm pressure: the longer the portal stays unopened, the louder the warning
+	local pressure = Config.Stages.Pressure
+	if pressure and revealed then
+		local step = stageTime >= pressure.DangerSeconds and 2 or (stageTime >= pressure.WarnSeconds and 1 or 0)
+		if step > swarmWarn then
+			swarmWarn = step
+			-- the clients' banner (StageUI, through the Hud.Announce queue) watches this
+			state:SetAttribute("SwarmWarn", step)
+		end
 	end
 	miniWaveTimer += dt
 	if miniWaveTimer >= Config.Run.MiniWaveInterval then

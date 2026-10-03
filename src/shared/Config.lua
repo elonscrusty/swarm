@@ -73,6 +73,11 @@ Config.Stages = {
 	-- the HUD arrow toward the portal appears after this long (never before the lock ends
 	-- or the reveal delay); 0 = from the reveal on, always
 	HintAfterSeconds = 0,
+	-- SWARM PRESSURE: the swarm keeps growing until the portal is charged. While exploring,
+	-- SwarmState SwarmWarn steps to 1 ("SWARM GROWING") at WarnSeconds of stage time and to
+	-- 2 ("SWARM OVERWHELMING") at DangerSeconds, back to 0 on the next stage. The HUD
+	-- turns the stage pill into OPEN THE PORTAL with the warning and a banner each step.
+	Pressure = { WarnSeconds = 75, DangerSeconds = 150 },
 	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
 	-- 0.35 (was 0.25): owner playtest "by map 2 players instant kill everything"; stage 1
 	-- stays as it was
@@ -162,7 +167,7 @@ Config.Dev = {
 -- PLAYER BASE STATS (before character, passive and meta bonuses)
 ------------------------------------------------------------------------------------------
 Config.Player = {
-	BaseMaxHP = 100,
+	BaseMaxHP = 120,
 	BaseSpeed = 16, -- Humanoid WalkSpeed
 	BasePickupRadius = 7, -- studs, gems inside this radius fly to you
 	BaseLuck = 0, -- 0.1 = +10%
@@ -525,10 +530,10 @@ Config.Enemies = {
 -- DIFFICULTY SCALING (tier = floor(minutes))
 ------------------------------------------------------------------------------------------
 Config.Difficulty = {
-	HPPerMinute = 0.16, -- enemy HP x(1 + tier * this)
+	HPPerMinute = 0.12, -- enemy HP x(1 + tier * this)
 	SpeedPerMinute = 0.02, -- enemy speed x(1 + tier * this) ...
 	SpeedCap = 1.3, -- ... capped here
-	DamagePerMinute = 0.06, -- enemy damage x(1 + tier * this)
+	DamagePerMinute = 0.045, -- enemy damage x(1 + tier * this)
 	-- Live-enemy target and burst size multiplier by player count (index = players).
 	PlayerCountMult = { 1, 1.6, 2.1, 2.5 },
 	-- Enemy HP multiplier per extra player.
@@ -559,7 +564,7 @@ Config.Spawn = {
 	Mode = "ScreenEdge",
 	ScreenRadius = 72,
 	ScreenRadiusJitter = 10,
-	MiniWaveBaseCount = 18,
+	MiniWaveBaseCount = 14,
 	MiniWavePerMinute = 3,
 }
 
@@ -641,7 +646,7 @@ Config.Boss = {
 --   boss      the Queen fight keeps a reduced crowd (Config.Stages.BossMinionShare)
 ------------------------------------------------------------------------------------------
 Config.Pacing = {
-	RunStartCalm = 6,
+	RunStartCalm = 12,
 	StageStartCalm = 10,
 	CalmMult = 0.35,
 	BuildUpFrom = 0.85,
@@ -649,7 +654,7 @@ Config.Pacing = {
 	MiniWaveLull = 8,
 	LullMult = 0.55,
 	IntroGroup = 3,
-	EliteFirst = 150,
+	EliteFirst = 210,
 	EliteEvery = 165,
 	EliteMinTime = 60,
 	EliteTypes = { "Slime", "Skeleton", "Brute", "Ghost", "Spitter" }, -- scheduled elites (never a bomb tick)
@@ -668,7 +673,7 @@ Config.Pacing = {
 	-- stage 3) per stage and MaxAlive at once, Distance studs from a living player.
 	-- Only while exploring (never during the boss fight or the surge).
 	Nests = {
-		Stage1RunTime = 360,
+		Stage1RunTime = 480,
 		FirstStageTime = 50,
 		Every = 70,
 		PerStage = 2,
@@ -754,6 +759,9 @@ Config.Graphics = {
 	-- When more enemies are on screen than this, only the nearest this many update their
 	-- pose every frame; the others (and every low-detail model) every 2nd frame.
 	FullRateEnemies = 30,
+	-- regular enemies' mesh pieces never cast shadows (bosses keep theirs): a hundred
+	-- moving shadow casters is the single biggest render cost in a big swarm
+	EnemyShadows = false,
 	-- Effect budget: pooled effect parts animating at once (sparks, dust, rings, bolts).
 	-- Cosmetic effects past it are skipped; boss warnings and player events never are.
 	MaxEffectParts = 220,

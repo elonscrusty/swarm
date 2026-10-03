@@ -137,6 +137,13 @@ function ModelLibrary.MeshPieces(name: string, palette: { [string]: Color3 }?, s
 	return pieces
 end
 
+-- Bosses (EnemyData IsBoss) keep their mesh shadows; Config.Graphics.EnemyShadows = false
+-- hides the regular creatures' shadows
+local function keepsShadow(typeId: string): boolean
+	local def = (EnemyData.Enemies :: any)[typeId]
+	return def ~= nil and def.IsBoss == true
+end
+
 -- Enemy type → mesh model name (blender/models/enemies.py) and whole-body motion.
 local ENEMY_MESH = {
 	Slime = { "Mite", "Scuttle" },
@@ -964,6 +971,11 @@ function ModelLibrary.Enemy(typeId: string, elite: boolean): ({ Piece }, string,
 		pieces = keep
 	end
 	if pieces and meshInfo then
+		if Config.Graphics.EnemyShadows == false and not keepsShadow(typeId) then
+			for _, piece in ipairs(pieces) do
+				piece.Part.CastShadow = false
+			end
+		end
 		local entry = MeshCatalog.Models[meshInfo[1]]
 		local bounds = (entry :: any).Bounds
 		if bounds then
