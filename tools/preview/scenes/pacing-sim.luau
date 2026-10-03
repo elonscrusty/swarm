@@ -7,7 +7,7 @@
 -- gaps between them (dead stretches > 45 s, bursts of 3+ levels inside 3 s), and per
 -- stage: levels, run gold, kills, enemy HP multiplier.
 --   lune ... --scene pacing-sim --studio --set stages=6 --set explore=150 --set bossmax=90
---   --set players=2|3 (no --studio)   --set pace=off (no gem XP pacing, for a before/after)
+--   --set players=2|3 (no --studio)   --set pace=off (no gem XP pacing) --set waves=off (continuous spawning)
 local Players = game:GetService("Players")
 local me = Players.LocalPlayer
 local n = math.clamp(tonumber(preview.args.players) or 1, 1, 3)
@@ -31,6 +31,9 @@ if n > 1 then
 end
 local Config = preview.shared("Config")
 -- --set pace=off: the gem XP pacing multipliers off (Config.XP.StageMult / OpeningMult)
+if preview.args.waves == "off" then
+	Config.Waves.Enabled = false
+end
 if preview.args.pace == "off" then
 	Config.XP.StageMult, Config.XP.OpeningMult = nil, nil
 end

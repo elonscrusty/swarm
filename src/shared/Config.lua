@@ -550,6 +550,40 @@ Config.Spawn = {
 }
 
 ------------------------------------------------------------------------------------------
+-- WAVES (EnemySpawner; owner: "instead of constantly spawning enemies, do it in waves")
+--   Every Config.Run.MiniWaveInterval seconds while exploring a WAVE is announced
+--   ("WAVE 3 · from the north", SwarmState attribute Wave = its number on this stage);
+--   WarnSeconds later it pours in over BurstSeconds from 1 direction, +1 at each
+--   DirectionsAt progression second (at most 3), each side one enemy type (wasps never
+--   before Config.Pacing.WaveMinTime, smaller per WaveCountMult). Size = (Base + PerMinute
+--   x difficulty minute) x player-count density x stage spawn multiplier (Endless too) x
+--   the stage-1 opening ramp, x(1 + GrowPerWave per earlier wave of the stage, at most
+--   GrowCap). An elite can lead a wave (EliteLeadChance, after Config.Pacing.EliteMinTime).
+--   Between waves the normal spawning only keeps a trickle: TrickleFrom -> TrickleTo of
+--   the live target over the interval, LullMult for LullSeconds after the burst. Boss
+--   fights keep their own crowd rules (Config.Stages.BossMinionShare). The live cap
+--   Config.Enemies.MaxLive still holds. Enabled = false: the old continuous spawning with
+--   ring mini-waves.
+------------------------------------------------------------------------------------------
+Config.Waves = {
+	Enabled = true,
+	WarnSeconds = 1.5,
+	BurstSeconds = 3,
+	MaxPerStep = 6, -- enemies spawned per frame at most while a wave pours in (perf)
+	LullSeconds = 5,
+	LullMult = 0.3,
+	TrickleFrom = 0.45,
+	TrickleTo = 0.7,
+	Base = 22,
+	PerMinute = 4,
+	GrowPerWave = 0.06,
+	GrowCap = 1.5,
+	DirectionsAt = { 100, 300 }, -- seconds of progression time (stage n starts at (n-1) x 120)
+	ArcRadians = 0.45, -- each side spreads this far either way
+	EliteLeadChance = 0.15,
+}
+
+------------------------------------------------------------------------------------------
 -- BOSS
 ------------------------------------------------------------------------------------------
 Config.Boss = {

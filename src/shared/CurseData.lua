@@ -70,7 +70,7 @@ CurseData.Curses = {
 		Name = "Horde",
 		Icon = "curse_Horde",
 		Short = "+40% enemies",
-		Text = "40% more enemies at once and bigger mini-waves.",
+		Text = "40% more enemies at once and bigger waves.",
 		Gold = 0.25,
 		SpawnMult = 1.4,
 	},
