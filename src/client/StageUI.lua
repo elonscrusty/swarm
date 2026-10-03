@@ -437,6 +437,22 @@ local function localRoot(): BasePart?
 	return char and char.PrimaryPart or nil
 end
 
+-- The arrow (64 px badge + distance label under it) centred at y must not lie on a
+-- reserved top-centre bar (Hud.ReserveCentre: the caravan defence bar); drop it below.
+local function clearCentreBars(x: number, y: number): number
+	for _, g in ipairs(Hud.CentreBars()) do
+		if g.Visible and g.Parent then
+			local gw, gh = g.Size.X.Offset, g.Size.Y.Offset
+			local gx = g.Position.X.Offset - g.AnchorPoint.X * gw
+			local gy = g.Position.Y.Offset - g.AnchorPoint.Y * gh
+			if x + 45 > gx - 6 and x - 45 < gx + gw + 6 and y + 54 > gy - 6 and y - 32 < gy + gh + 6 then
+				y = gy + gh + 6 + 32
+			end
+		end
+	end
+	return y
+end
+
 local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	local pos = state:GetAttribute("PortalPos")
 	local root = localRoot()
@@ -525,7 +541,8 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	if on and p.X > xMin and p.X < xMax and p.Y > yMin and p.Y < yMax and not overBar then
 		-- on screen: a marker floats over the portal, pointing down at it
 		ui.Arrow.Visible = true
-		ui.Arrow.Position = UDim2.fromOffset(math.floor(p.X + 0.5), math.floor(p.Y - 40 + math.sin(os.clock() * 3) * 4 + 0.5))
+		local fy = p.Y - 40 + math.sin(os.clock() * 3) * 4
+		ui.Arrow.Position = UDim2.fromOffset(math.floor(p.X + 0.5), math.floor(clearCentreBars(p.X, fy) + 0.5))
 		ui.ArrowPivot.Rotation = 90
 		return
 	end
@@ -554,7 +571,7 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 		at = clampTo(barTop)
 	end
 	ui.Arrow.Visible = true
-	ui.Arrow.Position = UDim2.fromOffset(math.floor(at.X + 0.5), math.floor(at.Y + 0.5))
+	ui.Arrow.Position = UDim2.fromOffset(math.floor(at.X + 0.5), math.floor(clearCentreBars(at.X, at.Y) + 0.5))
 	ui.ArrowPivot.Rotation = math.deg(math.atan2(d.Y, d.X))
 end
 

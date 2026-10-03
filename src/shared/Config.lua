@@ -91,8 +91,10 @@ Config.Stages = {
 	BossSpawnOffset = 12, -- the Queen climbs out this far behind the portal
 	-- regular enemies kept alive during the Queen fight: this share of the normal live
 	-- target, at most Config.Boss.MinionCapDuringBoss and at least BossMinionMin
-	BossMinionShare = 0.5,
-	BossMinionMin = 15,
+	-- 0.35 / 12 (was 0.5 / 15): auto-aim spent the fight on the crowd (pacing-sim: the
+	-- stage-1 Queen took ~4 minutes), so the boss fight thins the swarm more
+	BossMinionShare = 0.35,
+	BossMinionMin = 12,
 	-- surge after the Queen dies
 	-- surge size = SurgeBase + SurgePerStage x stage (x Config.Difficulty.PlayerCountMult,
 	-- capped by MaxLive): 40 on stage 1, 55 on stage 2 ...
@@ -732,16 +734,17 @@ Config.Graphics = {
 	-- cost nothing. Of the enemies ON SCREEN, the nearest MaxDetailedEnemies get the full
 	-- animated model; the rest get a low-detail variant (the model's LowDetailParts largest
 	-- pieces in their own colours, posed rigidly). The boss, elites and static / support
-	-- creatures are always full.
-	MaxDetailedEnemies = 110,
+	-- creatures are always full. (Was 110 counted over all live enemies, the rest drawn as
+	-- plain recoloured bodies.)
+	MaxDetailedEnemies = 80,
 	-- ... and on a device that can't keep up (frames slower than 40 fps for a while) the
 	-- budget steps down toward this (the rest low-detail), and back up once frames are fast.
 	MinDetailedEnemies = 40,
 	LowDetailParts = 4, -- pieces in a low-detail model (a mirrored pair counts as two)
-	CullMargin = 8, -- studs past the screen edge an enemy still gets its model
+	CullMargin = 6, -- studs past the screen edge an enemy still gets its model
 	-- When more enemies are on screen than this, only the nearest this many update their
 	-- pose every frame; the others (and every low-detail model) every 2nd frame.
-	FullRateEnemies = 50,
+	FullRateEnemies = 30,
 	-- Effect budget: pooled effect parts animating at once (sparks, dust, rings, bolts).
 	-- Cosmetic effects past it are skipped; boss warnings and player events never are.
 	MaxEffectParts = 220,

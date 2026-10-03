@@ -19,8 +19,9 @@
 	  * Update rate: when many enemies are on screen, only the FullRateEnemies nearest
 	    update every frame; the others (and every low-detail model) every 2nd frame,
 	    staggered so each frame moves half of them.
-	The boss, elites, static / support creatures and Burrowers are never culled, never
-	low-detail and always update every frame. Models (full and low) are pooled per enemy
+	Elites, static / support creatures and Burrowers are never low-detail and always update
+	every frame (culled off screen like the rest); a boss is never culled (its entrance
+	starts in the sky). Models (full and low) are pooled per enemy
 	type and go back to the pool when their enemy dies, leaves the screen or changes tier,
 	so models exist only for drawn enemies (plus the pools) and a recycled body reuses
 	parts instead of building new ones. Spawn dust puffs only for spawns on screen.
@@ -122,7 +123,7 @@ local RANK_EVERY = 0.3 -- seconds between nearest-first detail rankings
 local G = Config.Graphics
 local LOW_PARTS: number = G.LowDetailParts or 4
 local CULL_MARGIN: number = G.CullMargin or 8
-local CULL_LEAVE = CULL_MARGIN + 8 -- an on-screen enemy is culled only this far outside
+local CULL_LEAVE = CULL_MARGIN + 6 -- an on-screen enemy is culled only this far outside
 local FULL_RATE: number = G.FullRateEnemies or 50
 -- Spare models kept per enemy type / in all while a run is on (a swarm of one type churns
 -- through the detail budget, so a type may pool a full budget's worth; low-detail
@@ -1079,13 +1080,14 @@ local function step(dt: number)
 			end
 			local elite = body:GetAttribute("Elite") == true
 			local always = elite or alwaysDetailed(typeId)
+			local boss = always and isBoss(typeId)
 			-- the server body is never drawn: a model stands in for it, or nothing off screen
 			if body.LocalTransparencyModifier ~= 1 then
 				body.LocalTransparencyModifier = 1
 			end
 			local size = body.Size
-			local visible = always
-				or inView(cf.Position, (slot.OnScreen and CULL_LEAVE or CULL_MARGIN) + math.max(size.X, size.Y, size.Z))
+			local visible = boss
+				or inView(cf.Position, (slot.OnScreen and CULL_LEAVE or CULL_MARGIN) + math.max(size.X, size.Y, size.Z) * 0.5)
 			slot.OnScreen = visible
 			if not visible then
 				-- off screen: no model, no updates (back to the pool)
@@ -1101,6 +1103,9 @@ local function step(dt: number)
 				end
 				if slot.RallyRing and slot.RallyRing.CFrame.Y > ACTIVE_Y then
 					slot.RallyRing.CFrame = PARK
+				end
+				if slot.HPBar and slot.HPBar.Enabled then
+					hideHPBar(slot)
 				end
 				continue
 			end

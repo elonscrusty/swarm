@@ -513,6 +513,11 @@ function Hud.ReserveCentre(g: GuiObject)
 	table.insert(centreBars, g)
 end
 
+-- The reserved top-centre bars (visible or not), for other markers that must keep clear.
+function Hud.CentreBars(): { GuiObject }
+	return centreBars
+end
+
 local function stopBanner()
 	bannerToken += 1
 	bannerBusy = false

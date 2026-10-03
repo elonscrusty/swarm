@@ -31,6 +31,14 @@ if n > 1 then
 end
 local Config = preview.shared("Config")
 -- --set pace=off: the gem XP pacing multipliers off (Config.XP.StageMult / OpeningMult)
+-- --set legacy=on: the tuning before the progression pass (continuous spawning, no gem
+-- XP pacing, old stage HP / boss HP, run-clock spawn rows)
+if preview.args.legacy == "on" then
+	preview.args.waves, preview.args.pace = "off", "off"
+	Config.Stages.EnemyHPPerStage = 0.25
+	Config.Stages.BossHPByStage = { 0.3, 0.75, 1.1, 1.5, 2.0 }
+	Config.Spawn.StageRowSpan = nil
+end
 if preview.args.waves == "off" then
 	Config.Waves.Enabled = false
 end

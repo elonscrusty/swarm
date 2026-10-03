@@ -333,7 +333,15 @@ function Fire.Whip(rp, w, s, def)
 	local evo = w.Evolved and def.Evolution or nil
 	local reach = params.Reach * s.area
 	local half = math.rad(params.Arc) / 2
+	-- auto aim (owner): the forehand cut faces the nearest enemy in reach, else the facing
 	local facing = rp.Facing
+	if rp.Root then
+		local origin = ground(rp.Root.Position)
+		local target = nearestEnemies(origin, reach + 2, 1)[1]
+		if target then
+			facing = flatDir(target.Pos - origin, rp.Facing)
+		end
+	end
 	local tier = visualTier(w)
 	-- Riposte perk: every 3rd attack the forehand cut covers the full circle
 	w.Attacks = (w.Attacks or 0) + 1
@@ -662,20 +670,18 @@ function Fire.Boomerang(rp, w, s, def)
 end
 
 --[[
-	LONGBOW / WINDPIERCER: heavy piercing arrows in the movement direction; standing still
-	they fly at the nearest enemy in range (Steady Aim's natural partner), else where you
-	face. Several arrows fly side by side. Volley perk: every 3rd shot adds two arrows at
+	LONGBOW / WINDPIERCER: heavy piercing arrows at the nearest enemy in range (auto aim),
+	else in the movement direction, else where you face. Several arrows fly side by side. Volley perk: every 3rd shot adds two arrows at
 	±VolleyAngle degrees; Windpiercer does that on every shot.
 ]]
 function Fire.Longbow(rp, w, s, def)
 	local params = def.Params
 	local evo = w.Evolved and def.Evolution or nil
 	local origin = ground(rp.Root.Position)
-	local dir = rp.MoveDir.Magnitude > 0.1 and rp.MoveDir or nil
-	if not dir then
-		local target = nearestEnemies(origin, s.speed * s.duration, 1)[1]
-		dir = target and flatDir(target.Pos - origin, rp.Facing) or rp.Facing
-	end
+	-- auto aim (owner): the nearest enemy in range, else the movement direction, else facing
+	local target = nearestEnemies(origin, s.speed * s.duration, 1)[1]
+	local dir = target and flatDir(target.Pos - origin, rp.Facing)
+		or (rp.MoveDir.Magnitude > 0.1 and rp.MoveDir or rp.Facing)
 	w.Attacks = (w.Attacks or 0) + 1
 	local fan = (evo and evo.Fan) or (WeaponData.HasPerk(w, "Volley") and w.Attacks % params.VolleyEvery == 0)
 	local side = Vector3.new(-dir.Z, 0, dir.X)
