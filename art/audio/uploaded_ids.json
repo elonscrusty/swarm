@@ -1,6 +1,14 @@
 {
+ "BigKill": {
+  "id": 79432466085613,
+  "status": "moderation: Reviewing"
+ },
  "BossRoar": {
-  "id": 115727784015250,
+  "id": 135802539734782,
+  "status": "moderation: Reviewing"
+ },
+ "BossSlam": {
+  "id": 114145211136875,
   "status": "moderation: Reviewing"
  },
  "Chest": {
@@ -17,6 +25,26 @@
  },
  "EnemyDeath": {
   "id": 90139009200502,
+  "status": "moderation: Reviewing"
+ },
+ "GemPickup": {
+  "id": 95483225770017,
+  "status": "moderation: Reviewing"
+ },
+ "Hit": {
+  "id": 108261514204700,
+  "status": "moderation: Reviewing"
+ },
+ "Hurt": {
+  "id": 74889269081021,
+  "status": "moderation: Reviewing"
+ },
+ "LevelUp": {
+  "id": 129470727336059,
+  "status": "moderation: Reviewing"
+ },
+ "PortalAppear": {
+  "id": 76838198770269,
   "status": "moderation: Reviewing"
  }
 }
