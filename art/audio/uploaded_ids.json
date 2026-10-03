@@ -61,7 +61,7 @@
  },
  "Item": {
   "id": 105588297309015,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "LevelUp": {
   "id": 131826585081742,
@@ -69,38 +69,38 @@
  },
  "Lightning": {
   "id": 74962400988388,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "PortalAppear": {
   "id": 72802301491749,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "ReelTick": {
   "id": 111197240897473,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "Revive": {
   "id": 97435297484172,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "Shrine": {
   "id": 106727264178055,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "Swing": {
   "id": 110381677719056,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "Tip": {
   "id": 133320151991833,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "Toggle": {
   "id": 78864064038524,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  },
  "Victory": {
   "id": 71641610011777,
-  "status": "moderation: Reviewing"
+  "status": "ok"
  }
 }
