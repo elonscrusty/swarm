@@ -28,6 +28,7 @@
 	  damageTaken    -damage taken (Stoneskin; negative = less)
 	  levelHeal      share of max HP healed on level-up (Second Wind; ItemSystem.OnLevelUp)
 	  burnChance     chance a hit sets the enemy burning (Ember Oil; ItemSystem.OnHit)
+	  stillHeal      share of max HP healed per second while standing still (Still Waters)
 	  lowHpMight     +damage while below Tuning.LionheartHp of max HP (Lionheart)
 
 	Synergies: Area, Candle, Precision, Armor, Ember Oil, Thornhide and Stoneskin are pieces of the build synergies in
@@ -65,6 +66,7 @@ PassiveData.Order = {
 	"SecondWind",
 	"EmberOil",
 	"Lionheart",
+	"StillWaters",
 }
 
 -- Behaviour numbers of the passives that hook into ItemSystem (not stat bumps).
@@ -77,6 +79,10 @@ PassiveData.Tuning = {
 	MaxBurns = 80, -- burning enemies at once (server-wide), so huge swarms stay cheap
 	MaxBurnChance = 0.5,
 	LionheartHp = 0.4, -- Lionheart works below this share of max HP
+	StillDelay = 0.75, -- Still Waters: seconds standing still before it heals
+	StillMoveStuds = 0.3, -- moving more than this (flat) resets the timer
+	StillHurtPause = 1, -- no Still Waters healing for this long after a hit
+	StillCueEvery = 1, -- seconds between the soft green rings while it heals
 }
 
 --[[
@@ -378,6 +384,19 @@ PassiveData.Passives = {
 			{ lowHpMight = 0.20 },
 			{ lowHpMight = 0.35 },
 			{ lowHpMight = 0.50 },
+		},
+	},
+	-- Heal by standing still: good in quiet moments; any hit pauses it for a second, so
+	-- standing inside the swarm is not the way to use it.
+	StillWaters = {
+		Id = "StillWaters",
+		Name = "Still Waters",
+		Color = Color3.fromRGB(110, 200, 190),
+		Description = "Stand still to heal. A hit pauses it.",
+		Values = {
+			{ stillHeal = 0.02 },
+			{ stillHeal = 0.035 },
+			{ stillHeal = 0.05 },
 		},
 	},
 }

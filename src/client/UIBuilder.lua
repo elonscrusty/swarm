@@ -3178,7 +3178,7 @@ local function buildResults()
 				return a.LayoutOrder < b.LayoutOrder
 			end)
 			local y, best = 0, 0
-			for i, ch in ipairs(parts) do
+			for _, ch in ipairs(parts) do
 				y += ch.Size.Y.Offset
 				if y > room then
 					break

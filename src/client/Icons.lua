@@ -456,6 +456,7 @@ local DEFAULT: { [string]: Colors } = {
 	SecondWind = { Main = P.slate_200, Accent = P.fx_heal, Extra = P.ivory_200 },
 	EmberOil = { Main = P.slate_300, Accent = P.fx_fire, Extra = P.gold_300 },
 	Lionheart = { Main = P.crimson_400, Accent = P.gold_300, Extra = P.crimson_300 },
+	StillWaters = { Main = P.slate_300, Accent = P.fx_heal, Extra = P.slate_200 },
 	-- fallback cards and permanent upgrades
 	Gold = { Main = P.gold_400, Accent = P.gold_700, Extra = P.gold_600 },
 	Heal = { Main = P.dirt_400, Accent = P.ivory_100, Extra = P.gold_300 },
@@ -1826,6 +1827,15 @@ DRAW.EmberOil = function(c)
 	if not c.mono then
 		dot(c, 10.4, 13.8, 1.2, c.extra)
 	end
+end
+
+DRAW.StillWaters = function(c)
+	-- calm water rings around a single drop, with a small healing plus
+	ring(c, 11, 16, 8.6, 1.4, c.main, c.mono and 0 or 0.35)
+	ring(c, 11, 16, 5.4, 1.4, c.mono and c.main or c.extra)
+	drop(c, 11, 10, 3.2, c.mono and c.main or c.extra)
+	box(c, 19, 6, 2.2, 7, c.accent, 0, 0.7)
+	box(c, 19, 6, 7, 2.2, c.accent, 0, 0.7)
 end
 
 DRAW.Lionheart = function(c)

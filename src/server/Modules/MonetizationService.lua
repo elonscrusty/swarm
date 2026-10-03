@@ -144,6 +144,12 @@ function MonetizationService.RefreshAttributes(player: Player)
 	player:SetAttribute("VIP", MonetizationService.OwnsPass(player, "VIP"))
 	player:SetAttribute("StarterPack", MonetizationService.OwnsPass(player, "StarterPack"))
 	player:SetAttribute("DoubleGold", MonetizationService.OwnsPass(player, "DoubleGold"))
+	-- in a run, chest / shrine prices follow the new multiplier at once (GoldSystem.PriceMult);
+	-- through ctx, so no require cycle
+	local gold, run = ctx and ctx.GoldSystem, ctx and ctx.RunManager
+	if gold and gold.PublishGoldMult and run and run.GetRunPlayer and run.GetRunPlayer(player) then
+		gold.PublishGoldMult(player)
+	end
 end
 
 -- Revive product configured?

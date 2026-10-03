@@ -53,7 +53,7 @@ ItemSystem.Count = count
 local function state(rp)
 	local s = rp.ItemState
 	if not s then
-		s = { Shots = {}, LightningAt = 0, ExplodeAt = 0, ThornsAt = 0, LastHurt = 0, Shield = 0, ShownShield = -1, Regen = 0, RegenTimer = 0, MagnetTimer = 0, CritHealAt = 0, WardReady = false, WardAt = 0, RushUntil = 0 }
+		s = { Shots = {}, LightningAt = 0, ExplodeAt = 0, ThornsAt = 0, LastHurt = 0, Shield = 0, ShownShield = -1, Regen = 0, RegenTimer = 0, MagnetTimer = 0, CritHealAt = 0, WardReady = false, WardAt = 0, RushUntil = 0, StillTime = 0, StillHeal = 0, StillCue = 0 }
 		rp.ItemState = s
 	end
 	return s
@@ -452,6 +452,32 @@ local function stepPlayer(rp, dt: number, now: number)
 		rp.Player:SetAttribute("Ward", true)
 		if rp.Root and s.WardAt > 0 then
 			Fx.Ring(rp.Root.Position, 4, Palette.gold_300)
+		end
+	end
+	-- Still Waters: standing still (server position, not client claims) for StillDelay s and
+	-- unhurt for StillHurtPause s heals a share of max HP per second, in RegenTick ticks; a
+	-- soft green ring every StillCueEvery s while it heals
+	if (stats.StillHeal or 0) > 0 and rp.Root then
+		local pos: Vector3 = rp.Root.Position
+		local last: Vector3? = s.StillPos
+		if not last or Vector3.new(pos.X - last.X, 0, pos.Z - last.Z).Magnitude > PassiveData.Tuning.StillMoveStuds then
+			s.StillPos = pos
+			s.StillTime = 0
+		else
+			s.StillTime += dt
+		end
+		if s.StillTime >= PassiveData.Tuning.StillDelay and now - s.LastHurt >= PassiveData.Tuning.StillHurtPause and rp.HP < stats.MaxHP then
+			s.StillHeal += stats.MaxHP * stats.StillHeal * dt
+			if s.StillHeal >= 1 or s.StillTime - PassiveData.Tuning.StillDelay < dt then
+				ctx.RunManager.Heal(rp, s.StillHeal, true)
+				s.StillHeal = 0
+			end
+			if now >= s.StillCue then
+				s.StillCue = now + PassiveData.Tuning.StillCueEvery
+				Fx.Ring(pos, 3.5, Palette.fx_heal)
+			end
+		else
+			s.StillHeal = 0
 		end
 	end
 	-- regeneration in small ticks (one HP attribute write per tick, not per frame)

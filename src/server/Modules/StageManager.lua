@@ -468,7 +468,7 @@ local function sendOffer(rp)
 		NextStage = stage + 1,
 		NextArena = ((Config.Arenas :: any)[arenaFor(stage + 1)] or {}).DisplayName or arenaFor(stage + 1),
 		NextBoss = bossName(forcedBoss or bossFor(stage + 1)),
-		ReturnBonus = endless and 0 or math.floor((Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared) * ctx.MonetizationService.GoldMultiplier(rp.Player) * (ctx.RunModifiers and ctx.RunModifiers.GoldMult() or 1) + 0.5),
+		ReturnBonus = endless and 0 or math.floor((Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared) * ctx.GoldSystem.PriceMult(rp.Player) * (ctx.RunModifiers and ctx.RunModifiers.GoldMult() or 1) + 0.5),
 		Gold = rp.Gold,
 		Kills = rp.Kills,
 		Level = rp.Level,

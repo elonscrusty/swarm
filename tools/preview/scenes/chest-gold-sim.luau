@@ -127,5 +127,13 @@ else
 	preview.log("SKIP second chest (none left on the stage)")
 end
 
+-- 3) a pass lookup / purchase refreshes the attributes: the shown price moves at once
+passOn = false
+Monetization.RefreshAttributes(me)
+check(me:GetAttribute("GoldMult") == 1 and Gold.PriceMult(me) == 1, "RefreshAttributes publishes the new multiplier during the run")
+passOn = true
+Monetization.RefreshAttributes(me)
+check(me:GetAttribute("GoldMult") == Monetization.GoldMultiplier(me), "and again when the pass turns on")
+
 Monetization.OwnsPass = realOwnsPass
 preview.log(failures == 0 and "PASS chest-gold-sim" or ("FAIL chest-gold-sim: " .. failures .. " check(s)"))

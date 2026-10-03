@@ -17,7 +17,7 @@
 	  sheet = { Might, Armor, MaxHP, Speed, CooldownMult, AreaMult, Amount, Pierce,
 	            PickupRadius, Luck, ProjSpeedMult, DurationMult, Growth, DamageTaken, Regen,
 	            CritChance, CritDamage, GoldMult, EliteDamage, Thorns, CritHeal, WardSeconds,
-	            KillRush, LevelHeal, BurnChance, LowHpMight }
+	            KillRush, LevelHeal, BurnChance, LowHpMight, StillHeal }
 
 	StatSheet.Lines(before, after) → { {Key, Label, From, To} } the stats that differ, in
 	plain words with display values (used by passive level-up cards).
@@ -33,7 +33,7 @@ local StatSheet = {}
 
 local BONUS_KEYS = { "might", "armor", "maxHpMult", "maxHpFlat", "speed", "cooldown", "area", "amount", "pierce", "pickup", "luck", "projSpeed", "duration", "growth", "damageTaken",
 	-- behaviour passives (PassiveData; read by ItemSystem)
-	"eliteDamage", "thorns", "critHeal", "ward", "killRush", "levelHeal", "burnChance", "lowHpMight" }
+	"eliteDamage", "thorns", "critHeal", "ward", "killRush", "levelHeal", "burnChance", "lowHpMight", "stillHeal" }
 for _, k in ipairs(ItemData.StatKeys) do
 	if not table.find(BONUS_KEYS, k) then
 		table.insert(BONUS_KEYS, k) -- attackSpeed, regen, critChance, critDamage, goldGain
@@ -120,6 +120,7 @@ function StatSheet.Compute(input: Input): { [string]: number }
 		LevelHeal = math.clamp(b.levelHeal, 0, 1), -- share of max HP healed per level-up
 		BurnChance = math.clamp(b.burnChance, 0, PassiveData.Tuning.MaxBurnChance),
 		LowHpMight = 1 + b.lowHpMight, -- damage multiplier while badly hurt (Lionheart)
+		StillHeal = math.max(0, b.stillHeal), -- share of max HP per second standing still
 	}
 	-- curses multiply the finished sheet (Fragile, Glass Cannon)
 	sheet.MaxHP = math.max(1, math.floor(sheet.MaxHP * (curse.MaxHP or 1) + 0.5))
@@ -246,6 +247,13 @@ local LINES = {
 		end,
 	},
 	{ Key = "LowHpMight", Label = "Damage below 40% HP", Fmt = pct },
+	{
+		Key = "StillHeal",
+		Label = "Heal standing still",
+		Fmt = function(v: number): string
+			return num(v * 100) .. "% HP/s"
+		end,
+	},
 }
 
 -- Stats that differ between two sheets, as display lines.

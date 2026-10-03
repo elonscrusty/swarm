@@ -34,7 +34,7 @@ clearOffers()
 rp.InvulnUntil = math.huge
 
 -- every new passive: real data shape and a visible card line at each level
-local NEW = { "GiantsBane", "Thornhide", "BloodRune", "AegisCharm", "Windstep", "GildedPurse", "Stoneskin", "SecondWind", "EmberOil", "Lionheart" }
+local NEW = { "GiantsBane", "Thornhide", "BloodRune", "AegisCharm", "Windstep", "GildedPurse", "Stoneskin", "SecondWind", "EmberOil", "Lionheart", "StillWaters" }
 local base = StatSheet.Compute({ CharacterId = rp.CharacterId })
 for _, id in ipairs(NEW) do
 	local def = assert(PassiveData.Passives[id], id .. " missing")
@@ -198,6 +198,34 @@ clearOffers()
 check("Renewal without items", rp.HP > 52, string.format("HP 50 -> %.1f in 2 s", rp.HP))
 rp.Items = savedItems
 drop("Renewal")
+
+-- Still Waters: standing still heals ~5% max HP per second; moving or a hit stops it
+give("StillWaters", 3)
+rp.Root.Anchored = true -- hold the hero still (the server reads its real position)
+rp.HP = rp.Stats.MaxHP * 0.3
+local s0 = rp.HP
+advance(2.75) -- 0.75 s wait, then 2 s of healing
+clearOffers()
+local still = rp.HP - s0
+-- moving: nudge the hero every step, it must not heal
+rp.HP = rp.Stats.MaxHP * 0.3
+local m0 = rp.HP
+for i = 1, 20 do
+	rp.Root.CFrame = rp.Root.CFrame + Vector3.new(i % 2 == 0 and 1 or -1, 0, 0)
+	advance(0.1)
+end
+clearOffers()
+local moving = rp.HP - m0
+-- a hit pauses it
+advance(1)
+local h0 = rp.HP
+rp.ItemState.LastHurt = os.clock()
+advance(0.5)
+local afterHit = rp.HP - h0
+rp.Root.Anchored = false
+check("StillWaters", rp.Stats.StillHeal == 0.05 and still > rp.Stats.MaxHP * 0.08 and still < rp.Stats.MaxHP * 0.12 and moving < 0.5 and afterHit < 0.5,
+	string.format("StillHeal %.3f, still healed %.1f in 2.75 s, moving %.1f, after a hit %.1f", rp.Stats.StillHeal, still, moving, afterHit))
+drop("StillWaters")
 
 local failed = 0
 for _, r in ipairs(results) do

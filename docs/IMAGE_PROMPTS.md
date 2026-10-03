@@ -6,7 +6,7 @@ that reuse them (Max HP, Might, Armor, Speed, Luck, Growth, Revive). Everything 
 the game still draws with simple vector shapes, borrows from another icon, or doesn't have.
 
 **Total: 136 images** in 17 groups. Work top to bottom: groups 1-9 matter most in play.
-**New requests: 37 images** in groups 18-21 (the two new stage bosses, three small UI symbols, ten new passives, ten new weapons and their ten evolutions; not made yet).
+**New requests: 38 images** in groups 18-21 (the two new stage bosses, three small UI symbols, eleven new passives, ten new weapons and their ten evolutions; not made yet).
 
 How to use:
 1. Paste the **STYLE BLOCK** first in every ChatGPT chat (or once at the top of a chat).
@@ -297,7 +297,7 @@ and a tiny gold accent, no scene, readable at 20 px.
 When these come in: upload them with `tools/upload_icons.py`, run `tools/gen_icon_data.py`, and
 map the keys `heart`, `castle` and `aim` to them in `src/client/Icons.lua`.
 
-## 20. New requests: ten new passives, 10 images (`art/icons/`)
+## 20. New requests: eleven new passives, 11 images (`art/icons/`)
 
 Not made yet; the game draws these with code today. Same STYLE BLOCK, same format as the
 passive icons in `art/icons` (see `docs/ICON_LIST.md`): square 512x512, transparent
@@ -314,6 +314,7 @@ under the passive's id.
 - **SecondWind.png** (Second Wind, level-ups heal): a curling pale slate-blue gust of wind #B8C5D3 wrapping around a soft glowing green plus sign #B9DE8E.
 - **EmberOil.png** (Ember Oil, hits may burn): a round slate glass flask #8DA1B7 filled with glowing orange oil #E58A45, a small flame dancing on its cork.
 - **Lionheart.png** (Lionheart, more damage at low health): a chunky crimson heart #C9443F wearing a small antique gold crown #E5C988, a short golden mane-like flare behind it.
+- **StillWaters.png** (Still Waters, stand still to heal): a single glossy pale-teal water drop #8FD1C8 resting on calm slate-blue ripples #8DA1B7, a small soft green plus sign #B9DE8E glowing beside it.
 
 When these come in: upload them with `tools/upload_icons.py`, then run `tools/gen_icon_data.py`
 (the ids already match `PassiveData`, so the pictures replace the drawn icons automatically).
