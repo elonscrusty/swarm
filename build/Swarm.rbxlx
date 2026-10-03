@@ -2212,7 +2212,7 @@ Config.Stages = {
 	-- Scorpion Queen HP = Config.Boss.HP x this (x the player-count scaling). She comes
 	-- much earlier than the old 15:00 boss, so stage 1 is lighter; then +BossHPPerExtraStage
 	-- per stage past the list.
-	BossHPByStage = { 0.3, 0.75, 1.1, 1.5, 2.0 },
+	BossHPByStage = { 0.25, 0.7, 1.1, 1.5, 2.0 },
 	BossHPPerExtraStage = 0.5,
 	BossSpawnOffset = 12, -- the Queen climbs out this far behind the portal
 	-- regular enemies kept alive during the Queen fight: this share of the normal live
@@ -2285,7 +2285,7 @@ Config.Dev = {
 -- PLAYER BASE STATS (before character, passive and meta bonuses)
 ------------------------------------------------------------------------------------------
 Config.Player = {
-	BaseMaxHP = 100,
+	BaseMaxHP = 120,
 	BaseSpeed = 16, -- Humanoid WalkSpeed
 	BasePickupRadius = 7, -- studs, gems inside this radius fly to you
 	BaseLuck = 0, -- 0.1 = +10%
@@ -2637,10 +2637,10 @@ Config.Enemies = {
 -- DIFFICULTY SCALING (tier = floor(minutes))
 ------------------------------------------------------------------------------------------
 Config.Difficulty = {
-	HPPerMinute = 0.16, -- enemy HP x(1 + tier * this)
+	HPPerMinute = 0.12, -- enemy HP x(1 + tier * this)
 	SpeedPerMinute = 0.02, -- enemy speed x(1 + tier * this) ...
 	SpeedCap = 1.3, -- ... capped here
-	DamagePerMinute = 0.06, -- enemy damage x(1 + tier * this)
+	DamagePerMinute = 0.045, -- enemy damage x(1 + tier * this)
 	-- Live-enemy target and burst size multiplier by player count (index = players).
 	PlayerCountMult = { 1, 1.6, 2.1, 2.5 },
 	-- Enemy HP multiplier per extra player.
@@ -2656,8 +2656,8 @@ Config.Difficulty = {
 Config.Spawn = {
 	-- the first stage's live target and mini-waves start at OpeningMult of the table
 	-- and climb to full strength over OpeningSeconds (a gentle first two minutes)
-	OpeningSeconds = 120,
-	OpeningMult = 0.45,
+	OpeningSeconds = 180,
+	OpeningMult = 0.35,
 	StageProgressionSeconds = 120,
 	TickSeconds = 0.4, -- how often the spawner tops up toward the target count
 	MaxPerTick = 8,
@@ -2667,7 +2667,7 @@ Config.Spawn = {
 	Mode = "ScreenEdge",
 	ScreenRadius = 72,
 	ScreenRadiusJitter = 10,
-	MiniWaveBaseCount = 18,
+	MiniWaveBaseCount = 14,
 	MiniWavePerMinute = 3,
 }
 
@@ -2712,7 +2712,7 @@ Config.Pacing = {
 	MiniWaveLull = 8,
 	LullMult = 0.55,
 	IntroGroup = 3,
-	EliteFirst = 150,
+	EliteFirst = 210,
 	EliteEvery = 165,
 	EliteMinTime = 60,
 	EliteTypes = { "Slime", "Skeleton", "Brute", "Ghost", "Spitter" }, -- scheduled elites (never a bomb tick)
@@ -2725,7 +2725,7 @@ Config.Pacing = {
 	-- stage 3) per stage and MaxAlive at once, Distance studs from a living player.
 	-- Only while exploring (never during the boss fight or the surge).
 	Nests = {
-		Stage1RunTime = 360,
+		Stage1RunTime = 480,
 		FirstStageTime = 50,
 		Every = 70,
 		PerStage = 2,
@@ -4161,15 +4161,15 @@ EnemyData.EliteGem = { Large = 100 }
 	  Weights  relative spawn chance per enemy type this minute
 ]]
 EnemyData.SpawnTable = {
-	{ Target = 16, Weights = { Slime = 90, Bat = 10 } },
-	{ Target = 26, Weights = { Slime = 70, Bat = 25, Skeleton = 5 } },
-	{ Target = 36, Weights = { Slime = 55, Bat = 25, Skeleton = 20 } },
-	{ Target = 48, Weights = { Slime = 40, Bat = 25, Skeleton = 25, Ghost = 10 } },
-	{ Target = 62, Weights = { Slime = 30, Bat = 25, Skeleton = 25, Ghost = 15, Bomber = 5, Spitter = 4 } },
-	{ Target = 72, Weights = { Slime = 25, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 5, Spitter = 6 } },
-	{ Target = 82, Weights = { Slime = 20, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 10, Spitter = 8, Healer = 3 } },
-	{ Target = 92, Weights = { Slime = 15, Bat = 20, Skeleton = 25, Ghost = 20, Bomber = 10, Brute = 10, Spitter = 9, Healer = 4, Burrower = 4 } },
-	{ Target = 100, Weights = { Slime = 15, Bat = 15, Skeleton = 25, Ghost = 20, Bomber = 12, Brute = 13, Spitter = 10, Healer = 4, Burrower = 5 } },
+	{ Target = 12, Weights = { Slime = 90, Bat = 10 } },
+	{ Target = 20, Weights = { Slime = 75, Bat = 20, Skeleton = 5 } },
+	{ Target = 28, Weights = { Slime = 55, Bat = 25, Skeleton = 20 } },
+	{ Target = 38, Weights = { Slime = 45, Bat = 25, Skeleton = 25, Ghost = 5 } },
+	{ Target = 48, Weights = { Slime = 30, Bat = 25, Skeleton = 25, Ghost = 15, Bomber = 5, Spitter = 4 } },
+	{ Target = 58, Weights = { Slime = 25, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 5, Spitter = 6 } },
+	{ Target = 70, Weights = { Slime = 20, Bat = 20, Skeleton = 25, Ghost = 15, Bomber = 10, Brute = 10, Spitter = 8, Healer = 3 } },
+	{ Target = 82, Weights = { Slime = 15, Bat = 20, Skeleton = 25, Ghost = 20, Bomber = 10, Brute = 10, Spitter = 9, Healer = 4, Burrower = 4 } },
+	{ Target = 92, Weights = { Slime = 15, Bat = 15, Skeleton = 25, Ghost = 20, Bomber = 12, Brute = 13, Spitter = 10, Healer = 4, Burrower = 5 } },
 	{ Target = 110, Weights = { Slime = 10, Bat = 20, Skeleton = 25, Ghost = 20, Bomber = 12, Brute = 13, Spitter = 10, Healer = 5, Burrower = 6 } },
 	{ Target = 120, Weights = { Slime = 10, Bat = 15, Skeleton = 25, Ghost = 20, Bomber = 15, Brute = 15, Spitter = 11, Healer = 5, Burrower = 6 } },
 	{ Target = 130, Weights = { Slime = 10, Bat = 15, Skeleton = 20, Ghost = 25, Bomber = 15, Brute = 15, Spitter = 11, Healer = 5, Burrower = 7 } },
@@ -23179,12 +23179,18 @@ local readyEvent = Instance.new("BindableEvent")
 local pending = 0 -- models queued or loading
 local started = false
 
-type Job = { Name: string, Tier: number, Seq: number, State: string } -- queued | loading | done | failed
+type Job = { Name: string, Tier: number, Seq: number, State: string, Tries: number } -- queued | loading | done | failed
+-- InsertService can fail for a moment (rate limits, a slow asset fetch at server start):
+-- a model that fails is queued again this many times, at the back of its tier, so one
+-- bad fetch does not leave its part-built stand-in on screen for the whole server.
+local MAX_TRIES = 3
+local RETRY_DELAY = 4
 local jobs: { [string]: Job } = {}
 local seq = 0
 local active = 0
 local startClock = 0
 local loadedCount, failedCount, totalCount = 0, 0, 0
+local lastError = "" -- the latest load failure, published for the DEV lobby note
 local priorityReported = false
 
 MeshService.Ready = readyEvent.Event -- fires (modelName) each time a model finishes
@@ -23224,7 +23230,8 @@ local function loadModel(name: string, entry): boolean
 		return InsertService:LoadAsset(entry.AssetId)
 	end)
 	if not ok or not asset then
-		warn(string.format("[MeshService] could not load %s (%d): %s", name, entry.AssetId, tostring(asset)))
+		lastError = string.format("%s (%d): %s", name, entry.AssetId, tostring(asset))
+		warn("[MeshService] could not load " .. lastError)
 		return false
 	end
 	local folder = Instance.new("Folder")
@@ -23273,7 +23280,8 @@ local function loadModel(name: string, entry): boolean
 			template.Parent = folder
 			found += 1
 		else
-			warn(string.format("[MeshService] %s is missing piece %s", name, piece.Name))
+			lastError = string.format("%s is missing piece %s", name, piece.Name)
+			warn("[MeshService] " .. lastError)
 		end
 	end
 	asset:Destroy()
@@ -23376,6 +23384,7 @@ local function publish()
 	end
 	root:SetAttribute("Loaded", loadedCount)
 	root:SetAttribute("Failed", failedCount)
+	root:SetAttribute("LastError", string.sub(lastError, 1, 160))
 	root:SetAttribute("Total", totalCount)
 	root:SetAttribute("AllReady", started and pending == 0)
 	if not priorityReported and started then
@@ -23421,6 +23430,14 @@ local function run(job: Job)
 		if ok and loaded then
 			job.State = "done"
 			loadedCount += 1
+		elseif job.Tries < MAX_TRIES then
+			job.State = "queued"
+			job.Tries += 1
+			seq += 1
+			job.Seq = seq
+			pending += 1
+			warn(string.format("[MeshService] %s failed (try %d of %d), retrying", job.Name, job.Tries, MAX_TRIES))
+			task.delay(RETRY_DELAY, pump)
 		else
 			job.State = "failed"
 			failedCount += 1
@@ -23496,7 +23513,7 @@ function MeshService.Init(_ctx)
 	for name, entry in pairs(MeshCatalog.Models) do
 		if entry.AssetId and entry.AssetId ~= 0 then
 			seq += 1
-			jobs[name] = { Name = name, Tier = CATEGORY_TIER[(entry :: any).Category] or 4, Seq = seq, State = "queued" }
+			jobs[name] = { Name = name, Tier = CATEGORY_TIER[(entry :: any).Category] or 4, Seq = seq, State = "queued", Tries = 1 }
 			totalCount += 1
 		end
 	end
@@ -42546,6 +42563,7 @@ return JumpController
 ]]
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -42783,7 +42801,16 @@ local function updateLoadingPill()
 	local folder = ReplicatedStorage:FindFirstChild("SwarmMeshes")
 	local total = folder and tonumber(folder:GetAttribute("Total")) or 0
 	local show = folder ~= nil and total > 0 and folder:GetAttribute("PriorityReady") ~= true
-	if show then
+	-- DEV: models that failed to load stay reported (why heroes show their part stand-ins)
+	local failed = folder and tonumber(folder:GetAttribute("Failed")) or 0
+	local dev = RunService:IsStudio() or Players.LocalPlayer:GetAttribute("DevAccess") == true
+	if folder and not show and failed > 0 and dev then
+		ui.LoadingText.Text = string.format("DEV · %d of %d models failed · %s", failed, total, tostring(folder:GetAttribute("LastError") or ""))
+		pill.AnchorPoint = Vector2.new(ui.Chip.AnchorPoint.X, 0)
+		pill.Position = UDim2.new(ui.Chip.AnchorPoint.X, 0, 0, 56)
+		pill.Visible = true
+		ui.LoadingShown = true
+	elseif show then
 		-- progress of what the menu needs (lobby + heroes), else of everything
 		local need = tonumber(folder:GetAttribute("PriorityTotal")) or 0
 		local done = tonumber(folder:GetAttribute("PriorityDone")) or 0
@@ -47566,9 +47593,6 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 			UIKit.formatNumber(tonumber(last.Kills) or 0) .. " kills",
 			"+" .. UIKit.formatNumber(tonumber(last.Gold) or 0) .. " gold",
 		}
-		if fell then
-			table.insert(parts, "Fell to " .. tostring(last.DeathCause))
-		end
 		haul.Text = table.concat(parts, " · ")
 	end
 

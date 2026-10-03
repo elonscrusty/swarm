@@ -80,7 +80,7 @@ Config.Stages = {
 	-- Scorpion Queen HP = Config.Boss.HP x this (x the player-count scaling). She comes
 	-- much earlier than the old 15:00 boss, so stage 1 is lighter; then +BossHPPerExtraStage
 	-- per stage past the list.
-	BossHPByStage = { 0.3, 0.75, 1.1, 1.5, 2.0 },
+	BossHPByStage = { 0.25, 0.7, 1.1, 1.5, 2.0 },
 	BossHPPerExtraStage = 0.5,
 	BossSpawnOffset = 12, -- the Queen climbs out this far behind the portal
 	-- regular enemies kept alive during the Queen fight: this share of the normal live
@@ -153,7 +153,7 @@ Config.Dev = {
 -- PLAYER BASE STATS (before character, passive and meta bonuses)
 ------------------------------------------------------------------------------------------
 Config.Player = {
-	BaseMaxHP = 100,
+	BaseMaxHP = 120,
 	BaseSpeed = 16, -- Humanoid WalkSpeed
 	BasePickupRadius = 7, -- studs, gems inside this radius fly to you
 	BaseLuck = 0, -- 0.1 = +10%
@@ -505,10 +505,10 @@ Config.Enemies = {
 -- DIFFICULTY SCALING (tier = floor(minutes))
 ------------------------------------------------------------------------------------------
 Config.Difficulty = {
-	HPPerMinute = 0.16, -- enemy HP x(1 + tier * this)
+	HPPerMinute = 0.12, -- enemy HP x(1 + tier * this)
 	SpeedPerMinute = 0.02, -- enemy speed x(1 + tier * this) ...
 	SpeedCap = 1.3, -- ... capped here
-	DamagePerMinute = 0.06, -- enemy damage x(1 + tier * this)
+	DamagePerMinute = 0.045, -- enemy damage x(1 + tier * this)
 	-- Live-enemy target and burst size multiplier by player count (index = players).
 	PlayerCountMult = { 1, 1.6, 2.1, 2.5 },
 	-- Enemy HP multiplier per extra player.
@@ -524,8 +524,8 @@ Config.Difficulty = {
 Config.Spawn = {
 	-- the first stage's live target and mini-waves start at OpeningMult of the table
 	-- and climb to full strength over OpeningSeconds (a gentle first two minutes)
-	OpeningSeconds = 120,
-	OpeningMult = 0.45,
+	OpeningSeconds = 180,
+	OpeningMult = 0.35,
 	StageProgressionSeconds = 120,
 	TickSeconds = 0.4, -- how often the spawner tops up toward the target count
 	MaxPerTick = 8,
@@ -535,7 +535,7 @@ Config.Spawn = {
 	Mode = "ScreenEdge",
 	ScreenRadius = 72,
 	ScreenRadiusJitter = 10,
-	MiniWaveBaseCount = 18,
+	MiniWaveBaseCount = 14,
 	MiniWavePerMinute = 3,
 }
 
@@ -580,7 +580,7 @@ Config.Pacing = {
 	MiniWaveLull = 8,
 	LullMult = 0.55,
 	IntroGroup = 3,
-	EliteFirst = 150,
+	EliteFirst = 210,
 	EliteEvery = 165,
 	EliteMinTime = 60,
 	EliteTypes = { "Slime", "Skeleton", "Brute", "Ghost", "Spitter" }, -- scheduled elites (never a bomb tick)
@@ -593,7 +593,7 @@ Config.Pacing = {
 	-- stage 3) per stage and MaxAlive at once, Distance studs from a living player.
 	-- Only while exploring (never during the boss fight or the surge).
 	Nests = {
-		Stage1RunTime = 360,
+		Stage1RunTime = 480,
 		FirstStageTime = 50,
 		Every = 70,
 		PerStage = 2,

@@ -58,12 +58,18 @@ local readyEvent = Instance.new("BindableEvent")
 local pending = 0 -- models queued or loading
 local started = false
 
-type Job = { Name: string, Tier: number, Seq: number, State: string } -- queued | loading | done | failed
+type Job = { Name: string, Tier: number, Seq: number, State: string, Tries: number } -- queued | loading | done | failed
+-- InsertService can fail for a moment (rate limits, a slow asset fetch at server start):
+-- a model that fails is queued again this many times, at the back of its tier, so one
+-- bad fetch does not leave its part-built stand-in on screen for the whole server.
+local MAX_TRIES = 3
+local RETRY_DELAY = 4
 local jobs: { [string]: Job } = {}
 local seq = 0
 local active = 0
 local startClock = 0
 local loadedCount, failedCount, totalCount = 0, 0, 0
+local lastError = "" -- the latest load failure, published for the DEV lobby note
 local priorityReported = false
 
 MeshService.Ready = readyEvent.Event -- fires (modelName) each time a model finishes
@@ -103,7 +109,8 @@ local function loadModel(name: string, entry): boolean
 		return InsertService:LoadAsset(entry.AssetId)
 	end)
 	if not ok or not asset then
-		warn(string.format("[MeshService] could not load %s (%d): %s", name, entry.AssetId, tostring(asset)))
+		lastError = string.format("%s (%d): %s", name, entry.AssetId, tostring(asset))
+		warn("[MeshService] could not load " .. lastError)
 		return false
 	end
 	local folder = Instance.new("Folder")
@@ -152,7 +159,8 @@ local function loadModel(name: string, entry): boolean
 			template.Parent = folder
 			found += 1
 		else
-			warn(string.format("[MeshService] %s is missing piece %s", name, piece.Name))
+			lastError = string.format("%s is missing piece %s", name, piece.Name)
+			warn("[MeshService] " .. lastError)
 		end
 	end
 	asset:Destroy()
@@ -255,6 +263,7 @@ local function publish()
 	end
 	root:SetAttribute("Loaded", loadedCount)
 	root:SetAttribute("Failed", failedCount)
+	root:SetAttribute("LastError", string.sub(lastError, 1, 160))
 	root:SetAttribute("Total", totalCount)
 	root:SetAttribute("AllReady", started and pending == 0)
 	if not priorityReported and started then
@@ -300,6 +309,14 @@ local function run(job: Job)
 		if ok and loaded then
 			job.State = "done"
 			loadedCount += 1
+		elseif job.Tries < MAX_TRIES then
+			job.State = "queued"
+			job.Tries += 1
+			seq += 1
+			job.Seq = seq
+			pending += 1
+			warn(string.format("[MeshService] %s failed (try %d of %d), retrying", job.Name, job.Tries, MAX_TRIES))
+			task.delay(RETRY_DELAY, pump)
 		else
 			job.State = "failed"
 			failedCount += 1
@@ -375,7 +392,7 @@ function MeshService.Init(_ctx)
 	for name, entry in pairs(MeshCatalog.Models) do
 		if entry.AssetId and entry.AssetId ~= 0 then
 			seq += 1
-			jobs[name] = { Name = name, Tier = CATEGORY_TIER[(entry :: any).Category] or 4, Seq = seq, State = "queued" }
+			jobs[name] = { Name = name, Tier = CATEGORY_TIER[(entry :: any).Category] or 4, Seq = seq, State = "queued", Tries = 1 }
 			totalCount += 1
 		end
 	end
