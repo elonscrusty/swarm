@@ -263,6 +263,7 @@ local function buildPrompt(root: Frame)
 	local x0 = c * 2 + 18
 	ui.PromptTitle = text(face, "H3", "Small Chest", { Position = UDim2.fromOffset(x0, 8), Size = UDim2.new(1, -x0 - 10, 0, TS(18) + 4), TextColor3 = P.gold_200 })
 	ui.PromptDetail = text(face, "Caption", "", { Position = UDim2.fromOffset(x0, 10 + TS(18) + 2), Size = UDim2.new(1, -x0 - 10, 0, TS(12) + 4) })
+	ui.PromptDetailColor = ui.PromptDetail.TextColor3
 	-- an inset well behind the benefit / tradeoff lines (and the Shrine of Chance odds)
 	ui.PromptWell = new("Frame", { Name = "Well", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.05, BorderSizePixel = 0, Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -20, 0, 10), Visible = false }, face)
 	UIKit.corner(ui.PromptWell, Theme.Radius.M)
@@ -749,7 +750,9 @@ local STATE_TEXT = {
 }
 
 -- Fills the prompt for `model`; returns its height.
-local function fillPrompt(model: Model, progress: number): number
+-- tight = a short landscape screen: the try's outcome goes in the detail line instead
+-- of its own row and the well pads less, so the prompt stays clear of the weapons bar.
+local function fillPrompt(model: Model, progress: number, tight: boolean?): number
 	local kind = model:GetAttribute("LootKind") or "Chest"
 	setIcon(KIND_ICON[kind] or "reward_ChestLarge")
 	ui.PromptTitle.Text = tostring(model:GetAttribute("Title") or "")
@@ -765,18 +768,24 @@ local function fillPrompt(model: Model, progress: number): number
 	if ok and model:GetAttribute("LootType") == "Chance" and model:GetAttribute("Odds") ~= nil then
 		detail = "Pay gold · maybe an item" -- the odds row below has the numbers
 	end
+	local id = tonumber(model:GetAttribute("LootId")) or 0
+	local result = chanceResult.Id ~= 0 and chanceResult.Id == id and os.clock() < chanceResult.Until
+	local resultText = chanceResult.Win and "ITEM FOUND!" or "NO LUCK THIS TIME"
+	local resultColor = chanceResult.Win and P.gold_200 or P.ivory_200
+	if result and tight then
+		detail = resultText
+	end
 	ui.PromptDetail.Text = UIKit.track(detail)
+	ui.PromptDetail.TextColor3 = (result and tight) and resultColor or (ui.PromptDetailColor or ui.PromptDetail.TextColor3)
 	local benefit = tostring(model:GetAttribute("Benefit") or "")
 	local tradeoff = tostring(model:GetAttribute("Tradeoff") or "")
 	local showLines = ok or st == "Dormant" or st == "Guarded"
 	local y = 10 + (RING_R + 8) * 2 + 4
 	-- the last Shrine of Chance try's outcome, big, right under the header
-	local id = tonumber(model:GetAttribute("LootId")) or 0
-	local result = chanceResult.Id ~= 0 and chanceResult.Id == id and os.clock() < chanceResult.Until
-	ui.PromptResult.Visible = result
-	if result then
-		ui.PromptResult.Text = chanceResult.Win and "ITEM FOUND!" or "NO LUCK THIS TIME"
-		ui.PromptResult.TextColor3 = chanceResult.Win and P.gold_200 or P.ivory_200
+	ui.PromptResult.Visible = result and not tight
+	if result and not tight then
+		ui.PromptResult.Text = resultText
+		ui.PromptResult.TextColor3 = resultColor
 		ui.PromptResult.Position = UDim2.fromOffset(12, y - 2)
 		y += TS(20) + 8
 	end
@@ -788,8 +797,9 @@ local function fillPrompt(model: Model, progress: number): number
 	ui.PromptTradeoff.Visible = showLines and tradeoff ~= ""
 	local wellTop = y
 	ui.PromptWell.Visible = oddsRow or ui.PromptBenefit.Visible or ui.PromptTradeoff.Visible
+	local wellPad = tight and 3 or 6
 	if ui.PromptWell.Visible then
-		y += 6
+		y += wellPad
 	end
 	if oddsRow then
 		local cells = ui.OddsCells
@@ -798,7 +808,7 @@ local function fillPrompt(model: Model, progress: number): number
 		cells[3].Value.Text = tostring(tonumber(model:GetAttribute("TriesLeft")) or 0)
 		ui.Odds.Position = UDim2.fromOffset(18, y)
 		ui.Odds.Size = UDim2.new(1, -36, 0, ODDS_H())
-		y += ODDS_H() + 4
+		y += ODDS_H() + (tight and 0 or 4)
 	end
 	local px = TS(LINE_PX)
 	local lineH = px + 4
@@ -823,7 +833,7 @@ local function fillPrompt(model: Model, progress: number): number
 		place(ui.PromptTradeoff, "-  " .. tradeoff)
 	end
 	if ui.PromptWell.Visible then
-		y += 6
+		y += wellPad
 		ui.PromptWell.Position = UDim2.fromOffset(10, wellTop)
 		ui.PromptWell.Size = UDim2.new(1, -20, 0, y - wellTop)
 		y += 2
@@ -1139,6 +1149,13 @@ function LootUI.Update(_dt: number, inRun: boolean)
 		local w = math.min(kit.IsPortrait() and 360 or 340, v.X - 24)
 		ui.Prompt.Size = UDim2.fromOffset(w, ui.Prompt.Size.Y.Offset) -- fillPrompt wraps lines to this width
 		local h = fillPrompt(t, progress)
+		-- landscape: the prompt must fit between the top HUD and the weapons bar
+		local hudEls = Hud.Elements()
+		local barTop = hudEls.BarTop
+		local room = barTop and (barTop - 8 - (Hud.TopBottom() + 4)) or math.huge
+		if not kit.IsPortrait() and h > room then
+			h = fillPrompt(t, progress, true)
+		end
 		ui.Prompt.Size = UDim2.fromOffset(w, h)
 		local pos = t:GetAttribute("Pos")
 		local p = typeof(pos) == "Vector3" and project(pos + Vector3.new(0, 3, 0)) or Vector2.new(v.X / 2, v.Y / 2)
@@ -1178,6 +1195,24 @@ function LootUI.Update(_dt: number, inRun: boolean)
 				local jump = Mv.ButtonSize + Mv.ButtonMargin + math.max(0, ins.Right or 0) + 8
 				if x + w > v.X - jump and y + h / 2 > v.Y - jump then
 					x = math.max(16, v.X - jump - w)
+				end
+			end
+			-- never over the weapons bar: lift above it; a lifted prompt that now meets
+			-- the minimap goes left of the map
+			local bar = hudEls.Bar
+			if bar and bar.Visible and barTop then
+				local bl = bar.Position.X.Offset - bar.AnchorPoint.X * bar.Size.X.Offset
+				local br = bl + bar.Size.X.Offset
+				if x < br and x + w > bl and y + h / 2 > barTop - 8 then
+					y = math.max(Hud.TopBottom() + h / 2 + 4, barTop - 8 - h / 2)
+					local map2 = ui.Prompt.Parent and ui.Prompt.Parent:FindFirstChild("MiniMap")
+					if map2 and map2:IsA("GuiObject") and map2.Visible then
+						local mx, my = map2.Position.X.Offset, map2.Position.Y.Offset
+						local mw, mh = map2.Size.X.Offset, map2.Size.Y.Offset
+						if x + w > mx and x < mx + mw and y - h / 2 < my + mh and y + h / 2 > my then
+							x = math.max(16, mx - 8 - w)
+						end
+					end
 				end
 			end
 		end
