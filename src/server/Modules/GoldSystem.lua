@@ -26,8 +26,9 @@ local rng = Random.new()
 ------------------------------------------------------------------------------------------
 
 function GoldSystem.RetentionRate(cleared: number): number
-	return math.min(Config.Gold.FailureRetainCap, Config.Gold.FailureRetainBase
-		+ math.max(0, math.floor(cleared)) * Config.Gold.FailureRetainPerStage)
+	local rate = Config.Gold.FailureRetainBase + math.max(0, math.floor(cleared)) * Config.Gold.FailureRetainPerStage
+	-- rounded to whole percents so 0.35 + 2 x 0.15 keeps 65%, not 64.99...%
+	return math.min(Config.Gold.FailureRetainCap, math.floor(rate * 100 + 0.5) / 100)
 end
 
 -- Saved ledgers left by a crashed server are settled once when the profile loads.
