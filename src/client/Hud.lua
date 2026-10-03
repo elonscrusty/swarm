@@ -1159,6 +1159,7 @@ end
 -- goal's colour.
 -- Short forms of the objectives for when the pill would run under the health panel.
 local STAGE_SHORT = {
+	["FIND THE PORTAL"] = "PORTAL",
 	["OPENING THE PORTAL"] = "OPENING",
 	["OPEN THE PORTAL"] = "OPEN PORTAL",
 	["PORTAL DORMANT"] = "DORMANT",
@@ -1180,6 +1181,16 @@ local function stageGoal(state: Configuration, stagePhase: string): (string, str
 			return "OPEN THE PORTAL", "SWARM OVERWHELMING", P.crimson_300
 		elseif warn >= 1 then
 			return "OPEN THE PORTAL", "SWARM GROWING", P.amber_300
+		end
+		-- waves (Config.Waves, SwarmState Wave / WaveNext): "WAVE 3", or "WAVE 4 IN 0:03"
+		-- during the breather before it
+		local wave: number = tonumber(state:GetAttribute("Wave")) or 0
+		local nextAt: number = tonumber(state:GetAttribute("WaveNext")) or 0
+		if nextAt > 0 then
+			local now: number = tonumber(state:GetAttribute("RunTime")) or 0
+			return "FIND THE PORTAL", string.format("WAVE %d IN %s", wave + 1, UIKit.formatTime(math.max(0, math.ceil(nextAt - now)))), P.ivory_100
+		elseif wave > 0 then
+			return "FIND THE PORTAL", "WAVE " .. tostring(wave), P.ivory_100
 		end
 		return "FIND THE PORTAL", "", P.ivory_100
 	elseif stagePhase == "Boss" then
