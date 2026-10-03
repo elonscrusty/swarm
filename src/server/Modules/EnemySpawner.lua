@@ -15,7 +15,9 @@
 	  WarnId (its live telegraph), Harmless / Invulnerable / Untargetable / Dying (boss,
 	  a tunnelling Burrower), Owner (the boss that made an object: War Banner, Brood Egg),
 	  Children (a nest's mites), RallyUntil (War Banner buff), HPShown (ShowHP bar)
-	Pacing (Config.Pacing): calm at run / stage start, build-up between mini-waves, a lull
+	Waves (Config.Waves, stepWaves): while exploring every enemy comes in a numbered wave;
+	the continuous top-up below only runs during boss fights (or with waves off).
+	Pacing (Config.Pacing, waves off): calm at run / stage start, build-up between mini-waves, a lull
 	after each mini-wave, first-appearance callouts with a small intro group, scheduled
 	elites, nests on later stages (Config.Pacing.Nests). The boss encounter itself is
 	BossAI (data: BossData); the stage's boss id comes from StageManager.

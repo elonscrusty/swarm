@@ -4,7 +4,8 @@
 	run itself (players, lives, results); this module owns what happens on each stage:
 
 	  Explore  the arena of this stage with a PORTAL at a random clear spot. The swarm
-	           comes as usual (mini-waves every Config.Run.MiniWaveInterval). The portal is
+	           comes in numbered waves (Config.Waves, EnemySpawner stepWaves; the old
+	           mini-waves only with Config.Waves.Enabled = false). The portal is
 	           dormant for PortalLockSeconds; when the lock ends (and the stage banner has
 	           gone: RevealDelaySeconds) it is REVEALED (PortalHint / PortalReveal: the HUD
 	           arrow, banner, beacon and minimap ping) and any living player standing in
