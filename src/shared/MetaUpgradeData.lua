@@ -1,6 +1,17 @@
 --[[
 	MetaUpgradeData.lua
-	Permanent upgrades bought with gold in the lobby shop.
+	Permanent upgrades bought with gold in the lobby.
+
+	Two kinds (Hero Mastery, save schema 7):
+	  StatOrder     MaxHP, Might, Armor, Speed, Luck, Growth: bought PER HERO on the
+	                Characters screen (data.HeroUpgrades[heroId][id]); a hero's levels only
+	                go up to its mastery cap (HeroCap). Same prices / max levels as before.
+	  AccountOrder  Revive, Reroll, Skip: account-wide (data.Meta[id], Upgrades screen).
+	  Signature     one per hero (Signature[heroId], upgrade id "Signature"): 5 levels that
+	                strengthen the hero's trait (TraitValue). The stat ones carry PerLevel
+	                (StatSheet adds them); the others are read by WeaponSystem.
+	Mastery: Config.HeroMastery (MasteryFor turns a hero's XP into its level). Robux never
+	buys any of this.
 
 	Fields:
 	  MaxLevel     number of levels
@@ -15,6 +26,8 @@
 local MetaUpgradeData = {}
 
 MetaUpgradeData.Order = { "MaxHP", "Might", "Armor", "Speed", "Luck", "Growth", "Revive", "Reroll", "Skip" }
+MetaUpgradeData.StatOrder = { "MaxHP", "Might", "Armor", "Speed", "Luck", "Growth" }
+MetaUpgradeData.AccountOrder = { "Revive", "Reroll", "Skip" }
 
 MetaUpgradeData.Upgrades = {
 	MaxHP = {
@@ -140,6 +153,137 @@ function MetaUpgradeData.CostOf(upgradeId: string, ownedLevel: number): number?
 		return nil
 	end
 	return math.floor(def.BaseCost * def.CostGrowth ^ ownedLevel + 0.5)
+end
+
+local Config = require(script.Parent.Config)
+
+--[[
+	Signature upgrades: Trait = { Base, Per } in whole percent: the trait's value at signature
+	level L is (Base + Per * L) / 100 (Base = the hero's own trait today). Effect.Format
+	prints that percent. PerLevel (stat traits only): what StatSheet adds per level.
+]]
+local SIGNATURE_COST = { MaxLevel = 5, BaseCost = 500, CostGrowth = 1.6 }
+local function signature(hero: string, name: string, base: number, per: number, format: string, perLevel: { [string]: number }?)
+	return {
+		Id = "Signature",
+		Hero = hero,
+		Name = name,
+		Description = string.format(format, base) .. " now; " .. string.format(format, base + per * SIGNATURE_COST.MaxLevel) .. " at level " .. SIGNATURE_COST.MaxLevel .. ".",
+		MaxLevel = SIGNATURE_COST.MaxLevel,
+		BaseCost = SIGNATURE_COST.BaseCost,
+		CostGrowth = SIGNATURE_COST.CostGrowth,
+		Trait = { Base = base, Per = per },
+		Effect = { Format = format },
+		PerLevel = perLevel,
+	}
+end
+MetaUpgradeData.Signature = {
+	Knight = signature("Knight", "Iron Skin", 10, 2, "-%d%% damage taken", { damageTaken = -0.02 }),
+	Mage = signature("Mage", "Arcane Reach", 10, 3, "+%d%% area", { area = 0.03 }),
+	Rogue = signature("Rogue", "Fleet Foot", 15, 2, "+%d%% move speed", { speed = 0.02 }),
+	Priest = signature("Priest", "Blessed", 20, 3, "+%d%% max HP", { maxHpMult = 0.03 }),
+	Ranger = signature("Ranger", "Steady Aim", 30, 5, "+%d%% Longbow damage standing still"),
+	Alchemist = signature("Alchemist", "Volatile Mix", 20, 3, "+%d%% fire and area damage"),
+	Engineer = signature("Engineer", "Tinkerer", 30, 5, "+%d%% turret and totem time"),
+	Necromancer = signature("Necromancer", "Soul Harvest", 15, 2, "%d%% soul chance per kill"),
+}
+
+function MetaUpgradeData.IsStat(upgradeId: any): boolean
+	return type(upgradeId) == "string" and table.find(MetaUpgradeData.StatOrder, upgradeId) ~= nil
+end
+
+function MetaUpgradeData.IsAccount(upgradeId: any): boolean
+	return type(upgradeId) == "string" and table.find(MetaUpgradeData.AccountOrder, upgradeId) ~= nil
+end
+
+-- The definition of one of a hero's own upgrades (a stat id or "Signature"), or nil.
+function MetaUpgradeData.HeroDef(heroId: string, upgradeId: any): { [string]: any }?
+	if upgradeId == "Signature" then
+		return MetaUpgradeData.Signature[heroId]
+	end
+	if MetaUpgradeData.IsStat(upgradeId) then
+		return MetaUpgradeData.Upgrades[upgradeId]
+	end
+	return nil
+end
+
+-- A hero's upgrade ids in screen order: the six stats, then its signature.
+function MetaUpgradeData.HeroOrder(): { string }
+	local out = table.clone(MetaUpgradeData.StatOrder)
+	table.insert(out, "Signature")
+	return out
+end
+
+-- Gold price of a hero upgrade's next level, or nil when maxed / unknown.
+function MetaUpgradeData.HeroCostOf(heroId: string, upgradeId: string, ownedLevel: number): number?
+	local def = MetaUpgradeData.HeroDef(heroId, upgradeId)
+	if not def or ownedLevel >= def.MaxLevel then
+		return nil
+	end
+	return math.floor(def.BaseCost * def.CostGrowth ^ ownedLevel + 0.5)
+end
+
+-- The trait value of a hero at a signature level (0.10 = 10%), or nil for no signature.
+function MetaUpgradeData.TraitValue(heroId: string, level: number?): number?
+	local def = MetaUpgradeData.Signature[heroId]
+	if not def then
+		return nil
+	end
+	local l = math.clamp(math.floor(tonumber(level) or 0), 0, def.MaxLevel)
+	return (def.Trait.Base + def.Trait.Per * l) / 100
+end
+
+-- A hero upgrade's total effect at a level, in plain words.
+function MetaUpgradeData.HeroEffectText(heroId: string, upgradeId: string, level: number): string
+	if upgradeId == "Signature" then
+		local def = MetaUpgradeData.Signature[heroId]
+		if not def then
+			return ""
+		end
+		return string.format(def.Effect.Format, def.Trait.Base + def.Trait.Per * level)
+	end
+	return MetaUpgradeData.EffectText(upgradeId, level)
+end
+
+-- Mastery level needed to buy `nextLevel` of a hero upgrade.
+function MetaUpgradeData.RequiredMastery(upgradeId: string, nextLevel: number): number
+	local M = Config.HeroMastery
+	if upgradeId == "Signature" then
+		return M.SignatureEvery * nextLevel
+	end
+	return math.ceil(nextLevel / M.StatPerLevel)
+end
+
+-- Highest level of a hero upgrade its mastery allows (never above the upgrade's max).
+function MetaUpgradeData.HeroCap(mastery: number, upgradeId: string, heroId: string?): number
+	local M = Config.HeroMastery
+	local def = MetaUpgradeData.HeroDef(heroId or "Knight", upgradeId)
+	local maxLevel = def and def.MaxLevel or 0
+	if upgradeId == "Signature" then
+		return math.min(maxLevel, math.floor(mastery / M.SignatureEvery))
+	end
+	return math.min(maxLevel, mastery * M.StatPerLevel)
+end
+
+-- XP from mastery `level` to level + 1.
+function MetaUpgradeData.MasteryToNext(level: number): number
+	local M = Config.HeroMastery
+	return M.Base + M.PerLevel * (math.max(1, level) - 1)
+end
+
+-- Mastery level for a hero's total XP, the XP into that level and the XP it needs (0 at max).
+function MetaUpgradeData.MasteryFor(totalXP: number?): (number, number, number)
+	local xp = math.max(0, math.floor(tonumber(totalXP) or 0))
+	local level = 1
+	while level < Config.HeroMastery.MaxLevel do
+		local need = MetaUpgradeData.MasteryToNext(level)
+		if xp < need then
+			return level, xp, need
+		end
+		xp -= need
+		level += 1
+	end
+	return Config.HeroMastery.MaxLevel, 0, 0
 end
 
 return MetaUpgradeData

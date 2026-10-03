@@ -47,6 +47,7 @@ local Hud = require(script.Parent.Hud)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Accessibility = require(script.Parent.Accessibility)
 local PortalBeacon = require(script.Parent.PortalBeacon)
+local RunIntro = require(script.Parent.RunIntro)
 
 local StageUI = {}
 
@@ -76,9 +77,9 @@ local function checkPressure(state: Configuration)
 	local up = warn > lastWarn
 	lastWarn = warn
 	if up and warn == 1 then
-		Hud.Announce("THE SWARM IS GROWING", "Open the portal before it gets worse", Accessibility.Color(Color3.fromRGB(246, 218, 126), "Loot"), "PortalAppear")
+		Hud.Announce("THE SWARM IS GROWING", Config.Waves.Enabled and "Bigger waves until the portal opens" or "Open the portal before it gets worse", Accessibility.Color(Color3.fromRGB(246, 218, 126), "Loot"), "PortalAppear")
 	elseif up and warn >= 2 then
-		Hud.Announce("THE SWARM IS OVERWHELMING", "Open the portal now!", Accessibility.Color(Color3.fromRGB(219, 106, 94), "Danger"), "PortalAppear")
+		Hud.Announce("THE SWARM IS OVERWHELMING", Config.Waves.Enabled and "Huge waves: open the portal now!" or "Open the portal now!", Accessibility.Color(Color3.fromRGB(219, 106, 94), "Danger"), "PortalAppear")
 	end
 end
 
@@ -680,8 +681,8 @@ local function checkWave(state: Configuration)
 		lastWaveSeq = seq -- entering a run mid-wave: no stale banner
 		return
 	end
-	if seq == lastWaveSeq then
-		return
+	if seq == lastWaveSeq or RunIntro.Active() then
+		return -- the stage-start card is up: the banner waits for it
 	end
 	lastWaveSeq = seq
 	local n = state:GetAttribute("Wave") or 0

@@ -185,6 +185,8 @@ function GoldSystem.SyncProfile(player: Player)
 		Difficulty = data.Difficulty,
 		DifficultyClears = data.DifficultyClears,
 		Meta = data.Meta,
+		Heroes = data.Heroes or {}, -- Hero Mastery: { heroId = { XP, Runs } }
+		HeroUpgrades = data.HeroUpgrades or {}, -- { heroId = { upgradeId = level } }
 		OwnedCharacters = data.OwnedCharacters,
 		SelectedCharacter = data.SelectedCharacter,
 		Skins = data.Skins,
@@ -268,7 +270,8 @@ end
 -- double tap never buys two levels.
 local function onBuyMeta(player: Player, upgradeId: any, expectedLevel: any)
 	local data = ctx.DataService.GetData(player)
-	if not data or not inLobby(player) or type(upgradeId) ~= "string" or not MetaUpgradeData.Upgrades[upgradeId] then
+	-- only the account upgrades: the stat upgrades are bought per hero (onBuyHeroUpgrade)
+	if not data or not inLobby(player) or not MetaUpgradeData.IsAccount(upgradeId) or not MetaUpgradeData.Upgrades[upgradeId] then
 		return
 	end
 	local owned = data.Meta[upgradeId] or 0
@@ -292,6 +295,60 @@ local function onBuyMeta(player: Player, upgradeId: any, expectedLevel: any)
 	ctx.RunManager.Notify(player, string.format("%s upgraded to level %d!", def.Name, owned + 1), Color3.fromRGB(120, 255, 160))
 	GoldSystem.SyncProfile(player)
 end
+
+--[[
+	Hero Mastery: one level of a hero's own upgrade (a stat id or "Signature"). Checked here:
+	in the lobby, a known and owned hero, a known upgrade, the level the client saw (a
+	double tap buys one level), the hero's mastery cap, the max level and the gold.
+]]
+local function onBuyHeroUpgrade(player: Player, heroId: any, upgradeId: any, expectedLevel: any)
+	local data = ctx.DataService.GetData(player)
+	if not data or not inLobby(player) or type(heroId) ~= "string" or type(upgradeId) ~= "string" then
+		return
+	end
+	local hero = CharacterData.Characters[heroId]
+	local def = hero and MetaUpgradeData.HeroDef(heroId, upgradeId)
+	if not def or data.OwnedCharacters[heroId] ~= true then
+		GoldSystem.SyncProfile(player)
+		return
+	end
+	if type(data.HeroUpgrades) ~= "table" then
+		data.HeroUpgrades = {}
+	end
+	local track = data.HeroUpgrades[heroId]
+	local owned = type(track) == "table" and tonumber(track[upgradeId]) or 0
+	owned = owned or 0
+	if type(expectedLevel) ~= "number" or expectedLevel ~= owned then
+		GoldSystem.SyncProfile(player)
+		return
+	end
+	local heroes = type(data.Heroes) == "table" and data.Heroes or {}
+	local mastery = MetaUpgradeData.MasteryFor(type(heroes[heroId]) == "table" and heroes[heroId].XP or 0)
+	if owned + 1 > MetaUpgradeData.HeroCap(mastery, upgradeId, heroId) then
+		ctx.RunManager.Notify(player, string.format("Needs %s Mastery %d.", hero.Name, MetaUpgradeData.RequiredMastery(upgradeId, owned + 1)), Color3.fromRGB(255, 220, 120))
+		GoldSystem.SyncProfile(player)
+		return
+	end
+	local cost = MetaUpgradeData.HeroCostOf(heroId, upgradeId, owned)
+	if not cost then
+		GoldSystem.SyncProfile(player)
+		return
+	end
+	if data.Gold < cost then
+		ctx.RunManager.Notify(player, "Not enough gold.", Color3.fromRGB(255, 120, 120))
+		GoldSystem.SyncProfile(player)
+		return
+	end
+	data.Gold -= cost
+	if type(track) ~= "table" then
+		track = {}
+		data.HeroUpgrades[heroId] = track
+	end
+	track[upgradeId] = owned + 1
+	ctx.RunManager.Notify(player, string.format("%s %s upgraded to level %d!", hero.Name, def.Name, owned + 1), Color3.fromRGB(120, 255, 160))
+	GoldSystem.SyncProfile(player)
+end
+GoldSystem._BuyHeroUpgrade = onBuyHeroUpgrade -- (tests)
 
 local function onEquipSkin(player: Player, characterId: any, skinId: any)
 	local data = ctx.DataService.GetData(player)
@@ -371,6 +428,7 @@ function GoldSystem.Start()
 	Remotes.Listen("SelectCharacter", onSelectCharacter, 4)
 	Remotes.Listen("BuyCharacter", onBuyCharacter, 2)
 	Remotes.Listen("BuyMeta", onBuyMeta, 4)
+	Remotes.Listen("BuyHeroUpgrade", onBuyHeroUpgrade, 4)
 	Remotes.Listen("EquipSkin", onEquipSkin, 4)
 	Remotes.Listen("SaveSettings", onSaveSettings, 4)
 	Remotes.Listen("Tutorial", onTutorial, 6)

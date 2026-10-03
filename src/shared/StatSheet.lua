@@ -7,7 +7,9 @@
 	StatSheet.Compute(input) → sheet
 	  input = {
 	    CharacterId = "Knight",            -- CharacterData bonus
-	    Meta = { [upgradeId] = level },    -- permanent upgrades (MetaUpgradeData.PerLevel)
+	    Meta = { [upgradeId] = level },    -- permanent upgrades (MetaUpgradeData.PerLevel): the
+	                                       -- account ids, the hero's stat track and
+	                                       -- Signature (the hero's trait upgrade)
 	    Passives = { [passiveId] = level },-- PassiveData.Values[level] (TOTAL bonus per level)
 	    Items = { [itemId] = count },      -- run items (ItemData.Bonus)
 	    Team = { might = 0.15, ... }?,     -- this stage's Bargain Shrine boon (LootSystem)
@@ -69,8 +71,11 @@ function StatSheet.Compute(input: Input): { [string]: number }
 	local character = input.CharacterId and CharacterData.Characters[input.CharacterId]
 	addAll(character and character.Bonus)
 	for upgradeId, level in pairs(input.Meta or {}) do
-		local def = MetaUpgradeData.Upgrades[upgradeId]
-		if def and def.PerLevel then
+		-- "Signature": the hero's own trait upgrade (only the stat traits carry PerLevel)
+		local def = if upgradeId == "Signature"
+			then (input.CharacterId and MetaUpgradeData.Signature[input.CharacterId])
+			else MetaUpgradeData.Upgrades[upgradeId]
+		if def and def.PerLevel and type(level) == "number" then
 			for k, v in pairs(def.PerLevel) do
 				if b[k] ~= nil then
 					b[k] += v * level

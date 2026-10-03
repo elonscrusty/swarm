@@ -64,7 +64,8 @@ Remotes.ClientToServer = {
 	"AbandonRun", -- pause menu MAIN MENU (confirmed): leave the running run for the lobby menu
 	"SelectCharacter", -- (characterId)
 	"BuyCharacter", -- (characterId)
-	"BuyMeta", -- (upgradeId, levelSeenByClient?) a stale second tap is ignored
+	"BuyMeta", -- (upgradeId, levelSeenByClient?) account upgrades only; a stale second tap is ignored
+	"BuyHeroUpgrade", -- (heroId, upgradeId, levelSeenByClient) a hero's stat / Signature level (Hero Mastery)
 	"EquipSkin", -- (characterId, skinId)
 	"SetPause", -- (bool) pause menu open / closed
 	"SaveSettings", -- ({ Music, Sfx, Shake = 0-1, ReducedEffects, DamageNumbers, Tips = bool }) any subset

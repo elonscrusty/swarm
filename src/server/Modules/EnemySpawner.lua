@@ -678,7 +678,8 @@ end
 function EnemySpawner.WaveSize(n: number): number
 	local W = Config.Waves
 	local big = W.BigEvery > 0 and n % W.BigEvery == 0
-	local total = (W.Base + W.PerWave * (n - 1)) * countMult() * ctx.StageManager.SpawnMult() * (big and W.BigMult or 1) * pressureMult()
+	local late = W.LateFromWave and math.max(0, n - W.LateFromWave) or 0
+	local total = (W.Base + W.PerWave * (n - 1 - late) + (W.PerWaveLate or W.PerWave) * late) * countMult() * ctx.StageManager.SpawnMult() * (big and W.BigMult or 1) * pressureMult()
 	return math.floor(total + 0.5)
 end
 
@@ -795,6 +796,10 @@ local function pourWave(dt: number)
 			local e = EnemySpawner.Spawn(q.Type, pos, { Elite = q.Elite })
 			if e then
 				e.WaveId = runWave
+				local hpMult = 1 + (W.HPPerWave or 0) * (runWave - 1)
+				e.HP *= hpMult
+				e.MaxHP *= hpMult
+				e.Shield *= hpMult
 				if q.Elite then
 					ctx.RunManager.Broadcast(string.format("An elite %s %s leads the wave!", e.Affix or "", def.DisplayName or q.Type), Color3.fromRGB(255, 205, 120))
 				end
@@ -860,7 +865,7 @@ local function stepWaves(dt: number, runTime: number)
 	end
 	local alive = waveAlive() + #waveQueue
 	setWaveLeft(alive)
-	if wavePhase == "Fighting" and (alive <= math.floor(waveTotal * W.ClearShare) or waveTimer <= 0) then
+	if wavePhase == "Fighting" and (alive <= math.max(W.ClearMin or 0, math.floor(waveTotal * W.ClearShare)) or waveTimer <= 0) then
 		breather(W.BreatherSeconds, runTime)
 	end
 end
@@ -1030,7 +1035,8 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 	end
 
 	if rng:NextNumber() < (def.GemChance or 1) then
-		ctx.XPSystem.SpawnGem(pos, gemValue(def.Gem, def.XPScale or 1))
+		local waveXP = e.WaveId and Config.Waves.XPMult or 1 -- wave members (stepWaves)
+		ctx.XPSystem.SpawnGem(pos, gemValue(def.Gem, (def.XPScale or 1) * waveXP))
 		table.insert(drops, "XP")
 	end
 	if rp then

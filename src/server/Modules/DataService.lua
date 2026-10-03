@@ -24,8 +24,11 @@
 	Studio:  uses Config.Data.StudioStoreName (never the live store); if DataStores are
 	         unavailable (no API access) data is kept in memory only.
 
-	Save shape (Config.Data.SchemaVersion = 6):
-	  Version, Gold, Meta {id → level}, OwnedCharacters {id → true}, SelectedCharacter,
+	Save shape (Config.Data.SchemaVersion = 7):
+	  Version, Gold, Meta {id → level} (account upgrades Revive / Reroll / Skip; the old
+	  shared stat levels stay in it untouched for rollback safety but are no longer read),
+	  Heroes {heroId → {XP, Runs}} (Hero Mastery), HeroUpgrades {heroId → {upgradeId →
+	  level}} (each hero's six stat upgrades + "Signature"), OwnedCharacters {id → true}, SelectedCharacter,
 	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage,
 	  MostKills, BestScore, BestScoreEndless, BestLevel, TimePlayed (seconds in clean runs)}
 	  (missing keys start at 0),
@@ -92,6 +95,8 @@ local function defaultData()
 		Difficulty = "Standard",
 		DifficultyClears = { Standard = false, Veteran = false, Nightmare = false },
 		Meta = {},
+		Heroes = {},
+		HeroUpgrades = {},
 		OwnedCharacters = { [CharacterData.Default] = true },
 		SelectedCharacter = CharacterData.Default,
 		Skins = {},
@@ -127,7 +132,9 @@ DataService.DefaultData = defaultData
 	who has played a run already counts as having done the tutorial. Version 5 had no
 	retention systems: curses start unpicked, no daily played, account level 1 with 0 XP
 	(the level track starts for everyone from the next run; old progress is untouched),
-	no ring / frame worn, Stats.MostKills 0.
+	no ring / frame worn, Stats.MostKills 0. Version 6 had one shared set of stat upgrades
+	(Meta): Hero Mastery copies those levels to EVERY hero's own track (nothing wiped or
+	refunded, gold untouched, Meta kept as it was) and every hero starts at mastery 0 XP.
 ]]
 local MIGRATIONS: { [number]: (any) -> any } = {
 	[0] = function(data)
@@ -200,6 +207,34 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.Version = 6
 		return data
 	end,
+	[6] = function(data)
+		-- Hero Mastery: the shared stat levels become every hero's own levels
+		local seed = {}
+		if type(data.Meta) == "table" then
+			for _, id in ipairs(MetaUpgradeData.StatOrder) do
+				local n = tonumber(data.Meta[id])
+				if n and n == n and n > 0 and n < math.huge then
+					seed[id] = math.clamp(math.floor(n), 0, MetaUpgradeData.Upgrades[id].MaxLevel)
+				end
+			end
+		end
+		local tracks = type(data.HeroUpgrades) == "table" and data.HeroUpgrades or {}
+		for _, heroId in ipairs(CharacterData.Order) do
+			local track = type(tracks[heroId]) == "table" and tracks[heroId] or {}
+			for id, level in pairs(seed) do
+				if level > 0 and (tonumber(track[id]) or 0) < level then
+					track[id] = level
+				end
+			end
+			tracks[heroId] = track
+		end
+		data.HeroUpgrades = tracks
+		if type(data.Heroes) ~= "table" then
+			data.Heroes = {}
+		end
+		data.Version = 7
+		return data
+	end,
 }
 
 -- Brings any stored table up to the current schema and fills missing fields.
@@ -245,6 +280,36 @@ function DataService.Migrate(data: any): { [string]: any }
 			local n = tonumber(level)
 			n = (n and n == n and n < math.huge) and math.clamp(math.floor(n), 0, def.MaxLevel) or 0
 			data.Meta[id] = n > 0 and n or nil
+		end
+	end
+	-- Hero Mastery (schema 7): whole, finite XP / run counts per known hero and whole
+	-- upgrade levels inside each upgrade's range; unknown ids are left untouched
+	for _, heroId in ipairs(CharacterData.Order) do
+		local h = data.Heroes[heroId]
+		if h ~= nil then
+			if type(h) ~= "table" then
+				h = {}
+			end
+			for _, key in ipairs({ "XP", "Runs" }) do
+				local n = tonumber(h[key])
+				h[key] = (n and n == n and n < math.huge) and math.max(0, math.floor(n)) or 0
+			end
+			data.Heroes[heroId] = h
+		end
+		local track = data.HeroUpgrades[heroId]
+		if track ~= nil then
+			if type(track) ~= "table" then
+				track = {}
+			end
+			for id, level in pairs(track) do
+				local def = MetaUpgradeData.HeroDef(heroId, id)
+				if def then
+					local n = tonumber(level)
+					n = (n and n == n and n < math.huge) and math.clamp(math.floor(n), 0, def.MaxLevel) or 0
+					track[id] = n > 0 and n or nil
+				end
+			end
+			data.HeroUpgrades[heroId] = track
 		end
 	end
 	local tokens = tonumber(data.ReviveTokens)

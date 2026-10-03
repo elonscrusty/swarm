@@ -12,6 +12,8 @@
 ]]
 
 local AccountData = require(game:GetService("ReplicatedStorage").Shared.AccountData)
+local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
+local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 
 local AccountService = {}
 
@@ -78,6 +80,33 @@ function AccountService.AwardRun(player: Player, summary: AccountData.RunSummary
 		publish(player, data)
 	end
 	return { Gained = gained, Parts = parts, From = from, To = to, Into = into, Need = need, Rewards = rewards }
+end
+
+--[[
+	Hero Mastery (MetaUpgradeData, Config.HeroMastery): a committed run's XP (the same
+	amount AwardRun gave the account) goes to the hero played, and its run count goes up.
+	RunManager calls this after the DEV-taint return, so DEV runs never give mastery.
+	Returns the results line { Hero, Gained, From, To } or nil.
+]]
+function AccountService.AwardMastery(player: Player, heroId: string, gained: number): { [string]: any }?
+	local data = ctx.DataService.GetData(player)
+	if not data or type(heroId) ~= "string" or not CharacterData.Characters[heroId] then
+		return nil
+	end
+	if type(data.Heroes) ~= "table" then
+		data.Heroes = {}
+	end
+	local h = data.Heroes[heroId]
+	if type(h) ~= "table" then
+		h = { XP = 0, Runs = 0 }
+		data.Heroes[heroId] = h
+	end
+	gained = math.max(0, math.floor(tonumber(gained) or 0))
+	local from = MetaUpgradeData.MasteryFor(h.XP)
+	h.XP = math.max(0, math.floor(tonumber(h.XP) or 0)) + gained
+	h.Runs = math.max(0, math.floor(tonumber(h.Runs) or 0)) + 1
+	local to = MetaUpgradeData.MasteryFor(h.XP)
+	return { Hero = heroId, Gained = gained, From = from, To = to }
 end
 
 -- EquipCosmetic for rings and frames (AchievementService forwards them here).

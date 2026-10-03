@@ -76,7 +76,8 @@ Config.Stages = {
 	-- SWARM PRESSURE: the swarm keeps growing until the portal is charged. While exploring,
 	-- SwarmState SwarmWarn steps to 1 ("SWARM GROWING") at WarnSeconds of stage time and to
 	-- 2 ("SWARM OVERWHELMING") at DangerSeconds, back to 0 on the next stage. The HUD
-	-- turns the stage pill into OPEN THE PORTAL with the warning and a banner each step.
+	-- turns the stage pill into OPEN THE PORTAL with the warning and a banner each step;
+	-- with waves on (Config.Waves) each step makes the waves bigger (PressureMult).
 	Pressure = { WarnSeconds = 75, DangerSeconds = 150 },
 	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
 	-- 0.35 (was 0.25): owner playtest "by map 2 players instant kill everything"; stage 1
@@ -579,10 +580,13 @@ Config.Spawn = {
 --   ClearShare of the wave is alive or after MaxSeconds (no stalling). The breather waits
 --   while someone stands at the portal. Boss fights keep their own crowd
 --   (Config.Stages.BossMinionShare), the surge replaces waves.
---   size  = (Base + PerWave x (N - 1)) x Config.Difficulty.PlayerCountMult x the stage
---           spawn multiplier (Horde, Endless) x BigMult on every BigEvery-th wave
---   mix   = EnemyData.SpawnTable row at (N - 1) x RowSecondsPerWave seconds; wasps only
+--   size  = (Base + PerWave x (N - 1), PerWaveLate past LateFromWave) x Config.Difficulty.PlayerCountMult x the stage
+--           spawn multiplier (Horde, Endless) x BigMult on every BigEvery-th wave x
+--           PressureMult once the swarm pressure warning is up
+--   mix   = EnemyData.SpawnTable row at (N - 1) x RowSecondsPerWave seconds (never below
+--           the stage's first row), one main type per side + MixShare from the row; wasps only
 --           from BeesFromWave (smaller, Config.Pacing.WaveCountMult)
+--   HP    wave members x(1 + HPPerWave x (N - 1)) on top of the run-clock and stage scaling
 --   elites lead a wave from EliteFromWave on (EliteChance, always on big waves), one more
 --           every ElitePerWaves waves, at most EliteMax
 --   SwarmState: Wave, WaveSeq, WaveBig, WaveSides, WaveAngle, WaveNext (run time the next
@@ -591,19 +595,28 @@ Config.Spawn = {
 ------------------------------------------------------------------------------------------
 Config.Waves = {
 	Enabled = true,
-	FirstDelay = 5, -- stage 1: wave 1 comes right after the stage card
+	FirstDelay = 4, -- stage 1: wave 1 comes right after the stage card
 	StageStartDelay = 6, -- later stages, after the travel and the stage card
-	BreatherSeconds = 3.5,
+	BreatherSeconds = 3,
 	PortalHoldSeconds = 3, -- the breather stays at least this long while someone is at the portal
-	ClearShare = 0.1,
-	MaxSeconds = 40,
+	ClearShare = 0.1, -- the next breather starts at max(ClearMin, ClearShare x size) left
+	ClearMin = 3,
+	MaxSeconds = 30,
+	-- gem XP of wave enemies x this: waves come in bursts with breathers, so fewer enemies
+	-- spawn than with the old continuous top-up; this keeps the level-up pace (pacing-sim)
+	XPMult = 1.5,
 	BurstSeconds = 3,
 	MaxPerStep = 6, -- enemies spawned per frame at most while a wave pours in (perf)
-	Base = 10,
+	Base = 12,
 	PerWave = 4,
+	-- past LateFromWave each wave adds PerWaveLate instead (late waves still grow, slower)
+	LateFromWave = 10,
+	PerWaveLate = 2.5,
+	-- wave members' HP x(1 + HPPerWave x (N - 1)) on top of the run-clock / stage scaling
+	HPPerWave = 0.015,
 	BigEvery = 5,
-	BigMult = 1.5,
-	RowSecondsPerWave = 30,
+	BigMult = 1.35,
+	RowSecondsPerWave = 20,
 	BeesFromWave = 4,
 	SidesAtWave = { 4, 9 },
 	ArcRadians = 0.45, -- each side spreads this far either way
@@ -611,6 +624,16 @@ Config.Waves = {
 	EliteChance = 0.35,
 	ElitePerWaves = 8,
 	EliteMax = 3,
+	-- a share of each side is mixed from the whole spawn row (Spitters within
+	-- Config.Enemies.MaxLiveRanged, Healers / Burrowers within their caps), from MixFromWave
+	MixShare = 0.25,
+	MixFromWave = 3,
+	-- swarm pressure (Config.Stages.Pressure, SwarmWarn 1 / 2): waves x this
+	PressureMult = { 1.15, 1.35 },
+	-- from NestFromStage every NestEveryWaves-th wave (not a big one) plants a Nest
+	-- (Config.Pacing.Nests caps); the old timed nests are off while waves are on
+	NestFromStage = 2,
+	NestEveryWaves = 4,
 }
 
 ------------------------------------------------------------------------------------------
@@ -818,7 +841,7 @@ Config.Data = {
 	StoreName = "SwarmPlayerData",
 	StudioStoreName = "SwarmPlayerData_Studio", -- used instead in Studio: tests never touch live saves
 	KeyPrefix = "Player_",
-	SchemaVersion = 6, -- bump and add a migration step in DataService when the save shape changes
+	SchemaVersion = 7, -- bump and add a migration step in DataService when the save shape changes
 	AutoSaveSeconds = 60,
 	-- A session lock is considered dead (the server crashed) if it wasn't refreshed for
 	-- this long. Must be well above AutoSaveSeconds.
@@ -1254,6 +1277,22 @@ Config.Movement = {
 Config.Encounters = {
 	Types = { "Guarded", "Caravan", "Runes", "Treasure" },
 	Count = { 1, 2 },
+}
+
+------------------------------------------------------------------------------------------
+-- HERO MASTERY (MetaUpgradeData, DataService schema 7)
+--   Playing a hero gives that hero Mastery XP: the same amount as the account XP of the
+--   run (AccountData.RunXP, its MaxRun cap), only for the hero played, none on DEV runs.
+--   XP from level L to L + 1 = Base + PerLevel * (L - 1); heroes start at level 1.
+--   Mastery level N lets the hero's stat upgrades go up to level StatPerLevel * N; the
+--   signature upgrade's level n needs mastery SignatureEvery * n. Gold buys the levels.
+------------------------------------------------------------------------------------------
+Config.HeroMastery = {
+	MaxLevel = 10, -- 2 x 10 = 20 = the highest stat upgrade (Max HP, Might)
+	Base = 150, -- level 1 -> 2 (a short first run)
+	PerLevel = 100, -- each next level needs this much more (4,950 XP to level 10)
+	StatPerLevel = 2,
+	SignatureEvery = 2, -- signature level n needs mastery 2n (levels 2, 4, 6, 8, 10)
 }
 
 return Config

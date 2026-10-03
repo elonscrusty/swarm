@@ -137,6 +137,12 @@ function C.profile(overrides)
 	local p = {
 		Gold = 1840,
 		Meta = { MaxHP = 2, Might = 1, Armor = 1, Speed = 0, Luck = 0, Growth = 1, Revive = 0, Reroll = 1, Skip = 0 },
+		-- Hero Mastery: Knight mastery 3 (some XP into 4), part of its track bought
+		Heroes = { Knight = { XP = 620, Runs = 9 }, Mage = { XP = 40, Runs = 1 } },
+		HeroUpgrades = {
+			Knight = { MaxHP = 6, Might = 3, Armor = 1, Growth = 1, Signature = 1 },
+			Mage = { MaxHP = 2, Might = 1, Armor = 1, Growth = 1 },
+		},
 		OwnedCharacters = { Knight = true, Mage = true },
 		SelectedCharacter = "Knight",
 		Skins = { Knight = "Default" },

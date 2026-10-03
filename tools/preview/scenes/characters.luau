@@ -2,6 +2,7 @@
 -- sends it; the old lobby board prompt used the same remote).
 --   --set inspect=Ranger   inspect another character (taps its row)
 --   --set owned=all        every character owned (the hero unlock achievements done)
+--   --set mastery=open     tap UPGRADE <HERO> (Hero Mastery rows under the mastery block)
 local C = lib("common")
 C.lobby()
 C.startClient()
@@ -34,4 +35,13 @@ C.settle(2)
 if preview.args.skin then
 	local hits = preview.findGui(function(g) return g:IsA("TextButton") and g.Name == preview.args.skin and g.Parent.Name == "Swatches" end)
 	if hits[1] then preview.click(hits[1]); C.settle(1) end
+end
+if preview.args.mastery == "open" then
+	local hits = preview.findGui(function(g) return g:IsA("GuiButton") and g.Name == "MasteryUpgrade" end)
+	if hits[1] then
+		preview.click(hits[1])
+		C.settle(1)
+	else
+		preview.note("characters scene: no MasteryUpgrade button")
+	end
 end

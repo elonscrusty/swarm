@@ -23,6 +23,7 @@ local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponData)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
+local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 local Fx = require(script.Parent.Fx)
 
 local WeaponSystem = {}
@@ -112,6 +113,13 @@ end
 -- Helpers
 ------------------------------------------------------------------------------------------
 
+-- The hero's trait value with its Signature upgrade (Hero Mastery; rp.Meta.Signature =
+-- the level bought for this hero), or `fallback` when the hero has no signature entry.
+local function traitValue(rp, fallback: number): number
+	return MetaUpgradeData.TraitValue(rp.CharacterId, rp.Meta and rp.Meta.Signature or 0) or fallback
+end
+WeaponSystem._TraitValue = traitValue -- (tests)
+
 -- Effective stats of one weapon for one player (WeaponData row × stat sheet).
 local function weaponStats(rp, w)
 	local row = WeaponData.GetStats(w.Id, w.Level, w.Evolved)
@@ -123,12 +131,12 @@ local function weaponStats(rp, w)
 	local mult = s.Might * (rp.SteadyAim and (1 + ((w.Id == "Longbow" and rp.SteadyAimBonus or rp.SteadyAimOther) or 0)) or 1)
 	-- Volatile Mix (Alchemist): burning / area weapons hit harder
 	if hero and hero.AreaDamage and def and def.Area then
-		mult *= 1 + hero.AreaDamage
+		mult *= 1 + traitValue(rp, hero.AreaDamage)
 	end
 	local duration = row.duration * s.DurationMult
 	-- Tinkerer (Engineer): turrets and totems last longer
 	if hero and hero.DeployLife and def and def.Deployable then
-		duration *= 1 + hero.DeployLife
+		duration *= 1 + traitValue(rp, hero.DeployLife)
 	end
 	return {
 		damage = row.damage * mult,
@@ -1343,7 +1351,7 @@ onWeaponKill = function(rp, pos: Vector3, dead)
 		return
 	end
 	local now = ctx.RunManager.GetRunTime()
-	if now < (rp.SoulAt or 0) or rng:NextNumber() >= trait.Chance or #freeIds < EXTRA_MIN_FREE then
+	if now < (rp.SoulAt or 0) or rng:NextNumber() >= traitValue(rp, trait.Chance) or #freeIds < EXTRA_MIN_FREE then
 		return
 	end
 	local target = grid():Nearest(pos.X, pos.Z, 30, function(x)
@@ -2845,12 +2853,16 @@ local function updateSteadyAim(rp, dt: number)
 	else
 		rp.StillTime = (rp.StillTime or 0) + dt
 		if rp.StillTime >= trait.Delay then
-			rp.SteadyAimBonus = trait.Damage
-			rp.SteadyAimOther = trait.OtherDamage or trait.Damage
+			-- the Signature upgrade raises the Longbow bonus; other weapons scale with it
+			local bonus = traitValue(rp, trait.Damage)
+			rp.SteadyAimBonus = bonus
+			rp.SteadyAimOther = (trait.OtherDamage or trait.Damage) * bonus / trait.Damage
 			setSteadyAim(rp, true)
 		end
 	end
 end
+
+WeaponSystem._UpdateSteadyAim = updateSteadyAim -- (tests)
 
 function WeaponSystem.Step(dt: number)
 	if ctx.RunManager.IsSimulating() then

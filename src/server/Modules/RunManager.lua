@@ -773,7 +773,25 @@ end
 
 local function newRunPlayer(player: Player)
 	local data = ctx.DataService.GetData(player)
-	local meta = table.clone(data.Meta)
+	-- the stat sheet's permanent levels: the account upgrades (Revive / Reroll / Skip) from
+	-- Meta, the selected hero's own stat track and its Signature (Hero Mastery); the old
+	-- shared stat levels left in Meta are never read
+	local meta = {}
+	for _, id in ipairs(MetaUpgradeData.AccountOrder) do
+		local n = tonumber(data.Meta[id])
+		if n and n > 0 then
+			meta[id] = n
+		end
+	end
+	local track = type(data.HeroUpgrades) == "table" and data.HeroUpgrades[data.SelectedCharacter]
+	if type(track) == "table" then
+		for _, id in ipairs(MetaUpgradeData.HeroOrder()) do
+			local n = tonumber(track[id])
+			if n and n > 0 then
+				meta[id] = n
+			end
+		end
+	end
 	local function perRun(id: string): number
 		local def = MetaUpgradeData.Upgrades[id]
 		return (meta[id] or 0) * (def.PerRun or 1)
@@ -1037,6 +1055,8 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 		CurseMult = ctx.RunModifiers.GoldMult(),
 		DailyScored = rp.DailyScored == true,
 	})
+	-- Hero Mastery: the same XP, only for the hero played (DEV runs returned above)
+	local masteryInfo = ctx.AccountService.AwardMastery and ctx.AccountService.AwardMastery(rp.Player, rp.CharacterId, accountInfo and accountInfo.Gained or 0) or nil
 	-- the same score formula for both modes; Standard and Endless rank on separate boards
 	local score = ctx.LeaderboardService.RunScore({ Cleared = cleared, Bosses = bossKills, Level = rp.Level, Kills = rp.Kills, Seconds = t })
 	local scoreBoard = rp.Endless and "ScoreEndless" or "Score"
@@ -1052,7 +1072,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	-- here by the server; DEV-tainted runs returned above and never add to it
 	data.Stats.TimePlayed = math.floor((tonumber(data.Stats.TimePlayed) or 0) + math.max(0, t))
 	ctx.LeaderboardService.Submit(rp.Player, "Playtime", data.Stats.TimePlayed, nil, rp.RunId)
-	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0 }
+	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Mastery = masteryInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0 }
 	return newBest, unlocked
 end
 
@@ -1153,6 +1173,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		Curses = table.clone(ctx.RunModifiers.Active()), -- the run's curses (CurseData ids)
 		CurseGold = ctx.RunModifiers.GoldMult(),
 		Account = info and info.Account or nil, -- { Gained, Parts, From, To, Into, Need, Rewards }
+		Mastery = info and info.Mastery or nil, -- { Hero, Gained, From, To } (Hero Mastery)
 		Daily = info and info.Daily or nil, -- { Scored, Score, Text, NewBest, Best }
 		Seconds = Config.Run.ResultsSeconds,
 		InLobby = inLobby,

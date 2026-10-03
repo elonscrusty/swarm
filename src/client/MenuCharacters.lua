@@ -15,7 +15,12 @@
 	          intro line; a rule; STARTING WEAPON (tile) | TRAIT (green badge); EFFECT (a big
 	          gold "+20%" when the trait text starts with one, the rest, the weapon list),
 	          STRENGTH, TRADEOFF (red); for a locked hero the UNLOCK block (achievement and
-	          big "2 / 4" with a gold bar, or the gold price); the action button (gold
+	          big "2 / 4" with a gold bar, or the gold price); for an OWNED hero the same
+	          spot is the MASTERY block (Hero Mastery: level, XP "120 / 350" with a gold bar,
+	          the cap it allows, and UPGRADE <HERO>, which opens the hero's upgrade list
+	          right there: seven rows (icon, LV n / max, "current → next", BUY · N /
+	          LOCKED: MASTERY N / MAXED / BUYING... until the next ProfileSync), so phones
+	          scroll it and portrait shows it under the hero); the action button (gold
 	          SELECT <NAME> / UNLOCK • N GOLD, grey "REACH STAGE 4 TO UNLOCK"); SKINS: skin
 	          cards (swatch, name, OWNED / SKIN EQUIPPED / SOON / R$ pill, a check on the
 	          equipped one) and, for a skin not owned, its GET SKIN / COMING SOON button
@@ -39,6 +44,7 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local AchievementData = require(Shared:WaitForChild("AchievementData"))
+local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -90,6 +96,30 @@ local function shortGoal(a: { [string]: any }?): string?
 		return first
 	end
 	return nil
+end
+
+-- "+30 → +40 max HP": a hero upgrade's total effect now and after one more level, the
+-- shared words written once (Effect.Format is "<number part> <words>").
+local function effectStep(heroId: string, upgradeId: string, level: number, maxed: boolean): string
+	local def = MetaUpgradeData.HeroDef(heroId, upgradeId)
+	if not def or not def.Effect then
+		return ""
+	end
+	local function value(l: number): number
+		if upgradeId == "Signature" then
+			return def.Trait.Base + def.Trait.Per * l
+		end
+		return def.Effect.Per * l
+	end
+	local numberPart, words = string.match(def.Effect.Format, "^(%S+)%s+(.+)$")
+	if not numberPart then
+		return MetaUpgradeData.HeroEffectText(heroId, upgradeId, level)
+	end
+	local now = string.format(numberPart, value(level))
+	if maxed then
+		return now .. " " .. words .. " (max)"
+	end
+	return now .. " → " .. string.format(numberPart, value(level + 1)) .. " " .. words
 end
 
 -- Trait text split for the EFFECT row: a leading "+N%" (big number, or nil), the rest as
@@ -310,12 +340,42 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.list(unlock, { Padding = UDim.new(0, 4) })
 	UIKit.Hairline(unlock, { LayoutOrder = 0 })
 	local uTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, unlock)
-	text(uTop, "Label", "UNLOCK", { FontFace = DETAIL_HEADING, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
+	ui.UnlockLabel = text(uTop, "Label", "UNLOCK", { FontFace = DETAIL_HEADING, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
 	ui.UnlockName = text(uTop, "BodyStrong", "", { FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(0, TS(13) + 10), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.ivory_100 }, 16)
 	ui.UnlockCount = text(unlock, "Display", "", { FontFace = DETAIL_HEADING, LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(22) + 6), TextColor3 = P.gold_200 }, 22)
 	ui.UnlockRule = wrapped(unlock, "Body", P.ivory_200, 15, { Name = "Rule", LayoutOrder = 3 })
 	ui.UnlockMeter = UIKit.Meter(unlock, { Size = UDim2.new(1, 0, 0, 10), Color = P.gold_400, LayoutOrder = 4 } :: any)
 	ui.UnlockMeter.Frame.Name = "Progress"
+
+	-- Hero Mastery (owned heroes): UPGRADE <HERO> opens the hero's upgrade rows below it
+	ui.MasteryOpen = false
+	ui.MasteryButton = UIKit.Button(unlock, {
+		Name = "MasteryUpgrade",
+		Kind = "Outline",
+		Title = "UPGRADE",
+		Icon = "chevronsUp",
+		IconSize = 18,
+		Align = "Center",
+		Size = UDim2.new(1, 0, 0, 42),
+		LayoutOrder = 5,
+		Shadow = false,
+		OnClick = function()
+			ui.MasteryOpen = not ui.MasteryOpen
+			MenuCharacters._refresh()
+			if ui.MasteryOpen then
+				-- bring the rows into view (phones scroll the details panel)
+				task.defer(function()
+					local panel = ui.MasteryPanel
+					if panel.Visible then
+						local y = panel.AbsolutePosition.Y - ui.Scroll.AbsolutePosition.Y + ui.Scroll.CanvasPosition.Y
+						ui.Scroll.CanvasPosition = Vector2.new(0, math.max(0, y - 60))
+					end
+				end)
+			end
+		end,
+	})
+	ui.MasteryPanel = new("Frame", { Name = "HeroUpgrades", BackgroundTransparency = 1, Visible = false, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 6 }, unlock)
+	UIKit.list(ui.MasteryPanel, { Padding = UDim.new(0, 6) })
 
 	ui.Action = UIKit.Button(scroll, {
 		Kind = "Primary",
@@ -442,6 +502,108 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				MenuCharacters._refresh()
 			end)
 			swatches[skinId] = { Hit = hit, Stroke = st, Lock = lock, Pill = pill, Check = badge }
+		end
+	end
+
+	-- Hero Mastery upgrade rows (rebuilt from the profile; a tap marks its row BUYING...
+	-- until the next ProfileSync, which always carries the real gold and levels)
+	local pending: { [string]: number } = {}
+	local lastProfile: any = nil
+	local function buildMasteryRows(p: { [string]: any }, heroId: string)
+		for _, c in ipairs(ui.MasteryPanel:GetChildren()) do
+			if c:IsA("GuiObject") then
+				c:Destroy()
+			end
+		end
+		local heroes = type(p.Heroes) == "table" and p.Heroes or {}
+		local mastery = MetaUpgradeData.MasteryFor(type(heroes[heroId]) == "table" and heroes[heroId].XP or 0)
+		local track = type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[heroId]) == "table" and p.HeroUpgrades[heroId] or {}
+		local innerW = ui.DetailInnerW or 390
+		ui.BuiltInnerW = innerW
+		local bw = math.clamp(math.floor(innerW * 0.36), 118, 172)
+		local lineH = TS(13) + 4
+		local rowH = math.max(58, lineH + 2 * (TS(13) + 2) + 10)
+		for order, id in ipairs(MetaUpgradeData.HeroOrder()) do
+			local def = MetaUpgradeData.HeroDef(heroId, id)
+			if not def then
+				continue
+			end
+			local level = math.floor(tonumber(track[id]) or 0)
+			local cost = MetaUpgradeData.HeroCostOf(heroId, id, level)
+			local maxed = cost == nil
+			local cap = MetaUpgradeData.HeroCap(mastery, id, heroId)
+			local locked = not maxed and level + 1 > cap
+			local key = heroId .. "/" .. id
+			local busy = pending[key] ~= nil
+			local row = new("Frame", { Name = id, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, Size = UDim2.new(1, 0, 0, rowH), LayoutOrder = order }, ui.MasteryPanel)
+			UIKit.corner(row, Theme.Radius.M)
+			if id == "Signature" then
+				local disc = new("Frame", { Name = "Icon", BackgroundColor3 = P.moss_700, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(36, 36) }, row)
+				UIKit.corner(disc, 999)
+				UIKit.stroke(disc, P.moss_300, 1.5, 0.3)
+				Icons.Draw(disc, "sparkle", { Size = 20, Color = P.ivory_100, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.moss_700 })
+			else
+				local tile = UIKit.Tile(row, { Id = Icons.MetaIcon(id), Size = 36 })
+				tile.AnchorPoint = Vector2.new(0, 0.5)
+				tile.Position = UDim2.new(0, 8, 0.5, 0)
+			end
+			local textW = innerW - 52 - bw - 16
+			text(row, "Label", string.upper(def.Name) .. "  ·  LV " .. level .. " / " .. def.MaxLevel, {
+				Name = "Level", FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(52, 5), Size = UDim2.fromOffset(textW, lineH),
+				TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = maxed and P.gold_300 or P.ivory_100,
+			}, 13)
+			text(row, "Small", effectStep(heroId, id, level, maxed), {
+				Name = "Effect", Position = UDim2.fromOffset(52, 5 + lineH + 2), Size = UDim2.fromOffset(textW, rowH - lineH - 12),
+				TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd,
+				TextColor3 = maxed and P.gold_300 or P.moss_200,
+			}, 13)
+			local title, kind, icon = "", "Primary", "coin"
+			if maxed then
+				title, kind, icon = "MAXED", "Secondary", "check"
+			elseif locked then
+				local need = MetaUpgradeData.RequiredMastery(id, level + 1)
+				title, kind, icon = (bw >= 160 and "LOCKED: MASTERY " or "MASTERY ") .. need, "Secondary", "lock"
+			elseif busy then
+				title = "BUYING..."
+			else
+				title = "BUY · " .. UIKit.formatNumber(cost :: number)
+				kind = p.Gold >= (cost :: number) and "Primary" or "Outline"
+			end
+			local b
+			b = UIKit.Button(row, {
+				Name = "Buy",
+				Kind = kind,
+				Title = title,
+				Icon = icon,
+				IconSize = 16,
+				Align = "Center",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -8, 0.5, 0),
+				Size = UDim2.fromOffset(bw, 40),
+				Shadow = false,
+				OnClick = function()
+					if maxed or locked or pending[key] then
+						return
+					end
+					local pr = profile()
+					if pr and pr.Gold < (cost :: number) then
+						ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(cost :: number) .. " needed.", P.crimson_300)
+						return
+					end
+					pending[key] = os.clock()
+					b.SetText("BUYING...")
+					b.SetEnabled(false)
+					Remotes.Get("BuyHeroUpgrade"):FireServer(heroId, id, level)
+					-- no answer (dropped / rejected): ask for the real profile and free the row
+					task.delay(3, function()
+						if pending[key] and os.clock() - pending[key] >= 2.9 then
+							pending[key] = nil
+							Remotes.Get("RequestProfile"):FireServer()
+						end
+					end)
+				end,
+			})
+			b.SetEnabled(not maxed and not locked and not busy)
 		end
 	end
 
@@ -591,8 +753,30 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		ui.CentreTitle.Set(UIKit.spaced(def.Name))
 		local previewSkin = inspSkin
 		ui.CentreSub.Text = "Preview  ·  " .. skinName(previewSkin)
-		-- how to unlock it: the achievement and its progress, or the gold price
-		ui.UnlockCard.Visible = not own
+		-- how to unlock it: the achievement and its progress, or the gold price; an owned
+		-- hero shows its MASTERY instead (and UPGRADE <HERO>)
+		if p ~= lastProfile then
+			lastProfile = p
+			table.clear(pending) -- a fresh profile answers every purchase in flight
+		end
+		ui.UnlockCard.Visible = true
+		ui.UnlockLabel.Text = own and "MASTERY" or "UNLOCK"
+		ui.MasteryButton.Instance.Visible = own
+		ui.MasteryPanel.Visible = own and ui.MasteryOpen
+		if own then
+			local heroes = type(p.Heroes) == "table" and p.Heroes or {}
+			local h = type(heroes[inspChar]) == "table" and heroes[inspChar] or {}
+			local level, into, need = MetaUpgradeData.MasteryFor(h.XP or 0)
+			local cap = MetaUpgradeData.HeroCap(level, "MaxHP", inspChar)
+			ui.UnlockName.Text = "LEVEL " .. level .. (level >= Config.HeroMastery.MaxLevel and "  ·  MAX" or "")
+			ui.UnlockCount.Text = need > 0 and (UIKit.formatNumber(into) .. " / " .. UIKit.formatNumber(need) .. " XP") or "MAX"
+			ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery. Mastery %d lets its upgrades reach level %d.", def.Name, level, cap)
+			ui.UnlockMeter.Set(need > 0 and math.clamp(into / need, 0, 1) or 1, "")
+			ui.MasteryButton.SetText(ui.MasteryOpen and "HIDE UPGRADES" or ("UPGRADE " .. string.upper(def.Name)))
+			if ui.MasteryOpen then
+				buildMasteryRows(p, inspChar)
+			end
+		end
 		if not own then
 			if def.Unlock then
 				local aid = def.Unlock.Achievement
@@ -786,6 +970,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			place(ui.Detail, M, detailY, w, detailH)
 			pinAction(contentH > detailH + 1)
 			fitSkins(w - 40)
+			ui.DetailInnerW = w - 44
 			place(ui.Centre, (W - centreW) / 2, detailY - 64, centreW, 58)
 			ui.Centre.Visible = true
 			if ctx.Current() == "Characters" then
@@ -821,6 +1006,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			place(ui.Detail, W - M - rw, top, rw, math.min(contentH, H - M - top))
 			pinAction(contentH > H - M - top + 1)
 			fitSkins(rw - 40)
+			ui.DetailInnerW = rw - 44
 			-- the hero's name between the panels, under the dais
 			local gapL, gapR = M + lw, W - M - rw
 			centreW = math.min(420, gapR - gapL - 16)
@@ -836,6 +1022,10 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			for id in pairs(ui.Rows) do
 				paintRow(id, p)
 			end
+		end
+		-- the upgrade rows follow the panel's width (rotation, window size)
+		if ui.MasteryOpen and ui.MasteryPanel.Visible and ui.BuiltInnerW ~= ui.DetailInnerW then
+			refresh()
 		end
 	end
 

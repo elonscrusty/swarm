@@ -1175,22 +1175,27 @@ local function stageGoal(state: Configuration, stagePhase: string): (string, str
 		elseif lockLeft > 0 then
 			return "PORTAL DORMANT", UIKit.formatTime(lockLeft), P.ivory_100
 		end
-		-- swarm pressure (SwarmState SwarmWarn): the objective turns into a warning
-		local warn = state:GetAttribute("SwarmWarn") or 0
-		if warn >= 2 then
-			return "OPEN THE PORTAL", "SWARM OVERWHELMING", P.crimson_300
-		elseif warn >= 1 then
-			return "OPEN THE PORTAL", "SWARM GROWING", P.amber_300
-		end
 		-- waves (Config.Waves, SwarmState Wave / WaveNext): "WAVE 3", or "WAVE 4 IN 0:03"
 		-- during the breather before it
+		local waveText = ""
 		local wave: number = tonumber(state:GetAttribute("Wave")) or 0
 		local nextAt: number = tonumber(state:GetAttribute("WaveNext")) or 0
 		if nextAt > 0 then
 			local now: number = tonumber(state:GetAttribute("RunTime")) or 0
-			return "FIND THE PORTAL", string.format("WAVE %d IN %s", wave + 1, UIKit.formatTime(math.max(0, math.ceil(nextAt - now)))), P.ivory_100
+			waveText = string.format("WAVE %d IN %s", wave + 1, UIKit.formatTime(math.max(0, math.ceil(nextAt - now))))
 		elseif wave > 0 then
-			return "FIND THE PORTAL", "WAVE " .. tostring(wave), P.ivory_100
+			waveText = "WAVE " .. tostring(wave)
+		end
+		-- swarm pressure (SwarmState SwarmWarn): the objective turns into a warning (the
+		-- wave count stays; without waves the count says how bad it is)
+		local warn = state:GetAttribute("SwarmWarn") or 0
+		if warn >= 2 then
+			return "OPEN THE PORTAL", waveText ~= "" and waveText or "SWARM OVERWHELMING", P.crimson_300
+		elseif warn >= 1 then
+			return "OPEN THE PORTAL", waveText ~= "" and waveText or "SWARM GROWING", P.amber_300
+		end
+		if waveText ~= "" then
+			return "FIND THE PORTAL", waveText, P.ivory_100
 		end
 		return "FIND THE PORTAL", "", P.ivory_100
 	elseif stagePhase == "Boss" then
@@ -1216,7 +1221,7 @@ local function updateStage(state: Configuration)
 	local longGoal = goal
 	if anim.StageTooWide == longGoal then
 		goal = STAGE_SHORT[longGoal] or (stagePhase == "Boss" and "DEFEAT THE BOSS") or goal
-		if longGoal == "OPEN THE PORTAL" then
+		if longGoal == "OPEN THE PORTAL" and string.sub(count, 1, 5) == "SWARM" then
 			count = "" -- phones: the amber / crimson goal and the banner carry the warning
 		end
 	end

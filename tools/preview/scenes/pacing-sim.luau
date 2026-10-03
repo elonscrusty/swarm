@@ -3,7 +3,8 @@
 -- `stages` stages: explore `explore` seconds walking a circle, then summon the stage boss
 -- at the portal (StageManager.DevActivate, no DEV taint) and fight it there; a boss still
 -- alive after `bossmax` seconds is killed through EnemySpawner.Kill (its gems drop as
--- usual). Cards are auto-picked at once. Logs every level-up (run time, stage, phase), the
+-- usual). Cards are auto-picked at once. Waves (Config.Waves): every wave's size, mix,
+-- peak alive and clear time, hits to kill per wave band. Logs every level-up (run time, stage, phase), the
 -- gaps between them (dead stretches > 45 s, bursts of 3+ levels inside 3 s), and per
 -- stage: levels, run gold, kills, enemy HP multiplier.
 --   lune ... --scene pacing-sim --studio --set stages=6 --set explore=150 --set bossmax=90
@@ -84,6 +85,16 @@ local function ps(stage, phase)
 end
 -- hits to kill per enemy type and stage (a hit = one EnemySpawner.Damage call)
 local hitsOn, htk = {}, {}
+-- the same per wave band (Config.Waves: waves 1-3, 4-6, 7-9, 10-14, 15+)
+local htkWave = {}
+local BANDS = { { 1, 3 }, { 4, 6 }, { 7, 9 }, { 10, 14 }, { 15, 999 } }
+local function waveBand(id)
+	if type(id) ~= "number" then return nil end
+	for i, b in ipairs(BANDS) do
+		if id >= b[1] and id <= b[2] then return i end
+	end
+	return nil
+end
 local rawEDamage = Spawner.Damage
 Spawner.Damage = function(e, amount, ...)
 	local alive = e.Alive and not e.Boss and not e.Elite and not (e.Def and (e.Def.Object or e.Def.Spawner))
@@ -92,6 +103,14 @@ Spawner.Damage = function(e, amount, ...)
 	if alive then
 		hitsOn[uid] = (hitsOn[uid] or 0) + 1
 		if died then
+			local wb = waveBand(e.WaveId)
+			if wb then
+				local h = htkWave[wb] or { Hits = 0, N = 0, One = 0 }
+				h.Hits += hitsOn[uid]
+				h.N += 1
+				if hitsOn[uid] == 1 then h.One += 1 end
+				htkWave[wb] = h
+			end
 			local key = SM.GetStage() .. ":" .. e.Def.Id
 			local h = htk[key] or { Hits = 0, N = 0, One = 0 }
 			h.Hits += hitsOn[uid]
@@ -168,8 +187,12 @@ local function sampleBees()
 		preview.log("BEES alive per run minute: " .. table.concat(parts, " | "))
 	end
 end
-local ups = {}
-local lastSeq, waveLog = 0, {} -- { T, Stage, Phase, N }
+local ups = {} -- { T, Stage, Phase, N }
+-- waves: per wave its stage, start, size, peak alive (wave members) and the time until
+-- the next breather (cleared to Config.Waves.ClearShare, or the MaxSeconds cap)
+local lastSeq, waveLog, waves = 0, {}, {}
+local curWave = nil
+local counted = {}
 local last = rps[1].Level
 local function tick(dt)
 	preview.advance(dt)
@@ -196,6 +219,27 @@ local function tick(dt)
 	if seq ~= lastSeq then
 		lastSeq = seq
 		waveLog[SM.GetStage()] = (waveLog[SM.GetStage()] or "") .. string.format(" %d@%d:%02d", st:GetAttribute("Wave") or 0, t // 60, t % 60)
+		curWave = { N = st:GetAttribute("Wave") or 0, Stage = SM.GetStage(), T = t, Size = 0, Peak = 0, Clear = nil, Elites = 0, Types = {} }
+		table.insert(waves, curWave)
+	end
+	if curWave and not curWave.Clear then
+		local alive = 0
+		for _, e in ipairs(Spawner.Active) do
+			if e.Alive and e.WaveId == curWave.N then
+				alive += 1
+				if not counted[e.Uid] then
+					counted[e.Uid] = true
+					curWave.Size += 1
+					if e.Elite then curWave.Elites += 1 end
+					curWave.Types[e.Def.Id] = (curWave.Types[e.Def.Id] or 0) + 1
+				end
+			end
+		end
+		curWave.Peak = math.max(curWave.Peak, alive)
+		if (st:GetAttribute("WaveNext") or 0) > 0 or SM.GetPhase() ~= "Explore" then
+			curWave.Clear = t - curWave.T
+			curWave.How = SM.GetPhase() ~= "Explore" and "ended" or ""
+		end
 	end
 	local rp = rps[1]
 	if not rp then
@@ -295,6 +339,23 @@ for _, u in ipairs(ups) do
 	table.insert(events, string.format("%d:%02d S%d %s%s", u.T // 60, u.T % 60, u.Stage, string.sub(u.Phase, 1, 2), u.N > 1 and ("x" .. u.N) or ""))
 end
 preview.log("LEVELUPS " .. table.concat(events, " | "))
+for _, w in ipairs(waves) do
+	local types = {}
+	for id, c in pairs(w.Types) do table.insert(types, id .. " " .. c) end
+	table.sort(types)
+	preview.log(string.format("WAVE %d S%d at %d:%02d size %d (elites %d) peak alive %d %s %s | %s", w.N, w.Stage, w.T // 60, w.T % 60, w.Size, w.Elites, w.Peak,
+		w.Clear and string.format("cleared in %.0fs", w.Clear) or "unfinished", w.How or "", table.concat(types, ", ")))
+end
+do
+	local parts = {}
+	for i, b in ipairs(BANDS) do
+		local h = htkWave[i]
+		if h and h.N > 0 then
+			table.insert(parts, string.format("w%d-%s %.1f (1-hit %d%%, n %d)", b[1], b[2] >= 999 and "" or tostring(b[2]), h.Hits / h.N, math.floor(h.One / h.N * 100), h.N))
+		end
+	end
+	preview.log("HITS BY WAVE " .. table.concat(parts, " | "))
+end
 for _, r in ipairs(rows) do
 	preview.log(r)
 end
