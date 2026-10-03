@@ -9,8 +9,8 @@
 	  (Config.Shrines)         dark after 2 items or 6 tries.
 	  Bargain Shrine           free, once per stage: the whole team gets +25% damage and
 	                           +30% gold for the rest of the stage, the swarm gets +20% HP.
-	  Guarded Altar            a free rare chest. Dormant until a living player comes near,
-	  (Config.Guarded)         then elite guards climb out around it; when they are dead the
+	  Guarded Altar            a free rare chest. Hold its prompt to awaken the elite guards;
+	  (Config.Guarded)         when they are dead the
 	                           chest unlocks and opening it gives EVERY living teammate an item.
 	  Lost Caravan             placed here (Config.Caravan, far from the spawn like the altar),
 	  (CaravanEvent.lua)       run by CaravanEvent: hold its ring while waves come.
@@ -78,6 +78,8 @@ type Obj = {
 	Glow: { BasePart },
 	Light: PointLight?,
 	Ring: BasePart?,
+	Rune: number?,
+	Puzzle: any?,
 }
 
 local ctx
@@ -98,6 +100,7 @@ local TITLES = {
 	Chance = "Shrine of Chance",
 	Bargain = "Bargain Shrine",
 	Guarded = "Guarded Altar",
+	Treasure = "Buried Cache",
 }
 
 ------------------------------------------------------------------------------------------
@@ -362,6 +365,7 @@ local function buildChest(typeName: string, pos: Vector3, yawJitter: number)
 		State = "Ready",
 	})
 	obj.Model.Parent = folder
+	return obj
 end
 
 local SHRINE_LOOK = {
@@ -437,8 +441,8 @@ local function altarText(obj: Obj)
 		local n = obj.GuardTotal > 0 and (obj.GuardTotal - obj.Killed) or guardCount()
 		setAttrs(obj, {
 			Benefit = "Free rare item for every teammate",
-			Tradeoff = string.format("Wakes %d elite guards when you come near", n),
-			Detail = "Dormant",
+			Tradeoff = string.format("Hold to awaken %d elite guards", n),
+			Detail = "Dormant · activate when ready",
 		})
 	elseif st == "Guarded" then
 		local left = 0
@@ -470,6 +474,47 @@ local function buildAltar(arena, pos: Vector3)
 	altarText(obj)
 	MapBuilder.ClearDecor(arena, pos, 6)
 	obj.Model.Parent = folder
+end
+
+local RUNE_NAMES = { "Moon", "Sun", "Star" }
+local RUNE_COLORS = { P.slate_300, P.gold_300, P.crimson_400 }
+
+local function runeText(puzzle)
+	local names = {}
+	for _, id in ipairs(puzzle.Order) do table.insert(names, RUNE_NAMES[id]) end
+	for _, obj in ipairs(puzzle.Nodes) do
+		setAttrs(obj, { Detail = "Order: " .. table.concat(names, " > ") .. " · " .. puzzle.Progress .. "/3" })
+	end
+end
+
+local function buildRunes(arena, centre: Vector3)
+	local puzzle = { Order = { 1, 2, 3 }, Progress = 0, Nodes = {}, Solved = false }
+	for i = 3, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		puzzle.Order[i], puzzle.Order[j] = puzzle.Order[j], puzzle.Order[i]
+	end
+	MapBuilder.ClearDecor(arena, centre, 10)
+	for i = 1, 3 do
+		local angle = i * math.pi * 2 / 3
+		local pos = centre + Vector3.new(math.cos(angle) * 6, 0, math.sin(angle) * 6)
+		local cf = CFrame.new(pos)
+		local obj = newObj("Shrine", "Rune", pos, cf)
+		obj.Rune, obj.Puzzle = i, puzzle
+		add(obj.Model, cf, "Stone", Vector3.new(2, 3, 2), Vector3.new(0, 1.5, 0), P.stone_500)
+		addGlow(obj, pos + Vector3.new(0, 3.5, 0), RUNE_COLORS[i], true, true)
+		setAttrs(obj, { Title = RUNE_NAMES[i] .. " rune", Hold = 0.4, State = "Ready", Benefit = "Complete the sequence for a team relic", Tradeoff = "Wrong rune resets the sequence" })
+		obj.Model.Parent = folder
+		table.insert(puzzle.Nodes, obj)
+	end
+	runeText(puzzle)
+end
+
+local function buildTreasure(arena, pos: Vector3)
+	local obj = buildChest("Small", pos, 0)
+	obj.Type, obj.Price = "Treasure", 0
+	setAttrs(obj, { LootType = "Treasure", Title = TITLES.Treasure, Price = 0, Benefit = "Free uncommon or legendary relic", Detail = "Discovered cache · hold to claim" })
+	addGlow(obj, pos + Vector3.new(0, 2.7, 0), P.gold_300, true, false)
+	MapBuilder.ClearDecor(arena, pos, 3)
 end
 
 ------------------------------------------------------------------------------------------
@@ -541,17 +586,22 @@ function LootSystem.BuildStage(arena, stage: number, portalPos: Vector3?)
 		end
 		return at
 	end
-	-- the guarded altar: far from the spawn
-	local altarAt = spot({ MinDistance = Config.Guarded.MinDistance, Clearance = 7 })
-	if altarAt then
-		buildAltar(arena, altarAt)
+	-- Draw distinct optional locations; their rewards belong to this run only.
+	local kinds = table.clone(Config.Encounters.Types)
+	if not ctx.CaravanEvent then
+		local index = table.find(kinds, "Caravan")
+		if index then table.remove(kinds, index) end
 	end
-	-- the Lost Caravan (at most one): also far out, away from the altar
-	if ctx.CaravanEvent and ctx.CaravanEvent.Roll() then
+	local count = math.min(#kinds, rng:NextInteger(Config.Encounters.Count[1], Config.Encounters.Count[2]))
+	for _ = 1, count do
+		local kind = table.remove(kinds, rng:NextInteger(1, #kinds))
 		local K = Config.Caravan
-		local caravanAt = spot({ MinDistance = K.MinDistance, Clearance = K.Clearance, Spacing = math.max(C.Spacing, K.ZoneRadius * 2 + 10) })
-		if caravanAt then
-			ctx.CaravanEvent.Build(arena, caravanAt, stageNo)
+		local at = spot({ MinDistance = Config.Guarded.MinDistance, Clearance = kind == "Caravan" and K.Clearance or 11, Spacing = math.max(C.Spacing, K.ZoneRadius * 2 + 10) })
+		if at then
+			if kind == "Guarded" then buildAltar(arena, at)
+			elseif kind == "Runes" then buildRunes(arena, at)
+			elseif kind == "Treasure" then buildTreasure(arena, at)
+			elseif kind == "Caravan" then ctx.CaravanEvent.Build(arena, at, stageNo) end
 		end
 	end
 	-- shrines
@@ -609,7 +659,7 @@ end
 local function wake(obj: Obj)
 	local G = Config.Guarded
 	local want = obj.GuardTotal > 0 and math.max(1, obj.GuardTotal - obj.Killed) or guardCount()
-	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
+	local row = EnemyData.GetSpawnRow(ctx.EnemySpawner.ProgressionTime())
 	local made = 0
 	local offset = rng:NextNumber(0, math.pi * 2)
 	for i = 1, want do
@@ -631,7 +681,7 @@ local function wake(obj: Obj)
 		end
 	end
 	if made == 0 then
-		obj.WakeAt = os.clock() + 2 -- the field is full: try again soon
+		obj.WakeAt = ctx.RunManager.GetRunTime() + 2 -- the field is full: try again soon
 		return
 	end
 	if obj.GuardTotal == 0 then
@@ -667,7 +717,7 @@ function LootSystem.OnGuardDown(e, killed: boolean)
 		-- the guards were swept away, not beaten: the altar sleeps again (the ones that
 		-- were killed stay dead)
 		setState(obj, "Dormant")
-		obj.WakeAt = os.clock() + 5
+		obj.WakeAt = ctx.RunManager.GetRunTime() + 5
 		recolourGlow(obj, P.slate_300, 0)
 		altarText(obj)
 		return
@@ -679,30 +729,6 @@ function LootSystem.OnGuardDown(e, killed: boolean)
 	ctx.RunManager.Broadcast("The altar is unguarded: open it for an item each!", Color3.fromRGB(255, 220, 120))
 end
 
-local function stepAltars(now: number)
-	-- Any fighting phase: guards swept away by the Queen's arrival or the portal burn must
-	-- be wakeable again on the same stage (Explore never comes back after the Queen).
-	local phase = ctx.StageManager.GetPhase()
-	if phase ~= "Explore" and phase ~= "Boss" and phase ~= "Surge" and phase ~= "Open" then
-		return
-	end
-	local r2 = Config.Guarded.WakeRadius ^ 2
-	for _, obj in ipairs(list) do
-		if obj.Kind == "Altar" and obj.State == "Dormant" and now >= obj.WakeAt then
-			for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
-				local root: BasePart? = rp.Root
-				if rp.Alive and not rp.Paused and root then
-					local d = (root.Position - obj.Pos) * FLAT
-					if d.X * d.X + d.Z * d.Z <= r2 then
-						wake(obj)
-						break
-					end
-				end
-			end
-		end
-	end
-end
-
 ------------------------------------------------------------------------------------------
 -- Using things
 ------------------------------------------------------------------------------------------
@@ -710,7 +736,7 @@ end
 local function usable(obj: Obj): boolean
 	local st = obj.State
 	if obj.Kind == "Altar" then
-		return st == "Claimable"
+		return st == "Claimable" or (st == "Dormant" and ctx.RunManager.GetRunTime() >= obj.WakeAt)
 	end
 	return st == "Ready"
 end
@@ -761,12 +787,12 @@ local function openChest(rp, obj: Obj)
 		return
 	end
 	setState(obj, "Opened")
-	openLid(obj.Chest, obj.CF, "Chest_" .. obj.Type)
+	openLid(obj.Chest, obj.CF, "Chest_" .. (obj.Type == "Treasure" and "Small" or obj.Type))
 	recolourGlow(obj, nil, 1)
-	local weights = Config.Chests.Weights[obj.Type] or Config.Chests.Weights.Small
+	local weights = Config.Chests.Weights[obj.Type] or (obj.Type == "Treasure" and Config.Chests.Weights.Large) or Config.Chests.Weights.Small
 	local id = ctx.ItemSystem.Roll(weights, rp.Stats.Luck)
-	ctx.ItemSystem.Grant(rp, id, TITLES[obj.Type], true)
-	ctx.RunManager.HoldReward(rp)
+	local granted, dramatic = ctx.ItemSystem.Grant(rp, id, TITLES[obj.Type], true)
+	if granted then ctx.RunManager.HoldReward(rp, dramatic == true) end
 	Fx.Sound("Chest")
 	if obj.Type == "Golden" then
 		Events.Fire("GoldenChest", rp.Player)
@@ -788,8 +814,8 @@ local function useChance(rp, obj: Obj)
 	if rng:NextNumber() < S.ChanceSuccess then
 		obj.Found += 1
 		local id = ctx.ItemSystem.Roll(Config.Chests.Weights.Chance, rp.Stats.Luck)
-		ctx.ItemSystem.Grant(rp, id, TITLES.Chance, true)
-		ctx.RunManager.HoldReward(rp)
+		local granted, dramatic = ctx.ItemSystem.Grant(rp, id, TITLES.Chance, true)
+		if granted then ctx.RunManager.HoldReward(rp, dramatic == true) end
 		Fx.Ring(obj.Pos, 6, P.gold_300)
 	else
 		ctx.RunManager.Notify(rp.Player, "The shrine takes your gold... nothing this time.", Color3.fromRGB(200, 200, 210))
@@ -836,23 +862,52 @@ local function claimAltar(rp, obj: Obj)
 	Fx.Sound("Chest")
 	for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if other.Alive and not other.Returned and other.Stats then
-			ctx.ItemSystem.Grant(other, ctx.ItemSystem.Roll(Config.Chests.Weights.Guarded, other.Stats.Luck), TITLES.Guarded, true)
-			ctx.RunManager.HoldReward(other)
+			local granted, dramatic = ctx.ItemSystem.Grant(other, ctx.ItemSystem.Roll(Config.Chests.Weights.Guarded, other.Stats.Luck), TITLES.Guarded, true, true)
+			if granted then ctx.RunManager.HoldReward(other, dramatic == true) end
 			Events.Fire("OptionalEvent", other.Player, { Kind = "Altar" })
 		end
 	end
 	ctx.RunManager.Broadcast(rp.Player.DisplayName .. " opened the altar: an item for everyone!", Color3.fromRGB(255, 220, 120))
 end
 
+local function useRune(rp, obj: Obj)
+	local puzzle = obj.Puzzle
+	if not puzzle or puzzle.Solved then return end
+	if obj.Rune ~= puzzle.Order[puzzle.Progress + 1] then
+		puzzle.Progress = 0
+		ctx.RunManager.Notify(rp.Player, "The rune sequence resets. Read the stones' order.", P.crimson_400)
+	else
+		puzzle.Progress += 1
+		Fx.Ring(obj.Pos, 6, P.gold_300)
+		Fx.Sound("Shrine")
+	end
+	runeText(puzzle)
+	if puzzle.Progress < 3 then return end
+	puzzle.Solved = true
+	for _, node in ipairs(puzzle.Nodes) do
+		setState(node, "Spent")
+		setAttrs(node, { Detail = "Sequence complete · relic claimed" })
+		recolourGlow(node, P.gold_300, 0)
+	end
+	for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if other.Alive and not other.Returned and other.Stats then
+			local granted, dramatic = ctx.ItemSystem.Grant(other, ctx.ItemSystem.Roll(Config.Chests.Weights.Guarded, other.Stats.Luck), "Rune stones", true, true)
+			if granted then ctx.RunManager.HoldReward(other, dramatic == true) end
+		end
+	end
+end
+
 local function complete(rp, obj: Obj)
 	if obj.Kind == "Chest" then
 		openChest(rp, obj)
+	elseif obj.Type == "Rune" then
+		useRune(rp, obj)
 	elseif obj.Type == "Chance" then
 		useChance(rp, obj)
 	elseif obj.Type == "Bargain" then
 		useBargain(rp, obj)
 	elseif obj.Kind == "Altar" then
-		claimAltar(rp, obj)
+		if obj.State == "Dormant" then wake(obj) else claimAltar(rp, obj) end
 	end
 	feedback(rp, obj, "Done", nil)
 end
@@ -898,9 +953,6 @@ function LootSystem.Step(dt: number)
 		return
 	end
 	local simulating = ctx.RunManager.IsSimulating()
-	if simulating then
-		stepAltars(os.clock())
-	end
 	if next(holds) == nil then
 		return
 	end

@@ -52,6 +52,7 @@ local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local PassiveData = require(Shared:WaitForChild("PassiveData"))
 local ItemData = require(Shared:WaitForChild("ItemData"))
 local ArtData = require(Shared:WaitForChild("ArtData"))
+local IdleFx = require(script.Parent.IdleFx)
 
 local P = Theme.Palette
 local G = Theme.Icon.Grid
@@ -71,6 +72,7 @@ export type Opts = {
 	LayoutOrder: number?,
 	Name: string?,
 	Dim: boolean?, -- grey a picture (locked achievement); the drawn fallback uses Color instead
+	Idle: string?, -- opt-in decorative motion; IdleFx owns visibility and cleanup
 }
 
 type Ctx = {
@@ -1871,6 +1873,9 @@ function Icons.Draw(parent: Instance?, name: string, opts: Opts?): Frame
 		drawVector(f, drawn, o)
 	end
 	f.Parent = parent
+	if o.Idle then
+		IdleFx.Attach(f, o.Idle)
+	end
 	return f
 end
 
@@ -1889,6 +1894,7 @@ function Icons.Upgrade(parent: Instance?, id: string?, opts: Opts?): Frame
 		local f = container(key, o)
 		picture(f, key, image, o, o.Color or WHITE)
 		f.Parent = parent
+		if o.Idle then IdleFx.Attach(f, o.Idle) end
 		return f
 	end
 	if DRAW[key] then
@@ -1897,6 +1903,7 @@ function Icons.Upgrade(parent: Instance?, id: string?, opts: Opts?): Frame
 	local f = container(key, o)
 	drawVector(f, key, o, true)
 	f.Parent = parent
+	if o.Idle then IdleFx.Attach(f, o.Idle) end
 	return f
 end
 

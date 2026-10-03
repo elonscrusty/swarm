@@ -208,7 +208,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local f = card(order)
 		local id = itemId(item)
 		cardTop(f, function()
-			Icons.Draw(f, item.Icon, { Size = 56 })
+			Icons.Draw(f, item.Icon, { Size = 56, Idle = (item.Icon == "stat_Gold" or item.Icon == "shop_DoubleGold") and "Coin" or "Glint" })
 			if item.Key == "DoubleGold" then
 				UIKit.Badge(f, "2x", "Gold", { Position = UDim2.fromOffset(34, 38) })
 			end

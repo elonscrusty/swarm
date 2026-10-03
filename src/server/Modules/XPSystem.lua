@@ -61,6 +61,7 @@ local pickups: { Pickup } = {}
 
 function XPSystem.XPNeeded(level: number): number
 	return Config.XP.Base + math.min(level, Config.XP.CapLevel) * Config.XP.PerLevel
+		+ math.max(0, level - Config.XP.CapLevel) * Config.XP.AfterCapPerLevel
 end
 
 -- Gives `amount` XP to every living run participant (each scaled by their Growth).

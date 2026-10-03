@@ -55,7 +55,10 @@ local P = Theme.Palette
 local SIZE_PC, SIZE_COMPACT = 150, 112 -- map square (px, design space)
 local VIEW_STUDS = 200 -- studs across the map
 local MAX_ENEMY_DOTS = 40
-local MAX_LOOT, MAX_MATES = 12, 5
+-- Each optional location has at most three rune nodes; altar/caravan use separate markers.
+local MAX_LOOT = Config.Chests.SmallCount[2] + Config.Chests.LargeCount[2] + Config.Chests.GoldenCount
+	+ Config.Shrines.ChanceCount[2] + Config.Shrines.BargainCount + Config.Encounters.Count[2] * 3
+local MAX_MATES = 5
 local MOVE_HZ, ENEMY_HZ = 10, 5
 local PARKED_Y = -100 -- pooled enemy bodies are parked under this height (EnemyRenderer)
 local ARENA_SIZE: number = Config.Arenas.Size or 400

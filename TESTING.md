@@ -1,3 +1,23 @@
+## 2026-10-02 progression and polish verification
+
+The new progression supersedes older eight-rank and automatic-revive expectations below. Offline checks pass; Studio, live teleports, real purchases, music audibility and phone FPS still require device testing.
+
+On Windows, run `python -X utf8 tools/check.py --quick --rojo <rojo.exe>` with the toolchain in `../toolchain` (or pass `--tools`). Run `python -X utf8 tools/run_regressions.py` for the real-module offline regression suite. The original shell checker remains available on Linux.
+
+- [ ] Play Standard through five stages. Aim for 20–30 minutes during normal exploration; portals remain available immediately, so skilled rushing can finish sooner.
+- [ ] All seventeen weapons reach rank twelve. Behavior milestones work; evolution needs the matching passive at rank three. Six weapons remain the limit.
+- [ ] First upgrade panel appears after twenty active combat seconds. Later panels are fifty active combat seconds apart after closing, with up to four earned choices in the same panel. XP is conserved.
+- [ ] Max weapons alone do not stop upgrades. Finish owned passives and available evolutions: queued and later XP become automatic coins with no chooser. Higher tiers and uninterrupted survival increase these coins; knockdown resets the streak.
+- [ ] Standard completion unlocks Veteran; Veteran completion unlocks Nightmare. Daily, Endless and DEV runs do not unlock tiers. Older recorded Standard winners retain Veteran access after migration.
+- [ ] Optional locations vary between guarded elites, caravan defense, rune sequences and free treasure. Walking near an altar does not activate it. Markers are visible from the start, including every naturally spawned loot location. Rewards and secrets end with the run.
+- [ ] Each boss gains warned attack combinations below forty percent HP. Pause freezes combat clocks, including projectile lifetime, terrain hazards, slows and burns. Late-stage enemies and hazards remain bounded.
+- [ ] Hold REVIVE near a fallen teammate for two seconds. Movement, release, lost focus or leaving range resets progress. A held movement touch cannot select a newly opened upgrade, reroll or skip.
+- [ ] Ordinary rewards animate briefly while combat continues; legendary rewards, evolutions and encounter finales use the dramatic presentation. Quick reward releases do not close a newer rare reward.
+- [ ] Old savings and purchased coins remain separate from the current run. Defeat/abandon/disconnect retain 25% of unspent run earnings plus 15 percentage points per cleared stage, capped at 85%. Safe extraction retains all run earnings. Repeated end events do not pay twice.
+- [ ] Permanent upgrade tracks show the extended caps and preserve existing levels. Results show retained/lost earnings, defeat cause, progress and quick replay. Victories do not show a death cause.
+- [ ] Test phone landscape/portrait: all controls fit, icons animate, Reduced Effects restores stable poses, low health has a heartbeat warning, and automatic decoration reduction preserves telegraphs and markers.
+- [ ] Test save failure and receipt retry only in a safe test environment: no duplicate grant, no acknowledgement until saved, no receipt mutation after profile handoff. Rejoin and confirm saved tier, balances and ownership.
+
 # SWARM testing checklist
 
 Tick each box in Studio. "Output" means the Output window (View → Output); there should be no red errors.
@@ -281,7 +301,7 @@ Later creatures
 - [ ] Play again: gold, upgrade levels, Mage owned and selected, skin, settings sliders and stats are back.
 - [ ] Gold collected before dying in a run is kept.
 - [ ] Session lock: run two Studio sessions with the same account (or Team Test) → the second one waits and then gets the "data is still in use" kick unless the first one left.
-- [ ] Shutdown: start a run, stop the server mid-run → next session keeps the run's gold.
+- [ ] Shutdown: start a run, stop the server mid-run; the next session settles saved current-run earnings using the failure retention rate. Existing savings and purchases remain intact.
 - [ ] Note: if Studio crashes, the lock frees itself after `Config.Data.LockStaleSeconds` (200 s).
 
 ## 6. Co-op HUD, tips, results, accessibility, saving (new)
@@ -289,7 +309,7 @@ Team HUD (Test tab → 2 or 3 players, DUO / TRIO):
 - [ ] Each player sees one row per teammate (right side, under the counters; portrait: under the ability bar): hero icon, name, health bar. Nothing on the left / bottom where the thumb goes; a touch starting on a row still moves the hero.
 - [ ] A teammate picks a level-up card: the run freezes, others see "Paused: <Name> is choosing an upgrade" and that row says CHOOSING.
 - [ ] A teammate falls: the row says "DOWN · N m" (crimson) and a dashed gold circle appears around them on the floor plus a ring marker over them; when they are off screen a crimson arrow at the screen edge points at them with name and distance.
-- [ ] Stand in the circle: the dashes light up, the marker ring fills, the row says "REVIVING 60%" with a gold bar, and the fallen player sees the same ring over themselves and "A teammate is reviving you... 60%". Step out: progress falls back.
+- [ ] Hold REVIVE in the circle for two seconds: the dashes light up, the marker ring fills, the row says "REVIVING 60%" with a gold bar, and the fallen player sees the same ring over themselves and "A teammate is reviving you... 60%". Release, move or step out: progress resets.
 - [ ] A fallen player on the revive-product offer shows DECIDING; with no partner revives left OUT (no circle).
 - [ ] A teammate closes their client mid-run: everyone gets "<Name> left the run.", the row disappears at once, nothing breaks.
 - [ ] First group run: a "Team run" tip explains shared XP / own gold and items (once ever).

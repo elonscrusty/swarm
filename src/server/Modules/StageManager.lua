@@ -132,11 +132,13 @@ local function endlessMult(k: number, cap: number?): number
 end
 
 function StageManager.EnemyHPMult(): number
-	return perStage(Config.Stages.EnemyHPPerStage) * endlessMult(Config.Endless.HPPerStage)
+	local tier = ctx.RunModifiers and ctx.RunModifiers.DifficultyMultiplier and ctx.RunModifiers.DifficultyMultiplier("HP") or 1
+	return perStage(Config.Stages.EnemyHPPerStage) * endlessMult(Config.Endless.HPPerStage) * tier
 end
 
 function StageManager.DamageMult(): number
-	return perStage(Config.Stages.EnemyDamagePerStage) * endlessMult(Config.Endless.DamagePerStage)
+	local tier = ctx.RunModifiers and ctx.RunModifiers.DifficultyMultiplier and ctx.RunModifiers.DifficultyMultiplier("Damage") or 1
+	return perStage(Config.Stages.EnemyDamagePerStage) * endlessMult(Config.Endless.DamagePerStage) * tier
 end
 
 -- Live-target / mini-wave multiplier: the stage share x the Horde curse (x Endless).
@@ -157,10 +159,11 @@ end
 function StageManager.BossHPMult(): number
 	local list = Config.Stages.BossHPByStage
 	local s = math.max(1, stage)
+	local tier = ctx.RunModifiers and ctx.RunModifiers.DifficultyMultiplier and ctx.RunModifiers.DifficultyMultiplier("HP") or 1
 	if s <= #list then
-		return list[s]
+		return list[s] * tier
 	end
-	return (list[#list] + (s - #list) * Config.Stages.BossHPPerExtraStage) * endlessMult(Config.Endless.BossHPPerStage)
+	return (list[#list] + (s - #list) * Config.Stages.BossHPPerExtraStage) * endlessMult(Config.Endless.BossHPPerStage) * tier
 end
 
 ------------------------------------------------------------------------------------------
@@ -441,12 +444,17 @@ end
 -- Open portal: the choice
 ------------------------------------------------------------------------------------------
 
+local function expeditionComplete(): boolean
+	return not StageManager.IsEndless() and StageManager.StagesCleared() >= Config.Stages.WinMinStages
+end
+
 local function sendOffer(rp)
 	rp.PortalOffered = true
 	local cleared = StageManager.StagesCleared()
 	local endless = StageManager.IsEndless()
 	Remotes.FireClient("PortalOffer", rp.Player, {
 		Endless = endless, -- NEXT STAGE only (no RETURN TO LOBBY, no win)
+		Complete = expeditionComplete(),
 		CountsAsWin = not endless and cleared >= Config.Stages.WinMinStages,
 		WinMinStages = Config.Stages.WinMinStages,
 		Stage = stage,
@@ -513,6 +521,12 @@ local function checkChoices(timeout: boolean)
 		return
 	end
 	if ready < alive and not timeout then
+		return
+	end
+	if expeditionComplete() then
+		closeOffers()
+		ctx.XPSystem.CollectAll(true)
+		ctx.RunManager.FinishFromPortal()
 		return
 	end
 	if alive > 0 then
@@ -588,6 +602,9 @@ local function onChoice(player: Player, choice: any)
 	end
 	if choice == "Return" and StageManager.IsEndless() then
 		return -- Endless: the portal only leads deeper (leaving = the pause menu's MAIN MENU)
+	end
+	if choice == "Next" and expeditionComplete() then
+		return
 	end
 	if choice == "Return" then
 		ctx.RunManager.ReturnThroughPortal(rp)

@@ -548,7 +548,7 @@ local function stepLines(e, dt: number)
 					local t = rel:Dot(L.Dir)
 					if t >= -0.8 and t <= front + 0.6 and (rel - L.Dir * t).Magnitude <= L.Half + 0.6 then
 						L.Hit[rp] = true
-						ctx.RunManager.DamagePlayer(rp, L.Damage)
+						ctx.RunManager.DamagePlayer(rp, L.Damage, e.BossData.DisplayName .. " eruption")
 					end
 				end
 			end
@@ -601,7 +601,7 @@ local function stepRings(e, dt: number)
 							local off = (math.atan2(dz, dx) - R.Gap) % TAU
 							if math.min(off, TAU - off) > R.GapHalf then
 								R.Hit[rp] = true
-								ctx.RunManager.DamagePlayer(rp, R.Damage)
+								ctx.RunManager.DamagePlayer(rp, R.Damage, "Briar Sentinel bramble ring")
 							end
 						end
 					end
@@ -963,6 +963,7 @@ local function nextAttack(e)
 	local cycle = phase(e).Cycle
 	e.BossCycle = (e.BossCycle % #cycle) + 1
 	local name = cycle[e.BossCycle]
+	e.BossFollowup = phase(e).FollowUps and phase(e).FollowUps[name] or nil
 	local fn = Start[name]
 	if fn then
 		fn(e)
@@ -1032,7 +1033,15 @@ end
 State.Recover = function(e, _dt)
 	e.SpeedOverride = 0
 	if e.BossTimer <= 0 then
-		chase(e, paced(e, e.BossData.Chase))
+		local followup = e.BossFollowup
+		e.BossFollowup = nil
+		if followup and not e.PendingPhase and #living() > 0 and Start[followup] then
+			-- Keep the complete punish window, then telegraph the follow-up normally.
+			e.Harmless = false
+			Start[followup](e)
+		else
+			chase(e, paced(e, e.BossData.Chase))
+		end
 	end
 end
 
@@ -1437,7 +1446,7 @@ State.Breathing = function(e, _dt)
 		local d = to.Magnitude
 		if d > 0.5 and d <= A.Length + 0.8 and to.Unit:Dot(dir) >= cosHalf and clock >= (hit[rp] or 0) then
 			hit[rp] = clock + A.Tick
-			ctx.RunManager.DamagePlayer(rp, damage(A.Damage))
+			ctx.RunManager.DamagePlayer(rp, damage(A.Damage), "Frostbound Colossus freezing breath")
 			chill(rp, A.Chill, A.ChillTime)
 		end
 	end
@@ -1517,6 +1526,7 @@ function BossAI.ClearHazards(e)
 	end
 	clearObjects(e)
 	if e then
+		e.BossFollowup = nil
 		e.BossLines = nil
 		e.BossRings = nil
 		if e.FrostArmorOn then

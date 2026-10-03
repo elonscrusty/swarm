@@ -46,7 +46,9 @@ elseif view == "other" then
 	C.setState({ Frozen = true, LevelUpPause = false, RewardNames = "Ranger_Rex", RewardIds = ",9001," })
 	C.settle(0.6)
 else
-	C.setState({ Frozen = true, LevelUpPause = false, RewardNames = "Player", RewardIds = "," .. tostring(uid) .. "," })
+	local id = preview.args.item or "StormCharm"
+	local dramatic = preview.args.queue == "on" or C.shared("ItemData").Items[id].Rarity == "Legendary"
+	C.setState({ Frozen = dramatic, LevelUpPause = false, RewardNames = dramatic and "Player" or "", RewardIds = dramatic and ("," .. tostring(uid) .. ",") or "" })
 	if preview.args.reduced == "on" then
 		local ClientSettings = preview.client("ClientSettings")
 		if ClientSettings and ClientSettings.Set then
@@ -56,6 +58,7 @@ else
 	local t = tonumber(preview.args.t) or 2.0
 	if preview.args.queue == "on" then
 		C.fire("ChestOpened", {
+			Dramatic = true,
 			Rewards = {
 				{ Name = "Whip", Text = "Level 6", Color = Color3.fromRGB(220, 220, 230) },
 				{ Name = "Heart", Text = "Level 3", Color = Color3.fromRGB(220, 90, 90) },
@@ -63,11 +66,11 @@ else
 			Gold = 38,
 		})
 		C.settle(0.2)
-		C.fire("ItemGained", { Id = "StormCharm", Count = 1, Source = "Large Chest", Reward = true })
-		C.fire("ItemGained", { Id = "SunMedallion", Count = 1, Source = "Golden Chest", Reward = true })
+		C.fire("ItemGained", { Id = "StormCharm", Count = 1, Source = "Large Chest", Reward = true, Dramatic = true })
+		C.fire("ItemGained", { Id = "SunMedallion", Count = 1, Source = "Golden Chest", Reward = true, Dramatic = true })
 		C.settle(math.max(0.05, t - 0.2))
 	else
-		C.fire("ItemGained", { Id = preview.args.item or "StormCharm", Count = 1, Source = "Large Chest", Reward = true })
+		C.fire("ItemGained", { Id = id, Count = 1, Source = "Chest", Reward = true, Dramatic = dramatic })
 		C.settle(t)
 	end
 end

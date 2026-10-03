@@ -978,9 +978,11 @@ R.defineClass("TextService", {
 
 -- In-memory DataStores (only needed when a scene runs the full server).
 local stores = {}
+R.dataStoreFailure = { Reads = false, Writes = false, Open = false }
 R.defineClass("DataStoreService", {
 	methods = {
 		GetDataStore = function(_, name, scope)
+			if R.dataStoreFailure.Open then error("DataStore unavailable (test)") end
 			local key = tostring(name) .. "/" .. tostring(scope or "global")
 			if not stores[key] then
 				local ds = R.create("DataStore")
@@ -1011,12 +1013,14 @@ R.defineClass("DataStoreService", {
 R.defineClass("GlobalDataStore", {
 	methods = {
 		GetAsync = function(ds, key)
+			if R.dataStoreFailure.Reads then error("DataStore read unavailable (test)") end
 			return R.copyValue(states[ds].x.data[key]), nil
 		end,
 		SetAsync = function(ds, key, value)
 			states[ds].x.data[key] = R.copyValue(value)
 		end,
 		UpdateAsync = function(ds, key, fn)
+			if R.dataStoreFailure.Writes then error("DataStore write unavailable (test)") end
 			local data = states[ds].x.data
 			local new = fn(R.copyValue(data[key]), nil)
 			if new ~= nil then

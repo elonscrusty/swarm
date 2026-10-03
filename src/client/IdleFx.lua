@@ -32,8 +32,8 @@
 	  Shine    a brief brightness lift (ImageColor3 towards white is not possible, so the
 	           picture dims and recovers: a soft blink) every opts.Period seconds
 
-	Reduced effects (ClientSettings.Reduced()): continuous motions run at a third of the
-	speed and half the amplitude; one-shots (hits, sparks, sparkles, flips) never fire.
+	Reduced effects and the adaptive decoration budget restore the rest pose and suspend
+	motion; visibility and destruction checks continue, so hidden entries still clean up.
 
 	Transforms write Rotation, Position (an offset on the laid-out position; objects in a
 	UIListLayout only show rotation / scale), Size (non-uniform squash about the object's
@@ -45,6 +45,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local ClientSettings = require(script.Parent.ClientSettings)
+local ClientPerformance = require(script.Parent.ClientPerformance)
 
 local IdleFx = {}
 
@@ -173,6 +174,10 @@ end
 -- A soft round glow behind the picture (a sibling just under it), sized from the object.
 local function glowOf(e: Entry, color: Color3): Frame?
 	local g = e.Glow
+	if e.Reduced then
+		if g then g.Visible = false end
+		return nil
+	end
 	if g and g.Parent then
 		return g
 	end
@@ -202,8 +207,18 @@ end
 local function placeGlow(e: Entry, g: Frame, fx: number, fy: number, frac: number, alpha: number)
 	local obj = e.Obj
 	local ap, size = obj.AnchorPoint, obj.AbsoluteSize
+	local parentScale = 1
+	local ancestor = obj.Parent
+	while ancestor and not ancestor:IsA("ScreenGui") do
+		local s = ancestor:FindFirstChildOfClass("UIScale")
+		if s then
+			parentScale *= s.Scale
+		end
+		ancestor = ancestor.Parent
+	end
+	size /= math.max(0.01, parentScale)
 	local w, h = size.X, size.Y
-	local parentSize = (obj.Parent :: GuiObject).AbsoluteSize
+	local parentSize = (obj.Parent :: GuiObject).AbsoluteSize / math.max(0.01, parentScale)
 	-- the object's top-left in parent pixels: from its own Position and anchor
 	local px = obj.Position.X.Scale * parentSize.X + obj.Position.X.Offset - ap.X * w
 	local py = obj.Position.Y.Scale * parentSize.Y + obj.Position.Y.Offset - ap.Y * h
@@ -515,7 +530,11 @@ local function step(dt: number)
 		end
 		if now >= e.NextCheck then
 			e.NextCheck = now + CHECK
-			e.Reduced = ClientSettings.Reduced()
+			local reduced = (ClientSettings.Reduced() or ClientPerformance.Reduced())
+			if reduced ~= e.Reduced then
+				rest(e)
+				e.Reduced = reduced
+			end
 			local shown = isShown(obj)
 			if shown ~= e.Shown then
 				e.Shown = shown
@@ -527,7 +546,7 @@ local function step(dt: number)
 				rebase(e)
 			end
 		end
-		if e.Shown then
+		if e.Shown and not e.Reduced then
 			local reduced = e.Reduced
 			e.Clock += dt * (reduced and 0.35 or 1)
 			STEP[e.Kind](e, e.Clock + e.Phase, reduced and 0.5 or 1, reduced)

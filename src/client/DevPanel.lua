@@ -251,13 +251,13 @@ end
 
 local function buildItems(p: Instance)
 	local g = section(p, "Weapons", 1)
-	button(g, "All weapons Lv 8", 1, function()
+	button(g, "All weapons max rank", 1, function()
 		send("MaxWeapons")
 	end, "Primary")
 	button(g, "Evolve all", 2, function()
 		send("EvolveWeapons")
 	end)
-	g = section(p, "One weapon (Lv 8)", 2)
+	g = section(p, "One weapon (max rank)", 2)
 	for i, id in ipairs(WeaponData.Order) do
 		local def = WeaponData.Weapons[id]
 		button(g, def and def.Name or id, i, function()

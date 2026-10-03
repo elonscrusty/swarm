@@ -29,6 +29,7 @@ function loadPlaywright() {
 }
 
 function findChromium() {
+  if (process.env.SWARM_CHROMIUM && fs.existsSync(process.env.SWARM_CHROMIUM)) return process.env.SWARM_CHROMIUM;
   const base = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
   if (!fs.existsSync(base)) return undefined;
   const dirs = fs.readdirSync(base).filter((d) => /^chromium-\d+$/.test(d)).sort().reverse();

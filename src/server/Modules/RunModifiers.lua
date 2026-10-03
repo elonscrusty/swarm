@@ -43,6 +43,7 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
 local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponData)
 local ItemData = require(game:GetService("ReplicatedStorage").Shared.ItemData)
+local DifficultyData = require(game:GetService("ReplicatedStorage").Shared.DifficultyData)
 
 local RunModifiers = {}
 
@@ -53,6 +54,7 @@ local effects = CurseData.Effects({})
 local goldMult = 1
 local daily: CurseData.Daily? = nil -- the running run's daily setup (nil = not a daily)
 local endless = false -- the running run is an Endless run (Config.Endless)
+local difficulty = "Standard"
 local publishTimer = 0
 
 ------------------------------------------------------------------------------------------
@@ -64,15 +66,24 @@ function RunModifiers.Active(): { string }
 end
 
 function RunModifiers.GoldMult(): number
-	return goldMult
+	return goldMult * RunModifiers.DifficultyMultiplier("Gold")
+end
+
+function RunModifiers.DifficultyId(): string
+	return difficulty
+end
+
+function RunModifiers.DifficultyMultiplier(stat: string): number
+	local value = DifficultyData.Tiers[difficulty][stat]
+	return type(value) == "number" and value or 1
 end
 
 function RunModifiers.EnemySpeedMult(): number
-	return effects.EnemySpeed
+	return effects.EnemySpeed * RunModifiers.DifficultyMultiplier("Speed")
 end
 
 function RunModifiers.SpawnMult(): number
-	return effects.SpawnMult
+	return effects.SpawnMult * RunModifiers.DifficultyMultiplier("Density")
 end
 
 function RunModifiers.EliteChanceMult(): number
@@ -133,6 +144,7 @@ end
 	starter's saved curses. Returns the daily setup (fixed arena / boss plan) or nil.
 ]]
 function RunModifiers.BeginRun(modeName: string, starter: Player?): CurseData.Daily?
+	difficulty = "Standard"
 	if modeName == CurseData.DailyMode then
 		daily = CurseData.Daily(RunModifiers.Today())
 		setActive((daily :: CurseData.Daily).Curses)
@@ -140,6 +152,7 @@ function RunModifiers.BeginRun(modeName: string, starter: Player?): CurseData.Da
 	else
 		daily = nil
 		local data = starter and ctx.DataService.GetData(starter)
+		difficulty = DifficultyData.Selected(data)
 		setActive(data and CurseData.Sanitize(data.Curses) or {})
 		endless = endlessFor(modeName, data and data.Endless)
 	end
@@ -151,6 +164,7 @@ function RunModifiers.EndRun()
 	setActive({})
 	daily = nil
 	endless = false
+	difficulty = "Standard"
 	RunModifiers.Publish()
 end
 
@@ -158,6 +172,7 @@ end
 -- starting bonus. Called once per run player after the start weapon is set.
 function RunModifiers.SetupRunPlayer(rp)
 	rp.Endless = endless
+	rp.Difficulty = difficulty
 	local d = daily
 	if not d then
 		return
@@ -265,6 +280,56 @@ end
 -- Lobby: picking curses
 ------------------------------------------------------------------------------------------
 
+-- Completion is additive: historical stats and existing challenge hero unlocks stay intact.
+function RunModifiers.CompleteDifficulty(player: Player, cleared: number, won: boolean)
+	local rp = ctx.RunManager.GetRunPlayer(player)
+	if not won or cleared < Config.Stages.WinMinStages or not rp or rp.DevTainted or rp.Daily or rp.Endless then
+		return
+	end
+	local data = ctx.DataService.GetData(player)
+	if not data then
+		return
+	end
+	local id = rp.Difficulty or difficulty
+	if not DifficultyData.Tiers[id] then
+		return
+	end
+	data.DifficultyClears = data.DifficultyClears or {}
+	if data.DifficultyClears[id] then
+		return
+	end
+	data.DifficultyClears[id] = true
+	local hero = id == "Veteran" and "Engineer" or id == "Nightmare" and "Necromancer" or nil
+	if hero then
+		data.OwnedCharacters = data.OwnedCharacters or {}
+		if not data.OwnedCharacters[hero] then
+			data.OwnedCharacters[hero] = true
+			ctx.RunManager.Notify(player, hero .. " unlocked!", Color3.fromRGB(120, 255, 160))
+		end
+	end
+	local index = table.find(DifficultyData.Order, id)
+	local nextId = index and DifficultyData.Order[index + 1]
+	if nextId then
+		ctx.RunManager.Notify(player, nextId .. " difficulty unlocked!", Color3.fromRGB(255, 210, 80))
+	end
+	ctx.GoldSystem.SyncProfile(player)
+end
+
+local function onSetDifficulty(player: Player, id: any)
+	local data = ctx.DataService.GetData(player)
+	if type(id) ~= "string" or not data or ctx.RunManager.IsParticipant(player) then
+		return
+	end
+	if not DifficultyData.IsUnlocked(data, id) then
+		ctx.RunManager.Notify(player, "Clear the previous difficulty to unlock this tier.", Color3.fromRGB(255, 210, 80))
+		return
+	end
+	data.Difficulty = id
+	player:SetAttribute("Difficulty", id)
+	ctx.GoldSystem.SyncProfile(player)
+	RunModifiers.Publish()
+end
+
 local function onSetCurses(player: Player, list: any)
 	local data = ctx.DataService.GetData(player)
 	if not data or ctx.RunManager.IsParticipant(player) then
@@ -297,15 +362,19 @@ function RunModifiers.Publish()
 	local phase = state:GetAttribute("Phase")
 	local list: { string } = {}
 	local endlessShown = false
+	local difficultyShown = "Standard"
 	if phase == "Running" or phase == "Results" then
 		list = active
 		endlessShown = endless
+		difficultyShown = difficulty
 	elseif phase == "Countdown" then
 		local starter = ctx.RunManager.GetStarter and ctx.RunManager.GetStarter()
 		local data = starter and ctx.DataService.GetData(starter)
 		list = data and CurseData.Sanitize(data.Curses) or {}
 		endlessShown = data ~= nil and endlessFor(tostring(state:GetAttribute("Mode")), data.Endless)
+		difficultyShown = DifficultyData.Selected(data)
 	end
+	state:SetAttribute("Difficulty", difficultyShown)
 	if state:GetAttribute("Endless") ~= endlessShown then
 		state:SetAttribute("Endless", endlessShown)
 	end
@@ -335,17 +404,20 @@ function RunModifiers.Init(c)
 	state:SetAttribute("DailyDay", RunModifiers.Today())
 	state:SetAttribute("CurseMax", CurseData.MaxActive)
 	state:SetAttribute("Endless", false)
+	state:SetAttribute("Difficulty", "Standard")
 	assert(Config.Data.SchemaVersion >= 6, "RunModifiers needs save schema 6")
 end
 
 function RunModifiers.Start()
 	Remotes.Listen("SetCurses", onSetCurses, 6)
 	Remotes.Listen("SetEndless", onSetEndless, 6)
+	Remotes.Listen("SetDifficulty", onSetDifficulty, 4)
 	ctx.DataService.OnProfileLoaded(function(player)
 		local data = ctx.DataService.GetData(player)
 		if data then
 			player:SetAttribute("Curses", CurseData.ToString(CurseData.Sanitize(data.Curses) or {}))
 			player:SetAttribute("Endless", data.Endless == true and Config.Endless.Enabled == true)
+			player:SetAttribute("Difficulty", DifficultyData.Selected(data))
 		end
 	end)
 	Players.PlayerRemoving:Connect(function()

@@ -25,7 +25,7 @@ local M = require("@self/meshes")
 local DM = require("@self/datamodel")
 
 local states = R.states
-local Vector3, CFrame = roblox.Vector3, roblox.CFrame
+local Vector2, Vector3, CFrame = roblox.Vector2, roblox.Vector3, roblox.CFrame
 
 local Mock = {}
 
@@ -195,6 +195,10 @@ function Mock.api()
 			error("no server module " .. name)
 		end
 		return R.requireModule(m)
+	end
+
+	function api.failDataStores(reads: boolean, writes: boolean, opening: boolean?)
+		R.dataStoreFailure = { Reads = reads, Writes = writes, Open = opening == true }
 	end
 
 	-- The client modules folder the running client uses (PlayerScripts copy).

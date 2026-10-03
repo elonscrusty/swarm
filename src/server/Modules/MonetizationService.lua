@@ -207,13 +207,15 @@ local function processReceipt(info): Enum.ProductPurchaseDecision
 		waited += 0.5
 		profile = ctx.DataService.GetProfile(player)
 	end
-	if not profile then
+	if not profile or profile.Released or profile.LockLost then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 
 	local purchaseId = tostring(info.PurchaseId)
 	if ctx.DataService.HasPurchase(player, purchaseId) then
-		return Enum.ProductPurchaseDecision.PurchaseGranted -- already granted earlier
+		-- An earlier attempt may have granted in memory but failed to save.
+		return ctx.DataService.ForceSave(player) and Enum.ProductPurchaseDecision.PurchaseGranted
+			or Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local handler = productHandlers[info.ProductId]
 	if not handler then

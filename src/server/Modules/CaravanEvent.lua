@@ -263,7 +263,7 @@ end
 -- An enemy type of this minute's mix that can come in a ring: no ranged, support,
 -- burrowing, wave-shy or boss types.
 local function waveType(): string
-	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
+	local row = EnemyData.GetSpawnRow(ctx.EnemySpawner.ProgressionTime())
 	local total = 0
 	local pool = {}
 	for id, w in pairs(row.Weights) do
@@ -345,8 +345,8 @@ local function succeed(c: Caravan)
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Alive and not rp.Returned and rp.Stats then
 			ctx.GoldSystem.AddRunGold(rp, gold * rp.Stats.GoldMult)
-			ctx.ItemSystem.Grant(rp, ctx.ItemSystem.Roll(K.Weights, rp.Stats.Luck), "Lost Caravan", true)
-			ctx.RunManager.HoldReward(rp)
+			local granted, dramatic = ctx.ItemSystem.Grant(rp, ctx.ItemSystem.Roll(K.Weights, rp.Stats.Luck), "Lost Caravan", true, true)
+			if granted then ctx.RunManager.HoldReward(rp, dramatic == true) end
 		end
 	end
 	ctx.RunManager.Broadcast("The caravan is saved! An item and gold for everyone.", Color3.fromRGB(255, 220, 120))

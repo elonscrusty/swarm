@@ -13,6 +13,7 @@ local TweenService = game:GetService("TweenService")
 
 local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Theme"))
 local ClientSettings = require(script.Parent.ClientSettings)
+local ClientPerformance = require(script.Parent.ClientPerformance)
 
 local UIAnim = {}
 
@@ -289,14 +290,14 @@ function UIAnim.Float(obj: GuiObject, pixels: number, seconds: number)
 end
 
 --[[
-	Flashy extras for the menus. All of them honour ClientSettings.Reduced() (they do
+	Flashy extras for the menus. All of them honour (ClientSettings.Reduced() or ClientPerformance.Reduced()) (they do
 	little or nothing) and clean up after themselves: Burst and Sweep are one-shot,
 	Motes returns a stop function the screen calls when it hides.
 ]]
 
 -- One light streak sweeps across `obj` once (the parent should clip). Returns nothing.
 function UIAnim.Sweep(obj: GuiObject, delay: number?, transparency: number?, seconds: number?)
-	if ClientSettings.Reduced() then
+	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
 	local streak = Instance.new("Frame")
@@ -330,7 +331,7 @@ end
 ]]
 function UIAnim.Burst(parent: GuiObject, center: UDim2, colors: { Color3 }, count: number?, spread: number?)
 	local n = count or 18
-	local reduced = ClientSettings.Reduced()
+	local reduced = (ClientSettings.Reduced() or ClientPerformance.Reduced())
 	if reduced then
 		n = math.min(n, 5)
 	end
@@ -367,7 +368,7 @@ end
 	Reduced effects: no motes at all.
 ]]
 function UIAnim.Motes(parent: GuiObject, count: number?, color: Color3?): () -> ()
-	if ClientSettings.Reduced() then
+	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return function() end
 	end
 	local layer = Instance.new("Frame")
@@ -379,6 +380,7 @@ function UIAnim.Motes(parent: GuiObject, count: number?, color: Color3?): () -> 
 	layer.Parent = parent
 	local rng = Random.new()
 	local tweens: { Tween } = {}
+	local paused = false
 	for _ = 1, count or 12 do
 		local size = rng:NextInteger(2, 5)
 		local mote = Instance.new("Frame")
@@ -397,12 +399,26 @@ function UIAnim.Motes(parent: GuiObject, count: number?, color: Color3?): () -> 
 		mote.Position = UDim2.fromScale(x, 1.04)
 		local t = TweenService:Create(mote, info, { Position = UDim2.fromScale(x + rng:NextNumber(-0.06, 0.06), -0.04) })
 		task.delay(rng:NextNumber(0, seconds), function()
-			if layer.Parent then
+			if layer.Parent and not paused then
 				t:Play()
 			end
 		end)
 		table.insert(tweens, t)
 	end
+	task.spawn(function()
+		while layer.Parent do
+			task.wait(0.5)
+			if not layer.Parent then break end
+			local reduced = ClientSettings.Reduced() or ClientPerformance.Reduced()
+			if paused ~= reduced then
+				paused = reduced
+				layer.Visible = not reduced
+				for _, t in ipairs(tweens) do
+					if reduced then t:Cancel() else t:Play() end
+				end
+			end
+		end
+	end)
 	return function()
 		for _, t in ipairs(tweens) do
 			t:Cancel()
@@ -413,7 +429,7 @@ end
 
 -- Staggered pop-in for a list of objects (each `step` seconds later), one call per screen.
 function UIAnim.Cascade(objs: { GuiObject }, step: number?, from: number?, limit: number?)
-	local reduced = ClientSettings.Reduced()
+	local reduced = (ClientSettings.Reduced() or ClientPerformance.Reduced())
 	for i, o in ipairs(objs) do
 		if i > (limit or 14) then
 			break
@@ -424,7 +440,7 @@ end
 
 -- A glow flash (a bright frame that fades) over `obj`: purchase / unlock feedback.
 function UIAnim.Flash(obj: GuiObject, color: Color3?)
-	if ClientSettings.Reduced() then
+	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
 	local f = Instance.new("Frame")
@@ -451,7 +467,7 @@ end
 
 -- A bright streak that crosses `obj` once (the parent should clip: bars, tiles).
 function UIAnim.SweepOnce(obj: GuiObject, color: Color3?, seconds: number?, transparency: number?)
-	if ClientSettings.Reduced() then
+	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
 	local streak = Instance.new("Frame")
@@ -473,7 +489,7 @@ end
 
 -- Radial sparks flying out of `center` (a UDim2 inside `parent`) and fading.
 function UIAnim.Sparks(parent: GuiObject, center: UDim2, color: Color3, count: number?, distance: number?, seconds: number?)
-	if ClientSettings.Reduced() then
+	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
 	local n = count or 10
@@ -506,7 +522,7 @@ end
 
 -- A ring that expands from `center` to `endSize` pixels while fading (level-up pulse).
 function UIAnim.Ring(parent: GuiObject, center: UDim2, color: Color3, endSize: number?, seconds: number?)
-	if ClientSettings.Reduced() then
+	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
 	local ring = Instance.new("Frame")
@@ -535,7 +551,7 @@ end
 
 -- Quick positional jitter that settles back where it started.
 function UIAnim.Shake(obj: GuiObject, pixels: number?, seconds: number?)
-	if ClientSettings.Reduced() then
+	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
 	local home = obj.Position

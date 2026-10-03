@@ -234,3 +234,11 @@ so layouts can be checked against them (`--no-coreui` hides it).
 axes with the catalog Offset / Size (Blender (x, y, z) → Roblox (-x, z, y), front = -Z).
 It prints every mismatch or missing piece (exit code 1). The `models` scene is the visual
 check: heroes and creatures must show their faces in the front 3/4 view.
+
+## Portable regression checks
+
+`python -X utf8 tools/run_regressions.py` runs the real-module server checks and the focused phone input/lifecycle checks. Pass `--lune <path>` and `--out <directory>` if needed. Server smoke scenes use `--set headless=on` to omit full UI layout; the run-server scene still initializes its travel overlay. Visual scenes retain the full client.
+
+For Windows rendering, set `SWARM_CHROMIUM` to an installed Chromium executable and use relative paths in `--job scene.json:output.png`. Pass `--set images=loaded` when assessing layouts with repository art already available: the default mock reports images unloaded, which intentionally leaves production fallbacks visible.
+
+These checks exercise real gameplay modules through a mock engine. They do not verify Roblox physics, live DataStores/teleports, asset permission, sound audibility or actual device FPS.

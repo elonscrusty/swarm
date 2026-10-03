@@ -34,6 +34,7 @@ local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local PassiveData = require(Shared:WaitForChild("PassiveData"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local UIAnim = require(script.Parent.UIAnim)
+local IdleFx = require(script.Parent.IdleFx)
 local AssetPreload = require(script.Parent.AssetPreload)
 local ArtImage = require(script.Parent.ArtImage)
 local UIKit = require(script.Parent.UIKit)
@@ -47,6 +48,7 @@ local DevInbox = require(script.Parent.DevInbox)
 local BugReportUI = require(script.Parent.BugReportUI)
 local Showcase = require(script.Parent.Showcase)
 local ClientSettings = require(script.Parent.ClientSettings)
+local ClientPerformance = require(script.Parent.ClientPerformance)
 local TeamUI = require(script.Parent.TeamUI)
 local MiniMap = require(script.Parent.MiniMap)
 local Tutorial = require(script.Parent.Tutorial)
@@ -373,8 +375,8 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 		band.BackgroundTransparency = 0.25
 		band.Visible = true
 		-- slams in: big, then settles, with a ring and sparks behind the words
-		UIAnim.Pop(label, 0, ClientSettings.Reduced() and 1.1 or 2.1)
-		if not ClientSettings.Reduced() then
+		UIAnim.Pop(label, 0, (ClientSettings.Reduced() or ClientPerformance.Reduced()) and 1.1 or 2.1)
+		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			local tint = Theme.Tint(color or P.gold_300, 0.45, 0.92)
 			UIAnim.Sparks(band, UDim2.fromScale(0.5, 0.45), tint, 12, 150, 0.6)
 			UIAnim.Ring(band, UDim2.fromScale(0.5, 0.45), tint, 260, 0.55)
@@ -419,7 +421,7 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 	if iconName then
 		dotFrame = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(22, 22), LayoutOrder = 1 }, face)
 		Icons.Draw(dotFrame, iconName, { Size = 22, Back = P.slate_900 })
-		if not ClientSettings.Reduced() then
+		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			-- the icon pops with a little spin
 			dotFrame.Rotation = -25
 			UIAnim.Tween(dotFrame, 0.4, { Rotation = 0 }, Enum.EasingStyle.Back)
@@ -432,12 +434,13 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 	local l = UIKit.Role(face, "Body", str, {
 		LayoutOrder = 2,
 		Size = UDim2.fromOffset(0, TS(Theme.Type.Body.Size) + 22),
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextColor3 = C.Text,
 	})
-	local _ = l
+	new("UISizeConstraint", { MaxSize = Vector2.new(math.max(120, virtualSize().X - 2 * margin() - 72), TS(Theme.Type.Body.Size) + 22) }, l)
 	UIAnim.Pop(holder, 0, 0.5)
-	if not ClientSettings.Reduced() then
+	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		-- a colour flash fades off the pill as it pops in
 		local glow = new("Frame", { Name = "Glow", BackgroundColor3 = accentOf(color), BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, holder)
 		UIKit.corner(glow, 999)
@@ -736,7 +739,7 @@ local pickedAt = 0 -- when a card was last picked (its punch plays before the cl
 -- others shrink and dim; the overlay closes right after (closeOffer).
 local function pickAnimation(index: number)
 	pickedAt = os.clock()
-	local reduced = ClientSettings.Reduced()
+	local reduced = (ClientSettings.Reduced() or ClientPerformance.Reduced())
 	local focus = levelUp.Focus[index]
 	if focus then
 		focus(true)
@@ -903,9 +906,9 @@ local function buildLevelUp()
 		Size = UDim2.fromOffset(230, 60),
 		Align = "Left",
 		LayoutOrder = 1,
-		OnClick = function()
+		OnClick = function(input)
 			task.defer(function()
-				if not confirmInput(nil) then
+				if not confirmInput(input) then
 					return
 				end
 				-- no picks until the new cards are in (re-armed if the server sends none)
@@ -933,9 +936,9 @@ local function buildLevelUp()
 		Size = UDim2.fromOffset(230, 60),
 		Align = "Left",
 		LayoutOrder = 2,
-		OnClick = function()
+		OnClick = function(input)
 			task.defer(function()
-				if confirmInput(nil) then
+				if confirmInput(input) then
 					offerOpen = false
 					offerArm.At = math.huge
 					Remotes.Get("LevelUpSkip"):FireServer()
@@ -1120,6 +1123,10 @@ local function cardTile(face: GuiObject, c, size: number, accent: Color3, popDel
 	}, holder)
 	UIKit.corner(halo, 999)
 	local tile = UIKit.Tile(holder, { Id = id, Size = size, Evolved = c.Type == "Evolve" })
+	local glyph = tile:FindFirstChild("Icon")
+	if glyph and glyph:IsA("GuiObject") then
+		offerArm.Fx.Add(IdleFx.Attach(glyph, "Float"))
+	end
 	local rim = c.Type ~= "Evolve" and tile:FindFirstChildOfClass("UIStroke")
 	if rim then
 		rim.Color = accent
@@ -1129,7 +1136,7 @@ local function cardTile(face: GuiObject, c, size: number, accent: Color3, popDel
 	-- the painted rarity frame (ui/frames, 9-slice) around the tile; the drawn rim stays
 	-- under it and is all there is when the frame is not uploaded
 	ArtImage.Frame(tile, ArtImage.CardBand(c), math.max(6, math.floor(size * 0.1)))
-	if not ClientSettings.Reduced() then
+	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		offerArm.Fx.Add(UIAnim.Glow(halo, "BackgroundTransparency", 0.86, 0.95, 1.8))
 		if popDelay then
 			local s = UIAnim.ScaleOf(holder)
@@ -1279,7 +1286,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		TextColor3 = labelColor,
 		ZIndex = 3,
 	}, Theme.TextSize.Caption + 1)
-	if (c.Rarity == "Rare" or c.Rarity == "Epic" or legendary) and not ClientSettings.Reduced() then
+	if (c.Rarity == "Rare" or c.Rarity == "Epic" or legendary) and not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		-- the rarer bands shine now and then (started once the card has landed level:
 		-- Roblox does not clip inside a rotated card)
 		task.delay(animate and (offerArm.Stagger * (index - 1) + 0.32) or 0, function()
@@ -1481,7 +1488,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		-- slight tilt and growing to full size in 0.3 s, then a light sweeps across; an
 		-- evolution lands with a gold burst. Reduced effects: a quick settle, no tilt.
 		local s = UIAnim.ScaleOf(hit)
-		if ClientSettings.Reduced() then
+		if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			s.Scale = 0.97
 			UIAnim.Tween(s, 0.12, { Scale = 1 })
 		else
@@ -1642,6 +1649,7 @@ local function offerImages(offer): { string }
 end
 
 local function showOffer(offer)
+	local samePanel = offer.PanelId ~= nil and lastOffer ~= nil and offer.PanelId == lastOffer.PanelId and levelUp.Overlay.Visible
 	offerArm.Token += 1
 	local token = offerArm.Token
 	lastOffer = offer
@@ -1662,10 +1670,16 @@ local function showOffer(offer)
 		skips > 0 and string.format("%d left · +%d gold", skips, skipGold) or (skipMax > 0 and "None left this run" or "Buy skips in Upgrades")
 	)
 	levelUp.Skip.SetEnabled(skips > 0)
-	levelUp.Title.Text = offer.Pending > 1 and string.format("LEVEL UP!  +%d", offer.Pending) or "LEVEL UP!"
-	UIAnim.Punch(levelUp.Title, ClientSettings.Reduced() and 0.1 or 0.25)
-	offerSeconds = math.max(1, offer.Seconds)
-	offerDeadline = os.clock() + offer.Seconds
+	local total = tonumber(offer.BatchTotal) or 1
+	local remaining = tonumber(offer.BatchRemaining) or 1
+	levelUp.Title.Text = total > 1 and string.format("LEVEL UP!  %d / %d", total - remaining + 1, total) or "LEVEL UP!"
+	if not samePanel then
+		UIAnim.Punch(levelUp.Title, (ClientSettings.Reduced() or ClientPerformance.Reduced()) and 0.1 or 0.25)
+		offerSeconds = math.max(1, offer.Seconds)
+		offerDeadline = os.clock() + offer.Seconds
+	else
+		offerDeadline = math.min(offerDeadline, os.clock() + offer.Seconds)
+	end
 	offerHint = Tutorial.LevelUpHint() or offerHint
 	offerOpen = true
 	show(levelUp.Overlay, "LevelUp", true)
@@ -1675,7 +1689,7 @@ local function showOffer(offer)
 		end
 		offerArm.Revealed = true
 		offerArm.ShownAt = os.clock()
-		local first = buildCards(true)
+		local first = buildCards(not samePanel)
 		offerArm.At = os.clock() + offerArm.Arm
 		UIKit.FocusIfGamepad(first)
 	end
@@ -1957,7 +1971,7 @@ do
 		chest.Sub.TextColor3 = e.NameColor:Lerp(C.TextMuted, 0.35)
 		chest.Detail.Text = e.Detail
 		chest.Marker.Color = e.Accent
-		local reduced = ClientSettings.Reduced()
+		local reduced = (ClientSettings.Reduced() or ClientPerformance.Reduced())
 		setRevealAlpha(0, not reduced)
 		if not reduced then
 			for _, s in ipairs(slots) do
@@ -1998,7 +2012,7 @@ do
 			spin *= k
 			revealT = math.max(0.6, revealT * k)
 		end
-		if spin < 0.3 or ClientSettings.Reduced() then
+		if spin < 0.3 or (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			spin = 0
 		end
 		local travel = spin > 0 and math.max(8, math.floor((R.Tiles or 26) * spin / baseSpin + 0.5)) or 0
@@ -2065,7 +2079,7 @@ do
 		reward.Shown = 0
 		reward.Total = 1
 		show(chest.Overlay, "Reward", false)
-		if not ClientSettings.Reduced() then
+		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			-- the panel lands with a little tilt
 			local panel = chest.Panel :: Frame
 			panel.Rotation = -4
@@ -2234,6 +2248,20 @@ do
 			end
 		end
 		local gold = tonumber(data.Gold) or 0
+		if data.Dramatic ~= true then
+			local lines = {}
+			for _, entry in ipairs(list) do
+				table.insert(lines, tostring(entry.Name) .. " " .. tostring(entry.Text))
+			end
+			if gold > 0 then
+				table.insert(lines, "+" .. UIKit.formatNumber(gold) .. " gold")
+			end
+			if #lines > 0 then
+				UIBuilder.Toast("Chest: " .. table.concat(lines, " · "), P.gold_300)
+			end
+			releaseIfIdle()
+			return
+		end
 		local extras = {}
 		for i = 2, #list do
 			table.insert(extras, tostring(list[i].Name) .. " " .. tostring(list[i].Text))
@@ -2286,6 +2314,11 @@ do
 		end
 		local r = RARITY[def.Rarity] or RARITY.Common
 		local n = tonumber(data.Count) or 1
+		if data.Dramatic ~= true then
+			UIBuilder.Toast(def.Name .. (n > 1 and string.format(" x%d", n) or ""), r.Color)
+			releaseIfIdle()
+			return
+		end
 		enqueue({
 			Land = def.Id,
 			Fill = itemFill,
@@ -2724,7 +2757,7 @@ local function onReviveOffer(data)
 	UIKit.FocusIfGamepad(revive.Buy.Instance)
 	-- the title slams in and the heart beats a few times (event-driven, no endless loop)
 	UIAnim.Pop(revive.Title, 0.05, 1.8)
-	if not ClientSettings.Reduced() then
+	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		revive.BeatToken = (revive.BeatToken or 0) + 1
 		local token = revive.BeatToken
 		for i = 0, 3 do
@@ -2847,6 +2880,7 @@ local function buildResults()
 	results.Stages = statTile(grid, "portal", "Stages", 4)
 	results.Gold = statTile(grid, "stat_Gold", "Gold", 5)
 	results.Level = statTile(grid, "chevronsUp", "Level", 6)
+	results.Settlement = text(body, "Small", "", { Name = "Settlement", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(14) * 3 + 8), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted })
 
 	-- rewards first (new best, unlocks, achievements: what a short screen must not hide),
 	-- then the build and the items
@@ -3091,7 +3125,7 @@ local function animateAccountXP(data: any)
 	local meter = results.XPMeter
 	local need = a and tonumber(a.Need) or 0
 	results.XPToken = (results.XPToken or 0) + 1
-	if not a or need <= 0 or ClientSettings.Reduced() then
+	if not a or need <= 0 or (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
 	local token = results.XPToken
@@ -3147,6 +3181,11 @@ local function onRunResult(data)
 	-- panel then sits over the lobby until closed (or its timer runs out)
 	results.InLobby = data.InLobby == true
 	results.Mode = type(data.Mode) == "string" and data.Mode or "Solo"
+	local retained = tonumber(data.Gold) or 0
+	local coinsEarned = tonumber(data.GoldEarned) or retained
+	local lost = tonumber(data.GoldLost) or 0
+	local cause = type(data.DeathCause) == "string" and data.DeathCause or ""
+	results.Settlement.Text = string.format("%s · %s coins earned · %s kept · %s lost", tostring(data.Difficulty or "Standard"), UIKit.formatNumber(coinsEarned), UIKit.formatNumber(retained), UIKit.formatNumber(lost)) .. (cause ~= "" and ("\nCause: " .. cause) or "")
 	-- portal returns before WinMinStages stages are a safe escape, not a win
 	-- Abandoned: left from the pause menu's MAIN MENU (counted as a loss)
 	results.Title.Text = data.Won and "VICTORY!" or (data.Portal and "ESCAPED" or (data.Abandoned and "RUN ENDED" or "DEFEATED"))
@@ -3195,7 +3234,7 @@ local function onRunResult(data)
 		results.Overlay:SetAttribute("BackdropTransparency", image and 0.5 or Theme.Alpha.Backdrop)
 		if image then
 			back.Image = image
-			if not results.Overlay.Visible and not ClientSettings.Reduced() then
+			if not results.Overlay.Visible and not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 				back.ImageTransparency = 1
 				UIAnim.Tween(back, 0.5, { ImageTransparency = 0 })
 			else
@@ -3266,8 +3305,8 @@ local function onRunResult(data)
 	-- their numbers count up
 	-- title slam: it drops in big and hard; a victory also throws sparks and a ring
 	local good = data.Won or data.Portal
-	UIAnim.Pop(results.Title, 0.1, ClientSettings.Reduced() and 1.2 or 2.4)
-	if not ClientSettings.Reduced() then
+	UIAnim.Pop(results.Title, 0.1, (ClientSettings.Reduced() or ClientPerformance.Reduced()) and 1.2 or 2.4)
+	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		task.delay(0.3, function()
 			if results.Overlay.Visible then
 				UIAnim.Shake(results.Title, good and 5 or 9, 0.35)
@@ -3279,7 +3318,7 @@ local function onRunResult(data)
 		end)
 	end
 	animateAccountXP(data)
-	if not ClientSettings.Reduced() then
+	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		local medal = results.Medal :: GuiObject
 		medal.Rotation = -160
 		UIAnim.Pop(medal, 0.05, 0.3)
@@ -3317,7 +3356,7 @@ local function onRunResult(data)
 		-- new best: the badge pops with a starburst
 		UIAnim.Pop(results.Best, 1.5, 0.3)
 		UIAnim.Punch(results.Time, 0.3)
-		if not ClientSettings.Reduced() then
+		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			task.delay(1.55, function()
 				local panel = results.Modal.Panel :: Frame
 				local best = results.Best :: GuiObject
@@ -3641,6 +3680,7 @@ function UIBuilder.Init(d: { [string]: any })
 		end,
 	})
 	LootUI.Build(root, {
+		CanRevive = TeamUI.CanRevive,
 		Show = show,
 		Hide = hide,
 		OnRelayout = onRelayout,

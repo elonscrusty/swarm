@@ -137,7 +137,7 @@ function ArtImage.Place(parent: Instance?, key: string?, props: { [string]: any 
 	img.Size = UDim2.fromScale(1, 1)
 	img.Active = false
 	local fadeIn: number? = nil
-	local idle: { any }? = nil
+	local idle: { [any]: any }? = nil
 	for k, v in pairs(props or {}) do
 		if k == "FadeIn" then
 			fadeIn = v

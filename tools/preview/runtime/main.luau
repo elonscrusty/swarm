@@ -148,4 +148,4 @@ end
 local errs = #R.log.errors
 print(string.format("[preview] %s on %s: %d parts, %d gui layers, %d errors, %d warnings, %.1fs simulated, %.1fs real -> %s",
 	sceneName, deviceName, #data.world.parts, #data.gui.layers, errs, #R.log.warnings, S.now, os.clock() - started, outPath))
-process.exit(0)
+process.exit(errs > 0 and 1 or 0)

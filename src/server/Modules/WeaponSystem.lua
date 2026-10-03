@@ -59,6 +59,7 @@ local function allocProjectile(): Projectile?
 	p.Target = nil
 	p.TargetUid = nil
 	p.Hostile = false
+	p.Cause = nil
 	p.Owner = nil
 	p.Weapon = nil
 	p.Age = 0
@@ -436,7 +437,7 @@ function Fire.Aura(rp, w, s, def)
 	local n = grid():QueryCircle(origin.X, origin.Z, radius, queryBuf)
 	local hits = table.move(queryBuf, 1, n, 1, {})
 	local chill = WeaponData.HasPerk(w, "Chill")
-	local now = os.clock()
+	local now = ctx.RunManager.GetRunTime()
 	for _, e in ipairs(hits) do
 		if e.Alive then
 			if chill then
@@ -801,7 +802,7 @@ function Fire.Nova(rp, w, s, def)
 	local radius = params.Radius * s.area
 	local n = grid():QueryCircle(origin.X, origin.Z, radius, queryBuf)
 	local hits = table.move(queryBuf, 1, n, 1, {})
-	local now = os.clock()
+	local now = ctx.RunManager.GetRunTime()
 	local slow = (evo and evo.DeepFreeze) and params.EvoSlow or params.Slow
 	local shatter = WeaponData.HasPerk(w, "Shatter")
 	local shardVisual = visualByte(evo and params.EvoVisual or params.Visual, w)
@@ -1005,7 +1006,7 @@ function Fire.TotemOne(rp, w, s, def)
 	p.Pulses = 0
 	p.Rooting = WeaponData.HasPerk(w, "Rooting")
 	p.Evo = evo ~= nil
-	p.Born = os.clock()
+	p.Born = ctx.RunManager.GetRunTime()
 	w.Live[p] = true
 end
 
@@ -1185,7 +1186,7 @@ function Fire.TurretOne(rp, w, s, def)
 	p.ShotTimer = 0.45
 	p.Shots = 0
 	p.Flak = WeaponData.HasPerk(w, "Flak")
-	p.Born = os.clock()
+	p.Born = ctx.RunManager.GetRunTime()
 	w.Live[p] = true
 	Fx.Sound("Hit")
 end
@@ -1303,7 +1304,7 @@ onWeaponKill = function(rp, pos: Vector3, dead)
 	if not trait or not rp.Alive or not rp.Stats then
 		return
 	end
-	local now = os.clock()
+	local now = ctx.RunManager.GetRunTime()
 	if now < (rp.SoulAt or 0) or rng:NextNumber() >= trait.Chance or #freeIds < EXTRA_MIN_FREE then
 		return
 	end
@@ -1333,6 +1334,8 @@ function WeaponSystem.SpawnHostile(pos: Vector3, dir: Vector3, speed: number, da
 	end
 	p.Kind = "Straight"
 	p.Hostile = true
+	local boss = ctx.EnemySpawner.Boss
+	p.Cause = boss and boss.BossData and (boss.BossData.DisplayName .. " projectile") or "Enemy projectile"
 	p.Visual = visual
 	p.Pos = ground(pos)
 	p.Vel = dir * speed
@@ -1460,7 +1463,7 @@ local function collidePlayers(p: Projectile): boolean
 		if rp.Alive and rp.Root then
 			local d = (rp.Root.Position - p.Pos) * FLAT
 			if d.Magnitude <= p.Radius + PLAYER_RADIUS then
-				ctx.RunManager.DamagePlayer(rp, p.Damage)
+				ctx.RunManager.DamagePlayer(rp, p.Damage, p.Cause)
 				return true
 			end
 		end
@@ -1874,7 +1877,7 @@ end
 
 function WeaponSystem.Step(dt: number)
 	if ctx.RunManager.IsSimulating() then
-		local now = os.clock()
+		local now = ctx.RunManager.GetRunTime()
 		-- 1) fire weapons
 		for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 			if rp.Alive and not rp.Paused then

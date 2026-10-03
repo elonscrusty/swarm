@@ -98,7 +98,7 @@ if rp then
 	rp.InvulnUntil = math.huge -- the smoke test is about the loop, not survival
 end
 -- --set weapons=new: the dev loadout of every weapon added with the Alchemist / Engineer /
--- Necromancer (all at level 8; evolved after the travel) runs through the whole loop
+-- Necromancer (all at max rank; evolved after the travel) runs through the whole loop
 local newWeapons = preview.args.weapons == "new"
 if newWeapons then
 	send("DevCommand", "NewWeapons")

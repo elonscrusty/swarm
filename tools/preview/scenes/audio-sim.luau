@@ -15,6 +15,7 @@ local Config = C.shared("Config")
 if not Audio then
 	return
 end
+if preview.args.headless == "on" then Audio.Init() end
 
 local fails = 0
 local function check(ok: boolean, label: string, detail: string?)

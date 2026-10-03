@@ -2,12 +2,9 @@
 	GoldSystem.lua
 	Run gold and the lobby economy (characters, skins, meta upgrades, settings).
 
-	Gold earned in a run goes straight into the saved profile the moment it is earned,
-	so it is never lost on death, disconnect or a server crash after the next autosave.
-	rp.Gold (player attribute RunGold, the HUD coin counter) is the gold this run has
-	banked so far. Chests and shrines (LootSystem) spend from it with SpendRunGold, which
-	takes the same amount back out of the save: a run can only spend what it earned,
-	savings from earlier runs are never touched, and results show the gold taken home.
+	Run earnings are saved separately in RunEscrow until extraction or defeat. Chests
+	spend only this ledger. Settlement retains all earnings on extraction, or a stage-based
+	share on defeat. Existing savings and purchased coins never enter the at-risk ledger.
 	All prices are read from the shared data modules on the server; the client only
 	sends ids, never amounts.
 ]]
@@ -28,35 +25,97 @@ local rng = Random.new()
 -- Run gold
 ------------------------------------------------------------------------------------------
 
+function GoldSystem.RetentionRate(cleared: number): number
+	return math.min(Config.Gold.FailureRetainCap, Config.Gold.FailureRetainBase
+		+ math.max(0, math.floor(cleared)) * Config.Gold.FailureRetainPerStage)
+end
+
+-- Saved ledgers left by a crashed server are settled once when the profile loads.
+function GoldSystem.RecoverEscrow(data): number
+	local ledger = data.RunEscrow
+	if type(ledger) ~= "table" then
+		return 0
+	end
+	local gold, stages = tonumber(ledger.Gold) or 0, tonumber(ledger.Stages) or 0
+	local kept = 0
+	if gold == gold and stages == stages and gold < math.huge and stages < math.huge then
+		kept = math.floor(math.max(0, gold) * GoldSystem.RetentionRate(stages))
+	end
+	data.Gold += kept
+	data.RunEscrow = nil
+	return kept
+end
+
+function GoldSystem.BeginRun(rp)
+	local data = ctx.DataService.GetData(rp.Player)
+	if not data or rp.GoldSettlement then
+		return
+	end
+	local id = tostring(rp.RunId)
+	if data.RunEscrow and data.RunEscrow.Id == id then
+		return
+	end
+	GoldSystem.RecoverEscrow(data)
+	data.RunEscrow = { Id = id, Gold = rp.Gold or 0, Stages = 0 }
+end
+
+function GoldSystem.UpdateRunProgress(rp, cleared: number)
+	local data = ctx.DataService.GetData(rp.Player)
+	if data and data.RunEscrow and data.RunEscrow.Id == tostring(rp.RunId) then
+		data.RunEscrow.Stages = math.max(data.RunEscrow.Stages, cleared)
+	end
+end
+
+function GoldSystem.SettleRun(rp, extracted: boolean, cleared: number)
+	if rp.GoldSettlement then
+		return rp.GoldSettlement
+	end
+	local data = ctx.DataService.GetData(rp.Player)
+	local ledger = data and data.RunEscrow
+	local earned = ledger and ledger.Id == tostring(rp.RunId) and ledger.Gold or 0
+	local rate = extracted and 1 or GoldSystem.RetentionRate(cleared)
+	local kept = math.floor(earned * rate)
+	if data and ledger and ledger.Id == tostring(rp.RunId) then
+		data.Gold += kept
+		data.RunEscrow = nil
+	end
+	rp.GoldSettlement = { Earned = earned, Retained = kept, Lost = earned - kept, Rate = rate }
+	return rp.GoldSettlement
+end
+
 -- Adds gold (after gamepass multipliers and the run's curse bonus, CurseData) to the run
--- counter and the save. Returns amount.
+-- counter and its saved escrow. Returns amount.
 function GoldSystem.AddRunGold(rp, base: number): number
 	local player: Player = rp.Player
 	local data = ctx.DataService.GetData(player)
-	if not data or base <= 0 then
+	if not data or base <= 0 or base ~= base or base == math.huge or rp.GoldSettlement then
 		return 0
 	end
+	GoldSystem.BeginRun(rp)
 	local curse = ctx.RunModifiers and ctx.RunModifiers.GoldMult() or 1
 	local amount = math.floor(base * ctx.MonetizationService.GoldMultiplier(player) * curse + 0.5)
-	data.Gold += amount
+	data.RunEscrow.Gold += amount
 	rp.Gold += amount
 	player:SetAttribute("RunGold", rp.Gold)
 	return amount
 end
 
--- Gold this run can still spend at chests / shrines: what it banked, never more than the
--- save holds (the save always holds at least that much: nothing else spends in a run).
+-- Only the current run's unspent escrow can pay for chests and shrines.
 function GoldSystem.RunWallet(rp): number
 	local data = ctx.DataService.GetData(rp.Player)
 	if not data then
 		return 0
 	end
-	return math.max(0, math.min(rp.Gold, data.Gold))
+	local ledger = data.RunEscrow
+	return ledger and ledger.Id == tostring(rp.RunId) and math.max(0, math.min(rp.Gold, ledger.Gold)) or 0
 end
 
 -- Spends run gold (chests, shrines). False (and nothing spent) when the run can't afford
--- it. Keeps the save and the run counter in step; the save is written by the autosave.
+-- it. Keeps the saved escrow and run counter in step.
 function GoldSystem.SpendRunGold(rp, amount: number): boolean
+	if amount ~= amount or math.abs(amount) == math.huge then
+		return false
+	end
 	amount = math.floor(amount)
 	if amount <= 0 then
 		return true
@@ -65,7 +124,7 @@ function GoldSystem.SpendRunGold(rp, amount: number): boolean
 	if not data or GoldSystem.RunWallet(rp) < amount then
 		return false
 	end
-	data.Gold -= amount
+	data.RunEscrow.Gold -= amount
 	rp.Gold -= amount
 	rp.GoldSpent = (rp.GoldSpent or 0) + amount
 	rp.Player:SetAttribute("RunGold", rp.Gold)
@@ -96,6 +155,8 @@ function GoldSystem.SyncProfile(player: Player)
 	local M = ctx.MonetizationService
 	Remotes.FireClient("ProfileSync", player, {
 		Gold = data.Gold,
+		Difficulty = data.Difficulty,
+		DifficultyClears = data.DifficultyClears,
 		Meta = data.Meta,
 		OwnedCharacters = data.OwnedCharacters,
 		SelectedCharacter = data.SelectedCharacter,
@@ -146,7 +207,7 @@ end
 
 local function onBuyCharacter(player: Player, characterId: any)
 	local data = ctx.DataService.GetData(player)
-	if not data or type(characterId) ~= "string" then
+	if not data or not inLobby(player) or type(characterId) ~= "string" then
 		return
 	end
 	local def = CharacterData.Characters[characterId]
@@ -178,7 +239,7 @@ end
 -- double tap never buys two levels.
 local function onBuyMeta(player: Player, upgradeId: any, expectedLevel: any)
 	local data = ctx.DataService.GetData(player)
-	if not data or type(upgradeId) ~= "string" or not MetaUpgradeData.Upgrades[upgradeId] then
+	if not data or not inLobby(player) or type(upgradeId) ~= "string" or not MetaUpgradeData.Upgrades[upgradeId] then
 		return
 	end
 	local owned = data.Meta[upgradeId] or 0
@@ -295,6 +356,10 @@ function GoldSystem.Start()
 		GoldSystem.SyncProfile(player)
 	end, 2)
 	ctx.DataService.OnProfileLoaded(function(player)
+		local data = ctx.DataService.GetData(player)
+		if data then
+			GoldSystem.RecoverEscrow(data)
+		end
 		GoldSystem.SyncProfile(player)
 	end)
 end

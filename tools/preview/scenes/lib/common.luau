@@ -164,6 +164,11 @@ end
 
 -- Starts the client exactly like Roblox (copies StarterPlayerScripts, runs ClientMain).
 function C.startClient()
+	-- Server logic scenes can omit UI layout; visual scenes keep the normal client.
+	if preview.args.headless == "on" then
+		preview.startClient(false)
+		return
+	end
 	C.try("start client", preview.startClient)
 	preview.advance(0.1)
 end

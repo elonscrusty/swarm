@@ -2,8 +2,8 @@
 -- through the real systems (LevelUpSystem.AddWeapon, passives, ItemSystem.Grant), printing
 -- after each piece: the "Synergies" attribute and the stats the synergy touches (the
 -- change when it completes must equal its Bonus). Ember Field is left one piece short
--- (Candle); then a real level-up offer is rerolled until a card names the synergy it
--- completes, and the scene ends on that offer (HUD synergy chip + card hint render).
+-- (Candle); real upgrade cards must keep recipes hidden, and completing the build reveals
+-- its active bonus.
 -- run: render.sh synergy-sim --studio --devices pc,phone --max-time 200
 local C = lib("common")
 local Players = game:GetService("Players")
@@ -126,29 +126,17 @@ local adv2, h2, n2 = SynergyData.Advances(owned(), "Passive", "Luck")
 preview.log(string.format("Advances(Luck) -> %s %d/%d (want nil)", adv2 and adv2.Name or "nil", h2, n2))
 preview.log("active:", tostring(me:GetAttribute("Synergies")))
 
--- a real offer with the Candle card
-rp.Rerolls = 60
+-- Recipes stay hidden on real offers; the completed build still announces its bonus.
+rp.NextUpgradeCombatTime = 0
 LU.QueueLevels(rp, 1)
-advance(0.5)
-local found = nil
-for r = 1, 60 do
-	for _, card in ipairs(rp.Offer or {}) do
-		if card.Synergy then
-			found = card
-			preview.log(string.format("offer after %d rerolls: %s %s -> %q ready=%s lines=%d", r - 1, card.Type, card.Id, card.Synergy, tostring(card.SynergyReady), #(card.Lines or {})))
-			for _, l in ipairs(card.Lines or {}) do
-				preview.log(string.format("    %s %s -> %s", tostring(l.Label), tostring(l.From), tostring(l.To)))
-			end
-		end
-	end
-	if found then
-		break
-	end
-	preview.remote("LevelUpReroll"):FireServer()
-	advance(0.4)
+assert(rp.Offer, "expected a real offer")
+for _, choice in ipairs(rp.Offer) do
+    assert(choice.Synergy == nil and choice.SynergyReady == nil, "upgrade card exposed a hidden recipe")
 end
-if not found then
-	preview.log("FAIL: no synergy card in 60 rerolls")
-end
+LU.Cancel(rp)
+assert(not table.find(SynergyData.Active(owned()), "EmberField"), "recipe completed before Candle")
+addPassive("Candle")
+assert(table.find(SynergyData.Active(owned()), "EmberField"), "discovered synergy did not activate")
+assert(string.find(me:GetAttribute("Synergies"), "EmberField", 1, true), "discovered synergy was not published")
 advance(1.6)
-preview.log("done")
+preview.log("PASS: hidden recipes and discovered active synergies")

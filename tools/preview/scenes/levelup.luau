@@ -41,8 +41,9 @@ if WeaponData and PassiveData and Config and StatSheet then
 		local evo = def.Evolution
 		local hint, ready = nil, false
 		if evo and level >= Config.LevelUp.EvolveHintLevel then
-			ready = passives[evo.Passive] ~= nil
-			hint = string.format("Evolves at Lv %d with %s%s", WeaponData.MaxLevel, PassiveData.Passives[evo.Passive].Name, ready and " (owned)" or "")
+			local required = math.min(3, PassiveData.MaxLevelOf(evo.Passive))
+			ready = (passives[evo.Passive] or 0) >= required
+			hint = string.format("Evolves at Lv %d with %s Lv %d%s", WeaponData.MaxLevel, PassiveData.Passives[evo.Passive].Name, required, ready and " (ready)" or "")
 		end
 		return { Type = "WeaponUp", Id = id, Level = level, Name = def.Name, Rank = string.format("Lv %d → %d / %d", level - 1, level, WeaponData.MaxLevel), Lines = lines, Description = joined(lines), Hint = hint, HintReady = ready, Color = def.Color, Rarity = r, RarityLabel = label, RarityColor = color }
 	end
@@ -85,7 +86,7 @@ if WeaponData and PassiveData and Config and StatSheet then
 		table.insert(choices, { Type = "Evolve", Id = "Longbow", Level = WeaponData.MaxLevel, Name = edef.Evolution.Name, Rank = "EVOLUTION", Lines = WeaponData.CardLines("Longbow", WeaponData.MaxLevel, WeaponData.MaxLevel, true), Description = edef.Evolution.Description, Color = edef.Color, Rarity = "Legendary", RarityLabel = label, RarityColor = color })
 		table.insert(choices, weaponUp("MagicOrb", 5))
 		local fletch = passiveCard("Fletching", 1)
-		fletch.Hint = "Evolves Longbow at Lv 8"
+		fletch.Hint = "Evolves Longbow at Lv 12 with Fletching Lv 3"
 		table.insert(choices, fletch)
 	else
 		table.insert(choices, weaponUp("Whip", 6))
@@ -111,6 +112,9 @@ C.fire("LevelUpOffer", {
 	Seconds = 25,
 	Level = 14,
 	Pending = 1,
+	PanelId = 1,
+	BatchRemaining = 4,
+	BatchTotal = 4,
 })
 C.setState({ Frozen = true, LevelUpPause = true })
 local pick = tonumber(preview.args.pick)

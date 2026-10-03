@@ -183,8 +183,11 @@ end
 	first one (Step). Not while travelling. The item itself was granted before this is
 	called: closing, skipping or timing never changes what the player owns.
 ]]
-function RunManager.HoldReward(rp)
+function RunManager.HoldReward(rp, dramatic: boolean?)
 	rp.RewardSeq = (rp.RewardSeq or 0) + 1
+	if dramatic == false then
+		return
+	end
 	if phase ~= "Running" or ctx.StageManager.IsHolding() or not rp.Alive or rp.Returned then
 		return
 	end
@@ -204,7 +207,7 @@ end
 -- A short invulnerability after a choice / reward closes (Config.Player.ChoiceGraceSeconds).
 function RunManager.GrantChoiceGrace(rp)
 	if rp.Alive then
-		rp.InvulnUntil = math.max(rp.InvulnUntil or 0, os.clock() + (Config.Player.ChoiceGraceSeconds or 0))
+		rp.InvulnUntil = math.max(rp.InvulnUntil or 0, runTime + (Config.Player.ChoiceGraceSeconds or 0))
 	end
 end
 
@@ -538,7 +541,7 @@ local function revive(rp, message: string)
 	setAwaiting(rp, false)
 	setDownedLook(rp, false)
 	setHP(rp, rp.Stats.MaxHP * Config.Player.ReviveHPFraction)
-	rp.InvulnUntil = os.clock() + Config.Player.ReviveInvulnSeconds
+	rp.InvulnUntil = runTime + Config.Player.ReviveInvulnSeconds
 	rp.Player:SetAttribute("Alive", true)
 	if rp.Root then
 		ctx.EnemySpawner.KillInRadius(rp.Root.Position, Config.Player.ReviveClearRadius, rp)
@@ -562,7 +565,7 @@ local function finalizeDeath(rp)
 	setAwaiting(rp, false)
 	rp.TimeSurvived = runTime
 	rp.Player:SetAttribute("Alive", false)
-	ctx.LevelUpSystem.Cancel(rp)
+	ctx.LevelUpSystem.Cancel(rp, true)
 	ctx.WeaponSystem.ClearOwner(rp)
 	setDownedLook(rp, true)
 	Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
@@ -570,7 +573,7 @@ local function finalizeDeath(rp)
 	Fx.Sound("Death")
 	local rules = reviveRules()
 	if rules and #runPlayers > 1 and (rp.PartnerRevives or 0) < rules.PerRun then
-		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen! Stand next to them to revive.", Color3.fromRGB(255, 90, 90))
+		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen! Hold REVIVE beside them.", Color3.fromRGB(255, 90, 90))
 	else
 		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen!", Color3.fromRGB(255, 90, 90))
 	end
@@ -580,8 +583,8 @@ end
 
 --[[
 	DUO / TRIO: a fallen player (dead, not waiting on the revive offer) is revived when a
-	living teammate stands next to them for PartnerRevive.Seconds. Progress decays when
-	the teammate steps away. Each player can be partner-revived a few times per run.
+	living teammate holds REVIVE nearby for PartnerRevive.Seconds. Moving, releasing
+	or leaving range resets progress. Each player has a limited number of revives.
 ]]
 partnerRevives = function(dt: number)
 	local D = reviveRules()
@@ -592,7 +595,8 @@ partnerRevives = function(dt: number)
 		if not rp.Alive and not rp.AwaitingRevive and not rp.Returned and rp.Root and (rp.PartnerRevives or 0) < D.PerRun then
 			local helper = nil
 			for _, other in ipairs(runPlayers) do
-				if other ~= rp and other.Alive and other.Root then
+				if other ~= rp and other.Alive and other.Root and other.ReviveHeld and not other.Paused
+					and (not other.MoveDir or other.MoveDir.Magnitude < 0.1) then
 					if ((other.Root.Position - rp.Root.Position) * FLAT).Magnitude <= D.Radius then
 						helper = other
 					end
@@ -602,7 +606,7 @@ partnerRevives = function(dt: number)
 			if helper then
 				rp.ReviveProgress = before + dt / D.Seconds
 			else
-				rp.ReviveProgress = math.max(0, before - dt / D.Seconds)
+				rp.ReviveProgress = 0
 			end
 			if math.abs((rp.ReviveProgress or 0) - before) > 0 then
 				rp.Player:SetAttribute("ReviveProgress", math.clamp(rp.ReviveProgress, 0, 1))
@@ -623,6 +627,8 @@ partnerRevives = function(dt: number)
 end
 
 local function onDowned(rp)
+	rp.LastDownTime = runTime
+	rp.ReviveHeld = false
 	setHP(rp, 0)
 	if rp.RevivesLeft > 0 then
 		rp.RevivesLeft -= 1
@@ -657,7 +663,7 @@ local function onDowned(rp)
 end
 
 -- Server-only damage entry point (enemy contact, explosions, boss projectiles).
-function RunManager.DamagePlayer(rp, amount: number)
+function RunManager.DamagePlayer(rp, amount: number, cause: string?)
 	if not RunManager.IsSimulating() or not rp.Alive then
 		return
 	end
@@ -671,13 +677,16 @@ function RunManager.DamagePlayer(rp, amount: number)
 		return
 	end
 	local now = os.clock()
-	if now < rp.InvulnUntil then
+	if runTime < rp.InvulnUntil then
 		return
 	end
 	local dmg = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
 	local taken = dmg -- after armor / Iron Plate, before the shield (Barbed Mail scales on it)
 	dmg = ctx.ItemSystem.AbsorbHit(rp, dmg) -- Guardian Ward shield first
 	setHP(rp, rp.HP - dmg)
+	if dmg > 0 and rp.HP <= 0 then
+		rp.DeathCause = cause or "Swarm damage"
+	end
 	if now - (rp.LastHurtFx or 0) > Config.Player.HurtFlashSeconds then
 		rp.LastHurtFx = now
 		Fx.PlayerEvent(rp.Player, "hurt")
@@ -746,6 +755,8 @@ local function newRunPlayer(player: Player)
 		Kills = 0,
 		Gold = 0, -- gold banked this run (earned minus spent at chests / shrines)
 		GoldSpent = 0,
+		LastDownTime = 0,
+		ReviveHeld = false,
 		Items = {}, -- run items { [id] = count } (ItemSystem)
 		ItemOrder = {},
 		ShieldMax = 0,
@@ -764,6 +775,7 @@ local function newRunPlayer(player: Player)
 		DevTainted = runDevTainted, -- a DEV command was used in this run (see devCommand)
 		WinPaid = false,
 	}
+	ctx.GoldSystem.BeginRun(rp)
 	return rp
 end
 
@@ -922,6 +934,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	if not data then
 		return false, nil
 	end
+	ctx.GoldSystem.SettleRun(rp, rp.Extracted == true, ctx.StageManager.StagesCleared())
 	local newBest, unlocked = false, nil
 	local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
 	if rp.DevTainted then
@@ -953,6 +966,9 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	data.TutorialDone = true
 	-- retention: the daily score, account XP, the leaderboards (results show the first two)
 	local cleared = ctx.StageManager.StagesCleared()
+	if ctx.RunModifiers.CompleteDifficulty then
+		ctx.RunModifiers.CompleteDifficulty(rp.Player, cleared, won and not rp.Endless)
+	end
 	local dailyInfo = ctx.RunModifiers.CommitDaily(rp, cleared, ctx.StageManager.LastClearTime(), t)
 	local accountInfo = ctx.AccountService.AwardRun(rp.Player, {
 		Seconds = t,
@@ -1014,6 +1030,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		rp.WinPaid = true
 		ctx.GoldSystem.AddRunGold(rp, Config.Gold.WinBonus + Config.Gold.StageClearBonus * cleared)
 	end
+	rp.Extracted = portal
 	local data = ctx.DataService.GetData(player)
 	local bestStageBefore = data and (data.Stats.BestStage or 0) or 0
 	local newBest, unlocked = saveRunStats(rp, won)
@@ -1035,7 +1052,12 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		WinMinStages = Config.Stages.WinMinStages,
 		Time = math.floor(rp.TimeSurvived),
 		Kills = rp.Kills,
-		Gold = rp.Gold, -- banked: earned minus what chests / shrines took
+		Gold = rp.GoldSettlement and rp.GoldSettlement.Retained or rp.Gold,
+		GoldEarned = rp.GoldSettlement and rp.GoldSettlement.Earned or rp.Gold,
+		GoldLost = rp.GoldSettlement and rp.GoldSettlement.Lost or 0,
+		GoldRetention = rp.GoldSettlement and rp.GoldSettlement.Rate or 1,
+		DeathCause = not portal and not rp.Abandoned and not rp.Alive and rp.DeathCause or nil,
+		Difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard",
 		GoldSpent = rp.GoldSpent or 0,
 		Items = ctx.ItemSystem.Summary(rp),
 		Level = rp.Level,
@@ -1275,7 +1297,7 @@ function RunManager.TravelPlayers(arena)
 		else
 			setHP(rp, math.max(rp.HP, rp.Stats.MaxHP * S.TravelHealFraction))
 		end
-		rp.InvulnUntil = os.clock() + Config.Player.ReviveInvulnSeconds
+		rp.InvulnUntil = runTime + Config.Player.ReviveInvulnSeconds
 		RunManager.TeleportPlayer(rp, placeOnArena(arena, i, n))
 		RunManager.ApplyMovement(rp)
 	end
@@ -1694,6 +1716,7 @@ function RunManager.Step(dt: number)
 		if rp.RewardUntil and (now >= rp.RewardUntil or not rp.Alive) then
 			RunManager.EndReward(rp)
 		end
+		ctx.GoldSystem.UpdateRunProgress(rp, ctx.StageManager.StagesCleared())
 		local root: BasePart? = rp.Root
 		if root and root.Parent then
 			local look = root.CFrame.LookVector * FLAT
@@ -1869,6 +1892,20 @@ function RunManager.Start()
 			finalizeDeath(rp)
 		end
 	end, 2)
+
+	-- A release must clear held input even when repeated presses exhaust the limiter.
+	Remotes.Get("ReviveHold").OnServerEvent:Connect(function(player, held)
+		if held == false then
+			local rp = byPlayer[player]
+			if rp then rp.ReviveHeld = false end
+		end
+	end)
+	Remotes.Listen("ReviveHold", function(player, held)
+		local rp = byPlayer[player]
+		if rp and held == true then
+			rp.ReviveHeld = rp.Alive and not rp.Returned and not rp.Paused and phase == "Running"
+		end
+	end, 12)
 
 	ctx.DataService.OnProfileLoaded(function(player)
 		ctx.MonetizationService.RefreshAttributes(player)

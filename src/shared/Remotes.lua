@@ -75,6 +75,8 @@ Remotes.ClientToServer = {
 	"EquipCosmetic", -- ("Title" | "Color" | "Ring" | "Frame", id or "") an earned achievement / level-track cosmetic
 	"SetCurses", -- ({curseId}) lobby curse pick, at most CurseData.MaxActive (RunModifiers)
 	"SetEndless", -- (boolean) lobby ENDLESS switch for SOLO / DUO / TRIO runs (RunModifiers, Config.Endless)
+	"SetDifficulty", -- (tier id) validated unlocked lobby difficulty
+	"ReviveHold", -- (boolean) a living teammate starts/stops holding the revive interaction
 	"BugReport", -- ({ Category, Text, Client }) player bug report, filtered and rate limited (BugReportService)
 	"BugInbox", -- ("Page", cursor?) | ("SetStatus", id, status) DEV inbox, server-side allowlist
 	"LeaderboardRequest", -- (boardId) a Config.Leaderboards.Order id (LeaderboardService)

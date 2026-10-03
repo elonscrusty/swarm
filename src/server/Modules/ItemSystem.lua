@@ -92,12 +92,12 @@ end
 	Gives one copy of `id` to the player: stats, the client's strip and an item popup.
 	source = what it came from ("Small chest", "Shrine of Chance", ...), shown in the popup.
 ]]
--- reward = a chest / shrine / altar paid it: the item goes in the reward panel and the run
--- pauses briefly (RunManager.HoldReward); otherwise it is a corner popup.
-function ItemSystem.Grant(rp, id: string, source: string?, reward: boolean?): boolean
+-- Ordinary rewards stay compact; legendary finds and encounter finales get a showcase.
+-- The second return value tells the caller whether to protect/pause for the showcase.
+function ItemSystem.Grant(rp, id: string, source: string?, reward: boolean?, dramatic: boolean?): (boolean, boolean)
 	local def = ItemData.Items[id]
 	if not def or not rp.Items then
-		return false
+		return false, false
 	end
 	-- capped items (Phoenix Feather, MaxStacks 2): a copy past the cap re-rolls into another
 	-- item of the same rarity that isn't capped out
@@ -110,7 +110,7 @@ function ItemSystem.Grant(rp, id: string, source: string?, reward: boolean?): bo
 			end
 		end
 		if #options == 0 then
-			return false
+			return false, false
 		end
 		id = options[rng:NextInteger(1, #options)]
 		def = ItemData.Items[id]
@@ -122,16 +122,17 @@ function ItemSystem.Grant(rp, id: string, source: string?, reward: boolean?): bo
 	end
 	ItemSystem.Refresh(rp)
 	ItemSystem.Send(rp)
+	local showcase = reward == true and (dramatic == true or def.Rarity == "Legendary")
 	local player: Player = rp.Player
 	if player.Parent then
-		Remotes.FireClient("ItemGained", player, { Id = id, Count = n, Source = source, Reward = reward == true })
+		Remotes.FireClient("ItemGained", player, { Id = id, Count = n, Source = source, Reward = reward == true, Dramatic = showcase })
 	end
 	if rp.Root then
 		local color = def.Rarity == "Legendary" and Palette.gold_300 or (def.Rarity == "Uncommon" and Palette.slate_300 or Palette.ivory_200)
 		Fx.Ring(rp.Root.Position, def.Rarity == "Legendary" and 14 or 8, color)
 	end
 	Fx.Sound("Item")
-	return true
+	return true, showcase
 end
 
 ------------------------------------------------------------------------------------------

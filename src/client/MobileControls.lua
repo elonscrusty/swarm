@@ -305,6 +305,10 @@ function MobileControls.Init()
 
 	UserInputService.WindowFocusReleased:Connect(function()
 		table.clear(keys)
+		stickInput = nil
+		stickVector = Vector2.zero
+		gamepadVector = Vector2.zero
+		base.Visible = false
 	end)
 
 	RunService:BindToRenderStep("SwarmMove", Enum.RenderPriority.Input.Value + 1, function(dt: number)

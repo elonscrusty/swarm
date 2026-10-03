@@ -84,6 +84,8 @@ local function defaultData()
 	return {
 		Version = Config.Data.SchemaVersion,
 		Gold = 0,
+		Difficulty = "Standard",
+		DifficultyClears = { Standard = false, Veteran = false, Nightmare = false },
 		Meta = {},
 		OwnedCharacters = { [CharacterData.Default] = true },
 		SelectedCharacter = CharacterData.Default,
@@ -198,6 +200,7 @@ function DataService.Migrate(data: any): { [string]: any }
 	if type(data) ~= "table" then
 		return defaultData()
 	end
+	local legacyDifficulty = data.DifficultyClears == nil
 	local version = tonumber(data.Version) or 0
 	while version < Config.Data.SchemaVersion do
 		local step = MIGRATIONS[version]
@@ -222,7 +225,7 @@ function DataService.Migrate(data: any): { [string]: any }
 			data.Stats[k] = v
 		end
 	end
-	if type(data.Gold) ~= "number" or data.Gold ~= data.Gold then
+	if type(data.Gold) ~= "number" or data.Gold ~= data.Gold or math.abs(data.Gold) == math.huge then
 		data.Gold = 0
 	end
 	data.Gold = math.max(0, math.floor(data.Gold))
@@ -284,6 +287,28 @@ function DataService.Migrate(data: any): { [string]: any }
 	if not CharacterData.Characters[data.SelectedCharacter] or not data.OwnedCharacters[data.SelectedCharacter] then
 		data.SelectedCharacter = CharacterData.Default
 	end
+	if data.Difficulty ~= "Standard" and data.Difficulty ~= "Veteran" and data.Difficulty ~= "Nightmare" then
+		data.Difficulty = "Standard"
+	end
+	if type(data.DifficultyClears) ~= "table" then
+		data.DifficultyClears = {}
+	end
+	for _, id in ipairs({ "Standard", "Veteran", "Nightmare" }) do
+		data.DifficultyClears[id] = data.DifficultyClears[id] == true
+	end
+	-- Existing recorded winners keep access to the next tier after the redesign.
+	if legacyDifficulty and (data.Stats.Wins or 0) > 0 then
+		data.DifficultyClears.Standard = true
+	end
+	if type(data.RunEscrow) ~= "table" or type(data.RunEscrow.Id) ~= "string" then
+		data.RunEscrow = nil
+	else
+		for _, key in ipairs({ "Gold", "Stages" }) do
+			local value = tonumber(data.RunEscrow[key])
+			data.RunEscrow[key] = value and value == value and math.abs(value) < math.huge
+				and math.max(0, math.floor(value)) or 0
+		end
+	end
 	data.Version = Config.Data.SchemaVersion
 	return data
 end
@@ -294,6 +319,9 @@ end
 
 local function update(key: string, transform: (any) -> any): (boolean, any)
 	if not store then
+		if not RunService:IsStudio() then
+			return false, "Live DataStores unavailable"
+		end
 		local result = transform(memoryStore[key])
 		if result ~= nil then
 			memoryStore[key] = result
@@ -580,7 +608,7 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 	if not profile then
-		player:Kick("Your data is still in use by another server. Please wait a minute and rejoin.")
+		player:Kick("Your save could not be opened. Please wait a minute and rejoin.")
 		return
 	end
 	profiles[player] = profile
@@ -617,11 +645,15 @@ function DataService.Init(_ctx)
 			return (result :: DataStore):GetAsync("__probe")
 		end)
 		if not probeOk then
-			warn("[DataService] DataStores unavailable, using memory only: " .. tostring(probeErr))
-			store = nil
+			warn("[DataService] DataStore probe failed: " .. tostring(probeErr))
+			-- A transient live read failure must not replace existing saves with defaults.
+			-- Keep the live store so normal retrying UpdateAsync determines availability.
+			if RunService:IsStudio() then
+				store = nil
+			end
 		end
 	else
-		warn("[DataService] DataStores unavailable, using memory only: " .. tostring(result))
+		warn("[DataService] DataStores unavailable: " .. tostring(result))
 	end
 end
 

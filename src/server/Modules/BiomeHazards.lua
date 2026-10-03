@@ -22,6 +22,7 @@
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local Hazards = require(script.Parent.Hazards)
 
 local BiomeHazards = {}
 
@@ -30,6 +31,9 @@ local H = (Config.Arenas :: any).Hazards or {}
 local hazards: { any } = {}
 local timer = 0
 local tracked: { [any]: boolean } = {} -- run players whose terrain state was touched
+local eruptionTimer = 0
+local arenaActive = false
+local arenaName = ""
 
 local function kindAt(x: number, z: number): any?
 	for _, h in ipairs(hazards) do
@@ -60,7 +64,7 @@ local function setTerrain(rp, kind: string?)
 		ctx.RunManager.ApplyMovement(rp)
 	end
 	if kind == "Lava" then
-		rp.LavaNext = os.clock() + ((H.Lava and H.Lava.Grace) or 0.25)
+		rp.LavaNext = ctx.RunManager.GetRunTime() + ((H.Lava and H.Lava.Grace) or 0.25)
 	end
 	if rp.Player and rp.Player.Parent then
 		rp.Player:SetAttribute("Terrain", kind)
@@ -81,7 +85,7 @@ local function resetPlayer(rp)
 end
 
 local function stepPlayers()
-	local now = os.clock()
+	local now = ctx.RunManager.GetRunTime()
 	local players = ctx.RunManager.GetRunPlayers()
 	-- players who left the run (returned through the portal, disconnected) let go
 	for rp in pairs(tracked) do
@@ -100,7 +104,7 @@ local function stepPlayers()
 		setTerrain(rp, kind)
 		if kind == "Lava" and now >= (rp.LavaNext or 0) then
 			rp.LavaNext = now + ((H.Lava and H.Lava.Tick) or 0.5)
-			ctx.RunManager.DamagePlayer(rp, (H.Lava and H.Lava.Damage) or 6)
+			ctx.RunManager.DamagePlayer(rp, ((H.Lava and H.Lava.Damage) or 6) * ctx.StageManager.DamageMult(), "Lava")
 		end
 	end
 end
@@ -113,7 +117,7 @@ local function stepEnemies()
 	if not active then
 		return
 	end
-	local now = os.clock()
+	local now = ctx.RunManager.GetRunTime()
 	local hold = ((H.CheckInterval or 0.1) * 2.5)
 	for _, e in ipairs(active) do
 		if e.Alive ~= false and not e.Boss and not (e.Def and e.Def.FlyHeight) and e.Pos then
@@ -143,6 +147,10 @@ end
 -- The new stage's arena (after MapBuilder.BuildArena). Clears every player's terrain.
 function BiomeHazards.SetArena(arena)
 	hazards = (arena and arena.Hazards) or {}
+	arenaActive = arena ~= nil
+	arenaName = (arena and arena.Name) or ""
+	eruptionTimer = Config.Enemies.StageHazards.Every
+	Hazards.Clear("Biome")
 	timer = 0
 	BiomeHazards.ResetPlayers()
 end
@@ -157,6 +165,8 @@ end
 -- The run ended: no hazards, every player back on plain floor.
 function BiomeHazards.Clear()
 	hazards = {}
+	arenaActive = false
+	Hazards.Clear("Biome")
 	BiomeHazards.ResetPlayers()
 end
 
@@ -165,6 +175,25 @@ function BiomeHazards.Count(): number
 end
 
 function BiomeHazards.Step(dt: number)
+	if not ctx.RunManager.IsSimulating() then return end
+	local D = Config.Enemies.StageHazards
+	if arenaActive and ctx.StageManager.GetStage() >= D.FirstStage and ctx.StageManager.GetPhase() == "Explore" then
+		eruptionTimer -= dt
+		if eruptionTimer <= 0 then
+			eruptionTimer = D.Every
+			local made = 0
+			for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+				if rp.Alive and rp.Root and not rp.Paused and made < D.MaxTargets then
+					local p = rp.Root.Position
+					local pos = Vector3.new(p.X, Config.ArenaOrigin.Y, p.Z)
+					local frost = arenaName == "Snow"
+					Hazards.Strike(pos, D.Radius, D.Warn, D.Damage * ctx.StageManager.DamageMult(),
+						{ Group = "Biome", Style = frost and "frost" or "venom", Cause = frost and "Frost fracture" or "Ground eruption" })
+					made += 1
+				end
+			end
+		end
+	end
 	if #hazards == 0 then
 		return
 	end

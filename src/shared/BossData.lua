@@ -54,7 +54,7 @@ BossData.Bosses = {
 		Phases = {
 			{
 				Name = "Queen",
-				Above = 0.5,
+				Above = 0.4,
 				Speed = 1,
 				Cycle = { "Charge", "VenomBurst", "StingerRing", "Burrow", "Summon" },
 			},
@@ -66,6 +66,7 @@ BossData.Bosses = {
 				-- the twist: every charge is a double charge (a second lane is shown and run
 				-- right after the first one, re-aimed at the nearest player)
 				Twist = "DoubleCharge",
+				FollowUps = { Charge = "VenomBurst" }, -- keeps full recovery and the next move's telegraph
 				Roar = 1.4,
 				Message = "THE QUEEN IS ENRAGED!",
 			},
@@ -140,7 +141,7 @@ BossData.Bosses = {
 		Phases = {
 			{
 				Name = "Matriarch",
-				Above = 0.5,
+				Above = 0.4,
 				Speed = 1,
 				Cycle = { "DustStorm", "Dive", "GlimmerMines", "Summon" },
 			},
@@ -152,6 +153,7 @@ BossData.Bosses = {
 				-- no damage) and the Dust Storm sends a second wave with a turned gap
 				Cycle = { "DustStorm", "WingGust", "Dive", "GlimmerMines", "WingGust", "Summon" },
 				Twist = "Gusts",
+				FollowUps = { Dive = "GlimmerMines" }, -- keeps full recovery and the next move's telegraph
 				Roar = 1.4,
 				Message = "THE MATRIARCH WHIPS UP A TEMPEST!",
 			},
@@ -227,7 +229,7 @@ BossData.Bosses = {
 		Phases = {
 			{
 				Name = "Warlord",
-				Above = 0.5,
+				Above = 0.4,
 				Speed = 1,
 				Cycle = { "HornCharge", "GroundPound", "WarBanner", "HornCharge", "GroundPound", "Summon" },
 			},
@@ -239,6 +241,7 @@ BossData.Bosses = {
 				-- the twist: every pound is a double pound (the bands come back from the
 				-- outside in, so the safe band changes)
 				Twist = "DoublePound",
+				FollowUps = { GroundPound = "HornCharge" }, -- keeps full recovery and the next move's telegraph
 				Roar = 1.4,
 				Message = "THE WARLORD GOES BERSERK!",
 			},
@@ -304,7 +307,7 @@ BossData.Bosses = {
 		Phases = {
 			{
 				Name = "Mother",
-				Above = 0.5,
+				Above = 0.4,
 				Speed = 1,
 				Cycle = { "EggBarrage", "AcidPools", "BroodCall", "EggBarrage", "AcidPools" },
 			},
@@ -315,6 +318,7 @@ BossData.Bosses = {
 				Cycle = { "EggBarrage", "AcidPools", "BroodCall", "EggBarrage", "AcidPools" },
 				-- the twist: every acid pool drips a trail of smaller pools back toward her
 				Twist = "Trails",
+				FollowUps = { EggBarrage = "AcidPools" }, -- keeps full recovery and the next move's telegraph
 				Roar = 1.4,
 				Message = "THE HIVE MOTHER SWELLS WITH ACID!",
 			},
@@ -387,7 +391,7 @@ BossData.Bosses = {
 		Phases = {
 			{
 				Name = "Sentinel",
-				Above = 0.5,
+				Above = 0.4,
 				Speed = 1,
 				Cycle = { "RootLines", "ThornVolley", "BrambleRing", "RootLines", "Sproutling" },
 			},
@@ -399,6 +403,7 @@ BossData.Bosses = {
 				-- the twist: root lines come in two sets (the second re-aimed, shown at once
 				-- after the first erupts) and the bramble ring closes twice, its gap turned
 				Twist = "Overgrowth",
+				FollowUps = { ThornVolley = "RootLines" }, -- keeps full recovery and the next move's telegraph
 				Roar = 1.4,
 				Message = "THE BRIAR SENTINEL IS ENRAGED!",
 			},
@@ -477,7 +482,7 @@ BossData.Bosses = {
 		Phases = {
 			{
 				Name = "Colossus",
-				Above = 0.5,
+				Above = 0.4,
 				Speed = 1,
 				Cycle = { "GroundSlam", "IceLanes", "FrostBreath", "ShardRain", "GroundSlam", "IceLanes" },
 			},
@@ -489,6 +494,7 @@ BossData.Bosses = {
 				-- the twist: a frost armour (FrostArmor below) soaks all damage until it is
 				-- broken; breaking it staggers him, and it grows back after a while
 				Twist = "FrostArmor",
+				FollowUps = { IceLanes = "FrostBreath" }, -- keeps full recovery and the next move's telegraph
 				Roar = 1.6,
 				Message = "THE COLOSSUS GROWS FROST ARMOUR! Break it!",
 			},

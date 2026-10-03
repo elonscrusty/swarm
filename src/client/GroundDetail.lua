@@ -33,6 +33,7 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Palette = require(Shared:WaitForChild("Palette"))
 local ClientSettings = require(script.Parent:WaitForChild("ClientSettings"))
+local ClientPerformance = require(script.Parent:WaitForChild("ClientPerformance"))
 
 local GroundDetail = {}
 
@@ -141,7 +142,7 @@ local function parseSegs(s: any): { Seg }
 	if type(s) ~= "string" then
 		return out
 	end
-	for ax, az, bx, bz, w in string.gmatch(s, "([-%d.]+),([-%d.]+),([-%d.]+),([-%d.]+),([-%d.]+)") do
+	for ax, az, bx, bz, w in string.gmatch(s, "([%d.%-]+),([%d.%-]+),([%d.%-]+),([%d.%-]+),([%d.%-]+)") do
 		table.insert(out, { AX = tonumber(ax) or 0, AZ = tonumber(az) or 0, BX = tonumber(bx) or 0, BZ = tonumber(bz) or 0, W = tonumber(w) or 0 })
 	end
 	return out
@@ -152,7 +153,7 @@ local function parseCircles(s: any): { Circle }
 	if type(s) ~= "string" then
 		return out
 	end
-	for x, z, r in string.gmatch(s, "([-%d.]+),([-%d.]+),([-%d.]+)") do
+	for x, z, r in string.gmatch(s, "([%d.%-]+),([%d.%-]+),([%d.%-]+)") do
 		table.insert(out, { X = tonumber(x) or 0, Z = tonumber(z) or 0, R = tonumber(r) or 0 })
 	end
 	return out
@@ -294,9 +295,9 @@ end
 
 -- Small integer hash → 0..1 (fixed per cell / slot / arena).
 local function frac(a: Ctx, cx: number, cz: number, slot: number): number
-	local h = (cx * 73856093) ~ (cz * 19349663) ~ (slot * 83492791) ~ a.Seed
-	h = (h * 2654435761) % 4294967296
-	h = ((h ~ (h // 65536)) * 2246822519) % 4294967296
+	local h = bit32.bxor(cx * 73856093, cz * 19349663, slot * 83492791, a.Seed)
+	h = (h * 1664525 + 1013904223) % 4294967296
+	h = bit32.bxor(h, bit32.rshift(h, 16))
 	return (h % 1000003) / 1000003
 end
 
@@ -379,7 +380,7 @@ end
 
 local function refreshBudget()
 	local max = isTouchDevice() and MAX_PARTS_TOUCH or MAX_PARTS
-	if ClientSettings.Reduced() then
+	if ClientSettings.Reduced() or ClientPerformance.Reduced() then
 		max = math.floor(max * REDUCED_SHARE)
 	end
 	budget = math.max(0, max)
@@ -456,12 +457,12 @@ end
 
 -- Camera footprint on the floor, in cells: the view trapezoid of the run camera (pitch
 -- ~55°, looking along -Z) approximated by a rectangle in camera-yaw space, padded by a cell.
-local function footprint(cam: Camera): (number, number, number, number, Vector3, Vector3)?
+local function footprint(cam: Camera): (number?, number?, number?, number?, Vector3?, Vector3?, Vector3?)
 	local cf = cam.CFrame
 	local eye = cf.Position
 	local look = cf.LookVector
 	if look.Y >= -0.05 or eye.Y <= FLOOR_Y + 2 then
-		return nil
+		return nil, nil, nil, nil, nil, nil, nil
 	end
 	local t = (eye.Y - FLOOR_Y) / -look.Y
 	local focus = eye + look * t
@@ -607,6 +608,25 @@ end
 
 local started = false
 
+local function resizeBudget()
+	local before = budget
+	refreshBudget()
+	if before == budget then
+		return
+	end
+	releaseAll()
+	while #pool > budget do
+		local p = table.remove(pool)
+		if p then
+			local i = table.find(free, p)
+			if i then
+				table.remove(free, i)
+			end
+			p:Destroy()
+		end
+	end
+end
+
 function GroundDetail.Init()
 	if started then
 		return
@@ -615,19 +635,7 @@ function GroundDetail.Init()
 	refreshBudget()
 	ClientSettings.OnChanged(function(key)
 		if key == "ReducedEffects" then
-			refreshBudget()
-			-- shrink: drop the whole footprint, the next update refills within the budget
-			releaseAll()
-			while #pool > budget do
-				local p = table.remove(pool)
-				if p then
-					local i = table.find(free, p)
-					if i then
-						table.remove(free, i)
-					end
-					p:Destroy()
-				end
-			end
+			resizeBudget()
 		end
 	end)
 
@@ -649,6 +657,7 @@ function GroundDetail.Init()
 			return
 		end
 		acc = 0
+		resizeBudget()
 		local cam = workspace.CurrentCamera
 		if ctx and cam and player:GetAttribute("InRun") == true then
 			update(cam)

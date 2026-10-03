@@ -62,6 +62,7 @@ local TeleportService = game:GetService("TeleportService")
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
+local DifficultyData = require(game:GetService("ReplicatedStorage").Shared.DifficultyData)
 
 local RunServers = {}
 
@@ -69,6 +70,7 @@ export type Ticket = {
 	V: number,
 	Mode: string,
 	Endless: boolean,
+	Difficulty: string,
 	Curses: { string },
 	Arena: string,
 	Day: number,
@@ -193,6 +195,7 @@ function RunServers.SanitizeTicket(raw: any): Ticket?
 	return {
 		V = cfg().TicketVersion,
 		Mode = raw.Mode,
+		Difficulty = raw.Mode ~= CurseData.DailyMode and type(raw.Difficulty) == "string" and DifficultyData.Tiers[raw.Difficulty] ~= nil and raw.Difficulty or "Standard",
 		Endless = raw.Endless == true and Config.Endless.Enabled == true and table.find(Config.Endless.Modes, raw.Mode) ~= nil,
 		Curses = CurseData.Sanitize(raw.Curses) or {},
 		Arena = arena,
@@ -226,6 +229,7 @@ function RunServers.BuildTicket(list: { Player }, mode: string, starter: Player,
 	return {
 		V = cfg().TicketVersion,
 		Mode = mode,
+		Difficulty = mode ~= CurseData.DailyMode and DifficultyData.Selected(data) or "Standard",
 		Endless = data ~= nil and data.Endless == true,
 		Curses = data and CurseData.Sanitize(data.Curses) or {},
 		Arena = arena,
@@ -664,6 +668,12 @@ local function startTicketRun()
 		if data then
 			data.Curses = table.clone(t.Curses)
 			data.Endless = t.Endless
+			-- Join data is not authority. Validate the transported choice against the
+			-- original host's loaded save, or the replacement host if they never arrived.
+			local allowed = DifficultyData.IsUnlocked(data, t.Difficulty)
+			data.Difficulty = allowed and t.Difficulty or "Standard"
+			starter:SetAttribute("Difficulty", data.Difficulty)
+			if not allowed then notify(starter, "That difficulty is locked. Starting Standard.", WARN) end
 			starter:SetAttribute("Curses", CurseData.ToString(t.Curses))
 			starter:SetAttribute("Endless", t.Endless)
 		end

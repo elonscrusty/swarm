@@ -300,10 +300,12 @@ local function onOffer(data)
 	end
 	offer = data
 	chosen = false
-	ui.ChoiceTitle.Text = string.format("STAGE %d CLEARED", data.Stage or 1)
-	ui.ChoiceSub.Text = data.Endless and "ENDLESS · The portal only leads deeper. Leave any time from the pause menu."
+	ui.ChoiceTitle.Text = data.Complete and "EXPEDITION COMPLETE" or string.format("STAGE %d CLEARED", data.Stage or 1)
+	ui.ChoiceSub.Text = data.Complete and "Five stages cleared. Return safely with all your winnings."
+		or data.Endless and "ENDLESS · The portal only leads deeper. Leave any time from the pause menu."
 		or (data.Group and "The portal is open. Go deeper together, or take your winnings home." or "The portal is open. Go deeper, or take your winnings home.")
 	ui.Return.Instance.Visible = data.Endless ~= true
+	ui.Next.Instance.Visible = data.Complete ~= true
 	ui.StatStages.Text = tostring(data.StagesCleared or 0)
 	ui.StatTime.Text = UIKit.formatTime(data.Time or 0)
 	ui.StatKills.Text = UIKit.formatNumber(data.Kills or 0)
@@ -336,7 +338,7 @@ local function onOffer(data)
 	end
 	UIAnim.CountTo(ui.StatKills, 0, tonumber(data.Kills) or 0, UIKit.formatNumber, 0.7)
 	UIAnim.CountTo(ui.StatGold, 0, tonumber(data.Gold) or 0, UIKit.formatNumber, 0.8)
-	UIKit.FocusIfGamepad(ui.Next.Instance)
+	UIKit.FocusIfGamepad(data.Complete and ui.Return.Instance or ui.Next.Instance)
 end
 
 ------------------------------------------------------------------------------------------
@@ -561,7 +563,7 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 			if chosen then
 				note = ready ~= "" and string.format("Waiting for your team (%s ready) · %ds", ready, left) or string.format("Travelling in %ds", left)
 			else
-				note = string.format((offer and offer.Endless) and "Next stage in %ds" or "Next stage in %ds unless you return", left)
+				note = string.format((offer and offer.Complete) and "Returning in %ds" or (offer and offer.Endless) and "Next stage in %ds" or "Next stage in %ds unless you return", left)
 			end
 			if state:GetAttribute("Frozen") then
 				note ..= "  ·  paused"

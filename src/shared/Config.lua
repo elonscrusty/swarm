@@ -94,7 +94,7 @@ Config.Stages = {
 	ReviveOnTravelHPFraction = 0.5, -- fallen teammates stand up again on the next stage
 	-- RETURN TO LOBBY counts as a WIN (Stats.Wins) only with at least this many stages
 	-- cleared; the gold bonus (Config.Gold.WinBonus + StageClearBonus) is paid either way.
-	WinMinStages = 3,
+	WinMinStages = 5,
 }
 
 ------------------------------------------------------------------------------------------
@@ -175,6 +175,9 @@ Config.Slots = {
 ------------------------------------------------------------------------------------------
 Config.LevelUp = {
 	Choices = 3,
+	FirstOfferSeconds = 20,
+	OfferIntervalSeconds = 50,
+	ChoicesPerPanel = 4,
 	-- If a player doesn't pick in this many seconds a random card is chosen for them,
 	-- so nobody can stay paused (and protected) forever.
 	AutoPickSeconds = 25,
@@ -192,9 +195,9 @@ Config.LevelUp = {
 	WeightEvolution = 40, -- an available evolution is almost always offered
 	-- a passive that evolves a weapon you own (and don't have yet) is this much likelier
 	EvolutionPassiveWeightMult = 1.5,
-	-- weapon cards from this level on say what the weapon evolves with ("Evolves at Lv 8
+	-- weapon cards from this level on say what the weapon evolves with ("Evolves at Lv 12
 	-- with Heart (owned)")
-	EvolveHintLevel = 6,
+	EvolveHintLevel = 9,
 	-- Rarity names → card colour (UI) and label.
 	Rarities = {
 		Common = { Label = "Upgrade", Color = Color3.fromRGB(205, 210, 220) },
@@ -211,10 +214,11 @@ Config.LevelUp = {
 ------------------------------------------------------------------------------------------
 Config.XP = {
 	-- XP needed to go from level L to L+1 = Base + min(L, CapLevel) * PerLevel
-	-- (grows by PerLevel each level, then stays flat after CapLevel).
+	-- Early costs grow by PerLevel; after CapLevel, each extra level adds AfterCapPerLevel.
 	Base = 10,
 	PerLevel = 5,
 	CapLevel = 20,
+	AfterCapPerLevel = 2,
 	GemValues = { Small = 1, Medium = 5, Large = 25 },
 	GemPoolSize = 500,
 	MagnetSpeed = 45, -- studs/s a gem flies toward the player once inside pickup radius
@@ -237,6 +241,9 @@ Config.XP = {
 -- GOLD
 ------------------------------------------------------------------------------------------
 Config.Gold = {
+	FailureRetainBase = 0.25,
+	FailureRetainPerStage = 0.15,
+	FailureRetainCap = 0.85,
 	-- Normal enemies give 1-3 gold to the player who killed them. KillGoldChance is how
 	-- often a kill pays at all (1 = every kill; lower it if gold comes in too fast).
 	MinPerKill = 1,
@@ -332,8 +339,8 @@ Config.Chests = {
 	CostExponent = 1.2, -- stage 2 = x2.3, stage 3 = x3.7, stage 5 = x6.9
 	-- hold E / gamepad X / the touch button this long to open a chest (tune in playtesting)
 	HoldSeconds = { Small = 0.4, Large = 0.4, Golden = 0.4, Guarded = 0.4 },
-	-- A chest / shrine / altar reward pauses the whole run (like a level-up) while its reel
-	-- (Reel below) spins and the item is revealed. The client ends the pause when it is done
+	-- Rare reward showcases protect the chooser (pause solo) while their reel spins.
+	-- Ordinary item rewards continue combat. The client ends a showcase when it is done
 	-- (remote RewardClose); the server never waits longer than RewardPauseSeconds after a
 	-- reward (+ RewardQueueSeconds for each one queued behind it), and never more than
 	-- RewardPauseMax in a row however many rewards arrive.
@@ -383,13 +390,12 @@ Config.Shrines = {
 }
 
 ------------------------------------------------------------------------------------------
--- GUARDED ALTAR (LootSystem.lua): one per stage. A free rare chest on an altar. Dormant
--- until a living player comes within WakeRadius; then a group of elite guards climbs out
+-- GUARDED ALTAR (LootSystem.lua): an optional encounter drawn by Config.Encounters.
+-- Hold its prompt deliberately; then a group of elite guards climbs out
 -- around it. When every guard is dead the chest unlocks; opening it gives EVERY living
 -- teammate one item (Config.Chests.Weights.Guarded). Guards drop gems, not elite chests.
 ------------------------------------------------------------------------------------------
 Config.Guarded = {
-	WakeRadius = 24,
 	Guards = 2, -- + GuardsPerStage x stage + GuardsPerExtraPlayer x (players - 1) ...
 	GuardsPerStage = 1,
 	GuardsPerExtraPlayer = 1,
@@ -428,6 +434,9 @@ Config.Caravan = {
 -- ENEMIES
 ------------------------------------------------------------------------------------------
 Config.Enemies = {
+	MaxHazards = 48, -- cancelled warnings never deal damage
+	EliteStageChanceGrowth = 0.12,
+	StageHazards = { FirstStage = 3, Every = 22, Warn = 1.4, Radius = 5, Damage = 10, MaxTargets = 2 },
 	MaxLive = 200, -- hard cap on living enemies (must be <= PoolSize)
 	PoolSize = 300, -- enemy models pre-built at server start
 	MaxLiveRanged = 12, -- at most this many Ranged enemies (Spitters) alive; mini-waves never use them
@@ -496,6 +505,9 @@ Config.Difficulty = {
 -- SPAWNING
 ------------------------------------------------------------------------------------------
 Config.Spawn = {
+	OpeningSeconds = 60,
+	OpeningMult = 0.65,
+	StageProgressionSeconds = 120,
 	TickSeconds = 0.4, -- how often the spawner tops up toward the target count
 	MaxPerTick = 8,
 	-- "ScreenEdge": spawn on a ring just off-screen around a random player, clamped
@@ -745,9 +757,9 @@ Config.Monetization = {
 }
 
 ------------------------------------------------------------------------------------------
--- AUDIO (every Id below is a verified free Creator Store asset or a built-in rbxasset)
--- Verified 2026-10-02 through apis.roblox.com (toolbox-service item details + Open Cloud
--- assets): creator, free, public, type and duration are recorded in docs/AUDIO.md.
+-- AUDIO (existing Creator Store assets and built-in Roblox sounds)
+-- Music metadata checked 2026-10-02 through apis.roblox.com toolbox-service; see
+-- docs/AUDIO.md for verified metadata, inherited effect attribution and live checks.
 --   "Roblox" (user 1)            = Roblox's own sound-effect uploads (GUI / UI packs)
 --   "APMOfficial" (7462718749)   = the APM Music library Roblox licenses for free use in
 --                                  any Roblox experience (the Creator Store music catalogue)
@@ -775,6 +787,7 @@ Config.Sounds = {
 	Swing = { Id = "rbxasset://sounds/swordlunge.wav", Volume = 0.11, Category = "Player", MinGap = 0.18, PitchVar = 0.1 },
 	Throw = { Id = "rbxasset://sounds/Rocket whoosh 01.wav", Volume = 0.06, Category = "Player", MinGap = 0.25, Pitch = 1.3, PitchVar = 0.1 },
 	Hurt = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.55, Category = "Player", MinGap = 0.3, Pitch = 0.85, PitchVar = 0.05 },
+	Heartbeat = { Id = "rbxasset://sounds/collide.wav", Volume = 0.18, Category = "Player", MinGap = 0.4, Pitch = 0.45, PitchVar = 0 },
 	Death = { Id = "rbxasset://sounds/collide.wav", Volume = 0.6, Category = "Player", Pitch = 0.6, PitchVar = 0 },
 	LevelUp = { Id = "rbxassetid://15675043410", Volume = 0.6, Category = "Player", MinGap = 0.4, PitchVar = 0 }, -- Roblox_UI_Tonal_Stinger (Roblox)
 	Revive = { Id = "rbxassetid://15675043410", Volume = 0.55, Category = "Player", MinGap = 0.4, Pitch = 1.2, PitchVar = 0 }, -- Roblox_UI_Tonal_Stinger (Roblox)
@@ -975,9 +988,9 @@ Config.Arenas = {
 --   Solo  starts at once (no countdown).
 --   Duo / Trio  count down (Config.Run.CountdownSeconds) so others can join; the starter
 --   can press START NOW once someone joined, and a full run starts by itself.
--- A fallen player can be revived by a teammate standing next to them (PartnerRevive).
+-- A fallen player can be revived by a teammate holding the revive control nearby.
 local PARTNER_REVIVE = {
-	Seconds = 3, -- stand this long next to a fallen teammate to revive them
+	Seconds = 2, -- hold continuously in range; release or movement away resets progress
 	Radius = 7,
 	HPFraction = 0.4,
 	PerRun = 3, -- per downed player
@@ -1093,6 +1106,11 @@ Config.Movement = {
 	ServerTolerance = 1.35, -- server speed check slack on top of the hop cap (lag, knockback)
 	ButtonSize = 84, -- touch JUMP button (pixels before UIScale)
 	ButtonMargin = 26, -- from the right and bottom safe-area edges
+}
+
+Config.Encounters = {
+	Types = { "Guarded", "Caravan", "Runes", "Treasure" },
+	Count = { 1, 2 },
 }
 
 return Config

@@ -1,6 +1,6 @@
 -- weapons-sim: boots the REAL server (like stage-sim) and runs a solo run with the dev
 -- loadout of every weapon added with the Alchemist / Engineer / Necromancer (DevCommand
--- "NewWeapons": all eight at level 8), then evolves them all (DevCommand "EvolveWeapons"),
+-- "NewWeapons": all eight at level 12), then evolves them all (DevCommand "EvolveWeapons"),
 -- printing what is alive (projectiles by kind, kills, damage, HP) every few seconds. A logic
 -- smoke test for the new weapon behaviours, the hero traits and their effects; the final
 -- frame is the arena with the effects. Run it with --studio (dev commands are Studio only):

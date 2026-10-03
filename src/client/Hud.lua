@@ -27,7 +27,7 @@
 	The portal arrow, the charge ring, the portal choice panel and the travel fade live in
 	StageUI.lua.
 	  screen edges  crimson vignette pulse when hurt, slow pulse at low health
-	Motion (all event-driven, short, skipped or reduced with ClientSettings.Reduced()):
+	Motion (all event-driven, short, skipped or reduced with (ClientSettings.Reduced() or ClientPerformance.Reduced())):
 	  XP bar        shine sweep per gem burst; level up = white flash, sweep, ring + sparks
 	                on the medallion
 	  health        white damage chip that holds a beat before it drains, heal shimmer, a
@@ -64,6 +64,7 @@ local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local ArtImage = require(script.Parent.ArtImage)
 local ClientSettings = require(script.Parent.ClientSettings)
+local ClientPerformance = require(script.Parent.ClientPerformance)
 
 local Hud = {}
 
@@ -93,7 +94,7 @@ local updatePurse: (number) -> ()
 -- A soft colour flash over a Surface holder's face (a sibling of the face, so it never
 -- joins the face's list layout); fades out and destroys itself.
 local function glow(holder: GuiObject, color: Color3)
-	if ClientSettings.Reduced() then
+	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
 	local face = holder:FindFirstChild("Face")
@@ -459,7 +460,7 @@ local function showStageBanner(stageNo: number, goal: string)
 	stopBanner()
 	local token = bannerToken
 	local box, title, line, sub = ui.Banner :: Frame, ui.BannerTitle :: TextLabel, ui.BannerLine :: Frame, ui.BannerSub :: TextLabel
-	local reduced = ClientSettings.Reduced()
+	local reduced = (ClientSettings.Reduced() or ClientPerformance.Reduced())
 	title.Text = UIKit.track("STAGE " .. tostring(stageNo))
 	sub.Text = goal
 	title.TextTransparency, title.TextStrokeTransparency = 1, 1
@@ -578,7 +579,7 @@ local function setBossArt(id: any)
 	else
 		ui.BossArt = ArtImage.Place(ui.BossDisc, key, { Name = "Art", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromScale(1.3, 1.3), ZIndex = 7 }, { ui.BossSkull })
 	end
-	if not ClientSettings.Reduced() then
+	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		UIAnim.Pop(ui.BossDisc, 0.05, 2.2)
 	end
 end
@@ -753,7 +754,7 @@ end
 
 -- Shine sweep inside the tile's rounded shape, plus sparks (new) or a flash (level up).
 local function tileShine(tile: GuiObject, isNew: boolean)
-	if ClientSettings.Reduced() then
+	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		return
 	end
 	local clip = new("Frame", { Name = "ShineClip", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = 4 }, tile)
@@ -842,7 +843,7 @@ function Hud.Hurt()
 	if not level then
 		return
 	end
-	if ClientSettings.Reduced() then
+	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		UIAnim.Punch(ui.Heart, 0.25)
 		return
 	end
@@ -922,7 +923,7 @@ local function purseFloat(gain: number)
 	})
 	purse.Float = label
 	UIAnim.Pop(label, 0, 0.5)
-	local rise = ClientSettings.Reduced() and 8 or 24
+	local rise = (ClientSettings.Reduced() or ClientPerformance.Reduced()) and 8 or 24
 	UIAnim.Tween(label, 0.9, { Position = label.Position - UDim2.fromOffset(0, rise), TextTransparency = 1, TextStrokeTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	task.delay(0.95, function()
 		label:Destroy()
@@ -940,7 +941,7 @@ function Hud.SetPurseHint(price: number, afford: boolean, alarm: boolean?)
 		purse.AlarmUntil = os.clock() + 1.4
 		purse.Need = math.max(0, price - (tonumber(player:GetAttribute("RunGold")) or 0))
 		UIAnim.Punch(ui.Purse, 0.12)
-		if not ClientSettings.Reduced() then
+		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			local face = ui.PurseFace :: Frame
 			face.Rotation = 4
 			TweenService:Create(face, TweenInfo.new(0.05, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 3, true), { Rotation = -4 }):Play()
@@ -1154,11 +1155,18 @@ local function updateHealth(dt: number, nowT: number): (number, boolean)
 	if alive and frac > 0 and frac <= (Config.UI.LowHealthFraction or 0.3) then
 		if nowT >= (anim.NextBeat or 0) then
 			anim.NextBeat = nowT + 0.9
-			UIAnim.Punch(ui.Heart, 0.18)
+			if ui.Frame.Visible then
+				if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+					UIAnim.Punch(ui.Heart, 0.18)
+				end
+				if host.Audio and host.Audio.Play then
+					host.Audio.Play("Heartbeat")
+				end
+			end
 		end
 		if not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing then
 			-- reduced effects: a steady edge instead of a breathing one
-			level.Value = ClientSettings.Reduced() and 0.8 or (0.72 + 0.18 * (0.5 + 0.5 * math.sin(os.clock() * 4)))
+			level.Value = (ClientSettings.Reduced() or ClientPerformance.Reduced()) and 0.8 or (0.72 + 0.18 * (0.5 + 0.5 * math.sin(os.clock() * 4)))
 		end
 	elseif level.Value ~= 1 and (not vignetteTween or vignetteTween.PlaybackState ~= Enum.PlaybackState.Playing) then
 		level.Value = 1
@@ -1175,7 +1183,7 @@ local function updateXP(dt: number, nowT: number)
 		anim.XP = 0
 		ui.XP.Fill.BackgroundTransparency = 0
 		local flash = ui.XP.Fill:FindFirstChildOfClass("UIGradient")
-		if flash and not ClientSettings.Reduced() then
+		if flash and not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			flash.Color = ColorSequence.new(P.ivory_100)
 			task.delay(0.25, function()
 				flash.Color = Theme.Gradient.XP
@@ -1188,7 +1196,7 @@ local function updateXP(dt: number, nowT: number)
 		UIAnim.SweepOnce(ui.XP.Frame, P.ivory_100, 0.45, 0.1)
 		UIAnim.Ring(ui.XPRow, at, P.gold_200, 80, 0.5)
 		UIAnim.Sparks(ui.XPRow, at, P.gold_200, 8, 40, 0.55)
-		if not ClientSettings.Reduced() then
+		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			ui.Level.TextColor3 = P.gold_200
 			UIAnim.Tween(ui.Level, 0.8, { TextColor3 = P.ivory_100 })
 		end
@@ -1221,7 +1229,7 @@ local function updateKills()
 	-- every 50th kill is a small celebration
 	if anim.Kills and kills > anim.Kills and math.floor(kills / 50) > math.floor(anim.Kills / 50) then
 		UIAnim.Punch(ui.Kills.Value, 0.35)
-		if not ClientSettings.Reduced() then
+		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			ui.Kills.Value.TextColor3 = P.gold_200
 			UIAnim.Tween(ui.Kills.Value, 0.8, { TextColor3 = C.Text })
 			UIAnim.Sparks(ui.Kills.Icon, UDim2.fromScale(0.5, 0.5), P.gold_200, 6, 30, 0.45)
@@ -1251,7 +1259,7 @@ local function updateBoss(dt: number, state: Configuration)
 		setBossArt(state:GetAttribute("BossId"))
 		UIAnim.Pop(ui.Boss, 0, 0.3)
 		UIAnim.Shake(ui.Boss, 7, 0.45)
-		if not ClientSettings.Reduced() then
+		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			ui.BossName.TextTransparency = 1
 			ui.BossName.TextStrokeTransparency = 1
 			UIAnim.Tween(ui.BossName, 0.7, { TextTransparency = 0, TextStrokeTransparency = 0.5 })
@@ -1315,7 +1323,7 @@ local function updateStatus(state: Configuration, phase: string, stagePhase: str
 		if progress > 0 then
 			setStatus(string.format("A teammate is reviving you... %d%%", math.floor(progress * 100)), "heart", progress)
 		elseif (player:GetAttribute("PartnerRevivesLeft") or 0) > 0 then
-			setStatus("You fell! A teammate can revive you by standing next to you.", "people2")
+		setStatus("You fell! A teammate can hold REVIVE beside you for 2 seconds.", "people2")
 		else
 			setStatus("You fell. Spectating your team · Pause → MAIN MENU to leave now", "skull")
 		end
@@ -1335,7 +1343,7 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	if minute ~= anim.Minute then
 		if anim.Minute ~= nil then
 			UIAnim.Punch(ui.TimerPill, 0.15)
-			if not ClientSettings.Reduced() then
+			if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 				ui.Timer.TextColor3 = P.gold_200
 				UIAnim.Tween(ui.Timer, 0.9, { TextColor3 = C.Text })
 			end

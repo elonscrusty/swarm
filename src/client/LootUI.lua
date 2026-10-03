@@ -505,7 +505,7 @@ end
 local function usable(model: Model): boolean
 	local st = model:GetAttribute("State")
 	if model:GetAttribute("LootKind") == "Altar" then
-		return st == "Claimable"
+		return st == "Claimable" or st == "Dormant"
 	end
 	return st == "Ready"
 end
@@ -664,6 +664,9 @@ local function fillPrompt(model: Model, progress: number): number
 	local st = model:GetAttribute("State")
 	local ok = usable(model)
 	local detail = tostring(model:GetAttribute("Detail") or "")
+	if kind == "Altar" and st == "Dormant" then
+		detail = "Hold to awaken elite guards"
+	end
 	if not ok then
 		detail = (kind == "Altar" and detail ~= "") and detail or (STATE_TEXT[st] or detail)
 	end
@@ -1039,7 +1042,7 @@ function LootUI.Build(root: Frame, k: { [string]: any })
 	Remotes.Get("ItemGained").OnClientEvent:Connect(onGained)
 	Remotes.Get("LootFeedback").OnClientEvent:Connect(onFeedback)
 	UserInputService.InputBegan:Connect(function(input, processed)
-		if not processed and isHoldKey(input) then
+		if not processed and isHoldKey(input) and not (kit.CanRevive and kit.CanRevive()) then
 			lastTouch = false
 			LootUI.Press()
 		end

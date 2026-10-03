@@ -234,6 +234,13 @@ local function updateCrowd()
 end
 
 local function startVoice(s: Sound, def, category: string, priority: number, pitch: number?)
+	-- A pool slot may still be playing while a different slot finished first.
+	-- Restarting that Sound replaces its voice; it cannot count twice against the mix.
+	for i = #voices, 1, -1 do
+		if voices[i].Sound == s then
+			table.remove(voices, i)
+		end
+	end
 	local now = os.clock()
 	local var = def.PitchVar or A.DefaultPitchVar
 	local speed = pitch or ((def.Pitch or 1) + (math.random() * 2 - 1) * var)

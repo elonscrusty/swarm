@@ -285,6 +285,7 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.BossState = nil
 	e.BossTimer = nil
 	e.BossCycle = nil
+	e.BossFollowup = nil
 	e.RingWave = nil
 	e.ChargeDir = nil
 	e.SpeedOverride = nil
@@ -437,9 +438,20 @@ local function pickType(weights: { [string]: number }, allowRanged: boolean, wav
 end
 
 -- Normal spawning toward the live target for this minute.
+local function progressionTime(): number
+	return math.max(ctx.RunManager.GetRunTime(), (ctx.StageManager.GetStage() - 1) * Config.Spawn.StageProgressionSeconds)
+end
+EnemySpawner.ProgressionTime = progressionTime
+
+local function openingMult(): number
+	if ctx.StageManager.GetStage() > 1 then return 1 end
+	local progress = math.clamp(ctx.RunManager.GetRunTime() / Config.Spawn.OpeningSeconds, 0, 1)
+	return Config.Spawn.OpeningMult + (1 - Config.Spawn.OpeningMult) * progress
+end
+
 local function topUp()
-	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
-	local target = math.floor(row.Target * countMult() * ctx.StageManager.SpawnMult())
+	local row = EnemyData.GetSpawnRow(progressionTime())
+	local target = math.floor(row.Target * countMult() * ctx.StageManager.SpawnMult() * openingMult())
 	if EnemySpawner.Boss then
 		-- during the Queen fight: a share of the normal target, within [min, boss cap]
 		local S = Config.Stages
@@ -471,7 +483,8 @@ local function topUp()
 			end
 			break
 		end
-		local elite = eliteOk and rng:NextNumber() < Config.Enemies.EliteChance * (ctx.RunModifiers and ctx.RunModifiers.EliteChanceMult() or 1) -- Elite Surge
+		local stageChance = 1 + Config.Enemies.EliteStageChanceGrowth * math.min(8, ctx.StageManager.GetStage() - 1)
+		local elite = eliteOk and rng:NextNumber() < Config.Enemies.EliteChance * stageChance * (ctx.RunModifiers and ctx.RunModifiers.EliteChanceMult() or 1)
 		local pos = EnemySpawner.SpawnPoint(def.Radius * (elite and 2 or 1))
 		if pos then
 			EnemySpawner.Spawn(typeId, pos, { Elite = elite })
@@ -481,7 +494,7 @@ end
 
 -- A scheduled elite (Config.Pacing.EliteFirst / EliteEvery), announced.
 local function scheduledElite()
-	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
+	local row = EnemyData.GetSpawnRow(progressionTime())
 	local weights = {}
 	for _, id in ipairs(Config.Pacing.EliteTypes) do
 		if row.Weights[id] then
@@ -567,7 +580,7 @@ end
 
 -- Burst of one enemy type surrounding a random player (every MiniWaveInterval).
 function EnemySpawner.MiniWave()
-	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
+	local row = EnemyData.GetSpawnRow(progressionTime())
 	-- never a ring of Spitters (Ranged): a full circle of acid has no safe side; never
 	-- Healers / Burrowers either (NoWave)
 	local typeId = pickType(row.Weights, false, true)
@@ -575,7 +588,7 @@ function EnemySpawner.MiniWave()
 	introduce(typeId)
 	sinceWave = 0
 	lullLeft = Config.Pacing.MiniWaveLull
-	local count = math.floor((Config.Spawn.MiniWaveBaseCount + ctx.RunManager.GetTier() * Config.Spawn.MiniWavePerMinute) * countMult() * ctx.StageManager.SpawnMult())
+	local count = math.floor((Config.Spawn.MiniWaveBaseCount + ctx.RunManager.GetTier() * Config.Spawn.MiniWavePerMinute) * countMult() * ctx.StageManager.SpawnMult() * openingMult())
 	count = math.min(count, Config.Enemies.MaxLive - #EnemySpawner.Active)
 	local offset = rng:NextNumber(0, math.pi * 2)
 	for i = 1, count do
@@ -615,7 +628,7 @@ end
 	or blocked spots can stop some).
 ]]
 function EnemySpawner.SpawnSurge(count: number, centre: Vector3): number
-	local row = EnemyData.GetSpawnRow(ctx.RunManager.GetRunTime())
+	local row = EnemyData.GetSpawnRow(progressionTime())
 	local made = 0
 	local ranged = liveRanged()
 	for _ = 1, count do
@@ -862,7 +875,7 @@ function EnemySpawner.Explode(e)
 		if rp.Alive and rp.Root then
 			local d = (rp.Root.Position - e.Pos) * Vector3.new(1, 0, 1)
 			if d.Magnitude <= radius then
-				ctx.RunManager.DamagePlayer(rp, ex.Damage * tierMult)
+				ctx.RunManager.DamagePlayer(rp, ex.Damage * tierMult, (e.Def.DisplayName or e.Type) .. " explosion")
 			end
 		end
 	end
@@ -954,7 +967,7 @@ function EnemySpawner.Step(dt: number)
 	lullLeft = math.max(0, lullLeft - dt)
 	sinceWave += dt
 	if runTime >= nextEliteAt and ctx.StageManager.GetPhase() == "Explore" then
-		nextEliteAt = runTime + Config.Pacing.EliteEvery
+		nextEliteAt = runTime + Config.Pacing.EliteEvery / (1 + 0.12 * math.min(8, ctx.StageManager.GetStage() - 1))
 		scheduledElite()
 	end
 	stepNests(dt, runTime)

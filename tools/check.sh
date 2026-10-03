@@ -11,9 +11,12 @@ LSP="$T/lsp/luau-lsp"
 SM="$(mktemp -d)/sourcemap.json"
 
 "$ROJO" sourcemap default.project.json -o "$SM" >/dev/null
-OUT="$("$LSP" analyze --definitions="$T/globalTypes.d.luau" --sourcemap="$SM" src 2>&1 | grep -v -E '^\[(INFO|WARN)\]' || true)"
-if [ -n "$OUT" ]; then
+STATUS=0
+RAW="$("$LSP" analyze --definitions="$T/globalTypes.d.luau" --sourcemap="$SM" src 2>&1)" || STATUS=$?
+OUT="$(printf '%s\n' "$RAW" | grep -v -E '^\[(INFO|WARN)\]' || true)"
+if [ "$STATUS" -ne 0 ] || [ -n "$OUT" ]; then
 	echo "$OUT"
+	echo "TYPECHECK exit status: $STATUS"
 	echo "TYPECHECK: $(echo "$OUT" | wc -l) problem(s)"
 	exit 1
 fi
@@ -23,12 +26,13 @@ echo "TYPECHECK: ok"
 # "Out of local registers" (more than 200 locals alive in one function or module chunk).
 COMPILE="$T/luau/luau-compile"
 if [ -x "$COMPILE" ]; then
-	CERR="$(find src -name '*.lua' -o -name '*.luau' | while read -r f; do "$COMPILE" -O0 --null "$f" 2>&1 | grep -i error || true; done)"
-	if [ -n "$CERR" ]; then
-		echo "$CERR"
-		echo "COMPILE: failed"
-		exit 1
-	fi
+	while IFS= read -r f; do
+		if ! COUT="$("$COMPILE" -O0 --null "$f" 2>&1)"; then
+			echo "$f: $COUT"
+			echo "COMPILE: failed"
+			exit 1
+		fi
+	done < <(find src -name '*.lua' -o -name '*.luau')
 	echo "COMPILE: ok"
 fi
 

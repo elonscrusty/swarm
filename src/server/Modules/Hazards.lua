@@ -20,6 +20,7 @@
 ]]
 
 local Fx = require(script.Parent.Fx)
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 
 local Hazards = {}
 
@@ -30,6 +31,16 @@ local strikes: { any } = {}
 local patches: { any } = {}
 
 local waves: { any } = {}
+
+-- Cancel a pending warning before accepting a new hazard at the ceiling.
+-- Eviction never leaves damage behind after the player's warning disappears.
+local function makeRoom()
+	while #strikes + #patches + #waves >= Config.Enemies.MaxHazards do
+		local list = #strikes > 0 and strikes or (#patches > 0 and patches or waves)
+		local h = table.remove(list, 1)
+		if h.Warn then Fx.ClearWarn(h.Warn) end
+	end
+end
 
 -- Living run players whose root is within `radius` (+ their body) of a floor point
 -- (inner > 0: and at least `inner` from it, a ring band).
@@ -57,10 +68,11 @@ Hazards.PlayersIn = playersIn
 	Returns the strike record.
 ]]
 function Hazards.Strike(pos: Vector3, radius: number, delay: number, damage: number, opts: { [string]: any }?)
+	makeRoom()
 	local o = opts or {}
 	local style = o.Style or "venom"
 	local warn = o.Warn or Fx.Warn("circle", pos.X, pos.Z, radius, delay, style)
-	local s = { Pos = pos, Radius = radius, Inner = o.Inner, Left = delay, Damage = damage, Group = o.Group, Style = style, Warn = warn, OnStrike = o.OnStrike, NoPop = o.NoPop }
+	local s = { Pos = pos, Radius = radius, Inner = o.Inner, Left = delay, Damage = damage, Group = o.Group, Style = style, Warn = warn, OnStrike = o.OnStrike, NoPop = o.NoPop, Cause = o.Cause or (style == "burrow" and "Burrow eruption" or "Ground eruption") }
 	table.insert(strikes, s)
 	return s
 end
@@ -68,6 +80,7 @@ end
 -- A lingering patch: harmless for `arm` seconds (it glows), then burns for `life`.
 -- style "fire" (a Burning elite, the default) | "acid" (the Hive Mother's pools).
 function Hazards.Patch(pos: Vector3, radius: number, arm: number, life: number, tick: number, damage: number, group: string?, style: string?)
+	makeRoom()
 	local p = {
 		Pos = pos,
 		Radius = radius,
@@ -76,6 +89,7 @@ function Hazards.Patch(pos: Vector3, radius: number, arm: number, life: number, 
 		Tick = tick,
 		Damage = damage,
 		Group = group,
+		Cause = style == "acid" and "Acid pool" or "Burning elite fire",
 		Hit = {},
 		Warn = Fx.Warn("patch", pos.X, pos.Z, radius, arm, life, style or "fire"),
 	}
@@ -90,8 +104,9 @@ end
 	cleared with it). Returns the wave record.
 ]]
 function Hazards.Wave(pos: Vector3, delay: number, speed: number, maxRadius: number, width: number, gap: number, gapHalf: number, damage: number, opts: { [string]: any }?)
+	makeRoom()
 	local o = opts or {}
-	local w = { Pos = pos, R = o.Start or 0, Speed = speed, MaxR = maxRadius, Width = width, Gap = gap, GapHalf = gapHalf, Delay = delay, Damage = damage, Group = o.Group, Warn = o.Warn, Passed = {} }
+	local w = { Pos = pos, R = o.Start or 0, Speed = speed, MaxR = maxRadius, Width = width, Gap = gap, GapHalf = gapHalf, Delay = delay, Damage = damage, Group = o.Group, Warn = o.Warn, Passed = {}, Cause = o.Cause or "Boss shockwave" }
 	table.insert(waves, w)
 	return w
 end
@@ -138,6 +153,7 @@ local function angleGap(a: number, b: number): number
 end
 
 function Hazards.Step(dt: number)
+	if not ctx.RunManager.IsSimulating() then return end
 	for i = #strikes, 1, -1 do
 		local s = strikes[i]
 		s.Left -= dt
@@ -145,7 +161,7 @@ function Hazards.Step(dt: number)
 			table.remove(strikes, i)
 			if s.Damage > 0 then
 				for _, rp in ipairs(playersIn(s.Pos, s.Radius, s.Inner)) do
-					ctx.RunManager.DamagePlayer(rp, s.Damage)
+					ctx.RunManager.DamagePlayer(rp, s.Damage, s.Cause)
 				end
 			end
 			if not s.NoPop then
@@ -156,7 +172,7 @@ function Hazards.Step(dt: number)
 			end
 		end
 	end
-	local now = os.clock()
+	local now = ctx.RunManager.GetRunTime()
 	for i = #patches, 1, -1 do
 		local p = patches[i]
 		if p.Arm > 0 then
@@ -169,7 +185,7 @@ function Hazards.Step(dt: number)
 				for _, rp in ipairs(playersIn(p.Pos, p.Radius)) do
 					if now >= (p.Hit[rp] or 0) then
 						p.Hit[rp] = now + p.Tick
-						ctx.RunManager.DamagePlayer(rp, p.Damage)
+						ctx.RunManager.DamagePlayer(rp, p.Damage, p.Cause)
 					end
 				end
 			end
@@ -194,7 +210,7 @@ function Hazards.Step(dt: number)
 							-- the band reached them: hit unless they stand in the gap
 							w.Passed[rp] = true
 							if d < 0.5 or angleGap(math.atan2(dz, dx), w.Gap) > w.GapHalf then
-								ctx.RunManager.DamagePlayer(rp, w.Damage)
+								ctx.RunManager.DamagePlayer(rp, w.Damage, w.Cause)
 							end
 						elseif d < w.R - half then
 							w.Passed[rp] = true -- already behind the ring (it rolled past)

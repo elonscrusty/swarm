@@ -3,15 +3,15 @@
 	Stat sheets, level-up offers (3 cards, reroll, skip, auto-pick), weapon / passive
 	upgrades, evolutions and treasure chest rewards.
 
-	A player with pending levels is "Paused": they stop moving, their weapons stop and
+	Earned levels bank between grouped upgrade panels. During a panel the player is
+	"Paused": they stop moving, their weapons stop and
 	(Config.Player.LevelUpInvulnerable) they can't be hurt. The rest of the server keeps
 	running. If they don't choose within Config.LevelUp.AutoPickSeconds a random card
 	is taken for them.
 
 	Card types: WeaponNew, WeaponUp, Evolve, PassiveNew, PassiveUp, Gold, Heal.
 	Synergies (SynergyData): complete sets add their bonus to the stat sheet here; the
-	player attribute "Synergies" lists the active ids; a NEW card that completes or
-	advances one says so (card fields Synergy, SynergyReady).
+	player attribute "Synergies" lists discovered active ids. Cards keep recipes hidden.
 	Only the card index comes from the client; the server owns the card list.
 ]]
 
@@ -118,6 +118,7 @@ function LevelUpSystem.SendInventory(rp)
 			Id = id,
 			Name = w.Evolved and def.Evolution.Name or def.Name,
 			Level = w.Level,
+			MaxLevel = WeaponData.MaxLevel,
 			Evolved = w.Evolved,
 			Color = def.Color,
 		})
@@ -158,7 +159,8 @@ end
 local function canEvolve(rp, weaponId: string): boolean
 	local w = rp.Weapons[weaponId]
 	local def = WeaponData.Weapons[weaponId]
-	return w ~= nil and not w.Evolved and w.Level >= WeaponData.MaxLevel and def.Evolution ~= nil and (rp.Passives[def.Evolution.Passive] or 0) > 0
+	return w ~= nil and not w.Evolved and w.Level >= WeaponData.MaxLevel and def.Evolution ~= nil
+		and (rp.Passives[def.Evolution.Passive] or 0) >= math.min(3, PassiveData.MaxLevelOf(def.Evolution.Passive))
 end
 
 ------------------------------------------------------------------------------------------
@@ -244,15 +246,12 @@ local function buildPool(rp)
 			end
 		end
 	end
-	-- passives: never past their own max level, never one that changes nothing for this
-	-- build (e.g. Ammo with only melee weapons) unless it evolves a weapon you own
+	-- Finish every owned passive before converting XP to coins. New passives must
+	-- help the build or unlock an owned weapon's evolution.
 	for _, id in ipairs(rp.PassiveOrder) do
 		local level = rp.Passives[id]
 		if level < PassiveData.MaxLevelOf(id) then
-			local _, useful = passiveLines(rp, id, level + 1)
-			if useful then
-				table.insert(pool, card("PassiveUp", id, level + 1, L.WeightUpgradePassive))
-			end
+			table.insert(pool, card("PassiveUp", id, level + 1, L.WeightUpgradePassive))
 		end
 	end
 	if #rp.PassiveOrder < Config.Slots.Passives then
@@ -287,30 +286,22 @@ local function evolveHint(rp, c, def)
 		return
 	end
 	local pdef = PassiveData.Passives[evo.Passive]
-	local owned = (rp.Passives[evo.Passive] or 0) > 0
+	local needed = math.min(3, PassiveData.MaxLevelOf(evo.Passive))
+	local owned = (rp.Passives[evo.Passive] or 0) >= needed
+	local partner = string.format("%s Lv %d", pdef.Name, needed)
 	c.HintReady = owned
 	if c.Level >= WeaponData.MaxLevel then
-		c.Hint = owned and string.format("Evolves into %s next level-up!", evo.Name) or string.format("Evolves into %s with %s", evo.Name, pdef.Name)
+		c.Hint = owned and string.format("Evolves into %s next level-up!", evo.Name) or string.format("Evolves into %s with %s", evo.Name, partner)
 	else
-		c.Hint = string.format("Evolves at Lv %d with %s%s", WeaponData.MaxLevel, pdef.Name, owned and " (owned)" or "")
+		c.Hint = string.format("Evolves at Lv %d with %s%s", WeaponData.MaxLevel, partner, owned and " (ready)" or "")
 	end
-end
-
--- NEW weapon / passive cards: the synergy this piece completes or advances.
-local function synergyHint(rp, c, kind: string)
-	local s, have, need = SynergyData.Advances(ownedOf(rp), kind, c.Id)
-	if not s then
-		return
-	end
-	c.SynergyReady = have >= need
-	c.Synergy = c.SynergyReady and string.format("Synergy: completes %s", s.Name) or string.format("Synergy: %s %d/%d", s.Name, have, need)
 end
 
 -- Adds display fields for the client:
 --   Name, Rank ("NEW" | "Lv 3 → 4 / 8" | "EVOLUTION"), Lines (what changes, real numbers),
 --   Description (short text; also the joined lines for older clients), Hint (evolution
---   requirement on weapon cards when close), Synergy / SynergyReady (NEW cards that complete
---   or advance a synergy), Rarity / RarityLabel / RarityColor.
+--   requirement on weapon cards when close), Rarity / RarityLabel / RarityColor.
+-- Synergy recipes stay hidden until players discover them through their build.
 local function decorate(rp, c)
 	local rarity = "Common"
 	if c.Type == "WeaponNew" or c.Type == "WeaponUp" then
@@ -322,7 +313,6 @@ local function decorate(rp, c)
 			c.Rank = "NEW"
 			c.Description = def.Description
 			c.Lines = WeaponData.CardLines(c.Id, 0, 1)
-			synergyHint(rp, c, "Weapon")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, WeaponData.MaxLevel)
 			c.Lines = WeaponData.CardLines(c.Id, c.Level - 1, c.Level)
@@ -350,7 +340,6 @@ local function decorate(rp, c)
 			rarity = "Rare"
 			c.Rank = "NEW"
 			c.Description = def.Description
-			synergyHint(rp, c, "Passive")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, maxLevel)
 			c.Description = def.Description -- the lines carry the real numbers
@@ -362,8 +351,9 @@ local function decorate(rp, c)
 		for _, id in ipairs(rp.WeaponOrder) do
 			local wdef = WeaponData.Weapons[id]
 			if not rp.Weapons[id].Evolved and wdef.Evolution and wdef.Evolution.Passive == c.Id then
-				c.Hint = string.format("Evolves %s at Lv %d", wdef.Name, WeaponData.MaxLevel)
-				c.HintReady = rp.Weapons[id].Level >= WeaponData.MaxLevel
+				local needed = math.min(3, PassiveData.MaxLevelOf(c.Id))
+				c.Hint = string.format("Evolves %s at Lv %d with this at Lv %d", wdef.Name, WeaponData.MaxLevel, needed)
+				c.HintReady = rp.Weapons[id].Level >= WeaponData.MaxLevel and c.Level >= needed
 				break
 			end
 		end
@@ -407,10 +397,6 @@ local function rollChoices(rp)
 				break
 			end
 		end
-	end
-	if #choices == 0 then
-		table.insert(choices, decorate(rp, card("Gold", "Gold", 0, 1)))
-		table.insert(choices, decorate(rp, card("Heal", "Heal", 0, 1)))
 	end
 	return choices
 end
@@ -460,34 +446,67 @@ local function sendOffer(rp)
 		Seconds = math.max(0, rp.OfferDeadline - os.clock()),
 		Level = rp.Level - rp.PendingLevels + 1,
 		Pending = rp.PendingLevels,
+		PanelId = rp.PanelId,
+		BatchRemaining = rp.BatchRemaining,
+		BatchTotal = rp.BatchTotal,
 	})
 end
 
-local function offerNext(rp)
-	if rp.PendingLevels <= 0 or not rp.Alive then
-		rp.PendingLevels = math.max(0, rp.PendingLevels)
-		if rp.Offer then
-			rp.Offer = nil
-		end
+local function closePanel(rp, grace: boolean?)
+	local wasOpen = rp.Paused
+	rp.Offer = nil
+	rp.BatchRemaining = 0
+	rp.Paused = false
+	if wasOpen then
+		rp.NextUpgradeCombatTime = (rp.UpgradeCombatTime or 0) + Config.LevelUp.OfferIntervalSeconds
 		Remotes.FireClient("LevelUpClose", rp.Player)
-		rp.Paused = false
-		ctx.RunManager.GrantChoiceGrace(rp) -- don't get hit the instant the cards close
+		if grace then ctx.RunManager.GrantChoiceGrace(rp) end
 		ctx.RunManager.ApplyMovement(rp)
 		ctx.RunManager.RefreshFrozen()
+	end
+end
+
+-- Exhaustion uses the same useful-build pool as cards: no new slots or legal evolution
+-- may be lost. The economy applies the selected tier and purchase/curses once.
+local function convertMaxedLevels(rp): boolean
+	if rp.PendingLevels <= 0 or #buildPool(rp) > 0 then return false end
+	local minutes = math.floor(math.max(0, ctx.RunManager.GetRunTime() - (rp.LastDownTime or 0)) / 60)
+	local value = Config.LevelUp.FallbackGold * math.min(3, 1 + 0.1 * minutes)
+	local count = rp.PendingLevels
+	rp.PendingLevels = 0
+	closePanel(rp)
+	ctx.GoldSystem.AddRunGold(rp, value * count)
+	return true
+end
+
+local function offerNext(rp)
+	if not rp.Alive then closePanel(rp); return end
+	if convertMaxedLevels(rp) then return end
+	if rp.PendingLevels <= 0 or (rp.Paused and rp.BatchRemaining <= 0) then
+		closePanel(rp, true)
 		return
 	end
+	if not rp.Paused then
+		if not ctx.RunManager.IsRunning() or ctx.RunManager.IsMenuPaused() or ctx.RunManager.IsFrozen()
+			or ctx.StageManager.IsHolding() or rp.RewardUntil then return end
+		local eligible = rp.NextUpgradeCombatTime or Config.LevelUp.FirstOfferSeconds
+		if (rp.UpgradeCombatTime or 0) < eligible then return end
+		rp.PanelId = (rp.PanelId or 0) + 1
+		rp.BatchRemaining = math.min(Config.LevelUp.ChoicesPerPanel, rp.PendingLevels)
+		rp.BatchTotal = rp.BatchRemaining
+		local group = #ctx.RunManager.GetRunPlayers() > 1
+		rp.OfferDeadline = os.clock() + (group and Config.LevelUp.GroupAutoPickSeconds or Config.LevelUp.AutoPickSeconds)
+		rp.Paused = true
+		ctx.RunManager.ApplyMovement(rp)
+		ctx.RunManager.RefreshFrozen()
+	end
 	rp.Offer = rollChoices(rp)
-	local group = #ctx.RunManager.GetRunPlayers() > 1
-	rp.OfferDeadline = os.clock() + (group and Config.LevelUp.GroupAutoPickSeconds or Config.LevelUp.AutoPickSeconds)
-	rp.Paused = true
-	ctx.RunManager.ApplyMovement(rp)
-	ctx.RunManager.RefreshFrozen()
 	sendOffer(rp)
 end
 
 function LevelUpSystem.QueueLevels(rp, count: number)
 	rp.PendingLevels += count
-	Fx.PlayerEvent(rp.Player, "levelup")
+	if count > 0 and #buildPool(rp) > 0 then Fx.PlayerEvent(rp.Player, "levelup") end
 	if not rp.Offer then
 		offerNext(rp)
 	end
@@ -504,6 +523,7 @@ local function choose(rp, index: number)
 	end
 	rp.Offer = nil
 	rp.PendingLevels -= 1
+	rp.BatchRemaining -= 1
 	-- offerNext must always run (it releases the whole-run freeze), even if apply fails
 	local ok, err = pcall(apply, rp, c)
 	offerNext(rp)
@@ -513,10 +533,9 @@ local function choose(rp, index: number)
 end
 
 -- Ends any open offer without applying it (death, leaving, run end).
-function LevelUpSystem.Cancel(rp)
-	rp.Offer = nil
-	rp.PendingLevels = 0
-	rp.Paused = false
+function LevelUpSystem.Cancel(rp, preserveLevels: boolean?)
+	closePanel(rp)
+	if not preserveLevels then rp.PendingLevels = 0 end
 	if rp.Player.Parent then
 		Remotes.FireClient("LevelUpClose", rp.Player)
 	end
@@ -580,9 +599,14 @@ function LevelUpSystem.OpenChest(rp)
 	local stageScale = 1 + Config.Gold.EliteStageScale * (math.max(1, ctx.StageManager.GetStage()) - 1)
 	local gold = ctx.GoldSystem.AddRunGold(rp, (rng:NextInteger(Config.Gold.ChestGoldMin, Config.Gold.ChestGoldMax) + Config.Gold.Elite) * stageScale * rp.Stats.GoldMult)
 	afterChange(rp)
-	Remotes.FireClient("ChestOpened", rp.Player, { Rewards = rewards, Gold = gold })
+	local dramatic = #rewards > 1
+	for _, reward in ipairs(rewards) do
+		if reward.Text == "EVOLVED!" then dramatic = true end
+	end
+	Remotes.FireClient("ChestOpened", rp.Player, { Rewards = rewards, Gold = gold, Dramatic = dramatic })
 	Fx.Sound("Chest")
-	ctx.RunManager.HoldReward(rp)
+	ctx.RunManager.HoldReward(rp, dramatic)
+	if rp.PendingLevels > 0 then offerNext(rp) end
 end
 
 ------------------------------------------------------------------------------------------
@@ -594,7 +618,7 @@ LevelUpSystem.NewWeapons = { "Spear", "Crossbow", "FrostNova", "FireTrail", "Hea
 
 --[[
 	evolve = false: gives every weapon in `list` (default NewWeapons; WeaponData.Order = all
-	of them) at level 8 (past Config.Slots.Weapons: a test loadout). evolve = true: evolves
+	of them) at level 12 (past Config.Slots.Weapons: a test loadout). evolve = true: evolves
 	every owned weapon (its passive is not needed).
 ]]
 function LevelUpSystem.DevWeapons(rp, evolve: boolean, list: { string }?)
@@ -624,17 +648,28 @@ end
 ------------------------------------------------------------------------------------------
 
 function LevelUpSystem.Step(dt: number)
+	if not ctx.RunManager.IsRunning() then return end
 	-- Level-up pauses freeze the run too, but only the pause menu stops the auto-pick timer
 	-- (otherwise a player could hold everyone's game paused forever).
 	local menuPaused = ctx.RunManager.IsMenuPaused()
 	local now = os.clock()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+		local holding = ctx.StageManager.IsHolding()
+		if rp.Alive and not rp.Paused and not rp.RewardUntil and not menuPaused and not ctx.RunManager.IsFrozen() and not holding then
+			rp.UpgradeCombatTime = (rp.UpgradeCombatTime or 0) + dt
+		end
 		if rp.Offer then
 			if menuPaused then
 				rp.OfferDeadline += dt -- the solo pause menu also pauses the auto-pick timer
 			elseif now >= rp.OfferDeadline then
-				choose(rp, rng:NextInteger(1, #rp.Offer))
+				-- One deadline bounds the entire protected panel, including all queued choices.
+				for _ = 1, Config.LevelUp.ChoicesPerPanel do
+					if not rp.Offer then break end
+					choose(rp, rng:NextInteger(1, #rp.Offer))
+				end
 			end
+		elseif rp.Alive and not menuPaused and not holding and not ctx.RunManager.IsFrozen() then
+			offerNext(rp)
 		end
 	end
 end
@@ -676,6 +711,7 @@ function LevelUpSystem.Start()
 		rp.Skips -= 1
 		rp.Offer = nil
 		rp.PendingLevels -= 1
+		rp.BatchRemaining -= 1
 		ctx.GoldSystem.AddRunGold(rp, Config.LevelUp.SkipGold)
 		LevelUpSystem.SendInventory(rp)
 		offerNext(rp)

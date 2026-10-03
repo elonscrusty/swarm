@@ -1,0 +1,30 @@
+-- The real ground module must place bounded decoration, recycle it, and obey settings.
+local C = lib("common")
+local s = C.bootServer()
+local arena = s.MapBuilder.BuildArena("Forest")
+preview.startClient(false)
+local GroundDetail = preview.client("GroundDetail")
+local Settings = preview.client("ClientSettings")
+local Performance = preview.client("ClientPerformance")
+local player = game:GetService("Players").LocalPlayer
+local centre = s.Config.ArenaOrigin
+workspace.CurrentCamera.CFrame = CFrame.lookAt(centre + Vector3.new(0, 65, 45), centre)
+player:SetAttribute("InRun", true)
+GroundDetail.Init()
+preview.advance(0.5)
+local normal = GroundDetail.Stats()
+assert(normal.Active > 0 and normal.Active <= normal.Budget, "grass should fill the camera footprint within budget")
+Settings.Apply({ ReducedEffects = true })
+preview.advance(0.5)
+local reduced = GroundDetail.Stats()
+assert(reduced.Active <= reduced.Budget and reduced.Pool <= reduced.Budget, "reduced grass must shrink its pool")
+assert(reduced.Budget < normal.Budget, "reduced grass must use a smaller budget")
+player:SetAttribute("InRun", false)
+preview.advance(0.5)
+assert(GroundDetail.Stats().Active == 0, "leaving a run should recycle every detail")
+for _ = 1, 100 do Performance.Step(1 / 20) end
+assert(Performance.Reduced(), "sustained slow frames should reduce decoration")
+for _ = 1, 700 do Performance.Step(1 / 60) end
+assert(not Performance.Reduced(), "sustained recovery should restore decoration")
+assert(Settings.Reduced(), "automatic performance must not overwrite the user's setting")
+preview.log("PASS ground pool, reduced settings, run cleanup and adaptive hysteresis")

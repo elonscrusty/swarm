@@ -41,6 +41,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local AchievementData = require(Shared:WaitForChild("AchievementData"))
+local DifficultyData = require(Shared:WaitForChild("DifficultyData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -296,7 +297,7 @@ local function arenaText(): (string, string)
 	local state = Remotes.State()
 	local arenaId = state:GetAttribute("SelectedArena") or "Forest"
 	local arena = (Config.Arenas :: any)[arenaId]
-	local title = "ARENA: " .. string.upper(arena and arena.DisplayName or tostring(arenaId))
+	local title = string.upper(arena and arena.DisplayName or tostring(arenaId))
 	local best = profile and (profile.Stats.BestStage or 0) or 0
 	-- the next arena still locked (lowest requirement first), else the picked arena's hint
 	local nextDef, nextNeed = nil, math.huge
@@ -508,10 +509,30 @@ local function buildModes(frame: Frame)
 	ui.EndlessRow = holder
 	ui.EndlessEdge = face:FindFirstChildOfClass("UIStroke")
 	UIKit.padding(face, 0, 12, 0, 12)
-	ui.EndlessToggle = UIKit.Toggle(face, "Endless", "cycle", "Stages never end · harder each stage", player:GetAttribute("Endless") == true, function(on)
+	local endlessOn = player:GetAttribute("Endless") == true
+	local endlessButton = UIKit.Button(face, { Title = "ENDLESS", Subtitle = endlessOn and "ON" or "OFF", TitleSize = 15, TitleStyle = "Label", Size = UDim2.new(0.48, 0, 1, 0), OnClick = function()
+		endlessOn = not endlessOn
+		ui.EndlessToggle.Set(endlessOn)
 		endlessSentAt = os.clock()
-		Remotes.Get("SetEndless"):FireServer(on)
-	end, { Size = UDim2.fromScale(1, 1) })
+		Remotes.Get("SetEndless"):FireServer(endlessOn)
+	end })
+	ui.EndlessToggle = {
+		Set = function(on: boolean) endlessOn = on; endlessButton.SetText(nil, on and "ON" or "OFF"); endlessButton.SetSelected(on) end,
+		Get = function(): boolean return endlessOn end,
+	}
+	ui.Difficulty = UIKit.Button(face, { Name = "Difficulty", Title = "STANDARD", Subtitle = "Win: Veteran", TitleSize = 15, TitleStyle = "Label", Position = UDim2.fromScale(0.52, 0), Size = UDim2.new(0.48, 0, 1, 0), OnClick = function()
+		local currentTier = DifficultyData.Selected(profile)
+		local at = table.find(DifficultyData.Order, currentTier) or 1
+		for step = 1, #DifficultyData.Order - 1 do
+			local id = DifficultyData.Order[(at + step - 1) % #DifficultyData.Order + 1]
+			if DifficultyData.IsUnlocked(profile, id) then
+				Remotes.Get("SetDifficulty"):FireServer(id)
+				return
+			end
+		end
+		toast("Clear all five Standard stages to unlock Veteran.", P.gold_300)
+	end })
+	if ui.Difficulty.Subtitle then ui.Difficulty.Subtitle.TextSize = TS(12) end
 	if Config.Endless == nil or not Config.Endless.Enabled then
 		holder.Visible = false
 	end
@@ -639,16 +660,17 @@ local function setArenaArt(arenaId: string?)
 end
 
 local function buildHomeArt()
+	local motion = { Characters = "Bob", Upgrades = "Hammer", Arenas = "Sun", Daily = "Glint" }
 	-- feature cards: the picture stands a little proud of the icon well
 	for b, name in pairs({ [ui.CardCharacters] = "Characters", [ui.CardUpgrades] = "Upgrades", [ui.CardArena] = "Arenas", [ui.CardDaily] = "Daily" }) do
 		local holder = b.Content:FindFirstChild("IconHolder")
 		local well = holder and holder:FindFirstChild("Well")
-		ArtImage.ButtonIcon(well, "icons/ui/ui_" .. name, { Size = UDim2.fromScale(1.3, 1.3) })
+		ArtImage.ButtonIcon(well, "icons/ui/ui_" .. name, { Size = UDim2.fromScale(1.3, 1.3), Idle = { motion[name] } })
 	end
 	-- mode column, CURSES / DAILY, START NOW
 	local function onButton(b: any, name: string, scale: number)
 		local holder = b and b.Content:FindFirstChild("IconHolder")
-		ArtImage.ButtonIcon(holder, "icons/ui/ui_" .. name, { Size = UDim2.fromScale(scale, scale) })
+		ArtImage.ButtonIcon(holder, "icons/ui/ui_" .. name, { Size = UDim2.fromScale(scale, scale), Idle = { name == "Curses" and "Flicker" or name == "Daily" and "Glint" or "Sway" } })
 	end
 	for i, id in ipairs(Config.Modes.Order) do
 		onButton(ui.ModeButtons[i], id, 1.5)
@@ -659,7 +681,7 @@ local function buildHomeArt()
 	-- corner buttons (STATS keeps its drawn bars: there is no ui_ picture for it)
 	local glyphY = -TS(Theme.TextSize.Caption) / 2 - 2
 	for b, name in pairs({ [ui.SettingsBtn] = "Settings", [ui.RanksBtn] = "Leaderboards", [ui.TrackBtn] = "Track" }) do
-		ArtImage.ButtonIcon(b.Content, "icons/ui/ui_" .. name, { Position = UDim2.new(0.5, 0, 0.5, glyphY), Size = UDim2.fromOffset(42, 42) }, "Glyph")
+		ArtImage.ButtonIcon(b.Content, "icons/ui/ui_" .. name, { Position = UDim2.new(0.5, 0, 0.5, glyphY), Size = UDim2.fromOffset(42, 42), Idle = { name == "Settings" and "Spin" or "Glint" } }, "Glyph")
 	end
 	setArenaArt(tostring(Remotes.State():GetAttribute("SelectedArena") or "Forest"))
 end
@@ -726,8 +748,8 @@ local function buildHome(screen: Frame)
 	})
 	ui.CardUpgrades = UIKit.Card(ui.Cards, {
 		Icon = "chevronsUp",
-		Title = "UPGRADES",
-		Subtitle = "Get stronger",
+		Title = "SHOP",
+		Subtitle = "Upgrades, gold and cosmetics",
 		LayoutOrder = 2,
 		OnClick = function()
 			LobbyScreen.Show("Upgrades")
@@ -735,7 +757,7 @@ local function buildHome(screen: Frame)
 	})
 	ui.CardArena = UIKit.Card(ui.Cards, {
 		Icon = "tree",
-		Title = "ARENA: FOREST",
+		Title = "FOREST",
 		Subtitle = "Face the swarm",
 		LayoutOrder = 3,
 		OnClick = function()
@@ -1400,6 +1422,17 @@ function LobbyScreen.Update(_dt: number?)
 		ui.EndlessToggle.Set(endlessOn)
 	end
 	local endlessLit = ui.EndlessToggle.Get()
+	local difficulty = DifficultyData.Selected(profile)
+	local unlocked = 0
+	for _, id in ipairs(DifficultyData.Order) do
+		if DifficultyData.IsUnlocked(profile, id) then unlocked += 1 end
+	end
+	local tierKey = difficulty .. ":" .. unlocked
+	if ui.Difficulty.Instance:GetAttribute("Tier") ~= tierKey then
+		ui.Difficulty.Instance:SetAttribute("Tier", tierKey)
+		local tier = DifficultyData.Tiers[difficulty]
+		ui.Difficulty.SetText(string.upper(tier.Name), unlocked == 1 and "Win: Veteran" or unlocked == 2 and "Win: Nightmare" or string.format("x%.2g gold", tier.Gold))
+	end
 	if ui.EndlessEdge and ui.EndlessRow:GetAttribute("Lit") ~= endlessLit then
 		ui.EndlessRow:SetAttribute("Lit", endlessLit)
 		ui.EndlessEdge.Color = endlessLit and P.gold_400 or C.PanelEdge

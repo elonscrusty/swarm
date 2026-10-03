@@ -69,12 +69,13 @@ if role == "run" then
 	T.joinData[1] = ticketFor
 end
 
-local ava = preview.addPlayer("Ava", 2)
+local ava = preview.addPlayer("Ava", role == "lobby" and 2 or 4)
 local ben = role == "lobby" and preview.addPlayer("Ben", 3) or nil
 preview.forceMeshesUploaded()
 preview.startServer()
 preview.advance(2)
 C.startClient()
+if preview.args.headless == "on" then preview.client("TravelOverlay").Init() end
 preview.advance(1)
 
 local st = C.state()
@@ -225,10 +226,8 @@ else
 	as(me, "StartRun", "Solo")
 	preview.advance(0.5)
 	check("lobby start ignored while starting", st:GetAttribute("Phase") == "Lobby")
-	-- Ava (no ticket in her join data) was here from boot: not expected → sent home
-	check("intruder sent home", lastCall() ~= nil and ids(lastCall().UserIds) == "2" and lastCall().Data.SwarmReturn ~= nil, lastCall() and ids(lastCall().UserIds) or "no call")
-	-- Cal arrives with the ticket, as member 2? No: Ava's id is 2. Cal is member 3? He arrives late (below).
-	-- let Ava "leave" (her teleport worked) and Dee arrive as member 2 with the ticket
+	-- Ava's account is not in the ticket; authorized member 2 arrives as Dee below.
+	check("intruder sent home", lastCall() ~= nil and ids(lastCall().UserIds) == "4" and lastCall().Data.SwarmReturn ~= nil, lastCall() and ids(lastCall().UserIds) or "no call")
 	preview.removePlayer(ava)
 	T.joinData[2] = ticketFor
 	local dee = preview.addPlayer("Dee", 2)
@@ -284,3 +283,4 @@ else
 end
 
 preview.log(fails == 0 and "ALL PASS" or (fails .. " FAIL"))
+assert(fails == 0, tostring(fails) .. " run-server checks failed")

@@ -583,7 +583,7 @@ export type ButtonOpts = {
 	Shadow: boolean?,
 	Glow: boolean?,
 	Name: string?,
-	OnClick: (() -> ())?,
+	OnClick: ((InputObject?) -> ())?,
 	Sound: boolean?,
 }
 
@@ -897,7 +897,7 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 	hit.SelectionLost:Connect(function()
 		setHover(false)
 	end)
-	hit.Activated:Connect(function()
+	hit.Activated:Connect(function(input)
 		if not enabled then
 			return
 		end
@@ -905,7 +905,7 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 			click()
 		end
 		if o.OnClick then
-			o.OnClick()
+			o.OnClick(input)
 		end
 	end)
 

@@ -1,6 +1,6 @@
 --[[
 	WeaponData.lua
-	All 17 weapons, their 8 per-level stat rows, their evolutions, their mastery ranks, their
+	All 17 weapons, their 12 per-level stat rows, their evolutions, their
 	behaviour perks and the projectile visuals.
 
 	Stat row fields (every level row has all of them):
@@ -15,15 +15,11 @@
 	  heal       optional (Healing Totem): HP a pulse gives each player in range
 
 	Behaviour constants that never change with level live in `Params`.
-	An evolution needs the weapon at level 8 plus its `Passive` (any level). It replaces the
-	level-8 row with `Evolution.Stats` and switches on the evolution flags.
+	An evolution needs the weapon at level 12 plus its `Passive` at rank 3 (or its maximum). It replaces the
+	level-12 row with `Evolution.Stats` and switches on the evolution flags.
 
-	Mastery: past level 8 (evolved or not) a weapon keeps growing through MaxMastery ranks
-	(the weapon record's `Mastery`, 0 = none). `Mastery[rank]` holds the TOTAL bonus at that
-	rank: damage / area multipliers, a cooldown cut and the +1 amount capstone; MasteryBonus
-	applies it to a stat row (WeaponSystem.weaponStats) and MasteryLines prints the change for
-	a level-up card. Steps shrink rank by rank so late Endless builds don't explode: x1.30
-	damage, x0.88 cooldown, x1.20 area and +1 amount at rank 10.
+	Legacy mastery helpers below remain unused; no mastery cards or combat bonuses are wired.
+	Evolution ends the weapon's progression chain.
 
 	Perks: behaviour changes unlocked at a weapon level (and kept when evolved), e.g. the
 	Whip's Riposte. `Perks = { { Level, Id, Name, Text } }`; WeaponSystem asks
@@ -43,7 +39,7 @@
 
 local WeaponData = {}
 
-WeaponData.MaxLevel = 8
+WeaponData.MaxLevel = 12
 
 -- Mastery ranks after max level: cumulative bonus at each rank (see the header).
 WeaponData.MaxMastery = 10
@@ -203,17 +199,20 @@ WeaponData.Weapons = {
 		Behavior = "Whip",
 		AmountLabel = "Swings",
 		-- every 3rd attack the forehand cut becomes a full circle around you
-		Perks = { { Level = 6, Id = "Riposte", Name = "Riposte", Text = "Every 3rd attack also cuts all around you." } },
+		Perks = { { Level = 9, Id = "Riposte", Name = "Riposte", Text = "Every 3rd attack also cuts all around you." } },
 		-- hit shape: a sector Reach studs long and Arc degrees wide (same area as the old 13 x 4.5 box)
 		Params = { Reach = 7, Arc = 150 },
 		Levels = {
-			--   dmg  cd    amt area spd prc dur  kb
 			row(10, 1.35, 1, 1.0, 0, 999, 0.25, 14),
 			row(10, 1.35, 2, 1.0, 0, 999, 0.25, 14),
 			row(15, 1.35, 2, 1.0, 0, 999, 0.25, 14),
+			row(15, 1.35, 2, 1.05, 0, 999, 0.25, 15),
 			row(15, 1.35, 2, 1.1, 0, 999, 0.25, 16),
+			row(17.5, 1.35, 2, 1.1, 0, 999, 0.25, 16),
 			row(20, 1.35, 2, 1.1, 0, 999, 0.25, 16),
+			row(20, 1.325, 2, 1.15, 0, 999, 0.25, 17),
 			row(20, 1.30, 2, 1.2, 0, 999, 0.25, 18),
+			row(22.5, 1.3, 2, 1.2, 0, 999, 0.25, 18),
 			row(25, 1.30, 2, 1.2, 0, 999, 0.25, 18),
 			row(30, 1.20, 2, 1.3, 0, 999, 0.25, 20),
 		},
@@ -235,16 +234,20 @@ WeaponData.Weapons = {
 		Color = Color3.fromRGB(150, 80, 255),
 		Behavior = "Orb",
 		AmountLabel = "Orbs",
-		Perks = { { Level = 5, Id = "Split", Name = "Splitting Orbs", Text = "An orb's first kill splits off 2 small orbs (half damage)." } },
+		Perks = { { Level = 7, Id = "Split", Name = "Splitting Orbs", Text = "An orb's first kill splits off 2 small orbs (half damage)." } },
 		Params = { Radius = 1.0, TurnRate = 7, Visual = 1, EvoVisual = 6 },
 		Levels = {
 			row(10, 1.20, 1, 1.0, 38, 1, 3, 4),
 			row(10, 1.20, 2, 1.0, 38, 1, 3, 4),
 			row(10, 1.00, 2, 1.0, 38, 1, 3, 4),
+			row(10, 1, 2, 1, 39, 1, 3, 4),
 			row(10, 1.00, 3, 1.0, 40, 1, 3, 4),
+			row(12.5, 1, 3, 1, 40, 1, 3, 4.5),
 			row(15, 1.00, 3, 1.0, 40, 1, 3, 5),
 			row(15, 1.00, 3, 1.0, 40, 2, 3, 5),
+			row(15, 0.925, 3, 1, 41, 2, 3, 5),
 			row(15, 0.85, 3, 1.0, 42, 2, 3, 5),
+			row(17.5, 0.85, 3, 1.05, 42, 2, 3, 5.5),
 			row(20, 0.85, 4, 1.1, 42, 2, 3, 6),
 		},
 		Evolution = {
@@ -271,9 +274,13 @@ WeaponData.Weapons = {
 			row(7, 1.00, 2, 1.0, 80, 1, 1.0, 2),
 			row(9, 1.00, 2, 1.0, 80, 1, 1.0, 2),
 			row(9, 1.00, 3, 1.0, 80, 1, 1.0, 2),
+			row(9, 1, 3, 1, 82.5, 1, 1, 2.5),
 			row(9, 1.00, 3, 1.0, 85, 2, 1.0, 3),
+			row(9, 0.975, 3, 1, 85, 2, 1, 3),
 			row(9, 0.95, 4, 1.0, 85, 2, 1.0, 3),
+			row(10, 0.95, 4, 1, 85, 2, 1, 3),
 			row(11, 0.95, 4, 1.0, 85, 2, 1.0, 3),
+			row(11, 0.9, 4, 1, 87.5, 2, 1, 3),
 			row(11, 0.85, 5, 1.0, 90, 3, 1.0, 3),
 		},
 		Evolution = {
@@ -293,14 +300,18 @@ WeaponData.Weapons = {
 		Color = Color3.fromRGB(235, 235, 200),
 		Behavior = "Aura",
 		AmountLabel = nil, -- one ring: Amount does nothing for the aura
-		Perks = { { Level = 4, Id = "Chill", Name = "Chilling Aura", Text = "Enemies inside the aura move 25% slower." } },
+		Perks = { { Level = 6, Id = "Chill", Name = "Chilling Aura", Text = "Enemies inside the aura move 25% slower." } },
 		Params = { Radius = 5.5 },
 		Levels = {
 			row(5, 1.10, 1, 1.0, 0, 999, 0, 6),
 			row(5, 1.10, 1, 1.2, 0, 999, 0, 6),
+			row(6, 1.1, 1, 1.2, 0, 999, 0, 6),
 			row(7, 1.10, 1, 1.2, 0, 999, 0, 6),
+			row(7, 1.025, 1, 1.2, 0, 999, 0, 6.5),
 			row(7, 0.95, 1, 1.2, 0, 999, 0, 7),
+			row(7, 0.95, 1, 1.3, 0, 999, 0, 7),
 			row(7, 0.95, 1, 1.4, 0, 999, 0, 7),
+			row(8, 0.95, 1, 1.4, 0, 999, 0, 7),
 			row(9, 0.95, 1, 1.4, 0, 999, 0, 7),
 			row(9, 0.85, 1, 1.4, 0, 999, 0, 8),
 			row(11, 0.85, 1, 1.6, 0, 999, 0, 8),
@@ -331,10 +342,14 @@ WeaponData.Weapons = {
 			row(8, 4.2, 1, 1.0, 30, 999, 2.5, 0),
 			row(8, 4.2, 2, 1.0, 30, 999, 2.5, 0),
 			row(8, 4.2, 2, 1.2, 30, 999, 2.5, 0),
+			row(9.5, 4.2, 2, 1.2, 30, 999, 2.75, 0),
 			row(11, 4.2, 2, 1.2, 30, 999, 3.0, 0),
 			row(11, 4.2, 3, 1.2, 30, 999, 3.0, 0),
+			row(11, 4.1, 3, 1.3, 30, 999, 3, 0),
 			row(11, 4.0, 3, 1.4, 30, 999, 3.0, 0),
+			row(12.5, 4, 3, 1.4, 30, 999, 3.25, 0),
 			row(14, 4.0, 3, 1.4, 30, 999, 3.5, 0),
+			row(14, 3.8, 3, 1.4, 30, 999, 3.5, 0),
 			row(14, 3.6, 4, 1.4, 30, 999, 3.5, 0),
 		},
 		Evolution = {
@@ -359,10 +374,14 @@ WeaponData.Weapons = {
 			row(15, 3.0, 2, 1.0, 0, 999, 0, 0),
 			row(15, 3.0, 3, 1.0, 0, 999, 0, 0),
 			row(20, 3.0, 3, 1.0, 0, 999, 0, 0),
+			row(20, 3, 3, 1.15, 0, 999, 0, 0),
 			row(20, 3.0, 3, 1.3, 0, 999, 0, 0),
 			row(20, 3.0, 4, 1.3, 0, 999, 0, 0),
+			row(23, 2.8, 4, 1.3, 0, 999, 0, 0),
 			row(26, 2.6, 4, 1.3, 0, 999, 0, 0),
+			row(26, 2.6, 4, 1.45, 0, 999, 0, 0),
 			row(26, 2.6, 4, 1.6, 0, 999, 0, 0),
+			row(29, 2.6, 4, 1.6, 0, 999, 0, 0),
 			row(32, 2.6, 5, 1.6, 0, 999, 0, 0),
 		},
 		Evolution = {
@@ -388,9 +407,13 @@ WeaponData.Weapons = {
 			row(20, 2.5, 1, 1.0, 22, 3, 3.0, 10),
 			row(20, 2.5, 2, 1.0, 22, 3, 3.0, 10),
 			row(30, 2.5, 2, 1.0, 22, 3, 3.0, 10),
+			row(30, 2.5, 2, 1, 22, 4, 3, 11),
 			row(30, 2.5, 2, 1.0, 22, 5, 3.0, 12),
+			row(30, 2.5, 2, 1, 23, 5, 3, 12),
 			row(30, 2.5, 3, 1.0, 24, 5, 3.0, 12),
+			row(35, 2.5, 3, 1.1, 24, 5, 3, 12),
 			row(40, 2.5, 3, 1.2, 24, 5, 3.0, 12),
+			row(40, 2.5, 3, 1.2, 24, 6, 3, 13),
 			row(40, 2.5, 3, 1.2, 24, 7, 3.0, 14),
 			row(50, 2.2, 4, 1.2, 26, 7, 3.0, 14),
 		},
@@ -417,10 +440,14 @@ WeaponData.Weapons = {
 			row(10, 2.2, 1, 1.0, 36, 999, 0.8, 6),
 			row(14, 2.2, 1, 1.0, 36, 999, 0.8, 6),
 			row(14, 2.2, 2, 1.0, 36, 999, 0.8, 6),
+			row(14, 2.2, 2, 1, 39, 999, 0.8, 6.5),
 			row(14, 2.2, 2, 1.0, 42, 999, 0.8, 7),
+			row(16, 2.2, 2, 1.1, 42, 999, 0.8, 7),
 			row(18, 2.2, 2, 1.2, 42, 999, 0.8, 7),
 			row(18, 2.2, 3, 1.2, 42, 999, 0.8, 7),
+			row(18, 2.05, 3, 1.2, 42, 999, 0.8, 7.5),
 			row(18, 1.9, 3, 1.2, 42, 999, 0.8, 8),
+			row(21, 1.9, 3, 1.2, 43, 999, 0.85, 8),
 			row(24, 1.9, 4, 1.2, 44, 999, 0.9, 8),
 		},
 		Evolution = {
@@ -451,14 +478,17 @@ WeaponData.Weapons = {
 		AmountLabel = "Arrows",
 		DurationLabel = "Range",
 		Params = { Radius = 0.9, Spread = 1.1, Visual = 20, EvoVisual = 21, VolleyEvery = 3, VolleyAngle = 12 },
-		Perks = { { Level = 6, Id = "Volley", Name = "Volley", Text = "Every 3rd shot also fires 2 arrows to the sides." } },
+		Perks = { { Level = 10, Id = "Volley", Name = "Volley", Text = "Every 3rd shot also fires 2 arrows to the sides." } },
 		Levels = {
-			--   dmg  cd    amt area spd  prc dur   kb
 			row(18, 1.70, 1, 1.0, 100, 2, 0.90, 8),
 			row(24, 1.70, 1, 1.0, 100, 2, 0.90, 8),
+			row(24, 1.7, 1, 1, 102.5, 2, 0.925, 8.5),
 			row(24, 1.70, 1, 1.0, 105, 3, 0.95, 9),
+			row(24, 1.65, 1, 1, 105, 3, 0.95, 9),
 			row(24, 1.60, 2, 1.0, 105, 3, 0.95, 9),
+			row(27, 1.6, 2, 1, 107.5, 3, 0.975, 9.5),
 			row(30, 1.60, 2, 1.0, 110, 3, 1.00, 10),
+			row(30, 1.55, 2, 1.05, 110, 3, 1, 10),
 			row(30, 1.50, 2, 1.1, 110, 4, 1.00, 10),
 			row(36, 1.50, 2, 1.1, 115, 4, 1.00, 11),
 			row(42, 1.40, 2, 1.2, 115, 5, 1.00, 12),
@@ -499,18 +529,21 @@ WeaponData.Weapons = {
 		Color = Color3.fromRGB(190, 150, 90),
 		Behavior = "Spear",
 		AmountLabel = "Spears",
-		Perks = { { Level = 5, Id = "Impale", Name = "Impale", Text = "The first enemy each spear hits takes +50% damage." } },
+		Perks = { { Level = 6, Id = "Impale", Name = "Impale", Text = "The first enemy each spear hits takes +50% damage." } },
 		-- Reach studs at area 1, Width = hit radius along the shaft, ThrustTime = out and back
 		Params = { Reach = 11, Width = 1.3, ThrustTime = 0.26, FanAngle = 14, ImpaleBonus = 0.5, BurstRadius = 4.5, BurstShare = 0.6, Visual = 22, EvoVisual = 23 },
 		Levels = {
-			--   dmg  cd    amt area spd prc dur kb
 			row(14, 1.20, 1, 1.0, 0, 3, 0, 10),
 			row(18, 1.20, 1, 1.0, 0, 3, 0, 10),
 			row(18, 1.20, 2, 1.0, 0, 3, 0, 10),
+			row(20, 1.175, 2, 1.05, 0, 3, 0, 10.5),
 			row(22, 1.15, 2, 1.1, 0, 4, 0, 11),
 			row(22, 1.15, 2, 1.1, 0, 5, 0, 11),
+			row(24, 1.125, 2, 1.15, 0, 5, 0, 11.5),
 			row(26, 1.10, 2, 1.2, 0, 5, 0, 12),
+			row(27.5, 1.075, 2, 1.2, 0, 5, 0, 12),
 			row(29, 1.05, 2, 1.2, 0, 6, 0, 12),
+			row(30.5, 1.025, 2, 1.25, 0, 6, 0, 12.5),
 			row(32, 1.00, 2, 1.3, 0, 6, 0, 13),
 		},
 		Evolution = {
@@ -532,14 +565,18 @@ WeaponData.Weapons = {
 		Behavior = "Crossbow",
 		AmountLabel = "Bolts",
 		DurationLabel = "Range",
-		Perks = { { Level = 4, Id = "Ricochet", Name = "Ricochet", Text = "A bolt that would stop bounces once to the nearest other enemy." } },
+		Perks = { { Level = 6, Id = "Ricochet", Name = "Ricochet", Text = "A bolt that would stop bounces once to the nearest other enemy." } },
 		Params = { Radius = 0.7, Visual = 24, EvoVisual = 25 },
 		Levels = {
 			row(8, 0.95, 1, 1.0, 120, 1, 0.65, 3),
 			row(11, 0.95, 1, 1.0, 120, 1, 0.65, 3),
+			row(11, 0.925, 1, 1, 122.5, 1, 0.65, 3),
 			row(11, 0.90, 2, 1.0, 125, 1, 0.65, 3),
+			row(12, 0.9, 2, 1, 125, 1, 0.65, 3),
 			row(13, 0.90, 2, 1.0, 125, 1, 0.65, 3),
+			row(13, 0.875, 2, 1, 127.5, 1, 0.65, 3),
 			row(13, 0.85, 3, 1.0, 130, 1, 0.65, 3),
+			row(14, 0.85, 3, 1, 130, 1, 0.675, 3.5),
 			row(15, 0.85, 3, 1.0, 130, 2, 0.70, 4),
 			row(16, 0.80, 3, 1.0, 135, 2, 0.70, 4),
 			row(17, 0.78, 3, 1.1, 140, 2, 0.70, 4),
@@ -565,15 +602,19 @@ WeaponData.Weapons = {
 		Area = true,
 		AmountLabel = nil, -- one burst: Amount does nothing for the nova
 		DurationLabel = "Slow time",
-		Perks = { { Level = 5, Id = "Shatter", Name = "Shatter", Text = "Enemies the nova kills burst into 3 ice shards (half damage)." } },
+		Perks = { { Level = 8, Id = "Shatter", Name = "Shatter", Text = "Enemies the nova kills burst into 3 ice shards (half damage)." } },
 		-- Slow = enemy speed multiplier while chilled (EnemyAI SlowMult)
 		Params = { Radius = 8, Slow = 0.6, EvoSlow = 0.3, ShardCount = 3, ShardShare = 0.5, ShardSpeed = 48, MaxShards = 12, Visual = 26, EvoVisual = 36 },
 		Levels = {
 			row(12, 3.0, 1, 1.0, 0, 999, 1.5, 4),
 			row(12, 3.0, 1, 1.15, 0, 999, 1.5, 4),
+			row(14, 3, 1, 1.15, 0, 999, 1.65, 4),
 			row(16, 3.0, 1, 1.15, 0, 999, 1.8, 4),
+			row(16, 2.85, 1, 1.15, 0, 999, 1.8, 4.5),
 			row(16, 2.7, 1, 1.15, 0, 999, 1.8, 5),
+			row(18, 2.7, 1, 1.225, 0, 999, 1.9, 5),
 			row(20, 2.7, 1, 1.3, 0, 999, 2.0, 5),
+			row(22, 2.6, 1, 1.3, 0, 999, 2, 5),
 			row(24, 2.5, 1, 1.3, 0, 999, 2.0, 5),
 			row(26, 2.4, 1, 1.45, 0, 999, 2.2, 6),
 			row(30, 2.2, 1, 1.6, 0, 999, 2.5, 6),
@@ -600,15 +641,19 @@ WeaponData.Weapons = {
 		AmountLabel = nil,
 		DurationLabel = "Burn time",
 		CooldownLabel = "Flame every",
-		Perks = { { Level = 5, Id = "Wildfire", Name = "Wildfire", Text = "Every 3rd flame patch is 60% wider." } },
+		Perks = { { Level = 8, Id = "Wildfire", Name = "Wildfire", Text = "Every 3rd flame patch is 60% wider." } },
 		-- damage per Tick to enemies in a patch; Spacing = studs walked between patches
 		Params = { Radius = 3.2, Tick = 0.5, Arm = 0.15, Spacing = 2.2, MaxPatches = 16, WildfireEvery = 3, WildfireScale = 1.6, IgniteSeconds = 2, IgniteShare = 0.5, Visual = 37, EvoVisual = 38 },
 		Levels = {
 			row(4, 0.45, 1, 1.0, 0, 999, 2.0, 0),
 			row(5, 0.45, 1, 1.0, 0, 999, 2.2, 0),
+			row(5, 0.425, 1, 1.075, 0, 999, 2.2, 0),
 			row(5, 0.40, 1, 1.15, 0, 999, 2.2, 0),
+			row(6, 0.4, 1, 1.15, 0, 999, 2.35, 0),
 			row(7, 0.40, 1, 1.15, 0, 999, 2.5, 0),
+			row(7, 0.4, 1, 1.2, 0, 999, 2.5, 0),
 			row(7, 0.40, 1, 1.25, 0, 999, 2.5, 0),
+			row(8, 0.375, 1, 1.25, 0, 999, 2.65, 0),
 			row(9, 0.35, 1, 1.25, 0, 999, 2.8, 0),
 			row(10, 0.35, 1, 1.35, 0, 999, 2.8, 0),
 			row(12, 0.30, 1, 1.4, 0, 999, 3.0, 0),
@@ -635,15 +680,19 @@ WeaponData.Weapons = {
 		AmountLabel = "Totems",
 		DurationLabel = "Totem life",
 		CooldownLabel = "Plant every",
-		Perks = { { Level = 5, Id = "Rooting", Name = "Rooting Pulse", Text = "Every 3rd pulse roots enemies in the ring for 0.5 s." } },
+		Perks = { { Level = 8, Id = "Rooting", Name = "Rooting Pulse", Text = "Every 3rd pulse roots enemies in the ring for 0.5 s." } },
 		-- Pulse = seconds between pulses; a hero is healed by at most one totem per HealGap
 		Params = { Radius = 7, Pulse = 1.0, EvoPulse = 0.8, HealGap = 0.9, RootEvery = 3, RootSeconds = 0.5, MaxAmount = 3, Visual = 27, EvoVisual = 28 },
 		Levels = {
 			healing(row(6, 9.0, 1, 1.0, 0, 999, 7.0, 2), 1),
 			healing(row(8, 9.0, 1, 1.0, 0, 999, 7.0, 2), 1),
+			healing(row(8, 8.5, 1, 1.075, 0, 999, 7.5, 2), 1.25),
 			healing(row(8, 8.0, 1, 1.15, 0, 999, 8.0, 2), 1.5),
+			healing(row(9, 8, 1, 1.15, 0, 999, 8, 2), 1.5),
 			healing(row(10, 8.0, 1, 1.15, 0, 999, 8.0, 2), 1.5),
+			healing(row(10, 8, 1, 1.15, 0, 999, 8, 2), 1.75),
 			healing(row(10, 8.0, 2, 1.15, 0, 999, 8.0, 2), 2),
+			healing(row(11.5, 7.75, 2, 1.225, 0, 999, 8.25, 2.5), 2),
 			healing(row(13, 7.5, 2, 1.3, 0, 999, 8.5, 3), 2),
 			healing(row(15, 7.5, 2, 1.3, 0, 999, 9.0, 3), 2.5),
 			healing(row(18, 7.0, 2, 1.4, 0, 999, 9.0, 3), 2.5),
@@ -666,15 +715,19 @@ WeaponData.Weapons = {
 		Behavior = "Hook",
 		AmountLabel = "Hooks",
 		DurationLabel = "Reach time",
-		Perks = { { Level = 4, Id = "Barbed", Name = "Barbed Chain", Text = "Enemies along the chain are dragged in too." } },
+		Perks = { { Level = 6, Id = "Barbed", Name = "Barbed Chain", Text = "Enemies along the chain are dragged in too." } },
 		-- Cone = half-angle (degrees) around your facing; reach = speed x duration
 		Params = { Cone = 40, Radius = 1.0, PullTo = 5, ChainWidth = 1.6, ChainShare = 0.6, Visual = 29, EvoVisual = 30 },
 		Levels = {
 			row(18, 2.4, 1, 1.0, 75, 999, 0.42, 0),
 			row(22, 2.4, 1, 1.0, 75, 999, 0.42, 0),
+			row(22, 2.3, 1, 1.05, 77.5, 999, 0.435, 0),
 			row(22, 2.2, 1, 1.1, 80, 999, 0.45, 0),
+			row(24, 2.2, 1, 1.1, 80, 999, 0.45, 0),
 			row(26, 2.2, 1, 1.1, 80, 999, 0.45, 0),
+			row(26, 2.1, 1, 1.1, 82.5, 999, 0.45, 0),
 			row(26, 2.0, 2, 1.1, 85, 999, 0.45, 0),
+			row(29, 2, 2, 1.15, 85, 999, 0.465, 0),
 			row(32, 2.0, 2, 1.2, 85, 999, 0.48, 0),
 			row(36, 1.9, 2, 1.2, 90, 999, 0.50, 0),
 			row(40, 1.8, 2, 1.3, 90, 999, 0.50, 0),
@@ -699,15 +752,19 @@ WeaponData.Weapons = {
 		AmountLabel = "Turrets",
 		DurationLabel = "Turret life",
 		CooldownLabel = "Rebuild",
-		Perks = { { Level = 5, Id = "Flak", Name = "Flak Shells", Text = "Every 4th turret shot bursts for half damage around its target." } },
+		Perks = { { Level = 8, Id = "Flak", Name = "Flak Shells", Text = "Every 4th turret shot bursts for half damage around its target." } },
 		-- damage / speed / pierce are the turret's bolts; ShotEvery = seconds between shots
 		Params = { ShotEvery = 0.55, EvoShotEvery = 0.33, Range = 30, BoltRadius = 0.6, FlakEvery = 4, FlakRadius = 3.5, FlakShare = 0.5, MaxAmount = 2, Visual = 33, EvoVisual = 34, ShotVisual = 35 },
 		Levels = {
 			row(6, 7.0, 1, 1.0, 90, 1, 5.0, 2),
 			row(8, 7.0, 1, 1.0, 90, 1, 5.0, 2),
+			row(8, 6.75, 1, 1.05, 92.5, 1, 5.25, 2),
 			row(8, 6.5, 1, 1.1, 95, 1, 5.5, 2),
+			row(9, 6.5, 1, 1.1, 95, 1, 5.5, 2),
 			row(10, 6.5, 1, 1.1, 95, 1, 5.5, 2),
+			row(10, 6.5, 1, 1.1, 95, 1, 5.75, 2),
 			row(10, 6.5, 2, 1.1, 95, 1, 6.0, 2),
+			row(11.5, 6.25, 2, 1.15, 97.5, 1, 6, 2.5),
 			row(13, 6.0, 2, 1.2, 100, 2, 6.0, 3),
 			row(15, 6.0, 2, 1.2, 100, 2, 6.0, 3),
 			row(17, 6.0, 2, 1.3, 105, 2, 6.0, 3),
@@ -729,15 +786,19 @@ WeaponData.Weapons = {
 		Color = Color3.fromRGB(170, 210, 160),
 		Behavior = "Soul",
 		AmountLabel = "Souls",
-		Perks = { { Level = 4, Id = "Wandering", Name = "Wandering Souls", Text = "A soul that kills its target flies on to another enemy." } },
+		Perks = { { Level = 5, Id = "Wandering", Name = "Wandering Souls", Text = "A soul that kills its target flies on to another enemy." } },
 		Params = { Radius = 0.9, TurnRate = 5, Range = 55, Seek = 30, Visual = 31, EvoVisual = 32 },
 		Levels = {
 			row(9, 1.40, 1, 1.0, 30, 1, 4.0, 2),
 			row(9, 1.40, 2, 1.0, 30, 1, 4.0, 2),
 			row(12, 1.40, 2, 1.0, 32, 1, 4.0, 2),
+			row(12, 1.35, 2, 1, 32, 1, 4, 2),
 			row(12, 1.30, 2, 1.0, 32, 1, 4.0, 2),
+			row(12, 1.3, 2, 1, 33, 1, 4, 2),
 			row(12, 1.30, 3, 1.0, 34, 1, 4.0, 2),
+			row(13.5, 1.25, 3, 1, 34, 1, 4, 2.5),
 			row(15, 1.20, 3, 1.0, 34, 2, 4.0, 3),
+			row(16, 1.2, 3, 1.05, 35, 2, 4, 3),
 			row(17, 1.20, 3, 1.1, 36, 2, 4.0, 3),
 			row(18, 1.10, 4, 1.1, 36, 2, 4.5, 3),
 		},

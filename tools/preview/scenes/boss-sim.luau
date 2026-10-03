@@ -5,13 +5,14 @@
 -- Checks: the creatures (Spitter glob, Bomb Tick fuse, Rhino lunge, elite affixes, a
 -- Burrower tunnelling and surfacing, a Healer's pulse, a Nest spawning mites and paying
 -- its reward), the boss entrance (invulnerable, no damage during entrance + grace), the
--- attack cycle, phase 2 at 50% (roar + twist), a kill in the middle of an attack (the
+-- attack cycle, phase 2 below 40% (roar + twist + follow-up), a kill in the middle of an attack (the
 -- collapse clears every hazard / stinger / banner / egg at once, then the surge), a
 -- simultaneous second hit (no double kill), and travel cleanup. A logic smoke test:
 --   render.sh boss-sim --studio --devices pc --set boss=RhinoWarlord
 local C = lib("common")
 local Players = game:GetService("Players")
 local bossId = preview.args.boss or "ScorpionQueen"
+assert(C.shared("BossData").Bosses[bossId], "unknown boss fixture: " .. bossId)
 preview.forceMeshesUploaded()
 preview.startServer()
 preview.advance(1)
@@ -190,8 +191,8 @@ for _ = 1, 60 do
 end
 boss = Spawner.Boss
 if boss then
-	Spawner.Damage(boss, boss.HP - boss.MaxHP * 0.45, rp)
-	preview.log("boss hit to 45% -> phase 2 at the next chase")
+	Spawner.Damage(boss, boss.HP - boss.MaxHP * 0.35, rp)
+	preview.log("boss hit to 35% -> phase 2 at the next chase")
 end
 taken = 0
 run(34)

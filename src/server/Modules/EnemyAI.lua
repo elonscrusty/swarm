@@ -486,7 +486,7 @@ local function launchGlob(e, R)
 	end
 	local dist = ((point - e.Pos) * FLAT).Magnitude
 	Fx.Warn("glob", e.Pos.X, e.Pos.Z, point.X, point.Z, R.Flight, 5 + dist * 0.12)
-	Hazards.Strike(point, R.Splash, R.Flight, R.Damage * (e.DmgScale or 1), { Warn = e.WarnId, Style = "acid" })
+	Hazards.Strike(point, R.Splash, R.Flight, R.Damage * (e.DmgScale or 1), { Warn = e.WarnId, Style = "acid", Cause = "Spitter acid glob" })
 	e.WarnId = nil -- the strike owns the landing circle now
 	e.GlobTarget = nil
 end
@@ -659,7 +659,7 @@ function EnemyAI.Step(dt: number)
 	end
 	local chunks = Config.Enemies.ThinkChunks
 	local slot = frame % chunks
-	local now = os.clock()
+	local now = ctx.RunManager.GetRunTime()
 	local decay = math.max(0, 1 - Config.Enemies.KnockbackDecay * dt)
 	local sepStrength = Config.Enemies.SeparationStrength
 	local recycle2 = Config.Enemies.RecycleDistance ^ 2
@@ -746,7 +746,8 @@ function EnemyAI.Step(dt: number)
 				local reach = e.Radius + PLAYER_RADIUS
 				if not harmless and d2 <= reach * reach and now >= e.NextContact then
 					e.NextContact = now + Config.Enemies.ContactCooldown
-					ctx.RunManager.DamagePlayer(rp, e.Damage * (rallied and e.RallyDamage or 1))
+					local name = (e.BossData and e.BossData.DisplayName) or e.Def.DisplayName or e.Type
+					ctx.RunManager.DamagePlayer(rp, e.Damage * (rallied and e.RallyDamage or 1), name .. " contact")
 				end
 			end
 		end
