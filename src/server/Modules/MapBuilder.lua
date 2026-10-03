@@ -1594,7 +1594,7 @@ local function cliffs(arena: Arena, style: CliffStyle)
 					deco(arena.Decor, { Name = "CliffSeam", Size = Vector3.new(len * 0.55, 0.35, 0.7), CFrame = CFrame.new(W(arena, sp.X, sp.Y, 0.2)) * yawCF(math.deg(math.atan2(-along.Y, along.X))), Color = style.Seam, Material = NEON })
 				end
 				-- a kit rock at the foot (it pokes at most a stud into the play square)
-				if style.Foot and math.abs(t) < h - 6 and rng:NextNumber() < (face and 0.15 or 0.3) then
+				if style.Foot and math.abs(t) < h - 6 and rng:NextNumber() < (face and 0.12 or 0.25) then
 					local f = pick(style.Foot)
 					local s = rng:NextNumber(f[2], f[3])
 					local d = h + kitRadius(f[1]) * s - 1
@@ -1622,8 +1622,8 @@ type Vignette = (Arena, number, number) -> ()
 
 local function campfire(arena: Arena, x: number, z: number, stone: Pal?, wood: Color3?)
 	local w = wood or P.wood_600
-	for k = 0, 5 do
-		local a = k / 6 * TAU + jitter(0.2)
+	for k = 0, 4 do
+		local a = k / 5 * TAU + jitter(0.2)
 		decor(arena, "Rock_Small", x + math.cos(a) * 1.5, z + math.sin(a) * 1.5, nil, rng:NextNumber(0.55, 0.75), stone)
 	end
 	disc(arena.Decor, "Ash", W(arena, x, z, 0.06), 1.2, mix(P.cinder_500, P.dirt_500, 0.4))
@@ -1646,8 +1646,7 @@ end
 local function supplies(arena: Arena, x: number, z: number, wood: Pal?)
 	local yaw = rng:NextNumber(0, 360)
 	decor(arena, "Crate", x, z, yaw, 1.0, wood, { shadow = true })
-	decor(arena, "Crate", x + 2.1, z + jitter(0.4), yaw + jitter(15), 0.9, wood)
-	prop(arena.Decor, "Crate", CFrame.new(W(arena, x + 0.9, z, 1.95)) * yawCF(yaw + 25), 0.8, wood, { shadow = false })
+	prop(arena.Decor, "Crate", CFrame.new(W(arena, x + 0.2, z, 1.95)) * yawCF(yaw + 25), 0.8, wood, { shadow = false })
 	decor(arena, "Barrel", x - 1.8, z + 1.2, nil, 1.0, wood)
 	if rng:NextNumber() < 0.5 then
 		decor(arena, "Barrel", x - 1.6, z - 0.9, nil, 0.9, wood)
@@ -1944,9 +1943,9 @@ local function buildForest(arena: Arena)
 	-- camera side, then the tree line (on the cliff tops)
 	vignettes(arena, {
 		function(a, x, z) campfire(a, x, z) end,
-		function(a, x, z) ring(a, x, z, "Mushroom", 5, 3.2, 1.2, 1.7) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 4, 3.0, 1.2, 1.7) end,
 		function(a, x, z) supplies(a, x, z) end,
-		function(a, x, z) cluster(a, x, z, { { "Mushroom", 1.1, 1.6 }, { "Fern", 1.3, 1.8 }, { "Stump", 0.8, 1.0 } }, 5, 3.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Mushroom", 1.1, 1.6 }, { "Fern", 1.3, 1.8 }, { "Stump", 0.8, 1.0 } }, 4, 3.5) end,
 		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Rock_Small", 0.8, 1.2 }, { "Flowers", 1.2, 1.5 } }, 3, 3) end,
 		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.6, 1.0, 1.4) end,
 		function(a, x, z) cluster(a, x, z, { { "Crystal", 0.8, 1.2 }, { "Rock_Small", 0.8, 1.2 } }, 4, 2.5) end,
@@ -2253,7 +2252,7 @@ local function buildRuins(arena: Arena)
 		function(a, x, z) cluster(a, x, z, { { "CrystalCluster", 0.8, 1.1 }, { "Crystal", 0.8, 1.2 }, { "Rock_Small", 0.8, 1.2 } }, 4, 3) end,
 		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Ruin_Block", 0.5, 0.8 }, { "Flowers", 1.2, 1.5 } }, 3, 3) end,
 		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.8, 1.0, 1.5) end,
-		function(a, x, z) cluster(a, x, z, { { "Ruin_Block", 0.5, 0.8 }, { "Rock_Small", 0.8, 1.2 }, { "Fern", 1.2, 1.6 } }, 5, 4) end,
+		function(a, x, z) cluster(a, x, z, { { "Ruin_Block", 0.5, 0.8 }, { "Rock_Small", 0.8, 1.2 }, { "Fern", 1.2, 1.6 } }, 4, 4) end,
 	})
 	cliffs(arena, {
 		Rock = { RUIN_PAL.Stone, RUIN_PAL.Stone3, mix(RUIN_PAL.Stone, RUIN_PAL.Stone2, 0.5) },
@@ -2601,10 +2600,10 @@ local function buildSwamp(arena: Arena)
 	-- reeds along the edge, then the mangrove / willow line
 	vignettes(arena, {
 		function(a, x, z) campfire(a, x, z, SWAMP_PEBBLE, P.wood_700) end,
-		function(a, x, z) ring(a, x, z, "Mushroom", 5, 3.0, 1.2, 1.8) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.8, 1.2, 1.8) end,
 		function(a, x, z) supplies(a, x, z, SWAMP_WOOD) end,
 		function(a, x, z) decor(a, "Swamp_Lantern", x, z, 0, 0.9); cluster(a, x, z, { { "Reeds", 1.2, 1.6 }, { "Mushroom", 1.0, 1.4 } }, 4, 3) end,
-		function(a, x, z) cluster(a, x, z, { { "Swamp_Stump", 0.7, 0.9 }, { "Mushroom", 1.1, 1.5 }, { "Fern", 1.1, 1.5, SWAMP_FERN } }, 5, 3.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Swamp_Stump", 0.7, 0.9 }, { "Mushroom", 1.1, 1.5 }, { "Fern", 1.1, 1.5, SWAMP_FERN } }, 4, 3.5) end,
 		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.4, 1.0, 1.4) end,
 	})
 	cliffs(arena, {
@@ -2868,9 +2867,9 @@ local function buildSnow(arena: Arena)
 	vignettes(arena, {
 		function(a, x, z) campfire(a, x, z, SNOW_PEBBLE) end,
 		function(a, x, z) supplies(a, x, z, SNOW_WOOD) end,
-		function(a, x, z) cluster(a, x, z, { { "Ice_Crystal", 0.7, 1.1 }, { "Snow_Drift", 0.9, 1.2 }, { "Rock_Small", 0.8, 1.1, SNOW_PEBBLE } }, 5, 3.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Ice_Crystal", 0.7, 1.1 }, { "Snow_Drift", 0.9, 1.2 }, { "Rock_Small", 0.8, 1.1, SNOW_PEBBLE } }, 4, 3.5) end,
 		function(a, x, z) decor(a, "Snow_Lamp", x, z, 0, 0.9); cluster(a, x, z, { { "Snow_Bush", 0.9, 1.2 }, { "Snow_Drift", 0.9, 1.3 } }, 3, 3) end,
-		function(a, x, z) cluster(a, x, z, { { "Ice_Crystal", 0.6, 1.0 }, { "Ice_Crystal", 0.8, 1.2 } }, 4, 2.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Ice_Crystal", 0.6, 1.0 }, { "Ice_Crystal", 0.8, 1.2 } }, 3, 2.5) end,
 		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Snow_Drift", 0.9, 1.2 } }, 2, 2.5) end,
 	})
 	cliffs(arena, {

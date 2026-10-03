@@ -706,7 +706,7 @@ local function updateSlow()
 					-- shrines ivory diamonds
 					local shrine = kind == "Shrine"
 					local paid = not shrine and (tonumber(m:GetAttribute("Price")) or 0) > 0
-					local c = if shrine then Accessibility.Color(P.ivory_200, "Neutral") elseif paid then Accessibility.Color(P.gold_400, "Loot") else P.ivory_50
+					local c = if shrine then Accessibility.Color(P.ivory_200, "Neutral") elseif paid then Accessibility.Color(P.gold_400, "Loot") else P.ivory_100
 					if f.BackgroundColor3 ~= c then
 						f.BackgroundColor3 = c
 					end

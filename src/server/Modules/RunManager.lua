@@ -975,7 +975,7 @@ local function beginRun(here: boolean?)
 		for _, id in ipairs(curses) do
 			table.insert(names, CurseData.Curses[id].Name)
 		end
-		RunManager.Broadcast(string.format("Curses: %s · %s gold", table.concat(names, ", "), CurseData.GoldText(ctx.RunModifiers.GoldMult())), Color3.fromRGB(230, 150, 160))
+		RunManager.Broadcast(string.format("Curses: %s · %s gold", table.concat(names, ", "), CurseData.GoldText(CurseData.GoldMult(ctx.RunModifiers.Active()))), Color3.fromRGB(230, 150, 160))
 	end
 	if ctx.RunModifiers.IsEndless() then
 		RunManager.Broadcast("ENDLESS: no way home, only deeper.", Color3.fromRGB(190, 160, 255), true)
@@ -1171,7 +1171,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		Unlocked = unlocked,
 		Achievements = achievements, -- unlocked this run: { {Id, Name, Reward, Icon} }
 		Curses = table.clone(ctx.RunModifiers.Active()), -- the run's curses (CurseData ids)
-		CurseGold = ctx.RunModifiers.GoldMult(),
+		CurseGold = CurseData.GoldMult(ctx.RunModifiers.Active()), -- curses only (difficulty gold is separate)
 		Account = info and info.Account or nil, -- { Gained, Parts, From, To, Into, Need, Rewards }
 		Mastery = info and info.Mastery or nil, -- { Hero, Gained, From, To } (Hero Mastery)
 		Daily = info and info.Daily or nil, -- { Scored, Score, Text, NewBest, Best }

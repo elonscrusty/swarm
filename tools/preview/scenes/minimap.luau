@@ -1,5 +1,5 @@
 -- minimap: the in-run minimap (MiniMap.lua) with every marker kind at once: stage 2 with the
--- portal far off range (pinned to the map's edge with its pointer), two chests, a shrine and
+-- portal far off range (pinned to the map's edge with its pointer), two chests (one paid: gold, one free: white), a shrine and
 -- the altar nearby, one teammate (eased blue disc), the Lost Caravan waiting (edge pin)
 -- and a light swarm. Asserts the pooled markers are shown. Markers are driven through the
 -- same replicated attributes the game uses (SwarmLoot / SwarmEvents models, SwarmState).
@@ -27,8 +27,8 @@ local function marker(folderName: string, name: string, attrs)
 	m.Parent = folder
 	return m
 end
-marker("SwarmLoot", "ChestA", { Pos = centre + Vector3.new(22, 0, 18), LootKind = "Chest", State = "Idle" })
-marker("SwarmLoot", "ChestB", { Pos = centre + Vector3.new(-40, 0, 35), LootKind = "Chest", State = "Idle" })
+marker("SwarmLoot", "ChestA", { Pos = centre + Vector3.new(22, 0, 18), LootKind = "Chest", State = "Idle", Price = 40 })
+marker("SwarmLoot", "ChestB", { Pos = centre + Vector3.new(-40, 0, 35), LootKind = "Chest", State = "Idle", Price = 0 })
 marker("SwarmLoot", "ChestOpened", { Pos = centre + Vector3.new(10, 0, -10), LootKind = "Chest", State = "Opened" })
 marker("SwarmLoot", "Shrine", { Pos = centre + Vector3.new(45, 0, -30), LootKind = "Shrine", State = "Idle" })
 marker("SwarmLoot", "Altar", { Pos = centre + Vector3.new(-30, 0, -45), LootKind = "Altar", State = "Idle" })
