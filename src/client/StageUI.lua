@@ -686,7 +686,10 @@ local function checkWave(state: Configuration)
 	lastWaveSeq = seq
 	local n = state:GetAttribute("Wave") or 0
 	local sides = string.split(tostring(state:GetAttribute("WaveSides") or ""), ",")
-	local sub = #sides == 1 and sides[1] ~= "" and ("From the " .. sides[1]) or (#sides .. " sides at once!")
+	local sub = #sides == 1 and sides[1] ~= "" and ("From the " .. sides[1]) or ("From " .. #sides .. " sides at once!")
+	if state:GetAttribute("WaveBig") == true then
+		sub = "BIG WAVE · " .. sub
+	end
 	Hud.Announce("WAVE " .. tostring(n), sub, Accessibility.Color(P.crimson_300, "Danger"), "WaveHorn")
 	local base = state:GetAttribute("WaveAngle")
 	if type(base) == "number" and #sides >= 1 then
