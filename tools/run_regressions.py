@@ -59,6 +59,10 @@ def main():
         # Live-store and teleport fixtures intentionally run outside Studio.
         if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim"):
             command.remove("--studio")
+        # results-flow drives the client results screen, so it needs the client running
+        if scene == "results-flow":
+            command.remove("--set")
+            command.remove("headless=on")
         if scene == "layout":
             layout_scene, device = settings[0], settings[1]
             command = [args.lune, "run", "tools/preview/runtime/main.luau", "--", "--scene", layout_scene,

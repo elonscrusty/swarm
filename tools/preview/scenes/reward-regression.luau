@@ -15,7 +15,8 @@ Gold.AddRunGold(rp, 10000)
 local function open(id)
 	local chest
 	for _, obj in ipairs(Loot.Objects()) do
-		if obj.Kind == "Chest" and obj.State == "Ready" then chest = obj; break end
+		-- not the Golden Chest: it is always a rare reveal (LootSystem pauses for it)
+		if obj.Kind == "Chest" and obj.State == "Ready" and obj.Type ~= "Golden" then chest = obj; break end
 	end
 	assert(chest, "expected another chest")
 	rp.Root.CFrame = CFrame.new(chest.Pos + Vector3.new(2, 3, 0))
