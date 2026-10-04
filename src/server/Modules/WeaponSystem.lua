@@ -2037,7 +2037,9 @@ function Arm.stepCloud(p: Projectile, dt: number, now: number): boolean
 		local n = grid():QueryCircle(p.Pos.X, p.Pos.Z, x.R, queryBuf)
 		local hits = table.move(queryBuf, 1, n, 1, {})
 		for _, e in ipairs(hits) do
-			if e.Alive then
+			-- overlapping clouds of one censer hurt an enemy once per tick (they used to
+			-- stack: 3-4 clouds on the same clump multiplied the damage)
+			if e.Alive and burnReady(p.Weapon, e, x.Tick, now) then
 				if x.Choke then
 					slowEnemy(e, x.Choke, x.Tick + 0.15, now)
 				end
@@ -2495,7 +2497,8 @@ function Arm.stepVortex(p: Projectile, dt: number, now: number): boolean
 	local n = grid():QueryCircle(c.X, c.Z, x.R, queryBuf)
 	local hits = table.move(queryBuf, 1, n, 1, {})
 	for _, e in ipairs(hits) do
-		if e.Alive then
+		-- overlapping rifts of one weapon hurt an enemy once per tick (no stacking)
+		if e.Alive and burnReady(p.Weapon, e, x.Tick, now) then
 			local rel = (c - e.Pos) * FLAT
 			local d = rel.Magnitude
 			local kb = d > 0.8 and pullSpeed(math.min(d * 0.6, x.Pull)) or 0
