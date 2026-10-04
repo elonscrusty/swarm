@@ -1410,8 +1410,7 @@ end
 
 --[[
 	The art panel at the top of a landscape card: the item's picture large over a backdrop
-	tinted with the item's own colour (a visual theme, not a rarity), a soft glow and a dark
-	plinth. popDelay pops the picture in during the entrance; it floats gently while the
+	tinted with the item's own colour (a visual theme, not a rarity) and a soft glow. popDelay pops the picture in during the entrance; it floats gently while the
 	offer is open. A picture that has not loaded shows its vector icon (Icons).
 ]]
 function Choice.cardArt(face: GuiObject, c, x: number, y: number, w: number, h: number, accent: Color3, popDelay: number?): Frame
@@ -1440,18 +1439,7 @@ function Choice.cardArt(face: GuiObject, c, x: number, y: number, w: number, h: 
 		ZIndex = 2,
 	}, art)
 	UIKit.corner(glow, 999)
-	local plinth = new("Frame", {
-		Name = "Plinth",
-		BackgroundColor3 = P.slate_950,
-		BackgroundTransparency = 0.45,
-		BorderSizePixel = 0,
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -6),
-		Size = UDim2.fromOffset(math.floor(w * 0.6), math.max(8, math.floor(h * 0.1))),
-		ZIndex = 2,
-		Visible = h >= 100,
-	}, art)
-	UIKit.corner(plinth, 999)
+	-- (no plinth: the floating picture never sat on it and it read as a stray dark bar)
 	-- short panels (phones in landscape) give the picture nearly all their height
 	local iconS = math.max(32, math.floor(math.min(h < 100 and h - 14 or h - 30, w * 0.62)))
 	local holder = new("Frame", {

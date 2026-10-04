@@ -791,7 +791,11 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 			local left = state:GetAttribute("ChoiceLeft") or 0
 			local ready = state:GetAttribute("PortalReady") or ""
 			local note
-			if chosen then
+			if state:GetAttribute("ChoiceLeftHeld") == true then
+				-- group run: the countdown waits (bounded) while someone has an upgrade choice open
+				local names = tostring(state:GetAttribute("ChoosingNames") or "")
+				note = string.format("Waiting for %s to choose · %ds", names ~= "" and names or "a teammate", left)
+			elseif chosen then
 				note = ready ~= "" and string.format("Waiting for your team (%s ready) · %ds", ready, left) or string.format("Traveling in %ds", left)
 			else
 				note = string.format((offer and offer.Complete) and "Returning in %ds" or (offer and offer.Endless) and "Next stage in %ds" or "Next stage in %ds unless you return", left)

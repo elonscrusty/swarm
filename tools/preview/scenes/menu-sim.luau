@@ -83,6 +83,11 @@ if rp then
 end
 wait(2)
 log("after death")
+-- solo death opens the revive offer (Config.Monetization.RevivePromptSeconds) and the run
+-- waits on it: decline it as the offer's button does, then the results arrive
+preview.remote("ReviveDecline"):FireServer()
+wait(2)
+log("revive declined")
 -- the results screen's MAIN MENU (ReturnToLobby), as a player taps it
 preview.remote("ReturnToLobby"):FireServer()
 wait(1)
@@ -90,6 +95,14 @@ log("results closed")
 preview.remote("StartRun"):FireServer("Solo")
 wait(3)
 log("new run after death")
+local ok = me:GetAttribute("InRun") == true and me:GetAttribute("Alive") == true and #results >= 2 and results[#results].Abandoned ~= true
+preview.log((ok and "PASS" or "FAIL") .. " new run after death: alive in a fresh run, the death's results arrived")
+wait(5)
+log("new run +5 s")
+local spawned = Spawner.LiveCount(function()
+	return true
+end)
+preview.log((spawned > 0 and "PASS" or "FAIL") .. " new run after death spawns enemies (" .. spawned .. ")")
 preview.remote("AbandonRun"):FireServer()
 wait(1)
 log("final lobby")

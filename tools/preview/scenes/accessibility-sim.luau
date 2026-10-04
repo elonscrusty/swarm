@@ -100,7 +100,19 @@ Settings.Set("VisualAudioCues", true)
 if preview.args.headless ~= "on" then
 	preview.client("UIBuilder").OpenRunSettings()
 	local gui = game:GetService("Players").LocalPlayer.PlayerGui
-	local options = gui:FindFirstChild("Options", true)
+	-- the run settings' option list (the lobby PLAY sheet has its own "Options" list)
+	local options
+	for _, item in ipairs(gui:GetDescendants()) do
+		if item.Name == "Options" and item:IsA("ScrollingFrame") then
+			local shown, node = true, item
+			while node and node ~= gui do
+				if node:IsA("GuiObject") and not node.Visible then shown = false end
+				if node:IsA("ScreenGui") and not node.Enabled then shown = false end
+				node = node.Parent
+			end
+			if shown then options = item; break end
+		end
+	end
 	assert(options and options.CanvasSize.Y.Offset >= options.Size.Y.Offset, "settings must fit the viewport or remain reachable by scrolling")
 	if preview.args.view == "bottom" then options.CanvasPosition = Vector2.new(0, options.CanvasSize.Y.Offset) end
 end
