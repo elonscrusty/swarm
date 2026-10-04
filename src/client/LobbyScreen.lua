@@ -306,7 +306,7 @@ end
 	out once the lobby and heroes are in.
 ]]
 local function buildLoadingPill()
-	local pill = new("Frame", { Name = "LoadingPill", BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.25, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X, Position = UDim2.new(1, 0, 0, 56), AnchorPoint = Vector2.new(1, 0), Visible = false }, ui.Chip)
+	local pill = new("Frame", { Name = "LoadingPill", BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.25, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X, Position = UDim2.new(1, 0, 0, 56), AnchorPoint = Vector2.new(1, 0), Visible = false, ZIndex = 5 }, ui.Frame)
 	UIKit.corner(pill, 999)
 	UIKit.stroke(pill, P.gold_500, 1, 0.55)
 	UIKit.padding(pill, 0, 14, 0, 12)
@@ -332,8 +332,9 @@ local function updateLoadingPill()
 	-- (a DEV note: only on the MORE screen, never in the home composition)
 	if folder and not show and failed > 0 and dev and current == "More" then
 		ui.LoadingText.Text = string.format("DEV · %d of %d models failed · %s", failed, total, tostring(folder:GetAttribute("LastError") or ""))
-		pill.AnchorPoint = Vector2.new(ui.Chip.AnchorPoint.X, 0)
-		pill.Position = UDim2.new(ui.Chip.AnchorPoint.X, 0, 0, 56)
+		local at = ui.PillAnchor or { X = 0, Y = 56, AX = 0 }
+		pill.AnchorPoint = Vector2.new(at.AX, 0)
+		pill.Position = UDim2.fromOffset(at.X, at.Y)
 		pill.Visible = true
 		ui.LoadingShown = true
 	elseif show then
@@ -345,8 +346,9 @@ local function updateLoadingPill()
 			done = (tonumber(folder:GetAttribute("Loaded")) or 0) + (tonumber(folder:GetAttribute("Failed")) or 0)
 		end
 		ui.LoadingText.Text = string.format("Loading models… %d%%", math.floor(100 * math.clamp(done / need, 0, 1)))
-		pill.AnchorPoint = Vector2.new(ui.Chip.AnchorPoint.X, 0)
-		pill.Position = UDim2.new(ui.Chip.AnchorPoint.X, 0, 0, 56)
+		local at = ui.PillAnchor or { X = 0, Y = 56, AX = 0 }
+		pill.AnchorPoint = Vector2.new(at.AX, 0)
+		pill.Position = UDim2.fromOffset(at.X, at.Y)
 		pill.Visible = true
 		ui.LoadingShown = true
 	elseif ui.LoadingShown then
@@ -727,8 +729,9 @@ end
 
 local function buildHome(screen: Frame)
 	ui.Logo = buildLogo(screen)
-	buildHeroPill(screen)
-	buildTiles(screen)
+	buildCaption(screen)
+	buildAccount(screen)
+	buildNav(screen)
 	buildPlay(screen)
 	buildQueue(screen)
 end
@@ -736,6 +739,55 @@ end
 ------------------------------------------------------------------------------------------
 -- Layout
 ------------------------------------------------------------------------------------------
+
+-- The account pill's inside (badge, LV, rule, coin, gold) for a pill h tall; returns its width.
+local function layoutAccount(h: number): number
+	local heroS = h - 8
+	local x = 6
+	place(ui.AccountHero, x, 4, heroS, heroS)
+	x += heroS + 8
+	local lvSize = math.floor(math.clamp(h * 0.34, 14, 19))
+	ui.AccountLevel.TextSize = TS(lvSize)
+	local lvW = math.floor(TS(lvSize) * 0.66 * #ui.AccountLevel.Text + 4)
+	place(ui.AccountLevel, x, 0, lvW, h)
+	x += lvW + 12
+	place(ui.AccountRule, x, h * 0.22, 1, h * 0.56)
+	x += 13
+	ui.AccountCoin.Position = UDim2.fromOffset(x, math.floor((h - 30) / 2))
+	x += 30 + 8
+	local goldSize = math.floor(math.clamp(h * 0.38, 15, 21))
+	ui.AccountGold.TextSize = TS(goldSize)
+	local goldStr = UIKit.formatNumber(profile and profile.Gold or 0)
+	local gw = math.floor(TS(goldSize) * 0.64 * math.max(4, #goldStr) + 4)
+	place(ui.AccountGold, x, 0, gw, h)
+	return x + gw + 14
+end
+
+-- The bottom row: four items itemW wide, their captions and icons sized to the row.
+local function layoutNav(x: number, y: number, itemW: number, navH: number)
+	place(ui.Nav, x, y, itemW * #ui.NavItems, navH)
+	local capH = math.floor(math.clamp(navH * 0.26, 14, 24))
+	for i, b in ipairs(ui.NavItems) do
+		place(b.Instance, (i - 1) * itemW, 0, itemW, navH)
+		local cap = b.Content:FindFirstChild("Caption") :: TextLabel?
+		if cap then
+			cap.Size = UDim2.new(1, -4, 0, capH)
+			cap.Position = UDim2.new(0.5, 0, 1, -math.floor(navH * 0.06))
+		end
+		local iconS = math.floor(math.clamp(navH - capH - 18, 26, 52))
+		for _, ch in ipairs(b.Content:GetChildren()) do
+			if ch:IsA("GuiObject") and (ch.Name == "Glyph" or ch.Name == "Art") then
+				ch.Position = UDim2.new(0.5, 0, 0.5, -math.floor(capH / 2) - 2)
+				if ch.Name == "Art" then
+					ch.Size = UDim2.fromOffset(iconS, iconS)
+				end
+			end
+		end
+	end
+	for i, sep in ipairs(ui.NavSeps) do
+		place(sep, i * itemW, navH * 0.22, 1, navH * 0.56)
+	end
+end
 
 local function relayout()
 	if not ui.Frame then
@@ -750,12 +802,13 @@ local function relayout()
 	local G = Theme.Layout.Gutter
 	local home = current == "Home"
 	local showQueue = lastStatus == "Countdown" or lastStatus == "Busy"
+	local showReady = ui.ReadyBtn.Instance.Visible
 
+	-- sub-screens: the gold chip (phones in landscape put it in the Roblox top-bar row,
+	-- right of the Roblox buttons, above the screen's header); home has the account pill
 	setChipFlat(not portrait and current == "Characters")
-	-- every screen shows the gold chip; phones in landscape put it in the Roblox top-bar
-	-- row (right of the Roblox buttons) on the sub-screens, above the screen's header
 	local topRowChip = compact and not portrait and not home and ins.Top >= 48
-	ui.Chip.Visible = topRowChip or not (compact and not portrait and not home and current ~= "Characters")
+	ui.Chip.Visible = not home and (topRowChip or not (compact and not portrait and current ~= "Characters"))
 	ui.Cog.Instance.Visible = home
 	local chipY = ins.Right > 4 and (ins.Top + 6) or 12
 	if portrait then
@@ -763,156 +816,131 @@ local function relayout()
 	elseif current == "Characters" or topRowChip then
 		chipY = math.max(0, math.floor((ins.Top - 48) / 2))
 	end
-	-- home in landscape: the reference's margins (~4 % from the top, ~2 % from the right)
-	local homeWide = home and not portrait
-	local rightM = homeWide and math.max(M, math.floor(W * 0.022)) or M
-	if homeWide and ins.Right <= 4 then
-		chipY = math.max(chipY, math.floor(H * 0.04))
-	end
-	local cogS = 48
-	local cogW = home and (cogS + math.max(G, homeWide and math.floor(W * 0.014) or G)) or 0
 	ui.Chip.AnchorPoint = Vector2.new(1, 0)
 	if portrait and not home then
 		-- portrait sub-screens: under their header, centred
 		ui.Chip.AnchorPoint = Vector2.new(0.5, 0)
 		ui.Chip.Position = UDim2.fromOffset(W / 2, math.max(ins.Top + 4, 12) + 64)
+		ui.PillAnchor = { X = W / 2, Y = math.max(ins.Top + 4, 12) + 64 + 56, AX = 0.5 }
 	else
-		ui.Chip.Position = UDim2.fromOffset(W - rightM - cogW, chipY)
+		ui.Chip.Position = UDim2.fromOffset(W - M, chipY)
+		ui.PillAnchor = { X = W - M, Y = chipY + 56, AX = 1 }
 	end
-	place(ui.Cog.Instance, W - rightM - cogS, chipY, cogS, cogS)
 
-	local heroFrac = 0.5
-	local pillH = 64
-	local tilesW = 3 * (compact and 92 or 104) + 16
-	local tilesH = compact and 92 or 104
+	local heroFrac, heroX = 0.47, 0.6
+	local rightM = portrait and M or math.max(M, math.floor(W * 0.022))
+	local topY = chipY
+	if not portrait and ins.Right <= 4 then
+		topY = math.max(topY, math.floor(H * 0.025))
+	end
+	local pillH = math.floor(math.clamp(H * 0.062, 44, 58))
 	if portrait then
-		local logoScale = math.clamp((W - 2 * M) / 380, 0.66, 0.9)
-		ui.LogoScale.Scale = logoScale
-		local logoY = math.max(chipY + 52, ins.Top) + 6
-		ui.Logo.Position = UDim2.fromOffset((W - ui.LogoW * logoScale) / 2, logoY)
+		pillH = 46
+	end
+	-- top right: the account pill and PARTY
+	local partyW = math.floor(math.clamp(W * 0.085, 116, 150))
+	if portrait then
+		partyW = 112
+	end
+	local accW = layoutAccount(pillH)
+	place(ui.PartyBtn.Instance, W - rightM - partyW, topY, partyW, pillH)
+	place(ui.AccountBtn, W - rightM - partyW - G - accW, topY, accW, pillH)
+	if home then
+		ui.PillAnchor = { X = W - rightM, Y = topY + pillH + 8, AX = 1 }
+	end
+	local cogS = 48
+	local logoScale, logoX, logoY, capW, capH
+	local playW, playH, hintH, playY, playX
+	local navX, navY, itemW, navH
+	if portrait then
 		local w = math.min(W - 2 * M, 560)
 		local x = (W - w) / 2
-		-- bottom-up: mode selector, PLAY, tiles, hero pill
-		-- PLAY keeps the painted plate's shape (about 3.4 : 1) instead of stretching wide
-		local selH = 60
-		local playH = math.clamp(math.floor(w / 4), 108, 130)
-		local playW = math.min(w, math.floor(playH * 3.4))
-		local y = H - M - selH
-		local selW = math.min(w, 420)
-		place(ui.ModeSelect.Instance, (W - selW) / 2, y, selW, selH)
-		y -= G + playH
-		place(ui.PlayHolder, (W - playW) / 2, y, playW, playH)
-		local playTop = y
-		y -= G + 6 + tilesH
-		place(ui.Tiles, x, y, w, tilesH)
-		y -= 18 + pillH
-		local pillW = math.min(w, 400)
-		place(ui.HeroPill, (W - pillW) / 2, y, pillW, pillH)
-		-- the countdown / busy panel takes the pill, tiles, PLAY and selector area
-		place(ui.Queue, x, y, w, H - M - y)
-		place(ui.ReadyBtn.Instance, W - M - 132, playTop - G - 48 - tilesH - G - 6, 132, 48)
-		local logoBottom = logoY + (ui.LogoH + 10) * logoScale
-		heroFrac = ((logoBottom + y) / 2) / H
+		logoScale = math.clamp((w - 20) / ui.LogoW, 0.55, 1.05)
+		logoY = math.max(topY + pillH + 10, ins.Top + 4)
+		logoX = (W - ui.LogoW * logoScale) / 2
+		capW = math.min(w, 360)
+		capH = 34
+		-- bottom row: four items, then MORE and the cog
+		navH = 82
+		navY = H - M - navH
+		local side = 2 * (cogS + G)
+		itemW = math.floor((w - side) / 4)
+		navX = x
+		place(ui.Cog.Instance, x + w - cogS, navY + (navH - cogS) / 2, cogS, cogS)
+		place(ui.MoreBtn.Instance, x + w - 2 * cogS - G, navY + (navH - cogS) / 2, cogS, cogS)
+		-- PLAY (keeps the plate's ~3.25 : 1) with its line under it, over the bottom row
+		playW = math.min(w, 440)
+		playH = math.floor(math.clamp(playW / 3.25, 80, 136))
+		playW = math.min(playW, math.floor(playH * 3.25))
+		hintH = 26
+		local blockH = playH + 6 + hintH + (showReady and (G + 48) or 0)
+		playY = navY - G - blockH
+		playX = (W - playW) / 2
 	else
-		--[[ Proportions measured on the owner's reference (home-mockup, 16:9), as fractions of
-		     the safe area: logo 28 % wide top left; dock 27.4 % x 13.3 %, bottom 6 % up;
-		     hero selector 21.3 % x 6.6 % centred, PLAY 26.8 % x 15.5 % right with the
-		     SOLO selector (70 % of PLAY's width, 6.4 % tall) under it, both ending 7.5 % up.
-		     Phones keep finger-sized minimums. ]]
-		local sideM = math.max(M, math.floor(W * 0.022))
-		-- logo: ~28 % of the width, never taller than ~30 % of the height
-		local logoScale = math.min(W * 0.28 / ui.LogoW, H * 0.3 / ui.LogoH)
-		logoScale = math.clamp(logoScale, 0.5, 1.4)
-		ui.LogoScale.Scale = logoScale
-		local logoY = math.max(ins.Top + 2, math.floor(H * 0.03))
-		ui.Logo.Position = UDim2.fromOffset(sideM, logoY)
-		local baseB = math.max(M, math.floor(H * 0.06))
-		local lowB = math.max(M, math.floor(H * 0.075))
-		-- bottom left: the dock
-		tilesH = math.floor(math.clamp(H * 0.133, 90, 108))
-		tilesW = math.floor(math.clamp(W * 0.274, 3 * 92 + 16, 390))
-		place(ui.Tiles, sideM, H - baseB - tilesH, tilesW, tilesH)
-		-- bottom right: PLAY over the mode selector
-		local pw = math.floor(math.clamp(W * 0.268, 250, 400))
-		local playH = math.floor(math.clamp(H * 0.155, 80, 124))
-		local selH = math.floor(math.clamp(H * 0.064, 46, 52))
-		local selW = math.floor(pw * 0.7)
-		local selGap = math.max(8, math.floor(H * 0.018))
-		place(ui.ModeSelect.Instance, W - sideM - pw / 2 - selW / 2, H - lowB - selH, selW, selH)
-		local playY = H - lowB - selH - selGap - playH
-		place(ui.PlayHolder, W - sideM - pw, playY, pw, playH)
-		place(ui.ReadyBtn.Instance, W - sideM - 132, playY - G - 48, 132, 48)
-		local qTop = chipY + 64
-		place(ui.Queue, W - sideM - pw, qTop, pw, H - M - qTop)
-		-- the hero selector, compact and centred at the bottom (else in the gap between)
-		pillH = math.floor(math.clamp(H * 0.066, 50, 56))
-		local gapL, gapR = sideM + tilesW + 16, W - sideM - pw - 16
-		local half = math.min(W / 2 - gapL, gapR - W / 2)
-		local want = math.clamp(W * 0.213, 250, 320)
-		if 2 * half >= 250 then
-			local pillW = math.min(want, 2 * half)
-			place(ui.HeroPill, W / 2 - pillW / 2, H - lowB - pillH, pillW, pillH)
-		else
-			local pillW = math.clamp(gapR - gapL, 230, want)
-			place(ui.HeroPill, (gapL + gapR) / 2 - pillW / 2, H - lowB - pillH, pillW, pillH)
+		local sideM = math.max(M, math.floor(W * 0.045))
+		logoScale = math.clamp(math.min(W * 0.31 / ui.LogoW, H * 0.27 / ui.LogoH), 0.5, 1.7)
+		logoY = math.max(ins.Top + 2, math.floor(H * 0.035))
+		logoX = sideM
+		capW = ui.LogoW * logoScale * 0.92
+		capH = math.floor(math.clamp(H * 0.05, 28, 50))
+		-- bottom: the row of four centred under the hero, MORE and the cog bottom right
+		local bottomM = math.max(M, math.floor(H * 0.03))
+		navH = math.floor(math.clamp(H * 0.11, 62, 100))
+		navY = H - bottomM - navH
+		itemW = math.floor(math.clamp(W * 0.085, 76, 150))
+		local cogY = H - bottomM - cogS
+		place(ui.Cog.Instance, W - rightM - cogS, cogY, cogS, cogS)
+		local moreX = W - rightM - 2 * cogS - G
+		place(ui.MoreBtn.Instance, moreX, cogY, cogS, cogS)
+		navX = math.clamp(math.floor(W * 0.49 - 2 * itemW), sideM, moreX - G - 4 * itemW)
+		-- left: PLAY and its line, between the caption and the bottom row
+		playW = math.floor(math.clamp(W * 0.31, 230, 560))
+		playH = math.floor(math.clamp(playW / 3.25, 66, 172))
+		hintH = math.floor(math.clamp(H * 0.042, 20, 36))
+		local capBottom = logoY + ui.LogoH * logoScale + 2 + capH
+		local extra = 6 + hintH + (showReady and (G + 48) or 0)
+		local room = navY - G - (capBottom + G)
+		if playH + extra > room then
+			playH = math.max(56, room - extra)
+			playW = math.min(playW, math.floor(playH * 3.6))
 		end
-		-- the hero's middle at the centre, raised on short screens so the front of the dais
-		-- (about 0.34 of the height below the hero's middle) stays above the selector
-		heroFrac = math.clamp((H - lowB - pillH - 6) / H - 0.34, 0.4, 0.5)
+		playY = math.max(capBottom + G, math.min(math.floor(H * 0.52), navY - G - playH - extra))
+		playX = sideM
+		heroFrac = math.clamp((navY - 6) / H - 0.36, 0.38, 0.48)
+	end
+	ui.LogoScale.Scale = logoScale
+	ui.Logo.Position = UDim2.fromOffset(math.floor(logoX), math.floor(logoY))
+	local logoW = ui.LogoW * logoScale
+	local logoBottom = logoY + ui.LogoH * logoScale
+	place(ui.Caption, logoX + (logoW - capW) / 2, logoBottom + 2, capW, capH)
+	ui.CaptionFit.MaxTextSize = math.max(10, math.floor((capH - 12) * 0.95))
+	layoutNav(navX, navY, itemW, navH)
+	place(ui.PlayHolder, playX, playY, playW, playH)
+	place(ui.PlayHint, playX - 20, playY + playH + 6, playW + 40, hintH)
+	ui.PlayHintFit.MaxTextSize = math.max(10, hintH - 4)
+	local readyW = math.min(playW, 220)
+	place(ui.ReadyBtn.Instance, playX + (playW - readyW) / 2, playY + playH + 6 + hintH + G, readyW, 48)
+	local capBottom = logoBottom + 2 + capH
+	if portrait then
+		place(ui.Queue, (W - math.min(W - 2 * M, 560)) / 2, capBottom + math.floor((playY - capBottom) * 0.3), math.min(W - 2 * M, 560), navY - G - (capBottom + math.floor((playY - capBottom) * 0.3)))
+		heroFrac = ((capBottom + playY) / 2) / H
+		heroX = 0.5
+	else
+		local qw = math.max(playW, math.min(W * 0.36, 440))
+		place(ui.Queue, playX, capBottom + G, qw, navY - G - (capBottom + G))
 	end
 	-- PLAY lettering scales with the plate (reference: the word fills ~56 % of the width)
 	if ui.PlayBtn.Title then
-		local ph = ui.PlayHolder.Size.Y.Offset
-		ui.PlayBtn.Title.TextSize = math.floor(math.clamp(ph * 0.6, 40, 70))
+		ui.PlayBtn.Title.TextSize = math.floor(math.clamp(playH * 0.6, 34, 92))
 	end
 	if ui.PlayCrown then
-		ui.PlayCrown.Visible = ui.PlayHolder.Size.Y.Offset >= 80
-	end
-	-- tiles: three equal cells with separators
-	local tw = ui.Tiles.Size.X.Offset
-	local cell = math.floor((tw - 16) / 3)
-	for i, b in ipairs({ ui.HeroesTile, ui.ShopTile, ui.MoreTile }) do
-		place(b.Instance, 8 + (i - 1) * cell, 4, cell, tilesH - 8)
-	end
-	for i, sep in ipairs(ui.TileSeps) do
-		place(sep, 8 + i * cell, 20, 1, tilesH - 40)
-	end
-	-- the pill: name centred, "LV n" and a small gold bar under it, round arrows at the ends
-	local pw = ui.HeroPill.Size.X.Offset
-	local ph = ui.HeroPill.Size.Y.Offset
-	local arrow = math.min(44, ph - 8)
-	for _, b in ipairs({ ui.PrevArrow, ui.NextArrow }) do
-		b.Instance.Size = UDim2.fromOffset(arrow, arrow)
-	end
-	ui.PrevArrow.Instance.Position = UDim2.new(0, 4, 0.5, 0)
-	ui.NextArrow.Instance.Position = UDim2.new(1, -4, 0.5, 0)
-	local nameH = TS(16) + 2
-	local levelH = TS(11) + 2
-	local top = math.max(2, math.floor((ph - nameH - levelH - 2) / 2))
-	ui.HeroName.Position = UDim2.new(0.5, 0, 0, top)
-	ui.HeroName.Size = UDim2.new(1, -2 * (arrow + 10), 0, nameH)
-	local levelW = 38
-	local barW = math.clamp(pw - 2 * (arrow + 10) - levelW - 24, 50, 110)
-	local rowX = -(barW + levelW) / 2
-	local rowY = top + nameH + 2
-	ui.HeroLevel.TextSize = TS(11)
-	ui.HeroLevel.Position = UDim2.new(0.5, rowX, 0, rowY)
-	ui.HeroLevel.Size = UDim2.fromOffset(levelW, levelH)
-	ui.HeroBar.Frame.Position = UDim2.new(0.5, rowX + levelW, 0, rowY + math.floor((levelH - 5) / 2))
-	ui.HeroBar.Frame.Size = UDim2.fromOffset(barW, 5)
-	local openPad = arrow + 8
-	local open = ui.HeroPill:FindFirstChild("Open", true) :: GuiObject?
-	if open then
-		open.Position = UDim2.fromOffset(openPad, 0)
-		open.Size = UDim2.new(1, -2 * openPad, 1, 0)
+		ui.PlayCrown.Visible = playH >= 80
 	end
 
-	-- the queue replaces PLAY (portrait: the whole bottom block)
+	-- the queue replaces PLAY and its line (portrait: the hero's gap too)
 	ui.PlayHolder.Visible = not showQueue
-	ui.ModeSelect.Instance.Visible = not showQueue
+	ui.PlayHint.Visible = not showQueue
 	ui.Queue.Visible = showQueue
-	ui.HeroPill.Visible = not (showQueue and portrait)
-	ui.Tiles.Visible = not (showQueue and portrait)
 	-- "run in progress" needs no player list: a compact panel
 	if lastStatus == "Busy" then
 		ui.Queue.Size = UDim2.fromOffset(ui.Queue.Size.X.Offset, math.min(ui.Queue.Size.Y.Offset, 96 + TS(16) * 3 + 20))
@@ -939,9 +967,14 @@ local function relayout()
 	ui.QueueNote.Position = UDim2.fromOffset(0, noteY)
 	ui.QueueNote.Size = UDim2.new(1, 0, 0, short and (TS(16) + 6) or (TS(16) * 3 + 8))
 	ui.QueueNote.TextTruncate = short and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
-	-- where the hero should sit on screen (read by CameraController's menu shot)
-	workspace.CurrentCamera:SetAttribute("MenuHeroY", heroFrac)
-	workspace.CurrentCamera:SetAttribute("MenuHeroZoom", 1)
+	-- where the hero should sit on screen (read by CameraController's menu shot);
+	-- CHARACTERS sets its own framing
+	if current ~= "Characters" then
+		local cam = workspace.CurrentCamera
+		cam:SetAttribute("MenuHeroY", heroFrac)
+		cam:SetAttribute("MenuHeroX", heroX)
+		cam:SetAttribute("MenuHeroZoom", 1)
+	end
 	for _, s in pairs(screens) do
 		if s.Layout then
 			s.Layout(v, portrait, ins)

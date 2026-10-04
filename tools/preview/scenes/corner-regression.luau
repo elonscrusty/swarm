@@ -372,24 +372,28 @@ local function positions(arena)
 		{ "corner-SW", Vector3.new(c.X - e, c.Y, c.Z + e), Vector3.new(1, 0, -1).Unit },
 		{ "corner-SE", Vector3.new(c.X + e, c.Y, c.Z + e), Vector3.new(-1, 0, -1).Unit },
 	}
-	-- pockets: an obstacle within 9 studs of a wall makes a wall/obstacle join
+	-- pockets: an obstacle near a wall makes a channel; the hero stands flush against the
+	-- wall right behind it (the wall / obstacle join), enemies must come round the obstacle
 	local pockets = 0
 	for _, ob in ipairs(arena.Obstacles) do
-		if pockets >= 2 then
+		if pockets >= 3 then
 			break
 		end
 		local px, pz = ob.Pos.X - c.X, ob.Pos.Z - c.Z
-		local r = ob.Radius
+		local r = (ob.Kind == "Box") and math.max(ob.MaxX - ob.MinX, ob.MaxZ - ob.MinZ) / 2 or ob.Radius
 		local gapX, gapZ = h - math.abs(px) - r, h - math.abs(pz) - r
-		if gapX > 2.6 and gapX < 9 and math.abs(pz) < h - 20 then
+		local p, name, dir = nil, nil, nil
+		if gapX > 2.4 and gapX < 14 and math.abs(pz) < h - 24 then
 			local sx = math.sign(px)
-			local p = legal(Vector3.new(c.X + sx * (h - PLAYER_R), c.Y, ob.Pos.Z + r + PLAYER_R + 0.5))
-			table.insert(list, { "pocket-" .. (sx > 0 and "E" or "W") .. math.floor(pz), p, Vector3.new(-sx, 0, 0) })
-			pockets += 1
-		elseif gapZ > 2.6 and gapZ < 9 and math.abs(px) < h - 20 then
+			p = Vector3.new(c.X + sx * (h - PLAYER_R), c.Y, ob.Pos.Z)
+			name, dir = "pocket-" .. (sx > 0 and "E" or "W") .. math.floor(pz), Vector3.new(-sx, 0, 0)
+		elseif gapZ > 2.4 and gapZ < 14 and math.abs(px) < h - 24 then
 			local sz = math.sign(pz)
-			local p = legal(Vector3.new(ob.Pos.X + r + PLAYER_R + 0.5, c.Y, c.Z + sz * (h - PLAYER_R)))
-			table.insert(list, { "pocket-" .. (sz > 0 and "S" or "N") .. math.floor(px), p, Vector3.new(0, 0, -sz) })
+			p = Vector3.new(ob.Pos.X, c.Y, c.Z + sz * (h - PLAYER_R))
+			name, dir = "pocket-" .. (sz > 0 and "S" or "N") .. math.floor(px), Vector3.new(0, 0, -sz)
+		end
+		if p and not AI.IsBlocked(p.X, p.Z, PLAYER_R) then
+			table.insert(list, { name, p, dir })
 			pockets += 1
 		end
 	end

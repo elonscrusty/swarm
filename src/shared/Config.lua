@@ -209,7 +209,7 @@ Config.LevelUp = {
 	-- (Run.CoopChoiceFreezesRun), so the auto-pick comes sooner.
 	GroupAutoPickSeconds = 10,
 	-- Duo/Trio protection budget (docs/overhaul/CHOICE_STATE.md): seconds a player may spend
-	-- protected (choosing, chest reel, close grace) while the team plays on. It drains while
+	-- protected (choosing an upgrade, close grace; rewards never protect) while the team plays on. It drains while
 	-- protected and refills at RefillPerMinute; a panel's deadline never exceeds what is left,
 	-- and a new panel waits (levels stay banked) until at least GroupMinPanelSeconds are back.
 	-- So nobody can stay protected more than ~ProtectBudgetSeconds out of every minute.
@@ -1264,7 +1264,7 @@ Config.RunServers = {
 	GiveUpSeconds = 60, -- nobody's save loaded by then: everyone goes back to the lobby
 	TeleportTimeoutSeconds = 40, -- still here this long after the teleport: it failed
 	HomeDelaySeconds = 20, -- results over the lobby (portal / MAIN MENU): back to a lobby after this
-	HomeDelayAfterResultsSeconds = 2, -- the defeat results already counted down
+	ReplayGraceSeconds = 10, -- REPLAY on a run server: the new run / countdown must start within this, else the home countdown (the defeat results / MAIN MENU go home at once, FLOW)
 	HandoffLoadAttempts = 12, -- DataService load retries for a player arriving by a SWARM teleport
 	RejoinGraceSeconds = 120, -- a disconnected co-op member can return while this run remains alive
 }

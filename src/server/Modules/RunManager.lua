@@ -107,6 +107,11 @@ function RunManager.IsParticipant(player: Player): boolean
 end
 
 -- True when a DEV command was used in the player's current run (nothing public is written).
+-- Joined this server's lobby countdown (DUO / TRIO / party start): RunServers keeps them.
+function RunManager.IsQueued(player: Player): boolean
+	return phase == "Countdown" and joined[player] == true
+end
+
 function RunManager.IsDevTainted(player: Player): boolean
 	local rp = byPlayer[player]
 	return rp ~= nil and rp.DevTainted == true
@@ -175,6 +180,20 @@ function RunManager.RefreshFrozen()
 	end
 end
 
+-- A live group run: more than one fighter and the world not frozen or travelling.
+local function groupLive(): boolean
+	if phase ~= "Running" or frozen or ctx.StageManager.IsHolding() then
+		return false
+	end
+	local fighters = 0
+	for _, rp in ipairs(runPlayers) do
+		if rp.Alive and not rp.Returned then
+			fighters += 1
+		end
+	end
+	return fighters > 1
+end
+
 --[[
 	Chest rewards: a chest / shrine / altar paid this player an item (or an elite chest its
 	level-ups): the run pauses while the client's reel spins and reveals it (UIBuilder).
@@ -192,6 +211,11 @@ function RunManager.HoldReward(rp, dramatic: boolean?)
 		return
 	end
 	if phase ~= "Running" or ctx.StageManager.IsHolding() or not rp.Alive or rp.Returned then
+		return
+	end
+	-- Duo/Trio with the world live: a reward is not a choice. No hold, no rooting, no
+	-- protection (docs/overhaul/CHOICE_STATE.md); the client shows it without blocking.
+	if groupLive() then
 		return
 	end
 	local C = Config.Chests
@@ -222,18 +246,6 @@ end
 	freeze the world, so they never drain it. LevelUpSystem caps a group panel's deadline at
 	the budget left and waits to open one until GroupMinPanelSeconds are available.
 ]]
-local function groupLive(): boolean
-	if phase ~= "Running" or frozen or ctx.StageManager.IsHolding() then
-		return false
-	end
-	local fighters = 0
-	for _, rp in ipairs(runPlayers) do
-		if rp.Alive and not rp.Returned then
-			fighters += 1
-		end
-	end
-	return fighters > 1
-end
 
 function RunManager.ChoiceBudget(rp): number
 	local cap = Config.LevelUp.ProtectBudgetSeconds or math.huge
@@ -252,7 +264,7 @@ local function stepProtectBudget(rp, dt: number, live: boolean)
 	local L = Config.LevelUp
 	local cap = L.ProtectBudgetSeconds or math.huge
 	local budget = RunManager.ChoiceBudget(rp)
-	if live and (rp.Paused or rp.RewardUntil) then
+	if live and rp.Paused and rp.Offer ~= nil then
 		budget -= dt
 	else
 		budget += dt * (L.ProtectBudgetRefillPerMinute or 0) / 60
@@ -516,8 +528,8 @@ end
 -- rp.TerrainSpeedMult: the biome floor under the player (mud, quicksand, ice; BiomeHazards).
 function RunManager.ApplyMovement(rp)
 	local hum: Humanoid? = rp.Humanoid
-	-- a chest reward reel (RewardUntil) roots the opener like a level-up: in a group run
-	-- they can't be hurt meanwhile (DamagePlayer), so they must not walk either
+	-- a chest reward reel (RewardUntil) roots the opener; it only exists while the world
+	-- is frozen (solo), never over live group combat (HoldReward)
 	local canMove = rp.Alive and not rp.Paused and not rp.RewardUntil and not frozen and phase == "Running" and not ctx.StageManager.IsHolding()
 	if hum and hum.Parent then
 		-- rp.RushMult: Windstep's short burst after a kill (ItemSystem)
@@ -768,8 +780,9 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?)
 	-- choosing an upgrade or watching a chest reward: that player can't be hurt (in a group
 	-- run the world keeps moving around them, see RefreshFrozen). Only a server-opened
 	-- panel counts (rp.Offer, bounded by LevelUpSystem's deadline and the protection
-	-- budget); the run menu, reward toasts and client state never protect.
-	if ((rp.Paused and rp.Offer ~= nil) or rp.RewardUntil) and Config.Player.LevelUpInvulnerable then
+	-- budget); the run menu, rewards (chest reels included) and client state never protect.
+	-- A solo reward hold freezes the whole world instead (RefreshFrozen).
+	if rp.Paused and rp.Offer ~= nil and Config.Player.LevelUpInvulnerable then
 		return
 	end
 	-- dev godmode (DevTools sets it only for isDev players)
@@ -1341,8 +1354,10 @@ function RunManager.EndRun(won: boolean)
 end
 
 -- `how` (RunServers: when a run server sends the player home): "results" (the defeat
--- results counted down), "menu" (MAIN MENU on the results) or "portal" (the results sit
--- over the lobby menu: portal return, pause MAIN MENU).
+-- results counted down), "menu" (MAIN MENU on the results), "replay" (REPLAY on the
+-- results: stays for the new run) or "portal" (the results sit over the lobby menu: portal
+-- return, pause MAIN MENU). Attributes set here and in OnBackInLobby replicate together,
+-- so the client sees InRun = false and the travel cover in the same frame.
 local function returnPlayerToLobby(rp, how: string?)
 	if rp.Returned then
 		return
@@ -2075,7 +2090,9 @@ function RunManager.Step(dt: number)
 	local now = os.clock()
 	local live = groupLive()
 	for _, rp in ipairs(runPlayers) do
-		if rp.RewardUntil and (now >= rp.RewardUntil or not rp.Alive) then
+		-- a hold that began solo ends at once if the run becomes a live group run (a
+		-- teammate rejoined): rooted-but-unprotected must never happen
+		if rp.RewardUntil and (now >= rp.RewardUntil or not rp.Alive or live) then
 			RunManager.EndReward(rp)
 		end
 		stepProtectBudget(rp, dt, live)
@@ -2315,10 +2332,12 @@ function RunManager.Start()
 		-- in the Lobby phase JOIN does nothing: a late tap must not start a hidden run
 	end, 2)
 
-	Remotes.Listen("ReturnToLobby", function(player)
+	-- MAIN MENU / REPLAY on the defeat results (arg "Replay": the player starts the same
+	-- mode again right away, so a run server keeps them for it instead of sending them home)
+	Remotes.Listen("ReturnToLobby", function(player, why)
 		local rp = byPlayer[player]
 		if rp and phase == "Results" then
-			returnPlayerToLobby(rp, "menu")
+			returnPlayerToLobby(rp, why == "Replay" and "replay" or "menu")
 		end
 	end, 2)
 

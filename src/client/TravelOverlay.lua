@@ -4,12 +4,15 @@
 
 	Cover (full screen, blocks taps on the menu under it):
 	  player attribute Travel = "ToRun"    "TRAVELING TO YOUR RUN"  (lobby: saving, teleporting)
-	                   Travel = "ToLobby"  "BACK TO THE LOBBY"       (run server: saving, teleporting)
+	                   Travel = "ToLobby"  "TO THE MAIN LOBBY"       (run server: saving, teleporting;
+	                   set by the server in the same frame the run ends, so the run server's
+	                   own lobby menu is never shown as the destination)
 	  SwarmState RunServer + RunServerStatus = "Waiting"  "STARTING YOUR RUN" with
 	                   "Heroes ready: N / M" (RunServerHere / RunServerExpected)
-	Banner (top centre, small, the results panel stays readable):
-	  player attribute TravelHomeIn = seconds  "Back to the lobby in Ns" with GO NOW / STAY
-	  (remote TravelHome "Go" | "Stay").
+	Banner (top centre, small): player attribute TravelHomeIn = seconds  "Main lobby in Ns"
+	  with GO NOW / STAY (remote TravelHome "Go" | "Stay"). Hidden while the results panel
+	  is open (SetResultsOpen): the results footer shows the same countdown then, so there
+	  is only ever one.
 	Nothing shows in Studio or on a lobby server that never teleports. Reduced effects: no
 	dot animation, no fades.
 ]]
@@ -40,6 +43,7 @@ local coverDots: TextLabel
 local banner: Frame
 local bannerText: TextLabel
 local shownCover = false
+local resultsOpen = false -- UIBuilder: the results panel is up (it shows TravelHomeIn itself)
 
 local function fit()
 	local cam = workspace.CurrentCamera
@@ -138,7 +142,7 @@ local function coverText(state: Configuration): (string?, string?)
 	if travel == "ToRun" then
 		return "TRAVELING TO YOUR RUN", "Saving your progress and opening your own server…"
 	elseif travel == "ToLobby" then
-		return "BACK TO THE LOBBY", "Saving your progress…"
+		return "TO THE MAIN LOBBY", "Saving your progress…"
 	end
 	if state:GetAttribute("RunServer") == true and state:GetAttribute("RunServerStatus") == "Waiting" then
 		local here = tonumber(state:GetAttribute("RunServerHere")) or 0
@@ -175,10 +179,10 @@ local function update(state: Configuration, t: number)
 		end
 	end
 	local left = player:GetAttribute("TravelHomeIn")
-	local bannerOn = not show and type(left) == "number"
+	local bannerOn = not show and not resultsOpen and type(left) == "number" and player:GetAttribute("InRun") ~= true
 	banner.Visible = bannerOn
 	if bannerOn then
-		bannerText.Text = string.format("Back to the lobby in %ds", left)
+		bannerText.Text = string.format("Main lobby in %ds", left)
 	end
 end
 
@@ -192,6 +196,17 @@ function TravelOverlay.Init()
 			task.wait(0.1)
 		end
 	end)
+end
+
+-- UIBuilder: the results panel is open (it shows the go-home countdown in its footer).
+function TravelOverlay.SetResultsOpen(open: boolean)
+	resultsOpen = open
+end
+
+-- The cover is up (or about to be): Travel is set.
+function TravelOverlay.Covering(): boolean
+	local travel = player:GetAttribute("Travel")
+	return travel == "ToRun" or travel == "ToLobby"
 end
 
 -- Preview / tests: the cover's and banner's current state.

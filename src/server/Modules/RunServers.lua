@@ -622,7 +622,9 @@ local function withPartyMates(player: Player): { Player }
 	local party = ticket and ticket.Party
 	if party and table.find(party.Members, player.UserId) then
 		for other in pairs(homeAt) do
-			if other ~= player and other.Parent and table.find(party.Members, other.UserId) then
+			-- not a mate waiting for their REPLAY to start, nor one already in a run here
+			if other ~= player and other.Parent and table.find(party.Members, other.UserId)
+				and homeQuiet[other] ~= "replay" and other:GetAttribute("InRun") ~= true then
 				table.insert(list, other)
 			end
 		end

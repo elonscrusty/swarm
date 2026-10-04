@@ -102,6 +102,11 @@ assert(rp.HP < hp, "an open run menu grants no protection")
 preview.fireServerAs(player, "SetPause", false)
 RM.HoldReward(rp, false)
 assert(rp.RewardUntil == nil, "a compact reward toast does not protect")
+RM.HoldReward(rp, true)
+assert(rp.RewardUntil == nil and rp.Humanoid.WalkSpeed > 0, "a duo chest reveal neither holds nor roots")
+hp = rp.HP
+RM.DamagePlayer(rp, 50, "Test")
+assert(rp.HP < hp and not RM.IsFrozen(), "a duo chest reward grants no protection and no freeze")
 rp.Paused = true
 hp = rp.HP
 RM.DamagePlayer(rp, 50, "Test")
