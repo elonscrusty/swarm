@@ -621,7 +621,7 @@ local function triggers(state: Configuration)
 			local lockLeft = tonumber(state:GetAttribute("PortalLockLeft")) or 0
 			local secs = tostring(Config.Stages.ChargeSeconds)
 			local body = lockLeft > 0
-					and string.format("Follow the gold arrow. The portal wakes in %s; then stand in its ring for %s s.", UIKit.formatTime(lockLeft), secs)
+					and string.format("The portal wakes in %s. Then stand in its ring for %s s.", UIKit.formatTime(lockLeft), secs)
 				or string.format("Follow the gold arrow, then stand in the portal's ring for %s s.", secs)
 			push("Portal", "Find the portal", body, "portal", T.HintSeconds + 1)
 		end

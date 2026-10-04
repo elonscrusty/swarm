@@ -177,7 +177,16 @@ image (or drop the glyph and keep "MORE BELOW").
 
 ## 9. Render results
 
-(filled in below after the renders)
+`tutorial` scene, iphone (notch insets), `--set tip=Move|Portal|Boss`: 0 errors. Cards render
+beside their targets, clear of JUMP, minimap and the hero. Move: "Drag anywhere to move. Tap
+JUMP to hop over trouble." Portal (the scene forces a dormant portal; live config has no lock):
+fits in 3 lines; the dormant variant was then shortened to "The portal wakes in 1:35. Then stand
+in its ring for 2 s." (not re-rendered). Boss: first wording took 3 lines and crowded SKIP TIPS;
+shortened to "Red floor shapes show where the Scorpion Queen strikes. Step out!" (2 lines,
+re-rendered). `check_layout.py` over the three JSONs: 0 overlap / off-screen / top bar / covered /
+overflow / truncated (only the HUD's existing SMALL info notes). One earlier Portal render hit a
+runtime error in `Hud.lua:133` from another helper's in-progress edit; the re-render had 0 errors.
+PNGs: scratchpad/wf/copy/tut-Move, tut2-Portal, tut2-Boss.
 
 ## 10. Remaining risk
 
