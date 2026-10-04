@@ -168,18 +168,19 @@ result = nil
 preview.remote("AbandonRun"):FireServer()
 preview.advance(2)
 check("no second bonus", data.Gold - gold2 < FR.BonusGold and (type(result) ~= "table" or result.FirstRun == nil), "gold " .. gold2 .. " -> " .. data.Gold)
-local cy = preview.addPlayer("Cy", 4)
+-- Ben (brand new, refused above while in a party) leaves the party and starts Solo
+preview.fireServerAs(ben, "Party", "Leave")
 preview.advance(1.5)
-preview.fireServerAs(cy, "StartRun", "Solo")
+preview.fireServerAs(ben, "StartRun", "Solo")
 preview.advance(1.5)
-local cyRp = RM.GetRunPlayer(cy)
-local cyData = Data.GetData(cy)
-check("a new player's first Solo run gets the welcome", cyRp ~= nil and cyRp.FirstRun == true)
+local cyRp = RM.GetRunPlayer(ben)
+local cyData = Data.GetData(ben)
+check("a new player's first Solo run gets the welcome", cyRp ~= nil and cyRp.FirstRun == true, cyRp and "in run" or "no run")
 if cyRp then
 	cyRp.DevTainted = true -- as if a DEV command was used
 end
 local cyGold = cyData and cyData.Gold or 0
-preview.fireServerAs(cy, "AbandonRun")
+preview.fireServerAs(ben, "AbandonRun")
 preview.advance(2)
 check("a DEV-tainted first run pays no bonus", cyData ~= nil and cyData.FirstRunBonus ~= true and cyData.Gold - cyGold < FR.BonusGold,
 	cyData and ("gold " .. cyGold .. " -> " .. cyData.Gold) or "no data")

@@ -1091,7 +1091,7 @@ Config.FirstRun = {
 		off for every scene but firstjoin-sim). The global XP curve is untouched.
 	]]
 	Boost = true,
-	FirstLevelXP = 14, -- level 1 -> 2 costs this in the first run (normally Config.XP: 42)
+	FirstLevelXP = 18, -- level 1 -> 2 in the first run (normally Config.XP: 42); firstjoin-sim: ~15 s
 	-- the first level-up always offers one of these (the first one not owned) as a NEW
 	-- weapon, plus an upgrade for the starting weapon; the third card is a normal roll
 	ShowcaseWeapons = { "Lightning", "Garlic", "HolyWater" },
