@@ -91,14 +91,31 @@ sends `Id` itself; a payload `Id` / `Lane` / `Class` field always wins):
 | `wave.N.elite` | EnemySpawner loud-wave elite toast "Wave N: ..." | Notice Critical (sits under the wave headline) |
 | `elite` | "An elite X hunts you!" | Notice Critical, coalesces |
 | `swarm.approach` | "A swarm of X approaches!" | Notice Critical, coalesces |
-| `big:<text>` | any other big broadcast (boss arrival title, enrage phases) | Headline Critical |
+| `boss.arrive` | StageManager boss title broadcast | Headline Critical |
+| `boss.armor` | BossAI Frostbound Colossus armor shattered / grows back | Notice Info / Critical |
+| `boss.banner` | BossAI Rhino Warlord war banner | Notice Critical |
+| `big:<text>` | any other big broadcast without an id (enrage phases) | Headline Critical |
 | `boss.defeated` | StageManager "... DEFEATED! SURVIVE THE SURGE!" | Headline Info |
 | `stage.N` | Hud stage banner (when the stage card does not replace it) | Headline Info |
 | `caravan.defend` | CaravanEvent start | covered by the objective bar: not shown as a notice |
 | `caravan.result` | CaravanEvent end | Notice Info |
-| `team.fallen.<text>` | RunManager "X has fallen" | Notice Critical (one per teammate) |
+| `team.fallen.<UserId>` | RunManager "X has fallen" (with or without the revive hint) | Notice Critical (one per teammate) |
+| `team.revived.<UserId>` | RunManager "You revived X!" (to the helper only) | Notice Info |
+| `team.left.<UserId>` | RunManager left through the portal / returned to the main menu / left the run | Notice Info |
+| `team.rejoined.<UserId>` | RunManager "X rejoined the run." | Notice Info |
+| `stage.objective` | RunManager run start "Find the portal and summon the ..." and StageManager stage start "<arena> · find the portal" | Notice Info (one id: the later line refreshes the earlier) |
+| `altar.guardians` | LootSystem guarded altar woken | Notice Critical |
+| `altar.unguarded` | LootSystem altar ready to open | Notice Info |
+| `altar.opened` | LootSystem "X opened the altar" | Notice Info |
+| `nest.spawn` | EnemySpawner "A Nest takes root nearby!" | Notice Info |
+| `nest.destroyed` | EnemySpawner "Nest destroyed! +N gold each" | Notice Info |
+| `shrine.bargain` | LootSystem Bargain shrine line (to the buyer) | Notice Info |
+| `run.curses` | RunManager run start curse line | Notice Info |
+| `run.daily.scored` | RunManager daily scored / practice line | Notice Info |
+| `run.start.daily` / `run.start.endless` | RunManager big run-start broadcasts | Headline Info |
+| `lobby.run.starting` / `lobby.arena` | RunManager lobby broadcasts | Notice Info |
 | `achievement` | AchievementUnlocked | Notice Info, coalesces |
-| `run.start` / `run.end` | RunManager big broadcasts | Headline Info |
+| `run.end` | RunManager VICTORY / THE SWARM WINS | Headline Info |
 | `text:<text>` | anything else | Notice Info |
 
 ## 4. Input focus and interaction suppression
