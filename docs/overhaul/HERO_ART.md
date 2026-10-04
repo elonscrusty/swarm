@@ -87,7 +87,7 @@ capture was much hotter than the preview, so these are relative numbers, not a S
   (13/13) after the rename: PASS.
 - Renders (pc): `showcase --set hero=<Id>` and `menu --set hero=<Id>` for all eight heroes,
   `showcase --set skin=Knight_Paladin|Priest_Angel`; `arena` (Knight, Forest) and `arena
-  --set character=Priest --set arena=Snow` for in-run readability; `menu-sim` short run.
+  --set character=Priest --set arena=Snow` for in-run readability (red cape is the clearest hero cue in Forest; the Priest separates from snow by its ivory_400 front, gold trims and shadow); `menu-sim --studio --max-time 60`: 46 s simulated, 0 errors (a 120 s run timed out under machine load). All renders: 0 errors.
   Evidence: scratchpad `wf/hero-art/{before,after}/`.
 - BLOCKED: Roblox Studio lobby lighting with bloom / Future lighting, phone screens.
 

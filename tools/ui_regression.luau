@@ -189,10 +189,13 @@ local ok, err = S.runMain(function()
 	preview.advance(0.5)
 	UI.ShowChest({ Dramatic = false, Gold = 20, Rewards = {} })
 	preview.advance(0.05)
-	-- owner: every chest rolls; one the run is not paused for gets the mini reel, which never
-	-- dims or blocks the screen
-	local dim = guiRoot.Reward:FindFirstChild("Dim")
-	check("ordinary chest only plays the non-blocking mini reel", dim == nil or dim.Visible == false)
+	-- overhaul (docs/overhaul/REWARD.md): an ordinary chest is the compact reward card: no
+	-- reel, no dimmer, not a primary panel, world input (the next chest) still allowed
+	local UIStateM = preview.client("UIState")
+	local cardOverlay = guiRoot:FindFirstChild("RewardCard")
+	check("ordinary chest shows the non-blocking compact card, never the reel or its dimmer",
+		cardOverlay ~= nil and cardOverlay.Visible == true and guiRoot.Reward.Visible == false
+			and UIStateM.Owner() == nil and UIStateM.WorldInputAllowed())
 	UI.ShowChest({ Dramatic = true, Gold = 50, Rewards = {} })
 	preview.advance(0.05)
 	check("rare chest opens established dramatic reel", guiRoot.Reward.Visible == true)
