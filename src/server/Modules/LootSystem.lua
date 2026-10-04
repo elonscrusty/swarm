@@ -58,6 +58,7 @@ local METAL = Enum.Material.Metal
 local UPRIGHT = CFrame.Angles(0, 0, math.rad(90))
 local FACE_CAMERA = CFrame.Angles(0, math.pi, 0) -- model front (-Z) toward the run camera
 local FLAT = Vector3.new(1, 0, 1)
+local RING_T = 0.88 -- the faint "stand here" disc of shrines, the altar and rune stones
 
 type Obj = {
 	Id: number,
@@ -164,7 +165,7 @@ end
 --   Golden  slate panels, gold frame, red gems         (reward_ChestGolden)
 --   Plain   the free cache: weathered wood and iron, no gold, no posts
 local CHEST_LOOK = {
-	Small = { W = 2.6, H = 1.2, D = 1.8, LidH = 0.7, Wood = P.wood_500, Lid = P.wood_400, Band = P.gold_500, Frame = P.gold_500, Lock = P.gold_400 },
+	Small = { W = 2.6, H = 1.2, D = 1.8, LidH = 0.7, Wood = P.wood_500, Lid = P.wood_400, Band = P.gold_400, Frame = P.gold_400, Lock = P.gold_300 },
 	Large = { W = 3.6, H = 1.6, D = 2.4, LidH = 0.9, Wood = P.crimson_600, Lid = P.crimson_500, Band = P.steel_500, Frame = P.steel_500, Lock = P.gold_400, Stud = P.gold_400 },
 	Golden = { W = 3.0, H = 1.4, D = 2.1, LidH = 0.8, Wood = P.slate_700, Lid = P.slate_600, Band = P.gold_400, Frame = P.gold_400, Lock = P.gold_300, Stud = P.gold_300, Gem = P.crimson_400 },
 	Plain = { W = 2.5, H = 1.15, D = 1.7, LidH = 0.6, Wood = P.wood_600, Lid = P.wood_500, Band = P.steel_700, Frame = P.steel_600, Lock = P.steel_600, Plain = true },
@@ -348,7 +349,7 @@ local function addGlow(obj: Obj, at: Vector3, color: Color3, light: boolean, rin
 	end
 	if ring then
 		local r = Config.Chests.InteractRadius
-		local disc = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, r * 2, r * 2), CFrame = CFrame.new(obj.Pos + Vector3.new(0, 0.05, 0)) * UPRIGHT, Color = color, Transparency = 0.8 })
+		local disc = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, r * 2, r * 2), CFrame = CFrame.new(obj.Pos + Vector3.new(0, 0.05, 0)) * UPRIGHT, Color = color, Transparency = RING_T })
 		disc.Parent = obj.Model
 		obj.Ring = disc
 	end
@@ -386,7 +387,7 @@ local function recolourGlow(obj: Obj, color: Color3?, transparency: number?)
 		if color then
 			obj.Ring.Color = color
 		end
-		obj.Ring.Transparency = (transparency or 0) >= 1 and 1 or 0.8
+		obj.Ring.Transparency = (transparency or 0) >= 1 and 1 or RING_T
 	end
 end
 
@@ -461,10 +462,11 @@ end
 	chest is opened. Free chests (the Buried Cache, elite drops) stay plain wood.
 ]]
 local PLINTH_H = 0.35
+local BEAM_FROM = 4.9 -- studs above the floor
 local PREMIUM = {
-	Small = { R = 2.2, Beam = 0.35, BeamH = 9, BeamT = 0.82, Color = P.gold_300 },
-	Large = { R = 2.8, Beam = 0.55, BeamH = 12, BeamT = 0.76, Color = P.gold_300 },
-	Golden = { R = 2.6, Beam = 0.9, BeamH = 16, BeamT = 0.68, Color = P.gold_200 },
+	Small = { R = 2.2, Beam = 0.3, BeamH = 7, BeamT = 0.84, Color = P.gold_300 },
+	Large = { R = 2.8, Beam = 0.45, BeamH = 10, BeamT = 0.8, Color = P.gold_300 },
+	Golden = { R = 2.6, Beam = 0.65, BeamH = 14, BeamT = 0.74, Color = P.gold_200 },
 }
 
 local function premiumDressing(obj: Obj, typeName: string, pos: Vector3, cf: CFrame)
@@ -473,7 +475,8 @@ local function premiumDressing(obj: Obj, typeName: string, pos: Vector3, cf: CFr
 	plinth.Parent = obj.Model
 	local ring = part({ Name = "PlinthTrim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(PLINTH_H * 0.6, L.R * 2 + 0.35, L.R * 2 + 0.35), CFrame = CFrame.new(pos + Vector3.new(0, PLINTH_H * 0.3, 0)) * UPRIGHT, Color = P.gold_500, Material = METAL })
 	ring.Parent = obj.Model
-	local beam = part({ Name = "Beam", Shape = Enum.PartType.Cylinder, Size = Vector3.new(L.BeamH, L.Beam * 2, L.Beam * 2), CFrame = CFrame.new(pos + Vector3.new(0, L.BeamH / 2 + 0.5, 0)) * UPRIGHT, Color = L.Color, Material = NEON, Transparency = L.BeamT })
+	-- the beam starts above the coin / orb, so it never paints over the chest itself
+	local beam = part({ Name = "Beam", Shape = Enum.PartType.Cylinder, Size = Vector3.new(L.BeamH, L.Beam * 2, L.Beam * 2), CFrame = CFrame.new(pos + Vector3.new(0, BEAM_FROM + L.BeamH / 2, 0)) * UPRIGHT, Color = L.Color, Material = NEON, Transparency = L.BeamT })
 	beam.Parent = obj.Model
 	table.insert(obj.Glow, beam)
 	if typeName ~= "Golden" then -- the golden chest already wears its glowing orb up there
@@ -569,7 +572,7 @@ local function shrineCrown(obj: Obj, typeName: string, cf: CFrame, top: number)
 		obj.Scale = { Parts = arm, Pivot = cf * CFrame.new(0, top + 1.75, 0) }
 	end
 	local r = Config.Chests.InteractRadius
-	local disc = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, r * 2, r * 2), CFrame = CFrame.new(obj.Pos + Vector3.new(0, 0.05, 0)) * UPRIGHT, Color = typeName == "Chance" and P.gold_300 or P.crimson_400, Transparency = 0.8 })
+	local disc = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, r * 2, r * 2), CFrame = CFrame.new(obj.Pos + Vector3.new(0, 0.05, 0)) * UPRIGHT, Color = typeName == "Chance" and P.gold_300 or P.crimson_400, Transparency = RING_T })
 	disc.Parent = m
 	obj.Ring = disc
 end
@@ -743,7 +746,7 @@ end
 
 -- Paints every stone and order token for the puzzle's state ("flash" = a wrong stone).
 local function runeLook(puzzle, flash: boolean?)
-	local muted = function(c: Color3): Color3 return c:Lerp(P.stone_700, 0.45) end
+	local muted = function(c: Color3): Color3 return c:Lerp(P.stone_500, 0.5) end
 	for _, obj in ipairs(puzzle.Nodes) do
 		local id = obj.Rune :: number
 		local step = table.find(puzzle.Order, id) or 3
@@ -756,7 +759,7 @@ local function runeLook(puzzle, flash: boolean?)
 		end
 		if obj.Ring then
 			obj.Ring.Color = lit and RUNE_COLORS[id] or P.stone_300
-			obj.Ring.Transparency = puzzle.Solved and 1 or 0.8
+			obj.Ring.Transparency = puzzle.Solved and 1 or RING_T
 		end
 	end
 	for k, pieces in ipairs(puzzle.Tokens) do
@@ -787,11 +790,11 @@ local function buildRunes(arena, centre: Vector3)
 		add(m, cf, "Cap", Vector3.new(2.0, 0.25, 1.5), Vector3.new(0, 2.45, 0.15), P.stone_400)
 		-- the leaning tablet on the cap; its face (+Z of `face`) looks at the camera
 		local face = cf * CFrame.new(0, 3.2, 0.25) * lean
-		local slab = part({ Name = "Box", Size = Vector3.new(2.9, 2.9, 0.45), CFrame = face * CFrame.new(0, 0, -0.225), Color = P.stone_400, CastShadow = true })
+		local slab = part({ Name = "Box", Size = Vector3.new(2.9, 2.9, 0.45), CFrame = face * CFrame.new(0, 0, -0.225), Color = P.stone_600, CastShadow = true })
 		slab.Parent = m
-		local rim = part({ Name = "Trim", Size = Vector3.new(3.15, 3.15, 0.3), CFrame = face * CFrame.new(0, 0, -0.42), Color = P.stone_600 })
+		local rim = part({ Name = "Trim", Size = Vector3.new(3.15, 3.15, 0.3), CFrame = face * CFrame.new(0, 0, -0.42), Color = P.stone_400 })
 		rim.Parent = m
-		obj.Glow = runeGlyph(m, face, i, 2.3, P.stone_400)
+		obj.Glow = runeGlyph(m, face, i, 2.3, P.stone_600)
 		local l = Instance.new("PointLight")
 		l.Range = 12
 		l.Brightness = 1.2
@@ -800,7 +803,7 @@ local function buildRunes(arena, centre: Vector3)
 		l.Parent = obj.Glow[1]
 		obj.Light = l
 		local r = Config.Chests.InteractRadius
-		local disc = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, r * 2, r * 2), CFrame = CFrame.new(pos + Vector3.new(0, 0.05, 0)) * UPRIGHT, Color = P.stone_300, Transparency = 0.8 })
+		local disc = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, r * 2, r * 2), CFrame = CFrame.new(pos + Vector3.new(0, 0.05, 0)) * UPRIGHT, Color = P.stone_300, Transparency = RING_T })
 		disc.Parent = m
 		obj.Ring = disc
 		setAttrs(obj, { Title = RUNE_NAMES[i] .. " rune", Hold = 0.4, State = "Ready", Benefit = "Complete the sequence for a team item", Tradeoff = "Wrong rune resets the sequence" })
@@ -811,16 +814,16 @@ local function buildRunes(arena, centre: Vector3)
 	local tablet = Instance.new("Model")
 	tablet.Name = "RuneOrder"
 	local tcf = CFrame.new(centre)
-	add(tablet, tcf, "Dais", Vector3.new(0.3, 5.2, 5.2), Vector3.new(0, 0.15, 0), P.stone_600, nil, Enum.PartType.Cylinder, UPRIGHT)
-	add(tablet, tcf, "Top", Vector3.new(4.4, 0.12, 1.7), Vector3.new(0, 0.34, 0), P.stone_400)
+	add(tablet, tcf, "Dais", Vector3.new(0.3, 6, 6), Vector3.new(0, 0.15, 0), P.stone_400, nil, Enum.PartType.Cylinder, UPRIGHT)
+	add(tablet, tcf, "Top", Vector3.new(5.2, 0.12, 2), Vector3.new(0, 0.34, 0), P.stone_600)
 	local flat = CFrame.fromMatrix(Vector3.zero, Vector3.new(1, 0, 0), Vector3.new(0, 0, -1)) -- face up, glyph "up" = away from the camera
 	for k, id in ipairs(puzzle.Order) do
-		local x = (k - 2) * 1.45
+		local x = (k - 2) * 1.7
 		if k > 1 then
 			-- a small chevron between tokens: the sequence reads left to right
-			add(tablet, tcf, "Mark", Vector3.new(0.12, 0.06, 0.12), Vector3.new(x - 0.72, 0.43, 0), P.stone_200, nil, nil, CFrame.Angles(0, math.rad(45), 0))
+			add(tablet, tcf, "Mark", Vector3.new(0.12, 0.06, 0.12), Vector3.new(x - 0.85, 0.43, 0), P.stone_200, nil, nil, CFrame.Angles(0, math.rad(45), 0))
 		end
-		puzzle.Tokens[k] = runeGlyph(tablet, tcf * CFrame.new(x, 0.4, 0) * flat, id, 1.2, P.stone_400)
+		puzzle.Tokens[k] = runeGlyph(tablet, tcf * CFrame.new(x, 0.4, 0) * flat, id, 1.45, P.stone_600)
 	end
 	tablet.Parent = puzzle.Nodes[1].Model -- removed with the stones (LootSystem.Clear)
 	puzzle.Tablet = tablet

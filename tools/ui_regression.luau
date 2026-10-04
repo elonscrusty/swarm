@@ -226,6 +226,29 @@ local ok, err = S.runMain(function()
 	local marked = 0
 	for _, dot in ipairs(map.Elements().Loot) do if dot.Visible then marked += 1 end end
 	check("minimap retains every natural stage loot location", marked == markerCount)
+	-- HUD build details (BUILD on the ability panel): every category inspectable, closes
+	-- under a covering decision
+	local Hud = preview.client("Hud")
+	Hud.SetCovered(false)
+	Hud.SetVisible(true)
+	Hud.SetInventory({ Weapons = { { Id = "Whip", Level = 3 } }, Passives = { { Id = "Might", Level = 2 } }, WeaponSlots = 6, PassiveSlots = 6 })
+	preview.fireClient("Items", { { Id = "StormCharm", Count = 2 } })
+	preview.advance(0.1)
+	Hud.SetBuildOpen(true)
+	preview.advance(0.1)
+	local hudEls = Hud.Elements()
+	local rows, names = 0, {}
+	for _, c in ipairs(hudEls.BuildList:GetChildren()) do
+		if c.Name == "Row" then
+			rows += 1
+			names[c:FindFirstChild("Name").Text] = true
+		end
+	end
+	check("build details list weapons, passives and items", hudEls.Build.Visible == true and rows == 3 and names["Whip"] and names["Might"] and names["Storm Charm"])
+	Hud.SetCovered(true)
+	check("a covering decision closes the build details", hudEls.Build.Visible == false and Hud.BuildOpen() == false)
+	Hud.SetCovered(false)
+	check("minimap legend says Portal (the objective word), not Exit", map.Elements().Legend:FindFirstChild("Portal") ~= nil and map.Elements().Legend:FindFirstChild("Exit") == nil)
 end, 10)
 assert(ok, err)
 assert(#R.log.errors == 0, "mock runtime errors")

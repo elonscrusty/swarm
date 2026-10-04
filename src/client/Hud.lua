@@ -1,34 +1,38 @@
 --[[
 	Hud.lua
-	The in-run HUD (built and driven by UIBuilder), laid out after the owner's approved
-	mockup:
-	  top centre    the run timer (total run time over every stage) big in a dark pill with a
-	                thin gold rim; right under it one dark gold-rimmed panel: heart + big
-	                crimson health bar ("100 / 100 HP"; a steel band on it is the Guardian
-	                Ward shield), then a level medallion, "LV. 86" and the gold XP bar
-	                ("29 / 110 XP"); under that the boss bar with the boss's portrait while
-	                the boss lives; while the Frostbound Colossus wears his frost armour
-	                (boss body attribute FrostArmor, BossAI) the bar frosts over: an ice
-	                band on the fill, an ice rim and "FROST ARMOR" after the name
-	  top left      the stage pill under the Roblox menu buttons: "STAGE 3 • PORTAL DORMANT
-	                • 0:26" (goal and countdown of the stage loop; Endless runs: "ENDLESS •
-	                STAGE 9 • ..."); portrait: centred between the timer and the health panel
-	  top right     gold pill (coin + run gold: earned this run, minus what chests and shrines
-	                took), kills pill (skull + count), then the square gold-rimmed pause
-	                button. The gold number counts up and punches, a "+N" floats into the
-	                pill, and next to a chest / shrine its price shows in the pill (red "NEED
-	                N" after trying to open one without enough gold, set by LootUI through
-	                SetPurseHint)
-	  bottom centre only the ability panel (more of the arena in view): "WEAPONS" and
-	                "PASSIVES" rows of square tiles (item art, a round gold level badge, a
-	                gold rim once evolved / maxed, faint empty slots). Phones (compact): it
-	                scales down and stays centred, between the thumbstick side and the JUMP
-	                button. Portrait: it sits under the top cluster, away from the thumbs.
+	The in-run HUD (built and driven by UIBuilder), laid out after the approved 02 Desktop /
+	03 Mobile HUD (overhaul pack, docs/overhaul/HUD.md):
+	  top left      vitals: one dark gold-rimmed panel under the Roblox buttons: heart + the
+	                crimson health bar ("108 / 154 HP"; a steel band on it is the Guardian
+	                Ward shield), then the level medallion, "LV 26" and the cyan XP bar
+	                ("169 / 306 XP"; "Gold: ..." once levels pay coins). The run's item strip,
+	                curse / bargain / synergy chips and reward popups follow under it
+	                (LootUI, from Elements().LeftBottom / LeftWidth). Portrait: centred under
+	                the objective.
+	  top centre    the run timer in a dark pill, then the objective panel: a gold caption
+	                "FOREST · STAGE 2 · WAVE 6" (Endless: "ENDLESS · STAGE 9 ...", the arena
+	                name drops when it does not fit) over the one persistent objective
+	                ("Find the portal", "Portal dormant · 0:26", "Opening the portal · 60%",
+	                "Defeat the Scorpion Queen", "Survive the surge · 0:20"); under it the
+	                boss bar with the boss's portrait while the boss lives; while the
+	                Frostbound Colossus wears his frost armour (boss body attribute
+	                FrostArmor, BossAI) the bar frosts over
+	  top right     utility group: gold pill (run gold: earned this run, minus what chests and
+	                shrines took), kills pill, the square pause (menu) button; the minimap
+	                under them (MiniMap.lua). Next to a chest / shrine its price shows in the
+	                gold pill (red "NEED N", LootUI SetPurseHint)
+	  bottom centre the ability panel: "WEAPONS" and "PASSIVES" rows of square tiles (item
+	                art, a round gold rank badge, a gold rim once evolved / maxed, quiet "+"
+	                empty slots) and a BUILD column that opens the build details (every
+	                weapon, passive and item with rank and effect; B / gamepad Y; the run
+	                keeps going). Phones: scaled between the thumb side and the JUMP button.
+	                Portrait: under the top cluster, away from the thumbs.
 	  centre        status line (paused, "<Name> is choosing an upgrade", fallen, partner
-	                revive progress)
+	                revive progress); otherwise kept clear for combat
 	The portal arrow, the charge ring, the portal choice panel and the travel fade live in
 	StageUI.lua.
-	  screen edges  crimson vignette pulse when hurt, slow pulse at low health
+	  screen edges  crimson vignette pulse when hurt, slow pulse at low health (only those
+	                two meanings: the wave-direction edge glow in StageUI is amber)
 	Motion (all event-driven, short, skipped or reduced with (ClientSettings.Reduced() or ClientPerformance.Reduced())):
 	  XP bar        shine sweep per gem burst; level up = white flash, sweep, ring + sparks
 	                on the medallion
@@ -43,9 +47,8 @@
 	  boss bar      drops in with a shake, the name fades in under a sweep, shakes again at
 	                the phase marker
 
-	Calm: a plain objective ("FIND THE PORTAL") is news for a few seconds, then the stage
-	pill is just "STAGE N"; counting goals (dormant portal, charge, surge) and the boss stay.
-	Texts are rewritten only when their value changes; text uses the Theme.Type roles
+	The objective never hides (one persistent slot; short notices use UIState's centre
+	lane). Texts are rewritten only when their value changes; text uses the Theme.Type roles
 	(UIKit.Role).
 
 	Nothing in the ability panel or the plates is Active, so a thumb landing on them still

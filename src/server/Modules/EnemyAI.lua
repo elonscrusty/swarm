@@ -236,22 +236,17 @@ local function think(e, runPlayers)
 	if not normal and pressed and pressed:Dot(desired) < -0.2 then
 		normal = pressed
 	end
-	local keep = e.AvoidSide
-	e.AvoidSide = nil
 	if normal then
 		local tangent = normal:Cross(UP) * FLAT
 		if tangent.Magnitude > 1e-3 then
 			tangent = tangent.Unit
-			-- keep going round the side already chosen: meeting a face head-on, the side
-			-- flipped from think to think and a big enemy dithered behind it
-			if keep and math.abs(tangent:Dot(keep)) > 0.3 then
-				if tangent:Dot(keep) < 0 then
-					tangent = -tangent
-				end
-			elseif tangent:Dot(desired) < 0 then
+			-- go round on the side the target is; meeting a face (nearly) head-on, each enemy
+			-- keeps one hand on it (by id): choosing by the target's side flipped from think
+			-- to think there and a big enemy dithered behind a box in line with the player
+			local side = tangent:Dot(desired)
+			if side < -0.3 or (side <= 0.3 and e.Id % 2 == 1) then
 				tangent = -tangent
 			end
-			e.AvoidSide = tangent
 			local steer = tangent * Config.Enemies.AvoidTurnStrength + desired * 0.4 + normal * 0.3
 			if steer.Magnitude > 1e-3 then
 				desired = steer.Unit

@@ -257,7 +257,7 @@ local function buildLegend(face: Frame)
 			UIKit.corner(ring, 999)
 			UIKit.stroke(ring, entry.Color, 1, 0.1)
 		end
-		UIKit.text(cell, "Small", entry.Name, { Position = UDim2.fromOffset(11, 0), Size = UDim2.new(1, -11, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_200, ZIndex = 4 }, 10)
+		UIKit.text(cell, "Small", entry.Name, { Position = UDim2.fromOffset(entry.Ring and 13 or 11, 0), Size = UDim2.new(1, -(entry.Ring and 13 or 11), 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_200, ZIndex = 4 }, 10)
 	end
 end
 

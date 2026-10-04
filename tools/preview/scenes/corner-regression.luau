@@ -12,7 +12,10 @@
 -- Boundary walls.
 --
 -- Settings: --set arenas=Forest,Ruins (default all), --set report=on (per-case lines),
--- --set strict=off (report only, never FAIL).
+-- --set strict=off (report only, never FAIL), --set only=<spot> (one spot, e.g. corner-SE),
+-- --set at=x,z,dirX,dirZ (an extra spot), --set trace=<kind> [--set every=N] (first
+-- enemy's position / steering every N frames), --set debugrays=on, --set obstacles=on
+-- [--set near=x,z] (collider listing). Before/after numbers: docs/overhaul/CORNER_REPORT.md.
 -- Instrumentation (offline only, never shipped to clients): per enemy target distance,
 -- collider radius, desired vs actual speed, steering alignment (cos between the move
 -- direction and the line to the hero), separation push, stuck time, contact eligibility

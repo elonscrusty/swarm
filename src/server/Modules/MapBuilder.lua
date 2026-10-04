@@ -1232,7 +1232,7 @@ function MapBuilder.BuildLobby()
 	for _, c in ipairs({ { -0.17, 0.25, 1.0 }, { 0.03, 0.32, 0.8 }, { -0.44, 0.31, 1.2 }, { 0.34, 0.33, 1.0 } }) do
 		for k = -1, 1 do
 			local r = (k == 0 and 6 or 4.4) * c[3]
-			local puff = add({ Name = "Cloud", Shape = Enum.PartType.Ball, Size = Vector3.one * r * 2, CFrame = CFrame.new(sky(Vector3.new(c[1] + k * 0.045 * c[3], c[2] - math.abs(k) * 0.012, -1), 150)), Color = pick(CLOUD), Transparency = 0.45 })
+			local puff = add({ Name = "Cloud", Shape = Enum.PartType.Ball, Size = Vector3.one * r * 2, CFrame = CFrame.new(sky(Vector3.new(c[1] + k * 0.045 * c[3], c[2] - math.abs(k) * 0.012, -1), 150)), Color = pick(CLOUD), Transparency = 0.72 })
 			puff.CastShadow = false
 		end
 	end

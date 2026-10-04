@@ -38,8 +38,8 @@ Target staging, one surface per step:
 4. **Tutorial portal tip (done)**: shows only when the portal is not being charged yet, and only
    the next step with the real time: "Follow the gold arrow, then stand in the portal's ring for
    2 s." It no longer mentions the boss or repeats the swarm warning.
-5. **Tutorial boss tip (done)**: names the summoned boss (`BossName` / `StageBoss`): "Red shapes
-   on the floor show where the Scorpion Queen strikes. Step out of them!"
+5. **Tutorial boss tip (done)**: names the summoned boss (`BossName` / `StageBoss`): "Red floor
+   shapes show where the Scorpion Queen strikes. Step out!"
 
 Steps 2 and the broadcast clean-ups are in other helpers' files (see For others).
 

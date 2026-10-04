@@ -630,7 +630,7 @@ local function triggers(state: Configuration)
 		run.Boss = true
 		local boss = tostring(state:GetAttribute("BossName") or state:GetAttribute("StageBoss") or "")
 		local who = boss ~= "" and ("the " .. boss) or "the boss"
-		push("Boss", "Dodge the red", string.format("Red shapes on the floor show where %s strikes. Step out of them!", who), "skull")
+		push("Boss", "Dodge the red", string.format("Red floor shapes show where %s strikes. Step out!", who), "skull")
 	end
 	-- the first fallen teammate
 	if not run.Revive then

@@ -1340,7 +1340,8 @@ end
 	damage tick (WeaponData VineSnare Params.Tick = 0.5 s) and ease off between.
 ]]
 local function snare(b, vine: Color3, dark: Color3, thorn: Color3, r: number, n: number)
-	b.add("Cylinder", Vector3.new(0.1, r * 1.9, r * 1.9), ShotPalette.dirt_700, CFrame.new(0, 0.05, 0) * CYL_UP, { Transparency = 0.25 })
+	-- the earth patch is the snare's real reach (WeaponData Radius 2.6 x area ~1.1; x 1.8 evolved)
+	b.add("Cylinder", Vector3.new(0.1, r * 2, r * 2), ShotPalette.dirt_700, CFrame.new(0, 0.05, 0) * CYL_UP, { Transparency = 0.12 })
 	for i = 1, 3 do
 		local a = i * math.pi * 2 / 3 + 0.5
 		b.add("Block", Vector3.new(0.5, 0.26, 0.42), ShotPalette.dirt_600, CFrame.new(math.cos(a) * r * 0.55, 0.12, math.sin(a) * r * 0.55) * CFrame.Angles(0.3, a, 0.2))
@@ -1353,10 +1354,10 @@ local function snare(b, vine: Color3, dark: Color3, thorn: Color3, r: number, n:
 		local upper = foot * CFrame.Angles(math.rad(-22), 0, 0) * CFrame.new(0, 1.4, 0) * CFrame.Angles(math.rad(-48), 0, 0) * CFrame.new(0, 0.5, 0)
 		local col = i % 2 == 0 and vine or dark
 		local grip = { Anim = "Grip" }
-		b.add("Block", Vector3.new(0.48, 1.5, 0.48), col, lower, { Anim = grip.Anim, Pivot = lower:Inverse() * foot })
-		b.add("Block", Vector3.new(0.34, 1.05, 0.34), vine, upper, { Anim = grip.Anim, Pivot = upper:Inverse() * foot })
-		b.add("Wedge", Vector3.new(0.12, 0.42, 0.38), thorn, lower * CFrame.new(0, 0.2, 0.36), { Anim = grip.Anim, Pivot = (lower * CFrame.new(0, 0.2, 0.36)):Inverse() * foot })
-		b.add("Wedge", Vector3.new(0.1, 0.34, 0.3), thorn, upper * CFrame.new(0, -0.1, 0.28), { Anim = grip.Anim, Pivot = (upper * CFrame.new(0, -0.1, 0.28)):Inverse() * foot })
+		b.add("Block", Vector3.new(0.58, 1.5, 0.58), col, lower, { Anim = grip.Anim, Pivot = lower:Inverse() * foot })
+		b.add("Block", Vector3.new(0.42, 1.1, 0.42), vine, upper, { Anim = grip.Anim, Pivot = upper:Inverse() * foot })
+		b.add("Wedge", Vector3.new(0.16, 0.55, 0.5), thorn, lower * CFrame.new(0, 0.2, 0.46), { Anim = grip.Anim, Pivot = (lower * CFrame.new(0, 0.2, 0.46)):Inverse() * foot })
+		b.add("Wedge", Vector3.new(0.14, 0.45, 0.4), thorn, upper * CFrame.new(0, -0.1, 0.36), { Anim = grip.Anim, Pivot = (upper * CFrame.new(0, -0.1, 0.36)):Inverse() * foot })
 		if i % 2 == 1 then
 			b.add("Wedge", Vector3.new(0.06, 0.32, 0.62), ShotPalette.moss_300, lower * CFrame.new(0.36, 0.1, 0) * CFrame.Angles(0, math.rad(90), math.rad(-30)))
 		end
@@ -1417,10 +1418,10 @@ SHOTS[50] = function(b, _def)
 	sawblade(b, ShotPalette.crimson_400, ShotPalette.gold_500, ShotPalette.gold_200)
 end
 SHOTS[51] = function(b, _def)
-	snare(b, ShotPalette.moss_400, ShotPalette.moss_600, ShotPalette.ivory_200, 2.4, 4)
+	snare(b, ShotPalette.moss_400, ShotPalette.moss_600, ShotPalette.ivory_200, 2.8, 4)
 end
 SHOTS[52] = function(b, _def)
-	snare(b, ShotPalette.moss_300, ShotPalette.moss_700, ShotPalette.ivory_100, 3.2, 6)
+	snare(b, ShotPalette.moss_300, ShotPalette.moss_700, ShotPalette.ivory_100, 4.4, 6)
 end
 SHOTS[53] = function(b, _def)
 	wisp(b, ShotPalette.ivory_100, ShotPalette.fx_holy)

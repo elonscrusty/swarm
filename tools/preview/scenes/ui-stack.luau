@@ -20,7 +20,7 @@ local case = preview.args.case or "portal"
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
-local s = A.build({ enemies = 40, seconds = 300, portal = true, portalState = "Idle", stage = 2, swarm = true })
+local s = A.build({ enemies = 40, seconds = 300, portal = true, portalState = case == "levelup" and "Open" or "Idle", stage = 2, swarm = true, stagePhase = case == "levelup" and "Open" or nil, choiceLeft = 12 })
 C.fire("Inventory", A.inventory())
 C.setState({ WaveSeq = 1, Wave = 5, PortalReveal = 0, SwarmWarn = 0 })
 C.settle(4) -- past the stage card

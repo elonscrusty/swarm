@@ -428,6 +428,7 @@ local function buildNav(screen: Frame)
 		end })
 		local cap = b.Content:FindFirstChild("Caption") :: TextLabel?
 		if cap then
+			cap.Text = item.Name -- the reference's title case
 			cap.TextColor3 = P.ivory_100
 			cap.FontFace = Theme.Font.Title
 			cap.TextStrokeColor3 = C.Shadow
@@ -773,7 +774,7 @@ local function layoutNav(x: number, y: number, itemW: number, navH: number)
 			cap.Size = UDim2.new(1, -4, 0, capH)
 			cap.Position = UDim2.new(0.5, 0, 1, -math.floor(navH * 0.06))
 		end
-		local iconS = math.floor(math.clamp(navH - capH - 18, 26, 52))
+		local iconS = math.floor(math.clamp(navH - capH - 8, 30, 60))
 		for _, ch in ipairs(b.Content:GetChildren()) do
 			if ch:IsA("GuiObject") and (ch.Name == "Glyph" or ch.Name == "Art") then
 				ch.Position = UDim2.new(0.5, 0, 0.5, -math.floor(capH / 2) - 2)
@@ -884,7 +885,7 @@ local function relayout()
 		capH = math.floor(math.clamp(H * 0.05, 28, 50))
 		-- bottom: the row of four centred under the hero, MORE and the cog bottom right
 		local bottomM = math.max(M, math.floor(H * 0.03))
-		navH = math.floor(math.clamp(H * 0.11, 62, 100))
+		navH = math.floor(math.clamp(H * 0.11, 70, 100))
 		navY = H - bottomM - navH
 		itemW = math.floor(math.clamp(W * 0.085, 76, 150))
 		local cogY = H - bottomM - cogS

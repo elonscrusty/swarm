@@ -84,10 +84,9 @@ local s = A.build({
 			local mid = Vector3.zero
 			for _, r in ipairs(runes) do mid += r.Pos end
 			mid /= #runes
-			local delta = (at(14, -2) - mid) * Vector3.new(1, 0, 1)
+			local delta = (at(17, -3) - mid) * Vector3.new(1, 0, 1)
 			for _, r in ipairs(runes) do move(r, r.Pos + delta) end
-			local tablet = workspace:FindFirstChild("SwarmLoot") and runes[1].Puzzle.Tablet
-			if tablet then tablet:PivotTo(tablet:GetPivot() + delta) end
+			-- (the order tablet is inside the first stone's model: it moved with it)
 		end
 		local cv = Caravan.Get()
 		if cv then
@@ -137,7 +136,7 @@ local s = A.build({
 		end
 		preview.metrics.props = #Loot.Objects()
 		placed.rp = rp
-		return at(4, 4)
+		return at(3, 9)
 	end,
 })
 C.settle(1)

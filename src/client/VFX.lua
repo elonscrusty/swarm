@@ -1977,7 +1977,7 @@ local function totemPulseFx(x: number, z: number, radius: number, evo: boolean, 
 			wave(x, z, 1, radius - 0.3, 0.12, evo and P.gold_600 or P.moss_700, 0.35, 0.7, false, 0.55)
 		end
 		local core = Vector3.new(x, FLOOR_Y + K.TOTEM_CORE_Y, z)
-		if room(1) then
+		if not ClientSettings.Flashes() and room(1) then
 			fx("Ball", color, NEON, CFrame.new(core), nil, Vector3.one * 1.1, Vector3.one * 2, 0.45, 1, 0.3, EASE_OUT)
 		end
 		sparkle(core, color, 2, 0.5, 1.4, 0.45)
@@ -2107,7 +2107,7 @@ end
 -- Vine Snare release: the roots let go and sink back into the earth with a little dust.
 function K.snareRelease(pos: Vector3, evo: boolean)
 	local n = ClientSettings.Reduced() and 0 or (evo and 4 or 3)
-	local r = evo and 3.2 or 2.4
+	local r = evo and 4.4 or 2.8 -- the planted model's root ring (ModelLibrary SHOTS[51] / [52])
 	if n > 0 and room(n) then
 		for i = 1, n do
 			local a = i * TAU / n + 0.3
@@ -2149,7 +2149,8 @@ end
 
 -- Vortex: a ring sucked inward when a rift opens; its collapse (Implosion) flashes.
 function K.vortexOpen(x: number, z: number, r: number, evo: boolean)
-	wave(x, z, r * 1.3, r * 0.3, 0.35, evo and P.fx_arcane or P.ivory_200, 0.3, 0.5)
+	-- the hero's own area: dashed, and arcane-tinted rather than one more white ring
+	wave(x, z, r * 1.3, r * 0.3, 0.35, evo and P.fx_arcane or P.fx_arcane:Lerp(P.ivory_200, 0.4), 0.3, 0.5, false, 0.55)
 end
 
 function K.implosion(x: number, z: number, r: number, evo: boolean)
@@ -2565,10 +2566,9 @@ local function poseKit(kit: GemKit, kind: string, x: number, floorY: number, z: 
 	return n
 end
 
--- Burst where a gem was collected: a tinted flash, a four-point glint facing the camera
--- and a few crystal splinters thrown out.
 --[[
-	Collected gem burst. Flying gems are collected ON the hero, so the burst there is kept
+	Burst where a gem was collected: a tinted flash, a four-point glint facing the camera and
+	a few crystal splinters thrown out. Flying gems are collected ON the hero, so the burst there is kept
 	low and small (a floor-level flick and three shards, at most K.GEM_POPS_NEAR per 0.1 s)
 	and never a glowing ball over the hero's body; the big bright pop is for gems taken a
 	little way off (a teammate's pickup seen from afar).
@@ -2592,7 +2592,9 @@ local function gemPop(pos: Vector3, kind: string, onHero: boolean?)
 		K.gemNearCount += 1
 		popsThisFrame += 1
 		local floor = Vector3.new(pos.X, FLOOR_Y + 0.3, pos.Z)
-		fx("Cylinder", bright, NEON, CFrame.new(floor) * DISC, nil, Vector3.new(0.04, 1.2, 1.2), Vector3.new(0.04, 3.4, 3.4), 0.55, 1, 0.2, EASE_OUT)
+		if not ClientSettings.Flashes() then
+			fx("Cylinder", bright, NEON, CFrame.new(floor) * DISC, nil, Vector3.new(0.04, 1.2, 1.2), Vector3.new(0.04, 3.4, 3.4), 0.55, 1, 0.2, EASE_OUT)
+		end
 		if not ClientSettings.Reduced() then
 			for i = 1, 3 do
 				local a = i * TAU / 3 + math.random() * 0.8
