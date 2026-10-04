@@ -35,6 +35,8 @@ def main():
     checks += [("discovery", ["phone"]), ("discovery", ["phone-portrait"])]
     checks += [("pings", ["phone"]), ("pings", ["phone-portrait"])]
     checks += [("accessibility-sim", [])]
+    checks += [("results-flow", ["case=" + c]) for c in ("auto", "stay", "replay", "portal", "plain")]
+    checks += [("leaderboards", ["mismatch=board"])]
     checks += [("coop-regression", ["rejoin=" + value]) for value in ("success", "expired", "ended", "forged")]
     checks += [("reconnect-lobby", []), ("reconnect-lobby", ["fail=teleport"]), ("reconnect-lobby", ["fail=expired"])]
     # phone layouts: the scene's GUI export goes through tools/preview/check_layout.py
