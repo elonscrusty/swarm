@@ -199,6 +199,9 @@ Config.Slots = {
 Config.LevelUp = {
 	Choices = 3,
 	ChoicesPerPanel = 4,
+	-- levels earned while a panel is open join it (a burst of filled bars becomes one
+	-- longer panel instead of panel after panel), up to this many choices in total
+	PanelMergeMax = 6,
 	-- If a player doesn't pick in this many seconds a random card is chosen for them,
 	-- so nobody can stay paused (and protected) forever.
 	AutoPickSeconds = 25,
@@ -207,13 +210,20 @@ Config.LevelUp = {
 	GroupAutoPickSeconds = 10,
 	SkipGold = 10, -- run gold granted when a level-up is skipped
 	-- Relative weights for building the 3 cards. Luck multiplies the "new" weights.
-	WeightUpgradeWeapon = 10,
-	WeightUpgradePassive = 7,
+	-- (cardpool measure, 1000 real rolls: the old 10 / 7 / shared-weapons-only weights
+	-- offered the starting weapon at the first level-up 18 % of the time; these 70 %)
+	WeightUpgradeWeapon = 12,
+	WeightUpgradePassive = 8,
 	WeightNewWeapon = 6,
-	-- the new-weapon weight is shared out as if there were at most this many weapons you
-	-- don't own yet (17 weapons must not crowd out upgrades: same odds as with 9)
-	NewWeaponPoolRef = 8,
 	WeightNewPassive = 5,
+	-- the new-weapon / new-passive weights are each shared out as if there were at most
+	-- this many you don't own yet (27 weapons and 26 passives must not crowd out upgrades) ...
+	NewWeaponPoolRef = 8,
+	NewPassivePoolRef = 8,
+	-- ... and fewer while the build is young: Start with one item owned, +PerItem for each
+	-- further weapon / passive owned (LevelUpSystem newShare)
+	NewPoolRefStart = 2.5,
+	NewPoolRefPerItem = 1,
 	WeightEvolution = 40, -- an available evolution is almost always offered
 	-- a passive that evolves a weapon you own (and don't have yet) is this much likelier
 	EvolutionPassiveWeightMult = 1.5,

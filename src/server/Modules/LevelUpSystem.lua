@@ -295,6 +295,24 @@ local function passiveLines(rp, passiveId: string, level: number): ({ { [string]
 	return lines, useful or evolvesOwned(rp, passiveId)
 end
 
+--[[
+	How many unowned weapons (or passives) the "new" weight is shared out over at most:
+	with 27 weapons and 26 passives every NEW card would otherwise bury the few upgrades a
+	young build has (the first level-up offered the starting weapon only ~1 time in 6).
+	The share starts small (NewPoolRefStart with one item owned) and grows by
+	NewPoolRefPerItem per owned item up to NewWeaponPoolRef / NewPassivePoolRef, so early
+	offers usually carry an upgrade of what you have and later ones keep bringing new items.
+]]
+local function newShare(rp, cap: number?, unowned: number): number
+	local L = Config.LevelUp
+	local owned = #rp.WeaponOrder + #rp.PassiveOrder
+	local ref = cap or unowned
+	if L.NewPoolRefStart then
+		ref = math.min(ref, L.NewPoolRefStart + (L.NewPoolRefPerItem or 0) * math.max(0, owned - 1))
+	end
+	return math.min(1, ref / math.max(1, unowned))
+end
+
 local function buildPool(rp)
 	local L = Config.LevelUp
 	local luck = 1 + rp.Stats.Luck
@@ -314,9 +332,9 @@ local function buildPool(rp)
 				unowned += 1
 			end
 		end
-		-- with many weapons the "new weapon" weight is shared, so the odds of a new weapon
-		-- card stay what they were with the first 9 weapons (Config.LevelUp.NewWeaponPoolRef)
-		local share = math.min(1, (L.NewWeaponPoolRef or unowned) / math.max(1, unowned))
+		-- with many weapons the "new weapon" weight is shared (newShare), so more weapons
+		-- don't crowd out upgrades
+		local share = newShare(rp, L.NewWeaponPoolRef, unowned)
 		for _, id in ipairs(WeaponData.Order) do
 			if not rp.Weapons[id] then
 				table.insert(pool, card("WeaponNew", id, 1, L.WeightNewWeapon * luck * share))
@@ -332,17 +350,23 @@ local function buildPool(rp)
 		end
 	end
 	if #rp.PassiveOrder < Config.Slots.Passives then
+		-- the useful new passives share one weight bucket, like new weapons (newShare)
+		local fresh = {}
 		for _, id in ipairs(PassiveData.Order) do
 			if not rp.Passives[id] then
 				local _, useful = passiveLines(rp, id, 1)
 				if useful then
-					local weight = L.WeightNewPassive * luck
-					if evolvesOwned(rp, id) then
-						weight *= L.EvolutionPassiveWeightMult -- the missing evolution piece shows up more
-					end
-					table.insert(pool, card("PassiveNew", id, 1, weight))
+					table.insert(fresh, id)
 				end
 			end
+		end
+		local share = newShare(rp, L.NewPassivePoolRef, #fresh)
+		for _, id in ipairs(fresh) do
+			local weight = L.WeightNewPassive * luck * share
+			if evolvesOwned(rp, id) then
+				weight *= L.EvolutionPassiveWeightMult -- the missing evolution piece shows up more
+			end
+			table.insert(pool, card("PassiveNew", id, 1, weight))
 		end
 	end
 	return pool
@@ -658,6 +682,14 @@ function LevelUpSystem.QueueLevels(rp, count: number)
 	if count > 0 and #buildPool(rp) > 0 then Fx.PlayerEvent(rp.Player, "levelup") end
 	if not rp.Offer then
 		offerNext(rp)
+	elseif count > 0 and rp.Paused then
+		-- Levels filled while a panel is open (portal vacuum, surge kills) join that panel
+		-- (up to PanelMergeMax choices) instead of closing it and popping a second one
+		-- straight after: one "LEVEL UP 2 / 5" panel, no extra wait, same shared deadline.
+		local room = math.max(0, (Config.LevelUp.PanelMergeMax or Config.LevelUp.ChoicesPerPanel) - (rp.BatchTotal or 0))
+		local add = math.min(count, room)
+		rp.BatchRemaining += add
+		rp.BatchTotal = (rp.BatchTotal or 0) + add
 	end
 	rp.Player:SetAttribute("PendingUpgrades", rp.PendingLevels)
 	rp.Player:SetAttribute("XPReward", #buildPool(rp) == 0 and "Coins" or "Upgrade")
@@ -815,7 +847,7 @@ function LevelUpSystem.Step(dt: number)
 				rp.OfferDeadline += dt -- the solo pause menu also pauses the auto-pick timer
 			elseif now >= rp.OfferDeadline then
 				-- One deadline bounds the entire protected panel, including all queued choices.
-				for _ = 1, Config.LevelUp.ChoicesPerPanel do
+				for _ = 1, math.max(Config.LevelUp.ChoicesPerPanel, Config.LevelUp.PanelMergeMax or 0) do
 					if not rp.Offer then break end
 					if #rp.Offer == 0 then
 						closePanel(rp, true) -- nothing to pick: never a stuck protected pause

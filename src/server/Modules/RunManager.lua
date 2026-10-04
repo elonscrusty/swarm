@@ -1160,7 +1160,7 @@ local function firstRunResult(rp, data): ({ [string]: any }?, { [string]: any }?
 			goal = {
 				Kind = "BuyHero", Icon = "hero:" .. id,
 				Text = string.format("Unlock %s at %s gold", def.Name, commas(cost)),
-				Sub = "or PLAY AGAIN now",
+				Sub = "or tap REPLAY to play again",
 				Progress = math.clamp(gold / cost, 0, 1),
 				ProgressText = string.format("%s / %s gold", commas(gold), commas(cost)),
 			}

@@ -84,6 +84,34 @@ LU.Step(0)
 assert(not rp.Offer and not rp.Paused and rp.PendingLevels == 3 and rp.PanelId == timeoutPanel,
 	"one shared deadline must resolve four choices without reopening or discarding bank")
 LU.Cancel(rp)
+-- levels filled while a panel is open join it (no second panel popping straight after)
+LU.QueueLevels(rp, 1)
+local mergePanel = rp.PanelId
+assert(rp.Offer and rp.BatchTotal == 1, "one filled bar opens a one-card panel")
+LU.QueueLevels(rp, 3)
+assert(rp.PanelId == mergePanel and rp.BatchTotal == 4 and rp.BatchRemaining == 4 and rp.PendingLevels == 4,
+	"levels earned during an open panel must join it")
+LU.QueueLevels(rp, 5)
+assert(rp.BatchTotal == Config.LevelUp.PanelMergeMax and rp.PendingLevels == 9, "a merged panel stops at PanelMergeMax, the rest stays banked")
+LU.Cancel(rp)
+-- a young build sees its starting weapon's upgrade often (shared NEW weights)
+do
+	local start = rp.WeaponOrder[1]
+	rp.Weapons = { [start] = { Id = start, Level = 1, Evolved = false, Timer = 0, Live = {}, Growth = 0 } }
+	rp.WeaponOrder, rp.Passives, rp.PassiveOrder = { start }, {}, {}
+	LU.RecomputeStats(rp)
+	local hits, rolls = 0, 300
+	for _ = 1, rolls do
+		LU.QueueLevels(rp, 1)
+		for _, c in ipairs(rp.Offer or {}) do
+			if c.Type == "WeaponUp" and c.Id == start then hits += 1; break end
+		end
+		LU.Cancel(rp)
+	end
+	assert(hits / rolls >= 0.5,
+		"the first offers must usually upgrade the starting weapon: " .. hits .. "/" .. rolls)
+	print(string.format("PASS start weapon upgrade offered %d/%d first offers", hits, rolls))
+end
 rp.Weapons, rp.WeaponOrder, rp.Passives, rp.PassiveOrder = {}, {}, {}, {}
 for _, id in ipairs({ "Whip", "MagicOrb", "Knives", "Garlic", "HolyWater", "Lightning" }) do
 	rp.Weapons[id] = { Id = id, Level = 12, Evolved = true, Timer = 0, Live = {}, Growth = 0 }

@@ -584,13 +584,20 @@ local function heroPos(): Vector3?
 	return root and root.Position or nil
 end
 
+-- The first run's welcome is on (Config.FirstRun; set by the server for that run only).
+local function welcome(): boolean
+	return player:GetAttribute("FirstRunBoost") == true
+end
+
 local function startRun(_state: Configuration)
 	table.clear(run)
 	run.Start = os.clock()
 	run.StartPos = heroPos()
 	run.Kills0 = player:GetAttribute("Kills") or 0
 	push("Move", "Move", moveText(), "boot")
-	push("Attack", "Auto attack", "Your weapons fire on their own. Just keep moving!", "sword")
+	-- the first run's welcome (server attribute FirstRunBoost: the first level-up comes
+	-- within ~20 s) keeps this one short so the gem tip lands before the cards
+	push("Attack", "Auto attack", "Your weapons fire on their own. Just keep moving!", "sword", welcome() and 4.5 or nil)
 end
 
 local function triggers(state: Configuration)
@@ -603,7 +610,8 @@ local function triggers(state: Configuration)
 	-- gems after the first kill
 	if not run.Gems and (player:GetAttribute("Kills") or 0) > (run.Kills0 or 0) then
 		run.Gems = true
-		push("Gems", "Collect gems", "Walk over gems for XP. Fill this bar to level up!", "gem")
+		-- first run: straight after the current tip (the first level-up is close)
+		push("Gems", "Collect gems", "Walk over gems for XP. A full bar = a new upgrade!", "gem", nil, welcome())
 	end
 	-- the objective, a while into the run
 	local runTime = state:GetAttribute("RunTime") or 0
@@ -664,6 +672,9 @@ function Tutorial.LevelUpHint(): string?
 		return nil
 	end
 	markSeen("LevelUp")
+	if welcome() then
+		return "Tap a card: try the NEW weapon!"
+	end
 	return "Tap a card: a new weapon, an upgrade or a passive"
 end
 
