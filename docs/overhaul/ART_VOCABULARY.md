@@ -80,3 +80,19 @@ Every effect above checks `ClientSettings.Reduced()` (fewer parts: no inner heal
 per snare cast, no snare-release roots, no gem shards) and the shared part budget (`room()`).
 Reduce Flashes (`ClientSettings.Flashes()`) also drops the totem core flare and the Neon floor flick
 of a gem taken on the hero. Nothing in this vocabulary flashes the whole screen or a whole model.
+
+## 7. Heroes (HERO-ART, 2026-10)
+
+Heroes follow the six materials with these extra rules (details: `docs/overhaul/HERO_ART.md`):
+
+- Big armour shells (breastplate, pauldrons, greaves, helm shells, backpacks) are SmoothPlastic in
+  their Metal slot colour. Roblox Metal is kept for small pieces only (trims, gauntlets, arm
+  plates, faulds, blades, hilts, rivets), where the sheen reads as "steel" without a large hot patch.
+- Brightest big surface on a hero: ivory_200 / steel_300 / gold_300. ivory_100, steel_200 and
+  gold_200 are for small highlights only (eyes of light, trims on dark cloth), never a robe, cape,
+  hat or armour plate. A white hero (Priest, Angel, Paladin) gets its read from a darker second
+  cloth (ivory_400) and gold_500 trims.
+- Skin stays skin_400 / skin_500; bone stays ivory_200 / ivory_300 with dark sockets.
+- The crimson cape (Accent crimson_500) is the in-run locator for every default hero that has a
+  cape, stole or scarf. Skins may recolour it (owner-sold cosmetics), see HERO_ART.md section 4.
+- Neon on a hero is a fist-sized core at most (staff crystal, lamp, soul eyes).

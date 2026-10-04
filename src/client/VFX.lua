@@ -1979,10 +1979,10 @@ end
 K.TOTEM_CORE_Y = 3.1 -- the life-core's height over the floor (Shot_Totem x 1.5)
 local function totemPulseFx(x: number, z: number, radius: number, evo: boolean, healed: boolean)
 	local color = evo and FX.Heal:Lerp(FX.Gold, 0.35) or FX.Heal:Lerp(P.moss_300, 0.25)
-	wave(x, z, 1.2, radius, healed and 0.34 or 0.24, color, healed and 0.25 or 0.5, 0.7, false, 0.55)
+	wave(x, z, 1.2, radius, healed and 0.42 or 0.28, color, healed and 0.12 or 0.4, 0.7, false, 0.6)
 	if healed then
 		if not ClientSettings.Reduced() then
-			wave(x, z, 1, radius - 0.3, 0.12, evo and P.gold_600 or P.moss_700, 0.35, 0.7, false, 0.55)
+			wave(x, z, 1, radius - 0.32, 0.18, evo and P.gold_600 or P.moss_700, 0.2, 0.7, false, 0.6)
 		end
 		local core = Vector3.new(x, FLOOR_Y + K.TOTEM_CORE_Y, z)
 		if not ClientSettings.Flashes() and room(1) then
