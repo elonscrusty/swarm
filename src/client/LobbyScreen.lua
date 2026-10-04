@@ -898,7 +898,7 @@ local function relayout()
 		-- left: PLAY and its line, between the caption and the bottom row
 		playW = math.floor(math.clamp(W * 0.31, 230, 560))
 		playH = math.floor(math.clamp(playW / 3.25, 66, 172))
-		hintH = math.floor(math.clamp(H * 0.042, 20, 36))
+		hintH = math.floor(math.clamp(H * 0.034, 20, 30))
 		local capBottom = logoY + ui.LogoH * logoScale + 2 + capH
 		local extra = 6 + hintH + (showReady and (G + 48) or 0)
 		local room = navY - G - (capBottom + G)
