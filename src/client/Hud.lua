@@ -873,15 +873,15 @@ end
 -- APPEARED"), through UIState's headline lane. `sound` names a Config.Sounds entry to
 -- play with it (Audio); `id` is the semantic event id (default: the title), `class`
 -- "Critical" for threats (they never wait for reward feedback or the stage card).
-function Hud.Announce(title: string, sub: string, color: Color3?, sound: string?, id: string?, class: string?)
-	UIState.Headline({ Id = id or title, Title = title, Sub = sub, Color = color, Sound = sound, Class = class or "Info", Prefer = true })
+function Hud.Announce(title: string, sub: string, color: Color3?, sound: string?, id: string?, class: string?, expire: number?)
+	UIState.Headline({ Id = id or title, Title = title, Sub = sub, Color = color, Sound = sound, Class = class or "Info", Prefer = true, Expire = expire })
 end
 
 -- UIState's headline renderer: draws `item` and calls `done` once it has left the screen.
-local function renderHeadline(item: UIState.Headline, done: () -> ())
+local function renderHeadline(item: UIState.Headline, done: () -> ()): (() -> ())?
 	if not ui.Banner then
 		done()
-		return
+		return nil
 	end
 	local sound = item.Sound
 	showBanner(item.Title, item.Sub or "", item.Color, sound and function()
@@ -889,6 +889,11 @@ local function renderHeadline(item: UIState.Headline, done: () -> ())
 			host.Audio.Play(sound)
 		end
 	end or nil, done)
+	-- UIState cancels it when a prompt / reward card / panel comes up under it
+	return function()
+		bannerDone = nil -- UIState already let go of it
+		stopBanner()
+	end
 end
 
 -- Bottom edge of the centre banner while it shows (notices sit under it), else nil.

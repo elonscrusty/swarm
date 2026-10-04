@@ -302,7 +302,8 @@ local headlineToken = 0
 local recentHeadline: { [string]: number } = {} -- id -> when it last showed
 local HEADLINE_REPEAT = 6 -- the same id within this many seconds is a duplicate
 local HEADLINE_SETTLE = 0.15 -- an informational headline waits this long for a twin
-local headlineRenderer: ((Headline, () -> ()) -> ())? = nil
+local headlineRenderer: ((Headline, () -> ()) -> (() -> ())?)? = nil
+local headlineCancel: (() -> ())? = nil
 
 local function critical(item: { Class: string? }): boolean
 	return item.Class == "Critical"
@@ -330,6 +331,9 @@ function UIState.Headline(item: Headline)
 	end
 	for _, q in ipairs(headlineQueue) do
 		if q.Id == id then
+			if item.Expire then
+				q.Expire = math.max(q.Expire or 0, item.Expire)
+			end
 			-- the same event from a second producer: one banner, the richer wording
 			if item.Prefer or not q.Sub or q.Sub == "" then
 				q.Sub = item.Sub
@@ -393,6 +397,18 @@ local function stepHeadline(now: number)
 	if headlineNow and now - headlineSince > HEADLINE_SAFETY then
 		headlineNow = nil
 	end
+	-- an informational headline already up when a prompt / reward card / panel appears
+	-- leaves at once instead of sitting on top of it (it does not come back)
+	local cur = headlineNow
+	if cur and headlineHeld(cur) then
+		local cancel = headlineCancel
+		headlineNow = nil
+		headlineCancel = nil
+		headlineToken += 1
+		if cancel then
+			pcall(cancel)
+		end
+	end
 	-- stale ones leave the queue
 	for i = #headlineQueue, 1, -1 do
 		local q = headlineQueue[i]
@@ -415,14 +431,17 @@ local function stepHeadline(now: number)
 			recentHeadline[q.Id] = now
 			headlineToken += 1
 			local token = headlineToken
-			local render = headlineRenderer :: (Headline, () -> ()) -> ()
-			local ok, err = pcall(render, q, function()
+			local render = headlineRenderer :: (Headline, () -> ()) -> (() -> ())?
+			local ok, cancel = pcall(render, q, function()
 				if token == headlineToken then
 					headlineNow = nil
+					headlineCancel = nil
 				end
 			end)
-			if not ok then
-				warn("[UIState] " .. tostring(err))
+			if ok then
+				headlineCancel = cancel
+			else
+				warn("[UIState] " .. tostring(cancel))
 				headlineNow = nil
 			end
 			return
@@ -598,7 +617,8 @@ end
 -- Renderers, per frame, reset
 ------------------------------------------------------------------------------------------
 
--- "Headline": fn(item, done) draws a banner and calls done() when it has left.
+-- "Headline": fn(item, done) -> cancel? draws a banner, calls done() when it has left and
+-- may return a function that takes it off screen at once.
 -- "Notice": fn(item) -> { Set, Dismiss } draws a pill.
 function UIState.SetRenderer(lane: string, fn: any)
 	if lane == "Headline" then

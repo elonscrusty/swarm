@@ -1067,6 +1067,8 @@ function LootUI.Update(_dt: number, inRun: boolean)
 	ui.Strip.Visible = inRun and #items > 0
 	refreshCurses(inRun)
 	if not inRun then
+		UIState.SetHold("Prompt", false)
+		UIState.SetHold("ItemPopup", false)
 		ui.Prompt.Visible = false
 		ui.Marker.Visible = false
 		ui.Bargain.Visible = false
@@ -1233,6 +1235,11 @@ function LootUI.Update(_dt: number, inRun: boolean)
 		ui.Prompt.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	end
 	updateMarker(altar, shown)
+	-- informational centre headlines (stage banner, portal reveal) wait while a loot prompt
+	-- or an item popup is on screen, so they never land on top of them (UIState holds;
+	-- threat headlines still show)
+	UIState.SetHold("Prompt", shown)
+	UIState.SetHold("ItemPopup", #popups > 0)
 end
 
 -- For the preview tool / tests.

@@ -199,6 +199,29 @@ advance(0.1)
 UIState.Reset("death")
 check("reset drops queued and visible messages", pillCount() == 0 and UIState.HeadlineShowing() == nil and #UIState.QueuedNotices() == 0)
 
+-- a stage banner already up leaves when a loot prompt appears (HUD: shrine prompt collision)
+local cancelled = false
+UIState.SetRenderer("Headline", function(item, done)
+	headlineOn = item.Id
+	return function()
+		cancelled = true
+		headlineOn = nil
+	end
+end)
+UIState.Headline({ Id = "stage.2", Title = "STAGE 2", Class = "Info" })
+advance(0.3)
+check("stage banner showing", headlineOn == "stage.2")
+UIState.SetHold("Prompt", true)
+advance(0.1)
+check("an informational banner is taken off when a world prompt appears", cancelled and UIState.HeadlineShowing() == nil)
+UIState.Headline({ Id = "portal.reveal", Title = "THE PORTAL HAS APPEARED", Class = "Info", Expire = 15 })
+advance(8)
+check("the portal banner waits beside the prompt (long expiry)", headlineOn == nil and #UIState.QueuedNotices() >= 0)
+UIState.SetHold("Prompt", false)
+advance(0.2)
+check("and shows once the prompt is gone", headlineOn == "portal.reveal")
+UIState.Reset("test")
+
 -- player answers show even under a panel
 UIState.Open("Results", handle("Results"))
 UIState.Notice({ Id = "text:sent", Text = "Thanks! Your report was sent.", Class = "Player" })

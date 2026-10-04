@@ -88,7 +88,7 @@ pre-overhaul versions, other helpers' work kept):
 | friendly-fx release (evolved, t 0.15) | PASS: snares and totem gone, Lifebloom dashed ring + core flare; roots sink (faint at this zoom) |
 | combat-fx armoury Forest + Snow, pc + iphone, before / after | PASS, 0 errors; only the snare cast and vortex ring changed there (the after renders predate the vortex disc change) |
 | weapons-sim `weapons=armoury` (headless, 5 s phases) | PASS: 0 errors, 45 kills / 1111 dmg, every armoury weapon incl. Vine Snare fires at lv 8 and evolved |
-| perf-sim short (200 enemies) | see below |
+| perf-sim short (200 enemies, 5 s, Knight 6 evolved weapons, headless) | PASS, 0 errors: VFX RenderStepped 21.4 ms/frame in Lune (mock; compare runs, not absolute), 30.6 Parts/s created in VFX onFxBatch during warm-up (pool growth, bounded by `room()`); no pre-change run of this exact command to compare, so no before/after claim |
 | Studio, phone, co-op | BLOCKED (owner) |
 
 Remaining risk: the Grip clench is driven by the client's first-seen time, so it can be up

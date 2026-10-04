@@ -100,7 +100,7 @@ local function checkReveal(state: Configuration)
 			-- semantic id portal.reveal: the server's broadcast of the same moment merges
 			-- into this one banner (UIState), never a second heading
 			Hud.Announce("THE PORTAL HAS APPEARED", "Follow the arrow · stand in its circle",
-				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear", "portal.reveal", "Info")
+				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear", "portal.reveal", "Info", 15)
 		end
 	end
 end
