@@ -81,6 +81,7 @@ type Obj = {
 	Ring: BasePart?,
 	Rune: number?,
 	Puzzle: any?,
+	Scale: any?, -- the Bargain Shrine's balance (tips when sealed)
 }
 
 local ctx
@@ -304,6 +305,22 @@ local function openLid(chest: Model?, cf: CFrame, kitName: string)
 	end
 end
 
+-- An opened chest steps back: its gems stop glowing and the plinth's gold trim dulls, so
+-- the ones still worth walking to stand out (the lid is already open).
+local function quietOpened(obj: Obj)
+	for _, d in ipairs(obj.Model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			if d.Material == NEON and (d.Name == "Gem" or d.Name == "LidGem") then
+				d.Material = Enum.Material.SmoothPlastic
+				d.Color = d.Color:Lerp(P.stone_700, 0.5)
+			elseif d.Name == "PlinthTrim" then
+				d.Color = P.stone_400
+				d.Material = Enum.Material.SmoothPlastic
+			end
+		end
+	end
+end
+
 local function setAttrs(obj: Obj, attrs: { [string]: any })
 	for k, v in pairs(attrs) do
 		obj.Model:SetAttribute(k, v)
@@ -512,6 +529,51 @@ local function chanceText(obj: Obj)
 	})
 end
 
+--[[
+	What stands on top of a shrine tells its deal before any panel is read:
+	  Shrine of Chance   a large gold coin on its edge with a glowing core: it takes gold
+	                     (the same coin the paid chests wear)
+	  Bargain Shrine     an iron balance with a gold pan (the team's boon) and a crimson
+	                     pan (the swarm's extra HP): a trade. Sealing it tips the balance
+	                     and the shrine goes quiet (no glow, no ring; the HUD chip stays).
+	Both keep the faint ring showing where to stand.
+]]
+local function shrineCrown(obj: Obj, typeName: string, cf: CFrame, top: number)
+	local m = obj.Model
+	local face = CFrame.Angles(0, math.rad(90), 0) -- a cylinder's flat side toward the camera
+	if typeName == "Chance" then
+		local at = cf * CFrame.new(0, top + 1.3, 0)
+		local coin = part({ Name = "Coin", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 1.9, 1.9), CFrame = at * face, Color = P.gold_400, Material = METAL })
+		coin.Parent = m
+		local core = part({ Name = "Glow", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.34, 1.1, 1.1), CFrame = at * face, Color = P.gold_300, Material = NEON })
+		core.Parent = m
+		table.insert(obj.Glow, coin)
+		table.insert(obj.Glow, core)
+	else
+		local iron = P.steel_700
+		local function piece(name: string, size: Vector3, at: CFrame, color: Color3, material: Enum.Material?, shape: Enum.PartType?)
+			local p = part({ Name = name, Shape = shape, Size = size, CFrame = cf * at, Color = color, Material = material })
+			p.Parent = m
+			return p
+		end
+		piece("Scale", Vector3.new(0.22, 1.9, 0.22), CFrame.new(0, top + 0.95, 0), iron, METAL)
+		piece("Scale", Vector3.new(0.4, 0.4, 0.4), CFrame.new(0, top + 1.95, 0) * CFrame.Angles(0, math.rad(45), math.rad(45)), P.gold_500, METAL)
+		local arm = {}
+		table.insert(arm, piece("ScaleArm", Vector3.new(3.2, 0.16, 0.16), CFrame.new(0, top + 1.75, 0), iron, METAL))
+		for _, side in ipairs({ -1, 1 }) do
+			local x = side * 1.45
+			table.insert(arm, piece("ScaleArm", Vector3.new(0.06, 0.8, 0.06), CFrame.new(x, top + 1.35, 0), iron, METAL))
+			local pan = piece("ScaleArm", Vector3.new(0.14, 1.0, 1.0), CFrame.new(x, top + 0.95, 0) * UPRIGHT, side < 0 and P.gold_300 or P.crimson_400, NEON, Enum.PartType.Cylinder)
+			table.insert(arm, pan)
+		end
+		obj.Scale = { Parts = arm, Pivot = cf * CFrame.new(0, top + 1.75, 0) }
+	end
+	local r = Config.Chests.InteractRadius
+	local disc = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, r * 2, r * 2), CFrame = CFrame.new(obj.Pos + Vector3.new(0, 0.05, 0)) * UPRIGHT, Color = typeName == "Chance" and P.gold_300 or P.crimson_400, Transparency = 0.8 })
+	disc.Parent = m
+	obj.Ring = disc
+end
+
 local function buildShrine(arena, typeName: string, pos: Vector3)
 	local cf = CFrame.new(pos) * FACE_CAMERA
 	local obj = newObj("Shrine", typeName, pos, cf)
@@ -536,7 +598,7 @@ local function buildShrine(arena, typeName: string, pos: Vector3)
 		end
 	end
 	MapBuilder.AddCollider(arena, kit, cf, 1)
-	addGlow(obj, pos + Vector3.new(0, kitTop(kit, 5.0) + 1.1, 0), look.Sigil, false, true)
+	shrineCrown(obj, typeName, cf, kitTop(kit, 5.0))
 	setAttrs(obj, { Hold = Config.Shrines.HoldSeconds, State = "Ready" })
 	if typeName == "Chance" then
 		obj.Price = ItemData.StagePrice(Config.Shrines.ChanceCost, stageNo, Config.Chests.CostExponent)
@@ -623,7 +685,7 @@ end
 local RUNE_NAMES = { "Moon", "Sun", "Star" }
 local RUNE_COLORS = { P.fx_arcane, P.gold_300, P.fx_ivory }
 local RUNE_RADIUS = 9
-local RUNE_TILT = math.rad(90 - Config.Camera.Pitch) -- the tablet leans back by this much
+local RUNE_TILT = math.rad(Config.Camera.Pitch) -- the tablet leans back until it faces the camera
 local RUNE_FLASH = 0.7
 
 -- Raised glyph pieces for rune `id` on a face frame `f` (X right, Y up the face, Z out of
@@ -723,15 +785,13 @@ local function buildRunes(arena, centre: Vector3)
 		add(m, cf, "Dais", Vector3.new(0.5, 3.6, 3.6), Vector3.new(0, 0.25, 0), P.stone_600, nil, Enum.PartType.Cylinder, UPRIGHT)
 		add(m, cf, "Stone", Vector3.new(1.7, 1.9, 1.3), Vector3.new(0, 1.45, 0.15), P.stone_500)
 		add(m, cf, "Cap", Vector3.new(2.0, 0.25, 1.5), Vector3.new(0, 2.45, 0.15), P.stone_400)
-		-- the leaning tablet: its lower front edge rests on the cap
-		local face = cf * CFrame.new(0, 2.55, -0.45) * lean * CFrame.new(0, 1.35, 0)
-		local slab = part({ Name = "Box", Size = Vector3.new(2.9, 2.9, 0.45), CFrame = face * CFrame.new(0, 0, 0.225), Color = P.stone_400, CastShadow = true })
+		-- the leaning tablet on the cap; its face (+Z of `face`) looks at the camera
+		local face = cf * CFrame.new(0, 3.2, 0.25) * lean
+		local slab = part({ Name = "Box", Size = Vector3.new(2.9, 2.9, 0.45), CFrame = face * CFrame.new(0, 0, -0.225), Color = P.stone_400, CastShadow = true })
 		slab.Parent = m
-		local rim = part({ Name = "Trim", Size = Vector3.new(3.1, 3.1, 0.3), CFrame = face * CFrame.new(0, 0, 0.42), Color = P.stone_600 })
+		local rim = part({ Name = "Trim", Size = Vector3.new(3.15, 3.15, 0.3), CFrame = face * CFrame.new(0, 0, -0.42), Color = P.stone_600 })
 		rim.Parent = m
-		-- the face points toward the camera (+Z): flip the frame so the glyph's Z is out
-		local out = face * CFrame.Angles(0, math.pi, 0)
-		obj.Glow = runeGlyph(m, out, i, 2.3, P.stone_400)
+		obj.Glow = runeGlyph(m, face, i, 2.3, P.stone_400)
 		local l = Instance.new("PointLight")
 		l.Range = 12
 		l.Brightness = 1.2
@@ -1052,6 +1112,7 @@ local function openChest(rp, obj: Obj)
 	setState(obj, "Opened")
 	openLid(obj.Chest, obj.CF, "Chest_" .. (obj.Type == "Treasure" and "Small" or obj.Type))
 	recolourGlow(obj, nil, 1)
+	quietOpened(obj)
 	local weights = Config.Chests.Weights[obj.Type] or (obj.Type == "Treasure" and Config.Chests.Weights.Large) or Config.Chests.Weights.Small
 	local id = ctx.ItemSystem.Roll(weights, rp.Stats.Luck)
 	local granted, dramatic = ctx.ItemSystem.Grant(rp, id, TITLES[obj.Type], true)
@@ -1100,7 +1161,34 @@ local function useBargain(rp, obj: Obj)
 	teamBonus.goldGain += S.BargainGold
 	enemyHPMult = 1 + S.BargainEnemyHP
 	setAttrs(obj, { Detail = "Sealed: active until the next stage" })
-	recolourGlow(obj, P.crimson_300, 0)
+	-- sealed: the balance tips toward the crimson pan and the shrine goes quiet (the HUD
+	-- chip carries the active bargain from here)
+	recolourGlow(obj, P.crimson_600, 0)
+	for _, d in ipairs(obj.Model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Material == NEON then
+			d.Material = Enum.Material.SmoothPlastic
+		end
+	end
+	if obj.Light then
+		obj.Light.Enabled = false
+	end
+	if obj.Ring then
+		obj.Ring.Transparency = 1
+	end
+	local scale = obj.Scale
+	if scale then
+		local pivot: CFrame = scale.Pivot
+		local tip = pivot * CFrame.Angles(0, 0, math.rad(-14)) * pivot:Inverse()
+		for _, p in ipairs(scale.Parts) do
+			local level = p.Shape == Enum.PartType.Cylinder
+			local moved = tip * p.CFrame
+			-- pans hang level: move them with the arm, keep their own rotation
+			p.CFrame = level and (CFrame.new(moved.Position) * p.CFrame.Rotation) or moved
+			if level then
+				p.Color = p.Color:Lerp(P.stone_700, 0.35)
+			end
+		end
+	end
 	refreshTeam()
 	Fx.Ring(obj.Pos, 30, P.crimson_400)
 	Fx.Sound("Shrine")
@@ -1140,10 +1228,20 @@ local function useRune(rp, obj: Obj)
 		-- a wrong rune resets the sequence; the first rune pressed again starts it over
 		puzzle.Progress = obj.Rune == puzzle.Order[1] and 1 or 0
 		ctx.RunManager.Notify(rp.Player, "The rune sequence resets. Read the stones' order.", P.crimson_400)
+		-- every glyph flashes crimson for a moment, then shows the restarted sequence
+		puzzle.Flash += 1
+		local flash = puzzle.Flash
+		runeLook(puzzle, true)
+		task.delay(RUNE_FLASH, function()
+			if puzzle.Flash == flash and not puzzle.Solved then
+				runeLook(puzzle)
+			end
+		end)
 	else
 		puzzle.Progress += 1
-		Fx.Ring(obj.Pos, 6, P.gold_300)
+		Fx.Ring(obj.Pos, 6, RUNE_COLORS[obj.Rune :: number])
 		Fx.Sound("Shrine")
+		runeLook(puzzle)
 	end
 	runeText(puzzle)
 	if puzzle.Progress < 3 then return end
@@ -1151,8 +1249,9 @@ local function useRune(rp, obj: Obj)
 	for _, node in ipairs(puzzle.Nodes) do
 		setState(node, "Spent")
 		setAttrs(node, { Detail = "Sequence complete · item claimed" })
-		recolourGlow(node, P.gold_300, 0)
 	end
+	runeLook(puzzle) -- completed: quiet gold, no light, no rings
+	Fx.Ring(obj.Pos, 10, P.gold_300)
 	for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if other.Alive and not other.Returned and other.Stats then
 			local granted, dramatic = ctx.ItemSystem.Grant(other, ctx.ItemSystem.Roll(Config.Chests.Weights.Guarded, other.Stats.Luck), "Rune stones", true, true)
