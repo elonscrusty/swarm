@@ -1273,7 +1273,7 @@ end
 	Armoury batch (WeaponData.Visuals 39-56): part-built only, front = -Z like the rest.
 	Shields face outward (the server syncs the outward yaw); the saw and the vortex lie flat
 	and spin about Y (VFX styles "Saw" / "Vortex"); the snare stands on the floor (origin =
-	ground centre, it rises like a totem); clouds are soft translucent puffs.
+	ground centre, it rises like a totem); clouds are invisible markers (VFX draws them).
 ]]
 local function wardShield(b, face: Color3, rim: Color3, boss: Color3)
 	local faceOut = CFrame.Angles(0, math.rad(90), 0) -- cylinder axis X → Z: a disc facing out
@@ -1306,16 +1306,6 @@ end
 local function slingStone(b, stone: Color3, fleck: Color3, glow: boolean)
 	b.add("Ball", Vector3.new(0.9, 0.78, 0.9), stone, CFrame.new(), glow and { Material = SHOT_NEON } or nil)
 	b.add("Block", Vector3.new(0.36, 0.3, 0.36), fleck, CFrame.new(0.22, 0.18, -0.1) * CFrame.Angles(0.5, 0.6, 0))
-end
-
-local function cloud(b, light: Color3, mid: Color3, dark: Color3)
-	b.add("Ball", Vector3.new(4.6, 2.4, 4.6), mid, CFrame.new(0, 0.2, 0), { Transparency = 0.5 })
-	b.add("Ball", Vector3.new(3.4, 2.2, 3.4), light, CFrame.new(2.2, 0.5, 1.0), { Transparency = 0.55 })
-	b.add("Ball", Vector3.new(3.6, 2.0, 3.6), light, CFrame.new(-2.1, 0.3, -1.1), { Transparency = 0.55 })
-	b.add("Ball", Vector3.new(3.0, 1.8, 3.0), dark, CFrame.new(0.6, 0.9, -2.2), { Transparency = 0.6 })
-	b.add("Ball", Vector3.new(2.8, 1.7, 2.8), mid, CFrame.new(-0.8, 0.7, 2.3), { Transparency = 0.6 })
-	b.add("Ball", Vector3.new(0.5, 0.5, 0.5), light, CFrame.new(0.9, 1.4, 0.4), { Material = SHOT_NEON })
-	b.add("Ball", Vector3.new(0.4, 0.4, 0.4), light, CFrame.new(-1.0, 1.2, -0.3), { Material = SHOT_NEON })
 end
 
 local function sawblade(b, blade: Color3, hub: Color3, teeth: Color3)
@@ -1378,11 +1368,12 @@ end
 SHOTS[46] = function(b, _def)
 	slingStone(b, ShotPalette.gold_400, ShotPalette.crimson_400, true)
 end
+-- Plague Censer clouds: an invisible marker; VFX draws the cloud on it (WeaponFx "cl")
 SHOTS[47] = function(b, _def)
-	cloud(b, ShotPalette.moss_200, ShotPalette.moss_300, ShotPalette.bog_500)
+	b.add("Ball", Vector3.new(0.2, 0.2, 0.2), ShotPalette.moss_300, CFrame.new(), { Transparency = 1 })
 end
 SHOTS[48] = function(b, _def)
-	cloud(b, ShotPalette.moss_100, ShotPalette.moss_200, ShotPalette.murk_500)
+	b.add("Ball", Vector3.new(0.2, 0.2, 0.2), ShotPalette.moss_200, CFrame.new(), { Transparency = 1 })
 end
 SHOTS[49] = function(b, _def)
 	sawblade(b, ShotPalette.steel_200, ShotPalette.steel_600, ShotPalette.ivory_100)

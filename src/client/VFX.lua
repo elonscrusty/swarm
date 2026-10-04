@@ -662,6 +662,13 @@ local function releaseProjectile(id: number, silent: boolean?)
 	end
 	table.insert(projectilePools[e.Visual], e.Pieces)
 	entries[id] = nil
+	local o = K.orbits and K.orbits[id]
+	if o and o.Seq == e.Seq then
+		K.orbits[id] = nil
+	end
+	if K.cloudGone then
+		K.cloudGone(id, e.Seq)
+	end
 end
 
 -- A new projectile right next to a player = that player threw / cast it.
@@ -830,10 +837,15 @@ local function renderProjectiles(dt: number, now: number)
 	table.clear(projParts)
 	table.clear(projCFrames)
 	local n = 0
-	for _, e in pairs(entries) do
+	for id, e in pairs(entries) do
 		e.T += dt / syncInterval
 		local alpha = math.min(e.T, 1.5) -- small extrapolation hides jitter
 		local pos = e.From:Lerp(e.To, alpha)
+		local o = K.orbits[id]
+		if o and o.Seq == e.Seq then
+			-- orbiting weapons are drawn around the owner's live position (K.orbitPos)
+			pos = K.orbitPos(e, o, pos, now)
+		end
 		e.Drawn = pos
 		local cf = CFrame.new(pos) * projectileRotation(e, now - e.Born)
 		local aim: CFrame? = nil
@@ -865,6 +877,7 @@ local function renderProjectiles(dt: number, now: number)
 	if n > 0 then
 		workspace:BulkMoveTo(projParts, projCFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
+	K.stepClouds(dt, now)
 end
 
 -- Glass shards + a low splash where a bottle lands.
@@ -2096,6 +2109,211 @@ function K.implosion(x: number, z: number, r: number, evo: boolean)
 	smallBurst(x, z, r * 0.7, P.fx_arcane, P.ivory_200)
 end
 
+--[[
+	Orbiting weapons (WeaponFx "ob": userId, projectile id, seq, radius, growth, spin, angle):
+	Ward Shields, resting Spirit Wisps and Death Spiral axes are drawn around the OWNER'S
+	LIVE character every frame (angle = angle + spin x time since the message, radius +
+	growth x time), so they never trail behind a running hero. The server keeps its own
+	orbit for damage and re-sends it (every shield refresh); a re-send blends the angle over
+	ORBIT_BLEND s instead of snapping. radius < 0 = back to the synced position (a dart).
+]]
+K.orbits = {} :: { [number]: any }
+K.ORBIT_BLEND = 0.3
+
+local function wrapAngle(a: number): number
+	return (a + math.pi) % TAU - math.pi
+end
+
+function K.orbitAngle(o, now: number): number
+	local age = now - o.T
+	return o.A + o.Spin * age + o.Err * math.max(0, 1 - age / K.ORBIT_BLEND)
+end
+
+function K.setOrbit(userId: number, id: number, seq: number, r: number, growth: number, spin: number, angle: number)
+	local old = K.orbits[id]
+	if r < 0 then
+		if old and old.Seq == seq then
+			K.orbits[id] = nil
+		end
+		return
+	end
+	local now = os.clock()
+	local err = 0
+	if old and old.Seq == seq and old.UserId == userId then
+		err = wrapAngle(K.orbitAngle(old, now) - angle)
+	end
+	K.orbits[id] = { UserId = userId, Seq = seq, R = r, Growth = growth, Spin = spin, A = angle, T = now, Err = err }
+end
+
+function K.orbitPos(e, o, synced: Vector3, now: number): Vector3
+	local who = Players:GetPlayerByUserId(o.UserId)
+	local char = who and who.Character
+	local root = char and char.PrimaryPart
+	if not root then
+		return synced
+	end
+	local a = K.orbitAngle(o, now)
+	local r = o.R + o.Growth * (now - o.T)
+	local c, sn = math.cos(a), math.sin(a)
+	local rp = root.Position
+	e.Yaw = math.atan2(-c, -sn) -- facing outward (shields)
+	e.Heading = o.Spin >= 0 and math.atan2(sn, -c) or math.atan2(-sn, c) -- along the orbit (trails, saws)
+	return Vector3.new(rp.X + c * r, synced.Y, rp.Z + sn * r)
+end
+
+--[[
+	Plague Censer / Pestilence clouds (WeaponFx "cl": projectile id, seq, radius, evo). The
+	server's projectile is an invisible marker; this draws the cloud on it: a soft rim disc
+	exactly as wide as the damage circle (sickly purple edge, green inside) so players see
+	the area, a ring of slow-swirling translucent puffs plus a few inner ones, and small
+	spores drifting up. Parts come from the shared pool and go back when the cloud ends (a
+	0.4 s fade). Reduced effects: fewer puffs, no spores. At most CLOUD_MAX at once.
+]]
+type CloudKit = { Id: number, Seq: number, R: number, Evo: boolean, Born: number, Gone: number?, Pos: Vector3, Parts: { BasePart }, Shapes: { string }, Base: { number }, Kind: { string }, Phase: { number }, Fade: number }
+K.clouds = {} :: { [number]: CloudKit }
+K.cloudPending = {} :: { [number]: { any } }
+K.CLOUD_MAX = { 18, 10 }
+K.CLOUD_GREEN = { Color3.fromRGB(132, 176, 84), Color3.fromRGB(166, 196, 104), Color3.fromRGB(96, 140, 70) }
+K.CLOUD_PURPLE = { Color3.fromRGB(128, 96, 156), Color3.fromRGB(150, 110, 170) }
+K.cloudParts = {} :: { BasePart }
+K.cloudCFs = {} :: { CFrame }
+
+function K.cloudCount(): number
+	local n = 0
+	for _ in pairs(K.clouds) do
+		n += 1
+	end
+	return n
+end
+
+function K.newCloud(id: number, seq: number, r: number, evo: boolean, pos: Vector3, now: number): CloudKit?
+	local reduced = ClientSettings.Reduced()
+	if K.cloudCount() >= K.CLOUD_MAX[reduced and 2 or 1] then
+		return nil
+	end
+	local kit: CloudKit = { Id = id, Seq = seq, R = r, Evo = evo, Born = now, Pos = pos, Parts = {}, Shapes = {}, Base = {}, Kind = {}, Phase = {}, Fade = 0 }
+	local function add(shape: string, color: Color3, material: Enum.Material, size: Vector3, alpha: number, kind: string, phase: number)
+		local part = takePart(shape, color, material, size, 1)
+		table.insert(kit.Parts, part)
+		table.insert(kit.Shapes, shape)
+		table.insert(kit.Base, alpha)
+		table.insert(kit.Kind, kind)
+		table.insert(kit.Phase, phase)
+	end
+	local G, Pu = K.CLOUD_GREEN, K.CLOUD_PURPLE
+	-- the readable edge: a purple rim disc under a slightly smaller green disc
+	add("Cylinder", evo and Pu[1] or Pu[2], SMOOTH, Vector3.new(0.06, r * 2, r * 2), 0.42, "rim", 0)
+	add("Cylinder", evo and Pu[2]:Lerp(G[3], 0.4) or G[3], SMOOTH, Vector3.new(0.06, r * 1.8, r * 1.8), 0.66, "bed", 0)
+	local outer = reduced and 4 or 7
+	local ps = math.clamp(r * 0.62, 1.6, 5)
+	for i = 1, outer do
+		local purple = evo and i % 2 == 0 or i % 3 == 0
+		add("Ball", purple and Pu[(i % 2) + 1] or G[(i % 2) + 1], SMOOTH, Vector3.new(ps * 1.25, ps * 0.62, ps * 1.1), 0.5, "outer", (i - 1) * TAU / outer)
+	end
+	local inner = reduced and 1 or 3
+	for i = 1, inner do
+		add("Ball", i == 2 and Pu[1] or G[2], SMOOTH, Vector3.new(ps * 1.35, ps * 0.8, ps * 1.35), 0.46, "inner", (i - 1) * TAU / inner)
+	end
+	if not reduced then
+		for i = 1, 4 do
+			add("Ball", i % 2 == 0 and Pu[2] or G[2], NEON, Vector3.one * 0.32, 0.25, "spore", i * 0.4)
+		end
+	end
+	K.clouds[id] = kit
+	return kit
+end
+
+function K.freeCloud(kit: CloudKit)
+	for i, part in ipairs(kit.Parts) do
+		givePart(kit.Shapes[i], part)
+	end
+	K.clouds[kit.Id] = nil
+end
+
+-- A projectile entry went away: its cloud fades out where it is.
+function K.cloudGone(id: number, seq: number)
+	local kit = K.clouds[id]
+	if kit and kit.Seq == seq and not kit.Gone then
+		kit.Gone = os.clock()
+	end
+end
+
+function K.stepClouds(_dt: number, now: number)
+	for id, rec in pairs(K.cloudPending) do
+		local e = entries[id]
+		if e and e.Seq == rec[2] then
+			K.cloudPending[id] = nil
+			local old = K.clouds[id]
+			if old then
+				K.freeCloud(old)
+			end
+			K.newCloud(id, rec[2], rec[3], rec[4], e.Drawn, now)
+		elseif now - rec[5] > 1 then
+			K.cloudPending[id] = nil -- never matched (missed batch)
+		end
+	end
+	local n = 0
+	local parts, cfs = K.cloudParts, K.cloudCFs
+	for id, kit in pairs(K.clouds) do
+		local e = entries[id]
+		if e and e.Seq == kit.Seq and not kit.Gone then
+			kit.Pos = e.Drawn
+		end
+		local fade = math.clamp((now - kit.Born) / 0.4, 0, 1)
+		if kit.Gone then
+			fade = math.min(fade, 1 - (now - kit.Gone) / 0.4)
+		end
+		if kit.Gone and fade <= 0 then
+			K.freeCloud(kit)
+			continue
+		end
+		local x, z, r = kit.Pos.X, kit.Pos.Z, kit.R
+		local t = now - kit.Born
+		local fading = fade < 1 or kit.Fade < 1
+		kit.Fade = fade
+		for i, part in ipairs(kit.Parts) do
+			local kind = kit.Kind[i]
+			local ph = kit.Phase[i]
+			local cf: CFrame
+			local alpha = kit.Base[i]
+			if kind == "rim" then
+				cf = CFrame.new(x, FLOOR_Y + 0.34, z) * DISC -- above paths / floor decals
+			elseif kind == "bed" then
+				cf = CFrame.new(x, FLOOR_Y + 0.37, z) * DISC
+			elseif kind == "outer" then
+				local a = ph + t * 0.35
+				local rr = r * 0.62 + math.sin(t * 0.9 + ph * 2) * r * 0.06
+				cf = CFrame.new(x + math.cos(a) * rr, FLOOR_Y + r * 0.2 + math.sin(t * 1.3 + ph) * 0.18, z + math.sin(a) * rr) * CFrame.Angles(0, -a, 0)
+			elseif kind == "inner" then
+				local a = ph - t * 0.5
+				cf = CFrame.new(x + math.cos(a) * r * 0.22, FLOOR_Y + r * 0.32 + math.sin(t * 1.1 + ph) * 0.2, z + math.sin(a) * r * 0.22) * CFrame.Angles(0, a, 0)
+			else -- spore: rises from a spot inside the cloud and fades, then starts again elsewhere
+				local cycle = (t + ph) / 1.7
+				local k = math.floor(cycle)
+				local u = cycle - k
+				local a = (k * 2.39996 + ph * 7) % TAU
+				local d = r * (0.25 + ((k * 0.618 + ph) % 1) * 0.55)
+				cf = CFrame.new(x + math.cos(a) * d, FLOOR_Y + 0.6 + u * 3.2, z + math.sin(a) * d)
+				alpha = 0.25 + 0.75 * u
+				part.Transparency = 1 - (1 - alpha) * fade
+			end
+			if fading and kind ~= "spore" then
+				part.Transparency = 1 - (1 - alpha) * fade
+			end
+			n += 1
+			parts[n] = part
+			cfs[n] = cf
+		end
+	end
+	if n > 0 then
+		for i = #parts, n + 1, -1 do
+			parts[i] = nil
+			cfs[i] = nil
+		end
+		workspace:BulkMoveTo(parts, cfs, Enum.BulkMoveMode.FireCFrameChanged)
+	end
+end
+
 local function onWeaponFx(batch)
 	if type(batch) ~= "table" then
 		return
@@ -2154,6 +2372,12 @@ local function onWeaponFx(batch)
 	end)
 	each("vx", function(v)
 		K.vortexOpen(v[1], v[2], tonumber(v[3]) or 5.5, v[5] == 1)
+	end)
+	each("ob", function(v)
+		K.setOrbit(v[1], v[2], tonumber(v[3]) or 0, tonumber(v[4]) or -1, tonumber(v[5]) or 0, tonumber(v[6]) or 0, tonumber(v[7]) or 0)
+	end)
+	each("cl", function(v)
+		K.cloudPending[v[1]] = { v[1], v[2], math.clamp(tonumber(v[3]) or 4, 1, 20), v[4] == 1, os.clock() }
 	end)
 	each("vi", function(v)
 		K.implosion(v[1], v[2], tonumber(v[3]) or 5.5, v[4] == 1)

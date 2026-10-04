@@ -5,7 +5,8 @@
 --   --set moment=phase    a boss phase change (screen-edge flash)
 --   --set moment=pickup   a floor pickup taken next to the hero
 --   --set moment=armoury  the armoury-batch weapons (shields, meteor, saws, crack, wisps, rift,
---                         horn blast; --set evolved=on for the evolutions)
+--                         horn blast, censer cloud; --set evolved=on for the evolutions,
+--                         --set moved=on: the hero steps aside, the shields follow it)
 --   --set moment=stress   15 heavy batches a second for 10 s (60 deaths, 120 hits, 16 crits,
 --                         4 level-ups, 16 swings each), printing CombatFx.Stats() and the
 --                         effect instances alive every second: they must stay bounded
@@ -137,13 +138,32 @@ elseif moment == "armoury" then
 	end
 	local e = evo and 1 or 0
 	C.fire("ProjectileBatch", b)
+	-- the shields are drawn around the hero's live position (VFX K.setOrbit), the cloud by
+	-- VFX on its invisible marker (K.newCloud)
+	local orbits = {}
+	for i = 0, 3 do
+		table.insert(orbits, { me.UserId, 401 + i, 1, 5, 0, 1.2, (i * math.pi / 2 + 0.4) % (math.pi * 2) })
+	end
 	C.fire("WeaponFx", {
+		ob = orbits,
+		cl = { { 400 + #items, 1, evo and 7.2 or 5.6, e } },
 		mt = { { x - 12, z - 17, 5.5, 0.9, e } },
 		vx = { { x + 16, z + 12, 6.5, 3, e } },
 		vn = { { x - 10, z - 4, 3.2, e } },
 	})
 	preview.advance(0.2, 60)
 	C.fire("ProjectileBatch", b)
+	preview.advance(0.6, 60) -- the cloud fades in
+	C.fire("ProjectileBatch", b)
+	if preview.args.moved == "on" then
+		-- the hero steps 6 studs east: the shields must stay centred on the hero
+		local root = me.Character and me.Character.PrimaryPart
+		if root then
+			root.CFrame = root.CFrame + Vector3.new(6, 0, 0)
+		end
+		preview.advance(0.1, 60)
+		C.fire("ProjectileBatch", b)
+	end
 	local quake = {}
 	for i = 1, 4 do
 		table.insert(quake, { x - 1.5 * i, z + 2.2 * i, 2.4, e })

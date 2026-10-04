@@ -231,12 +231,15 @@ end
 --   vn = { {x, z, radius, evo} }            Vine Snare sprouting      vt = { {x, z, radius} } thorns
 --   hn = { {x, z, yaw, range, halfDeg, evo} } War Horn shockwave (halfDeg 180 = full ring)
 --   wb = { {x, z, reflect} }                a Ward Shield smashed an enemy projectile
+--   ob = { {userId, id, seq, radius, growth, spin, angle} } an orbiting projectile: the client
+--                                           draws it around the owner's live character (radius < 0 = stop)
+--   cl = { {id, seq, radius, evo} }         a Plague Censer cloud: the client draws the cloud on that marker
 --   vx = { {x, z, radius, life, evo} }      a Vortex opens            vi = { {x, z, radius, evo} } implosion
 ------------------------------------------------------------------------------------------
 
 local wfx: { [string]: { any } } = {}
 local wfxAny = false
-local WFX_CAPS = { nv = 12, fp = 48, tp = 16, hk = 16, fk = 16, lb = 16, sh = 16, qk = 40, mt = 12, vn = 16, vt = 12, hn = 12, wb = 8, vx = 8, vi = 8 }
+local WFX_CAPS = { nv = 12, fp = 48, tp = 16, hk = 16, fk = 16, lb = 16, sh = 16, qk = 40, ob = 96, cl = 16, mt = 12, vn = 16, vt = 12, hn = 12, wb = 8, vx = 8, vi = 8 }
 
 local function r1(n: number): number
 	return math.floor(n * 10 + 0.5) / 10
@@ -691,6 +694,8 @@ function Fire.Axe(rp, w, s, def)
 			p.Pierce = s.pierce
 			p.Rehit = 0.5
 			p.Pos = origin
+			-- drawn around the hero's live position on clients (VFX K.setOrbit)
+			pushFx("ob", { rp.Player.UserId, p.Id, p.Seq, r1(p.OrbitRadius), r1(p.OrbitGrowth), p.OrbitSpin, math.floor((p.Angle % TAU) * 1000 + 0.5) / 1000 })
 		else
 			p.Kind = "Arc"
 			p.Visual = visualByte(params.Visual, w)
@@ -1607,6 +1612,19 @@ end
 
 local Arm = {}
 
+-- Tell clients to draw projectile `p` orbiting its owner (VFX K.setOrbit): angle now (rad),
+-- spin (rad/s), radius and radius growth per second. radius < 0 = stop (back to synced).
+function Arm.orbitFx(p: Projectile, radius: number, growth: number, spin: number, angle: number)
+	local owner = p.Owner
+	if not owner or not owner.Player then
+		return
+	end
+	local function q(n: number): number
+		return math.floor(n * 1000 + 0.5) / 1000
+	end
+	pushFx("ob", { owner.Player.UserId, p.Id, p.Seq, q(radius), q(growth), q(spin), q(angle % TAU) })
+end
+
 -- Live projectiles of one weapon (persistent shields / wisps), oldest first.
 function Arm.liveList(w): { Projectile }
 	local list = {}
@@ -1696,6 +1714,7 @@ function Fire.Shields(rp, w, s, def)
 		p.X.Reflect = evo ~= nil and evo.Reflect == true
 		p.X.ReflectRadius = params.ReflectRadius * s.area
 		wards[p] = block or nil
+		Arm.orbitFx(p, orbit, 0, p.X.Spin, p.Angle)
 	end
 end
 
@@ -1984,6 +2003,7 @@ function Fire.Cloud(rp, w, s, def)
 			PoisonSeconds = params.PoisonSeconds,
 			PoisonShare = params.PoisonShare,
 		}
+		pushFx("cl", { p.Id, p.Seq, r1(p.X.R), evo and 1 or 0 })
 	end
 end
 
@@ -2314,6 +2334,10 @@ function Fire.Wisps(rp, w, s, def)
 		if p.Phase ~= "Dart" then
 			table.insert(resting, p)
 		end
+		if p.Phase == "Orbit" then
+			-- slots may have moved (a new wisp): re-send the client-drawn orbit
+			Arm.orbitFx(p, x.OrbitR, 0, x.Spin, ctx.RunManager.GetRunTime() * x.Spin + x.Slot)
+		end
 	end
 	if #resting == 0 then
 		return
@@ -2326,6 +2350,9 @@ function Fire.Wisps(rp, w, s, def)
 	end
 	for i, p in ipairs(resting) do
 		local t = targets[((i - 1) % #targets) + 1]
+		if p.Phase == "Orbit" then
+			Arm.orbitFx(p, -1, 0, 0, 0) -- darting: the client draws the synced flight again
+		end
 		p.Phase = "Dart"
 		p.Target = t
 		p.TargetUid = t.Uid
@@ -2379,6 +2406,7 @@ function Arm.stepWisp(p: Projectile, dt: number, now: number): boolean
 		local d = to.Magnitude
 		if p.Phase == "Back" and d <= 1.5 then
 			p.Phase = "Orbit"
+			Arm.orbitFx(p, x.OrbitR, 0, x.Spin, t)
 		end
 		if p.Phase == "Orbit" then
 			p.Pos = slot
