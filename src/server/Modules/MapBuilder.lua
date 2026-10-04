@@ -917,7 +917,7 @@ function MapBuilder.BuildLobby()
 		f.Parent = h
 	end
 	-- a strand of ivy hanging down a wall face (z = the face), leaves in two greens
-	local IVY = { mix(P.moss_700, P.slate_600, 0.25), mix(P.moss_600, P.slate_500, 0.25) }
+	local IVY = { mix(P.moss_500, P.slate_400, 0.2), mix(P.moss_400, P.slate_400, 0.2), P.moss_500 }
 	local function ivy(x: number, top: number, z: number, len: number)
 		local y = top
 		local dx = 0
@@ -1073,7 +1073,7 @@ function MapBuilder.BuildLobby()
 	pointLight(folder, daisPos + Vector3.new(3, 8, -4.5), 10, 1.3, rgb(150, 172, 255), false)
 	pointLight(folder, daisPos + Vector3.new(-2.2, 5.5, 1.2), 8, 0.9, rgb(176, 112, 255), false)
 	-- cool moonlight over the courtyard and a lavender wash on the castle front
-	pointLight(folder, daisPos + Vector3.new(0, 26, -10), 56, 1.1, rgb(140, 160, 236), false)
+	pointLight(folder, daisPos + Vector3.new(0, 24, -12), 60, 1.9, rgb(150, 166, 236), false)
 	pointLight(folder, at(0, 16, keepZ + 12), 40, 2.4, rgb(184, 184, 244), false)
 	for _, sx in ipairs({ -1, 1 }) do
 		pointLight(folder, at(sx * TOWER_X, 15, keepZ + 11), 26, 2.0, rgb(186, 184, 244), false)
@@ -1222,11 +1222,11 @@ function MapBuilder.BuildLobby()
 	local function sky(dir: Vector3, dist: number): Vector3
 		return camPos + camCF:VectorToWorldSpace(dir.Unit) * dist
 	end
-	local CLOUD = { rgb(58, 64, 112), rgb(72, 78, 128) }
+	local CLOUD = { rgb(92, 100, 156), rgb(108, 114, 168) }
 	for _, c in ipairs({ { -0.17, 0.25, 1.0 }, { 0.03, 0.32, 0.8 }, { -0.44, 0.31, 1.2 }, { 0.34, 0.33, 1.0 } }) do
 		for k = -1, 1 do
 			local r = (k == 0 and 6 or 4.4) * c[3]
-			local puff = add({ Name = "Cloud", Shape = Enum.PartType.Ball, Size = Vector3.one * r * 2, CFrame = CFrame.new(sky(Vector3.new(c[1] + k * 0.045 * c[3], c[2] - math.abs(k) * 0.012, -1), 150)), Color = pick(CLOUD), Transparency = 0.25 })
+			local puff = add({ Name = "Cloud", Shape = Enum.PartType.Ball, Size = Vector3.one * r * 2, CFrame = CFrame.new(sky(Vector3.new(c[1] + k * 0.045 * c[3], c[2] - math.abs(k) * 0.012, -1), 150)), Color = pick(CLOUD), Transparency = 0.45 })
 			puff.CastShadow = false
 		end
 	end
