@@ -120,7 +120,7 @@ elseif case == "stay" then
 	-- the results phase ends without a trip (held): back in this server's lobby
 	C.setPlayer({ InRun = false })
 	C.setState({ Phase = "Lobby" })
-	preview.advance(15, 30)
+	preview.advance(15, 4)
 	check("results still open long after the old timer", visible(), timerText())
 	check("footer: no countdown", string.find(timerText(), "STAYS OPEN") ~= nil, timerText())
 	local menu = button("MAIN MENU")
@@ -144,7 +144,7 @@ elseif case == "replay" then
 elseif case == "portal" then
 	check("footer: the trip countdown", string.find(timerText(), "MAIN LOBBY IN 18S") ~= nil, timerText())
 	check("banner hidden while the results show it", not TO.Debug().Banner)
-	preview.advance(14, 30)
+	preview.advance(14, 4)
 	check("results do not close on their own 12 s timer", visible(), timerText())
 else
 	check("footer: back to the lobby", string.find(timerText(), "BACK TO THE LOBBY IN") ~= nil, timerText())
