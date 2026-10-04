@@ -522,7 +522,7 @@ AchievementData.Achievements = {
 		Id = "BriarBane",
 		Name = "Briar Bane",
 		Description = "Defeat the Briar Sentinel.",
-		Icon = "sprout", -- drawn icon until art/icons/achievements/ach_BriarBane.png exists
+		Icon = "ach_BriarBane",
 		Event = "BossDefeated",
 		Kind = "Count",
 		Goal = 1,
@@ -533,7 +533,7 @@ AchievementData.Achievements = {
 		Id = "Frostbreaker",
 		Name = "Frostbreaker",
 		Description = "Defeat the Frostbound Colossus.",
-		Icon = "FrostNova", -- drawn icon until ach_Frostbreaker.png exists
+		Icon = "ach_Frostbreaker",
 		Event = "BossDefeated",
 		Kind = "Count",
 		Goal = 1,
@@ -638,13 +638,17 @@ ArtData.Ids = {
 	["arenas/Ruins"] = 139544457278310,
 	["arenas/Snow"] = 126888639274404,
 	["arenas/Swamp"] = 97349913312041,
+	["bosses/BriarSentinel"] = 81396907137818,
+	["bosses/FrostboundColossus"] = 107042844258603,
 	["bosses/HiveMother"] = 75243466589765,
 	["bosses/MothMatriarch"] = 127610936794145,
 	["bosses/RhinoWarlord"] = 79297399312973,
 	["bosses/ScorpionQueen"] = 128823629605857,
 	["icons/achievements/ach_Badge"] = 101875926496129,
+	["icons/achievements/ach_BriarBane"] = 98289158673669,
 	["icons/achievements/ach_Conqueror"] = 114486621306187,
 	["icons/achievements/ach_FieldEngineer"] = 129347171095492,
+	["icons/achievements/ach_Frostbreaker"] = 105162941390883,
 	["icons/achievements/ach_HiveCleanser"] = 132210123754360,
 	["icons/achievements/ach_KnightClear"] = 125782703447738,
 	["icons/achievements/ach_MageClear"] = 135614933713849,
@@ -705,8 +709,10 @@ ArtData.Ids = {
 	["icons/track/track_Level"] = 133827081892726,
 	["icons/track/track_Ring"] = 124586706925792,
 	["icons/track/track_Title"] = 78700094368288,
+	["icons/ui/sym_aim"] = 114244067686120,
 	["icons/ui/sym_arrowFast"] = 109874903136437,
 	["icons/ui/sym_calendar"] = 140237512578895,
+	["icons/ui/sym_castle"] = 140592768688922,
 	["icons/ui/sym_check"] = 83669026873947,
 	["icons/ui/sym_chevronsUp"] = 78081015628207,
 	["icons/ui/sym_clock"] = 75400395089147,
@@ -716,6 +722,7 @@ ArtData.Ids = {
 	["icons/ui/sym_cycle"] = 90356733787113,
 	["icons/ui/sym_flag"] = 73966774795104,
 	["icons/ui/sym_gear"] = 120365123104494,
+	["icons/ui/sym_heart"] = 123589421698122,
 	["icons/ui/sym_hourglass"] = 109069769495719,
 	["icons/ui/sym_info"] = 103918068813917,
 	["icons/ui/sym_lock"] = 105021639149224,
@@ -1622,7 +1629,7 @@ CharacterData.Characters = {
 		Name = "Mage",
 		Role = "Area caster", -- one-line tag on the character select card
 		Description = "Arcane scholar. Starts with the Magic Orb. +10% area.",
-		Cost = 1000,
+		Cost = 10000, -- owner: x10 (was 1000)
 		StartWeapon = "MagicOrb",
 		Bonus = { area = 0.10 },
 		BonusText = "+10% area",
@@ -1649,7 +1656,7 @@ CharacterData.Characters = {
 		Name = "Rogue",
 		Role = "Fast striker", -- one-line tag on the character select card
 		Description = "Quick and sharp. Starts with Throwing Knives. +15% speed.",
-		Cost = 2000,
+		Cost = 20000, -- owner: x10 (was 2000)
 		StartWeapon = "Knives",
 		Bonus = { speed = 0.15 },
 		BonusText = "+15% speed",
@@ -1676,7 +1683,7 @@ CharacterData.Characters = {
 		Name = "Priest",
 		Role = "Holy survivor", -- one-line tag on the character select card
 		Description = "Holy survivor. Starts with the Garlic Aura. +20% max HP.",
-		Cost = 3000,
+		Cost = 30000, -- owner: x10 (was 3000)
 		StartWeapon = "Garlic",
 		Bonus = { maxHpMult = 0.20 },
 		BonusText = "+20% HP",
@@ -2210,7 +2217,8 @@ Config.Stages = {
 	-- SWARM PRESSURE: the swarm keeps growing until the portal is charged. While exploring,
 	-- SwarmState SwarmWarn steps to 1 ("SWARM GROWING") at WarnSeconds of stage time and to
 	-- 2 ("SWARM OVERWHELMING") at DangerSeconds, back to 0 on the next stage. The HUD
-	-- turns the stage pill into OPEN THE PORTAL with the warning and a banner each step.
+	-- turns the stage pill into OPEN THE PORTAL with the warning and a banner each step;
+	-- with waves on (Config.Waves) each step makes the waves bigger (PressureMult).
 	Pressure = { WarnSeconds = 75, DangerSeconds = 150 },
 	-- difficulty on top of the run-time scaling, x(1 + this * (stage - 1))
 	-- 0.35 (was 0.25): owner playtest "by map 2 players instant kill everything"; stage 1
@@ -2703,41 +2711,80 @@ Config.Spawn = {
 }
 
 ------------------------------------------------------------------------------------------
--- WAVES (EnemySpawner; owner: "instead of constantly spawning enemies, do it in waves")
---   Every Config.Run.MiniWaveInterval seconds while exploring a WAVE is announced
---   ("WAVE 3 · from the north", SwarmState attribute Wave = its number on this stage);
---   WarnSeconds later it pours in over BurstSeconds from 1 direction, +1 at each
---   DirectionsAt progression second (at most 3), each side one enemy type (wasps never
---   before Config.Pacing.WaveMinTime, smaller per WaveCountMult). Size = (Base + PerMinute
---   x difficulty minute) x player-count density x stage spawn multiplier (Endless too) x
---   the stage-1 opening ramp, x(1 + GrowPerWave per earlier wave of the stage, at most
---   GrowCap). An elite can lead a wave (EliteLeadChance, after Config.Pacing.EliteMinTime).
---   Between waves the normal spawning only keeps a trickle: TrickleFrom -> TrickleTo of
---   the live target over the interval, LullMult for LullSeconds after the burst. Boss
---   fights keep their own crowd rules (Config.Stages.BossMinionShare). The live cap
---   Config.Enemies.MaxLive still holds. Enabled = false: the old continuous spawning with
---   ring mini-waves.
+-- WAVES (EnemySpawner stepWaves; owner: "ALL the enemies come in waves. Wave 1 is easy,
+-- wave 2 a little harder, wave 3 even harder")
+--   While exploring nothing spawns between waves. Wave N (counted across the whole run:
+--   stage 2 goes on from where stage 1 ended) comes after a breather, is announced (big
+--   centre "WAVE N" banner, horn, red glow on the screen edge it comes from; the stage pill
+--   says "WAVE N" / "WAVE N IN 0:03") and pours in over BurstSeconds from 1 side, 2 from
+--   SidesAtWave[1], 3 from SidesAtWave[2]. The next breather starts when at most
+--   ClearShare of the wave is alive or after MaxSeconds (no stalling). The breather waits
+--   while someone stands at the portal. Boss fights keep their own crowd
+--   (Config.Stages.BossMinionShare), the surge replaces waves.
+--   size  = (Base + PerWave x (N - 1), PerWaveLate past LateFromWave) x Config.Difficulty.PlayerCountMult x the stage
+--           spawn multiplier (Horde, Endless) x BigMult on every BigEvery-th wave x
+--           PressureMult once the swarm pressure warning is up
+--   mix   = EnemyData.SpawnTable row at (N - 1) x RowSecondsPerWave seconds (never below
+--           the stage's first row), one main type per side + MixShare from the row; wasps only
+--           from BeesFromWave (smaller, Config.Pacing.WaveCountMult)
+--   HP    wave members x(1 + HPPerWave x (N - 1)) on top of the run-clock and stage scaling
+--   elites lead a wave from EliteFromWave on (EliteChance, always on big waves), one more
+--           every ElitePerWaves waves, at most EliteMax
+--   never shrink: a normal wave is at least the last normal one (per player-count density);
+--           a big wave is the bump on top. Elite Surge (RunModifiers.EliteChanceMult) raises
+--           the elite chance and adds one elite per wave.
+--   announce: the big "WAVE N" banner + horn only for wave 1, big waves and a stage's first
+--           wave (SwarmState WaveLoud); other waves get one toast line, the pill and the glow.
+--   Boss-fight and surge kills also get XPMult (waves on), so level-ups stay even.
+--   SwarmState: Wave, WaveSeq, WaveBig, WaveLoud, WaveSides, WaveAngle, WaveNext (run time the next
+--   wave starts, 0 = none), WaveLeft (enemies of the current wave left).
+--   Enabled = false: the old continuous spawning with ring mini-waves.
 ------------------------------------------------------------------------------------------
 Config.Waves = {
 	Enabled = true,
-	WarnSeconds = 1.5,
-	BurstSeconds = 3,
+	FirstDelay = 4, -- stage 1: wave 1 comes right after the stage card
+	StageStartDelay = 6, -- later stages, after the travel and the stage card
+	BreatherSeconds = 3,
+	PortalHoldSeconds = 3, -- the breather stays at least this long while someone is at the portal
+	ClearShare = 0.1, -- the next breather starts at max(ClearMin, ClearShare x size) left
+	ClearMin = 3,
+	MaxSeconds = 30,
+	-- gem XP of wave enemies x this: waves come in bursts with breathers, so fewer enemies
+	-- spawn than with the old continuous top-up; this keeps the level-up pace (pacing-sim)
+	XPMult = 1.8,
+	GoldChanceMult = 1.5, -- the same for the kill-gold chance (Config.Gold.KillGoldChance)
+	BurstSeconds = 4.5,
 	MaxPerStep = 6, -- enemies spawned per frame at most while a wave pours in (perf)
-	LullSeconds = 5,
-	LullMult = 0.3,
-	TrickleFrom = 0.55,
-	TrickleTo = 0.8,
-	-- a living player within PortalCalmRadius studs of the portal while exploring: no new
-	-- wave starts and the trickle is x PortalCalmMult, so pushing to the portal works
-	PortalCalmRadius = 30,
-	PortalCalmMult = 0.5,
-	Base = 22,
-	PerMinute = 4,
-	GrowPerWave = 0.06,
-	GrowCap = 1.5,
-	DirectionsAt = { 100, 300 }, -- seconds of progression time (stage n starts at (n-1) x 120)
-	ArcRadians = 0.45, -- each side spreads this far either way
-	EliteLeadChance = 0.15,
+	Base = 12,
+	PerWave = 3,
+	-- past LateFromWave each wave adds PerWaveLate instead (late waves still grow, slower)
+	LateFromWave = 8,
+	PerWaveLate = 1.5,
+	-- wave members' HP x(1 + HPPerWave x (N - 1)) on top of the run-clock / stage scaling
+	HPPerWave = 0.01,
+	BigEvery = 5,
+	BigMult = 1.35,
+	RowSecondsPerWave = 15,
+	BeesFromWave = 4,
+	SidesAtWave = { 4, 9 },
+	ArcRadians = 0.6, -- each side spreads this far either way
+	EliteFromWave = 4,
+	EliteChance = 0.5,
+	ElitePerWaves = 8,
+	EliteMax = 3,
+	-- a share of each side is mixed from the whole spawn row (Spitters within
+	-- Config.Enemies.MaxLiveRanged, Healers / Burrowers within their caps), from MixFromWave
+	MixShare = 0.25,
+	-- at most Base + PerWave x (N - 1) of these alive per wave, counting the ones left from
+	-- earlier waves (the rest is re-picked): piled-up Brutes made stage 3 the hardest stage
+	TypeCap = { Brute = { Base = 1, PerWave = 0.2 }, Bomber = { Base = 4, PerWave = 0.5 } },
+	MixFromWave = 3,
+	-- swarm pressure (Config.Stages.Pressure, SwarmWarn 1 / 2): waves x this
+	PressureMult = { 1.15, 1.35 },
+	-- from NestFromStage every NestEveryWaves-th wave (not a big one) plants a Nest
+	-- (Config.Pacing.Nests caps); the old timed nests are off while waves are on
+	NestFromStage = 2,
+	NestEveryWaves = 4,
 }
 
 ------------------------------------------------------------------------------------------
@@ -2785,12 +2832,13 @@ Config.Pacing = {
 	EliteEvery = 165,
 	EliteMinTime = 60,
 	EliteTypes = { "Slime", "Skeleton", "Brute", "Ghost", "Spitter" }, -- scheduled elites (never a bomb tick)
-	-- Mini-wave rings by type: no ring of this type before WaveMinTime seconds of run time
-	-- (a Mite ring instead), and its ring is WaveCountMult times the usual size. Wasps are
-	-- fast flyers: a full ring of them in the first minute was the "too many bees" start
-	-- (pacing-sim: up to 22 wasps alive in minute 1, 41 in minute 5).
+	-- Wave groups by type: no group of this type before WaveMinTime seconds of run time
+	-- (old mini-waves) / Config.Waves.BeesFromWave (waves); Mites instead. Its group is
+	-- WaveCountMult times the usual size. Wasps are fast flyers: a full ring of them in the
+	-- first minute was the "too many bees" start (pacing-sim: up to 22 alive in minute 1).
 	WaveMinTime = { Bat = 150 },
-	WaveCountMult = { Bat = 0.6 },
+	-- Bombers / Brutes: a whole side of them was most of the damage in pacing-sim waves
+	WaveCountMult = { Bat = 0.6, Bomber = 0.5, Brute = 0.5 },
 	-- smaller intro groups for the later creatures (Healer from 6:00, Burrower from 7:00
 	-- in EnemyData.SpawnTable)
 	IntroGroupOf = { Healer = 2, Burrower = 2 },
@@ -2945,7 +2993,7 @@ Config.Data = {
 	StoreName = "SwarmPlayerData",
 	StudioStoreName = "SwarmPlayerData_Studio", -- used instead in Studio: tests never touch live saves
 	KeyPrefix = "Player_",
-	SchemaVersion = 6, -- bump and add a migration step in DataService when the save shape changes
+	SchemaVersion = 7, -- bump and add a migration step in DataService when the save shape changes
 	AutoSaveSeconds = 60,
 	-- A session lock is considered dead (the server crashed) if it wasn't refreshed for
 	-- this long. Must be well above AutoSaveSeconds.
@@ -3053,6 +3101,7 @@ Config.Sounds = {
 	Lunge = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.3, Category = "Warning", MinGap = 0.2, Pitch = 0.8, PitchVar = 0.06, World = true },
 	-- the Queen
 	BossRoar = { Id = "rbxassetid://135802539734782", Volume = 0.5, Category = "Boss", MinGap = 1, PitchVar = 0.04, DuckMusic = 2.2 }, -- SWARM SFX BossRoar: growl + sub hit
+	WaveHorn = { Id = "rbxassetid://135802539734782", Volume = 0.42, Category = "UI", MinGap = 2, Pitch = 1.35, PitchVar = 0, DuckMusic = 1.2 }, -- the BossRoar sound pitched up: a wave is coming (StageUI)
 	BossWarn = { Id = "rbxassetid://113336786346138", Volume = 0.35, Category = "Boss", MinGap = 0.4, Pitch = 1.1, PitchVar = 0.04, World = true }, -- SWARM SFX BossWhoosh
 	BossSummon = { Id = "rbxasset://sounds/splat.wav", Volume = 0.4, Category = "Boss", MinGap = 0.4, Pitch = 0.6, PitchVar = 0.05, World = true },
 	-- the rotating bosses (Telegraphs plays these for their new warning shapes)
@@ -3380,6 +3429,22 @@ Config.Movement = {
 Config.Encounters = {
 	Types = { "Guarded", "Caravan", "Runes", "Treasure" },
 	Count = { 1, 2 },
+}
+
+------------------------------------------------------------------------------------------
+-- HERO MASTERY (MetaUpgradeData, DataService schema 7)
+--   Playing a hero gives that hero Mastery XP: the same amount as the account XP of the
+--   run (AccountData.RunXP, its MaxRun cap), only for the hero played, none on DEV runs.
+--   XP from level L to L + 1 = Base + PerLevel * (L - 1); heroes start at level 1.
+--   Mastery level N lets the hero's stat upgrades go up to level StatPerLevel * N; the
+--   signature upgrade's level n needs mastery SignatureEvery * n. Gold buys the levels.
+------------------------------------------------------------------------------------------
+Config.HeroMastery = {
+	MaxLevel = 10, -- 2 x 10 = 20 = the highest stat upgrade (Max HP, Might)
+	Base = 150, -- level 1 -> 2 (a short first run)
+	PerLevel = 100, -- each next level needs this much more (4,950 XP to level 10)
+	StatPerLevel = 2,
+	SignatureEvery = 2, -- signature level n needs mastery 2n (levels 2, 4, 6, 8, 10)
 }
 
 return Config
@@ -4672,6 +4737,38 @@ IconData.Icons = {
 	altar = 76272553564152,
 	portal = 126782693482750,
 	revive = 140117129153655,
+	-- Other
+	AegisCharm = 131767302010947,
+	AegisRing = 73955717547966,
+	BloodRune = 129842947931988,
+	Cataclysm = 112682573509627,
+	Earthsplitter = 76288099840320,
+	EmberOil = 112910906183463,
+	Giantfeller = 123985668810174,
+	GiantsBane = 114533736757106,
+	GildedPurse = 139883243039527,
+	Lionheart = 100304374347727,
+	Pestilence = 104243269581519,
+	PlagueCenser = 115755518856980,
+	Ruinwheel = 126640341956346,
+	Sawblade = 117275822544943,
+	SecondWind = 122951282222182,
+	Singularity = 71157032438542,
+	Sling = 125842657826316,
+	SpiritWisps = 116994583705814,
+	Starfall = 94755844554012,
+	StillWaters = 91530053933320,
+	Stoneskin = 71553394202877,
+	Strangleroot = 116698494146447,
+	Thornhide = 136143539357678,
+	TitansRoar = 89735784208199,
+	VineSnare = 79187994328247,
+	Vortex = 74005103594271,
+	WarHorn = 109619643736979,
+	WardShields = 85827000775056,
+	Windstep = 90894200102391,
+	WispChoir = 134215168328609,
+	Worldbreaker = 94880898338591,
 } :: { [string]: (number | string)? }
 
 -- Last-resort text (1-2 letters) for an id that has neither a picture nor a vector icon.
@@ -7108,7 +7205,18 @@ return MeshCatalog
           <string name="Name">MetaUpgradeData</string>
           <string name="Source"><![CDATA[--[[
 	MetaUpgradeData.lua
-	Permanent upgrades bought with gold in the lobby shop.
+	Permanent upgrades bought with gold in the lobby.
+
+	Two kinds (Hero Mastery, save schema 7):
+	  StatOrder     MaxHP, Might, Armor, Speed, Luck, Growth: bought PER HERO on the
+	                Characters screen (data.HeroUpgrades[heroId][id]); a hero's levels only
+	                go up to its mastery cap (HeroCap). Same prices / max levels as before.
+	  AccountOrder  Revive, Reroll, Skip: account-wide (data.Meta[id], Upgrades screen).
+	  Signature     one per hero (Signature[heroId], upgrade id "Signature"): 5 levels that
+	                strengthen the hero's trait (TraitValue). The stat ones carry PerLevel
+	                (StatSheet adds them); the others are read by WeaponSystem.
+	Mastery: Config.HeroMastery (MasteryFor turns a hero's XP into its level). Robux never
+	buys any of this.
 
 	Fields:
 	  MaxLevel     number of levels
@@ -7123,6 +7231,8 @@ return MeshCatalog
 local MetaUpgradeData = {}
 
 MetaUpgradeData.Order = { "MaxHP", "Might", "Armor", "Speed", "Luck", "Growth", "Revive", "Reroll", "Skip" }
+MetaUpgradeData.StatOrder = { "MaxHP", "Might", "Armor", "Speed", "Luck", "Growth" }
+MetaUpgradeData.AccountOrder = { "Revive", "Reroll", "Skip" }
 
 MetaUpgradeData.Upgrades = {
 	MaxHP = {
@@ -7248,6 +7358,137 @@ function MetaUpgradeData.CostOf(upgradeId: string, ownedLevel: number): number?
 		return nil
 	end
 	return math.floor(def.BaseCost * def.CostGrowth ^ ownedLevel + 0.5)
+end
+
+local Config = require(script.Parent.Config)
+
+--[[
+	Signature upgrades: Trait = { Base, Per } in whole percent: the trait's value at signature
+	level L is (Base + Per * L) / 100 (Base = the hero's own trait today). Effect.Format
+	prints that percent. PerLevel (stat traits only): what StatSheet adds per level.
+]]
+local SIGNATURE_COST = { MaxLevel = 5, BaseCost = 500, CostGrowth = 1.6 }
+local function signature(hero: string, name: string, base: number, per: number, format: string, perLevel: { [string]: number }?)
+	return {
+		Id = "Signature",
+		Hero = hero,
+		Name = name,
+		Description = string.format(format, base) .. " now; " .. string.format(format, base + per * SIGNATURE_COST.MaxLevel) .. " at level " .. SIGNATURE_COST.MaxLevel .. ".",
+		MaxLevel = SIGNATURE_COST.MaxLevel,
+		BaseCost = SIGNATURE_COST.BaseCost,
+		CostGrowth = SIGNATURE_COST.CostGrowth,
+		Trait = { Base = base, Per = per },
+		Effect = { Format = format },
+		PerLevel = perLevel,
+	}
+end
+MetaUpgradeData.Signature = {
+	Knight = signature("Knight", "Iron Skin", 10, 2, "-%d%% damage taken", { damageTaken = -0.02 }),
+	Mage = signature("Mage", "Arcane Reach", 10, 3, "+%d%% area", { area = 0.03 }),
+	Rogue = signature("Rogue", "Fleet Foot", 15, 2, "+%d%% move speed", { speed = 0.02 }),
+	Priest = signature("Priest", "Blessed", 20, 3, "+%d%% max HP", { maxHpMult = 0.03 }),
+	Ranger = signature("Ranger", "Steady Aim", 30, 5, "+%d%% Longbow damage standing still"),
+	Alchemist = signature("Alchemist", "Volatile Mix", 20, 3, "+%d%% fire and area damage"),
+	Engineer = signature("Engineer", "Tinkerer", 30, 5, "+%d%% turret and totem time"),
+	Necromancer = signature("Necromancer", "Soul Harvest", 15, 2, "%d%% soul chance per kill"),
+}
+
+function MetaUpgradeData.IsStat(upgradeId: any): boolean
+	return type(upgradeId) == "string" and table.find(MetaUpgradeData.StatOrder, upgradeId) ~= nil
+end
+
+function MetaUpgradeData.IsAccount(upgradeId: any): boolean
+	return type(upgradeId) == "string" and table.find(MetaUpgradeData.AccountOrder, upgradeId) ~= nil
+end
+
+-- The definition of one of a hero's own upgrades (a stat id or "Signature"), or nil.
+function MetaUpgradeData.HeroDef(heroId: string, upgradeId: any): { [string]: any }?
+	if upgradeId == "Signature" then
+		return MetaUpgradeData.Signature[heroId]
+	end
+	if MetaUpgradeData.IsStat(upgradeId) then
+		return MetaUpgradeData.Upgrades[upgradeId]
+	end
+	return nil
+end
+
+-- A hero's upgrade ids in screen order: the six stats, then its signature.
+function MetaUpgradeData.HeroOrder(): { string }
+	local out = table.clone(MetaUpgradeData.StatOrder)
+	table.insert(out, "Signature")
+	return out
+end
+
+-- Gold price of a hero upgrade's next level, or nil when maxed / unknown.
+function MetaUpgradeData.HeroCostOf(heroId: string, upgradeId: string, ownedLevel: number): number?
+	local def = MetaUpgradeData.HeroDef(heroId, upgradeId)
+	if not def or ownedLevel >= def.MaxLevel then
+		return nil
+	end
+	return math.floor(def.BaseCost * def.CostGrowth ^ ownedLevel + 0.5)
+end
+
+-- The trait value of a hero at a signature level (0.10 = 10%), or nil for no signature.
+function MetaUpgradeData.TraitValue(heroId: string, level: number?): number?
+	local def = MetaUpgradeData.Signature[heroId]
+	if not def then
+		return nil
+	end
+	local l = math.clamp(math.floor(tonumber(level) or 0), 0, def.MaxLevel)
+	return (def.Trait.Base + def.Trait.Per * l) / 100
+end
+
+-- A hero upgrade's total effect at a level, in plain words.
+function MetaUpgradeData.HeroEffectText(heroId: string, upgradeId: string, level: number): string
+	if upgradeId == "Signature" then
+		local def = MetaUpgradeData.Signature[heroId]
+		if not def then
+			return ""
+		end
+		return string.format(def.Effect.Format, def.Trait.Base + def.Trait.Per * level)
+	end
+	return MetaUpgradeData.EffectText(upgradeId, level)
+end
+
+-- Mastery level needed to buy `nextLevel` of a hero upgrade.
+function MetaUpgradeData.RequiredMastery(upgradeId: string, nextLevel: number): number
+	local M = Config.HeroMastery
+	if upgradeId == "Signature" then
+		return M.SignatureEvery * nextLevel
+	end
+	return math.ceil(nextLevel / M.StatPerLevel)
+end
+
+-- Highest level of a hero upgrade its mastery allows (never above the upgrade's max).
+function MetaUpgradeData.HeroCap(mastery: number, upgradeId: string, heroId: string?): number
+	local M = Config.HeroMastery
+	local def = MetaUpgradeData.HeroDef(heroId or "Knight", upgradeId)
+	local maxLevel = def and def.MaxLevel or 0
+	if upgradeId == "Signature" then
+		return math.min(maxLevel, math.floor(mastery / M.SignatureEvery))
+	end
+	return math.min(maxLevel, mastery * M.StatPerLevel)
+end
+
+-- XP from mastery `level` to level + 1.
+function MetaUpgradeData.MasteryToNext(level: number): number
+	local M = Config.HeroMastery
+	return M.Base + M.PerLevel * (math.max(1, level) - 1)
+end
+
+-- Mastery level for a hero's total XP, the XP into that level and the XP it needs (0 at max).
+function MetaUpgradeData.MasteryFor(totalXP: number?): (number, number, number)
+	local xp = math.max(0, math.floor(tonumber(totalXP) or 0))
+	local level = 1
+	while level < Config.HeroMastery.MaxLevel do
+		local need = MetaUpgradeData.MasteryToNext(level)
+		if xp < need then
+			return level, xp, need
+		end
+		xp -= need
+		level += 1
+	end
+	return Config.HeroMastery.MaxLevel, 0, 0
 end
 
 return MetaUpgradeData
@@ -7486,11 +7727,6 @@ PassiveData.Order = {
 	"Fletching",
 	"Precision",
 	"Renewal",
-}
-
--- Held for a later update (owner): fully built and tested, but kept out of PassiveData.Order
--- so no level-up card, chest, journal or DEV list offers them. Move ids into Order to release.
-PassiveData.HeldOrder = {
 	"GiantsBane",
 	"Thornhide",
 	"BloodRune",
@@ -7503,6 +7739,10 @@ PassiveData.HeldOrder = {
 	"Lionheart",
 	"StillWaters",
 }
+
+-- Held for a later update: ids built and tested but kept out of Order (none right now).
+PassiveData.HeldOrder = {} :: { string }
+
 
 -- Behaviour numbers of the passives that hook into ItemSystem (not stat bumps).
 PassiveData.Tuning = {
@@ -7924,7 +8164,8 @@ Remotes.ClientToServer = {
 	"AbandonRun", -- pause menu MAIN MENU (confirmed): leave the running run for the lobby menu
 	"SelectCharacter", -- (characterId)
 	"BuyCharacter", -- (characterId)
-	"BuyMeta", -- (upgradeId, levelSeenByClient?) a stale second tap is ignored
+	"BuyMeta", -- (upgradeId, levelSeenByClient?) account upgrades only; a stale second tap is ignored
+	"BuyHeroUpgrade", -- (heroId, upgradeId, levelSeenByClient) a hero's stat / Signature level (Hero Mastery)
 	"EquipSkin", -- (characterId, skinId)
 	"SetPause", -- (bool) pause menu open / closed
 	"SaveSettings", -- ({ Music, Sfx, Shake = 0-1, ReducedEffects, DamageNumbers, Tips = bool }) any subset
@@ -8067,7 +8308,9 @@ return Remotes
 	StatSheet.Compute(input) → sheet
 	  input = {
 	    CharacterId = "Knight",            -- CharacterData bonus
-	    Meta = { [upgradeId] = level },    -- permanent upgrades (MetaUpgradeData.PerLevel)
+	    Meta = { [upgradeId] = level },    -- permanent upgrades (MetaUpgradeData.PerLevel): the
+	                                       -- account ids, the hero's stat track and
+	                                       -- Signature (the hero's trait upgrade)
 	    Passives = { [passiveId] = level },-- PassiveData.Values[level] (TOTAL bonus per level)
 	    Items = { [itemId] = count },      -- run items (ItemData.Bonus)
 	    Team = { might = 0.15, ... }?,     -- this stage's Bargain Shrine boon (LootSystem)
@@ -8129,8 +8372,11 @@ function StatSheet.Compute(input: Input): { [string]: number }
 	local character = input.CharacterId and CharacterData.Characters[input.CharacterId]
 	addAll(character and character.Bonus)
 	for upgradeId, level in pairs(input.Meta or {}) do
-		local def = MetaUpgradeData.Upgrades[upgradeId]
-		if def and def.PerLevel then
+		-- "Signature": the hero's own trait upgrade (only the stat traits carry PerLevel)
+		local def = if upgradeId == "Signature"
+			then (input.CharacterId and MetaUpgradeData.Signature[input.CharacterId])
+			else MetaUpgradeData.Upgrades[upgradeId]
+		if def and def.PerLevel and type(level) == "number" then
 			for k, v in pairs(def.PerLevel) do
 				if b[k] ~= nil then
 					b[k] += v * level
@@ -8448,7 +8694,6 @@ local LIST: { Synergy } = {
 	},
 	{
 		Id = "Inferno",
-		Held = true, -- needs a held passive (PassiveData.HeldOrder): kept out of Order until released
 		Name = "Inferno",
 		Text = "+8% burn chance, +10% damage",
 		Desc = "A fire weapon, the Ember Oil passive and Volatile Spore or Storm Charm.",
@@ -8463,7 +8708,6 @@ local LIST: { Synergy } = {
 	},
 	{
 		Id = "IronThicket",
-		Held = true, -- needs held passives (PassiveData.HeldOrder): kept out of Order until released
 		Name = "Iron Thicket",
 		Text = "+60% thorns, +1 armor",
 		Desc = "The Thornhide and Stoneskin passives and Iron Plate or Barbed Mail.",
@@ -9029,11 +9273,6 @@ WeaponData.Order = {
 	"ChainHook",
 	"Turret",
 	"SoulBolt",
-}
-
--- Held for the next update (owner): fully built and tested, but kept out of WeaponData.Order so
--- no level-up card, chest, journal or DEV list offers them. Move ids into Order to release.
-WeaponData.HeldOrder = {
 	"WardShields",
 	"Earthsplitter",
 	"Starfall",
@@ -9045,6 +9284,10 @@ WeaponData.HeldOrder = {
 	"SpiritWisps",
 	"Vortex",
 }
+
+-- Held for a later update: ids built and tested but kept out of Order (none right now).
+WeaponData.HeldOrder = {} :: { string }
+
 
 -- Display names for stat diffs on level-up cards.
 WeaponData.StatLabels = {
@@ -10665,6 +10908,8 @@ print(string.format("[SWARM] server ready (v%s)%s", Config.Version, ctx.DataServ
 ]]
 
 local AccountData = require(game:GetService("ReplicatedStorage").Shared.AccountData)
+local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
+local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 
 local AccountService = {}
 
@@ -10731,6 +10976,33 @@ function AccountService.AwardRun(player: Player, summary: AccountData.RunSummary
 		publish(player, data)
 	end
 	return { Gained = gained, Parts = parts, From = from, To = to, Into = into, Need = need, Rewards = rewards }
+end
+
+--[[
+	Hero Mastery (MetaUpgradeData, Config.HeroMastery): a committed run's XP (the same
+	amount AwardRun gave the account) goes to the hero played, and its run count goes up.
+	RunManager calls this after the DEV-taint return, so DEV runs never give mastery.
+	Returns the results line { Hero, Gained, From, To } or nil.
+]]
+function AccountService.AwardMastery(player: Player, heroId: string, gained: number): { [string]: any }?
+	local data = ctx.DataService.GetData(player)
+	if not data or type(heroId) ~= "string" or not CharacterData.Characters[heroId] then
+		return nil
+	end
+	if type(data.Heroes) ~= "table" then
+		data.Heroes = {}
+	end
+	local h = data.Heroes[heroId]
+	if type(h) ~= "table" then
+		h = { XP = 0, Runs = 0 }
+		data.Heroes[heroId] = h
+	end
+	gained = math.max(0, math.floor(tonumber(gained) or 0))
+	local from = MetaUpgradeData.MasteryFor(h.XP)
+	h.XP = math.max(0, math.floor(tonumber(h.XP) or 0)) + gained
+	h.Runs = math.max(0, math.floor(tonumber(h.Runs) or 0)) + 1
+	local to = MetaUpgradeData.MasteryFor(h.XP)
+	return { Hero = heroId, Gained = gained, From = from, To = to }
 end
 
 -- EquipCosmetic for rings and frames (AchievementService forwards them here).
@@ -13957,8 +14229,11 @@ return DamageNumbers
 	Studio:  uses Config.Data.StudioStoreName (never the live store); if DataStores are
 	         unavailable (no API access) data is kept in memory only.
 
-	Save shape (Config.Data.SchemaVersion = 6):
-	  Version, Gold, Meta {id → level}, OwnedCharacters {id → true}, SelectedCharacter,
+	Save shape (Config.Data.SchemaVersion = 7):
+	  Version, Gold, Meta {id → level} (account upgrades Revive / Reroll / Skip; the old
+	  shared stat levels stay in it untouched for rollback safety but are no longer read),
+	  Heroes {heroId → {XP, Runs}} (Hero Mastery), HeroUpgrades {heroId → {upgradeId →
+	  level}} (each hero's six stat upgrades + "Signature"), OwnedCharacters {id → true}, SelectedCharacter,
 	  Skins {characterId → skinId}, Stats {BestTime, TotalKills, Wins, Runs, BestStage,
 	  MostKills, BestScore, BestScoreEndless, BestLevel, TimePlayed (seconds in clean runs)}
 	  (missing keys start at 0),
@@ -14025,6 +14300,8 @@ local function defaultData()
 		Difficulty = "Standard",
 		DifficultyClears = { Standard = false, Veteran = false, Nightmare = false },
 		Meta = {},
+		Heroes = {},
+		HeroUpgrades = {},
 		OwnedCharacters = { [CharacterData.Default] = true },
 		SelectedCharacter = CharacterData.Default,
 		Skins = {},
@@ -14060,7 +14337,9 @@ DataService.DefaultData = defaultData
 	who has played a run already counts as having done the tutorial. Version 5 had no
 	retention systems: curses start unpicked, no daily played, account level 1 with 0 XP
 	(the level track starts for everyone from the next run; old progress is untouched),
-	no ring / frame worn, Stats.MostKills 0.
+	no ring / frame worn, Stats.MostKills 0. Version 6 had one shared set of stat upgrades
+	(Meta): Hero Mastery copies those levels to EVERY hero's own track (nothing wiped or
+	refunded, gold untouched, Meta kept as it was) and every hero starts at mastery 0 XP.
 ]]
 local MIGRATIONS: { [number]: (any) -> any } = {
 	[0] = function(data)
@@ -14133,6 +14412,34 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		data.Version = 6
 		return data
 	end,
+	[6] = function(data)
+		-- Hero Mastery: the shared stat levels become every hero's own levels
+		local seed = {}
+		if type(data.Meta) == "table" then
+			for _, id in ipairs(MetaUpgradeData.StatOrder) do
+				local n = tonumber(data.Meta[id])
+				if n and n == n and n > 0 and n < math.huge then
+					seed[id] = math.clamp(math.floor(n), 0, MetaUpgradeData.Upgrades[id].MaxLevel)
+				end
+			end
+		end
+		local tracks = type(data.HeroUpgrades) == "table" and data.HeroUpgrades or {}
+		for _, heroId in ipairs(CharacterData.Order) do
+			local track = type(tracks[heroId]) == "table" and tracks[heroId] or {}
+			for id, level in pairs(seed) do
+				if level > 0 and (tonumber(track[id]) or 0) < level then
+					track[id] = level
+				end
+			end
+			tracks[heroId] = track
+		end
+		data.HeroUpgrades = tracks
+		if type(data.Heroes) ~= "table" then
+			data.Heroes = {}
+		end
+		data.Version = 7
+		return data
+	end,
 }
 
 -- Brings any stored table up to the current schema and fills missing fields.
@@ -14178,6 +14485,36 @@ function DataService.Migrate(data: any): { [string]: any }
 			local n = tonumber(level)
 			n = (n and n == n and n < math.huge) and math.clamp(math.floor(n), 0, def.MaxLevel) or 0
 			data.Meta[id] = n > 0 and n or nil
+		end
+	end
+	-- Hero Mastery (schema 7): whole, finite XP / run counts per known hero and whole
+	-- upgrade levels inside each upgrade's range; unknown ids are left untouched
+	for _, heroId in ipairs(CharacterData.Order) do
+		local h = data.Heroes[heroId]
+		if h ~= nil then
+			if type(h) ~= "table" then
+				h = {}
+			end
+			for _, key in ipairs({ "XP", "Runs" }) do
+				local n = tonumber(h[key])
+				h[key] = (n and n == n and n < math.huge) and math.max(0, math.floor(n)) or 0
+			end
+			data.Heroes[heroId] = h
+		end
+		local track = data.HeroUpgrades[heroId]
+		if track ~= nil then
+			if type(track) ~= "table" then
+				track = {}
+			end
+			for id, level in pairs(track) do
+				local def = MetaUpgradeData.HeroDef(heroId, id)
+				if def then
+					local n = tonumber(level)
+					n = (n and n == n and n < math.huge) and math.clamp(math.floor(n), 0, def.MaxLevel) or 0
+					track[id] = n > 0 and n or nil
+				end
+			end
+			data.HeroUpgrades[heroId] = track
 		end
 	end
 	local tokens = tonumber(data.ReviveTokens)
@@ -16042,7 +16379,9 @@ return EnemyAI
 	  WarnId (its live telegraph), Harmless / Invulnerable / Untargetable / Dying (boss,
 	  a tunnelling Burrower), Owner (the boss that made an object: War Banner, Brood Egg),
 	  Children (a nest's mites), RallyUntil (War Banner buff), HPShown (ShowHP bar)
-	Pacing (Config.Pacing): calm at run / stage start, build-up between mini-waves, a lull
+	Waves (Config.Waves, stepWaves): while exploring every enemy comes in a numbered wave;
+	the continuous top-up below only runs during boss fights (or with waves off).
+	Pacing (Config.Pacing, waves off): calm at run / stage start, build-up between mini-waves, a lull
 	after each mini-wave, first-appearance callouts with a small intro group, scheduled
 	elites, nests on later stages (Config.Pacing.Nests). The boss encounter itself is
 	BossAI (data: BossData); the stage's boss id comes from StageManager.
@@ -16087,12 +16426,17 @@ local sinceWave = 0
 local lullLeft = 0
 local nextEliteAt = 0
 local seen: { [string]: boolean } = {}
--- waves (Config.Waves): the stage's wave count and the burst still to pour in
-local waveStage = 0
-local waveNumber = 0
+-- waves (Config.Waves): numbered across the whole run
+local waveStage = 0 -- stage the wave state belongs to (a new stage starts with a breather)
+local runWave = 0 -- the current / last wave number of this run
+local lastWaveBase = 0 -- the last normal wave's size per player-count density (waves never shrink)
+local stageFirstWave = false -- the next wave is the first of its stage (a loud announcement)
+local wavePhase = "Off" -- "Off" | "Breather" | "Pouring" | "Fighting"
+local waveTimer = 0 -- Breather: seconds to the next wave; Fighting: seconds before it moves on anyway
+local waveTotal = 0 -- enemies queued for the current wave
 local waveQueue: { { Type: string, Angle: number, Spread: number, Elite: boolean, Rp: any } } = {}
-local waveDelay = 0 -- seconds until the announced wave pours in
 local burstLeft = 0 -- seconds left to pour the rest of it in
+local waveSeq = 0 -- every wave of the server's life (SwarmState WaveSeq: clients announce on change)
 -- nests (Config.Pacing.Nests), per stage
 local nestStage = 0
 local nestStageTime = 0
@@ -16225,14 +16569,14 @@ local function introduce(typeId: string): boolean
 	return def ~= nil and def.Intro ~= nil
 end
 
--- A living player near the portal while exploring (Config.Waves.PortalCalmRadius).
+-- A living player in (or at the edge of) the portal circle while exploring: charging it.
 local function nearPortal(): boolean
-	local W = Config.Waves
-	local p = W.PortalCalmRadius and ctx.StageManager.GetPhase() == "Explore" and ctx.StageManager.PortalPosition()
+	local p = ctx.StageManager.GetPhase() == "Explore" and ctx.StageManager.PortalPosition()
 	if not p then
 		return false
 	end
-	local r2 = W.PortalCalmRadius * W.PortalCalmRadius
+	local r = Config.Stages.PortalRadius + 4
+	local r2 = r * r
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		local root = rp.Alive and rp.Root
 		if root then
@@ -16248,18 +16592,13 @@ end
 -- Live-target multiplier from the pacing curve (calm, lull, build-up).
 local function pacingMult(): number
 	local P = Config.Pacing
-	local W = Config.Waves
 	if calmLeft > 0 then
 		return P.CalmMult
 	end
 	if lullLeft > 0 then
-		return W.Enabled and W.LullMult or P.LullMult
+		return P.LullMult
 	end
 	local u = math.clamp(sinceWave / math.max(1, Config.Run.MiniWaveInterval), 0, 1)
-	if W.Enabled then
-		-- between waves only a light trickle, so kills and XP never fully stall
-		return (W.TrickleFrom + (W.TrickleTo - W.TrickleFrom) * u) * (nearPortal() and W.PortalCalmMult or 1)
-	end
 	return P.BuildUpFrom + (P.BuildUpTo - P.BuildUpFrom) * u
 end
 
@@ -16288,6 +16627,7 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 		return nil
 	end
 	local e = pool[index]
+	e.WaveId = nil -- set by pourWave for wave members
 	local elite = (opts and opts.Elite) and not isBoss or false
 	local tier = ctx.RunManager.GetTier()
 	local D = Config.Difficulty
@@ -16508,6 +16848,9 @@ local function openingMult(): number
 end
 
 local function topUp()
+	if Config.Waves.Enabled and not EnemySpawner.Boss then
+		return -- while exploring every enemy comes in a wave (stepWaves)
+	end
 	local row = EnemyData.GetSpawnRow(progressionTime())
 	local target = math.floor(row.Target * countMult() * ctx.StageManager.SpawnMult() * openingMult())
 	if EnemySpawner.Boss then
@@ -16605,6 +16948,9 @@ EnemySpawner.SpawnNest = spawnNest
 
 -- Nests on later stages (Config.Pacing.Nests), only while exploring.
 local function stepNests(dt: number, runTime: number)
+	if Config.Waves.Enabled then
+		return -- waves plant nests themselves (Config.Waves.NestEveryWaves)
+	end
 	local N = Config.Pacing.Nests
 	local stage = ctx.StageManager.GetStage()
 	if stage ~= nestStage then
@@ -16646,82 +16992,215 @@ local function compass(a: number): string
 end
 
 --[[
-	A WAVE (Config.Waves), started every Config.Run.MiniWaveInterval while exploring
-	(StageManager): announced at once ("WAVE 3 · from the north"), then after WarnSeconds
-	it pours in over BurstSeconds from 1-3 directions around one player, one enemy type per
-	direction (so it reads). Size = (Base + PerMinute x difficulty minute) x the player-count
-	density x the stage spawn multiplier (Endless included) x the opening ramp, growing by
-	GrowPerWave per wave of the stage (up to GrowCap). Afterwards a short lull; between
-	waves a light trickle keeps going (pacingMult). Config.Waves.Enabled = false brings
-	back the old ring-shaped mini-wave on top of continuous spawning.
+	WAVES (Config.Waves; owner: "ALL the enemies come in waves. Wave 1 is easy, wave 2 a
+	little harder, wave 3 even harder"). While exploring there is no continuous spawning:
+	  Breather  a short countdown (SwarmState WaveNext = the run time the wave starts); it
+	            waits while someone stands at the portal (charging it)
+	  Pouring   wave N (counted across the whole run, SwarmState Wave / WaveSeq) is
+	            announced (StageUI: big "WAVE N" banner, horn, red screen-edge glow from
+	            WaveSides / WaveAngle) and pours in over BurstSeconds from 1-3 sides
+	  Fighting  until at most ClearShare of it is alive (SwarmState WaveLeft), or MaxSeconds
+	            pass, then the next breather
+	Size = (Base + PerWave x (N - 1)) x player-count density x the stage spawn multiplier
+	(Horde curse, Endless) x BigMult on every BigEvery-th wave. The enemy mix is the spawn
+	table row at (N - 1) x RowSecondsPerWave. Elites lead waves from EliteFromWave on.
+	Boss fights keep their own crowd (topUp), the surge replaces waves; a new stage starts
+	with StageStartDelay of breather. Enemy HP / damage keep the run-clock scaling.
 ]]
+local function waveAlive(): number
+	local n = 0
+	for _, e in ipairs(EnemySpawner.Active) do
+		if e.Alive and e.WaveId == runWave then
+			n += 1
+		end
+	end
+	return n
+end
+
+-- One enemy type for wave N: Bats (wasps) only from Config.Waves.BeesFromWave (Mites
+-- before, smaller groups after, Config.Pacing.WaveCountMult).
+local function waveType(row, n: number, allowRanged: boolean, wave: boolean): string
+	local P = Config.Pacing
+	local typeId = pickType(row.Weights, allowRanged, wave)
+	if P.WaveMinTime and P.WaveMinTime[typeId] and n < (Config.Waves.BeesFromWave or 0) then
+		typeId = "Slime"
+	end
+	return typeId
+end
+
+-- Spawn-table seconds for wave N's mix: (N - 1) x RowSecondsPerWave, never below the
+-- current stage's first row (stage n starts at (n-1) x Config.Spawn.StageProgressionSeconds).
+local function waveRowSeconds(n: number): number
+	local floor = (ctx.StageManager.GetStage() - 1) * Config.Spawn.StageProgressionSeconds
+	return math.max(floor, (n - 1) * Config.Waves.RowSecondsPerWave)
+end
+
+-- Swarm pressure (Config.Stages.Pressure, SwarmState SwarmWarn 0-2) makes waves bigger.
+local function pressureMult(): number
+	local warn = tonumber(Remotes.State():GetAttribute("SwarmWarn")) or 0
+	local list = Config.Waves.PressureMult
+	return warn > 0 and list and list[math.min(warn, #list)] or 1
+end
+
+-- Wave N's size before the live cap and the never-shrink floor (Config.Waves), without
+-- the big-wave bump: exported for the sims.
+function EnemySpawner.WaveSize(n: number): number
+	local W = Config.Waves
+	local late = W.LateFromWave and math.max(0, n - W.LateFromWave) or 0
+	local total = (W.Base + W.PerWave * (n - 1 - late) + (W.PerWaveLate or W.PerWave) * late) * countMult() * ctx.StageManager.SpawnMult() * pressureMult()
+	return math.floor(total + 0.5)
+end
+
 local function startWave()
 	local W = Config.Waves
 	local P = Config.Pacing
-	local stage = ctx.StageManager.GetStage()
-	if stage ~= waveStage then
-		waveStage = stage
-		waveNumber = 0
-	end
 	local rp = randomAlivePlayer()
-	if not rp or nearPortal() then
-		return -- someone is pushing into the portal: no wave on top of them
+	if not rp then
+		return false
 	end
-	waveNumber += 1
-	local runTime = ctx.RunManager.GetRunTime()
-	local row = EnemyData.GetSpawnRow(progressionTime())
-	local grow = math.min(W.GrowCap, 1 + W.GrowPerWave * (waveNumber - 1))
-	local total = (W.Base + ctx.RunManager.GetTier() * W.PerMinute) * countMult() * ctx.StageManager.SpawnMult() * openingMult() * grow
+	runWave += 1
+	local n = runWave
+	local row = EnemyData.GetSpawnRow(waveRowSeconds(n))
+	local big = W.BigEvery > 0 and n % W.BigEvery == 0
+	-- waves never shrink (owner: "each wave harder"): a normal wave is at least the last
+	-- normal one, per player-count density (a teammate leaving still shrinks it), so a new
+	-- stage dropping the pressure step or the stage multiplier changing cannot undo it; a
+	-- big wave is the bump on top
+	local density = countMult()
+	local normal = math.max(EnemySpawner.WaveSize(n), math.ceil(lastWaveBase * density))
+	lastWaveBase = normal / density
+	local total = math.min(math.floor(normal * (big and W.BigMult or 1) + 0.5), Config.Enemies.MaxLive)
+	local loud = n == 1 or big or stageFirstWave -- the big banner + horn (StageUI); else a toast
+	stageFirstWave = false
 	local dirs = 1
-	for _, at in ipairs(W.DirectionsAt) do
-		if progressionTime() >= at then
+	for _, at in ipairs(W.SidesAtWave) do
+		if n >= at then
 			dirs += 1
 		end
 	end
 	dirs = math.min(dirs, 3)
+	-- elites: x the Elite Surge curse (RunModifiers.EliteChanceMult; also Daily runs), which
+	-- also adds one elite per wave
+	local eliteMult = ctx.RunModifiers and ctx.RunModifiers.EliteChanceMult() or 1
+	local elites = 0
+	if n >= W.EliteFromWave and (big or rng:NextNumber() < math.min(1, W.EliteChance * eliteMult)) then
+		elites = 1 + math.floor((n - W.EliteFromWave) / W.ElitePerWaves) + (eliteMult > 1 and 1 or 0)
+		elites = math.min(W.EliteMax + (eliteMult > 1 and 1 or 0), elites)
+	end
+	total = math.max(dirs, total - elites) -- the elites are part of the wave, not extra
 	local base = rng:NextNumber(0, math.pi * 2)
-	local leadElite = runTime >= P.EliteMinTime and rng:NextNumber() < W.EliteLeadChance * (1 + Config.Enemies.EliteStageChanceGrowth * math.min(8, stage - 1))
 	local sides = {}
+	-- the mixed share of each side: Spitters within Config.Enemies.MaxLiveRanged (counting
+	-- the ones already queued), Healers / Burrowers within their caps (pickType)
+	local rangedRoom = Config.Enemies.MaxLiveRanged - liveRanged()
 	table.clear(waveQueue)
+	-- heavy types are capped per wave (Config.Waves.TypeCap: Base + PerWave x (N - 1)); the
+	-- rest of their share is re-picked (a sudden side of Brutes was the stage-3 damage spike)
+	-- (the ones still alive from earlier waves count: tanky Brutes piled up wave on wave)
+	local typeCount: { [string]: number } = {}
+	for id in pairs(W.TypeCap or {}) do
+		typeCount[id] = liveCount(function(def)
+			return def.Id == id
+		end)
+	end
+	local function capped(typeId: string): boolean
+		local c = W.TypeCap and W.TypeCap[typeId]
+		return c ~= nil and (typeCount[typeId] or 0) >= math.floor(c.Base + c.PerWave * (n - 1))
+	end
 	for d = 1, dirs do
-		local typeId = pickType(row.Weights, false, true)
-		if P.WaveMinTime and P.WaveMinTime[typeId] and runTime < P.WaveMinTime[typeId] then
-			typeId = "Slime"
-		end
-		introduce(typeId)
-		local count = math.floor(total / dirs * (P.WaveCountMult and P.WaveCountMult[typeId] or 1) + 0.5)
+		-- each side reads as one main type (never Ranged / NoWave) plus a mixed share
+		local mainType = waveType(row, n, false, true)
+		introduce(mainType)
+		-- the side's full share (the sides add up to the wave total); a type that comes in
+		-- smaller groups (Config.Pacing.WaveCountMult: wasps, Bombers, Brutes) fills the
+		-- rest of its side from the row mix, so the wave does not shrink
+		local count = math.floor(total * d / dirs) - math.floor(total * (d - 1) / dirs)
+		local mixed = n >= (W.MixFromWave or 1) and math.floor(count * (W.MixShare or 0)) or 0
+		local mainCount = math.floor((count - mixed) * (P.WaveCountMult and P.WaveCountMult[mainType] or 1) + 0.5)
+		mixed = count - mainCount
 		local angle = base + (d - 1) * (2 * math.pi / dirs) + rng:NextNumber(-0.3, 0.3)
 		table.insert(sides, compass(angle))
-		local eliteOk = leadElite and d == 1 and table.find(P.EliteTypes, typeId) ~= nil
 		for k = 1, count do
-			table.insert(waveQueue, { Type = typeId, Angle = angle, Spread = W.ArcRadians, Elite = eliteOk and k == 1, Rp = rp })
+			local typeId = mainType
+			if k <= mixed then
+				typeId = waveType(row, n, rangedRoom > 0, false)
+				if typeId == mainType and P.WaveCountMult and P.WaveCountMult[mainType] then
+					typeId = waveType(row, n, rangedRoom > 0, false) -- one more roll for variety
+				end
+				if EnemyData.Enemies[typeId].Ranged then
+					rangedRoom -= 1
+				end
+				introduce(typeId)
+			end
+			for _ = 1, 3 do
+				if not capped(typeId) then
+					break
+				end
+				typeId = waveType(row, n, false, true)
+			end
+			if capped(typeId) then
+				typeId = "Slime"
+			end
+			typeCount[typeId] = (typeCount[typeId] or 0) + 1
+			table.insert(waveQueue, { Type = typeId, Angle = angle, Spread = W.ArcRadians, Elite = false, Rp = rp })
 		end
 	end
-	waveDelay = W.WarnSeconds
-	burstLeft = W.BurstSeconds
-	sinceWave = 0
-	lullLeft = W.WarnSeconds + W.BurstSeconds + W.LullSeconds
-	Remotes.State():SetAttribute("Wave", waveNumber)
-	if #waveQueue > 0 then
-		local where = dirs == 1 and ("from the " .. sides[1]) or (dirs .. " sides")
-		ctx.RunManager.Broadcast(string.format("WAVE %d · %s", waveNumber, where), Color3.fromRGB(255, 190, 110))
-		Fx.Sound("Tip")
+	-- the elites lead (queued last, popped first) as one of the elite types
+	local eliteWeights = {}
+	for _, id in ipairs(P.EliteTypes) do
+		if row.Weights[id] then
+			eliteWeights[id] = row.Weights[id]
+		end
 	end
+	if next(eliteWeights) == nil then
+		eliteWeights = { Slime = 1 }
+	end
+	for _ = 1, elites do
+		table.insert(waveQueue, { Type = weightedPick(eliteWeights), Angle = base, Spread = W.ArcRadians, Elite = true, Rp = rp })
+	end
+	waveTotal = #waveQueue
+	burstLeft = W.BurstSeconds
+	wavePhase = "Pouring"
+	waveTimer = W.MaxSeconds
+	waveSeq += 1
+	-- later stages: every NestEveryWaves-th wave plants a Nest (Config.Pacing.Nests caps)
+	local N = P.Nests
+	local stage = ctx.StageManager.GetStage()
+	if stage ~= nestStage then
+		nestStage = stage
+		nestsMade = 0
+	end
+	if W.NestEveryWaves and stage >= (W.NestFromStage or 2) and n % W.NestEveryWaves == 0 and not big
+		and nestsMade < N.PerStage + (stage >= 3 and 1 or 0)
+		and liveCount(function(def) return def.Spawner ~= nil end) < N.MaxAlive then
+		local nest = EnemySpawner.SpawnNest()
+		if nest then
+			nestsMade += 1
+			nest.WaveId = runWave
+		end
+	end
+	local state = Remotes.State()
+	state:SetAttribute("Wave", n)
+	state:SetAttribute("WaveBig", big)
+	state:SetAttribute("WaveLoud", loud)
+	-- one message per wave at most: a quiet wave's toast names its sides and elites; a loud
+	-- wave's elites get one toast under the banner
+	local where = #sides == 1 and ("from the " .. sides[1]) or (#sides .. " sides")
+	local eliteText = elites == 1 and "an elite leads it" or (elites > 1 and (elites .. " elites lead it") or nil)
+	if not loud then
+		ctx.RunManager.Broadcast(string.format("WAVE %d · %s%s", n, where, eliteText and (" · " .. eliteText) or ""), Color3.fromRGB(255, 190, 110))
+	elseif eliteText then
+		ctx.RunManager.Broadcast(string.format("Wave %d: %s!", n, eliteText), Color3.fromRGB(255, 205, 120))
+	end
+	state:SetAttribute("WaveSides", table.concat(sides, ","))
+	state:SetAttribute("WaveAngle", math.floor(base * 100 + 0.5) / 100)
+	state:SetAttribute("WaveNext", 0)
+	state:SetAttribute("WaveSeq", waveSeq) -- last: clients read the rest when it changes
+	return true
 end
 
 -- Pours the announced wave in over Config.Waves.BurstSeconds (a capped number per step).
-local function stepWave(dt: number)
-	if #waveQueue == 0 then
-		return
-	end
-	if waveDelay > 0 then
-		waveDelay -= dt
-		return
-	end
-	if not ctx.StageManager.AllowSpawning() or EnemySpawner.Boss then
-		table.clear(waveQueue) -- the boss came (or the stage ended): drop the rest
-		return
-	end
+local function pourWave(dt: number)
 	local W = Config.Waves
 	local per = math.min(W.MaxPerStep, math.max(1, math.ceil(#waveQueue * dt / math.max(dt, burstLeft))))
 	burstLeft -= dt
@@ -16731,17 +17210,84 @@ local function stepWave(dt: number)
 			break
 		end
 		if #EnemySpawner.Active >= Config.Enemies.MaxLive then
-			table.clear(waveQueue)
+			table.insert(waveQueue, q) -- the live cap is full: the rest waits for room
 			break
 		end
 		local def = EnemyData.Enemies[q.Type]
 		local pos = EnemySpawner.SpawnPoint(def.Radius * (q.Elite and Config.Enemies.EliteSizeMult or 1), q.Angle + rng:NextNumber(-q.Spread, q.Spread), q.Rp)
 		if pos then
 			local e = EnemySpawner.Spawn(q.Type, pos, { Elite = q.Elite })
-			if e and q.Elite then
-				ctx.RunManager.Broadcast(string.format("An elite %s %s leads the wave!", e.Affix or "", def.DisplayName or q.Type), Color3.fromRGB(255, 205, 120))
+			if e then
+				e.WaveId = runWave
+				local hpMult = 1 + (W.HPPerWave or 0) * (runWave - 1)
+				e.HP *= hpMult
+				e.MaxHP *= hpMult
+				e.Shield *= hpMult
 			end
 		end
+	end
+end
+
+local function setWaveLeft(n: number)
+	local state = Remotes.State()
+	if state:GetAttribute("WaveLeft") ~= n then
+		state:SetAttribute("WaveLeft", n)
+	end
+end
+
+local function breather(seconds: number, runTime: number)
+	wavePhase = "Breather"
+	waveTimer = seconds
+	Remotes.State():SetAttribute("WaveNext", math.floor((runTime + seconds) * 10 + 0.5) / 10)
+end
+
+-- The wave state machine (only while exploring; Config.Waves.Enabled).
+local function stepWaves(dt: number, runTime: number)
+	local W = Config.Waves
+	local stage = ctx.StageManager.GetStage()
+	local exploring = W.Enabled and ctx.StageManager.GetPhase() == "Explore"
+	if not exploring then
+		if wavePhase ~= "Off" then
+			wavePhase = "Off"
+			table.clear(waveQueue)
+			Remotes.State():SetAttribute("WaveNext", 0)
+			setWaveLeft(0)
+		end
+		return
+	end
+	if stage ~= waveStage or wavePhase == "Off" then
+		stageFirstWave = stage ~= waveStage
+		waveStage = stage
+		breather(stage <= 1 and W.FirstDelay or W.StageStartDelay, runTime)
+		return
+	end
+	if wavePhase == "Breather" then
+		if nearPortal() then
+			-- someone is charging the portal: the next wave waits for them
+			if waveTimer < W.PortalHoldSeconds then
+				breather(W.PortalHoldSeconds, runTime)
+			end
+			return
+		end
+		waveTimer -= dt
+		if waveTimer <= 0 then
+			if not startWave() then
+				breather(1, runTime)
+			end
+		end
+		return
+	end
+	waveTimer -= dt
+	if wavePhase == "Pouring" then
+		pourWave(dt)
+		if #waveQueue == 0 then
+			wavePhase = "Fighting"
+		end
+	end
+	local alive = waveAlive() + #waveQueue
+	setWaveLeft(alive)
+	if wavePhase == "Fighting" and (alive <= math.max(W.ClearMin or 0, math.floor(waveTotal * W.ClearShare)) or waveTimer <= 0) then
+		breather(W.BreatherSeconds, runTime)
 	end
 end
 
@@ -16749,8 +17295,7 @@ end
 -- WAVE when Config.Waves.Enabled (startWave).
 function EnemySpawner.MiniWave()
 	if Config.Waves.Enabled then
-		startWave()
-		return
+		return -- waves keep their own state machine (stepWaves)
 	end
 	local row = EnemyData.GetSpawnRow(progressionTime())
 	-- never a ring of Spitters (Ranged): a full circle of acid has no safe side; never
@@ -16911,7 +17456,12 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 	end
 
 	if rng:NextNumber() < (def.GemChance or 1) then
-		ctx.XPSystem.SpawnGem(pos, gemValue(def.Gem, def.XPScale or 1))
+		-- wave members (stepWaves) and, with waves on, the boss fight's crowd and the surge
+		-- (the only XP for a minute or two: without it the level-ups dried up, then came 5-6
+		-- at once at the portal)
+		local phase = ctx.StageManager.GetPhase()
+		local waveXP = (e.WaveId or (Config.Waves.Enabled and not e.Boss and (phase == "Boss" or phase == "Surge"))) and Config.Waves.XPMult or 1
+		ctx.XPSystem.SpawnGem(pos, gemValue(def.Gem, (def.XPScale or 1) * waveXP))
 		table.insert(drops, "XP")
 	end
 	if rp then
@@ -16958,7 +17508,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		Fx.Warn("pop", pos.X, pos.Z, e.Radius * 2, "dust")
 	else
 		if rp then
-			local paid = ctx.GoldSystem.OnKill(rp, pos)
+			local paid = ctx.GoldSystem.OnKill(rp, pos, e.WaveId and Config.Waves.GoldChanceMult or 1)
 			if paid and paid > 0 then table.insert(drops, "Gold") end
 		end
 		local drop = ctx.XPSystem.RollFloorPickup(pos, rp and rp.Stats.Luck or 0)
@@ -17151,18 +17701,25 @@ function EnemySpawner.Step(dt: number)
 		nextEliteAt = Config.Pacing.EliteFirst
 		nestStage = 0 -- a new run: the nest schedule starts over
 		waveStage = 0
+		runWave = 0
+		lastWaveBase = 0
+		wavePhase = "Off"
 		table.clear(waveQueue)
+		local state = Remotes.State()
+		state:SetAttribute("Wave", 0)
+		state:SetAttribute("WaveNext", 0)
+		state:SetAttribute("WaveLeft", 0)
 	end
 	lastRunTime = runTime
 	calmLeft = math.max(0, calmLeft - dt)
 	lullLeft = math.max(0, lullLeft - dt)
 	sinceWave += dt
-	if runTime >= nextEliteAt and ctx.StageManager.GetPhase() == "Explore" then
+	if runTime >= nextEliteAt and ctx.StageManager.GetPhase() == "Explore" and not Config.Waves.Enabled then
 		nextEliteAt = runTime + Config.Pacing.EliteEvery / (1 + 0.12 * math.min(8, ctx.StageManager.GetStage() - 1))
 		scheduledElite()
 	end
 	stepNests(dt, runTime)
-	stepWave(dt)
+	stepWaves(dt, runTime)
 	spawnTimer += dt
 	if spawnTimer >= Config.Spawn.TickSeconds then
 		spawnTimer = 0
@@ -17604,8 +18161,9 @@ end
 
 -- Normal kill: 1-3 gold with Config.Gold.KillGoldChance (x the run's GoldMult: items, the
 -- Bargain Shrine). pos (where the enemy died) only feeds the coin burst clients draw.
-function GoldSystem.OnKill(rp, pos: Vector3?)
-	if rng:NextNumber() < Config.Gold.KillGoldChance then
+-- chanceMult scales the chance (wave enemies: Config.Waves.GoldChanceMult).
+function GoldSystem.OnKill(rp, pos: Vector3?, chanceMult: number?)
+	if rng:NextNumber() < Config.Gold.KillGoldChance * (chanceMult or 1) then
 		local paid = GoldSystem.AddRunGold(rp, rng:NextInteger(Config.Gold.MinPerKill, Config.Gold.MaxPerKill) * (rp.Stats and rp.Stats.GoldMult or 1))
 		if paid > 0 and pos then
 			Fx.Gold(pos, paid, rp.Player.UserId)
@@ -17631,6 +18189,8 @@ function GoldSystem.SyncProfile(player: Player)
 		Difficulty = data.Difficulty,
 		DifficultyClears = data.DifficultyClears,
 		Meta = data.Meta,
+		Heroes = data.Heroes or {}, -- Hero Mastery: { heroId = { XP, Runs } }
+		HeroUpgrades = data.HeroUpgrades or {}, -- { heroId = { upgradeId = level } }
 		OwnedCharacters = data.OwnedCharacters,
 		SelectedCharacter = data.SelectedCharacter,
 		Skins = data.Skins,
@@ -17714,7 +18274,8 @@ end
 -- double tap never buys two levels.
 local function onBuyMeta(player: Player, upgradeId: any, expectedLevel: any)
 	local data = ctx.DataService.GetData(player)
-	if not data or not inLobby(player) or type(upgradeId) ~= "string" or not MetaUpgradeData.Upgrades[upgradeId] then
+	-- only the account upgrades: the stat upgrades are bought per hero (onBuyHeroUpgrade)
+	if not data or not inLobby(player) or not MetaUpgradeData.IsAccount(upgradeId) or not MetaUpgradeData.Upgrades[upgradeId] then
 		return
 	end
 	local owned = data.Meta[upgradeId] or 0
@@ -17738,6 +18299,60 @@ local function onBuyMeta(player: Player, upgradeId: any, expectedLevel: any)
 	ctx.RunManager.Notify(player, string.format("%s upgraded to level %d!", def.Name, owned + 1), Color3.fromRGB(120, 255, 160))
 	GoldSystem.SyncProfile(player)
 end
+
+--[[
+	Hero Mastery: one level of a hero's own upgrade (a stat id or "Signature"). Checked here:
+	in the lobby, a known and owned hero, a known upgrade, the level the client saw (a
+	double tap buys one level), the hero's mastery cap, the max level and the gold.
+]]
+local function onBuyHeroUpgrade(player: Player, heroId: any, upgradeId: any, expectedLevel: any)
+	local data = ctx.DataService.GetData(player)
+	if not data or not inLobby(player) or type(heroId) ~= "string" or type(upgradeId) ~= "string" then
+		return
+	end
+	local hero = CharacterData.Characters[heroId]
+	local def = hero and MetaUpgradeData.HeroDef(heroId, upgradeId)
+	if not def or data.OwnedCharacters[heroId] ~= true then
+		GoldSystem.SyncProfile(player)
+		return
+	end
+	if type(data.HeroUpgrades) ~= "table" then
+		data.HeroUpgrades = {}
+	end
+	local track = data.HeroUpgrades[heroId]
+	local owned = type(track) == "table" and tonumber(track[upgradeId]) or 0
+	owned = owned or 0
+	if type(expectedLevel) ~= "number" or expectedLevel ~= owned then
+		GoldSystem.SyncProfile(player)
+		return
+	end
+	local heroes = type(data.Heroes) == "table" and data.Heroes or {}
+	local mastery = MetaUpgradeData.MasteryFor(type(heroes[heroId]) == "table" and heroes[heroId].XP or 0)
+	if owned + 1 > MetaUpgradeData.HeroCap(mastery, upgradeId, heroId) then
+		ctx.RunManager.Notify(player, string.format("Needs %s Mastery %d.", hero.Name, MetaUpgradeData.RequiredMastery(upgradeId, owned + 1)), Color3.fromRGB(255, 220, 120))
+		GoldSystem.SyncProfile(player)
+		return
+	end
+	local cost = MetaUpgradeData.HeroCostOf(heroId, upgradeId, owned)
+	if not cost then
+		GoldSystem.SyncProfile(player)
+		return
+	end
+	if data.Gold < cost then
+		ctx.RunManager.Notify(player, "Not enough gold.", Color3.fromRGB(255, 120, 120))
+		GoldSystem.SyncProfile(player)
+		return
+	end
+	data.Gold -= cost
+	if type(track) ~= "table" then
+		track = {}
+		data.HeroUpgrades[heroId] = track
+	end
+	track[upgradeId] = owned + 1
+	ctx.RunManager.Notify(player, string.format("%s %s upgraded to level %d!", hero.Name, def.Name, owned + 1), Color3.fromRGB(120, 255, 160))
+	GoldSystem.SyncProfile(player)
+end
+GoldSystem._BuyHeroUpgrade = onBuyHeroUpgrade -- (tests)
 
 local function onEquipSkin(player: Player, characterId: any, skinId: any)
 	local data = ctx.DataService.GetData(player)
@@ -17817,6 +18432,7 @@ function GoldSystem.Start()
 	Remotes.Listen("SelectCharacter", onSelectCharacter, 4)
 	Remotes.Listen("BuyCharacter", onBuyCharacter, 2)
 	Remotes.Listen("BuyMeta", onBuyMeta, 4)
+	Remotes.Listen("BuyHeroUpgrade", onBuyHeroUpgrade, 4)
 	Remotes.Listen("EquipSkin", onEquipSkin, 4)
 	Remotes.Listen("SaveSettings", onSaveSettings, 4)
 	Remotes.Listen("Tutorial", onTutorial, 6)
@@ -18744,6 +19360,8 @@ local lastWrite: { [string]: number } = {}
 local localBoards: { [string]: { [number]: number } } = {} -- "local" mode (and recent writes)
 local names: { [number]: string } = {}
 local submitted: { [string]: boolean } = {} -- runId .. "|" .. board .. "|" .. userId already queued
+local submittedCount = 0 -- entries in `submitted` (cleared past MaxSubmitted: a long-lived lobby)
+local MaxSubmitted = 4096
 local flushTimer = 0
 local flushing = false
 
@@ -18816,7 +19434,14 @@ function LeaderboardService.Submit(player: Player, board: string, value: number,
 		if submitted[once] then
 			return
 		end
+		-- a run is committed once (RunManager), so this guard only matters within one
+		-- commit: forgetting old runs keeps a server that runs for days from growing
+		if submittedCount >= MaxSubmitted then
+			table.clear(submitted)
+			submittedCount = 0
+		end
 		submitted[once] = true
+		submittedCount += 1
 	end
 	value = math.floor(value)
 	local name = storeName(board, day)
@@ -19851,9 +20476,9 @@ end
 -- Dev tools (RunManager "DevCommand": Studio / creator only)
 ------------------------------------------------------------------------------------------
 
--- The weapons that came with the Alchemist, the Engineer and the Necromancer (the held armoury
--- batch in WeaponData.HeldOrder joins once it is released).
-LevelUpSystem.NewWeapons = { "Spear", "Crossbow", "FrostNova", "FireTrail", "HealingTotem", "ChainHook", "Turret", "SoulBolt" }
+-- The weapons that came with the Alchemist, the Engineer and the Necromancer, then the armoury batch.
+LevelUpSystem.NewWeapons = { "Spear", "Crossbow", "FrostNova", "FireTrail", "HealingTotem", "ChainHook", "Turret", "SoulBolt",
+	"WardShields", "Earthsplitter", "Starfall", "Sling", "PlagueCenser", "Sawblade", "VineSnare", "WarHorn", "SpiritWisps", "Vortex" }
 
 --[[
 	evolve = false: gives every weapon in `list` (default NewWeapons; WeaponData.Order = all
@@ -21308,6 +21933,7 @@ type PropOpts = {
 	occluder: boolean?, -- tag "SwarmOccluder"
 	query: boolean?, -- CanQuery on (the dais: the showcase finds its top by raycast)
 	fallback: ((Model, CFrame, number, { [string]: Color3 }, boolean) -> ())?, -- builder for models without a FALLBACK entry
+	stretch: number?, -- widen the piece along its own X axis (one long cliff-face rock instead of two)
 }
 
 local function kitEntry(name: string): any
@@ -21394,13 +22020,14 @@ end
 -- Use native parts instead of the broad triangular faces in the uploaded tuft.
 FALLBACK.GrassTuft = function(m, cf, s, pal)
 	local color = c3(pal, "Grass", P.meadow_600)
-	for i = 1, 3 do
-		local height = 0.65 + (i % 3) * 0.18
+	-- two crossed blades (a third added nothing from the run camera; phones: part count)
+	for i = 1, 2 do
+		local height = 0.7 + (i % 2) * 0.2
 		local angle = i * 2.4
-		local blade = CFrame.new(math.cos(angle) * 0.16, 0.04, math.sin(angle) * 0.16)
-			* CFrame.Angles(0, angle, (i - 2) * 0.22) * CFrame.new(0, height / 2, 0)
-		fpart(m, cf, s, "GrassBlade", Vector3.new(0.10, height, 0.08), blade,
-			color:Lerp(P.meadow_700, (i - 1) * 0.10), false)
+		local blade = CFrame.new(math.cos(angle) * 0.14, 0.04, math.sin(angle) * 0.14)
+			* CFrame.Angles(0, angle, (i - 1.5) * 0.4) * CFrame.new(0, height / 2, 0)
+		fpart(m, cf, s, "GrassBlade", Vector3.new(0.12, height, 0.09), blade,
+			color:Lerp(P.meadow_700, (i - 1) * 0.12), false)
 	end
 end
 FALLBACK.Flowers = function(m, cf, s, pal)
@@ -21632,6 +22259,21 @@ local function whenMeshLoads(name: string, fn: () -> ())
 	table.insert(list :: { () -> () }, fn)
 end
 
+-- Widens every piece of a placed prop by k along the prop's X axis (positions and sizes).
+local function stretchX(container: Model, cf: CFrame, k: number)
+	for _, d in ipairs(container:GetChildren()) do
+		if d:IsA("BasePart") then
+			local rel = cf:ToObjectSpace(d.CFrame)
+			local p = rel.Position
+			d.CFrame = cf * CFrame.new(p.X * k, p.Y, p.Z) * rel.Rotation
+			-- the piece's own X runs along the prop's X (unrotated import): widen it
+			if math.abs(rel.RightVector.X) > 0.99 then
+				d.Size = Vector3.new(d.Size.X * k, d.Size.Y, d.Size.Z)
+			end
+		end
+	end
+end
+
 local function applyOpts(p: BasePart, opts: PropOpts)
 	if opts.shadow == false then
 		p.CastShadow = false
@@ -21646,6 +22288,9 @@ local function fillMesh(container: Model, name: string, cf: CFrame, scale: numbe
 	local model = MeshService.Build(name, cf, palette, scale)
 	if not model then
 		return false
+	end
+	if opts.stretch then
+		stretchX(model, cf, opts.stretch)
 	end
 	for _, d in ipairs(model:GetChildren()) do
 		if d:IsA("BasePart") then
@@ -21671,6 +22316,9 @@ local function prop(parent: Instance, name: string, cf: CFrame, scale: number?, 
 		local build = FALLBACK[name] or o.fallback or catalogFallback(name)
 		if build then
 			build(container, cf, s, kitPalette(name, palette), o.shadow ~= false)
+			if o.stretch then
+				stretchX(container, cf, o.stretch)
+			end
 			for _, d in ipairs(container:GetChildren()) do
 				if d:IsA("BasePart") then
 					applyOpts(d, o)
@@ -22377,17 +23025,42 @@ local function smoothPath(ctrl: { Vector2 }, step: number): { Vector2 }
 	return out
 end
 
--- Flat dirt path with a soft (grass-dirt) edge. Segments butt end to end (no overlap,
--- so no z-fighting seams from the high run camera); a disc a hair lower fills the outside
--- of every bend. Registered in arena.Paths (decoration keeps off it).
+-- Flat dirt path with a soft (grass-dirt) edge: two slabs per segment (edge + core), no
+-- extra parts at the bends. Each segment is lengthened at both ends by the mitre of its
+-- bend, so neighbours overlap and close the wedge on the outside of every bend;
+-- neighbours sit 0.06 studs apart in height (odd / even), so the overlaps never
+-- z-fight from the high run camera. Registered in arena.Paths (decoration keeps off it).
 local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Color3, edge: Color3, yBase: number)
-	local pts = smoothPath(ctrl, 18)
+	-- nearly straight runs (under 3° of turn, up to 40 studs) become one segment
+	local raw = smoothPath(ctrl, 18)
+	local pts: { Vector2 } = { raw[1] }
+	for i = 2, #raw - 1 do
+		local from, here, nxt = pts[#pts], raw[i], raw[i + 1]
+		local d0, d1 = here - from, nxt - here
+		local straight = d0.Magnitude > 1e-3 and d1.Magnitude > 1e-3 and d0.Unit:Dot(d1.Unit) > math.cos(math.rad(3))
+		if not (straight and (nxt - from).Magnitude <= 40) then
+			table.insert(pts, here)
+		end
+	end
+	table.insert(pts, raw[#raw])
 	local edgeW = width + 2.8
 	local h = arena.Half
 	-- the path runs into the cliffs on the north / west / east sides (it stops at their
 	-- foot) and fades into the tree line past the low south rim
 	local function beyond(p: Vector2): boolean
 		return math.abs(p.X) > h + 2 or p.Y < -h - 2 or p.Y > h + 34
+	end
+	-- tan(half bend) at point i (0 at the ends; capped so a sharp bend cannot spike)
+	local function mitre(i: number): number
+		if i <= 1 or i >= #pts then
+			return 0
+		end
+		local d0, d1 = pts[i] - pts[i - 1], pts[i + 1] - pts[i]
+		if d0.Magnitude < 1e-3 or d1.Magnitude < 1e-3 then
+			return 0
+		end
+		local bend = math.acos(math.clamp(d0.Unit:Dot(d1.Unit), -1, 1))
+		return math.tan(math.min(bend, math.rad(70)) / 2)
 	end
 	for i = 1, #pts - 1 do
 		local a, b = pts[i], pts[i + 1]
@@ -22396,15 +23069,14 @@ local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Co
 		end
 		local d = b - a
 		local len = d.Magnitude
-		local mid = (a + b) / 2
+		local dir = d.Unit
 		local yaw = math.atan2(-d.X, -d.Y)
-		slab(arena.Decor, "PathEdge", W(arena, mid.X, mid.Y, yBase), edgeW, len, yaw, edge)
-		slab(arena.Decor, "Path", W(arena, mid.X, mid.Y, yBase + 0.16), width, len, yaw, core, 0.2)
-		-- bend fill only where the bend is wide enough to open a visible gap
-		local bend = i > 1 and math.acos(math.clamp(d.Unit:Dot((a - pts[i - 1]).Unit), -1, 1)) or 0
-		if bend > math.rad(4) then
-			disc(arena.Decor, "PathEdgeBend", W(arena, a.X, a.Y, yBase - 0.06), edgeW / 2, edge)
-			disc(arena.Decor, "PathBend", W(arena, a.X, a.Y, yBase + 0.08), width / 2, core)
+		local lift = (i % 2) * 0.06
+		local ma, mb = mitre(i), mitre(i + 1)
+		for _, layer in ipairs({ { "PathEdge", edgeW, edge, yBase, 0.1 }, { "Path", width, core, yBase + 0.16, 0.2 } }) do
+			local ea, eb = layer[2] / 2 * ma, layer[2] / 2 * mb
+			local mid = (a + b) / 2 + dir * ((eb - ea) / 2)
+			slab(arena.Decor, layer[1], W(arena, mid.X, mid.Y, layer[4] + lift), layer[2], len + ea + eb, yaw, layer[3], layer[5])
 		end
 		table.insert(arena.Paths, { A = Vector3.new(a.X, 0, a.Y), B = Vector3.new(b.X, 0, b.Y), W = edgeW / 2 })
 	end
@@ -22510,9 +23182,12 @@ end
 --     colour (moss, snow, sand, ash); about half the chunks get a lower ledge in front, so
 --     the face steps like a real cliff; the tree line stands on the top (treeLine);
 --   * south (camera side): a low broken rim (style.South) the run camera sees over.
--- Cost per tall chunk (~35 studs): block + cap + one kit rock face (3 mesh parts), Ruins
--- a ledge (+2) instead of the rock; south rim one part per ~20 studs. All
--- decoration: anchored, no collision / queries / touch; only the big bodies cast shadows.
+-- Cost per tall chunk (~48 studs): block + cap + one kit rock face (3 mesh parts, widened
+-- along the wall with PropOpts.stretch so one rock covers a long chunk), Ruins a capless
+-- ledge (+1) instead of the rock; south rim one part per ~27 studs. Long chunks keep the
+-- arena near its pre-cliff part count (phones; docs/PERFORMANCE.md "Arena part counts").
+-- All decoration: anchored, no collision / queries / touch (the invisible Boundary walls
+-- block); only the big bodies cast shadows.
 ------------------------------------------------------------------------------------------
 
 type CliffStyle = {
@@ -22527,8 +23202,8 @@ type CliffStyle = {
 	Face: { any }?, -- { kit rock, palette }: the big low-poly rock in front of each tall chunk
 }
 
-local CLIFF_STEP = 31 -- studs between chunk centres on the tall sides
-local CLIFF_STEP_SOUTH = 19
+local CLIFF_STEP = 43 -- studs between chunk centres on the tall sides
+local CLIFF_STEP_SOUTH = 26
 local CLIFF_DEPTH = 24 -- depth of a tall chunk (its flat top carries the tree line)
 
 -- Top height of the cliff at `t` along `side` (smooth, seeded per side).
@@ -22590,35 +23265,38 @@ local function cliffs(arena: Arena, style: CliffStyle)
 			local hgt = cliffTop(arena, side, t) + jitter(south and 0.5 or 1.5)
 			local color = pick(style.Rock)
 			if south then
-				local len = rng:NextNumber(18, 23)
+				local len = rng:NextNumber(25, 30)
 				cliffBlock(arena, style, along, out, t, h + rng:NextNumber(0.3, 1.0), len, rng:NextNumber(5, 8), hgt, color, false, true)
 			else
-				local len = rng:NextNumber(33, 39)
+				local len = rng:NextNumber(45, 52)
 				local face = style.Face
 				-- Rocky face: a big kit rock (low-poly mesh, the biome's own) in front of
 				-- the block hides its flat front; the block behind gives the height and
 				-- the flat top. Masonry (Ruins) keeps cut blocks with stepped ledges.
 				-- (sized to cover most of the block's length, never taller than the block)
-				local faceScale = face and math.clamp(len * rng:NextNumber(0.62, 0.78) / 4.9, hgt * 0.5 / 2.9, hgt * 0.95 / 2.9) or 0
+				local faceWidth = len * rng:NextNumber(0.62, 0.78)
+				local faceScale = face and math.clamp(faceWidth / 4.9, hgt * 0.5 / 2.9, hgt * 0.95 / 2.9) or 0
+				local faceStretch = face and math.clamp(faceWidth / (4.9 * faceScale), 1, 1.7) or 1
 				local ledge = not face and rng:NextNumber() < 0.45
 				local ledgeDepth = rng:NextNumber(6, 9)
 				local setback = face and faceScale * 1.2 or (ledge and ledgeDepth - 1.5 or rng:NextNumber(0.3, 2.4))
 				local cf = cliffBlock(arena, style, along, out, t, h + setback, len, CLIFF_DEPTH + jitter(3), hgt, color, true)
 				if face then
-					-- long side along the wall; turned up to 15°, its deepest point stays outside
-					local fyaw = math.deg(math.atan2(-along.Y, along.X)) + jitter(15) + (rng:NextNumber() < 0.5 and 180 or 0)
+					-- long side along the wall; turned up to 15° (less when widened), its deepest point stays outside
+					local fyaw = math.deg(math.atan2(-along.Y, along.X)) + jitter(15 / faceStretch) + (rng:NextNumber() < 0.5 and 180 or 0)
 					local fp = along * (t + jitter(4)) + out * (h + 2.25 * faceScale - 0.3)
 					local fcf = CFrame.new(W(arena, fp.X, fp.Y, -0.3)) * yawCF(fyaw)
-					prop(arena.Decor, face[1], fcf, faceScale, face[2], { shadow = true })
+					prop(arena.Decor, face[1], fcf, faceScale, face[2], { shadow = true, stretch = faceStretch > 1.02 and faceStretch or nil })
 				end
 				if ledge then
 					local lh = hgt * rng:NextNumber(0.35, 0.6)
-					cliffBlock(arena, style, along, out, t + jitter(len * 0.2), h + 0.3, len * rng:NextNumber(0.5, 0.75), ledgeDepth, lh, pick(style.Rock), false)
+					-- capless: a cut stone step (one part) under the wall's capped top
+					cliffBlock(arena, style, along, out, t + jitter(len * 0.2), h + 0.3, len * rng:NextNumber(0.45, 0.65), ledgeDepth, lh, pick(style.Rock), false, true)
 				end
 				if style.Masonry then
 					-- merlons on the wall top (a broken battlement)
 					for _, dx in ipairs({ -len * 0.3, len * 0.3 }) do
-						if rng:NextNumber() < 0.6 then
+						if rng:NextNumber() < 0.5 then
 							local at = cf * CFrame.new(dx + jitter(2), (hgt + 1) / 2 + 1.1, 0)
 							deco(arena.Decor, { Name = "Merlon", Size = Vector3.new(3.4, 2.2, 3), CFrame = at - out3 * (CLIFF_DEPTH / 2 - 2), Color = style.Rock[1], CastShadow = false })
 						end
@@ -22629,7 +23307,7 @@ local function cliffs(arena: Arena, style: CliffStyle)
 					deco(arena.Decor, { Name = "CliffSeam", Size = Vector3.new(len * 0.55, 0.35, 0.7), CFrame = CFrame.new(W(arena, sp.X, sp.Y, 0.2)) * yawCF(math.deg(math.atan2(-along.Y, along.X))), Color = style.Seam, Material = NEON })
 				end
 				-- a kit rock at the foot (it pokes at most a stud into the play square)
-				if style.Foot and math.abs(t) < h - 6 and rng:NextNumber() < (face and 0.15 or 0.3) then
+				if style.Foot and math.abs(t) < h - 6 and rng:NextNumber() < (face and 0.12 or 0.25) then
 					local f = pick(style.Foot)
 					local s = rng:NextNumber(f[2], f[3])
 					local d = h + kitRadius(f[1]) * s - 1
@@ -22657,8 +23335,8 @@ type Vignette = (Arena, number, number) -> ()
 
 local function campfire(arena: Arena, x: number, z: number, stone: Pal?, wood: Color3?)
 	local w = wood or P.wood_600
-	for k = 0, 5 do
-		local a = k / 6 * TAU + jitter(0.2)
+	for k = 0, 4 do
+		local a = k / 5 * TAU + jitter(0.2)
 		decor(arena, "Rock_Small", x + math.cos(a) * 1.5, z + math.sin(a) * 1.5, nil, rng:NextNumber(0.55, 0.75), stone)
 	end
 	disc(arena.Decor, "Ash", W(arena, x, z, 0.06), 1.2, mix(P.cinder_500, P.dirt_500, 0.4))
@@ -22681,8 +23359,7 @@ end
 local function supplies(arena: Arena, x: number, z: number, wood: Pal?)
 	local yaw = rng:NextNumber(0, 360)
 	decor(arena, "Crate", x, z, yaw, 1.0, wood, { shadow = true })
-	decor(arena, "Crate", x + 2.1, z + jitter(0.4), yaw + jitter(15), 0.9, wood)
-	prop(arena.Decor, "Crate", CFrame.new(W(arena, x + 0.9, z, 1.95)) * yawCF(yaw + 25), 0.8, wood, { shadow = false })
+	prop(arena.Decor, "Crate", CFrame.new(W(arena, x + 0.2, z, 1.95)) * yawCF(yaw + 25), 0.8, wood, { shadow = false })
 	decor(arena, "Barrel", x - 1.8, z + 1.2, nil, 1.0, wood)
 	if rng:NextNumber() < 0.5 then
 		decor(arena, "Barrel", x - 1.6, z - 0.9, nil, 0.9, wood)
@@ -22979,9 +23656,9 @@ local function buildForest(arena: Arena)
 	-- camera side, then the tree line (on the cliff tops)
 	vignettes(arena, {
 		function(a, x, z) campfire(a, x, z) end,
-		function(a, x, z) ring(a, x, z, "Mushroom", 5, 3.2, 1.2, 1.7) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 4, 3.0, 1.2, 1.7) end,
 		function(a, x, z) supplies(a, x, z) end,
-		function(a, x, z) cluster(a, x, z, { { "Mushroom", 1.1, 1.6 }, { "Fern", 1.3, 1.8 }, { "Stump", 0.8, 1.0 } }, 5, 3.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Mushroom", 1.1, 1.6 }, { "Fern", 1.3, 1.8 }, { "Stump", 0.8, 1.0 } }, 4, 3.5) end,
 		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Rock_Small", 0.8, 1.2 }, { "Flowers", 1.2, 1.5 } }, 3, 3) end,
 		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.6, 1.0, 1.4) end,
 		function(a, x, z) cluster(a, x, z, { { "Crystal", 0.8, 1.2 }, { "Rock_Small", 0.8, 1.2 } }, 4, 2.5) end,
@@ -23288,7 +23965,7 @@ local function buildRuins(arena: Arena)
 		function(a, x, z) cluster(a, x, z, { { "CrystalCluster", 0.8, 1.1 }, { "Crystal", 0.8, 1.2 }, { "Rock_Small", 0.8, 1.2 } }, 4, 3) end,
 		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Ruin_Block", 0.5, 0.8 }, { "Flowers", 1.2, 1.5 } }, 3, 3) end,
 		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.8, 1.0, 1.5) end,
-		function(a, x, z) cluster(a, x, z, { { "Ruin_Block", 0.5, 0.8 }, { "Rock_Small", 0.8, 1.2 }, { "Fern", 1.2, 1.6 } }, 5, 4) end,
+		function(a, x, z) cluster(a, x, z, { { "Ruin_Block", 0.5, 0.8 }, { "Rock_Small", 0.8, 1.2 }, { "Fern", 1.2, 1.6 } }, 4, 4) end,
 	})
 	cliffs(arena, {
 		Rock = { RUIN_PAL.Stone, RUIN_PAL.Stone3, mix(RUIN_PAL.Stone, RUIN_PAL.Stone2, 0.5) },
@@ -23636,10 +24313,10 @@ local function buildSwamp(arena: Arena)
 	-- reeds along the edge, then the mangrove / willow line
 	vignettes(arena, {
 		function(a, x, z) campfire(a, x, z, SWAMP_PEBBLE, P.wood_700) end,
-		function(a, x, z) ring(a, x, z, "Mushroom", 5, 3.0, 1.2, 1.8) end,
+		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.8, 1.2, 1.8) end,
 		function(a, x, z) supplies(a, x, z, SWAMP_WOOD) end,
 		function(a, x, z) decor(a, "Swamp_Lantern", x, z, 0, 0.9); cluster(a, x, z, { { "Reeds", 1.2, 1.6 }, { "Mushroom", 1.0, 1.4 } }, 4, 3) end,
-		function(a, x, z) cluster(a, x, z, { { "Swamp_Stump", 0.7, 0.9 }, { "Mushroom", 1.1, 1.5 }, { "Fern", 1.1, 1.5, SWAMP_FERN } }, 5, 3.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Swamp_Stump", 0.7, 0.9 }, { "Mushroom", 1.1, 1.5 }, { "Fern", 1.1, 1.5, SWAMP_FERN } }, 4, 3.5) end,
 		function(a, x, z) ring(a, x, z, "Mushroom", 4, 2.4, 1.0, 1.4) end,
 	})
 	cliffs(arena, {
@@ -23903,9 +24580,9 @@ local function buildSnow(arena: Arena)
 	vignettes(arena, {
 		function(a, x, z) campfire(a, x, z, SNOW_PEBBLE) end,
 		function(a, x, z) supplies(a, x, z, SNOW_WOOD) end,
-		function(a, x, z) cluster(a, x, z, { { "Ice_Crystal", 0.7, 1.1 }, { "Snow_Drift", 0.9, 1.2 }, { "Rock_Small", 0.8, 1.1, SNOW_PEBBLE } }, 5, 3.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Ice_Crystal", 0.7, 1.1 }, { "Snow_Drift", 0.9, 1.2 }, { "Rock_Small", 0.8, 1.1, SNOW_PEBBLE } }, 4, 3.5) end,
 		function(a, x, z) decor(a, "Snow_Lamp", x, z, 0, 0.9); cluster(a, x, z, { { "Snow_Bush", 0.9, 1.2 }, { "Snow_Drift", 0.9, 1.3 } }, 3, 3) end,
-		function(a, x, z) cluster(a, x, z, { { "Ice_Crystal", 0.6, 1.0 }, { "Ice_Crystal", 0.8, 1.2 } }, 4, 2.5) end,
+		function(a, x, z) cluster(a, x, z, { { "Ice_Crystal", 0.6, 1.0 }, { "Ice_Crystal", 0.8, 1.2 } }, 3, 2.5) end,
 		function(a, x, z) decor(a, "Banner", x, z, 180, 1.0); cluster(a, x, z, { { "Snow_Drift", 0.9, 1.2 } }, 2, 2.5) end,
 	})
 	cliffs(arena, {
@@ -27857,7 +28534,25 @@ end
 
 local function newRunPlayer(player: Player)
 	local data = ctx.DataService.GetData(player)
-	local meta = table.clone(data.Meta)
+	-- the stat sheet's permanent levels: the account upgrades (Revive / Reroll / Skip) from
+	-- Meta, the selected hero's own stat track and its Signature (Hero Mastery); the old
+	-- shared stat levels left in Meta are never read
+	local meta = {}
+	for _, id in ipairs(MetaUpgradeData.AccountOrder) do
+		local n = tonumber(data.Meta[id])
+		if n and n > 0 then
+			meta[id] = n
+		end
+	end
+	local track = type(data.HeroUpgrades) == "table" and data.HeroUpgrades[data.SelectedCharacter]
+	if type(track) == "table" then
+		for _, id in ipairs(MetaUpgradeData.HeroOrder()) do
+			local n = tonumber(track[id])
+			if n and n > 0 then
+				meta[id] = n
+			end
+		end
+	end
 	local function perRun(id: string): number
 		local def = MetaUpgradeData.Upgrades[id]
 		return (meta[id] or 0) * (def.PerRun or 1)
@@ -27925,6 +28620,7 @@ local function resetPlayerAttributes(player: Player)
 	player:SetAttribute("Paused", false)
 	player:SetAttribute("AuraEvo", nil)
 	player:SetAttribute("SteadyAim", nil)
+	player:SetAttribute("SteadyAimBonus", nil)
 	player:SetAttribute("ReviveProgress", nil)
 	player:SetAttribute("PartnerRevivesLeft", nil)
 	player:SetAttribute("AwaitingRevive", nil)
@@ -28041,7 +28737,7 @@ local function beginRun(here: boolean?)
 		for _, id in ipairs(curses) do
 			table.insert(names, CurseData.Curses[id].Name)
 		end
-		RunManager.Broadcast(string.format("Curses: %s · %s gold", table.concat(names, ", "), CurseData.GoldText(ctx.RunModifiers.GoldMult())), Color3.fromRGB(230, 150, 160))
+		RunManager.Broadcast(string.format("Curses: %s · %s gold", table.concat(names, ", "), CurseData.GoldText(CurseData.GoldMult(ctx.RunModifiers.Active()))), Color3.fromRGB(230, 150, 160))
 	end
 	if ctx.RunModifiers.IsEndless() then
 		RunManager.Broadcast("ENDLESS: no way home, only deeper.", Color3.fromRGB(190, 160, 255), true)
@@ -28121,6 +28817,8 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 		CurseMult = ctx.RunModifiers.GoldMult(),
 		DailyScored = rp.DailyScored == true,
 	})
+	-- Hero Mastery: the same XP, only for the hero played (DEV runs returned above)
+	local masteryInfo = ctx.AccountService.AwardMastery and ctx.AccountService.AwardMastery(rp.Player, rp.CharacterId, accountInfo and accountInfo.Gained or 0) or nil
 	-- the same score formula for both modes; Standard and Endless rank on separate boards
 	local score = ctx.LeaderboardService.RunScore({ Cleared = cleared, Bosses = bossKills, Level = rp.Level, Kills = rp.Kills, Seconds = t })
 	local scoreBoard = rp.Endless and "ScoreEndless" or "Score"
@@ -28136,7 +28834,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	-- here by the server; DEV-tainted runs returned above and never add to it
 	data.Stats.TimePlayed = math.floor((tonumber(data.Stats.TimePlayed) or 0) + math.max(0, t))
 	ctx.LeaderboardService.Submit(rp.Player, "Playtime", data.Stats.TimePlayed, nil, rp.RunId)
-	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0 }
+	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Mastery = masteryInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0 }
 	return newBest, unlocked
 end
 
@@ -28235,8 +28933,9 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		Unlocked = unlocked,
 		Achievements = achievements, -- unlocked this run: { {Id, Name, Reward, Icon} }
 		Curses = table.clone(ctx.RunModifiers.Active()), -- the run's curses (CurseData ids)
-		CurseGold = ctx.RunModifiers.GoldMult(),
+		CurseGold = CurseData.GoldMult(ctx.RunModifiers.Active()), -- curses only (difficulty gold is separate)
 		Account = info and info.Account or nil, -- { Gained, Parts, From, To, Into, Need, Rewards }
+		Mastery = info and info.Mastery or nil, -- { Hero, Gained, From, To } (Hero Mastery)
 		Daily = info and info.Daily or nil, -- { Scored, Score, Text, NewBest, Best }
 		Seconds = Config.Run.ResultsSeconds,
 		InLobby = inLobby,
@@ -30271,7 +30970,7 @@ local function sendHome(list: { Player }, why: string?)
 			setTravel(p, "ToLobby")
 			table.insert(ready, p)
 		else
-			notify(p, "Couldn't save before travelling: you can keep playing here.", WARN)
+			notify(p, "Couldn't save before traveling: you can keep playing here.", WARN)
 		end
 	end
 	if #ready == 0 then
@@ -30756,7 +31455,8 @@ return SpatialGrid
 	run itself (players, lives, results); this module owns what happens on each stage:
 
 	  Explore  the arena of this stage with a PORTAL at a random clear spot. The swarm
-	           comes as usual (mini-waves every Config.Run.MiniWaveInterval). The portal is
+	           comes in numbered waves (Config.Waves, EnemySpawner stepWaves; the old
+	           mini-waves only with Config.Waves.Enabled = false). The portal is
 	           dormant for PortalLockSeconds; when the lock ends (and the stage banner has
 	           gone: RevealDelaySeconds) it is REVEALED (PortalHint / PortalReveal: the HUD
 	           arrow, banner, beacon and minimap ping) and any living player standing in
@@ -31727,6 +32427,7 @@ local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponData)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
+local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 local Fx = require(script.Parent.Fx)
 
 local WeaponSystem = {}
@@ -31816,6 +32517,13 @@ end
 -- Helpers
 ------------------------------------------------------------------------------------------
 
+-- The hero's trait value with its Signature upgrade (Hero Mastery; rp.Meta.Signature =
+-- the level bought for this hero), or `fallback` when the hero has no signature entry.
+local function traitValue(rp, fallback: number): number
+	return MetaUpgradeData.TraitValue(rp.CharacterId, rp.Meta and rp.Meta.Signature or 0) or fallback
+end
+WeaponSystem._TraitValue = traitValue -- (tests)
+
 -- Effective stats of one weapon for one player (WeaponData row × stat sheet).
 local function weaponStats(rp, w)
 	local row = WeaponData.GetStats(w.Id, w.Level, w.Evolved)
@@ -31827,12 +32535,12 @@ local function weaponStats(rp, w)
 	local mult = s.Might * (rp.SteadyAim and (1 + ((w.Id == "Longbow" and rp.SteadyAimBonus or rp.SteadyAimOther) or 0)) or 1)
 	-- Volatile Mix (Alchemist): burning / area weapons hit harder
 	if hero and hero.AreaDamage and def and def.Area then
-		mult *= 1 + hero.AreaDamage
+		mult *= 1 + traitValue(rp, hero.AreaDamage)
 	end
 	local duration = row.duration * s.DurationMult
 	-- Tinkerer (Engineer): turrets and totems last longer
 	if hero and hero.DeployLife and def and def.Deployable then
-		duration *= 1 + hero.DeployLife
+		duration *= 1 + traitValue(rp, hero.DeployLife)
 	end
 	return {
 		damage = row.damage * mult,
@@ -31927,12 +32635,15 @@ end
 --   vn = { {x, z, radius, evo} }            Vine Snare sprouting      vt = { {x, z, radius} } thorns
 --   hn = { {x, z, yaw, range, halfDeg, evo} } War Horn shockwave (halfDeg 180 = full ring)
 --   wb = { {x, z, reflect} }                a Ward Shield smashed an enemy projectile
+--   ob = { {userId, id, seq, radius, growth, spin, angle} } an orbiting projectile: the client
+--                                           draws it around the owner's live character (radius < 0 = stop)
+--   cl = { {id, seq, radius, evo} }         a Plague Censer cloud: the client draws the cloud on that marker
 --   vx = { {x, z, radius, life, evo} }      a Vortex opens            vi = { {x, z, radius, evo} } implosion
 ------------------------------------------------------------------------------------------
 
 local wfx: { [string]: { any } } = {}
 local wfxAny = false
-local WFX_CAPS = { nv = 12, fp = 48, tp = 16, hk = 16, fk = 16, lb = 16, sh = 16, qk = 40, mt = 12, vn = 16, vt = 12, hn = 12, wb = 8, vx = 8, vi = 8 }
+local WFX_CAPS = { nv = 12, fp = 48, tp = 16, hk = 16, fk = 16, lb = 16, sh = 16, qk = 40, ob = 96, cl = 16, mt = 12, vn = 16, vt = 12, hn = 12, wb = 8, vx = 8, vi = 8 }
 
 local function r1(n: number): number
 	return math.floor(n * 10 + 0.5) / 10
@@ -32031,21 +32742,99 @@ end
 ]]
 local SWING_HIT_DELAY = 0.08
 local SWING_INNER = 1.5 -- enemies this close are always inside the swing
+local SWING_AIM_CANDIDATES = 24 -- in-reach enemies tried as the aim direction
+
+-- True when enemy e (its body circle) is inside a swing from origin toward dir.
+local function inSwing(e, origin: Vector3, dir: Vector3, reach: number, half: number, full: boolean?): boolean
+	local rel = (e.Pos - origin) * FLAT
+	local d = rel.Magnitude
+	if d > reach + e.Radius then
+		return false
+	end
+	if d <= SWING_INNER + e.Radius or full then
+		return true
+	end
+	local off = math.acos(math.clamp(rel:Dot(dir) / d, -1, 1)) - half
+	-- inside the sector, or overlapping one of its edges
+	return off <= 0 or (off < math.pi / 2 and d * math.sin(off) <= e.Radius)
+end
+
+-- An enemy a weapon hit can actually hurt (a boss's collapse / a tunnelling Burrower can't).
+local function hittable(e): boolean
+	return e.Alive and not e.Invulnerable and not e.Dying and not e.Untargetable
+end
+local function skipUnhittable(e): boolean
+	return not hittable(e)
+end
+local function skipUnhittableOrStatic(e): boolean
+	return not hittable(e) or e.Def.Static == true
+end
+
+--[[
+	Auto aim for a swing (owner): the direction whose cut hits the most enemies that are in
+	reach NOW, measured by their body edge (a boss or a Nest whose centre is past the reach
+	still counts; the old aim at the nearest CENTRE turned the cut toward a small enemy just
+	out of reach and hit nothing). Each in-reach enemy's direction is a candidate; ties go
+	to the closer edge. `both`: the backhand cut (opposite) also lands. Nothing in reach:
+	the nearest hittable moving enemy within `look` studs, so the swing visibly turns toward
+	incoming enemies; nil = keep the facing.
+]]
+local function swingAim(origin: Vector3, reach: number, half: number, both: boolean, look: number): Vector3?
+	local n = grid():QueryCircle(origin.X, origin.Z, reach, queryBuf)
+	local cands = {}
+	for i = 1, n do
+		local e = queryBuf[i]
+		if hittable(e) then
+			cands[#cands + 1] = e
+		end
+	end
+	if #cands > 0 then
+		local function edge(e)
+			return ((e.Pos - origin) * FLAT).Magnitude - e.Radius
+		end
+		table.sort(cands, function(a, b)
+			return edge(a) < edge(b)
+		end)
+		local bestDir, bestScore = nil, -1
+		for i = 1, math.min(#cands, SWING_AIM_CANDIDATES) do
+			local dir = flatDir(cands[i].Pos - origin, Vector3.zero)
+			if dir.Magnitude > 0 then
+				local score = 0
+				for _, e in ipairs(cands) do
+					if inSwing(e, origin, dir, reach, half) or (both and inSwing(e, origin, -dir, reach, half)) then
+						score += 1
+					end
+				end
+				if score > bestScore then
+					bestDir, bestScore = dir, score
+				end
+			end
+		end
+		if bestDir then
+			return bestDir
+		end
+	end
+	local target = grid():Nearest(origin.X, origin.Z, look, skipUnhittableOrStatic)
+		or grid():Nearest(origin.X, origin.Z, look, skipUnhittable)
+	if target then
+		local dir = flatDir(target.Pos - origin, Vector3.zero)
+		return dir.Magnitude > 0 and dir or nil
+	end
+	return nil
+end
+WeaponSystem._SwingAim = swingAim -- (tests)
 
 function Fire.Whip(rp, w, s, def)
 	local params = def.Params
 	local evo = w.Evolved and def.Evolution or nil
 	local reach = params.Reach * s.area
 	local half = math.rad(params.Arc) / 2
-	-- auto aim (owner): the forehand cut faces the nearest enemy (looking well past the
-	-- reach so the swing visibly turns toward incoming enemies), else the facing
+	-- auto aim (owner): the forehand cut faces the enemies it can hit (swingAim), else
+	-- turns toward the nearest one within max(3 x reach, 30) studs, else the facing
 	local facing = rp.Facing
 	if rp.Root then
 		local origin = ground(rp.Root.Position)
-		local target = nearestEnemies(origin, math.max(reach * 3, 30), 1)[1]
-		if target then
-			facing = flatDir(target.Pos - origin, rp.Facing)
-		end
+		facing = swingAim(origin, reach, half, s.amount >= 2, math.max(reach * 3, 30)) or rp.Facing
 	end
 	local tier = visualTier(w)
 	-- Riposte perk: every 3rd attack the forehand cut covers the full circle
@@ -32073,15 +32862,7 @@ function Fire.Whip(rp, w, s, def)
 				local hits = table.move(queryBuf, 1, n, 1, {})
 				for _, e in ipairs(hits) do
 					if e.Alive then
-						local rel = (e.Pos - origin) * FLAT
-						local d = rel.Magnitude
-						local inside = d <= SWING_INNER + e.Radius or (full and d <= reach + e.Radius)
-						if not inside then
-							local off = math.acos(math.clamp(rel:Dot(dir) / d, -1, 1)) - half
-							-- inside the sector, or overlapping one of its edges
-							inside = off <= 0 or (off < math.pi / 2 and d * math.sin(off) <= e.Radius)
-						end
-						if inside then
+						if inSwing(e, origin, dir, reach, half, full) then
 							hitEnemy(rp, e, s.damage, origin, s.knockback)
 							if evo and healed < evo.LifestealCapPerSwing then
 								healed += evo.Lifesteal
@@ -32317,6 +33098,8 @@ function Fire.Axe(rp, w, s, def)
 			p.Pierce = s.pierce
 			p.Rehit = 0.5
 			p.Pos = origin
+			-- drawn around the hero's live position on clients (VFX K.setOrbit)
+			pushFx("ob", { rp.Player.UserId, p.Id, p.Seq, r1(p.OrbitRadius), r1(p.OrbitGrowth), p.OrbitSpin, math.floor((p.Angle % TAU) * 1000 + 0.5) / 1000 })
 		else
 			p.Kind = "Arc"
 			p.Visual = visualByte(params.Visual, w)
@@ -33047,7 +33830,7 @@ onWeaponKill = function(rp, pos: Vector3, dead)
 		return
 	end
 	local now = ctx.RunManager.GetRunTime()
-	if now < (rp.SoulAt or 0) or rng:NextNumber() >= trait.Chance or #freeIds < EXTRA_MIN_FREE then
+	if now < (rp.SoulAt or 0) or rng:NextNumber() >= traitValue(rp, trait.Chance) or #freeIds < EXTRA_MIN_FREE then
 		return
 	end
 	local target = grid():Nearest(pos.X, pos.Z, 30, function(x)
@@ -33233,6 +34016,19 @@ end
 
 local Arm = {}
 
+-- Tell clients to draw projectile `p` orbiting its owner (VFX K.setOrbit): angle now (rad),
+-- spin (rad/s), radius and radius growth per second. radius < 0 = stop (back to synced).
+function Arm.orbitFx(p: Projectile, radius: number, growth: number, spin: number, angle: number)
+	local owner = p.Owner
+	if not owner or not owner.Player then
+		return
+	end
+	local function q(n: number): number
+		return math.floor(n * 1000 + 0.5) / 1000
+	end
+	pushFx("ob", { owner.Player.UserId, p.Id, p.Seq, q(radius), q(growth), q(spin), q(angle % TAU) })
+end
+
 -- Live projectiles of one weapon (persistent shields / wisps), oldest first.
 function Arm.liveList(w): { Projectile }
 	local list = {}
@@ -33322,6 +34118,7 @@ function Fire.Shields(rp, w, s, def)
 		p.X.Reflect = evo ~= nil and evo.Reflect == true
 		p.X.ReflectRadius = params.ReflectRadius * s.area
 		wards[p] = block or nil
+		Arm.orbitFx(p, orbit, 0, p.X.Spin, p.Angle)
 	end
 end
 
@@ -33610,6 +34407,7 @@ function Fire.Cloud(rp, w, s, def)
 			PoisonSeconds = params.PoisonSeconds,
 			PoisonShare = params.PoisonShare,
 		}
+		pushFx("cl", { p.Id, p.Seq, r1(p.X.R), evo and 1 or 0 })
 	end
 end
 
@@ -33851,7 +34649,9 @@ function Fire.Horn(rp, w, s, def)
 	local evo = w.Evolved and def.Evolution or nil
 	local range = params.Range * s.area
 	local origin = ground(rp.Root.Position)
-	local aim = Arm.aim(rp, origin, range * 1.6)
+	-- the cone faces the enemies it can hit now (by body edge, like the Whip), else the
+	-- nearest hittable one within 1.6 x range, else the facing
+	local aim = swingAim(origin, range, math.rad(params.HalfAngle), s.amount == 2, range * 1.6) or rp.Facing
 	local echo = WeaponData.HasPerk(w, "Echo")
 	local shots = {}
 	if evo and evo.Roar then
@@ -33938,6 +34738,10 @@ function Fire.Wisps(rp, w, s, def)
 		if p.Phase ~= "Dart" then
 			table.insert(resting, p)
 		end
+		if p.Phase == "Orbit" then
+			-- slots may have moved (a new wisp): re-send the client-drawn orbit
+			Arm.orbitFx(p, x.OrbitR, 0, x.Spin, ctx.RunManager.GetRunTime() * x.Spin + x.Slot)
+		end
 	end
 	if #resting == 0 then
 		return
@@ -33950,6 +34754,9 @@ function Fire.Wisps(rp, w, s, def)
 	end
 	for i, p in ipairs(resting) do
 		local t = targets[((i - 1) % #targets) + 1]
+		if p.Phase == "Orbit" then
+			Arm.orbitFx(p, -1, 0, 0, 0) -- darting: the client draws the synced flight again
+		end
 		p.Phase = "Dart"
 		p.Target = t
 		p.TargetUid = t.Uid
@@ -34003,6 +34810,7 @@ function Arm.stepWisp(p: Projectile, dt: number, now: number): boolean
 		local d = to.Magnitude
 		if p.Phase == "Back" and d <= 1.5 then
 			p.Phase = "Orbit"
+			Arm.orbitFx(p, x.OrbitR, 0, x.Spin, t)
 		end
 		if p.Phase == "Orbit" then
 			p.Pos = slot
@@ -34549,12 +35357,17 @@ local function updateSteadyAim(rp, dt: number)
 	else
 		rp.StillTime = (rp.StillTime or 0) + dt
 		if rp.StillTime >= trait.Delay then
-			rp.SteadyAimBonus = trait.Damage
-			rp.SteadyAimOther = trait.OtherDamage or trait.Damage
+			-- the Signature upgrade raises the Longbow bonus; other weapons scale with it
+			local bonus = traitValue(rp, trait.Damage)
+			rp.SteadyAimBonus = bonus
+			rp.SteadyAimOther = (trait.OtherDamage or trait.Damage) * bonus / trait.Damage
+			rp.Player:SetAttribute("SteadyAimBonus", bonus) -- the HUD chip's numbers (before SteadyAim flips)
 			setSteadyAim(rp, true)
 		end
 	end
 end
+
+WeaponSystem._UpdateSteadyAim = updateSteadyAim -- (tests)
 
 function WeaponSystem.Step(dt: number)
 	if ctx.RunManager.IsSimulating() then
@@ -36509,6 +37322,7 @@ local category = B.Categories[1].Id
 local sending = false
 local sendToken = 0
 local relayout: () -> () = function() end
+local returnFocus: GuiObject? = nil
 
 -- "Phone" | "Tablet" | "Desktop" | "Console" | "VR"
 local function deviceType(): string
@@ -36621,14 +37435,47 @@ function BugReportUI.Open()
 	end
 	refreshCount()
 	relayout()
+	if not ui.Overlay.Visible then
+		-- the button that opened the form gets the gamepad focus back on close
+		local sel = GuiService.SelectedObject
+		returnFocus = (sel and not sel:IsDescendantOf(ui.Overlay)) and sel or nil
+	end
 	host.Show(ui.Overlay, "BugReport", true)
 	UIKit.FocusIfGamepad(ui.Box)
 end
 
+-- Shown on screen: parented under a ScreenGui with every ancestor visible.
+local function onScreen(obj: GuiObject): boolean
+	local o: Instance? = obj
+	while o and not o:IsA("LayerCollector") do
+		if o:IsA("GuiObject") and not o.Visible then
+			return false
+		end
+		o = o.Parent
+	end
+	return o ~= nil and (o :: LayerCollector).Enabled
+end
+
 function BugReportUI.Close()
-	if ui.Overlay then
-		ui.Box:ReleaseFocus()
-		host.Hide(ui.Overlay, "BugReport")
+	if not ui.Overlay then
+		return
+	end
+	local wasOpen = ui.Overlay.Visible
+	ui.Box:ReleaseFocus()
+	host.Hide(ui.Overlay, "BugReport")
+	if not wasOpen then
+		return
+	end
+	-- hand the gamepad focus back to the screen underneath (the button that opened the form)
+	local back = returnFocus
+	returnFocus = nil
+	local sel = GuiService.SelectedObject
+	if sel == nil or sel:IsDescendantOf(ui.Overlay) then
+		if back and back.Parent and onScreen(back) then
+			UIKit.FocusIfGamepad(back)
+		elseif sel then
+			GuiService.SelectedObject = nil
+		end
 	end
 end
 
@@ -41855,8 +42702,12 @@ local function refreshBuff()
 	-- every other weapon)
 	local heroDef = CharacterData.Characters[tostring(player:GetAttribute("CharacterId") or "")]
 	local trait = (heroDef and heroDef.SteadyAim) or (CharacterData.Characters.Ranger and CharacterData.Characters.Ranger.SteadyAim)
-	local bow = trait and math.floor((trait.Damage or 0) * 100 + 0.5) or 30
-	local other = trait and math.floor((trait.OtherDamage or 0) * 100 + 0.5) or 0
+	-- the server's live Longbow bonus (SteadyAimBonus: with the hero's Signature upgrade);
+	-- other weapons scale with it the way WeaponSystem does
+	local base = trait and trait.Damage or 0.30
+	local live = tonumber(player:GetAttribute("SteadyAimBonus")) or base
+	local bow = math.floor(live * 100 + 0.5)
+	local other = trait and math.floor((trait.OtherDamage or 0) * live / math.max(0.01, base) * 100 + 0.5) or 0
 	local onText = other > 0 and string.format("STEADY AIM +%d%% BOW · +%d%% OTHERS", bow, other) or string.format("STEADY AIM +%d%% DAMAGE", bow)
 	ui.BuffText.Text = state and onText or "STAND STILL TO AIM"
 	ui.BuffText.TextColor3 = state and P.moss_200 or C.TextMuted
@@ -41878,8 +42729,10 @@ local function buildBanner(frame: Frame)
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.gold_200,
 		TextStrokeTransparency = 0.35,
+		TextScaled = true, -- long titles ("THE SWARM IS OVERWHELMING") shrink to fit phones
 		ZIndex = 9,
 	})
+	new("UITextSizeConstraint", { MaxTextSize = TS(TY.Display.Size), MinTextSize = 14 }, ui.BannerTitle)
 	ui.BannerLine = new("Frame", { Name = "Line", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, TS(TY.Display.Size) + 10), Size = UDim2.fromOffset(0, 3), ZIndex = 9 }, box)
 	UIKit.corner(ui.BannerLine, 2)
 	ui.BannerSub = role(box, "Body", "", {
@@ -41910,6 +42763,8 @@ local bannerQueue: { { Title: string, Goal: string, Color: Color3?, OnShow: (() 
 local bannerBusy = false
 local bannerBaseY = 0
 local centreBars: { GuiObject } = {}
+local portraitBars: { GuiObject } = {} -- kept clear of the banner in portrait only
+local bannerPortrait = false
 local showBanner: (string, string, Color3?, (() -> ())?) -> ()
 
 local function placeBanner()
@@ -41919,8 +42774,16 @@ local function placeBanner()
 	end
 	local half = box.Size.Y.Offset / 2
 	local y = bannerBaseY
-	for _ = 1, 2 do -- twice: dropping under one bar may land on another
-		for _, g in ipairs(centreBars) do
+	-- portrait: the left-edge minimap (Hud.AvoidInPortrait) sits about mid-screen too
+	local list = centreBars
+	if bannerPortrait and #portraitBars > 0 then
+		list = table.clone(centreBars)
+		for _, g in ipairs(portraitBars) do
+			table.insert(list, g)
+		end
+	end
+	for _ = 1, 3 do -- again: dropping under one bar may land on another
+		for _, g in ipairs(list) do
 			if g.Visible and g.Parent then
 				local gh = g.Size.Y.Offset
 				local top = g.Position.Y.Offset - g.AnchorPoint.Y * gh
@@ -41939,6 +42802,12 @@ end
 -- A persistent bar in the top centre (e.g. the caravan defence bar): banners stack under it.
 function Hud.ReserveCentre(g: GuiObject)
 	table.insert(centreBars, g)
+end
+
+-- A panel the centre banners must keep clear of in portrait only (the minimap there sits
+-- at the left edge about mid-screen; in landscape it is in a corner).
+function Hud.AvoidInPortrait(g: GuiObject)
+	table.insert(portraitBars, g)
 end
 
 -- The reserved top-centre bars (visible or not), for other markers that must keep clear.
@@ -42236,6 +43105,7 @@ local function layout()
 	-- stage banner: under the top cluster in landscape, mid-screen in portrait
 	ui.Banner.Size = UDim2.fromOffset(math.min(520, W - 2 * M), 110)
 	bannerBaseY = math.floor(portrait and H * 0.5 or math.max(H * 0.3, topBottom + 70))
+	bannerPortrait = portrait
 	ui.Banner.Position = UDim2.fromOffset(math.floor(W / 2), bannerBaseY)
 	placeBanner()
 
@@ -42558,7 +43428,8 @@ updatePurse = function(dt: number)
 		hint, hintColor = "NEED " .. UIKit.formatNumber(math.max(1, purse.Need)), P.crimson_300
 	elseif purse.Price > 0 then
 		if purse.Afford then
-			hint, hintColor = "/ " .. UIKit.formatNumber(purse.Price), P.moss_200
+			-- the price in reach ("140 / 34" read like a fraction of a total)
+			hint, hintColor = "COST " .. UIKit.formatNumber(purse.Price), P.moss_200
 		else
 			hint, hintColor = "NEED " .. UIKit.formatNumber(purse.Price - gold), P.crimson_300
 		end
@@ -42587,6 +43458,7 @@ end
 -- goal's colour.
 -- Short forms of the objectives for when the pill would run under the health panel.
 local STAGE_SHORT = {
+	["FIND THE PORTAL"] = "PORTAL",
 	["OPENING THE PORTAL"] = "OPENING",
 	["OPEN THE PORTAL"] = "OPEN PORTAL",
 	["PORTAL DORMANT"] = "DORMANT",
@@ -42602,12 +43474,27 @@ local function stageGoal(state: Configuration, stagePhase: string): (string, str
 		elseif lockLeft > 0 then
 			return "PORTAL DORMANT", UIKit.formatTime(lockLeft), P.ivory_100
 		end
-		-- swarm pressure (SwarmState SwarmWarn): the objective turns into a warning
+		-- waves (Config.Waves, SwarmState Wave / WaveNext): "WAVE 3", or "WAVE 4 IN 0:03"
+		-- during the breather before it
+		local waveText = ""
+		local wave: number = tonumber(state:GetAttribute("Wave")) or 0
+		local nextAt: number = tonumber(state:GetAttribute("WaveNext")) or 0
+		if nextAt > 0 then
+			local now: number = tonumber(state:GetAttribute("RunTime")) or 0
+			waveText = string.format("WAVE %d IN %s", wave + 1, UIKit.formatTime(math.max(0, math.ceil(nextAt - now))))
+		elseif wave > 0 then
+			waveText = "WAVE " .. tostring(wave)
+		end
+		-- swarm pressure (SwarmState SwarmWarn): the objective turns into a warning (the
+		-- wave count stays; without waves the count says how bad it is)
 		local warn = state:GetAttribute("SwarmWarn") or 0
 		if warn >= 2 then
-			return "OPEN THE PORTAL", "SWARM OVERWHELMING", P.crimson_300
+			return "OPEN THE PORTAL", waveText ~= "" and waveText or "SWARM OVERWHELMING", P.crimson_300
 		elseif warn >= 1 then
-			return "OPEN THE PORTAL", "SWARM GROWING", P.amber_300
+			return "OPEN THE PORTAL", waveText ~= "" and waveText or "SWARM GROWING", P.amber_300
+		end
+		if waveText ~= "" then
+			return "FIND THE PORTAL", waveText, P.ivory_100
 		end
 		return "FIND THE PORTAL", "", P.ivory_100
 	elseif stagePhase == "Boss" then
@@ -42633,8 +43520,13 @@ local function updateStage(state: Configuration)
 	local longGoal = goal
 	if anim.StageTooWide == longGoal then
 		goal = STAGE_SHORT[longGoal] or (stagePhase == "Boss" and "DEFEAT THE BOSS") or goal
-		if longGoal == "OPEN THE PORTAL" then
+		if longGoal == "OPEN THE PORTAL" and string.sub(count, 1, 5) == "SWARM" then
 			count = "" -- phones: the amber / crimson goal and the banner carry the warning
+		end
+		-- the wave breather: "WAVE 4 IN 0:03" -> "NEXT 0:03" (the banner names the wave)
+		local nextIn = string.match(count, "^WAVE %d+ IN (.+)$")
+		if nextIn then
+			count = "NEXT " .. nextIn
 		end
 	end
 	local stageShown = stageNo > 0 and goal ~= ""
@@ -43096,7 +43988,14 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	buildBoss(frame)
 	buildCounters(frame)
 	buildVitals(frame)
-	buildBanner(frame)
+	-- the centre banner sits in its own full-screen layer one step above the HUD, so the
+	-- world markers drawn after the HUD (StageUI's portal ring and edge arrow) never cover
+	-- its text; the layer shows and hides with the HUD
+	local top = new("Frame", { Name = "HUDTop", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Active = false, ZIndex = Theme.Z.Hud + 1 }, root)
+	frame:GetPropertyChangedSignal("Visible"):Connect(function()
+		top.Visible = frame.Visible
+	end)
+	buildBanner(top)
 	buildBuffChip(frame)
 	buildBar(frame)
 	buildStatus(frame)
@@ -45287,9 +46186,9 @@ end
 -- Drawn glyphs that have a sym_<name> picture (art/icons/ui).
 local SYMBOLS: { [string]: boolean } = {}
 for _, n in ipairs({
-	"arrowFast", "calendar", "check", "chevronsUp", "clock", "close", "crown", "curse", "cycle", "flag", "gear",
-	"hourglass", "info", "lock", "medal", "music", "pause", "people2", "people3", "person", "play", "podium",
-	"skip", "skull", "sparkle", "speaker", "trophy", "userPlus", "warning",
+	"aim", "arrowFast", "calendar", "castle", "check", "chevronsUp", "clock", "close", "crown", "curse", "cycle",
+	"flag", "gear", "heart", "hourglass", "info", "lock", "medal", "music", "pause", "people2", "people3", "person",
+	"play", "podium", "skip", "skull", "sparkle", "speaker", "trophy", "userPlus", "warning",
 }) do
 	SYMBOLS[n] = true
 end
@@ -45316,6 +46215,7 @@ local ART_FALLBACK: { [string]: string } = {
 	ach_Conqueror = "trophy", ach_KnightClear = "helmet", ach_MageClear = "wizardHat", ach_RogueClear = "hood",
 	ach_PriestClear = "mitre", ach_Veteran = "chevronsUp", ach_FieldEngineer = "gear", ach_Reaper = "skull",
 	ach_MothBane = "skull", ach_WarlordFall = "flag", ach_HiveCleanser = "skull",
+	ach_BriarBane = "sprout", ach_Frostbreaker = "FrostNova",
 	-- account track
 	track_Title = "flag", track_Color = "sparkle", track_Ring = "area", track_Frame = "medal", track_Level = "medal",
 	-- shop
@@ -45555,6 +46455,7 @@ local META_ICONS = {
 	Revive = "revive",
 	Reroll = "meta_Reroll",
 	Skip = "meta_Skip",
+	Signature = "sparkle", -- a hero's signature trait upgrade (Hero Mastery; the trait badge)
 }
 
 function Icons.MetaIcon(upgradeId: string): string
@@ -47028,11 +47929,12 @@ local function buildQueue(frame: Frame)
 	UIKit.list(ui.QueueList, { Padding = UDim.new(0, 4) })
 	ui.QueueNote = text(face, "Body", "", { Name = "Note", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Size = UDim2.new(1, 0, 0, TS(16) * 3 + 8) })
 	-- the run's curses (the starter's pick): a tap opens the CURSES screen
-	local curseRow = new("TextButton", { Name = "QueueCurses", Text = "", AutoButtonColor = false, BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.25, Size = UDim2.new(1, 0, 0, 40) }, face)
+	local curseRow = new("TextButton", { Name = "QueueCurses", Text = "", AutoButtonColor = false, BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.25, Size = UDim2.new(1, 0, 0, 56) }, face)
 	UIKit.corner(curseRow, Theme.Radius.S)
 	UIKit.stroke(curseRow, P.crimson_400, 1, 0.45)
 	Icons.Draw(curseRow, "curse", { Size = 22, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Back = C.PanelInset })
-	ui.QueueCurseText = text(curseRow, "Label", "", { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -46, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, RichText = true }, 13)
+	-- two lines: several curses wrap instead of reading "Frenz..."
+	ui.QueueCurseText = text(curseRow, "Label", "", { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -46, 1, 0), TextWrapped = true, TextTruncate = Enum.TextTruncate.AtEnd, RichText = true }, 13)
 	curseRow.Activated:Connect(function()
 		UIKit.Click()
 		LobbyScreen.Show("Curses")
@@ -47219,7 +48121,7 @@ local function buildHome(screen: Frame)
 	})
 	ui.CardUpgrades = UIKit.Card(ui.Cards, {
 		Icon = "chevronsUp",
-		Title = "SHOP",
+		Title = "UPGRADES", -- the screen's own title (its tabs are PERMANENT / SHOP)
 		Subtitle = "Upgrades, gold and cosmetics",
 		LayoutOrder = 2,
 		OnClick = function()
@@ -47360,7 +48262,10 @@ local function relayout()
 	setChipFlat(not portrait and current == "Characters")
 	-- phones in landscape: the CHARACTERS title shares the top row, so the chip keeps only GOLD
 	local slim = compact and not portrait and current == "Characters"
-	ui.Chip.Visible = not (compact and not portrait and current ~= "Home" and current ~= "Characters")
+	-- every screen shows the stats chip (gold on every buy screen); phones in landscape put it
+	-- in the Roblox top-bar row, right of the Roblox buttons, above the screen's header
+	local topRowChip = compact and not portrait and current ~= "Home" and ins.Top >= 48
+	ui.Chip.Visible = topRowChip or not (compact and not portrait and current ~= "Home" and current ~= "Characters")
 	for _, ch in ipairs(ui.ChipFace:GetChildren()) do
 		if ch:IsA("GuiObject") and ch ~= ui.Gold.Frame then
 			ch.Visible = not slim
@@ -47441,7 +48346,7 @@ local function relayout()
 		local logoY = math.max(ins.Top + 2, 14)
 		ui.Logo.Position = UDim2.fromOffset(M, logoY)
 		ui.Chip.AnchorPoint = Vector2.new(1, 0)
-		ui.Chip.Position = UDim2.fromOffset(W - M, current == "Characters" and math.max(0, math.floor((ins.Top - 48) / 2)) or chipY)
+		ui.Chip.Position = UDim2.fromOffset(W - M, (current == "Characters" or topRowChip) and math.max(0, math.floor((ins.Top - 48) / 2)) or chipY)
 		-- PARTY pill left of the stats chip
 		ui.PartyCornerBtn.Instance.Visible = false
 		ui.PartyBtn.Instance.Visible = true
@@ -47551,7 +48456,7 @@ local function relayout()
 	local qh = ui.Queue.Size.Y.Offset
 	local busy = lastStatus == "Busy"
 	-- the full panel needs the player list, the curse / endless lines, the note and buttons
-	local extraLines = (ui.QueueCurses:GetAttribute("Has") == true and 46 or 0) + (ui.QueueEndless:GetAttribute("Has") == true and 38 or 0)
+	local extraLines = (ui.QueueCurses:GetAttribute("Has") == true and 62 or 0) + (ui.QueueEndless:GetAttribute("Has") == true and 38 or 0)
 	local short = qh < math.max(280, 72 + 4 * 30 + extraLines + TS(16) * 3 + 8 + 52 + 36) and not busy
 	ui.QueueList.Visible = not short and not busy
 	local noteY = (short or busy) and 68 or (72 + 4 * 30)
@@ -47560,7 +48465,7 @@ local function relayout()
 	local curseY = noteY
 	if ui.QueueCurses.Visible then
 		ui.QueueCurses.Position = UDim2.fromOffset(0, curseY)
-		noteY += 46
+		noteY += 62
 	end
 	ui.QueueEndless.Visible = ui.QueueEndless:GetAttribute("Has") == true
 	if ui.QueueEndless.Visible then
@@ -47712,7 +48617,10 @@ function LobbyScreen.SetVisible(on: boolean)
 		browse = nil
 		ui.Dim.BackgroundTransparency = 1
 		UIAnim.SwapScreens(nil, ui.Home, 1, Config.UI.ScreenSlideSeconds)
-		UIAnim.SlideIn(ui.Chip, Vector2.new(0, -60), 0)
+		-- scale-only entrance: relayout() owns the chip's Position (a Position tween captured
+		-- its target here and overrode any relayout during the tween, leaving the chip at a
+		-- stale spot, e.g. on the left when the first layout ran before the screen size was known)
+		UIAnim.Pop(ui.Chip, 0, 0.85)
 		homeEntrance()
 		if ui.Playtime then
 			ui.Playtime.Shown(true)
@@ -47789,7 +48697,7 @@ function LobbyScreen.RefreshHero()
 	else
 		local skinId = skinOf(id)
 		local skin = CharacterData.Skins[skinId]
-		ui.NameSub.Text = (skin and (skin.Name .. " · ") or "") .. def.Description
+		ui.NameSub.Text = (skin and (skin.Name .. " · ") or "") .. MenuCharacters.TraitText(id, def.Description, profile)
 		ui.NameSub.TextColor3 = C.TextMuted
 		if current ~= "Characters" then
 			Showcase.Show(id, skinId)
@@ -48250,7 +49158,11 @@ end
 -- Build
 ------------------------------------------------------------------------------------------
 
-local function buildStrip(root: Frame)
+local function buildStrip(screen: Frame)
+	-- the strip and its chips share one full-size layer (same coordinates as the screen) so a
+	-- covering modal (ITEMS, pause, level-up, reel, results) hides them all at once
+	local root = new("Frame", { Name = "RunChips", BackgroundTransparency = 1, Active = false, Size = UDim2.fromScale(1, 1), ZIndex = Theme.Z.Hud }, screen)
+	ui.ChipLayer = root
 	local strip = new("Frame", { Name = "ItemStrip", BackgroundTransparency = 1, Active = false, Visible = false, ZIndex = Theme.Z.Hud }, root)
 	ui.Strip = strip
 	ui.StripGrid = new("UIGridLayout", {
@@ -49327,6 +50239,13 @@ function LootUI.Update(_dt: number, inRun: boolean)
 end
 
 -- For the preview tool / tests.
+-- UIBuilder: a HUD-covering modal opened or closed (the strip and chips hide under it).
+function LootUI.SetCovered(on: boolean)
+	if ui.ChipLayer then
+		ui.ChipLayer.Visible = not on
+	end
+end
+
 function LootUI.Elements(): { [string]: any }
 	return ui
 end
@@ -49807,7 +50726,7 @@ return MenuArenas
 	          rule (UIKit.TitleBar) in the Roblox top-bar row; LobbyScreen shows the BEST /
 	          WINS / GOLD stats inline on the right
 	  left    the roster: one row per character (hero badge art, serif name), rows split by
-	          thin lines; the selected hero shows a gold check and EQUIPPED, locked heroes a
+	          thin lines; the selected hero shows a gold check and SELECTED, locked heroes a
 	          lock, the inspected one a gold border, a gold accent bar and a PREVIEW pill
 	  centre  under the hero: its name in spaced caps between gold rules and
 	          "Preview • <skin>"
@@ -49816,7 +50735,12 @@ return MenuArenas
 	          intro line; a rule; STARTING WEAPON (tile) | TRAIT (green badge); EFFECT (a big
 	          gold "+20%" when the trait text starts with one, the rest, the weapon list),
 	          STRENGTH, TRADEOFF (red); for a locked hero the UNLOCK block (achievement and
-	          big "2 / 4" with a gold bar, or the gold price); the action button (gold
+	          big "2 / 4" with a gold bar, or the gold price); for an OWNED hero the same
+	          spot is the MASTERY block (Hero Mastery: level, XP "120 / 350" with a gold bar,
+	          the cap it allows, and UPGRADE <HERO>, which opens the hero's upgrade list
+	          right there: seven rows (icon, LV n / max, "current → next", BUY · N /
+	          LOCKED: MASTERY N / MAXED / BUYING... until the next ProfileSync), so phones
+	          scroll it and portrait shows it under the hero); the action button (gold
 	          SELECT <NAME> / UNLOCK • N GOLD, grey "REACH STAGE 4 TO UNLOCK"); SKINS: skin
 	          cards (swatch, name, OWNED / SKIN EQUIPPED / SOON / R$ pill, a check on the
 	          equipped one) and, for a skin not owned, its GET SKIN / COMING SOON button
@@ -49840,6 +50764,7 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local AchievementData = require(Shared:WaitForChild("AchievementData"))
+local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -49891,6 +50816,65 @@ local function shortGoal(a: { [string]: any }?): string?
 		return first
 	end
 	return nil
+end
+
+-- "+30 → +40 max HP": a hero upgrade's total effect now and after one more level, the
+-- shared words written once (Effect.Format is "<number part> <words>").
+local function effectStep(heroId: string, upgradeId: string, level: number, maxed: boolean): string
+	local def = MetaUpgradeData.HeroDef(heroId, upgradeId)
+	if not def or not def.Effect then
+		return ""
+	end
+	local function value(l: number): number
+		if upgradeId == "Signature" then
+			return def.Trait.Base + def.Trait.Per * l
+		end
+		return def.Effect.Per * l
+	end
+	local numberPart, words = string.match(def.Effect.Format, "^(%S+)%s+(.+)$")
+	if not numberPart then
+		return MetaUpgradeData.HeroEffectText(heroId, upgradeId, level)
+	end
+	-- nothing bought yet reads like the account upgrades ("None yet"), not "+0% → +5%"
+	if level <= 0 and upgradeId ~= "Signature" and not maxed then
+		return "Next: " .. string.format(numberPart, value(1)) .. " " .. words
+	end
+	local now = string.format(numberPart, value(level))
+	if maxed then
+		return now .. " " .. words .. " (max)"
+	end
+	return now .. " → " .. string.format(numberPart, value(level + 1)) .. " " .. words
+end
+
+-- The trait sentence with the hero's current value (Hero Mastery: base + Signature level),
+-- e.g. "Takes 14% less damage" at Iron Skin level 2. The Ranger's "+10% other weapons"
+-- scales with the Longbow number the way WeaponSystem does.
+local function currentTraitText(heroId: string, textIn: string, level: number): string
+	local sig = MetaUpgradeData.Signature[heroId]
+	if not sig or level <= 0 then
+		return textIn
+	end
+	local base = sig.Trait.Base
+	local now = base + sig.Trait.Per * level
+	local out, n = string.gsub(textIn, "%f[%d]" .. base .. "%%", now .. "%%", 1)
+	if n > 0 then
+		local steady = CharacterData.Characters[heroId] and CharacterData.Characters[heroId].SteadyAim
+		if steady and steady.OtherDamage then
+			local other = math.floor(steady.OtherDamage * 100 + 0.5)
+			local otherNow = math.floor(steady.OtherDamage * now / base * 100 + 0.5)
+			out = string.gsub(out, "%(%+" .. other .. "%%", "(+" .. otherNow .. "%%", 1)
+		end
+	end
+	return out
+end
+
+-- the same sentence for a profile (the home hero card uses it so both screens agree)
+function MenuCharacters.TraitText(heroId: string, textIn: string, p: { [string]: any }?): string
+	local level = 0
+	if p and type(p.OwnedCharacters) == "table" and p.OwnedCharacters[heroId] == true and type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[heroId]) == "table" then
+		level = math.floor(tonumber(p.HeroUpgrades[heroId].Signature) or 0)
+	end
+	return currentTraitText(heroId, textIn, level)
 end
 
 -- Trait text split for the EFFECT row: a leading "+N%" (big number, or nil), the rest as
@@ -49961,7 +50945,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		UIKit.list(marks, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
 		local check = Icons.Draw(marks, "check", { Size = 20, Color = P.gold_300, Back = P.slate_900 })
 		check.LayoutOrder = 1
-		local equipped = text(marks, "Label", "EQUIPPED", { Name = "Equipped", LayoutOrder = 2, Size = UDim2.fromOffset(0, TS(13) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200 }, 13)
+		local equipped = text(marks, "Label", "SELECTED", { Name = "Equipped", LayoutOrder = 2, Size = UDim2.fromOffset(0, TS(13) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200 }, 13)
 		local lock = Icons.Draw(marks, "lock", { Size = 18, Color = P.stone_300, Back = P.slate_900 })
 		lock.LayoutOrder = 3
 		local preview = UIKit.StatusPill(marks, "PREVIEW", { LayoutOrder = 4, Size = UDim2.fromOffset(0, TS(11) + 12) })
@@ -50111,12 +51095,42 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.list(unlock, { Padding = UDim.new(0, 4) })
 	UIKit.Hairline(unlock, { LayoutOrder = 0 })
 	local uTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, unlock)
-	text(uTop, "Label", "UNLOCK", { FontFace = DETAIL_HEADING, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
+	ui.UnlockLabel = text(uTop, "Label", "UNLOCK", { FontFace = DETAIL_HEADING, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
 	ui.UnlockName = text(uTop, "BodyStrong", "", { FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(0, TS(13) + 10), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.ivory_100 }, 16)
 	ui.UnlockCount = text(unlock, "Display", "", { FontFace = DETAIL_HEADING, LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(22) + 6), TextColor3 = P.gold_200 }, 22)
 	ui.UnlockRule = wrapped(unlock, "Body", P.ivory_200, 15, { Name = "Rule", LayoutOrder = 3 })
 	ui.UnlockMeter = UIKit.Meter(unlock, { Size = UDim2.new(1, 0, 0, 10), Color = P.gold_400, LayoutOrder = 4 } :: any)
 	ui.UnlockMeter.Frame.Name = "Progress"
+
+	-- Hero Mastery (owned heroes): UPGRADE <HERO> opens the hero's upgrade rows below it
+	ui.MasteryOpen = false
+	ui.MasteryButton = UIKit.Button(unlock, {
+		Name = "MasteryUpgrade",
+		Kind = "Outline",
+		Title = "UPGRADE",
+		Icon = "chevronsUp",
+		IconSize = 18,
+		Align = "Center",
+		Size = UDim2.new(1, 0, 0, 42),
+		LayoutOrder = 5,
+		Shadow = false,
+		OnClick = function()
+			ui.MasteryOpen = not ui.MasteryOpen
+			MenuCharacters._refresh()
+			if ui.MasteryOpen then
+				-- bring the rows into view (phones scroll the details panel)
+				task.defer(function()
+					local panel = ui.MasteryPanel
+					if panel.Visible then
+						local y = panel.AbsolutePosition.Y - ui.Scroll.AbsolutePosition.Y + ui.Scroll.CanvasPosition.Y
+						ui.Scroll.CanvasPosition = Vector2.new(0, math.max(0, y - 60))
+					end
+				end)
+			end
+		end,
+	})
+	ui.MasteryPanel = new("Frame", { Name = "HeroUpgrades", BackgroundTransparency = 1, Visible = false, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 6 }, unlock)
+	UIKit.list(ui.MasteryPanel, { Padding = UDim.new(0, 6) })
 
 	ui.Action = UIKit.Button(scroll, {
 		Kind = "Primary",
@@ -50246,6 +51260,118 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 	end
 
+	-- Hero Mastery upgrade rows (rebuilt from the profile; a tap marks its row BUYING...
+	-- until the next ProfileSync, which always carries the real gold and levels)
+	local pending: { [string]: number } = {}
+	local lastHeroLevel: { [string]: number } = {} -- mastery levels seen (a rise plays a sound)
+	local lastProfile: any = nil
+	local function buildMasteryRows(p: { [string]: any }, heroId: string)
+		for _, c in ipairs(ui.MasteryPanel:GetChildren()) do
+			if c:IsA("GuiObject") then
+				c:Destroy()
+			end
+		end
+		local heroes = type(p.Heroes) == "table" and p.Heroes or {}
+		local mastery = MetaUpgradeData.MasteryFor(type(heroes[heroId]) == "table" and heroes[heroId].XP or 0)
+		local track = type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[heroId]) == "table" and p.HeroUpgrades[heroId] or {}
+		local innerW = ui.DetailInnerW or 390
+		ui.BuiltInnerW = innerW
+		local bw = math.clamp(math.floor(innerW * 0.37), 128, 190)
+		local withIcon = bw >= 175 -- narrow buttons (phones) keep the whole label instead
+		local lineH = TS(13) + 4
+		local rowH = math.max(58, lineH + 2 * (TS(13) + 2) + 10)
+		for order, id in ipairs(MetaUpgradeData.HeroOrder()) do
+			local def = MetaUpgradeData.HeroDef(heroId, id)
+			if not def then
+				continue
+			end
+			local level = math.floor(tonumber(track[id]) or 0)
+			local cost = MetaUpgradeData.HeroCostOf(heroId, id, level)
+			local maxed = cost == nil
+			local cap = MetaUpgradeData.HeroCap(mastery, id, heroId)
+			local locked = not maxed and level + 1 > cap
+			local key = heroId .. "/" .. id
+			if lastHeroLevel[key] ~= nil and level > lastHeroLevel[key] and screen.Visible then
+				UIKit.Sound("Item") -- a mastery level bought
+			end
+			lastHeroLevel[key] = level
+			local busy = pending[key] ~= nil
+			local row = new("Frame", { Name = id, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, Size = UDim2.new(1, 0, 0, rowH), LayoutOrder = order }, ui.MasteryPanel)
+			UIKit.corner(row, Theme.Radius.M)
+			if id == "Signature" then
+				local disc = new("Frame", { Name = "Icon", BackgroundColor3 = P.moss_700, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(36, 36) }, row)
+				UIKit.corner(disc, 999)
+				UIKit.stroke(disc, P.moss_300, 1.5, 0.3)
+				Icons.Draw(disc, Icons.MetaIcon("Signature"), { Size = 20, Color = P.ivory_100, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.moss_700 })
+			else
+				local tile = UIKit.Tile(row, { Id = Icons.MetaIcon(id), Size = 36 })
+				tile.AnchorPoint = Vector2.new(0, 0.5)
+				tile.Position = UDim2.new(0, 8, 0.5, 0)
+			end
+			local textW = innerW - 52 - bw - 16
+			text(row, "Label", string.upper(def.Name) .. " · LV " .. level .. "/" .. def.MaxLevel, {
+				Name = "Level", FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(52, 5), Size = UDim2.fromOffset(textW, lineH),
+				TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = maxed and P.gold_300 or P.ivory_100,
+			}, 13)
+			text(row, "Small", effectStep(heroId, id, level, maxed), {
+				Name = "Effect", Position = UDim2.fromOffset(52, 5 + lineH + 2), Size = UDim2.fromOffset(textW, rowH - lineH - 12),
+				TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd,
+				TextColor3 = maxed and P.gold_300 or P.moss_200,
+			}, 13)
+			local title, kind = "", "Primary"
+			local icon = "coin"
+			if maxed then
+				title, kind = "MAXED", "Secondary"
+				icon = "check"
+			elseif locked then
+				title, kind = "MASTERY " .. MetaUpgradeData.RequiredMastery(id, level + 1), "Secondary"
+				icon = "lock"
+			elseif busy then
+				title = "BUYING..."
+			else
+				-- the unit always shows (Upgrades reads "BUY · N GOLD"); narrow phone
+				-- buttons drop the BUY instead
+				title = (withIcon and "BUY · " or "") .. UIKit.formatNumber(cost :: number) .. " GOLD"
+				kind = p.Gold >= (cost :: number) and "Primary" or "Outline"
+			end
+			local b
+			b = UIKit.Button(row, {
+				Name = "Buy",
+				Kind = kind,
+				Title = title,
+				Icon = withIcon and icon or nil,
+				IconSize = 16,
+				Align = "Center",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -8, 0.5, 0),
+				Size = UDim2.fromOffset(bw, 40),
+				Shadow = false,
+				OnClick = function()
+					if maxed or locked or pending[key] then
+						return
+					end
+					local pr = profile()
+					if pr and pr.Gold < (cost :: number) then
+						ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(cost :: number) .. " needed.", P.crimson_300)
+						return
+					end
+					pending[key] = os.clock()
+					b.SetText("BUYING...")
+					b.SetEnabled(false)
+					Remotes.Get("BuyHeroUpgrade"):FireServer(heroId, id, level)
+					-- no answer (dropped / rejected): ask for the real profile and free the row
+					task.delay(3, function()
+						if pending[key] and os.clock() - pending[key] >= 2.9 then
+							pending[key] = nil
+							Remotes.Get("RequestProfile"):FireServer()
+						end
+					end)
+				end,
+			})
+			b.SetEnabled(not maxed and not locked and not busy)
+		end
+	end
+
 	-- the portrait (art/portraits/<Id>; the drawn class icon while it loads / if missing)
 	local function buildPortrait(id: string)
 		for _, c in ipairs(ui.PortraitWell:GetChildren()) do
@@ -50271,7 +51397,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		row.Edge.Color = insp and P.gold_400 or P.slate_600
 		row.Edge.Thickness = insp and 2 or 1
 		row.Accent.Visible = insp and full
-		row.Name.TextColor3 = insp and P.gold_200 or P.ivory_100
+		row.Name.TextColor3 = insp and P.gold_200 or ((own or full) and P.ivory_100 or P.stone_300)
 		row.Check.Visible = sel
 		row.Equipped.Visible = sel and full
 		row.Lock.Visible = not own
@@ -50331,6 +51457,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			if row then
 				UIAnim.Selected(row.Check)
 			end
+			if bought then
+				UIKit.Sound("Chest") -- a hero unlocked with gold
+			end
 		end
 		if screen.Visible and lastSkin and lastSkin ~= skinNow and string.find(lastSkin, "@" .. inspChar, 1, true) then
 			local sw = swatches[p.Skins[inspChar] or "Default"]
@@ -50365,11 +51494,16 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 		ui.Name.TextSize = TS(nameSize)
 		ui.Role.Text = string.upper(def.Role or "")
-		ui.Desc.Text = def.Description
+		ui.Desc.Text = def.Description -- (the trait's current value is set below)
 		local weapon = WeaponData.Weapons[def.StartWeapon]
 		ui.Weapon.Text = weapon and weapon.Name or def.StartWeapon
 		ui.Bonus.Text = def.Trait and def.Trait.Name or (def.BonusText or "")
-		local big, body, list = splitEffect(def.Trait and def.Trait.Text or (def.BonusText or ""))
+		local sigLevel = 0
+		if own and type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[inspChar]) == "table" then
+			sigLevel = math.floor(tonumber(p.HeroUpgrades[inspChar].Signature) or 0)
+		end
+		ui.Desc.Text = currentTraitText(inspChar, def.Description, sigLevel)
+		local big, body, list = splitEffect(currentTraitText(inspChar, def.Trait and def.Trait.Text or (def.BonusText or ""), sigLevel))
 		ui.EffectBig.Text = big or ""
 		ui.EffectBig.Visible = big ~= nil
 		-- The trait sentence stays full width beneath its highlighted number.
@@ -50391,9 +51525,33 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		-- centre caption
 		ui.CentreTitle.Set(UIKit.spaced(def.Name))
 		local previewSkin = inspSkin
-		ui.CentreSub.Text = "Preview  ·  " .. skinName(previewSkin)
-		-- how to unlock it: the achievement and its progress, or the gold price
-		ui.UnlockCard.Visible = not own
+		-- the equipped hero in its equipped skin is not a preview
+		local wearing = selected and type(p.Skins) == "table" and (p.Skins[inspChar] or "Default") == previewSkin
+		ui.CentreSub.Text = (wearing and "Equipped  ·  " or "Preview  ·  ") .. skinName(previewSkin)
+		-- how to unlock it: the achievement and its progress, or the gold price; an owned
+		-- hero shows its MASTERY instead (and UPGRADE <HERO>)
+		if p ~= lastProfile then
+			lastProfile = p
+			table.clear(pending) -- a fresh profile answers every purchase in flight
+		end
+		ui.UnlockCard.Visible = true
+		ui.UnlockLabel.Text = own and "MASTERY" or "UNLOCK"
+		ui.MasteryButton.Instance.Visible = own
+		ui.MasteryPanel.Visible = own and ui.MasteryOpen
+		if own then
+			local heroes = type(p.Heroes) == "table" and p.Heroes or {}
+			local h = type(heroes[inspChar]) == "table" and heroes[inspChar] or {}
+			local level, into, need = MetaUpgradeData.MasteryFor(h.XP or 0)
+			local cap = MetaUpgradeData.HeroCap(level, "MaxHP", inspChar)
+			ui.UnlockName.Text = "LEVEL " .. level .. (level >= Config.HeroMastery.MaxLevel and "  ·  MAX" or "")
+			ui.UnlockCount.Text = need > 0 and (UIKit.formatNumber(into) .. " / " .. UIKit.formatNumber(need) .. " XP") or "MAX"
+			ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery. Mastery %d lets its upgrades reach level %d.", def.Name, level, cap)
+			ui.UnlockMeter.Set(need > 0 and math.clamp(into / need, 0, 1) or 1, "")
+			ui.MasteryButton.SetText(ui.MasteryOpen and "HIDE UPGRADES" or ("UPGRADE " .. string.upper(def.Name)))
+			if ui.MasteryOpen then
+				buildMasteryRows(p, inspChar)
+			end
+		end
 		if not own then
 			if def.Unlock then
 				local aid = def.Unlock.Achievement
@@ -50427,7 +51585,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			ui.Action.SetIcon("coin")
 		elseif selected then
 			ui.Action.SetKind("Secondary")
-			ui.Action.SetText(string.upper(def.Name) .. " EQUIPPED")
+			ui.Action.SetText(string.upper(def.Name) .. " SELECTED")
 			ui.Action.SetIcon("check")
 			ui.Action.SetEnabled(false)
 		else
@@ -50515,7 +51673,20 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		row.Name.TextXAlignment = mode == "tab" and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
 		local size = mode == "row" and Theme.TextSize.H2 or (long and Theme.TextSize.Small - 1 or Theme.TextSize.Body)
 		row.Name.TextSize = TS(size)
-		row.Marks.Visible = mode == "row"
+		-- tiles / tabs (phones) keep the lock and the equipped check as a small corner badge
+		row.Marks.Visible = true
+		if mode == "row" then
+			row.Marks.AnchorPoint = Vector2.new(1, 0.5)
+			row.Marks.Position = UDim2.new(1, -10, 0.5, 0)
+			row.Marks.Size = UDim2.new(0, 170, 1, 0)
+		else
+			row.Marks.AnchorPoint = Vector2.new(1, 0)
+			row.Marks.Position = UDim2.new(1, -3, 0, 3)
+			row.Marks.Size = UDim2.fromOffset(40, 16)
+		end
+		local markS = mode == "row" and 20 or 15
+		row.Check.Size = UDim2.fromOffset(markS, markS)
+		row.Lock.Size = UDim2.fromOffset(markS - 2, markS - 2)
 		row.Sep.Visible = mode == "row"
 	end
 
@@ -50581,16 +51752,24 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				row.Instance.Size = UDim2.new(1 / perRow, -6, 0, 52)
 				rowStyle(id, "tab", 52)
 			end
-			local detailH = math.min(contentH, math.floor(H * 0.56) - (listH - 76))
+			-- the details panel leaves the hero a clear gap between the tabs and the panel
+			-- (the panel scrolls; the action button stays pinned in view)
+			local detailH = math.min(contentH, math.floor(H * 0.5) - (listH - 76))
 			local detailY = H - M - detailH
 			ui.NameRoom = w - 40 - PORTRAIT - 14
 			place(ui.Detail, M, detailY, w, detailH)
 			pinAction(contentH > detailH + 1)
 			fitSkins(w - 40)
+			ui.DetailInnerW = w - 44
+			-- the details panel already names the hero: no caption over the hero's feet
 			place(ui.Centre, (W - centreW) / 2, detailY - 64, centreW, 58)
-			ui.Centre.Visible = true
+			ui.Centre.Visible = false
 			if ctx.Current() == "Characters" then
-				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + listH) + (detailY - 50)) / 2 / H)
+				local gapTop, gapBottom = top + listH + 6, detailY - 6
+				local cam = workspace.CurrentCamera
+				cam:SetAttribute("MenuHeroY", (gapTop + gapBottom) / 2 / H)
+				-- a short gap widens the shot so the whole hero fits (CameraController)
+				cam:SetAttribute("MenuHeroZoom", math.clamp(H * 0.3 / math.max(1, gapBottom - gapTop), 1, 1.6))
 			end
 		else
 			-- one column of rows split by lines; when rows get too short (phones in
@@ -50617,11 +51796,13 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				row.Instance.Size = cols == 2 and UDim2.new(0.5, -gap / 2, 0, rowH) or UDim2.new(1, 0, 0, rowH)
 				rowStyle(id, cols == 2 and "tile" or "row", rowH)
 			end
-			local rw = math.clamp(W * 0.37, 430, 530)
+			-- phones in landscape (tiles): a slimmer details panel leaves the dais hero clear
+			local rw = math.clamp(W * 0.37, cols == 2 and 400 or 430, 530)
 			ui.NameRoom = rw - 40 - PORTRAIT - 14
 			place(ui.Detail, W - M - rw, top, rw, math.min(contentH, H - M - top))
 			pinAction(contentH > H - M - top + 1)
 			fitSkins(rw - 40)
+			ui.DetailInnerW = rw - 44
 			-- the hero's name between the panels, under the dais
 			local gapL, gapR = M + lw, W - M - rw
 			centreW = math.min(420, gapR - gapL - 16)
@@ -50630,13 +51811,21 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			-- already names the hero, so the caption hides instead of reading "KNI..."
 			ui.Centre.Visible = centreW >= 180
 			if ctx.Current() == "Characters" then
-				workspace.CurrentCamera:SetAttribute("MenuHeroY", 0.5)
+				local cam = workspace.CurrentCamera
+				cam:SetAttribute("MenuHeroY", 0.5)
+				-- a narrow gap between the panels (phones) widens the shot so the turning
+				-- hero stays clear of both panels
+				cam:SetAttribute("MenuHeroZoom", math.clamp(W * 0.23 / math.max(1, gapR - gapL), 1, 1.6))
 			end
 		end
 		if p then
 			for id in pairs(ui.Rows) do
 				paintRow(id, p)
 			end
+		end
+		-- the upgrade rows follow the panel's width (rotation, window size)
+		if ui.MasteryOpen and ui.MasteryPanel.Visible and ui.BuiltInnerW ~= ui.DetailInnerW then
+			refresh()
 		end
 	end
 
@@ -51176,10 +52365,10 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	ui.Play = UIKit.Button(foot, {
 		Kind = "Primary",
 		Glow = true,
-		Title = "START RANKED",
+		Title = "PLAY DAILY",
 		TitleStyle = "Label",
 		TitleSize = 18,
-		Subtitle = "Uses today's attempt",
+		Subtitle = "Scored attempt",
 		Icon = "play",
 		IconSize = 26,
 		Align = "Center",
@@ -51293,17 +52482,17 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		if used then
 			UIKit.SetStatus(ui.Pill, "PRACTICE")
 			ui.Heading.Text = "Practice today's challenge"
-			ui.InfoText.Text = (score > 0 and ("Ranked result: " .. CurseData.ScoreText(score) .. ". ") or "Today's ranked attempt is used. ")
-				.. "Practice cannot replace your ranked score. New ranked try at 00:00 UTC." .. bestLine
+			ui.InfoText.Text = (score > 0 and ("Scored result: " .. CurseData.ScoreText(score) .. ". ") or "Today's scored attempt is used. ")
+				.. "Practice cannot replace your scored result. New scored try at 00:00 UTC." .. bestLine
 				.. (rankLine and ("\n" .. rankLine) or "")
 		else
-			UIKit.SetStatus(ui.Pill, "READY", "RANKED")
-			ui.Heading.Text = "Your ranked run is ready"
-			ui.InfoText.Text = "One ranked try today. Used when the run starts, even if you lose or leave. New try at 00:00 UTC." .. bestLine
+			UIKit.SetStatus(ui.Pill, "READY")
+			ui.Heading.Text = "Your scored attempt is ready"
+			ui.InfoText.Text = "One scored try today. Used when the run starts, even if you lose or leave. New try at 00:00 UTC." .. bestLine
 		end
 		ui.Sub.Text = string.format("1. Play solo on today's shared route.\n2. Clear %d stages; more clears rank higher.\n3. Ties: faster last boss kill wins. No clears? Longer survival wins.", Config.Stages.WinMinStages)
 		ui.Play.SetKind(used and "Secondary" or "Primary")
-		ui.Play.SetText(used and "PRACTICE RUN" or "START RANKED", used and "No leaderboard score" or "Uses today's attempt")
+		ui.Play.SetText(used and "PRACTICE RUN" or "PLAY DAILY", used and "No leaderboard score" or "Scored attempt")
 		if shownDay ~= day then
 			shownDay = day
 			buildDay(d)
@@ -52394,7 +53583,8 @@ local narrow = false
 -- Width of a row button (narrow lists: smaller, icon-less unless it is icon-only).
 local function bw(w: number, title: string): number
 	if narrow and title ~= "" then
-		return math.max(76, w - 32)
+		-- never narrower than the word itself ("AC..." on phones)
+		return math.max(76, #title * 16 + 30, w - 32)
 	end
 	return w
 end
@@ -52620,7 +53810,8 @@ MenuParty._card = function()
 		card.Title.Text = inv.FromName .. " invites you to their party"
 		card.Total = math.max(1, (deadlines[inv.FromId] or 0) - os.clock())
 		card.Holder.Visible = true
-		UIAnim.SlideIn(card.Holder, Vector2.new(0, -40), 0)
+		-- scale-only entrance: the layout owns the card's Position
+		UIAnim.Pop(card.Holder, 0, 0.9)
 		-- ticks on every screen (the lobby's Update stops during a run)
 		if not card.Ticking then
 			card.Ticking = true
@@ -52756,7 +53947,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		-- invites to you first
 		for _, inv in ipairs(openInvites()) do
 			order += 1
-			local f = personRow(plist, order, inv.FromId, inv.FromName, "Invited you to their party", P.gold_300, bw(108, "ACCEPT") + 8 + 44 + 16, true)
+			local f = personRow(plist, order, inv.FromId, inv.FromName, narrow and "Invited you" or "Invited you to their party", P.gold_300, bw(108, "ACCEPT") + 8 + 44 + 16, true)
 			rowButton(f, "ACCEPT", nil, "Primary", 108, 8, function()
 				send("Accept", inv.FromId)
 				deadlines[inv.FromId] = 0
@@ -52832,7 +54023,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		ui.Start.Instance.Visible = inParty() and isLeader() and mode ~= nil
 		if ui.Start.Instance.Visible then
 			local allReady = sum.Ready >= sum.Others
-			ui.Start.SetText(allReady and ("START " .. string.upper((Config.Modes :: any)[mode :: string].DisplayName)) or string.format("READY %d/%d", sum.Ready, sum.Others))
+			ui.Start.SetText(allReady and ("START " .. string.upper((Config.Modes :: any)[mode :: string].DisplayName)) or string.format("%d/%d READY", sum.Ready, sum.Others))
 			ui.Start.SetEnabled(allReady)
 		end
 	end
@@ -53396,7 +54587,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	ui.Tabs = UIKit.Tabs(face, {
 		{ Id = "Stats", Title = "Stats", Icon = "bars" },
 		{ Id = "Achievements", Title = "Achievements", Icon = "ach_Badge" },
-		{ Id = "Journal", Title = "Journal", Icon = "bars" },
+		{ Id = "Journal", Title = "Journal", Icon = "skull" }, -- the enemy journal (not the stats bars)
 	}, function(id)
 		if id == "Journal" then
 			ui.Tabs.Select(tab)
@@ -53495,9 +54686,19 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		V.Skins.Text = skins .. " / " .. total
 		ui.Bars.Skins.Set(skins / math.max(1, total))
 		local levels, maxLevels = 0, 0
-		for _, id in ipairs(MetaUpgradeData.Order) do
-			levels += p.Meta[id] or 0
+		-- account upgrades + the selected hero's own track (Hero Mastery)
+		for _, id in ipairs(MetaUpgradeData.AccountOrder) do
+			levels += tonumber(p.Meta[id]) or 0
 			maxLevels += MetaUpgradeData.Upgrades[id].MaxLevel
+		end
+		local heroId = p.SelectedCharacter or "Knight"
+		local track = type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[heroId]) == "table" and p.HeroUpgrades[heroId] or {}
+		for _, id in ipairs(MetaUpgradeData.HeroOrder()) do
+			local def = MetaUpgradeData.HeroDef(heroId, id)
+			if def then
+				levels += tonumber(track[id]) or 0
+				maxLevels += def.MaxLevel
+			end
 		end
 		V.Meta.Text = levels .. " / " .. maxLevels
 		ui.Bars.Meta.Set(levels / math.max(1, maxLevels))
@@ -53939,10 +55140,14 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		local order = 0
+		ui.NextRow = nil
 		for _, lv in ipairs(AccountData.RewardLevels) do
 			for _, r in ipairs(AccountData.Rewards[lv]) do
 				order += 1
 				local f = rewardRow(lv, r, level, order)
+				if lv > level and not ui.NextRow then
+					ui.NextRow = f -- the next reward to earn (the list opens there)
+				end
 				if animate and order <= 10 then
 					UIAnim.Pop(f, 0.02 * order, 0.9)
 				end
@@ -53979,6 +55184,20 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 		OnShow = function(_p)
 			fill(true)
 			MenuTrack._layout()
+			-- open the list one row above the next reward instead of at LV 2
+			task.defer(function()
+				local row, first = ui.NextRow, nil
+				for _, ch in ipairs(list:GetChildren()) do
+					if ch:IsA("GuiObject") and ch.LayoutOrder == 1 then
+						first = ch
+					end
+				end
+				if row and row.Parent and first then
+					local step = row.AbsoluteSize.Y * (70 / 64)
+					local y = row.AbsolutePosition.Y - first.AbsolutePosition.Y - step
+					list.CanvasPosition = Vector2.new(0, math.max(0, y))
+				end
+			end)
 		end,
 	}
 end
@@ -53995,7 +55214,10 @@ return MenuTrack
             <string name="Source"><![CDATA[--[[
 	MenuUpgrades.lua
 	The UPGRADES screen: two tabs in one panel.
-	  PERMANENT  the gold upgrades (MetaUpgradeData) as a 3 x 2 card grid (the rest scroll):
+	  PERMANENT  the account-wide gold upgrades (MetaUpgradeData.AccountOrder: Revive,
+	             Reroll, Skip) and a HERO UPGRADES card: the stat upgrades are bought per
+	             hero on the Characters screen now (Hero Mastery), its button goes there.
+	             Cards:
 	             icon tile, name, what one level gives, LV n / max with rank tally marks,
 	             CURRENT / NEXT effect in plain words and a gold BUY • N GOLD button (an
 	             outlined "N GOLD • NEED M MORE" when short, MAXED when done). A tap marks the
@@ -54117,11 +55339,35 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		return f
 	end
 
-	-- icon tile, serif name and the one-line description (both card kinds)
-	local function cardTop(f: Frame, iconTile: () -> (), name: string, desc: string, rightW: number)
+	local HERO_DESC = "Each hero has its own Max HP, Might, Armor, Speed, Luck, Growth and trait upgrades."
+
+	-- lines a description needs in a card of the current width (narrow phone cards wrap
+	-- to 3-4 lines instead of cutting the sentence off)
+	local function descLines(desc: string): number
+		local room = math.max(60, (ui.CellW or 280) - 28 - 70)
+		return math.clamp(math.ceil(#desc * TS(14) * 0.55 / room), 1, 4)
+	end
+	local function metaDescLines(): number
+		local n = 2
+		for _, id in ipairs(MetaUpgradeData.AccountOrder) do
+			n = math.max(n, descLines(MetaUpgradeData.Upgrades[id].Description))
+		end
+		return math.max(n, descLines(HERO_DESC))
+	end
+
+	-- icon tile, serif name and the description (both card kinds); a long name shrinks to
+	-- fit the card instead of reading "HERO UPGRA..."
+	local function cardTop(f: Frame, iconTile: () -> (), name: string, desc: string, rightW: number, lines: number?)
 		iconTile()
-		text(f, "H2", string.upper(name), { Name = "Name", Position = UDim2.fromOffset(70, 0), Size = UDim2.new(1, -70 - rightW, 0, TS(20) + 6), TextTruncate = Enum.TextTruncate.AtEnd }, 20)
-		text(f, "Small", desc, { Name = "Desc", Position = UDim2.fromOffset(70, TS(20) + 8), Size = UDim2.new(1, -70, 0, TS(14) * 2 + 4), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd })
+		local title = string.upper(name)
+		local room = (ui.CellW or 280) - 28 - 70 - rightW
+		local size = 20
+		while size > 14 and #title * TS(size) * 0.72 > room do
+			size -= 1
+		end
+		text(f, "H2", title, { Name = "Name", Position = UDim2.fromOffset(70, 0), Size = UDim2.new(1, -70 - rightW, 0, TS(20) + 6), TextTruncate = Enum.TextTruncate.AtEnd }, size)
+		local n = lines or 2
+		text(f, "Small", desc, { Name = "Desc", Position = UDim2.fromOffset(70, TS(20) + 8), Size = UDim2.new(1, -70, 0, TS(14) * n + 4), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd })
 	end
 
 	-- purchase state: a tap marks the row pending (button reads BUYING..., taps ignored)
@@ -54136,11 +55382,12 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local maxed = cost == nil
 		local affordable = cost ~= nil and p.Gold >= cost
 		local f = card(order)
+		local lines = metaDescLines()
 		cardTop(f, function()
 			UIKit.Tile(f, { Id = Icons.MetaIcon(id), Size = 56 })
-		end, def.Name, def.Description, 0)
-		-- Gold tallies are bought; the bright next tally is affordable; short dim lines remain.
-		local barY = math.max(64, TS(20) + 12 + 2 * TS(14)) -- under a two-line description
+		end, def.Name, def.Description, 0, lines)
+		-- one segment per level: gold = bought, ivory = the next one is affordable, dark = left
+		local barY = math.max(64, TS(20) + 12 + lines * TS(14)) -- under the description
 		local rank = text(f, "Label", string.format("LV %d / %d", level, def.MaxLevel), {
 			Name = "Rank",
 			Position = UDim2.fromOffset(0, barY),
@@ -54151,14 +55398,19 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		for i = 1, def.MaxLevel do
 			local bought = i <= level
 			local available = i == level + 1 and affordable
-			new("Frame", {
+			local seg = new("Frame", {
 				Name = "Rank" .. i,
-				BackgroundColor3 = bought and P.gold_400 or available and P.ivory_100 or P.slate_600,
+				BackgroundColor3 = bought and P.gold_400 or P.slate_600,
+				BackgroundTransparency = bought and 0 or 0.2,
 				BorderSizePixel = 0,
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.new((i - 0.5) / def.MaxLevel, 0, 1, 0),
-				Size = UDim2.fromOffset(2, (bought or available) and 8 or 4),
+				Position = UDim2.new((i - 1) / def.MaxLevel, 2, 0, 1),
+				Size = UDim2.new(1 / def.MaxLevel, -4, 0, 6),
 			}, marks)
+			UIKit.corner(seg, 3)
+			if available then
+				-- the next level is affordable: an outlined segment, not a filled one
+				UIKit.stroke(seg, P.gold_300, 1, 0.1)
+			end
 		end
 		UIKit.Hairline(f, { Position = UDim2.fromOffset(0, barY + TS(13) + 14) })
 		-- current / next effect (what the next level really gives)
@@ -54176,7 +55428,8 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			local b
 			b = UIKit.Button(f, {
 				Kind = affordable and "Primary" or "Outline",
-				Title = busy and "BUYING..." or (affordable and ("BUY · " .. UIKit.formatNumber(cost) .. " GOLD") or (UIKit.formatNumber(cost) .. " GOLD · NEED " .. UIKit.formatNumber(cost - p.Gold) .. " MORE")),
+				-- narrow phone cards: "2,500 · NEED 660" instead of a cut "2,500 GOLD · NEED 6..."
+				Title = busy and "BUYING..." or (affordable and ("BUY · " .. UIKit.formatNumber(cost) .. " GOLD") or (UIKit.formatNumber(cost) .. ((ui.CellW or 280) >= 330 and " GOLD · NEED " or " · NEED ") .. UIKit.formatNumber(cost - p.Gold) .. ((ui.CellW or 280) >= 330 and " MORE" or ""))),
 				Icon = "coin",
 				IconSize = 20,
 				Align = "Center",
@@ -54228,8 +55481,34 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			UIAnim.Pop(rank, 0, 1.4)
 			UIAnim.Flash(f, P.gold_300)
 			UIAnim.Burst(f, UDim2.fromScale(0.5, 0.45), { P.gold_300, P.gold_500, P.ivory_100 }, 18, 80)
+			UIKit.Sound("Item") -- the purchase landed (not only the tap's click)
 		end
 		lastLevels[id] = level
+		return f
+	end
+
+	-- the stat upgrades moved to each hero (Characters screen, Hero Mastery)
+	local function heroCard(p, order: number)
+		local f = card(order)
+		local selected = p.SelectedCharacter or "Knight"
+		cardTop(f, function()
+			Icons.Character(f, selected, { Size = 56 })
+		end, "Hero upgrades", HERO_DESC, 0, metaDescLines())
+		UIKit.Button(f, {
+			Kind = "Primary",
+			Title = "OPEN CHARACTERS",
+			Icon = "chevronsUp",
+			IconSize = 20,
+			Align = "Center",
+			Name = "HeroUpgrades",
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.fromScale(0, 1),
+			Size = UDim2.new(1, 0, 0, 46),
+			Shadow = false,
+			OnClick = function()
+				ctx.ShowScreen("Characters")
+			end,
+		})
 		return f
 	end
 
@@ -54297,7 +55576,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		-- a fresh profile answers every purchase in flight
 		table.clear(pending)
 		if tab == "Permanent" then
-			ui.Note.Text = "Buy permanent upgrades with gold. They last forever."
+			ui.Note.Text = "Account upgrades for every hero. Hero stats are bought on each hero."
 		else
 			ui.Note.Text = "Gold packs, gold boosts and VIP perks. Purchases go through Roblox."
 		end
@@ -54308,12 +55587,16 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		end
 		local n = 0
 		if tab == "Permanent" then
-			for order, id in ipairs(MetaUpgradeData.Order) do
+			for order, id in ipairs(MetaUpgradeData.AccountOrder) do
 				local f = metaCard(p, id, order)
 				n += 1
 				if animate then
 					UIAnim.Pop(f, 0.03 * n, 0.7)
 				end
+			end
+			local f = heroCard(p, #MetaUpgradeData.AccountOrder + 1)
+			if animate then
+				UIAnim.Pop(f, 0.03 * (n + 1), 0.7)
 			end
 		else
 			for order, item in ipairs(SHOP) do
@@ -54330,9 +55613,17 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 	-- card height: the PERMANENT cards hold the level bar and CURRENT / NEXT, the SHOP
 	-- cards only the description and the button
 	MenuUpgrades._cell = function()
-		local metaH = math.max(64, TS(20) + 12 + 2 * TS(14)) + TS(13) + 22 + 2 * (TS(15) + 6) + 12 + 46 + 28
+		local metaH = math.max(64, TS(20) + 12 + metaDescLines() * TS(14)) + TS(13) + 22 + 2 * (TS(15) + 6) + 12 + 46 + 28
 		local shopH = TS(20) + 8 + 2 * TS(14) + 16 + 50 + 28 + 8
-		ui.Grid.CellSize = UDim2.fromOffset(ui.CellW or 280, tab == "Shop" and shopH or metaH)
+		local cellH = tab == "Shop" and shopH or metaH
+		ui.Grid.CellSize = UDim2.fromOffset(ui.CellW or 280, cellH)
+		-- the panel is only as tall as its cards (portrait left half the screen empty)
+		if ui.PanelMaxH then
+			local count = tab == "Shop" and #SHOP or (#MetaUpgradeData.AccountOrder + 1)
+			local rows = math.ceil(count / (ui.Cols or 1))
+			local need = 28 + ui.ScrollTop + 12 + rows * cellH + (rows - 1) * 12 + 8
+			ui.Panel.Size = UDim2.fromOffset(ui.Panel.Size.X.Offset, math.min(ui.PanelMaxH, need))
+		end
 	end
 
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
@@ -54347,11 +55638,26 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local w = math.min(W - 2 * M, 960)
 		ui.Panel.Position = UDim2.fromOffset((W - w) / 2, top)
 		ui.Panel.Size = UDim2.fromOffset(w, H - top - M)
+		ui.PanelMaxH = H - top - M
+		-- phones in landscape: no note line (the HERO UPGRADES card says the same), so the
+		-- cards' buy buttons are in view without scrolling
+		local pr = ctx.Profile()
+		local noNote = UIKit.IsCompact() and not portrait and not (pr and pr.MemoryOnly)
+		ui.Note.Visible = not noNote
+		ui.ScrollTop = Theme.Size.TapMin + (noNote and 8 or (14 + TS(14) + 6))
+		ui.Scroll.Position = UDim2.fromOffset(0, ui.ScrollTop)
+		ui.Scroll.Size = UDim2.new(1, 0, 1, -ui.ScrollTop)
 		local inner = w - 32 - 12
 		local cols = math.clamp(math.floor((inner + 12) / 264), 1, 3)
+		ui.Cols = cols
 		local cw = math.floor((inner - (cols - 1) * 12) / cols)
+		local changed = ui.CellW ~= cw
 		ui.CellW = cw
 		MenuUpgrades._cell()
+		-- card text (description lines, title size, button label) follows the card width
+		if changed and screen.Visible then
+			rebuild(false)
+		end
 	end
 
 	return {
@@ -54398,7 +55704,8 @@ return MenuUpgrades
 	                pinned to the edge with a pointer, pinged once when it appears
 	  caravan       the Lost Caravan (workspace.SwarmEvents.Caravan): wood square, gold
 	                edge while defended, pinned to the edge, pinged when the defence starts
-	  loot          chests (gold squares), shrines (ivory diamonds), the altar (amber ring),
+	  loot          paid chests (gold squares), free chests (Price 0: white squares), shrines
+	                (ivory diamonds), the altar (amber ring),
 	                in range only; gone once opened / spent / claimed
 	  teammates     blue discs (dimmed while fallen), eased between updates
 	  enemies       at most MAX_ENEMY_DOTS faint red dots sampled evenly from the enemies
@@ -54640,6 +55947,7 @@ function MiniMap.Build(root: Frame, k: { [string]: any })
 	holder.Active = false
 	face.Active = false
 	ui.Holder, ui.Face = holder, face
+	Hud.AvoidInPortrait(holder) -- portrait: the centre banners drop below the map
 	-- the clipped viewport (the dark "outside" of the arena), inset so the corners stay clean
 	local view = new("Frame", { Name = "View", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.05, BorderSizePixel = 0, ClipsDescendants = true, Position = UDim2.fromOffset(MAP_INSET, HEADER_PC), Size = UDim2.fromOffset(viewPx, viewPx), ZIndex = 2 }, face)
 	UIKit.corner(view, 5)
@@ -55082,8 +56390,11 @@ local function updateSlow()
 					used += 1
 					local f = ui.Loot[used]
 					placeAt(f, lpos.X, lpos.Z)
+					-- paid chests gold squares, free ones (caches, Price 0) ivory squares,
+					-- shrines ivory diamonds
 					local shrine = kind == "Shrine"
-					local c = Accessibility.Color(shrine and P.ivory_200 or P.gold_400, shrine and "Neutral" or "Loot")
+					local paid = not shrine and (tonumber(m:GetAttribute("Price")) or 0) > 0
+					local c = if shrine then Accessibility.Color(P.ivory_200, "Neutral") elseif paid then Accessibility.Color(P.gold_400, "Loot") else P.ivory_100
 					if f.BackgroundColor3 ~= c then
 						f.BackgroundColor3 = c
 					end
@@ -56901,7 +58212,7 @@ end
 	Armoury batch (WeaponData.Visuals 39-56): part-built only, front = -Z like the rest.
 	Shields face outward (the server syncs the outward yaw); the saw and the vortex lie flat
 	and spin about Y (VFX styles "Saw" / "Vortex"); the snare stands on the floor (origin =
-	ground centre, it rises like a totem); clouds are soft translucent puffs.
+	ground centre, it rises like a totem); clouds are invisible markers (VFX draws them).
 ]]
 local function wardShield(b, face: Color3, rim: Color3, boss: Color3)
 	local faceOut = CFrame.Angles(0, math.rad(90), 0) -- cylinder axis X → Z: a disc facing out
@@ -56934,16 +58245,6 @@ end
 local function slingStone(b, stone: Color3, fleck: Color3, glow: boolean)
 	b.add("Ball", Vector3.new(0.9, 0.78, 0.9), stone, CFrame.new(), glow and { Material = SHOT_NEON } or nil)
 	b.add("Block", Vector3.new(0.36, 0.3, 0.36), fleck, CFrame.new(0.22, 0.18, -0.1) * CFrame.Angles(0.5, 0.6, 0))
-end
-
-local function cloud(b, light: Color3, mid: Color3, dark: Color3)
-	b.add("Ball", Vector3.new(4.6, 2.4, 4.6), mid, CFrame.new(0, 0.2, 0), { Transparency = 0.5 })
-	b.add("Ball", Vector3.new(3.4, 2.2, 3.4), light, CFrame.new(2.2, 0.5, 1.0), { Transparency = 0.55 })
-	b.add("Ball", Vector3.new(3.6, 2.0, 3.6), light, CFrame.new(-2.1, 0.3, -1.1), { Transparency = 0.55 })
-	b.add("Ball", Vector3.new(3.0, 1.8, 3.0), dark, CFrame.new(0.6, 0.9, -2.2), { Transparency = 0.6 })
-	b.add("Ball", Vector3.new(2.8, 1.7, 2.8), mid, CFrame.new(-0.8, 0.7, 2.3), { Transparency = 0.6 })
-	b.add("Ball", Vector3.new(0.5, 0.5, 0.5), light, CFrame.new(0.9, 1.4, 0.4), { Material = SHOT_NEON })
-	b.add("Ball", Vector3.new(0.4, 0.4, 0.4), light, CFrame.new(-1.0, 1.2, -0.3), { Material = SHOT_NEON })
 end
 
 local function sawblade(b, blade: Color3, hub: Color3, teeth: Color3)
@@ -57006,11 +58307,12 @@ end
 SHOTS[46] = function(b, _def)
 	slingStone(b, ShotPalette.gold_400, ShotPalette.crimson_400, true)
 end
+-- Plague Censer clouds: an invisible marker; VFX draws the cloud on it (WeaponFx "cl")
 SHOTS[47] = function(b, _def)
-	cloud(b, ShotPalette.moss_200, ShotPalette.moss_300, ShotPalette.bog_500)
+	b.add("Ball", Vector3.new(0.2, 0.2, 0.2), ShotPalette.moss_300, CFrame.new(), { Transparency = 1 })
 end
 SHOTS[48] = function(b, _def)
-	cloud(b, ShotPalette.moss_100, ShotPalette.moss_200, ShotPalette.murk_500)
+	b.add("Ball", Vector3.new(0.2, 0.2, 0.2), ShotPalette.moss_200, CFrame.new(), { Transparency = 1 })
 end
 SHOTS[49] = function(b, _def)
 	sawblade(b, ShotPalette.steel_200, ShotPalette.steel_600, ShotPalette.ivory_100)
@@ -59393,6 +60695,10 @@ return Showcase
 	                 auto-continue countdown and who is ready (SwarmState ChoiceLeft /
 	                 PortalReady). Answers with the PortalChoice remote; the server decides.
 	                 Endless runs (offer.Endless): NEXT STAGE only, no RETURN TO LOBBY.
+	  waves          SwarmState WaveSeq changes when the server announces a wave
+	                 (EnemySpawner, Config.Waves): a big centre banner "WAVE 3" / "From the
+	                 north" with the horn (Hud.Announce, WaveHorn) and a red glow on the
+	                 screen edge(s) it comes from (SwarmState WaveAngle + WaveSides)
 	  travel fade    remote StageTravel: the screen fades to slate with "STAGE N · Arena"
 	                 (the title slams in with a ring and sparks), then fades back once the
 	                 new stage is running
@@ -59418,6 +60724,7 @@ local Hud = require(script.Parent.Hud)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Accessibility = require(script.Parent.Accessibility)
 local PortalBeacon = require(script.Parent.PortalBeacon)
+local RunIntro = require(script.Parent.RunIntro)
 
 local StageUI = {}
 
@@ -59434,6 +60741,7 @@ local offer: { [string]: any }? = nil
 local chosen = false
 local travel = { Active = false, Since = 0 }
 local lastReveal: number? = nil -- SwarmState PortalReveal seen last (nil = not in a run)
+local lastWaveSeq: number? = nil -- SwarmState WaveSeq seen last (nil = not in a run)
 local lastWarn = 0 -- SwarmState SwarmWarn seen last (the swarm-pressure banner)
 
 -- Swarm pressure (SwarmState SwarmWarn, Config.Stages.Pressure): a banner each step up,
@@ -59446,9 +60754,9 @@ local function checkPressure(state: Configuration)
 	local up = warn > lastWarn
 	lastWarn = warn
 	if up and warn == 1 then
-		Hud.Announce("THE SWARM IS GROWING", "Open the portal before it gets worse", Accessibility.Color(Color3.fromRGB(246, 218, 126), "Loot"), "PortalAppear")
+		Hud.Announce("THE SWARM IS GROWING", Config.Waves.Enabled and "Bigger waves until the portal opens" or "Open the portal before it gets worse", Accessibility.Color(Color3.fromRGB(246, 218, 126), "Loot"), "PortalAppear")
 	elseif up and warn >= 2 then
-		Hud.Announce("THE SWARM IS OVERWHELMING", "Open the portal now!", Accessibility.Color(Color3.fromRGB(219, 106, 94), "Danger"), "PortalAppear")
+		Hud.Announce("THE SWARM IS OVERWHELMING", Config.Waves.Enabled and "Huge waves: open the portal now!" or "Open the portal now!", Accessibility.Color(Color3.fromRGB(219, 106, 94), "Danger"), "PortalAppear")
 	end
 end
 
@@ -59462,7 +60770,7 @@ local function checkReveal(state: Configuration)
 	if reveal ~= lastReveal then
 		lastReveal = reveal
 		if reveal > 0 then
-			Hud.Announce("THE PORTAL HAS APPEARED", "Open it before the swarm grows too strong: follow the arrow, stand in its circle",
+			Hud.Announce("THE PORTAL HAS APPEARED", "Follow the arrow · stand in its circle",
 				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear")
 		end
 	end
@@ -59967,6 +61275,118 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	ui.ArrowPivot.Rotation = math.deg(math.atan2(d.Y, d.X))
 end
 
+------------------------------------------------------------------------------------------
+-- Waves
+------------------------------------------------------------------------------------------
+
+local EDGE_SIDES = { "Left", "Right", "Top", "Bottom" }
+
+local function buildEdges(root: Frame)
+	ui.Edges = {}
+	for _, side in ipairs(EDGE_SIDES) do
+		local vertical = side == "Left" or side == "Right"
+		local f = new("Frame", {
+			Name = "WaveEdge" .. side,
+			BackgroundColor3 = P.crimson_400,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(side == "Right" and 1 or 0, side == "Bottom" and 1 or 0),
+			Position = UDim2.fromScale(side == "Right" and 1 or 0, side == "Bottom" and 1 or 0),
+			Size = vertical and UDim2.new(0, 90, 1, 0) or UDim2.new(1, 0, 0, 70),
+			Visible = false,
+			ZIndex = Theme.Z.Hud,
+		}, root)
+		-- solid at the screen edge, clear toward the middle
+		local rot = ({ Left = 0, Right = 180, Top = 90, Bottom = 270 })[side]
+		new("UIGradient", {
+			Rotation = rot,
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) }),
+		}, f)
+		ui.Edges[side] = f
+	end
+end
+
+-- Which screen edge a world direction (from the local hero) points at.
+local function screenSide(angle: number): string?
+	local root = localRoot()
+	if not root then
+		return nil
+	end
+	local p = root.Position
+	local a, _ = project(p)
+	local b, _ = project(p + Vector3.new(math.cos(angle), 0, math.sin(angle)) * 40)
+	local d = b - a
+	if d.Magnitude < 1 then
+		return nil
+	end
+	if math.abs(d.X) > math.abs(d.Y) then
+		return d.X > 0 and "Right" or "Left"
+	end
+	return d.Y > 0 and "Bottom" or "Top"
+end
+
+local function flashEdge(side: string)
+	local f = ui.Edges and ui.Edges[side]
+	if not f then
+		return
+	end
+	f.Visible = true
+	f.BackgroundTransparency = 1
+	local reduced = ClientSettings.Reduced()
+	-- in: quick (reduced: no pulse, one soft fade); hold; out
+	local fadeIn = TweenService:Create(f, TweenInfo.new(reduced and 0.4 or 0.15), { BackgroundTransparency = reduced and 0.45 or 0.25 })
+	fadeIn:Play()
+	task.delay(reduced and 2.4 or 0.45, function()
+		if not reduced then
+			TweenService:Create(f, TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 2, true), { BackgroundTransparency = 0.55 }):Play()
+		end
+		task.delay(reduced and 0 or 1.2, function()
+			local out = TweenService:Create(f, TweenInfo.new(0.8), { BackgroundTransparency = 1 })
+			out.Completed:Connect(function()
+				if f.BackgroundTransparency >= 0.99 then
+					f.Visible = false
+				end
+			end)
+			out:Play()
+		end)
+	end)
+end
+
+local function checkWave(state: Configuration)
+	local seq = state:GetAttribute("WaveSeq") or 0
+	if lastWaveSeq == nil then
+		lastWaveSeq = seq -- entering a run mid-wave: no stale banner
+		return
+	end
+	if seq == lastWaveSeq or RunIntro.Active() then
+		return -- the stage-start card is up: the banner waits for it
+	end
+	lastWaveSeq = seq
+	local n = state:GetAttribute("Wave") or 0
+	local sides = string.split(tostring(state:GetAttribute("WaveSides") or ""), ",")
+	local sub = #sides == 1 and sides[1] ~= "" and ("From the " .. sides[1]) or ("From " .. #sides .. " sides at once!")
+	if state:GetAttribute("WaveBig") == true then
+		sub = "BIG WAVE · " .. sub
+	end
+	-- the big banner + horn only for wave 1, every big wave and a stage's first wave
+	-- (SwarmState WaveLoud); the others get the server's one-line toast, the pill and the
+	-- edge glow
+	if state:GetAttribute("WaveLoud") ~= false then
+		Hud.Announce("WAVE " .. tostring(n), sub, Accessibility.Color(P.crimson_300, "Danger"), "WaveHorn")
+	end
+	local base = state:GetAttribute("WaveAngle")
+	if type(base) == "number" and #sides >= 1 then
+		local lit = {}
+		for d = 1, #sides do
+			local side = screenSide(base + (d - 1) * (2 * math.pi / #sides))
+			if side and not lit[side] then
+				lit[side] = true
+				flashEdge(side)
+			end
+		end
+	end
+end
+
 function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 	local stagePhase = state:GetAttribute("StagePhase") or "None"
 	if not inRun then
@@ -59983,9 +61403,11 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 			lastReveal = nil
 			PortalBeacon.Clear()
 		end
+		lastWaveSeq = nil
 		return
 	end
 	checkReveal(state)
+	checkWave(state)
 	checkPressure(state)
 	PortalBeacon.Update(state, not travel.Active)
 	-- the travel fade lifts once the next stage runs (or after a safety timeout)
@@ -60022,6 +61444,7 @@ end
 
 function StageUI.Build(root: Frame, k: { [string]: any })
 	kit = k
+	buildEdges(root)
 	buildArrow(root)
 	buildRing(root)
 	buildChoice(root)
@@ -62867,6 +64290,127 @@ end
 	(portrait). The hero stands at the screen centre: when the card would cover it (short
 	landscape phones), the card moves to the side of the screen with more room, narrower.
 ]]
+-- Screen rects (virtual units, x / y / w / h) of what a tip card must not cover. The
+-- first list holds the touch controls the card must clear; the second everything else a
+-- new spot for it must also leave visible.
+local function obstacleRects(W: number): ({ { number } }, { { number } })
+	local parent = ui.Card and ui.Card.Parent :: GuiObject?
+	if not parent or parent.AbsoluteSize.X < 1 then
+		return {}, {}
+	end
+	local k = W / parent.AbsoluteSize.X
+	local origin = parent.AbsolutePosition
+	local function rect(g: Instance?, pad: number): { number }?
+		if not g or not g:IsA("GuiObject") or not g.Visible or g.AbsoluteSize.X < 1 then
+			return nil
+		end
+		local anc: Instance? = g.Parent
+		while anc and anc:IsA("GuiObject") do
+			if not anc.Visible then
+				return nil
+			end
+			anc = anc.Parent
+		end
+		local p, sz = (g.AbsolutePosition - origin) * k, g.AbsoluteSize * k
+		return { p.X - pad, p.Y - pad, sz.X + 2 * pad, sz.Y + 2 * pad }
+	end
+	local controls: { { number } }, others: { { number } } = {}, {}
+	local function add(list: { { number } }, r: { number }?)
+		if r then
+			table.insert(list, r)
+		end
+	end
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if pg then
+		add(controls, rect(pg:FindFirstChild("JumpButton", true), 8))
+		local ping = pg:FindFirstChild("Ping", true)
+		if ping and ping:IsA("GuiButton") then
+			add(controls, rect(ping, 8))
+		end
+	end
+	add(others, rect(MiniMap.Elements().Holder, 6))
+	add(others, rect(LootUI.Elements().Prompt, 6))
+	local team = TeamUI.Elements()
+	add(others, rect(team.List, 6))
+	for _, mk in pairs(team.Markers or {}) do
+		local r = rect(mk.Holder, 12)
+		if r then
+			r[4] += 26 -- the name / progress label under the ring
+			add(others, r)
+		end
+	end
+	local hud = Hud.Elements()
+	add(others, rect(hud.Stage, 6))
+	add(others, rect(hud.TimerPill, 6))
+	add(others, rect(hud.Plate and hud.Plate:FindFirstChild("Body"), 6))
+	add(others, rect(hud.Bar, 6))
+	add(others, rect(hud.Counters, 6))
+	return controls, others
+end
+
+local function clearOfControls(x: number, y: number, w: number, h: number, W: number, H: number): (number, number, number, number)
+	local controls, others = obstacleRects(W)
+	local function hitsAny(list: { { number } }, cx: number, cy: number, cw: number?, ch: number?): boolean
+		local ww, hh = cw or w, ch or h
+		local l, t = cx - ww / 2, cy
+		for _, r in ipairs(list) do
+			-- (a few px of touch is fine: the rects already carry padding)
+			if l + 4 < r[1] + r[3] and l + ww > r[1] + 4 and t + 4 < r[2] + r[4] and t + hh > r[2] + 4 then
+				return true
+			end
+		end
+		return false
+	end
+	if not hitsAny(controls, x, y) then
+		return x, y, w, h
+	end
+	local function aboveControls(cx: number): number
+		local top = y
+		for _, r in ipairs(controls) do
+			local l = cx - w / 2
+			if l < r[1] + r[3] and l + w > r[1] then
+				top = math.min(top, r[2] - 8 - h)
+			end
+		end
+		return top
+	end
+	local xl, xr = 12 + w / 2, W - 12 - w / 2
+	local candidates = {
+		{ x, aboveControls(x), w, h },
+		{ x < W / 2 and xr or xl, y, w, h },
+		{ x < W / 2 and xr or xl, aboveControls(x < W / 2 and xr or xl), w, h },
+		{ xl, math.max(8, Hud.TopBottom() + 8), w, h },
+	}
+	-- the top-left corner under Roblox's buttons, narrowed to end before the top HUD
+	-- (timer / vitals) that starts to its right
+	local cornerY = 56
+	local edge = W
+	for _, r in ipairs(others) do
+		if r[2] < cornerY + h and r[1] > 40 then
+			edge = math.min(edge, r[1])
+		end
+	end
+	local cw = math.min(w, edge - 24)
+	if cw >= 320 and bodyLines(ui.Body.Text, cw - 32 - ICON - 14) <= 2 then
+		local ch = sizeCard(cw)
+		table.insert(candidates, { 12 + cw / 2, cornerY, cw, ch })
+	end
+	for _, c in ipairs(candidates) do
+		local cx, cy, cw2, ch2 = c[1], c[2], c[3], c[4]
+		local hero = not (math.abs(cx - W / 2) < cw2 / 2 + 70 and cy < H / 2 + 80 and cy + ch2 > H / 2 - 80)
+		if cy >= 8 and cy + ch2 <= H - 8 and hero and not hitsAny(controls, cx, cy, cw2, ch2) and not hitsAny(others, cx, cy, cw2, ch2) then
+			return cx, cy, cw2, ch2
+		end
+	end
+	-- nowhere fully free: at least keep the controls clear
+	for _, c in ipairs(candidates) do
+		if c[2] >= 8 and c[2] + c[4] <= H - 8 and not hitsAny(controls, c[1], c[2], c[3], c[4]) then
+			return c[1], c[2], c[3], c[4]
+		end
+	end
+	return x, y, w, h
+end
+
 local function layout()
 	if not ui.Card or not current then
 		return
@@ -62949,6 +64493,13 @@ local function layout()
 		end
 		x = right and (W - 12 - w / 2) or (12 + w / 2)
 	end
+	-- touch controls (JUMP, PING) must never sit under the card: a tip without a target
+	-- moves up / to the other side / to the top-left corner, to the first spot that covers
+	-- no control, map, team row, revive marker, loot prompt or the hero
+	if not (pos and size) then
+		x, y, w, h = clearOfControls(x, y, w, h, W, H)
+		h = sizeCard(w) -- the spot search may have measured other widths
+	end
 	if pos and size then
 		local ax = math.clamp(tx - (x - w / 2), 28, w - 28)
 		ui.Arrow.Position = UDim2.fromOffset(ax, dir < 0 and 0 or h)
@@ -63019,9 +64570,9 @@ local function showNext(now: number)
 	setIcon(tip.Icon)
 	layout()
 	ui.Card.Visible = true
-	-- slide in from the side of what it explains (or rise from below)
-	local d = (current :: any).Dir
-	UIAnim.SlideIn(ui.Card, Vector2.new(0, d < 0 and -28 or 28), 0)
+	-- scale-only entrance: layout() owns the card's Position (a Position tween would
+	-- override any relayout during it and leave the card at a stale spot)
+	UIAnim.Pop(ui.Card, 0, 0.9)
 	if not ClientSettings.Reduced() then
 		-- the icon spins in, the TIP badge pops, a glint crosses the card, and the ring
 		-- around the explained element pulses out once
@@ -63259,6 +64810,7 @@ return Tutorial
 	Cancel them when it closes; UIAnim.Track collects tweens (and IdleFx handles) for that.
 ]]
 
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Theme"))
@@ -63278,6 +64830,10 @@ local function scaleOf(obj: GuiObject): UIScale
 	return s :: UIScale
 end
 UIAnim.ScaleOf = scaleOf
+
+-- UIAnim.Punch's replayable tweens (weak keys: gone with their UIScale)
+local PUNCH_INFO = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local punchTweens: { [UIScale]: Tween } = setmetatable({}, { __mode = "k" }) :: any
 
 function UIAnim.Tween(obj: Instance, seconds: number, goal: { [string]: any }, style: Enum.EasingStyle?, dir: Enum.EasingDirection?): Tween
 	local t = TweenService:Create(obj, TweenInfo.new(seconds, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), goal)
@@ -63322,19 +64878,14 @@ function UIAnim.Punch(obj: GuiObject, amount: number?)
 	end
 	local s = scaleOf(obj)
 	s.Scale = 1 + (amount or 0.25)
-	UIAnim.Tween(s, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
-end
-
--- Slides in from an offset (in pixels) while growing to full size, staggered by `delay`.
-function UIAnim.SlideIn(obj: GuiObject, offset: Vector2, delay: number?)
-	local target = obj.Position
-	obj.Position = target + UDim2.fromOffset(offset.X, offset.Y)
-	local s = scaleOf(obj)
-	s.Scale = 0.94
-	task.delay(delay or 0, function()
-		UIAnim.Tween(obj, 0.4, { Position = target }, Enum.EasingStyle.Quint)
-		UIAnim.Tween(s, 0.4, { Scale = 1 }, Enum.EasingStyle.Quint)
-	end)
+	-- one Tween per scale, replayed (a burst of gold / kills punches every frame: no
+	-- new Tween each time); Play restarts from the value just set, like a fresh tween
+	local t = punchTweens[s]
+	if not t then
+		t = TweenService:Create(s, PUNCH_INFO, { Scale = 1 })
+		punchTweens[s] = t
+	end
+	t:Play()
 end
 
 -- Fades a frame's background from invisible to `target` transparency.
@@ -63751,6 +65302,47 @@ function UIAnim.SweepOnce(obj: GuiObject, color: Color3?, seconds: number?, tran
 	end)
 end
 
+-- Sparks in flight, driven by one RenderStepped connection (only while any fly) and
+-- recycled through a small pool: a big swarm's gold / kill sparks create no Frames or
+-- Tweens per burst. Motion matches the old Quad-out tween (position, fade, shrink to 1 px).
+local SPARK_POOL_MAX = 64
+local sparkPool: { Frame } = {}
+local sparks: { { [string]: any } } = {}
+local sparkConn: RBXScriptConnection? = nil
+
+local function stepSparks()
+	local now = os.clock()
+	local i = 1
+	while i <= #sparks do
+		local s = sparks[i]
+		local f: Frame = s.Frame
+		local t = (now - s.T0) / s.Dur
+		if t >= 1 or f.Parent ~= s.Parent then
+			-- done (or its parent went away): back to the pool when still usable
+			local intact = f.Parent == s.Parent
+			sparks[i] = sparks[#sparks]
+			sparks[#sparks] = nil
+			if intact and #sparkPool < SPARK_POOL_MAX then
+				f.Parent = nil
+				table.insert(sparkPool, f)
+			else
+				f:Destroy()
+			end
+		else
+			local e = 1 - (1 - t) * (1 - t) -- Quad out
+			f.Position = (s.From :: UDim2):Lerp(s.To, e)
+			f.BackgroundTransparency = e
+			local px = s.Size + (1 - s.Size) * e
+			f.Size = UDim2.fromOffset(px, px)
+			i += 1
+		end
+	end
+	if #sparks == 0 and sparkConn then
+		sparkConn:Disconnect()
+		sparkConn = nil
+	end
+end
+
 -- Radial sparks flying out of `center` (a UDim2 inside `parent`) and fading.
 function UIAnim.Sparks(parent: GuiObject, center: UDim2, color: Color3, count: number?, distance: number?, seconds: number?)
 	if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
@@ -63759,28 +65351,30 @@ function UIAnim.Sparks(parent: GuiObject, center: UDim2, color: Color3, count: n
 	local n = count or 10
 	local dist = distance or 46
 	local dur = seconds or 0.55
+	local now = os.clock()
 	for i = 1, n do
 		local a = (i / n) * math.pi * 2 + (i % 3) * 0.2
 		local d = dist * (0.65 + 0.35 * ((i * 7) % 5) / 4)
 		local size = 4 + (i % 3) * 2
-		local spark = Instance.new("Frame")
-		spark.Name = "Spark"
-		spark.BackgroundColor3 = color
-		spark.BorderSizePixel = 0
-		spark.AnchorPoint = Vector2.new(0.5, 0.5)
-		spark.Size = UDim2.fromOffset(size, size)
-		spark.Rotation = 45
-		spark.Position = center
-		spark.ZIndex = parent.ZIndex + 5
-		spark.Parent = parent
-		local t = UIAnim.Tween(spark, dur, {
-			Position = center + UDim2.fromOffset(math.cos(a) * d, math.sin(a) * d),
-			BackgroundTransparency = 1,
-			Size = UDim2.fromOffset(1, 1),
-		}, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		t.Completed:Once(function()
-			spark:Destroy()
-		end)
+		local spark = table.remove(sparkPool)
+		if not spark then
+			spark = Instance.new("Frame")
+			spark.Name = "Spark"
+			spark.BorderSizePixel = 0
+			spark.AnchorPoint = Vector2.new(0.5, 0.5)
+			spark.Rotation = 45
+		end
+		local f = spark :: Frame
+		f.BackgroundColor3 = color
+		f.BackgroundTransparency = 0
+		f.Size = UDim2.fromOffset(size, size)
+		f.Position = center
+		f.ZIndex = parent.ZIndex + 5
+		f.Parent = parent
+		table.insert(sparks, { Frame = f, Parent = parent, T0 = now, Dur = dur, From = center, To = center + UDim2.fromOffset(math.cos(a) * d, math.sin(a) * d), Size = size })
+	end
+	if not sparkConn then
+		sparkConn = RunService.RenderStepped:Connect(stepSparks)
 	end
 end
 
@@ -64034,6 +65628,7 @@ local function setCovering(name: string, on: boolean)
 	end
 	Hud.SetCovered(next(covering) ~= nil)
 	MiniMap.SetCovered(next(covering) ~= nil)
+	LootUI.SetCovered(next(covering) ~= nil)
 end
 
 -- Opening: the dimmer fades in and the panel pops up with a little overshoot.
@@ -66377,6 +67972,47 @@ local function stackHeight(frame: Instance, gap: number): number
 	return h + math.max(0, n - 1) * gap
 end
 
+-- The tallest cut (<= h, >= floor) through the stacked settings columns that splits no
+-- row: the columns' rows laid out as their UIListLayout does (COLUMN_PAD - 4 on top, 6
+-- between). Returns h when there is no such cut.
+local function snapToRows(cols: { Frame }, h: number, floor: number): number
+	local rows: { { number } } = {}
+	for _, col in ipairs(cols) do
+		local list = {}
+		for _, ch in ipairs(col:GetChildren()) do
+			if ch:IsA("GuiObject") and ch.Visible then
+				table.insert(list, ch)
+			end
+		end
+		table.sort(list, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		local y = col.Position.Y.Offset + 12
+		for _, ch in ipairs(list) do
+			table.insert(rows, { y, y + ch.Size.Y.Offset })
+			y += ch.Size.Y.Offset + 6
+		end
+	end
+	local best = nil
+	for _, r in ipairs(rows) do
+		for _, cut in ipairs({ r[1] - 2, r[2] + 3 }) do
+			if cut <= h and cut >= floor and (best == nil or cut > best) then
+				local ok = true
+				for _, o in ipairs(rows) do
+					if o[1] < cut and cut < o[2] then
+						ok = false
+						break
+					end
+				end
+				if ok then
+					best = cut
+				end
+			end
+		end
+	end
+	return best or h
+end
+
 -- A settings column heading: serif caps in gold over a hairline.
 local function sectionCaption(parent: Instance, str: string, order: number)
 	local h = TS(18) + 14
@@ -66627,6 +68263,10 @@ local function buildPause()
 		local fixed = (TS(30) + 6) + 10 + pause.Note.Size.Y.Offset + Theme.Size.Button + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(160, v.Y - 24 - fixed)
 		local h = math.min(contentH, room)
+		if contentH > h + 1 then
+			-- the scroll edge falls between rows, not through a title or its description
+			h = snapToRows({ colA, colB }, h, math.max(140, h - 140))
+		end
 		options.Size = UDim2.new(1, 0, 0, h)
 		options.CanvasSize = UDim2.fromOffset(0, contentH)
 		options.ScrollBarThickness = contentH > h + 1 and 4 or 0
@@ -66867,6 +68507,7 @@ end
 ------------------------------------------------------------------------------------------
 
 local results: { [string]: any } = {}
+local MORE_H = 18 -- the results' MORE BELOW row
 local resultsDeadline = 0
 -- REPLAY: start the same mode again once this client is back in the lobby
 local pendingReplay: { Mode: string, Until: number, Waited: boolean }? = nil
@@ -67005,8 +68646,11 @@ local function buildResults()
 		Visible = false,
 	})
 
+	-- the scroll hint row (shown only while the body scrolls; see results.MoreHint)
+	results.More = text(content, "Caption", UIKit.track("More below") .. "  \u{25BE}", { Name = "MoreHint", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, MORE_H), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, Visible = false }, 11)
+
 	-- actions: REPLAY (same mode) and MAIN MENU
-	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 4, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
+	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
 	results.ButtonRow = row
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 	results.Replay = UIKit.Button(row, {
@@ -67047,7 +68691,7 @@ local function buildResults()
 	})
 	-- footer: the countdown and a quiet REPORT A BUG (the same form as the pause menu's,
 	-- opened over the results; the results wait while it is open)
-	local footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 44) }, content)
+	local footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 44) }, content)
 	results.Footer = footer
 	results.FooterList = UIKit.list(footer, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
 	results.Timer = text(footer, "Caption", "", { LayoutOrder = 1, Size = UDim2.fromOffset(0, TS(12) + 6), AutomaticSize = Enum.AutomaticSize.X, TextXAlignment = Enum.TextXAlignment.Center })
@@ -67117,6 +68761,17 @@ local function buildResults()
 		local nLines = (results.ProgLineCount or 0) * perLine
 		results.ProgLines.Size = UDim2.new(1, -28, 0, nLines * lineH)
 		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0))
+		-- the defeat's damage review: two hits per line on landscape phones (half the height,
+		-- so it sits nearer the fold)
+		local recent = results.Recent :: { string }?
+		if results.SettlementBase and recent and #recent > 0 then
+			local reviewRows = {}
+			local step = slim and 2 or 1
+			for i = 1, #recent, step do
+				table.insert(reviewRows, slim and table.concat(recent, "      ", i, math.min(i + 1, #recent)) or recent[i])
+			end
+			results.Settlement.Text = results.SettlementBase .. "\nRecent damage (latest first):\n" .. table.concat(reviewRows, "\n")
+		end
 		local settlementLines = 0
 		for line in string.gmatch(results.Settlement.Text .. "\n", "([^\n]*)\n") do
 			settlementLines += math.max(1, math.ceil(#line * results.Settlement.TextSize * 0.6 / math.max(1, inner)))
@@ -67133,6 +68788,11 @@ local function buildResults()
 		results.Footer.Size = UDim2.new(1, 0, 0, footH)
 		local fixed = headH + 10 + btnH + footH + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(140, v.Y - 24 - fixed)
+		local scrolls = bodyH > room
+		if scrolls then
+			room = math.max(140, room - MORE_H - 10) -- the MORE BELOW row and its gap
+		end
+		results.More.Visible = scrolls
 		local h = math.min(bodyH, room)
 		if bodyH > room then
 			-- the scroll area ends between two blocks, never through a line of text
@@ -67161,7 +68821,16 @@ local function buildResults()
 		body.Size = UDim2.new(1, 0, 0, h)
 		body.CanvasSize = UDim2.fromOffset(0, bodyH)
 		body.ScrollBarThickness = bodyH > h + 1 and 4 or 0
+		results.MoreHint()
 	end
+	-- "MORE BELOW" under the body while it scrolls (the damage review / build sit below
+	-- the fold on landscape phones): its own row, so it never covers a line; dimmed once
+	-- scrolled to the end; event-driven
+	function results.MoreHint()
+		local hidden = body.CanvasSize.Y.Offset - body.Size.Y.Offset - body.CanvasPosition.Y
+		results.More.TextTransparency = hidden > 8 and 0 or 0.65
+	end
+	body:GetPropertyChangedSignal("CanvasPosition"):Connect(results.MoreHint)
 	results.Layout = layoutResults
 	onRelayout(layoutResults)
 end
@@ -67181,6 +68850,14 @@ local function fillProgress(data: any)
 			table.insert(names, def and def.Name or tostring(id))
 		end
 		table.insert(lines, string.format('<font color="%s"><b>CURSES</b></font>  %s  ·  <font color="%s">%s gold</font>', hex(P.crimson_300), table.concat(names, " · "), hex(P.gold_300), CurseData.GoldText(tonumber(data.CurseGold) or CurseData.GoldMult(curses))))
+	end
+	-- Hero Mastery: "KNIGHT MASTERY  +120 XP  ·  Level 3 → 4"
+	local m = type(data.Mastery) == "table" and data.Mastery or nil
+	if m and (tonumber(m.Gained) or 0) > 0 then
+		local hero = CharacterData.Characters[m.Hero]
+		local mf, mt = tonumber(m.From) or 1, tonumber(m.To) or 1
+		table.insert(lines, string.format('<font color="%s"><b>%s MASTERY</b></font>  +%s XP%s', hex(P.gold_300), string.upper(hero and hero.Name or "Hero"),
+			UIKit.formatNumber(tonumber(m.Gained) or 0), mf ~= mt and string.format('  ·  <font color="%s">Level %d → %d</font>', hex(P.moss_200), mf, mt) or ""))
 	end
 	local d = type(data.Daily) == "table" and data.Daily or nil
 	if d then
@@ -67346,6 +69023,9 @@ local function onRunResult(data)
 			end
 		end
 	end
+	-- the text itself is composed by results.Layout (two hits per line on landscape phones)
+	results.SettlementBase = results.Settlement.Text
+	results.Recent = recent
 	if #recent > 0 then
 		results.Settlement.Text ..= "\nRecent damage (latest first):\n" .. table.concat(recent, "\n")
 	end
@@ -67955,7 +69635,7 @@ function UIBuilder.Init(d: { [string]: any })
 		local reward = (info.Reward and info.Reward ~= "") and (" · " .. tostring(info.Reward)) or ""
 		UIBuilder.Toast("Achievement: " .. tostring(info.Name) .. reward, P.gold_300)
 		if deps.Audio and deps.Audio.Play then
-			pcall(deps.Audio.Play, "LevelUp")
+			pcall(deps.Audio.Play, "Evolve") -- its own swell, not the level-up arpeggio
 		end
 	end)
 	Remotes.Get("LevelUpClose").OnClientEvent:Connect(closeOffer)
@@ -68100,6 +69780,13 @@ local function click()
 	end
 end
 UIKit.Click = click
+
+-- Any Config.Sounds cue from a screen (purchases, unlocks); silent without the Audio module.
+function UIKit.Sound(name: string)
+	if audio then
+		pcall(audio.Play, name)
+	end
+end
 
 -- Phones: bigger reference text (see header).
 function UIKit.SetCompact(on: boolean)
@@ -70901,6 +72588,13 @@ local function releaseProjectile(id: number, silent: boolean?)
 	end
 	table.insert(projectilePools[e.Visual], e.Pieces)
 	entries[id] = nil
+	local o = K.orbits and K.orbits[id]
+	if o and o.Seq == e.Seq then
+		K.orbits[id] = nil
+	end
+	if K.cloudGone then
+		K.cloudGone(id, e.Seq)
+	end
 end
 
 -- A new projectile right next to a player = that player threw / cast it.
@@ -71069,10 +72763,15 @@ local function renderProjectiles(dt: number, now: number)
 	table.clear(projParts)
 	table.clear(projCFrames)
 	local n = 0
-	for _, e in pairs(entries) do
+	for id, e in pairs(entries) do
 		e.T += dt / syncInterval
 		local alpha = math.min(e.T, 1.5) -- small extrapolation hides jitter
 		local pos = e.From:Lerp(e.To, alpha)
+		local o = K.orbits[id]
+		if o and o.Seq == e.Seq then
+			-- orbiting weapons are drawn around the owner's live position (K.orbitPos)
+			pos = K.orbitPos(e, o, pos, now)
+		end
 		e.Drawn = pos
 		local cf = CFrame.new(pos) * projectileRotation(e, now - e.Born)
 		local aim: CFrame? = nil
@@ -71104,6 +72803,7 @@ local function renderProjectiles(dt: number, now: number)
 	if n > 0 then
 		workspace:BulkMoveTo(projParts, projCFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
+	K.stepClouds(dt, now)
 end
 
 -- Glass shards + a low splash where a bottle lands.
@@ -72335,6 +74035,211 @@ function K.implosion(x: number, z: number, r: number, evo: boolean)
 	smallBurst(x, z, r * 0.7, P.fx_arcane, P.ivory_200)
 end
 
+--[[
+	Orbiting weapons (WeaponFx "ob": userId, projectile id, seq, radius, growth, spin, angle):
+	Ward Shields, resting Spirit Wisps and Death Spiral axes are drawn around the OWNER'S
+	LIVE character every frame (angle = angle + spin x time since the message, radius +
+	growth x time), so they never trail behind a running hero. The server keeps its own
+	orbit for damage and re-sends it (every shield refresh); a re-send blends the angle over
+	ORBIT_BLEND s instead of snapping. radius < 0 = back to the synced position (a dart).
+]]
+K.orbits = {} :: { [number]: any }
+K.ORBIT_BLEND = 0.3
+
+local function wrapAngle(a: number): number
+	return (a + math.pi) % TAU - math.pi
+end
+
+function K.orbitAngle(o, now: number): number
+	local age = now - o.T
+	return o.A + o.Spin * age + o.Err * math.max(0, 1 - age / K.ORBIT_BLEND)
+end
+
+function K.setOrbit(userId: number, id: number, seq: number, r: number, growth: number, spin: number, angle: number)
+	local old = K.orbits[id]
+	if r < 0 then
+		if old and old.Seq == seq then
+			K.orbits[id] = nil
+		end
+		return
+	end
+	local now = os.clock()
+	local err = 0
+	if old and old.Seq == seq and old.UserId == userId then
+		err = wrapAngle(K.orbitAngle(old, now) - angle)
+	end
+	K.orbits[id] = { UserId = userId, Seq = seq, R = r, Growth = growth, Spin = spin, A = angle, T = now, Err = err }
+end
+
+function K.orbitPos(e, o, synced: Vector3, now: number): Vector3
+	local who = Players:GetPlayerByUserId(o.UserId)
+	local char = who and who.Character
+	local root = char and char.PrimaryPart
+	if not root then
+		return synced
+	end
+	local a = K.orbitAngle(o, now)
+	local r = o.R + o.Growth * (now - o.T)
+	local c, sn = math.cos(a), math.sin(a)
+	local rp = root.Position
+	e.Yaw = math.atan2(-c, -sn) -- facing outward (shields)
+	e.Heading = o.Spin >= 0 and math.atan2(sn, -c) or math.atan2(-sn, c) -- along the orbit (trails, saws)
+	return Vector3.new(rp.X + c * r, synced.Y, rp.Z + sn * r)
+end
+
+--[[
+	Plague Censer / Pestilence clouds (WeaponFx "cl": projectile id, seq, radius, evo). The
+	server's projectile is an invisible marker; this draws the cloud on it: a soft rim disc
+	exactly as wide as the damage circle (sickly purple edge, green inside) so players see
+	the area, a ring of slow-swirling translucent puffs plus a few inner ones, and small
+	spores drifting up. Parts come from the shared pool and go back when the cloud ends (a
+	0.4 s fade). Reduced effects: fewer puffs, no spores. At most CLOUD_MAX at once.
+]]
+type CloudKit = { Id: number, Seq: number, R: number, Evo: boolean, Born: number, Gone: number?, Pos: Vector3, Parts: { BasePart }, Shapes: { string }, Base: { number }, Kind: { string }, Phase: { number }, Fade: number }
+K.clouds = {} :: { [number]: CloudKit }
+K.cloudPending = {} :: { [number]: { any } }
+K.CLOUD_MAX = { 18, 10 }
+K.CLOUD_GREEN = { Color3.fromRGB(132, 176, 84), Color3.fromRGB(166, 196, 104), Color3.fromRGB(96, 140, 70) }
+K.CLOUD_PURPLE = { Color3.fromRGB(128, 96, 156), Color3.fromRGB(150, 110, 170) }
+K.cloudParts = {} :: { BasePart }
+K.cloudCFs = {} :: { CFrame }
+
+function K.cloudCount(): number
+	local n = 0
+	for _ in pairs(K.clouds) do
+		n += 1
+	end
+	return n
+end
+
+function K.newCloud(id: number, seq: number, r: number, evo: boolean, pos: Vector3, now: number): CloudKit?
+	local reduced = ClientSettings.Reduced()
+	if K.cloudCount() >= K.CLOUD_MAX[reduced and 2 or 1] then
+		return nil
+	end
+	local kit: CloudKit = { Id = id, Seq = seq, R = r, Evo = evo, Born = now, Pos = pos, Parts = {}, Shapes = {}, Base = {}, Kind = {}, Phase = {}, Fade = 0 }
+	local function add(shape: string, color: Color3, material: Enum.Material, size: Vector3, alpha: number, kind: string, phase: number)
+		local part = takePart(shape, color, material, size, 1)
+		table.insert(kit.Parts, part)
+		table.insert(kit.Shapes, shape)
+		table.insert(kit.Base, alpha)
+		table.insert(kit.Kind, kind)
+		table.insert(kit.Phase, phase)
+	end
+	local G, Pu = K.CLOUD_GREEN, K.CLOUD_PURPLE
+	-- the readable edge: a purple rim disc under a slightly smaller green disc
+	add("Cylinder", evo and Pu[1] or Pu[2], SMOOTH, Vector3.new(0.06, r * 2, r * 2), 0.42, "rim", 0)
+	add("Cylinder", evo and Pu[2]:Lerp(G[3], 0.4) or G[3], SMOOTH, Vector3.new(0.06, r * 1.8, r * 1.8), 0.66, "bed", 0)
+	local outer = reduced and 4 or 7
+	local ps = math.clamp(r * 0.62, 1.6, 5)
+	for i = 1, outer do
+		local purple = evo and i % 2 == 0 or i % 3 == 0
+		add("Ball", purple and Pu[(i % 2) + 1] or G[(i % 2) + 1], SMOOTH, Vector3.new(ps * 1.25, ps * 0.62, ps * 1.1), 0.5, "outer", (i - 1) * TAU / outer)
+	end
+	local inner = reduced and 1 or 3
+	for i = 1, inner do
+		add("Ball", i == 2 and Pu[1] or G[2], SMOOTH, Vector3.new(ps * 1.35, ps * 0.8, ps * 1.35), 0.46, "inner", (i - 1) * TAU / inner)
+	end
+	if not reduced then
+		for i = 1, 4 do
+			add("Ball", i % 2 == 0 and Pu[2] or G[2], NEON, Vector3.one * 0.32, 0.25, "spore", i * 0.4)
+		end
+	end
+	K.clouds[id] = kit
+	return kit
+end
+
+function K.freeCloud(kit: CloudKit)
+	for i, part in ipairs(kit.Parts) do
+		givePart(kit.Shapes[i], part)
+	end
+	K.clouds[kit.Id] = nil
+end
+
+-- A projectile entry went away: its cloud fades out where it is.
+function K.cloudGone(id: number, seq: number)
+	local kit = K.clouds[id]
+	if kit and kit.Seq == seq and not kit.Gone then
+		kit.Gone = os.clock()
+	end
+end
+
+function K.stepClouds(_dt: number, now: number)
+	for id, rec in pairs(K.cloudPending) do
+		local e = entries[id]
+		if e and e.Seq == rec[2] then
+			K.cloudPending[id] = nil
+			local old = K.clouds[id]
+			if old then
+				K.freeCloud(old)
+			end
+			K.newCloud(id, rec[2], rec[3], rec[4], e.Drawn, now)
+		elseif now - rec[5] > 1 then
+			K.cloudPending[id] = nil -- never matched (missed batch)
+		end
+	end
+	local n = 0
+	local parts, cfs = K.cloudParts, K.cloudCFs
+	for id, kit in pairs(K.clouds) do
+		local e = entries[id]
+		if e and e.Seq == kit.Seq and not kit.Gone then
+			kit.Pos = e.Drawn
+		end
+		local fade = math.clamp((now - kit.Born) / 0.4, 0, 1)
+		if kit.Gone then
+			fade = math.min(fade, 1 - (now - kit.Gone) / 0.4)
+		end
+		if kit.Gone and fade <= 0 then
+			K.freeCloud(kit)
+			continue
+		end
+		local x, z, r = kit.Pos.X, kit.Pos.Z, kit.R
+		local t = now - kit.Born
+		local fading = fade < 1 or kit.Fade < 1
+		kit.Fade = fade
+		for i, part in ipairs(kit.Parts) do
+			local kind = kit.Kind[i]
+			local ph = kit.Phase[i]
+			local cf: CFrame
+			local alpha = kit.Base[i]
+			if kind == "rim" then
+				cf = CFrame.new(x, FLOOR_Y + 0.34, z) * DISC -- above paths / floor decals
+			elseif kind == "bed" then
+				cf = CFrame.new(x, FLOOR_Y + 0.37, z) * DISC
+			elseif kind == "outer" then
+				local a = ph + t * 0.35
+				local rr = r * 0.62 + math.sin(t * 0.9 + ph * 2) * r * 0.06
+				cf = CFrame.new(x + math.cos(a) * rr, FLOOR_Y + r * 0.2 + math.sin(t * 1.3 + ph) * 0.18, z + math.sin(a) * rr) * CFrame.Angles(0, -a, 0)
+			elseif kind == "inner" then
+				local a = ph - t * 0.5
+				cf = CFrame.new(x + math.cos(a) * r * 0.22, FLOOR_Y + r * 0.32 + math.sin(t * 1.1 + ph) * 0.2, z + math.sin(a) * r * 0.22) * CFrame.Angles(0, a, 0)
+			else -- spore: rises from a spot inside the cloud and fades, then starts again elsewhere
+				local cycle = (t + ph) / 1.7
+				local k = math.floor(cycle)
+				local u = cycle - k
+				local a = (k * 2.39996 + ph * 7) % TAU
+				local d = r * (0.25 + ((k * 0.618 + ph) % 1) * 0.55)
+				cf = CFrame.new(x + math.cos(a) * d, FLOOR_Y + 0.6 + u * 3.2, z + math.sin(a) * d)
+				alpha = 0.25 + 0.75 * u
+				part.Transparency = 1 - (1 - alpha) * fade
+			end
+			if fading and kind ~= "spore" then
+				part.Transparency = 1 - (1 - alpha) * fade
+			end
+			n += 1
+			parts[n] = part
+			cfs[n] = cf
+		end
+	end
+	if n > 0 then
+		for i = #parts, n + 1, -1 do
+			parts[i] = nil
+			cfs[i] = nil
+		end
+		workspace:BulkMoveTo(parts, cfs, Enum.BulkMoveMode.FireCFrameChanged)
+	end
+end
+
 local function onWeaponFx(batch)
 	if type(batch) ~= "table" then
 		return
@@ -72393,6 +74298,12 @@ local function onWeaponFx(batch)
 	end)
 	each("vx", function(v)
 		K.vortexOpen(v[1], v[2], tonumber(v[3]) or 5.5, v[5] == 1)
+	end)
+	each("ob", function(v)
+		K.setOrbit(v[1], v[2], tonumber(v[3]) or 0, tonumber(v[4]) or -1, tonumber(v[5]) or 0, tonumber(v[6]) or 0, tonumber(v[7]) or 0)
+	end)
+	each("cl", function(v)
+		K.cloudPending[v[1]] = { v[1], v[2], math.clamp(tonumber(v[3]) or 4, 1, 20), v[4] == 1, os.clock() }
 	end)
 	each("vi", function(v)
 		K.implosion(v[1], v[2], tonumber(v[3]) or 5.5, v[4] == 1)

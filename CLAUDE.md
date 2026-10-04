@@ -77,7 +77,17 @@ Whip/Longbow auto aim; bigger Garlic Aura; stronger Healing Totem; gold kept on 
 HELD for a later update (built + tested, switched off): 10 new weapons (WeaponData.HeldOrder),
 11 new passives + 2 synergies (PassiveData.HeldOrder, SynergyData Held), numbered-wave rework
 (patch kept outside the tree; re-do from the owner's spec: waves only, each harder).
-Next owner request: per-character upgrades instead of shared meta upgrades (plan first).
+Hero Mastery update (70/70 regressions, offline only, NOT Studio-tested): per-hero upgrades
+(Config.HeroMastery, MetaUpgradeData StatOrder/AccountOrder/Signature, save schema 7 with
+Heroes/HeroUpgrades; old shared stat levels copied to every hero), numbered waves (each harder,
+Config.Waves; banner on wave 1, every 5th and stage starts), 10 weapons + 11 passives + 2
+synergies released with art, hero prices 10k/20k/30k (owner), new boss/medal/symbol art, Whip
+aim fix (whip-regression), client-drawn censer clouds and orbits, stats chip/tutorial/party
+entrance fix, audit fixes (docs/AUDIT_2026-10-04.md). PUBLISH NOTE: schema bump, so after
+publishing run "Migrate to Latest Update"; test with a copy of a real save first.
+Pending owner OK (approved in chat but must be re-confirmed by the owner's own message):
+economy changes in scratchpad ECON_PROPOSAL (20k per-level cap, more gold per run, harder
+achievement heroes). Planned next: Sigils (docs/SIGILS_PLAN.md).
 
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
