@@ -678,13 +678,23 @@ local function pressureMult(): number
 	return warn > 0 and list and list[math.min(warn, #list)] or 1
 end
 
+-- The first run's gentle opening (Config.FirstRun: waves 1..GentleWaves of an account's
+-- very first Solo run, RunManager.IsFirstRunWelcome): `key`'s multiplier, else 1.
+local function gentle(n: number, key: string): number
+	local cfg = (Config :: any).FirstRun
+	if not cfg or n > (cfg.GentleWaves or 0) or not ctx.RunManager.IsFirstRunWelcome or not ctx.RunManager.IsFirstRunWelcome() then
+		return 1
+	end
+	return tonumber(cfg[key]) or 1
+end
+
 -- Wave N's size before the live cap and the never-shrink floor (Config.Waves), without
 -- the big-wave bump: exported for the sims.
 function EnemySpawner.WaveSize(n: number): number
 	local W = Config.Waves
 	local late = W.LateFromWave and math.max(0, n - W.LateFromWave) or 0
 	local total = (W.Base + W.PerWave * (n - 1 - late) + (W.PerWaveLate or W.PerWave) * late) * countMult() * ctx.StageManager.SpawnMult() * pressureMult()
-	return math.floor(total + 0.5)
+	return math.floor(total * gentle(n, "GentleSizeMult") + 0.5)
 end
 
 local function startWave()
@@ -855,7 +865,7 @@ local function pourWave(dt: number)
 			local e = EnemySpawner.Spawn(q.Type, pos, { Elite = q.Elite })
 			if e then
 				e.WaveId = runWave
-				local hpMult = 1 + (W.HPPerWave or 0) * (runWave - 1)
+				local hpMult = (1 + (W.HPPerWave or 0) * (runWave - 1)) * gentle(runWave, "GentleHPMult")
 				e.HP *= hpMult
 				e.MaxHP *= hpMult
 				e.Shield *= hpMult

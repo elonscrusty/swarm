@@ -60,6 +60,7 @@ local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
 local MenuTrack = require(script.Parent.MenuTrack)
 local MenuArenas = require(script.Parent.MenuArenas)
 local MenuParty = require(script.Parent.MenuParty)
+local NoticeDots = require(script.Parent.NoticeDots)
 local MenuPlay = require(script.Parent.MenuPlay)
 local MenuMore = require(script.Parent.MenuMore)
 
@@ -451,6 +452,10 @@ local function buildTiles(screen: Frame)
 		UIKit.corner(d, 999)
 	end
 	ui.MoreBadge = UIKit.Badge(ui.MoreTile.Instance, "", "Crimson", { Name = "InviteBadge", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -6, 0, 6), ZIndex = 6, Visible = false })
+	-- notice dots (NoticeDots): something new behind the tile (the invite badge sits on top)
+	NoticeDots.Attach("Heroes", ui.HeroesTile.Instance, { Position = UDim2.new(1, -14, 0, 14) })
+	NoticeDots.Attach("Shop", ui.ShopTile.Instance, { Position = UDim2.new(1, -14, 0, 14) })
+	NoticeDots.Attach("More", ui.MoreTile.Instance, { Position = UDim2.new(1, -14, 0, 14) })
 	-- thin gold separators between the tiles
 	ui.TileSeps = {}
 	for i = 1, 2 do
@@ -818,6 +823,17 @@ end
 -- Slides to "Home" | "Play" | "More" | "Characters" | "Upgrades" | "Stats" | "Journal" |
 -- "Curses" | "Daily" | "Ranks" | "Track" | "Arenas" | "Party" (old panel name "Shop" =
 -- Upgrades). arg goes to the screen's OnShow (Ranks: the board, Stats: the tab).
+-- The notice dot a screen clears when the player looks at it (NoticeDots).
+local function markSeen(name: string, arg: any?)
+	local id = ({ Characters = "Heroes", Upgrades = "Shop", More = "More", Daily = "Daily", Party = "Party", Track = "Track" } :: { [string]: string })[name]
+	if name == "Stats" and arg == "Achievements" then
+		id = "Achievements"
+	end
+	if id then
+		NoticeDots.MarkSeen(id)
+	end
+end
+
 function LobbyScreen.Show(name: string, arg: any?)
 	if name == "Shop" then
 		name = "Upgrades"
@@ -825,6 +841,7 @@ function LobbyScreen.Show(name: string, arg: any?)
 	if not SCREEN_ORDER[name] or not ui.Frame then
 		return
 	end
+	markSeen(name, arg)
 	if name == current and ui[name].Visible then
 		local s = screens[name]
 		if s and s.OnShow and arg ~= nil then
@@ -977,6 +994,10 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 			s.Refresh(p)
 		end
 	end
+	NoticeDots.Refresh(p)
+	if ui.Frame.Visible then
+		markSeen(current) -- a change on the open screen is seen already
+	end
 	maybeAskFirstRun(p)
 end
 
@@ -1100,6 +1121,7 @@ function LobbyScreen.Update(_dt: number?)
 	end
 	local badge = party.Invites > 0 and tostring(party.Invites) or ""
 	if ui.MoreBadge.Text ~= badge then
+		NoticeDots.SetInvites(party.Invites)
 		ui.MoreBadge.Text = badge
 		ui.MoreBadge.Visible = badge ~= ""
 		if badge ~= "" then

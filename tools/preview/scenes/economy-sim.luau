@@ -65,3 +65,23 @@ assert(Gold.RecoverEscrow(data) == 65, "crash recovery retains stage-based earni
 assert(Gold.RecoverEscrow(data) == 0, "crash recovery runs once")
 assert(data.Gold == 2221, "crash recovery preserves separate balance")
 preview.log("PASS escrow spending, retention, purchases and repeated settlement")
+
+-- survival gold (owner): 40 per whole minute up to 30, straight to the save, never in the
+-- run purse and never cut by the loss rule
+assert(Config.Gold.KillGoldChance == 0.25 and Config.Gold.StageClearBonus == 300, "owner gold income values")
+assert(Config.Gold.SurvivalPerMinute == 40 and Config.Gold.SurvivalMaxMinutes == 30, "survival gold values")
+local mult = Gold.PublishGoldMult(player)
+local survivalRun = { Player = player, RunId = "survival-test", Gold = 0, GoldSpent = 0 }
+Gold.BeginRun(survivalRun)
+Gold.AddRunGold(survivalRun, 100)
+local before = data.Gold
+local walletBefore = Gold.RunWallet(survivalRun)
+local settled = Gold.SettleRun(survivalRun, false, 0, 4 * 60 + 59)
+local escrowKept = math.floor(math.floor(100 * mult + 0.5) * 0.35)
+assert(walletBefore == math.floor(100 * mult + 0.5), "survival gold never enters the run purse")
+assert(settled.Survival == math.floor(160 * mult + 0.5), "4 min 59 s pays 4 whole minutes: " .. tostring(settled.Survival))
+assert(settled.Retained == escrowKept and data.Gold == before + escrowKept + settled.Survival, "survival gold is kept in full on a loss")
+assert(Gold.SettleRun(survivalRun, false, 0, 600).Survival == settled.Survival and data.Gold == before + escrowKept + settled.Survival, "survival gold is paid once")
+assert(Gold.SurvivalGold(player, 3 * 3600) == math.floor(1200 * mult + 0.5), "survival gold stops at 30 minutes")
+assert(Gold.SurvivalGold(player, 59) == 0 and Gold.SurvivalGold(player, 0 / 0) == 0 and Gold.SurvivalGold(player, nil) == 0, "no survival gold under a minute or for bad input")
+preview.log("PASS survival gold (per minute, capped, outside the purse and the loss rule)")

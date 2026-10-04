@@ -11,6 +11,8 @@
 --   --set screen=Play|More|...   open that lobby screen (LobbyScreen.Show) before the shot
 --   --set phase=countdown|busy  a DUO countdown (the queue panel replaces PLAY) / a run in progress
 --   --set play=tap               taps the home PLAY button and prints the StartRun it sent
+--   --set dots=on                notice dots: gold for a hero + upgrades, the daily not played,
+--                               then a second profile with a new achievement and account level
 local C = lib("common")
 C.lobby()
 C.startClient()
@@ -22,6 +24,17 @@ if preview.args.lastrun then
 		Time = 754, Stage = kind == "won" and 5 or 3, StagesCleared = kind == "won" and 5 or 2, Kills = 1284, Level = 19,
 		Gold = 215, Difficulty = "Standard", DeathCause = kind == "fell" and "Briar Sentinel" or nil,
 	}
+end
+if preview.args.dots == "on" then
+	profile.Gold = 25000
+	profile.Daily = { Day = 0, Used = false }
+	profile.Achievements = { Progress = {}, Unlocked = {} }
+	profile.Account = { XP = 0, Level = 1, Into = 0, Need = 100 }
+	C.sendProfile(profile)
+	C.settle(0.5)
+	profile = table.clone(profile)
+	profile.Achievements = { Progress = {}, Unlocked = { QueenSlayer = 1 } }
+	profile.Account = { XP = 5000, Level = 6, Into = 0, Need = 100 }
 end
 C.sendProfile(profile)
 if preview.args.playtime ~= "none" then

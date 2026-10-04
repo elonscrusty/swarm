@@ -47,6 +47,7 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
+local NextGoal = require(game:GetService("ReplicatedStorage").Shared.NextGoal)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local MapBuilder = require(script.Parent.MapBuilder)
 local Fx = require(script.Parent.Fx)
@@ -851,7 +852,7 @@ local function newRunPlayer(player: Player)
 end
 
 local function resetPlayerAttributes(player: Player)
-	for _, name in ipairs({ "HP", "MaxHP", "Level", "XP", "XPNeeded", "Kills", "RunGold", "AuraRadius", "Shield", "ShieldMax", "GoldMult" }) do
+	for _, name in ipairs({ "HP", "MaxHP", "Level", "XP", "XPNeeded", "Kills", "RunGold", "AuraRadius", "Shield", "ShieldMax", "GoldMult", "FirstRunBoost" }) do
 		player:SetAttribute(name, nil)
 	end
 	player:SetAttribute("InRun", false)
@@ -869,6 +870,34 @@ end
 local function placeOnArena(arena, i: number, n: number): Vector3
 	local a = (i / n) * math.pi * 2
 	return arena.Center + Vector3.new(math.cos(a), 0, math.sin(a)) * (n > 1 and Config.Run.ArenaSpawnSpread or 0)
+end
+
+--[[
+	The first run's welcome (Config.FirstRun.Boost): an account's very first run, Solo, no
+	curses / Endless / harder difficulty, not DEV-tainted. Then: a cheap first level, a
+	showcase first offer (LevelUpSystem), gentle first waves (EnemySpawner) and a one-time
+	gold bonus on the results (saveRunStats, save flag FirstRunBonus). Called before
+	Stats.Runs counts the run, so it can happen once per account.
+]]
+local function firstRunWelcome(rp, data, teamSize: number): boolean
+	local cfg = (Config :: any).FirstRun
+	if not cfg or cfg.AutoStart ~= true or cfg.Boost ~= true or teamSize ~= 1 or mode ~= cfg.Mode then
+		return false
+	end
+	if data.TutorialDone == true or data.FirstRunBonus == true or type(data.Stats) ~= "table" or (tonumber(data.Stats.Runs) or 0) > 0 then
+		return false
+	end
+	if rp.DevTainted or rp.Endless or rp.Daily or #ctx.RunModifiers.Active() > 0 or ctx.RunModifiers.IsEndless() then
+		return false
+	end
+	local difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard"
+	return difficulty == "Standard"
+end
+
+-- The run's first-run welcome is on (Solo: the only run player has rp.FirstRun).
+function RunManager.IsFirstRunWelcome(): boolean
+	local rp = runPlayers[1]
+	return #runPlayers == 1 and rp ~= nil and rp.FirstRun == true and not rp.DevTainted
 end
 
 local function beginRun(here: boolean?)
@@ -959,6 +988,13 @@ local function beginRun(here: boolean?)
 
 		local data = ctx.DataService.GetData(player)
 		if data then
+			-- before Runs counts this run: an account's very first run gets the welcome
+			if firstRunWelcome(rp, data, #list) then
+				rp.FirstRun = true
+				rp.XPNeeded = math.max(1, math.floor(tonumber((Config :: any).FirstRun.FirstLevelXP) or rp.XPNeeded))
+				player:SetAttribute("XPNeeded", rp.XPNeeded)
+				player:SetAttribute("FirstRunBoost", true)
+			end
 			data.Stats.Runs += 1
 		end
 	end
@@ -1010,15 +1046,22 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	if not data then
 		return false, nil
 	end
-	ctx.GoldSystem.SettleRun(rp, rp.Extracted == true, ctx.StageManager.StagesCleared())
+	local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
+	ctx.GoldSystem.SettleRun(rp, rp.Extracted == true, ctx.StageManager.StagesCleared(), t)
 	data.RunReconnect = nil
 	local newBest, unlocked = false, nil
-	local t = (rp.Alive or rp.AwaitingRevive) and runTime or rp.TimeSurvived
 	if rp.DevTainted then
 		-- a DEV command was used: no records, unlocks, daily score, account XP or boards
 		data.TutorialDone = true
 		rp.CommitInfo = {}
 		return false, nil
+	end
+	-- the first run's one-time welcome bonus (Config.FirstRun.BonusGold; save flag)
+	if rp.FirstRun and data.FirstRunBonus ~= true then
+		data.FirstRunBonus = true
+		local bonus = math.max(0, math.floor(tonumber((Config :: any).FirstRun.BonusGold) or 0))
+		data.Gold += bonus
+		rp.FirstRunBonusPaid = bonus
 	end
 	data.Stats.TotalKills += math.max(0, rp.Kills - (rp.DisconnectRecordedKills or 0))
 	data.Stats.MostKills = math.max(data.Stats.MostKills or 0, rp.Kills)
@@ -1095,6 +1138,38 @@ local function buildSummary(rp)
 	return { Weapons = weapons, Passives = passives }
 end
 
+local function commas(n: number): string
+	local out = tostring(math.floor(n)):reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return (out:gsub("^,", ""))
+end
+
+-- The first run's results: the one-time bonus paid ({ Bonus }) and a NEXT GOAL that
+-- points at the first hero sold for gold (same shape as NextGoal.Pick), or nil, nil
+-- when this was not the first run.
+local function firstRunResult(rp, data): ({ [string]: any }?, { [string]: any }?)
+	if not rp.FirstRun or not rp.FirstRunBonusPaid or not data then
+		return nil, nil
+	end
+	local gold = math.max(0, tonumber(data.Gold) or 0)
+	local owned = type(data.OwnedCharacters) == "table" and data.OwnedCharacters or {}
+	local goal = nil
+	for _, id in ipairs(CharacterData.Order) do
+		local def = CharacterData.Characters[id]
+		if def and (tonumber(def.Cost) or 0) > 0 and not def.Unlock and not owned[id] then
+			local cost = def.Cost
+			goal = {
+				Kind = "BuyHero", Icon = "hero:" .. id,
+				Text = string.format("Unlock %s at %s gold", def.Name, commas(cost)),
+				Sub = "or PLAY AGAIN now",
+				Progress = math.clamp(gold / cost, 0, 1),
+				ProgressText = string.format("%s / %s gold", commas(gold), commas(cost)),
+			}
+			break
+		end
+	end
+	return { Bonus = rp.FirstRunBonusPaid }, goal
+end
+
 --[[
 	Commits a finished run and shows the results screen. portal = left through an open
 	portal (WinBonus + StageClearBonus per cleared stage, always paid); it counts as a WIN
@@ -1126,7 +1201,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		data.LastRun = {
 			Won = won, Portal = portal, Mode = mode, CharacterId = rp.CharacterId,
 			Time = math.floor(rp.TimeSurvived), Stage = reached, StagesCleared = cleared,
-			Kills = rp.Kills, Level = rp.Level, Gold = rp.GoldSettlement and rp.GoldSettlement.Retained or 0,
+			Kills = rp.Kills, Level = rp.Level, Gold = rp.GoldSettlement and (rp.GoldSettlement.Retained + (rp.GoldSettlement.Survival or 0)) or 0,
 			Difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard",
 			DeathCause = not portal and not rp.Abandoned and not rp.Alive and rp.DeathCause or nil,
 		}
@@ -1136,6 +1211,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		return
 	end
 	Remotes.FireClient("PortalOffer", player, { Close = true })
+	local firstInfo, firstGoal = firstRunResult(rp, data)
 	Remotes.FireClient("RunResult", player, {
 		Won = won,
 		Portal = portal, -- left through the portal (a win only from WinMinStages)
@@ -1146,6 +1222,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		GoldEarned = rp.GoldSettlement and rp.GoldSettlement.Earned or rp.Gold,
 		GoldLost = rp.GoldSettlement and rp.GoldSettlement.Lost or 0,
 		GoldRetention = rp.GoldSettlement and rp.GoldSettlement.Rate or 1,
+		GoldSurvival = rp.GoldSettlement and rp.GoldSettlement.Survival or 0, -- always kept (own line)
 		DeathCause = not portal and not rp.Abandoned and not rp.Alive and rp.DeathCause or nil,
 		DamageHistory = not portal and not rp.Abandoned and rp.DamageHistory or {},
 		Difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard",
@@ -1176,6 +1253,9 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		Account = info and info.Account or nil, -- { Gained, Parts, From, To, Into, Need, Rewards }
 		Mastery = info and info.Mastery or nil, -- { Hero, Gained, From, To } (Hero Mastery)
 		Daily = info and info.Daily or nil, -- { Scored, Score, Text, NewBest, Best }
+		-- the results NEXT GOAL card, from the settled save (display only; nil for DEV runs)
+		FirstRun = firstInfo, -- { Bonus }: the first run's one-time gold bonus (Config.FirstRun)
+		NextGoal = firstGoal or data and not rp.DevTainted and NextGoal.Pick(data, { Hero = rp.CharacterId, RunGold = rp.GoldSettlement and (rp.GoldSettlement.Retained + (rp.GoldSettlement.Survival or 0)) or 0 }) or nil,
 		Seconds = Config.Run.ResultsSeconds,
 		InLobby = inLobby,
 	})

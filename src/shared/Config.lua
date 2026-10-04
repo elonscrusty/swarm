@@ -291,14 +291,18 @@ Config.Gold = {
 	-- often a kill pays at all (1 = every kill; lower it if gold comes in too fast).
 	MinPerKill = 1,
 	MaxPerKill = 3,
-	KillGoldChance = 0.12,
+	KillGoldChance = 0.25, -- owner: 0.25 (was 0.12)
 	Elite = 15, -- extra gold from an elite's chest (on top of ChestGold) ...
 	EliteStageScale = 0.25, -- ... the whole elite chest gold x (1 + this x (stage - 1))
 	Boss = 200, -- every living player gets this each time the Scorpion Queen dies
 	ChestGoldMin = 15,
 	ChestGoldMax = 40,
 	WinBonus = 100, -- paid when a player leaves through an open portal (a win)
-	StageClearBonus = 150, -- plus this per stage cleared, on that same return
+	StageClearBonus = 300, -- plus this per stage cleared, on that same return (owner: was 150)
+	-- Survival gold: this much per whole minute survived (up to SurvivalMaxMinutes), paid at
+	-- the end of every run straight to the save, outside the run purse and the loss rule.
+	SurvivalPerMinute = 40,
+	SurvivalMaxMinutes = 30,
 }
 
 ------------------------------------------------------------------------------------------
@@ -1069,6 +1073,24 @@ Config.FirstRun = {
 	AutoStart = true,
 	Mode = "Solo",
 	CoverSeconds = 4, -- the lobby waits at most this long for the server's answer
+	--[[
+		The first run's welcome (RunManager decides per run player: rp.FirstRun, player
+		attribute FirstRunBoost). Only an account's very first run (no run ever started,
+		tutorial not done, bonus not paid), Solo, no curses / Endless, never DEV-tainted,
+		never co-op or Daily, and only while AutoStart is on (the preview mock switches it
+		off for every scene but firstjoin-sim). The global XP curve is untouched.
+	]]
+	Boost = true,
+	FirstLevelXP = 14, -- level 1 -> 2 costs this in the first run (normally Config.XP: 42)
+	-- the first level-up always offers one of these (the first one not owned) as a NEW
+	-- weapon, plus an upgrade for the starting weapon; the third card is a normal roll
+	ShowcaseWeapons = { "Lightning", "Garlic", "HolyWater" },
+	GentleWaves = 2, -- waves 1..GentleWaves are smaller and softer in the first run
+	GentleSizeMult = 0.7,
+	GentleHPMult = 0.7,
+	-- paid once per account when the first run ends (win or lose, not DEV-tainted), on top
+	-- of the run's gold: the price of the cheapest permanent upgrade (a hero's Max HP lv 1: 200)
+	BonusGold = 200,
 }
 
 Config.Tutorial = {

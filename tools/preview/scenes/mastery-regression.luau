@@ -98,6 +98,25 @@ for l = 0, 4 do
 	table.insert(costs, Meta.HeroCostOf("Knight", "Signature", l))
 end
 assert(table.concat(costs, ",") == "500,800,1280,2048,3277", "signature prices: " .. table.concat(costs, ","))
+-- owner: no per-hero stat level costs more than MaxStatLevelCost (20,000); cheaper levels unchanged
+assert(Meta.MaxStatLevelCost == 20000, "stat level cap")
+for _, upgradeId in ipairs(Meta.StatOrder) do
+	local def = Meta.HeroDef("Knight", upgradeId)
+	for l = 0, def.MaxLevel - 1 do
+		local raw = math.floor(def.BaseCost * def.CostGrowth ^ l + 0.5)
+		local cost = Meta.HeroCostOf("Knight", upgradeId, l)
+		assert(cost == math.min(raw, 20000), upgradeId .. " level " .. (l + 1) .. " costs " .. tostring(cost))
+	end
+	assert(Meta.HeroCostOf("Knight", upgradeId, def.MaxLevel) == nil, upgradeId .. " maxed has no price")
+end
+assert(Meta.HeroCostOf("Knight", "MaxHP", 12) == 20000 and Meta.HeroCostOf("Knight", "MaxHP", 11) < 20000, "Max HP level 13 is capped, level 12 is not")
+-- owner: achievement heroes have real goals
+local Ach = preview.shared("AchievementData").Achievements
+assert(Ach.QueenSlayer.Goal == 3 and Ach.QueenSlayer.Reward.Character == "Ranger", "Ranger: beat the Scorpion Queen 3 times")
+assert(Ach.Reaper.Goal == 1500 and Ach.Reaper.Kind == "Max" and Ach.Reaper.Reward.Character == "Necromancer", "Necromancer: 1,500 kills in one run")
+assert(Ach.FieldEngineer.Goal == 5 and Ach.FieldEngineer.Filter and Ach.FieldEngineer.Filter.Kind == "Altar"
+	and Ach.FieldEngineer.Reward.Character == "Engineer", "Engineer: 5 Guarded Altars, Bargains don't count")
+preview.log("PASS stat level cost cap and achievement hero goals")
 local function sheetAt(hero, level)
 	return StatSheet.Compute({ CharacterId = hero, Meta = { Signature = level } })
 end

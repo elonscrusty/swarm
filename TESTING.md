@@ -42,12 +42,12 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 - [ ] No walking in the lobby: WASD / touch do nothing, no thumbstick appears.
 
 ## 0c. Characters, achievements, upgrades (new)
-- [ ] CHARACTERS lists 8 heroes (landscape PC: one column; phone landscape: two columns of names; portrait: two rows of four tabs, no "..."); the Alchemist / Engineer / Necromancer read "Locked · Deep Delver / Field Engineer / Reaper" with their progress (e.g. "2/4", "1/3", "318/500").
-- [ ] The Ranger reads "Locked · Queen Slayer". Its details show Starts with Longbow, Trait Steady Aim, EFFECT / STRENGTH / TRADEOFF lines, "UNLOCK Queen Slayer: Defeat the Scorpion Queen. 0/1" and a disabled LOCKED · QUEEN SLAYER button (no gold purchase possible; the home nameplate shows LOCKED).
+- [ ] CHARACTERS lists 8 heroes (landscape PC: one column; phone landscape: two columns of names; portrait: two rows of four tabs, no "..."); the Alchemist / Engineer / Necromancer read "Locked · Deep Delver / Field Engineer / Reaper" with their progress (e.g. "2/4", "1/5", "318/1,500").
+- [ ] The Ranger reads "Locked · Queen Slayer". Its details show Starts with Longbow, Trait Steady Aim, EFFECT / STRENGTH / TRADEOFF lines, "UNLOCK Queen Slayer: Defeat the Scorpion Queen 3 times. 0/3" and a disabled LOCKED · QUEEN SLAYER button (no gold purchase possible; the home nameplate shows LOCKED).
 - [ ] Every other hero shows its trait, strength and tradeoff; Rogue / Priest still unlock for gold.
 - [ ] Portrait: the eight hero tabs (two rows) fit without "...".
 - [ ] STATS has STATS / ACHIEVEMENTS tabs; the Achievements tile shows n / (the number of achievements). The list shows one row each with reward lines and progress bars (time ones as m:ss).
-- [ ] Kill the Queen (DEV: spawn portal boss): toast "Achievement: Queen Slayer · Unlocks the Ranger · 150 gold"; the results screen lists it; back in the lobby the Ranger is owned and selectable.
+- [ ] Kill the Queen 3 times in normal runs (DEV runs give no achievement progress; a player who already owned the Ranger keeps it): on the third, toast "Achievement: Queen Slayer · Unlocks the Ranger · 150 gold"; the results screen lists it; back in the lobby the Ranger is owned and selectable.
 - [ ] Clearing a stage as the Knight unlocks Knight's Oath; opening a Golden Chest unlocks Golden Touch; a Duo partner revive counts toward Lifesaver (3).
 - [ ] Earned titles / name colours appear under WEAR TITLE / NAME COLOUR; picking one changes the name line above the hero nameplate on home.
 - [ ] Old save (schema 3) loads with gold, characters and skins intact and empty achievements (Output: no migration errors).
@@ -108,8 +108,8 @@ Tip: DEV → "All new weapons Lv 8" gives all eight at level 8 (past the slot li
 - [ ] Turret: a turret rises next to you and its head turns to shoot gold bolts at the nearest enemy (range ~30); max 1 (Lv 5+: 2); when you walk away the oldest is rebuilt next to you; Lv 5 every 4th shot bursts. Bastion: gilded turrets, much faster fire.
 - [ ] Soul Bolt: skull souls curl out and home in; a soul whose target died seeks another; Lv 4 a killing soul flies on. Soul Storm: crimson souls passing through three enemies.
 - [ ] Alchemist (Deep Delver: reach stage 4): starts with the Fire Trail; area / fire weapons do 20% more (compare Frost Nova numbers with damage numbers on).
-- [ ] Engineer (Field Engineer: 3 Guarded Altars / Bargain stages in total): starts with the Turret; turrets and totems last 30% longer.
-- [ ] Necromancer (Reaper: 500 kills in one run): starts with the Soul Bolt; now and then a small soul rises from a kill (green sparkle) and hunts another enemy.
+- [ ] Engineer (Field Engineer: open 5 Guarded Altars; Bargains no longer count): starts with the Turret; turrets and totems last 30% longer.
+- [ ] Necromancer (Reaper: 1,500 kills in one run): starts with the Soul Bolt; now and then a small soul rises from a kill (green sparkle) and hunts another enemy.
 - [ ] Unlocking any of them: toast "Achievement: … · Unlocks the <hero> · 150 gold"; the hero is owned and selectable in the lobby; no gold purchase is possible before.
 - [ ] Travel to the next stage / end of run: every turret, totem, flame patch, hook and soul is gone.
 
@@ -313,6 +313,9 @@ Later creatures
 - [ ] Earn gold in a run, buy a meta upgrade, buy Mage (10,000 gold), equip a skin. Stop.
 - [ ] Play again: gold, upgrade levels, Mage owned and selected, skin, settings sliders and stats are back.
 - [ ] Gold collected before dying in a run is kept.
+- [ ] Survival gold: die on stage 1 after about 4 minutes. The results screen shows its own line "Survival +160 gold · 4 min (always kept)" (x2 with Double Gold) under the earned / kept / lost line; the lobby gold rose by kept + survival. The run purse never showed it, so chests could not spend it. A 40-minute Endless run pays at most 1,200.
+- [ ] Gold income: kills drop gold about one kill in four; RETURN TO LOBBY after N stages pays 100 + 300 x N.
+- [ ] Hero upgrades: no stat level on CHARACTERS → UPGRADE <HERO> shows a price above 20,000 (Max HP from level 13, Might from level 12); cheaper levels keep their old prices; buying one charges exactly the shown price.
 - [ ] Session lock: run two Studio sessions with the same account (or Team Test) → the second one waits and then gets the "data is still in use" kick unless the first one left.
 - [ ] Shutdown: start a run, stop the server mid-run; the next session settles saved current-run earnings using the failure retention rate. Existing savings and purchases remain intact.
 - [ ] Note: if Studio crashes, the lock frees itself after `Config.Data.LockStaleSeconds` (200 s).

@@ -21,6 +21,7 @@ local MenuDaily = require(script.Parent.MenuDaily)
 local CurseData = require(Shared:WaitForChild("CurseData"))
 local DevPanel = require(script.Parent.DevPanel)
 local BugReportUI = require(script.Parent.BugReportUI)
+local NoticeDots = require(script.Parent.NoticeDots)
 
 local MenuMore = {}
 
@@ -87,6 +88,9 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 			ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. item.Art, { Size = UDim2.fromScale(1.45, 1.45) })
 		end
 		ui.Rows[i] = { Item = item, Button = b }
+		if item.Id == "Daily" or item.Id == "Party" or item.Id == "Achievements" or item.Id == "Track" then
+			NoticeDots.Attach(item.Id, b.Instance, { Position = UDim2.new(1, -10, 0, 10) })
+		end
 		if item.Id == "Party" then
 			ui.PartyRow = b
 			ui.PartyBadge = UIKit.Badge(b.Instance, "", "Crimson", { Name = "InviteBadge", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 4, 0, -4), ZIndex = 6, Visible = false })

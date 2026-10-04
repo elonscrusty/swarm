@@ -484,10 +484,41 @@ local function decorate(rp, c)
 	return c
 end
 
+--[[
+	The first run's first offer (Config.FirstRun, rp.FirstRun): a flashy NEW weapon (the
+	first ShowcaseWeapons id still in the pool) and the starting weapon's upgrade come
+	first, the rest is a normal roll. Only the very first offer of that run (a reroll
+	rolls normally).
+]]
+local function showcaseChoices(rp, pool): { any }
+	local choices = {}
+	if not rp.FirstRun or rp.FirstOfferShown then
+		return choices
+	end
+	rp.FirstOfferShown = true
+	local function take(kind: string, id: string?): boolean
+		for i, c in ipairs(pool) do
+			if c.Type == kind and c.Id == id then
+				table.insert(choices, decorate(rp, c))
+				table.remove(pool, i)
+				return true
+			end
+		end
+		return false
+	end
+	for _, id in ipairs((Config :: any).FirstRun.ShowcaseWeapons or {}) do
+		if take("WeaponNew", id) then
+			break
+		end
+	end
+	take("WeaponUp", rp.WeaponOrder[1])
+	return choices
+end
+
 local function rollChoices(rp)
 	local pool = buildPool(rp)
-	local choices = {}
-	for _ = 1, Config.LevelUp.Choices do
+	local choices = showcaseChoices(rp, pool)
+	for _ = #choices + 1, Config.LevelUp.Choices do
 		local total = 0
 		for _, c in ipairs(pool) do
 			total += c.Weight

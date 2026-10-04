@@ -49,7 +49,7 @@ Models come from two places:
    chests and chickens left on the floor when the group travels are collected for them.
 5. **The portal opens**: leftovers burn up, the gems fly to you, and each living player
    picks **NEXT STAGE** or **RETURN TO LOBBY** (15 s, undecided = next stage).
-   * Return = that player's run ends at once: `WinBonus` (100) + `StageClearBonus` (150) per stage
+   * Return = that player's run ends at once: `WinBonus` (100) + `StageClearBonus` (300) per stage
      cleared, best time / furthest stage saved, results over the lobby menu. It counts as a
      WIN (Stats.Wins) only with `Config.Stages.WinMinStages` (3) stages cleared.
    * Reaching a stage unlocks arenas in the lobby (`Config.Arenas.<name>.RequiredBestStage`):
@@ -111,6 +111,11 @@ run ends). Code: `LootSystem.lua` (server), `ItemSystem.lua` (server), `ItemData
   after a press without enough gold. Chests and shrines spend it and take the same amount
   back out of the save, so a run can only spend what it earned; older savings are never
   touched. The results screen shows the gold you took home and the items you found.
+  Kills pay gold 25% of the time (`KillGoldChance`). **Survival gold**: at the end of every
+  run, win or lose, 40 gold per whole minute survived (up to 30 minutes, x the gold pass
+  multiplier; `SurvivalPerMinute` / `SurvivalMaxMinutes`) goes straight to the save. It never
+  enters the run purse (chests can't spend it) and the loss rule never cuts it; the results
+  screen shows it on its own line ("Survival +160 gold"). DEV runs follow the same gold rules.
 * **Chest rewards pause the run**: an item from a chest / shrine / altar, or an elite chest's
   level-ups and gold, shows in a compact centred TREASURE panel while the whole run freezes
   like a level-up (`RunManager.HoldReward`; teammates see "<Name> is opening a chest"). It
@@ -361,8 +366,8 @@ projectiles that stop on a hit; it evolves the Longbow.
 | Priest | Garlic Aura | Blessed: +20% max HP | no reach | 30,000 gold |
 | Ranger | Longbow | Steady Aim: stand still 0.8 s for +30% Longbow damage (+10% other weapons) until you move | slow shots, one direction, bonus needs standing still | achievement Queen Slayer |
 | Alchemist | Fire Trail | Volatile Mix: +20% damage for burning / area weapons (Fire Trail, Frost Nova, Healing Totem, Holy Water, Garlic, Lightning) | damage stays behind you: needs to keep moving | achievement Deep Delver (reach stage 4) |
-| Engineer | Turret | Tinkerer: turrets and Healing Totems last 30% longer | turrets stay where they were built; slow start | achievement Field Engineer (3 optional events) |
-| Necromancer | Soul Bolt | Soul Harvest: every weapon kill has a 15% chance to release a homing soul (10 + 0.6 x level damage, x Might) | slow souls, small hits: tough single targets take long | achievement Reaper (500 kills in one run) |
+| Engineer | Turret | Tinkerer: turrets and Healing Totems last 30% longer | turrets stay where they were built; slow start | achievement Field Engineer (open 5 Guarded Altars) |
+| Necromancer | Soul Bolt | Soul Harvest: every weapon kill has a 15% chance to release a homing soul (10 + 0.6 x level damage, x Might) | slow souls, small hits: tough single targets take long | achievement Reaper (1,500 kills in one run) |
 
 **Longbow** (Ranger's weapon, also a normal weapon card for everyone): heavy arrows in the
 movement direction (at the nearest enemy while standing still), range ≈ 90-125 studs, pierce
@@ -405,13 +410,14 @@ fire bus events: RunManager BossKilled / RunWon / PartnerRevive, StageManager Bo
 OptionalEvent (Bargain), LootSystem GoldenChest / OptionalEvent (altar); run time and level are
 polled once a second). A toast shows the unlock in the run; the results screen lists the run's
 unlocks; STATS → ACHIEVEMENTS shows progress bars and lets you wear earned titles and name
-colours (lobby nameplate, above the hero name).
+colours (lobby nameplate, above the hero name). Goals raised later never take anything back: an
+achievement (and its hero) already unlocked stays unlocked.
 
 | Achievement | Goal | Reward |
 |---|---|---|
 | Hold the Line | survive 5:00 in one run | 100 gold |
 | Unbroken | survive 10:00 in one run | 250 gold, title Unbroken |
-| Queen Slayer | defeat the Scorpion Queen | **unlocks the Ranger**, 150 gold |
+| Queen Slayer | defeat the Scorpion Queen 3 times | **unlocks the Ranger**, 150 gold |
 | Moth Bane / Banner Breaker / Hive Cleanser | defeat the Moth Matriarch / Rhino Warlord / Hive Mother | 120 gold each (+ title Banner Breaker) |
 | Conqueror | clear stage 3 and leave through the portal (a win) | 400 gold, title, Gold name colour |
 | Daredevil | open a Guarded Altar or clear a stage under a Bargain | 150 gold, title, Crimson name colour |
@@ -420,8 +426,8 @@ colours (lobby nameplate, above the hero name).
 | Veteran | reach level 30 in one run | 200 gold, title Veteran |
 | Golden Touch | open a Golden Chest | 100 gold, title Treasure Hunter |
 | Deep Delver | reach stage 4 in one run | **unlocks the Alchemist**, 150 gold |
-| Field Engineer | complete 3 optional events (Guarded Altars / Bargain stages, total) | **unlocks the Engineer**, 150 gold |
-| Reaper | defeat 500 enemies in one run | **unlocks the Necromancer**, 150 gold |
+| Field Engineer | open 5 Guarded Altars (Bargains no longer count; earlier progress kept) | **unlocks the Engineer**, 150 gold |
+| Reaper | defeat 1,500 enemies in one run | **unlocks the Necromancer**, 150 gold |
 
 Save schema 4 (DataService migration 3 → 4): `Achievements = { Progress, Unlocked }`, `Title`,
 `NameColor`, all starting empty; gold, owned characters, skins and stats are untouched.
@@ -434,7 +440,8 @@ rejected purchase re-syncs the real gold.
 
 **Hero Mastery** (save schema 7, `MetaUpgradeData`, `Config.HeroMastery`): the six stat upgrades
 (Max HP, Might, Armor, Speed, Luck, Growth) are bought per hero on the CHARACTERS screen (an owned
-hero's MASTERY block → UPGRADE <HERO>), same prices and max levels as before. Each committed run gives
+hero's MASTERY block → UPGRADE <HERO>), same prices and max levels as before, except that no single
+stat level costs more than 20,000 gold (`MetaUpgradeData.MaxStatLevelCost`, owner). Each committed run gives
 the hero played Mastery XP (the run's account XP, none for DEV runs); mastery level N allows stat
 levels up to 2N (max mastery 10). Each hero also has a 5-level signature upgrade of its trait (500 gold,
 x1.6 per level; level n needs mastery 2n). Revive / Reroll / Skip stay account-wide on UPGRADES. The v7
@@ -656,7 +663,7 @@ Purchases are cosmetic or convenience (gold and skins). There are no loot boxes.
 | What counts as a win | `Config.Stages.WinMinStages`; arena unlocks: `Config.Arenas.<name>.RequiredBestStage` |
 | Arena order / biome hazards | `Config.Arenas.Order` (lobby), `Rotation`, `ShuffleRotation`; `Config.Arenas.Hazards` (Mud, Quicksand, Ice, Lava numbers, `LootPad`) |
 | Leveling speed | `Config.XP.Base`, `PerLevel`, `CapLevel` |
-| Gold income | `Config.Gold.KillGoldChance`, `MinPerKill`, `MaxPerKill`, `Boss`, `WinBonus`, `StageClearBonus` |
+| Gold income | `Config.Gold.KillGoldChance`, `MinPerKill`, `MaxPerKill`, `Boss`, `WinBonus`, `StageClearBonus`, `SurvivalPerMinute`, `SurvivalMaxMinutes` |
 | Player survivability | `Config.Player.BaseMaxHP`, `ReviveHPFraction` |
 | Run length | the players decide (portal); `Config.Run.BossTime` is no longer used |
 | Camera | `Config.Camera.RunDistance`, `Pitch` |

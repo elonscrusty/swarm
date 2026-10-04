@@ -67,7 +67,23 @@ function GoldSystem.UpdateRunProgress(rp, cleared: number)
 	end
 end
 
-function GoldSystem.SettleRun(rp, extracted: boolean, cleared: number)
+-- Survival gold (owner): Config.Gold.SurvivalPerMinute for every whole minute survived, up
+-- to SurvivalMaxMinutes, times the published gold multiplier like all other gold.
+function GoldSystem.SurvivalGold(player: Player, seconds: number?): number
+	local s = tonumber(seconds) or 0
+	if s ~= s or s <= 0 then
+		return 0
+	end
+	local minutes = math.min(Config.Gold.SurvivalMaxMinutes or 0, math.floor(math.min(s, 1e7) / 60))
+	if minutes <= 0 then
+		return 0
+	end
+	return math.floor((Config.Gold.SurvivalPerMinute or 0) * minutes * GoldSystem.PublishGoldMult(player) + 0.5)
+end
+
+-- `seconds` = how long the player lasted. Survival gold goes straight to the save: never
+-- into RunEscrow (chests can't spend it) and never cut by the loss rule.
+function GoldSystem.SettleRun(rp, extracted: boolean, cleared: number, seconds: number?)
 	if rp.GoldSettlement then
 		return rp.GoldSettlement
 	end
@@ -80,7 +96,11 @@ function GoldSystem.SettleRun(rp, extracted: boolean, cleared: number)
 		data.Gold += kept
 		data.RunEscrow = nil
 	end
-	rp.GoldSettlement = { Earned = earned, Retained = kept, Lost = earned - kept, Rate = rate }
+	local survival = data and GoldSystem.SurvivalGold(rp.Player, seconds) or 0
+	if data and survival > 0 then
+		data.Gold += survival
+	end
+	rp.GoldSettlement = { Earned = earned, Retained = kept, Lost = earned - kept, Rate = rate, Survival = survival }
 	return rp.GoldSettlement
 end
 

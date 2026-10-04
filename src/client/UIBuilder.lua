@@ -3115,6 +3115,20 @@ local function buildResults()
 		Size = UDim2.new(1, -74, 0, 18),
 	})
 	results.ProgLines = text(prog, "Small", "", { Name = "Lines", Position = UDim2.fromOffset(14, TS(18) + 44), Size = UDim2.new(1, -28, 0, 0), RichText = true, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextXAlignment = Enum.TextXAlignment.Center })
+	-- NEXT GOAL (RunResult.NextGoal, picked by the server from the settled save): one
+	-- reason to play again at the bottom of the progress block, icon + line + bar
+	local goal = new("Frame", { Name = "NextGoal", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 0), Visible = false }, prog)
+	results.Goal = goal
+	new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_600, BackgroundTransparency = 0.55, BorderSizePixel = 0, Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 0, 1) }, goal)
+	results.GoalIcon = new("Frame", { Name = "Icon", BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 10), Size = UDim2.fromOffset(34, 34) }, goal)
+	results.GoalText = text(goal, "Small", "", { Name = "Line", Position = UDim2.fromOffset(60, 8), Size = UDim2.new(1, -74, 0, TS(Theme.TextSize.Small) + 4), RichText = true, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top })
+	results.GoalMeter = UIKit.Meter(goal, {
+		Gradient = ColorSequence.new(P.moss_400, P.moss_200),
+		TextStyle = "Number",
+		TextSize = 11,
+		Position = UDim2.fromOffset(60, 30),
+		Size = UDim2.new(1, -74, 0, 16),
+	})
 	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Visible = false })
 	-- achievements unlocked this run (one line each: trophy, name, reward)
 	results.Achievements = text(body, "Small", "", {
@@ -3243,7 +3257,18 @@ local function buildResults()
 		local perLine = inner < 520 and 2 or 1
 		local nLines = (results.ProgLineCount or 0) * perLine
 		results.ProgLines.Size = UDim2.new(1, -28, 0, nLines * lineH)
-		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0))
+		-- the NEXT GOAL row: its line wraps to two on narrow screens, the bar sits under it
+		local goalH = 0
+		if results.Goal.Visible then
+			local goalLines = inner < 560 and 2 or 1
+			local textH = goalLines * lineH
+			results.GoalText.Size = UDim2.new(1, -74, 0, textH)
+			local meterShown = results.GoalMeter.Frame.Visible
+			results.GoalMeter.Frame.Position = UDim2.fromOffset(60, 10 + textH + 4)
+			goalH = math.max(54, 10 + textH + (meterShown and 4 + 16 or 0) + 10)
+			results.Goal.Size = UDim2.new(1, 0, 0, goalH)
+		end
+		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0) + goalH)
 		-- the defeat's damage review: two hits per line on landscape phones (half the height,
 		-- so it sits nearer the fold)
 		local recent = results.Recent :: { string }?
@@ -3377,6 +3402,36 @@ local function fillProgress(data: any)
 	results.ProgLineCount = #lines
 end
 
+-- The NEXT GOAL row (display only; the server picked it from the settled save).
+local function fillGoal(data: any)
+	local g = type(data.NextGoal) == "table" and data.NextGoal or nil
+	local goalText = g and type(g.Text) == "string" and g.Text or nil
+	results.Goal.Visible = goalText ~= nil
+	if not g or not goalText then
+		return
+	end
+	results.Progress.Visible = true
+	for _, ch in ipairs(results.GoalIcon:GetChildren()) do
+		ch:Destroy()
+	end
+	local icon = type(g.Icon) == "string" and g.Icon or "flag"
+	local heroId = string.match(icon, "^hero:(.+)$")
+	local iconOpts = { Size = 34, Back = C.PanelInset }
+	if heroId and CharacterData.Characters[heroId] then
+		Icons.Character(results.GoalIcon, heroId, iconOpts)
+	else
+		Icons.Draw(results.GoalIcon, Icons.Has(icon) and icon or "flag", iconOpts)
+	end
+	local sub = type(g.Sub) == "string" and g.Sub ~= "" and string.format('  <font color="%s">· %s</font>', hex(C.TextMuted), g.Sub) or ""
+	results.GoalText.Text = string.format('<font color="%s"><b>NEXT GOAL</b></font>  %s%s', hex(P.moss_200), goalText, sub)
+	local share = math.clamp(tonumber(g.Progress) or 0, 0, 1)
+	local barText = type(g.ProgressText) == "string" and g.ProgressText or nil
+	results.GoalMeter.Frame.Visible = barText ~= nil
+	if barText then
+		results.GoalMeter.Set(share, barText)
+	end
+end
+
 -- Weapons (with levels / evolutions) and passives of the run, as tiles.
 local function fillBuild(build: any)
 	local holder = results.BuildHolder :: Frame
@@ -3492,6 +3547,11 @@ local function onRunResult(data)
 	local lost = tonumber(data.GoldLost) or 0
 	-- the cause of death is deliberately not shown on the results screen (owner request)
 	results.Settlement.Text = string.format("%s · %s gold earned · %s kept · %s lost", tostring(data.Difficulty or "Standard"), UIKit.formatNumber(coinsEarned), UIKit.formatNumber(retained), UIKit.formatNumber(lost))
+	-- survival gold is paid outside the run purse and always kept: its own line
+	local survival = tonumber(data.GoldSurvival) or 0
+	if survival == survival and survival > 0 and survival < math.huge then
+		results.Settlement.Text ..= string.format("\nSurvival +%s gold · %d min (always kept)", UIKit.formatNumber(math.floor(survival)), math.min(Config.Gold.SurvivalMaxMinutes or 30, math.floor((tonumber(data.Time) or 0) / 60)))
+	end
 	local history = type(data.DamageHistory) == "table" and data.DamageHistory or {}
 	local recent = {}
 	if not data.Won and not data.Portal and not data.Abandoned then
@@ -3572,6 +3632,7 @@ local function onRunResult(data)
 	local framed = Cosmetics.Frame(results.Medal, profile and profile.Frame or "")
 	results.MedalStroke.Transparency = framed and 1 or 0.05
 	fillProgress(data)
+	fillGoal(data)
 	local damage = tonumber(data.Damage) or 0
 	results.Hero.Text = string.format("%s  ·  %s damage dealt", heroDef and heroDef.Name or heroId, UIKit.formatNumber(math.floor(damage)))
 		.. (type(data.Score) == "number" and ((data.Endless and "  ·  endless score " or "  ·  score ") .. UIKit.formatNumber(data.Score)) or "")
@@ -3599,6 +3660,11 @@ local function onRunResult(data)
 	local lines = {}
 	for _, a in ipairs(earned) do
 		table.insert(lines, string.format('<font color="%s"><b>ACHIEVEMENT · %s</b></font>  %s', hex(P.gold_300), string.upper(tostring(a.Name)), tostring(a.Reward or "")))
+	end
+	-- the first run's one-time welcome bonus (server-paid, Config.FirstRun.BonusGold)
+	local firstBonus = type(data.FirstRun) == "table" and tonumber(data.FirstRun.Bonus) or nil
+	if firstBonus and firstBonus == firstBonus and firstBonus > 0 and firstBonus < math.huge then
+		table.insert(lines, 1, string.format('<font color="%s"><b>FIRST RUN BONUS</b></font>  +%s gold', hex(P.gold_300), UIKit.formatNumber(math.floor(firstBonus))))
 	end
 	results.Achievements.Visible = #lines > 0
 	results.Achievements.Text = table.concat(lines, "\n")

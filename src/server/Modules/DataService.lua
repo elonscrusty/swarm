@@ -36,7 +36,7 @@
 	  Tips} (Config.Settings.Defaults), ReviveTokens, SelectedArena,
 	  Achievements {Progress {id → number}, Unlocked {id → os.time()}} (AchievementService),
 	  Title (worn achievement title, "" = none), NameColor (AchievementData.Colors id, ""),
-	  TutorialDone (first-run tips finished / skipped), SeenTips {tipId → true},
+	  TutorialDone (first-run tips finished / skipped), FirstRunBonus (first-run gold paid), SeenTips {tipId → true},
 	  Curses {curseId} (the run modifiers last picked in the lobby, CurseData),
 	  Endless (boolean: the lobby ENDLESS switch, Config.Endless; old saves: false),
 	  Daily {Day, Used, Score, Plays, BestScore, BestDay} (Daily Challenge: today's scored
@@ -111,6 +111,7 @@ local function defaultData()
 		Title = "",
 		NameColor = "",
 		TutorialDone = false,
+		FirstRunBonus = false, -- the first run's one-time gold bonus was paid (Config.FirstRun)
 		SeenTips = {},
 		Curses = {},
 		Endless = false,
@@ -351,6 +352,11 @@ function DataService.Migrate(data: any): { [string]: any }
 	end
 	if type(data.SeenTips) ~= "table" then
 		data.SeenTips = {}
+	end
+	-- additive (no schema bump): an older save never gets the first-run welcome anyway
+	-- (Stats.Runs > 0), so a missing flag reads as "not paid"
+	if type(data.FirstRunBonus) ~= "boolean" then
+		data.FirstRunBonus = false
 	end
 	-- discovered weapons / passives / items / evolutions / synergies (DiscoveryService):
 	-- every table present, nothing removed (additive, no schema bump)

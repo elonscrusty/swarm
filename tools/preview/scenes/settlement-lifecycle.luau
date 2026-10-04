@@ -43,3 +43,19 @@ RM.OnPlayerRemoving(player)
 assert(data.Gold == expected + 70, "repeat disconnect must not settle twice")
 assert(disconnected.GoldSettlement.Retained == 70, "disconnect must use the same settlement record")
 preview.log("PASS abandon, safe extraction, tier clear, disconnect and duplicate end callbacks")
+
+-- survival gold: a run that lasted 2+ minutes pays 2 x SurvivalPerMinute straight to the
+-- save on a loss, on top of the 35% of the purse (never cut, paid once)
+preview.advance(1)
+local survivor = start()
+preview.advance(125)
+local before = data.Gold
+RM.AbandonRun(survivor)
+local s = assert(survivor.GoldSettlement)
+assert(s.Survival == math.floor(Config.Gold.SurvivalPerMinute * 2 * Gold.PublishGoldMult(player) + 0.5),
+	"two minutes survived pay survival gold: " .. tostring(s.Survival))
+assert(data.Gold - before >= s.Retained + s.Survival and s.Rate < 1, "survival gold is kept in full on a loss")
+local after = data.Gold
+RM.AbandonRun(survivor)
+assert(data.Gold == after, "survival gold is paid once")
+preview.log("PASS survival gold at run end")
