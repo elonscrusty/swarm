@@ -601,6 +601,9 @@ decoratePlay = function(b: any)
 	local faceStroke = face:FindFirstChildOfClass("UIStroke")
 	local kitBevel = face:FindFirstChild("Bevel")
 	local artOn = false
+	local pad = b.Content:FindFirstChildOfClass("UIPadding")
+	local padL = pad and pad.PaddingLeft or UDim.new()
+	local padR = pad and pad.PaddingRight or UDim.new()
 	face:GetPropertyChangedSignal("BackgroundTransparency"):Connect(function()
 		if artOn and face.BackgroundTransparency ~= 1 then
 			face.BackgroundTransparency = 1
@@ -620,6 +623,11 @@ decoratePlay = function(b: any)
 			kitBevel.Visible = show
 		end
 		face.BackgroundTransparency = show and 0 or 1
+		-- keep the arrow (scaled 1.6x, it grows rightwards) inside the painted rim and bevel
+		if pad then
+			pad.PaddingLeft = show and padL or UDim.new(0.07, 0)
+			pad.PaddingRight = show and padR or UDim.new(0.07, 14)
+		end
 	end)
 end
 
@@ -675,7 +683,54 @@ local function buildPlay(screen: Frame)
 		SliceScale = 0.3,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 2,
-	}, { ui.ModeSelect.Face:FindFirstChild("GoldEdge") :: GuiObject })
+	}, (function()
+		-- the painted frame brings its own plate and border: the gold edge, the kit's edge
+		-- line, rounded face and drop shadow would show as a second outline around it (the
+		-- kit repaints the face on hover, hence the property watch)
+		local mface = ui.ModeSelect.Face
+		local mhit = ui.ModeSelect.Instance
+		local extras: { GuiObject } = {}
+		for _, n in ipairs({ "GoldEdge" }) do
+			local g = mface:FindFirstChild(n)
+			if g and g:IsA("GuiObject") then
+				table.insert(extras, g)
+			end
+		end
+		for _, n in ipairs({ "Shadow", "ShadowWide" }) do
+			local g = mhit:FindFirstChild(n)
+			if g and g:IsA("GuiObject") then
+				table.insert(extras, g)
+			end
+		end
+		local bevel = mface:FindFirstChild("Bevel")
+		if bevel and bevel:IsA("GuiObject") then
+			table.insert(extras, bevel)
+		end
+		local kitEdge = mface:FindFirstChildOfClass("UIStroke")
+		local on = false
+		local shown = mface.BackgroundTransparency
+		mface:GetPropertyChangedSignal("BackgroundTransparency"):Connect(function()
+			if on and mface.BackgroundTransparency ~= 1 then
+				shown = mface.BackgroundTransparency
+				mface.BackgroundTransparency = 1
+			end
+		end)
+		return function(show: boolean)
+			on = not show
+			for _, g in ipairs(extras) do
+				g.Visible = show
+			end
+			if kitEdge then
+				kitEdge.Enabled = show
+			end
+			if show then
+				mface.BackgroundTransparency = shown
+			else
+				shown = mface.BackgroundTransparency
+				mface.BackgroundTransparency = 1
+			end
+		end
+	end)())
 	-- a party member's READY toggle (the leader's start waits for everyone)
 	ui.ReadyBtn = UIKit.Button(screen, {
 		Kind = "Primary",
@@ -855,12 +910,15 @@ local function relayout()
 		local w = math.min(W - 2 * M, 560)
 		local x = (W - w) / 2
 		-- bottom-up: mode selector, PLAY, tiles, hero pill
-		local selH, playH = 60, 108
+		-- PLAY keeps the painted plate's shape (about 3.4 : 1) instead of stretching wide
+		local selH = 60
+		local playH = math.clamp(math.floor(w / 4), 108, 130)
+		local playW = math.min(w, math.floor(playH * 3.4))
 		local y = H - M - selH
 		local selW = math.min(w, 420)
 		place(ui.ModeSelect.Instance, (W - selW) / 2, y, selW, selH)
 		y -= G + playH
-		place(ui.PlayHolder, x, y, w, playH)
+		place(ui.PlayHolder, (W - playW) / 2, y, playW, playH)
 		local playTop = y
 		y -= G + 6 + tilesH
 		place(ui.Tiles, x, y, w, tilesH)
