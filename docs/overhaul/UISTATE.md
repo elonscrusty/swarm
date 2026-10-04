@@ -39,7 +39,34 @@ Nothing here was tested in Studio or on a device.
   when the stage leaves Open).
 - `src/client/LootUI.lua`: loot prompt hidden and hold/purchase refused unless
   `UIState.WorldInputAllowed()`; a hold in progress is released when a panel takes input.
-- NEW `tools/uistate_regression.luau` (30 checks), NEW scene `tools/preview/scenes/ui-stack.luau`.
+- NEW `tools/uistate_regression.luau` (34 checks), NEW scene `tools/preview/scenes/ui-stack.luau`.
 
-## Tests run
-See the final report section below (filled in at the end of the batch).
+- Coordinator rule added for HUD (loot-scene collisions): informational headlines hold while a
+  loot prompt or item popup shows (LootUI sets holds `Prompt` / `ItemPopup`) and one already up
+  is taken off; portal reveal waits up to 15 s.
+
+## Tests run (offline only; NOT Studio / device / live multiplayer)
+- `bash tools/check.sh --quick`: TYPECHECK ok, COMPILE ok. PASS
+- `lune run tools/uistate_regression.luau`: 34/34 PASS (all six proven cases as state logic,
+  stacking, expiry, watchdog, reset, prompt hold/cancel).
+- `lune run tools/ui_regression.luau phone` / `phone-portrait`: 30/30 PASS each.
+- Renders `ui-stack` (iphone unless noted), real client UI against the preview mock:
+  - portal: 1 heading "THE PORTAL HAS APPEARED" with the client sub line (was 2). PASS
+  - caravan: defence bar + WAVE 4 headline, 0 notice pills (caravan toast suppressed). PASS
+  - elite: SWARM IS GROWING headline, elite pill directly under it, altar info pill waiting. PASS
+  - stack: 2 pills, the two elites coalesced "x2" (was 4 stacked). PASS
+  - levelup: `LevelUp(shown), Portal(suspended)`; pc + closeup: after the choice `Portal(shown)`. PASS
+  - reel (pc, after=on): during the reward 0 portal headings + no chest prompt; after it 1
+    heading + prompt back. PASS
+- `check_layout.py` on ui-stack stack/elite/caravan/reel (iphone), loot (iphone,
+  phone-portrait), rewards (iphone): 0 problems. PASS
+- menu-sim cycles=1 headless: lobby -> run -> pause -> MAIN MENU -> death -> results -> lobby,
+  0 errors. PASS (headless: no GUI exercised); GUI menu-sim: see the final report.
+
+## Remaining risk
+- Critical notices during a headline sit under it, near the hero on phones (~2.4 s).
+- Group runs: the portal ChoiceLeft countdown keeps running while a player's upgrade panel
+  suspends the stage-clear panel (server rule, CHOICE-SERVER).
+- A full reward reveal suspended behind a higher panel keeps playing hidden (presentation only).
+- The mini reel is not hidden under a covering panel (unchanged).
+- Notify classification is text-based until the server sends `Id` (FOR OTHERS).
