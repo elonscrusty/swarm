@@ -380,11 +380,21 @@ local function build(root: Instance, host: { [string]: any }?)
 		host.OnRelayout(layout)
 		layout()
 	end
+	-- the DEV button only floats in a run; in the lobby DEV lives in MORE (MenuMore's DEV
+	-- row opens this panel), so the home screen's composition stays clean
+	local function syncToggle()
+		local inRun = player:GetAttribute("InRun") == true
+		if toggle then
+			toggle.Visible = inRun
+		end
+	end
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
 		showTab(player:GetAttribute("InRun") == true and "Run" or "Profile")
+		syncToggle()
 		refresh()
 	end)
 	showTab(player:GetAttribute("InRun") == true and "Run" or "Profile")
+	syncToggle()
 	refresh()
 
 	-- INVINCIBLE badge on the DEV button while god mode is on (visible with the panel shut)

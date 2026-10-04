@@ -155,6 +155,24 @@ local function updateMore()
 			table.insert(parts, id .. "=" .. k)
 		end
 	end
+	-- MORE stays seen while nothing beyond what the player already saw there is unseen
+	local was = seen.More
+	if was then
+		local old = {}
+		for _, part in ipairs(string.split(was, ";")) do
+			old[part] = true
+		end
+		local subset = true
+		for _, part in ipairs(parts) do
+			if not old[part] then
+				subset = false
+				break
+			end
+		end
+		if subset then
+			seen.More = table.concat(parts, ";")
+		end
+	end
 	setKey("More", table.concat(parts, ";"))
 end
 

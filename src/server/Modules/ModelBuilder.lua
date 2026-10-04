@@ -8,6 +8,7 @@
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local MeshCatalog = require(game:GetService("ReplicatedStorage").Shared.MeshCatalog)
+local SOUL_GLOW = Color3.fromRGB(189, 120, 255) -- the Necromancer's violet soul light
 local MeshService = require(script.Parent.MeshService)
 
 local ModelBuilder = {}
@@ -451,21 +452,21 @@ ModelBuilder.ClassGear = {
 		gear(ra, rig.Model, { Name = "WrenchJaw", Size = Vector3.new(0.3, 0.75, 0.5), Color = BLADE, Material = METAL }, CFrame.new(0.15, -1.25, -2.6))
 		gear(ra, rig.Model, { Name = "WrenchGear", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 0.5, 0.5), Color = c.Gold, Material = METAL }, CFrame.new(0.32, -1.25, -1.6))
 	end,
-	-- Necromancer: dark robe with a crimson front, a bone collar, a bone mask with glowing
-	-- eyes under the hood and a bone staff topped with a small skull.
+	-- Necromancer: black robe with a gold front, a bone collar, a bone mask with violet
+	-- eyes under the hood and a tall black staff topped with a skull and a soul core.
 	Necromancer = function(rig: Rig, c)
 		robe(rig, c, 2.7)
 		gear(rig.Torso, rig.Model, { Name = "RobeFront", Size = Vector3.new(0.85, 2.3, 0.12), Color = c.Accent }, CFrame.new(0, -2.05, -1.16))
 		gear(rig.Torso, rig.Model, { Name = "BoneCollar", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.5, 2.3, 2.0), Color = c.Metal, CastShadow = true }, CFrame.new(0, 1.15, 0.15) * UP)
 		gear(rig.Head, rig.Model, { Name = "FaceMask", Size = Vector3.new(1.3, 1.05, 0.2), Color = Palette.ivory_200 }, CFrame.new(0, 0, -0.7))
-		gear(rig.Head, rig.Model, { Name = "FaceGlow", Size = Vector3.new(0.7, 0.14, 0.08), Color = Palette.fx_heal, Material = Enum.Material.Neon }, CFrame.new(0, 0.07, -0.82))
+		gear(rig.Head, rig.Model, { Name = "FaceGlow", Size = Vector3.new(0.7, 0.14, 0.08), Color = SOUL_GLOW, Material = Enum.Material.Neon }, CFrame.new(0, 0.07, -0.82))
 		for _, arm in ipairs({ rig.LeftArm, rig.RightArm }) do
 			gear(arm, rig.Model, { Name = "Ribs", Size = Vector3.new(0.8, 0.55, 0.8), Color = c.Metal }, CFrame.new(0, 0.75, 0))
 		end
 		local ra = rig.RightArm
-		gear(ra, rig.Model, { Name = "Staff", Shape = Enum.PartType.Cylinder, Size = Vector3.new(5.2, 0.26, 0.26), Color = Palette.ivory_300 }, CFrame.new(0.15, 0.3, -0.35) * UP)
-		gear(ra, rig.Model, { Name = "StaffSkull", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), Color = Palette.ivory_200 }, CFrame.new(0.15, 2.95, -0.4))
-		gear(ra, rig.Model, { Name = "StaffCore", Shape = Enum.PartType.Ball, Size = Vector3.new(0.3, 0.3, 0.3), Color = Palette.fx_heal, Material = Enum.Material.Neon }, CFrame.new(0.15, 3.35, -0.4))
+		gear(ra, rig.Model, { Name = "Staff", Shape = Enum.PartType.Cylinder, Size = Vector3.new(7.2, 0.26, 0.26), Color = Palette.chitin_800 }, CFrame.new(0.15, 1.3, -0.35) * UP)
+		gear(ra, rig.Model, { Name = "StaffSkull", Shape = Enum.PartType.Ball, Size = Vector3.new(0.85, 0.85, 0.85), Color = Palette.ivory_200 }, CFrame.new(0.15, 5.2, -0.4))
+		gear(ra, rig.Model, { Name = "StaffCore", Shape = Enum.PartType.Ball, Size = Vector3.new(0.3, 0.3, 0.3), Color = SOUL_GLOW, Material = Enum.Material.Neon }, CFrame.new(0.15, 5.85, -0.4))
 	end,
 }
 

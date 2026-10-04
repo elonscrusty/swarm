@@ -450,13 +450,15 @@ def necro_hood(m, o, bone):
     arc_shell(shade, [(0.86, -0.1, 0.0), (0.86, -1.45, 0.04)], 40, 320, seg=8, thick=0.04, loc=o)
 
 
-@register("Necromancer", "Heroes", "Ivory skull mask under a tall dark cowl, slate and crimson robes, spiked bone "
-                                   "collar and pauldrons, bone staff with a small glowing soul core.")
+@register("Necromancer", "Heroes", "Ivory skull mask under a tall black cowl with gold edging, black and gold robes, "
+                                   "spiked bone collar and pauldrons, tall black staff crowned with a skull in a "
+                                   "gold claw and a violet soul core.")
 def necromancer(m):
-    rig(m, pal(Cloth="slate_800", Cloth2="slate_700", Metal="ivory_300", MetalDark="ivory_500",
-                   Accent="crimson_600", AccentDark="crimson_800", Gold="gold_600", Hat="slate_900",
-                   HatAccent="crimson_600", Hair="slate_950", Skin="stone_300", Bone="ivory_200",
-                   Glow=mix("fx_heal", "fx_holy", 0.35)))
+    # black and gold (the lobby reference look), violet soul glow
+    rig(m, pal(Cloth="chitin_900", Cloth2="wasp_900", Metal="ivory_200", MetalDark="ivory_400",
+                   Accent="gold_400", AccentDark="gold_600", Gold="gold_400", Hat="chitin_900",
+                   HatAccent="gold_500", Hair="slate_950", Skin="ivory_300", Bone="ivory_200",
+                   Shaft="chitin_800", Glow=(0.74, 0.47, 1.0)))
     head(m)
     mask = m.piece("FaceMask", "Bone", bone="Head")
     # skull mask over the face: domed brow, cheekbones, a narrow jaw
@@ -522,29 +524,31 @@ def necromancer(m):
                   [0.11, 0.08, 0.0], seg=4)
         turn(pad, k, (x, 0, 3.9), (0, s * 10, 0))
 
-    # bone staff in the right hand: a spine of knuckled vertebrae, a claw of finger bones
-    # cradling the soul core, a small skull below it
-    base, top = Vector((-1.52, -0.22, 0.12)), Vector((-1.62, -0.4, 4.7))
-    staff = m.piece("Staff", "Bone", bone="RightArm", shadow=True)
-    sweep(staff, [base, (base + top) / 2, top], [0.09, 0.1, 0.11], seg=6)
-    for u in (0.3, 0.55, 0.8):
-        c = base.lerp(top, u)
-        staff.ico(0.15, loc=c, scale=(1, 1, 0.6), subdiv=0)
-    for i in range(4):
-        a = math.radians(45 + i * 90)
-        out = Vector((math.cos(a), math.sin(a), 0))
-        sweep(staff, [top, top + out * 0.3 + Vector((0, 0, 0.2)), top + out * 0.32 + Vector((0, 0, 0.62)),
-                      top + out * 0.1 + Vector((0, 0, 0.84))], [0.07, 0.06, 0.05, 0.0], seg=4)
+    # tall black staff in the right hand (rising well above the hood): gold bands down the
+    # shaft, a big ivory skull on top cradled by a gold claw of flaring prongs, violet
+    # glowing eye sockets and a soul core above the skull
+    base, top = Vector((-1.52, -0.22, 0.12)), Vector((-1.68, -0.44, 7.3))
+    staff = m.piece("Staff", "Shaft", bone="RightArm", shadow=True)
+    sweep(staff, [base, (base + top) / 2, top], [0.1, 0.11, 0.12], seg=6)
     sk = m.piece("StaffSkull", "Bone", bone="RightArm")
-    skull(sk, top + Vector((0, -0.08, -0.26)), r=0.26)
-    sock = m.piece("StaffSkullEyes", "Dark", bone="RightArm")
+    sc = top + Vector((0, -0.04, 0.42))
+    skull(sk, sc, r=0.44)
+    sock = m.piece("StaffSkullEyes", "Glow", "Neon", bone="RightArm")
     for s in (1, -1):
-        sock.ico(0.07, loc=top + Vector((s * 0.1, -0.33, -0.24)), subdiv=0)
+        sock.ico(0.11, loc=sc + Vector((s * 0.16, -0.42, 0.04)), subdiv=0)
     ring = m.piece("StaffTrim", "Gold", "Metal", bone="RightArm")
-    band(ring, 0.08, 0.15, -0.07, 0.07, seg=6, loc=top + Vector((0, 0, 0.0)))
-    band(ring, 0.07, 0.13, -0.06, 0.06, seg=6, loc=base + Vector((0, 0, 0.14)))
+    for u in (0.08, 0.42, 0.7):  # gold bands down the shaft
+        band(ring, 0.1, 0.17, -0.08, 0.08, seg=6, loc=base.lerp(top, u))
+    band(ring, 0.12, 0.26, -0.12, 0.12, seg=6, loc=top + Vector((0, 0, -0.1)))  # collar under the skull
+    for i in range(5):  # the claw: prongs flaring out and up round the skull
+        a = math.radians(90 + (i - 2) * 48)
+        out = Vector((math.cos(a), -math.sin(a) * 0.6, 0)).normalized()
+        ln = 1.25 if i == 2 else (1.05 if i in (1, 3) else 0.85)
+        b0 = top + Vector((0, 0, -0.05))
+        sweep(ring, [b0, b0 + out * 0.42 + Vector((0, 0, 0.3)), b0 + out * 0.62 + Vector((0, 0, 0.3 + ln * 0.6)),
+                     b0 + out * 0.5 + Vector((0, 0, 0.3 + ln))], [0.09, 0.08, 0.06, 0.0], seg=4)
     core = m.piece("StaffCore", "Glow", "Neon", bone="RightArm")
-    core.ico(0.2, loc=top + Vector((0, 0, 0.5)), subdiv=1)
+    core.ico(0.16, loc=sc + Vector((0, 0.05, 0.78)), subdiv=1)
 
     legs(m, "Cloth2", width=0.68)
     boots(m, "Dark", z_top=0.6, cuff=False)

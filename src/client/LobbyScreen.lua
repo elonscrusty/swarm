@@ -91,6 +91,26 @@ local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
 end
 
+-- Home palette taken from the reference (brighter than the antique UI gold on purpose:
+-- the PLAY plate is the one bright thing on the screen)
+local NAVY = Color3.fromRGB(16, 22, 38)
+local PLAY_HI = Color3.fromRGB(255, 233, 150)
+local PLAY_MID = Color3.fromRGB(242, 194, 74)
+local PLAY_LO = Color3.fromRGB(196, 139, 38)
+local PLAY_RIM = Color3.fromRGB(122, 80, 20)
+local PLAY_LINE = Color3.fromRGB(255, 243, 200)
+
+local decoratePlay: (b: any) -> ()
+
+-- A thin gold border drawn on its own frame, so a button's hover / press repaint (which
+-- resets the face's own stroke) never takes it away.
+local function goldEdge(face: GuiObject, radius: number, transparency: number?, thickness: number?): Frame
+	local f = new("Frame", { Name = "GoldEdge", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Active = false }, face)
+	UIKit.corner(f, radius)
+	UIKit.stroke(f, P.gold_400, thickness or 1.5, transparency or 0.1)
+	return f
+end
+
 local function toast(str: string, color: Color3?)
 	if host.Toast then
 		host.Toast(str, color)
@@ -148,14 +168,30 @@ local function buildLogo(parent: Instance): Frame
 	local letters = word(Vector2.new(0, 4), Color3.new(1, 1, 1), 0)
 	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Steel }, letters)
 	new("UIStroke", { Color = P.slate_950, Thickness = 2, Transparency = 0.15, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual }, letters)
-	text(logo, "Label", UIKit.track("Survive ◆ Upgrade ◆ Conquer"), {
-		Name = "Tagline",
-		Position = UDim2.fromOffset(4, 100),
-		Size = UDim2.fromOffset(360, 22),
-		TextColor3 = P.gold_300,
-		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.6,
-	}, 14)
+	-- the tagline: small letter-spaced ivory serif words with gold diamonds between them
+	-- (Roblox has no letter spacing, so the letters are spaced by hand; the diamonds are drawn)
+	local tagline = new("Frame", { Name = "Tagline", BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 100), Size = UDim2.fromOffset(280, 18) }, logo)
+	UIKit.list(tagline, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 9) })
+	for i, w in ipairs({ "SURVIVE", "UPGRADE", "CONQUER" }) do
+		if i > 1 then
+			local d = new("Frame", { Name = "Diamond" .. i, BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Rotation = 45, Size = UDim2.fromOffset(6, 6), LayoutOrder = i * 2 - 1 }, tagline)
+			d.Active = false
+		end
+		local spaced = string.sub((string.gsub(w, "(.)", "%1 ")), 1, -2)
+		new("TextLabel", {
+			Name = "Word" .. i,
+			BackgroundTransparency = 1,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(0, 18),
+			Text = spaced,
+			FontFace = Theme.Font.Title,
+			TextSize = 11,
+			TextColor3 = P.ivory_100,
+			TextStrokeColor3 = C.Shadow,
+			TextStrokeTransparency = 0.55,
+			LayoutOrder = i * 2,
+		}, tagline)
+	end
 	-- the painted logo (screens/logo_SWARM, 2:1) replaces the sword and letters; they stay
 	-- as the fallback while it loads or if it is not uploaded. The frame grows to fit it.
 	ui.LogoW, ui.LogoH = 350, 130
@@ -169,11 +205,9 @@ local function buildLogo(parent: Instance): Frame
 	if art then
 		ui.LogoW, ui.LogoH = 280, 162
 		logo.Size = UDim2.fromOffset(360, 162)
-		local tagline = logo:FindFirstChild("Tagline") :: TextLabel?
-		if tagline then
-			-- under the painted logo's frame (the picture's box ends at 136)
-			tagline.Position = UDim2.fromOffset(4, 138)
-		end
+		-- under the painted logo's frame (the picture's box ends at 136), centred on it
+		tagline.Position = UDim2.fromOffset(0, 134)
+		tagline.Size = UDim2.fromOffset(280, 18)
 	end
 	return logo
 end
@@ -202,7 +236,8 @@ end
 ------------------------------------------------------------------------------------------
 
 local function buildChip(frame: Frame)
-	local holder, face = UIKit.Surface(frame, { Name = "StatsChip", Radius = 999, Size = UDim2.fromOffset(0, 48) })
+	-- a compact dark rounded plate with a thin gold edge (reference: not a full pill)
+	local holder, face = UIKit.Surface(frame, { Name = "StatsChip", Radius = 10, Color = NAVY, Transparency = 0.12, Edge = P.gold_400, EdgeTransparency = 0.2, Size = UDim2.fromOffset(0, 48) })
 	holder.AutomaticSize = Enum.AutomaticSize.X
 	face.AutomaticSize = Enum.AutomaticSize.X
 	face.Size = UDim2.fromScale(0, 1)
@@ -212,11 +247,13 @@ local function buildChip(frame: Frame)
 	ui.ChipFace = face
 	-- gold only (best time / wins live on the STATS screen)
 	ui.Gold = UIKit.Chip(face, "lobby_Gold", nil, "0", { Name = "Gold", LayoutOrder = 1, Size = UDim2.fromOffset(0, 48) }, { Size = 28 })
+	ui.Gold.Value.FontFace = Theme.Font.Title
 	ui.Gold.Value.TextColor3 = P.gold_200
 	-- the settings cog beside it (home only; it stays still)
 	ui.Cog = UIKit.IconButton(frame, {
 		Icon = "gear",
-		Size = 52,
+		Size = 48,
+		IconSize = 30,
 		Name = "SettingsCog",
 		OnClick = function()
 			if host.OpenSettings then
@@ -224,7 +261,11 @@ local function buildChip(frame: Frame)
 			end
 		end,
 	})
-	ArtImage.ButtonIcon(ui.Cog.Content, "icons/ui/ui_Settings", { Size = UDim2.fromOffset(38, 38) }, "Glyph")
+	-- square dark plate, gold edge, plain gold gear (the reference); the painted wrench-and-
+	-- gear picture read as a different icon, so the drawn gold gear stays until the gold
+	-- gear picture (ui/home/home_Gear) is uploaded
+	goldEdge(ui.Cog.Face, Theme.Radius.M, 0.15)
+	ArtImage.ButtonIcon(ui.Cog.Content, "ui/home/home_Gear", { Size = UDim2.fromOffset(34, 34) }, "Glyph")
 end
 
 -- CHARACTERS shows the stats inline in the top bar: no pill box (face, edge, shadow) behind them
@@ -280,7 +321,8 @@ local function updateLoadingPill()
 	-- DEV: models that failed to load stay reported (why heroes show their part stand-ins)
 	local failed = folder and tonumber(folder:GetAttribute("Failed")) or 0
 	local dev = RunService:IsStudio() or Players.LocalPlayer:GetAttribute("DevAccess") == true
-	if folder and not show and failed > 0 and dev then
+	-- (a DEV note: only on the MORE screen, never in the home composition)
+	if folder and not show and failed > 0 and dev and current == "More" then
 		ui.LoadingText.Text = string.format("DEV · %d of %d models failed · %s", failed, total, tostring(folder:GetAttribute("LastError") or ""))
 		pill.AnchorPoint = Vector2.new(ui.Chip.AnchorPoint.X, 0)
 		pill.Position = UDim2.new(ui.Chip.AnchorPoint.X, 0, 0, 56)
@@ -353,7 +395,7 @@ local function browseStep(dir: number)
 end
 
 local function buildHeroPill(screen: Frame)
-	local holder, face = UIKit.Surface(screen, { Name = "HeroPill", Radius = 999, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	local holder, face = UIKit.Surface(screen, { Name = "HeroPill", Radius = 999, Color = NAVY, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.15, EdgeThickness = 1.5 })
 	ui.HeroPill = holder
 	-- the middle opens HEROES
 	local open = new("TextButton", { Name = "Open", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Position = UDim2.fromOffset(56, 0), Size = UDim2.new(1, -112, 1, 0), ZIndex = 3 }, face)
@@ -370,7 +412,8 @@ local function buildHeroPill(screen: Frame)
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.ivory_100,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-	}, 18)
+		FontFace = Theme.Font.Title,
+	}, 16)
 	ui.HeroLevel = text(face, "Caption", "LV 1", {
 		Name = "HeroLevel",
 		Position = UDim2.new(0.5, -84, 0, 14 + TS(18)),
@@ -418,9 +461,22 @@ end
 ------------------------------------------------------------------------------------------
 
 local function buildTiles(screen: Frame)
-	local holder, face = UIKit.Surface(screen, { Name = "Tiles", Radius = Theme.Radius.L, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	-- the dock: dark navy plate, thin gold border, rounded corners (reference). The painted
+	-- frame (ui/home/home_DockFrame, 9-slice) replaces the drawn border once uploaded.
+	local holder, face = UIKit.Surface(screen, { Name = "Tiles", Radius = 12, Color = NAVY, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.1, EdgeThickness = 1.5 })
 	ui.Tiles = holder
 	ui.TilesFace = face
+	local edge = face:FindFirstChildOfClass("UIStroke")
+	ArtImage.Place(face, "ui/home/home_DockFrame", {
+		Name = "DockArt",
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(64, 64, 704, 192),
+		SliceScale = 0.35,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 2,
+	}, edge and function(show: boolean)
+		edge.Enabled = show
+	end or nil)
 	local function tile(name: string, icon: string, caption: string, order: number, onClick: () -> ()): any
 		local b = UIKit.IconButton(face, { Icon = icon, Caption = caption, Kind = "Ghost", Size = 96, IconSize = 46, Name = name, LayoutOrder = order, OnClick = onClick })
 		local cap = b.Content:FindFirstChild("Caption") :: TextLabel?
@@ -430,6 +486,8 @@ local function buildTiles(screen: Frame)
 			cap.TextSize = TS(15)
 			cap.Size = UDim2.new(1, -4, 0, TS(15) + 4)
 		end
+		-- the gold dock icon picture (ui/home/home_<Name>) over the drawn one once uploaded
+		ArtImage.ButtonIcon(b.Content, "ui/home/home_" .. name, { Size = UDim2.fromOffset(52, 52), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -TS(Theme.TextSize.Caption) / 2 - 4) }, name == "More" and "Dots" or "Glyph")
 		return b
 	end
 	ui.HeroesTile = tile("Heroes", "helmet", "Heroes", 1, function()
@@ -459,8 +517,76 @@ local function buildTiles(screen: Frame)
 	-- thin gold separators between the tiles
 	ui.TileSeps = {}
 	for i = 1, 2 do
-		ui.TileSeps[i] = new("Frame", { Name = "Sep" .. i, BackgroundColor3 = P.gold_400, BackgroundTransparency = 0.6, BorderSizePixel = 0 }, face)
+		ui.TileSeps[i] = new("Frame", { Name = "Sep" .. i, BackgroundColor3 = P.gold_400, BackgroundTransparency = 0.45, BorderSizePixel = 0 }, face)
 	end
+end
+
+--[[
+	The ornate PLAY plate (reference: bright gold gradient, a dark bronze rim with a light
+	inner bevel line, small corner studs, a faint crown behind the letters, dark serif
+	lettering, right arrow). Built from UI objects as a best-effort stand-in: it is NOT the
+	painted plate. Once ui/home/home_PlayButton is uploaded (docs/IMAGE_PROMPTS.md group 22)
+	the picture covers the drawn rim, bevel, studs and crown (the letters stay live text).
+]]
+decoratePlay = function(b: any)
+	local face: Frame = b.Face
+	local radius = Theme.Radius.M
+	-- the bright gold fill sits over the kit's antique gradient (hover / press repaint the
+	-- face underneath; this layer keeps the reference's colour)
+	local fill = new("Frame", { Name = "GoldFill", BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 1, Active = false }, face)
+	UIKit.corner(fill, radius)
+	new("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, PLAY_HI),
+			ColorSequenceKeypoint.new(0.42, PLAY_MID),
+			ColorSequenceKeypoint.new(1, PLAY_LO),
+		}),
+	}, fill)
+	local hover = face:FindFirstChild("Hover")
+	if hover and hover:IsA("GuiObject") then
+		hover.ZIndex = 2
+	end
+	local drawn: { GuiObject } = {}
+	-- outer bronze rim (thick) and the light bevel line inside it
+	local rim = new("Frame", { Name = "Rim", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Active = false }, face)
+	UIKit.corner(rim, radius)
+	UIKit.stroke(rim, PLAY_RIM, 3, 0)
+	table.insert(drawn, rim)
+	local line = new("Frame", { Name = "Bevel2", BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 1, -12), ZIndex = 2, Active = false }, face)
+	UIKit.corner(line, math.max(2, radius - 4))
+	UIKit.stroke(line, PLAY_LINE, 1.5, 0.15)
+	table.insert(drawn, line)
+	local shade = new("Frame", { Name = "Bevel3", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 1, -16), ZIndex = 2, Active = false }, face)
+	UIKit.corner(shade, math.max(2, radius - 6))
+	UIKit.stroke(shade, PLAY_LO, 1, 0.35)
+	table.insert(drawn, shade)
+	-- small diamond studs in the corners of the bevel line
+	for _, at in ipairs({ Vector2.new(0, 0), Vector2.new(1, 0), Vector2.new(0, 1), Vector2.new(1, 1) }) do
+		local stud = new("Frame", {
+			Name = "Stud",
+			BackgroundColor3 = PLAY_RIM,
+			BorderSizePixel = 0,
+			Rotation = 45,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(at.X, at.X == 0 and 14 or -14, at.Y, at.Y == 0 and 14 or -14),
+			Size = UDim2.fromOffset(6, 6),
+			ZIndex = 2,
+			Active = false,
+		}, face)
+		table.insert(drawn, stud)
+	end
+	-- a bigger arrow (reference), scaled so the kit's repaint keeps it
+	local right = b.Content:FindFirstChild("Right")
+	if right then
+		new("UIScale", { Name = "Big", Scale = 1.6 }, right)
+	end
+	-- the faint crown behind the letters
+	local crownHolder = new("CanvasGroup", { Name = "Crown", BackgroundTransparency = 1, GroupTransparency = 0.68, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 3), Size = UDim2.fromOffset(64, 44), ZIndex = 2 }, face)
+	Icons.Draw(crownHolder, "crown", { Size = 44, Color = PLAY_HI, Back = PLAY_MID, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0) })
+	table.insert(drawn, crownHolder)
+	ui.PlayCrown = crownHolder
+	ArtImage.Place(face, "ui/home/home_PlayButton", { Name = "PlayArt", ScaleType = Enum.ScaleType.Stretch, Size = UDim2.fromScale(1, 1), ZIndex = 2 }, drawn)
 end
 
 local function buildPlay(screen: Frame)
@@ -482,7 +608,9 @@ local function buildPlay(screen: Frame)
 	})
 	if ui.PlayBtn.Title then
 		ui.PlayBtn.Title.FontFace = Theme.Font.Display
+		ui.PlayBtn.Title.TextColor3 = Color3.fromRGB(28, 18, 6)
 	end
+	decoratePlay(ui.PlayBtn)
 	ui.PlayBtn.Face.ClipsDescendants = true
 	UIAnim.Shine(ui.PlayBtn.Face, 3.2, 0.78)
 	if not UIAnim.Reduced() then
@@ -501,6 +629,19 @@ local function buildPlay(screen: Frame)
 			LobbyScreen.Show("Play")
 		end,
 	})
+	-- reference: a narrower dark plate, thin gold border, ivory serif text, gold chevron
+	if ui.ModeSelect.Title then
+		ui.ModeSelect.Title.FontFace = Theme.Font.Title
+	end
+	goldEdge(ui.ModeSelect.Face, Theme.Radius.M, 0.15)
+	ArtImage.Place(ui.ModeSelect.Face, "ui/home/home_ModeFrame", {
+		Name = "ModeArt",
+		ScaleType = Enum.ScaleType.Slice,
+		SliceCenter = Rect.new(48, 48, 592, 80),
+		SliceScale = 0.3,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 2,
+	}, { ui.ModeSelect.Face:FindFirstChild("GoldEdge") :: GuiObject })
 	-- a party member's READY toggle (the leader's start waits for everyone)
 	ui.ReadyBtn = UIKit.Button(screen, {
 		Kind = "Primary",
@@ -650,16 +791,23 @@ local function relayout()
 	elseif current == "Characters" or topRowChip then
 		chipY = math.max(0, math.floor((ins.Top - 48) / 2))
 	end
-	local cogW = home and (52 + G) or 0
+	-- home in landscape: the reference's margins (~4 % from the top, ~2 % from the right)
+	local homeWide = home and not portrait
+	local rightM = homeWide and math.max(M, math.floor(W * 0.022)) or M
+	if homeWide and ins.Right <= 4 then
+		chipY = math.max(chipY, math.floor(H * 0.04))
+	end
+	local cogS = 48
+	local cogW = home and (cogS + math.max(G, homeWide and math.floor(W * 0.014) or G)) or 0
 	ui.Chip.AnchorPoint = Vector2.new(1, 0)
 	if portrait and not home then
 		-- portrait sub-screens: under their header, centred
 		ui.Chip.AnchorPoint = Vector2.new(0.5, 0)
 		ui.Chip.Position = UDim2.fromOffset(W / 2, math.max(ins.Top + 4, 12) + 64)
 	else
-		ui.Chip.Position = UDim2.fromOffset(W - M - cogW, chipY + (home and 2 or 0))
+		ui.Chip.Position = UDim2.fromOffset(W - rightM - cogW, chipY)
 	end
-	place(ui.Cog.Instance, W - M - 52, chipY, 52, 52)
+	place(ui.Cog.Instance, W - rightM - cogS, chipY, cogS, cogS)
 
 	local heroFrac = 0.5
 	local pillH = 64
@@ -691,35 +839,57 @@ local function relayout()
 		local logoBottom = logoY + (ui.LogoH + 10) * logoScale
 		heroFrac = ((logoBottom + y) / 2) / H
 	else
-		local logoScale = math.clamp(H / 760, compact and 0.56 or 0.7, 1)
+		--[[ Proportions measured on the owner's reference (home-mockup, 16:9), as fractions of
+		     the safe area: logo 28 % wide top left; dock 27.4 % x 13.3 %, bottom 6 % up;
+		     hero selector 21.3 % x 6.6 % centred, PLAY 26.8 % x 15.5 % right with the
+		     SOLO selector (70 % of PLAY's width, 6.4 % tall) under it, both ending 7.5 % up.
+		     Phones keep finger-sized minimums. ]]
+		local sideM = math.max(M, math.floor(W * 0.022))
+		-- logo: ~28 % of the width, never taller than ~30 % of the height
+		local logoScale = math.min(W * 0.28 / ui.LogoW, H * 0.3 / ui.LogoH)
+		logoScale = math.clamp(logoScale, 0.5, 1.4)
 		ui.LogoScale.Scale = logoScale
-		local logoY = math.max(ins.Top + 2, 14)
-		ui.Logo.Position = UDim2.fromOffset(M, logoY)
-		-- bottom left: the tiles panel
-		place(ui.Tiles, M, H - M - tilesH, tilesW, tilesH)
+		local logoY = math.max(ins.Top + 2, math.floor(H * 0.03))
+		ui.Logo.Position = UDim2.fromOffset(sideM, logoY)
+		local baseB = math.max(M, math.floor(H * 0.06))
+		local lowB = math.max(M, math.floor(H * 0.075))
+		-- bottom left: the dock
+		tilesH = math.floor(math.clamp(H * 0.133, 90, 108))
+		tilesW = math.floor(math.clamp(W * 0.274, 3 * 92 + 16, 390))
+		place(ui.Tiles, sideM, H - baseB - tilesH, tilesW, tilesH)
 		-- bottom right: PLAY over the mode selector
-		local pw = math.clamp(W * 0.3, 260, 400)
-		local playH = compact and 88 or 108
-		local selH = compact and 50 or 56
-		local selW = math.floor(pw * 0.78)
-		place(ui.ModeSelect.Instance, W - M - pw / 2 - selW / 2, H - M - selH, selW, selH)
-		local playY = H - M - selH - G - playH
-		place(ui.PlayHolder, W - M - pw, playY, pw, playH)
-		place(ui.ReadyBtn.Instance, W - M - 132, playY - G - 48, 132, 48)
+		local pw = math.floor(math.clamp(W * 0.268, 250, 400))
+		local playH = math.floor(math.clamp(H * 0.155, 80, 124))
+		local selH = math.floor(math.clamp(H * 0.064, 46, 52))
+		local selW = math.floor(pw * 0.7)
+		local selGap = math.max(8, math.floor(H * 0.018))
+		place(ui.ModeSelect.Instance, W - sideM - pw / 2 - selW / 2, H - lowB - selH, selW, selH)
+		local playY = H - lowB - selH - selGap - playH
+		place(ui.PlayHolder, W - sideM - pw, playY, pw, playH)
+		place(ui.ReadyBtn.Instance, W - sideM - 132, playY - G - 48, 132, 48)
 		local qTop = chipY + 64
-		place(ui.Queue, W - M - pw, qTop, pw, H - M - qTop)
-		-- the hero pill between them, at the bottom
-		local gapL, gapR = M + tilesW + 16, W - M - pw - 16
-		-- centred under the hero when there is room either side, else in the gap
+		place(ui.Queue, W - sideM - pw, qTop, pw, H - M - qTop)
+		-- the hero selector, compact and centred at the bottom (else in the gap between)
+		pillH = math.floor(math.clamp(H * 0.066, 50, 56))
+		local gapL, gapR = sideM + tilesW + 16, W - sideM - pw - 16
 		local half = math.min(W / 2 - gapL, gapR - W / 2)
-		if 2 * half >= 260 then
-			local pillW = math.min(360, 2 * half)
-			place(ui.HeroPill, W / 2 - pillW / 2, H - M - pillH - 4, pillW, pillH)
+		local want = math.clamp(W * 0.213, 250, 320)
+		if 2 * half >= 250 then
+			local pillW = math.min(want, 2 * half)
+			place(ui.HeroPill, W / 2 - pillW / 2, H - lowB - pillH, pillW, pillH)
 		else
-			local pillW = math.clamp(gapR - gapL, 240, 360)
-			place(ui.HeroPill, (gapL + gapR) / 2 - pillW / 2, H - M - pillH - 4, pillW, pillH)
+			local pillW = math.clamp(gapR - gapL, 230, want)
+			place(ui.HeroPill, (gapL + gapR) / 2 - pillW / 2, H - lowB - pillH, pillW, pillH)
 		end
 		heroFrac = 0.5
+	end
+	-- PLAY lettering scales with the plate (reference: the word fills ~56 % of the width)
+	if ui.PlayBtn.Title then
+		local ph = ui.PlayHolder.Size.Y.Offset
+		ui.PlayBtn.Title.TextSize = math.floor(math.clamp(ph * 0.6, 40, 70))
+	end
+	if ui.PlayCrown then
+		ui.PlayCrown.Visible = ui.PlayHolder.Size.Y.Offset >= 80
 	end
 	-- tiles: three equal cells with separators
 	local tw = ui.Tiles.Size.X.Offset
@@ -730,12 +900,35 @@ local function relayout()
 	for i, sep in ipairs(ui.TileSeps) do
 		place(sep, 8 + i * cell, 20, 1, tilesH - 40)
 	end
-	-- the pill: name centred, the level and bar under it
+	-- the pill: name centred, "LV n" and a small gold bar under it, round arrows at the ends
 	local pw = ui.HeroPill.Size.X.Offset
-	local barW = math.clamp(pw - 112 - 60, 60, 150)
-	ui.HeroLevel.Position = UDim2.new(0.5, -(barW + 54) / 2, 0, 12 + TS(18))
-	ui.HeroBar.Frame.Position = UDim2.new(0.5, -(barW + 54) / 2 + 54, 0, 16 + TS(18) + (TS(12) + 4 - 8) / 2)
-	ui.HeroBar.Frame.Size = UDim2.fromOffset(barW, 8)
+	local ph = ui.HeroPill.Size.Y.Offset
+	local arrow = math.min(44, ph - 8)
+	for _, b in ipairs({ ui.PrevArrow, ui.NextArrow }) do
+		b.Instance.Size = UDim2.fromOffset(arrow, arrow)
+	end
+	ui.PrevArrow.Instance.Position = UDim2.new(0, 4, 0.5, 0)
+	ui.NextArrow.Instance.Position = UDim2.new(1, -4, 0.5, 0)
+	local nameH = TS(16) + 2
+	local levelH = TS(11) + 2
+	local top = math.max(2, math.floor((ph - nameH - levelH - 2) / 2))
+	ui.HeroName.Position = UDim2.new(0.5, 0, 0, top)
+	ui.HeroName.Size = UDim2.new(1, -2 * (arrow + 10), 0, nameH)
+	local levelW = 38
+	local barW = math.clamp(pw - 2 * (arrow + 10) - levelW - 24, 50, 110)
+	local rowX = -(barW + levelW) / 2
+	local rowY = top + nameH + 2
+	ui.HeroLevel.TextSize = TS(11)
+	ui.HeroLevel.Position = UDim2.new(0.5, rowX, 0, rowY)
+	ui.HeroLevel.Size = UDim2.fromOffset(levelW, levelH)
+	ui.HeroBar.Frame.Position = UDim2.new(0.5, rowX + levelW, 0, rowY + math.floor((levelH - 5) / 2))
+	ui.HeroBar.Frame.Size = UDim2.fromOffset(barW, 5)
+	local openPad = arrow + 8
+	local open = ui.HeroPill:FindFirstChild("Open", true) :: GuiObject?
+	if open then
+		open.Position = UDim2.fromOffset(openPad, 0)
+		open.Size = UDim2.new(1, -2 * openPad, 1, 0)
+	end
 
 	-- the queue replaces PLAY (portrait: the whole bottom block)
 	ui.PlayHolder.Visible = not showQueue

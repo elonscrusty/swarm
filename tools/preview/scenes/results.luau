@@ -4,6 +4,7 @@
 --   --set daily=on         a scored Daily Challenge run (daily line, its curses)
 --   --set outcome=endless  an Endless run left from the pause menu on stage 9 (endless score)
 --   --set mastery=on       with a Hero Mastery line in the progress block
+--   --set outcome=first    a brand-new player's first run: FIRST RUN BONUS line + Mage goal
 -- The progress block shows the account XP / level ("+340 XP · Level 7 → 8"), the run's
 -- curses and a track reward; the medallion wears the Gold portrait frame.
 local A = lib("arena")
@@ -38,6 +39,19 @@ local build = {
 	Weapons = { { Id = "Whip", Level = 12, Evolved = true }, { Id = "MagicOrb", Level = 9, Evolved = false }, { Id = "Knives", Level = 7, Evolved = false }, { Id = "Garlic", Level = 4, Evolved = false } },
 	Passives = { { Id = "Might", Level = 5 }, { Id = "Armor", Level = 3 }, { Id = "Heart", Level = 3 }, { Id = "Luck", Level = 1 } },
 }
+if preview.args.outcome == "first" then
+	-- a brand-new player's first run (Config.FirstRun): fell on stage 1, the one-time
+	-- bonus line and the NEXT GOAL RunManager sends for it (first hero sold for gold)
+	local FR = C.shared("Config").FirstRun
+	C.fire("RunResult", { FirstRun = { Bonus = FR.BonusGold },
+		NextGoal = { Kind = "BuyHero", Icon = "hero:Mage", Text = "Unlock Mage at 10,000 gold", Sub = "or tap REPLAY to play again", Progress = 0.034, ProgressText = "342 / 10,000 gold" },
+		Curses = {}, CurseGold = 1, Account = { Gained = 64, From = 1, To = 1, Into = 64, Need = 300, Rewards = {} }, Mastery = { Hero = "Knight", Gained = 64, From = 1, To = 1 },
+		Won = false, Portal = false, Time = 168, Kills = 141, Gold = 49, GoldEarned = 142, GoldLost = 93, GoldRetention = 0.35, Difficulty = "Standard", Level = 8, Damage = 9120,
+		Arena = "Forest", Mode = "Solo", CharacterId = "Knight", Build = { Weapons = { { Id = "Whip", Level = 3, Evolved = false }, { Id = "Lightning", Level = 3, Evolved = false } }, Passives = { { Id = "Might", Level = 1 } } },
+		BossKills = 0, BossFight = false, Seconds = 25, StagesCleared = 0, Stage = 1, Items = {} })
+	C.settle(3)
+	return
+end
 if preview.args.outcome == "endless" then
 	C.fire("RunResult", { NextGoal = nextGoal, Curses = {}, CurseGold = 1, Account = { Gained = 610, From = 7, To = 8, Into = 60, Need = 500, Rewards = {} }, Won = false, Portal = false, Abandoned = true, Endless = true, Score = 13840, ScoreBoard = "ScoreEndless", NewBestLevel = true, Time = 2410, Kills = 5210, Gold = 960, Level = 46, Damage = 912400, Arena = "Snow", Mode = "Solo", CharacterId = "Knight", Build = build, BossKills = 8, BossFight = false, Seconds = 25, StagesCleared = 8, Stage = 9, Items = { { Id = "Whetstone", Count = 4 }, { Id = "IronPlate", Count = 2 } } })
 	C.settle(3)

@@ -1296,7 +1296,7 @@ Config.Leaderboards = {
 Config.ArenaOrigin = Vector3.new(0, 0, 0) -- floor top surface is at this height
 Config.Lobby = {
 	Origin = Vector3.new(1200, 0, 0), -- the castle courtyard (menu backdrop), far from the arena
-	MenuFieldOfView = 55, -- FOV of the menu shot (MenuCamera attribute; portrait widens it)
+	MenuFieldOfView = 40, -- FOV of the menu shot (MenuCamera attribute; portrait widens it)
 }
 
 ------------------------------------------------------------------------------------------

@@ -365,6 +365,42 @@ When these come in: upload them with `tools/upload_icons.py`, then run `tools/ge
 
 ---
 
+## 22. New requests: home screen pieces, 7 images (`art/ui/home/`)
+
+The home screen (owner reference `home-mockup`) is rebuilt to the reference's layout, but a few
+pieces are drawn with plain UI shapes as a **best-effort stand-in, not a match**: the ornate PLAY
+plate, the dock and mode-selector frames, the gold gear and the gold dock icons. Each one is
+already wired to the key below (`ArtImage`); once uploaded with `tools/upload_art.py` the
+picture replaces the drawn stand-in with no code change. Same STYLE BLOCK. PNG, **transparent
+background**, no text or letters in any of them (the game draws PLAY / SOLO / labels as live text).
+
+- **home_PlayButton.png** (1200x390, shown stretched over the PLAY button, aspect 3:1 to 3.3:1):
+  a wide horizontal gold plate with slightly chamfered corners, bright polished gold gradient
+  (light #FFE996 top to deep #C48B26 bottom), a thick dark bronze rim #7A5014 with a thin light
+  ivory-gold bevel line #FFF3C8 just inside it, small diamond studs in the four corners, a very
+  faint embossed crown motif centred in the upper third (low contrast, gold on gold), a soft warm
+  outer glow. Keep the middle 60 % calm and empty so dark lettering reads on top. No text.
+- **home_DockFrame.png** (768x256, 9-slice: corners and border must fit in the outer 64 px;
+  SliceCenter 64,64,704,192): a rounded rectangle frame, deep navy #101626 fill at ~90 %
+  opacity, a thin antique gold border #D5B062 (3-4 px) with tiny gold corner flourishes, plain
+  centre. No icons, no dividers.
+- **home_ModeFrame.png** (640x128, 9-slice: border inside the outer 48 px; SliceCenter
+  48,48,592,80): a slim rounded dark navy #101626 plate with a thin gold border #D5B062 and a
+  faint inner highlight line along the top. Plain centre, no chevron.
+- **home_Gear.png** (256x256): a single chunky low-poly gold settings gear, eight teeth, round hole,
+  polished antique gold #E8B84A with darker facets #9C6E22, no wrench, no background plate.
+- **home_Heroes.png** (256x256): a gold crested warrior helmet seen from the front-left (open
+  face slot, crest on top), polished gold #E8B84A with darker gold facets, thin dark outline.
+- **home_Shop.png** (256x256): a small gold treasure chest, closed, banded and studded, all gold
+  #E8B84A with darker gold facets (no brown wood), thin dark outline.
+- **home_More.png** (256x256, optional): three round gold studs in a row, polished gold, small gap
+  between them, thin dark outline.
+
+Sizes in game: PLAY ~340x110 px at 1280x720 (about 27 % x 15 % of the screen), dock ~350x96,
+mode selector ~240x46, gear in a 48 px square, dock icons ~52 px.
+
+---
+
 When images come back, Claude can resize, check and upload them. Uploads go through
 `tools/upload_icons.py`, which needs Open Cloud asset upload access. Claude then wires them
 into the game (portraits, arena cards, boss bar, menu buttons, reel frames), so nothing shows

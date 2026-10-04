@@ -11,12 +11,23 @@
 --   --set screen=Play|More|...   open that lobby screen (LobbyScreen.Show) before the shot
 --   --set phase=countdown|busy  a DUO countdown (the queue panel replaces PLAY) / a run in progress
 --   --set play=tap               taps the home PLAY button and prints the StartRun it sent
+--   --set hero=<Id>              that hero selected / on the dais (owned, some mastery XP)
 --   --set dots=on                notice dots: gold for a hero + upgrades, the daily not played,
---                               then a second profile with a new achievement and account level
+--                               then a second profile with a new achievement and account level;
+--                               --set dots=seen also opens HEROES, then MORE's ACHIEVEMENTS row,
+--                               and checks those dots cleared (PASS lines)
 local C = lib("common")
-C.lobby()
+-- --set hero=Necromancer   the selected (and shown) hero; owned, mastery level 5
+local hero = preview.args.hero
+C.lobby(hero and { character = hero } or nil)
 C.startClient()
 local profile = C.profile()
+if hero then
+	profile.SelectedCharacter = hero
+	profile.OwnedCharacters[hero] = true
+	profile.Heroes[hero] = profile.Heroes[hero] or { XP = 900, Runs = 14 }
+	profile.Skins[hero] = "Default"
+end
 if preview.args.lastrun then
 	local kind = preview.args.lastrun
 	profile.LastRun = {
@@ -25,7 +36,7 @@ if preview.args.lastrun then
 		Gold = 215, Difficulty = "Standard", DeathCause = kind == "fell" and "Briar Sentinel" or nil,
 	}
 end
-if preview.args.dots == "on" then
+if preview.args.dots == "on" or preview.args.dots == "seen" then
 	profile.Gold = 25000
 	profile.Daily = { Day = 0, Used = false }
 	profile.Achievements = { Progress = {}, Unlocked = {} }
@@ -74,6 +85,28 @@ if preview.args.retry == "on" then
 	C.settle(0.5)
 	assert(got == (preview.args.lastmode or "Solo"), "RETRY must fire StartRun with the last mode, got " .. tostring(got))
 	preview.log("PASS RETRY fired StartRun(" .. tostring(got) .. ")")
+end
+if preview.args.dots == "seen" then
+	local Dots = preview.client("NoticeDots")
+	local LS = preview.client("LobbyScreen")
+	C.settle(1)
+	for _, id in ipairs({ "Heroes", "Shop", "More", "Daily", "Achievements", "Track" }) do
+		assert(Dots.Visible(id), "notice dot " .. id .. " must show before it is seen")
+	end
+	LS.Show("Characters")
+	C.settle(0.5)
+	LS.Show("Home")
+	C.settle(0.5)
+	assert(not Dots.Visible("Heroes") and Dots.Visible("Shop"), "HEROES dot clears once HEROES is viewed, SHOP stays")
+	LS.Show("More")
+	LS.Show("Stats", "Achievements")
+	C.settle(0.5)
+	assert(not Dots.Visible("More") and not Dots.Visible("Achievements") and Dots.Visible("Daily"), "MORE / ACHIEVEMENTS dots clear when viewed, DAILY row stays")
+	C.sendProfile(profile)
+	C.settle(0.5)
+	assert(not Dots.Visible("Heroes") and not Dots.Visible("More"), "a resync with nothing new keeps seen dots hidden")
+	preview.log("PASS notice dots: show, clear when viewed, stay cleared on resync")
+	LS.Show("Home")
 end
 if preview.args.save then
 	C.setPlayer({ SaveStatus = preview.args.save })

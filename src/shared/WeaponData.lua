@@ -880,25 +880,27 @@ WeaponData.Weapons = {
 		-- OrbitRadius / ShieldRadius at area 1; speed = studs per second along the orbit
 		Params = { OrbitRadius = 4.2, ShieldRadius = 1.4, MaxAmount = 8, ReflectRadius = 4, Visual = 39, EvoVisual = 40 },
 		Levels = {
+			-- per-enemy in the ring = damage x shields / orbit period (each shield hits
+			-- once per pass); balance pass: ~7 / 24 / 48 / 102 dmg/s (was 7 / 38 / 114 / 242)
 			row(9, 0.90, 1, 1.0, 20, 999, 0, 6),
 			row(9, 0.90, 2, 1.0, 20, 999, 0, 6),
-			row(12, 0.90, 2, 1.0, 21, 999, 0, 6),
-			row(12, 0.85, 2, 1.1, 22, 999, 0, 7),
-			row(14, 0.85, 3, 1.1, 22, 999, 0, 7),
-			row(16, 0.80, 3, 1.1, 23, 999, 0, 7),
-			row(16, 0.80, 3, 1.15, 24, 999, 0, 8),
-			row(19, 0.75, 3, 1.15, 24, 999, 0, 8),
-			row(19, 0.70, 4, 1.2, 25, 999, 0, 8),
-			row(22, 0.65, 4, 1.2, 26, 999, 0, 9),
-			row(25, 0.60, 4, 1.25, 27, 999, 0, 9),
-			row(28, 0.55, 5, 1.3, 28, 999, 0, 10),
+			row(10, 0.90, 2, 1.0, 21, 999, 0, 6),
+			row(10, 0.85, 2, 1.1, 23, 999, 0, 7),
+			row(10, 0.85, 3, 1.1, 20, 999, 0, 7),
+			row(11, 0.80, 3, 1.1, 21, 999, 0, 7),
+			row(11, 0.80, 3, 1.15, 22, 999, 0, 8),
+			row(12, 0.75, 3, 1.15, 22, 999, 0, 8),
+			row(12, 0.70, 4, 1.2, 21, 999, 0, 8),
+			row(13, 0.65, 4, 1.2, 22, 999, 0, 9),
+			row(14, 0.60, 4, 1.25, 23, 999, 0, 9),
+			row(15, 0.55, 5, 1.3, 22, 999, 0, 10),
 		},
 		Evolution = {
 			Id = "AegisRing",
 			Name = "Aegis Ring",
 			Passive = "AegisCharm",
 			Description = "Six golden shields; every shot they smash bursts back at the swarm.",
-			Stats = row(50, 0.40, 6, 1.5, 32, 999, 0, 12),
+			Stats = row(26, 0.40, 6, 1.5, 26, 999, 0, 12),
 			Reflect = true, -- a smashed projectile bursts for full damage around it
 		},
 	},

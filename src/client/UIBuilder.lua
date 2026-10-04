@@ -3116,8 +3116,9 @@ local function buildResults()
 	})
 	results.ProgLines = text(prog, "Small", "", { Name = "Lines", Position = UDim2.fromOffset(14, TS(18) + 44), Size = UDim2.new(1, -28, 0, 0), RichText = true, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextXAlignment = Enum.TextXAlignment.Center })
 	-- NEXT GOAL (RunResult.NextGoal, picked by the server from the settled save): one
-	-- reason to play again at the bottom of the progress block, icon + line + bar
-	local goal = new("Frame", { Name = "NextGoal", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 0), Visible = false }, prog)
+	-- reason to play again right under the account XP bar (above the curse / daily lines,
+	-- so it is the first thing a scroll reveals on landscape phones), icon + line + bar
+	local goal = new("Frame", { Name = "NextGoal", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TS(18) + 42), Size = UDim2.new(1, 0, 0, 0), Visible = false }, prog)
 	results.Goal = goal
 	new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_600, BackgroundTransparency = 0.55, BorderSizePixel = 0, Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 0, 1) }, goal)
 	results.GoalIcon = new("Frame", { Name = "Icon", BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 10), Size = UDim2.fromOffset(34, 34) }, goal)
@@ -3222,7 +3223,9 @@ local function buildResults()
 		results.Hero.Position = UDim2.fromOffset(0, titleSize + TS(12) + 18)
 		local tileH = slim and 72 or 104
 		local btnH = slim and 48 or Theme.Size.Button
-		grid.LayoutOrder = slim and 0 or 1
+		grid.LayoutOrder = slim and -1 or 1
+		-- rewards (first-run bonus, achievements) stay on screen right under the tiles
+		results.Achievements.LayoutOrder = slim and 0 or 5
 		results.Progress.LayoutOrder = slim and 1 or 6
 		-- header height follows the text sizes (phones set text 20% bigger)
 		local headH = math.max(84, titleSize + 6 + TS(12) + 8 + TS(15) + 8)
@@ -3268,6 +3271,7 @@ local function buildResults()
 			goalH = math.max(54, 10 + textH + (meterShown and 4 + 16 or 0) + 10)
 			results.Goal.Size = UDim2.new(1, 0, 0, goalH)
 		end
+		results.ProgLines.Position = UDim2.fromOffset(14, TS(18) + 44 + goalH)
 		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0) + goalH)
 		-- the defeat's damage review: two hits per line on landscape phones (half the height,
 		-- so it sits nearer the fold)
@@ -3850,13 +3854,16 @@ updateSaveNotice = function(inRun: boolean)
 		local was = saveNotice.Status
 		saveNotice.Status = status
 		saveNotice.Text.Text = status == "memory" and "Progress isn't being saved in this session" or "Progress isn't being saved right now"
-		if bad and inRun then
+		if bad then
+			-- a toast when it starts (run or lobby); the lobby keeps the line in MORE
 			UIBuilder.Toast(saveNotice.Text.Text .. ". We'll keep trying.", P.crimson_300)
 		elseif not bad and (was == "failing") then
 			UIBuilder.Toast("Saving works again. Your progress is safe.", P.moss_300)
 		end
 	end
-	local shown = bad and not inRun
+	-- never over the lobby: session notices stay out of the home screen's composition (the
+	-- toast above says it once when it starts; MenuMore lists it as a row while it lasts)
+	local shown = false
 	if saveNotice.Holder.Visible ~= shown then
 		saveNotice.Holder.Visible = shown
 		if shown then

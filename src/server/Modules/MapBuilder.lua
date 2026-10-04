@@ -662,14 +662,17 @@ local LIGHTING = {
 	-- dusk courtyard: cool slate sky and ambient, a low warm sun under the horizon glow;
 	-- the fire pools and the key light on the dais do the rest
 	Lobby = {
-		Clock = 18.1, Brightness = 1.4, Latitude = 40, Shadow = 0.35,
-		Ambient = rgb(118, 124, 160), Outdoor = rgb(152, 160, 204), Top = rgb(190, 192, 230), Bottom = rgb(56, 54, 74),
-		Diffuse = 0.35, Specular = 0.3,
-		Atmo = { Density = 0.28, Offset = 0.2, Color = rgb(126, 146, 200), Decay = rgb(218, 138, 100), Glare = 0.2, Haze = 1.1 },
-		Bloom = { Intensity = 0.35, Size = 22, Threshold = 1.4 },
-		Grade = { Brightness = 0.01, Contrast = 0.13, Saturation = 0.16, Tint = rgb(246, 244, 255) },
-		Rays = { Intensity = 0.02, Spread = 0.5 },
-		Clouds = { Cover = 0.55, Density = 0.55, Color = rgb(150, 136, 160) },
+		-- moonlit night: blue ambient and a lavender sky light, warm torches / braziers do
+		-- the rest; restrained bloom so the runes, flames and staff glow without the hero
+		-- washing out
+		Clock = 18.6, Brightness = 1.1, Latitude = 40, Shadow = 0.4,
+		Ambient = rgb(100, 104, 150), Outdoor = rgb(146, 150, 206), Top = rgb(160, 174, 236), Bottom = rgb(44, 38, 66),
+		Diffuse = 0.3, Specular = 0.35,
+		Atmo = { Density = 0.12, Offset = 0.1, Color = rgb(104, 118, 184), Decay = rgb(110, 98, 170), Glare = 0, Haze = 0.6 },
+		Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.25 },
+		Grade = { Brightness = 0, Contrast = 0.18, Saturation = 0.2, Tint = rgb(238, 240, 255) },
+		Rays = { Intensity = 0.0, Spread = 0.5 },
+		Clouds = { Cover = 0.5, Density = 0.5, Color = rgb(84, 90, 138) },
 	},
 	-- Arenas follow the bright "sunny storybook" look (docs/ART_DIRECTION.md): a warm
 	-- high sun with soft shadows, warm ambient and a green / sand ground bounce, little
@@ -861,11 +864,15 @@ end
 -- Menu shot (studs, relative to the dais centre): camera height / distance, aim height.
 local MENU = {
 	DaisZ = -4, -- dais centre, relative to Config.Lobby.Origin
-	CamHeight = 7.6,
+	DaisScale = 0.8, -- the dais fills about the middle third of a 16:9 shot
+	CamHeight = 6.2, -- camera height above the floor: a little over the hero's chest
 	CamDistance = 23,
-	AimHeight = 4.5, -- the hero's chest on the dais (the aim point lands at MenuHeroY)
-	KeepZ = -21, -- keep wall face, relative to the dais
+	AimLift = 3.5, -- aim this far above the dais top: the hero's middle (lands at MenuHeroY)
+	KeepZ = -53, -- keep wall face, relative to the dais (far: the castle reads at its real scale)
 	WaitZ = 34, -- hidden waiting spot for real characters (behind the camera)
+	Moon = Vector3.new(-0.09, 0.3, -1), -- moon direction in camera space (16:9: top centre)
+	MoonDistance = 170,
+	MoonRadius = 3.4,
 }
 
 function MapBuilder.BuildLobby()
@@ -888,8 +895,9 @@ function MapBuilder.BuildLobby()
 	local keepZ = MENU.DaisZ + MENU.KeepZ -- keep wall front face (relative to o)
 	local FACE_SOUTH = yawCF(180) -- kit fronts face −Z; this turns them toward the camera
 	-- castle stone one step lighter than the kit default so it reads in the dusk light
-	local CASTLE: Pal = { Stone = P.stone_400, Trim = P.stone_300, Base = P.stone_500 }
-	local FLAME: Pal = { Flame = rgb(255, 128, 40), Core = rgb(255, 196, 110) }
+	-- pale lavender-grey castle stone, so it reads moonlit against the night sky
+	local CASTLE: Pal = { Stone = mix(P.stone_300, P.slate_300, 0.3), Trim = mix(P.stone_200, P.slate_200, 0.3), Base = mix(P.stone_400, P.slate_400, 0.3) }
+	local FLAME: Pal = { Flame = rgb(255, 112, 16), Core = rgb(255, 200, 72) }
 
 	local function at(x: number, y: number, z: number): Vector3
 		return o + Vector3.new(x, y, z)
@@ -899,69 +907,127 @@ function MapBuilder.BuildLobby()
 	end
 
 	--------------------------------------------------------------------------------------
-	-- Ground: grout slab + 6-stud flagstones in three close stone tones, dark meadow
+	-- Ground: grout slab + 6-stud flagstones in cool moonlit stone tones, dark meadow
 	-- outside the walls.
 	local floorX0, floorX1 = -51, 51
 	local floorZ0, floorZ1 = keepZ - 4, MENU.WaitZ + 10
-	add({ Name = "Floor", Size = Vector3.new(floorX1 - floorX0, 2, floorZ1 - floorZ0), CFrame = CFrame.new(at((floorX0 + floorX1) / 2, -1.06, (floorZ0 + floorZ1) / 2)), Color = P.stone_700, CanCollide = true, CanQuery = true })
+	add({ Name = "Floor", Size = Vector3.new(floorX1 - floorX0, 2, floorZ1 - floorZ0), CFrame = CFrame.new(at((floorX0 + floorX1) / 2, -1.06, (floorZ0 + floorZ1) / 2)), Color = mix(P.stone_800, P.slate_700, 0.5), CanCollide = true, CanQuery = true })
 	add({ Name = "Grounds", Size = Vector3.new(420, 2, 420), CFrame = CFrame.new(at(0, -1.3, -60)), Color = P.moss_800, CanCollide = true })
-	local tones = { P.stone_400, mix(P.stone_400, P.stone_500, 0.5), P.stone_500, mix(P.stone_400, P.slate_400, 0.25) }
+	local tones = {
+		mix(P.stone_300, P.slate_300, 0.35),
+		mix(P.stone_400, P.slate_300, 0.4),
+		mix(P.stone_400, P.slate_400, 0.3),
+		mix(P.stone_300, P.slate_400, 0.5),
+	}
 	local tile = 6
+	local daisR = 5.5 * MENU.DaisScale
 	for ix = 0, 13 do
-		for iz = 0, 8 do
+		for iz = 0, 13 do
 			local x = -42 + tile / 2 + ix * tile
 			local z = keepZ + tile / 2 + iz * tile
 			local d = Vector2.new(x, z - MENU.DaisZ).Magnitude
-			if d > 5.2 then -- the dais covers the middle
+			if d > daisR - 0.3 then -- the dais covers the middle
 				local t = pick(tones)
-				add({ Name = "Flagstone", Size = Vector3.new(tile - 0.32, 0.2, tile - 0.32), CFrame = CFrame.new(at(x, -0.1 + jitter(0.015), z)) * yawCF(jitter(0.8)), Color = t, CanQuery = true })
+				add({ Name = "Flagstone", Size = Vector3.new(tile - 0.32, 0.2, tile - 0.32), CFrame = CFrame.new(at(x, -0.1 + jitter(0.015), z)) * yawCF(jitter(0.8)), Color = t, Reflectance = 0.04, CanQuery = true })
 			end
 		end
 	end
 
 	--------------------------------------------------------------------------------------
-	-- Keep wall with the gatehouse in the middle, roofed towers framing it, plain towers
-	-- at the corners, side walls running toward the camera.
+	-- Keep wall with the gatehouse centred behind the hero, the two blue-roofed towers
+	-- framing it, lower curtain walls running out to the sides, the old keep on the hill
+	-- behind with lit windows.
 	local wallZ = keepZ - 1.55 -- wall centre (3 thick, front face at keepZ)
 	local GATE_S = 1.25
+	local TOWER_X, TOWER_S = 17.5, 1.08
+	local ROOF: Pal = { Stone = CASTLE.Stone, Trim = CASTLE.Trim, Base = CASTLE.Base, Roof = rgb(46, 74, 178), RoofTrim = rgb(92, 124, 214), Pennant = P.crimson_600 }
 	local gateCF = CFrame.new(at(0, 0, keepZ - 2.05 * GATE_S + 0.4)) * FACE_SOUTH
 	prop(folder, "Castle_Gate", gateCF, GATE_S, CASTLE)
 	for _, sx in ipairs({ -1, 1 }) do
+		prop(folder, "Castle_Wall", CFrame.new(at(sx * 12, 0, wallZ)) * FACE_SOUTH, 1.25, CASTLE)
 		for k = 1, 4 do
-			prop(folder, "Castle_Wall", CFrame.new(at(sx * (k * 12), 0, wallZ)) * FACE_SOUTH, 1, CASTLE)
+			prop(folder, "Castle_Wall", CFrame.new(at(sx * (15.5 + k * 12), 0, wallZ - 2)) * FACE_SOUTH, 1, CASTLE)
 		end
-		prop(folder, "Castle_TowerRoof", CFrame.new(at(sx * 19, 0, keepZ - 0.6)), 0.95, CASTLE)
-		prop(folder, "Castle_Tower", CFrame.new(at(sx * 49, 0, wallZ)), 1.1, CASTLE)
-		for k = 0, 3 do
-			prop(folder, "Castle_Wall", CFrame.new(at(sx * 49, 0, keepZ + 6 + k * 12)) * yawCF(-90 * sx), 1, CASTLE)
-		end
+		prop(folder, "Castle_TowerRoof", CFrame.new(at(sx * TOWER_X, 0, keepZ - 0.4)), TOWER_S, ROOF)
 	end
-	-- crimson banners and wall torches between the gate and the towers
+	-- the old keep on the hill: a tall dark block with merlons and warm windows
+	local keepBack = keepZ - 44
+	local KEEP = mix(CASTLE.Base, P.slate_500, 0.45)
+	add({ Name = "Keep", Size = Vector3.new(16, 30, 12), CFrame = CFrame.new(at(13, 15, keepBack)), Color = KEEP })
+	add({ Name = "KeepTower", Size = Vector3.new(7, 36, 7), CFrame = CFrame.new(at(2.5, 18, keepBack + 2)), Color = mix(KEEP, CASTLE.Trim, 0.15) })
+	for k = 0, 3 do
+		add({ Name = "Merlon", Size = Vector3.new(2.2, 2, 12), CFrame = CFrame.new(at(6.8 + k * 4.4, 31, keepBack)), Color = KEEP })
+	end
+	for k = 0, 1 do
+		add({ Name = "Merlon", Size = Vector3.new(1.8, 2, 7), CFrame = CFrame.new(at(0.7 + k * 3.6, 37, keepBack + 2)), Color = KEEP })
+	end
+	local WINDOW = rgb(255, 190, 96)
+	for _, w in ipairs({ { 9, 24 }, { 12, 24 }, { 17, 24 }, { 10.5, 18.5 }, { 15.5, 18.5 }, { 2.5, 29 }, { 2.5, 22 } }) do
+		local front = (w[1] < 6) and (keepBack + 2 + 3.55) or (keepBack + 6.05)
+		add({ Name = "KeepWindow", Size = Vector3.new(0.9, 1.6, 0.1), CFrame = CFrame.new(at(w[1], w[2], front)), Color = WINDOW, Material = NEON })
+	end
+	-- crimson crown banners: on the gate either side of the arch and on both towers;
+	-- wall torches beside the gate
 	for _, sx in ipairs({ -1, 1 }) do
-		prop(folder, "Castle_Banner", CFrame.new(at(sx * 10.9, 9.4, keepZ)) * FACE_SOUTH, 1.05)
-		for _, x in ipairs({ 8.5, 13.3 }) do
-			local cf = CFrame.new(at(sx * x, 4.6, keepZ)) * FACE_SOUTH
-			prop(folder, "Torch_Wall", cf, 1.1, FLAME)
-			pointLight(folder, kitLightPoint("Torch_Wall", cf, 1.1) or cf.Position, 13, 1.3, FIRE, true)
-		end
+		prop(folder, "Castle_Banner", CFrame.new(at(sx * TOWER_X, 13.2, keepZ - 0.4 + 4.65)) * FACE_SOUTH, 1.25)
+		prop(folder, "Castle_Banner", CFrame.new(at(sx * 10.2, 10.6, keepZ + 0.36)) * FACE_SOUTH, 1.1)
+		local cf = CFrame.new(at(sx * 4.8, 5.6, keepZ + 0.4)) * FACE_SOUTH
+		prop(folder, "Torch_Wall", cf, 1.1, FLAME)
+		pointLight(folder, kitLightPoint("Torch_Wall", cf, 1.1) or cf.Position, 12, 1.2, FIRE, true)
 	end
 	-- warm-lit doorway inside the gate
-	pointLight(folder, (kitLightPoint("Castle_Gate", gateCF, GATE_S) or at(0, 3, keepZ)) + Vector3.new(0, 1, 1.5), 13, 1.2, rgb(255, 176, 110), true)
+	pointLight(folder, (kitLightPoint("Castle_Gate", gateCF, GATE_S) or at(0, 3, keepZ)) + Vector3.new(0, 1, 1.5), 12, 1.1, rgb(255, 176, 110), true)
 
 	--------------------------------------------------------------------------------------
-	-- The dais (raycast-able top for the showcase), braziers either side, the hero mark.
-	local dais = prop(folder, "Dais", CFrame.new(daisPos), 1, nil, { query = true })
+	-- The dais (raycast-able top for the showcase) with glowing gold runes, braziers in
+	-- two pairs (big near ones, smaller ones further back).
+	local dais = prop(folder, "Dais", CFrame.new(daisPos), MENU.DaisScale, { Top = mix(P.stone_300, P.slate_300, 0.3), Rim = mix(P.stone_400, P.slate_400, 0.3), Rim2 = mix(P.stone_500, P.slate_500, 0.3), Rim3 = mix(P.stone_300, P.slate_400, 0.3) }, { query = true })
 	local daisEntry = kitEntry("Dais")
-	local daisTop = (daisEntry and daisEntry.Top) or 1.2
+	local daisTop = ((daisEntry and daisEntry.Top) or 1.2) * MENU.DaisScale
 	for _, d in ipairs(dais:GetChildren()) do
 		if d:IsA("BasePart") then
 			d.CanCollide = true
 		end
 	end
-	for _, sx in ipairs({ -1, 1 }) do
-		local cf = CFrame.new(daisPos + Vector3.new(sx * 7.2, 0, -1.6))
-		prop(folder, "Brazier", cf, 1.05, { Flame = FLAME.Flame, Core = FLAME.Core, Stone = P.stone_400, Base = P.stone_500 })
-		pointLight(folder, (kitLightPoint("Brazier", cf, 1.05) or cf.Position + Vector3.new(0, 3.4, 0)) + Vector3.new(0, 1.8, 0), 17, 1.9, FIRE, true)
+	local RUNE = rgb(255, 196, 92)
+	local runes = Instance.new("Model")
+	runes.Name = "DaisRunes"
+	runes.Parent = folder
+	local function rune(size: Vector3, cf: CFrame)
+		local r = deco(runes, { Name = "Rune", Size = size, CFrame = cf, Color = RUNE, Material = NEON })
+		r.CastShadow = false
+	end
+	-- two glowing circles on the top
+	local topC = daisPos + Vector3.new(0, daisTop + 0.02, 0)
+	for _, ring in ipairs({ { 2.95 * MENU.DaisScale, 0.2, 32 }, { 2.0 * MENU.DaisScale, 0.1, 24 } }) do
+		local r, w, n = ring[1], ring[2], ring[3]
+		local len = 2 * math.pi * r / n * 1.04
+		for k = 0, n - 1 do
+			rune(Vector3.new(len, 0.04, w), CFrame.new(topC) * CFrame.Angles(0, k * 2 * math.pi / n, 0) * CFrame.new(0, 0, -r))
+		end
+	end
+	-- glyphs round the front of the rim (the side the camera sees)
+	local rimR = 5.15 * MENU.DaisScale
+	for k = -5, 5 do
+		local a = math.rad(k * 15)
+		local face = CFrame.new(daisPos) * CFrame.Angles(0, a, 0) * CFrame.new(0, daisTop * 0.74, rimR)
+		if k % 2 == 0 then
+			rune(Vector3.new(0.34, 0.34, 0.06), face * CFrame.Angles(0, 0, math.rad(45)))
+			rune(Vector3.new(0.08, 0.5, 0.06), face * CFrame.new(-0.34, 0, 0))
+			rune(Vector3.new(0.08, 0.5, 0.06), face * CFrame.new(0.34, 0, 0))
+		else
+			rune(Vector3.new(0.09, 0.46, 0.06), face * CFrame.new(-0.12, 0, 0) * CFrame.Angles(0, 0, math.rad(-22)))
+			rune(Vector3.new(0.09, 0.46, 0.06), face * CFrame.new(0.12, 0, 0) * CFrame.Angles(0, 0, math.rad(22)))
+			rune(Vector3.new(0.4, 0.08, 0.06), face * CFrame.new(0, -0.2, 0))
+		end
+	end
+	pointLight(folder, daisPos + Vector3.new(0, daisTop + 0.25, 3.2), 8, 0.6, RUNE, false)
+	for _, b in ipairs({ { 9.2, -3, 1.05, 16, 1.7 }, { 7.4, -12, 0.82, 12, 1.2 } }) do
+		for _, sx in ipairs({ -1, 1 }) do
+			local cf = CFrame.new(daisPos + Vector3.new(sx * b[1], 0, b[2]))
+			prop(folder, "Brazier", cf, b[3], { Flame = FLAME.Flame, Core = FLAME.Core, Stone = mix(P.stone_400, P.slate_400, 0.3), Base = mix(P.stone_500, P.slate_500, 0.3) })
+			pointLight(folder, (kitLightPoint("Brazier", cf, b[3]) or cf.Position + Vector3.new(0, 3.4, 0)) + Vector3.new(0, 1.4, 0), b[4], b[5], FIRE, true)
+		end
 	end
 	local camPos = daisPos + Vector3.new(0, MENU.CamHeight, MENU.CamDistance)
 	local standPos = daisPos + Vector3.new(0, daisTop + 0.025, 0)
@@ -971,40 +1037,70 @@ function MapBuilder.BuildLobby()
 		CFrame = CFrame.lookAt(standPos, Vector3.new(camPos.X, standPos.Y, camPos.Z)),
 		Transparency = 1,
 	})
-	-- key light: warm, in front of the hero and above the camera line, so the hero is the
-	-- brightest thing in the shot; a cool rim from behind separates it from the gate
-	pointLight(folder, daisPos + Vector3.new(-2.5, 8.5, 7.5), 15, 2.4, rgb(255, 226, 188), false)
-	pointLight(folder, daisPos + Vector3.new(3, 7, -5), 9, 0.9, rgb(170, 190, 255), false)
-	-- cool "moonlight" fill over the courtyard so the walls and towers read at dusk
-	pointLight(folder, daisPos + Vector3.new(0, 24, -2), 50, 1.0, rgb(150, 170, 230), false)
-
-	--------------------------------------------------------------------------------------
-	-- Props at the edges: crates / barrels against the wall, ferns and shrubs at its foot,
-	-- pines over the battlements.
+	-- key light: soft and neutral-warm, in front of the hero above the camera line (bright
+	-- enough to read, never washed out); a cool moon rim from behind and a violet soul glow
+	-- at the staff side separate it from the gate
+	pointLight(folder, daisPos + Vector3.new(-2.5, 9, 8), 15, 1.35, rgb(255, 228, 200), false)
+	pointLight(folder, daisPos + Vector3.new(3, 8, -4.5), 10, 1.3, rgb(150, 172, 255), false)
+	pointLight(folder, daisPos + Vector3.new(-2.2, 5.5, 1.2), 8, 0.9, rgb(176, 112, 255), false)
+	-- cool moonlight over the courtyard and a lavender wash on the castle front
+	pointLight(folder, daisPos + Vector3.new(0, 26, -10), 56, 1.1, rgb(140, 160, 236), false)
+	pointLight(folder, at(0, 18, keepZ + 18), 40, 1.5, rgb(176, 178, 244), false)
 	for _, sx in ipairs({ -1, 1 }) do
-		local base = at(sx * 13.6, 0, keepZ + 4.2)
-		prop(folder, "Crate", CFrame.new(base) * yawCF(8 * sx), 1.25)
-		prop(folder, "Crate", CFrame.new(base + Vector3.new(sx * 2.7, 0, 0.5)) * yawCF(-12 * sx), 1.1)
-		prop(folder, "Crate", CFrame.new(base + Vector3.new(sx * 1.2, 2.5, 0.1)) * yawCF(25 * sx), 0.95)
-		prop(folder, "Barrel", CFrame.new(base + Vector3.new(-sx * 2.8, 0, 0.6)), 1.25)
-		prop(folder, "Barrel", CFrame.new(base + Vector3.new(-sx * 4.6, 0, 1.4)), 1.15)
-		for _, x in ipairs({ 8.2, 16.4, 25, 30 }) do
-			prop(folder, "Fern", CFrame.new(at(sx * (x + jitter(0.6)), 0, keepZ + 0.9 + jitter(0.3))) * randomYaw(), rng:NextNumber(1.1, 1.5), nil, { shadow = false })
-		end
-		prop(folder, "Bush", CFrame.new(at(sx * 26.5, 0, keepZ + 6.5)) * randomYaw(), 1.3, nil, { shadow = false })
-		prop(folder, "Fern", CFrame.new(at(sx * 8.4, 0, MENU.DaisZ + 1.5)) * randomYaw(), 1.0, nil, { shadow = false })
-		prop(folder, "GrassTuft", CFrame.new(at(sx * 11, 0, MENU.DaisZ - 6)) * randomYaw(), 1.2, nil, { shadow = false })
+		pointLight(folder, at(sx * TOWER_X, 16, keepZ + 14), 24, 1.2, rgb(180, 180, 244), false)
 	end
-	for i = 1, 18 do
-		local x = -64 + (i - 1) * (128 / 17) + jitter(2.5)
-		local z = keepZ - rng:NextNumber(12, 30)
-		if math.abs(x) > 12 or z < keepZ - 24 then
-			prop(folder, "Tree_PineTall", CFrame.new(at(x, 0, z)) * randomYaw(), rng:NextNumber(1.05, 1.45), { Needles = mix(P.moss_700, P.slate_500, 0.3), Needles2 = mix(P.moss_600, P.slate_500, 0.3) })
+
+	--------------------------------------------------------------------------------------
+	-- Props: crates / barrels behind the far braziers, standing torches, ruined stone
+	-- blocks at the sides, ferns at the wall foot, pines over the battlements and at the
+	-- edges, a red banner and stones framing the bottom corners.
+	for _, sx in ipairs({ -1, 1 }) do
+		local base = daisPos + Vector3.new(sx * 10, 0, -16.5)
+		prop(folder, "Crate", CFrame.new(base) * yawCF(8 * sx), 1.3)
+		prop(folder, "Crate", CFrame.new(base + Vector3.new(sx * 2.7, 0, -0.4)) * yawCF(-12 * sx), 1.15)
+		prop(folder, "Crate", CFrame.new(base + Vector3.new(sx * 1.2, 2.6, -0.2)) * yawCF(25 * sx), 0.95)
+		prop(folder, "Barrel", CFrame.new(base + Vector3.new(-sx * 2.6, 0, 0.8)), 1.25)
+		prop(folder, "Barrel", CFrame.new(base + Vector3.new(-sx * 4.3, 0, 0.2)), 1.15)
+		prop(folder, "Barrel", CFrame.new(base + Vector3.new(sx * 4.9, 0, 0.9)), 1.2)
+		local torchCF = CFrame.new(daisPos + Vector3.new(sx * 20.5, 0, -27))
+		prop(folder, "Torch", torchCF, 1.6, FLAME)
+		pointLight(folder, (kitLightPoint("Torch", torchCF, 1.6) or torchCF.Position + Vector3.new(0, 5.6, 0)) + Vector3.new(0, 0.8, 0), 12, 1.1, FIRE, true)
+		-- ruined stone blocks at the sides (mid ground)
+		local SIDE: Pal = { Stone = mix(P.stone_400, P.slate_400, 0.35), Stone2 = mix(P.stone_500, P.slate_500, 0.35), Trim = mix(P.stone_300, P.slate_400, 0.35), Moss = P.moss_600 }
+		prop(folder, "Ruin_Block", CFrame.new(daisPos + Vector3.new(sx * 23, 0, -20)) * yawCF(10 * sx), 1.6, SIDE)
+		prop(folder, "Ruin_Block", CFrame.new(daisPos + Vector3.new(sx * 24.5, 2.1, -20.6)) * yawCF(-14 * sx), 1.4, SIDE)
+		prop(folder, "Ruin_Block", CFrame.new(daisPos + Vector3.new(sx * 18.5, 0, -17)) * yawCF(30 * sx), 1.2, SIDE)
+		prop(folder, "Pillar", CFrame.new(daisPos + Vector3.new(sx * 27, 0, -24)) * yawCF(12 * sx), 1.6, { Base = SIDE.Stone2, Shaft = SIDE.Trim, Shaft2 = SIDE.Stone, Moss = P.moss_600 })
+		-- foliage
+		for _, x in ipairs({ 8.2, 16.4, 21, 27 }) do
+			prop(folder, "Fern", CFrame.new(at(sx * (x + jitter(0.6)), 0, keepZ + 1.2 + jitter(0.3))) * randomYaw(), rng:NextNumber(1.1, 1.5), nil, { shadow = false })
+		end
+		prop(folder, "Bush", CFrame.new(daisPos + Vector3.new(sx * 14.5, 0, -13)) * randomYaw(), 1.3, nil, { shadow = false })
+		prop(folder, "Fern", CFrame.new(daisPos + Vector3.new(sx * 6.8, 0, 1.8)) * randomYaw(), 1.0, nil, { shadow = false })
+		prop(folder, "Fern", CFrame.new(daisPos + Vector3.new(sx * 12.5, 0, -6)) * randomYaw(), 1.3, nil, { shadow = false })
+		prop(folder, "GrassTuft", CFrame.new(daisPos + Vector3.new(sx * 5.5, 0, -9)) * randomYaw(), 1.2, nil, { shadow = false })
+		-- foreground: low stones and ferns in the bottom corners
+		prop(folder, "Ruin_Block", CFrame.new(daisPos + Vector3.new(sx * 7.6, 0, 10.5)) * yawCF(18 * sx), 1.25, SIDE, { shadow = false })
+		prop(folder, "Rock_Slab", CFrame.new(daisPos + Vector3.new(sx * 5.2, 0, 13)) * yawCF(-20 * sx), 1.3, nil, { shadow = false })
+		prop(folder, "Fern", CFrame.new(daisPos + Vector3.new(sx * 9.2, 0, 8.5)) * randomYaw(), 1.4, nil, { shadow = false })
+		-- pines framing the screen edges
+		for k = 0, 1 do
+			prop(folder, "Tree_PineTall", CFrame.new(daisPos + Vector3.new(sx * (29 + k * 7 + jitter(1)), 0, -30 + k * 6)) * randomYaw(), rng:NextNumber(0.95, 1.2), { Needles = mix(P.moss_800, P.slate_600, 0.35), Needles2 = mix(P.moss_700, P.slate_600, 0.35) })
+		end
+	end
+	-- the red crown banner leaning in the bottom-left foreground, caught by brazier light
+	pointLight(folder, daisPos + Vector3.new(-6.5, 3.5, 8.5), 9, 0.8, FIRE, true)
+	prop(folder, "Banner", CFrame.new(daisPos + Vector3.new(-7.2, 0, 11)) * yawCF(16) * CFrame.Angles(0, 0, math.rad(7)), 0.56, { Cloth = P.crimson_600, Gold = P.gold_500, Wood = P.wood_700 }, { shadow = false })
+	for i = 1, 22 do
+		local x = -64 + (i - 1) * (128 / 21) + jitter(2.5)
+		local z = keepZ - rng:NextNumber(8, 36)
+		if math.abs(x) > 20 or z < keepZ - 26 then
+			prop(folder, "Tree_PineTall", CFrame.new(at(x, 0, z)) * randomYaw(), rng:NextNumber(1.05, 1.45), { Needles = mix(P.moss_800, P.slate_600, 0.3), Needles2 = mix(P.moss_700, P.slate_600, 0.3) })
 		end
 	end
 
 	--------------------------------------------------------------------------------------
-	-- Embers drifting up from the braziers, a few dust motes in the torch light.
+	-- Air: embers drifting up from the braziers, violet soul wisps circling the hero.
 	local air = add({ Name = "Ambience", Size = Vector3.new(26, 5, 10), CFrame = CFrame.new(daisPos + Vector3.new(0, 4, -3)), Transparency = 1 })
 	local motes = Instance.new("ParticleEmitter")
 	motes.Name = "Embers"
@@ -1022,6 +1118,24 @@ function MapBuilder.BuildLobby()
 	motes.Shape = Enum.ParticleEmitterShape.Box
 	motes.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
 	motes.Parent = air
+	local soulAir = add({ Name = "SoulAir", Size = Vector3.new(6, 5.5, 3), CFrame = CFrame.new(daisPos + Vector3.new(0, daisTop + 3.6, 0.4)), Transparency = 1 })
+	local souls = Instance.new("ParticleEmitter")
+	souls.Name = "SoulWisps"
+	souls.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	souls.Color = ColorSequence.new(rgb(196, 132, 255), rgb(132, 86, 255))
+	souls.LightEmission = 1
+	souls.LightInfluence = 0
+	souls.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.25, 0.3), NumberSequenceKeypoint.new(1, 0.08) })
+	souls.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.25, 0.15), NumberSequenceKeypoint.new(1, 1) })
+	souls.Lifetime = NumberRange.new(2.5, 4.5)
+	souls.Rate = 3
+	souls.Speed = NumberRange.new(0.2, 0.5)
+	souls.SpreadAngle = Vector2.new(180, 180)
+	souls.Acceleration = Vector3.new(0, 0.35, 0)
+	souls.RotSpeed = NumberRange.new(-40, 40)
+	souls.Shape = Enum.ParticleEmitterShape.Box
+	souls.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	souls.Parent = soulAir
 
 	--------------------------------------------------------------------------------------
 	-- Behind the camera: the low south wall, the waiting spot and the legacy prompts /
@@ -1049,15 +1163,24 @@ function MapBuilder.BuildLobby()
 	local shopPrompt = prompt(shopBoard, "Open Shop", "Upgrades", "ShopPrompt")
 
 	--------------------------------------------------------------------------------------
-	-- Menu camera: low and centred, aimed at the hero's chest on the dais. The gate sits
-	-- right behind the hero, banners / torches / braziers stay in the middle band, the
-	-- roofed towers frame it at the UI column edges and the dais step shows above the
-	-- nameplate.
-	local fov = Config.Lobby.MenuFieldOfView or 45
-	local camLook = daisPos + Vector3.new(0, MENU.AimHeight, 0)
-	local menuCamera = add({ Name = "MenuCamera", Size = Vector3.new(1, 1, 1), CFrame = CFrame.lookAt(camPos, camLook), Transparency = 1 })
+	-- Menu camera: at about the hero's chest height, a little low, aimed at the hero's
+	-- middle on the dais (so the hero fills roughly 28-71% of the screen height). The gate
+	-- sits right behind the hero, the blue-roofed towers frame it, the braziers and crates
+	-- stay in the middle band and the corners hold the foreground banner / stones.
+	local fov = Config.Lobby.MenuFieldOfView or 40
+	local camLook = daisPos + Vector3.new(0, daisTop + MENU.AimLift, 0)
+	local camCF = CFrame.lookAt(camPos, camLook)
+	local menuCamera = add({ Name = "MenuCamera", Size = Vector3.new(1, 1, 1), CFrame = camCF, Transparency = 1 })
 	menuCamera:SetAttribute("FieldOfView", fov)
 	menuCamera:SetAttribute("Focus", camLook)
+	-- the moon: a glowing disc far behind the keep, top centre of the shot, with two
+	-- faint halo shells (no sky textures needed)
+	local moonPos = camPos + camCF:VectorToWorldSpace(MENU.Moon.Unit) * MENU.MoonDistance
+	local MOON = rgb(232, 238, 255)
+	for _, shell in ipairs({ { 1, 0, "Moon" }, { 1.4, 0.88, "MoonHalo" }, { 2.1, 0.95, "MoonHalo" } }) do
+		local m = add({ Name = shell[3], Shape = Enum.PartType.Ball, Size = Vector3.one * (MENU.MoonRadius * 2 * shell[1]), CFrame = CFrame.new(moonPos), Color = shell[1] == 1 and MOON or rgb(160, 182, 255), Material = NEON, Transparency = shell[2] })
+		m.CastShadow = false
+	end
 	menuStand:SetAttribute("Top", daisTop)
 
 	MapBuilder.ApplyLighting("Lobby")

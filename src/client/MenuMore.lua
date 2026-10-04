@@ -53,6 +53,13 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 	ui.Scroll = scroll
 
 	local ITEMS = {
+		-- a session notice, listed first while it lasts (player attribute SaveStatus; the home
+		-- screen never shows it); a tap repeats it as a toast
+		{ Id = "SaveStatus", Title = "PROGRESS NOT SAVED", Sub = "Saving isn't working right now", Icon = "warning", Notice = true, Go = function()
+			if host.Toast then
+				host.Toast("Progress isn't being saved right now. We'll keep trying.", P.crimson_300)
+			end
+		end },
 		{ Id = "Daily", Title = "DAILY CHALLENGE", Sub = "One scored try a day", Icon = "calendar", Art = "Daily", Go = function() ctx.ShowScreen("Daily") end },
 		{ Id = "Party", Title = "PARTY", Sub = "Play with friends", Icon = "lobby_Party", Go = function() ctx.ShowScreen("Party") end },
 		{ Id = "Ranks", Title = "RANKS", Sub = "Leaderboards", Icon = "podium", Art = "Leaderboards", Go = function() ctx.ShowScreen("Ranks") end },
@@ -88,6 +95,14 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 			ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. item.Art, { Size = UDim2.fromScale(1.45, 1.45) })
 		end
 		ui.Rows[i] = { Item = item, Button = b }
+		if item.Notice then
+			ui.NoticeRow = b
+			local st = b.Face:FindFirstChildOfClass("UIStroke")
+			if st then
+				st.Color = P.crimson_400
+				st.Transparency = 0.1
+			end
+		end
 		if item.Id == "Daily" or item.Id == "Party" or item.Id == "Achievements" or item.Id == "Track" then
 			NoticeDots.Attach(item.Id, b.Instance, { Position = UDim2.new(1, -10, 0, 10) })
 		end
@@ -99,10 +114,15 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		end
 	end
 
+	local function saveStatus(): string
+		local st = tostring(game:GetService("Players").LocalPlayer:GetAttribute("SaveStatus") or "ok")
+		return (st == "failing" or st == "memory") and st or "ok"
+	end
+
 	local function shownRows(): { any }
 		local list = {}
 		for _, r in ipairs(ui.Rows) do
-			local on = not r.Item.Dev or DevPanel.IsDev()
+			local on = (not r.Item.Dev or DevPanel.IsDev()) and (not r.Item.Notice or saveStatus() ~= "ok")
 			r.Button.Instance.Visible = on
 			if on then
 				table.insert(list, r)
@@ -142,6 +162,7 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 
 	-- the live subtitles: the party's size / invites, the daily's state
 	local lastKey = ""
+	local lastSave: string? = nil
 	MenuMore._update = function(p: { [string]: any }?)
 		local party = MenuParty.Summary()
 		local partySub = "Play with friends"
@@ -151,11 +172,18 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		local used, score = MenuDaily.Status(p)
 		local dailySub = used and ("Done · " .. (score > 0 and CurseData.ScoreText(score) or "practice open")) or ("Ready · " .. MenuDaily.TimeLeft() .. " left")
 		local badge = party.Invites > 0 and tostring(party.Invites) or ""
-		local key = partySub .. "|" .. dailySub .. "|" .. badge
+		local save = saveStatus()
+		local key = partySub .. "|" .. dailySub .. "|" .. badge .. "|" .. save
 		if key == lastKey then
 			return
 		end
+		local saveChanged = lastSave ~= nil and lastSave ~= save
+		lastSave = save
 		lastKey = key
+		ui.NoticeRow.SetText(nil, save == "memory" and "Not saved in this session" or "Saving isn't working right now")
+		if saveChanged then
+			MenuMore._layout()
+		end
 		ui.PartyRow.SetText(nil, partySub)
 		ui.PartyRow.SetSelected(party.Count > 0)
 		ui.DailyRow.SetText(nil, dailySub)

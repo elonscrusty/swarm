@@ -111,15 +111,24 @@ if synIndex and choices[synIndex] and SynergyData then
 	choices[synIndex].Synergy = string.format("Synergy: %s %d/%d", hidden and "???" or s.Name, 2, 3)
 	choices[synIndex].SynergyReady = false
 end
+-- --set welcome=on: a brand-new player's first level-up (Config.FirstRun): tips on, the
+-- welcome hint line, level 2, no rerolls / skips bought yet. Use with
+-- --set cards=Lightning+Whip:2+passive:Might (what LevelUpSystem offers a Knight then)
+local welcome = preview.args.welcome == "on"
+if welcome then
+	game:GetService("Players").LocalPlayer:SetAttribute("FirstRunBoost", true)
+	C.sendProfile(C.profile({ TutorialDone = false, SeenTips = {} }))
+	C.settle(0.2)
+end
 C.fire("LevelUpOffer", {
 	Choices = choices,
-	Rerolls = tonumber(preview.args.rerolls) or 2,
-	Skips = tonumber(preview.args.skips) or 1,
-	RerollsMax = tonumber(preview.args.rerollsMax) or 2,
-	SkipsMax = tonumber(preview.args.skipsMax) or 5,
+	Rerolls = tonumber(preview.args.rerolls) or (welcome and 0 or 2),
+	Skips = tonumber(preview.args.skips) or (welcome and 0 or 1),
+	RerollsMax = tonumber(preview.args.rerollsMax) or (welcome and 0 or 2),
+	SkipsMax = tonumber(preview.args.skipsMax) or (welcome and 0 or 5),
 	SkipGold = Config and Config.LevelUp.SkipGold or 10,
 	Seconds = 25,
-	Level = 14,
+	Level = welcome and 2 or 14,
 	Pending = 1,
 	PanelId = 1,
 	BatchRemaining = 4,
