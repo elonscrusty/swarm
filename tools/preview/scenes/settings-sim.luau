@@ -39,7 +39,7 @@ assert(Settings.Reduced() and Settings.Flashes(), "reduced effects + reduce flas
 preview.log("PASS every saved setting reaches the client")
 
 if preview.args.headless ~= "on" then
-	preview.client("UIBuilder").OpenPause()
+	preview.client("UIBuilder").OpenRunSettings()
 	C.settle(0.5)
 	assert(C.findText("COLORS: PROTANOPIA") or C.findText("COLORS: PROTAN"), "settings screen shows the saved colour mode")
 	assert(C.findText("TOUCH LAYOUT: LEFT"), "settings screen shows the saved touch layout")

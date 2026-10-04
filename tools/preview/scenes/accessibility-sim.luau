@@ -32,10 +32,11 @@ if preview.args.headless ~= "on" then
 	local edge = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("SwarmEdgeFlash", true)
 	assert(not edge or not edge.Enabled, "boss phase edge flash must be suppressed")
 	local p = game:GetService("Players").LocalPlayer
+	local gradient = Hud.Elements().XP.Fill:FindFirstChildOfClass("UIGradient")
+	local normal = gradient.Color.Keypoints[1].Value
 	p:SetAttribute("Level", (p:GetAttribute("Level") or 1) + 1)
 	Hud.Update(1 / 60, C.state(), false)
-	local gradient = Hud.Elements().XP.Fill:FindFirstChildOfClass("UIGradient")
-	assert(gradient.Color.Keypoints[1].Value == C.shared("Theme").Gradient.XP.Keypoints[1].Value, "XP must retain its normal colour")
+	assert(gradient.Color.Keypoints[1].Value == normal, "XP must retain its normal colour")
 end
 assert(Access.Color(Color3.new(1, 0, 0), "Danger") ~= Access.Color(Color3.new(0, 1, 0), "Heal"), "danger and healing must remain distinct")
 local dark = Color3.fromRGB(15, 19, 24)
@@ -97,7 +98,7 @@ preview.log("PASS accessibility settings, channel/mute routing, visual warnings,
 game:GetService("Players").LocalPlayer:SetAttribute("InRun", true)
 Settings.Set("VisualAudioCues", true)
 if preview.args.headless ~= "on" then
-	preview.client("UIBuilder").OpenPause()
+	preview.client("UIBuilder").OpenRunSettings()
 	local gui = game:GetService("Players").LocalPlayer.PlayerGui
 	local options = gui:FindFirstChild("Options", true)
 	assert(options and options.CanvasSize.Y.Offset >= options.Size.Y.Offset, "settings must fit the viewport or remain reachable by scrolling")
