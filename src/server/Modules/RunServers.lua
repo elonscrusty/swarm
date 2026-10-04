@@ -733,7 +733,22 @@ local function homeStep()
 end
 
 local function onTravelHome(player: Player, choice: any)
-	if role ~= "Run" or travelling[player] or busyHere(player) then
+	if role ~= "Run" or travelling[player] then
+		return
+	end
+	if choice == "Hold" then
+		-- the results' STAY (also while the defeat results are still up, InRun): keep
+		-- reading, nothing automatic until MAIN MENU (quiet: the results say it)
+		held[player] = true
+		if homeAt[player] then
+			if homeQuiet[player] == "now" then
+				setTravel(player, nil)
+			end
+			clearHome(player)
+		end
+		return
+	end
+	if busyHere(player) then
 		return
 	end
 	if choice == "Go" then
@@ -757,15 +772,6 @@ local function onTravelHome(player: Player, choice: any)
 		end
 		clearHome(player)
 		notify(player, "Staying here: start another run from the menu, or leave any time.", GOOD)
-	elseif choice == "Hold" then
-		-- the results' STAY: keep reading, nothing automatic (quiet: the results say it)
-		held[player] = true
-		if homeAt[player] then
-			if homeQuiet[player] == "now" then
-				setTravel(player, nil)
-			end
-			clearHome(player)
-		end
 	elseif choice == "Replay" then
 		-- REPLAY on results over the lobby menu: the countdown waits for the new run
 		held[player] = nil

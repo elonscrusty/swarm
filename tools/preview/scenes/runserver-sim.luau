@@ -284,7 +284,11 @@ else
 	end)
 	local c2 = me:GetAttributeChangedSignal("InRun"):Connect(function()
 		if me:GetAttribute("InRun") == false and travelAtReturn == "unset" then
-			travelAtReturn = tostring(me:GetAttribute("Travel"))
+			-- what the client gets with this change: the end of the same server step
+			travelAtReturn = "pending"
+			task.defer(function()
+				travelAtReturn = tostring(me:GetAttribute("Travel"))
+			end)
 		end
 	end)
 	as(me, "StartRun", "Solo")
