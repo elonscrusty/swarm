@@ -91,7 +91,10 @@ Config.Stages = {
 	-- { 0.22, 0.4, 0.7, 1.05, 1.5 } (was 0.3, 0.75, 1.1, 1.5, 2.0): stage 2's boss was a x2.5
 	-- jump (owner: "round two is way too hard") and the stage-1 Queen took a level-6 hero
 	-- 3-4 minutes in pacing-sim; now steps of x1.8, x1.75, x1.5, x1.43
-	BossHPByStage = { 0.22, 0.4, 0.7, 1.05, 1.5 },
+	-- { .., .., 0.85, 1.35, 2.0 } (was 0.7, 1.05, 1.5; overhaul 2026-10-04,
+	-- docs/overhaul/BALANCE_TUNE.md): stage 3-5 bosses fell in 6-35 s for a buying build;
+	-- econ-sim boss time on stage 3 went 25 -> 30 s (n=5). Stages 1-2 unchanged.
+	BossHPByStage = { 0.22, 0.4, 0.85, 1.35, 2.0 },
 	-- 0.4 (was 0.5): with the Endless boss growth on top, stage 6 was a x1.44 jump over
 	-- stage 5; now x1.27 (Standard) / x1.39 (Endless), then smaller steps
 	BossHPPerExtraStage = 0.4,
@@ -566,7 +569,11 @@ Config.Difficulty = {
 	HPPerExtraPlayer = 0.25,
 	-- HP and damage stop growing with time after this many minutes (long stage runs lean
 	-- on the per-stage multipliers in Config.Stages instead).
-	MaxTier = 12,
+	-- 16 (was 12; overhaul 2026-10-04, docs/overhaul/BALANCE_TUNE.md): the cap was reached
+	-- during stage 3, so stages 4-5 went soft. Stages 1-3 end before minute 12 in econ-sim,
+	-- so they are unchanged; stage 5 normal enemies get up to x1.2 HP and x1.12 damage
+	-- (Endless past stage 5: the same constant step, then its own per-stage growth).
+	MaxTier = 16,
 }
 
 ------------------------------------------------------------------------------------------

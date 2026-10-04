@@ -120,14 +120,28 @@ if welcome then
 	C.sendProfile(C.profile({ TutorialDone = false, SeenTips = {} }))
 	C.settle(0.2)
 end
+-- --set group=on   a duo / trio choice (CHOICE_STATE): ChoiceGroup + ChoiceProtectedUntil on
+--                  the server clock, ~10 s; the pill says the team keeps playing
+-- --set paused=on  the server clock is stopped (ChoiceTimerPaused): the countdown freezes
+local group, paused = preview.args.group == "on", preview.args.paused == "on"
+if group or paused then
+	local lp = game:GetService("Players").LocalPlayer
+	lp:SetAttribute("ChoiceOpen", true)
+	lp:SetAttribute("ChoiceOfferId", 1)
+	lp:SetAttribute("ChoiceGroup", group)
+	lp:SetAttribute("ChoiceTimerPaused", paused)
+	lp:SetAttribute("ChoiceProtectedUntil", workspace:GetServerTimeNow() + (group and 9.5 or 18.5))
+end
 C.fire("LevelUpOffer", {
+	OfferId = 1,
+	Group = group,
 	Choices = choices,
 	Rerolls = tonumber(preview.args.rerolls) or (welcome and 0 or 2),
 	Skips = tonumber(preview.args.skips) or (welcome and 0 or 1),
 	RerollsMax = tonumber(preview.args.rerollsMax) or (welcome and 0 or 2),
 	SkipsMax = tonumber(preview.args.skipsMax) or (welcome and 0 or 5),
 	SkipGold = Config and Config.LevelUp.SkipGold or 10,
-	Seconds = 25,
+	Seconds = group and 9.5 or 25,
 	Level = welcome and 2 or 14,
 	Pending = 1,
 	PanelId = 1,

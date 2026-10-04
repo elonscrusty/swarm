@@ -20,7 +20,7 @@ def main():
     checks = [(name, []) for name in (
         "economy-sim", "storage-sim", "difficulty-sim", "ground-sim", "audio-sim",
         "progression-regression", "mastery-regression", "combat-regression", "corner-regression", "whip-regression", "data-regression", "passives-regression", "run-manager-regression", "choice-regression", "portal-hold-regression", "fall-regression", "safety-sim", "settings-sim",
-        "settlement-lifecycle", "reward-regression", "encounters-sim", "encounter-placement",
+        "settlement-lifecycle", "reward-regression", "reward-once-regression", "encounters-sim", "encounter-placement",
         "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim", "chest-gold-sim", "curses-sim",
     )]
     checks += [("storage-sim", ["outage=all"]), ("runserver-sim", ["role=lobby"]),

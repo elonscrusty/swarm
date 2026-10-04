@@ -1223,7 +1223,7 @@ function Choice.artPref(w: number): number
 	return UIKit.IsCompact() and math.floor(math.min(110, w * 0.42)) or math.floor(math.min(230, w * 0.72))
 end
 function Choice.artMin(): number
-	return UIKit.IsCompact() and 56 or 120
+	return UIKit.IsCompact() and 72 or 120
 end
 
 -- Height a wide portrait card needs.
@@ -1449,14 +1449,16 @@ function Choice.cardArt(face: GuiObject, c, x: number, y: number, w: number, h: 
 		Position = UDim2.new(0.5, 0, 1, -6),
 		Size = UDim2.fromOffset(math.floor(w * 0.6), math.max(8, math.floor(h * 0.1))),
 		ZIndex = 2,
+		Visible = h >= 100,
 	}, art)
 	UIKit.corner(plinth, 999)
-	local iconS = math.max(32, math.floor(math.min(h - 30, w * 0.62)))
+	-- short panels (phones in landscape) give the picture nearly all their height
+	local iconS = math.max(32, math.floor(math.min(h < 100 and h - 14 or h - 30, w * 0.62)))
 	local holder = new("Frame", {
 		Name = "IconHolder",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 6),
+		Position = UDim2.new(0.5, 0, 0.5, h < 100 and 4 or 6),
 		Size = UDim2.fromOffset(iconS, iconS),
 		ZIndex = 3,
 	}, art)
@@ -1464,7 +1466,7 @@ function Choice.cardArt(face: GuiObject, c, x: number, y: number, w: number, h: 
 	icon.ZIndex = 3
 	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		offerArm.Fx.Add(IdleFx.Attach(icon, "Float"))
-		offerArm.Fx.Add(UIAnim.Glow(glow, "BackgroundTransparency", 0.74, 0.86, 1.8))
+		offerArm.Fx.Add(UIAnim.Glow(glow, "BackgroundTransparency", 0.8, 0.9, 1.8))
 		if popDelay then
 			local s = UIAnim.ScaleOf(holder)
 			s.Scale = 0.6
@@ -3452,8 +3454,10 @@ function runMenu.buildRunMenu()
 		ZIndex = 2,
 	}, overlay)
 	runMenu.Drawer = drawer
+	-- past the safe area (a phone's notch side) the drawer colour runs on to the screen edge
+	runMenu.Tail = new("Frame", { Name = "Tail", BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.02, BorderSizePixel = 0, ZIndex = 2 }, drawer)
 	-- the gold edge toward the arena
-	new("Frame", { Name = "Edge", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.25, BorderSizePixel = 0, Size = UDim2.new(0, 2, 1, 0), ZIndex = 3 }, drawer)
+	runMenu.Edge = new("Frame", { Name = "Edge", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.25, BorderSizePixel = 0, Size = UDim2.new(0, 2, 1, 0), ZIndex = 3 }, drawer)
 
 	-- run gold and kills (the numbers the HUD shows)
 	local function chip(name: string, icon: string): (Frame, TextLabel)
@@ -3569,18 +3573,14 @@ function runMenu.buildRunMenu()
 	local function layout()
 		local v = virtualSize()
 		local compact = UIKit.IsCompact()
-		local w
-		if portrait then
-			w = math.min(v.X - 24, 380)
-		else
-			w = math.clamp(math.floor(v.X * (compact and 0.4 or 0.3)), 300, 420)
-		end
-		w = math.min(w, v.X)
+		-- landscape: a drawer on the right edge; portrait: a sheet along the bottom, so the
+		-- HP / timer at the top stay readable in a live group run
+		local sheet = portrait
+		local w = sheet and v.X or math.min(v.X, math.clamp(math.floor(v.X * (compact and 0.4 or 0.3)), 300, 420))
 		-- the Roblox buttons sit on the top right in some layouts: start below them
-		local top = (insets.Right > 0 and insets.Top or 0) + 14
-		drawer.Position = UDim2.new(1, 0, 0, 0)
-		drawer.Size = UDim2.fromOffset(w, v.Y)
+		local top = (not sheet and insets.Right > 0 and insets.Top or 0) + 14
 		runMenu.Width = w
+		runMenu.Sheet = sheet
 		local pad = compact and 16 or 22
 		local inner = w - 2 * pad
 		local gap = compact and 8 or 12
@@ -3595,10 +3595,10 @@ function runMenu.buildRunMenu()
 		local noteH = lines * (TS(16) + 3) + 4
 		local confirming = runMenu.Confirming == true
 		local buttons = confirming and 2 or 4
-		local crest = 52
+		local crest = sheet and 0 or 52
 		local function need(): number
 			return top + chipH + gap + (crest > 0 and crest + 4 or 0) + titleH + 6 + pillH + gap + 1 + gap + noteH + gap * 2
-				+ buttons * bh + (buttons - 1) * gap + gap + 1 + hintH + 12
+				+ buttons * bh + buttons * gap + gap + 1 + hintH + 12
 		end
 		-- short screens: drop the crest, then tighter buttons
 		if need() > v.Y then
@@ -3608,6 +3608,21 @@ function runMenu.buildRunMenu()
 			bh = math.max(Theme.Size.TapMin, bh - 8)
 		end
 		local showHint = need() <= v.Y
+		local H = sheet and math.min(v.Y, need()) or v.Y
+		runMenu.Height = H
+		drawer.AnchorPoint = Vector2.new(1, 0)
+		drawer.Position = sheet and UDim2.new(1, 0, 0, v.Y - H) or UDim2.new(1, 0, 0, 0)
+		drawer.Size = UDim2.fromOffset(w, H)
+		-- past the safe area the colour runs on to the screen edge (right, or bottom)
+		local sc = math.max(0.01, uiScale.Scale)
+		local at, full = guiScreenPos(), fxGui.AbsoluteSize
+		local gapTop = math.max(0, math.floor(at.Y / sc))
+		local gapRight = math.max(0, math.floor((full.X - at.X - gui.AbsoluteSize.X) / sc))
+		local gapBottom = math.max(0, math.floor((full.Y - at.Y - gui.AbsoluteSize.Y) / sc))
+		runMenu.Tail.Visible = (sheet and gapBottom or gapRight) > 0
+		runMenu.Tail.Position = sheet and UDim2.new(0, 0, 1, 0) or UDim2.new(1, 0, 0, -gapTop)
+		runMenu.Tail.Size = sheet and UDim2.new(1, 0, 0, gapBottom) or UDim2.new(0, gapRight, 1, gapTop + gapBottom)
+		runMenu.Edge.Size = sheet and UDim2.new(1, 0, 0, 2) or UDim2.new(0, 2, 1, 0)
 		local y = top
 		local half = math.floor((inner - gap) / 2)
 		runMenu.GoldChip.Position = UDim2.fromOffset(pad, y)
@@ -3652,7 +3667,7 @@ function runMenu.buildRunMenu()
 		end
 		place(runMenu.Leave, true)
 		runMenu.Hint.Visible = showHint
-		runMenu.Hint.Position = UDim2.fromOffset(pad, v.Y - hintH - 12)
+		runMenu.Hint.Position = UDim2.fromOffset(pad, H - hintH - 12)
 		runMenu.Hint.Size = UDim2.fromOffset(inner, hintH)
 	end
 	runMenu.Layout = layout
@@ -3737,12 +3752,16 @@ end
 -- Slides the drawer in from the right edge (reduced motion: no slide).
 function runMenu.slideRunMenuIn()
 	local d = runMenu.Drawer
+	local rest = d.Position
 	if ClientSettings.Reduced() then
-		d.Position = UDim2.new(1, 0, 0, 0)
 		return
 	end
-	d.Position = UDim2.new(1, math.floor(runMenu.Width or 360), 0, 0)
-	UIAnim.Tween(d, 0.22, { Position = UDim2.new(1, 0, 0, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	if runMenu.Sheet then
+		d.Position = rest + UDim2.fromOffset(0, math.floor(runMenu.Height or 400))
+	else
+		d.Position = rest + UDim2.fromOffset(math.floor(runMenu.Width or 360), 0)
+	end
+	UIAnim.Tween(d, 0.22, { Position = rest }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 end
 
 -- The run menu (HUD pause button). Never over a decision, results or travel.
@@ -4027,24 +4046,25 @@ local function progressCard(parent: Instance, name: string, order: number, gradi
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextColor3 = C.Text,
 	}, 13)
+	-- "Level 7 → 8  ·  +342 XP", then what the level is (temporary / per hero / cosmetic)
 	local levelLabel = text(f, "BodyStrong", "", {
 		Name = "Level",
-		Position = UDim2.fromOffset(12, 8),
+		Position = UDim2.fromOffset(12, TS(13) + 12),
 		Size = UDim2.new(1, -24, 0, TS(13) + 4),
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		RichText = true,
 		TextColor3 = C.Text,
 	}, 13)
 	local gain = text(f, "Small", "", {
-		Name = "Gain",
-		Position = UDim2.fromOffset(12, TS(13) + 14),
-		Size = UDim2.new(1, -24, 0, TS(12) + 4),
+		Name = "Note",
+		Position = UDim2.fromOffset(12, 2 * TS(13) + 16),
+		Size = UDim2.new(1, -24, 0, TS(11) + 4),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		RichText = true,
 		TextColor3 = C.TextMuted,
-	}, 12)
+	}, 11)
 	local meter = UIKit.Meter(f, {
 		Gradient = gradient,
 		TextStyle = "Number",
@@ -4144,7 +4164,7 @@ local function buildResults()
 	results.Title = text(titleCol, "Display", "VICTORY!", { Position = UDim2.fromOffset(0, 2), Size = UDim2.new(1, 0, 0, TS(44) + 6) }, 44)
 	results.Arena = text(titleCol, "Label", "", { Position = UDim2.fromOffset(0, TS(44) + 10), Size = UDim2.new(1, 0, 0, TS(13) + 6), TextColor3 = C.Text, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
 	results.Hero = text(titleCol, "BodyStrong", "", { Position = UDim2.fromOffset(0, TS(44) + TS(12) + 18), Size = UDim2.new(1, 0, 0, TS(15) + 4), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
-	UIKit.Divider(content, 260, { LayoutOrder = 2 })
+	results.Divider = UIKit.Divider(content, 260, { LayoutOrder = 2 })
 
 	-- body (scrolls on short screens): tiles, gold ledger, progress, rewards, RUN DETAILS
 	local body = new("ScrollingFrame", {
@@ -4201,7 +4221,7 @@ local function buildResults()
 	local prog = new("Frame", { Name = "Progress", BackgroundTransparency = 1, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 84) }, body)
 	results.Progress = prog
 	results.ProgList = UIKit.list(prog, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
-	results.RunCard = progressCard(prog, "RunLevel", 1, ColorSequence.new(P.crimson_300, P.crimson_500), P.crimson_400)
+	results.RunCard = progressCard(prog, "RunLevel", 1, ColorSequence.new(P.steel_200, P.steel_400), P.steel_300)
 	results.MasteryCard = progressCard(prog, "HeroMastery", 2, ColorSequence.new(P.gold_300, P.gold_500), P.gold_400)
 	results.AccountCard = progressCard(prog, "AccountLevel", 3, ColorSequence.new(RES_CYAN, RES_CYAN_DARK), RES_CYAN)
 	-- the account bar animation (animateAccountXP) works on these
@@ -4408,7 +4428,8 @@ local function buildResults()
 		results.Title.Size = UDim2.new(1, 0, 0, titleSize + 6)
 		results.Arena.Position = UDim2.fromOffset(0, titleSize + 10)
 		results.Hero.Position = UDim2.fromOffset(0, titleSize + TS(13) + 18)
-		local tileH = slim and 72 or 104
+		local tileH = slim and 52 or 104
+		results.Divider.Visible = not slim
 		local btnH = slim and 48 or Theme.Size.Button
 		local headH = math.max(84, titleSize + 6 + TS(13) + 8 + TS(15) + 8)
 		head.Size = UDim2.new(1, 0, 0, headH)
@@ -4425,7 +4446,11 @@ local function buildResults()
 				end
 				local value = tile:FindFirstChild("Value")
 				if value and value:IsA("GuiObject") then
-					value.Position = UDim2.fromOffset(4, slim and 8 or 42)
+					value.Position = UDim2.fromOffset(4, slim and 2 or 42)
+				end
+				local cap = tile:FindFirstChild("Caption")
+				if cap and cap:IsA("GuiObject") then
+					cap.Position = UDim2.new(0, 2, 1, slim and -4 or -10)
 				end
 			end
 		end
@@ -4446,14 +4471,16 @@ local function buildResults()
 		local noteLines = lineCount(results.LedgerNote.Text, noteSize, inner - 20)
 		local noteH = noteLines * (noteSize + 4) + 2
 		results.LedgerNote.Size = UDim2.new(1, -20, 0, noteH)
-		results.Ledger.Size = UDim2.new(1, 0, 0, 8 + rowsH + 6 + noteH + 8)
+		local lpad = slim and 4 or 8
+		results.LedgerRow.Position = UDim2.fromOffset(8, lpad)
+		results.LedgerNote.Position = UDim2.new(0, 10, 1, -lpad)
+		results.Ledger.Size = UDim2.new(1, 0, 0, lpad + rowsH + (slim and 2 or 6) + noteH + lpad)
 		-- progress cards: three side by side, stacked when narrow
 		local pcols = inner >= 520 and 3 or 1
 		local cardW = math.floor((inner - (pcols - 1) * 8) / pcols)
-		local cardH = 8 + TS(13) + 6 + TS(12) + 6 + 16 + 12
+		local cardH = 2 * TS(13) + 16 + TS(11) + 4 + 6 + 16 + 10
 		for _, card in ipairs({ results.RunCard, results.MasteryCard, results.AccountCard }) do
 			card.Frame.Size = UDim2.fromOffset(cardW, cardH)
-			card.Gain.Position = UDim2.fromOffset(12, TS(13) + 14)
 		end
 		local prow = math.ceil(3 / pcols)
 		results.Progress.Size = UDim2.new(1, 0, 0, prow * cardH + (prow - 1) * 8)
@@ -4523,9 +4550,9 @@ local function buildResults()
 		results.FooterList.Padding = UDim.new(0, stacked and 4 or 14)
 		local footH = stacked and (TS(12) + 6 + 4 + bugH) or bugH
 		results.Footer.Size = UDim2.new(1, 0, 0, footH)
-		local fixed = headH + 10 + btnH + footH + 4 * 10 + 2 * Theme.Space.XL + 8 + (goalH > 0 and goalH + 10 or 0)
+		local fixed = headH + (slim and -10 or 10) + btnH + footH + 4 * 10 + 2 * Theme.Space.XL + 8 + (goalH > 0 and goalH + 10 or 0)
 		-- the scroll area may shrink a little for the pinned NEXT GOAL (the tiles still show)
-		local minRoom = goalH > 0 and 96 or 140
+		local minRoom = math.min(goalH > 0 and 96 or 140, tileH)
 		local room = math.max(minRoom, v.Y - 24 - fixed)
 		local scrolls = bodyH > room
 		if scrolls then
@@ -4626,10 +4653,10 @@ local function fillLedger(data: any)
 	results.LedgerNote.Text = note
 end
 
-local function setCard(card: { [string]: any }, title: string, level: string, gain: string, share: number?, barText: string?)
+local function setCard(card: { [string]: any }, title: string, level: string, gain: string, note: string, share: number?, barText: string?)
 	card.Title.Text = UIKit.track(title)
-	card.Level.Text = level
-	card.Gain.Text = gain
+	card.Level.Text = (level ~= "" and gain ~= "") and (level .. "  ·  " .. gain) or (level .. gain)
+	card.Gain.Text = note
 	card.Meter.Frame.Visible = share ~= nil
 	if share ~= nil then
 		card.Meter.Set(math.clamp(share, 0, 1), barText)
@@ -4645,7 +4672,7 @@ function fillMastery(data: any)
 	local hero = CharacterData.Characters[heroId]
 	local title = string.format("%s mastery", hero and hero.Name or "Hero")
 	if not mst then
-		setCard(results.MasteryCard, title, "", data.DevRun and "Not recorded (DEV run)" or "No mastery XP this run", nil)
+		setCard(results.MasteryCard, title, "", data.DevRun and "Not recorded" or "No XP", data.DevRun and "DEV run: no progress saved" or "Permanent, for this hero", nil)
 		return
 	end
 	local from, to = math.floor(safeNumber(mst.From)), math.floor(safeNumber(mst.To))
@@ -4663,11 +4690,11 @@ function fillMastery(data: any)
 		end
 	end
 	if into and need and need > 0 then
-		setCard(results.MasteryCard, title, levelText, gain, into / need, string.format("%s / %s", UIKit.formatNumber(math.floor(into)), UIKit.formatNumber(math.floor(need))))
+		setCard(results.MasteryCard, title, levelText, gain, "Permanent, for this hero", into / need, string.format("%s / %s", UIKit.formatNumber(math.floor(into)), UIKit.formatNumber(math.floor(need))))
 	elseif to >= Config.HeroMastery.MaxLevel then
-		setCard(results.MasteryCard, title, levelText, gain, 1, "MAX LEVEL")
+		setCard(results.MasteryCard, title, levelText, gain, "Permanent, for this hero", 1, "MAX LEVEL")
 	else
-		setCard(results.MasteryCard, title, levelText, gain, nil)
+		setCard(results.MasteryCard, title, levelText, gain, "Permanent, for this hero", nil)
 	end
 end
 
@@ -4685,7 +4712,7 @@ local function fillProgress(data: any)
 		xp, need = tonumber(player:GetAttribute("XP")), tonumber(player:GetAttribute("XPNeeded"))
 	end
 	local runShare = (xp and need and need > 0) and xp / need or nil
-	setCard(results.RunCard, "Run level", "Level " .. lvl, "This run only: resets next run", runShare,
+	setCard(results.RunCard, "Run level", "Level " .. lvl, "", "Temporary: this run only", runShare,
 		runShare and string.format("%s / %s", UIKit.formatNumber(math.floor(xp :: number)), UIKit.formatNumber(math.floor(need :: number))) or nil)
 	fillMastery(data)
 	-- account level (cosmetic)
@@ -4693,15 +4720,15 @@ local function fillProgress(data: any)
 	if a then
 		local from, to = math.floor(safeNumber(a.From)), math.floor(safeNumber(a.To))
 		local levelText = from ~= to and string.format('<font color="%s">Level %d → %d</font>', hex(RES_MINT), from, to) or ("Level " .. to)
-		local gain = string.format('<font color="%s"><b>+%s XP</b></font>  ·  cosmetic rewards only', hex(RES_CYAN), UIKit.formatNumber(math.floor(safeNumber(a.Gained))))
+		local gain = string.format('<font color="%s"><b>+%s XP</b></font>', hex(RES_CYAN), UIKit.formatNumber(math.floor(safeNumber(a.Gained))))
 		local an = safeNumber(a.Need)
 		if an > 0 then
-			setCard(results.AccountCard, "Account level", levelText, gain, safeNumber(a.Into) / an, string.format("%s / %s", UIKit.formatNumber(math.floor(safeNumber(a.Into))), UIKit.formatNumber(math.floor(an))))
+			setCard(results.AccountCard, "Account level", levelText, gain, "Cosmetic rewards only", safeNumber(a.Into) / an, string.format("%s / %s", UIKit.formatNumber(math.floor(safeNumber(a.Into))), UIKit.formatNumber(math.floor(an))))
 		else
-			setCard(results.AccountCard, "Account level", levelText, gain, 1, "MAX LEVEL")
+			setCard(results.AccountCard, "Account level", levelText, gain, "Cosmetic rewards only", 1, "MAX LEVEL")
 		end
 	else
-		setCard(results.AccountCard, "Account level", "", data.DevRun and "Not recorded (DEV run)" or "Cosmetic progression", nil)
+		setCard(results.AccountCard, "Account level", "", data.DevRun and "Not recorded" or "No XP", "Cosmetic rewards only", nil)
 	end
 end
 
