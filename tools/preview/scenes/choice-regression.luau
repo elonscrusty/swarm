@@ -100,6 +100,7 @@ assert(not RM.IsMenuPaused() and not RM.IsFrozen(), "the duo run menu does not p
 rp.InvulnUntil = 0
 tough(rp); hp = rp.HP
 RM.DamagePlayer(rp, 1e5, "Test")
+preview.log("dbg menu", rp.HP, hp, rp.Alive, rp.Paused, rp.Offer ~= nil, rp.InvulnUntil, RM.GetRunTime(), RM.IsSimulating(), player:GetAttribute("DevGod"), rp.Shield, player:GetAttribute("Shield"))
 assert(rp.HP < hp, "an open run menu grants no protection")
 preview.fireServerAs(player, "SetPause", false)
 RM.HoldReward(rp, false)
