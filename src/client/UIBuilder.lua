@@ -3115,21 +3115,6 @@ local function buildResults()
 		Size = UDim2.new(1, -74, 0, 18),
 	})
 	results.ProgLines = text(prog, "Small", "", { Name = "Lines", Position = UDim2.fromOffset(14, TS(18) + 44), Size = UDim2.new(1, -28, 0, 0), RichText = true, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextXAlignment = Enum.TextXAlignment.Center })
-	-- NEXT GOAL (RunResult.NextGoal, picked by the server from the settled save): one
-	-- reason to play again right under the account XP bar (above the curse / daily lines,
-	-- so it is the first thing a scroll reveals on landscape phones), icon + line + bar
-	local goal = new("Frame", { Name = "NextGoal", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TS(18) + 42), Size = UDim2.new(1, 0, 0, 0), Visible = false }, prog)
-	results.Goal = goal
-	new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_600, BackgroundTransparency = 0.55, BorderSizePixel = 0, Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 0, 1) }, goal)
-	results.GoalIcon = new("Frame", { Name = "Icon", BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 10), Size = UDim2.fromOffset(34, 34) }, goal)
-	results.GoalText = text(goal, "Small", "", { Name = "Line", Position = UDim2.fromOffset(60, 8), Size = UDim2.new(1, -74, 0, TS(Theme.TextSize.Small) + 4), RichText = true, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top })
-	results.GoalMeter = UIKit.Meter(goal, {
-		Gradient = ColorSequence.new(P.moss_400, P.moss_200),
-		TextStyle = "Number",
-		TextSize = 11,
-		Position = UDim2.fromOffset(60, 30),
-		Size = UDim2.new(1, -74, 0, 16),
-	})
 	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Visible = false })
 	-- achievements unlocked this run (one line each: trophy, name, reward)
 	results.Achievements = text(body, "Small", "", {
@@ -3146,6 +3131,21 @@ local function buildResults()
 
 	-- the scroll hint row (shown only while the body scrolls; see results.MoreHint)
 	results.More = text(content, "Caption", UIKit.track("More below") .. "  \u{25BE}", { Name = "MoreHint", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, MORE_H), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, Visible = false }, 11)
+	-- NEXT GOAL (RunResult.NextGoal, picked by the server from the settled save): the
+	-- reason to play again, pinned just above REPLAY / MAIN MENU so it never scrolls away:
+	-- icon, one line, a progress bar (beside the line when wide, under it when narrow)
+	local goal = new("Frame", { Name = "NextGoal", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.15, BorderSizePixel = 0, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 0), Visible = false }, content)
+	UIKit.corner(goal, 10)
+	UIKit.stroke(goal, P.moss_400, 1.5, 0.25)
+	results.Goal = goal
+	results.GoalIcon = new("Frame", { Name = "Icon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(28, 28) }, goal)
+	results.GoalText = text(goal, "Small", "", { Name = "Line", RichText = true, TextTruncate = Enum.TextTruncate.AtEnd, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
+	results.GoalMeter = UIKit.Meter(goal, {
+		Gradient = ColorSequence.new(P.moss_400, P.moss_200),
+		TextStyle = "Number",
+		TextSize = 11,
+		Size = UDim2.fromOffset(160, 16),
+	})
 
 	-- actions: REPLAY (same mode) and MAIN MENU
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
@@ -3260,19 +3260,36 @@ local function buildResults()
 		local perLine = inner < 520 and 2 or 1
 		local nLines = (results.ProgLineCount or 0) * perLine
 		results.ProgLines.Size = UDim2.new(1, -28, 0, nLines * lineH)
-		-- the NEXT GOAL row: its line wraps to two on narrow screens, the bar sits under it
+		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0))
+		-- the pinned NEXT GOAL row (above the buttons): one row with the bar on the right
+		-- when there is room, otherwise the bar under the line
+		results.ButtonRow.LayoutOrder = 6
+		results.Footer.LayoutOrder = 7
 		local goalH = 0
 		if results.Goal.Visible then
-			local goalLines = inner < 560 and 2 or 1
-			local textH = goalLines * lineH
-			results.GoalText.Size = UDim2.new(1, -74, 0, textH)
 			local meterShown = results.GoalMeter.Frame.Visible
-			results.GoalMeter.Frame.Position = UDim2.fromOffset(60, 10 + textH + 4)
-			goalH = math.max(54, 10 + textH + (meterShown and 4 + 16 or 0) + 10)
+			local oneRow = inner >= 420 or not meterShown
+			local textX = 46
+			if oneRow then
+				goalH = math.max(slim and 34 or 40, lineH + 14)
+				local barW = meterShown and math.clamp(math.floor(inner * 0.3), 120, 200) or 0
+				results.GoalText.Position = UDim2.fromOffset(textX, 0)
+				results.GoalText.Size = UDim2.new(1, -(textX + barW + (meterShown and 20 or 10)), 1, 0)
+				results.GoalMeter.Frame.AnchorPoint = Vector2.new(1, 0.5)
+				results.GoalMeter.Frame.Position = UDim2.new(1, -10, 0.5, 0)
+				results.GoalMeter.Frame.Size = UDim2.fromOffset(barW, 16)
+			else
+				goalH = 8 + lineH + 4 + 16 + 8
+				results.GoalText.Position = UDim2.fromOffset(textX, 6)
+				results.GoalText.Size = UDim2.new(1, -(textX + 10), 0, lineH + 2)
+				results.GoalMeter.Frame.AnchorPoint = Vector2.new(0, 0)
+				results.GoalMeter.Frame.Position = UDim2.fromOffset(textX, 8 + lineH + 4)
+				results.GoalMeter.Frame.Size = UDim2.new(1, -(textX + 10), 0, 16)
+			end
+			-- the extra line ("about 2 more runs") only where it fits beside the goal
+			results.GoalText.Text = (oneRow and inner < 600) and results.GoalShort or results.GoalLong
 			results.Goal.Size = UDim2.new(1, 0, 0, goalH)
 		end
-		results.ProgLines.Position = UDim2.fromOffset(14, TS(18) + 44 + goalH)
-		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0) + goalH)
 		-- the defeat's damage review: two hits per line on landscape phones (half the height,
 		-- so it sits nearer the fold)
 		local recent = results.Recent :: { string }?
@@ -3298,11 +3315,13 @@ local function buildResults()
 		results.FooterList.Padding = UDim.new(0, stacked and 4 or 14)
 		local footH = stacked and (TS(12) + 6 + 4 + bugH) or bugH
 		results.Footer.Size = UDim2.new(1, 0, 0, footH)
-		local fixed = headH + 10 + btnH + footH + 4 * 10 + 2 * Theme.Space.XL + 8
-		local room = math.max(140, v.Y - 24 - fixed)
+		local fixed = headH + 10 + btnH + footH + 4 * 10 + 2 * Theme.Space.XL + 8 + (goalH > 0 and goalH + 10 or 0)
+		-- the scroll area may shrink a little for the pinned NEXT GOAL (the tiles still show)
+		local minRoom = goalH > 0 and 96 or 140
+		local room = math.max(minRoom, v.Y - 24 - fixed)
 		local scrolls = bodyH > room
 		if scrolls then
-			room = math.max(140, room - MORE_H - 10) -- the MORE BELOW row and its gap
+			room = math.max(minRoom, room - MORE_H - 10) -- the MORE BELOW row and its gap
 		end
 		results.More.Visible = scrolls
 		local h = math.min(bodyH, room)
@@ -3326,7 +3345,7 @@ local function buildResults()
 				best = y
 				y += 10
 			end
-			if best >= 140 then
+			if best >= minRoom then
 				h = best
 			end
 		end
@@ -3414,20 +3433,21 @@ local function fillGoal(data: any)
 	if not g or not goalText then
 		return
 	end
-	results.Progress.Visible = true
 	for _, ch in ipairs(results.GoalIcon:GetChildren()) do
 		ch:Destroy()
 	end
 	local icon = type(g.Icon) == "string" and g.Icon or "flag"
 	local heroId = string.match(icon, "^hero:(.+)$")
-	local iconOpts = { Size = 34, Back = C.PanelInset }
+	local iconOpts = { Size = 28, Back = C.PanelInset }
 	if heroId and CharacterData.Characters[heroId] then
 		Icons.Character(results.GoalIcon, heroId, iconOpts)
 	else
 		Icons.Draw(results.GoalIcon, Icons.Has(icon) and icon or "flag", iconOpts)
 	end
 	local sub = type(g.Sub) == "string" and g.Sub ~= "" and string.format('  <font color="%s">· %s</font>', hex(C.TextMuted), g.Sub) or ""
-	results.GoalText.Text = string.format('<font color="%s"><b>NEXT GOAL</b></font>  %s%s', hex(P.moss_200), goalText, sub)
+	results.GoalLong = string.format('<font color="%s"><b>NEXT GOAL</b></font>  %s%s', hex(P.moss_200), goalText, sub)
+	results.GoalShort = string.format('<font color="%s"><b>NEXT GOAL</b></font>  %s', hex(P.moss_200), goalText)
+	results.GoalText.Text = results.GoalLong
 	local share = math.clamp(tonumber(g.Progress) or 0, 0, 1)
 	local barText = type(g.ProgressText) == "string" and g.ProgressText or nil
 	results.GoalMeter.Frame.Visible = barText ~= nil
