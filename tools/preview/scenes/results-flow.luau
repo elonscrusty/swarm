@@ -16,6 +16,14 @@
 -- Run: render.sh results-flow --devices pc --set case=stay
 local C = lib("common")
 C.lobby()
+-- the run folders the client waits for (the scene runs longer than their 10 s wait)
+for _, name in ipairs({ "SwarmGems", "SwarmEnemies", "SwarmPickups" }) do
+	if not workspace:FindFirstChild(name) then
+		local f = Instance.new("Folder")
+		f.Name = name
+		f.Parent = workspace
+	end
+end
 local case = preview.args.case or "auto"
 local runServer = case ~= "plain"
 local Players = game:GetService("Players")
