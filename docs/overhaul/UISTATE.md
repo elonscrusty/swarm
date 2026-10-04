@@ -61,7 +61,7 @@ Nothing here was tested in Studio or on a device.
 - `check_layout.py` on ui-stack stack/elite/caravan/reel (iphone), loot (iphone,
   phone-portrait), rewards (iphone): 0 problems. PASS
 - menu-sim cycles=1 headless: lobby -> run -> pause -> MAIN MENU -> death -> results -> lobby,
-  0 errors. PASS (headless: no GUI exercised); GUI menu-sim: see the final report.
+  0 errors, headless and with the full GUI (pause opened and froze the run, MAIN MENU, results). PASS
 
 ## Remaining risk
 - Critical notices during a headline sit under it, near the hero on phones (~2.4 s).

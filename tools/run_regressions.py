@@ -35,6 +35,7 @@ def main():
     checks += [("discovery", ["phone"]), ("discovery", ["phone-portrait"])]
     checks += [("pings", ["phone"]), ("pings", ["phone-portrait"])]
     checks += [("accessibility-sim", [])]
+    checks += [("uistate", [])]
     checks += [("results-flow", ["case=" + c]) for c in ("auto", "stay", "replay", "portal", "plain")]
     checks += [("leaderboards", ["mismatch=board"])]
     checks += [("coop-regression", ["rejoin=" + value]) for value in ("success", "expired", "ended", "forged")]
@@ -49,7 +50,7 @@ def main():
     def run(check):
         scene, settings = check
         name = scene + ("-" + "-".join(settings).replace("=", "-") if settings else "")
-        scripts = {"ui": "ui_regression.luau", "menu": "menu_clarity_regression.luau", "discovery": "menu_discovery_regression.luau", "pings": "team_pings_regression.luau"}
+        scripts = {"ui": "ui_regression.luau", "menu": "menu_clarity_regression.luau", "discovery": "menu_discovery_regression.luau", "pings": "team_pings_regression.luau", "uistate": "uistate_regression.luau"}
         command = [args.lune, "run", "tools/" + scripts[scene], *settings] if scene in scripts else [
             args.lune, "run", "tools/preview/runtime/main.luau", "--", "--scene", scene,
             "--studio", "--device", "pc", "--out", str(args.out / (name + ".json")),
