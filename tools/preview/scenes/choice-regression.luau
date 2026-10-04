@@ -22,6 +22,11 @@ end
 tough(rp)
 tough(mate)
 rp.InvulnUntil, mate.InvulnUntil = 0, 0
+-- three heavy hits: random upgrades from the auto-picks may include a one-hit ward or a
+-- shield, which must not be mistaken for choice protection (MaxHP resets on each pick)
+local function hit(r)
+	for _ = 1, 3 do RM.DamagePlayer(r, 1e5, "Test") end
+end
 local function serverLeft(): number
 	return (player:GetAttribute("ChoiceProtectedUntil") or 0) - workspace:GetServerTimeNow()
 end
@@ -37,8 +42,8 @@ preview.advance(0.5)
 assert(RM.GetRunTime() > t0, "the run clock keeps going for the team")
 tough(rp); tough(mate)
 local hp, mateHp = rp.HP, mate.HP
-RM.DamagePlayer(rp, 1e5, "Test")
-RM.DamagePlayer(mate, 1e5, "Test")
+hit(rp)
+hit(mate)
 assert(rp.HP == hp, "the chooser is protected while the panel is open")
 assert(mate.HP < mateHp, "the teammate takes damage normally")
 assert(rp.Root.Parent and rp.Humanoid.WalkSpeed == 0, "the chooser is rooted")
@@ -65,7 +70,7 @@ assert(player:GetAttribute("ChoiceOpen") == false, "ChoiceOpen cleared on close"
 assert(rp.Humanoid.WalkSpeed > 0, "control restored when the panel closes")
 preview.advance((Config.Player.ChoiceGraceSeconds or 0) + 0.1)
 tough(rp); hp = rp.HP
-RM.DamagePlayer(rp, 1e5, "Test")
+hit(rp)
 assert(rp.HP < hp, "protection ends after the panel and its grace")
 
 -- 4) farming: endless queued levels cannot keep a player protected
@@ -99,8 +104,7 @@ preview.fireServerAs(player, "SetPause", true)
 assert(not RM.IsMenuPaused() and not RM.IsFrozen(), "the duo run menu does not pause the server")
 rp.InvulnUntil = 0
 tough(rp); hp = rp.HP
-RM.DamagePlayer(rp, 1e5, "Test")
-preview.log("dbg menu", rp.HP, hp, rp.Alive, rp.Paused, rp.Offer ~= nil, rp.InvulnUntil, RM.GetRunTime(), RM.IsSimulating(), player:GetAttribute("DevGod"), rp.Shield, player:GetAttribute("Shield"))
+hit(rp)
 assert(rp.HP < hp, "an open run menu grants no protection")
 preview.fireServerAs(player, "SetPause", false)
 RM.HoldReward(rp, false)
@@ -108,11 +112,11 @@ assert(rp.RewardUntil == nil, "a compact reward toast does not protect")
 RM.HoldReward(rp, true)
 assert(rp.RewardUntil == nil and rp.Humanoid.WalkSpeed > 0, "a duo chest reveal neither holds nor roots")
 tough(rp); hp = rp.HP
-RM.DamagePlayer(rp, 1e5, "Test")
+hit(rp)
 assert(rp.HP < hp and not RM.IsFrozen(), "a duo chest reward grants no protection and no freeze")
 rp.Paused = true
 tough(rp); hp = rp.HP
-RM.DamagePlayer(rp, 1e5, "Test")
+hit(rp)
 assert(rp.HP < hp, "Paused without a server offer is not protection")
 rp.Paused = false
 RM.ApplyMovement(rp)
