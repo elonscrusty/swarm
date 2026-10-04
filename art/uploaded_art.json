@@ -137,5 +137,12 @@
  "ui/frames/frame_Epic": 137826964624748,
  "ui/frames/frame_Legendary": 137989517510949,
  "ui/frames/frame_Rare": 140455712348346,
- "ui/frames/frame_Uncommon": 129050915914715
+ "ui/frames/frame_Uncommon": 129050915914715,
+ "ui/home/home_DockFrame": 102626822380717,
+ "ui/home/home_Gear": 102207388526789,
+ "ui/home/home_Heroes": 93901765059273,
+ "ui/home/home_ModeFrame": 105436874183207,
+ "ui/home/home_More": 81635351890933,
+ "ui/home/home_PlayButton": 121146725124906,
+ "ui/home/home_Shop": 101753352127935
 }

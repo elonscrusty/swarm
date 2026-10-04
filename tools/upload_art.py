@@ -29,7 +29,8 @@ IDS = os.path.join(ART, "uploaded_art.json")
 LUA = os.path.join(ROOT, "src", "shared", "ArtData.lua")
 TMP = os.path.join(ROOT, "art", ".upload_tmp")
 SKIP_TOP = {"store"}
-MAX_SIDE = {"screens": 1024, "arenas": 1024}
+# "ui/home" keeps the 9-slice frames at their drawn size (SliceCenter is in image pixels)
+MAX_SIDE = {"screens": 1024, "arenas": 1024, "ui/home": 1024}
 
 
 def keys():
@@ -49,7 +50,8 @@ def keys():
 def shrink(src, key):
     os.makedirs(TMP, exist_ok=True)
     top = key.split("/")[0]
-    side = MAX_SIDE.get(top, 512)
+    sub = "/".join(key.split("/")[:2])
+    side = MAX_SIDE.get(sub, MAX_SIDE.get(top, 512))
     img = Image.open(src).convert("RGBA")
     w, h = img.size
     if max(w, h) > side:

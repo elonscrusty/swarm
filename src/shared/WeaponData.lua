@@ -854,16 +854,22 @@ WeaponData.Weapons = {
 		not offered anywhere); moving their ids into Order releases them.
 		Per-target DPS at L1 / L6 / L12 / evolved (same measure as the notes above; line and
 		area weapons are per target inside the effect):
-		  Ward Shields   6.8 / 20 / 51 / 125   orbiting, hits all around, Bulwark eats shots
-		  Earthsplitter  7 / 13 / 30 / 49      line of spikes (+ Aftershock eruptions)
+		  Ward Shields   6.8 / 25 / 48 / 102   orbiting, every shield hits once per pass
+		  Earthsplitter  6 / 8 / 10 / 11       per fissure; the fan overlaps near you (+ Aftershock)
 		  Starfall       10 / 17 / 32 / 51     delayed blast on the densest crowd + crater
-		  Sling          6.9 / 25 / 67 / 149   one stone bounces through 3-8 enemies
+		  Sling          6.9 / 25 / 67 / 117   one stone bounces through 3-8 enemies
 		  Plague Censer  6 / 12 / 22 / 30      drifting cloud (+ Pestilence poison)
 		  Sawblade       7.5 / 30 / 70 / 160   grinds slowly through crowds (3 bites a pass)
 		  Vine Snare     8 / 14 / 22 / 30      roots a spot (inside the snare)
-		  War Horn       5 / 10 / 19 / 32      cone with big knockback (+ Echo 60%)
+		  War Horn       5 / 10 / 16 / 25      cone with big knockback (+ Echo 60%)
 		  Spirit Wisps   5.7 / 30 / 67 / 147   darting wisps that come back to orbit you
 		  Vortex         6 / 10 / 17.5 / 25    pulls a crowd together (+ Implosion)
+		Balance pass (dps sim: one weapon, 25 unkillable enemies crowding a standing hero),
+		damage per enemy per second at L12 / evolved: area weapons 13-28 / 19-41 (Garlic,
+		Frost Nova, Holy Water, Totem, Censer, Vines, Vortex, Starfall, Horn, Earthsplitter),
+		Ward Shields 54 / 106 (about the strong single-target weapons, but only in its ring).
+		Overlapping clouds, rifts, snares, pools, craters and totems of ONE weapon hurt an
+		enemy once per tick (WeaponSystem burnReady), like the Fire Trail's flames.
 	]]
 
 	-- WARD SHIELDS: shields always circle you, hitting what they pass (cooldown = how often
@@ -918,28 +924,28 @@ WeaponData.Weapons = {
 		DurationLabel = "Length",
 		Perks = { { Level = 8, Id = "Aftershock", Name = "Aftershock", Text = "Each fissure ends in a big eruption." } },
 		-- reach = speed x duration; StepDist studs between spike bursts of SpikeRadius
-		Params = { StepDist = 2.4, SpikeRadius = 2.2, FanAngle = 25, Range = 40, AftershockRadius = 5, AftershockShare = 1.0, Visual = 41, EvoVisual = 42 },
+		Params = { StepDist = 2.4, SpikeRadius = 2.2, FanAngle = 25, Range = 40, AftershockRadius = 5, AftershockShare = 0.5, Visual = 41, EvoVisual = 42 },
 		Levels = {
 			-- balance pass: fan fissures overlap near you, so damage is low per fissure
 			row(12, 2.0, 1, 1.0, 30, 999, 0.8, 8),
 			row(13, 2.0, 1, 1.0, 30, 999, 0.8, 8),
 			row(13, 2.0, 2, 1.0, 30, 999, 0.8, 8),
 			row(14, 1.9, 2, 1.05, 31, 999, 0.85, 9),
-			row(15, 1.9, 2, 1.1, 32, 999, 0.9, 9),
-			row(15, 1.8, 3, 1.1, 32, 999, 0.9, 9),
-			row(16, 1.8, 3, 1.15, 33, 999, 0.95, 10),
-			row(16, 1.7, 3, 1.15, 34, 999, 1.0, 10),
-			row(17, 1.7, 3, 1.2, 35, 999, 1.0, 10),
-			row(17, 1.6, 3, 1.25, 36, 999, 1.05, 11),
-			row(18, 1.55, 3, 1.3, 37, 999, 1.1, 11),
-			row(18, 1.5, 4, 1.35, 38, 999, 1.1, 12),
+			row(14, 1.9, 2, 1.1, 32, 999, 0.9, 9),
+			row(14, 1.8, 3, 1.1, 32, 999, 0.9, 9),
+			row(14, 1.8, 3, 1.15, 33, 999, 0.95, 10),
+			row(14, 1.7, 3, 1.15, 34, 999, 1.0, 10),
+			row(15, 1.7, 3, 1.2, 35, 999, 1.0, 10),
+			row(15, 1.6, 3, 1.25, 36, 999, 1.05, 11),
+			row(15, 1.55, 3, 1.3, 37, 999, 1.1, 11),
+			row(15, 1.5, 4, 1.35, 38, 999, 1.1, 12),
 		},
 		Evolution = {
 			Id = "Worldbreaker",
 			Name = "Worldbreaker",
 			Passive = "Stoneskin",
 			Description = "Five fissures split the ground all around you.",
-			Stats = row(20, 1.3, 5, 1.6, 42, 999, 1.25, 14),
+			Stats = row(16, 1.5, 5, 1.6, 42, 999, 1.25, 14),
 			Ring = true, -- fissures spread evenly all around instead of a fan
 		},
 	},
@@ -1150,18 +1156,18 @@ WeaponData.Weapons = {
 			row(18, 2.2, 2, 1.1, 0, 999, 1.0, 26),
 			row(21, 2.1, 2, 1.15, 0, 999, 1.0, 28),
 			row(21, 2.0, 2, 1.2, 0, 999, 1.1, 28),
-			row(24, 2.0, 2, 1.2, 0, 999, 1.2, 30),
-			row(26, 1.9, 2, 1.25, 0, 999, 1.2, 30),
-			row(28, 1.85, 2, 1.3, 0, 999, 1.3, 32),
-			row(30, 1.8, 2, 1.35, 0, 999, 1.4, 32),
-			row(33, 1.7, 3, 1.4, 0, 999, 1.5, 34),
+			row(22, 2.0, 2, 1.2, 0, 999, 1.2, 30),
+			row(23, 1.9, 2, 1.25, 0, 999, 1.2, 30),
+			row(24, 1.85, 2, 1.3, 0, 999, 1.3, 32),
+			row(25, 1.8, 2, 1.35, 0, 999, 1.4, 32),
+			row(27, 1.7, 3, 1.4, 0, 999, 1.5, 34),
 		},
 		Evolution = {
 			Id = "TitansRoar",
 			Name = "Titan's Roar",
 			Passive = "Lionheart",
 			Description = "A roar that blasts the whole ring around you.",
-			Stats = row(48, 1.5, 3, 1.7, 0, 999, 2.0, 38),
+			Stats = row(38, 1.5, 3, 1.7, 0, 999, 2.0, 38),
 			Roar = true, -- one full-circle blast (per amount: a little later, a little wider)
 		},
 	},
