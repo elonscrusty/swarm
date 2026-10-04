@@ -315,8 +315,11 @@ local function fitModal(m: UIKit.Modal, list: UIListLayout)
 			end
 		end
 		h += math.max(0, n - 1) * list.Padding.Offset
+		-- the content's own padding (a screen may tighten it on short viewports)
+		local pad = m.Content:FindFirstChildOfClass("UIPadding")
+		local padY = pad and (pad.PaddingTop.Offset + pad.PaddingBottom.Offset) or 2 * Theme.Space.XL
 		if h > 10 then
-			m.Panel.Size = UDim2.new(m.Panel.Size.X, UDim.new(0, math.floor(h + 2 * Theme.Space.XL + 4)))
+			m.Panel.Size = UDim2.new(m.Panel.Size.X, UDim.new(0, math.floor(h + padY + 4)))
 		end
 	end
 	list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(fit)
@@ -1368,7 +1371,10 @@ local function changeBox(parent: Instance, c, line, x: number, y: number, w: num
 	local head = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, compact and 5 or 8), Size = UDim2.new(1, 0, 0, 22) }, box)
 	UIKit.list(head, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
 	statIcon(head, tostring(line.Label), c, 18).LayoutOrder = 1
-	text(head, "Caption", UIKit.track(tostring(line.Label)), { Size = UDim2.fromOffset(0, 22), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, LayoutOrder = 2 }, 14)
+	-- passive values are the hero's totals (hero and meta bonuses included), not the
+	-- amount this card adds: say so (CP-09)
+	local isPassive = c.Type == "PassiveNew" or c.Type == "PassiveUp"
+	text(head, "Caption", UIKit.track((isPassive and "Total " or "") .. tostring(line.Label)), { Size = UDim2.fromOffset(0, 22), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, LayoutOrder = 2 }, 14)
 	text(box, "Number", string.format('%s  <font color="%s">→</font>  <font color="%s">%s</font>', tostring(line.From), hex(P.gold_400), hex(P.fx_heal), tostring(line.To)), {
 		Position = UDim2.fromOffset(6, compact and 27 or 32),
 		Size = UDim2.new(1, -12, 0, compact and 32 or 36),
@@ -2001,7 +2007,7 @@ local function showOffer(offer)
 	levelUp.Reroll.SetEnabled(rerolls > 0)
 	levelUp.Skip.SetText(
 		"SKIP",
-		skips > 0 and string.format("%d left · +%d gold", skips, skipGold) or (skipMax > 0 and "None left this run" or "Buy skips in the Shop")
+		skips > 0 and string.format("%d left · +%d gold", skips, skipGold) or (skipMax > 0 and "None left this run" or "No skips left")
 	)
 	levelUp.Skip.SetEnabled(skips > 0)
 	local total = tonumber(offer.BatchTotal) or 1
@@ -4117,7 +4123,8 @@ local function buildResults()
 	results.Overlay = m.Overlay
 	results.Modal = m
 	local content = m.Content
-	fitModal(m, UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }))
+	results.ContentList = UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center })
+	fitModal(m, results.ContentList)
 
 	-- header: the hero's medallion, the verdict, "HERO · ARENA · STAGE", damage and score
 	local head = new("Frame", { Name = "Head", BackgroundTransparency = 1, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 92) }, content)
@@ -4167,7 +4174,7 @@ local function buildResults()
 		ElasticBehavior = Enum.ElasticBehavior.Never,
 	}, content)
 	results.Body = body
-	UIKit.list(body, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center })
+	results.BodyList = UIKit.list(body, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center })
 
 	-- 1. summary tiles: survived, enemies defeated, stages cleared, boss state
 	local grid = new("Frame", { Name = "Stats", BackgroundTransparency = 1, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 104) }, body)
@@ -4410,16 +4417,30 @@ local function buildResults()
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
 		-- phones in landscape: a smaller title, slim tiles without icons, lower buttons
+		-- (slim: tighter gaps, header, tiles, ledger and progress cards so the ledger and the
+		-- three progress bars fit above the fold on a phone in landscape)
 		local slim = UIKit.IsCompact() and not portrait
-		local titleSize = TS(slim and 34 or 44)
+		local gap = slim and 6 or 10
+		results.ContentList.Padding = UDim.new(0, gap)
+		local padY = slim and 14 or Theme.Space.XL
+		local contentPad = m.Content:FindFirstChildOfClass("UIPadding")
+		if contentPad then
+			contentPad.PaddingTop = UDim.new(0, padY)
+			contentPad.PaddingBottom = UDim.new(0, padY)
+		end
+		results.BodyList.Padding = UDim.new(0, gap)
+		local titleSize = TS(slim and 30 or 44)
 		results.Title.TextSize = titleSize
-		results.Title.Size = UDim2.new(1, 0, 0, titleSize + 6)
-		results.Arena.Position = UDim2.fromOffset(0, titleSize + 10)
-		results.Hero.Position = UDim2.fromOffset(0, titleSize + TS(13) + 18)
-		local tileH = slim and 52 or 104
+		results.Title.Size = UDim2.new(1, 0, 0, titleSize + (slim and 2 or 6))
+		results.Arena.Position = UDim2.fromOffset(0, titleSize + (slim and 4 or 10))
+		results.Hero.Position = UDim2.fromOffset(0, titleSize + TS(13) + (slim and 10 or 18))
+		local medalS = slim and 60 or 80
+		results.Medal.Size = UDim2.fromOffset(medalS, medalS)
+		results.BossBadge.Size = UDim2.fromOffset(medalS / 2, medalS / 2)
+		local tileH = slim and 48 or 104
 		results.Divider.Visible = not slim
-		local btnH = slim and 48 or Theme.Size.Button
-		local headH = math.max(84, titleSize + 6 + TS(13) + 8 + TS(15) + 8)
+		local btnH = slim and 42 or Theme.Size.Button
+		local headH = slim and math.max(medalS, titleSize + 4 + TS(13) + 6 + TS(15) + 2) or math.max(84, titleSize + 6 + TS(13) + 8 + TS(15) + 8)
 		head.Size = UDim2.new(1, 0, 0, headH)
 		results.TitleCol.Size = UDim2.fromOffset(math.max(160, math.min(480, inner - 96)), headH)
 		-- four tiles in one row (stable widths), two rows of two when very narrow
@@ -4438,7 +4459,7 @@ local function buildResults()
 				end
 				local cap = tile:FindFirstChild("Caption")
 				if cap and cap:IsA("GuiObject") then
-					cap.Position = UDim2.new(0, 2, 1, slim and -4 or -10)
+					cap.Position = UDim2.new(0, 2, 1, slim and -2 or -10)
 				end
 			end
 		end
@@ -4447,9 +4468,10 @@ local function buildResults()
 		-- the gold ledger: five cells in a row, or 3 + 2 when narrow
 		local lcols = inner >= 560 and 5 or 3
 		local cellW = math.floor((inner - 16 - (lcols - 1) * 6) / lcols)
-		local cellH = TS(20) + 6 + TS(11) + 6
+		local cellH = TS(20) + (slim and 2 or 6) + TS(11) + (slim and 2 or 6)
 		for _, cell in pairs(results.LedgerCells) do
 			cell.Frame.Size = UDim2.fromOffset(cellW, cellH)
+			cell.Caption.Position = UDim2.fromOffset(0, TS(20) + (slim and 2 or 6))
 		end
 		local lrows = math.ceil(5 / lcols)
 		local rowsH = lrows * cellH + (lrows - 1) * 6
@@ -4466,9 +4488,16 @@ local function buildResults()
 		-- progress cards: three side by side, stacked when narrow
 		local pcols = inner >= 520 and 3 or 1
 		local cardW = math.floor((inner - (pcols - 1) * 8) / pcols)
-		local cardH = 2 * TS(13) + 16 + TS(11) + 4 + 6 + 16 + 10
+		-- slim: lines 2 px closer, a 14 px bar 6 px off the bottom
+		local cpad = slim and 5 or 8
+		local cardH = slim and (cpad + 2 * TS(13) + 8 + TS(11) + 4 + 4 + 14 + 6) or (2 * TS(13) + 16 + TS(11) + 4 + 6 + 16 + 10)
 		for _, card in ipairs({ results.RunCard, results.MasteryCard, results.AccountCard }) do
 			card.Frame.Size = UDim2.fromOffset(cardW, cardH)
+			card.Title.Position = UDim2.fromOffset(12, cpad)
+			card.Level.Position = UDim2.fromOffset(12, cpad + TS(13) + (slim and 3 or 4))
+			card.Gain.Position = UDim2.fromOffset(12, cpad + 2 * TS(13) + (slim and 6 or 8))
+			card.Meter.Frame.Position = UDim2.new(0, 12, 1, slim and -6 or -10)
+			card.Meter.Frame.Size = UDim2.new(1, -24, 0, slim and 14 or 16)
 		end
 		local prow = math.ceil(3 / pcols)
 		results.Progress.Size = UDim2.new(1, 0, 0, prow * cardH + (prow - 1) * 8)
@@ -4527,9 +4556,9 @@ local function buildResults()
 			results.GoalText.Text = (oneRow and inner < 600) and results.GoalShort or results.GoalLong
 			results.Goal.Size = UDim2.new(1, 0, 0, goalH)
 		end
-		local bodyH = stackHeight(body, 10)
+		local bodyH = stackHeight(body, gap)
 		-- footer: countdown, STAY and REPORT A BUG side by side, stacked when narrow
-		local bugH = slim and 40 or 44
+		local bugH = slim and 36 or 44
 		results.Bug.Instance.Size = UDim2.fromOffset(TS(12) * 8 + 74, bugH)
 		results.Stay.Instance.Size = UDim2.fromOffset(TS(12) * 4 + 62, bugH)
 		results.Actions.Size = UDim2.fromOffset(0, bugH)
@@ -4538,13 +4567,13 @@ local function buildResults()
 		results.FooterList.Padding = UDim.new(0, stacked and 4 or 14)
 		local footH = stacked and (TS(12) + 6 + 4 + bugH) or bugH
 		results.Footer.Size = UDim2.new(1, 0, 0, footH)
-		local fixed = headH + (slim and -10 or 10) + btnH + footH + 4 * 10 + 2 * Theme.Space.XL + 8 + (goalH > 0 and goalH + 10 or 0)
+		local fixed = headH + (slim and -gap or 10) + btnH + footH + 4 * gap + 2 * padY + 8 + (goalH > 0 and goalH + gap or 0)
 		-- the scroll area may shrink a little for the pinned NEXT GOAL (the tiles still show)
 		local minRoom = math.min(goalH > 0 and 96 or 140, tileH)
-		local room = math.max(minRoom, v.Y - 24 - fixed)
+		local room = math.max(minRoom, v.Y - (slim and 12 or 24) - fixed)
 		local scrolls = bodyH > room
 		if scrolls then
-			room = math.max(minRoom, room - MORE_H - 10) -- the MORE BELOW row and its gap
+			room = math.max(minRoom, room - MORE_H - gap) -- the MORE BELOW row and its gap
 		end
 		results.More.Visible = scrolls
 		local h = math.min(bodyH, room)
@@ -4566,7 +4595,7 @@ local function buildResults()
 					break
 				end
 				best = y
-				y += 10
+				y += gap
 			end
 			if best >= minRoom then
 				h = best

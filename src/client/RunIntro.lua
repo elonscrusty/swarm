@@ -36,6 +36,7 @@ local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
+local InputPrompts = require(script.Parent.InputPrompts)
 
 local RunIntro = {}
 
@@ -320,7 +321,8 @@ local function fill(state: Configuration, stageNo: number)
 	hc.Sub.Text = string.format("%s s to charge", tostring(charge))
 	hb.Title.Text = "BEAT THE BOSS"
 	hb.Sub.Text = boss ~= "" and boss or "Then the portal opens"
-	ui.Close.Text = UIKit.track(UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and "TAP TO CLOSE" or "CLICK TO CLOSE")
+	-- the last input used (touch / mouse and keys / gamepad), COPY CP-03
+	ui.Close.Text = UIKit.track(string.upper(InputPrompts.ToClose()))
 end
 
 -- Hud's stage-banner hook: shows the card for stage `stageNo`; true = the banner is ours.
@@ -410,6 +412,10 @@ function RunIntro.Build(root: Frame, k: { [string]: any })
 		if ui.Card.Visible then
 			layout()
 		end
+	end)
+	-- the close prompt follows the last input used
+	InputPrompts.OnChanged(function()
+		ui.Close.Text = UIKit.track(string.upper(InputPrompts.ToClose()))
 	end)
 	-- tap / click inside the card closes it (the card is not Active, so the same touch
 	-- still moves the hero)

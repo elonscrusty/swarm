@@ -327,7 +327,7 @@ end
 
 local function refreshChoiceButtons()
 	if chosen then
-		ui.Next.SetText("READY", "Waiting for your team")
+		ui.Next.SetText("READY", (offer and offer.Group) and "Waiting for your team" or "Traveling...")
 		ui.Next.SetIcon("check")
 		ui.Next.SetEnabled(false)
 	else

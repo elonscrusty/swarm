@@ -1067,7 +1067,8 @@ local function updateCaravan(root: BasePart?, alive: boolean)
 		ui.CaravanBar.Size = UDim2.fromOffset(w, 50)
 		ui.CaravanBar.Position = UDim2.fromOffset(math.floor(v.X / 2), math.floor(top))
 		local away = grace >= 0
-		ui.CaravanBarTitle.Text = away and "RETURN TO THE CARAVAN!" or "DEFEND THE CARAVAN"
+		-- the caravan is a side objective (COPY CP-05): say so when the title fits
+		ui.CaravanBarTitle.Text = away and "RETURN TO THE CARAVAN!" or (w - 110 >= 250 and "OPTIONAL · DEFEND THE CARAVAN" or "OPTIONAL · DEFEND")
 		ui.CaravanBarTitle.TextColor3 = away and P.crimson_300 or P.gold_200
 		ui.CaravanBarTime.Text = away and string.format("LOST IN %d", grace) or string.format("%d s", tonumber(m:GetAttribute("Left")) or 0)
 		ui.CaravanBarTime.TextColor3 = away and P.crimson_300 or P.ivory_100

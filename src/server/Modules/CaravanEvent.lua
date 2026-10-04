@@ -68,6 +68,11 @@ local current: Caravan? = nil
 -- Model
 ------------------------------------------------------------------------------------------
 
+-- A run with one player: rewards say "you", not "every teammate" (COPY CP-02).
+local function soloRun(): boolean
+	return #ctx.RunManager.GetRunPlayers() <= 1
+end
+
 local function add(m: Model, cf: CFrame, name: string, size: Vector3, at: Vector3, color: Color3, material: Enum.Material?, shape: Enum.PartType?, rot: CFrame?): BasePart
 	local p = part({
 		Name = name,
@@ -241,7 +246,7 @@ function CaravanEvent.Build(arena, pos: Vector3, stage: number)
 	setAttr(c, "Progress", 0)
 	setAttr(c, "Left", K.HoldSeconds)
 	setAttr(c, "Grace", -1)
-	setAttr(c, "Benefit", "An item and gold for every teammate")
+	setAttr(c, "Benefit", soloRun() and "An item and gold for you" or "An item and gold for every teammate")
 	setState(c, "Waiting")
 	-- the cart blocks heroes and enemies like any prop (an axis-aligned box: it is small)
 	MapBuilder.AddCollider(arena, { Kind = "Box", Size = { 6, 6 }, Height = 4 }, CFrame.new(pos), 1)
@@ -357,7 +362,7 @@ local function start(c: Caravan)
 	recolour(c, P.crimson_300, false)
 	Fx.Ring(c.Pos, Config.Caravan.ZoneRadius, P.gold_300)
 	Fx.Sound("BossBanner")
-	ctx.RunManager.Broadcast(string.format("Defend the caravan! Hold its ring for %d seconds.", Config.Caravan.HoldSeconds), Color3.fromRGB(255, 200, 120), nil, { Id = "caravan.defend" })
+	ctx.RunManager.Broadcast(string.format("Optional: defend the caravan! Hold its ring for %d seconds.", Config.Caravan.HoldSeconds), Color3.fromRGB(255, 200, 120), nil, { Id = "caravan.defend" })
 end
 
 local function succeed(c: Caravan, line: string?)
@@ -385,7 +390,8 @@ local function succeed(c: Caravan, line: string?)
 			if granted then ctx.RunManager.HoldReward(rp, dramatic == true) end
 		end
 	end
-	ctx.RunManager.Broadcast(line or "The caravan is saved! An item and gold for everyone.", Color3.fromRGB(255, 220, 120), nil, { Id = "caravan.result" })
+	local reward = soloRun() and "An item and gold for you." or "An item and gold for everyone."
+	ctx.RunManager.Broadcast((line or ("The caravan is saved! " .. reward)) .. " Back to the portal!", Color3.fromRGB(255, 220, 120), nil, { Id = "caravan.result" })
 end
 
 local FIGHTING = { Explore = true, Boss = true, Surge = true }
@@ -398,9 +404,9 @@ local function fail(c: Caravan, phase: string)
 	recolour(c, P.stone_500, true)
 	Fx.Ring(c.Pos, 10, P.stone_500)
 	if FIGHTING[phase] then
-		ctx.RunManager.Broadcast("The caravan was overrun... nobody held its ring.", Color3.fromRGB(255, 130, 110), nil, { Id = "caravan.result" })
+		ctx.RunManager.Broadcast("The caravan was overrun... its ring was left empty. Back to the portal!", Color3.fromRGB(255, 130, 110), nil, { Id = "caravan.result" })
 	else
-		ctx.RunManager.Broadcast("The caravan was left behind... nobody held its ring.", Color3.fromRGB(255, 130, 110), nil, { Id = "caravan.result" })
+		ctx.RunManager.Broadcast("The caravan was left behind... its ring was left empty.", Color3.fromRGB(255, 130, 110), nil, { Id = "caravan.result" })
 	end
 end
 
@@ -424,7 +430,7 @@ function CaravanEvent.Step(dt: number)
 	-- the caravan's attackers too: the defence ends there and counts as won (nobody can
 	-- hold a ring with the boss on the field, and the waves it was holding off are gone).
 	if phase == "Boss" and c.StartPhase ~= "Boss" and Config.Boss.ClearMinionsOnSpawn then
-		succeed(c, "The boss scattered the raiders: the caravan escapes! An item and gold for everyone.")
+		succeed(c, "The boss scattered the raiders: the caravan escapes! " .. (soloRun() and "An item and gold for you." or "An item and gold for everyone."))
 		return
 	end
 	local K = Config.Caravan

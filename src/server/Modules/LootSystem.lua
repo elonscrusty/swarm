@@ -635,12 +635,17 @@ local function guardCount(): number
 	return math.min(G.MaxGuards, G.Guards + G.GuardsPerStage * stageNo + G.GuardsPerExtraPlayer * math.max(0, players - 1))
 end
 
+-- A run with one player: rewards say "you", not "every teammate" (COPY CP-02).
+local function soloRun(): boolean
+	return #ctx.RunManager.GetRunPlayers() <= 1
+end
+
 local function altarText(obj: Obj)
 	local st = obj.State
 	if st == "Dormant" then
 		local n = obj.GuardTotal > 0 and (obj.GuardTotal - obj.Killed) or guardCount()
 		setAttrs(obj, {
-			Benefit = "Free uncommon or legendary item for every teammate",
+			Benefit = soloRun() and "Free uncommon or legendary item" or "Free uncommon or legendary item for every teammate",
 			Tradeoff = string.format("Hold to awaken %d elite guards", n),
 			Detail = "Dormant · activate when ready",
 		})
@@ -651,7 +656,7 @@ local function altarText(obj: Obj)
 		end
 		setAttrs(obj, { Detail = string.format("Guards left: %d / %d", left, obj.GuardTotal) })
 	elseif st == "Claimable" then
-		setAttrs(obj, { Benefit = "Free: one item for every teammate", Tradeoff = "", Detail = "Unguarded: open it!" })
+		setAttrs(obj, { Benefit = soloRun() and "Free: one item for you" or "Free: one item for every teammate", Tradeoff = "", Detail = "Unguarded: open it!" })
 	elseif st == "Claimed" then
 		setAttrs(obj, { Detail = "Claimed" })
 	end
@@ -1058,7 +1063,7 @@ function LootSystem.OnGuardDown(e, killed: boolean)
 	recolourGlow(obj, P.gold_300, 0)
 	altarText(obj)
 	Fx.Ring(obj.Pos, 12, P.gold_300)
-	ctx.RunManager.Broadcast("The altar is unguarded: open it for an item each!", Color3.fromRGB(255, 220, 120), nil, { Id = "altar.unguarded" })
+	ctx.RunManager.Broadcast(soloRun() and "The altar is unguarded: open it for a free item!" or "The altar is unguarded: open it for an item each!", Color3.fromRGB(255, 220, 120), nil, { Id = "altar.unguarded" })
 end
 
 ------------------------------------------------------------------------------------------
@@ -1250,7 +1255,7 @@ local function claimAltar(rp, obj: Obj)
 	end
 	Fx.Ring(obj.Pos, 16, P.gold_300)
 	Fx.Sound("Chest")
-	ctx.RunManager.Broadcast(rp.Player.DisplayName .. " opened the altar: an item for everyone!", Color3.fromRGB(255, 220, 120), nil, { Id = "altar.opened" })
+	ctx.RunManager.Broadcast(soloRun() and "You opened the altar: a free item!" or (rp.Player.DisplayName .. " opened the altar: an item for everyone!"), Color3.fromRGB(255, 220, 120), nil, { Id = "altar.opened" })
 end
 
 local function useRune(rp, obj: Obj)
