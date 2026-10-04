@@ -244,7 +244,7 @@ local ok, err = S.runMain(function()
 			names[c:FindFirstChild("Name").Text] = true
 		end
 	end
-	check("build details list weapons, passives and items", hudEls.Build.Visible == true and rows == 3 and names["Whip"] and names["Might"] and names["Storm Charm"])
+	check("build details list weapons, passives and items", hudEls.Build.Visible == true and rows == 3 and names[preview.shared("WeaponData").Weapons.Whip.Name] and names["Might"] and names["Storm Charm"])
 	Hud.SetCovered(true)
 	check("a covering decision closes the build details", hudEls.Build.Visible == false and Hud.BuildOpen() == false)
 	Hud.SetCovered(false)

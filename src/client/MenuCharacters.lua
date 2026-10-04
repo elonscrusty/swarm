@@ -613,7 +613,7 @@ local bought: { [string]: { [string]: number } } = {} -- upgrades bought on this
 			local effectLine = effectStep(heroId, id, level, maxed)
 if locked then
 	-- why the next rank is locked (MetaUpgradeData.RequiredMastery / HeroCap)
-	effectLine = string.format("Rank %d needs %s mastery %d (now %d)", level + 1, heroName, MetaUpgradeData.RequiredMastery(id, level + 1), mastery)
+	effectLine = string.format("Rank %d needs mastery %d (now %d)", level + 1, MetaUpgradeData.RequiredMastery(id, level + 1), mastery)
 end
 text(row, "Small", effectLine, {
 				Name = "Effect", Position = UDim2.fromOffset(52, 5 + lineH + 2), Size = UDim2.fromOffset(textW, rowH - lineH - 12),

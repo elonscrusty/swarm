@@ -111,8 +111,8 @@ local METAL = Enum.Material.Metal
 
 -- great helm: bucket, gold brow band, dark T visor
 local function greatHelm(head, model, color)
-	hatPart(head, model, { Name = "Helm", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.95, 1.95, 1.95), Color = color, Material = METAL, CastShadow = true }, CFrame.new(0, -0.62, 0) * UP)
-	hatPart(head, model, { Name = "HelmTop", Shape = Enum.PartType.Ball, Size = Vector3.new(1.9, 0.75, 1.85), Color = color, Material = METAL }, CFrame.new(0, 0.32, 0))
+	hatPart(head, model, { Name = "Helm", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.95, 1.95, 1.95), Color = color, CastShadow = true }, CFrame.new(0, -0.62, 0) * UP)
+	hatPart(head, model, { Name = "HelmTop", Shape = Enum.PartType.Ball, Size = Vector3.new(1.9, 0.75, 1.85), Color = color }, CFrame.new(0, 0.32, 0))
 	hatPart(head, model, { Name = "HelmBand", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.16, 2.02, 2.02), Color = Palette.gold_500, Material = METAL }, CFrame.new(0, -0.28, 0) * UP)
 	hatPart(head, model, { Name = "VisorH", Size = Vector3.new(1.1, 0.17, 0.12), Color = DARK }, CFrame.new(0, -0.6, -0.94))
 	hatPart(head, model, { Name = "VisorV", Size = Vector3.new(0.17, 0.62, 0.12), Color = DARK }, CFrame.new(0, -0.98, -0.94))
@@ -210,7 +210,7 @@ ModelBuilder.HatShapes = {
 	end,
 	-- the Engineer's steel helmet with a gold ridge and a lamp
 	Miner = function(head, model, color, accent)
-		hatPart(head, model, { Name = "Helm", Shape = Enum.PartType.Ball, Size = Vector3.new(2.0, 1.25, 2.0), Color = color, Material = METAL, CastShadow = true }, CFrame.new(0, -0.22, 0))
+		hatPart(head, model, { Name = "Helm", Shape = Enum.PartType.Ball, Size = Vector3.new(2.0, 1.25, 2.0), Color = color, CastShadow = true }, CFrame.new(0, -0.22, 0))
 		hatPart(head, model, { Name = "HelmBrim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 2.3, 2.3), Color = color, Material = METAL }, CFrame.new(0, -0.58, 0) * UP)
 		hatPart(head, model, { Name = "HelmTrim", Size = Vector3.new(0.3, 0.3, 1.85), Color = accent, Material = METAL }, CFrame.new(0, 0.32, 0))
 		hatPart(head, model, { Name = "HelmLamp", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.36, 0.56, 0.56), Color = accent, Material = METAL }, CFrame.new(0, -0.18, -0.98) * CFrame.Angles(0, math.rad(90), 0))
@@ -334,7 +334,7 @@ ModelBuilder.ClassGear = {
 	Knight = function(rig: Rig, c)
 		for _, arm in ipairs({ rig.LeftArm, rig.RightArm }) do
 			local s = arm.Position.X < 0 and -1 or 1
-			gear(arm, rig.Model, { Name = "Pauldron", Shape = Enum.PartType.Ball, Size = Vector3.new(1.5, 0.95, 1.4), Color = c.Metal, Material = METAL, CastShadow = true }, CFrame.new(s * 0.06, 0.9, 0))
+			gear(arm, rig.Model, { Name = "Pauldron", Shape = Enum.PartType.Ball, Size = Vector3.new(1.5, 0.95, 1.4), Color = c.Metal, CastShadow = true }, CFrame.new(s * 0.06, 0.9, 0))
 			gear(arm, rig.Model, { Name = "PauldronRim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 1.55, 1.45), Color = c.Gold, Material = METAL }, CFrame.new(s * 0.06, 0.5, 0) * UP)
 		end
 		gear(rig.Torso, rig.Model, { Name = "Faulds", Size = Vector3.new(2.4, 0.8, 1.55), Color = c.MetalDark, Material = METAL }, CFrame.new(0, -1.4, 0))
@@ -436,12 +436,12 @@ ModelBuilder.ClassGear = {
 	Engineer = function(rig: Rig, c)
 		for _, arm in ipairs({ rig.LeftArm, rig.RightArm }) do
 			local s = arm.Position.X < 0 and -1 or 1
-			gear(arm, rig.Model, { Name = "Pauldron", Shape = Enum.PartType.Ball, Size = Vector3.new(1.3, 0.8, 1.2), Color = c.Metal, Material = METAL, CastShadow = true }, CFrame.new(s * 0.05, 0.8, 0))
+			gear(arm, rig.Model, { Name = "Pauldron", Shape = Enum.PartType.Ball, Size = Vector3.new(1.3, 0.8, 1.2), Color = c.Metal, CastShadow = true }, CFrame.new(s * 0.05, 0.8, 0))
 			gear(arm, rig.Model, { Name = "PadTrim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 1.3, 1.25), Color = c.Gold, Material = METAL }, CFrame.new(s * 0.05, 0.48, 0) * UP)
 		end
 		gear(rig.Torso, rig.Model, { Name = "Kerchief", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 2.2, 1.6), Color = c.Accent }, CFrame.new(0, 1.05, 0) * UP)
 		gear(rig.Head, rig.Model, { Name = "FaceBeard", Wedge = true, Size = Vector3.new(1.3, 1.1, 0.55), Color = Palette.clay_500 }, CFrame.new(0, -0.85, -0.62) * CFrame.Angles(0, 0, math.rad(180)))
-		gear(rig.Torso, rig.Model, { Name = "Pack", Size = Vector3.new(1.1, 1.8, 0.9), Color = c.Metal, Material = METAL, CastShadow = true }, CFrame.new(0, 0.2, 1.05))
+		gear(rig.Torso, rig.Model, { Name = "Pack", Size = Vector3.new(1.1, 1.8, 0.9), Color = c.Metal, CastShadow = true }, CFrame.new(0, 0.2, 1.05))
 		gear(rig.Torso, rig.Model, { Name = "PackPipe", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.9, 0.34, 0.34), Color = c.MetalDark, Material = METAL }, CFrame.new(0.36, 1.25, 1.2) * UP)
 		for _, x in ipairs({ -0.7, 0.75 }) do
 			gear(rig.Torso, rig.Model, { Name = "Gear", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.14, 0.55, 0.55), Color = c.Gold, Material = METAL }, CFrame.new(x, -0.95, -0.78) * CFrame.Angles(0, math.rad(90), 0))
@@ -604,7 +604,9 @@ function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts:
 		return p
 	end
 	local R = ModelBuilder.Rig
-	local torso = body("Torso", Vector3.new(2.3, 2.4, 1.4), Vector3.new(0, 3.3, 0), c.Torso, armour)
+	-- big plates (torso, pauldrons, helm shells) are SmoothPlastic like the meshes: Metal only on
+	-- small trims, gauntlets and blades, so no large hot sheen (docs/overhaul/ART_VOCABULARY.md)
+	local torso = body("Torso", Vector3.new(2.3, 2.4, 1.4), Vector3.new(0, 3.3, 0), c.Torso)
 	local head = body("Head", ModelBuilder.HeadSize, ModelBuilder.HeadCenter, c.Skin)
 	local armColor = armour and c.MetalDark or ((characterId == "Rogue" or characterId == "Ranger") and c.Cloth2 or c.Cloth)
 	local leftArm = body("Left Arm", Vector3.new(0.62, 1.75, 0.65), Vector3.new(-1.43, 3.05, 0), armColor, armour)
@@ -627,7 +629,7 @@ function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts:
 		gear(arm, model, { Name = "Hand", Size = Vector3.new(0.58, 0.56, 0.6), Color = armour and c.Metal or (GLOVED[characterId] and LEATHER or c.Skin), Material = armour and METAL or nil }, CFrame.new(s * 0.07, -0.93, -0.04))
 	end
 	for _, leg in ipairs({ leftLeg, rightLeg }) do
-		gear(leg, model, { Name = "Boot", Size = Vector3.new(0.84, 0.5, 1.15), Color = armour and c.Metal or LEATHER, Material = armour and METAL or nil }, CFrame.new(0, -1.0, -0.14))
+		gear(leg, model, { Name = "Boot", Size = Vector3.new(0.84, 0.5, 1.15), Color = armour and c.Metal or LEATHER }, CFrame.new(0, -1.0, -0.14))
 	end
 	gear(torso, model, { Name = "Belt", Size = Vector3.new(2.36, 0.22, 1.46), Color = LEATHER }, CFrame.new(0, -0.95, 0))
 	gear(torso, model, { Name = "Buckle", Size = Vector3.new(0.36, 0.28, 0.08), Color = c.Gold, Material = METAL }, CFrame.new(0, -0.95, -0.76))

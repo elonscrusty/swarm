@@ -960,7 +960,15 @@ local function flash(id: number)
 		return
 	end
 	if not flashing[body] then
-		body.Color = WHITE
+		-- a partial brighten like EnemyRenderer's flashColors (never pure white: the body
+		-- keeps its contour): grunts 0.6, elites 0.45, bosses 0.32, scaled by luminance
+		local base = body:GetAttribute("BaseColor")
+		local c: Color3 = typeof(base) == "Color3" and base or body.Color
+		local typeId = body:GetAttribute("Type")
+		local def = type(typeId) == "string" and EnemyData.Enemies[typeId] or nil
+		local k = (def and def.IsBoss == true) and 0.32 or (body:GetAttribute("Elite") == true and 0.45 or 0.6)
+		local lum = 0.299 * c.R + 0.587 * c.G + 0.114 * c.B
+		body.Color = c:Lerp(FX.Hit, k * (0.3 + 0.7 * lum))
 	end
 	flashing[body] = os.clock() + Config.Enemies.HitFlashSeconds
 end
@@ -2881,6 +2889,7 @@ type Deco = {
 	Chev: { BasePart }?,
 	MarkerStyle: string,
 	Aura: Ring?,
+	AuraEdge: Ring?,
 	AuraFill: BasePart?,
 	Motes: { BasePart }?,
 	AuraR: number,
@@ -3160,6 +3169,9 @@ local function hideAura(deco: Deco)
 	if deco.Aura then
 		hideRing(deco.Aura)
 	end
+	if deco.AuraEdge then
+		hideRing(deco.AuraEdge)
+	end
 	if deco.AuraFill then
 		deco.AuraFill.CFrame = PARK
 	end
@@ -3176,6 +3188,7 @@ end
 local function updateAura(deco: Deco, root: BasePart, radius: number, evo: boolean, now: number)
 	if not deco.Aura then
 		deco.Aura = newRing(28)
+		deco.AuraEdge = newRing(28)
 		deco.AuraFill = newPart("Cylinder")
 		local motes = {}
 		for i = 1, K.AURA_MOTES do
@@ -3191,7 +3204,13 @@ local function updateAura(deco: Deco, root: BasePart, radius: number, evo: boole
 	local pos = root.Position
 	local ringObj = deco.Aura :: Ring
 	styleRing(ringObj, radius, 0.16, color, 0.45, 0.62)
-	placeRing(ringObj, pos.X, FLOOR_Y + 0.1, pos.Z, evo and -now * 0.8 or now * 0.3)
+	local spin = evo and -now * 0.8 or now * 0.3
+	placeRing(ringObj, pos.X, FLOOR_Y + 0.1, pos.Z, spin)
+	-- a thin dark under-edge on the outside of each dash: the pale ring alone vanishes on
+	-- snow and ice (docs/overhaul/ART_VOCABULARY.md: pale things carry one darker element)
+	local edge = deco.AuraEdge :: Ring
+	styleRing(edge, radius + 0.13, 0.1, evo and P.slate_700 or P.slate_600, 0.55, 0.62)
+	placeRing(edge, pos.X, FLOOR_Y + 0.095, pos.Z, spin)
 	local fill = deco.AuraFill :: BasePart
 	if deco.AuraR ~= radius then
 		deco.AuraR = radius
@@ -3265,6 +3284,7 @@ local function updateDecos(now: number, dt: number)
 		if not other.Parent then
 			destroyRing(deco.Marker)
 			destroyRing(deco.Aura)
+			destroyRing(deco.AuraEdge)
 			for _, part in ipairs({ deco.MarkerFill, deco.AuraFill } :: { BasePart? }) do
 				if part then
 					part:Destroy()

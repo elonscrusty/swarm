@@ -41,7 +41,7 @@ ambient animation, Settings = the existing modal):
 Left: SOLO / DUO / TRIO, a rule line that states who starts and what the size means (solo starts at
 once; Duo/Trio without a party = a countdown others in the server can JOIN; a party plays its own
 size; a member's START becomes READY / UNREADY), START. Right (scrolls if it does not fit): HERO
-(hero + skin, opens Characters), WORLD ("Playing here · next: Desert unlocks at best stage 5"),
+(hero + skin, opens Characters), WORLD ("Current · next: Desert at best stage 5"),
 DIFFICULTY (locked tier named with what clears it), CURSES, ENDLESS (switch with "No portal win:
 stages go on. Own leaderboard."), DAILY CHALLENGE ("One scored try · used when it starts · resets in
 Xh" / "Scored try used · practice only"), LAST RUN + RETRY. Members / fixed-size parties cannot pick
@@ -53,7 +53,7 @@ before (StartRun, SetDifficulty, SetEndless, Party Ready).
   you play the Knight until you select another" (and "previewing skin X" for a skin preview).
 - Hero upgrade list starts with "RANGER'S UPGRADES · only for the Ranger · paid with gold".
 - Locked ranks explain themselves with the real rule (`MetaUpgradeData.RequiredMastery`):
-  "Rank 7 needs Ranger mastery 4 (now 3)". The mastery block states purchased rank vs cap vs max:
+  "Rank 7 needs mastery 4 (now 3)" (the list header names the hero). The mastery block states purchased rank vs cap vs max:
   max mastery 10, each mastery level = 2 more ranks of every stat upgrade up to its own max, the
   trait needs mastery 2/4/6..., plus the current stat and trait caps (`HeroCap`).
 - One cumulative line "Bought this visit: Max HP LV 3 · Might LV 2" under the rows; rows update from

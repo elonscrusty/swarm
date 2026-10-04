@@ -395,8 +395,17 @@ local function weaponIconId(id: string, evolved: boolean): string
 	return id
 end
 
+-- Columns the ability panel shows: the owned weapons / passives plus one free "+" slot
+-- (at least 3), up to the real slot count. A fresh run's tray is short and grows as the
+-- build fills; the build details always state the full capacity ("WEAPONS 2 / 6").
+local function shownSlots(): number
+	local cap = math.max((inventory and inventory.WeaponSlots) or Config.Slots.Weapons, (inventory and inventory.PassiveSlots) or Config.Slots.Passives)
+	local owned = math.max(inventory and inventory.Weapons and #inventory.Weapons or 0, inventory and inventory.Passives and #inventory.Passives or 0)
+	return math.clamp(owned + 1, math.min(3, cap), cap)
+end
+
 local function invSize(): (number, number, number)
-	local slots = math.max((inventory and inventory.WeaponSlots) or Config.Slots.Weapons, (inventory and inventory.PassiveSlots) or Config.Slots.Passives)
+	local slots = shownSlots()
 	local w = INV.Pad * 2 + INV.Label + slots * INV.Tile + math.max(0, slots - 1) * INV.Gap + INV.Build
 	local h = INV.Pad * 2 + INV.Tile * 2 + INV.RowGap
 	return w, h, slots
@@ -599,6 +608,8 @@ setBuildOpen = function(on: boolean)
 	end
 	ui.BuildOpen = on
 	ui.Build.Visible = on
+	-- routine headlines wait while the details are open (critical ones still show)
+	UIState.SetHold("Build", on)
 	ui.BuildButton.BackgroundTransparency = on and 0.55 or 1
 	ui.BuildChevron.Rotation = on and 180 or 0
 	if on then
@@ -1231,7 +1242,8 @@ function Hud.SetInventory(inv: { [string]: any }?)
 		end
 	end
 	local maxW = WeaponData.MaxLevel
-	for i = 1, (inv.WeaponSlots or Config.Slots.Weapons) do
+	local shown = shownSlots()
+	for i = 1, math.min(shown, inv.WeaponSlots or Config.Slots.Weapons) do
 		local wp = inv.Weapons[i]
 		local tile
 		if wp then
@@ -1242,7 +1254,7 @@ function Hud.SetInventory(inv: { [string]: any }?)
 		end
 		tile.LayoutOrder = i
 	end
-	for i = 1, (inv.PassiveSlots or Config.Slots.Passives) do
+	for i = 1, math.min(shown, inv.PassiveSlots or Config.Slots.Passives) do
 		local p = inv.Passives[i]
 		local tile
 		if p then
@@ -1974,7 +1986,13 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	UIState.SetRenderer("Headline", renderHeadline)
 	buildBuffChip(frame)
 	buildBar(frame)
-	buildDetails(frame)
+	-- the build details sit in their own layer over the HUD, the banner layer and the world
+	-- markers (the player opened them on purpose); shown and hidden with the HUD
+	local detailLayer = new("Frame", { Name = "HUDBuild", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Active = false, ZIndex = Theme.Z.Hud + 4 }, root)
+	frame:GetPropertyChangedSignal("Visible"):Connect(function()
+		detailLayer.Visible = frame.Visible
+	end)
+	buildDetails(detailLayer)
 	buildStatus(frame)
 	buildVignette(fxGui)
 	for _, name in ipairs({ "HP", "MaxHP", "Shield" }) do

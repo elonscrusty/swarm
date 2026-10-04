@@ -1676,6 +1676,7 @@ type CliffStyle = {
 	Masonry: boolean?, -- Ruins: square-cut blocks, merlons on top, no tilt
 	Seam: Color3?, -- Lava: a glowing crack at the foot of some chunks
 	Face: { any }?, -- { kit rock, palette }: the big low-poly rock in front of each tall chunk
+	RimCap: Color3?, -- camera-side rim cap (default: Cap half-way to the rock, a step off the floor)
 }
 
 local CLIFF_STEP = 46 -- studs between chunk centres on the tall sides
@@ -1705,7 +1706,7 @@ end
 -- One rock block whose inner face is `inner` studs out from the centre line, plus its cap.
 -- cap: cap thickness share (nil = 1, 0 = no cap). calm: small turn / tilt (the camera-side
 -- rim and the corner steps, where a tilted end would stick up at the seam).
-local function cliffBlock(arena: Arena, style: CliffStyle, along: Vector2, out: Vector2, t: number, inner: number, len: number, depth: number, hgt: number, color: Color3, shadow: boolean, cap: number?, calm: boolean?): CFrame
+local function cliffBlock(arena: Arena, style: CliffStyle, along: Vector2, out: Vector2, t: number, inner: number, len: number, depth: number, hgt: number, color: Color3, shadow: boolean, cap: number?, calm: boolean?, capColor: Color3?): CFrame
 	local yawDeg = style.Masonry and 0 or jitter(calm and 2.5 or 7)
 	local tilt = style.Masonry and 0 or (calm and 1.2 or 3)
 	-- a turned / tilted block pokes in by its half length * sin(yaw) and half height * sin(tilt)
@@ -1718,7 +1719,7 @@ local function cliffBlock(arena: Arena, style: CliffStyle, along: Vector2, out: 
 		return cf
 	end
 	local capT = (style.CapThick or 0.8) * (cap or 1)
-	deco(arena.Decor, { Name = "CliffCap", Size = Vector3.new(len - 0.5, capT, depth - 0.5), CFrame = cf * CFrame.new(0, (hgt + 1) / 2 + capT / 2 - 0.25, 0), Color = style.Cap, CastShadow = false })
+	deco(arena.Decor, { Name = "CliffCap", Size = Vector3.new(len - 0.5, capT, depth - 0.5), CFrame = cf * CFrame.new(0, (hgt + 1) / 2 + capT / 2 - 0.25, 0), Color = capColor or style.Cap, CastShadow = false })
 	return cf
 end
 
@@ -1749,7 +1750,7 @@ local function cliffShoulder(arena: Arena, style: CliffStyle, side: number)
 	local mid = math.max(rim + 3, tall * 0.55)
 	local low = rim + 1.4
 	cliffBlock(arena, style, along, out, h - CORNER_SET + 7, h + 0.6, 18, CLIFF_DEPTH, mid, pick(style.Rock), true, nil, true)
-	cliffBlock(arena, style, along, out, h + 20, h + 0.6, 22, CLIFF_DEPTH - 2, low, pick(style.Rock), false, 0.8, true)
+	cliffBlock(arena, style, along, out, h + 20, h + 0.6, 22, CLIFF_DEPTH - 2, low, pick(style.Rock), false, 0.8, true, style.RimCap or mix(style.Cap, style.Rock[1], 0.5))
 	-- a rock on the upper step, half against the tall cliff's end face
 	cornerRock(arena, style, out.X * (h + 12.5), h - CORNER_SET + 1, mid - 1.3, math.max(tall - mid, 3) * 0.95)
 end
@@ -1761,6 +1762,8 @@ local function cliffs(arena: Arena, style: CliffStyle)
 	for side = 1, 4 do
 		arena.CliffWave[side] = { rng:NextNumber(0, TAU), rng:NextNumber(0, TAU) }
 	end
+	-- the rim cap sits a step off the floor's value so the edge reads as an edge from above
+	local rimCap = style.RimCap or mix(style.Cap, style.Rock[1], 0.5)
 	local sides = { Vector2.new(0, -1), Vector2.new(0, 1), Vector2.new(-1, 0), Vector2.new(1, 0) }
 	for side, out in ipairs(sides) do
 		local along = (side <= 2) and Vector2.new(1, 0) or Vector2.new(0, 1)
@@ -1782,7 +1785,7 @@ local function cliffs(arena: Arena, style: CliffStyle)
 				-- long, calm, overlapping rim stones with a thin cap in the biome's ground
 				-- colour (moss, snow, sand, ash): a bank, not a row of loose grey slabs
 				local len = rng:NextNumber(31, 35)
-				cliffBlock(arena, style, along, out, t, h + rng:NextNumber(0.3, 1.0), len, rng:NextNumber(6, 9), hgt, color, false, 0.7, true)
+				cliffBlock(arena, style, along, out, t, h + rng:NextNumber(0.3, 1.0), len, rng:NextNumber(6, 9), hgt, color, false, 0.7, true, rimCap)
 			else
 				local len = rng:NextNumber(48, 55)
 				local s0 = t - len / 2
@@ -2584,13 +2587,29 @@ local function rimDecor(arena: Arena, x: number, z: number, r0: number, r1: numb
 	end
 end
 
--- Hazard pools: kit mesh (hazard radius from the catalog note, at scale 1) per kind.
-local HAZARD_KIT: { [string]: { Model: string, Radius: number } } = {
-	Mud = { Model = "Mud_Pool", Radius = 3.6 },
-	Quicksand = { Model = "Quicksand", Radius = 3.6 },
-	Ice = { Model = "Frozen_Pond", Radius = 4.4 },
-	Lava = { Model = "Lava_Pool", Radius = 3.6 },
+-- Hazard pools: kit mesh per kind. The hazard circle is the mesh's Fill piece (the mud /
+-- sand / ice / lava surface inside the rim): centred on it and as wide as its mean half
+-- size, so where you slow, slip or burn is where the surface is drawn (within about 0.3
+-- studs at scale 1; the old fixed radius ran up to 0.5 studs into the rim on one side).
+-- Radius is the fallback when the catalog has no such piece.
+local HAZARD_KIT: { [string]: { Model: string, Radius: number, Fill: string } } = {
+	Mud = { Model = "Mud_Pool", Radius = 3.6, Fill = "Mud" },
+	Quicksand = { Model = "Quicksand", Radius = 3.6, Fill = "Sand" },
+	Ice = { Model = "Frozen_Pond", Radius = 4.4, Fill = "Ice" },
+	Lava = { Model = "Lava_Pool", Radius = 3.6, Fill = "Lava" },
 }
+
+-- Scale-1 radius and centre offset (model space x, z) of a hazard kind's fill surface.
+local function hazardFill(kind: string): (number, number, number)
+	local kit = HAZARD_KIT[kind]
+	local entry = kitEntry(kit.Model)
+	for _, piece in ipairs((entry and entry.Pieces) or {}) do
+		if piece.Name == kit.Fill and piece.Offset and piece.Size then
+			return (piece.Size[1] + piece.Size[3]) / 4, piece.Offset[1], piece.Offset[3]
+		end
+	end
+	return kit.Radius, 0, 0
+end
 local HAZARD_GLOW_TAG = "SwarmHazardGlow" -- the client (TerrainFx) makes these breathe
 
 --[[
@@ -2600,7 +2619,8 @@ local HAZARD_GLOW_TAG = "SwarmHazardGlow" -- the client (TerrainFx) makes these 
 ]]
 local function hazardPool(arena: Arena, kind: string, x: number, z: number, s: number, yawDeg: number, palette: Pal?): Model?
 	local kit = HAZARD_KIT[kind]
-	local r = kit.Radius * s
+	local r0, ox, oz = hazardFill(kind)
+	local r = r0 * s
 	if math.sqrt(x * x + z * z) - r < arena.Clear + 10 then
 		warn(string.format("[MapBuilder] %s pool at (%.0f, %.0f) skipped: too close to the spawn", kind, x, z))
 		return nil
@@ -2609,7 +2629,11 @@ local function hazardPool(arena: Arena, kind: string, x: number, z: number, s: n
 		warn(string.format("[MapBuilder] %s pool at (%.0f, %.0f) touches a path", kind, x, z))
 	end
 	local pos = W(arena, x, z)
-	local model = prop(arena.Model, kit.Model, CFrame.new(pos) * yawCF(yawDeg), s, palette, { shadow = false })
+	-- the mesh is shifted so its fill surface is centred on the hazard point; the pivot
+	-- stays there too (the minimap and the hazard outlines draw the circle at the pivot)
+	local at = CFrame.new(pos) * yawCF(yawDeg)
+	local model = prop(arena.Model, kit.Model, at * CFrame.new(-ox * s, 0, -oz * s), s, palette, { shadow = false })
+	model.WorldPivot = at
 	model.Name = "Hazard_" .. kind
 	model:SetAttribute("HazardKind", kind)
 	model:SetAttribute("HazardRadius", r)
@@ -2624,7 +2648,7 @@ local function lavaPool(arena: Arena, x: number, z: number, s: number, yawDeg: n
 	if not model then
 		return
 	end
-	local r = HAZARD_KIT.Lava.Radius * s
+	local r = model:GetAttribute("HazardRadius") or HAZARD_KIT.Lava.Radius * s
 	local glow = disc(arena.Model, "HazardGlow", W(arena, x, z, 0.05), r + 1.1, P.lava_500, 0.06)
 	glow.Material = NEON
 	glow.Transparency = 0.5
@@ -2698,7 +2722,7 @@ end
 -- No lilypads or reeds: those mark the impassable water of the bog pond.
 local function mudPool(arena: Arena, x: number, z: number, s: number, yawDeg: number)
 	if hazardPool(arena, "Mud", x, z, s, yawDeg) then
-		local r = HAZARD_KIT.Mud.Radius * s
+		local r = hazardFill("Mud") * s
 		rimDecor(arena, x, z, r + 1.2, r + 3, 3, SWAMP_POOL_RIM)
 		if rng:NextNumber() < 0.5 then
 			-- (draws kept from the old lilypad so the seeded layout after it is unchanged)
@@ -2951,7 +2975,7 @@ end
 
 local function icePond(arena: Arena, x: number, z: number, s: number, yawDeg: number)
 	if hazardPool(arena, "Ice", x, z, s, yawDeg) then
-		local r = HAZARD_KIT.Ice.Radius * s
+		local r = hazardFill("Ice") * s
 		rimDecor(arena, x, z, r + 2, r + 4, 3, ICE_RIM)
 	end
 end
@@ -3141,6 +3165,7 @@ local function buildSnow(arena: Arena)
 		Rock = { mix(P.stone_400, P.slate_500, 0.35), mix(P.stone_500, P.slate_600, 0.3), mix(P.ice_300, P.slate_400, 0.55) },
 		Cap = P.snow_100,
 		CapThick = 1.6,
+		RimCap = P.snow_100, -- fresh snow on the rim too (the floor is a darker packed snow)
 		Height = { 13, 21 },
 		South = { 2.4, 3.8 },
 		Face = { "Snow_Rock", { Stone = mix(P.stone_400, P.slate_500, 0.35), Stone2 = mix(P.stone_500, P.slate_600, 0.3), Snow = P.snow_100 } },
@@ -3212,7 +3237,7 @@ end
 
 local function quicksand(arena: Arena, x: number, z: number, s: number, yawDeg: number)
 	if hazardPool(arena, "Quicksand", x, z, s, yawDeg) then
-		local r = HAZARD_KIT.Quicksand.Radius * s
+		local r = hazardFill("Quicksand") * s
 		rimDecor(arena, x, z, r + 1.8, r + 3.5, 3, SAND_RIM)
 	end
 end

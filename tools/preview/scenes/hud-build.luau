@@ -39,6 +39,9 @@ if not early then
 end
 C.settle(2.5)
 if preview.args.build ~= "off" and not early then
+	-- opened a moment after the portal reveal headline (a headline already on screen would
+	-- finish under the panel; new routine ones wait while it is open: UIState hold "Build")
+	C.settle(3)
 	local Hud = preview.client("Hud")
 	Hud.SetBuildOpen(true)
 	C.settle(0.6)

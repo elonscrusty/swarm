@@ -142,7 +142,7 @@ local function arenaText(profile: { [string]: any }?): (string, string)
 		end
 	end
 	if nextDef then
-		return title, string.format("Playing here · next: %s unlocks at best stage %d", nextDef.DisplayName, nextNeed)
+		return title, string.format("Current · next: %s at best stage %d", nextDef.DisplayName, nextNeed)
 	end
 	return title, (arena and arena.Hint) or "Face the swarm"
 end

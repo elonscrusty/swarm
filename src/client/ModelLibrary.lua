@@ -1371,8 +1371,10 @@ local function wisp(b, core: Color3, halo: Color3)
 end
 
 local function vortexDisc(b, outer: Color3, inner: Color3, core: Color3, r: number)
-	b.add("Cylinder", Vector3.new(0.08, r * 2, r * 2), outer, CYL_UP, { Material = SHOT_NEON, Transparency = 0.78 })
-	b.add("Cylinder", Vector3.new(0.1, r * 1.1, r * 1.1), inner, CFrame.new(0, 0.03, 0) * CYL_UP, { Material = SHOT_NEON, Transparency = 0.55 })
+	-- the wide discs are plain (a big Neon surface blows out on snow, ART_VOCABULARY); the
+	-- Neon stays in the small core and the swirl arms
+	b.add("Cylinder", Vector3.new(0.08, r * 2, r * 2), outer, CYL_UP, { Transparency = 0.8 })
+	b.add("Cylinder", Vector3.new(0.1, r * 1.1, r * 1.1), inner, CFrame.new(0, 0.03, 0) * CYL_UP, { Transparency = 0.6 })
 	b.add("Cylinder", Vector3.new(0.12, r * 0.36, r * 0.36), core, CFrame.new(0, 0.06, 0) * CYL_UP, { Material = SHOT_NEON })
 	for i = 1, 4 do
 		local a = i * math.pi / 2
