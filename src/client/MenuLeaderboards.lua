@@ -311,10 +311,10 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		end
 		-- you
 		ui.YouName.Text = player.DisplayName
-		local note
-		ui.YouRank.Text, ui.YouValue.Text, note = MenuLeaderboards.YouText(board, d)
-		ui.YouNote.Text = note
-		ui.YouNote.Visible = note ~= ""
+		local youNote
+		ui.YouRank.Text, ui.YouValue.Text, youNote = MenuLeaderboards.YouText(board, d)
+		ui.YouNote.Text = youNote
+		ui.YouNote.Visible = youNote ~= ""
 		MenuLeaderboards._layout()
 	end
 

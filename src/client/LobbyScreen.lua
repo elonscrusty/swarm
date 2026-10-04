@@ -44,7 +44,6 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
-local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
 local CurseData = require(Shared:WaitForChild("CurseData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
@@ -79,6 +78,10 @@ local current = "Home"
 local SCREEN_ORDER = { Home = 1, Play = 1.5, Characters = 2, Upgrades = 3, Arenas = 3.5, More = 3.8, Stats = 4, Journal = 4.5, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9 }
 -- where BACK goes from each screen (anything else goes home)
 local PARENT = { Arenas = "Play", Curses = "Play", Daily = "More", Party = "More", Ranks = "More", Stats = "More", Track = "More", Journal = "More" }
+-- the screen each one was opened from this time (home's WORLDS / DAILY / PARTY / the
+-- account pill go back home; the PLAY sheet's WORLD row goes back to the sheet)
+local cameFrom: { [string]: string } = {}
+local goingBack = false
 local screens: { [string]: any } = {}
 local shownGold: number? = nil
 local lastStatus = ""
@@ -116,10 +119,6 @@ local function toast(str: string, color: Color3?)
 	if host.Toast then
 		host.Toast(str, color)
 	end
-end
-
-local function owned(id: string): boolean
-	return profile ~= nil and profile.OwnedCharacters[id] == true
 end
 
 local function selectedChar(): string
@@ -1017,10 +1016,12 @@ local STAGGER = 0.03
 local function homeEntrance()
 	homeAmbient(true)
 	UIAnim.Pop(ui.Logo, 0, 0.9)
-	UIAnim.Pop(ui.Tiles, STAGGER * 2, 0.85)
-	UIAnim.Pop(ui.HeroPill, STAGGER * 3, 0.85)
-	UIAnim.Pop(ui.PlayBtn.Instance, STAGGER * 4, 0.8)
-	UIAnim.Pop(ui.ModeSelect.Instance, STAGGER * 5, 0.85)
+	UIAnim.Pop(ui.Caption, STAGGER, 0.9)
+	UIAnim.Pop(ui.AccountBtn, STAGGER * 2, 0.85)
+	UIAnim.Pop(ui.PartyBtn.Instance, STAGGER * 2, 0.85)
+	UIAnim.Pop(ui.PlayBtn.Instance, STAGGER * 3, 0.8)
+	UIAnim.Pop(ui.Nav, STAGGER * 4, 0.85)
+	UIAnim.Pop(ui.MoreBtn.Instance, STAGGER * 5, 0.85)
 end
 
 -- Slides to "Home" | "Play" | "More" | "Characters" | "Upgrades" | "Stats" | "Journal" |
@@ -1055,6 +1056,9 @@ function LobbyScreen.Show(name: string, arg: any?)
 	local direction = SCREEN_ORDER[name] >= SCREEN_ORDER[current] and 1 or -1
 	UIAnim.SwapScreens(ui[current], ui[name], direction, math.min(0.2, Config.UI.ScreenSlideSeconds))
 	local from = current
+	if not goingBack and name ~= "Home" then
+		cameFrom[name] = from
+	end
 	current = name
 	-- the screen being left stops its idle loops (OnHide)
 	local left = screens[from]
@@ -1115,6 +1119,7 @@ function LobbyScreen.SetVisible(on: boolean)
 			ui[name].Visible = false
 		end
 		current = "Home"
+		table.clear(cameFrom)
 		ui.Dim.BackgroundTransparency = 1
 		UIAnim.SwapScreens(nil, ui.Home, 1, Config.UI.ScreenSlideSeconds)
 		-- scale-only entrance: relayout() owns the chip's Position
@@ -1129,24 +1134,52 @@ function LobbyScreen.SetVisible(on: boolean)
 	end
 end
 
--- The hero pill and the hero on the dais: the selected character.
+-- "K N I G H T  ·  G O L D  T R I M": the caption's letter-spaced words.
+local function spacedCaps(str: string): string
+	local words = {}
+	for w in string.gmatch(string.upper(str), "%S+") do
+		table.insert(words, (string.sub((string.gsub(w, "(.)", "%1 ")), 1, -2)))
+	end
+	return table.concat(words, "   ")
+end
+
+-- The caption, the account pill's badge and the hero on the dais: the selected hero and
+-- its equipped skin (Default reads as the hero's name only).
+local captionHero = ""
 function LobbyScreen.RefreshHero()
-	if not ui.HeroName then
+	if not ui.CaptionText then
 		return
 	end
 	local id = selectedChar()
 	local def = CharacterData.Characters[id] or CharacterData.Characters[CharacterData.Default]
-	ui.HeroName.Text = string.upper(def.Name)
-	-- Hero Mastery: the hero's level and the XP into it
-	local heroes = profile and profile.Heroes
-	local h = type(heroes) == "table" and heroes[def.Id or id] or nil
-	local level, into, need = MetaUpgradeData.MasteryFor(type(h) == "table" and h.XP or 0)
-	ui.HeroLevel.Text = "LV " .. level
-	local maxed = level >= Config.HeroMastery.MaxLevel
-	ui.HeroBar.Set(maxed and 1 or (need > 0 and math.clamp(into / need, 0, 1) or 0))
-	if current ~= "Characters" then
-		Showcase.Show(id, skinOf(id))
+	local skinId = skinOf(def.Id or id)
+	local skin = skinId ~= "Default" and CharacterData.Skins[skinId] or nil
+	local line = spacedCaps(def.Name) .. (skin and ("   ·   " .. spacedCaps(skin.Name)) or "")
+	if ui.CaptionText.Text ~= line then
+		ui.CaptionText.Text = line
 	end
+	ui.Caption:SetAttribute("Hero", def.Id or id)
+	ui.Caption:SetAttribute("Skin", skinId)
+	if captionHero ~= (def.Id or id) then
+		captionHero = def.Id or id
+		for _, c in ipairs(ui.AccountHero:GetChildren()) do
+			c:Destroy()
+		end
+		Icons.Character(ui.AccountHero, captionHero, { Size = 40, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	end
+	if current ~= "Characters" then
+		Showcase.Show(id, skinId)
+	end
+end
+
+-- The account pill's level and gold (account level: MenuTrack / AccountData).
+local function refreshAccount(p: { [string]: any }): boolean
+	local level = MenuTrack.Account(p)
+	local lv = "LV " .. tostring(level)
+	local width = ui.AccountLevel.Text ~= lv or #UIKit.formatNumber(p.Gold or 0) ~= #UIKit.formatNumber(shownGold or 0)
+	ui.AccountLevel.Text = lv
+	UIAnim.CountTo(ui.AccountGold, shownGold or p.Gold, p.Gold, UIKit.formatNumber, 0.7)
+	return width
 end
 
 function LobbyScreen.SetJoined(on: boolean)
@@ -1180,6 +1213,7 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 		return
 	end
 	UIAnim.CountTo(ui.Gold.Value, shownGold or p.Gold, p.Gold, UIKit.formatNumber, 0.7)
+	local resize = refreshAccount(p)
 	if shownGold and shownGold ~= p.Gold and ui.Frame.Visible then
 		-- the coin icon pops when gold changes (a buy, a run's haul)
 		for _, ch in ipairs(ui.Gold.Frame:GetChildren()) do
@@ -1189,6 +1223,9 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 		end
 	end
 	shownGold = p.Gold
+	if resize then
+		relayout()
+	end
 	-- the worn dais ring (level track) under the hero
 	Showcase.SetRing(type(p.Ring) == "string" and p.Ring or "")
 	LobbyScreen.RefreshHero()
@@ -1304,7 +1341,7 @@ function LobbyScreen.Update(_dt: number?)
 		UIAnim.Pop(kind ~= "Modes" and ui.Queue or ui.PlayBtn.Instance, 0, 0.8)
 	end
 
-	-- PARTY: invites on the MORE tile, a member's READY pill, the party's mode
+	-- PARTY: the button's size and invite badge, a member's READY toggle, the party's mode
 	local party = MenuParty.Summary()
 	if party.Count ~= lastPartyCount then
 		lastPartyCount = party.Count
@@ -1312,9 +1349,14 @@ function LobbyScreen.Update(_dt: number?)
 		if partyMode then
 			MenuPlay.SetMode(partyMode)
 		end
+		ui.PartyBtn.SetText(party.Count > 0 and string.format("Party %d/%d", party.Count, party.Max) or "Party")
+		ui.PartyBtn.SetSelected(party.Count > 0)
 	end
 	local showReady = party.Count > 0 and not party.Leader and kind == "Modes"
-	ui.ReadyBtn.Instance.Visible = showReady
+	if ui.ReadyBtn.Instance.Visible ~= showReady then
+		ui.ReadyBtn.Instance.Visible = showReady
+		relayout()
+	end
 	local readyText = party.MyReady and "UNREADY" or "READY"
 	if showReady and ui.ReadyBtn.Instance:GetAttribute("Shown") ~= readyText then
 		ui.ReadyBtn.Instance:SetAttribute("Shown", readyText)
@@ -1323,12 +1365,12 @@ function LobbyScreen.Update(_dt: number?)
 		ui.ReadyBtn.SetIcon(not party.MyReady and "check" or nil)
 	end
 	local badge = party.Invites > 0 and tostring(party.Invites) or ""
-	if ui.MoreBadge.Text ~= badge then
+	if ui.PartyBadge.Text ~= badge then
 		NoticeDots.SetInvites(party.Invites)
-		ui.MoreBadge.Text = badge
-		ui.MoreBadge.Visible = badge ~= ""
+		ui.PartyBadge.Text = badge
+		ui.PartyBadge.Visible = badge ~= ""
 		if badge ~= "" then
-			UIAnim.Pop(ui.MoreBadge, 0, 0.4) -- a new invite: the badge pops in
+			UIAnim.Pop(ui.PartyBadge, 0, 0.4) -- a new invite: the badge pops in
 		end
 	end
 	LobbyScreen._modeText()
@@ -1376,7 +1418,13 @@ function LobbyScreen.Init(h: { [string]: any })
 	local ctx = {
 		Host = h,
 		Back = function()
-			LobbyScreen.Show(PARENT[current] or "Home")
+			local to = cameFrom[current] or PARENT[current] or "Home"
+			if to == current or not SCREEN_ORDER[to] then
+				to = "Home"
+			end
+			goingBack = true
+			LobbyScreen.Show(to)
+			goingBack = false
 		end,
 		Toast = toast,
 		Current = function(): string

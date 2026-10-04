@@ -64,6 +64,23 @@ local voices: { Voice } = {}
 local duckUntil = 0
 local ducked = false
 
+-- Defaults for mix rules not (yet) in Config.Audio, so Config stays untouched here.
+--   Reserve: voices only critical sounds (priority >= CriticalPriority) may use, so a boss
+--            telegraph or the low-HP heartbeat never finds the mix full of pickups.
+--   DuckAlso: extra groups turned down (x volume) while a Warning / Boss sound plays.
+local RESERVE = A.Reserve or 3
+local CRITICAL_PRIORITY = A.CriticalPriority or 4
+local DUCK_ALSO: { [string]: number } = A.Duck.Also or { Pickup = 0.6, Player = 0.8 }
+local function duckScale(cat: string): number
+	if not ducked then
+		return 1
+	end
+	if cat == A.Duck.Target then
+		return A.Duck.Volume
+	end
+	return DUCK_ALSO[cat] or 1
+end
+
 -- crowd ceiling: start times of recent Combat / Pickup sounds, current fade per group
 local crowdStarts: { number } = {}
 local crowdLevel: { [string]: number } = {}
@@ -166,13 +183,15 @@ end
 local function claimVoice(category: string, priority: number): boolean
 	local catMax = A.Categories[category].MaxVoices or 3
 	local inCat = 0
+	-- non-critical sounds leave RESERVE voices free for warnings
+	local mixMax = priority >= CRITICAL_PRIORITY and A.MaxVoices or math.max(1, A.MaxVoices - RESERVE)
 	for _, v in ipairs(voices) do
 		if v.Category == category then
 			inCat += 1
 		end
 	end
 	local catFull = inCat >= catMax
-	if not catFull and #voices < A.MaxVoices then
+	if not catFull and #voices < mixMax then
 		return true
 	end
 	local victim: number? = nil
@@ -206,17 +225,23 @@ local function setDuck(on: boolean)
 		return
 	end
 	ducked = on
-	local target = groups[A.Duck.Target]
-	if target then
-		local base = (A.Categories[A.Duck.Target].Volume or 1) * (crowdLevel[A.Duck.Target] or 1)
-		if crowdTween[A.Duck.Target] then
-			crowdTween[A.Duck.Target]:Cancel()
+	local targets = { A.Duck.Target }
+	for cat in pairs(DUCK_ALSO) do
+		table.insert(targets, cat)
+	end
+	for _, cat in ipairs(targets) do
+		local target = groups[cat]
+		if target then
+			local base = (A.Categories[cat].Volume or 1) * (crowdLevel[cat] or 1)
+			if crowdTween[cat] then
+				crowdTween[cat]:Cancel()
+			end
+			-- kept in crowdTween so the next crowd update cancels it (two tweens on one group
+			-- would fight over its volume)
+			local t = TweenService:Create(target, TweenInfo.new(on and 0.08 or 0.4), { Volume = base * duckScale(cat) })
+			crowdTween[cat] = t
+			t:Play()
 		end
-		-- kept in crowdTween so the next crowd update cancels it (two tweens on one group
-		-- would fight over its volume)
-		local t = TweenService:Create(target, TweenInfo.new(on and 0.08 or 0.4), { Volume = on and base * A.Duck.Volume or base })
-		crowdTween[A.Duck.Target] = t
-		t:Play()
 	end
 end
 

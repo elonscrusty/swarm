@@ -35,6 +35,7 @@ local menuPart: BasePart? = nil
 local nextMenuSearch = 0
 local menuBlend = 0 -- 0 = follow camera, 1 = lobby menu camera (smooth switch)
 local menuTilt = 0 -- menu framing offset (screen fraction), eased toward MenuHeroY
+local menuPan = 0 -- sideways framing offset (screen fraction), eased toward MenuHeroX
 
 -- The "MenuCamera" part of the lobby, searched again every 2 s until found.
 local function findMenuCamera(): BasePart?
@@ -206,7 +207,13 @@ function CameraController.Init()
 				local heroY = tonumber(cam:GetAttribute("MenuHeroY")) or 0.5
 				menuTilt += (math.clamp(0.5 - heroY, -0.25, 0.25) - menuTilt) * math.min(1, dt * 5)
 				local tilt = math.atan(2 * menuTilt * math.tan(math.rad(cam.FieldOfView) / 2))
-				local goal = menu * CFrame.Angles(-tilt, 0, 0) * sway
+				-- MenuHeroX (0 = left edge, 0.5 = centre): the title screen puts the hero on the
+				-- dais right of centre, so the shot turns left by the matching angle
+				local heroX = tonumber(cam:GetAttribute("MenuHeroX")) or 0.5
+				menuPan += (math.clamp(heroX - 0.5, -0.25, 0.25) - menuPan) * math.min(1, dt * 5)
+				local aspect = cam.ViewportSize.X / math.max(1, cam.ViewportSize.Y)
+				local pan = math.atan(2 * menuPan * math.tan(math.rad(cam.FieldOfView) / 2) * aspect)
+				local goal = menu * CFrame.Angles(0, pan, 0) * CFrame.Angles(-tilt, 0, 0) * sway
 				menuBlend = math.min(1, menuBlend + dt * 2)
 				if menuBlend >= 1 then
 					cam.CFrame = goal

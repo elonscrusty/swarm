@@ -375,7 +375,24 @@ local function positions(arena)
 	-- pockets: an obstacle near a wall makes a channel; the hero stands flush against the
 	-- wall right behind it (the wall / obstacle join), enemies must come round the obstacle
 	local pockets = 0
-	for _, ob in ipairs(arena.Obstacles) do
+	if args.obstacles == "on" then
+		for _, ob in ipairs(arena.Obstacles) do
+			local r = (ob.Kind == "Box") and math.max(ob.MaxX - ob.MinX, ob.MaxZ - ob.MinZ) / 2 or ob.Radius
+			local gap = h - math.max(math.abs(ob.Pos.X - c.X), math.abs(ob.Pos.Z - c.Z)) - r
+			if gap < 30 then
+				preview.log(string.format("obstacle %s at (%.0f, %.0f) r=%.1f wall gap %.1f", ob.Kind, ob.Pos.X, ob.Pos.Z, r, gap))
+			end
+		end
+	end
+	local near = table.clone(arena.Obstacles)
+	local function wallGap(ob)
+		local r = (ob.Kind == "Box") and math.max(ob.MaxX - ob.MinX, ob.MaxZ - ob.MinZ) / 2 or ob.Radius
+		return h - math.max(math.abs(ob.Pos.X - c.X), math.abs(ob.Pos.Z - c.Z)) - r
+	end
+	table.sort(near, function(a, b)
+		return wallGap(a) < wallGap(b)
+	end)
+	for _, ob in ipairs(near) do
 		if pockets >= 3 then
 			break
 		end
@@ -383,11 +400,11 @@ local function positions(arena)
 		local r = (ob.Kind == "Box") and math.max(ob.MaxX - ob.MinX, ob.MaxZ - ob.MinZ) / 2 or ob.Radius
 		local gapX, gapZ = h - math.abs(px) - r, h - math.abs(pz) - r
 		local p, name, dir = nil, nil, nil
-		if gapX > 2.4 and gapX < 14 and math.abs(pz) < h - 24 then
+		if gapX > 2.4 and gapX < 20 and math.abs(pz) < h - 8 then
 			local sx = math.sign(px)
 			p = Vector3.new(c.X + sx * (h - PLAYER_R), c.Y, ob.Pos.Z)
 			name, dir = "pocket-" .. (sx > 0 and "E" or "W") .. math.floor(pz), Vector3.new(-sx, 0, 0)
-		elseif gapZ > 2.4 and gapZ < 14 and math.abs(px) < h - 24 then
+		elseif gapZ > 2.4 and gapZ < 20 and math.abs(px) < h - 8 then
 			local sz = math.sign(pz)
 			p = Vector3.new(ob.Pos.X, c.Y, c.Z + sz * (h - PLAYER_R))
 			name, dir = "pocket-" .. (sz > 0 and "S" or "N") .. math.floor(px), Vector3.new(0, 0, -sz)

@@ -54,6 +54,9 @@ export type Handle = {
 	Hide: (() -> ())?, -- suspend it (hide without resolving)
 	Blocks: boolean?, -- thumbstick + world interaction off while shown
 	Covers: boolean?, -- HUD / minimap / item strip hidden while shown
+	-- a sub-panel opened from another panel (bug report over results, items over the run
+	-- menu): it owns input but leaves the panel under it on screen instead of suspending it
+	Stacks: boolean?,
 }
 
 type Entry = { Name: string, Priority: number, Handle: Handle, Shown: boolean, ShownAt: number, OpenedAt: number }
@@ -83,21 +86,45 @@ end
 
 local function recompute(reshow: string?)
 	local top = topName()
-	-- suspend first, then show the owner (no frame with two panels)
+	-- what is on screen: the highest ordinary panel (the base) plus any stacking sub-panel
+	-- above it; everything else is suspended
+	local base, baseP = nil, -math.huge
 	for name, e in pairs(open) do
-		if name ~= top and e.Shown then
+		if e.Handle.Stacks ~= true and (e.Priority > baseP or (e.Priority == baseP and base ~= nil and name < base)) then
+			base, baseP = name, e.Priority
+		end
+	end
+	local function onScreen(name: string, e: Entry): boolean
+		if name == top or name == base then
+			return true
+		end
+		return e.Handle.Stacks == true and e.Priority > baseP
+	end
+	-- suspend first, then show (no frame with two competing panels)
+	for name, e in pairs(open) do
+		if e.Shown and not onScreen(name, e) then
 			e.Shown = false
 			call(e.Handle.Hide)
 		end
 	end
-	if top then
-		local e = open[top]
-		if not e.Shown then
-			e.Shown = true
-			e.ShownAt = clock()
-			call(e.Handle.Show)
-		elseif reshow == top then
-			call(e.Handle.Show)
+	local order = {}
+	for name in pairs(open) do
+		table.insert(order, name)
+	end
+	table.sort(order, function(a, b)
+		return open[a].Priority > open[b].Priority
+	end)
+	for i = #order, 1, -1 do -- lowest first, so a sub-panel is drawn after its parent
+		local name = order[i]
+		local e = open[name]
+		if onScreen(name, e) then
+			if not e.Shown then
+				e.Shown = true
+				e.ShownAt = clock()
+				call(e.Handle.Show)
+			elseif reshow == name then
+				call(e.Handle.Show)
+			end
 		end
 	end
 	if top ~= owner then
@@ -143,7 +170,7 @@ function UIState.IsOpen(name: string): boolean
 	return open[name] ~= nil
 end
 
--- Open and currently the owner (not suspended).
+-- Open and on screen (not suspended).
 function UIState.IsShown(name: string): boolean
 	local e = open[name]
 	return e ~= nil and e.Shown
@@ -411,7 +438,7 @@ export type Notice = {
 	Id: string,
 	Text: string,
 	Color: any?, -- Color3
-	Class: string?, -- "Critical" | "Info"
+	Class: string?, -- "Critical" | "Info" | "Player" (answer to the player's own action)
 	Seconds: number?, -- on screen (default 3)
 	Expire: number?, -- may wait this long (default Info 6, Critical 3)
 	-- filled in by UIState
@@ -507,6 +534,10 @@ function UIState.QueuedNotices(): { Notice }
 end
 
 local function noticeHeld(item: Notice): boolean
+	-- an answer to the player's own action shows at once (toasts sit above panels)
+	if item.Class == "Player" then
+		return false
+	end
 	if UIState.Covered() or open.Travel then
 		return true
 	end

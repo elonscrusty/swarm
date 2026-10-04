@@ -959,7 +959,7 @@ Config.Sounds = {
 	Swing = { Id = "rbxassetid://110381677719056", Volume = 0.09, Category = "Player", MinGap = 0.18, PitchVar = 0.12 }, -- SWARM SFX Swing: airy whoosh
 	Throw = { Id = "rbxassetid://110381677719056", Volume = 0.06, Category = "Player", MinGap = 0.25, Pitch = 1.25, PitchVar = 0.1 }, -- SWARM SFX Swing, higher
 	Hurt = { Id = "rbxassetid://103629944065626", Volume = 0.32, Category = "Player", MinGap = 0.3, PitchVar = 0.06 }, -- SWARM SFX Hurt: punch + grunt
-	Heartbeat = { Id = "rbxassetid://106832514643917", Volume = 0.16, Category = "Player", MinGap = 0.4, PitchVar = 0 }, -- SWARM SFX Heartbeat: lub-dub
+	Heartbeat = { Id = "rbxassetid://106832514643917", Volume = 0.16, Category = "Player", Priority = 5, MinGap = 0.4, PitchVar = 0 }, -- SWARM SFX Heartbeat: lub-dub
 	Death = { Id = "rbxassetid://106619962538253", Volume = 0.36, Category = "Player", PitchVar = 0, DuckMusic = 2.4 }, -- SWARM SFX Death: falling minor chord
 	LevelUp = { Id = "rbxassetid://131826585081742", Volume = 0.46, Category = "Player", MinGap = 0.4, PitchVar = 0, DuckMusic = 1.4 }, -- SWARM SFX LevelUp: C-major arpeggio
 	Revive = { Id = "rbxassetid://97435297484172", Volume = 0.36, Category = "Player", MinGap = 0.4, PitchVar = 0, DuckMusic = 1.6 }, -- SWARM SFX Revive: A-major rise
@@ -982,7 +982,7 @@ Config.Sounds = {
 	Lunge = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.3, Category = "Warning", MinGap = 0.2, Pitch = 0.8, PitchVar = 0.06, World = true },
 	-- the Queen
 	BossRoar = { Id = "rbxassetid://135802539734782", Volume = 0.5, Category = "Boss", MinGap = 1, PitchVar = 0.04, DuckMusic = 2.2 }, -- SWARM SFX BossRoar: growl + sub hit
-	WaveHorn = { Id = "rbxassetid://135802539734782", Volume = 0.42, Category = "UI", MinGap = 2, Pitch = 1.35, PitchVar = 0, DuckMusic = 1.2 }, -- the BossRoar sound pitched up: a wave is coming (StageUI)
+	WaveHorn = { Id = "rbxassetid://135802539734782", Volume = 0.42, Category = "UI", Priority = 5, MinGap = 2, Pitch = 1.35, PitchVar = 0, DuckMusic = 1.2 }, -- the BossRoar sound pitched up: a wave is coming (StageUI)
 	BossWarn = { Id = "rbxassetid://113336786346138", Volume = 0.35, Category = "Boss", MinGap = 0.4, Pitch = 1.1, PitchVar = 0.04, World = true }, -- SWARM SFX BossWhoosh
 	BossSummon = { Id = "rbxasset://sounds/splat.wav", Volume = 0.4, Category = "Boss", MinGap = 0.4, Pitch = 0.6, PitchVar = 0.05, World = true },
 	-- the rotating bosses (Telegraphs plays these for their new warning shapes)
@@ -993,12 +993,21 @@ Config.Sounds = {
 	BossEmerge = { Id = "rbxassetid://114145211136875", Volume = 0.22, Category = "Boss", MinGap = 0.4, Pitch = 0.8, PitchVar = 0.05, World = true }, -- SWARM SFX BossSlam, lower
 	BossBanner = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.45, Category = "Boss", MinGap = 0.5, Pitch = 0.6, PitchVar = 0.03, World = true },
 	BurrowWarn = { Id = "rbxasset://sounds/splat.wav", Volume = 0.26, Category = "Warning", MinGap = 0.25, Pitch = 0.7, PitchVar = 0.08, World = true },
+	-- an elite spawns (server Fx batch name "EliteSpawn"): the BossWhoosh id, low and short
+	EliteSpawn = { Id = "rbxassetid://113336786346138", Volume = 0.3, Category = "Warning", MinGap = 1.2, Pitch = 0.85, PitchVar = 0.03, DuckMusic = 0.8 }, -- SWARM SFX BossWhoosh
 	HealPulse = { Id = "rbxassetid://133320151991833", Volume = 0.06, Category = "Combat", MinGap = 0.4, Pitch = 0.75, PitchVar = 0.05, World = true }, -- SWARM SFX Tip, lower
 	-- interface
 	Click = { Id = "rbxassetid://130072904039232", Volume = 0.38, Category = "UI", MinGap = 0.06, PitchVar = 0.04 }, -- SWARM SFX Click: soft wooden tick
 	Toggle = { Id = "rbxassetid://78864064038524", Volume = 0.27, Category = "UI", MinGap = 0.06, PitchVar = 0.02 }, -- SWARM SFX Toggle: two-tone tick
 	Tip = { Id = "rbxassetid://133320151991833", Volume = 0.11, Category = "UI", MinGap = 0.6, PitchVar = 0 }, -- SWARM SFX Tip: two soft bells
 	ReelTick = { Id = "rbxassetid://111197240897473", Volume = 0.12, Category = "UI", MinGap = 0.04, PitchVar = 0.05 }, -- SWARM SFX ReelTick
+	-- UI states (existing ids re-pitched; callers: UIKit.Sound / audio.Play by name)
+	CardAppear = { Id = "rbxassetid://105588297309015", Volume = 0.1, Category = "UI", MinGap = 0.25, Pitch = 1.3, PitchVar = 0.02 }, -- compact reward card slides in (SWARM SFX Item, higher, quiet)
+	ChoiceOpen = { Id = "rbxassetid://133320151991833", Volume = 0.2, Category = "UI", MinGap = 0.5, Pitch = 1.15, PitchVar = 0, DuckMusic = 0.6 }, -- upgrade choice opens (SWARM SFX Tip)
+	ChoicePick = { Id = "rbxassetid://78864064038524", Volume = 0.3, Category = "UI", MinGap = 0.15, Pitch = 1.2, PitchVar = 0.02 }, -- a card is picked (SWARM SFX Toggle)
+	ResultsLose = { Id = "rbxassetid://106619962538253", Volume = 0.3, Category = "UI", MinGap = 1, Pitch = 0.9, PitchVar = 0, DuckMusic = 2.4 }, -- results after a loss (SWARM SFX Death, softer)
+	PartyJoin = { Id = "rbxassetid://105588297309015", Volume = 0.22, Category = "UI", MinGap = 0.4, Pitch = 0.9, PitchVar = 0.02 }, -- a duo partner joins the menu party (SWARM SFX Item)
+	TitleStart = { Id = "rbxassetid://130072904039232", Volume = 0.34, Category = "UI", MinGap = 0.3, Pitch = 0.8, PitchVar = 0.02 }, -- PLAY on the title (SWARM SFX Click, deeper)
 	-- music (APMOfficial, free in any Roblox experience; looped, crossfaded and ducked under
 	-- big moments by Audio.lua). Swap: paste another Creator Store id as "rbxassetid://<id>"
 	-- (docs/AUDIO.md lists candidates to audition); "" = silent.

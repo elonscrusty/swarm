@@ -46,6 +46,7 @@ local LobbyScreen = require(script.Parent.LobbyScreen)
 local DevPanel = require(script.Parent.DevPanel)
 local DevInbox = require(script.Parent.DevInbox)
 local BugReportUI = require(script.Parent.BugReportUI)
+local TravelOverlay = require(script.Parent.TravelOverlay)
 local Showcase = require(script.Parent.Showcase)
 local ClientSettings = require(script.Parent.ClientSettings)
 local ClientPerformance = require(script.Parent.ClientPerformance)
@@ -53,6 +54,7 @@ local TeamUI = require(script.Parent.TeamUI)
 local MiniMap = require(script.Parent.MiniMap)
 local Tutorial = require(script.Parent.Tutorial)
 local RunIntro = require(script.Parent.RunIntro)
+local UIState = require(script.Parent.UIState)
 local Cosmetics = require(script.Parent.Cosmetics)
 local CurseData = require(Shared:WaitForChild("CurseData"))
 local ItemData = require(Shared:WaitForChild("ItemData"))
@@ -86,41 +88,50 @@ local function noFlashes(): boolean
 	return ClientSettings.Flashes() or ClientPerformance.Reduced()
 end
 
+--[[
+	Overlay ownership goes through UIState (docs/overhaul/UI_STATE_CONTRACT.md): every
+	panel opened with show() is a primary; only the highest-priority open one is visible,
+	the others are suspended (hidden, not resolved) until it closes. The shown owner decides
+	whether the thumbstick works (Blocks) and whether the HUD hides under it (Covers).
+	`blocking` here only holds the non-panel blocks (the lobby menu).
+]]
+local function refreshControls()
+	if deps.MobileControls then
+		deps.MobileControls.SetEnabled(next(blocking) == nil and not UIState.Blocking())
+	end
+end
+
 local function setBlocking(name: string, on: boolean)
 	if on then
 		blocking[name] = true
 	else
 		blocking[name] = nil
 	end
-	if deps.MobileControls then
-		deps.MobileControls.SetEnabled(next(blocking) == nil)
-	end
+	refreshControls()
 end
 
--- Modals that cover the HUD while open (Hud.SetCovered hides it under them).
+-- Modals that cover the HUD while they own the screen (Hud.SetCovered hides it under them).
 local COVERS_HUD = { LevelUp = true, Reward = true, Pause = true, Revive = true, Results = true, Portal = true, Items = true, BugReport = true }
-local covering: { [string]: true } = {}
-local function setCovering(name: string, on: boolean)
-	if not COVERS_HUD[name] or (covering[name] == true) == on then
-		return
-	end
-	if on then
-		covering[name] = true
-	else
-		covering[name] = nil
-	end
-	Hud.SetCovered(next(covering) ~= nil)
-	MiniMap.SetCovered(next(covering) ~= nil)
-	LootUI.SetCovered(next(covering) ~= nil)
+local overlays: { [string]: GuiObject } = {} -- name -> its overlay (UIState.Audit, setCovering)
+local function applyOwner()
+	local covered = UIState.Covered()
+	Hud.SetCovered(covered)
+	MiniMap.SetCovered(covered)
+	LootUI.SetCovered(covered)
+	refreshControls()
 end
+UIState.OnOwnerChanged(function()
+	applyOwner()
+	LootUI.Release() -- a panel took input: a chest / shrine hold in progress lets go
+end)
 
--- Opening: the dimmer fades in and the panel pops up with a little overshoot.
-local function show(overlay: GuiObject, name: string, blocks: boolean)
+-- Makes an overlay visible: the dimmer fades in and the panel pops up with a little
+-- overshoot (only when it was hidden: a re-show keeps it still).
+local function revealOverlay(overlay: GuiObject)
+	local wasVisible = overlay.Visible and not overlay:GetAttribute("Hiding")
 	overlay:SetAttribute("AnimToken", (tonumber(overlay:GetAttribute("AnimToken")) or 0) + 1)
 	overlay:SetAttribute("Hiding", nil)
-	local wasVisible = overlay.Visible
 	overlay.Visible = true
-	setCovering(name, true)
 	if not wasVisible then
 		local dim = overlay:FindFirstChild("Dim")
 		if dim and dim:IsA("GuiObject") then
@@ -131,17 +142,64 @@ local function show(overlay: GuiObject, name: string, blocks: boolean)
 			UIAnim.Pop(panel, 0, 0.82)
 		end
 	end
-	if blocks then
-		setBlocking(name, true)
+end
+
+local function primaryHandle(overlay: GuiObject, name: string, blocks: boolean, covers: boolean): UIState.Handle
+	return {
+		Blocks = blocks,
+		Covers = covers,
+		Show = function()
+			revealOverlay(overlay)
+		end,
+		Hide = function()
+			-- suspended under a higher panel: out of sight at once, nothing resolved
+			overlay:SetAttribute("AnimToken", (tonumber(overlay:GetAttribute("AnimToken")) or 0) + 1)
+			overlay:SetAttribute("Hiding", nil)
+			overlay.Visible = false
+		end,
+	}
+end
+
+-- Opening a panel: it becomes an open primary in UIState and shows when it owns the
+-- screen. The chest reward overlay starts as automatic feedback (the mini reel, never an
+-- input owner); setCovering("Reward", true) turns its full reveal into a primary.
+local function show(overlay: GuiObject, name: string, blocks: boolean)
+	overlays[name] = overlay
+	if name == "Reward" then
+		revealOverlay(overlay)
+		UIState.SetFeedback(true)
+		return
 	end
+	UIState.Open(name, primaryHandle(overlay, name, blocks, COVERS_HUD[name] == true))
+	applyOwner() -- a re-show may change what the owner blocks
+end
+
+-- The reward reel switching between its mini (feedback, the run goes on) and full (a
+-- primary that covers the HUD) presentation.
+local function setCovering(name: string, on: boolean)
+	local overlay = overlays[name]
+	if not overlay then
+		return
+	end
+	if on then
+		UIState.SetFeedback(false)
+		UIState.Open(name, primaryHandle(overlay, name, false, true))
+	else
+		UIState.Close(name)
+		UIState.SetFeedback(overlay.Visible)
+	end
+	applyOwner()
 end
 
 -- Closing: the panel shrinks away, then the overlay hides (unless reopened meanwhile).
 -- Safe to call every frame: a close that is already animating is left to finish
 -- (restarting it each frame used to keep the results screen on forever).
 local function hide(overlay: GuiObject, name: string)
-	setBlocking(name, false)
-	setCovering(name, false)
+	if name == "Reward" then
+		UIState.SetFeedback(false)
+	end
+	UIState.Close(name)
+	applyOwner()
 	if not overlay.Visible or overlay:GetAttribute("Hiding") then
 		return
 	end
@@ -284,7 +342,7 @@ end
 ------------------------------------------------------------------------------------------
 
 local toastList: Frame
-local banner: { [string]: any } = {}
+local placeToasts: () -> () -- the notice lane's spot (below)
 
 -- Server colours are bright; bring them into the palette.
 local function accentOf(color: Color3?): Color3
@@ -303,49 +361,48 @@ local function buildToasts()
 		ZIndex = Theme.Z.Toast,
 	}, root)
 	UIKit.list(toastList, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center })
-
-	-- big banner: serif title on a soft dark band that fades out at both ends
-	local band = new("Frame", {
-		Name = "Banner",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.new(1, 0, 0, 120),
-		BackgroundColor3 = C.Backdrop,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ZIndex = Theme.Z.Toast,
-		Visible = false,
-	}, root)
-	new("UIGradient", {
-		Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 1),
-			NumberSequenceKeypoint.new(0.3, 0.45),
-			NumberSequenceKeypoint.new(0.7, 0.45),
-			NumberSequenceKeypoint.new(1, 1),
-		}),
-	}, band)
-	banner.Band = band
-	banner.Text = UIKit.Role(band, "Display", "", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.45),
-		Size = UDim2.new(1, -40, 0, TS(Theme.Type.Display.Size) + 8),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextStrokeTransparency = 0.5,
-		ZIndex = 2,
-	})
-	-- a long banner ("THE PORTAL IS REVEALED!") shrinks to the band instead of running off it
-	banner.Text.TextScaled = true
-	new("UITextSizeConstraint", { MinTextSize = TS(18), MaxTextSize = TS(Theme.Type.Display.Size) }, banner.Text)
-	banner.Divider = UIKit.Divider(band, 260, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.45, TS(Theme.Type.Display.Size) / 2 + 8), ZIndex = 2 })
 	onRelayout(function()
 		local v = virtualSize()
-		local inRun = player:GetAttribute("InRun") == true
-		toastList.Position = UDim2.fromOffset(v.X / 2, inRun and (Hud.TopBottom() + 6) or (insets.Top + 70))
 		toastList.Size = UDim2.fromOffset(math.min(560, v.X - 32), 260)
-		band.Position = UDim2.fromOffset(v.X / 2, v.Y * 0.36)
+		-- phones: two notices at most, so the stack never reaches the hero
+		UIState.SetMaxNotices(UIKit.IsCompact() and 2 or 3)
+		placeToasts()
 	end)
 end
 
-local bannerToken = 0
+--[[
+	The notice lane's slot (UIState): under the top HUD, below any reserved top-centre bar
+	(the caravan defence bar) and, while a centre headline shows, below the headline.
+	Called every frame; only writes when the spot changes.
+]]
+function placeToasts()
+	if not toastList or not root then
+		return
+	end
+	local v = virtualSize()
+	local y
+	if player:GetAttribute("InRun") == true then
+		y = Hud.TopBottom() + 6
+		for _, g in ipairs(Hud.CentreBars()) do
+			if g.Visible and g.Parent then
+				local gh = g.Size.Y.Offset
+				local bottom = g.Position.Y.Offset + (1 - g.AnchorPoint.Y) * gh
+				y = math.max(y, bottom + 6)
+			end
+		end
+		local hb = Hud.HeadlineBottom()
+		if hb then
+			y = math.max(y, hb + 6)
+		end
+	else
+		y = insets.Top + 70
+	end
+	local at = UDim2.fromOffset(math.floor(v.X / 2), math.floor(y))
+	if toastList.Position ~= at then
+		toastList.Position = at
+	end
+end
+
 local toastOrder = 0
 
 -- Icon for a toast by what it is about (portal / surge / boss / loot ...); nil = a dot.
@@ -373,53 +430,25 @@ local function toastIcon(str: string): string?
 	return nil
 end
 
+--[[
+	A client message. Client callers are answers to the player's own action ("Not enough
+	gold yet", a bug report sent): class "Player", shown even under a panel. `big` sends it
+	to the centre headline lane instead. Server messages come through UIState.FromServer.
+]]
 function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 	if big then
-		bannerToken += 1
-		local token = bannerToken
-		local band = banner.Band :: Frame
-		local label = banner.Text :: TextLabel
-		-- a banner still fading out: stop its tweens, or they would fade this one too
-		for _, tw in ipairs(banner.Fades or {}) do
-			tw:Cancel()
-		end
-		banner.Fades = nil
-		label.Text = str
-		label.TextColor3 = Theme.Tint(color or P.gold_300, 0.45, 0.92)
-		label.TextTransparency = 0
-		label.TextStrokeTransparency = 0.5
-		band.BackgroundTransparency = 0.25
-		band.Visible = true
-		-- slams in: big, then settles, with a ring and sparks behind the words
-		UIAnim.Pop(label, 0, (ClientSettings.Reduced() or ClientPerformance.Reduced()) and 1.1 or 2.1)
-		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
-			local tint = Theme.Tint(color or P.gold_300, 0.45, 0.92)
-			UIAnim.Sparks(band, UDim2.fromScale(0.5, 0.45), tint, 12, 150, 0.6)
-			UIAnim.Ring(band, UDim2.fromScale(0.5, 0.45), tint, 260, 0.55)
-			UIAnim.Shake(label, 5, 0.3)
-		end
-		task.delay(2.2, function()
-			if token == bannerToken then
-				local fade = TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 })
-				local tw = TweenService:Create(band, TweenInfo.new(0.5), { BackgroundTransparency = 1 })
-				banner.Fades = { fade, tw }
-				tw.Completed:Once(function()
-					if token == bannerToken then
-						band.Visible = false
-						banner.Fades = nil
-					end
-				end)
-				fade:Play()
-				tw:Play()
-			end
-		end)
+		UIState.Headline({ Id = UIState.Classify(str, true).Id, Title = str, Sub = "", Color = color, Class = "Info" })
 		return
 	end
+	UIState.Notice({ Id = "text:" .. string.lower(str), Text = str, Color = color, Class = "Player", Seconds = Config.UI.ToastSeconds })
+end
+
+-- UIState's notice renderer: one gold-rimmed pill in the toast list; UIState says when it
+-- goes (Dismiss) and when a repeat folds into it (Set: "x2").
+local function renderNotice(item: UIState.Notice): UIState.NoticeHandle
+	local str, color = item.Text, item.Color :: Color3?
 	toastOrder += 1
-	if player:GetAttribute("InRun") then
-		-- below the timer / plates / boss bar as they are right now
-		toastList.Position = UDim2.fromOffset(toastList.Position.X.Offset, Hud.TopBottom() + 6)
-	end
+	placeToasts()
 	local holder, face = UIKit.Surface(toastList, {
 		Name = "Toast",
 		Size = UDim2.fromOffset(0, TS(Theme.Type.Body.Size) + 22),
@@ -467,29 +496,27 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 			glow:Destroy()
 		end)
 	end
-	-- keep the stack short
-	local toasts = {}
-	for _, ch in ipairs(toastList:GetChildren()) do
-		if ch:IsA("GuiObject") then
-			table.insert(toasts, ch)
-		end
-	end
-	table.sort(toasts, function(a, b)
-		return a.LayoutOrder < b.LayoutOrder
-	end)
-	while #toasts > 4 do
-		local oldest = table.remove(toasts, 1)
-		if oldest then
-			oldest:Destroy()
-		end
-	end
-	task.delay(Config.UI.ToastSeconds, function()
-		if holder.Parent then
-			UIAnim.PopOut(holder, function()
-				holder:Destroy()
-			end)
-		end
-	end)
+	local gone = false
+	return {
+		Set = function(newText: string, count: number)
+			if gone then
+				return
+			end
+			l.Text = count > 1 and string.format("%s  x%d", newText, count) or newText
+			UIAnim.Punch(holder, 0.08)
+		end,
+		Dismiss = function()
+			if gone then
+				return
+			end
+			gone = true
+			if holder.Parent then
+				UIAnim.PopOut(holder, function()
+					holder:Destroy()
+				end)
+			end
+		end,
+	}
 end
 
 ------------------------------------------------------------------------------------------
@@ -2770,7 +2797,7 @@ local function buildPause()
 		if input.KeyCode ~= Enum.KeyCode.ButtonB or not pause.Overlay.Visible or pause.Overlay:GetAttribute("Hiding") then
 			return
 		end
-		if blocking.Items or blocking.BugReport or UserInputService:GetFocusedTextBox() then
+		if UIState.IsOpen("Items") or UIState.IsOpen("BugReport") or UserInputService:GetFocusedTextBox() then
 			return
 		end
 		if pause.Confirming then
@@ -2835,6 +2862,10 @@ local function syncOptions()
 end
 
 function UIBuilder.OpenPause()
+	-- the run menu never opens over a decision, results or travel (UIState priorities)
+	if not UIState.CanOpen("Pause") then
+		return
+	end
 	pauseMode = "Pause"
 	pause.Title.Text = "PAUSED"
 	pause.Resume.SetText("RESUME")
@@ -3017,6 +3048,23 @@ local function statTile(parent: Instance, icon: string, caption: string, order: 
 	return value, cap
 end
 
+-- A live private run server (RunServers): the results lead to the main lobby by teleport.
+local function onRunServer(): boolean
+	return Remotes.State():GetAttribute("RunServer") == true
+end
+
+-- STAY / REPORT A BUG on the results: no automatic return or close any more. On a run
+-- server the server holds the trip home too (TravelHome "Hold") until MAIN MENU.
+local function holdResults()
+	if results.Held or results.Leaving or TravelOverlay.Covering() then
+		return
+	end
+	results.Held = true
+	if onRunServer() then
+		Remotes.Get("TravelHome"):FireServer("Hold")
+	end
+end
+
 -- Can REPLAY start a new run from here? (one run per server: not while others play on)
 local function replayState(): (boolean, string)
 	local phase = Remotes.State():GetAttribute("Phase") or "Lobby"
@@ -3165,8 +3213,11 @@ local function buildResults()
 				return
 			end
 			pendingReplay = { Mode = results.Mode or "Solo", Until = os.clock() + 45, Waited = false }
+			-- "Replay": a private run server keeps the player for the new run (no trip home)
 			if not results.InLobby and player:GetAttribute("InRun") then
-				Remotes.Get("ReturnToLobby"):FireServer()
+				Remotes.Get("ReturnToLobby"):FireServer("Replay")
+			elseif onRunServer() then
+				Remotes.Get("TravelHome"):FireServer("Replay")
 			end
 			hide(results.Overlay, "Results")
 		end,
@@ -3183,8 +3234,19 @@ local function buildResults()
 			pendingReplay = nil
 			if not results.InLobby then
 				Remotes.Get("ReturnToLobby"):FireServer()
+			elseif onRunServer() then
+				Remotes.Get("TravelHome"):FireServer("Go")
 			end
-			hide(results.Overlay, "Results")
+			if onRunServer() then
+				-- a private run server: its own lobby menu is not where MAIN MENU goes. The
+				-- results stay until the travel cover is up (FLOW: no lobby, then a second
+				-- countdown, then another loading screen)
+				results.Leaving = os.clock()
+				results.Replay.SetEnabled(false)
+				results.Button.SetEnabled(false)
+			else
+				hide(results.Overlay, "Results")
+			end
 		end,
 	})
 	-- footer: the countdown and a quiet REPORT A BUG (the same form as the pause menu's,
@@ -3193,7 +3255,23 @@ local function buildResults()
 	results.Footer = footer
 	results.FooterList = UIKit.list(footer, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
 	results.Timer = text(footer, "Caption", "", { LayoutOrder = 1, Size = UDim2.fromOffset(0, TS(12) + 6), AutomaticSize = Enum.AutomaticSize.X, TextXAlignment = Enum.TextXAlignment.Center })
-	results.Bug = UIKit.Button(footer, {
+	-- STAY stops the automatic return / close (the results stay until REPLAY or MAIN MENU)
+	local actions = new("Frame", { Name = "Actions", BackgroundTransparency = 1, LayoutOrder = 2, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 44) }, footer)
+	results.Actions = actions
+	UIKit.list(actions, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	results.Stay = UIKit.Button(actions, {
+		Kind = "Secondary",
+		Title = "STAY",
+		Name = "Stay",
+		Align = "Center",
+		Shadow = false,
+		Size = UDim2.fromOffset(110, 44),
+		LayoutOrder = 1,
+		OnClick = function()
+			holdResults()
+		end,
+	})
+	results.Bug = UIKit.Button(actions, {
 		Kind = "Secondary",
 		Title = "REPORT A BUG",
 		Icon = "warning",
@@ -3203,6 +3281,7 @@ local function buildResults()
 		Size = UDim2.fromOffset(190, 44),
 		LayoutOrder = 2,
 		OnClick = function()
+			holdResults() -- the report takes a while: nothing automatic meanwhile
 			BugReportUI.Open()
 		end,
 	})
@@ -3310,6 +3389,8 @@ local function buildResults()
 		-- footer: countdown and REPORT A BUG side by side, stacked when narrow
 		local bugH = slim and 40 or 44
 		results.Bug.Instance.Size = UDim2.fromOffset(TS(12) * 8 + 74, bugH)
+		results.Stay.Instance.Size = UDim2.fromOffset(TS(12) * 4 + 62, bugH)
+		results.Actions.Size = UDim2.fromOffset(0, bugH)
 		local stacked = inner < 470
 		results.FooterList.FillDirection = stacked and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
 		results.FooterList.Padding = UDim.new(0, stacked and 4 or 14)
@@ -3565,6 +3646,11 @@ local function onRunResult(data)
 	-- InLobby: the player left through a portal and is back at the menu already; the
 	-- panel then sits over the lobby until closed (or its timer runs out)
 	results.InLobby = data.InLobby == true
+	-- the return flow of this results screen (STAY, MAIN MENU on a run server)
+	results.Held = false
+	results.Leaving = nil
+	results.ReturnedAt = nil
+	results.Button.SetEnabled(true)
 	results.Mode = type(data.Mode) == "string" and data.Mode or "Solo"
 	local retained = tonumber(data.Gold) or 0
 	local coinsEarned = tonumber(data.GoldEarned) or retained
@@ -3928,9 +4014,14 @@ local function updateFrame(dt: number)
 			hide(revive.Overlay, "Revive")
 		end
 	end
+	TravelOverlay.SetResultsOpen(results.Overlay.Visible)
 	if results.Overlay.Visible then
 		local left = math.max(0, math.ceil(resultsDeadline - os.clock()))
 		local canReplay, why = replayState()
+		local covered = TravelOverlay.Covering() -- the server is sending us to the main lobby
+		if results.Leaving or covered then
+			canReplay = false
+		end
 		if results.Replay.IsEnabled() ~= canReplay then
 			results.Replay.SetEnabled(canReplay)
 			if canReplay then
@@ -3938,27 +4029,57 @@ local function updateFrame(dt: number)
 			end
 		end
 		-- why REPLAY is off goes on the timer line (inside the button it would truncate)
-		local tail = (not canReplay and why ~= "") and ("  ·  " .. why) or ""
+		local tail = (not canReplay and why ~= "" and not results.Leaving and not covered) and ("  ·  " .. why) or ""
 		local reporting = BugReportUI.IsOpen()
-		if results.InLobby then
-			if reporting then
-				-- the bug form is open over the results: they wait for it
-				resultsDeadline = math.max(resultsDeadline, os.clock() + 8)
-				left = math.max(0, math.ceil(resultsDeadline - os.clock()))
-			end
-			results.Timer.Text = UIKit.track("Closes in " .. left .. "s" .. tail)
-			if left <= 0 or inRun then
+		if reporting then
+			holdResults() -- a bug report is never cut off by a timer or a teleport
+		end
+		-- one countdown: a private run server's trip home (TravelHomeIn) when one runs
+		local homeIn = player:GetAttribute("TravelHomeIn")
+		results.Stay.Instance.Visible = not results.Held and not results.Leaving and not covered
+		if results.Leaving or covered then
+			-- the results stay under the travel cover; the run server's own lobby menu is
+			-- never shown as the destination
+			results.Timer.Text = UIKit.track("Going to the main lobby…")
+			if not covered and results.Leaving and os.clock() - results.Leaving > 4 then
+				-- the trip did not start (or failed: the server said why): this server's lobby
+				results.Leaving = nil
+				results.Button.SetEnabled(true)
 				hide(results.Overlay, "Results")
-				results.InLobby = false
+			end
+		elseif results.Held then
+			if not inRun and not results.InLobby then
+				results.InLobby = true -- back in the lobby: the panel stays over the menu
+			end
+			results.Timer.Text = UIKit.track("Stays open until you choose" .. tail)
+			if inRun and results.InLobby then
+				hide(results.Overlay, "Results") -- a new run started (a teammate's start)
+			end
+		elseif results.InLobby then
+			if type(homeIn) == "number" then
+				-- results over a run server's lobby menu: they close when the trip starts
+				results.Timer.Text = UIKit.track("Main lobby in " .. homeIn .. "s" .. tail)
+				if inRun then
+					hide(results.Overlay, "Results")
+				end
+			else
+				results.Timer.Text = UIKit.track("Closes in " .. left .. "s" .. tail)
+				if left <= 0 or inRun then
+					hide(results.Overlay, "Results")
+					results.InLobby = false
+				end
 			end
 		else
-			results.Timer.Text = UIKit.track("Back to the lobby in " .. left .. "s" .. tail)
+			local where = onRunServer() and "Main lobby in " or "Back to the lobby in "
+			results.Timer.Text = UIKit.track(where .. left .. "s" .. tail)
 			if not inRun then
-				if reporting then
-					-- back in the lobby while the bug form is open: keep the results
-					-- under it, then give them a short timer of their own
-					results.InLobby = true
-					resultsDeadline = os.clock() + 10
+				if onRunServer() then
+					-- the server raises the travel cover in the same frame; a short grace in
+					-- case it arrives a moment later, then this server's lobby (no trip)
+					results.ReturnedAt = results.ReturnedAt or os.clock()
+					if os.clock() - results.ReturnedAt > 2 then
+						hide(results.Overlay, "Results")
+					end
 				else
 					hide(results.Overlay, "Results")
 				end
@@ -3983,16 +4104,19 @@ local function updateFrame(dt: number)
 	LootUI.Update(dt, inRun)
 	TeamUI.Update(dt, state, inRun)
 	MiniMap.Update(dt, state, inRun)
-	local modalOpen = levelUp.Overlay.Visible or pause.Overlay.Visible or revive.Overlay.Visible or results.Overlay.Visible
-	if not modalOpen then
-		for name in pairs(blocking) do
-			if name ~= "Lobby" then
-				modalOpen = true
-				break
-			end
-		end
-	end
+	local modalOpen = UIState.Owner() ~= nil
 	RunIntro.Update(dt, state, inRun)
+	-- UIState lanes: informational headlines wait for the stage-start card
+	UIState.SetHold("Intro", RunIntro.Active())
+	UIState.Step()
+	placeToasts()
+	UIState.Audit(function(name: string): boolean?
+		local o = overlays[name]
+		if not o then
+			return nil -- not a UIBuilder overlay (StageUI's travel fade)
+		end
+		return o.Visible
+	end)
 	Tutorial.Update(dt, state, inRun, modalOpen or RunIntro.Active())
 	updateSaveNotice(inRun)
 	-- the pause menu belongs to the run, the settings menu to the lobby
@@ -4093,6 +4217,7 @@ function UIBuilder.Init(d: { [string]: any })
 	Hud.Build(root, fxGui, hostApi)
 	LobbyScreen.Init(hostApi)
 	buildToasts()
+	UIState.SetRenderer("Notice", renderNotice)
 	buildLevelUp()
 	buildChest()
 	LootUI.OnReward = showItemReward
@@ -4209,16 +4334,17 @@ function UIBuilder.Init(d: { [string]: any })
 			return
 		end
 		local reward = (info.Reward and info.Reward ~= "") and (" · " .. tostring(info.Reward)) or ""
-		UIBuilder.Toast("Achievement: " .. tostring(info.Name) .. reward, P.gold_300)
+		UIState.Notice({ Id = "achievement", Text = "Achievement: " .. tostring(info.Name) .. reward, Color = P.gold_300, Class = "Info", Seconds = Config.UI.ToastSeconds })
 		if deps.Audio and deps.Audio.Play then
 			pcall(deps.Audio.Play, "Evolve") -- its own swell, not the level-up arpeggio
 		end
 	end)
 	Remotes.Get("LevelUpClose").OnClientEvent:Connect(closeOffer)
 	Remotes.Get("ChestOpened").OnClientEvent:Connect(UIBuilder.ShowChest)
+	-- server messages: semantic id, lane and class (UIState.Classify, or the payload's Id)
 	Remotes.Get("Notify").OnClientEvent:Connect(function(data)
 		if type(data) == "table" and type(data.Text) == "string" then
-			UIBuilder.Toast(data.Text, data.Color, data.Big)
+			UIState.FromServer(data)
 		end
 	end)
 	Remotes.Get("RunResult").OnClientEvent:Connect(onRunResult)
@@ -4235,6 +4361,8 @@ function UIBuilder.Init(d: { [string]: any })
 	-- Leaving a run clears the HUD inventory and every in-run overlay / sound; entering
 	-- one starts a clean HUD.
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
+		-- headlines / notices belong to the moment that just ended (UIState contract §5)
+		UIState.Reset(player:GetAttribute("InRun") and "enter" or "leave")
 		if not player:GetAttribute("InRun") then
 			Hud.SetInventory(nil)
 			closeOffer()

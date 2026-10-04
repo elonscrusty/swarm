@@ -226,18 +226,32 @@ def X(s, pts):
 
 @register("Mite", "Enemies", "Slime id. The grunt: round yellow-green beetle, dark head, amber eyes.")
 def mite(m):
-    """Cheapest model (100+ on screen): 5 pieces, <= 350 tris."""
-    m.extra["palette"] = {"Base": P("beetle_300"), "Dark": P("chitin_900"), "Eye": P("amber_500")}
+    """Cheapest model (100+ on screen): 6 pieces, <= 420 tris.
+
+    Crowd readability (overhaul 2026-10): the pale top of each elytron is the Shell; its lower
+    band is the darker ShellSide (olive), so packed mites keep a dark rim between them instead
+    of merging into one light mass; a wide dark seam and a dark collar between pronotum and
+    elytra segment the shell at gameplay zoom.
+    """
+    m.extra["palette"] = {"Base": P("beetle_300"), "Side": mix("beetle_300", "beetle_700", 0.62),
+                          "Dark": P("chitin_900"), "Eye": P("amber_500")}
     shell = m.piece("Shell", "Base", shadow=True)
+    side = m.piece("ShellSide", "Side")
     c = (0, 0.36, 0.6)
+    cut = (0, 0, 1.22)  # top cap above, darker band below (elytra reach z = 1.74)
     for s in (-1, 1):  # two elytra; the dark underside shows through the seam
         ellipsoid(shell, c, (1.2, 1.12, 1.14), seg=12, rings=6, axis="Y",
-                  keep=[(c, (0, 0, 1)), (c, (s, 0, 0))], shift=(s * 0.045, 0, 0))
+                  keep=[(c, (0, 0, 1)), (c, (s, 0, 0)), (cut, (0, 0, 1))], shift=(s * 0.08, 0, 0))
+        ellipsoid(side, c, (1.2, 1.12, 1.14), seg=12, rings=6, axis="Y",
+                  keep=[(c, (0, 0, 1)), (c, (s, 0, 0)), (cut, (0, 0, -1))], shift=(s * 0.08, 0, 0))
     pc = (0, -0.64, 0.6)
-    ellipsoid(shell, pc, (0.84, 0.5, 0.8), seg=8, rings=4, axis="Y", keep=[(pc, (0, 0, 1))])  # pronotum
+    ellipsoid(shell, pc, (0.84, 0.5, 0.8), seg=8, rings=4, axis="Y", keep=[(pc, (0, 0, 1)), ((0, 0, 1.0), (0, 0, 1))])
+    ellipsoid(side, pc, (0.84, 0.5, 0.8), seg=8, rings=4, axis="Y", keep=[(pc, (0, 0, 1)), ((0, 0, 1.0), (0, 0, -1))])
     head = m.piece("Head", "Dark")
     ellipsoid(head, (0, -1.1, 0.58), (0.5, 0.42, 0.36), seg=8, rings=4)
     ellipsoid(head, (0, 0.22, 0.6), (1.06, 1.3, 0.42), seg=8, rings=4, keep=[((0, 0, 0.6), (0, 0, -1))])
+    # dark collar between pronotum and elytra (segmentation that reads from the run camera)
+    ellipsoid(head, (0, -0.3, 0.6), (0.98, 0.16, 0.95), seg=8, rings=4, keep=[((0, 0, 0.6), (0, 0, 1))])
     for s in (-1, 1):  # mandibles
         tube(head, X(s, [(0.18, -1.38, 0.48), (0.21, -1.62, 0.47), (0.06, -1.78, 0.45)]), [0.08, 0.06, 0.0], seg=3)
     eyes = m.piece("Eyes", "Eye", "Neon")

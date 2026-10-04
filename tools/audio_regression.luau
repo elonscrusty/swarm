@@ -23,5 +23,22 @@ local ok, err = S.runMain(function()
 	audio.StopEffects()
 	assert(#audio.Voices() == 0, "stopping effects clears the tracked voices")
 	print("PASS pooled audio voice uniqueness and cleanup")
+	-- critical sounds outrank filler and get the reserved voices
+	config.Audio.MaxVoices = 6
+	for _, n in ipairs({ "Hit", "EnemyDeath", "GemPickup", "Coin", "Item", "Tip", "BossWarn" }) do
+		config.Sounds[n].MinGap = 0
+	end
+	for _, n in ipairs({ "Hit", "EnemyDeath", "GemPickup", "Coin", "Item", "Tip" }) do
+		audio.Play(n)
+	end
+	assert(#audio.Voices() <= 6 - 3, "filler must leave the reserve free")
+	audio.Play("BossWarn")
+	local boss = false
+	for _, v in ipairs(audio.Voices()) do
+		boss = boss or v.Name:match("^BossWarn") ~= nil
+	end
+	assert(boss, "a boss warning must play in a crowded mix")
+	assert(config.Sounds.EliteSpawn and config.Sounds.EliteSpawn.Category == "Warning", "EliteSpawn is a Warning")
+	print("PASS critical warnings get reserved voices")
 end, 2)
 assert(ok, err)

@@ -1048,6 +1048,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				local gapTop, gapBottom = top + listH + 6, detailY - 6
 				local cam = workspace.CurrentCamera
 				cam:SetAttribute("MenuHeroY", (gapTop + gapBottom) / 2 / H)
+				cam:SetAttribute("MenuHeroX", 0.5)
 				-- a short gap widens the shot so the whole hero fits (CameraController)
 				cam:SetAttribute("MenuHeroZoom", math.clamp(H * 0.3 / math.max(1, gapBottom - gapTop), 1, 1.6))
 			end
@@ -1093,6 +1094,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			if ctx.Current() == "Characters" then
 				local cam = workspace.CurrentCamera
 				cam:SetAttribute("MenuHeroY", 0.5)
+				-- the hero stands in the middle of the gap between the panels
+				cam:SetAttribute("MenuHeroX", math.clamp((gapL + gapR) / 2 / W, 0.35, 0.65))
 				-- a narrow gap between the panels (phones) widens the shot so the turning
 				-- hero stays clear of both panels
 				cam:SetAttribute("MenuHeroZoom", math.clamp(W * 0.23 / math.max(1, gapR - gapL), 1, 1.6))

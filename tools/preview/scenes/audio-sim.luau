@@ -164,4 +164,56 @@ if gem.Steps and gem.Climb then
 	check(math.abs(first - (gem.Pitch or 1)) < 0.03, "the climb resets after a pause", string.format("%.2f", first))
 end
 
+-- 7. priority: with the mix full of pickups / combat, a critical warning still plays and
+-- non-critical sounds leave the reserve free; warnings also duck Pickup
+Audio.StopEffects()
+preview.advance(1)
+local cfg = Config.Audio
+local filler = { "Hit", "EnemyDeath", "Lightning", "GemPickup", "Coin", "Chest", "Item", "Shrine", "Tip", "Click", "Toggle", "Swing", "Throw" }
+local saved = {}
+for _, n in ipairs(filler) do
+	saved[n] = Config.Sounds[n].MinGap
+	Config.Sounds[n].MinGap = 0
+end
+for _, n in ipairs(filler) do
+	Audio.Play(n)
+end
+local nonCritical = #Audio.Voices()
+check(nonCritical <= cfg.MaxVoices - 3, "non-critical sounds leave the reserve free", string.format("%d of %d", nonCritical, cfg.MaxVoices))
+for _, n in ipairs({ "BossWarn", "EliteSpawn", "WaveHorn", "Heartbeat" }) do
+	Config.Sounds[n].MinGap = 0
+	Audio.Play(n)
+end
+local seenCritical = {}
+for _, v in ipairs(Audio.Voices()) do
+	seenCritical[v.Name:gsub("%d+$", "")] = true
+end
+check(seenCritical.BossWarn and seenCritical.EliteSpawn, "boss telegraph and elite spawn get a voice in a full mix")
+check(seenCritical.WaveHorn and seenCritical.Heartbeat, "wave start and low-HP heartbeat get a voice in a full mix")
+check(#Audio.Voices() <= cfg.MaxVoices, "mix still within MaxVoices", tostring(#Audio.Voices()))
+preview.advance(0.15)
+check(groupVolume("Pickup") < pickupBase * 0.8, "warning also ducks Pickup", string.format("%.2f", groupVolume("Pickup")))
+for n, g in pairs(saved) do
+	Config.Sounds[n].MinGap = g
+end
+preview.advance(cfg.Duck.Seconds + 1.5)
+Audio.StopEffects()
+-- 8. UI-state sounds exist, are UI category, and reuse approved ids only
+local approved = {}
+for name, def in pairs(Config.Sounds) do
+	approved[def.Id] = approved[def.Id] or name
+end
+for _, n in ipairs({ "CardAppear", "ChoiceOpen", "ChoicePick", "ResultsLose", "PartyJoin", "TitleStart", "EliteSpawn" }) do
+	local def = Config.Sounds[n]
+	check(def ~= nil and def.Id ~= "" and (def.Category == "UI" or def.Category == "Warning"), "sound " .. n .. " configured")
+end
+-- channel volume controls still scale the groups
+local ClientSettings = preview.client("ClientSettings")
+if ClientSettings and ClientSettings.Set then
+	ClientSettings.Set("WarningVolume", 0.5)
+	preview.advance(0.1)
+	check(math.abs(groupVolume("SwarmWarning") - 0.5) < 0.02, "Warning channel volume applies", string.format("%.2f", groupVolume("SwarmWarning")))
+	ClientSettings.Set("WarningVolume", 1)
+end
+
 preview.log(fails == 0 and "audio-sim: all PASS" or string.format("audio-sim: %d FAIL", fails))
