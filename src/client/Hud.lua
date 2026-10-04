@@ -1153,7 +1153,8 @@ updatePurse = function(dt: number)
 		hint, hintColor = "NEED " .. UIKit.formatNumber(math.max(1, purse.Need)), P.crimson_300
 	elseif purse.Price > 0 then
 		if purse.Afford then
-			hint, hintColor = "/ " .. UIKit.formatNumber(purse.Price), P.moss_200
+			-- the price in reach ("140 / 34" read like a fraction of a total)
+			hint, hintColor = "COST " .. UIKit.formatNumber(purse.Price), P.moss_200
 		else
 			hint, hintColor = "NEED " .. UIKit.formatNumber(purse.Price - gold), P.crimson_300
 		end
@@ -1712,7 +1713,14 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	buildBoss(frame)
 	buildCounters(frame)
 	buildVitals(frame)
-	buildBanner(frame)
+	-- the centre banner sits in its own full-screen layer one step above the HUD, so the
+	-- world markers drawn after the HUD (StageUI's portal ring and edge arrow) never cover
+	-- its text; the layer shows and hides with the HUD
+	local top = new("Frame", { Name = "HUDTop", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Active = false, ZIndex = Theme.Z.Hud + 1 }, root)
+	frame:GetPropertyChangedSignal("Visible"):Connect(function()
+		top.Visible = frame.Visible
+	end)
+	buildBanner(top)
 	buildBuffChip(frame)
 	buildBar(frame)
 	buildStatus(frame)

@@ -256,6 +256,127 @@ end
 	(portrait). The hero stands at the screen centre: when the card would cover it (short
 	landscape phones), the card moves to the side of the screen with more room, narrower.
 ]]
+-- Screen rects (virtual units, x / y / w / h) of what a tip card must not cover. The
+-- first list holds the touch controls the card must clear; the second everything else a
+-- new spot for it must also leave visible.
+local function obstacleRects(W: number): ({ { number } }, { { number } })
+	local parent = ui.Card and ui.Card.Parent :: GuiObject?
+	if not parent or parent.AbsoluteSize.X < 1 then
+		return {}, {}
+	end
+	local k = W / parent.AbsoluteSize.X
+	local origin = parent.AbsolutePosition
+	local function rect(g: Instance?, pad: number): { number }?
+		if not g or not g:IsA("GuiObject") or not g.Visible or g.AbsoluteSize.X < 1 then
+			return nil
+		end
+		local anc: Instance? = g.Parent
+		while anc and anc:IsA("GuiObject") do
+			if not anc.Visible then
+				return nil
+			end
+			anc = anc.Parent
+		end
+		local p, sz = (g.AbsolutePosition - origin) * k, g.AbsoluteSize * k
+		return { p.X - pad, p.Y - pad, sz.X + 2 * pad, sz.Y + 2 * pad }
+	end
+	local controls: { { number } }, others: { { number } } = {}, {}
+	local function add(list: { { number } }, r: { number }?)
+		if r then
+			table.insert(list, r)
+		end
+	end
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if pg then
+		add(controls, rect(pg:FindFirstChild("JumpButton", true), 8))
+		local ping = pg:FindFirstChild("Ping", true)
+		if ping and ping:IsA("GuiButton") then
+			add(controls, rect(ping, 8))
+		end
+	end
+	add(others, rect(MiniMap.Elements().Holder, 6))
+	add(others, rect(LootUI.Elements().Prompt, 6))
+	local team = TeamUI.Elements()
+	add(others, rect(team.List, 6))
+	for _, mk in pairs(team.Markers or {}) do
+		local r = rect(mk.Holder, 12)
+		if r then
+			r[4] += 26 -- the name / progress label under the ring
+			add(others, r)
+		end
+	end
+	local hud = Hud.Elements()
+	add(others, rect(hud.Stage, 6))
+	add(others, rect(hud.TimerPill, 6))
+	add(others, rect(hud.Plate and hud.Plate:FindFirstChild("Body"), 6))
+	add(others, rect(hud.Bar, 6))
+	add(others, rect(hud.Counters, 6))
+	return controls, others
+end
+
+local function clearOfControls(x: number, y: number, w: number, h: number, W: number, H: number): (number, number, number, number)
+	local controls, others = obstacleRects(W)
+	local function hitsAny(list: { { number } }, cx: number, cy: number, cw: number?, ch: number?): boolean
+		local ww, hh = cw or w, ch or h
+		local l, t = cx - ww / 2, cy
+		for _, r in ipairs(list) do
+			-- (a few px of touch is fine: the rects already carry padding)
+			if l + 4 < r[1] + r[3] and l + ww > r[1] + 4 and t + 4 < r[2] + r[4] and t + hh > r[2] + 4 then
+				return true
+			end
+		end
+		return false
+	end
+	if not hitsAny(controls, x, y) then
+		return x, y, w, h
+	end
+	local function aboveControls(cx: number): number
+		local top = y
+		for _, r in ipairs(controls) do
+			local l = cx - w / 2
+			if l < r[1] + r[3] and l + w > r[1] then
+				top = math.min(top, r[2] - 8 - h)
+			end
+		end
+		return top
+	end
+	local xl, xr = 12 + w / 2, W - 12 - w / 2
+	local candidates = {
+		{ x, aboveControls(x), w, h },
+		{ x < W / 2 and xr or xl, y, w, h },
+		{ x < W / 2 and xr or xl, aboveControls(x < W / 2 and xr or xl), w, h },
+		{ xl, math.max(8, Hud.TopBottom() + 8), w, h },
+	}
+	-- the top-left corner under Roblox's buttons, narrowed to end before the top HUD
+	-- (timer / vitals) that starts to its right
+	local cornerY = 56
+	local edge = W
+	for _, r in ipairs(others) do
+		if r[2] < cornerY + h and r[1] > 40 then
+			edge = math.min(edge, r[1])
+		end
+	end
+	local cw = math.min(w, edge - 24)
+	if cw >= 320 and bodyLines(ui.Body.Text, cw - 32 - ICON - 14) <= 2 then
+		local ch = sizeCard(cw)
+		table.insert(candidates, { 12 + cw / 2, cornerY, cw, ch })
+	end
+	for _, c in ipairs(candidates) do
+		local cx, cy, cw2, ch2 = c[1], c[2], c[3], c[4]
+		local hero = not (math.abs(cx - W / 2) < cw2 / 2 + 70 and cy < H / 2 + 80 and cy + ch2 > H / 2 - 80)
+		if cy >= 8 and cy + ch2 <= H - 8 and hero and not hitsAny(controls, cx, cy, cw2, ch2) and not hitsAny(others, cx, cy, cw2, ch2) then
+			return cx, cy, cw2, ch2
+		end
+	end
+	-- nowhere fully free: at least keep the controls clear
+	for _, c in ipairs(candidates) do
+		if c[2] >= 8 and c[2] + c[4] <= H - 8 and not hitsAny(controls, c[1], c[2], c[3], c[4]) then
+			return c[1], c[2], c[3], c[4]
+		end
+	end
+	return x, y, w, h
+end
+
 local function layout()
 	if not ui.Card or not current then
 		return
@@ -337,6 +458,13 @@ local function layout()
 			end
 		end
 		x = right and (W - 12 - w / 2) or (12 + w / 2)
+	end
+	-- touch controls (JUMP, PING) must never sit under the card: a tip without a target
+	-- moves up / to the other side / to the top-left corner, to the first spot that covers
+	-- no control, map, team row, revive marker, loot prompt or the hero
+	if not (pos and size) then
+		x, y, w, h = clearOfControls(x, y, w, h, W, H)
+		h = sizeCard(w) -- the spot search may have measured other widths
 	end
 	if pos and size then
 		local ax = math.clamp(tx - (x - w / 2), 28, w - 28)
