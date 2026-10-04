@@ -42,7 +42,10 @@ is not verified.
 - `bash tools/check.sh --quick`: TYPECHECK ok, COMPILE ok (remaining lints are in Hud.lua, not owned).
 - enemy-slice before/after, Forest + Snow, pc + iphone: 0 errors; flash 18/18 hit.
 - combat-regression: PASS.
-- perf-sim: see the report / PERFORMANCE_BASELINE.md (see below).
+- perf-sim (headless, enemies=200, seconds=3) vs the PERF helper's HEAD-ref run of the same
+  scene: EnemyRenderer BulkMoveTo parts 53538/s vs 53146/s (+0.7%), Color writes 2342/s vs
+  2319/s, MeshPart creation 123/s both. ms/frame is not comparable (machine shared by many
+  helpers; Lune timing), counts are the evidence. Only the 200 phase finished in my run.
 - Blender: Mite 400 tris (6 pieces), ScorpionQueen 2044 tris, MothMatriarch 1634 tris.
 
 ## Remaining risk / not done

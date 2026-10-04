@@ -867,7 +867,7 @@ local MENU = {
 	DaisZ = -4, -- dais centre, relative to Config.Lobby.Origin
 	DaisScale = 0.8, -- the dais fills about the middle third of a 16:9 shot
 	CamHeight = 6.2, -- camera height above the floor: a little over the hero's chest
-	CamDistance = 23,
+	CamDistance = 19.5, -- (title screen: the hero fills about half the height, as in 01_Title)
 	AimLift = 3.5, -- aim this far above the dais top: the hero's middle (lands at MenuHeroY)
 	KeepZ = -53, -- keep wall face, relative to the dais (far: the castle reads at its real scale)
 	WaitZ = 34, -- hidden waiting spot for real characters (behind the camera)
@@ -1223,18 +1223,10 @@ function MapBuilder.BuildLobby()
 		local glow = add({ Name = "SunsetGlow" .. k, Shape = Enum.PartType.Ball, Size = Vector3.one * (k == 2 and 44 or 34), CFrame = CFrame.new(gpos), Color = rgb(255, 150, 96), Material = NEON, Transparency = 0.94 })
 		glow.CastShadow = false
 	end
-	-- a few dusky clouds catching the last light and the first stars over the battlements,
-	-- placed in camera space like the sun (far, unlit-looking, no shadows)
+	-- the first stars over the battlements, placed in camera space like the sun (far,
+	-- unlit-looking, no shadows); the ball "clouds" of the night lobby read as blobs and are gone
 	local function sky(dir: Vector3, dist: number): Vector3
 		return camPos + camCF:VectorToWorldSpace(dir.Unit) * dist
-	end
-	local CLOUD = { rgb(120, 96, 150), rgb(150, 110, 150) }
-	for _, c in ipairs({ { -0.17, 0.25, 1.0 }, { 0.03, 0.32, 0.8 }, { -0.44, 0.31, 1.2 }, { 0.34, 0.33, 1.0 } }) do
-		for k = -1, 1 do
-			local r = (k == 0 and 6 or 4.4) * c[3]
-			local puff = add({ Name = "Cloud", Shape = Enum.PartType.Ball, Size = Vector3.one * r * 2, CFrame = CFrame.new(sky(Vector3.new(c[1] + k * 0.045 * c[3], c[2] - math.abs(k) * 0.012, -1), 150)), Color = pick(CLOUD), Transparency = 0.72 })
-			puff.CastShadow = false
-		end
 	end
 	for _ = 1, 16 do
 		local d = Vector3.new(rng:NextNumber(-1.15, 1.15), rng:NextNumber(0.22, 0.37), -1)
@@ -1625,17 +1617,19 @@ local function treeLine(arena: Arena, kinds: { { any } }, southKinds: { { any } 
 end
 
 -- Broken split-rail fence along the boundary (decoration): runs of sections with gaps,
--- some leaning, one now and then fallen.
+-- some leaning, one now and then fallen. Not with cliffs: there the capped rim is the
+-- camera-side edge, and a fence a stud inside the Boundary (no collision) read as a false
+-- edge in front of the real one (overhaul ART-16).
 local function brokenFence(arena: Arena, scale: number, palette: Pal?, period: number)
+	if arena.Cliff then
+		return
+	end
 	local h = arena.Half
 	local len = 8 * scale
 	local k = 0
 	alongSides(-h + len / 2, h - len / 2, len, function(side, along, out, t)
 		-- a short run (2, sometimes 3 sections) every `period` slots, offset per side
 		k += 1
-		if arena.Cliff and side ~= 2 then
-			return -- the cliffs line the other three sides
-		end
 		local phase = (k + side * 7) % period
 		if phase >= 2 and not (phase == 2 and rng:NextNumber() < 0.35) then
 			return
@@ -1684,8 +1678,9 @@ type CliffStyle = {
 	Face: { any }?, -- { kit rock, palette }: the big low-poly rock in front of each tall chunk
 }
 
-local CLIFF_STEP = 43 -- studs between chunk centres on the tall sides
-local CLIFF_STEP_SOUTH = 26
+local CLIFF_STEP = 46 -- studs between chunk centres on the tall sides
+local CLIFF_STEP_SOUTH = 30
+local CORNER_SET = 6 -- the west / east cliffs stop this far before the south edge (the corner steps take over)
 local CLIFF_DEPTH = 24 -- depth of a tall chunk (its flat top carries the tree line)
 
 -- Top height of the cliff at `t` along `side` (smooth, seeded per side).
@@ -1708,21 +1703,55 @@ local function kitRadius(name: string): number
 end
 
 -- One rock block whose inner face is `inner` studs out from the centre line, plus its cap.
-local function cliffBlock(arena: Arena, style: CliffStyle, along: Vector2, out: Vector2, t: number, inner: number, len: number, depth: number, hgt: number, color: Color3, shadow: boolean, noCap: boolean?): CFrame
-	local yawDeg = style.Masonry and 0 or jitter(7)
-	local tilt = style.Masonry and 0 or 3
+-- cap: cap thickness share (nil = 1, 0 = no cap). calm: small turn / tilt (the camera-side
+-- rim and the corner steps, where a tilted end would stick up at the seam).
+local function cliffBlock(arena: Arena, style: CliffStyle, along: Vector2, out: Vector2, t: number, inner: number, len: number, depth: number, hgt: number, color: Color3, shadow: boolean, cap: number?, calm: boolean?): CFrame
+	local yawDeg = style.Masonry and 0 or jitter(calm and 2.5 or 7)
+	local tilt = style.Masonry and 0 or (calm and 1.2 or 3)
 	-- a turned / tilted block pokes in by its half length * sin(yaw) and half height * sin(tilt)
 	local poke = math.abs(math.sin(math.rad(yawDeg))) * len / 2 + math.sin(math.rad(tilt)) * hgt / 2
 	local p = along * t + out * (inner + poke + depth / 2)
 	local base = math.deg(math.atan2(-along.Y, along.X))
 	local cf = CFrame.new(W(arena, p.X, p.Y, hgt / 2 - 1)) * yawCF(base + yawDeg) * CFrame.Angles(math.rad(jitter(tilt)), 0, math.rad(jitter(tilt)))
 	deco(arena.Decor, { Name = "Cliff", Size = Vector3.new(len, hgt + 1, depth), CFrame = cf, Color = color, CastShadow = shadow })
-	if noCap then
+	if cap == 0 then
 		return cf
 	end
-	local capT = style.CapThick or 0.8
+	local capT = (style.CapThick or 0.8) * (cap or 1)
 	deco(arena.Decor, { Name = "CliffCap", Size = Vector3.new(len - 0.5, capT, depth - 0.5), CFrame = cf * CFrame.new(0, (hgt + 1) / 2 + capT / 2 - 0.25, 0), Color = style.Cap, CastShadow = false })
 	return cf
+end
+
+-- The designed corner piece: the biome's face rock sitting on the
+-- upper corner step against the tall cliff's end, so the camera sees a broken rock
+-- silhouette there instead of one flat block end. Long side across the wall, all of it
+-- outside the play square (no collision: the Boundary walls block).
+local function cornerRock(arena: Arena, style: CliffStyle, x: number, z: number, y: number, hgt: number)
+	local piece = style.Face
+	if not piece then
+		return -- Ruins: the cut-stone steps are the corner (its foot blocks cost 10 parts)
+	end
+	local entry = kitEntry(piece[1])
+	local top = (entry and entry.Bounds and entry.Bounds[2][2]) or 2.9
+	local s = math.clamp(hgt / top, 1.2, 4)
+	prop(arena.Decor, piece[1], CFrame.new(W(arena, x, z, y)) * yawCF(jitter(10) + (rng:NextNumber() < 0.5 and 180 or 0)), s, piece[2], { shadow = true })
+end
+
+-- South (camera-side) corners: the tall west / east cliff (it stops CORNER_SET short of
+-- the edge) comes down to the low rim in two capped steps, so the camera never faces one
+-- sheer block end next to a knee-high rim. Inner faces stay just outside the Boundary.
+local function cliffShoulder(arena: Arena, style: CliffStyle, side: number)
+	local h = arena.Half
+	local out = side == 3 and Vector2.new(-1, 0) or Vector2.new(1, 0)
+	local along = Vector2.new(0, 1)
+	local tall = cliffTop(arena, side, h - CORNER_SET)
+	local rim = style.South[2]
+	local mid = math.max(rim + 3, tall * 0.55)
+	local low = rim + 1.4
+	cliffBlock(arena, style, along, out, h - CORNER_SET + 7, h + 0.6, 18, CLIFF_DEPTH, mid, pick(style.Rock), true, nil, true)
+	cliffBlock(arena, style, along, out, h + 20, h + 0.6, 22, CLIFF_DEPTH - 2, low, pick(style.Rock), false, 0.8, true)
+	-- a rock on the upper step, half against the tall cliff's end face
+	cornerRock(arena, style, out.X * (h + 12.5), h - CORNER_SET + 1, mid - 1.3, math.max(tall - mid, 3) * 0.95)
 end
 
 local function cliffs(arena: Arena, style: CliffStyle)
@@ -1738,8 +1767,11 @@ local function cliffs(arena: Arena, style: CliffStyle)
 		local south = side == 2
 		local out3 = Vector3.new(out.X, 0, out.Y)
 		local step = south and CLIFF_STEP_SOUTH or CLIFF_STEP
-		-- north / south rows run past the corners; west / east rows fill between them
-		local reach = side <= 2 and h + 30 or h + 6
+		-- north / south rows run past the corners; west / east rows fill between them and
+		-- stop CORNER_SET short of the south edge (cliffShoulder steps down to the rim there)
+		-- (the rim stops where the corner steps' upper block hides it)
+		local reach = side == 1 and h + 30 or (south and h + 2 or h + 6)
+		local stop = side >= 3 and h - CORNER_SET or math.huge
 		local t = -reach + jitter(3)
 		local k = 0
 		while t <= reach do
@@ -1747,10 +1779,22 @@ local function cliffs(arena: Arena, style: CliffStyle)
 			local hgt = cliffTop(arena, side, t) + jitter(south and 0.5 or 1.5)
 			local color = pick(style.Rock)
 			if south then
-				local len = rng:NextNumber(25, 30)
-				cliffBlock(arena, style, along, out, t, h + rng:NextNumber(0.3, 1.0), len, rng:NextNumber(5, 8), hgt, color, false, true)
+				-- long, calm, overlapping rim stones with a thin cap in the biome's ground
+				-- colour (moss, snow, sand, ash): a bank, not a row of loose grey slabs
+				local len = rng:NextNumber(31, 35)
+				cliffBlock(arena, style, along, out, t, h + rng:NextNumber(0.3, 1.0), len, rng:NextNumber(6, 9), hgt, color, false, 0.7, true)
 			else
-				local len = rng:NextNumber(45, 52)
+				local len = rng:NextNumber(48, 55)
+				local s0 = t - len / 2
+				if s0 > stop - 12 then
+					break -- the corner steps cover the rest
+				end
+				if t + len / 2 > stop then
+					-- the last chunk ends at the corner steps (at least 12 studs long)
+					s0 = math.min(s0, stop - 12)
+					len = stop - s0
+					t = (s0 + stop) / 2
+				end
 				local face = style.Face
 				-- Rocky face: a big kit rock (low-poly mesh, the biome's own) in front of
 				-- the block hides its flat front; the block behind gives the height and
@@ -1773,7 +1817,7 @@ local function cliffs(arena: Arena, style: CliffStyle)
 				if ledge then
 					local lh = hgt * rng:NextNumber(0.35, 0.6)
 					-- capless: a cut stone step (one part) under the wall's capped top
-					cliffBlock(arena, style, along, out, t + jitter(len * 0.2), h + 0.3, len * rng:NextNumber(0.45, 0.65), ledgeDepth, lh, pick(style.Rock), false, true)
+					cliffBlock(arena, style, along, out, t + jitter(len * 0.2), h + 0.3, len * rng:NextNumber(0.45, 0.65), ledgeDepth, lh, pick(style.Rock), false, 0)
 				end
 				if style.Masonry then
 					-- merlons on the wall top (a broken battlement)
@@ -1788,11 +1832,12 @@ local function cliffs(arena: Arena, style: CliffStyle)
 					local sp = along * t + out * (h + 0.5)
 					deco(arena.Decor, { Name = "CliffSeam", Size = Vector3.new(len * 0.55, 0.35, 0.7), CFrame = CFrame.new(W(arena, sp.X, sp.Y, 0.2)) * yawCF(math.deg(math.atan2(-along.Y, along.X))), Color = style.Seam, Material = NEON })
 				end
-				-- a kit rock at the foot (it pokes at most a stud into the play square)
+				-- a kit piece at the foot, flush with the edge (nothing that looks solid stands
+				-- on walkable floor: what you see is where the Boundary stops you)
 				if style.Foot and math.abs(t) < h - 6 and rng:NextNumber() < (face and 0.12 or 0.25) then
 					local f = pick(style.Foot)
 					local s = rng:NextNumber(f[2], f[3])
-					local d = h + kitRadius(f[1]) * s - 1
+					local d = h + kitRadius(f[1]) * s - 0.2
 					local p = along * (t + jitter(8)) + out * d
 					decor(arena, f[1], p.X, p.Y, nil, s, f[4], { shadow = false })
 				end
@@ -1800,6 +1845,10 @@ local function cliffs(arena: Arena, style: CliffStyle)
 			t += step + jitter(step * 0.15)
 		end
 	end
+	-- camera-side corners: stepped shoulders (the far corners already meet behind the
+	-- face rocks of the north row and the first west / east chunk)
+	cliffShoulder(arena, style, 3)
+	cliffShoulder(arena, style, 4)
 	arena.CliffTop = function(side: number, t: number): number
 		return cliffTop(arena, side, t)
 	end
@@ -1929,9 +1978,26 @@ local function outcrop(arena: Arena, x: number, z: number, big: number, medium: 
 	scatter(arena, x, z, big * 5, 3, { { "Rock_Small", 0.8, 1.4 }, { "GrassTuft", 1, 1.5 }, { "Fern", 0.9, 1.2 } }, 0.6)
 end
 
+-- An irregular bank under a round pond: a main ring plus two lobes (one a darker wet
+-- margin) on seeded sides, so the rim no longer reads as one perfect circle. The water
+-- disc and its circle collider stay round and equal: the water edge is where you stop.
+-- Uses its own Random so the arena's seeded layout after it is unchanged.
+local function pondBank(arena: Arena, x: number, z: number, r: number, bank: Color3, wet: Color3)
+	local m = arena.Decor
+	local own = Random.new(math.floor(x * 31 + z * 17 + r * 7))
+	disc(m, "PondBank", W(arena, x, z, 0.08), r + 1.9, bank)
+	local a0 = own:NextNumber(0, TAU)
+	for k = 1, 2 do
+		local a = a0 + (k - 1) * own:NextNumber(1.9, 2.8)
+		local lr = r * own:NextNumber(0.42, 0.58)
+		local d = r + 1.9 - lr + own:NextNumber(0.6, 1.6) -- pokes 0.6-1.6 studs past the ring
+		disc(m, "PondBank", W(arena, x + math.cos(a) * d, z + math.sin(a) * d, 0.08 - k * 0.006), lr, k == 2 and wet or bank)
+	end
+end
+
 local function forestPond(arena: Arena, x: number, z: number, r: number)
 	local m = arena.Decor
-	disc(m, "PondBank", W(arena, x, z, 0.08), r + 2.6, mix(P.dirt_600, P.moss_600, 0.35))
+	pondBank(arena, x, z, r, mix(P.dirt_600, P.moss_600, 0.35), mix(P.dirt_700, P.moss_700, 0.4))
 	disc(m, "PondBed", W(arena, x, z, 0.12), r + 0.6, P.slate_700)
 	local water = disc(m, "Water", W(arena, x, z, 0.2), r, mix(P.slate_500, P.moss_500, 0.25))
 	water.Transparency = 0.12
@@ -2602,12 +2668,14 @@ local SWAMP_SHADE = {
 	{ "Mushroom", 0.9, 1.3 },
 	{ "GrassTuft", 1.0, 1.4, SWAMP_GRASS },
 }
-local SWAMP_POOL_RIM = { { "Reeds", 1.0, 1.4 }, { "GrassTuft", 1.0, 1.5, SWAMP_GRASS }, { "GrassTuft", 1.0, 1.5, SWAMP_GRASS }, { "Rock_Small", 0.7, 1.0, SWAMP_PEBBLE } }
+-- mud pool rims: grass, pebbles, mushrooms. Reeds and lilypads belong to the deep water
+-- (bog pond), so slowing mud and impassable water have their own edge language.
+local SWAMP_POOL_RIM = { { "Mushroom", 0.9, 1.2 }, { "GrassTuft", 1.0, 1.5, SWAMP_GRASS }, { "GrassTuft", 1.0, 1.5, SWAMP_GRASS }, { "Rock_Small", 0.7, 1.0, SWAMP_PEBBLE } }
 
 -- Deep bog pond (impassable water, one circle collider), lilypads and reeds.
 local function bogPond(arena: Arena, x: number, z: number, r: number)
 	local m = arena.Decor
-	disc(m, "PondBank", W(arena, x, z, 0.08), r + 2.8, mix(P.peat_500, P.fen_600, 0.4))
+	pondBank(arena, x, z, r, mix(P.peat_500, P.fen_600, 0.4), mix(P.peat_500, P.murk_700, 0.6))
 	disc(m, "PondBed", W(arena, x, z, 0.12), r + 0.6, P.murk_800)
 	local water = disc(m, "Water", W(arena, x, z, 0.2), r, mix(P.fen_600, P.slate_500, 0.45))
 	water.Transparency = 0.1
@@ -2626,14 +2694,16 @@ local function bogPond(arena: Arena, x: number, z: number, r: number)
 	keepout(arena, x, z, r + 3)
 end
 
--- A mud pool with reeds on its rim and now and then a lilypad.
+-- A mud pool (slows: the mesh's mud is the footprint) with grass and pebbles on its rim.
+-- No lilypads or reeds: those mark the impassable water of the bog pond.
 local function mudPool(arena: Arena, x: number, z: number, s: number, yawDeg: number)
 	if hazardPool(arena, "Mud", x, z, s, yawDeg) then
 		local r = HAZARD_KIT.Mud.Radius * s
 		rimDecor(arena, x, z, r + 1.2, r + 3, 3, SWAMP_POOL_RIM)
 		if rng:NextNumber() < 0.5 then
-			local a = rng:NextNumber(0, TAU)
-			prop(arena.Decor, "Lilypads", CFrame.new(W(arena, x + math.cos(a) * r * 0.4, z + math.sin(a) * r * 0.4, 0.05)) * randomYaw(), 1.1, nil, { shadow = false })
+			-- (draws kept from the old lilypad so the seeded layout after it is unchanged)
+			local _ = rng:NextNumber(0, TAU)
+			local _ = randomYaw()
 		end
 	end
 end
@@ -2811,7 +2881,7 @@ local function buildSwamp(arena: Arena)
 	})
 	local h = arena.Half
 	alongSides(-h + 10, h - 10, 40, function(_side, along, out, t)
-		if rng:NextNumber() < 0.38 then
+		if rng:NextNumber() < 0.22 then
 			local p = along * (t + jitter(6)) + out * (h - 2 - rng:NextNumber(0, 3))
 			decor(arena, "Reeds", p.X, p.Y, nil, rng:NextNumber(1.4, 1.9))
 		end
@@ -2869,7 +2939,7 @@ local function snowTower(arena: Arena, x: number, z: number, r: number)
 		local hgt = (k % 3 == 0) and rng:NextNumber(1.2, 2) or rng:NextNumber(3, 6)
 		local cf = CFrame.new(W(arena, x + math.cos(a) * (r - 1), z + math.sin(a) * (r - 1), hgt / 2)) * CFrame.Angles(0, -a, 0)
 		deco(m, { Name = "Stone", Size = Vector3.new(2.2, hgt, r * TAU / n + 0.4), CFrame = cf, Color = mix(SNOW_RUIN.Stone, SNOW_RUIN.Stone3, rng:NextNumber(0, 1)), CastShadow = true })
-		deco(m, { Name = "Snow", Size = Vector3.new(2.3, 0.35, r * TAU / n + 0.45), CFrame = cf * CFrame.new(0, hgt / 2 + 0.1, 0), Color = P.snow_100 })
+		deco(m, { Name = "Snow", Size = Vector3.new(2.4, 0.7, r * TAU / n + 0.5), CFrame = cf * CFrame.new(0, hgt / 2 + 0.25, 0), Color = P.snow_100 })
 	end
 	disc(m, "Rubble", W(arena, x, z, 0.4), r - 1.6, P.snow_200, 0.8)
 	tag(m)
@@ -3085,7 +3155,7 @@ local function buildSnow(arena: Arena)
 		{ "Snow_Bush", 1.5, 2.1, nil },
 		{ "Snow_Drift", 1.4, 2.0, nil },
 		{ "Snow_Pine", 0.6, 0.75, nil },
-	}, 38, mix(P.snow_300, P.ice_300, 0.35))
+	}, 42, mix(P.snow_300, P.ice_300, 0.35))
 end
 
 ------------------------------------------------------------------------------------------

@@ -139,7 +139,7 @@ IconData.Icons = {
 
 -- Last-resort text (1-2 letters) for an id that has neither a picture nor a vector icon.
 IconData.Glyphs = {
-	Whip = "Wh",
+	Whip = "Sw",
 	MagicOrb = "Or",
 	Knives = "Kn",
 	Garlic = "Ga",
@@ -148,7 +148,7 @@ IconData.Glyphs = {
 	Axe = "Ax",
 	Boomerang = "Bo",
 	Longbow = "Lb",
-	Bloodwhip = "BW",
+	Bloodwhip = "BB",
 	TwinOrbs = "TO",
 	ThousandEdge = "TE",
 	SoulEater = "SE",

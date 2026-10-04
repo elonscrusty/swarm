@@ -64,7 +64,7 @@ else
 		C.fire("ChestOpened", {
 			Dramatic = true,
 			Rewards = {
-				{ Name = "Whip", Text = "Level 6", Color = Color3.fromRGB(220, 220, 230) },
+				{ Name = "Sword", Text = "Level 6", Color = Color3.fromRGB(220, 220, 230) },
 				{ Name = "Heart", Text = "Level 3", Color = Color3.fromRGB(220, 90, 90) },
 			},
 			Gold = 38,

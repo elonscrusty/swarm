@@ -231,7 +231,7 @@ end
 WeaponData.Weapons = {
 	Whip = {
 		Id = "Whip",
-		Name = "Whip",
+		Name = "Sword", -- id stays "Whip" (saves, data keys); owner 2026-10: the Knight swings a sword
 		Description = "Swings a wide sword arc in the direction you face.",
 		Color = Color3.fromRGB(200, 70, 60),
 		Behavior = "Whip",
@@ -256,7 +256,7 @@ WeaponData.Weapons = {
 		},
 		Evolution = {
 			Id = "Bloodwhip",
-			Name = "Bloodwhip",
+			Name = "Bloodblade", -- id stays "Bloodwhip"
 			Passive = "Heart",
 			Description = "Huge crimson slashes that heal you on every hit.",
 			Stats = row(40, 1.10, 2, 1.5, 0, 999, 0.25, 22),

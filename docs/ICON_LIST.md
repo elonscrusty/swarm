@@ -84,7 +84,7 @@ tripled. Passives are simple single symbols; items are small physical trinkets.
 ### 4.1 Weapons (17)
 
 #### Whip.png
-- **Name:** Whip
+- **Name:** Sword (id Whip)
 - **Effect:** Swings a wide sword arc in the direction you face.
 - **Prompt:**
   ```text
@@ -224,7 +224,7 @@ tripled. Passives are simple single symbols; items are small physical trinkets.
 Each evolution is the weapon it comes from, upgraded. The recipe is shown as *weapon + passive*.
 
 #### Bloodwhip.png
-- **Name:** Bloodwhip (Whip + Heart)
+- **Name:** Bloodblade (Sword + Heart; id Bloodwhip)
 - **Effect:** Huge crimson slashes that heal you on every hit.
 - **Prompt:**
   ```text
@@ -709,7 +709,7 @@ The five loot / run markers use lower-case file names on purpose (they match the
 
 ## 5. Look-alike check
 Things that must never look alike (check them side by side):
-- Sword icons: **Whip** (one steel sword + slash arc), **Bloodwhip** (one crimson sword), **Might** (two crossed swords).
+- Sword icons: **Sword** (id Whip, one steel sword + slash arc), **Bloodblade** (id Bloodwhip, one crimson sword), **Might** (two crossed swords).
 - Grey things: **Whetstone** (smooth light block), **Lodestone** (jagged dark rock), **IronPlate** (riveted steel square).
 - Crit things: **KeenLens** (magnifying glass), **Precision** (archery target), **HuntersEye** (eye).
 - Defence: **Armor** (kite shield), **IronPlate** (square plate), **BarbedMail** (spiked plate), **GuardianWard** (bubble), **Bastion** (gold turret).

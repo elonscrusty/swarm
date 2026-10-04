@@ -892,7 +892,9 @@ local function relayout()
 		place(ui.Cog.Instance, W - rightM - cogS, cogY, cogS, cogS)
 		local moreX = W - rightM - 2 * cogS - G
 		place(ui.MoreBtn.Instance, moreX, cogY, cogS, cogS)
-		navX = math.clamp(math.floor(W * 0.49 - 2 * itemW), sideM, moreX - G - 4 * itemW)
+		-- (narrow windows: the items shrink so the row still ends before MORE)
+		itemW = math.max(40, math.min(itemW, math.floor((moreX - G - sideM) / 4)))
+		navX = math.clamp(math.floor(W * 0.49 - 2 * itemW), sideM, math.max(sideM, moreX - G - 4 * itemW))
 		-- left: PLAY and its line, between the caption and the bottom row
 		playW = math.floor(math.clamp(W * 0.31, 230, 560))
 		playH = math.floor(math.clamp(playW / 3.25, 66, 172))

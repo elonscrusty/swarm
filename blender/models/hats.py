@@ -253,7 +253,7 @@ def aim(d):
 def hat_helmet(m, o=(0, 0, 0), bone=None):
     """Great helm: faceted bucket with a flat face, dark T visor, gold brow band and a
     crimson horsehair plume arcing back (the Knight's own headgear)."""
-    helm = m.piece("Helm", "Hat", "Metal", bone=bone, shadow=True)
+    helm = m.piece("Helm", "Hat", bone=bone, shadow=True)  # big shell: no Metal sheen
     lathe(helm, [(0.88, -1.62), (0.97, -1.3), (0.99, -0.55), (0.98, 0.02), (0.85, 0.25), (0.5, 0.37),
                  (0.0, 0.4)], seg=8, phase=22.5, loc=o, sy=0.95)
     visor = m.piece("HelmVisor", "Dark", bone=bone)

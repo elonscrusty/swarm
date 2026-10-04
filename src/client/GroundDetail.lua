@@ -272,8 +272,9 @@ local function densityAt(a: Ctx, x: number, z: number): number
 		return 0
 	end
 	if outer then
-		-- past the cliffs (north / west / east) the floor is under rock: nothing to draw
-		if a.Cliffs and z < HALF - 2 then
+		-- past the cliffs (north / west / east) the floor is under rock, and so is the strip
+		-- under the camera-side rim and the stepped corners (MapBuilder.cliffs): nothing to draw
+		if a.Cliffs and (z < HALF - 2 or (z > HALF + 0.3 and z < HALF + 10) or (ax > HALF and z < HALF + 31)) then
 			return 0
 		end
 		return OUTER_DENSITY

@@ -136,7 +136,7 @@ def knight(m):
     hat_helmet(m, HAT_ORIGIN, "Head")
 
     # torso: faceted breastplate with a front ridge, stepped plate skirt, belt, cape
-    t = m.piece("Torso", "Metal", "Metal", bone="Torso", shadow=True)
+    t = m.piece("Torso", "Metal", bone="Torso", shadow=True)  # big plate: no Metal sheen (ART_VOCABULARY)
     lathe(t, [(0.78, 2.3), (0.86, 2.75), (1.0, 3.3), (1.06, 3.85), (0.96, 4.28), (0.6, 4.5), (0.0, 4.54)],
           seg=8, sx=1.12, sy=0.66)
     f = m.piece("Faulds", "MetalDark", "Metal", bone="Torso")
@@ -162,7 +162,7 @@ def knight(m):
         x = s * 1.43
         arm = m.piece(bone, "MetalDark", "Metal", bone=bone)
         block(arm, (0.6, 0.62, 1.7), loc=(x, 0, 3.05), rot=(0, -s * 5, 0), bottom=(0.9, 0.9), bevel=0.12)
-        pad = m.piece(bone + "Pauldron", "Metal", "Metal", bone=bone)
+        pad = m.piece(bone + "Pauldron", "Metal", bone=bone)
         k = mark(pad)
         lathe(pad, [(0.76, 3.5), (0.74, 3.64), (0.74, 3.86), (0.62, 4.14), (0.34, 4.3), (0.0, 4.34)], seg=8,
               phase=22.5, loc=(x + s * 0.06, 0, 0), sy=0.94)
@@ -203,7 +203,7 @@ def knight(m):
     for s, side in SIDES:
         bone = side + "Leg"
         x = s * 0.52
-        a = m.piece(bone + "Armor", "Metal", "Metal", bone=bone)
+        a = m.piece(bone + "Armor", "Metal", bone=bone)
         block(a, (0.84, 0.92, 0.66), loc=(x, -0.02, 0.8), bottom=(0.92, 0.94), bevel=0.1)
         block(a, (0.5, 0.26, 0.42), loc=(x, -0.44, 1.18), rot=(-12, 0, 0), top=(0.8, 1.0), bevel=0)
         block(a, (0.9, 1.26, 0.48), loc=(x, -0.17, 0.24), top=(0.86, 0.78), shift=(0, 0.1), bevel=0.1)
@@ -354,8 +354,8 @@ def rogue(m):
 
 @register("Priest", "Heroes", "Ivory robes with a gold stole, mitre, golden sun staff and a small book.")
 def priest(m):
-    rig(m, palette(Cloth="ivory_100", Cloth2="ivory_300", Accent="gold_600", AccentDark="gold_700",
-                   Gold="gold_400", Hat="ivory_100", HatAccent="gold_500", Metal="ivory_200", MetalDark="ivory_400",
+    rig(m, palette(Cloth="ivory_200", Cloth2="ivory_400", Accent="gold_600", AccentDark="gold_700",
+                   Gold="gold_500", Hat="ivory_200", HatAccent="gold_500", Metal="ivory_300", MetalDark="ivory_400",
                    Hair="dirt_300", Skin="skin_400", Glow="fx_gold", Book="crimson_700"))
     head(m)
     hair = hair_cap(m, back_to=5.2)

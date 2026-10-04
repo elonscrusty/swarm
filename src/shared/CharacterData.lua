@@ -55,14 +55,14 @@ CharacterData.Characters = {
 		Id = "Knight",
 		Name = "Knight",
 		Role = "Tough tank", -- one-line tag on the character select card
-		Description = "Sturdy fighter. Starts with the Whip. Takes 10% less damage.",
+		Description = "Sturdy fighter. Starts with the Sword. Takes 10% less damage.",
 		Cost = 0,
 		StartWeapon = "Whip",
 		Bonus = { damageTaken = -0.10 },
 		BonusText = "-10% damage taken",
 		Trait = { Name = "Iron Skin", Text = "Takes 10% less damage from every hit." },
 		Strengths = "Hard to kill; wide sword cuts clear the crowd in front and behind.",
-		Tradeoff = "Short reach: the Whip only hits enemies within about 7 m.",
+		Tradeoff = "Short reach: the Sword only hits enemies within about 7 m.",
 		Colors = {
 			Metal = Palette.steel_400,
 			MetalDark = Palette.steel_600,

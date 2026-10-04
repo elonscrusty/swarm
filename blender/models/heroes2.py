@@ -309,7 +309,7 @@ def alchemist(m):
 
 def miner_helmet(m, o, bone):
     """Round steel helmet with a rolled brim, a brass lamp at the brow and a gear badge."""
-    helm = m.piece("Helm", "Hat", "Metal", bone=bone, shadow=True)
+    helm = m.piece("Helm", "Hat", bone=bone, shadow=True)  # big shell: no Metal sheen
     lathe(helm, [(0.98, -0.5), (1.0, -0.2), (0.94, 0.08), (0.74, 0.32), (0.4, 0.46), (0.0, 0.5)], seg=8,
           phase=22.5, loc=o, sy=0.98)
     revolve(helm, [(0.92, -0.56), (1.18, -0.6), (1.2, -0.5), (0.94, -0.44)], seg=8, phase=22.5, loc=o, sy=1.0)
@@ -361,7 +361,7 @@ def engineer(m):
     gears = m.piece("Gears", "Gold", "Metal", bone="Torso")
     gear(gears, (0, -0.98, 2.25), (0, 0, 0), 0.32, 0.24, depth=0.12)
     # boiler backpack: a steel tank with brass bands, a gear and a stubby chimney
-    pack = m.piece("Pack", "Metal", "Metal", bone="Torso", shadow=True)
+    pack = m.piece("Pack", "Metal", bone="Torso", shadow=True)
     pack.cyl(0.55, 0.55, 1.5, seg=8, loc=(0, 1.08, 3.35))
     lathe(pack, [(0.55, 4.1), (0.4, 4.35), (0.0, 4.42)], seg=8, loc=(0, 1.08, 0))
     block(pack, (1.1, 0.3, 1.2), loc=(0, 0.74, 3.35), bevel=0.08)
@@ -382,7 +382,7 @@ def engineer(m):
         x = s * 1.48
         arm = m.piece(bone, "Cloth", bone=bone)
         block(arm, (0.66, 0.66, 1.6), loc=(x, 0, 3.1), rot=(0, -s * 5, 0), bottom=(0.92, 0.92), bevel=0.14)
-        pad = m.piece(bone + "Pauldron", "Metal", "Metal", bone=bone)
+        pad = m.piece(bone + "Pauldron", "Metal", bone=bone)
         k = mark(pad)
         lathe(pad, [(0.66, 3.56), (0.66, 3.78), (0.56, 4.06), (0.3, 4.2), (0.0, 4.24)], seg=8, phase=22.5,
               loc=(x + s * 0.04, 0, 0), sy=0.96)
@@ -455,9 +455,9 @@ def necro_hood(m, o, bone):
                                    "gold claw and a violet soul core.")
 def necromancer(m):
     # black and gold (the lobby reference look), violet soul glow
-    rig(m, pal(Cloth="chitin_900", Cloth2="wasp_900", Metal="ivory_200", MetalDark="ivory_400",
+    rig(m, pal(Cloth="chitin_900", Cloth2="wasp_900", Metal="ivory_300", MetalDark="ivory_500",
                    Accent="gold_400", AccentDark="gold_600", Gold="gold_400", Hat="chitin_900",
-                   HatAccent="gold_500", Hair="slate_950", Skin="ivory_300", Bone="ivory_100",
+                   HatAccent="gold_500", Hair="slate_950", Skin="ivory_300", Bone="ivory_200",
                    Shaft="chitin_800", Glow=(0.74, 0.47, 1.0)))
     head(m)
     mask = m.piece("FaceMask", "Bone", bone="Head")
