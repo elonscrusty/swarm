@@ -605,8 +605,64 @@ local function buildAltar(arena, pos: Vector3)
 	obj.Model.Parent = folder
 end
 
+--[[
+	Star / Sun / Moon rune stones. Each stone is a small monument: a round plinth, a short
+	pillar and a tablet leaning back toward the run camera (its face is square to the
+	camera's 55° pitch) with the rune's glyph raised on it: a crescent (Moon), a disc with
+	rays (Sun), a five-pointed star (Star). The same stone family as the portal's masonry.
+	A low order tablet in the middle shows the sequence left to right as three small flat
+	glyphs. States (runeLook):
+	  ready      glyphs carved in a muted tone, no light
+	  correct    a stone pressed in the right order: its glyph and its order token glow
+	  reset      a wrong stone: every glyph flashes crimson for a moment, then back to ready
+	  completed  every glyph and token turns quiet gold (no glow, no light, no rings)
+	The stones stand RUNE_RADIUS from the centre, far enough apart that their interact
+	circles (Config.Chests.InteractRadius) never overlap: at most one stone is in reach, so
+	the nearest-target prompt can never pick a stone the player did not walk to.
+]]
 local RUNE_NAMES = { "Moon", "Sun", "Star" }
-local RUNE_COLORS = { P.slate_300, P.gold_300, P.crimson_400 }
+local RUNE_COLORS = { P.fx_arcane, P.gold_300, P.fx_ivory }
+local RUNE_RADIUS = 9
+local RUNE_TILT = math.rad(90 - Config.Camera.Pitch) -- the tablet leans back by this much
+local RUNE_FLASH = 0.7
+
+-- Raised glyph pieces for rune `id` on a face frame `f` (X right, Y up the face, Z out of
+-- the face), `size` studs across. Returns the pieces (they are recoloured by state).
+local function runeGlyph(m: Model, f: CFrame, id: number, size: number, faceColor: Color3): { BasePart }
+	local out: { BasePart } = {}
+	local t = math.max(0.06, size * 0.05)
+	local function piece(name: string, sz: Vector3, at: CFrame, shape: Enum.PartType?, color: Color3?)
+		local p = part({ Name = name, Shape = shape, Size = sz, CFrame = f * at, Color = color or RUNE_COLORS[id] })
+		p.Parent = m
+		if not color then
+			table.insert(out, p)
+		end
+		return p
+	end
+	local DISC = CFrame.Angles(0, math.rad(90), 0) -- a cylinder's axis (X) out of the face
+	if id == 1 then
+		-- crescent: a disc with a face-coloured disc over its upper right
+		piece("Glyph", Vector3.new(t, size * 0.86, size * 0.86), CFrame.new(0, 0, t / 2) * DISC, Enum.PartType.Cylinder)
+		piece("GlyphCut", Vector3.new(t * 1.2, size * 0.72, size * 0.72), CFrame.new(size * 0.22, size * 0.12, t * 0.7) * DISC, Enum.PartType.Cylinder, faceColor)
+	elseif id == 2 then
+		-- sun: a disc and eight rays
+		piece("Glyph", Vector3.new(t, size * 0.5, size * 0.5), CFrame.new(0, 0, t / 2) * DISC, Enum.PartType.Cylinder)
+		for k = 0, 7 do
+			local a = k * math.pi / 4
+			piece("Glyph", Vector3.new(size * 0.1, size * 0.2, t), CFrame.new(math.cos(a) * size * 0.4, math.sin(a) * size * 0.4, t / 2) * CFrame.Angles(0, 0, a - math.pi / 2))
+		end
+	else
+		-- star: five tapering points around a small centre
+		piece("Glyph", Vector3.new(size * 0.3, size * 0.3, t), CFrame.new(0, 0, t / 2) * CFrame.Angles(0, 0, math.rad(45)))
+		for k = 0, 4 do
+			local a = math.pi / 2 + k * math.pi * 2 / 5
+			local rot = CFrame.Angles(0, 0, a - math.pi / 2)
+			piece("Glyph", Vector3.new(size * 0.17, size * 0.22, t), CFrame.new(math.cos(a) * size * 0.2, math.sin(a) * size * 0.2, t / 2) * rot)
+			piece("Glyph", Vector3.new(size * 0.08, size * 0.18, t), CFrame.new(math.cos(a) * size * 0.38, math.sin(a) * size * 0.38, t / 2) * rot)
+		end
+	end
+	return out
+end
 
 local function runeText(puzzle)
 	local names = {}
@@ -616,25 +672,99 @@ local function runeText(puzzle)
 	end
 end
 
+local function paintGlyph(pieces: { BasePart }, color: Color3, lit: boolean)
+	for _, p in ipairs(pieces) do
+		p.Color = color
+		p.Material = lit and NEON or Enum.Material.SmoothPlastic
+	end
+end
+
+-- Paints every stone and order token for the puzzle's state ("flash" = a wrong stone).
+local function runeLook(puzzle, flash: boolean?)
+	local muted = function(c: Color3): Color3 return c:Lerp(P.stone_700, 0.45) end
+	for _, obj in ipairs(puzzle.Nodes) do
+		local id = obj.Rune :: number
+		local step = table.find(puzzle.Order, id) or 3
+		local lit = not puzzle.Solved and step <= puzzle.Progress
+		local color = puzzle.Solved and P.gold_500 or flash and P.crimson_400 or lit and RUNE_COLORS[id] or muted(RUNE_COLORS[id])
+		paintGlyph(obj.Glow, color, (lit or flash == true) and not puzzle.Solved)
+		if obj.Light then
+			obj.Light.Enabled = lit or flash == true
+			obj.Light.Color = flash and P.crimson_400 or RUNE_COLORS[id]
+		end
+		if obj.Ring then
+			obj.Ring.Color = lit and RUNE_COLORS[id] or P.stone_300
+			obj.Ring.Transparency = puzzle.Solved and 1 or 0.8
+		end
+	end
+	for k, pieces in ipairs(puzzle.Tokens) do
+		local id = puzzle.Order[k]
+		local lit = not puzzle.Solved and k <= puzzle.Progress
+		paintGlyph(pieces, puzzle.Solved and P.gold_500 or flash and P.crimson_400 or lit and RUNE_COLORS[id] or muted(RUNE_COLORS[id]), lit or flash == true)
+	end
+end
+
 local function buildRunes(arena, centre: Vector3)
-	local puzzle = { Order = { 1, 2, 3 }, Progress = 0, Nodes = {}, Solved = false }
+	local puzzle = { Order = { 1, 2, 3 }, Progress = 0, Nodes = {}, Tokens = {}, Solved = false, Flash = 0, Tablet = nil :: Model? }
 	for i = 3, 2, -1 do
 		local j = rng:NextInteger(1, i)
 		puzzle.Order[i], puzzle.Order[j] = puzzle.Order[j], puzzle.Order[i]
 	end
-	MapBuilder.ClearDecor(arena, centre, 10)
+	MapBuilder.ClearDecor(arena, centre, RUNE_RADIUS + 3)
+	local lean = CFrame.Angles(-RUNE_TILT, 0, 0) -- top edge away from the camera (-Z)
 	for i = 1, 3 do
-		local angle = i * math.pi * 2 / 3
-		local pos = centre + Vector3.new(math.cos(angle) * 6, 0, math.sin(angle) * 6)
+		-- one stone left, one right, one at the back (the camera sees all three faces)
+		local angle = math.rad(-90) + (i - 1) * math.pi * 2 / 3
+		local pos = centre + Vector3.new(math.cos(angle) * RUNE_RADIUS, 0, math.sin(angle) * RUNE_RADIUS)
 		local cf = CFrame.new(pos)
 		local obj = newObj("Shrine", "Rune", pos, cf)
 		obj.Rune, obj.Puzzle = i, puzzle
-		add(obj.Model, cf, "Stone", Vector3.new(2, 3, 2), Vector3.new(0, 1.5, 0), P.stone_500)
-		addGlow(obj, pos + Vector3.new(0, 3.5, 0), RUNE_COLORS[i], true, true)
+		local m = obj.Model
+		add(m, cf, "Dais", Vector3.new(0.5, 3.6, 3.6), Vector3.new(0, 0.25, 0), P.stone_600, nil, Enum.PartType.Cylinder, UPRIGHT)
+		add(m, cf, "Stone", Vector3.new(1.7, 1.9, 1.3), Vector3.new(0, 1.45, 0.15), P.stone_500)
+		add(m, cf, "Cap", Vector3.new(2.0, 0.25, 1.5), Vector3.new(0, 2.45, 0.15), P.stone_400)
+		-- the leaning tablet: its lower front edge rests on the cap
+		local face = cf * CFrame.new(0, 2.55, -0.45) * lean * CFrame.new(0, 1.35, 0)
+		local slab = part({ Name = "Box", Size = Vector3.new(2.9, 2.9, 0.45), CFrame = face * CFrame.new(0, 0, 0.225), Color = P.stone_400, CastShadow = true })
+		slab.Parent = m
+		local rim = part({ Name = "Trim", Size = Vector3.new(3.1, 3.1, 0.3), CFrame = face * CFrame.new(0, 0, 0.42), Color = P.stone_600 })
+		rim.Parent = m
+		-- the face points toward the camera (+Z): flip the frame so the glyph's Z is out
+		local out = face * CFrame.Angles(0, math.pi, 0)
+		obj.Glow = runeGlyph(m, out, i, 2.3, P.stone_400)
+		local l = Instance.new("PointLight")
+		l.Range = 12
+		l.Brightness = 1.2
+		l.Shadows = false
+		l.Enabled = false
+		l.Parent = obj.Glow[1]
+		obj.Light = l
+		local r = Config.Chests.InteractRadius
+		local disc = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, r * 2, r * 2), CFrame = CFrame.new(pos + Vector3.new(0, 0.05, 0)) * UPRIGHT, Color = P.stone_300, Transparency = 0.8 })
+		disc.Parent = m
+		obj.Ring = disc
 		setAttrs(obj, { Title = RUNE_NAMES[i] .. " rune", Hold = 0.4, State = "Ready", Benefit = "Complete the sequence for a team item", Tradeoff = "Wrong rune resets the sequence" })
-		obj.Model.Parent = folder
+		m.Parent = folder
 		table.insert(puzzle.Nodes, obj)
 	end
+	-- the order tablet in the middle: three flat glyphs, first on the left (screen left = -X)
+	local tablet = Instance.new("Model")
+	tablet.Name = "RuneOrder"
+	local tcf = CFrame.new(centre)
+	add(tablet, tcf, "Dais", Vector3.new(0.3, 5.2, 5.2), Vector3.new(0, 0.15, 0), P.stone_600, nil, Enum.PartType.Cylinder, UPRIGHT)
+	add(tablet, tcf, "Top", Vector3.new(4.4, 0.12, 1.7), Vector3.new(0, 0.34, 0), P.stone_400)
+	local flat = CFrame.fromMatrix(Vector3.zero, Vector3.new(1, 0, 0), Vector3.new(0, 0, -1)) -- face up, glyph "up" = away from the camera
+	for k, id in ipairs(puzzle.Order) do
+		local x = (k - 2) * 1.45
+		if k > 1 then
+			-- a small chevron between tokens: the sequence reads left to right
+			add(tablet, tcf, "Mark", Vector3.new(0.12, 0.06, 0.12), Vector3.new(x - 0.72, 0.43, 0), P.stone_200, nil, nil, CFrame.Angles(0, math.rad(45), 0))
+		end
+		puzzle.Tokens[k] = runeGlyph(tablet, tcf * CFrame.new(x, 0.4, 0) * flat, id, 1.2, P.stone_400)
+	end
+	tablet.Parent = puzzle.Nodes[1].Model -- removed with the stones (LootSystem.Clear)
+	puzzle.Tablet = tablet
+	runeLook(puzzle)
 	runeText(puzzle)
 end
 

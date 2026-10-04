@@ -45,6 +45,8 @@ local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
+local MiniMap = require(script.Parent.MiniMap)
+local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Accessibility = require(script.Parent.Accessibility)
 local PortalBeacon = require(script.Parent.PortalBeacon)
@@ -485,6 +487,35 @@ local function clearCentreBars(x: number, y: number): number
 	return y
 end
 
+-- The edge marker must not sit on the HUD's corner panels (landscape: the vitals + item
+-- strip column top left, the minimap top right): an arrow that would land on one drops
+-- just below it, keeping its side of the screen.
+local function clearCornerPanels(x: number, y: number): number
+	local rects = {}
+	local function add(g: GuiObject?)
+		if g and g.Visible and g.Parent and g.Size.X.Offset > 0 then
+			local gw, gh = g.Size.X.Offset, g.Size.Y.Offset
+			table.insert(rects, { g.Position.X.Offset - g.AnchorPoint.X * gw, g.Position.Y.Offset - g.AnchorPoint.Y * gh, gw, gh })
+		end
+	end
+	local hud = Hud.Elements()
+	if not kit.IsPortrait() then
+		add(hud.Plate)
+		local loot = LootUI.Elements()
+		if loot.Strip and #loot.Strip:GetChildren() > 1 then
+			add(loot.Strip)
+		end
+	end
+	add(MiniMap.Elements().Holder)
+	for _, r in ipairs(rects) do
+		local gx, gy, gw, gh = r[1], r[2], r[3], r[4]
+		if x + 40 > gx - 6 and x - 40 < gx + gw + 6 and y + 54 > gy - 6 and y - 32 < gy + gh + 6 then
+			y = gy + gh + 6 + 32
+		end
+	end
+	return y
+end
+
 local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	local pos = state:GetAttribute("PortalPos")
 	local root = localRoot()
@@ -603,7 +634,7 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 		at = clampTo(barTop)
 	end
 	ui.Arrow.Visible = true
-	ui.Arrow.Position = UDim2.fromOffset(math.floor(at.X + 0.5), math.floor(clearCentreBars(at.X, at.Y) + 0.5))
+	ui.Arrow.Position = UDim2.fromOffset(math.floor(at.X + 0.5), math.floor(clearCornerPanels(at.X, clearCentreBars(at.X, at.Y)) + 0.5))
 	ui.ArrowPivot.Rotation = math.deg(math.atan2(d.Y, d.X))
 end
 
