@@ -293,7 +293,7 @@ WeaponData.Weapons = {
 			Name = "Twin Orbs",
 			Passive = "SpeedBoots",
 			Description = "Every shot fires twin orbs that pierce through crowds.",
-			Stats = row(20, 0.80, 4, 1.2, 48, 4, 3.5, 6),
+			Stats = row(21, 0.85, 4, 1.2, 48, 4, 3.5, 6),
 			Twin = true, -- each shot spawns two orbs side by side
 		},
 	},
