@@ -1143,7 +1143,10 @@ local function totemPulse(p: Projectile, now: number)
 			if root then
 				slowEnemy(e, 0.05, params.RootSeconds, now)
 			end
-			hitEnemy(p.Owner, e, p.Damage, p.Pos, p.Knockback)
+			-- overlapping totems of one weapon hurt an enemy once per pulse (no stacking)
+			if p.Weapon and burnReady(p.Weapon, e, p.Pulse, now) then
+				hitEnemy(p.Owner, e, p.Damage, p.Pos, p.Knockback)
+			end
 		end
 	end
 	local healed = 0
@@ -1908,7 +1911,7 @@ function Arm.landMeteor(p: Projectile)
 	end
 	Fx.Explosion(at, x.R)
 	if x.Crater > 0 then
-		table.insert(zones, { Pos = at, Radius = x.CraterR, Life = x.Crater, Tick = x.CraterTick, Timer = x.CraterTick, Damage = x.CraterDamage, Owner = owner })
+		table.insert(zones, { Pos = at, Radius = x.CraterR, Life = x.Crater, Tick = x.CraterTick, Timer = x.CraterTick, Damage = x.CraterDamage, Owner = owner, Weapon = p.Weapon })
 		Fx.Pool(at, x.CraterR, x.Crater, true)
 	end
 	Fx.Sound("Hit")
@@ -2209,7 +2212,8 @@ function Arm.stepSnare(p: Projectile, dt: number, now: number): boolean
 			local d = rel.Magnitude
 			local kb = (x.Pull and d > 1) and pullSpeed(d * x.Pull) or 0
 			local at = e.Pos
-			if damageEnemy(owner, e, p.Damage, d > 1e-3 and rel / d or nil, kb) and x.Thorn and thorns < x.ThornsPerTick then
+			-- overlapping snares of one weapon hurt an enemy once per tick (no stacking)
+			if burnReady(p.Weapon, e, x.Tick, now) and damageEnemy(owner, e, p.Damage, d > 1e-3 and rel / d or nil, kb) and x.Thorn and thorns < x.ThornsPerTick then
 				thorns += 1
 				burstAround(owner, at, x.Thorn, p.Damage * x.ThornShare)
 				pushFx("vt", { r1(at.X), r1(at.Z), r1(x.Thorn) })
@@ -2576,6 +2580,7 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 				Timer = 0,
 				Damage = p.Damage,
 				Owner = p.Owner,
+				Weapon = p.Weapon, -- overlapping pools of one weapon hurt once per tick
 			})
 			Fx.Pool(p.Pos, p.PoolRadius, p.PoolLife, p.Evo)
 		end
@@ -2768,6 +2773,7 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 end
 
 local function stepZones(dt: number)
+	local now = ctx.RunManager.GetRunTime()
 	for i = #zones, 1, -1 do
 		local z = zones[i]
 		z.Life -= dt
@@ -2777,7 +2783,9 @@ local function stepZones(dt: number)
 			local n = grid():QueryCircle(z.Pos.X, z.Pos.Z, z.Radius, queryBuf)
 			local hits = table.move(queryBuf, 1, n, 1, {})
 			for _, e in ipairs(hits) do
-				if e.Alive then
+				-- overlapping pools / craters of one weapon hurt an enemy once per tick
+				-- (four bottles on one clump used to deal four times the damage)
+				if e.Alive and (not z.Weapon or burnReady(z.Weapon, e, z.Tick, now)) then
 					damageEnemy(z.Owner, e, z.Damage, nil, 0)
 				end
 			end
