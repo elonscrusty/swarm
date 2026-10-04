@@ -189,8 +189,8 @@ local function cutToLow(pieces: { any }): { any }
 		local band = string.match(name, "^(.+)Side$")
 		if band then
 			stem, digits = band, ""
-		elseif byKey[name .. "|"] then
-			stem, digits = name, ""
+		elseif not stem or stem == "" then
+			stem, digits = name, "" -- a single piece is its own unit (a band can join it)
 		end
 		local size = piece.Part.Size
 		local volume = size.X * size.Y * size.Z
