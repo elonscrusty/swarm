@@ -80,7 +80,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	ui.Tabs = UIKit.Tabs(face, {
 		{ Id = "Stats", Title = "Stats", Icon = "bars" },
 		{ Id = "Achievements", Title = "Achievements", Icon = "ach_Badge" },
-		{ Id = "Journal", Title = "Journal", Icon = "bars" },
+		{ Id = "Journal", Title = "Journal", Icon = "skull" }, -- the enemy journal (not the stats bars)
 	}, function(id)
 		if id == "Journal" then
 			ui.Tabs.Select(tab)

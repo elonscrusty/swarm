@@ -581,7 +581,7 @@ local function sendHome(list: { Player }, why: string?)
 			setTravel(p, "ToLobby")
 			table.insert(ready, p)
 		else
-			notify(p, "Couldn't save before travelling: you can keep playing here.", WARN)
+			notify(p, "Couldn't save before traveling: you can keep playing here.", WARN)
 		end
 	end
 	if #ready == 0 then

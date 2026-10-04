@@ -1076,7 +1076,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				row.Instance.Size = cols == 2 and UDim2.new(0.5, -gap / 2, 0, rowH) or UDim2.new(1, 0, 0, rowH)
 				rowStyle(id, cols == 2 and "tile" or "row", rowH)
 			end
-			local rw = math.clamp(W * 0.37, 430, 530)
+			-- phones in landscape (tiles): a slimmer details panel leaves the dais hero clear
+			local rw = math.clamp(W * 0.37, cols == 2 and 400 or 430, 530)
 			ui.NameRoom = rw - 40 - PORTRAIT - 14
 			place(ui.Detail, W - M - rw, top, rw, math.min(contentH, H - M - top))
 			pinAction(contentH > H - M - top + 1)

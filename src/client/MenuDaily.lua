@@ -224,10 +224,10 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	ui.Play = UIKit.Button(foot, {
 		Kind = "Primary",
 		Glow = true,
-		Title = "START RANKED",
+		Title = "PLAY DAILY",
 		TitleStyle = "Label",
 		TitleSize = 18,
-		Subtitle = "Uses today's attempt",
+		Subtitle = "Scored attempt",
 		Icon = "play",
 		IconSize = 26,
 		Align = "Center",
@@ -341,17 +341,17 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		if used then
 			UIKit.SetStatus(ui.Pill, "PRACTICE")
 			ui.Heading.Text = "Practice today's challenge"
-			ui.InfoText.Text = (score > 0 and ("Ranked result: " .. CurseData.ScoreText(score) .. ". ") or "Today's ranked attempt is used. ")
-				.. "Practice cannot replace your ranked score. New ranked try at 00:00 UTC." .. bestLine
+			ui.InfoText.Text = (score > 0 and ("Scored result: " .. CurseData.ScoreText(score) .. ". ") or "Today's scored attempt is used. ")
+				.. "Practice cannot replace your scored result. New scored try at 00:00 UTC." .. bestLine
 				.. (rankLine and ("\n" .. rankLine) or "")
 		else
-			UIKit.SetStatus(ui.Pill, "READY", "RANKED")
-			ui.Heading.Text = "Your ranked run is ready"
-			ui.InfoText.Text = "One ranked try today. Used when the run starts, even if you lose or leave. New try at 00:00 UTC." .. bestLine
+			UIKit.SetStatus(ui.Pill, "READY")
+			ui.Heading.Text = "Your scored attempt is ready"
+			ui.InfoText.Text = "One scored try today. Used when the run starts, even if you lose or leave. New try at 00:00 UTC." .. bestLine
 		end
 		ui.Sub.Text = string.format("1. Play solo on today's shared route.\n2. Clear %d stages; more clears rank higher.\n3. Ties: faster last boss kill wins. No clears? Longer survival wins.", Config.Stages.WinMinStages)
 		ui.Play.SetKind(used and "Secondary" or "Primary")
-		ui.Play.SetText(used and "PRACTICE RUN" or "START RANKED", used and "No leaderboard score" or "Uses today's attempt")
+		ui.Play.SetText(used and "PRACTICE RUN" or "PLAY DAILY", used and "No leaderboard score" or "Scored attempt")
 		if shownDay ~= day then
 			shownDay = day
 			buildDay(d)

@@ -116,7 +116,8 @@ local narrow = false
 -- Width of a row button (narrow lists: smaller, icon-less unless it is icon-only).
 local function bw(w: number, title: string): number
 	if narrow and title ~= "" then
-		return math.max(76, w - 32)
+		-- never narrower than the word itself ("AC..." on phones)
+		return math.max(76, #title * 16 + 30, w - 32)
 	end
 	return w
 end
@@ -479,7 +480,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		-- invites to you first
 		for _, inv in ipairs(openInvites()) do
 			order += 1
-			local f = personRow(plist, order, inv.FromId, inv.FromName, "Invited you to their party", P.gold_300, bw(108, "ACCEPT") + 8 + 44 + 16, true)
+			local f = personRow(plist, order, inv.FromId, inv.FromName, narrow and "Invited you" or "Invited you to their party", P.gold_300, bw(108, "ACCEPT") + 8 + 44 + 16, true)
 			rowButton(f, "ACCEPT", nil, "Primary", 108, 8, function()
 				send("Accept", inv.FromId)
 				deadlines[inv.FromId] = 0
@@ -555,7 +556,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		ui.Start.Instance.Visible = inParty() and isLeader() and mode ~= nil
 		if ui.Start.Instance.Visible then
 			local allReady = sum.Ready >= sum.Others
-			ui.Start.SetText(allReady and ("START " .. string.upper((Config.Modes :: any)[mode :: string].DisplayName)) or string.format("READY %d/%d", sum.Ready, sum.Others))
+			ui.Start.SetText(allReady and ("START " .. string.upper((Config.Modes :: any)[mode :: string].DisplayName)) or string.format("%d/%d READY", sum.Ready, sum.Others))
 			ui.Start.SetEnabled(allReady)
 		end
 	end

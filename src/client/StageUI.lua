@@ -93,7 +93,7 @@ local function checkReveal(state: Configuration)
 	if reveal ~= lastReveal then
 		lastReveal = reveal
 		if reveal > 0 then
-			Hud.Announce("THE PORTAL HAS APPEARED", "Open it before the swarm grows too strong: follow the arrow, stand in its circle",
+			Hud.Announce("THE PORTAL HAS APPEARED", "Follow the arrow · stand in its circle",
 				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear")
 		end
 	end

@@ -589,11 +589,12 @@ local function buildQueue(frame: Frame)
 	UIKit.list(ui.QueueList, { Padding = UDim.new(0, 4) })
 	ui.QueueNote = text(face, "Body", "", { Name = "Note", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Size = UDim2.new(1, 0, 0, TS(16) * 3 + 8) })
 	-- the run's curses (the starter's pick): a tap opens the CURSES screen
-	local curseRow = new("TextButton", { Name = "QueueCurses", Text = "", AutoButtonColor = false, BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.25, Size = UDim2.new(1, 0, 0, 40) }, face)
+	local curseRow = new("TextButton", { Name = "QueueCurses", Text = "", AutoButtonColor = false, BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.25, Size = UDim2.new(1, 0, 0, 56) }, face)
 	UIKit.corner(curseRow, Theme.Radius.S)
 	UIKit.stroke(curseRow, P.crimson_400, 1, 0.45)
 	Icons.Draw(curseRow, "curse", { Size = 22, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Back = C.PanelInset })
-	ui.QueueCurseText = text(curseRow, "Label", "", { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -46, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, RichText = true }, 13)
+	-- two lines: several curses wrap instead of reading "Frenz..."
+	ui.QueueCurseText = text(curseRow, "Label", "", { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -46, 1, 0), TextWrapped = true, TextTruncate = Enum.TextTruncate.AtEnd, RichText = true }, 13)
 	curseRow.Activated:Connect(function()
 		UIKit.Click()
 		LobbyScreen.Show("Curses")
@@ -1115,7 +1116,7 @@ local function relayout()
 	local qh = ui.Queue.Size.Y.Offset
 	local busy = lastStatus == "Busy"
 	-- the full panel needs the player list, the curse / endless lines, the note and buttons
-	local extraLines = (ui.QueueCurses:GetAttribute("Has") == true and 46 or 0) + (ui.QueueEndless:GetAttribute("Has") == true and 38 or 0)
+	local extraLines = (ui.QueueCurses:GetAttribute("Has") == true and 62 or 0) + (ui.QueueEndless:GetAttribute("Has") == true and 38 or 0)
 	local short = qh < math.max(280, 72 + 4 * 30 + extraLines + TS(16) * 3 + 8 + 52 + 36) and not busy
 	ui.QueueList.Visible = not short and not busy
 	local noteY = (short or busy) and 68 or (72 + 4 * 30)
@@ -1124,7 +1125,7 @@ local function relayout()
 	local curseY = noteY
 	if ui.QueueCurses.Visible then
 		ui.QueueCurses.Position = UDim2.fromOffset(0, curseY)
-		noteY += 46
+		noteY += 62
 	end
 	ui.QueueEndless.Visible = ui.QueueEndless:GetAttribute("Has") == true
 	if ui.QueueEndless.Visible then

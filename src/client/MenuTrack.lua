@@ -177,10 +177,14 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		local order = 0
+		ui.NextRow = nil
 		for _, lv in ipairs(AccountData.RewardLevels) do
 			for _, r in ipairs(AccountData.Rewards[lv]) do
 				order += 1
 				local f = rewardRow(lv, r, level, order)
+				if lv > level and not ui.NextRow then
+					ui.NextRow = f -- the next reward to earn (the list opens there)
+				end
 				if animate and order <= 10 then
 					UIAnim.Pop(f, 0.02 * order, 0.9)
 				end
@@ -217,6 +221,20 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 		OnShow = function(_p)
 			fill(true)
 			MenuTrack._layout()
+			-- open the list one row above the next reward instead of at LV 2
+			task.defer(function()
+				local row, first = ui.NextRow, nil
+				for _, ch in ipairs(list:GetChildren()) do
+					if ch:IsA("GuiObject") and ch.LayoutOrder == 1 then
+						first = ch
+					end
+				end
+				if row and row.Parent and first then
+					local step = row.AbsoluteSize.Y * (70 / 64)
+					local y = row.AbsolutePosition.Y - first.AbsolutePosition.Y - step
+					list.CanvasPosition = Vector2.new(0, math.max(0, y))
+				end
+			end)
 		end,
 	}
 end
