@@ -112,6 +112,8 @@ end
 
 -- Modals that cover the HUD while they own the screen (Hud.SetCovered hides it under them).
 local COVERS_HUD = { LevelUp = true, Reward = true, Pause = true, Revive = true, Results = true, Portal = true, Items = true, BugReport = true }
+-- Sub-panels opened from another panel: the parent stays on screen under them.
+local STACKS = { Items = true, BugReport = true }
 local overlays: { [string]: GuiObject } = {} -- name -> its overlay (UIState.Audit, setCovering)
 local function applyOwner()
 	local covered = UIState.Covered()
@@ -148,6 +150,7 @@ local function primaryHandle(overlay: GuiObject, name: string, blocks: boolean, 
 	return {
 		Blocks = blocks,
 		Covers = covers,
+		Stacks = STACKS[name] == true,
 		Show = function()
 			revealOverlay(overlay)
 		end,

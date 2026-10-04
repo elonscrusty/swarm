@@ -11335,7 +11335,7 @@
   "name": "Mite",
   "category": "Enemies",
   "note": "Slime id. The grunt: round yellow-green beetle, dark head, amber eyes.",
-  "tris": 308,
+  "tris": 406,
   "pieces": [
    {
     "name": "Shell",
@@ -11343,15 +11343,30 @@
     "material": "SmoothPlastic",
     "offset": [
      0.0,
-     1.17,
+     1.37,
+     0.1222
+    ],
+    "size": [
+     2.1332,
+     0.74,
+     2.3173
+    ],
+    "shadow": true
+   },
+   {
+    "name": "ShellSide",
+    "slot": "Side",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     0.91,
      0.17
     ],
     "size": [
-     2.49,
-     1.14,
+     2.56,
+     0.62,
      2.62
-    ],
-    "shadow": true
+    ]
    },
    {
     "name": "Head",
@@ -11359,12 +11374,12 @@
     "material": "SmoothPlastic",
     "offset": [
      0.0,
-     0.56,
+     0.865,
      -0.13
     ],
     "size": [
      2.12,
-     0.76,
+     1.37,
      3.3
     ]
    },
@@ -11441,6 +11456,11 @@
     0.9137254901960784,
     0.7254901960784313,
     0.2549019607843137
+   ],
+   "Side": [
+    0.3556862745098039,
+    0.4779607843137255,
+    0.2156078431372549
    ]
   },
   "bounds": [

@@ -662,17 +662,18 @@ local LIGHTING = {
 	-- dusk courtyard: cool slate sky and ambient, a low warm sun under the horizon glow;
 	-- the fire pools and the key light on the dais do the rest
 	Lobby = {
-		-- moonlit night: blue ambient and a lavender sky light, warm torches / braziers do
-		-- the rest; restrained bloom so the runes, flames and staff glow without the hero
-		-- washing out
-		Clock = 18.6, Brightness = 1.1, Latitude = 40, Shadow = 0.4,
-		Ambient = rgb(114, 116, 162), Outdoor = rgb(162, 162, 216), Top = rgb(160, 174, 236), Bottom = rgb(44, 38, 66),
+		-- dusk (title screen, overhaul 01_Title): the sun just setting behind the pines on
+		-- the left, a warm orange horizon under a deep blue-violet sky, cool lavender
+		-- ambient on the castle stone and warm torches / braziers / the dais glow doing the
+		-- rest; restrained bloom so the flames and runes glow without the hero washing out
+		Clock = 17.8, Brightness = 1.15, Latitude = 40, Shadow = 0.4,
+		Ambient = rgb(118, 112, 160), Outdoor = rgb(168, 154, 204), Top = rgb(255, 204, 168), Bottom = rgb(50, 40, 70),
 		Diffuse = 0.3, Specular = 0.35,
-		Atmo = { Density = 0.12, Offset = 0.1, Color = rgb(104, 118, 184), Decay = rgb(110, 98, 170), Glare = 0, Haze = 0.6 },
+		Atmo = { Density = 0.13, Offset = 0.1, Color = rgb(232, 146, 112), Decay = rgb(92, 82, 168), Glare = 0.2, Haze = 1.1 },
 		Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.25 },
-		Grade = { Brightness = 0, Contrast = 0.18, Saturation = 0.2, Tint = rgb(238, 240, 255) },
-		Rays = { Intensity = 0.0, Spread = 0.5 },
-		Clouds = { Cover = 0.5, Density = 0.5, Color = rgb(84, 90, 138) },
+		Grade = { Brightness = 0, Contrast = 0.16, Saturation = 0.2, Tint = rgb(255, 242, 238) },
+		Rays = { Intensity = 0.02, Spread = 0.5 },
+		Clouds = { Cover = 0.45, Density = 0.45, Color = rgb(124, 104, 158) },
 	},
 	-- Arenas follow the bright "sunny storybook" look (docs/ART_DIRECTION.md): a warm
 	-- high sun with soft shadows, warm ambient and a green / sand ground bounce, little
@@ -870,9 +871,9 @@ local MENU = {
 	AimLift = 3.5, -- aim this far above the dais top: the hero's middle (lands at MenuHeroY)
 	KeepZ = -53, -- keep wall face, relative to the dais (far: the castle reads at its real scale)
 	WaitZ = 34, -- hidden waiting spot for real characters (behind the camera)
-	Moon = Vector3.new(-0.09, 0.3, -1), -- moon direction in camera space (16:9: top centre)
-	MoonDistance = 170,
-	MoonRadius = 3.4,
+	Sun = Vector3.new(-0.42, 0.035, -1), -- setting sun in camera space (left, on the treeline)
+	SunDistance = 170,
+	SunRadius = 4.2,
 }
 
 function MapBuilder.BuildLobby()
@@ -1067,12 +1068,12 @@ function MapBuilder.BuildLobby()
 		Transparency = 1,
 	})
 	-- key light: soft and neutral-warm, in front of the hero above the camera line (bright
-	-- enough to read, never washed out); a cool moon rim from behind and a violet soul glow
-	-- at the staff side separate it from the gate
-	pointLight(folder, daisPos + Vector3.new(-2.5, 9, 8), 15, 1.35, rgb(255, 228, 200), false)
-	pointLight(folder, daisPos + Vector3.new(3, 8, -4.5), 10, 1.3, rgb(150, 172, 255), false)
-	pointLight(folder, daisPos + Vector3.new(-2.2, 5.5, 1.2), 8, 0.9, rgb(176, 112, 255), false)
-	-- cool moonlight over the courtyard and a lavender wash on the castle front
+	-- enough to read, never washed out; silver stays silver, gold trim stays gold); a cool
+	-- dusk rim from behind and a warm sunset fill from the left separate it from the gate
+	pointLight(folder, daisPos + Vector3.new(-2.5, 9, 8), 15, 1.25, rgb(255, 228, 204), false)
+	pointLight(folder, daisPos + Vector3.new(3, 8, -4.5), 10, 1.3, rgb(160, 168, 255), false)
+	pointLight(folder, daisPos + Vector3.new(-5, 5, 1.5), 9, 0.8, rgb(255, 170, 110), false)
+	-- cool dusk light over the courtyard and a lavender wash on the castle front
 	pointLight(folder, daisPos + Vector3.new(0, 24, -12), 60, 1.9, rgb(150, 166, 236), false)
 	pointLight(folder, at(0, 16, keepZ + 12), 40, 2.4, rgb(184, 184, 244), false)
 	for _, sx in ipairs({ -1, 1 }) do
@@ -1136,7 +1137,7 @@ function MapBuilder.BuildLobby()
 	end
 
 	--------------------------------------------------------------------------------------
-	-- Air: embers drifting up from the braziers, violet soul wisps circling the hero.
+	-- Air: embers drifting up from the braziers, a few gold motes rising off the dais.
 	local air = add({ Name = "Ambience", Size = Vector3.new(26, 5, 10), CFrame = CFrame.new(daisPos + Vector3.new(0, 4, -3)), Transparency = 1 })
 	local motes = Instance.new("ParticleEmitter")
 	motes.Name = "Embers"
@@ -1156,9 +1157,9 @@ function MapBuilder.BuildLobby()
 	motes.Parent = air
 	local soulAir = add({ Name = "SoulAir", Size = Vector3.new(6, 5.5, 3), CFrame = CFrame.new(daisPos + Vector3.new(0, daisTop + 3.6, 0.4)), Transparency = 1 })
 	local souls = Instance.new("ParticleEmitter")
-	souls.Name = "SoulWisps"
+	souls.Name = "DaisMotes"
 	souls.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-	souls.Color = ColorSequence.new(rgb(196, 132, 255), rgb(132, 86, 255))
+	souls.Color = ColorSequence.new(rgb(255, 214, 130), rgb(255, 170, 70))
 	souls.LightEmission = 1
 	souls.LightInfluence = 0
 	souls.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.25, 0.3), NumberSequenceKeypoint.new(1, 0.08) })
@@ -1209,20 +1210,26 @@ function MapBuilder.BuildLobby()
 	local menuCamera = add({ Name = "MenuCamera", Size = Vector3.new(1, 1, 1), CFrame = camCF, Transparency = 1 })
 	menuCamera:SetAttribute("FieldOfView", fov)
 	menuCamera:SetAttribute("Focus", camLook)
-	-- the moon: a glowing disc far behind the keep, top centre of the shot, with two
-	-- faint halo shells (no sky textures needed)
-	local moonPos = camPos + camCF:VectorToWorldSpace(MENU.Moon.Unit) * MENU.MoonDistance
-	local MOON = rgb(232, 238, 255)
-	for _, shell in ipairs({ { 1, 0, "Moon" }, { 1.4, 0.88, "MoonHalo" }, { 2.1, 0.95, "MoonHalo" } }) do
-		local m = add({ Name = shell[3], Shape = Enum.PartType.Ball, Size = Vector3.one * (MENU.MoonRadius * 2 * shell[1]), CFrame = CFrame.new(moonPos), Color = shell[1] == 1 and MOON or rgb(160, 182, 255), Material = NEON, Transparency = shell[2] })
+	-- the setting sun: a glowing disc far behind the pines on the left, on the treeline, with
+	-- two warm halo shells and a wide faint glow along the horizon (no sky textures needed)
+	local sunPos = camPos + camCF:VectorToWorldSpace(MENU.Sun.Unit) * MENU.SunDistance
+	local SUN = rgb(255, 214, 140)
+	for _, shell in ipairs({ { 1, 0, "Sun", SUN }, { 1.5, 0.82, "SunHalo", rgb(255, 160, 90) }, { 2.4, 0.92, "SunHalo", rgb(255, 128, 80) } }) do
+		local m = add({ Name = shell[3], Shape = Enum.PartType.Ball, Size = Vector3.one * (MENU.SunRadius * 2 * shell[1]), CFrame = CFrame.new(sunPos), Color = shell[4], Material = NEON, Transparency = shell[2] })
 		m.CastShadow = false
 	end
-	-- a few dark clouds drifting past the moon and stars over the battlements, placed in
-	-- camera space like the moon (far, unlit-looking, no shadows)
+	local glowDir = camCF:VectorToWorldSpace(Vector3.new(-0.2, 0.0, -1).Unit)
+	for k, g in ipairs({ { 0, 0.9, 64 }, { -0.35, 0.93, 48 }, { 0.3, 0.95, 44 } }) do
+		local at = camPos + camCF:VectorToWorldSpace(Vector3.new(-0.2 + g[1], -0.005, -1).Unit) * 200
+		local glow = add({ Name = "SunsetGlow" .. k, Shape = Enum.PartType.Ball, Size = Vector3.new(g[3] * 2.4, g[3] * 0.32, g[3] * 0.6), CFrame = CFrame.lookAt(at, at + glowDir), Color = rgb(255, 150, 96), Material = NEON, Transparency = g[2] })
+		glow.CastShadow = false
+	end
+	-- a few dusky clouds catching the last light and the first stars over the battlements,
+	-- placed in camera space like the sun (far, unlit-looking, no shadows)
 	local function sky(dir: Vector3, dist: number): Vector3
 		return camPos + camCF:VectorToWorldSpace(dir.Unit) * dist
 	end
-	local CLOUD = { rgb(92, 100, 156), rgb(108, 114, 168) }
+	local CLOUD = { rgb(120, 96, 150), rgb(150, 110, 150) }
 	for _, c in ipairs({ { -0.17, 0.25, 1.0 }, { 0.03, 0.32, 0.8 }, { -0.44, 0.31, 1.2 }, { 0.34, 0.33, 1.0 } }) do
 		for k = -1, 1 do
 			local r = (k == 0 and 6 or 4.4) * c[3]
@@ -1230,8 +1237,8 @@ function MapBuilder.BuildLobby()
 			puff.CastShadow = false
 		end
 	end
-	for _ = 1, 28 do
-		local d = Vector3.new(rng:NextNumber(-1.15, 1.15), rng:NextNumber(0.12, 0.37), -1)
+	for _ = 1, 16 do
+		local d = Vector3.new(rng:NextNumber(-1.15, 1.15), rng:NextNumber(0.22, 0.37), -1)
 		local star = add({ Name = "Star", Shape = Enum.PartType.Ball, Size = Vector3.one * rng:NextNumber(0.5, 1.0), CFrame = CFrame.new(sky(d, 210)), Color = rgb(220, 228, 255), Material = NEON })
 		star.CastShadow = false
 	end
