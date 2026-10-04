@@ -4118,7 +4118,7 @@ function UIBuilder.Init(d: { [string]: any })
 		local reward = (info.Reward and info.Reward ~= "") and (" · " .. tostring(info.Reward)) or ""
 		UIBuilder.Toast("Achievement: " .. tostring(info.Name) .. reward, P.gold_300)
 		if deps.Audio and deps.Audio.Play then
-			pcall(deps.Audio.Play, "LevelUp")
+			pcall(deps.Audio.Play, "Evolve") -- its own swell, not the level-up arpeggio
 		end
 	end)
 	Remotes.Get("LevelUpClose").OnClientEvent:Connect(closeOffer)

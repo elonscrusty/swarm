@@ -126,13 +126,13 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		return f
 	end
 
-	local HERO_DESC = "Hero stats are now on each hero: Max HP, Might, Armor, Speed, Luck, Growth and a signature trait."
+	local HERO_DESC = "Each hero has its own Max HP, Might, Armor, Speed, Luck, Growth and trait upgrades."
 
 	-- lines a description needs in a card of the current width (narrow phone cards wrap
 	-- to 3-4 lines instead of cutting the sentence off)
 	local function descLines(desc: string): number
 		local room = math.max(60, (ui.CellW or 280) - 28 - 70)
-		return math.clamp(math.ceil(#desc * TS(14) * 0.5 / room), 1, 4)
+		return math.clamp(math.ceil(#desc * TS(14) * 0.55 / room), 1, 4)
 	end
 	local function metaDescLines(): number
 		local n = 2
@@ -149,7 +149,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local title = string.upper(name)
 		local room = (ui.CellW or 280) - 28 - 70 - rightW
 		local size = 20
-		while size > 14 and #title * TS(size) * 0.62 > room do
+		while size > 14 and #title * TS(size) * 0.72 > room do
 			size -= 1
 		end
 		text(f, "H2", title, { Name = "Name", Position = UDim2.fromOffset(70, 0), Size = UDim2.new(1, -70 - rightW, 0, TS(20) + 6), TextTruncate = Enum.TextTruncate.AtEnd }, size)
@@ -187,13 +187,17 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			local available = i == level + 1 and affordable
 			local seg = new("Frame", {
 				Name = "Rank" .. i,
-				BackgroundColor3 = bought and P.gold_400 or available and P.ivory_100 or P.slate_600,
-				BackgroundTransparency = (bought or available) and 0 or 0.2,
+				BackgroundColor3 = bought and P.gold_400 or P.slate_600,
+				BackgroundTransparency = bought and 0 or 0.2,
 				BorderSizePixel = 0,
 				Position = UDim2.new((i - 1) / def.MaxLevel, 2, 0, 1),
 				Size = UDim2.new(1 / def.MaxLevel, -4, 0, 6),
 			}, marks)
 			UIKit.corner(seg, 3)
+			if available then
+				-- the next level is affordable: an outlined segment, not a filled one
+				UIKit.stroke(seg, P.gold_300, 1, 0.1)
+			end
 		end
 		UIKit.Hairline(f, { Position = UDim2.fromOffset(0, barY + TS(13) + 14) })
 		-- current / next effect (what the next level really gives)
@@ -264,6 +268,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			UIAnim.Pop(rank, 0, 1.4)
 			UIAnim.Flash(f, P.gold_300)
 			UIAnim.Burst(f, UDim2.fromScale(0.5, 0.45), { P.gold_300, P.gold_500, P.ivory_100 }, 18, 80)
+			UIKit.Sound("Item") -- the purchase landed (not only the tap's click)
 		end
 		lastLevels[id] = level
 		return f
@@ -397,7 +402,15 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 	MenuUpgrades._cell = function()
 		local metaH = math.max(64, TS(20) + 12 + metaDescLines() * TS(14)) + TS(13) + 22 + 2 * (TS(15) + 6) + 12 + 46 + 28
 		local shopH = TS(20) + 8 + 2 * TS(14) + 16 + 50 + 28 + 8
-		ui.Grid.CellSize = UDim2.fromOffset(ui.CellW or 280, tab == "Shop" and shopH or metaH)
+		local cellH = tab == "Shop" and shopH or metaH
+		ui.Grid.CellSize = UDim2.fromOffset(ui.CellW or 280, cellH)
+		-- the panel is only as tall as its cards (portrait left half the screen empty)
+		if ui.PanelMaxH then
+			local count = tab == "Shop" and #SHOP or (#MetaUpgradeData.AccountOrder + 1)
+			local rows = math.ceil(count / (ui.Cols or 1))
+			local need = 28 + ui.ScrollTop + 12 + rows * cellH + (rows - 1) * 12 + 8
+			ui.Panel.Size = UDim2.fromOffset(ui.Panel.Size.X.Offset, math.min(ui.PanelMaxH, need))
+		end
 	end
 
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
@@ -412,8 +425,18 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local w = math.min(W - 2 * M, 960)
 		ui.Panel.Position = UDim2.fromOffset((W - w) / 2, top)
 		ui.Panel.Size = UDim2.fromOffset(w, H - top - M)
+		ui.PanelMaxH = H - top - M
+		-- phones in landscape: no note line (the HERO UPGRADES card says the same), so the
+		-- cards' buy buttons are in view without scrolling
+		local pr = ctx.Profile()
+		local noNote = UIKit.IsCompact() and not portrait and not (pr and pr.MemoryOnly)
+		ui.Note.Visible = not noNote
+		ui.ScrollTop = Theme.Size.TapMin + (noNote and 8 or (14 + TS(14) + 6))
+		ui.Scroll.Position = UDim2.fromOffset(0, ui.ScrollTop)
+		ui.Scroll.Size = UDim2.new(1, 0, 1, -ui.ScrollTop)
 		local inner = w - 32 - 12
 		local cols = math.clamp(math.floor((inner + 12) / 264), 1, 3)
+		ui.Cols = cols
 		local cw = math.floor((inner - (cols - 1) * 12) / cols)
 		local changed = ui.CellW ~= cw
 		ui.CellW = cw

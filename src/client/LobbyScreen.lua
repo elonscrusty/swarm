@@ -780,7 +780,7 @@ local function buildHome(screen: Frame)
 	})
 	ui.CardUpgrades = UIKit.Card(ui.Cards, {
 		Icon = "chevronsUp",
-		Title = "SHOP",
+		Title = "UPGRADES", -- the screen's own title (its tabs are PERMANENT / SHOP)
 		Subtitle = "Upgrades, gold and cosmetics",
 		LayoutOrder = 2,
 		OnClick = function()

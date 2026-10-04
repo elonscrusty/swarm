@@ -543,6 +543,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	-- Hero Mastery upgrade rows (rebuilt from the profile; a tap marks its row BUYING...
 	-- until the next ProfileSync, which always carries the real gold and levels)
 	local pending: { [string]: number } = {}
+	local lastHeroLevel: { [string]: number } = {} -- mastery levels seen (a rise plays a sound)
 	local lastProfile: any = nil
 	local function buildMasteryRows(p: { [string]: any }, heroId: string)
 		for _, c in ipairs(ui.MasteryPanel:GetChildren()) do
@@ -570,6 +571,10 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			local cap = MetaUpgradeData.HeroCap(mastery, id, heroId)
 			local locked = not maxed and level + 1 > cap
 			local key = heroId .. "/" .. id
+			if lastHeroLevel[key] ~= nil and level > lastHeroLevel[key] and screen.Visible then
+				UIKit.Sound("Item") -- a mastery level bought
+			end
+			lastHeroLevel[key] = level
 			local busy = pending[key] ~= nil
 			local row = new("Frame", { Name = id, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, Size = UDim2.new(1, 0, 0, rowH), LayoutOrder = order }, ui.MasteryPanel)
 			UIKit.corner(row, Theme.Radius.M)
@@ -731,6 +736,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			UIAnim.Selected(ui.Action.Face)
 			if row then
 				UIAnim.Selected(row.Check)
+			end
+			if bought then
+				UIKit.Sound("Chest") -- a hero unlocked with gold
 			end
 		end
 		if screen.Visible and lastSkin and lastSkin ~= skinNow and string.find(lastSkin, "@" .. inspChar, 1, true) then
@@ -1086,7 +1094,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				cam:SetAttribute("MenuHeroY", 0.5)
 				-- a narrow gap between the panels (phones) widens the shot so the turning
 				-- hero stays clear of both panels
-				cam:SetAttribute("MenuHeroZoom", math.clamp(W * 0.2 / math.max(1, gapR - gapL), 1, 1.5))
+				cam:SetAttribute("MenuHeroZoom", math.clamp(W * 0.23 / math.max(1, gapR - gapL), 1, 1.6))
 			end
 		end
 		if p then

@@ -68,6 +68,13 @@ local function click()
 end
 UIKit.Click = click
 
+-- Any Config.Sounds cue from a screen (purchases, unlocks); silent without the Audio module.
+function UIKit.Sound(name: string)
+	if audio then
+		pcall(audio.Play, name)
+	end
+end
+
 -- Phones: bigger reference text (see header).
 function UIKit.SetCompact(on: boolean)
 	compact = on
