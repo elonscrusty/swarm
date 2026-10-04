@@ -44,7 +44,7 @@ if preview.args.outcome == "first" then
 	-- bonus line and the NEXT GOAL RunManager sends for it (first hero sold for gold)
 	local FR = C.shared("Config").FirstRun
 	C.fire("RunResult", { FirstRun = { Bonus = FR.BonusGold },
-		NextGoal = { Kind = "BuyHero", Icon = "hero:Mage", Text = "Unlock Mage at 10,000 gold", Sub = "or tap REPLAY to play again", Progress = 0.034, ProgressText = "342 / 10,000 gold" },
+		NextGoal = { Kind = "BuyHero", Icon = "hero:Mage", Text = "Unlock Mage at 10,000 gold", Sub = "or play again", Progress = 0.034, ProgressText = "342 / 10,000 gold" },
 		Curses = {}, CurseGold = 1, Account = { Gained = 64, From = 1, To = 1, Into = 64, Need = 300, Rewards = {} }, Mastery = { Hero = "Knight", Gained = 64, From = 1, To = 1 },
 		Won = false, Portal = false, Time = 168, Kills = 141, Gold = 49, GoldEarned = 142, GoldLost = 93, GoldRetention = 0.35, Difficulty = "Standard", Level = 8, Damage = 9120,
 		Arena = "Forest", Mode = "Solo", CharacterId = "Knight", Build = { Weapons = { { Id = "Whip", Level = 3, Evolved = false }, { Id = "Lightning", Level = 3, Evolved = false } }, Passives = { { Id = "Might", Level = 1 } } },
