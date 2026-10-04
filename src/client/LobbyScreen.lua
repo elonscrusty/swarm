@@ -921,7 +921,10 @@ local function relayout()
 	setChipFlat(not portrait and current == "Characters")
 	-- phones in landscape: the CHARACTERS title shares the top row, so the chip keeps only GOLD
 	local slim = compact and not portrait and current == "Characters"
-	ui.Chip.Visible = not (compact and not portrait and current ~= "Home" and current ~= "Characters")
+	-- every screen shows the stats chip (gold on every buy screen); phones in landscape put it
+	-- in the Roblox top-bar row, right of the Roblox buttons, above the screen's header
+	local topRowChip = compact and not portrait and current ~= "Home" and ins.Top >= 48
+	ui.Chip.Visible = topRowChip or not (compact and not portrait and current ~= "Home" and current ~= "Characters")
 	for _, ch in ipairs(ui.ChipFace:GetChildren()) do
 		if ch:IsA("GuiObject") and ch ~= ui.Gold.Frame then
 			ch.Visible = not slim
@@ -1002,7 +1005,7 @@ local function relayout()
 		local logoY = math.max(ins.Top + 2, 14)
 		ui.Logo.Position = UDim2.fromOffset(M, logoY)
 		ui.Chip.AnchorPoint = Vector2.new(1, 0)
-		ui.Chip.Position = UDim2.fromOffset(W - M, current == "Characters" and math.max(0, math.floor((ins.Top - 48) / 2)) or chipY)
+		ui.Chip.Position = UDim2.fromOffset(W - M, (current == "Characters" or topRowChip) and math.max(0, math.floor((ins.Top - 48) / 2)) or chipY)
 		-- PARTY pill left of the stats chip
 		ui.PartyCornerBtn.Instance.Visible = false
 		ui.PartyBtn.Instance.Visible = true
@@ -1353,7 +1356,7 @@ function LobbyScreen.RefreshHero()
 	else
 		local skinId = skinOf(id)
 		local skin = CharacterData.Skins[skinId]
-		ui.NameSub.Text = (skin and (skin.Name .. " · ") or "") .. def.Description
+		ui.NameSub.Text = (skin and (skin.Name .. " · ") or "") .. MenuCharacters.TraitText(id, def.Description, profile)
 		ui.NameSub.TextColor3 = C.TextMuted
 		if current ~= "Characters" then
 			Showcase.Show(id, skinId)

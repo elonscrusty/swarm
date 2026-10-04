@@ -691,7 +691,12 @@ local function checkWave(state: Configuration)
 	if state:GetAttribute("WaveBig") == true then
 		sub = "BIG WAVE · " .. sub
 	end
-	Hud.Announce("WAVE " .. tostring(n), sub, Accessibility.Color(P.crimson_300, "Danger"), "WaveHorn")
+	-- the big banner + horn only for wave 1, every big wave and a stage's first wave
+	-- (SwarmState WaveLoud); the others get the server's one-line toast, the pill and the
+	-- edge glow
+	if state:GetAttribute("WaveLoud") ~= false then
+		Hud.Announce("WAVE " .. tostring(n), sub, Accessibility.Color(P.crimson_300, "Danger"), "WaveHorn")
+	end
 	local base = state:GetAttribute("WaveAngle")
 	if type(base) == "number" and #sides >= 1 then
 		local lit = {}

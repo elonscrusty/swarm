@@ -589,7 +589,13 @@ Config.Spawn = {
 --   HP    wave members x(1 + HPPerWave x (N - 1)) on top of the run-clock and stage scaling
 --   elites lead a wave from EliteFromWave on (EliteChance, always on big waves), one more
 --           every ElitePerWaves waves, at most EliteMax
---   SwarmState: Wave, WaveSeq, WaveBig, WaveSides, WaveAngle, WaveNext (run time the next
+--   never shrink: a normal wave is at least the last normal one (per player-count density);
+--           a big wave is the bump on top. Elite Surge (RunModifiers.EliteChanceMult) raises
+--           the elite chance and adds one elite per wave.
+--   announce: the big "WAVE N" banner + horn only for wave 1, big waves and a stage's first
+--           wave (SwarmState WaveLoud); other waves get one toast line, the pill and the glow.
+--   Boss-fight and surge kills also get XPMult (waves on), so level-ups stay even.
+--   SwarmState: Wave, WaveSeq, WaveBig, WaveLoud, WaveSides, WaveAngle, WaveNext (run time the next
 --   wave starts, 0 = none), WaveLeft (enemies of the current wave left).
 --   Enabled = false: the old continuous spawning with ring mini-waves.
 ------------------------------------------------------------------------------------------

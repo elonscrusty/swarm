@@ -144,6 +144,15 @@ local function currentTraitText(heroId: string, textIn: string, level: number): 
 	return out
 end
 
+-- the same sentence for a profile (the home hero card uses it so both screens agree)
+function MenuCharacters.TraitText(heroId: string, textIn: string, p: { [string]: any }?): string
+	local level = 0
+	if p and type(p.OwnedCharacters) == "table" and p.OwnedCharacters[heroId] == true and type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[heroId]) == "table" then
+		level = math.floor(tonumber(p.HeroUpgrades[heroId].Signature) or 0)
+	end
+	return currentTraitText(heroId, textIn, level)
+end
+
 -- Trait text split for the EFFECT row: a leading "+N%" (big number, or nil), the rest as
 -- a sentence, and the weapon list after a colon (" • " separated, or nil).
 local function splitEffect(s: string): (string?, string, string?)
@@ -657,7 +666,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		row.Edge.Color = insp and P.gold_400 or P.slate_600
 		row.Edge.Thickness = insp and 2 or 1
 		row.Accent.Visible = insp and full
-		row.Name.TextColor3 = insp and P.gold_200 or P.ivory_100
+		row.Name.TextColor3 = insp and P.gold_200 or ((own or full) and P.ivory_100 or P.stone_300)
 		row.Check.Visible = sel
 		row.Equipped.Visible = sel and full
 		row.Lock.Visible = not own
@@ -928,7 +937,20 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		row.Name.TextXAlignment = mode == "tab" and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
 		local size = mode == "row" and Theme.TextSize.H2 or (long and Theme.TextSize.Small - 1 or Theme.TextSize.Body)
 		row.Name.TextSize = TS(size)
-		row.Marks.Visible = mode == "row"
+		-- tiles / tabs (phones) keep the lock and the equipped check as a small corner badge
+		row.Marks.Visible = true
+		if mode == "row" then
+			row.Marks.AnchorPoint = Vector2.new(1, 0.5)
+			row.Marks.Position = UDim2.new(1, -10, 0.5, 0)
+			row.Marks.Size = UDim2.new(0, 170, 1, 0)
+		else
+			row.Marks.AnchorPoint = Vector2.new(1, 0)
+			row.Marks.Position = UDim2.new(1, -3, 0, 3)
+			row.Marks.Size = UDim2.fromOffset(40, 16)
+		end
+		local markS = mode == "row" and 20 or 15
+		row.Check.Size = UDim2.fromOffset(markS, markS)
+		row.Lock.Size = UDim2.fromOffset(markS - 2, markS - 2)
 		row.Sep.Visible = mode == "row"
 	end
 

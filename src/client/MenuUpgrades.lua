@@ -126,11 +126,35 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		return f
 	end
 
-	-- icon tile, serif name and the one-line description (both card kinds)
-	local function cardTop(f: Frame, iconTile: () -> (), name: string, desc: string, rightW: number)
+	local HERO_DESC = "Hero stats are now on each hero: Max HP, Might, Armor, Speed, Luck, Growth and a signature trait."
+
+	-- lines a description needs in a card of the current width (narrow phone cards wrap
+	-- to 3-4 lines instead of cutting the sentence off)
+	local function descLines(desc: string): number
+		local room = math.max(60, (ui.CellW or 280) - 28 - 70)
+		return math.clamp(math.ceil(#desc * TS(14) * 0.5 / room), 1, 4)
+	end
+	local function metaDescLines(): number
+		local n = 2
+		for _, id in ipairs(MetaUpgradeData.AccountOrder) do
+			n = math.max(n, descLines(MetaUpgradeData.Upgrades[id].Description))
+		end
+		return math.max(n, descLines(HERO_DESC))
+	end
+
+	-- icon tile, serif name and the description (both card kinds); a long name shrinks to
+	-- fit the card instead of reading "HERO UPGRA..."
+	local function cardTop(f: Frame, iconTile: () -> (), name: string, desc: string, rightW: number, lines: number?)
 		iconTile()
-		text(f, "H2", string.upper(name), { Name = "Name", Position = UDim2.fromOffset(70, 0), Size = UDim2.new(1, -70 - rightW, 0, TS(20) + 6), TextTruncate = Enum.TextTruncate.AtEnd }, 20)
-		text(f, "Small", desc, { Name = "Desc", Position = UDim2.fromOffset(70, TS(20) + 8), Size = UDim2.new(1, -70, 0, TS(14) * 2 + 4), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd })
+		local title = string.upper(name)
+		local room = (ui.CellW or 280) - 28 - 70 - rightW
+		local size = 20
+		while size > 14 and #title * TS(size) * 0.62 > room do
+			size -= 1
+		end
+		text(f, "H2", title, { Name = "Name", Position = UDim2.fromOffset(70, 0), Size = UDim2.new(1, -70 - rightW, 0, TS(20) + 6), TextTruncate = Enum.TextTruncate.AtEnd }, size)
+		local n = lines or 2
+		text(f, "Small", desc, { Name = "Desc", Position = UDim2.fromOffset(70, TS(20) + 8), Size = UDim2.new(1, -70, 0, TS(14) * n + 4), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd })
 	end
 
 	-- purchase state: a tap marks the row pending (button reads BUYING..., taps ignored)
@@ -145,11 +169,12 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local maxed = cost == nil
 		local affordable = cost ~= nil and p.Gold >= cost
 		local f = card(order)
+		local lines = metaDescLines()
 		cardTop(f, function()
 			UIKit.Tile(f, { Id = Icons.MetaIcon(id), Size = 56 })
-		end, def.Name, def.Description, 0)
-		-- Gold tallies are bought; the bright next tally is affordable; short dim lines remain.
-		local barY = math.max(64, TS(20) + 12 + 2 * TS(14)) -- under a two-line description
+		end, def.Name, def.Description, 0, lines)
+		-- one segment per level: gold = bought, ivory = the next one is affordable, dark = left
+		local barY = math.max(64, TS(20) + 12 + lines * TS(14)) -- under the description
 		local rank = text(f, "Label", string.format("LV %d / %d", level, def.MaxLevel), {
 			Name = "Rank",
 			Position = UDim2.fromOffset(0, barY),
@@ -160,14 +185,15 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		for i = 1, def.MaxLevel do
 			local bought = i <= level
 			local available = i == level + 1 and affordable
-			new("Frame", {
+			local seg = new("Frame", {
 				Name = "Rank" .. i,
 				BackgroundColor3 = bought and P.gold_400 or available and P.ivory_100 or P.slate_600,
+				BackgroundTransparency = (bought or available) and 0 or 0.2,
 				BorderSizePixel = 0,
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.new((i - 0.5) / def.MaxLevel, 0, 1, 0),
-				Size = UDim2.fromOffset(2, (bought or available) and 8 or 4),
+				Position = UDim2.new((i - 1) / def.MaxLevel, 2, 0, 1),
+				Size = UDim2.new(1 / def.MaxLevel, -4, 0, 6),
 			}, marks)
+			UIKit.corner(seg, 3)
 		end
 		UIKit.Hairline(f, { Position = UDim2.fromOffset(0, barY + TS(13) + 14) })
 		-- current / next effect (what the next level really gives)
@@ -185,7 +211,8 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			local b
 			b = UIKit.Button(f, {
 				Kind = affordable and "Primary" or "Outline",
-				Title = busy and "BUYING..." or (affordable and ("BUY · " .. UIKit.formatNumber(cost) .. " GOLD") or (UIKit.formatNumber(cost) .. " GOLD · NEED " .. UIKit.formatNumber(cost - p.Gold) .. " MORE")),
+				-- narrow phone cards: "2,500 · NEED 660" instead of a cut "2,500 GOLD · NEED 6..."
+				Title = busy and "BUYING..." or (affordable and ("BUY · " .. UIKit.formatNumber(cost) .. " GOLD") or (UIKit.formatNumber(cost) .. ((ui.CellW or 280) >= 330 and " GOLD · NEED " or " · NEED ") .. UIKit.formatNumber(cost - p.Gold) .. ((ui.CellW or 280) >= 330 and " MORE" or ""))),
 				Icon = "coin",
 				IconSize = 20,
 				Align = "Center",
@@ -248,7 +275,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local selected = p.SelectedCharacter or "Knight"
 		cardTop(f, function()
 			Icons.Character(f, selected, { Size = 56 })
-		end, "Hero upgrades", "Hero stats are now on each hero: Max HP, Might, Armor, Speed, Luck, Growth and a signature trait.", 0)
+		end, "Hero upgrades", HERO_DESC, 0, metaDescLines())
 		UIKit.Button(f, {
 			Kind = "Primary",
 			Title = "OPEN CHARACTERS",
@@ -368,7 +395,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 	-- card height: the PERMANENT cards hold the level bar and CURRENT / NEXT, the SHOP
 	-- cards only the description and the button
 	MenuUpgrades._cell = function()
-		local metaH = math.max(64, TS(20) + 12 + 2 * TS(14)) + TS(13) + 22 + 2 * (TS(15) + 6) + 12 + 46 + 28
+		local metaH = math.max(64, TS(20) + 12 + metaDescLines() * TS(14)) + TS(13) + 22 + 2 * (TS(15) + 6) + 12 + 46 + 28
 		local shopH = TS(20) + 8 + 2 * TS(14) + 16 + 50 + 28 + 8
 		ui.Grid.CellSize = UDim2.fromOffset(ui.CellW or 280, tab == "Shop" and shopH or metaH)
 	end
@@ -388,8 +415,13 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local inner = w - 32 - 12
 		local cols = math.clamp(math.floor((inner + 12) / 264), 1, 3)
 		local cw = math.floor((inner - (cols - 1) * 12) / cols)
+		local changed = ui.CellW ~= cw
 		ui.CellW = cw
 		MenuUpgrades._cell()
+		-- card text (description lines, title size, button label) follows the card width
+		if changed and screen.Visible then
+			rebuild(false)
+		end
 	end
 
 	return {

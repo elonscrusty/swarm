@@ -65,6 +65,8 @@ local seen: { [string]: boolean } = {}
 -- waves (Config.Waves): numbered across the whole run
 local waveStage = 0 -- stage the wave state belongs to (a new stage starts with a breather)
 local runWave = 0 -- the current / last wave number of this run
+local lastWaveBase = 0 -- the last normal wave's size per player-count density (waves never shrink)
+local stageFirstWave = false -- the next wave is the first of its stage (a loud announcement)
 local wavePhase = "Off" -- "Off" | "Breather" | "Pouring" | "Fighting"
 local waveTimer = 0 -- Breather: seconds to the next wave; Fighting: seconds before it moves on anyway
 local waveTotal = 0 -- enemies queued for the current wave
@@ -676,12 +678,12 @@ local function pressureMult(): number
 	return warn > 0 and list and list[math.min(warn, #list)] or 1
 end
 
--- Wave N's size before the live cap (Config.Waves): exported for the sims.
+-- Wave N's size before the live cap and the never-shrink floor (Config.Waves), without
+-- the big-wave bump: exported for the sims.
 function EnemySpawner.WaveSize(n: number): number
 	local W = Config.Waves
-	local big = W.BigEvery > 0 and n % W.BigEvery == 0
 	local late = W.LateFromWave and math.max(0, n - W.LateFromWave) or 0
-	local total = (W.Base + W.PerWave * (n - 1 - late) + (W.PerWaveLate or W.PerWave) * late) * countMult() * ctx.StageManager.SpawnMult() * (big and W.BigMult or 1) * pressureMult()
+	local total = (W.Base + W.PerWave * (n - 1 - late) + (W.PerWaveLate or W.PerWave) * late) * countMult() * ctx.StageManager.SpawnMult() * pressureMult()
 	return math.floor(total + 0.5)
 end
 
@@ -696,7 +698,16 @@ local function startWave()
 	local n = runWave
 	local row = EnemyData.GetSpawnRow(waveRowSeconds(n))
 	local big = W.BigEvery > 0 and n % W.BigEvery == 0
-	local total = math.min(EnemySpawner.WaveSize(n), Config.Enemies.MaxLive)
+	-- waves never shrink (owner: "each wave harder"): a normal wave is at least the last
+	-- normal one, per player-count density (a teammate leaving still shrinks it), so a new
+	-- stage dropping the pressure step or the stage multiplier changing cannot undo it; a
+	-- big wave is the bump on top
+	local density = countMult()
+	local normal = math.max(EnemySpawner.WaveSize(n), math.ceil(lastWaveBase * density))
+	lastWaveBase = normal / density
+	local total = math.min(math.floor(normal * (big and W.BigMult or 1) + 0.5), Config.Enemies.MaxLive)
+	local loud = n == 1 or big or stageFirstWave -- the big banner + horn (StageUI); else a toast
+	stageFirstWave = false
 	local dirs = 1
 	for _, at in ipairs(W.SidesAtWave) do
 		if n >= at then
@@ -704,10 +715,15 @@ local function startWave()
 		end
 	end
 	dirs = math.min(dirs, 3)
+	-- elites: x the Elite Surge curse (RunModifiers.EliteChanceMult; also Daily runs), which
+	-- also adds one elite per wave
+	local eliteMult = ctx.RunModifiers and ctx.RunModifiers.EliteChanceMult() or 1
 	local elites = 0
-	if n >= W.EliteFromWave and (big or rng:NextNumber() < W.EliteChance) then
-		elites = math.min(W.EliteMax, 1 + math.floor((n - W.EliteFromWave) / W.ElitePerWaves))
+	if n >= W.EliteFromWave and (big or rng:NextNumber() < math.min(1, W.EliteChance * eliteMult)) then
+		elites = 1 + math.floor((n - W.EliteFromWave) / W.ElitePerWaves) + (eliteMult > 1 and 1 or 0)
+		elites = math.min(W.EliteMax + (eliteMult > 1 and 1 or 0), elites)
 	end
+	total = math.max(dirs, total - elites) -- the elites are part of the wave, not extra
 	local base = rng:NextNumber(0, math.pi * 2)
 	local sides = {}
 	-- the mixed share of each side: Spitters within Config.Enemies.MaxLiveRanged (counting
@@ -731,14 +747,22 @@ local function startWave()
 		-- each side reads as one main type (never Ranged / NoWave) plus a mixed share
 		local mainType = waveType(row, n, false, true)
 		introduce(mainType)
-		local count = math.max(1, math.floor(total / dirs * (P.WaveCountMult and P.WaveCountMult[mainType] or 1) + 0.5))
+		-- the side's full share (the sides add up to the wave total); a type that comes in
+		-- smaller groups (Config.Pacing.WaveCountMult: wasps, Bombers, Brutes) fills the
+		-- rest of its side from the row mix, so the wave does not shrink
+		local count = math.floor(total * d / dirs) - math.floor(total * (d - 1) / dirs)
 		local mixed = n >= (W.MixFromWave or 1) and math.floor(count * (W.MixShare or 0)) or 0
+		local mainCount = math.floor((count - mixed) * (P.WaveCountMult and P.WaveCountMult[mainType] or 1) + 0.5)
+		mixed = count - mainCount
 		local angle = base + (d - 1) * (2 * math.pi / dirs) + rng:NextNumber(-0.3, 0.3)
 		table.insert(sides, compass(angle))
 		for k = 1, count do
 			local typeId = mainType
 			if k <= mixed then
 				typeId = waveType(row, n, rangedRoom > 0, false)
+				if typeId == mainType and P.WaveCountMult and P.WaveCountMult[mainType] then
+					typeId = waveType(row, n, rangedRoom > 0, false) -- one more roll for variety
+				end
 				if EnemyData.Enemies[typeId].Ranged then
 					rangedRoom -= 1
 				end
@@ -794,6 +818,16 @@ local function startWave()
 	local state = Remotes.State()
 	state:SetAttribute("Wave", n)
 	state:SetAttribute("WaveBig", big)
+	state:SetAttribute("WaveLoud", loud)
+	-- one message per wave at most: a quiet wave's toast names its sides and elites; a loud
+	-- wave's elites get one toast under the banner
+	local where = #sides == 1 and ("from the " .. sides[1]) or (#sides .. " sides")
+	local eliteText = elites == 1 and "an elite leads it" or (elites > 1 and (elites .. " elites lead it") or nil)
+	if not loud then
+		ctx.RunManager.Broadcast(string.format("WAVE %d · %s%s", n, where, eliteText and (" · " .. eliteText) or ""), Color3.fromRGB(255, 190, 110))
+	elseif eliteText then
+		ctx.RunManager.Broadcast(string.format("Wave %d: %s!", n, eliteText), Color3.fromRGB(255, 205, 120))
+	end
 	state:SetAttribute("WaveSides", table.concat(sides, ","))
 	state:SetAttribute("WaveAngle", math.floor(base * 100 + 0.5) / 100)
 	state:SetAttribute("WaveNext", 0)
@@ -825,9 +859,6 @@ local function pourWave(dt: number)
 				e.HP *= hpMult
 				e.MaxHP *= hpMult
 				e.Shield *= hpMult
-				if q.Elite then
-					ctx.RunManager.Broadcast(string.format("An elite %s %s leads the wave!", e.Affix or "", def.DisplayName or q.Type), Color3.fromRGB(255, 205, 120))
-				end
 			end
 		end
 	end
@@ -861,6 +892,7 @@ local function stepWaves(dt: number, runTime: number)
 		return
 	end
 	if stage ~= waveStage or wavePhase == "Off" then
+		stageFirstWave = stage ~= waveStage
 		waveStage = stage
 		breather(stage <= 1 and W.FirstDelay or W.StageStartDelay, runTime)
 		return
@@ -1060,7 +1092,11 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 	end
 
 	if rng:NextNumber() < (def.GemChance or 1) then
-		local waveXP = e.WaveId and Config.Waves.XPMult or 1 -- wave members (stepWaves)
+		-- wave members (stepWaves) and, with waves on, the boss fight's crowd and the surge
+		-- (the only XP for a minute or two: without it the level-ups dried up, then came 5-6
+		-- at once at the portal)
+		local phase = ctx.StageManager.GetPhase()
+		local waveXP = (e.WaveId or (Config.Waves.Enabled and not e.Boss and (phase == "Boss" or phase == "Surge"))) and Config.Waves.XPMult or 1
 		ctx.XPSystem.SpawnGem(pos, gemValue(def.Gem, (def.XPScale or 1) * waveXP))
 		table.insert(drops, "XP")
 	end
@@ -1302,6 +1338,7 @@ function EnemySpawner.Step(dt: number)
 		nestStage = 0 -- a new run: the nest schedule starts over
 		waveStage = 0
 		runWave = 0
+		lastWaveBase = 0
 		wavePhase = "Off"
 		table.clear(waveQueue)
 		local state = Remotes.State()

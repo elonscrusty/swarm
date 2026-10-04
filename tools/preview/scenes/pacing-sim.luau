@@ -50,6 +50,13 @@ end
 preview.startServer()
 preview.advance(2)
 local RM = preview.server("RunManager")
+-- --set elitemult=3: the Elite Surge curse's elite multiplier (RunModifiers.EliteChanceMult)
+if tonumber(preview.args.elitemult) then
+	local mult = tonumber(preview.args.elitemult)
+	preview.server("RunModifiers").EliteChanceMult = function()
+		return mult
+	end
+end
 local SM = preview.server("StageManager")
 local Spawner = preview.server("EnemySpawner")
 -- gold by source (caller file:line), to see where run gold comes from
@@ -195,6 +202,7 @@ local ups = {} -- { T, Stage, Phase, N }
 -- the next breather (cleared to Config.Waves.ClearShare, or the MaxSeconds cap)
 local lastSeq, waveLog, waves = 0, {}, {}
 local curWave = nil
+local loudWaves = 0
 local counted = {}
 local last = rps[1].Level
 local function tick(dt)
@@ -222,13 +230,14 @@ local function tick(dt)
 	if seq ~= lastSeq then
 		lastSeq = seq
 		waveLog[SM.GetStage()] = (waveLog[SM.GetStage()] or "") .. string.format(" %d@%d:%02d", st:GetAttribute("Wave") or 0, t // 60, t % 60)
+		loudWaves += st:GetAttribute("WaveLoud") ~= false and 1 or 0
 		curWave = { N = st:GetAttribute("Wave") or 0, Stage = SM.GetStage(), T = t, Size = 0, Peak = 0, Clear = nil, Elites = 0, Types = {} }
 		table.insert(waves, curWave)
 	end
 	if curWave and not curWave.Clear then
 		local alive = 0
 		for _, e in ipairs(Spawner.Active) do
-			if e.Alive and e.WaveId == curWave.N then
+			if e.Alive and e.WaveId == curWave.N and not (e.Def and e.Def.Spawner) then
 				alive += 1
 				if not counted[e.Uid] then
 					counted[e.Uid] = true
@@ -377,5 +386,23 @@ do
 	local parts = {}
 	for _, k in ipairs(keys) do table.insert(parts, k .. "=" .. goldBy[k]) end
 	preview.log("GOLD BY SOURCE " .. table.concat(parts, " "))
+end
+do
+	local sizes, shrinks, lastNormal = {}, 0, 0
+	for _, w in ipairs(waves) do
+		table.insert(sizes, tostring(w.Size))
+		local big = Config.Waves.BigEvery > 0 and w.N % Config.Waves.BigEvery == 0
+		if not big then
+			if w.Size < lastNormal then shrinks += 1 end
+			lastNormal = w.Size
+		end
+	end
+	preview.log("WAVE SIZES " .. table.concat(sizes, " "))
+	local bossGaps = 0
+	for _, g in ipairs(gaps) do
+		if string.find(g, "Boss") then bossGaps += 1 end
+	end
+	preview.log(string.format("WAVES %d, loud banners %d (%.1f per 20 min), normal waves smaller than the last normal one: %d, level-up gaps > 45 s in boss fights: %d",
+		#waves, loudWaves, loudWaves / math.max(1, t) * 1200, shrinks, bossGaps))
 end
 preview.log(string.format("RESULT players=%d time=%.0fs level=%d gold=%d gaps>45s=%d bursts(3+ in 3s)=%d", n, t, rps[1].Level, rps[1].Gold, #gaps, bursts))
