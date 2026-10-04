@@ -666,7 +666,7 @@ local LIGHTING = {
 		-- the rest; restrained bloom so the runes, flames and staff glow without the hero
 		-- washing out
 		Clock = 18.6, Brightness = 1.1, Latitude = 40, Shadow = 0.4,
-		Ambient = rgb(100, 104, 150), Outdoor = rgb(146, 150, 206), Top = rgb(160, 174, 236), Bottom = rgb(44, 38, 66),
+		Ambient = rgb(114, 116, 162), Outdoor = rgb(162, 162, 216), Top = rgb(160, 174, 236), Bottom = rgb(44, 38, 66),
 		Diffuse = 0.3, Specular = 0.35,
 		Atmo = { Density = 0.12, Offset = 0.1, Color = rgb(104, 118, 184), Decay = rgb(110, 98, 170), Glare = 0, Haze = 0.6 },
 		Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.25 },
@@ -897,13 +897,38 @@ function MapBuilder.BuildLobby()
 	-- castle stone one step lighter than the kit default so it reads in the dusk light
 	-- pale lavender-grey castle stone, so it reads moonlit against the night sky
 	local CASTLE: Pal = { Stone = mix(P.stone_300, P.slate_300, 0.3), Trim = mix(P.stone_200, P.slate_200, 0.3), Base = mix(P.stone_400, P.slate_400, 0.3) }
-	local FLAME: Pal = { Flame = rgb(255, 112, 16), Core = rgb(255, 200, 72) }
+	-- warm orange-yellow: a strong green channel keeps bright neon from turning pink
+	local FLAME: Pal = { Flame = rgb(255, 150, 36), Core = rgb(255, 226, 120) }
 
 	local function at(x: number, y: number, z: number): Vector3
 		return o + Vector3.new(x, y, z)
 	end
 	local function add(props: { [string]: any }): BasePart
 		return deco(folder, props)
+	end
+	-- a real Fire effect over a brazier bowl / torch head (the neon flame mesh is the core)
+	local function fire(pos: Vector3, size: number)
+		local h = add({ Name = "FireAnchor", Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(pos), Transparency = 1 })
+		local f = Instance.new("Fire")
+		f.Size = size
+		f.Heat = size * 1.6
+		f.Color = rgb(255, 118, 26)
+		f.SecondaryColor = rgb(255, 210, 84)
+		f.Parent = h
+	end
+	-- a strand of ivy hanging down a wall face (z = the face), leaves in two greens
+	local IVY = { mix(P.moss_700, P.slate_600, 0.25), mix(P.moss_600, P.slate_500, 0.25) }
+	local function ivy(x: number, top: number, z: number, len: number)
+		local y = top
+		local dx = 0
+		while y > top - len do
+			for _ = 1, 2 do
+				local leaf = add({ Name = "Ivy", Size = Vector3.new(rng:NextNumber(0.7, 1.1), rng:NextNumber(0.55, 0.85), 0.14), CFrame = CFrame.new(at(x + dx + jitter(0.45), y + jitter(0.2), z + 0.08)) * CFrame.Angles(0, 0, math.rad(jitter(40))), Color = pick(IVY) })
+				leaf.CastShadow = false
+			end
+			dx += jitter(0.35)
+			y -= 0.75
+		end
 	end
 
 	--------------------------------------------------------------------------------------
@@ -973,6 +998,7 @@ function MapBuilder.BuildLobby()
 		prop(folder, "Castle_Banner", CFrame.new(at(sx * 10.2, 10.6, keepZ + 0.36)) * FACE_SOUTH, 1.1)
 		local cf = CFrame.new(at(sx * 4.8, 5.6, keepZ + 0.4)) * FACE_SOUTH
 		prop(folder, "Torch_Wall", cf, 1.1, FLAME)
+		fire(kitLightPoint("Torch_Wall", cf, 1.1) or cf.Position, 0.9)
 		pointLight(folder, kitLightPoint("Torch_Wall", cf, 1.1) or cf.Position, 12, 1.2, FIRE, true)
 	end
 	-- warm-lit doorway inside the gate
@@ -1026,6 +1052,9 @@ function MapBuilder.BuildLobby()
 		for _, sx in ipairs({ -1, 1 }) do
 			local cf = CFrame.new(daisPos + Vector3.new(sx * b[1], 0, b[2]))
 			prop(folder, "Brazier", cf, b[3], { Flame = FLAME.Flame, Core = FLAME.Core, Stone = mix(P.stone_400, P.slate_400, 0.3), Base = mix(P.stone_500, P.slate_500, 0.3) })
+			fire(kitLightPoint("Brazier", cf, b[3]) or cf.Position + Vector3.new(0, 3.3 * b[3], 0), 2.6 * b[3])
+			-- warm glow pooled on the flagstones under the bowl
+			pointLight(folder, cf.Position + Vector3.new(0, 1.2, 1.2), 9, 0.9, FIRE, false)
 			pointLight(folder, (kitLightPoint("Brazier", cf, b[3]) or cf.Position + Vector3.new(0, 3.4, 0)) + Vector3.new(0, 1.4, 0), b[4], b[5], FIRE, true)
 		end
 	end
@@ -1045,9 +1074,15 @@ function MapBuilder.BuildLobby()
 	pointLight(folder, daisPos + Vector3.new(-2.2, 5.5, 1.2), 8, 0.9, rgb(176, 112, 255), false)
 	-- cool moonlight over the courtyard and a lavender wash on the castle front
 	pointLight(folder, daisPos + Vector3.new(0, 26, -10), 56, 1.1, rgb(140, 160, 236), false)
-	pointLight(folder, at(0, 18, keepZ + 18), 40, 1.5, rgb(176, 178, 244), false)
+	pointLight(folder, at(0, 16, keepZ + 12), 40, 2.4, rgb(184, 184, 244), false)
 	for _, sx in ipairs({ -1, 1 }) do
-		pointLight(folder, at(sx * TOWER_X, 16, keepZ + 14), 24, 1.2, rgb(180, 180, 244), false)
+		pointLight(folder, at(sx * TOWER_X, 15, keepZ + 11), 26, 2.0, rgb(186, 184, 244), false)
+		pointLight(folder, at(sx * 33, 9, keepZ + 10), 26, 1.6, rgb(176, 176, 236), false)
+		-- ivy on the gate, the walls beside the towers and the curtain walls
+		ivy(sx * 6.9, 12.6, keepZ + 0.4, 6)
+		ivy(sx * 23.5, 9.6, keepZ - 2.05, 5.5)
+		ivy(sx * 29.5, 9.6, keepZ - 2.05, 3.5)
+		ivy(sx * 36, 9.6, keepZ - 2.05, 6.5)
 	end
 
 	--------------------------------------------------------------------------------------
@@ -1064,6 +1099,7 @@ function MapBuilder.BuildLobby()
 		prop(folder, "Barrel", CFrame.new(base + Vector3.new(sx * 4.9, 0, 0.9)), 1.2)
 		local torchCF = CFrame.new(daisPos + Vector3.new(sx * 20.5, 0, -27))
 		prop(folder, "Torch", torchCF, 1.6, FLAME)
+		fire(kitLightPoint("Torch", torchCF, 1.6) or torchCF.Position + Vector3.new(0, 7.9, 0), 1.6)
 		pointLight(folder, (kitLightPoint("Torch", torchCF, 1.6) or torchCF.Position + Vector3.new(0, 5.6, 0)) + Vector3.new(0, 0.8, 0), 12, 1.1, FIRE, true)
 		-- ruined stone blocks at the sides (mid ground)
 		local SIDE: Pal = { Stone = mix(P.stone_400, P.slate_400, 0.35), Stone2 = mix(P.stone_500, P.slate_500, 0.35), Trim = mix(P.stone_300, P.slate_400, 0.35), Moss = P.moss_600 }
@@ -1180,6 +1216,24 @@ function MapBuilder.BuildLobby()
 	for _, shell in ipairs({ { 1, 0, "Moon" }, { 1.4, 0.88, "MoonHalo" }, { 2.1, 0.95, "MoonHalo" } }) do
 		local m = add({ Name = shell[3], Shape = Enum.PartType.Ball, Size = Vector3.one * (MENU.MoonRadius * 2 * shell[1]), CFrame = CFrame.new(moonPos), Color = shell[1] == 1 and MOON or rgb(160, 182, 255), Material = NEON, Transparency = shell[2] })
 		m.CastShadow = false
+	end
+	-- a few dark clouds drifting past the moon and stars over the battlements, placed in
+	-- camera space like the moon (far, unlit-looking, no shadows)
+	local function sky(dir: Vector3, dist: number): Vector3
+		return camPos + camCF:VectorToWorldSpace(dir.Unit) * dist
+	end
+	local CLOUD = { rgb(58, 64, 112), rgb(72, 78, 128) }
+	for _, c in ipairs({ { -0.17, 0.25, 1.0 }, { 0.03, 0.32, 0.8 }, { -0.44, 0.31, 1.2 }, { 0.34, 0.33, 1.0 } }) do
+		for k = -1, 1 do
+			local r = (k == 0 and 6 or 4.4) * c[3]
+			local puff = add({ Name = "Cloud", Shape = Enum.PartType.Ball, Size = Vector3.one * r * 2, CFrame = CFrame.new(sky(Vector3.new(c[1] + k * 0.045 * c[3], c[2] - math.abs(k) * 0.012, -1), 150)), Color = pick(CLOUD), Transparency = 0.25 })
+			puff.CastShadow = false
+		end
+	end
+	for _ = 1, 28 do
+		local d = Vector3.new(rng:NextNumber(-1.15, 1.15), rng:NextNumber(0.12, 0.37), -1)
+		local star = add({ Name = "Star", Shape = Enum.PartType.Ball, Size = Vector3.one * rng:NextNumber(0.5, 1.0), CFrame = CFrame.new(sky(d, 210)), Color = rgb(220, 228, 255), Material = NEON })
+		star.CastShadow = false
 	end
 	menuStand:SetAttribute("Top", daisTop)
 

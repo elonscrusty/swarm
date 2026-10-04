@@ -457,7 +457,7 @@ def necromancer(m):
     # black and gold (the lobby reference look), violet soul glow
     rig(m, pal(Cloth="chitin_900", Cloth2="wasp_900", Metal="ivory_200", MetalDark="ivory_400",
                    Accent="gold_400", AccentDark="gold_600", Gold="gold_400", Hat="chitin_900",
-                   HatAccent="gold_500", Hair="slate_950", Skin="ivory_300", Bone="ivory_200",
+                   HatAccent="gold_500", Hair="slate_950", Skin="ivory_300", Bone="ivory_100",
                    Shaft="chitin_800", Glow=(0.74, 0.47, 1.0)))
     head(m)
     mask = m.piece("FaceMask", "Bone", bone="Head")
@@ -531,11 +531,11 @@ def necromancer(m):
     staff = m.piece("Staff", "Shaft", bone="RightArm", shadow=True)
     sweep(staff, [base, (base + top) / 2, top], [0.1, 0.11, 0.12], seg=6)
     sk = m.piece("StaffSkull", "Bone", bone="RightArm")
-    sc = top + Vector((0, -0.04, 0.42))
-    skull(sk, sc, r=0.44)
+    sc = top + Vector((0, -0.04, 0.55))
+    skull(sk, sc, r=0.58)
     sock = m.piece("StaffSkullEyes", "Glow", "Neon", bone="RightArm")
     for s in (1, -1):
-        sock.ico(0.11, loc=sc + Vector((s * 0.16, -0.42, 0.04)), subdiv=0)
+        sock.ico(0.14, loc=sc + Vector((s * 0.21, -0.55, 0.05)), subdiv=0)
     ring = m.piece("StaffTrim", "Gold", "Metal", bone="RightArm")
     for u in (0.08, 0.42, 0.7):  # gold bands down the shaft
         band(ring, 0.1, 0.17, -0.08, 0.08, seg=6, loc=base.lerp(top, u))
@@ -545,10 +545,10 @@ def necromancer(m):
         out = Vector((math.cos(a), -math.sin(a) * 0.6, 0)).normalized()
         ln = 1.25 if i == 2 else (1.05 if i in (1, 3) else 0.85)
         b0 = top + Vector((0, 0, -0.05))
-        sweep(ring, [b0, b0 + out * 0.42 + Vector((0, 0, 0.3)), b0 + out * 0.62 + Vector((0, 0, 0.3 + ln * 0.6)),
-                     b0 + out * 0.5 + Vector((0, 0, 0.3 + ln))], [0.09, 0.08, 0.06, 0.0], seg=4)
+        sweep(ring, [b0, b0 + out * 0.5 + Vector((0, 0, 0.32)), b0 + out * 0.8 + Vector((0, 0, 0.32 + ln * 0.7)),
+                     b0 + out * 0.64 + Vector((0, 0, 0.32 + ln * 1.15))], [0.1, 0.09, 0.07, 0.0], seg=4)
     core = m.piece("StaffCore", "Glow", "Neon", bone="RightArm")
-    core.ico(0.16, loc=sc + Vector((0, 0.05, 0.78)), subdiv=1)
+    core.ico(0.18, loc=sc + Vector((0, 0.05, 0.98)), subdiv=1)
 
     legs(m, "Cloth2", width=0.68)
     boots(m, "Dark", z_top=0.6, cuff=False)

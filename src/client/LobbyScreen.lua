@@ -414,6 +414,9 @@ local function buildHeroPill(screen: Frame)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		FontFace = Theme.Font.Title,
 	}, 16)
+	-- long names ("NECROMANCER") shrink to fit before they would truncate
+	ui.HeroName.TextScaled = true
+	ui.HeroNameFit = new("UITextSizeConstraint", { MaxTextSize = TS(16), MinTextSize = 10 }, ui.HeroName)
 	ui.HeroLevel = text(face, "Caption", "LV 1", {
 		Name = "HeroLevel",
 		Position = UDim2.new(0.5, -84, 0, 14 + TS(18)),
@@ -881,7 +884,9 @@ local function relayout()
 			local pillW = math.clamp(gapR - gapL, 230, want)
 			place(ui.HeroPill, (gapL + gapR) / 2 - pillW / 2, H - lowB - pillH, pillW, pillH)
 		end
-		heroFrac = 0.5
+		-- the hero's middle at the centre, raised on short screens so the front of the dais
+		-- (about 0.34 of the height below the hero's middle) stays above the selector
+		heroFrac = math.clamp((H - lowB - pillH - 6) / H - 0.34, 0.4, 0.5)
 	end
 	-- PLAY lettering scales with the plate (reference: the word fills ~56 % of the width)
 	if ui.PlayBtn.Title then
