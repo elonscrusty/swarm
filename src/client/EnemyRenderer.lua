@@ -181,6 +181,13 @@ end
 local function cutToLow(pieces: { any }): { any }
 	local units: { { Pieces: { any }, Volume: number } } = {}
 	local byKey: { [string]: { Pieces: { any }, Volume: number } } = {}
+	local bands: { [string]: boolean } = {}
+	for _, piece in ipairs(pieces) do
+		local band = string.match(piece.Part.Name, "^(.+)Side$")
+		if band then
+			bands[band] = true
+		end
+	end
 	for _, piece in ipairs(pieces) do
 		local name = piece.Part.Name
 		local stem, digits = string.match(name, "^(.-)[LR](%d*)$")
@@ -189,8 +196,8 @@ local function cutToLow(pieces: { any }): { any }
 		local band = string.match(name, "^(.+)Side$")
 		if band then
 			stem, digits = band, ""
-		elseif not stem or stem == "" then
-			stem, digits = name, "" -- a single piece is its own unit (a band can join it)
+		elseif bands[name] then
+			stem, digits = name, "" -- the piece a band joins
 		end
 		local size = piece.Part.Size
 		local volume = size.X * size.Y * size.Z
