@@ -85,9 +85,14 @@ synergies released with art, hero prices 10k/20k/30k (owner), new boss/medal/sym
 aim fix (whip-regression), client-drawn censer clouds and orbits, stats chip/tutorial/party
 entrance fix, audit fixes (docs/AUDIT_2026-10-04.md). PUBLISH NOTE: schema bump, so after
 publishing run "Migrate to Latest Update"; test with a copy of a real save first.
-Pending owner OK (approved in chat but must be re-confirmed by the owner's own message):
-economy changes in scratchpad ECON_PROPOSAL (20k per-level cap, more gold per run, harder
-achievement heroes). Planned next: Sigils (docs/SIGILS_PLAN.md).
+Home + retention update (70/70 regressions, offline only, NOT Studio-tested): home screen rebuilt to
+the owner's 2026-10-04 mockup (scratchpad home-mockup / home-spec; LobbyScreen, MenuPlay, MenuMore,
+owner art art/ui/home group 22), lobby 3D scene reframed (big hero, courtyard, Necromancer rebuild),
+first-join auto run with a first-run welcome (Config.FirstRun, +200 gold bonus, owner OK), notice
+dots (NoticeDots), NEXT GOAL on results (shared/NextGoal), economy (owner OK): 20k per-level cap,
+KillGoldChance 0.25, StageClearBonus 300, survival gold 40/min, harder achievement heroes; card pool
+weights + merged level-up panels; area weapons hit once per tick + balance trims; Death Spiral fix.
+Planned next: Sigils (docs/SIGILS_PLAN.md). Remaining audit items: docs/AUDIT_2026-10-04.md.
 
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
