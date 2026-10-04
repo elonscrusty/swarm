@@ -11,8 +11,10 @@
 	                 attribute Synergies, SynergyData).
 	  item popup     remote ItemGained: icon tile in the rarity colour, name, rarity, what it
 	                 does and where it came from; stacks up to 3 under the strip. Items
-	                 from a chest / shrine / altar (Reward = true) go to the centred
-	                 reward reel instead (LootUI.OnReward, set by UIBuilder)
+	                 from a chest / shrine / altar (Reward = true) go to UIBuilder instead
+	                 (LootUI.OnReward): the compact reward card, or the contained reveal for
+	                 a rare reward in a solo run; each is kept in the recent-rewards
+	                 history (LootUI.RecordReward) shown at the top of the items list
 	  purse hint     the price of the loot in reach goes to the HUD purse
 	                 (Hud.SetPurseHint; red "NEED N" after a press without enough gold)
 	  loot prompt    next to the nearest chest / shrine / altar in reach: title, state,
@@ -88,6 +90,8 @@ local target: Model? = nil
 local lastTouch = false
 
 local KIND_ICON = { Chest = "reward_ChestLarge", Shrine = "shrine", Altar = "altar" }
+-- chests by tier (the vector chest for the small / free ones, the painted art for the big ones)
+local CHEST_ICON = { Small = "chest", Treasure = "chest", Large = "reward_ChestLarge", Golden = "reward_ChestGolden" }
 local LINE_PX = 16 -- benefit / tradeoff text (reference px; phones get the compact boost)
 local function ODDS_H(): number
 	return TS(24) + TS(12) + 12
@@ -101,6 +105,12 @@ local CHANCE_RESULT_SECONDS = 2.6
 local chanceItemAt = -math.huge
 local chanceResult = { Id = 0, Win = false, Until = 0 }
 local clues: { { [string]: any } }? = nil -- Inventory.Synergies rows (nil: older server)
+
+-- Recent rewards (chests, shrines, the altar, elite chests): newest first, this run only.
+-- Filled by UIBuilder when a reward arrives (LootUI.RecordReward), whatever shows it
+-- (compact card or reveal), so a skipped or closed reward can still be read later.
+local HISTORY_MAX = 8
+local history: { { [string]: any } } = {}
 
 local function rarityOf(id: string): string
 	local def = ItemData.Items[id]
@@ -470,6 +480,27 @@ local function refreshList()
 		end
 		text(row, "Small", body, { Position = UDim2.fromOffset(64, 8 + TS(16)), Size = UDim2.new(1, -72, 0, 62 - 12 - TS(16)), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = active and C.Text or C.TextMuted })
 	end
+	-- recent rewards: one short row each, newest first, above the synergies
+	if #history > 0 then
+		text(ui.ItemsList, "Caption", UIKit.track("RECENT REWARDS"), { Name = "RecentHead", LayoutOrder = -300, Size = UDim2.new(1, -8, 0, TS(12) + 6), TextColor3 = P.gold_300 })
+		local now = os.clock()
+		for i, h in ipairs(history) do
+			local row = UIKit.Panel(ui.ItemsList, { Name = "Recent" .. i, LayoutOrder = -300 + i, Size = UDim2.new(1, -8, 0, 40) }, true)
+			local tile = new("Frame", { BackgroundColor3 = P.slate_900, BorderSizePixel = 0, Position = UDim2.fromOffset(6, 4), Size = UDim2.fromOffset(32, 32) }, row)
+			UIKit.corner(tile, 999)
+			UIKit.stroke(tile, typeof(h.Color) == "Color3" and h.Color or P.slate_400, 1.5, 0.2)
+			if h.Id == "Gold" then
+				Icons.Draw(tile, "coin", { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+			elseif type(h.Id) == "string" then
+				Icons.Upgrade(tile, h.Id, { Size = 24, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+			end
+			local ago = math.max(0, math.floor(now - (h.At or now)))
+			local when = ago < 60 and (ago .. "s ago") or (math.floor(ago / 60) .. "m ago")
+			text(row, "BodyStrong", h.Name .. (h.Count > 1 and ("  x" .. h.Count) or ""), { Position = UDim2.fromOffset(46, 2), Size = UDim2.new(1, -150, 0, TS(16) + 2), TextColor3 = typeof(h.Color) == "Color3" and h.Color or C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
+			text(row, "Caption", tostring(h.Source or "Reward"), { Position = UDim2.fromOffset(46, 4 + TS(16)), Size = UDim2.new(1, -150, 0, TS(12) + 2), TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd })
+			text(row, "Caption", UIKit.track(when), { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(96, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.TextMuted })
+		end
+	end
 	local total = 0
 	for i, it in ipairs(items) do
 		local def = ItemData.Items[it.Id]
@@ -484,6 +515,24 @@ local function refreshList()
 		end
 	end
 	ui.ItemsSub.Text = UIKit.track(total == 0 and "No items yet: open chests and shrines" or string.format("%d item%s this run · lost when the run ends", total, total == 1 and "" or "s"))
+end
+
+function LootUI.RecordReward(e: { [string]: any })
+	if type(e) ~= "table" or type(e.Name) ~= "string" then
+		return
+	end
+	table.insert(history, 1, { Id = e.Id, Name = e.Name, Sub = e.Sub, Source = e.Source, Color = e.Color, Count = tonumber(e.Count) or 1, At = os.clock() })
+	while #history > HISTORY_MAX do
+		table.remove(history)
+	end
+	if ui.Items and ui.Items.Overlay.Visible then
+		refreshList()
+	end
+end
+
+-- The history, newest first (tests / preview).
+function LootUI.RecentRewards(): { { [string]: any } }
+	return history
 end
 
 function LootUI.OpenItems()
@@ -758,7 +807,7 @@ local STATE_TEXT = {
 -- of its own row and the well pads less, so the prompt stays clear of the weapons bar.
 local function fillPrompt(model: Model, progress: number, tight: boolean?): number
 	local kind = model:GetAttribute("LootKind") or "Chest"
-	setIcon(KIND_ICON[kind] or "reward_ChestLarge")
+	setIcon(kind == "Chest" and (CHEST_ICON[tostring(model:GetAttribute("LootType"))] or "chest") or KIND_ICON[kind] or "chest")
 	ui.PromptTitle.Text = tostring(model:GetAttribute("Title") or "")
 	local st = model:GetAttribute("State")
 	local ok = usable(model)
@@ -771,6 +820,11 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 	end
 	if ok and model:GetAttribute("LootType") == "Chance" and model:GetAttribute("Odds") ~= nil then
 		detail = "Pay gold · maybe an item" -- the odds row below has the numbers
+	end
+	if ok and kind == "Chest" then
+		-- what it costs, in which money, before the hold (the odds are the benefit line)
+		local cost = priceOf(model)
+		detail = cost > 0 and string.format("Costs %s run gold · hold to open", UIKit.formatNumber(cost)) or "Free · hold to open"
 	end
 	local id = tonumber(model:GetAttribute("LootId")) or 0
 	local result = chanceResult.Id ~= 0 and chanceResult.Id == id and os.clock() < chanceResult.Until
@@ -1292,6 +1346,7 @@ function LootUI.Build(root: Frame, k: { [string]: any })
 		if not player:GetAttribute("InRun") then
 			items = {}
 			clues = nil
+			table.clear(history)
 			refreshStrip()
 			kit.Hide(ui.Items.Overlay, "Items")
 		end

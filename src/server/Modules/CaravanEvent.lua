@@ -357,7 +357,7 @@ local function start(c: Caravan)
 	recolour(c, P.crimson_300, false)
 	Fx.Ring(c.Pos, Config.Caravan.ZoneRadius, P.gold_300)
 	Fx.Sound("BossBanner")
-	ctx.RunManager.Broadcast(string.format("Defend the caravan! Hold its ring for %d seconds.", Config.Caravan.HoldSeconds), Color3.fromRGB(255, 200, 120))
+	ctx.RunManager.Broadcast(string.format("Defend the caravan! Hold its ring for %d seconds.", Config.Caravan.HoldSeconds), Color3.fromRGB(255, 200, 120), nil, { Id = "caravan.defend" })
 end
 
 local function succeed(c: Caravan, line: string?)
@@ -385,7 +385,7 @@ local function succeed(c: Caravan, line: string?)
 			if granted then ctx.RunManager.HoldReward(rp, dramatic == true) end
 		end
 	end
-	ctx.RunManager.Broadcast(line or "The caravan is saved! An item and gold for everyone.", Color3.fromRGB(255, 220, 120))
+	ctx.RunManager.Broadcast(line or "The caravan is saved! An item and gold for everyone.", Color3.fromRGB(255, 220, 120), nil, { Id = "caravan.result" })
 end
 
 local FIGHTING = { Explore = true, Boss = true, Surge = true }
@@ -398,9 +398,9 @@ local function fail(c: Caravan, phase: string)
 	recolour(c, P.stone_500, true)
 	Fx.Ring(c.Pos, 10, P.stone_500)
 	if FIGHTING[phase] then
-		ctx.RunManager.Broadcast("The caravan was overrun... nobody held its ring.", Color3.fromRGB(255, 130, 110))
+		ctx.RunManager.Broadcast("The caravan was overrun... nobody held its ring.", Color3.fromRGB(255, 130, 110), nil, { Id = "caravan.result" })
 	else
-		ctx.RunManager.Broadcast("The caravan was left behind... nobody held its ring.", Color3.fromRGB(255, 130, 110))
+		ctx.RunManager.Broadcast("The caravan was left behind... nobody held its ring.", Color3.fromRGB(255, 130, 110), nil, { Id = "caravan.result" })
 	end
 end
 

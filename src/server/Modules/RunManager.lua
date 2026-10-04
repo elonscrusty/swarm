@@ -47,6 +47,7 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
+local BossData = require(game:GetService("ReplicatedStorage").Shared.BossData)
 local NextGoal = require(game:GetService("ReplicatedStorage").Shared.NextGoal)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local MapBuilder = require(script.Parent.MapBuilder)
@@ -327,14 +328,32 @@ end
 -- Messages
 ------------------------------------------------------------------------------------------
 
-function RunManager.Notify(player: Player, text: string, color: Color3?)
+--[[
+	Every Notify payload carries the client's lane routing (docs/overhaul/UI_STATE_CONTRACT.md
+	section 3): Id (semantic id; the same id from two producers shows once), Lane
+	("Headline" | "Notice") and Class ("Critical" | "Info"). Senders pass `meta` with the id
+	from the contract's table; without it a personal message is an Info notice keyed by its
+	text and a broadcast is a notice (Info) or, when big, a Critical headline, which is what
+	the client's classifier would pick for an unknown text.
+]]
+export type NotifyMeta = { Id: string?, Lane: string?, Class: string? }
+
+local function payload(text: string, color: Color3?, big: boolean?, meta: NotifyMeta?)
+	local lane = meta and meta.Lane or (big and "Headline" or "Notice")
+	local class = meta and meta.Class or (big and "Critical" or "Info")
+	local id = meta and meta.Id or ((big and "big:" or "text:") .. string.lower(text))
+	return { Text = text, Color = color, Big = big, Id = id, Lane = lane, Class = class }
+end
+RunManager.NotifyPayload = payload -- (RunServers / PartyService / tests)
+
+function RunManager.Notify(player: Player, text: string, color: Color3?, meta: NotifyMeta?)
 	if player.Parent then
-		Remotes.FireClient("Notify", player, { Text = text, Color = color })
+		Remotes.FireClient("Notify", player, payload(text, color, nil, meta))
 	end
 end
 
-function RunManager.Broadcast(text: string, color: Color3?, big: boolean?)
-	Remotes.FireAllClients("Notify", { Text = text, Color = color, Big = big })
+function RunManager.Broadcast(text: string, color: Color3?, big: boolean?, meta: NotifyMeta?)
+	Remotes.FireAllClients("Notify", payload(text, color, big, meta))
 end
 
 -- True for a mode name a client may ask for (the lobby's modes, the Daily Challenge and
@@ -681,9 +700,9 @@ local function finalizeDeath(rp)
 	Fx.Sound("Death")
 	local rules = reviveRules()
 	if rules and #runPlayers > 1 and (rp.PartnerRevives or 0) < rules.PerRun then
-		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen! Stand beside them to revive.", Color3.fromRGB(255, 90, 90))
+		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen! Stand beside them to revive.", Color3.fromRGB(255, 90, 90), nil, { Id = "team.fallen." .. rp.Player.UserId, Class = "Critical" })
 	else
-		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen!", Color3.fromRGB(255, 90, 90))
+		RunManager.Broadcast(rp.Player.DisplayName .. " has fallen!", Color3.fromRGB(255, 90, 90), nil, { Id = "team.fallen." .. rp.Player.UserId, Class = "Critical" })
 	end
 	ctx.StageManager.OnRosterChanged() -- first: an open portal may finish the run as a win
 	checkEnd()
@@ -729,7 +748,7 @@ partnerRevives = function(dt: number)
 				revive(rp, "Revived by " .. helper.Player.DisplayName .. "!")
 				Events.Fire("PartnerRevive", helper.Player)
 				setHP(rp, rp.Stats.MaxHP * D.HPFraction)
-				RunManager.Notify(helper.Player, "You revived " .. rp.Player.DisplayName .. "!", Color3.fromRGB(120, 255, 160))
+				RunManager.Notify(helper.Player, "You revived " .. rp.Player.DisplayName .. "!", Color3.fromRGB(120, 255, 160), { Id = "team.revived." .. rp.Player.UserId })
 			end
 		end
 	end
@@ -1072,8 +1091,8 @@ local function beginRun(here: boolean?)
 	ctx.RunModifiers.Publish()
 	if daily then
 		local first = runPlayers[1]
-		RunManager.Broadcast("DAILY CHALLENGE", Color3.fromRGB(255, 230, 150), true)
-		RunManager.Broadcast(first and first.DailyScored and "Scored attempt: make it count!" or "Practice run: not scored.", Color3.fromRGB(255, 220, 120))
+		RunManager.Broadcast("DAILY CHALLENGE", Color3.fromRGB(255, 230, 150), true, { Id = "run.start.daily", Class = "Info" })
+		RunManager.Broadcast(first and first.DailyScored and "Scored attempt: make it count!" or "Practice run: not scored.", Color3.fromRGB(255, 220, 120), nil, { Id = "run.daily.scored" })
 	end
 	-- "STAGE 1" itself is the client HUD's stage banner (Hud.lua), not a broadcast
 	local curses = ctx.RunModifiers.Active()
@@ -1082,12 +1101,14 @@ local function beginRun(here: boolean?)
 		for _, id in ipairs(curses) do
 			table.insert(names, CurseData.Curses[id].Name)
 		end
-		RunManager.Broadcast(string.format("Curses: %s · %s gold", table.concat(names, ", "), CurseData.GoldText(CurseData.GoldMult(ctx.RunModifiers.Active()))), Color3.fromRGB(230, 150, 160))
+		RunManager.Broadcast(string.format("Curses: %s · %s gold", table.concat(names, ", "), CurseData.GoldText(CurseData.GoldMult(ctx.RunModifiers.Active()))), Color3.fromRGB(230, 150, 160), nil, { Id = "run.curses" })
 	end
 	if ctx.RunModifiers.IsEndless() then
-		RunManager.Broadcast("ENDLESS: no way home, only deeper.", Color3.fromRGB(190, 160, 255), true)
+		RunManager.Broadcast("ENDLESS: no way home, only deeper.", Color3.fromRGB(190, 160, 255), true, { Id = "run.start.endless", Class = "Info" })
 	end
-	RunManager.Broadcast("Find the portal and summon the Scorpion Queen!", Color3.fromRGB(180, 200, 255))
+	-- the real stage-1 boss (rotation, Daily order or a DEV-forced one), never a fixed name
+	local boss = BossData.Bosses[ctx.StageManager.StageBoss()]
+	RunManager.Broadcast("Find the portal and summon the " .. (boss and boss.DisplayName or "boss") .. "!", Color3.fromRGB(180, 200, 255), nil, { Id = "stage.objective" })
 end
 
 -- Who started the countdown (their curses are on show), or nil.
@@ -1350,7 +1371,7 @@ function RunManager.EndRun(won: boolean)
 		RunManager.ApplyMovement(rp)
 	end
 	ctx.StageManager.EndRun() -- the results are out: the stage loop stops here
-	RunManager.Broadcast(won and "VICTORY!" or "THE SWARM WINS...", won and Color3.fromRGB(255, 220, 80) or Color3.fromRGB(255, 80, 80), true)
+	RunManager.Broadcast(won and "VICTORY!" or "THE SWARM WINS...", won and Color3.fromRGB(255, 220, 80) or Color3.fromRGB(255, 80, 80), true, { Id = "run.end", Class = "Info" })
 end
 
 -- `how` (RunServers: when a run server sends the player home): "results" (the defeat
@@ -1451,7 +1472,7 @@ function RunManager.ReturnThroughPortal(rp)
 	rp.Root = nil
 	returnPlayerToLobby(rp)
 	local cleared = ctx.StageManager.StagesCleared()
-	RunManager.Broadcast(string.format("%s left through the portal (%d stage%s cleared).", rp.Player.DisplayName, cleared, cleared == 1 and "" or "s"), Color3.fromRGB(255, 220, 120))
+	RunManager.Broadcast(string.format("%s left through the portal (%d stage%s cleared).", rp.Player.DisplayName, cleared, cleared == 1 and "" or "s"), Color3.fromRGB(255, 220, 120), nil, { Id = "team.left." .. rp.Player.UserId })
 	if #runPlayers == 0 then
 		returnAll()
 	end
@@ -1479,7 +1500,7 @@ function RunManager.AbandonRun(rp)
 	if #runPlayers == 0 then
 		returnAll()
 	else
-		RunManager.Broadcast(rp.Player.DisplayName .. " returned to the main menu.", Color3.fromRGB(255, 200, 120))
+		RunManager.Broadcast(rp.Player.DisplayName .. " returned to the main menu.", Color3.fromRGB(255, 200, 120), nil, { Id = "team.left." .. rp.Player.UserId })
 		ctx.StageManager.OnRosterChanged()
 		checkEnd() -- only fallen teammates left: their run ends as a defeat
 	end
@@ -1648,7 +1669,7 @@ local function startRun(player: Player, newMode: string)
 	tryJoin(player)
 	joinParty(player)
 	if (phase :: string) == "Countdown" then -- tryJoin may have started a full run
-		RunManager.Broadcast(player.DisplayName .. " is starting a " .. string.upper(modeDef().DisplayName) .. " run! Tap JOIN to play.", Color3.fromRGB(120, 255, 160))
+		RunManager.Broadcast(player.DisplayName .. " is starting a " .. string.upper(modeDef().DisplayName) .. " run! Tap JOIN to play.", Color3.fromRGB(120, 255, 160), nil, { Id = "lobby.run.starting" })
 	end
 end
 
@@ -1753,7 +1774,7 @@ local function setArena(name: string)
 	if lobby.ArenaLabel then
 		lobby.ArenaLabel.Text = "ARENA: " .. string.upper(Config.Arenas[name].DisplayName)
 	end
-	RunManager.Broadcast("Arena set to " .. Config.Arenas[name].DisplayName, Color3.fromRGB(255, 220, 120))
+	RunManager.Broadcast("Arena set to " .. Config.Arenas[name].DisplayName, Color3.fromRGB(255, 220, 120), nil, { Id = "lobby.arena" })
 end
 
 --[[
@@ -2199,7 +2220,7 @@ function RunManager.OnPlayerRemoving(player: Player)
 	removeFromRun(rp)
 	if wasInRun and #runPlayers > 0 then
 		-- teammates see who dropped out (their HUD team list removes the row by itself)
-		RunManager.Broadcast(player.DisplayName .. " left the run.", Color3.fromRGB(255, 200, 120))
+		RunManager.Broadcast(player.DisplayName .. " left the run.", Color3.fromRGB(255, 200, 120), nil, { Id = "team.left." .. player.UserId })
 	end
 	rp.Root = nil
 	if phase == "Running" then
@@ -2269,7 +2290,7 @@ function RunManager.TryReconnect(player: Player, id: string): boolean
 	end
 	RunManager.RefreshFrozen()
 	ctx.StageManager.OnRosterChanged()
-	RunManager.Broadcast(player.DisplayName .. " rejoined the run.", Color3.fromRGB(120, 255, 160))
+	RunManager.Broadcast(player.DisplayName .. " rejoined the run.", Color3.fromRGB(120, 255, 160), nil, { Id = "team.rejoined." .. player.UserId })
 	return true
 end
 

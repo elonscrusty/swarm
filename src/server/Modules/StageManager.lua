@@ -38,7 +38,7 @@
 	SpawnMultCap and Config.Enemies.MaxLive). Standard runs are unchanged.
 
 	SwarmState attributes (client HUD): Stage, StagePhase, StageArena, StageBoss, PortalPos,
-	PortalHint, SwarmWarn (0-2, Config.Stages.Pressure), PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, PortalReady ("ready/total"),
+	PortalHint, SwarmWarn (0-2, Config.Stages.Pressure), PortalCharge, PortalLockLeft, SurgeLeft, ChoiceLeft, ChoiceLeftHeld (group: the countdown waits for an open upgrade choice), PortalReady ("ready/total"),
 	PortalReveal (counts up each time a stage's portal becomes chargeable: the clients'
 	cue for the banner, sound, beacon burst and minimap ping; see Config.Stages.RevealDelaySeconds).
 ]]
@@ -78,6 +78,8 @@ local surgeBudget = 0
 local surgeTimer = 0
 local choiceLeft = 0
 local shownChoice = -1
+local choiceHeld = 0 -- seconds this stage-clear countdown already waited for upgrade choices
+local shownHeld: boolean? = nil
 local travelStep = ""
 local travelTimer = 0
 local lastClearTime = 0 -- run time when the last stage boss died (Daily Challenge score)
@@ -319,6 +321,8 @@ local function buildStage(n: number)
 	state:SetAttribute("PortalLockLeft", math.ceil(lockSeconds()))
 	state:SetAttribute("SurgeLeft", 0)
 	state:SetAttribute("ChoiceLeft", 0)
+	state:SetAttribute("ChoiceLeftHeld", false)
+	shownHeld = false
 	state:SetAttribute("PortalReady", "")
 	return arena
 end
@@ -377,6 +381,8 @@ function StageManager.EndRun()
 	state:SetAttribute("StageBoss", nil)
 	state:SetAttribute("SurgeLeft", 0)
 	state:SetAttribute("ChoiceLeft", 0)
+	state:SetAttribute("ChoiceLeftHeld", false)
+	shownHeld = false
 	state:SetAttribute("PortalReady", "")
 end
 
@@ -403,7 +409,7 @@ local function startBoss(): boolean
 	publishCharge()
 	portalState("Boss")
 	Fx.Ring(p.Pos, Config.Stages.PortalRadius * 2, Color3.fromRGB(255, 60, 70))
-	ctx.RunManager.Broadcast(BossData.Get(forcedBoss or stageBoss).Title, Color3.fromRGB(255, 60, 60), true)
+	ctx.RunManager.Broadcast(BossData.Get(forcedBoss or stageBoss).Title, Color3.fromRGB(255, 60, 60), true, { Id = "boss.arrive", Lane = "Headline", Class = "Critical" })
 	return true
 end
 
@@ -439,7 +445,7 @@ function StageManager.OnBossKilled(_pos: Vector3)
 	portalState("Surge")
 	state:SetAttribute("SurgeLeft", math.ceil(surgeTimer))
 	local bossId = forcedBoss or stageBoss
-	ctx.RunManager.Broadcast(string.upper(bossName(bossId)) .. " DEFEATED! SURVIVE THE SURGE!", Color3.fromRGB(255, 200, 80), true)
+	ctx.RunManager.Broadcast(string.upper(bossName(bossId)) .. " DEFEATED! SURVIVE THE SURGE!", Color3.fromRGB(255, 200, 80), true, { Id = "boss.defeated", Lane = "Headline", Class = "Info" })
 	-- achievements per boss (Queen Slayer, Moth Bane ...): the whole team (fallen too)
 	for _, rp in ipairs(participants()) do
 		if not rp.Returned then
@@ -582,6 +588,7 @@ local function openPortal()
 	end
 	choiceLeft = Config.Stages.ChoiceSeconds
 	shownChoice = -1
+	choiceHeld = 0
 	for _, rp in ipairs(participants()) do
 		rp.PortalChoice = nil
 		rp.PortalOffered = false
@@ -590,7 +597,7 @@ local function openPortal()
 	if ctx.MeshService and ctx.MeshService.PrioritizeArena then
 		ctx.MeshService.PrioritizeArena(arenaFor(stage + 1))
 	end
-	ctx.RunManager.Broadcast("THE PORTAL IS OPEN", Color3.fromRGB(255, 220, 120), true)
+	ctx.RunManager.Broadcast("THE PORTAL IS OPEN", Color3.fromRGB(255, 220, 120), true, { Id = "portal.open", Lane = "Headline", Class = "Info" })
 	-- achievements: the stage is cleared for everyone standing (a Bargain stage counts as
 	-- an optional event)
 	local bargain = ctx.LootSystem and (ctx.LootSystem.TeamBonus().might or 0) > 0
@@ -653,7 +660,7 @@ local function stepExplore(dt: number)
 		if portal then
 			Fx.Ring(portal.Pos, Config.Stages.PortalRadius * 2.5, Color3.fromRGB(190, 210, 255))
 		end
-		ctx.RunManager.Broadcast("THE PORTAL HAS APPEARED", Color3.fromRGB(190, 210, 255), true)
+		ctx.RunManager.Broadcast("THE PORTAL HAS APPEARED", Color3.fromRGB(190, 210, 255), true, { Id = "portal.reveal", Lane = "Headline", Class = "Info" })
 	end
 	-- swarm pressure: the longer the portal stays unopened, the louder the warning
 	local pressure = Config.Stages.Pressure
@@ -720,6 +727,17 @@ local function stepSurge(dt: number)
 	end
 end
 
+-- True while a living, still-playing participant has an upgrade panel open (server state:
+-- rp.Offer with rp.Paused, the same test as LevelUpSystem's ChoiceOpen attribute).
+function StageManager.AnyChoiceOpen(): boolean
+	for _, rp in ipairs(participants()) do
+		if rp.Alive and not rp.Returned and rp.Paused and rp.Offer ~= nil then
+			return true
+		end
+	end
+	return false
+end
+
 local function stepOpen(dt: number)
 	-- send the panel to players who are (or came back) alive
 	for _, rp in ipairs(participants()) do
@@ -727,9 +745,22 @@ local function stepOpen(dt: number)
 			sendOffer(rp)
 		end
 	end
-	-- the countdown stops while the run is frozen (pause menu, level-up choice)
+	-- the countdown stops while the run is frozen (solo pause menu, solo level-up choice).
+	-- Group run: it also waits while any living player has an upgrade choice open (that
+	-- panel outranks the stage-clear dialog on their screen), bounded by
+	-- Config.Stages.ChoiceHoldMaxSeconds per stage clear so nobody can stall the team.
+	local held = false
 	if not ctx.RunManager.IsFrozen() then
-		choiceLeft -= dt
+		if choiceHeld < (Config.Stages.ChoiceHoldMaxSeconds or 0) and StageManager.AnyChoiceOpen() then
+			held = true
+			choiceHeld += dt
+		else
+			choiceLeft -= dt
+		end
+	end
+	if held ~= shownHeld then
+		shownHeld = held
+		state:SetAttribute("ChoiceLeftHeld", held)
 	end
 	local shown = math.max(0, math.ceil(choiceLeft))
 	if shown ~= shownChoice then
@@ -765,7 +796,7 @@ local function stepTravel(dt: number)
 		-- biome arenas with floor hazards name them ("Swamp · Mud pools slow you · ...")
 		local def = (Config.Arenas :: any)[arenaName]
 		local hint = (BiomeHazards.Count() > 0 and def and def.Hint) and (" · " .. def.Hint) or ""
-		ctx.RunManager.Broadcast(StageManager.ArenaDisplayName() .. hint .. " · find the portal", Color3.fromRGB(180, 200, 255))
+		ctx.RunManager.Broadcast(StageManager.ArenaDisplayName() .. hint .. " · find the portal", Color3.fromRGB(180, 200, 255), nil, { Id = "stage.objective" })
 	end
 end
 

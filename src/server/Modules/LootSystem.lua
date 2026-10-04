@@ -1025,7 +1025,7 @@ local function wake(obj: Obj)
 	altarText(obj)
 	Fx.Ring(obj.Pos, Config.Guarded.SpawnRadius[2], P.crimson_400)
 	Fx.Sound("BossRoar")
-	ctx.RunManager.Broadcast("The altar's guardians awaken! Defeat them to claim its treasure.", Color3.fromRGB(255, 120, 100))
+	ctx.RunManager.Broadcast("The altar's guardians awaken! Defeat them to claim its treasure.", Color3.fromRGB(255, 120, 100), nil, { Id = "altar.guardians", Class = "Critical" })
 end
 
 -- A guard died (killed) or was removed (despawned: the Queen's arrival, the portal burn).
@@ -1058,7 +1058,7 @@ function LootSystem.OnGuardDown(e, killed: boolean)
 	recolourGlow(obj, P.gold_300, 0)
 	altarText(obj)
 	Fx.Ring(obj.Pos, 12, P.gold_300)
-	ctx.RunManager.Broadcast("The altar is unguarded: open it for an item each!", Color3.fromRGB(255, 220, 120))
+	ctx.RunManager.Broadcast("The altar is unguarded: open it for an item each!", Color3.fromRGB(255, 220, 120), nil, { Id = "altar.unguarded" })
 end
 
 ------------------------------------------------------------------------------------------
@@ -1118,14 +1118,28 @@ local function openChest(rp, obj: Obj)
 		ctx.RunManager.Notify(rp.Player, REASON_TEXT.gold, Color3.fromRGB(255, 120, 120))
 		return
 	end
+	-- Exactly once (ISSUE TS-02): the chest leaves "Ready" before anything else, so no
+	-- second hold (this player's or a teammate's) can complete it, and the item is granted
+	-- right after the gold is taken, before any cosmetic step that could fail. What the
+	-- client shows afterwards (card, reveal, skip, close, death) never touches the grant.
 	setState(obj, "Opened")
-	openLid(obj.Chest, obj.CF, "Chest_" .. (obj.Type == "Treasure" and "Small" or obj.Type))
-	recolourGlow(obj, nil, 1)
-	quietOpened(obj)
 	local weights = Config.Chests.Weights[obj.Type] or (obj.Type == "Treasure" and Config.Chests.Weights.Large) or Config.Chests.Weights.Small
 	local id = ctx.ItemSystem.Roll(weights, rp.Stats.Luck)
 	local granted, dramatic = ctx.ItemSystem.Grant(rp, id, TITLES[obj.Type], true)
-	if granted then ctx.RunManager.HoldReward(rp, dramatic == true) end
+	if granted then
+		-- the Golden Chest always gets the contained reveal (it pays a Legendary anyway)
+		ctx.RunManager.HoldReward(rp, dramatic == true or obj.Type == "Golden")
+	else
+		warn(string.format("[LootSystem] %s paid %d for a %s but no item could be granted", rp.Player.Name, price, obj.Type))
+	end
+	local okFx, err = pcall(function()
+		openLid(obj.Chest, obj.CF, "Chest_" .. (obj.Type == "Treasure" and "Small" or obj.Type))
+		recolourGlow(obj, nil, 1)
+		quietOpened(obj)
+	end)
+	if not okFx then
+		warn("[LootSystem] chest open effect failed: " .. tostring(err))
+	end
 	Fx.Sound("Chest")
 	if obj.Type == "Golden" then
 		Events.Fire("GoldenChest", rp.Player)
@@ -1209,18 +1223,15 @@ local function useBargain(rp, obj: Obj)
 			math.floor(S.BargainGold * 100 + 0.5),
 			math.floor(S.BargainEnemyHP * 100 + 0.5)
 		),
-		Color3.fromRGB(255, 150, 130)
+		Color3.fromRGB(255, 150, 130),
+		nil,
+		{ Id = "shrine.bargain" }
 	)
 end
 
 local function claimAltar(rp, obj: Obj)
+	-- claimed first (no second claim), grants next, cosmetics last (TS-02)
 	setState(obj, "Claimed")
-	openLid(obj.Chest, obj.CF, "Chest_Large")
-	recolourGlow(obj, nil, 1)
-	quietOpened(obj)
-	altarText(obj)
-	Fx.Ring(obj.Pos, 16, P.gold_300)
-	Fx.Sound("Chest")
 	for _, other in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if other.Alive and not other.Returned and other.Stats then
 			local granted, dramatic = ctx.ItemSystem.Grant(other, ctx.ItemSystem.Roll(Config.Chests.Weights.Guarded, other.Stats.Luck), TITLES.Guarded, true, true)
@@ -1228,7 +1239,18 @@ local function claimAltar(rp, obj: Obj)
 			Events.Fire("OptionalEvent", other.Player, { Kind = "Altar" })
 		end
 	end
-	ctx.RunManager.Broadcast(rp.Player.DisplayName .. " opened the altar: an item for everyone!", Color3.fromRGB(255, 220, 120))
+	local okFx, err = pcall(function()
+		openLid(obj.Chest, obj.CF, "Chest_Large")
+		recolourGlow(obj, nil, 1)
+		quietOpened(obj)
+		altarText(obj)
+	end)
+	if not okFx then
+		warn("[LootSystem] altar open effect failed: " .. tostring(err))
+	end
+	Fx.Ring(obj.Pos, 16, P.gold_300)
+	Fx.Sound("Chest")
+	ctx.RunManager.Broadcast(rp.Player.DisplayName .. " opened the altar: an item for everyone!", Color3.fromRGB(255, 220, 120), nil, { Id = "altar.opened" })
 end
 
 local function useRune(rp, obj: Obj)

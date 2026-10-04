@@ -419,6 +419,8 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	if isBoss then
 		EnemySpawner.Boss = e
 		bossDirty = true
+	elseif elite then
+		Fx.Sound("EliteSpawn") -- every elite (waves, altar guards, caravan); the client spaces repeats (MinGap)
 	end
 	return e
 end
@@ -547,7 +549,7 @@ local function scheduledElite()
 	local e = pos and EnemySpawner.Spawn(typeId, pos, { Elite = true }) or nil
 	if e then
 		seen[typeId] = true
-		ctx.RunManager.Broadcast(string.format("An elite %s %s hunts you!", e.Affix or "", def.DisplayName or typeId), Color3.fromRGB(255, 205, 120))
+		ctx.RunManager.Broadcast(string.format("An elite %s %s hunts you!", e.Affix or "", def.DisplayName or typeId), Color3.fromRGB(255, 205, 120), nil, { Id = "elite", Class = "Critical" })
 	end
 end
 
@@ -571,7 +573,7 @@ local function spawnNest()
 			local e = EnemySpawner.Spawn("Nest", Vector3.new(x, Config.ArenaOrigin.Y, z))
 			if e then
 				if not introduce("Nest") then
-					ctx.RunManager.Broadcast("A Nest takes root nearby!", Color3.fromRGB(255, 205, 120))
+					ctx.RunManager.Broadcast("A Nest takes root nearby!", Color3.fromRGB(255, 205, 120), nil, { Id = "nest.spawn" })
 				end
 				Fx.Warn("pop", x, z, def.Radius * 2.5, "dust")
 				return e
@@ -834,9 +836,9 @@ local function startWave()
 	local where = #sides == 1 and ("from the " .. sides[1]) or (#sides .. " sides")
 	local eliteText = elites == 1 and "an elite leads it" or (elites > 1 and (elites .. " elites lead it") or nil)
 	if not loud then
-		ctx.RunManager.Broadcast(string.format("WAVE %d · %s%s", n, where, eliteText and (" · " .. eliteText) or ""), Color3.fromRGB(255, 190, 110))
+		ctx.RunManager.Broadcast(string.format("WAVE %d · %s%s", n, where, eliteText and (" · " .. eliteText) or ""), Color3.fromRGB(255, 190, 110), nil, { Id = "wave." .. n .. ".info", Class = "Critical" })
 	elseif eliteText then
-		ctx.RunManager.Broadcast(string.format("Wave %d: %s!", n, eliteText), Color3.fromRGB(255, 205, 120))
+		ctx.RunManager.Broadcast(string.format("Wave %d: %s!", n, eliteText), Color3.fromRGB(255, 205, 120), nil, { Id = "wave." .. n .. ".elite", Class = "Critical" })
 	end
 	state:SetAttribute("WaveSides", table.concat(sides, ","))
 	state:SetAttribute("WaveAngle", math.floor(base * 100 + 0.5) / 100)
@@ -966,7 +968,7 @@ function EnemySpawner.MiniWave()
 		end
 	end
 	if count > 0 then
-		ctx.RunManager.Broadcast("A swarm of " .. (def.DisplayName or typeId) .. "s approaches!", Color3.fromRGB(255, 160, 80))
+		ctx.RunManager.Broadcast("A swarm of " .. (def.DisplayName or typeId) .. "s approaches!", Color3.fromRGB(255, 160, 80), nil, { Id = "swarm.approach", Class = "Critical" })
 	end
 end
 
@@ -1149,7 +1151,7 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 				local a = k * 2.4
 				ctx.XPSystem.SpawnGem(pos + Vector3.new(math.cos(a) * 3, 0, math.sin(a) * 3), gemValue(def.Gem, 1))
 			end
-			ctx.RunManager.Broadcast(string.format("Nest destroyed! +%d gold each", gold), Color3.fromRGB(255, 215, 120))
+			ctx.RunManager.Broadcast(string.format("Nest destroyed! +%d gold each", gold), Color3.fromRGB(255, 215, 120), nil, { Id = "nest.destroyed" })
 		end
 		Fx.Warn("pop", pos.X, pos.Z, e.Radius * 2, "dust")
 	else

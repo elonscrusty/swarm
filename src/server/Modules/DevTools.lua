@@ -185,7 +185,7 @@ function DevTools.Handle(ctx, player: Player, command: string, arg: any, inLobby
 		end
 		ctx.StageManager.ForceBoss(arg)
 		if ctx.StageManager.DevActivate() then
-			ctx.RunManager.Broadcast("DEV: " .. BossData.Bosses[arg].DisplayName .. " summoned", DEV_COLOR)
+			ctx.RunManager.Broadcast("DEV: " .. BossData.Bosses[arg].DisplayName .. " summoned", DEV_COLOR, nil, { Id = "dev" })
 		else
 			ctx.RunManager.Notify(player, "DEV: the next portal summons " .. BossData.Bosses[arg].DisplayName .. " (the portal is busy now)", DEV_COLOR)
 		end
@@ -222,13 +222,13 @@ function DevTools.Handle(ctx, player: Player, command: string, arg: any, inLobby
 		end
 	elseif command == "SpawnPortalBoss" or command == "SkipToBoss" then
 		if ctx.StageManager.DevActivate() then
-			ctx.RunManager.Broadcast("DEV: portal boss summoned", DEV_COLOR)
+			ctx.RunManager.Broadcast("DEV: portal boss summoned", DEV_COLOR, nil, { Id = "dev" })
 		end
 	elseif command == "TeleportToPortal" then
 		ctx.StageManager.DevTeleport(rp)
 	elseif command == "NextStage" then
 		if ctx.StageManager.DevNextStage() then
-			ctx.RunManager.Broadcast("DEV: on to the next stage", DEV_COLOR)
+			ctx.RunManager.Broadcast("DEV: on to the next stage", DEV_COLOR, nil, { Id = "dev" })
 		end
 	end
 end

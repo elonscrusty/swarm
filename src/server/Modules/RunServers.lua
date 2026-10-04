@@ -122,7 +122,8 @@ end
 
 local function notify(player: Player, text: string, color: Color3?)
 	if player.Parent then
-		Remotes.FireClient("Notify", player, { Text = text, Color = color })
+		-- lane routing as RunManager.Notify (UI_STATE_CONTRACT section 3): an Info notice
+		Remotes.FireClient("Notify", player, { Text = text, Color = color, Id = "text:" .. string.lower(text), Lane = "Notice", Class = "Info" })
 	end
 end
 

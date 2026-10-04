@@ -166,14 +166,18 @@ end
 -- Opening a panel: it becomes an open primary in UIState and shows when it owns the
 -- screen. The chest reward overlay starts as automatic feedback (the mini reel, never an
 -- input owner); setCovering("Reward", true) turns its full reveal into a primary.
-local function show(overlay: GuiObject, name: string, blocks: boolean)
+-- `covers` overrides COVERS_HUD for this opening (the run menu drawer leaves the HUD visible).
+local function show(overlay: GuiObject, name: string, blocks: boolean, covers: boolean?)
 	overlays[name] = overlay
 	if name == "Reward" then
 		revealOverlay(overlay)
 		UIState.SetFeedback(true)
 		return
 	end
-	UIState.Open(name, primaryHandle(overlay, name, blocks, COVERS_HUD[name] == true))
+	if covers == nil then
+		covers = COVERS_HUD[name] == true
+	end
+	UIState.Open(name, primaryHandle(overlay, name, blocks, covers == true))
 	applyOwner() -- a re-show may change what the owner blocks
 end
 
@@ -443,7 +447,11 @@ function UIBuilder.Toast(str: string, color: Color3?, big: boolean?)
 		UIState.Headline({ Id = UIState.Classify(str, true).Id, Title = str, Sub = "", Color = color, Class = "Info" })
 		return
 	end
-	UIState.Notice({ Id = "text:" .. string.lower(str), Text = str, Color = color, Class = "Player", Seconds = Config.UI.ToastSeconds })
+	local low = string.lower(str)
+	-- repeated "X upgraded to level N" answers (quick taps on upgrade rows) share one id, so
+	-- they fold into one pill (latest text, "x2") instead of stacking
+	local id = string.find(low, "upgraded to level", 1, true) and "upgraded" or ("text:" .. low)
+	UIState.Notice({ Id = id, Text = str, Color = color, Class = "Player", Seconds = Config.UI.ToastSeconds })
 end
 
 -- UIState's notice renderer: one gold-rimmed pill in the toast list; UIState says when it
@@ -528,10 +536,76 @@ end
 
 local levelUp: { [string]: any } = {}
 local offerDeadline = 0
-local offerSeconds = 1
 local offerOpen = false
 local lastOffer: { [string]: any }? = nil
-local offerHint: string? = nil -- first-run explanation under LEVEL UP! (Tutorial)
+local offerHint: string? = nil -- first-run explanation under the title (Tutorial)
+-- Level-up helpers live in one table (UIBuilder is close to Luau's 200-local limit).
+local Choice: { [string]: any } = {
+	Prompts = require(script.Parent.InputPrompts), -- device-aware "how to choose" (COPY)
+	FrozenLeft = nil :: number?, -- seconds shown while the server clock is stopped (ChoiceTimerPaused)
+}
+
+-- Upgrade choice sounds (Config.Sounds, docs/overhaul/AUDIO_MIX.md).
+function Choice.choiceSound(name: string)
+	if deps.Audio and deps.Audio.Play then
+		pcall(deps.Audio.Play, name)
+	end
+end
+
+--[[
+	Seconds until the server auto-picks: the player attribute ChoiceProtectedUntil
+	(workspace:GetServerTimeNow() time, docs/overhaul/CHOICE_STATE.md), frozen while
+	ChoiceTimerPaused (solo run menu, stage travel). Without the attribute (older server,
+	offline preview) the offer's own Seconds count down locally.
+]]
+function Choice.choiceSecondsLeft(): number
+	local untilAt = player:GetAttribute("ChoiceProtectedUntil")
+	local left
+	if type(untilAt) == "number" then
+		local ok, now = pcall(function()
+			return workspace:GetServerTimeNow()
+		end)
+		left = ok and (untilAt - now) or (offerDeadline - os.clock())
+	else
+		left = offerDeadline - os.clock()
+	end
+	left = math.max(0, left)
+	if player:GetAttribute("ChoiceTimerPaused") == true then
+		Choice.FrozenLeft = Choice.FrozenLeft or left
+		return Choice.FrozenLeft :: number
+	end
+	Choice.FrozenLeft = nil
+	return left
+end
+
+-- A live group choice (duo / trio): the world keeps running for the team.
+function Choice.choiceGroup(): boolean
+	local attr = player:GetAttribute("ChoiceGroup")
+	if attr ~= nil then
+		return attr == true
+	end
+	return lastOffer ~= nil and lastOffer.Group == true
+end
+
+-- The countdown pill: "AUTO-PICK IN 24s"; every round left in the panel is auto-picked at
+-- zero ("AUTO-PICK ALL 3 IN 24s"); "TIMER PAUSED" while the clock is stopped; group runs
+-- say the team keeps playing.
+function Choice.choicePillText(left: number, narrow: boolean): string
+	local secs = math.ceil(left)
+	local rounds = lastOffer and tonumber(lastOffer.BatchRemaining) or 1
+	local s
+	if player:GetAttribute("ChoiceTimerPaused") == true then
+		s = string.format("TIMER PAUSED · %ds", secs)
+	elseif rounds and rounds > 1 and not narrow then
+		s = string.format("AUTO-PICK ALL %d IN %ds", rounds, secs)
+	else
+		s = string.format("AUTO-PICK IN %ds", secs)
+	end
+	if Choice.choiceGroup() then
+		s = narrow and string.format("%ds · TEAM KEEPS PLAYING", secs) or (s .. " · TEAM KEEPS PLAYING")
+	end
+	return s
+end
 
 --[[
 	Offer flow: the offer's icon pictures are staged first (AssetPreload, at most Stage
@@ -662,8 +736,34 @@ local function cardBand(c): (Color3, Color3)
 	return r.Band:Lerp(P.slate_900, 0.35), r.Color
 end
 
--- Small caps in the header band: what kind of card this is.
-local function cardKind(c): string
+-- An upgrade's rank change: ("LV 5 → 6", "12") from the server's Rank ("Lv 5 → 6 / 12"),
+-- or from Level for older servers; nil on other cards.
+function Choice.rankLevels(c): (string?, string?)
+	if c.Type ~= "WeaponUp" and c.Type ~= "PassiveUp" then
+		return nil, nil
+	end
+	local a, b, m = string.match(tostring(c.Rank or ""), "(%d+)%s*→%s*(%d+)%s*/%s*(%d+)")
+	if a then
+		return string.format("LV %s → %s", a, b), m
+	end
+	local level = tonumber(c.Level) or 1
+	local max = c.Type == "WeaponUp" and WeaponData.MaxLevel or PassiveData.MaxLevelOf(c.Id)
+	return string.format("LV %d → %d", level - 1, level), tostring(max)
+end
+
+-- The card takes its item to the last rank. It is still a choice, so it reads "Final
+-- upgrade"; "Maxed" is only for an item that has no upgrade left (never offered).
+function Choice.finalRank(c): boolean
+	if c.Type ~= "WeaponUp" and c.Type ~= "PassiveUp" then
+		return false
+	end
+	local max = c.Type == "WeaponUp" and WeaponData.MaxLevel or PassiveData.MaxLevelOf(c.Id)
+	return c.Rarity == "Epic" or (tonumber(c.Level) or 0) >= max
+end
+
+-- Small caps on the card's tab: what kind of card this is, with the rank change on
+-- upgrades ("UPGRADE · LV 5 → 6", "FINAL UPGRADE · LV 11 → 12"); withMax adds "/ 12".
+local function cardKind(c, withMax: boolean?): string
 	if c.Type == "WeaponNew" then
 		return "NEW WEAPON"
 	elseif c.Type == "PassiveNew" then
@@ -672,10 +772,13 @@ local function cardKind(c): string
 		return "EVOLUTION"
 	elseif c.Type == "Gold" or c.Type == "Heal" then
 		return "BONUS"
-	elseif c.Rarity == "Epic" then
-		return "MAX LEVEL"
 	end
-	return "UPGRADE"
+	local head = Choice.finalRank(c) and "FINAL UPGRADE" or "UPGRADE"
+	local lv, max = Choice.rankLevels(c)
+	if lv then
+		return head .. "  ·  " .. lv .. ((withMax and max) and (" / " .. max) or "")
+	end
+	return head
 end
 
 -- Line under the card name: "LV 3 → 4 / 8", "LONGBOW EVOLVES"; nothing on NEW cards (the
@@ -830,9 +933,10 @@ local function chooseCard(index: number, input: InputObject?)
 	end
 	offerOpen = false
 	offerArm.At = math.huge
-	UIKit.Click()
+	Choice.choiceSound("ChoicePick")
 	pickAnimation(index)
-	Remotes.Get("LevelUpChoose"):FireServer(index)
+	-- the card set id: a double tap or a late packet for an older set is ignored (CHOICE_STATE)
+	Remotes.Get("LevelUpChoose"):FireServer(index, lastOffer and lastOffer.OfferId)
 end
 
 -- A one-shot light streak across a card face (clipped to the card).
@@ -889,18 +993,7 @@ end
 
 -- How to choose with the device in hand ("Press 1, 2 or 3 to choose" / tap / gamepad).
 local function choiceHint(count: number): string
-	local last = UserInputService:GetLastInputType()
-	if last == Enum.UserInputType.Gamepad1 or last == Enum.UserInputType.Gamepad2 then
-		return "Press A to choose"
-	elseif last == Enum.UserInputType.Touch or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled) then
-		return "Tap a card to choose"
-	end
-	local keys = {}
-	for i = 1, math.max(1, count) do
-		table.insert(keys, tostring(i))
-	end
-	local last1 = table.remove(keys)
-	return #keys > 0 and string.format("Press %s or %s to choose", table.concat(keys, ", "), last1) or string.format("Press %s to choose", last1)
+	return Choice.Prompts.Choose(count)
 end
 
 --[[
@@ -925,7 +1018,9 @@ local function buildLevelUp()
 	-- "Panel" is what show() pops in: here the whole content block
 	local panel = new("Frame", { Name = "Panel", BackgroundTransparency = 1, ZIndex = 2 }, overlay)
 	levelUp.Panel = panel
-	levelUp.Title = text(panel, "Display", "LEVEL UP!", {
+	-- approved screen 04: CHOOSE YOUR UPGRADE, a gold rule with a diamond, LEVEL N • PICK ONE,
+	-- the AUTO-PICK pill (the countdown; no separate bar)
+	levelUp.Title = text(panel, "Display", "CHOOSE YOUR UPGRADE", {
 		Name = "Title",
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.gold_300,
@@ -934,10 +1029,9 @@ local function buildLevelUp()
 	}, 46)
 	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.gold_200, P.gold_400) }, levelUp.Title)
 	levelUp.Divider = UIKit.Divider(panel, 460)
-	levelUp.Sub = text(panel, "H3", "Choose one upgrade", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text })
+	levelUp.Sub = text(panel, "Label", "PICK ONE", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd }, 18)
 	levelUp.Pill = UIKit.IconPill(panel, "clock", "AUTO-PICK IN 25s", { AnchorPoint = Vector2.new(0.5, 0) })
 	levelUp.Pill.Label.TextColor3 = C.Text
-	levelUp.Timer = UIKit.Meter(panel, { Gradient = ColorSequence.new(P.gold_500, P.gold_300), Size = UDim2.fromOffset(330, 7) })
 	levelUp.Cards = new("Frame", { Name = "Cards", BackgroundTransparency = 1 }, panel)
 	levelUp.Layout = UIKit.list(levelUp.Cards, {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -978,7 +1072,7 @@ local function buildLevelUp()
 						offerArm.ShownAt = shown
 					end
 				end)
-				Remotes.Get("LevelUpReroll"):FireServer()
+				Remotes.Get("LevelUpReroll"):FireServer(lastOffer and lastOffer.OfferId)
 			end)
 		end,
 	})
@@ -997,7 +1091,7 @@ local function buildLevelUp()
 				if confirmInput(input) then
 					offerOpen = false
 					offerArm.At = math.huge
-					Remotes.Get("LevelUpSkip"):FireServer()
+					Remotes.Get("LevelUpSkip"):FireServer(lastOffer and lastOffer.OfferId)
 				end
 			end)
 		end,
@@ -1057,27 +1151,31 @@ local function buildLevelUp()
 end
 
 -- Fixed parts of a card (reference px).
-local CARD = { Pad = 14, Band = 30, Tile = 62, Row = 30, Box = 76, Syn = 30, Foot = 48, PBand = 26, PTile = 56, PRow = 28 }
+local CARD = { Pad = 14, Band = 30, Tile = 62, Row = 30, Box = 76, Syn = 30, Foot = 44, FootPad = 12, Inset = 6, TabH = 26, PBand = 26, PTile = 56, PRow = 28 }
 
--- Phones (landscape) get a smaller tile, footer and title so the rows keep their room.
-local function cardTileSize(): number
-	return UIKit.IsCompact() and 50 or CARD.Tile
+-- Phones (landscape) get a smaller footer and title so the rows keep their room.
+function Choice.cardFootH(): number
+	return UIKit.IsCompact() and 38 or CARD.Foot
 end
-local function cardFootH(): number
-	return UIKit.IsCompact() and 40 or CARD.Foot
+-- "CHOOSE YOUR UPGRADE" at the biggest size that fits the screen width.
+function Choice.titleSize(): number
+	local base = UIKit.IsCompact() and 34 or 46
+	local fit = (virtualSize().X - 2 * margin()) / (19 * 0.8) / (UIKit.IsCompact() and Theme.TextScaleCompact or 1)
+	return math.max(18, math.min(base, math.floor(fit)))
 end
-local function titleSize(): number
-	return UIKit.IsCompact() and 36 or 46
+-- The card name (serif, centred under the art).
+function Choice.cardNameH(): number
+	return TS(UIKit.IsCompact() and 22 or 26) + 6
 end
 
 -- Phones in landscape have the shortest cards: one description line and a one-line hint.
-local function compactLandscape(): boolean
+function Choice.compactLandscape(): boolean
 	return UIKit.IsCompact() and not portrait
 end
 
 -- Is this card's description line the one-line gain summary (an upgrade) rather than
 -- the weapon / passive text?
-local function summaryCard(c): boolean
+function Choice.summaryCard(c): boolean
 	return c.Type == "WeaponUp" or c.Type == "PassiveUp"
 end
 
@@ -1086,7 +1184,7 @@ end
 -- phones in landscape.
 local function descHeight(desc: string?, w: number, c): number
 	local plain = string.gsub(desc or "", "<[^>]+>", "")
-	local maxLines = (compactLandscape() and summaryCard(c)) and 1 or 2
+	local maxLines = (Choice.compactLandscape() and Choice.summaryCard(c)) and 1 or 2
 	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.44 / math.max(1, w - 2 * CARD.Pad)), 1, maxLines)
 	return TS(14) * lines + 8
 end
@@ -1102,10 +1200,10 @@ local function boxHeight(): number
 	return UIKit.IsCompact() and 62 or CARD.Box
 end
 
--- Height a landscape card needs for everything it has to show.
+-- Height a landscape card needs for everything but its art panel.
 local function cardNeeds(c, w: number): number
 	local desc, stats, changes = cardContent(c)
-	local h = CARD.Band + 12 + cardTileSize() + 10 + (desc and descHeight(desc, w, c) + 4 or 0) + 14
+	local h = CARD.Inset + 8 + Choice.cardNameH() + (desc and descHeight(desc, w, c) + 6 or 0) + 4
 	if #changes > 0 then
 		h += boxHeight() + 6 + (#changes - 1) * (CARD.Row - 2)
 	else
@@ -1117,7 +1215,15 @@ local function cardNeeds(c, w: number): number
 	if c.Hint then
 		h += hintHeight() + 2
 	end
-	return h + 10 + cardFootH()
+	return h + 10 + Choice.cardFootH() + CARD.FootPad
+end
+
+-- The art panel's height: what it would like, and the least it keeps before rows give way.
+function Choice.artPref(w: number): number
+	return UIKit.IsCompact() and math.floor(math.min(110, w * 0.42)) or math.floor(math.min(230, w * 0.72))
+end
+function Choice.artMin(): number
+	return UIKit.IsCompact() and 56 or 120
 end
 
 -- Height a wide portrait card needs.
@@ -1137,7 +1243,7 @@ end
 -- Room left for the cards under the header and above the buttons (landscape).
 local function headerHeight(): number
 	local subH = (portrait or not UIKit.IsCompact() or offerHint ~= nil) and TS(18) + 6 or 0
-	return TS(titleSize()) + 6 + 10 + 6 + subH + 6 + (Theme.Size.Badge + 14) + 8 + 7 + 16
+	return TS(Choice.titleSize()) + 6 + 16 + subH + 6 + (Theme.Size.Badge + 14) + 16
 end
 -- Phones in landscape: lower reroll / skip buttons and no "Tap a card" hint line (each
 -- card's own footer says it), so the cards keep their height in the short screen.
@@ -1172,13 +1278,13 @@ local function cardMetrics(count: number): (number, number)
 		end
 		return math.min(v.X - 2 * m, 600), math.min(most, 320)
 	end
-	local w = math.min(290, (v.X - 2 * m - (count - 1) * 18) / math.max(1, count))
+	local w = math.min(300, (v.X - 2 * m - (count - 1) * 18) / math.max(1, count))
 	local most = 300
 	for _, c in ipairs(choices) do
-		most = math.max(most, cardNeeds(c, w))
+		most = math.max(most, cardNeeds(c, w) + Choice.artPref(w))
 	end
 	local room = v.Y - headerHeight() - footerHeight() - levelUpTop() - 6
-	return w, math.max(phoneLandscape() and 180 or 260, math.min(most, room, 440))
+	return w, math.max(phoneLandscape() and 180 or 260, math.min(most, room, 640))
 end
 
 -- Card icon: the upgrade tile framed in the card's accent (rim + a soft halo that breathes
@@ -1285,15 +1391,108 @@ local function synergyBar(parent: Instance, c, x: number, y: number, w: number, 
 	text(row, "Caption", synergyText(c), { Size = UDim2.fromOffset(0, h), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.fx_heal, LayoutOrder = 2, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
 end
 
+-- Small gold diamonds at the four corners of a card (the sculpted frame of screen 04).
+function Choice.cornerGems(face: GuiObject, color: Color3)
+	for _, at in ipairs({ { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } }) do
+		local gem = new("Frame", {
+			Name = "Gem",
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(at[1], at[1] == 0 and 9 or -9, at[2], at[2] == 0 and 9 or -9),
+			Size = UDim2.fromOffset(7, 7),
+			Rotation = 45,
+			ZIndex = 5,
+		}, face)
+		UIKit.stroke(gem, P.slate_950, 1, 0.3)
+	end
+end
+
 --[[
-	One card. Landscape (tall, owner mockup): header band with the card kind in small caps;
-	icon tile left + serif name (+ LV a → b / max) right; the description; a gold rule with
-	a diamond; then a NEW weapon's stat table (icon, caps label, value) or an upgrade's boxed
-	main change (big "From → To", the new value green) with the other changes as rows; the
-	synergy bar; the evolution hint; and a footer with the number badge + "Choose".
-	Portrait (wide, stacked): band with kind + number, icon left, name / level / description
-	right, the rows under it. Hover / gamepad focus / the pick turn the card gold-rimmed and
-	warm-tinted (Focus[index]).
+	The art panel at the top of a landscape card: the item's picture large over a backdrop
+	tinted with the item's own colour (a visual theme, not a rarity), a soft glow and a dark
+	plinth. popDelay pops the picture in during the entrance; it floats gently while the
+	offer is open. A picture that has not loaded shows its vector icon (Icons).
+]]
+function Choice.cardArt(face: GuiObject, c, x: number, y: number, w: number, h: number, accent: Color3, popDelay: number?): Frame
+	local tint = typeof(c.Color) == "Color3" and c.Color or accent
+	local art = new("Frame", {
+		Name = "Art",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(x, y),
+		Size = UDim2.fromOffset(w, h),
+		ClipsDescendants = true,
+		ZIndex = 2,
+	}, face)
+	UIKit.corner(art, Theme.Radius.L - 2)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(tint:Lerp(P.slate_800, 0.5), tint:Lerp(P.slate_950, 0.82)) }, art)
+	local rim = UIKit.stroke(art, accent, 1, 0.5)
+	local glowS = math.floor(math.min(w, h) * 1.05)
+	local glow = new("Frame", {
+		Name = "Glow",
+		BackgroundColor3 = tint:Lerp(P.ivory_100, 0.35),
+		BackgroundTransparency = 0.8,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 6),
+		Size = UDim2.fromOffset(glowS, glowS),
+		ZIndex = 2,
+	}, art)
+	UIKit.corner(glow, 999)
+	local plinth = new("Frame", {
+		Name = "Plinth",
+		BackgroundColor3 = P.slate_950,
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -6),
+		Size = UDim2.fromOffset(math.floor(w * 0.6), math.max(8, math.floor(h * 0.1))),
+		ZIndex = 2,
+	}, art)
+	UIKit.corner(plinth, 999)
+	local iconS = math.max(32, math.floor(math.min(h - 30, w * 0.62)))
+	local holder = new("Frame", {
+		Name = "IconHolder",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 6),
+		Size = UDim2.fromOffset(iconS, iconS),
+		ZIndex = 3,
+	}, art)
+	local icon = Icons.Upgrade(holder, cardIconId(c), { Size = iconS, Name = "Icon" })
+	icon.ZIndex = 3
+	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+		offerArm.Fx.Add(IdleFx.Attach(icon, "Float"))
+		offerArm.Fx.Add(UIAnim.Glow(glow, "BackgroundTransparency", 0.74, 0.86, 1.8))
+		if popDelay then
+			local s = UIAnim.ScaleOf(holder)
+			s.Scale = 0.6
+			task.delay(popDelay, function()
+				if holder.Parent then
+					UIAnim.Tween(s, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+				end
+			end)
+		end
+	end
+	if c.Type == "Evolve" then
+		rim.Color = P.gold_400
+		rim.Thickness = 2
+		rim.Transparency = 0
+	end
+	return art
+end
+
+--[[
+	One card (approved screen 04). Landscape (tall): a sculpted slate frame with corner gems;
+	a tab with the card kind and rank change ("NEW PASSIVE", "UPGRADE · LV 1 → 2", "FINAL
+	UPGRADE · LV 11 → 12"); the art panel; the serif name; the one-line effect; the boxed main
+	change (stat, big "From → To", the new value green) with any other changes as rows, or a
+	NEW weapon's starting stats; the synergy bar; the evolution hint; and a CHOOSE plate with
+	the 1 / 2 / 3 key. Portrait (wide, stacked): band with kind + rank + number, icon left,
+	name / description right, the rows under it. Hover / gamepad focus / the pick give the
+	card a thicker gold border and a warm tint (Focus[index]): visible as shape, not only
+	colour.
 ]]
 local function makeCard(c, index: number, count: number, animate: boolean)
 	local w, h = cardMetrics(count)
@@ -1315,17 +1514,18 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 	hit:SetAttribute("Legendary", legendary)
 	UIKit.Focusable(hit)
 	UIKit.Shadow(hit, Theme.Radius.L, 5, 0)
+	-- gold glow behind the card: always on an evolution, on focus for the others
+	local glow = new("Frame", {
+		Name = "Glow",
+		BackgroundColor3 = P.gold_300,
+		BackgroundTransparency = legendary and 0.75 or 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(-7, -7),
+		Size = UDim2.new(1, 14, 1, 14),
+		ZIndex = 0,
+	}, hit)
+	UIKit.corner(glow, Theme.Radius.L + 7)
 	if legendary then
-		local glow = new("Frame", {
-			Name = "Glow",
-			BackgroundColor3 = P.gold_300,
-			BackgroundTransparency = 0.75,
-			BorderSizePixel = 0,
-			Position = UDim2.fromOffset(-7, -7),
-			Size = UDim2.new(1, 14, 1, 14),
-			ZIndex = 0,
-		}, hit)
-		UIKit.corner(glow, Theme.Radius.L + 7)
 		offerArm.Fx.Add(UIAnim.Glow(glow, "BackgroundTransparency", 0.72, 0.9, 1.1))
 	end
 	local face = new("Frame", {
@@ -1342,36 +1542,67 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 	local warm = new("Frame", { Name = "Warm", BackgroundColor3 = P.gold_600, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, face)
 	UIKit.corner(warm, Theme.Radius.L)
 	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.2, 0.75) }, warm)
-	local edge = UIKit.stroke(face, legendary and P.gold_400 or edgeColor, legendary and 2.5 or 1.5, legendary and 0 or 0.45)
+	local edgeRest = portrait and edgeColor or edgeColor:Lerp(P.slate_400, 0.5)
+	local edge = UIKit.stroke(face, legendary and P.gold_400 or edgeRest, legendary and 2.5 or 2, legendary and 0 or 0.3)
 	if legendary then
 		offerArm.Fx.Add(UIAnim.PulseStroke(edge, 2, 3.5))
 	end
-
-	-- header band
-	local bandH = portrait and CARD.PBand or CARD.Band
-	local band = new("Frame", { Name = "Band", BackgroundColor3 = bandColor, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, bandH), ZIndex = 2, ClipsDescendants = true }, face)
-	UIKit.corner(band, Theme.Radius.L)
-	new("Frame", { BackgroundColor3 = bandColor, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -Theme.Radius.L), Size = UDim2.new(1, 0, 0, Theme.Radius.L), ZIndex = 2 }, band)
-	new("Frame", { Name = "Line", BackgroundColor3 = legendary and P.gold_300 or edgeColor, BackgroundTransparency = 0.6, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 3 }, band)
+	local plateStroke: UIStroke? = nil -- the CHOOSE plate's rim (landscape)
+	local bandLabel: TextLabel
 	local labelColor = legendary and P.gold_900 or edgeColor:Lerp(P.ivory_100, 0.45)
-	local bandLabel = text(band, "Label", UIKit.track(cardKind(c)), {
-		Position = UDim2.fromOffset(portrait and pad or 0, 0),
-		Size = portrait and UDim2.new(1, -pad * 2, 1, 0) or UDim2.fromScale(1, 1),
-		TextXAlignment = portrait and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center,
-		TextColor3 = labelColor,
-		ZIndex = 3,
-	}, Theme.TextSize.Caption + 1)
+	local shineOn: GuiObject
+
+	if portrait then
+		-- header band
+		local bandH = CARD.PBand
+		local band = new("Frame", { Name = "Band", BackgroundColor3 = bandColor, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, bandH), ZIndex = 2, ClipsDescendants = true }, face)
+		UIKit.corner(band, Theme.Radius.L)
+		new("Frame", { BackgroundColor3 = bandColor, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -Theme.Radius.L), Size = UDim2.new(1, 0, 0, Theme.Radius.L), ZIndex = 2 }, band)
+		new("Frame", { Name = "Line", BackgroundColor3 = legendary and P.gold_300 or edgeColor, BackgroundTransparency = 0.6, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 3 }, band)
+		bandLabel = text(band, "Label", UIKit.track(cardKind(c, true)), {
+			Position = UDim2.fromOffset(pad, 0),
+			Size = UDim2.new(1, -pad * 2 - 28, 1, 0),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = labelColor,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			ZIndex = 3,
+		}, Theme.TextSize.Caption + 1)
+		shineOn = band
+	else
+		-- the tab on the top edge: kind + rank change (the "/ max" while it fits)
+		local long = UIKit.track(cardKind(c, true))
+		local tabText = (utf8.len(long) or #long) * TS(13) * 0.62 + 28 <= w - 2 * pad and long or UIKit.track(cardKind(c, false))
+		local tab = text(face, "Label", tabText, {
+			Name = "Tab",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 2),
+			Size = UDim2.fromOffset(0, CARD.TabH),
+			AutomaticSize = Enum.AutomaticSize.X,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			BackgroundColor3 = legendary and P.gold_400 or bandColor:Lerp(P.slate_950, 0.25),
+			BackgroundTransparency = 0.04,
+			TextColor3 = labelColor,
+			ClipsDescendants = true,
+			ZIndex = 6,
+		}, 13)
+		new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, tab)
+		UIKit.corner(tab, 8)
+		UIKit.stroke(tab, legendary and P.gold_200 or edgeColor, 1, 0.25).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		bandLabel = tab
+		shineOn = tab
+		Choice.cornerGems(face, legendary and P.gold_300 or P.gold_500)
+	end
 	if (c.Rarity == "Rare" or c.Rarity == "Epic" or legendary) and not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
-		-- the rarer bands shine now and then (started once the card has landed level:
+		-- the rarer tabs shine now and then (started once the card has landed level:
 		-- Roblox does not clip inside a rotated card)
 		task.delay(animate and (offerArm.Stagger * (index - 1) + 0.32) or 0, function()
-			if band.Parent then
-				offerArm.Fx.Add(UIAnim.Shine(band, legendary and 1.8 or 2.8, legendary and 0.6 or 0.8))
+			if shineOn.Parent then
+				offerArm.Fx.Add(UIAnim.Shine(shineOn, legendary and 1.8 or 2.8, legendary and 0.6 or 0.8))
 			end
 		end)
 	end
 
-	-- focus look (hover, gamepad selection, the pick)
+	-- focus look (hover, gamepad selection, the pick): thicker gold border, glow, warm tint
 	local focused = false
 	local function setFocus(on: boolean)
 		if focused == on then
@@ -1381,8 +1612,12 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		local t = Theme.Motion.Fast
 		UIAnim.Tween(warm, t, { BackgroundTransparency = on and 0.82 or 1 })
 		if not legendary then
-			UIAnim.Tween(edge, t, { Color = on and P.gold_400 or edgeColor, Thickness = on and 2.5 or 1.5, Transparency = on and 0 or 0.45 })
-			bandLabel.TextColor3 = on and P.gold_300 or labelColor
+			UIAnim.Tween(edge, t, { Color = on and P.gold_300 or edgeRest, Thickness = on and 3.5 or 2, Transparency = on and 0 or 0.3 })
+			UIAnim.Tween(glow, t, { BackgroundTransparency = on and 0.8 or 1 })
+			bandLabel.TextColor3 = on and P.gold_200 or labelColor
+		end
+		if plateStroke then
+			UIAnim.Tween(plateStroke, t, { Color = on and P.gold_200 or P.gold_500, Transparency = on and 0 or 0.35, Thickness = on and 2 or 1.5 })
 		end
 	end
 	levelUp.Focus[index] = setFocus
@@ -1394,13 +1629,14 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		end
 	end)
 	local delay = offerArm.Stagger * (index - 1) -- this card's entrance delay
-	local sub = cardLevelText(c)
+	local sub = (c.Type == "WeaponUp" or c.Type == "PassiveUp") and "" or cardLevelText(c)
 
 	if portrait then
+		local bandH = CARD.PBand
 		-- number badge at the band's right end
-		local num = text(band, "Number", tostring(index), {
+		local num = text(face, "Number", tostring(index), {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -pad, 0.5, 0),
+			Position = UDim2.new(1, -pad, 0, bandH / 2),
 			Size = UDim2.fromOffset(20, 20),
 			TextXAlignment = Enum.TextXAlignment.Center,
 			BackgroundColor3 = P.slate_950,
@@ -1457,65 +1693,89 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			}, 13)
 		end
 	else
-		local y = bandH + 12
-		local tileSize = cardTileSize()
-		local tile = cardTile(face, c, tileSize, edgeColor, animate and delay + 0.08 or nil)
-		tile.Position = UDim2.fromOffset(pad, y)
-		local x = pad + tileSize + 12
-		local nameH = TS(22) + 6
-		local subH = sub ~= "" and TS(13) + 4 or 0
-		local ny = y + math.floor((tileSize - nameH - subH) / 2)
+		-- the CHOOSE plate at the bottom: the 1 / 2 / 3 key and CHOOSE
+		local footH = Choice.cardFootH()
+		local footY = h - footH - CARD.FootPad
+		local plate = new("Frame", {
+			Name = "ChoosePlate",
+			BackgroundColor3 = P.slate_950,
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(pad + 4, footY),
+			Size = UDim2.new(1, -2 * (pad + 4), 0, footH),
+			ZIndex = 2,
+		}, face)
+		UIKit.corner(plate, 10)
+		plateStroke = UIKit.stroke(plate, P.gold_500, 1.5, 0.35)
+		UIKit.list(plate, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
+		local keySize = footH - 12
+		local num = text(plate, "Number", tostring(index), {
+			Size = UDim2.fromOffset(keySize, keySize),
+			TextXAlignment = Enum.TextXAlignment.Center,
+			BackgroundColor3 = P.slate_900,
+			BackgroundTransparency = 0,
+			LayoutOrder = 1,
+			ZIndex = 3,
+		}, 16)
+		UIKit.corner(num, 6)
+		UIKit.stroke(num, P.ivory_200, 1.5, 0.15).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		text(plate, "Label", "CHOOSE", {
+			Size = UDim2.fromOffset(0, footH),
+			AutomaticSize = Enum.AutomaticSize.X,
+			TextColor3 = P.ivory_100,
+			LayoutOrder = 2,
+			ZIndex = 3,
+		}, 16)
+
+		-- the art panel takes what the text leaves (between Choice.artMin and Choice.artPref)
+		local artH = math.clamp(h - cardNeeds(c, w), Choice.artMin(), Choice.artPref(w))
+		local y = CARD.Inset
+		Choice.cardArt(face, c, CARD.Inset, y, w - 2 * CARD.Inset, artH, edgeColor, animate and delay + 0.08 or nil)
+		y += artH + 8
 		text(face, "H2", c.Name, {
-			Position = UDim2.fromOffset(x, ny),
-			Size = UDim2.new(1, -x - 8, 0, nameH),
+			Position = UDim2.fromOffset(pad, y),
+			Size = UDim2.new(1, -2 * pad, 0, Choice.cardNameH()),
+			TextXAlignment = Enum.TextXAlignment.Center,
 			TextTruncate = Enum.TextTruncate.AtEnd,
-		}, 23)
+			ZIndex = 2,
+		}, UIKit.IsCompact() and 22 or 26)
+		y += Choice.cardNameH()
 		if sub ~= "" then
-			text(face, "Label", UIKit.track(sub), {
-				Position = UDim2.fromOffset(x, ny + nameH),
-				Size = UDim2.new(1, -x - 8, 0, subH),
-				TextColor3 = legendary and P.gold_300 or P.ivory_300,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-			}, 13)
+			-- evolution / bonus cards: what happens ("LONGBOW EVOLVES", "RUN GOLD") in the
+			-- line the effect would take when there is no description
+			if not desc then
+				text(face, "Label", UIKit.track(sub), {
+					Position = UDim2.fromOffset(pad, y),
+					Size = UDim2.new(1, -2 * pad, 0, TS(13) + 4),
+					TextXAlignment = Enum.TextXAlignment.Center,
+					TextColor3 = legendary and P.gold_300 or P.ivory_300,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					ZIndex = 2,
+				}, 13)
+				y += TS(13) + 8
+			end
 		end
-		y += tileSize + 10
 		if desc then
+			local dh = descHeight(desc, w, c)
 			text(face, "Body", desc, {
 				Position = UDim2.fromOffset(pad, y),
-				Size = UDim2.new(1, -2 * pad, 0, descHeight(desc, w, c)),
+				Size = UDim2.new(1, -2 * pad, 0, dh),
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextWrapped = true,
 				RichText = true,
 				TextColor3 = P.ivory_200,
 				TextTruncate = Enum.TextTruncate.AtEnd,
+				ZIndex = 2,
 			}, 14)
-			y += descHeight(desc, w, c) + 4
+			y += dh + 6
 		end
-		UIKit.Divider(face, w - 2 * pad - 20, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, y) })
-		y += 14
-		-- footer: a hairline, the number badge and "Choose"
-		local footH = cardFootH()
-		local footY = h - footH
-		new("Frame", { Name = "FootLine", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0, Position = UDim2.fromOffset(pad, footY), Size = UDim2.new(1, -2 * pad, 0, 1) }, face)
-		local num = text(face, "Number", tostring(index), {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, -34, 0, footY + footH / 2),
-			Size = UDim2.fromOffset(30, 30),
-			TextXAlignment = Enum.TextXAlignment.Center,
-		}, 16)
-		UIKit.corner(num, 999)
-		UIKit.stroke(num, P.ivory_200, 1.5, 0.15).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		text(face, "BodyStrong", "Choose", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0.5, -8, 0, footY + footH / 2),
-			Size = UDim2.fromOffset(90, TS(16) + 6),
-		}, 16)
-		-- top-down under the rule: the rows (what the card does comes first), then the
-		-- synergy bar and the evolution hint while they fit above the footer
-		local bottom = footY - 6
+		y += 4
+		-- top-down under the effect: the rows (what the card does comes first), then the
+		-- synergy bar and the evolution hint while they fit above the plate
+		local bottom = footY - 8
 		local rw = w - 2 * pad
 		-- the synergy bar and the evolution hint keep their room (rows that do not fit are
-		-- dropped instead: the description line already sums up the gain)
+		-- dropped instead: the effect line already sums up the gain)
 		local synRoom = c.Synergy and CARD.Syn + 8 or 0
 		local hintRoom = c.Hint and hintHeight() + 4 or 0
 		local function fits(hh: number): boolean
@@ -1536,7 +1796,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			end
 		else
 			-- slimmer rows on phones in landscape, so a NEW weapon keeps its third stat
-			local rowH = compactLandscape() and CARD.Row - 4 or CARD.Row
+			local rowH = Choice.compactLandscape() and CARD.Row - 4 or CARD.Row
 			for _, line in ipairs(stats) do
 				if not fits(rowH) then
 					break
@@ -1625,13 +1885,13 @@ local function layoutLevelUp()
 	local v = virtualSize()
 	local count = lastOffer and #lastOffer.Choices or 3
 	local cw, ch = cardMetrics(count)
-	local titleH = TS(titleSize()) + 6
+	local titleH = TS(Choice.titleSize()) + 6
 	-- phones (landscape) drop "Choose one upgrade" (the cards need the room) unless the
 	-- tutorial has something to say there
 	local showSub = portrait or not UIKit.IsCompact() or offerHint ~= nil
 	local subH = showSub and TS(18) + 6 or 0
 	levelUp.Sub.Visible = showSub
-	levelUp.Title.TextSize = TS(titleSize())
+	levelUp.Title.TextSize = TS(Choice.titleSize())
 	local pillH = Theme.Size.Badge + 14
 	local cardsW = portrait and cw or (count * cw + (count - 1) * 18)
 	local cardsH = ch
@@ -1643,7 +1903,7 @@ local function layoutLevelUp()
 	end
 	local showHint = not phoneLandscape()
 	local hintH = showHint and TS(15) + 6 or 0
-	local headH = titleH + 10 + 6 + subH + 6 + pillH + 8 + 7 + 16
+	local headH = titleH + 16 + subH + 6 + pillH + 16
 	local blockH = headH + cardsH + footerHeight()
 	local top = math.max(levelUpTop(), (v.Y - blockH) / 2)
 	local panel = levelUp.Panel :: Frame
@@ -1656,14 +1916,11 @@ local function layoutLevelUp()
 	levelUp.Divider.Position = UDim2.new(0.5, 0, 0, y)
 	levelUp.Divider.Size = UDim2.fromOffset(math.min(460, v.X - 2 * margin()), 10)
 	y += 16
-	levelUp.Sub.Position = UDim2.fromOffset(0, y)
-	levelUp.Sub.Size = UDim2.new(1, 0, 0, subH)
+	levelUp.Sub.Position = UDim2.fromOffset(margin(), y)
+	levelUp.Sub.Size = UDim2.new(1, -2 * margin(), 0, subH)
 	y += subH + 6
 	levelUp.Pill.Frame.Position = UDim2.new(0.5, 0, 0, y)
-	y += pillH + 8
-	levelUp.Timer.Frame.AnchorPoint = Vector2.new(0.5, 0)
-	levelUp.Timer.Frame.Position = UDim2.new(0.5, 0, 0, y)
-	y += 7 + 16
+	y += pillH + 16
 	levelUp.Layout.FillDirection = portrait and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
 	levelUp.Layout.Padding = UDim.new(0, portrait and 12 or 18)
 	levelUp.Cards.Position = UDim2.fromOffset((v.X - cardsW) / 2, y)
@@ -1759,12 +2016,25 @@ local function showOffer(offer)
 	levelUp.Skip.SetEnabled(skips > 0)
 	local total = tonumber(offer.BatchTotal) or 1
 	local remaining = tonumber(offer.BatchRemaining) or 1
-	levelUp.Title.Text = total > 1 and string.format("LEVEL UP!  %d / %d", total - remaining + 1, total) or "LEVEL UP!"
+	-- "LEVEL 14  •  PICK ONE", with the round when the panel holds several ("•  1 OF 4")
+	local level = tonumber(offer.Level)
+	local parts = {}
+	if level then
+		table.insert(parts, "LEVEL " .. level)
+	end
+	table.insert(parts, "PICK ONE")
+	if total > 1 then
+		table.insert(parts, string.format("%d OF %d", total - remaining + 1, total))
+	end
+	levelUp.SubText = UIKit.track(table.concat(parts, "  •  "))
 	if not samePanel then
 		UIAnim.Punch(levelUp.Title, (ClientSettings.Reduced() or ClientPerformance.Reduced()) and 0.1 or 0.25)
-		offerSeconds = math.max(1, offer.Seconds)
+		Choice.choiceSound("ChoiceOpen")
 		offerDeadline = os.clock() + offer.Seconds
+		Choice.FrozenLeft = nil
 	else
+		-- the next round of the same panel (or a reroll): new cards, no second opening sound
+		Choice.choiceSound("CardAppear")
 		offerDeadline = math.min(offerDeadline, os.clock() + offer.Seconds)
 	end
 	offerHint = Tutorial.LevelUpHint() or offerHint
@@ -1835,15 +2105,18 @@ end
 	the run (InRun), the results show or the hero goes down.
 	Built once: a fixed ring of slot tiles is recycled as the strip moves (one slot changes
 	per tile passed) and item icons are pooled by id.
-	Every chest rolls (owner): a reward the server does NOT pause for (an ordinary item, a
-	one-level elite chest) plays the short "mini" reel instead (Mini = true: ~1.5 s, no
-	dimmer, the HUD stays, taps and keys go to the game, placed beside the hero), so a
-	teammate's or an ordinary chest never stops anyone. It queues with the others.
+	Overhaul (docs/overhaul/REWARD.md, approved screen 05; replaces "every chest rolls"):
+	only RARE rewards in a solo run use this reel (a Legendary item, the Golden Chest, the
+	guarded altar / rune stones, an elite chest with several levels or an evolution: what
+	the server pauses for). Every other reward, and every reward in a live duo / trio run,
+	is the compact reward card below (no reel, no pause, no confirmation).
 ]]
 local closeReward: (boolean) -> ()
 local buildChest: () -> ()
 local showItemReward: (any) -> ()
 do
+	-- required here, not at the top: the main chunk is at Luau's 200-local limit
+	local InputPrompts = require(script.Parent.InputPrompts)
 	local RARITY = Theme.ItemRarity
 	local TILE, GAP, ICON, SLOTS = 54, 8, 38, 9
 	local PITCH = TILE + GAP
@@ -2223,6 +2496,7 @@ do
 		reward.Total = 1
 		chest.ModeSet = false
 		setMode(e.Mini == true)
+		chest.Hint.Text = UIKit.track(string.upper(InputPrompts.ToSkip()))
 		show(chest.Overlay, "Reward", false)
 		setCovering("Reward", e.Mini ~= true)
 		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
@@ -2243,6 +2517,278 @@ do
 		if not reward.Open then
 			Remotes.Get("RewardClose"):FireServer(reward.Seq)
 		end
+	end
+
+	--[[
+		Compact reward card (approved screen 05): an automatic reward (a common chest /
+		shrine item, a one-level elite chest, and in a live duo / trio run every reward) is
+		reported by a contained side card: header "SMALL CHEST · REWARD", the reward in a
+		medallion, its name, rarity / count and what it does, and a draining bar
+		("Auto-added · 3s"). No reel, no dimmer, no confirmation: the server already granted
+		it, the card is presentation only. It never owns input (not a UIState primary): it
+		holds informational headlines (UIState hold "RewardCard") but leaves movement and
+		chest prompts alone, so the next chest can be opened while it shows. The x closes it
+		early. Repeats of the same reward from the same source coalesce ("x2") instead of
+		queueing; different rewards queue and show faster while others wait. Hidden (its
+		clock stopped) while a covering panel owns the screen. Every reward also lands in the
+		recent-rewards history (LootUI.RecordReward, the ITEMS list).
+	]]
+	local CARD_SECONDS = 3 -- on screen when nothing waits
+	local CARD_QUEUED = 1.6 -- when more are waiting
+	local CARD_RARE = 4 -- a rare reward shown as a card (live duo / trio run)
+	local CARD_W = 340
+	local card: { [string]: any } = { Queue = {}, Cur = nil, Left = 0, Total = 0, Held = false }
+
+	-- More than one living fighter in the run: the world is live, so even a rare reward is
+	-- a card (the server never holds a group run for a reward: RunManager.HoldReward).
+	local function groupLive(): boolean
+		local n = 0
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p:GetAttribute("InRun") == true and p:GetAttribute("Alive") ~= false then
+				n += 1
+			end
+		end
+		return n > 1
+	end
+
+	local function setCardHold(on: boolean)
+		if card.Held ~= on then
+			card.Held = on
+			UIState.SetHold("RewardCard", on)
+		end
+	end
+
+	local function layoutCard()
+		if not card.Panel then
+			return
+		end
+		local v = virtualSize()
+		local w = math.min(CARD_W, v.X - 2 * margin())
+		local nameH = TS(18) + 6
+		local subH = TS(12) + 4
+		local bodyH = TS(13) + 4
+		local mid = math.max(64, nameH + subH + bodyH + 4)
+		local headH = TS(12) + 12
+		local h = 8 + headH + 8 + mid + 10 + TS(12) + 6 + 10
+		card.Panel.Size = UDim2.fromOffset(w, h)
+		card.Head.Size = UDim2.new(1, -54, 0, headH)
+		card.Close.Size = UDim2.fromOffset(headH + 6, headH + 6)
+		card.Rule.Position = UDim2.fromOffset(12, 8 + headH + 2)
+		local y = 8 + headH + 8
+		card.Medal.Position = UDim2.fromOffset(14, y + math.floor((mid - 64) / 2))
+		local tx = 14 + 64 + 14
+		local ty = y + math.floor((mid - (nameH + subH + bodyH)) / 2)
+		card.Name.Position = UDim2.fromOffset(tx, ty)
+		card.Name.Size = UDim2.new(1, -tx - 12, 0, nameH)
+		card.Sub.Position = UDim2.fromOffset(tx, ty + nameH)
+		card.Sub.Size = UDim2.new(1, -tx - 12, 0, subH)
+		card.Body.Position = UDim2.fromOffset(tx, ty + nameH + subH)
+		card.Body.Size = UDim2.new(1, -tx - 12, 0, bodyH)
+		y += mid + 10
+		card.Bar.Frame.Position = UDim2.fromOffset(14, y + math.floor((TS(12) + 6 - 6) / 2))
+		card.Bar.Frame.Size = UDim2.new(1, -28 - 118, 0, 6)
+		card.When.Position = UDim2.new(1, -12, 0, y)
+		card.When.Size = UDim2.fromOffset(112, TS(12) + 6)
+		-- beside the hero, never over him: left of centre under the top HUD in landscape
+		-- (the approved screen), under the hero in portrait
+		local m = margin()
+		if portrait then
+			local cy = math.min(v.Y * 0.5 + 80 + h / 2, v.Y - h / 2 - 8)
+			card.Panel.Position = UDim2.fromOffset(math.floor(v.X / 2), math.floor(cy))
+		else
+			local x = math.max(m + w / 2, math.min(v.X / 2 - 60 - w / 2, v.X * 0.25))
+			local top = (Hud.TopBottom() or 0) + 8
+			local bottom = (Hud.BarTop() or v.Y) - 8
+			local cy = math.max(top + h / 2, math.min(v.Y * 0.45, bottom - h / 2))
+			card.Panel.Position = UDim2.fromOffset(math.floor(x), math.floor(cy))
+		end
+	end
+
+	local function fillCard(e)
+		card.Head.Text = UIKit.track(string.upper(e.Source or "Chest") .. "  ·  REWARD")
+		card.Name.Text = e.Name .. ((e.Count or 1) > 1 and ("  x" .. e.Count) or "")
+		card.Name.TextColor3 = e.NameColor
+		card.Sub.Text = e.Sub
+		card.Sub.TextColor3 = e.NameColor:Lerp(C.TextMuted, 0.35)
+		card.Body.Text = e.Detail or ""
+		card.MedalRim.Color = e.Accent
+		card.MedalRim.Transparency = e.Big and 0 or 0.15
+		if card.Edge then
+			card.Edge.Color = e.Big and P.gold_300 or P.gold_400
+		end
+		if card.IconId ~= e.Land then
+			if card.Icon then
+				card.Icon:Destroy()
+			end
+			card.IconId = e.Land
+			local land = e.Land
+			card.Icon = (land == "Gold") and Icons.Draw(card.Medal, "coin", { Size = 40, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+				or Icons.Upgrade(card.Medal, land, { Size = 42, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+		end
+	end
+
+	local function showCard(e)
+		card.Cur = e
+		card.Total = (#card.Queue > 0) and CARD_QUEUED or (e.Big and CARD_RARE or CARD_SECONDS)
+		card.Left = card.Total
+		fillCard(e)
+		layoutCard()
+		card.Overlay.Visible = true
+		setCardHold(true)
+		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+			UIAnim.Pop(card.Panel, 0, 0.85)
+			if e.Big and not noFlashes() then
+				local g = card.Sheen :: Frame
+				g.BackgroundColor3 = e.Accent
+				g.BackgroundTransparency = 0.6
+				TweenService:Create(g, TweenInfo.new(0.9), { BackgroundTransparency = 1 }):Play()
+			end
+		end
+		if deps.Audio and deps.Audio.Play then
+			pcall(deps.Audio.Play, "Item", e.Big and 0.9 or 0.6)
+		end
+	end
+
+	local function nextCard()
+		local e = table.remove(card.Queue, 1)
+		if e then
+			showCard(e)
+		else
+			card.Cur = nil
+			card.Overlay.Visible = false
+			setCardHold(false)
+		end
+	end
+
+	local function clearCards()
+		table.clear(card.Queue)
+		card.Cur = nil
+		if card.Overlay then
+			card.Overlay.Visible = false
+		end
+		setCardHold(false)
+	end
+
+	-- A reward for the card: the same reward from the same source coalesces ("x2").
+	local function pushCard(e)
+		e.Key = tostring(e.Land) .. "|" .. tostring(e.Source) .. "|" .. tostring(e.Name)
+		e.Count = e.Count or 1
+		local cur = card.Cur
+		if cur and cur.Key == e.Key and not e.NoMerge then
+			cur.Count += e.Count
+			fillCard(cur)
+			card.Left = math.max(card.Left, math.min(card.Total, CARD_QUEUED))
+			return
+		end
+		for _, q in ipairs(card.Queue) do
+			if q.Key == e.Key and not e.NoMerge then
+				q.Count += e.Count
+				return
+			end
+		end
+		table.insert(card.Queue, e)
+		if not cur then
+			nextCard()
+		elseif card.Left > CARD_QUEUED then
+			-- something waits: the one on screen hurries up
+			card.Left = CARD_QUEUED
+			card.Total = math.max(card.Total, CARD_QUEUED)
+		end
+	end
+
+	local function buildCard()
+		local overlay = new("Frame", { Name = "RewardCard", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Active = false, Visible = false, ZIndex = Theme.Z.Loot - 1 }, root)
+		card.Overlay = overlay
+		local holder, face = UIKit.Surface(overlay, {
+			Name = "Panel",
+			Size = UDim2.fromOffset(CARD_W, 140),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Radius = Theme.Radius.L,
+			Edge = P.gold_400,
+			EdgeTransparency = 0.2,
+			Transparency = 0.06,
+			ZIndex = 2,
+		})
+		holder.Active = false
+		face.Active = false
+		card.Panel = holder
+		card.Edge = face:FindFirstChildOfClass("UIStroke") :: UIStroke
+		card.Sheen = new("Frame", { Name = "Sheen", Size = UDim2.fromScale(1, 1), BackgroundColor3 = P.gold_300, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 2 }, face)
+		UIKit.corner(card.Sheen, Theme.Radius.L)
+		card.Head = text(face, "Caption", "", { Name = "Head", Position = UDim2.fromOffset(14, 8), TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 })
+		-- the x: closes this card early (nothing to confirm; the reward is already owned)
+		local close = new("TextButton", { Name = "Close", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -6, 0, 5), ZIndex = 4 }, face)
+		Icons.Draw(close, "close", { Size = 16, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Color = P.gold_300 })
+		close.Activated:Connect(function()
+			if card.Cur then
+				nextCard()
+			end
+		end)
+		card.Close = close
+		card.Rule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.new(1, -24, 0, 1), ZIndex = 3 }, face)
+		-- the reward in a round medallion with a rarity rim
+		local medal = new("Frame", { Name = "Medal", BackgroundColor3 = P.slate_900, BorderSizePixel = 0, Size = UDim2.fromOffset(64, 64), ZIndex = 3 }, face)
+		UIKit.corner(medal, 999)
+		card.MedalRim = UIKit.stroke(medal, P.gold_400, 2, 0.15)
+		card.Medal = medal
+		card.Name = text(face, "H3", "", { Name = "RewardName", TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 }, 19)
+		card.Sub = text(face, "Caption", "", { Name = "RewardSub", TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 })
+		card.Body = text(face, "Small", "", { Name = "RewardBody", TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.Text, ZIndex = 3 }, 13)
+		card.Bar = UIKit.Meter(face, { Gradient = ColorSequence.new(P.moss_300, P.moss_200), Size = UDim2.new(1, -146, 0, 6) })
+		card.Bar.Frame.ZIndex = 3
+		card.When = text(face, "Caption", "", { Name = "When", AnchorPoint = Vector2.new(1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.TextMuted, ZIndex = 3 })
+		onRelayout(layoutCard)
+		layoutCard()
+		RunService.RenderStepped:Connect(function(dt)
+			if not card.Cur then
+				return
+			end
+			-- a covering panel (level-up, rare reveal, run menu, results) owns the screen:
+			-- out of sight and its clock stopped until it closes
+			local covered = UIState.Covered()
+			card.Overlay.Visible = not covered
+			if covered then
+				return
+			end
+			card.Left -= dt
+			if card.Left <= 0 then
+				nextCard()
+				return
+			end
+			card.Bar.Set(math.clamp(card.Left / math.max(0.1, card.Total), 0, 1))
+			card.When.Text = UIKit.track(string.format("Auto-added  ·  %ds", math.ceil(card.Left)))
+		end)
+		-- leaving the run, results, going down: the cards go (the rewards stay owned)
+		player:GetAttributeChangedSignal("InRun"):Connect(clearCards)
+		player:GetAttributeChangedSignal("Alive"):Connect(function()
+			if player:GetAttribute("Alive") == false then
+				clearCards()
+			end
+		end)
+		Remotes.Get("RunResult").OnClientEvent:Connect(clearCards)
+	end
+
+	-- Every reward goes to the history (ITEMS list) when it arrives, whatever shows it.
+	local function record(e)
+		if LootUI.RecordReward then
+			LootUI.RecordReward({ Id = e.Land, Name = e.Name, Sub = e.Sub, Source = e.Source, Color = e.NameColor, Count = e.Count or 1 })
+		end
+	end
+
+	-- Routes a reward: rare and solo (the server paused the run) → the contained reveal
+	-- (the reel); everything else → the compact card, and any pause the server may still
+	-- hold for it is released at once (the card never roots the hero).
+	local function present(e, rare: boolean)
+		record(e)
+		if rare and not groupLive() then
+			e.Mini = false
+			enqueue(e)
+			return
+		end
+		e.Mini = true
+		e.Big = rare
+		pushCard(e)
+		releaseIfIdle()
 	end
 
 	buildChest = function()
@@ -2313,9 +2859,10 @@ do
 		chest.Detail = text(face, "Small", "", { TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, TextColor3 = C.Text, ZIndex = 3 }, 14)
 		-- footer: the reveal's time left as a draining bar + "TAP TO SKIP"
 		chest.Timer = UIKit.Meter(face, { Gradient = ColorSequence.new(P.gold_500, P.gold_300), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -TS(12) - 10), Size = UDim2.fromOffset(120, 3) })
-		chest.Hint = text(face, "Caption", UIKit.track("TAP TO SKIP"), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -5), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
+		chest.Hint = text(face, "Caption", UIKit.track(string.upper(InputPrompts.ToSkip())), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -5), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
 		onRelayout(layoutChest)
 		layoutChest()
+		buildCard()
 
 		UserInputService.InputBegan:Connect(function(input, processed)
 			if not reward.Open or processed or chest.Mini then
@@ -2395,8 +2942,8 @@ do
 			end
 		end
 		local gold = tonumber(data.Gold) or 0
-		-- not paused for (one level): the short mini reel, the run goes on
-		local mini = data.Dramatic ~= true
+		-- several levels or an evolution: the contained reveal (solo); one level: the card
+		local rare = data.Dramatic == true
 		local extras = {}
 		for i = 2, #list do
 			table.insert(extras, tostring(list[i].Name) .. " " .. tostring(list[i].Text))
@@ -2418,7 +2965,6 @@ do
 				Detail = #extras > 0 and ("Also: " .. table.concat(extras, "  ·  ")) or "A free level from the chest",
 				Big = evolved,
 				Source = "Elite chest",
-				Mini = mini,
 			}
 		elseif gold > 0 then
 			e = {
@@ -2431,11 +2977,11 @@ do
 				Detail = "Added to your purse",
 				Big = false,
 				Source = "Elite chest",
-				Mini = mini,
 			}
 		end
 		if e then
-			enqueue(e)
+			e.NoMerge = true -- each elite chest is its own grant
+			present(e, rare)
 		else
 			releaseIfIdle()
 		end
@@ -2451,7 +2997,11 @@ do
 		end
 		local r = RARITY[def.Rarity] or RARITY.Common
 		local n = tonumber(data.Count) or 1
-		enqueue({
+		local source = type(data.Source) == "string" and data.Source or "Chest"
+		-- rare: what the server showcases (Legendary, the guarded altar / rune stones) and
+		-- the Golden Chest; the rest is a common automatic reward
+		local rare = data.Dramatic == true or def.Rarity == "Legendary" or source == "Golden Chest"
+		local e = {
 			Land = def.Id,
 			Fill = itemFill,
 			Accent = r.Color,
@@ -2460,10 +3010,14 @@ do
 			Sub = UIKit.track(string.upper(r.Label) .. " ITEM" .. (n > 1 and ("  ·  x" .. n) or "")),
 			Detail = def.Text,
 			Big = def.Rarity == "Legendary",
-			Source = type(data.Source) == "string" and data.Source or "Chest",
-			-- not paused for: the short mini reel while the run goes on
-			Mini = data.Dramatic ~= true,
-		})
+			Source = source,
+		}
+		if not (rare and not groupLive()) then
+			-- the card says where it went (approved screen 05); the count owned is in the
+			-- items strip and the ITEMS list
+			e.Sub = UIKit.track(string.upper(r.Label)) .. "  ·  Added to your items" .. (n > 1 and string.format(" (%d owned)", n) or "")
+		end
+		present(e, rare)
 	end
 end
 
@@ -2560,8 +3114,7 @@ local function settingWord(value: any): string
 end
 
 -- The same menu is the in-run pause menu and the lobby SETTINGS screen.
-local pauseMode = "Pause" -- "Pause" | "Settings"
-local setLeaveConfirm: (on: boolean) -> ()
+local pauseMode = "Settings" -- "Settings" (lobby) | "RunSettings" (opened from the run menu)
 
 local function buildPause()
 	local m = UIKit.Modal(root, "Pause", 760, 470, Theme.Z.Pause)
@@ -2684,57 +3237,19 @@ local function buildPause()
 		end,
 	})
 
+	-- one button: DONE (lobby SETTINGS) / BACK (settings opened from the run menu). The run
+	-- menu itself (resume, build, leave) is the side drawer below (buildRunMenu).
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
-	pause.ItemsButton = UIKit.Button(row, {
-		Kind = "Secondary",
-		Title = "ITEMS",
-		Icon = "chest",
-		IconSize = 20,
-		Align = "Center",
-		Size = UDim2.fromOffset(200, Theme.Size.Button - 4),
-		LayoutOrder = 1,
-		OnClick = function()
-			LootUI.OpenItems()
-		end,
-	})
-	-- MAIN MENU (pause only): the first tap asks, the second leaves the run
-	pause.MenuButton = UIKit.Button(row, {
-		Kind = "Outline",
-		Title = "MAIN MENU",
-		Icon = "castle",
-		IconSize = 20,
-		Align = "Center",
-		Size = UDim2.fromOffset(200, Theme.Size.Button - 4),
-		LayoutOrder = 0,
-		OnClick = function()
-			if pauseMode ~= "Pause" then
-				return
-			end
-			if pause.Confirming then
-				pause.Confirming = false
-				Remotes.Get("AbandonRun"):FireServer()
-				UIBuilder.ClosePause()
-			else
-				setLeaveConfirm(true)
-				UIAnim.Bump(pause.MenuButton.Face, 0.08)
-			end
-		end,
-	})
 	pause.Resume = UIKit.Button(row, {
 		Kind = "Primary",
-		Title = "RESUME",
-		Icon = "play",
+		Title = "DONE",
+		Icon = "check",
 		IconSize = 20,
 		Align = "Center",
 		Size = UDim2.fromOffset(240, Theme.Size.Button),
 		LayoutOrder = 2,
 		OnClick = function()
-			if pause.Confirming then
-				setLeaveConfirm(false)
-				UIAnim.Bump(pause.MenuButton.Face)
-				return
-			end
 			UIBuilder.ClosePause()
 		end,
 	})
@@ -2783,19 +3298,13 @@ local function buildPause()
 		options.Size = UDim2.new(1, 0, 0, h)
 		options.CanvasSize = UDim2.fromOffset(0, contentH)
 		options.ScrollBarThickness = contentH > h + 1 and 4 or 0
-		-- two or three buttons share the row (ITEMS and MAIN MENU are hidden in SETTINGS)
-		local shown = (pause.ItemsButton.Instance.Visible and 1 or 0) + (pause.MenuButton.Instance.Visible and 1 or 0)
-		local bw = math.clamp(math.floor((inner - 12 * shown) / (shown + 1)), 120, 240)
-		local sw = math.min(200, bw)
-		pause.ItemsButton.Instance.Size = UDim2.fromOffset(sw, Theme.Size.Button - 4)
-		pause.MenuButton.Instance.Size = UDim2.fromOffset(sw, Theme.Size.Button - 4)
-		pause.Resume.Instance.Size = UDim2.fromOffset(bw, Theme.Size.Button)
+		pause.Resume.Instance.Size = UDim2.fromOffset(math.clamp(inner, 120, 240), Theme.Size.Button)
 	end
 	pause.Layout = layoutOptions
 	onRelayout(layoutOptions)
 
-	-- gamepad B backs out: the LEAVE RUN step first, then the menu (not while the ITEMS
-	-- list or the bug report sit on top of it, or a text box has the input)
+	-- gamepad B backs out (not while the bug report sits on top of it, or a text box has
+	-- the input); from the run menu's SETTINGS it goes back to the run menu
 	UserInputService.InputBegan:Connect(function(input)
 		if input.KeyCode ~= Enum.KeyCode.ButtonB or not pause.Overlay.Visible or pause.Overlay:GetAttribute("Hiding") then
 			return
@@ -2803,47 +3312,8 @@ local function buildPause()
 		if UIState.IsOpen("Items") or UIState.IsOpen("BugReport") or UserInputService:GetFocusedTextBox() then
 			return
 		end
-		if pause.Confirming then
-			setLeaveConfirm(false)
-		else
-			UIBuilder.ClosePause()
-		end
+		UIBuilder.ClosePause()
 	end)
-end
-
--- The pause note: frozen or not, and whether saving works.
-local function pauseNote(): string
-	local participants = Remotes.State():GetAttribute("Participants") or 1
-	local note = (participants <= 1 and Config.Run.SoloPauseFreezesRun) and "The run is paused." or "Group run: the swarm keeps coming while this menu is open!"
-	local status = player:GetAttribute("SaveStatus")
-	if status == "failing" or status == "memory" then
-		note ..= "  Progress isn't being saved right now."
-	end
-	return note
-end
-
--- MAIN MENU's confirm step: says what leaving costs (the run, counted as a loss; what was
--- earned so far stays), LEAVE RUN confirms, KEEP PLAYING goes back.
-function setLeaveConfirm(on: boolean)
-	pause.Confirming = on
-	pause.Options.Visible = not on
-	pause.ItemsButton.Instance.Visible = not on
-	if on then
-		local participants = Remotes.State():GetAttribute("Participants") or 1
-		pause.Title.Text = "LEAVE THIS RUN?"
-		pause.Note.Text = "You go back to the main menu and this run ends as a loss. Gold, kills and account XP earned so far are kept."
-			.. (participants > 1 and " Your team keeps playing." or "")
-		pause.MenuButton.SetText("LEAVE RUN")
-		pause.Resume.SetText("KEEP PLAYING")
-		pause.Resume.SetIcon("play")
-		UIKit.FocusIfGamepad(pause.Resume.Instance)
-	else
-		pause.Title.Text = "PAUSED"
-		pause.Note.Text = pauseNote()
-		pause.MenuButton.SetText("MAIN MENU")
-		pause.Resume.SetText("RESUME")
-	end
-	pause.Layout()
 end
 
 local function syncOptions()
@@ -2864,50 +3334,516 @@ local function syncOptions()
 	pause.Layout()
 end
 
-function UIBuilder.OpenPause()
-	-- the run menu never opens over a decision, results or travel (UIState priorities)
-	if not UIState.CanOpen("Pause") then
+------------------------------------------------------------------------------------------
+-- Run menu: the side drawer (approved screen 07) for solo and group runs
+------------------------------------------------------------------------------------------
+--[[
+	The in-run menu is a drawer on the right edge that leaves most of the arena (and the HUD:
+	HP, timer, build strip) in view. RETURN TO RUN, SETTINGS (the existing settings screen,
+	unchanged; BACK returns here), VIEW BUILD (the items / combos list) and LEAVE RUN, which
+	asks first (what leaving costs) before it sends AbandonRun.
+
+	What the run does while it is open is decided by the server only (RunManager SetPause):
+	solo (one player in the run, Config.Run.SoloPauseFreezesRun) freezes the run; in a group
+	run nothing pauses and the menu gives NO protection, so the drawer says "Game not paused,
+	you can be hit". This menu never grants protection itself and must not be made to.
+	It is the UIState primary "Pause" (priority 50): it never opens over a higher panel and a
+	level-up / revive / results opening on top suspends it.
+]]
+
+-- (one top-level local: UIBuilder is near Luau's 200-locals limit, so the helpers live in it)
+local runMenu: { [string]: any } = { Prompts = require(script.Parent.InputPrompts) }
+runMenu.ARM = 0.35 -- a press must begin this long after a state shows (no stale taps)
+
+-- True when the server freezes the run for this menu (its own rule, RunManager SetPause).
+function runMenu.menuFreezesRun(): boolean
+	local participants = tonumber(Remotes.State():GetAttribute("Participants")) or 1
+	return participants <= 1 and Config.Run.SoloPauseFreezesRun == true
+end
+
+function runMenu.teamWord(): string
+	local participants = tonumber(Remotes.State():GetAttribute("Participants")) or 1
+	return participants <= 1 and "SOLO" or participants == 2 and "DUO" or participants == 3 and "TRIO" or "TEAM"
+end
+
+function runMenu.saveWarning(): string?
+	local status = player:GetAttribute("SaveStatus")
+	if status == "failing" or status == "memory" then
+		return "Progress isn't being saved right now."
+	end
+	return nil
+end
+
+-- The line under the title: what the run is doing while this menu is open.
+function runMenu.runMenuNote(): string
+	local note = runMenu.menuFreezesRun() and "The run is paused while this menu is open." or "Game not paused, you can be hit."
+	local warn = runMenu.saveWarning()
+	return warn and (note .. " " .. warn) or note
+end
+
+-- LEAVE RUN's confirm text: the real cost (Config.Gold failure rule, team keeps playing).
+function runMenu.leaveNote(): string
+	local g = Config.Gold :: any
+	local note = string.format(
+		"You go back to the main menu and this run ends as a loss. You keep %d%% of this run's gold (+%d%% per stage cleared); kills and account XP so far still count.",
+		math.floor((g.FailureRetainBase or 0) * 100 + 0.5),
+		math.floor((g.FailureRetainPerStage or 0) * 100 + 0.5)
+	)
+	local participants = tonumber(Remotes.State():GetAttribute("Participants")) or 1
+	if participants > 1 then
+		note ..= " Your team keeps playing."
+	end
+	return note
+end
+
+function runMenu.backHint(): string
+	local mode = runMenu.Prompts.Mode()
+	if mode == "Gamepad" then
+		return "Press B to return"
+	elseif mode == "Touch" then
+		return "Tap the arena to return"
+	end
+	return "Click the arena to return"
+end
+
+function runMenu.buildRunMenu()
+	local overlay = new("Frame", {
+		Name = "RunMenu",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Active = true,
+		Visible = false,
+		ZIndex = Theme.Z.Pause,
+	}, root)
+	-- a light tint: the arena stays readable (solo gets a darker one: it is paused)
+	overlay:SetAttribute("BackdropTransparency", 0.82)
+	local dim = new("Frame", { Name = "Dim", BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.82, BorderSizePixel = 0, Active = true, ZIndex = 1 }, overlay)
+	UIKit.Bleed(dim)
+	runMenu.Overlay, runMenu.Dim = overlay, dim
+	-- a tap / click on the arena returns to the run (cancels the leave question first)
+	local outside = new("TextButton", {
+		Name = "Outside",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundTransparency = 1,
+		Selectable = false,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 1,
+	}, overlay)
+	UIKit.Bleed(outside)
+	outside.Activated:Connect(function()
+		if os.clock() - (runMenu.ArmedAt or 0) < runMenu.ARM then
+			return
+		end
+		if runMenu.Confirming then
+			runMenu.setConfirm(false)
+		else
+			UIBuilder.ClosePause()
+		end
+	end)
+
+	local drawer = new("Frame", {
+		Name = "Drawer",
+		BackgroundColor3 = P.slate_900,
+		BackgroundTransparency = 0.02,
+		BorderSizePixel = 0,
+		Active = true,
+		AnchorPoint = Vector2.new(1, 0),
+		ZIndex = 2,
+	}, overlay)
+	runMenu.Drawer = drawer
+	-- the gold edge toward the arena
+	new("Frame", { Name = "Edge", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.25, BorderSizePixel = 0, Size = UDim2.new(0, 2, 1, 0), ZIndex = 3 }, drawer)
+
+	-- run gold and kills (the numbers the HUD shows)
+	local function chip(name: string, icon: string): (Frame, TextLabel)
+		local f = new("Frame", { Name = name, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, BorderSizePixel = 0, ZIndex = 3 }, drawer)
+		UIKit.corner(f, Theme.Radius.M)
+		UIKit.stroke(f, P.gold_500, 1, 0.55)
+		Icons.Draw(f, icon, { Size = 22, Color = P.gold_300, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0) })
+		local l = text(f, "Number", "0", { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -44, 1, 0), ZIndex = 3 })
+		return f, l
+	end
+	runMenu.GoldChip, runMenu.GoldText = chip("Gold", "coin")
+	runMenu.KillsChip, runMenu.KillsText = chip("Kills", "skull")
+
+	runMenu.Crest = Icons.Draw(drawer, "helmet", { Size = 52, Color = P.gold_400 })
+	runMenu.Crest.AnchorPoint = Vector2.new(0.5, 0)
+	runMenu.Title = text(drawer, "H1", "RUN MENU", { TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 3 })
+	-- "DUO · RUN CONTINUES" / "SOLO · GAME PAUSED"
+	local pill = new("Frame", { Name = "Status", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 }, drawer)
+	UIKit.corner(pill, 999)
+	runMenu.PillStroke = UIKit.stroke(pill, P.gold_400, 1.5, 0.1)
+	runMenu.PillText = text(pill, "Label", "", { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, ZIndex = 3 })
+	runMenu.Pill = pill
+	runMenu.Rule = UIKit.Hairline(drawer, { AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 })
+	runMenu.Rule.Parent = drawer
+	runMenu.Note = text(drawer, "Body", "", { TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = C.Text, ZIndex = 3 })
+
+	runMenu.Return = UIKit.Button(drawer, {
+		Kind = "Primary",
+		Title = "RETURN TO RUN",
+		Icon = "play",
+		IconSize = 22,
+		Align = "Center",
+		Shrink = true,
+		ZIndex = 3,
+		OnClick = function()
+			if runMenu.Confirming then
+				runMenu.setConfirm(false)
+			else
+				UIBuilder.ClosePause()
+			end
+		end,
+	})
+	runMenu.Settings = UIKit.Button(drawer, {
+		Kind = "Secondary",
+		Title = "SETTINGS",
+		Icon = "gear",
+		IconSize = 22,
+		Align = "Center",
+		Shrink = true,
+		ZIndex = 3,
+		OnClick = function()
+			UIBuilder.OpenRunSettings()
+		end,
+	})
+	runMenu.Build = UIKit.Button(drawer, {
+		Kind = "Secondary",
+		Title = "VIEW BUILD",
+		Icon = "bars",
+		IconSize = 22,
+		Align = "Center",
+		Shrink = true,
+		ZIndex = 3,
+		OnClick = function()
+			LootUI.OpenItems()
+		end,
+	})
+	runMenu.Rule2 = UIKit.Hairline(drawer, { AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 })
+	runMenu.Rule2.Parent = drawer
+	-- LEAVE RUN: crimson; the first press asks, the confirm press (armed) leaves
+	local leave = UIKit.Button(drawer, {
+		Kind = "Outline",
+		Title = "LEAVE RUN",
+		Align = "Center",
+		Shrink = true,
+		ZIndex = 3,
+		OnClick = function()
+			if os.clock() - (runMenu.ArmedAt or 0) < runMenu.ARM then
+				return
+			end
+			if runMenu.Confirming then
+				runMenu.Confirming = false
+				Remotes.Get("AbandonRun"):FireServer()
+				UIBuilder.ClosePause()
+			else
+				runMenu.setConfirm(true)
+			end
+		end,
+	})
+	runMenu.Leave = leave
+	Icons.Draw(leave.Face, "arrowRight", { Size = 22, Color = P.crimson_300, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0) })
+	-- the button repaints its edge / title on hover: keep them crimson
+	local edge = leave.Face:FindFirstChildOfClass("UIStroke")
+	local function crimson()
+		if edge and edge.Color ~= P.crimson_400 then
+			edge.Color = P.crimson_400
+		end
+		if leave.Title and leave.Title.TextColor3 ~= P.crimson_300 then
+			leave.Title.TextColor3 = P.crimson_300
+		end
+	end
+	crimson()
+	if edge then
+		edge:GetPropertyChangedSignal("Color"):Connect(crimson)
+	end
+	if leave.Title then
+		leave.Title:GetPropertyChangedSignal("TextColor3"):Connect(crimson)
+	end
+	local tint = new("Frame", { Name = "Tint", BackgroundColor3 = P.crimson_700, BackgroundTransparency = 0.78, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 1, Active = false }, leave.Face)
+	UIKit.corner(tint, Theme.Radius.M)
+
+	runMenu.Hint = text(drawer, "Small", "", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
+
+	local function layout()
+		local v = virtualSize()
+		local compact = UIKit.IsCompact()
+		local w
+		if portrait then
+			w = math.min(v.X - 24, 380)
+		else
+			w = math.clamp(math.floor(v.X * (compact and 0.4 or 0.3)), 300, 420)
+		end
+		w = math.min(w, v.X)
+		-- the Roblox buttons sit on the top right in some layouts: start below them
+		local top = (insets.Right > 0 and insets.Top or 0) + 14
+		drawer.Position = UDim2.new(1, 0, 0, 0)
+		drawer.Size = UDim2.fromOffset(w, v.Y)
+		runMenu.Width = w
+		local pad = compact and 16 or 22
+		local inner = w - 2 * pad
+		local gap = compact and 8 or 12
+		local bh = Theme.Size.Button
+		local chipH = 40
+		local titleH = TS(30) + 6
+		local pillH = TS(14) + 14
+		local hintH = TS(14) + 8
+		-- note lines (rough: ~0.5 em per character)
+		local perLine = math.max(10, math.floor(inner / (TS(16) * 0.5)))
+		local lines = math.clamp(math.ceil(#runMenu.Note.Text / perLine), 1, 6)
+		local noteH = lines * (TS(16) + 3) + 4
+		local confirming = runMenu.Confirming == true
+		local buttons = confirming and 2 or 4
+		local crest = 52
+		local function need(): number
+			return top + chipH + gap + (crest > 0 and crest + 4 or 0) + titleH + 6 + pillH + gap + 1 + gap + noteH + gap * 2
+				+ buttons * bh + (buttons - 1) * gap + gap + 1 + hintH + 12
+		end
+		-- short screens: drop the crest, then tighter buttons
+		if need() > v.Y then
+			crest = 0
+		end
+		if need() > v.Y then
+			bh = math.max(Theme.Size.TapMin, bh - 8)
+		end
+		local showHint = need() <= v.Y
+		local y = top
+		local half = math.floor((inner - gap) / 2)
+		runMenu.GoldChip.Position = UDim2.fromOffset(pad, y)
+		runMenu.GoldChip.Size = UDim2.fromOffset(half, chipH)
+		runMenu.KillsChip.Position = UDim2.fromOffset(pad + half + gap, y)
+		runMenu.KillsChip.Size = UDim2.fromOffset(inner - half - gap, chipH)
+		y += chipH + gap
+		runMenu.Crest.Visible = crest > 0
+		if crest > 0 then
+			runMenu.Crest.Position = UDim2.fromOffset(math.floor(w / 2), y)
+			y += crest + 4
+		end
+		runMenu.Title.Position = UDim2.fromOffset(pad, y)
+		runMenu.Title.Size = UDim2.fromOffset(inner, titleH)
+		y += titleH + 6
+		local pw = math.min(inner, math.floor(utf8.len(runMenu.PillText.Text) or 0) * math.floor(TS(14) * 0.66) + 40)
+		runMenu.Pill.Position = UDim2.fromOffset(math.floor(w / 2), y)
+		runMenu.Pill.Size = UDim2.fromOffset(pw, pillH)
+		y += pillH + gap
+		runMenu.Rule.Position = UDim2.fromOffset(math.floor(w / 2), y)
+		runMenu.Rule.Size = UDim2.fromOffset(math.min(120, inner), 1)
+		y += 1 + gap
+		runMenu.Note.Position = UDim2.fromOffset(pad, y)
+		runMenu.Note.Size = UDim2.fromOffset(inner, noteH)
+		y += noteH + gap * 2
+		local function place(b: any, on: boolean)
+			b.Instance.Visible = on
+			if on then
+				b.Instance.Position = UDim2.fromOffset(pad, y)
+				b.Instance.Size = UDim2.fromOffset(inner, bh)
+				y += bh + gap
+			end
+		end
+		place(runMenu.Return, true)
+		place(runMenu.Settings, not confirming)
+		place(runMenu.Build, not confirming)
+		runMenu.Rule2.Visible = not confirming
+		if not confirming then
+			runMenu.Rule2.Position = UDim2.fromOffset(math.floor(w / 2), y)
+			runMenu.Rule2.Size = UDim2.fromOffset(math.floor(inner * 0.7), 1)
+			y += 1 + gap
+		end
+		place(runMenu.Leave, true)
+		runMenu.Hint.Visible = showHint
+		runMenu.Hint.Position = UDim2.fromOffset(pad, v.Y - hintH - 12)
+		runMenu.Hint.Size = UDim2.fromOffset(inner, hintH)
+	end
+	runMenu.Layout = layout
+	onRelayout(layout)
+
+	-- live numbers while open
+	local function refreshNumbers()
+		runMenu.GoldText.Text = tostring(math.floor(tonumber(player:GetAttribute("RunGold")) or 0))
+		runMenu.KillsText.Text = tostring(math.floor(tonumber(player:GetAttribute("Kills")) or 0))
+	end
+	runMenu.RefreshNumbers = refreshNumbers
+	for _, attr in ipairs({ "RunGold", "Kills" }) do
+		player:GetAttributeChangedSignal(attr):Connect(function()
+			if overlay.Visible then
+				refreshNumbers()
+			end
+		end)
+	end
+	-- a teammate leaves / joins while it is open: ask the server again (it decides the
+	-- freeze from the run's size) and relabel
+	Remotes.State():GetAttributeChangedSignal("Participants"):Connect(function()
+		if UIState.IsOpen("Pause") and pauseMode ~= "Settings" and player:GetAttribute("InRun") == true then
+			Remotes.Get("SetPause"):FireServer(true)
+			if overlay.Visible and not runMenu.Confirming then
+				runMenu.setConfirm(false)
+			end
+		end
+	end)
+	runMenu.Prompts.OnChanged(function()
+		runMenu.Hint.Text = runMenu.backHint()
+	end)
+
+	-- gamepad B: the leave question first, then the menu (not under ITEMS / bug report)
+	UserInputService.InputBegan:Connect(function(input)
+		if input.KeyCode ~= Enum.KeyCode.ButtonB or not overlay.Visible or not UIState.IsShown("Pause") then
+			return
+		end
+		if UIState.IsOpen("Items") or UIState.IsOpen("BugReport") or UserInputService:GetFocusedTextBox() then
+			return
+		end
+		if runMenu.Confirming then
+			runMenu.setConfirm(false)
+		else
+			UIBuilder.ClosePause()
+		end
+	end)
+end
+
+-- Fills the drawer for the normal state (on) = false, or the LEAVE RUN question (true).
+function runMenu.setConfirm(on: boolean)
+	runMenu.Confirming = on
+	runMenu.ArmedAt = os.clock()
+	local frozen = runMenu.menuFreezesRun()
+	if on then
+		runMenu.Title.Text = "LEAVE RUN?"
+		runMenu.PillText.Text = UIKit.track("This run ends")
+		runMenu.PillStroke.Color = P.crimson_400
+		runMenu.PillText.TextColor3 = P.crimson_300
+		runMenu.Note.Text = runMenu.leaveNote()
+		runMenu.Return.SetText("KEEP PLAYING")
+		runMenu.Leave.SetText("YES, LEAVE RUN")
+		UIKit.FocusIfGamepad(runMenu.Return.Instance)
+	else
+		runMenu.Title.Text = "RUN MENU"
+		runMenu.PillText.Text = UIKit.track(runMenu.teamWord() .. " · " .. (frozen and "Game paused" or "Run continues"))
+		runMenu.PillStroke.Color = frozen and P.gold_400 or P.crimson_400
+		runMenu.PillText.TextColor3 = frozen and P.gold_200 or P.ivory_100
+		runMenu.Note.Text = runMenu.runMenuNote()
+		runMenu.Return.SetText("RETURN TO RUN")
+		runMenu.Leave.SetText("LEAVE RUN")
+		local n = LootUI.ItemCount()
+		runMenu.Build.SetText(n > 0 and string.format("VIEW BUILD (%d)", n) or "VIEW BUILD")
+	end
+	-- solo is paused: a darker tint; a live group run keeps the arena clear
+	local dimT = frozen and 0.55 or 0.82
+	runMenu.Overlay:SetAttribute("BackdropTransparency", dimT)
+	runMenu.Dim.BackgroundTransparency = dimT
+	runMenu.Hint.Text = runMenu.backHint()
+	runMenu.Layout()
+end
+
+-- Slides the drawer in from the right edge (reduced motion: no slide).
+function runMenu.slideRunMenuIn()
+	local d = runMenu.Drawer
+	if ClientSettings.Reduced() then
+		d.Position = UDim2.new(1, 0, 0, 0)
 		return
 	end
-	pauseMode = "Pause"
-	pause.Title.Text = "PAUSED"
-	pause.Resume.SetText("RESUME")
-	pause.Resume.SetIcon("play")
-	pause.Confirming = false
-	pause.Options.Visible = true
-	pause.MenuButton.SetText("MAIN MENU")
-	pause.MenuButton.Instance.Visible = player:GetAttribute("InRun") == true
-	pause.Note.Text = pauseNote()
-	local n = LootUI.ItemCount()
-	pause.ItemsButton.Instance.Visible = true
-	pause.ItemsButton.SetText(n > 0 and string.format("ITEMS (%d)", n) or "ITEMS")
-	syncOptions()
-	show(pause.Overlay, "Pause", true)
-	UIKit.FocusIfGamepad(pause.Resume.Instance)
+	d.Position = UDim2.new(1, math.floor(runMenu.Width or 360), 0, 0)
+	UIAnim.Tween(d, 0.22, { Position = UDim2.new(1, 0, 0, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+end
+
+-- The run menu (HUD pause button). Never over a decision, results or travel.
+function UIBuilder.OpenPause()
+	if not UIState.CanOpen("Pause") or player:GetAttribute("InRun") ~= true then
+		return
+	end
+	local fromSettings = pauseMode == "RunSettings" and pause.Overlay.Visible
+	if fromSettings then
+		pauseMode = "Settings"
+		hide(pause.Overlay, "Pause")
+	end
+	runMenu.RefreshNumbers()
+	runMenu.setConfirm(false)
+	show(runMenu.Overlay, "Pause", true, false)
+	if not fromSettings then
+		runMenu.slideRunMenuIn()
+	end
+	UIKit.FocusIfGamepad(runMenu.Return.Instance)
 	Remotes.Get("SetPause"):FireServer(true)
 end
 
+-- The existing settings screen, opened from the run menu: BACK returns to the drawer and
+-- the run stays as the menu left it (solo paused, group live: the note says so).
+function UIBuilder.OpenRunSettings()
+	if player:GetAttribute("InRun") ~= true then
+		UIBuilder.OpenSettings()
+		return
+	end
+	if runMenu.Overlay.Visible then
+		runMenu.Confirming = false
+		hide(runMenu.Overlay, "Pause")
+	end
+	pauseMode = "RunSettings"
+	pause.Title.Text = "SETTINGS"
+	pause.Resume.SetText("BACK")
+	pause.Resume.SetIcon("chevronLeft")
+	pause.Note.Text = runMenu.menuFreezesRun() and settingsNote() or ("Game not paused, you can be hit. " .. settingsNote())
+	pause.Options.Visible = true
+	syncOptions()
+	show(pause.Overlay, "Pause", true)
+	UIKit.FocusIfGamepad(pause.Resume.Instance)
+	-- straight here (no drawer first): the server still hears that the menu is open
+	Remotes.Get("SetPause"):FireServer(true)
+end
+
+-- Lobby SETTINGS (during a run it is the run menu's settings).
 function UIBuilder.OpenSettings()
+	if player:GetAttribute("InRun") == true then
+		UIBuilder.OpenRunSettings()
+		return
+	end
 	pauseMode = "Settings"
 	pause.Title.Text = "SETTINGS"
 	pause.Resume.SetText("DONE")
 	pause.Resume.SetIcon("check")
 	pause.Note.Text = settingsNote()
-	pause.Confirming = false
 	pause.Options.Visible = true
-	pause.ItemsButton.Instance.Visible = false
-	pause.MenuButton.Instance.Visible = false
 	syncOptions()
 	show(pause.Overlay, "Pause", true)
 	UIKit.FocusIfGamepad(pause.Resume.Instance)
 end
 
+-- Closes whichever menu is up: run settings go back to the drawer, the drawer resumes the
+-- run (SetPause false), lobby settings just close.
 function UIBuilder.ClosePause()
-	pause.Confirming = false
-	hide(pause.Overlay, "Pause")
 	BugReportUI.Close()
-	if pauseMode == "Pause" then
+	if pauseMode == "RunSettings" and pause.Overlay.Visible and player:GetAttribute("InRun") == true then
+		UIBuilder.OpenPause()
+		if not runMenu.Overlay.Visible then
+			-- the drawer could not open (a higher panel): leave the menu entirely
+			pauseMode = "Settings"
+			hide(pause.Overlay, "Pause")
+			Remotes.Get("SetPause"):FireServer(false)
+		end
+		return
+	end
+	local wasRun = runMenu.Overlay.Visible or pauseMode == "RunSettings"
+	runMenu.Confirming = false
+	if runMenu.Overlay.Visible then
+		hide(runMenu.Overlay, "Pause")
+	end
+	if pause.Overlay.Visible then
+		hide(pause.Overlay, "Pause")
+	end
+	pauseMode = "Settings"
+	if wasRun then
 		Remotes.Get("SetPause"):FireServer(false)
+	end
+end
+
+-- Leaving the run / results: both menus close without telling the server (it ended it).
+function runMenu.closeRunMenusSilently()
+	runMenu.Confirming = false
+	-- also when suspended under a higher panel (open in UIState, not visible)
+	if runMenu.Overlay and (runMenu.Overlay.Visible or (overlays.Pause == runMenu.Overlay and UIState.IsOpen("Pause"))) then
+		hide(runMenu.Overlay, "Pause")
+	end
+	if pauseMode == "RunSettings" then
+		pauseMode = "Settings"
+		hide(pause.Overlay, "Pause")
 	end
 end
 
@@ -4004,10 +4940,9 @@ local function updateFrame(dt: number)
 	end
 
 	if levelUp.Overlay.Visible then
-		local left = math.max(0, offerDeadline - os.clock())
-		levelUp.Sub.Text = offerHint or "Choose one upgrade"
-		levelUp.Pill.SetText(string.format("AUTO-PICK IN %ds", math.ceil(left)))
-		levelUp.Timer.Set(left / offerSeconds)
+		-- server clock (ChoiceProtectedUntil), frozen while ChoiceTimerPaused
+		levelUp.Sub.Text = offerHint or levelUp.SubText or "PICK ONE"
+		levelUp.Pill.SetText(Choice.choicePillText(Choice.choiceSecondsLeft(), virtualSize().X < 520))
 	end
 	if revive.Overlay.Visible then
 		local left = math.max(0, reviveDeadline - os.clock())
@@ -4122,9 +5057,18 @@ local function updateFrame(dt: number)
 	end)
 	Tutorial.Update(dt, state, inRun, modalOpen or RunIntro.Active())
 	updateSaveNotice(inRun)
-	-- the pause menu belongs to the run, the settings menu to the lobby
-	if pause.Overlay.Visible and (pauseMode == "Pause") ~= inRun then
-		hide(pause.Overlay, "Pause")
+	-- the run menu and its settings belong to the run, the settings menu to the lobby; a
+	-- drawer whose "Pause" entry was closed elsewhere (results) goes too
+	if pause.Overlay.Visible and not pause.Overlay:GetAttribute("Hiding") and (pauseMode == "RunSettings") ~= inRun then
+		if pauseMode == "RunSettings" then
+			runMenu.closeRunMenusSilently()
+		else
+			hide(pause.Overlay, "Pause")
+		end
+	end
+	if runMenu.Overlay.Visible and (not inRun or not UIState.IsOpen("Pause")) then
+		runMenu.closeRunMenusSilently()
+		runMenu.Overlay.Visible = false
 	end
 end
 
@@ -4225,6 +5169,7 @@ function UIBuilder.Init(d: { [string]: any })
 	buildChest()
 	LootUI.OnReward = showItemReward
 	buildPause()
+	runMenu.buildRunMenu()
 	BugReportUI.Build(root, { Show = show, Hide = hide, FitModal = fitModal, OnRelayout = onRelayout, VirtualSize = virtualSize, Toast = UIBuilder.Toast })
 	buildRevive()
 	buildResults()
@@ -4375,10 +5320,9 @@ function UIBuilder.Init(d: { [string]: any })
 			closeOffer()
 			hide(revive.Overlay, "Revive")
 			closeReward(false)
-			if pauseMode == "Pause" then
+			if pauseMode == "RunSettings" or overlays.Pause == runMenu.Overlay then
 				-- the server already ended this player's run: no SetPause, just close
-				pause.Confirming = false
-				hide(pause.Overlay, "Pause")
+				runMenu.closeRunMenusSilently()
 				-- (a bug report written from the results screen stays open)
 				if not results.Overlay.Visible then
 					BugReportUI.Close()

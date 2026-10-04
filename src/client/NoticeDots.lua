@@ -15,7 +15,8 @@
 	per-frame work. The halo pulse is a single looping tween per visible dot, played only
 	while the dot is shown; with reduced effects the dot is static.
 
-	Ids: Heroes, Shop, More (home tiles); Daily, Party, Achievements, Track (MORE rows).
+	Ids: Heroes, Shop, Daily, Party, More (home); Achievements, Track (MORE rows; the MORE
+	tile's dot counts only these two).
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -39,7 +40,9 @@ type Dot = { Frame: Frame, Halo: Frame, Scale: UIScale, Tween: Tween? }
 local dots: { [string]: { Dot } } = {}
 local keys: { [string]: string } = {}
 local seen: { [string]: string } = {}
-local MORE_ROWS = { "Daily", "Party", "Achievements", "Track" }
+-- rows the MORE tile's dot counts: only what is reached through MORE. Daily and Party have
+-- their own home buttons (and dots), so counting them here dotted two places for one thing.
+local MORE_ROWS = { "Achievements", "Track" }
 
 -- session baseline (first profile): only what changes after it counts as new
 local baseline: { Ach: { [string]: boolean }, Owned: { [string]: boolean }, Level: number }? = nil

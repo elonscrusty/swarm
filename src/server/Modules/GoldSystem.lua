@@ -312,8 +312,7 @@ local function onBuyMeta(player: Player, upgradeId: any, expectedLevel: any)
 	end
 	data.Gold -= cost
 	data.Meta[upgradeId] = owned + 1
-	local def = MetaUpgradeData.Upgrades[upgradeId]
-	ctx.RunManager.Notify(player, string.format("%s upgraded to level %d!", def.Name, owned + 1), Color3.fromRGB(120, 255, 160))
+	-- no success toast: the upgrade row updates from the ProfileSync (TITLE handoff)
 	GoldSystem.SyncProfile(player)
 end
 
@@ -366,7 +365,7 @@ local function onBuyHeroUpgrade(player: Player, heroId: any, upgradeId: any, exp
 		data.HeroUpgrades[heroId] = track
 	end
 	track[upgradeId] = owned + 1
-	ctx.RunManager.Notify(player, string.format("%s %s upgraded to level %d!", hero.Name, def.Name, owned + 1), Color3.fromRGB(120, 255, 160))
+	-- no success toast: the hero's upgrade row updates from the ProfileSync
 	GoldSystem.SyncProfile(player)
 end
 GoldSystem._BuyHeroUpgrade = onBuyHeroUpgrade -- (tests)

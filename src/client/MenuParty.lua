@@ -44,6 +44,7 @@ type State = { LeaderId: number, Members: { { UserId: number, Name: string, Read
 
 local state: State = { LeaderId = 0, Members = {}, Max = 3, Invites = {}, Sent = {} }
 local deadlines: { [number]: number } = {} -- invite from userId -> os.clock() it expires
+local knownMembers: { [number]: boolean }? = nil -- party member ids at the last PartyState (PartyJoin sound)
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -544,9 +545,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		local count = math.max(1, #state.Members)
 		ui.PartyLabel.Text = UIKit.track(string.format("Your party  %d/%d", count, state.Max))
 		if not inParty() then
-			ui.Hint.Text = "Invite players on this server or your friends. When the leader starts SOLO, DUO or TRIO, the party joins that run together."
+			ui.Hint.Text = "Invite players on this server or your friends. When the leader starts DUO or TRIO, party members join that run (up to its size). SOLO and Daily runs are the leader's alone."
 		elseif isLeader() then
-			ui.Hint.Text = "When everyone is READY, press START (or a mode on the home screen): your party joins your run."
+			ui.Hint.Text = "When everyone is READY, press START (or DUO / TRIO on the home screen): your party joins your run."
 		else
 			ui.Hint.Text = "Tap READY when you're set. Your leader starts the run and you join it automatically."
 		end
@@ -734,6 +735,20 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			Invites = type(d.Invites) == "table" and d.Invites or {},
 			Sent = type(d.Sent) == "table" and d.Sent or {},
 		}
+		-- someone else joined my party, or I joined theirs (not the first state after load): PartyJoin
+		local nowIds: { [number]: boolean } = {}
+		local joinedNew = false
+		for _, m in ipairs(state.Members) do
+			local id = tonumber(m.UserId) or 0
+			nowIds[id] = true
+			if knownMembers and not knownMembers[id] and id ~= player.UserId then
+				joinedNew = true
+			end
+		end
+		knownMembers = nowIds
+		if joinedNew then
+			UIKit.Sound("PartyJoin")
+		end
 		local now = os.clock()
 		local seen: { [number]: boolean } = {}
 		for _, inv in ipairs(state.Invites) do

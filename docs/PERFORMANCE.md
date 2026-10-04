@@ -128,20 +128,22 @@ In the real game enemies spawn off screen, so culling saves more than in this ri
 benchmark. Not yet checked on a device: whether models popping in at the screen edge
 are visible (raise `CullMargin` if so).
 
-## Arena part counts (2026-10-03)
+## Arena part counts (2026-10-04)
 
 The 3D cliffs, path detail and vignettes had raised every arena 15-30 % over its old part
 count. Phone guide: keep each arena's static world near or under its pre-cliff count
-(about 1 050-1 200 parts). `arena-map` (one build, default seed; parts include MeshParts):
+(about 1 050-1 260 parts). `arena-map` (one build, default seed; parts include MeshParts).
+"2026-10-03" is the cliff trim below; "now" adds the overhaul's boundary and rim-cap pass
+(docs/overhaul/WORLD_ART.md):
 
-| arena | pre-cliff (`8262c11`) | with cliffs (`5c466b9`) | now | MeshParts now | instances before / now |
-|---|---|---|---|---|---|
-| Forest | 1 207 | 1 352 | 1 174 | 681 | 1 707 / 1 521 |
-| Ruins | 1 146 | 1 295 | 1 153 | 645 | 1 574 / 1 418 |
-| Swamp | 1 196 | 1 442 | 1 200 | 766 | 1 779 / 1 508 |
-| Snow | 1 196 | 1 389 | 1 241 | 841 | 1 684 / 1 526 |
-| Desert | 1 054 | 1 225 | 1 051 | 710 | 1 522 / 1 327 |
-| Lava | 1 046 | 1 257 | 1 092 | 744 | 1 524 / 1 343 |
+| arena | pre-cliff (`8262c11`) | with cliffs (`5c466b9`) | 2026-10-03 | now | MeshParts now | instances 2026-10-03 / now |
+|---|---|---|---|---|---|---|
+| Forest | 1 207 | 1 352 | 1 174 | 1 183 | 675 | 1 526 / 1 531 |
+| Ruins | 1 146 | 1 295 | 1 153 | 1 185 | 657 | 1 423 / 1 458 |
+| Swamp | 1 196 | 1 442 | 1 200 | 1 184 | 734 | 1 513 / 1 488 |
+| Snow | 1 196 | 1 389 | 1 241 | 1 251 | 837 | 1 531 / 1 538 |
+| Desert | 1 054 | 1 225 | 1 051 | 1 043 | 688 | 1 332 / 1 320 |
+| Lava | 1 046 | 1 257 | 1 092 | 1 108 | 744 | 1 348 / 1 364 |
 
 How (MapBuilder; the look is kept, checked side by side at the run camera):
 - Cliffs: longer chunks (tall 45-52 studs every 43, south rim 25-30 every 26) with the
@@ -153,7 +155,8 @@ How (MapBuilder; the look is kept, checked side by side at the run camera):
   and alternate 0.06 studs in height (no z-fighting); nearly straight runs merge.
 - Vignettes: one piece fewer each (campfire 5 stones, 2 crates in supplies, 4-piece rings
   and clusters); server grass tufts have 2 blades instead of 3.
-Snow and Lava stay about 4 % over their pre-cliff counts. Not yet checked on a phone.
+Ruins (+39), Snow (+55) and Lava (+62) stay 3-6 % over their pre-cliff counts; none is above
+1 260 parts. Not yet checked on a phone.
 
 ## Remaining limits
 

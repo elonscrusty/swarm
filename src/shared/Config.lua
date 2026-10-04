@@ -112,6 +112,9 @@ Config.Stages = {
 	SurgeEndRemaining = 0.2, -- ... or until at most this share of the surge is still alive
 	-- the open portal
 	ChoiceSeconds = 15, -- undecided living players go to the next stage after this
+	-- group runs: the countdown waits while a living player has an upgrade choice open, for
+	-- at most this many seconds per stage clear (> one group panel, GroupAutoPickSeconds 10)
+	ChoiceHoldMaxSeconds = 12,
 	TravelFadeSeconds = 0.8, -- screen fade before / after the arena swap
 	TravelHealFraction = 0.6, -- living players are healed up to at least this share of max HP
 	ReviveOnTravelHPFraction = 0.5, -- fallen teammates stand up again on the next stage
@@ -1032,6 +1035,8 @@ Config.Sounds = {
 ]]
 Config.Audio = {
 	MaxVoices = 12,
+	-- only Warning / Boss sounds and the low-HP heartbeat (priority 5) may use the last Reserve voices
+	CriticalPriority = 5,
 	Categories = {
 		Combat = { Volume = 0.7, MaxVoices = 3, Priority = 1 },
 		Pickup = { Volume = 0.8, MaxVoices = 3, Priority = 2 },
