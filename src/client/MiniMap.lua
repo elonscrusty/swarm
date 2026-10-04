@@ -60,7 +60,7 @@ local player = Players.LocalPlayer
 local new = UIKit.new
 local P = Theme.Palette
 
-local SIZE_PC, SIZE_COMPACT = 150, 128 -- panel width (px, design space)
+local SIZE_PC, SIZE_COMPACT = 180, 128 -- panel width (px, design space)
 local MAP_INSET = 7
 local HEADER_PC, HEADER_COMPACT, FOOTER_PC = 20, 16, 18
 local VIEW_STUDS = 200 -- studs across the map
@@ -241,7 +241,9 @@ local function buildLegend(face: Frame)
 	local legend = new("Frame", { Name = "Legend", BackgroundTransparency = 1, Size = UDim2.new(1, -2 * MAP_INSET, 0, FOOTER_PC), ZIndex = 3 }, face)
 	ui.Legend = legend
 	local keys = {
-		{ Name = "Exit", Color = P.ivory_100, Diamond = true, Size = 6 },
+		-- the stage's way on is called the PORTAL everywhere (objective panel, edge marker,
+		-- banners); its key is the marker's own diamond-in-a-ring
+		{ Name = "Portal", Color = P.ivory_100, Diamond = true, Size = 6, Ring = true },
 		{ Name = "Boss", Color = Accessibility.Color(P.crimson_500, "Danger"), Diamond = true, Size = 6 },
 		{ Name = "Loot", Color = P.gold_400, Size = 5 },
 		{ Name = "Ally", Color = Accessibility.Color(P.ice_300, "Ally"), Round = true, Size = 5 },
@@ -250,7 +252,12 @@ local function buildLegend(face: Frame)
 		local cell = new("Frame", { Name = entry.Name, BackgroundTransparency = 1, Position = UDim2.fromScale((i - 1) / #keys, 0), Size = UDim2.fromScale(1 / #keys, 1), ZIndex = 3 }, legend)
 		local marker = new("Frame", { Name = "Key", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 4, 0.5, 0), Size = UDim2.fromOffset(entry.Size, entry.Size), Rotation = entry.Diamond and 45 or 0, BackgroundColor3 = entry.Color, BorderSizePixel = 0, ZIndex = 4 }, cell)
 		UIKit.corner(marker, entry.Round and 999 or 1)
-		UIKit.text(cell, "Small", entry.Name, { Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -10, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_300, ZIndex = 4 }, 9)
+		if entry.Ring then
+			local ring = new("Frame", { Name = "Ring", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 4, 0.5, 0), Size = UDim2.fromOffset(11, 11), BackgroundTransparency = 1, ZIndex = 4 }, cell)
+			UIKit.corner(ring, 999)
+			UIKit.stroke(ring, entry.Color, 1, 0.1)
+		end
+		UIKit.text(cell, "Small", entry.Name, { Position = UDim2.fromOffset(11, 0), Size = UDim2.new(1, -11, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_200, ZIndex = 4 }, 10)
 	end
 end
 

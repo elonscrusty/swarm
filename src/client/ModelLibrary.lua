@@ -204,7 +204,7 @@ local ELITE_GOLD = Palette.gold_400
 
 -- Slot colours of each creature, the same as the Blender models' palettes.
 local LOOKS: { [string]: { [string]: Color3 } } = {
-	Slime = { Base = Palette.beetle_300, Dark = Palette.chitin_900, Eye = Palette.amber_500 },
+	Slime = { Base = Palette.beetle_300, Side = Palette.beetle_300:Lerp(Palette.beetle_700, 0.7), Dark = Palette.chitin_900, Eye = Palette.amber_500 },
 	Bat = { Base = Palette.wasp_500, Dark = Palette.wasp_900, Light = Palette.ivory_100, Eye = Palette.amber_500 },
 	Skeleton = {
 		Base = Palette.beetle_700,
@@ -242,21 +242,24 @@ local LOOKS: { [string]: { [string]: Color3 } } = {
 		Glow = Palette.amber_300,
 		Eye = Palette.amber_500,
 	},
+	-- black chitin under amber-orange armour, gold crown, green venom (her portrait; the
+	-- ScorpionQueen mesh palette in blender/models/enemies.py)
 	Boss = {
-		Base = Palette.crimson_500,
-		Accent = Palette.crimson_800,
-		Gold = Palette.gold_500,
+		Base = Palette.chitin_800:Lerp(Palette.crimson_800, 0.28),
+		Accent = Palette.chitin_800:Lerp(Palette.slate_600, 0.35),
+		Gold = Color3.fromRGB(219, 128, 33),
+		Crown = Palette.gold_400,
 		Dark = Palette.chitin_900,
-		Light = Palette.amber_500,
-		Glow = Palette.amber_300,
-		Eye = Palette.amber_500,
+		Light = Color3.fromRGB(230, 143, 41),
+		Glow = Color3.fromRGB(153, 255, 82),
+		Eye = Color3.fromRGB(140, 242, 77),
 	},
 	-- the new creatures and bosses (the same slot colours as their Blender palettes)
 	MothBoss = {
 		Base = Palette.ivory_200:Lerp(Palette.stone_300, 0.2),
-		Light = Palette.moth_300,
-		Accent = Palette.slate_600,
-		Metal = Palette.slate_500,
+		Light = Color3.fromRGB(153, 128, 199), -- violet fore-wings (the mesh palette)
+		Accent = Color3.fromRGB(87, 64, 128),
+		Metal = Color3.fromRGB(43, 31, 66),
 		Gold = Palette.gold_400,
 		Dark = Palette.chitin_800,
 		White = Palette.ivory_100,
@@ -413,7 +416,8 @@ local ENEMIES: { [string]: (any, { [string]: Color3 }) -> string } = {}
 
 -- Mite: round yellow-green shell with a seam, dark head, amber eyes, six legs.
 ENEMIES.Slime = function(b, c)
-	egg(b, V(2.5, 1.6, 2.3), c.Base, CFrame.new(0, 0.95, 0.3))
+	egg(b, V(2.62, 1.2, 2.42), c.Side or c.Dark, CFrame.new(0, 0.78, 0.3)) -- darker shell sides (crowd read)
+	egg(b, V(2.36, 1.6, 2.18), c.Base, CFrame.new(0, 1.0, 0.3))
 	b.add("Block", V(0.09, 0.1, 1.4), c.Dark, CFrame.new(0, 1.72, 0.45))
 	egg(b, V(1.65, 1.15, 0.95), c.Base, CFrame.new(0, 0.9, -0.7))
 	egg(b, V(1.0, 0.72, 0.85), c.Dark, CFrame.new(0, 0.6, -1.15))
@@ -1181,12 +1185,23 @@ local function shard(b, ice: Color3, glow: Color3)
 	b.add("Ball", Vector3.new(0.24, 0.26, 0.4), glow, CFrame.new(0, 0, -0.3), { Material = SHOT_NEON })
 end
 
-local function totem(b, wood: Color3, carving: Color3, gold: Color3, glow: Color3)
-	b.add("Block", Vector3.new(0.76, 2.85, 0.74), wood, CFrame.new(0, 0.82, 0))
-	b.add("Block", Vector3.new(1.8, 0.95, 0.65), carving, CFrame.new(0, 1.46, 0))
-	b.add("Block", Vector3.new(0.43, 0.38, 0.06), ShotPalette.chitin_900, CFrame.new(0, 1.38, -0.34))
-	b.add("Block", Vector3.new(0.64, 0.5, 0.55), gold, CFrame.new(0, 2.5, 0), { Material = SHOT_METAL })
-	b.add("Ball", Vector3.new(0.56, 0.6, 0.56), glow, CFrame.new(0, 2.85, 0), { Material = SHOT_NEON })
+-- Healing Totem stand-in (same design as the Shot_Totem mesh and the icon): a compact carved
+-- idol, a stern lower face under a beaked upper head with two carved wings, a banded cup
+-- rim and a big green life-core sitting in it.
+local function totem(b, wood: Color3, carving: Color3, band: Color3, glow: Color3)
+	local dark = ShotPalette.wood_900
+	b.add("Block", Vector3.new(0.86, 0.3, 0.86), wood, CFrame.new(0, 0.15, 0))
+	b.add("Block", Vector3.new(0.76, 0.72, 0.7), wood, CFrame.new(0, 0.62, 0))
+	b.add("Block", Vector3.new(0.5, 0.08, 0.06), dark, CFrame.new(0, 0.42, -0.36))
+	b.add("Block", Vector3.new(0.6, 0.14, 0.14), carving, CFrame.new(0, 0.82, -0.36))
+	b.add("Block", Vector3.new(0.82, 0.68, 0.72), carving, CFrame.new(0, 1.35, 0))
+	b.add("Wedge", Vector3.new(0.22, 0.3, 0.26), wood, CFrame.new(0, 1.36, -0.48) * CFrame.Angles(0, math.rad(180), 0))
+	b.add("Block", Vector3.new(0.6, 0.12, 0.06), dark, CFrame.new(0, 1.5, -0.37))
+	for _, sx in ipairs({ -1, 1 }) do
+		b.add("Wedge", Vector3.new(0.22, 0.42, 0.6), carving, CFrame.new(sx * 0.62, 1.6, 0) * CFrame.Angles(0, sx * math.rad(90), 0) * CFrame.Angles(math.rad(20), 0, 0))
+	end
+	b.add("Cylinder", Vector3.new(0.12, 0.96, 0.96), band, CFrame.new(0, 1.72, 0) * CYL_UP, { Material = SHOT_METAL })
+	b.add("Ball", Vector3.new(0.82, 0.82, 0.82), glow, CFrame.new(0, 2.08, 0), { Material = SHOT_NEON })
 end
 
 local function hook(b, metal: Color3, chain: Color3)
@@ -1197,7 +1212,7 @@ local function hook(b, metal: Color3, chain: Color3)
 end
 
 local function soul(b, glow: Color3, wisp: Color3)
-	b.add("Ball", Vector3.new(0.9, 0.9, 0.95), ShotPalette.ivory_200, CFrame.new(0, 0.05, -0.45))
+	b.add("Ball", Vector3.new(0.9, 0.9, 0.95), ShotPalette.ivory_300, CFrame.new(0, 0.05, -0.45))
 	b.add("Block", Vector3.new(0.52, 0.16, 0.12), glow, CFrame.new(0, 0.12, -0.9), { Material = SHOT_NEON })
 	b.add("Ball", Vector3.new(0.62, 0.58, 2.0), wisp, CFrame.new(0, 0.23, 0.7), { Transparency = 0.45 })
 end
@@ -1233,10 +1248,10 @@ SHOTS[26] = function(b, _def)
 	shard(b, ShotPalette.ice_300, ShotPalette.ice_100)
 end
 SHOTS[27] = function(b, _def)
-	totem(b, ShotPalette.wood_500, ShotPalette.wood_400, SHOT.Gold, ShotPalette.fx_heal)
+	totem(b, ShotPalette.wood_600, ShotPalette.wood_500, ShotPalette.wood_800, ShotPalette.fx_heal:Lerp(ShotPalette.moss_300, 0.3))
 end
 SHOTS[28] = function(b, _def)
-	totem(b, ShotPalette.wood_500, ShotPalette.gold_500, ShotPalette.gold_300, ShotPalette.fx_gold)
+	totem(b, ShotPalette.wood_600, ShotPalette.gold_500, ShotPalette.gold_300, ShotPalette.fx_gold)
 end
 SHOTS[29] = function(b, _def)
 	hook(b, ShotPalette.steel_400, ShotPalette.steel_600)
@@ -1245,7 +1260,7 @@ SHOTS[30] = function(b, _def)
 	hook(b, ShotPalette.crimson_400, ShotPalette.crimson_800)
 end
 SHOTS[31] = function(b, _def)
-	soul(b, ShotPalette.fx_heal, ShotPalette.moss_100)
+	soul(b, ShotPalette.fx_heal, ShotPalette.fx_heal:Lerp(ShotPalette.moss_500, 0.45))
 end
 SHOTS[32] = function(b, _def)
 	soul(b, ShotPalette.crimson_300, ShotPalette.crimson_300)
@@ -1317,14 +1332,34 @@ local function sawblade(b, blade: Color3, hub: Color3, teeth: Color3)
 	end
 end
 
-local function snare(b, vine: Color3, dark: Color3, thorn: Color3, r: number)
-	b.add("Cylinder", Vector3.new(0.1, r * 2, r * 2), dark, CFrame.new(0, 0.05, 0) * CYL_UP, { Transparency = 0.45 })
-	for i = 1, 6 do
-		local a = i * math.pi / 3
-		local x, z = math.cos(a) * r * 0.8, math.sin(a) * r * 0.8
-		local turn = CFrame.Angles(0, -a, 0)
-		b.add("Block", Vector3.new(0.32, 2.2, 0.32), i % 2 == 0 and vine or dark, CFrame.new(x, 0.9, z) * turn * CFrame.Angles(0, 0, math.rad(24)))
-		b.add("Wedge", Vector3.new(0.12, 0.4, 0.45), thorn, CFrame.new(x * 0.88, 1.5, z * 0.88) * turn)
+--[[
+	Vine Snare / Strangleroot (same read as the icon): a dark churned-earth patch, `n` thick
+	thorny roots bursting up round its edge and curling in over the ring, pale thorns on the
+	outside of every bend and a few leaves. The root pieces carry Anim = "Grip" with a pivot
+	at the root's foot: VFX animates them with the snare's age, so they clench on every
+	damage tick (WeaponData VineSnare Params.Tick = 0.5 s) and ease off between.
+]]
+local function snare(b, vine: Color3, dark: Color3, thorn: Color3, r: number, n: number)
+	b.add("Cylinder", Vector3.new(0.1, r * 1.9, r * 1.9), ShotPalette.dirt_700, CFrame.new(0, 0.05, 0) * CYL_UP, { Transparency = 0.25 })
+	for i = 1, 3 do
+		local a = i * math.pi * 2 / 3 + 0.5
+		b.add("Block", Vector3.new(0.5, 0.26, 0.42), ShotPalette.dirt_600, CFrame.new(math.cos(a) * r * 0.55, 0.12, math.sin(a) * r * 0.55) * CFrame.Angles(0.3, a, 0.2))
+	end
+	for i = 1, n do
+		local a = i * math.pi * 2 / n + 0.3
+		-- root frame: at the foot, local Z pointing outward, local X along the edge
+		local foot = CFrame.new(math.cos(a) * r * 0.82, 0, math.sin(a) * r * 0.82) * CFrame.Angles(0, math.pi / 2 - a, 0)
+		local lower = foot * CFrame.Angles(math.rad(-22), 0, 0) * CFrame.new(0, 0.75, 0)
+		local upper = foot * CFrame.Angles(math.rad(-22), 0, 0) * CFrame.new(0, 1.4, 0) * CFrame.Angles(math.rad(-48), 0, 0) * CFrame.new(0, 0.5, 0)
+		local col = i % 2 == 0 and vine or dark
+		local grip = { Anim = "Grip" }
+		b.add("Block", Vector3.new(0.48, 1.5, 0.48), col, lower, { Anim = grip.Anim, Pivot = lower:Inverse() * foot })
+		b.add("Block", Vector3.new(0.34, 1.05, 0.34), vine, upper, { Anim = grip.Anim, Pivot = upper:Inverse() * foot })
+		b.add("Wedge", Vector3.new(0.12, 0.42, 0.38), thorn, lower * CFrame.new(0, 0.2, 0.36), { Anim = grip.Anim, Pivot = (lower * CFrame.new(0, 0.2, 0.36)):Inverse() * foot })
+		b.add("Wedge", Vector3.new(0.1, 0.34, 0.3), thorn, upper * CFrame.new(0, -0.1, 0.28), { Anim = grip.Anim, Pivot = (upper * CFrame.new(0, -0.1, 0.28)):Inverse() * foot })
+		if i % 2 == 1 then
+			b.add("Wedge", Vector3.new(0.06, 0.32, 0.62), ShotPalette.moss_300, lower * CFrame.new(0.36, 0.1, 0) * CFrame.Angles(0, math.rad(90), math.rad(-30)))
+		end
 	end
 end
 
@@ -1382,10 +1417,10 @@ SHOTS[50] = function(b, _def)
 	sawblade(b, ShotPalette.crimson_400, ShotPalette.gold_500, ShotPalette.gold_200)
 end
 SHOTS[51] = function(b, _def)
-	snare(b, ShotPalette.moss_400, ShotPalette.moss_600, ShotPalette.ivory_300, 2.4)
+	snare(b, ShotPalette.moss_400, ShotPalette.moss_600, ShotPalette.ivory_200, 2.4, 4)
 end
 SHOTS[52] = function(b, _def)
-	snare(b, ShotPalette.moss_300, ShotPalette.moss_700, ShotPalette.crimson_300, 3.2)
+	snare(b, ShotPalette.moss_300, ShotPalette.moss_700, ShotPalette.ivory_100, 3.2, 6)
 end
 SHOTS[53] = function(b, _def)
 	wisp(b, ShotPalette.ivory_100, ShotPalette.fx_holy)
@@ -1428,8 +1463,10 @@ local SHOT_MESH: { [number]: { any } } = {
 	[28] = { "Shot_Totem", { Wood2 = ShotPalette.gold_500, Gold = ShotPalette.gold_300, Leaf = ShotPalette.gold_400, Glow = ShotPalette.fx_gold }, 1.6 },
 	[29] = { "Shot_Hook", nil },
 	[30] = { "Shot_Hook", { Hook = ShotPalette.crimson_400, Chain = ShotPalette.crimson_800 } },
-	[31] = { "Shot_Soul", nil },
-	[32] = { "Shot_Soul", { Glow = ShotPalette.crimson_300, Light = ShotPalette.crimson_300 } },
+	-- Soul Bolt skulls: drawn 1.3x with a warm bone and a saturated green spectral tail so
+	-- they never read as the pale ivory / lavender flyers (moths) they fly among
+	[31] = { "Shot_Soul", { Bone = ShotPalette.ivory_300, Light = ShotPalette.fx_heal:Lerp(ShotPalette.moss_500, 0.45) }, 1.3 },
+	[32] = { "Shot_Soul", { Bone = ShotPalette.ivory_300, Glow = ShotPalette.crimson_300, Light = ShotPalette.crimson_400 }, 1.3 },
 	[33] = { "Ability_Turret", nil, 1.6 },
 	[34] = { "Ability_Turret", { Metal = ShotPalette.gold_400, MetalDark = ShotPalette.steel_600, Gold = ShotPalette.crimson_500, Glow = ShotPalette.fx_gold }, 1.7 },
 	[35] = { "Shot_Bolt", { Head = ShotPalette.gold_300, Shaft = ShotPalette.steel_600, Fletch = ShotPalette.gold_500 }, 0.75 },
@@ -1505,6 +1542,10 @@ function ModelLibrary.Animate(anim: string, t: number, phase: number, move: numb
 		return CFrame.new(0, s * s * s * 0.13 - 0.06, 0)
 	elseif anim == "Tail" then
 		return CFrame.Angles(math.sin(t * 2.2 + phase) * 0.12, 0, math.sin(t * 1.3 + phase) * 0.08)
+	elseif anim == "Grip" then
+		-- Vine Snare roots: t = the snare's age; a clench inward on every 0.5 s damage tick
+		local u = 1 - (t % 0.5) / 0.5
+		return CFrame.Angles(-0.2 * u * u * u, 0, 0)
 	elseif anim == "CrownBob" then
 		return CFrame.new(0, math.sin(t * 3 + phase) * 0.18, 0) * CFrame.Angles(0, t * 0.9, 0)
 	end
@@ -1569,6 +1610,13 @@ end
 ]]
 local AURA_MESH = { Burning = "EliteAura_Burning", Shielded = "EliteAura_Shield", Swift = "EliteAura_Swift" }
 
+-- Palette overrides (overhaul 2026-10): the Swift streaks were all ivory and vanished on
+-- snow; deep blue speed lines with pale cores read on grass, paths and snow alike and do not
+-- borrow the cyan of XP gems or the gold of loot.
+local AURA_PALETTE: { [string]: { [string]: Color3 } } = {
+	Swift = { Light = Color3.fromRGB(46, 82, 150), Accent = Palette.ivory_100, Glow = Color3.fromRGB(150, 196, 255) },
+}
+
 function ModelLibrary.AuraMeshName(affix: string): string?
 	return AURA_MESH[affix]
 end
@@ -1576,7 +1624,7 @@ end
 function ModelLibrary.Aura(affix: string, radius: number, halfHeight: number): { Piece }
 	local s = radius / 1.4 -- the aura meshes are authored for a body of radius ~1.4
 	local meshName = AURA_MESH[affix]
-	local pieces = meshName and ModelLibrary.MeshPieces(meshName, nil, s, -halfHeight) or nil
+	local pieces = meshName and ModelLibrary.MeshPieces(meshName, AURA_PALETTE[affix], s, -halfHeight) or nil
 	if pieces then
 		return pieces
 	end
@@ -1609,7 +1657,7 @@ function ModelLibrary.Aura(affix: string, radius: number, halfHeight: number): {
 			local a = i * math.pi * 2 / 3
 			local y = base + (0.35 + (i - 1) * 0.7) * s
 			local cf = CFrame.new(math.cos(a) * (r + 0.2 * s), y, math.sin(a) * (r + 0.2 * s)) * CFrame.Angles(0, -a, 0)
-			spinPiece("Block", V(0.12, 0.1, 2.2) * s, Palette.ivory_100, cf, { Transparency = 0.35 })
+			spinPiece("Block", V(0.16, 0.12, 2.2) * s, Color3.fromRGB(46, 82, 150), cf, { Transparency = 0.2 })
 			spinPiece("Ball", V(0.22, 0.22, 0.22) * s, Palette.fx_bolt, cf * CFrame.new(0, 0, -1.1 * s), { Material = NEON })
 		end
 	end

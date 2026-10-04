@@ -26,8 +26,9 @@
 	so models exist only for drawn enemies (plus the pools) and a recycled body reuses
 	parts instead of building new ones. Spawn dust puffs only for spawns on screen.
 
-	Readability: Flash() gives a brief white hit flash (full or low-detail model); elites stand
-	on a soft gold ground ring on top of their bigger, gold-tinted model with its crown,
+	Readability: Flash() gives a brief warm hit flash that keeps dark contours (full or
+	low-detail model); elites stand on a crimson-rimmed dark ground ring (hostile, unlike the
+	hero's pale-gold ring) under their bigger, gold-tinted model with its crown,
 	wear their affix aura (EliteAura_* meshes or a part ring: flames, orbiting shield
 	plates that shatter when the shield breaks, wind streaks) and a small affix tag.
 
@@ -80,8 +81,10 @@ type Slot = {
 	Move: number,
 	Parked: boolean,
 	FlashUntil: number,
+	FlashNext: number, -- a boss re-flashes no sooner than this (no strobing under constant hits)
 	Dist: number,
 	Halo: BasePart?,
+	HaloCore: BasePart?,
 	-- behaviour poses / affixes (from body attributes)
 	Act: string?,
 	ActAt: number,
@@ -118,7 +121,6 @@ local ACTIVE_Y = -100
 local FLOOR_Y = Config.ArenaOrigin.Y
 local DISC = CFrame.Angles(0, 0, math.rad(90)) -- cylinder axis X → Y (a flat disc)
 local FLAT = Vector3.new(1, 0, 1)
-local WHITE = Color3.new(1, 1, 1)
 local RANK_EVERY = 0.3 -- seconds between nearest-first detail rankings
 local G = Config.Graphics
 local LOW_PARTS: number = G.LowDetailParts or 4
@@ -133,7 +135,7 @@ local POOL_CAP: number = G.MaxDetailedEnemies
 local LOW_POOL_CAP: number = Config.Enemies.MaxLive
 local POOL_TOTAL: number = math.floor(G.MaxDetailedEnemies * 1.5) + LOW_POOL_CAP
 local POOL_KEEP = 12
-local HALO_KEEP = 6
+local HALO_KEEP = 12 -- two discs per elite (rim + core)
 local PROBE_EVERY = 4 -- seconds between checks whether a part-built type has its meshes now
 
 local partsBuf: { BasePart } = {}
@@ -227,6 +229,7 @@ local function buildModel(typeId: string, elite: boolean, low: boolean): ({ any 
 	return pieces, motion, scale
 end
 
+local flashColors: (slot: any) -> ()
 local function restoreColors(pieces: { any })
 	for _, piece in ipairs(pieces) do
 		piece.Part.Color = Accessibility.Color(piece.Color)
@@ -390,6 +393,12 @@ local function dropHalo(slot: Slot)
 		halo.CFrame = PARK
 		table.insert(haloPool, halo)
 	end
+	local core = slot.HaloCore
+	if core then
+		slot.HaloCore = nil
+		core.CFrame = PARK
+		table.insert(haloPool, core)
+	end
 end
 
 -- Once the run is over: destroys pooled models past the per-type reserve and spare halos,
@@ -445,6 +454,7 @@ local function track(model: Instance)
 		Move = 0,
 		Parked = true,
 		FlashUntil = 0,
+		FlashNext = 0,
 		Dist = 0,
 		Halo = nil,
 		Act = nil,
@@ -502,7 +512,29 @@ local function track(model: Instance)
 	readShield()
 end
 
--- White hit flash on enemy `id` (its full or low-detail model; an off-screen enemy has
+--[[
+	Hit flash (overhaul 2026-10): no longer a full white-out. Each piece moves part of the way
+	toward a warm ivory, dark pieces (legs, undersides, seams, the mite's shell sides) much less
+	than pale ones, so the silhouette and shell segmentation stay readable on grass and snow.
+	Strength: grunts 0.6, elites 0.45 (their gold tint, crown and affix aura stay), bosses 0.32
+	and at most once per BOSS_FLASH_GAP. Length Config.Enemies.HitFlashSeconds; off with
+	Reduce Flashes / Reduced Effects. Meanings stay separate: damage = this brief warm lift;
+	attack preparation = the pose plus the floor telegraph (Telegraphs.lua), the Bomb Tick's
+	amber blink and the Queen's tail glow; elite = crown, ring and affix aura (never a flash).
+]]
+local FLASH_TINT = Color3.fromRGB(255, 241, 216)
+local BOSS_FLASH_GAP = 0.3
+flashColors = function(slot: Slot)
+	local typeId = slot.Type
+	local k = (typeId and isBoss(typeId :: string)) and 0.32 or (slot.Elite and 0.45 or 0.6)
+	for _, piece in ipairs(slot.Pieces) do
+		local base = Accessibility.Color(piece.Color)
+		local lum = 0.299 * base.R + 0.587 * base.G + 0.114 * base.B
+		piece.Part.Color = base:Lerp(FLASH_TINT, k * (0.3 + 0.7 * lum))
+	end
+end
+
+-- Hit flash on enemy `id` (its full or low-detail model; an off-screen enemy has
 -- neither and its body is hidden: nothing to flash).
 function EnemyRenderer.Flash(id: number): boolean
 	if ClientSettings.Flashes() then return true end
@@ -512,10 +544,14 @@ function EnemyRenderer.Flash(id: number): boolean
 	end
 	local now = os.clock()
 	if not slot.Parked and #slot.Pieces > 0 then
+		if now < slot.FlashNext then
+			return true -- a boss under constant hits keeps its colours between flashes
+		end
 		if now >= slot.FlashUntil then
-			for _, piece in ipairs(slot.Pieces) do
-				piece.Part.Color = WHITE
-			end
+			flashColors(slot)
+		end
+		if slot.Type and isBoss(slot.Type :: string) then
+			slot.FlashNext = now + BOSS_FLASH_GAP
 		end
 	else
 		local body = slot.Body
@@ -980,14 +1016,14 @@ local function ensureAura(slot: Slot, affix: string)
 	if not tag then
 		local gui = Instance.new("BillboardGui")
 		gui.Name = "AffixTag"
-		gui.Size = UDim2.fromOffset(96, 18)
+		gui.Size = UDim2.fromOffset(110, 20)
 		gui.LightInfluence = 0
 		gui.MaxDistance = 220
 		local label = Instance.new("TextLabel")
 		label.BackgroundTransparency = 1
 		label.Size = UDim2.fromScale(1, 1)
 		label.Font = Enum.Font.SourceSansBold
-		label.TextSize = 11
+		label.TextSize = 13
 		label.TextStrokeTransparency = 0.35
 		label.TextStrokeColor3 = Palette.slate_950
 		label.TextTransparency = 0.2
@@ -1290,20 +1326,33 @@ local function step(dt: number)
 					dropAura(slot)
 				end
 
-				-- elites: soft gold ring on the ground under them
+				-- elites: a hostile base ring under them (overhaul 2026-10): a crimson rim around
+				-- a dark core, so it never reads as the hero's pale-gold ring, gold loot or an
+				-- amber fire pool; the rim breathes slowly (steady with Reduce Flashes)
 				if elite then
 					local halo = slot.Halo
-					if not halo then
-						halo = takeHalo()
+					local core = slot.HaloCore
+					if not halo or not core then
+						halo = halo or takeHalo()
+						core = core or takeHalo()
 						slot.Halo = halo
+						slot.HaloCore = core
 						local d = math.max(body.Size.X, body.Size.Z) * 1.3 + 1.2
 						halo.Size = Vector3.new(0.06, d, d)
+						core.Size = Vector3.new(0.06, d - 1.1, d - 1.1)
+						halo.Color = Accessibility.Color(Palette.crimson_500, "Danger")
+						core.Color = Palette.chitin_900
 					end
-					halo.Transparency = 0.62 + 0.08 * math.sin(clock * 3 + slot.Phase)
+					local calm = ClientSettings.Flashes()
+					halo.Transparency = calm and 0.3 or (0.3 + 0.1 * math.sin(clock * 2.4 + slot.Phase))
+					core.Transparency = 0.5
+					local p = render.Position
 					n += 1
 					partsBuf[n] = halo
-					local p = render.Position
 					cframesBuf[n] = CFrame.new(p.X, FLOOR_Y + 0.34, p.Z) * DISC -- over the paths, under telegraphs
+					n += 1
+					partsBuf[n] = core :: BasePart
+					cframesBuf[n] = CFrame.new(p.X, FLOOR_Y + 0.345, p.Z) * DISC
 				elseif slot.Halo then
 					dropHalo(slot)
 				end
@@ -1374,6 +1423,9 @@ function EnemyRenderer.Init()
 			for _, slot in pairs(slots) do
 				slot.FlashUntil = 0
 				restoreColors(slot.Pieces)
+				if slot.Halo then
+					slot.Halo.Color = Accessibility.Color(Palette.crimson_500, "Danger")
+				end
 			end
 		end
 	end)

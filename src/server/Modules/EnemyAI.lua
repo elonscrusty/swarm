@@ -220,7 +220,9 @@ local function think(e, runPlayers)
 	-- docs/overhaul/CORNER_REPORT.md, tools/preview/scenes/corner-regression.luau.)
 	local look = math.min(Config.Enemies.AvoidRayLength + e.Radius, to.Magnitude)
 	if not e.Ghost and rayParams and obstacleAhead(e.Pos, desired, look) then
-		local origin = e.Pos + Vector3.new(0, 2.5, 0)
+		-- 1 stud up: the lowest colliders (rubble, low walls, plinths) top out at ~1.3 studs;
+		-- a ray at 2.5 passed over them and an enemy meeting one head-on stalled behind it
+		local origin = e.Pos + Vector3.new(0, 1, 0)
 		local hit = workspace:Raycast(origin, desired * look, rayParams)
 		if hit then
 			local tangent = hit.Normal:Cross(UP) * FLAT

@@ -407,10 +407,13 @@ POP.gust = function(x, z, r)
 	end
 end
 
+-- An enemy Healer's pulse (it heals the swarm: not a hazard). Overhaul 2026-10: a light fill
+-- inside a darker moss rim (the rim disc sits under the fill), so the pulse keeps an edge on
+-- snow and does not become a big pale disc over the fight.
 POP.heal = function(x, z, r)
 	local d = r * 2
-	anim("Cylinder", P.fx_heal, SMOOTH, flatDisc(x, z, 0.12), nil, Vector3.new(0.04, 2, 2), Vector3.new(0.04, d, d), 0.35, 1, 0.55)
-	anim("Cylinder", P.moss_200, SMOOTH, flatDisc(x, z, 0.13), nil, Vector3.new(0.04, d * 0.9, d * 0.9), Vector3.new(0.04, d * 1.02, d * 1.02), 0.4, 1, 0.5)
+	anim("Cylinder", P.moss_700, SMOOTH, flatDisc(x, z, 0.12), nil, Vector3.new(0.04, 2.4, 2.4), Vector3.new(0.04, d * 1.04, d * 1.04), 0.45, 1, 0.55)
+	anim("Cylinder", P.fx_heal, SMOOTH, flatDisc(x, z, 0.13), nil, Vector3.new(0.04, 2, 2), Vector3.new(0.04, d * 0.94, d * 0.94), 0.62, 1, 0.5)
 	for i = 1, 7 do
 		local a = i * TAU / 7 + math.random() * 0.6
 		local rr = r * (0.2 + math.random() * 0.6)
@@ -866,7 +869,9 @@ Kind.patch = function(x: number, z: number, radius: number, arm: number, life: n
 	rec.Dur = rec.Arm + rec.Life
 	rec.Scorch = disc(C.Outline, r * 2 + 0.5, 1, x, FLOOR_Y + Y_RIM, z)
 	rec.Ember = disc(acid and C.Acid or P.fx_fire, 0.1, 1, x, FLOOR_Y + Y_FILL, z)
-	rec.Edge = ring(acid and 22 or 16, P.amber_300, 1, x, FLOOR_Y + Y_EDGE, z, r - 0.15, 0.26, acid and 0.55 or 0.6)
+	-- hostile edge (overhaul 2026-10): fire gets a crimson dashed rim over the dark scorch so
+	-- it never reads as gold loot, the hero's pale-gold ring or a friendly area
+	rec.Edge = ring(acid and 22 or 16, acid and P.amber_300 or Accessibility.Color(P.crimson_400, "Danger"), 1, x, FLOOR_Y + Y_EDGE, z, r - 0.15, acid and 0.26 or 0.34, acid and 0.55 or 0.6)
 	rec.Flames = {}
 	for k = 1, (acid and math.clamp(math.floor(r), 2, 5) or 3) do
 		local f

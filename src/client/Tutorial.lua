@@ -15,10 +15,11 @@
 	  Gems      after the first kill: gems are XP → the XP bar
 	  LevelUp   the first level-up offer: one line under LEVEL UP! explains the cards
 	            (UIBuilder asks LevelUpHint; not a callout)
-	  Portal    after Config.Tutorial.PortalTipAt run seconds: the stage objective → the
-	            stage pill
-	  Boss      when the stage boss appears: red floor shapes show where it strikes → the
-	            boss bar
+	  Portal    after Config.Tutorial.PortalTipAt run seconds, unless the portal is already
+	            charging: only the next step (gold arrow, the ring, the real ChargeSeconds;
+	            RunIntro's stage card holds the whole plan) → the stage pill
+	  Boss      when the stage boss appears: red floor shapes show where <boss name> strikes
+	            → the boss bar
 	Co-op tips (once ever, also for experienced players; "TEAM TIP" instead of a count):
 	  TeamRules the first group run: what is shared and what is your own
 	  Revive    the first time a teammate falls: stand beside them to revive
@@ -32,7 +33,6 @@
 ]]
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local TextService = game:GetService("TextService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -47,6 +47,7 @@ local MiniMap = require(script.Parent.MiniMap)
 local TeamUI = require(script.Parent.TeamUI)
 local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
+local InputPrompts = require(script.Parent.InputPrompts)
 
 local Tutorial = {}
 
@@ -531,7 +532,8 @@ local function showNext(now: number)
 	end
 	current = { Id = tip.Id, Until = now + tip.Seconds, Seconds = tip.Seconds, Since = now }
 	ui.Title.Text = tip.Title
-	ui.Body.Text = tip.Text
+	-- input-aware text is read when the tip shows (the device in hand may have changed)
+	ui.Body.Text = tip.Id == "Move" and InputPrompts.Move() or tip.Text
 	ui.Step.Text = stepText(tip.Id)
 	setIcon(tip.Icon)
 	layout()
@@ -568,14 +570,7 @@ end
 ------------------------------------------------------------------------------------------
 
 local function moveText(): string
-	local last = UserInputService:GetLastInputType()
-	local gamepad = string.find(tostring(last), "Gamepad") ~= nil
-	if gamepad then
-		return "Move with the left stick, A to jump. Chain hops for a bit of speed!"
-	elseif UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
-		return "Drag anywhere to move, tap JUMP to hop over trouble."
-	end
-	return "Move with WASD or the arrow keys, Space to jump. Chain hops for a bit of speed!"
+	return InputPrompts.Move()
 end
 
 local function heroPos(): Vector3?
@@ -618,14 +613,24 @@ local function triggers(state: Configuration)
 	local stagePhase = state:GetAttribute("StagePhase") or "None"
 	if not run.Portal and stagePhase == "Explore" and runTime >= T.PortalTipAt then
 		run.Portal = true
-		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
-		local body = lockLeft > 0 and string.format("Find the stone portal (it wakes in %s). Stand in its circle to call the boss.", UIKit.formatTime(lockLeft))
-			or "Find the stone portal and stand in its circle to call the boss. The swarm keeps growing until you do!"
-		push("Portal", "Find the portal", body, "portal", T.HintSeconds + 1)
+		-- Staged opening: the stage-start card (RunIntro) lays out the whole plan (portal →
+		-- ring → boss); this tip only repeats the NEXT step with the real charge time, and
+		-- the Boss tip names the boss once it is summoned. A player already charging the
+		-- portal has found it: no tip.
+		if (tonumber(state:GetAttribute("PortalCharge")) or 0) <= 0 then
+			local lockLeft = tonumber(state:GetAttribute("PortalLockLeft")) or 0
+			local secs = tostring(Config.Stages.ChargeSeconds)
+			local body = lockLeft > 0
+					and string.format("Follow the gold arrow. The portal wakes in %s; then stand in its ring for %s s.", UIKit.formatTime(lockLeft), secs)
+				or string.format("Follow the gold arrow, then stand in the portal's ring for %s s.", secs)
+			push("Portal", "Find the portal", body, "portal", T.HintSeconds + 1)
+		end
 	end
 	if not run.Boss and stagePhase == "Boss" then
 		run.Boss = true
-		push("Boss", "Dodge the red", "Red shapes on the floor show where the boss strikes. Step out!", "skull")
+		local boss = tostring(state:GetAttribute("BossName") or state:GetAttribute("StageBoss") or "")
+		local who = boss ~= "" and ("the " .. boss) or "the boss"
+		push("Boss", "Dodge the red", string.format("Red shapes on the floor show where %s strikes. Step out of them!", who), "skull")
 	end
 	-- the first fallen teammate
 	if not run.Revive then
@@ -672,10 +677,12 @@ function Tutorial.LevelUpHint(): string?
 		return nil
 	end
 	markSeen("LevelUp")
+	-- input-neutral: the line under the cards already says how to choose on this device
+	-- (InputPrompts.Choose), so this one only explains what the cards are
 	if welcome() then
-		return "Tap a card: try the NEW weapon!"
+		return "Choose one: try the NEW weapon!"
 	end
-	return "Tap a card: a new weapon, an upgrade or a passive"
+	return "Choose one: a new weapon, an upgrade or a passive"
 end
 
 -- "Skip tips": no more tutorial hints (co-op tips stay until seen or Show tips is off).
@@ -757,6 +764,13 @@ function Tutorial.Build(root: Frame, k: { [string]: any })
 	kit = k
 	build(root)
 	kit.OnRelayout(layout)
+	-- the player switched device (touch / keyboard and mouse / gamepad): reword the shown tip
+	InputPrompts.OnChanged(function()
+		if current and current.Id == "Move" and ui.Body then
+			ui.Body.Text = moveText()
+			layout()
+		end
+	end)
 	ClientSettings.OnChanged(function(key, value)
 		if key == "Tips" and value == false then
 			Tutorial.Clear()

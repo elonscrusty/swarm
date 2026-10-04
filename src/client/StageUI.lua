@@ -20,8 +20,9 @@
 	                 Endless runs (offer.Endless): NEXT STAGE only, no RETURN TO LOBBY.
 	  waves          SwarmState WaveSeq changes when the server announces a wave
 	                 (EnemySpawner, Config.Waves): a big centre banner "WAVE 3" / "From the
-	                 north" with the horn (Hud.Announce, WaveHorn) and a red glow on the
-	                 screen edge(s) it comes from (SwarmState WaveAngle + WaveSides)
+	                 north" with the horn (Hud.Announce, WaveHorn) and an amber glow on the
+	                 screen edge(s) it comes from (SwarmState WaveAngle + WaveSides; amber so
+	                 it never reads as the crimson hurt / low-health vignette)
 	  travel fade    remote StageTravel: the screen fades to slate with "STAGE N · Arena"
 	                 (the title slams in with a ring and sparks), then fades back once the
 	                 new stage is running
@@ -616,9 +617,11 @@ local function buildEdges(root: Frame)
 	ui.Edges = {}
 	for _, side in ipairs(EDGE_SIDES) do
 		local vertical = side == "Left" or side == "Right"
+		-- amber, not crimson: crimson at the screen edge means YOU are hurt / low on health
+		-- (Hud vignette); this edge only says where a new wave comes from
 		local f = new("Frame", {
 			Name = "WaveEdge" .. side,
-			BackgroundColor3 = P.crimson_400,
+			BackgroundColor3 = P.amber_500,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			AnchorPoint = Vector2.new(side == "Right" and 1 or 0, side == "Bottom" and 1 or 0),

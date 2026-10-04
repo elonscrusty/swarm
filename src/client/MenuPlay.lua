@@ -1,19 +1,27 @@
 --[[
 	MenuPlay.lua
-	The PLAY options sheet (opened from the home screen's mode selector under PLAY):
+	The run-setup step (the home screen's PLAY opens it; overhaul 01_Title "Choose your
+	mode next."):
 
-	  MODE        SOLO / DUO / TRIO (big; a tap picks the mode the home PLAY button uses)
-	  ARENA       the lobby's arena (opens the ARENAS screen, MenuArenas)
-	  DIFFICULTY  cycles through the unlocked tiers (remote SetDifficulty)
-	  CURSES      the run modifiers picked and their gold (opens CURSES, MenuCurses)
-	  ENDLESS     switch (remote SetEndless; the server's answer is the player attribute
-	              "Endless", Config.Endless)
-	  LAST RUN    the saved last run with RETRY (MenuLastRun), when there is one
-	  START       starts the picked mode (remote StartRun, the same validated start as
-	              the home PLAY button; the server decides: RunManager.startRun)
+	  left        SOLO / DUO / TRIO (big; the picked one lit), a line that says who starts
+	              and what the size means (a party plays its own size, a member waits for
+	              the leader), START
+	  right       (scrolls when it does not fit)
+	    HERO        the selected hero and equipped skin (opens CHARACTERS)
+	    WORLD       the lobby's arena and the next one still locked (opens ARENAS)
+	    DIFFICULTY  cycles through the unlocked tiers; locked tiers name what clears them
+	    CURSES      the run modifiers picked and their gold (opens CURSES, MenuCurses)
+	    ENDLESS     switch (remote SetEndless; the server's answer is the player attribute
+	                "Endless", Config.Endless): no portal win, its own leaderboard
+	    DAILY       today's scored try / practice and the reset time (opens DAILY, which
+	                holds the full rules)
+	    LAST RUN    the saved last run with RETRY (MenuLastRun), when there is one
+	  START       starts the picked mode (remote StartRun, the same validated start the
+	              server always used: RunManager.startRun). A party member's START is
+	              their READY toggle instead (the leader starts).
 
-	The picked mode lives here (MenuPlay.Mode) so the home PLAY button and its selector
-	show the same thing. It defaults to SOLO; joining a party picks the party's size.
+	The picked mode lives here (MenuPlay.Mode) so the home screen's line under PLAY shows
+	the same thing. It defaults to SOLO; joining a party picks the party's size.
 ]]
 
 local Players = game:GetService("Players")
@@ -31,6 +39,8 @@ local ArtImage = require(script.Parent.ArtImage)
 local MenuCurses = require(script.Parent.MenuCurses)
 local MenuParty = require(script.Parent.MenuParty)
 local MenuLastRun = require(script.Parent.MenuLastRun)
+local MenuDaily = require(script.Parent.MenuDaily)
+local CharacterData = require(Shared:WaitForChild("CharacterData"))
 
 local MenuPlay = {}
 
@@ -117,11 +127,11 @@ local function curseLine(list: { string }, empty: string): string
 	return CurseData.GoldText(CurseData.GoldMult(list)) .. " gold · " .. table.concat(names, ", ")
 end
 
--- The arena row: its name, and the next arena still locked (or the picked arena's hint).
+-- The world row: its name, and the next world still locked (or the picked one's hint).
 local function arenaText(profile: { [string]: any }?): (string, string)
 	local arenaId = Remotes.State():GetAttribute("SelectedArena") or "Forest"
 	local arena = (Config.Arenas :: any)[arenaId]
-	local title = "ARENA · " .. string.upper(arena and arena.DisplayName or tostring(arenaId))
+	local title = "WORLD · " .. string.upper(arena and arena.DisplayName or tostring(arenaId))
 	local best = profile and profile.Stats and (profile.Stats.BestStage or 0) or 0
 	local nextDef, nextNeed = nil, math.huge
 	for _, name in ipairs(Config.Arenas.Order) do
@@ -135,6 +145,21 @@ local function arenaText(profile: { [string]: any }?): (string, string)
 		return title, string.format("Unlock %s at stage %d", nextDef.DisplayName, nextNeed)
 	end
 	return title, (arena and arena.Hint) or "Face the swarm"
+end
+
+-- Who starts and what the picked size means (party rules: MenuParty / RunManager).
+function MenuPlay.RuleLine(): string
+	local party = MenuParty.Summary()
+	local def = (Config.Modes :: any)[mode]
+	local name = def and def.DisplayName or mode
+	if party.Count > 0 and not party.Leader then
+		return "Party member: your leader picks the mode, curses and Endless and starts the run. Tap READY."
+	elseif party.Count > 1 then
+		return string.format("You lead a party of %d: START begins a %s countdown for your party.", party.Count, name)
+	elseif mode == (Config.Modes.Order[1] or "Solo") then
+		return "Just you. START begins the run at once."
+	end
+	return string.format("START opens a %s countdown that players in this server can JOIN.", name)
 end
 
 function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
@@ -167,6 +192,16 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			Name = id,
 			LayoutOrder = i,
 			OnClick = function()
+				local party = MenuParty.Summary()
+				if party.Count > 0 and not party.Leader then
+					toast("Your party leader picks the mode.", P.gold_300)
+					return
+				end
+				local forced = party.Count > 1 and MenuParty.PartyMode() or nil
+				if forced and forced ~= id then
+					toast(string.format("A party of %d plays %s.", party.Count, string.upper(forced)), P.gold_300)
+					return
+				end
 				MenuPlay.SetMode(id)
 				UIAnim.Bump(ui.Modes[i].Face, 0.06)
 			end,
@@ -174,9 +209,23 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. id, { Size = UDim2.fromScale(1.5, 1.5) })
 		ui.Modes[i] = b
 	end
+	ui.Rule = UIKit.text(face, "Small", "", { Name = "Rule", TextWrapped = true, TextColor3 = P.ivory_200, TextYAlignment = Enum.TextYAlignment.Center, TextScaled = true }, 14)
+	UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(14), MinTextSize = 9 }, ui.Rule)
+
+	-- the options column scrolls when it does not fit (phones in landscape)
+	local opts = UIKit.new("ScrollingFrame", {
+		Name = "Options",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = P.gold_500,
+		CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+	}, face)
+	ui.Options = opts
 
 	local function row(name: string, title: string, sub: string, icon: string, art: string?, onClick: () -> ()): any
-		local b = UIKit.Button(face, {
+		local b = UIKit.Button(opts, {
 			Kind = "Secondary",
 			Title = title,
 			Subtitle = sub,
@@ -195,7 +244,10 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		end
 		return b
 	end
-	ui.Arena = row("Arena", "ARENA · FOREST", "Face the swarm", "castle", "Arenas", function()
+	ui.Hero = row("Hero", "HERO · KNIGHT", "Change in Characters", "helmet", "Characters", function()
+		ctx.ShowScreen("Characters")
+	end)
+	ui.Arena = row("Arena", "WORLD · FOREST", "Face the swarm", "castle", "Arenas", function()
 		ctx.ShowScreen("Arenas")
 	end)
 	ui.Difficulty = row("Difficulty", "DIFFICULTY · STANDARD", "Tap to change", "skull", nil, function()
@@ -222,18 +274,21 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	ui.Curses = row("Curses", "CURSES", "Harder runs, more gold", "curse", "Curses", function()
 		ctx.ShowScreen("Curses")
 	end)
-	local eHolder, eFace = UIKit.Surface(face, { Name = "EndlessRow", Radius = Theme.Radius.M, Transparency = 0.12, Edge = C.PanelEdge, EdgeTransparency = Theme.Alpha.Edge, Shadow = false })
+	local eHolder, eFace = UIKit.Surface(opts, { Name = "EndlessRow", Radius = Theme.Radius.M, Transparency = 0.12, Edge = C.PanelEdge, EdgeTransparency = Theme.Alpha.Edge, Shadow = false })
 	ui.EndlessRow = eHolder
 	ui.EndlessEdge = eFace:FindFirstChildOfClass("UIStroke")
 	UIKit.padding(eFace, 0, 12, 0, 12)
-	ui.EndlessToggle = UIKit.Toggle(eFace, "Endless", "cycle", nil, player:GetAttribute("Endless") == true, function(on)
+	ui.EndlessToggle = UIKit.Toggle(eFace, "Endless", "cycle", "No portal win: stages go on. Own leaderboard.", player:GetAttribute("Endless") == true, function(on)
 		endlessSentAt = os.clock()
 		Remotes.Get("SetEndless"):FireServer(on)
-	end, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.new(1, 0, 0, Theme.Size.TapMin) })
+	end, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.new(1, 0, 0, 56) })
 	if Config.Endless == nil or not Config.Endless.Enabled then
 		eHolder.Visible = false
 	end
-	ui.LastRun = MenuLastRun.Build(face, ctx)
+	ui.Daily = row("Daily", "DAILY CHALLENGE", "One scored try a day", "calendar", "Daily", function()
+		ctx.ShowScreen("Daily")
+	end)
+	ui.LastRun = MenuLastRun.Build(opts, ctx)
 	ui.Start = UIKit.Button(face, {
 		Kind = "Primary",
 		Glow = true,
@@ -245,6 +300,12 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		Align = "Center",
 		Name = "Start",
 		OnClick = function()
+			local party = MenuParty.Summary()
+			if party.Count > 0 and not party.Leader then
+				-- a member's START is READY (the leader's start waits for everyone)
+				MenuParty.SetReady(not party.MyReady)
+				return
+			end
 			if MenuPlay.Start(toast) then
 				-- a group countdown shows on the home screen; a solo run hides the lobby
 				ctx.Back()
@@ -254,16 +315,47 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	ArtImage.ButtonIcon(ui.Start.Content:FindFirstChild("IconHolder"), "icons/ui/ui_Play", { Size = UDim2.fromScale(1.6, 1.6) })
 
 	local function showMode()
+		local party = MenuParty.Summary()
+		local member = party.Count > 0 and not party.Leader
+		local forced = party.Count > 1 and MenuParty.PartyMode() or nil
 		for i, id in ipairs(Config.Modes.Order) do
 			local on = id == mode
 			ui.Modes[i].SetSelected(on)
 			ui.Modes[i].SetKind(on and "Outline" or "Secondary")
+			-- a member, or a party of fixed size, cannot pick another size
+			ui.Modes[i].Instance:SetAttribute("Locked", member or (forced ~= nil and forced ~= id))
+			ui.Modes[i].Face.BackgroundTransparency = (member or (forced ~= nil and forced ~= id)) and 0.5 or 0
 		end
 		local def = (Config.Modes :: any)[mode]
-		ui.Start.SetText("START " .. string.upper(def and def.DisplayName or mode))
+		local startText = "START " .. string.upper(def and def.DisplayName or mode)
+		if member then
+			startText = party.MyReady and "UNREADY" or "READY"
+		end
+		ui.Start.SetText(startText)
+		ui.Rule.Text = MenuPlay.RuleLine()
 	end
 	MenuPlay.OnModeChanged(showMode)
 	showMode()
+
+	local optionList = { ui.Hero.Instance, ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.EndlessRow, ui.Daily.Instance }
+	local function layoutOptions(colW: number, rowH: number, endlessH: number, lastH: number): number
+		local G = Theme.Layout.Gutter
+		local y = 0
+		for _, b in ipairs(optionList) do
+			if b.Visible or b ~= ui.EndlessRow then
+				local h = b == ui.EndlessRow and endlessH or rowH
+				place(b, 0, y, colW - 6, h)
+				y += h + G
+			end
+		end
+		if ui.LastRun.Has() then
+			place(ui.LastRun.Frame, 0, y, colW - 6, lastH)
+			ui.LastRun.SetWidth(colW - 6)
+			y += lastH + G
+		end
+		opts.CanvasSize = UDim2.fromOffset(0, math.max(0, y - G))
+		return math.max(0, y - G)
+	end
 
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
 		local W, H = v.X, v.Y
@@ -274,63 +366,48 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		place(ui.Header.Frame, M, headY, math.min(520, W - 2 * M), 56)
 		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
 		local hasLast = ui.LastRun.Has()
-		local endless = ui.EndlessRow.Visible
 		local pad = 16
+		local endlessH = 64
 		if portrait then
 			local w = math.min(W - 2 * M, 560)
 			local inner = w - 2 * pad
-			local modeH, rowH, lastH, startH = 76, 60, 76, 76
-			local rows = 3 + (endless and 1 or 0)
-			local h = pad + 3 * modeH + 2 * G + 18 + rows * rowH + (rows - 1) * G + (hasLast and (G + lastH) or 0) + 18 + startH + pad
-			h = math.min(h, H - top - M)
+			local modeH, rowH, lastH, startH, ruleH = 64, 56, 76, 68, 40
+			local h = H - top - M
 			place(ui.Panel, (W - w) / 2, top, w, h)
 			local y = pad
 			for i = 1, #ui.Modes do
 				place(ui.Modes[i].Instance, pad, y, inner, modeH)
 				y += modeH + G
 			end
-			y += 18 - G
-			for _, b in ipairs({ ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.EndlessRow }) do
-				if b.Visible or b ~= ui.EndlessRow then
-					place(b, pad, y, inner, rowH)
-					y += rowH + G
-				end
-			end
-			if hasLast then
-				place(ui.LastRun.Frame, pad, y, inner, lastH)
-				ui.LastRun.SetWidth(inner)
-			end
+			place(ui.Rule, pad, y, inner, ruleH)
+			y += ruleH + G
 			place(ui.Start.Instance, pad, h - pad - startH, inner, startH)
+			local optsH = h - pad - startH - G - y
+			place(opts, pad, y, inner + 6, math.max(0, optsH))
+			layoutOptions(inner + 6, rowH, endlessH, hasLast and lastH or 0)
 		else
-			-- two columns: the modes and START on the left, the options on the right
-			local w = math.min(W - 2 * M, 980)
-			local h = math.min(H - top - M, 470)
+			-- two columns: the modes, the rule line and START on the left, the options right
+			local w = math.min(W - 2 * M, 1000)
+			local h = math.min(H - top - M, 520)
 			place(ui.Panel, (W - w) / 2, top, w, h)
 			local inner = h - 2 * pad
 			local colW = math.floor((w - 2 * pad - 2 * G) / 2)
-			local startH = math.clamp(math.floor(inner * 0.24), 56, 84)
-			local modeH = math.floor((inner - startH - 3 * G) / 3)
+			local startH = math.clamp(math.floor(inner * 0.2), 52, 80)
+			local ruleH = math.clamp(math.floor(inner * 0.13), 32, 52)
+			local modeH = math.floor((inner - startH - ruleH - 3 * G) / 3)
 			local y = pad
 			for i = 1, #ui.Modes do
 				place(ui.Modes[i].Instance, pad, y, colW, modeH)
 				y += modeH + G
 			end
+			place(ui.Rule, pad, y, colW, ruleH)
 			place(ui.Start.Instance, pad, h - pad - startH, colW, startH)
 			local x = pad + colW + 2 * G
-			local rows = 3 + (endless and 1 or 0)
+			local rows = 5
 			local lastH = hasLast and 76 or 0
-			local rowH = math.clamp(math.floor((inner - lastH - (hasLast and G or 0) - (rows - 1) * G) / rows), Theme.Size.TapMin, 72)
-			y = pad
-			for _, b in ipairs({ ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.EndlessRow }) do
-				if b.Visible or b ~= ui.EndlessRow then
-					place(b, x, y, colW, rowH)
-					y += rowH + G
-				end
-			end
-			if hasLast then
-				place(ui.LastRun.Frame, x, h - pad - lastH, colW, lastH)
-				ui.LastRun.SetWidth(colW)
-			end
+			local rowH = math.clamp(math.floor((inner - lastH - (hasLast and G or 0) - endlessH - rows * G) / rows), Theme.Size.TapMin, 66)
+			place(opts, x, pad, colW + 6, inner)
+			layoutOptions(colW + 6, rowH, endlessH, lastH)
 		end
 		ui.LastRun.Frame.Visible = hasLast
 	end
@@ -342,19 +419,35 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local profile = ctx.Profile()
 		local had = ui.LastRun.Has()
 		ui.LastRun.Refresh(profile)
+		-- the hero and skin PLAY will use (CHARACTERS changes them)
+		local heroId = profile and profile.SelectedCharacter or CharacterData.Default
+		local hero = CharacterData.Characters[heroId] or CharacterData.Characters[CharacterData.Default]
+		local skinId = profile and type(profile.Skins) == "table" and profile.Skins[hero.Id] or "Default"
+		local skin = skinId ~= "Default" and CharacterData.Skins[skinId] or nil
+		ui.Hero.SetText("HERO · " .. string.upper(hero.Name), (skin and (skin.Name .. " · ") or "") .. "Change in Characters")
 		local title, sub = arenaText(profile)
 		ui.Arena.SetText(title, sub)
 		local tier = DifficultyData.Tiers[DifficultyData.Selected(profile)]
+		local nextLocked: string? = nil
 		local unlocked = 0
 		for _, id in ipairs(DifficultyData.Order) do
 			if DifficultyData.IsUnlocked(profile, id) then
 				unlocked += 1
+			elseif not nextLocked then
+				local t = DifficultyData.Tiers[id]
+				local needs = DifficultyData.Tiers[t.Requires]
+				nextLocked = string.format("%s locked: clear %s first", t.Name, needs and needs.Name or "Standard")
 			end
 		end
-		ui.Difficulty.SetText("DIFFICULTY · " .. string.upper(tier and tier.Name or "Standard"), unlocked > 1 and "Tap to change" or "More unlock as you clear stages")
+		ui.Difficulty.SetText("DIFFICULTY · " .. string.upper(tier and tier.Name or "Standard"), unlocked > 1 and "Tap to change" or (nextLocked or "Tap to change"))
 		local curses = MenuCurses.Current()
 		ui.Curses.SetText(#curses > 0 and string.format("CURSES · %d", #curses) or "CURSES", curseLine(curses, "Harder runs, more gold"))
 		ui.Curses.SetSelected(#curses > 0)
+		local used, score = MenuDaily.Status(profile)
+		local dailySub = used and ("Scored try used" .. (score > 0 and (" · " .. CurseData.ScoreText(score)) or "") .. " · practice only · resets in " .. MenuDaily.TimeLeft())
+			or ("One scored try · used when it starts · resets in " .. MenuDaily.TimeLeft())
+		ui.Daily.SetText(nil, dailySub)
+		showMode()
 		if had ~= ui.LastRun.Has() then
 			MenuPlay._layout()
 		end
@@ -388,7 +481,9 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 				ui.EndlessEdge.Transparency = lit and 0.1 or Theme.Alpha.Edge
 			end
 			if screen.Visible then
+				local party = MenuParty.Summary()
 				local key = tostring(Remotes.State():GetAttribute("SelectedArena")) .. "|" .. table.concat(MenuCurses.Current(), ",")
+					.. "|" .. party.Count .. "|" .. tostring(party.Leader) .. "|" .. tostring(party.MyReady) .. "|" .. MenuDaily.TimeLeft()
 				if key ~= ui.Key then
 					ui.Key = key
 					refresh()

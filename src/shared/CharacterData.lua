@@ -62,7 +62,7 @@ CharacterData.Characters = {
 		BonusText = "-10% damage taken",
 		Trait = { Name = "Iron Skin", Text = "Takes 10% less damage from every hit." },
 		Strengths = "Hard to kill; wide sword cuts clear the crowd in front and behind.",
-		Tradeoff = "Short reach: the Whip only hits enemies within about 7 studs.",
+		Tradeoff = "Short reach: the Whip only hits enemies within about 7 m.",
 		Colors = {
 			Metal = Palette.steel_400,
 			MetalDark = Palette.steel_600,

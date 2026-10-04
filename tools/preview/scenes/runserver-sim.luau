@@ -357,6 +357,8 @@ else
 	as(me, "TravelHome", "Stay")
 	preview.advance(0.5)
 	check("flow: STAY on the banner clears it", me:GetAttribute("TravelHomeIn") == nil and #T.calls == n)
+	RS.OnBackInLobby(me, "portal") -- results over the lobby again: the 20 s countdown
+	preview.advance(0.5)
 
 	-- Dee waits again (as if back from her own run) → the timer sends both together
 	preview.server("RunServers").OnBackInLobby(dee, "results")

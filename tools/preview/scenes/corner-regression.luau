@@ -376,6 +376,14 @@ local function positions(arena)
 	-- wall right behind it (the wall / obstacle join), enemies must come round the obstacle
 	local pockets = 0
 	if args.obstacles == "on" then
+		for _, d in ipairs(arena.ObstacleFolder:GetDescendants()) do
+			if d:IsA("BasePart") then
+				local top = d.Position.Y + (d.Shape == Enum.PartType.Cylinder and d.Size.X or d.Size.Y) / 2 - c.Y
+				if top < 3 then
+					preview.log(string.format("low collider %s at (%.0f, %.0f) top %.1f", d.Name, d.Position.X, d.Position.Z, top))
+				end
+			end
+		end
 		for _, ob in ipairs(arena.Obstacles) do
 			local r = (ob.Kind == "Box") and math.max(ob.MaxX - ob.MinX, ob.MaxZ - ob.MinZ) / 2 or ob.Radius
 			local gap = h - math.max(math.abs(ob.Pos.X - c.X), math.abs(ob.Pos.Z - c.Z)) - r
@@ -390,10 +398,17 @@ local function positions(arena)
 		return h - math.max(math.abs(ob.Pos.X - c.X), math.abs(ob.Pos.Z - c.Z)) - r
 	end
 	table.sort(near, function(a, b)
-		return wallGap(a) < wallGap(b)
+		local ga, gb = wallGap(a), wallGap(b)
+		if math.abs(ga - gb) > 1e-3 then
+			return ga < gb
+		end
+		if a.Pos.X ~= b.Pos.X then
+			return a.Pos.X < b.Pos.X
+		end
+		return a.Pos.Z < b.Pos.Z
 	end)
 	for _, ob in ipairs(near) do
-		if pockets >= 3 then
+		if pockets >= 4 then
 			break
 		end
 		local px, pz = ob.Pos.X - c.X, ob.Pos.Z - c.Z
@@ -413,6 +428,11 @@ local function positions(arena)
 			table.insert(list, { name, p, dir })
 			pockets += 1
 		end
+	end
+	if args.at then
+		-- one extra spot: --set at=x,z,dirX,dirZ (debugging a reported pocket)
+		local v = string.split(args.at, ",")
+		table.insert(list, { "at", Vector3.new(tonumber(v[1]), c.Y, tonumber(v[2])), Vector3.new(tonumber(v[3]) or 0, 0, tonumber(v[4]) or -1).Unit })
 	end
 	for _, item in ipairs(list) do
 		item[2] = legal(item[2])

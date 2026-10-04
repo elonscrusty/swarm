@@ -35,17 +35,20 @@ def wing_outline(pts, s, k=1.0):
                                       "eye-spots and dark rims, a gold coronet and a crown of five feathery antennae, "
                                       "glowing heart (Pulse). Wings FlutterL/R, antennae Wiggle, legs SwingA/B.")
 def moth_matriarch(m):
-    lav = mix(mix("moth_300", "crimson_300", 0.18), "slate_300", 0.1)
+    # overhaul 2026-10: closer to art/bosses/MothMatriarch.png and readable on snow: violet
+    # fore-wings and deep plum under-wings with a dark plum rim along the outer edge, cream fur
+    # thorax, a dark navy abdomen under gold bands (the lavender wings and gold eye-spots stay)
+    lav = (0.6, 0.5, 0.78)
     m.extra["palette"] = {"Base": mix("ivory_200", "moth_300", 0.35), "Light": lav,
-                          "Accent": mix("slate_500", "crimson_600", 0.2), "Gold": P("gold_400"),
+                          "Accent": (0.34, 0.25, 0.5), "Gold": P("gold_400"), "Belly": (0.2, 0.2, 0.32),
                           "Dark": P("chitin_800"), "Eye": P("amber_500"), "Glow": P("moth_glow"),
-                          "White": P("ivory_100"), "Metal": P("slate_700")}
+                          "White": P("ivory_100"), "Metal": (0.17, 0.12, 0.26)}
     zc = 4.2  # body height
     body = m.piece("Body", "Base", shadow=True)
     ellipsoid(body, (0, -0.6, zc), (1.3, 1.35, 1.25), seg=10, rings=7, lumps=0.08, seed=5)  # thorax
     ellipsoid(body, (0, -1.85, zc + 0.1), (1.25, 0.6, 1.05), seg=10, rings=5, lumps=0.14, seed=9)  # fur ruff
     ellipsoid(body, (0, -2.45, zc + 0.05), (0.72, 0.6, 0.66), seg=8, rings=5)  # head
-    abd = m.piece("Abdomen", "Base", anim="Tail", pivot=(0, 0.6, zc))
+    abd = m.piece("Abdomen", "Belly", anim="Tail", pivot=(0, 0.6, zc))
     gold_b = m.piece("AbdomenBands", "Gold", "Metal", anim="Tail", pivot=(0, 0.6, zc))
     pts = [Vector((0, 0.5, zc)), Vector((0, 1.6, zc - 0.25)), Vector((0, 2.7, zc - 0.6)), Vector((0, 3.6, zc - 1.05)),
            Vector((0, 4.3, zc - 1.5))]
@@ -96,10 +99,10 @@ def moth_matriarch(m):
     for s, side, anim in ((1, "L", "FlutterL"), (-1, "R", "FlutterR")):
         piv = (s * 0.7, -0.6, zr)
         rot = (0, -s * dih, 0)
-        under = m.piece("UnderWing" + side, "Accent", anim=anim, pivot=piv, transparency=0.18)
+        under = m.piece("UnderWing" + side, "Accent", anim=anim, pivot=piv, transparency=0.08)
         plate(under, wing_outline(hind, s), 0.1, loc=(0, 0, zr - 0.08), rot=rot)
         plate(under, wing_outline([(x * 0.9, y * 0.9 - 0.15) for x, y in fore], s), 0.1, loc=(0, 0, zr - 0.1), rot=rot)
-        over = m.piece("Wing" + side, "Light", anim=anim, pivot=piv, transparency=0.32)
+        over = m.piece("Wing" + side, "Light", anim=anim, pivot=piv, transparency=0.12)
         plate(over, wing_outline(fore, s), 0.08, loc=(0, 0, zr + 0.04), rot=rot)
         spots = m.piece("EyeSpots" + side, "Gold", "Metal", anim=anim, pivot=piv)
         annulus(spots, (s * 4.3, -1.6), 0.95, 0.55, 0.12, seg=10, loc=(0, 0, zr + 0.08), rot=rot)
@@ -111,6 +114,18 @@ def moth_matriarch(m):
         plate(marks, wing_outline(tip, s), 0.12, loc=(0, 0, zr + 0.06), rot=rot)
         edge = [(2.6, 6.2), (2.1, 6.4), (2.0, 5.5), (2.7, 5.4)]
         plate(marks, wing_outline(edge, s), 0.12, loc=(0, 0, zr - 0.02), rot=rot)
+        # dark rim along the fore-wing's outer edge: a strip between the outline and a copy
+        # pulled 0.42 studs toward the wing centre (wing-edge contrast on snow and grass)
+        cx = sum(x for x, _ in fore) / len(fore)
+        cy = sum(y for _, y in fore) / len(fore)
+        for i in range(1, 7):
+            a, b = fore[i], fore[i + 1]
+            def inner(q):
+                dx, dy = cx - q[0], cy - q[1]
+                d = math.hypot(dx, dy) or 1.0
+                return (q[0] + dx / d * 0.42, q[1] + dy / d * 0.42)
+            quad = [a, b, inner(b), inner(a)]
+            plate(marks, wing_outline(quad, s), 0.1, loc=(0, 0, zr + 0.09), rot=rot)
 
 
 # ------------------------------------------------------------------ RHINO WARLORD

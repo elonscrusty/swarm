@@ -10,8 +10,10 @@
 --                               PLAY sheet, taps RETRY and prints the StartRun the server received
 --   --set screen=Play|More|...   open that lobby screen (LobbyScreen.Show) before the shot
 --   --set phase=countdown|busy  a DUO countdown (the queue panel replaces PLAY) / a run in progress
---   --set play=tap               taps the home PLAY button and prints the StartRun it sent
+--   --set play=tap               taps the home PLAY button (opens the run-setup step), then its
+--                               START, and prints the StartRun it sent
 --   --set hero=<Id>              that hero selected / on the dais (owned, some mastery XP)
+--   --set skin=<SkinId>          the selected hero wears that skin (owned), e.g. GoldTrim
 --   --set dots=on                notice dots: gold for a hero + upgrades, the daily not played,
 --                               then a second profile with a new achievement and account level;
 --                               --set dots=seen also opens HEROES, then MORE's ACHIEVEMENTS row,
@@ -27,6 +29,12 @@ if hero then
 	profile.OwnedCharacters[hero] = true
 	profile.Heroes[hero] = profile.Heroes[hero] or { XP = 900, Runs = 14 }
 	profile.Skins[hero] = "Default"
+end
+if preview.args.skin then
+	local id = profile.SelectedCharacter or "Knight"
+	profile.Skins[id] = preview.args.skin
+	profile.OwnedSkins = profile.OwnedSkins or {}
+	profile.OwnedSkins[preview.args.skin] = true
 end
 if preview.args.lastrun then
 	local kind = preview.args.lastrun
@@ -65,9 +73,15 @@ if preview.args.play == "tap" then
 	local play = preview.findGui(function(g) return g:IsA("GuiButton") and g.Name == "Play" and preview.isShown(g) end)
 	assert(play[1], "the home screen must show the PLAY button")
 	preview.click(play[1])
+	C.settle(0.5)
+	assert(got == nil, "PLAY opens the run-setup step; it must not start a run by itself")
+	assert(preview.client("LobbyScreen").Current() == "Play", "PLAY must open the run-setup step")
+	local start = preview.findGui(function(g) return g:IsA("GuiButton") and g.Name == "Start" and preview.isShown(g) end)
+	assert(start[1], "the run-setup step must show START")
+	preview.click(start[1])
 	C.settle(0.3)
-	assert(got == "Solo", "PLAY must fire StartRun(Solo) by default, got " .. tostring(got))
-	preview.log("PASS PLAY fired StartRun(" .. tostring(got) .. ")")
+	assert(got == "Solo", "START must fire StartRun(Solo) by default, got " .. tostring(got))
+	preview.log("PASS PLAY opened the run setup; START fired StartRun(" .. tostring(got) .. ")")
 end
 if preview.args.retry == "on" or preview.args.screen then
 	C.settle(1)

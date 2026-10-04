@@ -508,12 +508,18 @@ def bomb_tick(m):
 
 # ------------------------------------------------------------------ SCORPION QUEEN (Boss id)
 
-@register("ScorpionQueen", "Enemies", "Boss. Crimson scorpion queen: antique-gold plates and crown, huge claws, amber stinger.")
+@register("ScorpionQueen", "Enemies", "Boss. Black-and-amber armoured scorpion queen (matches her portrait): "
+                                      "charcoal shell under amber-orange plates, gold crown, huge amber-plated claws, "
+                                      "green venom.")
 def scorpion_queen(m):
-    m.extra["palette"] = {"Base": P("crimson_500"), "Accent": P("crimson_800"), "Gold": P("gold_500"),
-                          "Dark": P("chitin_900"), "Eye": P("amber_500"), "Light": P("amber_500"), "Glow": P("amber_300")}
+    # overhaul 2026-10: palette aligned with art/bosses/ScorpionQueen.png (black chitin, amber-orange
+    # armour, gold crown, green venom); legs and claws thickened so they read at gameplay zoom
+    m.extra["palette"] = {"Base": mix("chitin_800", "crimson_800", 0.28), "Accent": mix("chitin_800", "slate_600", 0.35),
+                          "Gold": (0.86, 0.5, 0.13), "Crown": P("gold_400"), "Dark": P("chitin_900"),
+                          "Eye": (0.55, 0.95, 0.3), "Light": (0.9, 0.56, 0.16), "Glow": (0.6, 1.0, 0.32)}
     shell = m.piece("Carapace", "Base", shadow=True)
     gold = m.piece("Plates", "Gold", "Metal")
+    crown_p = m.piece("Crown", "Crown", "Metal")
     hc, hr = (0, -2.55, 2.3), (2.5, 1.75, 1.35)
     ellipsoid(shell, hc, hr, seg=12, rings=8, axis="Y", keep=[(hc, (0, 0, 1))])  # head shield
     for i in range(6):  # overlapping back plates: crimson with a broad gold rear rim and a keel spike
@@ -526,12 +532,12 @@ def scorpion_queen(m):
         top = Vector((0, y + 0.1, c[2] + r[2] - 0.08))
         tube(gold, [top, top + Vector((0, 0.32, 0.42))], [0.2, 0.0], seg=4)
     # crown: a gold band across the head shield behind the eyes, five spikes
-    ellipsoid(gold, hc, (hr[0] + 0.05, hr[1] + 0.05, hr[2] + 0.05), seg=12, rings=8, axis="Y",
+    ellipsoid(crown_p, hc, (hr[0] + 0.05, hr[1] + 0.05, hr[2] + 0.05), seg=12, rings=8, axis="Y",
               keep=[(hc, (0, 0, 1)), ((0, -3.15, 0), (0, 1, 0)), ((0, -2.65, 0), (0, -1, 0))])
     for x, h, lean in ((0, 1.75, 0.0), (0.42, 1.35, 0.3), (0.78, 1.0, 0.6)):
         for s in ((1,) if x == 0 else (-1, 1)):
             base = on_ellipsoid(hc, hr, (s * x, -0.32, 1))[0] - Vector((0, 0, 0.15))
-            tube(gold, [base, base + Vector((s * lean * 0.45, 0.12, h * 0.55)), base + Vector((s * lean, 0.22, h))],
+            tube(crown_p, [base, base + Vector((s * lean * 0.45, 0.12, h * 0.55)), base + Vector((s * lean, 0.22, h))],
                  [0.3, 0.19, 0.0], seg=4)
     body = m.piece("Body", "Dark")
     ellipsoid(body, (0, 0.1, 1.95), (2.3, 4.3, 0.95), seg=10, rings=4, keep=[((0, 0, 2.3), (0, 0, -1))])
@@ -546,13 +552,13 @@ def scorpion_queen(m):
     for s, side in ((1, "L"), (-1, "R")):
         shoulder = (s * 1.9, -3.3, 2.35)
         claw = m.piece("Claw" + side, "Base", anim="Jaw", pivot=shoulder)
-        tube(claw, [shoulder, (s * 3.55, -4.0, 2.95), (s * 4.05, -5.5, 2.85)], [0.62, 0.55, 0.5], seg=6)
-        hand_c, hand_r = (s * 3.85, -6.55, 2.75), (1.08, 1.48, 0.9)
+        tube(claw, [shoulder, (s * 3.55, -4.0, 2.95), (s * 4.05, -5.5, 2.85)], [0.72, 0.66, 0.6], seg=6)
+        hand_c, hand_r = (s * 3.85, -6.55, 2.75), (1.22, 1.6, 0.98)
         ellipsoid(claw, hand_c, hand_r, seg=10, rings=6, axis="Y")
         plate_ = m.piece("ClawPlate" + side, "Gold", "Metal", anim="Jaw", pivot=shoulder)
+        # amber armour over the whole upper claw (the portrait's orange pincers), dark rims below
         ellipsoid(plate_, hand_c, (hand_r[0] + 0.05, hand_r[1] + 0.05, hand_r[2] + 0.05), seg=10, rings=6, axis="Y",
-                  keep=[((0, 0, hand_c[2] + 0.42), (0, 0, 1)), ((hand_c[0] - 0.42, 0, 0), (1, 0, 0)),
-                        ((hand_c[0] + 0.42, 0, 0), (-1, 0, 0))])
+                  keep=[((0, 0, hand_c[2] + 0.12), (0, 0, 1))])
         tips = m.piece("ClawTips" + side, "Dark", anim="Jaw", pivot=shoulder)
         tube(tips, [(s * 4.3, -7.6, 2.75), (s * 4.3, -8.5, 2.72), (s * 3.8, -9.2, 2.68)], [0.5, 0.36, 0.0], seg=5)
         tube(tips, [(s * 3.35, -7.65, 2.75), (s * 3.0, -8.45, 2.72), (s * 3.32, -9.02, 2.68)], [0.42, 0.3, 0.0], seg=5)
@@ -563,7 +569,7 @@ def scorpion_queen(m):
             hip = (s * 2.0, y, 2.05)
             leg = m.piece(f"Leg{side}{i + 1}", "Accent", anim=anim, pivot=hip)
             tube(leg, [hip, (s * 4.0, y + dk * 0.55, 3.75), (s * 5.85, y + dk, 1.2), (s * 6.55, y + df, 0.0)],
-                 [0.44, 0.38, 0.24, 0.0], seg=5)
+                 [0.5, 0.46, 0.32, 0.05], seg=5)
     tail_pts = [(0, 3.15, 2.6), (0, 4.5, 3.4), (0, 5.4, 5.05), (0, 5.6, 7.0), (0, 5.1, 8.85), (0, 3.95, 10.25), (0, 2.45, 10.95)]
     tail_r = [1.0, 0.92, 0.84, 0.76, 0.7, 0.64, 0.6]
     pivot = tail_pts[0]

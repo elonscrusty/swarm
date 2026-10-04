@@ -416,12 +416,15 @@ local function destroyRing(ring: Ring?)
 	end
 end
 
--- Expanding rings on the floor (shockwaves, level-up, heal, revive).
-type Wave = { Ring: Ring, X: number, Z: number, R0: number, R1: number, W: number, Color: Color3, A0: number, Start: number, Dur: number, Spin: number }
+-- Expanding rings on the floor (shockwaves, level-up, heal, revive). dash < 1 = the friendly
+-- area look (docs/overhaul/ART_VOCABULARY.md): the hero's own areas (heal, snare, aura) are
+-- segmented rings rippling outward and turning slowly; solid rings are shockwaves and the
+-- player marker; enemy warnings (Telegraphs.lua) are filled crimson / amber shapes.
+type Wave = { Ring: Ring, X: number, Z: number, R0: number, R1: number, W: number, Color: Color3, A0: number, Start: number, Dur: number, Spin: number, Dash: number, Turn: number }
 local waves: { Wave } = {}
 local ringPool: { [number]: { Ring } } = {}
 
-local function wave(x: number, z: number, r0: number, r1: number, width: number, color: Color3, a0: number, dur: number, critical: boolean?): boolean
+local function wave(x: number, z: number, r0: number, r1: number, width: number, color: Color3, a0: number, dur: number, critical: boolean?, dash: number?): boolean
 	local n = r1 > 40 and 40 or (r1 > 14 and 28 or 18)
 	if not room(n, critical) then
 		return false
@@ -429,7 +432,8 @@ local function wave(x: number, z: number, r0: number, r1: number, width: number,
 	local list = ringPool[n]
 	local ring = list and table.remove(list) or newRing(n)
 	fxParts += n
-	table.insert(waves, { Ring = ring, X = x, Z = z, R0 = r0, R1 = r1, W = width, Color = color, A0 = a0, Start = os.clock(), Dur = dur, Spin = math.random() * TAU })
+	local d = dash or 1
+	table.insert(waves, { Ring = ring, X = x, Z = z, R0 = r0, R1 = r1, W = width, Color = color, A0 = a0, Start = os.clock(), Dur = dur, Spin = math.random() * TAU, Dash = d, Turn = d < 1 and 0.6 or 0 })
 	return true
 end
 
@@ -451,8 +455,8 @@ local function stepWaves(now: number)
 		else
 			local r = w.R0 + (w.R1 - w.R0) * ease(EASE_OUT3, u)
 			-- crisp while it travels, gone by the end
-			styleRing(w.Ring, r, w.W * (1 - 0.45 * u), w.Color, w.A0 + (1 - w.A0) * u * u)
-			placeRing(w.Ring, w.X, FLOOR_Y + 0.09, w.Z, w.Spin)
+			styleRing(w.Ring, r, w.W * (1 - 0.45 * u), w.Color, w.A0 + (1 - w.A0) * u * u, w.Dash)
+			placeRing(w.Ring, w.X, FLOOR_Y + 0.09, w.Z, w.Spin + w.Turn * u)
 		end
 	end
 end
@@ -849,6 +853,7 @@ local function renderProjectiles(dt: number, now: number)
 		e.Drawn = pos
 		local cf = CFrame.new(pos) * projectileRotation(e, now - e.Born)
 		local aim: CFrame? = nil
+		local planted = e.Def.Style == "Totem"
 		if e.Def.Style == "Turret" then
 			-- the head (pieces animated "Spin") turns toward the synced aim, the base stays put
 			local cur = e.Aim or e.Yaw
@@ -863,6 +868,9 @@ local function renderProjectiles(dt: number, now: number)
 			if aim and piece.Anim == "Spin" then
 				local pv = piece.Pivot or CFrame.identity
 				projCFrames[n] = cf * piece.Offset * pv * aim * pv:Inverse()
+			elseif planted then
+				-- planted models animate with their own age (Vine Snare roots clench on its ticks)
+				projCFrames[n] = ModelLibrary.PieceCFrame(cf, piece, now - e.Born, 0, 1)
 			else
 				projCFrames[n] = ModelLibrary.PieceCFrame(cf, piece, spinClock, e.Phase, 1)
 			end
@@ -901,7 +909,10 @@ projectileImpact = function(e: Entry)
 		return
 	end
 	local def = e.Def
-	if def.Shatter then
+	if def.Name == "Snare" or def.Name == "Strangleroot" then
+		impactBudget -= 1
+		K.snareRelease(e.Drawn, def.Name == "Strangleroot")
+	elseif def.Shatter then
 		impactBudget -= 1
 		shatter(e.Drawn, def.Color)
 	elseif def.Impact and room(1) then
@@ -1489,6 +1500,8 @@ local coins: { Coin } = {}
 K.MAX_COINS = 36
 local COIN_POP, COIN_BOUNCE, COIN_FLY = 0.38, 0.16, 0.34 -- seconds per leg
 local COIN_SCALE, PILE_SCALE = 2.1, 2.1 -- ~2 studs across: readable from the run camera
+K.COIN_END_RING = 2.9 -- studs from the hero's centre where an arriving coin is absorbed
+K.coinSparkAt = 0
 
 local function newCoin(pile: boolean): Coin
 	local name = pile and "GoldPile" or "GoldCoin"
@@ -1577,9 +1590,14 @@ local function renderCoins(now: number)
 			local u = (t - COIN_POP - COIN_BOUNCE) / COIN_FLY
 			local root = characterRoot(c.UserId)
 			if root and root.Parent then
-				-- ease in: it lifts off slowly, then snaps into the player
+				-- ease in: it lifts off slowly, then snaps into the player's marker ring on
+				-- the side it came from (never onto the hero's body: a dozen coins there
+				-- would hide the hero from the overhead camera)
 				local k = u * u
-				local to = root.Position + Vector3.new(0, 0.5, 0)
+				local rp = root.Position
+				local side = Vector3.new(c.Land.X - rp.X, 0, c.Land.Z - rp.Z)
+				side = side.Magnitude > 0.1 and side.Unit or Vector3.new(1, 0, 0)
+				local to = Vector3.new(rp.X, FLOOR_Y + 0.9, rp.Z) + side * K.COIN_END_RING
 				pos = c.Land:Lerp(to, k) + Vector3.new(0, math.sin(u * math.pi) * 1.5, 0)
 			else
 				pos = c.Land
@@ -1587,7 +1605,8 @@ local function renderCoins(now: number)
 			done = u >= 1
 		end
 		if done then
-			if room(2) then
+			if room(2) and now - K.coinSparkAt > 0.08 then
+				K.coinSparkAt = now -- one small sparkle per burst arriving, not one per coin
 				sparkle(pos, FX.Gold, 2, 0.4, 1.2, 0.3)
 			end
 			freeCoin(c)
@@ -1942,12 +1961,26 @@ local function stepFirePatches(now: number)
 	end
 end
 
--- Healing Totem pulse: a soft green ring out to the totem's reach (brighter when it healed).
+--[[
+	Healing Totem pulse, one controlled beat per server pulse (friendly-area look: a dashed
+	ring rippling out to the totem's reach and turning a little, never a filled disc). A pulse
+	that healed someone adds a thin dark-moss inner edge (keeps it readable on snow and ice,
+	where the pale green alone washes out) and a small flare off the life-core; a damage-only
+	pulse is a single faint ring. Lifebloom: warmer, gold-green.
+]]
+K.TOTEM_CORE_Y = 3.1 -- the life-core's height over the floor (Shot_Totem x 1.5)
 local function totemPulseFx(x: number, z: number, radius: number, evo: boolean, healed: boolean)
-	local color = evo and FX.Heal:Lerp(FX.Gold, 0.35) or FX.Heal
-	wave(x, z, 1.2, radius, healed and 0.32 or 0.22, color, healed and 0.25 or 0.45, 0.55)
+	local color = evo and FX.Heal:Lerp(FX.Gold, 0.35) or FX.Heal:Lerp(P.moss_300, 0.25)
+	wave(x, z, 1.2, radius, healed and 0.34 or 0.24, color, healed and 0.25 or 0.5, 0.7, false, 0.55)
 	if healed then
-		sparkle(Vector3.new(x, FLOOR_Y + 4.2, z), color, 3, 0.6, 1.8, 0.5)
+		if not ClientSettings.Reduced() then
+			wave(x, z, 1, radius - 0.3, 0.12, evo and P.gold_600 or P.moss_700, 0.35, 0.7, false, 0.55)
+		end
+		local core = Vector3.new(x, FLOOR_Y + K.TOTEM_CORE_Y, z)
+		if room(1) then
+			fx("Ball", color, NEON, CFrame.new(core), nil, Vector3.one * 1.1, Vector3.one * 2, 0.45, 1, 0.3, EASE_OUT)
+		end
+		sparkle(core, color, 2, 0.5, 1.4, 0.45)
 	end
 end
 
@@ -2055,17 +2088,36 @@ function K.meteorMark(x: number, z: number, r: number, fall: number, evo: boolea
 	end
 end
 
--- Vine Snare: a green ring and vines whipping up around the snare's edge.
+-- Vine Snare cast: the ground cracks open (a dashed moss ring racing to the snare's edge)
+-- and clods of earth are thrown out as the roots (the planted model, ModelLibrary snare)
+-- burst up. No green disc: the earth patch and the roots carry the read.
 function K.vineSprout(x: number, z: number, r: number, evo: boolean)
-	wave(x, z, r * 0.2, r, 0.3, evo and P.moss_200 or P.moss_300, 0.3, 0.35)
-	local n = evo and 6 or 4
+	wave(x, z, r * 0.3, r * 1.05, 0.3, evo and P.moss_200 or P.moss_300, 0.25, 0.4, false, 0.55)
+	local n = ClientSettings.Reduced() and 2 or (evo and 5 or 4)
 	if room(n) then
 		for i = 1, n do
-			local a = i * TAU / n + math.random() * 0.5
-			local px, pz = x + math.cos(a) * r * 0.75, z + math.sin(a) * r * 0.75
-			local turn = CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, math.rad(25))
-			fx("Wedge", i % 2 == 0 and P.moss_500 or P.moss_400, SMOOTH, CFrame.new(px, FLOOR_Y - 1, pz) * turn, CFrame.new(px, FLOOR_Y + 0.7, pz) * turn, Vector3.new(0.35, 2, 0.6), nil, 0, 1, 0.6, EASE_OUT, nil, nil, 4)
+			local a = i * TAU / n + math.random() * 0.6
+			local from = CFrame.new(x + math.cos(a) * r * 0.5, FLOOR_Y + 0.3, z + math.sin(a) * r * 0.5)
+			local to = CFrame.new(x + math.cos(a) * r * 1.15, FLOOR_Y + 0.15, z + math.sin(a) * r * 1.15) * CFrame.Angles(math.random() * 2, a, math.random() * 2)
+			fx("Block", i % 2 == 0 and P.dirt_600 or P.dirt_500, SMOOTH, from, to, Vector3.new(0.42, 0.3, 0.38), Vector3.new(0.2, 0.15, 0.18), 0, 1, 0.45, EASE_OUT, 1.4, nil, 3)
 		end
+	end
+end
+
+-- Vine Snare release: the roots let go and sink back into the earth with a little dust.
+function K.snareRelease(pos: Vector3, evo: boolean)
+	local n = ClientSettings.Reduced() and 0 or (evo and 4 or 3)
+	local r = evo and 3.2 or 2.4
+	if n > 0 and room(n) then
+		for i = 1, n do
+			local a = i * TAU / n + 0.3
+			local px, pz = pos.X + math.cos(a) * r * 0.8, pos.Z + math.sin(a) * r * 0.8
+			local turn = CFrame.Angles(0, math.pi / 2 - a, 0) * CFrame.Angles(math.rad(-30), 0, 0)
+			fx("Block", P.moss_600, SMOOTH, CFrame.new(px, FLOOR_Y + 0.6, pz) * turn, CFrame.new(px, FLOOR_Y - 0.8, pz) * turn, Vector3.new(0.4, 1.3, 0.4), Vector3.new(0.3, 1, 0.3), 0, 1, 0.3, EASE_OUT)
+		end
+	end
+	if room(1) then
+		fx("Cylinder", P.dirt_500, SMOOTH, CFrame.new(pos.X, FLOOR_Y + 0.08, pos.Z) * DISC, nil, Vector3.new(0.06, r * 1.6, r * 1.6), Vector3.new(0.06, r * 2.1, r * 2.1), 0.55, 1, 0.3, EASE_OUT)
 	end
 end
 
@@ -2515,13 +2567,43 @@ end
 
 -- Burst where a gem was collected: a tinted flash, a four-point glint facing the camera
 -- and a few crystal splinters thrown out.
-local function gemPop(pos: Vector3, kind: string)
+--[[
+	Collected gem burst. Flying gems are collected ON the hero, so the burst there is kept
+	low and small (a floor-level flick and three shards, at most K.GEM_POPS_NEAR per 0.1 s)
+	and never a glowing ball over the hero's body; the big bright pop is for gems taken a
+	little way off (a teammate's pickup seen from afar).
+]]
+K.GEM_POPS_NEAR = 2
+K.gemNearWindow, K.gemNearCount = 0, 0
+local function gemPop(pos: Vector3, kind: string, onHero: boolean?)
 	if popsThisFrame >= 5 or not room(6) then
 		return
 	end
-	popsThisFrame += 1
 	local color: Color3 = FX.Gem[kind] or FX.Arcane
 	local bright = color:Lerp(WHITE, 0.55)
+	if onHero then
+		local now = os.clock()
+		if now - K.gemNearWindow > 0.1 then
+			K.gemNearWindow, K.gemNearCount = now, 0
+		end
+		if K.gemNearCount >= K.GEM_POPS_NEAR then
+			return
+		end
+		K.gemNearCount += 1
+		popsThisFrame += 1
+		local floor = Vector3.new(pos.X, FLOOR_Y + 0.3, pos.Z)
+		fx("Cylinder", bright, NEON, CFrame.new(floor) * DISC, nil, Vector3.new(0.04, 1.2, 1.2), Vector3.new(0.04, 3.4, 3.4), 0.55, 1, 0.2, EASE_OUT)
+		if not ClientSettings.Reduced() then
+			for i = 1, 3 do
+				local a = i * TAU / 3 + math.random() * 0.8
+				local from = floor + Vector3.new(math.cos(a) * 1.6, 0.3, math.sin(a) * 1.6)
+				local to = floor + Vector3.new(math.cos(a) * 2.8, 0.8, math.sin(a) * 2.8)
+				fx("Wedge", color, SMOOTH, CFrame.new(from) * CFrame.Angles(0, a, 0), CFrame.new(to) * CFrame.Angles(math.random() * 3, a, math.random() * 3), Vector3.new(0.12, 0.3, 0.2), Vector3.new(0.04, 0.12, 0.08), 0.05, 1, 0.26, EASE_OUT)
+			end
+		end
+		return
+	end
+	popsThisFrame += 1
 	local at = pos + Vector3.new(0, 0.5, 0)
 	fx("Ball", bright, NEON, CFrame.new(at), nil, Vector3.one * 0.35, Vector3.one * 1.5, 0.15, 1, 0.16, EASE_OUT)
 	local cam = workspace.CurrentCamera
@@ -2580,6 +2662,7 @@ local function trackGem(gem: Instance)
 			if last then
 				-- collected next to a player: a burst (and the pickup sound for me)
 				local near = math.huge
+				local onHero = false
 				for _, other in ipairs(Players:GetPlayers()) do
 					local char = other.Character
 					local root = char and char.PrimaryPart
@@ -2589,10 +2672,13 @@ local function trackGem(gem: Instance)
 						if other == player and d < 8 then
 							Audio.Play("GemPickup")
 						end
+						if d < 3 then
+							onHero = true
+						end
 					end
 				end
 				if near < 6 then
-					gemPop(last, gemKindOf(part))
+					gemPop(last, gemKindOf(part), onHero)
 				end
 			end
 		end

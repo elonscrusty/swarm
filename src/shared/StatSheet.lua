@@ -146,12 +146,26 @@ local function num(v: number): string
 	return string.format("%.1f", v)
 end
 
--- Sheet key → label and how to print its value. Only stats a passive can change.
+--[[
+	Sheet key → label and how to print its value. Only stats a passive can change.
+	Values are TOTALS for the whole build (hero trait, permanent upgrades, items and
+	passives together), so a first pick can start from a non-zero value (Knight's Iron
+	Skin makes Stoneskin read "Damage reduction 10% → 16%"). Distances print in m: the
+	game's distance unit (1 stud), the same unit the HUD's markers use.
+]]
+local TUNING = PassiveData.Tuning
 local LINES = {
 	{ Key = "MaxHP", Label = "Max HP", Fmt = num },
 	{ Key = "Might", Label = "Damage", Fmt = pct },
 	{ Key = "Armor", Label = "Armor", Fmt = num },
-	{ Key = "Speed", Label = "Move speed", Fmt = num },
+	{
+		Key = "Speed",
+		Label = "Move speed",
+		-- against the base speed, like Speed Boots' "+10% per level" (was a bare 17.6)
+		Fmt = function(v: number): string
+			return pct(v / Config.Player.BaseSpeed)
+		end,
+	},
 	{
 		Key = "CooldownMult",
 		Label = "Attack cooldown",
@@ -179,7 +193,7 @@ local LINES = {
 		Key = "PickupRadius",
 		Label = "Pickup radius",
 		Fmt = function(v: number): string
-			return num(v) .. " studs"
+			return num(v) .. " m"
 		end,
 	},
 	{
@@ -209,9 +223,11 @@ local LINES = {
 	{ Key = "EliteDamage", Label = "Elite and boss damage", Fmt = pct },
 	{
 		Key = "Thorns",
-		Label = "Thorns",
+		-- ItemSystem.OnHurt: a share of the damage you took (at least half the raw hit),
+		-- times your damage, to enemies around you
+		Label = "Thorns (of hit taken)",
 		Fmt = function(v: number): string
-			return math.floor(v * 100 + 0.5) .. "% of hit"
+			return math.floor(v * 100 + 0.5) .. "%"
 		end,
 	},
 	{
@@ -230,18 +246,26 @@ local LINES = {
 	},
 	{
 		Key = "KillRush",
-		Label = "Speed after a kill",
+		Label = string.format("Speed %s s after a kill", num(TUNING.WindstepSeconds)),
 		Fmt = function(v: number): string
 			return pct(1 + v)
 		end,
 	},
 	{ Key = "GoldMult", Label = "Gold", Fmt = pct },
-	{ Key = "DamageTaken", Label = "Damage taken", Fmt = pct },
+	{
+		Key = "DamageTaken",
+		-- the sheet keeps a multiplier on damage taken (0.84 = 16% less); the card shows the
+		-- reduction as a plain positive share (negative only when curses raise damage taken)
+		Label = "Damage reduction",
+		Fmt = function(v: number): string
+			return math.floor((1 - v) * 100 + 0.5) .. "%"
+		end,
+	},
 	{
 		Key = "LevelHeal",
 		Label = "Heal per level-up",
 		Fmt = function(v: number): string
-			return math.floor(v * 100 + 0.5) .. "% HP"
+			return math.floor(v * 100 + 0.5) .. "% max HP"
 		end,
 	},
 	{
@@ -251,12 +275,12 @@ local LINES = {
 			return math.floor(v * 100 + 0.5) .. "%"
 		end,
 	},
-	{ Key = "LowHpMight", Label = "Damage below 40% HP", Fmt = pct },
+	{ Key = "LowHpMight", Label = string.format("Damage below %d%% max HP", math.floor(TUNING.LionheartHp * 100 + 0.5)), Fmt = pct },
 	{
 		Key = "StillHeal",
 		Label = "Heal standing still",
 		Fmt = function(v: number): string
-			return num(v * 100) .. "% HP/s"
+			return num(v * 100) .. "% max HP/s"
 		end,
 	},
 }

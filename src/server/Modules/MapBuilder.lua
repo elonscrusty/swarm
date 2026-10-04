@@ -1218,10 +1218,9 @@ function MapBuilder.BuildLobby()
 		local m = add({ Name = shell[3], Shape = Enum.PartType.Ball, Size = Vector3.one * (MENU.SunRadius * 2 * shell[1]), CFrame = CFrame.new(sunPos), Color = shell[4], Material = NEON, Transparency = shell[2] })
 		m.CastShadow = false
 	end
-	local glowDir = camCF:VectorToWorldSpace(Vector3.new(-0.2, 0.0, -1).Unit)
-	for k, g in ipairs({ { 0, 0.9, 64 }, { -0.35, 0.93, 48 }, { 0.3, 0.95, 44 } }) do
-		local at = camPos + camCF:VectorToWorldSpace(Vector3.new(-0.2 + g[1], -0.005, -1).Unit) * 200
-		local glow = add({ Name = "SunsetGlow" .. k, Shape = Enum.PartType.Ball, Size = Vector3.new(g[3] * 2.4, g[3] * 0.32, g[3] * 0.6), CFrame = CFrame.lookAt(at, at + glowDir), Color = rgb(255, 150, 96), Material = NEON, Transparency = g[2] })
+	for k, gx in ipairs({ -0.62, -0.5, -0.36, -0.22, -0.08 }) do
+		local gpos = camPos + camCF:VectorToWorldSpace(Vector3.new(gx, -0.01, -1).Unit) * 210
+		local glow = add({ Name = "SunsetGlow" .. k, Shape = Enum.PartType.Ball, Size = Vector3.one * (k == 2 and 44 or 34), CFrame = CFrame.new(gpos), Color = rgb(255, 150, 96), Material = NEON, Transparency = 0.94 })
 		glow.CastShadow = false
 	end
 	-- a few dusky clouds catching the last light and the first stars over the battlements,

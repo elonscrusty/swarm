@@ -5,14 +5,14 @@ centre). Slot names the game may recolour:
   Shot_Bolt        Head (Metal) + Shaft + Fletch
   Shot_FrostShard  Ice + Ice2 + Glow (small Neon core)
   Shot_Fire        Flame (Neon) + Core (Neon) + Ember (Neon, Spin)
-  Shot_Totem       Wood + Wood2 + Dark + Gold + Glow (Neon orb, light extra)
+  Shot_Totem       Wood + Wood2 + Dark + Gold (cup band) + Glow (Neon core, light extra) + Leaf
   Shot_Hook        Hook (Metal) + Chain (Metal)
 """
 
 import math
 
 from swarmkit import register
-from style import P
+from style import P, mix
 
 from ._propkit import TAU, light_at, loft, mesh, prism_xz, put, ring, sweep
 from .items import blade_solid
@@ -100,37 +100,52 @@ def shot_fire(m):
         em.ico(0.07, loc=(x, y, z), subdiv=0)
 
 
-@register("Shot_Totem", "Projectiles", "Healing totem ~3.1 tall standing on the ground (origin = ground centre): carved "
-          "wooden post with a face and small wings, gold crown cradling a green-gold glowing orb. Light = orb.")
+@register("Shot_Totem", "Projectiles", "Healing totem ~2.5 tall standing on the ground (origin = ground centre): a "
+          "compact carved idol matching the Healing Totem icon: two stacked faces (a stern lower face, a beaked upper "
+          "head with carved wings), a cup rim with a band, a big faceted green life-core in the cup, sprouts at the "
+          "foot. Light = core.")
 def shot_totem(m):
-    m.extra["palette"] = {"Wood": P("wood_500"), "Wood2": P("wood_400"), "Dark": P("wood_900"), "Gold": P("gold_500"),
-                          "Glow": P("fx_heal"), "Leaf": P("moss_400")}
-    m.extra["light"] = light_at(0, 0, 2.75)
+    # Slots kept from the first totem so the evolved recolour (Lifebloom) still applies:
+    # Wood (post, lower face), Wood2 (upper head + wings), Dark (carved grooves), Gold (the cup
+    # band: dark wood here, gold when evolved), Glow (the core, Neon), Leaf (sprouts).
+    m.extra["palette"] = {"Wood": P("wood_600"), "Wood2": P("wood_500"), "Dark": P("wood_900"), "Gold": P("wood_800"),
+                          "Glow": mix("fx_heal", "moss_300", 0.3), "Leaf": P("moss_400")}
+    m.extra["light"] = light_at(0, 0, 2.05)
     m.extra["anchor"] = "ground centre"
     w = m.piece("Post", "Wood", shadow=True)
-    loft(w, [ring(6, 0.38, -0.1), ring(6, 0.32, 0.3), ring(6, 0.28, 1.0)])
-    loft(w, [(0, 0, -0.6), ring(6, 0.3, -0.05)])  # stake tip (below ground, hidden)
-    w2 = m.piece("Carving", "Wood2", shadow=True)
-    w2.box((0.66, 0.6, 0.85), loc=(0, 0, 1.4), bevel=0.08, taper=(1.1, 1.1))
-    w.box((0.74, 0.22, 0.14), loc=(0, -0.3, 1.66), bevel=0.03)
-    dark = m.piece("Face", "Dark")
-    for x in (-0.15, 0.15):
-        dark.box((0.13, 0.06, 0.1), loc=(x, -0.32, 1.52), bevel=0.0)
-    dark.box((0.3, 0.06, 0.07), loc=(0, -0.32, 1.22), bevel=0.0)
+    loft(w, [(0, 0, -0.6), ring(6, 0.34, -0.05)])  # stake tip (below ground, hidden)
+    loft(w, [ring(6, 0.46, -0.05, phase=TAU / 12), ring(6, 0.44, 0.08, phase=TAU / 12), ring(6, 0.38, 0.2, phase=TAU / 12)])
+    # lower face: a squat block with a brow bar, a flat nose and a grim mouth
+    w.box((0.78, 0.7, 0.72), loc=(0, 0, 0.56), bevel=0.07, taper=(0.94, 0.94))
+    w.box((0.62, 0.16, 0.13), loc=(0, -0.36, 0.74), bevel=0.04)
+    w.spike(0.11, 0.16, seg=4, base=(0, -0.34, 0.66), direction=(0, -1, -0.9))
+    dark = m.piece("Grooves", "Dark")
+    for x in (-0.17, 0.17):
+        dark.box((0.15, 0.06, 0.07), loc=(x, -0.36, 0.64), bevel=0.0)
+    dark.box((0.42, 0.06, 0.08), loc=(0, -0.36, 0.4), bevel=0.0)
+    dark.cyl(0.43, 0.43, 0.07, seg=6, loc=(0, 0, 0.95), rot=(0, 0, 30))  # groove between the faces
+    # upper head: wider at the top, heavy angled brows, a beak nose and carved wings
+    up = m.piece("Head", "Wood2", shadow=True)
+    up.box((0.8, 0.72, 0.66), loc=(0, 0, 1.31), bevel=0.07, taper=(1.1, 1.08))
     for sx in (-1, 1):
-        prism_xz(w2, [(sx * x, z) for x, z in ((0.3, 1.4), (0.85, 1.75), (0.9, 1.95), (0.6, 1.85), (0.3, 1.75))][::sx],
-                 -0.08, 0.08)
-    loft(w, [ring(6, 0.3, 1.82), ring(6, 0.25, 2.25)])
-    gold = m.piece("Gold", "Gold")
-    loft(gold, [ring(6, 0.32, 2.2), ring(6, 0.32, 2.32), ring(6, 0.22, 2.36)])
-    for k in range(4):
-        a = k * TAU / 4 + TAU / 8
-        gold.limb((math.cos(a) * 0.22, math.sin(a) * 0.22, 2.3), (math.cos(a) * 0.32, math.sin(a) * 0.32, 2.95), 0.05, 0.03, seg=3)
-    leaf = m.piece("Leaves", "Leaf")
+        up.box((0.32, 0.17, 0.12), loc=(sx * 0.17, -0.39, 1.47), rot=(0, sx * 16, 0), bevel=0.03)
+        dark.box((0.16, 0.06, 0.08), loc=(sx * 0.17, -0.38, 1.36), bevel=0.0)
+    up.spike(0.13, 0.3, seg=4, base=(0, -0.36, 1.38), direction=(0, -1, -1.1))
+    for sx in (-1, 1):
+        # a broad fin swept up and out (three carved feather steps on its lower edge)
+        wing = [(0.38, 1.6), (0.62, 1.66), (1.0, 1.84), (0.94, 1.6), (0.8, 1.56), (0.82, 1.42), (0.66, 1.38),
+                (0.66, 1.24), (0.38, 1.12)]
+        prism_xz(up, [(sx * x, z) for x, z in wing][::-sx], -0.13, 0.13)
+    # the cup: a six-sided rim with a band, holding the life-core
+    loft(w, [ring(6, 0.4, 1.62, phase=TAU / 12), ring(6, 0.47, 1.8, phase=TAU / 12)], cap_last=False)
+    loft(w, [ring(6, 0.38, 1.8, phase=TAU / 12), ring(6, 0.34, 1.7, phase=TAU / 12)], cap_first=False)
+    band = m.piece("Band", "Gold")
+    band.cyl(0.46, 0.47, 0.08, seg=6, loc=(0, 0, 1.69), rot=(0, 0, 30))
+    m.piece("Core", "Glow", "Neon").ico(0.4, loc=(0, 0, 2.06), subdiv=1)
+    leaf = m.piece("Sprouts", "Leaf")
     for k in range(3):
-        a = k * TAU / 3
-        leaf.limb((math.cos(a) * 0.2, math.sin(a) * 0.2, 2.3), (math.cos(a) * 0.55, math.sin(a) * 0.55, 2.45), 0.09, 0.0, seg=3)
-    m.piece("Orb", "Glow", "Neon").ico(0.3, loc=(0, 0, 2.75), subdiv=1)
+        a = k * TAU / 3 + 0.4
+        leaf.limb((math.cos(a) * 0.4, math.sin(a) * 0.4, 0.0), (math.cos(a) * 0.72, math.sin(a) * 0.72, 0.3), 0.09, 0.0, seg=3)
 
 
 @register("Shot_Hook", "Projectiles", "Chain hook head ~1.5 long: barbed steel hook at -Y curling back, eye ring and "

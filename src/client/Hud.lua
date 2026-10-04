@@ -53,6 +53,7 @@
 ]]
 
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -60,6 +61,8 @@ local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local PassiveData = require(Shared:WaitForChild("PassiveData"))
+local ItemData = require(Shared:WaitForChild("ItemData"))
+local Remotes = require(Shared:WaitForChild("Remotes"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local EnemyData = require(Shared:WaitForChild("EnemyData"))
 local UIKit = require(script.Parent.UIKit)
@@ -83,12 +86,15 @@ local C, P = Theme.Color, Theme.Palette
 export type Insets = { Top: number, Left: number, Right: number }
 
 -- Health panel and ability panel, designed at full size (reference px), fitted with a UIScale.
-local VIT = { W = 420, PadX = 10, PadY = 9, HP = 26, XP = 20, Gap = 8 } -- health / level panel
+local VIT = { W = 380, PadX = 10, PadY = 9, HP = 26, XP = 20, Gap = 8 } -- health / level panel
 VIT.H = VIT.PadY * 2 + VIT.HP + VIT.Gap + VIT.XP
-local INV = { Pad = 10, Label = 84, Tile = 64, Gap = 8, RowGap = 14 } -- ability panel
+local INV = { Pad = 10, Label = 84, Tile = 64, Gap = 8, RowGap = 14, Build = 66 } -- ability panel (+ BUILD column)
 local PILL_H, PAUSE = 44, 50 -- top right counters / pause button
 local TIMER_W, TIMER_H = 150, 52
-local STAGE_H = 30
+local OBJ_W, OBJ_H = 380, 54 -- objective panel under the timer (two lines)
+-- XP / portal cyan of the approved HUD (02/03 mockups); the health bar stays crimson
+local XP_GRADIENT = ColorSequence.new(Color3.fromRGB(150, 214, 229), Color3.fromRGB(84, 165, 189))
+local XP_STROKE = Color3.fromRGB(42, 92, 110)
 
 local host: { [string]: any } = {}
 local ui: { [string]: any } = {}
@@ -160,25 +166,41 @@ local function buildTimer(frame: Frame)
 	})
 end
 
--- Stage pill under the timer: "STAGE 2 • FIND THE PORTAL", "STAGE 3 • PORTAL DORMANT • 0:26".
+-- Objective panel under the timer (approved 02/03 HUD): a gold caption with where the run
+-- is ("FOREST · STAGE 2 · WAVE 6") over the one current objective ("Find the portal",
+-- "Portal dormant · 0:26", "Defeat the Scorpion Queen"). Persistent: the objective never
+-- hides; short notices use the separate centre lane (UIState). Text shrinks before it
+-- would truncate (TextScaled with a size cap), so long boss names and Endless fit phones.
 local function buildStage(frame: Frame)
-	local holder, face = autoPill(frame, "Stage", STAGE_H, 999, 14, 14, 7)
+	local holder, face = goldSurface(frame, "Stage", Theme.Radius.M, UDim2.fromOffset(OBJ_W, OBJ_H))
 	holder.AnchorPoint = Vector2.new(0.5, 0)
 	ui.Stage = holder
-	local function label(order: number, color: Color3): TextLabel
-		return role(face, "Label", "", { LayoutOrder = order, Size = UDim2.fromOffset(0, STAGE_H), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = color })
-	end
-	local function dot(order: number): Frame
-		local d = new("Frame", { BackgroundColor3 = P.gold_400, Size = UDim2.fromOffset(4, 4), LayoutOrder = order, BorderSizePixel = 0 }, face)
-		UIKit.corner(d, 999)
-		return d
-	end
-	ui.StageNumber = label(1, P.gold_200)
-	ui.StageNumber.Text = "STAGE 1"
-	ui.StageDot = dot(2)
-	ui.StageGoal = label(3, P.ivory_100)
-	ui.StageDot2 = dot(4)
-	ui.StageCount = label(5, P.ivory_100)
+	ui.StageFace = face
+	UIKit.padding(face, 4, 14, 5, 14)
+	-- the caption row: a thin gold rule, the caption, a rule (the mockup's "— FOREST · STAGE 1 —");
+	-- it never scales: a caption too wide for the panel drops the arena name (updateStage)
+	local cap = new("Frame", { Name = "Caption", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0.42, 0) }, face)
+	UIKit.list(cap, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	ui.StageRuleL = new("Frame", { Name = "RuleL", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.35, BorderSizePixel = 0, Size = UDim2.fromOffset(18, 1), LayoutOrder = 1 }, cap)
+	ui.StageNumber = role(cap, "Label", "STAGE 1", {
+		Name = "Where",
+		LayoutOrder = 2,
+		Size = UDim2.fromScale(0, 1),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextColor3 = P.gold_200,
+	})
+	ui.StageRuleR = new("Frame", { Name = "RuleR", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.35, BorderSizePixel = 0, Size = UDim2.fromOffset(18, 1), LayoutOrder = 3 }, cap)
+	ui.StageGoal = role(face, "Body", "", {
+		Name = "Goal",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 1),
+		Size = UDim2.new(1, 0, 0.58, 0),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = P.ivory_100,
+		FontFace = Theme.Font.Heading,
+		TextScaled = true,
+	})
+	new("UITextSizeConstraint", { MaxTextSize = TS(TY.Body.Size + 2), MinTextSize = 10 }, ui.StageGoal)
 end
 
 -- Boss bar (under the stage pill while the boss lives).
@@ -347,27 +369,43 @@ local function buildVitals(frame: Frame)
 		TextColor3 = P.ivory_100,
 	})
 	ui.XP = UIKit.Meter(xpRow, {
-		Gradient = Theme.Gradient.XP,
+		Gradient = XP_GRADIENT,
 		TextStyle = "Number",
 		TextSize = TY.Label.Size,
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 100, 0.5, 0),
 		Size = UDim2.new(1, -100, 1, 0),
 	})
+	UIKit.stroke(ui.XP.Frame, XP_STROKE, 1.5, 0.1)
 
 	-- bright leading edge on the XP fill (reads as the bar's "spark")
 	local edge = new("Frame", { Name = "Edge", BackgroundColor3 = P.ivory_100, BackgroundTransparency = 0.55, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(1, 0.5), Size = UDim2.new(0, 6, 1, 0), ZIndex = 3 }, ui.XP.Fill)
 	UIKit.corner(edge, 999)
 end
 
+-- Icon key of an inventory weapon: its evolution once evolved.
+local function weaponIconId(id: string, evolved: boolean): string
+	local def = WeaponData.Weapons[id]
+	if evolved and def and def.Evolution then
+		return def.Evolution.Id
+	end
+	return id
+end
+
 local function invSize(): (number, number, number)
 	local slots = math.max((inventory and inventory.WeaponSlots) or Config.Slots.Weapons, (inventory and inventory.PassiveSlots) or Config.Slots.Passives)
-	local w = INV.Pad * 2 + INV.Label + slots * INV.Tile + math.max(0, slots - 1) * INV.Gap
+	local w = INV.Pad * 2 + INV.Label + slots * INV.Tile + math.max(0, slots - 1) * INV.Gap + INV.Build
 	local h = INV.Pad * 2 + INV.Tile * 2 + INV.RowGap
 	return w, h, slots
 end
 
--- Ability panel (bottom centre): labels + two rows of tiles.
+local setBuildOpen: (boolean) -> ()
+local relayout: () -> () = function() end
+
+-- Ability panel (bottom centre): labels + two rows of tiles, and at its right end the
+-- BUILD button that opens the build details (every weapon, passive and item with its rank
+-- and effect). The tiles stay non-Active (a thumb landing on them still moves the hero);
+-- only the BUILD column takes input. Keyboard B / gamepad Y toggle it too.
 local function buildBar(frame: Frame)
 	local holder = new("Frame", { Name = "AbilityBar", BackgroundTransparency = 1, Active = false }, frame)
 	ui.Bar = holder
@@ -386,11 +424,193 @@ local function buildBar(frame: Frame)
 	local y2 = INV.Pad + INV.Tile + INV.RowGap
 	rowLabel("WEAPONS", INV.Pad)
 	rowLabel("PASSIVES", y2)
-	ui.BarRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, Position = UDim2.fromOffset(INV.Pad, INV.Pad + INV.Tile + INV.RowGap / 2), Size = UDim2.new(1, -2 * INV.Pad, 0, 1) }, face)
-	ui.WeaponRow = new("Frame", { Name = "Weapons", BackgroundTransparency = 1, Active = false, Position = UDim2.fromOffset(INV.Pad + INV.Label, INV.Pad), Size = UDim2.new(1, -(2 * INV.Pad + INV.Label), 0, INV.Tile) }, face)
+	ui.BarRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, Position = UDim2.fromOffset(INV.Pad, INV.Pad + INV.Tile + INV.RowGap / 2), Size = UDim2.new(1, -(2 * INV.Pad + INV.Build), 0, 1) }, face)
+	ui.WeaponRow = new("Frame", { Name = "Weapons", BackgroundTransparency = 1, Active = false, Position = UDim2.fromOffset(INV.Pad + INV.Label, INV.Pad), Size = UDim2.new(1, -(2 * INV.Pad + INV.Label + INV.Build), 0, INV.Tile) }, face)
 	UIKit.list(ui.WeaponRow, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, INV.Gap) })
-	ui.PassiveRow = new("Frame", { Name = "Passives", BackgroundTransparency = 1, Active = false, Position = UDim2.fromOffset(INV.Pad + INV.Label, y2), Size = UDim2.new(1, -(2 * INV.Pad + INV.Label), 0, INV.Tile) }, face)
+	ui.PassiveRow = new("Frame", { Name = "Passives", BackgroundTransparency = 1, Active = false, Position = UDim2.fromOffset(INV.Pad + INV.Label, y2), Size = UDim2.new(1, -(2 * INV.Pad + INV.Label + INV.Build), 0, INV.Tile) }, face)
 	UIKit.list(ui.PassiveRow, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, INV.Gap) })
+
+	-- BUILD column: a divider, a chevron and the word; the whole column is the button
+	new("Frame", { Name = "BuildRule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -(INV.Build - 4), 0, INV.Pad + 4), Size = UDim2.new(0, 1, 1, -(2 * INV.Pad + 8)) }, face)
+	local btn = new("TextButton", {
+		Name = "BuildButton",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundColor3 = P.slate_800,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -4, 0.5, 0),
+		Size = UDim2.new(0, INV.Build - 10, 1, -12),
+		Selectable = true,
+		ZIndex = 4,
+	}, face)
+	UIKit.corner(btn, Theme.Radius.M)
+	ui.BuildButton = btn
+	ui.BuildChevron = Icons.Draw(btn, "chevronsUp", { Size = 22, Color = P.gold_200, Back = P.slate_900, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -12), ZIndex = 5 })
+	role(btn, "Label", "BUILD", {
+		Name = "Word",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0.5, 4),
+		Size = UDim2.new(1, 0, 0, 20),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = P.ivory_100,
+		ZIndex = 5,
+	})
+	btn.MouseEnter:Connect(function()
+		btn.BackgroundTransparency = 0.4
+	end)
+	btn.MouseLeave:Connect(function()
+		btn.BackgroundTransparency = ui.BuildOpen and 0.55 or 1
+	end)
+	btn.Activated:Connect(function()
+		setBuildOpen(not ui.BuildOpen)
+	end)
+end
+
+------------------------------------------------------------------------------------------
+-- Build details (BUILD on the ability panel): what every owned weapon, passive and item
+-- does, with its rank. A non-modal panel over the bottom of the arena (the run keeps
+-- going; nothing pauses), closed by BUILD again, B / gamepad Y, its X, or any covering
+-- overlay. Rebuilt only when it opens or the inventory / items change while open.
+------------------------------------------------------------------------------------------
+
+local runItems: { { Id: string, Count: number } } = {}
+local BUILD_W = 560
+
+local function buildDetails(frame: Frame)
+	local holder, face = goldSurface(frame, "BuildDetails", Theme.Radius.L, UDim2.fromOffset(BUILD_W, 300))
+	holder.Visible = false
+	holder.Active = true -- taps on the open panel do not walk the hero
+	holder.AnchorPoint = Vector2.new(0.5, 1)
+	ui.Build = holder
+	ui.BuildFace = face
+	UIKit.padding(face, 8, 10, 10, 14)
+	role(face, "Heading", "YOUR BUILD", { Name = "Title", Size = UDim2.new(1, -44, 0, 26) })
+	ui.BuildNote = role(face, "Caption", "The run keeps going while this is open", { Name = "Note", Position = UDim2.fromOffset(0, 26), Size = UDim2.new(1, -44, 0, 16) })
+	local close = UIKit.IconButton(face, {
+		Icon = "close",
+		Kind = "Outline",
+		Size = 36,
+		Name = "Close",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		OnClick = function()
+			setBuildOpen(false)
+		end,
+	})
+	ui.BuildClose = close
+	local list = new("ScrollingFrame", {
+		Name = "List",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, 46),
+		Size = UDim2.new(1, 0, 1, -46),
+		CanvasSize = UDim2.fromOffset(0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = P.gold_500,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ElasticBehavior = Enum.ElasticBehavior.Never,
+	}, face)
+	UIKit.list(list, { Padding = UDim.new(0, 4) })
+	UIKit.padding(list, 0, 8, 0, 0)
+	ui.BuildList = list
+end
+
+-- One row: icon, name, rank (right) and the one-line effect.
+local function detailRow(parent: Instance, order: number, icon: string, name: string, rank: string, effect: string, gold: boolean)
+	local row = new("Frame", { Name = "Row", BackgroundColor3 = P.slate_800, BackgroundTransparency = 0.35, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 48), LayoutOrder = order }, parent)
+	UIKit.corner(row, Theme.Radius.S)
+	if gold then
+		UIKit.stroke(row, P.gold_400, 1.5, 0.2)
+	end
+	Icons.Upgrade(row, icon, { Size = 38, Position = UDim2.fromOffset(5, 5), Back = P.slate_800 })
+	role(row, "Body", name, { Name = "Name", Position = UDim2.fromOffset(52, 3), Size = UDim2.new(1, -150, 0, 22), TextTruncate = Enum.TextTruncate.AtEnd })
+	role(row, "Label", rank, { Name = "Rank", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 3), Size = UDim2.fromOffset(92, 22), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = gold and P.gold_200 or P.ivory_300 })
+	local fx = role(row, "Caption", effect, { Name = "Effect", Position = UDim2.fromOffset(52, 24), Size = UDim2.new(1, -60, 0, 20), TextColor3 = P.ivory_200, TextScaled = true })
+	new("UITextSizeConstraint", { MaxTextSize = TS(TY.Caption.Size), MinTextSize = 9 }, fx)
+end
+
+local function detailHeader(parent: Instance, order: number, str: string)
+	role(parent, "Label", str, { Name = "Section", Size = UDim2.new(1, 0, 0, 22), LayoutOrder = order, TextColor3 = P.gold_300 })
+end
+
+local function refreshDetails()
+	local list = ui.BuildList :: ScrollingFrame?
+	if not list or not ui.BuildOpen then
+		return
+	end
+	for _, c in ipairs(list:GetChildren()) do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	local inv = inventory
+	local order = 0
+	local function nextOrder(): number
+		order += 1
+		return order
+	end
+	local weapons = (inv and inv.Weapons) or {}
+	local passives = (inv and inv.Passives) or {}
+	detailHeader(list, nextOrder(), string.format("WEAPONS  %d / %d", #weapons, (inv and inv.WeaponSlots) or Config.Slots.Weapons))
+	for _, wp in ipairs(weapons) do
+		local def = WeaponData.Weapons[wp.Id]
+		local evo = wp.Evolved and def and def.Evolution
+		local name = evo and evo.Name or (def and def.Name) or wp.Id
+		local rank = evo and "EVOLVED" or (wp.Level >= WeaponData.MaxLevel and string.format("MAX %d", wp.Level) or string.format("LV %d / %d", wp.Level, WeaponData.MaxLevel))
+		local effect = (evo and evo.Description) or (def and def.Description) or ""
+		detailRow(list, nextOrder(), weaponIconId(wp.Id, wp.Evolved), name, rank, effect, wp.Evolved or wp.Level >= WeaponData.MaxLevel)
+	end
+	detailHeader(list, nextOrder(), string.format("PASSIVES  %d / %d", #passives, (inv and inv.PassiveSlots) or Config.Slots.Passives))
+	for _, ps in ipairs(passives) do
+		local def = PassiveData.Passives[ps.Id]
+		local maxLv = ps.MaxLevel or PassiveData.MaxLevelOf(ps.Id)
+		local rank = ps.Level >= maxLv and string.format("MAX %d", ps.Level) or string.format("LV %d / %d", ps.Level, maxLv)
+		detailRow(list, nextOrder(), ps.Id, (def and def.Name) or ps.Id, rank, (def and def.Description) or "", ps.Level >= maxLv)
+	end
+	local total = 0
+	for _, it in ipairs(runItems) do
+		total += it.Count
+	end
+	detailHeader(list, nextOrder(), total > 0 and string.format("ITEMS  %d", total) or "ITEMS  none yet")
+	for _, it in ipairs(runItems) do
+		local def = ItemData.Items[it.Id]
+		if def then
+			local rarity = def.Rarity and string.upper(def.Rarity) or ""
+			detailRow(list, nextOrder(), it.Id, def.Name, (it.Count > 1 and ("x" .. it.Count .. "  ") or "") .. rarity, def.Text or def.Desc or "", false)
+		end
+	end
+end
+
+setBuildOpen = function(on: boolean)
+	if not ui.Build then
+		return
+	end
+	if on and not (ui.Frame and ui.Frame.Visible) then
+		on = false
+	end
+	if ui.BuildOpen == on then
+		return
+	end
+	ui.BuildOpen = on
+	ui.Build.Visible = on
+	ui.BuildButton.BackgroundTransparency = on and 0.55 or 1
+	ui.BuildChevron.Rotation = on and 180 or 0
+	if on then
+		refreshDetails()
+		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+			UIAnim.Pop(ui.Build, 0, 0.6)
+		end
+	end
+	relayout()
+end
+Hud.SetBuildOpen = function(on: boolean)
+	setBuildOpen(on)
+end
+function Hud.BuildOpen(): boolean
+	return ui.BuildOpen == true
 end
 
 -- Buff chip (Ranger's Steady Aim): a small pill over the ability panel. Shown only for a
@@ -755,7 +975,7 @@ local function layout()
 	local M = compact and Theme.Layout.MarginCompact or Theme.Layout.Margin
 	local scale = math.max(0.01, host.Scale())
 
-	-- pause + gold / kills pills (top right)
+	-- utility group (top right): gold / kills pills + the pause (menu) button
 	local pauseY = ins.Right > 4 and (ins.Top + 6) or 10
 	place(ui.Pause.Instance, W - M - PAUSE, pauseY, PAUSE, PAUSE)
 	ui.Counters.Position = UDim2.fromOffset(W - M - PAUSE - 8, pauseY + (PAUSE - PILL_H) / 2)
@@ -772,44 +992,56 @@ local function layout()
 	place(ui.TimerPill, W / 2 - TIMER_W / 2, timerY, TIMER_W, TIMER_H)
 	local y = timerY + TIMER_H + 6
 
-	-- stage pill: top left under the Roblox menu buttons (landscape); portrait has no room
-	-- beside the timer, so it sits centred under it
-	if portrait then
-		-- a wide objective (OPEN THE PORTAL + the swarm warning) must clear Roblox's menu /
-		-- chat buttons (44 px tall in a 58 px bar from the top inset)
-		y = math.max(y, ins.Top + 58 + 4)
-		ui.Stage.AnchorPoint = Vector2.new(0.5, 0)
-		ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(y))
-		if ui.Stage.Visible then
-			y += STAGE_H + 6
-		end
-		ui.LeftBottom = nil
-	else
-		local sy = math.max(ins.Top, 0) + 6
-		ui.Stage.AnchorPoint = Vector2.new(0, 0)
-		ui.Stage.Position = UDim2.fromOffset(M, math.floor(sy))
-		ui.LeftBottom = ui.Stage.Visible and (sy + STAGE_H) or nil
-	end
-
-	-- health / level panel under the timer (one fit factor; phones a bit smaller)
-	local kv = compact and 0.85 or 1
+	-- vitals (HP, run level, XP): top left under the Roblox buttons in landscape (the
+	-- approved 02/03 layout); portrait has no room beside the timer, so they stack centred
+	local kv = compact and 0.76 or 1
 	kv = math.min(kv, (W - 2 * M) / VIT.W)
 	ui.PlateFit.Scale = kv
 	local vitW, vitH = VIT.W * kv, VIT.H * kv
-	place(ui.Plate, W / 2 - vitW / 2, y, vitW, vitH)
-	-- width the stage pill may take before it runs under the health panel (updateStage)
-	ui.StageRoom = portrait and (W - 2 * M) or (W / 2 - vitW / 2 - 10 - M)
-	y += vitH
+	local leftRight = 0 -- right edge of the left column (vitals, item strip)
+	local objW
+	if portrait then
+		-- the objective must clear Roblox's menu / chat buttons (44 px tall in a 58 px bar)
+		y = math.max(y, ins.Top + 58 + 4)
+		objW = math.min(OBJ_W + 40, W - 2 * M)
+	else
+		local vy = math.max(ins.Top, 4) + 6
+		place(ui.Plate, M, vy, vitW, vitH)
+		leftRight = M + vitW
+		ui.LeftBottom = vy + vitH
+		ui.LeftWidth = vitW
+		-- the objective sits between the vitals and the minimap column under the counters
+		local mapLeft = W - M - (compact and 128 or 180)
+		local half = math.min(W / 2 - leftRight - 10, mapLeft - W / 2 - 10)
+		objW = math.clamp(2 * half, 200, OBJ_W)
+	end
 
-	-- boss bar under the health panel
-	local bossW = math.min(560, W - 2 * M)
-	local bossY = y + 10
+	-- objective panel under the timer
+	local objH = compact and 48 or OBJ_H
+	ui.Stage.AnchorPoint = Vector2.new(0.5, 0)
+	ui.Stage.Position = UDim2.fromOffset(math.floor(W / 2 + 0.5), math.floor(y))
+	ui.Stage.Size = UDim2.fromOffset(math.floor(objW), objH)
+	ui.StageRoom = objW
+	if ui.Stage.Visible then
+		y += objH + 6
+	end
+
+	if portrait then
+		place(ui.Plate, W / 2 - vitW / 2, y, vitW, vitH)
+		y += vitH
+		ui.LeftBottom = nil
+		ui.LeftWidth = nil
+	end
+
+	-- boss bar under the objective (clear of the left column in landscape)
+	local bossW = portrait and math.min(560, W - 2 * M) or math.min(560, W - 2 * (leftRight + 12))
+	local bossY = y + 4
 	place(ui.Boss, W / 2 - bossW / 2, bossY, bossW, 46)
-	local topBottom = ui.Boss.Visible and (bossY + 62) or (y + 4)
+	local topBottom = ui.Boss.Visible and (bossY + 62) or (y + 2)
 	ui.TopBottom = topBottom
 
 	-- ability panel: bottom centre (landscape), between the thumb side and the JUMP button
-	-- and never taller than ~30% of the screen; portrait: under the top cluster, away from
+	-- and never taller than ~25% of the screen; portrait: under the top cluster, away from
 	-- the thumbs
 	local invW, invH = invSize()
 	local k
@@ -817,7 +1049,7 @@ local function layout()
 		k = math.min(compact and 0.86 or 1, (W - 2 * M) / invW, (H * 0.22) / invH)
 	else
 		local jumpClear = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26) / scale + ins.Right + 12
-		k = math.min(compact and 0.62 or 0.78, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.24) / invH)
+		k = math.min(compact and 0.68 or 0.78, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.24) / invH)
 	end
 	ui.BarFit.Scale = k
 	local barW, barH = invW * k, invH * k
@@ -834,6 +1066,25 @@ local function layout()
 			ui.Buff.AnchorPoint = Vector2.new(0.5, 1)
 			ui.Buff.Position = UDim2.fromOffset(math.floor(W / 2), clusterTop - 6)
 		end
+	end
+
+	-- build details: over the arena right above the ability panel (landscape) or under it
+	-- (portrait), never under the top cluster
+	if ui.Build then
+		local bw = math.min(BUILD_W, W - 2 * M)
+		if portrait then
+			local top = clusterBottom + 8
+			ui.Build.AnchorPoint = Vector2.new(0.5, 0)
+			ui.Build.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(top))
+			ui.Build.Size = UDim2.fromOffset(math.floor(bw), math.floor(math.clamp(H - top - M - 140, 160, 460)))
+		else
+			local bottom = clusterTop - 8
+			ui.Build.AnchorPoint = Vector2.new(0.5, 1)
+			ui.Build.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(bottom))
+			ui.Build.Size = UDim2.fromOffset(math.floor(bw), math.floor(math.clamp(bottom - topBottom - 8, 150, 380)))
+		end
+		local face = ui.BuildFace :: Frame
+		face.Size = UDim2.fromScale(1, 1)
 	end
 
 	-- stage banner: under the top cluster in landscape, mid-screen in portrait
@@ -853,19 +1104,12 @@ local function layout()
 	end
 end
 Hud.Layout = layout
+relayout = layout
 
 ------------------------------------------------------------------------------------------
 -- Ability panel contents
 ------------------------------------------------------------------------------------------
 
--- Icon key of an inventory weapon: its evolution once evolved.
-local function weaponIconId(id: string, evolved: boolean): string
-	local def = WeaponData.Weapons[id]
-	if evolved and def and def.Evolution then
-		return def.Evolution.Id
-	end
-	return id
-end
 
 --[[
 	One ability tile: a dark rounded square with the item art, a round gold level badge in
@@ -878,7 +1122,7 @@ local function hudTile(parent: Instance, size: number, id: string?, level: numbe
 		Name = empty and "Empty" or "Tile",
 		Size = UDim2.fromOffset(size, size),
 		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = empty and 0.75 or 0.02,
+		BackgroundTransparency = empty and 0.84 or 0.02,
 		BorderSizePixel = 0,
 		Active = false,
 	})
@@ -889,7 +1133,20 @@ local function hudTile(parent: Instance, size: number, id: string?, level: numbe
 	else
 		UIKit.stroke(tile, empty and P.slate_600 or P.slate_500, 1, empty and 0.55 or 0.15)
 	end
-	if not empty then
+	if empty then
+		-- a quiet "+" says the slot can still be filled (capacity cue without a loud strip)
+		new("TextLabel", {
+			Name = "Plus",
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			Text = "+",
+			FontFace = TY.Number.Font,
+			TextSize = math.floor(size * 0.42),
+			TextColor3 = P.slate_300,
+			TextTransparency = 0.45,
+			Active = false,
+		}, tile)
+	else
 		local inset = math.floor(size * 0.08)
 		Icons.Upgrade(tile, id, { Size = size - inset * 2, Position = UDim2.fromOffset(inset, inset), Back = P.slate_800, Name = "Icon" })
 		if level and level > 0 then
@@ -951,6 +1208,7 @@ function Hud.SetInventory(inv: { [string]: any }?)
 	if not inv then
 		table.clear(shownLevels)
 		anim.BarReady = false
+		setBuildOpen(false)
 		return
 	end
 	local w, h = invSize()
@@ -993,6 +1251,7 @@ function Hud.SetInventory(inv: { [string]: any }?)
 		tile.LayoutOrder = i
 	end
 	anim.BarReady = true
+	refreshDetails()
 end
 
 ------------------------------------------------------------------------------------------
@@ -1188,58 +1447,47 @@ end
 -- Per frame (only while in a run)
 ------------------------------------------------------------------------------------------
 
--- What to do on this stage: goal (upper case), a countdown / progress ("" = none) and the
--- goal's colour.
--- Short forms of the objectives for when the pill would run under the health panel.
-local STAGE_SHORT = {
-	["FIND THE PORTAL"] = "PORTAL",
-	["OPENING THE PORTAL"] = "OPENING",
-	["OPEN THE PORTAL"] = "OPEN PORTAL",
-	["PORTAL DORMANT"] = "DORMANT",
-	["SURVIVE THE SURGE"] = "SURGE",
-}
-
+-- What to do on this stage: the objective sentence, the wave part of the caption ("WAVE 3",
+-- "NEXT WAVE 0:03", "" = none) and the objective's colour. One wording everywhere: the
+-- stage's way on is the PORTAL (the minimap legend, the edge marker and the banner say the
+-- same word).
 local function stageGoal(state: Configuration, stagePhase: string): (string, string, Color3)
+	-- waves (Config.Waves, SwarmState Wave / WaveNext): "WAVE 3", or "NEXT WAVE 0:03"
+	-- during the breather before it
+	local waveText = ""
+	local wave: number = tonumber(state:GetAttribute("Wave")) or 0
+	local nextAt: number = tonumber(state:GetAttribute("WaveNext")) or 0
+	if nextAt > 0 then
+		local now: number = tonumber(state:GetAttribute("RunTime")) or 0
+		waveText = string.format("WAVE %d IN %s", wave + 1, UIKit.formatTime(math.max(0, math.ceil(nextAt - now))))
+	elseif wave > 0 then
+		waveText = "WAVE " .. tostring(wave)
+	end
 	if stagePhase == "Explore" then
 		local chargeNow = state:GetAttribute("PortalCharge") or 0
 		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
 		if chargeNow > 0 then
-			return "OPENING THE PORTAL", string.format("%d%%", math.floor(chargeNow * 100)), P.gold_200
+			return string.format("Opening the portal · %d%%", math.floor(chargeNow * 100)), waveText, P.gold_200
 		elseif lockLeft > 0 then
-			return "PORTAL DORMANT", UIKit.formatTime(lockLeft), P.ivory_100
+			return "Portal dormant · " .. UIKit.formatTime(lockLeft), waveText, P.ivory_100
 		end
-		-- waves (Config.Waves, SwarmState Wave / WaveNext): "WAVE 3", or "WAVE 4 IN 0:03"
-		-- during the breather before it
-		local waveText = ""
-		local wave: number = tonumber(state:GetAttribute("Wave")) or 0
-		local nextAt: number = tonumber(state:GetAttribute("WaveNext")) or 0
-		if nextAt > 0 then
-			local now: number = tonumber(state:GetAttribute("RunTime")) or 0
-			waveText = string.format("WAVE %d IN %s", wave + 1, UIKit.formatTime(math.max(0, math.ceil(nextAt - now))))
-		elseif wave > 0 then
-			waveText = "WAVE " .. tostring(wave)
-		end
-		-- swarm pressure (SwarmState SwarmWarn): the objective turns into a warning (the
-		-- wave count stays; without waves the count says how bad it is)
+		-- swarm pressure (SwarmState SwarmWarn): the objective turns into a warning
 		local warn = state:GetAttribute("SwarmWarn") or 0
 		if warn >= 2 then
-			return "OPEN THE PORTAL", waveText ~= "" and waveText or "SWARM OVERWHELMING", P.crimson_300
+			return "Open the portal · swarm overwhelming", waveText, P.crimson_300
 		elseif warn >= 1 then
-			return "OPEN THE PORTAL", waveText ~= "" and waveText or "SWARM GROWING", P.amber_300
+			return "Open the portal · swarm growing", waveText, P.amber_300
 		end
-		if waveText ~= "" then
-			return "FIND THE PORTAL", waveText, P.ivory_100
-		end
-		return "FIND THE PORTAL", "", P.ivory_100
+		return "Find the portal", waveText, P.ivory_100
 	elseif stagePhase == "Boss" then
-		return "DEFEAT THE " .. string.upper(tostring(state:GetAttribute("BossName") or state:GetAttribute("StageBoss") or "Queen")), "", P.crimson_300
+		return "Defeat the " .. tostring(state:GetAttribute("BossName") or state:GetAttribute("StageBoss") or "Queen"), waveText, P.crimson_300
 	elseif stagePhase == "Surge" then
 		local left = state:GetAttribute("SurgeLeft") or 0
-		return "SURVIVE THE SURGE", left > 0 and UIKit.formatTime(left) or "", P.crimson_300
+		return left > 0 and ("Survive the surge · " .. UIKit.formatTime(left)) or "Survive the surge", waveText, P.crimson_300
 	elseif stagePhase == "Open" then
-		return "PORTAL OPEN", "", P.gold_200
+		return "Portal open · step in", "", P.gold_200
 	elseif stagePhase == "Travel" then
-		return "TRAVELING", "", P.ivory_100
+		return "Traveling", "", P.ivory_100
 	end
 	return "", "", P.ivory_100
 end
@@ -1247,38 +1495,42 @@ end
 local function updateStage(state: Configuration)
 	local stageNo = state:GetAttribute("Stage") or 0
 	local stagePhase = state:GetAttribute("StagePhase") or "None"
-	local goal, count, goalColor = stageGoal(state, stagePhase)
-	-- an objective measured too wide for the room left of the health panel (phones in
-	-- landscape, long boss names, Endless) is shortened: the boss bar right below names
-	-- the boss, and the count ("60%", "0:20") says the rest
-	local longGoal = goal
-	if anim.StageTooWide == longGoal then
-		goal = STAGE_SHORT[longGoal] or (stagePhase == "Boss" and "DEFEAT THE BOSS") or goal
-		if longGoal == "OPEN THE PORTAL" and string.sub(count, 1, 5) == "SWARM" then
-			count = "" -- phones: the amber / crimson goal and the banner carry the warning
-		end
-		-- the wave breather: "WAVE 4 IN 0:03" -> "NEXT 0:03" (the banner names the wave)
-		local nextIn = string.match(count, "^WAVE %d+ IN (.+)$")
-		if nextIn then
-			count = "NEXT " .. nextIn
-		end
-	end
+	local goal, waveText, goalColor = stageGoal(state, stagePhase)
 	local stageShown = stageNo > 0 and goal ~= ""
 	if ui.Stage.Visible ~= stageShown then
 		ui.Stage.Visible = stageShown
 		layout()
 	end
 	if stageShown then
-		-- Endless runs say so on the pill ("ENDLESS • STAGE 9", SwarmState Endless)
-		local num = (state:GetAttribute("Endless") == true and "ENDLESS · STAGE " or "STAGE ") .. tostring(stageNo)
-		if ui.StageNumber.Text ~= num then
-			ui.StageNumber.Text = num
-			UIAnim.Pop(ui.Stage, 0, 0.7)
+		-- caption: "FOREST · STAGE 2 · WAVE 6" (Endless: "ENDLESS · STAGE 9 · ..."); a caption
+		-- measured too wide for the panel drops the arena name (it is on the stage card)
+		local arena = (Config.Arenas :: any)[tostring(state:GetAttribute("Arena") or "")]
+		local where = state:GetAttribute("Endless") == true and "ENDLESS" or (type(arena) == "table" and arena.DisplayName and string.upper(arena.DisplayName)) or nil
+		local parts = {}
+		if where and anim.CaptionShort ~= stageNo then
+			table.insert(parts, where)
+		end
+		table.insert(parts, "STAGE " .. tostring(stageNo))
+		if waveText ~= "" then
+			table.insert(parts, waveText)
+		end
+		local caption = table.concat(parts, " · ")
+		if ui.StageNumber.Text ~= caption then
+			local newStage = anim.CaptionStage ~= stageNo
+			ui.StageNumber.Text = caption
+			anim.CaptionStage = stageNo
+			if newStage then
+				UIAnim.Pop(ui.Stage, 0, 0.7)
+			end
+		end
+		if where and anim.CaptionShort ~= stageNo and ui.StageRoom
+			and ui.StageNumber.AbsoluteSize.X / math.max(0.01, host.Scale()) > ui.StageRoom - 2 * (18 + 8) - 28 then
+			anim.CaptionShort = stageNo
 		end
 		if ui.StageGoal.Text ~= goal then
 			ui.StageGoal.Text = goal
-			anim.StageNewsAt = os.clock()
-			if goal == "OPEN THE PORTAL" or goal == "OPEN PORTAL" then
+			if string.sub(goal, 1, 15) == "Open the portal" and anim.GoalWarn ~= goal then
+				anim.GoalWarn = goal
 				UIAnim.Punch(ui.Stage, 0.25)
 				UIAnim.Shake(ui.Stage, 4, 0.3)
 				glow(ui.Stage, P.crimson_400)
@@ -1292,25 +1544,8 @@ local function updateStage(state: Configuration)
 			end
 		end
 		anim.StagePhase = stagePhase
-		ui.StageGoal.TextColor3 = goalColor
-		setText(ui.StageCount, count)
-		-- calm: a plain objective is news for a few seconds, then the pill is just
-		-- "STAGE N"; boss / surge / open portal and counting goals stay (urgent or moving)
-		local urgent = stagePhase ~= "Explore" or count ~= "" or (state:GetAttribute("SwarmWarn") or 0) > 0
-		local calm = not urgent and os.clock() - (anim.StageNewsAt or 0) > 8
-		if ui.StageGoal.Visible == calm then
-			ui.StageGoal.Visible = not calm
-			ui.StageDot.Visible = not calm
-		end
-		local showCount = count ~= "" and not calm
-		if ui.StageCount.Visible ~= showCount then
-			ui.StageCount.Visible = showCount
-			ui.StageDot2.Visible = showCount
-		end
-		if goal == longGoal and ui.StageRoom and (stagePhase == "Boss" or STAGE_SHORT[longGoal]) then
-			if ui.Stage.AbsoluteSize.X / math.max(0.01, host.Scale()) > ui.StageRoom then
-				anim.StageTooWide = longGoal
-			end
+		if ui.StageGoal.TextColor3 ~= goalColor then
+			ui.StageGoal.TextColor3 = goalColor
 		end
 	end
 
@@ -1320,8 +1555,7 @@ local function updateStage(state: Configuration)
 			anim.BannerStage = stageNo
 			-- joining mid-fight (reconnect, boss already up): no banner over the action
 			if stagePhase == "Explore" or stagePhase == "None" then
-				local sub = count ~= "" and (goal .. " · " .. count) or goal
-				showStageBanner(stageNo, sub)
+				showStageBanner(stageNo, string.upper(goal))
 			end
 		end
 	end
@@ -1402,7 +1636,7 @@ local function updateXP(dt: number, nowT: number)
 		if flash and not (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
 			flash.Color = ColorSequence.new(P.ivory_100)
 			task.delay(0.25, function()
-				flash.Color = Theme.Gradient.XP
+				flash.Color = XP_GRADIENT
 			end)
 		end
 		UIAnim.Punch(ui.Level, 0.4)
@@ -1432,7 +1666,7 @@ local function updateXP(dt: number, nowT: number)
 	end
 	local pending = tonumber(player:GetAttribute("PendingUpgrades")) or 0
 	local str = pending > 0 and string.format("%d upgrade%s ready", pending, pending == 1 and "" or "s")
-		or string.format("%s: %d / %d XP", player:GetAttribute("XPReward") == "Coins" and "Gold" or "Upgrade", xp, need)
+		or (player:GetAttribute("XPReward") == "Coins" and string.format("Gold: %d / %d XP", xp, need) or string.format("%d / %d XP", xp, need))
 	if anim.XPShown ~= str then
 		anim.XPShown = str
 		ui.XP.Label.Text = str
@@ -1689,6 +1923,7 @@ function Hud.SetVisible(on: boolean)
 		ui.Frame.Visible = on and not hudCovered
 	end
 	if not on then
+		setBuildOpen(false)
 		stopBanner()
 		if ui.VignetteLevel then
 			ui.VignetteLevel.Value = 1
@@ -1698,6 +1933,9 @@ end
 
 function Hud.SetCovered(on: boolean)
 	hudCovered = on
+	if on then
+		setBuildOpen(false) -- a decision / menu takes over; the details never linger behind it
+	end
 	if ui.Frame then
 		ui.Frame.Visible = hudOn and not on
 	end
@@ -1733,6 +1971,7 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	UIState.SetRenderer("Headline", renderHeadline)
 	buildBuffChip(frame)
 	buildBar(frame)
+	buildDetails(frame)
 	buildStatus(frame)
 	buildVignette(fxGui)
 	for _, name in ipairs({ "HP", "MaxHP", "Shield" }) do
@@ -1741,6 +1980,36 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	refreshHpText()
 	player:GetAttributeChangedSignal("Ward"):Connect(refreshWard)
 	refreshWard()
+	-- the run's items for the build details (the same list the item strip shows)
+	Remotes.Get("Items").OnClientEvent:Connect(function(list)
+		if type(list) ~= "table" then
+			return
+		end
+		runItems = {}
+		for _, it in ipairs(list) do
+			if type(it) == "table" and type(it.Id) == "string" and ItemData.Items[it.Id] then
+				table.insert(runItems, { Id = it.Id, Count = tonumber(it.Count) or 1 })
+			end
+		end
+		refreshDetails()
+	end)
+	player:GetAttributeChangedSignal("InRun"):Connect(function()
+		if not player:GetAttribute("InRun") then
+			runItems = {}
+			setBuildOpen(false)
+		end
+	end)
+	-- B (keyboard) / Y (gamepad) toggle the build details while the HUD shows
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed or UserInputService:GetFocusedTextBox() then
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.B or input.KeyCode == Enum.KeyCode.ButtonY then
+			if ui.Frame and ui.Frame.Visible then
+				setBuildOpen(not ui.BuildOpen)
+			end
+		end
+	end)
 	-- the counters grow with their numbers; keep the timer clear of them
 	ui.Counters:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
 	h.OnRelayout(layout)

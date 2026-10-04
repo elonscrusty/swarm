@@ -60,6 +60,7 @@ local DETAIL_HEADING = Font.fromEnum(Enum.Font.GothamBold)
 local ACTION_H = 46 -- the SELECT / UNLOCK button
 local PORTRAIT = 84 -- framed portrait in the details head
 local SKIN_GAP = 8
+local STICKY_H = 30 -- the PREVIEW / EQUIPPED strip on top of the details panel
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -275,7 +276,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		Name = "Scroll",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromOffset(0, STICKY_H),
+		Size = UDim2.new(1, 0, 1, -STICKY_H),
 		ScrollBarThickness = 4,
 		ScrollBarImageColor3 = P.gold_500,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -285,6 +287,13 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.padding(scroll, 20, 20, 20, 20)
 	ui.DetailList = UIKit.list(scroll, { Padding = UDim.new(0, 12), HorizontalAlignment = Enum.HorizontalAlignment.Left })
 	ui.Scroll = scroll
+	-- sticky strip over the scrolling details: which hero this panel is about (PREVIEW vs
+	-- EQUIPPED) and whose upgrades the rows below buy, so it stays clear while scrolling
+	ui.Sticky = new("Frame", { Name = "Sticky", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.2, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, STICKY_H), ZIndex = 4 }, detailFace)
+	UIKit.corner(ui.Sticky, Theme.Radius.L)
+	UIKit.Hairline(ui.Sticky, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, 0), Size = UDim2.new(1, -24, 0, 1), ZIndex = 5 })
+	ui.StickyText = text(ui.Sticky, "Label", "", { Name = "Text", Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, -32, 1, 0), RichText = true, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100, TextScaled = true, ZIndex = 5 }, 13)
+	new("UITextSizeConstraint", { MaxTextSize = TS(13), MinTextSize = 9 }, ui.StickyText)
 	-- footer for the action button when the details don't fit (phones): always in view
 	ui.Footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Visible = false, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) }, detailFace)
 	UIKit.padding(ui.Footer, 6, 18, 12, 18)
@@ -544,6 +553,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	-- until the next ProfileSync, which always carries the real gold and levels)
 	local pending: { [string]: number } = {}
 	local lastHeroLevel: { [string]: number } = {} -- mastery levels seen (a rise plays a sound)
+local bought: { [string]: { [string]: number } } = {} -- upgrades bought on this visit
 	local lastProfile: any = nil
 	local function buildMasteryRows(p: { [string]: any }, heroId: string)
 		for _, c in ipairs(ui.MasteryPanel:GetChildren()) do
@@ -556,6 +566,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		local track = type(p.HeroUpgrades) == "table" and type(p.HeroUpgrades[heroId]) == "table" and p.HeroUpgrades[heroId] or {}
 		local innerW = ui.DetailInnerW or 390
 		ui.BuiltInnerW = innerW
+		local heroName = CharacterData.Characters[heroId] and CharacterData.Characters[heroId].Name or heroId
+		-- whose upgrades these are, and one running note of what was bought on this visit
+		-- (rows update from the server's profile; no stream of confirmations here)
+		local headTxt = string.format("%s'S UPGRADES · only for the %s · paid with gold", string.upper(heroName), heroName)
+		text(ui.MasteryPanel, "Small", headTxt, { Name = "Owner", LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(13) + 6), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd, FontFace = DETAIL_HEADING }, 13)
 		local bw = math.clamp(math.floor(innerW * 0.37), 128, 190)
 		local withIcon = bw >= 175 -- narrow buttons (phones) keep the whole label instead
 		local lineH = TS(13) + 4
@@ -573,6 +588,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			local key = heroId .. "/" .. id
 			if lastHeroLevel[key] ~= nil and level > lastHeroLevel[key] and screen.Visible then
 				UIKit.Sound("Item") -- a mastery level bought
+				bought[heroId] = bought[heroId] or {}
+				bought[heroId][def.Name] = level
 			end
 			lastHeroLevel[key] = level
 			local busy = pending[key] ~= nil
@@ -593,10 +610,15 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				Name = "Level", FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(52, 5), Size = UDim2.fromOffset(textW, lineH),
 				TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = maxed and P.gold_300 or P.ivory_100,
 			}, 13)
-			text(row, "Small", effectStep(heroId, id, level, maxed), {
+			local effectLine = effectStep(heroId, id, level, maxed)
+if locked then
+	-- why the next rank is locked (MetaUpgradeData.RequiredMastery / HeroCap)
+	effectLine = string.format("Rank %d needs %s mastery %d (now %d)", level + 1, heroName, MetaUpgradeData.RequiredMastery(id, level + 1), mastery)
+end
+text(row, "Small", effectLine, {
 				Name = "Effect", Position = UDim2.fromOffset(52, 5 + lineH + 2), Size = UDim2.fromOffset(textW, rowH - lineH - 12),
 				TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd,
-				TextColor3 = maxed and P.gold_300 or P.moss_200,
+				TextColor3 = maxed and P.gold_300 or (locked and P.ivory_300 or P.moss_200),
 			}, 13)
 			local title, kind = "", "Primary"
 			local icon = "coin"
@@ -649,6 +671,15 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				end,
 			})
 			b.SetEnabled(not maxed and not locked and not busy)
+		end
+		local got = bought[heroId]
+		if got and next(got) then
+			local parts = {}
+			for name, lv in pairs(got) do
+				table.insert(parts, name .. " LV " .. lv)
+			end
+			table.sort(parts)
+			text(ui.MasteryPanel, "Small", "Bought this visit: " .. table.concat(parts, " · "), { Name = "Bought", LayoutOrder = 100, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.moss_200 }, 13)
 		end
 	end
 
@@ -808,6 +839,18 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		-- the equipped hero in its equipped skin is not a preview
 		local wearing = selected and type(p.Skins) == "table" and (p.Skins[inspChar] or "Default") == previewSkin
 		ui.CentreSub.Text = (wearing and "Equipped  ·  " or "Preview  ·  ") .. skinName(previewSkin)
+local eqDef = CharacterData.Characters[p.SelectedCharacter or CharacterData.Default]
+local gold, muted = UIKit.hex(P.gold_300), UIKit.hex(P.ivory_300)
+local sticky
+if selected then
+	sticky = string.format('<font color="%s">EQUIPPED</font>  %s', gold, string.upper(def.Name))
+	if not wearing then
+		sticky ..= string.format('  <font color="%s">· previewing skin %s</font>', muted, skinName(previewSkin))
+	end
+else
+	sticky = string.format('<font color="%s">PREVIEW</font>  %s  <font color="%s">· you play the %s until you select another</font>', gold, string.upper(def.Name), muted, eqDef and eqDef.Name or "Knight")
+end
+ui.StickyText.Text = sticky
 		-- how to unlock it: the achievement and its progress, or the gold price; an owned
 		-- hero shows its MASTERY instead (and UPGRADE <HERO>)
 		if p ~= lastProfile then
@@ -825,7 +868,10 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			local cap = MetaUpgradeData.HeroCap(level, "MaxHP", inspChar)
 			ui.UnlockName.Text = "LEVEL " .. level .. (level >= Config.HeroMastery.MaxLevel and "  ·  MAX" or "")
 			ui.UnlockCount.Text = need > 0 and (UIKit.formatNumber(into) .. " / " .. UIKit.formatNumber(need) .. " XP") or "MAX"
-			ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery. Mastery %d lets its upgrades reach level %d.", def.Name, level, cap)
+			local sigCap = MetaUpgradeData.HeroCap(level, "Signature", inspChar)
+local every = Config.HeroMastery.SignatureEvery
+ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d). Each mastery level lets every stat upgrade go %d ranks higher, up to that upgrade's own max; the trait needs mastery %d, %d, %d... Now: stats up to rank %d, trait up to rank %d.",
+	def.Name, Config.HeroMastery.MaxLevel, Config.HeroMastery.StatPerLevel, every, 2 * every, 3 * every, cap, sigCap)
 			ui.UnlockMeter.Set(need > 0 and math.clamp(into / need, 0, 1) or 1, "")
 			ui.MasteryButton.SetText(ui.MasteryOpen and "HIDE UPGRADES" or ("UPGRADE " .. string.upper(def.Name)))
 			if ui.MasteryOpen then
@@ -979,7 +1025,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 		ui.Footer.Visible = on
 		ui.Footer.Size = UDim2.new(1, 0, 0, ACTION_H + 18)
-		ui.Scroll.Size = on and UDim2.new(1, 0, 1, -(ACTION_H + 18)) or UDim2.fromScale(1, 1)
+		ui.Scroll.Size = on and UDim2.new(1, 0, 1, -(ACTION_H + 18) - STICKY_H) or UDim2.new(1, 0, 1, -STICKY_H)
 		b.Parent = on and ui.Footer or ui.Scroll
 	end
 
@@ -1015,7 +1061,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		if ui.Action.Instance.Parent == ui.Footer then
 			measured += ACTION_H + 8
 		end
-		local contentH = measured > 10 and (measured + 32) or (UIKit.IsCompact() and 640 or 590)
+		local contentH = measured > 10 and (measured + 32 + STICKY_H) or (UIKit.IsCompact() and 640 or 590)
 		local n = #CharacterData.Order
 		local centreW = 420
 		if portrait then
@@ -1128,6 +1174,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end,
 		OnShow = function(_p)
+			table.clear(bought)
 			refresh()
 			local i = 0
 			for _, id in ipairs(CharacterData.Order) do

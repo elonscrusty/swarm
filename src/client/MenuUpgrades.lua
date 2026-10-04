@@ -126,13 +126,14 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		return f
 	end
 
-	local HERO_DESC = "Each hero has its own Max HP, Might, Armor, Speed, Luck, Growth and trait upgrades."
+	local HERO_DESC = "Each hero has its own stat and trait upgrades, bought in Characters."
 
 	-- lines a description needs in a card of the current width (narrow phone cards wrap
 	-- to 3-4 lines instead of cutting the sentence off)
 	local function descLines(desc: string): number
 		local room = math.max(60, (ui.CellW or 280) - 28 - 70)
-		return math.clamp(math.ceil(#desc * TS(14) * 0.55 / room), 1, 4)
+		-- (a generous width per letter: a short estimate cut the sentence off)
+		return math.clamp(math.ceil(#desc * TS(14) * 0.62 / room), 1, 4)
 	end
 	local function metaDescLines(): number
 		local n = 2
@@ -280,7 +281,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local selected = p.SelectedCharacter or "Knight"
 		cardTop(f, function()
 			Icons.Character(f, selected, { Size = 56 })
-		end, "Hero upgrades", HERO_DESC, 0, metaDescLines())
+		end, "Hero upgrades", HERO_DESC, 0, math.max(metaDescLines(), descLines(HERO_DESC) + 1))
 		UIKit.Button(f, {
 			Kind = "Primary",
 			Title = "OPEN CHARACTERS",

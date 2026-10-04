@@ -152,46 +152,90 @@ local function add(m: Model, cf: CFrame, name: string, size: Vector3, at: Vector
 	return p
 end
 
--- Part-built chests in the same pieces as blender/models/loot.py: Box, Lid (+ LidTrim),
--- Straps, Fittings. The Lid carries a "Hinge" attribute (back top edge, relative to the
--- Lid's centre in model space) so both looks open the same way.
+-- Part-built chests in the same pieces as blender/models/loot.py: Box, Lid (+ Lid*
+-- pieces that swing with it), Straps, Fittings. The Lid carries a "Hinge" attribute (back
+-- bottom edge, relative to the Lid's centre in model space) so both looks open the same way.
+-- One construction for every tier, matching the chest icons: a faceted lid (flat top and
+-- two bevels), two bands running over body and lid, a rim at the seam, corner posts and a
+-- lock plate with a hasp on the front (-Z, toward the camera). Tiers differ in material:
+--   Small   brown wood, gold bands and posts          (icons/chest)
+--   Large   crimson panels, steel frame, gold studs    (reward_ChestLarge)
+--   Golden  slate panels, gold frame, red gems         (reward_ChestGolden)
+--   Plain   the free cache: weathered wood and iron, no gold, no posts
 local CHEST_LOOK = {
-	Small = { W = 2.6, H = 1.2, D = 1.8, LidH = 0.6, Wood = P.wood_500, Lid = P.wood_400, Iron = P.steel_700, Trim = P.gold_500 },
-	Large = { W = 3.6, H = 1.6, D = 2.4, LidH = 0.8, Wood = P.wood_600, Lid = P.wood_500, Iron = P.steel_600, Trim = P.gold_400 },
-	Golden = { W = 3.0, H = 1.4, D = 2.1, LidH = 0.7, Wood = P.gold_600, Lid = P.gold_500, Iron = P.gold_700, Trim = P.ivory_100 },
-	-- free chests (the Buried Cache): plain weathered wood and iron, no gold anywhere
-	Plain = { W = 2.5, H = 1.15, D = 1.7, LidH = 0.55, Wood = P.wood_600, Lid = P.wood_500, Iron = P.steel_700, Trim = P.steel_600, Plain = true },
+	Small = { W = 2.6, H = 1.2, D = 1.8, LidH = 0.7, Wood = P.wood_500, Lid = P.wood_400, Band = P.gold_500, Frame = P.gold_500, Lock = P.gold_400 },
+	Large = { W = 3.6, H = 1.6, D = 2.4, LidH = 0.9, Wood = P.crimson_600, Lid = P.crimson_500, Band = P.steel_500, Frame = P.steel_500, Lock = P.gold_400, Stud = P.gold_400 },
+	Golden = { W = 3.0, H = 1.4, D = 2.1, LidH = 0.8, Wood = P.slate_700, Lid = P.slate_600, Band = P.gold_400, Frame = P.gold_400, Lock = P.gold_300, Stud = P.gold_300, Gem = P.crimson_400 },
+	Plain = { W = 2.5, H = 1.15, D = 1.7, LidH = 0.6, Wood = P.wood_600, Lid = P.wood_500, Band = P.steel_700, Frame = P.steel_600, Lock = P.steel_600, Plain = true },
 }
 
 local function chestFallback(kind: string)
 	return function(m: Model, cf: CFrame, s: number, _pal, _sh)
 		local L = CHEST_LOOK[kind] or CHEST_LOOK.Small
 		local w, h, d, lh = L.W * s, L.H * s, L.D * s, L.LidH * s
+		local lw, ld = w + 0.06, d + 0.06 -- the lid overhangs the box a little
+		local half = lh * 0.5
+		local topD = ld * 0.52 -- the flat top of the faceted lid
+		local bevel = (ld - topD) / 2
+		local back = CFrame.Angles(0, math.pi, 0)
 		add(m, cf, "Box", Vector3.new(w, h, d), Vector3.new(0, h / 2, 0), L.Wood)
-		add(m, cf, "Fittings", Vector3.new(w + 0.1, 0.18 * s, d + 0.1), Vector3.new(0, 0.09 * s, 0), L.Trim, kind == "Golden" and METAL or nil)
-		local lid = add(m, cf, "Lid", Vector3.new(w + 0.06, lh, d + 0.06), Vector3.new(0, h + lh / 2, 0), L.Lid)
-		lid:SetAttribute("Hinge", Vector3.new(0, -lh / 2, (d + 0.06) / 2))
-		local trim = add(m, cf, "LidTrim", Vector3.new(w * 0.7, lh * 0.35, d * 0.7), Vector3.new(0, h + lh + lh * 0.17, 0), L.Lid:Lerp(L.Trim, 0.25))
-		local _ = trim
-		for _, x in ipairs({ -w * 0.3, w * 0.3 }) do
-			add(m, cf, "Straps", Vector3.new(0.22 * s, h + 0.02, d + 0.04), Vector3.new(x, h / 2, 0), L.Iron, METAL)
+		-- lid: a block, a narrower top and two bevels (front wedge low toward -Z)
+		local lid = add(m, cf, "Lid", Vector3.new(lw, half, ld), Vector3.new(0, h + half / 2, 0), L.Lid)
+		lid:SetAttribute("Hinge", Vector3.new(0, -half / 2, ld / 2))
+		add(m, cf, "LidTop", Vector3.new(lw, half, topD), Vector3.new(0, h + half * 1.5, 0), L.Lid)
+		local wedge = function(name: string, size: Vector3, z: number, color: Color3, material: Enum.Material?, rot: CFrame?)
+			local p = part({
+				Name = name,
+				Wedge = true,
+				Size = size,
+				CFrame = cf * CFrame.new(0, h + half * 1.5, z) * (rot or CFrame.identity),
+				Color = color,
+				Material = material,
+			})
+			p.Parent = m
+			return p
 		end
-		add(m, cf, "Fittings", Vector3.new(0.42 * s, 0.5 * s, 0.12), Vector3.new(0, h - 0.1 * s, -d / 2 - 0.05), L.Trim, METAL)
+		wedge("LidBevel", Vector3.new(lw, half, bevel), -(topD + bevel) / 2, L.Lid)
+		wedge("LidBevel", Vector3.new(lw, half, bevel), (topD + bevel) / 2, L.Lid, nil, back)
+		-- bands over body and lid (the lid's parts swing with it)
+		local bw = (kind == "Large" and 0.32 or 0.24) * s
+		for _, x in ipairs({ -w * 0.32, w * 0.32 }) do
+			add(m, cf, "Straps", Vector3.new(bw, h + 0.02, d + 0.06), Vector3.new(x, h / 2, 0), L.Band, METAL)
+			add(m, cf, "LidBand", Vector3.new(bw, half + 0.02, ld + 0.05), Vector3.new(x, h + half / 2, 0), L.Band, METAL)
+			add(m, cf, "LidBand", Vector3.new(bw, half + 0.03, topD + 0.02), Vector3.new(x, h + half * 1.5 + 0.015, 0), L.Band, METAL)
+			for _, sign in ipairs({ -1, 1 }) do
+				local bp = part({
+					Name = "LidBand",
+					Wedge = true,
+					Size = Vector3.new(bw, half + 0.03, bevel + 0.03),
+					CFrame = cf * CFrame.new(x, h + half * 1.5 + 0.015, sign * ((topD + bevel) / 2 + 0.012)) * (sign > 0 and back or CFrame.identity),
+					Color = L.Band,
+					Material = METAL,
+				})
+				bp.Parent = m
+			end
+		end
+		-- rim at the seam and the foot band
+		add(m, cf, "Fittings", Vector3.new(w + 0.12, 0.16 * s, d + 0.12), Vector3.new(0, h - 0.08 * s, 0), L.Frame, METAL)
+		add(m, cf, "Fittings", Vector3.new(w + 0.1, 0.18 * s, d + 0.1), Vector3.new(0, 0.09 * s, 0), L.Frame, METAL)
 		if not L.Plain then
-			-- paid chests: gold corner caps (the free cache has none)
+			-- corner posts (paid chests; the free cache has none)
 			for _, x in ipairs({ -w / 2, w / 2 }) do
 				for _, z in ipairs({ -d / 2, d / 2 }) do
-					add(m, cf, "Fittings", Vector3.new(0.3, 0.36, 0.3) * s, Vector3.new(x, h - 0.16 * s, z), L.Trim, METAL)
+					add(m, cf, "Fittings", Vector3.new(0.3 * s, h + 0.04, 0.3 * s), Vector3.new(x, h / 2, z), L.Frame, METAL)
+					if L.Stud and z < 0 then
+						add(m, cf, "Fittings", Vector3.new(0.22, 0.22, 0.22) * s, Vector3.new(x, h * 0.5, z - 0.16 * s), L.Stud, METAL, nil, CFrame.Angles(0, 0, math.rad(45)))
+					end
 				end
 			end
 		end
-		if kind == "Large" then
-			for _, x in ipairs({ -w * 0.3, w * 0.3 }) do
-				add(m, cf, "Gem", Vector3.new(0.24, 0.24, 0.24) * s, Vector3.new(x, h * 0.55, -d / 2 - 0.1), P.slate_300, NEON, nil, CFrame.Angles(0, 0, math.rad(45)))
-			end
-		end
-		if kind == "Golden" then
-			add(m, cf, "Gem", Vector3.new(0.3, 0.3, 0.3) * s, Vector3.new(0, h + lh + lh * 0.4, 0), P.crimson_400, NEON, nil, CFrame.Angles(0, math.rad(45), math.rad(45)))
+		-- lock plate with a keyhole on the body, the hasp on the lid
+		add(m, cf, "Fittings", Vector3.new(0.6 * s, 0.66 * s, 0.14), Vector3.new(0, h - 0.3 * s, -d / 2 - 0.07), L.Lock, METAL)
+		add(m, cf, "Fittings", Vector3.new(0.13 * s, 0.24 * s, 0.05), Vector3.new(0, h - 0.36 * s, -d / 2 - 0.16), P.slate_950)
+		add(m, cf, "LidHasp", Vector3.new(0.34 * s, half * 0.8, 0.12), Vector3.new(0, h + half * 0.4, -ld / 2 - 0.06), L.Lock, METAL)
+		if L.Gem then
+			add(m, cf, "Gem", Vector3.new(0.3, 0.3, 0.3) * s, Vector3.new(0, h - 0.3 * s, -d / 2 - 0.2), L.Gem, NEON, nil, CFrame.Angles(0, 0, math.rad(45)))
+			add(m, cf, "LidGem", Vector3.new(0.34, 0.34, 0.34) * s, Vector3.new(0, h + lh + 0.1 * s, 0), L.Gem, NEON, nil, CFrame.Angles(0, math.rad(45), math.rad(45)))
 		end
 	end
 end
