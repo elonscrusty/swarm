@@ -219,22 +219,42 @@ local function think(e, runPlayers)
 	-- they crawled at about a tenth of their speed just outside contact reach:
 	-- docs/overhaul/CORNER_REPORT.md, tools/preview/scenes/corner-regression.luau.)
 	local look = math.min(Config.Enemies.AvoidRayLength + e.Radius, to.Magnitude)
+	local normal: Vector3? = nil
 	if not e.Ghost and rayParams and obstacleAhead(e.Pos, desired, look) then
 		-- 1 stud up: the lowest colliders (rubble, low walls, plinths) top out at ~1.3 studs;
 		-- a ray at 2.5 passed over them and an enemy meeting one head-on stalled behind it
 		local origin = e.Pos + Vector3.new(0, 1, 0)
 		local hit = workspace:Raycast(origin, desired * look, rayParams)
 		if hit then
-			local tangent = hit.Normal:Cross(UP) * FLAT
-			if tangent.Magnitude > 1e-3 then
-				tangent = tangent.Unit
-				if tangent:Dot(desired) < 0 then
+			normal = hit.Normal * FLAT
+		end
+	end
+	-- The ray is thin, the enemy is not: a big enemy whose edge rests on an obstacle the
+	-- ray misses was pushed straight back every frame (EnemyAI.Step pushOut) and stalled.
+	-- Pressed against an obstacle and still heading into it: steer round it the same way.
+	local pressed = e.BlockNormal
+	if not normal and pressed and pressed:Dot(desired) < -0.2 then
+		normal = pressed
+	end
+	local keep = e.AvoidSide
+	e.AvoidSide = nil
+	if normal then
+		local tangent = normal:Cross(UP) * FLAT
+		if tangent.Magnitude > 1e-3 then
+			tangent = tangent.Unit
+			-- keep going round the side already chosen: meeting a face head-on, the side
+			-- flipped from think to think and a big enemy dithered behind it
+			if keep and math.abs(tangent:Dot(keep)) > 0.3 then
+				if tangent:Dot(keep) < 0 then
 					tangent = -tangent
 				end
-				local steer = tangent * Config.Enemies.AvoidTurnStrength + desired * 0.4 + (hit.Normal * FLAT) * 0.3
-				if steer.Magnitude > 1e-3 then
-					desired = steer.Unit
-				end
+			elseif tangent:Dot(desired) < 0 then
+				tangent = -tangent
+			end
+			e.AvoidSide = tangent
+			local steer = tangent * Config.Enemies.AvoidTurnStrength + desired * 0.4 + normal * 0.3
+			if steer.Magnitude > 1e-3 then
+				desired = steer.Unit
 			end
 		end
 	end
@@ -731,7 +751,12 @@ function EnemyAI.Step(dt: number)
 			pos = e.Pos + vel * dt
 			e.Knock *= decay
 			if not e.Ghost then
-				pos = pushOut(pos, e.Radius)
+				local free = pushOut(pos, e.Radius)
+				local bx, bz = free.X - pos.X, free.Z - pos.Z
+				local b = math.sqrt(bx * bx + bz * bz)
+				-- which way an obstacle pushed it back this frame (think() steers round)
+				e.BlockNormal = b > 1e-3 and Vector3.new(bx / b, 0, bz / b) or nil
+				pos = free
 			end
 		end
 		pos = Vector3.new(math.clamp(pos.X, c.X - half + e.Radius, c.X + half - e.Radius), c.Y, math.clamp(pos.Z, c.Z - half + e.Radius, c.Z + half - e.Radius))

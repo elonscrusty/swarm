@@ -126,11 +126,20 @@ preview.setRaycast(function(origin: Vector3, direction: Vector3, params)
 	end
 	collectShapes(params)
 	local best, bestN, bestPart = math.huge, nil, nil
+	local e = origin + direction
+	local x0, x1 = math.min(origin.X, e.X), math.max(origin.X, e.X)
+	local z0, z1 = math.min(origin.Z, e.Z), math.max(origin.Z, e.Z)
 	for _, sh in ipairs(shapes) do
 		local t, n
 		if sh.Cyl then
+			if sh.X + sh.R < x0 or sh.X - sh.R > x1 or sh.Z + sh.R < z0 or sh.Z - sh.R > z1 then
+				continue
+			end
 			t, n = rayCyl(origin, direction, sh)
 		else
+			if sh.Max.X < x0 or sh.Min.X > x1 or sh.Max.Z < z0 or sh.Min.Z > z1 then
+				continue
+			end
 			t, n = rayBox(origin, direction, sh.Min, sh.Max)
 		end
 		if t and t < best then
@@ -280,7 +289,7 @@ local function measure(rp, at: Vector3, kind: string, openDir: Vector3, seconds:
 		purge()
 		t += dt
 		local hp = rp.Root.Position
-		if args.trace == kind and list[1] and math.floor(t * FPS + 0.5) % 15 == 0 then
+		if args.trace == kind and list[1] and math.floor(t * FPS + 0.5) % (tonumber(args.every) or 15) == 0 then
 			local e1 = list[1]
 			preview.log(string.format("trace t=%.1f hero (%.1f, %.1f) enemy (%.1f, %.1f) alive=%s dir=%s sep=%s act=%s", t, hp.X, hp.Z, e1.Pos.X, e1.Pos.Z, tostring(e1.Alive), tostring(e1.Dir), tostring(e1.Sep), tostring(e1.Act)))
 		end
@@ -379,6 +388,12 @@ local function positions(arena)
 		for _, d in ipairs(arena.ObstacleFolder:GetDescendants()) do
 			if d:IsA("BasePart") then
 				local top = d.Position.Y + (d.Shape == Enum.PartType.Cylinder and d.Size.X or d.Size.Y) / 2 - c.Y
+				if args.near then
+					local v = string.split(args.near, ",")
+					if math.abs(d.Position.X - tonumber(v[1])) < 6 and math.abs(d.Position.Z - tonumber(v[2])) < 6 then
+						preview.log("near part", d.Name, tostring(d.Shape), tostring(d.Position), tostring(d.Size), tostring(d.CFrame.Rotation), d.CanQuery)
+					end
+				end
 				if top < 3 then
 					preview.log(string.format("low collider %s at (%.0f, %.0f) top %.1f", d.Name, d.Position.X, d.Position.Z, top))
 				end
@@ -408,7 +423,7 @@ local function positions(arena)
 		return a.Pos.Z < b.Pos.Z
 	end)
 	for _, ob in ipairs(near) do
-		if pockets >= 4 then
+		if pockets >= 3 then
 			break
 		end
 		local px, pz = ob.Pos.X - c.X, ob.Pos.Z - c.Z
@@ -472,7 +487,7 @@ for _, arenaName in ipairs(arenas) do
 			continue
 		end
 		local single = measure(rp, at, "single", dir, 8)
-		local crowd = measure(rp, at, "crowd", dir, 12)
+		local crowd = measure(rp, at, "crowd", dir, 9)
 		local elite = measure(rp, at, "elite", dir, 8)
 		line(arenaName, name, "single", single)
 		line(arenaName, name, "crowd", crowd)

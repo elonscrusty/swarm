@@ -3,10 +3,14 @@
 	The stage portal's landmark, client side: ONE pooled beacon that makes the portal
 	unmistakable from the moment it is revealed (SwarmState PortalReveal, StageManager):
 
-	  pillar    a tall neon light pillar over the portal with a glowing cap, breathing
-	  ring      a pulsing floor ring (two rings of 16 slabs expanding from the rune circle)
-	  burst     at the reveal the pillar rises out of the ground and a bright shockwave
-	            ring runs out across the floor (skipped with Reduce flashes)
+	  pillar    a tall, slim light pillar starting ABOVE the arch (so the masonry and the
+	            membrane stay readable), with a small glowing cap, breathing softly
+	  ring      a gentle floor pulse just outside the rune circle (two rings of 16 short
+	            dashes), only while the portal waits (available) or stands open (exit
+	            ready): never while charging or during the boss / surge, so the charge
+	            marks and the boss telegraphs are not drowned in moving marks
+	  burst     at the reveal the pillar rises and a shockwave ring runs out across the
+	            floor (skipped with Reduce flashes)
 
 	Colours follow the stage phase like the world portal (arcane while exploring, gold
 	while charging / open, crimson during the boss and the surge) through
@@ -30,14 +34,16 @@ local TAU = math.pi * 2
 local UPRIGHT = CFrame.Angles(0, 0, math.pi / 2) -- a cylinder's axis is X: stand it up
 
 local PILLAR_H = 140
-local PILLAR_D = 2.4
-local HALO_D = 7
+local PILLAR_D = 1.6
+local PILLAR_BASE = 12 -- studs above the floor: the Portal arch is ~11 tall
+local HALO_D = 4
+local CAP_D = 3.6
 local RING_SLABS = 16
 local RING_FROM = Config.Stages.PortalRadius + 0.5
-local RING_TO = Config.Stages.PortalRadius + 14
-local PULSE_SECONDS = 2.2
+local RING_TO = Config.Stages.PortalRadius + 6
+local PULSE_SECONDS = 2.6
 local BURST_SECONDS = 1.1
-local BURST_RADIUS = 46
+local BURST_RADIUS = 30
 local PARK = CFrame.new(0, -400, 0)
 
 local folder: Folder? = nil
@@ -81,17 +87,17 @@ local function build()
 	folder = f
 	pillar = part("Pillar", Enum.PartType.Cylinder, Vector3.new(PILLAR_H, PILLAR_D, PILLAR_D), P.fx_arcane, 0.25)
 	halo = part("Halo", Enum.PartType.Cylinder, Vector3.new(PILLAR_H * 0.6, HALO_D, HALO_D), P.fx_arcane, 0.84)
-	cap = part("Cap", Enum.PartType.Ball, Vector3.new(6, 6, 6), P.ivory_100, 0.15)
+	cap = part("Cap", Enum.PartType.Ball, Vector3.new(CAP_D, CAP_D, CAP_D), P.ivory_100, 0.15)
 	for r = 1, 2 do
 		rings[r] = {}
 		for i = 1, RING_SLABS do
-			local slab = part("Ring", Enum.PartType.Block, Vector3.new(2.2, 0.16, 0.5), P.fx_arcane, 0.3)
+			local slab = part("Ring", Enum.PartType.Block, Vector3.new(1.3, 0.12, 0.32), P.fx_arcane, 0.45)
 			rings[r][i] = slab
 			table.insert(ringParts, slab)
 		end
 	end
 	for i = 1, RING_SLABS do
-		local slab = part("Burst", Enum.PartType.Block, Vector3.new(4, 0.2, 0.7), P.ivory_100, 1)
+		local slab = part("Burst", Enum.PartType.Block, Vector3.new(3, 0.16, 0.5), P.ivory_100, 1)
 		burst[i] = slab
 		table.insert(ringParts, slab)
 	end
@@ -188,7 +194,7 @@ function PortalBeacon.Update(state: Configuration, inRun: boolean)
 	local rise = math.clamp((now - burstAt) / 0.7, 0, 1)
 	local breathe = isReduced and 0 or math.sin(now * 2.1) * 0.5 + 0.5
 	local h = PILLAR_H * rise
-	local y = base.Y + 1
+	local y = base.Y + PILLAR_BASE
 	if pillar and halo and cap then
 		local size = Vector3.new(math.max(0.1, h), PILLAR_D, PILLAR_D)
 		if (pillar.Size - size).Magnitude > 0.05 then
@@ -201,22 +207,34 @@ function PortalBeacon.Update(state: Configuration, inRun: boolean)
 		table.insert(cfs, CFrame.new(base.X, y + h * 0.3, base.Z) * UPRIGHT)
 		table.insert(list, cap)
 		table.insert(cfs, CFrame.new(base.X, y + h + 2, base.Z))
-		local t = 0.22 + breathe * 0.2
+		local t = 0.45 + breathe * 0.15
 		if math.abs(pillar.Transparency - t) > 0.01 then
 			pillar.Transparency = t
-			halo.Transparency = 0.8 + breathe * 0.08
-			cap.Transparency = 0.1 + breathe * 0.25
+			halo.Transparency = 0.88 + breathe * 0.06
+			cap.Transparency = 0.2 + breathe * 0.25
 		end
 	end
-	-- the floor rings: two pulses running outward, or one steady ring (reduced)
-	if isReduced then
+	-- the floor rings: two soft pulses running outward, or one steady ring (reduced); none
+	-- while charging (the rune circle's marks show the charge) or in the boss / surge
+	local pulse = key == "idle" or key == "open"
+	if not pulse then
+		for r = 1, 2 do
+			for _, slab in ipairs(rings[r]) do
+				if slab.Transparency < 1 then
+					slab.Transparency = 1
+				end
+				table.insert(list, slab)
+				table.insert(cfs, PARK)
+			end
+		end
+	elseif isReduced then
 		ringAt(rings[1], base, RING_FROM + 1.5, base.Y + 0.12, 0.3, list, cfs)
 		ringAt(rings[2], base, RING_FROM + 1.5, base.Y + 0.12, 1, list, cfs)
 	else
 		for r = 1, 2 do
 			local f = ((now / PULSE_SECONDS) + (r - 1) * 0.5) % 1
 			local radius = RING_FROM + (RING_TO - RING_FROM) * f
-			ringAt(rings[r], base, radius, base.Y + 0.12, 0.2 + f * 0.8, list, cfs)
+			ringAt(rings[r], base, radius, base.Y + 0.12, 0.45 + f * 0.55, list, cfs)
 		end
 	end
 	-- the reveal shockwave

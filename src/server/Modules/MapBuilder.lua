@@ -3673,11 +3673,11 @@ end
 
 -- Portal looks per state (UI and world share the palette).
 local PORTAL_LOOK = {
-	Idle = { Surface = P.slate_400, SurfaceT = 0.3, Glyph = P.fx_arcane, Beam = P.fx_arcane, BeamT = 0.86, Core = P.slate_200, Light = P.fx_arcane, Bright = 1.2, Mark = P.slate_300, MarkT = 0.35 },
-	Charged = { Surface = P.gold_300, SurfaceT = 0.2, Glyph = P.gold_300, Beam = P.gold_300, BeamT = 0.8, Core = P.gold_200, Light = P.gold_300, Bright = 2, Mark = P.gold_400, MarkT = 0.1 },
-	Boss = { Surface = P.crimson_600, SurfaceT = 0.22, Glyph = P.crimson_300, Beam = P.crimson_400, BeamT = 0.84, Core = P.crimson_300, Light = P.crimson_400, Bright = 1.6, Mark = P.crimson_400, MarkT = 0.25 },
-	Surge = { Surface = P.crimson_500, SurfaceT = 0.15, Glyph = P.crimson_300, Beam = P.crimson_400, BeamT = 0.78, Core = P.crimson_300, Light = P.crimson_400, Bright = 2.2, Mark = P.crimson_300, MarkT = 0.15 },
-	Open = { Surface = P.gold_200, SurfaceT = 0.15, Glyph = P.ivory_100, Beam = P.gold_300, BeamT = 0.74, Core = P.ivory_100, Light = P.gold_300, Bright = 2.4, Mark = P.gold_300, MarkT = 0.05 },
+	Idle = { Surface = P.slate_400, SurfaceT = 0.3, Glyph = P.fx_arcane, Beam = P.fx_arcane, BeamT = 0.9, Core = P.slate_200, CoreT = 0.78, Light = P.fx_arcane, Bright = 1.2, Mark = P.slate_300, MarkT = 0.35 },
+	Charged = { Surface = P.gold_300, SurfaceT = 0.2, Glyph = P.gold_300, Beam = P.gold_300, BeamT = 0.86, Core = P.gold_200, CoreT = 0.72, Light = P.gold_300, Bright = 1.8, Mark = P.gold_400, MarkT = 0.1 },
+	Boss = { Surface = P.crimson_600, SurfaceT = 0.22, Glyph = P.crimson_300, Beam = P.crimson_400, BeamT = 0.9, Core = P.crimson_300, CoreT = 0.8, Light = P.crimson_400, Bright = 1.3, Mark = P.crimson_400, MarkT = 0.25 },
+	Surge = { Surface = P.crimson_500, SurfaceT = 0.15, Glyph = P.crimson_300, Beam = P.crimson_400, BeamT = 0.88, Core = P.crimson_300, CoreT = 0.76, Light = P.crimson_400, Bright = 1.8, Mark = P.crimson_300, MarkT = 0.15 },
+	Open = { Surface = P.gold_200, SurfaceT = 0.15, Glyph = P.ivory_100, Beam = P.gold_300, BeamT = 0.82, Core = P.ivory_100, CoreT = 0.66, Light = P.gold_300, Bright = 2.2, Mark = P.gold_300, MarkT = 0.05 },
 }
 
 local function lerpLook(a, b, t: number)
@@ -3740,12 +3740,16 @@ function MapBuilder.BuildPortal(arena: Arena, pos: Vector3): Portal
 	local lightAt = kitLightPoint("Portal", cf, 1) or (pos + Vector3.new(0, 6, 0))
 	local light = pointLight(fx, lightAt, 26, 1.2, P.fx_arcane, false)
 	arena.Lights += 1
-	local beamH = 70
+	-- the beam starts above the arch (Portal mesh top ~11 studs) so it never paints over
+	-- the masonry or the membrane, and stays slim: the client beacon (PortalBeacon) is the
+	-- far landmark, this one only ties the colour to the arch
+	local beamH = 60
+	local beamBase = 11.5
 	local beam = deco(fx, {
 		Name = "Beam",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(beamH, 4.4, 4.4),
-		CFrame = CFrame.new(pos + Vector3.new(0, 6 + beamH / 2, 0)) * UPRIGHT,
+		Size = Vector3.new(beamH, 3, 3),
+		CFrame = CFrame.new(pos + Vector3.new(0, beamBase + beamH / 2, 0)) * UPRIGHT,
 		Color = P.fx_arcane,
 		Transparency = 0.86,
 		CastShadow = false,
@@ -3753,8 +3757,8 @@ function MapBuilder.BuildPortal(arena: Arena, pos: Vector3): Portal
 	local core = deco(fx, {
 		Name = "BeamCore",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(beamH, 1.4, 1.4),
-		CFrame = CFrame.new(pos + Vector3.new(0, 6 + beamH / 2, 0)) * UPRIGHT,
+		Size = Vector3.new(beamH, 1, 1),
+		CFrame = CFrame.new(pos + Vector3.new(0, beamBase + beamH / 2, 0)) * UPRIGHT,
 		Color = P.slate_200,
 		Transparency = 0.7,
 		CastShadow = false,
@@ -3790,6 +3794,7 @@ function MapBuilder.BuildPortal(arena: Arena, pos: Vector3): Portal
 		beam.Color = look.Beam
 		beam.Transparency = look.BeamT
 		core.Color = look.Core
+		core.Transparency = look.CoreT
 		light.Color = look.Light
 		light.Brightness = look.Bright
 		local lit = state == "Charging" and math.floor(c * n) or (state == "Idle" and 0 or n)

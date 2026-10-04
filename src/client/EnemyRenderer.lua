@@ -184,6 +184,14 @@ local function cutToLow(pieces: { any }): { any }
 	for _, piece in ipairs(pieces) do
 		local name = piece.Part.Name
 		local stem, digits = string.match(name, "^(.-)[LR](%d*)$")
+		-- a "<Name>Side" piece is the darker lower band of <Name> (the Mite's ShellSide):
+		-- kept or dropped together with it, so far mites keep their two-tone shell
+		local band = string.match(name, "^(.+)Side$")
+		if band then
+			stem, digits = band, ""
+		elseif byKey[name .. "|"] then
+			stem, digits = name, ""
+		end
 		local size = piece.Part.Size
 		local volume = size.X * size.Y * size.Z
 		local key = (stem and stem ~= "") and (stem .. "|" .. digits) or nil

@@ -40,6 +40,7 @@ local NEON = Enum.Material.Neon
 local UPRIGHT = CFrame.Angles(0, 0, math.rad(90))
 local FACE_CAMERA = CFrame.Angles(0, math.pi, 0)
 local FLAT = Vector3.new(1, 0, 1)
+local RING_FILL = 0.88 -- the hold ring's faint fill (its dashed edge carries the shape)
 
 type Caravan = {
 	Pos: Vector3,
@@ -53,6 +54,7 @@ type Caravan = {
 	Glow: { BasePart },
 	Light: PointLight?,
 	Ring: BasePart?,
+	Marks: { BasePart }, -- the ring's dashed edge (a friendly area: edge marks, not a filled pool)
 	Shown: { [string]: any },
 	StartPhase: string?, -- the stage phase the defence began in
 }
@@ -81,10 +83,13 @@ local function add(m: Model, cf: CFrame, name: string, size: Vector3, at: Vector
 end
 
 -- A part-built covered cart, tipped toward its broken front-left wheel, with spilled
--- crates, a banner pole and a lantern (the glow that shows its state).
+-- crates, a banded cargo chest, a banner pole and a lantern (the glow that shows its
+-- state). The canvas is plain cloth (no Fabric texture: it read as a fine pattern beside
+-- the flat-coloured props) and wears the kingdom's crimson band with a gold crest on the
+-- side facing the camera, like the altar's banner.
 local function buildCart(c: Caravan, cf: CFrame)
 	local m = c.Model
-	local wood, dark, canvas = P.wood_500, P.wood_700, P.ivory_200
+	local wood, dark, canvas = P.wood_500, P.wood_700, P.ivory_300
 	local tip = cf * CFrame.Angles(math.rad(-4), 0, math.rad(5)) -- sagging on the broken wheel
 	add(m, tip, "Bed", Vector3.new(7, 0.8, 3.6), Vector3.new(0, 1.9, 0), wood)
 	add(m, tip, "Rail", Vector3.new(7, 0.6, 0.25), Vector3.new(0, 2.6, 1.7), dark)
@@ -92,8 +97,14 @@ local function buildCart(c: Caravan, cf: CFrame)
 	add(m, tip, "Rail", Vector3.new(0.25, 0.6, 3.6), Vector3.new(-3.4, 2.6, 0), dark)
 	-- canvas cover: two slopes and its hoops
 	for _, z in ipairs({ 0.95, -0.95 }) do
-		add(m, tip, "Canvas", Vector3.new(5.4, 0.18, 2.3), Vector3.new(0.4, 3.75, z), canvas, Enum.Material.Fabric, nil, CFrame.Angles(math.rad(z > 0 and 40 or -40), 0, 0))
+		add(m, tip, "Canvas", Vector3.new(5.4, 0.18, 2.3), Vector3.new(0.4, 3.75, z), canvas, nil, nil, CFrame.Angles(math.rad(z > 0 and 40 or -40), 0, 0))
 	end
+	-- heraldry on the camera side (model -Z): a crimson band and a gold crest
+	local slope = tip * CFrame.new(0.4, 3.75, -0.95) * CFrame.Angles(math.rad(-40), 0, 0)
+	local band = part({ Name = "Heraldry", Size = Vector3.new(1.5, 0.06, 2.34), CFrame = slope * CFrame.new(0, 0.12, 0), Color = P.crimson_500 })
+	band.Parent = m
+	local crest = part({ Name = "Heraldry", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.08, 0.95, 0.95), CFrame = slope * CFrame.new(0, 0.17, 0.1) * UPRIGHT, Color = P.gold_400 })
+	crest.Parent = m
 	for _, x in ipairs({ -2.0, 0.4, 2.8 }) do
 		add(m, tip, "Hoop", Vector3.new(0.2, 0.2, 3.2), Vector3.new(x, 4.55, 0), dark)
 	end
@@ -110,7 +121,12 @@ local function buildCart(c: Caravan, cf: CFrame)
 	add(m, cf, "Crate", Vector3.new(1.4, 1.4, 1.4), Vector3.new(-4.6, 0.7, -1.2), P.wood_400, nil, nil, CFrame.Angles(0, math.rad(25), 0))
 	add(m, cf, "Crate", Vector3.new(1.1, 1.1, 1.1), Vector3.new(-4.0, 0.55, -3.0), P.wood_600, nil, nil, CFrame.Angles(0, math.rad(-15), 0))
 	add(m, cf, "Sack", Vector3.new(1.2, 1.2, 1.2), Vector3.new(-5.4, 0.5, 0.6), P.sand_400, Enum.Material.Fabric, Enum.PartType.Ball)
-	add(m, tip, "Cargo", Vector3.new(1.6, 1.0, 1.6), Vector3.new(-1.2, 2.8, 0.3), P.gold_500)
+	-- the cargo worth saving: a small banded chest in the open back of the cart
+	add(m, tip, "Cargo", Vector3.new(1.5, 0.9, 1.1), Vector3.new(-1.9, 2.75, 0.2), P.wood_400)
+	add(m, tip, "Cargo", Vector3.new(1.56, 0.32, 1.16), Vector3.new(-1.9, 3.35, 0.2), P.wood_500)
+	for _, x in ipairs({ -2.35, -1.45 }) do
+		add(m, tip, "Cargo", Vector3.new(0.16, 1.28, 1.18), Vector3.new(x, 2.94, 0.2), P.gold_500, Enum.Material.Metal)
+	end
 	-- banner pole with a pennant: the marker you see from afar
 	add(m, cf, "Pole", Vector3.new(0.25, 7, 0.25), Vector3.new(3.8, 3.5, -3.2), dark)
 	local flag = add(m, cf, "Banner", Vector3.new(2.2, 1.3, 0.1), Vector3.new(4.95, 6.2, -3.2), P.crimson_400, Enum.Material.Fabric)
@@ -128,9 +144,19 @@ local function buildCart(c: Caravan, cf: CFrame)
 	c.Light = l
 	-- the ring to hold
 	local r = Config.Caravan.ZoneRadius
-	local disc = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, r * 2, r * 2), CFrame = CFrame.new(c.Pos + Vector3.new(0, 0.06, 0)) * UPRIGHT, Color = P.gold_300, Transparency = 0.82 })
+	local disc = part({ Name = "Ring", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.06, r * 2, r * 2), CFrame = CFrame.new(c.Pos + Vector3.new(0, 0.06, 0)) * UPRIGHT, Color = P.gold_300, Transparency = RING_FILL })
 	disc.Parent = m
 	c.Ring = disc
+	-- the ring's edge: short dashes, so a friendly hold area reads differently from a
+	-- filled hostile pool of the same warm colour
+	local n = 28
+	for i = 1, n do
+		local a = (i - 0.5) / n * math.pi * 2
+		local at = c.Pos + Vector3.new(math.cos(a) * (r - 0.4), 0.09, math.sin(a) * (r - 0.4))
+		local dash = part({ Name = "RingMark", Size = Vector3.new(0.45, 0.06, math.pi * 2 * r / n * 0.5), CFrame = CFrame.new(at) * CFrame.Angles(0, -a, 0), Color = P.ivory_100, Transparency = 0.25 })
+		dash.Parent = m
+		table.insert(c.Marks, dash)
+	end
 end
 
 local function setAttr(c: Caravan, k: string, v: any)
@@ -158,7 +184,11 @@ local function recolour(c: Caravan, color: Color3, dim: boolean)
 	end
 	if c.Ring then
 		c.Ring.Color = color
-		c.Ring.Transparency = dim and 1 or 0.82
+		c.Ring.Transparency = dim and 1 or RING_FILL
+	end
+	for _, mark in ipairs(c.Marks) do
+		mark.Color = dim and P.stone_500 or (color == P.crimson_300 and P.ivory_100 or color)
+		mark.Transparency = dim and 1 or 0.25
 	end
 end
 
@@ -198,6 +228,7 @@ function CaravanEvent.Build(arena, pos: Vector3, stage: number)
 		Glow = {},
 		Light = nil,
 		Ring = nil,
+		Marks = {},
 		Shown = {},
 	}
 	buildCart(c, cf)
@@ -336,9 +367,13 @@ local function succeed(c: Caravan, line: string?)
 	setAttr(c, "Progress", 1)
 	setAttr(c, "Left", 0)
 	setAttr(c, "Grace", -1)
-	recolour(c, P.gold_300, false)
-	if c.Ring then
-		c.Ring.Transparency = 1
+	-- saved: the event is over, so the cart goes quiet (ring and its edge gone, a low
+	-- warm lantern, the banner stays)
+	recolour(c, P.gold_300, true)
+	for _, g in ipairs(c.Glow) do
+		if g.Name == "Lantern" then
+			g.Transparency = 0.35
+		end
 	end
 	Fx.Ring(c.Pos, 18, P.gold_300)
 	Fx.Sound("Chest")
