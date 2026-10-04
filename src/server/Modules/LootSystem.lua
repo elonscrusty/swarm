@@ -7,8 +7,9 @@
 	                           (ItemSystem.Roll with the chest's rarity weights).
 	  Shrine of Chance         pay gold, 50% chance of an item; each try costs more; goes
 	  (Config.Shrines)         dark after 2 items or 6 tries.
-	  Bargain Shrine           free, once per stage: the whole team gets +25% damage and
-	                           +30% gold for the rest of the stage, the swarm gets +20% HP.
+	  Bargain Shrine           free, once per stage: the whole team gets +25% added to the
+	                           damage bonus and +30% gold (kills, elite chests, bosses, nests,
+	                           caravan) for the rest of the stage, the swarm gets +20% HP.
 	  Guarded Altar            a free rare chest. Hold its prompt to awaken the elite guards;
 	  (Config.Guarded)         when they are dead the
 	                           chest unlocks and opening it gives EVERY living teammate an item.
@@ -432,8 +433,10 @@ local function newObj(kind: string, typeName: string, pos: Vector3, cf: CFrame):
 	return obj
 end
 
--- "1 item (80% common, 19% uncommon, 1% legendary)" from the chest's rarity weights
--- (Config.Chests.Weights), so the prompt never drifts from the tuning.
+-- "1 item (80% common, 19% uncommon, 1% legendary before luck)" from the chest's rarity
+-- weights (Config.Chests.Weights), so the prompt never drifts from the tuning. The prompt is
+-- one shared world label, so it shows the base odds; Luck (ItemSystem.Roll) raises the
+-- rarer shares per player, hence "before luck".
 local function chestBenefit(typeName: string): string
 	local weights = Config.Chests.Weights[typeName] or Config.Chests.Weights.Small
 	local total = 0
@@ -451,7 +454,7 @@ local function chestBenefit(typeName: string): string
 		local space = string.find(parts[1], " ") or 0
 		return "1 " .. string.sub(parts[1], space + 1) .. " item"
 	end
-	return "1 item (" .. table.concat(parts, ", ") .. ")"
+	return "1 item (" .. table.concat(parts, ", ") .. " before luck)"
 end
 
 --[[
@@ -610,7 +613,10 @@ local function buildShrine(arena, typeName: string, pos: Vector3)
 	else
 		local S = Config.Shrines
 		setAttrs(obj, {
-			Benefit = string.format("Team: +%d%% damage, +%d%% gold this stage", math.floor(S.BargainDamage * 100 + 0.5), math.floor(S.BargainGold * 100 + 0.5)),
+			-- the damage is added to the build's damage bonus (Might, additive), the gold to
+			-- the gold bonus; it pays on kills, elite chests and bosses (also nests and the
+			-- caravan), not on the return bonus, full-build coins or survival gold
+			Benefit = string.format("Team: +%d%% added to damage bonus, +%d%% gold from kills, elite chests and bosses this stage", math.floor(S.BargainDamage * 100 + 0.5), math.floor(S.BargainGold * 100 + 0.5)),
 			Tradeoff = string.format("Enemies: +%d%% HP this stage", math.floor(S.BargainEnemyHP * 100 + 0.5)),
 			Detail = "Free · once per stage",
 		})
@@ -1197,7 +1203,7 @@ local function useBargain(rp, obj: Obj)
 	Fx.Sound("Shrine")
 	ctx.RunManager.Broadcast(
 		string.format(
-			"%s sealed a bargain: +%d%% damage and +%d%% gold, but enemies have +%d%% HP this stage!",
+			"%s sealed a bargain: +%d%% added to damage bonus, +%d%% gold from kills, elite chests and bosses, but enemies have +%d%% HP this stage!",
 			rp.Player.DisplayName,
 			math.floor(S.BargainDamage * 100 + 0.5),
 			math.floor(S.BargainGold * 100 + 0.5),

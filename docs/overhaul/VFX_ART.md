@@ -55,10 +55,43 @@ part of ART-05 (snow separation of heal circles and skull projectiles). Shared v
   are filled shapes (Telegraphs.lua, ENEMY-ART).
 - Coins: absorbed at the hero's marker ring (`K.COIN_END_RING` = 2.9 studs out on the side
   they came from) instead of the hero's centre; one sparkle per arriving burst (80 ms gate).
+- Garlic / Soul Eater aura: a thin dark slate under-edge outside each dash (`deco.AuraEdge`),
+  so the pale ring survives on snow (coordinator / ENEMY-ART request).
+- Fallback hit flash (`VFX.flash`, bodies EnemyRenderer does not track): was pure white; now
+  the same partial brighten as EnemyRenderer (0.6 grunt / 0.45 elite / 0.32 boss, luminance
+  scaled), still off with Reduce Flashes.
+- Vortex rift model: the two wide discs are no longer Neon (only the core and swirl arms are).
 - Gems taken on the hero (`gemPop(..., onHero)`): a floor-level ring flick (off with Reduce
   Flashes) and three shards thrown outward, at most `K.GEM_POPS_NEAR` = 2 per 0.1 s; the bright
   pop stays for gems taken away from the hero.
 
-## Tests
+## Gems in motion (ART-21, test)
 
-(see the bottom section, filled in after the runs)
+`pickups-close --set arena=Snow --set trail=off` at t = 0.8 and 1.25 s (scratchpad
+`wf/vfx-art/gems/`): every crystal kit shows its two-tone crown and darker pavilion and the
+facets swap light / dark as it turns; at some yaws a crown pair is near one tone for a moment,
+which is the "flat quadrilateral" read in a still frame. Gems beyond `K.GEM_NEAR` (42 studs)
+are the server cube on its corner in one colour by design. Verdict: not a mesh defect; no
+change. Risk: a Studio check at the owner's zoom on snow is still open.
+
+## Tests (offline only; nothing Studio / device / multiplayer verified)
+
+New scene `tools/preview/scenes/friendly-fx.luau` (totem + pulse, two snares, souls, coins
+and gems arriving at the hero; `arena`, `evolved`, `release`, `t`, `dist`, `reduced`).
+Renders in scratchpad `wf/vfx-art/` (before = the tree with my files reverted to the
+pre-overhaul versions, other helpers' work kept):
+
+| Check | Result |
+|---|---|
+| `bash tools/check.sh --quick` | PASS (typecheck, compile, icons) |
+| friendly-fx Forest + Snow, pc + iphone, before / after | PASS (visual): snares read as dark earth patches with thorny curled roots on grass and snow (before: thin sticks); totem is the idol with a green core (before: a post with a bright top); souls carry a green tail and read apart from the pale moths; coins gather at the marker ring and the hero stays visible; heal pulse is a dashed ring with a dark inner edge, visible on snow (`after/snow2`) |
+| friendly-fx release (evolved, t 0.15) | PASS: snares and totem gone, Lifebloom dashed ring + core flare; roots sink (faint at this zoom) |
+| combat-fx armoury Forest + Snow, pc + iphone, before / after | PASS, 0 errors; only the snare cast and vortex ring changed there (the after renders predate the vortex disc change) |
+| weapons-sim `weapons=armoury` (headless, 5 s phases) | PASS: 0 errors, 45 kills / 1111 dmg, every armoury weapon incl. Vine Snare fires at lv 8 and evolved |
+| perf-sim short (200 enemies) | see below |
+| Studio, phone, co-op | BLOCKED (owner) |
+
+Remaining risk: the Grip clench is driven by the client's first-seen time, so it can be up
+to one sync interval off the server tick; the snare model radius is fixed per visual (2.8 /
+4.4) while the real reach grows with Area upgrades; the new totem mesh only shows in game
+once Studio loads asset 124246776936271 (the part-built fallback matches meanwhile).

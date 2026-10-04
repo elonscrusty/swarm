@@ -76,7 +76,26 @@ the tray already reserves the JUMP column on both sides).
 
 ## Verification
 
-RESULTS_PLACEHOLDER
+- `bash tools/check.sh --quick`: PASS (typecheck 0, compile ok, icon check 0) after every edit.
+- `tools/ui_regression.luau`: PASS 30/30 (27 existing + 3 new HUD checks). Baseline before my
+  edits: 27/27.
+- Renders (offline mock, `--set images=loaded`), `scratchpad/wf/hud/a1..a6/`:
+  arena pc / iphone / laptop / phone / phone-portrait; boss pc / iphone / laptop / phone / tablet;
+  loot pc / iphone / phone-portrait; team pc / iphone / phone-portrait; hud-build pc / iphone /
+  phone-portrait / tablet (+ early=on pc / iphone). boss/loot phone-portrait in a2/a3 failed at
+  that moment from a concurrent TITLE edit in LobbyScreen.lua (math.clamp min > max, line ~895);
+  re-rendered clean later (a6, a5).
+- `check_layout.py` over all 26 scene/device JSONs: 0 off-screen, 0 under top bar, 0 overflow,
+  0 truncated. **Remaining: FAIL (not 0)** on two scenes, both the centre stage banner
+  ("STAGE 2 / FIND THE PORTAL", UIState headline lane) under or over another owner's panel:
+  loot pc / iphone (banner sub covered by the Shrine of Chance prompt) and loot phone-portrait
+  (banner title under the Storm Charm / Sun Medallion popups). The same geometry exists in the
+  baseline renders, where the banner was captured fainter and the checker passed it; the
+  vitals/objective move shifts the top cluster by about 6-11 px. Routed to UISTATE (headline lane
+  should hold or move while a loot prompt or reward popups occupy the centre).
+- Every HUD-owned panel (vitals, objective, boss bar, tray, BUILD details, minimap, portal
+  marker) is clean on every device rendered.
+- Not exercised: Studio, real phones / tablets, gamepad, real touch timing, multiplayer.
 
 ## Side-by-sides
 
