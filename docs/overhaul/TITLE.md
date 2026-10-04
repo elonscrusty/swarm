@@ -75,8 +75,25 @@ purchase kinds (UI-55, kept). Native purchase prompts untouched.
   gold dais motes; key light slightly lower (ART-18/23: less white/gold blow-out).
 - Knight Gold Trim: Showcase already shows the equipped skin; the home caption names it.
 
-## Tests (offline)
-See the "Verification" section at the end (filled in from the runs).
+## Tests (offline; PASS = exercised in the mock, not in Studio)
+- `bash tools/check.sh --quick`: PASS (my files clean; other helpers' files had transient warnings).
+- `tools/menu_clarity_regression.luau` (rewritten home section): PASS phone and phone-portrait. Checks
+  the home's only buttons, caption = hero + equipped skin, pill = account LV + gold, PLAY opens the
+  setup step without starting, sheet rows (hero, world, difficulty, curses, Endless, Daily with
+  disclosure, START), START fires StartRun(Solo), DUO rule line, every home route (Worlds, Daily,
+  Party, account pill, Characters, Shop, caption) and BACK returning to where it was opened, MORE list
+  (Daily, Party, Ranks, Stats, Track, Journal, Achievements, Settings, Bug report). Sim budget 8 → 20 s.
+- `menu` scene `--set play=tap` (updated: PLAY → setup step → START): PASS, StartRun(Solo).
+- `menu-sim --set cycles=1`: lobby → run → MAIN MENU → lobby, workspace 2402 → 4455 → 2402, no errors.
+- `firstjoin-sim`: PASS all checks (auto first run, cover, no second ask, party refusal).
+- Renders (`menu --set images=loaded --set skin=GoldTrim`) pc, iphone, phone, phone-portrait, tablet;
+  `menu --set screen=Play --set lastrun=fell` pc, iphone, phone-portrait; `characters --set
+  inspect=Ranger --set owned=all --set mastery=open` pc, iphone. `check_layout.py`: 0 problems on all
+  (info only: one 8 pt "Characters" caption on iphone before the icon/caption resize).
+- Side by side with 01_Title.png: scratchpad `wf/title/side_by_side_pc_final.png`.
+- Bug found and fixed by the renders: a landscape layout pass on a very narrow window (phone-portrait
+  boot) hit `math.clamp` max < min; the bottom row now shrinks instead.
+- NOT run: Studio, a real device, live party/countdown, the full regression suite.
 
 ## Remaining differences / risks
 - Gold Trim skin data (`CharacterData.Skins.GoldTrim`, not TITLE-owned) turns the Knight's cape and
@@ -88,3 +105,14 @@ See the "Verification" section at the end (filled in from the runs).
 - Server success toasts for lobby purchases still stack (see FOR OTHERS); the screen itself now shows
   one cumulative line.
 - Real dusk sky look in Studio depends on Roblox's sky/atmosphere; the preview draws a simple gradient.
+
+## FOR OTHERS
+- UISTATE (`UIBuilder.Toast`, ~line 376): coalesce lobby purchase toasts. When a new toast has the
+  same kind as a live one (e.g. text matching "upgraded to level" within `Config.UI.ToastSeconds`),
+  replace that pill's text ("Ranger upgrades: 3 bought") and restart its timer instead of adding a
+  pill (UI-12). The Characters screen now shows its own cumulative line.
+- SAFETY (`GoldSystem.lua` ~316 and ~369): optional, drop or shorten the success Notify for BuyMeta /
+  BuyHeroUpgrade in the lobby (rows already update from ProfileSync).
+- Art / owner (`CharacterData.Skins.GoldTrim`): the skin gilds the Knight's cape and plume; 01_Title
+  shows red cape + plume with gold trim (ART-19). Decide whether Gold Trim should keep Accent.
+- NoticeDots.lua: the "More" dot still aggregates Daily and Party, which now also sit on home.
