@@ -6,7 +6,7 @@
 	          rule (UIKit.TitleBar) in the Roblox top-bar row; LobbyScreen shows the BEST /
 	          WINS / GOLD stats inline on the right
 	  left    the roster: one row per character (hero badge art, serif name), rows split by
-	          thin lines; the selected hero shows a gold check and EQUIPPED, locked heroes a
+	          thin lines; the selected hero shows a gold check and SELECTED, locked heroes a
 	          lock, the inspected one a gold border, a gold accent bar and a PREVIEW pill
 	  centre  under the hero: its name in spaced caps between gold rules and
 	          "Preview • <skin>"
@@ -115,6 +115,10 @@ local function effectStep(heroId: string, upgradeId: string, level: number, maxe
 	if not numberPart then
 		return MetaUpgradeData.HeroEffectText(heroId, upgradeId, level)
 	end
+	-- nothing bought yet reads like the account upgrades ("None yet"), not "+0% → +5%"
+	if level <= 0 and upgradeId ~= "Signature" and not maxed then
+		return "Next: " .. string.format(numberPart, value(1)) .. " " .. words
+	end
 	local now = string.format(numberPart, value(level))
 	if maxed then
 		return now .. " " .. words .. " (max)"
@@ -221,7 +225,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		UIKit.list(marks, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
 		local check = Icons.Draw(marks, "check", { Size = 20, Color = P.gold_300, Back = P.slate_900 })
 		check.LayoutOrder = 1
-		local equipped = text(marks, "Label", "EQUIPPED", { Name = "Equipped", LayoutOrder = 2, Size = UDim2.fromOffset(0, TS(13) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200 }, 13)
+		local equipped = text(marks, "Label", "SELECTED", { Name = "Equipped", LayoutOrder = 2, Size = UDim2.fromOffset(0, TS(13) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200 }, 13)
 		local lock = Icons.Draw(marks, "lock", { Size = 18, Color = P.stone_300, Back = P.slate_900 })
 		lock.LayoutOrder = 3
 		local preview = UIKit.StatusPill(marks, "PREVIEW", { LayoutOrder = 4, Size = UDim2.fromOffset(0, TS(11) + 12) })
@@ -600,7 +604,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			elseif busy then
 				title = "BUYING..."
 			else
-				title = "BUY · " .. UIKit.formatNumber(cost :: number)
+				-- the unit always shows (Upgrades reads "BUY · N GOLD"); narrow phone
+				-- buttons drop the BUY instead
+				title = (withIcon and "BUY · " or "") .. UIKit.formatNumber(cost :: number) .. " GOLD"
 				kind = p.Gold >= (cost :: number) and "Primary" or "Outline"
 			end
 			local b
@@ -791,7 +797,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		-- centre caption
 		ui.CentreTitle.Set(UIKit.spaced(def.Name))
 		local previewSkin = inspSkin
-		ui.CentreSub.Text = "Preview  ·  " .. skinName(previewSkin)
+		-- the equipped hero in its equipped skin is not a preview
+		local wearing = selected and type(p.Skins) == "table" and (p.Skins[inspChar] or "Default") == previewSkin
+		ui.CentreSub.Text = (wearing and "Equipped  ·  " or "Preview  ·  ") .. skinName(previewSkin)
 		-- how to unlock it: the achievement and its progress, or the gold price; an owned
 		-- hero shows its MASTERY instead (and UPGRADE <HERO>)
 		if p ~= lastProfile then
@@ -849,7 +857,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			ui.Action.SetIcon("coin")
 		elseif selected then
 			ui.Action.SetKind("Secondary")
-			ui.Action.SetText(string.upper(def.Name) .. " EQUIPPED")
+			ui.Action.SetText(string.upper(def.Name) .. " SELECTED")
 			ui.Action.SetIcon("check")
 			ui.Action.SetEnabled(false)
 		else
@@ -1016,17 +1024,24 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				row.Instance.Size = UDim2.new(1 / perRow, -6, 0, 52)
 				rowStyle(id, "tab", 52)
 			end
-			local detailH = math.min(contentH, math.floor(H * 0.56) - (listH - 76))
+			-- the details panel leaves the hero a clear gap between the tabs and the panel
+			-- (the panel scrolls; the action button stays pinned in view)
+			local detailH = math.min(contentH, math.floor(H * 0.5) - (listH - 76))
 			local detailY = H - M - detailH
 			ui.NameRoom = w - 40 - PORTRAIT - 14
 			place(ui.Detail, M, detailY, w, detailH)
 			pinAction(contentH > detailH + 1)
 			fitSkins(w - 40)
 			ui.DetailInnerW = w - 44
+			-- the details panel already names the hero: no caption over the hero's feet
 			place(ui.Centre, (W - centreW) / 2, detailY - 64, centreW, 58)
-			ui.Centre.Visible = true
+			ui.Centre.Visible = false
 			if ctx.Current() == "Characters" then
-				workspace.CurrentCamera:SetAttribute("MenuHeroY", ((top + listH) + (detailY - 50)) / 2 / H)
+				local gapTop, gapBottom = top + listH + 6, detailY - 6
+				local cam = workspace.CurrentCamera
+				cam:SetAttribute("MenuHeroY", (gapTop + gapBottom) / 2 / H)
+				-- a short gap widens the shot so the whole hero fits (CameraController)
+				cam:SetAttribute("MenuHeroZoom", math.clamp(H * 0.3 / math.max(1, gapBottom - gapTop), 1, 1.6))
 			end
 		else
 			-- one column of rows split by lines; when rows get too short (phones in
@@ -1067,7 +1082,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			-- already names the hero, so the caption hides instead of reading "KNI..."
 			ui.Centre.Visible = centreW >= 180
 			if ctx.Current() == "Characters" then
-				workspace.CurrentCamera:SetAttribute("MenuHeroY", 0.5)
+				local cam = workspace.CurrentCamera
+				cam:SetAttribute("MenuHeroY", 0.5)
+				-- a narrow gap between the panels (phones) widens the shot so the turning
+				-- hero stays clear of both panels
+				cam:SetAttribute("MenuHeroZoom", math.clamp(W * 0.2 / math.max(1, gapR - gapL), 1, 1.5))
 			end
 		end
 		if p then
