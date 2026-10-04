@@ -2044,8 +2044,10 @@ function Arm.stepCloud(p: Projectile, dt: number, now: number): boolean
 					slowEnemy(e, x.Choke, x.Tick + 0.15, now)
 				end
 				damageEnemy(owner, e, p.Damage, nil, 0)
+				-- (poison starts 1.5 ticks later, so it only hurts after leaving the cloud
+				-- and never takes the cloud's own tick)
 				if x.Poison and e.Alive then
-					burns[e] = { Uid = e.Uid, Until = now + x.PoisonSeconds, Next = now + x.Tick, Tick = x.Tick, Damage = p.Damage * x.PoisonShare, Owner = owner, Weapon = p.Weapon }
+					burns[e] = { Uid = e.Uid, Until = now + x.PoisonSeconds, Next = now + x.Tick * 1.5, Tick = x.Tick, Damage = p.Damage * x.PoisonShare, Owner = owner, Weapon = p.Weapon }
 				end
 			end
 		end
