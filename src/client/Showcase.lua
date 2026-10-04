@@ -413,6 +413,76 @@ local function appearEffect(at: CFrame)
 	end)
 end
 
+------------------------------------------------------------------------------------------
+-- Soul skulls: a few small glowing violet skulls drifting round the Necromancer on the
+-- dais (a fixed pool of four, moved each frame while the menu shows; hidden otherwise)
+------------------------------------------------------------------------------------------
+
+local SOUL_COLOR = Color3.fromRGB(189, 120, 255)
+local SOUL_HEROES = { Necromancer = true }
+local souls: { { Head: BasePart, Jaw: BasePart, Eyes: BasePart, Phase: number, Radius: number, Height: number, Speed: number } } = {}
+
+local function soulPart(name: string, shape: Enum.PartType, size: Vector3, color: Color3, material: Enum.Material): BasePart
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Shape = shape
+	p.Size = size
+	p.Color = color
+	p.Material = material
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Transparency = 1
+	return p
+end
+
+local function buildSouls(parent: Instance)
+	if #souls > 0 then
+		return
+	end
+	local m = Instance.new("Model")
+	m.Name = "SoulSkulls"
+	m.Parent = parent
+	for i = 1, 4 do
+		table.insert(souls, {
+			Head = soulPart("SoulHead", Enum.PartType.Ball, Vector3.new(0.62, 0.62, 0.62), SOUL_COLOR, Enum.Material.Neon),
+			Jaw = soulPart("SoulJaw", Enum.PartType.Block, Vector3.new(0.4, 0.22, 0.34), SOUL_COLOR, Enum.Material.Neon),
+			Eyes = soulPart("SoulEyes", Enum.PartType.Block, Vector3.new(0.38, 0.12, 0.06), Color3.fromRGB(40, 16, 70), Enum.Material.SmoothPlastic),
+			Phase = (i - 1) * math.pi / 2 + 0.4,
+			Radius = 2.5 + (i % 2) * 0.7,
+			Height = 2.4 + ((i * 1.37) % 1) * 3.2,
+			Speed = 0.45 + (i % 3) * 0.12,
+		})
+		local s = souls[#souls]
+		s.Head.Parent = m
+		s.Jaw.Parent = m
+		s.Eyes.Parent = m
+	end
+end
+
+-- Moves the skulls round the stand (on = shown) for time t.
+local function stepSouls(stand: CFrame?, on: boolean, t: number)
+	for i, s in ipairs(souls) do
+		if not (on and stand) then
+			if s.Head.Transparency < 1 then
+				s.Head.Transparency, s.Jaw.Transparency, s.Eyes.Transparency = 1, 1, 1
+			end
+			continue
+		end
+		local a = s.Phase + t * s.Speed
+		local pos = (stand :: CFrame).Position + Vector3.new(math.cos(a) * s.Radius, s.Height + math.sin(t * 1.3 + i) * 0.35, math.sin(a) * s.Radius * 0.8)
+		-- face along the drift, a little toward the camera side
+		local cf = CFrame.lookAt(pos, pos + Vector3.new(-math.sin(a), 0, math.cos(a)) + (stand :: CFrame).LookVector * 0.6)
+		local fade = 0.25 + 0.2 * math.sin(t * 2 + i * 1.7)
+		s.Head.CFrame = cf
+		s.Jaw.CFrame = cf * CFrame.new(0, -0.32, -0.08)
+		s.Eyes.CFrame = cf * CFrame.new(0, 0.02, -0.3)
+		s.Head.Transparency, s.Jaw.Transparency, s.Eyes.Transparency = fade, fade, fade
+	end
+end
+
 -- Hero pivot on the dais: feet on the stand, turned by the drag yaw.
 local function placeAt(stand: CFrame, lift: number): CFrame
 	return stand * CFrame.Angles(0, yaw, 0) * CFrame.new(0, lift, 0)
@@ -493,6 +563,34 @@ local function refresh()
 	fillLight.Brightness = 1.6
 	fillLight.Shadows = false
 	fillLight.Parent = fill
+	-- a staff topped with a skull (the Necromancer) gets a violet swirl and glow round it
+	local staffSkull = m:FindFirstChild("StaffSkull", true)
+	if staffSkull and staffSkull:IsA("BasePart") then
+		local swirl = Instance.new("ParticleEmitter")
+		swirl.Name = "SoulSwirl"
+		swirl.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		swirl.Color = ColorSequence.new(SOUL_COLOR, Color3.fromRGB(120, 72, 255))
+		swirl.LightEmission = 1
+		swirl.LightInfluence = 0
+		swirl.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.4, 0.32), NumberSequenceKeypoint.new(1, 0) })
+		swirl.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(0.3, 0.1), NumberSequenceKeypoint.new(1, 1) })
+		swirl.Lifetime = NumberRange.new(0.9, 1.5)
+		swirl.Rate = ClientSettings.Reduced() and 6 or 14
+		swirl.Speed = NumberRange.new(0.6, 1.2)
+		swirl.SpreadAngle = Vector2.new(180, 180)
+		swirl.RotSpeed = NumberRange.new(-180, 180)
+		swirl.Acceleration = Vector3.new(0, 0.8, 0)
+		swirl.Shape = Enum.ParticleEmitterShape.Sphere
+		swirl.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+		swirl.Parent = staffSkull
+		local glow = Instance.new("PointLight")
+		glow.Name = "SoulGlow"
+		glow.Color = SOUL_COLOR
+		glow.Range = 7
+		glow.Brightness = 1.4
+		glow.Shadows = false
+		glow.Parent = staffSkull
+	end
 	m.Parent = folder
 	model = m
 	modelKey = key
@@ -905,13 +1003,24 @@ function Showcase.Init()
 	f.Name = "SwarmShowcase"
 	f.Parent = workspace
 	folder = f
+	buildSouls(f)
 
 	local checkTimer = 0
+	local soulsShown = false
 	RunService.RenderStepped:Connect(function(dt)
 		if not visible then
+			if soulsShown then
+				soulsShown = false
+				stepSouls(nil, false, 0)
+			end
 			return
 		end
 		poseClock += dt
+		local wantSouls = model ~= nil and SOUL_HEROES[modelChar] == true
+		if wantSouls or soulsShown then
+			soulsShown = wantSouls
+			stepSouls(standCF, wantSouls, poseClock)
+		end
 		local m = model
 		local turned = stepSpin(dt)
 		if m and m.Parent then
