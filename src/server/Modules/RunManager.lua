@@ -1501,6 +1501,54 @@ local function startRun(player: Player, newMode: string)
 end
 
 --[[
+	A brand-new player's first join (Config.FirstRun): the client asks once its lobby is
+	up (remote StartFirstRun) and the server decides. Only a player with no run ever
+	started (Stats.Runs counts a run at its start, so leaving mid-run still counts) and the
+	tutorial not done, once per server session, from the Lobby phase, on a lobby server,
+	not travelling or reconnecting, not in a party, with no curses / Endless picked. Then
+	it is the plain SOLO start (same rules as the button). Everyone else stays in the lobby.
+]]
+local firstRunAsked: { [Player]: boolean } = {}
+-- true when `player` may get the automatic first run now (see above)
+local function firstRunAllowed(player: Player): boolean
+	local cfg = (Config :: any).FirstRun
+	if not cfg or cfg.AutoStart ~= true or not isMode(cfg.Mode) then
+		return false
+	end
+	local data = ctx.DataService.GetData(player)
+	if not data or data.TutorialDone == true or type(data.Stats) ~= "table" or (tonumber(data.Stats.Runs) or 0) > 0 then
+		return false
+	end
+	if (type(data.Curses) == "table" and #data.Curses > 0) or player:GetAttribute("Endless") == true then
+		return false
+	end
+	if phase ~= "Lobby" or byPlayer[player] or player:GetAttribute("InRun") == true then
+		return false
+	end
+	if ctx.RunServers and (ctx.RunServers.IsRunServer() or ctx.RunServers.Blocks(player)) then
+		return false
+	end
+	if ctx.PartyService and ctx.PartyService.PartyOf(player) then
+		return false
+	end
+	return true
+end
+
+local function startFirstRun(player: Player)
+	if firstRunAsked[player] then
+		return
+	end
+	firstRunAsked[player] = true
+	-- the answer (player attribute FirstRun): "Start" (a run is starting) or "Lobby"
+	if firstRunAllowed(player) then
+		player:SetAttribute("FirstRun", "Start")
+		startRun(player, (Config :: any).FirstRun.Mode)
+	else
+		player:SetAttribute("FirstRun", "Lobby")
+	end
+end
+
+--[[
 	Starts a run on THIS server for `players` (RunServers: a run server's ticket, or the
 	lobby's fallback when the teleport failed): the mode, the arena (already validated) and
 	the starter whose curses / Endless switch it uses. Only from the Lobby phase; returns
@@ -1941,6 +1989,7 @@ end
 ------------------------------------------------------------------------------------------
 
 function RunManager.OnPlayerRemoving(player: Player)
+	firstRunAsked[player] = nil
 	if joined[player] then
 		joined[player] = nil
 		local i = table.find(joinedOrder, player)
@@ -2113,6 +2162,9 @@ function RunManager.Start()
 		end
 	end, 2)
 
+	Remotes.Listen("StartFirstRun", function(player)
+		startFirstRun(player)
+	end, 1)
 	Remotes.Listen("StartNow", startNow, 2)
 	Remotes.Listen("CycleArena", cycleArena, 3)
 	Remotes.Listen("DevCommand", devCommand, 6)

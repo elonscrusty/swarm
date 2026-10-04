@@ -431,7 +431,12 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 				refreshAchievements(false)
 			end
 		end,
-		OnShow = function(_p)
+		OnShow = function(_p, arg)
+			-- the MORE list opens a tab directly ("Achievements" / "Stats")
+			if arg == "Achievements" or arg == "Stats" then
+				tab = arg
+				ui.Tabs.Select(arg)
+			end
 			refresh()
 			MenuStats._show(true)
 			UIAnim.Cascade(ui.Tiles, 0.025, 0.8)

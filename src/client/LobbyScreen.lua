@@ -1,37 +1,37 @@
 --[[
 	LobbyScreen.lua
 	The main menu, shown whenever the player is not in a run. The 3D castle courtyard at
-	dusk is the backdrop and the hero stands on the lit dais in the middle (Showcase.lua);
-	the UI frames it:
+	dusk is the backdrop and the hero stands on the lit dais in the middle (Showcase.lua,
+	drag to spin). The home screen is deliberately simple (owner mockup "One big PLAY"):
 
-	  top left      SWARM logo (sword behind the letters) + "SURVIVE · UPGRADE · CONQUER"
-	  top right     stats chip: best time, wins, gold (stays on every menu screen)
-	  left column   feature cards CHARACTERS / UPGRADES / ARENA: <name> (opens the ARENAS screen,
-	                MenuArenas) / DAILY CHALLENGE
-	  bottom centre nameplate of the hero with gold arrows to browse characters
-	                (owned → selected at once; locked → price, UNLOCK / DETAILS)
-	  right column  LAST RUN card (MenuLastRun: the saved LastRun summary + RETRY through
-	                StartRun; only where it fits above the column, so not on phones in
-	                landscape), SOLO (primary gold), DUO, TRIO, then CURSES (the run modifiers picked,
-	                their gold bonus) and the ENDLESS switch (Config.Endless: no win, the
-	                portal only goes deeper; remote SetEndless, the server's answer is the
-	                player attribute "Endless"). A countdown (who joined, the curses, an
-	                ENDLESS line, JOIN, START NOW, the number) or "run in progress" replaces
-	                this column.
-	  bottom left   SETTINGS, STATS, RANKS (leaderboards), TRACK (account level); portrait
-	                adds PARTY to this row
-	  top right     PARTY (landscape: left of the stats chip): party size / ready count, a red
-	                badge for open invites; opens the PARTY screen (MenuParty). A party member
-	                also gets READY / UNREADY beside it (portrait: under the stats chip)
-	  nameplate     your level, name, worn title / colour above the hero's plate
-	Portrait stacks: logo, stats, hero, nameplate, last run, curses + daily, endless, modes,
-	cards, corner buttons.
+	  top left      SWARM logo + "SURVIVE ◆ UPGRADE ◆ CONQUER"
+	  top right     gold chip (every screen) and the settings cog (home)
+	  centre        the hero; under it the hero selector pill "‹ NAME ›" with the hero's
+	                Hero Mastery level and bar (arrows switch between owned heroes, a tap
+	                on the name opens HEROES)
+	  bottom left   one panel: HEROES (MenuCharacters) / SHOP (MenuUpgrades) / MORE
+	                (MenuMore: Daily, Party, Ranks, Stats, Account Level, Journal,
+	                Achievements, Settings, Report a bug, DEV) with the party invite badge
+	  bottom right  the big PLAY button (starts the picked mode with the current options:
+	                one tap to a run) and under it the mode selector "SOLO ›" that opens
+	                the PLAY sheet (MenuPlay: Solo / Duo / Trio, Arena, Difficulty,
+	                Curses, Endless, LAST RUN + RETRY, START). A party member gets a small
+	                READY pill above PLAY. A countdown (who joined, the curses, an ENDLESS
+	                line, JOIN, START NOW, the number) or "run in progress" replaces PLAY.
+	Portrait stacks: chip + cog, logo, hero, hero pill, tiles, PLAY, mode selector.
 
-	Sub-screens slide in: Characters (MenuCharacters), Upgrades (MenuUpgrades), Stats
-	(MenuStats), Curses (MenuCurses), Daily (MenuDaily), Ranks (MenuLeaderboards), Track
-	(MenuTrack), Party (MenuParty); Settings is UIBuilder's modal. Everything sent to the server is an id or a
-	mode name; the server validates it (RunManager: StartRun / JoinRun / StartNow /
-	CycleArena, GoldSystem: purchases and selection).
+	A brand-new player (no run ever started, tutorial not done) asks the server once for
+	the automatic first Solo run (remote StartFirstRun, Config.FirstRun); the server
+	decides and answers with the player attribute FirstRun. Meanwhile a plain cover says
+	the run is starting (at most Config.FirstRun.CoverSeconds).
+
+	Sub-screens slide in: Characters (MenuCharacters), Upgrades (MenuUpgrades), Play
+	(MenuPlay), More (MenuMore), Stats (MenuStats), Journal (MenuJournal), Curses
+	(MenuCurses), Daily (MenuDaily), Ranks (MenuLeaderboards), Track (MenuTrack), Arenas
+	(MenuArenas), Party (MenuParty); Settings is UIBuilder's modal. BACK returns to the
+	screen's parent (PARENT). Everything sent to the server is an id or a mode name; the
+	server validates it (RunManager: StartRun / JoinRun / StartNow / CycleArena,
+	GoldSystem: purchases and selection).
 ]]
 
 local Players = game:GetService("Players")
@@ -43,8 +43,8 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
-local AchievementData = require(Shared:WaitForChild("AchievementData"))
-local DifficultyData = require(Shared:WaitForChild("DifficultyData"))
+local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
+local CurseData = require(Shared:WaitForChild("CurseData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -60,9 +60,8 @@ local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
 local MenuTrack = require(script.Parent.MenuTrack)
 local MenuArenas = require(script.Parent.MenuArenas)
 local MenuParty = require(script.Parent.MenuParty)
-local MenuLastRun = require(script.Parent.MenuLastRun)
-local Cosmetics = require(script.Parent.Cosmetics)
-local CurseData = require(Shared:WaitForChild("CurseData"))
+local MenuPlay = require(script.Parent.MenuPlay)
+local MenuMore = require(script.Parent.MenuMore)
 
 local LobbyScreen = {}
 
@@ -70,23 +69,21 @@ local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 
-local MODES = {
-	Solo = { Sub = "Start right now", Icon = "person" },
-	Duo = { Sub = "2 players + revives", Icon = "people2" },
-	Trio = { Sub = "3 players + revives", Icon = "people3" },
-}
-
 local host: { [string]: any } = {}
 local profile: { [string]: any }? = nil
 local joinedCountdown = false
 local ui: { [string]: any } = {}
 local current = "Home"
-local SCREEN_ORDER = { Home = 1, Characters = 2, Upgrades = 3, Arenas = 3.5, Stats = 4, Journal = 4.5, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9 }
+local SCREEN_ORDER = { Home = 1, Play = 1.5, Characters = 2, Upgrades = 3, Arenas = 3.5, More = 3.8, Stats = 4, Journal = 4.5, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9 }
+-- where BACK goes from each screen (anything else goes home)
+local PARENT = { Arenas = "Play", Curses = "Play", Daily = "More", Party = "More", Ranks = "More", Stats = "More", Track = "More", Journal = "More" }
 local screens: { [string]: any } = {}
 local shownGold: number? = nil
 local lastStatus = ""
-local browse: string? = nil -- a locked character being looked at from the nameplate
-local endlessSentAt = -100 -- os.clock() of the last SetEndless (the switch waits for the answer)
+local lastPartyCount = 0
+-- the automatic first run: "" (not asked), "Asked" (waiting for the server), "Done"
+local firstRun = ""
+local firstRunAt = 0
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -150,9 +147,8 @@ local function buildLogo(parent: Instance): Frame
 	local letters = word(Vector2.new(0, 4), Color3.new(1, 1, 1), 0)
 	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Steel }, letters)
 	new("UIStroke", { Color = P.slate_950, Thickness = 2, Transparency = 0.15, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual }, letters)
-	text(logo, "Label", UIKit.track("Survive · Upgrade · Conquer"), {
+	text(logo, "Label", UIKit.track("Survive ◆ Upgrade ◆ Conquer"), {
 		Name = "Tagline",
-		Visible = false, -- owner: no tagline under the logo
 		Position = UDim2.fromOffset(4, 100),
 		Size = UDim2.fromOffset(360, 22),
 		TextColor3 = P.gold_300,
@@ -170,11 +166,12 @@ local function buildLogo(parent: Instance): Frame
 	end
 	local art = ArtImage.Place(logo, "screens/logo_SWARM", { Name = "LogoArt", Position = UDim2.fromOffset(0, -4), Size = UDim2.fromOffset(280, 140), ZIndex = 2 }, drawn)
 	if art then
-		ui.LogoW, ui.LogoH = 280, 150
-		logo.Size = UDim2.fromOffset(360, 150)
+		ui.LogoW, ui.LogoH = 280, 162
+		logo.Size = UDim2.fromOffset(360, 162)
 		local tagline = logo:FindFirstChild("Tagline") :: TextLabel?
 		if tagline then
-			tagline.Position = UDim2.fromOffset(4, 124)
+			-- under the painted logo's frame (the picture's box ends at 136)
+			tagline.Position = UDim2.fromOffset(4, 138)
 		end
 	end
 	return logo
@@ -200,7 +197,7 @@ local function buildVignette(fxGui: ScreenGui)
 end
 
 ------------------------------------------------------------------------------------------
--- Stats chip (top right, every screen)
+-- Gold chip + settings cog (top right)
 ------------------------------------------------------------------------------------------
 
 local function buildChip(frame: Frame)
@@ -208,19 +205,25 @@ local function buildChip(frame: Frame)
 	holder.AutomaticSize = Enum.AutomaticSize.X
 	face.AutomaticSize = Enum.AutomaticSize.X
 	face.Size = UDim2.fromScale(0, 1)
-	UIKit.padding(face, 0, 18, 0, 16)
-	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
+	UIKit.padding(face, 0, 18, 0, 14)
+	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) })
 	ui.Chip = holder
 	ui.ChipFace = face
-	local function sep(order: number)
-		new("Frame", { BackgroundColor3 = C.Gold, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 22), LayoutOrder = order }, face)
-	end
-	ui.Best = UIKit.Chip(face, "lobby_BestTime", "Best time", "0:00", { LayoutOrder = 1, Size = UDim2.fromOffset(0, 48) }, { Size = 26 })
-	sep(2)
-	ui.Wins = UIKit.Chip(face, "lobby_Wins", "Wins", "0", { LayoutOrder = 3, Size = UDim2.fromOffset(0, 48) }, { Size = 26 })
-	sep(4)
-	ui.Gold = UIKit.Chip(face, "lobby_Gold", "Gold", "0", { LayoutOrder = 5, Size = UDim2.fromOffset(0, 48) }, { Size = 26 })
+	-- gold only (best time / wins live on the STATS screen)
+	ui.Gold = UIKit.Chip(face, "lobby_Gold", nil, "0", { Name = "Gold", LayoutOrder = 1, Size = UDim2.fromOffset(0, 48) }, { Size = 28 })
 	ui.Gold.Value.TextColor3 = P.gold_200
+	-- the settings cog beside it (home only; it stays still)
+	ui.Cog = UIKit.IconButton(frame, {
+		Icon = "gear",
+		Size = 52,
+		Name = "SettingsCog",
+		OnClick = function()
+			if host.OpenSettings then
+				host.OpenSettings()
+			end
+		end,
+	})
+	ArtImage.ButtonIcon(ui.Cog.Content, "icons/ui/ui_Settings", { Size = UDim2.fromOffset(38, 38) }, "Glyph")
 end
 
 -- CHARACTERS shows the stats inline in the top bar: no pill box (face, edge, shadow) behind them
@@ -304,151 +307,98 @@ local function updateLoadingPill()
 end
 
 ------------------------------------------------------------------------------------------
--- Home
+-- Home: hero selector pill
 ------------------------------------------------------------------------------------------
 
-local function arenaText(): (string, string)
-	local state = Remotes.State()
-	local arenaId = state:GetAttribute("SelectedArena") or "Forest"
-	local arena = (Config.Arenas :: any)[arenaId]
-	local title = string.upper(arena and arena.DisplayName or tostring(arenaId))
-	local best = profile and (profile.Stats.BestStage or 0) or 0
-	-- the next arena still locked (lowest requirement first), else the picked arena's hint
-	local nextDef, nextNeed = nil, math.huge
-	for _, name in ipairs(Config.Arenas.Order) do
-		local def = (Config.Arenas :: any)[name]
-		local need = def and def.RequiredBestStage or 0
-		if def and best < need and need < nextNeed then
-			nextDef, nextNeed = def, need
-		end
-	end
-	if nextDef then
-		return title, string.format("Unlock %s at stage %d", nextDef.DisplayName, nextNeed) -- short: the card is one line
-	end
-	return title, (arena and arena.Hint) or "Face the swarm"
-end
-
--- Nameplate arrows: browse characters in order.
+-- Arrows: the next / previous OWNED hero (selected at once; the server confirms).
 local selectToken = 0
 local function browseStep(dir: number)
 	local order = CharacterData.Order
-	local cur = browse or selectedChar()
+	local cur = selectedChar()
 	local i = table.find(order, cur) or 1
-	local nextId = order[((i - 1 + dir) % #order) + 1]
-	if owned(nextId) then
-		browse = nil
-		if nextId ~= selectedChar() then
-			if profile then
-				-- show it at once; the server's profile sync confirms
-				profile.SelectedCharacter = nextId
-			end
-			-- send only the last of several quick taps (the remote is rate limited), then
-			-- ask for the profile so the server's choice always wins on screen
-			selectToken += 1
-			local token = selectToken
-			task.delay(0.35, function()
+	local nextId = nil
+	for step = 1, #order - 1 do
+		local id = order[((i - 1 + dir * step) % #order) + 1]
+		if owned(id) then
+			nextId = id
+			break
+		end
+	end
+	if not nextId then
+		toast("Unlock more heroes in HEROES.", P.gold_300)
+		UIAnim.Bump(ui.HeroPill, 0.04)
+		return
+	end
+	if profile then
+		-- show it at once; the server's profile sync confirms
+		profile.SelectedCharacter = nextId
+	end
+	-- send only the last of several quick taps (the remote is rate limited), then ask
+	-- for the profile so the server's choice always wins on screen
+	selectToken += 1
+	local token = selectToken
+	task.delay(0.35, function()
+		if token == selectToken then
+			Remotes.Get("SelectCharacter"):FireServer(nextId)
+			task.delay(1, function()
 				if token == selectToken then
-					Remotes.Get("SelectCharacter"):FireServer(nextId)
-					task.delay(1, function()
-						if token == selectToken then
-							Remotes.Get("RequestProfile"):FireServer()
-						end
-					end)
+					Remotes.Get("RequestProfile"):FireServer()
 				end
 			end)
 		end
-	else
-		browse = nextId
-		Showcase.Show(nextId, "Default")
-	end
+	end)
 	LobbyScreen.RefreshHero()
-	UIAnim.Punch(ui.NameTitle, 0.08)
+	UIAnim.Bump(ui.HeroName, 0.08)
 end
 
-local function buildNameplate(frame: Frame)
-	local plate = new("Frame", { Name = "Nameplate", BackgroundTransparency = 1 }, frame)
-	ui.Nameplate = plate
-	local holder, face = UIKit.Surface(plate, { Name = "Plate", Radius = Theme.Radius.L })
-	ui.PlateSurface = holder
-	ui.NameTitle = text(face, "H1", "Knight", { Name = "Name", TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, TS(30) + 4) })
-	ui.NameDivider = UIKit.Divider(face, 160, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12 + TS(30)) })
-	ui.NameSub = text(face, "Body", "", {
-		Name = "Sub",
+local function buildHeroPill(screen: Frame)
+	local holder, face = UIKit.Surface(screen, { Name = "HeroPill", Radius = 999, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	ui.HeroPill = holder
+	-- the middle opens HEROES
+	local open = new("TextButton", { Name = "Open", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Position = UDim2.fromOffset(56, 0), Size = UDim2.new(1, -112, 1, 0), ZIndex = 3 }, face)
+	UIKit.Focusable(open)
+	open.Activated:Connect(function()
+		UIKit.Click()
+		LobbyScreen.Show("Characters")
+	end)
+	ui.HeroName = text(face, "Label", "KNIGHT", {
+		Name = "HeroName",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 8),
+		Size = UDim2.new(1, -112, 0, TS(18) + 4),
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextWrapped = true,
-		Position = UDim2.fromOffset(16, 24 + TS(30)),
-		Size = UDim2.new(1, -32, 0, TS(16) * 2 + 6),
-		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = P.ivory_100,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, 18)
+	ui.HeroLevel = text(face, "Caption", "LV 1", {
+		Name = "HeroLevel",
+		Position = UDim2.new(0.5, -84, 0, 14 + TS(18)),
+		Size = UDim2.fromOffset(48, TS(12) + 4),
+		TextColor3 = P.gold_300,
+	}, 12)
+	ui.HeroBar = UIKit.Meter(face, {
+		Gradient = ColorSequence.new(P.gold_500, P.gold_300),
+		Position = UDim2.new(0.5, -34, 0, 18 + TS(18)),
+		Size = UDim2.fromOffset(118, 8),
 	})
-	ui.LockIcon = Icons.Draw(face, "lock", { Size = 22, Color = P.gold_400, Position = UDim2.fromOffset(16, 14) })
-	-- the hero's painted bust (portraits/<Id>) in a small gold-rimmed tile on the plate's
-	-- top-left corner; hidden for heroes without a portrait (RefreshHero)
-	local medal = new("Frame", { Name = "Portrait", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.05, BorderSizePixel = 0, Position = UDim2.fromOffset(-14, -30), Size = UDim2.fromOffset(64, 64), ClipsDescendants = true, ZIndex = 4, Visible = false }, plate)
-	UIKit.corner(medal, Theme.Radius.M)
-	UIKit.stroke(medal, P.gold_400, 2, 0.05)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_700, P.slate_950) }, medal)
-	ui.PlateMedal = medal
-	-- your name with the achievement title / nameplate colour you wear (AchievementData)
-	ui.PlayerTag = text(plate, "Label", "", {
-		Name = "PlayerTag",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 0, -6),
-		Size = UDim2.new(1, 0, 0, TS(15) + 4),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.45,
-		RichText = true,
-	}, 15)
-	-- locked character: price + unlock / details
-	local lockRow = new("Frame", { Name = "LockRow", BackgroundTransparency = 1, Visible = false, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -12), Size = UDim2.new(1, 0, 0, 48) }, face)
-	ui.LockRow = lockRow
-	UIKit.list(lockRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) })
-	ui.Unlock = UIKit.Button(lockRow, {
-		Kind = "Outline",
-		Title = "UNLOCK",
-		Icon = "coin",
-		IconSize = 20,
-		Align = "Center",
-		Size = UDim2.fromOffset(196, 48),
-		LayoutOrder = 1,
-		OnClick = function()
-			local id = browse
-			if not id or not profile then
-				return
-			end
-			local def = CharacterData.Characters[id]
-			if profile.Gold < def.Cost then
-				toast("Not enough gold yet: " .. UIKit.formatNumber(def.Cost) .. " needed.", P.crimson_300)
-				return
-			end
-			Remotes.Get("BuyCharacter"):FireServer(id)
-		end,
-	})
-	ui.Details = UIKit.Button(lockRow, {
-		Title = "DETAILS",
-		Icon = "helmet",
-		IconSize = 20,
-		Align = "Center",
-		Size = UDim2.fromOffset(146, 48),
-		LayoutOrder = 2,
-		OnClick = function()
-			LobbyScreen.Show("Characters")
-		end,
-	})
-	ui.PrevArrow = UIKit.IconButton(plate, {
+	ui.PrevArrow = UIKit.IconButton(face, {
 		Icon = "chevronLeft",
-		Size = 52,
+		Size = 44,
 		Round = true,
 		Name = "Prev",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 8, 0.5, 0),
 		OnClick = function()
 			browseStep(-1)
 		end,
 	})
-	ui.NextArrow = UIKit.IconButton(plate, {
+	ui.NextArrow = UIKit.IconButton(face, {
 		Icon = "chevronRight",
-		Size = 52,
+		Size = 44,
 		Round = true,
 		Name = "Next",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -8, 0.5, 0),
 		OnClick = function()
 			browseStep(1)
 		end,
@@ -462,115 +412,124 @@ local function buildNameplate(frame: Frame)
 	end
 end
 
-local function buildModes(frame: Frame)
-	ui.ModeButtons = {}
-	for i, id in ipairs(Config.Modes.Order) do
-		local def = (Config.Modes :: any)[id]
-		local style = MODES[id] or { Sub = def.MaxPlayers .. " players", Icon = "people3" }
-		local b = UIKit.Button(frame, {
-			Kind = i == 1 and "Primary" or "Secondary",
-			Glow = i == 1,
-			Title = string.upper(def.DisplayName),
-			Subtitle = style.Sub,
-			Icon = style.Icon,
-			IconSize = 34,
-			TitleStyle = "H1",
-			TitleSize = i == 1 and 30 or 26,
-			Chevron = true,
-			Align = "Left",
-			Name = id,
-			OnClick = function()
-				Remotes.Get("StartRun"):FireServer(id)
-			end,
-		})
-		if i == 1 then
-			b.Face.ClipsDescendants = true
-			UIAnim.Shine(b.Face, 3.2, 0.78)
+------------------------------------------------------------------------------------------
+-- Home: HEROES / SHOP / MORE tiles, PLAY and the mode selector
+------------------------------------------------------------------------------------------
+
+local function buildTiles(screen: Frame)
+	local holder, face = UIKit.Surface(screen, { Name = "Tiles", Radius = Theme.Radius.L, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	ui.Tiles = holder
+	ui.TilesFace = face
+	local function tile(name: string, icon: string, caption: string, order: number, onClick: () -> ()): any
+		local b = UIKit.IconButton(face, { Icon = icon, Caption = caption, Kind = "Ghost", Size = 96, IconSize = 46, Name = name, LayoutOrder = order, OnClick = onClick })
+		local cap = b.Content:FindFirstChild("Caption") :: TextLabel?
+		if cap then
+			cap.TextColor3 = P.ivory_100
+			cap.FontFace = Theme.Font.Title
+			cap.TextSize = TS(15)
+			cap.Size = UDim2.new(1, -4, 0, TS(15) + 4)
 		end
-		ui.ModeButtons[i] = b
+		return b
 	end
-	-- the run modifiers (MenuCurses): what is picked and the gold it adds
-	ui.CurseBtn = UIKit.Button(frame, {
-		Kind = "Secondary",
-		Title = "CURSES",
-		Subtitle = "Harder runs, more gold",
-		Icon = "curse",
-		IconSize = 28,
-		Chevron = true,
-		Align = "Left",
-		Name = "Curses",
-		OnClick = function()
-			LobbyScreen.Show("Curses")
-		end,
-	})
-	-- portrait: the daily sits next to CURSES (the card row keeps three tiles)
-	ui.DailyBtn = UIKit.Button(frame, {
-		Kind = "Secondary",
-		Title = "DAILY",
-		Subtitle = "Ready",
-		Icon = "calendar",
-		IconSize = 28,
-		Chevron = true,
-		Align = "Left",
-		Name = "DailyPortrait",
-		OnClick = function()
-			LobbyScreen.Show("Daily")
-		end,
-	})
-	ui.DailyBtn.Instance.Visible = false
-	-- ENDLESS: a switch under the modes (the server keeps it per player, like curses)
-	local holder, face = UIKit.Surface(frame, { Name = "EndlessRow", Radius = Theme.Radius.M, Transparency = 0.12, Edge = C.PanelEdge, EdgeTransparency = Theme.Alpha.Edge })
-	ui.EndlessRow = holder
-	ui.EndlessEdge = face:FindFirstChildOfClass("UIStroke")
-	UIKit.padding(face, 0, 12, 0, 12)
-	ui.EndlessToggle = UIKit.Toggle(face, "Endless", nil, nil, player:GetAttribute("Endless") == true, function(on)
-		endlessSentAt = os.clock()
-		Remotes.Get("SetEndless"):FireServer(on)
-	end, { Size = UDim2.new(0.64, 0, 1, 0) })
-	ui.Difficulty = UIKit.Button(face, { Kind = "Secondary", Name = "Difficulty", Title = "STANDARD", TitleSize = 12, TitleStyle = "Label", Position = UDim2.fromScale(0.67, 0), Size = UDim2.new(0.33, 0, 1, 0), OnClick = function()
-		local currentTier = DifficultyData.Selected(profile)
-		local at = table.find(DifficultyData.Order, currentTier) or 1
-		for step = 1, #DifficultyData.Order - 1 do
-			local id = DifficultyData.Order[(at + step - 1) % #DifficultyData.Order + 1]
-			if DifficultyData.IsUnlocked(profile, id) then
-				Remotes.Get("SetDifficulty"):FireServer(id)
-				return
-			end
-		end
-		-- the first tier still locked, and the one it needs cleared
-		local nextLocked = nil
-		for _, id in ipairs(DifficultyData.Order) do
-			if not DifficultyData.IsUnlocked(profile, id) then
-				nextLocked = DifficultyData.Tiers[id]
-				break
-			end
-		end
-		if nextLocked then
-			local needs = DifficultyData.Tiers[nextLocked.Requires]
-			toast(string.format("Clear all %d %s stages to unlock %s.", Config.Stages.WinMinStages, needs and needs.Name or "Standard", nextLocked.Name), P.gold_300)
-		end
-	end })
-	local difficultyPadding = ui.Difficulty.Content:FindFirstChildOfClass("UIPadding")
-	if difficultyPadding then
-		difficultyPadding.PaddingLeft = UDim.new(0, 4)
-		difficultyPadding.PaddingRight = UDim.new(0, 4)
+	ui.HeroesTile = tile("Heroes", "helmet", "Heroes", 1, function()
+		LobbyScreen.Show("Characters")
+	end)
+	ui.ShopTile = tile("Shop", "chest", "Shop", 2, function()
+		LobbyScreen.Show("Upgrades")
+	end)
+	ui.MoreTile = tile("More", "plus", "More", 3, function()
+		LobbyScreen.Show("More")
+	end)
+	-- MORE: three gold dots instead of a glyph
+	local glyph = ui.MoreTile.Content:FindFirstChild("Glyph")
+	if glyph then
+		glyph:Destroy()
 	end
-	if Config.Endless == nil or not Config.Endless.Enabled then
-		holder.Visible = false
+	local dots = new("Frame", { Name = "Dots", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -TS(Theme.TextSize.Caption) / 2 - 2), Size = UDim2.fromOffset(44, 12) }, ui.MoreTile.Content)
+	for i = 0, 2 do
+		local d = new("Frame", { BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Position = UDim2.fromOffset(i * 16, 0), Size = UDim2.fromOffset(12, 12) }, dots)
+		UIKit.corner(d, 999)
+	end
+	ui.MoreBadge = UIKit.Badge(ui.MoreTile.Instance, "", "Crimson", { Name = "InviteBadge", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -6, 0, 6), ZIndex = 6, Visible = false })
+	-- thin gold separators between the tiles
+	ui.TileSeps = {}
+	for i = 1, 2 do
+		ui.TileSeps[i] = new("Frame", { Name = "Sep" .. i, BackgroundColor3 = P.gold_400, BackgroundTransparency = 0.6, BorderSizePixel = 0 }, face)
 	end
 end
 
--- "Frenzy, Horde · +45% gold" (or the empty text) for a curse list.
-local function curseLine(list: { string }, empty: string): string
-	if #list == 0 then
-		return empty
+local function buildPlay(screen: Frame)
+	-- the wrapper breathes (a gentle pulse); the button inside keeps its press feedback
+	ui.PlayHolder = new("Frame", { Name = "PlayHolder", BackgroundTransparency = 1 }, screen)
+	ui.PlayBtn = UIKit.Button(ui.PlayHolder, {
+		Kind = "Primary",
+		Glow = true,
+		Title = "PLAY",
+		TitleStyle = "H1",
+		TitleSize = 46,
+		Chevron = true,
+		Align = "Center",
+		Name = "Play",
+		Size = UDim2.fromScale(1, 1),
+		OnClick = function()
+			MenuPlay.Start(toast)
+		end,
+	})
+	if ui.PlayBtn.Title then
+		ui.PlayBtn.Title.FontFace = Theme.Font.Display
 	end
-	local names = {}
-	for _, id in ipairs(list) do
-		table.insert(names, CurseData.Curses[id].Name)
+	ui.PlayBtn.Face.ClipsDescendants = true
+	UIAnim.Shine(ui.PlayBtn.Face, 3.2, 0.78)
+	if not UIAnim.Reduced() then
+		UIAnim.Breathe(ui.PlayHolder, 0.025, 1.4)
 	end
-	-- the gold bonus first: narrow rows truncate the end of the line
-	return CurseData.GoldText(CurseData.GoldMult(list)) .. " gold · " .. table.concat(names, ", ")
+	ui.ModeSelect = UIKit.Button(screen, {
+		Kind = "Secondary",
+		Title = "SOLO",
+		TitleStyle = "Label",
+		TitleSize = 17,
+		Chevron = true,
+		Align = "Center",
+		Shrink = true,
+		Name = "ModeSelect",
+		OnClick = function()
+			LobbyScreen.Show("Play")
+		end,
+	})
+	-- a party member's READY toggle (the leader's start waits for everyone)
+	ui.ReadyBtn = UIKit.Button(screen, {
+		Kind = "Primary",
+		Title = "READY",
+		Icon = "check",
+		IconSize = 18,
+		Align = "Center",
+		Name = "PartyReady",
+		OnClick = function()
+			MenuParty.SetReady(not MenuParty.Summary().MyReady)
+		end,
+	})
+	ui.ReadyBtn.Instance.Visible = false
+	MenuPlay.OnModeChanged(function()
+		LobbyScreen._modeText()
+	end)
+end
+
+-- The selector's text: the mode and anything that changes the run ("SOLO · ENDLESS").
+function LobbyScreen._modeText()
+	if ui.ModeSelect then
+		local line = MenuPlay.Summary()
+		if ui.ModeSelect.Instance:GetAttribute("Line") ~= line then
+			ui.ModeSelect.Instance:SetAttribute("Line", line)
+			ui.ModeSelect.SetText(line)
+		end
+	end
+end
+
+-- "Starting your first run…" while the server answers a brand-new player's StartFirstRun.
+local function buildFirstRunCover(frame: Frame)
+	local cover = new("Frame", { Name = "FirstRunCover", BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.15, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 20, Visible = false, Active = true }, frame)
+	text(cover, "H1", "Starting your first run…", { Name = "Text", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -40, 0, TS(30) + 8), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 21 })
+	ui.FirstRunCover = cover
 end
 
 -- Countdown (who joined, JOIN / START NOW, the number) or "run in progress".
@@ -648,259 +607,17 @@ local function playerRow(name: string?, order: number)
 	})
 end
 
-------------------------------------------------------------------------------------------
--- Painted art on the home screen (ArtImage; each falls back to the drawn icon)
-------------------------------------------------------------------------------------------
-
--- Arena picture behind the ARENA card (arenas/<id>, cropped) under a dark wash that keeps
--- the title readable; follows the selected arena.
-local function setArenaArt(arenaId: string?)
-	local b = ui.CardArena
-	if not b or ui.ArenaArtId == arenaId then
-		return
-	end
-	ui.ArenaArtId = arenaId
-	local key = ArtImage.Arena(arenaId)
-	if not ui.ArenaArt then
-		if not ArtImage.Image(key) then
-			return
-		end
-		local face = b.Face
-		local hover = face:FindFirstChild("Hover")
-		if hover and hover:IsA("GuiObject") then
-			hover.ZIndex = 2 -- the hover tint stays over the picture
-		end
-		ui.ArenaArt = ArtImage.Place(face, key, { Name = "ArenaArt", ScaleType = Enum.ScaleType.Crop, ZIndex = 1, ImageTransparency = 0.1 })
-		UIKit.corner(ui.ArenaArt, Theme.Radius.M)
-		ui.ArenaShade = new("Frame", { Name = "ArenaShade", BackgroundColor3 = C.Backdrop, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 1 }, face)
-		UIKit.corner(ui.ArenaShade, Theme.Radius.M)
-		ui.ArenaShadeGrad = new("UIGradient", { Transparency = NumberSequence.new(0.2, 0.7) }, ui.ArenaShade)
-	else
-		local has = ArtImage.Image(key) ~= nil
-		ui.ArenaShade.Visible = has
-		ArtImage.Set(ui.ArenaArt, key)
-	end
-end
-
-local function buildHomeArt()
-	local motion = { Characters = "Bob", Upgrades = "Hammer", Arenas = "Sun", Daily = "Glint" }
-	-- feature cards: the picture stands a little proud of the icon well
-	for b, name in pairs({ [ui.CardCharacters] = "Characters", [ui.CardUpgrades] = "Upgrades", [ui.CardArena] = "Arenas", [ui.CardDaily] = "Daily" }) do
-		local holder = b.Content:FindFirstChild("IconHolder")
-		local well = holder and holder:FindFirstChild("Well")
-		ArtImage.ButtonIcon(well, "icons/ui/ui_" .. name, { Size = UDim2.fromScale(1.3, 1.3), Idle = { motion[name] } })
-	end
-	-- mode column, CURSES / DAILY, START NOW
-	local function onButton(b: any, name: string, scale: number)
-		local holder = b and b.Content:FindFirstChild("IconHolder")
-		ArtImage.ButtonIcon(holder, "icons/ui/ui_" .. name, { Size = UDim2.fromScale(scale, scale), Idle = { name == "Curses" and "Flicker" or name == "Daily" and "Glint" or "Sway" } })
-	end
-	for i, id in ipairs(Config.Modes.Order) do
-		onButton(ui.ModeButtons[i], id, 1.5)
-	end
-	onButton(ui.CurseBtn, "Curses", 1.55)
-	onButton(ui.DailyBtn, "Daily", 1.55)
-	onButton(ui.StartNow, "Play", 1.6)
-	onButton(ui.Details, "Characters", 1.35) -- the nameplate's DETAILS (locked hero)
-	-- corner buttons (STATS keeps its drawn bars: there is no ui_ picture for it)
-	local glyphY = -TS(Theme.TextSize.Caption) / 2 - 2
-	for b, name in pairs({ [ui.SettingsBtn] = "Settings", [ui.RanksBtn] = "Leaderboards", [ui.TrackBtn] = "Track" }) do
-		ArtImage.ButtonIcon(b.Content, "icons/ui/ui_" .. name, { Position = UDim2.new(0.5, 0, 0.5, glyphY), Size = UDim2.fromOffset(42, 42), Idle = name ~= "Settings" and { "Glint" } or nil }, "Glyph")
-	end
-	setArenaArt(tostring(Remotes.State():GetAttribute("SelectedArena") or "Forest"))
-end
-
--- PARTY: a pill beside the stats chip (landscape) or a fifth corner button (portrait),
--- each with a red badge counting open invites.
-local function partyBadge(parent: Instance): TextLabel
-	return UIKit.Badge(parent, "", "Crimson", { Name = "InviteBadge", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 6, 0, -6), ZIndex = 6, Visible = false })
-end
-
-local function buildParty(screen: Frame)
-	ui.PartyBtn = UIKit.Button(screen, {
-		Kind = "Secondary",
-		Title = "PARTY",
-		Subtitle = "With friends",
-		Icon = "lobby_Party",
-		IconSize = 26,
-		TitleSize = 18,
-		Align = "Left",
-		Name = "Party",
-		OnClick = function()
-			LobbyScreen.Show("Party")
-		end,
-	})
-	ui.PartyBadge = partyBadge(ui.PartyBtn.Instance)
-	ui.PartyCornerBtn = UIKit.IconButton(ui.Corner, {
-		Icon = "lobby_Party",
-		Caption = "Party",
-		Size = 76,
-		LayoutOrder = 5,
-		Name = "PartyCorner",
-		OnClick = function()
-			LobbyScreen.Show("Party")
-		end,
-	})
-	ui.PartyCornerBadge = partyBadge(ui.PartyCornerBtn.Instance)
-	-- Keep the party emblem's designed colours on both lobby layouts.
-	local partyHolder = ui.PartyBtn.Content:FindFirstChild("IconHolder")
-	if partyHolder then
-		for _, child in ipairs(partyHolder:GetChildren()) do child:Destroy() end
-		Icons.Draw(partyHolder, "lobby_Party", { Size = 26, Back = C.Panel })
-	end
-	local partyGlyph = ui.PartyCornerBtn.Content:FindFirstChild("Glyph")
-	if partyGlyph then partyGlyph:Destroy() end
-	Icons.Draw(ui.PartyCornerBtn.Content, "lobby_Party", { Name = "Glyph", Size = 32, Back = C.Panel, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -TS(Theme.TextSize.Caption) / 2 - 2) })
-	-- a party member's READY toggle (the leader's start waits for everyone)
-	ui.ReadyBtn = UIKit.Button(screen, {
-		Kind = "Primary",
-		Title = "READY",
-		Icon = "check",
-		IconSize = 18,
-		Align = "Center",
-		Name = "PartyReady",
-		OnClick = function()
-			MenuParty.SetReady(not MenuParty.Summary().MyReady)
-		end,
-	})
-	ui.ReadyBtn.Instance.Visible = false
-end
-
 local function buildHome(screen: Frame)
 	ui.Logo = buildLogo(screen)
-	ui.Cards = new("Frame", { Name = "Cards", BackgroundTransparency = 1 }, screen)
-	ui.CardsLayout = UIKit.list(ui.Cards, { Padding = UDim.new(0, Theme.Layout.Gutter) })
-	ui.CardCharacters = UIKit.Card(ui.Cards, {
-		Icon = "helmet",
-		Title = "CHARACTERS",
-		Subtitle = "Choose your hero",
-		LayoutOrder = 1,
-		OnClick = function()
-			LobbyScreen.Show("Characters")
-		end,
-	})
-	ui.CardUpgrades = UIKit.Card(ui.Cards, {
-		Icon = "chevronsUp",
-		Title = "UPGRADES", -- the screen's own title (its tabs are PERMANENT / SHOP)
-		Subtitle = "Upgrades, gold and cosmetics",
-		LayoutOrder = 2,
-		OnClick = function()
-			LobbyScreen.Show("Upgrades")
-		end,
-	})
-	ui.CardArena = UIKit.Card(ui.Cards, {
-		Icon = "tree",
-		Title = "FOREST",
-		Subtitle = "Face the swarm",
-		LayoutOrder = 3,
-		OnClick = function()
-			LobbyScreen.Show("Arenas")
-		end,
-	})
-	ui.CardDaily = UIKit.Card(ui.Cards, {
-		Icon = "calendar",
-		Title = "DAILY CHALLENGE",
-		Subtitle = "One scored try a day",
-		LayoutOrder = 4,
-		Name = "DAILY",
-		OnClick = function()
-			LobbyScreen.Show("Daily")
-		end,
-	})
-	ui.Corner = new("Frame", { Name = "CornerButtons", BackgroundTransparency = 1 }, screen)
-	ui.CornerLayout = UIKit.list(ui.Corner, { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, Theme.Layout.Gutter) })
-	ui.SettingsBtn = UIKit.IconButton(ui.Corner, {
-		Icon = "gear",
-		Caption = "Settings",
-		Size = 76,
-		LayoutOrder = 1,
-		OnClick = function()
-			if host.OpenSettings then
-				host.OpenSettings()
-			end
-		end,
-	})
-	ui.StatsBtn = UIKit.IconButton(ui.Corner, {
-		Icon = "bars",
-		Caption = "Stats",
-		Size = 76,
-		LayoutOrder = 2,
-		OnClick = function()
-			LobbyScreen.Show("Stats")
-		end,
-	})
-	ui.RanksBtn = UIKit.IconButton(ui.Corner, {
-		Icon = "podium",
-		Caption = "Ranks",
-		Size = 76,
-		LayoutOrder = 3,
-		Name = "Ranks",
-		OnClick = function()
-			LobbyScreen.Show("Ranks")
-		end,
-	})
-	ui.TrackBtn = UIKit.IconButton(ui.Corner, {
-		Icon = "medal",
-		Caption = "Track",
-		Size = 76,
-		LayoutOrder = 4,
-		Name = "Track",
-		OnClick = function()
-			LobbyScreen.Show("Track")
-		end,
-	})
-	buildNameplate(screen)
-	buildModes(screen)
+	buildHeroPill(screen)
+	buildTiles(screen)
+	buildPlay(screen)
 	buildQueue(screen)
-	buildParty(screen)
-	buildHomeArt()
 end
 
 ------------------------------------------------------------------------------------------
 -- Layout
 ------------------------------------------------------------------------------------------
-
--- Portrait: the three feature cards become small tiles (icon over a short caps title).
-local function setCardsCompact(on: boolean)
-	if ui.CardsCompact == on then
-		return
-	end
-	ui.CardsCompact = on
-	if ui.ArenaShadeGrad then
-		-- tiles: darker at the bottom where the caption sits; rows: darker behind the text
-		ui.ArenaShadeGrad.Rotation = on and 90 or 0
-		ui.ArenaShadeGrad.Transparency = on and NumberSequence.new(0.65, 0.15) or NumberSequence.new(0.2, 0.7)
-	end
-	for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
-		local layout = b.Content:FindFirstChildOfClass("UIListLayout")
-		local column = b.Content:FindFirstChild("Text") :: Frame?
-		local right = b.Content:FindFirstChild("Right") :: Frame?
-		local iconHolder = b.Content:FindFirstChild("IconHolder") :: Frame?
-		if layout then
-			layout.FillDirection = on and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
-			layout.HorizontalAlignment = on and Enum.HorizontalAlignment.Center or Enum.HorizontalAlignment.Left
-			layout.Padding = UDim.new(0, on and 4 or Theme.Space.M)
-		end
-		if right then
-			right.Visible = not on
-		end
-		if iconHolder then
-			iconHolder.Size = on and UDim2.fromOffset(40, 40) or UDim2.fromOffset(46, 46)
-		end
-		if column then
-			column.Size = on and UDim2.new(1, 0, 0, TS(15) + 6) or UDim2.new(1, -(46 + 20 + 2 * Theme.Space.M), 1, 0)
-		end
-		if b.Subtitle then
-			b.Subtitle.Visible = not on
-		end
-		if b.Title then
-			b.Title.FontFace = on and Theme.Font.Label or Theme.Font.Title
-			b.Title.TextSize = on and TS(15) or TS(Theme.TextSize.H2)
-			b.Title.TextXAlignment = on and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
-			b.Title.Size = UDim2.new(1, 0, 0, b.Title.TextSize + 6)
-		end
-	end
-end
 
 local function relayout()
 	if not ui.Frame then
@@ -913,206 +630,119 @@ local function relayout()
 	local compact = UIKit.IsCompact()
 	local M = compact and Theme.Layout.MarginCompact or Theme.Layout.Margin
 	local G = Theme.Layout.Gutter
-
-	local chipY = ins.Right > 4 and (ins.Top + 6) or 12
-	local plateH = (browse and 158 or 104) + (compact and 16 or 0)
-	local heroFrac = 0.5
-	local heroZoom = 1
+	local home = current == "Home"
+	local showQueue = lastStatus == "Countdown" or lastStatus == "Busy"
 
 	setChipFlat(not portrait and current == "Characters")
-	-- phones in landscape: the CHARACTERS title shares the top row, so the chip keeps only GOLD
-	local slim = compact and not portrait and current == "Characters"
-	-- every screen shows the stats chip (gold on every buy screen); phones in landscape put it
-	-- in the Roblox top-bar row, right of the Roblox buttons, above the screen's header
-	local topRowChip = compact and not portrait and current ~= "Home" and ins.Top >= 48
-	ui.Chip.Visible = topRowChip or not (compact and not portrait and current ~= "Home" and current ~= "Characters")
-	for _, ch in ipairs(ui.ChipFace:GetChildren()) do
-		if ch:IsA("GuiObject") and ch ~= ui.Gold.Frame then
-			ch.Visible = not slim
-		end
-	end
+	-- every screen shows the gold chip; phones in landscape put it in the Roblox top-bar
+	-- row (right of the Roblox buttons) on the sub-screens, above the screen's header
+	local topRowChip = compact and not portrait and not home and ins.Top >= 48
+	ui.Chip.Visible = topRowChip or not (compact and not portrait and not home and current ~= "Characters")
+	ui.Cog.Instance.Visible = home
+	local chipY = ins.Right > 4 and (ins.Top + 6) or 12
 	if portrait then
-		local logoScale = math.clamp((W - 2 * M) / 380, 0.66, 0.85)
-		ui.LogoScale.Scale = logoScale
-		local logoY = math.max(ins.Top + 2, 10)
-		ui.Logo.Position = UDim2.fromOffset((W - ui.LogoW * logoScale) / 2, logoY)
-		local chipTop = logoY + (ui.LogoH - 6) * logoScale + 4
+		chipY = ins.Top >= 48 and math.max(4, math.floor((ins.Top - 52) / 2)) or 12
+	elseif current == "Characters" or topRowChip then
+		chipY = math.max(0, math.floor((ins.Top - 48) / 2))
+	end
+	local cogW = home and (52 + G) or 0
+	ui.Chip.AnchorPoint = Vector2.new(1, 0)
+	if portrait and not home then
+		-- portrait sub-screens: under their header, centred
 		ui.Chip.AnchorPoint = Vector2.new(0.5, 0)
-		-- sub-screens: under their header instead of the logo
-		ui.Chip.Position = UDim2.fromOffset(W / 2, current == "Home" and chipTop or (math.max(ins.Top + 4, 12) + 64))
-		local w = W - 2 * M
-		-- bottom-up: settings / stats, cards, DUO + TRIO, SOLO, nameplate
-		local cornerH = 64
-		local y = H - M - cornerH
-		place(ui.Corner, M, y, w, cornerH)
-		ui.PartyCornerBtn.Instance.Visible = true
-		ui.PartyBtn.Instance.Visible = false
-		ui.PlaceParty = nil
-		place(ui.ReadyBtn.Instance, W - M - 132, chipTop + 58, 132, 48)
-		-- PLAYTIME as a one-line chip on the left of that row (READY keeps the right)
-		if ui.Playtime then
-			ui.Playtime.Place(M, chipTop + 62, math.min(300, W - 2 * M - 132 - G), 0)
-		end
-		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn, ui.PartyCornerBtn }) do
-			b.Instance.Size = UDim2.fromOffset(math.floor((w - 4 * G) / 5), cornerH)
-		end
-		local cardH = compact and 96 or 88
-		setCardsCompact(true)
-		y -= G + cardH
-		ui.CardsLayout.FillDirection = Enum.FillDirection.Horizontal
-		place(ui.Cards, M, y, w, cardH)
-		ui.CardDaily.Instance.Visible = false
-		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena }) do
-			b.Instance.Size = UDim2.fromOffset(math.floor((w - 2 * G) / 3), cardH)
-		end
-		local soloH, smallH, curseH = 84, 76, 64
-		y -= G + smallH
-		local half = math.floor((w - G) / 2)
-		place(ui.ModeButtons[2].Instance, M, y, half, smallH)
-		place(ui.ModeButtons[3].Instance, M + half + G, y, half, smallH)
-		y -= G + soloH
-		place(ui.ModeButtons[1].Instance, M, y, w, soloH)
-		local endH = 60
-		y -= G + endH
-		place(ui.EndlessRow, M, y, w, endH)
-		y -= G + curseH
-		place(ui.CurseBtn.Instance, M, y, half, curseH)
-		place(ui.DailyBtn.Instance, M + half + G, y, half, curseH)
-		place(ui.Queue, M, y, w, curseH + endH + 2 * G + soloH + G + smallH)
-		-- the LAST RUN card (when there is one) sits over the curse row
-		local lastShown = ui.LastRun ~= nil and ui.LastRun.Has() and lastStatus == "Modes"
-		if ui.LastRun then
-			local lastH = 76
-			if lastShown then
-				y -= G + lastH
-				place(ui.LastRun.Frame, M, y, w, lastH)
-				ui.LastRun.SetWidth(w)
-			end
-			ui.LastRun.Frame.Visible = lastShown
-		end
-		y -= 18 + plateH
-		local plateW = math.min(w - 2 * 62, 460)
-		place(ui.Nameplate, (W - plateW) / 2, y, plateW, plateH)
-		heroFrac = ((chipTop + 52 + y) / 2) / H
-		-- the LAST RUN card shortens the hero's room between the chip and the plate: the
-		-- menu camera widens its shot (CameraController: MenuHeroZoom) so the hero fits
-		local room = y - (chipTop + 52)
-		heroZoom = (lastShown and current == "Home") and math.clamp(H * 0.24 / math.max(1, room), 1, 1.3) or 1
-		ui.PrevArrow.Instance.Visible = true
-		ui.NextArrow.Instance.Visible = true
+		ui.Chip.Position = UDim2.fromOffset(W / 2, math.max(ins.Top + 4, 12) + 64)
 	else
-		local logoScale = math.clamp(H / 760, compact and 0.56 or 0.7, 1) -- phones: room for the cards
+		ui.Chip.Position = UDim2.fromOffset(W - M - cogW, chipY + (home and 2 or 0))
+	end
+	place(ui.Cog.Instance, W - M - 52, chipY, 52, 52)
+
+	local heroFrac = 0.5
+	local pillH = 64
+	local tilesW = 3 * (compact and 92 or 104) + 16
+	local tilesH = compact and 92 or 104
+	if portrait then
+		local logoScale = math.clamp((W - 2 * M) / 380, 0.66, 0.9)
+		ui.LogoScale.Scale = logoScale
+		local logoY = math.max(chipY + 52, ins.Top) + 6
+		ui.Logo.Position = UDim2.fromOffset((W - ui.LogoW * logoScale) / 2, logoY)
+		local w = math.min(W - 2 * M, 560)
+		local x = (W - w) / 2
+		-- bottom-up: mode selector, PLAY, tiles, hero pill
+		local selH, playH = 60, 108
+		local y = H - M - selH
+		local selW = math.min(w, 420)
+		place(ui.ModeSelect.Instance, (W - selW) / 2, y, selW, selH)
+		y -= G + playH
+		place(ui.PlayHolder, x, y, w, playH)
+		local playTop = y
+		y -= G + 6 + tilesH
+		place(ui.Tiles, x, y, w, tilesH)
+		y -= 18 + pillH
+		local pillW = math.min(w, 400)
+		place(ui.HeroPill, (W - pillW) / 2, y, pillW, pillH)
+		-- the countdown / busy panel takes the pill, tiles, PLAY and selector area
+		place(ui.Queue, x, y, w, H - M - y)
+		place(ui.ReadyBtn.Instance, W - M - 132, playTop - G - 48 - tilesH - G - 6, 132, 48)
+		local logoBottom = logoY + (ui.LogoH + 10) * logoScale
+		heroFrac = ((logoBottom + y) / 2) / H
+	else
+		local logoScale = math.clamp(H / 760, compact and 0.56 or 0.7, 1)
 		ui.LogoScale.Scale = logoScale
 		local logoY = math.max(ins.Top + 2, 14)
 		ui.Logo.Position = UDim2.fromOffset(M, logoY)
-		ui.Chip.AnchorPoint = Vector2.new(1, 0)
-		ui.Chip.Position = UDim2.fromOffset(W - M, (current == "Characters" or topRowChip) and math.max(0, math.floor((ins.Top - 48) / 2)) or chipY)
-		-- PARTY pill left of the stats chip
-		ui.PartyCornerBtn.Instance.Visible = false
-		ui.PartyBtn.Instance.Visible = true
-		ui.PlaceParty = function()
-			local chipW = ui.Chip.AbsoluteSize.X / math.max(0.01, host.Scale())
-			local pw = compact and 180 or 210
-			place(ui.PartyBtn.Instance, W - M - chipW - G - pw, chipY - 2, pw, 52)
-			place(ui.ReadyBtn.Instance, W - M - chipW - 2 * G - pw - 132, chipY, 132, 48)
-			-- PLAYTIME under the PARTY pill, right-aligned with it, above the hero's head:
-			-- rows where there is room, else the one-line chip
-			if ui.Playtime then
-				local right = W - M - chipW - G
-				local logoRight = M + ui.LogoW * ui.LogoScale.Scale + G
-				-- (narrow and right-aligned: the hero's raised sword stays clear on its left)
-				local pwide = math.min(math.max(pw, compact and 260 or 300), right - logoRight)
-				local top = chipY + 58
-				local room = H * 0.31 - top
-				local rows = math.floor((room - 12 - 30) / 24) - 1
-				ui.Playtime.Place(right - pwide, top, pwide, rows >= 2 and rows or 0)
-			end
-		end
-		ui.PlaceParty()
-		local logoBottom = logoY + (ui.LogoH - 4) * logoScale
-		local cw = math.clamp(W * 0.27, compact and 320 or 290, 360) -- phones: room for CHARACTERS
-		local cornerW = 4 * 76 + 3 * G
-		local cornerSize = cornerW <= cw and 76 or 64 -- clear of the nameplate arrows
-		place(ui.Corner, M, H - M - cornerSize, 4 * cornerSize + 3 * G, cornerSize)
-		for _, b in ipairs({ ui.SettingsBtn, ui.StatsBtn, ui.RanksBtn, ui.TrackBtn }) do
-			b.Instance.Size = UDim2.fromOffset(cornerSize, cornerSize)
-		end
-		-- left cards, centred between the logo and the corner buttons
-		local top, bottom = logoBottom + 12, H - M - cornerSize - 12
-		local cardH = math.min(compact and 86 or 80, math.floor((bottom - top - 3 * G) / 4))
-		setCardsCompact(false)
-		ui.CardsLayout.FillDirection = Enum.FillDirection.Vertical
-		local cardsH = 4 * cardH + 3 * G
-		place(ui.Cards, M, math.max(top, (top + bottom - cardsH) / 2), cw, cardsH)
-		ui.CardDaily.Instance.Visible = true
-		ui.DailyBtn.Instance.Visible = false
-		ui.CardDaily.SetText(compact and "DAILY" or "DAILY CHALLENGE")
-		for _, b in ipairs({ ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
-			b.Instance.Size = UDim2.fromOffset(cw, cardH)
-			-- cards too short for title + subtitle show the title alone
-			if b.Subtitle then
-				b.Subtitle.Visible = cardH >= TS(Theme.TextSize.H2) + TS(15) + 22
-			end
-		end
-		-- right column: SOLO / DUO / TRIO, then CURSES
-		local rw = math.clamp(W * 0.25, 280, 340)
-		local soloH, smallH, curseH, endH = 96, 80, 68, 60
-		local colH = soloH + 2 * smallH + curseH + endH + 4 * G
-		local colTop = math.max(chipY + 64, (H - colH) / 2)
-		-- short screens (phones in landscape): the column shrinks to fit above the bottom
-		local room = H - M - colTop
-		if colH > room then
-			local k = math.max(0.72, (room - 4 * G) / (colH - 4 * G))
-			soloH, smallH, curseH = math.floor(soloH * k), math.floor(smallH * k), math.floor(curseH * k)
-			endH = math.max(Theme.Size.TapMin, math.floor(endH * k))
-			colH = soloH + 2 * smallH + curseH + endH + 4 * G
-		end
-		-- the LAST RUN card above the column, centred with it, only where the whole column
-		-- still fits (phones in landscape have no room: the card stays hidden there)
-		if ui.LastRun then
-			local lastH = 78
-			local wanted = ui.LastRun.Has() and lastStatus == "Modes"
-			local withCard = colH + G + lastH
-			local cardTop = math.max(chipY + 64, (H - withCard) / 2)
-			local fits = wanted and H - M - cardTop >= withCard
-			if fits then
-				place(ui.LastRun.Frame, W - M - rw, cardTop, rw, lastH)
-				ui.LastRun.SetWidth(rw)
-				colTop = cardTop + lastH + G
-			end
-			ui.LastRun.Frame.Visible = fits
-		end
-		place(ui.ModeButtons[1].Instance, W - M - rw, colTop, rw, soloH)
-		place(ui.ModeButtons[2].Instance, W - M - rw, colTop + soloH + G, rw, smallH)
-		place(ui.ModeButtons[3].Instance, W - M - rw, colTop + soloH + smallH + 2 * G, rw, smallH)
-		place(ui.CurseBtn.Instance, W - M - rw, colTop + soloH + 2 * smallH + 3 * G, rw, curseH)
-		place(ui.EndlessRow, W - M - rw, colTop + soloH + 2 * smallH + curseH + 4 * G, rw, endH)
-		place(ui.Queue, W - M - rw, colTop - 10, rw, math.min(colH + 40, H - colTop - M))
-		-- nameplate bottom centre, between the columns
-		local gapL, gapR = M + cw + 16, W - M - rw - 16
-		-- the browse arrows only where they fit beside the plate (phones in landscape have
-		-- no room; the plate itself still opens CHARACTERS there)
-		local arrows = gapR - gapL - 2 * 64 >= 300
-		ui.PrevArrow.Instance.Visible = arrows
-		ui.NextArrow.Instance.Visible = arrows
-		if arrows then
-			local plateW = math.clamp(gapR - gapL - 2 * 64, 300, 460)
-			place(ui.Nameplate, W / 2 - plateW / 2, H - M - plateH, plateW, plateH)
+		-- bottom left: the tiles panel
+		place(ui.Tiles, M, H - M - tilesH, tilesW, tilesH)
+		-- bottom right: PLAY over the mode selector
+		local pw = math.clamp(W * 0.3, 260, 400)
+		local playH = compact and 88 or 108
+		local selH = compact and 50 or 56
+		local selW = math.floor(pw * 0.78)
+		place(ui.ModeSelect.Instance, W - M - pw / 2 - selW / 2, H - M - selH, selW, selH)
+		local playY = H - M - selH - G - playH
+		place(ui.PlayHolder, W - M - pw, playY, pw, playH)
+		place(ui.ReadyBtn.Instance, W - M - 132, playY - G - 48, 132, 48)
+		local qTop = chipY + 64
+		place(ui.Queue, W - M - pw, qTop, pw, H - M - qTop)
+		-- the hero pill between them, at the bottom
+		local gapL, gapR = M + tilesW + 16, W - M - pw - 16
+		-- centred under the hero when there is room either side, else in the gap
+		local half = math.min(W / 2 - gapL, gapR - W / 2)
+		if 2 * half >= 260 then
+			local pillW = math.min(360, 2 * half)
+			place(ui.HeroPill, W / 2 - pillW / 2, H - M - pillH - 4, pillW, pillH)
 		else
-			local plateW = math.max(260, gapR - gapL)
-			place(ui.Nameplate, (gapL + gapR) / 2 - plateW / 2, H - M - plateH, plateW, plateH)
+			local pillW = math.clamp(gapR - gapL, 240, 360)
+			place(ui.HeroPill, (gapL + gapR) / 2 - pillW / 2, H - M - pillH - 4, pillW, pillH)
 		end
+		heroFrac = 0.5
 	end
-	ui.PlateSurface.Size = UDim2.fromScale(1, 1)
-	ui.PrevArrow.Instance.AnchorPoint = Vector2.new(1, 0.5)
-	ui.PrevArrow.Instance.Position = UDim2.new(0, -10, 0.5, 0)
-	ui.NextArrow.Instance.AnchorPoint = Vector2.new(0, 0.5)
-	ui.NextArrow.Instance.Position = UDim2.new(1, 10, 0.5, 0)
+	-- tiles: three equal cells with separators
+	local tw = ui.Tiles.Size.X.Offset
+	local cell = math.floor((tw - 16) / 3)
+	for i, b in ipairs({ ui.HeroesTile, ui.ShopTile, ui.MoreTile }) do
+		place(b.Instance, 8 + (i - 1) * cell, 4, cell, tilesH - 8)
+	end
+	for i, sep in ipairs(ui.TileSeps) do
+		place(sep, 8 + i * cell, 20, 1, tilesH - 40)
+	end
+	-- the pill: name centred, the level and bar under it
+	local pw = ui.HeroPill.Size.X.Offset
+	local barW = math.clamp(pw - 112 - 60, 60, 150)
+	ui.HeroLevel.Position = UDim2.new(0.5, -(barW + 54) / 2, 0, 12 + TS(18))
+	ui.HeroBar.Frame.Position = UDim2.new(0.5, -(barW + 54) / 2 + 54, 0, 16 + TS(18) + (TS(12) + 4 - 8) / 2)
+	ui.HeroBar.Frame.Size = UDim2.fromOffset(barW, 8)
+
+	-- the queue replaces PLAY (portrait: the whole bottom block)
+	ui.PlayHolder.Visible = not showQueue
+	ui.ModeSelect.Instance.Visible = not showQueue
+	ui.Queue.Visible = showQueue
+	ui.HeroPill.Visible = not (showQueue and portrait)
+	ui.Tiles.Visible = not (showQueue and portrait)
 	-- "run in progress" needs no player list: a compact panel
 	if lastStatus == "Busy" then
 		ui.Queue.Size = UDim2.fromOffset(ui.Queue.Size.X.Offset, math.min(ui.Queue.Size.Y.Offset, 96 + TS(16) * 3 + 20))
 	end
-	-- queue panel: a short panel (portrait) folds the player list into the note
+	-- queue panel: a short panel folds the player list into the note
 	local qh = ui.Queue.Size.Y.Offset
 	local busy = lastStatus == "Busy"
 	-- the full panel needs the player list, the curse / endless lines, the note and buttons
@@ -1122,9 +752,8 @@ local function relayout()
 	local noteY = (short or busy) and 68 or (72 + 4 * 30)
 	-- the curse line sits under the note (above the buttons)
 	ui.QueueCurses.Visible = ui.QueueCurses:GetAttribute("Has") == true
-	local curseY = noteY
 	if ui.QueueCurses.Visible then
-		ui.QueueCurses.Position = UDim2.fromOffset(0, curseY)
+		ui.QueueCurses.Position = UDim2.fromOffset(0, noteY)
 		noteY += 62
 	end
 	ui.QueueEndless.Visible = ui.QueueEndless:GetAttribute("Has") == true
@@ -1137,7 +766,7 @@ local function relayout()
 	ui.QueueNote.TextTruncate = short and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
 	-- where the hero should sit on screen (read by CameraController's menu shot)
 	workspace.CurrentCamera:SetAttribute("MenuHeroY", heroFrac)
-	workspace.CurrentCamera:SetAttribute("MenuHeroZoom", heroZoom)
+	workspace.CurrentCamera:SetAttribute("MenuHeroZoom", 1)
 	for _, s in pairs(screens) do
 		if s.Layout then
 			s.Layout(v, portrait, ins)
@@ -1174,27 +803,21 @@ local function homeAmbient(on: boolean)
 	end)
 end
 
--- staggered entrance: 0.03 s per item, the whole wave done within ~0.25 s
+-- staggered entrance: 0.03 s per item, the whole wave done within ~0.25 s (scale only:
+-- relayout owns every Position)
 local STAGGER = 0.03
 local function homeEntrance()
 	homeAmbient(true)
-	local i = 0
-	for _, b in ipairs(ui.ModeButtons) do
-		i += 1
-		UIAnim.Pop(b.Instance, STAGGER * i, 0.85)
-	end
-	for _, b in ipairs({ ui.CurseBtn, ui.CardCharacters, ui.CardUpgrades, ui.CardArena, ui.CardDaily }) do
-		i += 1
-		UIAnim.Pop(b.Instance, math.min(STAGGER * i, 0.24), 0.85)
-	end
-	UIAnim.Pop(ui.EndlessRow, STAGGER * 4, 0.85)
-	UIAnim.Pop(ui.Nameplate, 0.1, 0.85)
 	UIAnim.Pop(ui.Logo, 0, 0.9)
+	UIAnim.Pop(ui.Tiles, STAGGER * 2, 0.85)
+	UIAnim.Pop(ui.HeroPill, STAGGER * 3, 0.85)
+	UIAnim.Pop(ui.PlayBtn.Instance, STAGGER * 4, 0.8)
+	UIAnim.Pop(ui.ModeSelect.Instance, STAGGER * 5, 0.85)
 end
 
--- Slides to "Home" | "Characters" | "Upgrades" | "Stats" | "Curses" | "Daily" | "Ranks" |
--- "Track" (old panel name "Shop" = Upgrades). arg goes to the screen's OnShow (Ranks: the
--- board to open).
+-- Slides to "Home" | "Play" | "More" | "Characters" | "Upgrades" | "Stats" | "Journal" |
+-- "Curses" | "Daily" | "Ranks" | "Track" | "Arenas" | "Party" (old panel name "Shop" =
+-- Upgrades). arg goes to the screen's OnShow (Ranks: the board, Stats: the tab).
 function LobbyScreen.Show(name: string, arg: any?)
 	if name == "Shop" then
 		name = "Upgrades"
@@ -1224,10 +847,8 @@ function LobbyScreen.Show(name: string, arg: any?)
 	relayout()
 	UIAnim.Tween(ui.Dim, Theme.Motion.Base, { BackgroundTransparency = (name ~= "Home" and name ~= "Characters") and 0.4 or 1 })
 	if from == "Characters" or name == "Characters" then
-		local target = browse
-		browse = nil
 		if name == "Characters" and screens.Characters.Inspect then
-			screens.Characters.Inspect(target or selectedChar())
+			screens.Characters.Inspect(selectedChar())
 		else
 			Showcase.Show(selectedChar(), skinOf(selectedChar()))
 			LobbyScreen.RefreshHero()
@@ -1240,16 +861,15 @@ function LobbyScreen.Show(name: string, arg: any?)
 	end
 	if name == "Home" then
 		homeEntrance()
-		UIKit.FocusIfGamepad(ui.ModeButtons[1].Instance)
-	end
-	if ui.Playtime then
-		ui.Playtime.Shown(name == "Home")
+		UIKit.FocusIfGamepad(ui.PlayBtn.Instance)
 	end
 end
 
 function LobbyScreen.Current(): string
 	return current
 end
+
+local maybeAskFirstRun: (p: { [string]: any }) -> ()
 
 -- Shows / hides the whole lobby (UIBuilder: not in a run ⇔ visible).
 function LobbyScreen.SetVisible(on: boolean)
@@ -1260,13 +880,14 @@ function LobbyScreen.SetVisible(on: boolean)
 	ui.Vignette.Visible = on
 	if not on then
 		homeAmbient(false)
-		if ui.Playtime then
-			ui.Playtime.Shown(false)
-		end
 		local s = screens[current]
 		if s and s.OnHide then
 			s.OnHide()
 		end
+		if firstRun == "Asked" then
+			firstRun = "Done" -- the first run started: the lobby shows normally after it
+		end
+		ui.FirstRunCover.Visible = false
 	end
 	if on then
 		-- always come back to the home screen
@@ -1274,100 +895,63 @@ function LobbyScreen.SetVisible(on: boolean)
 			ui[name].Visible = false
 		end
 		current = "Home"
-		browse = nil
 		ui.Dim.BackgroundTransparency = 1
 		UIAnim.SwapScreens(nil, ui.Home, 1, Config.UI.ScreenSlideSeconds)
-		-- scale-only entrance: relayout() owns the chip's Position (a Position tween captured
-		-- its target here and overrode any relayout during the tween, leaving the chip at a
-		-- stale spot, e.g. on the left when the first layout ran before the screen size was known)
+		-- scale-only entrance: relayout() owns the chip's Position
 		UIAnim.Pop(ui.Chip, 0, 0.85)
 		homeEntrance()
-		if ui.Playtime then
-			ui.Playtime.Shown(true)
-		end
 		lastStatus = ""
 		LobbyScreen.RefreshHero()
-		UIKit.FocusIfGamepad(ui.ModeButtons[1].Instance)
+		UIKit.FocusIfGamepad(ui.PlayBtn.Instance)
+		if profile then
+			maybeAskFirstRun(profile)
+		end
 	end
 end
 
--- The nameplate's portrait tile: the hero's bust (greyed while browsing a locked one),
--- the drawn class icon while it loads; no tile for a hero without a portrait. The name
--- keeps an even inset either side so it stays centred clear of the tile.
-local function setPlatePortrait(id: string, locked: boolean)
-	local medal = ui.PlateMedal
-	if not medal then
-		return
-	end
-	local key = ArtImage.Portrait(id)
-	local has = ArtImage.Image(key) ~= nil
-	medal.Visible = has
-	ui.NameTitle.Position = UDim2.fromOffset(has and 54 or 0, 8)
-	ui.NameTitle.Size = UDim2.new(1, has and -108 or 0, 0, TS(30) + 4)
-	ui.LockIcon.Position = has and UDim2.new(1, -38, 0, 14) or UDim2.fromOffset(16, 14)
-	if not has then
-		return
-	end
-	if ui.PlateMedalId ~= id then
-		ui.PlateMedalId = id
-		local old = medal:FindFirstChild("ClassIcon")
-		if old then
-			old:Destroy()
-		end
-		local icon = Icons.Character(medal, id, { Size = 34, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
-		icon.Name = "ClassIcon"
-		if ui.PlatePortrait then
-			ArtImage.Set(ui.PlatePortrait, key, { icon })
-		else
-			ui.PlatePortrait = ArtImage.Place(medal, key, { Name = "Bust", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromScale(1.08, 1.08), ZIndex = 5 }, { icon })
-		end
-	end
-	if ui.PlatePortrait then
-		ui.PlatePortrait.ImageColor3 = locked and Color3.fromRGB(120, 120, 130) or Color3.new(1, 1, 1)
-	end
-end
-
--- Nameplate + hero on the dais: the selected character, or the locked one being browsed.
+-- The hero pill and the hero on the dais: the selected character.
 function LobbyScreen.RefreshHero()
-	if not ui.NameTitle then
+	if not ui.HeroName then
 		return
 	end
-	local id = browse or selectedChar()
+	local id = selectedChar()
 	local def = CharacterData.Characters[id] or CharacterData.Characters[CharacterData.Default]
-	local locked = browse ~= nil
-	ui.NameTitle.Text = def.Name
-	ui.LockRow.Visible = locked
-	ui.LockIcon.Visible = locked
-	setPlatePortrait(def.Id or id, locked)
-	if locked and def.Unlock then
-		-- earned through an achievement (the Ranger), never bought
-		local a = AchievementData.Achievements[def.Unlock.Achievement]
-		ui.NameSub.Text = string.format("Locked · %s", a and a.Description or "earn its achievement")
-		ui.NameSub.TextColor3 = P.gold_300
-		ui.Unlock.SetText("LOCKED")
-		ui.Unlock.SetIcon("lock")
-		ui.Unlock.SetEnabled(false)
-	elseif locked then
-		local afford = profile ~= nil and profile.Gold >= def.Cost
-		ui.NameSub.Text = string.format("Locked · %s · %s", def.Role or "", def.BonusText or "")
-		ui.NameSub.TextColor3 = P.gold_300
-		ui.Unlock.SetText("UNLOCK  " .. UIKit.formatNumber(def.Cost))
-		ui.Unlock.SetIcon("coin")
-		ui.Unlock.SetEnabled(afford)
-	else
-		local skinId = skinOf(id)
-		local skin = CharacterData.Skins[skinId]
-		ui.NameSub.Text = (skin and (skin.Name .. " · ") or "") .. MenuCharacters.TraitText(id, def.Description, profile)
-		ui.NameSub.TextColor3 = C.TextMuted
-		if current ~= "Characters" then
-			Showcase.Show(id, skinId)
-		end
+	ui.HeroName.Text = string.upper(def.Name)
+	-- Hero Mastery: the hero's level and the XP into it
+	local heroes = profile and profile.Heroes
+	local h = type(heroes) == "table" and heroes[def.Id or id] or nil
+	local level, into, need = MetaUpgradeData.MasteryFor(type(h) == "table" and h.XP or 0)
+	ui.HeroLevel.Text = "LV " .. level
+	local maxed = level >= Config.HeroMastery.MaxLevel
+	ui.HeroBar.Set(maxed and 1 or (need > 0 and math.clamp(into / need, 0, 1) or 0))
+	if current ~= "Characters" then
+		Showcase.Show(id, skinOf(id))
 	end
-	relayout()
 end
 
 function LobbyScreen.SetJoined(on: boolean)
 	joinedCountdown = on
+end
+
+-- A brand-new player's first join: ask the server once for the automatic first run.
+maybeAskFirstRun = function(p: { [string]: any })
+	if firstRun ~= "" or not ui.Frame or not ui.Frame.Visible then
+		return
+	end
+	local cfg = (Config :: any).FirstRun
+	local state = Remotes.State()
+	local runs = type(p.Stats) == "table" and tonumber(p.Stats.Runs) or 0
+	if not cfg or cfg.AutoStart ~= true or p.TutorialDone ~= false or (runs or 0) > 0
+		or player:GetAttribute("InRun") == true or player:GetAttribute("Travel") ~= nil
+		or state:GetAttribute("RunServer") == true or (state:GetAttribute("Phase") or "Lobby") ~= "Lobby"
+		or MenuParty.Summary().Count > 0 then
+		firstRun = "Done"
+		return
+	end
+	firstRun = "Asked"
+	firstRunAt = os.clock()
+	ui.FirstRunCover.Visible = true
+	Remotes.Get("StartFirstRun"):FireServer()
 end
 
 function LobbyScreen.SetProfile(p: { [string]: any })
@@ -1385,32 +969,15 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 		end
 	end
 	shownGold = p.Gold
-	ui.Best.SetValue(UIKit.formatTime(p.Stats.BestTime))
-	ui.Wins.SetValue(UIKit.formatNumber(p.Stats.Wins))
-	if ui.PlayerTag then
-		local nameColor = Cosmetics.NameColor(p.NameColor) or P.ivory_200
-		local title = (type(p.Title) == "string" and p.Title ~= "") and string.format('  <font color="%s">·  %s</font>', UIKit.hex(P.gold_300), string.upper(p.Title)) or ""
-		local level = MenuTrack.Account(p)
-		ui.PlayerTag.Text = string.format('<font color="%s"><b>LV %d</b></font>  <font color="%s">%s</font>%s', UIKit.hex(P.gold_300), level, UIKit.hex(nameColor), Players.LocalPlayer.DisplayName, title)
-	end
 	-- the worn dais ring (level track) under the hero
 	Showcase.SetRing(type(p.Ring) == "string" and p.Ring or "")
-	if ui.LastRun then
-		local had = ui.LastRun.Has()
-		ui.LastRun.Refresh(p)
-		if ui.LastRun.Has() ~= had then
-			relayout()
-		end
-	end
-	if browse and owned(browse) then
-		browse = nil -- just bought it (the server also selects it)
-	end
 	LobbyScreen.RefreshHero()
 	for _, s in pairs(screens) do
 		if s.Refresh then
 			s.Refresh(p)
 		end
 	end
+	maybeAskFirstRun(p)
 end
 
 local function clearQueueList()
@@ -1421,15 +988,32 @@ local function clearQueueList()
 	end
 end
 
+-- "+45% gold · Frenzy, Horde" for the countdown's curse line.
+local function curseLine(list: { string }): string
+	local names = {}
+	for _, id in ipairs(list) do
+		table.insert(names, CurseData.Curses[id].Name)
+	end
+	return CurseData.GoldText(CurseData.GoldMult(list)) .. " gold · " .. table.concat(names, ", ")
+end
+
 --[[
-	Per-frame updates (cheap: only strings and visibility). The mode column swaps with the
-	queue panel when a countdown or another run is going.
+	Per-frame updates (cheap: only strings and visibility). PLAY and its selector swap
+	with the queue panel when a countdown or another run is going.
 ]]
 function LobbyScreen.Update(_dt: number?)
 	if not ui.Frame or not ui.Frame.Visible then
 		return
 	end
 	updateLoadingPill()
+	-- the first-run cover waits for the server's answer (or gives up)
+	if firstRun == "Asked" then
+		local answer = player:GetAttribute("FirstRun")
+		if answer == "Lobby" or os.clock() - firstRunAt > ((Config :: any).FirstRun.CoverSeconds or 4) then
+			firstRun = "Done"
+			ui.FirstRunCover.Visible = false
+		end
+	end
 	local state = Remotes.State()
 	local phase = state:GetAttribute("Phase") or "Lobby"
 	local kind = "Modes"
@@ -1481,7 +1065,7 @@ function LobbyScreen.Update(_dt: number?)
 		ui.QueueTitle.Text = "RUN IN PROGRESS"
 		local stageNo = state:GetAttribute("Stage") or 0
 		ui.QueueCaption.Text = UIKit.track((state:GetAttribute("Endless") == true and "Endless · " or "") .. (stageNo > 0 and ("Stage " .. stageNo .. " · ") or "") .. "Time " .. UIKit.formatTime(state:GetAttribute("RunTime") or 0))
-		ui.QueueNote.Text = "Wait here for the next one! Pick a character or buy upgrades in the meantime."
+		ui.QueueNote.Text = "Wait here for the next one!"
 		ui.QueueRow.Visible = false
 		if ui.QueueKey ~= "busy" then
 			ui.QueueKey = "busy"
@@ -1492,22 +1076,19 @@ function LobbyScreen.Update(_dt: number?)
 	end
 	if kind ~= lastStatus then
 		lastStatus = kind
-		local showQueue = kind ~= "Modes"
-		for _, b in ipairs(ui.ModeButtons) do
-			b.Instance.Visible = not showQueue
-		end
-		ui.Queue.Visible = showQueue
-		UIAnim.Pop(showQueue and ui.Queue or ui.ModeButtons[1].Instance, 0, 0.8)
 		relayout()
+		UIAnim.Pop(kind ~= "Modes" and ui.Queue or ui.PlayBtn.Instance, 0, 0.8)
 	end
 
-	-- PARTY: size and open invites
+	-- PARTY: invites on the MORE tile, a member's READY pill, the party's mode
 	local party = MenuParty.Summary()
-	local partySub = "With friends"
-	if party.Count > 0 then
-		partySub = party.Others > 0 and string.format("%d/%d · %d/%d ready", party.Count, party.Max, party.Ready, party.Others) or string.format("%d/%d · %s", party.Count, party.Max, party.Leader and "Leader" or "Member")
+	if party.Count ~= lastPartyCount then
+		lastPartyCount = party.Count
+		local partyMode = party.Count > 1 and MenuParty.PartyMode() or nil
+		if partyMode then
+			MenuPlay.SetMode(partyMode)
+		end
 	end
-	-- READY: members only, while the mode buttons show
 	local showReady = party.Count > 0 and not party.Leader and kind == "Modes"
 	ui.ReadyBtn.Instance.Visible = showReady
 	local readyText = party.MyReady and "UNREADY" or "READY"
@@ -1517,55 +1098,17 @@ function LobbyScreen.Update(_dt: number?)
 		ui.ReadyBtn.SetKind(party.MyReady and "Secondary" or "Primary")
 		ui.ReadyBtn.SetIcon(not party.MyReady and "check" or nil)
 	end
-	if ui.PartyBtn.Subtitle and ui.PartyBtn.Subtitle.Text ~= partySub then
-		ui.PartyBtn.SetText(nil, partySub)
-		ui.PartyBtn.SetSelected(party.Count > 0)
-	end
 	local badge = party.Invites > 0 and tostring(party.Invites) or ""
-	if ui.PartyBadge.Text ~= badge then
-		ui.PartyBadge.Text = badge
-		ui.PartyCornerBadge.Text = badge
-		ui.PartyBadge.Visible = badge ~= ""
-		ui.PartyCornerBadge.Visible = badge ~= ""
+	if ui.MoreBadge.Text ~= badge then
+		ui.MoreBadge.Text = badge
+		ui.MoreBadge.Visible = badge ~= ""
 		if badge ~= "" then
-			-- a new invite: the badge pops in
-			UIAnim.Pop(ui.PartyBadge, 0, 0.4)
-			UIAnim.Pop(ui.PartyCornerBadge, 0, 0.4)
+			UIAnim.Pop(ui.MoreBadge, 0, 0.4) -- a new invite: the badge pops in
 		end
 	end
+	LobbyScreen._modeText()
 
-	-- the curse button / queue line, the daily card
-	local myCurses = MenuCurses.Current()
-	local curseSub = curseLine(myCurses, "Harder runs, more gold")
-	if ui.CurseBtn.Subtitle and ui.CurseBtn.Subtitle.Text ~= curseSub then
-		ui.CurseBtn.SetText(nil, curseSub)
-		ui.CurseBtn.SetSelected(#myCurses > 0)
-	end
-	ui.CurseBtn.Instance.Visible = kind == "Modes"
-	ui.DailyBtn.Instance.Visible = kind == "Modes" and host.IsPortrait()
-	-- the ENDLESS switch follows the server's answer (after a short wait for our own tap)
-	local endlessOn = player:GetAttribute("Endless") == true
-	ui.EndlessRow.Visible = kind == "Modes" and Config.Endless ~= nil and Config.Endless.Enabled == true
-	if os.clock() - endlessSentAt > 1.5 and ui.EndlessToggle.Get() ~= endlessOn then
-		ui.EndlessToggle.Set(endlessOn)
-	end
-	local endlessLit = ui.EndlessToggle.Get()
-	local difficulty = DifficultyData.Selected(profile)
-	local unlocked = 0
-	for _, id in ipairs(DifficultyData.Order) do
-		if DifficultyData.IsUnlocked(profile, id) then unlocked += 1 end
-	end
-	local tierKey = difficulty .. ":" .. unlocked
-	if ui.Difficulty.Instance:GetAttribute("Tier") ~= tierKey then
-		ui.Difficulty.Instance:SetAttribute("Tier", tierKey)
-		local tier = DifficultyData.Tiers[difficulty]
-		ui.Difficulty.SetText(string.upper(tier.Name))
-	end
-	if ui.EndlessEdge and ui.EndlessRow:GetAttribute("Lit") ~= endlessLit then
-		ui.EndlessRow:SetAttribute("Lit", endlessLit)
-		ui.EndlessEdge.Color = endlessLit and P.gold_400 or C.PanelEdge
-		ui.EndlessEdge.Transparency = endlessLit and 0.1 or Theme.Alpha.Edge
-	end
+	-- the countdown's curse / endless lines (the starter's pick)
 	local endlessShown = kind == "Countdown" and state:GetAttribute("Endless") == true
 	if ui.QueueEndless:GetAttribute("Has") ~= endlessShown then
 		ui.QueueEndless:SetAttribute("Has", endlessShown)
@@ -1578,36 +1121,15 @@ function LobbyScreen.Update(_dt: number?)
 		relayout()
 	end
 	if has then
-		local line = string.format('<font color="%s">CURSES</font>  %s', UIKit.hex(P.crimson_300), curseLine(shown, ""))
+		local line = string.format('<font color="%s">CURSES</font>  %s', UIKit.hex(P.crimson_300), curseLine(shown))
 		if ui.QueueCurseText.Text ~= line then
 			ui.QueueCurseText.Text = line
 		end
-	end
-	local used, score = MenuDaily.Status(profile)
-	local dailySub = used and ("Done · " .. (score > 0 and CurseData.ScoreText(score) or "practice open")) or ("Ready · " .. MenuDaily.TimeLeft() .. " left")
-	if ui.CardDaily.Subtitle and ui.CardDaily.Subtitle.Text ~= dailySub then
-		ui.CardDaily.SetText(nil, dailySub)
-		ui.DailyBtn.SetText(nil, used and "Done · practice" or ("Ready · " .. MenuDaily.TimeLeft()))
 	end
 	for _, s in pairs(screens) do
 		if s.Update then
 			s.Update(_dt or 0)
 		end
-	end
-	if ui.Playtime then
-		ui.Playtime.Update(_dt or 0)
-	end
-
-	setArenaArt(tostring(state:GetAttribute("SelectedArena") or "Forest"))
-	local title, sub = arenaText()
-	if ui.CardArena.Title and ui.CardArena.Title.Text ~= title then
-		if ui.ArenaShown then
-			UIAnim.Punch(ui.CardArena.Instance, 0.06)
-		end
-		ui.ArenaShown = true
-		ui.CardArena.SetText(title, sub)
-	elseif ui.CardArena.Subtitle and ui.CardArena.Subtitle.Text ~= sub then
-		ui.CardArena.SetText(nil, sub)
 	end
 end
 
@@ -1624,17 +1146,12 @@ function LobbyScreen.Init(h: { [string]: any })
 	end
 	buildHome(screen("Home"))
 	buildChip(frame)
-	-- the PARTY pill follows the chip's width (it changes with the numbers in it)
-	ui.Chip:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-		if ui.PlaceParty then
-			ui.PlaceParty()
-		end
-	end)
 	buildLoadingPill()
+	buildFirstRunCover(frame)
 	local ctx = {
 		Host = h,
 		Back = function()
-			LobbyScreen.Show("Home")
+			LobbyScreen.Show(PARENT[current] or "Home")
 		end,
 		Toast = toast,
 		Current = function(): string
@@ -1647,11 +1164,10 @@ function LobbyScreen.Init(h: { [string]: any })
 			LobbyScreen.Show(name, arg)
 		end,
 	}
-	ui.LastRun = MenuLastRun.Build(ui.Home, ctx)
-	ui.LastRun.Refresh(profile)
-	-- (the home-screen PLAYTIME board was removed by the owner; the TIME tab in Leaderboards stays)
 	screens.Characters = MenuCharacters.Build(screen("Characters"), ctx)
 	screens.Upgrades = MenuUpgrades.Build(screen("Upgrades"), ctx)
+	screens.Play = MenuPlay.Build(screen("Play"), ctx)
+	screens.More = MenuMore.Build(screen("More"), ctx)
 	screens.Stats = MenuStats.Build(screen("Stats"), ctx)
 	screens.Journal = MenuJournal.Build(screen("Journal"), ctx)
 	screens.Curses = MenuCurses.Build(screen("Curses"), ctx)

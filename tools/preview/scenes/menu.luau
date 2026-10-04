@@ -5,9 +5,12 @@
 --   --set drag=input            a real drag over the hero through UserInputService events
 --                               (right across the hero; prints whether the press was taken)
 --   --set endless=on             the ENDLESS switch is on (player attribute Endless)
---   --set lastrun=won|fell|left  the profile carries a LastRun (the LAST RUN card + RETRY);
---                               --set lastmode=Duo its mode; --set retry=on taps RETRY and
---                               prints the StartRun the server received
+--   --set lastrun=won|fell|left  the profile carries a LastRun (the PLAY sheet's LAST RUN card +
+--                               RETRY); --set lastmode=Duo its mode; --set retry=on opens the
+--                               PLAY sheet, taps RETRY and prints the StartRun the server received
+--   --set screen=Play|More|...   open that lobby screen (LobbyScreen.Show) before the shot
+--   --set phase=countdown|busy  a DUO countdown (the queue panel replaces PLAY) / a run in progress
+--   --set play=tap               taps the home PLAY button and prints the StartRun it sent
 local C = lib("common")
 C.lobby()
 C.startClient()
@@ -21,8 +24,6 @@ if preview.args.lastrun then
 	}
 end
 C.sendProfile(profile)
--- the home screen's PLAYTIME board (MenuPlaytime): a server answer with five players and
--- you outside them (--set playtime=none: no answer, "Loading...")
 if preview.args.playtime ~= "none" then
 	local names = { "Ava", "Bramblewick", "Kestrel", "Moonpetal", "Ironjaw", "Thistle" }
 	local rows = {}
@@ -31,6 +32,23 @@ if preview.args.playtime ~= "none" then
 	end
 	C.fire("LeaderboardData", { Board = "Playtime", Rows = rows, Status = "ok", Age = 5, MyRank = 12, MyBest = 11160, Top = 50 })
 end
+if preview.args.play == "tap" then
+	local got = nil
+	preview.remote("StartRun").OnServerEvent:Connect(function(_player, mode)
+		got = mode
+	end)
+	C.settle(1)
+	local play = preview.findGui(function(g) return g:IsA("GuiButton") and g.Name == "Play" and preview.isShown(g) end)
+	assert(play[1], "the home screen must show the PLAY button")
+	preview.click(play[1])
+	C.settle(0.3)
+	assert(got == "Solo", "PLAY must fire StartRun(Solo) by default, got " .. tostring(got))
+	preview.log("PASS PLAY fired StartRun(" .. tostring(got) .. ")")
+end
+if preview.args.retry == "on" or preview.args.screen then
+	C.settle(1)
+	preview.client("LobbyScreen").Show(preview.args.retry == "on" and "Play" or preview.args.screen)
+end
 if preview.args.retry == "on" then
 	local got = nil
 	preview.remote("StartRun").OnServerEvent:Connect(function(_player, mode)
@@ -38,20 +56,19 @@ if preview.args.retry == "on" then
 	end)
 	C.settle(1)
 	local retry = preview.findGui(function(g) return g:IsA("GuiButton") and g.Name == "Retry" and preview.isShown(g) end)
-	local vp = workspace.CurrentCamera.ViewportSize
-	if not retry[1] and vp.X > vp.Y and vp.Y < 600 then
-		-- phones in landscape have no room for the card (LobbyScreen hides it there)
-		preview.log("SKIP LAST RUN card hidden on a short landscape screen (no room)")
-	else
-		assert(retry[1], "the LAST RUN card must show a RETRY button")
-		preview.click(retry[1])
-		C.settle(0.5)
-		assert(got == (preview.args.lastmode or "Solo"), "RETRY must fire StartRun with the last mode, got " .. tostring(got))
-		preview.log("PASS RETRY fired StartRun(" .. tostring(got) .. ")")
-	end
+	assert(retry[1], "the PLAY sheet's LAST RUN card must show a RETRY button")
+	preview.click(retry[1])
+	C.settle(0.5)
+	assert(got == (preview.args.lastmode or "Solo"), "RETRY must fire StartRun with the last mode, got " .. tostring(got))
+	preview.log("PASS RETRY fired StartRun(" .. tostring(got) .. ")")
 end
 if preview.args.save then
 	C.setPlayer({ SaveStatus = preview.args.save })
+end
+if preview.args.phase == "countdown" then
+	C.setState({ Phase = "Countdown", Mode = "Duo", Countdown = 7, Joined = 1, MaxJoin = 2, JoinedNames = "PreviewPlayer" })
+elseif preview.args.phase == "busy" then
+	C.setState({ Phase = "Running", Mode = "Solo", Stage = 2, RunTime = 312 })
 end
 if preview.args.endless == "on" then
 	C.setPlayer({ Endless = true })

@@ -1059,6 +1059,18 @@ Config.TeamPings = { Cooldown = 2, Duration = 6, MaxDistance = 100 }
 	TeamRules (shared XP, own gold and items) shows once in the first group run, also for
 	experienced players.
 ]]
+--[[
+	A brand-new player's first join drops straight into a Solo run with the first-run tips
+	(the lobby shows after it). The client asks (remote StartFirstRun) once its lobby is up;
+	RunManager decides (no run ever started, tutorial not done, lobby server, no party,
+	not travelling / reconnecting) and answers with the player attribute FirstRun.
+]]
+Config.FirstRun = {
+	AutoStart = true,
+	Mode = "Solo",
+	CoverSeconds = 4, -- the lobby waits at most this long for the server's answer
+}
+
 Config.Tutorial = {
 	Tips = { "Move", "Attack", "Gems", "LevelUp", "Portal", "Boss", "Revive", "TeamRules" },
 	HintSeconds = 6.5, -- each hint stays this long

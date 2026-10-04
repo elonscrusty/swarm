@@ -65,5 +65,91 @@ local ok, err = S.runMain(function()
 	preview.advance(0.1)
 	assert(ach.CanvasPosition.Y > 0, "wear rewards action must jump to the cosmetic controls")
 	print("PASS Daily ranked/practice/reset rules and actionable achievement grouping", device)
+
+	-- the home screen ("One big PLAY"): only the logo, gold + cog, the hero pill, the
+	-- HEROES / SHOP / MORE tiles, PLAY and its mode selector; PLAY starts SOLO in one tap,
+	-- the selector opens the PLAY sheet, BACK from CURSES returns to it, MORE lists the rest
+	local Showcase = preview.client("Showcase")
+	Showcase.Show = function() end
+	Showcase.SetRing = function() end
+	local root = env.Instance.new("Frame")
+	root.Size = env.UDim2.fromOffset(size.X, size.Y)
+	root.Parent = gui
+	local fx = env.Instance.new("ScreenGui")
+	fx.Parent = preview.playerGui()
+	local relayouts = {}
+	local lobbyHost = {
+		Root = root, FxGui = fx, VirtualSize = host.VirtualSize, IsPortrait = host.IsPortrait, Insets = host.Insets,
+		Scale = function() return 1 end, OnRelayout = function(fn) table.insert(relayouts, fn) end,
+		OpenSettings = function() end, Toast = function() end,
+	}
+	local Lobby = preview.client("LobbyScreen")
+	Lobby.Init(lobbyHost)
+	profile.OwnedCharacters = { Knight = true }
+	profile.SelectedCharacter = "Knight"
+	profile.Skins = {}
+	profile.Heroes = { Knight = { XP = 0, Runs = 0 } }
+	profile.TutorialDone = true
+	profile.Stats.Runs = 3
+	profile.Curses = {}
+	Lobby.SetVisible(true)
+	Lobby.SetProfile(profile)
+	Lobby.Update(0.1)
+	preview.advance(0.5)
+	local home = root:FindFirstChild("Home", true)
+	local function shown(obj)
+		local o = obj
+		while o and o ~= root do
+			if o:IsA("GuiObject") and not o.Visible then return false end
+			o = o.Parent
+		end
+		return true
+	end
+	local allowed = { Play = true, ModeSelect = true, Heroes = true, Shop = true, More = true, Prev = true, Next = true, Open = true, HitPad = true }
+	local extra = {}
+	for _, d in ipairs(home:GetDescendants()) do
+		if d:IsA("GuiButton") and shown(d) and not allowed[d.Name] then
+			table.insert(extra, d.Name)
+		end
+	end
+	assert(#extra == 0, "home shows only PLAY, the mode selector, the hero pill and three tiles; also: " .. table.concat(extra, ", "))
+	for _, name in ipairs({ "Play", "ModeSelect", "Heroes", "Shop", "More" }) do
+		local b = home:FindFirstChild(name, true)
+		assert(b and shown(b), "home must show " .. name)
+	end
+	local cog = root:FindFirstChild("SettingsCog", true)
+	assert(cog and shown(cog), "home must show the settings cog")
+	local started = nil
+	Remotes.Get("StartRun").OnServerEvent:Connect(function(_, mode) started = mode end)
+	home:FindFirstChild("Play", true).Activated:_fire()
+	preview.advance(0.1)
+	assert(started == "Solo", "PLAY starts SOLO in one tap, got " .. tostring(started))
+	home:FindFirstChild("ModeSelect", true).Activated:_fire()
+	preview.advance(0.4)
+	assert(Lobby.Current() == "Play", "the mode selector opens the PLAY sheet")
+	local sheet = root:FindFirstChild("Play", true)
+	sheet:FindFirstChild("Duo", true).Activated:_fire()
+	preview.advance(0.1)
+	assert(preview.client("MenuPlay").Mode() == "Duo", "picking DUO on the sheet sets the mode")
+	Lobby.Show("Curses")
+	preview.advance(0.3)
+	root:FindFirstChild("Curses", true):FindFirstChild("Back", true).Activated:_fire()
+	preview.advance(0.3)
+	assert(Lobby.Current() == "Play", "BACK from CURSES returns to the PLAY sheet")
+	Lobby.Show("Home")
+	preview.advance(0.3)
+	assert(hasText(home, "DUO"), "the selector shows the picked mode")
+	home:FindFirstChild("More", true).Activated:_fire()
+	preview.advance(0.4)
+	assert(Lobby.Current() == "More", "MORE opens the list")
+	local more = root.Lobby.Screens.More
+	for _, name in ipairs({ "Daily", "Party", "Ranks", "Stats", "Track", "Journal", "Achievements", "Settings", "BugReport" }) do
+		local b = more:FindFirstChild(name, true)
+		assert(b and shown(b), "MORE must list " .. name)
+	end
+	more:FindFirstChild("Achievements", true).Activated:_fire()
+	preview.advance(0.4)
+	assert(Lobby.Current() == "Stats", "ACHIEVEMENTS opens the stats screen")
+	print("PASS home: one PLAY, three tiles, PLAY sheet and MORE list", device)
 end, 8)
 assert(ok, tostring(err))

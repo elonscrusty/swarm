@@ -216,9 +216,19 @@ function Mock.api()
 		return R.requireModule(m)
 	end
 
+	-- A brand-new save would drop every sim straight into the automatic first run
+	-- (Config.FirstRun): scenes keep the lobby unless --set firstrun=on.
+	local function firstRunSwitch()
+		local ok, cfg = pcall(api.shared, "Config")
+		if ok and type(cfg) == "table" and type(cfg.FirstRun) == "table" then
+			cfg.FirstRun.AutoStart = api.args.firstrun == "on"
+		end
+	end
+
 	-- Copies StarterPlayerScripts into PlayerScripts and runs the LocalScripts there
 	-- (ClientMain), like Roblox does when the player joins.
 	function api.startClient(runScripts: boolean?)
+		firstRunSwitch()
 		local sps = R.findChild(states[R.services.StarterPlayer], "StarterPlayerScripts")
 		local ps = R.findChild(states[R.localPlayer], "PlayerScripts")
 		for _, c in ipairs(states[sps].children) do
@@ -237,6 +247,7 @@ function Mock.api()
 
 	-- Runs the server Scripts (GameServer) - the full server; needs more mocking.
 	function api.startServer()
+		firstRunSwitch()
 		R.walk(R.services.ServerScriptService, function(d)
 			local st = states[d]
 			if st.info.name == "Script" then
