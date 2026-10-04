@@ -851,9 +851,13 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 		ui.Price.SetValue(price > 0 and UIKit.formatNumber(price) or "FREE")
 		ui.Price.Value.TextColor3 = (price > 0 and not canAfford(model)) and P.crimson_300 or P.gold_200
 		ui.HoldButton.Position = UDim2.new(1, -12, 0, y)
-		local touch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-		local pad = UserInputService.GamepadEnabled and not touch
-		ui.HoldLabel.Text = (touch or lastTouch) and "HOLD" or (pad and "HOLD  X" or "HOLD  E")
+		-- label by the input actually used last (GamepadEnabled alone is true on many PCs and in
+		-- Studio, which showed "HOLD X" to keyboard players)
+		local last = UserInputService:GetLastInputType()
+		local touch = lastTouch or last == Enum.UserInputType.Touch
+			or (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled)
+		local pad = not touch and string.sub(last.Name, 1, 7) == "Gamepad"
+		ui.HoldLabel.Text = touch and "HOLD" or (pad and "HOLD  X" or "HOLD  E")
 		y += 44
 		local note = ""
 		if price > 0 and not canAfford(model) then
