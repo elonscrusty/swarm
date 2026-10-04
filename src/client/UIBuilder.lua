@@ -4363,6 +4363,10 @@ function UIBuilder.Init(d: { [string]: any })
 
 	-- Leaving a run clears the HUD inventory and every in-run overlay / sound; entering
 	-- one starts a clean HUD.
+	-- the hero went down: queued headlines / notices are about the moment that ended
+	player:GetAttributeChangedSignal("Alive"):Connect(function()
+		UIState.Reset(player:GetAttribute("Alive") == false and "death" or "respawn")
+	end)
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
 		-- headlines / notices belong to the moment that just ended (UIState contract §5)
 		UIState.Reset(player:GetAttribute("InRun") and "enter" or "leave")

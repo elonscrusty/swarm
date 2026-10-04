@@ -19,7 +19,7 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
     checks = [(name, []) for name in (
         "economy-sim", "storage-sim", "difficulty-sim", "ground-sim", "audio-sim",
-        "progression-regression", "mastery-regression", "combat-regression", "whip-regression", "data-regression", "passives-regression", "run-manager-regression", "choice-regression", "fall-regression",
+        "progression-regression", "mastery-regression", "combat-regression", "whip-regression", "data-regression", "passives-regression", "run-manager-regression", "choice-regression", "fall-regression", "safety-sim", "settings-sim",
         "settlement-lifecycle", "reward-regression", "encounters-sim", "encounter-placement",
         "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim", "chest-gold-sim", "curses-sim",
     )]
@@ -54,7 +54,7 @@ def main():
             "--max-time", "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby"):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim"):
             command.remove("--studio")
         if scene == "layout":
             layout_scene, device = settings[0], settings[1]

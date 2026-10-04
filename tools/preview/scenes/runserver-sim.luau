@@ -13,7 +13,11 @@
 --       who came (ticket curses sanitised, locked arena refused), a late member refused,
 --       MAIN MENU → the go-home banner, STAY, GO NOW failing twice (save taken back, the
 --       run server's lobby stays usable), a REPLAY here, and the timer sending the party home
---       together with SwarmReturn data.
+--       together with SwarmReturn data. Return flow (FLOW, Short 2:04): the defeat results
+--       running out raise the travel cover in the same step as InRun = false (no lobby, no
+--       second countdown) and send exactly one teleport; results STAY ("Hold") keeps the
+--       player with no countdown until GO; REPLAY ("Replay") stays for the new run, and a
+--       replay that never starts falls back to the visible countdown.
 -- Run: render.sh runserver-sim --devices pc --max-time 200 [--set role=run]
 -- (Studio behaviour is unchanged: menu-sim / stage-sim run with --studio.)
 local C = lib("common")
@@ -254,7 +258,7 @@ else
 	preview.advance(1)
 	check("home timer set", me:GetAttribute("TravelHomeIn") == Config.RunServers.HomeDelaySeconds - 1 or me:GetAttribute("TravelHomeIn") == Config.RunServers.HomeDelaySeconds, tostring(me:GetAttribute("TravelHomeIn")))
 	local o = preview.client("TravelOverlay").Debug()
-	check("client banner", o.Banner and string.find(o.BannerText, "Back to the lobby") ~= nil, o.BannerText)
+	check("client banner", o.Banner and string.find(o.BannerText, "Main lobby in") ~= nil, o.BannerText)
 	-- Dee stays
 	as(dee, "TravelHome", "Stay")
 	preview.advance(0.5)
@@ -271,6 +275,85 @@ else
 	check("replay plays on the run server", st:GetAttribute("Phase") == "Running" and #T.calls == n)
 	as(me, "AbandonRun")
 	preview.advance(1)
+	-- FLOW A: a defeat on this run server. The results run out → one transition: the travel
+	-- cover in the same step as InRun = false, no TravelHomeIn countdown, one teleport.
+	local seenHomeIn = false
+	local travelAtReturn = "unset"
+	local c1 = me:GetAttributeChangedSignal("TravelHomeIn"):Connect(function()
+		if me:GetAttribute("TravelHomeIn") ~= nil then seenHomeIn = true end
+	end)
+	local c2 = me:GetAttributeChangedSignal("InRun"):Connect(function()
+		if me:GetAttribute("InRun") == false and travelAtReturn == "unset" then
+			travelAtReturn = tostring(me:GetAttribute("Travel"))
+		end
+	end)
+	as(me, "StartRun", "Solo")
+	preview.advance(1)
+	RM.EndRun(false)
+	preview.advance(0.3)
+	check("flow: defeat results up", st:GetAttribute("Phase") == "Results" and me:GetAttribute("InRun") == true, tostring(st:GetAttribute("Phase")))
+	n = #T.calls
+	preview.advance(Config.Run.ResultsSeconds + 1.5)
+	check("flow: cover raised with the return (no lobby shown)", travelAtReturn == "ToLobby", travelAtReturn)
+	check("flow: no second countdown", not seenHomeIn)
+	check("flow: exactly one teleport home", #T.calls == n + 1 and ids(lastCall().UserIds) == "1", tostring(#T.calls - n))
+	preview.advance(2)
+	check("flow: no duplicate departure", #T.calls == n + 1, tostring(#T.calls - n))
+	-- that teleport fails (retry, then for good): back here with the save, cover gone
+	preview.teleportInitFailed(me)
+	preview.advance(1.5)
+	preview.teleportInitFailed(me)
+	preview.advance(1)
+	check("flow: failed trip → this server's lobby, save back", me:GetAttribute("Travel") == "" and not DS.IsReleased(me) and me:GetAttribute("TravelHomeIn") == nil, lastNote(me))
+	c1:Disconnect()
+	c2:Disconnect()
+
+	-- FLOW B: results STAY (Hold) during the defeat results: nothing automatic, GO later
+	as(me, "StartRun", "Solo")
+	preview.advance(1)
+	RM.EndRun(false)
+	preview.advance(0.3)
+	as(me, "TravelHome", "Hold")
+	n = #T.calls
+	preview.advance(Config.Run.ResultsSeconds + 1.5)
+	check("flow: STAY keeps the player (no cover, no countdown, no teleport)", me:GetAttribute("InRun") == false and me:GetAttribute("Travel") == "" and me:GetAttribute("TravelHomeIn") == nil and #T.calls == n, tostring(me:GetAttribute("Travel")) .. " " .. tostring(#T.calls - n))
+	preview.advance(25)
+	check("flow: still here after the old countdown", #T.calls == n and me:GetAttribute("TravelHomeIn") == nil)
+	as(me, "TravelHome", "Go")
+	preview.advance(1)
+	check("flow: MAIN MENU after STAY goes home once", #T.calls == n + 1 and me:GetAttribute("Travel") == "ToLobby", tostring(#T.calls - n))
+	as(me, "TravelHome", "Go")
+	preview.advance(1)
+	check("flow: a second GO does not teleport again", #T.calls == n + 1, tostring(#T.calls - n))
+	preview.teleportInitFailed(me)
+	preview.advance(1.5)
+	preview.teleportInitFailed(me)
+	preview.advance(1)
+
+	-- FLOW C: REPLAY on the defeat results stays for the new run
+	as(me, "StartRun", "Solo")
+	preview.advance(1)
+	RM.EndRun(false)
+	preview.advance(0.3)
+	n = #T.calls
+	as(me, "ReturnToLobby", "Replay")
+	preview.advance(0.6)
+	check("flow: REPLAY → no cover, no countdown", me:GetAttribute("InRun") == false and me:GetAttribute("Travel") == "" and me:GetAttribute("TravelHomeIn") == nil, tostring(me:GetAttribute("Travel")))
+	as(me, "StartRun", "Solo")
+	preview.advance(1)
+	check("flow: the replay runs here", st:GetAttribute("Phase") == "Running" and me:GetAttribute("InRun") == true and #T.calls == n)
+	preview.advance(Config.RunServers.ReplayGraceSeconds + 1)
+	check("flow: no trip home during the replayed run", #T.calls == n and me:GetAttribute("TravelHomeIn") == nil and me:GetAttribute("Travel") == "")
+	RM.EndRun(false)
+	preview.advance(0.3)
+	as(me, "ReturnToLobby", "Replay")
+	preview.advance(Config.RunServers.ReplayGraceSeconds + 1)
+	local left = me:GetAttribute("TravelHomeIn")
+	check("flow: a replay that never starts → the visible countdown", type(left) == "number" and left > Config.RunServers.HomeDelaySeconds - 3 and #T.calls == n, tostring(left))
+	as(me, "TravelHome", "Stay")
+	preview.advance(0.5)
+	check("flow: STAY on the banner clears it", me:GetAttribute("TravelHomeIn") == nil and #T.calls == n)
+
 	-- Dee waits again (as if back from her own run) → the timer sends both together
 	preview.server("RunServers").OnBackInLobby(dee, "results")
 	preview.advance(Config.RunServers.HomeDelaySeconds + 1)

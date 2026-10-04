@@ -48,6 +48,7 @@ local ClientSettings = require(script.Parent.ClientSettings)
 local Accessibility = require(script.Parent.Accessibility)
 local PortalBeacon = require(script.Parent.PortalBeacon)
 local RunIntro = require(script.Parent.RunIntro)
+local UIState = require(script.Parent.UIState)
 
 local StageUI = {}
 
@@ -77,9 +78,9 @@ local function checkPressure(state: Configuration)
 	local up = warn > lastWarn
 	lastWarn = warn
 	if up and warn == 1 then
-		Hud.Announce("THE SWARM IS GROWING", Config.Waves.Enabled and "Bigger waves until the portal opens" or "Open the portal before it gets worse", Accessibility.Color(Color3.fromRGB(246, 218, 126), "Loot"), "PortalAppear")
+		Hud.Announce("THE SWARM IS GROWING", Config.Waves.Enabled and "Bigger waves until the portal opens" or "Open the portal before it gets worse", Accessibility.Color(Color3.fromRGB(246, 218, 126), "Loot"), "PortalAppear", "swarm.pressure.1", "Info")
 	elseif up and warn >= 2 then
-		Hud.Announce("THE SWARM IS OVERWHELMING", Config.Waves.Enabled and "Huge waves: open the portal now!" or "Open the portal now!", Accessibility.Color(Color3.fromRGB(219, 106, 94), "Danger"), "PortalAppear")
+		Hud.Announce("THE SWARM IS OVERWHELMING", Config.Waves.Enabled and "Huge waves: open the portal now!" or "Open the portal now!", Accessibility.Color(Color3.fromRGB(219, 106, 94), "Danger"), "PortalAppear", "swarm.pressure.2", "Critical")
 	end
 end
 
@@ -93,8 +94,10 @@ local function checkReveal(state: Configuration)
 	if reveal ~= lastReveal then
 		lastReveal = reveal
 		if reveal > 0 then
+			-- semantic id portal.reveal: the server's broadcast of the same moment merges
+			-- into this one banner (UIState), never a second heading
 			Hud.Announce("THE PORTAL HAS APPEARED", "Follow the arrow · stand in its circle",
-				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear")
+				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear", "portal.reveal", "Info")
 		end
 	end
 end
@@ -418,6 +421,10 @@ local function onTravel(data)
 	end
 	travel.Active = true
 	travel.Since = os.clock()
+	-- the travel fade owns the screen (UIState: nothing else opens over it) and the last
+	-- stage's queued headlines / notices are dropped
+	UIState.Open("Travel", { Blocks = false, Covers = false })
+	UIState.Reset("travel")
 	ui.FadeTitle.Text = "STAGE " .. tostring(data.Stage or "?")
 	-- "RUINS · MOTH MATRIARCH": the arena and the boss that guards its portal
 	local sub = tostring(data.Arena or "")
@@ -440,6 +447,7 @@ end
 
 local function endTravel()
 	travel.Active = false
+	UIState.Close("Travel")
 	fadeTo(1, 0.6)
 end
 
@@ -695,7 +703,7 @@ local function checkWave(state: Configuration)
 	-- (SwarmState WaveLoud); the others get the server's one-line toast, the pill and the
 	-- edge glow
 	if state:GetAttribute("WaveLoud") ~= false then
-		Hud.Announce("WAVE " .. tostring(n), sub, Accessibility.Color(P.crimson_300, "Danger"), "WaveHorn")
+		Hud.Announce("WAVE " .. tostring(n), sub, Accessibility.Color(P.crimson_300, "Danger"), "WaveHorn", "wave." .. tostring(n), "Critical")
 	end
 	local base = state:GetAttribute("WaveAngle")
 	if type(base) == "number" and #sides >= 1 then
@@ -715,7 +723,7 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 	if not inRun then
 		ui.Arrow.Visible = false
 		ui.Ring.Visible = false
-		if ui.Choice.Overlay.Visible then
+		if UIState.IsOpen("Portal") then
 			offer = nil
 			kit.Hide(ui.Choice.Overlay, "Portal")
 		end
@@ -738,7 +746,8 @@ function StageUI.Update(_dt: number, state: Configuration, inRun: boolean)
 		endTravel()
 	end
 	updateArrowAndRing(state, stagePhase)
-	if ui.Choice.Overlay.Visible then
+	-- open (shown, or waiting behind the upgrade choice: UIState)
+	if UIState.IsOpen("Portal") then
 		if stagePhase ~= "Open" then
 			offer = nil
 			kit.Hide(ui.Choice.Overlay, "Portal")

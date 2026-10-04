@@ -59,6 +59,7 @@ local UIAnim = require(script.Parent.UIAnim)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
+local UIState = require(script.Parent.UIState)
 
 local LootUI = {}
 
@@ -592,7 +593,8 @@ end
 
 function LootUI.Press()
 	local t = target
-	if not t or hold.Id ~= 0 or not usable(t) then
+	-- a panel or reward feedback owns the screen: no hold, no purchase (UIState contract §4)
+	if not t or hold.Id ~= 0 or not usable(t) or not UIState.WorldInputAllowed() then
 		return
 	end
 	if not canAfford(t) then
@@ -1132,7 +1134,13 @@ function LootUI.Update(_dt: number, inRun: boolean)
 			UIAnim.Pop(ui.Prompt, 0, 0.8)
 		end
 	end
-	local shown = target ~= nil and target.Parent ~= nil
+	-- hidden while a panel or reward feedback is on screen (the opened chest's prompt must
+	-- not sit beside its own reward); a hold in progress lets go
+	local allowed = UIState.WorldInputAllowed()
+	if not allowed and hold.Id ~= 0 then
+		LootUI.Release()
+	end
+	local shown = target ~= nil and target.Parent ~= nil and allowed
 	ui.Prompt.Visible = shown
 	if shown and usable(target :: Model) then
 		local t = target :: Model
