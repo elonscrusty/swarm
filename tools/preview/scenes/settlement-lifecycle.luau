@@ -48,7 +48,14 @@ preview.log("PASS abandon, safe extraction, tier clear, disconnect and duplicate
 -- save on a loss, on top of the 35% of the purse (never cut, paid once)
 preview.advance(1)
 local survivor = start()
-preview.advance(125)
+-- survival is paid on run time; a solo level-up panel freezes it, so answer every offer
+-- (as a player would) until two real run minutes have passed
+for _ = 1, 400 do
+	if RM.GetRunTime() >= 125 then break end
+	if survivor.Offer then preview.remote("LevelUpChoose"):FireServer(1) end
+	preview.advance(1)
+end
+assert(RM.GetRunTime() >= 125, "run clock must reach two minutes: " .. RM.GetRunTime())
 local before = data.Gold
 RM.AbandonRun(survivor)
 local s = assert(survivor.GoldSettlement)

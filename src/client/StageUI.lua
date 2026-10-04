@@ -573,7 +573,9 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	end
 
 	-- edge arrow (after the hint time, while exploring)
-	local showArrow = stagePhase == "Explore" and state:GetAttribute("PortalHint") == true and not inside and not showRing
+	-- (hidden while the player reads the BUILD details over the arena; the minimap keeps
+	-- the portal pin and the marker returns when they close)
+	local showArrow = stagePhase == "Explore" and state:GetAttribute("PortalHint") == true and not inside and not showRing and not Hud.BuildOpen()
 	if not showArrow then
 		ui.Arrow.Visible = false
 		ui.ArrowShown = false
