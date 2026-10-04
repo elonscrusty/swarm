@@ -3965,8 +3965,15 @@ local resultsDeadline = 0
 -- REPLAY: start the same mode again once this client is back in the lobby
 local pendingReplay: { Mode: string, Until: number, Waited: boolean }? = nil
 
+-- Results screen tokens (approved screen 06 / SWARM_UI_reference_guide shared language)
+local RES_CYAN = Color3.fromRGB(100, 183, 203) -- account level (cosmetic) bar
+local RES_CYAN_DARK = Color3.fromRGB(58, 128, 148)
+local RES_MINT = Color3.fromRGB(159, 206, 152)
+
+-- A summary tile (screen 06: icon, big number, caption). Fixed size from layoutResults.
 local function statTile(parent: Instance, icon: string, caption: string, order: number): (TextLabel, TextLabel)
-	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(94, 104) }, true)
+	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(140, 104) }, true)
+	UIKit.stroke(f, P.gold_600, 1, 0.45)
 	local glyph = Icons.Draw(f, icon, { Size = 26, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Color = if icon == "coin" or icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
 	glyph.Name = "TileIcon" -- hidden on phones in landscape (slim tiles)
 	local value = text(f, "Number", "0", {
@@ -3985,6 +3992,68 @@ local function statTile(parent: Instance, icon: string, caption: string, order: 
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, 11)
 	return value, cap
+end
+
+-- One column of the gold ledger: a number over its caption (and an optional note).
+local function ledgerCell(parent: Instance, name: string, order: number, color: Color3): { [string]: any }
+	local f = new("Frame", { Name = name, BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.fromOffset(110, 52) }, parent)
+	local value = text(f, "Number", "0", {
+		Name = "Value",
+		Size = UDim2.new(1, 0, 0, TS(20) + 4),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = color,
+	}, 20)
+	local cap = text(f, "Caption", "", {
+		Name = "Caption",
+		Position = UDim2.fromOffset(0, TS(20) + 6),
+		Size = UDim2.new(1, 0, 0, TS(11) + 4),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, 11)
+	return { Frame = f, Value = value, Caption = cap }
+end
+
+-- One progress card (run level / hero mastery / account level): its own label, level,
+-- gain line and bar. The three are never merged into one bar.
+local function progressCard(parent: Instance, name: string, order: number, gradient: ColorSequence, accent: Color3): { [string]: any }
+	local f = UIKit.Panel(parent, { Name = name, LayoutOrder = order, Size = UDim2.fromOffset(200, 84) }, true)
+	local stroke = UIKit.stroke(f, accent, 1, 0.55)
+	local title = text(f, "Label", "", {
+		Name = "Title",
+		Position = UDim2.fromOffset(12, 8),
+		Size = UDim2.new(1, -24, 0, TS(13) + 4),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = C.Text,
+	}, 13)
+	local levelLabel = text(f, "BodyStrong", "", {
+		Name = "Level",
+		Position = UDim2.fromOffset(12, 8),
+		Size = UDim2.new(1, -24, 0, TS(13) + 4),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		RichText = true,
+		TextColor3 = C.Text,
+	}, 13)
+	local gain = text(f, "Small", "", {
+		Name = "Gain",
+		Position = UDim2.fromOffset(12, TS(13) + 14),
+		Size = UDim2.new(1, -24, 0, TS(12) + 4),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		RichText = true,
+		TextColor3 = C.TextMuted,
+	}, 12)
+	local meter = UIKit.Meter(f, {
+		Gradient = gradient,
+		TextStyle = "Number",
+		TextSize = 11,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 12, 1, -10),
+		Size = UDim2.new(1, -24, 0, 16),
+	})
+	return { Frame = f, Stroke = stroke, Title = title, Level = levelLabel, Gain = gain, Meter = meter }
 end
 
 -- A live private run server (RunServers): the results lead to the main lobby by teleport.
@@ -4016,14 +4085,33 @@ local function replayState(): (boolean, string)
 	return false, "Your team is still playing"
 end
 
+-- Hero Mastery level, XP into it and XP it needs (0 at max) for a hero's total XP: the
+-- same rule as MetaUpgradeData.MasteryFor (Config.HeroMastery).
+local function masteryFor(totalXP: number): (number, number, number)
+	local M = Config.HeroMastery
+	local xp = math.max(0, math.floor(totalXP))
+	local level = 1
+	while level < M.MaxLevel do
+		local need = M.Base + M.PerLevel * (level - 1)
+		if xp < need then
+			return level, xp, need
+		end
+		xp -= need
+		level += 1
+	end
+	return M.MaxLevel, 0, 0
+end
+
+local fillMastery: (any) -> () -- defined below (the profile listener calls it)
+
 local function buildResults()
-	local m = UIKit.Modal(root, "Results", 680, 460, Theme.Z.Results)
+	local m = UIKit.Modal(root, "Results", 760, 460, Theme.Z.Results)
 	results.Overlay = m.Overlay
 	results.Modal = m
 	local content = m.Content
 	fitModal(m, UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }))
 
-	-- header: the hero's medallion, the verdict, where and how
+	-- header: the hero's medallion, the verdict, "HERO · ARENA · STAGE", damage and score
 	local head = new("Frame", { Name = "Head", BackgroundTransparency = 1, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 92) }, content)
 	UIKit.list(head, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 16) })
 	local medal = new("Frame", { Name = "Hero", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.05, Size = UDim2.fromOffset(80, 80), LayoutOrder = 1 }, head)
@@ -4054,11 +4142,11 @@ local function buildResults()
 	local titleCol = new("Frame", { Name = "TitleCol", BackgroundTransparency = 1, Size = UDim2.fromOffset(420, 92), LayoutOrder = 2 }, head)
 	results.TitleCol = titleCol
 	results.Title = text(titleCol, "Display", "VICTORY!", { Position = UDim2.fromOffset(0, 2), Size = UDim2.new(1, 0, 0, TS(44) + 6) }, 44)
-	results.Arena = text(titleCol, "Label", "", { Position = UDim2.fromOffset(0, TS(44) + 10), Size = UDim2.new(1, 0, 0, TS(12) + 6), TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd })
+	results.Arena = text(titleCol, "Label", "", { Position = UDim2.fromOffset(0, TS(44) + 10), Size = UDim2.new(1, 0, 0, TS(13) + 6), TextColor3 = C.Text, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
 	results.Hero = text(titleCol, "BodyStrong", "", { Position = UDim2.fromOffset(0, TS(44) + TS(12) + 18), Size = UDim2.new(1, 0, 0, TS(15) + 4), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
 	UIKit.Divider(content, 260, { LayoutOrder = 2 })
 
-	-- body (scrolls on short screens): numbers, build, rewards
+	-- body (scrolls on short screens): tiles, gold ledger, progress, rewards, RUN DETAILS
 	local body = new("ScrollingFrame", {
 		Name = "Body",
 		LayoutOrder = 3,
@@ -4073,40 +4161,60 @@ local function buildResults()
 	results.Body = body
 	UIKit.list(body, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center })
 
+	-- 1. summary tiles: survived, enemies defeated, stages cleared, boss state
 	local grid = new("Frame", { Name = "Stats", BackgroundTransparency = 1, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 104) }, body)
 	results.Grid = grid
 	results.GridLayout = UIKit.list(grid, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
 	results.Time = statTile(grid, "clock", "Survived", 1)
-	results.Kills = statTile(grid, "stat_Kills", "Defeated", 2)
-	results.Boss, results.BossCaption = statTile(grid, "crown", "Bosses", 3)
-	results.Stages = statTile(grid, "portal", "Stages", 4)
-	results.Gold = statTile(grid, "stat_Gold", "Gold", 5)
-	results.Level = statTile(grid, "chevronsUp", "Level", 6)
-	results.Settlement = text(body, "Small", "", { Name = "Settlement", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(14) * 3 + 8), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted })
+	results.Kills = statTile(grid, "stat_Kills", "Enemies defeated", 2)
+	results.Stages, results.StagesCaption = statTile(grid, "portal", "Stages cleared", 3)
+	results.Boss, results.BossCaption = statTile(grid, "crown", "Bosses", 4)
 
-	-- rewards first (new best, unlocks, achievements: what a short screen must not hide),
-	-- then the build and the items
-	results.Best = UIKit.Badge(body, "NEW BEST TIME!", "Gold", { LayoutOrder = 3, Visible = false })
-	results.BuildHolder = new("Frame", { Name = "Build", BackgroundTransparency = 1, LayoutOrder = 7, Size = UDim2.new(1, 0, 0, 0) }, body)
-	results.ItemsHolder = new("Frame", { Name = "ItemsHolder", BackgroundTransparency = 1, LayoutOrder = 8, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
-	-- progress: account XP and level, the run's curses, the daily score
-	local prog = UIKit.Panel(body, { Name = "Progress", LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 96) }, true)
+	-- 2. the gold ledger (RunResult: GoldEarned = the unspent run purse at the end,
+	-- GoldSpent = chests / shrines, Gold = kept, GoldLost, GoldSurvival + FirstRun = bonuses)
+	local ledger = UIKit.Panel(body, { Name = "GoldLedger", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 96) }, true)
+	UIKit.stroke(ledger, P.gold_600, 1, 0.45)
+	results.Ledger = ledger
+	local cellsRow = new("Frame", { Name = "Cells", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 0, 52) }, ledger)
+	results.LedgerRow = cellsRow
+	results.LedgerList = UIKit.list(cellsRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6), Wraps = true })
+	results.LedgerCells = {
+		Earned = ledgerCell(cellsRow, "Earned", 1, P.gold_200),
+		Spent = ledgerCell(cellsRow, "Spent", 2, C.Text),
+		Unspent = ledgerCell(cellsRow, "Unspent", 3, C.Text),
+		Kept = ledgerCell(cellsRow, "Kept", 4, RES_MINT),
+		Bonus = ledgerCell(cellsRow, "Bonuses", 5, RES_MINT),
+	}
+	results.LedgerNote = text(ledger, "Small", "", {
+		Name = "Note",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 10, 1, -6),
+		Size = UDim2.new(1, -20, 0, TS(12) + 6),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = true,
+		RichText = true,
+		TextColor3 = C.TextMuted,
+	}, 12)
+
+	-- 3. progress: run level (temporary), hero mastery, account level (cosmetic). Three
+	-- separate cards and bars; never one merged bar.
+	local prog = new("Frame", { Name = "Progress", BackgroundTransparency = 1, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 84) }, body)
 	results.Progress = prog
-	Icons.Draw(prog, "track_Level", { Size = 34, Position = UDim2.fromOffset(14, 12), Back = C.PanelInset })
-	results.XPText = text(prog, "H3", "", { Name = "XP", Position = UDim2.fromOffset(60, 8), Size = UDim2.new(1, -74, 0, TS(18) + 6), RichText = true, TextTruncate = Enum.TextTruncate.AtEnd })
-	results.XPMeter = UIKit.Meter(prog, {
-		Gradient = ColorSequence.new(P.gold_500, P.gold_300),
-		TextStyle = "Number",
-		TextSize = 12,
-		Position = UDim2.fromOffset(60, TS(18) + 18),
-		Size = UDim2.new(1, -74, 0, 18),
-	})
-	results.ProgLines = text(prog, "Small", "", { Name = "Lines", Position = UDim2.fromOffset(14, TS(18) + 44), Size = UDim2.new(1, -28, 0, 0), RichText = true, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextXAlignment = Enum.TextXAlignment.Center })
-	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Visible = false })
-	-- achievements unlocked this run (one line each: trophy, name, reward)
+	results.ProgList = UIKit.list(prog, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
+	results.RunCard = progressCard(prog, "RunLevel", 1, ColorSequence.new(P.crimson_300, P.crimson_500), P.crimson_400)
+	results.MasteryCard = progressCard(prog, "HeroMastery", 2, ColorSequence.new(P.gold_300, P.gold_500), P.gold_400)
+	results.AccountCard = progressCard(prog, "AccountLevel", 3, ColorSequence.new(RES_CYAN, RES_CYAN_DARK), RES_CYAN)
+	-- the account bar animation (animateAccountXP) works on these
+	results.XPMeter = results.AccountCard.Meter
+	results.XPText = results.AccountCard.Level
+	results.AccountFrame = results.AccountCard.Frame
+
+	-- 4. rewards (new best, arena unlocked, achievements, first-run bonus, cosmetics)
+	results.Best = UIKit.Badge(body, "NEW BEST TIME!", "Gold", { LayoutOrder = 4, Visible = false })
+	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 5, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Visible = false })
 	results.Achievements = text(body, "Small", "", {
 		Name = "Achievements",
-		LayoutOrder = 5,
+		LayoutOrder = 6,
 		Size = UDim2.new(1, 0, 0, 0),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextYAlignment = Enum.TextYAlignment.Top,
@@ -4116,8 +4224,53 @@ local function buildResults()
 		Visible = false,
 	})
 
+	-- 5. RUN DETAILS (collapsed by default, the choice is kept for the session): the
+	-- difficulty, curses, daily, bonus breakdown, recent damage, the build and the items
+	local toggle = new("TextButton", {
+		Name = "RunDetails",
+		LayoutOrder = 7,
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundColor3 = C.PanelInset,
+		BackgroundTransparency = Theme.Alpha.PanelSoft,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 44),
+	}, body)
+	UIKit.corner(toggle, 10)
+	UIKit.stroke(toggle, P.gold_600, 1, 0.45)
+	results.DetailsToggle = toggle
+	Icons.Draw(toggle, "info", { Size = 20, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Color = P.gold_300 })
+	results.DetailsTitle = text(toggle, "Label", UIKit.track("Run details"), { Name = "Title", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 42, 0.5, 0), Size = UDim2.fromOffset(TS(13) * 8, TS(13) + 6), TextXAlignment = Enum.TextXAlignment.Left }, 13)
+	results.DetailsSub = text(toggle, "Small", "Build, gold earned and spent, recent damage", { Name = "Sub", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 42 + TS(13) * 8 + 10, 0.5, 0), Size = UDim2.new(1, -(42 + TS(13) * 8 + 10 + 80), 0, TS(12) + 6), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.TextMuted }, 12)
+	results.DetailsState = text(toggle, "Caption", "SHOW", { Name = "State", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(64, TS(12) + 6), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 }, 12)
+	results.Details = text(body, "Small", "", {
+		Name = "DetailsText",
+		LayoutOrder = 8,
+		Size = UDim2.new(1, 0, 0, 0),
+		TextWrapped = true,
+		RichText = true,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextColor3 = C.TextMuted,
+		Visible = false,
+	})
+	results.BuildHolder = new("Frame", { Name = "Build", BackgroundTransparency = 1, LayoutOrder = 9, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
+	results.ItemsHolder = new("Frame", { Name = "ItemsHolder", BackgroundTransparency = 1, LayoutOrder = 10, Size = UDim2.new(1, 0, 0, 0), Visible = false }, body)
+	results.DetailsOpen = false
+	toggle.Activated:Connect(function()
+		results.DetailsOpen = not results.DetailsOpen
+		results.Layout()
+		if results.DetailsOpen then
+			-- bring the opened details into view
+			task.defer(function()
+				local maxY = math.max(0, body.CanvasSize.Y.Offset - body.Size.Y.Offset)
+				body.CanvasPosition = Vector2.new(0, math.min(maxY, toggle.Position.Y.Offset))
+			end)
+		end
+	end)
+
 	-- the scroll hint row (shown only while the body scrolls; see results.MoreHint)
-	results.More = text(content, "Caption", UIKit.track("More below") .. "  \u{25BE}", { Name = "MoreHint", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, MORE_H), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, Visible = false }, 11)
+	results.More = text(content, "Caption", UIKit.track("More below"), { Name = "MoreHint", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, MORE_H), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, Visible = false }, 11)
 	-- NEXT GOAL (RunResult.NextGoal, picked by the server from the settled save): the
 	-- reason to play again, pinned just above REPLAY / MAIN MENU so it never scrolls away:
 	-- icon, one line, a progress bar (beside the line when wide, under it when narrow)
@@ -4134,7 +4287,7 @@ local function buildResults()
 		Size = UDim2.fromOffset(160, 16),
 	})
 
-	-- actions: REPLAY (same mode) and MAIN MENU
+	-- actions: REPLAY (same mode) and MAIN MENU, fixed under the body
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
 	results.ButtonRow = row
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
@@ -4188,8 +4341,8 @@ local function buildResults()
 			end
 		end,
 	})
-	-- footer: the countdown and a quiet REPORT A BUG (the same form as the pause menu's,
-	-- opened over the results; the results wait while it is open)
+	-- footer: the one countdown, STAY and a quiet REPORT A BUG (the same form as the pause
+	-- menu's, opened over the results; the results wait while it is open)
 	local footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 44) }, content)
 	results.Footer = footer
 	results.FooterList = UIKit.list(footer, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
@@ -4225,33 +4378,44 @@ local function buildResults()
 		end,
 	})
 
+	-- a later profile sync carries the settled hero XP (mastery bar fallback)
+	Remotes.Get("ProfileSync").OnClientEvent:Connect(function()
+		task.defer(function()
+			if results.Overlay.Visible and results.Data then
+				fillMastery(results.Data)
+			end
+		end)
+	end)
+
+	local function lineCount(str: string, size: number, width: number): number
+		local n = 0
+		for line in string.gmatch(str .. "\n", "([^\n]*)\n") do
+			local plain = string.gsub(line, "<[^>]+>", "")
+			n += math.max(1, math.ceil(utf8.len(plain) or #plain) * size * 0.55 / math.max(1, width))
+		end
+		return n
+	end
+
 	local function layoutResults()
 		local v = virtualSize()
-		local w = tallModalWidth(680)
+		local w = tallModalWidth(760)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
-		-- phones in landscape: a smaller title, slim tiles without icons, lower buttons and
-		-- the XP block right under the tiles, so the main numbers and the account XP show
-		-- without scrolling
+		-- phones in landscape: a smaller title, slim tiles without icons, lower buttons
 		local slim = UIKit.IsCompact() and not portrait
 		local titleSize = TS(slim and 34 or 44)
 		results.Title.TextSize = titleSize
 		results.Title.Size = UDim2.new(1, 0, 0, titleSize + 6)
 		results.Arena.Position = UDim2.fromOffset(0, titleSize + 10)
-		results.Hero.Position = UDim2.fromOffset(0, titleSize + TS(12) + 18)
+		results.Hero.Position = UDim2.fromOffset(0, titleSize + TS(13) + 18)
 		local tileH = slim and 72 or 104
 		local btnH = slim and 48 or Theme.Size.Button
-		grid.LayoutOrder = slim and -1 or 1
-		-- rewards (first-run bonus, achievements) stay on screen right under the tiles
-		results.Achievements.LayoutOrder = slim and 0 or 5
-		results.Progress.LayoutOrder = slim and 1 or 6
-		-- header height follows the text sizes (phones set text 20% bigger)
-		local headH = math.max(84, titleSize + 6 + TS(12) + 8 + TS(15) + 8)
+		local headH = math.max(84, titleSize + 6 + TS(13) + 8 + TS(15) + 8)
 		head.Size = UDim2.new(1, 0, 0, headH)
-		results.TitleCol.Size = UDim2.fromOffset(math.max(160, math.min(440, inner - 96)), headH)
-		-- six tiles in one row when they fit (a little narrower on phones), otherwise two
-		-- rows of three
-		local tileW = math.clamp(math.floor((inner + 8) / 6) - 8, 84, 94)
+		results.TitleCol.Size = UDim2.fromOffset(math.max(160, math.min(480, inner - 96)), headH)
+		-- four tiles in one row (stable widths), two rows of two when very narrow
+		local cols = inner >= 360 and 4 or 2
+		local tileW = math.floor((inner - (cols - 1) * 8) / cols)
 		for _, tile in ipairs(grid:GetChildren()) do
 			if tile:IsA("GuiObject") then
 				tile.Size = UDim2.fromOffset(tileW, tileH)
@@ -4265,22 +4429,62 @@ local function buildResults()
 				end
 			end
 		end
-		local perRow = math.max(1, math.floor((inner + 8) / (tileW + 8)))
-		local cols = perRow >= 6 and 6 or (perRow >= 3 and 3 or 2)
-		local rows = math.ceil(6 / cols)
-		grid.Size = UDim2.fromOffset(cols * (tileW + 8) - 8, rows * tileH + (rows - 1) * 8)
-		local bw = math.clamp(math.floor((inner - 12) / 2), 140, 250)
+		local rows = math.ceil(4 / cols)
+		grid.Size = UDim2.fromOffset(inner, rows * tileH + (rows - 1) * 8)
+		-- the gold ledger: five cells in a row, or 3 + 2 when narrow
+		local lcols = inner >= 560 and 5 or 3
+		local cellW = math.floor((inner - 16 - (lcols - 1) * 6) / lcols)
+		local cellH = TS(20) + 6 + TS(11) + 6
+		for _, cell in pairs(results.LedgerCells) do
+			cell.Frame.Size = UDim2.fromOffset(cellW, cellH)
+		end
+		local lrows = math.ceil(5 / lcols)
+		local rowsH = lrows * cellH + (lrows - 1) * 6
+		results.LedgerRow.Size = UDim2.new(1, -16, 0, rowsH)
+		results.LedgerCells.Unspent.Caption.Text = UIKit.track(results.UnspentLong and lcols == 5 and results.UnspentLong or results.UnspentShort or "Unspent")
+		local noteSize = results.LedgerNote.TextSize
+		local noteLines = lineCount(results.LedgerNote.Text, noteSize, inner - 20)
+		local noteH = noteLines * (noteSize + 4) + 2
+		results.LedgerNote.Size = UDim2.new(1, -20, 0, noteH)
+		results.Ledger.Size = UDim2.new(1, 0, 0, 8 + rowsH + 6 + noteH + 8)
+		-- progress cards: three side by side, stacked when narrow
+		local pcols = inner >= 520 and 3 or 1
+		local cardW = math.floor((inner - (pcols - 1) * 8) / pcols)
+		local cardH = 8 + TS(13) + 6 + TS(12) + 6 + 16 + 12
+		for _, card in ipairs({ results.RunCard, results.MasteryCard, results.AccountCard }) do
+			card.Frame.Size = UDim2.fromOffset(cardW, cardH)
+			card.Gain.Position = UDim2.fromOffset(12, TS(13) + 14)
+		end
+		local prow = math.ceil(3 / pcols)
+		results.Progress.Size = UDim2.new(1, 0, 0, prow * cardH + (prow - 1) * 8)
+		-- RUN DETAILS row and its contents
+		local open = results.DetailsOpen == true
+		local togH = slim and 40 or 44
+		results.DetailsToggle.Size = UDim2.new(1, 0, 0, togH)
+		results.DetailsSub.Visible = inner >= 460
+		results.DetailsState.Text = open and "HIDE" or "SHOW"
+		local lineH = TS(Theme.TextSize.Small) + 4
+		local recent = results.Recent :: { string }?
+		local detailText = results.DetailsBase or ""
+		if recent and #recent > 0 then
+			local reviewRows = {}
+			local step = slim and 2 or 1
+			for i = 1, #recent, step do
+				table.insert(reviewRows, slim and table.concat(recent, "      ", i, math.min(i + 1, #recent)) or recent[i])
+			end
+			detailText ..= (detailText ~= "" and "\n" or "") .. string.format('<font color="%s"><b>RECENT DAMAGE</b></font> (latest first)\n', hex(P.crimson_300)) .. table.concat(reviewRows, "\n")
+		end
+		results.Details.Text = detailText
+		results.Details.Visible = open and detailText ~= ""
+		results.Details.Size = UDim2.new(1, 0, 0, lineCount(detailText, results.Details.TextSize, inner) * (results.Details.TextSize + 5) + 6)
+		results.BuildHolder.Visible = open and results.HasBuild == true
+		results.ItemsHolder.Visible = open and results.HasItems == true
+		-- the pinned NEXT GOAL row (above the buttons): one row with the bar on the right
+		-- when there is room, otherwise the bar under the line
+		local bw = math.clamp(math.floor((inner - 12) / 2), 140, 320)
 		results.ButtonRow.Size = UDim2.new(1, 0, 0, btnH)
 		results.Replay.Instance.Size = UDim2.fromOffset(bw, btnH)
 		results.Button.Instance.Size = UDim2.fromOffset(bw, btnH)
-		-- the progress block grows with its lines (wrapped on narrow screens)
-		local lineH = TS(Theme.TextSize.Small) + 4
-		local perLine = inner < 520 and 2 or 1
-		local nLines = (results.ProgLineCount or 0) * perLine
-		results.ProgLines.Size = UDim2.new(1, -28, 0, nLines * lineH)
-		results.Progress.Size = UDim2.new(1, 0, 0, TS(18) + 44 + nLines * lineH + (nLines > 0 and 10 or 0))
-		-- the pinned NEXT GOAL row (above the buttons): one row with the bar on the right
-		-- when there is room, otherwise the bar under the line
 		results.ButtonRow.LayoutOrder = 6
 		results.Footer.LayoutOrder = 7
 		local goalH = 0
@@ -4308,24 +4512,8 @@ local function buildResults()
 			results.GoalText.Text = (oneRow and inner < 600) and results.GoalShort or results.GoalLong
 			results.Goal.Size = UDim2.new(1, 0, 0, goalH)
 		end
-		-- the defeat's damage review: two hits per line on landscape phones (half the height,
-		-- so it sits nearer the fold)
-		local recent = results.Recent :: { string }?
-		if results.SettlementBase and recent and #recent > 0 then
-			local reviewRows = {}
-			local step = slim and 2 or 1
-			for i = 1, #recent, step do
-				table.insert(reviewRows, slim and table.concat(recent, "      ", i, math.min(i + 1, #recent)) or recent[i])
-			end
-			results.Settlement.Text = results.SettlementBase .. "\nRecent damage (latest first):\n" .. table.concat(reviewRows, "\n")
-		end
-		local settlementLines = 0
-		for line in string.gmatch(results.Settlement.Text .. "\n", "([^\n]*)\n") do
-			settlementLines += math.max(1, math.ceil(#line * results.Settlement.TextSize * 0.6 / math.max(1, inner)))
-		end
-		results.Settlement.Size = UDim2.new(1, 0, 0, settlementLines * (results.Settlement.TextSize + 5) + 8)
 		local bodyH = stackHeight(body, 10)
-		-- footer: countdown and REPORT A BUG side by side, stacked when narrow
+		-- footer: countdown, STAY and REPORT A BUG side by side, stacked when narrow
 		local bugH = slim and 40 or 44
 		results.Bug.Instance.Size = UDim2.fromOffset(TS(12) * 8 + 74, bugH)
 		results.Stay.Instance.Size = UDim2.fromOffset(TS(12) * 4 + 62, bugH)
@@ -4374,9 +4562,8 @@ local function buildResults()
 		body.ScrollBarThickness = bodyH > h + 1 and 4 or 0
 		results.MoreHint()
 	end
-	-- "MORE BELOW" under the body while it scrolls (the damage review / build sit below
-	-- the fold on landscape phones): its own row, so it never covers a line; dimmed once
-	-- scrolled to the end; event-driven
+	-- "MORE BELOW" under the body while it scrolls: its own row, so it never covers a
+	-- line; dimmed once scrolled to the end; event-driven
 	function results.MoreHint()
 		local hidden = body.CanvasSize.Y.Offset - body.Size.Y.Offset - body.CanvasPosition.Y
 		results.More.TextTransparency = hidden > 8 and 0 or 0.65
@@ -4386,13 +4573,144 @@ local function buildResults()
 	onRelayout(layoutResults)
 end
 
+local function safeNumber(x: any): number
+	local n = tonumber(x) or 0
+	if n ~= n or n == math.huge or n == -math.huge then
+		return 0
+	end
+	return n
+end
+
 --[[
-	The progress block: "+340 XP · Level 7 → 8" over the XP bar (account level), then one
-	line each for the run's curses, the daily score and track rewards unlocked.
+	The gold ledger, from RunResult (server definitions, GoldSystem.SettleRun):
+	  Earned (gross)  = GoldEarned + GoldSpent: all run gold collected (portal bonus included)
+	  Spent           = GoldSpent: chests and shrines bought during the run
+	  Unspent         = GoldEarned: the run purse at the end ("gold at defeat" on a loss)
+	  Kept            = Gold: unspent x GoldRetention (all of it through the portal)
+	  Lost            = GoldLost
+	  Bonuses         = GoldSurvival + FirstRun.Bonus: paid outside the purse, always kept
+]]
+local function fillLedger(data: any)
+	local unspent = math.floor(safeNumber(data.GoldEarned or data.Gold))
+	local spent = math.floor(safeNumber(data.GoldSpent))
+	local kept = math.floor(safeNumber(data.Gold))
+	local lost = math.floor(safeNumber(data.GoldLost))
+	local survival = math.floor(safeNumber(data.GoldSurvival))
+	local first = type(data.FirstRun) == "table" and math.floor(safeNumber(data.FirstRun.Bonus)) or 0
+	local bonus = math.max(0, survival) + math.max(0, first)
+	local rate = data.GoldRetention ~= nil and safeNumber(data.GoldRetention) or (unspent > 0 and kept / unspent or 1)
+	local lostRun = not data.Won and not data.Portal
+	local cells = results.LedgerCells
+	cells.Earned.Value.Text = UIKit.formatNumber(unspent + spent)
+	cells.Earned.Caption.Text = UIKit.track("Earned")
+	cells.Spent.Value.Text = UIKit.formatNumber(spent)
+	cells.Spent.Caption.Text = UIKit.track("Spent")
+	cells.Unspent.Value.Text = UIKit.formatNumber(unspent)
+	results.UnspentLong = lostRun and "Gold at defeat" or "Unspent"
+	results.UnspentShort = lostRun and "At defeat" or "Unspent"
+	cells.Kept.Value.Text = UIKit.formatNumber(kept)
+	cells.Kept.Caption.Text = UIKit.track(rate >= 1 and "Kept · all" or string.format("Kept · %d%%", math.floor(rate * 100 + 0.5)))
+	cells.Bonus.Value.Text = (bonus > 0 and "+" or "") .. UIKit.formatNumber(bonus)
+	cells.Bonus.Caption.Text = UIKit.track("Bonuses")
+	results.LedgerKept = kept
+	local banked = kept + bonus
+	local note = string.format('Added to your gold: <font color="%s"><b>%s</b></font>', hex(RES_MINT), UIKit.formatNumber(banked))
+	if bonus > 0 then
+		note ..= string.format(" (%s kept + %s bonuses)", UIKit.formatNumber(kept), UIKit.formatNumber(bonus))
+	end
+	if lost > 0 then
+		note ..= string.format('  ·  <font color="%s">%s lost</font> on %s', hex(P.crimson_300), UIKit.formatNumber(lost), data.Abandoned and "leaving early" or "defeat")
+	elseif data.Portal then
+		note ..= "  ·  portal: all unspent gold kept"
+	end
+	results.LedgerNote.Text = note
+end
+
+local function setCard(card: { [string]: any }, title: string, level: string, gain: string, share: number?, barText: string?)
+	card.Title.Text = UIKit.track(title)
+	card.Level.Text = level
+	card.Gain.Text = gain
+	card.Meter.Frame.Visible = share ~= nil
+	if share ~= nil then
+		card.Meter.Set(math.clamp(share, 0, 1), barText)
+	end
+end
+
+-- Hero Mastery card. RunResult.Mastery = { Hero, Gained, From, To } (+ Into, Need when the
+-- server sends them); otherwise the bar comes from the synced profile's hero XP and is
+-- shown only when it agrees with the level the server reported.
+function fillMastery(data: any)
+	local mst = type(data.Mastery) == "table" and data.Mastery or nil
+	local heroId = mst and mst.Hero or data.CharacterId
+	local hero = CharacterData.Characters[heroId]
+	local title = string.format("%s mastery", hero and hero.Name or "Hero")
+	if not mst then
+		setCard(results.MasteryCard, title, "", data.DevRun and "Not recorded (DEV run)" or "No mastery XP this run", nil)
+		return
+	end
+	local from, to = math.floor(safeNumber(mst.From)), math.floor(safeNumber(mst.To))
+	local levelText = from ~= to and string.format('<font color="%s">Level %d → %d</font>', hex(RES_MINT), from, to) or ("Level " .. to)
+	local gain = string.format('<font color="%s"><b>+%s XP</b></font>', hex(P.gold_200), UIKit.formatNumber(math.floor(safeNumber(mst.Gained))))
+	local into, need = tonumber(mst.Into), tonumber(mst.Need)
+	if not (into and need) then
+		local heroes = profile and type(profile.Heroes) == "table" and profile.Heroes or nil
+		local h = heroes and type(heroes[heroId]) == "table" and heroes[heroId] or nil
+		if h then
+			local lvl, i, n = masteryFor(safeNumber(h.XP))
+			if lvl == to then
+				into, need = i, n
+			end
+		end
+	end
+	if into and need and need > 0 then
+		setCard(results.MasteryCard, title, levelText, gain, into / need, string.format("%s / %s", UIKit.formatNumber(math.floor(into)), UIKit.formatNumber(math.floor(need))))
+	elseif to >= Config.HeroMastery.MaxLevel then
+		setCard(results.MasteryCard, title, levelText, gain, 1, "MAX LEVEL")
+	else
+		setCard(results.MasteryCard, title, levelText, gain, nil)
+	end
+end
+
+--[[
+	The three progress cards: RUN LEVEL (temporary, this run only; the hero's XP bar at the
+	end), HERO MASTERY (per hero, permanent), ACCOUNT LEVEL (cosmetic rewards only).
 ]]
 local function fillProgress(data: any)
+	-- run level: RunResult.Level; the bar from RunXP / RunXPNeed when the server sends
+	-- them, else from the player's run attributes (set by RunManager, reset only when the
+	-- next run starts) when they belong to this result
+	local lvl = math.floor(safeNumber(data.Level))
+	local xp, need = tonumber(data.RunXP), tonumber(data.RunXPNeed)
+	if not (xp and need) and player:GetAttribute("Level") == lvl then
+		xp, need = tonumber(player:GetAttribute("XP")), tonumber(player:GetAttribute("XPNeeded"))
+	end
+	local runShare = (xp and need and need > 0) and xp / need or nil
+	setCard(results.RunCard, "Run level", "Level " .. lvl, "This run only: resets next run", runShare,
+		runShare and string.format("%s / %s", UIKit.formatNumber(math.floor(xp :: number)), UIKit.formatNumber(math.floor(need :: number))) or nil)
+	fillMastery(data)
+	-- account level (cosmetic)
 	local a = type(data.Account) == "table" and data.Account or nil
+	if a then
+		local from, to = math.floor(safeNumber(a.From)), math.floor(safeNumber(a.To))
+		local levelText = from ~= to and string.format('<font color="%s">Level %d → %d</font>', hex(RES_MINT), from, to) or ("Level " .. to)
+		local gain = string.format('<font color="%s"><b>+%s XP</b></font>  ·  cosmetic rewards only', hex(RES_CYAN), UIKit.formatNumber(math.floor(safeNumber(a.Gained))))
+		local an = safeNumber(a.Need)
+		if an > 0 then
+			setCard(results.AccountCard, "Account level", levelText, gain, safeNumber(a.Into) / an, string.format("%s / %s", UIKit.formatNumber(math.floor(safeNumber(a.Into))), UIKit.formatNumber(math.floor(an))))
+		else
+			setCard(results.AccountCard, "Account level", levelText, gain, 1, "MAX LEVEL")
+		end
+	else
+		setCard(results.AccountCard, "Account level", "", data.DevRun and "Not recorded (DEV run)" or "Cosmetic progression", nil)
+	end
+end
+
+-- RUN DETAILS text: difficulty, curses, daily, bonus breakdown (recent damage is added by
+-- results.Layout, two hits per line on landscape phones).
+local function fillDetails(data: any)
 	local lines = {}
+	local diff = tostring(data.Difficulty or "Standard")
+	table.insert(lines, string.format('<font color="%s"><b>DIFFICULTY</b></font>  %s', hex(P.gold_300), diff))
 	local curses = type(data.Curses) == "table" and data.Curses or {}
 	if #curses > 0 then
 		local names = {}
@@ -4400,49 +4718,36 @@ local function fillProgress(data: any)
 			local def = CurseData.Curses[id]
 			table.insert(names, def and def.Name or tostring(id))
 		end
-		table.insert(lines, string.format('<font color="%s"><b>CURSES</b></font>  %s  ·  <font color="%s">%s gold</font>', hex(P.crimson_300), table.concat(names, " · "), hex(P.gold_300), CurseData.GoldText(tonumber(data.CurseGold) or CurseData.GoldMult(curses))))
-	end
-	-- Hero Mastery: "KNIGHT MASTERY  +120 XP  ·  Level 3 → 4"
-	local m = type(data.Mastery) == "table" and data.Mastery or nil
-	if m and (tonumber(m.Gained) or 0) > 0 then
-		local hero = CharacterData.Characters[m.Hero]
-		local mf, mt = tonumber(m.From) or 1, tonumber(m.To) or 1
-		table.insert(lines, string.format('<font color="%s"><b>%s MASTERY</b></font>  +%s XP%s', hex(P.gold_300), string.upper(hero and hero.Name or "Hero"),
-			UIKit.formatNumber(tonumber(m.Gained) or 0), mf ~= mt and string.format('  ·  <font color="%s">Level %d → %d</font>', hex(P.moss_200), mf, mt) or ""))
+		table.insert(lines, string.format('<font color="%s"><b>CURSES</b></font>  %s  ·  %s gold', hex(P.crimson_300), table.concat(names, " · "), CurseData.GoldText(tonumber(data.CurseGold) or CurseData.GoldMult(curses))))
 	end
 	local d = type(data.Daily) == "table" and data.Daily or nil
 	if d then
 		if d.Scored then
-			table.insert(lines, string.format('<font color="%s"><b>DAILY · SCORED</b></font>  %s%s', hex(P.gold_300), tostring(d.Text or ""), d.NewBest and string.format('  ·  <font color="%s">NEW DAILY BEST</font>', hex(P.moss_200)) or ""))
+			table.insert(lines, string.format('<font color="%s"><b>DAILY · SCORED</b></font>  %s%s', hex(P.gold_300), tostring(d.Text or ""), d.NewBest and "  ·  NEW DAILY BEST" or ""))
 		else
 			table.insert(lines, string.format('<font color="%s"><b>DAILY · PRACTICE</b></font>  %s  (not scored)', hex(P.gold_300), tostring(d.Text or "")))
 		end
 	end
-	if a and type(a.Rewards) == "table" and #a.Rewards > 0 then
-		local r = {}
-		for _, name in ipairs(a.Rewards) do
-			table.insert(r, tostring(name))
-		end
-		table.insert(lines, string.format('<font color="%s"><b>UNLOCKED</b></font>  %s  (wear it in ACCOUNT LEVEL)', hex(P.gold_300), table.concat(r, " · ")))
+	-- gold: where the numbers come from
+	local unspent = math.floor(safeNumber(data.GoldEarned or data.Gold))
+	local spent = math.floor(safeNumber(data.GoldSpent))
+	table.insert(lines, string.format('<font color="%s"><b>GOLD</b></font>  %s earned · %s spent on chests and shrines · %s left at the end', hex(P.gold_300),
+		UIKit.formatNumber(unspent + spent), UIKit.formatNumber(spent), UIKit.formatNumber(unspent)))
+	if data.Portal then
+		table.insert(lines, "Earned includes the portal bonus for the stages cleared")
 	end
-	results.Progress.Visible = a ~= nil or #lines > 0
-	if a then
-		local from, to = tonumber(a.From) or 1, tonumber(a.To) or 1
-		local levelText = from ~= to and string.format("Level %d → %d", from, to) or ("Level " .. to)
-		results.XPText.Text = string.format('<font color="%s">+%s XP</font>  ·  %s', hex(P.gold_200), UIKit.formatNumber(tonumber(a.Gained) or 0), levelText)
-		local need = tonumber(a.Need) or 0
-		if need > 0 then
-			results.XPMeter.Set((tonumber(a.Into) or 0) / need, string.format("%s / %s XP", UIKit.formatNumber(tonumber(a.Into) or 0), UIKit.formatNumber(need)))
-		else
-			results.XPMeter.Set(1, "MAX LEVEL")
-		end
-		results.XPMeter.Frame.Visible = true
-	else
-		results.XPText.Text = "Run progress"
-		results.XPMeter.Frame.Visible = false
+	local survival = math.floor(safeNumber(data.GoldSurvival))
+	if survival > 0 then
+		table.insert(lines, string.format("Survival bonus +%s gold · %d min (always kept)", UIKit.formatNumber(survival), math.min(Config.Gold.SurvivalMaxMinutes or 30, math.floor(safeNumber(data.Time) / 60))))
 	end
-	results.ProgLines.Text = table.concat(lines, "\n")
-	results.ProgLineCount = #lines
+	local first = type(data.FirstRun) == "table" and math.floor(safeNumber(data.FirstRun.Bonus)) or 0
+	if first > 0 then
+		table.insert(lines, string.format("First run bonus +%s gold (one time)", UIKit.formatNumber(first)))
+	end
+	if data.DevRun then
+		table.insert(lines, "DEV tools were used: nothing public was recorded")
+	end
+	results.DetailsBase = table.concat(lines, "\n")
 end
 
 -- The NEXT GOAL row (display only; the server picked it from the settled save).
@@ -4486,10 +4791,10 @@ local function fillBuild(build: any)
 	local passives = type(build) == "table" and type(build.Passives) == "table" and build.Passives or {}
 	if #weapons + #passives == 0 then
 		holder.Size = UDim2.new(1, 0, 0, 0)
-		holder.Visible = false
+		results.HasBuild = false
 		return
 	end
-	holder.Visible = true
+	results.HasBuild = true
 	local inner = results.Modal.Panel.Size.X.Offset - 2 * Theme.Space.XL
 	text(holder, "Caption", UIKit.track("Build"), { Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center })
 	local row = new("Frame", { Name = "Tiles", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, TS(12) + 8) }, holder)
@@ -4559,8 +4864,8 @@ local function animateAccountXP(data: any)
 			-- level up: flash, ring and sparks on the bar, the text punches
 			meter.Set(1)
 			UIAnim.SweepOnce(meter.Frame, P.ivory_100, 0.4, 0.1)
-			UIAnim.Ring(results.Progress, UDim2.new(1, -40, 0, 30), P.gold_200, 120, 0.6)
-			UIAnim.Sparks(results.Progress, UDim2.new(1, -40, 0, 30), P.gold_200, 12, 70, 0.6)
+			UIAnim.Ring(results.AccountFrame, UDim2.new(1, -40, 0, 30), RES_CYAN, 120, 0.6)
+			UIAnim.Sparks(results.AccountFrame, UDim2.new(1, -40, 0, 30), RES_CYAN, 12, 70, 0.6)
 			UIAnim.Punch(results.XPText, 0.12)
 			task.wait(0.2)
 			nv.Value = 0
@@ -4582,6 +4887,7 @@ local function onRunResult(data)
 	hide(pause.Overlay, "Pause")
 	Tutorial.Clear()
 	pendingReplay = nil
+	results.Data = data
 	-- InLobby: the player left through a portal and is back at the menu already; the
 	-- panel then sits over the lobby until closed (or its timer runs out)
 	results.InLobby = data.InLobby == true
@@ -4591,16 +4897,9 @@ local function onRunResult(data)
 	results.ReturnedAt = nil
 	results.Button.SetEnabled(true)
 	results.Mode = type(data.Mode) == "string" and data.Mode or "Solo"
-	local retained = tonumber(data.Gold) or 0
-	local coinsEarned = tonumber(data.GoldEarned) or retained
-	local lost = tonumber(data.GoldLost) or 0
-	-- the cause of death is deliberately not shown on the results screen (owner request)
-	results.Settlement.Text = string.format("%s · %s gold earned · %s kept · %s lost", tostring(data.Difficulty or "Standard"), UIKit.formatNumber(coinsEarned), UIKit.formatNumber(retained), UIKit.formatNumber(lost))
-	-- survival gold is paid outside the run purse and always kept: its own line
-	local survival = tonumber(data.GoldSurvival) or 0
-	if survival == survival and survival > 0 and survival < math.huge then
-		results.Settlement.Text ..= string.format("\nSurvival +%s gold · %d min (always kept)", UIKit.formatNumber(math.floor(survival)), math.min(Config.Gold.SurvivalMaxMinutes or 30, math.floor((tonumber(data.Time) or 0) / 60)))
-	end
+	fillLedger(data)
+	fillDetails(data)
+	-- recent damage, for RUN DETAILS (the cause of death is not a headline: owner request)
 	local history = type(data.DamageHistory) == "table" and data.DamageHistory or {}
 	local recent = {}
 	if not data.Won and not data.Portal and not data.Abandoned then
@@ -4615,33 +4914,24 @@ local function onRunResult(data)
 			end
 		end
 	end
-	-- the text itself is composed by results.Layout (two hits per line on landscape phones)
-	results.SettlementBase = results.Settlement.Text
 	results.Recent = recent
-	if #recent > 0 then
-		results.Settlement.Text ..= "\nRecent damage (latest first):\n" .. table.concat(recent, "\n")
-	end
 	-- portal returns before WinMinStages stages are a safe escape, not a win
 	-- Abandoned: left from the pause menu's MAIN MENU (counted as a loss)
 	results.Title.Text = data.Won and "VICTORY!" or (data.Portal and "ESCAPED" or (data.Abandoned and "RUN ENDED" or "DEFEATED"))
 	results.Title.TextColor3 = (data.Won or data.Portal) and P.gold_300 or P.crimson_300
 	results.MedalStroke.Color = (data.Won or data.Portal) and P.gold_400 or P.crimson_400
 	local cleared = tonumber(data.StagesCleared) or 0
-	local where = (data.Won or data.Portal) and string.format("%d stage%s cleared", cleared, cleared == 1 and "" or "s")
-		or string.format(data.Abandoned and "Left on stage %d" or "Fell on stage %d", tonumber(data.Stage) or 1)
-	-- Endless runs never win: they say how deep they went ("ENDLESS · Reached stage 9")
-	if data.Endless then
-		where = string.format("ENDLESS · Reached stage %d", tonumber(data.Stage) or 1)
-	end
-	results.Arena.Text = UIKit.track(where .. " · " .. tostring(data.Arena))
+	local heroId = type(data.CharacterId) == "string" and data.CharacterId or CharacterData.Default
+	local heroDef = CharacterData.Characters[heroId]
+	-- "KNIGHT · FOREST · STAGE 1" (Endless: "ENDLESS STAGE 9")
+	local stageText = (data.Endless and "Endless stage " or "Stage ") .. tostring(tonumber(data.Stage) or 1)
+	results.Arena.Text = UIKit.track(string.format("%s · %s · %s", heroDef and heroDef.Name or heroId, tostring(data.Arena), stageText))
 	-- the hero who played
 	for _, ch in ipairs(results.Medal:GetChildren()) do
 		if ch:IsA("Frame") and ch ~= results.BossBadge then
 			ch:Destroy()
 		end
 	end
-	local heroId = type(data.CharacterId) == "string" and data.CharacterId or CharacterData.Default
-	local heroDef = CharacterData.Characters[heroId]
 	local classIcon = Icons.Character(results.Medal, heroId, { Size = 48, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
 	-- the hero's painted bust in the medal (the class icon while it loads / without one)
 	ArtImage.RoundPortrait(results.Medal, ArtImage.Portrait(heroId), { classIcon })
@@ -4683,8 +4973,8 @@ local function onRunResult(data)
 	fillProgress(data)
 	fillGoal(data)
 	local damage = tonumber(data.Damage) or 0
-	results.Hero.Text = string.format("%s  ·  %s damage dealt", heroDef and heroDef.Name or heroId, UIKit.formatNumber(math.floor(damage)))
-		.. (type(data.Score) == "number" and ((data.Endless and "  ·  endless score " or "  ·  score ") .. UIKit.formatNumber(data.Score)) or "")
+	results.Hero.Text = string.format("%s damage dealt", UIKit.formatNumber(math.floor(damage)))
+		.. (type(data.Score) == "number" and ((data.Endless and "  ·  Endless score " or "  ·  Score ") .. UIKit.formatNumber(data.Score)) or "")
 	-- numbers
 	results.Stages.Text = tostring(cleared)
 	results.Time.Text = formatTime(data.Time)
@@ -4697,7 +4987,7 @@ local function onRunResult(data)
 		results.BossCaption.Text = UIKit.track("Fell to the boss")
 	else
 		results.Boss.Text = "-"
-		results.BossCaption.Text = UIKit.track("Not reached")
+		results.BossCaption.Text = UIKit.track("Boss not reached")
 	end
 	results.Best.Text = (data.NewBest and data.NewBestStage) and "NEW BEST TIME AND STAGE!"
 		or (data.NewBestStage and "NEW BEST STAGE!" or (data.NewBest and "NEW BEST TIME!" or "NEW BEST LEVEL!"))
@@ -4715,6 +5005,15 @@ local function onRunResult(data)
 	if firstBonus and firstBonus == firstBonus and firstBonus > 0 and firstBonus < math.huge then
 		table.insert(lines, 1, string.format('<font color="%s"><b>FIRST RUN BONUS</b></font>  +%s gold', hex(P.gold_300), UIKit.formatNumber(math.floor(firstBonus))))
 	end
+	-- account level rewards are cosmetic (frames, rings): never shown as combat upgrades
+	local a = type(data.Account) == "table" and data.Account or nil
+	if a and type(a.Rewards) == "table" and #a.Rewards > 0 then
+		local r = {}
+		for _, name in ipairs(a.Rewards) do
+			table.insert(r, tostring(name))
+		end
+		table.insert(lines, string.format('<font color="%s"><b>COSMETIC UNLOCKED</b></font>  %s  (wear it in ACCOUNT LEVEL)', hex(RES_CYAN), table.concat(r, " · ")))
+	end
 	results.Achievements.Visible = #lines > 0
 	results.Achievements.Text = table.concat(lines, "\n")
 	results.Achievements.Size = UDim2.new(1, 0, 0, #lines * (TS(Theme.TextSize.Small) + 6))
@@ -4725,7 +5024,7 @@ local function onRunResult(data)
 		ch:Destroy()
 	end
 	local runItems = type(data.Items) == "table" and data.Items or {}
-	results.ItemsHolder.Visible = #runItems > 0
+	results.HasItems = #runItems > 0
 	if #runItems > 0 then
 		local w = results.Modal.Panel.Size.X.Offset - 2 * Theme.Space.XL
 		local perRow = math.max(1, math.floor((w + 6) / 40))
@@ -4741,48 +5040,38 @@ local function onRunResult(data)
 	local canReplay = replayState()
 	results.Replay.SetEnabled(canReplay)
 	UIKit.FocusIfGamepad(canReplay and results.Replay.Instance or results.Button.Instance)
-	if data.Won and deps.Audio then
-		pcall(deps.Audio.Play, "Victory")
+	if deps.Audio then
+		if data.Won then
+			pcall(deps.Audio.Play, "Victory")
+		elseif not data.Portal then
+			pcall(deps.Audio.Play, "ResultsLose") -- a defeat or a run left early
+		end
 	end
-	-- title drops in, the medal flips round, the stat tiles land one after another and
-	-- their numbers count up
-	-- title slam: it drops in big and hard; a victory also throws sparks and a ring
+	-- a short, contained entrance (guide: 180-240 ms panels, no bouncy type): the title
+	-- drops in, the medal turns, the tiles land in order and their numbers count up
+	local reduced = ClientSettings.Reduced() or ClientPerformance.Reduced()
 	local good = data.Won or data.Portal
-	UIAnim.Pop(results.Title, 0.1, (ClientSettings.Reduced() or ClientPerformance.Reduced()) and 1.2 or 2.4)
-	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+	UIAnim.Pop(results.Title, 0.1, reduced and 1.2 or 1.6)
+	if not reduced and good then
 		task.delay(0.3, function()
 			if results.Overlay.Visible then
-				UIAnim.Shake(results.Title, good and 5 or 9, 0.35)
-				if good then
-					UIAnim.Sparks(results.TitleCol, UDim2.new(0, 120, 0, 28), P.gold_200, 14, 120, 0.7)
-					UIAnim.Ring(results.TitleCol, UDim2.new(0, 120, 0, 28), P.gold_300, 200, 0.6)
-				end
+				UIAnim.Sparks(results.TitleCol, UDim2.new(0, 120, 0, 28), P.gold_200, 14, 120, 0.7)
+				UIAnim.Ring(results.TitleCol, UDim2.new(0, 120, 0, 28), P.gold_300, 200, 0.6)
 			end
 		end)
 	end
 	animateAccountXP(data)
-	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+	if not reduced then
 		local medal = results.Medal :: GuiObject
 		medal.Rotation = -160
 		UIAnim.Pop(medal, 0.05, 0.3)
 		task.delay(0.05, function()
 			UIAnim.Tween(medal, 0.55, { Rotation = 0 }, Enum.EasingStyle.Back)
 		end)
-		for i, label in ipairs({ results.Stages, results.Time, results.Kills, results.Boss, results.Gold, results.Level }) do
+		for i, label in ipairs({ results.Time, results.Kills, results.Stages, results.Boss }) do
 			local tile = label and label.Parent
 			if tile and tile:IsA("GuiObject") then
-				UIAnim.Pop(tile, 0.35 + 0.14 * i, 0.4)
-			end
-		end
-		-- the build tiles cascade in after the numbers
-		local tiles = results.BuildHolder:FindFirstChild("Tiles")
-		if tiles then
-			local i = 0
-			for _, t in ipairs(tiles:GetChildren()) do
-				if t.Name == "Tile" then
-					i += 1
-					UIAnim.Pop(t :: GuiObject, 1.3 + 0.07 * math.min(i, 12), 0.3)
-				end
+				UIAnim.Pop(tile, 0.3 + 0.1 * i, 0.3)
 			end
 		end
 	end
@@ -4792,14 +5081,13 @@ local function onRunResult(data)
 	end
 	UIAnim.CountTo(results.Time, 0, tonumber(data.Time) or 0, clockText, 0.9)
 	UIAnim.CountTo(results.Kills, 0, tonumber(data.Kills) or 0, UIKit.formatNumber, 0.9)
-	UIAnim.CountTo(results.Gold, 0, tonumber(data.Gold) or 0, UIKit.formatNumber, 0.9)
-	UIAnim.CountTo(results.Level, 0, tonumber(data.Level) or 0, "%d", 0.7)
 	UIAnim.CountTo(results.Stages, 0, cleared, "%d", 0.6)
+	UIAnim.CountTo(results.LedgerCells.Kept.Value, 0, results.LedgerKept or 0, UIKit.formatNumber, 0.9)
 	if data.NewBest then
 		-- new best: the badge pops with a starburst
 		UIAnim.Pop(results.Best, 1.5, 0.3)
 		UIAnim.Punch(results.Time, 0.3)
-		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
+		if not reduced then
 			task.delay(1.55, function()
 				local panel = results.Modal.Panel :: Frame
 				local best = results.Best :: GuiObject
