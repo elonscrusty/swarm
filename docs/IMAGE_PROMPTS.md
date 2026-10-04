@@ -365,7 +365,12 @@ When these come in: upload them with `tools/upload_icons.py`, then run `tools/ge
 
 ---
 
-## 22. New requests: home screen pieces, 7 images (`art/ui/home/`)
+## 22. New requests: home screen pieces, 7 images (`art/ui/home/`) (DONE)
+
+DONE: made by the owner, uploaded with `tools/upload_art.py` and wired (the drawn stand-ins hide
+once each picture loads). Moderation: all 7 Approved (checked after upload). The PLAY
+plate was cropped to the plate (outer glow removed, calm middle band stretched to 1200x390) so it
+fills the button; the dock frame was re-laid out so its border sits on the 9-slice edges.
 
 The home screen (owner reference `home-mockup`) is rebuilt to the reference's layout, but a few
 pieces are drawn with plain UI shapes as a **best-effort stand-in, not a match**: the ornate PLAY

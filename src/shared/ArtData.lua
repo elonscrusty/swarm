@@ -152,7 +152,7 @@ ArtData.Ids = {
 	["ui/home/home_Heroes"] = 93901765059273,
 	["ui/home/home_ModeFrame"] = 105436874183207,
 	["ui/home/home_More"] = 81635351890933,
-	["ui/home/home_PlayButton"] = 121146725124906,
+	["ui/home/home_PlayButton"] = 85759600369160,
 	["ui/home/home_Shop"] = 101753352127935,
 } :: { [string]: number }
 

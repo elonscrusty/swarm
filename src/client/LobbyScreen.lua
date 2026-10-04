@@ -476,10 +476,15 @@ local function buildTiles(screen: Frame)
 		SliceCenter = Rect.new(64, 64, 704, 192),
 		SliceScale = 0.35,
 		Size = UDim2.fromScale(1, 1),
-		ZIndex = 2,
-	}, edge and function(show: boolean)
-		edge.Enabled = show
-	end or nil)
+		-- under the tiles (ZIndex 1): the frame's navy centre must not cover the icons
+		ZIndex = 0,
+	}, function(show: boolean)
+		if edge then
+			edge.Enabled = show
+		end
+		-- the picture brings its own navy plate and rounded corners
+		face.BackgroundTransparency = show and 0.1 or 1
+	end)
 	local function tile(name: string, icon: string, caption: string, order: number, onClick: () -> ()): any
 		local b = UIKit.IconButton(face, { Icon = icon, Caption = caption, Kind = "Ghost", Size = 96, IconSize = 46, Name = name, LayoutOrder = order, OnClick = onClick })
 		local cap = b.Content:FindFirstChild("Caption") :: TextLabel?
@@ -589,7 +594,33 @@ decoratePlay = function(b: any)
 	Icons.Draw(crownHolder, "crown", { Size = 44, Color = PLAY_HI, Back = PLAY_MID, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0) })
 	table.insert(drawn, crownHolder)
 	ui.PlayCrown = crownHolder
-	ArtImage.Place(face, "ui/home/home_PlayButton", { Name = "PlayArt", ScaleType = Enum.ScaleType.Stretch, Size = UDim2.fromScale(1, 1), ZIndex = 2 }, drawn)
+	-- the painted plate has chamfered corners and its own rim: while it shows, the kit's
+	-- rounded face, edge line and top bevel would peek out at the corners, so they go clear
+	-- (the kit repaints the face on hover / press, hence the property watch)
+	table.insert(drawn, fill)
+	local faceStroke = face:FindFirstChildOfClass("UIStroke")
+	local kitBevel = face:FindFirstChild("Bevel")
+	local artOn = false
+	face:GetPropertyChangedSignal("BackgroundTransparency"):Connect(function()
+		if artOn and face.BackgroundTransparency ~= 1 then
+			face.BackgroundTransparency = 1
+		end
+	end)
+	ArtImage.Place(face, "ui/home/home_PlayButton", { Name = "PlayArt", ScaleType = Enum.ScaleType.Stretch, Size = UDim2.fromScale(1, 1), ZIndex = 2 }, function(show: boolean)
+		artOn = not show
+		for _, g in ipairs(drawn) do
+			if g.Parent then
+				g.Visible = show
+			end
+		end
+		if faceStroke then
+			faceStroke.Enabled = show
+		end
+		if kitBevel and kitBevel:IsA("GuiObject") then
+			kitBevel.Visible = show
+		end
+		face.BackgroundTransparency = show and 0 or 1
+	end)
 end
 
 local function buildPlay(screen: Frame)
