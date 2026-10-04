@@ -180,6 +180,7 @@ async function render() {
   await fontsReady;
   const gui = document.getElementById('gui');
   try { window.__artMap = await (await fetch('/artmap.json')).json(); } catch (e) { window.__artMap = {}; }
+  try { window.__artSize = await (await fetch('/artsize.json')).json(); } catch (e) { window.__artSize = {}; }
   window.__imgLoads = [];
   paintGui(gui, job.gui, d, viewportImages, { hideCoreUi: job.render && job.render.hideCoreUi });
   paintOverlays(gui, job.overlays, (x, y, z) => {

@@ -88,6 +88,24 @@ async function main() {
       try { for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(fi, 'utf8')))) map[String(v)] = 'icons/' + k; } catch (e) { /* no icons */ }
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(map) });
     }
+    if (p === '/artsize.json') {
+      // pixel size of each owner picture as uploaded (tools/upload_art.py caps the long side:
+      // 1024 for screens/, arenas/ and ui/home/, else 512), so 9-slice SliceCenter maps right
+      const sizes = {};
+      const f = path.join(args.repo, 'art', 'uploaded_art.json');
+      let keys = [];
+      try { keys = Object.keys(JSON.parse(fs.readFileSync(f, 'utf8'))); } catch (e) { /* no art */ }
+      for (const k of keys) {
+        try {
+          const b = fs.readFileSync(path.join(args.repo, 'art', k + '.png'));
+          let w = b.readUInt32BE(16), h = b.readUInt32BE(20);
+          const cap = /^(screens|arenas|ui\/home)\//.test(k) ? 1024 : 512;
+          if (Math.max(w, h) > cap) { const s = cap / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+          sizes[k] = [w, h];
+        } catch (e) { /* unreadable */ }
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sizes) });
+    }
     for (const [prefix, dir] of Object.entries(files)) {
       if (p.startsWith(prefix)) {
         const file = path.join(dir, p.slice(prefix.length));

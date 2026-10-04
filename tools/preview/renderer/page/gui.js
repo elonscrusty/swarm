@@ -123,7 +123,9 @@ function paintItem(container, it, viewportImages) {
     let style = `left:0;top:0;width:100%;height:100%;border-radius:inherit;opacity:${c[3]};filter:brightness(${((c[0] + c[1] + c[2]) / 3).toFixed(3)});`;
     if (it.image.slice) {
       const [x0, y0, x1, y1, k] = it.image.slice;
-      style += `border-style:solid;border-image:url(${url}) ${y0} ${512 - x1} ${512 - y1} ${x0} fill;border-width:${y0 * k}px ${(512 - x1) * k}px ${(512 - y1) * k}px ${x0 * k}px;box-sizing:border-box;`;
+      // SliceCenter is in the uploaded picture's pixels (artsize.json); 512 square if unknown
+      const [iw, ih] = (window.__artSize && window.__artSize[window.__artMap[artKey]]) || [512, 512];
+      style += `border-style:solid;border-image:url(${url}) ${y0} ${iw - x1} ${ih - y1} ${x0} fill;border-width:${y0 * k}px ${(iw - x1) * k}px ${(ih - y1) * k}px ${x0 * k}px;box-sizing:border-box;`;
     } else {
       style += `background:url(${url}) center/${fit} no-repeat;`;
     }
