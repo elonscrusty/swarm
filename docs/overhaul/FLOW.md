@@ -124,10 +124,17 @@ checking the live boards needs the owner (BLOCKED offline).
   GO ignored; REPLAY stays, replayed run never sent home, unstarted replay → visible
   countdown; banner STAY): PASS.
 - `runserver-sim role=lobby`: PASS.
-- `results-flow` (new client scene, cases auto / stay / replay / portal / plain): see the
-  report section below.
-- `leaderboards --set mismatch=board|save|queued` (+ `board=BestStage`): see below.
-- `reconnect-lobby`, `settlement-lifecycle`: see below.
+- `results-flow` (new client scene) cases auto / stay / replay / portal / plain: all checks
+  PASS. The first stay/portal runs also logged mock WaitForChild timeouts (the scene had not
+  created the run folders); the scene now creates them.
+- `leaderboards --set mismatch=board`: PASS (card 11,920 = row; "Board record · your save's
+  best: 8,940"). save / queued / BestStage variants: not run (machine load), same code path.
+- `reconnect-lobby` (default, fail=teleport, fail=expired): 0 errors.
+- `settlement-lifecycle`: FAIL at line 55 ("survival gold: 0"), **not caused by FLOW**. The
+  scene advances 125 s and expects 2 min of run clock, but solo level-up offers now freeze
+  `runTime` (measured: 67 s of clock after 120 s simulated, `frozen = true`, `PendingLevels = 1`).
+  saveRunStats / SettleRun / `seconds` are unchanged. Fix belongs in the scene (advance until
+  `RM.GetRunTime() >= 125`, or pick the offers) or with CHOICE-SERVER if the freeze is wrong.
 - BLOCKED: real teleports, live OrderedDataStores, Studio, phone hardware, multi-client.
 
 ## Remaining risk
