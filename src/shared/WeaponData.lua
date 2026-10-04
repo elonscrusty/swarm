@@ -440,7 +440,7 @@ WeaponData.Weapons = {
 		Color = Color3.fromRGB(170, 170, 180),
 		Behavior = "Axe",
 		AmountLabel = "Axes",
-		Params = { Radius = 1.6, UpSpeed = 48, Gravity = 80, Visual = 4, EvoVisual = 9, OrbitRadius = 6, OrbitGrowth = 7, OrbitSpin = 4.5 },
+		Params = { Radius = 1.6, UpSpeed = 48, Gravity = 80, Visual = 4, EvoVisual = 9, OrbitRadius = 1.5, OrbitGrowth = 7, OrbitSpin = 4.5 }, -- Death Spiral starts at your side (was 6: missed enemies hugging you)
 		Levels = {
 			row(20, 2.5, 1, 1.0, 22, 3, 3.0, 10),
 			row(20, 2.5, 2, 1.0, 22, 3, 3.0, 10),
@@ -460,7 +460,7 @@ WeaponData.Weapons = {
 			Name = "Death Spiral",
 			Passive = "Might",
 			Description = "Axes orbit you and spiral outward through everything.",
-			Stats = row(60, 3.0, 8, 1.5, 0, 999, 3.5, 14),
+			Stats = row(60, 3.0, 6, 1.5, 0, 999, 3.5, 14),
 			Orbit = true,
 		},
 	},
