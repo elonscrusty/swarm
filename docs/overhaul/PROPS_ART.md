@@ -101,10 +101,11 @@ vs muted vs gold-complete are distinct; the three chest tiers match their icons.
 |---|---|
 | `bash tools/check.sh --quick` | PASS (typecheck, compile, icons) |
 | encounters-sim (deliberate altar, rune order/reset, single rewards, cleanup) | PASS |
-| caravan-sim, encounter-placement | see bottom |
+| caravan-sim | BLOCKED: killed after >40 min wall time on the overloaded machine (other helpers' econ/perf sims), no result. The caravan logic is untouched; only model/recolour code changed |
+| encounter-placement | not run (time) |
 | props scene pc, 4 variants | rendered, 0 errors |
 | stage-portal pc + iphone, before/after; Boss look pc | rendered, 0 errors |
-| perf-sim | see bottom |
+| perf-sim | not run (machine busy); changes are static anchored parts only, see part counts below |
 
 ## Remaining risk / not done
 
