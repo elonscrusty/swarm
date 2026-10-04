@@ -40,10 +40,21 @@
 	  starter's own lobby pick). SwarmState "RunServer" (true), "RunServerStatus"
 	  ("Waiting" | "Started" | "Failed"), "RunServerHere" / "RunServerExpected" drive the
 	  client's "Starting…" cover; the lobby menu under it can't start anything meanwhile.
-	  Back in the lobby after a run (RunManager.returnPlayerToLobby → OnBackInLobby) the
-	  player goes home after HomeDelaySeconds (results over the lobby menu) or
-	  HomeDelayAfterResultsSeconds (the defeat results already counted down); player
-	  attribute "TravelHomeIn" shows the countdown with GO NOW / STAY (remote TravelHome).
+	  Back in the lobby after a run (RunManager.returnPlayerToLobby → OnBackInLobby, `how`):
+	    "results" / "menu"  the defeat results counted down, or MAIN MENU on them: home at
+	               once. Travel = "ToLobby" is set in the same frame as InRun = false, so
+	               the client keeps the results under the "BACK TO THE LOBBY" cover and
+	               never shows this server's lobby as if it were the destination (Short
+	               2:04: lobby + a second countdown, then another loading screen).
+	    "portal"   results over the lobby menu (portal return, pause MAIN MENU): home
+	               after HomeDelaySeconds; player attribute "TravelHomeIn" is the one
+	               countdown (results footer while they are open, else the banner).
+	    "replay"   REPLAY on the results: stays for the new run; if no run or countdown
+	               has taken the player after ReplayGraceSeconds, the normal countdown.
+	  Remote TravelHome: "Go" (now; also without a countdown, e.g. after STAY), "Stay"
+	  (cancel the countdown, toast), "Hold" (results STAY: no countdown and no departure
+	  until the player picks MAIN MENU; quiet), "Replay" (REPLAY over the lobby menu).
+	  A player in a run or a lobby countdown is never sent home.
 	  Going home saves and releases first, then TeleportAsync(game.PlaceId, players) with
 	  TeleportData { SwarmReturn = { Party } }: party mates waiting at the same moment go in
 	  one teleport (same lobby server) and PartyService re-forms the party there. If the
@@ -97,6 +108,8 @@ local firstArrival = 0
 local status = "Waiting"
 local refused: { [Player]: string } = {} -- sent home once their save is loaded
 local homeAt: { [Player]: number } = {} -- back in the run server's lobby: goes home at (os.clock)
+local homeQuiet: { [Player]: string } = {} -- "now" (no countdown shown) | "replay" (grace before a countdown)
+local held: { [Player]: boolean } = {} -- results STAY: nothing automatic until the player chooses
 local reconnecting: { [Player]: string } = {}
 
 local GOOD = Color3.fromRGB(120, 255, 160)
@@ -423,6 +436,7 @@ local function failOne(player: Player)
 		end
 	elseif takeBack(player) then
 		homeAt[player] = nil
+		homeQuiet[player] = nil
 		player:SetAttribute("TravelHomeIn", nil)
 		notify(player, "Couldn't reach a lobby server: you can keep playing here.", WARN)
 	end
@@ -571,16 +585,20 @@ local function sendHome(list: { Player }, why: string?)
 	local ready = {}
 	for _, p in ipairs(group) do
 		homeAt[p] = nil
+		homeQuiet[p] = nil
+		held[p] = nil
 		p:SetAttribute("TravelHomeIn", nil)
 		if why then
 			notify(p, why, WARN)
 		end
+		-- the cover goes up before the save (it can take a moment)
+		setTravel(p, "ToLobby")
 		-- a save that never loaded here (refused before loading) has nothing to hand over
 		if ctx.DataService.GetData(p) == nil or ctx.DataService.ReleaseForTeleport(p) then
 			travelling[p] = tr
-			setTravel(p, "ToLobby")
 			table.insert(ready, p)
 		else
+			setTravel(p, nil)
 			notify(p, "Couldn't save before traveling: you can keep playing here.", WARN)
 		end
 	end
@@ -612,17 +630,61 @@ local function withPartyMates(player: Player): { Player }
 	return list
 end
 
+-- In a run here, or waiting in this server's lobby countdown: never sent home.
+local function busyHere(player: Player): boolean
+	if player:GetAttribute("InRun") == true then
+		return true
+	end
+	return ctx.RunManager.IsQueued ~= nil and ctx.RunManager.IsQueued(player)
+end
+
+local function clearHome(player: Player)
+	homeAt[player] = nil
+	homeQuiet[player] = nil
+	if player.Parent then
+		player:SetAttribute("TravelHomeIn", nil)
+	end
+end
+
+-- A visible countdown home (the banner / the results footer show TravelHomeIn).
+local function countdownHome(player: Player, seconds: number)
+	homeAt[player] = os.clock() + seconds
+	homeQuiet[player] = nil
+	player:SetAttribute("TravelHomeIn", math.ceil(seconds))
+end
+
+-- Home at the next homeStep (party mates due at the same moment travel together). The
+-- cover attribute is set right now, in the same frame as the run's InRun = false.
+local function homeNow(player: Player)
+	homeAt[player] = os.clock()
+	homeQuiet[player] = "now"
+	player:SetAttribute("TravelHomeIn", nil)
+	setTravel(player, "ToLobby")
+end
+
 --[[
 	RunManager.returnPlayerToLobby: the player's run is over. On a run server they go back
-	to a public lobby after a short wait (the results stay readable; GO NOW / STAY).
+	to a public lobby (see the header for each `how`).
 ]]
 function RunServers.OnBackInLobby(player: Player, how: string)
-	if role ~= "Run" or not live() then
+	if role ~= "Run" or not live() or not player.Parent then
 		return
 	end
-	local delay = how == "portal" and cfg().HomeDelaySeconds or cfg().HomeDelayAfterResultsSeconds
-	homeAt[player] = os.clock() + delay
-	player:SetAttribute("TravelHomeIn", math.ceil(delay))
+	if how == "menu" then
+		held[player] = nil -- MAIN MENU is an explicit choice, also after STAY
+	elseif held[player] then
+		clearHome(player)
+		return
+	end
+	if how == "results" or how == "menu" then
+		homeNow(player)
+	elseif how == "replay" then
+		homeAt[player] = os.clock() + (cfg().ReplayGraceSeconds or 10)
+		homeQuiet[player] = "replay"
+		player:SetAttribute("TravelHomeIn", nil)
+	else
+		countdownHome(player, cfg().HomeDelaySeconds)
+	end
 end
 
 local function homeStep()
@@ -631,14 +693,24 @@ local function homeStep()
 	for player, at in pairs(homeAt) do
 		if not player.Parent then
 			homeAt[player] = nil
-		elseif player:GetAttribute("InRun") == true then
-			-- REPLAY started a new run here: it goes home after that one
-			homeAt[player] = nil
-			player:SetAttribute("TravelHomeIn", nil)
+			homeQuiet[player] = nil
+		elseif busyHere(player) then
+			-- REPLAY started a new run (or joined a countdown) here: home after that one
+			if homeQuiet[player] == "now" then
+				setTravel(player, nil)
+			end
+			clearHome(player)
+		elseif homeQuiet[player] == "replay" then
+			if now >= at then
+				-- the replay never started: the normal countdown, visible
+				countdownHome(player, cfg().HomeDelaySeconds)
+			end
 		else
-			local left = math.max(0, math.ceil(at - now))
-			if player:GetAttribute("TravelHomeIn") ~= left then
-				player:SetAttribute("TravelHomeIn", left)
+			if homeQuiet[player] == nil then
+				local left = math.max(0, math.ceil(at - now))
+				if player:GetAttribute("TravelHomeIn") ~= left then
+					player:SetAttribute("TravelHomeIn", left)
+				end
 			end
 			if now >= at then
 				table.insert(due, player)
@@ -651,6 +723,7 @@ local function homeStep()
 			local group = withPartyMates(player)
 			for _, p in ipairs(group) do
 				sent[p] = true
+				homeAt[p] = nil -- one departure per player, even while sendHome yields
 			end
 			task.spawn(sendHome, group)
 		end
@@ -658,19 +731,45 @@ local function homeStep()
 end
 
 local function onTravelHome(player: Player, choice: any)
-	if role ~= "Run" or not homeAt[player] then
+	if role ~= "Run" or travelling[player] or busyHere(player) then
 		return
 	end
 	if choice == "Go" then
+		-- also without a countdown (after STAY / Hold): the player asked for it
+		held[player] = nil
 		local group = withPartyMates(player)
 		for _, p in ipairs(group) do
 			homeAt[p] = nil
+			if p ~= player then
+				homeQuiet[p] = nil
+			end
 		end
+		homeQuiet[player] = nil
 		task.spawn(sendHome, group)
 	elseif choice == "Stay" then
-		homeAt[player] = nil
-		player:SetAttribute("TravelHomeIn", nil)
+		if not homeAt[player] then
+			return
+		end
+		if homeQuiet[player] == "now" then
+			setTravel(player, nil)
+		end
+		clearHome(player)
 		notify(player, "Staying here: start another run from the menu, or leave any time.", GOOD)
+	elseif choice == "Hold" then
+		-- the results' STAY: keep reading, nothing automatic (quiet: the results say it)
+		held[player] = true
+		if homeAt[player] then
+			if homeQuiet[player] == "now" then
+				setTravel(player, nil)
+			end
+			clearHome(player)
+		end
+	elseif choice == "Replay" then
+		-- REPLAY on results over the lobby menu: the countdown waits for the new run
+		held[player] = nil
+		homeAt[player] = os.clock() + (cfg().ReplayGraceSeconds or 10)
+		homeQuiet[player] = "replay"
+		player:SetAttribute("TravelHomeIn", nil)
 	end
 end
 
@@ -820,6 +919,8 @@ function RunServers.Start()
 		travelling[player] = nil
 		ownTeleport[player] = nil
 		homeAt[player] = nil
+		homeQuiet[player] = nil
+		held[player] = nil
 		refused[player] = nil
 		reconnecting[player] = nil
 	end)

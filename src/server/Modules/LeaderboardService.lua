@@ -11,7 +11,13 @@
 	  Playtime      total seconds played in clean runs (Stats.TimePlayed) SwarmLB_Playtime
 	                (shown on the lobby home screen, MenuPlaytime)
 	Your own best comes from the save: Stats.BestScore / BestScoreEndless / BestStage /
-	MostKills / BestLevel, Daily.Score (today).
+	MostKills / BestLevel, Daily.Score (today). The answer also carries your entry on the
+	board itself (MyBoard, when you are in the rows): the two can differ (the board keeps
+	the highest value ever written and is re-read at most every RefreshSeconds; a save
+	can miss a run whose save write failed while its board write went through). The client
+	shows the board entry next to its rank and labels any different save value instead of
+	showing two numbers as one "best" (docs/overhaul/FLOW.md). Nothing here ever lowers,
+	deletes or rewrites a stored score.
 
 	Writes (Submit, called when a run is committed): a per player / board queue keeps the
 	best value; a flush every FlushSeconds writes entries whose throttle passed, with
@@ -155,7 +161,9 @@ function LeaderboardService.Submit(player: Player, board: string, value: number,
 	end
 	value = math.floor(value)
 	local name = storeName(board, day)
-	remember(name, player.UserId, value)
+	if not available then
+		remember(name, player.UserId, value) -- "local" rows (no DataStores) only
+	end
 	local key = name .. "|" .. player.UserId
 	local p = pending[key]
 	if p then
@@ -171,6 +179,13 @@ local function flush()
 		return
 	end
 	local now = os.clock()
+	-- throttle stamps older than the throttle no longer matter: a lobby that runs for days
+	-- does not keep one per player and board forever
+	for key, at in pairs(lastWrite) do
+		if now - at >= L.WriteThrottleSeconds and not pending[key] then
+			lastWrite[key] = nil
+		end
+	end
 	local keys = {}
 	for key in pairs(pending) do
 		table.insert(keys, key)
@@ -361,13 +376,15 @@ local function onRequest(player: Player, board: any)
 	end
 	local rows, status, age = rowsOf(name)
 	local out = {}
-	local myRank = nil
+	local myRank, myBoard = nil, nil
 	for i, e in ipairs(rows) do
 		table.insert(out, { Rank = i, UserId = e.UserId, Name = nameOf(e.UserId), Value = e.Value, Me = e.UserId == player.UserId })
 		if e.UserId == player.UserId then
-			myRank = i
+			myRank, myBoard = i, e.Value
 		end
 	end
+	-- a better run of yours still waiting in this server's write queue
+	local queued = pending[name .. "|" .. player.UserId]
 	Remotes.FireClient("LeaderboardData", player, {
 		Board = board,
 		Day = board == "Daily" and today() or nil,
@@ -375,7 +392,9 @@ local function onRequest(player: Player, board: any)
 		Status = status,
 		Age = age,
 		MyRank = myRank,
-		MyBest = ownBest(player, board),
+		MyBoard = myBoard, -- your value in Rows (the ranked entry), nil when not in them
+		MyBest = ownBest(player, board), -- your save's best (all your recorded runs)
+		MyQueued = queued and queued.Value or nil, -- written to the board shortly
 		Top = L.Top,
 	})
 end

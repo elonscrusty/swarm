@@ -5,9 +5,13 @@
 
 	Earned levels bank between grouped upgrade panels. During a panel the player is
 	"Paused": they stop moving, their weapons stop and
-	(Config.Player.LevelUpInvulnerable) they can't be hurt. The rest of the server keeps
-	running. If they don't choose within Config.LevelUp.AutoPickSeconds a random card
-	is taken for them.
+	(Config.Player.LevelUpInvulnerable) they can't be hurt. Solo: the world freezes too
+	(RunManager.RefreshFrozen). Duo/Trio: the world keeps running and only the chooser is
+	protected, bounded by GroupAutoPickSeconds and the protection budget
+	(RunManager.ChoiceBudget). When the deadline passes a random card is taken for every
+	choice left in the panel. The full contract: docs/overhaul/CHOICE_STATE.md
+	(player attributes ChoiceOpen / ChoiceId / ChoiceOfferId / ChoiceProtectedUntil /
+	ChoiceTimerPaused / ChoiceDeferred / ChoiceGroup).
 
 	Card types: WeaponNew, WeaponUp, Evolve, PassiveNew, PassiveUp, Gold, Heal.
 	Synergies (SynergyData): complete sets add their bonus to the stat sheet here; the
@@ -603,8 +607,42 @@ end
 -- Offer flow
 ------------------------------------------------------------------------------------------
 
+-- Mirrors the server choice state onto player attributes (read-only for the client).
+-- ChoiceProtectedUntil is workspace:GetServerTimeNow() time; while ChoiceTimerPaused the
+-- clock is stopped (solo pause menu, stage travel) and it is re-sent on resume.
+local function publishChoice(rp)
+	local player = rp.Player
+	if not player.Parent then return end
+	local open = rp.Offer ~= nil and rp.Paused == true
+	player:SetAttribute("ChoiceOpen", open)
+	player:SetAttribute("ChoiceId", open and rp.PanelId or nil)
+	player:SetAttribute("ChoiceOfferId", open and rp.OfferSeq or nil)
+	player:SetAttribute("ChoiceProtectedUntil", open and (workspace:GetServerTimeNow() + math.max(0, rp.OfferDeadline - os.clock())) or nil)
+	if open then
+		player:SetAttribute("ChoiceTimerPaused", rp.ChoiceTimerPaused == true)
+		player:SetAttribute("ChoiceGroup", rp.ChoiceGroup == true)
+	else
+		player:SetAttribute("ChoiceTimerPaused", nil)
+		player:SetAttribute("ChoiceGroup", nil)
+	end
+	player:SetAttribute("ChoiceDeferred", (not open and rp.PendingLevels > 0) and rp.ChoiceDeferred or nil)
+end
+
+local function setDeferred(rp, reason: string?)
+	if rp.ChoiceDeferred ~= reason then
+		rp.ChoiceDeferred = reason
+		publishChoice(rp)
+	end
+end
+
 local function sendOffer(rp)
+	-- every new card set gets a fresh id: a pick / reroll / skip naming an older id (a
+	-- double tap, a late packet) is ignored instead of landing on the next round
+	rp.OfferSeq = (rp.OfferSeq or 0) + 1
+	publishChoice(rp)
 	Remotes.FireClient("LevelUpOffer", rp.Player, {
+		OfferId = rp.OfferSeq,
+		Group = rp.ChoiceGroup == true,
 		Choices = rp.Offer,
 		Rerolls = rp.Rerolls,
 		Skips = rp.Skips,
@@ -625,7 +663,9 @@ local function closePanel(rp, grace: boolean?)
 	rp.Offer = nil
 	rp.BatchRemaining = 0
 	rp.Paused = false
+	rp.ChoiceTimerPaused = false
 	if wasOpen then
+		publishChoice(rp)
 		Remotes.FireClient("LevelUpClose", rp.Player)
 		if grace then ctx.RunManager.GrantChoiceGrace(rp) end
 		ctx.RunManager.ApplyMovement(rp)
@@ -647,16 +687,32 @@ local function convertMaxedLevels(rp): boolean
 end
 
 local function offerNext(rp)
-	if not rp.Alive then closePanel(rp); return end
+	if not rp.Alive then closePanel(rp); setDeferred(rp, nil); return end
 	if rp.PendingLevels <= 0 then
 		closePanel(rp, true)
+		setDeferred(rp, nil)
 		return
 	end
 	-- Step retries every frame while levels wait: nothing may open (or be converted) during
-	-- a reward reel, a stage swap or the pause menu, so the pool is not built until it can.
-	if not rp.Paused and (not ctx.RunManager.IsRunning() or ctx.RunManager.IsMenuPaused() or ctx.RunManager.IsFrozen()
-		or ctx.StageManager.IsHolding() or rp.RewardUntil) then
-		return
+	-- a reward reel, a stage swap, the stage-clear (portal) dialog or the pause menu, so the
+	-- pool is not built until it can. The levels stay banked (ChoiceDeferred says why).
+	if not rp.Paused then
+		local wait = nil
+		if not ctx.RunManager.IsRunning() then
+			wait = "Run"
+		elseif ctx.RunManager.IsMenuPaused() or ctx.RunManager.IsFrozen() then
+			wait = "Paused"
+		elseif ctx.StageManager.IsHolding() then
+			wait = "Travel"
+		elseif rp.PortalOffered then
+			wait = "Portal"
+		elseif rp.RewardUntil then
+			wait = "Reward"
+		elseif ctx.RunManager.IsGroupChoice() and ctx.RunManager.ChoiceBudget(rp) < (Config.LevelUp.GroupMinPanelSeconds or 0) then
+			wait = "Budget" -- protected too long this minute: keep fighting, the panel opens once it refills
+		end
+		setDeferred(rp, wait)
+		if wait then return end
 	end
 	if convertMaxedLevels(rp) then return end
 	if rp.Paused and rp.BatchRemaining <= 0 then
@@ -667,13 +723,25 @@ local function offerNext(rp)
 		rp.PanelId = (rp.PanelId or 0) + 1
 		rp.BatchRemaining = math.min(Config.LevelUp.ChoicesPerPanel, rp.PendingLevels)
 		rp.BatchTotal = rp.BatchRemaining
-		local group = #ctx.RunManager.GetRunPlayers() > 1
-		rp.OfferDeadline = os.clock() + (group and Config.LevelUp.GroupAutoPickSeconds or Config.LevelUp.AutoPickSeconds)
+		-- live group run: the panel's whole life is capped by the budget left (never more
+		-- than GroupAutoPickSeconds); solo / last fighter: the world freezes, normal timer
+		local group = ctx.RunManager.IsGroupChoice()
+		rp.ChoiceGroup = group
+		local seconds = Config.LevelUp.AutoPickSeconds
+		if group then
+			seconds = math.min(Config.LevelUp.GroupAutoPickSeconds, ctx.RunManager.ChoiceBudget(rp))
+		end
+		rp.OfferDeadline = os.clock() + seconds
+		rp.ChoiceTimerPaused = false
 		rp.Paused = true
+		rp.Offer = rollChoices(rp)
+		-- after rp.Offer is set: RefreshFrozen counts a choice by rp.Offer (before this
+		-- order fix a solo panel rooted the player but never froze the world)
 		ctx.RunManager.ApplyMovement(rp)
 		ctx.RunManager.RefreshFrozen()
+	else
+		rp.Offer = rollChoices(rp)
 	end
-	rp.Offer = rollChoices(rp)
 	sendOffer(rp)
 end
 
@@ -695,9 +763,9 @@ function LevelUpSystem.QueueLevels(rp, count: number)
 	rp.Player:SetAttribute("XPReward", #buildPool(rp) == 0 and "Coins" or "Upgrade")
 end
 
-local function choose(rp, index: number)
+local function choose(rp, index: number, offerId: number?)
 	local offer = rp.Offer
-	if not offer then
+	if not offer or (offerId ~= nil and offerId ~= rp.OfferSeq) then
 		return
 	end
 	local c = offer[index]
@@ -721,6 +789,8 @@ end
 function LevelUpSystem.Cancel(rp, preserveLevels: boolean?)
 	closePanel(rp)
 	if not preserveLevels then rp.PendingLevels = 0 end
+	rp.ChoiceDeferred = nil
+	publishChoice(rp)
 	rp.Player:SetAttribute("PendingUpgrades", rp.PendingLevels)
 	if rp.Player.Parent then
 		Remotes.FireClient("LevelUpClose", rp.Player)
@@ -840,11 +910,21 @@ function LevelUpSystem.Step(dt: number)
 	-- Level-up pauses freeze the run too, but only the pause menu stops the auto-pick timer
 	-- (otherwise a player could hold everyone's game paused forever).
 	local menuPaused = ctx.RunManager.IsMenuPaused()
+	local holding = ctx.StageManager.IsHolding()
 	local now = os.clock()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
-		if rp.Offer then
-			if menuPaused then
-				rp.OfferDeadline += dt -- the solo pause menu also pauses the auto-pick timer
+		if rp.Offer and not rp.Alive then
+			LevelUpSystem.Cancel(rp, true) -- downed / dead: close it, keep the banked levels
+		elseif rp.Offer then
+			-- the solo pause menu and stage travel stop the auto-pick clock (nobody can be
+			-- hurt then); the duo run menu never does (menuPaused is solo only)
+			local timerPaused = menuPaused or holding
+			if timerPaused ~= (rp.ChoiceTimerPaused == true) then
+				rp.ChoiceTimerPaused = timerPaused
+				publishChoice(rp)
+			end
+			if timerPaused then
+				rp.OfferDeadline += dt
 			elseif now >= rp.OfferDeadline then
 				-- One deadline bounds the entire protected panel, including all queued choices.
 				for _ = 1, math.max(Config.LevelUp.ChoicesPerPanel, Config.LevelUp.PanelMergeMax or 0) do
@@ -867,21 +947,28 @@ function LevelUpSystem.Init(c)
 end
 
 function LevelUpSystem.Start()
-	Remotes.Listen("LevelUpChoose", function(player, index)
+	-- offerId (optional, LevelUpOffer.OfferId / attribute ChoiceOfferId): when sent, a
+	-- request for any other card set is dropped, so each round applies exactly once.
+	local function staleId(rp, offerId): boolean
+		if offerId == nil then return false end
+		return type(offerId) ~= "number" or offerId ~= rp.OfferSeq
+	end
+
+	Remotes.Listen("LevelUpChoose", function(player, index, offerId)
 		local rp = ctx.RunManager.GetRunPlayer(player)
-		if not rp or type(index) ~= "number" or index ~= index then
+		if not rp or type(index) ~= "number" or index ~= index or staleId(rp, offerId) then
 			return
 		end
 		index = math.floor(index)
 		if index < 1 or index > Config.LevelUp.Choices + 1 then
 			return
 		end
-		choose(rp, index)
+		choose(rp, index, offerId)
 	end, 6)
 
-	Remotes.Listen("LevelUpReroll", function(player)
+	Remotes.Listen("LevelUpReroll", function(player, offerId)
 		local rp = ctx.RunManager.GetRunPlayer(player)
-		if not rp or not rp.Offer or rp.Rerolls <= 0 then
+		if not rp or not rp.Offer or rp.Rerolls <= 0 or staleId(rp, offerId) then
 			return
 		end
 		rp.Rerolls -= 1
@@ -891,9 +978,9 @@ function LevelUpSystem.Start()
 		LevelUpSystem.SendInventory(rp)
 	end, 3)
 
-	Remotes.Listen("LevelUpSkip", function(player)
+	Remotes.Listen("LevelUpSkip", function(player, offerId)
 		local rp = ctx.RunManager.GetRunPlayer(player)
-		if not rp or not rp.Offer or rp.Skips <= 0 then
+		if not rp or not rp.Offer or rp.Skips <= 0 or staleId(rp, offerId) then
 			return
 		end
 		rp.Skips -= 1

@@ -38,6 +38,8 @@ local testRun = {
 	ApplyMovement = function() end,
 	RefreshFrozen = function() end,
 	GrantChoiceGrace = function() end,
+	IsGroupChoice = function() return false end,
+	ChoiceBudget = function() return math.huge end,
 	Notify = function() end,
 	HoldReward = function(_, dramatic) if dramatic ~= false then holds += 1 end end,
 }

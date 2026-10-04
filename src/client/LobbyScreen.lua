@@ -1,24 +1,25 @@
 --[[
 	LobbyScreen.lua
 	The main menu, shown whenever the player is not in a run. The 3D castle courtyard at
-	dusk is the backdrop and the hero stands on the lit dais in the middle (Showcase.lua,
-	drag to spin). The home screen is deliberately simple (owner mockup "One big PLAY"):
+	dusk is the backdrop and the selected hero stands on the glowing dais right of centre
+	(Showcase.lua, drag to spin; CameraController frames it from MenuHeroX / MenuHeroY).
+	The home screen follows the approved title screen (overhaul 01_Title.png):
 
-	  top left      SWARM logo + "SURVIVE ◆ UPGRADE ◆ CONQUER"
-	  top right     gold chip (every screen) and the settings cog (home)
-	  centre        the hero; under it the hero selector pill "‹ NAME ›" with the hero's
-	                Hero Mastery level and bar (arrows switch between owned heroes, a tap
-	                on the name opens HEROES)
-	  bottom left   one panel: HEROES (MenuCharacters) / SHOP (MenuUpgrades) / MORE
-	                (MenuMore: Daily, Party, Ranks, Stats, Account Level, Journal,
-	                Achievements, Settings, Report a bug, DEV) with the party invite badge
-	  bottom right  the big PLAY button (starts the picked mode with the current options:
-	                one tap to a run) and under it the mode selector "SOLO ›" that opens
-	                the PLAY sheet (MenuPlay: Solo / Duo / Trio, Arena, Difficulty,
-	                Curses, Endless, LAST RUN + RETRY, START). A party member gets a small
-	                READY pill above PLAY. A countdown (who joined, the curses, an ENDLESS
-	                line, JOIN, START NOW, the number) or "run in progress" replaces PLAY.
-	Portrait stacks: chip + cog, logo, hero, hero pill, tiles, PLAY, mode selector.
+	  top left      the SWARM logo and under it the hero caption "KNIGHT · GOLD TRIM" (the
+	                selected hero and its equipped skin, from the profile; a tap opens
+	                CHARACTERS)
+	  left          the big gold PLAY plate and "Choose your mode next.": PLAY opens the
+	                run-setup step (MenuPlay: Solo / Duo / Trio, world, difficulty, curses,
+	                Endless, Daily, LAST RUN + RETRY, START). A party member gets a READY
+	                toggle under PLAY. A countdown (who joined, the curses, an ENDLESS line,
+	                JOIN, START NOW, the number) or "run in progress" replaces PLAY.
+	  top right     the account pill (hero badge, account LV, gold; a tap opens ACCOUNT
+	                LEVEL) and the PARTY button (party size, invite badge)
+	  bottom        CHARACTERS / SHOP / WORLDS / DAILY
+	  bottom right  MORE (Stats, Ranks, Account Level, Journal, Achievements, Party,
+	                Settings, Report a bug, DEV) and the settings cog (UIBuilder's modal)
+	Portrait stacks: pill + party, logo + caption, hero, PLAY + hint, the bottom row.
+	Sub-screens keep the gold chip (top right; inline on CHARACTERS).
 
 	A brand-new player (no run ever started, tutorial not done) asks the server once for
 	the automatic first Solo run (remote StartFirstRun, Config.FirstRun); the server
@@ -28,10 +29,10 @@
 	Sub-screens slide in: Characters (MenuCharacters), Upgrades (MenuUpgrades), Play
 	(MenuPlay), More (MenuMore), Stats (MenuStats), Journal (MenuJournal), Curses
 	(MenuCurses), Daily (MenuDaily), Ranks (MenuLeaderboards), Track (MenuTrack), Arenas
-	(MenuArenas), Party (MenuParty); Settings is UIBuilder's modal. BACK returns to the
-	screen's parent (PARENT). Everything sent to the server is an id or a mode name; the
-	server validates it (RunManager: StartRun / JoinRun / StartNow / CycleArena,
-	GoldSystem: purchases and selection).
+	(MenuArenas, "Worlds"), Party (MenuParty); Settings is UIBuilder's modal. BACK returns
+	to the screen it was opened from (else PARENT, else home). Everything sent to the
+	server is an id or a mode name; the server validates it (RunManager: StartRun /
+	JoinRun / StartNow / CycleArena, GoldSystem: purchases and selection).
 ]]
 
 local Players = game:GetService("Players")
@@ -168,30 +169,6 @@ local function buildLogo(parent: Instance): Frame
 	local letters = word(Vector2.new(0, 4), Color3.new(1, 1, 1), 0)
 	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Steel }, letters)
 	new("UIStroke", { Color = P.slate_950, Thickness = 2, Transparency = 0.15, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual }, letters)
-	-- the tagline: small letter-spaced ivory serif words with gold diamonds between them
-	-- (Roblox has no letter spacing, so the letters are spaced by hand; the diamonds are drawn)
-	local tagline = new("Frame", { Name = "Tagline", BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 100), Size = UDim2.fromOffset(280, 18) }, logo)
-	UIKit.list(tagline, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 9) })
-	for i, w in ipairs({ "SURVIVE", "UPGRADE", "CONQUER" }) do
-		if i > 1 then
-			local d = new("Frame", { Name = "Diamond" .. i, BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Rotation = 45, Size = UDim2.fromOffset(6, 6), LayoutOrder = i * 2 - 1 }, tagline)
-			d.Active = false
-		end
-		local spaced = string.sub((string.gsub(w, "(.)", "%1 ")), 1, -2)
-		new("TextLabel", {
-			Name = "Word" .. i,
-			BackgroundTransparency = 1,
-			AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.fromOffset(0, 18),
-			Text = spaced,
-			FontFace = Theme.Font.Title,
-			TextSize = 11,
-			TextColor3 = P.ivory_100,
-			TextStrokeColor3 = C.Shadow,
-			TextStrokeTransparency = 0.55,
-			LayoutOrder = i * 2,
-		}, tagline)
-	end
 	-- the painted logo (screens/logo_SWARM, 2:1) replaces the sword and letters; they stay
 	-- as the fallback while it loads or if it is not uploaded. The frame grows to fit it.
 	ui.LogoW, ui.LogoH = 350, 130
@@ -203,13 +180,44 @@ local function buildLogo(parent: Instance): Frame
 	end
 	local art = ArtImage.Place(logo, "screens/logo_SWARM", { Name = "LogoArt", Position = UDim2.fromOffset(0, -4), Size = UDim2.fromOffset(280, 140), ZIndex = 2 }, drawn)
 	if art then
-		ui.LogoW, ui.LogoH = 280, 162
-		logo.Size = UDim2.fromOffset(360, 162)
-		-- under the painted logo's frame (the picture's box ends at 136), centred on it
-		tagline.Position = UDim2.fromOffset(0, 134)
-		tagline.Size = UDim2.fromOffset(280, 18)
+		-- the picture's box ends at about 136
+		ui.LogoW, ui.LogoH = 280, 136
+		logo.Size = UDim2.fromOffset(280, 136)
 	end
 	return logo
+end
+
+-- The hero caption under the logo: a thin gold rule with a diamond, then the selected
+-- hero and its equipped skin in letter-spaced serif caps ("K N I G H T  ·  G O L D  T R I M").
+-- A tap opens CHARACTERS.
+local function buildCaption(parent: Instance)
+	local b = new("TextButton", { Name = "HeroCaption", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(300, 44) }, parent)
+	UIKit.Focusable(b)
+	b.Activated:Connect(function()
+		UIKit.Click()
+		LobbyScreen.Show("Characters")
+	end)
+	local rule = new("Frame", { Name = "Rule", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 2), Size = UDim2.new(0.86, 0, 0, 8) }, b)
+	for i, side in ipairs({ 0, 1 }) do
+		local line = new("Frame", { Name = "Line" .. i, BorderSizePixel = 0, BackgroundColor3 = P.gold_400, AnchorPoint = Vector2.new(side, 0.5), Position = UDim2.fromScale(side, 0.5), Size = UDim2.new(0.5, -9, 0, 1) }, rule)
+		new("UIGradient", { Transparency = NumberSequence.new(side == 0 and 0.85 or 0.1, side == 0 and 0.1 or 0.85) }, line)
+	end
+	new("Frame", { Name = "Diamond", BackgroundColor3 = P.gold_300, BorderSizePixel = 0, Rotation = 45, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(7, 7) }, rule)
+	ui.CaptionText = new("TextLabel", {
+		Name = "Text",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, 12),
+		Size = UDim2.new(1, 0, 1, -12),
+		Text = "K N I G H T",
+		FontFace = Theme.Font.Title,
+		TextSize = 18,
+		TextColor3 = P.ivory_100,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.45,
+		TextScaled = true,
+	}, b)
+	ui.CaptionFit = new("UITextSizeConstraint", { MaxTextSize = 20, MinTextSize = 9 }, ui.CaptionText)
+	ui.Caption = b
 end
 
 -- Soft dark edges over the 3D scene so the menu reads (in the full-screen FX gui).
@@ -350,183 +358,106 @@ local function updateLoadingPill()
 end
 
 ------------------------------------------------------------------------------------------
--- Home: hero selector pill
+-- Home: account pill + PARTY (top right), the bottom row, MORE
 ------------------------------------------------------------------------------------------
 
--- Arrows: the next / previous OWNED hero (selected at once; the server confirms).
-local selectToken = 0
-local function browseStep(dir: number)
-	local order = CharacterData.Order
-	local cur = selectedChar()
-	local i = table.find(order, cur) or 1
-	local nextId = nil
-	for step = 1, #order - 1 do
-		local id = order[((i - 1 + dir * step) % #order) + 1]
-		if owned(id) then
-			nextId = id
-			break
-		end
+-- A dark plate with a thin gold edge (the reference's pills and the cog's square).
+local function plate(face: GuiObject)
+	face.BackgroundColor3 = NAVY
+	face.BackgroundTransparency = 0.12
+	local st = face:FindFirstChildOfClass("UIStroke")
+	if st then
+		st.Color = P.gold_400
+		st.Transparency = 0.2
+		st.Thickness = 1.5
 	end
-	if not nextId then
-		toast("Unlock more heroes in HEROES.", P.gold_300)
-		UIAnim.Bump(ui.HeroPill, 0.04)
-		return
-	end
-	if profile then
-		-- show it at once; the server's profile sync confirms
-		profile.SelectedCharacter = nextId
-	end
-	-- send only the last of several quick taps (the remote is rate limited), then ask
-	-- for the profile so the server's choice always wins on screen
-	selectToken += 1
-	local token = selectToken
-	task.delay(0.35, function()
-		if token == selectToken then
-			Remotes.Get("SelectCharacter"):FireServer(nextId)
-			task.delay(1, function()
-				if token == selectToken then
-					Remotes.Get("RequestProfile"):FireServer()
-				end
-			end)
-		end
-	end)
-	LobbyScreen.RefreshHero()
-	UIAnim.Bump(ui.HeroName, 0.08)
 end
 
-local function buildHeroPill(screen: Frame)
-	local holder, face = UIKit.Surface(screen, { Name = "HeroPill", Radius = 999, Color = NAVY, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.15, EdgeThickness = 1.5 })
-	ui.HeroPill = holder
-	-- the middle opens HEROES
-	local open = new("TextButton", { Name = "Open", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Position = UDim2.fromOffset(56, 0), Size = UDim2.new(1, -112, 1, 0), ZIndex = 3 }, face)
-	UIKit.Focusable(open)
-	open.Activated:Connect(function()
+-- Account pill: the selected hero's badge, "LV n" (account level, MenuTrack), a gold rule,
+-- the coin and the gold. A tap opens ACCOUNT LEVEL (the track and its cosmetic rewards).
+local function buildAccount(screen: Frame)
+	local b = new("TextButton", { Name = "AccountPill", Text = "Account level", TextTransparency = 1, AutoButtonColor = false, BackgroundColor3 = NAVY, BackgroundTransparency = 0.12, BorderSizePixel = 0 }, screen)
+	UIKit.corner(b, 10)
+	UIKit.stroke(b, P.gold_400, 1.5, 0.2)
+	UIKit.Focusable(b)
+	UIAnim.Button(b)
+	b.Activated:Connect(function()
 		UIKit.Click()
-		LobbyScreen.Show("Characters")
+		LobbyScreen.Show("Track")
 	end)
-	ui.HeroName = text(face, "Label", "KNIGHT", {
-		Name = "HeroName",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 8),
-		Size = UDim2.new(1, -112, 0, TS(18) + 4),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = P.ivory_100,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		FontFace = Theme.Font.Title,
-	}, 16)
-	-- long names ("NECROMANCER") shrink to fit before they would truncate
-	ui.HeroName.TextScaled = true
-	ui.HeroNameFit = new("UITextSizeConstraint", { MaxTextSize = TS(16), MinTextSize = 10 }, ui.HeroName)
-	ui.HeroLevel = text(face, "Caption", "LV 1", {
-		Name = "HeroLevel",
-		Position = UDim2.new(0.5, -84, 0, 14 + TS(18)),
-		Size = UDim2.fromOffset(48, TS(12) + 4),
-		TextColor3 = P.gold_300,
-	}, 12)
-	ui.HeroBar = UIKit.Meter(face, {
-		Gradient = ColorSequence.new(P.gold_500, P.gold_300),
-		Position = UDim2.new(0.5, -34, 0, 18 + TS(18)),
-		Size = UDim2.fromOffset(118, 8),
-	})
-	ui.PrevArrow = UIKit.IconButton(face, {
-		Icon = "chevronLeft",
-		Size = 44,
-		Round = true,
-		Name = "Prev",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 8, 0.5, 0),
-		OnClick = function()
-			browseStep(-1)
-		end,
-	})
-	ui.NextArrow = UIKit.IconButton(face, {
-		Icon = "chevronRight",
-		Size = 44,
-		Round = true,
-		Name = "Next",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -8, 0.5, 0),
-		OnClick = function()
-			browseStep(1)
-		end,
-	})
-	for _, b in ipairs({ ui.PrevArrow, ui.NextArrow }) do
-		local st = b.Face:FindFirstChildOfClass("UIStroke")
-		if st then
-			st.Color = P.gold_400
-			st.Transparency = 0.1
-		end
+	ui.AccountHero = new("Frame", { Name = "Hero", BackgroundTransparency = 1, Size = UDim2.fromOffset(44, 44) }, b)
+	ui.AccountLevel = text(b, "Label", "LV 1", { Name = "AccountLevel", FontFace = Theme.Font.Title, TextColor3 = P.ivory_100, TextXAlignment = Enum.TextXAlignment.Center }, 18)
+	ui.AccountRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_400, BackgroundTransparency = 0.35, BorderSizePixel = 0 }, b)
+	ui.AccountCoin = Icons.Draw(b, "lobby_Gold", { Size = 30, Back = NAVY })
+	ui.AccountGold = text(b, "Number", "0", { Name = "AccountGold", FontFace = Theme.Font.Title, TextColor3 = P.ivory_100 }, 20)
+	ui.AccountBtn = b
+	NoticeDots.Attach("Track", b, { Position = UDim2.new(1, -8, 0, 8) })
+
+	ui.PartyBtn = UIKit.Button(screen, { Kind = "Secondary", Name = "PartyButton", Title = "Party", TitleStyle = "Label", TitleSize = 17, Icon = "lobby_Party", IconSize = 26, Align = "Center", Shrink = true, Radius = 10, OnClick = function()
+		LobbyScreen.Show("Party")
+	end })
+	plate(ui.PartyBtn.Face)
+	if ui.PartyBtn.Title then
+		ui.PartyBtn.Title.FontFace = Theme.Font.Title
+		ui.PartyBtn.Title.TextColor3 = P.ivory_100
 	end
+	ui.PartyBadge = UIKit.Badge(ui.PartyBtn.Instance, "", "Crimson", { Name = "InviteBadge", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 6, 0, -6), ZIndex = 6, Visible = false })
+	NoticeDots.Attach("Party", ui.PartyBtn.Instance, { Position = UDim2.new(1, -8, 0, 8) })
 end
 
-------------------------------------------------------------------------------------------
--- Home: HEROES / SHOP / MORE tiles, PLAY and the mode selector
-------------------------------------------------------------------------------------------
+-- Bottom row: CHARACTERS / SHOP / WORLDS / DAILY (gold icon over a serif caption, thin gold
+-- separators, a soft dark band behind so they read over the courtyard).
+local NAV = {
+	{ Name = "Characters", Icon = "helmet", Art = "ui/home/home_Heroes", Screen = "Characters", Dot = "Heroes" },
+	{ Name = "Shop", Icon = "chest", Art = "ui/home/home_Shop", Screen = "Upgrades", Dot = "Shop" },
+	{ Name = "Worlds", Icon = "castle", Art = "icons/ui/ui_Arenas", Screen = "Arenas" },
+	{ Name = "Daily", Icon = "calendar", Art = "icons/ui/ui_Daily", Screen = "Daily", Dot = "Daily" },
+}
 
-local function buildTiles(screen: Frame)
-	-- the dock: dark navy plate, thin gold border, rounded corners (reference). The painted
-	-- frame (ui/home/home_DockFrame, 9-slice) replaces the drawn border once uploaded.
-	local holder, face = UIKit.Surface(screen, { Name = "Tiles", Radius = 12, Color = NAVY, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.1, EdgeThickness = 1.5 })
-	ui.Tiles = holder
-	ui.TilesFace = face
-	local edge = face:FindFirstChildOfClass("UIStroke")
-	ArtImage.Place(face, "ui/home/home_DockFrame", {
-		Name = "DockArt",
-		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Rect.new(64, 64, 704, 192),
-		SliceScale = 0.35,
-		Size = UDim2.fromScale(1, 1),
-		-- under the tiles (ZIndex 1): the frame's navy centre must not cover the icons
-		ZIndex = 0,
-	}, function(show: boolean)
-		if edge then
-			edge.Enabled = show
-		end
-		-- the picture brings its own navy plate and rounded corners
-		face.BackgroundTransparency = show and 0.1 or 1
-	end)
-	local function tile(name: string, icon: string, caption: string, order: number, onClick: () -> ()): any
-		local b = UIKit.IconButton(face, { Icon = icon, Caption = caption, Kind = "Ghost", Size = 96, IconSize = 46, Name = name, LayoutOrder = order, OnClick = onClick })
+local function buildNav(screen: Frame)
+	local row = new("Frame", { Name = "Nav", BackgroundTransparency = 1 }, screen)
+	ui.Nav = row
+	local shade = new("Frame", { Name = "Shade", BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.35, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.55), Size = UDim2.new(1, 80, 1, 24), ZIndex = 0, Active = false }, row)
+	new("UIGradient", { Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.2, 0.15), NumberSequenceKeypoint.new(0.8, 0.15), NumberSequenceKeypoint.new(1, 1) }) }, shade)
+	ui.NavItems = {}
+	ui.NavSeps = {}
+	for i, item in ipairs(NAV) do
+		local b = UIKit.IconButton(row, { Icon = item.Icon, Caption = item.Name, Kind = "Ghost", Size = 96, IconSize = 40, Name = item.Name, LayoutOrder = i, OnClick = function()
+			LobbyScreen.Show(item.Screen)
+		end })
 		local cap = b.Content:FindFirstChild("Caption") :: TextLabel?
 		if cap then
 			cap.TextColor3 = P.ivory_100
 			cap.FontFace = Theme.Font.Title
-			cap.TextSize = TS(15)
-			cap.Size = UDim2.new(1, -4, 0, TS(15) + 4)
+			cap.TextStrokeColor3 = C.Shadow
+			cap.TextStrokeTransparency = 0.4
+			cap.TextScaled = true
+			new("UITextSizeConstraint", { MaxTextSize = TS(17), MinTextSize = 9 }, cap)
 		end
-		-- the gold dock icon picture (ui/home/home_<Name>) over the drawn one once uploaded
-		ArtImage.ButtonIcon(b.Content, "ui/home/home_" .. name, { Size = UDim2.fromOffset(52, 52), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -TS(Theme.TextSize.Caption) / 2 - 4) }, name == "More" and "Dots" or "Glyph")
-		return b
+		ArtImage.ButtonIcon(b.Content, item.Art, { Size = UDim2.fromOffset(46, 46), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -TS(Theme.TextSize.Caption) / 2 - 4) }, "Glyph")
+		if item.Dot then
+			NoticeDots.Attach(item.Dot, b.Instance, { Position = UDim2.new(1, -12, 0, 10) })
+		end
+		ui.NavItems[i] = b
+		if i > 1 then
+			ui.NavSeps[i - 1] = new("Frame", { Name = "Sep" .. (i - 1), BackgroundColor3 = P.gold_400, BackgroundTransparency = 0.5, BorderSizePixel = 0 }, row)
+		end
 	end
-	ui.HeroesTile = tile("Heroes", "helmet", "Heroes", 1, function()
-		LobbyScreen.Show("Characters")
-	end)
-	ui.ShopTile = tile("Shop", "chest", "Shop", 2, function()
-		LobbyScreen.Show("Upgrades")
-	end)
-	ui.MoreTile = tile("More", "plus", "More", 3, function()
+	-- MORE: three gold dots on a small dark plate beside the cog
+	ui.MoreBtn = UIKit.IconButton(screen, { Icon = "plus", Size = 48, IconSize = 26, Name = "More", OnClick = function()
 		LobbyScreen.Show("More")
-	end)
-	-- MORE: three gold dots instead of a glyph
-	local glyph = ui.MoreTile.Content:FindFirstChild("Glyph")
+	end })
+	plate(ui.MoreBtn.Face)
+	local glyph = ui.MoreBtn.Content:FindFirstChild("Glyph")
 	if glyph then
 		glyph:Destroy()
 	end
-	local dots = new("Frame", { Name = "Dots", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -TS(Theme.TextSize.Caption) / 2 - 2), Size = UDim2.fromOffset(44, 12) }, ui.MoreTile.Content)
-	for i = 0, 2 do
-		local d = new("Frame", { BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Position = UDim2.fromOffset(i * 16, 0), Size = UDim2.fromOffset(12, 12) }, dots)
+	local dots = new("Frame", { Name = "Dots", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(28, 8) }, ui.MoreBtn.Content)
+	for k = 0, 2 do
+		local d = new("Frame", { BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Position = UDim2.fromOffset(k * 10, 0), Size = UDim2.fromOffset(8, 8) }, dots)
 		UIKit.corner(d, 999)
 	end
-	ui.MoreBadge = UIKit.Badge(ui.MoreTile.Instance, "", "Crimson", { Name = "InviteBadge", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -6, 0, 6), ZIndex = 6, Visible = false })
-	-- notice dots (NoticeDots): something new behind the tile (the invite badge sits on top)
-	NoticeDots.Attach("Heroes", ui.HeroesTile.Instance, { Position = UDim2.new(1, -14, 0, 14) })
-	NoticeDots.Attach("Shop", ui.ShopTile.Instance, { Position = UDim2.new(1, -14, 0, 14) })
-	NoticeDots.Attach("More", ui.MoreTile.Instance, { Position = UDim2.new(1, -14, 0, 14) })
-	-- thin gold separators between the tiles
-	ui.TileSeps = {}
-	for i = 1, 2 do
-		ui.TileSeps[i] = new("Frame", { Name = "Sep" .. i, BackgroundColor3 = P.gold_400, BackgroundTransparency = 0.45, BorderSizePixel = 0 }, face)
-	end
+	NoticeDots.Attach("More", ui.MoreBtn.Instance, { Position = UDim2.new(1, -6, 0, 6) })
 end
 
 --[[
@@ -644,8 +575,9 @@ local function buildPlay(screen: Frame)
 		Align = "Center",
 		Name = "Play",
 		Size = UDim2.fromScale(1, 1),
+		-- the run-setup step (mode, world, rules) comes next; START there starts the run
 		OnClick = function()
-			MenuPlay.Start(toast)
+			LobbyScreen.Show("Play")
 		end,
 	})
 	if ui.PlayBtn.Title then
@@ -658,79 +590,17 @@ local function buildPlay(screen: Frame)
 	if not UIAnim.Reduced() then
 		UIAnim.Breathe(ui.PlayHolder, 0.025, 1.4)
 	end
-	ui.ModeSelect = UIKit.Button(screen, {
-		Kind = "Secondary",
-		Title = "SOLO",
-		TitleStyle = "Label",
-		TitleSize = 17,
-		Chevron = true,
-		Align = "Center",
-		Shrink = true,
-		Name = "ModeSelect",
-		OnClick = function()
-			LobbyScreen.Show("Play")
-		end,
-	})
-	-- reference: a narrower dark plate, thin gold border, ivory serif text, gold chevron
-	if ui.ModeSelect.Title then
-		ui.ModeSelect.Title.FontFace = Theme.Font.Title
-	end
-	goldEdge(ui.ModeSelect.Face, Theme.Radius.M, 0.15)
-	ArtImage.Place(ui.ModeSelect.Face, "ui/home/home_ModeFrame", {
-		Name = "ModeArt",
-		ScaleType = Enum.ScaleType.Slice,
-		SliceCenter = Rect.new(48, 48, 592, 80),
-		SliceScale = 0.3,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 2,
-	}, (function()
-		-- the painted frame brings its own plate and border: the gold edge, the kit's edge
-		-- line, rounded face and drop shadow would show as a second outline around it (the
-		-- kit repaints the face on hover, hence the property watch)
-		local mface = ui.ModeSelect.Face
-		local mhit = ui.ModeSelect.Instance
-		local extras: { GuiObject } = {}
-		for _, n in ipairs({ "GoldEdge" }) do
-			local g = mface:FindFirstChild(n)
-			if g and g:IsA("GuiObject") then
-				table.insert(extras, g)
-			end
-		end
-		for _, n in ipairs({ "Shadow", "ShadowWide" }) do
-			local g = mhit:FindFirstChild(n)
-			if g and g:IsA("GuiObject") then
-				table.insert(extras, g)
-			end
-		end
-		local bevel = mface:FindFirstChild("Bevel")
-		if bevel and bevel:IsA("GuiObject") then
-			table.insert(extras, bevel)
-		end
-		local kitEdge = mface:FindFirstChildOfClass("UIStroke")
-		local on = false
-		local shown = mface.BackgroundTransparency
-		mface:GetPropertyChangedSignal("BackgroundTransparency"):Connect(function()
-			if on and mface.BackgroundTransparency ~= 1 then
-				shown = mface.BackgroundTransparency
-				mface.BackgroundTransparency = 1
-			end
-		end)
-		return function(show: boolean)
-			on = not show
-			for _, g in ipairs(extras) do
-				g.Visible = show
-			end
-			if kitEdge then
-				kitEdge.Enabled = show
-			end
-			if show then
-				mface.BackgroundTransparency = shown
-			else
-				shown = mface.BackgroundTransparency
-				mface.BackgroundTransparency = 1
-			end
-		end
-	end)())
+	-- under PLAY: "Choose your mode next." (or what is picked / the party's rule)
+	ui.PlayHint = text(screen, "Body", "Choose your mode next.", {
+		Name = "PlayHint",
+		FontFace = Theme.Font.Title,
+		TextColor3 = P.ivory_100,
+		TextStrokeColor3 = C.Shadow,
+		TextStrokeTransparency = 0.4,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextScaled = true,
+	}, 20)
+	ui.PlayHintFit = new("UITextSizeConstraint", { MaxTextSize = 22, MinTextSize = 10 }, ui.PlayHint)
 	-- a party member's READY toggle (the leader's start waits for everyone)
 	ui.ReadyBtn = UIKit.Button(screen, {
 		Kind = "Primary",
@@ -749,14 +619,27 @@ local function buildPlay(screen: Frame)
 	end)
 end
 
--- The selector's text: the mode and anything that changes the run ("SOLO · ENDLESS").
+-- The line under PLAY: "Choose your mode next." while nothing is picked beyond SOLO, else
+-- what PLAY will start with ("DUO · ENDLESS · change it next"); a party says who starts.
 function LobbyScreen._modeText()
-	if ui.ModeSelect then
-		local line = MenuPlay.Summary()
-		if ui.ModeSelect.Instance:GetAttribute("Line") ~= line then
-			ui.ModeSelect.Instance:SetAttribute("Line", line)
-			ui.ModeSelect.SetText(line)
+	if not ui.PlayHint then
+		return
+	end
+	local party = MenuParty.Summary()
+	local line
+	if party.Count > 0 and not party.Leader then
+		line = "Your party leader picks the mode and starts."
+	else
+		local summary = MenuPlay.Summary()
+		local plain = string.upper(((Config.Modes :: any)[Config.Modes.Order[1]] or {}).DisplayName or "SOLO")
+		if summary == plain and party.Count == 0 then
+			line = "Choose your mode next."
+		else
+			line = summary .. " · change it next"
 		end
+	end
+	if ui.PlayHint.Text ~= line then
+		ui.PlayHint.Text = line
 	end
 end
 

@@ -245,6 +245,12 @@ function Mock.api()
 		end
 	end
 
+	-- Opt-in workspace:Raycast for a scene: fn(origin, direction, params) -> hit table or
+	-- nil (Instance, Position, Normal, Distance, Material). nil restores "hits nothing".
+	function api.setRaycast(fn)
+		R.raycastHook = fn
+	end
+
 	-- Runs the server Scripts (GameServer) - the full server; needs more mocking.
 	function api.startServer()
 		firstRunSwitch()

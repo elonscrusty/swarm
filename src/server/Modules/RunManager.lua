@@ -214,10 +214,62 @@ function RunManager.HoldReward(rp, dramatic: boolean?)
 	RunManager.RefreshFrozen()
 end
 
+--[[
+	Choice protection budget (docs/overhaul/CHOICE_STATE.md). In a live group run (world not
+	frozen, more than one fighter) a player's protected time (open level-up panel, chest reel,
+	close grace) drains rp.ProtectBudget; unprotected time refills it at
+	Config.LevelUp.ProtectBudgetRefillPerMinute up to ProtectBudgetSeconds. Solo choices
+	freeze the world, so they never drain it. LevelUpSystem caps a group panel's deadline at
+	the budget left and waits to open one until GroupMinPanelSeconds are available.
+]]
+local function groupLive(): boolean
+	if phase ~= "Running" or frozen or ctx.StageManager.IsHolding() then
+		return false
+	end
+	local fighters = 0
+	for _, rp in ipairs(runPlayers) do
+		if rp.Alive and not rp.Returned then
+			fighters += 1
+		end
+	end
+	return fighters > 1
+end
+
+function RunManager.ChoiceBudget(rp): number
+	local cap = Config.LevelUp.ProtectBudgetSeconds or math.huge
+	if rp.ProtectBudget == nil then
+		rp.ProtectBudget = cap
+	end
+	return math.clamp(rp.ProtectBudget, 0, cap)
+end
+
+-- True when a choice by this player runs over live combat (Duo/Trio, world not frozen).
+function RunManager.IsGroupChoice(): boolean
+	return groupLive()
+end
+
+local function stepProtectBudget(rp, dt: number, live: boolean)
+	local L = Config.LevelUp
+	local cap = L.ProtectBudgetSeconds or math.huge
+	local budget = RunManager.ChoiceBudget(rp)
+	if live and (rp.Paused or rp.RewardUntil) then
+		budget -= dt
+	else
+		budget += dt * (L.ProtectBudgetRefillPerMinute or 0) / 60
+	end
+	rp.ProtectBudget = math.clamp(budget, 0, cap)
+end
+
 -- A short invulnerability after a choice / reward closes (Config.Player.ChoiceGraceSeconds).
+-- In a live group run it is paid from the protection budget like the choice itself.
 function RunManager.GrantChoiceGrace(rp)
 	if rp.Alive then
-		rp.InvulnUntil = math.max(rp.InvulnUntil or 0, runTime + (Config.Player.ChoiceGraceSeconds or 0))
+		local grace = Config.Player.ChoiceGraceSeconds or 0
+		if groupLive() then
+			grace = math.min(grace, RunManager.ChoiceBudget(rp))
+			rp.ProtectBudget = RunManager.ChoiceBudget(rp) - grace
+		end
+		rp.InvulnUntil = math.max(rp.InvulnUntil or 0, runTime + grace)
 	end
 end
 
@@ -714,8 +766,10 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?)
 		return
 	end
 	-- choosing an upgrade or watching a chest reward: that player can't be hurt (in a group
-	-- run the world keeps moving around them, see RefreshFrozen)
-	if (rp.Paused or rp.RewardUntil) and Config.Player.LevelUpInvulnerable then
+	-- run the world keeps moving around them, see RefreshFrozen). Only a server-opened
+	-- panel counts (rp.Offer, bounded by LevelUpSystem's deadline and the protection
+	-- budget); the run menu, reward toasts and client state never protect.
+	if ((rp.Paused and rp.Offer ~= nil) or rp.RewardUntil) and Config.Player.LevelUpInvulnerable then
 		return
 	end
 	-- dev godmode (DevTools sets it only for isDev players)
@@ -858,6 +912,9 @@ local function resetPlayerAttributes(player: Player)
 	player:SetAttribute("InRun", false)
 	player:SetAttribute("Alive", nil)
 	player:SetAttribute("Paused", false)
+	for _, name in ipairs({ "ChoiceOpen", "ChoiceId", "ChoiceOfferId", "ChoiceProtectedUntil", "ChoiceTimerPaused", "ChoiceDeferred", "ChoiceGroup" }) do
+		player:SetAttribute(name, nil)
+	end
 	player:SetAttribute("AuraEvo", nil)
 	player:SetAttribute("SteadyAim", nil)
 	player:SetAttribute("SteadyAimBonus", nil)
@@ -2016,10 +2073,12 @@ function RunManager.Step(dt: number)
 	end
 
 	local now = os.clock()
+	local live = groupLive()
 	for _, rp in ipairs(runPlayers) do
 		if rp.RewardUntil and (now >= rp.RewardUntil or not rp.Alive) then
 			RunManager.EndReward(rp)
 		end
+		stepProtectBudget(rp, dt, live)
 		ctx.GoldSystem.UpdateRunProgress(rp, ctx.StageManager.StagesCleared())
 		local root: BasePart? = rp.Root
 		if root and root.Parent then

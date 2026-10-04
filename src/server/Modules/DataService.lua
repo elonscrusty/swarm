@@ -77,6 +77,11 @@ type Profile = {
 local store: DataStore? = nil
 local memoryStore: { [string]: any } = {} -- fallback when DataStores are unavailable
 local profiles: { [Player]: Profile } = {}
+-- UserIds whose leave / shutdown save is still being written by this server. A quick
+-- rejoin to the same server (reconnect, Rejoin) waits for it: our own lock does not stop
+-- the load, so without this it could read the save from before that final write and the
+-- next autosave would put the older data back.
+local releasing: { [number]: boolean } = {}
 local loadedCallbacks: { (Player, Profile) -> () } = {}
 local jobId = (game.JobId ~= "" and game.JobId) or ("studio-" .. tostring(math.random(1, 1e9)))
 
@@ -764,6 +769,14 @@ function DataService.SetSaveStatus(player: Player, status: string)
 end
 
 local function onPlayerAdded(player: Player)
+	local waited = 0
+	while releasing[player.UserId] and waited < 30 and player.Parent do
+		task.wait(0.25)
+		waited += 0.25
+	end
+	if not player.Parent then
+		return
+	end
 	local profile = loadProfile(player)
 	if not player.Parent then
 		-- left while loading: give the lock back so another server can load at once
@@ -789,8 +802,16 @@ local function onPlayerRemoving(player: Player)
 		return
 	end
 	-- Other services commit run results on PlayerRemoving first (GameServer orders this).
-	DataService.SaveProfile(profile, true)
-	profiles[player] = nil
+	local userId = player.UserId
+	releasing[userId] = true
+	local ok, err = pcall(DataService.SaveProfile, profile, true)
+	releasing[userId] = nil
+	if profiles[player] == profile then
+		profiles[player] = nil
+	end
+	if not ok then
+		warn("[DataService] final save failed for " .. profile.Key .. ": " .. tostring(err))
+	end
 end
 DataService.ReleasePlayer = onPlayerRemoving
 

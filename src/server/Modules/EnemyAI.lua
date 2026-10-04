@@ -213,9 +213,15 @@ local function think(e, runPlayers)
 		desired = CFrame.fromAxisAngle(UP, angle):VectorToWorldSpace(desired)
 	end
 
-	if not e.Ghost and rayParams and obstacleAhead(e.Pos, desired, Config.Enemies.AvoidRayLength + e.Radius) then
+	-- The look-ahead stops at the target: a wall or tree BEHIND the player is not in the
+	-- way. (A full-length ray hit the boundary wall behind a player standing at the fence
+	-- or in a corner and turned every enemy within ~10 studs sideways along the wall, so
+	-- they crawled at about a tenth of their speed just outside contact reach:
+	-- docs/overhaul/CORNER_REPORT.md, tools/preview/scenes/corner-regression.luau.)
+	local look = math.min(Config.Enemies.AvoidRayLength + e.Radius, to.Magnitude)
+	if not e.Ghost and rayParams and obstacleAhead(e.Pos, desired, look) then
 		local origin = e.Pos + Vector3.new(0, 2.5, 0)
-		local hit = workspace:Raycast(origin, desired * (Config.Enemies.AvoidRayLength + e.Radius), rayParams)
+		local hit = workspace:Raycast(origin, desired * look, rayParams)
 		if hit then
 			local tangent = hit.Normal:Cross(UP) * FLAT
 			if tangent.Magnitude > 1e-3 then

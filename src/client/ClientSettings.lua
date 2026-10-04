@@ -21,6 +21,10 @@ local ClientSettings = {}
 local values: { [string]: any } = table.clone(Config.Settings.Defaults)
 local listeners: { (string, any) -> () } = {}
 local dirty: { [string]: any } = {}
+-- values sent to the server a moment ago: a ProfileSync the server wrote before it
+-- received them must not switch the setting back (the server has the new value)
+local sent: { [string]: { Value: any, At: number } } = {}
+local SENT_GRACE = 5
 local saveToken = 0
 
 local SAVE_DELAY = 0.6
@@ -62,7 +66,12 @@ function ClientSettings.Apply(saved: { [string]: any }?)
 	end
 	for key, default in pairs(Config.Settings.Defaults) do
 		local v = saved[key]
-		if valid(key, v) and dirty[key] == nil and values[key] ~= v then
+		local pending = sent[key]
+		if pending and (pending.Value == v or os.clock() - pending.At > SENT_GRACE) then
+			sent[key] = nil -- the server echoed it (or the grace ran out): profile values rule again
+			pending = nil
+		end
+		if valid(key, v) and dirty[key] == nil and pending == nil and values[key] ~= v then
 			if type(v) == "number" then v = math.clamp(v, 0, 1) end
 			values[key] = v
 			notify(key, v)
@@ -91,6 +100,10 @@ function ClientSettings.Set(key: string, value: any)
 		end
 		local payload = dirty
 		dirty = {}
+		local now = os.clock()
+		for k, v in pairs(payload) do
+			sent[k] = { Value = v, At = now }
+		end
 		Remotes.Get("SaveSettings"):FireServer(payload)
 	end)
 end

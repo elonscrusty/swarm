@@ -83,6 +83,21 @@ function MonetizationService.OwnsPassId(player: Player, passId: number?): boolea
 	return cached
 end
 
+-- True for a non-zero id listed in Config.Monetization.GamePasses or SkinPasses.
+function MonetizationService.IsConfiguredPass(passId: any): boolean
+	if type(passId) ~= "number" or passId == 0 then
+		return false
+	end
+	for _, list in ipairs({ Config.Monetization.GamePasses, Config.Monetization.SkinPasses }) do
+		for _, id in pairs(list) do
+			if id == passId then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 -- key = "StarterPack" | "VIP" | "DoubleGold"
 function MonetizationService.OwnsPass(player: Player, key: string): boolean
 	return MonetizationService.OwnsPassId(player, Config.Monetization.GamePasses[key])
@@ -201,6 +216,9 @@ local function buildProductHandlers()
 end
 
 local function processReceipt(info): Enum.ProductPurchaseDecision
+	if type(info) ~= "table" or type(info.PlayerId) ~= "number" or info.PurchaseId == nil then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 	local player = Players:GetPlayerByUserId(info.PlayerId)
 	if not player then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
@@ -251,10 +269,14 @@ function MonetizationService.Init(c)
 	buildProductHandlers()
 	MarketplaceService.ProcessReceipt = processReceipt
 end
+MonetizationService._ProcessReceipt = processReceipt -- (tests: safety-sim)
 
 function MonetizationService.Start()
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
-		if not purchased then
+		-- only a finished purchase of one of this game's configured passes counts (a cancel,
+		-- a failed payment or an unknown id changes nothing); the pass itself is never saved:
+		-- every join asks Roblox again (warm), so this only unlocks it for this session
+		if purchased ~= true or not MonetizationService.IsConfiguredPass(passId) then
 			return
 		end
 		local cache = passCache[player]

@@ -10,7 +10,12 @@
 	            after), the player's round head shot (UIKit.Avatar; a neutral silhouette
 	            until it loads or when it cannot), the name, the value in gold; your row is
 	            outlined. Only real rows (no filler), then a quiet "N ranked players" line
-	  YOUR BEST a pinned card: your rank, head shot, name and your own best
+	  YOUR BEST a pinned card: your rank, head shot, name and your entry. When you are in the
+	            rows the value is your row's value (the same number as the outlined row);
+	            a different value in your save is shown with its own label ("saved best"
+	            / "not on the board yet"), never as a second unlabelled best. Without
+	            global boards ("local") the rank is this server's and your all-time best
+	            is labelled as such (MenuLeaderboards.YouText, docs/overhaul/FLOW.md).
 	Opening a tab asks the server (LeaderboardRequest); LeaderboardService answers with
 	LeaderboardData: the top 50 rows (Rank, UserId, Name, Value, Me), your rank when you
 	are in them, your own best, and a status. "loading" asks again shortly; "local" (no
@@ -94,12 +99,54 @@ function MenuLeaderboards.BestText(board: string, value: number): string
 	return string.upper(MenuLeaderboards.ValueText(board, value))
 end
 
+--[[
+	The YOUR BEST card's rank and value for one LeaderboardData answer. The ranked value is
+	the board's own entry (it matches the outlined row); the save's best is labelled when it
+	differs, so the card never shows a second number under the same name:
+	  save higher  the board has not taken that run yet (queued, re-read every minute, or a
+	               write that failed): "<board value> · saved best <save value>"
+	  board higher the board keeps the highest value ever written; a run the save does
+	               not have (an old or failed save): "<board value> · saved best <save>"
+	  not ranked   "Not in the top 50 · <save value>"
+	  local        rows from this server only: "<value here> · all-time <save value>"
+]]
+function MenuLeaderboards.YouText(board: string, d: { [string]: any }?): (string, string, string)
+	local myRank = d and tonumber(d.MyRank)
+	local saved = d and tonumber(d.MyBest) or 0
+	local onBoard = d and tonumber(d.MyBoard)
+	local queued = d and tonumber(d.MyQueued)
+	local rank = myRank and ("#" .. myRank) or "-"
+	if myRank and onBoard and onBoard > 0 then
+		local note = ""
+		if d and d.Status == "local" then
+			if saved > onBoard then
+				note = "Best on any server: " .. MenuLeaderboards.ValueText(board, saved)
+			end
+		elseif queued and queued > onBoard then
+			note = "New best " .. MenuLeaderboards.ValueText(board, queued) .. ": board updating"
+		elseif saved > onBoard then
+			note = "Saved best " .. MenuLeaderboards.ValueText(board, saved) .. ": not on the board yet"
+		elseif saved < onBoard and saved > 0 then
+			note = "Board record · your save's best: " .. MenuLeaderboards.ValueText(board, saved)
+		end
+		return rank, MenuLeaderboards.BestText(board, onBoard), note
+	end
+	if saved > 0 then
+		local scope = (d and d.Status == "local") and "Not ranked on this server" or ("Not in the top " .. tostring(d and d.Top or 50))
+		return rank, MenuLeaderboards.BestText(board, saved), scope
+	elseif board == "Daily" then
+		return rank, "No scored attempt today", ""
+	end
+	return rank, "No runs yet", ""
+end
+
 function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = {}
 	local board = "Score"
 	local data: { [string]: any } = {} -- last answer per board
 	local asked: { [string]: number } = {}
+	local retrying: { [string]: boolean } = {} -- a "loading" re-ask is scheduled
 	local rowCount = 0
 
 	ui.Header = UIKit.ScreenHeader(screen, "LEADERBOARDS", ctx.Back)
@@ -175,6 +222,8 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.Avatar(ui.YouAvatarSlot, player.UserId, 36)
 	ui.YouName = text(youFace, "BodyStrong", "", { Name = "Name", Position = UDim2.fromOffset(252, 0), Size = UDim2.new(0.4, -252, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
 	ui.YouValue = text(youFace, "Number", "", { Name = "Value", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 0), Size = UDim2.new(0.6, -16, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd }, 18)
+	-- what the value is when the save and the board differ (YouText)
+	ui.YouNote = text(youFace, "Small", "", { Name = "Note", AnchorPoint = Vector2.new(1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd, Visible = false })
 
 	local function rowFor(r: { [string]: any }, order: number)
 		local me = r.Me == true
@@ -262,16 +311,10 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		end
 		-- you
 		ui.YouName.Text = player.DisplayName
-		local myRank = d and tonumber(d.MyRank)
-		local best = d and tonumber(d.MyBest) or 0
-		ui.YouRank.Text = myRank and ("#" .. myRank) or "-"
-		if best > 0 then
-			ui.YouValue.Text = (myRank and "" or ("Not in the top " .. tostring(d and d.Top or 50) .. " · ")) .. MenuLeaderboards.BestText(board, best)
-		elseif board == "Daily" then
-			ui.YouValue.Text = "No scored attempt today"
-		else
-			ui.YouValue.Text = "No runs yet"
-		end
+		local note
+		ui.YouRank.Text, ui.YouValue.Text, note = MenuLeaderboards.YouText(board, d)
+		ui.YouNote.Text = note
+		ui.YouNote.Visible = note ~= ""
 		MenuLeaderboards._layout()
 	end
 
@@ -331,7 +374,8 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 			y += headH + 6
 		end
 		-- rows: as many as fit, the rest scroll
-		local youH = narrow and 64 or 60
+		local noted = ui.YouNote.Visible
+		local youH = narrow and (noted and 86 or 64) or (noted and 66 or 60)
 		local countH = TS(14) + 8
 		local tail = (rowCount > 0 and countH or 0) + 10 + youH
 		local want = rowCount * (ROW_H + ROW_GAP) + 4
@@ -361,18 +405,26 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		if narrow then
 			ui.YouName.AnchorPoint = Vector2.zero
 			ui.YouName.Position = UDim2.fromOffset(nameX, 6)
-			ui.YouName.Size = UDim2.new(1, -nameX - 12, 0.5, -6)
+			ui.YouName.Size = UDim2.new(1, -nameX - 12, 0, 26)
 			ui.YouValue.AnchorPoint = Vector2.zero
-			ui.YouValue.Position = UDim2.new(0, nameX, 0.5, 0)
-			ui.YouValue.Size = UDim2.new(1, -nameX - 12, 0.5, -6)
+			ui.YouValue.Position = UDim2.fromOffset(nameX, 32)
+			ui.YouValue.Size = UDim2.new(1, -nameX - 12, 0, 26)
 			ui.YouValue.TextXAlignment = Enum.TextXAlignment.Left
+			ui.YouNote.AnchorPoint = Vector2.zero
+			ui.YouNote.Position = UDim2.fromOffset(nameX, 58)
+			ui.YouNote.Size = UDim2.new(1, -nameX - 12, 0, 22)
+			ui.YouNote.TextXAlignment = Enum.TextXAlignment.Left
 		else
 			ui.YouName.Position = UDim2.fromOffset(nameX, 0)
 			ui.YouName.Size = UDim2.new(0.5, -nameX + 40, 1, 0)
 			ui.YouValue.AnchorPoint = Vector2.new(1, 0)
-			ui.YouValue.Position = UDim2.new(1, -16, 0, 0)
-			ui.YouValue.Size = UDim2.new(0.5, -56, 1, 0)
+			ui.YouValue.Position = UDim2.new(1, -16, 0, noted and 6 or 0)
+			ui.YouValue.Size = UDim2.new(0.5, -56, noted and 0 or 1, noted and 30 or 0)
 			ui.YouValue.TextXAlignment = Enum.TextXAlignment.Right
+			ui.YouNote.AnchorPoint = Vector2.new(1, 0)
+			ui.YouNote.Position = UDim2.new(1, -16, 0, 38)
+			ui.YouNote.Size = UDim2.new(0.5, -56, 0, 22)
+			ui.YouNote.TextXAlignment = Enum.TextXAlignment.Right
 		end
 		-- five tabs: one-word titles below 900 wide, and on narrow panels no icons, tight
 		-- padding and a smaller title, so all five fit a phone
@@ -415,8 +467,11 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		if d.Board == board and screen.Visible then
 			MenuLeaderboards._fill(false)
 		end
-		if d.Status == "loading" and screen.Visible then
+		-- one retry chain per board: answers to repeated asks must not stack retries
+		if d.Status == "loading" and screen.Visible and not retrying[d.Board] then
+			retrying[d.Board] = true
 			task.delay(1.5, function()
+				retrying[d.Board] = nil
 				if screen.Visible and board == d.Board then
 					ask(d.Board, true)
 				end

@@ -208,6 +208,14 @@ Config.LevelUp = {
 	-- In Duo/Trio the chooser stands still and can't be hurt while the team keeps playing
 	-- (Run.CoopChoiceFreezesRun), so the auto-pick comes sooner.
 	GroupAutoPickSeconds = 10,
+	-- Duo/Trio protection budget (docs/overhaul/CHOICE_STATE.md): seconds a player may spend
+	-- protected (choosing, chest reel, close grace) while the team plays on. It drains while
+	-- protected and refills at RefillPerMinute; a panel's deadline never exceeds what is left,
+	-- and a new panel waits (levels stay banked) until at least GroupMinPanelSeconds are back.
+	-- So nobody can stay protected more than ~ProtectBudgetSeconds out of every minute.
+	ProtectBudgetSeconds = 20,
+	ProtectBudgetRefillPerMinute = 20,
+	GroupMinPanelSeconds = 4,
 	SkipGold = 10, -- run gold granted when a level-up is skipped
 	-- Relative weights for building the 3 cards. Luck multiplies the "new" weights.
 	-- (cardpool measure, 1000 real rolls: the old 10 / 7 / shared-weapons-only weights

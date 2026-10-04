@@ -583,10 +583,14 @@ R.defineClass("Workspace", {
 		end,
 	},
 	methods = {
-		Raycast = function()
+		Raycast = function(_, origin, direction, params)
 			local P = R.prof
 			if P and P.on then
 				P.count("query Raycast")
+			end
+			-- opt-in scene hook (preview.setRaycast, e.g. corner-regression); default: no hit
+			if R.raycastHook then
+				return R.raycastHook(origin, direction, params)
 			end
 			return nil
 		end,

@@ -68,6 +68,7 @@ local Icons = require(script.Parent.Icons)
 local ArtImage = require(script.Parent.ArtImage)
 local ClientSettings = require(script.Parent.ClientSettings)
 local ClientPerformance = require(script.Parent.ClientPerformance)
+local UIState = require(script.Parent.UIState)
 
 local Hud = {}
 
@@ -476,21 +477,18 @@ local bannerToken = 0
 local bannerTweens: { Tween } = {}
 
 --[[
-	One rule for every centre banner (stage banner, portal reveal, Hud.Announce callers):
-	  * queue: a banner asked for while another is on screen waits its turn (at most
-	    BANNER_QUEUE waiting, the same title never twice), so two never overlap or cut
-	    each other off;
+	The centre banner draws UIState's headline lane (docs/overhaul/UI_STATE_CONTRACT.md):
+	  * UIState queues, dedupes by semantic id and holds headlines (one at a time); this
+	    file only draws the one it is handed and reports when it has left;
 	  * stack: persistent top-centre bars register with Hud.ReserveCentre (the caravan's
 	    defence bar); while one is visible the banner drops below it.
 ]]
-local BANNER_QUEUE = 3
-local bannerQueue: { { Title: string, Goal: string, Color: Color3?, OnShow: (() -> ())? } } = {}
-local bannerBusy = false
+local bannerDone: (() -> ())? = nil
 local bannerBaseY = 0
 local centreBars: { GuiObject } = {}
 local portraitBars: { GuiObject } = {} -- kept clear of the banner in portrait only
 local bannerPortrait = false
-local showBanner: (string, string, Color3?, (() -> ())?) -> ()
+local showBanner: (string, string, Color3?, (() -> ())?, (() -> ())?) -> ()
 
 local function placeBanner()
 	local box = ui.Banner :: Frame?
@@ -542,8 +540,11 @@ end
 
 local function stopBanner()
 	bannerToken += 1
-	bannerBusy = false
-	table.clear(bannerQueue)
+	local done = bannerDone
+	bannerDone = nil
+	if done then
+		done()
+	end
 	for _, t in ipairs(bannerTweens) do
 		t:Cancel()
 	end
@@ -553,34 +554,24 @@ local function stopBanner()
 	end
 end
 
-local function nextBanner()
-	bannerBusy = false
-	local item = table.remove(bannerQueue, 1)
-	if item then
-		showBanner(item.Title, item.Goal, item.Color, item.OnShow)
+local function bannerLeft()
+	local done = bannerDone
+	bannerDone = nil
+	if done then
+		done()
 	end
 end
 
 -- Slides / scales in, holds ~1 s, fades. Reduced effects: a plain fade, no scale or sparks.
 -- `color` tints the title (the stage banner is gold; the portal reveal is arcane blue).
-function showBanner(titleText: string, goal: string, color: Color3?, onShow: (() -> ())?)
-	if bannerBusy then
-		if #bannerQueue < BANNER_QUEUE and ui.BannerTitle.Text ~= UIKit.track(titleText) then
-			for _, q in ipairs(bannerQueue) do
-				if q.Title == titleText then
-					return
-				end
-			end
-			table.insert(bannerQueue, { Title = titleText, Goal = goal, Color = color, OnShow = onShow })
-		end
-		return
-	end
+function showBanner(titleText: string, goal: string, color: Color3?, onShow: (() -> ())?, onDone: (() -> ())?)
 	bannerToken += 1
 	for _, t in ipairs(bannerTweens) do
 		t:Cancel()
 	end
 	table.clear(bannerTweens)
-	bannerBusy = true
+	bannerLeft() -- a banner cut short still reports that it left
+	bannerDone = onDone
 	local token = bannerToken
 	if onShow then
 		onShow()
@@ -631,7 +622,7 @@ function showBanner(titleText: string, goal: string, color: Color3?, onShow: (()
 		task.delay(0.45, function()
 			if token == bannerToken then
 				box.Visible = false
-				nextBanner()
+				bannerLeft()
 			end
 		end)
 	end)
@@ -641,20 +632,38 @@ local function showStageBanner(stageNo: number, goal: string)
 	if Hud.StageIntro and Hud.StageIntro(stageNo) then
 		return
 	end
-	showBanner("STAGE " .. tostring(stageNo), goal, nil)
+	UIState.Headline({ Id = "stage." .. tostring(stageNo), Title = "STAGE " .. tostring(stageNo), Sub = goal, Class = "Info" })
 end
 
 -- A one-off banner over the arena in the stage banner's style (StageUI: "THE PORTAL HAS
--- APPEARED"). `sound` names a Config.Sounds entry to play with it (Audio).
-function Hud.Announce(title: string, sub: string, color: Color3?, sound: string?)
+-- APPEARED"), through UIState's headline lane. `sound` names a Config.Sounds entry to
+-- play with it (Audio); `id` is the semantic event id (default: the title), `class`
+-- "Critical" for threats (they never wait for reward feedback or the stage card).
+function Hud.Announce(title: string, sub: string, color: Color3?, sound: string?, id: string?, class: string?)
+	UIState.Headline({ Id = id or title, Title = title, Sub = sub, Color = color, Sound = sound, Class = class or "Info", Prefer = true })
+end
+
+-- UIState's headline renderer: draws `item` and calls `done` once it has left the screen.
+local function renderHeadline(item: UIState.Headline, done: () -> ())
 	if not ui.Banner then
+		done()
 		return
 	end
-	showBanner(title, sub, color, sound and function()
+	local sound = item.Sound
+	showBanner(item.Title, item.Sub or "", item.Color, sound and function()
 		if host.Audio and host.Audio.Play then
 			host.Audio.Play(sound)
 		end
-	end or nil)
+	end or nil, done)
+end
+
+-- Bottom edge of the centre banner while it shows (notices sit under it), else nil.
+function Hud.HeadlineBottom(): number?
+	local box = ui.Banner :: Frame?
+	if not box or not box.Visible or not (ui.Frame and ui.Frame.Visible) then
+		return nil
+	end
+	return box.Position.Y.Offset + box.Size.Y.Offset * (1 - box.AnchorPoint.Y)
 end
 
 local function buildStatus(frame: Frame)
@@ -1721,6 +1730,7 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 		top.Visible = frame.Visible
 	end)
 	buildBanner(top)
+	UIState.SetRenderer("Headline", renderHeadline)
 	buildBuffChip(frame)
 	buildBar(frame)
 	buildStatus(frame)
