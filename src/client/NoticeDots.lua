@@ -55,12 +55,12 @@ local stopPulse: (Dot) -> ()
 local function startPulse(d: Dot)
 	stopPulse(d)
 	if reduced() then
-		d.Scale.Scale = 1.2
-		d.Halo.BackgroundTransparency = 0.6
+		d.Scale.Scale = 1.25
+		d.Halo.BackgroundTransparency = 0.45
 		return
 	end
 	d.Scale.Scale = 1
-	d.Halo.BackgroundTransparency = 0.45
+	d.Halo.BackgroundTransparency = 0.3
 	local info = TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, -1, false)
 	local t = TweenService:Create(d.Scale, info, { Scale = 1.9 })
 	local t2 = TweenService:Create(d.Halo, info, { BackgroundTransparency = 1 })
@@ -110,8 +110,8 @@ function NoticeDots.Attach(id: string, parent: Instance, props: { [string]: any 
 	}, parent)
 	local halo = new("Frame", {
 		Name = "Halo",
-		BackgroundColor3 = P.gold_300,
-		BackgroundTransparency = 0.5,
+		BackgroundColor3 = P.gold_400,
+		BackgroundTransparency = 0.3,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -123,13 +123,13 @@ function NoticeDots.Attach(id: string, parent: Instance, props: { [string]: any 
 	scale.Parent = halo
 	local core = new("Frame", {
 		Name = "Core",
-		BackgroundColor3 = P.gold_300,
+		BackgroundColor3 = P.gold_200,
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 6,
 	}, f)
 	UIKit.corner(core, 999)
-	UIKit.stroke(core, P.gold_900, 1.5, 0.2)
+	UIKit.stroke(core, P.gold_500, 1, 0.1)
 	if props then
 		for k, v in pairs(props) do
 			(f :: any)[k] = v
