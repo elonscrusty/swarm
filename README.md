@@ -450,7 +450,7 @@ nothing is sold, nothing gives run stats outside the run it belongs to). Save sc
 
 **Curses** (run modifiers; data `src/shared/CurseData.lua`, server `RunModifiers.lua`,
 lobby `MenuCurses.lua`). Before a run the starter toggles up to 3 on the CURSES screen
-(home: the button under TRIO; portrait: next to DAILY). Each one makes the run harder for
+(PLAY sheet: the CURSES row). Each one makes the run harder for
 everyone in it and adds gold (additive, shown on every card and as a total):
 
 | Curse | Effect | Gold |
@@ -524,7 +524,7 @@ for everyone from their next run). Migrate also re-validates these fields on eve
    rojo serve default.project.json
    ```
 3. Open a new Baseplate in Studio, delete the Baseplate part, open the Rojo plugin and press **Connect**.
-4. Press Play. The lobby menu appears; tap **SOLO** to start a run right away.
+4. Press Play. The lobby menu appears; tap **PLAY** to start a Solo run right away (a brand-new save starts one by itself).
 
 To make a place file without Studio: `rojo build default.project.json -o Swarm.rbxlx`.
 
@@ -787,11 +787,16 @@ Whenever you are not in a run, a full-screen menu (`LobbyScreen.lua`) covers the
 there is no walking in the lobby (no thumbstick, lobby characters stand still, the lobby's
 ProximityPrompts are switched off).
 
-- **Home**: gold, best time and wins at the top, SETTINGS (sound, comfort, tips; see §12) top right; your own
-  character turning in the middle (tap it to change character); your permanent upgrades
-  summarised; the big **SOLO / DUO / TRIO** buttons and CURSES; the cards CHARACTERS,
-  UPGRADES, ARENA and DAILY CHALLENGE; corner buttons SETTINGS, STATS, RANKS (leaderboards)
-  and TRACK (account level). The nameplate shows your level, name and worn title.
+- **Home** (owner mockup, 2026-10-04): the SWARM logo and tagline top left, the gold chip and
+  the settings cog (§12) top right; your hero turning in the middle (drag to spin) with a
+  "‹ NAME ›" pill under it showing its Hero Mastery level and bar (arrows switch between
+  owned heroes, a tap on the name opens HEROES); HEROES / SHOP / MORE tiles bottom left;
+  the big **PLAY** button bottom right with a mode selector under it ("SOLO ›"). One tap on
+  PLAY starts the picked mode. The selector opens the **PLAY sheet** (`MenuPlay.lua`: Solo /
+  Duo / Trio, Arena, Difficulty, Curses, Endless, last run with RETRY). **MORE**
+  (`MenuMore.lua`) lists Daily Challenge, Party, Ranks, Stats, Account Level, Journal,
+  Achievements, Settings, Report a bug and DEV (DEV only for allowlisted players). A brand-new
+  player's first join auto-starts a Solo run (`Config.FirstRun`).
 - **Characters**: one card per character with a turning 3D preview, role, description,
   starting weapon, bonus, Buy / Select and the skins (tap a swatch to equip or buy).
 - **Upgrades**: permanent gold upgrades and the Robux shop (gold and cosmetics only).

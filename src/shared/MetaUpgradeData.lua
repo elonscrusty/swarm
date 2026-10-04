@@ -215,12 +215,20 @@ function MetaUpgradeData.HeroOrder(): { string }
 end
 
 -- Gold price of a hero upgrade's next level, or nil when maxed / unknown.
+-- No single level of a per-hero stat upgrade costs more than this (owner: lower the top
+-- levels). Signature and account upgrades are not capped.
+MetaUpgradeData.MaxStatLevelCost = 20000
+
 function MetaUpgradeData.HeroCostOf(heroId: string, upgradeId: string, ownedLevel: number): number?
 	local def = MetaUpgradeData.HeroDef(heroId, upgradeId)
 	if not def or ownedLevel >= def.MaxLevel then
 		return nil
 	end
-	return math.floor(def.BaseCost * def.CostGrowth ^ ownedLevel + 0.5)
+	local cost = math.floor(def.BaseCost * def.CostGrowth ^ ownedLevel + 0.5)
+	if MetaUpgradeData.IsStat(upgradeId) then
+		cost = math.min(cost, MetaUpgradeData.MaxStatLevelCost)
+	end
+	return cost
 end
 
 -- The trait value of a hero at a signature level (0.10 = 10%), or nil for no signature.

@@ -41,7 +41,7 @@ cannot read a save written by the new version.
 | Overlays over the HUD (level-up, revive, pause, results, chest, portal, items, bug report) | PASS (offline) | full-screen dimmers (UIKit.Bleed), HUD + minimap hidden under covering modals (Hud.SetCovered); automatic layout check 0 overlap / 0 off-screen / 0 under top bar over 120 renders (30 scenes x pc, iphone, phone, phone-portrait) |
 | Phone level-up touch safety | PASS (offline) | TouchArm 0.8 s, complete-tap rule (slop 24 px, hold < 0.6 s), thumbstick / JUMP zone guarded 1.2 s; 4 new checks in `tools/ui_regression.luau` |
 | Upgrade pop-up pacing | PASS (config) | Config.XP 30 + 12/level to 20 then +6 (level 1 = 42, 20 = 270, 50 = 450), co-op share 0.5 / 0.36; `levelrate-sim` ~2.4 level-ups per minute solo. Real pacing is an owner playtest call |
-| Lobby screens (home, characters, shop, arenas, daily, curses, endless, party, countdown, leaderboards, stats, achievements, journal, track, settings, bug report, DEV) | PASS (offline) | all render with 0 errors on 4 devices; fixes this pass listed in section 2 |
+| Lobby screens (home per the 2026-10-04 owner mockup: logo, gold chip + cog, hero + mastery pill, HEROES / SHOP / MORE, PLAY + mode selector; PLAY sheet; MORE; characters, shop, arenas, daily, curses, endless, party, countdown, leaderboards, stats, achievements, journal, track, settings, bug report, DEV) | PASS (offline) | all render with 0 errors on 4 devices; fixes this pass listed in section 2 |
 | Run flows (solo / duo / trio / daily / endless, run servers + Studio fallback, reconnect) | PASS (offline) | `stage-sim`, `endless-sim` (via regressions), `runserver-sim` lobby + run, `coop-regression` success / expired / ended / forged, `reconnect-lobby`. Live teleports BLOCKED |
 | Level-up, chests / reel, shrines / altar, caravan, synergies | PASS (offline) | `reward-regression`, `rewards-sim` (TESTING.md), `encounters-sim`, `expedition-sim`, `synergy-sim`, `caravan-sim` |
 | Bosses (Queen, Matriarch, Warlord, Hive Mother, Briar Sentinel, Frostbound Colossus) | PASS (offline) | `boss-sim` per boss: entrance, cycle, phase 2, kill mid-attack, collapse, surge, travel cleanup |
@@ -107,8 +107,8 @@ Do these in order; stop and report the first thing that fails.
 2. **Enable saving**: Game Settings → Security → **Enable Studio Access to API Services**
    (Studio uses the separate `_Studio` DataStores, live saves are untouched). Play again:
    the lobby must not show "Progress isn't being saved right now".
-3. **Phone check (your phone, landscape and portrait)**: lobby home, CHARACTERS, SHOP,
-   DAILY, start a solo run, level up (cards must not pick themselves when your thumb is on
+3. **Phone check (your phone, landscape and portrait)**: lobby home (PLAY, mode selector, HEROES / SHOP / MORE), CHARACTERS, SHOP,
+   DAILY (MORE), start a solo run, level up (cards must not pick themselves when your thumb is on
    the stick: wait ~1 s then tap once), pause menu (every toggle label readable), die
    (revive offer), results. The dimmer must reach every screen edge and the HUD must be
    hidden under level-up / pause / revive / results. Screenshot anything odd.

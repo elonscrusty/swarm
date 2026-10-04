@@ -159,7 +159,7 @@ CharacterData.Characters = {
 		Swatch = "Cloth",
 		Hat = "Mitre",
 	},
-	-- Ranger: unlocked by the "Queen Slayer" achievement (AchievementData). Mesh "Ranger"
+	-- Ranger: unlocked by the "Queen Slayer" achievement (beat the Scorpion Queen 3 times). Mesh "Ranger"
 	-- (MeshCatalog) when uploaded, else the part-built fallback (ModelBuilder.ClassGear).
 	Ranger = {
 		Id = "Ranger",
@@ -225,7 +225,7 @@ CharacterData.Characters = {
 		Swatch = "Cloth",
 		Hat = "Goggles",
 	},
-	-- Engineer: unlocked by "Field Engineer" (3 optional events: Guarded Altars / Bargains).
+	-- Engineer: unlocked by "Field Engineer" (open 5 Guarded Altars).
 	Engineer = {
 		Id = "Engineer",
 		Name = "Engineer",
@@ -254,7 +254,7 @@ CharacterData.Characters = {
 		Swatch = "Cloth",
 		Hat = "Miner",
 	},
-	-- Necromancer: unlocked by "Reaper" (defeat 500 enemies in one run).
+	-- Necromancer: unlocked by "Reaper" (defeat 1,500 enemies in one run).
 	Necromancer = {
 		Id = "Necromancer",
 		Name = "Necromancer",

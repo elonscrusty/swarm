@@ -25,19 +25,19 @@ Tick each box in Studio. "Output" means the Output window (View → Output); the
 ## 0. Setup
 - [ ] `rojo serve` connected, Play starts with no red errors in Output.
 - [ ] Output shows `[SWARM] server ready`. If it also says "DataStores OFF", enable API access (README §1) for the save tests.
-- [ ] The lobby menu fills the screen: gold / best time / wins pills at the top, your character turning in the middle, SOLO / DUO / TRIO on the right (landscape) or below the character (portrait).
+- [ ] The lobby menu fills the screen: logo + tagline top left, gold chip and settings cog top right, your hero turning in the middle with the "‹ NAME ›" mastery pill, HEROES / SHOP / MORE tiles bottom left, PLAY and the "SOLO ›" mode selector bottom right (portrait stacks them under the hero). Tapping PLAY starts a Solo run; the selector opens the PLAY sheet (modes, arena, difficulty, curses, endless, last run / RETRY). MORE lists Daily, Party, Ranks, Stats, Account Level, Journal, Achievements, Settings, Report a bug, DEV. A brand-new save starts its first Solo run by itself.
 - [ ] Behind the menu the 3D lobby shows from a fixed scenic camera (the `MenuCamera` part if the lobby has one); it sways very slightly.
-- [ ] Background dots drift upward; the mode buttons breathe, glow and get a light sweep now and then; buttons shrink a little when pressed.
-- [ ] DEV button (bottom left) is visible in Studio. In a published game it shows only for the game's creator.
+- [ ] The PLAY button breathes and glows; buttons shrink a little when pressed.
+- [ ] DEV (inside MORE) is visible in Studio. In a published game it shows only for the game's creator.
 
 ## 0b. Lobby screens
-- [ ] Tap CHARACTERS (or your character): the screen slides in from the right and the cards pop in one after another.
+- [ ] Tap HEROES (or the hero name pill): the screen slides in from the right and the cards pop in one after another.
 - [ ] Each card: turning 3D model, name, role (gold), description, "Starts with" + weapon icon, bonus (green), Buy / Select / SELECTED button, skin swatches. Your selected character has a gold border and a SELECTED ribbon.
-- [ ] Buy Mage with too little gold: toast "Not enough gold"; with enough gold the card turns to SELECTED and the home screen's character changes.
-- [ ] Tap an owned skin swatch: it gets a gold border, the card's model and the home character change colour. Locked skins show "R$" (gamepass set) or "soon".
-- [ ] < BACK slides back to home. UPGRADES (or the upgrades summary) opens the shop with staggered cells; buying a level updates the summary bar on home.
+- [ ] Buy Mage with too little gold: toast "Not enough gold"; with enough gold the card turns to SELECTED and the home hero changes.
+- [ ] Tap an owned skin swatch: it gets a gold border, the card's model and the home hero change colour. Locked skins show "R$" (gamepass set) or "soon".
+- [ ] < BACK slides back to home. SHOP opens the shop with staggered cells; buying a level updates the hero's Mastery pill on home.
 - [ ] Gold pill counts up/down smoothly after a purchase.
-- [ ] ARENA cycles to Ruins only after reaching stage 2 in a run (otherwise a toast says so and the card reads "Ruins: reach stage 2 to unlock"); the button shows the arena name. Later unlocks: Swamp at stage 3, Snow 4, Desert 5, Lava 6 (the card names the next locked arena; once all are unlocked it shows the picked arena's hint, e.g. "Mud pools slow you").
+- [ ] ARENA (on the PLAY sheet) cycles to Ruins only after reaching stage 2 in a run (otherwise a toast says so and the card reads "Ruins: reach stage 2 to unlock"); the button shows the arena name. Later unlocks: Swamp at stage 3, Snow 4, Desert 5, Lava 6 (the card names the next locked arena; once all are unlocked it shows the picked arena's hint, e.g. "Mud pools slow you").
 - [ ] SETTINGS opens the volume menu ("Close" button); sliders work and are saved.
 - [ ] No walking in the lobby: WASD / touch do nothing, no thumbstick appears.
 
