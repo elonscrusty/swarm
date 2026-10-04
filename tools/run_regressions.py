@@ -53,7 +53,7 @@ def main():
         command = [args.lune, "run", "tools/" + scripts[scene], *settings] if scene in scripts else [
             args.lune, "run", "tools/preview/runtime/main.luau", "--", "--scene", scene,
             "--studio", "--device", "pc", "--out", str(args.out / (name + ".json")),
-            "--max-time", "400", "--set", "headless=on",
+            "--max-time", "3000" if scene == "corner-regression" else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
         if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim"):

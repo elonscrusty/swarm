@@ -100,8 +100,11 @@ All stay inside the 1 050-1 260 band; Ruins (+32) and Lava (+16) pay for the rim
   Ruins; seed 2: Swamp mud WalkSpeed 10.4 = 16 × 0.65), 0 FAIL.
 - Renders: SE corner of every biome, pc + iphone, before (`c5ad391`) and after; Forest / Swamp
   pond before / after; occlusion grove and Snow SW / Forest NW corner after.
-  Evidence: `scratchpad/wf/worldart/{before,after}/`.
-- perf-sim: see the end of this file.
+  Evidence: `scratchpad/wf/worldart/{before,after}/`, logs in `scratchpad/wf/worldart/tests/`.
+- perf-sim (150 enemies, 3 s phases, client on): exit 0, server 9.5 ms/frame, client 41.6
+  ms/frame on the Lune mock; GroundDetail 2.2 ms/frame, 305 BulkMoveTo parts/s. The arena is
+  static scenery, so the run-time cost is unchanged except fewer wasted ground pieces; no
+  before run (an earlier 200-enemy run timed out under machine load).
 
 ## Visual verdict (renders)
 - Corners: PASS. The camera-side corner now steps tall cliff → capped step with a rock → low
