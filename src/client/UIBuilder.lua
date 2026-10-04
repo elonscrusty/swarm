@@ -4647,6 +4647,12 @@ local function fillLedger(data: any)
 	end
 	if lost > 0 then
 		note ..= string.format('  ·  <font color="%s">%s lost</font> on %s', hex(P.crimson_300), UIKit.formatNumber(lost), data.Abandoned and "leaving early" or "defeat")
+	end
+	if lostRun then
+		-- the server rule (GoldSystem.RetentionRate): base + per stage cleared, capped
+		local G = Config.Gold
+		note ..= string.format("\nA loss keeps %d%% + %d%% per stage cleared (max %d%%) of the unspent gold",
+			math.floor(G.FailureRetainBase * 100 + 0.5), math.floor(G.FailureRetainPerStage * 100 + 0.5), math.floor(G.FailureRetainCap * 100 + 0.5))
 	elseif data.Portal then
 		note ..= "  ·  portal: all unspent gold kept"
 	end

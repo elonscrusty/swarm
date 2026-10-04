@@ -1164,7 +1164,7 @@ function LootUI.Update(_dt: number, inRun: boolean)
 		ui.Bargain.Visible = bargain
 		if bargain then
 			local S = Config.Shrines
-			ui.BargainText.Text = string.format("BARGAIN  +%d%% DMG  +%d%% GOLD  ·  ENEMIES +%d%% HP", math.floor(S.BargainDamage * 100 + 0.5), math.floor(S.BargainGold * 100 + 0.5), math.floor(S.BargainEnemyHP * 100 + 0.5))
+			ui.BargainText.Text = string.format("BARGAIN  +%d%% DMG BONUS  +%d%% GOLD", math.floor(S.BargainDamage * 100 + 0.5), math.floor(S.BargainGold * 100 + 0.5))
 			UIAnim.Pop(ui.Bargain, 0, 0.7)
 		end
 		LootUI.Layout()
