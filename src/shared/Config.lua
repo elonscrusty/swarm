@@ -317,7 +317,10 @@ Config.Gold = {
 	MaxPerKill = 3,
 	KillGoldChance = 0.25, -- owner: 0.25 (was 0.12)
 	Elite = 15, -- extra gold from an elite's chest (on top of ChestGold) ...
-	EliteStageScale = 0.25, -- ... the whole elite chest gold x (1 + this x (stage - 1))
+	EliteStageScale = 0.25, -- ... the whole elite chest gold x (1 + this x (stage - 1)) on stages 1-2,
+	-- then + EliteLateStageScale per stage from stage 3 on (owner OK 2026-10-04: stage 3+ only;
+	-- was 0.25 like the early step, stages 1-2 unchanged)
+	EliteLateStageScale = 0.05,
 	Boss = 200, -- every living player gets this each time the Scorpion Queen dies
 	ChestGoldMin = 15,
 	ChestGoldMax = 40,
@@ -407,7 +410,10 @@ Config.Chests = {
 	LargeCount = { 2, 3 },
 	GoldenCount = 1,
 	Cost = { Small = 25, Large = 60, Golden = 150 }, -- on stage 1
-	CostExponent = 1.2, -- stage 2 = x2.3, stage 3 = x3.7, stage 5 = x6.9
+	CostExponent = 1.2, -- stage 2 = x2.3; with LateCostExponent stage 3 = x5.1, stage 4 = x8.9, stage 5 = x13.7
+	-- From stage 3 on, prices are also x (stage / 2)^this; stages 1-2 unchanged. Shared with
+	-- the Shrine of Chance (ItemData.StagePrice). Owner OK 2026-10-04 ("stage 3+ only").
+	LateCostExponent = 0.75,
 	-- hold E / gamepad X / the touch button this long to open a chest (tune in playtesting)
 	HoldSeconds = { Small = 0.4, Large = 0.4, Golden = 0.4, Guarded = 0.4 },
 	-- Rare reward showcases protect the chooser (pause solo) while their reel spins.

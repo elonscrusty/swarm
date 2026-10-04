@@ -23,7 +23,13 @@ local RM = preview.server("RunManager")
 local Loot = preview.server("LootSystem")
 local Gold = preview.server("GoldSystem")
 local Items = preview.server("ItemSystem")
-local advance = preview.advance
+-- 10 simulated frames a second: the full server + client in a live run is slow in the mock
+-- (about 30 s real per simulated second at 60 fps), and nothing here needs finer steps
+-- (holds and reward timers are server/clock based). Keeps the scene inside the 360 s
+-- regression budget.
+local function advance(seconds: number)
+	preview.advance(seconds, 10)
+end
 
 local fails = 0
 local function check(cond: any, label: string)

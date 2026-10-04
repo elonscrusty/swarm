@@ -139,3 +139,95 @@ prices or elite-chest gold (a `max(0, stage - 2)` term), then re-measure with C 
 - ASSUMED: real players' pacing (slower players reach the MaxTier window earlier), dodging,
   card choices, routing time to chests; Studio / device / live party behaviour (BLOCKED here).
 - Not touched: gold, prices, Robux, armor rules, `Config.Waves`, hazards.
+
+## 5. Stage 3+ economy (owner OK 2026-10-04)
+
+Owner decision (2026-10-04, in the owner's own answer to the lead): "Stage 3+ only". Stages 1-2
+stay exactly as they were; from stage 3 chests and the Shrine of Chance cost more and elite
+chests give less gold. Armor, Robux and pass values are not touched. Applied by ECON-TUNE-2.
+
+### 5a. Change
+
+- `Config.Chests.LateCostExponent = 0.75` (new). `ItemData.StagePrice` = `base x stage^CostExponent`,
+  and from stage 3 also `x (stage / 2)^LateCostExponent` (stage 3 x1.36, 4 x1.68, 5 x1.99).
+  Stages 1-2 multiply by exactly 1. Chests and the Shrine of Chance both go through
+  `StagePrice`, so the shrine follows (its per-try growth is unchanged).
+- `Config.Gold.EliteLateStageScale = 0.05` (new). Elite chest gold scale (`LevelUpSystem.OpenChest`)
+  = `1 + EliteStageScale x (min(stage, 2) - 1) + EliteLateStageScale x max(0, stage - 2)`.
+  Stages 1-2 keep x1.00 / x1.25; it was +0.25 per stage after that too.
+- Endless: stages 6+ use the same formulas, so Endless prices rise further (stage 6 x2.28 on
+  top of the old curve) and Endless elite gold grows 0.05 per stage. `endless-sim` PASS; Endless
+  balance itself was not measured.
+
+| Price (no pass) | Stage 1 | Stage 2 | Stage 3 | Stage 4 | Stage 5 |
+|---|---|---|---|---|---|
+| Small chest | 25 | 57 | 93 -> 127 | 132 -> 222 | 172 -> 343 |
+| Large chest | 60 | 138 | 224 -> 304 | 317 -> 533 | 414 -> 823 |
+| Golden chest | 150 | 345 | 561 -> 760 | 792 -> 1,331 | 1,035 -> 2,057 |
+| Shrine of Chance (1st try) | 15 | 34 | 56 -> 76 | 79 -> 133 | 103 -> 206 |
+| Elite chest gold scale | x1.00 | x1.25 | x1.50 -> x1.30 | x1.75 -> x1.35 | x2.00 -> x1.40 |
+
+Elite chest gold, average before the gold multiplier (42.5 base): stage 3 64 -> 55, stage 4
+74 -> 57, stage 5 85 -> 60. Gold-pass owners see and pay `PlayerPrice` of the new price,
+as before.
+
+### 5b. Measurements (econ-sim, same scratch copy and method as section 0)
+
+Baseline = the shipped 1a + 1b (`v13_*` logs). Chests bought = paid chests bought / spawned,
+summed over the seeds (count, not gold).
+
+Candidates, cohort A (fresh Knight, greedy), seeds 1-3:
+
+| LateCostExponent / EliteLateStageScale | Bought st 3 | st 4 | st 5 |
+|---|---|---|---|
+| baseline (0 / 0.25) | 98 % | 96 % | 100 % |
+| 0.5 / 0.10 | 88 % | 81 % | 85 % (misses) |
+| 0.75 / 0.10 | 86 % | 81 % | 77 % (edge) |
+| **0.75 / 0.05 (applied)** | **86 %** | **68 %** | **75 %** |
+| 1.0 / 0.10 | 79 % | 66 % | 69 % |
+
+Chosen: the smallest price step that reaches the 60-80 % target on both stages 4 and 5.
+0.75 / 0.10 lands on the edge (81 % on stage 4); 1.0 / 0.10 also works but with a 25 % larger
+price step on stage 5.
+
+Applied values, per cohort:
+
+| Cohort | Stage | Bought before -> after | Min HP % before -> after (per seed) | Would-be deaths |
+|---|---|---|---|---|
+| A n=3 | 1-2 | identical | identical | identical |
+| A n=3 | 3 | 98 -> 86 % | 62/79/82 -> 61/46/4 | 0 -> 1 |
+| A n=3 | 4 | 96 -> 68 % | 62/83/71 -> 11/67/93 | 0 -> 0 |
+| A n=3 | 5 | 100 -> 75 % | 74/94/70 -> 15/63/9 | 0 -> 0 |
+| C n=1 (est.) | 1-2 | identical | identical | identical |
+| C n=1 | 3 / 4 / 5 | 93 / 94 / 100 -> 73 / 47 / 56 % | 88 / 90 / 100 -> 90 / 79 / 95 | 0 -> 0 |
+| B n=1 (no buy) | 1-5 | 0 % | identical on every stage | identical |
+
+Lobby gold after the run: A 4,378 / 5,941 / 5,159 -> 4,224 / 4,406 / 4,685; C 4,358 -> 4,383;
+B 15,248 -> 14,606 (-4 %, elite gold only). First purchase still 0:24 (stage 1 unchanged).
+
+Reading: goal 3 (60-80 % on stages 4-5 for a greedy buyer) is met in this sample; fewer
+items also push goal 1 (stage 3-5 min HP below 40 % in 4 of 9 stage-runs, was 0). The
+established build (C) now buys about half of the stage 4-5 chests but still does not drop
+below 60 % HP (goal 2 not met; armour was out of scope). Banking vs buying stays a clear
+trade (B still 0-7 would-be deaths per stage and 0-5 % min HP, far more lobby gold).
+
+### 5c. Verified vs assumed
+
+- PASS keep rule: for A seeds 1-3, C seed 1 and B seed 1, the logs through the stage 2 summary
+  are identical to the baseline (only the source line number of the elite-gold entry moved).
+  A neutral run (new code, LateCostExponent 0, EliteLateStageScale 0.25) also matched the
+  baseline through stage 3.
+- Noise: the sim is **not** deterministic after stage 3. A rerun of the unchanged frozen code
+  (seed 1) matched the old log through stage 3 and then drifted (stage 4 min HP 62 -> 58 %).
+  So stage 4-5 numbers are n=3 samples with real spread; the chosen value has margin on
+  stage 4 (68 %) and a little on stage 5 (75 %).
+- PASS shown price = charged price, with and without passes: code check (the server sets the
+  `Price` attribute from `obj.Price` = `StagePrice`; client shows `PlayerPrice(Price, GoldMult)`,
+  server charges `PlayerPrice(obj.Price, GoldSystem.PriceMult)`; the new term is inside
+  `StagePrice` only) and `chest-gold-sim` PASS (it exercises the pass multiplier on stage 1;
+  stage 3+ prices are covered by the code check, not by that scene).
+- PASS: `tools/check.sh --quick`; `chest-gold-sim`, `economy-sim`, `reward-regression`,
+  `settlement-lifecycle`, `endless-sim` (0 FAIL lines each).
+- ASSUMED / BLOCKED: real players' routing and buying habits, co-op purses, Studio and device
+  behaviour; Endless economy balance.
+- Lead: capped LateCostExponent term at stage 5 (Endless keeps stage-5 ratio); endless-sim 0 FAIL.

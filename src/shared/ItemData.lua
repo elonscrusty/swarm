@@ -32,6 +32,8 @@
 	passive; the procs have internal cooldowns (Config.Items) so huge swarms stay cheap.
 ]]
 
+local Config = require(script.Parent.Config)
+
 local ItemData = {}
 
 ItemData.Rarities = { "Common", "Uncommon", "Legendary" }
@@ -145,14 +147,19 @@ function ItemData.RollRarity(weights: { [string]: number }, luck: number, roll: 
 end
 
 --[[
-	Prices. StagePrice = base x stage^exponent (Config.Chests.CostExponent): what a chest or
+	Prices. StagePrice = base x stage^exponent (Config.Chests.CostExponent), and from stage 3
+	on also x (stage / 2)^Config.Chests.LateCostExponent (stages 1-2 unchanged): what a chest or
 	shrine costs on this stage before the player's own multiplier. PlayerPrice multiplies
 	that by the player's gold multiplier (gamepasses pay out more gold, so their owners pay
 	the same share of their income: a pass never buys extra items). Shared, so the client
 	shows exactly the price the server charges.
 ]]
 function ItemData.StagePrice(base: number, stage: number, exponent: number): number
-	return math.floor(base * math.max(1, stage) ^ exponent + 0.5)
+	local s = math.max(1, stage)
+	-- the late term stops growing after stage 5 (only measured to stage 5; Endless keeps the
+	-- stage 5 ratio instead of compounding)
+	local late = if s > 2 then (math.min(s, 5) / 2) ^ (Config.Chests.LateCostExponent or 0) else 1
+	return math.floor(base * s ^ exponent * late + 0.5)
 end
 
 function ItemData.PlayerPrice(price: number, goldMult: number?): number

@@ -852,8 +852,11 @@ function LevelUpSystem.OpenChest(rp)
 	if rng:NextNumber() < Config.Drops.ChestBonusLevelChance * (1 + rp.Stats.Luck) then
 		chestLevelUp(rp, rewards)
 	end
-	-- elite chest gold grows with the stage so it keeps pace with chest / shrine prices
-	local stageScale = 1 + Config.Gold.EliteStageScale * (math.max(1, ctx.StageManager.GetStage()) - 1)
+	-- elite chest gold grows with the stage: EliteStageScale up to stage 2, then the smaller
+	-- EliteLateStageScale per stage from stage 3 on (stages 1-2 unchanged)
+	local stageNo = math.max(1, ctx.StageManager.GetStage())
+	local stageScale = 1 + Config.Gold.EliteStageScale * (math.min(stageNo, 2) - 1)
+		+ (Config.Gold.EliteLateStageScale or Config.Gold.EliteStageScale) * math.max(0, stageNo - 2)
 	local gold = ctx.GoldSystem.AddRunGold(rp, (rng:NextInteger(Config.Gold.ChestGoldMin, Config.Gold.ChestGoldMax) + Config.Gold.Elite) * stageScale * rp.Stats.GoldMult)
 	afterChange(rp)
 	local dramatic = #rewards > 1
