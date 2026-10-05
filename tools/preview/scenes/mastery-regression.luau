@@ -98,18 +98,41 @@ for l = 0, 4 do
 	table.insert(costs, Meta.HeroCostOf("Knight", "Signature", l))
 end
 assert(table.concat(costs, ",") == "500,800,1280,2048,3277", "signature prices: " .. table.concat(costs, ","))
--- owner: no per-hero stat level costs more than MaxStatLevelCost (20,000); cheaper levels unchanged
-assert(Meta.MaxStatLevelCost == 20000, "stat level cap")
+-- owner: no per-hero stat level costs more than MaxStatLevelCost (15,000, owner OK
+-- 2026-10-05; was 20,000); cheaper levels unchanged
+assert(Meta.MaxStatLevelCost == 15000, "stat level cap")
 for _, upgradeId in ipairs(Meta.StatOrder) do
 	local def = Meta.HeroDef("Knight", upgradeId)
 	for l = 0, def.MaxLevel - 1 do
 		local raw = math.floor(def.BaseCost * def.CostGrowth ^ l + 0.5)
 		local cost = Meta.HeroCostOf("Knight", upgradeId, l)
-		assert(cost == math.min(raw, 20000), upgradeId .. " level " .. (l + 1) .. " costs " .. tostring(cost))
+		assert(cost == math.min(raw, 15000), upgradeId .. " level " .. (l + 1) .. " costs " .. tostring(cost))
 	end
 	assert(Meta.HeroCostOf("Knight", upgradeId, def.MaxLevel) == nil, upgradeId .. " maxed has no price")
 end
-assert(Meta.HeroCostOf("Knight", "MaxHP", 12) == 20000 and Meta.HeroCostOf("Knight", "MaxHP", 11) < 20000, "Max HP level 13 is capped, level 12 is not")
+assert(Meta.HeroCostOf("Knight", "MaxHP", 11) == 15000 and Meta.HeroCostOf("Knight", "MaxHP", 10) < 15000, "Max HP level 12 is capped, level 11 is not")
+-- the full stat track (6 stats) at the new cap: 518,636 gold (625,448 at 20,000)
+local trackTotal = 0
+for _, upgradeId in ipairs(Meta.StatOrder) do
+	for l = 0, Meta.HeroDef("Knight", upgradeId).MaxLevel - 1 do
+		trackTotal += Meta.HeroCostOf("Knight", upgradeId, l)
+	end
+end
+assert(trackTotal == 518636, "stat track total " .. trackTotal)
+-- the shop (MenuCharacters / NoticeDots read HeroCostOf) and the server charge the same capped price
+do
+	local shown = Meta.HeroCostOf("Knight", "MaxHP", 11)
+	data.Gold = 20000
+	data.HeroUpgrades.Knight.MaxHP = 11
+	GS._BuyHeroUpgrade(player, "Knight", "MaxHP", 11)
+	assert(shown == 15000 and data.HeroUpgrades.Knight.MaxHP == 12 and data.Gold == 20000 - shown,
+		"server charges the shown capped price: gold " .. data.Gold)
+	local shownMight = Meta.HeroCostOf("Knight", "Might", 15) -- raw 131,368
+	data.Gold = 15000
+	data.HeroUpgrades.Knight.Might = 15
+	GS._BuyHeroUpgrade(player, "Knight", "Might", 15)
+	assert(shownMight == 15000 and data.HeroUpgrades.Knight.Might == 16 and data.Gold == 0, "exactly 15,000 buys a capped level")
+end
 -- owner: achievement heroes have real goals
 local Ach = preview.shared("AchievementData").Achievements
 assert(Ach.QueenSlayer.Goal == 3 and Ach.QueenSlayer.Reward.Character == "Ranger", "Ranger: beat the Scorpion Queen 3 times")

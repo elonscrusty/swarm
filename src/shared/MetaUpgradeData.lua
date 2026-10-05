@@ -216,8 +216,9 @@ end
 
 -- Gold price of a hero upgrade's next level, or nil when maxed / unknown.
 -- No single level of a per-hero stat upgrade costs more than this (owner: lower the top
--- levels). Signature and account upgrades are not capped.
-MetaUpgradeData.MaxStatLevelCost = 20000
+-- levels). Signature and account upgrades are not capped. 15,000 (was 20,000; owner OK
+-- 2026-10-05): one hero's full track 633,353 -> 526,541 gold. No refunds, no save change.
+MetaUpgradeData.MaxStatLevelCost = 15000
 
 function MetaUpgradeData.HeroCostOf(heroId: string, upgradeId: string, ownedLevel: number): number?
 	local def = MetaUpgradeData.HeroDef(heroId, upgradeId)

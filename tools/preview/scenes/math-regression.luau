@@ -408,6 +408,28 @@ for _, id in ipairs(WeaponData.Order) do
 		-- one ring tick per cooldown (first tick at the 0.3 s add timer)
 		local expectTicks = math.floor((window - 0.3) / stats.cooldown) + 1
 		check("D Garlic cadence", math.abs(full - expectTicks) <= 1, string.format("%d ticks vs %d", full, expectTicks))
+		-- MATH-13 (owner OK 2026-10-05): the time past zero carries into the next cooldown;
+		-- a long hitch carries at most one cooldown (one extra attack, on the next frame)
+		local f = 1 / 60
+		target.Pos, target.Knock = spot(), Vector3.zero
+		w.Timer = 0.005
+		WS.Step(f)
+		check("D MATH-13 leftover carries over", near(w.Timer, stats.cooldown - (f - 0.005), 1e-9), string.format("%.6f vs %.6f", w.Timer, stats.cooldown - (f - 0.005)))
+		w.Timer = 0.005
+		WS.Step(5)
+		check("D MATH-13 hitch carry capped (timer 0, not negative)", near(w.Timer, 0, 1e-9), string.format("%.6f", w.Timer))
+		WS.Step(f)
+		check("D MATH-13 one extra attack, then normal cadence", near(w.Timer, stats.cooldown - f, 1e-9), string.format("%.6f vs %.6f", w.Timer, stats.cooldown - f))
+		-- 60 Hz over 3 s: fires == floor(3 / cooldown) (+-1 at the window edge), no lost frames
+		local fires, frames = 0, 180
+		w.Timer = stats.cooldown
+		for _ = 1, frames do
+			local before = w.Timer
+			WS.Step(f)
+			if w.Timer > before then fires += 1 end
+		end
+		local exact = math.floor(frames * f / stats.cooldown)
+		check("D MATH-13 60 Hz cadence = 3 s / cooldown", math.abs(fires - exact) <= 1 and fires >= exact, string.format("%d fires vs %d (cd %.3f)", fires, exact, stats.cooldown))
 	end
 	Spawner.Despawn(target)
 end
