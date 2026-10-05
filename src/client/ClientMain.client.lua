@@ -169,14 +169,7 @@ end
 -- Music follows the game phase.
 local state = Remotes.State()
 -- (MusicSlots: a track per world and for the boss's later phases, Audio.RunTrack)
-local function updateMusic()
-	Audio.SetMusic(Audio.RunTrack(player:GetAttribute("InRun") == true, state))
-end
-player:GetAttributeChangedSignal("InRun"):Connect(updateMusic)
-state:GetAttributeChangedSignal("BossMaxHP"):Connect(updateMusic)
-state:GetAttributeChangedSignal("BossPhase"):Connect(updateMusic)
-state:GetAttributeChangedSignal("Arena"):Connect(updateMusic)
-updateMusic()
+Audio.FollowRun(player, state)
 
 -- [VIP] chat tag (TextChatService). The VIP attribute is set by the server.
 TextChatService.OnIncomingMessage = function(message: TextChatMessage)

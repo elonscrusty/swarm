@@ -1711,8 +1711,8 @@ Config.HeroMastery = {
 -- (Might counted up to MaxMight); elites, altar guards, mini-bosses and nests take at most
 -- EliteShare of their max HP, bosses at most BossShare (never an instant boss kill).
 Config.Ultimate = {
-	KillsToCharge = 150, -- own kills for a full charge (kills made by the ultimate don't count)
-	Cooldown = 45, -- run seconds between two uses, even with the kills already made
+	KillsToCharge = 200, -- own kills for a full charge (kills made by the ultimate don't count)
+	Cooldown = 60, -- run seconds between two uses, even with the kills already made
 	Radius = 42, -- studs around the hero (x the hero's Radius); the Bomb pickup clears 75
 	Base = 40,
 	PerLevel = 8,

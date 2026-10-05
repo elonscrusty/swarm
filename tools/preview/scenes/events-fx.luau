@@ -144,6 +144,9 @@ if show == "goldrush" then
 end
 
 -- 4) fog -------------------------------------------------------------------------------
+-- a second crowd off to the east, mostly beyond the fog radius
+A.swarm(s, hero + Vector3.new(75, 0, 0), 30, 300)
+step(0.3)
 F:SetAttribute("FogRadius", Config.WorldEvents.Fog.Radius)
 F:SetAttribute("MapEvent", "Fog")
 F:SetAttribute("MapEventLeft", 45)
@@ -157,6 +160,21 @@ local here = root and root.Position or hero
 check(filter ~= nil and filter(here + Vector3.new(R - 3, 0, 0), false) == false, "fog: near enemy drawn")
 check(filter ~= nil and filter(here + Vector3.new(R + 10, 0, 0), false) == true, "fog: far enemy hidden")
 check(filter ~= nil and filter(here + Vector3.new(R + 2, 0, 0), true) == false, "fog: hysteresis")
+-- the renderer really hides the far ones (models parked, counted as culled)
+local far, farShown = 0, 0
+local ef = workspace:FindFirstChild("SwarmEnemies")
+for _, m in ipairs(ef and ef:GetChildren() or {}) do
+	local body = m:FindFirstChild("Body") or (m:IsA("BasePart") and m)
+	if body and body:IsA("BasePart") and body:GetAttribute("Elite") ~= true then
+		local d = (body.Position - here) * Vector3.new(1, 0, 1)
+		if d.Magnitude > R + 8 then
+			far += 1
+		end
+	end
+end
+local rs = EnemyRenderer.Stats()
+preview.log(string.format("fog: far normal enemies %d, renderer live %d on screen %d culled %d", far, rs.live, rs.onScreen, rs.culled))
+check(far == 0 or rs.culled >= far * 0.8, "fog: renderer hides the far enemies", string.format("%d of %d", rs.culled, far))
 local gui = me.PlayerGui:FindFirstChild("WorldFxFog")
 check(gui ~= nil and gui.Enabled and #gui:GetChildren() == 3, "fog: mist rings")
 if show == "fog" then

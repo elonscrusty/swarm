@@ -43,8 +43,8 @@ local R = Theme.ItemRarity
 local FLAT = Vector3.new(1, 0, 1)
 local MARKER_RANGE = 140 -- studs: markers show this close
 local KINDS = { SecretRoom = true, Merchant = true, Rescue = true }
-local CARD_H = 150 -- offer card height (compact: CARD_H_COMPACT, no tile)
-local CARD_H_COMPACT = 112
+local CARD_H = 158 -- offer card height (compact: CARD_H_COMPACT, no tile)
+local CARD_H_COMPACT = 120
 local compact = false
 
 type Marker = { Model: Model, Billboard: BillboardGui, Title: TextLabel, Sub: TextLabel, Tag: TextLabel, Bar: Frame, Fill: Frame, Cracks: { BasePart } }
@@ -206,7 +206,7 @@ local function buildPanel(root: Frame)
 		local tileBox = UIKit.new("Frame", { Name = "TileBox", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(36, 36) }, card)
 		local name = UIKit.text(card, "Label", "", { Name = "ItemName", Position = UDim2.fromOffset(4, 44), Size = UDim2.new(1, -8, 0, 16), TextXAlignment = Enum.TextXAlignment.Center, TextScaled = true }, 13)
 		local rarity = UIKit.text(card, "Caption", "", { Name = "Rarity", Position = UDim2.fromOffset(4, 60), Size = UDim2.new(1, -8, 0, 13), TextXAlignment = Enum.TextXAlignment.Center }, 11)
-		local desc = UIKit.text(card, "Caption", "", { Name = "Desc", Position = UDim2.fromOffset(4, 72), Size = UDim2.new(1, -8, 0, 26), TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextScaled = true, TextColor3 = P.ivory_200 }, 11)
+		local desc = UIKit.text(card, "Caption", "", { Name = "Desc", Position = UDim2.fromOffset(4, 72), Size = UDim2.new(1, -8, 0, 26), TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = P.ivory_200 }, 11)
 		local price = UIKit.text(card, "Label", "", { Name = "Price", Position = UDim2.fromOffset(4, 98), Size = UDim2.new(1, -8, 0, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 }, 14)
 		local btn = UIKit.Button(card, { Name = "Buy", Title = "BUY", Kind = "Primary", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.new(1, -12, 0, 34), Shadow = false, OnClick = function() buy(i) end })
 		cards[i] = { Card = card, Stroke = stroke, TileBox = tileBox, Name = name, Rarity = rarity, Desc = desc, Price = price, Button = btn, Shown = "" }

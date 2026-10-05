@@ -40,7 +40,7 @@ the round **ULT** button above JUMP (FeatureHud slot), the **Q** key or gamepad 
 - **Characters screen:** an ULTIMATE block with the move's name and one line.
 
 ### Tuning (`Config.Ultimate`)
-`KillsToCharge` 150, `Cooldown` 45, `Radius` 42 (the Bomb pickup clears 75), `Base` 40,
+`KillsToCharge` 200, `Cooldown` 60 (first tried 150 / 45: too strong in stage 2-3, see below), `Radius` 42 (the Bomb pickup clears 75), `Base` 40,
 `PerLevel` 8, `Cap` 480, `MaxMight` 2.5, `EliteShare` 0.4, `BossShare` 0.06, `Knockback` 18,
 `Rate` 2. Per-hero factors and extras are in `CharacterData.Ultimates`.
 
@@ -50,7 +50,23 @@ Method: the audit's scratch `econ-sim` scene, copied onto this tree in
 1-5. The bot fires the ultimate **the moment it is charged**, so these numbers are an upper
 bound on its effect. Each row averages 5 seeds.
 
-ECON_TABLE
+| Stage | Off: taken/min, lethal hits, boss phase s | On, 150 kills / 45 s | On, 200 kills / 60 s (shipped) |
+|---|---|---|---|
+| S1 | 98, 1.8, 96 | 97, 2.0, 96 (2.0 uses) | 95, 1.6, 91 (1.0 uses) |
+| S2 | 113, 1.4, 70 | 69, 0.2, 64 (3.8 uses) | 89, 0.4, 68 (3.0 uses) |
+| S3 | 50, 0.0, 52 | 33, 0.0, 52 (4.0 uses) | 75, 0.0, 57 (3.4 uses) |
+| S4 | 31, 0.2, 46 | 30, 0.0, 46 (4.4 uses) | 19, 0.0, 47 (3.0 uses) |
+| S5 | 76, 0.0, 28 | 80, 0.0, 25 (4.0 uses) | 95, 0.0, 30 (3.4 uses) |
+
+How to read it:
+- At 150 / 45 the move took about 35-40% off the damage taken in stages 2-3, which is too
+  much of a crutch. At 200 / 60 (shipped) it fires about 3 times a stage. The damage
+  taken then sits within seed noise of having no ultimate: S2 is -21%, and S3 and S5 come
+  out higher because the seeds vary.
+- Stage time doesn't change, because the explore time is fixed in the scene.
+- The boss phase changes by at most 5 s, so the 6% boss cap holds.
+- The numbers are noisy with 5 seeds; more seeds would tighten them.
+- Logs: `scratchpad/hp-econ/out/{off,on,t200}_s1..5.log`.
 
 ## 12. Second signature skill (`SecondSkill`)
 
@@ -85,7 +101,7 @@ that already exists (`data.Heroes[hero].XP`), so there's no new save field.
   validates the hero, the kind and the id, and caps each list at `Caps.PresetPicks` (12).
   It stores one entry per hero in the `Presets` save field.
 - **In a run:** level-up cards whose id is a favourite of the selected hero get a small
-  "★ Favourite" pill in the top-right corner. The hook is one line in `UIBuilder` makeCard,
+  "★ Favourite" pill: bottom-left on tall cards (landscape), on the top edge left of the key number on the stacked portrait cards. The hook is one line in `UIBuilder` makeCard,
   `HeroPresets.Tag`. Offers and weights are never touched: `LevelUpSystem` doesn't read
   presets at all.
 - **Cap change:** `Config.Data.Caps.Presets` went from 6 to 12, one list per hero for the 8
@@ -114,8 +130,9 @@ that already exists (`data.Heroes[hero].XP`), so there's no new save field.
     boss cap 6%, elite survives, own kills don't recharge, remote path, attributes
     cleared, Priest heal; preset validation, caps, one list per hero, clean-stable, switch off.
   - `check.sh --quick`: no diagnostics in HEROPOWER files.
-  - Layout checks: `characters favourites=open` on iphone and phone-portrait, `levelup fav=on`
-    (see the report).
+  - Layout checks (check_layout, 0 problems): `characters favourites=open` on iphone and
+    phone-portrait; `levelup fav=on` on pc, iphone and phone-portrait.
+  - econ-sim before/after: see the table above.
 - BLOCKED:
   - Studio, real phones and live servers: no session access.
   - Feel of the ULT button on touch.

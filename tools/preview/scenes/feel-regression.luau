@@ -22,9 +22,26 @@ for _, f in ipairs({ "BossIntro", "Announcer", "HitFeel", "MusicSlots" }) do
 	Config.Features[f] = false
 end
 
+local headless = preview.args.headless == "on"
 local s = A.build({ enemies = 40, seconds = 300 })
-C.settle(2)
 local me = Players.LocalPlayer
+if headless then
+	-- no ClientMain (and no GUI layout, which makes this scene ~50x slower): start the pieces
+	-- FEEL needs like ClientMain does, and a stand-in headline renderer (Hud's draws it)
+	preview.client("Audio").Init()
+	preview.client("CameraController").Init()
+	preview.client("EnemyRenderer").Init()
+	preview.client("FeatureHud").Init()
+	preview.client("UIState").SetRenderer("Headline", function(_item, done)
+		task.delay(2, done)
+		return function() end
+	end)
+	preview.client("Audio").FollowRun(me, C.state())
+	preview.client("BossIntro").Init()
+	preview.client("Announcer").Init()
+	preview.client("HitFeel").Init()
+end
+C.settle(2)
 local fails = 0
 local function check(ok: boolean, label: string, detail: any?)
 	if not ok then
@@ -148,11 +165,12 @@ base = camOffset()
 -- 2) boss intro, solo
 ------------------------------------------------------------------------------------------
 local frozenBefore = C.state():GetAttribute("Frozen")
+C.setState({ Stage = 2 })
 bossArrive("Scorpion Queen", "ScorpionQueen")
 preview.advance(0.05, 60)
 check(BossIntro.Stats().Cards == 1 and UIState.HeadlineSeen("boss.arrive"), "solo: name card in the headline lane (boss.arrive)")
 local shown = UIState.HeadlineShowing()
-check(shown ~= nil and shown.Id == "boss.arrive" and string.find(shown.Sub or "", "BOSS", 1, true) ~= nil, "solo: card shows the boss line", shown and shown.Sub)
+check(shown ~= nil and shown.Id == "boss.arrive" and string.find(shown.Sub or "", "STAGE 2 BOSS", 1, true) ~= nil, "solo: card shows the boss line", shown and shown.Sub)
 check(Audio.CurrentMusic() == "BossMusic", "music: boss slot", Audio.CurrentMusic())
 preview.advance(0.45, 60)
 local off = camOffset() - base

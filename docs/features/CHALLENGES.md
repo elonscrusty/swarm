@@ -98,11 +98,49 @@ Everything is in `src/shared/Config.lua` under `Config.MiniBoss`, `Config.TrialS
 Prices are untouched. No `Config.Chests` costs, `CostExponent` values or gold numbers changed.
 See the before/after table below.
 
-ECON_TABLE
+Offline runs before the change (HEAD snapshot) and after it:
+
+| Check | Before | After |
+|---|---|---|
+| `economy-sim` (escrow, retention, survival gold, receipts) | 3/3 PASS | 3/3 PASS, same numbers |
+| `chest-gold-sim` (shown price = charged price, GoldMult) | 9/9 PASS, a stage-1 chest costs 150 | 9/9 PASS, same prices (the cursed Small chest in the regression costs 25 = the normal price) |
+
+What each stage can now give (expected values, base odds before luck):
+
+| Source | Before | After |
+|---|---|---|
+| Cursed Small chest (same price) | 80% common / 19% uncommon / 1% legendary | 30 / 60 / 10, plus 60 s of stronger enemies |
+| Cursed Large chest (same price) | 0 / 80 / 20 | 0 / 55 / 45, plus 60 s of stronger enemies |
+| Chance of a cursed chest | - | 60% of stages, one chest out of 13-18 |
+| Champion's Chest (stage 2+, free after a fight) | - | about 0.7 extra items per stage (0/70/30), worth about a Large chest (stage 2 price is about 138 gold) |
+| Shrine of Trial (when placed) | - | +1 upgrade pick after 30 s of harder enemies |
+
+How often the director picks them (`MaxActive` 2, placed weights MiniBoss 3, Trial 1, three
+EXPLORE encounters at weight 1, no spot failures): the champion runs on about 71% of stages from
+stage 2, and the trial on about 32% of stages. This is a moderate in-run power gain that has to be
+earned with risk. Gold income and prices are unchanged. To trim it, lower `Config.MiniBoss.Weight`,
+lower `ChestWeights.Legendary`, or lower `Config.CursedChest.Chance`.
 
 ## Verified vs BLOCKED
 
-VERIFIED_SECTION
+VERIFIED offline (Lune, real GameServer with all modules), `challenges-regression`, 44/44 checks PASS:
+- **Cursed chest.** It is placed. Its price is unchanged. The curse is on the prompt before the hold. It uses the better table and pays one item, only once.
+  Enemies get speed x1.15 and damage x1.25, including ones that spawn during the curse. The curse ends after 60 s and the stats are restored.
+- **Shrine of Trial.** Holding starts it, and the trial wave is kept around the shrine. Surviving wins. It gives one bonus pick whose
+  set holds a card above Common, through OfferId, and the bonus is used up by its pick. A finished shrine cannot restart. Leaving
+  the ring fails the trial with no reward.
+- **Champion.** There is none on stage 1. On stage 2 the chest is locked and free. Walking close wakes the guard (name plate, HP bar,
+  guard link). A death with no killer pays nothing and the guard comes back after 4 s. A player kill unlocks the chest, which pays
+  one item, once.
+- **Cleanup.** Travel and MAIN MENU remove the models and SwarmState attributes and undo the enemy buffs.
+- **Switches off.** With the switches off, nothing is placed and every loot object is a plain one.
+- Note: a level-up panel that opens during a hold cancels that hold. This is how every chest already works, and the
+  test simply holds again.
+
+Also run after the hooks, unchanged: `economy-sim`, `chest-gold-sim`, plus the hook-adjacent regressions
+listed in the lead report. `check.sh --quick` reports no diagnostics in these files.
+
+Client visuals (`ChallengesUI`) pass the type check only. They have not been rendered or checked on a device, so they are BLOCKED.
 
 BLOCKED: Studio playtest, phones (touch hold, badge readability), live multiplayer (co-op trial with
 2-3 players, the champion in a duo), and the look of the Shrine kit mesh in violet. Icons: no new icons are

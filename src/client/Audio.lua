@@ -577,6 +577,18 @@ function Audio.RunTrack(inRun: boolean, state: Instance): string?
 	return Audio.ResolveMusic("WorldMusic_" .. tostring(state:GetAttribute("Arena") or "")) or "BattleMusic"
 end
 
+-- Keeps the music on Audio.RunTrack: called once by ClientMain (InRun, boss, phase, world).
+function Audio.FollowRun(player: Player, state: Instance)
+	local function update()
+		Audio.SetMusic(Audio.RunTrack(player:GetAttribute("InRun") == true, state))
+	end
+	player:GetAttributeChangedSignal("InRun"):Connect(update)
+	for _, name in ipairs({ "BossMaxHP", "BossPhase", "Arena" }) do
+		state:GetAttributeChangedSignal(name):Connect(update)
+	end
+	update()
+end
+
 -- The track playing (or fading in) now, for tests.
 function Audio.CurrentMusic(): string?
 	return currentMusic
