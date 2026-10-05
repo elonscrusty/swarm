@@ -242,7 +242,9 @@ function StoreFx.DecoratePlate(frame: GuiObject, who: Player): boolean
 	s.Name = "StorePlateStroke"
 	if supporter or (l and l.Glow) then
 		local glow = new("Frame", { Name = "StoreGlow", BackgroundColor3 = color, BackgroundTransparency = 0.75, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, 8, 1, 8), ZIndex = 0 }, frame)
-		UIKit.corner(glow, 999)
+		-- the glow follows the plate's own corners (a round pill or META's 12 px title plate)
+		local c = frame:FindFirstChildOfClass("UICorner")
+		UIKit.corner(glow, c and (c.CornerRadius.Offset > 0 and c.CornerRadius.Offset + 4 or 999) or 999)
 		UIAnim.Breathe(glow, 0.06, 1.4)
 	end
 	if supporter then

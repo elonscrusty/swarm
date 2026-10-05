@@ -600,6 +600,9 @@ R.defineClass("UserInputService", {
 	},
 	methods = {
 		GetLastInputType = function()
+			if R.lastInput then
+				return R.lastInput
+			end
 			return device().touch and Enum.UserInputType.Touch or Enum.UserInputType.MouseMovement
 		end,
 		GetMouseLocation = function()

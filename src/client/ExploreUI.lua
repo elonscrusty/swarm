@@ -17,7 +17,10 @@
 	             the loot prompt (LootUI), so it is the price the server charges; red when
 	             you can't afford it, and a press then shows "NEED N" on the purse
 	             (Hud.SetPurseHint). BUY sends MerchantBuy(merchantId, slot); the server
-	             decides. Keys 1 / 2 / 3 buy on a keyboard.
+	             decides. Keys 1 / 2 / 3 buy on a keyboard. Gamepad: D-pad left / right picks
+	             an offer (gold rim, "X BUY"), X buys it; no GUI selection, so the left
+	             stick keeps moving the hero. Not while the ping wheel is open or a chest
+	             prompt owns X (LootUI), and only while UIState.WorldInputAllowed().
 	Everything hides outside a run and while a panel covers the HUD (UIState.Covered).
 ]]
 
@@ -34,6 +37,8 @@ local UIKit = require(script.Parent.UIKit)
 local UIState = require(script.Parent.UIState)
 local UIAnim = require(script.Parent.UIAnim)
 local Hud = require(script.Parent.Hud)
+local LootUI = require(script.Parent.LootUI)
+local FeatureHud = require(script.Parent.FeatureHud)
 
 local ExploreUI = {}
 
@@ -55,6 +60,7 @@ local gui: ScreenGui? = nil
 local panel: Frame? = nil
 local cards: { { [string]: any } } = {}
 local panelFor = 0 -- merchant id the panel was built for
+local padSlot = 1 -- gamepad: the highlighted offer
 local clock = 0
 
 local function inRun(): boolean
@@ -191,6 +197,59 @@ local function buy(slot: number)
 	Remotes.Get("MerchantBuy"):FireServer(stock.Id, slot)
 end
 
+local function usingPad(): boolean
+	local last = UserInputService:GetLastInputType()
+	return last == Enum.UserInputType.Gamepad1 or last == Enum.UserInputType.Gamepad2
+end
+
+-- Offers the gamepad can pick: shown and not sold.
+local function padSlots(): { number }
+	local out = {}
+	for i, card in ipairs(cards) do
+		local item = stock.Items and stock.Items[i]
+		if item and not item.Sold and card.Card.Visible then
+			table.insert(out, i)
+		end
+	end
+	return out
+end
+
+-- Moves the highlight by `dir` (0 = keep it on a buyable offer).
+local function padMove(dir: number)
+	local list = padSlots()
+	if #list == 0 then
+		return
+	end
+	local at = table.find(list, padSlot)
+	if not at then
+		padSlot = list[1]
+		return
+	end
+	padSlot = list[(at - 1 + dir) % #list + 1]
+end
+
+-- The gold rim and "X BUY" on the highlighted offer while a gamepad is in use.
+local function padHighlight()
+	local pad = usingPad()
+	if pad then
+		padMove(0)
+	end
+	for i, card in ipairs(cards) do
+		local item = stock.Items and stock.Items[i]
+		local on = pad and i == padSlot and item ~= nil and not item.Sold
+		local def = item and ItemData.Items[item.Id]
+		local r = def and (R[def.Rarity] or R.Common)
+		set(card.Stroke, "Thickness", on and 3 or 1.5)
+		set(card.Stroke, "Transparency", on and 0 or 0.4)
+		set(card.Stroke, "Color", on and P.gold_300 or (r and r.Color or P.ivory_200))
+		local label = item and item.Sold and "SOLD" or (on and "X  BUY" or "BUY")
+		if card.Label ~= label then
+			card.Label = label
+			card.Button.SetText(label)
+		end
+	end
+end
+
 local function buildPanel(root: Frame)
 	local p = UIKit.new("Frame", { Name = "MerchantPanel", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.06, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -150), Size = UDim2.fromOffset(420, CARD_H + 42), Visible = false }, root) :: Frame
 	UIKit.corner(p, Theme.Radius.L)
@@ -233,7 +292,8 @@ local function fillCards()
 				card.Desc.Text = def.Text or ""
 				card.Rarity.TextColor3 = r.Color
 				card.Stroke.Color = r.Color
-				card.Button.SetText(item.Sold and "SOLD" or "BUY")
+				card.Label = item.Sold and "SOLD" or "BUY"
+				card.Button.SetText(card.Label)
 				card.Button.SetEnabled(not item.Sold)
 			end
 			local price = priceOf(item)
@@ -376,6 +436,7 @@ local function update(dt: number)
 		end
 		layoutPanel(p)
 		fillCards()
+		padHighlight()
 	end
 	set(p, "Visible", show)
 	if gui then
@@ -421,6 +482,23 @@ function ExploreUI.Init()
 		local slot = input.KeyCode == Enum.KeyCode.One and 1 or input.KeyCode == Enum.KeyCode.Two and 2 or input.KeyCode == Enum.KeyCode.Three and 3 or nil
 		if slot then
 			buy(slot)
+			return
+		end
+		-- gamepad: D-pad picks, X buys (the D-pad belongs to the ping wheel while it is open;
+		-- X belongs to a chest / shrine prompt while one shows)
+		if not UIState.WorldInputAllowed() or FeatureHud.PingWheelOpen() or player:GetAttribute("Alive") == false then
+			return
+		end
+		if input.KeyCode == Enum.KeyCode.DPadLeft or input.KeyCode == Enum.KeyCode.DPadRight then
+			padMove(input.KeyCode == Enum.KeyCode.DPadRight and 1 or -1)
+			padHighlight()
+		elseif input.KeyCode == Enum.KeyCode.ButtonX then
+			local prompt = LootUI.Elements().Prompt :: GuiObject?
+			if prompt and prompt.Visible then
+				return
+			end
+			padMove(0)
+			buy(padSlot)
 		end
 	end)
 	RunService.RenderStepped:Connect(update)

@@ -144,3 +144,32 @@ if preview.args.debug == "on" then
 	end
 	preview.log("ben root " .. tostring(down.Character and down.Character.PrimaryPart and down.Character.PrimaryPart.Position))
 end
+
+-- --set plate=on: one plate per hero. A teammate wearing a store nameplate + Supporter gets
+-- StoreFx's plate; once they wear a META title, TitlePlates draws the plate (name + title)
+-- styled by StoreFx.DecoratePlate and StoreFx drops its own (PASS / FAIL lines)
+if preview.args.plate == "on" then
+	local mate = alive or down
+	local pg = game:GetService("Players").LocalPlayer.PlayerGui
+	local function count(prefix: string): (number, Instance?)
+		local n, last = 0, nil
+		for _, d in ipairs(pg:GetDescendants()) do
+			if d:IsA("BillboardGui") and d.Name == prefix .. mate.Name then
+				n += 1
+				last = d
+			end
+		end
+		return n, last
+	end
+	mate:SetAttribute("CosPlate", "Plate_Gold")
+	mate:SetAttribute("Supporter", true)
+	C.settle(1.2)
+	local store0, title0 = count("StorePlate_"), count("TitlePlate_")
+	preview.log(((store0 == 1 and title0 == 0) and "PASS" or "FAIL") .. string.format(" plate: no title = the store plate only (store %d, title %d)", store0, title0))
+	mate:SetAttribute("Title", "Swarm Breaker")
+	C.settle(1.2)
+	local store1 = count("StorePlate_")
+	local title1, gui = count("TitlePlate_")
+	local styled = gui and gui:FindFirstChild("StorePlateStroke", true) ~= nil
+	preview.log(((store1 == 0 and title1 == 1 and styled) and "PASS" or "FAIL") .. string.format(" plate: titled = one plate (store %d, title %d, frame styled %s)", store1, title1, tostring(styled)))
+end

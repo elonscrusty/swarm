@@ -92,3 +92,26 @@ end
 C.settle(tonumber(preview.args.at) or 6) -- after the stage-start card
 local panel = C.findText("^MERCHANT$")
 preview.log("merchant panel title shown: " .. tostring(panel ~= nil))
+
+-- --set pad=on: a gamepad player at the cart: D-pad right moves the gold rim to the next
+-- offer ("X  BUY"), X sends MerchantBuy for that slot (PASS / FAIL lines)
+if preview.args.pad == "on" and panel then
+	local UIS = game:GetService("UserInputService")
+	preview.setLastInput(Enum.UserInputType.Gamepad1)
+	local sent: { number } = {}
+	preview.remote("MerchantBuy").OnServerEvent:Connect(function(_p, _id, slot)
+		table.insert(sent, slot)
+	end)
+	local function pad(key)
+		UIS.InputBegan:_fire({ UserInputType = Enum.UserInputType.Gamepad1, UserInputState = Enum.UserInputState.Begin, KeyCode = key, Position = Vector3.zero, Delta = Vector3.zero }, false)
+		C.settle(0.3)
+	end
+	C.settle(0.3)
+	local first = C.findText("^X  BUY$")
+	preview.log((first and "PASS" or "FAIL") .. " pad: one offer shows X  BUY")
+	pad(Enum.KeyCode.DPadRight)
+	local after = C.findText("^X  BUY$")
+	preview.log(((after and after ~= first) and "PASS" or "FAIL") .. " pad: D-pad right moves the pick")
+	pad(Enum.KeyCode.ButtonX)
+	preview.log((#sent >= 1 and "PASS" or "FAIL") .. " pad: X sends MerchantBuy (slot " .. tostring(sent[1]) .. ")")
+end

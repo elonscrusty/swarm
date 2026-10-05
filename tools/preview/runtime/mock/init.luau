@@ -290,6 +290,12 @@ function Mock.api()
 		R.loadLatency = base and { base = base, slots = slots or 6 } or nil
 	end
 
+	-- UserInputService:GetLastInputType() answers this (e.g. Enum.UserInputType.Gamepad1);
+	-- nil = the device default (Touch on phones, MouseMovement otherwise).
+	function api.setLastInput(kind: any)
+		R.lastInput = kind
+	end
+
 	function api.forceMeshesUploaded()
 		return M.forceUploaded()
 	end
