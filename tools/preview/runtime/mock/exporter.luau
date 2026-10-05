@@ -295,7 +295,14 @@ function E.collectWorld(root, opts)
 	end
 	for _, c in ipairs(states[root].children) do
 		local cs = states[c]
-		if not cs.info.isA.Camera and not cs.info.isA.GuiBase2d then
+		if cs.info.isA.Camera then
+			-- parts a client parents to its camera render locally in Roblox (e.g. ChallengesUI's rings)
+			for _, cc in ipairs(cs.children) do
+				if not states[cc].info.isA.GuiBase2d then
+					visit(cc)
+				end
+			end
+		elseif not cs.info.isA.GuiBase2d then
 			visit(c)
 		end
 	end

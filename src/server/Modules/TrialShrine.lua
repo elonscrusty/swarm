@@ -223,7 +223,7 @@ local function start(rp, _obj)
 	end
 	setState(math.ceil(cur.Left))
 	shrineText("Trial running")
-	ringLook(SIGIL, 0.55)
+	ringLook(SIGIL, 0.72) -- light enough to read gems and telegraphs through
 	spawnFoe(true)
 	Fx.Ring(cur.Pos, T().Radius, SIGIL)
 	Fx.Sound("BossRoar")
