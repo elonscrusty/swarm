@@ -65,6 +65,9 @@ additive (a `Recovered` field only appears for corrupt records).
 - `python3 tools/run_regressions.py --lune /tmp/sh-tools/lune/lune`: 96/96 PASS. 13 checks were
   added by this audit: security, math, economy, world, journey, loot-focus, lobby-screens, hud-key,
   pass-warm, perf regressions, run-intro panel, results best score, leaderboards error.
+- Owner decisions batch (2026-10-05, after the run above): `check.sh --quick` PASS; math, combat,
+  choice, coop, security, safety-sim, mastery, progression, world regressions and boss-sim x6
+  PASS (world-regression needed a fixture fix, WORLD.md). Full run_regressions: NOT RUN.
 - Layout: 141 scene/device renders through check_layout (SCREENS.md); about 12 variants NOT RUN.
 - BLOCKED: Studio play, real phone/tablet, real gamepad, live 2-4 player server, DataStores,
   real purchases, asset permissions in the live experience, Roblox's own use of gamepad Start.
@@ -77,17 +80,27 @@ additive (a `Recovered` field only appears for corrupt records).
 - Difficulty: moving play n=2, no would-be deaths after stage 1, ends ≈ level 65.
 
 ## 7. Remaining items and decisions for the owner
-Owner decisions (nothing applied):
-1. SEC-02b: enemies still chase a player who is choosing, so they draw enemies off their partner for a short while.
-2. SEC-13: lobby DEV gold/levels on the owner's live save can feed public boards (needs a save flag).
-3. SEC-14: DEV ResetProgress also works in live servers (proposal: Studio only).
-4. SEC-16: a friend can join a party from join data without an invite (proposal: invite card).
-5. MATH-13: weapons lose up to a frame per attack (fix makes all weapons slightly faster).
-6. MATH-14: weapon cards show base numbers before bonuses.
-7. MATH-15: "Damage dealt" counts overkill.
-8. WORLD: stage-2 boss HP 0.4 → 0.5 to fix second-world ease.
-9. ECONOMY: 633k per-hero upgrade track; Score board mixes difficulties and curses.
-10. SCREENS S-09: three uploaded home pictures are unused.
+Owner decisions applied 2026-10-05 (owner OK 2026-10-05; offline only, NOT Studio-tested):
+- SEC-02b: enemies and boss aims pick another living player while a chooser is protected
+  (the server state ChoiceProtectedUntil mirrors); if everyone is protected, unchanged.
+  security-regression §6 (enemies); bosses static only. VERIFIED FIXED (offline).
+- SEC-13: additive save flag `DevBoosted` (default false, no schema bump), set by lobby
+  UnlockAll / LobbyGold / AccountLevels; any run with a boosted player is DEV-tainted team-wide.
+  security-regression §7. VERIFIED FIXED (offline).
+- MATH-13: weapon cooldowns carry the leftover time, capped at one cooldown (a hitch gives at
+  most one extra attack, next frame). math-regression D MATH-13. VERIFIED FIXED (offline).
+- WORLD W-12: `BossHPByStage[2]` 0.4 → 0.5. econ-sim seeds 1-3: stage-2 boss 49.2 → 61.4 s mean
+  (+25 %); stage 1 identical (WORLD.md). VERIFIED FIXED (offline sim, n=3).
+- ECONOMY EC-A24: hero stat per-level cap 20,000 → 15,000; one hero's full track 633,353 →
+  526,541 gold; shop price = server charge (mastery-regression). VERIFIED FIXED (offline).
+
+Still open for the owner (nothing applied):
+1. SEC-14: DEV ResetProgress also works in live servers (proposal: Studio only).
+2. SEC-16: a friend can join a party from join data without an invite (proposal: invite card).
+3. MATH-14: weapon cards show base numbers before bonuses.
+4. MATH-15: "Damage dealt" counts overkill.
+5. ECONOMY: Score board mixes difficulties and curses.
+6. SCREENS S-09: three uploaded home pictures are unused.
 Open P2: MATH-17 Windstep cap briefly exceeded; LootSystem has no refund if a paid chest can't
 grant (unreachable today); +32 connections plateau in the soak (untraced, bounded).
 

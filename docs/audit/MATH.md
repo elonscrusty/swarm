@@ -58,7 +58,7 @@ so at most x1.9. Stacked XP is bounded and multiplied once per gem (C4c).
 | MATH-10 | Combat | Each hit equals the prediction (`WeaponStats`), HP lost = sum of hits | all 27 released weapons, level 1, a pinned dummy, crits off | 4 s per weapon | 27/27 match; HP lost = sum of hits; Garlic 4 ticks in 4 s as predicted; crit x2 once, procs never crit | runtime test D | - | - | - | VERIFIED WORKING | D |
 | MATH-11 | Data | Every hero, weapon, passive, item, synergy and upgrade key is a real sheet key; rows finite; cooldown > 0; evolution partners released; passives never get worse with level | data tables | inventory | all valid (8 heroes, 27 weapons + evolutions, 26 passives, 19 items, 6 synergies) | test B1-B4 | - | - | - | VERIFIED WORKING | B |
 | MATH-12 | Caps | Cooldown floor 0.3 (sheet) and 0.08 (weapon), crit 60%, speed x2.2, every sheet value finite for a fully maxed build of every hero | StatSheet, weaponStats | extreme stacks | all hold | test A6-A9, A14 | - | - | - | VERIFIED WORKING | A |
-| MATH-13 | Cadence | A weapon fires every `cooldown` s | WeaponSystem.Step (`w.Timer = s.cooldown`) | 60 Hz frames | the time past zero is dropped, so each attack is up to one frame late: about +0.5 frame on average (around 1% at 0.7 s, up to 10% at the 0.08 s floor) | static | P2 | reset instead of carrying the remainder | Proposal: `w.Timer += s.cooldown` (with a floor). This makes weapons slightly faster, so it is a balance change and needs the owner. | UNVERIFIABLE (proposal) | owner decision |
+| MATH-13 | Cadence | A weapon fires every `cooldown` s; owner OK 2026-10-05 | WeaponSystem.Step (`w.Timer = s.cooldown - math.min(-w.Timer, s.cooldown)`) | 60 Hz frames; a 5 s hitch | Before: the time past zero was dropped (up to one frame late per attack). After: the leftover carries over; the carry is capped at one cooldown, so a hitch gives at most one extra attack on the next frame (never a burst, one attack per weapon per frame) | sim: math-regression D MATH-13 (carry, hitch cap, 3 s at 60 Hz = floor(3/cd) fires) | P2 | reset instead of carrying the remainder | Applied. All weapons are slightly faster (about +0.5 frame per attack recovered) | VERIFIED FIXED (offline sim) | feel check in Studio |
 | MATH-14 | Cards | Card numbers can be read as your real damage | WeaponData.CardLines | any weapon card | shows the base row (before Might, attack speed, area) while passive cards show whole-build totals | static | P2 | design choice | Proposal: label it "base", or show the effective value. This is a UI copy decision. | UNVERIFIABLE (proposal) | SCREENS / owner |
 | MATH-15 | Results | "Damage dealt" | EnemySpawner.Damage (`rp.DamageDealt += amount`) | big hit on a weak enemy | counts overkill (the whole hit, not the HP actually removed) | static | P2 | - | Proposal: add min(amount, HP before the hit) if the stat should mean HP removed | UNVERIFIABLE (proposal) | WORLD / ECONOMY |
 | MATH-16 | Lifesteal | Bloodblade heals at most 8 per swing | Fire.Whip | many enemies in one swing | exact today (1 per hit up to 8); `healed < cap then += Lifesteal` would go over the cap if Lifesteal were ever more than 1 | static | P2 (latent) | the cap is checked before adding | Proposal: `math.min(cap, healed + Lifesteal)` if Lifesteal is ever changed | NOT APPLICABLE today | - |
@@ -70,6 +70,7 @@ so at most x1.9. Stacked XP is bounded and multiplied once per gem (C4c).
 - `src/server/Modules/RunManager.lua`: `Heal` input guard only (MATH-02); the file belongs to JOURNEY, and the heal code belongs to MATH.
 - `src/server/Modules/EnemySpawner.lua`: one-line NaN guard in `Damage` (MATH-03); the file belongs to WORLD, and the damage code belongs to MATH.
 - `tools/preview/scenes/math-regression.luau`: new regression.
+- `src/server/Modules/WeaponSystem.lua` (owner decision 2026-10-05): cooldown carry-over with a one-cooldown cap (MATH-13); math-regression's cadence checks updated (D MATH-13).
 
 Risk: low. Valid inputs behave exactly as before. Recovery: revert the guard lines.
 
@@ -77,5 +78,6 @@ Risk: low. Valid inputs behave exactly as before. Recovery: revert the guard lin
 - math-regression: PASS 80/80. MATH-01 to 04 fail without their fixes (worked out from the code; the old code was not run).
 - Adjacent, after the changes: passives-regression, progression-regression, mastery-regression, xp-sim,
   combat-regression, choice-regression, synergy-sim: PASS.
+- After MATH-13 (2026-10-05): math-regression PASS 84/84, combat-regression PASS, boss-sim x6 PASS.
 - `bash tools/check.sh --quick`: TYPECHECK ok, COMPILE ok.
 - Studio, real devices, multi-client: NOT RUN.

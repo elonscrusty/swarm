@@ -35,7 +35,7 @@ Command used for each scene (`scratchpad/world/scene.sh`):
 | W-09 | Caravan during the Open phase | – | `CaravanEvent.Step` | Start it in the last seconds of the surge, then hold during the choice | By design, hold time counts while the portal is open but no waves come, so about 15 s of the 20 s hold can be free. | static | P2 | Design | Proposal: stop counting progress in Open (or end the defence as Lost/Saved at the sweep). Owner decision. | UNVERIFIABLE (not run) | – |
 | W-10 | Rush play | – | `Config.Stages.PortalLockSeconds {0,0}` (owner) | econ-sim `explore=60` + Bargain | Charging early skips the exploration waves, but it is **not** easier: lower level, higher damage taken (below). | test | – | Owner design | – | VERIFIED WORKING | – |
 | W-11 | Contact through thin walls | No hits through walls | `EnemyAI.Step` contact (2D distance) | – | A hit would need a collider thinner than about 0.2 studs between the hero and the enemy (push-out keeps enemies a full radius off faces). None is known; not measured. | static | P2 | – | – | NOT RUN | Optional probe: thinnest box per arena |
-| W-12 | Second world ease | Stages should get harder | `Config.Stages`, `Config.Waves` | econ-sim moving, seeds 1-2 | Confirmed for a buying build: stage 2 is easier than stage 1 (below). Not for a build that doesn't buy. | test | P2 (balance) | Stage-1 chests are cheap; the bot buys 13+ before stage 2 | Proposals only (below) | UNVERIFIABLE (balance call) | Owner decision, then re-measure |
+| W-12 | Second world ease | Stages should get harder | `Config.Stages.BossHPByStage[2]` | econ-sim moving, seeds 1-3, stages=2 | Stage-2 boss HP 0.4 → 0.5 applied (owner OK 2026-10-05). Stage-2 boss time 49 → 61 s mean (+25 %, below); stage 1 identical | sim | P2 (balance) | Stage-1 chests are cheap; the bot buys 13+ before stage 2 | Applied: stage-2 multiplier only | VERIFIED FIXED (offline sim, n=3) | real players, Studio |
 | W-13 | Snow visibility | Enemies, heals and hazards readable on snow | MapBuilder snow palette; art owned by ENEMY/VFX art | – | Not re-rendered in this audit (shared machine). The 2026-10-04 fixes (ART-05) are documented as offline renders only. | – | P2 | – | SCREENS / art follow-up | UNVERIFIABLE | Studio on snow at the owner's zoom |
 | W-14 | Co-op targeting at walls | Each enemy chases the nearest living player | `EnemyAI.nearestPlayer` | – | Solo sims only | – | – | – | – | UNVERIFIABLE (multi-client BLOCKED) | Duo playtest |
 
@@ -96,6 +96,24 @@ stay identical):
 3. Leave it: stage 2 is still harder than stage 1 for players who don't buy, and the boss is the
    real threat (Moth Matriarch, EC-07).
 
+### Applied 2026-10-05 (owner OK 2026-10-05): stage-2 boss HP 0.4 → 0.5
+
+`Config.Stages.BossHPByStage = { 0.22, 0.5, 0.85, 1.35, 2.0 }` (only stage 2 changed). Measured on
+copies of the current tree (incl. today's MATH-13 cadence and SEC-02b targeting), econ-sim, fresh
+Knight, greedy buying, solo, `--set stages=2`, same seeds before/after (`scratchpad/dec/out`):
+
+| Seed | Stage-1 boss | Stage-2 boss before (0.4) | Stage-2 boss after (0.5) | Stage-2 boss phase before → after | Stage-2 min HP / would-be deaths before → after |
+|---|---|---|---|---|---|
+| 1 | 72.2 s | 58.8 s | 75.8 s | 75 → 87 s | 5 % / 2 → 1 % / 3 |
+| 2 | force-killed at 5 % (123 s phase) | 48.5 s | 58.1 s | 72 → 78 s | 5 % / 1 → 5 % / 1 |
+| 3 | 76.1 s | 40.4 s | 50.2 s | 56 → 64 s | 3 % / 3 → 3 % / 2 |
+| Mean | ~74 s | **49.2 s** | **61.4 s** (+25 %) | 68 → 76 s | |
+
+Stage 1 is identical in both builds (same seeds, same numbers). The stage-2 boss now takes
+78-100 % of the stage-1 boss time instead of 53-81 %. n=3, one bot, offline: a direction, not a
+tuning proof. Today's numbers are longer than the audit table above (that table was a different
+tree state); compare only within this table.
+
 ## Changed files
 
 | File | Change | Risk | Recovery |
@@ -103,6 +121,9 @@ stay identical):
 | `src/server/Modules/EnemySpawner.lua` | `nearPortal` = charge ring only and only when chargeable (W-03); elite chest only with a killer (W-04); the sweep (`KillInRadius` with `rp == nil`) also takes burrowed enemies and clears enemy hazards (W-05) | Low: bomb pickups and the revive shockwave pass `rp` and are unchanged. A team standing inside the ring gets the boss in 2 s, as before. | Revert the three hunks |
 | `src/server/Modules/CaravanEvent.lua` | Boss-arrival success needs the ring held and ≥ 50 % progress; checked once (W-06) | Low: an abandoned caravan is now Lost (as with walking away) | Revert the block |
 | `tools/preview/scenes/world-regression.luau` | New regression | – | – |
+| `tools/preview/scenes/world-regression.luau` (2026-10-05) | 12 tanky holders keep the surge above `SurgeEndRemaining` during the W-04/05 sweep setup. With the MATH-13 cadence carry-over the hero thinned the surge to its end share on its own and the portal opened 0.1 s into the setup (2 FAIL: "Burrower is tunnelling", "hazards cleared"); a fixture timing issue, not a game fault (the sweep itself still worked: phase Open, burrower gone) | Test only | Remove the holder loop |
+| `src/shared/Config.lua` (owner OK 2026-10-05) | `BossHPByStage[2]` 0.4 → 0.5 (W-12) | Balance only; stage 1 identical | Set it back to 0.4 |
+| `src/server/Modules/EnemyAI.lua`, `BossAI.lua` (owner OK 2026-10-05, SEC-02b) | Targeting skips a protected chooser while another living player is free (per-frame protected set; bosses: `targets()` for nearest, burrow, spots, root lanes) | Low; enemy part tested in security-regression §6, boss part static | Revert the hunks |
 
 Note: the same `EnemySpawner.lua` also has another auditor's NaN guard in `Damage`
 (`not (amount > 0)`), which is not from this area.

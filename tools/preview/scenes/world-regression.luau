@@ -168,7 +168,15 @@ if boss then
 		end
 	end
 	check(SM.GetPhase() == "Surge", "the surge starts after the boss")
+	-- tanky holders keep the surge above its end share (SurgeEndRemaining) until the test
+	-- kills the rest: with the MATH-13 cadence carry-over the hero can thin the surge to the
+	-- end share on its own during the setup below (the portal then opened early)
+	for k = 1, 12 do
+		local a = k * math.pi / 6
+		ES.Spawn("Slime", rp.Root.Position + Vector3.new(math.cos(a) * 40, 0, math.sin(a) * 40), { Force = true, HP = 1e12 })
+	end
 	step(Config.Stages.SurgeSpawnSeconds + 0.5)
+	check(SM.GetPhase() == "Surge", "the surge is still running for the sweep setup")
 	local root = rp.Root.Position
 	-- control: an elite the hero kills drops its chest
 	local before = chests

@@ -30,7 +30,7 @@ Clients send ids only, never amounts.
 | Sink: chests / Chance | `StagePrice` (x (s/2)^0.75 from stage 3, capped at 5) then `PlayerPrice` with the shown GoldMult | `LootSystem` | yes | shown = charged (code + chest-gold-sim) |
 | Sink: heroes | 10k / 20k / 30k | `onBuyCharacter` | yes | achievement heroes never sold |
 | Sink: account upgrades | Revive 2,500, Reroll 800/1,600, Skip 600 (5,500 total) | `onBuyMeta` | yes | stale-level guard |
-| Sink: hero upgrades | base x growth^n, stat levels capped at 20,000 | `onBuyHeroUpgrade` | yes | mastery cap, stale-level guard |
+| Sink: hero upgrades | base x growth^n, stat levels capped at 15,000 (was 20,000; owner OK 2026-10-05) | `onBuyHeroUpgrade` | yes | mastery cap, stale-level guard |
 
 Rounding: every payout rounds once, after all multipliers. No runaway multiplier found: the
 pass multiplier is applied in `AddRunGold` only, item/Bargain gold through `Stats.GoldMult`
@@ -79,7 +79,21 @@ Lobby sink scale (code): one hero's full track is 633,353 gold (Max HP 211,500, 
 231,300, the rest 190,553), account upgrades 5,500, heroes 60,000. At ~2,500 per greedy
 win that is ~250 wins per hero; at ~12,500 (banking) ~50. PROPOSAL only (owner): the 20,000
 cap levels of Max HP / Might (levels 11-20 of each) are 77 % of a hero's track; consider
-whether that tail is intended. Not changed.
+whether that tail is intended.
+
+**Applied, owner OK 2026-10-05: per-level cap 20,000 → 15,000** (`MetaUpgradeData.MaxStatLevelCost`;
+cap value only, no refunds, no save change). One hero's full track, computed from
+`MetaUpgradeData.HeroCostOf` (6 stats + Signature 7,905):
+
+| | Max HP | Might | Armor | Speed | Luck | Growth | Signature | Full track |
+|---|---|---|---|---|---|---|---|---|
+| Before (20,000) | 211,500 | 231,300 | 50,111 | 7,889 | 59,503 | 65,145 | 7,905 | **633,353** |
+| After (15,000) | 169,200 | 184,000 | 45,111 | 7,889 | 54,471 | 57,965 | 7,905 | **526,541** (−106,812, −16.9 %) |
+
+The cap now starts at Max HP level 12 (was 13) and Might level 11 (was 12). At ~2,500 per greedy win that is
+~211 wins per hero (was ~250). The shop (`MenuCharacters`, `NoticeDots`) and the server
+(`GoldSystem.onBuyHeroUpgrade`) both price with `HeroCostOf`; mastery-regression checks the
+cap, the track total and that the server charges exactly the shown 15,000.
 
 ## 3. Finding matrix
 
@@ -107,6 +121,7 @@ whether that tail is intended. Not changed.
 | EC-A20 | Purchases: failure / receipts | Cancel changes nothing; receipt once | `processReceipt` | cancel; save fails | cancel ignored (Roblox shows its own UI); receipt recorded then acknowledged only after save; retry path saves again | static + safety-sim (SECURITY) | - | - | - | VERIFIED WORKING (mock) | real purchase: owner only |
 | EC-A21 | Pass lookup at join | Earnings use the pass from the first coin | `MonetizationService.PassesKnown`, `RefreshAttributes`; `GoldSystem.AddRunGold` (rp.EarlyGold), `GoldSystem.CorrectEarlyGold`; `RunManager.newRunPlayer` (PassRerolls) | pass owner (DoubleGold + VIP), lookup answers 5 s after run start | before: gold earned before the answer stayed x1 and the VIP reroll was missing for the whole run. FINAL-FIX: run start never waits (no blocking at all); gold earned while the lookup is pending is recorded and the difference is paid once when it answers; the VIP reroll is handed over then | `pass-warm-regression` (slow mock lookup via new `preview.setPassLookup`): 9/9 PASS | P2 | non-blocking cache | retroactive correction instead of a wait (beginRun runs from the server loop, a wait there would stall it) | VERIFIED FIXED (offline) | Studio with a real pass |
 | EC-A22 | Paid chest with no grantable item | Gold refunded | `LootSystem.openChest` | every item of the rarity capped | only Phoenix is capped, so practically unreachable; would warn and keep the gold | static | P2 | no refund branch | FOR OTHERS: refund on `granted == false` | UNVERIFIABLE (unreachable today) | - |
+| EC-A24 | Hero track cap | Per-level stat cap 15,000 (owner OK 2026-10-05) | `MetaUpgradeData.MaxStatLevelCost`, `HeroCostOf`; `GoldSystem.onBuyHeroUpgrade`; `MenuCharacters` | max mastery Knight, buy Max HP 12 / Might 16 | shown price 15,000 = server charge; full track 633,353 → 526,541 | test: mastery-regression | - | - | Applied (cap value only, no refunds, no save change) | VERIFIED FIXED (offline) | Studio shop look |
 | EC-A23 | Stage 3+ tune | Stages 1-2 unchanged, 60-80 % bought on 4-5 | `ItemData.StagePrice`, `OpenChest` | econ-sim A n=5 | 70 / 75 % bought on stages 4-5; first buy 0:24-1:00 | sim | - | - | - | VERIFIED WORKING (offline sim) | real players |
 
 ## 4. Changed files
@@ -119,6 +134,8 @@ whether that tail is intended. Not changed.
 | `tools/preview/scenes/economy-regression.luau` | new regression (EC-A01..05) | test |
 | `MonetizationService.lua`, `GoldSystem.lua`, `RunManager.lua` (FINAL-FIX) | EC-A21: `PassesKnown`, early-gold record + one-time top-up (`CorrectEarlyGold`), late VIP reroll (`PassRerolls`) | low: only pays the missing pass bonus once; revert the three hunks |
 | `tools/preview/scenes/pass-warm-regression.luau`, preview mock `setPassLookup` (FINAL-FIX) | new regression (EC-A21, slow mock lookup) | test |
+| `src/shared/MetaUpgradeData.lua` (owner decision 2026-10-05) | `MaxStatLevelCost` 20,000 → 15,000 (EC-A24) | price-only; owned levels and saves untouched. Recovery: set the value back |
+| `tools/preview/scenes/mastery-regression.luau` | cap 15,000, track total, server charge = shown price | test |
 | `MenuLeaderboards.lua` (FINAL-FIX) | S-19: one-line error/local note on short screens, column heading dropped when tight | low |
 | `tools/preview/scenes/leaderboards.luau` | `textcheck=on` mode (EC-A06) | test |
 | `tools/preview/runtime/mock/classes/services.luau` | `GetSortedAsync` honours `failDataStores` reads | test mock; only scenes that fail reads are affected (storage-sim does not read boards) |

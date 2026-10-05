@@ -10,6 +10,7 @@
 --      lobby God toggle taints the next run; invincibility ends with the run
 --   6) duo choice protection: RewardClose / SetPause spam gives no invulnerability; a
 --      chooser who drops out leaves no stale Paused / Offer flags
+--      and enemies target the free partner, not a protected chooser (SEC-02b)
 --   7) DevBoosted (SEC-13, owner OK 2026-10-05): run DEV commands never set it; lobby
 --      LobbyGold / AccountLevels / UnlockAll do; Migrate defaults and keeps it; every later
 --      run with a boosted player is tainted (team-wide) and submits nothing
@@ -271,6 +272,21 @@ do
 	-- a chooser who drops out leaves no protection behind
 	LUS.QueueLevels(mrp, 1)
 	assert(mrp.Offer and mrp.Paused, "panel open")
+	-- SEC-02b (owner OK 2026-10-05): enemies leave a protected chooser for a free partner
+	do
+		local Spawner = preview.server("EnemySpawner")
+		local e = assert(Spawner.Spawn("Bat", mrp.Root.Position + Vector3.new(3, 0, 0), { Force = true, HP = 1e6 }))
+		preview.advance(0.3)
+		assert(e.Target == orp, "an enemy next to the chooser targets the free partner")
+		LUS.QueueLevels(orp, 1)
+		preview.advance(0.3)
+		if orp.Offer and orp.Paused then
+			assert(e.Target == mrp, "everyone protected: the nearest player again (no idle)")
+			LUS.Cancel(orp)
+		end
+		Spawner.Despawn(e)
+		preview.log("PASS SEC-02b: enemies skip a protected chooser while a partner is free")
+	end
 	preview.removePlayer(mate)
 	preview.advance(0.5)
 	-- the record is inert once out of the run: no one counts as choosing, nothing frozen

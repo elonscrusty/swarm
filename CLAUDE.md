@@ -89,7 +89,7 @@ Home + retention update (70/70 regressions, offline only, NOT Studio-tested): ho
 the owner's 2026-10-04 mockup (scratchpad home-mockup / home-spec; LobbyScreen, MenuPlay, MenuMore,
 owner art art/ui/home group 22), lobby 3D scene reframed (big hero, courtyard, Necromancer rebuild),
 first-join auto run with a first-run welcome (Config.FirstRun, +200 gold bonus, owner OK), notice
-dots (NoticeDots), NEXT GOAL on results (shared/NextGoal), economy (owner OK): 20k per-level cap,
+dots (NoticeDots), NEXT GOAL on results (shared/NextGoal), economy (owner OK): 20k per-level cap (15k since 2026-10-05, owner),
 KillGoldChance 0.25, StageClearBonus 300, survival gold 40/min, harder achievement heroes; card pool
 weights + merged level-up panels; area weapons hit once per tick + balance trims; Death Spiral fix.
 Planned next: Sigils (docs/SIGILS_PLAN.md). Remaining audit items: docs/AUDIT_2026-10-04.md.

@@ -94,7 +94,9 @@ Config.Stages = {
 	-- { .., .., 0.85, 1.35, 2.0 } (was 0.7, 1.05, 1.5; overhaul 2026-10-04,
 	-- docs/overhaul/BALANCE_TUNE.md): stage 3-5 bosses fell in 6-35 s for a buying build;
 	-- econ-sim boss time on stage 3 went 25 -> 30 s (n=5). Stages 1-2 unchanged.
-	BossHPByStage = { 0.22, 0.4, 0.85, 1.35, 2.0 },
+	-- stage 2 0.4 -> 0.5 (owner OK 2026-10-05, audit W-12): a buying build found the second
+	-- world easier than the first (boss time below in docs/audit/WORLD.md). Others unchanged.
+	BossHPByStage = { 0.22, 0.5, 0.85, 1.35, 2.0 },
 	-- 0.4 (was 0.5): with the Endless boss growth on top, stage 6 was a x1.44 jump over
 	-- stage 5; now x1.27 (Standard) / x1.39 (Endless), then smaller steps
 	BossHPPerExtraStage = 0.4,
