@@ -76,7 +76,7 @@ local function makeMarker(m: Model): Marker?
 	if not anchor or not anchor:IsA("BasePart") then
 		return nil
 	end
-	local bb = UIKit.new("BillboardGui", { Name = "ExploreMarker", Adornee = anchor, Size = UDim2.fromOffset(190, 64), StudsOffsetWorldSpace = Vector3.new(0, 1, 0), AlwaysOnTop = true, MaxDistance = MARKER_RANGE, Enabled = false, ResetOnSpawn = false }, player:WaitForChild("PlayerGui")) :: BillboardGui
+	local bb = UIKit.new("BillboardGui", { Name = "ExploreMarker", Adornee = anchor, Size = UDim2.fromOffset(190, 64), StudsOffsetWorldSpace = Vector3.new(0, 5, 0), AlwaysOnTop = true, MaxDistance = MARKER_RANGE, Enabled = false, ResetOnSpawn = false }, player:WaitForChild("PlayerGui")) :: BillboardGui
 	local face = UIKit.new("Frame", { Name = "Face", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.15, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(180, 46) }, bb)
 	UIKit.corner(face, Theme.Radius.M)
 	UIKit.stroke(face, P.gold_400, 1.5, 0.25)
@@ -289,7 +289,7 @@ local function layoutPanel(p: Frame)
 	local bottom = h - 150
 	local top = 0
 	if h > w then
-		bottom = h - 210 -- portrait: above the JUMP button
+		bottom = h - 122 -- portrait: just above the JUMP button, under the minimap
 	else
 		local t, b = hudSpace(holder)
 		if t and b and b > t + 100 then
