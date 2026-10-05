@@ -54,6 +54,7 @@ local MapBuilder = require(script.Parent.MapBuilder)
 local Fx = require(script.Parent.Fx)
 local Events = require(script.Parent.Events)
 local DevTools = require(script.Parent.DevTools)
+local EncounterDirector = require(script.Parent.EncounterDirector) -- feature encounters: PlayerOut on death / portal / abandon
 
 local RunManager = {}
 local disconnected: { [number]: any } = {}
@@ -692,6 +693,7 @@ local function finalizeDeath(rp)
 	end
 	rp.Alive = false
 	setAwaiting(rp, false)
+	EncounterDirector.PlayerOut(rp, "Death")
 	rp.TimeSurvived = runTime
 	rp.Player:SetAttribute("Alive", false)
 	ctx.LevelUpSystem.Cancel(rp, true)
@@ -1481,6 +1483,7 @@ function RunManager.ReturnThroughPortal(rp)
 		return
 	end
 	ctx.LevelUpSystem.Cancel(rp)
+	EncounterDirector.PlayerOut(rp, "Portal")
 	finishPlayer(rp, true, true)
 	removeFromRun(rp)
 	rp.Root = nil
@@ -1507,6 +1510,7 @@ function RunManager.AbandonRun(rp)
 	RunManager.EndReward(rp)
 	Remotes.FireClient("ReviveOffer", rp.Player, { Close = true })
 	rp.Abandoned = true
+	EncounterDirector.PlayerOut(rp, "Abandon")
 	finishPlayer(rp, false, true)
 	removeFromRun(rp)
 	rp.Root = nil
@@ -2235,6 +2239,9 @@ function RunManager.OnPlayerRemoving(player: Player)
 		saveRunStats(rp, false)
 	end
 	-- other systems may still hold this record (enemy targets, delayed whip slashes)
+	if wasInRun then
+		EncounterDirector.PlayerOut(rp, "Leave")
+	end
 	removeFromRun(rp)
 	if wasInRun and #runPlayers > 0 then
 		-- teammates see who dropped out (their HUD team list removes the row by itself)

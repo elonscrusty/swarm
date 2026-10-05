@@ -7,7 +7,8 @@
 	  Run, Dev, Player, Slots, LevelUp, XP, Gold, Drops, Items, Chests, Shrines, Guarded,
 	  Enemies, Difficulty, Spawn, Boss, Pacing,
 	  Projectiles, Net, Camera, Controls, Graphics, Data, Monetization, Sounds, Audio,
-	  Settings, Tutorial, DamageNumbers, UI, Arenas, Modes, Lobby
+	  Settings, Tutorial, DamageNumbers, UI, Arenas, Modes, Lobby, Features (FeatureOn),
+	  Encounters (Director), FeatureHud
 ]]
 
 local Config = {}
@@ -901,6 +902,17 @@ Config.Data = {
 	LoadRetryDelay = 4,
 	SaveAttempts = 4,
 	MaxStoredPurchaseIds = 150,
+	-- size caps for the additive feature fields (DataService.Migrate trims anything above)
+	Caps = {
+		IdLength = 64, -- longest id string kept in a set / list
+		SetEntries = 400, -- ids per owned / seen set (cosmetics, titles, collection ...)
+		Sigils = 64, -- owned Sigils
+		SigilSlots = 2, -- equipped Sigils
+		SeasonClaims = 200, -- claimed season tiers
+		Presets = 6, -- build presets
+		PresetPicks = 12, -- weapon / passive ids in one preset
+		WeaponMastery = 128, -- weapons with a mastery count
+	},
 }
 
 ------------------------------------------------------------------------------------------
@@ -920,6 +932,9 @@ Config.Monetization = {
 		Revive = 3716061270, -- mid-run revive, offered once per run on death
 	},
 	ProductGold = { Gold500 = 500, Gold1500 = 1500, Gold5000 = 5000 },
+	-- Cosmetic passes / products for the store (STORE fills it; CosmeticData Store keys
+	-- point here). 0 = not created yet: the shop shows "Coming soon".
+	Cosmetics = {},
 	-- One gamepass per cosmetic skin. Keys must match skin ids in CharacterData.
 	SkinPasses = {
 		Knight_Crimson = 0,
@@ -1369,6 +1384,70 @@ Config.Movement = {
 Config.Encounters = {
 	Types = { "Guarded", "Caravan", "Runes", "Treasure" },
 	Count = { 1, 2 },
+	-- EncounterDirector (server): the feature encounters (map events, mini-bosses, shrines,
+	-- merchant, rescue, secret rooms ...) on top of the optional locations above.
+	Director = {
+		MaxActive = 2, -- placed encounters running at the same time (per stage)
+		MaxAmbient = 1, -- ambient ones (weather, map-wide events) at the same time
+		-- FindSpot defaults: the same rules as the optional locations (LootSystem.BuildStage)
+		MinDistance = 75, -- studs from the spawn centre
+		Clearance = 11, -- free radius around the spot
+		Spacing = 34, -- studs from the portal, loot, the caravan and other encounters
+	},
+}
+
+------------------------------------------------------------------------------------------
+-- FEATURES (the 30-features batch, docs/features/FOUNDATION.md)
+--   One switch per feature. false = the game behaves exactly as before that feature.
+--   Read with Config.FeatureOn(name) (unknown names read as off).
+------------------------------------------------------------------------------------------
+Config.Features = {
+	Sigils = true, -- 1  Sigils (docs/SIGILS_PLAN.md)
+	MapEvents = true, -- 2  meteor shower, gold rush minute, fog
+	MiniBosses = true, -- 3  mid-stage mini-boss guarding a big chest
+	SecretRooms = true, -- 4  cracked walls
+	TrialShrine = true, -- 5  Shrine of Trial
+	Merchant = true, -- 6  merchant cart
+	CursedChests = true, -- 7  cursed chests
+	Rescue = true, -- 8  lost villager to the portal
+	Weather = true, -- 9  weather per world
+	BossIntro = true, -- 10 boss phase intro (camera push + name card)
+	NewHeroes = true, -- 11 Archer, Bard, Golem
+	SecondSkill = true, -- 12 second signature skill via mastery
+	Ultimate = true, -- 13 hero ultimate
+	BuildPresets = true, -- 14 favourite build paths
+	WeaponMastery = true, -- 15 weapon mastery glow / trail
+	TeamCombo = true, -- 16 team combo move
+	QuickPings = true, -- 17 quick pings / emotes
+	CoopBoss = true, -- 18 co-op-only boss mechanic
+	TeamBoard = true, -- 19 weekly team leaderboard
+	Spectate = true, -- 20 spectate a teammate after death
+	WeeklyChallenge = true, -- 21 weekly challenge run
+	SeasonTrack = true, -- 22 free season track
+	Titles = true, -- 23 achievement titles under the name
+	CollectionBook = true, -- 24 collection book
+	LoginStreak = true, -- 25 daily login streak
+	Announcer = true, -- 26 kill-streak announcer + combo counter
+	HitFeel = true, -- 27 hit-stop + death burst
+	MusicSlots = true, -- 28 per-world + boss-phase music slots
+	PhotoMode = true, -- 29 photo mode on results
+	LobbyFun = true, -- 30 training dummy, mirror, jump-pad course
+	Store = true, -- the cosmetics store (docs/features/STORE.md)
+}
+
+-- True when feature `name` (a Config.Features key) is switched on.
+function Config.FeatureOn(name: string): boolean
+	return (Config.Features :: any)[name] == true
+end
+
+-- Client FeatureHud (src/client/FeatureHud.lua): reserved HUD slots for new features.
+Config.FeatureHud = {
+	UltimateKey = Enum.KeyCode.Q, -- keyboard
+	UltimatePad = Enum.KeyCode.ButtonR1, -- gamepad
+	UltimateSize = 72, -- touch button (pixels), above the JUMP button
+	BadgeSize = 36, -- top-right badge row (pixels)
+	MaxBadges = 6,
+	AnnounceSeconds = 1.6, -- combo / announcer line default time on screen
 }
 
 ------------------------------------------------------------------------------------------

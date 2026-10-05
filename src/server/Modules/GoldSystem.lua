@@ -266,6 +266,8 @@ function GoldSystem.SyncProfile(player: Player)
 			DoubleGold = M.OwnsPass(player, "DoubleGold"),
 		},
 		MemoryOnly = ctx.DataService.IsMemoryOnly(),
+		-- 30-features batch save fields (DataService.FeatureView, docs/features/FOUNDATION.md)
+		Features = ctx.DataService.FeatureView and ctx.DataService.FeatureView(data) or nil,
 	})
 	player:SetAttribute("Gold", data.Gold)
 	-- the server sends damage numbers only to players who switched them on

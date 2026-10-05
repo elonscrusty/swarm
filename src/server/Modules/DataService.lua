@@ -48,6 +48,13 @@
 	  DevBoosted (boolean: a lobby DEV command boosted this profile, DevTools; every later
 	  run by this player is dev-tainted, so it never reaches boards or records. Additive,
 	  no schema bump; owner OK 2026-10-05, audit SEC-13)
+	30-features batch (additive, no schema bump, CleanFeatureFields; docs/features/FOUNDATION.md):
+	  Sigils {Owned {id → os.time()}, Equipped {id}}, Weekly {Week, Score, Plays, BestScore,
+	  BestWeek}, Season {Id, XP, Claimed {tier → true}}, Titles {Owned {id → true}},
+	  Collection {Seen {id → true}}, LoginStreak {Day, LastDay, Best}, Presets {List
+	  {{Hero, Weapons, Passives}}, Active {heroId → index}}, WeaponMastery {weaponId → count},
+	  Cosmetics {Owned {id → true}, Equipped {Trail, Burst, Pet, Emote, Nameplate, Dais}},
+	  Supporter (boolean)
 
 	Save health is shown to the player (never pretend saving works): the player attribute
 	"SaveStatus" is "ok", "memory" (DataStores unavailable: nothing is saved this session)
@@ -98,6 +105,21 @@ local function defaultDaily()
 	return { Day = 0, Used = false, Score = 0, Plays = 0, BestScore = 0, BestDay = 0 }
 end
 
+local function defaultWeekly()
+	return { Week = 0, Score = 0, Plays = 0, BestScore = 0, BestWeek = 0 }
+end
+
+-- Cosmetic slots worn (CosmeticData kinds that are not stored elsewhere; "" = none).
+-- Skins stay in data.Skins, titles in data.Title, the dais ring in data.Ring.
+local EQUIP_SLOTS = { "Trail", "Burst", "Pet", "Emote", "Nameplate", "Dais" }
+local function defaultEquipped()
+	local t = {}
+	for _, k in ipairs(EQUIP_SLOTS) do
+		t[k] = ""
+	end
+	return t
+end
+
 local function defaultData()
 	return {
 		Version = Config.Data.SchemaVersion,
@@ -130,6 +152,17 @@ local function defaultData()
 		Ring = "",
 		Frame = "",
 		DevBoosted = false, -- a lobby DEV command boosted this profile (DevTools, SEC-13)
+		-- 30-features batch (additive, no schema bump; docs/features/FOUNDATION.md)
+		Sigils = { Owned = {}, Equipped = {} },
+		Weekly = defaultWeekly(),
+		Season = { Id = "", XP = 0, Claimed = {} },
+		Titles = { Owned = {} },
+		Collection = { Seen = {} },
+		LoginStreak = { Day = 0, LastDay = 0, Best = 0 },
+		Presets = { List = {}, Active = {} },
+		WeaponMastery = {},
+		Cosmetics = { Owned = {}, Equipped = defaultEquipped() },
+		Supporter = false,
 	}
 end
 DataService.DefaultData = defaultData
@@ -248,6 +281,174 @@ local MIGRATIONS: { [number]: (any) -> any } = {
 		return data
 	end,
 }
+
+------------------------------------------------------------------------------------------
+-- 30-features batch save fields (additive, no schema bump; docs/features/FOUNDATION.md)
+--   Every field gets its default when missing or of the wrong shape; ids are short
+--   strings; sets / lists are capped (Config.Data.Caps). Unknown ids are KEPT (the data
+--   modules that know them may not exist yet): nothing a player earned is lost.
+------------------------------------------------------------------------------------------
+
+local function cleanId(v: any): string?
+	if type(v) == "string" and #v > 0 and #v <= Config.Data.Caps.IdLength then
+		return v
+	end
+	return nil
+end
+
+local function whole(v: any): number
+	local n = tonumber(v)
+	if n and n == n and math.abs(n) < math.huge then
+		return math.max(0, math.floor(n))
+	end
+	return 0
+end
+
+-- { id = true } with valid ids only, at most `cap` entries.
+local function cleanSet(t: any, cap: number): { [string]: boolean }
+	local out, n = {}, 0
+	if type(t) ~= "table" then
+		return out
+	end
+	for k, v in pairs(t) do
+		local id = cleanId(k)
+		if id and v == true and n < cap then
+			out[id] = true
+			n += 1
+		end
+	end
+	return out
+end
+
+-- { id = whole number } (counts, timestamps), at most `cap` entries; true reads as 1.
+local function cleanCounts(t: any, cap: number): { [string]: number }
+	local out, n = {}, 0
+	if type(t) ~= "table" then
+		return out
+	end
+	for k, v in pairs(t) do
+		local id = cleanId(k)
+		if id and (v == true or type(v) == "number") and n < cap then
+			out[id] = v == true and 1 or whole(v)
+			n += 1
+		end
+	end
+	return out
+end
+
+-- An array of distinct valid ids, at most `cap` long (order kept).
+local function cleanList(t: any, cap: number): { string }
+	local out = {}
+	if type(t) ~= "table" then
+		return out
+	end
+	for _, v in ipairs(t) do
+		local id = cleanId(v)
+		if id and not table.find(out, id) and #out < cap then
+			table.insert(out, id)
+		end
+	end
+	return out
+end
+
+local function sub(data: any, key: string): { [string]: any }
+	if type(data[key]) ~= "table" then
+		data[key] = {}
+	end
+	return data[key]
+end
+
+function DataService.CleanFeatureFields(data: { [string]: any })
+	local C = Config.Data.Caps
+	-- Sigils { Owned {id → os.time()}, Equipped {id, id} } (equipped ones must be owned;
+	-- the slot count by mastery is checked by the Sigils equip remote)
+	local sigils = sub(data, "Sigils")
+	sigils.Owned = cleanCounts(sigils.Owned, C.Sigils)
+	local equipped = {}
+	for _, id in ipairs(cleanList(sigils.Equipped, C.Sigils)) do
+		if sigils.Owned[id] ~= nil and #equipped < C.SigilSlots then
+			table.insert(equipped, id)
+		end
+	end
+	sigils.Equipped = equipped
+	-- Weekly challenge { Week, Score, Plays, BestScore, BestWeek } (whole numbers)
+	local weekly = sub(data, "Weekly")
+	for k in pairs(defaultWeekly()) do
+		weekly[k] = whole(weekly[k])
+	end
+	-- Season track { Id = season id ("" = none yet), XP, Claimed {tostring(tier) → true} }
+	local season = sub(data, "Season")
+	season.Id = cleanId(season.Id) or ""
+	season.XP = whole(season.XP)
+	season.Claimed = cleanSet(season.Claimed, C.SeasonClaims)
+	-- Titles { Owned {id → true} } (the worn one stays data.Title)
+	local titles = sub(data, "Titles")
+	titles.Owned = cleanSet(titles.Owned, C.SetEntries)
+	-- Collection book { Seen {id → true} } ("Kind:Id" keys; Journal / Discovered hold the rest)
+	local collection = sub(data, "Collection")
+	collection.Seen = cleanSet(collection.Seen, C.SetEntries)
+	-- Login streak { Day = streak length, LastDay = UTC day number of the last claim, Best }
+	local streak = sub(data, "LoginStreak")
+	for _, k in ipairs({ "Day", "LastDay", "Best" }) do
+		streak[k] = whole(streak[k])
+	end
+	-- Build presets { List {{Hero, Weapons {id}, Passives {id}}}, Active {heroId → index} }
+	local presets = sub(data, "Presets")
+	local list = {}
+	if type(presets.List) == "table" then
+		for _, p in ipairs(presets.List) do
+			if type(p) == "table" and #list < C.Presets then
+				table.insert(list, {
+					Hero = cleanId(p.Hero) or "",
+					Weapons = cleanList(p.Weapons, C.PresetPicks),
+					Passives = cleanList(p.Passives, C.PresetPicks),
+				})
+			end
+		end
+	end
+	presets.List = list
+	local active = {}
+	if type(presets.Active) == "table" then
+		for heroId, index in pairs(presets.Active) do
+			local id, n = cleanId(heroId), whole(index)
+			if id and n >= 1 and n <= #list then
+				active[id] = n
+			end
+		end
+	end
+	presets.Active = active
+	-- Weapon mastery {weaponId → count}
+	data.WeaponMastery = cleanCounts(data.WeaponMastery, C.WeaponMastery)
+	-- Cosmetics { Owned {id → true}, Equipped {Trail, Burst, Pet, Emote, Nameplate, Dais} }
+	local cosmetics = sub(data, "Cosmetics")
+	cosmetics.Owned = cleanSet(cosmetics.Owned, C.SetEntries)
+	local worn = type(cosmetics.Equipped) == "table" and cosmetics.Equipped or {}
+	local clean = {}
+	for _, k in ipairs(EQUIP_SLOTS) do
+		clean[k] = cleanId(worn[k]) or ""
+	end
+	cosmetics.Equipped = clean
+	-- Supporter (the one-time Supporter pass seen; never cleared here)
+	if type(data.Supporter) ~= "boolean" then
+		data.Supporter = false
+	end
+end
+
+-- The feature fields for the client (GoldSystem.SyncProfile sends it as ProfileSync.Features).
+function DataService.FeatureView(data: { [string]: any }): { [string]: any }
+	return {
+		Sigils = data.Sigils,
+		Weekly = data.Weekly,
+		Season = data.Season,
+		Titles = data.Titles,
+		Collection = data.Collection,
+		LoginStreak = data.LoginStreak,
+		Presets = data.Presets,
+		WeaponMastery = data.WeaponMastery,
+		Cosmetics = data.Cosmetics,
+		Supporter = data.Supporter == true,
+	}
+end
 
 -- Brings any stored table up to the current schema and fills missing fields.
 function DataService.Migrate(data: any): { [string]: any }
@@ -493,6 +694,7 @@ function DataService.Migrate(data: any): { [string]: any }
 				and math.max(0, math.floor(value)) or 0
 		end
 	end
+	DataService.CleanFeatureFields(data)
 	data.Version = math.max(Config.Data.SchemaVersion, storedVersion)
 	return data
 end

@@ -274,5 +274,91 @@ if not BossData.Bosses[Config.Boss.First] then
 	bad("Config.Boss.First unknown")
 end
 
+-- 30-features batch (docs/features/FOUNDATION.md): flags, cosmetics registry, save fields
+do
+	local NAMES = { "Sigils", "MapEvents", "MiniBosses", "SecretRooms", "TrialShrine", "Merchant", "CursedChests", "Rescue", "Weather", "BossIntro", "NewHeroes", "SecondSkill", "Ultimate", "BuildPresets", "WeaponMastery", "TeamCombo", "QuickPings", "CoopBoss", "TeamBoard", "Spectate", "WeeklyChallenge", "SeasonTrack", "Titles", "CollectionBook", "LoginStreak", "Announcer", "HitFeel", "MusicSlots", "PhotoMode", "LobbyFun", "Store" }
+	local n = 0
+	for name, on in pairs(Config.Features) do
+		n += 1
+		if type(on) ~= "boolean" then bad("Config.Features." .. name .. " is not a boolean") end
+		if not table.find(NAMES, name) then bad("Config.Features." .. name .. " is not a known feature") end
+	end
+	for _, name in ipairs(NAMES) do
+		if Config.FeatureOn(name) ~= (Config.Features[name] == true) then bad("FeatureOn(" .. name .. ") disagrees") end
+	end
+	if n ~= 31 then bad("Config.Features has " .. n .. " flags, expected 31") end
+	if Config.FeatureOn("NoSuchFeature") then bad("unknown feature reads as on") end
+
+	local Cos = preview.shared("CosmeticData")
+	local CharacterData = preview.shared("CharacterData")
+	for _, id in ipairs(Cos.Order) do
+		local e = Cos.Items[id]
+		if e.Id ~= id then bad("cosmetic " .. id .. " Id mismatch") end
+		if not table.find(Cos.Kinds, e.Kind) then bad("cosmetic " .. id .. " kind " .. tostring(e.Kind)) end
+		if e.Source == "Earned" and (type(e.Condition) ~= "string" or e.Condition == "") then bad("earned cosmetic " .. id .. " has no condition text") end
+		if e.Source == "Store" and type(e.StoreKey) ~= "string" then bad("store cosmetic " .. id .. " has no StoreKey") end
+		if e.Source == "Store" and Cos.StoreId(id) == 0 and not Cos.ComingSoon(id) then bad("cosmetic " .. id .. " coming-soon state") end
+	end
+	for id in pairs(CharacterData.Skins) do
+		if not Cos.Items[id] or Cos.Items[id].Kind ~= "Skin" then bad("skin " .. id .. " missing from CosmeticData") end
+	end
+
+	local DS = preview.server("DataService")
+	local S = Config.Data.SchemaVersion
+	-- an old save (schema 7, before this batch) loads with every new field at its default
+	local old = DS.Migrate({ Version = S, Gold = 777, OwnedCharacters = { Mage = true }, Title = "Veteran", Ring = "Ember", Skins = { Knight = "Default" }, Stats = { Wins = 2 } })
+	if old.Gold ~= 777 or not old.OwnedCharacters.Mage or old.Title ~= "Veteran" or old.Ring ~= "Ember" or old.Stats.Wins ~= 2 then bad("old save lost progress") end
+	if old.Version ~= S then bad("feature fields bumped the schema") end
+	if type(old.Sigils.Owned) ~= "table" or #old.Sigils.Equipped ~= 0 then bad("Sigils default") end
+	if old.Weekly.BestScore ~= 0 or old.Season.Id ~= "" or old.Season.XP ~= 0 then bad("Weekly / Season default") end
+	if next(old.Titles.Owned) ~= nil or next(old.Collection.Seen) ~= nil then bad("Titles / Collection default") end
+	if old.LoginStreak.Day ~= 0 or old.LoginStreak.LastDay ~= 0 then bad("LoginStreak default") end
+	if #old.Presets.List ~= 0 or next(old.WeaponMastery) ~= nil then bad("Presets / WeaponMastery default") end
+	if old.Cosmetics.Equipped.Trail ~= "" or old.Cosmetics.Equipped.Dais ~= "" or old.Supporter ~= false then bad("Cosmetics / Supporter default") end
+	-- a filled save keeps everything valid
+	local full = DS.Migrate({
+		Version = S, Gold = 1,
+		Sigils = { Owned = { HaresFoot = 1700000000, GlassEye = 1700000001 }, Equipped = { "HaresFoot", "Nope", "GlassEye", "HaresFoot" } },
+		Weekly = { Week = 2900, Score = 50, Plays = 3, BestScore = 900, BestWeek = 2899 },
+		Season = { Id = "S1", XP = 1234, Claimed = { ["1"] = true, ["2"] = true } },
+		Titles = { Owned = { Trailblazer = true } },
+		Collection = { Seen = { ["Boss:ScorpionQueen"] = true } },
+		LoginStreak = { Day = 5, LastDay = 20000, Best = 9 },
+		Presets = { List = { { Hero = "Knight", Weapons = { "Whip", "Whip", "Orb" }, Passives = { "Armor" } } }, Active = { Knight = 1, Mage = 4 } },
+		WeaponMastery = { Whip = 120, Orb = 3.7 },
+		Cosmetics = { Owned = { Trail_Ember = true }, Equipped = { Trail = "Trail_Ember", Pet = 5 } },
+		Supporter = true,
+	})
+	if full.Sigils.Owned.HaresFoot ~= 1700000000 or #full.Sigils.Equipped ~= 2 or full.Sigils.Equipped[2] ~= "GlassEye" then bad("Sigils kept / cleaned") end
+	if full.Weekly.BestScore ~= 900 or full.Season.XP ~= 1234 or not full.Season.Claimed["2"] then bad("Weekly / Season kept") end
+	if not full.Titles.Owned.Trailblazer or not full.Collection.Seen["Boss:ScorpionQueen"] then bad("Titles / Collection kept") end
+	if full.LoginStreak.Day ~= 5 or full.LoginStreak.Best ~= 9 then bad("LoginStreak kept") end
+	local p1 = full.Presets.List[1]
+	if not p1 or p1.Hero ~= "Knight" or #p1.Weapons ~= 2 or full.Presets.Active.Knight ~= 1 or full.Presets.Active.Mage ~= nil then bad("Presets kept / cleaned") end
+	if full.WeaponMastery.Whip ~= 120 or full.WeaponMastery.Orb ~= 3 then bad("WeaponMastery kept") end
+	if full.Cosmetics.Equipped.Trail ~= "Trail_Ember" or full.Cosmetics.Equipped.Pet ~= "" or not full.Cosmetics.Owned.Trail_Ember or full.Supporter ~= true then bad("Cosmetics / Supporter kept") end
+	-- malformed and oversized
+	local junk = DS.Migrate({ Version = S, Sigils = "x", Weekly = { Week = 0 / 0, BestScore = math.huge }, Season = 5, Titles = { Owned = { [string.rep("a", 200)] = true, ok = "yes" } }, LoginStreak = { Day = -3 }, Presets = { List = "x" }, Cosmetics = { Equipped = "x" }, Supporter = "yes", WeaponMastery = { [1] = 5 } })
+	if type(junk.Sigils.Owned) ~= "table" or junk.Weekly.Week ~= 0 or junk.Weekly.BestScore ~= 0 or junk.Season.Id ~= "" or next(junk.Titles.Owned) ~= nil
+		or junk.LoginStreak.Day ~= 0 or #junk.Presets.List ~= 0 or junk.Cosmetics.Equipped.Trail ~= "" or junk.Supporter ~= false or next(junk.WeaponMastery) ~= nil then
+		bad("malformed feature fields not reset")
+	end
+	local many, presets = {}, {}
+	for i = 1, Config.Data.Caps.SetEntries + 50 do many["id" .. i] = true end
+	for _ = 1, Config.Data.Caps.Presets + 3 do table.insert(presets, { Hero = "Knight", Weapons = {}, Passives = {} }) end
+	local capped = DS.Migrate({ Version = S, Collection = { Seen = many }, Presets = { List = presets } })
+	local count = 0
+	for _ in pairs(capped.Collection.Seen) do count += 1 end
+	if count ~= Config.Data.Caps.SetEntries or #capped.Presets.List ~= Config.Data.Caps.Presets then bad("feature caps not applied") end
+	-- a second pass changes nothing (Migrate is stable on its own output)
+	local again = DS.Migrate(full)
+	if again.Sigils.Equipped[1] ~= "HaresFoot" or again.Season.XP ~= 1234 or again.Presets.Active.Knight ~= 1 then bad("Migrate not stable on feature fields") end
+	local view = DS.FeatureView(full)
+	for _, k in ipairs({ "Sigils", "Weekly", "Season", "Titles", "Collection", "LoginStreak", "Presets", "WeaponMastery", "Cosmetics" }) do
+		if type(view[k]) ~= "table" then bad("FeatureView misses " .. k) end
+	end
+	preview.log("PASS feature foundation: 31 flags, " .. #Cos.Order .. " cosmetics, save fields default / keep / clean / cap")
+end
+
 preview.log(string.format("data sanity: %d finding(s)", #findings))
 assert(#findings == 0, table.concat(findings, "\n"))

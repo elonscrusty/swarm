@@ -49,6 +49,7 @@ local MapBuilder = require(script.Parent.MapBuilder)
 local Fx = require(script.Parent.Fx)
 local Events = require(script.Parent.Events)
 local BiomeHazards = require(script.Parent.BiomeHazards)
+local EncounterDirector = require(script.Parent.EncounterDirector)
 local BossData = require(game:GetService("ReplicatedStorage").Shared.BossData)
 
 local StageManager = {}
@@ -300,6 +301,8 @@ local function buildStage(n: number)
 	portal = MapBuilder.BuildPortal(arena, spot)
 	-- chests, shrines and the guarded altar (new spots every stage; the old ones are gone)
 	ctx.LootSystem.BuildStage(arena, n, spot)
+	-- feature encounters (EncounterDirector; nothing runs while none is registered)
+	EncounterDirector.StageStart(arena, n, spot, arenaName)
 	ctx.EnemyAI.SetArena(arena) -- after the portal and the loot: their colliders count too
 	BiomeHazards.SetArena(arena) -- mud / ice / quicksand / lava pools of a biome arena
 	stageTime = 0
@@ -363,6 +366,7 @@ end
 
 -- The run is over (defeat, everyone returned, server cleanup).
 function StageManager.EndRun()
+	EncounterDirector.StageEnd("RunEnd") -- feature encounters clean up (defeat, abandon, last one out)
 	portal = nil
 	fixedBosses = nil
 	BiomeHazards.Clear()
@@ -780,6 +784,7 @@ local function stepTravel(dt: number)
 	if travelStep == "FadeIn" then
 		-- the screens are dark: bank what is still on the floor, then swap the arena
 		ctx.XPSystem.CollectAll()
+		EncounterDirector.StageEnd("Travel")
 		ctx.EnemySpawner.DespawnAll()
 		ctx.WeaponSystem.Clear()
 		ctx.XPSystem.Clear()
@@ -817,6 +822,7 @@ function StageManager.Step(dt: number)
 	-- floor hazards keep working while the portal is open too: a player who walks off the
 	-- ice or out of the mud on the way to it gets their footing back at once
 	BiomeHazards.Step(dt)
+	EncounterDirector.Step(dt)
 	if sub == "Explore" then
 		stepExplore(dt)
 	elseif sub == "Surge" then
@@ -896,6 +902,7 @@ end
 function StageManager.Init(c)
 	ctx = c
 	BiomeHazards.Init(c)
+	EncounterDirector.Init(c)
 	state = Remotes.State()
 	state:SetAttribute("Stage", 0)
 	state:SetAttribute("StagePhase", "None")

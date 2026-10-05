@@ -53,6 +53,11 @@ do
 		{ Skins = { Knight = 5, Nobody = "Default" } }, { PurchaseIds = { 1, "a", {} } }, { Curses = { 1, 2, 3 } },
 		{ LastRun = { Time = math.huge, Mode = {} } }, { RunEscrow = { Id = 5 } }, { RunReconnect = { AccessCode = string.rep("x", 600) } },
 		{ Journal = "x" }, { Discovered = { Weapons = 3 } }, { Difficulty = "God" }, { SelectedCharacter = "Nobody" },
+		-- 30-features batch fields (docs/features/FOUNDATION.md)
+		{ Sigils = { Owned = "x", Equipped = { {}, 5 } } }, { Sigils = { Owned = { A = 0 / 0 }, Equipped = "A" } },
+		{ Weekly = "x" }, { Season = { Claimed = { 1, 2 }, XP = -1 } }, { Titles = { Owned = { [{}] = true } } },
+		{ Collection = 3 }, { LoginStreak = { LastDay = math.huge } }, { Presets = { List = { 5, { Weapons = "x" } }, Active = 2 } },
+		{ WeaponMastery = { Whip = 0 / 0 } }, { Cosmetics = { Owned = { [string.rep("z", 99)] = true }, Equipped = { Trail = 7 } } }, { Supporter = 1 },
 	}
 	for i, f in ipairs(fixtures) do
 		local ok, out = pcall(DS.Migrate, f)
@@ -70,6 +75,9 @@ do
 	assert(DS.Migrate({ Version = S + 1, Gold = 5 }).Version == S + 1, "a newer build's version is kept")
 	assert(DS.Migrate({ Version = 9999, Gold = 5 }).Version == S, "a far-off version is junk")
 	assert(DS.Migrate({ Version = 2, Gold = 5 }).Version == S, "an old save reaches the current schema")
+	-- feature fields never forge ownership: an equipped Sigil must be owned, junk is dropped
+	local forged = DS.Migrate({ Version = S, Sigils = { Owned = {}, Equipped = { "HaresFoot" } }, Supporter = "true" })
+	assert(#forged.Sigils.Equipped == 0 and forged.Supporter == false, "feature fields cannot be forged by a malformed save")
 	preview.log(string.format("PASS migrate: %d malformed / legacy / oversized fixtures, progress kept, newer version kept", #fixtures))
 end
 
