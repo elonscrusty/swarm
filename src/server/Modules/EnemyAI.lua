@@ -163,9 +163,20 @@ end
 -- Living players' root positions, read once per frame (EnemyAI.Step) instead of once per
 -- enemy per use: rp -> position.
 local playerPos: { [any]: Vector3 } = {}
+-- Players whose server-opened upgrade choice protects them this frame (the state that
+-- ChoiceProtectedUntil mirrors: rp.Offer while rp.Paused). Enemies pick someone else while
+-- anyone else is free (owner OK 2026-10-05, SEC-02b); if all are protected, nothing changes.
+local protectedNow: { [any]: boolean } = {}
+local anyFree = false
+
+local function isProtected(rp): boolean
+	return rp.Paused == true and rp.Offer ~= nil
+end
+EnemyAI.IsChoiceProtected = isProtected
 
 local function nearestPlayer(pos: Vector3, runPlayers)
 	local best, bestD2 = nil, math.huge
+	local freeBest, freeD2 = nil, math.huge
 	local px, pz = pos.X, pos.Z
 	for _, rp in ipairs(runPlayers) do
 		local p = playerPos[rp]
@@ -175,7 +186,13 @@ local function nearestPlayer(pos: Vector3, runPlayers)
 			if d2 < bestD2 then
 				best, bestD2 = rp, d2
 			end
+			if d2 < freeD2 and not protectedNow[rp] then
+				freeBest, freeD2 = rp, d2
+			end
 		end
+	end
+	if freeBest then
+		return freeBest, math.sqrt(freeD2)
 	end
 	return best, math.sqrt(bestD2)
 end
@@ -675,9 +692,16 @@ function EnemyAI.Step(dt: number)
 	local active = ctx.EnemySpawner.Active
 	local runPlayers = ctx.RunManager.GetRunPlayers()
 	table.clear(playerPos)
+	table.clear(protectedNow)
+	anyFree = false
 	for _, rp in ipairs(runPlayers) do
 		if rp.Alive and rp.Root then
 			playerPos[rp] = rp.Root.Position
+			if isProtected(rp) then
+				protectedNow[rp] = true
+			else
+				anyFree = true
+			end
 		end
 	end
 	local chunks = Config.Enemies.ThinkChunks
@@ -700,7 +724,7 @@ function EnemyAI.Step(dt: number)
 	while i <= #active do
 		local e = active[i]
 		local static = e.Def.Static == true
-		if not static and (e.ThinkSlot == slot or e.Target == nil or (e.Target and not e.Target.Alive)) then
+		if not static and (e.ThinkSlot == slot or e.Target == nil or (e.Target and not e.Target.Alive) or (anyFree and protectedNow[e.Target])) then
 			debug.profilebegin("EnemyAI.Think")
 			think(e, runPlayers)
 			debug.profileend()

@@ -81,6 +81,20 @@ local function living(): { any }
 	return out
 end
 
+-- Who the boss aims at: living players whose upgrade choice is not protecting them (the
+-- state ChoiceProtectedUntil mirrors), or everyone living if all are protected
+-- (owner OK 2026-10-05, SEC-02b). Hits still use living(); protected players take no damage.
+local function targets(): { any }
+	local all = living()
+	local out = {}
+	for _, rp in ipairs(all) do
+		if not (rp.Paused == true and rp.Offer ~= nil) then
+			table.insert(out, rp)
+		end
+	end
+	return #out > 0 and out or all
+end
+
 local function floorPos(rp): Vector3
 	local p = rp.Root.Position
 	return Vector3.new(p.X, Config.ArenaOrigin.Y, p.Z)
@@ -88,7 +102,7 @@ end
 
 local function nearest(pos: Vector3)
 	local best, bestD = nil, math.huge
-	for _, rp in ipairs(living()) do
+	for _, rp in ipairs(targets()) do
 		local d = ((rp.Root.Position - pos) * FLAT).Magnitude
 		if d < bestD then
 			best, bestD = rp, d
@@ -213,7 +227,7 @@ end
 -- Spots near the players: one close to each (offset minOff..maxOff), the rest around
 -- random players (near..far), at least `apart` from each other.
 local function spotsNearPlayers(n: number, minOff: number, maxOff: number, near: number, far: number, apart: number): { Vector3 }
-	local players = living()
+	local players = targets()
 	local spots: { Vector3 } = {}
 	if #players == 0 then
 		return spots
@@ -361,7 +375,7 @@ end
 
 function Start.Burrow(e)
 	local A = e.BossData.Attacks.Burrow
-	local list = living()
+	local list = targets()
 	e.BurrowTarget = #list > 0 and list[rng:NextInteger(1, #list)] or nil
 	e.SpeedOverride = 0
 	setAct(e, "Dive")
@@ -673,7 +687,7 @@ local function rootSet(e, windup: number)
 		end
 		return true
 	end
-	for _, rp in ipairs(living()) do
+	for _, rp in ipairs(targets()) do
 		local to = (rp.Root.Position - e.Pos) * FLAT
 		if #angles < n and to.Magnitude > 0.5 then
 			local a = math.atan2(to.Z, to.X)
