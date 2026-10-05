@@ -80,9 +80,25 @@ Method:
   boss-phase time.
 - Gold and cleared stages are unaffected (fixed explore time).
 
-BALANCE_TABLE
+| Hero | Taken/min S1-3 | Lethal S1-5 | Min HP S1-3 | TTK normal s | Boss phase s | Kills | Seeds |
+|---|---|---|---|---|---|---|---|
+| Knight | 87 | 3.4 | 39% | 1.12 | 58 | 6326 | 5 |
+| Archer | 252 | 21.2 | 20% | 1.40 | 64 | 6456 | 5 |
+| Bard | 183 | 9.2 | 20% | 1.40 | 74 | 5672 | 5 |
+| Golem | 97 | 2.8 | 38% | 0.90 | 62 | 6934 | 5 |
 
-How to read it: see the notes under the table. The numbers are noisy with 5 seeds.
+How to read it:
+- **Golem:** within the Knight's range.
+- **Archer and Bard:** they take about 2-3x the Knight's damage. Part of that is that they
+  have no defensive trait, while the Knight takes 10% less damage. Their weapons also clear
+  more slowly than the Sword (TTK 1.40 s vs 1.12 s).
+- **Baseline missing:** the gold-hero runs (Mage, Rogue, Priest) were stopped at the lead's
+  request, so it's still unknown whether Archer and Bard sit inside the existing heroes'
+  range. That check is **BLOCKED** until wave 3.
+- **Bard balance:** the econ-sim bot is solo, so the Bard only shows its 7% self buff.
+- **Tuning if wave 3 confirms the gap:** Archer `Bonus.cooldown` 0.10 → 0.15; Bard
+  `SelfShare` 0.6 → 0.8.
+
 Logs: `scratchpad/heroes/econ/out/<Hero>_s1..5.log`.
 
 ## Files
@@ -135,8 +151,9 @@ Logs: `scratchpad/heroes/econ/out/<Hero>_s1..5.log`.
   - Layout checks with 0 problems: `characters` on iphone and phone-portrait.
   - Meshes built, uploaded and in MeshCatalog.
   - Renders: lobby (Bard) on pc; Characters on pc and iphone.
-  - econ-sim: see the balance check above.
+  - econ-sim: Knight and the 3 new heroes, 5 seeds each.
 - BLOCKED:
+  - econ-sim range check against Mage, Rogue and Priest: the runs were stopped (see the balance check).
   - Studio, real phones and live servers.
   - The Robux early unlock: the products don't exist yet (Id 0), so it shows "Coming soon".
   - How the new meshes look in Roblox lighting.
