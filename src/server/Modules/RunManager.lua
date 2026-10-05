@@ -910,6 +910,8 @@ local function newRunPlayer(player: Player)
 		Rerolls = perRun("Reroll") + ctx.MonetizationService.ExtraRerolls(player),
 		Skips = perRun("Skip"),
 		RerollsMax = perRun("Reroll") + ctx.MonetizationService.ExtraRerolls(player),
+		-- VIP rerolls granted so far (a late pass lookup tops up the rest, MonetizationService)
+		PassRerolls = ctx.MonetizationService.ExtraRerolls(player),
 		SkipsMax = perRun("Skip"),
 		Kills = 0,
 		Gold = 0, -- gold banked this run (earned minus spent at chests / shrines)

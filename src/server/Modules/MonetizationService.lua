@@ -83,6 +83,20 @@ function MonetizationService.OwnsPassId(player: Player, passId: number?): boolea
 	return cached
 end
 
+-- True once every configured gameplay pass (Config.Monetization.GamePasses) has an answer
+-- for this player. Until then earnings are paid with the passes known so far and the
+-- difference is paid back when the lookup answers (GoldSystem.CorrectEarlyGold, audit
+-- EC-A21): a slow lookup never holds up the run.
+function MonetizationService.PassesKnown(player: Player): boolean
+	local cache = passCache[player]
+	for _, id in pairs(Config.Monetization.GamePasses) do
+		if id ~= 0 and (not cache or cache[id] == nil) then
+			return false
+		end
+	end
+	return true
+end
+
 -- True for a non-zero id listed in Config.Monetization.GamePasses or SkinPasses.
 function MonetizationService.IsConfiguredPass(passId: any): boolean
 	if type(passId) ~= "number" or passId == 0 then
@@ -162,8 +176,23 @@ function MonetizationService.RefreshAttributes(player: Player)
 	-- in a run, chest / shrine prices follow the new multiplier at once (GoldSystem.PriceMult);
 	-- through ctx, so no require cycle
 	local gold, run = ctx and ctx.GoldSystem, ctx and ctx.RunManager
-	if gold and gold.PublishGoldMult and run and run.GetRunPlayer and run.GetRunPlayer(player) then
+	local rp = run and run.GetRunPlayer and run.GetRunPlayer(player)
+	if gold and gold.PublishGoldMult and rp then
 		gold.PublishGoldMult(player)
+		-- a lookup that answered after the run began: pay back what the first seconds
+		-- earned without the pass, and hand over the VIP rerolls (EC-A21)
+		if MonetizationService.PassesKnown(player) then
+			if gold.CorrectEarlyGold then
+				gold.CorrectEarlyGold(rp)
+			end
+			local extra = MonetizationService.ExtraRerolls(player)
+			local given = tonumber(rp.PassRerolls) or 0
+			if extra > given and type(rp.Rerolls) == "number" then
+				rp.Rerolls += extra - given
+				rp.RerollsMax = (tonumber(rp.RerollsMax) or 0) + extra - given
+				rp.PassRerolls = extra
+			end
+		end
 	end
 end
 

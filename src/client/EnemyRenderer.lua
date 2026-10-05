@@ -236,18 +236,53 @@ local function cutToLow(pieces: { any }): { any }
 	return keep
 end
 
+-- Snow contrast (audit S-18): the pale Phase Moth and the pale Healer aphid almost vanish
+-- on the grey-white Snow ground. On the Snow arena only, their pale pieces are drawn a few
+-- shades darker (same hue, a little more colour): a slate moth, a sage aphid. Other
+-- arenas, other enemies and dark pieces (eyes, stripes, contours) are unchanged.
+local SnowContrast = {
+	Types = { Ghost = true, Healer = true },
+	On = false, -- SwarmState Arena == "Snow"
+	PALE = 0.62, -- pieces brighter than this (0-1 luminance) are darkened
+	VALUE = 0.5, -- their brightness is capped here
+}
+
+function SnowContrast.color(c: Color3): Color3
+	local h, sat, v = c:ToHSV()
+	return Color3.fromHSV(h, math.min(1, sat * 1.6 + 0.08), math.min(v, SnowContrast.VALUE))
+end
+
+-- Records each pale piece's snow colour on a fresh Ghost / Healer model.
+function SnowContrast.mark(typeId: string, pieces: { any })
+	if not SnowContrast.Types[typeId] then
+		return
+	end
+	for _, piece in ipairs(pieces) do
+		local c = piece.Color
+		if typeof(c) == "Color3" and 0.299 * c.R + 0.587 * c.G + 0.114 * c.B > SnowContrast.PALE then
+			piece.SnowColor = SnowContrast.color(c)
+		end
+	end
+end
+
+-- The colour a piece is normally drawn in (before accessibility and flashes).
+function SnowContrast.base(piece: any): Color3
+	return (SnowContrast.On and piece.SnowColor) or piece.Color
+end
+
 local function buildModel(typeId: string, elite: boolean, low: boolean): ({ any }, string, number)
 	local pieces, motion, scale = ModelLibrary.Enemy(typeId, elite)
 	if low then
 		pieces = cutToLow(pieces)
 	end
+	SnowContrast.mark(typeId, pieces)
 	return pieces, motion, scale
 end
 
 local flashColors: (slot: any) -> ()
 local function restoreColors(pieces: { any })
 	for _, piece in ipairs(pieces) do
-		piece.Part.Color = Accessibility.Color(piece.Color)
+		piece.Part.Color = Accessibility.Color(SnowContrast.base(piece))
 	end
 end
 
@@ -543,7 +578,7 @@ flashColors = function(slot: Slot)
 	local typeId = slot.Type
 	local k = (typeId and isBoss(typeId :: string)) and 0.32 or (slot.Elite and 0.45 or 0.6)
 	for _, piece in ipairs(slot.Pieces) do
-		local base = Accessibility.Color(piece.Color)
+		local base = Accessibility.Color(SnowContrast.base(piece))
 		local lum = 0.299 * base.R + 0.587 * base.G + 0.114 * base.B
 		piece.Part.Color = base:Lerp(FLASH_TINT, k * (0.3 + 0.7 * lum))
 	end
@@ -1253,7 +1288,7 @@ local function step(dt: number)
 					slot.Blink = blinkOn
 					if blinkOn then
 						for _, piece in ipairs(slot.Pieces) do
-							piece.Part.Color = piece.Color:Lerp(BLINK, 0.7)
+							piece.Part.Color = SnowContrast.base(piece):Lerp(BLINK, 0.7)
 						end
 					else
 						restoreColors(slot.Pieces)
@@ -1453,6 +1488,23 @@ function EnemyRenderer.Init()
 		if localPlayer:GetAttribute("InRun") ~= true then
 			trimming = true
 		end
+	end)
+	-- Snow contrast follows the arena (SwarmState Arena); live models recolour at once
+	task.spawn(function()
+		local state = game:GetService("ReplicatedStorage"):WaitForChild("SwarmState")
+		local function sync()
+			local on = state:GetAttribute("Arena") == "Snow"
+			if on ~= SnowContrast.On then
+				SnowContrast.On = on
+				for _, slot in pairs(slots) do
+					if slot.Type and SnowContrast.Types[slot.Type] and slot.FlashUntil == 0 then
+						restoreColors(slot.Pieces)
+					end
+				end
+			end
+		end
+		state:GetAttributeChangedSignal("Arena"):Connect(sync)
+		sync()
 	end)
 	Telegraphs.Init() -- the floor warnings (started here so ClientMain stays unchanged)
 	task.spawn(function()

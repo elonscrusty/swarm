@@ -829,7 +829,11 @@ R.defineClass("MarketplaceService", {
 		GetProductInfoAsync = function(_, id)
 			return { Name = "Product " .. tostring(id), Description = "", PriceInRobux = 49, IconImageAssetId = 0, ProductId = id, AssetId = id, IsForSale = true }
 		end,
-		UserOwnsGamePassAsync = function()
+		UserOwnsGamePassAsync = function(_, userId, passId)
+			local hook = R.passLookupHook
+			if hook then
+				return hook(userId, passId) == true
+			end
 			return false
 		end,
 		PlayerOwnsAsset = function()

@@ -51,6 +51,11 @@ function A.swarm(s, centre: Vector3, count: number, runSeconds: number)
 	local made = 0
 	for i = 1, count do
 		local typeId = weightedPick(rng, row.Weights)
+		-- --set types=Ghost,Healer: only these enemy types (a readability check)
+		local only = preview.args.types and string.split(preview.args.types, ",") or nil
+		if only and #only > 0 then
+			typeId = only[(i - 1) % #only + 1]
+		end
 		local def = EnemyData.Enemies[typeId]
 		local elite = i % 40 == 0 -- a few elites
 		local sizeMult = elite and Config.Enemies.EliteSizeMult or 1

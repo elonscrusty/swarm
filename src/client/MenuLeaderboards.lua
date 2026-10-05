@@ -308,6 +308,11 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		end
 		ui.Note.Visible = note ~= ""
 		ui.NoteText.Text = note
+		-- the full note, and a one-line version for short screens (phones in landscape)
+		ui.NoteFull = note
+		ui.NoteShort = (status == "error" and "Could not read the board. Trying again in a minute.")
+			or (status == "local" and "Global boards offline: this server only.")
+			or note
 		local rows = d and type(d.Rows) == "table" and d.Rows or {}
 		rowCount = #rows
 		local made = {}
@@ -387,11 +392,20 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		end
 		y += short and 6 or 12
 		if ui.Note.Visible then
-			local noteH = TS(14) * (narrow and 5 or 2) + 22
+			-- short screens get the one-line note so YOUR BEST stays on screen (S-19)
+			ui.NoteText.Text = (short and ui.NoteShort or ui.NoteFull) or ui.NoteText.Text
+			local noteH = short and (TS(14) + 18) or (TS(14) * (narrow and 5 or 2) + 22)
 			place(ui.Note, 0, y, iw, noteH)
-			y += noteH + 10
+			y += noteH + (short and 6 or 10)
 		end
 		local headH = TS(12) + 12
+		-- still too tight for one row plus YOUR BEST: the column heading goes (the row shows
+		-- rank, name and score on its own)
+		do
+			local youGuess = narrow and (ui.YouNote.Visible and 86 or 64) or (ui.YouNote.Visible and 66 or 60)
+			local spare = maxH - 32 - y - (TS(14) + 8) - 10 - youGuess - (ROW_H + 8)
+			ui.Head.Visible = rowCount > 0 and spare >= headH + 6
+		end
 		if ui.Head.Visible then
 			place(ui.Head, 0, y, iw, headH)
 			y += headH + 6

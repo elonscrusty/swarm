@@ -2035,6 +2035,16 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 			if ui.Frame and ui.Frame.Visible and UIState.Owner() == nil then
 				setBuildOpen(not ui.BuildOpen)
 			end
+		elseif input.KeyCode == Enum.KeyCode.ButtonStart and player:GetAttribute("InRun") == true then
+			-- gamepad Start opens / closes the run menu like the on-screen menu button (S-16);
+			-- a higher panel (level-up, reward, results...) keeps it shut (UIState.CanOpen)
+			if UIState.Owner() == "Pause" then
+				if host.OnPauseClose then
+					host.OnPauseClose()
+				end
+			elseif UIState.CanOpen("Pause") and host.OnPause then
+				host.OnPause()
+			end
 		end
 	end)
 	-- the counters grow with their numbers; keep the timer clear of them

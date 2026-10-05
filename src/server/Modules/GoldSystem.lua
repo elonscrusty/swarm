@@ -118,7 +118,39 @@ function GoldSystem.AddRunGold(rp, base: number): number
 	data.RunEscrow.Gold += amount
 	rp.Gold += amount
 	player:SetAttribute("RunGold", rp.Gold)
+	-- the pass lookup has not answered yet (first seconds on a fresh server): remember
+	-- what was earned so the pass bonus can be paid back once it does (EC-A21)
+	local mon = ctx.MonetizationService
+	if mon.PassesKnown and not mon.PassesKnown(player) then
+		local early = rp.EarlyGold or { Base = 0, Paid = 0 }
+		early.Base += base * curse
+		early.Paid += amount
+		rp.EarlyGold = early
+	end
 	return amount
+end
+
+-- Pays the difference for gold earned before the pass lookup answered (AddRunGold keeps
+-- it in rp.EarlyGold): the multiplier the player really has, minus what was paid. Once
+-- per run; nothing for non-owners. Returns the top-up.
+function GoldSystem.CorrectEarlyGold(rp): number
+	local early = rp.EarlyGold
+	if not early or rp.GoldSettlement then
+		return 0
+	end
+	rp.EarlyGold = nil
+	local data = ctx.DataService.GetData(rp.Player)
+	if not data or not data.RunEscrow or data.RunEscrow.Id ~= tostring(rp.RunId) then
+		return 0
+	end
+	local owed = math.floor(early.Base * GoldSystem.PublishGoldMult(rp.Player) + 0.5) - early.Paid
+	if owed <= 0 or owed ~= owed or owed == math.huge then
+		return 0
+	end
+	data.RunEscrow.Gold += owed
+	rp.Gold += owed
+	rp.Player:SetAttribute("RunGold", rp.Gold)
+	return owed
 end
 
 --[[

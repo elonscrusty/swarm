@@ -5509,6 +5509,9 @@ function UIBuilder.Init(d: { [string]: any })
 		OnPause = function()
 			UIBuilder.OpenPause()
 		end,
+		OnPauseClose = function()
+			UIBuilder.ClosePause()
+		end,
 	}
 
 	Showcase.Init()

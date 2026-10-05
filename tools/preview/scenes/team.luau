@@ -6,7 +6,8 @@
 --   --set revive=0.55        the fallen teammate's ReviveProgress (0 = just fell)
 --   --set far=on             the fallen teammate is off screen (edge arrow)
 --   --set me=down            the local player is the one down (ring over yourself)
---   --set choosing=on        the alive teammate is choosing a level-up card (the freeze)
+--   --set choosing=on        the alive teammate is choosing a level-up card: a live group choice
+--                            (docs/overhaul/CHOICE_STATE.md), the world keeps running, no "Paused"
 --   --set leave=on           the alive teammate disconnects mid-scene (row removed)
 local A = lib("arena")
 local C = lib("common")
@@ -62,9 +63,27 @@ if meDown then
 	C.setPlayer({ Alive = false, HP = 0, ReviveProgress = revive, PartnerRevivesLeft = 2 })
 end
 if preview.args.choosing == "on" and alive then
-	C.setState({ Frozen = true, LevelUpPause = true, ChoosingIds = "," .. tostring(alive.UserId) .. ",", ChoosingNames = alive.DisplayName })
+	-- what RunManager writes for a Duo/Trio panel: the world is not frozen, LevelUpPause stays
+	-- false, the chooser's own Player carries ChoiceOpen / ChoiceGroup / ChoiceProtectedUntil
+	C.setState({ Frozen = false, LevelUpPause = false, ChoosingIds = "," .. tostring(alive.UserId) .. ",", ChoosingNames = alive.DisplayName })
+	alive:SetAttribute("ChoiceOpen", true)
+	alive:SetAttribute("ChoiceGroup", true)
+	alive:SetAttribute("ChoiceId", 1)
+	alive:SetAttribute("ChoiceOfferId", 1)
+	alive:SetAttribute("ChoiceProtectedUntil", workspace:GetServerTimeNow() + (Config.LevelUp and Config.LevelUp.GroupAutoPickSeconds or 10))
+	alive:SetAttribute("Paused", true)
 end
 C.settle(1.5)
+if preview.args.choosing == "on" and alive then
+	local text = ""
+	for _, d in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
+		if d:IsA("TextLabel") and d.Visible and string.find(d.Text, "choosing an upgrade", 1, true) then
+			text = d.Text
+		end
+	end
+	local ok = text ~= "" and not string.find(text, "Paused", 1, true)
+	preview.log(string.format("%s team group choice status: %q (live world, no Paused)", ok and "PASS" or "FAIL", text))
+end
 if preview.args.leave == "on" and alive then
 	C.fire("Notify", { Text = alive.DisplayName .. " left the run.", Color = Color3.fromRGB(255, 200, 120) })
 	alive.Parent = nil

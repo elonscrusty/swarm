@@ -251,6 +251,12 @@ function Mock.api()
 		R.raycastHook = fn
 	end
 
+	-- Opt-in MarketplaceService:UserOwnsGamePassAsync for a scene: fn(userId, passId) ->
+	-- boolean (may task.wait to model a slow lookup). nil restores "owns nothing".
+	function api.setPassLookup(fn)
+		R.passLookupHook = fn
+	end
+
 	-- Runs the server Scripts (GameServer) - the full server; needs more mocking.
 	function api.startServer()
 		firstRunSwitch()
