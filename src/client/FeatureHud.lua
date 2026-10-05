@@ -488,8 +488,8 @@ function FeatureHud.Init()
 				-- the upper third, but under the HUD's top cluster (timer, objective, boss
 				-- bar; portrait: vitals and abilities) and the portrait minimap
 				local holder = slots.Announcer
-				local ah = holder.AbsoluteSize.Y
-				local aw = holder.AbsoluteSize.X
+				local ah = 40
+				local aw = math.floor(rootSize.X * 0.9)
 				local ay = origin.Y + rootSize.Y * 0.26 - ah / 2
 				local rects = {}
 				refreshFinds(playerGui)
@@ -499,8 +499,11 @@ function FeatureHud.Init()
 						addRect(rects, els[key])
 					end
 				end
-				addRect(rects, cachedFinds.MiniMap)
+				local map = {}
+				addRect(map, cachedFinds.MiniMap)
+				local mapRect = map[1]
 				local left = origin.X + (rootSize.X - aw) / 2
+				local edge = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
 				for _ = 1, 4 do
 					for _, r in ipairs(rects) do
 						if r.Max.X > left and r.Min.X < left + aw and r.Max.Y > ay - 2 and r.Min.Y < ay + ah + 2 then
@@ -508,8 +511,24 @@ function FeatureHud.Init()
 						end
 					end
 				end
+				-- the minimap (portrait: left edge under the cluster): a narrower line beside it
+				-- (TextScaled shrinks the words) rather than one over the hero
+				if mapRect and mapRect.Max.X > left and mapRect.Min.X < left + aw and mapRect.Max.Y > ay - 2 and mapRect.Min.Y < ay + ah + 2 then
+					local room = origin.X + rootSize.X - edge - (mapRect.Max.X + 8)
+					if room >= 170 then
+						left = mapRect.Max.X + 8
+						aw = math.floor(room)
+						ah = 30
+					else
+						ay = mapRect.Max.Y + 4
+					end
+				end
 				ay = math.min(ay, origin.Y + rootSize.Y * 0.6)
-				local want = UDim2.fromOffset(math.floor(rootSize.X / 2), math.floor(ay - origin.Y + ah / 2))
+				local size = UDim2.fromOffset(aw, ah)
+				if holder.Size ~= size then
+					holder.Size = size
+				end
+				local want = UDim2.fromOffset(math.floor(left - origin.X + aw / 2), math.floor(ay - origin.Y + ah / 2))
 				if holder.Position ~= want then
 					holder.Position = want
 				end
