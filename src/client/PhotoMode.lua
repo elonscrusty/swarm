@@ -10,8 +10,8 @@
 	            EXIT. The bar fades out after HintSeconds without input (photo-ready); a tap
 	            then brings it back, a tap on empty space while it shows exits. Esc / B exit.
 	  safety    the hero copy is local, anchored and never collides; your real character is
-	            only hidden locally (LocalTransparencyModifier) and comes back on exit, like
-	            every hidden ScreenGui. Leaving the run (InRun false) exits at once.
+	            only hidden locally (LocalTransparencyModifier, its overhead bar shrunk) and
+	            comes back on exit, like every hidden ScreenGui. Leaving the run (InRun false) exits at once.
 
 	PhotoMode.AttachButton(parent, order, onOpen?) → Button?  (UIBuilder's results footer;
 	        nil while the switch is off)
@@ -51,6 +51,7 @@ type Session = {
 	Frame: Frame,
 	Hidden: { ScreenGui },
 	HiddenParts: { [BasePart]: number },
+	HiddenBoards: { [BillboardGui]: UDim2 },
 	Model: Model?,
 	Feet: CFrame,
 	Pose: number,
@@ -275,6 +276,7 @@ function PhotoMode.Enter()
 		Frame = nil :: any,
 		Hidden = {},
 		HiddenParts = {},
+		HiddenBoards = {},
 		Model = nil,
 		Feet = feetCFrame(),
 		Pose = 1,
@@ -313,6 +315,13 @@ function PhotoMode.Enter()
 				if d:IsA("BasePart") then
 					s.HiddenParts[d] = d.LocalTransparencyModifier
 					d.LocalTransparencyModifier = 1
+				end
+			end
+			-- its overhead bar / plates (VFX writes only their Enabled, so they shrink to nothing)
+			for _, d in ipairs(workspace:GetDescendants()) do
+				if d:IsA("BillboardGui") and ((d.Adornee and d.Adornee:IsDescendantOf(char)) or d:IsDescendantOf(char)) then
+					s.HiddenBoards[d] = d.Size
+					d.Size = UDim2.new()
 				end
 			end
 		end
@@ -373,6 +382,11 @@ function PhotoMode.Exit()
 	for part, ltm in pairs(s.HiddenParts) do
 		if part.Parent then
 			part.LocalTransparencyModifier = ltm
+		end
+	end
+	for board, size in pairs(s.HiddenBoards) do
+		if board.Parent then
+			board.Size = size
 		end
 	end
 	for _, g in ipairs(s.Hidden) do
