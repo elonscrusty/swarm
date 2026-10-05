@@ -102,7 +102,7 @@ REPORT A BUG.
   hit number every `DummyHitEvery` seconds.
 - **Cosmetics mirror:**
   - A copy of your selected hero in its worn skin stands on a pedestal in front of a mirror.
-  - A board lists what you wear: hero and skin, title, trail, burst, pet, plate, dais, and how
+  - A list over it shows what you wear: hero and skin, title, trail, burst, pet, plate, dais, and how
     many weapons wear a glow.
 - **Jump pads:** a gold pad throws you straight up (`LaunchSpeed`) and you steer onto the next
   platform. There are four platforms, and the last one is gold, with a flag.

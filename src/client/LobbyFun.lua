@@ -13,7 +13,7 @@
 	            StatSheet with the hero's bonus): "about N damage a second", and while you
 	            stand near it, a hit number every DummyHitEvery seconds.
 	  mirror    COSMETICS MIRROR: a copy of your hero in its worn skin on a pedestal, with a
-	            board listing what you wear (title, trail, burst, pet, plate, dais, weapon glows).
+	            list over it of what you wear (title, trail, burst, pet, plate, dais, weapon glows).
 	  course    JUMP PADS: a pad throws you up, steer onto the next platform; the clock starts
 	            on the first pad and stops on the top platform. The best time is kept for this
 	            session only (never saved). Falling to the floor ends the try.
@@ -272,22 +272,19 @@ local function build(s: Session)
 	local hitBB = billboard(body, 2.2, 120, 30)
 	hitBB.Name = "Hit"
 	s.DummyHit = text(hitBB, "Label", "", { Name = "Number", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, TextStrokeTransparency = 0.2 }, 20)
-	-- cosmetics mirror: pedestal, frame, glass, a board
+	-- cosmetics mirror: pedestal, frame, glass and a list of what you wear
 	local m = o + LF.Mirror
 	part(f, { Name = "MirrorPedestal", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.8, 5, 5), CFrame = CFrame.new(m + Vector3.new(0, 0.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = P.stone_300, Material = Enum.Material.Marble, CanCollide = true })
 	part(f, { Name = "MirrorFrame", Size = Vector3.new(6.4, 8.4, 0.5), CFrame = CFrame.new(m + Vector3.new(0, 4.2, -3.4)), Color = P.gold_500, Material = Enum.Material.Metal, CanCollide = true })
 	part(f, { Name = "MirrorGlass", Size = Vector3.new(5.6, 7.6, 0.1), CFrame = CFrame.new(m + Vector3.new(0, 4.2, -3.1)), Color = P.ice_100, Material = Enum.Material.Glass, Reflectance = 0.6, Transparency = 0.15 })
-	-- the board stands beside the mirror, tilted back so the camera reads it (its +Z face)
-	local board = part(f, { Name = "MirrorBoard", Size = Vector3.new(5.6, 4, 0.3), CFrame = CFrame.new(m + Vector3.new(-7, 2.4, 0)) * CFrame.Angles(math.rad(-35), 0, 0), Color = P.slate_700, CanCollide = true })
-	local sg = Instance.new("SurfaceGui")
-	sg.Name = "Worn"
-	sg.Face = Enum.NormalId.Back
-	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	sg.PixelsPerStud = 50
-	sg.LightInfluence = 0
-	sg.Parent = board
-	text(sg, "Label", "COSMETICS MIRROR", { Name = "Title", Position = UDim2.fromOffset(10, 6), Size = UDim2.new(1, -20, 0, 26), TextColor3 = P.gold_200 }, 22)
-	text(sg, "Small", mirrorLines(), { Name = "Lines", Position = UDim2.fromOffset(10, 36), Size = UDim2.new(1, -20, 1, -42), TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = P.ivory_100, TextWrapped = true }, 17)
+	-- what you wear, over the mirror (a billboard: readable from the play camera)
+	local frame = f:FindFirstChild("MirrorFrame") :: BasePart
+	local wornBB = billboard(frame, 6.4, 250, 176)
+	wornBB.Name = "Worn"
+	local back = new("Frame", { Name = "Back", Size = UDim2.fromScale(1, 1), BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.2, BorderSizePixel = 0 }, wornBB)
+	UIKit.corner(back, 10)
+	text(back, "Label", "COSMETICS MIRROR", { Name = "Title", Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -20, 0, 22), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 }, 15)
+	text(back, "Small", mirrorLines(), { Name = "Lines", Position = UDim2.fromOffset(10, 28), Size = UDim2.new(1, -20, 1, -32), TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = P.ivory_100, TextWrapped = true }, 13)
 	local skinId = type(profile.Skins) == "table" and profile.Skins[heroId] or "Default"
 	local hero = PhotoMode.CloneHero(heroId, skinId)
 	if hero then
