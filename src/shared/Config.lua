@@ -8,7 +8,7 @@
 	  Enemies, Difficulty, Spawn, Boss, Pacing,
 	  Projectiles, Net, Camera, Controls, Graphics, Data, Monetization, Sounds, Audio,
 	  Settings, Tutorial, DamageNumbers, UI, Arenas, Modes, Lobby, Features (FeatureOn),
-	  Encounters (Director), FeatureHud
+	  Encounters (Director), FeatureHud, WorldEvents, Weather
 ]]
 
 local Config = {}
@@ -511,6 +511,59 @@ Config.Caravan = {
 }
 
 ------------------------------------------------------------------------------------------
+-- EXPLORE features (docs/features/EXPLORE.md): secret rooms (4), the merchant cart (6),
+-- the lost villager (8). Each is a placed encounter of the EncounterDirector (at most
+-- Config.Encounters.Director.MaxActive placed encounters run per stage, so not every
+-- stage gets every one). Switches: Config.Features.SecretRooms / Merchant / Rescue.
+------------------------------------------------------------------------------------------
+Config.Explore = {
+	SecretRoom = {
+		Weight = 1, -- director pick weight
+		EdgeMargin = 20, -- the alcove centre stays this far inside the fence ...
+		EdgeBand = 26, -- ... and at most EdgeMargin + EdgeBand from it (an arena edge)
+		Width = 12, -- alcove inside, along the edge (studs)
+		Depth = 9, -- alcove inside, toward the fence
+		Wall = 1.6, -- wall thickness
+		Height = 8, -- wall height (a jump is ~3.7 studs)
+		HP = 70, -- the cracked wall's HP on stage 1 ...
+		HPPerStage = 0.6, -- ... x (1 + this x (stage - 1))
+		BreakRange = 16, -- studs from the wall: every weapon a player fires within this hits it
+		MaxShots = 3, -- a weapon's projectile count counts up to this many hits per attack
+		ChallengeChance = 0.4, -- else a free treasure chest (LootSystem.AddTreasure)
+		PackBase = 2, -- elites in the challenge pack: PackBase + 1 per 2 stages ...
+		PackMax = 4, -- ... at most this many
+	},
+	Merchant = {
+		Weight = 1.5,
+		Clearance = 7,
+		InteractRadius = 10, -- studs from the cart: the shop panel shows
+		Slots = 3, -- items per player
+		-- rarity of each offered item (luck raises Uncommon / Legendary like chests)
+		Weights = { Common = 55, Uncommon = 37, Legendary = 8 },
+		-- an item costs what a chest of its rarity costs (Config.Chests.Cost through
+		-- ItemData.StagePrice / PlayerPrice): no new price formula
+		PriceChest = { Common = "Small", Uncommon = "Large", Legendary = "Golden" },
+	},
+	Rescue = {
+		Weight = 1,
+		MinDistance = 90, -- studs from the spawn centre
+		Clearance = 6,
+		FindRadius = 9, -- a living player this close starts the escort
+		WalkSpeed = 15, -- studs/s (hero walk speed is about 16-18)
+		FollowDistance = 5, -- stops this close to the hero it follows
+		CatchUp = 45, -- stuck this far behind for CatchUpSeconds: it hops to its hero
+		CatchUpSeconds = 3,
+		HP = 80, -- stage 1 ...
+		HPPerStage = 0.4, -- ... x (1 + this x (stage - 1))
+		AggroRadius = 14, -- enemies this close turn on the villager when it is nearer than any hero
+		Radius = 1.4, -- body radius for enemy contact
+		Gold = 60, -- fallback when no item can be granted (before gold multipliers) ...
+		GoldStageScale = 0.35,
+		Weights = { Common = 30, Uncommon = 60, Legendary = 10 }, -- the item for each living teammate
+	},
+}
+
+------------------------------------------------------------------------------------------
 -- ENEMIES
 ------------------------------------------------------------------------------------------
 Config.Enemies = {
@@ -909,7 +962,7 @@ Config.Data = {
 		Sigils = 64, -- owned Sigils
 		SigilSlots = 2, -- equipped Sigils
 		SeasonClaims = 200, -- claimed season tiers
-		Presets = 6, -- build presets
+		Presets = 12, -- build presets (one per hero; HEROPOWER raised 6 -> 12 for 8 + 3 heroes)
 		PresetPicks = 12, -- weapon / passive ids in one preset
 		WeaponMastery = 128, -- weapons with a mastery count
 	},
@@ -1047,6 +1100,18 @@ Config.Sounds = {
 	LobbyMusic = { Id = "rbxassetid://1836939228", Volume = 0.26, Category = "Music" }, -- Celtic Adventures, Bob Bradley, 2:16
 	BattleMusic = { Id = "rbxassetid://9047425352", Volume = 0.22, Category = "Music" }, -- Drums of Battle, Gabriel Saban, 2:47
 	BossMusic = { Id = "rbxassetid://1838623501", Volume = 0.26, Category = "Music" }, -- Hell Ride, Thomas Parisch, 2:21
+	-- music slots (feature 28, Config.Features.MusicSlots; docs/features/FEEL.md): one track per
+	-- world and one for the boss's later phases. "" = no track of its own yet, so the slot
+	-- plays its Fallback (the tracks above). Owner: paste a licensed / Creator Store id here.
+	WorldMusic_Forest = { Id = "", Volume = 0.22, Category = "Music", Fallback = "BattleMusic" },
+	WorldMusic_Ruins = { Id = "", Volume = 0.22, Category = "Music", Fallback = "BattleMusic" },
+	WorldMusic_Swamp = { Id = "", Volume = 0.22, Category = "Music", Fallback = "BattleMusic" },
+	WorldMusic_Snow = { Id = "", Volume = 0.22, Category = "Music", Fallback = "BattleMusic" },
+	WorldMusic_Desert = { Id = "", Volume = 0.22, Category = "Music", Fallback = "BattleMusic" },
+	WorldMusic_Lava = { Id = "", Volume = 0.22, Category = "Music", Fallback = "BattleMusic" },
+	BossPhaseMusic = { Id = "", Volume = 0.26, Category = "Music", Fallback = "BossMusic" }, -- boss phase 2+
+	-- kill-streak milestone callout (feature 26): the SWARM SFX Item chime, played higher per milestone
+	ComboMilestone = { Id = "rbxassetid://105588297309015", Volume = 0.24, Category = "UI", MinGap = 0.8, PitchVar = 0 },
 }
 
 --[[
@@ -1450,6 +1515,177 @@ Config.FeatureHud = {
 	AnnounceSeconds = 1.6, -- combo / announcer line default time on screen
 }
 
+--[[
+	FEEL (features 10, 26, 27, 28; docs/features/FEEL.md). Client-only presentation: none of
+	it changes damage, timing or what the server simulates.
+	  BossIntro  boss arrival / phase change: a short camera push toward the boss (solo), a
+	             zoom + vignette that never moves the view (co-op), the name card through
+	             UIState's headline lane. Reduced effects or Screen shake 0 = card only.
+	  Announcer  combo counter in the FeatureHud announcer line + milestone callouts.
+	  HitFeel    a tiny camera hold on crits / huge kills (capped per second) and a pooled
+	             chunk burst on enemy deaths.
+]]
+Config.Feel = {
+	BossIntro = {
+		Seconds = 1.1, -- whole push: ease in, hold, ease out (never over 1.2)
+		In = 0.3,
+		Out = 0.45,
+		Shift = 0.4, -- the view slides this fraction of the hero -> boss gap ...
+		MaxShift = 16, -- ... at most this many studs, so the hero stays on screen
+		Pull = 0.16, -- and moves this fraction of the camera distance closer
+		CoopZoom = 0.9, -- co-op: field of view x this at the peak (a zoom; the view never moves)
+		Vignette = 0.5, -- co-op: darkest edge (0 = none, 1 = black)
+	},
+	Announcer = {
+		ResetSeconds = 3, -- the combo ends after this long without a kill
+		ShowFrom = 10, -- the counter shows from this many kills in a row
+		Milestones = { 50, 100, 250, 500, 1000 },
+		Words = { [50] = "KILLING SPREE", [100] = "RAMPAGE", [250] = "UNSTOPPABLE", [500] = "LEGENDARY", [1000] = "GODLIKE" },
+		CalloutSeconds = 1.8,
+		PitchStep = 2, -- semitones higher per milestone (ComboMilestone sound)
+	},
+	HitFeel = {
+		StopSeconds = 0.035, -- camera hold on a big hit (<= 0.04)
+		MaxPerSecond = 2, -- hit-stops in any 1 s window
+		MinGap = 0.3,
+		CritRange = 55, -- studs: only crits this close to the local hero count
+		BurstsPerBatch = 6, -- death bursts per FxBatch (nearest first in batch order)
+		BurstRange = 70, -- studs from the hero
+		Pieces = 5, -- chunks per normal kill (big kills x2)
+		MaxPieces = 90, -- alive at once (pooled parts)
+		PiecesPerSecond = 220, -- token bucket
+		Life = 0.65, -- seconds a chunk flies
+		Gravity = 70,
+	},
+}
+
+------------------------------------------------------------------------------------------
+-- MAP EVENTS (feature 2, src/server/Modules/WorldEvents.lua, docs/features/EVENTS.md)
+--   At most one map event per stage, through EncounterDirector (an ambient encounter).
+--   It starts StartAfter seconds into the stage's explore phase and ends early when the
+--   boss comes (any phase but Explore). Balance-neutral by design: meteors hit enemies
+--   too, the gold rush only raises the kill-gold CHANCE (capped), fog is visual only.
+------------------------------------------------------------------------------------------
+Config.WorldEvents = {
+	FirstStage = 2, -- stage 1 stays plain (first runs, the tutorial)
+	Chance = 0.6, -- per stage from FirstStage
+	StartAfter = { 40, 100 }, -- seconds into the explore phase
+	Weights = { Meteor = 1, GoldRush = 1, Fog = 1 },
+	Meteor = {
+		Seconds = 24, -- the shower lasts this long
+		Every = 3.2, -- a volley every this many seconds
+		PerVolley = 3, -- impacts per volley (one near each living player first, then random)
+		Warn = 1.3, -- seconds between the warning ring and the impact (at least 1.2)
+		Radius = 7,
+		NearPlayer = { 4, 14 }, -- the player-aimed impact lands this far from them (never on top)
+		Damage = 14, -- to players, x the stage DamageMult; armor / invulnerability apply
+		EnemyHPFraction = 0.45, -- normal enemies lose this share of their max HP (no gold: no killer)
+		EliteHPFraction = 0.12,
+		MaxHazardShare = 0.5, -- skip a volley while other hazards use this share of MaxHazards
+	},
+	GoldRush = {
+		Seconds = 60,
+		ChanceMult = 2, -- kill-gold chance x this (amount, GoldMult and passes unchanged)
+		MaxChance = 0.6, -- the boosted chance never goes above this
+	},
+	Fog = {
+		Seconds = 45,
+		Radius = 42, -- enemies show within this many studs of a living run player
+		Hysteresis = 4, -- shown ones hide only this far past the radius (no flicker)
+		-- bosses, elites, telegraphs, projectiles, pickups and the minimap always show
+	},
+}
+
+------------------------------------------------------------------------------------------
+-- WEATHER (feature 9, src/server/Modules/Weather.lua, client WorldFx.lua)
+--   A property of the world, not an encounter: it never takes the director's ambient
+--   slot, so a map event can still run beside it. Snow: everyone (enemies too) moves a
+--   little slower. Lava: telegraphed fire patches (burn players and enemies alike).
+--   Every world has at most one light ambient particle effect (Reduced effects: none
+--   for decoration, a lighter snowfall).
+------------------------------------------------------------------------------------------
+Config.Weather = {
+	FirstStage = 1,
+	Snow = {
+		PlayerSpeed = 0.9, -- WalkSpeed x this (stacks with the floor hazards' mult)
+		EnemySpeed = 0.9, -- every walking enemy (not bosses' scripted moves)
+	},
+	Lava = {
+		FirstAfter = 20, -- seconds into the explore phase
+		Every = { 14, 20 }, -- seconds between eruptions
+		Patches = 2, -- per eruption (the first near a random living player)
+		NearPlayer = { 6, 16 },
+		Radius = 6,
+		Arm = 1.6, -- harmless glow first (the telegraph)
+		Life = 4,
+		Tick = 0.5,
+		Damage = 5, -- per tick to players, x the stage DamageMult
+		EnemyDamageFraction = 0.08, -- per tick, of a normal enemy's max HP (elites x0.25)
+		MaxHazardShare = 0.5,
+	},
+	-- client ambience per arena (WorldFx): Kind = "Snow" | "Embers" | "Leaves" | "Motes" |
+	-- "Dust" | nil, Rate = particles per second (x0.4 with Reduced effects; decoration
+	-- kinds are off with Reduced effects, snow stays light so the storm is still told)
+	Ambient = {
+		Forest = { Kind = "Leaves", Rate = 6 },
+		Ruins = { Kind = "Motes", Rate = 5 },
+		Swamp = { Kind = "Motes", Rate = 7 },
+		Snow = { Kind = "Snow", Rate = 70 },
+		Desert = { Kind = "Dust", Rate = 8 },
+		Lava = { Kind = "Embers", Rate = 14 },
+	},
+}
+
+--[[
+	CHALLENGES (features 3, 5, 7; docs/features/CHALLENGES.md). Server-owned encounters;
+	every reward is granted once on the server through the existing pipelines.
+	  MiniBoss     from stage MinStage, a buffed elite guards a big free chest (EncounterDirector
+	               placed encounter). The chest stays locked until a player kills the guard.
+	  TrialShrine  hold to start a short, harder fight; survive inside the ring for Seconds and
+	               each survivor gets one extra upgrade pick with a guaranteed NEW / MAX /
+	               EVOLUTION card (LevelUpSystem.QueueBonusPick, the normal OfferId flow).
+	  CursedChest  one paid chest per stage (Chance) turns cursed: better loot, same price;
+	               opening it makes the swarm stronger for Seconds (shown on the prompt first).
+]]
+Config.MiniBoss = {
+	MinStage = 2,
+	Weight = 3, -- EncounterDirector pick weight (higher = more often picked first)
+	WakeRadius = 30, -- a player this close wakes the guard (studs from the chest)
+	-- buffed existing enemy types, picked at random; the name plate shows the name
+	Types = { "Brute", "Skeleton", "Ghost" },
+	Names = { Brute = "Ironhorn the Brute", Skeleton = "Beetle Captain", Ghost = "Moth Duchess" },
+	HPMult = 3, -- on top of the elite's HP (x Config.Enemies.EliteHPMult)
+	DamageMult = 1.3, -- contact + attack damage
+	SpeedMult = 0.9,
+	ChestWeights = { Common = 0, Uncommon = 70, Legendary = 30 }, -- free Large chest
+	RetrySeconds = 4, -- the guard was swept away (not killed): it comes back after this
+}
+Config.TrialShrine = {
+	Weight = 1,
+	Hold = 1.2,
+	Seconds = 30, -- survive this long
+	Radius = 22, -- stay inside this ring (studs from the shrine)
+	LeaveGrace = 2, -- seconds outside the ring before the trial fails
+	Alive = 10, -- trial enemies kept alive at once (solo) ...
+	AlivePerExtraPlayer = 4, -- ... + this per extra player in the trial
+	SpawnRadius = { 16, 24 },
+	EliteEvery = 10, -- an elite joins every this many seconds
+	HPMult = 1.5,
+	DamageMult = 1.25,
+}
+Config.CursedChest = {
+	Chance = 0.6, -- per stage, from MinStage
+	MinStage = 1,
+	Types = { "Small", "Large" }, -- which paid chests may turn cursed (price unchanged)
+	Seconds = 60,
+	EnemyDamageMult = 1.25,
+	EnemySpeedMult = 1.15,
+	Weights = {
+		Small = { Common = 30, Uncommon = 60, Legendary = 10 }, -- normal Small 80 / 19 / 1
+		Large = { Common = 0, Uncommon = 55, Legendary = 45 }, -- normal Large 0 / 80 / 20
+	},
+}
+
 ------------------------------------------------------------------------------------------
 -- HERO MASTERY (MetaUpgradeData, DataService schema 7)
 --   Playing a hero gives that hero Mastery XP: the same amount as the account XP of the
@@ -1464,6 +1700,39 @@ Config.HeroMastery = {
 	PerLevel = 100, -- each next level needs this much more (4,950 XP to level 10)
 	StatPerLevel = 2,
 	SignatureEvery = 2, -- signature level n needs mastery 2n (levels 2, 4, 6, 8, 10)
+}
+
+------------------------------------------------------------------------------------------
+-- HEROPOWER (docs/features/HEROPOWER.md): hero ultimate (13), second signature skill (12),
+-- build presets (14). Each sits behind its Config.Features switch.
+------------------------------------------------------------------------------------------
+-- Hero ultimate (server Ultimate.lua, client Ultimate.lua): kills charge it, the ULT button /
+-- Q / R1 fires it. Damage = min(Cap, Base + PerLevel x (level - 1)) x hero Damage x Might
+-- (Might counted up to MaxMight); elites, altar guards, mini-bosses and nests take at most
+-- EliteShare of their max HP, bosses at most BossShare (never an instant boss kill).
+Config.Ultimate = {
+	KillsToCharge = 150, -- own kills for a full charge (kills made by the ultimate don't count)
+	Cooldown = 45, -- run seconds between two uses, even with the kills already made
+	Radius = 42, -- studs around the hero (x the hero's Radius); the Bomb pickup clears 75
+	Base = 40,
+	PerLevel = 8,
+	Cap = 480, -- before Might and the hero's own Damage factor
+	MaxMight = 2.5,
+	EliteShare = 0.4,
+	BossShare = 0.06,
+	Knockback = 18,
+	Rate = 2, -- UseUltimate requests per second per player (Remotes.Listen)
+}
+-- Second signature skill: one small passive per hero (CharacterData.SecondSkills), free,
+-- switched on for runs once the hero's Hero Mastery reaches Rank.
+Config.SecondSkill = {
+	Rank = 5,
+}
+-- Build presets: favourite weapons / passives per hero (save field Presets, one list per
+-- hero). Level-up cards of a favourite get a small tag; offers and weights never change.
+Config.BuildPresets = {
+	Tag = "★ Favourite",
+	Rate = 6, -- SetPreset requests per second per player
 }
 
 return Config

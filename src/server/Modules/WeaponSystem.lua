@@ -2978,6 +2978,17 @@ end
 
 WeaponSystem._UpdateSteadyAim = updateSteadyAim -- (tests)
 
+--[[
+	Feature hook (docs/features/EXPLORE.md): fn(rp, w, stats) runs after every weapon
+	attack a player makes (stats = WeaponStats: damage, amount, area ...). Listeners must
+	be cheap and must not error (the fire loop does not pcall them); SecretRoom wraps its
+	own in pcall. No listeners = nothing changes.
+]]
+local fireListeners: { (any, any, any) -> () } = {}
+function WeaponSystem.OnFired(fn: (any, any, any) -> ())
+	table.insert(fireListeners, fn)
+end
+
 function WeaponSystem.Step(dt: number)
 	if ctx.RunManager.IsSimulating() then
 		local now = ctx.RunManager.GetRunTime()
@@ -3003,6 +3014,10 @@ function WeaponSystem.Step(dt: number)
 						local fn = Fire[def.Behavior]
 						if fn then
 							fn(rp, w, s, def)
+						end
+						-- feature hook (WeaponSystem.OnFired): e.g. the secret-room wall
+						for _, listener in ipairs(fireListeners) do
+							listener(rp, w, s)
 						end
 					end
 				end

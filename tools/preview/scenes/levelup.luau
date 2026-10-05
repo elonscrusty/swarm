@@ -132,6 +132,13 @@ if group or paused then
 	lp:SetAttribute("ChoiceTimerPaused", paused)
 	lp:SetAttribute("ChoiceProtectedUntil", workspace:GetServerTimeNow() + (group and 9.5 or 18.5))
 end
+-- --set fav=on   HEROPOWER build presets: the first and last cards are favourites of the
+--                Knight, so they carry the small favourite tag (the offer itself is unchanged)
+if preview.args.fav == "on" and #choices > 0 then
+	local ids = { choices[1].Id, choices[#choices].Id }
+	C.sendProfile(C.profile({ SelectedCharacter = "Knight", Features = { Presets = { List = { { Hero = "Knight", Weapons = ids, Passives = ids } }, Active = { Knight = 1 } } } }))
+	C.settle(0.2)
+end
 C.fire("LevelUpOffer", {
 	OfferId = 1,
 	Group = group,

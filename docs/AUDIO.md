@@ -155,6 +155,11 @@ before using): Lobby: 1842961239 *Frontiers (Underscore Version)* 130 s. Run: 90
 Boss: 9043171470 *Edge Of Extinction* 160 s, 9045953483 *Last Man Standing* 137 s,
 1838626031 *Hell Ride (No Choir)* 140 s (calmer version of the current boss track).
 
+Per-world and boss-phase tracks (feature 28, `Config.Features.MusicSlots`): the slots
+`WorldMusic_Forest` ... `WorldMusic_Lava` and `BossPhaseMusic` in `Config.Sounds` are empty
+and play their `Fallback` (BattleMusic / BossMusic) until an id is pasted. Steps:
+docs/features/FEEL.md section 4.
+
 ## Required live checks
 
 - In Studio and on the owner's phone, hear lobby, battle and boss tracks with no asset-access errors.

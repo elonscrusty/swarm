@@ -86,6 +86,11 @@ function StatSheet.Compute(input: Input): { [string]: number }
 			end
 		end
 	end
+	-- second signature skill (HEROPOWER): RunManager sets Meta.SecondSkill = 1 once unlocked
+	local second = input.Meta and input.Meta.SecondSkill == 1 and input.CharacterId and CharacterData.SecondSkills[input.CharacterId]
+	if second and Config.FeatureOn("SecondSkill") then
+		addAll(second.Bonus)
+	end
 	for passiveId, level in pairs(input.Passives or {}) do
 		local def = PassiveData.Passives[passiveId]
 		if def then

@@ -138,6 +138,14 @@ VFX.Init({
 UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls })
 require(script.Parent:WaitForChild("TeamPings")).Init()
 require(script.Parent:WaitForChild("FeatureHud")).Init() -- reserved HUD slots for new features (empty until one uses them)
+require(script.Parent:WaitForChild("Ultimate")).Init() -- hero ultimate button + build preset cache (HEROPOWER)
+require(script.Parent:WaitForChild("ChallengesUI")).Init() -- CHALLENGES: champion plate + ring, trial / curse badges (idle while the switches are off)
+require(script.Parent:WaitForChild("WorldFx")).Init() -- EVENTS: map events + weather visuals (idle while the switches are off)
+require(script.Parent:WaitForChild("ExploreUI")).Init() -- EXPLORE: cracked wall / merchant / villager markers + the merchant panel (idle while the switches are off)
+-- FEEL (docs/features/FEEL.md): each one idles while its Config.Features switch is off
+require(script.Parent:WaitForChild("BossIntro")).Init()
+require(script.Parent:WaitForChild("Announcer")).Init()
+require(script.Parent:WaitForChild("HitFeel")).Init()
 require(script.Parent:WaitForChild("ClientPerformance")).Init()
 require(script.Parent:WaitForChild("GroundDetail")).Init()
 DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer
@@ -160,18 +168,14 @@ end
 
 -- Music follows the game phase.
 local state = Remotes.State()
+-- (MusicSlots: a track per world and for the boss's later phases, Audio.RunTrack)
 local function updateMusic()
-	local inRun = player:GetAttribute("InRun") == true
-	if not inRun then
-		Audio.SetMusic("LobbyMusic")
-	elseif (state:GetAttribute("BossMaxHP") or 0) > 0 then
-		Audio.SetMusic("BossMusic")
-	else
-		Audio.SetMusic("BattleMusic")
-	end
+	Audio.SetMusic(Audio.RunTrack(player:GetAttribute("InRun") == true, state))
 end
 player:GetAttributeChangedSignal("InRun"):Connect(updateMusic)
 state:GetAttributeChangedSignal("BossMaxHP"):Connect(updateMusic)
+state:GetAttributeChangedSignal("BossPhase"):Connect(updateMusic)
+state:GetAttributeChangedSignal("Arena"):Connect(updateMusic)
 updateMusic()
 
 -- [VIP] chat tag (TextChatService). The VIP attribute is set by the server.

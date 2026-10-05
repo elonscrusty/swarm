@@ -41,6 +41,7 @@
 ]]
 
 local Palette = require(script.Parent.Palette)
+local Config = require(script.Parent.Config)
 
 local CharacterData = {}
 
@@ -285,6 +286,58 @@ CharacterData.Characters = {
 		Hat = "Hood",
 	},
 }
+
+--[[
+	HEROPOWER (docs/features/HEROPOWER.md)
+
+	Ultimates[heroId] (Config.Features.Ultimate): one big move per hero, built from the
+	existing effects (server Ultimate.lua). Numbers are factors on Config.Ultimate:
+	  Name, Text     shown on the Characters screen and announced when it fires
+	  Damage         x the shared damage        Radius   x Config.Ultimate.Radius
+	  Look           which existing effects draw it (Ultimate.lua LOOKS)
+	  Color          ring / text colour
+	  Heal           share of max HP healed for the hero and teammates in range
+	  Slow           { Mult, Seconds } on the enemies hit (never bosses)
+	  Guard          seconds of no damage for the hero
+	  Knock          x Config.Ultimate.Knockback
+
+	SecondSkills[heroId] (Config.Features.SecondSkill): a second, small passive signature,
+	free and never sold, on in runs once the hero reaches Config.SecondSkill.Rank mastery.
+	Bonus uses the same keys as PassiveData values (StatSheet adds it as Meta.SecondSkill).
+]]
+CharacterData.Ultimates = {
+	Knight = { Name = "Valor Quake", Text = "Slams the ground: a shockwave hurls back everything near you, and you take no damage for 1.5 s.", Damage = 1.0, Radius = 0.9, Look = "Quake", Color = Palette.gold_400, Guard = 1.5, Knock = 2.0 },
+	Mage = { Name = "Starfall", Text = "Stars rain all around you and chill the survivors.", Damage = 1.1, Radius = 1.0, Look = "Stars", Color = Palette.slate_300, Slow = { Mult = 0.5, Seconds = 3 } },
+	Rogue = { Name = "Blade Storm", Text = "A whirl of blades cuts every enemy around you.", Damage = 1.15, Radius = 0.85, Look = "Blades", Color = Palette.crimson_400 },
+	Priest = { Name = "Holy Nova", Text = "A burst of light hurts enemies and heals you and nearby allies for 25% max HP.", Damage = 0.8, Radius = 1.0, Look = "Nova", Color = Palette.ivory_200, Heal = 0.25 },
+	Ranger = { Name = "Arrow Rain", Text = "A volley of arrows falls on everything around you.", Damage = 1.1, Radius = 1.1, Look = "Arrows", Color = Palette.moss_400 },
+	Alchemist = { Name = "Firestorm", Text = "Flasks burst into flame all around you.", Damage = 1.1, Radius = 1.0, Look = "Fire", Color = Palette.crimson_500 },
+	Engineer = { Name = "Overcharge", Text = "Lightning arcs from you to every enemy close by.", Damage = 1.0, Radius = 1.0, Look = "Sparks", Color = Palette.steel_300 },
+	Necromancer = { Name = "Soul Reap", Text = "Tears out the souls around you and heals you for 10% max HP.", Damage = 1.0, Radius = 1.0, Look = "Souls", Color = Palette.gold_400, Heal = 0.10 },
+}
+-- the fallback for a hero without its own entry (new heroes until they get one)
+CharacterData.DefaultUltimate = "Knight"
+
+CharacterData.SecondSkills = {
+	Knight = { Name = "Shield Wall", Text = "+1 armor: every hit does 1 less damage.", Bonus = { armor = 1 } },
+	Mage = { Name = "Quick Study", Text = "+8% XP.", Bonus = { growth = 0.08 } },
+	Rogue = { Name = "Keen Edge", Text = "+5% crit chance.", Bonus = { critChance = 0.05 } },
+	Priest = { Name = "Mending", Text = "Regenerate 0.5 HP every second.", Bonus = { regen = 0.5 } },
+	Ranger = { Name = "Far Sight", Text = "+20% pickup radius.", Bonus = { pickup = 0.20 } },
+	Alchemist = { Name = "Slow Burn", Text = "Weapon effects last 10% longer.", Bonus = { duration = 0.10 } },
+	Engineer = { Name = "Spare Parts", Text = "-5% weapon cooldown.", Bonus = { cooldown = 0.05 } },
+	Necromancer = { Name = "Dark Pact", Text = "+6% damage.", Bonus = { might = 0.06 } },
+}
+
+function CharacterData.UltimateFor(heroId: string?)
+	return (heroId and CharacterData.Ultimates[heroId]) or CharacterData.Ultimates[CharacterData.DefaultUltimate]
+end
+
+-- True when the hero's second skill is on for a run: the switch, an entry, and mastery >= Rank.
+function CharacterData.SecondSkillOn(heroId: string?, mastery: number?): boolean
+	return Config.FeatureOn("SecondSkill") and heroId ~= nil and CharacterData.SecondSkills[heroId] ~= nil
+		and (tonumber(mastery) or 0) >= Config.SecondSkill.Rank
+end
 
 --[[
 	Skins. "Default" is implied for every character (its own Colors + Hat).

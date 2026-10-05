@@ -414,6 +414,8 @@ Intentional: text buttons.
 | `-` | DEV invincibility / DEV panel controls | DEV panel | - | working (text button, no icon: intentional) |
 | `-` | Reroll / Skip / Auto-pick / Banish | level-up buttons: `cycle`, `skip` (recoloured on buttons, so drawn); auto-pick is a timer bar (no icon); banish does not exist | drawn: DRAW.cycle, DRAW.skip | working (drawn) |
 | `-` | Coins / XP / pause / settings / daily | keys `coin`, XP gems are 3D (no icon), `pause`, `gear`, `calendar` | drawn | working (drawn) |
+| `-` | Hero ultimate button (HEROPOWER) | FeatureHud round button above JUMP: text "ULT" with a gold charge fill; owner art per hero (8 ultimates, CharacterData.Ultimates) would be a later upgrade | - | working (text button; owner picture optional) |
+| `-` | Favourite tag / marks (HEROPOWER) | level-up card "★ Favourite" pill and the gold star on Characters > FAVOURITES tiles (existing weapon / passive icons) | - | working (text, no icon needed) |
 
 ## Problems
 

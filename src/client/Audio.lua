@@ -540,6 +540,48 @@ function Audio.SetMusic(name: string?)
 	end
 end
 
+--[[
+	Music slots (feature 28, Config.Features.MusicSlots). A slot is a Config.Sounds music
+	entry; one with no id of its own plays its Fallback (followed up to 4 steps), so an
+	empty slot sounds exactly like before. Returns the track that really plays, or nil.
+]]
+function Audio.ResolveMusic(name: string?): string?
+	local n = name
+	for _ = 1, 5 do
+		if n == nil or musicSounds[n] then
+			return n
+		end
+		local def = Config.Sounds[n]
+		n = def and def.Fallback or nil
+	end
+	return nil
+end
+
+--[[
+	The track for the run state: the lobby, the world's slot (state attribute Arena) or the
+	boss (phase 2+ = BossPhaseMusic). With MusicSlots off: LobbyMusic / BattleMusic /
+	BossMusic as before.
+]]
+function Audio.RunTrack(inRun: boolean, state: Instance): string?
+	if not inRun then
+		return "LobbyMusic"
+	end
+	local boss = (tonumber(state:GetAttribute("BossMaxHP")) or 0) > 0
+	if not Config.FeatureOn("MusicSlots") then
+		return boss and "BossMusic" or "BattleMusic"
+	end
+	if boss then
+		local phase = tonumber(state:GetAttribute("BossPhase")) or 0
+		return Audio.ResolveMusic(phase >= 2 and "BossPhaseMusic" or "BossMusic")
+	end
+	return Audio.ResolveMusic("WorldMusic_" .. tostring(state:GetAttribute("Arena") or "")) or "BattleMusic"
+end
+
+-- The track playing (or fading in) now, for tests.
+function Audio.CurrentMusic(): string?
+	return currentMusic
+end
+
 function Audio.SetVolumes(music: number, sfx: number)
 	local muted = ClientSettings.Get("MuteAll") == true
 	musicGroup.Volume = muted and 0 or math.clamp(music, 0, 1)

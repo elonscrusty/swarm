@@ -552,8 +552,9 @@ function RunManager.ApplyMovement(rp)
 	-- is frozen (solo), never over live group combat (HoldReward)
 	local canMove = rp.Alive and not rp.Paused and not rp.RewardUntil and not frozen and phase == "Running" and not ctx.StageManager.IsHolding()
 	if hum and hum.Parent then
-		-- rp.RushMult: Windstep's short burst after a kill (ItemSystem)
-		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * (rp.RushMult or 1) or 0
+		-- rp.RushMult: Windstep's short burst after a kill (ItemSystem); rp.WeatherSpeedMult:
+		-- a snow storm (Weather)
+		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * (rp.RushMult or 1) * (rp.WeatherSpeedMult or 1) or 0
 	end
 	rp.Player:SetAttribute("Paused", rp.Paused == true)
 end
@@ -882,6 +883,11 @@ local function newRunPlayer(player: Player)
 				meta[id] = n
 			end
 		end
+	end
+	-- HEROPOWER second signature skill: free, on once the hero's mastery reaches the rank
+	local heroXP = type(data.Heroes) == "table" and type(data.Heroes[data.SelectedCharacter]) == "table" and data.Heroes[data.SelectedCharacter].XP or 0
+	if CharacterData.SecondSkillOn(data.SelectedCharacter, (MetaUpgradeData.MasteryFor(heroXP))) then
+		meta.SecondSkill = 1
 	end
 	local function perRun(id: string): number
 		local def = MetaUpgradeData.Upgrades[id]

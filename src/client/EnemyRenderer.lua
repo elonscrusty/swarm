@@ -67,6 +67,9 @@ local Accessibility = require(script.Parent.Accessibility)
 local Players = game:GetService("Players")
 
 local EnemyRenderer = {}
+-- WorldFx (fog): (position, shownLastFrame) -> true = keep this normal enemy hidden.
+-- Bosses, elites and the always-detailed creatures are never passed to it.
+EnemyRenderer.HideFilter = nil :: ((Vector3, boolean) -> boolean)?
 
 type Slot = {
 	Body: BasePart,
@@ -1179,6 +1182,11 @@ local function step(dt: number)
 			local size = body.Size
 			local visible = boss
 				or inView(cf.Position, (slot.OnScreen and CULL_LEAVE or CULL_MARGIN) + math.max(size.X, size.Y, size.Z) * 0.5)
+			-- a FOG map event (WorldFx): normal enemies far from every player stay hidden
+			local hide = EnemyRenderer.HideFilter
+			if visible and hide and not always and hide(cf.Position, slot.OnScreen) then
+				visible = false
+			end
 			slot.OnScreen = visible
 			if not visible then
 				-- off screen: no model, no updates (back to the pool)

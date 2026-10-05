@@ -1885,6 +1885,8 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		-- deferred: the press timing (InputBegan / Ended) of this same input is recorded first
 		task.defer(chooseCard, index, input)
 	end)
+	-- build presets (HEROPOWER, feature 14): a small favourite tag, offers unchanged
+	require(script.Parent.HeroPresets).Tag(face, c)
 	return hit
 end
 

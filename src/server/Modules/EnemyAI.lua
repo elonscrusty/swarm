@@ -47,6 +47,8 @@ local Hazards = require(script.Parent.Hazards)
 local BossAI = require(script.Parent.BossAI)
 
 local EnemyAI = {}
+-- Weather (a snow storm): every walking enemy x this; 1 = normal.
+EnemyAI.WorldSpeedMult = 1
 
 local ctx
 local rng = Random.new()
@@ -750,6 +752,9 @@ function EnemyAI.Step(dt: number)
 		end
 		if rallied and not e.SpeedOverride then
 			speed *= e.RallySpeed or 1
+		end
+		if not e.SpeedOverride then
+			speed *= EnemyAI.WorldSpeedMult -- a snow storm (Weather); 1 otherwise
 		end
 		-- A fuse / lunge wind-up stays exactly where its telegraph was drawn (no
 		-- separation or knockback drift).

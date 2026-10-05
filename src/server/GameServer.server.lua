@@ -51,6 +51,14 @@ local ORDER = {
 	"ItemSystem",
 	"LootSystem",
 	"CaravanEvent",
+	"SecretRoom", -- EXPLORE (feature 4): cracked wall + alcove (docs/features/EXPLORE.md)
+	"Merchant", -- EXPLORE (feature 6): merchant cart, per-player stock for run gold
+	"Rescue", -- EXPLORE (feature 8): lost villager escorted to the portal
+	"MiniBoss", -- CHALLENGES (feature 3): a champion guards a big chest
+	"TrialShrine", -- CHALLENGES (feature 5): Shrine of Trial
+	"CursedChest", -- CHALLENGES (feature 7): cursed chest variant
+	"WorldEvents", -- map events (feature 2): meteor shower, gold rush, fog
+	"Weather", -- weather per world (feature 9)
 	"StageManager",
 	"RunManager",
 	"PartyService",
@@ -61,6 +69,8 @@ local ORDER = {
 	"AchievementService",
 	"DamageNumbers",
 	"BugReportService",
+	"Ultimate", -- hero ultimate (feature 13, HEROPOWER)
+	"BuildPresets", -- favourite weapons / passives per hero (feature 14, HEROPOWER)
 }
 
 for _, name in ipairs(ORDER) do
@@ -110,6 +120,7 @@ local STEPS = {
 	{ "RunModifiers", ctx.RunModifiers.Step },
 	{ "LeaderboardService", ctx.LeaderboardService.Step },
 	{ "DamageNumbers", ctx.DamageNumbers.Step },
+	{ "Ultimate", ctx.Ultimate.Step },
 	{ "Fx", ctx.Fx.Step },
 }
 local lastError: { [string]: number } = {}

@@ -84,6 +84,12 @@ type Obj = {
 	Rune: number?,
 	Puzzle: any?,
 	Scale: any?, -- the Bargain Shrine's balance (tips when sealed)
+	-- feature hooks (docs/features/CHALLENGES.md): set by feature modules, nil otherwise
+	Weights: { [string]: number }?, -- item rarity weights instead of the type's
+	Title: string?, -- reward popup source instead of TITLES[Type]
+	OnOpened: ((any, any) -> ())?, -- after a chest's item was granted (rp, obj)
+	OnComplete: ((any, any) -> ())?, -- a finished hold on a feature object (rp, obj)
+	OnGuardDown: ((any, boolean) -> ())?, -- its guard died / was removed (e, killed)
 }
 
 local ctx
@@ -94,6 +100,7 @@ local list: { Obj } = {}
 local nextId = 0
 local holds: { [any]: { Obj: Obj, Elapsed: number } } = {}
 local stageNo = 1
+local builtHooks: { (any, number) -> () } = {} -- feature hooks after BuildStage (CHALLENGES)
 local teamBonus = { might = 0, goldGain = 0 } -- the Bargain Shrine (this stage)
 local enemyHPMult = 1
 
@@ -848,6 +855,20 @@ local function buildTreasure(arena, pos: Vector3)
 	setAttrs(obj, { LootType = "Treasure", Title = TITLES.Treasure, Price = 0, Benefit = "Free uncommon or legendary item", Detail = "Discovered cache · hold to claim" })
 	addGlow(obj, pos + Vector3.new(0, 2.7, 0), P.gold_300, true, false)
 	MapBuilder.ClearDecor(arena, pos, 3)
+	return obj
+end
+
+--[[
+	EXPLORE hook (docs/features/EXPLORE.md, SecretRoom.lua): a free treasure chest placed
+	mid-stage, exactly like the Buried Cache (same weights, hold, exactly-once opening);
+	`title` renames it. Removed with the rest of the loot by Clear (travel, run end).
+]]
+function LootSystem.AddTreasure(arena, pos: Vector3, title: string?): number
+	local obj = buildTreasure(arena, pos)
+	if title then
+		setAttrs(obj, { Title = title })
+	end
+	return obj.Id
 end
 
 ------------------------------------------------------------------------------------------
@@ -970,6 +991,12 @@ function LootSystem.BuildStage(arena, stage: number, portalPos: Vector3?)
 	chests("Golden", C.GoldenCount)
 	chests("Large", rng:NextInteger(C.LargeCount[1], C.LargeCount[2]))
 	chests("Small", rng:NextInteger(C.SmallCount[1], C.SmallCount[2]))
+	for _, fn in ipairs(builtHooks) do
+		local ok, err = pcall(fn, arena, stageNo) -- feature variants (cursed chests); own rng
+		if not ok then
+			warn("[LootSystem] stage hook failed: " .. tostring(err))
+		end
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -1046,6 +1073,10 @@ function LootSystem.OnGuardDown(e, killed: boolean)
 	else
 		obj.Despawned += 1
 	end
+	if obj.OnGuardDown then
+		obj.OnGuardDown(e, killed) -- a feature's guard (MiniBoss): it decides
+		return
+	end
 	if next(obj.Guards) ~= nil then
 		altarText(obj)
 		return
@@ -1096,6 +1127,9 @@ local function check(rp, obj: Obj): (boolean, string?)
 	if rp.Paused then
 		return false, "paused"
 	end
+	if obj.State == "Locked" then
+		return false, "locked" -- a feature chest still guarded (MiniBoss)
+	end
 	if not usable(obj) then
 		return false, "used"
 	end
@@ -1114,6 +1148,7 @@ local REASON_TEXT = {
 	gold = "Not enough gold.",
 	used = "Someone was faster.",
 	gone = "It's gone.",
+	locked = "Defeat its guard first.",
 }
 
 local function openChest(rp, obj: Obj)
@@ -1128,9 +1163,9 @@ local function openChest(rp, obj: Obj)
 	-- right after the gold is taken, before any cosmetic step that could fail. What the
 	-- client shows afterwards (card, reveal, skip, close, death) never touches the grant.
 	setState(obj, "Opened")
-	local weights = Config.Chests.Weights[obj.Type] or (obj.Type == "Treasure" and Config.Chests.Weights.Large) or Config.Chests.Weights.Small
+	local weights = obj.Weights or Config.Chests.Weights[obj.Type] or (obj.Type == "Treasure" and Config.Chests.Weights.Large) or Config.Chests.Weights.Small
 	local id = ctx.ItemSystem.Roll(weights, rp.Stats.Luck)
-	local granted, dramatic = ctx.ItemSystem.Grant(rp, id, TITLES[obj.Type], true)
+	local granted, dramatic = ctx.ItemSystem.Grant(rp, id, obj.Title or TITLES[obj.Type], true)
 	if granted then
 		-- the Golden Chest always gets the contained reveal (it pays a Legendary anyway)
 		ctx.RunManager.HoldReward(rp, dramatic == true or obj.Type == "Golden")
@@ -1148,6 +1183,12 @@ local function openChest(rp, obj: Obj)
 	Fx.Sound("Chest")
 	if obj.Type == "Golden" then
 		Events.Fire("GoldenChest", rp.Player)
+	end
+	if obj.OnOpened then
+		local okHook, hookErr = pcall(obj.OnOpened, rp, obj) -- after the grant (cursed chest)
+		if not okHook then
+			warn("[LootSystem] chest hook failed: " .. tostring(hookErr))
+		end
 	end
 end
 
@@ -1298,7 +1339,9 @@ local function useRune(rp, obj: Obj)
 end
 
 local function complete(rp, obj: Obj)
-	if obj.Kind == "Chest" then
+	if obj.OnComplete then
+		obj.OnComplete(rp, obj) -- a feature object (Shrine of Trial)
+	elseif obj.Kind == "Chest" then
 		openChest(rp, obj)
 	elseif obj.Type == "Rune" then
 		useRune(rp, obj)
@@ -1384,6 +1427,72 @@ function LootSystem.Step(dt: number)
 		end
 		-- frozen runs (level-up, pause menu) keep the hold where it is
 	end
+end
+
+------------------------------------------------------------------------------------------
+-- Feature hooks (docs/features/CHALLENGES.md): objects that use the hold / prompt /
+-- reward pipeline above. The owning module sets obj.Weights / Title / OnOpened /
+-- OnComplete / OnGuardDown; everything is removed with the stage (Clear).
+------------------------------------------------------------------------------------------
+
+-- fn(arena, stage) after every BuildStage (the stage's chests are in Objects()).
+function LootSystem.OnBuilt(fn: (any, number) -> ())
+	table.insert(builtHooks, fn)
+end
+
+-- A chest of a normal type at pos (free = the plain wooden look, no price).
+function LootSystem.AddFeatureChest(arena, typeName: string, pos: Vector3, free: boolean?): Obj
+	local obj = buildChest(typeName, pos, 0, free)
+	if free then
+		obj.Price = 0
+		setAttrs(obj, { Price = 0 })
+	end
+	MapBuilder.ClearDecor(arena, pos, 3)
+	return obj
+end
+
+-- A stone shrine (the Shrine kit) with a sigil colour, a light and the stand-here ring.
+function LootSystem.AddFeatureShrine(arena, typeName: string, pos: Vector3, sigil: Color3, stone: Color3?): Obj
+	local cf = CFrame.new(pos) * FACE_CAMERA
+	local obj = newObj("Shrine", typeName, pos, cf)
+	local look = { Gold = sigil, Stone = stone or P.stone_600, Base = P.stone_800 }
+	local shrineFallback = MapBuilder.FallbackFor("Shrine")
+	local fallback = shrineFallback
+		and function(fm: Model, fcf: CFrame, fs: number, _pal, sh: boolean)
+			(shrineFallback :: any)(fm, fcf, fs, look, sh)
+		end
+	local m = MapBuilder.PlaceProp(obj.Model, "Shrine", cf, 1, look, { fallback = fallback })
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") and GLOW_PIECES[d.Name] then
+			d.Material = NEON
+			d.Color = sigil
+			table.insert(obj.Glow, d)
+		end
+	end
+	MapBuilder.AddCollider(arena, "Shrine", cf, 1)
+	addGlow(obj, pos + Vector3.new(0, kitTop("Shrine", 5.0) + 1.4, 0), sigil, true, true)
+	MapBuilder.ClearDecor(arena, pos, 3)
+	setAttrs(obj, { Hold = Config.Shrines.HoldSeconds, State = "Ready" })
+	obj.Model.Parent = folder
+	return obj
+end
+
+function LootSystem.SetObjState(obj: Obj, newState: string, attrs: { [string]: any }?)
+	setState(obj, newState)
+	if attrs then
+		setAttrs(obj, attrs)
+	end
+end
+
+-- Recolours the glow pieces (nil colour = keep it; transparency 1 = off).
+function LootSystem.SetGlow(obj: Obj, color: Color3?, transparency: number?)
+	recolourGlow(obj, color, transparency)
+end
+
+-- Makes enemy e a guard of obj (its death calls obj.OnGuardDown).
+function LootSystem.AddGuard(obj: Obj, e)
+	e.Guard = obj.Id
+	obj.Guards[e] = e.Uid
 end
 
 function LootSystem.Init(c)

@@ -49,6 +49,7 @@ local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Showcase = require(script.Parent.Showcase)
+local MenuHeroPower = require(script.Parent.MenuHeroPower)
 
 local MenuCharacters = {}
 
@@ -420,6 +421,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	})
 	ui.MasteryPanel = new("Frame", { Name = "HeroUpgrades", BackgroundTransparency = 1, Visible = false, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 6 }, unlock)
 	UIKit.list(ui.MasteryPanel, { Padding = UDim.new(0, 6) })
+	-- HEROPOWER (ultimate, second skill, favourites): its own module, under the mastery rows
+	ui.HeroPower = MenuHeroPower.Build(unlock, 7)
 
 	ui.Action = UIKit.Button(scroll, {
 		Kind = "Primary",
@@ -797,6 +800,7 @@ text(row, "Small", effectLine, {
 		end
 		local own = p.OwnedCharacters[inspChar] == true
 		local selected = p.SelectedCharacter == inspChar
+		ui.HeroPower.Refresh(inspChar, p, own)
 		ui.Name.Text = string.upper(def.Name)
 		-- long names a step smaller so they fit beside the pill
 		local nameSize = 28

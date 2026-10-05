@@ -568,7 +568,48 @@ local function rollChoices(rp)
 		-- never an empty panel (a protected pause with nothing to pick): the first legal card
 		table.insert(choices, decorate(rp, pool[1]))
 	end
+	-- a bonus pick (Shrine of Trial, QueueBonusPick): at least one card above Common
+	rp.OfferBoosted = nil
+	if (rp.BonusPicks or 0) > 0 then
+		local has = false
+		for _, c in ipairs(choices) do
+			has = has or c.Rarity ~= "Common"
+		end
+		local best = nil
+		for _, c in ipairs(pool) do
+			local rare = c.Type == "WeaponNew" or c.Type == "PassiveNew" or c.Type == "Evolve"
+				or (c.Type == "WeaponUp" and c.Level >= WeaponData.MaxLevel)
+				or (c.Type == "PassiveUp" and c.Level >= PassiveData.MaxLevelOf(c.Id))
+			if not has and rare and (not best or c.Weight > best.Weight) then
+				best = c
+			end
+		end
+		if best then
+			choices[math.min(#choices + 1, Config.LevelUp.Choices)] = decorate(rp, best)
+		end
+		rp.OfferBoosted = true
+		for _, c in ipairs(choices) do
+			c.Bonus = true -- the client may tag the set ("TRIAL REWARD")
+		end
+	end
 	return choices
+end
+
+--[[
+	One extra upgrade pick earned in the run (Shrine of Trial): queued like a level, and its
+	card set always holds a card above Common (NEW / MAX / EVOLUTION) when the build still
+	has one. Picked through the normal OfferId flow; used up by that pick (or a skip).
+]]
+function LevelUpSystem.QueueBonusPick(rp)
+	rp.BonusPicks = (rp.BonusPicks or 0) + 1
+	LevelUpSystem.QueueLevels(rp, 1)
+end
+
+local function useBonus(rp)
+	if rp.OfferBoosted then
+		rp.OfferBoosted = nil
+		rp.BonusPicks = math.max(0, (rp.BonusPicks or 0) - 1)
+	end
 end
 
 local function apply(rp, c)
@@ -775,6 +816,7 @@ local function choose(rp, index: number, offerId: number?)
 	rp.Offer = nil
 	rp.PendingLevels -= 1
 	rp.BatchRemaining -= 1
+	useBonus(rp)
 	-- offerNext must always run (it releases the whole-run freeze), even if apply fails
 	local ok, err = pcall(apply, rp, c)
 	offerNext(rp)
@@ -788,7 +830,7 @@ end
 -- Ends any open offer without applying it (death, leaving, run end).
 function LevelUpSystem.Cancel(rp, preserveLevels: boolean?)
 	closePanel(rp)
-	if not preserveLevels then rp.PendingLevels = 0 end
+	if not preserveLevels then rp.PendingLevels = 0; rp.BonusPicks = 0 end
 	rp.ChoiceDeferred = nil
 	publishChoice(rp)
 	rp.Player:SetAttribute("PendingUpgrades", rp.PendingLevels)
@@ -989,6 +1031,7 @@ function LevelUpSystem.Start()
 		rp.Skips -= 1
 		rp.Offer = nil
 		rp.PendingLevels -= 1
+		useBonus(rp)
 		rp.BatchRemaining -= 1
 		ctx.GoldSystem.AddRunGold(rp, Config.LevelUp.SkipGold)
 		LevelUpSystem.SendInventory(rp)

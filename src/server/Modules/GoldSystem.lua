@@ -212,7 +212,11 @@ end
 -- Bargain Shrine). pos (where the enemy died) only feeds the coin burst clients draw.
 -- chanceMult scales the chance (wave enemies: Config.Waves.GoldChanceMult).
 function GoldSystem.OnKill(rp, pos: Vector3?, chanceMult: number?)
-	if rng:NextNumber() < Config.Gold.KillGoldChance * (chanceMult or 1) then
+	local chance = Config.Gold.KillGoldChance * (chanceMult or 1)
+	if ctx.WorldEvents then
+		chance = ctx.WorldEvents.GoldChance(chance) -- a GOLD RUSH map event (capped)
+	end
+	if rng:NextNumber() < chance then
 		local paid = GoldSystem.AddRunGold(rp, rng:NextInteger(Config.Gold.MinPerKill, Config.Gold.MaxPerKill) * (rp.Stats and rp.Stats.GoldMult or 1))
 		if paid > 0 and pos then
 			Fx.Gold(pos, paid, rp.Player.UserId)
