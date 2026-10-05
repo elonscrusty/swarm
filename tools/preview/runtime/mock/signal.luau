@@ -32,6 +32,10 @@ function Connection:Disconnect()
 	end
 end
 
+-- every connection ever made (weak): api.liveCounts() counts the ones still connected
+local registry = setmetatable({}, { __mode = "k" })
+R.connRegistry = registry
+
 local Signal = {}
 Signal.__index = Signal
 Signal.__type = "RBXScriptSignal"
@@ -49,6 +53,7 @@ function Signal:Connect(fn)
 	end
 	local c = setmetatable({ Connected = true, _fn = fn, _signal = self }, Connection)
 	table.insert(self._conns, c)
+	registry[c] = true
 	if self._onConnect then
 		self._onConnect(self)
 	end

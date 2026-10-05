@@ -476,6 +476,38 @@ function Mock.api()
 		return inTree, notDestroyed
 	end
 
+	-- Leak probes: connections still connected (by signal name), threads waiting on
+	-- task.wait / task.delay, deferred threads, tweens in the active list, live Sounds
+	-- (playing / all) not destroyed.
+	function api.liveCounts()
+		local out = { connections = 0, waiting = #S.waiting, deferred = #S.deferred, tweens = 0, sounds = 0, soundsPlaying = 0, bySignal = {} }
+		for c in pairs(R.connRegistry or {}) do
+			if c.Connected then
+				out.connections += 1
+				local n = tostring(c._signal and c._signal._name)
+				out.bySignal[n] = (out.bySignal[n] or 0) + 1
+			end
+		end
+		out.tweens = R.activeTweens and #R.activeTweens or 0
+		for _, st in pairs(states) do
+			if not st.destroyed and st.info and st.info.name == "Sound" then
+				out.sounds += 1
+				if st.x and st.x.playing then
+					out.soundsPlaying += 1
+				end
+			end
+		end
+		return out
+	end
+
+	-- forced GUI layouts per game line since the last reset (see layout.luau L.update)
+	function api.forcedLayouts(reset: boolean?)
+		local out = R.forcedLayouts or {}
+		if reset then
+			R.forcedLayouts = {}
+		end
+		return out
+	end
 	api.Mock = Mock
 	R.api = api
 	return api

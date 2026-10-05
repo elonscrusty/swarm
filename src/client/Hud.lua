@@ -1543,9 +1543,19 @@ local function updateStage(state: Configuration)
 				UIAnim.Pop(ui.Stage, 0, 0.7)
 			end
 		end
-		if where and anim.CaptionShort ~= stageNo and ui.StageRoom
-			and ui.StageNumber.AbsoluteSize.X / math.max(0.01, host.Scale()) > ui.StageRoom - 2 * (18 + 8) - 28 then
-			anim.CaptionShort = stageNo
+		-- measure only on the few frames after the caption, UI scale or panel room changed
+		-- (AutomaticSize settles within a frame or two): an AbsoluteSize read every frame
+		-- forces a GUI layout pass each frame (PERF-01)
+		local scale = host.Scale()
+		if anim.CaptionMeasured ~= caption or anim.CaptionScale ~= scale or anim.CaptionRoom ~= ui.StageRoom then
+			anim.CaptionMeasured, anim.CaptionScale, anim.CaptionRoom = caption, scale, ui.StageRoom
+			anim.CaptionChecks = 4
+		end
+		if where and anim.CaptionShort ~= stageNo and ui.StageRoom and (anim.CaptionChecks or 0) > 0 then
+			anim.CaptionChecks -= 1
+			if ui.StageNumber.AbsoluteSize.X / math.max(0.01, scale) > ui.StageRoom - 2 * (18 + 8) - 28 then
+				anim.CaptionShort = stageNo
+			end
 		end
 		if ui.StageGoal.Text ~= goal then
 			ui.StageGoal.Text = goal

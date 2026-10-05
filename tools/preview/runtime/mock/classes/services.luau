@@ -345,6 +345,7 @@ local function lerpValue(a, b, t)
 end
 
 local active = {} -- array of tween states
+R.activeTweens = active -- api.liveCounts()
 local owners = setmetatable({}, { __mode = "k" }) -- instance -> { prop -> tween }
 
 local function finish(tween, st, stateItem)

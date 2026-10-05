@@ -42,6 +42,7 @@ local function count(root: Instance): number
 	return #root:GetDescendants()
 end
 local gui = me:FindFirstChild("PlayerGui") or me
+local probes: { any }? = nil
 local function log(label: string)
 	local r = results[#results]
 	preview.log(string.format("%-26s phase=%s InRun=%s Alive=%s enemies=%d workspace=%d gui=%d frozen=%s result=%s",
@@ -50,6 +51,16 @@ local function log(label: string)
 			return true
 		end), count(workspace), count(gui), tostring(st:GetAttribute("Frozen")),
 		r and string.format("%s/%s kills=%s abandoned=%s", tostring(r.Won), tostring(r.Portal), tostring(r.Kills), tostring(r.Abandoned)) or "-"))
+	-- leak probes (mock): connections, waiting / deferred threads, tweens, Sounds, Lua heap
+	if preview.liveCounts then
+		local lc = preview.liveCounts()
+		local inTree, all = preview.liveInstances()
+		pcall(collectgarbage, "collect")
+		preview.log(string.format("%-26s   probes conns=%d waiting=%d deferred=%d tweens=%d sounds=%d/%d tree=%d all=%d heap=%.1fMB",
+			"", lc.connections, lc.waiting, lc.deferred, lc.tweens, lc.soundsPlaying, lc.sounds, inTree, all, collectgarbage("count") / 1024))
+		probes = probes or {}
+		table.insert(probes, { label = label, lc = lc })
+	end
 end
 
 log("boot (lobby)")
@@ -106,3 +117,35 @@ preview.log((spawned > 0 and "PASS" or "FAIL") .. " new run after death spawns e
 preview.remote("AbandonRun"):FireServer()
 wait(1)
 log("final lobby")
+-- connection growth by signal name between the first return to the lobby and the final lobby
+if probes then
+	local a, b
+	for _, p in ipairs(probes) do
+		if p.label == "cycle 1 after MAIN MENU" then
+			a = p.lc
+		end
+	end
+	b = probes[#probes].lc
+	if a and b then
+		local rows = {}
+		for k, v in pairs(b.bySignal) do
+			local d = v - (a.bySignal[k] or 0)
+			if d ~= 0 then
+				table.insert(rows, { k, d })
+			end
+		end
+		for k, v in pairs(a.bySignal) do
+			if b.bySignal[k] == nil then
+				table.insert(rows, { k, -v })
+			end
+		end
+		table.sort(rows, function(x, y)
+			return math.abs(x[2]) > math.abs(y[2])
+		end)
+		local parts = {}
+		for i = 1, math.min(12, #rows) do
+			table.insert(parts, string.format("%s %+d", rows[i][1], rows[i][2]))
+		end
+		preview.log(string.format("connections: cycle-1 lobby %d -> final lobby %d; by signal: %s", a.connections, b.connections, table.concat(parts, ", ")))
+	end
+end

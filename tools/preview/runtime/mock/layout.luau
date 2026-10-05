@@ -872,6 +872,18 @@ end
 
 function L.ensure()
 	if R.guiDirty and not L.updating then
+		-- a forced (on-demand) layout: count it by the game line that read AbsoluteSize /
+		-- TextBounds on a dirty GUI (api.forcedLayouts)
+		local key = "?"
+		for lvl = 2, 8 do
+			local src, ln = debug.info(lvl, "sl")
+			if src and not string.find(src, "mock", 1, true) and not string.find(src, "runtime", 1, true) then
+				key = string.gsub(src, '^%[string "(.*)"%]$', "%1") .. ":" .. tostring(ln)
+				break
+			end
+		end
+		R.forcedLayouts = R.forcedLayouts or {}
+		R.forcedLayouts[key] = (R.forcedLayouts[key] or 0) + 1
 		L.update()
 	end
 end

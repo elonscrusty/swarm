@@ -21,6 +21,8 @@
 --       caravan   the Lost Caravan defence with its waves, the hero in the ring
 --       boss      each new boss (BriarSentinel, FrostboundColossus; --set bosses=Id,Id)
 --                 held in phase 2 (HP kept at 40%) with its hazards live
+--                 --set bossenemies=200 also keeps that many swarm enemies alive around the
+--                 hero during each boss phase (the dense boss-plus-swarm case)
 --       endless   an Endless run moved to stage --set stage=12 (DEV next stage), the real
 --                 spawner at its Endless multipliers
 --     these use the real spawner (the normal MaxLive) instead of the benchmark ring, and
@@ -38,6 +40,8 @@ for _, n in ipairs(counts) do
 end
 local seconds = tonumber(args.seconds) or 10
 local soak = tonumber(args.soak) or 0
+local bossN = tonumber(args.bossenemies) or 0
+maxN = math.max(maxN, bossN)
 local top = tonumber(args.top) or 14
 local withClient = args.client ~= "off"
 local scenario = args.scenario or "swarm"
@@ -533,7 +537,10 @@ if want("boss") then
 		run(6) -- entrance + first attacks
 		table.clear(seen)
 		table.clear(order)
-		phase("boss " .. id, 0, seconds)
+		if bossN > 0 then
+			Config.Enemies.MaxLive = math.max(normalMaxLive, bossN) -- the bench ring around the boss fight
+		end
+		phase(bossN > 0 and string.format("boss %s +%d", id, bossN) or ("boss " .. id), bossN, seconds)
 		local b = Spawner.Boss
 		line(string.format("boss %s: alive %s, phase %s, states seen [%s], peak boss lines %d, rings %d",
 			id, tostring(b ~= nil and b.Alive), tostring(b and b.PhaseIndex), table.concat(order, " "), peakLines, peakRings))
@@ -587,6 +594,10 @@ if soak > 0 then
 		done += step
 		local inTree, all = preview.liveInstances()
 		line(string.format("  t+%3ds  alive %3d  tree %6d  all %6d  heap %6.1f MB  kills %s", done, #Spawner.Active, inTree, all, collectgarbage("count") / 1024, tostring(rp.Kills)))
+		if preview.liveCounts then
+			local lc = preview.liveCounts()
+			line(string.format("           probes: conns %d, waiting threads %d, deferred %d, tweens %d, sounds %d (playing %d)", lc.connections, lc.waiting, lc.deferred, lc.tweens, lc.sounds, lc.soundsPlaying))
+		end
 		local grew = {}
 		for k, v in pairs(buckets()) do
 			local d = v - (base[k] or 0)
@@ -610,4 +621,18 @@ for _, r in ipairs(results) do
 	line(string.format("  %-6s server %7.3f  client %7.3f  instances tree %d all %d  heap %.1f MB", r.label, r.server, r.client, r.tree, r.all, r.heap / 1024))
 end
 preview.metrics.perf = results
+do -- forced GUI layouts (AbsoluteSize / TextBounds reads on a dirty GUI) by game line
+	local rows = {}
+	for k, v in pairs(preview.forcedLayouts()) do
+		table.insert(rows, { k, v })
+	end
+	table.sort(rows, function(a, b)
+		return a[2] > b[2]
+	end)
+	local parts = {}
+	for i = 1, math.min(6, #rows) do
+		table.insert(parts, rows[i][1] .. " " .. rows[i][2])
+	end
+	line(string.format("forced GUI layouts over the whole scene: [%s]", table.concat(parts, ", ")))
+end
 -- the picture: the swarm from the run camera
