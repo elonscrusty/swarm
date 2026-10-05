@@ -1641,6 +1641,8 @@ Config.FeatureHud = {
 	UltimateSize = 72, -- touch button (pixels), above the JUMP button
 	BadgeSize = 36, -- top-right badge row (pixels)
 	MaxBadges = 6,
+	MaxBadgesCompact = 3, -- phones: fewer badges (lowest Order first) so the row fits
+	BadgeMinScale = 0.7, -- the row shrinks down to this before badges are dropped
 	AnnounceSeconds = 1.6, -- combo / announcer line default time on screen
 }
 

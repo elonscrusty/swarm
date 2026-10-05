@@ -756,6 +756,36 @@ local function placeBanner()
 	end
 end
 
+-- The status line (e.g. "A teammate is reviving you"): in portrait it drops below the
+-- left-edge minimap (Hud.AvoidInPortrait) when they would overlap.
+local statusBaseY = 0
+local statusPortrait = false
+local function placeStatus()
+	local box = ui.Status :: Frame?
+	if not box then
+		return
+	end
+	local half = box.Size.Y.Offset / 2
+	local y = statusBaseY
+	if statusPortrait then
+		for _ = 1, 2 do
+			for _, g in ipairs(portraitBars) do
+				if g.Visible and g.Parent then
+					local gh = g.Size.Y.Offset
+					local top = g.Position.Y.Offset - g.AnchorPoint.Y * gh
+					if y - half < top + gh + 8 and y + half > top - 8 then
+						y = top + gh + 8 + half
+					end
+				end
+			end
+		end
+	end
+	local at = UDim2.fromOffset(box.Position.X.Offset, math.floor(y))
+	if box.Position ~= at then
+		box.Position = at
+	end
+end
+
 -- A persistent bar in the top centre (e.g. the caravan defence bar): banners stack under it.
 function Hud.ReserveCentre(g: GuiObject)
 	table.insert(centreBars, g)
@@ -1121,6 +1151,9 @@ local function layout()
 	else
 		ui.Status.Position = UDim2.fromOffset(W / 2, math.min(H * 0.66, clusterTop - 44))
 	end
+	statusBaseY = ui.Status.Position.Y.Offset
+	statusPortrait = portrait
+	placeStatus()
 end
 Hud.Layout = layout
 relayout = layout
@@ -1872,6 +1905,9 @@ function Hud.Update(dt: number, state: Configuration, reviveOpen: boolean)
 	refreshBuff()
 	if ui.Banner.Visible then
 		placeBanner() -- a centre bar may appear mid-banner
+	end
+	if statusPortrait and ui.Status.Visible then
+		placeStatus() -- the portrait minimap moves with the strips and chips
 	end
 	local phase = state:GetAttribute("Phase") or "Lobby"
 	local runTime = state:GetAttribute("RunTime") or 0

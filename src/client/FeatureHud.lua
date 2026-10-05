@@ -70,6 +70,24 @@ end
 -- Badges
 ------------------------------------------------------------------------------------------
 
+-- Hides the highest orders beyond the cap (fewer on phones, Config.FeatureHud.MaxBadgesCompact).
+local function applyCap()
+	local list = {}
+	for _, f in pairs(badges) do
+		table.insert(list, f)
+	end
+	table.sort(list, function(a, c)
+		return a.LayoutOrder < c.LayoutOrder or (a.LayoutOrder == c.LayoutOrder and a.Name < c.Name)
+	end)
+	local cap = UIKit.IsCompact() and (F.MaxBadgesCompact or F.MaxBadges) or F.MaxBadges
+	for i, f in ipairs(list) do
+		local on = i <= cap
+		if f.Visible ~= on then
+			f.Visible = on
+		end
+	end
+end
+
 --[[
 	Adds or updates badge `id`: opts = { Text = "SNOW", Color = Color3, Order = number }.
 	At most Config.FeatureHud.MaxBadges show (lowest Order first).
@@ -99,17 +117,7 @@ function FeatureHud.Badge(id: string, opts: { Text: string?, Color: Color3?, Ord
 		UIKit.stroke(frame, opts.Color or P.gold_400, 1, 0.3)
 	end
 	frame.LayoutOrder = opts.Order or 100
-	-- the cap: hide the highest orders beyond MaxBadges
-	local list = {}
-	for _, f in pairs(badges) do
-		table.insert(list, f)
-	end
-	table.sort(list, function(a, c)
-		return a.LayoutOrder < c.LayoutOrder or (a.LayoutOrder == c.LayoutOrder and a.Name < c.Name)
-	end)
-	for i, f in ipairs(list) do
-		f.Visible = i <= F.MaxBadges
-	end
+	applyCap()
 	return frame
 end
 
@@ -118,6 +126,7 @@ function FeatureHud.RemoveBadge(id: string)
 	if b then
 		b:Destroy()
 		badges[id] = nil
+		applyCap()
 	end
 end
 
@@ -184,14 +193,83 @@ end
 -- Layout + per-frame state
 ------------------------------------------------------------------------------------------
 
--- The lowest bottom edge (pixels) of the HUD's top-right pieces, so badges sit under them.
-local function rightColumnBottom(main: Instance?): number
+-- Screen rects (absolute pixels) the badge row must keep clear of: the HUD's top pieces,
+-- the minimap, the team rows and a tutorial tip card. Refreshed by the layout below.
+local function addRect(out: { Rect }, g: any)
+	if typeof(g) == "table" then
+		g = g.Instance
+	end
+	if typeof(g) == "Instance" and g:IsA("GuiObject") and g.Visible and g.Parent then
+		local sg = g:FindFirstAncestorOfClass("ScreenGui")
+		if sg and not sg.Enabled then
+			return
+		end
+		local p, sz = g.AbsolutePosition, g.AbsoluteSize
+		if sz.X > 1 and sz.Y > 1 then
+			table.insert(out, Rect.new(p.X, p.Y, p.X + sz.X, p.Y + sz.Y))
+		end
+	end
+end
+
+local hudMod: any, teamMod: any = nil, nil
+local function elementsOf(name: string): { [string]: any }?
+	local mod = name == "Hud" and hudMod or teamMod
+	if mod == nil then
+		local ok, m = pcall(require, (script.Parent :: any):FindFirstChild(name))
+		mod = ok and m or false
+		if name == "Hud" then
+			hudMod = mod
+		else
+			teamMod = mod
+		end
+	end
+	return mod and mod.Elements and mod.Elements() or nil
+end
+
+local cachedFinds: { [string]: Instance? } = {}
+local nextFind = 0
+local function obstacles(playerGui: Instance): { Rect }
+	local now = os.clock()
+	if now >= nextFind then
+		nextFind = now + 1
+		local main = playerGui:FindFirstChild("SwarmUI")
+		cachedFinds.MiniMap = main and main:FindFirstChild("MiniMap", true)
+		cachedFinds.TipCard = playerGui:FindFirstChild("TipCard", true)
+		local spectate = playerGui:FindFirstChild("Spectate")
+		cachedFinds.Spectate = spectate and spectate:FindFirstChild("Row")
+	end
+	local out = {}
+	local els = elementsOf("Hud")
+	if els then
+		for _, key in ipairs({ "Counters", "Pause", "TimerPill", "Stage", "Plate", "Boss", "Bar" }) do
+			addRect(out, els[key])
+		end
+	end
+	addRect(out, cachedFinds.MiniMap)
+	addRect(out, cachedFinds.TipCard)
+	addRect(out, cachedFinds.Spectate)
+	local team = elementsOf("TeamUI")
+	local list = team and team.List
+	if typeof(list) == "Instance" and list:IsA("GuiObject") and list.Visible then
+		for _, row in ipairs(list:GetChildren()) do
+			addRect(out, row)
+		end
+	end
+	return out
+end
+
+-- The pieces right above the row (counters / pause): the row starts under them.
+local function topRightBottom(): number
+	local els = elementsOf("Hud")
 	local bottom = 0
-	if main then
-		for _, name in ipairs({ "Counters", "MiniMap" }) do
-			local f = main:FindFirstChild(name, true)
-			if f and f:IsA("GuiObject") and f.Visible then
-				bottom = math.max(bottom, f.AbsolutePosition.Y + f.AbsoluteSize.Y)
+	if els then
+		for _, key in ipairs({ "Counters", "Pause" }) do
+			local g = els[key]
+			if typeof(g) == "table" then
+				g = g.Instance
+			end
+			if typeof(g) == "Instance" and g:IsA("GuiObject") and g.Visible then
+				bottom = math.max(bottom, g.AbsolutePosition.Y + g.AbsoluteSize.Y)
 			end
 		end
 	end
@@ -221,6 +299,7 @@ function FeatureHud.Init()
 	local badgeRow = UIKit.new("Frame", { Name = "Badges", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(0, F.BadgeSize), AutomaticSize = Enum.AutomaticSize.X }, root) :: Frame
 	UIKit.list(badgeRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
 	slots.Badges = badgeRow
+	local rowScale = UIKit.new("UIScale", { Scale = 1 }, badgeRow) :: UIScale
 
 	-- announcer / combo line (upper third, centred)
 	local announce = UIKit.new("Frame", { Name = "Announcer", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.26), Size = UDim2.new(0.9, 0, 0, 40) }, root) :: Frame
@@ -263,13 +342,63 @@ function FeatureHud.Init()
 			return
 		end
 		local now = os.clock()
-		-- badges under the counters / minimap
-		local main = playerGui:FindFirstChild("SwarmUI") or playerGui
-		local cam = workspace.CurrentCamera
-		local w = cam and cam.ViewportSize.X or 800
+		-- badges: right-aligned inside the safe area (root), under the counters and clear
+		-- of the minimap, team rows and tip card; the row shrinks before badges are dropped
+		applyCap()
+		local origin, rootSize = root.AbsolutePosition, root.AbsoluteSize
+		local w = rootSize.X
 		local margin = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
-		local y = math.max(rightColumnBottom(main) + 8, 64)
-		local at = UDim2.fromOffset(w - margin, y)
+		local scale = rowScale.Scale
+		local natural = badgeRow.AbsoluteSize.X / math.max(scale, 0.01)
+		local maxW = math.max(80, (UIKit.IsCompact() and w * 0.62 or w * 0.45) - margin)
+		local fit = math.clamp(maxW / math.max(natural, 1), F.BadgeMinScale or 0.7, 1)
+		if math.abs(fit - scale) > 0.01 then
+			rowScale.Scale = fit
+			scale = fit
+		end
+		local rw, rh = natural * scale, F.BadgeSize * scale
+		local right = origin.X + w - margin
+		local top = math.max(topRightBottom() + 8, origin.Y + 8)
+		local y = top
+		if natural > 1 then
+			local rects = obstacles(playerGui)
+			-- drops `y` under every rect the row at (rx, y) would touch; nil = no room left
+			local function settle(rx: number, y0: number): number?
+				local yy = y0
+				for _ = 1, 8 do
+					local moved = false
+					for _, r in ipairs(rects) do
+						if r.Max.X > rx - rw - 6 and r.Min.X < rx + 6 and r.Max.Y > yy - 4 and r.Min.Y < yy + rh + 4 then
+							yy = r.Max.Y + 8
+							moved = true
+						end
+					end
+					if not moved then
+						return yy + rh <= origin.Y + rootSize.Y * 0.75 and yy or nil
+					end
+				end
+				return nil
+			end
+			local found = settle(right, top)
+			if not found then
+				-- the right column is full (team rows, minimap, tip card): sit at the top,
+				-- left of whatever fills the column under the counters
+				local colLeft = right
+				for _, r in ipairs(rects) do
+					if r.Max.X > right - rw - 6 and r.Min.Y >= top - 4 and r.Min.Y < top + 3 * rh then
+						colLeft = math.min(colLeft, r.Min.X)
+					end
+				end
+				if colLeft - 8 - rw > origin.X + margin then
+					found = settle(colLeft - 8, top)
+					if found then
+						right = colLeft - 8
+					end
+				end
+			end
+			y = found or top
+		end
+		local at = UDim2.fromOffset(math.floor(right - origin.X + 0.5), math.floor(y - origin.Y + 0.5))
 		if badgeRow.Position ~= at then
 			badgeRow.Position = at
 		end
@@ -289,8 +418,9 @@ function FeatureHud.Init()
 		end
 		if showUlt and u then
 			local jump = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26)
-			local vh = cam and cam.ViewportSize.Y or 600
-			local pos = UDim2.fromOffset(w - (Config.Movement.ButtonMargin or 26), vh - jump - 12)
+			-- in root (safe-area) pixels, like the badge row
+			local vh = root.AbsoluteSize.Y
+			local pos = UDim2.fromOffset(root.AbsoluteSize.X - (Config.Movement.ButtonMargin or 26), vh - jump - 12)
 			if ult.Position ~= pos then
 				ult.Position = pos
 			end
