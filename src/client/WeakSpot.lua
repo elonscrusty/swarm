@@ -6,7 +6,7 @@
 
 	While open: a glowing gold ring on the floor behind the boss with a "HIT HERE" tag
 	(pooled, one part), and a FeatureHud badge: "HIT ITS BACK" for the other players,
-	"KEEP ITS AGGRO" for the holder. Nothing flashes; the ring pulses slowly. Gone when the
+	"HOLD AGGRO" for the holder. Nothing flashes; the ring pulses slowly. Gone when the
 	spot closes, the boss dies, the run ends or the switch is off.
 ]]
 
@@ -40,7 +40,7 @@ function WeakSpot.BadgeText(): string
 	if not WeakSpot.Spot() then
 		return ""
 	end
-	return Remotes.State():GetAttribute("BossAggroId") == player.UserId and "KEEP ITS AGGRO" or "HIT ITS BACK"
+	return Remotes.State():GetAttribute("BossAggroId") == player.UserId and "HOLD AGGRO" or "HIT ITS BACK"
 end
 
 function WeakSpot.Marker(): BasePart?

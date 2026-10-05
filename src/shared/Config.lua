@@ -1671,9 +1671,9 @@ Config.PhotoMode = {
 	Poses = { "Showcase", "Cheer", "Idle" }, -- HeroPoses names, in the POSE button's order
 	PoseNames = { Showcase = "HEROIC", Cheer = "CHEER", Idle = "RELAXED" },
 	OrbitSpeed = 10, -- degrees per second while ORBIT is on
-	Distance = 11, -- camera distance from the hero (studs)
-	Height = 3.2, -- camera height above the hero's feet
-	AimHeight = 2.6, -- aim point above the feet
+	Distance = 17, -- camera distance from the hero (studs)
+	Height = 6, -- camera height above the hero's feet (looks over gems and small props)
+	AimHeight = 3.2, -- aim point above the feet
 	FieldOfView = 40,
 	Frames = { "None", "Gold", "Crimson", "Frost" }, -- overlay frame styles (FRAME button)
 	HintSeconds = 2.5, -- "Tap to exit" hint

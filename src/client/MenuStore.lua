@@ -129,7 +129,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 
 	for i, s in ipairs(StoreCatalog.Sections) do
 		local title = string.upper(s.Title)
-		local w = math.floor(#title * TS(14) * 0.66 + 44)
+		local w = math.floor(#title * TS(14) * 0.7 + 64)
 		chips[s.Id] = UIKit.Button(ui.Chips, {
 			Kind = s.Id == section and "Primary" or "Ghost",
 			Title = title,

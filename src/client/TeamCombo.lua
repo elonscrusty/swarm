@@ -5,7 +5,7 @@
 
 	Shows the shared meter the server publishes (SwarmState TeamCombo 0..1, TeamComboPair,
 	TeamComboUsed) as a FeatureHud badge in a group run: "TEAM 40%" while it fills,
-	"COMBO READY" when it is full and you stand with a teammate, "COMBO: GET CLOSE" when it
+	"COMBO READY" when it is full and you stand with a teammate, "GET CLOSE" when it
 	is full but you are apart. When you can fire it a round COMBO touch button shows left of
 	the ULT button; keyboard F, gamepad ButtonL1. Pressing only asks the server
 	(TeamComboFire); the server checks the meter, the partner and the run. Each new
@@ -68,7 +68,7 @@ end
 -- The badge words for meter `m` (tests read them).
 function TeamCombo.BadgeText(m: number, together: boolean): string
 	if m >= 1 then
-		return together and "COMBO READY" or "COMBO: GET CLOSE"
+		return together and "COMBO READY" or "GET CLOSE"
 	end
 	return string.format("TEAM %d%%", math.floor(m * 100))
 end

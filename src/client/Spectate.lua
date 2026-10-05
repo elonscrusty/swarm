@@ -40,6 +40,38 @@ local nameLabel: TextLabel? = nil
 local reviveButton: TextButton? = nil
 local reviveLabel: TextLabel? = nil
 local sentUntil = 0
+local rowFrame: Frame? = nil
+
+-- Where the [<] NAME [>] row goes: under the HUD timer in landscape, above the REVIVE ME
+-- button (bottom-left) in portrait.
+local function placeRow(screen: ScreenGui)
+	local row = rowFrame
+	if not row then
+		return
+	end
+	local cam = workspace.CurrentCamera
+	local w = cam and cam.ViewportSize.X or 800
+	local h = cam and cam.ViewportSize.Y or 600
+	local M = Theme.Layout.Margin
+	local pos, anchor
+	if w > h then
+		local main = player.PlayerGui:FindFirstChild("SwarmUI")
+		local timer = main and main:FindFirstChild("TimerPill", true)
+		local top = 64
+		if timer and timer:IsA("GuiObject") and timer.Visible then
+			top = timer.AbsolutePosition.Y + timer.AbsoluteSize.Y + 8 - screen.AbsolutePosition.Y
+		end
+		pos, anchor = UDim2.new(0.5, 0, 0, math.floor(top)), Vector2.new(0.5, 0)
+	else
+		pos, anchor = UDim2.new(0, M, 1, -(M + 48 + 10)), Vector2.new(0, 1)
+	end
+	if row.Position ~= pos then
+		row.Position = pos
+	end
+	if row.AnchorPoint ~= anchor then
+		row.AnchorPoint = anchor
+	end
+end
 
 local function on(): boolean
 	return Config.FeatureOn("Spectate")
@@ -112,8 +144,10 @@ function Spectate.Init()
 	local M = Theme.Layout.Margin
 	local size = S.ButtonSize
 	local barW = size * 2 + 150 + 16
-	local holder = UIKit.new("Frame", { Name = "Bar", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, M, 1, -M), Size = UDim2.fromOffset(barW, size + 8 + 48) }, screen)
-	local row = UIKit.new("Frame", { Name = "Row", BackgroundTransparency = 1, Size = UDim2.fromOffset(barW, size) }, holder)
+	-- [<] WATCHING NAME [>]: under the timer in landscape (the status line sits centre-low),
+	-- above REVIVE ME in the bottom-left corner in portrait (placed every frame below)
+	local row = UIKit.new("Frame", { Name = "Row", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(barW, size) }, screen)
+	rowFrame = row
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
 	arrow(row, "Prev", "<", -1)
 	local pill = UIKit.new("Frame", { Name = "Watching", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.15, Size = UDim2.fromOffset(150, 40), LayoutOrder = 2 }, row)
@@ -127,9 +161,9 @@ function Spectate.Init()
 		BackgroundColor3 = P.gold_300,
 		BackgroundTransparency = 0.05,
 		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.fromScale(0, 1),
+		Position = UDim2.new(0, M, 1, -M),
 		Size = UDim2.fromOffset(150, 48),
-	}, holder) :: TextButton
+	}, screen) :: TextButton
 	UIKit.corner(revive, Theme.Radius.M)
 	reviveLabel = UIKit.text(revive, "Label", Config.QuickPings.Labels.ReviveMe or "REVIVE ME", { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.slate_950 }, 15) :: any
 	revive.Activated:Connect(function()
@@ -158,6 +192,7 @@ function Spectate.Init()
 		if not active then
 			return
 		end
+		placeRow(screen)
 		local watched = CameraController.Spectated()
 		local text = watched and ("WATCHING " .. string.upper(watched.DisplayName)) or "NO TEAMMATE UP"
 		local label = nameLabel :: TextLabel

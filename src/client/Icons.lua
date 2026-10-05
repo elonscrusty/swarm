@@ -2407,12 +2407,17 @@ function Icons.PreloadList(): { string }
 	return list
 end
 
--- "hero_<Id>" (its picture, with the drawn class icon under it), or "person" for an unknown id.
+-- HEROES (feature 11): heroes without a hero_<Id> picture yet show this existing icon
+-- (owner pictures wanted: docs/ICON_CHECKLIST.md). Move one to ART_FALLBACK once its PNG exists.
+local HERO_DRAWN: { [string]: string } = { Archer = "Crossbow", Bard = "music", Golem = "Stoneskin" }
+
+-- "hero_<Id>" (its picture, with the drawn class icon under it), the HERO_DRAWN icon, or
+-- "person" for an unknown id.
 function Icons.CharacterIcon(characterId: string): string
 	if ART_FALLBACK["hero_" .. characterId] then
 		return "hero_" .. characterId
 	end
-	return "person"
+	return HERO_DRAWN[characterId] or "person"
 end
 
 function Icons.Character(parent: Instance?, characterId: string, opts: Opts?): Frame

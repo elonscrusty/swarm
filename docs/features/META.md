@@ -157,7 +157,11 @@ with a gain and a cost of the same size.
   - streak: same day, next day, grace, reset, day 7 title
   - titles: wear rules, the attribute
   - collection
-- `meta` scene: each screen with a sample profile, phone layout checks with `check_layout.py`.
+- `meta` scene: each screen with a sample profile (`--set screen=Sigils|Weekly|Season|Titles|Collection|Streak|Play|More`).
+  On 2026-10-05 the checks gave:
+  - `meta-regression`: 63 PASS lines and 0 FAIL.
+  - Layout: `check_layout.py` found 0 problems for all 8 screens, on both iphone and
+    phone-portrait.
 
 BLOCKED (offline only):
 - Studio, phones and live servers.

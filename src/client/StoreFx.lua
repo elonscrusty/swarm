@@ -471,11 +471,9 @@ local function refreshPlayer(who: Player, camPos: Vector3?)
 			buildTrail(r, trailId)
 		end
 	end
-	-- nameplate (the menu hero's plate sits over the dais)
+	-- nameplate (none on the menu hero: the lobby screens sit over it)
 	local adornee: BasePart? = nil
-	if menu then
-		adornee = menuAnchor
-	elseif root and not hidden(r) then
+	if not menu and root and not hidden(r) then
 		adornee = root
 	end
 	local plateKey = adornee and (tostring(who:GetAttribute("CosPlate") or "") .. "|" .. tostring(who:GetAttribute("Supporter")) .. "|" .. adornee:GetFullName()) or ""

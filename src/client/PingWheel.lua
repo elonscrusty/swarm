@@ -107,6 +107,23 @@ function PingWheel.Init()
 	end
 	local size = Q.WheelSize
 	slot.Size = UDim2.fromOffset(size, size)
+	-- a dimmer behind the options (full screen): the wheel reads as the one thing to answer,
+	-- and a tap outside it closes it
+	local dim = UIKit.new("TextButton", {
+		Name = "Dim",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundColor3 = P.slate_950,
+		BackgroundTransparency = 0.55,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(4000, 4000),
+		ZIndex = 0,
+	}, slot) :: TextButton
+	dim.Activated:Connect(function()
+		PingWheel.SetOpen(false)
+	end)
 	local b = Q.ButtonSize
 	local radius = size / 2 - b / 2
 	local n = #Q.Order

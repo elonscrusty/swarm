@@ -124,10 +124,12 @@ add("Fallback cards and loot markers", "Level-up fallback cards (all slots maxed
 
 # characters: Icons.lua CHARACTER_ICONS
 cmap = {k[5:]: k for k in re.findall(r'\b(hero_\w+) = "', icons_lua)}
+_hd = re.search(r"local HERO_DRAWN[^=]*= \{([^}]*)\}", icons_lua)
+HERO_DRAWN = dict(re.findall(r'(\w+) = "(\w+)"', _hd.group(1))) if _hd else {}
 chars = blocks("src/shared/CharacterData.lua", None, "CharacterData.Skins", 2)
 rows = []
 for i, n, _ in chars:
-    key = cmap.get(i)
+    key = cmap.get(i) or HERO_DRAWN.get(i)  # HERO_DRAWN: new heroes until their picture exists
     rows.append((key, n + " [" + i + "]", "character select, lobby, team HUD, results"))
 add("Characters (class icon)", "Class icons: hero_<Id> picture (Icons.Character), drawn hat / helmet under it. Skins reuse the class icon.", rows)
 add("Locked / state icons", "Icons that mark a state.", [
@@ -188,6 +190,15 @@ sections.append(("Controls without an icon", "Intentional: text buttons.", [
     ("-", "DEV invincibility / DEV panel controls", "DEV panel", "working (text button, no icon: intentional)", "-"),
     ("-", "Reroll / Skip / Auto-pick / Banish", "level-up buttons: `cycle`, `skip` (recoloured on buttons, so drawn); auto-pick is a timer bar (no icon); banish does not exist", "working (drawn)", "drawn: DRAW.cycle, DRAW.skip"),
     ("-", "Coins / XP / pause / settings / daily", "keys `coin`, XP gems are 3D (no icon), `pause`, `gear`, `calendar`", "working (drawn)", "drawn"),
+    # rows the 30-features helpers added (kept here so a regeneration doesn't drop them)
+    ("-", "Hero ultimate button (HEROPOWER)", "FeatureHud round button above JUMP: text \"ULT\" with a gold charge fill; owner art per hero (8 ultimates, CharacterData.Ultimates) would be a later upgrade", "working (text button; owner picture optional)", "-"),
+    ("-", "Cosmetic store items (STORE)", "STORE screen cards: a coloured swatch tile with an existing drawn icon per kind (`arrowFast` trails, `VolatileSpore` bursts, `heart` pets, emote icons, `flag` plates, `area` dais, `crown` Supporter, `gift`); owner pictures per item (and for each new pass / product in Creator Dashboard) would be a later upgrade", "working (drawn; owner pictures optional)", "drawn"),
+    ("-", "Favourite tag / marks (HEROPOWER)", "level-up card \"★ Favourite\" pill and the gold star on Characters > FAVOURITES tiles (existing weapon / passive icons)", "working (text, no icon needed)", "-"),
+    ("-", "META screens: Sigils, weekly, season, titles, collection, daily reward", "Sigil rows use existing drawn icons (`boot`, `Garlic`, `coin`, `aim`, `shield`, `heart`, `magnet`, `pouch`, `sparkle`, `hourglass`, `area`, `person`); season / streak rows `lobby_Gold`, `medal`, `crown`, `gift`; MORE rows `gift`, `calendar`, `flag`, `medal`, `chest`; collection tiles reuse weapon / passive / item / hero icons (dark silhouettes when not found), `skull` enemies, `crown` bosses. Owner pictures, one per Sigil (12) and a SIGILS / SEASON / TITLES / COLLECTION / DAILY REWARD menu picture, would be a later upgrade", "working (drawn; owner pictures optional)", "drawn"),
+    ("-", "LOBBY: weapon mastery, photo mode, courtyard", "MORE rows `sword` (WEAPON MASTERY) and `castle` (COURTYARD); results PHOTO button `sparkle`; mastery menu rows reuse the weapon icons with colour swatches and `lock`. Owner pictures for WEAPON MASTERY / COURTYARD / PHOTO would be a later upgrade", "working (drawn; owner pictures optional)", "drawn"),
+    ("-", "HEROES: Archer, Bard, Golem class icons", "character select rows, lobby, team HUD, results show the existing `Crossbow`, `music`, `Stoneskin` icons (Icons.lua HERO_DRAWN). Owner pictures wanted: art/icons/heroes/hero_Archer.png, hero_Bard.png, hero_Golem.png (same style as hero_Knight), then tools/upload_icons.py + tools/gen_icon_data.py and move the hero into ART_FALLBACK", "working (existing icons; owner pictures wanted)", "drawn"),
+    ("-", "HEROES: Archer, Bard, Golem portraits", "ArtImage.Portrait keys `portraits/Archer`, `portraits/Bard`, `portraits/Golem` (Characters screen, lobby cards, results) are not in ArtData yet: the screens show the 3D preview / class icon fallback. Owner pictures wanted in the portrait style of the 8 heroes (art/ui portraits group), then tools/upload_art.py", "working (fallback; owner pictures wanted)", "-"),
+    ("-", "HEROES: Bard SONG badge", "FeatureHud badge \"SONG +12%\" (text, gold edge) while the Rally Song buffs you", "working (text, no icon needed)", "-"),
 ]))
 
 # --- write -------------------------------------------------------------------------------
