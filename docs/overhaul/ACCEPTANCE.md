@@ -66,11 +66,11 @@ Totals: PASS (offline) 54, FAIL 4, BLOCKED 5, NOT RUN 5 (68 lines).
 | 30 | Full 6+6 build with stacked items and modifiers readable and inspectable | PASS (offline) | render; HUD (hud-build) | |
 | 31 | Actual phone/tablet input, thumb zones, safe areas, native controls, gestures, holds | BLOCKED | render only | Real devices |
 | 32 | Upgrade cards: approved treatment, current-to-next, qualifiers, focus, shortcuts | PASS (offline) | render; UPGRADE_UI, COPY 4 | Existing icon art, not painted card art |
-| 33 | Final upgrade vs Maxed, total vs added, units, duration, HP/damage qualifiers | FAIL | UPGRADE_UI, COPY | Final/Maxed, units, qualifiers done; total vs added contribution not separated on the card (CP-09) |
+| 33 | Final upgrade vs Maxed, total vs added, units, duration, HP/damage qualifiers | PASS (offline) | UPGRADE_UI, COPY, POLISH | Final/Maxed, units, qualifiers done; passive change box labelled TOTAL, added amount on the line under the name (CP-09, levelup render iphone / phone / portrait) |
 | 34 | Results: stable tiles/actions, accurate gold accounting, separate progress | PASS (offline) | render + sim; RESULTS, BALANCE_AUDIT 3 | Landscape iPhone needs a scroll |
 | 35 | Replay / Main Menu / Stay and return happen once, no stale countdown | PASS (offline) | sim; FLOW (runserver-sim, results-flow) | Real teleports untested |
 | 36 | Duo menu side drawer, live-run label, restores input, confirms leave | PASS (offline) | render + sim; DUO_MENU | |
-| 37 | Fresh onboarding, main vs optional objectives, Portal/Exit, guidance, input-aware copy tested | FAIL | COPY, HUD | Optional caravan label not applied (CP-05); RunIntro close prompt not input-aware (CP-03); real fresh account BLOCKED |
+| 37 | Fresh onboarding, main vs optional objectives, Portal/Exit, guidance, input-aware copy tested | PASS (offline); fresh account BLOCKED | COPY, HUD, POLISH | Caravan labelled Optional in broadcast and bar (CP-05); RunIntro close prompt from InputPrompts (CP-03); solo copy branches (CP-02); real fresh account BLOCKED |
 | 38 | Controller focus/back/selection and keyboard shortcuts | BLOCKED | none for gamepad | No gamepad in the mock (UI-61); keyboard 1/2/3 kept in code |
 | 39 | Narrow/wide windows, ratios, long/localised text, large numbers, disabled states, glyph fallback | NOT RUN | render; HUD, TITLE (check_layout on 6 device sizes) | Localised text, ultrawide and UI scale not run |
 

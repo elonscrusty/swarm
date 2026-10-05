@@ -1,6 +1,7 @@
 -- results: the results screen over the arena (RunResult remote, as RunManager sends it):
 -- verdict, hero, numbers, the build, items, rewards, REPLAY / MAIN MENU.
---   --set outcome=defeat   a defeat during the Queen fight (no rewards lines)
+--   --set outcome=defeat   a defeat during the Queen fight (no rewards lines); --set details=open
+--                          opens RUN DETAILS and checks the "Last hit" line
 --   --set daily=on         a scored Daily Challenge run (daily line, its curses)
 --   --set outcome=endless  an Endless run left from the pause menu on stage 9 (endless score)
 --   --set mastery=on       with a Hero Mastery line in the progress block
@@ -58,8 +59,20 @@ if preview.args.outcome == "endless" then
 	return
 end
 if preview.args.outcome == "defeat" then
-	C.fire("RunResult", { NextGoal = nextGoal, Mastery = mastery, Curses = progress.Curses, CurseGold = progress.CurseGold, Account = { Gained = 118, From = 7, To = 7, Into = 210, Need = 450, Rewards = {} }, Won = false, Portal = false, Time = 412, Kills = 655, Gold = 330, GoldEarned = 600, GoldLost = 270, GoldRetention = 0.55, Difficulty = "Veteran", DeathCause = "Frostbound Colossus freezing breath", Level = 29, Damage = 64210, Arena = "Ruins (Duo)", Mode = "Duo", CharacterId = "Mage", Build = build, BossKills = 2, BossFight = true, Seconds = 25, StagesCleared = 2, Stage = 3, Items = { { Id = "Whetstone", Count = 1 }, { Id = "Bandage", Count = 2 } } })
+	C.fire("RunResult", { NextGoal = nextGoal, Mastery = mastery, Curses = progress.Curses, CurseGold = progress.CurseGold, Account = { Gained = 118, From = 7, To = 7, Into = 210, Need = 450, Rewards = {} }, Won = false, Portal = false, Time = 412, Kills = 655, Gold = 330, GoldEarned = 600, GoldLost = 270, GoldRetention = 0.55, Difficulty = "Veteran", DeathCause = "Frostbound Colossus freezing breath", DamageHistory = { { Cause = "Slime", Damage = 6, Time = 405 }, { Cause = "Ice Shard", Damage = 18, Time = 409 }, { Cause = "Frostbound Colossus freezing breath", Damage = 64, Time = 411.5 } }, Level = 29, Damage = 64210, Arena = "Ruins (Duo)", Mode = "Duo", CharacterId = "Mage", Build = build, BossKills = 2, BossFight = true, Seconds = 25, StagesCleared = 2, Stage = 3, Items = { { Id = "Whetstone", Count = 1 }, { Id = "Bandage", Count = 2 } } })
 	C.settle(3)
+	if preview.args.details == "open" then
+		-- --set details=open: RUN DETAILS opened (the "Last hit" line, CP-16)
+		local gui = game:GetService("Players").LocalPlayer.PlayerGui
+		local toggle = gui:FindFirstChild("RunDetails", true)
+		if toggle then
+			preview.click(toggle)
+			C.settle(1)
+		end
+		local details = gui:FindFirstChild("DetailsText", true)
+		local t = details and details.Text or ""
+		preview.log((string.find(t, "Last hit:", 1, true) and string.find(t, "Before that: Ice Shard 18, Slime 6", 1, true) and "PASS" or "FAIL") .. " last hit line: " .. string.gsub(t, "\n", " | "))
+	end
 	return
 end
 C.fire("RunResult", { NextGoal = nextGoal, Mastery = mastery, Curses = progress.Curses, CurseGold = progress.CurseGold, Account = progress.Account, Daily = progress.Daily, Won = true, Mode = daily and "Daily" or "Solo", CharacterId = "Knight", Build = build, BossKills = 5, BossFight = false, Achievements = { { Id = "QueenSlayer", Name = "Queen Slayer", Reward = "Unlocks the Ranger" } }, Time = 1500, Kills = 3874, Gold = 1412, GoldEarned = 1412, GoldLost = 0, GoldRetention = 1, Difficulty = "Standard", WinMinStages = 5, Level = 31, Damage = 286400, Arena = "Forest", NewBest = true, Unlocked = "Ruins", Seconds = 25, Portal = true, StagesCleared = 5, Stage = 5, Items = { { Id = "Whetstone", Count = 3 }, { Id = "QuickGloves", Count = 2 }, { Id = "StormCharm", Count = 1 }, { Id = "GuardianWard", Count = 1 }, { Id = "KeenLens", Count = 4 }, { Id = "SunMedallion", Count = 1 }, { Id = "IronPlate", Count = 2 }, { Id = "Bandage", Count = 1 } } })

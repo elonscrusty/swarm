@@ -1397,6 +1397,17 @@ local function synergyBar(parent: Instance, c, x: number, y: number, w: number, 
 	text(row, "Caption", synergyText(c), { Size = UDim2.fromOffset(0, h), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.fx_heal, LayoutOrder = 2, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
 end
 
+-- The evolution / synergy hint under a card's stats (CP-11): its own soft plate with a
+-- gold edge so it reads as a goal, not fine print. Same truthful text as before.
+function Choice.hintPlate(label: TextLabel, c)
+	label.BackgroundColor3 = P.slate_950
+	label.BackgroundTransparency = 0.45
+	label.Name = "Hint"
+	UIKit.corner(label, 6)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, label)
+	UIKit.stroke(label, c.HintReady and P.gold_400 or P.gold_600, 1, c.HintReady and 0.2 or 0.5)
+end
+
 -- Small gold diamonds at the four corners of a card (the sculpted frame of screen 04).
 function Choice.cornerGems(face: GuiObject, color: Color3)
 	for _, at in ipairs({ { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } }) do
@@ -1680,13 +1691,13 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			y += CARD.Syn + 4
 		end
 		if c.Hint then
-			text(face, "Small", tostring(c.Hint), {
+			Choice.hintPlate(text(face, "Small", tostring(c.Hint), {
 				Position = UDim2.fromOffset(pad, y + 2),
 				Size = UDim2.new(1, -2 * pad, 0, TS(13) + 4),
 				TextXAlignment = Enum.TextXAlignment.Center,
-				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
+				TextColor3 = c.HintReady and P.gold_300 or P.gold_200,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-			}, 13)
+			}, 13), c)
 		end
 	else
 		-- the CHOOSE plate at the bottom: the 1 / 2 / 3 key and CHOOSE
@@ -1808,15 +1819,15 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		hintRoom = 0
 		local hh = hintHeight()
 		if c.Hint and fits(hh) then
-			text(face, "Small", tostring(c.Hint), {
+			Choice.hintPlate(text(face, "Small", tostring(c.Hint), {
 				Position = UDim2.fromOffset(pad, bottom - hh),
 				Size = UDim2.new(1, -2 * pad, 0, hh),
 				TextXAlignment = Enum.TextXAlignment.Center,
-				TextYAlignment = Enum.TextYAlignment.Bottom,
+				TextYAlignment = Enum.TextYAlignment.Center,
 				TextWrapped = true,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextColor3 = c.HintReady and P.gold_300 or C.TextMuted,
-			}, 13)
+				TextColor3 = c.HintReady and P.gold_300 or P.gold_200,
+			}, 13), c)
 		end
 	end
 
@@ -4511,12 +4522,11 @@ local function buildResults()
 		local recent = results.Recent :: { string }?
 		local detailText = results.DetailsBase or ""
 		if recent and #recent > 0 then
-			local reviewRows = {}
-			local step = slim and 2 or 1
-			for i = 1, #recent, step do
-				table.insert(reviewRows, slim and table.concat(recent, "      ", i, math.min(i + 1, #recent)) or recent[i])
+			-- "Last hit: Brute 24", then the hits before it on one line
+			detailText ..= (detailText ~= "" and "\n" or "") .. string.format('<font color="%s"><b>Last hit:</b></font> %s', hex(P.crimson_300), recent[1])
+			if #recent > 1 then
+				detailText ..= "\nBefore that: " .. table.concat(recent, ", ", 2)
 			end
-			detailText ..= (detailText ~= "" and "\n" or "") .. string.format('<font color="%s"><b>RECENT DAMAGE</b></font> (latest first)\n', hex(P.crimson_300)) .. table.concat(reviewRows, "\n")
 		end
 		results.Details.Text = detailText
 		results.Details.Visible = open and detailText ~= ""
@@ -4959,7 +4969,8 @@ local function onRunResult(data)
 				and hit.Damage > 0 and hit.Damage < math.huge and type(hit.Time) == "number" and hit.Time == hit.Time then
 				local age = math.max(0, (tonumber(data.Time) or 0) - hit.Time)
 				if age <= 15 then
-					table.insert(recent, string.format("%s · -%s HP · %ds ago", string.sub(hit.Cause, 1, 70), UIKit.formatNumber(math.ceil(hit.Damage)), math.floor(age)))
+					-- plain words (CP-16): "Brute (24 damage)" for the last hit, "Brute 24" before it
+					table.insert(recent, string.format(#recent == 0 and "%s (%s damage)" or "%s %s", string.sub(hit.Cause, 1, 70), UIKit.formatNumber(math.ceil(hit.Damage))))
 				end
 			end
 		end
