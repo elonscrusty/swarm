@@ -225,6 +225,11 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 				Remotes.Get("StoreBuy"):FireServer(itemId, target)
 			end,
 		})
+		-- the price may have arrived before the button existed (an answer without a yield)
+		local cached = prices[(pass and "GamePass:" or "Product:") .. robuxId]
+		if cached then
+			b.SetText(label("R$ " .. UIKit.formatNumber(cached)))
+		end
 		return b
 	end
 

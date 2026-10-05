@@ -36,6 +36,9 @@ def main():
     checks += [("pings", ["phone"]), ("pings", ["phone-portrait"])]
     checks += [("accessibility-sim", [])]
     checks += [("uistate", [])]
+    checks += [("store-regression", [])]
+    checks += [("layout", ["store", d, "section=Gift", "ids=on"]) for d in ("iphone", "phone-portrait")]
+    checks += [("layout", ["store", d, "section=Pets"]) for d in ("iphone", "phone-portrait")]
     checks += [("heroes-regression", []), ("heroes-regression", ["coop=on"])]
     checks += [("layout", ["team", d, "mode=Duo", "wheel=on"]) for d in ("iphone", "phone-portrait")]
     checks += [("layout", ["meta", d, "screen=" + s]) for d in ("iphone", "phone-portrait") for s in ("Sigils", "Weekly", "Season", "Titles", "Collection", "Streak", "Play", "More")]
@@ -66,7 +69,7 @@ def main():
             "--max-time", "3000" if scene == "corner-regression" else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression"):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression"):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
         if scene in ("results-flow", "leaderboards", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx"):

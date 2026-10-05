@@ -200,9 +200,11 @@ local function layout()
 		local cam = workspace.CurrentCamera
 		w, h = cam.ViewportSize.X, cam.ViewportSize.Y
 	end
+	-- below the Roblox top bar (58 px) on every device
 	local pw = math.min(640, w - 24)
-	local ph = math.min(560, h - 24)
+	local ph = math.min(560, h - 72)
 	ui.Panel.Size = UDim2.fromOffset(pw, ph)
+	ui.Panel.Position = UDim2.new(0.5, 0, 0, 60 + math.floor((h - 72 - ph) / 2))
 	-- narrow: the swatches go under the name
 	local narrow = pw < 470
 	local rowH = narrow and 94 or 64
@@ -228,10 +230,10 @@ local function build()
 	dim.Activated:Connect(function()
 		WeaponMastery.Close()
 	end)
-	local holder, face = UIKit.Surface(root, { Name = "Panel", Size = UDim2.fromOffset(600, 520), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Radius = Theme.Radius.L, Transparency = 0.04, ZIndex = 2 })
+	local holder, face = UIKit.Surface(root, { Name = "Panel", Size = UDim2.fromOffset(600, 520), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 60), Radius = Theme.Radius.L, Transparency = 0.04, ZIndex = 2 })
 	ui.Panel = holder
 	text(face, "H2", "WEAPON MASTERY", { Name = "Title", Position = UDim2.fromOffset(18, 12), Size = UDim2.new(1, -90, 0, 30) }, 22)
-	ui.Hint = text(face, "Small", "Kills with a weapon earn glow colours for it. Looks only.", { Name = "Hint", Position = UDim2.fromOffset(18, 44), Size = UDim2.new(1, -36, 0, 18), TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
+	ui.Hint = text(face, "Small", "Kills unlock glow colours per weapon. Looks only.", { Name = "Hint", Position = UDim2.fromOffset(18, 44), Size = UDim2.new(1, -78, 0, 18), TextColor3 = C.TextMuted, TextWrapped = false, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
 	local close = UIKit.IconButton(face, { Icon = "close", Name = "Close", Size = 44, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), OnClick = function()
 		WeaponMastery.Close()
 	end })
@@ -288,7 +290,7 @@ function WeaponMastery.Open()
 	if not gui then
 		build()
 	end
-	ui.Hint.Text = "Kills with a weapon earn glow colours for it. Looks only."
+	ui.Hint.Text = "Kills unlock glow colours per weapon. Looks only."
 	ui.Refresh()
 	layout()
 	local g = gui :: ScreenGui

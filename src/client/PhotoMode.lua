@@ -425,7 +425,7 @@ function PhotoMode.AttachButton(parent: Instance, order: number, onOpen: (() -> 
 	if parent:IsA("GuiObject") then
 		local function fit()
 			local h = (parent :: GuiObject).Size.Y.Offset
-			b.Instance.Size = UDim2.fromOffset(UIKit.TS(12) * 5 + 50, h > 0 and h or 44)
+			b.Instance.Size = UDim2.fromOffset(UIKit.TS(12) * 4 + 74, h > 0 and h or 44)
 		end
 		parent:GetPropertyChangedSignal("Size"):Connect(fit)
 		fit()
