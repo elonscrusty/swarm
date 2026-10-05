@@ -233,7 +233,8 @@ local function build()
 	local holder, face = UIKit.Surface(root, { Name = "Panel", Size = UDim2.fromOffset(600, 520), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 60), Radius = Theme.Radius.L, Transparency = 0.04, ZIndex = 2 })
 	ui.Panel = holder
 	text(face, "H2", "WEAPON MASTERY", { Name = "Title", Position = UDim2.fromOffset(18, 12), Size = UDim2.new(1, -90, 0, 30) }, 22)
-	ui.Hint = text(face, "Small", "Kills unlock glow colours per weapon. Looks only.", { Name = "Hint", Position = UDim2.fromOffset(18, 44), Size = UDim2.new(1, -78, 0, 18), TextColor3 = C.TextMuted, TextWrapped = false, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
+	ui.Hint = text(face, "Small", "Kills unlock glow colours per weapon. Looks only.", { Name = "Hint", Position = UDim2.fromOffset(18, 44), Size = UDim2.new(1, -78, 0, 18), TextColor3 = C.TextMuted, TextWrapped = false, TextScaled = true, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
+	new("UITextSizeConstraint", { MaxTextSize = ui.Hint.TextSize, MinTextSize = 9 }, ui.Hint) -- phones: shrink before truncating
 	local close = UIKit.IconButton(face, { Icon = "close", Name = "Close", Size = 44, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), OnClick = function()
 		WeaponMastery.Close()
 	end })

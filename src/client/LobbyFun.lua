@@ -337,7 +337,7 @@ local function statusText(c: Course, now: number): string
 	if best then
 		return "BEST  " .. fmtTime(best :: number) .. (c.Last and ("   ·   LAST  " .. fmtTime(c.Last :: number)) or "")
 	end
-	return "Walk to the gold pad to start the course"
+	return "Step on the gold pad"
 end
 
 local function step(dt: number)
@@ -444,7 +444,9 @@ function LobbyFun.Enter()
 	cons.MinSize = Vector2.new(150, 40)
 	cons.MaxSize = Vector2.new(460, 40)
 	cons.Parent = pill
-	s.Status = text(pill, "Label", "", { Name = "Status", Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -20, 1, 0), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
+	s.Status = text(pill, "Label", "", { Name = "Status", Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -20, 1, 0), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextScaled = true, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
+	-- phones: shrink before truncating (the pill is narrow between the menu buttons)
+	new("UITextSizeConstraint", { MaxTextSize = s.Status.TextSize, MinTextSize = 10 }, s.Status)
 	g.Parent = playerGui
 	-- your hero walks in at the courtyard spawn
 	local char = player.Character

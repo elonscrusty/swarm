@@ -248,6 +248,9 @@ local function obstacles(playerGui: Instance): { Rect }
 	addRect(out, cachedFinds.MiniMap)
 	addRect(out, cachedFinds.TipCard)
 	addRect(out, cachedFinds.Spectate)
+	addRect(out, slots.Ultimate)
+	local combo = slots.Ultimate and slots.Ultimate.Parent and slots.Ultimate.Parent:FindFirstChild("TeamCombo")
+	addRect(out, combo)
 	local team = elementsOf("TeamUI")
 	local list = team and team.List
 	if typeof(list) == "Instance" and list:IsA("GuiObject") and list.Visible then
@@ -274,6 +277,69 @@ local function topRightBottom(): number
 		end
 	end
 	return bottom
+end
+
+-- The ultimate button's spot (root pixels, anchor 1,1) and the side its neighbours (the
+-- TEAM combo button) go: above JUMP on PC / portrait / tablets; LEFT of JUMP on landscape
+-- phones (above it there is the minimap and the badge row); right of it for left-handed.
+local ultAt = UDim2.fromOffset(0, 0)
+local ultDir = -1 -- -1: neighbours to the left, 1: to the right
+local shownCharge = -1
+local jumpButton: GuiObject? = nil
+local nextJumpFind = 0
+local function placeUltimate()
+	local holder = slots.Ultimate
+	local root = holder and holder.Parent :: GuiObject?
+	if not holder or not root then
+		return
+	end
+	local origin, size = root.AbsolutePosition, root.AbsoluteSize
+	local s = F.UltimateSize
+	local margin = Config.Movement.ButtonMargin or 26
+	local x, y = size.X - margin, size.Y - (Config.Movement.ButtonSize or 84) - margin - 12
+	ultDir = -1
+	local now = os.clock()
+	if now >= nextJumpFind or (jumpButton and not jumpButton.Parent) then
+		nextJumpFind = now + 1
+		local pg = player:FindFirstChild("PlayerGui")
+		jumpButton = pg and pg:FindFirstChild("JumpButton", true) :: GuiObject?
+	end
+	local jump = jumpButton
+	if jump and jump.Visible and jump.AbsoluteSize.X > 1 then
+		local jx, jy = jump.AbsolutePosition.X - origin.X, jump.AbsolutePosition.Y - origin.Y
+		local jw, jh = jump.AbsoluteSize.X, jump.AbsoluteSize.Y
+		local leftSide = jx + jw / 2 < size.X / 2
+		if size.X > size.Y and UIKit.IsCompact() then
+			-- beside JUMP, bottoms level
+			y = jy + jh
+			if leftSide then
+				x, ultDir = jx + jw + 12 + s, 1
+			else
+				x = jx - 12
+			end
+		else
+			y = jy - 12
+			x = leftSide and (jx + s) or (jx + jw)
+			ultDir = leftSide and 1 or -1
+		end
+	end
+	local at = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
+	ultAt = at
+	if holder.Position ~= at then
+		holder.Position = at
+	end
+end
+
+-- Where a neighbour button `size` px wide goes next to the ultimate (anchor 1,1, root
+-- pixels of the FeatureHud root): the TEAM combo button uses it.
+function FeatureHud.NextToUltimate(size: number): UDim2
+	local x = ultAt.X.Offset
+	if ultDir < 0 then
+		x -= F.UltimateSize + 12
+	else
+		x += size + 12
+	end
+	return UDim2.fromOffset(x, ultAt.Y.Offset)
 end
 
 local function setVisible(on: boolean)
@@ -310,10 +376,15 @@ function FeatureHud.Init()
 	local size = F.UltimateSize
 	local ult = UIKit.new("Frame", { Name = "Ultimate", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(size, size), Visible = false }, root) :: Frame
 	slots.Ultimate = ult
-	local button = UIKit.new("TextButton", { Name = "Button", Text = "", AutoButtonColor = true, BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true }, ult) :: TextButton
+	local button = UIKit.new("TextButton", { Name = "Button", Text = "", AutoButtonColor = true, BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.1, Size = UDim2.fromScale(1, 1) }, ult) :: TextButton
 	UIKit.corner(button, 999)
 	UIKit.stroke(button, P.gold_400, 2, 0.1)
-	ultFill = UIKit.new("Frame", { Name = "Charge", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.45, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0) }, button) :: any
+	-- the charge: a round gold fill rising from the bottom (a UIGradient cut-off: Roblox's
+	-- ClipsDescendants clips to the square, not the round corners)
+	local fill = UIKit.new("Frame", { Name = "Charge", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.45, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, button) :: Frame
+	UIKit.corner(fill, 999)
+	UIKit.new("UIGradient", { Name = "Level", Rotation = -90, Transparency = NumberSequence.new(1) }, fill)
+	ultFill = fill
 	ultLabel = UIKit.text(button, "Label", "ULT", { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 2 }, 15) :: any
 	button.Activated:Connect(fireUltimate)
 	ultButton = button
@@ -416,19 +487,28 @@ function FeatureHud.Init()
 		if ult.Visible ~= showUlt then
 			ult.Visible = showUlt
 		end
+		placeUltimate()
 		if showUlt and u then
-			local jump = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26)
-			-- in root (safe-area) pixels, like the badge row
-			local vh = root.AbsoluteSize.Y
-			local pos = UDim2.fromOffset(root.AbsoluteSize.X - (Config.Movement.ButtonMargin or 26), vh - jump - 12)
-			if ult.Position ~= pos then
-				ult.Position = pos
-			end
 			local charge = math.clamp(u.Charge or 0, 0, 1)
 			local fill = ultFill :: Frame
-			local want = UDim2.fromScale(1, charge)
-			if fill.Size ~= want then
-				fill.Size = want
+			if math.abs(charge - shownCharge) > 0.004 then
+				shownCharge = charge
+				local grad = fill:FindFirstChild("Level") :: UIGradient?
+				if grad then
+					-- opaque-ish gold up to `charge` (from the bottom), clear above it
+					if charge <= 0.001 then
+						grad.Transparency = NumberSequence.new(1)
+					elseif charge >= 0.999 then
+						grad.Transparency = NumberSequence.new(0)
+					else
+						grad.Transparency = NumberSequence.new({
+							NumberSequenceKeypoint.new(0, 0),
+							NumberSequenceKeypoint.new(charge, 0),
+							NumberSequenceKeypoint.new(math.min(charge + 0.001, 0.999), 1),
+							NumberSequenceKeypoint.new(1, 1),
+						})
+					end
+				end
 			end
 			local label = ultLabel :: TextLabel
 			local text = u.Label or "ULT"

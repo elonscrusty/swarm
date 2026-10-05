@@ -155,13 +155,8 @@ function TeamCombo.Init()
 				b.Visible = show
 			end
 			if show then
-				-- left of the ULT button (FeatureHud places that one above JUMP)
-				local cam = workspace.CurrentCamera
-				local w = cam and cam.ViewportSize.X or 800
-				local h = cam and cam.ViewportSize.Y or 600
-				local margin = Config.Movement.ButtonMargin or 26
-				local jump = (Config.Movement.ButtonSize or 84) + margin
-				local pos = UDim2.fromOffset(w - margin - Config.FeatureHud.UltimateSize - 12, h - jump - 12)
+				-- beside the ULT button (FeatureHud places it next to JUMP, in safe-area pixels)
+				local pos = FeatureHud.NextToUltimate(T.ButtonSize)
 				if b.Position ~= pos then
 					b.Position = pos
 				end
