@@ -163,6 +163,10 @@ local expect = {
 		return WS.WeaponStats(fakeRp("Engineer", l), { Id = "Turret", Level = 1 }).duration / base
 	end },
 	Necromancer = { 0.15, 0.25, function(l) return WS._TraitValue(fakeRp("Necromancer", l), 0) end },
+	-- HEROES (feature 11): present while Config.Features.NewHeroes is on
+	Archer = { 0.90, 0.80, function(l) return sheetAt("Archer", l).CooldownMult end },
+	Golem = { 1.25, 1.40, function(l) return sheetAt("Golem", l).MaxHP / Config.Player.BaseMaxHP end },
+	Bard = { 0.12, 0.22, function(l) return preview.server("HeroSong").Value(fakeRp("Bard", l)) end },
 	Ranger = { 0.30, 0.55, function(l)
 		local r = fakeRp("Ranger", l)
 		r.Root = { Position = Vector3.new(0, 3, 0) }

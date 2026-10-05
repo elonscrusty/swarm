@@ -790,6 +790,665 @@
   }
  },
  {
+  "name": "Archer",
+  "category": "Heroes",
+  "note": "Royal crossbowman: steel parade helm with a crimson crest, slate gambeson under an ivory tabard with gold trim, leather bracers, bolt case on the hip, a heavy crossbow held forward at the waist.",
+  "tris": 2330,
+  "pieces": [
+   {
+    "name": "Head",
+    "slot": "Skin",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.15,
+     0.0
+    ],
+    "size": [
+     1.4289,
+     1.4,
+     1.3369
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "Eyes",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.12,
+     -0.665
+    ],
+    "size": [
+     0.7,
+     0.28,
+     0.08
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceHair",
+    "slot": "Hair",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.415,
+     0.0578
+    ],
+    "size": [
+     1.7257,
+     1.03,
+     1.6356
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Helm",
+    "slot": "Hat",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     5.415,
+     0.17
+    ],
+    "size": [
+     2.2445,
+     1.77,
+     2.26
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "HelmTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     5.75,
+     0.0
+    ],
+    "size": [
+     1.8847,
+     1.3199,
+     1.8282
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Plume",
+    "slot": "HatAccent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     6.5186,
+     0.2219
+    ],
+    "size": [
+     0.4,
+     1.0293,
+     1.7355
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Torso",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.36,
+     0.0
+    ],
+    "size": [
+     2.0355,
+     2.32,
+     1.357
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "Quilting",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.35,
+     0.0
+    ],
+    "size": [
+     1.9956,
+     1.08,
+     1.3673
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Tunic",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.8,
+     0.0
+    ],
+    "size": [
+     2.1153,
+     1.0,
+     1.5277
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Tabard",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.7703,
+     0.0
+    ],
+    "size": [
+     1.0391,
+     2.8534,
+     2.0782
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "TabardTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     2.4092,
+     -0.0036
+    ],
+    "size": [
+     1.08,
+     2.5003,
+     1.9528
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Belt",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.31,
+     0.0
+    ],
+    "size": [
+     1.9557,
+     0.22,
+     1.4486
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Buckle",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     2.31,
+     -0.82
+    ],
+    "size": [
+     0.3,
+     0.26,
+     0.12
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "BoltCase",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.0674,
+     1.9526,
+     0.2659
+    ],
+    "size": [
+     0.5462,
+     1.2723,
+     0.8444
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "Bolts",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.09,
+     2.725,
+     0.34
+    ],
+    "size": [
+     0.24,
+     0.5544,
+     0.2998
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Fletching",
+    "slot": "HatAccent",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.0445,
+     2.85,
+     0.405
+    ],
+    "size": [
+     0.485,
+     0.3,
+     0.47
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "LeftArm",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.3672,
+     3.0813,
+     0.0
+    ],
+    "size": [
+     0.6951,
+     1.7223,
+     0.5958
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmPad",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.3777,
+     3.7955,
+     0.0
+    ],
+    "size": [
+     0.9082,
+     0.6285,
+     0.8869
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmBracer",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.45,
+     2.685,
+     -0.02
+    ],
+    "size": [
+     0.7945,
+     0.53,
+     0.7945
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmGlove",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.46,
+     2.16,
+     -0.04
+    ],
+    "size": [
+     0.5084,
+     0.5,
+     0.5443
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "RightArm",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.3672,
+     3.0813,
+     0.0
+    ],
+    "size": [
+     0.6951,
+     1.7223,
+     0.5958
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmPad",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.3777,
+     3.7955,
+     0.0
+    ],
+    "size": [
+     0.9082,
+     0.6285,
+     0.8869
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmBracer",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.45,
+     2.685,
+     -0.02
+    ],
+    "size": [
+     0.7945,
+     0.53,
+     0.7945
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmGlove",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.46,
+     2.16,
+     -0.04
+    ],
+    "size": [
+     0.5084,
+     0.5,
+     0.5443
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "Crossbow",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.2929,
+     2.2166,
+     -1.0006
+    ],
+    "size": [
+     0.9617,
+     0.8523,
+     3.0794
+    ],
+    "bone": "RightArm",
+    "shadow": true
+   },
+   {
+    "name": "CrossbowProd",
+    "slot": "Blade",
+    "material": "Metal",
+    "offset": [
+     1.0078,
+     2.4274,
+     -2.2771
+    ],
+    "size": [
+     2.7953,
+     0.3799,
+     0.9065
+    ],
+    "bone": "RightArm",
+    "shadow": true
+   },
+   {
+    "name": "CrossbowString",
+    "slot": "Lace",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.0238,
+     2.3063,
+     -1.5873
+    ],
+    "size": [
+     2.775,
+     0.2055,
+     1.7712
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "CrossbowBolt",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.1068,
+     2.4801,
+     -1.762
+    ],
+    "size": [
+     0.5061,
+     0.2927,
+     2.0739
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "CrossbowTrim",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     1.1128,
+     2.4074,
+     -1.7153
+    ],
+    "size": [
+     0.6224,
+     0.4,
+     2.1531
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "LeftLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.6948,
+     1.6,
+     0.7952
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.6948,
+     1.6,
+     0.7952
+    ],
+    "bone": "RightLeg"
+   },
+   {
+    "name": "LeftLegBoot",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     0.55,
+     -0.1127
+    ],
+    "size": [
+     0.86,
+     1.1,
+     1.1253
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLegBoot",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     0.55,
+     -0.1127
+    ],
+    "size": [
+     0.86,
+     1.1,
+     1.1253
+    ],
+    "bone": "RightLeg"
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.054901960784313725,
+    0.07450980392156863,
+    0.10196078431372549
+   ],
+   "Accent": [
+    0.788235294117647,
+    0.7450980392156863,
+    0.6509803921568628
+   ],
+   "Metal": [
+    0.43137254901960786,
+    0.2980392156862745,
+    0.2
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Wood": [
+    0.49411764705882355,
+    0.3607843137254902,
+    0.24705882352941178
+   ],
+   "Skin": [
+    0.9058823529411765,
+    0.7372549019607844,
+    0.592156862745098
+   ],
+   "Cloth": [
+    0.27450980392156865,
+    0.3607843137254902,
+    0.4627450980392157
+   ],
+   "Cloth2": [
+    0.2784313725490196,
+    0.2980392156862745,
+    0.32941176470588235
+   ],
+   "Hair": [
+    0.396078431372549,
+    0.2823529411764706,
+    0.19607843137254902
+   ],
+   "Leather": [
+    0.33725490196078434,
+    0.22745098039215686,
+    0.15294117647058825
+   ],
+   "Blade": [
+    0.7372549019607844,
+    0.7647058823529411,
+    0.796078431372549
+   ],
+   "MetalDark": [
+    0.24705882352941178,
+    0.16470588235294117,
+    0.10980392156862745
+   ],
+   "Hat": [
+    0.6196078431372549,
+    0.6549019607843137,
+    0.6980392156862745
+   ],
+   "HatAccent": [
+    0.788235294117647,
+    0.26666666666666666,
+    0.24705882352941178
+   ],
+   "Lace": [
+    0.9529411764705882,
+    0.9294117647058824,
+    0.8745098039215686
+   ]
+  },
+  "bounds": [
+   [
+    -1.847,
+    0.0,
+    -2.799
+   ],
+   [
+    2.411,
+    7.033,
+    1.3
+   ]
+  ],
+  "joints": {
+   "Neck": [
+    0.0,
+    4.45,
+    0.0
+   ],
+   "LeftShoulder": [
+    -1.2,
+    3.95,
+    0.0
+   ],
+   "RightShoulder": [
+    1.2,
+    3.95,
+    0.0
+   ],
+   "LeftHip": [
+    -0.5,
+    2.0,
+    0.0
+   ],
+   "RightHip": [
+    0.5,
+    2.0,
+    0.0
+   ]
+  }
+ },
+ {
   "name": "Ash_Pile",
   "category": "Lava",
   "note": "Grey ash heap with charcoal chunks and two tiny embers, ~3 x 2.2 x 0.9. Decoration (no collider).",
@@ -976,6 +1635,654 @@
    "kind": "circle",
    "radius": 0.35,
    "height": 9
+  }
+ },
+ {
+  "name": "Bard",
+  "category": "Heroes",
+  "note": "Travelling bard: crimson feathered cap with a long white plume, crimson doublet with gold slashes and a lace ruff, short gold half-cape, a lute on the back and a curved brass war horn in the left hand.",
+  "tris": 2184,
+  "pieces": [
+   {
+    "name": "Head",
+    "slot": "Skin",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.15,
+     0.0
+    ],
+    "size": [
+     1.4289,
+     1.4,
+     1.3369
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "Eyes",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.12,
+     -0.665
+    ],
+    "size": [
+     0.7,
+     0.28,
+     0.08
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceHair",
+    "slot": "Hair",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.415,
+     0.0578
+    ],
+    "size": [
+     1.7257,
+     1.03,
+     1.6356
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Cap",
+    "slot": "Hat",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.9634,
+     0.0
+    ],
+    "size": [
+     2.1684,
+     0.9068,
+     2.4624
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "Feather",
+    "slot": "HatAccent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.0061,
+     6.2612,
+     0.9054
+    ],
+    "size": [
+     0.3869,
+     1.1376,
+     1.3891
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceMoustache",
+    "slot": "Hair",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.8405,
+     -0.72
+    ],
+    "size": [
+     0.96,
+     0.179,
+     0.16
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Torso",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.36,
+     0.0
+    ],
+    "size": [
+     1.9978,
+     2.32,
+     1.357
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "Slashes",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.3,
+     -0.76
+    ],
+    "size": [
+     1.2,
+     0.9,
+     0.1
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Peplum",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     1.825,
+     0.04
+    ],
+    "size": [
+     2.544,
+     1.11,
+     1.968
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Ruff",
+    "slot": "Lace",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.42,
+     0.0
+    ],
+    "size": [
+     1.5371,
+     0.24,
+     1.3003
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Belt",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.34,
+     0.0
+    ],
+    "size": [
+     1.8803,
+     0.2,
+     1.4191
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Pouch",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.66,
+     2.08,
+     -0.66
+    ],
+    "size": [
+     0.4,
+     0.42,
+     0.3
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Buckle",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.0,
+     2.34,
+     -0.82
+    ],
+    "size": [
+     0.3,
+     0.26,
+     0.12
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Cape",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.4487,
+     3.58,
+     0.4815
+    ],
+    "size": [
+     1.84,
+     1.96,
+     1.7093
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "CapeClasp",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     -0.62,
+     4.2,
+     -0.58
+    ],
+    "size": [
+     0.2504,
+     0.28,
+     0.1429
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Lute",
+    "slot": "Wood",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.3,
+     2.9,
+     0.86
+    ],
+    "size": [
+     1.1016,
+     1.3258,
+     0.443
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "LuteHole",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1884,
+     3.1233,
+     1.1434
+    ],
+    "size": [
+     0.3033,
+     0.32,
+     0.1809
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "LuteNeck",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.2662,
+     4.054,
+     0.9197
+    ],
+    "size": [
+     0.8829,
+     1.3788,
+     0.2547
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "LutePegs",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     0.6393,
+     4.8114,
+     1.0531
+    ],
+    "size": [
+     0.3983,
+     0.3801,
+     0.3494
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "LuteStrap",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0011,
+     3.3424,
+     -0.5835
+    ],
+    "size": [
+     1.8315,
+     1.8027,
+     0.6009
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "LeftArm",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.4623,
+     3.2515,
+     0.0
+    ],
+    "size": [
+     1.0051,
+     1.7351,
+     0.9608
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmSlash",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.4584,
+     3.2041,
+     0.0
+    ],
+    "size": [
+     1.0647,
+     0.702,
+     1.0075
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmGlove",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.44,
+     2.285,
+     -0.02
+    ],
+    "size": [
+     0.7761,
+     0.75,
+     0.7761
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "RightArm",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.4623,
+     3.2515,
+     0.0
+    ],
+    "size": [
+     1.0051,
+     1.7351,
+     0.9608
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmSlash",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.4584,
+     3.2041,
+     0.0
+    ],
+    "size": [
+     1.0647,
+     0.702,
+     1.0075
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmGlove",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.44,
+     2.285,
+     -0.02
+    ],
+    "size": [
+     0.7761,
+     0.75,
+     0.7761
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "WarHorn",
+    "slot": "Gold",
+    "material": "Metal",
+    "offset": [
+     -1.68,
+     2.6394,
+     -0.6491
+    ],
+    "size": [
+     0.7586,
+     1.5509,
+     1.735
+    ],
+    "bone": "LeftArm",
+    "shadow": true
+   },
+   {
+    "name": "WarHornBand",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.5799,
+     2.3337,
+     -0.4249
+    ],
+    "size": [
+     0.3359,
+     0.4136,
+     0.438
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "WarHornBell",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.6802,
+     3.2646,
+     -1.172
+    ],
+    "size": [
+     0.6015,
+     0.2893,
+     0.5686
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.6352,
+     1.6,
+     0.7952
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.6352,
+     1.6,
+     0.7952
+    ],
+    "bone": "RightLeg"
+   },
+   {
+    "name": "LeftLegBoot",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.52,
+     0.625,
+     -0.1127
+    ],
+    "size": [
+     0.86,
+     1.25,
+     1.1253
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "RightLegBoot",
+    "slot": "Leather",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.52,
+     0.625,
+     -0.1127
+    ],
+    "size": [
+     0.86,
+     1.25,
+     1.1253
+    ],
+    "bone": "RightLeg"
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.054901960784313725,
+    0.07450980392156863,
+    0.10196078431372549
+   ],
+   "Accent": [
+    0.8352941176470589,
+    0.6901960784313725,
+    0.3843137254901961
+   ],
+   "Metal": [
+    0.43137254901960786,
+    0.2980392156862745,
+    0.2
+   ],
+   "Gold": [
+    0.7490196078431373,
+    0.592156862745098,
+    0.27450980392156865
+   ],
+   "Wood": [
+    0.49411764705882355,
+    0.3607843137254902,
+    0.24705882352941178
+   ],
+   "Skin": [
+    0.8509803921568627,
+    0.6549019607843137,
+    0.4980392156862745
+   ],
+   "Cloth": [
+    0.6823529411764706,
+    0.17647058823529413,
+    0.19215686274509805
+   ],
+   "Cloth2": [
+    0.10980392156862745,
+    0.1450980392156863,
+    0.19215686274509805
+   ],
+   "Hair": [
+    0.3058823529411765,
+    0.2196078431372549,
+    0.1568627450980392
+   ],
+   "Leather": [
+    0.33725490196078434,
+    0.22745098039215686,
+    0.15294117647058825
+   ],
+   "Hat": [
+    0.5647058823529412,
+    0.13333333333333333,
+    0.1607843137254902
+   ],
+   "HatAccent": [
+    0.8980392156862745,
+    0.8627450980392157,
+    0.7803921568627451
+   ],
+   "Lace": [
+    0.8980392156862745,
+    0.8627450980392157,
+    0.7803921568627451
+   ]
+  },
+  "bounds": [
+   [
+    -2.059,
+    0.0,
+    -1.517
+   ],
+   [
+    1.991,
+    6.83,
+    1.6
+   ]
+  ],
+  "joints": {
+   "Neck": [
+    0.0,
+    4.45,
+    0.0
+   ],
+   "LeftShoulder": [
+    -1.2,
+    3.95,
+    0.0
+   ],
+   "RightShoulder": [
+    1.2,
+    3.95,
+    0.0
+   ],
+   "LeftHip": [
+    -0.5,
+    2.0,
+    0.0
+   ],
+   "RightHip": [
+    0.5,
+    2.0,
+    0.0
+   ]
   }
  },
  {
@@ -7799,6 +9106,553 @@
     0.517
    ]
   ]
+ },
+ {
+  "name": "Golem",
+  "category": "Heroes",
+  "note": "Living stone guardian: a boulder chest with glowing amber cracks and a rune, a craggy stone brow with rock horns and amber eyes, moss on the shoulders, huge stone arms and fists, thick stone legs.",
+  "tris": 1444,
+  "pieces": [
+   {
+    "name": "Head",
+    "slot": "Skin",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.15,
+     0.0
+    ],
+    "size": [
+     1.4289,
+     1.4,
+     1.3369
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "Eyes",
+    "slot": "Dark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.12,
+     -0.665
+    ],
+    "size": [
+     0.7,
+     0.28,
+     0.08
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceGlow",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     0.0,
+     5.17,
+     -0.7
+    ],
+    "size": [
+     0.8,
+     0.16,
+     0.06
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "FaceJaw",
+    "slot": "Skin",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     4.53,
+     -0.42
+    ],
+    "size": [
+     1.1612,
+     0.36,
+     0.4889
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Crag",
+    "slot": "Hat",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     5.75,
+     -0.0495
+    ],
+    "size": [
+     1.9889,
+     0.8,
+     1.9002
+    ],
+    "bone": "Head",
+    "shadow": true
+   },
+   {
+    "name": "CragHorns",
+    "slot": "HatAccent",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     6.1058,
+     -0.0244
+    ],
+    "size": [
+     2.7967,
+     1.2884,
+     0.5587
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "CragMoss",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.2746,
+     6.0756,
+     0.1129
+    ],
+    "size": [
+     0.9125,
+     0.3098,
+     0.6733
+    ],
+    "bone": "Head"
+   },
+   {
+    "name": "Torso",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.325,
+     -0.0516
+    ],
+    "size": [
+     2.8047,
+     2.45,
+     1.98
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "ChestPlates",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     3.2451,
+     -0.8379
+    ],
+    "size": [
+     1.9124,
+     1.8188,
+     0.6044
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "Cracks",
+    "slot": "Glow",
+    "material": "Neon",
+    "offset": [
+     -0.035,
+     3.188,
+     -1.015
+    ],
+    "size": [
+     1.33,
+     1.144,
+     0.15
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Moss",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.1185,
+     4.1116,
+     0.3058
+    ],
+    "size": [
+     2.0912,
+     0.8212,
+     1.235
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "VineBelt",
+    "slot": "Cloth",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0,
+     2.275,
+     -0.0458
+    ],
+    "size": [
+     2.3749,
+     0.25,
+     1.7565
+    ],
+    "bone": "Torso"
+   },
+   {
+    "name": "Rocks",
+    "slot": "Rock",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.0271,
+     3.3411,
+     0.9614
+    ],
+    "size": [
+     1.5338,
+     1.51,
+     0.7812
+    ],
+    "bone": "Torso",
+    "shadow": true
+   },
+   {
+    "name": "LeftArm",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.5821,
+     3.0022,
+     0.0
+    ],
+    "size": [
+     0.961,
+     1.7468,
+     0.8529
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmBoulder",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.636,
+     3.9646,
+     -0.0479
+    ],
+    "size": [
+     1.4445,
+     1.1151,
+     1.4024
+    ],
+    "bone": "LeftArm",
+    "shadow": true
+   },
+   {
+    "name": "LeftArmMoss",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.6581,
+     4.4544,
+     0.0796
+    ],
+    "size": [
+     0.9563,
+     0.2904,
+     0.8734
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "LeftArmFist",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.66,
+     1.95,
+     -0.06
+    ],
+    "size": [
+     0.9777,
+     0.86,
+     0.9777
+    ],
+    "bone": "LeftArm",
+    "shadow": true
+   },
+   {
+    "name": "LeftArmKnuckles",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -1.66,
+     2.1,
+     -0.58
+    ],
+    "size": [
+     0.86,
+     0.22,
+     0.2
+    ],
+    "bone": "LeftArm"
+   },
+   {
+    "name": "RightArm",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.5821,
+     3.0022,
+     0.0
+    ],
+    "size": [
+     0.961,
+     1.7468,
+     0.8529
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmBoulder",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.697,
+     3.921,
+     -0.0106
+    ],
+    "size": [
+     1.5104,
+     1.173,
+     1.3807
+    ],
+    "bone": "RightArm",
+    "shadow": true
+   },
+   {
+    "name": "RightArmMoss",
+    "slot": "Accent",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.6762,
+     4.4431,
+     0.0215
+    ],
+    "size": [
+     0.8284,
+     0.3428,
+     0.9111
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "RightArmFist",
+    "slot": "Metal",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.66,
+     1.95,
+     -0.06
+    ],
+    "size": [
+     0.9777,
+     0.86,
+     0.9777
+    ],
+    "bone": "RightArm",
+    "shadow": true
+   },
+   {
+    "name": "RightArmKnuckles",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     1.66,
+     2.1,
+     -0.58
+    ],
+    "size": [
+     0.86,
+     0.22,
+     0.2
+    ],
+    "bone": "RightArm"
+   },
+   {
+    "name": "LeftLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.56,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.8738,
+     1.6,
+     0.8937
+    ],
+    "bone": "LeftLeg"
+   },
+   {
+    "name": "LeftLegFoot",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     -0.58,
+     0.28,
+     -0.1216
+    ],
+    "size": [
+     0.9751,
+     0.56,
+     1.2384
+    ],
+    "bone": "LeftLeg",
+    "shadow": true
+   },
+   {
+    "name": "RightLeg",
+    "slot": "Cloth2",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.56,
+     1.25,
+     0.0
+    ],
+    "size": [
+     0.8738,
+     1.6,
+     0.8937
+    ],
+    "bone": "RightLeg"
+   },
+   {
+    "name": "RightLegFoot",
+    "slot": "MetalDark",
+    "material": "SmoothPlastic",
+    "offset": [
+     0.58,
+     0.28,
+     -0.1216
+    ],
+    "size": [
+     0.9751,
+     0.56,
+     1.2384
+    ],
+    "bone": "RightLeg",
+    "shadow": true
+   }
+  ],
+  "preview_palette": {
+   "Dark": [
+    0.054901960784313725,
+    0.07450980392156863,
+    0.10196078431372549
+   ],
+   "Accent": [
+    0.39215686274509803,
+    0.5411764705882353,
+    0.2784313725490196
+   ],
+   "Glow": [
+    0.9647058823529412,
+    0.8549019607843137,
+    0.49411764705882355
+   ],
+   "Metal": [
+    0.5215686274509804,
+    0.5411764705882353,
+    0.5686274509803921
+   ],
+   "Skin": [
+    0.6196078431372549,
+    0.6352941176470588,
+    0.6549019607843137
+   ],
+   "Cloth": [
+    0.2627450980392157,
+    0.39215686274509803,
+    0.21176470588235294
+   ],
+   "Cloth2": [
+    0.2784313725490196,
+    0.2980392156862745,
+    0.32941176470588235
+   ],
+   "MetalDark": [
+    0.35294117647058826,
+    0.3764705882352941,
+    0.40784313725490196
+   ],
+   "Hat": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ],
+   "HatAccent": [
+    0.7294117647058823,
+    0.7372549019607844,
+    0.7450980392156863
+   ],
+   "Rock": [
+    0.43137254901960786,
+    0.4549019607843137,
+    0.48627450980392156
+   ]
+  },
+  "bounds": [
+   [
+    -2.358,
+    0.0,
+    -1.14
+   ],
+   [
+    2.452,
+    6.75,
+    1.352
+   ]
+  ],
+  "joints": {
+   "Neck": [
+    0.0,
+    4.45,
+    0.0
+   ],
+   "LeftShoulder": [
+    -1.2,
+    3.95,
+    0.0
+   ],
+   "RightShoulder": [
+    1.2,
+    3.95,
+    0.0
+   ],
+   "LeftHip": [
+    -0.5,
+    2.0,
+    0.0
+   ],
+   "RightHip": [
+    0.5,
+    2.0,
+    0.0
+   ]
+  }
  },
  {
   "name": "GrassTuft",

@@ -109,6 +109,45 @@ local function canSpectate(p: Player?): boolean
 	return p ~= nil and p.Parent ~= nil and p:GetAttribute("InRun") == true and p:GetAttribute("Alive") == true and rootOf(p) ~= nil
 end
 
+-- Living teammates the camera may follow, in a stable order (UserId).
+local function spectateList(): { Player }
+	local list = {}
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other ~= player and canSpectate(other) then
+			table.insert(list, other)
+		end
+	end
+	table.sort(list, function(a, b)
+		return a.UserId < b.UserId
+	end)
+	return list
+end
+
+-- The teammate followed while the local player is down in a run (nil otherwise).
+function CameraController.Spectated(): Player?
+	if player:GetAttribute("InRun") == true and player:GetAttribute("Alive") == false and canSpectate(spectated) then
+		return spectated
+	end
+	return nil
+end
+
+-- Spectate (feature 20, docs/features/TEAM.md): follow the next (step 1) or previous
+-- (step -1) living teammate. Only while the local player is down in a run; the camera
+-- glides over (SpectatePanSeconds). Returns who is followed now.
+function CameraController.SpectateCycle(step: number): Player?
+	if player:GetAttribute("InRun") ~= true or player:GetAttribute("Alive") ~= false then
+		return nil
+	end
+	local list = spectateList()
+	if #list == 0 then
+		return nil
+	end
+	local at = spectated and table.find(list, spectated) or nil
+	local i = at and ((at - 1 + (step < 0 and -1 or 1)) % #list + 1) or 1
+	spectated = list[i]
+	return spectated
+end
+
 -- Reduced camera motion for jumps: while the local hero is in the air (a hop) the camera
 -- keeps the height it had on the ground, so bunny hops never bob the view. A long fall
 -- (over AirHoldSeconds) is followed normally.

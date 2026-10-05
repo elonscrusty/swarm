@@ -546,6 +546,28 @@ local function trailStyle(raw: number, td: any, tier: number): TrailStyle
 end
 
 -- Takes a trail and starts it at `cf` (nil when the budget is used up).
+-- A trail style recoloured with a weapon mastery glow (cached per style and colour).
+K.tinted = {} :: { [TrailStyle]: { [Color3]: TrailStyle } }
+function K.tintTrail(st: TrailStyle, glow: Color3): TrailStyle
+	local byColor = K.tinted[st]
+	if not byColor then
+		byColor = {}
+		K.tinted[st] = byColor
+	end
+	local out = byColor[glow]
+	if not out then
+		out = {
+			Color = ColorSequence.new(glow:Lerp(Color3.new(1, 1, 1), 0.35), glow),
+			Alpha = st.Alpha,
+			Width = st.Width * 1.1,
+			Life = st.Life,
+			Emission = math.min(1, st.Emission + 0.25),
+		}
+		byColor[glow] = out
+	end
+	return out :: TrailStyle
+end
+
 local function acquireTrail(cf: CFrame, st: TrailStyle): TrailSlot?
 	-- the budget counts trails drawing now (flying or still fading), not slots ever made,
 	-- so Reduced effects thins them even once the pool is warm
@@ -730,7 +752,13 @@ local function onProjectileBatch(b: buffer)
 			local trail: TrailSlot? = nil
 			local td = def.Trail
 			if td then
-				trail = acquireTrail(CFrame.new(pos) * CFrame.Angles(0, yaw, 0), trailStyle(raw, td, tier))
+				local st = trailStyle(raw, td, tier)
+				-- weapon mastery glow (feature 15): your own shot may wear an earned colour
+				local glow: Color3? = K.masteryColor and K.masteryColor(visual, pos)
+				if glow then
+					st = K.tintTrail(st, glow)
+				end
+				trail = acquireTrail(CFrame.new(pos) * CFrame.Angles(0, yaw, 0), st)
 			end
 			entries[id] = {
 				Pieces = getProjectileModel(visual),
@@ -1133,6 +1161,13 @@ local function slash(x: number, z: number, yaw: number, reach: number, sweep: nu
 	rig.Edge.Color = st.Edge
 	rig.Edge.Transparency = st.EdgeAlpha
 	rig.Tip.Color = st.Tip
+	-- weapon mastery glow (feature 15): your own sword wears its earned colour
+	local glow: Color3? = userId == player.UserId and K.masteryColor and K.masteryColor("Whip") or nil
+	if glow then
+		rig.Core.Color = ColorSequence.new(glow:Lerp(Color3.new(1, 1, 1), 0.35))
+		rig.Edge.Color = ColorSequence.new(glow, glow:Lerp(Color3.new(1, 1, 1), 0.5))
+		rig.Tip.Color = glow
+	end
 	rig.Tip.Size = Vector3.one * (0.4 + tier * 0.05)
 	rig.Tip.Transparency = 1
 	local root = characterRoot(userId)
@@ -3543,6 +3578,15 @@ end
 ------------------------------------------------------------------------------------------
 -- Init
 ------------------------------------------------------------------------------------------
+
+--[[
+	Weapon mastery glow (feature 15): fn(weapon, spawnPos?) → Color3? where weapon is a
+	projectile visual index or "Whip" (the sword slash, always the local player's). Return
+	nil to keep the weapon's own colours. Set by the client WeaponMastery module.
+]]
+function VFX.SetMasteryColor(fn: ((any, Vector3?) -> Color3?)?)
+	K.masteryColor = fn
+end
 
 function VFX.Init(opts: { OnLocalEvent: ((string) -> ())? }?)
 	Accessibility.Init()

@@ -1138,6 +1138,9 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		if not e.Guard and rp then
 			ctx.XPSystem.SpawnChest(pos)
 			table.insert(drops, "Chest")
+			if ctx.MetaService and not e.WaveId then
+				ctx.MetaService.OnEliteKilled(rp) -- META: the killer's Sigil roll (wave elites never)
+			end
 		end
 		ctx.XPSystem.SpawnGem(pos + Vector3.new(2, 0, 0), gemValue(EnemyData.EliteGem, 1))
 		table.insert(drops, "XP")
@@ -1214,6 +1217,9 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 			Fx.Hit(e.Id)
 			return false
 		end
+	end
+	if e.Boss and rp then
+		amount = BossAI.ModifyHit(e, amount, rp) -- the co-op weak spot (CoopBoss.lua)
 	end
 	e.HP -= amount
 	if rp then

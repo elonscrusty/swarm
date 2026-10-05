@@ -41,6 +41,8 @@ local MenuParty = require(script.Parent.MenuParty)
 local MenuLastRun = require(script.Parent.MenuLastRun)
 local MenuDaily = require(script.Parent.MenuDaily)
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
+local MenuSigils = require(script.Parent.MenuSigils)
+local MenuWeekly = require(script.Parent.MenuWeekly)
 
 local MenuPlay = {}
 
@@ -288,6 +290,16 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	ui.Daily = row("Daily", "DAILY CHALLENGE", "One scored try a day", "calendar", "Daily", function()
 		ctx.ShowScreen("Daily")
 	end)
+	-- META (docs/features/META.md): the worn Sigils and the Weekly Challenge (shown only while
+	-- their switches are on)
+	ui.Sigils = row("Sigils", "SIGILS", "None worn", "sparkle", nil, function()
+		ctx.ShowScreen("Sigils")
+	end)
+	ui.Sigils.Instance.Visible = Config.FeatureOn("Sigils")
+	ui.Weekly = row("Weekly", "WEEKLY CHALLENGE", "One hero, one week", "calendar", nil, function()
+		ctx.ShowScreen("Weekly")
+	end)
+	ui.Weekly.Instance.Visible = Config.FeatureOn("WeeklyChallenge")
 	ui.LastRun = MenuLastRun.Build(opts, ctx)
 	ui.Start = UIKit.Button(face, {
 		Kind = "Primary",
@@ -337,12 +349,12 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	MenuPlay.OnModeChanged(showMode)
 	showMode()
 
-	local optionList = { ui.Hero.Instance, ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.EndlessRow, ui.Daily.Instance }
+	local optionList = { ui.Hero.Instance, ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.Sigils.Instance, ui.EndlessRow, ui.Daily.Instance, ui.Weekly.Instance }
 	local function layoutOptions(colW: number, rowH: number, endlessH: number, lastH: number): number
 		local G = Theme.Layout.Gutter
 		local y = 0
 		for _, b in ipairs(optionList) do
-			if b.Visible or b ~= ui.EndlessRow then
+			if b.Visible or (b ~= ui.EndlessRow and b ~= ui.Sigils.Instance and b ~= ui.Weekly.Instance) then
 				local h = b == ui.EndlessRow and endlessH or rowH
 				place(b, 0, y, colW - 6, h)
 				y += h + G
@@ -403,7 +415,7 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			place(ui.Rule, pad, y, colW, ruleH)
 			place(ui.Start.Instance, pad, h - pad - startH, colW, startH)
 			local x = pad + colW + 2 * G
-			local rows = 5
+			local rows = 5 + (ui.Sigils.Instance.Visible and 1 or 0) + (ui.Weekly.Instance.Visible and 1 or 0)
 			local lastH = hasLast and 76 or 0
 			local rowH = math.clamp(math.floor((inner - lastH - (hasLast and G or 0) - endlessH - rows * G) / rows), Theme.Size.TapMin, 66)
 			place(opts, x, pad, colW + 6, inner)
@@ -447,6 +459,12 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local dailySub = used and ("Scored try used" .. (score > 0 and (" · " .. CurseData.ScoreText(score)) or "") .. " · practice only · resets in " .. MenuDaily.TimeLeft())
 			or ("One scored try · used when it starts · resets in " .. MenuDaily.TimeLeft())
 		ui.Daily.SetText(nil, dailySub)
+		if ui.Sigils.Instance.Visible then
+			ui.Sigils.SetText(nil, MenuSigils.Summary(profile))
+		end
+		if ui.Weekly.Instance.Visible then
+			ui.Weekly.SetText(nil, MenuWeekly.Summary(profile))
+		end
 		showMode()
 		if had ~= ui.LastRun.Has() then
 			MenuPlay._layout()

@@ -139,13 +139,20 @@ UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls })
 require(script.Parent:WaitForChild("TeamPings")).Init()
 require(script.Parent:WaitForChild("FeatureHud")).Init() -- reserved HUD slots for new features (empty until one uses them)
 require(script.Parent:WaitForChild("Ultimate")).Init() -- hero ultimate button + build preset cache (HEROPOWER)
+require(script.Parent:WaitForChild("HeroSong")).Init() -- HEROES: the Bard's SONG badge (idle while the switch is off)
 require(script.Parent:WaitForChild("ChallengesUI")).Init() -- CHALLENGES: champion plate + ring, trial / curse badges (idle while the switches are off)
 require(script.Parent:WaitForChild("WorldFx")).Init() -- EVENTS: map events + weather visuals (idle while the switches are off)
+require(script.Parent:WaitForChild("TeamCombo")).Init() -- TEAM: combo meter + PingWheel, Spectate, WeakSpot (idle while the switches are off)
 require(script.Parent:WaitForChild("ExploreUI")).Init() -- EXPLORE: cracked wall / merchant / villager markers + the merchant panel (idle while the switches are off)
 -- FEEL (docs/features/FEEL.md): each one idles while its Config.Features switch is off
 require(script.Parent:WaitForChild("BossIntro")).Init()
 require(script.Parent:WaitForChild("Announcer")).Init()
 require(script.Parent:WaitForChild("HitFeel")).Init()
+-- LOBBY (docs/features/LOBBY.md): weapon mastery glows + menu, the COURTYARD (idle while switched off)
+require(script.Parent:WaitForChild("WeaponMastery")).Init()
+require(script.Parent:WaitForChild("LobbyFun")).Init()
+require(script.Parent:WaitForChild("StoreFx")).Init() -- STORE: pets, trails, plates, emotes, dais, burst style (idle while the switch is off)
+require(script.Parent:WaitForChild("TitlePlates")).Init() -- META: name + worn title over each hero (idle while the switch is off)
 require(script.Parent:WaitForChild("ClientPerformance")).Init()
 require(script.Parent:WaitForChild("GroundDetail")).Init()
 DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer
@@ -179,6 +186,10 @@ TextChatService.OnIncomingMessage = function(message: TextChatMessage)
 		local speaker = Players:GetPlayerByUserId(source.UserId)
 		if speaker and speaker:GetAttribute("VIP") then
 			props.PrefixText = '<font color="#FFD24A">[VIP]</font> ' .. message.PrefixText
+		end
+		-- the Supporter pass badge (StoreService sets the attribute only with Store on)
+		if speaker and speaker:GetAttribute("Supporter") == true then
+			props.PrefixText = '<font color="#FFE07A">[SUPPORTER]</font> ' .. (props.PrefixText ~= "" and props.PrefixText or message.PrefixText)
 		end
 	end
 	return props

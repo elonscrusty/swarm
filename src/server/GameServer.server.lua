@@ -40,6 +40,7 @@ local ORDER = {
 	"LeaderboardService",
 	"MonetizationService",
 	"GoldSystem",
+	"StoreService", -- the cosmetic store: equip, gifts, earned looks (docs/features/STORE.md)
 	"MeshService",
 	"MapBuilder",
 	"ModelBuilder",
@@ -71,6 +72,11 @@ local ORDER = {
 	"BugReportService",
 	"Ultimate", -- hero ultimate (feature 13, HEROPOWER)
 	"BuildPresets", -- favourite weapons / passives per hero (feature 14, HEROPOWER)
+	"MetaService", -- META (features 1, 19, 21-25): Sigils, weekly / team boards, season, titles, collection, login streak
+	"WeaponMastery", -- kills per weapon + mastery glow colours (feature 15, LOBBY)
+	"TeamCombo", -- team combo meter + burst (feature 16, TEAM)
+	"CoopBoss", -- co-op boss weak spot, BossAI variant hook (feature 18, TEAM)
+	"HeroSong", -- the Bard's Rally Song team buff (feature 11, HEROES)
 }
 
 for _, name in ipairs(ORDER) do
@@ -121,6 +127,9 @@ local STEPS = {
 	{ "LeaderboardService", ctx.LeaderboardService.Step },
 	{ "DamageNumbers", ctx.DamageNumbers.Step },
 	{ "Ultimate", ctx.Ultimate.Step },
+	{ "MetaService", ctx.MetaService.Step },
+	{ "TeamCombo", ctx.TeamCombo.Step },
+	{ "HeroSong", ctx.HeroSong.Step },
 	{ "Fx", ctx.Fx.Step },
 }
 local lastError: { [string]: number } = {}

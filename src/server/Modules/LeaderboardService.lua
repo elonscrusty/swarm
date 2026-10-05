@@ -38,6 +38,15 @@
 	pcall'd); unknown names show as "Player <id>". Rows carry the UserId too (the client
 	shows the player's head shot).
 
+	META boards (docs/features/META.md), only while their switch is on; NEW store names,
+	the boards above are never touched:
+	  Weekly        best Weekly Challenge run score of the UTC week       SwarmLB_Weekly_<week>
+	                (Config.Features.WeeklyChallenge; MetaData.WeekOf)
+	  TeamDuo       best Duo run score of the week, one row per team      SwarmLB_TeamDuo_<week>
+	  TeamTrio      best Trio run score of the week, one row per team     SwarmLB_TeamTrio_<week>
+	                (Config.Features.TeamBoard; SubmitTeam: the key is the team's sorted
+	                UserIds "12_34", the value the best member's run score)
+
 	Studio uses its own stores (Config.Leaderboards.StudioStorePrefix): tests never write to
 	the live boards. Submit takes the run's id: one run is submitted at most once per board,
 	and RunManager never submits dev-tainted runs (a DEV command was used).
@@ -50,6 +59,7 @@ local RunService = game:GetService("RunService")
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
+local MetaData = require(game:GetService("ReplicatedStorage").Shared.MetaData)
 
 local LeaderboardService = {}
 
@@ -58,7 +68,7 @@ local L = Config.Leaderboards
 local PREFIX = if RunService:IsStudio() then (L.StudioStorePrefix or (L.StorePrefix .. "Studio_")) else L.StorePrefix
 local ctx
 
-type Entry = { UserId: number, Value: number }
+type Entry = { UserId: number, Value: number, Key: string?, Members: { number }? }
 type Cache = {
 	Rows: { Entry },
 	Time: number, -- os.clock() of the last good read (0 = never)
@@ -67,14 +77,14 @@ type Cache = {
 	Loading: boolean,
 	Asked: number, -- os.clock() of the last request
 }
-type Pending = { Board: string, Day: number, UserId: number, Value: number, Retries: number }
+type Pending = { Board: string, Day: number, UserId: number, Key: string?, Value: number, Retries: number }
 
 local available = false -- OrderedDataStores can be used
 local stores: { [string]: OrderedDataStore } = {}
 local caches: { [string]: Cache } = {}
 local pending: { [string]: Pending } = {} -- key = storeName .. "|" .. userId
 local lastWrite: { [string]: number } = {}
-local localBoards: { [string]: { [number]: number } } = {} -- "local" mode (and recent writes)
+local localBoards: { [string]: { [any]: number } } = {} -- "local" mode (and recent writes); team boards use the team key
 local names: { [number]: string } = {}
 local submitted: { [string]: boolean } = {} -- runId .. "|" .. board .. "|" .. userId already queued
 local submittedCount = 0 -- entries in `submitted` (cleared past MaxSubmitted: a long-lived lobby)
@@ -86,16 +96,35 @@ local function today(): number
 	return CurseData.DayOf(os.time())
 end
 
--- Store name of a board (the daily board is one store per UTC day).
+local function thisWeek(): number
+	return MetaData.WeekOf(os.time())
+end
+
+-- META boards: board id → its Config.Features switch (weekly stores, one per UTC week)
+local FEATURE_BOARDS: { [string]: string } = { Weekly = "WeeklyChallenge", TeamDuo = "TeamBoard", TeamTrio = "TeamBoard" }
+local TEAM_BOARDS: { [string]: boolean } = { TeamDuo = true, TeamTrio = true }
+LeaderboardService.FeatureBoards = FEATURE_BOARDS
+
+-- Store name of a board (the daily board is one store per UTC day, the META boards one
+-- per UTC week: `day` is then the week number).
 local function storeName(board: string, day: number?): string
 	if board == "Daily" then
 		return PREFIX .. "Daily_" .. tostring(day or today())
+	elseif FEATURE_BOARDS[board] then
+		return PREFIX .. board .. "_" .. tostring(day or thisWeek())
 	end
 	return PREFIX .. board
 end
 
 local function isBoard(board: any): boolean
-	return type(board) == "string" and table.find(L.Order, board) ~= nil
+	if type(board) ~= "string" then
+		return false
+	end
+	local feature = FEATURE_BOARDS[board]
+	if feature then
+		return Config.FeatureOn(feature)
+	end
+	return table.find(L.Order, board) ~= nil
 end
 
 local function storeFor(name: string): OrderedDataStore?
@@ -123,7 +152,7 @@ local function budget(kind: Enum.DataStoreRequestType): number
 	return ok and tonumber(n) or 0
 end
 
-local function remember(name: string, userId: number, value: number)
+local function remember(name: string, userId: any, value: number)
 	local board = localBoards[name]
 	if not board then
 		board = {}
@@ -143,7 +172,7 @@ end
 	ignored.
 ]]
 function LeaderboardService.Submit(player: Player, board: string, value: number, day: number?, runId: string?)
-	if not L.Enabled or not isBoard(board) or type(value) ~= "number" or value ~= value or value <= 0 then
+	if not L.Enabled or not isBoard(board) or TEAM_BOARDS[board] or type(value) ~= "number" or value ~= value or value <= 0 then
 		return
 	end
 	if runId then
@@ -171,6 +200,53 @@ function LeaderboardService.Submit(player: Player, board: string, value: number,
 		p.Value = math.max(p.Value, value)
 	else
 		pending[key] = { Board = name, Day = day or today(), UserId = player.UserId, Value = value, Retries = 0 }
+	end
+end
+
+--[[
+	A team's run on a weekly team board (TeamDuo / TeamTrio): one row per team, keyed by
+	the members' sorted UserIds. Every member's commit may call this; the queue keeps the
+	best value, and each (run, member) counts once.
+]]
+function LeaderboardService.SubmitTeam(board: string, userIds: { number }, value: number, week: number?, runId: string?, fromUserId: number?)
+	if not L.Enabled or not TEAM_BOARDS[board] or not isBoard(board) or type(value) ~= "number" or value ~= value or value <= 0 or value == math.huge then
+		return
+	end
+	if type(userIds) ~= "table" or #userIds < 2 or #userIds > 3 then
+		return
+	end
+	local ids = {}
+	for _, id in ipairs(userIds) do
+		if type(id) ~= "number" or id ~= id or table.find(ids, id) then
+			return
+		end
+		table.insert(ids, id)
+	end
+	table.sort(ids)
+	local key = table.concat(ids, "_")
+	if runId then
+		local once = runId .. "|" .. board .. "|" .. key .. "|" .. tostring(fromUserId or 0)
+		if submitted[once] then
+			return
+		end
+		if submittedCount >= MaxSubmitted then
+			table.clear(submitted)
+			submittedCount = 0
+		end
+		submitted[once] = true
+		submittedCount += 1
+	end
+	value = math.floor(value)
+	local name = storeName(board, week)
+	if not available then
+		remember(name, key, value)
+	end
+	local pkey = name .. "|" .. key
+	local p = pending[pkey]
+	if p then
+		p.Value = math.max(p.Value, value)
+	else
+		pending[pkey] = { Board = name, Day = week or thisWeek(), UserId = ids[1], Key = key, Value = value, Retries = 0 }
 	end
 end
 
@@ -203,7 +279,7 @@ local function flush()
 			if store then
 				local value = p.Value
 				local ok, err = pcall(function()
-					store:UpdateAsync(tostring(p.UserId), function(old)
+					store:UpdateAsync(p.Key or tostring(p.UserId), function(old)
 						local before = tonumber(old) or 0
 						if value <= before then
 							return nil -- keep the better stored value (no write)
@@ -265,6 +341,15 @@ local function refresh(name: string)
 				local v = tonumber(item.value)
 				if uid and v then
 					table.insert(list, { UserId = uid, Value = v })
+				elseif v and type(item.key) == "string" then
+					-- a team row ("12_34"): its members
+					local members = {}
+					for part in string.gmatch(item.key, "%d+") do
+						table.insert(members, tonumber(part) :: number)
+					end
+					if #members >= 2 then
+						table.insert(list, { UserId = members[1], Value = v, Key = item.key, Members = members })
+					end
 				end
 			end
 			return list
@@ -337,7 +422,7 @@ local function nameOf(userId: number, unknown: { number }?): string
 	if known then
 		return known
 	end
-	if unknown and not looking[userId] then
+	if unknown and not looking[userId] and not table.find(unknown, userId) then
 		table.insert(unknown, userId)
 	end
 	return "Player " .. userId -- until the lookup answers (the next refresh shows the name)
@@ -363,7 +448,17 @@ local function rowsOf(name: string): ({ Entry }, string, number)
 	if not available then
 		local list: { Entry } = {}
 		for uid, v in pairs(localBoards[name] or {}) do
-			table.insert(list, { UserId = uid, Value = v })
+			if type(uid) == "number" then
+				table.insert(list, { UserId = uid, Value = v })
+			elseif type(uid) == "string" then
+				local members = {}
+				for part in string.gmatch(uid, "%d+") do
+					table.insert(members, tonumber(part) :: number)
+				end
+				if #members >= 2 then
+					table.insert(list, { UserId = members[1], Value = v, Key = uid, Members = members })
+				end
+			end
 		end
 		table.sort(list, function(a, b)
 			return a.Value > b.Value
@@ -415,6 +510,9 @@ local function ownBest(player: Player, board: string): number
 	elseif board == "Daily" then
 		local D = data.Daily or {}
 		return D.Day == today() and (D.Score or 0) or 0
+	elseif board == "Weekly" then
+		local W = type(data.Weekly) == "table" and data.Weekly or {}
+		return W.Week == thisWeek() and (tonumber(W.Score) or 0) or 0
 	end
 	return 0
 end
@@ -435,8 +533,19 @@ local function onRequest(player: Player, board: any)
 	local ranks = LeaderboardService.RankRows(rows)
 	local unknown = {}
 	for i, e in ipairs(rows) do
-		table.insert(out, { Rank = ranks[i], UserId = e.UserId, Name = nameOf(e.UserId, unknown), Value = e.Value, Me = e.UserId == player.UserId })
-		if e.UserId == player.UserId then
+		local rowName = nameOf(e.UserId, unknown)
+		local me = e.UserId == player.UserId
+		if e.Members then
+			-- a team row: every member's name, "you" when you are one of them
+			local names = {}
+			for _, uid in ipairs(e.Members) do
+				table.insert(names, nameOf(uid, unknown))
+			end
+			rowName = table.concat(names, " + ")
+			me = table.find(e.Members, player.UserId) ~= nil
+		end
+		table.insert(out, { Rank = ranks[i], UserId = e.UserId, Name = rowName, Value = e.Value, Me = me, Members = e.Members })
+		if me and not myRank then
 			myRank, myBoard = ranks[i], e.Value
 		end
 	end
@@ -446,6 +555,7 @@ local function onRequest(player: Player, board: any)
 	Remotes.FireClient("LeaderboardData", player, {
 		Board = board,
 		Day = board == "Daily" and today() or nil,
+		Week = FEATURE_BOARDS[board] and thisWeek() or nil,
 		Rows = out,
 		Status = status,
 		Age = age,

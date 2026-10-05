@@ -9,6 +9,8 @@
 	  ACHIEVEMENTS (MenuStats' tab)         SETTINGS (UIBuilder's modal)
 	  REPORT A BUG (BugReportUI)            DEV (DevPanel; only when DevPanel.IsDev: the
 	                                        server checks every DEV command again)
+	  COURTYARD (LobbyFun) and WEAPON MASTERY (WeaponMastery): only while their
+	  Config.Features switch is on (docs/features/LOBBY.md)
 ]]
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -22,6 +24,12 @@ local CurseData = require(Shared:WaitForChild("CurseData"))
 local DevPanel = require(script.Parent.DevPanel)
 local BugReportUI = require(script.Parent.BugReportUI)
 local NoticeDots = require(script.Parent.NoticeDots)
+local Config = require(Shared:WaitForChild("Config"))
+local MenuWeekly = require(script.Parent.MenuWeekly)
+local MenuSeason = require(script.Parent.MenuSeason)
+local MenuStreak = require(script.Parent.MenuStreak)
+local MenuTitles = require(script.Parent.MenuTitles)
+local MenuCollection = require(script.Parent.MenuCollection)
 
 local MenuMore = {}
 
@@ -66,7 +74,20 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		{ Id = "Stats", Title = "STATS", Sub = "Your records", Icon = "bars", Go = function() ctx.ShowScreen("Stats", "Stats") end },
 		{ Id = "Track", Title = "ACCOUNT LEVEL", Sub = "Rewards for every run", Icon = "medal", Art = "Track", Go = function() ctx.ShowScreen("Track") end },
 		{ Id = "Journal", Title = "JOURNAL", Sub = "Enemies you have met", Icon = "skull", Go = function() ctx.ShowScreen("Journal") end },
+		-- META (docs/features/META.md): each row shows only while its switch is on
+		{ Id = "Streak", Title = "DAILY REWARD", Sub = "Log in each day", Icon = "gift", Feature = "LoginStreak", Go = function() ctx.ShowScreen("Streak") end },
+		{ Id = "Weekly", Title = "WEEKLY CHALLENGE", Sub = "One hero, one week", Icon = "calendar", Feature = { "WeeklyChallenge", "TeamBoard" }, Go = function() ctx.ShowScreen("Weekly") end },
+		{ Id = "Season", Title = "SEASON", Sub = "Free rewards track", Icon = "flag", Feature = "SeasonTrack", Go = function() ctx.ShowScreen("Season") end },
+		{ Id = "Titles", Title = "TITLES", Sub = "Wear a title under your name", Icon = "medal", Feature = "Titles", Go = function() ctx.ShowScreen("Titles") end },
+		{ Id = "Collection", Title = "COLLECTION", Sub = "Everything you have found", Icon = "chest", Feature = "CollectionBook", Go = function() ctx.ShowScreen("Collection") end },
 		{ Id = "Achievements", Title = "ACHIEVEMENTS", Sub = "Goals, titles and colours", Icon = "trophy", Go = function() ctx.ShowScreen("Stats", "Achievements") end },
+		-- LOBBY features (docs/features/LOBBY.md), listed only while their switch is on
+		{ Id = "Courtyard", Title = "COURTYARD", Sub = "Dummy, mirror and jump pads", Icon = "castle", Feature = "LobbyFun", Go = function()
+			require(script.Parent.LobbyFun).Enter()
+		end },
+		{ Id = "WeaponMastery", Title = "WEAPON MASTERY", Sub = "Glow colours from kills", Icon = "sword", Feature = "WeaponMastery", Go = function()
+			require(script.Parent.WeaponMastery).Open()
+		end },
 		{ Id = "Settings", Title = "SETTINGS", Sub = "Sound, controls, display", Icon = "gear", Art = "Settings", Go = function()
 			if host.OpenSettings then
 				host.OpenSettings()
@@ -119,10 +140,25 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		return (st == "failing" or st == "memory") and st or "ok"
 	end
 
+	-- a META row's switch (a name, or a list: on when any of them is on)
+	local function featureOn(f: any): boolean
+		if f == nil then
+			return true
+		elseif type(f) == "table" then
+			for _, name in ipairs(f) do
+				if Config.FeatureOn(name) then
+					return true
+				end
+			end
+			return false
+		end
+		return Config.FeatureOn(f)
+	end
+
 	local function shownRows(): { any }
 		local list = {}
 		for _, r in ipairs(ui.Rows) do
-			local on = (not r.Item.Dev or DevPanel.IsDev()) and (not r.Item.Notice or saveStatus() ~= "ok")
+			local on = (not r.Item.Dev or DevPanel.IsDev()) and (not r.Item.Notice or saveStatus() ~= "ok") and featureOn(r.Item.Feature) and (not r.Item.Feature or Config.FeatureOn(r.Item.Feature))
 			r.Button.Instance.Visible = on
 			if on then
 				table.insert(list, r)
@@ -173,7 +209,19 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		local dailySub = used and ("Done · " .. (score > 0 and CurseData.ScoreText(score) or "practice open")) or ("Ready · " .. MenuDaily.TimeLeft() .. " left")
 		local badge = party.Invites > 0 and tostring(party.Invites) or ""
 		local save = saveStatus()
-		local key = partySub .. "|" .. dailySub .. "|" .. badge .. "|" .. save
+		-- META rows' live lines
+		local metaSubs = {
+			Streak = Config.FeatureOn("LoginStreak") and MenuStreak.Summary(p) or nil,
+			Weekly = Config.FeatureOn("WeeklyChallenge") and MenuWeekly.Summary(p) or nil,
+			Season = Config.FeatureOn("SeasonTrack") and MenuSeason.Summary(p) or nil,
+			Titles = Config.FeatureOn("Titles") and MenuTitles.Summary(p) or nil,
+			Collection = Config.FeatureOn("CollectionBook") and MenuCollection.Summary(p) or nil,
+		}
+		local metaKey = ""
+		for _, id in ipairs({ "Streak", "Weekly", "Season", "Titles", "Collection" }) do
+			metaKey ..= "|" .. tostring(metaSubs[id])
+		end
+		local key = partySub .. "|" .. dailySub .. "|" .. badge .. "|" .. save .. metaKey
 		if key == lastKey then
 			return
 		end
@@ -187,6 +235,12 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		ui.PartyRow.SetText(nil, partySub)
 		ui.PartyRow.SetSelected(party.Count > 0)
 		ui.DailyRow.SetText(nil, dailySub)
+		for _, r in ipairs(ui.Rows) do
+			local line = metaSubs[r.Item.Id]
+			if line then
+				r.Button.SetText(nil, line)
+			end
+		end
 		ui.PartyBadge.Text = badge
 		ui.PartyBadge.Visible = badge ~= ""
 	end

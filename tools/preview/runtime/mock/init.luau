@@ -257,6 +257,22 @@ function Mock.api()
 		R.passLookupHook = fn
 	end
 
+	-- MarketplaceService prompts opened so far: { {kind, id, t} } (store tests).
+	function api.marketPrompts()
+		local out = {}
+		for _, e in ipairs(R.log.fired) do
+			if e.remote == "MarketplaceService" then
+				table.insert(out, { kind = e.direction, id = tonumber(e.args), t = e.t })
+			end
+		end
+		return out
+	end
+
+	-- Fires a MarketplaceService event, e.g. ("PromptProductPurchaseFinished", userId, id, false).
+	function api.marketEvent(name: string, ...)
+		R.fire(states[R.services.MarketplaceService], name, ...)
+	end
+
 	-- Runs the server Scripts (GameServer) - the full server; needs more mocking.
 	function api.startServer()
 		firstRunSwitch()

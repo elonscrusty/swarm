@@ -11,7 +11,7 @@ C.startClient()
 local overrides = nil
 if preview.args.owned == "all" then
 	overrides = {
-		OwnedCharacters = { Knight = true, Mage = true, Rogue = true, Priest = true, Ranger = true, Alchemist = true, Engineer = true, Necromancer = true },
+		OwnedCharacters = { Knight = true, Mage = true, Rogue = true, Priest = true, Ranger = true, Alchemist = true, Engineer = true, Necromancer = true, Archer = true, Bard = true, Golem = true },
 		Achievements = {
 			Progress = { QueenSlayer = 1, DeepDelver = 4, FieldEngineer = 3, Reaper = 500 },
 			Unlocked = { QueenSlayer = 1, DeepDelver = 1, FieldEngineer = 1, Reaper = 1 },

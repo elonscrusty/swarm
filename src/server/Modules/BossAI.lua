@@ -1507,6 +1507,23 @@ end
 -- Public
 ------------------------------------------------------------------------------------------
 
+--[[
+	Variant hook (feature 18, CoopBoss.lua, docs/features/TEAM.md). A module may set
+	BossAI.Variant = { Step = fn(e, dt), Hit = fn(e, amount, rp) -> amount, Clear = fn(e) }.
+	Step runs every boss frame while it is not collapsing; Hit can change a player's hit
+	(EnemySpawner.Damage calls BossAI.ModifyHit); Clear runs with ClearHazards. Nil = the
+	bosses as they always were.
+]]
+BossAI.Variant = nil :: any
+
+function BossAI.ModifyHit(e, amount: number, rp): number
+	local v = BossAI.Variant
+	if v and v.Hit and rp then
+		return v.Hit(e, amount, rp)
+	end
+	return amount
+end
+
 -- The boss just spawned (EnemySpawner.SpawnBoss): start the entrance.
 function BossAI.Begin(e, data: any?)
 	local boss = data or BossData.Get(Config.Boss.First)
@@ -1573,6 +1590,9 @@ function BossAI.ClearHazards(e)
 	end
 	clearChill()
 	ctx.WeaponSystem.ClearHostile()
+	if BossAI.Variant and BossAI.Variant.Clear then
+		BossAI.Variant.Clear(e)
+	end
 end
 
 -- Its HP reached 0 (EnemySpawner.Damage): the collapse, then the real kill.
@@ -1634,6 +1654,9 @@ function BossAI.Step(e, dt: number)
 		stepArmor(e)
 	end
 	stepChill()
+	if BossAI.Variant and BossAI.Variant.Step and not e.Dying then
+		BossAI.Variant.Step(e, dt) -- the co-op variant (CoopBoss.lua)
+	end
 	-- the Warlord's banner fell: it is back on his back
 	if e.Part:GetAttribute("BannerOut") and liveObjects(e, "WarBanner") == 0 then
 		e.Part:SetAttribute("BannerOut", nil)

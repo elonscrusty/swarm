@@ -1158,6 +1158,9 @@ local function openChest(rp, obj: Obj)
 		ctx.RunManager.Notify(rp.Player, REASON_TEXT.gold, Color3.fromRGB(255, 120, 120))
 		return
 	end
+	if ctx.MetaService then
+		ctx.MetaService.OnGoldPaid(rp, price) -- Haggler's Coin Sigil: part of the price back
+	end
 	-- Exactly once (ISSUE TS-02): the chest leaves "Ready" before anything else, so no
 	-- second hold (this player's or a teammate's) can complete it, and the item is granted
 	-- right after the gold is taken, before any cosmetic step that could fail. What the
@@ -1199,6 +1202,9 @@ local function useChance(rp, obj: Obj)
 		feedback(rp, obj, "Cancel", "gold")
 		ctx.RunManager.Notify(rp.Player, REASON_TEXT.gold, Color3.fromRGB(255, 120, 120))
 		return
+	end
+	if ctx.MetaService then
+		ctx.MetaService.OnGoldPaid(rp, price) -- Haggler's Coin Sigil: part of the price back
 	end
 	obj.Tries += 1
 	obj.Price = math.floor(obj.Price * S.ChanceCostGrowth + 0.5)

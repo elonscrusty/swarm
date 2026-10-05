@@ -65,6 +65,16 @@ local MenuParty = require(script.Parent.MenuParty)
 local NoticeDots = require(script.Parent.NoticeDots)
 local MenuPlay = require(script.Parent.MenuPlay)
 local MenuMore = require(script.Parent.MenuMore)
+-- META screens (docs/features/META.md); each opens only from its PLAY / MORE row, which
+-- shows only while its Config.Features switch is on
+local META_SCREENS = {
+	Sigils = require(script.Parent.MenuSigils),
+	Weekly = require(script.Parent.MenuWeekly),
+	Season = require(script.Parent.MenuSeason),
+	Titles = require(script.Parent.MenuTitles),
+	Collection = require(script.Parent.MenuCollection),
+	Streak = require(script.Parent.MenuStreak),
+}
 local UIState = require(script.Parent.UIState)
 
 local LobbyScreen = {}
@@ -78,9 +88,9 @@ local profile: { [string]: any }? = nil
 local joinedCountdown = false
 local ui: { [string]: any } = {}
 local current = "Home"
-local SCREEN_ORDER = { Home = 1, Play = 1.5, Characters = 2, Upgrades = 3, Arenas = 3.5, More = 3.8, Stats = 4, Journal = 4.5, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9 }
+local SCREEN_ORDER = { Home = 1, Play = 1.5, Characters = 2, Upgrades = 3, Store = 3.2, Arenas = 3.5, More = 3.8, Stats = 4, Journal = 4.5, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9, Sigils = 1.6, Weekly = 6.5, Season = 8.2, Titles = 8.4, Collection = 8.6, Streak = 8.8 }
 -- where BACK goes from each screen (anything else goes home)
-local PARENT = { Arenas = "Play", Curses = "Play", Daily = "More", Party = "More", Ranks = "More", Stats = "More", Track = "More", Journal = "More" }
+local PARENT = { Store = "Upgrades", Arenas = "Play", Curses = "Play", Daily = "More", Party = "More", Ranks = "More", Stats = "More", Track = "More", Journal = "More", Sigils = "Play", Weekly = "More", Season = "More", Titles = "More", Collection = "More", Streak = "More" }
 -- the screen each one was opened from this time (home's WORLDS / DAILY / PARTY / the
 -- account pill go back home; the PLAY sheet's WORLD row goes back to the sheet)
 local cameFrom: { [string]: string } = {}
@@ -1503,6 +1513,13 @@ function LobbyScreen.Init(h: { [string]: any })
 	screens.Track = MenuTrack.Build(screen("Track"), ctx)
 	screens.Arenas = MenuArenas.Build(screen("Arenas"), ctx)
 	screens.Party = MenuParty.Build(screen("Party"), ctx)
+	for name, menu in pairs(META_SCREENS) do
+		screens[name] = (menu :: any).Build(screen(name), ctx)
+	end
+	-- the cosmetic STORE (Config.Features.Store; opened from the UPGRADES screen's SHOP tab)
+	if Config.FeatureOn("Store") then
+		screens.Store = require(script.Parent.MenuStore).Build(screen("Store"), ctx)
+	end
 	-- gamepad B on a lobby screen = its BACK button. Not while a panel (settings, bug
 	-- report ...) owns input, nor on the same press that just closed one (its own B
 	-- handler may run first), nor while typing.

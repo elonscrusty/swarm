@@ -44,6 +44,7 @@ local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
 local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponData)
 local ItemData = require(game:GetService("ReplicatedStorage").Shared.ItemData)
 local DifficultyData = require(game:GetService("ReplicatedStorage").Shared.DifficultyData)
+local MetaData = require(game:GetService("ReplicatedStorage").Shared.MetaData)
 
 local RunModifiers = {}
 
@@ -53,6 +54,7 @@ local active: { string } = {} -- curses of the running run
 local effects = CurseData.Effects({})
 local goldMult = 1
 local daily: CurseData.Daily? = nil -- the running run's daily setup (nil = not a daily)
+local weekly: MetaData.Weekly? = nil -- the running run's Weekly Challenge setup (META, feature 21)
 local endless = false -- the running run is an Endless run (Config.Endless)
 local difficulty = "Standard"
 local publishTimer = 0
@@ -106,6 +108,16 @@ function RunModifiers.IsDaily(): boolean
 	return daily ~= nil
 end
 
+-- The Weekly Challenge (META, MetaData.Weekly): the running run's setup, or nil.
+function RunModifiers.Weekly(): MetaData.Weekly?
+	return weekly
+end
+
+-- The weekly's first world (RunManager.beginRun), or nil when the run is not a weekly.
+function RunModifiers.WeeklyArena(): string?
+	return weekly and weekly.Arena or nil
+end
+
 function RunModifiers.IsEndless(): boolean
 	return endless
 end
@@ -145,9 +157,16 @@ end
 ]]
 function RunModifiers.BeginRun(modeName: string, starter: Player?): CurseData.Daily?
 	difficulty = "Standard"
+	weekly = nil
 	if modeName == CurseData.DailyMode then
 		daily = CurseData.Daily(RunModifiers.Today())
 		setActive((daily :: CurseData.Daily).Curses)
+		endless = false
+	elseif modeName == MetaData.WeeklyMode and Config.FeatureOn("WeeklyChallenge") then
+		-- the week's fixed curses (the starter's own pick is ignored), Standard, no Endless
+		daily = nil
+		weekly = MetaData.Weekly(MetaData.WeekOf(os.time()))
+		setActive((weekly :: MetaData.Weekly).Curses)
 		endless = false
 	else
 		daily = nil
@@ -163,6 +182,7 @@ end
 function RunModifiers.EndRun()
 	setActive({})
 	daily = nil
+	weekly = nil
 	endless = false
 	difficulty = "Standard"
 	RunModifiers.Publish()
@@ -173,6 +193,10 @@ end
 function RunModifiers.SetupRunPlayer(rp)
 	rp.Endless = endless
 	rp.Difficulty = difficulty
+	if weekly then
+		rp.Weekly = true
+		rp.WeeklyWeek = (weekly :: MetaData.Weekly).Week
+	end
 	local d = daily
 	if not d then
 		return
@@ -384,6 +408,7 @@ function RunModifiers.Publish()
 	end
 	state:SetAttribute("CurseGold", CurseData.GoldMult(list))
 	state:SetAttribute("DailyRun", (phase == "Running" or phase == "Results") and daily ~= nil)
+	state:SetAttribute("WeeklyRun", (phase == "Running" or phase == "Results") and weekly ~= nil)
 	state:SetAttribute("DailyDay", RunModifiers.Today())
 end
 

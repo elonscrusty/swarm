@@ -9,10 +9,16 @@
 	  VIP          +1 reroll per run, [VIP] chat tag (client), crown in the lobby
 	  DoubleGold   2x gold
 	  Skin passes  one per cosmetic skin (Config.Monetization.SkinPasses)
+	  Supporter    Config.Monetization.CosmeticPasses: badge, glowing plate, lobby banner
+	               (StoreService / StoreFx; looks only)
 	Developer products
 	  Gold500 / Gold1500 / Gold5000  add gold to the save
 	  Revive       adds a revive token; RunManager spends it at once if the buyer is
 	               waiting to be revived, otherwise it is kept for the next death
+	  Cosmetics / HeroUnlocks  the cosmetic store (StoreService): one look into
+	               data.Cosmetics.Owned, or an early unlock of a hero also earned by play.
+	               A store gift (StoreBuy with a target) is granted into the recipient's
+	               save when they are still here (StoreService.GiftRoute / GrantGift).
 
 	ProcessReceipt is idempotent: every PurchaseId is stored in the profile and a receipt
 	is only acknowledged after the profile (with that id) was saved. Nothing for sale
@@ -97,12 +103,13 @@ function MonetizationService.PassesKnown(player: Player): boolean
 	return true
 end
 
--- True for a non-zero id listed in Config.Monetization.GamePasses or SkinPasses.
+-- True for a non-zero id listed in Config.Monetization.GamePasses, SkinPasses or
+-- CosmeticPasses (the store's Supporter pass).
 function MonetizationService.IsConfiguredPass(passId: any): boolean
 	if type(passId) ~= "number" or passId == 0 then
 		return false
 	end
-	for _, list in ipairs({ Config.Monetization.GamePasses, Config.Monetization.SkinPasses }) do
+	for _, list in ipairs({ Config.Monetization.GamePasses, Config.Monetization.SkinPasses, (Config.Monetization :: any).CosmeticPasses or {} }) do
 		for _, id in pairs(list) do
 			if id == passId then
 				return true
@@ -173,6 +180,10 @@ function MonetizationService.RefreshAttributes(player: Player)
 	player:SetAttribute("VIP", MonetizationService.OwnsPass(player, "VIP"))
 	player:SetAttribute("StarterPack", MonetizationService.OwnsPass(player, "StarterPack"))
 	player:SetAttribute("DoubleGold", MonetizationService.OwnsPass(player, "DoubleGold"))
+	-- the cosmetic store's Supporter flag and worn looks (no-op with Store off)
+	if ctx and ctx.StoreService then
+		ctx.StoreService.Apply(player)
+	end
 	-- in a run, chest / shrine prices follow the new multiplier at once (GoldSystem.PriceMult);
 	-- through ctx, so no require cycle
 	local gold, run = ctx and ctx.GoldSystem, ctx and ctx.RunManager
@@ -242,6 +253,15 @@ local function buildProductHandlers()
 			end)
 		end
 	end
+	-- the cosmetic store: looks and early hero unlocks (Config.Features.Store)
+	local store = ctx and ctx.StoreService
+	if store and Config.FeatureOn("Store") then
+		for productId in pairs(store.ProductMap()) do
+			if not productHandlers[productId] then
+				productHandlers[productId] = store.Handler(productId)
+			end
+		end
+	end
 end
 
 local function processReceipt(info): Enum.ProductPurchaseDecision
@@ -275,7 +295,18 @@ local function processReceipt(info): Enum.ProductPurchaseDecision
 		warn("[Monetization] no handler for product " .. tostring(info.ProductId))
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
-	local ok, err = pcall(handler, player, profile.Data)
+	-- a store gift goes to the recipient picked on the server (StoreService.GiftRoute)
+	local store = ctx.StoreService
+	local gift = store and Config.FeatureOn("Store") and store.GiftRoute(player, info.ProductId, purchaseId)
+	local ok, err
+	if gift then
+		ok, err = pcall(store.GrantGift, player, profile.Data, gift)
+		if ok and err == false then
+			return Enum.ProductPurchaseDecision.NotProcessedYet -- the recipient's save failed: retry
+		end
+	else
+		ok, err = pcall(handler, player, profile.Data)
+	end
 	if not ok then
 		warn("[Monetization] product handler failed: " .. tostring(err))
 		return Enum.ProductPurchaseDecision.NotProcessedYet
@@ -299,6 +330,7 @@ function MonetizationService.Init(c)
 	MarketplaceService.ProcessReceipt = processReceipt
 end
 MonetizationService._ProcessReceipt = processReceipt -- (tests: safety-sim)
+MonetizationService._RebuildProducts = buildProductHandlers -- (tests: store-regression, ids set at run time)
 
 function MonetizationService.Start()
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
@@ -333,6 +365,11 @@ function MonetizationService.Start()
 					end
 				end
 				for _, id in pairs(Config.Monetization.SkinPasses) do
+					if id ~= 0 then
+						queryPass(player, id)
+					end
+				end
+				for _, id in pairs((Config.Monetization :: any).CosmeticPasses or {}) do
 					if id ~= 0 then
 						queryPass(player, id)
 					end

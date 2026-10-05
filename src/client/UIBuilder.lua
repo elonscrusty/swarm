@@ -4405,6 +4405,8 @@ local function buildResults()
 			BugReportUI.Open()
 		end,
 	})
+	-- PHOTO (feature 29, PhotoMode.lua): hides the UI, poses the hero; nil while switched off
+	results.Photo = require(script.Parent.PhotoMode).AttachButton(actions, 3, holdResults)
 
 	-- a later profile sync carries the settled hero XP (mastery bar fallback)
 	Remotes.Get("ProfileSync").OnClientEvent:Connect(function()

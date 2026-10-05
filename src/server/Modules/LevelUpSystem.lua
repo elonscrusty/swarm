@@ -87,6 +87,8 @@ local function sheetFor(rp, passives: { [string]: number }?)
 		Items = rp.Items or {},
 		Team = teamAndSynergy(rp, passives),
 		Curse = ctx.RunModifiers and ctx.RunModifiers.StatMults() or nil,
+		Sigils = rp.Sigils, -- META (feature 1): nil unless worn (never in Daily / Weekly runs)
+		SigilAlone = rp.SigilAlone,
 	})
 end
 
@@ -567,6 +569,13 @@ local function rollChoices(rp)
 	if #choices == 0 and #pool > 0 then
 		-- never an empty panel (a protected pause with nothing to pick): the first legal card
 		table.insert(choices, decorate(rp, pool[1]))
+	end
+	-- Clove Bulb Sigil (META): the first card set of the run shows one card fewer
+	if rp.SigilFewerFirst then
+		rp.SigilFewerFirst = nil
+		if #choices > 1 then
+			table.remove(choices)
+		end
 	end
 	-- a bonus pick (Shrine of Trial, QueueBonusPick): at least one card above Common
 	rp.OfferBoosted = nil

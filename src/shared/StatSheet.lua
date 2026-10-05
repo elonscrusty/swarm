@@ -30,6 +30,7 @@ local CharacterData = require(script.Parent.CharacterData)
 local MetaUpgradeData = require(script.Parent.MetaUpgradeData)
 local PassiveData = require(script.Parent.PassiveData)
 local ItemData = require(script.Parent.ItemData)
+local SigilData = require(script.Parent.SigilData)
 
 local StatSheet = {}
 
@@ -50,6 +51,8 @@ export type Input = {
 	Items: { [string]: number }?,
 	Team: { [string]: number }?,
 	Curse: { [string]: number }?,
+	Sigils: { [string]: boolean }?, -- worn Sigils (META, Config.Features.Sigils): after Meta
+	SigilAlone: boolean?, -- Lone Wolf: no living ally within SigilData.LoneWolfRange
 }
 
 function StatSheet.Compute(input: Input): { [string]: number }
@@ -90,6 +93,21 @@ function StatSheet.Compute(input: Input): { [string]: number }
 	local second = input.Meta and input.Meta.SecondSkill == 1 and input.CharacterId and CharacterData.SecondSkills[input.CharacterId]
 	if second and Config.FeatureOn("SecondSkill") then
 		addAll(second.Bonus)
+	end
+	-- Sigils (feature 1): their own step after the permanent upgrades; never stack (a set)
+	local noRegen = false
+	if input.Sigils and Config.FeatureOn("Sigils") then
+		for id in pairs(input.Sigils) do
+			local def = SigilData.Sigils[id]
+			if def then
+				addAll(def.Bonus)
+				local special = def.Special
+				if special and special.LoneWolf then
+					b.might += input.SigilAlone and special.LoneWolf or -special.LoneWolf
+				end
+				noRegen = noRegen or (special ~= nil and special.NoRegen == true)
+			end
+		end
 	end
 	for passiveId, level in pairs(input.Passives or {}) do
 		local def = PassiveData.Passives[passiveId]
@@ -139,6 +157,9 @@ function StatSheet.Compute(input: Input): { [string]: number }
 	sheet.MaxHP = math.max(1, math.floor(sheet.MaxHP * (curse.MaxHP or 1) + 0.5))
 	sheet.Might *= curse.Might or 1
 	sheet.DamageTaken *= curse.DamageTaken or 1
+	if noRegen then
+		sheet.Regen = 0 -- Ember Heart
+	end
 	return sheet
 end
 

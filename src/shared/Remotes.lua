@@ -47,6 +47,7 @@ Remotes.ServerToClient = {
 	"LeaderboardData", -- { Board, Rows = { {Rank, Name, Value, Me} }, Status, Age, MyRank?, MyBest } (LeaderboardService)
 	"PartyState", -- this player's party: { LeaderId, Members = { {UserId, Name, Ready} }, Max, Invites = { {FromId, FromName, Seconds} }, Sent = {userId} } (PartyService)
 	"PartyInvite", -- a new invite: { FromId, FromName, Seconds } (PartyService): the ACCEPT / DECLINE card
+	"StoreResult", -- cosmetic store answer: { Kind = "Buy" | "Equip" | "Gift", Ok, Text } (StoreService)
 	"MerchantStock", -- this player's merchant cart stock: { Id, Stage, Items = { {Id, Rarity, Price, Sold} } } or { Id = 0 } (Merchant.lua, EXPLORE)
 }
 
@@ -91,6 +92,12 @@ Remotes.ClientToServer = {
 	"UseUltimate", -- () fire the hero ultimate; the server checks charge, life and the run (Ultimate.lua, HEROPOWER)
 	"SetPreset", -- (heroId, "Weapons" | "Passives", id, on) mark a favourite for the level-up tag (Ultimate.lua, HEROPOWER)
 	"MerchantBuy", -- (merchantId, slot) buy one item of your own merchant stock for run gold (Merchant.lua, EXPLORE)
+	"Meta", -- META (MetaService): ("EquipSigil", slot, id | "") | ("ClaimStreak") | ("ClaimSeason", tier | "All") | ("Sync")
+	"SetMasteryGlow", -- (weaponId, milestone 0..n) the glow a weapon wears; the server checks its kill count (WeaponMastery.lua, LOBBY)
+	"StoreBuy", -- (itemId, giftToUserId?) cosmetic store: the server checks the item / target and opens the Roblox prompt (StoreService)
+	"StoreEquip", -- (kind, id | "") wear an owned store cosmetic; ("Sync") re-checks earned looks (StoreService)
+	"StoreEmote", -- () play the worn emote over your hero (StoreService, cooldown)
+	"TeamComboFire", -- () fire the full team combo; the server checks the meter, the partner and the run (TeamCombo.lua, TEAM)
 }
 
 local folder: Folder? = nil

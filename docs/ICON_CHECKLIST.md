@@ -415,7 +415,9 @@ Intentional: text buttons.
 | `-` | Reroll / Skip / Auto-pick / Banish | level-up buttons: `cycle`, `skip` (recoloured on buttons, so drawn); auto-pick is a timer bar (no icon); banish does not exist | drawn: DRAW.cycle, DRAW.skip | working (drawn) |
 | `-` | Coins / XP / pause / settings / daily | keys `coin`, XP gems are 3D (no icon), `pause`, `gear`, `calendar` | drawn | working (drawn) |
 | `-` | Hero ultimate button (HEROPOWER) | FeatureHud round button above JUMP: text "ULT" with a gold charge fill; owner art per hero (8 ultimates, CharacterData.Ultimates) would be a later upgrade | - | working (text button; owner picture optional) |
+| `-` | Cosmetic store items (STORE) | STORE screen cards: a coloured swatch tile with an existing drawn icon per kind (`arrowFast` trails, `VolatileSpore` bursts, `heart` pets, emote icons, `flag` plates, `area` dais, `crown` Supporter, `gift`); owner pictures per item (and for each new pass / product in Creator Dashboard) would be a later upgrade | drawn | working (drawn; owner pictures optional) |
 | `-` | Favourite tag / marks (HEROPOWER) | level-up card "★ Favourite" pill and the gold star on Characters > FAVOURITES tiles (existing weapon / passive icons) | - | working (text, no icon needed) |
+| `-` | META screens: Sigils, weekly, season, titles, collection, daily reward | Sigil rows use existing drawn icons (`boot`, `Garlic`, `coin`, `aim`, `shield`, `heart`, `magnet`, `pouch`, `sparkle`, `hourglass`, `area`, `person`); season / streak rows `lobby_Gold`, `medal`, `crown`, `gift`; MORE rows `gift`, `calendar`, `flag`, `medal`, `chest`; collection tiles reuse weapon / passive / item / hero icons (dark silhouettes when not found), `skull` enemies, `crown` bosses. Owner pictures, one per Sigil (12) and a SIGILS / SEASON / TITLES / COLLECTION / DAILY REWARD menu picture, would be a later upgrade | drawn | working (drawn; owner pictures optional) |
 
 ## Problems
 

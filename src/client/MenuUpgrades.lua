@@ -350,6 +350,30 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		return f
 	end
 
+	-- the cosmetic STORE entry (Config.Features.Store)
+	local function storeCard(order: number)
+		local f = card(order)
+		cardTop(f, function()
+			Icons.Draw(f, "gift", { Size = 56, Idle = "Glint" })
+		end, "Cosmetic store", "Skins, trails, pets, emotes and gifts. Looks only.", 0)
+		UIKit.Button(f, {
+			Kind = "Primary",
+			Title = "OPEN STORE",
+			Icon = "sparkle",
+			IconSize = 20,
+			Align = "Center",
+			Name = "OpenStore",
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.fromScale(0, 1),
+			Size = UDim2.new(1, 0, 0, 50),
+			Shadow = false,
+			OnClick = function()
+				ctx.ShowScreen("Store")
+			end,
+		})
+		return f
+	end
+
 	local function rebuild(animate: boolean)
 		for _, c in ipairs(ui.Scroll:GetChildren()) do
 			if c:IsA("GuiObject") then
@@ -387,6 +411,14 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 				UIAnim.Pop(f, 0.03 * (n + 1), 0.7)
 			end
 		else
+			if Config.FeatureOn("Store") then
+				-- the cosmetic STORE (MenuStore): skins, trails, pets, gifts ...
+				local f = storeCard(0)
+				n += 1
+				if animate then
+					UIAnim.Pop(f, 0, 0.7)
+				end
+			end
 			for order, item in ipairs(SHOP) do
 				local f = shopCard(p, item, order)
 				n += 1
@@ -407,7 +439,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		ui.Grid.CellSize = UDim2.fromOffset(ui.CellW or 280, cellH)
 		-- the panel is only as tall as its cards (portrait left half the screen empty)
 		if ui.PanelMaxH then
-			local count = tab == "Shop" and #SHOP or (#MetaUpgradeData.AccountOrder + 1)
+			local count = tab == "Shop" and (#SHOP + (Config.FeatureOn("Store") and 1 or 0)) or (#MetaUpgradeData.AccountOrder + 1)
 			local rows = math.ceil(count / (ui.Cols or 1))
 			local need = 28 + ui.ScrollTop + 12 + rows * cellH + (rows - 1) * 12 + 8
 			ui.Panel.Size = UDim2.fromOffset(ui.Panel.Size.X.Offset, math.min(ui.PanelMaxH, need))

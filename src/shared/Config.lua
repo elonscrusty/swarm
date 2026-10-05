@@ -985,9 +985,36 @@ Config.Monetization = {
 		Revive = 3716061270, -- mid-run revive, offered once per run on death
 	},
 	ProductGold = { Gold500 = 500, Gold1500 = 1500, Gold5000 = 5000 },
-	-- Cosmetic passes / products for the store (STORE fills it; CosmeticData Store keys
-	-- point here). 0 = not created yet: the shop shows "Coming soon".
-	Cosmetics = {},
+	-- Cosmetic developer products for the store (CosmeticData / StoreCatalog Store keys
+	-- point here; docs/features/STORE.md). 0 = not created yet: the shop shows "Coming
+	-- soon". Each one gives one look (data.Cosmetics.Owned) and can be gifted.
+	Cosmetics = {
+		Trail_Ember = 0,
+		Trail_Frost = 0,
+		Trail_Royal = 0,
+		Burst_Confetti = 0,
+		Burst_Void = 0,
+		Burst_Frost = 0,
+		Pet_Fox = 0,
+		Pet_Owl = 0,
+		Pet_Drake = 0,
+		Emote_Cheer = 0,
+		Emote_Flex = 0,
+		Plate_Gold = 0,
+		Plate_Ember = 0,
+		Dais_Obsidian = 0,
+		Dais_Sunfire = 0,
+	},
+	-- Cosmetic game passes: Supporter = one-time pass (badge, glowing nameplate, lobby
+	-- banner; looks only). 0 = not created yet.
+	CosmeticPasses = {
+		Supporter = 0,
+	},
+	-- HEROES (feature 11): early unlock of the three heroes that are also sold for gold
+	-- (CharacterData StoreKey "HeroUnlocks.<Id>"). Developer products, 0 = not created yet:
+	-- the Store shows "Coming soon". The owner creates them and pastes the ids; STORE wires
+	-- the purchase (it sets OwnedCharacters[id] = true, the same flag gold buys).
+	HeroUnlocks = { Archer = 0, Bard = 0, Golem = 0 },
 	-- One gamepass per cosmetic skin. Keys must match skin ids in CharacterData.
 	SkinPasses = {
 		Knight_Crimson = 0,
@@ -1007,6 +1034,16 @@ Config.Monetization = {
 	DoubleGoldMult = 2,
 	VIPExtraRerolls = 1,
 	RevivePromptSeconds = 12, -- how long the revive offer stays up after death
+}
+
+-- The cosmetic store (Config.Features.Store; docs/features/STORE.md). Looks only.
+Config.Store = {
+	GiftSeconds = 300, -- a gift target is kept this long while the Roblox prompt is open
+	EmoteCooldown = 3, -- seconds between two emotes of one player
+	EmoteSeconds = 2.2, -- how long an emote shows over the hero
+	MaxPets = 8, -- pets drawn at once on one screen (nearest first)
+	PetRange = 150, -- studs: pets / trails / plates further from the camera are not drawn
+	PlateRange = 70, -- studs: nameplates show within this distance
 }
 
 ------------------------------------------------------------------------------------------
@@ -1182,6 +1219,81 @@ end
 Config.TeamPings = { Cooldown = 2, Duration = 6, MaxDistance = 100 }
 
 --[[
+	TEAM (features 16, 17, 18, 20; docs/features/TEAM.md). Co-op only: a solo run never
+	sees any of it. Each has its own switch in Config.Features.
+]]
+-- 16 team combo: two living, free players close together charge one shared meter; when
+-- it is full either of them fires a burst around both (server-checked, capped damage).
+Config.TeamCombo = {
+	Radius = 12, -- studs between the two players (flat distance)
+	ChargeSeconds = 25, -- seconds together (world running) for a full meter
+	DrainSeconds = 60, -- apart: the meter drains from full to empty in this long
+	Cooldown = 40, -- run seconds after a burst before the meter fills again
+	BurstRadius = 20, -- around the middle of the pair
+	Damage = 120, -- base damage per enemy, + PerLevel per average hero level
+	PerLevel = 12,
+	Cap = 600, -- per enemy, before the elite / boss share caps
+	EliteShare = 0.2, -- elites, guards, mini-bosses, nests: at most this share of max HP
+	BossShare = 0.04, -- bosses: at most this share of max HP (never an instant kill)
+	Knockback = 30,
+	MaxPerStage = 3, -- bursts per stage, whatever the meter says
+	Rate = 2, -- TeamComboFire remote, per player per second
+	Key = Enum.KeyCode.F, -- keyboard
+	Pad = Enum.KeyCode.ButtonL1, -- gamepad
+	ButtonSize = 60, -- touch button (pixels), left of the ULT button
+}
+
+-- 17 quick pings and emotes: the ping wheel (FeatureHud PingWheel slot). Presets only, no
+-- text from players. Every ping still goes through TeamPingService (Config.TeamPings
+-- cooldown + the remote rate limit). Labels are what teammates see on the marker.
+Config.QuickPings = {
+	Order = { "Help", "Loot", "Portal", "OnMyWay", "Wave", "Cheer" },
+	Labels = {
+		Help = "HELP HERE",
+		Loot = "CHEST HERE",
+		Portal = "GO PORTAL",
+		OnMyWay = "ON MY WAY",
+		Wave = "HELLO!",
+		Cheer = "NICE!",
+		ReviveMe = "REVIVE ME",
+	},
+	Emotes = { Wave = true, Cheer = true }, -- shown over the sender's head
+	OpenKey = Enum.KeyCode.G, -- keyboard (the old PING key); 1-6 send directly
+	PadOpen = Enum.KeyCode.DPadUp, -- gamepad: open / close
+	PadNext = Enum.KeyCode.DPadRight, -- gamepad: highlight the next / previous option
+	PadPrev = Enum.KeyCode.DPadLeft,
+	PadSend = Enum.KeyCode.DPadDown, -- gamepad: send the highlighted option
+	WheelSize = 260, -- pixels (the FeatureHud slot)
+	ButtonSize = 76, -- each option (pixels, >= 44 touch)
+}
+
+-- 18 co-op boss mechanic: with 2+ living players, while one player holds this boss's
+-- aggro for HoldSeconds a weak spot opens on its back (the side away from the holder) for
+-- OpenSeconds. Hits from the other players standing behind it deal Mult damage. Solo and
+-- every other boss are unchanged.
+Config.CoopBoss = {
+	Boss = "ScorpionQueen", -- the BossData id that gets the co-op variant
+	MinPlayers = 2, -- living players needed
+	HoldSeconds = 3, -- same aggro holder this long (boss attacking, not in its entrance)
+	LoseSeconds = 0.6, -- the boss must aim at someone else this long before the holder changes
+	OpenSeconds = 6,
+	Cooldown = 8, -- after it closes
+	Mult = 1.5, -- damage from behind while open (non-holders only)
+	BackDot = -0.2, -- "behind": dot(boss→hitter, boss→holder) below this
+	MaxBonusShare = 0.05, -- extra damage per opening, at most this share of the boss's max HP
+	MarkerDistance = 1.0, -- marker sits this many boss radii behind it
+}
+
+-- 20 spectate: while down or out in a group run, cycle the camera through living
+-- teammates; a REVIVE ME ping (teammates see it at your body).
+Config.Spectate = {
+	PrevKeys = { Enum.KeyCode.Left, Enum.KeyCode.DPadLeft },
+	NextKeys = { Enum.KeyCode.Right, Enum.KeyCode.DPadRight },
+	ReviveKeys = { Enum.KeyCode.G, Enum.KeyCode.DPadUp },
+	ButtonSize = 56, -- arrow buttons (pixels)
+}
+
+--[[
 	First-run tips (client Tutorial.lua): small hints that teach through play, each shown
 	once (the server keeps the ids seen in the profile: SeenTips) and dismissed on their
 	own; they never pause or block the run. A player with any run played before this
@@ -1342,6 +1454,10 @@ Config.Modes = {
 	-- The Daily Challenge (lobby DAILY card): solo, fixed arena tour / bosses / curses /
 	-- starting bonus per UTC day (CurseData.Daily). Not in Order: it has its own card.
 	Daily = { DisplayName = "Daily", MaxPlayers = 1, Countdown = false },
+	-- The Weekly Challenge (feature 21, Config.Features.WeeklyChallenge; MetaData.Weekly):
+	-- solo, a fixed hero, curses and first world per UTC week, its own weekly board. Not in
+	-- Order: it has its own screen (MenuWeekly). Accepted only while the switch is on.
+	Weekly = { DisplayName = "Weekly", MaxPlayers = 1, Countdown = false },
 }
 
 -- Parties (server PartyService.lua, lobby PARTY screen MenuParty.lua). Friends on this
@@ -1500,6 +1616,19 @@ Config.Features = {
 	Store = true, -- the cosmetics store (docs/features/STORE.md)
 }
 
+-- Season track (feature 22, Config.Features.SeasonTrack; MetaData, docs/features/META.md).
+-- A season runs from Start to End (UTC dates, both days included); its Id keys the save's
+-- progress (a new Id starts a new track, and tiers reached but not claimed in the old one
+-- are paid when the new one starts). Free only: there is no paid lane. Add the next season
+-- as a new row; never reuse an Id.
+Config.Season = {
+	List = {
+		{ Id = "S1", Name = "Season 1", Start = "2026-10-05", End = "2027-01-03" },
+	},
+	XPPerTier = 400, -- season XP per tier (season XP = the account XP a clean run gives)
+	Tiers = 30,
+}
+
 -- True when feature `name` (a Config.Features key) is switched on.
 function Config.FeatureOn(name: string): boolean
 	return (Config.Features :: any)[name] == true
@@ -1513,6 +1642,72 @@ Config.FeatureHud = {
 	BadgeSize = 36, -- top-right badge row (pixels)
 	MaxBadges = 6,
 	AnnounceSeconds = 1.6, -- combo / announcer line default time on screen
+}
+
+--[[
+	LOBBY (features 15, 29, 30; docs/features/LOBBY.md). Cosmetic and lobby-only: nothing
+	here changes a run's power.
+]]
+-- 15 Weapon mastery (Config.Features.WeaponMastery): the server counts each weapon's kills
+-- (save field WeaponMastery {weaponId → kills}); a milestone unlocks a glow colour for THAT
+-- weapon. The colour each weapon wears is chosen per weapon in the WEAPON MASTERY menu and
+-- saved in the same field as "Glow:<weaponId>" → milestone number (absent = its own colour).
+-- Only your own weapon effects are tinted, on your screen.
+Config.WeaponMastery = {
+	Milestones = { -- kills with one weapon → a glow colour for it (CosmeticData "Earned" Trail entries)
+		{ Kills = 250, Id = "Trail_MasteryBronze", Name = "Bronze Glow", Color = Color3.fromRGB(222, 142, 74) },
+		{ Kills = 1000, Id = "Trail_MasterySilver", Name = "Silver Glow", Color = Color3.fromRGB(200, 222, 244) },
+		{ Kills = 3000, Id = "Trail_MasteryGold", Name = "Gold Glow", Color = Color3.fromRGB(255, 204, 72) },
+		{ Kills = 8000, Id = "Trail_MasteryArcane", Name = "Arcane Glow", Color = Color3.fromRGB(184, 120, 255) },
+	},
+	Tint = 0.8, -- how much of the weapon's own trail / slash colour the glow replaces
+	MaxCount = 100000000, -- a weapon's count stops here
+	EquipRate = 4, -- SetMasteryGlow requests per second per player
+}
+
+-- 29 Photo mode on the results screen (Config.Features.PhotoMode): no upload, the player
+-- uses the device's own screenshot.
+Config.PhotoMode = {
+	Poses = { "Showcase", "Cheer", "Idle" }, -- HeroPoses names, in the POSE button's order
+	PoseNames = { Showcase = "HEROIC", Cheer = "CHEER", Idle = "RELAXED" },
+	OrbitSpeed = 10, -- degrees per second while ORBIT is on
+	Distance = 11, -- camera distance from the hero (studs)
+	Height = 3.2, -- camera height above the hero's feet
+	AimHeight = 2.6, -- aim point above the feet
+	FieldOfView = 40,
+	Frames = { "None", "Gold", "Crimson", "Frost" }, -- overlay frame styles (FRAME button)
+	HintSeconds = 2.5, -- "Tap to exit" hint
+}
+
+-- 30 Lobby fun (Config.Features.LobbyFun): a courtyard behind the menu camera, built on the
+-- client only while the player is there (never in the title shot). Offsets are studs from
+-- Config.Lobby.Origin; +Z is behind the menu camera.
+Config.LobbyFun = {
+	Spawn = Vector3.new(0, 3, 60), -- where you appear
+	WalkSpeed = 16,
+	CameraDistance = 30,
+	Dummy = Vector3.new(-14, 0, 66), -- training dummy (DPS of the selected hero's start weapon)
+	DummyHitEvery = 0.5, -- seconds between the dummy's shown hits
+	Mirror = Vector3.new(14, 0, 66), -- cosmetics mirror
+	Course = {
+		-- a jump pad sits at the start and on every platform but the last; a pad throws you
+		-- straight up (LaunchSpeed) and you steer onto the next platform in the air
+		Start = Vector3.new(0, 0, 76), -- the first pad, on the courtyard floor
+		Platforms = { -- top centre + size; the last one is the finish
+			{ At = Vector3.new(0, 5, 84), Size = Vector3.new(7, 1, 7) },
+			{ At = Vector3.new(8, 10, 90), Size = Vector3.new(7, 1, 7) },
+			{ At = Vector3.new(0, 15, 97), Size = Vector3.new(7, 1, 7) },
+			{ At = Vector3.new(-9, 19, 91), Size = Vector3.new(9, 1, 9) },
+		},
+		LaunchSpeed = 62, -- studs/s up (about 9.8 studs high)
+		PadRadius = 1.8,
+		PadCooldown = 0.4,
+		FinishRadius = 4,
+		FallY = -8, -- below this (relative to the origin) you are put back at the start
+		MaxSeconds = 120, -- a try longer than this is dropped
+	},
+	Floor = { Centre = Vector3.new(0, 0, 80), Size = Vector3.new(64, 1, 64) }, -- top at y 0
+	MaxParts = 80, -- the whole courtyard stays under this many parts (perf)
 }
 
 --[[

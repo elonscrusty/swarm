@@ -9,6 +9,11 @@
 --   --set choosing=on        the alive teammate is choosing a level-up card: a live group choice
 --                            (docs/overhaul/CHOICE_STATE.md), the world keeps running, no "Paused"
 --   --set leave=on           the alive teammate disconnects mid-scene (row removed)
+--   TEAM features (docs/features/TEAM.md):
+--   --set wheel=on           the quick-ping wheel open (FeatureHud PingWheel slot)
+--   --set combo=full|half    the team combo meter (badge; full = the COMBO button)
+--   --set weakspot=on        the co-op boss weak spot marker + badge in front of the hero
+--   (with me=down the spectate bar shows: < WATCHING NAME > and REVIVE ME)
 local A = lib("arena")
 local C = lib("common")
 local mode = preview.args.mode or "Trio"
@@ -91,6 +96,27 @@ if preview.args.leave == "on" and alive then
 		alive.Character:Destroy()
 	end
 	C.settle(1)
+end
+-- TEAM features (16, 17, 18, 20)
+if preview.args.combo == "full" or preview.args.combo == "half" then
+	local pair = alive and string.format(",%d,%d,", game:GetService("Players").LocalPlayer.UserId, alive.UserId) or nil
+	C.setState({ TeamCombo = preview.args.combo == "full" and 1 or 0.46, TeamComboPair = pair, TeamComboUsed = 0 })
+end
+if preview.args.weakspot == "on" then
+	C.setState({ BossWeakSpot = centre + Vector3.new(6, 0, -10), BossAggroId = 2 })
+end
+if preview.args.wheel == "on" then
+	local wheel = C.try("require PingWheel", preview.client, "PingWheel")
+	if wheel then
+		wheel.SetOpen(true)
+	end
+end
+if preview.args.combo or preview.args.weakspot or preview.args.wheel or meDown then
+	C.settle(0.6)
+	local spectate = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("Spectate")
+	local fh = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("FeatureHud")
+	preview.log(string.format("team features: spectate bar=%s wheel=%s combo button=%s", tostring(spectate and spectate.Enabled),
+		tostring(fh and fh.Root.PingWheel.Visible), tostring(fh and fh.Root:FindFirstChild("TeamCombo") and fh.Root.TeamCombo.Visible)))
 end
 local TeamUI = C.try("require TeamUI", preview.client, "TeamUI")
 if TeamUI then

@@ -186,6 +186,10 @@ MetaUpgradeData.Signature = {
 	Alchemist = signature("Alchemist", "Volatile Mix", 20, 3, "+%d%% fire and area damage"),
 	Engineer = signature("Engineer", "Tinkerer", 30, 5, "+%d%% turret and totem time"),
 	Necromancer = signature("Necromancer", "Soul Harvest", 15, 2, "%d%% soul chance per kill"),
+	-- HEROES (feature 11, docs/features/HEROES.md); unused while the heroes are switched off
+	Archer = signature("Archer", "Quick Draw", 10, 2, "-%d%% weapon cooldown", { cooldown = 0.02 }),
+	Bard = signature("Bard", "Rally Song", 12, 2, "+%d%% damage for allies nearby"),
+	Golem = signature("Golem", "Stone Body", 25, 3, "+%d%% max HP", { maxHpMult = 0.03 }),
 }
 
 function MetaUpgradeData.IsStat(upgradeId: any): boolean

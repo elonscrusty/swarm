@@ -194,7 +194,9 @@ local function onEquip(player: Player, kind: any, value: any)
 		-- earned from an achievement, or from the account level track
 		local source = AchievementData.Source(kind, value)
 		local fromAchievement = source ~= nil and store(data).Unlocked[source] ~= nil
-		if not fromAchievement and not ctx.AccountService.CanWear(data, kind, value) then
+		-- META milestone / season / streak titles (Config.Features.Titles)
+		local fromMeta = kind == "Title" and ctx.MetaService ~= nil and ctx.MetaService.OwnsTitle(data, value)
+		if not fromAchievement and not fromMeta and not ctx.AccountService.CanWear(data, kind, value) then
 			return
 		end
 	end

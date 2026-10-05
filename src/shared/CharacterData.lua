@@ -1,6 +1,6 @@
 --[[
 	CharacterData.lua
-	The 8 playable characters and their cosmetic skins.
+	The 8 playable characters (+3 behind Config.Features.NewHeroes) and their cosmetic skins.
 
 	Character fields:
 	  Role          short tag shown on the character select card (descriptive only)
@@ -30,6 +30,9 @@
 	                  Hat        headgear           HatAccent  plume, hat band, horns, jewels
 	                  Skin       face and hands
 	                MetalDark / AccentDark are optional: they default to a shade of Metal / Accent.
+	  StoreKey      optional (new heroes): path into Config.Monetization of the early-unlock
+	                product (Id 0 = not created yet, the Store shows "Coming soon")
+	  Song          optional (Bard): see the HEROES block below
 	  Swatch        the slot shown as the body colour on skin swatches
 	  Hat           headgear shape (a "Hat_<Shape>" mesh, part-built ModelBuilder.HatShapes as
 	                fallback). The character's own Hat is its built-in headgear.
@@ -288,6 +291,130 @@ CharacterData.Characters = {
 }
 
 --[[
+	HEROES (feature 11, Config.Features.NewHeroes; docs/features/HEROES.md): three heroes
+	earned by play. They are sold for gold at the existing hero price tiers (10k / 20k /
+	30k), and the Store may sell an early unlock (Config.Monetization.HeroUnlocks, Id 0 =
+	coming soon) that sets the same OwnedCharacters flag. With the switch off they are
+	not in Order or Characters, so every screen and check behaves as before.
+	  Song (Bard)   { Radius, SelfShare, Pulse }: teammates within Radius deal +trait value
+	                damage (MetaUpgradeData Signature "Bard"); the Bard itself gets
+	                SelfShare of it, so a solo Bard still has a smaller buff (server
+	                HeroSong.lua; never stacks between two Bards)
+]]
+CharacterData.NewHeroOrder = { "Archer", "Bard", "Golem" }
+CharacterData.NewHeroes = {
+	-- Archer: 10,000 gold (the Mage tier). Mesh "Archer", part-built fallback ClassGear.Archer.
+	Archer = {
+		Id = "Archer",
+		Name = "Archer",
+		Role = "Quick shooter", -- one-line tag on the character select card
+		Description = "Fast hands. Starts with the Crossbow. -10% weapon cooldown.",
+		Cost = 10000, -- the existing 10k hero tier
+		StoreKey = "HeroUnlocks.Archer",
+		StartWeapon = "Crossbow",
+		Bonus = { cooldown = 0.10 },
+		BonusText = "-10% cooldown",
+		Trait = { Name = "Quick Draw", Text = "Every weapon fires 10% more often." },
+		Strengths = "Bolts fly at the nearest enemies, and every weapon fires faster.",
+		Tradeoff = "Light armour: no defense bonus, and early bolts stop at the first enemy.",
+		Colors = {
+			Metal = Palette.leather_500,
+			MetalDark = Palette.leather_700,
+			Cloth = Palette.slate_500,
+			Cloth2 = Palette.stone_700,
+			Accent = Palette.ivory_300,
+			AccentDark = Palette.ivory_500,
+			Gold = Palette.gold_500,
+			Hat = Palette.steel_400,
+			HatAccent = Palette.crimson_400,
+			Skin = Palette.skin_400,
+		},
+		Swatch = "Cloth",
+		Hat = "Plume",
+	},
+	-- Bard: 20,000 gold (the Rogue tier). Mesh "Bard", part-built fallback ClassGear.Bard.
+	Bard = {
+		Id = "Bard",
+		Name = "Bard",
+		Role = "Team booster", -- one-line tag on the character select card
+		Description = "Plays for the team. Starts with the War Horn. Allies near you deal 12% more damage.",
+		Cost = 20000, -- the existing 20k hero tier
+		StoreKey = "HeroUnlocks.Bard",
+		StartWeapon = "WarHorn",
+		Bonus = {},
+		BonusText = "Rally Song",
+		Trait = { Name = "Rally Song", Text = "Allies within 22 m deal +12% damage. You get +7% (also when alone)." },
+		Strengths = "Makes the whole team stronger; the horn pushes the swarm away.",
+		Tradeoff = "Alone the song is only half as strong, and the horn has a short reach.",
+		Song = { Radius = 22, SelfShare = 0.6, Pulse = 4 },
+		Colors = {
+			Metal = Palette.leather_500,
+			MetalDark = Palette.leather_700,
+			Cloth = Palette.crimson_500,
+			Cloth2 = Palette.slate_800,
+			Accent = Palette.gold_400,
+			AccentDark = Palette.gold_600,
+			Gold = Palette.gold_500,
+			Hat = Palette.crimson_600,
+			HatAccent = Palette.ivory_200,
+			Skin = Palette.skin_500,
+		},
+		Swatch = "Cloth",
+		Hat = "Cap",
+	},
+	-- Golem: 30,000 gold (the Priest tier). Mesh "Golem", part-built fallback ClassGear.Golem.
+	Golem = {
+		Id = "Golem",
+		Name = "Golem",
+		Role = "Stone tank", -- one-line tag on the character select card
+		Description = "Living stone. Starts with the Earthsplitter. +25% max HP, +1 armor, 10% slower.",
+		Cost = 30000, -- the existing 30k hero tier
+		StoreKey = "HeroUnlocks.Golem",
+		StartWeapon = "Earthsplitter",
+		Bonus = { maxHpMult = 0.25, armor = 1, speed = -0.10 },
+		BonusText = "+25% HP, +1 armor",
+		Trait = { Name = "Stone Body", Text = "+25% max HP and +1 armor, but 10% slower." },
+		Strengths = "The toughest body: lots of HP, and armor blunts every hit.",
+		Tradeoff = "Slow: 10% less move speed, so it is hard to run from the swarm.",
+		Colors = {
+			Metal = Palette.stone_400,
+			MetalDark = Palette.stone_600,
+			Cloth = Palette.moss_600,
+			Cloth2 = Palette.stone_700,
+			Accent = Palette.moss_400,
+			AccentDark = Palette.moss_700,
+			Gold = Palette.gold_500,
+			Hat = Palette.stone_500,
+			HatAccent = Palette.stone_200,
+			Skin = Palette.stone_300,
+		},
+		Swatch = "Metal",
+		Hat = "Horns",
+	},
+}
+
+-- Adds (on = true) or removes the new heroes from Order and Characters, in place, so every
+-- module that already holds these tables sees the change. Runs once at load from the
+-- switch; the regression scene calls it to test both states.
+function CharacterData.SetNewHeroes(on: boolean)
+	for _, id in ipairs(CharacterData.NewHeroOrder) do
+		local at = table.find(CharacterData.Order, id)
+		if on then
+			CharacterData.Characters[id] = CharacterData.NewHeroes[id]
+			if not at then
+				table.insert(CharacterData.Order, id)
+			end
+		else
+			CharacterData.Characters[id] = nil
+			if at then
+				table.remove(CharacterData.Order, at)
+			end
+		end
+	end
+end
+CharacterData.SetNewHeroes(Config.FeatureOn("NewHeroes"))
+
+--[[
 	HEROPOWER (docs/features/HEROPOWER.md)
 
 	Ultimates[heroId] (Config.Features.Ultimate): one big move per hero, built from the
@@ -314,6 +441,10 @@ CharacterData.Ultimates = {
 	Alchemist = { Name = "Firestorm", Text = "Flasks burst into flame all around you.", Damage = 1.1, Radius = 1.0, Look = "Fire", Color = Palette.crimson_500 },
 	Engineer = { Name = "Overcharge", Text = "Lightning arcs from you to every enemy close by.", Damage = 1.0, Radius = 1.0, Look = "Sparks", Color = Palette.steel_300 },
 	Necromancer = { Name = "Soul Reap", Text = "Tears out the souls around you and heals you for 10% max HP.", Damage = 1.0, Radius = 1.0, Look = "Souls", Color = Palette.gold_400, Heal = 0.10 },
+	-- HEROES (feature 11)
+	Archer = { Name = "Bolt Barrage", Text = "A storm of bolts hits every enemy around you.", Damage = 1.1, Radius = 0.95, Look = "Arrows", Color = Palette.slate_300 },
+	Bard = { Name = "Battle Hymn", Text = "A mighty chord hurts enemies and heals you and nearby allies for 15% max HP.", Damage = 0.85, Radius = 1.0, Look = "Nova", Color = Palette.gold_300, Heal = 0.15 },
+	Golem = { Name = "Landslide", Text = "Stamps the ground: rocks hurl back everything near you, and you take no damage for 2 s.", Damage = 0.95, Radius = 0.9, Look = "Quake", Color = Palette.amber_300, Guard = 2.0, Knock = 2.2 },
 }
 -- the fallback for a hero without its own entry (new heroes until they get one)
 CharacterData.DefaultUltimate = "Knight"
@@ -327,6 +458,10 @@ CharacterData.SecondSkills = {
 	Alchemist = { Name = "Slow Burn", Text = "Weapon effects last 10% longer.", Bonus = { duration = 0.10 } },
 	Engineer = { Name = "Spare Parts", Text = "-5% weapon cooldown.", Bonus = { cooldown = 0.05 } },
 	Necromancer = { Name = "Dark Pact", Text = "+6% damage.", Bonus = { might = 0.06 } },
+	-- HEROES (feature 11)
+	Archer = { Name = "Eagle Eye", Text = "Bolts and arrows pass through 1 more enemy.", Bonus = { pierce = 1 } },
+	Bard = { Name = "Encore", Text = "+10% luck: rarer items, better cards.", Bonus = { luck = 0.10 } },
+	Golem = { Name = "Rock Spines", Text = "A hit on you also hurts enemies around you for half its damage.", Bonus = { thorns = 0.5 } },
 }
 
 function CharacterData.UltimateFor(heroId: string?)

@@ -980,6 +980,11 @@ function Showcase.IsVisible(): boolean
 	return visible
 end
 
+-- The dais feet CFrame while the menu hero shows (StoreFx: dais theme, banner, pet), else nil.
+function Showcase.Stand(): CFrame?
+	return visible and standCF or nil
+end
+
 -- Shows this character + skin on the dais (no-op when it already does).
 function Showcase.Show(characterId: string?, skinId: string?)
 	local c = characterId or CharacterData.Default

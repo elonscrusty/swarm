@@ -129,6 +129,10 @@ local function weaponStats(rp, w)
 	-- Steady Aim (Ranger): standing still gives +SteadyAimBonus damage to the Longbow and
 	-- +SteadyAimOther to every other weapon until you move
 	local mult = s.Might * (rp.SteadyAim and (1 + ((w.Id == "Longbow" and rp.SteadyAimBonus or rp.SteadyAimOther) or 0)) or 1)
+	-- Rally Song (Bard, HEROES): server-decided team buff (HeroSong; 0 when off)
+	if rp.SongBuff and rp.SongBuff > 0 then
+		mult *= 1 + rp.SongBuff
+	end
 	-- Volatile Mix (Alchemist): burning / area weapons hit harder
 	if hero and hero.AreaDamage and def and def.Area then
 		mult *= 1 + traitValue(rp, hero.AreaDamage)
@@ -270,6 +274,12 @@ end
 -- Soul Harvest (Necromancer), set below: a weapon kill may release a soul.
 local onWeaponKill: (rp: any, pos: Vector3, dead: any) -> ()
 
+-- The weapon whose hit is being resolved now (set by Step around each weapon's fire,
+-- projectile, pool and burn), so a kill can be credited to it: WeaponSystem.OnKill
+-- listeners (weapon mastery, feature 15). Cosmetic bookkeeping only.
+local killSource: any = nil
+local killListeners: { (any, any, any) -> () } = {}
+
 --[[
 	Every weapon hit goes through here: EnemySpawner.Damage (crits, item procs, kills), then
 	the hero's kill trait. noHarvest = a soul from Soul Harvest itself (souls never chain).
@@ -279,6 +289,11 @@ local function damageEnemy(rp, e, amount: number, dir: Vector3?, knockback: numb
 	local died = ctx.EnemySpawner.Damage(e, amount, rp, dir, knockback, isProc)
 	if died and rp and not noHarvest then
 		onWeaponKill(rp, pos, e)
+	end
+	if died and rp and killSource and #killListeners > 0 then
+		for _, fn in ipairs(killListeners) do
+			fn(rp, killSource, e)
+		end
 	end
 	return died
 end
@@ -452,6 +467,7 @@ function Fire.Whip(rp, w, s, def)
 				if not rp.Alive or not rp.Root or not ctx.RunManager.IsSimulating() then
 					return
 				end
+				killSource = w -- a delayed hit: credit the sword (OnKill)
 				local origin = ground(rp.Root.Position)
 				local healed = 0
 				local n = grid():QueryCircle(origin.X, origin.Z, reach, queryBuf)
@@ -1023,6 +1039,7 @@ local function stepPatches(dt: number, now: number)
 				local hits = table.move(queryBuf, 1, n, 1, {})
 				for _, e in ipairs(hits) do
 					if e.Alive and burnReady(z.Weapon, e, z.Tick, now) then
+						killSource = z.Weapon
 						damageEnemy(owner, e, z.Damage, nil, 0)
 						if z.Ignite and e.Alive then
 							burns[e] = { Uid = e.Uid, Until = now + z.IgniteSeconds, Next = now + z.Tick, Tick = z.Tick, Damage = z.Damage * z.IgniteShare, Owner = owner, Weapon = z.Weapon }
@@ -1042,6 +1059,7 @@ local function stepPatches(dt: number, now: number)
 		elseif now >= b.Next then
 			b.Next = now + b.Tick
 			if burnReady(b.Weapon, e, b.Tick, now) then
+				killSource = b.Weapon
 				damageEnemy(b.Owner, e, b.Damage, nil, 0)
 			end
 		end
@@ -2279,6 +2297,7 @@ function Fire.Horn(rp, w, s, def)
 			if not rp.Alive or not rp.Root or not ctx.RunManager.IsSimulating() then
 				return
 			end
+			killSource = w -- a delayed blast: credit the horn (OnKill)
 			Arm.hornBlast(rp, ground(rp.Root.Position), sh.Dir, sh.Range, sh.Half, s.damage * sh.Share, s.knockback * sh.Share, s.duration, params.DazeSlow, evo ~= nil)
 		end
 		if sh.Delay <= 0 then
@@ -2786,6 +2805,7 @@ local function stepZones(dt: number)
 				-- overlapping pools / craters of one weapon hurt an enemy once per tick
 				-- (four bottles on one clump used to deal four times the damage)
 				if e.Alive and (not z.Weapon or burnReady(z.Weapon, e, z.Tick, now)) then
+					killSource = z.Weapon
 					damageEnemy(z.Owner, e, z.Damage, nil, 0)
 				end
 			end
@@ -2989,6 +3009,15 @@ function WeaponSystem.OnFired(fn: (any, any, any) -> ())
 	table.insert(fireListeners, fn)
 end
 
+--[[
+	Kill hook: fn(rp, w, enemy) runs when a weapon hit kills an enemy, with the weapon
+	(w.Id) that dealt it (weapon mastery, feature 15). Item procs and kills with no weapon
+	behind them are not reported. Listeners must be cheap and never change the fight.
+]]
+function WeaponSystem.OnKill(fn: (any, any, any) -> ())
+	table.insert(killListeners, fn)
+end
+
 function WeaponSystem.Step(dt: number)
 	if ctx.RunManager.IsSimulating() then
 		local now = ctx.RunManager.GetRunTime()
@@ -3012,6 +3041,7 @@ function WeaponSystem.Step(dt: number)
 						-- Spare Quiver (per weapon); turrets / totems never pass their cap
 						s.amount = WeaponData.CapAmount(id, s.amount + ctx.ItemSystem.ExtraShot(rp, w))
 						local fn = Fire[def.Behavior]
+						killSource = w
 						if fn then
 							fn(rp, w, s, def)
 						end
@@ -3026,6 +3056,7 @@ function WeaponSystem.Step(dt: number)
 		-- 2) simulate projectiles (iterate backwards: freeing swap-removes)
 		for i = #live, 1, -1 do
 			local p = live[i]
+			killSource = p and p.Weapon
 			if p and p.Active and stepProjectile(p, dt, now) then
 				freeProjectile(p)
 			end
@@ -3033,6 +3064,7 @@ function WeaponSystem.Step(dt: number)
 		-- 3) pools, Fire Trail patches and ignites
 		stepZones(dt)
 		stepPatches(dt, now)
+		killSource = nil
 	end
 
 	syncTimer += dt

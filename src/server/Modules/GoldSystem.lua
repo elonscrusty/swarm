@@ -269,6 +269,8 @@ function GoldSystem.SyncProfile(player: Player)
 			VIP = M.OwnsPass(player, "VIP"),
 			DoubleGold = M.OwnsPass(player, "DoubleGold"),
 		},
+		-- the cosmetic store (StoreService.View: owned / worn looks, Supporter); nil with Store off
+		Store = ctx.StoreService and ctx.StoreService.View(player, data) or nil,
 		MemoryOnly = ctx.DataService.IsMemoryOnly(),
 		-- 30-features batch save fields (DataService.FeatureView, docs/features/FOUNDATION.md)
 		Features = ctx.DataService.FeatureView and ctx.DataService.FeatureView(data) or nil,

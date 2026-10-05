@@ -318,7 +318,7 @@ type Rig = { Model: Model, Torso: BasePart, Head: BasePart, LeftArm: BasePart, R
 
 local LEATHER = Palette.leather_600
 -- heroes whose part-built fallback wears leather gloves
-local GLOVED = { Rogue = true, Ranger = true, Alchemist = true, Engineer = true }
+local GLOVED = { Rogue = true, Ranger = true, Alchemist = true, Engineer = true, Archer = true, Bard = true }
 local WOOD = Palette.wood_500
 local BLADE = Palette.steel_300
 
@@ -468,6 +468,59 @@ ModelBuilder.ClassGear = {
 		gear(ra, rig.Model, { Name = "StaffSkull", Shape = Enum.PartType.Ball, Size = Vector3.new(0.85, 0.85, 0.85), Color = Palette.ivory_200 }, CFrame.new(0.15, 5.2, -0.4))
 		gear(ra, rig.Model, { Name = "StaffCore", Shape = Enum.PartType.Ball, Size = Vector3.new(0.3, 0.3, 0.3), Color = SOUL_GLOW, Material = Enum.Material.Neon }, CFrame.new(0.15, 5.85, -0.4))
 	end,
+	-- HEROES (feature 11). Archer: short ivory cape, a bolt case on the right hip, leather
+	-- bracers and a crossbow held forward in the right hand (stock along the aim, steel
+	-- limbs across). Fallback for the "Archer" mesh.
+	Archer = function(rig: Rig, c)
+		gear(rig.Torso, rig.Model, { Name = "Cape", Size = Vector3.new(2.0, 2.4, 0.12), Color = c.Accent, CastShadow = true }, CFrame.new(0, -0.3, 0.8) * CFrame.Angles(math.rad(6), 0, 0))
+		gear(rig.Torso, rig.Model, { Name = "Collar", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.35, 2.3, 2.0), Color = c.Accent }, CFrame.new(0, 1.1, 0) * UP)
+		gear(rig.Torso, rig.Model, { Name = "Strap", Size = Vector3.new(0.24, 3.0, 0.1), Color = c.Metal }, CFrame.new(0, 0.05, -0.74) * CFrame.Angles(0, 0, math.rad(38)))
+		local case = CFrame.new(1.2, -1.0, 0.25) * CFrame.Angles(math.rad(-12), 0, 0)
+		gear(rig.Torso, rig.Model, { Name = "BoltCase", Size = Vector3.new(0.5, 1.2, 0.6), Color = c.Metal, CastShadow = true }, case)
+		for i, z in ipairs({ -0.14, 0.0, 0.14 }) do
+			gear(rig.Torso, rig.Model, { Name = "Fletching", Size = Vector3.new(0.08, 0.32, 0.16), Color = i == 2 and c.HatAccent or Palette.ivory_200 }, case * CFrame.new(0, 0.74, z))
+		end
+		for _, arm in ipairs({ rig.LeftArm, rig.RightArm }) do
+			gear(arm, rig.Model, { Name = "Bracer", Size = Vector3.new(0.7, 0.55, 0.72), Color = c.Metal }, CFrame.new(0, -0.45, 0))
+		end
+		local ra = rig.RightArm
+		local grip = CFrame.new(0.05, -1.0, -0.45)
+		gear(ra, rig.Model, { Name = "Stock", Size = Vector3.new(0.26, 0.3, 1.9), Color = WOOD, CastShadow = true }, grip * CFrame.new(0, 0.05, -0.55))
+		gear(ra, rig.Model, { Name = "Limbs", Size = Vector3.new(2.1, 0.16, 0.2), Color = BLADE, Material = METAL }, grip * CFrame.new(0, 0.12, -1.35))
+		gear(ra, rig.Model, { Name = "LimbTips", Size = Vector3.new(2.3, 0.2, 0.12), Color = c.Gold, Material = METAL }, grip * CFrame.new(0, 0.12, -1.25))
+		gear(ra, rig.Model, { Name = "String", Size = Vector3.new(2.0, 0.05, 0.05), Color = Palette.ivory_100 }, grip * CFrame.new(0, 0.15, -0.95))
+		gear(ra, rig.Model, { Name = "Bolt", Size = Vector3.new(0.08, 0.08, 1.1), Color = Palette.ivory_200 }, grip * CFrame.new(0, 0.24, -1.2))
+	end,
+	-- Bard: gold sash and short cape, a lute on the back (body, neck, peg head) and a
+	-- curved brass war horn in the left hand. Fallback for the "Bard" mesh.
+	Bard = function(rig: Rig, c)
+		gear(rig.Torso, rig.Model, { Name = "Cape", Size = Vector3.new(2.1, 2.2, 0.12), Color = c.Accent, CastShadow = true }, CFrame.new(0, -0.2, 0.8) * CFrame.Angles(math.rad(6), 0, 0))
+		gear(rig.Torso, rig.Model, { Name = "Sash", Size = Vector3.new(0.3, 3.0, 0.1), Color = c.Accent }, CFrame.new(0, 0.05, -0.74) * CFrame.Angles(0, 0, math.rad(-38)))
+		gear(rig.Torso, rig.Model, { Name = "Ruff", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.35, 2.2, 2.0), Color = Palette.ivory_200 }, CFrame.new(0, 1.12, 0) * UP)
+		local lute = CFrame.new(0.2, -0.1, 1.0) * CFrame.Angles(0, 0, math.rad(30))
+		gear(rig.Torso, rig.Model, { Name = "LuteBody", Shape = Enum.PartType.Ball, Size = Vector3.new(1.3, 1.5, 0.6), Color = WOOD, CastShadow = true }, lute)
+		gear(rig.Torso, rig.Model, { Name = "LuteNeck", Size = Vector3.new(0.22, 1.6, 0.14), Color = Palette.wood_700 }, lute * CFrame.new(0, 1.4, 0))
+		gear(rig.Torso, rig.Model, { Name = "LuteHead", Size = Vector3.new(0.3, 0.4, 0.16), Color = c.Gold, Material = METAL }, lute * CFrame.new(0, 2.3, 0.04) * CFrame.Angles(math.rad(-25), 0, 0))
+		local la = rig.LeftArm
+		local hand = CFrame.new(-0.05, -1.0, -0.4)
+		gear(la, rig.Model, { Name = "HornBody", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1.4, 0.3, 0.3), Color = c.Gold, Material = METAL, CastShadow = true }, hand * CFrame.Angles(0, math.rad(90), 0))
+		gear(la, rig.Model, { Name = "HornBell", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 0.8, 0.8), Color = c.Gold, Material = METAL }, hand * CFrame.new(0, 0.1, -0.85) * CFrame.Angles(0, math.rad(90), 0))
+		gear(la, rig.Model, { Name = "HornBand", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.12, 0.36, 0.36), Color = c.Cloth }, hand * CFrame.new(0, 0, -0.3) * CFrame.Angles(0, math.rad(90), 0))
+	end,
+	-- Golem: stone pauldrons and big stone fists, moss on the shoulders, a glowing amber
+	-- rune in the chest. Fallback for the "Golem" mesh.
+	Golem = function(rig: Rig, c)
+		for _, arm in ipairs({ rig.LeftArm, rig.RightArm }) do
+			local s = arm.Position.X < 0 and -1 or 1
+			gear(arm, rig.Model, { Name = "Pauldron", Size = Vector3.new(1.5, 1.0, 1.4), Color = c.Metal, Material = Enum.Material.Slate, CastShadow = true }, CFrame.new(s * 0.1, 0.85, 0) * CFrame.Angles(0, 0, math.rad(s * 10)))
+			gear(arm, rig.Model, { Name = "Moss", Size = Vector3.new(1.2, 0.22, 1.1), Color = c.Accent, Material = Enum.Material.Grass }, CFrame.new(s * 0.1, 1.42, 0))
+			gear(arm, rig.Model, { Name = "Fist", Size = Vector3.new(1.0, 0.9, 1.0), Color = c.Metal, Material = Enum.Material.Slate, CastShadow = true }, CFrame.new(s * 0.05, -1.05, -0.05))
+		end
+		gear(rig.Torso, rig.Model, { Name = "ChestPlate", Size = Vector3.new(2.5, 1.6, 1.6), Color = c.Metal, Material = Enum.Material.Slate, CastShadow = true }, CFrame.new(0, 0.45, 0))
+		gear(rig.Torso, rig.Model, { Name = "Rune", Size = Vector3.new(0.5, 0.5, 0.1), Color = Palette.amber_300, Material = Enum.Material.Neon }, CFrame.new(0, 0.5, -0.82) * CFrame.Angles(0, 0, math.rad(45)))
+		gear(rig.Torso, rig.Model, { Name = "MossBelt", Size = Vector3.new(2.4, 0.3, 1.5), Color = c.Cloth, Material = Enum.Material.Grass }, CFrame.new(0, -0.75, 0))
+		gear(rig.Head, rig.Model, { Name = "FaceGlow", Size = Vector3.new(0.75, 0.14, 0.08), Color = Palette.amber_300, Material = Enum.Material.Neon }, CFrame.new(0, 0.0, -0.72))
+	end,
 }
 
 ------------------------------------------------------------------------------------------
@@ -608,7 +661,7 @@ function ModelBuilder.BuildCharacter(characterId: string, skinId: string?, opts:
 	-- small trims, gauntlets and blades, so no large hot sheen (docs/overhaul/ART_VOCABULARY.md)
 	local torso = body("Torso", Vector3.new(2.3, 2.4, 1.4), Vector3.new(0, 3.3, 0), c.Torso)
 	local head = body("Head", ModelBuilder.HeadSize, ModelBuilder.HeadCenter, c.Skin)
-	local armColor = armour and c.MetalDark or ((characterId == "Rogue" or characterId == "Ranger") and c.Cloth2 or c.Cloth)
+	local armColor = armour and c.MetalDark or (characterId == "Golem" and c.Metal) or ((characterId == "Rogue" or characterId == "Ranger") and c.Cloth2 or c.Cloth)
 	local leftArm = body("Left Arm", Vector3.new(0.62, 1.75, 0.65), Vector3.new(-1.43, 3.05, 0), armColor, armour)
 	local rightArm = body("Right Arm", Vector3.new(0.62, 1.75, 0.65), Vector3.new(1.43, 3.05, 0), armColor, armour)
 	local leftLeg = body("Left Leg", Vector3.new(0.74, 1.6, 0.8), Vector3.new(-0.52, 1.25, 0), c.Cloth2)

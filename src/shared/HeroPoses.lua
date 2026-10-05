@@ -11,7 +11,7 @@
 	  Right Hip       +Z spreads the leg (Left Hip: -Z)
 	  Neck            +X lifts the chin, +Y turns the head to its left
 	  RootJoint       rotates the whole body around the root centre (y = 3); Pos moves it
-	Poses:
+	Poses (HeroPoses.Shared: Cheer, for every hero; photo mode):
 	  Showcase  the heroic stance for the lobby dais (Knight: sword raised, shield forward;
 	            Ranger: longbow held out upright, drawing hand by the quiver; Alchemist: a
 	            flask held up; Engineer: wrench raised; Necromancer: staff forward, a hand
@@ -126,6 +126,18 @@ HeroPoses.Poses = {
 	},
 }
 
+-- Poses every hero shares (used when a hero has no own version): photo mode (feature 29).
+HeroPoses.Shared = {
+	-- both arms up in a victory cheer, chin up
+	Cheer = {
+		Neck = { 14, 0, 0 },
+		["Right Shoulder"] = { 165, 0, 18 },
+		["Left Shoulder"] = { 165, 0, -18 },
+		["Left Hip"] = { 6, 0, -6 },
+		["Right Hip"] = { -4, 0, 6 },
+	},
+}
+
 -- body drops a little in wide stances so the feet stay on the ground
 HeroPoses.Drop = { Knight = 0.06, Mage = 0.02, Rogue = 0.16, Priest = 0.01, Ranger = 0.07, Alchemist = 0.04, Engineer = 0.07, Necromancer = 0.02 }
 
@@ -142,7 +154,7 @@ end
 ]]
 function HeroPoses.Get(characterId: string, poseName: string, t: number?): { [string]: CFrame }
 	local set = HeroPoses.Poses[characterId] or HeroPoses.Poses.Knight
-	local pose: Pose = (poseName ~= "Idle" and (set :: any)[poseName]) or {}
+	local pose: Pose = (poseName ~= "Idle" and ((set :: any)[poseName] or (HeroPoses.Shared :: any)[poseName])) or {}
 	local breath = math.sin((t or 0) * math.pi * 2 / IDLE.Period)
 	local out: { [string]: CFrame } = {}
 	for _, name in ipairs({ "RootJoint", "Neck", "Left Shoulder", "Right Shoulder", "Left Hip", "Right Hip" }) do

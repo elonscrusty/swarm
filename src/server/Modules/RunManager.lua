@@ -360,7 +360,8 @@ end
 -- True for a mode name a client may ask for (the lobby's modes, the Daily Challenge and
 -- the old "Squad").
 local function isMode(name: any): boolean
-	return type(name) == "string" and (table.find(Config.Modes.Order, name) ~= nil or name == "Squad" or name == "Daily")
+	return type(name) == "string" and (table.find(Config.Modes.Order, name) ~= nil or name == "Squad" or name == "Daily"
+		or (name == "Weekly" and Config.FeatureOn("WeeklyChallenge"))) -- META: the Weekly Challenge
 end
 
 local function modeDef()
@@ -865,6 +866,8 @@ end
 
 local function newRunPlayer(player: Player)
 	local data = ctx.DataService.GetData(player)
+	-- the hero this run plays: the selected one, or the Weekly Challenge's lent hero (META)
+	local heroId = ctx.MetaService and ctx.MetaService.RunHero(mode, data) or data.SelectedCharacter
 	-- the stat sheet's permanent levels: the account upgrades (Revive / Reroll / Skip) from
 	-- Meta, the selected hero's own stat track and its Signature (Hero Mastery); the old
 	-- shared stat levels left in Meta are never read
@@ -875,7 +878,7 @@ local function newRunPlayer(player: Player)
 			meta[id] = n
 		end
 	end
-	local track = type(data.HeroUpgrades) == "table" and data.HeroUpgrades[data.SelectedCharacter]
+	local track = type(data.HeroUpgrades) == "table" and data.HeroUpgrades[heroId]
 	if type(track) == "table" then
 		for _, id in ipairs(MetaUpgradeData.HeroOrder()) do
 			local n = tonumber(track[id])
@@ -885,8 +888,8 @@ local function newRunPlayer(player: Player)
 		end
 	end
 	-- HEROPOWER second signature skill: free, on once the hero's mastery reaches the rank
-	local heroXP = type(data.Heroes) == "table" and type(data.Heroes[data.SelectedCharacter]) == "table" and data.Heroes[data.SelectedCharacter].XP or 0
-	if CharacterData.SecondSkillOn(data.SelectedCharacter, (MetaUpgradeData.MasteryFor(heroXP))) then
+	local heroXP = type(data.Heroes) == "table" and type(data.Heroes[heroId]) == "table" and data.Heroes[heroId].XP or 0
+	if CharacterData.SecondSkillOn(heroId, (MetaUpgradeData.MasteryFor(heroXP))) then
 		meta.SecondSkill = 1
 	end
 	local function perRun(id: string): number
@@ -895,7 +898,7 @@ local function newRunPlayer(player: Player)
 	end
 	local rp = {
 		Player = player,
-		CharacterId = data.SelectedCharacter,
+		CharacterId = heroId,
 		Meta = meta,
 		Weapons = {},
 		WeaponOrder = {},
@@ -1029,7 +1032,7 @@ local function beginRun(here: boolean?)
 	local daily = ctx.RunModifiers.BeginRun(mode, runStarter or list[1])
 	-- stage 1: the lobby's arena with its portal (StageManager also sets EnemyAI's arena);
 	-- the daily has its own arena tour and boss order
-	local arena = ctx.StageManager.BeginRun(daily and daily.Arenas[1] or selectedArena, daily)
+	local arena = ctx.StageManager.BeginRun(daily and daily.Arenas[1] or ctx.RunModifiers.WeeklyArena() or selectedArena, daily)
 
 	runTime = 0
 	table.clear(disconnected)
@@ -1067,12 +1070,15 @@ local function beginRun(here: boolean?)
 		table.insert(runPlayers, rp)
 		byPlayer[player] = rp
 		local pos = placeOnArena(arena, i, #list) + Vector3.new(0, 3.5, 0)
-		local model = spawnCharacter(player, CFrame.new(pos), false)
+		local model = spawnCharacter(player, CFrame.new(pos), false, rp.CharacterId)
 		RunManager.AttachCharacter(rp, model)
 
 		local character = CharacterData.Characters[rp.CharacterId] or CharacterData.Characters[CharacterData.Default]
 		ctx.LevelUpSystem.AddWeapon(rp, character.StartWeapon)
 		ctx.RunModifiers.SetupRunPlayer(rp) -- daily: scored / practice + the starting bonus
+		if ctx.MetaService then
+			ctx.MetaService.SetupRunPlayer(rp, mode, list) -- META: worn Sigils, the run's team
+		end
 		ctx.LevelUpSystem.RecomputeStats(rp)
 		setHP(rp, rp.Stats.MaxHP)
 		player:SetAttribute("CharacterId", rp.CharacterId) -- the HUD's team list shows the hero
@@ -1226,9 +1232,14 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	-- here by the server; DEV-tainted runs returned above and never add to it
 	data.Stats.TimePlayed = math.floor((tonumber(data.Stats.TimePlayed) or 0) + math.max(0, t))
 	ctx.LeaderboardService.Submit(rp.Player, "Playtime", data.Stats.TimePlayed, nil, rp.RunId)
+	-- META (docs/features/META.md): Sigils found, the weekly / team boards, season XP, the
+	-- collection, titles. Clean runs only (DEV-tainted runs returned above).
+	local metaInfo = ctx.MetaService and ctx.MetaService.CommitRun(rp, {
+		Won = won, Score = score, Cleared = cleared, AccountXP = accountInfo and accountInfo.Gained or 0, Mode = mode,
+	}) or nil
 	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Mastery = masteryInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0,
 		-- beat the saved personal best score of this board (not on the first scored run)
-		NewBestScore = score > scoreBefore and scoreBefore > 0 }
+		NewBestScore = score > scoreBefore and scoreBefore > 0, Meta = metaInfo }
 	return newBest, unlocked
 end
 
@@ -1342,7 +1353,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		Items = ctx.ItemSystem.Summary(rp),
 		Level = rp.Level,
 		Damage = math.floor(rp.DamageDealt),
-		Arena = ctx.StageManager.ArenaDisplayName() .. ((mode == "Duo" or mode == "Trio" or mode == "Daily") and (" (" .. mode .. ")") or ""),
+		Arena = ctx.StageManager.ArenaDisplayName() .. ((mode == "Duo" or mode == "Trio" or mode == "Daily" or mode == "Weekly") and (" (" .. mode .. ")") or ""),
 		Endless = rp.Endless == true, -- an Endless run (no win; scored on ScoreEndless)
 		Mode = mode, -- REPLAY starts this mode again (StartRun from the lobby)
 		CharacterId = rp.CharacterId,
@@ -1659,8 +1670,8 @@ local function startRun(player: Player, newMode: string)
 		return -- on the way to a run server, or this run server is starting its run
 	end
 	if phase == "Countdown" then
-		if newMode == "Daily" then
-			RunManager.Notify(player, "A group run is starting: join it, or play the Daily after it.", Color3.fromRGB(255, 200, 120))
+		if newMode == "Daily" or newMode == "Weekly" then
+			RunManager.Notify(player, "A group run is starting: join it, or play the " .. newMode .. " after it.", Color3.fromRGB(255, 200, 120))
 			return
 		end
 		tryJoin(player)

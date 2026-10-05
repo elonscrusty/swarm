@@ -40,6 +40,7 @@ export type Entry = {
 	Condition: string?,
 	StoreKey: string?,
 	Character: string?,
+	Weapon: boolean?, -- a weapon mastery glow (feature 15): worn per weapon, not in a slot
 }
 
 CosmeticData.Items = {} :: { [string]: Entry }
@@ -61,6 +62,25 @@ end
 
 for _, kind in ipairs({ "Trail", "Burst", "Pet", "Emote", "Nameplate", "Dais" }) do
 	CosmeticData.Add({ Id = kind .. "_None", Kind = kind, Name = "None", Source = "Default" })
+end
+
+------------------------------------------------------------------------------------------
+-- STORE items (StoreCatalog.lua: trails, bursts, pets, emotes, plates, dais themes)
+------------------------------------------------------------------------------------------
+
+for _, e in ipairs(require(script.Parent.StoreCatalog).Entries) do
+	CosmeticData.Add(e)
+end
+
+------------------------------------------------------------------------------------------
+-- Weapon mastery trail colours (feature 15, docs/features/LOBBY.md): earned per weapon by
+-- kills with it (Config.WeaponMastery.Milestones). Weapon = true: worn per weapon through the
+-- WEAPON MASTERY menu (SetMasteryGlow), never in the Equipped.Trail slot; the server derives
+-- ownership from the save's WeaponMastery counts.
+------------------------------------------------------------------------------------------
+
+for _, m in ipairs(Config.WeaponMastery.Milestones) do
+	CosmeticData.Add({ Id = m.Id, Kind = "Trail", Name = m.Name, Source = "Earned", Condition = string.format("%d kills with one weapon", m.Kills), Weapon = true })
 end
 
 ------------------------------------------------------------------------------------------
@@ -104,6 +124,17 @@ for _, level in ipairs(AccountData.RewardLevels) do
 		if r.Kind == "Title" and not CosmeticData.Items["Title_" .. r.Id] then
 			CosmeticData.Add({ Id = "Title_" .. r.Id, Kind = "Title", Name = r.Id, Source = "Earned", Condition = "Account level " .. level })
 		end
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- META (docs/features/META.md): milestone / season / streak titles and nameplate frames,
+-- all earned by play (MetaData)
+------------------------------------------------------------------------------------------
+
+for _, e in ipairs(require(script.Parent.MetaData).CosmeticEntries()) do
+	if not CosmeticData.Items[e.Id] then
+		CosmeticData.Add(e :: any)
 	end
 end
 

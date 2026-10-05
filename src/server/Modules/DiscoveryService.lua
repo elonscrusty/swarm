@@ -14,6 +14,7 @@ local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponDat
 local PassiveData = require(game:GetService("ReplicatedStorage").Shared.PassiveData)
 local ItemData = require(game:GetService("ReplicatedStorage").Shared.ItemData)
 local SynergyData = require(game:GetService("ReplicatedStorage").Shared.SynergyData)
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 
 local DiscoveryService = {}
 local ctx
@@ -79,6 +80,49 @@ function DiscoveryService.Record(player: Player, kind: string, id: string): bool
 		return false
 	end
 	rec[kind][id] = true
+	if not pending[player] then
+		pending[player] = true
+		task.delay(1, function()
+			pending[player] = nil
+			if player.Parent and ctx.GoldSystem then
+				ctx.GoldSystem.SyncProfile(player)
+			end
+		end)
+	end
+	return true
+end
+
+--[[
+	Collection book (META, feature 24, Config.Features.CollectionBook): a "Kind:Id" key for
+	what the records above do not hold ("Boss:HiveMother" beaten, "Hero:Mage" played) goes
+	into data.Collection.Seen (capped by Config.Data.Caps.SetEntries). Returns true when new.
+]]
+function DiscoveryService.RecordCollection(player: Player, key: string): boolean
+	if not Config.FeatureOn("CollectionBook") or type(key) ~= "string" or #key == 0 or #key > Config.Data.Caps.IdLength then
+		return false
+	end
+	local data = ctx.DataService.GetData(player)
+	if not data then
+		return false
+	end
+	if type(data.Collection) ~= "table" then
+		data.Collection = {}
+	end
+	if type(data.Collection.Seen) ~= "table" then
+		data.Collection.Seen = {}
+	end
+	local seen = data.Collection.Seen
+	if seen[key] == true then
+		return false
+	end
+	local n = 0
+	for _ in pairs(seen) do
+		n += 1
+	end
+	if n >= Config.Data.Caps.SetEntries then
+		return false
+	end
+	seen[key] = true
 	if not pending[player] then
 		pending[player] = true
 		task.delay(1, function()

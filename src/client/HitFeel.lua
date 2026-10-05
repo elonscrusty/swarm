@@ -148,6 +148,13 @@ local function newPart(): BasePart
 	return p
 end
 
+-- Cosmetic style of the bursts on THIS screen (STORE: the worn death burst, StoreFx sets
+-- it; nil = the creature's own colours). { Color, Mix = 0..1, Neon, Colors = {Color3} }
+local style: { [string]: any }? = nil
+function HitFeel.SetStyle(s: { [string]: any }?)
+	style = s
+end
+
 -- Chunks out of an enemy that died at (x, z): colour, size = its death size (studs).
 function HitFeel.Burst(x: number, z: number, color: Color3, size: number): number
 	if not on() or not folder then
@@ -172,14 +179,21 @@ function HitFeel.Burst(x: number, z: number, color: Color3, size: number): numbe
 	local r = math.clamp(size, 1.5, 12)
 	local chunk = math.clamp(r * 0.22, 0.35, 1.6)
 	local from = Vector3.new(x, FLOOR_Y + r * 0.45, z)
+	local st = style
+	if st and typeof(st.Color) == "Color3" then
+		color = color:Lerp(st.Color, math.clamp(tonumber(st.Mix) or 0.7, 0, 1))
+	end
 	local dark = color:Lerp(Color3.new(0, 0, 0), 0.25)
+	local palette: { Color3 }? = st and type(st.Colors) == "table" and #st.Colors > 0 and st.Colors or nil
+	local material = (st and st.Neon) and Enum.Material.Neon or Enum.Material.SmoothPlastic
 	for i = 1, n do
 		local p = table.remove(pool) or newPart()
 		local a = (i / n) * TAU + math.random() * 0.6
 		local speed = (9 + math.random() * 8) * math.clamp(r / 3, 0.8, 1.8)
 		local vel = Vector3.new(math.cos(a) * speed, 14 + math.random() * 10, math.sin(a) * speed)
 		local s = Vector3.new(chunk, chunk * (0.6 + math.random() * 0.5), chunk * (0.7 + math.random() * 0.6))
-		p.Color = i % 3 == 0 and dark or color
+		p.Color = palette and palette[(i - 1) % #palette + 1] or (i % 3 == 0 and dark or color)
+		p.Material = material
 		p.Size = s
 		p.Transparency = 0
 		local pc: Piece = table.remove(spare) or ({} :: any)
