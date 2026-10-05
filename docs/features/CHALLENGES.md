@@ -137,8 +137,8 @@ VERIFIED offline (Lune, real GameServer with all modules), `challenges-regressio
 - Note: a level-up panel that opens during a hold cancels that hold. This is how every chest already works, and the
   test simply holds again.
 
-Also run after the hooks, unchanged: `economy-sim`, `chest-gold-sim`, plus the hook-adjacent regressions
-listed in the lead report. `check.sh --quick` reports no diagnostics in these files.
+Also run after the hooks, unchanged: `economy-sim`, `chest-gold-sim`, `foundation-regression`, `encounters-sim`,
+`reward-once-regression`, `choice-regression`, `encounter-placement` and `loot-focus-regression` (all PASS). `check.sh --quick` reports no diagnostics in these files.
 
 Client visuals (`ChallengesUI`) pass the type check only. They have not been rendered or checked on a device, so they are BLOCKED.
 
