@@ -1198,7 +1198,8 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	local score = ctx.LeaderboardService.RunScore({ Cleared = cleared, Bosses = bossKills, Level = rp.Level, Kills = rp.Kills, Seconds = t })
 	local scoreBoard = rp.Endless and "ScoreEndless" or "Score"
 	local bestKey = rp.Endless and "BestScoreEndless" or "BestScore"
-	data.Stats[bestKey] = math.max(data.Stats[bestKey] or 0, score)
+	local scoreBefore = tonumber(data.Stats[bestKey]) or 0
+	data.Stats[bestKey] = math.max(scoreBefore, score)
 	local levelBefore = data.Stats.BestLevel or 0
 	data.Stats.BestLevel = math.max(levelBefore, rp.Level or 1)
 	ctx.LeaderboardService.Submit(rp.Player, scoreBoard, score, nil, rp.RunId)
@@ -1209,7 +1210,9 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	-- here by the server; DEV-tainted runs returned above and never add to it
 	data.Stats.TimePlayed = math.floor((tonumber(data.Stats.TimePlayed) or 0) + math.max(0, t))
 	ctx.LeaderboardService.Submit(rp.Player, "Playtime", data.Stats.TimePlayed, nil, rp.RunId)
-	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Mastery = masteryInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0 }
+	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Mastery = masteryInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0,
+		-- beat the saved personal best score of this board (not on the first scored run)
+		NewBestScore = score > scoreBefore and scoreBefore > 0 }
 	return newBest, unlocked
 end
 
@@ -1339,6 +1342,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		Score = info and info.Score or nil, -- the run's high-score value (none for dev runs)
 		ScoreBoard = info and info.ScoreBoard or nil, -- "Score" | "ScoreEndless"
 		NewBestLevel = info and info.NewBestLevel or nil, -- beat the saved highest level
+		NewBestScore = info and info.NewBestScore or nil, -- beat the saved personal best score (Score / ScoreEndless)
 		Unlocked = unlocked,
 		Achievements = achievements, -- unlocked this run: { {Id, Name, Reward, Icon} }
 		Curses = table.clone(ctx.RunModifiers.Active()), -- the run's curses (CurseData ids)

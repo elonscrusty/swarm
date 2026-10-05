@@ -5050,9 +5050,11 @@ local function onRunResult(data)
 		results.Boss.Text = "-"
 		results.BossCaption.Text = UIKit.track("Boss not reached")
 	end
-	results.Best.Text = (data.NewBest and data.NewBestStage) and "NEW BEST TIME AND STAGE!"
+	-- the personal best score (the high-score board's value) comes first when it was beaten
+	results.Best.Text = data.NewBestScore == true and (data.NewBestStage and "NEW BEST SCORE AND STAGE!" or "NEW BEST SCORE!")
+		or (data.NewBest and data.NewBestStage) and "NEW BEST TIME AND STAGE!"
 		or (data.NewBestStage and "NEW BEST STAGE!" or (data.NewBest and "NEW BEST TIME!" or "NEW BEST LEVEL!"))
-	data.NewBest = data.NewBest == true or data.NewBestStage == true or data.NewBestLevel == true
+	data.NewBest = data.NewBest == true or data.NewBestStage == true or data.NewBestLevel == true or data.NewBestScore == true
 	results.Best.Visible = data.NewBest == true
 	results.Unlocked.Visible = data.Unlocked ~= nil
 	results.Unlocked.Text = data.Unlocked and ("Unlocked: " .. data.Unlocked .. " arena!") or ""

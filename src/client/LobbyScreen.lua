@@ -377,7 +377,7 @@ local function plate(face: GuiObject)
 	end
 end
 
--- Account pill: the selected hero's badge, "LV n" (account level, MenuTrack), a gold rule,
+-- Account pill: the selected hero's badge, "ACCOUNT / LV n" (account level, MenuTrack), a gold rule,
 -- the coin and the gold. A tap opens ACCOUNT LEVEL (the track and its cosmetic rewards).
 local function buildAccount(screen: Frame)
 	local b = new("TextButton", { Name = "AccountPill", Text = "Account level", TextTransparency = 1, AutoButtonColor = false, BackgroundColor3 = NAVY, BackgroundTransparency = 0.12, BorderSizePixel = 0 }, screen)
@@ -391,6 +391,9 @@ local function buildAccount(screen: Frame)
 	end)
 	ui.AccountHero = new("Frame", { Name = "Hero", BackgroundTransparency = 1, Size = UDim2.fromOffset(44, 44) }, b)
 	ui.AccountLevel = text(b, "Label", "LV 1", { Name = "AccountLevel", FontFace = Theme.Font.Title, TextColor3 = P.ivory_100, TextXAlignment = Enum.TextXAlignment.Center }, 18)
+	-- "ACCOUNT" over the level, so the number next to the hero badge does not read as the
+	-- hero's own level (heroes have mastery ranks of their own)
+	ui.AccountCaption = text(b, "Caption", "ACCOUNT", { Name = "AccountCaption", TextColor3 = P.gold_300, TextXAlignment = Enum.TextXAlignment.Center }, 10)
 	ui.AccountRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_400, BackgroundTransparency = 0.35, BorderSizePixel = 0 }, b)
 	ui.AccountCoin = Icons.Draw(b, "lobby_Gold", { Size = 30, Back = NAVY })
 	ui.AccountGold = text(b, "Number", "0", { Name = "AccountGold", FontFace = Theme.Font.Title, TextColor3 = P.ivory_100 }, 20)
@@ -751,8 +754,14 @@ local function layoutAccount(h: number): number
 	x += heroS + 8
 	local lvSize = math.floor(math.clamp(h * 0.34, 14, 19))
 	ui.AccountLevel.TextSize = TS(lvSize)
-	local lvW = math.floor(TS(lvSize) * 0.66 * #ui.AccountLevel.Text + 4)
-	place(ui.AccountLevel, x, 0, lvW, h)
+	local capSize = math.floor(math.clamp(h * 0.22, 9, 11))
+	ui.AccountCaption.TextSize = TS(capSize)
+	local lvW = math.floor(math.max(TS(lvSize) * 0.66 * #ui.AccountLevel.Text, TS(capSize) * 0.72 * 7) + 4)
+	local capH = TS(capSize) + 2
+	local lvH = TS(lvSize) + 2
+	local top = math.floor((h - capH - lvH) / 2)
+	place(ui.AccountCaption, x, top, lvW, capH)
+	place(ui.AccountLevel, x, top + capH, lvW, lvH)
 	x += lvW + 12
 	place(ui.AccountRule, x, h * 0.22, 1, h * 0.56)
 	x += 13
@@ -969,9 +978,21 @@ local function relayout()
 		ui.QueueEndless.Position = UDim2.fromOffset(0, noteY)
 		noteY += 38
 	end
+	local noteH = short and (TS(16) + 6) or (TS(16) * 3 + 8)
 	ui.QueueNote.Position = UDim2.fromOffset(0, noteY)
-	ui.QueueNote.Size = UDim2.new(1, 0, 0, short and (TS(16) + 6) or (TS(16) * 3 + 8))
+	ui.QueueNote.Size = UDim2.new(1, 0, 0, noteH)
 	ui.QueueNote.TextTruncate = short and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
+	-- a very short panel (phones in landscape): a line that would run under the JOIN /
+	-- START buttons is left out instead of being drawn behind them (the note goes first,
+	-- the curse / endless lines are the run's rules and stay while they fit)
+	local roomBottom = qh - 28 - 52 - 4 -- face padding, the button row and a gap
+	ui.QueueNote.Visible = noteY + noteH <= roomBottom
+	if ui.QueueEndless.Visible and ui.QueueEndless.Position.Y.Offset + 32 > roomBottom then
+		ui.QueueEndless.Visible = false
+	end
+	if ui.QueueCurses.Visible and ui.QueueCurses.Position.Y.Offset + 56 > roomBottom then
+		ui.QueueCurses.Visible = false
+	end
 	-- where the hero should sit on screen (read by CameraController's menu shot);
 	-- CHARACTERS sets its own framing
 	if current ~= "Characters" then

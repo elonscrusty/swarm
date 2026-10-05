@@ -41,6 +41,8 @@ local GROUPS = {
 		Tiles = {
 			{ Key = "Best", Icon = "stat_BestTime", Caption = "Best time" },
 			{ Key = "Stage", Icon = "portal", Caption = "Best stage" },
+			{ Key = "Score", Icon = "crown", Caption = "Best score" },
+			{ Key = "Level", Icon = "chevronsUp", Caption = "Highest run level" },
 			{ Key = "Wins", Icon = "stat_Wins", Caption = "Wins" },
 			{ Key = "Runs", Icon = "stat_Runs", Caption = "Runs played" },
 			{ Key = "Rate", Icon = "stat_WinRate", Caption = "Win rate" },
@@ -156,6 +158,9 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		local V = ui.Values
 		V.Best.Text = UIKit.formatTime(s.BestTime)
 		V.Stage.Text = (s.BestStage or 0) > 0 and ("Stage " .. tostring(s.BestStage)) or "-"
+		-- personal records from the save (the leaderboards show the global ones)
+		V.Score.Text = (tonumber(s.BestScore) or 0) > 0 and UIKit.formatNumber(s.BestScore) or "-"
+		V.Level.Text = (tonumber(s.BestLevel) or 0) > 0 and ("LV " .. tostring(s.BestLevel)) or "-"
 		V.Wins.Text = UIKit.formatNumber(s.Wins)
 		V.Runs.Text = UIKit.formatNumber(s.Runs)
 		V.Rate.Text = s.Runs > 0 and string.format("%d%%", math.floor(s.Wins / s.Runs * 100 + 0.5)) or "-"

@@ -19,7 +19,7 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
     checks = [(name, []) for name in (
         "economy-sim", "storage-sim", "difficulty-sim", "ground-sim", "audio-sim",
-        "progression-regression", "mastery-regression", "combat-regression", "corner-regression", "whip-regression", "data-regression", "passives-regression", "math-regression", "economy-regression", "run-manager-regression", "choice-regression", "portal-hold-regression", "fall-regression", "safety-sim", "settings-sim", "security-regression",
+        "progression-regression", "mastery-regression", "combat-regression", "corner-regression", "world-regression", "whip-regression", "data-regression", "passives-regression", "math-regression", "economy-regression", "run-manager-regression", "choice-regression", "portal-hold-regression", "fall-regression", "safety-sim", "settings-sim", "security-regression",
         "settlement-lifecycle", "reward-regression", "reward-once-regression", "encounters-sim", "encounter-placement",
         "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim", "chest-gold-sim", "curses-sim",
     )]
@@ -74,7 +74,7 @@ def main():
             for setting in settings:
                 command.extend(["--set", setting])
         try:
-            result = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1500 if scene in ("corner-regression", "reward-once-regression", "stage-sim") else 360)
+            result = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim") else 360)
             output = result.stdout + result.stderr
             if scene == "layout" and result.returncode == 0:
                 layout = subprocess.run([sys.executable, "tools/preview/check_layout.py", str(args.out / (name + ".json")), "--quiet"],

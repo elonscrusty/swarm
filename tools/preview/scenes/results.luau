@@ -75,5 +75,18 @@ if preview.args.outcome == "defeat" then
 	end
 	return
 end
-C.fire("RunResult", { NextGoal = nextGoal, Mastery = mastery, Curses = progress.Curses, CurseGold = progress.CurseGold, Account = progress.Account, Daily = progress.Daily, Won = true, Mode = daily and "Daily" or "Solo", CharacterId = "Knight", Build = build, BossKills = 5, BossFight = false, Achievements = { { Id = "QueenSlayer", Name = "Queen Slayer", Reward = "Unlocks the Ranger" } }, Time = 1500, Kills = 3874, Gold = 1412, GoldEarned = 1412, GoldLost = 0, GoldRetention = 1, Difficulty = "Standard", WinMinStages = 5, Level = 31, Damage = 286400, Arena = "Forest", NewBest = true, Unlocked = "Ruins", Seconds = 25, Portal = true, StagesCleared = 5, Stage = 5, Items = { { Id = "Whetstone", Count = 3 }, { Id = "QuickGloves", Count = 2 }, { Id = "StormCharm", Count = 1 }, { Id = "GuardianWard", Count = 1 }, { Id = "KeenLens", Count = 4 }, { Id = "SunMedallion", Count = 1 }, { Id = "IronPlate", Count = 2 }, { Id = "Bandage", Count = 1 } } })
+C.fire("RunResult", { NextGoal = nextGoal, Mastery = mastery, Curses = progress.Curses, CurseGold = progress.CurseGold, Account = progress.Account, Daily = progress.Daily, Won = true, Mode = daily and "Daily" or "Solo", CharacterId = "Knight", Build = build, BossKills = 5, BossFight = false, Achievements = { { Id = "QueenSlayer", Name = "Queen Slayer", Reward = "Unlocks the Ranger" } }, Time = 1500, Kills = 3874, Gold = 1412, GoldEarned = 1412, GoldLost = 0, GoldRetention = 1, Difficulty = "Standard", WinMinStages = 5, Level = 31, Damage = 286400, Arena = "Forest", NewBest = true, NewBestScore = preview.args.bestscore == "on" or nil, NewBestStage = preview.args.bestscore == "on" or nil, Unlocked = "Ruins", Seconds = 25, Portal = true, StagesCleared = 5, Stage = 5, Items = { { Id = "Whetstone", Count = 3 }, { Id = "QuickGloves", Count = 2 }, { Id = "StormCharm", Count = 1 }, { Id = "GuardianWard", Count = 1 }, { Id = "KeenLens", Count = 4 }, { Id = "SunMedallion", Count = 1 }, { Id = "IronPlate", Count = 2 }, { Id = "Bandage", Count = 1 } } })
 C.settle(3)
+
+-- --set bestscore=on (audit J-09): the run beat the personal best score (and stage): the
+-- results badge must say so
+if preview.args.bestscore == "on" then
+	C.settle(2)
+	local badge = nil
+	for _, d in ipairs(game:GetService("Players").LocalPlayer.PlayerGui:GetDescendants()) do
+		if d:IsA("TextLabel") and string.find(d.Text, "NEW BEST", 1, true) then
+			badge = d
+		end
+	end
+	preview.log((badge and badge.Text == "NEW BEST SCORE AND STAGE!" and preview.isShown(badge)) and "PASS results badge reads NEW BEST SCORE AND STAGE!" or ("FAIL results badge: " .. tostring(badge and badge.Text)))
+end

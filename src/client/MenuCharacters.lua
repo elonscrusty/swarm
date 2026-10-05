@@ -612,8 +612,8 @@ local bought: { [string]: { [string]: number } } = {} -- upgrades bought on this
 			}, 13)
 			local effectLine = effectStep(heroId, id, level, maxed)
 if locked then
-	-- why the next rank is locked (MetaUpgradeData.RequiredMastery / HeroCap)
-	effectLine = string.format("Rank %d needs mastery %d (now %d)", level + 1, MetaUpgradeData.RequiredMastery(id, level + 1), mastery)
+	-- why the next level is locked (MetaUpgradeData.RequiredMastery / HeroCap)
+	effectLine = string.format("LV %d needs mastery %d (now %d)", level + 1, MetaUpgradeData.RequiredMastery(id, level + 1), mastery)
 end
 text(row, "Small", effectLine, {
 				Name = "Effect", Position = UDim2.fromOffset(52, 5 + lineH + 2), Size = UDim2.fromOffset(textW, rowH - lineH - 12),
@@ -870,7 +870,7 @@ ui.StickyText.Text = sticky
 			ui.UnlockCount.Text = need > 0 and (UIKit.formatNumber(into) .. " / " .. UIKit.formatNumber(need) .. " XP") or "MAX"
 			local sigCap = MetaUpgradeData.HeroCap(level, "Signature", inspChar)
 local every = Config.HeroMastery.SignatureEvery
-ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d). Each mastery level lets every stat upgrade go %d ranks higher, up to that upgrade's own max; the trait needs mastery %d, %d, %d... Now: stats up to rank %d, trait up to rank %d.",
+ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d). Each mastery level lets every stat upgrade go %d levels higher, up to that upgrade's own max; the trait needs mastery %d, %d, %d... Now: stats up to LV %d, trait up to LV %d.",
 	def.Name, Config.HeroMastery.MaxLevel, Config.HeroMastery.StatPerLevel, every, 2 * every, 3 * every, cap, sigCap)
 			ui.UnlockMeter.Set(need > 0 and math.clamp(into / need, 0, 1) or 1, "")
 			ui.MasteryButton.SetText(ui.MasteryOpen and "HIDE UPGRADES" or ("UPGRADE " .. string.upper(def.Name)))

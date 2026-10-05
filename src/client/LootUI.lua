@@ -1341,6 +1341,11 @@ function LootUI.Build(root: Frame, k: { [string]: any })
 			LootUI.Release()
 		end
 	end)
+	-- focus loss (alt-tab, the Roblox menu, a phone notification): the key's InputEnded
+	-- may never come, so a hold in progress lets go instead of finishing (and charging)
+	UserInputService.WindowFocusReleased:Connect(function()
+		LootUI.Release()
+	end)
 	player:GetAttributeChangedSignal("Synergies"):Connect(refreshSynergies)
 	refreshSynergies()
 	player:GetAttributeChangedSignal("InRun"):Connect(function()

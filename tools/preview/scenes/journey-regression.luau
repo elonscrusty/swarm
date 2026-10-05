@@ -42,9 +42,12 @@ local function check(cond: any, label: string)
 end
 
 local results = 0
-preview.remote("RunResult").OnClientEvent:Connect(function()
+local lastResult: any = nil
+preview.remote("RunResult").OnClientEvent:Connect(function(data)
 	results += 1
+	lastResult = data
 end)
+local DS = preview.server("DataService")
 
 local function start()
 	preview.remote("StartRun"):FireServer("Solo")
@@ -186,6 +189,8 @@ rp.RevivesLeft = 0
 rp.Items = rp.Items or {}
 rp.ProductReviveUsed = true
 local hp = rp.HP
+-- J-09: an old personal best of 1 point: this run's result must say NEW BEST SCORE
+DS.GetData(me).Stats.BestScore = 1
 RM.HoldReward(rp, true)
 RM.DamagePlayer(rp, 1e9, "Test")
 check(rp.HP == hp and rp.Alive, "E no damage lands during the solo reward hold")
@@ -204,6 +209,7 @@ preview.advance(0.5)
 check(not rp.Alive, "E after the hold and its grace the hero can fall")
 check(results == r0 + 1, "E the run ends with one result (" .. tostring(results - r0) .. ")")
 check(rp.Offer == nil and not RM.IsFrozen(), "E no panel or freeze left after the defeat")
+check(lastResult and lastResult.NewBestScore == true and (lastResult.Score or 0) > 1, "E (J-09) beating the saved best score sets NewBestScore (score " .. tostring(lastResult and lastResult.Score) .. ")")
 
 -- back to the lobby
 preview.fireServerAs(me, "ReturnToLobby")
@@ -216,10 +222,12 @@ check(clearStage(rp, true), "F stage 1 reaches the open portal")
 preview.advance(0.5)
 LUS.QueueLevels(rp, 3) -- banked levels at the win must not leak into the next run
 RM.HoldReward(rp, false)
+DS.GetData(me).Stats.BestScore = 1e12 -- J-09: a best this run cannot beat
 r0 = results
 preview.fireServerAs(me, "PortalChoice", "Return")
 preview.advance(1)
 check(results == r0 + 1, "F the victory sends one result")
+check(lastResult and lastResult.Won == true and lastResult.NewBestScore ~= true, "F (J-09) a score under the saved best is not called a new best")
 check(st:GetAttribute("Phase") == "Lobby" and me:GetAttribute("InRun") ~= true, "F back in the lobby after the win")
 local old = rp
 rp = start()
