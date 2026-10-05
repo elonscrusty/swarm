@@ -61,7 +61,26 @@ starts an event on the live stage, which is useful for tests and DEV.
 
 ## Balance (events-balance, offline)
 
-BALANCE_TABLE
+`events-balance` ran on 2026-10-05: solo runs on stage 1, 120 s windows, 8 runs per
+config, the hero standing still (no dodging), level-ups picked automatically. Fog changes
+nothing on the server, so the base vs Fog difference shows this sim's run-to-run noise:
+about 19 %.
+
+| Config | Damage taken | Event's own damage | Run gold | Kills | vs base |
+|---|---|---|---|---|---|
+| base (both off) | 334 | 0 | 267 | 215 | 1.00 / 1.00 |
+| Meteor | 318 | 25 (8 %) | 273 | 204 | dmg x0.95, gold x1.02 |
+| Gold rush | 330 | 0 | 305 | 207 | dmg x0.99, gold x1.14 |
+| Fog | 275 | 0 | 319 | 214 | x0.82 / x1.19 (noise) |
+| Snow | 223 | 0 | 265 | 201 | dmg x0.67, gold x0.99 |
+| Lava | 307 | 17 (6 %) | 252 | 211 | dmg x0.92, gold x0.94 |
+
+Verdict: PASS. No config moves damage or gold by more than the noise. The meteor and
+lava hazards make up 8 % and 6 % of the damage taken while standing still. The gold rush
+can only double kill gold for 60 s (the chance is capped at 0.6). Stage, chest and
+survival gold don't change. Snow lowered damage in this sim, because enemies reach a
+hero who stands still more slowly, while a moving player is just as slow. Expect the
+storm to be roughly neutral in play; this is ASSUMED, not tested.
 
 ## Verified vs BLOCKED
 

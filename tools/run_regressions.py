@@ -20,7 +20,7 @@ def main():
     checks = [(name, []) for name in (
         "economy-sim", "storage-sim", "difficulty-sim", "ground-sim", "audio-sim",
         "progression-regression", "mastery-regression", "combat-regression", "corner-regression", "world-regression", "journey-regression", "loot-focus-regression", "lobby-screens-regression", "hud-key-regression", "whip-regression", "data-regression", "passives-regression", "math-regression", "economy-regression", "run-manager-regression", "choice-regression", "portal-hold-regression", "fall-regression", "safety-sim", "settings-sim", "security-regression", "pass-warm-regression", "perf-regression",
-        "settlement-lifecycle", "foundation-regression", "heropower-regression", "challenges-regression", "explore-regression", "reward-regression", "reward-once-regression", "encounters-sim", "encounter-placement",
+        "settlement-lifecycle", "foundation-regression", "heropower-regression", "challenges-regression", "explore-regression", "events-regression", "reward-regression", "reward-once-regression", "encounters-sim", "encounter-placement",
         "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim", "chest-gold-sim", "curses-sim",
     )]
     checks += [("storage-sim", ["outage=all"]), ("runserver-sim", ["role=lobby"]),
@@ -36,6 +36,7 @@ def main():
     checks += [("pings", ["phone"]), ("pings", ["phone-portrait"])]
     checks += [("accessibility-sim", [])]
     checks += [("uistate", [])]
+    checks += [("events-fx", [])]
     checks += [("layout", ["explore", d]) for d in ("iphone", "phone-portrait")]
     checks += [("layout", ["characters", d, "favourites=open"]) for d in ("iphone", "phone-portrait")]
     checks += [("layout", ["levelup", d, "fav=on"]) for d in ("iphone", "phone-portrait")]
@@ -65,7 +66,7 @@ def main():
         if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression"):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
-        if scene in ("results-flow", "leaderboards", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression"):
+        if scene in ("results-flow", "leaderboards", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx"):
             command.remove("--set")
             command.remove("headless=on")
         if scene == "layout":
