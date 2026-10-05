@@ -1040,6 +1040,12 @@ local function beginRun(here: boolean?)
 		if player:GetAttribute("DevGod") == true then
 			runDevTainted = true
 		end
+		-- a profile boosted by lobby DEV commands taints the run like a DEV tool would
+		-- (owner OK 2026-10-05, audit SEC-13)
+		local pdata = ctx.DataService.GetData(player)
+		if pdata and pdata.DevBoosted == true then
+			runDevTainted = true
+		end
 	end
 	state:SetAttribute("Frozen", false)
 	state:SetAttribute("RunTime", 0)
@@ -2261,6 +2267,13 @@ function RunManager.TryReconnect(player: Player, id: string): boolean
 	data.RunReconnect.Expires = 0
 	rp.Player = player
 	rp.Gold = data.RunEscrow.Gold
+	if data.DevBoosted == true and not runDevTainted then
+		-- a boosted profile coming back taints the run like a DEV command (SEC-13)
+		runDevTainted = true
+		for _, other in ipairs(runPlayers) do
+			other.DevTainted = true
+		end
+	end
 	rp.DevTainted = rp.DevTainted or runDevTainted
 	rp.LastValidPos, rp.SpeedCheckTimer, rp.OnObstacleFor = nil, 0, 0
 	rp.ReviveHeld, rp.RewardUntil, rp.Paused = false, nil, false

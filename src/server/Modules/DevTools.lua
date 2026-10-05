@@ -77,6 +77,11 @@ local KIND = {
 	NextStage = "run",
 }
 
+-- Lobby commands that boost the profile (set data.DevBoosted). ResetProgress is not one:
+-- it starts a fresh default profile.
+local BOOSTS = { UnlockAll = true, LobbyGold = true, AccountLevels = true }
+DevTools.Boosts = BOOSTS
+
 function DevTools.Knows(command: string): boolean
 	return KIND[command] ~= nil
 end
@@ -142,6 +147,13 @@ function DevTools.Handle(ctx, player: Player, command: string, arg: any, inLobby
 	if kind == "run" and not live then
 		ctx.RunManager.Notify(player, "DEV: start a run first", DEV_COLOR)
 		return
+	end
+
+	-- profile-boosting lobby commands mark the save: every later run by this player is
+	-- dev-tainted (RunManager), so boosted gold / heroes / levels never reach boards or
+	-- records (owner OK 2026-10-05, audit SEC-13)
+	if BOOSTS[command] then
+		data.DevBoosted = true
 	end
 
 	if command == "UnlockAll" then

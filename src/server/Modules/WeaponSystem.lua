@@ -2993,7 +2993,11 @@ function WeaponSystem.Step(dt: number)
 					if w.Timer <= 0 then
 						local def = WeaponData.Weapons[id]
 						local s = weaponStats(rp, w)
-						w.Timer = s.cooldown
+						-- carry the time past zero into the next cooldown so attacks keep
+						-- their exact cadence (owner OK 2026-10-05, audit MATH-13); the carry
+						-- is capped at one cooldown, so a long hitch gives at most one extra
+						-- attack (on the next frame), never a burst, and still one per frame
+						w.Timer = s.cooldown - math.min(-w.Timer, s.cooldown)
 						-- Spare Quiver (per weapon); turrets / totems never pass their cap
 						s.amount = WeaponData.CapAmount(id, s.amount + ctx.ItemSystem.ExtraShot(rp, w))
 						local fn = Fire[def.Behavior]

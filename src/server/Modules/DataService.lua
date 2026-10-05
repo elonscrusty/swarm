@@ -45,6 +45,9 @@
 	  ring / portrait frame from the level track, "" = none),
 	  Discovered {Weapons, Passives, Items, Evolutions, Synergies} ({id → true}: what the
 	  player has owned or seen; DiscoveryService, used to gate combination clues)
+	  DevBoosted (boolean: a lobby DEV command boosted this profile, DevTools; every later
+	  run by this player is dev-tainted, so it never reaches boards or records. Additive,
+	  no schema bump; owner OK 2026-10-05, audit SEC-13)
 
 	Save health is shown to the player (never pretend saving works): the player attribute
 	"SaveStatus" is "ok", "memory" (DataStores unavailable: nothing is saved this session)
@@ -126,6 +129,7 @@ local function defaultData()
 		Account = { XP = 0, Level = 1 },
 		Ring = "",
 		Frame = "",
+		DevBoosted = false, -- a lobby DEV command boosted this profile (DevTools, SEC-13)
 	}
 end
 DataService.DefaultData = defaultData
@@ -367,6 +371,11 @@ function DataService.Migrate(data: any): { [string]: any }
 	-- (Stats.Runs > 0), so a missing flag reads as "not paid"
 	if type(data.FirstRunBonus) ~= "boolean" then
 		data.FirstRunBonus = false
+	end
+	-- additive (no schema bump): a missing or malformed flag reads as "not boosted"; a
+	-- set flag is never cleared here (only a DEV ResetProgress starts a fresh profile)
+	if type(data.DevBoosted) ~= "boolean" then
+		data.DevBoosted = false
 	end
 	-- discovered weapons / passives / items / evolutions / synergies (DiscoveryService):
 	-- every table present, nothing removed (additive, no schema bump)

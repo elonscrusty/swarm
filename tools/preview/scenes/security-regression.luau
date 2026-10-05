@@ -10,6 +10,9 @@
 --      lobby God toggle taints the next run; invincibility ends with the run
 --   6) duo choice protection: RewardClose / SetPause spam gives no invulnerability; a
 --      chooser who drops out leaves no stale Paused / Offer flags
+--   7) DevBoosted (SEC-13, owner OK 2026-10-05): run DEV commands never set it; lobby
+--      LobbyGold / AccountLevels / UnlockAll do; Migrate defaults and keeps it; every later
+--      run with a boosted player is tainted (team-wide) and submits nothing
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 assert(not RunService:IsStudio(), "security-regression must run without --studio")
@@ -193,6 +196,55 @@ do
 	assert(owner:GetAttribute("DevGod") == nil, "invincibility ends with the run")
 	assert(od ~= nil)
 	preview.log("PASS DEV: allowlist, team-wide taint, no boards / records / playtime, God taints and ends")
+end
+------------------------------------------------------------------------------------------
+-- 7) DevBoosted profile flag
+------------------------------------------------------------------------------------------
+do
+	preview.advance(Config.Run.ResultsSeconds + 2)
+	local od, md = assert(DS.GetData(owner)), assert(DS.GetData(mate))
+	assert(od.DevBoosted == false and md.DevBoosted == false, "default false; run commands (AddGold, God) never boost the profile")
+	assert(DS.DefaultData().DevBoosted == false, "DefaultData has DevBoosted = false")
+	local legacy = DS.Migrate({ Version = Config.Data.SchemaVersion, Gold = 5 })
+	assert(legacy.DevBoosted == false, "a save without the flag migrates to false")
+	local bad = DS.Migrate({ Version = Config.Data.SchemaVersion, Gold = 5, DevBoosted = "yes" })
+	assert(bad.DevBoosted == false, "a malformed flag reads as false")
+	local kept = DS.Migrate({ Version = Config.Data.SchemaVersion, Gold = 5, DevBoosted = true })
+	assert(kept.DevBoosted == true, "Migrate keeps a set flag")
+	-- a non-dev's lobby request does nothing
+	preview.fireServerAs(mate, "DevCommand", "LobbyGold", 500)
+	preview.advance(0.2)
+	assert(md.DevBoosted == false, "an ordinary player's lobby DEV request sets nothing")
+	-- clean solo run first: not tainted
+	assert(RM.StartTeamRun({ owner }, "Solo", "Forest", owner), "solo starts")
+	preview.advance(2)
+	local crp = assert(RM.GetRunPlayer(owner))
+	assert(not crp.DevTainted, "an unboosted profile starts a clean run")
+	RM.AbandonRun(crp)
+	preview.advance(1)
+	preview.advance(Config.Run.ResultsSeconds + 2)
+	for _, cmd in ipairs({ "LobbyGold", "AccountLevels", "UnlockAll" }) do
+		od.DevBoosted = false
+		preview.fireServerAs(owner, "DevCommand", cmd, 1)
+		preview.advance(0.2)
+		assert(od.DevBoosted == true, cmd .. " marks the profile DevBoosted")
+	end
+	assert(owner:GetAttribute("DevGod") == nil, "no God left on (taint must come from the flag)")
+	-- a duo with the boosted owner: tainted for both, nothing submitted
+	assert(RM.StartTeamRun({ owner, mate }, "Duo", "Forest", owner), "duo starts")
+	preview.advance(3)
+	local orp, mrp = assert(RM.GetRunPlayer(owner)), assert(RM.GetRunPlayer(mate))
+	assert(orp.DevTainted and mrp.DevTainted, "a run with a DevBoosted player is tainted team-wide")
+	local playtime = md.Stats.TimePlayed
+	preview.advance(5)
+	submits = 0
+	RM.AbandonRun(mrp)
+	RM.AbandonRun(orp)
+	preview.advance(1)
+	assert(submits == 0, "a DevBoosted run submits nothing to the leaderboards")
+	assert(md.Stats.TimePlayed == playtime, "no playtime from a DevBoosted run")
+	assert(od.DevBoosted == true, "the flag persists after the run")
+	preview.log("PASS DevBoosted: lobby boosts set the flag, Migrate keeps it, boosted runs are tainted and submit nothing")
 end
 LB.Submit = realSubmit
 
