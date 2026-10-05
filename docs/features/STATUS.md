@@ -15,11 +15,9 @@ nothing has been played in Studio, on a device or in a live server. Each feature
 | 11 | Archer, Bard, Golem | HEROES.md |
 | 16, 17, 18, 20 | Team combo, ping wheel, co-op boss, spectate | TEAM.md |
 | 1, 19, 21-25 | Sigils, team board, weekly challenge, season track, titles, collection book, login streak | META.md |
+| 15, 29, 30 | Weapon mastery glows, photo mode, lobby courtyard | LOBBY.md |
 | Store | Cosmetic Robux store, all ids 0 ("Coming soon") | STORE.md |
 | Groundwork | Switches, save fields, EncounterDirector, FeatureHud, CosmeticData | FOUNDATION.md |
-
-## Paused (switch OFF, unfinished, not verified)
-15 WeaponMastery, 29 PhotoMode, 30 LobbyFun (LOBBY.md).
 
 ## Wave 3, not done yet (resume here)
 - Balance:

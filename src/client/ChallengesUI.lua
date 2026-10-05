@@ -86,8 +86,8 @@ local function ensureRings()
 		p.Parent = workspace.CurrentCamera or workspace
 		return p
 	end
-	ringOuter = disc("ChampionRingOuter", P.gold_400, 0.35)
-	ringInner = disc("ChampionRingInner", VIOLET_DARK, 0.2)
+	ringOuter = disc("ChampionRingOuter", P.gold_400, 0.5)
+	ringInner = disc("ChampionRingInner", VIOLET_DARK, 0.55) -- light: gems and telegraphs read through
 end
 
 local function hideChampion()

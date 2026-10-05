@@ -228,7 +228,7 @@ end
 
 local cachedFinds: { [string]: Instance? } = {}
 local nextFind = 0
-local function obstacles(playerGui: Instance): { Rect }
+local function refreshFinds(playerGui: Instance)
 	local now = os.clock()
 	if now >= nextFind then
 		nextFind = now + 1
@@ -238,6 +238,10 @@ local function obstacles(playerGui: Instance): { Rect }
 		local spectate = playerGui:FindFirstChild("Spectate")
 		cachedFinds.Spectate = spectate and spectate:FindFirstChild("Row")
 	end
+end
+
+local function obstacles(playerGui: Instance): { Rect }
+	refreshFinds(playerGui)
 	local out = {}
 	local els = elementsOf("Hud")
 	if els then
@@ -305,7 +309,8 @@ local function placeUltimate()
 		jumpButton = pg and pg:FindFirstChild("JumpButton", true) :: GuiObject?
 	end
 	local jump = jumpButton
-	if jump and jump.Visible and jump.AbsoluteSize.X > 1 then
+	local jumpGui = jump and jump:FindFirstAncestorOfClass("ScreenGui")
+	if jump and jump.Visible and jump.AbsoluteSize.X > 1 and (not jumpGui or jumpGui.Enabled) then
 		local jx, jy = jump.AbsolutePosition.X - origin.X, jump.AbsolutePosition.Y - origin.Y
 		local jw, jh = jump.AbsoluteSize.X, jump.AbsoluteSize.Y
 		local leftSide = jx + jw / 2 < size.X / 2
@@ -478,6 +483,36 @@ function FeatureHud.Init()
 			local show = line.Text ~= "" and now < announceUntil
 			if line.Visible ~= show then
 				line.Visible = show
+			end
+			if show then
+				-- the upper third, but under the HUD's top cluster (timer, objective, boss
+				-- bar; portrait: vitals and abilities) and the portrait minimap
+				local holder = slots.Announcer
+				local ah = holder.AbsoluteSize.Y
+				local aw = holder.AbsoluteSize.X
+				local ay = origin.Y + rootSize.Y * 0.26 - ah / 2
+				local rects = {}
+				refreshFinds(playerGui)
+				local els = elementsOf("Hud")
+				if els then
+					for _, key in ipairs({ "TimerPill", "Stage", "Plate", "Boss", "Bar" }) do
+						addRect(rects, els[key])
+					end
+				end
+				addRect(rects, cachedFinds.MiniMap)
+				local left = origin.X + (rootSize.X - aw) / 2
+				for _ = 1, 4 do
+					for _, r in ipairs(rects) do
+						if r.Max.X > left and r.Min.X < left + aw and r.Max.Y > ay - 2 and r.Min.Y < ay + ah + 2 then
+							ay = r.Max.Y + 4
+						end
+					end
+				end
+				ay = math.min(ay, origin.Y + rootSize.Y * 0.6)
+				local want = UDim2.fromOffset(math.floor(rootSize.X / 2), math.floor(ay - origin.Y + ah / 2))
+				if holder.Position ~= want then
+					holder.Position = want
+				end
 			end
 		end
 		-- ultimate: shown while a feature set it, the player is alive and on touch screens

@@ -126,7 +126,8 @@ REPORT A BUG.
 
 Verified offline (Lune preview), with my files at zero type-check diagnostics:
 
-- `lobby-regression` passes every check:
+- `lobby-regression` passes every check (71 PASS, 0 FAIL); `menu-sim` and `results-flow`
+  `case=auto` still pass with the switches on:
   - Sword and orb kills are credited to the right weapon.
   - DEV taint and the switch off both stop counting.
   - A milestone crossing sends one notice. The cap and `MaxCount` hold.
@@ -138,10 +139,12 @@ Verified offline (Lune preview), with my files at zero type-check diagnostics:
     reset, timeout), the build on entry, the part count, the position behind the camera, BACK,
     a run start, and the switch off.
 - Renders:
-  - `photo-mode` on pc and phone.
-  - `lobby-fun` on pc and phone.
-  - The `menu` title screen on pc and iphone, compared with HEAD; see the report for the
-    numbers.
+  - `weapon-mastery`, `photo-mode` and `lobby-fun` on pc, iphone and phone-portrait, with
+    check_layout at 0 findings (the courtyard clock and the mastery hint shrink before they
+    truncate on narrow phones).
+  - The `menu` title screen on pc, iphone and phone-portrait, before (switches off) and after
+    (switches on): the camera CFrame and FOV are identical and the pc render is
+    pixel-identical, so the title and lobby framing are unchanged.
 
 BLOCKED (needs Studio or a device):
 
