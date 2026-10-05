@@ -54,7 +54,7 @@ When a boss arrives (SwarmState `BossName` is set) or reaches a new phase (`Boss
   Reduced effects or Screen shake 0.
 - **Death burst:** chunks in the creature's colour fly out of a dead enemy, tumble, land and fade.
   - Bursts only show within `BurstRange` of the hero, at most `BurstsPerBatch` per batch.
-  - The parts are pooled, at most `MaxPieces` (90) alive at once, refilled from a token bucket
+  - The parts are pooled, at most `MaxPieces` (60) alive at once, refilled from a token bucket
     (`PiecesPerSecond`), with no Instance churn once warm.
   - With Reduced effects, only big kills get a burst, and with fewer chunks.
   - Nothing flashes. Chunks are parked when the run ends.
@@ -88,7 +88,11 @@ To add a track (owner, Studio):
   - Combo show, reset, one callout per milestone with its sound, the notice lane under a banner.
   - Bursts pooled and bounded under stress, hit-stop ≤ 40 ms, the per-second cap, crit range,
     reduced effects, and cleanup at run end.
-- `perf-sim` before/after: see the lead's report (a client callback cost comparison).
+- `perf-sim` (300 enemies, six evolved weapons, 8 s) before → after, Lune ms/frame (the
+  machine was shared, so expect ±20% noise): VFX 9.6 → 10.7, CombatFx 0.96 → 1.21 (both
+  unchanged code, so that's noise), HitFeel 1.16 new (5.6k BulkMoveTo parts/s against VFX's
+  62k). After that run, `MaxPieces` went from 90 to 60 and `PiecesPerSecond` from 220 to 160.
+  BossIntro and Announcer cost nothing while idle.
 - BLOCKED: Studio, phone and live servers. Not tested there:
   - how the push and the hit-stop feel on a real device;
   - whether the headline merge order between the attribute and the server banner matches on

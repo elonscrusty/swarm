@@ -1552,8 +1552,8 @@ Config.Feel = {
 		BurstsPerBatch = 6, -- death bursts per FxBatch (nearest first in batch order)
 		BurstRange = 70, -- studs from the hero
 		Pieces = 5, -- chunks per normal kill (big kills x2)
-		MaxPieces = 90, -- alive at once (pooled parts)
-		PiecesPerSecond = 220, -- token bucket
+		MaxPieces = 60, -- alive at once (pooled parts)
+		PiecesPerSecond = 160, -- token bucket
 		Life = 0.65, -- seconds a chunk flies
 		Gravity = 70,
 	},
