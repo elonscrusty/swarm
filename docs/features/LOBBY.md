@@ -1,5 +1,9 @@
 # LOBBY: weapon mastery, photo mode, courtyard
 
+> **PAUSED 2026-10-05 (owner asked to wrap up).** The work was stopped before it was finished and
+> verified. All three switches (`WeaponMastery`, `PhotoMode`, `LobbyFun`) are set to `false`, so the
+> game behaves as before. Resume: finish and verify, then switch them back on.
+
 Wave 2 of the 30-features batch (features 15, 29 and 30). All three are cosmetic or
 lobby-only. None of them changes damage, drops, XP, gold or what a run gives you, and
 none of them can be bought. Each one has its own switch in `Config.Features`. When a

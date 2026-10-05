@@ -1597,7 +1597,7 @@ Config.Features = {
 	SecondSkill = true, -- 12 second signature skill via mastery
 	Ultimate = true, -- 13 hero ultimate
 	BuildPresets = true, -- 14 favourite build paths
-	WeaponMastery = true, -- 15 weapon mastery glow / trail
+	WeaponMastery = false, -- PAUSED 2026-10-05 (unfinished, not verified). 15 weapon mastery glow / trail
 	TeamCombo = true, -- 16 team combo move
 	QuickPings = true, -- 17 quick pings / emotes
 	CoopBoss = true, -- 18 co-op-only boss mechanic
@@ -1611,8 +1611,8 @@ Config.Features = {
 	Announcer = true, -- 26 kill-streak announcer + combo counter
 	HitFeel = true, -- 27 hit-stop + death burst
 	MusicSlots = true, -- 28 per-world + boss-phase music slots
-	PhotoMode = true, -- 29 photo mode on results
-	LobbyFun = true, -- 30 training dummy, mirror, jump-pad course
+	PhotoMode = false, -- PAUSED 2026-10-05 (unfinished, not verified). 29 photo mode on results
+	LobbyFun = false, -- PAUSED 2026-10-05 (unfinished, not verified). 30 training dummy, mirror, jump-pad course
 	Store = true, -- the cosmetics store (docs/features/STORE.md)
 }
 

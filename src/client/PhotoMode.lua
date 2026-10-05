@@ -62,6 +62,7 @@ type Session = {
 	Started: number,
 	Conns: { RBXScriptConnection },
 	Buttons: { [string]: any },
+	Narrow: boolean,
 }
 
 local session: Session? = nil
@@ -181,12 +182,14 @@ local function applyFrame(s: Session)
 			end
 		end
 	end
-	s.Buttons.Frame.SetText("FRAME: " .. string.upper(style))
+	-- narrow screens: the value only, so the bar keeps one row
+	s.Buttons.Frame.SetText(s.Narrow and (style == "None" and "NO FRAME" or string.upper(style)) or ("FRAME: " .. string.upper(style)))
 end
 
 local function applyPose(s: Session)
 	local name = PM.Poses[s.Pose] or "Showcase"
-	s.Buttons.Pose.SetText("POSE: " .. (PM.PoseNames[name] or string.upper(name)))
+	local label = PM.PoseNames[name] or string.upper(name)
+	s.Buttons.Pose.SetText(s.Narrow and label or ("POSE: " .. label))
 end
 
 local function bump(s: Session)
@@ -252,10 +255,15 @@ local function buildGui(s: Session)
 	local function fit()
 		local w = g.AbsoluteSize.X
 		local narrow = w > 0 and w < 520
-		s.Buttons.Pose.Instance.Size = UDim2.fromOffset(narrow and 120 or 150, 44)
-		s.Buttons.Frame.Instance.Size = UDim2.fromOffset(narrow and 120 or 150, 44)
-		s.Buttons.Orbit.Instance.Size = UDim2.fromOffset(narrow and 76 or 96, 44)
+		s.Narrow = narrow
+		s.Buttons.Pose.Instance.Size = UDim2.fromOffset(narrow and 100 or 150, 44)
+		s.Buttons.Frame.Instance.Size = UDim2.fromOffset(narrow and 100 or 150, 44)
+		s.Buttons.Orbit.Instance.Size = UDim2.fromOffset(narrow and 72 or 96, 44)
 		s.Buttons.Exit.Instance.Size = UDim2.fromOffset(narrow and 64 or 90, 44)
+		if s.Frame then
+			applyPose(s)
+			applyFrame(s)
+		end
 	end
 	table.insert(s.Conns, g:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit))
 	fit()
@@ -287,6 +295,7 @@ function PhotoMode.Enter()
 		Started = os.clock(),
 		Conns = {},
 		Buttons = {},
+		Narrow = false,
 	}
 	session = s
 	-- hide every other GUI (restored on exit)
