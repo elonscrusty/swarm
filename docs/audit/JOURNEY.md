@@ -70,8 +70,8 @@ design: meaningful choices kept). No change proposed to the level-up rate (MATH/
 | J-07 | Chest hold × focus loss | Release early / focus loss → no open, no charge (prompt 7) | `LootUI` input, `LootSystem.onHold/Step` | E held, alt-tab before 0.4 s | Before: chest opened and charged (InputEnded never arrives on focus loss). After: stays Ready, no gold, no grant | runtime (loot-focus-regression FAIL 3/7 before, PASS 7/7 after) | P2 | No `WindowFocusReleased` handler | Release on focus loss | VERIFIED FIXED | Studio alt-tab |
 | J-08 | DEV taint scope (SEC-15) | Taint only the dev's own run | `RunManager.devCommand` | Non-participant dev sends a DEV command during another run | Before: run tainted. After: untainted; a participant's command still taints | runtime (journey-regression G: FAIL before, PASS after) | P2 | Taint keyed to phase, not participation | Require a live run player | VERIFIED FIXED | - |
 | J-09 | Results: new best score (ECONOMY) | Results say NEW BEST SCORE when the personal best is beaten | `saveRunStats`, `finishPlayer`, UIBuilder results badge | Saved BestScore 1, run ends | Before: no flag, badge only time / stage / level. After: `NewBestScore` true; not set below the saved best; badge "NEW BEST SCORE AND STAGE!" fits iphone + portrait | runtime (E/F checks) + render + check_layout 0 problems | P2 | Score best not compared | Flag + badge text | VERIFIED FIXED | Studio |
-| J-10 | Duplicated portal heading (lead) | One heading | server `Broadcast` Id `portal.reveal` + StageUI same id, UIState merge | Portal reveal | One heading | uistate_regression (see tests) | - | fixed in overhaul | none | VERIFIED WORKING | - |
-| J-11 | Reel overflow (lead) | Reveal fits on phones | UIBuilder reward reel `layoutChest` | rewards view=panel queue=on | see tests | render + check_layout | - | - | none | see tests | Studio phone |
+| J-10 | Duplicated portal heading (lead) | One heading | server `Broadcast` Id `portal.reveal` + StageUI same id, UIState merge | Portal reveal | One heading (ids merge in the headline lane) | uistate_regression PASS 0 FAIL | - | fixed in overhaul | none | VERIFIED WORKING | Studio |
+| J-11 | Reel overflow (lead) | Reveal fits on phones | UIBuilder reward reel `layoutChest` | rewards view=panel queue=on t=2.0 | Fits: 0 overflow / truncated / clipped on iphone and phone-portrait | render + check_layout | - | fixed earlier | none | VERIFIED WORKING (offline) | Studio phone |
 | J-12 | Chest hold edge cases (static) | walk away, insufficient gold, panel opens, other player first, repeated hold | `LootSystem.check/onHold/Step/openChest`, `LootUI.Press/Release` | static + reward-once B | Server re-checks range, gold, state, Paused every frame; `setState("Opened")` before grant; spam refused | static + reward-once-regression | - | - | none | VERIFIED WORKING (offline) | touch/controller on device BLOCKED |
 | J-13 | Disconnect during selection / save | Levels kept on rejoin | `Cancel(rp, true)`, `TryReconnect` | - | coop-regression rejoin variants, choice-regression | existing tests | - | - | none | NOT RUN here (baseline PASS 83/83) | live BLOCKED |
 | J-14 | Duo transitions | Partner keeps playing; fallen mates revive on travel | `TravelPlayers`, `groupLive` | interrupt-sim duo | Mate never froze me; travel revives fallen players | runtime (duo sim) + static | - | - | none | VERIFIED WORKING (sim) | two clients BLOCKED |
@@ -85,10 +85,6 @@ design: meaningful choices kept). No change proposed to the level-up rate (MATH/
 - run-intro `--set stage=2 --set panel=on`: PASS 4/4; pre-fix RunIntro FAIL 2.
 - results `--set bestscore=on` iphone + phone-portrait: PASS, check_layout 0 problems.
 - interrupt-sim solo and duo: measurement (above).
-- ADJACENT: filled in below.
+- Adjacent: uistate_regression PASS (0 FAIL); ui_regression phone PASS; choice-regression, run-manager-regression, settlement-lifecycle, reward-once-regression PASS (0 FAIL, 0 errors); results-flow case=replay PASS; rewards reel iphone + phone-portrait check_layout 0 problems.
+- NOT RUN by me: full `run_regressions.py`, stage-sim, menu-sim, firstjoin-sim, reconnect-lobby (baseline 83/83 PASS; the lead's final run covers them).
 - BLOCKED: Studio, devices, touch / controller hardware, two-client duo, real teleports.
-
-## Note for the lead
-A WIP commit (3faf066 or neighbours) captured `LootUI.lua` and `RunIntro.lua` while I had the
-baseline versions swapped in to prove the regressions fail before the fix. The working tree has
-the fixed versions again (`git diff` shows the fix hunks); commit them.
