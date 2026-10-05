@@ -37,7 +37,6 @@ local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local InputPrompts = require(script.Parent.InputPrompts)
-local UIState = require(script.Parent.UIState)
 
 local RunIntro = {}
 
@@ -57,10 +56,7 @@ local PAD = 16
 local kit: { [string]: any } = {}
 local ui: { [string]: any } = {}
 local firstRun = false -- profile TutorialDone == false
-local show = { Token = 0, Until = 0, Since = 0, Seconds = 1, Reveal = 0, Full = false, Long = false, Held = 0 }
--- the card's clock waits under a covering panel (the banked level-ups open the moment a
--- stage travel ends, audit J-05), but never longer than this in total
-local HOLD_MAX = 30
+local show = { Token = 0, Until = 0, Since = 0, Seconds = 1, Reveal = 0, Full = false, Long = false }
 local tweens: { Tween } = {}
 -- the stage this client saw begin (SwarmState Stage changed while it watched) and when:
 -- a client that joins mid-stage (reconnect) gets the plain banner instead
@@ -349,7 +345,6 @@ function RunIntro.Show(stageNo: number): boolean
 	fill(state, stageNo)
 	stopTweens()
 	show.Token += 1
-	show.Held = 0
 	show.Since = os.clock()
 	show.Until = show.Since + show.Seconds
 	layout()
@@ -388,21 +383,13 @@ function RunIntro.Active(): boolean
 end
 
 -- Per frame (UIBuilder).
-function RunIntro.Update(dt: number, state: Configuration, inRun: boolean)
+function RunIntro.Update(_dt: number, state: Configuration, inRun: boolean)
 	if not ui.Card or not ui.Card.Visible or show.Until <= 0 then
 		return
 	end
 	local now = os.clock()
 	if not inRun then
 		hide(true)
-		return
-	end
-	-- a covering panel (level-up, rare reveal, run menu) owns the screen: the card waits
-	-- behind it with its clock stopped, so the stage objective is still read afterwards
-	if UIState.Covered() and show.Held < HOLD_MAX then
-		show.Held += dt
-		show.Since += dt
-		show.Until += dt
 		return
 	end
 	-- the portal reveal banner takes over (after the card has had a moment)

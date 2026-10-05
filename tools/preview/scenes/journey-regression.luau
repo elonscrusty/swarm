@@ -15,10 +15,14 @@
 --   F  restart after a victory (WinMinStages forced to 1): the next run starts clean
 --      (stage 1, Explore, no offer / hold / deferral / portal state, fresh run player,
 --      no enemies or frozen flag carried over)
+--   G  (SEC-15) a DEV command by a player outside the run does not taint it; one by a
+--      run player does
 -- Lune sim, NOT Studio. Prints PASS / FAIL lines; any FAIL fails tools/run_regressions.py.
 local Players = game:GetService("Players")
 local me = Players.LocalPlayer
 local Config = preview.shared("Config")
+-- G: a second player on the same server who never joins the run (a dev in Studio)
+local watcher = preview.addPlayer("Watcher", 2)
 preview.startServer()
 preview.advance(1)
 local RM = preview.server("RunManager")
@@ -234,5 +238,15 @@ end
 check(not bossLeft, "F no boss carried over")
 preview.advance(3)
 check(RM.GetRunTime() > 1, "F the new run's clock runs")
+
+-- G) SEC-15: a DEV command from someone outside the run does not taint it; one from a
+-- player in the run does (every Studio player counts as a dev)
+check(not RM.IsParticipant(watcher) and not RM.IsDevTainted(me), "G a clean run, the watcher is not in it")
+preview.fireServerAs(watcher, "DevCommand", "DamageNumbers")
+preview.advance(0.3)
+check(not RM.IsDevTainted(me), "G a DEV command from outside the run leaves it untainted")
+preview.fireServerAs(me, "DevCommand", "DamageNumbers")
+preview.advance(0.3)
+check(RM.IsDevTainted(me), "G a DEV command from a run player taints the run")
 
 preview.log(fails == 0 and "journey-regression: ALL PASS" or ("journey-regression: " .. fails .. " FAIL"))

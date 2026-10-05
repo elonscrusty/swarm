@@ -42,7 +42,7 @@ local C, P = Theme.Color, Theme.Palette
 local player = Players.LocalPlayer
 
 local BOARDS = {
-	{ Id = "Score", Title = "High score", Short = "SCORE", Icon = "trophy", Heading = "Global high scores", Sub = "Best run score outside Endless, any difficulty, all servers", Explain = "Score reflects stages, bosses, kills, level and time.", Column = "Score" },
+	{ Id = "Score", Title = "High score", Short = "SCORE", Icon = "trophy", Heading = "Global high scores", Sub = "Best non-Endless run score, all servers", Explain = "Any difficulty. Score reflects stages, bosses, kills, level and time.", Column = "Score" },
 	-- not a tab: the HIGH SCORE tab's ENDLESS side
 	{ Id = "ScoreEndless", Tab = "Score", Title = "High score", Short = "SCORE", Icon = "trophy", Heading = "Endless high scores", Sub = "Best Endless run score across all servers", Explain = "Same score as Standard; Endless runs go on until you fall.", Column = "Score" },
 	{ Id = "BestStage", Title = "Best stage", Short = "STAGE", Icon = "portal", Heading = "Best stage", Sub = "Furthest stage reached in one run", Explain = "All time, across all servers.", Column = "Stage" },

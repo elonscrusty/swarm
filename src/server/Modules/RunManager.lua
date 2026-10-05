@@ -1848,9 +1848,13 @@ local function devCommand(player: Player, command: any, arg: any)
 	if type(command) ~= "string" or not isDev(player) then
 		return
 	end
-	-- any DEV command during a run taints the whole run (everyone in it, and anyone the
-	-- run still adds): it then writes no records, boards, daily score or achievements
-	if phase == "Running" and not runDevTainted then
+	-- any DEV command by a player IN the run taints the whole run (everyone in it, and
+	-- anyone the run still adds): it then writes no records, boards, daily score or
+	-- achievements. A dev outside the run (lobby side of the same server) cannot touch it:
+	-- DevTools' run commands need a live run player, the rest change only the dev's own
+	-- save, so another group's run stays clean (audit SEC-15).
+	local devRp = byPlayer[player]
+	if phase == "Running" and not runDevTainted and devRp ~= nil and not devRp.Returned then
 		runDevTainted = true
 		for _, other in ipairs(runPlayers) do
 			other.DevTainted = true
