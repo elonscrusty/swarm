@@ -62,6 +62,7 @@ type Entry = { UserId: number, Value: number }
 type Cache = {
 	Rows: { Entry },
 	Time: number, -- os.clock() of the last good read (0 = never)
+	Tried: number, -- os.clock() of the last read attempt, good or failed (refresh throttle)
 	Status: string,
 	Loading: boolean,
 	Asked: number, -- os.clock() of the last request
@@ -235,7 +236,7 @@ end
 local function cacheFor(name: string): Cache
 	local c = caches[name]
 	if not c then
-		c = { Rows = {}, Time = 0, Status = available and "loading" or "local", Loading = false, Asked = 0 }
+		c = { Rows = {}, Time = 0, Tried = 0, Status = available and "loading" or "local", Loading = false, Asked = 0 }
 		caches[name] = c
 	end
 	return c
@@ -250,6 +251,7 @@ local function refresh(name: string)
 		return
 	end
 	c.Loading = true
+	c.Tried = os.clock()
 	task.spawn(function()
 		local store = storeFor(name)
 		local ok, rows = pcall(function()
@@ -273,14 +275,59 @@ local function refresh(name: string)
 			c.Time = os.clock()
 			c.Status = "ok"
 		else
+			-- Time stays at the last good read (Age = how old the kept rows are); Tried
+			-- keeps a failing store from being hammered: next try after RefreshSeconds
 			c.Status = "error"
-			c.Time = os.clock() -- don't hammer a failing store; try again after RefreshSeconds
+			c.Tried = os.clock()
 			warn("[Leaderboard] read " .. name .. " failed: " .. tostring(rows))
 		end
 	end)
 end
 
-local function nameOf(userId: number): string
+--[[
+	Row names are display names everywhere (the YOUR BEST card shows yours too): players on
+	this server from their Player, everyone else from one batched UserService lookup per
+	answer (pcall'd), falling back to the username and then "Player <id>". A player's row
+	used to read as their display name while they were on this server and as their username
+	elsewhere (or after they left), so one person showed under two names.
+]]
+local looking: { [number]: boolean } = {}
+local function lookupNames(ids: { number })
+	if #ids == 0 then
+		return
+	end
+	for _, id in ipairs(ids) do
+		looking[id] = true
+	end
+	task.spawn(function()
+		local ok, infos = pcall(function()
+			return game:GetService("UserService"):GetUserInfosByUserIdsAsync(ids)
+		end)
+		if ok and type(infos) == "table" then
+			for _, info in ipairs(infos) do
+				local id = type(info) == "table" and tonumber(info.Id)
+				local display = id and info.DisplayName
+				if id and type(display) == "string" and display ~= "" then
+					names[id] = display
+				end
+			end
+		end
+		for _, id in ipairs(ids) do
+			if not names[id] then
+				local okName, result = pcall(function()
+					return Players:GetNameFromUserIdAsync(id)
+				end)
+				if okName and type(result) == "string" then
+					names[id] = result
+				end
+			end
+			names[id] = names[id] or ("Player " .. id) -- no answer: don't ask again every time
+			looking[id] = nil
+		end
+	end)
+end
+
+local function nameOf(userId: number, unknown: { number }?): string
 	local p = Players:GetPlayerByUserId(userId)
 	if p then
 		names[userId] = p.DisplayName
@@ -290,16 +337,24 @@ local function nameOf(userId: number): string
 	if known then
 		return known
 	end
-	names[userId] = "Player " .. userId -- until the lookup below answers
-	task.spawn(function()
-		local ok, result = pcall(function()
-			return Players:GetNameFromUserIdAsync(userId)
-		end)
-		if ok and type(result) == "string" then
-			names[userId] = result
-		end
-	end)
-	return names[userId]
+	if unknown and not looking[userId] then
+		table.insert(unknown, userId)
+	end
+	return "Player " .. userId -- until the lookup answers (the next refresh shows the name)
+end
+
+--[[
+	Ranks with ties: equal values share a rank and the next value skips the shared places
+	(1, 2, 2, 4), so two players on Stage 5 both get the same medal instead of #1 and #2
+	decided by the store's key order.
+]]
+function LeaderboardService.RankRows(rows: { Entry }): { number }
+	local ranks = {}
+	for i, e in ipairs(rows) do
+		local prev = rows[i - 1]
+		ranks[i] = (prev and prev.Value == e.Value) and ranks[i - 1] or i
+	end
+	return ranks
 end
 
 -- Rows of a board for the client: the global cache, or this server's runs ("local").
@@ -371,18 +426,21 @@ local function onRequest(player: Player, board: any)
 	local name = storeName(board)
 	local c = cacheFor(name)
 	c.Asked = os.clock()
-	if available and (c.Time == 0 or os.clock() - c.Time >= L.RefreshSeconds) then
+	if available and (c.Tried == 0 or os.clock() - c.Tried >= L.RefreshSeconds) then
 		refresh(name)
 	end
 	local rows, status, age = rowsOf(name)
 	local out = {}
 	local myRank, myBoard = nil, nil
+	local ranks = LeaderboardService.RankRows(rows)
+	local unknown = {}
 	for i, e in ipairs(rows) do
-		table.insert(out, { Rank = i, UserId = e.UserId, Name = nameOf(e.UserId), Value = e.Value, Me = e.UserId == player.UserId })
+		table.insert(out, { Rank = ranks[i], UserId = e.UserId, Name = nameOf(e.UserId, unknown), Value = e.Value, Me = e.UserId == player.UserId })
 		if e.UserId == player.UserId then
-			myRank, myBoard = i, e.Value
+			myRank, myBoard = ranks[i], e.Value
 		end
 	end
+	lookupNames(unknown)
 	-- a better run of yours still waiting in this server's write queue
 	local queued = pending[name .. "|" .. player.UserId]
 	Remotes.FireClient("LeaderboardData", player, {
@@ -430,7 +488,7 @@ function LeaderboardService.Step(dt: number)
 	-- keep watched boards fresh in the background
 	local now = os.clock()
 	for name, c in pairs(caches) do
-		if available and now - c.Asked < L.WatchSeconds and now - c.Time >= L.RefreshSeconds then
+		if available and now - c.Asked < L.WatchSeconds and now - c.Tried >= L.RefreshSeconds then
 			refresh(name)
 		end
 	end

@@ -109,6 +109,11 @@ function XPSystem.GiveSharedXP(amount: number)
 end
 
 function XPSystem.GiveXP(rp, amount: number)
+	-- only a finite positive amount: NaN would freeze the bar for the rest of the run and
+	-- an infinite one would spin the level loop below forever (server hang)
+	if not (amount > 0 and amount < math.huge) then
+		return
+	end
 	rp.XP += amount
 	local gained = 0
 	while rp.XP >= rp.XPNeeded do

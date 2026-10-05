@@ -28,3 +28,30 @@ C.setState({
 	PortalLockLeft = 0,
 })
 C.settle(at)
+-- --set panel=on (audit J-05 regression): a level-up panel opens at once over the stage
+-- card (banked levels open the moment a travel ends). The card's clock must wait behind
+-- the covering panel and the card must still be shown after the panel closes.
+if preview.args.panel == "on" then
+	local RunIntro = preview.client("RunIntro")
+	local fails = 0
+	local function check(cond, label)
+		preview.log((cond and "PASS " or "FAIL ") .. label)
+		if not cond then fails += 1 end
+	end
+	check(RunIntro.Active(), "the stage card shows when the stage begins")
+	C.fire("LevelUpOffer", {
+		OfferId = 1, Group = false, Choices = { { Kind = "Weapon", Id = "Whip", Level = 2, Text = "+damage" } },
+		Rerolls = 0, Skips = 0, RerollsMax = 0, SkipsMax = 0, SkipGold = 10, Seconds = 25, Level = 5,
+		Pending = 1, PanelId = 1, BatchRemaining = 1, BatchTotal = 1,
+	})
+	C.setState({ Frozen = true, LevelUpPause = true })
+	C.settle(4) -- longer than the later-stage card (2.4 s) and the stage-1 card (3.6 s)
+	check(RunIntro.Active(), "the card waits behind the covering level-up panel")
+	C.fire("LevelUpClose")
+	C.setState({ Frozen = false, LevelUpPause = false })
+	C.settle(0.6)
+	check(RunIntro.Active(), "the card is still shown after the panel closes")
+	C.settle(5)
+	check(not RunIntro.Active(), "the card then closes on its own timer")
+	preview.log(fails == 0 and "run-intro panel: ALL PASS" or ("run-intro panel: " .. fails .. " FAIL"))
+end

@@ -57,6 +57,7 @@ type Caravan = {
 	Marks: { BasePart }, -- the ring's dashed edge (a friendly area: edge marks, not a filled pool)
 	Shown: { [string]: any },
 	StartPhase: string?, -- the stage phase the defence began in
+	BossSeen: boolean?, -- the stage boss arrived during this defence (checked once)
 }
 
 local ctx
@@ -395,6 +396,9 @@ local function succeed(c: Caravan, line: string?)
 end
 
 local FIGHTING = { Explore = true, Boss = true, Surge = true }
+-- the boss arriving wins a defence only when the ring is held and this share of
+-- Config.Caravan.HoldSeconds is done (CaravanEvent.Step)
+local SCATTER_SHARE = 0.5
 
 -- Nobody held the ring for LeaveGrace seconds. While the portal is open no wave came, so
 -- the team simply left it behind (a different line: nothing "overran" it).
@@ -427,13 +431,19 @@ function CaravanEvent.Step(dt: number)
 		return
 	end
 	-- The stage boss arriving clears every normal enemy (Config.Boss.ClearMinionsOnSpawn),
-	-- the caravan's attackers too: the defence ends there and counts as won (nobody can
-	-- hold a ring with the boss on the field, and the waves it was holding off are gone).
-	if phase == "Boss" and c.StartPhase ~= "Boss" and Config.Boss.ClearMinionsOnSpawn then
-		succeed(c, "The boss scattered the raiders: the caravan escapes! " .. (soloRun() and "An item and gold for you." or "An item and gold for everyone."))
-		return
-	end
+	-- the caravan's attackers too: a defence that is really being held (someone in the ring
+	-- right now, at least SCATTER_SHARE of the hold done) ends there and counts as won. Any
+	-- other defence simply goes on under the usual rules (hold the ring, or it is lost after
+	-- LeaveGrace). Before, any started defence was won here: step into the ring, run to the
+	-- portal and charge it = a free item and gold with no defence (WORLD audit W-06).
 	local K = Config.Caravan
+	if phase == "Boss" and c.StartPhase ~= "Boss" and not c.BossSeen and Config.Boss.ClearMinionsOnSpawn then
+		c.BossSeen = true
+		if anyInRing(c, false) and c.Progress >= K.HoldSeconds * SCATTER_SHARE then
+			succeed(c, "The boss scattered the raiders: the caravan escapes! " .. (soloRun() and "An item and gold for you." or "An item and gold for everyone."))
+			return
+		end
+	end
 	if anyInRing(c, false) then
 		c.Progress += dt
 		c.Empty = 0

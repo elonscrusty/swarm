@@ -83,6 +83,8 @@ local profiles: { [Player]: Profile } = {}
 -- next autosave would put the older data back.
 local releasing: { [number]: boolean } = {}
 local loadedCallbacks: { (Player, Profile) -> () } = {}
+-- How long a same-server rejoin waits for that final save before it is turned away.
+local RELEASE_WAIT_SECONDS = 60
 local jobId = (game.JobId ~= "" and game.JobId) or ("studio-" .. tostring(math.random(1, 1e9)))
 
 ------------------------------------------------------------------------------------------
@@ -250,6 +252,9 @@ function DataService.Migrate(data: any): { [string]: any }
 	end
 	local legacyDifficulty = data.DifficultyClears == nil
 	local version = tonumber(data.Version) or 0
+	-- a save written by a newer build (rolling update) keeps its version, so that build's
+	-- migrations never run a second time on it (audit SEC-05); a far-off value is junk
+	local storedVersion = (version == version and version > 0 and version <= Config.Data.SchemaVersion + 3) and math.floor(version) or 0
 	while version < Config.Data.SchemaVersion do
 		local step = MIGRATIONS[version]
 		if not step then
@@ -479,7 +484,7 @@ function DataService.Migrate(data: any): { [string]: any }
 				and math.max(0, math.floor(value)) or 0
 		end
 	end
-	data.Version = Config.Data.SchemaVersion
+	data.Version = math.max(Config.Data.SchemaVersion, storedVersion)
 	return data
 end
 
@@ -542,7 +547,15 @@ local function loadProfile(player: Player): Profile?
 	for attempt = 1, attempts do
 		local lockedByOther = false
 		local ok, record = update(key, function(old)
+			-- a record we can't read (hand edit, corruption) is kept under Recovered, never
+			-- overwritten: the player starts from defaults and the old value stays for repair
+			if old ~= nil and type(old) ~= "table" then
+				old = { Recovered = old }
+			end
 			old = (type(old) == "table") and old or {}
+			if old.Data ~= nil and type(old.Data) ~= "table" and old.Recovered == nil then
+				old.Recovered = old.Data
+			end
 			local lock = old.Lock
 			if lock and lock.JobId ~= jobId and type(lock.Time) == "number" and os.time() - lock.Time < Config.Data.LockStaleSeconds then
 				lockedByOther = true
@@ -770,11 +783,18 @@ end
 
 local function onPlayerAdded(player: Player)
 	local waited = 0
-	while releasing[player.UserId] and waited < 30 and player.Parent do
+	while releasing[player.UserId] and waited < RELEASE_WAIT_SECONDS and player.Parent do
 		task.wait(0.25)
 		waited += 0.25
 	end
 	if not player.Parent then
+		return
+	end
+	if releasing[player.UserId] then
+		-- the last session's final save is still retrying: loading now would read the save
+		-- from before it (our own lock does not stop us) and the next autosave would put
+		-- that older data back. Ask the player to come back instead (audit SEC-03).
+		player:Kick("Your last session is still saving. Please wait a minute and rejoin.")
 		return
 	end
 	local profile = loadProfile(player)

@@ -110,6 +110,42 @@ C.fire("LeaderboardData", {
 	Top = 50,
 })
 C.settle(2)
+-- textcheck=on (audit 2026-10-05, docs/audit/ECONOMY.md EC-A06): a failed read with no rows
+-- never says "be the first", a full top-50 list says "Top 50" (not "50 ranked players"), and
+-- the HIGH SCORE subtitle does not call the non-Endless board "Standard" (a difficulty name)
+if preview.args.textcheck == "on" then
+	local ML = preview.client("MenuLeaderboards")
+	local tfails = 0
+	local function tcheck(label: string, ok: boolean, detail: string?)
+		if not ok then tfails += 1 end
+		preview.log(string.format("%s  %s%s", ok and "PASS" or "FAIL", label, detail and ("  (" .. detail .. ")") or ""))
+	end
+	tcheck("error empty text is not 'be the first'", not string.find(ML.EmptyText("error"), "first", 1, true), ML.EmptyText("error"))
+	tcheck("ok empty text invites", string.find(ML.EmptyText("ok"), "first", 1, true) ~= nil)
+	tcheck("full list reads Top 50", ML.CountText(50, 50) == "Top 50 players", ML.CountText(50, 50))
+	tcheck("short list counts rows", ML.CountText(12, 50) == "12 ranked players", ML.CountText(12, 50))
+	local sub = preview.findGui(function(obj)
+		return obj.Name == "BoardSub" and obj:IsA("TextLabel")
+	end)[1]
+	if board == "Score" then
+		tcheck("subtitle avoids 'Standard'", sub ~= nil and not string.find(sub.Text, "Standard", 1, true), sub and sub.Text)
+	end
+	if status == "error" and n == 0 then
+		local empty = preview.findGui(function(obj)
+			return obj.Name == "Empty" and obj:IsA("TextLabel")
+		end)[1]
+		tcheck("rendered empty line on error", empty ~= nil and empty.Visible and not string.find(empty.Text, "first", 1, true), empty and empty.Text)
+		local note = preview.findGui(function(obj)
+			return obj.Name == "Note" and obj:IsA("Frame")
+		end)[1]
+		local noteText = ""
+		for _, d in ipairs(note and note:GetDescendants() or {}) do
+			if d:IsA("TextLabel") and d.Text ~= "" then noteText = d.Text end
+		end
+		tcheck("error note does not claim kept rows", noteText ~= "" and not string.find(noteText, "last rows", 1, true), noteText)
+	end
+	preview.log(tfails == 0 and "TEXT ALL PASS" or (tfails .. " FAIL"))
+end
 -- YOUR BEST must show the same value as the outlined row; a different save value only
 -- with its own label (FLOW: Long 1:12 / 1:16)
 if mismatch or preview.args.check == "on" then

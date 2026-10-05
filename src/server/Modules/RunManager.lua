@@ -635,7 +635,9 @@ local function setHP(rp, hp: number)
 end
 
 function RunManager.Heal(rp, amount: number, silent: boolean?)
-	if not rp.Alive then
+	-- a heal only ever adds: NaN would stick in HP (never dies), a negative amount would be
+	-- damage that skips armor and the downed check (an alive hero at 0 HP)
+	if not rp.Alive or not (amount > 0 and amount < math.huge) then
 		return
 	end
 	setHP(rp, rp.HP + amount)

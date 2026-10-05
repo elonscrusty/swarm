@@ -1047,6 +1047,7 @@ R.defineClass("GlobalDataStore", {
 R.defineClass("OrderedDataStore", {
 	methods = {
 		GetSortedAsync = function(ds, ascending, pageSize)
+			if R.dataStoreFailure.Reads then error("OrderedDataStore read unavailable (test)") end
 			local rows = {}
 			for k, v in pairs(states[ds].x.data) do
 				if type(v) == "number" then

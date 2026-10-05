@@ -38,6 +38,8 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -63,6 +65,7 @@ local MenuParty = require(script.Parent.MenuParty)
 local NoticeDots = require(script.Parent.NoticeDots)
 local MenuPlay = require(script.Parent.MenuPlay)
 local MenuMore = require(script.Parent.MenuMore)
+local UIState = require(script.Parent.UIState)
 
 local LobbyScreen = {}
 
@@ -1081,6 +1084,16 @@ function LobbyScreen.Show(name: string, arg: any?)
 			LobbyScreen.RefreshHero()
 		end
 	end
+	-- a gamepad keeps its selection on the new screen (the button it was on is now hidden);
+	-- a screen's OnShow may move it to a better first control
+	if name ~= "Home" then
+		local last = UserInputService:GetLastInputType()
+		if last == Enum.UserInputType.Gamepad1 or last == Enum.UserInputType.Gamepad2 then
+			pcall(function()
+				GuiService:Select(ui[name])
+			end)
+		end
+	end
 	local s = screens[name]
 	if s and s.OnShow then
 		s.OnShow(profile, arg)
@@ -1452,6 +1465,24 @@ function LobbyScreen.Init(h: { [string]: any })
 	screens.Track = MenuTrack.Build(screen("Track"), ctx)
 	screens.Arenas = MenuArenas.Build(screen("Arenas"), ctx)
 	screens.Party = MenuParty.Build(screen("Party"), ctx)
+	-- gamepad B on a lobby screen = its BACK button. Not while a panel (settings, bug
+	-- report ...) owns input, nor on the same press that just closed one (its own B
+	-- handler may run first), nor while typing.
+	local ownerFreedAt = -math.huge
+	UIState.OnOwnerChanged(function(owner: string?)
+		if owner == nil then
+			ownerFreedAt = os.clock()
+		end
+	end)
+	UserInputService.InputBegan:Connect(function(input)
+		if input.KeyCode ~= Enum.KeyCode.ButtonB or not ui.Frame.Visible or current == "Home" then
+			return
+		end
+		if UIState.Owner() ~= nil or os.clock() - ownerFreedAt < 0.1 or UserInputService:GetFocusedTextBox() then
+			return
+		end
+		ctx.Back()
+	end)
 	h.OnRelayout(relayout)
 	relayout()
 end

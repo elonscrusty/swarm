@@ -19,7 +19,7 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
     checks = [(name, []) for name in (
         "economy-sim", "storage-sim", "difficulty-sim", "ground-sim", "audio-sim",
-        "progression-regression", "mastery-regression", "combat-regression", "corner-regression", "whip-regression", "data-regression", "passives-regression", "run-manager-regression", "choice-regression", "portal-hold-regression", "fall-regression", "safety-sim", "settings-sim",
+        "progression-regression", "mastery-regression", "combat-regression", "corner-regression", "whip-regression", "data-regression", "passives-regression", "run-manager-regression", "choice-regression", "portal-hold-regression", "fall-regression", "safety-sim", "settings-sim", "security-regression",
         "settlement-lifecycle", "reward-regression", "reward-once-regression", "encounters-sim", "encounter-placement",
         "expedition-sim", "party-sim", "stage-sim", "weapons-sim", "xp-sim", "synergy-sim", "chest-gold-sim", "curses-sim",
     )]
@@ -57,7 +57,7 @@ def main():
             "--max-time", "3000" if scene == "corner-regression" else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim"):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression"):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
         if scene in ("results-flow", "leaderboards"):

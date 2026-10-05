@@ -205,13 +205,21 @@ local function introduce(typeId: string): boolean
 	return def ~= nil and def.Intro ~= nil
 end
 
--- A living player in (or at the edge of) the portal circle while exploring: charging it.
+-- A living player charging the portal while exploring: inside its ring (the same radius
+-- StageManager charges with) while it can be charged. Only the charge itself holds the next
+-- wave back, and a charge summons the boss in Config.Stages.ChargeSeconds. (It used to be
+-- the ring + 4 studs, also while dormant: a hero standing just outside the ring held every
+-- wave off for as long as they liked, a risk-free spot to idle for survival gold. WORLD
+-- audit W-03, tools/preview/scenes/world-regression.luau.)
 local function nearPortal(): boolean
 	local p = ctx.StageManager.GetPhase() == "Explore" and ctx.StageManager.PortalPosition()
 	if not p then
 		return false
 	end
-	local r = Config.Stages.PortalRadius + 4
+	if (tonumber(Remotes.State():GetAttribute("PortalLockLeft")) or 0) > 0 then
+		return false -- dormant: standing there charges nothing
+	end
+	local r = Config.Stages.PortalRadius
 	local r2 = r * r
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		local root = rp.Alive and rp.Root
@@ -1124,8 +1132,10 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 		end
 		ctx.RunManager.OnBossKilled(pos)
 	elseif e.Elite then
-		-- altar guards drop gems only: the altar's chest is their reward
-		if not e.Guard then
+		-- altar guards drop gems only: the altar's chest is their reward. An elite with no
+		-- killer (burnt up by the open portal's sweep, or an elite Bomb Tick blowing itself
+		-- up) was not beaten: gems only, no free chest (WORLD audit W-04).
+		if not e.Guard and rp then
 			ctx.XPSystem.SpawnChest(pos)
 			table.insert(drops, "Chest")
 		end
@@ -1180,7 +1190,7 @@ end
 	further procs).
 ]]
 function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockback: number?, isProc: boolean?): boolean
-	if not e.Alive or amount <= 0 then
+	if not e.Alive or not (amount > 0) then -- (NaN too: it would make the enemy unkillable)
 		return false
 	end
 	if e.Invulnerable or e.Dying then
@@ -1272,11 +1282,19 @@ end
 
 -- Bomb pickup / revive shockwave: kill every ordinary enemy in range (never bosses, their
 -- banners / eggs, nests or anything invulnerable such as a burrowed Burrower).
+-- rp == nil is the open portal's sweep (StageManager.openPortal: no killer): it also takes
+-- burrowed enemies and cancels every pending enemy hazard, so nothing keeps hunting the team
+-- while they choose (a tunnelling Burrower from the boss fight used to survive it and surface
+-- during the stage-clear choice; WORLD audit W-05).
 function EnemySpawner.KillInRadius(pos: Vector3, radius: number, rp)
 	local r2 = radius * radius
+	local sweep = rp == nil
+	if sweep then
+		ctx.EnemyAI.ClearHazards(nil)
+	end
 	for i = #EnemySpawner.Active, 1, -1 do
 		local e = EnemySpawner.Active[i]
-		if e and e.Alive and not e.Boss and not e.Def.Object and not e.Def.Spawner and not e.Invulnerable then
+		if e and e.Alive and not e.Boss and not e.Def.Object and not e.Def.Spawner and (sweep or not e.Invulnerable) then
 			local dx, dz = e.Pos.X - pos.X, e.Pos.Z - pos.Z
 			if dx * dx + dz * dz <= r2 then
 				EnemySpawner.Kill(e, rp)

@@ -42,7 +42,7 @@ local C, P = Theme.Color, Theme.Palette
 local player = Players.LocalPlayer
 
 local BOARDS = {
-	{ Id = "Score", Title = "High score", Short = "SCORE", Icon = "trophy", Heading = "Global high scores", Sub = "Best Standard run score across all servers", Explain = "Score reflects stages, bosses, kills, level and time.", Column = "Score" },
+	{ Id = "Score", Title = "High score", Short = "SCORE", Icon = "trophy", Heading = "Global high scores", Sub = "Best run score outside Endless, any difficulty, all servers", Explain = "Score reflects stages, bosses, kills, level and time.", Column = "Score" },
 	-- not a tab: the HIGH SCORE tab's ENDLESS side
 	{ Id = "ScoreEndless", Tab = "Score", Title = "High score", Short = "SCORE", Icon = "trophy", Heading = "Endless high scores", Sub = "Best Endless run score across all servers", Explain = "Same score as Standard; Endless runs go on until you fall.", Column = "Score" },
 	{ Id = "BestStage", Title = "Best stage", Short = "STAGE", Icon = "portal", Heading = "Best stage", Sub = "Furthest stage reached in one run", Explain = "All time, across all servers.", Column = "Stage" },
@@ -138,6 +138,26 @@ function MenuLeaderboards.YouText(board: string, d: { [string]: any }?): (string
 		return rank, "No scored attempt today", ""
 	end
 	return rank, "No runs yet", ""
+end
+
+-- The line under an empty table: an empty board, this server's empty local list, or a
+-- read that failed before any rows arrived (never "be the first" when we could not look).
+function MenuLeaderboards.EmptyText(status: string?): string
+	if status == "local" then
+		return "No runs finished on this server yet. Play one!"
+	elseif status == "error" then
+		return "Nothing to show yet."
+	end
+	return "Nobody is on this board yet. Be the first!"
+end
+
+-- The quiet line under global rows: the server sends only the top `top`, so a full list
+-- says "Top 50", not "50 ranked players" (the board has more entries than that).
+function MenuLeaderboards.CountText(n: number, top: number): string
+	if n >= top then
+		return "Top " .. UIKit.formatNumber(top) .. " players"
+	end
+	return n == 1 and "1 ranked player" or (UIKit.formatNumber(n) .. " ranked players")
 end
 
 function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
@@ -280,7 +300,9 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 				note = "Global boards are offline right now. Showing this server only."
 			end
 		elseif status == "error" then
-			note = "The leaderboard could not be read right now. Showing the last rows we had; it tries again in a minute."
+			local kept = d and type(d.Rows) == "table" and #d.Rows > 0
+			note = kept and "The leaderboard could not be read right now. Showing the last rows we had; it tries again in a minute."
+				or "The leaderboard could not be read right now. It tries again in a minute."
 		elseif status == "loading" then
 			note = "Loading the leaderboard..."
 		end
@@ -302,12 +324,13 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		end
 		ui.Head.Visible = #rows > 0
 		ui.Empty.Visible = #rows == 0 and status ~= "loading"
-		ui.Empty.Text = status == "local" and "No runs finished on this server yet. Play one!" or "Nobody is on this board yet. Be the first!"
+		-- a failed read with nothing kept is not an empty board (the note says why)
+		ui.Empty.Text = MenuLeaderboards.EmptyText(status)
 		ui.Count.Visible = #rows > 0
 		if status == "local" then
 			ui.Count.Text = #rows == 1 and "1 player on this server" or (#rows .. " players on this server")
 		else
-			ui.Count.Text = #rows == 1 and "1 ranked player" or (UIKit.formatNumber(#rows) .. " ranked players")
+			ui.Count.Text = MenuLeaderboards.CountText(#rows, d and tonumber(d.Top) or 50)
 		end
 		-- you
 		ui.YouName.Text = player.DisplayName

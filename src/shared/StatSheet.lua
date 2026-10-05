@@ -76,9 +76,12 @@ function StatSheet.Compute(input: Input): { [string]: number }
 			then (input.CharacterId and MetaUpgradeData.Signature[input.CharacterId])
 			else MetaUpgradeData.Upgrades[upgradeId]
 		if def and def.PerLevel and type(level) == "number" then
+			-- a saved level is never trusted past the upgrade's own range (an over-max,
+			-- negative, NaN or infinite level would scale the bonus without limit)
+			local l = if level == level then math.clamp(math.floor(level), 0, def.MaxLevel or 0) else 0
 			for k, v in pairs(def.PerLevel) do
 				if b[k] ~= nil then
-					b[k] += v * level
+					b[k] += v * l
 				end
 			end
 		end

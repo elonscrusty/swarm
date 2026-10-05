@@ -2031,7 +2031,8 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 			return
 		end
 		if input.KeyCode == Enum.KeyCode.B or input.KeyCode == Enum.KeyCode.ButtonY then
-			if ui.Frame and ui.Frame.Visible then
+			-- not under a panel that leaves the HUD visible (the run menu drawer owns input)
+			if ui.Frame and ui.Frame.Visible and UIState.Owner() == nil then
 				setBuildOpen(not ui.BuildOpen)
 			end
 		end

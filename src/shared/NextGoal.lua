@@ -126,12 +126,18 @@ function NextGoal.Pick(data: any, opts: { Hero: string?, RunGold: number?, Now: 
 		local tier = DifficultyData.Tiers[tierId]
 		if tier.Requires ~= "" and not DifficultyData.IsUnlocked(data, tierId) then
 			local need = Config.Stages.WinMinStages
-			local share = 0
+			local share, cleared = 0, 0
 			if tier.Requires == "Standard" then
+				-- BestStage is the furthest stage REACHED: stages cleared = reached - 1
 				local best = type(data.Stats) == "table" and tonumber(data.Stats.BestStage) or 0
-				share = math.clamp(((best or 0) - 1) / need, 0, 0.95)
+				cleared = math.clamp((best or 0) - 1, 0, need)
+				share = math.clamp(cleared / need, 0, 0.95)
 			end
-			add({ Kind = "Difficulty", Icon = "crown", Text = string.format("Win a %s run (clear %d stages) to unlock %s", tier.Requires, need, tier.Name), Progress = share, ProgressText = tier.Requires == "Standard" and string.format("Best: %d / %d stages", math.floor(share * need + 0.5), need) or nil }, share + 0.05)
+			-- cleared all stages already (a run that went on, Endless or a Daily) but never
+			-- returned through the portal: the bar used to read "5 / 5" with the tier still
+			-- locked; say what is missing instead
+			local done = tier.Requires == "Standard" and cleared >= need
+			add({ Kind = "Difficulty", Icon = "crown", Text = string.format("Win a %s run (clear %d stages) to unlock %s", tier.Requires, need, tier.Name), Sub = done and "Then return through the portal (not Endless or Daily)" or nil, Progress = share, ProgressText = tier.Requires == "Standard" and (done and "Not won yet" or string.format("Best: %d / %d stages", cleared, need)) or nil }, share + 0.05)
 			break
 		end
 	end
