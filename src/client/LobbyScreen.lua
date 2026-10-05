@@ -1430,6 +1430,23 @@ function LobbyScreen.Update(_dt: number?)
 			ui.QueueCurseText.Text = line
 		end
 	end
+	-- a panel too short for the curse / endless rows (phones in landscape): the run's
+	-- rules still show, folded into the caption line
+	if kind == "Countdown" then
+		local extra = ""
+		if has and not ui.QueueCurses.Visible then
+			extra ..= string.format(" · %d curse%s", #shown, #shown == 1 and "" or "s")
+		end
+		if endlessShown and not ui.QueueEndless.Visible then
+			extra ..= " · Endless"
+		end
+		if extra ~= "" then
+			local joinedN = state:GetAttribute("Joined") or 0
+			local def = (Config.Modes :: any)[state:GetAttribute("Mode") or "Duo"]
+			local maxN = state:GetAttribute("MaxJoin") or (def and def.MaxPlayers) or 4
+			ui.QueueCaption.Text = UIKit.track(string.format("Starting · %d/%d joined", joinedN, maxN) .. extra)
+		end
+	end
 	for _, s in pairs(screens) do
 		if s.Update then
 			s.Update(_dt or 0)
