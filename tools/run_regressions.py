@@ -60,7 +60,7 @@ def main():
         if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim"):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
-        if scene == "results-flow":
+        if scene in ("results-flow", "leaderboards"):
             command.remove("--set")
             command.remove("headless=on")
         if scene == "layout":

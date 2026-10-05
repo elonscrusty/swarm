@@ -15,6 +15,15 @@ C.startClient()
 C.sendProfile()
 C.settle(1)
 local button = C.findText("^%s*RANKS%s*$", "GuiButton")
+if not button then
+	-- the home screen keeps Ranks under MORE
+	local more = C.findText("^%s*MORE%s*$", "GuiButton")
+	if more then
+		preview.click(more)
+		C.settle(0.5)
+		button = C.findText("^%s*RANKS%s*$", "GuiButton")
+	end
+end
 if button then
 	preview.click(button)
 else

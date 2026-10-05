@@ -167,3 +167,13 @@ Full table with evidence: ACCEPTANCE.md. Totals: PASS (offline) 54, FAIL 4, BLOC
 2. caravan-sim; perf-sim after-run on a quiet machine plus a boss + 200 enemies scene.
 3. Open register items: UI-11, UI-30, CP-02, CP-05, CP-11, CP-16, ART-22, ART-24.
 4. All Studio, device, gamepad and two-client checks (MIGRATION_ROLLBACK.md 4).
+
+
+## Full regression run (lead, 2026-10-05)
+
+`python3 tools/run_regressions.py` on commit after the final polish: 82/83 on the first run.
+The one FAIL (leaderboards mismatch=board) was the scene itself: it ran headless (no client)
+and looked for a RANKS button that now sits under MORE. Fixed the scene and the runner
+(leaderboards runs with the client, like results-flow); rerun alone: ALL PASS. Result: 83/83.
+`tools/check.sh` (type check + Rojo build): clean. All offline (Lune preview); nothing in
+Studio, on a device, with a gamepad or in a live multi-client server.
