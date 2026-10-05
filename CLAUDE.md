@@ -106,6 +106,12 @@ notices; group stage clear waits up to 12 s for open choices; audio mix, copy, s
 up, from stage 3 pricier chests (Chests.LateCostExponent, capped at stage 5) and less elite gold
 (Gold.EliteLateStageScale); stages 1-2 unchanged; armor unchanged. No save schema change.
 Settings screen design untouched (excluded by the pack).
+Full-game audit 2026-10-05 (96/96 regressions, offline only, NOT Studio-tested; docs/audit/AUDIT_REPORT.md
+plus one matrix per area): fixed stale save on same-server rejoin, portal-edge wave hold, free caravan
+save, elite chests without a killer, non-finite XP/heal/damage, chest hold on focus loss, DEV taint
+scope, NEW BEST SCORE, leaderboard ties/error states/names, pass gold top-up, lobby phone layout,
+gamepad back/Start, snow contrast for pale enemies, HUD per-frame layout. 10 owner decisions listed
+in AUDIT_REPORT section 7.
 
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
