@@ -1683,21 +1683,24 @@ Config.PhotoMode = {
 -- client only while the player is there (never in the title shot). Offsets are studs from
 -- Config.Lobby.Origin; +Z is behind the menu camera.
 Config.LobbyFun = {
-	Spawn = Vector3.new(0, 3, 60), -- where you appear
+	-- the play camera looks the run camera's way (toward −Z), so things further up the
+	-- screen have a smaller z: the spawn is at the back (+Z), the course runs up the screen
+	Spawn = Vector3.new(0, 3, 104), -- where you appear
 	WalkSpeed = 16,
-	CameraDistance = 30,
-	Dummy = Vector3.new(-14, 0, 66), -- training dummy (DPS of the selected hero's start weapon)
+	CameraDistance = 34,
+	Dummy = Vector3.new(-15, 0, 94), -- training dummy (DPS of the selected hero's start weapon)
 	DummyHitEvery = 0.5, -- seconds between the dummy's shown hits
-	Mirror = Vector3.new(14, 0, 66), -- cosmetics mirror
+	Mirror = Vector3.new(15, 0, 94), -- cosmetics mirror
+	Lanterns = { Vector3.new(-9, 0, 100), Vector3.new(9, 0, 100), Vector3.new(0, 0, 70) }, -- warm lights (dusk)
 	Course = {
 		-- a jump pad sits at the start and on every platform but the last; a pad throws you
 		-- straight up (LaunchSpeed) and you steer onto the next platform in the air
-		Start = Vector3.new(0, 0, 76), -- the first pad, on the courtyard floor
+		Start = Vector3.new(0, 0, 86), -- the first pad, on the courtyard floor
 		Platforms = { -- top centre + size; the last one is the finish
-			{ At = Vector3.new(0, 5, 84), Size = Vector3.new(7, 1, 7) },
-			{ At = Vector3.new(8, 10, 90), Size = Vector3.new(7, 1, 7) },
-			{ At = Vector3.new(0, 15, 97), Size = Vector3.new(7, 1, 7) },
-			{ At = Vector3.new(-9, 19, 91), Size = Vector3.new(9, 1, 9) },
+			{ At = Vector3.new(0, 5, 78), Size = Vector3.new(7, 1, 7) },
+			{ At = Vector3.new(8, 10, 71), Size = Vector3.new(7, 1, 7) },
+			{ At = Vector3.new(0, 15, 64), Size = Vector3.new(7, 1, 7) },
+			{ At = Vector3.new(-9, 19, 58), Size = Vector3.new(9, 1, 9) },
 		},
 		LaunchSpeed = 62, -- studs/s up (about 9.8 studs high)
 		PadRadius = 1.8,

@@ -17,7 +17,8 @@ Fun.Enter()
 local LF = Config.LobbyFun
 local o = Config.Lobby.Origin
 local view = preview.args.view or "course"
-local spot = view == "dummy" and (LF.Dummy + Vector3.new(4, 0, -6)) or view == "mirror" and (LF.Mirror + Vector3.new(-3, 0, -7)) or (LF.Course.Start + Vector3.new(0, 0, -6))
+-- the play camera looks toward −Z: stand on the +Z side (in front of the thing, facing up the screen)
+local spot = view == "dummy" and (LF.Dummy + Vector3.new(4, 0, 6)) or view == "mirror" and (LF.Mirror + Vector3.new(-4, 0, 7)) or (LF.Course.Start + Vector3.new(0, 0, 6))
 local char = game:GetService("Players").LocalPlayer.Character
 if char then
 	char:PivotTo(CFrame.new(o + spot + Vector3.new(0, 3, 0)))

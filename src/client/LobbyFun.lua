@@ -244,13 +244,24 @@ local function build(s: Session)
 	local f = s.Folder
 	local fl = LF.Floor
 	part(f, { Name = "Floor", Size = fl.Size, CFrame = CFrame.new(o + fl.Centre - Vector3.new(0, fl.Size.Y / 2, 0)), Color = P.stone_400, Material = Enum.Material.Slate, CanCollide = true })
-	-- training dummy: base, post, body, head, a target ring
+	-- lanterns: the courtyard is behind the castle's lit side, so it gets its own warm light
+	for i, at in ipairs(LF.Lanterns) do
+		part(f, { Name = "LanternPost" .. i, Size = Vector3.new(0.5, 6, 0.5), CFrame = CFrame.new(o + at + Vector3.new(0, 3, 0)), Color = P.stone_500 })
+		local head = part(f, { Name = "Lantern" .. i, Shape = Enum.PartType.Ball, Size = Vector3.new(1.4, 1.4, 1.4), CFrame = CFrame.new(o + at + Vector3.new(0, 6.6, 0)), Color = Color3.fromRGB(255, 200, 110), Material = Enum.Material.Neon })
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(255, 196, 120)
+		light.Range = 36
+		light.Brightness = 2.2
+		light.Shadows = false
+		light.Parent = head
+	end
+	-- training dummy (faces the camera, +Z): base, post, body, head, a target ring
 	local d = o + LF.Dummy
 	part(f, { Name = "DummyBase", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.6, 4, 4), CFrame = CFrame.new(d + Vector3.new(0, 0.3, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = P.stone_500, CanCollide = true })
 	part(f, { Name = "DummyPost", Size = Vector3.new(0.6, 5, 0.6), CFrame = CFrame.new(d + Vector3.new(0, 2.5, 0)), Color = P.wood_500, Material = Enum.Material.Wood })
 	local body = part(f, { Name = "DummyBody", Size = Vector3.new(2.4, 2.6, 1.4), CFrame = CFrame.new(d + Vector3.new(0, 3.6, 0)), Color = P.wood_400, Material = Enum.Material.Fabric, CanCollide = true })
 	part(f, { Name = "DummyHead", Shape = Enum.PartType.Ball, Size = Vector3.new(1.6, 1.6, 1.6), CFrame = CFrame.new(d + Vector3.new(0, 5.6, 0)), Color = P.wood_400:Lerp(P.ivory_200, 0.35), Material = Enum.Material.Fabric })
-	part(f, { Name = "DummyTarget", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 1.4, 1.4), CFrame = CFrame.new(d + Vector3.new(0, 3.7, -0.72)) * CFrame.Angles(0, math.rad(90), 0), Color = P.crimson_500 })
+	part(f, { Name = "DummyTarget", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.1, 1.4, 1.4), CFrame = CFrame.new(d + Vector3.new(0, 3.7, 0.72)) * CFrame.Angles(0, math.rad(90), 0), Color = P.crimson_500 })
 	local heroId = profile.SelectedCharacter or "Knight"
 	local weaponName, dps = LobbyFun.DummyDPS(heroId)
 	s.DummyDPS = dps
@@ -264,9 +275,10 @@ local function build(s: Session)
 	-- cosmetics mirror: pedestal, frame, glass, a board
 	local m = o + LF.Mirror
 	part(f, { Name = "MirrorPedestal", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.8, 5, 5), CFrame = CFrame.new(m + Vector3.new(0, 0.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = P.stone_300, Material = Enum.Material.Marble, CanCollide = true })
-	part(f, { Name = "MirrorFrame", Size = Vector3.new(6.4, 8.4, 0.5), CFrame = CFrame.new(m + Vector3.new(0, 4.2, 3.4)), Color = P.gold_500, Material = Enum.Material.Metal, CanCollide = true })
-	part(f, { Name = "MirrorGlass", Size = Vector3.new(5.6, 7.6, 0.1), CFrame = CFrame.new(m + Vector3.new(0, 4.2, 3.1)), Color = P.ice_100, Material = Enum.Material.Glass, Reflectance = 0.6, Transparency = 0.15 })
-	local board = part(f, { Name = "MirrorBoard", Size = Vector3.new(5, 3.6, 0.3), CFrame = CFrame.new(m + Vector3.new(-6, 2.2, 0)) * CFrame.Angles(0, math.rad(200), 0), Color = P.slate_700, CanCollide = true })
+	part(f, { Name = "MirrorFrame", Size = Vector3.new(6.4, 8.4, 0.5), CFrame = CFrame.new(m + Vector3.new(0, 4.2, -3.4)), Color = P.gold_500, Material = Enum.Material.Metal, CanCollide = true })
+	part(f, { Name = "MirrorGlass", Size = Vector3.new(5.6, 7.6, 0.1), CFrame = CFrame.new(m + Vector3.new(0, 4.2, -3.1)), Color = P.ice_100, Material = Enum.Material.Glass, Reflectance = 0.6, Transparency = 0.15 })
+	-- the board stands beside the mirror, tilted back so the camera reads it (its +Z face)
+	local board = part(f, { Name = "MirrorBoard", Size = Vector3.new(5.6, 4, 0.3), CFrame = CFrame.new(m + Vector3.new(-7, 2.4, 0)) * CFrame.Angles(math.rad(-35), 0, 0), Color = P.slate_700, CanCollide = true })
 	local sg = Instance.new("SurfaceGui")
 	sg.Name = "Worn"
 	sg.Face = Enum.NormalId.Back
@@ -283,8 +295,8 @@ local function build(s: Session)
 		local root = hero.PrimaryPart :: BasePart
 		local bbCF, bbSize = hero:GetBoundingBox()
 		local lift = math.clamp(root.Position.Y - (bbCF.Position.Y - bbSize.Y / 2), 2.4, 4.2)
-		-- faces the spawn (toward −Z) with the mirror behind it
-		hero:PivotTo(CFrame.lookAt(m + Vector3.new(0, 0.8 + lift, 0), m + Vector3.new(0, 0.8 + lift, -10)))
+		-- faces the camera (+Z) with the mirror behind it
+		hero:PivotTo(CFrame.lookAt(m + Vector3.new(0, 0.8 + lift, 0), m + Vector3.new(0, 0.8 + lift, 10)))
 		hero.Parent = f
 		HeroPoses.Apply(hero, "Showcase", 0)
 		s.Hero = hero
@@ -426,7 +438,7 @@ function LobbyFun.Enter()
 	build(s)
 	folder.Parent = workspace
 	-- the courtyard UI: BACK and the course clock
-	UIKit.Button(g, { Kind = "Secondary", Title = "BACK", Icon = "chevronLeft", IconSize = 18, Name = "Back", Align = "Center", Size = UDim2.fromOffset(120, 48), Position = UDim2.fromOffset(16, 16), OnClick = function()
+	UIKit.Button(g, { Kind = "Secondary", Title = "BACK", Icon = "chevronLeft", IconSize = 18, Name = "Back", Align = "Center", Size = UDim2.fromOffset(120, 48), Position = UDim2.fromOffset(16, 66), OnClick = function()
 		LobbyFun.Exit()
 	end })
 	local pill = new("Frame", { Name = "Clock", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 16), Size = UDim2.new(1, -300, 0, 40), BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.25, BorderSizePixel = 0 }, g)
