@@ -93,6 +93,19 @@ dots (NoticeDots), NEXT GOAL on results (shared/NextGoal), economy (owner OK): 2
 KillGoldChance 0.25, StageClearBonus 300, survival gold 40/min, harder achievement heroes; card pool
 weights + merged level-up panels; area weapons hit once per tick + balance trims; Death Spiral fix.
 Planned next: Sigils (docs/SIGILS_PLAN.md). Remaining audit items: docs/AUDIT_2026-10-04.md.
+Overhaul (owner's 2026-10-04 master prompt pack; offline only, NOT Studio-tested; all docs in
+docs/overhaul/, start with CHANGE_SUMMARY.md, ACCEPTANCE.md, TEST_REPORT.md, ISSUE_REGISTER.md):
+corner farming fixed (EnemyAI steering, corner-regression); server choice state (OfferId, bounded
+duo protection budget, solo panel freezes the world); UIState coordinator (one panel, headline
+lanes, uistate_regression); approved screens 01-07 rebuilt (title + MenuPlay run setup, HUD with
+BUILD panel, upgrade cards, compact reward cards + rare reveal + exactly-once grants, results
+ledger with separate run/mastery/account bars, duo side-drawer "Game not paused"); tagged server
+notices; group stage clear waits up to 12 s for open choices; audio mix, copy, safety, art passes
+(enemies, props, world rims, VFX, heroes); Whip shown as "Sword" (id unchanged, evolution
+"Bloodblade"); Gold Trim stays gold (owner). Balance (owner OK): MaxTier 16, boss HP stages 3-5
+up, from stage 3 pricier chests (Chests.LateCostExponent, capped at stage 5) and less elite gold
+(Gold.EliteLateStageScale); stages 1-2 unchanged; armor unchanged. No save schema change.
+Settings screen design untouched (excluded by the pack).
 
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
