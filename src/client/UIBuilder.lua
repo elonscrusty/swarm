@@ -1197,7 +1197,13 @@ end
 function Choice.fit(label: TextLabel, max: number, minSize: number, wrap: boolean)
 	label.TextScaled = true
 	label.TextWrapped = wrap
-	local c = label:FindFirstChildOfClass("UITextSizeConstraint") or new("UITextSizeConstraint", {}, label)
+	-- our own named constraint; TextFit's (it skips TextScaled labels) must not stay
+	local tf = label:FindFirstChild("TextFit")
+	if tf then
+		tf:Destroy()
+	end
+	label:SetAttribute("NoTextFit", true)
+	local c = label:FindFirstChild("Fit") or new("UITextSizeConstraint", { Name = "Fit" }, label)
 	c.MaxTextSize = max
 	c.MinTextSize = math.min(max, minSize)
 end
@@ -3418,7 +3424,13 @@ function runMenu.fit(label: TextLabel, minSize: number?, wrap: boolean?)
 	local max = label.TextSize
 	label.TextScaled = true
 	label.TextWrapped = wrap == true
-	local c = label:FindFirstChildOfClass("UITextSizeConstraint") or new("UITextSizeConstraint", {}, label)
+	-- our own named constraint; TextFit's (it skips TextScaled labels) must not stay
+	local tf = label:FindFirstChild("TextFit")
+	if tf then
+		tf:Destroy()
+	end
+	label:SetAttribute("NoTextFit", true)
+	local c = label:FindFirstChild("Fit") or new("UITextSizeConstraint", { Name = "Fit" }, label)
 	c.MaxTextSize = max
 	c.MinTextSize = math.min(max, minSize or 10)
 end

@@ -95,7 +95,13 @@ export type Insets = { Top: number, Left: number, Right: number }
 local function fitText(label: TextLabel, minSize: number?): TextLabel
 	local max = label.TextSize
 	label.TextScaled = true
-	local c = label:FindFirstChildOfClass("UITextSizeConstraint") or new("UITextSizeConstraint", {}, label)
+	-- our own named constraint; TextFit's (it skips TextScaled labels) must not stay
+	local tf = label:FindFirstChild("TextFit")
+	if tf then
+		tf:Destroy()
+	end
+	label:SetAttribute("NoTextFit", true)
+	local c = label:FindFirstChild("Fit") or new("UITextSizeConstraint", { Name = "Fit" }, label)
 	c.MaxTextSize = max
 	c.MinTextSize = math.min(max, minSize or 9)
 	return label
