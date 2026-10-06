@@ -873,11 +873,17 @@ function StageManager.DevTeleport(rp): boolean
 	return true
 end
 
--- "Next stage": opens the portal now (leftovers burn up, a live boss too) and sends every
+-- "Next stage": opens the portal now (leftovers burn up, a live boss is removed) and sends every
 -- living player on to the next stage.
 function StageManager.DevNextStage(): boolean
 	if sub ~= "Explore" and sub ~= "Boss" and sub ~= "Surge" and sub ~= "Open" then
 		return false
+	end
+	-- a live boss goes with no rewards (openPortal's sweep skips bosses, so it used to stay
+	-- alive through the portal choice; dev only, the run is tainted)
+	local boss = ctx.EnemySpawner.Boss
+	if boss and boss.Alive then
+		ctx.EnemySpawner.Despawn(boss)
 	end
 	if sub ~= "Open" then
 		openPortal()

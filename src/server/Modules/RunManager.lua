@@ -555,9 +555,21 @@ function RunManager.ApplyMovement(rp)
 	if hum and hum.Parent then
 		-- rp.RushMult: Windstep's short burst after a kill (ItemSystem); rp.WeatherSpeedMult:
 		-- a snow storm (Weather)
-		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * (rp.RushMult or 1) * (rp.WeatherSpeedMult or 1) or 0
+		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * RunManager.RushMult(rp) * (rp.WeatherSpeedMult or 1) or 0
 	end
 	rp.Player:SetAttribute("Paused", rp.Paused == true)
+end
+
+-- Windstep's burst, capped with the speed of now (MATH-17): the burst stores its multiplier
+-- when it starts, so a speed gain during the burst must not push Speed x Rush past
+-- BaseSpeed x Items.MaxSpeedMult. Never below 1 (a burst never slows).
+function RunManager.RushMult(rp): number
+	local mult = rp.RushMult
+	if not mult or not rp.Stats then
+		return 1
+	end
+	local cap = Config.Player.BaseSpeed * Config.Items.MaxSpeedMult / math.max(1, rp.Stats.Speed)
+	return math.max(1, math.min(mult, cap))
 end
 
 function RunManager.ApplyMovementAll()

@@ -1221,9 +1221,11 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 	if e.Boss and rp then
 		amount = BossAI.ModifyHit(e, amount, rp) -- the co-op weak spot (CoopBoss.lua)
 	end
+	local hpBefore = math.max(0, e.HP)
 	e.HP -= amount
 	if rp then
-		rp.DamageDealt += amount
+		-- "Damage dealt" counts the HP really removed, not the overkill (MATH-15)
+		rp.DamageDealt += math.min(amount, hpBefore)
 		DamageNumbers.Add(rp.Player, e.Id, amount, crit) -- only for players with the setting on
 	end
 	Fx.Hit(e.Id)

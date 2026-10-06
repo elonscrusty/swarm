@@ -346,6 +346,41 @@ Spawner.Damage(dummy, -5, rp)
 check("C8 enemy HP ignores NaN / zero / negative", dummy.HP == dummy.MaxHP and dummy.Alive, tostring(dummy.HP))
 Spawner.Despawn(dummy)
 
+-- C9 MATH-15: "Damage dealt" counts the HP really removed, not the overkill
+local weak = assert(Spawner.Spawn("Bat", rp.Root.Position + Vector3.new(6, 0, 0), { Force = true, HP = 30 }))
+local weakHP = weak.HP
+local dealtBefore = rp.DamageDealt
+Spawner.Damage(weak, 1000, rp, nil, 0, true) -- a proc: no crit, no item multipliers
+check("C9 MATH-15 overkill not counted as damage dealt", near(rp.DamageDealt - dealtBefore, weakHP), string.format("+%.1f for a %.1f HP enemy", rp.DamageDealt - dealtBefore, weakHP))
+Spawner.Despawn(weak)
+local strong = assert(Spawner.Spawn("Bat", rp.Root.Position + Vector3.new(6, 0, 0), { Force = true, HP = 1e6 }))
+dealtBefore = rp.DamageDealt
+Spawner.Damage(strong, 25, rp, nil, 0, true)
+check("C9b a hit that does not kill counts in full", near(rp.DamageDealt - dealtBefore, 25), string.format("+%.1f", rp.DamageDealt - dealtBefore))
+Spawner.Despawn(strong)
+
+-- C10 MATH-17: Windstep's burst never takes Speed past BaseSpeed x Items.MaxSpeedMult, even
+-- when the speed rises during the burst (the multiplier was capped once, at its start)
+local speedCap = P.BaseSpeed * I.MaxSpeedMult
+local savedSpeed = rp.Stats.Speed
+rp.Stats.Speed = P.BaseSpeed
+rp.RushMult = 1.8 -- what OnKill stores at BaseSpeed (cap 2.2)
+local rushLow = RM.RushMult(rp)
+rp.Stats.Speed = P.BaseSpeed * 1.6 -- a speed pick during the burst
+RM.ApplyMovement(rp)
+local rushHigh = RM.RushMult(rp)
+local hum = rp.Humanoid
+local ws = hum and hum.WalkSpeed or 0
+local env = (rp.TerrainSpeedMult or 1) * (rp.WeatherSpeedMult or 1)
+check("C10 MATH-17 Windstep re-capped when speed rises mid-burst", near(rushLow, 1.8) and rp.Stats.Speed * rushHigh <= speedCap + 1e-6 and ws <= speedCap * env + 1e-6,
+	string.format("rush %.3f -> %.3f, speed x rush %.2f (cap %.2f), WalkSpeed %.2f", rushLow, rushHigh, rp.Stats.Speed * rushHigh, speedCap, ws))
+rp.Stats.Speed = speedCap * 2
+check("C10b the burst never slows below x1", RM.RushMult(rp) == 1, string.format("%.3f", RM.RushMult(rp)))
+rp.RushMult = nil
+rp.Stats.Speed = savedSpeed
+LU.RecomputeStats(rp)
+RM.ApplyMovement(rp)
+
 ------------------------------------------------------------------------------------------
 -- D. Controlled-target combat: each released weapon alone, predicted vs observed hits
 ------------------------------------------------------------------------------------------
@@ -448,6 +483,32 @@ check("D crit x CritDamage once, proc never crits", near(critLoss, 10 * rp.Stats
 Spawner.Despawn(target)
 Spawner.Damage = realDamage
 LU.RecomputeStats(rp)
+
+------------------------------------------------------------------------------------------
+-- F. Dev "Next stage" during a boss fight removes the boss (audit W-08; dev only)
+------------------------------------------------------------------------------------------
+local SM = preview.server("StageManager")
+Spawner.DespawnAll()
+local stageBefore = SM.GetStage()
+local activated = SM.DevActivate()
+for _ = 1, 150 do
+	if Spawner.Boss and Spawner.Boss.Alive then break end
+	advance(0.1)
+end
+local liveBoss = Spawner.Boss
+local hadBoss = liveBoss ~= nil and liveBoss.Alive
+local moved = SM.DevNextStage()
+local stateObj = game:GetService("ReplicatedStorage"):FindFirstChild("SwarmState")
+check("F1 dev Next stage removes a live boss", activated and hadBoss and moved and Spawner.Boss == nil and not (liveBoss and liveBoss.Alive)
+	and (stateObj == nil or stateObj:GetAttribute("BossName") == nil),
+	string.format("activated %s boss %s next %s phase %s boss after %s", tostring(activated), tostring(hadBoss), tostring(moved), SM.GetPhase(), tostring(Spawner.Boss)))
+for _ = 1, 200 do
+	if SM.GetStage() > stageBefore and SM.GetPhase() == "Explore" then break end
+	advance(0.1)
+end
+check("F2 the next stage starts with no boss", SM.GetStage() == stageBefore + 1 and SM.GetPhase() == "Explore" and Spawner.Boss == nil,
+	string.format("stage %d -> %d phase %s", stageBefore, SM.GetStage(), SM.GetPhase()))
+rp.InvulnUntil = math.huge
 
 ------------------------------------------------------------------------------------------
 -- E. Lethal hits (last: the run ends)
