@@ -186,6 +186,7 @@ local function buildTimer(frame: Frame)
 		TextSize = TS(TY.Display.Size),
 		TextXAlignment = Enum.TextXAlignment.Center,
 	})
+	fitText(ui.Timer, 16)
 end
 
 -- Objective panel under the timer (approved 02/03 HUD): a gold caption with where the run
@@ -390,6 +391,8 @@ local function buildVitals(frame: Frame)
 		Size = UDim2.new(0, 66, 1, 0),
 		TextColor3 = P.ivory_100,
 	})
+	-- "LV 14" stays left of the XP bar (large phone text ran it under the bar)
+	fitText(ui.Level, 10)
 	ui.XP = UIKit.Meter(xpRow, {
 		Gradient = XP_GRADIENT,
 		TextStyle = "Number",
