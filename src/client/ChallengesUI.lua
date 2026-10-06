@@ -87,7 +87,9 @@ local function ensureRings()
 		return p
 	end
 	ringOuter = disc("ChampionRingOuter", P.gold_400, 0.5)
-	ringInner = disc("ChampionRingInner", VIOLET_DARK, 0.55) -- light: gems and telegraphs read through
+	local inner = disc("ChampionRingInner", VIOLET_DARK, 0.55) -- light: gems and telegraphs read through
+	inner.Material = Enum.Material.SmoothPlastic -- only the gold rim glows
+	ringInner = inner
 end
 
 local function hideChampion()

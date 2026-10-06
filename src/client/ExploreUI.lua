@@ -174,6 +174,56 @@ local function untrack(m: Instance)
 	end
 end
 
+-- World pills sit under every ScreenGui: when the default spot (5 studs over the anchor)
+-- lands under the HUD's top cluster (portrait: timer, objective, vitals, abilities), the
+-- pill slides toward the camera (down the screen) in 3-stud steps until it is clear.
+local function hudRects(): { Rect }
+	local out = {}
+	local els = Hud.Elements()
+	for _, key in ipairs({ "TimerPill", "Stage", "Plate", "Boss", "Bar" }) do
+		local g = els[key]
+		if typeof(g) == "Instance" and g:IsA("GuiObject") and g.Visible then
+			local p, sz = g.AbsolutePosition, g.AbsoluteSize
+			table.insert(out, Rect.new(p.X, p.Y, p.X + sz.X, p.Y + sz.Y))
+		end
+	end
+	return out
+end
+
+local function clearOfHud(mk: Marker)
+	local cam = workspace.CurrentCamera
+	local anchor = mk.Billboard.Adornee :: any
+	if not cam or not anchor then
+		return
+	end
+	local look = cam.CFrame.LookVector * FLAT
+	local back = look.Magnitude > 0.01 and -look.Unit or Vector3.zero
+	local rects = hudRects()
+	local base = Vector3.new(0, 5, 0)
+	local chosen = base
+	for k = 0, 24, 3 do
+		local off = base + back * k
+		local sp, onScreen = cam:WorldToScreenPoint(anchor.Position + off)
+		chosen = off
+		if not onScreen then
+			break
+		end
+		-- the face: 180 x 46 px, its bottom 32 px under the point
+		local l, r, t, b = sp.X - 90, sp.X + 90, sp.Y - 14, sp.Y + 32
+		local hit = false
+		for _, rc in ipairs(rects) do
+			if rc.Max.X > l and rc.Min.X < r and rc.Max.Y > t and rc.Min.Y < b then
+				hit = true
+				break
+			end
+		end
+		if not hit then
+			break
+		end
+	end
+	set(mk.Billboard, "StudsOffsetWorldSpace", chosen)
+end
+
 ------------------------------------------------------------------------------------------
 -- Merchant panel
 ------------------------------------------------------------------------------------------
@@ -404,6 +454,7 @@ local function update(dt: number)
 			set(mk.Billboard, "Enabled", show)
 			if show then
 				fillMarker(mk)
+				clearOfHud(mk)
 			end
 			-- the hint shimmer on a sealed wall
 			if #mk.Cracks > 0 and m:GetAttribute("State") == "Sealed" then

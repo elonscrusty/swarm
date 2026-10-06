@@ -499,6 +499,9 @@ function FeatureHud.Init()
 						addRect(rects, els[key])
 					end
 				end
+				if natural > 1 then
+					addRect(rects, badgeRow) -- the feature badges (placed above, this frame)
+				end
 				local map = {}
 				addRect(map, cachedFinds.MiniMap)
 				local mapRect = map[1]
@@ -514,11 +517,30 @@ function FeatureHud.Init()
 				-- the minimap (portrait: left edge under the cluster): a narrower line beside it
 				-- (TextScaled shrinks the words) rather than one over the hero
 				if mapRect and mapRect.Max.X > left and mapRect.Min.X < left + aw and mapRect.Max.Y > ay - 2 and mapRect.Min.Y < ay + ah + 2 then
+					-- first: a centred line narrowed to clear it; then: beside it; last: under it
+					local centre = origin.X + rootSize.X / 2
+					local half = mapRect.Min.X > centre and (mapRect.Min.X - 8 - centre) or (centre - mapRect.Max.X - 8)
 					local room = origin.X + rootSize.X - edge - (mapRect.Max.X + 8)
-					if room >= 170 then
+					if half * 2 >= 240 then
+						aw = math.floor(math.min(aw, half * 2))
+						left = centre - aw / 2
+						for _, r in ipairs(rects) do
+							if r.Max.X > left and r.Min.X < left + aw and r.Max.Y > ay - 2 and r.Min.Y < ay + ah + 2 then
+								ay = r.Max.Y + 4
+							end
+						end
+					elseif room >= 170 then
 						left = mapRect.Max.X + 8
 						aw = math.floor(room)
 						ah = 30
+						-- and under whatever else sits in that band (the badge row)
+						for _ = 1, 2 do
+							for _, r in ipairs(rects) do
+								if r.Max.X > left and r.Min.X < left + aw and r.Max.Y > ay - 2 and r.Min.Y < ay + ah + 2 then
+									ay = r.Max.Y + 4
+								end
+							end
+						end
 					else
 						ay = mapRect.Max.Y + 4
 					end
