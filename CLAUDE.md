@@ -112,14 +112,12 @@ save, elite chests without a killer, non-finite XP/heal/damage, chest hold on fo
 scope, NEW BEST SCORE, leaderboard ties/error states/names, pass gold top-up, lobby phone layout,
 gamepad back/Start, snow contrast for pale enemies, HUD per-frame layout. 10 owner decisions listed
 in AUDIT_REPORT section 7.
-30-features batch + Robux store (2026-10-05, offline only, NOT Studio-tested; docs/features/*.md, start
-with FOUNDATION.md; every feature has a Config.Features switch). Done: map events + weather, mini-bosses,
-Trial shrine, cursed chests, secret rooms, merchant, rescue, boss intro, announcer, hit feel, music slots,
-ultimates, second skill, presets, Archer/Bard/Golem, team combo, ping wheel, co-op boss, spectate, Sigils,
-weekly challenge + team board, season track, titles, collection book, login streak, cosmetic store (all
-product ids 0 until the owner creates them). PAUSED (switched off, unfinished): WeaponMastery, PhotoMode,
-LobbyFun. Wave 3 NOT DONE: integration and balance (Archer/Bard too weak, combo/co-op boss numbers, events
-loot totals), leftover layout items and a full regression run are listed in docs/features/STATUS.md.
+30-features batch + Robux store (2026-10-05/06, 149/149 regressions, offline only, NOT Studio-tested;
+docs/features/*.md, start with FOUNDATION.md and STATUS.md; every feature has a Config.Features switch, all
+on). All 30 features plus the cosmetic store (all product ids 0 until the owner creates them). Wave 3 done:
+UI pass (UI_PASS.md), lobby features verified, regression fixes (sealed secret rooms block spawns, WorldFx,
+favourites grid and FeatureHud per-frame layout). NOT done: full balance sims for encounter totals, team
+combo and co-op boss (Archer/Bard measured inside the existing hero range, left unchanged).
 
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),

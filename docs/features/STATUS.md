@@ -19,19 +19,13 @@ nothing has been played in Studio, on a device or in a live server. Each feature
 | Store | Cosmetic Robux store, all ids 0 ("Coming soon") | STORE.md |
 | Groundwork | Switches, save fields, EncounterDirector, FeatureHud, CosmeticData | FOUNDATION.md |
 
-## Wave 3, not done yet (resume here)
-- Balance:
-  - Archer and Bard take 2-3x the Knight's damage (proposal: Archer cooldown 0.15, Bard SelfShare 0.8).
-  - The team combo burst and the co-op boss x1.5 are untested for balance.
-  - Run the full econ-sim with every encounter on (total gold/loot added by mini-boss, Trial, merchant, secret rooms, rescue, gold rush).
-- Layout:
-  - The FeatureHud badge row is cut off at the right edge on phones and covers the TEAM TIP chip on iphone.
-  - In portrait, the minimap covers "A teammate is reviving you".
-- Merchant: no gamepad purchase.
-- Presentation:
-  - ChallengesUI was never rendered.
-  - The explore labels were not re-rendered after the last move.
-- Plates: META's title plate should go through `StoreFx.DecoratePlate` (one plate, not two).
-- Emotes are icon pops only.
-- Regression: the full `tools/run_regressions.py` run and perf-sim with every feature on; see the lead's latest run below.
-- Owner: icons and portraits for new content (ICON_CHECKLIST), Store product creation (STORE.md), and the Studio playtest.
+## Wave 3 (2026-10-06)
+- Done: UI pass (UI_PASS.md, one portrait FAIL left: minimap over the downed hero's "REVIVING" world
+  label), lobby features verified (LOBBY.md), merchant gamepad, single title/name plate, regression fixes
+  (sealed secret rooms block spawns inside; WorldFx no longer waits on its folder; favourites grid built on
+  open; FeatureHud re-placed only on change). Full run: `bash tools/check.sh` clean,
+  `tools/run_regressions.py` 149/149 PASS.
+- Balance: Archer and Bard measured inside the existing heroes' range (Archer about Mage, Bard about
+  Priest, econ-sim 5 seeds), so left unchanged. NOT RUN: encounter totals with every feature on, team combo
+  share and co-op boss weak spot (sims stopped; owner to choose whether to run them).
+- Owner: icons/portraits for new content (ICON_CHECKLIST), Store product creation (STORE.md), Studio playtest.
