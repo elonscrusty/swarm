@@ -2263,29 +2263,49 @@ local function picture(f: Frame, name: string, image: string, o: Opts, tint: Col
 		img.ImageColor3 = tint
 	end
 	img.Parent = f
+	-- Exactly one icon at a time: while the drawn stand-in shows, the picture is see-through
+	-- (it keeps loading), so a picture that loads without IsLoaded being seen never sits on
+	-- top of its drawn twin (Archer / Bard / Golem showed both: their pictures are
+	-- transparent icons, not the opaque hero art that used to hide the stand-in).
+	local shownTransparency = img.ImageTransparency
 	local drawn = false
+	local function loaded()
+		if fb.Parent then
+			fb:Destroy()
+		end
+		img.ImageTransparency = shownTransparency
+	end
 	task.spawn(function()
 		local waited = 0
 		while fb.Parent and img.Parent and waited < FALLBACK_GIVE_UP do
 			if img.IsLoaded then
-				fb:Destroy()
+				loaded()
 				return
 			end
 			if waited >= FALLBACK_DELAY and not drawn then
 				drawn = true
 				drawVector(fb, name, o, true)
 				fb.Visible = true
+				img.ImageTransparency = 1
 			end
 			task.wait(FALLBACK_POLL)
 			waited += FALLBACK_POLL
 		end
-		-- not loaded yet: the drawn icon stays until the picture arrives, never under it
+		-- not loaded yet: keep checking slowly (the change signal alone is not reliable), so
+		-- the drawn icon gives way as soon as the picture is in
 		if fb.Parent and img.Parent then
 			img:GetPropertyChangedSignal("IsLoaded"):Connect(function()
 				if img.IsLoaded and fb.Parent then
-					fb:Destroy()
+					loaded()
 				end
 			end)
+			while fb.Parent and img.Parent do
+				task.wait(1)
+				if img.IsLoaded then
+					loaded()
+					return
+				end
+			end
 		end
 	end)
 end
