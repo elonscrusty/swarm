@@ -144,7 +144,10 @@ local function buildArrow(root: Frame)
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.ivory_100,
 		TextStrokeTransparency = 0.4,
+		-- scales down inside its box: the phone's large-text setting grew "139 m" onto the tray
+		TextScaled = true,
 	}, true)
+	new("UITextSizeConstraint", { MinTextSize = 10, MaxTextSize = ui.ArrowDistance.TextSize }, ui.ArrowDistance)
 	UIAnim.Breathe(badge, 0.06, 1.6)
 end
 
@@ -575,7 +578,10 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	-- edge arrow (after the hint time, while exploring)
 	-- (hidden while the player reads the BUILD details over the arena; the minimap keeps
 	-- the portal pin and the marker returns when they close)
+	-- (also hidden while this player's run menu is open: the drawer covers that side and the
+	-- marker sat on the HUD's centre status line)
 	local showArrow = stagePhase == "Explore" and state:GetAttribute("PortalHint") == true and not inside and not showRing and not Hud.BuildOpen()
+		and not UIState.IsShown("Pause")
 	if not showArrow then
 		ui.Arrow.Visible = false
 		ui.ArrowShown = false
@@ -597,7 +603,9 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	-- landscape: the ability bar takes the bottom centre; keep the arrow above it there
 	local barTop, barL, barR = math.huge, 0, 0
 	if not portrait and els.Bar then
-		barTop = Hud.BarTop() - 48
+		-- the marker's centre: its 64 px badge plus the distance label under it (~30 px)
+		-- stay above the tray with a small gap
+		barTop = Hud.BarTop() - 66
 		barL = els.Bar.Position.X.Offset - 40
 		barR = barL + els.Bar.Size.X.Offset + 80
 	end

@@ -214,6 +214,20 @@ function paintItems(container, items, viewportImages) {
 
 // Ghost of Roblox's own top-bar buttons (menu, chat) so layouts can be checked against them.
 function paintCoreUi(root, gui, device) {
+  if (gui.coreButtons && gui.coreButtons.length) {
+    // the device's measured Roblox top-bar buttons (round Roblox button, menu + chat pill)
+    for (const b of gui.coreButtons) {
+      const el = document.createElement('div');
+      const r = Math.min(b.w, b.h) / 2;
+      el.style.cssText = `left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px;border-radius:${r}px;background:rgba(18,21,27,0.72);box-shadow:0 0 0 1px rgba(255,255,255,0.15);`;
+      const glyph = document.createElement('div');
+      glyph.style.cssText = 'left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:space-evenly;color:rgba(255,255,255,0.9);font:600 18px "Source Sans 3";';
+      glyph.textContent = b.kind === 'roblox' ? '◆' : '☰  ✉';
+      el.appendChild(glyph);
+      root.appendChild(el);
+    }
+    return;
+  }
   const top = gui.topbar.y;
   const left = (gui.safe.left || 0) + 16;
   const size = 44;

@@ -88,6 +88,19 @@ local C, P = Theme.Color, Theme.Palette
 
 export type Insets = { Top: number, Left: number, Right: number }
 
+-- A label that must stay inside its box: it scales down (never below `minSize`, never above
+-- its own TextSize). Roblox's "Text size" accessibility setting (GuiService.PreferredTextSize)
+-- grows plain TextSize text on the owner's phone by about 1.45x and does not touch TextScaled
+-- text, so fixed boxes (tray labels, BUILD) use this.
+local function fitText(label: TextLabel, minSize: number?): TextLabel
+	local max = label.TextSize
+	label.TextScaled = true
+	local c = label:FindFirstChildOfClass("UITextSizeConstraint") or new("UITextSizeConstraint", {}, label)
+	c.MaxTextSize = max
+	c.MinTextSize = math.min(max, minSize or 9)
+	return label
+end
+
 -- Health panel and ability panel, designed at full size (reference px), fitted with a UIScale.
 local VIT = { W = 380, PadX = 10, PadY = 9, HP = 26, XP = 20, Gap = 8 } -- health / level panel
 VIT.H = VIT.PadY * 2 + VIT.HP + VIT.Gap + VIT.XP
@@ -426,12 +439,15 @@ local function buildBar(frame: Frame)
 	ui.BarBody = body
 	ui.BarFit = new("UIScale", { Name = "Fit", Scale = 1 }, body)
 	local function rowLabel(str: string, y: number)
-		role(face, "Label", str, {
+		-- the word gets the label column only (the first tile starts right after it) and
+		-- shrinks to fit: on a phone with large text "WEAPONS" ran under the first tile
+		local l = role(face, "Label", str, {
 			Name = str,
-			Position = UDim2.fromOffset(INV.Pad + 2, y),
-			Size = UDim2.fromOffset(INV.Label - 4, INV.Tile),
+			Position = UDim2.fromOffset(INV.Pad + 2, y + math.floor(INV.Tile / 2) - 12),
+			Size = UDim2.fromOffset(INV.Label - 8, 24),
 			TextColor3 = P.ivory_100,
 		})
+		fitText(l, 9)
 	end
 	local y2 = INV.Pad + INV.Tile + INV.RowGap
 	rowLabel("WEAPONS", INV.Pad)
@@ -460,15 +476,15 @@ local function buildBar(frame: Frame)
 	UIKit.corner(btn, Theme.Radius.M)
 	ui.BuildButton = btn
 	ui.BuildChevron = Icons.Draw(btn, "chevronsUp", { Size = 22, Color = P.gold_200, Back = P.slate_900, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -12), ZIndex = 5 })
-	role(btn, "Label", "BUILD", {
+	fitText(role(btn, "Label", "BUILD", {
 		Name = "Word",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0.5, 4),
-		Size = UDim2.new(1, 0, 0, 20),
+		Size = UDim2.new(1, -6, 0, 20),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.ivory_100,
 		ZIndex = 5,
-	})
+	}), 9)
 	btn.MouseEnter:Connect(function()
 		btn.BackgroundTransparency = 0.4
 	end)
@@ -1878,6 +1894,10 @@ local function updateStatus(state: Configuration, phase: string, stagePhase: str
 				local several = string.find(names, ",", 1, true) ~= nil
 				setStatus(string.format("Paused: %s %s choosing an upgrade", names, several and "are" or "is"), "hourglass")
 			end
+		elseif player:GetAttribute("Paused") == true or UIState.IsShown("Pause") then
+			-- this player's own run menu is open and says "SOLO · GAME PAUSED" itself; a
+			-- second "Paused" banner only sat on the portal marker beside the drawer
+			setStatus("")
 		else
 			setStatus("Paused", "pause")
 		end

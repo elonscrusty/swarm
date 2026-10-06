@@ -477,6 +477,7 @@ local function textItem(st, rec, comps, alphaMul)
 		baseColor = gp(st, "PlaceholderColor3")
 	end
 	local lines = res.lines
+	local cutAny = false
 	if truncate then
 		local maxLines = math.max(1, math.floor(box.h / math.max(lines[1] and lines[1].height or 1, 1) + 0.001))
 		local cut = {}
@@ -484,6 +485,7 @@ local function textItem(st, rec, comps, alphaMul)
 			local line = lines[i]
 			if i == math.min(#lines, maxLines) and (#lines > maxLines or line.width > box.w + 0.5) then
 				line = T.truncateLine(line, box.w)
+				cutAny = true
 			end
 			table.insert(cut, line)
 		end
@@ -556,6 +558,15 @@ local function textItem(st, rec, comps, alphaMul)
 		y += line.height
 	end
 	local out = { x = r4(box.x - rec.x), y = r4(box.y - rec.y), w = r4(box.w), h = r4(box.h), lines = outLines }
+	if cutAny then
+		-- the whole string, so the layout check can tell "BA..." (cut to nothing) from a
+		-- long line that lost its last words
+		local full = gp(st, "Text")
+		if gp(st, "RichText") then
+			full = T.stripRich(full)
+		end
+		out.full = full
+	end
 	local strokeT = gp(st, "TextStrokeTransparency")
 	if strokeT < 1 then
 		out.legacyStroke = { color = rgba(gp(st, "TextStrokeColor3"), 1 - (1 - strokeT) * (1 - baseT) * alphaMul), thickness = r4(1 * (rec.k or 1)) }
@@ -875,6 +886,8 @@ function E.gui()
 		safe = d.safe,
 		topbar = { y = (d.topbarBelowSafeTop and d.safe.top or 0), h = d.topbar, bottom = inset.Y },
 		coreGui = R.coreGui,
+		coreButtons = d.coreButtons,
+		textSize = R.textSize,
 	}
 end
 

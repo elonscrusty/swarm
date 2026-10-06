@@ -35,6 +35,9 @@ local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local DevInbox = require(script.Parent.DevInbox)
+local UIState = require(script.Parent.UIState)
+local ClientSettings = require(script.Parent.ClientSettings)
+local UserInputService = game:GetService("UserInputService")
 
 local DevPanel = {}
 
@@ -369,11 +372,24 @@ local function build(root: Instance, host: { [string]: any }?)
 			panel.Position = UDim2.fromOffset(M, ty + 56)
 			panel.Size = UDim2.fromOffset(w, math.min(600, v.Y - ty - 56 - M))
 		else
+			-- touch screens: the JUMP button (MobileControls, Config.Movement) owns the bottom
+			-- right corner, so DEV sits just above it, right edges level (on the owner's
+			-- iPhone the two overlapped); left-handed layouts move JUMP away, keep the corner
+			local bottom = v.Y - M
+			local right = v.X - M
+			if UserInputService.TouchEnabled and ClientSettings.Get("TouchLayout") ~= "LeftHanded" then
+				local mv = Config.Movement :: any
+				local s = math.max(0.01, host.Scale and host.Scale() or 1)
+				local compactScale = ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1
+				local margin = (mv.ButtonMargin or 26) / s
+				bottom = v.Y - margin - (mv.ButtonSize or 84) * compactScale - 12
+				right = v.X - margin
+			end
 			toggle.AnchorPoint = Vector2.new(1, 1)
-			toggle.Position = UDim2.fromOffset(v.X - M, v.Y - M)
+			toggle.Position = UDim2.fromOffset(right, bottom)
 			panel.AnchorPoint = Vector2.new(1, 1)
-			panel.Position = UDim2.fromOffset(v.X - M, v.Y - M - 56)
-			panel.Size = UDim2.fromOffset(w, math.min(600, v.Y - M - 56 - topY))
+			panel.Position = UDim2.fromOffset(right, bottom - 56)
+			panel.Size = UDim2.fromOffset(w, math.max(160, math.min(600, bottom - 56 - topY)))
 		end
 	end
 	if host then
@@ -382,12 +398,22 @@ local function build(root: Instance, host: { [string]: any }?)
 	end
 	-- the DEV button only floats in a run; in the lobby DEV lives in MORE (MenuMore's DEV
 	-- row opens this panel), so the home screen's composition stays clean
+	-- hidden while a panel is shown (run menu drawer, level-up, rewards, results ...): it
+	-- drew on top of LEAVE RUN on the owner's iPhone. An open dev panel keeps it.
 	local function syncToggle()
 		local inRun = player:GetAttribute("InRun") == true
 		if toggle then
-			toggle.Visible = inRun
+			toggle.Visible = inRun and (UIState.Owner() == nil or (panel ~= nil and panel.Visible))
 		end
 	end
+	UIState.OnOwnerChanged(function()
+		syncToggle()
+	end)
+	ClientSettings.OnChanged(function(key)
+		if key == "TouchLayout" then
+			layout()
+		end
+	end)
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
 		showTab(player:GetAttribute("InRun") == true and "Run" or "Profile")
 		syncToggle()

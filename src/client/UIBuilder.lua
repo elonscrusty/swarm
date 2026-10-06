@@ -1099,6 +1099,14 @@ local function buildLevelUp()
 			end)
 		end,
 	})
+	-- REROLL / SKIP words and their "1 left" lines shrink inside the button (phone large text)
+	for _, b in ipairs({ levelUp.Reroll, levelUp.Skip }) do
+		for _, l in ipairs({ b.Title, b.Subtitle }) do
+			if l then
+				Choice.fit(l, l.TextSize, 9, false)
+			end
+		end
+	end
 	-- how to choose (keyboard / touch / gamepad), between two short rules
 	local hint = new("Frame", { Name = "Hint", BackgroundTransparency = 1 }, panel)
 	UIKit.list(hint, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
@@ -1166,6 +1174,26 @@ function Choice.titleSize(): number
 	local fit = (virtualSize().X - 2 * margin()) / (19 * 0.8) / (UIKit.IsCompact() and Theme.TextScaleCompact or 1)
 	return math.max(18, math.min(base, math.floor(fit)))
 end
+-- Where the Roblox top bar buttons end, in root px from the gui's left edge. Conservative:
+-- GuiService.TopbarInset is reported in safe-area space on iPhones (insets.Left reads
+-- ~59 px short there and the level-up title ran under the chat button), so the larger of
+-- the two readings wins.
+function Choice.topbarLeft(): number
+	local s = math.max(0.01, uiScale.Scale)
+	local ok, rect = pcall(function()
+		return GuiService.TopbarInset
+	end)
+	local raw = (ok and typeof(rect) == "Rect" and rect.Height > 0) and rect.Min.X / s or 0
+	return math.max(insets.Left, raw)
+end
+-- A level-up label that must stay in its box: scales down, never above `max`.
+function Choice.fit(label: TextLabel, max: number, minSize: number, wrap: boolean)
+	label.TextScaled = true
+	label.TextWrapped = wrap
+	local c = label:FindFirstChildOfClass("UITextSizeConstraint") or new("UITextSizeConstraint", {}, label)
+	c.MaxTextSize = max
+	c.MinTextSize = math.min(max, minSize)
+end
 -- The card name (serif, centred under the art).
 function Choice.cardNameH(): number
 	return TS(UIKit.IsCompact() and 22 or 26) + 6
@@ -1188,7 +1216,7 @@ end
 local function descHeight(desc: string?, w: number, c): number
 	local plain = string.gsub(desc or "", "<[^>]+>", "")
 	local maxLines = (Choice.compactLandscape() and Choice.summaryCard(c)) and 1 or 2
-	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.44 / math.max(1, w - 2 * CARD.Pad)), 1, maxLines)
+	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.5 / math.max(1, w - 2 * CARD.Pad)), 1, maxLines)
 	return TS(14) * lines + 8
 end
 
@@ -1764,7 +1792,8 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		end
 		if desc then
 			local dh = descHeight(desc, w, c)
-			text(face, "Body", desc, {
+			-- shrinks to fit its lines (the phone's large-text setting cut "+12% attack area per")
+			local dl = text(face, "Body", desc, {
 				Position = UDim2.fromOffset(pad, y),
 				Size = UDim2.new(1, -2 * pad, 0, dh),
 				TextXAlignment = Enum.TextXAlignment.Center,
@@ -1774,6 +1803,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				ZIndex = 2,
 			}, 14)
+			Choice.fit(dl, dl.TextSize, 10, true)
 			y += dh + 6
 		end
 		y += 4
@@ -1918,8 +1948,15 @@ local function layoutLevelUp()
 	local panel = levelUp.Panel :: Frame
 	panel.Position = UDim2.fromOffset(0, 0)
 	panel.Size = UDim2.fromOffset(v.X, v.Y)
-	levelUp.Title.Position = UDim2.fromOffset(0, top)
-	levelUp.Title.Size = UDim2.new(1, 0, 0, titleH)
+	-- the title scales down inside its box; in landscape the box keeps clear of the Roblox
+	-- buttons at the top left (symmetric, so the title stays centred)
+	Choice.fit(levelUp.Title, TS(Choice.titleSize()), 14, false)
+	local tl = 0
+	if not portrait and top < insets.Top + 4 then
+		tl = math.min(math.floor(v.X * 0.3), Choice.topbarLeft() + 8)
+	end
+	levelUp.Title.Position = UDim2.fromOffset(tl, top)
+	levelUp.Title.Size = UDim2.new(1, -2 * tl, 0, titleH)
 	local y = top + titleH
 	levelUp.Divider.AnchorPoint = Vector2.new(0.5, 0)
 	levelUp.Divider.Position = UDim2.new(0.5, 0, 0, y)
@@ -2015,12 +2052,14 @@ local function showOffer(offer)
 	local skipGold = tonumber(offer.SkipGold) or Config.LevelUp.SkipGold
 	levelUp.Reroll.SetText(
 		"REROLL",
-		rerolls > 0 and string.format("%d left · %d new cards", rerolls, Config.LevelUp.Choices) or (rerollMax > 0 and "None left this run" or "Buy rerolls in the Shop")
+		rerolls > 0 and (phoneLandscape() and string.format("%d left", rerolls) or string.format("%d left · %d new cards", rerolls, Config.LevelUp.Choices))
+			or (rerollMax > 0 and "None left this run" or "Buy rerolls in the Shop")
 	)
 	levelUp.Reroll.SetEnabled(rerolls > 0)
 	levelUp.Skip.SetText(
 		"SKIP",
-		skips > 0 and string.format("%d left · +%d gold", skips, skipGold) or (skipMax > 0 and "None left this run" or "No skips left")
+		skips > 0 and (phoneLandscape() and string.format("%d left · +%d", skips, skipGold) or string.format("%d left · +%d gold", skips, skipGold))
+			or (skipMax > 0 and "None left this run" or "No skips left")
 	)
 	levelUp.Skip.SetEnabled(skips > 0)
 	local total = tonumber(offer.BatchTotal) or 1
@@ -3364,6 +3403,19 @@ end
 local runMenu: { [string]: any } = { Prompts = require(script.Parent.InputPrompts) }
 runMenu.ARM = 0.35 -- a press must begin this long after a state shows (no stale taps)
 
+-- Keeps a label inside its box: it scales down (to `minSize` at least, never above its
+-- own TextSize). Roblox's "Text size" accessibility setting grows plain TextSize text
+-- (about 1.45x on the owner's iPhone) and leaves TextScaled text alone, so the drawer's
+-- fixed boxes use this.
+function runMenu.fit(label: TextLabel, minSize: number?, wrap: boolean?)
+	local max = label.TextSize
+	label.TextScaled = true
+	label.TextWrapped = wrap == true
+	local c = label:FindFirstChildOfClass("UITextSizeConstraint") or new("UITextSizeConstraint", {}, label)
+	c.MaxTextSize = max
+	c.MinTextSize = math.min(max, minSize or 10)
+end
+
 -- True when the server freezes the run for this menu (its own rule, RunManager SetPause).
 function runMenu.menuFreezesRun(): boolean
 	local participants = tonumber(Remotes.State():GetAttribute("Participants")) or 1
@@ -3481,15 +3533,18 @@ function runMenu.buildRunMenu()
 	runMenu.Crest = Icons.Draw(drawer, "helmet", { Size = 52, Color = P.gold_400 })
 	runMenu.Crest.AnchorPoint = Vector2.new(0.5, 0)
 	runMenu.Title = text(drawer, "H1", "RUN MENU", { TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 3 })
+	runMenu.fit(runMenu.Title, 18)
 	-- "DUO · RUN CONTINUES" / "SOLO · GAME PAUSED"
 	local pill = new("Frame", { Name = "Status", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 }, drawer)
 	UIKit.corner(pill, 999)
 	runMenu.PillStroke = UIKit.stroke(pill, P.gold_400, 1.5, 0.1)
-	runMenu.PillText = text(pill, "Label", "", { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, ZIndex = 3 })
+	runMenu.PillText = text(pill, "Label", "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -20, 1, -6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, ZIndex = 3 })
+	runMenu.fit(runMenu.PillText, 9)
 	runMenu.Pill = pill
 	runMenu.Rule = UIKit.Hairline(drawer, { AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 })
 	runMenu.Rule.Parent = drawer
 	runMenu.Note = text(drawer, "Body", "", { TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = C.Text, ZIndex = 3 })
+	runMenu.fit(runMenu.Note, 11, true)
 
 	runMenu.Return = UIKit.Button(drawer, {
 		Kind = "Primary",
@@ -3576,6 +3631,7 @@ function runMenu.buildRunMenu()
 	UIKit.corner(tint, Theme.Radius.M)
 
 	runMenu.Hint = text(drawer, "Small", "", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
+	runMenu.fit(runMenu.Hint, 9)
 
 	local function layout()
 		local v = virtualSize()
@@ -3584,7 +3640,9 @@ function runMenu.buildRunMenu()
 		-- HP / timer at the top stay readable in a live group run
 		local sheet = portrait
 		local w = sheet and v.X or math.min(v.X, math.clamp(math.floor(v.X * (compact and 0.4 or 0.3)), 300, 420))
-		-- the Roblox buttons sit on the top right in some layouts: start below them
+		-- the Roblox buttons sit on the top right in some layouts: start below them (a
+		-- short screen gives that room back first: on iPhones the reading is off and the
+		-- top right is free, owner's 2026-10-06 shots)
 		local top = (not sheet and insets.Right > 0 and insets.Top or 0) + 14
 		runMenu.Width = w
 		runMenu.Sheet = sheet
@@ -3596,25 +3654,41 @@ function runMenu.buildRunMenu()
 		local titleH = TS(30) + 6
 		local pillH = TS(14) + 14
 		local hintH = TS(14) + 8
-		-- note lines (rough: ~0.5 em per character)
-		local perLine = math.max(10, math.floor(inner / (TS(16) * 0.5)))
+		-- note lines (rough: ~0.55 em per character; the label shrinks to fit for real)
+		local perLine = math.max(10, math.floor(inner / (TS(16) * 0.55)))
 		local lines = math.clamp(math.ceil(#runMenu.Note.Text / perLine), 1, 6)
 		local noteH = lines * (TS(16) + 3) + 4
 		local confirming = runMenu.Confirming == true
 		local buttons = confirming and 2 or 4
 		local crest = sheet and 0 or 52
+		-- SETTINGS and VIEW BUILD share one row on the shortest screens
+		local paired = false
 		local function need(): number
+			local rows = (paired and not confirming) and buttons - 1 or buttons
 			return top + chipH + gap + (crest > 0 and crest + 4 or 0) + titleH + 6 + pillH + gap + 1 + gap + noteH + gap * 2
-				+ buttons * bh + buttons * gap + gap + 1 + hintH + 12
+				+ rows * bh + rows * gap + gap + 1 + 12
 		end
-		-- short screens: drop the crest, then tighter buttons
+		-- short screens: drop the crest, the top-right inset, then tighter buttons, then
+		-- pair SETTINGS / VIEW BUILD, then a shorter note box (the note shrinks to fit)
 		if need() > v.Y then
 			crest = 0
+		end
+		if need() > v.Y and top > 14 then
+			top = 10
 		end
 		if need() > v.Y then
 			bh = math.max(Theme.Size.TapMin, bh - 8)
 		end
-		local showHint = need() <= v.Y
+		if need() > v.Y and not confirming then
+			paired = true
+		end
+		if need() > v.Y then
+			noteH = math.max(TS(16) * 2 + 8, noteH - (need() - v.Y))
+		end
+		if need() > v.Y then
+			gap = 6
+		end
+		local showHint = need() + hintH <= v.Y
 		local H = sheet and math.min(v.Y, need()) or v.Y
 		runMenu.Height = H
 		drawer.AnchorPoint = Vector2.new(1, 0)
@@ -3645,7 +3719,7 @@ function runMenu.buildRunMenu()
 		runMenu.Title.Position = UDim2.fromOffset(pad, y)
 		runMenu.Title.Size = UDim2.fromOffset(inner, titleH)
 		y += titleH + 6
-		local pw = math.min(inner, math.floor(utf8.len(runMenu.PillText.Text) or 0) * math.floor(TS(14) * 0.66) + 40)
+		local pw = math.min(inner, math.floor(utf8.len(runMenu.PillText.Text) or 0) * math.floor(TS(14) * 0.75) + 48)
 		runMenu.Pill.Position = UDim2.fromOffset(math.floor(w / 2), y)
 		runMenu.Pill.Size = UDim2.fromOffset(pw, pillH)
 		y += pillH + gap
@@ -3664,8 +3738,19 @@ function runMenu.buildRunMenu()
 			end
 		end
 		place(runMenu.Return, true)
-		place(runMenu.Settings, not confirming)
-		place(runMenu.Build, not confirming)
+		if paired and not confirming then
+			local hw = math.floor((inner - gap) / 2)
+			runMenu.Settings.Instance.Visible = true
+			runMenu.Settings.Instance.Position = UDim2.fromOffset(pad, y)
+			runMenu.Settings.Instance.Size = UDim2.fromOffset(hw, bh)
+			runMenu.Build.Instance.Visible = true
+			runMenu.Build.Instance.Position = UDim2.fromOffset(pad + hw + gap, y)
+			runMenu.Build.Instance.Size = UDim2.fromOffset(inner - hw - gap, bh)
+			y += bh + gap
+		else
+			place(runMenu.Settings, not confirming)
+			place(runMenu.Build, not confirming)
+		end
 		runMenu.Rule2.Visible = not confirming
 		if not confirming then
 			runMenu.Rule2.Position = UDim2.fromOffset(math.floor(w / 2), y)

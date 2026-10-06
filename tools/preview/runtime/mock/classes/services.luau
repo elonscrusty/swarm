@@ -983,6 +983,15 @@ R.defineClass("Team", {
 -- filter would; anything else passes unchanged.
 R.defineClass("TextService", {
 	methods = {
+		-- measured like a label (no kerning); grows with the Text size setting as on Roblox
+		GetTextSize = function(_, str, size, font, frame)
+			local T = require("../text")
+			local face = typeof(font) == "Font" and font or roblox.Font.fromEnum(font)
+			local px = size * (R.textScale or 1)
+			local res = T.layout({ text = tostring(str), font = face, size = px, wrap = true, maxWidth = frame and frame.X or math.huge, lineHeight = 1 })
+			local h = math.max(res.height, px)
+			return Vector2.new(math.ceil(res.width), math.ceil(h))
+		end,
 		FilterStringAsync = function(_, text)
 			local filtered = (string.gsub(tostring(text), "[Bb]adword", "#######"))
 			return {

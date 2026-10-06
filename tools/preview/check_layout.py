@@ -11,6 +11,9 @@ reports, per scene and device:
   TOPBAR     visible text under Roblox's own top-bar buttons (menu / chat ghost)
   COVERED    visible text partly hidden under an opaque panel or button painted later
   TRUNCATED  text cut with "..." (information only; lists and long names truncate on purpose)
+  CUT        text cut with "..." down to a stub: under 4 characters left, a one-to-three-word
+             label (button, name, tab) losing a quarter of its letters, or any text losing
+             more than 60 % ("BA..." for BACK, "Alch..." for Alchemist)
   OVERFLOW   a text line wider than its own label running past the label's sides (text too
              big for its box: drawn over neighbours, or cut by whatever is painted next)
   CLIPPED    a text line sliced by a clipping frame so only a sliver of it shows (information
@@ -22,7 +25,7 @@ Usage:
   python3 tools/preview/check_layout.py DIR [DIR ...] [--strict] [--quiet]
   python3 tools/preview/check_layout.py out/sweep/levelup-iphone.json
 
-Exit code 1 when any OVERLAP / OFFSCREEN / TOPBAR / COVERED / OVERFLOW finding is left after the allowlist
+Exit code 1 when any OVERLAP / OFFSCREEN / TOPBAR / COVERED / OVERFLOW / CUT finding is left after the allowlist
 (--strict also fails on TRUNCATED; CLIPPED / SMALL never fail). The allowlist below names known, intended cases.
 """
 from __future__ import annotations
@@ -137,6 +140,7 @@ def collect(doc):
                             "truncated": seg["t"].endswith("..."),
                             "box": rect,
                             "full": full,
+                            "src": t.get("full"),
                             "layer": L.get("name"),
                         })
     return boxes, texts, gui
@@ -170,6 +174,9 @@ def check_doc(path, strict=False):
     core = gui.get("coreGui") or {}
     if core.get("Chat") is not False:
         buttons.append((left + 56, by, left + 100, by + 44))
+    if gui.get("coreButtons"):
+        # measured device top bar (iphone): round Roblox button + menu/chat pill
+        buttons = [(b["x"], b["y"], b["x"] + b["w"], b["y"] + b["h"]) for b in gui["coreButtons"]]
 
     screen = (0, 0, W, H)
     # panels (opaque boxes of some size) running off the screen; full-bleed layers are fine
@@ -193,7 +200,16 @@ def check_doc(path, strict=False):
                 findings.append(("TOPBAR", t["name"], t["text"], r))
                 break
         if t["truncated"]:
-            findings.append(("TRUNCATED", t["name"], t["text"], r))
+            kind = "TRUNCATED"
+            src = (t.get("src") or "").strip()
+            shown = t["text"][:-3].strip()
+            if src and len(src) > len(shown):
+                words = len(src.split())
+                # cut to a stub: "BA..." for BACK, "Alch..." for Alchemist, "R..." -
+                # a button / name / short label too narrow for its own words
+                if len(shown) < 4 or (words <= 3 and len(shown) < 0.75 * len(src)) or len(shown) < 0.4 * len(src):
+                    kind = "CUT"
+            findings.append((kind, t["name"], t["text"] + ("  [" + src + "]" if kind == "CUT" else ""), r))
         raw = t["raw"]
         bx = t["box"]
         if (bx[0] - raw[0] > OVERFLOW_PX or raw[2] - bx[2] > OVERFLOW_PX) and ("O", t["index"]) not in info_seen:
@@ -291,7 +307,7 @@ def main(argv):
         print(__doc__)
         return 2
     bad = 0
-    total = {"OVERLAP": 0, "OFFSCREEN": 0, "TOPBAR": 0, "COVERED": 0, "OVERFLOW": 0, "TRUNCATED": 0, "CLIPPED": 0, "SMALL": 0}
+    total = {"CUT": 0, "OVERLAP": 0, "OFFSCREEN": 0, "TOPBAR": 0, "COVERED": 0, "OVERFLOW": 0, "TRUNCATED": 0, "CLIPPED": 0, "SMALL": 0}
     for p in paths:
         try:
             scene, device, findings = check_doc(p, strict)
@@ -312,7 +328,7 @@ def main(argv):
             if not quiet:
                 for kind, name, text, r in soft:
                     print(f"   {kind:9s} {name}: {text!r}")
-    print(f"checked {len(paths)} scene(s): {total['OVERLAP']} overlap, {total['OFFSCREEN']} off-screen, {total['TOPBAR']} under top bar, {total['COVERED']} part-covered, {total['OVERFLOW']} overflowing, {total['TRUNCATED']} truncated, {total['CLIPPED']} clipped, {total['SMALL']} small; {bad} scene(s) with problems")
+    print(f"checked {len(paths)} scene(s): {total['CUT']} cut short, {total['OVERLAP']} overlap, {total['OFFSCREEN']} off-screen, {total['TOPBAR']} under top bar, {total['COVERED']} part-covered, {total['OVERFLOW']} overflowing, {total['TRUNCATED']} truncated, {total['CLIPPED']} clipped, {total['SMALL']} small; {bad} scene(s) with problems")
     return 1 if bad else 0
 
 

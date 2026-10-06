@@ -16,8 +16,8 @@
 
 	FeatureHud.Slot(name) returns the raw holder Frame ("Badges", "Announcer", "Ultimate",
 	"PingWheel") for custom content. Everything is hidden outside a run, while dead for
-	the ultimate, and while a panel covers the HUD (UIState.Covered: level-up, rewards,
-	pause, results, travel ...). Nothing shows until a feature uses a slot.
+	the ultimate, and while any panel is shown (UIState.Covered or UIState.Owner: level-up,
+	rewards, the run menu drawer, results, travel ...). Nothing shows until a feature uses a slot.
 ]]
 
 local Players = game:GetService("Players")
@@ -423,7 +423,9 @@ function FeatureHud.Init()
 
 	-- per frame: only writes that change something (no churn in the lobby)
 	RunService.RenderStepped:Connect(function()
-		local on = inRun() and not UIState.Covered()
+		-- hidden under ANY shown panel, not only the covering ones: the run menu drawer leaves
+		-- the HUD in view, and the ULT button drew on top of it (owner's iPhone, 2026-10-06)
+		local on = inRun() and not UIState.Covered() and UIState.Owner() == nil
 		setVisible(on)
 		if screen.Enabled ~= on then
 			screen.Enabled = on
