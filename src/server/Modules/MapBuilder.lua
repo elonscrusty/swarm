@@ -665,13 +665,14 @@ local LIGHTING = {
 		-- dusk (title screen, overhaul 01_Title): the sun just setting behind the pines on
 		-- the left, a warm orange horizon under a deep blue-violet sky, cool lavender
 		-- ambient on the castle stone and warm torches / braziers / the dais glow doing the
-		-- rest; restrained bloom so the flames and runes glow without the hero washing out
-		Clock = 17.8, Brightness = 1.15, Latitude = 40, Shadow = 0.4,
-		Ambient = rgb(118, 112, 160), Outdoor = rgb(168, 154, 204), Top = rgb(255, 204, 168), Bottom = rgb(50, 40, 70),
+		-- rest; restrained bloom so the flames and runes glow without the hero washing out (dimmed
+		-- 2026-10-06: the owner found the menu too bright)
+		Clock = 17.8, Brightness = 0.8, Latitude = 40, Shadow = 0.4,
+		Ambient = rgb(94, 90, 130), Outdoor = rgb(128, 118, 160), Top = rgb(255, 204, 168), Bottom = rgb(50, 40, 70),
 		Diffuse = 0.3, Specular = 0.35,
 		Atmo = { Density = 0.13, Offset = 0.1, Color = rgb(232, 146, 112), Decay = rgb(92, 82, 168), Glare = 0.2, Haze = 1.1 },
-		Bloom = { Intensity = 0.45, Size = 24, Threshold = 1.25 },
-		Grade = { Brightness = 0, Contrast = 0.16, Saturation = 0.2, Tint = rgb(255, 242, 238) },
+		Bloom = { Intensity = 0.28, Size = 22, Threshold = 1.5 },
+		Grade = { Brightness = -0.04, Contrast = 0.16, Saturation = 0.2, Tint = rgb(255, 242, 238) },
 		Rays = { Intensity = 0.02, Spread = 0.5 },
 		Clouds = { Cover = 0.45, Density = 0.45, Color = rgb(124, 104, 158) },
 	},
@@ -1016,7 +1017,7 @@ function MapBuilder.BuildLobby()
 			d.CanCollide = true
 		end
 	end
-	local RUNE = rgb(255, 196, 92)
+	local RUNE = rgb(214, 156, 66) -- dimmer neon (owner: menu too bright, 2026-10-06)
 	local runes = Instance.new("Model")
 	runes.Name = "DaisRunes"
 	runes.Parent = folder
@@ -1048,14 +1049,14 @@ function MapBuilder.BuildLobby()
 			rune(Vector3.new(0.4, 0.08, 0.06), face * CFrame.new(0, -0.2, 0))
 		end
 	end
-	pointLight(folder, daisPos + Vector3.new(0, daisTop + 0.25, 3.2), 8, 0.6, RUNE, false)
-	for _, b in ipairs({ { 9.2, -3, 1.05, 16, 1.7 }, { 7.4, -12, 0.82, 12, 1.2 } }) do
+	pointLight(folder, daisPos + Vector3.new(0, daisTop + 0.25, 3.2), 8, 0.45, RUNE, false)
+	for _, b in ipairs({ { 9.2, -3, 1.05, 14, 1.1 }, { 7.4, -12, 0.82, 11, 0.8 } }) do
 		for _, sx in ipairs({ -1, 1 }) do
 			local cf = CFrame.new(daisPos + Vector3.new(sx * b[1], 0, b[2]))
 			prop(folder, "Brazier", cf, b[3], { Flame = FLAME.Flame, Core = FLAME.Core, Stone = mix(P.stone_400, P.slate_400, 0.3), Base = mix(P.stone_500, P.slate_500, 0.3) })
-			fire(kitLightPoint("Brazier", cf, b[3]) or cf.Position + Vector3.new(0, 3.3 * b[3], 0), 2.6 * b[3])
+			fire(kitLightPoint("Brazier", cf, b[3]) or cf.Position + Vector3.new(0, 3.3 * b[3], 0), 2.0 * b[3])
 			-- warm glow pooled on the flagstones under the bowl
-			pointLight(folder, cf.Position + Vector3.new(0, 1.2, 1.2), 9, 0.9, FIRE, false)
+			pointLight(folder, cf.Position + Vector3.new(0, 1.2, 1.2), 8, 0.55, FIRE, false)
 			pointLight(folder, (kitLightPoint("Brazier", cf, b[3]) or cf.Position + Vector3.new(0, 3.4, 0)) + Vector3.new(0, 1.4, 0), b[4], b[5], FIRE, true)
 		end
 	end
@@ -1070,7 +1071,7 @@ function MapBuilder.BuildLobby()
 	-- key light: soft and neutral-warm, in front of the hero above the camera line (bright
 	-- enough to read, never washed out; silver stays silver, gold trim stays gold); a cool
 	-- dusk rim from behind and a warm sunset fill from the left separate it from the gate
-	pointLight(folder, daisPos + Vector3.new(-2.5, 9, 8), 15, 1.25, rgb(255, 228, 204), false)
+	pointLight(folder, daisPos + Vector3.new(-2.5, 9, 8), 15, 1.05, rgb(255, 228, 204), false)
 	pointLight(folder, daisPos + Vector3.new(3, 8, -4.5), 10, 1.3, rgb(160, 168, 255), false)
 	pointLight(folder, daisPos + Vector3.new(-5, 5, 1.5), 9, 0.8, rgb(255, 170, 110), false)
 	-- cool dusk light over the courtyard and a lavender wash on the castle front
