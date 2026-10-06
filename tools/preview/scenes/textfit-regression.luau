@@ -52,10 +52,13 @@ local function audit(screenName: string)
 	return managed, grown, bad
 end
 
+-- counted while each screen is shown (audit only sees shown labels)
+local totalGrown = 0
 for _, name in ipairs({ "Party", "Daily", "Arenas", "Characters", "Play", "Track" }) do
 	LS.Show(name)
 	C.settle(1.5)
 	local managed, grown, bad = audit(name)
+	totalGrown += grown
 	if medium then
 		check(managed == 0, name .. ": TextFit idle at Medium", managed .. " managed")
 	else
@@ -66,11 +69,6 @@ end
 local stats = TextFit.Stats()
 check(stats.Pending == 0, "TextFit settled", stats.Watched .. " watched, " .. stats.Pending .. " pending")
 if not medium then
-	local _, totalGrown = 0, 0
-	for _, name in ipairs({ "Party", "Daily", "Play" }) do
-		local _m, g = audit(name)
-		totalGrown += g
-	end
 	check(totalGrown > 0, "the setting is honoured where there is room", totalGrown .. " labels above their design size")
 end
 
