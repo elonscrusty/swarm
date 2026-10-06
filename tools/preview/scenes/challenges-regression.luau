@@ -49,6 +49,10 @@ for k in pairs(Config.Features) do
 	Config.Features[k] = mine[k] == true
 end
 Config.CursedChest.Chance = 1
+-- the trial's mechanics are tested on stage 1, so its stage gate (Config.TrialShrine.MinStage,
+-- 2 since BALANCE-2) is lowered here; section 5b checks the gate itself
+local trialGate = Config.TrialShrine.MinStage or 1
+Config.TrialShrine.MinStage = 1
 
 local function itemCount(rp): number
 	local n = 0
@@ -302,6 +306,15 @@ check(not RM.IsRunning(), "run ended")
 check(MB.Get() == nil and TS.Get() == nil and not CC.Active(), "encounters cleaned up at run end")
 check((state:GetAttribute("MiniBossId") or 0) == 0 and (state:GetAttribute("TrialLeft") or -1) == -1 and (state:GetAttribute("CurseLeft") or 0) == 0, "SwarmState attributes cleared")
 check(mbModel == nil or mbModel.Parent == nil, "chest models removed")
+
+-- 5b) stage gate: with the shipped MinStage there is no Shrine of Trial on stage 1 --------
+Config.TrialShrine.MinStage = trialGate
+preview.remote("StartRun"):FireServer("Solo")
+advance(2)
+check(trialGate <= 1 or TS.Get() == nil, "MinStage " .. tostring(trialGate) .. ": no Shrine of Trial on stage 1")
+preview.remote("AbandonRun"):FireServer()
+advance(2)
+check(not RM.IsRunning(), "gate run ended")
 
 -- 6) switches off --------------------------------------------------------------------
 Config.Features.MiniBosses, Config.Features.TrialShrine, Config.Features.CursedChests = false, false, false
