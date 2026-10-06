@@ -6,10 +6,14 @@
 --                                  defaults to Largest, the owner's phone)
 -- Render the PNGs with tools/preview/sweep.sh (it runs this scene and the renderer).
 local C = lib("common")
+print("[sweep] boot")
 C.lobby()
+print("[sweep] lobby built")
 local ava = preview.addPlayer("VinyLucifer", 2)
 preview.addPlayer("MaximilianTheVeryLongName", 7)
+print("[sweep] players added")
 C.startClient()
+print("[sweep] client started")
 local CurseData = C.shared("CurseData")
 local day = CurseData and CurseData.DayOf(os.time()) or 0
 C.setState({ DailyDay = day })
@@ -34,7 +38,9 @@ profile.LastRun = {
 C.sendProfile(profile)
 C.fire("PartyState", { LeaderId = 0, Members = {}, Max = 3, Invites = {}, Sent = {} })
 ava:SetAttribute("PartyId", nil)
+print("[sweep] profile sent")
 C.settle(2)
+print("[sweep] settled")
 
 local LS = preview.client("LobbyScreen")
 local all = {
@@ -71,6 +77,7 @@ for _, name in ipairs(want) do
 			preview.warn("lobby-sweep: Show(" .. name .. ") failed: " .. tostring(err))
 		end
 	end
+	print("[sweep] showing " .. name)
 	C.settle(2.5)
 	preview.snapshot(string.lower(name))
 	if name == "Settings" then

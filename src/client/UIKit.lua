@@ -1739,6 +1739,114 @@ function UIKit.Modal(root: Instance, name: string, width: number, height: number
 end
 
 ------------------------------------------------------------------------------------------
+-- Scroll hint: phones hide scroll bars, so a list cut at the bottom looked finished.
+-- A small gold chevron badge sits on the frame's bottom (or right) edge while there is
+-- more to scroll that way, and one on the top (left) edge once scrolled. It follows the
+-- frame (a sibling overlay; no input), so any ScrollingFrame can get one.
+------------------------------------------------------------------------------------------
+
+function UIKit.ScrollHint(sf: ScrollingFrame)
+	if sf:GetAttribute("ScrollHint") or not sf.Parent then
+		return
+	end
+	sf:SetAttribute("ScrollHint", true)
+	local overlay = new("Frame", {
+		Name = sf.Name .. "Hint",
+		BackgroundTransparency = 1,
+		Active = false,
+		ZIndex = sf.ZIndex + 5,
+		Visible = false,
+	}, sf.Parent)
+	local function badge(name: string, rotation: number): Frame
+		local b = new("Frame", {
+			Name = name,
+			BackgroundColor3 = C.Panel,
+			BackgroundTransparency = 0.08,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(30, 20),
+			Visible = false,
+			Active = false,
+			ZIndex = sf.ZIndex + 5,
+		}, overlay)
+		corner(b, 10)
+		stroke(b, P.gold_400, 1.5, 0.1)
+		local g = Icons.Draw(b, "chevronRight", { Size = 14, Color = P.gold_300 })
+		g.AnchorPoint = Vector2.new(0.5, 0.5)
+		g.Position = UDim2.fromScale(0.5, 0.5)
+		g.Rotation = rotation
+		g.ZIndex = sf.ZIndex + 6
+		return b
+	end
+	local down, up = badge("More", 90), badge("Back", -90)
+	local downGlyph = down:FindFirstChildWhichIsA("Frame") :: Frame
+	local upGlyph = up:FindFirstChildWhichIsA("Frame") :: Frame
+	local function update()
+		local parent = sf.Parent
+		if not parent or not overlay.Parent then
+			return
+		end
+		overlay.Visible = sf.Visible
+		overlay.AnchorPoint = sf.AnchorPoint
+		overlay.Position = sf.Position
+		overlay.Size = sf.Size
+		overlay.ZIndex = sf.ZIndex + 5
+		local canvas, window, at = sf.AbsoluteCanvasSize, sf.AbsoluteWindowSize, sf.CanvasPosition
+		local k = 1
+		local own = sf.Size.Y.Scale == 0 and sf.Size.Y.Offset > 0 and sf.Size.Y.Offset or nil
+		if own and sf.AbsoluteSize.Y > 0 then
+			k = sf.AbsoluteSize.Y / own -- screen px per layout px (UIScale)
+		end
+		local horizontal = canvas.X > window.X + 4 and canvas.Y <= window.Y + 4
+		local more, back
+		if horizontal then
+			more = at.X * k + window.X < canvas.X - 4
+			back = at.X > 4
+			down.AnchorPoint, down.Position = Vector2.new(1, 0.5), UDim2.new(1, -2, 0.5, 0)
+			up.AnchorPoint, up.Position = Vector2.new(0, 0.5), UDim2.new(0, 2, 0.5, 0)
+			down.Size, up.Size = UDim2.fromOffset(20, 30), UDim2.fromOffset(20, 30)
+			downGlyph.Rotation = 0
+			upGlyph.Rotation = 180
+		else
+			more = at.Y * k + window.Y < canvas.Y - 4
+			back = at.Y > 4
+			down.AnchorPoint, down.Position = Vector2.new(0.5, 1), UDim2.new(0.5, 0, 1, -2)
+			up.AnchorPoint, up.Position = Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 2)
+			down.Size, up.Size = UDim2.fromOffset(30, 20), UDim2.fromOffset(30, 20)
+			downGlyph.Rotation = 90
+			upGlyph.Rotation = -90
+		end
+		down.Visible = more
+		up.Visible = back
+	end
+	for _, prop in ipairs({ "CanvasPosition", "AbsoluteCanvasSize", "AbsoluteWindowSize", "Position", "Size", "Visible", "AnchorPoint" }) do
+		sf:GetPropertyChangedSignal(prop):Connect(update)
+	end
+	sf.AncestryChanged:Connect(function(_, parent)
+		if parent == nil then
+			overlay:Destroy()
+		elseif overlay.Parent ~= parent then
+			overlay.Parent = parent
+			update()
+		end
+	end)
+	update()
+end
+
+-- Every ScrollingFrame under `root`, now and later, gets a ScrollHint.
+function UIKit.ScrollHints(root: Instance)
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("ScrollingFrame") then
+			UIKit.ScrollHint(d)
+		end
+	end
+	root.DescendantAdded:Connect(function(d)
+		if d:IsA("ScrollingFrame") then
+			task.defer(UIKit.ScrollHint, d)
+		end
+	end)
+end
+
+------------------------------------------------------------------------------------------
 -- Screen header (lobby sub-screens): [< BACK]  TITLE
 ------------------------------------------------------------------------------------------
 

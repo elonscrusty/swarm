@@ -1520,6 +1520,8 @@ function LobbyScreen.Init(h: { [string]: any })
 	if Config.FeatureOn("Store") then
 		screens.Store = require(script.Parent.MenuStore).Build(screen("Store"), ctx)
 	end
+	-- phones hide scroll bars: every list that can scroll shows a chevron (UIKit.ScrollHint)
+	UIKit.ScrollHints(ui.Screens)
 	-- gamepad B on a lobby screen = its BACK button. Not while a panel (settings, bug
 	-- report ...) owns input, nor on the same press that just closed one (its own B
 	-- handler may run first), nor while typing.
