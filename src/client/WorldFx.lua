@@ -389,8 +389,12 @@ function WorldFx.Init()
 	f.Name = "WorldFxClient"
 	f.Parent = workspace
 	fxFolder = f
-	task.spawn(function()
-		local src = workspace:WaitForChild("WorldFx")
+	-- workspace.WorldFx is made by the server (WorldEvents.Init). Bind when it is there
+	-- or when it arrives, without yielding a thread forever if it never does.
+	local function bind(src: Instance)
+		if folder == src then
+			return
+		end
 		folder = src
 		src:GetAttributeChangedSignal("MapEvent"):Connect(onEvent)
 		src:GetAttributeChangedSignal("MapEventLeft"):Connect(updateBadges)
@@ -402,7 +406,21 @@ function WorldFx.Init()
 		src.ChildAdded:Connect(addMeteor)
 		onEvent()
 		onWorld()
-	end)
+	end
+	local existing = workspace:FindFirstChild("WorldFx")
+	if existing then
+		bind(existing)
+	else
+		local conn: RBXScriptConnection? = nil
+		conn = workspace.ChildAdded:Connect(function(child)
+			if child.Name == "WorldFx" and child:IsA("Folder") then
+				if conn then
+					conn:Disconnect()
+				end
+				bind(child)
+			end
+		end)
+	end
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
 		applyAmbient()
 		updateBadges()

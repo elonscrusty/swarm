@@ -70,6 +70,14 @@ end
 -- Badges
 ------------------------------------------------------------------------------------------
 
+-- The badge row / announcer / ultimate placement reads AbsoluteSize / AbsolutePosition,
+-- which forces a GUI layout pass whenever anything on screen changed that frame. So it runs
+-- only when something of ours changed (layoutDirty) and otherwise once a second to
+-- follow the HUD around it (minimap, team rows), not every frame.
+local layoutDirty = true
+local nextLayout = 0
+local LAYOUT_EVERY = 1
+
 -- Hides the highest orders beyond the cap (fewer on phones, Config.FeatureHud.MaxBadgesCompact).
 local function applyCap()
 	local list = {}
@@ -118,6 +126,7 @@ function FeatureHud.Badge(id: string, opts: { Text: string?, Color: Color3?, Ord
 	end
 	frame.LayoutOrder = opts.Order or 100
 	applyCap()
+	layoutDirty = true
 	return frame
 end
 
@@ -127,6 +136,7 @@ function FeatureHud.RemoveBadge(id: string)
 		b:Destroy()
 		badges[id] = nil
 		applyCap()
+		layoutDirty = true
 	end
 end
 
@@ -144,6 +154,7 @@ function FeatureHud.Announce(text: string, opts: { Color: Color3?, Seconds: numb
 	label.Text = text
 	label.TextColor3 = o.Color or P.gold_200
 	announceUntil = text == "" and 0 or os.clock() + (o.Seconds or F.AnnounceSeconds)
+	layoutDirty = true
 end
 
 ------------------------------------------------------------------------------------------
@@ -155,6 +166,9 @@ end
 	(touch) and binds the key; nil hides it and unbinds. Call again to update the charge.
 ]]
 function FeatureHud.SetUltimate(cfg: { OnActivate: (() -> ())?, Charge: number?, Label: string? }?)
+	if (cfg == nil) ~= (ultimate == nil) then
+		layoutDirty = true
+	end
 	ultimate = cfg
 end
 
@@ -413,148 +427,157 @@ function FeatureHud.Init()
 		setVisible(on)
 		if screen.Enabled ~= on then
 			screen.Enabled = on
+			layoutDirty = true
 		end
 		if not on then
 			return
 		end
 		local now = os.clock()
-		-- badges: right-aligned inside the safe area (root), under the counters and clear
-		-- of the minimap, team rows and tip card; the row shrinks before badges are dropped
-		applyCap()
-		local origin, rootSize = root.AbsolutePosition, root.AbsoluteSize
-		local w = rootSize.X
-		local margin = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
-		local scale = rowScale.Scale
-		local natural = badgeRow.AbsoluteSize.X / math.max(scale, 0.01)
-		local maxW = math.max(80, (UIKit.IsCompact() and w * 0.62 or w * 0.45) - margin)
-		local fit = math.clamp(maxW / math.max(natural, 1), F.BadgeMinScale or 0.7, 1)
-		if math.abs(fit - scale) > 0.01 then
-			rowScale.Scale = fit
-			scale = fit
-		end
-		local rw, rh = natural * scale, F.BadgeSize * scale
-		local right = origin.X + w - margin
-		local top = math.max(topRightBottom() + 8, origin.Y + 8)
-		local y = top
-		if natural > 1 then
-			local rects = obstacles(playerGui)
-			-- drops `y` under every rect the row at (rx, y) would touch; nil = no room left
-			local function settle(rx: number, y0: number): number?
-				local yy = y0
-				for _ = 1, 8 do
-					local moved = false
-					for _, r in ipairs(rects) do
-						if r.Max.X > rx - rw - 6 and r.Min.X < rx + 6 and r.Max.Y > yy - 4 and r.Min.Y < yy + rh + 4 then
-							yy = r.Max.Y + 8
-							moved = true
+		local doLayout = layoutDirty or now >= nextLayout
+		-- (the announcer line hides on time even between layout passes)
+		local doAnnounce = announceLabel ~= nil and announceLabel.Visible and now >= announceUntil
+		if doLayout or doAnnounce then
+			layoutDirty = false
+			nextLayout = now + LAYOUT_EVERY
+			-- badges: right-aligned inside the safe area (root), under the counters and clear
+			-- of the minimap, team rows and tip card; the row shrinks before badges are dropped
+			applyCap()
+			local origin, rootSize = root.AbsolutePosition, root.AbsoluteSize
+			local w = rootSize.X
+			local margin = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+			local scale = rowScale.Scale
+			local natural = badgeRow.AbsoluteSize.X / math.max(scale, 0.01)
+			local maxW = math.max(80, (UIKit.IsCompact() and w * 0.62 or w * 0.45) - margin)
+			local fit = math.clamp(maxW / math.max(natural, 1), F.BadgeMinScale or 0.7, 1)
+			if math.abs(fit - scale) > 0.01 then
+				rowScale.Scale = fit
+				scale = fit
+			end
+			local rw, rh = natural * scale, F.BadgeSize * scale
+			local right = origin.X + w - margin
+			local top = math.max(topRightBottom() + 8, origin.Y + 8)
+			local y = top
+			if natural > 1 then
+				local rects = obstacles(playerGui)
+				-- drops `y` under every rect the row at (rx, y) would touch; nil = no room left
+				local function settle(rx: number, y0: number): number?
+					local yy = y0
+					for _ = 1, 8 do
+						local moved = false
+						for _, r in ipairs(rects) do
+							if r.Max.X > rx - rw - 6 and r.Min.X < rx + 6 and r.Max.Y > yy - 4 and r.Min.Y < yy + rh + 4 then
+								yy = r.Max.Y + 8
+								moved = true
+							end
+						end
+						if not moved then
+							return yy + rh <= origin.Y + rootSize.Y * 0.75 and yy or nil
 						end
 					end
-					if not moved then
-						return yy + rh <= origin.Y + rootSize.Y * 0.75 and yy or nil
-					end
+					return nil
 				end
-				return nil
-			end
-			local found = settle(right, top)
-			if not found then
-				-- the right column is full (team rows, minimap, tip card): sit at the top,
-				-- left of whatever fills the column under the counters
-				local colLeft = right
-				for _, r in ipairs(rects) do
-					if r.Max.X > right - rw - 6 and r.Min.Y >= top - 4 and r.Min.Y < top + 3 * rh then
-						colLeft = math.min(colLeft, r.Min.X)
-					end
-				end
-				if colLeft - 8 - rw > origin.X + margin then
-					found = settle(colLeft - 8, top)
-					if found then
-						right = colLeft - 8
-					end
-				end
-			end
-			y = found or top
-		end
-		local at = UDim2.fromOffset(math.floor(right - origin.X + 0.5), math.floor(y - origin.Y + 0.5))
-		if badgeRow.Position ~= at then
-			badgeRow.Position = at
-		end
-		local line = announceLabel
-		if line then
-			local show = line.Text ~= "" and now < announceUntil
-			if line.Visible ~= show then
-				line.Visible = show
-			end
-			if show then
-				-- the upper third, but under the HUD's top cluster (timer, objective, boss
-				-- bar; portrait: vitals and abilities) and the portrait minimap
-				local holder = slots.Announcer
-				local ah = 40
-				local aw = math.floor(rootSize.X * 0.9)
-				local ay = origin.Y + rootSize.Y * 0.26 - ah / 2
-				local rects = {}
-				refreshFinds(playerGui)
-				local els = elementsOf("Hud")
-				if els then
-					for _, key in ipairs({ "TimerPill", "Stage", "Plate", "Boss", "Bar" }) do
-						addRect(rects, els[key])
-					end
-				end
-				if natural > 1 then
-					addRect(rects, badgeRow) -- the feature badges (placed above, this frame)
-				end
-				local map = {}
-				addRect(map, cachedFinds.MiniMap)
-				local mapRect = map[1]
-				local left = origin.X + (rootSize.X - aw) / 2
-				local edge = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
-				for _ = 1, 4 do
+				local found = settle(right, top)
+				if not found then
+					-- the right column is full (team rows, minimap, tip card): sit at the top,
+					-- left of whatever fills the column under the counters
+					local colLeft = right
 					for _, r in ipairs(rects) do
-						if r.Max.X > left and r.Min.X < left + aw and r.Max.Y > ay - 2 and r.Min.Y < ay + ah + 2 then
-							ay = r.Max.Y + 4
+						if r.Max.X > right - rw - 6 and r.Min.Y >= top - 4 and r.Min.Y < top + 3 * rh then
+							colLeft = math.min(colLeft, r.Min.X)
+						end
+					end
+					if colLeft - 8 - rw > origin.X + margin then
+						found = settle(colLeft - 8, top)
+						if found then
+							right = colLeft - 8
 						end
 					end
 				end
-				-- the minimap (portrait: left edge under the cluster): a narrower line beside it
-				-- (TextScaled shrinks the words) rather than one over the hero
-				if mapRect and mapRect.Max.X > left and mapRect.Min.X < left + aw and mapRect.Max.Y > ay - 2 and mapRect.Min.Y < ay + ah + 2 then
-					-- first: a centred line narrowed to clear it; then: beside it; last: under it
-					local centre = origin.X + rootSize.X / 2
-					local half = mapRect.Min.X > centre and (mapRect.Min.X - 8 - centre) or (centre - mapRect.Max.X - 8)
-					local room = origin.X + rootSize.X - edge - (mapRect.Max.X + 8)
-					if half * 2 >= 240 then
-						aw = math.floor(math.min(aw, half * 2))
-						left = centre - aw / 2
+				y = found or top
+			end
+			local at = UDim2.fromOffset(math.floor(right - origin.X + 0.5), math.floor(y - origin.Y + 0.5))
+			if badgeRow.Position ~= at then
+				badgeRow.Position = at
+			end
+			local line = announceLabel
+			if line then
+				local show = line.Text ~= "" and now < announceUntil
+				if line.Visible ~= show then
+					line.Visible = show
+				end
+				if show then
+					-- the upper third, but under the HUD's top cluster (timer, objective, boss
+					-- bar; portrait: vitals and abilities) and the portrait minimap
+					local holder = slots.Announcer
+					local ah = 40
+					local aw = math.floor(rootSize.X * 0.9)
+					local ay = origin.Y + rootSize.Y * 0.26 - ah / 2
+					local rects = {}
+					refreshFinds(playerGui)
+					local els = elementsOf("Hud")
+					if els then
+						for _, key in ipairs({ "TimerPill", "Stage", "Plate", "Boss", "Bar" }) do
+							addRect(rects, els[key])
+						end
+					end
+					if natural > 1 then
+						addRect(rects, badgeRow) -- the feature badges (placed above, this frame)
+					end
+					local map = {}
+					addRect(map, cachedFinds.MiniMap)
+					local mapRect = map[1]
+					local left = origin.X + (rootSize.X - aw) / 2
+					local edge = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+					for _ = 1, 4 do
 						for _, r in ipairs(rects) do
 							if r.Max.X > left and r.Min.X < left + aw and r.Max.Y > ay - 2 and r.Min.Y < ay + ah + 2 then
 								ay = r.Max.Y + 4
 							end
 						end
-					elseif room >= 170 then
-						left = mapRect.Max.X + 8
-						aw = math.floor(room)
-						ah = 30
-						-- and under whatever else sits in that band (the badge row)
-						for _ = 1, 2 do
+					end
+					-- the minimap (portrait: left edge under the cluster): a narrower line beside it
+					-- (TextScaled shrinks the words) rather than one over the hero
+					if mapRect and mapRect.Max.X > left and mapRect.Min.X < left + aw and mapRect.Max.Y > ay - 2 and mapRect.Min.Y < ay + ah + 2 then
+						-- first: a centred line narrowed to clear it; then: beside it; last: under it
+						local centre = origin.X + rootSize.X / 2
+						local half = mapRect.Min.X > centre and (mapRect.Min.X - 8 - centre) or (centre - mapRect.Max.X - 8)
+						local room = origin.X + rootSize.X - edge - (mapRect.Max.X + 8)
+						if half * 2 >= 240 then
+							aw = math.floor(math.min(aw, half * 2))
+							left = centre - aw / 2
 							for _, r in ipairs(rects) do
 								if r.Max.X > left and r.Min.X < left + aw and r.Max.Y > ay - 2 and r.Min.Y < ay + ah + 2 then
 									ay = r.Max.Y + 4
 								end
 							end
+						elseif room >= 170 then
+							left = mapRect.Max.X + 8
+							aw = math.floor(room)
+							ah = 30
+							-- and under whatever else sits in that band (the badge row)
+							for _ = 1, 2 do
+								for _, r in ipairs(rects) do
+									if r.Max.X > left and r.Min.X < left + aw and r.Max.Y > ay - 2 and r.Min.Y < ay + ah + 2 then
+										ay = r.Max.Y + 4
+									end
+								end
+							end
+						else
+							ay = mapRect.Max.Y + 4
 						end
-					else
-						ay = mapRect.Max.Y + 4
+					end
+					ay = math.min(ay, origin.Y + rootSize.Y * 0.6)
+					local size = UDim2.fromOffset(aw, ah)
+					if holder.Size ~= size then
+						holder.Size = size
+					end
+					local want = UDim2.fromOffset(math.floor(left - origin.X + aw / 2), math.floor(ay - origin.Y + ah / 2))
+					if holder.Position ~= want then
+						holder.Position = want
 					end
 				end
-				ay = math.min(ay, origin.Y + rootSize.Y * 0.6)
-				local size = UDim2.fromOffset(aw, ah)
-				if holder.Size ~= size then
-					holder.Size = size
-				end
-				local want = UDim2.fromOffset(math.floor(left - origin.X + aw / 2), math.floor(ay - origin.Y + ah / 2))
-				if holder.Position ~= want then
-					holder.Position = want
-				end
 			end
+			placeUltimate()
 		end
 		-- ultimate: shown while a feature set it, the player is alive and on touch screens
 		-- (keyboard / gamepad players use the key; the button still shows the charge on PC)
@@ -562,8 +585,8 @@ function FeatureHud.Init()
 		local showUlt = u ~= nil and player:GetAttribute("Alive") == true
 		if ult.Visible ~= showUlt then
 			ult.Visible = showUlt
+			placeUltimate()
 		end
-		placeUltimate()
 		if showUlt and u then
 			local charge = math.clamp(u.Charge or 0, 0, 1)
 			local fill = ultFill :: Frame

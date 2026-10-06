@@ -107,8 +107,18 @@ function MenuHeroPower.Build(parent: Instance, order: number)
 			end)
 		end
 	end
-	section("Weapons", "WEAPONS", WeaponData.Order, 1)
-	section("Passives", "PASSIVES", PassiveData.Order, 3)
+	-- The tiles (every weapon and passive, ~600 instances) are built the first time the
+	-- grid opens, not with the screen: most players never open it, and a hidden grid still
+	-- costs GUI layout passes and memory.
+	local built = false
+	local function ensureGrid()
+		if built then
+			return
+		end
+		built = true
+		section("Weapons", "WEAPONS", WeaponData.Order, 1)
+		section("Passives", "PASSIVES", PassiveData.Order, 3)
+	end
 
 	local lastProfile: { [string]: any }? = nil
 	local lastOwned = false
@@ -144,6 +154,9 @@ function MenuHeroPower.Build(parent: Instance, order: number)
 		favCap.Visible = favShown
 		favText.Visible = favShown
 		favButton.Instance.Visible = favShown
+		if favShown and open then
+			ensureGrid()
+		end
 		grid.Visible = favShown and open
 		local fav = HeroPresets.Favourites(heroId)
 		local n = #fav.Weapons + #fav.Passives

@@ -54,6 +54,7 @@ type Room = {
 	MaxHP: number,
 	FrontRecord: any?, -- the front wall's arena.Obstacles entry
 	FrontPart: BasePart?, -- its collider part
+	SealRecord: any?, -- part-less arena.Obstacles entry over the whole sealed footprint
 	Front: { BasePart }, -- the visible cracked wall pieces
 	Reward: string?,
 	Shown: number,
@@ -184,6 +185,7 @@ local function build(info, spot: Vector3): Room
 		MaxHP = 0,
 		FrontRecord = nil,
 		FrontPart = nil,
+		SealRecord = nil,
 		Front = {},
 		Reward = nil,
 		Shown = -1,
@@ -233,6 +235,27 @@ local function build(info, spot: Vector3): Room
 	collider(arena, spot + along * (w / 2 + t / 2), t, d + t * 2, out, h)
 	collider(arena, spot - along * (w / 2 + t / 2), t, d + t * 2, out, h)
 	r.FrontRecord, r.FrontPart = collider(arena, wallPos, w, t, out, h)
+	-- While sealed the alcove is solid ground for enemies: one obstacle record (no part)
+	-- over the walls and the closed-off inside, so nothing spawns or is pushed into the
+	-- empty interior where it could never get out (EnemyAI grid, IsBlocked, PushOut).
+	do
+		local ext = w / 2 + t -- along half-extent, walls included
+		local depthMid = spot -- front and back walls sit symmetrically about the alcove centre
+		local depthHalf = d / 2 + t
+		local hx = math.abs(out.X) > 0.5 and depthHalf or ext
+		local hz = math.abs(out.X) > 0.5 and ext or depthHalf
+		local rec = {
+			Kind = "Box",
+			Pos = Vector3.new(depthMid.X, Config.ArenaOrigin.Y, depthMid.Z),
+			Radius = math.sqrt(hx * hx + hz * hz),
+			MinX = depthMid.X - hx,
+			MaxX = depthMid.X + hx,
+			MinZ = depthMid.Z - hz,
+			MaxZ = depthMid.Z + hz,
+		}
+		table.insert(arena.Obstacles, rec)
+		r.SealRecord = rec
+	end
 	MapBuilder.ClearDecor(arena, spot, w)
 	m:SetAttribute("EventKind", NAME)
 	m:SetAttribute("Title", "Cracked Wall")
@@ -297,12 +320,13 @@ local function open(r: Room, rng: Random)
 	r.HP = 0
 	-- the way in: remove the front collider and let the enemies' obstacle grid know
 	local arena = r.Arena
-	if r.FrontRecord then
-		local i = table.find(arena.Obstacles, r.FrontRecord)
+	for _, rec in { r.FrontRecord or false, r.SealRecord or false } do
+		local i = rec and table.find(arena.Obstacles, rec)
 		if i then
 			table.remove(arena.Obstacles, i)
 		end
 	end
+	r.SealRecord = nil
 	if r.FrontPart then
 		r.FrontPart:Destroy()
 	end
