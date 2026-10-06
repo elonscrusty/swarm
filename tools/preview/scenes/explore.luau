@@ -80,14 +80,16 @@ local s = A.build({
 })
 C.setPlayer({ RunGold = tonumber(preview.args.gold) or 120, GoldMult = 1 })
 local cart = MC.Get()
+local items: { any }? = nil
 if cart then
 	local stock = MC.StockOf(fakeRp) or {}
-	local items = {}
+	local list = {}
 	for i, o in ipairs(stock) do
-		items[i] = { Id = o.Id, Rarity = o.Rarity, Price = o.Price, Sold = i == 1 }
+		list[i] = { Id = o.Id, Rarity = o.Rarity, Price = o.Price, Sold = i == 1 }
 	end
-	C.fire("MerchantStock", { Id = cart.Id, Stage = 2, Items = items })
-	preview.log(string.format("merchant at %.0f studs from the hero, offers: %s", ((cart.Pos - s.centre) * FLAT).Magnitude, #items))
+	items = list
+	C.fire("MerchantStock", { Id = cart.Id, Stage = 2, Items = list })
+	preview.log(string.format("merchant at %.0f studs from the hero, offers: %s", ((cart.Pos - s.centre) * FLAT).Magnitude, #list))
 end
 C.settle(tonumber(preview.args.at) or 6) -- after the stage-start card
 local panel = C.findText("^MERCHANT$")
@@ -112,6 +114,18 @@ if preview.args.pad == "on" and panel then
 	pad(Enum.KeyCode.DPadRight)
 	local after = C.findText("^X  BUY$")
 	preview.log(((after and after ~= first) and "PASS" or "FAIL") .. " pad: D-pad right moves the pick")
+	-- X on an offer you can't afford sends nothing (the price punches, NEED shows), so if the
+	-- pick is the too-dear one, move once more onto the affordable offer and press X again
+	local ItemData = C.shared("ItemData")
+	local gold = tonumber(preview.args.gold) or 120
 	pad(Enum.KeyCode.ButtonX)
-	preview.log((#sent >= 1 and "PASS" or "FAIL") .. " pad: X sends MerchantBuy (slot " .. tostring(sent[1]) .. ")")
+	local firstSent = #sent
+	if firstSent == 0 then
+		pad(Enum.KeyCode.DPadRight)
+		pad(Enum.KeyCode.ButtonX)
+	end
+	local slot = sent[1]
+	local item = slot and items and items[slot]
+	local affordable = item ~= nil and ItemData.PlayerPrice(tonumber(item.Price) or 0, 1) <= gold
+	preview.log((#sent == 1 and affordable and "PASS" or "FAIL") .. " pad: X sends MerchantBuy for an affordable offer (slot " .. tostring(slot) .. (firstSent == 0 and ", the too-dear pick sent nothing" or "") .. ")")
 end

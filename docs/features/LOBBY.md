@@ -104,6 +104,9 @@ REPORT A BUG.
   - A copy of your selected hero in its worn skin stands on a pedestal in front of a mirror.
   - A list over it shows what you wear: hero and skin, title, trail, burst, pet, plate, dais, and how
     many weapons wear a glow.
+  - On phones the list is a card at the top right instead, shown only while you stand within
+    14 studs of the mirror. The world label was a fixed size, so on a short landscape screen it
+    reached the top and covered the clock and the JUMP PADS sign (fixed 2026-10-06).
 - **Jump pads:** a gold pad throws you straight up (`LaunchSpeed`) and you steer onto the next
   platform. There are four platforms, and the last one is gold, with a flag.
   - The clock starts on the first pad and stops on the top platform.

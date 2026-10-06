@@ -71,7 +71,8 @@ if preview.args.ids == "on" then
 	if section ~= "Heroes" and section ~= "Gift" and not priced then
 		preview.log("FAIL store: ids on but no Robux price shown")
 	end
-elseif section ~= nil and section ~= "Heroes" and section ~= "Gift" and section ~= "Skins" and not soon and section ~= "Emotes" then
+-- (Supporter: the sample profile owns the pass, so its card reads OWNED with EQUIP)
+elseif section ~= nil and section ~= "Heroes" and section ~= "Gift" and section ~= "Skins" and section ~= "Supporter" and not soon and section ~= "Emotes" then
 	preview.log("FAIL store: ids 0 but no COMING SOON")
 end
 if preview.args.view == "dais" then

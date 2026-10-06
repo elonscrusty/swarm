@@ -62,6 +62,7 @@ type Session = {
 	DummyHit: TextLabel,
 	DummyNext: number,
 	DummyDPS: number,
+	Worn: Frame?,
 	Course: Course,
 	Lift: number,
 	Conns: { RBXScriptConnection },
@@ -277,14 +278,18 @@ local function build(s: Session)
 	part(f, { Name = "MirrorPedestal", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.8, 5, 5), CFrame = CFrame.new(m + Vector3.new(0, 0.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = P.stone_300, Material = Enum.Material.Marble, CanCollide = true })
 	part(f, { Name = "MirrorFrame", Size = Vector3.new(6.4, 8.4, 0.5), CFrame = CFrame.new(m + Vector3.new(0, 4.2, -3.4)), Color = P.gold_500, Material = Enum.Material.Metal, CanCollide = true })
 	part(f, { Name = "MirrorGlass", Size = Vector3.new(5.6, 7.6, 0.1), CFrame = CFrame.new(m + Vector3.new(0, 4.2, -3.1)), Color = P.ice_100, Material = Enum.Material.Glass, Reflectance = 0.6, Transparency = 0.15 })
-	-- what you wear, over the mirror (a billboard: readable from the play camera)
-	local frame = f:FindFirstChild("MirrorFrame") :: BasePart
-	local wornBB = billboard(frame, 6.4, 250, 176)
-	wornBB.Name = "Worn"
-	local back = new("Frame", { Name = "Back", Size = UDim2.fromScale(1, 1), BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.2, BorderSizePixel = 0 }, wornBB)
-	UIKit.corner(back, 10)
-	text(back, "Label", "COSMETICS MIRROR", { Name = "Title", Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -20, 0, 22), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 }, 15)
-	text(back, "Small", mirrorLines(), { Name = "Lines", Position = UDim2.fromOffset(10, 28), Size = UDim2.new(1, -20, 1, -32), TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = P.ivory_100, TextWrapped = true }, 13)
+	-- what you wear, over the mirror (a billboard: readable from the play camera). Phones get a
+	-- screen card instead (enter() builds it): a fixed-pixel billboard reached the top of a short
+	-- landscape screen and covered the clock and the JUMP PADS sign there
+	if not UIKit.IsCompact() then
+		local frame = f:FindFirstChild("MirrorFrame") :: BasePart
+		local wornBB = billboard(frame, 6.4, 250, 176)
+		wornBB.Name = "Worn"
+		local back = new("Frame", { Name = "Back", Size = UDim2.fromScale(1, 1), BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.2, BorderSizePixel = 0 }, wornBB)
+		UIKit.corner(back, 10)
+		text(back, "Label", "COSMETICS MIRROR", { Name = "Title", Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -20, 0, 22), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 }, 15)
+		text(back, "Small", mirrorLines(), { Name = "Lines", Position = UDim2.fromOffset(10, 28), Size = UDim2.new(1, -20, 1, -32), TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = P.ivory_100, TextWrapped = true }, 13)
+	end
 	local skinId = type(profile.Skins) == "table" and profile.Skins[heroId] or "Default"
 	local hero = PhotoMode.CloneHero(heroId, skinId)
 	if hero then
@@ -386,6 +391,11 @@ local function step(dt: number)
 		else
 			s.DummyHit.Text = ""
 		end
+		-- phones: the mirror card only shows while you stand at the mirror
+		if s.Worn then
+			local m = origin() + LF.Mirror
+			s.Worn.Visible = (Vector3.new(root.Position.X, 0, root.Position.Z) - Vector3.new(m.X, 0, m.Z)).Magnitude < 14
+		end
 		-- follow camera (the run camera's angle, so the stick directions match)
 		local cam = workspace.CurrentCamera
 		local pitch, yaw = math.rad(Config.Camera.Pitch), math.rad(Config.Camera.Yaw)
@@ -419,6 +429,7 @@ function LobbyFun.Enter()
 		DummyHit = nil :: any,
 		DummyNext = 0,
 		DummyDPS = 0,
+		Worn = nil,
 		Course = LobbyFun.NewCourse(),
 		Lift = 3,
 		Conns = {},
@@ -447,6 +458,14 @@ function LobbyFun.Enter()
 	s.Status = text(pill, "Label", "", { Name = "Status", Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -20, 1, 0), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextScaled = true, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
 	-- phones: shrink before truncating (the pill is narrow between the menu buttons)
 	new("UITextSizeConstraint", { MaxTextSize = s.Status.TextSize, MinTextSize = 10 }, s.Status)
+	-- phones: the mirror list is a card at the top right, shown while you stand at the mirror
+	if UIKit.IsCompact() then
+		local card = new("Frame", { Name = "Worn", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 68), Size = UDim2.fromOffset(200, 136), BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.2, BorderSizePixel = 0, Visible = false }, g)
+		UIKit.corner(card, 10)
+		text(card, "Label", "COSMETICS MIRROR", { Name = "Title", Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -20, 0, 18), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 }, 12)
+		text(card, "Small", mirrorLines(), { Name = "Lines", Position = UDim2.fromOffset(10, 24), Size = UDim2.new(1, -20, 1, -27), TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = P.ivory_100, TextWrapped = true }, 10)
+		s.Worn = card
+	end
 	g.Parent = playerGui
 	-- your hero walks in at the courtyard spawn
 	local char = player.Character

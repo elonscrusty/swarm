@@ -24,7 +24,32 @@ cursed badge, `--set extras=on` ULT + announcer); `explore --set pad=on` (gamepa
 
 ## Results (scene x device)
 
-RESULTS_TABLE
+Run 2026-10-06: offline Lune + `check_layout.py` (`--set images=loaded`), with all switches on.
+PASS means 0 layout problems and no FAIL / step-error lines from the scene's own checks. "-" means not run.
+
+| Scene | pc | iphone | phone-portrait |
+|---|---|---|---|
+| `challenges` | PASS | PASS | PASS |
+| `challenges --set extras=on` (ULT + announcer) | PASS | PASS | PASS |
+| `explore --set pad=on` | PASS (1) | PASS | PASS |
+| `events-fx` | PASS | PASS | PASS |
+| `team --set plate=on` | PASS | PASS | PASS |
+| `team --set me=down` | PASS | PASS | FAIL (2) |
+| `meta` Sigils / Weekly / Season / Titles / Collection / Streak / Play / More | - | PASS (8/8) | PASS (8/8) |
+| `store` Skins / Trails / Bursts / Pets / Emotes / Plates / Dais / Heroes / Gift | - | PASS (9/9) | PASS (9/9) |
+| `store --set section=Supporter` | - | PASS (3) | PASS (3) |
+| `levelup --set fav=on` | - | PASS | PASS |
+| `characters --set favourites=open` | - | PASS | PASS |
+
+1. The first pc run failed the scene's own check "X sends MerchantBuy". The UI was right: the
+   D-pad pick had landed on the offer the sample purse can't afford, and X correctly sent
+   nothing. The scene now presses X on the too-dear pick (nothing must be sent), moves to the
+   affordable offer and presses X again. It passes on all three devices.
+2. COVERED: the portrait minimap sits over the world label "YOU · REVIVING". This is the known
+   item below (TeamUI billboard vs Hud minimap, outside the new modules).
+3. The first iphone run failed the scene's "ids 0 but no COMING SOON" check. The sample profile
+   owns the Supporter pass, so its card correctly reads OWNED with EQUIP. The check now skips
+   Supporter.
 
 ## Not fixed (outside the new modules)
 
