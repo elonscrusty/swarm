@@ -1,8 +1,0 @@
-local C = lib("common")
-C.lobby()
-C.startClient()
-C.sendProfile()
-C.settle(1)
-print("[dbg] before snapshot")
-preview.snapshot("snapdbg")
-print("[dbg] after snapshot")

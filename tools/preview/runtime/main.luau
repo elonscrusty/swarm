@@ -105,17 +105,13 @@ end
 -- preview.snapshot(tag): writes the scene JSON as it is now next to the final one, named
 -- <tag>-<device>.json (a sweep scene can capture many screens in one Lune run; render the
 -- PNGs with renderer/render.mjs --job json:png, check them with check_layout.py)
+-- (kept in memory: Lune's fs calls yield, which the scene's simulated scheduler must not see;
+-- the files are written after the scene ends)
 local snapshots = {}
 preview.snapshot = function(tag: string)
 	local dir = string.match(outPath, "^(.*)/[^/]+$") or "."
-	if not fs.isDir(dir) then
-		fs.writeDir(dir)
-	end
 	local path = dir .. "/" .. tag .. "-" .. deviceName .. ".json"
-	local data = Mock.export(tag)
-	fs.writeFile(path, serde.encode("json", data, false))
-	table.insert(snapshots, path)
-	print("[preview] snapshot " .. path)
+	table.insert(snapshots, { path = path, json = serde.encode("json", Mock.export(tag), false) })
 	return path
 end
 
@@ -154,6 +150,10 @@ if dir and not fs.isDir(dir) then
 	fs.writeDir(dir)
 end
 fs.writeFile(outPath, json)
+for _, snap in ipairs(snapshots) do
+	fs.writeFile(snap.path, snap.json)
+	print("[preview] snapshot " .. snap.path)
+end
 
 -- scene metrics also go to <out>.metrics.json (and stdout with --print-metrics)
 local metricsPath = string.gsub(outPath, "%.json$", "") .. ".metrics.json"

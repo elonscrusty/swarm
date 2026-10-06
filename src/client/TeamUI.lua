@@ -369,9 +369,25 @@ local function updateMarker(m: Marker, p: Player, root: BasePart, progress: numb
 		end
 		-- the 200 px label is centred under the ring; near a screen edge it slides in so
 		-- it never runs off screen
-		local lx = math.clamp(x, 108, W - 108)
 		local labelAbove = false
-		if kit.IsPortrait() then
+		local portrait = kit.IsPortrait()
+		if portrait then
+			-- portrait: the ring itself slides right of the left-edge minimap when it would
+			-- sit under it (the map is painted over the markers)
+			local half = m.Holder.Size.X.Offset / 2
+			for _, g in ipairs(Hud.PortraitBars()) do
+				if g.Visible and g.Parent then
+					local gx = g.Position.X.Offset - g.AnchorPoint.X * g.Size.X.Offset
+					local gy = g.Position.Y.Offset - g.AnchorPoint.Y * g.Size.Y.Offset
+					local gr, gb = gx + g.Size.X.Offset, gy + g.Size.Y.Offset
+					if x - half < gr + 4 and x + half > gx - 4 and y - half < gb + 4 and y + half > gy - 4 then
+						x = math.min(gr + 6 + half, W - half - 4)
+					end
+				end
+			end
+		end
+		local lx = math.clamp(x, 108, W - 108)
+		if portrait then
 			-- portrait: the left-edge minimap sits about mid-screen, right where the downed
 			-- hero's "You · reviving" label lands; the label slides right of the map, or
 			-- goes above the ring when there is no room beside it

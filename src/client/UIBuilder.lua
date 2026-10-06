@@ -1383,19 +1383,22 @@ local function statRow(parent: Instance, c, line, x: number, y: number, w: numbe
 	local icon = statIcon(row, tostring(line.Label), c, 18)
 	icon.AnchorPoint = Vector2.new(0, 0.5)
 	icon.Position = UDim2.new(0, 8, 0.5, 0)
-	text(row, "Caption", UIKit.track(tostring(line.Label)), {
+	-- both shrink inside the row (large phone text cut "COOLDOWN" to "COOLD...")
+	local name = text(row, "Caption", UIKit.track(tostring(line.Label)), {
 		Position = UDim2.fromOffset(34, 0),
 		Size = UDim2.new(0.55, -34, 1, 0),
 		TextColor3 = P.ivory_300,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, 13)
-	text(row, "Number", value, {
+	Choice.fit(name, name.TextSize, 9, false)
+	local num = text(row, "Number", value, {
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -10, 0, 0),
 		Size = UDim2.new(0.45, 0, 1, 0),
 		TextXAlignment = Enum.TextXAlignment.Right,
 		RichText = true,
 	}, 16)
+	Choice.fit(num, num.TextSize, 10, false)
 	return h
 end
 

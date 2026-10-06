@@ -36,6 +36,8 @@ def main():
     checks += [("pings", ["phone"]), ("pings", ["phone-portrait"])]
     checks += [("accessibility-sim", [])]
     checks += [("uistate", [])]
+    # the player's Roblox Text size setting on a phone (TextFit, docs/MOBILE_FIX.md)
+    checks += [("textfit-regression", []), ("textfit-regression", ["textsize=Medium"])]
     checks += [("lobby-regression", [])]
     checks += [("layout", [s, d]) for s in ("weapon-mastery", "photo-mode", "lobby-fun") for d in ("iphone", "phone-portrait")]
     checks += [("layout", ["lobby-fun", d, "view=mirror"]) for d in ("iphone", "phone-portrait")]
@@ -77,9 +79,12 @@ def main():
         if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression"):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
-        if scene in ("results-flow", "leaderboards", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx"):
+        if scene in ("results-flow", "leaderboards", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression"):
             command.remove("--set")
             command.remove("headless=on")
+        if scene == "textfit-regression":
+            command[command.index("--device") + 1] = "iphone"
+            command.remove("--studio")
         if scene == "layout":
             layout_scene, device = settings[0], settings[1]
             command = [args.lune, "run", "tools/preview/runtime/main.luau", "--", "--scene", layout_scene,
