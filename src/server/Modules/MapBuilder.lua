@@ -670,6 +670,9 @@ local LIGHTING = {
 		Clock = 17.8, Brightness = 0.8, Latitude = 40, Shadow = 0.4,
 		Ambient = rgb(94, 90, 130), Outdoor = rgb(128, 118, 160), Top = rgb(255, 204, 168), Bottom = rgb(50, 40, 70),
 		Diffuse = 0.3, Specular = 0.35,
+		-- the owner's phone (Future lighting) showed white walls and a glowing floor even
+		-- after the dimmer values above, so the whole menu scene is also exposed down
+		Exposure = -0.5,
 		Atmo = { Density = 0.13, Offset = 0.1, Color = rgb(232, 146, 112), Decay = rgb(92, 82, 168), Glare = 0.2, Haze = 1.1 },
 		Bloom = { Intensity = 0.28, Size = 22, Threshold = 1.5 },
 		Grade = { Brightness = -0.04, Contrast = 0.16, Saturation = 0.2, Tint = rgb(255, 242, 238) },
@@ -777,7 +780,7 @@ function MapBuilder.ApplyLighting(name: string)
 	Lighting.EnvironmentDiffuseScale = L.Diffuse
 	Lighting.EnvironmentSpecularScale = L.Specular
 	Lighting.FogEnd = 100000
-	Lighting.ExposureCompensation = 0
+	Lighting.ExposureCompensation = L.Exposure or 0
 
 	local atmo = lightingEffect("Atmosphere", "SwarmAtmosphere") :: Atmosphere
 	atmo.Density = L.Atmo.Density
