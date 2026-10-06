@@ -139,26 +139,6 @@ local function watch(label: any)
 	end
 	local e: Entry = { Level = 1, Fit = nil, Want = "restart", Restarts = 0, Size = label.TextSize, Conns = {} }
 	entries[label] = e
-	table.insert(e.Conns, label:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-		local fit = e.Fit
-		if not fit then
-			return -- still settling: step() looks at it anyway
-		end
-		local now = label.AbsoluteSize
-		if math.abs(now.X - fit.X) <= 1 and math.abs(now.Y - fit.Y) <= 1 then
-			return
-		end
-		-- the same shape, only scaled: a press / pop / breathing UIScale animation, which
-		-- changes AbsoluteSize every frame without changing the room the text has
-		if fit.X > 0 and fit.Y > 0 and math.abs(now.X / fit.X - now.Y / fit.Y) < 0.02 then
-			return
-		end
-		if now.X <= fit.X + 1 and now.Y <= fit.Y + 1 then
-			want(label, "check") -- less room: may need to shrink
-		else
-			want(label, "restart") -- more room: may grow again
-		end
-	end))
 	table.insert(e.Conns, label:GetPropertyChangedSignal("Text"):Connect(function()
 		want(label, "check")
 	end))
@@ -188,8 +168,61 @@ local function watch(label: any)
 	pending[label] = true
 end
 
+-- A settled label whose box changed: less room may need a smaller cap, more room may let
+-- it grow again. The same shape only scaled is a press / pop / breathing UIScale animation
+-- (AbsoluteSize changes every frame, the room for the text does not): ignored.
+local function sizeChanged(label: Instance, e: Entry, now: Vector2)
+	local fit = e.Fit
+	if not fit or e.Want then
+		return
+	end
+	if math.abs(now.X - fit.X) <= 1 and math.abs(now.Y - fit.Y) <= 1 then
+		return
+	end
+	if fit.X > 0 and fit.Y > 0 and math.abs(now.X / fit.X - now.Y / fit.Y) < 0.02 then
+		return
+	end
+	if now.X <= fit.X + 1 and now.Y <= fit.Y + 1 then
+		want(label, "check")
+	else
+		want(label, "restart")
+	end
+end
+
+-- Settled labels are re-measured a slice at a time (no per-label AbsoluteSize listeners:
+-- thousands of them cost more than a slow round-robin).
+local SWEEP_EVERY = 0.25
+local SWEEP_SLICE = 250
+local sweepList: { Instance } = {}
+local sweepAt = 1
+local sweepClock = 0
+
+local function sweep()
+	if sweepAt > #sweepList then
+		table.clear(sweepList)
+		for label in pairs(entries) do
+			table.insert(sweepList, label)
+		end
+		sweepAt = 1
+	end
+	local last = math.min(#sweepList, sweepAt + SWEEP_SLICE - 1)
+	for i = sweepAt, last do
+		local label = sweepList[i]
+		local e = entries[label]
+		if e and e.Fit and not e.Want and label.Parent then
+			sizeChanged(label, e, (label :: any).AbsoluteSize)
+		end
+	end
+	sweepAt = last + 1
+end
+
 -- One pass per frame: first read every label (one layout), then write the new caps.
-local function step()
+local function step(dt: number)
+	sweepClock += dt
+	if sweepClock >= SWEEP_EVERY then
+		sweepClock = 0
+		sweep()
+	end
 	local reads = {}
 	local n = 0
 	for label in pairs(pending) do
