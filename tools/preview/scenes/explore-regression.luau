@@ -237,6 +237,12 @@ local function merchant(stageLabel: string)
 	check(stock[1].Sold, stageLabel .. " slot marked sold")
 	ok, why = MC.Buy(rp, cart.Id, 1)
 	check(not ok and why == "sold" and itemCount(rp) == items + 1, stageLabel .. " second buy of the same slot refused")
+	-- REVIEW R-01: a reconnect makes a new record (a copy); it keeps the same stock, so a
+	-- rejoin never rerolls the cart or reopens sold slots
+	local copy = table.clone(rp)
+	check(MC.StockOf(copy) == stock, stageLabel .. " reconnected record keeps its stock")
+	ok, why = MC.Buy(copy, cart.Id, 1)
+	check(not ok and why == "sold", stageLabel .. " reconnected record can't rebuy a sold slot")
 	ok, why = MC.Buy(rp, cart.Id, 9)
 	check(not ok and why == "bad", stageLabel .. " bad slot refused")
 	ok, why = MC.Buy(rp, cart.Id + 99, 2)

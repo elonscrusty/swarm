@@ -163,6 +163,12 @@ rp.Alive = false
 ok, why = Ult.Use(player)
 assert(not ok and why == "state", "dead: refused (" .. tostring(why) .. ")")
 rp.Alive = true
+-- choosing a card (a co-op chooser is protected and the world keeps running): refused
+-- (REVIEW R-03)
+rp.Offer = { Id = -1 }
+ok, why = Ult.Use(player)
+assert(not ok and why == "state", "choosing a card: refused (" .. tostring(why) .. ")")
+rp.Offer = nil
 -- the switch
 Config.Features.Ultimate = false
 ok, why = Ult.Use(player)

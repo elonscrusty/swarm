@@ -45,7 +45,9 @@ local function folder(): Folder
 end
 
 local function setPlayerMult(rp, mult: number?)
-	if rp.WeatherSpeedMult == mult then
+	-- a reconnected player comes back as a copy of its record (RunManager snapshot) that
+	-- still carries the old multiplier: track it too, or it would never be reset (REVIEW R-02)
+	if rp.WeatherSpeedMult == mult and (mult == nil or tracked[rp]) then
 		return
 	end
 	rp.WeatherSpeedMult = mult

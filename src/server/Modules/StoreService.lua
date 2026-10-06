@@ -39,7 +39,7 @@ local StoreService = {}
 local ctx
 local GOLD = Color3.fromRGB(255, 215, 80)
 
-type Gift = { Target: number, TargetName: string, ProductId: number, Item: string, At: number }
+type Gift = { Target: number, TargetName: string, ProductId: number, Item: string, At: number, Delivered: boolean? }
 local pendingGift: { [Player]: Gift } = {}
 local routes: { [string]: Gift } = {} -- purchaseId → the gift it was routed as
 local prompted: { [Player]: { Id: number, At: number } } = {}
@@ -301,8 +301,14 @@ function StoreService.GrantGift(buyer: Player, buyerData: { [string]: any }, g: 
 	end
 	local recipient = Players:GetPlayerByUserId(g.Target)
 	local profile = recipient and ctx.DataService.GetProfile(recipient)
-	if recipient and recipient ~= buyer and profile and not profile.Released and not profile.LockLost then
+	-- the recipient got this look some other way after the prompt opened (bought or was
+	-- gifted it): the buyer keeps it instead of paying for nothing (REVIEW R-04)
+	-- (a retried receipt of a gift already delivered keeps its route: g.Delivered)
+	local already = not g.Delivered and recipient ~= nil and profile ~= nil and item.Kind == "Cosmetic"
+		and StoreService.Owns(recipient, profile.Data, item.Id)
+	if recipient and recipient ~= buyer and profile and not profile.Released and not profile.LockLost and not already then
 		local name = StoreService.GrantItem(recipient, profile.Data, item)
+		g.Delivered = true
 		if not ctx.DataService.ForceSave(recipient) then
 			return false
 		end
@@ -313,9 +319,9 @@ function StoreService.GrantGift(buyer: Player, buyerData: { [string]: any }, g: 
 		end)
 		return true
 	end
-	-- the recipient left before the purchase finished: the buyer keeps it
+	-- the recipient left (or owns it already) before the purchase finished: the buyer keeps it
 	local name = StoreService.GrantItem(buyer, buyerData, item)
-	afterGrant(buyer, g.TargetName .. " left, so " .. name .. " is yours. Thank you!")
+	afterGrant(buyer, g.TargetName .. (already and " owns it already" or " left") .. ", so " .. name .. " is yours. Thank you!")
 	return true
 end
 

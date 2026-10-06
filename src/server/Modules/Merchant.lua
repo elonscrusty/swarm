@@ -48,7 +48,7 @@ type Cart = {
 	Pos: Vector3,
 	Stage: number,
 	Model: Model,
-	Stock: { [any]: { Offer } }, -- rp -> offers
+	Stock: { [any]: { Offer } }, -- the player's UserId (rp for a test record) -> offers
 }
 
 local ctx
@@ -173,15 +173,23 @@ local function rollStock(rp, c: Cart): { Offer }
 	return list
 end
 
+-- The stock key of a run player: its UserId, so a reconnected player (RunManager makes a
+-- new record from a copy) keeps its stock and its sold slots (REVIEW R-01).
+local function stockKey(rp): any
+	local player = rp.Player
+	return (typeof(player) == "Instance" and player:IsA("Player")) and player.UserId or rp
+end
+
 local function stockOf(rp): { Offer }?
 	local c = cart
 	if not c then
 		return nil
 	end
-	local s = c.Stock[rp]
+	local key = stockKey(rp)
+	local s = c.Stock[key]
 	if not s then
 		s = rollStock(rp, c)
-		c.Stock[rp] = s
+		c.Stock[key] = s
 	end
 	return s
 end

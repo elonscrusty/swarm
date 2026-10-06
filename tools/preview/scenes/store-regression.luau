@@ -266,6 +266,14 @@ do
 	-- a hero can't be gifted
 	buy("Hero_Archer", friend.UserId)
 	assert(prompts() == before + 5, "no hero gift prompt (prompts: " .. prompts() - before .. ")")
+	-- REVIEW R-04: the recipient got the look while the prompt was open: the buyer keeps it
+	data.Cosmetics.Owned.Pet_Fox = nil
+	fdata.Cosmetics.Owned.Pet_Fox = nil
+	buy("Pet_Fox", friend.UserId)
+	assert(lastPrompt().id == IDS.Pet_Fox, "gift prompt for the pet")
+	fdata.Cosmetics.Owned.Pet_Fox = true
+	assert(receipt(IDS.Pet_Fox, nil, "g-4") == Decision.PurchaseGranted, "gift to an owner is acknowledged")
+	assert(data.Cosmetics.Owned.Pet_Fox == true, "the buyer keeps a look the recipient already owns")
 	preview.log("PASS gifts: server-checked target, recipient save, no spoofing, self / unknown / pass / owner / hero refused, stale target, retry to the same recipient, recipient left -> buyer")
 end
 

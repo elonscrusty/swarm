@@ -132,6 +132,22 @@ ED.StageEnd("Travel")
 advance(0.2)
 check(rp.WeatherSpeedMult == nil and EAI.WorldSpeedMult == 1 and F:GetAttribute("World") == nil, "snow: travel cleans up")
 check(hum and math.abs(hum.WalkSpeed - rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * (rp.RushMult or 1)) < 0.01, "snow: speed back", hum and hum.WalkSpeed)
+-- REVIEW R-02: a reconnected player is a copy of its record (RunManager snapshot) that
+-- still carries the storm multiplier; the stage end must still reset it
+do
+	asWorld("Snow", 3)
+	advance(0.5)
+	local list = RM.GetRunPlayers()
+	local at = table.find(list, rp)
+	local copy = table.clone(rp)
+	list[at] = copy
+	advance(0.3)
+	ED.StageEnd("Travel")
+	advance(0.2)
+	check(copy.WeatherSpeedMult == nil, "snow: a reconnected copy is reset at the stage end", copy.WeatherSpeedMult)
+	list[at] = rp
+	rp.WeatherSpeedMult = nil
+end
 
 -- 2) Lava eruptions --------------------------------------------------------------------
 asWorld("Lava", 3)

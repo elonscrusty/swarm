@@ -797,6 +797,11 @@ function Hud.AvoidInPortrait(g: GuiObject)
 	table.insert(portraitBars, g)
 end
 
+-- The portrait-only panels (the left-edge minimap), for world labels that must keep clear.
+function Hud.PortraitBars(): { GuiObject }
+	return portraitBars
+end
+
 -- The reserved top-centre bars (visible or not), for other markers that must keep clear.
 function Hud.CentreBars(): { GuiObject }
 	return centreBars

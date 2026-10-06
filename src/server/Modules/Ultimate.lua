@@ -157,7 +157,7 @@ function Ultimate.Use(player: Player): (boolean, string?)
 	if not RM.IsRunning() or not RM.IsSimulating() then
 		return false, "frozen"
 	end
-	if not rp.Alive or rp.Returned or rp.AwaitingRevive or rp.Paused or rp.RewardUntil or not rp.Root then
+	if not rp.Alive or rp.Returned or rp.AwaitingRevive or rp.Paused or rp.RewardUntil or rp.Offer ~= nil or not rp.Root then
 		return false, "state"
 	end
 	if Ultimate.Charge(rp) < 1 then
