@@ -254,8 +254,15 @@ local function computeInsets()
 	end)
 	if ok and typeof(rect) == "Rect" and rect.Height > 0 then
 		top = math.max(0, rect.Max.Y - pos.Y) / s
-		left = math.max(0, rect.Min.X - pos.X) / s
-		right = math.max(0, (pos.X + size.X) - rect.Max.X) / s
+		-- the Rect's X space differs by device: on the owner's iPhone it is measured from the
+		-- safe-area edge (the gui's left), elsewhere from the screen edge. The free strip runs
+		-- to the right end of the usable area, so take the reading whose right end matches.
+		local originX = pos.X
+		if pos.X > 2 and math.abs(size.X - rect.Max.X) <= 8 and math.abs(pos.X + size.X - rect.Max.X) > 8 then
+			originX = 0
+		end
+		left = math.max(0, rect.Min.X - originX) / s
+		right = math.max(0, (originX + size.X) - rect.Max.X) / s
 	end
 	insets = { Top = top, Left = left, Right = right }
 end
@@ -5556,6 +5563,13 @@ function UIBuilder.Init(d: { [string]: any })
 	fxGui.IgnoreGuiInset = true
 	fxGui.ScreenInsets = Enum.ScreenInsets.None
 	fxGui.Parent = player:WaitForChild("PlayerGui")
+	-- the player's Roblox Text size setting: text grows where it has room and keeps its
+	-- designed size where it would be cut (TextFit, docs/MOBILE_FIX.md)
+	do
+		local TextFit = require(script.Parent.TextFit)
+		TextFit.Watch(player:WaitForChild("PlayerGui"))
+		TextFit.Start()
+	end
 	-- phones (short side under 560 px): compact layouts and the phone design space. The
 	-- full-screen gui's size is the most reliable reading; the camera viewport can still be
 	-- a placeholder this early.

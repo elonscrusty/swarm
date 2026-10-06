@@ -102,6 +102,23 @@ if fs.isDir(root .. "/scenes/lib") then
 	end
 end
 
+-- preview.snapshot(tag): writes the scene JSON as it is now next to the final one, named
+-- <tag>-<device>.json (a sweep scene can capture many screens in one Lune run; render the
+-- PNGs with renderer/render.mjs --job json:png, check them with check_layout.py)
+local snapshots = {}
+preview.snapshot = function(tag: string)
+	local dir = string.match(outPath, "^(.*)/[^/]+$") or "."
+	if not fs.isDir(dir) then
+		fs.writeDir(dir)
+	end
+	local path = dir .. "/" .. tag .. "-" .. deviceName .. ".json"
+	local data = Mock.export(tag)
+	fs.writeFile(path, serde.encode("json", data, false))
+	table.insert(snapshots, path)
+	print("[preview] snapshot " .. path)
+	return path
+end
+
 local sceneEnv = R.envFor(nil)
 sceneEnv.preview = preview
 local libCache = {}

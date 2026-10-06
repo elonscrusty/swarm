@@ -1369,6 +1369,11 @@ Config.UI = {
 	-- 852 x 393 phone renders reference px at ~0.77 (text ~11-15 pt, buttons ~40 pt) and
 	-- layouts reflow into ~960 x 514 virtual px.
 	PhoneReferenceSize = Vector2.new(960, 470),
+	-- The player's Roblox "Text size" setting (GuiService.PreferredTextSize) scales every
+	-- TextSize-sized label at render time. TextFit lets text grow up to this much over its
+	-- designed size where the label has room, and shrinks it back (never below the design
+	-- size) where it would be cut or run into its neighbours (docs/MOBILE_FIX.md).
+	TextGrowMax = 1.25,
 	-- Fonts and sizes live in Theme (Merriweather titles, Source Sans body / numbers).
 	-- These two are only the fallbacks for plain Enum.Font properties.
 	Font = Enum.Font.SourceSansBold,

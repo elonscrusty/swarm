@@ -48,21 +48,22 @@ Mock.DEVICES = {
 	--    and thinks the top bar's right side is taken;
 	--  * the player's Roblox "Text size" accessibility setting (GuiService.PreferredTextSize)
 	--    scales every TextSize-sized label at render time (not TextScaled ones, and never
-	--    past a UITextSizeConstraint.MaxTextSize). The owner's phone measures about 1.45x
-	--    (textSize = "Larger", see TEXT_SCALES); `--set textsize=Medium` turns it off.
+	--    past a UITextSizeConstraint.MaxTextSize). The owner's phone measures about 1.6x
+	--    (textSize = "Largest", see TEXT_SCALES); `--set textsize=Medium` turns it off.
 	iphone = {
 		name = "iphone", width = 852, height = 393, dpr = 3, touch = true, keyboard = false, mouse = false,
 		safe = { left = 59, right = 59, top = 0, bottom = 0 }, topbar = 58, insetSpace = true, clipSafe = true,
-		topbarSafeSpace = true, textSize = "Larger",
+		topbarSafeSpace = true, textSize = "Largest",
 		coreButtons = { { x = 77, y = 13, w = 42, h = 42, kind = "roblox" }, { x = 128, y = 13, w = 94, h = 42, kind = "pill" } },
 	},
 	tablet = { name = "tablet", width = 1024, height = 768, dpr = 1.5, touch = true, keyboard = false, mouse = false, safe = { left = 0, right = 0, top = 0, bottom = 20 }, topbar = 58 },
 }
 
 -- Render-time text scale per GuiService.PreferredTextSize. Roblox does not publish the
--- factors; Larger is measured from the owner's screenshots (glyph heights of the same
--- labels against a Medium render), the others are spaced around it.
-Mock.TEXT_SCALES = { Medium = 1, Large = 1.2, Larger = 1.45, Largest = 1.75 }
+-- factors. The owner's iPhone shots measure 1.57-1.60x (widths of the same Source Sans
+-- labels against a Medium render: "Open slot", "THIS SERVER", "Not in a party yet"), taken
+-- here as Largest; Large / Larger are spaced evenly below it (estimates).
+Mock.TEXT_SCALES = { Medium = 1, Large = 1.2, Larger = 1.4, Largest = 1.6 }
 
 function Mock.boot(options)
 	R.options = options
