@@ -142,7 +142,19 @@ local function layoutText(st, comps, w, h, k, wrapWidth)
 		opts.wrap = true
 		opts.maxWidth = w
 	else
-		size = gp(st, "TextSize") * k
+		-- Roblox scales TextSize-sized text by the player's Text size setting at render
+		-- time; a UITextSizeConstraint caps the result at its MaxTextSize
+		local ts = gp(st, "TextSize")
+		local pref = R.textScale or 1
+		if pref ~= 1 then
+			local grown = ts * pref
+			local tc = componentEnabled(comps.UITextSizeConstraint)
+			if tc then
+				grown = math.min(grown, math.max(ts, gp(states[tc], "MaxTextSize")))
+			end
+			ts = grown
+		end
+		size = ts * k
 		opts.wrap = gp(st, "TextWrapped")
 		opts.maxWidth = wrapWidth or w
 	end

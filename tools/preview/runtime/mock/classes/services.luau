@@ -676,6 +676,16 @@ R.defineClass("GuiService", {
 			local top = (d.topbarBelowSafeTop and d.safe.top or 0)
 			-- real phones (insetSpace) leave the whole right side of the top bar free
 			local right = d.insetSpace and (d.width - d.safe.right) or (d.width - d.safe.right - 60)
+			if d.coreButtons then
+				-- the free strip starts right of the drawn Roblox buttons
+				local last = d.coreButtons[#d.coreButtons]
+				local minX = last.x + last.w + 1
+				if d.topbarSafeSpace then
+					-- the real app reports this Rect in safe-area space (x = 0 at the safe edge)
+					return roblox.Rect.new(minX - d.safe.left, top, right - d.safe.left, top + d.topbar)
+				end
+				return roblox.Rect.new(minX, top, right, top + d.topbar)
+			end
 			return roblox.Rect.new(d.safe.left + 120, top, right, top + d.topbar)
 		end,
 		IsWindows = function()
@@ -688,7 +698,7 @@ R.defineClass("GuiService", {
 			return 1
 		end,
 		PreferredTextSize = function()
-			return Enum.PreferredTextSize.Medium
+			return (Enum.PreferredTextSize :: any)[R.textSize or "Medium"]
 		end,
 	},
 	methods = {

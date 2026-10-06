@@ -39,9 +39,30 @@ Mock.DEVICES = {
 	-- 58 px top bar, so an IgnoreGuiInset ScreenGui starts at y = -58, same space as
 	-- Camera:WorldToScreenPoint) and ScreenGuis with safe-area insets clip their descendants
 	-- to the safe area unless ClipToDeviceSafeArea = false.
-	iphone = { name = "iphone", width = 852, height = 393, dpr = 3, touch = true, keyboard = false, mouse = false, safe = { left = 59, right = 59, top = 0, bottom = 0 }, topbar = 58, insetSpace = true, clipSafe = true },
+	--
+	-- Calibrated again against the owner's 2026-10-06 iPhone screenshots (2556 x 1179):
+	--  * the new Roblox top bar: a round Roblox button and a menu + chat pill, drawn at
+	--    x 77-222 / y 13-55 (coreButtons), and GuiService.TopbarInset reported in safe-area
+	--    space (X 59 px left of the screen position the game computes from AbsolutePosition:
+	--    topbarSafeSpace), so a layout trusting it lands its header under the chat button
+	--    and thinks the top bar's right side is taken;
+	--  * the player's Roblox "Text size" accessibility setting (GuiService.PreferredTextSize)
+	--    scales every TextSize-sized label at render time (not TextScaled ones, and never
+	--    past a UITextSizeConstraint.MaxTextSize). The owner's phone measures about 1.45x
+	--    (textSize = "Larger", see TEXT_SCALES); `--set textsize=Medium` turns it off.
+	iphone = {
+		name = "iphone", width = 852, height = 393, dpr = 3, touch = true, keyboard = false, mouse = false,
+		safe = { left = 59, right = 59, top = 0, bottom = 0 }, topbar = 58, insetSpace = true, clipSafe = true,
+		topbarSafeSpace = true, textSize = "Larger",
+		coreButtons = { { x = 77, y = 13, w = 42, h = 42, kind = "roblox" }, { x = 128, y = 13, w = 94, h = 42, kind = "pill" } },
+	},
 	tablet = { name = "tablet", width = 1024, height = 768, dpr = 1.5, touch = true, keyboard = false, mouse = false, safe = { left = 0, right = 0, top = 0, bottom = 20 }, topbar = 58 },
 }
+
+-- Render-time text scale per GuiService.PreferredTextSize. Roblox does not publish the
+-- factors; Larger is measured from the owner's screenshots (glyph heights of the same
+-- labels against a Medium render), the others are spaced around it.
+Mock.TEXT_SCALES = { Medium = 1, Large = 1.2, Larger = 1.45, Largest = 1.75 }
 
 function Mock.boot(options)
 	R.options = options
@@ -49,6 +70,14 @@ function Mock.boot(options)
 	if not options.device then
 		error("unknown device profile")
 	end
+	-- the player's Roblox Text size setting (GuiService.PreferredTextSize): `--set textsize=`
+	-- overrides the device profile's
+	local ts = (options.sceneArgs and options.sceneArgs.textsize) or options.device.textSize or "Medium"
+	if not Mock.TEXT_SCALES[ts] then
+		error("unknown textsize " .. tostring(ts) .. " (Medium, Large, Larger, Largest)")
+	end
+	R.textSize = ts
+	R.textScale = Mock.TEXT_SCALES[ts]
 	math.randomseed(options.seed or 1)
 	T.setMetrics(options.fontMetrics)
 	M.setCatalog(options.catalog)
