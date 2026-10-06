@@ -352,6 +352,9 @@ function TrialShrine.Init(c)
 	EncounterDirector.Register(NAME, {
 		Feature = "TrialShrine",
 		Weight = Config.TrialShrine.Weight,
+		Allow = function(info)
+			return info.Stage >= (Config.TrialShrine.MinStage or 1)
+		end,
 		OnStageStart = onStageStart,
 		OnTick = onTick,
 		OnCleanup = cleanup,

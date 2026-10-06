@@ -1861,6 +1861,7 @@ Config.MiniBoss = {
 	RetrySeconds = 4, -- the guard was swept away (not killed): it comes back after this
 }
 Config.TrialShrine = {
+	MinStage = 2, -- BALANCE-2: a level-1 hero who started it on stage 1 died in ~8 s (econ-sim)
 	Weight = 1,
 	Hold = 1.2,
 	Seconds = 30, -- survive this long
