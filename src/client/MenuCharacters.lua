@@ -58,6 +58,39 @@ local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 local DETAIL_HEADING = Font.fromEnum(Enum.Font.GothamBold)
 
+-- A hero name shrinks to fit its row / tile ("Necromancer" in a narrow portrait tab, or a large
+-- Roblox Text size setting) instead of being cut to "Necroma..." (docs/MOBILE_FIX.md).
+local function fitName(label: TextLabel, size: number)
+	label.TextSize = size
+	label.TextScaled = true
+	label:SetAttribute("NoTextFit", true)
+	local tf = label:FindFirstChild("TextFit")
+	if tf then
+		tf:Destroy()
+	end
+	local fit = label:FindFirstChild("Fit") :: UITextSizeConstraint?
+	if not fit then
+		local c = Instance.new("UITextSizeConstraint")
+		c.Name = "Fit"
+		c.Parent = label
+		fit = c
+	end
+	if fit then
+		fit.MaxTextSize = size
+		fit.MinTextSize = math.min(size, 9)
+	end
+end
+
+local function unfitName(label: TextLabel, size: number)
+	label.TextScaled = false
+	label.TextSize = size
+	label:SetAttribute("NoTextFit", nil)
+	local fit = label:FindFirstChild("Fit")
+	if fit then
+		fit:Destroy()
+	end
+end
+
 local ACTION_H = 46 -- the SELECT / UNLOCK button
 local PORTRAIT = 84 -- framed portrait in the details head
 local SKIN_GAP = 8
@@ -1002,7 +1035,13 @@ ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d).
 		row.Name.Size = UDim2.new(1, -(nx + (mode == "row" and 150 or 4)), 1, 0)
 		row.Name.TextXAlignment = mode == "tab" and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
 		local size = mode == "row" and Theme.TextSize.H2 or (long and Theme.TextSize.Small - 1 or Theme.TextSize.Body)
-		row.Name.TextSize = TS(size)
+		-- portrait tabs are narrow: the name shrinks to fit there; rows and tiles keep
+		-- their size (TextFit lets them grow with a large Text size setting where they fit)
+		if mode == "tab" then
+			fitName(row.Name, TS(size))
+		else
+			unfitName(row.Name, TS(size))
+		end
 		-- tiles / tabs (phones) keep the lock and the equipped check as a small corner badge
 		row.Marks.Visible = true
 		if mode == "row" then

@@ -11,6 +11,15 @@
 --   * at Medium (--set textsize=Medium) TextFit adds nothing
 local C = lib("common")
 C.lobby()
+-- the run folders the client waits on (VFX, EnemyRenderer); a lobby server makes them too,
+-- and without them the 16 s scene logs WaitForChild time-outs (exit code 1)
+for _, n in ipairs({ "SwarmGems", "SwarmPickups", "SwarmEnemies" }) do
+	if not workspace:FindFirstChild(n) then
+		local f = Instance.new("Folder")
+		f.Name = n
+		f.Parent = workspace
+	end
+end
 C.startClient()
 local p = C.profile({ Gold = 20927, Account = { XP = 2350 } })
 p.Stats.BestStage = 4

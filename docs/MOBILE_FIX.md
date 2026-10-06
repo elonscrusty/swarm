@@ -1,5 +1,33 @@
 # Mobile menu fix (2026-10-06)
 
+## Wrap-up status (2026-10-06, for tonight's update)
+
+Offline preview only (iphone profile, Roblox Text size = Largest, the owner's phone). NOT
+checked on a device or in Studio. Side-by-sides (owner shot vs render): scratchpad
+`wrapup/side/`.
+
+| Owner's shot | Problem | Now |
+|---|---|---|
+| 1, 2, 3, 4, 6, 8 | BACK cut to "BA..." | fixed (TextFit) |
+| 5 | CHARACTERS BACK under the Roblox chat button | fixed (TopbarInset X space) |
+| 9 | home ACCOUNT pill dropped below the top bar, "ACCOUNT / LV 7" overlapping | fixed |
+| 5 | hero names "Alch...", "Engi...", "Necro...", KNIGHT... button | fixed (Necromancer drawn smaller) |
+| 1, 2, 5, 8 | two-line rows drawn over each other | fixed |
+| 2, 3, 6 | "DAILY...", "FOR...", "Change in..." cut | fixed |
+| 1, 2, 5, 8 | content cut at the bottom with no sign of more | fixed: lists scroll and show a chevron hint |
+| 10, 12 | ULT and DEV drawn over the run menu; pill text spills; note cut; LEAVE RUN cut | fixed |
+| 10, 12 | "Paused" banner over the portal marker | fixed |
+| 11 | JUMP over DEV | fixed: DEV sits above JUMP on touch screens |
+| 11 | "WEAP" / "PASSI" / "BU" tray labels | fixed (shrink to fit; small but whole) |
+| 13 | CHOOSE YOUR UPGRADE under the Roblox buttons, cut descriptions, REROLL "1 left · 3..." | fixed |
+
+Still open:
+- Not seen on a real phone yet: the owner's next phone test is the real check.
+- The tray words WEAPONS / PASSIVES / BUILD are small on phones (they shrink to fit).
+- Text at the Largest setting only grows a little (up to 1.25x) where there is room; elsewhere
+  it stays at the designed size.
+- phone-portrait lobby screens only checked by the regressions, not re-rendered one by one.
+
 The owner tested on a real iPhone (2556 x 1179 px, landscape, 852 x 393 pt at 3x) and found
 every lobby menu broken: buttons cut to "BA...", names cut to "Alch...", two-line rows
 drawn over each other, content cut off at the bottom, a header under the Roblox chat
