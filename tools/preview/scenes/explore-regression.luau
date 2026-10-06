@@ -127,7 +127,9 @@ local function secretRoom(stageLabel: string, expect: string)
 	check(EAI.IsBlocked(r.WallPos.X, r.WallPos.Z, 0.5), stageLabel .. " cracked wall blocks (collider)")
 	local back = r.Pos + r.Out * (K.Depth / 2 + K.Wall / 2)
 	check(EAI.IsBlocked(back.X, back.Z, 0.5), stageLabel .. " back wall blocks")
-	check(not EAI.IsBlocked(r.Pos.X, r.Pos.Z, 0.5), stageLabel .. " alcove inside is free")
+	-- while sealed the inside counts as blocked, so no enemy spawns or is pushed in there
+	-- (it could never get out: corner-regression pocket next to an alcove)
+	check(EAI.IsBlocked(r.Pos.X, r.Pos.Z, 0.5), stageLabel .. " sealed alcove inside is closed to enemies")
 	-- stand in front of the wall and let the weapons fire
 	standAt(r.WallPos - r.Out * 6)
 	local hp0 = r.HP
@@ -146,6 +148,7 @@ local function secretRoom(stageLabel: string, expect: string)
 	end
 	check(r.State == "Open" and r.Model:GetAttribute("State") == "Open", stageLabel .. " wall opens")
 	check(not EAI.IsBlocked(r.WallPos.X, r.WallPos.Z, 0.5), stageLabel .. " front collider removed")
+	check(not EAI.IsBlocked(r.Pos.X, r.Pos.Z, 0.5), stageLabel .. " open alcove inside is free")
 	check(EAI.IsBlocked(back.X, back.Z, 0.5), stageLabel .. " back wall still blocks")
 	check(r.Reward == expect, stageLabel .. " reward " .. tostring(r.Reward) .. " (want " .. expect .. ")")
 	local caches, elites = 0, 0
