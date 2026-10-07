@@ -75,7 +75,7 @@ local publishTimer = 0
 local runSeed: number? = nil -- the running run's seed (Daily / Weekly: their fixed seed)
 local modCache: { [number]: string | false } = {} -- stage -> rolled id (false = none)
 local appliedMod: string? = nil -- the modifier the stat sheets were last computed with
-local seedRng = Random.new() -- own Random: the game's other rolls are untouched
+local seedRng: Random? = nil -- own Random, made on first use (switch on): the game's other rolls are untouched
 
 ------------------------------------------------------------------------------------------
 -- Queries (gameplay hooks)
@@ -265,7 +265,10 @@ function RunModifiers.BeginRun(modeName: string, starter: Player?): CurseData.Da
 		difficulty = DifficultyData.Selected(data)
 		setActive(data and CurseData.Sanitize(data.Curses) or {})
 		endless = endlessFor(modeName, data and data.Endless)
-		runSeed = seedRng:NextInteger(1, 2147483646)
+		if Config.FeatureOn("StageModifiers") then
+			seedRng = seedRng or Random.new()
+			runSeed = (seedRng :: Random):NextInteger(1, 2147483646)
+		end
 	end
 	RunModifiers.Publish()
 	return daily
