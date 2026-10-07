@@ -1,5 +1,9 @@
 # Party quick lines (switch `PartyQuickLines`)
 
+**HELD (owner decision, 2026-10-07): switched off (`Config.Features.PartyQuickLines = false`) and its
+regression checks removed from tools/run_regressions.py. The code stays in the tree, unreleased;
+with the switch off the game behaves as before.**
+
 ## What
 Six fixed lines a party can say to each other: "Ready?", "Go!", "GG", "One more?",
 "Wait for me", "Thanks!". There is no typing anywhere, so no text filtering is needed: the

@@ -1,5 +1,9 @@
 # Stage modifiers (switch `StageModifiers`)
 
+**HELD (owner decision, 2026-10-07): switched off (`Config.Features.StageModifiers = false`) and its
+regression checks removed from tools/run_regressions.py. The code stays in the tree, unreleased;
+with the switch off the game behaves as before.**
+
 ## What
 From stage 2, every stage rolls one modifier: a trade-off that makes the stage different.
 It is named on the stage-start card and shown as a HUD badge while the stage lasts.

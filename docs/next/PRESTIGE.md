@@ -1,5 +1,9 @@
 # Prestige (switch `Prestige`)
 
+**HELD (owner decision, 2026-10-07): switched off (`Config.Features.Prestige = false`) and its
+regression checks removed from tools/run_regressions.py. The code stays in the tree, unreleased;
+with the switch off the game behaves as before.**
+
 ## What
 A hero whose whole Hero Mastery track is maxed (its six stat upgrades and its signature
 upgrade all at their max level, `MetaUpgradeData.HeroOrder`) can Prestige from the

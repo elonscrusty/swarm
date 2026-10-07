@@ -1939,10 +1939,10 @@ Config.Features = {
 	Banish = true, -- BANISH on the level-up panel, 3 per run (docs/next/BANISH.md)
 	DamageNumberOptions = true, -- damage number size + combine settings (docs/next/DAMAGE_NUMBERS.md)
 	FinalStand = true, -- 5 s speed/damage burst under 10% HP, once per stage (docs/next/FINAL_STAND.md)
-	StageModifiers = true, -- one trade-off modifier per stage from stage 2 (docs/next/STAGE_MODIFIERS.md)
-	PartyQuickLines = true, -- fixed-text party quick lines (docs/next/PARTY_QUICK_LINES.md)
+	StageModifiers = false, -- HELD (owner, 2026-10-07): built, not released; one trade-off modifier per stage from stage 2 (docs/next/STAGE_MODIFIERS.md)
+	PartyQuickLines = false, -- HELD (owner, 2026-10-07): built, not released; fixed-text party quick lines (docs/next/PARTY_QUICK_LINES.md)
 	ReviveThanks = true, -- THANKS! button after a teammate revive (docs/next/REVIVE_THANKS.md)
-	Prestige = true, -- reset a maxed hero's mastery for a gold-bonus star (docs/next/PRESTIGE.md)
+	Prestige = false, -- HELD (owner, 2026-10-07): built, not released; reset a maxed hero's mastery for a gold-bonus star (docs/next/PRESTIGE.md)
 	QuickResume = false, -- HELD (owner, 2026-10-07): built, not released; live servers close ~30 s after the last player leaves (docs/next/QUICK_RESUME.md)
 }
 

@@ -87,15 +87,12 @@ def main():
     checks += [("evolution-preview-regression", [])] + [("layout", ["evolution-panel-regression", d]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "evo=on"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["hud-build", d]) for d in ("iphone", "phone-portrait", "pc")]  # EvolutionPreview (docs/next/EVOLUTION_PREVIEW.md)
     checks += [("banish-regression", [])] + [("layout", ["levelup", d, "banish=3"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "banish=2", "banishmode=on", "evo=on"]) for d in ("iphone", "phone-portrait", "pc")]  # Banish (docs/next/BANISH.md)
     # batch B group C: FinalStand, StageModifiers
-    checks += [("final-stand-regression", []), ("stage-modifiers-regression", [])]  # FinalStand / StageModifiers server logic (PASS/FAIL lines; docs/next/FINAL_STAND.md, STAGE_MODIFIERS.md)
-    checks += [("layout", ["final-stand-fx", d]) for d in ("iphone", "phone-portrait")] + [("layout", ["stage-modifiers-ui", d]) for d in ("iphone", "phone-portrait", "pc")]  # aura + headline, stage card line + HUD badge
+    checks += [("final-stand-regression", [])]  # FinalStand / StageModifiers server logic (PASS/FAIL lines; docs/next/FINAL_STAND.md, STAGE_MODIFIERS.md)
+    checks += [("layout", ["final-stand-fx", d]) for d in ("iphone", "phone-portrait")]  # aura + headline, stage card line + HUD badge
     # batch B group D: PartyQuickLines, ReviveThanks
-    checks += [("party-quick-lines-regression", ["headless=off"])]  # PartyQuickLines: party-only delivery, validation, 1/2 s + 10/min limits, bubble fades (PASS/FAIL lines; needs the full client)
-    checks += [("layout", ["party-quick-lines-layout", d, "view=" + v]) for d in ("iphone", "phone-portrait", "pc") for v in ("panel", "home", "solo")]  # PartyQuickLines: PARTY screen strip + feed, home SAY chip popup
     checks += [("revive-thanks-regression", ["headless=off"])]  # ReviveThanks: offer, once, XP, pair limit, DEV taint, solo, 6 s button (PASS/FAIL lines; needs the full client)
     checks += [("layout", ["revive-thanks-layout", d]) for d in ("iphone", "phone-portrait", "pc")]  # ReviveThanks: THANKS! button clear of JUMP / ULT / team list
     # batch B group E: Prestige, QuickResume
-    checks += [("prestige-regression", [])] + [("layout", ["prestige-regression", d, "case=confirm"]) for d in ("iphone", "phone-portrait", "pc")]  # Prestige (docs/next/PRESTIGE.md)
 
     def run(check):
         scene, settings = check
