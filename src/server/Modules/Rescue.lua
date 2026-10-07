@@ -11,7 +11,7 @@
 	  Following  it walks (WalkSpeed) after the NEAREST living player and stops
 	             FollowDistance studs from them. It walks around obstacles the way enemies
 	             are pushed out of them (EnemyAI.PushOut) and stays inside the fence; if it
-	             is stuck CatchUp studs behind for CatchUpSeconds it hops to its hero (a
+	             is stuck (not moving) more than CatchUp studs behind for CatchUpSeconds it hops to its hero (a
 	             free spot beside them, pushed out of obstacles and clamped to the fence;
 	             no free spot = no hop).
 	             Enemies can hurt it (contact, Config.Enemies.ContactCooldown per enemy),
