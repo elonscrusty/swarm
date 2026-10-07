@@ -118,6 +118,13 @@ on). All 30 features plus the cosmetic store (all product ids 0 until the owner 
 UI pass (UI_PASS.md), lobby features verified, regression fixes (sealed secret rooms block spawns, WorldFx,
 favourites grid and FeatureHud per-frame layout). NOT done: full balance sims for encounter totals, team
 combo and co-op boss (Archer/Bard measured inside the existing hero range, left unchanged).
+Phone fix + review batch (2026-10-07, offline only, NOT Studio-tested): owner's iPhone shots
+(scratchpad mobile-shots) showed cut/overlapping text from Roblox Text size Largest (~1.6x) and the
+iPhone TopbarInset offset; TextFit.lua (grow <=1.25x, shrink to fit), UIBuilder.computeInsets fix,
+preview `--set textsize=` (iphone defaults to Largest) and a check_layout CUT rule; home, play,
+characters, run menu, level-up fixed (other lobby screens via the shared fix), docs/MOBILE_FIX.md.
+Also: review fixes (docs/features/REVIEW.md), Trial shrine from stage 2 (BALANCE.md), darker lobby
+(exposure -0.5). Regressions 145/151 then the 6 layout fails fixed and rechecked individually.
 
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),

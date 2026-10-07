@@ -3884,6 +3884,11 @@ Config.UI = {
 	-- 852 x 393 phone renders reference px at ~0.77 (text ~11-15 pt, buttons ~40 pt) and
 	-- layouts reflow into ~960 x 514 virtual px.
 	PhoneReferenceSize = Vector2.new(960, 470),
+	-- The player's Roblox "Text size" setting (GuiService.PreferredTextSize) scales every
+	-- TextSize-sized label at render time. TextFit lets text grow up to this much over its
+	-- designed size where the label has room, and shrinks it back (never below the design
+	-- size) where it would be cut or run into its neighbours (docs/MOBILE_FIX.md).
+	TextGrowMax = 1.25,
 	-- Fonts and sizes live in Theme (Merriweather titles, Source Sans body / numbers).
 	-- These two are only the fallbacks for plain Enum.Font properties.
 	Font = Enum.Font.SourceSansBold,
@@ -4376,6 +4381,7 @@ Config.MiniBoss = {
 	RetrySeconds = 4, -- the guard was swept away (not killed): it comes back after this
 }
 Config.TrialShrine = {
+	MinStage = 2, -- BALANCE-2: a level-1 hero who started it on stage 1 died in ~8 s (econ-sim)
 	Weight = 1,
 	Hold = 1.2,
 	Seconds = 30, -- survive this long
@@ -21168,9 +21174,11 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 	if e.Boss and rp then
 		amount = BossAI.ModifyHit(e, amount, rp) -- the co-op weak spot (CoopBoss.lua)
 	end
+	local hpBefore = math.max(0, e.HP)
 	e.HP -= amount
 	if rp then
-		rp.DamageDealt += amount
+		-- "Damage dealt" counts the HP really removed, not the overkill (MATH-15)
+		rp.DamageDealt += math.min(amount, hpBefore)
 		DamageNumbers.Add(rp.Player, e.Id, amount, crit) -- only for players with the setting on
 	end
 	Fx.Hit(e.Id)
@@ -27013,6 +27021,9 @@ local LIGHTING = {
 		Clock = 17.8, Brightness = 0.8, Latitude = 40, Shadow = 0.4,
 		Ambient = rgb(94, 90, 130), Outdoor = rgb(128, 118, 160), Top = rgb(255, 204, 168), Bottom = rgb(50, 40, 70),
 		Diffuse = 0.3, Specular = 0.35,
+		-- the owner's phone (Future lighting) showed white walls and a glowing floor even
+		-- after the dimmer values above, so the whole menu scene is also exposed down
+		Exposure = -0.5,
 		Atmo = { Density = 0.13, Offset = 0.1, Color = rgb(232, 146, 112), Decay = rgb(92, 82, 168), Glare = 0.2, Haze = 1.1 },
 		Bloom = { Intensity = 0.28, Size = 22, Threshold = 1.5 },
 		Grade = { Brightness = -0.04, Contrast = 0.16, Saturation = 0.2, Tint = rgb(255, 242, 238) },
@@ -27120,7 +27131,7 @@ function MapBuilder.ApplyLighting(name: string)
 	Lighting.EnvironmentDiffuseScale = L.Diffuse
 	Lighting.EnvironmentSpecularScale = L.Specular
 	Lighting.FogEnd = 100000
-	Lighting.ExposureCompensation = 0
+	Lighting.ExposureCompensation = L.Exposure or 0
 
 	local atmo = lightingEffect("Atmosphere", "SwarmAtmosphere") :: Atmosphere
 	atmo.Density = L.Atmo.Density
@@ -30426,7 +30437,7 @@ type Cart = {
 	Pos: Vector3,
 	Stage: number,
 	Model: Model,
-	Stock: { [any]: { Offer } }, -- rp -> offers
+	Stock: { [any]: { Offer } }, -- the player's UserId (rp for a test record) -> offers
 }
 
 local ctx
@@ -30551,15 +30562,23 @@ local function rollStock(rp, c: Cart): { Offer }
 	return list
 end
 
+-- The stock key of a run player: its UserId, so a reconnected player (RunManager makes a
+-- new record from a copy) keeps its stock and its sold slots (REVIEW R-01).
+local function stockKey(rp): any
+	local player = rp.Player
+	return (typeof(player) == "Instance" and player:IsA("Player")) and player.UserId or rp
+end
+
 local function stockOf(rp): { Offer }?
 	local c = cart
 	if not c then
 		return nil
 	end
-	local s = c.Stock[rp]
+	local key = stockKey(rp)
+	local s = c.Stock[key]
 	if not s then
 		s = rollStock(rp, c)
-		c.Stock[rp] = s
+		c.Stock[key] = s
 	end
 	return s
 end
@@ -35157,9 +35176,21 @@ function RunManager.ApplyMovement(rp)
 	if hum and hum.Parent then
 		-- rp.RushMult: Windstep's short burst after a kill (ItemSystem); rp.WeatherSpeedMult:
 		-- a snow storm (Weather)
-		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * (rp.RushMult or 1) * (rp.WeatherSpeedMult or 1) or 0
+		hum.WalkSpeed = canMove and rp.Stats and rp.Stats.Speed * (rp.TerrainSpeedMult or 1) * RunManager.RushMult(rp) * (rp.WeatherSpeedMult or 1) or 0
 	end
 	rp.Player:SetAttribute("Paused", rp.Paused == true)
+end
+
+-- Windstep's burst, capped with the speed of now (MATH-17): the burst stores its multiplier
+-- when it starts, so a speed gain during the burst must not push Speed x Rush past
+-- BaseSpeed x Items.MaxSpeedMult. Never below 1 (a burst never slows).
+function RunManager.RushMult(rp): number
+	local mult = rp.RushMult
+	if not mult or not rp.Stats then
+		return 1
+	end
+	local cap = Config.Player.BaseSpeed * Config.Items.MaxSpeedMult / math.max(1, rp.Stats.Speed)
+	return math.max(1, math.min(mult, cap))
 end
 
 function RunManager.ApplyMovementAll()
@@ -40039,11 +40070,17 @@ function StageManager.DevTeleport(rp): boolean
 	return true
 end
 
--- "Next stage": opens the portal now (leftovers burn up, a live boss too) and sends every
+-- "Next stage": opens the portal now (leftovers burn up, a live boss is removed) and sends every
 -- living player on to the next stage.
 function StageManager.DevNextStage(): boolean
 	if sub ~= "Explore" and sub ~= "Boss" and sub ~= "Surge" and sub ~= "Open" then
 		return false
+	end
+	-- a live boss goes with no rewards (openPortal's sweep skips bosses, so it used to stay
+	-- alive through the portal choice; dev only, the run is tainted)
+	local boss = ctx.EnemySpawner.Boss
+	if boss and boss.Alive then
+		ctx.EnemySpawner.Despawn(boss)
 	end
 	if sub ~= "Open" then
 		openPortal()
@@ -40126,7 +40163,7 @@ local StoreService = {}
 local ctx
 local GOLD = Color3.fromRGB(255, 215, 80)
 
-type Gift = { Target: number, TargetName: string, ProductId: number, Item: string, At: number }
+type Gift = { Target: number, TargetName: string, ProductId: number, Item: string, At: number, Delivered: boolean? }
 local pendingGift: { [Player]: Gift } = {}
 local routes: { [string]: Gift } = {} -- purchaseId → the gift it was routed as
 local prompted: { [Player]: { Id: number, At: number } } = {}
@@ -40388,8 +40425,14 @@ function StoreService.GrantGift(buyer: Player, buyerData: { [string]: any }, g: 
 	end
 	local recipient = Players:GetPlayerByUserId(g.Target)
 	local profile = recipient and ctx.DataService.GetProfile(recipient)
-	if recipient and recipient ~= buyer and profile and not profile.Released and not profile.LockLost then
+	-- the recipient got this look some other way after the prompt opened (bought or was
+	-- gifted it): the buyer keeps it instead of paying for nothing (REVIEW R-04)
+	-- (a retried receipt of a gift already delivered keeps its route: g.Delivered)
+	local already = not g.Delivered and recipient ~= nil and profile ~= nil and item.Kind == "Cosmetic"
+		and StoreService.Owns(recipient, profile.Data, item.Id)
+	if recipient and recipient ~= buyer and profile and not profile.Released and not profile.LockLost and not already then
 		local name = StoreService.GrantItem(recipient, profile.Data, item)
+		g.Delivered = true
 		if not ctx.DataService.ForceSave(recipient) then
 			return false
 		end
@@ -40400,9 +40443,9 @@ function StoreService.GrantGift(buyer: Player, buyerData: { [string]: any }, g: 
 		end)
 		return true
 	end
-	-- the recipient left before the purchase finished: the buyer keeps it
+	-- the recipient left (or owns it already) before the purchase finished: the buyer keeps it
 	local name = StoreService.GrantItem(buyer, buyerData, item)
-	afterGrant(buyer, g.TargetName .. " left, so " .. name .. " is yours. Thank you!")
+	afterGrant(buyer, g.TargetName .. (already and " owns it already" or " left") .. ", so " .. name .. " is yours. Thank you!")
 	return true
 end
 
@@ -41324,6 +41367,9 @@ function TrialShrine.Init(c)
 	EncounterDirector.Register(NAME, {
 		Feature = "TrialShrine",
 		Weight = Config.TrialShrine.Weight,
+		Allow = function(info)
+			return info.Stage >= (Config.TrialShrine.MinStage or 1)
+		end,
 		OnStageStart = onStageStart,
 		OnTick = onTick,
 		OnCleanup = cleanup,
@@ -41497,7 +41543,7 @@ function Ultimate.Use(player: Player): (boolean, string?)
 	if not RM.IsRunning() or not RM.IsSimulating() then
 		return false, "frozen"
 	end
-	if not rp.Alive or rp.Returned or rp.AwaitingRevive or rp.Paused or rp.RewardUntil or not rp.Root then
+	if not rp.Alive or rp.Returned or rp.AwaitingRevive or rp.Paused or rp.RewardUntil or rp.Offer ~= nil or not rp.Root then
 		return false, "state"
 	end
 	if Ultimate.Charge(rp) < 1 then
@@ -44915,7 +44961,9 @@ local function folder(): Folder
 end
 
 local function setPlayerMult(rp, mult: number?)
-	if rp.WeatherSpeedMult == mult then
+	-- a reconnected player comes back as a copy of its record (RunManager snapshot) that
+	-- still carries the old multiplier: track it too, or it would never be reset (REVIEW R-02)
+	if rp.WeatherSpeedMult == mult and (mult == nil or tracked[rp]) then
 		return
 	end
 	rp.WeatherSpeedMult = mult
@@ -50438,6 +50486,9 @@ local WeaponData = require(Shared:WaitForChild("WeaponData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local DevInbox = require(script.Parent.DevInbox)
+local UIState = require(script.Parent.UIState)
+local ClientSettings = require(script.Parent.ClientSettings)
+local UserInputService = game:GetService("UserInputService")
 
 local DevPanel = {}
 
@@ -50772,11 +50823,24 @@ local function build(root: Instance, host: { [string]: any }?)
 			panel.Position = UDim2.fromOffset(M, ty + 56)
 			panel.Size = UDim2.fromOffset(w, math.min(600, v.Y - ty - 56 - M))
 		else
+			-- touch screens: the JUMP button (MobileControls, Config.Movement) owns the bottom
+			-- right corner, so DEV sits just above it, right edges level (on the owner's
+			-- iPhone the two overlapped); left-handed layouts move JUMP away, keep the corner
+			local bottom = v.Y - M
+			local right = v.X - M
+			if UserInputService.TouchEnabled and ClientSettings.Get("TouchLayout") ~= "LeftHanded" then
+				local mv = Config.Movement :: any
+				local s = math.max(0.01, host.Scale and host.Scale() or 1)
+				local compactScale = ClientSettings.Get("TouchLayout") == "Compact" and 0.8 or 1
+				local margin = (mv.ButtonMargin or 26) / s
+				bottom = v.Y - margin - (mv.ButtonSize or 84) * compactScale - 12
+				right = v.X - margin
+			end
 			toggle.AnchorPoint = Vector2.new(1, 1)
-			toggle.Position = UDim2.fromOffset(v.X - M, v.Y - M)
+			toggle.Position = UDim2.fromOffset(right, bottom)
 			panel.AnchorPoint = Vector2.new(1, 1)
-			panel.Position = UDim2.fromOffset(v.X - M, v.Y - M - 56)
-			panel.Size = UDim2.fromOffset(w, math.min(600, v.Y - M - 56 - topY))
+			panel.Position = UDim2.fromOffset(right, bottom - 56)
+			panel.Size = UDim2.fromOffset(w, math.max(160, math.min(600, bottom - 56 - topY)))
 		end
 	end
 	if host then
@@ -50785,12 +50849,22 @@ local function build(root: Instance, host: { [string]: any }?)
 	end
 	-- the DEV button only floats in a run; in the lobby DEV lives in MORE (MenuMore's DEV
 	-- row opens this panel), so the home screen's composition stays clean
+	-- hidden while a panel is shown (run menu drawer, level-up, rewards, results ...): it
+	-- drew on top of LEAVE RUN on the owner's iPhone. An open dev panel keeps it.
 	local function syncToggle()
 		local inRun = player:GetAttribute("InRun") == true
 		if toggle then
-			toggle.Visible = inRun
+			toggle.Visible = inRun and (UIState.Owner() == nil or (panel ~= nil and panel.Visible))
 		end
 	end
+	UIState.OnOwnerChanged(function()
+		syncToggle()
+	end)
+	ClientSettings.OnChanged(function(key)
+		if key == "TouchLayout" then
+			layout()
+		end
+	end)
 	player:GetAttributeChangedSignal("InRun"):Connect(function()
 		showTab(player:GetAttribute("InRun") == true and "Run" or "Profile")
 		syncToggle()
@@ -52978,8 +53052,8 @@ return ExploreUI
 
 	FeatureHud.Slot(name) returns the raw holder Frame ("Badges", "Announcer", "Ultimate",
 	"PingWheel") for custom content. Everything is hidden outside a run, while dead for
-	the ultimate, and while a panel covers the HUD (UIState.Covered: level-up, rewards,
-	pause, results, travel ...). Nothing shows until a feature uses a slot.
+	the ultimate, and while any panel is shown (UIState.Covered or UIState.Owner: level-up,
+	rewards, the run menu drawer, results, travel ...). Nothing shows until a feature uses a slot.
 ]]
 
 local Players = game:GetService("Players")
@@ -53385,7 +53459,9 @@ function FeatureHud.Init()
 
 	-- per frame: only writes that change something (no churn in the lobby)
 	RunService.RenderStepped:Connect(function()
-		local on = inRun() and not UIState.Covered()
+		-- hidden under ANY shown panel, not only the covering ones: the run menu drawer leaves
+		-- the HUD in view, and the ULT button drew on top of it (owner's iPhone, 2026-10-06)
+		local on = inRun() and not UIState.Covered() and UIState.Owner() == nil
 		setVisible(on)
 		if screen.Enabled ~= on then
 			screen.Enabled = on
@@ -54533,10 +54609,12 @@ function HeroPresets.Tag(face: GuiObject, c: { [string]: any })
 	-- (portrait stack): on the top edge left of the key number, in the gap between cards
 	local hit = face.Parent
 	local wide = hit and hit:IsA("GuiObject") and hit.Size.X.Offset > 2 * hit.Size.Y.Offset
+	local plate = face:FindFirstChild("ChoosePlate") :: GuiObject?
 	local tag = UIKit.text(face, "Label", Config.BuildPresets.Tag, {
 		Name = "FavouriteTag",
 		AnchorPoint = if wide then Vector2.new(1, 0.5) else Vector2.new(0, 1),
-		Position = if wide then UDim2.new(1, -44, 0, 0) else UDim2.new(0, 8, 1, -8),
+		-- tall cards sit just above the CHOOSE plate so a wide tag (large text) never meets the key
+		Position = if wide then UDim2.new(1, -44, 0, 0) else (plate and UDim2.new(0, 8, 0, plate.Position.Y.Offset - 4) or UDim2.new(0, 8, 1, -8)),
 		Size = UDim2.fromOffset(0, UIKit.TS(12) + 6),
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextXAlignment = Enum.TextXAlignment.Center,
@@ -55045,6 +55123,25 @@ local C, P = Theme.Color, Theme.Palette
 
 export type Insets = { Top: number, Left: number, Right: number }
 
+-- A label that must stay inside its box: it scales down (never below `minSize`, never above
+-- its own TextSize). Roblox's "Text size" accessibility setting (GuiService.PreferredTextSize)
+-- grows plain TextSize text on the owner's phone by about 1.45x and does not touch TextScaled
+-- text, so fixed boxes (tray labels, BUILD) use this.
+local function fitText(label: TextLabel, minSize: number?): TextLabel
+	local max = label.TextSize
+	label.TextScaled = true
+	-- our own named constraint; TextFit's (it skips TextScaled labels) must not stay
+	local tf = label:FindFirstChild("TextFit")
+	if tf then
+		tf:Destroy()
+	end
+	label:SetAttribute("NoTextFit", true)
+	local c = label:FindFirstChild("Fit") or new("UITextSizeConstraint", { Name = "Fit" }, label)
+	c.MaxTextSize = max
+	c.MinTextSize = math.min(max, minSize or 9)
+	return label
+end
+
 -- Health panel and ability panel, designed at full size (reference px), fitted with a UIScale.
 local VIT = { W = 380, PadX = 10, PadY = 9, HP = 26, XP = 20, Gap = 8 } -- health / level panel
 VIT.H = VIT.PadY * 2 + VIT.HP + VIT.Gap + VIT.XP
@@ -55124,6 +55221,7 @@ local function buildTimer(frame: Frame)
 		TextSize = TS(TY.Display.Size),
 		TextXAlignment = Enum.TextXAlignment.Center,
 	})
+	fitText(ui.Timer, 16)
 end
 
 -- Objective panel under the timer (approved 02/03 HUD): a gold caption with where the run
@@ -55328,6 +55426,8 @@ local function buildVitals(frame: Frame)
 		Size = UDim2.new(0, 66, 1, 0),
 		TextColor3 = P.ivory_100,
 	})
+	-- "LV 14" stays left of the XP bar (large phone text ran it under the bar)
+	fitText(ui.Level, 10)
 	ui.XP = UIKit.Meter(xpRow, {
 		Gradient = XP_GRADIENT,
 		TextStyle = "Number",
@@ -55383,12 +55483,15 @@ local function buildBar(frame: Frame)
 	ui.BarBody = body
 	ui.BarFit = new("UIScale", { Name = "Fit", Scale = 1 }, body)
 	local function rowLabel(str: string, y: number)
-		role(face, "Label", str, {
+		-- the word gets the label column only (the first tile starts right after it) and
+		-- shrinks to fit: on a phone with large text "WEAPONS" ran under the first tile
+		local l = role(face, "Label", str, {
 			Name = str,
-			Position = UDim2.fromOffset(INV.Pad + 2, y),
-			Size = UDim2.fromOffset(INV.Label - 4, INV.Tile),
+			Position = UDim2.fromOffset(INV.Pad + 2, y + math.floor(INV.Tile / 2) - 12),
+			Size = UDim2.fromOffset(INV.Label - 8, 24),
 			TextColor3 = P.ivory_100,
 		})
+		fitText(l, 9)
 	end
 	local y2 = INV.Pad + INV.Tile + INV.RowGap
 	rowLabel("WEAPONS", INV.Pad)
@@ -55417,15 +55520,15 @@ local function buildBar(frame: Frame)
 	UIKit.corner(btn, Theme.Radius.M)
 	ui.BuildButton = btn
 	ui.BuildChevron = Icons.Draw(btn, "chevronsUp", { Size = 22, Color = P.gold_200, Back = P.slate_900, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -12), ZIndex = 5 })
-	role(btn, "Label", "BUILD", {
+	fitText(role(btn, "Label", "BUILD", {
 		Name = "Word",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0.5, 4),
-		Size = UDim2.new(1, 0, 0, 20),
+		Size = UDim2.new(1, -6, 0, 20),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.ivory_100,
 		ZIndex = 5,
-	})
+	}), 9)
 	btn.MouseEnter:Connect(function()
 		btn.BackgroundTransparency = 0.4
 	end)
@@ -55752,6 +55855,11 @@ end
 -- at the left edge about mid-screen; in landscape it is in a corner).
 function Hud.AvoidInPortrait(g: GuiObject)
 	table.insert(portraitBars, g)
+end
+
+-- The portrait-only panels (the left-edge minimap), for world labels that must keep clear.
+function Hud.PortraitBars(): { GuiObject }
+	return portraitBars
 end
 
 -- The reserved top-centre bars (visible or not), for other markers that must keep clear.
@@ -56830,6 +56938,10 @@ local function updateStatus(state: Configuration, phase: string, stagePhase: str
 				local several = string.find(names, ",", 1, true) ~= nil
 				setStatus(string.format("Paused: %s %s choosing an upgrade", names, several and "are" or "is"), "hourglass")
 			end
+		elseif player:GetAttribute("Paused") == true or UIState.IsShown("Pause") then
+			-- this player's own run menu is open and says "SOLO · GAME PAUSED" itself; a
+			-- second "Paused" banner only sat on the portal marker beside the drawer
+			setStatus("")
 		else
 			setStatus("Paused", "pause")
 		end
@@ -62639,6 +62751,8 @@ function LobbyScreen.Init(h: { [string]: any })
 	if Config.FeatureOn("Store") then
 		screens.Store = require(script.Parent.MenuStore).Build(screen("Store"), ctx)
 	end
+	-- phones hide scroll bars: every list that can scroll shows a chevron (UIKit.ScrollHint)
+	UIKit.ScrollHints(ui.Screens)
 	-- gamepad B on a lobby screen = its BACK button. Not while a panel (settings, bug
 	-- report ...) owns input, nor on the same press that just closed one (its own B
 	-- handler may run first), nor while typing.
@@ -64513,6 +64627,39 @@ local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 local DETAIL_HEADING = Font.fromEnum(Enum.Font.GothamBold)
 
+-- A hero name shrinks to fit its row / tile ("Necromancer" in a narrow portrait tab, or a large
+-- Roblox Text size setting) instead of being cut to "Necroma..." (docs/MOBILE_FIX.md).
+local function fitName(label: TextLabel, size: number)
+	label.TextSize = size
+	label.TextScaled = true
+	label:SetAttribute("NoTextFit", true)
+	local tf = label:FindFirstChild("TextFit")
+	if tf then
+		tf:Destroy()
+	end
+	local fit = label:FindFirstChild("Fit") :: UITextSizeConstraint?
+	if not fit then
+		local c = Instance.new("UITextSizeConstraint")
+		c.Name = "Fit"
+		c.Parent = label
+		fit = c
+	end
+	if fit then
+		fit.MaxTextSize = size
+		fit.MinTextSize = math.min(size, 9)
+	end
+end
+
+local function unfitName(label: TextLabel, size: number)
+	label.TextScaled = false
+	label.TextSize = size
+	label:SetAttribute("NoTextFit", nil)
+	local fit = label:FindFirstChild("Fit")
+	if fit then
+		fit:Destroy()
+	end
+end
+
 local ACTION_H = 46 -- the SELECT / UNLOCK button
 local PORTRAIT = 84 -- framed portrait in the details head
 local SKIN_GAP = 8
@@ -65028,7 +65175,7 @@ local bought: { [string]: { [string]: number } } = {} -- upgrades bought on this
 		-- whose upgrades these are, and one running note of what was bought on this visit
 		-- (rows update from the server's profile; no stream of confirmations here)
 		local headTxt = string.format("%s'S UPGRADES · only for the %s · paid with gold", string.upper(heroName), heroName)
-		text(ui.MasteryPanel, "Small", headTxt, { Name = "Owner", LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(13) + 6), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd, FontFace = DETAIL_HEADING }, 13)
+		text(ui.MasteryPanel, "Small", headTxt, { Name = "Owner", LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(13) + 6), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.gold_200, FontFace = DETAIL_HEADING }, 13) -- wraps to a second line at large text sizes
 		local bw = math.clamp(math.floor(innerW * 0.37), 128, 190)
 		local withIcon = bw >= 175 -- narrow buttons (phones) keep the whole label instead
 		local lineH = TS(13) + 4
@@ -65101,6 +65248,7 @@ text(row, "Small", effectLine, {
 				Title = title,
 				Icon = withIcon and icon or nil,
 				IconSize = 16,
+				Shrink = true, -- large text sizes: the label shrinks a little before it cuts
 				Align = "Center",
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, -8, 0.5, 0),
@@ -65457,7 +65605,13 @@ ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d).
 		row.Name.Size = UDim2.new(1, -(nx + (mode == "row" and 150 or 4)), 1, 0)
 		row.Name.TextXAlignment = mode == "tab" and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
 		local size = mode == "row" and Theme.TextSize.H2 or (long and Theme.TextSize.Small - 1 or Theme.TextSize.Body)
-		row.Name.TextSize = TS(size)
+		-- portrait tabs are narrow: the name shrinks to fit there; rows and tiles keep
+		-- their size (TextFit lets them grow with a large Text size setting where they fit)
+		if mode == "tab" then
+			fitName(row.Name, TS(size))
+		else
+			unfitName(row.Name, TS(size))
+		end
 		-- tiles / tabs (phones) keep the lock and the equipped check as a small corner badge
 		row.Marks.Visible = true
 		if mode == "row" then
@@ -70421,7 +70575,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 	}, face)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Top }, ui.Chips)
 	local chips: { [string]: any } = {}
-	ui.Note = text(face, "Small", "", { Name = "Note", Size = UDim2.new(1, 0, 0, TS(14) + 6), TextColor3 = C.TextMuted, TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 14)
+	ui.Note = text(face, "Small", "", { Name = "Note", Size = UDim2.new(1, 0, 0, 2 * TS(14) + 6), TextColor3 = C.TextMuted, TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true }, 14)
 	ui.Scroll = new("ScrollingFrame", {
 		Name = "Scroll",
 		BackgroundTransparency = 1,
@@ -70849,7 +71003,8 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		ui.Chips.Position = UDim2.fromOffset(0, 0)
 		local noteY = chipsH + 4
 		ui.Note.Position = UDim2.fromOffset(0, noteY)
-		ui.ScrollTop = noteY + TS(14) + 10
+		-- the note may wrap to two lines on narrow phones (big Roblox text size)
+		ui.ScrollTop = noteY + 2 * TS(14) + 10
 		ui.Scroll.Position = UDim2.fromOffset(0, ui.ScrollTop)
 		ui.Scroll.Size = UDim2.new(1, 0, 1, -ui.ScrollTop)
 		local inner = w - 28 - 12
@@ -79038,7 +79193,10 @@ local function buildArrow(root: Frame)
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.ivory_100,
 		TextStrokeTransparency = 0.4,
+		-- scales down inside its box: the phone's large-text setting grew "139 m" onto the tray
+		TextScaled = true,
 	}, true)
+	new("UITextSizeConstraint", { MinTextSize = 10, MaxTextSize = ui.ArrowDistance.TextSize }, ui.ArrowDistance)
 	UIAnim.Breathe(badge, 0.06, 1.6)
 end
 
@@ -79469,7 +79627,10 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	-- edge arrow (after the hint time, while exploring)
 	-- (hidden while the player reads the BUILD details over the arena; the minimap keeps
 	-- the portal pin and the marker returns when they close)
+	-- (also hidden while this player's run menu is open: the drawer covers that side and the
+	-- marker sat on the HUD's centre status line)
 	local showArrow = stagePhase == "Explore" and state:GetAttribute("PortalHint") == true and not inside and not showRing and not Hud.BuildOpen()
+		and not UIState.IsShown("Pause")
 	if not showArrow then
 		ui.Arrow.Visible = false
 		ui.ArrowShown = false
@@ -79491,7 +79652,9 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	-- landscape: the ability bar takes the bottom centre; keep the arrow above it there
 	local barTop, barL, barR = math.huge, 0, 0
 	if not portrait and els.Bar then
-		barTop = Hud.BarTop() - 48
+		-- the marker's centre: its 64 px badge plus the distance label under it (~30 px)
+		-- stay above the tray with a small gap
+		barTop = Hud.BarTop() - 66
 		barL = els.Bar.Position.X.Offset - 40
 		barR = barL + els.Bar.Size.X.Offset + 80
 	end
@@ -81110,7 +81273,51 @@ local function updateMarker(m: Marker, p: Player, root: BasePart, progress: numb
 		end
 		-- the 200 px label is centred under the ring; near a screen edge it slides in so
 		-- it never runs off screen
-		m.Label.Position = UDim2.new(0.5, math.clamp(x, 108, W - 108) - x, 1, 0)
+		local labelAbove = false
+		local portrait = kit.IsPortrait()
+		if portrait then
+			-- portrait: the ring itself slides right of the left-edge minimap when it would
+			-- sit under it (the map is painted over the markers)
+			local half = m.Holder.Size.X.Offset / 2
+			for _, g in ipairs(Hud.PortraitBars()) do
+				if g.Visible and g.Parent then
+					local gx = g.Position.X.Offset - g.AnchorPoint.X * g.Size.X.Offset
+					local gy = g.Position.Y.Offset - g.AnchorPoint.Y * g.Size.Y.Offset
+					local gr, gb = gx + g.Size.X.Offset, gy + g.Size.Y.Offset
+					if x - half < gr + 4 and x + half > gx - 4 and y - half < gb + 4 and y + half > gy - 4 then
+						x = math.min(gr + 6 + half, W - half - 4)
+					end
+				end
+			end
+		end
+		local lx = math.clamp(x, 108, W - 108)
+		if portrait then
+			-- portrait: the left-edge minimap sits about mid-screen, right where the downed
+			-- hero's "You · reviving" label lands; the label slides right of the map, or
+			-- goes above the ring when there is no room beside it
+			local lh = m.Label.Size.Y.Offset
+			local ly = y + MARK_R + 8
+			for _, g in ipairs(Hud.PortraitBars()) do
+				if g.Visible and g.Parent then
+					local gx = g.Position.X.Offset - g.AnchorPoint.X * g.Size.X.Offset
+					local gy = g.Position.Y.Offset - g.AnchorPoint.Y * g.Size.Y.Offset
+					local gr, gb = gx + g.Size.X.Offset, gy + g.Size.Y.Offset
+					local function hits(cx: number, top: number): boolean
+						return cx - 100 < gr + 4 and cx + 100 > gx - 4 and top < gb + 4 and top + lh > gy - 4
+					end
+					if hits(lx, ly) then
+						local shifted = gr + 8 + 100
+						if shifted <= W - 8 - 100 + 0.5 then
+							lx = shifted
+						elseif not hits(lx, y - MARK_R - 8 - lh) then
+							labelAbove = true
+						end
+					end
+				end
+			end
+		end
+		m.Label.AnchorPoint = if labelAbove then Vector2.new(0.5, 1) else Vector2.new(0.5, 0)
+		m.Label.Position = UDim2.new(0.5, lx - x, if labelAbove then 0 else 1, 0)
 		m.Holder.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	end
 	local inside = on and p2.X > 50 and p2.X < W - 50 and p2.Y > top and p2.Y < bottom
@@ -82970,6 +83177,361 @@ return TerrainFx
         </Item>
         <Item class="ModuleScript" referent="167">
           <Properties>
+            <string name="Name">TextFit</string>
+            <string name="Source"><![CDATA[--[[
+	TextFit.lua
+	Keeps the player's Roblox "Text size" accessibility setting (GuiService.PreferredTextSize)
+	from breaking layouts, without throwing it away.
+
+	Roblox scales every TextSize-sized label by that setting at render time (about 1.6x on
+	the owner's iPhone, docs/MOBILE_FIX.md); TextScaled labels are not scaled, and no label
+	grows past a UITextSizeConstraint's MaxTextSize. Our layouts are measured for the
+	designed TextSize, so a big setting cut "BACK" to "BA...", stacked two-line rows on top
+	of each other and pushed text out of fixed panels.
+
+	For every TextLabel / TextButton under the watched roots (not TextScaled, not opted out,
+	no constraint of its own) TextFit adds a UITextSizeConstraint named "TextFit" and steps
+	its MaxTextSize through
+	    designed x Config.UI.TextGrowMax  ->  halfway  ->  designed
+	until the label reports TextFits: text grows where its label has room and falls back to
+	the designed size (which the layouts are checked at) where it would be cut or overflow.
+	A label that got smaller re-checks only by shrinking; one that got bigger starts again
+	from the top. Nothing is added while the setting is the default (Medium).
+
+	Opt a label out with the attribute NoTextFit = true (it then keeps its designed size).
+]]
+
+local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
+
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
+
+local TextFit = {}
+
+local NAME = "TextFit"
+local MAX_RESTARTS = 8 -- per label; after that it keeps its designed size (no flicker loops)
+local PER_FRAME = 300 -- labels looked at per Heartbeat
+type Entry = {
+	Level: number, -- 1 = most growth ... 3 = designed size
+	Fit: Vector2?, -- AbsoluteSize the current level was settled at
+	Want: string?, -- "restart" | "check" | nil
+	Restarts: number,
+	Size: number, -- TextSize the level was computed for
+	Conns: { RBXScriptConnection },
+}
+
+local roots: { Instance } = {}
+local entries: { [Instance]: Entry } = {}
+local pending: { [Instance]: boolean } = {}
+local active = false
+local stepConn: RBXScriptConnection? = nil
+
+local function growMax(): number
+	return (Config.UI and Config.UI.TextGrowMax) or 1.25
+end
+
+-- Whether the player's setting is above the default (TextFit is idle otherwise).
+function TextFit.Enlarged(): boolean
+	local ok, v = pcall(function()
+		return GuiService.PreferredTextSize
+	end)
+	return ok and v ~= nil and v ~= Enum.PreferredTextSize.Medium
+end
+
+local function isText(obj: Instance): boolean
+	return obj:IsA("TextLabel") or obj:IsA("TextButton")
+end
+
+-- MaxTextSize for a level (1 = most growth, 3 = the designed size).
+local function capFor(size: number, level: number): number
+	local g = growMax()
+	if level <= 1 then
+		return math.max(1, math.floor(size * g))
+	elseif level == 2 then
+		return math.max(1, math.floor(size * (1 + g) / 2))
+	end
+	return math.max(1, math.floor(size + 0.5))
+end
+
+local function ownConstraint(label: Instance): UITextSizeConstraint?
+	return label:FindFirstChild(NAME) :: UITextSizeConstraint?
+end
+
+local function foreignConstraint(label: Instance): boolean
+	for _, c in ipairs(label:GetChildren()) do
+		if c:IsA("UITextSizeConstraint") and c.Name ~= NAME then
+			return true
+		end
+	end
+	return false
+end
+
+local function release(label: Instance)
+	local e = entries[label]
+	if e then
+		for _, c in ipairs(e.Conns) do
+			c:Disconnect()
+		end
+		entries[label] = nil
+	end
+	pending[label] = nil
+	local own = ownConstraint(label)
+	if own then
+		own:Destroy()
+	end
+end
+
+-- Writes the level's cap (only from step(), never inside a layout signal).
+local function apply(label: any, e: Entry)
+	local own = ownConstraint(label)
+	if not own then
+		own = Instance.new("UITextSizeConstraint")
+		own.Name = NAME
+		own.MinTextSize = 1
+		own.Parent = label
+	end
+	local cap = capFor(e.Size, e.Level)
+	if own.MaxTextSize ~= cap then
+		own.MaxTextSize = cap
+	end
+end
+
+-- Should this label be managed now? (TextScaled text ignores the setting; a label with its
+-- own UITextSizeConstraint already has a bound; NoTextFit keeps the designed size.)
+local function eligible(label: any): boolean
+	return not label.TextScaled and label:GetAttribute("NoTextFit") ~= true and not foreignConstraint(label)
+end
+
+local function want(label: Instance, what: string)
+	local e = entries[label]
+	if not e then
+		return
+	end
+	if e.Want ~= "restart" then
+		e.Want = what
+	end
+	pending[label] = true
+end
+
+local function watch(label: any)
+	if entries[label] then
+		return
+	end
+	local e: Entry = { Level = 1, Fit = nil, Want = "restart", Restarts = 0, Size = label.TextSize, Conns = {} }
+	entries[label] = e
+	table.insert(e.Conns, label:GetPropertyChangedSignal("Text"):Connect(function()
+		want(label, "check")
+	end))
+	table.insert(e.Conns, label:GetPropertyChangedSignal("TextSize"):Connect(function()
+		if label.TextSize ~= e.Size then
+			want(label, "restart")
+		end
+	end))
+	for _, prop in ipairs({ "TextScaled", "TextWrapped", "FontFace" }) do
+		table.insert(e.Conns, label:GetPropertyChangedSignal(prop):Connect(function()
+			want(label, "restart")
+		end))
+	end
+	table.insert(e.Conns, label:GetAttributeChangedSignal("NoTextFit"):Connect(function()
+		want(label, "restart")
+	end))
+	table.insert(e.Conns, label.ChildAdded:Connect(function(c)
+		if c:IsA("UITextSizeConstraint") and c.Name ~= NAME then
+			want(label, "restart")
+		end
+	end))
+	table.insert(e.Conns, label.AncestryChanged:Connect(function(_, parent)
+		if parent == nil then
+			release(label)
+		end
+	end))
+	pending[label] = true
+end
+
+-- A settled label whose box changed: less room may need a smaller cap, more room may let
+-- it grow again. The same shape only scaled is a press / pop / breathing UIScale animation
+-- (AbsoluteSize changes every frame, the room for the text does not): ignored.
+local function sizeChanged(label: Instance, e: Entry, now: Vector2)
+	local fit = e.Fit
+	if not fit or e.Want then
+		return
+	end
+	if math.abs(now.X - fit.X) <= 1 and math.abs(now.Y - fit.Y) <= 1 then
+		return
+	end
+	if fit.X > 0 and fit.Y > 0 and math.abs(now.X / fit.X - now.Y / fit.Y) < 0.02 then
+		return
+	end
+	if now.X <= fit.X + 1 and now.Y <= fit.Y + 1 then
+		want(label, "check")
+	else
+		want(label, "restart")
+	end
+end
+
+-- Settled labels are re-measured a slice at a time (no per-label AbsoluteSize listeners:
+-- thousands of them cost more than a slow round-robin).
+local SWEEP_EVERY = 0.25
+local SWEEP_SLICE = 250
+local sweepList: { Instance } = {}
+local sweepAt = 1
+local sweepClock = 0
+
+local function sweep()
+	if sweepAt > #sweepList then
+		table.clear(sweepList)
+		for label in pairs(entries) do
+			table.insert(sweepList, label)
+		end
+		sweepAt = 1
+	end
+	local last = math.min(#sweepList, sweepAt + SWEEP_SLICE - 1)
+	for i = sweepAt, last do
+		local label = sweepList[i]
+		local e = entries[label]
+		if e and e.Fit and not e.Want and label.Parent then
+			sizeChanged(label, e, (label :: any).AbsoluteSize)
+		end
+	end
+	sweepAt = last + 1
+end
+
+-- One pass per frame: first read every label (one layout), then write the new caps.
+local function step(dt: number)
+	sweepClock += dt
+	if sweepClock >= SWEEP_EVERY then
+		sweepClock = 0
+		sweep()
+	end
+	local reads = {}
+	local n = 0
+	for label in pairs(pending) do
+		n += 1
+		if n > PER_FRAME then
+			break
+		end
+		local e = entries[label]
+		if not e or not label.Parent then
+			pending[label] = nil
+			continue
+		end
+		local abs = (label :: any).AbsoluteSize
+		table.insert(reads, { label, e, abs, (label :: any).TextFits })
+	end
+	for _, r in ipairs(reads) do
+		local label, e, abs, fits = r[1], r[2], r[3], r[4]
+		pending[label] = nil
+		if e.Want == "restart" then
+			e.Want = "check"
+			e.Restarts += 1
+			e.Size = (label :: any).TextSize
+			if not eligible(label) then
+				e.Want = nil
+				local own = ownConstraint(label)
+				if (label :: any).TextScaled or foreignConstraint(label) then
+					if own then
+						own:Destroy()
+					end
+				else
+					e.Level = 3 -- NoTextFit: the designed size
+					apply(label, e)
+				end
+			else
+				e.Level = e.Restarts > MAX_RESTARTS and 3 or 1
+				e.Fit = nil
+				apply(label, e)
+				pending[label] = true -- look again next frame
+			end
+		elseif e.Want == "check" then
+			if abs.X < 1 or abs.Y < 1 then
+				e.Want = nil -- not laid out (hidden or empty): a size change brings it back
+				e.Fit = nil
+			elseif fits or e.Level >= 3 then
+				e.Want = nil
+				e.Fit = abs
+			else
+				e.Level += 1
+				apply(label, e)
+				pending[label] = true
+			end
+		end
+	end
+end
+
+local function scan(root: Instance)
+	for _, d in ipairs(root:GetDescendants()) do
+		if isText(d) then
+			watch(d)
+		end
+	end
+end
+
+local function setActive(on: boolean)
+	if on == active then
+		return
+	end
+	active = on
+	if on then
+		for _, root in ipairs(roots) do
+			scan(root)
+		end
+		stepConn = RunService.Heartbeat:Connect(step)
+	else
+		if stepConn then
+			stepConn:Disconnect()
+			stepConn = nil
+		end
+		local list = {}
+		for label in pairs(entries) do
+			table.insert(list, label)
+		end
+		for _, label in ipairs(list) do
+			release(label)
+		end
+	end
+end
+
+-- Watches every text object under `root` (now and later).
+function TextFit.Watch(root: Instance)
+	table.insert(roots, root)
+	root.DescendantAdded:Connect(function(d)
+		if active and isText(d) then
+			watch(d)
+		end
+	end)
+	if active then
+		scan(root)
+	end
+end
+
+-- Starts following the player's Text size setting (call once).
+function TextFit.Start()
+	pcall(function()
+		GuiService:GetPropertyChangedSignal("PreferredTextSize"):Connect(function()
+			setActive(TextFit.Enlarged())
+		end)
+	end)
+	setActive(TextFit.Enlarged())
+end
+
+-- How many labels are managed / still settling (regression scenes).
+function TextFit.Stats(): { Watched: number, Pending: number }
+	local n, p = 0, 0
+	for _ in pairs(entries) do
+		n += 1
+	end
+	for _ in pairs(pending) do
+		p += 1
+	end
+	return { Watched = n, Pending = p }
+end
+
+return TextFit
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="168">
+          <Properties>
             <string name="Name">TitlePlates</string>
             <string name="Source"><![CDATA[--[[
 	TitlePlates.lua (feature 23, Config.Features.Titles; docs/features/META.md)
@@ -83096,7 +83658,7 @@ return TitlePlates
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="168">
+        <Item class="ModuleScript" referent="169">
           <Properties>
             <string name="Name">TravelOverlay</string>
             <string name="Source"><![CDATA[--[[
@@ -83319,7 +83881,7 @@ return TravelOverlay
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="169">
+        <Item class="ModuleScript" referent="170">
           <Properties>
             <string name="Name">Tutorial</string>
             <string name="Source"><![CDATA[--[[
@@ -84111,7 +84673,7 @@ return Tutorial
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="170">
+        <Item class="ModuleScript" referent="171">
           <Properties>
             <string name="Name">UIAnim</string>
             <string name="Source"><![CDATA[--[[
@@ -84827,7 +85389,7 @@ return UIAnim
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="171">
+        <Item class="ModuleScript" referent="172">
           <Properties>
             <string name="Name">UIBuilder</string>
             <string name="Source"><![CDATA[--[[
@@ -85086,8 +85648,15 @@ local function computeInsets()
 	end)
 	if ok and typeof(rect) == "Rect" and rect.Height > 0 then
 		top = math.max(0, rect.Max.Y - pos.Y) / s
-		left = math.max(0, rect.Min.X - pos.X) / s
-		right = math.max(0, (pos.X + size.X) - rect.Max.X) / s
+		-- the Rect's X space differs by device: on the owner's iPhone it is measured from the
+		-- safe-area edge (the gui's left), elsewhere from the screen edge. The free strip runs
+		-- to the right end of the usable area, so take the reading whose right end matches.
+		local originX = pos.X
+		if pos.X > 2 and math.abs(size.X - rect.Max.X) <= 8 and math.abs(pos.X + size.X - rect.Max.X) > 8 then
+			originX = 0
+		end
+		left = math.max(0, rect.Min.X - originX) / s
+		right = math.max(0, (originX + size.X) - rect.Max.X) / s
 	end
 	insets = { Top = top, Left = left, Right = right }
 end
@@ -85931,6 +86500,14 @@ local function buildLevelUp()
 			end)
 		end,
 	})
+	-- REROLL / SKIP words and their "1 left" lines shrink inside the button (phone large text)
+	for _, b in ipairs({ levelUp.Reroll, levelUp.Skip }) do
+		for _, l in ipairs({ b.Title, b.Subtitle }) do
+			if l then
+				Choice.fit(l, l.TextSize, 9, false)
+			end
+		end
+	end
 	-- how to choose (keyboard / touch / gamepad), between two short rules
 	local hint = new("Frame", { Name = "Hint", BackgroundTransparency = 1 }, panel)
 	UIKit.list(hint, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
@@ -85998,6 +86575,32 @@ function Choice.titleSize(): number
 	local fit = (virtualSize().X - 2 * margin()) / (19 * 0.8) / (UIKit.IsCompact() and Theme.TextScaleCompact or 1)
 	return math.max(18, math.min(base, math.floor(fit)))
 end
+-- Where the Roblox top bar buttons end, in root px from the gui's left edge. Conservative:
+-- GuiService.TopbarInset is reported in safe-area space on iPhones (insets.Left reads
+-- ~59 px short there and the level-up title ran under the chat button), so the larger of
+-- the two readings wins.
+function Choice.topbarLeft(): number
+	local s = math.max(0.01, uiScale.Scale)
+	local ok, rect = pcall(function()
+		return GuiService.TopbarInset
+	end)
+	local raw = (ok and typeof(rect) == "Rect" and rect.Height > 0) and rect.Min.X / s or 0
+	return math.max(insets.Left, raw)
+end
+-- A level-up label that must stay in its box: scales down, never above `max`.
+function Choice.fit(label: TextLabel, max: number, minSize: number, wrap: boolean)
+	label.TextScaled = true
+	label.TextWrapped = wrap
+	-- our own named constraint; TextFit's (it skips TextScaled labels) must not stay
+	local tf = label:FindFirstChild("TextFit")
+	if tf then
+		tf:Destroy()
+	end
+	label:SetAttribute("NoTextFit", true)
+	local c = label:FindFirstChild("Fit") or new("UITextSizeConstraint", { Name = "Fit" }, label)
+	c.MaxTextSize = max
+	c.MinTextSize = math.min(max, minSize)
+end
 -- The card name (serif, centred under the art).
 function Choice.cardNameH(): number
 	return TS(UIKit.IsCompact() and 22 or 26) + 6
@@ -86020,7 +86623,7 @@ end
 local function descHeight(desc: string?, w: number, c): number
 	local plain = string.gsub(desc or "", "<[^>]+>", "")
 	local maxLines = (Choice.compactLandscape() and Choice.summaryCard(c)) and 1 or 2
-	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.44 / math.max(1, w - 2 * CARD.Pad)), 1, maxLines)
+	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.5 / math.max(1, w - 2 * CARD.Pad)), 1, maxLines)
 	return TS(14) * lines + 8
 end
 
@@ -86174,19 +86777,22 @@ local function statRow(parent: Instance, c, line, x: number, y: number, w: numbe
 	local icon = statIcon(row, tostring(line.Label), c, 18)
 	icon.AnchorPoint = Vector2.new(0, 0.5)
 	icon.Position = UDim2.new(0, 8, 0.5, 0)
-	text(row, "Caption", UIKit.track(tostring(line.Label)), {
+	-- both shrink inside the row (large phone text cut "COOLDOWN" to "COOLD...")
+	local name = text(row, "Caption", UIKit.track(tostring(line.Label)), {
 		Position = UDim2.fromOffset(34, 0),
 		Size = UDim2.new(0.55, -34, 1, 0),
 		TextColor3 = P.ivory_300,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, 13)
-	text(row, "Number", value, {
+	Choice.fit(name, name.TextSize, 9, false)
+	local num = text(row, "Number", value, {
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -10, 0, 0),
 		Size = UDim2.new(0.45, 0, 1, 0),
 		TextXAlignment = Enum.TextXAlignment.Right,
 		RichText = true,
 	}, 16)
+	Choice.fit(num, num.TextSize, 10, false)
 	return h
 end
 
@@ -86596,7 +87202,8 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		end
 		if desc then
 			local dh = descHeight(desc, w, c)
-			text(face, "Body", desc, {
+			-- shrinks to fit its lines (the phone's large-text setting cut "+12% attack area per")
+			local dl = text(face, "Body", desc, {
 				Position = UDim2.fromOffset(pad, y),
 				Size = UDim2.new(1, -2 * pad, 0, dh),
 				TextXAlignment = Enum.TextXAlignment.Center,
@@ -86606,6 +87213,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				ZIndex = 2,
 			}, 14)
+			Choice.fit(dl, dl.TextSize, 10, true)
 			y += dh + 6
 		end
 		y += 4
@@ -86750,8 +87358,15 @@ local function layoutLevelUp()
 	local panel = levelUp.Panel :: Frame
 	panel.Position = UDim2.fromOffset(0, 0)
 	panel.Size = UDim2.fromOffset(v.X, v.Y)
-	levelUp.Title.Position = UDim2.fromOffset(0, top)
-	levelUp.Title.Size = UDim2.new(1, 0, 0, titleH)
+	-- the title scales down inside its box; in landscape the box keeps clear of the Roblox
+	-- buttons at the top left (symmetric, so the title stays centred)
+	Choice.fit(levelUp.Title, TS(Choice.titleSize()), 14, false)
+	local tl = 0
+	if not portrait and top < insets.Top + 4 then
+		tl = math.min(math.floor(v.X * 0.3), Choice.topbarLeft() + 8)
+	end
+	levelUp.Title.Position = UDim2.fromOffset(tl, top)
+	levelUp.Title.Size = UDim2.new(1, -2 * tl, 0, titleH)
 	local y = top + titleH
 	levelUp.Divider.AnchorPoint = Vector2.new(0.5, 0)
 	levelUp.Divider.Position = UDim2.new(0.5, 0, 0, y)
@@ -86847,12 +87462,14 @@ local function showOffer(offer)
 	local skipGold = tonumber(offer.SkipGold) or Config.LevelUp.SkipGold
 	levelUp.Reroll.SetText(
 		"REROLL",
-		rerolls > 0 and string.format("%d left · %d new cards", rerolls, Config.LevelUp.Choices) or (rerollMax > 0 and "None left this run" or "Buy rerolls in the Shop")
+		rerolls > 0 and (phoneLandscape() and string.format("%d left", rerolls) or string.format("%d left · %d new cards", rerolls, Config.LevelUp.Choices))
+			or (rerollMax > 0 and "None left this run" or "Buy rerolls in the Shop")
 	)
 	levelUp.Reroll.SetEnabled(rerolls > 0)
 	levelUp.Skip.SetText(
 		"SKIP",
-		skips > 0 and string.format("%d left · +%d gold", skips, skipGold) or (skipMax > 0 and "None left this run" or "No skips left")
+		skips > 0 and (phoneLandscape() and string.format("%d left · +%d", skips, skipGold) or string.format("%d left · +%d gold", skips, skipGold))
+			or (skipMax > 0 and "None left this run" or "No skips left")
 	)
 	levelUp.Skip.SetEnabled(skips > 0)
 	local total = tonumber(offer.BatchTotal) or 1
@@ -88196,6 +88813,25 @@ end
 local runMenu: { [string]: any } = { Prompts = require(script.Parent.InputPrompts) }
 runMenu.ARM = 0.35 -- a press must begin this long after a state shows (no stale taps)
 
+-- Keeps a label inside its box: it scales down (to `minSize` at least, never above its
+-- own TextSize). Roblox's "Text size" accessibility setting grows plain TextSize text
+-- (about 1.45x on the owner's iPhone) and leaves TextScaled text alone, so the drawer's
+-- fixed boxes use this.
+function runMenu.fit(label: TextLabel, minSize: number?, wrap: boolean?)
+	local max = label.TextSize
+	label.TextScaled = true
+	label.TextWrapped = wrap == true
+	-- our own named constraint; TextFit's (it skips TextScaled labels) must not stay
+	local tf = label:FindFirstChild("TextFit")
+	if tf then
+		tf:Destroy()
+	end
+	label:SetAttribute("NoTextFit", true)
+	local c = label:FindFirstChild("Fit") or new("UITextSizeConstraint", { Name = "Fit" }, label)
+	c.MaxTextSize = max
+	c.MinTextSize = math.min(max, minSize or 10)
+end
+
 -- True when the server freezes the run for this menu (its own rule, RunManager SetPause).
 function runMenu.menuFreezesRun(): boolean
 	local participants = tonumber(Remotes.State():GetAttribute("Participants")) or 1
@@ -88313,15 +88949,18 @@ function runMenu.buildRunMenu()
 	runMenu.Crest = Icons.Draw(drawer, "helmet", { Size = 52, Color = P.gold_400 })
 	runMenu.Crest.AnchorPoint = Vector2.new(0.5, 0)
 	runMenu.Title = text(drawer, "H1", "RUN MENU", { TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 3 })
+	runMenu.fit(runMenu.Title, 18)
 	-- "DUO · RUN CONTINUES" / "SOLO · GAME PAUSED"
 	local pill = new("Frame", { Name = "Status", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 }, drawer)
 	UIKit.corner(pill, 999)
 	runMenu.PillStroke = UIKit.stroke(pill, P.gold_400, 1.5, 0.1)
-	runMenu.PillText = text(pill, "Label", "", { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, ZIndex = 3 })
+	runMenu.PillText = text(pill, "Label", "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -20, 1, -6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, ZIndex = 3 })
+	runMenu.fit(runMenu.PillText, 9)
 	runMenu.Pill = pill
 	runMenu.Rule = UIKit.Hairline(drawer, { AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 })
 	runMenu.Rule.Parent = drawer
 	runMenu.Note = text(drawer, "Body", "", { TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = C.Text, ZIndex = 3 })
+	runMenu.fit(runMenu.Note, 11, true)
 
 	runMenu.Return = UIKit.Button(drawer, {
 		Kind = "Primary",
@@ -88408,6 +89047,7 @@ function runMenu.buildRunMenu()
 	UIKit.corner(tint, Theme.Radius.M)
 
 	runMenu.Hint = text(drawer, "Small", "", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
+	runMenu.fit(runMenu.Hint, 9)
 
 	local function layout()
 		local v = virtualSize()
@@ -88416,7 +89056,9 @@ function runMenu.buildRunMenu()
 		-- HP / timer at the top stay readable in a live group run
 		local sheet = portrait
 		local w = sheet and v.X or math.min(v.X, math.clamp(math.floor(v.X * (compact and 0.4 or 0.3)), 300, 420))
-		-- the Roblox buttons sit on the top right in some layouts: start below them
+		-- the Roblox buttons sit on the top right in some layouts: start below them (a
+		-- short screen gives that room back first: on iPhones the reading is off and the
+		-- top right is free, owner's 2026-10-06 shots)
 		local top = (not sheet and insets.Right > 0 and insets.Top or 0) + 14
 		runMenu.Width = w
 		runMenu.Sheet = sheet
@@ -88428,25 +89070,41 @@ function runMenu.buildRunMenu()
 		local titleH = TS(30) + 6
 		local pillH = TS(14) + 14
 		local hintH = TS(14) + 8
-		-- note lines (rough: ~0.5 em per character)
-		local perLine = math.max(10, math.floor(inner / (TS(16) * 0.5)))
+		-- note lines (rough: ~0.55 em per character; the label shrinks to fit for real)
+		local perLine = math.max(10, math.floor(inner / (TS(16) * 0.55)))
 		local lines = math.clamp(math.ceil(#runMenu.Note.Text / perLine), 1, 6)
 		local noteH = lines * (TS(16) + 3) + 4
 		local confirming = runMenu.Confirming == true
 		local buttons = confirming and 2 or 4
 		local crest = sheet and 0 or 52
+		-- SETTINGS and VIEW BUILD share one row on the shortest screens
+		local paired = false
 		local function need(): number
+			local rows = (paired and not confirming) and buttons - 1 or buttons
 			return top + chipH + gap + (crest > 0 and crest + 4 or 0) + titleH + 6 + pillH + gap + 1 + gap + noteH + gap * 2
-				+ buttons * bh + buttons * gap + gap + 1 + hintH + 12
+				+ rows * bh + rows * gap + gap + 1 + 12
 		end
-		-- short screens: drop the crest, then tighter buttons
+		-- short screens: drop the crest, the top-right inset, then tighter buttons, then
+		-- pair SETTINGS / VIEW BUILD, then a shorter note box (the note shrinks to fit)
 		if need() > v.Y then
 			crest = 0
+		end
+		if need() > v.Y and top > 14 then
+			top = 10
 		end
 		if need() > v.Y then
 			bh = math.max(Theme.Size.TapMin, bh - 8)
 		end
-		local showHint = need() <= v.Y
+		if need() > v.Y and not confirming then
+			paired = true
+		end
+		if need() > v.Y then
+			noteH = math.max(TS(16) * 2 + 8, noteH - (need() - v.Y))
+		end
+		if need() > v.Y then
+			gap = 6
+		end
+		local showHint = need() + hintH <= v.Y
 		local H = sheet and math.min(v.Y, need()) or v.Y
 		runMenu.Height = H
 		drawer.AnchorPoint = Vector2.new(1, 0)
@@ -88477,7 +89135,7 @@ function runMenu.buildRunMenu()
 		runMenu.Title.Position = UDim2.fromOffset(pad, y)
 		runMenu.Title.Size = UDim2.fromOffset(inner, titleH)
 		y += titleH + 6
-		local pw = math.min(inner, math.floor(utf8.len(runMenu.PillText.Text) or 0) * math.floor(TS(14) * 0.66) + 40)
+		local pw = math.min(inner, math.floor(utf8.len(runMenu.PillText.Text) or 0) * math.floor(TS(14) * 0.75) + 48)
 		runMenu.Pill.Position = UDim2.fromOffset(math.floor(w / 2), y)
 		runMenu.Pill.Size = UDim2.fromOffset(pw, pillH)
 		y += pillH + gap
@@ -88496,8 +89154,19 @@ function runMenu.buildRunMenu()
 			end
 		end
 		place(runMenu.Return, true)
-		place(runMenu.Settings, not confirming)
-		place(runMenu.Build, not confirming)
+		if paired and not confirming then
+			local hw = math.floor((inner - gap) / 2)
+			runMenu.Settings.Instance.Visible = true
+			runMenu.Settings.Instance.Position = UDim2.fromOffset(pad, y)
+			runMenu.Settings.Instance.Size = UDim2.fromOffset(hw, bh)
+			runMenu.Build.Instance.Visible = true
+			runMenu.Build.Instance.Position = UDim2.fromOffset(pad + hw + gap, y)
+			runMenu.Build.Instance.Size = UDim2.fromOffset(inner - hw - gap, bh)
+			y += bh + gap
+		else
+			place(runMenu.Settings, not confirming)
+			place(runMenu.Build, not confirming)
+		end
 		runMenu.Rule2.Visible = not confirming
 		if not confirming then
 			runMenu.Rule2.Position = UDim2.fromOffset(math.floor(w / 2), y)
@@ -88848,7 +89517,9 @@ local function statTile(parent: Instance, icon: string, caption: string, order: 
 		Size = UDim2.new(1, -4, 0, TS(12) + 2),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextScaled = true, -- long captions (ENEMIES DEFEATED) shrink a little before they cut
 	}, 11)
+	new("UITextSizeConstraint", { MinTextSize = math.max(8, cap.TextSize - 4), MaxTextSize = cap.TextSize }, cap)
 	return value, cap
 end
 
@@ -89139,7 +89810,8 @@ local function buildResults()
 	UIKit.stroke(goal, P.moss_400, 1.5, 0.25)
 	results.Goal = goal
 	results.GoalIcon = new("Frame", { Name = "Icon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(28, 28) }, goal)
-	results.GoalText = text(goal, "Small", "", { Name = "Line", RichText = true, TextTruncate = Enum.TextTruncate.AtEnd, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
+	results.GoalText = text(goal, "Small", "", { Name = "Line", RichText = true, TextScaled = true, TextTruncate = Enum.TextTruncate.AtEnd, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
+	new("UITextSizeConstraint", { MinTextSize = math.max(10, results.GoalText.TextSize - 3), MaxTextSize = results.GoalText.TextSize }, results.GoalText) -- shrinks a little before it cuts
 	results.GoalMeter = UIKit.Meter(goal, {
 		Gradient = ColorSequence.new(P.moss_400, P.moss_200),
 		TextStyle = "Number",
@@ -89284,7 +89956,7 @@ local function buildResults()
 		local medalS = slim and 60 or 80
 		results.Medal.Size = UDim2.fromOffset(medalS, medalS)
 		results.BossBadge.Size = UDim2.fromOffset(medalS / 2, medalS / 2)
-		local tileH = slim and 48 or 104
+		local tileH = slim and math.max(48, TS(24) + TS(12) + 12) or 104 -- slim: value over caption, never overlapping
 		results.Divider.Visible = not slim
 		local btnH = slim and 42 or Theme.Size.Button
 		local headH = slim and math.max(medalS, titleSize + 4 + TS(13) + 6 + TS(15) + 2) or math.max(84, titleSize + 6 + TS(13) + 8 + TS(15) + 8)
@@ -89384,7 +90056,7 @@ local function buildResults()
 			local textX = 46
 			if oneRow then
 				goalH = math.max(slim and 34 or 40, lineH + 14)
-				local barW = meterShown and math.clamp(math.floor(inner * 0.3), 120, 200) or 0
+				local barW = meterShown and math.clamp(math.floor(inner * (inner < 600 and 0.2 or 0.3)), 90, 200) or 0
 				results.GoalText.Position = UDim2.fromOffset(textX, 0)
 				results.GoalText.Size = UDim2.new(1, -(textX + barW + (meterShown and 20 or 10)), 1, 0)
 				results.GoalMeter.Frame.AnchorPoint = Vector2.new(1, 0.5)
@@ -90303,6 +90975,13 @@ function UIBuilder.Init(d: { [string]: any })
 	fxGui.IgnoreGuiInset = true
 	fxGui.ScreenInsets = Enum.ScreenInsets.None
 	fxGui.Parent = player:WaitForChild("PlayerGui")
+	-- the player's Roblox Text size setting: text grows where it has room and keeps its
+	-- designed size where it would be cut (TextFit, docs/MOBILE_FIX.md)
+	do
+		local TextFit = require(script.Parent.TextFit)
+		TextFit.Watch(player:WaitForChild("PlayerGui"))
+		TextFit.Start()
+	end
 	-- phones (short side under 560 px): compact layouts and the phone design space. The
 	-- full-screen gui's size is the most reliable reading; the camera viewport can still be
 	-- a placeholder this early.
@@ -90553,7 +91232,7 @@ return UIBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="172">
+        <Item class="ModuleScript" referent="173">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[--[[
@@ -92297,6 +92976,114 @@ function UIKit.Modal(root: Instance, name: string, width: number, height: number
 end
 
 ------------------------------------------------------------------------------------------
+-- Scroll hint: phones hide scroll bars, so a list cut at the bottom looked finished.
+-- A small gold chevron badge sits on the frame's bottom (or right) edge while there is
+-- more to scroll that way, and one on the top (left) edge once scrolled. It follows the
+-- frame (a sibling overlay; no input), so any ScrollingFrame can get one.
+------------------------------------------------------------------------------------------
+
+function UIKit.ScrollHint(sf: ScrollingFrame)
+	if sf:GetAttribute("ScrollHint") or not sf.Parent then
+		return
+	end
+	sf:SetAttribute("ScrollHint", true)
+	local overlay = new("Frame", {
+		Name = sf.Name .. "Hint",
+		BackgroundTransparency = 1,
+		Active = false,
+		ZIndex = sf.ZIndex + 5,
+		Visible = false,
+	}, sf.Parent)
+	local function badge(name: string, rotation: number): Frame
+		local b = new("Frame", {
+			Name = name,
+			BackgroundColor3 = C.Panel,
+			BackgroundTransparency = 0.08,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(30, 20),
+			Visible = false,
+			Active = false,
+			ZIndex = sf.ZIndex + 5,
+		}, overlay)
+		corner(b, 10)
+		stroke(b, P.gold_400, 1.5, 0.1)
+		local g = Icons.Draw(b, "chevronRight", { Size = 14, Color = P.gold_300 })
+		g.AnchorPoint = Vector2.new(0.5, 0.5)
+		g.Position = UDim2.fromScale(0.5, 0.5)
+		g.Rotation = rotation
+		g.ZIndex = sf.ZIndex + 6
+		return b
+	end
+	local down, up = badge("More", 90), badge("Back", -90)
+	local downGlyph = down:FindFirstChildWhichIsA("Frame") :: Frame
+	local upGlyph = up:FindFirstChildWhichIsA("Frame") :: Frame
+	local function update()
+		local parent = sf.Parent
+		if not parent or not overlay.Parent then
+			return
+		end
+		overlay.Visible = sf.Visible
+		overlay.AnchorPoint = sf.AnchorPoint
+		overlay.Position = sf.Position
+		overlay.Size = sf.Size
+		overlay.ZIndex = sf.ZIndex + 5
+		local canvas, window, at = sf.AbsoluteCanvasSize, sf.AbsoluteWindowSize, sf.CanvasPosition
+		local k = 1
+		local own = sf.Size.Y.Scale == 0 and sf.Size.Y.Offset > 0 and sf.Size.Y.Offset or nil
+		if own and sf.AbsoluteSize.Y > 0 then
+			k = sf.AbsoluteSize.Y / own -- screen px per layout px (UIScale)
+		end
+		local horizontal = canvas.X > window.X + 4 and canvas.Y <= window.Y + 4
+		local more, back
+		if horizontal then
+			more = at.X * k + window.X < canvas.X - 4
+			back = at.X > 4
+			down.AnchorPoint, down.Position = Vector2.new(1, 0.5), UDim2.new(1, -2, 0.5, 0)
+			up.AnchorPoint, up.Position = Vector2.new(0, 0.5), UDim2.new(0, 2, 0.5, 0)
+			down.Size, up.Size = UDim2.fromOffset(20, 30), UDim2.fromOffset(20, 30)
+			downGlyph.Rotation = 0
+			upGlyph.Rotation = 180
+		else
+			more = at.Y * k + window.Y < canvas.Y - 4
+			back = at.Y > 4
+			down.AnchorPoint, down.Position = Vector2.new(0.5, 1), UDim2.new(0.5, 0, 1, -2)
+			up.AnchorPoint, up.Position = Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 2)
+			down.Size, up.Size = UDim2.fromOffset(30, 20), UDim2.fromOffset(30, 20)
+			downGlyph.Rotation = 90
+			upGlyph.Rotation = -90
+		end
+		down.Visible = more
+		up.Visible = back
+	end
+	for _, prop in ipairs({ "CanvasPosition", "AbsoluteCanvasSize", "AbsoluteWindowSize", "Position", "Size", "Visible", "AnchorPoint" }) do
+		sf:GetPropertyChangedSignal(prop):Connect(update)
+	end
+	sf.AncestryChanged:Connect(function(_, parent)
+		if parent == nil then
+			overlay:Destroy()
+		elseif overlay.Parent ~= parent then
+			overlay.Parent = parent
+			update()
+		end
+	end)
+	update()
+end
+
+-- Every ScrollingFrame under `root`, now and later, gets a ScrollHint.
+function UIKit.ScrollHints(root: Instance)
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("ScrollingFrame") then
+			UIKit.ScrollHint(d)
+		end
+	end
+	root.DescendantAdded:Connect(function(d)
+		if d:IsA("ScrollingFrame") then
+			task.defer(UIKit.ScrollHint, d)
+		end
+	end)
+end
+
+------------------------------------------------------------------------------------------
 -- Screen header (lobby sub-screens): [< BACK]  TITLE
 ------------------------------------------------------------------------------------------
 
@@ -92766,7 +93553,7 @@ return UIKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="173">
+        <Item class="ModuleScript" referent="174">
           <Properties>
             <string name="Name">UIState</string>
             <string name="Source"><![CDATA[--[[
@@ -93492,7 +94279,7 @@ return UIState
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="174">
+        <Item class="ModuleScript" referent="175">
           <Properties>
             <string name="Name">Ultimate</string>
             <string name="Source"><![CDATA[--[[
@@ -93562,7 +94349,7 @@ return Ultimate
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="175">
+        <Item class="ModuleScript" referent="176">
           <Properties>
             <string name="Name">VFX</string>
             <string name="Source"><![CDATA[--[[
@@ -97208,7 +97995,7 @@ return VFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="176">
+        <Item class="ModuleScript" referent="177">
           <Properties>
             <string name="Name">ViewportPreview</string>
             <string name="Source"><![CDATA[--[[
@@ -97400,7 +98187,7 @@ return ViewportPreview
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="177">
+        <Item class="ModuleScript" referent="178">
           <Properties>
             <string name="Name">WeakSpot</string>
             <string name="Source"><![CDATA[--[[
@@ -97507,7 +98294,7 @@ return WeakSpot
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="178">
+        <Item class="ModuleScript" referent="179">
           <Properties>
             <string name="Name">WeaponMastery</string>
             <string name="Source"><![CDATA[--[[
@@ -97843,7 +98630,7 @@ return WeaponMastery
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="179">
+        <Item class="ModuleScript" referent="180">
           <Properties>
             <string name="Name">WorldFx</string>
             <string name="Source"><![CDATA[--[[
@@ -98301,7 +99088,7 @@ return WorldFx
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="180">
+  <Item class="Workspace" referent="181">
     <Properties>
       <string name="Name">Workspace</string>
       <float name="FallenPartsDestroyHeight">-200</float>
