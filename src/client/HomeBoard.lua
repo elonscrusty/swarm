@@ -194,7 +194,9 @@ function HomeBoard.Build(parent: Frame, onOpen: () -> ())
 
 	-- Places the panel in (x, y, w, maxH). portrait = the two-line strip. Hides it when even
 	-- the strip does not fit.
+	local lastLayout: { any }? = nil
 	function api.Layout(x: number, y: number, w: number, maxH: number, portrait: boolean)
+		lastLayout = { x, y, w, maxH, portrait }
 		local pad = 10
 		if portrait then
 			wanted = maxH >= 58 and w >= 220
@@ -221,7 +223,9 @@ function HomeBoard.Build(parent: Frame, onOpen: () -> ())
 		else
 			local headH, rowH, youH = 26, 22, 20
 			local fixed = 8 + headH + 6 + youH * 2 + 10
-			local n = math.clamp(math.floor((maxH - fixed) / rowH), 0, MAX_ROWS)
+			-- only as many rows as the board has (one line for the loading / empty text)
+			local have = data and type(data.Rows) == "table" and #data.Rows or 0
+			local n = math.clamp(math.floor((maxH - fixed) / rowH), 0, math.max(1, math.min(MAX_ROWS, have)))
 			wanted = w >= 150 and n >= 1
 			shownRows = n
 			if wanted then
@@ -268,7 +272,11 @@ function HomeBoard.Build(parent: Frame, onOpen: () -> ())
 			return
 		end
 		data = d
-		fill()
+		if lastLayout then
+			api.Layout(table.unpack(lastLayout))
+		else
+			fill()
+		end
 		-- the server is still reading: ask again shortly (once per answer)
 		if d.Status == "loading" then
 			task.delay(2, function()

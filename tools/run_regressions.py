@@ -36,6 +36,8 @@ def main():
     checks += [("pings", ["phone"]), ("pings", ["phone-portrait"])]
     checks += [("accessibility-sim", [])]
     checks += [("uistate", [])]
+    checks += [("home-board-regression", [])]
+    checks += [("layout", ["menu", d, "board=" + b]) for d in ("iphone", "phone-portrait") for b in ("empty", "error", "out")]
     # the player's Roblox Text size setting on a phone (TextFit, docs/MOBILE_FIX.md)
     checks += [("textfit-regression", []), ("textfit-regression", ["textsize=Medium"])]
     checks += [("lobby-regression", [])]
