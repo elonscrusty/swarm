@@ -58,6 +58,8 @@ local function startSolo(): any
 	if rp then
 		rp.InvulnUntil = math.huge
 	end
+	local d = Data.GetData(me)
+	preview.log(string.format("startSolo: phase=%s rp=%s runs=%s done=%s replay=%s tdone=%s", tostring(st:GetAttribute("Phase")), tostring(rp ~= nil), tostring(d and d.Stats.Runs), tostring(d and d.WalkthroughDone), tostring(d and d.WalkthroughReplay), tostring(d and d.TutorialDone)))
 	return rp
 end
 local function standAt(rp, pos: Vector3)

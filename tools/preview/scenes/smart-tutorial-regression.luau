@@ -11,6 +11,14 @@
 local A = lib("arena")
 local C = lib("common")
 local Players = game:GetService("Players")
+-- the world folders the client waits for (no swarm in this scene)
+for _, name in ipairs({ "SwarmEnemies", "SwarmPickups", "SwarmGems", "SwarmLoot" }) do
+	if not workspace:FindFirstChild(name) then
+		local f = Instance.new("Folder")
+		f.Name = name
+		f.Parent = workspace
+	end
+end
 local s = A.build({ enemies = 0, swarm = false, seconds = 20, stage = 1, stagePhase = "Explore", lockLeft = 0 })
 C.settle(1)
 local Config = C.shared("Config")
@@ -85,9 +93,14 @@ local b = els()
 check(b.Card and b.Card.Visible, "the Move bubble is on screen")
 local body = b.Body and b.Body.Text or ""
 check(string.find(body, "to move") ~= nil, "Move uses the input prompt text: " .. body)
-local v = Hud.BarTop()
 local card = b.Card
-if card then
+local vp = workspace.CurrentCamera.ViewportSize
+if card and vp.Y > vp.X then
+	-- portrait: the tray is at the top under the HUD stack; the bubble sits below all of it
+	local top = card.Position.Y.Offset - card.Size.Y.Offset
+	check(top >= Hud.TopBottom(), string.format("portrait: bubble top %d below the HUD stack %d", top, Hud.TopBottom()))
+elseif card then
+	local v = Hud.BarTop()
 	check(card.Position.Y.Offset <= v + 1, string.format("bubble bottom %d above the tray top %d", card.Position.Y.Offset, v))
 end
 step(1)

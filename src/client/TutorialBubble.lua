@@ -13,7 +13,8 @@
 	Show(text, icon, target?)  target() returns the point to aim at in root (virtual) pixels,
 	                           or nil (no pointer); it is asked again every Step
 	Hide()                     pops the bubble out
-	SetCovered(on)             hidden behind a panel (keeps the tip)
+	SetCovered(on)             hidden behind a panel (keeps the tip); the quick-ping wheel
+	                           (PingWheel) hides it too
 	Step(dt)                   per frame: placement and the pointer
 ]]
 
@@ -26,6 +27,9 @@ local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local ClientSettings = require(script.Parent.ClientSettings)
+local PingWheel = require(script.Parent.PingWheel)
+local LootUI = require(script.Parent.LootUI)
+local MiniMap = require(script.Parent.MiniMap)
 
 local TutorialBubble = {}
 
@@ -126,7 +130,69 @@ local function textWidth(text: string): number
 	return 300
 end
 
--- Places the bubble: bottom centre, just above the ability tray. Returns its rect.
+-- Root-pixel rect (x, y, w, h) of a shown GuiObject, or nil.
+local function rectOf(g: Instance?): { number }?
+	local root = rootFrame
+	if not root or not g or not g:IsA("GuiObject") or not g.Visible or g.AbsoluteSize.X < 1 then
+		return nil
+	end
+	local anc: Instance? = g.Parent
+	while anc and anc:IsA("GuiObject") do
+		if not anc.Visible then
+			return nil
+		end
+		anc = anc.Parent
+	end
+	local v: Vector2 = kit.VirtualSize()
+	local k = v.X / math.max(1, root.AbsoluteSize.X)
+	local p = (g.AbsolutePosition - root.AbsolutePosition) * k
+	local sz = g.AbsoluteSize * k
+	return { p.X, p.Y, sz.X, sz.Y }
+end
+
+-- Portrait: the ability tray sits at the top under the HUD stack, so the bubble goes near
+-- the bottom, above whatever lives there (JUMP / PING, the item strip, the loot prompt,
+-- the minimap) and below the hero.
+local function portraitBottom(W: number, H: number, w: number, h: number): number
+	local obstacles: { { number } } = {}
+	local function add(g: Instance?)
+		local r = rectOf(g)
+		if r then
+			table.insert(obstacles, r)
+		end
+	end
+	local pg = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	if pg then
+		add(pg:FindFirstChild("JumpButton", true))
+		local ping = pg:FindFirstChild("Ping", true)
+		if ping and ping:IsA("GuiButton") then
+			add(ping)
+		end
+	end
+	local loot = LootUI.Elements()
+	add(loot.Strip)
+	add(loot.Prompt)
+	add(MiniMap.Elements().Holder)
+	local l, r = W / 2 - w / 2, W / 2 + w / 2
+	local bottom = H - 16
+	for _ = 1, 6 do
+		local moved = false
+		for _, o in ipairs(obstacles) do
+			if l < o[1] + o[3] and r > o[1] and bottom - h < o[2] + o[4] and bottom > o[2] then
+				bottom = o[2] - 10
+				moved = true
+			end
+		end
+		if not moved then
+			break
+		end
+	end
+	-- never up into the hero (screen centre) or the top HUD
+	return math.max(bottom, math.min(H - 16, H / 2 + 90 + h), Hud.TopBottom() + 8 + h)
+end
+
+-- Places the bubble: bottom centre, just above the ability tray (landscape), or near the
+-- bottom clear of the touch controls (portrait). Returns its rect.
 local function place(): (number, number, number, number)
 	local v: Vector2 = kit.VirtualSize()
 	local W, H = v.X, v.Y
@@ -136,8 +202,13 @@ local function place(): (number, number, number, number)
 	local w = math.clamp(textWidth(text) * 1.3 + inner + 2 * PAD + 8, 220, math.min(MAX_W, W - 32))
 	local n = lines(text, (w - inner - 2 * PAD) / 1.25)
 	local h = math.max(ICON + 16, n * (TS(BODY_SIZE) + 4) * 1.25 + 16)
-	local bottom = math.min(H - 8, Hud.BarTop() - 14 - TAIL / 2)
-	bottom = math.max(bottom, math.min(H - 8, Hud.TopBottom() + 8 + h))
+	local bottom: number
+	if kit.IsPortrait and kit.IsPortrait() then
+		bottom = portraitBottom(W, H, w, h)
+	else
+		bottom = math.min(H - 8, Hud.BarTop() - 14 - TAIL / 2)
+		bottom = math.max(bottom, math.min(H - 8, Hud.TopBottom() + 8 + h))
+	end
 	ui.Card.Size = UDim2.fromOffset(math.floor(w), math.floor(h))
 	ui.Card.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(bottom))
 	return W / 2 - w / 2, bottom - h, w, h
@@ -188,8 +259,13 @@ local function placePointer(x: number, y: number, w: number, h: number)
 	ui.Pointer.Visible = true
 end
 
+-- Hidden: a panel covers the screen (the caller says) or the quick-ping wheel is open.
+local function hiddenNow(): boolean
+	return covered or PingWheel.IsOpen()
+end
+
 local function layout()
-	if not showing or not ui.Card then
+	if not showing or not ui.Card or hiddenNow() then
 		return
 	end
 	local x, y, w, h = place()
@@ -208,9 +284,12 @@ function TutorialBubble.Show(text: string, icon: string, aim: (() -> Vector2?)?)
 	showing = true
 	ui.Body.Text = text
 	setIcon(icon)
-	layout()
-	ui.Card.Visible = not covered
-	ui.Pointer.Visible = ui.Pointer.Visible and not covered
+	local hidden = hiddenNow()
+	if not hidden then
+		layout()
+	end
+	ui.Card.Visible = not hidden
+	ui.Pointer.Visible = ui.Pointer.Visible and not hidden
 	UIAnim.Pop(ui.Card, 0, 0.85)
 end
 
@@ -243,22 +322,29 @@ function TutorialBubble.SetCovered(on: boolean)
 	if not ui.Card then
 		return
 	end
-	if on then
+	if hiddenNow() then
 		ui.Card.Visible = false
 		ui.Pointer.Visible = false
-	elseif showing then
+	elseif showing and not ui.Card.Visible then
 		ui.Card.Visible = true
 		layout()
 	end
 end
 
 function TutorialBubble.Showing(): boolean
-	return showing and not covered
+	return showing and not hiddenNow()
 end
 
 function TutorialBubble.Step(dt: number)
 	clock += dt
-	if showing and not covered then
+	if not ui.Card then
+		return
+	end
+	if showing and hiddenNow() then
+		ui.Card.Visible = false
+		ui.Pointer.Visible = false
+	elseif showing then
+		ui.Card.Visible = true
 		layout()
 	end
 end

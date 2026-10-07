@@ -297,6 +297,22 @@ end
 local function blockers(): { Box }
 	local out = WorldLabelFade.Rects()
 	addBox(out, MiniMap.Elements().Holder)
+	-- HUD pieces WorldLabelFade leaves out: the gold / kills counters, the pause button,
+	-- the BUILD button and the buff / status chips
+	local hud = Hud.Elements()
+	if typeof(hud.Frame) == "Instance" and hud.Frame.Visible then
+		local counters = hud.Counters
+		if typeof(counters) == "Instance" then
+			for _, c in ipairs(counters:GetChildren()) do
+				addBox(out, c)
+			end
+		end
+		local pause = hud.Pause
+		addBox(out, type(pause) == "table" and pause.Instance or pause)
+		for _, key in ipairs({ "BuildButton", "Buff", "Status" }) do
+			addBox(out, hud[key])
+		end
+	end
 	local stage = StageUI.Elements()
 	addBox(out, stage.Arrow)
 	local pg = player:FindFirstChild("PlayerGui")
