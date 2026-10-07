@@ -44,6 +44,14 @@ local burns: { [any]: { [string]: any } } = {}
 local burnCount = 0
 local T = PassiveData.Tuning
 
+-- Every item / passive timer (cooldowns, burns, Windstep, ward and shield recharge) runs
+-- on the run's simulation clock (RunManager.GetRunTime): it stops while the world is
+-- frozen (solo pause, level-up, reward reel) or travelling, so no timer elapses unseen.
+-- A new run starts it at 0 again; run player records (and their ItemState) are new too.
+local function simNow(): number
+	return ctx.RunManager.GetRunTime()
+end
+
 local function count(rp, id: string): number
 	local items = rp.Items
 	return items and items[id] or 0
@@ -171,7 +179,7 @@ function ItemSystem.ModifyHit(rp, amount: number, e: any?): (number, boolean)
 	if stats.CritChance > 0 and rng:NextNumber() < stats.CritChance then
 		if (stats.CritHeal or 0) > 0 and rp.Alive and rp.HP > 0 and rp.HP < stats.MaxHP then
 			local s = state(rp)
-			local now = os.clock()
+			local now = simNow()
 			if now >= s.CritHealAt then
 				s.CritHealAt = now + T.BloodRuneCooldown
 				ctx.RunManager.Heal(rp, stats.CritHeal, true)
@@ -186,7 +194,7 @@ end
 -- big swarms cheap).
 local function ignite(rp, e, amount: number)
 	local b = burns[e]
-	local now = os.clock()
+	local now = simNow()
 	local dps = amount * T.BurnShare
 	if b then
 		b.Until = now + T.BurnSeconds
@@ -207,7 +215,8 @@ local function stepBurns(now: number)
 		return
 	end
 	for e, b in pairs(burns) do
-		if not e.Alive or e.Uid ~= b.Uid or now >= b.Until or not b.Owner.Alive then
+		-- (an Until far ahead of the clock = a burn from an earlier run: the clock restarted)
+		if not e.Alive or e.Uid ~= b.Uid or now >= b.Until or b.Until - now > T.BurnSeconds + 1 or not b.Owner.Alive then
 			burns[e] = nil
 			burnCount -= 1
 		elseif now >= b.Next then
@@ -234,7 +243,7 @@ function ItemSystem.OnHit(rp, e, amount: number)
 	end
 	local I = Config.Items
 	local s = state(rp)
-	local now = os.clock()
+	local now = simNow()
 	if now < s.LightningAt or rng:NextNumber() >= ItemData.Hyperbolic(ItemData.Items.StormCharm.K or 0.1, n) then
 		return
 	end
@@ -270,7 +279,7 @@ function ItemSystem.OnKill(rp, pos: Vector3, maxHP: number, isProc: boolean?)
 	-- when the burst starts or ends, not per kill)
 	local rush = rp.Stats and rp.Stats.KillRush or 0
 	if rush > 0 then
-		state(rp).RushUntil = os.clock() + T.WindstepSeconds
+		state(rp).RushUntil = simNow() + T.WindstepSeconds
 		if not rp.RushMult then
 			local cap = Config.Player.BaseSpeed * I.MaxSpeedMult / math.max(1, rp.Stats.Speed)
 			local mult = math.min(1 + rush, cap)
@@ -289,7 +298,7 @@ function ItemSystem.OnKill(rp, pos: Vector3, maxHP: number, isProc: boolean?)
 	local spore = count(rp, "VolatileSpore")
 	if spore > 0 and not isProc then
 		local s = state(rp)
-		local now = os.clock()
+		local now = simNow()
 		if now >= s.ExplodeAt and rng:NextNumber() < I.ExplodeChance then
 			s.ExplodeAt = now + I.ExplodeCooldown
 			local damage = maxHP * (I.ExplodeShare + I.ExplodeSharePerStack * (spore - 1))
@@ -332,7 +341,7 @@ end
 -- can of a hit. Returns the damage left for HP.
 function ItemSystem.AbsorbHit(rp, dmg: number): number
 	local s = state(rp)
-	local now = os.clock()
+	local now = simNow()
 	s.LastHurt = now
 	local ward = rp.Stats and rp.Stats.WardSeconds or 0
 	if ward > 0 and s.WardReady and dmg > 0 then
@@ -364,7 +373,7 @@ function ItemSystem.OnHurt(rp, raw: number, taken: number?)
 		return
 	end
 	local s = state(rp)
-	local now = os.clock()
+	local now = simNow()
 	if now < s.ThornsAt then
 		return
 	end
@@ -520,7 +529,7 @@ function ItemSystem.Step(dt: number)
 	if not ctx.RunManager.IsSimulating() then
 		return
 	end
-	local now = os.clock()
+	local now = simNow()
 	-- every run player: passives (Renewal regen, Aegis Charm, Windstep) work without items
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Items then

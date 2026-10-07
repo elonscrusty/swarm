@@ -64,7 +64,7 @@ local ITEMS: { Item } = {
 
 	-- Uncommon ----------------------------------------------------------------------------
 	{ Id = "IronPlate", Name = "Iron Plate", Rarity = "Uncommon", Stack = "Hyperbolic", K = 0.06, Text = "Take 6% less damage", Desc = "Take less damage. Stacks add less each time: 1 stack 6%, 3 stacks 15%, 10 stacks 38%." },
-	{ Id = "BarbedMail", Name = "Barbed Mail", Rarity = "Uncommon", Stack = "Linear", Proc = "Thorns", Text = "When hit, hit back x1.5", Desc = "When hit, deal 150% of the damage you took (+100% per stack; at least half the raw hit) to enemies within 8 m." },
+	{ Id = "BarbedMail", Name = "Barbed Mail", Rarity = "Uncommon", Stack = "Linear", Proc = "Thorns", Text = "Hit back 150% nearby (8 m)", Desc = "When an enemy hits you, deal 150% of the damage you took (at least half the hit) to every enemy within 8 m. Works even if a shield absorbs it. Once per 0.5 s. +100% per extra copy. Scales with Might." },
 	{ Id = "StormCharm", Name = "Storm Charm", Rarity = "Uncommon", Stack = "Hyperbolic", K = 0.11, Proc = "Lightning", Text = "10% of hits call lightning", Desc = "Hits have a ~10% chance to strike 3 enemies (+1 per stack, max 5) for 40% of the hit; 2 stacks 18%." },
 	{ Id = "VolatileSpore", Name = "Volatile Spore", Rarity = "Uncommon", Stack = "Linear", Proc = "Explode", Text = "20% of kills explode", Desc = "20% of kills burst for 60% of the enemy's max HP (+30% per stack) within 7 m; bosses take at most 5%." },
 	{ Id = "GuardianWard", Name = "Guardian Ward", Rarity = "Uncommon", Stack = "Linear", Proc = "Shield", Text = "8% max HP shield after 5 s unhurt", Desc = "After 5 s without damage, gain a shield of 8% max HP per stack (up to 40%)." },
