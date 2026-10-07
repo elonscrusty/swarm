@@ -285,9 +285,12 @@ me:SetAttribute("Paused", nil)
 advance(2.1)
 clearEnemies()
 local boss = assert(ES.SpawnBoss(base + Vector3.new(0, 0, 20), "ScorpionQueen"), "boss")
+-- RM.TeleportPlayer, not a raw CFrame: a charging boss moves fast, and following it with
+-- raw jumps trips the server's speed check, which snaps the hero back to the spawn
 local function hold(dist: number, mateSide: number)
-	place(rp, boss.Pos + Vector3.new(-dist, 0, 0))
-	place(mate, boss.Pos + Vector3.new(mateSide, 0, 0))
+	local y = rp.Root.Position.Y - 3.5
+	RM.TeleportPlayer(rp, Vector3.new(boss.Pos.X - dist, y, boss.Pos.Z))
+	RM.TeleportPlayer(mate, Vector3.new(boss.Pos.X + mateSide, y, boss.Pos.Z))
 end
 for _ = 1, 120 do
 	if not boss.Invulnerable and boss.BossState ~= "Entrance" then break end
@@ -314,7 +317,7 @@ local spot = state:GetAttribute("BossWeakSpot")
 if typeof(spot) == "Vector3" then
 	local toSpot = ((spot - boss.Pos) * FLAT).Unit
 	local toHolder = ((rp.Root.Position - boss.Pos) * FLAT).Unit
-	check(toSpot:Dot(toHolder) < -0.5, "boss: the spot is on the far side from the holder")
+	check(toSpot:Dot(toHolder) < -0.5, "boss: the spot is on the far side from the holder", string.format("dot %.2f spot %s boss %s holder %s", toSpot:Dot(toHolder), tostring(spot), tostring(boss.Pos), tostring(rp.Root.Position)))
 end
 local function hit(who, amount)
 	local hp = boss.HP
