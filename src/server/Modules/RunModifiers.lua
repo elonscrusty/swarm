@@ -34,6 +34,18 @@
 	  practice. CommitDaily scores the attempt (CurseData.DailyScore), keeps today's score
 	  and the best ever in data.Daily and sends it to the Daily leaderboard.
 	  SwarmState "DailyDay": today's UTC day number (the lobby card shows that day).
+
+	Stage modifiers (batch B, Config.Features.StageModifiers, Config.StageModifiers;
+	docs/next/STAGE_MODIFIERS.md)
+	  BeginRun picks the run seed (Daily / Weekly: their fixed seed, so everyone gets the same
+	  list; otherwise a random one). StageModifierFor(stage) = StageModifierData.Roll(seed,
+	  stage). The modifier is live while its stage runs (StageModifier: not during the travel,
+	  not outside Running) and works through the existing hooks: EnemySpeedMult / SpawnMult /
+	  EliteChanceMult and StatMults here (capped against the same curse effect,
+	  Config.StageModifiers.Caps), StageMod(key) for StageManager (EnemyHP, EnemyDamage),
+	  XPSystem (XP), GoldSystem (KillGold), StageModCount("ChestRolls") for the elite chest, and
+	  LootSystem asks StageModifierFor while placing small chests. When it changes, every run
+	  player's stat sheet is recomputed (Step). SwarmState "StageModifier": the id on show.
 ]]
 
 local Players = game:GetService("Players")
@@ -45,6 +57,7 @@ local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponDat
 local ItemData = require(game:GetService("ReplicatedStorage").Shared.ItemData)
 local DifficultyData = require(game:GetService("ReplicatedStorage").Shared.DifficultyData)
 local MetaData = require(game:GetService("ReplicatedStorage").Shared.MetaData)
+local StageModifierData = require(game:GetService("ReplicatedStorage").Shared.StageModifierData)
 
 local RunModifiers = {}
 
@@ -58,6 +71,11 @@ local weekly: MetaData.Weekly? = nil -- the running run's Weekly Challenge setup
 local endless = false -- the running run is an Endless run (Config.Endless)
 local difficulty = "Standard"
 local publishTimer = 0
+-- stage modifiers (Config.StageModifiers, docs/next/STAGE_MODIFIERS.md)
+local runSeed: number? = nil -- the running run's seed (Daily / Weekly: their fixed seed)
+local modCache: { [number]: string | false } = {} -- stage -> rolled id (false = none)
+local appliedMod: string? = nil -- the modifier the stat sheets were last computed with
+local seedRng = Random.new() -- own Random: the game's other rolls are untouched
 
 ------------------------------------------------------------------------------------------
 -- Queries (gameplay hooks)
@@ -80,28 +98,97 @@ function RunModifiers.DifficultyMultiplier(stat: string): number
 	return type(value) == "number" and value or 1
 end
 
+------------------------------------------------------------------------------------------
+-- Stage modifiers (Config.Features.StageModifiers; docs/next/STAGE_MODIFIERS.md)
+------------------------------------------------------------------------------------------
+
+-- The running run's seed (nil between runs).
+function RunModifiers.RunSeed(): number?
+	return runSeed
+end
+
+-- The modifier stage `stage` of this run rolls (nil: switch off, no run, before FromStage).
+-- Pure on the run seed, so LootSystem can ask while the stage is being built.
+function RunModifiers.StageModifierFor(stage: number): string?
+	if not Config.FeatureOn("StageModifiers") or runSeed == nil or type(stage) ~= "number" then
+		return nil
+	end
+	local cached = modCache[stage]
+	if cached == nil then
+		cached = StageModifierData.Roll(runSeed, stage) or false
+		modCache[stage] = cached
+	end
+	return cached or nil
+end
+
+-- The modifier in force now: the live stage's, cleared during the travel (stage end) and
+-- outside a running run.
+function RunModifiers.StageModifier(): string?
+	local sm = ctx and ctx.StageManager
+	if not sm or not state or state:GetAttribute("Phase") ~= "Running" then
+		return nil
+	end
+	local stage = sm.GetStage()
+	if stage <= 0 or sm.GetPhase() == "Travel" then
+		return nil
+	end
+	return RunModifiers.StageModifierFor(stage)
+end
+
+-- The live modifier's multiplier for effect `key` (1 = none).
+function RunModifiers.StageMod(key: string): number
+	local id = RunModifiers.StageModifier()
+	if not id then
+		return 1
+	end
+	return StageModifierData.Effects(id)[key] or 1
+end
+
+-- The live modifier's count for effect `key` (ChestRolls; 0 = none).
+function RunModifiers.StageModCount(key: string): number
+	local id = RunModifiers.StageModifier()
+	if not id then
+		return 0
+	end
+	return StageModifierData.Effects(id)[key] or 0
+end
+
+local function capOf(key: string): number?
+	return (Config :: any).StageModifiers.Caps[key]
+end
+
 function RunModifiers.EnemySpeedMult(): number
-	return effects.EnemySpeed * RunModifiers.DifficultyMultiplier("Speed")
+	return StageModifierData.Combine(effects.EnemySpeed, RunModifiers.StageMod("EnemySpeed"), capOf("EnemySpeed")) * RunModifiers.DifficultyMultiplier("Speed")
 end
 
 function RunModifiers.SpawnMult(): number
-	return effects.SpawnMult * RunModifiers.DifficultyMultiplier("Density")
+	return StageModifierData.Combine(effects.SpawnMult, RunModifiers.StageMod("SpawnMult"), capOf("SpawnMult")) * RunModifiers.DifficultyMultiplier("Density")
 end
 
 function RunModifiers.EliteChanceMult(): number
-	return effects.EliteChance
+	return StageModifierData.Combine(effects.EliteChance, RunModifiers.StageMod("EliteChance"), capOf("EliteChance"))
 end
 
 function RunModifiers.NoHealPickups(): boolean
 	return effects.NoHealPickups
 end
 
--- Final multipliers for the stat sheet (StatSheet.Compute input.Curse).
+-- Final multipliers for the stat sheet (StatSheet.Compute input.Curse): the curses, with the
+-- live stage modifier's stat effects (capped against the same curse effect).
 function RunModifiers.StatMults(): { [string]: number }?
-	if #active == 0 then
+	local id = RunModifiers.StageModifier()
+	if #active == 0 and not id then
 		return nil
 	end
-	return { MaxHP = effects.MaxHP, Might = effects.Might, DamageTaken = effects.DamageTaken }
+	local m = StageModifierData.Effects(id)
+	return {
+		MaxHP = effects.MaxHP,
+		Might = StageModifierData.Combine(effects.Might, m.Might, capOf("Might")),
+		DamageTaken = StageModifierData.Combine(effects.DamageTaken, m.DamageTaken, capOf("DamageTaken")),
+		Speed = m.Speed,
+		CooldownMult = m.CooldownMult,
+		GoldMult = m.Gold,
+	}
 end
 
 function RunModifiers.IsDaily(): boolean
@@ -158,22 +245,27 @@ end
 function RunModifiers.BeginRun(modeName: string, starter: Player?): CurseData.Daily?
 	difficulty = "Standard"
 	weekly = nil
+	table.clear(modCache)
+	appliedMod = nil
 	if modeName == CurseData.DailyMode then
 		daily = CurseData.Daily(RunModifiers.Today())
 		setActive((daily :: CurseData.Daily).Curses)
 		endless = false
+		runSeed = (daily :: CurseData.Daily).Seed -- everyone gets today's stage modifiers
 	elseif modeName == MetaData.WeeklyMode and Config.FeatureOn("WeeklyChallenge") then
 		-- the week's fixed curses (the starter's own pick is ignored), Standard, no Endless
 		daily = nil
 		weekly = MetaData.Weekly(MetaData.WeekOf(os.time()))
 		setActive((weekly :: MetaData.Weekly).Curses)
 		endless = false
+		runSeed = (weekly :: MetaData.Weekly).Seed
 	else
 		daily = nil
 		local data = starter and ctx.DataService.GetData(starter)
 		difficulty = DifficultyData.Selected(data)
 		setActive(data and CurseData.Sanitize(data.Curses) or {})
 		endless = endlessFor(modeName, data and data.Endless)
+		runSeed = seedRng:NextInteger(1, 2147483646)
 	end
 	RunModifiers.Publish()
 	return daily
@@ -185,6 +277,9 @@ function RunModifiers.EndRun()
 	weekly = nil
 	endless = false
 	difficulty = "Standard"
+	runSeed = nil
+	table.clear(modCache)
+	appliedMod = nil
 	RunModifiers.Publish()
 end
 
@@ -410,9 +505,37 @@ function RunModifiers.Publish()
 	state:SetAttribute("DailyRun", (phase == "Running" or phase == "Results") and daily ~= nil)
 	state:SetAttribute("WeeklyRun", (phase == "Running" or phase == "Results") and weekly ~= nil)
 	state:SetAttribute("DailyDay", RunModifiers.Today())
+	-- the stage modifier on show: the current stage's ("" = none; also during its travel,
+	-- so the next stage card can name it); the HUD badge and RunIntro read it
+	local shownMod = ""
+	if phase == "Running" and ctx.StageManager then
+		shownMod = RunModifiers.StageModifierFor(ctx.StageManager.GetStage()) or ""
+	end
+	if state:GetAttribute("StageModifier") ~= shownMod then
+		state:SetAttribute("StageModifier", shownMod)
+	end
+end
+
+-- The live stage modifier changed (a new stage, its travel, the run's end): every run
+-- player's stat sheet follows at once (Glass Arena, Haste, Thick Hides gold).
+local function followStageModifier()
+	local id = RunModifiers.StageModifier()
+	if id == appliedMod then
+		return
+	end
+	appliedMod = id
+	if ctx.RunManager and ctx.LevelUpSystem then
+		for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+			if rp.Stats then
+				ctx.LevelUpSystem.RecomputeStats(rp)
+			end
+		end
+	end
+	RunModifiers.Publish()
 end
 
 function RunModifiers.Step(dt: number)
+	followStageModifier()
 	publishTimer += dt
 	if publishTimer >= 0.5 then
 		publishTimer = 0
@@ -430,6 +553,7 @@ function RunModifiers.Init(c)
 	state:SetAttribute("CurseMax", CurseData.MaxActive)
 	state:SetAttribute("Endless", false)
 	state:SetAttribute("Difficulty", "Standard")
+	state:SetAttribute("StageModifier", "")
 	assert(Config.Data.SchemaVersion >= 6, "RunModifiers needs save schema 6")
 end
 

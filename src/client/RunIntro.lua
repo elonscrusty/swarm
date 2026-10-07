@@ -14,6 +14,9 @@
 	            SwarmState PortalHint; or when it wakes, SwarmState PortalLockLeft), stand in its
 	            ring (Config.Stages.ChargeSeconds), beat the stage boss (StageBoss).
 	            Stages 2+: the headline only, shorter.
+	  modifier  the stage modifier on show (SwarmState StageModifier, batch B StageModifiers):
+	            "GLASS ARENA: You deal +20% damage · You take +20% damage", and the card
+	            stays Config.StageModifiers.CardSeconds longer.
 	  footer    TAP TO CLOSE + a draining gold bar
 
 	Never blocks or pauses anything: nothing in it is Active (a thumb landing on it still
@@ -32,6 +35,7 @@ local TextService = game:GetService("TextService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local StageModifierData = require(Shared:WaitForChild("StageModifierData"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
@@ -148,6 +152,8 @@ local function build(root: Frame)
 	ui.Sub = UIKit.Role(face, "Label", "BEFORE THE SWARM GROWS TOO STRONG", { Name = "Sub", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextWrapped = true }, false)
 	ui.Sub.TextSize = TS(SUB)
 	ui.Why = UIKit.Role(face, "Body", "", { Name = "Why", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, TextWrapped = true }, false)
+	-- the stage modifier (batch B, StageModifiers): its name and effects on one wrapped line
+	ui.Mod = UIKit.Role(face, "Body", "", { Name = "Modifier", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300, TextWrapped = true, Visible = false }, false)
 	ui.Rule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.4, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(160, 2) }, face)
 	ui.Hints = {
 		hintCell(face, "HintPortal", "portal"),
@@ -198,6 +204,15 @@ local function layout()
 		local n = lines(ui.Why.Text, px, Enum.Font.SourceSansSemibold, inner - 8)
 		ui.Why.Position = UDim2.fromOffset(PAD, y)
 		ui.Why.Size = UDim2.fromOffset(inner, n * (px + 3))
+		y += n * (px + 3) + 6
+	end
+	ui.Mod.Visible = ui.Mod.Text ~= ""
+	if ui.Mod.Visible then
+		local px = TS(Theme.Type.Body.Size)
+		ui.Mod.TextSize = px
+		local n = lines(ui.Mod.Text, px, Enum.Font.SourceSansSemibold, inner - 8)
+		ui.Mod.Position = UDim2.fromOffset(PAD, y)
+		ui.Mod.Size = UDim2.fromOffset(inner, n * (px + 3))
 		y += n * (px + 3) + 6
 	end
 	ui.Rule.Visible = show.Full
@@ -304,6 +319,20 @@ local function hide(fast: boolean?)
 	end)
 end
 
+-- "GLASS ARENA: You deal +20% damage · You take +20% damage" for the stage modifier on show
+-- (SwarmState StageModifier, batch B StageModifiers), "" when there is none.
+function RunIntro.ModifierText(state: Configuration): string
+	if not Config.FeatureOn("StageModifiers") then
+		return ""
+	end
+	local id = tostring(state:GetAttribute("StageModifier") or "")
+	local name = StageModifierData.Name(id)
+	if name == "" then
+		return ""
+	end
+	return string.upper(name) .. ": " .. StageModifierData.Short(id)
+end
+
 local function fill(state: Configuration, stageNo: number)
 	local endless = state:GetAttribute("Endless") == true
 	local arena = tostring(state:GetAttribute("StageArena") or "")
@@ -315,6 +344,7 @@ local function fill(state: Configuration, stageNo: number)
 	ui.Head.Text = "OPEN THE PORTAL"
 	ui.Sub.Text = "BEFORE THE SWARM GROWS TOO STRONG"
 	ui.Why.Text = "The swarm gets bigger and tougher every minute. Open the portal fast."
+	ui.Mod.Text = RunIntro.ModifierText(state)
 	-- live hint values
 	local lockLeft = tonumber(state:GetAttribute("PortalLockLeft")) or 0
 	local charge = Config.Stages.ChargeSeconds
@@ -350,6 +380,9 @@ function RunIntro.Show(stageNo: number): boolean
 	show.Seconds = firstRun and SECONDS_FIRST_RUN or (stageNo <= 1 and SECONDS_FIRST_STAGE or SECONDS_LATER)
 	show.Reveal = tonumber(state:GetAttribute("PortalReveal")) or 0
 	fill(state, stageNo)
+	if ui.Mod.Text ~= "" then
+		show.Seconds += (Config :: any).StageModifiers.CardSeconds or 0 -- time to read the modifier
+	end
 	stopTweens()
 	show.Token += 1
 	show.Held = 0
@@ -467,6 +500,13 @@ function RunIntro.Build(root: Frame, k: { [string]: any })
 		local n = tonumber(state:GetAttribute("Stage")) or 0
 		if n > 0 then
 			begun.Stage, begun.At = n, os.clock()
+		end
+	end)
+	-- the stage modifier arriving while the card shows: name it at once
+	state:GetAttributeChangedSignal("StageModifier"):Connect(function()
+		if RunIntro.Active() then
+			ui.Mod.Text = RunIntro.ModifierText(state)
+			layout()
 		end
 	end)
 	Hud.StageIntro = RunIntro.Show

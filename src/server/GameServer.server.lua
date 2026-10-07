@@ -54,6 +54,7 @@ local ORDER = {
 	"EnemyAI",
 	"WeaponSystem",
 	"ItemSystem",
+	"FinalStand", -- batch B: under-10% HP burst, once per stage (docs/next/FINAL_STAND.md)
 	"LootSystem",
 	"CaravanEvent",
 	"SecretRoom", -- EXPLORE (feature 4): cracked wall + alcove (docs/features/EXPLORE.md)
@@ -129,6 +130,7 @@ local STEPS = {
 	{ "WeaponSystem", ctx.WeaponSystem.Step },
 	{ "XPSystem", ctx.XPSystem.Step },
 	{ "ItemSystem", ctx.ItemSystem.Step },
+	{ "FinalStand", ctx.FinalStand.Step },
 	{ "LootSystem", ctx.LootSystem.Step },
 	{ "CaravanEvent", ctx.CaravanEvent.Step },
 	{ "LevelUpSystem", ctx.LevelUpSystem.Step },

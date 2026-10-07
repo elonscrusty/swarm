@@ -14,7 +14,9 @@
 	    Items = { [itemId] = count },      -- run items (ItemData.Bonus)
 	    Team = { might = 0.15, ... }?,     -- this stage's Bargain Shrine boon (LootSystem)
 	    Curse = { MaxHP = 0.7, Might = 1.3, DamageTaken = 1.3 }?, -- the run's curses
-	                                       -- (CurseData), final multipliers
+	                                       -- (CurseData), final multipliers; also the stage
+	                                       -- modifier's Speed / CooldownMult / GoldMult
+	    Temp = { FinalStand = { Might = 1.4, Speed = 1.3 } }?, -- temporary, applied last
 	  }
 	  sheet = { Might, Armor, MaxHP, Speed, CooldownMult, AreaMult, Amount, Pierce,
 	            PickupRadius, Luck, ProjSpeedMult, DurationMult, Growth, DamageTaken, Regen,
@@ -53,7 +55,12 @@ export type Input = {
 	Curse: { [string]: number }?,
 	Sigils: { [string]: boolean }?, -- worn Sigils (META, Config.Features.Sigils): after Meta
 	SigilAlone: boolean?, -- Lone Wolf: no living ally within SigilData.LoneWolfRange
+	-- temporary multipliers by source, applied last (Final Stand: rp.TempMods.FinalStand)
+	Temp: { [string]: { [string]: number } }?,
 }
+
+-- sheet keys a temporary modifier may multiply
+local TEMP_KEYS = { "Might", "Speed", "DamageTaken", "CooldownMult" }
 
 function StatSheet.Compute(input: Input): { [string]: number }
 	local b: { [string]: number } = {}
@@ -153,12 +160,31 @@ function StatSheet.Compute(input: Input): { [string]: number }
 		LowHpMight = 1 + b.lowHpMight, -- damage multiplier while badly hurt (Lionheart)
 		StillHeal = math.max(0, b.stillHeal), -- share of max HP per second standing still
 	}
-	-- curses multiply the finished sheet (Fragile, Glass Cannon)
+	-- curses multiply the finished sheet (Fragile, Glass Cannon); the stage modifier's stat
+	-- effects ride on the same table (RunModifiers.StatMults: Speed, CooldownMult, GoldMult)
 	sheet.MaxHP = math.max(1, math.floor(sheet.MaxHP * (curse.MaxHP or 1) + 0.5))
 	sheet.Might *= curse.Might or 1
 	sheet.DamageTaken *= curse.DamageTaken or 1
+	sheet.CooldownMult *= curse.CooldownMult or 1
+	sheet.GoldMult *= curse.GoldMult or 1
+	if curse.Speed then
+		-- never past the item speed cap (a hero already at it gains nothing)
+		sheet.Speed = math.min(sheet.Speed * curse.Speed, math.max(sheet.Speed, P.BaseSpeed * I.MaxSpeedMult))
+	end
 	if noRegen then
 		sheet.Regen = 0 -- Ember Heart
+	end
+	-- temporary multipliers last (rp.TempMods: Final Stand); { source = { Might = 1.4, ... } }
+	for _, mods in pairs(input.Temp or {}) do
+		if type(mods) == "table" then
+			for _, k in ipairs(TEMP_KEYS) do
+				local v = mods[k]
+				if type(v) == "number" and v == v and v > 0 and v < math.huge then
+					local t = sheet :: any
+					t[k] *= v
+				end
+			end
+		end
 	end
 	return sheet
 end

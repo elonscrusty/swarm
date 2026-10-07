@@ -148,12 +148,15 @@ end
 
 function StageManager.EnemyHPMult(): number
 	local tier = ctx.RunModifiers and ctx.RunModifiers.DifficultyMultiplier and ctx.RunModifiers.DifficultyMultiplier("HP") or 1
-	return perStage(Config.Stages.EnemyHPPerStage) * endlessMult(Config.Endless.HPPerStage) * tier
+	-- x the stage modifier (Thick Hides; 1 otherwise, docs/next/STAGE_MODIFIERS.md)
+	local mod = ctx.RunModifiers and ctx.RunModifiers.StageMod and ctx.RunModifiers.StageMod("EnemyHP") or 1
+	return perStage(Config.Stages.EnemyHPPerStage) * endlessMult(Config.Endless.HPPerStage) * tier * mod
 end
 
 function StageManager.DamageMult(): number
 	local tier = ctx.RunModifiers and ctx.RunModifiers.DifficultyMultiplier and ctx.RunModifiers.DifficultyMultiplier("Damage") or 1
-	return perStage(Config.Stages.EnemyDamagePerStage) * endlessMult(Config.Endless.DamagePerStage) * tier
+	local mod = ctx.RunModifiers and ctx.RunModifiers.StageMod and ctx.RunModifiers.StageMod("EnemyDamage") or 1 -- Bounty
+	return perStage(Config.Stages.EnemyDamagePerStage) * endlessMult(Config.Endless.DamagePerStage) * tier * mod
 end
 
 -- Live-target / mini-wave multiplier: the stage share x the Horde curse (x Endless).

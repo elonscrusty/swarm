@@ -97,6 +97,7 @@ local function sheetFor(rp, passives: { [string]: number }?)
 		Curse = ctx.RunModifiers and ctx.RunModifiers.StatMults() or nil,
 		Sigils = rp.Sigils, -- META (feature 1): nil unless worn (never in Daily / Weekly runs)
 		SigilAlone = rp.SigilAlone,
+		Temp = rp.TempMods, -- temporary multipliers (Final Stand, FinalStand.lua); nil = none
 	})
 end
 
@@ -1106,6 +1107,10 @@ function LevelUpSystem.OpenChest(rp)
 	local rewards = {}
 	chestLevelUp(rp, rewards)
 	if rng:NextNumber() < Config.Drops.ChestBonusLevelChance * (1 + rp.Stats.Luck) then
+		chestLevelUp(rp, rewards)
+	end
+	-- stage modifier Elite Night: extra rolls (0 otherwise; docs/next/STAGE_MODIFIERS.md)
+	for _ = 1, ctx.RunModifiers and ctx.RunModifiers.StageModCount and ctx.RunModifiers.StageModCount("ChestRolls") or 0 do
 		chestLevelUp(rp, rewards)
 	end
 	-- elite chest gold grows with the stage: EliteStageScale up to stage 2, then the smaller
