@@ -10,7 +10,8 @@
 	  eyebrow   STAGE N · arena name (ENDLESS · STAGE N on Endless runs)
 	  headline  OPEN THE PORTAL / BEFORE THE SWARM GROWS TOO STRONG
 	  hints     stage 1 (and a player's first run): three icon hints with live numbers:
-	            find the portal (or when it wakes, SwarmState PortalLockLeft), stand in its
+	            reach the portal (it appears soon / follow the PORTAL arrow once revealed,
+	            SwarmState PortalHint; or when it wakes, SwarmState PortalLockLeft), stand in its
 	            ring (Config.Stages.ChargeSeconds), beat the stage boss (StageBoss).
 	            Stages 2+: the headline only, shorter.
 	  footer    TAP TO CLOSE + a draining gold bar
@@ -313,16 +314,18 @@ local function fill(state: Configuration, stageNo: number)
 	ui.Eyebrow.Text = UIKit.track(head)
 	ui.Head.Text = "OPEN THE PORTAL"
 	ui.Sub.Text = "BEFORE THE SWARM GROWS TOO STRONG"
-	ui.Why.Text = "The swarm gets bigger and tougher every minute. Find the portal fast."
+	ui.Why.Text = "The swarm gets bigger and tougher every minute. Open the portal fast."
 	-- live hint values
 	local lockLeft = tonumber(state:GetAttribute("PortalLockLeft")) or 0
 	local charge = Config.Stages.ChargeSeconds
 	local boss = tostring(state:GetAttribute("StageBoss") or "")
 	local hp, hc, hb = ui.Hints[1], ui.Hints[2], ui.Hints[3]
-	hp.Title.Text = "FIND THE PORTAL"
-	hp.Sub.Text = lockLeft > 0 and ("Wakes in " .. UIKit.formatTime(lockLeft)) or "Follow the gold arrow"
+	hp.Title.Text = "REACH THE PORTAL"
+	-- before the reveal there is no arrow yet (the tutorial run waits for the first pick)
+	hp.Sub.Text = lockLeft > 0 and ("Wakes in " .. UIKit.formatTime(lockLeft))
+		or (state:GetAttribute("PortalHint") == true and "Follow the PORTAL arrow" or "It appears soon")
 	hc.Title.Text = "STAND IN ITS RING"
-	hc.Sub.Text = string.format("%s s to charge", tostring(charge))
+	hc.Sub.Text = string.format("%s s to summon", tostring(charge))
 	hb.Title.Text = "BEAT THE BOSS"
 	hb.Sub.Text = boss ~= "" and boss or "Then the portal opens"
 	-- the last input used (touch / mouse and keys / gamepad), COPY CP-03

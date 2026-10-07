@@ -9,10 +9,14 @@
 	                 ping (MiniMap). Owner: the portal must be very evident when it spawns.
 	  portal arrow   from the reveal on (SwarmState PortalHint; Config.Stages.HintAfterSeconds
 	                 can delay it) an arrow at the screen edge points at this stage's
-	                 portal, with the distance; when the portal is on screen a small
-	                 marker floats over it instead
+	                 portal, with "PORTAL · 139 m" on a dark tag; when the portal is on
+	                 screen the marker sits just above its arch (under the beacon pillar)
+	                 instead. It keeps off the HUD corners, the centre bars, the banner
+	                 lane, the notice pills and the touch buttons (JUMP, ULT), and hides
+	                 while any panel is open (level-up, reward, portal choice, run menu,
+	                 BUILD details, the merchant's shop)
 	  charge ring    24 rune segments over the portal that fill while someone stands in
-	                 its circle ("Stand here to open" / "Opening 60%")
+	                 its circle ("Stand here 2 s to summon" / "Summoning 60%")
 	  choice panel   the portal opened (remote PortalOffer): stage cleared, the run so far,
 	                 NEXT STAGE (primary gold) or RETURN TO LOBBY (+ the win bonus), the
 	                 auto-continue countdown and who is ready (SwarmState ChoiceLeft /
@@ -61,6 +65,8 @@ local C, P = Theme.Color, Theme.Palette
 
 local SEGMENTS = 24
 local RING_R = 30
+local ARROW_TAG_W = 118 -- the "PORTAL · 139 m" tag under the arrow badge
+local ARROW_HALF_W = ARROW_TAG_W / 2 + 4 -- the marker's half width with its tag
 
 local kit: { [string]: any } = {}
 local ui: { [string]: any } = {}
@@ -99,7 +105,9 @@ local function checkReveal(state: Configuration)
 		if reveal > 0 then
 			-- semantic id portal.reveal: the server's broadcast of the same moment merges
 			-- into this one banner (UIState), never a second heading
-			Hud.Announce("THE PORTAL HAS APPEARED", "Follow the arrow · stand in its circle",
+			-- (the one portal instruction of the stage: the run start sends no objective notice)
+			local boss = tostring(state:GetAttribute("StageBoss") or "")
+			Hud.Announce("THE PORTAL HAS APPEARED", "Follow the PORTAL arrow · stand in its ring to summon " .. (boss ~= "" and ("the " .. boss) or "the boss"),
 				Accessibility.Color(Color3.fromRGB(190, 210, 255), "Magic"), "PortalAppear", "portal.reveal", "Info", 15)
 		end
 	end
@@ -137,16 +145,21 @@ local function buildArrow(root: Frame)
 	local badge, face = UIKit.Surface(holder, { Name = "Badge", Radius = 999, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.2, Size = UDim2.fromOffset(48, 48), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 	local _ = badge
 	Icons.Draw(face, "portal", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	-- "PORTAL · 139 m" on a dark tag under the badge (readable over grass and snow)
 	ui.ArrowDistance = UIKit.Role(holder, "Label", "", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 1, 0),
-		Size = UDim2.fromOffset(90, TS(Theme.Type.Label.Size) + 4),
+		Size = UDim2.fromOffset(ARROW_TAG_W, TS(Theme.Type.Label.Size) + 6),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.ivory_100,
-		TextStrokeTransparency = 0.4,
+		TextStrokeTransparency = 0.6,
+		BackgroundColor3 = P.slate_950,
+		BackgroundTransparency = 0.2,
 		-- scales down inside its box: the phone's large-text setting grew "139 m" onto the tray
 		TextScaled = true,
 	}, true)
+	UIKit.corner(ui.ArrowDistance, 999)
+	UIKit.padding(ui.ArrowDistance, 1, 8, 1, 8)
 	new("UITextSizeConstraint", { MinTextSize = 10, MaxTextSize = ui.ArrowDistance.TextSize }, ui.ArrowDistance)
 	UIAnim.Breathe(badge, 0.06, 1.6)
 end
@@ -519,6 +532,97 @@ local function clearCornerPanels(x: number, y: number): number
 	return y
 end
 
+-- Touch buttons and notice pills the marker must keep off, as rects in root pixels
+-- ({ x, y, w, h }). Touch buttons live in their own ScreenGuis (SwarmStick: JUMP;
+-- FeatureHud: ULT); their screen rects are read twice a second.
+local touchRects: { { number } } = {}
+local touchAt = -1
+
+local function screenToRoot(g: GuiObject): { number }
+	local s = math.max(0.01, kit.Scale())
+	local off: Vector2 = kit.GuiOffset()
+	local p, sz = g.AbsolutePosition, g.AbsoluteSize
+	return { (p.X - off.X) / s, (p.Y - off.Y) / s, sz.X / s, sz.Y / s }
+end
+
+local function refreshTouchRects()
+	if os.clock() - touchAt < 0.5 then
+		return
+	end
+	touchAt = os.clock()
+	table.clear(touchRects)
+	local pg = player:FindFirstChild("PlayerGui")
+	if not pg then
+		return
+	end
+	local function add(gui: Instance?, path: { string })
+		if not gui or not gui:IsA("ScreenGui") or not gui.Enabled then
+			return
+		end
+		local obj: Instance? = gui
+		for _, name in ipairs(path) do
+			obj = obj and obj:FindFirstChild(name, true)
+		end
+		if obj and obj:IsA("GuiObject") and obj.Visible and obj.AbsoluteSize.X > 0 then
+			table.insert(touchRects, screenToRoot(obj))
+		end
+	end
+	add(pg:FindFirstChild("SwarmStick"), { "JumpButton" })
+	add(pg:FindFirstChild("FeatureHud"), { "Ultimate" })
+end
+
+-- The notice pills (UIBuilder's toast list, a sibling in the same root) and the centre
+-- banner while they show.
+local function centreRects(): { { number } }
+	local out = {}
+	local root = ui.Arrow and ui.Arrow.Parent
+	local toasts = root and root:FindFirstChild("Toasts")
+	if toasts and toasts:IsA("GuiObject") and toasts.Visible then
+		for _, c in ipairs(toasts:GetChildren()) do
+			if c:IsA("GuiObject") and c.Visible and c.AbsoluteSize.X > 0 then
+				table.insert(out, screenToRoot(c))
+			end
+		end
+	end
+	local banner = Hud.Elements().Banner
+	if banner and banner.Visible then
+		table.insert(out, screenToRoot(banner))
+	end
+	return out
+end
+
+-- Moves a marker centred at (x, y) off every rect in `rects`, along the screen edge it
+-- sits on: on a side edge it moves up (or down, under a rect in the top half), on the top /
+-- bottom edge sideways toward the nearer end of the rect.
+local function avoidRects(x: number, y: number, rects: { { number } }, onSide: boolean, H: number): (number, number)
+	for _ = 1, 3 do
+		local moved = false
+		for _, r in ipairs(rects) do
+			local gx, gy, gw, gh = r[1], r[2], r[3], r[4]
+			if x + ARROW_HALF_W > gx - 6 and x - ARROW_HALF_W < gx + gw + 6 and y + 54 > gy - 6 and y - 32 < gy + gh + 6 then
+				moved = true
+				if onSide then
+					if gy + gh / 2 > H / 2 then
+						y = gy - 6 - 54
+					else
+						y = gy + gh + 6 + 32
+					end
+				else
+					if x < gx + gw / 2 then
+						x = gx - 6 - ARROW_HALF_W
+					else
+						x = gx + gw + 6 + ARROW_HALF_W
+					end
+				end
+			end
+		end
+		if not moved then
+			break
+		end
+	end
+	return x, y
+end
+
 local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	local pos = state:GetAttribute("PortalPos")
 	local root = localRoot()
@@ -537,7 +641,10 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	local charge = state:GetAttribute("PortalCharge") or 0
 	local inside = alive and dist <= Config.Stages.PortalRadius
 	local top, topOn = project(pos + Vector3.new(0, 12, 0))
-	local showRing = stagePhase == "Explore" and (inside or charge > 0) and topOn
+	-- (also just outside the circle once revealed: the label says what to do there)
+	local hinted = state:GetAttribute("PortalHint") == true
+	local near = alive and hinted and dist <= Config.Stages.PortalRadius + 10
+	local showRing = stagePhase == "Explore" and (inside or near or charge > 0) and topOn
 	ui.Ring.Visible = showRing
 	if not showRing then
 		ui.LitSegments = 0
@@ -567,11 +674,13 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 		end
 		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
 		if charge > 0 then
-			ui.RingLabel.Text = UIKit.track(string.format("Opening %d%%", math.floor(charge * 100)))
+			ui.RingLabel.Text = UIKit.track(string.format("Summoning %d%%", math.floor(charge * 100)))
 		elseif lockLeft > 0 then
 			ui.RingLabel.Text = UIKit.track("Dormant " .. UIKit.formatTime(lockLeft))
 		else
-			ui.RingLabel.Text = UIKit.track(inside and "Stand here to open" or "Portal")
+			-- before the reveal it can't be charged (StageManager); after it: how to summon
+			ui.RingLabel.Text = UIKit.track(not hinted and "Not open yet"
+				or string.format("Stand here %s s to summon", tostring(Config.Stages.ChargeSeconds)))
 		end
 	end
 
@@ -580,8 +689,10 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	-- the portal pin and the marker returns when they close)
 	-- (also hidden while this player's run menu is open: the drawer covers that side and the
 	-- marker sat on the HUD's centre status line)
+	-- (and while any panel is open: level-up, reward, portal choice, or the merchant's shop
+	-- in the middle of the screen, UIState.SidePanelOpen)
 	local showArrow = stagePhase == "Explore" and state:GetAttribute("PortalHint") == true and not inside and not showRing and not Hud.BuildOpen()
-		and not UIState.IsShown("Pause")
+		and not UIState.IsShown("Pause") and UIState.Owner() == nil and not UIState.Covered() and not UIState.SidePanelOpen()
 	if not showArrow then
 		ui.Arrow.Visible = false
 		ui.ArrowShown = false
@@ -591,7 +702,8 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 		ui.ArrowShown = true
 		UIAnim.Pop(ui.Arrow, 0, 0.4)
 	end
-	local p, on = project(pos + Vector3.new(0, 6, 0))
+	-- the arch is ~11 studs tall: on screen the marker sits just above it
+	local p, on = project(pos + Vector3.new(0, 13, 0))
 	local portrait: boolean = kit.IsPortrait()
 	local els = Hud.Elements()
 	local yMin = math.max(70, Hud.TopBottom() + 44)
@@ -599,7 +711,7 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 		yMin = math.max(yMin, els.BarBottom + 44)
 	end
 	local yMax = portrait and (H - 110) or (H - 70)
-	local xMin, xMax = 56, W - 56
+	local xMin, xMax = ARROW_HALF_W + 4, W - ARROW_HALF_W - 4
 	-- landscape: the ability bar takes the bottom centre; keep the arrow above it there
 	local barTop, barL, barR = math.huge, 0, 0
 	if not portrait and els.Bar then
@@ -609,12 +721,12 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 		barL = els.Bar.Position.X.Offset - 40
 		barR = barL + els.Bar.Size.X.Offset + 80
 	end
-	ui.ArrowDistance.Text = string.format("%d m", math.floor(dist + 0.5))
+	ui.ArrowDistance.Text = string.format("PORTAL · %d m", math.floor(dist + 0.5))
 	local overBar = p.Y > barTop and p.X > barL and p.X < barR
 	if on and p.X > xMin and p.X < xMax and p.Y > yMin and p.Y < yMax and not overBar then
 		-- on screen: a marker floats over the portal, pointing down at it
 		ui.Arrow.Visible = true
-		local fy = p.Y - 40 + math.sin(os.clock() * 3) * 4
+		local fy = p.Y - 34 + math.sin(os.clock() * 3) * 4
 		ui.Arrow.Position = UDim2.fromOffset(math.floor(p.X + 0.5), math.floor(clearCentreBars(p.X, fy) + 0.5))
 		ui.ArrowPivot.Rotation = 90
 		return
@@ -643,8 +755,15 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 	if at.Y > barTop and at.X > barL and at.X < barR then
 		at = clampTo(barTop)
 	end
+	refreshTouchRects()
+	local ax, ay = at.X, clearCornerPanels(at.X, clearCentreBars(at.X, at.Y))
+	local onSide = ax <= xMin + 1 or ax >= xMax - 1
+	ax, ay = avoidRects(ax, ay, touchRects, onSide, H)
+	ax, ay = avoidRects(ax, ay, centreRects(), onSide, H)
+	ax = math.clamp(ax, xMin, xMax)
+	ay = math.clamp(ay, yMin, yMax)
 	ui.Arrow.Visible = true
-	ui.Arrow.Position = UDim2.fromOffset(math.floor(at.X + 0.5), math.floor(clearCornerPanels(at.X, clearCentreBars(at.X, at.Y)) + 0.5))
+	ui.Arrow.Position = UDim2.fromOffset(math.floor(ax + 0.5), math.floor(ay + 0.5))
 	ui.ArrowPivot.Rotation = math.deg(math.atan2(d.Y, d.X))
 end
 
@@ -822,8 +941,39 @@ function StageUI.Elements(): { [string]: any }
 	return ui
 end
 
+-- Headlines whose moment can pass while they wait in UIState's queue (a reward card or the
+-- stage-start card holds them): checked while they wait and while they show, so a late
+-- "THE PORTAL HAS APPEARED" never plays once the portal is open or the boss is up.
+local function registerValidators()
+	local function phase(): string
+		return tostring(Remotes.State():GetAttribute("StagePhase") or "None")
+	end
+	UIState.SetValidator("portal.reveal", function()
+		return phase() == "Explore"
+	end)
+	UIState.SetValidator("swarm.pressure", function()
+		return phase() == "Explore"
+	end)
+	UIState.SetValidator("portal.open", function()
+		return phase() == "Open"
+	end)
+	-- "wave.6": stale once a later wave has started
+	UIState.SetValidator("wave.", function(id: string)
+		local n = tonumber(string.match(id, "^wave%.(%d+)$"))
+		local now = tonumber(Remotes.State():GetAttribute("Wave"))
+		return n == nil or now == nil or now <= n
+	end)
+	-- "stage.3": only on stage 3
+	UIState.SetValidator("stage.", function(id: string)
+		local n = tonumber(string.match(id, "^stage%.(%d+)$"))
+		local now = tonumber(Remotes.State():GetAttribute("Stage"))
+		return n == nil or now == nil or now == n
+	end)
+end
+
 function StageUI.Build(root: Frame, k: { [string]: any })
 	kit = k
+	registerValidators()
 	buildEdges(root)
 	buildArrow(root)
 	buildRing(root)

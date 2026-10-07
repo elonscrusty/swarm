@@ -18,6 +18,7 @@ local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared
 local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Theme"))
 local CameraController = require(script.Parent.CameraController)
 local ClientSettings = require(script.Parent.ClientSettings)
+local Icons = require(script.Parent.Icons)
 
 local MobileControls = {}
 
@@ -41,6 +42,8 @@ local base: Frame
 local knob: Frame
 local uiScale: UIScale? = nil
 local jumpButton: TextButton? = nil
+local jumpLabel: TextLabel? = nil
+local jumpArrow: CanvasGroup? = nil
 local jumpUsable: boolean? = nil
 local relayout: (() -> ())? = nil -- re-applies scale and side (set by buildGui)
 
@@ -72,7 +75,12 @@ function MobileControls.SetJumpButton(show: boolean, usable: boolean)
 	if jumpUsable ~= usable then
 		jumpUsable = usable
 		b.BackgroundTransparency = usable and 0.15 or 0.6
-		b.TextTransparency = usable and 0 or 0.5
+		if jumpLabel then
+			jumpLabel.TextTransparency = usable and 0 or 0.5
+		end
+		if jumpArrow then
+			jumpArrow.GroupTransparency = usable and 0 or 0.5
+		end
 	end
 end
 
@@ -191,13 +199,35 @@ local function buildGui()
 	jump.BackgroundColor3 = P.slate_900
 	jump.BackgroundTransparency = 0.15
 	jump.AutoButtonColor = false
-	jump.Text = "JUMP"
-	jump.TextColor3 = P.ivory_100
-	jump.TextScaled = false
-	jump.TextSize = 20
-	jump.FontFace = Theme.Font.Label
+	jump.Text = ""
 	jump.Visible = false
 	jump.Parent = gui
+	-- an up arrow over the word: reads as "jump" without reading
+	local arrow = Instance.new("CanvasGroup")
+	arrow.Name = "Arrow"
+	arrow.BackgroundTransparency = 1
+	arrow.AnchorPoint = Vector2.new(0.5, 0.5)
+	arrow.Position = UDim2.fromScale(0.5, 0.36)
+	arrow.Size = UDim2.fromOffset(30, 30)
+	arrow.Parent = jump
+	Icons.Draw(arrow, "chevronsUp", { Size = 30, Color = P.gold_300, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5) })
+	jumpArrow = arrow
+	local word = Instance.new("TextLabel")
+	word.Name = "Label"
+	word.BackgroundTransparency = 1
+	word.AnchorPoint = Vector2.new(0.5, 0)
+	word.Position = UDim2.fromScale(0.5, 0.58)
+	word.Size = UDim2.new(0.8, 0, 0, 20)
+	word.Text = "JUMP"
+	word.TextColor3 = P.ivory_100
+	word.TextSize = 17
+	word.FontFace = Theme.Font.Label
+	word:SetAttribute("NoTextFit", true)
+	word.Parent = jump
+	local cap = Instance.new("UITextSizeConstraint") -- the Roblox Text size setting must not push it out
+	cap.MaxTextSize = 17
+	cap.Parent = word
+	jumpLabel = word
 	local jc = Instance.new("UICorner")
 	jc.CornerRadius = UDim.new(1, 0)
 	jc.Parent = jump

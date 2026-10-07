@@ -47,7 +47,6 @@ local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 local CurseData = require(game:GetService("ReplicatedStorage").Shared.CurseData)
-local BossData = require(game:GetService("ReplicatedStorage").Shared.BossData)
 local NextGoal = require(game:GetService("ReplicatedStorage").Shared.NextGoal)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local MapBuilder = require(script.Parent.MapBuilder)
@@ -1016,6 +1015,33 @@ function RunManager.IsFirstRunWelcome(): boolean
 	return #runPlayers == 1 and rp ~= nil and rp.FirstRun == true and not rp.DevTainted
 end
 
+--[[
+	The tutorial run's portal reveal waits (Config.FirstRun.RevealCapSeconds, StageManager):
+	with the first-run flow on (Config.FirstRun.AutoStart, RevealWaitsForPick), true while a Solo run's only player still has the tutorial to finish (save TutorialDone
+	not true, tips not switched off, not DEV-tainted) and has not picked a first level-up
+	card yet (a level banked behind an open or deferred panel does not count). Read live, so
+	SKIP TIPS or switching tips off mid-run ends the wait at once. Co-op: never.
+]]
+function RunManager.TutorialRevealHold(): boolean
+	local cfg = (Config :: any).FirstRun
+	-- the first-run flow's switch (AutoStart; the preview keeps it off unless --set firstrun=on)
+	if not cfg or cfg.AutoStart ~= true or cfg.RevealWaitsForPick == false then
+		return false
+	end
+	local rp = runPlayers[1]
+	if #runPlayers ~= 1 or rp == nil or rp.DevTainted or not rp.Alive then
+		return false
+	end
+	local data = ctx.DataService.GetData(rp.Player)
+	if not data or data.TutorialDone == true then
+		return false
+	end
+	if type(data.Settings) == "table" and data.Settings.Tips == false then
+		return false
+	end
+	return (tonumber(rp.Level) or 1) - (tonumber(rp.PendingLevels) or 0) < 2
+end
+
 local function beginRun(here: boolean?)
 	local runStarter = starter -- whose curses the run uses (Solo / Daily: the only player)
 	local list = {}
@@ -1142,9 +1168,9 @@ local function beginRun(here: boolean?)
 	if ctx.RunModifiers.IsEndless() then
 		RunManager.Broadcast("ENDLESS: no way home, only deeper.", Color3.fromRGB(190, 160, 255), true, { Id = "run.start.endless", Class = "Info" })
 	end
-	-- the real stage-1 boss (rotation, Daily order or a DEV-forced one), never a fixed name
-	local boss = BossData.Bosses[ctx.StageManager.StageBoss()]
-	RunManager.Broadcast("Find the portal and summon the " .. (boss and boss.DisplayName or "boss") .. "!", Color3.fromRGB(180, 200, 255), nil, { Id = "stage.objective" })
+	-- no portal objective notice here: before the reveal the portal can't be found yet (the
+	-- HUD pill says "Survive until the portal opens"); the reveal headline (StageUI, id
+	-- portal.reveal) carries the instruction and the real stage boss's name
 end
 
 -- Who started the countdown (their curses are on show), or nil.

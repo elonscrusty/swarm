@@ -289,6 +289,9 @@ function CameraController.Init()
 		local want = inRun and Config.Camera.RunDistance or Config.Camera.LobbyDistance
 		if portrait then
 			want *= Config.Camera.PortraitDistanceMult
+		elseif inRun and math.min(viewport.X, viewport.Y) < (C.PhoneShortSide or 560) then
+			-- landscape phone: closer, so the hero and enemies are not tiny on a small screen
+			want *= C.PhoneDistanceMult or 1
 		end
 		distance += (want - distance) * math.min(1, dt * 3)
 

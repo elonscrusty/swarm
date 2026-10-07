@@ -19,7 +19,7 @@ end
 if tip == "LevelUp" or tip == "TeamRules" or tip == "Revive" then
 	seen = { Move = true, Attack = true }
 end
-local s = A.build({ enemies = 50, stage = 1, stagePhase = "Explore", lockLeft = 95 })
+local s = A.build({ enemies = 50, stage = 1, stagePhase = "Explore", lockLeft = 0 })
 C.setPlayer({ Kills = 0 })
 -- a first run is young (the arena scene sits at 8:24, past the portal tip time)
 if tip ~= "Portal" then
@@ -58,7 +58,9 @@ if tip == "Gems" then
 	C.settle(0.3)
 	C.setPlayer({ Kills = 3 })
 elseif tip == "Portal" then
-	C.setState({ RunTime = 62 })
+	-- the portal tip follows the reveal (SwarmState PortalHint), not a fixed run time
+	C.setState({ RunTime = 30, PortalLockLeft = 0, PortalHint = true, PortalReveal = 1, StageBoss = "Scorpion Queen" })
+	C.settle(2.2)
 elseif tip == "Boss" then
 	C.setState({ StagePhase = "Boss", BossMaxHP = 9000, BossHP = 9000, BossName = "Scorpion Queen" })
 end
@@ -76,4 +78,9 @@ local Tutorial = C.try("require Tutorial", preview.client, "Tutorial")
 if Tutorial then
 	local els = Tutorial.Elements()
 	preview.log(string.format("tip card visible=%s step=%s title=%s body=%s", tostring(els.Card and els.Card.Visible), tostring(els.Step and els.Step.Text), tostring(els.Title and els.Title.Text), tostring(els.Body and els.Body.Text)))
+end
+local Hud = C.try("require Hud", preview.client, "Hud")
+if Hud then
+	local goal = Hud.Elements().StageGoal
+	preview.log("stage pill: " .. tostring(goal and goal.Text))
 end

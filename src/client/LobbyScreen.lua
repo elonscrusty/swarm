@@ -451,7 +451,9 @@ local function buildNav(screen: Frame)
 			cap.TextStrokeColor3 = C.Shadow
 			cap.TextStrokeTransparency = 0.4
 			cap.TextScaled = true
-			new("UITextSizeConstraint", { MaxTextSize = TS(17), MinTextSize = 9 }, cap)
+			-- readable on phones (owner brief item 8): the box grows (layoutNav) instead of
+			-- the text shrinking, so the floor stays at 12
+			new("UITextSizeConstraint", { MaxTextSize = TS(18), MinTextSize = 12 }, cap)
 		end
 		ArtImage.ButtonIcon(b.Content, item.Art, { Size = UDim2.fromOffset(46, 46), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -TS(Theme.TextSize.Caption) / 2 - 4) }, "Glyph")
 		if item.Dot then
@@ -794,13 +796,26 @@ end
 -- The bottom row: four items itemW wide, their captions and icons sized to the row.
 local function layoutNav(x: number, y: number, itemW: number, navH: number)
 	place(ui.Nav, x, y, itemW * #ui.NavItems, navH)
-	local capH = math.floor(math.clamp(navH * 0.26, 14, 24))
+	-- a tall caption box (~30 % of the row) so the serif caption reads at 12+ px; the whole
+	-- item (icon + caption) is the tap target, itemW x navH
+	local capH = math.floor(math.clamp(navH * 0.3, 20, 30))
+	-- one caption size for the whole row (the longest caption sets it; ~0.57 em a letter in
+	-- the bold serif), so "Characters" does not read smaller than "Shop"
+	local longest = 1
+	for _, item in ipairs(NAV) do
+		longest = math.max(longest, #item.Name)
+	end
+	local rowSize = math.clamp(math.floor(itemW / (longest * 0.57)), 12, TS(18))
 	for i, b in ipairs(ui.NavItems) do
 		place(b.Instance, (i - 1) * itemW, 0, itemW, navH)
 		local cap = b.Content:FindFirstChild("Caption") :: TextLabel?
 		if cap then
-			cap.Size = UDim2.new(1, -4, 0, capH)
+			cap.Size = UDim2.new(1, 0, 0, capH) -- the full item width (separators sit higher)
 			cap.Position = UDim2.new(0.5, 0, 1, -math.floor(navH * 0.06))
+			local fit = cap:FindFirstChildOfClass("UITextSizeConstraint")
+			if fit then
+				fit.MaxTextSize = rowSize
+			end
 		end
 		local iconS = math.floor(math.clamp(navH - capH - 8, 30, 60))
 		for _, ch in ipairs(b.Content:GetChildren()) do
@@ -889,7 +904,7 @@ local function relayout()
 		capW = math.min(w, 360)
 		capH = 34
 		-- bottom row: four items, then MORE and the cog
-		navH = 82
+		navH = 88
 		navY = H - M - navH
 		local side = 2 * (cogS + G)
 		itemW = math.floor((w - side) / 4)
@@ -913,9 +928,9 @@ local function relayout()
 		capH = math.floor(math.clamp(H * 0.05, 28, 50))
 		-- bottom: the row of four centred under the hero, MORE and the cog bottom right
 		local bottomM = math.max(M, math.floor(H * 0.03))
-		navH = math.floor(math.clamp(H * 0.11, 70, 100))
+		navH = math.floor(math.clamp(H * 0.13, 80, 104))
 		navY = H - bottomM - navH
-		itemW = math.floor(math.clamp(W * 0.085, 76, 150))
+		itemW = math.floor(math.clamp(W * 0.092, 94, 150))
 		local cogY = H - bottomM - cogS
 		place(ui.Cog.Instance, W - rightM - cogS, cogY, cogS, cogS)
 		local moreX = W - rightM - 2 * cogS - G

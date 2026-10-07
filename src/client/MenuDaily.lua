@@ -3,7 +3,7 @@
 	The DAILY CHALLENGE screen (lobby DAILY card): today's fixed setup, the same for every
 	player (CurseData.Daily(day), day = SwarmState "DailyDay", UTC), laid out as one
 	dashboard panel:
-	  header    calendar, the date ("OCT 02, 2026"), "UTC • RESETS IN 4H 27M", a status
+	  header    calendar, the date ("OCT 02, 2026"), "NEW TRY IN 4H 27M · 00:00 UTC", a status
 	            pill (READY / USED)
 	  hero      "Your scored attempt is ready" (or your scored result), the rules line, an
 	            info card ("counts as soon as the run starts" / practice wording, best ever)
@@ -118,6 +118,12 @@ function MenuDaily.TimeLeft(): string
 	return string.format("%dm", math.max(1, m))
 end
 
+-- The header line: "NEW TRY IN 5H 12M · 00:00 UTC" (the countdown reads the same in every
+-- time zone; the UTC reset stays as a small note).
+function MenuDaily.ResetLine(): string
+	return UIKit.track("New try in " .. MenuDaily.TimeLeft()) .. "  ·  00:00 UTC"
+end
+
 -- "2026-10-02" -> "OCT 02, 2026".
 function MenuDaily.LongDate(iso: string): string
 	local y, m, d = string.match(iso, "^(%d+)-(%d+)-(%d+)$")
@@ -227,7 +233,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		Title = "PLAY DAILY",
 		TitleStyle = "Label",
 		TitleSize = 18,
-		Subtitle = "Scored attempt",
+		Subtitle = "Scored attempt · your 1 try today",
 		Icon = "play",
 		IconSize = 26,
 		Align = "Center",
@@ -331,7 +337,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local day = MenuDaily.Today()
 		local d = CurseData.Daily(day)
 		ui.Date.Text = MenuDaily.LongDate(d.Date)
-		ui.Reset.Text = UIKit.track("New challenge in " .. MenuDaily.TimeLeft())
+		ui.Reset.Text = MenuDaily.ResetLine()
 		local used, score, best, bestDay = MenuDaily.Status(p)
 		local key = tostring(day) .. ":" .. tostring(score)
 		if key ~= resultKey then resultKey = key; askRank() end
@@ -342,16 +348,18 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			UIKit.SetStatus(ui.Pill, "PRACTICE")
 			ui.Heading.Text = "Practice today's challenge"
 			ui.InfoText.Text = (score > 0 and ("Scored result: " .. CurseData.ScoreText(score) .. ". ") or "Today's scored attempt is used. ")
-				.. "Practice cannot replace your scored result. New scored try at 00:00 UTC." .. bestLine
+				.. "Practice runs never change your scored result. New scored try in " .. MenuDaily.TimeLeft() .. " (00:00 UTC)." .. bestLine
 				.. (rankLine and ("\n" .. rankLine) or "")
 		else
 			UIKit.SetStatus(ui.Pill, "READY")
 			ui.Heading.Text = "Your scored attempt is ready"
-			ui.InfoText.Text = "One scored try today. Used when the run starts, even if you lose or leave. New try at 00:00 UTC." .. bestLine
+			ui.InfoText.Text = "One scored try today. It is used once the run starts, even if you lose or leave. "
+				.. "If the run never starts (for example, the trip to the run server fails), you keep it. New try in "
+				.. MenuDaily.TimeLeft() .. " (00:00 UTC)." .. bestLine
 		end
 		ui.Sub.Text = string.format("1. Play solo on today's shared route.\n2. Clear %d stages; more clears rank higher.\n3. Ties: faster last boss kill wins. No clears? Longer survival wins.", Config.Stages.WinMinStages)
 		ui.Play.SetKind(used and "Secondary" or "Primary")
-		ui.Play.SetText(used and "PRACTICE RUN" or "PLAY DAILY", used and "No leaderboard score" or "Scored attempt")
+		ui.Play.SetText(used and "PRACTICE RUN" or "PLAY DAILY", used and "No leaderboard score" or "Scored attempt · your 1 try today")
 		if shownDay ~= day then
 			shownDay = day
 			buildDay(d)
@@ -556,7 +564,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 					if os.clock() - askedAt >= 30 then askRank(); fill() end
 					local _, score = MenuDaily.Status(ctx.Profile())
 					if displayedRank and not MenuDaily.RankText(rankData, MenuDaily.Today(), score, os.clock() - rankReceivedAt) then fill() end
-					ui.Reset.Text = UIKit.track("New challenge in " .. MenuDaily.TimeLeft())
+					ui.Reset.Text = MenuDaily.ResetLine()
 					if MenuDaily.Today() ~= shownDay then
 						fill()
 					end

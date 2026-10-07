@@ -46,3 +46,11 @@ if preview.args.build ~= "off" and not early then
 	Hud.SetBuildOpen(true)
 	C.settle(0.6)
 end
+-- --set ult=0.4 shows the ultimate button charging (40%), --set ult=ready ready (gold, pulse,
+-- the first-ready callout); --set ulthero=Mage another hero's move
+local ult = preview.args.ult
+if ult then
+	local charge = ult == "ready" and 1 or (tonumber(ult) or 0)
+	C.setPlayer({ UltHero = preview.args.ulthero or "Knight", UltCharge = charge })
+	C.settle(1)
+end

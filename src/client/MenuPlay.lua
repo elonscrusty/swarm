@@ -22,6 +22,15 @@
 
 	The picked mode lives here (MenuPlay.Mode) so the home screen's line under PLAY shows
 	the same thing. It defaults to SOLO; joining a party picks the party's size.
+
+	New accounts (owner brief item 9; MenuPlay.IsSimple: fewer than SIMPLE_RUNS (3)
+	saved runs, profile.Stats.Runs, and not in a party) get a simpler setup:
+	  a summary card   HERO · KNIGHT (opens CHARACTERS) and WORLD · FOREST (opens ARENAS)
+	  START SOLO       one big primary action ("QuickStart"; same start as START)
+	  ADVANCED OPTIONS collapsed by default; opens mode (SOLO / DUO / TRIO), the rule line,
+	                   difficulty, curses, endless, daily, sigils, weekly and LAST RUN (the
+	                   same controls as the full screen, moved into one scroll column)
+	Anyone in a party (leader or member) always gets the full screen with READY.
 ]]
 
 local Players = game:GetService("Players")
@@ -57,6 +66,8 @@ local MODES = {
 
 local mode = Config.Modes.Order[1] or "Solo"
 local listeners: { () -> () } = {}
+local SIMPLE_RUNS = 3 -- saved runs before the full run setup shows by default
+local advancedOpen = false -- the simple setup's ADVANCED OPTIONS (kept for the session)
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -75,6 +86,17 @@ function MenuPlay.SetMode(id: string)
 	for _, fn in ipairs(listeners) do
 		fn()
 	end
+end
+
+-- True when this profile gets the simple run setup: a new account (fewer than SIMPLE_RUNS
+-- runs saved) that is not in a party (party play keeps the full screen with READY).
+function MenuPlay.IsSimple(profile: { [string]: any }?): boolean
+	local stats = profile and profile.Stats
+	local runs = type(stats) == "table" and tonumber(stats.Runs) or nil
+	if runs == nil or runs >= SIMPLE_RUNS then
+		return false
+	end
+	return MenuParty.Summary().Count == 0
 end
 
 -- Called whenever the picked mode changes.
@@ -144,7 +166,7 @@ local function arenaText(profile: { [string]: any }?): (string, string)
 		end
 	end
 	if nextDef then
-		return title, string.format("Current · next: %s at best stage %d", nextDef.DisplayName, nextNeed)
+		return title, string.format("Next world: %s (reach stage %d)", nextDef.DisplayName, nextNeed)
 	end
 	return title, (arena and arena.Hint) or "Face the swarm"
 end
@@ -301,6 +323,24 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	end)
 	ui.Weekly.Instance.Visible = Config.FeatureOn("WeeklyChallenge")
 	ui.LastRun = MenuLastRun.Build(opts, ctx)
+	local function onStart()
+		local party = MenuParty.Summary()
+		if party.Count > 0 and not party.Leader then
+			-- a member's START is READY (the leader's start waits for everyone)
+			MenuParty.SetReady(not party.MyReady)
+			return
+		end
+		if MenuPlay.Start(toast) then
+			-- a group countdown shows on the home screen; a solo run hides the lobby
+			ctx.Back()
+		end
+	end
+	local simple = false
+	local function showAdvanced()
+		ui.Advanced.SetText(advancedOpen and "HIDE ADVANCED OPTIONS" or "ADVANCED OPTIONS", advancedOpen and "Back to the quick start" or "Mode, difficulty, curses, endless, daily")
+		ui.Advanced.SetSelected(advancedOpen)
+		opts.Visible = not simple or advancedOpen
+	end
 	ui.Start = UIKit.Button(face, {
 		Kind = "Primary",
 		Glow = true,
@@ -312,19 +352,55 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		Align = "Center",
 		Name = "Start",
 		OnClick = function()
-			local party = MenuParty.Summary()
-			if party.Count > 0 and not party.Leader then
-				-- a member's START is READY (the leader's start waits for everyone)
-				MenuParty.SetReady(not party.MyReady)
-				return
-			end
-			if MenuPlay.Start(toast) then
-				-- a group countdown shows on the home screen; a solo run hides the lobby
-				ctx.Back()
-			end
+			onStart()
 		end,
 	})
 	ArtImage.ButtonIcon(ui.Start.Content:FindFirstChild("IconHolder"), "icons/ui/ui_Play", { Size = UDim2.fromScale(1.6, 1.6) })
+
+	-- the simple setup (new accounts, MenuPlay.IsSimple): a summary card holding the HERO and
+	-- WORLD rows, one big START with a line under it, and ADVANCED OPTIONS (collapsed)
+	ui.Summary = UIKit.new("Frame", { Name = "Summary", BackgroundTransparency = 1 }, face)
+	ui.QuickStart = UIKit.Button(face, {
+		Kind = "Primary",
+		Glow = true,
+		Title = "START SOLO",
+		Subtitle = "Just you · the run begins at once",
+		Icon = "play",
+		IconSize = 34,
+		TitleStyle = "H1",
+		TitleSize = 32,
+		Align = "Center",
+		Shrink = true,
+		Name = "QuickStart",
+		OnClick = function()
+			onStart()
+		end,
+	})
+	ArtImage.ButtonIcon(ui.QuickStart.Content:FindFirstChild("IconHolder"), "icons/ui/ui_Play", { Size = UDim2.fromScale(1.6, 1.6) })
+	ui.Advanced = UIKit.Button(face, {
+		Kind = "Secondary",
+		Title = "ADVANCED OPTIONS",
+		Subtitle = "Mode, difficulty, curses, endless, daily",
+		Icon = "sparkle",
+		IconSize = 24,
+		TitleStyle = "Label",
+		TitleSize = 16,
+		Chevron = true,
+		Align = "Left",
+		Shrink = true,
+		Name = "Advanced",
+		OnClick = function()
+			advancedOpen = not advancedOpen
+			showAdvanced()
+			MenuPlay._layout()
+			if advancedOpen then
+				UIAnim.Pop(opts, 0, 0.92)
+			end
+		end,
+	})
+	ui.Summary.Visible = false
+	ui.QuickStart.Instance.Visible = false
+	ui.Advanced.Instance.Visible = false
 
 	local function showMode()
 		local party = MenuParty.Summary()
@@ -344,16 +420,21 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			startText = party.MyReady and "UNREADY" or "READY"
 		end
 		ui.Start.SetText(startText)
+		ui.QuickStart.SetText(startText, mode == (Config.Modes.Order[1] or "Solo") and "Just you · the run begins at once"
+			or "Opens a countdown that players here can JOIN")
 		ui.Rule.Text = MenuPlay.RuleLine()
 	end
 	MenuPlay.OnModeChanged(showMode)
 	showMode()
 
 	local optionList = { ui.Hero.Instance, ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.Sigils.Instance, ui.EndlessRow, ui.Daily.Instance, ui.Weekly.Instance }
-	local function layoutOptions(colW: number, rowH: number, endlessH: number, lastH: number): number
+	local function layoutOptions(colW: number, rowH: number, endlessH: number, lastH: number, y0: number?): number
 		local G = Theme.Layout.Gutter
-		local y = 0
+		local y = y0 or 0
 		for _, b in ipairs(optionList) do
+			if simple and (b == ui.Hero.Instance or b == ui.Arena.Instance) then
+				continue -- on the summary card
+			end
 			if b.Visible or (b ~= ui.EndlessRow and b ~= ui.Sigils.Instance and b ~= ui.Weekly.Instance) then
 				local h = b == ui.EndlessRow and endlessH or rowH
 				place(b, 0, y, colW - 6, h)
@@ -369,6 +450,88 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		return math.max(0, y - G)
 	end
 
+	-- Moves the controls between the full screen and the simple setup (same buttons).
+	local function applySimple(on: boolean)
+		simple = on
+		screen:SetAttribute("Simple", on)
+		ui.Hero.Instance.Parent = on and ui.Summary or opts
+		ui.Arena.Instance.Parent = on and ui.Summary or opts
+		for _, b in ipairs(ui.Modes) do
+			b.Instance.Parent = on and opts or face
+		end
+		ui.Rule.Parent = on and opts or face
+		ui.Start.Instance.Visible = not on
+		ui.Summary.Visible = on
+		ui.QuickStart.Instance.Visible = on
+		ui.Advanced.Instance.Visible = on
+		showAdvanced()
+	end
+
+	-- The simple setup's ADVANCED column: the modes (a row of three when they fit), the
+	-- rule line, then the usual option rows.
+	local function layoutAdvanced(colW: number)
+		local G = Theme.Layout.Gutter
+		local w = colW - 6
+		local y = 0
+		local per = math.floor((w - 2 * G) / 3)
+		if per >= 190 then
+			for i, b in ipairs(ui.Modes) do
+				place(b.Instance, (i - 1) * (per + G), 0, per, 64)
+			end
+			y = 64 + G
+		else
+			for _, b in ipairs(ui.Modes) do
+				place(b.Instance, 0, y, w, 56)
+				y += 56 + G
+			end
+		end
+		place(ui.Rule, 0, y, w, 40)
+		y += 40 + G
+		layoutOptions(colW, 56, 64, ui.LastRun.Has() and 76 or 0, y)
+	end
+
+	local function layoutSimple(W: number, H: number, top: number, M: number, portrait: boolean)
+		local G = Theme.Layout.Gutter
+		local pad = 16
+		local rowH, advH = 58, 56
+		local availH = H - top - M
+		-- the left (portrait: only) column: HERO, WORLD, START, ADVANCED OPTIONS
+		local function column(x: number, colW: number, startH: number)
+			local y = pad
+			place(ui.Summary, x, y, colW, 2 * rowH + G)
+			place(ui.Hero.Instance, 0, 0, colW, rowH)
+			place(ui.Arena.Instance, 0, rowH + G, colW, rowH)
+			y += 2 * rowH + 2 * G
+			place(ui.QuickStart.Instance, x, y, colW, startH)
+			y += startH + G
+			place(ui.Advanced.Instance, x, y, colW, advH)
+			return y + advH + G
+		end
+		if portrait then
+			local w = math.min(W - 2 * M, 560)
+			local inner = w - 2 * pad
+			local startH = 96
+			local need = 2 * pad + 2 * rowH + 4 * G + startH + advH
+			local h = advancedOpen and availH or math.min(availH, need)
+			place(ui.Panel, (W - w) / 2, top, w, h)
+			local y = column(pad, inner, startH)
+			place(opts, pad, y, inner + 6, math.max(0, h - pad - y))
+			layoutAdvanced(inner + 6)
+		else
+			local maxH = math.min(availH, 520)
+			local w = advancedOpen and math.min(W - 2 * M, 1000) or math.min(W - 2 * M, 600)
+			local colW = advancedOpen and math.floor((w - 2 * pad - 2 * G) / 2) or (w - 2 * pad)
+			local fixed = 2 * pad + 2 * rowH + 3 * G + advH
+			local startH = math.clamp(maxH - fixed, 64, advancedOpen and 150 or 104)
+			local h = advancedOpen and maxH or math.min(maxH, fixed + startH)
+			place(ui.Panel, (W - w) / 2, top, w, h)
+			column(pad, colW, startH)
+			place(opts, pad + colW + 2 * G, pad, colW + 6, h - 2 * pad)
+			layoutAdvanced(colW + 6)
+		end
+		ui.LastRun.Frame.Visible = ui.LastRun.Has()
+	end
+
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
 		local W, H = v.X, v.Y
 		local compact = UIKit.IsCompact()
@@ -377,6 +540,10 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local headY = math.max(ins.Top + 4, 12)
 		place(ui.Header.Frame, M, headY, math.min(520, W - 2 * M), 56)
 		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		if simple then
+			layoutSimple(W, H, top, M, portrait)
+			return
+		end
 		local hasLast = ui.LastRun.Has()
 		local pad = 16
 		local endlessH = 64
@@ -430,6 +597,11 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	local function refresh()
 		local profile = ctx.Profile()
 		local had = ui.LastRun.Has()
+		local wantSimple = MenuPlay.IsSimple(profile)
+		local modeChanged = wantSimple ~= simple
+		if modeChanged then
+			applySimple(wantSimple)
+		end
 		ui.LastRun.Refresh(profile)
 		-- the hero and skin PLAY will use (CHARACTERS changes them)
 		local heroId = profile and profile.SelectedCharacter or CharacterData.Default
@@ -446,12 +618,14 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			if DifficultyData.IsUnlocked(profile, id) then
 				unlocked += 1
 			elseif not nextLocked then
+				-- the lock and what opens it, beside the option (the tap toast says the same)
 				local t = DifficultyData.Tiers[id]
 				local needs = DifficultyData.Tiers[t.Requires]
-				nextLocked = string.format("%s locked: clear %s first", t.Name, needs and needs.Name or "Standard")
+				nextLocked = string.format("%s locked: clear all %d %s stages", t.Name, Config.Stages.WinMinStages, needs and needs.Name or "Standard")
 			end
 		end
-		ui.Difficulty.SetText("DIFFICULTY · " .. string.upper(tier and tier.Name or "Standard"), unlocked > 1 and "Tap to change" or (nextLocked or "Tap to change"))
+		local diffSub = unlocked > 1 and ("Tap to change" .. (nextLocked and (" · " .. nextLocked) or "")) or (nextLocked or "Tap to change")
+		ui.Difficulty.SetText("DIFFICULTY · " .. string.upper(tier and tier.Name or "Standard"), diffSub)
 		local curses = MenuCurses.Current()
 		ui.Curses.SetText(#curses > 0 and string.format("CURSES · %d", #curses) or "CURSES", curseLine(curses, "Harder runs, more gold"))
 		ui.Curses.SetSelected(#curses > 0)
@@ -466,7 +640,7 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			ui.Weekly.SetText(nil, MenuWeekly.Summary(profile))
 		end
 		showMode()
-		if had ~= ui.LastRun.Has() then
+		if modeChanged or had ~= ui.LastRun.Has() then
 			MenuPlay._layout()
 		end
 	end
@@ -482,9 +656,9 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			for i, b in ipairs(ui.Modes) do
 				UIAnim.Pop(b.Instance, 0.03 * i, 0.85)
 			end
-			UIAnim.Pop(ui.Start.Instance, 0.12, 0.85)
+			UIAnim.Pop(simple and ui.QuickStart.Instance or ui.Start.Instance, 0.12, 0.85)
 			MenuPlay._layout()
-			UIKit.FocusIfGamepad(ui.Start.Instance)
+			UIKit.FocusIfGamepad(simple and ui.QuickStart.Instance or ui.Start.Instance)
 		end,
 		Update = function(_dt: number)
 			-- the ENDLESS switch follows the server's answer (after a short wait for our tap)
