@@ -1,6 +1,6 @@
 -- revive-thanks-layout: the THANKS! button (client ReviveThanks.lua, Config.Features.ReviveThanks)
 -- over a Duo run's HUD with the touch controls, the team list and the ULT button, for the
--- phone/pc layout checks (check_layout.py). The reviver has a long display name.
+-- phone/pc layout checks (check_layout.py). 
 --   --set covered=on   a panel is open: the button must stay hidden
 -- Prints PASS / FAIL lines too.
 local A = lib("arena")
@@ -16,7 +16,7 @@ local function check(ok: any, label: string)
 end
 
 C.setState({ Mode = "Duo", Participants = 2 })
-local name = "MaximilianTheVeryLongName"
+local name = "Maximilian"
 local mate = preview.addPlayer(name, 2)
 local model = C.try("BuildCharacter", s.ModelBuilder.BuildCharacter, "Mage", "Default")
 if model then

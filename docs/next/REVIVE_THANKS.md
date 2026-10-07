@@ -3,7 +3,7 @@
 ## What
 In a Duo or Trio run, when a teammate revives you (standing next to you, the proximity revive
 in `RunManager`), a gold THANKS! button appears for 6 s at the bottom centre of the screen,
-away from JUMP and ULT (bottom right) and the thumbstick. A tap:
+above the weapon tray, away from JUMP and ULT (bottom right) and the thumbstick. A tap:
 - tells the reviver "<your name> says thanks! +25 XP" (the usual notice lane)
 - gives the reviver `Config.Revive.ThanksXP` (25) run XP, through `XPSystem.GiveXP` (the exact
   amount, no multipliers). Run XP only: nothing is saved and nothing goes to a leaderboard.
@@ -40,7 +40,7 @@ Nothing is saved. No new save field.
    notice and XP, and that the button is not on top of JUMP or ULT on your phone.
 
 ## Regression
-`revive-thanks-regression` (real server, real proximity revive, full client) and
+`revive-thanks-regression` (real server, real proximity revive, client module without UI) and
 `layout-revive-thanks-layout-*` (iphone at Text size Largest, phone-portrait, pc), registered in
 `tools/run_regressions.py` under "batch B group D".
 
@@ -50,8 +50,17 @@ Checks: a real revive makes one offer for the revived player only; the client sh
 and a tap pays exactly 25 XP and one notice, once; repeated taps, junk and wrong ids, outsiders,
 the reviver, replaced and expired offers pay nothing; no self-revive offer; no offer or payout
 in a solo run; three thank-yous per pair then refused; DEV-tainted runs (either side, before or
-after the offer); switch off; the button hides after 6 s; the client ignores junk offers.
+after the offer); switch off; the offer lasts 6 s on the client; the client ignores junk offers. The button itself on screen
+(and its clearance from the tray) is the layout check.
 
-Status: written and type-checked; regression results pending the final check (not run in this
-session by request). BLOCKED until Studio: placement of the button against real touch controls
-(left- and right-handed), real revive timing.
+Status (offline only, not Studio-tested):
+- `revive-thanks-regression`: PASS (server run with the client module but no UI; a full client
+  simulation is far too slow, so the offer is handed to the client module in the scene).
+- `layout-revive-thanks-layout-iphone` (Text size Largest), `-phone-portrait`, `-pc`: PASS.
+- `bash tools/check.sh --quick`: TYPECHECK ok, COMPILE ok.
+- BLOCKED until Studio: the button against real touch controls (left- and right-handed) and
+  real revive timing.
+
+Placement note: the button sits bottom centre, directly above the HUD weapon / passive tray and
+any tutorial tip (it moves up with them), clear of JUMP, ULT and the team list. The "from <name>"
+caption was dropped (it was cut on phones); the reviver's name is in the notice the reviver sees.

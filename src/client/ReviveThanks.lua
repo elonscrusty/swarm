@@ -19,7 +19,6 @@ local RunService = game:GetService("RunService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
-local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local UIState = require(script.Parent.UIState)
@@ -28,14 +27,14 @@ local FeatureHud = require(script.Parent.FeatureHud)
 local ReviveThanks = {}
 
 local player = Players.LocalPlayer
-local P = Theme.Palette
 
 local WIDTH, HEIGHT = 168, 52
 
 local offer: { Id: number, Until: number, From: string }? = nil
 local screen: ScreenGui? = nil
 local holder: Frame? = nil
-local caption: TextLabel? = nil
+local root: Frame? = nil
+local nextPlace = 0
 local started = false
 
 local function cfg(): { [string]: any }
@@ -80,9 +79,6 @@ function ReviveThanks.Receive(d: any): boolean
 	seconds = math.min(seconds, cfg().ThanksSeconds)
 	local from = type(d.FromName) == "string" and string.sub(d.FromName, 1, 40) or ""
 	offer = { Id = id, Until = os.clock() + seconds, From = from }
-	if caption then
-		caption.Text = from ~= "" and ("from " .. from) or ""
-	end
 	if holder then
 		UIAnim.Pop(holder, 0, 0.5)
 	end
@@ -101,6 +97,39 @@ function ReviveThanks.Tap(): boolean
 	return true
 end
 
+-- Bottom centre, just above whatever sits low in the middle: the HUD's weapon / passive tray
+-- (AbilityBar) and a tutorial tip (TipBubble / TipCard). Where nothing is there (portrait)
+-- it sits a little above the edge.
+local OBSTACLES = { "AbilityBar", "TipBubble", "TipCard" }
+local function place()
+	local r, h = root, holder
+	if not r or not h then
+		return
+	end
+	local size = r.AbsoluteSize
+	if size.X <= 1 then
+		return
+	end
+	local origin = r.AbsolutePosition
+	local cx = origin.X + size.X / 2
+	local y = size.Y - 28
+	local pg = player:FindFirstChild("PlayerGui")
+	local main = pg and pg:FindFirstChild("SwarmUI")
+	if main then
+		for _, name in ipairs(OBSTACLES) do
+			local g = main:FindFirstChild(name, true)
+			if g and g:IsA("GuiObject") and g.Visible and g.AbsoluteSize.X > 1 then
+				local p, sz = g.AbsolutePosition, g.AbsoluteSize
+				-- only what is in the lower half and under the button's column
+				if p.Y > origin.Y + size.Y * 0.4 and p.X < cx + WIDTH / 2 and p.X + sz.X > cx - WIDTH / 2 then
+					y = math.min(y, p.Y - origin.Y - 8)
+				end
+			end
+		end
+	end
+	h.Position = UDim2.fromOffset(math.floor(size.X / 2 + 0.5), math.max(HEIGHT, math.floor(y + 0.5)))
+end
+
 local function step()
 	local o = offer
 	if o == nil then
@@ -115,6 +144,11 @@ local function step()
 	local show = FeatureHud.Visible() and not covered and player:GetAttribute("Paused") ~= true
 	if holder and holder.Visible ~= show then
 		holder.Visible = show
+		nextPlace = 0
+	end
+	if show and os.clock() >= nextPlace then
+		nextPlace = os.clock() + 0.5
+		place()
 	end
 	if screen and screen.Enabled ~= show then
 		screen.Enabled = show
@@ -131,14 +165,16 @@ function ReviveThanks.Init()
 	screen = gui
 	-- bottom centre, a little above the edge: JUMP / ULT are on the right (or left when
 	-- left-handed), the stick is a left thumb zone, the HUD panels are at the top
+	local r = UIKit.new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, gui) :: Frame
+	root = r
 	local h = UIKit.new("Frame", {
 		Name = "Holder",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -28),
-		Size = UDim2.fromOffset(WIDTH, HEIGHT + 18),
+		Size = UDim2.fromOffset(WIDTH, HEIGHT),
 		Visible = false,
-	}, gui) :: Frame
+	}, r) :: Frame
 	holder = h
 	UIKit.Button(h, {
 		Kind = "Primary",
@@ -155,7 +191,6 @@ function ReviveThanks.Init()
 			ReviveThanks.Tap()
 		end,
 	})
-	caption = UIKit.text(h, "Small", "", { Name = "From", Position = UDim2.fromOffset(0, HEIGHT + 2), Size = UDim2.new(1, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100, TextStrokeTransparency = 0.5 }, 12) :: TextLabel
 	Remotes.Get("ReviveThanksOffer").OnClientEvent:Connect(function(d)
 		ReviveThanks.Receive(d)
 	end)

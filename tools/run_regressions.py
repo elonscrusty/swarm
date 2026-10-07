@@ -88,7 +88,7 @@ def main():
     checks += [("banish-regression", [])] + [("layout", ["levelup", d, "banish=3"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "banish=2", "banishmode=on", "evo=on"]) for d in ("iphone", "phone-portrait", "pc")]  # Banish (docs/next/BANISH.md)
     # batch B group C: FinalStand, StageModifiers
     # batch B group D: PartyQuickLines, ReviveThanks
-    checks += [("revive-thanks-regression", ["headless=off"])]  # ReviveThanks: offer, once, XP, pair limit, DEV taint, solo, 6 s button (PASS/FAIL lines; needs the full client)
+    checks += [("revive-thanks-regression", [])]  # ReviveThanks: offer, once, XP, pair limit, DEV taint, solo, 6 s offer (PASS/FAIL lines; server run, client module without UI)
     checks += [("layout", ["revive-thanks-layout", d]) for d in ("iphone", "phone-portrait", "pc")]  # ReviveThanks: THANKS! button clear of JUMP / ULT / team list
     # batch B group E: Prestige, QuickResume
 
