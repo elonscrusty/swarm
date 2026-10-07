@@ -164,20 +164,25 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		return f
 	end
 
-	-- icon tile + name + one or two lines of description
+	-- icon tile + name + one or two lines of description; a state badge (OWNED / WORN) sits
+	-- under the name and the description below it, so long names keep the full width
 	local function cardTop(f: Frame, tile: () -> (), name: string, desc: string, badge: string?)
 		tile()
 		local title = string.upper(name)
-		local room = (ui.CellW or 260) - 24 - 64 - (badge and 64 or 0)
+		local room = (ui.CellW or 260) - 24 - 64
 		local size = 18
 		while size > 13 and #title * TS(size) * 0.7 > room do
 			size -= 1
 		end
-		text(f, "H2", title, { Name = "Name", Position = UDim2.fromOffset(64, 0), Size = UDim2.new(1, -64 - (badge and 64 or 0), 0, TS(18) + 6), TextTruncate = Enum.TextTruncate.AtEnd }, size)
-		text(f, "Small", desc, { Name = "Desc", Position = UDim2.fromOffset(64, TS(18) + 8), Size = UDim2.new(1, -64, 0, TS(13) * 3 + 4), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+		text(f, "H2", title, { Name = "Name", Position = UDim2.fromOffset(64, 0), Size = UDim2.new(1, -64, 0, TS(18) + 6), TextTruncate = Enum.TextTruncate.AtEnd }, size)
+		local descY = TS(18) + 8
+		local lines = 3
 		if badge then
-			UIKit.Badge(f, badge, badge == "WORN" and "Gold" or "Moss", { Name = "State", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 2) })
+			UIKit.Badge(f, badge, badge == "WORN" and "Gold" or "Moss", { Name = "State", Position = UDim2.fromOffset(64, descY) })
+			descY += Theme.Size.Badge + 4
+			lines = 2
 		end
+		text(f, "Small", desc, { Name = "Desc", Position = UDim2.fromOffset(64, descY), Size = UDim2.new(1, -64, 0, TS(13) * lines + 4), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
 	end
 
 	local function swatch(f: Frame, icon: string, color: Color3?)
@@ -526,7 +531,9 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		if not portrait then
 			top = math.max(top, 76)
 		end
-		local w = math.min(W - 2 * M - ins.Left - ins.Right, 980)
+		-- ins is the top-bar strip (Roblox's buttons), which only the header row has to avoid:
+		-- the panel sits below it and takes the full width (portrait phones lost half of it)
+		local w = math.min(W - 2 * M, 980)
 		ui.Panel.Position = UDim2.fromOffset((W - w) / 2, top)
 		ui.Panel.Size = UDim2.fromOffset(w, H - top - M)
 		ui.PanelMaxH = H - top - M

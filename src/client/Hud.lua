@@ -443,11 +443,21 @@ local relayout: () -> () = function() end
 local function buildBar(frame: Frame)
 	local holder = new("Frame", { Name = "AbilityBar", BackgroundTransparency = 1, Active = false }, frame)
 	ui.Bar = holder
+	-- phones: the panel is scaled to about half size, where the words came out a few points
+	-- tall (cut or unreadable at large Roblox text sizes), so a narrower column shows a sword
+	-- and a shield instead and the tiles get the room
+	local iconLabels = UIKit.IsCompact()
+	INV.Label = iconLabels and 46 or 84
 	local w, h = invSize()
 	local body, face = goldSurface(holder, "Body", Theme.Radius.L, UDim2.fromOffset(w, h))
 	ui.BarBody = body
 	ui.BarFit = new("UIScale", { Name = "Fit", Scale = 1 }, body)
-	local function rowLabel(str: string, y: number)
+	local function rowLabel(str: string, y: number, icon: string)
+		if iconLabels then
+			local slot = new("Frame", { Name = str, BackgroundTransparency = 1, Position = UDim2.fromOffset(INV.Pad, y), Size = UDim2.fromOffset(INV.Label - 6, INV.Tile) }, face)
+			Icons.Draw(slot, icon, { Size = 40, Color = P.gold_200, Back = P.slate_900, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+			return
+		end
 		-- the word gets the label column only (the first tile starts right after it) and
 		-- shrinks to fit: on a phone with large text "WEAPONS" ran under the first tile
 		local l = role(face, "Label", str, {
@@ -459,8 +469,8 @@ local function buildBar(frame: Frame)
 		fitText(l, 9)
 	end
 	local y2 = INV.Pad + INV.Tile + INV.RowGap
-	rowLabel("WEAPONS", INV.Pad)
-	rowLabel("PASSIVES", y2)
+	rowLabel("WEAPONS", INV.Pad, "sword")
+	rowLabel("PASSIVES", y2, "shield")
 	ui.BarRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, Position = UDim2.fromOffset(INV.Pad, INV.Pad + INV.Tile + INV.RowGap / 2), Size = UDim2.new(1, -(2 * INV.Pad + INV.Build), 0, 1) }, face)
 	ui.WeaponRow = new("Frame", { Name = "Weapons", BackgroundTransparency = 1, Active = false, Position = UDim2.fromOffset(INV.Pad + INV.Label, INV.Pad), Size = UDim2.new(1, -(2 * INV.Pad + INV.Label + INV.Build), 0, INV.Tile) }, face)
 	UIKit.list(ui.WeaponRow, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, INV.Gap) })

@@ -287,7 +287,7 @@ STATS screen.
 | `stat_BestTime` | Best time [Best] | STATS | rbxassetid://121618866572998 | working (image) |
 | `portal` | Best stage [Stage] | STATS | rbxassetid://126782693482750 | working (image) |
 | `crown` | Best score [Score] | STATS | rbxassetid://111893393943562 | working (image) |
-| `chevronsUp` | Highest run level [Level] | STATS | rbxassetid://78081015628207 | working (image) |
+| `chevronsUp` | Best level [Level] | STATS | rbxassetid://78081015628207 | working (image) |
 | `stat_Wins` | Wins [Wins] | STATS | rbxassetid://99714951476710 | working (image) |
 | `stat_Runs` | Runs played [Runs] | STATS | rbxassetid://73659202222948 | working (image) |
 | `stat_WinRate` | Win rate [Rate] | STATS | rbxassetid://94897019228978 | working (image) |
@@ -355,7 +355,7 @@ Every icon name written in src (screens that use it).
 | `check` | check | BugReportUI, LobbyScreen, MenuCharacters, MenuCurses, MenuHeroPower, MenuParty, MenuStore, MenuUpgrades, UIBuilder | rbxassetid://83669026873947 | working (image) |
 | `chest` | chest | AchievementData, LobbyScreen, MenuMore | rbxassetid://102564255284031 | working (image) |
 | `chevronLeft` | chevronLeft | DevInbox, LobbyFun, LootUI, UIKit | drawn: DRAW.chevronLeft | working (drawn) |
-| `chevronRight` | chevronRight | DevInbox, MenuDaily, MenuStore | drawn: DRAW.chevronRight | working (drawn) |
+| `chevronRight` | chevronRight | DevInbox, MenuDaily, MenuStore, UIKit | drawn: DRAW.chevronRight | working (drawn) |
 | `chevronsUp` | chevronsUp | Hud, MenuCharacters, MenuLeaderboards, MenuStats, MenuUpgrades, NextGoal, UIBuilder | rbxassetid://78081015628207 | working (image) |
 | `clock` | clock | MenuLeaderboards, MenuPlaytime | rbxassetid://75400395089147 | working (image) |
 | `close` | close | BugReportUI, DevInbox, DevPanel, Hud, MenuCurses, MenuParty, UIBuilder, WeaponMastery | rbxassetid://70434531884861 | working (image) |
@@ -415,7 +415,7 @@ Every icon name written in src (screens that use it).
 | `stat_WinRate` | stat_WinRate | MenuStats | rbxassetid://94897019228978 | working (image) |
 | `stat_Wins` | stat_Wins | MenuStats | rbxassetid://99714951476710 | working (image) |
 | `sword` | sword | MenuMore | drawn: DRAW.sword | working (drawn) |
-| `trophy` | trophy | MenuLeaderboards, MenuMore, StoreCatalog | rbxassetid://93769712875963 | working (image) |
+| `trophy` | trophy | HomeBoard, MenuLeaderboards, MenuMore, StoreCatalog | rbxassetid://93769712875963 | working (image) |
 | `userPlus` | userPlus | LobbyScreen, MenuParty | rbxassetid://120028255241411 | working (image) |
 | `warning` | warning | MenuMore, MenuWeekly, UIBuilder | rbxassetid://102963920348478 | working (image) |
 

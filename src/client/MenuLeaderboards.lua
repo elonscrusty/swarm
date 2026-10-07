@@ -358,12 +358,16 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		local narrow = iw < 660
 		local short = maxH < 470 -- phones in landscape: drop the explanation line
 		local tabsH = Theme.Size.TapMin + 4
-		ui.Tabs.Frame.Position = UDim2.new()
-		ui.Tabs.Frame.Size = UDim2.new(1, 0, 0, tabsH)
-		local y = tabsH + (short and 8 or 14)
 		-- very short screens (phones in landscape) also drop the heading: the tabs and the
 		-- switch say which board this is, and YOUR BEST must stay inside the panel
 		local tight = maxH < 420
+		local scoreTab = boardOf(board).Id == "Score" or boardOf(board).Tab == "Score"
+		-- on those the STANDARD / ENDLESS switch shares the tab row, so more rows fit
+		local inline = tight and scoreTab
+		local inlineW = math.min(280, math.floor(iw * 0.38))
+		ui.Tabs.Frame.Position = UDim2.new()
+		ui.Tabs.Frame.Size = UDim2.new(1, inline and -(inlineW + 8) or 0, 0, tabsH)
+		local y = tabsH + (short and 8 or 14)
 		local titleH = TS(22) + 10
 		ui.Title.Frame.Visible = not tight
 		if not tight then
@@ -372,14 +376,15 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		end
 		-- the STANDARD / ENDLESS switch on the HIGH SCORE tab; on short screens it takes the
 		-- subtitle's place (the heading and the switch already say which board this is)
-		local scoreTab = boardOf(board).Id == "Score" or boardOf(board).Tab == "Score"
 		ui.Sub.Visible = not (short and scoreTab)
 		if ui.Sub.Visible then
 			place(ui.Sub, 0, y, iw, TS(16) + 6)
 			y += TS(16) + 6
 		end
 		ui.Side.Frame.Visible = scoreTab
-		if scoreTab then
+		if inline then
+			place(ui.Side.Frame, iw - inlineW, 2, inlineW, tabsH - 4)
+		elseif scoreTab then
 			local sideW = math.min(iw, 300)
 			place(ui.Side.Frame, (iw - sideW) / 2, y + 6, sideW, 40)
 			y += 50
@@ -414,7 +419,8 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		local noted = ui.YouNote.Visible
 		local youH = narrow and (noted and 86 or 64) or (noted and 66 or 60)
 		local countH = TS(14) + 8
-		local tail = (rowCount > 0 and countH or 0) + 10 + youH
+		local showCount = rowCount > 0 and not tight -- tight: the scroll bar says there are more
+		local tail = (showCount and countH or 0) + 10 + youH
 		local want = rowCount * (ROW_H + ROW_GAP) + 4
 		local room = maxH - 32 - y - tail
 		local listH = math.max(ROW_H + 8, math.min(want, room))
@@ -425,7 +431,8 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		place(ui.Empty, 0, y + 6, iw, TS(16) * 2 + 8)
 		ui.List.ScrollBarThickness = want > listH + 1 and 4 or 0
 		y += listH
-		if rowCount > 0 then
+		ui.Count.Visible = showCount
+		if showCount then
 			place(ui.Count, 0, y + 2, iw, countH)
 			y += countH
 		end
@@ -474,18 +481,19 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 			local column = content and content:FindFirstChild("Text")
 			local pad = content and content:FindFirstChildOfClass("UIPadding")
 			if icon and icon:IsA("GuiObject") then
-				icon.Visible = not narrow
+				icon.Visible = not narrow and not inline
 			end
-			if narrow and column and column:IsA("GuiObject") then
+			local slim = narrow or inline
+			if slim and column and column:IsA("GuiObject") then
 				column.Size = UDim2.fromScale(1, 1)
 			end
 			if pad then
-				pad.PaddingLeft = UDim.new(0, narrow and 2 or Theme.Space.L)
-				pad.PaddingRight = UDim.new(0, narrow and 2 or Theme.Space.L)
+				pad.PaddingLeft = UDim.new(0, slim and 2 or Theme.Space.L)
+				pad.PaddingRight = UDim.new(0, slim and 2 or Theme.Space.L)
 			end
 			if title and title:IsA("TextLabel") then
 				title.Text = oneWord and b.Short or string.upper(b.Title)
-				title.TextSize = narrow and TS(13) or TS(Theme.TextSize.Body)
+				title.TextSize = slim and TS(13) or TS(Theme.TextSize.Body)
 			end
 		end
 		place(ui.Panel, (W - w) / 2, top, w, math.min(maxH, y + 32))
