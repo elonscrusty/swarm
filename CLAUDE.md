@@ -138,6 +138,11 @@ contact cooldown per player + 0.4 s contact grace, DEV CombatTrace, boss prefere
 Encounters: no new caravan/escort during the stage-1 boss (Config.Encounters.Intro), caravan 1 s start +
 rules + 10 s stage-1 grace, villager unstick (CatchUp 12), item timers on the run clock. Preview devices
 phone-1108 / phone-small; run_regressions --only/--workers. Regressions 165/165 after fixes (offline).
+Batch A (docs/PROMPT_NEXT_BATCH.md, branch `batch-a`, NOT merged to main; offline only, NOT
+Studio-tested; report docs/next/BATCH_A_REPORT.md): SmartTutorial, DangerArrows, FastStart,
+DailyQuests, ComebackGift, InviteRewards, GroupBonus, StarterBundle, BugReportPlus, Walkthrough,
+each with its Config.Features switch. Waiting on the owner: quest gold 300/300/600, comeback
+gold 500/1000, group id (0 = off), Pioneer skin OK + Starter Bundle product (Id 0 = hidden).
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,
