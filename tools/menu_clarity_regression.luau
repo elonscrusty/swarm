@@ -27,7 +27,7 @@ local ok, err = S.runMain(function()
 		end
 		return false
 	end
-	assert(hasText(screen, "PLAY DAILY") and hasText(screen, "Scored attempt"), "ready Daily should name its scored action")
+	assert(hasText(screen, "PLAY DAILY") and hasText(screen, "Scored · 1 try"), "ready Daily should name its scored action")
 	assert(hasText(screen, "starts") and hasText(screen, "leave"), "Daily must explain when the try is consumed")
 	assert(hasText(screen, "last boss") and hasText(screen, "survival"), "Daily must explain both scoring ties")
 	assert(hasText(screen, "1. Play") and hasText(screen, "2. Clear") and hasText(screen, "3. Ties"), "Daily should guide players in three numbered steps")
