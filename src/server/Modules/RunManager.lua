@@ -766,6 +766,9 @@ partnerRevives = function(dt: number)
 				Events.Fire("PartnerRevive", helper.Player)
 				setHP(rp, rp.Stats.MaxHP * D.HPFraction)
 				RunManager.Notify(helper.Player, "You revived " .. rp.Player.DisplayName .. "!", Color3.fromRGB(120, 255, 160), { Id = "team.revived." .. rp.Player.UserId })
+				if ctx.ReviveThanks then
+					ctx.ReviveThanks.OnRevived(rp, helper) -- ReviveThanks: the THANKS! offer (docs/next/REVIVE_THANKS.md)
+				end
 			end
 		end
 	end

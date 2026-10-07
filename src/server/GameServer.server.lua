@@ -66,6 +66,7 @@ local ORDER = {
 	"StageManager",
 	"RunManager",
 	"PartyService",
+	"ReviveThanks", -- THANKS! after a teammate revive (docs/next/REVIVE_THANKS.md)
 	"RunServers", -- private run servers: lobby → run server → lobby teleports (live game only)
 	"JournalService",
 	"DiscoveryService", -- discovered weapons / passives / items / evolutions / synergies (card clues)
