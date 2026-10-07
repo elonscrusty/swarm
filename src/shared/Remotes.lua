@@ -95,6 +95,8 @@ Remotes.ClientToServer = {
 	"Meta", -- META (MetaService): ("EquipSigil", slot, id | "") | ("ClaimStreak") | ("ClaimSeason", tier | "All") | ("Sync")
 	"Quests", -- daily quests (DailyQuests): ("Claim", questId) | ("ClaimBonus")
 	"Comeback", -- comeback gift (ComebackGift): ("Claim")
+	"Prestige", -- (heroId, starsSeen) prestige a maxed hero after the confirm (Prestige.lua, docs/next/PRESTIGE.md)
+	"QuickResume", -- ("Resume") | ("End") the RESUME RUN card of a disconnected solo run (QuickResume.lua, docs/next/QUICK_RESUME.md)
 	"SetMasteryGlow", -- (weaponId, milestone 0..n) the glow a weapon wears; the server checks its kill count (WeaponMastery.lua, LOBBY)
 	"StoreBuy", -- (itemId, giftToUserId?) cosmetic store: the server checks the item / target and opens the Roblox prompt (StoreService)
 	"StoreEquip", -- (kind, id | "") wear an owned store cosmetic; ("Sync") re-checks earned looks (StoreService)

@@ -1682,6 +1682,13 @@ Config.RunServers = {
 	ReplayGraceSeconds = 10, -- REPLAY on a run server: the new run / countdown must start within this, else the home countdown (the defeat results / MAIN MENU go home at once, FLOW)
 	HandoffLoadAttempts = 12, -- DataService load retries for a player arriving by a SWARM teleport
 	RejoinGraceSeconds = 120, -- a disconnected co-op member can return while this run remains alive
+	SoloResumeSeconds = 60, -- QuickResume: a disconnected SOLO run waits (frozen) this long (docs/next/QUICK_RESUME.md)
+}
+
+-- Quick resume (Config.Features.QuickResume; server QuickResume.lua, client ResumeCard.lua;
+-- docs/next/QUICK_RESUME.md). The window itself is Config.RunServers.SoloResumeSeconds.
+Config.QuickResume = {
+	Rate = 2, -- "QuickResume" requests per second per player (Remotes.Listen)
 }
 
 ------------------------------------------------------------------------------------------
@@ -2129,6 +2136,21 @@ Config.HeroMastery = {
 	PerLevel = 100, -- each next level needs this much more (4,950 XP to level 10)
 	StatPerLevel = 2,
 	SignatureEvery = 2, -- signature level n needs mastery 2n (levels 2, 4, 6, 8, 10)
+}
+
+-- Prestige (Config.Features.Prestige; shared PrestigeData.lua, server Prestige.lua, client
+-- MenuPrestige.lua + PrestigeConfirm.lua; docs/next/PRESTIGE.md). A hero with its whole
+-- mastery track maxed resets those upgrade levels to 0 for a star. PROPOSED reward numbers,
+-- awaiting owner approval: +5% per star of the gold a run with that hero pays into the
+-- lobby at settlement (never in-run gold, so chest prices keep the GoldMult rule), max 5
+-- stars = +25%. No combat power, no Robux path.
+Config.Prestige = {
+	MaxStars = 5, -- PROPOSED
+	GoldPerStar = 0.05, -- PROPOSED
+	GoldCap = 0.25, -- PROPOSED (never above MaxStars x GoldPerStar)
+	ConfirmSeconds = 3, -- the PRESTIGE <HERO> button needs a second tap within this
+	Rate = 2, -- "Prestige" requests per second per player (Remotes.Listen)
+	CooldownSeconds = 5, -- server: at most one prestige per player this often
 }
 
 ------------------------------------------------------------------------------------------

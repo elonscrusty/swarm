@@ -43,6 +43,7 @@ local ORDER = {
 	"StoreService", -- the cosmetic store: equip, gifts, earned looks (docs/features/STORE.md)
 	"StarterBundle", -- one-per-account starter bundle product (docs/next/STARTER_BUNDLE.md)
 	"GroupBonus", -- Roblox group member bonus at settlement + title (docs/next/GROUP_BONUS.md)
+	"Prestige", -- prestige stars of maxed heroes, gold bonus at settlement (docs/next/PRESTIGE.md)
 	"InviteRewards", -- invite referrals: cosmetic rewards, pending credits (docs/next/INVITE_REWARDS.md)
 	"MeshService",
 	"MapBuilder",
@@ -67,6 +68,7 @@ local ORDER = {
 	"RunManager",
 	"PartyService",
 	"RunServers", -- private run servers: lobby → run server → lobby teleports (live game only)
+	"QuickResume", -- disconnected solo runs: hold, RESUME RUN card, settle on expiry (docs/next/QUICK_RESUME.md)
 	"JournalService",
 	"DiscoveryService", -- discovered weapons / passives / items / evolutions / synergies (card clues)
 	"TeamPingService",

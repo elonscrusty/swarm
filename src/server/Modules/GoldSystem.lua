@@ -106,7 +106,12 @@ function GoldSystem.SettleRun(rp, extracted: boolean, cleared: number, seconds: 
 	if data and ctx.GroupBonus and ctx.GroupBonus.Settle then
 		group = ctx.GroupBonus.Settle(rp, kept + survival, data)
 	end
-	rp.GoldSettlement = { Earned = earned, Retained = kept, Lost = earned - kept, Rate = rate, Survival = survival, Group = group }
+	-- Prestige stars of the hero played (Prestige.lua): the same base, settlement only
+	local prestige = 0
+	if data and ctx.Prestige and ctx.Prestige.Settle then
+		prestige = ctx.Prestige.Settle(rp, kept + survival, data)
+	end
+	rp.GoldSettlement = { Earned = earned, Retained = kept, Lost = earned - kept, Rate = rate, Survival = survival, Group = group, Prestige = prestige }
 	return rp.GoldSettlement
 end
 
@@ -523,7 +528,9 @@ function GoldSystem.Start()
 	end, 2)
 	ctx.DataService.OnProfileLoaded(function(player)
 		local data = ctx.DataService.GetData(player)
-		if data and not (ctx.RunServers and type(ctx.RunServers.HasPendingReconnect) == "function" and ctx.RunServers.HasPendingReconnect(data)) then
+		-- a disconnected solo run waiting for its player (QuickResume) keeps its escrow too
+		if data and not (ctx.RunServers and type(ctx.RunServers.HasPendingReconnect) == "function" and ctx.RunServers.HasPendingReconnect(data))
+			and not (ctx.QuickResume and ctx.QuickResume.Pending(data)) then
 			GoldSystem.RecoverEscrow(data)
 		end
 		GoldSystem.SyncProfile(player)

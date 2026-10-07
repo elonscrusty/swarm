@@ -85,6 +85,8 @@ def main():
     # batch B group C: FinalStand, StageModifiers
     # batch B group D: PartyQuickLines, ReviveThanks
     # batch B group E: Prestige, QuickResume
+    checks += [("prestige-regression", [])] + [("layout", ["prestige-regression", d, "case=confirm"]) for d in ("iphone", "phone-portrait", "pc")]  # Prestige (docs/next/PRESTIGE.md)
+    checks += [("quick-resume-regression", ["case=local"]), ("quick-resume-regression", ["case=run"]), ("quick-resume-regression", ["case=run", "rejoin=expired"])] + [("quick-resume-regression", ["case=lobby", "flow=" + f]) for f in ("resume", "end", "timeout", "expired")] + [("layout", ["quick-resume-regression", d, "case=card"]) for d in ("iphone", "phone-portrait", "pc")]  # QuickResume (docs/next/QUICK_RESUME.md); case=run / lobby use the teleport mock (no --studio)
 
     def run(check):
         scene, settings = check
@@ -96,7 +98,7 @@ def main():
             "--max-time", "3000" if scene == "corner-regression" else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression"):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
         if scene in ("results-flow", "leaderboards", "home-board-regression", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression"):
