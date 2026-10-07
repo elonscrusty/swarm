@@ -1819,6 +1819,17 @@ Config.Features = {
 	SmartTutorial = true, -- one-at-a-time speech-bubble tips over the first 2 runs (docs/next/SMART_TUTORIAL.md)
 	DangerArrows = true, -- off-screen boss / champion / elite edge arrows (docs/next/DANGER_ARROWS.md)
 	Walkthrough = true, -- interactive first-run walkthrough: move, fight, gems, upgrade, chest, go (Config.Walkthrough, docs/next/WALKTHROUGH.md)
+	-- batch B (docs/PROMPT_BATCH_B.md, docs/next/)
+	AffixIcons = true, -- elite affix badges over elites + first-sight notice (docs/next/AFFIX_ICONS.md)
+	EvolutionPreview = true, -- evolution line on cards + BUILD panel Evolutions list (docs/next/EVOLUTION_PREVIEW.md)
+	Banish = true, -- BANISH on the level-up panel, 3 per run (docs/next/BANISH.md)
+	DamageNumberOptions = true, -- damage number size + combine settings (docs/next/DAMAGE_NUMBERS.md)
+	FinalStand = true, -- 5 s speed/damage burst under 10% HP, once per stage (docs/next/FINAL_STAND.md)
+	StageModifiers = true, -- one trade-off modifier per stage from stage 2 (docs/next/STAGE_MODIFIERS.md)
+	PartyQuickLines = true, -- fixed-text party quick lines (docs/next/PARTY_QUICK_LINES.md)
+	ReviveThanks = true, -- THANKS! button after a teammate revive (docs/next/REVIVE_THANKS.md)
+	Prestige = true, -- reset a maxed hero's mastery for a gold-bonus star (docs/next/PRESTIGE.md)
+	QuickResume = true, -- resume a disconnected solo run within 60 s (docs/next/QUICK_RESUME.md)
 }
 
 -- Season track (feature 22, Config.Features.SeasonTrack; MetaData, docs/features/META.md).

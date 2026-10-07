@@ -79,6 +79,12 @@ def main():
     checks += [("layout", ["danger-arrows-regression", d]) for d in ("iphone", "phone-portrait", "pc")]  # DangerArrows: logic PASS/FAIL lines + layout
     checks += [("layout", ["smart-tutorial-regression", d]) for d in ("iphone", "phone-portrait", "pc")]  # SmartTutorial: logic PASS/FAIL lines + layout
     checks += [("walkthrough-regression", [])]  # Walkthrough: interactive first-run steps, holds, exactly-once chest, timeouts (PASS/FAIL lines)
+    # batch B (docs/PROMPT_BATCH_B.md, docs/next/); one block per group
+    # batch B group A: AffixIcons, DamageNumberOptions
+    # batch B group B: EvolutionPreview, Banish
+    # batch B group C: FinalStand, StageModifiers
+    # batch B group D: PartyQuickLines, ReviveThanks
+    # batch B group E: Prestige, QuickResume
 
     def run(check):
         scene, settings = check
