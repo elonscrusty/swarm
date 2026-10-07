@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Offline preview renderer for SWARM (docs/PREVIEW.md).
 #
-#   bash tools/preview/render.sh <scene> [--device pc|laptop|phone|iphone|phone-portrait|tablet]
+#   bash tools/preview/render.sh <scene> [--device pc|laptop|phone|iphone|phone-portrait|tablet|phone-1108|phone-small]
 #                                [--out file.png] [--seed N] [--repo PATH] [--studio]
 #                                [--set key=value] [--json file.json] [--no-coreui]
 #                                [--ref GIT_REF]   render a committed version (snapshot)

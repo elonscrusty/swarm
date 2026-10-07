@@ -47,7 +47,7 @@ COVER_ALPHA = 0.55  # a box at least this opaque drawn between two texts covers 
 CLIP_SLIVER = (0.05, 0.7)  # visible height fraction of a text line that reads as "sliced"
 SMALL_TEXT_PX = 10.0  # line height in device points (phones) below which text is hard to read
 OVERFLOW_PX = 6.0  # a text run this far past its label's left / right edge
-PHONES = ("iphone", "phone", "phone-portrait")
+PHONES = ("iphone", "phone", "phone-portrait", "phone-1108", "phone-small")
 INFO = ("TRUNCATED", "CLIPPED", "SMALL")
 
 
@@ -163,8 +163,8 @@ def check_doc(path, strict=False):
         doc = json.load(f)
     base = os.path.basename(path)[:-5]
     scene, _, device = base.rpartition("-")
-    if device in ("portrait",) and scene.endswith("-phone"):
-        scene, device = scene[:-6], "phone-portrait"
+    if device in ("portrait", "1108", "small") and scene.endswith("-phone"):
+        scene, device = scene[:-6], "phone-" + device
     dev = doc.get("device") or {}
     W, H = dev.get("width", 1920), dev.get("height", 1080)
     boxes, texts, gui = collect(doc)

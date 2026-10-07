@@ -56,6 +56,10 @@ Mock.DEVICES = {
 		topbarSafeSpace = true, textSize = "Largest",
 		coreButtons = { { x = 77, y = 13, w = 42, h = 42, kind = "roblox" }, { x = 128, y = 13, w = 94, h = 42, kind = "pill" } },
 	},
+	-- the owner's 2026-10-07 landscape phone recording (1108 x 512, an Android-style phone with
+	-- no notch inset reported) and a small landscape phone (iPhone SE class, 667 x 375)
+	["phone-1108"] = { name = "phone-1108", width = 1108, height = 512, dpr = 2.5, touch = true, keyboard = false, mouse = false, safe = { left = 0, right = 0, top = 0, bottom = 0 }, topbar = 58 },
+	["phone-small"] = { name = "phone-small", width = 667, height = 375, dpr = 2, touch = true, keyboard = false, mouse = false, safe = { left = 0, right = 0, top = 0, bottom = 0 }, topbar = 58 },
 	tablet = { name = "tablet", width = 1024, height = 768, dpr = 1.5, touch = true, keyboard = false, mouse = false, safe = { left = 0, right = 0, top = 0, bottom = 20 }, topbar = 58 },
 }
 
