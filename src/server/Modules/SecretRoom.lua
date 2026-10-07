@@ -348,6 +348,12 @@ local function open(r: Room, rng: Random)
 	end
 	Fx.Explosion(r.WallPos + Vector3.new(0, 2, 0), 5)
 	Fx.Sound("Explosion")
+	-- daily quests (DailyQuests): the whole team broke it (any attack chips the wall)
+	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+		if not rp.Returned then
+			rp.SecretRoomsOpened = (rp.SecretRoomsOpened or 0) + 1
+		end
+	end
 	local challenge = rng:NextNumber() < K().ChallengeChance
 	if challenge and spawnPack(r, rng) > 0 then
 		r.Reward = "Challenge"

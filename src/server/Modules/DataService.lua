@@ -143,6 +143,7 @@ local function defaultData()
 		Title = "",
 		NameColor = "",
 		TutorialDone = false,
+		TutorialStep = 0, -- tutorial runs played (Config.Tutorial.Smart.Runs; SmartTutorial)
 		FirstRunBonus = false, -- the first run's one-time gold bonus was paid (Config.FirstRun)
 		SeenTips = {},
 		Curses = {},
@@ -163,6 +164,15 @@ local function defaultData()
 		WeaponMastery = {},
 		Cosmetics = { Owned = {}, Equipped = defaultEquipped() },
 		Supporter = false,
+		-- next batch (additive, no schema bump; docs/next/): when this save was first made
+		-- (0 = before this field existed: an older account), the Starter Bundle bought once,
+		-- invite rewards (InviteRewards: New = no earlier save, ReferredBy, Sent, Credited)
+		FirstJoin = 0,
+		StarterBundleOwned = false,
+		Invite = { New = false, ReferredBy = 0, Sent = false, Credited = {} },
+		-- the interactive first-run walkthrough (Walkthrough.lua): ran once / Replay tips asked for it again
+		WalkthroughDone = false,
+		WalkthroughReplay = false,
 	}
 end
 DataService.DefaultData = defaultData
@@ -447,6 +457,9 @@ function DataService.FeatureView(data: { [string]: any }): { [string]: any }
 		WeaponMastery = data.WeaponMastery,
 		Cosmetics = data.Cosmetics,
 		Supporter = data.Supporter == true,
+		-- next batch (docs/next): DailyQuests {Day, Progress, Claimed}, Comeback {LastGift, Pending?}
+		DailyQuests = data.DailyQuests,
+		Comeback = data.Comeback,
 	}
 end
 
@@ -568,10 +581,22 @@ function DataService.Migrate(data: any): { [string]: any }
 	if type(data.SeenTips) ~= "table" then
 		data.SeenTips = {}
 	end
+	-- additive (SmartTutorial): tutorial runs played; a finished tutorial stays finished
+	if type(data.TutorialStep) ~= "number" or data.TutorialStep ~= data.TutorialStep then
+		data.TutorialStep = 0
+	end
 	-- additive (no schema bump): an older save never gets the first-run welcome anyway
 	-- (Stats.Runs > 0), so a missing flag reads as "not paid"
 	if type(data.FirstRunBonus) ~= "boolean" then
 		data.FirstRunBonus = false
+	end
+	-- additive (no schema bump; Walkthrough.lua): an older save has Stats.Runs > 0, so a
+	-- missing flag never starts the walkthrough unless Replay tips asks for it
+	if type(data.WalkthroughDone) ~= "boolean" then
+		data.WalkthroughDone = false
+	end
+	if type(data.WalkthroughReplay) ~= "boolean" then
+		data.WalkthroughReplay = false
 	end
 	-- additive (no schema bump): a missing or malformed flag reads as "not boosted"; a
 	-- set flag is never cleared here (only a DEV ResetProgress starts a fresh profile)
@@ -777,6 +802,12 @@ local function loadProfile(player: Player): Profile?
 		end)
 		if ok and not lockedByOther then
 			local data = DataService.Migrate(type(record) == "table" and record.Data or nil)
+			-- a brand-new account (no earlier save, nothing recovered): FirstJoin is now and the
+			-- invite rewards may treat it as new to SWARM (StarterBundle / InviteRewards)
+			if type(record) ~= "table" or (record.Data == nil and record.Recovered == nil) then
+				data.FirstJoin = os.time()
+				data.Invite = { New = true, ReferredBy = 0, Sent = false, Credited = {} }
+			end
 			return {
 				Player = player,
 				Key = key,

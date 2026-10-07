@@ -662,6 +662,12 @@ local function tutorialHold(): boolean
 	if stage ~= 1 then
 		return false
 	end
+	-- the first-run walkthrough (Walkthrough.lua) keeps it hidden until its GO step (no cap:
+	-- every walkthrough step has its own timeout)
+	if ctx.Walkthrough and ctx.Walkthrough.HoldsReveal() then
+		tutorialHeld = true
+		return true
+	end
 	local cfg = (Config :: any).FirstRun or {}
 	if stageTime >= (tonumber(cfg.RevealCapSeconds) or 45) then
 		return false

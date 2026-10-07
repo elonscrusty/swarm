@@ -5,8 +5,16 @@
 --     (the hints before it count as seen; LevelUp opens a level-up offer and shows the
 --     explanation line under LEVEL UP!)
 --   --set tips=off   Settings > Show tips off: nothing shows
+--   --set smart=off  Config.Features.SmartTutorial off: the older callout card (the default
+--     shows the SmartTutorial speech bubble; smart-tutorial-regression walks its steps)
 local A = lib("arena")
 local C = lib("common")
+if preview.args.smart == "off" then
+	local Cfg = C.shared("Config")
+	if Cfg then
+		Cfg.Features.SmartTutorial = false
+	end
+end
 local tip = preview.args.tip or "Move"
 local order = { "Move", "Attack", "Gems", "Portal", "Boss" }
 local seen = {}
@@ -77,6 +85,8 @@ end
 local Tutorial = C.try("require Tutorial", preview.client, "Tutorial")
 if Tutorial then
 	local els = Tutorial.Elements()
+	local bubble = els.Bubble or {}
+	preview.log(string.format("tip bubble visible=%s body=%s current=%s", tostring(bubble.Card and bubble.Card.Visible), tostring(bubble.Body and bubble.Body.Text), tostring((Tutorial.Current())))
 	preview.log(string.format("tip card visible=%s step=%s title=%s body=%s", tostring(els.Card and els.Card.Visible), tostring(els.Step and els.Step.Text), tostring(els.Title and els.Title.Text), tostring(els.Body and els.Body.Text)))
 end
 local Hud = C.try("require Hud", preview.client, "Hud")

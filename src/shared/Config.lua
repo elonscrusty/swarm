@@ -757,6 +757,35 @@ Config.Waves = {
 	NestEveryWaves = 4,
 }
 
+--[[
+	FAST START (switch Config.Features.FastStart, docs/next/FAST_START.md): the first Waves
+	waves of the run, while it is on stage 1, come quicker and a little bigger (EnemySpawner
+	FastStartMult). Each value multiplies its Config.Waves number for those waves only:
+	  FirstDelayMult  FirstDelay before wave 1
+	  BurstMult       BurstSeconds (the wave pours in faster)
+	  MaxSecondsMult  MaxSeconds (the wave's time cap)
+	  BreatherMult    BreatherSeconds after waves 1..Waves
+	  SizeMult        the wave's size (after the never-shrink floor is recorded, so wave
+	                  Waves + 1 and later are sized exactly as before)
+	  ClearShare      replaces Config.Waves.ClearShare (the next breather starts sooner)
+	Stage 2+ and every later wave are unchanged. Config.FirstRun's gentle waves still apply
+	on top in an account's first run.
+]]
+-- Tuned with fast-start-regression's measure mode (8 seeds, docs/next/FAST_START.md): waves
+-- 1-3 done ~27% sooner, XP in the first 90 s +24-33%, first level-up ~20 s (was ~24 s),
+-- stage-1 damage and would-be deaths unchanged within noise. FirstDelay and the pour-in stay
+-- as they were (shortening them pushed the first level-up under 20 s).
+Config.FastStart = {
+	Waves = 3,
+	FirstDelayMult = 1,
+	BurstMult = 1,
+	MaxSecondsMult = 0.35, -- 30 s -> 10.5 s; leftovers keep fighting alongside the next wave
+	BreatherMult = 0.34, -- 3 s -> ~1 s
+	SizeMult = 1.2, -- 12 / 15 / 18 -> 14 / 18 / 22 (solo)
+	ClearShare = 0.4, -- the next breather starts with 40 % of the wave left (plain 0.1, at least 3)
+	FirstLevelUpBy = 30, -- fast-start-regression: the first level-up comes by this run time
+}
+
 ------------------------------------------------------------------------------------------
 -- BOSS
 ------------------------------------------------------------------------------------------
@@ -1078,6 +1107,10 @@ Config.Monetization = {
 	-- the Store shows "Coming soon". The owner creates them and pastes the ids; STORE wires
 	-- the purchase (it sets OwnedCharacters[id] = true, the same flag gold buys).
 	HeroUnlocks = { Archer = 0, Bard = 0, Golem = 0 },
+	-- STARTER BUNDLE (Config.Features.StarterBundle; docs/next/STARTER_BUNDLE.md): one developer
+	-- product, once per account (Pioneer Knight skin + gold + "Pioneer" title, Config.StarterBundle).
+	-- 0 = hidden: the owner creates the product, sets its price on Roblox and pastes the id here.
+	StarterBundle = 0,
 	-- One gamepass per cosmetic skin. Keys must match skin ids in CharacterData.
 	SkinPasses = {
 		Knight_Crimson = 0,
@@ -1107,6 +1140,37 @@ Config.Store = {
 	MaxPets = 8, -- pets drawn at once on one screen (nearest first)
 	PetRange = 150, -- studs: pets / trails / plates further from the camera are not drawn
 	PlateRange = 70, -- studs: nameplates show within this distance
+}
+
+-- Starter bundle (Config.Features.StarterBundle; docs/next/STARTER_BUNDLE.md). The product id
+-- is Config.Monetization.StarterBundle; its price only ever comes from GetProductInfo.
+Config.StarterBundle = {
+	Gold = 2000, -- gold added to the save by the purchase
+	Skin = "Knight_Pioneer", -- CharacterData skin (Pass = "StarterBundle"); PENDING owner OK
+	Title = "Title_Pioneer", -- MetaData title granted with it
+	OfferDays = 7, -- the home card shows for this many days after the save's FirstJoin
+}
+
+-- Roblox group bonus (Config.Features.GroupBonus; docs/next/GROUP_BONUS.md). Id = 0: off
+-- until the owner gives the group id. Members get GoldBonus of the gold a run pays into
+-- the lobby (kept + survival, at settlement; never in-run chest gold), at most GoldCap.
+Config.Group = {
+	Id = 0,
+	GoldBonus = 0.10,
+	GoldCap = 500,
+	Title = "Title_Group Member", -- worn while a member (MetaData)
+}
+
+-- Invite rewards (Config.Features.InviteRewards; docs/next/INVITE_REWARDS.md). Cosmetic only.
+Config.Invite = {
+	Badge = "Plate_Friend", -- nameplate for a new player who joined through an invite
+	Title = "Title_Recruiter", -- the inviter's title (first credited friend)
+	Trail = "Trail_Recruiter", -- the inviter's trail at TrailAt credited friends
+	TrailAt = 3,
+	RunsNeeded = 1, -- the new player must finish this many runs before the inviter is credited
+	MaxCredits = 200, -- credited friends kept in the inviter's save (the set is capped)
+	StoreName = "SwarmInvites", -- pending credits, keyed by the inviter (Studio: StoreName .. "_Studio")
+	PollSeconds = 300, -- an online inviter's pending credits are checked this often
 }
 
 ------------------------------------------------------------------------------------------
@@ -1406,12 +1470,59 @@ Config.FirstRun = {
 	RevealCapSeconds = 45,
 }
 
+--[[
+	The interactive first-run walkthrough (Config.Features.Walkthrough; server
+	Walkthrough.lua, client WalkthroughClient.lua, docs/next/WALKTHROUGH.md). Same gate as the
+	first-run flow (Config.FirstRun.AutoStart on, Solo, Standard, no curses / Endless / Daily,
+	not DEV-tainted, tips on) plus: the account's very first run (Stats.Runs 0, TutorialDone
+	false) or Settings > Replay tips (save WalkthroughReplay). Runs once (save WalkthroughDone).
+	Steps wait for the player: MOVE (stand in a gold ring), FIGHT (beat EnemyCount weak
+	enemies), GEMS (pick up their gems; first level-up), UPGRADE (pick a card), CHEST (open a
+	free chest), GO (waves + portal reveal released). Normal waves and the stage-1 portal
+	reveal are held until GO. Every step auto-completes after its timeout (run clock: pause
+	and panels stop it), so nobody gets stuck.
+]]
+Config.Walkthrough = {
+	RingDistance = 15, -- studs from the hero to the MOVE ring
+	RingRadius = 4.5, -- the hero counts as "in the ring" within this many studs
+	RingClearance = 5, -- open ground needed around the ring / chest (EnemyAI obstacles)
+	EnemyType = "Slime", -- the weakest basic enemy (EnemyData)
+	EnemyCount = 5,
+	EnemyDistance = 20, -- studs from the hero
+	EnemyHP = 4, -- each one dies to one or two hits
+	EnemySpeedMult = 0.45, -- slow
+	EnemyDamageMult = 0.3, -- soft bites
+	GemRadius = 45, -- gems within this many studs count for the first level (top-up check)
+	ChestDistance = 12, -- studs from the hero to the free chest
+	ChestType = "Small", -- a normal free chest (LootSystem.AddFeatureChest, normal reward)
+	GoSeconds = 6, -- "Waves are coming!" stays this long, then the walkthrough ends
+	ReleaseWaveDelay = 4, -- the first wave comes at most this long after GO
+	-- seconds of run time before a step completes on its own
+	Timeouts = { Move = 45, Fight = 45, Gems = 30, Upgrade = 45, Chest = 45 },
+}
+
 Config.Tutorial = {
-	Tips = { "Move", "Attack", "Gems", "LevelUp", "Portal", "Boss", "Revive", "TeamRules" },
+	Tips = { "Move", "Attack", "Gems", "LevelUp", "Portal", "Boss", "Revive", "TeamRules", "Chest" },
 	HintSeconds = 6.5, -- each hint stays this long
 	GapSeconds = 1.5, -- pause between two hints
 	FirstDelay = 1.5, -- the first hint after the run starts
 	PortalTipDelay = 2, -- seconds after the portal reveal (its banner first) before the portal tip
+	--[[
+		Smarter tutorial (Config.Features.SmartTutorial; client TutorialBubble.lua,
+		docs/next/SMART_TUTORIAL.md): seven one-at-a-time speech-bubble tips (Move, Attack,
+		Gems, LevelUp, Chest, Portal, Boss), each when it is needed, over the player's first
+		Runs runs (save TutorialStep counts the tutorial runs played; TutorialDone ends it).
+		A bubble fades once its action is done or after Seconds.
+	]]
+	Smart = {
+		Runs = 2, -- tutorial runs before TutorialDone
+		Seconds = 8, -- a bubble's longest stay
+		AttackSeconds = 4, -- "your weapon attacks by itself" (nothing to do)
+		MoveStuds = 10, -- the move tip ends once the hero walked this far
+		GemNearStuds = 30, -- the gem tip starts when a gem lies this close
+		ChestStuds = 12, -- the chest tip starts this close to a ready chest
+		GapSeconds = 0.8, -- pause between two bubbles
+	},
 }
 
 --[[
@@ -1692,12 +1803,22 @@ Config.Features = {
 	Titles = true, -- 23 achievement titles under the name
 	CollectionBook = true, -- 24 collection book
 	LoginStreak = true, -- 25 daily login streak
+	DailyQuests = true, -- 3 daily quests per UTC day (docs/next/DAILY_QUESTS.md)
+	ComebackGift = true, -- welcome-back gift after 3+ days away (docs/next/COMEBACK_GIFT.md)
 	Announcer = false, -- off 2026-10-07: the owner found the combo text blocked the screen. -- 26 kill-streak announcer + combo counter
 	HitFeel = true, -- 27 hit-stop + death burst
 	MusicSlots = true, -- 28 per-world + boss-phase music slots
 	PhotoMode = true, -- 29 photo mode on results
 	LobbyFun = true, -- 30 training dummy, mirror, jump-pad course
 	Store = true, -- the cosmetics store (docs/features/STORE.md)
+	FastStart = true, -- quicker, slightly bigger waves 1-3 on stage 1 (Config.FastStart, docs/next/FAST_START.md)
+	StarterBundle = true, -- one-per-account starter bundle product (docs/next/STARTER_BUNDLE.md)
+	GroupBonus = true, -- Roblox group member gold bonus + title (docs/next/GROUP_BONUS.md)
+	InviteRewards = true, -- invite friends: cosmetic rewards (docs/next/INVITE_REWARDS.md)
+	BugReportPlus = true, -- bug report snapshot, 3 reports/hour, DEV inbox latest 20 (docs/next/BUG_REPORT_PLUS.md)
+	SmartTutorial = true, -- one-at-a-time speech-bubble tips over the first 2 runs (docs/next/SMART_TUTORIAL.md)
+	DangerArrows = true, -- off-screen boss / champion / elite edge arrows (docs/next/DANGER_ARROWS.md)
+	Walkthrough = true, -- interactive first-run walkthrough: move, fight, gems, upgrade, chest, go (Config.Walkthrough, docs/next/WALKTHROUGH.md)
 }
 
 -- Season track (feature 22, Config.Features.SeasonTrack; MetaData, docs/features/META.md).
@@ -1711,6 +1832,18 @@ Config.Season = {
 	},
 	XPPerTier = 400, -- season XP per tier (season XP = the account XP a clean run gives)
 	Tiers = 30,
+}
+
+-- Off-screen danger arrows (Config.Features.DangerArrows; client DangerArrows.lua,
+-- docs/next/DANGER_ARROWS.md): an edge arrow per boss / champion / elite that is off screen
+-- or farther than FarStuds, nearest first, at most MaxArrows, refreshed UpdateHz times a second.
+Config.DangerArrows = {
+	FarStuds = 60, -- on screen but farther than this still gets an arrow
+	MaxArrows = 4,
+	UpdateHz = 10,
+	FadeSeconds = 0.15, -- fade in (under 0.2 s)
+	Size = 44, -- badge size in pixels (the distance tag sits under it)
+	EdgeMargin = 8, -- pixels inside the safe area
 }
 
 -- True when feature `name` (a Config.Features key) is switched on.
@@ -2018,6 +2151,41 @@ Config.SecondSkill = {
 Config.BuildPresets = {
 	Tag = "★ Favourite",
 	Rate = 6, -- SetPreset requests per second per player
+}
+
+-- Daily quests (Config.Features.DailyQuests; server DailyQuests.lua, shared QuestData.lua,
+-- lobby MenuQuests.lua; docs/next/DAILY_QUESTS.md). 3 quests per UTC day, the same for
+-- everyone; progress from clean runs only (never DEV / DevBoosted-tainted ones).
+Config.DailyQuests = {
+	Slots = { "Easy", "Easy", "Hard" }, -- the pool tier of each slot (QuestData.Quests)
+	-- gold per slot: proposed, awaiting owner approval
+	Rewards = { 300, 300, 600 },
+	-- all three claimed: the first of these earned looks not owned yet (StoreCatalog
+	-- entries, Source "Earned"); proposed, awaiting owner approval
+	BonusCosmetics = { "Plate_Questor", "Trail_Questor" },
+	-- the bonus once every look above is owned: proposed, awaiting owner approval
+	BonusGoldAfter = 200,
+	PlayMinSeconds = 60, -- "play a Duo run" / "play the daily" need this much of the run
+	ToastGap = 20, -- seconds between two in-run quest notices (one player)
+	Rate = 4, -- Quests remote requests per second per player
+}
+
+-- Comeback gift (Config.Features.ComebackGift; server ComebackGift.lua, lobby
+-- MenuComeback.lua; docs/next/COMEBACK_GIFT.md). Joining after AwayDays+ days away (save
+-- LastSeen, kept fresh while online and on leave) offers a one-time WELCOME BACK card.
+Config.Comeback = {
+	AwayDays = 3,
+	LongDays = 7, -- this many days away or more: the long-absence gift
+	-- gold: proposed, awaiting owner approval
+	Gold = 500, -- 3-6 days away
+	LongGold = 1000, -- 7+ days away
+	-- 7+ days: this earned look too (StoreCatalog entry, Source "Earned"); proposed, awaiting owner approval
+	LongCosmetic = "Trail_Homecoming",
+	CosmeticOwnedGold = 250, -- the look is owned already: this gold instead (proposed, awaiting owner approval)
+	CooldownHours = 72, -- at most one gift per this many hours
+	MinRuns = 1, -- never for a brand-new account (finished runs before the time away)
+	SeenEvery = 60, -- seconds between LastSeen refreshes while online
+	Rate = 2, -- Comeback remote requests per second per player
 }
 
 return Config

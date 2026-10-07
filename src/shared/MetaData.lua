@@ -198,6 +198,11 @@ MetaData.Titles = {
 	{ Id = "Title_Trailblazer", Name = "Trailblazer", How = "Season tier 10" },
 	{ Id = "Title_Seasoned", Name = "Seasoned", How = "Season tier 20" },
 	{ Id = "Title_Season Champion", Name = "Season Champion", How = "Season tier 30" },
+	-- next batch (docs/next/): the Starter Bundle, invites and the Roblox group; each is
+	-- granted by its own server module (StarterBundle, InviteRewards, GroupBonus)
+	{ Id = "Title_Pioneer", Name = "Pioneer", How = "Comes with the Starter Bundle" },
+	{ Id = "Title_Recruiter", Name = "Recruiter", How = "Invite a new friend who finishes a run" },
+	{ Id = "Title_Group Member", Name = "Group Member", How = "Join our Roblox group" },
 }
 MetaData.TitleById = {}
 for _, t in ipairs(MetaData.Titles) do

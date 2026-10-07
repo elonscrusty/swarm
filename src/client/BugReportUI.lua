@@ -22,6 +22,8 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local B = require(Shared:WaitForChild("BugReportData"))
 local UIKit = require(script.Parent.UIKit)
+local BugSnapshot = require(script.Parent.BugSnapshot)
+local SnapshotData = require(Shared:WaitForChild("BugSnapshotData"))
 
 local BugReportUI = {}
 
@@ -112,7 +114,13 @@ local function send()
 	setStatus("Sending your report...", C.TextMuted)
 	sendToken += 1
 	local token = sendToken
-	Remotes.Get("BugReport"):FireServer({ Category = category, Text = clean, Client = clientContext() })
+	local payload: { [string]: any } = { Category = category, Text = clean, Client = clientContext() }
+	if SnapshotData.On() then
+		-- BugReportPlus: the automatic snapshot (no player text; the server cleans it again)
+		local ok, snap = pcall(BugSnapshot.Collect)
+		payload.Snapshot = ok and snap or nil
+	end
+	Remotes.Get("BugReport"):FireServer(payload)
 	task.delay(ANSWER_TIMEOUT, function()
 		if sending and sendToken == token then
 			setSending(false)
@@ -144,7 +152,7 @@ function BugReportUI.Open()
 	if not ui.Overlay then
 		return
 	end
-	ui.Context.Text = "Attached: " .. B.ContextLine(clientContext())
+	ui.Context.Text = "Attached: " .. B.ContextLine(clientContext()) .. (SnapshotData.On() and " · snapshot" or "")
 	if not sending then
 		setStatus("Please don't include personal info. Reports are text filtered.", C.TextFaint)
 	end
@@ -204,6 +212,7 @@ end
 ]]
 function BugReportUI.Build(root: Instance, h: { [string]: any })
 	host = h
+	BugSnapshot.Start() -- BugReportPlus (no-op when the switch is off)
 	local m = UIKit.Modal(root, "BugReport", 600, 520, Theme.Z.Pause + 3)
 	ui.Overlay = m.Overlay
 	local content = m.Content

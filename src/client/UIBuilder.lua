@@ -5101,6 +5101,8 @@ local function fillLedger(data: any)
 	local survival = math.floor(safeNumber(data.GoldSurvival))
 	local first = type(data.FirstRun) == "table" and math.floor(safeNumber(data.FirstRun.Bonus)) or 0
 	local bonus = math.max(0, survival) + math.max(0, first)
+	-- Roblox group member bonus (GroupBonus): its own part of the line below
+	local group = math.max(0, math.floor(safeNumber(data.GoldGroup)))
 	local rate = data.GoldRetention ~= nil and safeNumber(data.GoldRetention) or (unspent > 0 and kept / unspent or 1)
 	local lostRun = not data.Won and not data.Portal
 	local cells = results.LedgerCells
@@ -5116,9 +5118,11 @@ local function fillLedger(data: any)
 	cells.Bonus.Value.Text = (bonus > 0 and "+" or "") .. UIKit.formatNumber(bonus)
 	cells.Bonus.Caption.Text = UIKit.track("Bonuses")
 	results.LedgerKept = kept
-	local banked = kept + bonus
+	local banked = kept + bonus + group
 	local note = string.format('Added to your gold: <font color="%s"><b>%s</b></font>', hex(RES_MINT), UIKit.formatNumber(banked))
-	if bonus > 0 then
+	if group > 0 then
+		note ..= string.format(" (%s kept + %s bonuses + %s group bonus)", UIKit.formatNumber(kept), UIKit.formatNumber(bonus), UIKit.formatNumber(group))
+	elseif bonus > 0 then
 		note ..= string.format(" (%s kept + %s bonuses)", UIKit.formatNumber(kept), UIKit.formatNumber(bonus))
 	end
 	if lost > 0 then
@@ -5252,6 +5256,11 @@ local function fillDetails(data: any)
 	local first = type(data.FirstRun) == "table" and math.floor(safeNumber(data.FirstRun.Bonus)) or 0
 	if first > 0 then
 		table.insert(lines, string.format("First run bonus +%s gold (one time)", UIKit.formatNumber(first)))
+	end
+	local group = math.floor(safeNumber(data.GoldGroup))
+	if group > 0 then
+		table.insert(lines, string.format("Group bonus +%s gold (Roblox group member, %d%% up to %s per run)", UIKit.formatNumber(group),
+			math.floor(((Config :: any).Group.GoldBonus or 0) * 100 + 0.5), UIKit.formatNumber((Config :: any).Group.GoldCap or 0)))
 	end
 	if data.DevRun then
 		table.insert(lines, "DEV tools were used: nothing public was recorded")

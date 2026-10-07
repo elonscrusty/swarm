@@ -207,6 +207,7 @@ local function save(c: Villager)
 	-- "for everyone": a teammate downed and waiting for a revive is still in the run
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if (rp.Alive or rp.AwaitingRevive) and not rp.Returned and rp.Stats then
+			rp.VillagersSaved = (rp.VillagersSaved or 0) + 1 -- daily quests (DailyQuests)
 			local granted, dramatic = ctx.ItemSystem.Grant(rp, ctx.ItemSystem.Roll(k.Weights, rp.Stats.Luck), "Lost Villager", true)
 			if granted then
 				anyItem = true

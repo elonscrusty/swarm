@@ -1184,6 +1184,7 @@ local function openChest(rp, obj: Obj)
 		warn("[LootSystem] chest open effect failed: " .. tostring(err))
 	end
 	Fx.Sound("Chest")
+	rp.ChestsOpened = (rp.ChestsOpened or 0) + 1 -- daily quests (DailyQuests)
 	if obj.Type == "Golden" then
 		Events.Fire("GoldenChest", rp.Player)
 	end

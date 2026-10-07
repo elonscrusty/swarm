@@ -28,6 +28,7 @@ local AchievementData = require(Shared:WaitForChild("AchievementData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
+local StarterCard = require(script.Parent.StarterCard)
 
 local MenuStore = {}
 
@@ -315,9 +316,40 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 			elseif not worn then
 				bottomCaption(f, "Unlock the hero to wear it")
 			end
+		elseif (CharacterData.Skins[e.Id] :: any).Pass == "StarterBundle" then
+			-- the Starter Bundle's skin: only inside the bundle (StarterBundle.lua)
+			if StarterCard.Offered() then
+				bottomButton(f, { Kind = "Outline", Title = "STARTER BUNDLE", Icon = "gift", Name = "Bundle", OnClick = function()
+					ctx.ShowScreen("Starter")
+				end })
+			else
+				bottomCaption(f, "Starter Bundle only")
+			end
 		else
 			buyButton(f, e.Id, CosmeticData.StoreId(e.Id), true)
 		end
+		return f
+	end
+
+	-- the Starter Bundle at the top of the store while it is offered (new players only)
+	local function starterCard(order: number)
+		local f = card(order)
+		f.Name = "StarterBundle"
+		cardTop(f, function()
+			swatch(f, "gift", P.gold_300)
+		end, "Starter Bundle", StarterCard.Contents() .. ". Once per account.", "NEW")
+		local b
+		local function label(): string
+			local price = StarterCard.Price(function()
+				if b and b.Instance.Parent then
+					b.SetText(label())
+				end
+			end)
+			return price and ("VIEW · " .. price) or "VIEW"
+		end
+		b = bottomButton(f, { Kind = "Primary", Title = label(), Icon = "robux", Name = "ViewBundle", OnClick = function()
+			ctx.ShowScreen("Starter")
+		end })
 		return f
 	end
 
@@ -478,6 +510,9 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 			if s.Id == section then
 				sec = s
 			end
+		end
+		if section == "Skins" and StarterCard.Offered() then
+			table.insert(made, starterCard(-1))
 		end
 		if section == "Skins" then
 			for i, e in ipairs(CosmeticData.OfKind("Skin")) do

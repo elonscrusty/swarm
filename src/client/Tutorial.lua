@@ -33,10 +33,30 @@
 	ends the tutorial ("Skip"); Settings > Show tips switches every hint off and Settings >
 	Replay tips ("Replay") shows them again from the next run. The server marks the
 	tutorial done when the first run ends.
+
+	SmartTutorial (Config.Features.SmartTutorial, Config.Tutorial.Smart,
+	docs/next/SMART_TUTORIAL.md) replaces the tour above (the callout card stays for the
+	switch off): seven tips over the player's first two runs (save TutorialStep), one at a
+	time in a small speech bubble above the ability tray (TutorialBubble.lua) whose pointer
+	aims at the thing, each when it is needed and gone once its action is done or after
+	Smart.Seconds:
+	  Move      run start, until the hero walked Smart.MoveStuds (InputPrompts.MoveShort)
+	  Attack    the first kill: "Your weapon attacks by itself" → the weapon row
+	  Gems      a gem lands within Smart.GemNearStuds: "Pick up the blue gems for XP" → the
+	            gem; done when the XP bar moves
+	  LevelUp   the first level-up offer: "Choose an upgrade" under LEVEL UP! (the cards stay
+	            free to pick; LevelUpHint)
+	  Chest     a ready chest within Smart.ChestStuds (InputPrompts.OpenChest) → the chest;
+	            done when it opens
+	  Portal    after the reveal (PortalTipDelay): "Find and charge the portal" → the PORTAL
+	            arrow (StageUI); done when the charge starts
+	  Boss      the first boss arrival: "Bosses guard the way out" → the boss bar
+	The co-op tips use the same bubble. The bubble hides while a panel covers the screen.
 ]]
 
 local Players = game:GetService("Players")
 local TextService = game:GetService("TextService")
+local GuiService = game:GetService("GuiService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -51,6 +71,9 @@ local TeamUI = require(script.Parent.TeamUI)
 local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
 local InputPrompts = require(script.Parent.InputPrompts)
+local TutorialBubble = require(script.Parent.TutorialBubble)
+local StageUI = require(script.Parent.StageUI)
+local WalkthroughClient = require(script.Parent.WalkthroughClient)
 
 local Tutorial = {}
 
@@ -58,8 +81,16 @@ local player = Players.LocalPlayer
 local new, TS = UIKit.new, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 local T = Config.Tutorial
+local S = T.Smart or {}
+
+-- SmartTutorial (one bubble at a time, seven tips over the first two runs)
+local function smart(): boolean
+	return (Config :: any).Features.SmartTutorial == true
+end
 
 local COOP = { TeamRules = true, Revive = true }
+-- the tips the interactive walkthrough teaches by doing (WalkthroughClient): never shown after it
+local WALK_TIPS = { "Move", "Attack", "Gems", "LevelUp", "Chest", "Portal" }
 -- the numbered tour of a first run ("TIP n / total")
 local TOUR = { "Move", "Attack", "Gems", "Portal", "Boss" }
 -- what each tip points at: Hud.Elements() keys, first visible one wins
@@ -76,7 +107,7 @@ local ICON = 48
 local ARROW = 22
 local SKIP_W, SKIP_H = 150, 38
 
-type Tip = { Id: string, Text: string, Title: string, Icon: string, Seconds: number }
+type Tip = { Id: string, Text: string, Title: string, Icon: string, Seconds: number, Done: (() -> boolean)?, Aim: (() -> Vector2?)? }
 
 local kit: { [string]: any } = {}
 local ui: { [string]: any } = {}
@@ -130,6 +161,15 @@ local function push(id: string, title: string, body: string, icon: string, secon
 		return
 	end
 	table.insert(queue, first and 1 or (#queue + 1), { Id = id, Title = title, Text = body, Icon = icon, Seconds = seconds or T.HintSeconds })
+end
+
+-- A SmartTutorial tip: done() ends it early once its action happened, aim() is the point
+-- its pointer aims at (root pixels) or nil.
+local function pushSmart(id: string, body: string, icon: string, seconds: number?, done: (() -> boolean)?, aim: (() -> Vector2?)?)
+	if not wants(id) or queued(id) then
+		return
+	end
+	table.insert(queue, { Id = id, Title = "", Text = body, Icon = icon, Seconds = seconds or S.Seconds or 8, Done = done, Aim = aim })
 end
 
 ------------------------------------------------------------------------------------------
@@ -497,6 +537,10 @@ end
 local function hideCard()
 	if current then
 		current = nil
+		if smart() then
+			TutorialBubble.Hide()
+			return
+		end
 		local card = ui.Card :: Frame
 		ui.Focus.Visible = false
 		UIAnim.PopOut(card, function()
@@ -533,7 +577,20 @@ local function showNext(now: number)
 	if not wants(tip.Id) then
 		return
 	end
-	current = { Id = tip.Id, Until = now + tip.Seconds, Seconds = tip.Seconds, Since = now }
+	current = { Id = tip.Id, Until = now + tip.Seconds, Seconds = tip.Seconds, Since = now, Done = tip.Done }
+	if smart() then
+		-- input-aware lines are read when the tip shows (the device in hand may have changed)
+		local text = tip.Id == "Move" and InputPrompts.MoveShort() or tip.Id == "Chest" and InputPrompts.OpenChest() or tip.Text
+		if COOP[tip.Id] then
+			text = tip.Title .. ": " .. text
+		end
+		TutorialBubble.Show(text, tip.Icon, tip.Aim)
+		markSeen(tip.Id)
+		if kit.Audio then
+			pcall(kit.Audio.Play, "Tip")
+		end
+		return
+	end
 	ui.Title.Text = tip.Title
 	-- input-aware text is read when the tip shows (the device in hand may have changed)
 	ui.Body.Text = tip.Id == "Move" and InputPrompts.Move() or tip.Text
@@ -587,11 +644,174 @@ local function welcome(): boolean
 	return player:GetAttribute("FirstRunBoost") == true
 end
 
+------------------------------------------------------------------------------------------
+-- SmartTutorial triggers
+------------------------------------------------------------------------------------------
+
+-- The centre of a HUD target (TARGETS keys) in root pixels, or nil when it is not shown.
+local function hudAim(id: string): () -> Vector2?
+	return function()
+		local pos, size = targetRect(id)
+		if pos and size then
+			return pos + size / 2
+		end
+		return nil
+	end
+end
+
+-- A world point in root pixels (clamped to the screen when it is off it).
+local function worldAim(get: () -> Vector3?): () -> Vector2?
+	return function()
+		local p = get()
+		local cam = workspace.CurrentCamera
+		if not p or not cam or not rootFrame then
+			return nil
+		end
+		local vp = cam:WorldToViewportPoint(p)
+		if vp.Z <= 0 then
+			return nil
+		end
+		local sg = rootFrame:FindFirstAncestorOfClass("ScreenGui")
+		local inset: Vector2 = Vector2.zero
+		if sg and not sg.IgnoreGuiInset then
+			inset = GuiService:GetGuiInset()
+		end
+		local pt = TutorialBubble.ToRoot(Vector2.new(vp.X, vp.Y) - inset)
+		if not pt then
+			return nil
+		end
+		local v: Vector2 = kit.VirtualSize()
+		return Vector2.new(math.clamp(pt.X, 8, v.X - 8), math.clamp(pt.Y, 8, v.Y - 8))
+	end
+end
+
+-- The nearest live XP gem (workspace.SwarmGems, attribute Base) within maxD studs.
+local function nearestGem(maxD: number): Vector3?
+	local folder = workspace:FindFirstChild("SwarmGems")
+	local hp = heroPos()
+	if not folder or not hp then
+		return nil
+	end
+	local best, bd = nil, maxD * maxD
+	for _, g in ipairs(folder:GetChildren()) do
+		if g:IsA("BasePart") and g:GetAttribute("Active") == true then
+			local b = g:GetAttribute("Base")
+			if typeof(b) == "Vector3" then
+				local dx, dz = b.X - hp.X, b.Z - hp.Z
+				local d = dx * dx + dz * dz
+				if d <= bd then
+					best, bd = b, d
+				end
+			end
+		end
+	end
+	return best
+end
+
+-- The nearest ready chest (workspace.SwarmLoot, LootKind Chest) within maxD studs.
+local function nearChest(maxD: number): Model?
+	local folder = workspace:FindFirstChild("SwarmLoot")
+	local hp = heroPos()
+	if not folder or not hp then
+		return nil
+	end
+	for _, m in ipairs(folder:GetChildren()) do
+		if m:IsA("Model") and (m:GetAttribute("LootKind") or "Chest") == "Chest" and m:GetAttribute("State") == "Ready" then
+			local pos = m:GetAttribute("Pos")
+			if typeof(pos) == "Vector3" and Vector2.new(pos.X - hp.X, pos.Z - hp.Z).Magnitude <= maxD then
+				return m
+			end
+		end
+	end
+	return nil
+end
+
+local function xpMark(): string
+	return tostring(player:GetAttribute("Level") or 0) .. ":" .. tostring(player:GetAttribute("XP") or 0)
+end
+
+local function smartStart()
+	pushSmart("Move", InputPrompts.MoveShort(), "boot", S.Seconds, function()
+		local pos = heroPos()
+		run.StartPos = run.StartPos or pos -- the character may arrive after the run start
+		local start = run.StartPos
+		return start ~= nil and pos ~= nil and ((pos - start) * Vector3.new(1, 0, 1)).Magnitude >= (S.MoveStuds or 10)
+	end)
+end
+
+local function smartTriggers(state: Configuration)
+	local now = os.clock()
+	-- 2: the first kill
+	if not run.Attack and (player:GetAttribute("Kills") or 0) > (run.Kills0 or 0) then
+		run.Attack = true
+		pushSmart("Attack", "Your weapon attacks by itself", "sword", S.AttackSeconds or 4, nil, hudAim("Attack"))
+	end
+	-- 3 and 5 scan the world a few times a second
+	if now >= (run.ScanAt or 0) then
+		run.ScanAt = now + 0.25
+		if not run.Gems and wants("Gems") and nearestGem(S.GemNearStuds or 30) then
+			run.Gems = true
+			local mark = xpMark()
+			pushSmart("Gems", "Pick up the blue gems for XP", "gem", S.Seconds, function()
+				return xpMark() ~= mark
+			end, worldAim(function()
+				return nearestGem((S.GemNearStuds or 30) * 2)
+			end))
+		end
+		if not run.Chest and wants("Chest") then
+			local chest = nearChest(S.ChestStuds or 12)
+			if chest then
+				run.Chest = true
+				pushSmart("Chest", InputPrompts.OpenChest(), "chest", S.Seconds, function()
+					return chest.Parent == nil or chest:GetAttribute("State") ~= "Ready"
+				end, worldAim(function()
+					local pos = chest:GetAttribute("Pos")
+					return typeof(pos) == "Vector3" and pos + Vector3.new(0, 2, 0) or nil
+				end))
+			end
+		end
+	end
+	-- 6: the portal, once revealed (its banner first)
+	local stagePhase = state:GetAttribute("StagePhase") or "None"
+	if not run.Portal and stagePhase == "Explore" and state:GetAttribute("PortalHint") == true then
+		run.RevealSeen = run.RevealSeen or now
+		if now - run.RevealSeen >= (T.PortalTipDelay or 2) then
+			run.Portal = true
+			-- a player already charging the portal has found it: no tip
+			if (tonumber(state:GetAttribute("PortalCharge")) or 0) <= 0 then
+				pushSmart("Portal", "Find and charge the portal", "portal", S.Seconds, function()
+					return (tonumber(state:GetAttribute("PortalCharge")) or 0) > 0 or state:GetAttribute("StagePhase") ~= "Explore"
+				end, function()
+					local arrow = StageUI.Elements().Arrow
+					if typeof(arrow) == "Instance" and arrow:IsA("GuiObject") and arrow.Visible then
+						return TutorialBubble.ToRoot(arrow.AbsolutePosition + arrow.AbsoluteSize / 2)
+					end
+					return worldAim(function()
+						local pp = state:GetAttribute("PortalPos")
+						return typeof(pp) == "Vector3" and pp or nil
+					end)()
+				end)
+			end
+		end
+	end
+	-- 7: the first boss
+	if not run.Boss and stagePhase == "Boss" then
+		run.Boss = true
+		pushSmart("Boss", "Bosses guard the way out", "skull", S.Seconds, function()
+			return state:GetAttribute("StagePhase") ~= "Boss"
+		end, hudAim("Boss"))
+	end
+end
+
 local function startRun(_state: Configuration)
 	table.clear(run)
 	run.Start = os.clock()
 	run.StartPos = heroPos()
 	run.Kills0 = player:GetAttribute("Kills") or 0
+	if smart() then
+		smartStart()
+		return
+	end
 	push("Move", "Move", moveText(), "boot")
 	-- the first run's welcome (server attribute FirstRunBoost: the first level-up comes
 	-- within ~20 s) keeps this one short so the gem tip lands before the cards
@@ -605,15 +825,18 @@ local function triggers(state: Configuration)
 		run.Team = true
 		push("TeamRules", "Team run", "Gem XP is shared by every living teammate. Gold and items are your own.", "people2", T.HintSeconds + 2, true)
 	end
+	if smart() then
+		smartTriggers(state)
+	end
 	-- gems after the first kill
-	if not run.Gems and (player:GetAttribute("Kills") or 0) > (run.Kills0 or 0) then
+	if not smart() and not run.Gems and (player:GetAttribute("Kills") or 0) > (run.Kills0 or 0) then
 		run.Gems = true
 		-- first run: straight after the current tip (the first level-up is close)
 		push("Gems", "Collect gems", "Walk over blue gems to collect XP. A full bar = an upgrade!", "gem", nil, welcome())
 	end
 	-- the objective, once the portal is revealed (its banner shows first)
 	local stagePhase = state:GetAttribute("StagePhase") or "None"
-	if not run.Portal and stagePhase == "Explore" and state:GetAttribute("PortalHint") == true then
+	if not smart() and not run.Portal and stagePhase == "Explore" and state:GetAttribute("PortalHint") == true then
 		run.RevealSeen = run.RevealSeen or os.clock()
 		if os.clock() - run.RevealSeen >= (T.PortalTipDelay or 2) then
 			run.Portal = true
@@ -626,7 +849,7 @@ local function triggers(state: Configuration)
 			end
 		end
 	end
-	if not run.Boss and stagePhase == "Boss" then
+	if not smart() and not run.Boss and stagePhase == "Boss" then
 		run.Boss = true
 		local boss = tostring(state:GetAttribute("BossName") or state:GetAttribute("StageBoss") or "")
 		local who = boss ~= "" and ("the " .. boss) or "the boss"
@@ -645,7 +868,7 @@ local function triggers(state: Configuration)
 		end
 	end
 	-- Move ends early once the hero has walked a few steps
-	if current and current.Id == "Move" and run.StartPos then
+	if not smart() and current and current.Id == "Move" and run.StartPos then
 		local pos = heroPos()
 		if pos and (pos - run.StartPos).Magnitude > 14 and os.clock() - current.Since > 2.5 then
 			current.Until = math.min(current.Until, os.clock() + 0.6)
@@ -660,6 +883,9 @@ end
 -- Profile from ProfileSync: TutorialDone, SeenTips.
 function Tutorial.SetProfile(p: { [string]: any })
 	tutorialDone = p.TutorialDone ~= false
+	if smart() and (tonumber(p.TutorialStep) or 0) >= (S.Runs or 2) then
+		tutorialDone = true -- the two tutorial runs are over (the server agrees)
+	end
 	if type(p.SeenTips) == "table" then
 		-- the server's list plus whatever this session showed (its "Seen" may be in flight;
 		-- Replay clears both)
@@ -673,10 +899,20 @@ end
 
 -- The first level-up offer's explanation (nil once seen or when tips are off).
 function Tutorial.LevelUpHint(): string?
+	-- the interactive walkthrough's UPGRADE step (WalkthroughClient)
+	local walk = WalkthroughClient.LevelUpHint()
+	if walk then
+		markSeen("LevelUp")
+		return walk
+	end
 	if not wants("LevelUp") then
 		return nil
 	end
 	markSeen("LevelUp")
+	if smart() then
+		-- step 4: the line under LEVEL UP! points the player at the cards; it never blocks them
+		return welcome() and "Choose an upgrade: try the NEW weapon!" or "Choose an upgrade"
+	end
 	-- input-neutral: the line under the cards already says how to choose on this device
 	-- (InputPrompts.Choose), so this one only explains what the cards are
 	if welcome() then
@@ -719,6 +955,29 @@ function Tutorial.Update(dt: number, state: Configuration, inRun: boolean, block
 		return
 	end
 	local now = os.clock()
+	-- the interactive first-run walkthrough (WalkthroughClient, Config.Features.Walkthrough)
+	-- owns the bubble while it runs; the tips it replaces never show
+	local walking, walkStarted = WalkthroughClient.Update(dt, inRun and tipsOn(), blocked)
+	if walking then
+		if walkStarted then
+			for _, id in ipairs(WALK_TIPS) do
+				markSeen(id)
+			end
+			for i = #queue, 1, -1 do
+				if not COOP[queue[i].Id] then
+					table.remove(queue, i)
+				end
+			end
+			if current and not COOP[current.Id] then
+				if smart() then
+					current = nil -- the walkthrough's line already took the bubble
+				else
+					hideCard()
+				end
+			end
+		end
+		return
+	end
 	if not inRun or not tipsOn() then
 		if run.Start then
 			table.clear(run)
@@ -736,6 +995,28 @@ function Tutorial.Update(dt: number, state: Configuration, inRun: boolean, block
 	end
 	triggers(state)
 	if current then
+		if smart() then
+			-- behind a panel (UIState owner, the stage-start card) the tip waits, hidden
+			TutorialBubble.SetCovered(blocked)
+			if blocked then
+				current.Until += dt
+				return
+			end
+			TutorialBubble.Step(dt)
+			if current.Done and not current.Finished then
+				local ok, done = pcall(current.Done)
+				if ok and done then
+					-- the action is done: fade shortly
+					current.Finished = true
+					current.Until = math.min(current.Until, now + 0.6)
+				end
+			end
+			if now >= current.Until then
+				hideCard()
+				nextAt = now + (S.GapSeconds or T.GapSeconds)
+			end
+			return
+		end
 		if blocked then
 			current.Until += dt
 			ui.Card.Visible = false
@@ -763,9 +1044,19 @@ end
 function Tutorial.Build(root: Frame, k: { [string]: any })
 	kit = k
 	build(root)
+	TutorialBubble.Build(root, k)
+	WalkthroughClient.Build(root, k)
 	kit.OnRelayout(layout)
 	-- the player switched device (touch / keyboard and mouse / gamepad): reword the shown tip
 	InputPrompts.OnChanged(function()
+		if smart() then
+			if current and current.Id == "Move" then
+				TutorialBubble.SetText(InputPrompts.MoveShort())
+			elseif current and current.Id == "Chest" then
+				TutorialBubble.SetText(InputPrompts.OpenChest())
+			end
+			return
+		end
 		if current and current.Id == "Move" and ui.Body then
 			ui.Body.Text = moveText()
 			layout()
@@ -780,7 +1071,18 @@ end
 
 -- For the preview tool / tests.
 function Tutorial.Elements(): { [string]: any }
+	ui.Bubble = TutorialBubble.Elements()
 	return ui
+end
+
+-- For tests: the tip on screen (nil when none), the queued ids, and whether it is hidden
+-- behind a panel.
+function Tutorial.Current(): (string?, { string }, boolean)
+	local ids = {}
+	for _, q in ipairs(queue) do
+		table.insert(ids, q.Id)
+	end
+	return current and current.Id or nil, ids, current ~= nil and not TutorialBubble.Showing()
 end
 
 return Tutorial

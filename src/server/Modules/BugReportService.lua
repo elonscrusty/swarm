@@ -23,6 +23,15 @@
 	  Answers come back on BugInboxData. Player attribute "BugInbox" = true tells the client
 	  to show the inbox button; it grants nothing by itself.
 
+	BugReportPlus (Config.Features.BugReportPlus, shared rules BugSnapshotData,
+	docs/next/BUG_REPORT_PLUS.md): the report may carry a client Snapshot; it is cleaned
+	field by field (known ids, fixed name lists, clamped numbers), its log lines have player
+	names removed and go through the text filter (dropped when the filter fails), and it is
+	stored as record.Snapshot next to the server's own build (record.ServerBuild) and wave.
+	Reports are limited to BugSnapshotData.HourLimit per rolling hour (this server's memory
+	plus the quota record "Recent" list, so all servers). The inbox pages hold the latest
+	BugSnapshotData.InboxRows rows with their snapshots. Off: everything works as before.
+
 	Stores are "SwarmBugReports_v1" / "SwarmBugIndex_v1", with "_Studio" appended in Studio.
 	Every DataStore and filter call is pcall'd; there is no external HTTP and no webhook.
 ]]
@@ -36,6 +45,7 @@ local Shared = game:GetService("ReplicatedStorage").Shared
 local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 local B = require(Shared.BugReportData)
+local S = require(Shared.BugSnapshotData)
 local DevAccess = require(script.Parent.DevAccess)
 
 local BugReportService = {}
@@ -49,6 +59,11 @@ local lastSent: { [number]: number } = {} -- userId → os.clock() of the last s
 local lastTry: { [number]: number } = {} -- userId → os.clock() of the last attempt (any result)
 local cache: { [string]: { [string]: any } } = {} -- report id → record (inbox reads)
 local cacheCount = 0
+local sentTimes: { [number]: { number } } = {} -- userId → os.time() of saved reports (BugReportPlus)
+
+local function pageSize(): number
+	return S.On() and S.InboxRows or B.PageSize
+end
 
 ------------------------------------------------------------------------------------------
 -- Access
@@ -113,6 +128,9 @@ local function serverContext(player: Player): { [string]: any }
 		c.Character = rp.CharacterId
 		c.Level = player:GetAttribute("Level")
 		c.RunTime = math.floor(rm.GetRunTime())
+		if S.On() then
+			c.Wave = state:GetAttribute("Wave")
+		end
 	elseif data then
 		c.Arena = data.SelectedArena
 		c.Character = data.SelectedCharacter
@@ -164,7 +182,16 @@ local function reserveQuota(userId: number): (boolean, string?, number?)
 			prevLast = type(old) == "table" and old.Day == day and tonumber(old.Last) or 0
 			local q = type(old) == "table" and old or {}
 			if q.Day ~= day then
-				q = { Day = day, Count = 0, Last = 0 }
+				q = { Day = day, Count = 0, Last = 0, Recent = q.Recent }
+			end
+			local recent: { number }? = nil
+			if S.On() then
+				local fits, kept = S.HourCheck(q.Recent, now)
+				if not fits then
+					reason = string.format("You've sent %d reports this hour. Thanks! Try again later.", S.HourLimit)
+					return nil
+				end
+				recent = kept
 			end
 			if (tonumber(q.Count) or 0) >= B.PerDay then
 				reason = string.format("You've sent %d reports today. Thanks! Try again tomorrow.", B.PerDay)
@@ -176,6 +203,10 @@ local function reserveQuota(userId: number): (boolean, string?, number?)
 			end
 			q.Count = (tonumber(q.Count) or 0) + 1
 			q.Last = now
+			if recent then
+				table.insert(recent, now)
+				q.Recent = recent
+			end
 			return q
 		end)
 	end)
@@ -199,12 +230,43 @@ local function refundQuota(userId: number, prevLast: number)
 			end
 			old.Count = math.max(0, (tonumber(old.Count) or 0) - 1)
 			old.Last = prevLast
+			if type(old.Recent) == "table" and #old.Recent > 0 then
+				table.remove(old.Recent, #old.Recent)
+			end
 			return old
 		end)
 	end)
 	if not ok then
 		warn("[BugReportService] quota refund failed: " .. tostring(err))
 	end
+end
+
+-- BugReportPlus: the client's snapshot, cleaned, with log lines name-scrubbed and filtered.
+local function buildSnapshot(player: Player, raw: any): { [string]: any }
+	local snap = S.CleanSnapshot(raw)
+	local logs = snap.Logs
+	if #logs > 0 then
+		local names = {}
+		for _, p in ipairs(Players:GetPlayers()) do
+			table.insert(names, p.Name)
+			table.insert(names, p.DisplayName)
+		end
+		local texts = {}
+		for i, e in ipairs(logs) do
+			texts[i] = S.RedactNames(e.Text, names)
+		end
+		local filtered = filter(table.concat(texts, "\n"), player.UserId)
+		local lines = filtered and string.split(filtered, "\n") or {}
+		if filtered and #lines == #logs then
+			for i, e in ipairs(logs) do
+				e.Text = S.CleanLogText(lines[i]) or "?"
+			end
+		else
+			snap.Logs = {}
+			snap.LogsDropped = true
+		end
+	end
+	return snap
 end
 
 local function submit(player: Player, payload: any)
@@ -225,6 +287,13 @@ local function submit(player: Player, payload: any)
 	if last and os.clock() - last < B.CooldownSeconds then
 		reply(player, false, "Please wait a minute between reports.")
 		return
+	end
+	if S.On() then
+		local fits = S.HourCheck(sentTimes[userId], os.time())
+		if not fits then
+			reply(player, false, string.format("You've sent %d reports this hour. Thanks! Try again later.", S.HourLimit))
+			return
+		end
 	end
 	local tried = lastTry[userId]
 	if tried and os.clock() - tried < 5 then
@@ -267,6 +336,14 @@ local function submit(player: Player, payload: any)
 			Client = B.CleanClientContext(payload.Client),
 			JobId = game.JobId,
 		}
+		if S.On() then
+			record.Snapshot = buildSnapshot(player, payload.Snapshot)
+			local rm = ctx.RunManager
+			local rp = rm and rm.GetRunPlayer(player)
+			if rp and rm.IsParticipant(player) then
+				record.ServerBuild = S.ServerBuild(rp)
+			end
+		end
 		local saved = pcall(function()
 			(reports :: DataStore):SetAsync(id, record, { userId })
 		end)
@@ -285,6 +362,11 @@ local function submit(player: Player, payload: any)
 			return
 		end
 		lastSent[userId] = os.clock()
+		if S.On() then
+			local _, kept = S.HourCheck(sentTimes[userId], os.time())
+			table.insert(kept, os.time())
+			sentTimes[userId] = kept
+		end
 		remember(id, record)
 		reply(player, true, "Thanks! Your report was sent to the developer.")
 	end)
@@ -307,7 +389,7 @@ local function cleanCursor(c: any): Cursor?
 	end
 	local keys = {}
 	if type(c.K) == "table" then
-		for i = 1, math.min(#c.K, B.PageSize) do
+		for i = 1, math.min(#c.K, pageSize()) do
 			if B.IsReportId(c.K[i]) then
 				table.insert(keys, c.K[i])
 			end
@@ -334,6 +416,13 @@ local function rowOf(id: string, r: { [string]: any }?): { [string]: any }
 		RunTime = type(r.Server) == "table" and r.Server.RunTime or nil,
 		Mode = type(r.Server) == "table" and r.Server.Mode or nil,
 		PlaceVersion = type(r.Server) == "table" and r.Server.PlaceVersion or nil,
+		-- BugReportPlus: cleaned again on the way out (already filtered when stored)
+		Snapshot = (S.On() and type(r.Snapshot) == "table") and S.CleanSnapshot(r.Snapshot) or nil,
+		ServerBuild = (S.On() and type(r.ServerBuild) == "table") and {
+			Wave = type(r.Server) == "table" and tonumber(r.Server.Wave) or nil,
+			Weapons = S.CleanBuild(r.ServerBuild.Weapons, "Weapon"),
+			Passives = S.CleanBuild(r.ServerBuild.Passives, "Passive"),
+		} or nil,
 	}
 end
 
@@ -353,7 +442,8 @@ local function sendPage(player: Player, cursorIn: any)
 			skip[k] = true
 		end
 	end
-	local want = B.PageSize + (cursor and #cursor.K or 0) + 1
+	local size = pageSize()
+	local want = size + (cursor and #cursor.K or 0) + 1
 	local ok, entries = pcall(function()
 		local pages = (index :: OrderedDataStore):GetSortedAsync(false, want, nil, cursor and cursor.V or nil)
 		return pages:GetCurrentPage()
@@ -367,7 +457,7 @@ local function sendPage(player: Player, cursorIn: any)
 	local more = false
 	for _, e in ipairs(entries) do
 		if not skip[e.key] then
-			if #picked >= B.PageSize then
+			if #picked >= size then
 				more = true
 				break
 			end

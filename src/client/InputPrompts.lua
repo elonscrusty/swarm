@@ -17,6 +17,8 @@
 	Choose(count)      "Tap a card to choose" | "Press 1, 2 or 3 to choose" | "Press A to choose"
 	PickCard()         "Tap a card" | "Click a card or press 1-3" | "Pick a card with A"
 	Move()             how to move and jump with the current device (one short sentence)
+	MoveShort()        "Drag anywhere to move" | "WASD to move" | "Left stick to move" (tutorial bubble)
+	OpenChest()        "Hold the button to open chests" | "Hold E to open chests" | "Hold X to open chests"
 
 	Bindings these texts describe (keep them in step when a binding changes):
 	  confirm / skip   Touch tap, mouse click, Space / Enter, gamepad A (UIBuilder level-up
@@ -148,6 +150,17 @@ function InputPrompts.Move(): string
 		"Move with WASD or the arrow keys. Space jumps; chain hops for speed!",
 		"Move with the left stick. A jumps; chain hops for speed!"
 	)
+end
+
+-- The short move line of the tutorial bubble (the touch thumbstick floats: anywhere works).
+function InputPrompts.MoveShort(): string
+	return pick("Drag anywhere to move", "WASD to move", "Left stick to move")
+end
+
+-- The tutorial bubble's chest line (touch players hold the prompt's HOLD button, LootUI).
+function InputPrompts.OpenChest(): string
+	local key = InputPrompts.HoldKey()
+	return key ~= "" and ("Hold " .. key .. " to open chests") or "Hold the button to open chests"
 end
 
 return InputPrompts

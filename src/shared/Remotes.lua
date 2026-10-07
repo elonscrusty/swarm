@@ -93,10 +93,13 @@ Remotes.ClientToServer = {
 	"SetPreset", -- (heroId, "Weapons" | "Passives", id, on) mark a favourite for the level-up tag (Ultimate.lua, HEROPOWER)
 	"MerchantBuy", -- (merchantId, slot) buy one item of your own merchant stock for run gold (Merchant.lua, EXPLORE)
 	"Meta", -- META (MetaService): ("EquipSigil", slot, id | "") | ("ClaimStreak") | ("ClaimSeason", tier | "All") | ("Sync")
+	"Quests", -- daily quests (DailyQuests): ("Claim", questId) | ("ClaimBonus")
+	"Comeback", -- comeback gift (ComebackGift): ("Claim")
 	"SetMasteryGlow", -- (weaponId, milestone 0..n) the glow a weapon wears; the server checks its kill count (WeaponMastery.lua, LOBBY)
 	"StoreBuy", -- (itemId, giftToUserId?) cosmetic store: the server checks the item / target and opens the Roblox prompt (StoreService)
 	"StoreEquip", -- (kind, id | "") wear an owned store cosmetic; ("Sync") re-checks earned looks (StoreService)
 	"StoreEmote", -- () play the worn emote over your hero (StoreService, cooldown)
+	"StarterBundle", -- ("Buy") the server checks the starter offer and opens the Roblox prompt (StarterBundle.lua)
 	"TeamComboFire", -- () fire the full team combo; the server checks the meter, the partner and the run (TeamCombo.lua, TEAM)
 }
 

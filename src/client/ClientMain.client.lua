@@ -144,6 +144,7 @@ require(script.Parent:WaitForChild("ChallengesUI")).Init() -- CHALLENGES: champi
 require(script.Parent:WaitForChild("WorldFx")).Init() -- EVENTS: map events + weather visuals (idle while the switches are off)
 require(script.Parent:WaitForChild("TeamCombo")).Init() -- TEAM: combo meter + PingWheel, Spectate, WeakSpot (idle while the switches are off)
 require(script.Parent:WaitForChild("ExploreUI")).Init() -- EXPLORE: cracked wall / merchant / villager markers + the merchant panel (idle while the switches are off)
+require(script.Parent:WaitForChild("DangerArrows")).Init() -- off-screen boss / champion / elite edge arrows (idle while the switch is off)
 -- FEEL (docs/features/FEEL.md): each one idles while its Config.Features switch is off
 require(script.Parent:WaitForChild("BossIntro")).Init()
 require(script.Parent:WaitForChild("Announcer")).Init()

@@ -20,6 +20,7 @@ preview.advance(2)
 
 local Config = preview.shared("Config")
 Config.FirstRun.AutoStart = true
+preview.shared("Config").Features.Walkthrough = false -- this scene checks the flow without the interactive walkthrough (walkthrough-regression covers it)
 local st = game:GetService("ReplicatedStorage"):FindFirstChild("SwarmState") :: any
 local RM = preview.server("RunManager")
 local Data = preview.server("DataService")

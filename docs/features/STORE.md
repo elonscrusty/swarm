@@ -123,6 +123,37 @@ steps for each row in the table below.
 
 Any store product above can be gifted. Passes and hero unlocks can't.
 
+### Starter Bundle (docs/next/STARTER_BUNDLE.md)
+
+This is a developer product that each account can buy once. Only new players see it, for
+7 days after their first join. It gives the Pioneer Knight skin, 2,000 gold and the Pioneer
+title, so it is looks and gold only. Until the id is set, nothing about it shows.
+
+1. **Approve first:** the Pioneer skin (its look and name) and the 2,000 gold. The skin is
+   pending your OK.
+2. Creator Dashboard > SWARM > Monetization > **Developer Products** > **Create a Developer
+   Product**.
+   - Name: "Starter Bundle".
+   - Description, for example: "Pioneer Knight skin, 2,000 gold and the Pioneer title. Once
+     per account."
+   - **Choose the price yourself.**
+3. Paste the id into `Config.Monetization.StarterBundle` in `src/shared/Config.lua`, or send it
+   to Claude.
+4. Test in Studio with a new test account. Studio saves are separate, and a fresh Studio save
+   counts as new.
+   - The home screen shows the STARTER BUNDLE card. Tap it: the screen shows `BUY · R$ <your
+     price>`.
+   - Buy it (a Studio test purchase). You should see "Starter Bundle: Pioneer skin, Pioneer
+     title and +2000 gold". The card disappears, and the Store's Skins section no longer shows
+     the bundle card.
+   - CHARACTERS > Knight > Pioneer: EQUIP SKIN works. TITLES lists Pioneer.
+   - Rejoin: the bundle stays owned and BUY is not offered again.
+5. Rebuild and publish.
+
+| Item | Type | Config key | What it gives | Earned alternative |
+|---|---|---|---|---|
+| Starter Bundle | product, once per account | `Monetization.StarterBundle` | Pioneer Knight skin, 2,000 gold, Pioneer title | gold from runs; other skins and titles are earned by play |
+
 ## Verified vs BLOCKED
 
 - **PASS (offline Lune):**

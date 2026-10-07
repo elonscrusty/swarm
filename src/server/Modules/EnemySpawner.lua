@@ -688,6 +688,22 @@ local function pressureMult(): number
 	return warn > 0 and list and list[math.min(warn, #list)] or 1
 end
 
+-- The faster stage-1 opening (Config.FastStart, switch Config.Features.FastStart): for
+-- run waves 1..Waves while the run is on stage 1, `key`'s multiplier, else 1. Exported for
+-- fast-start-regression.
+local function fastStartCfg(n: number): any
+	local cfg = (Config :: any).FastStart
+	if not cfg or not Config.FeatureOn("FastStart") or n < 1 or n > (cfg.Waves or 0) or ctx.StageManager.GetStage() ~= 1 then
+		return nil
+	end
+	return cfg
+end
+local function fastStart(n: number, key: string): number
+	local cfg = fastStartCfg(n)
+	return cfg and tonumber(cfg[key]) or 1
+end
+EnemySpawner.FastStartMult = fastStart
+
 -- The first run's gentle opening (Config.FirstRun: waves 1..GentleWaves of an account's
 -- very first Solo run, RunManager.IsFirstRunWelcome): `key`'s multiplier, else 1.
 local function gentle(n: number, key: string): number
@@ -725,7 +741,8 @@ local function startWave()
 	local density = countMult()
 	local normal = math.max(EnemySpawner.WaveSize(n), math.ceil(lastWaveBase * density))
 	lastWaveBase = normal / density
-	local total = math.min(math.floor(normal * (big and W.BigMult or 1) + 0.5), Config.Enemies.MaxLive)
+	-- FastStart's bigger opening waves come after the floor above, so later waves keep their size
+	local total = math.min(math.floor(normal * (big and W.BigMult or 1) * fastStart(n, "SizeMult") + 0.5), Config.Enemies.MaxLive)
 	local loud = n == 1 or big or stageFirstWave -- the big banner + horn (StageUI); else a toast
 	stageFirstWave = false
 	local dirs = 1
@@ -815,9 +832,9 @@ local function startWave()
 		table.insert(waveQueue, { Type = weightedPick(eliteWeights), Angle = base, Spread = W.ArcRadians, Elite = true, Rp = rp })
 	end
 	waveTotal = #waveQueue
-	burstLeft = W.BurstSeconds
+	burstLeft = W.BurstSeconds * fastStart(n, "BurstMult")
 	wavePhase = "Pouring"
-	waveTimer = W.MaxSeconds
+	waveTimer = W.MaxSeconds * fastStart(n, "MaxSecondsMult")
 	waveSeq += 1
 	-- later stages: every NestEveryWaves-th wave plants a Nest (Config.Pacing.Nests caps)
 	local N = P.Nests
@@ -914,10 +931,17 @@ local function stepWaves(dt: number, runTime: number)
 	if stage ~= waveStage or wavePhase == "Off" then
 		stageFirstWave = stage ~= waveStage
 		waveStage = stage
-		breather(stage <= 1 and W.FirstDelay or W.StageStartDelay, runTime)
+		breather(stage <= 1 and W.FirstDelay * fastStart(runWave + 1, "FirstDelayMult") or W.StageStartDelay, runTime)
 		return
 	end
 	if wavePhase == "Breather" then
+		if next(EnemySpawner.Holds) ~= nil then
+			-- held (EnemySpawner.SetHold: the first-run walkthrough): the next wave waits
+			if Remotes.State():GetAttribute("WaveNext") ~= 0 then
+				Remotes.State():SetAttribute("WaveNext", 0)
+			end
+			return
+		end
 		if nearPortal() then
 			-- someone is charging the portal: the next wave waits for them
 			if waveTimer < W.PortalHoldSeconds then
@@ -942,8 +966,20 @@ local function stepWaves(dt: number, runTime: number)
 	end
 	local alive = waveAlive() + #waveQueue
 	setWaveLeft(alive)
-	if wavePhase == "Fighting" and (alive <= math.max(W.ClearMin or 0, math.floor(waveTotal * W.ClearShare)) or waveTimer <= 0) then
-		breather(W.BreatherSeconds, runTime)
+	local fast = fastStartCfg(runWave)
+	local clearShare = fast and tonumber(fast.ClearShare) or W.ClearShare
+	if wavePhase == "Fighting" and (alive <= math.max(W.ClearMin or 0, math.floor(waveTotal * clearShare)) or waveTimer <= 0) then
+		breather(W.BreatherSeconds * fastStart(runWave, "BreatherMult"), runTime)
+	end
+end
+
+-- Wave holds by reason (Walkthrough.lua): while any is on, the next wave waits in its
+-- breather; the last one let go resumes it (at most `delay` seconds away).
+EnemySpawner.Holds = {} :: { [string]: boolean }
+function EnemySpawner.SetHold(reason: string, on: boolean, delay: number?)
+	EnemySpawner.Holds[reason] = on and true or nil
+	if not on and next(EnemySpawner.Holds) == nil and wavePhase == "Breather" then
+		breather(math.min(waveTimer, delay or waveTimer), ctx.RunManager.GetRunTime())
 	end
 end
 

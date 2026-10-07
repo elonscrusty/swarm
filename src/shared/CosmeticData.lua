@@ -103,7 +103,8 @@ for _, id in ipairs(sortedKeys(CharacterData.Skins)) do
 		Kind = "Skin",
 		Name = skin.Name,
 		Source = "Store",
-		StoreKey = skin.Pass == "StarterPack" and "GamePasses.StarterPack" or ("SkinPasses." .. id),
+		-- the Starter Bundle skin has no store key of its own (the bundle is the product)
+		StoreKey = skin.Pass == "StarterPack" and "GamePasses.StarterPack" or skin.Pass == "StarterBundle" and "StarterBundle.Skin" or ("SkinPasses." .. id),
 		Character = skin.Character,
 	})
 end

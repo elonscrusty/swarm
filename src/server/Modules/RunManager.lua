@@ -1200,6 +1200,10 @@ local function beginRun(here: boolean?)
 				player:SetAttribute("XPNeeded", rp.XPNeeded)
 				player:SetAttribute("FirstRunBoost", true)
 			end
+			-- the interactive first-run walkthrough (Walkthrough.lua; Solo only, once)
+			if ctx.Walkthrough then
+				ctx.Walkthrough.Consider(rp, data, #list, mode)
+			end
 			data.Stats.Runs += 1
 		end
 	end
@@ -1289,8 +1293,14 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	if won then
 		data.Stats.Wins += 1
 	end
-	-- the first run is the tutorial run: tips stop after it (Settings > Replay tips)
-	data.TutorialDone = true
+	-- the first run is the tutorial run: tips stop after it (Settings > Replay tips);
+	-- SmartTutorial: after Config.Tutorial.Smart.Runs runs (save TutorialStep counts them)
+	if (Config :: any).Features.SmartTutorial == true and data.TutorialDone ~= true then
+		data.TutorialStep = (tonumber(data.TutorialStep) or 0) + 1
+		data.TutorialDone = data.TutorialStep >= ((Config :: any).Tutorial.Smart.Runs or 2)
+	else
+		data.TutorialDone = true
+	end
 	-- retention: the daily score, account XP, the leaderboards (results show the first two)
 	local cleared = ctx.StageManager.StagesCleared()
 	if ctx.RunModifiers.CompleteDifficulty then
@@ -1329,6 +1339,14 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	local metaInfo = ctx.MetaService and ctx.MetaService.CommitRun(rp, {
 		Won = won, Score = score, Cleared = cleared, AccountXP = accountInfo and accountInfo.Gained or 0, Mode = mode,
 	}) or nil
+	-- daily quests (docs/next/DAILY_QUESTS.md): this run's progress, clean runs only
+	if ctx.DailyQuests then
+		ctx.DailyQuests.CommitRun(rp, { Won = won, Mode = mode, Seconds = t })
+	end
+	-- invite rewards (InviteRewards.lua): a referred new player finished a clean run
+	if ctx.InviteRewards then
+		ctx.InviteRewards.OnRunCommitted(rp.Player, data)
+	end
 	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Mastery = masteryInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0,
 		-- beat the saved personal best score of this board (not on the first scored run)
 		NewBestScore = score > scoreBefore and scoreBefore > 0, Meta = metaInfo }
@@ -1438,6 +1456,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		GoldLost = rp.GoldSettlement and rp.GoldSettlement.Lost or 0,
 		GoldRetention = rp.GoldSettlement and rp.GoldSettlement.Rate or 1,
 		GoldSurvival = rp.GoldSettlement and rp.GoldSettlement.Survival or 0, -- always kept (own line)
+		GoldGroup = rp.GoldSettlement and rp.GoldSettlement.Group or 0, -- Roblox group member bonus (GroupBonus, own line)
 		DeathCause = not portal and not rp.Abandoned and not rp.Alive and rp.DeathCause or nil,
 		DamageHistory = not portal and not rp.Abandoned and rp.DamageHistory or {},
 		Difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard",

@@ -172,6 +172,7 @@ local function finish(won: boolean, why: string?)
 	end
 	if won then
 		for _, rp in ipairs(winners) do
+			rp.TrialsWon = (rp.TrialsWon or 0) + 1 -- daily quests (DailyQuests)
 			ctx.LevelUpSystem.QueueBonusPick(rp)
 			ctx.RunManager.Notify(rp.Player, "Trial won! A bonus upgrade with a rare card.", Color3.fromRGB(205, 170, 255), { Id = "trial.won" })
 		end

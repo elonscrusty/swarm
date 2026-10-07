@@ -28,8 +28,12 @@ local Config = require(Shared:WaitForChild("Config"))
 local MenuWeekly = require(script.Parent.MenuWeekly)
 local MenuSeason = require(script.Parent.MenuSeason)
 local MenuStreak = require(script.Parent.MenuStreak)
+local MenuQuests = require(script.Parent.MenuQuests)
+local MenuComeback = require(script.Parent.MenuComeback)
 local MenuTitles = require(script.Parent.MenuTitles)
 local MenuCollection = require(script.Parent.MenuCollection)
+local MenuInvite = require(script.Parent.MenuInvite)
+local MenuGroup = require(script.Parent.MenuGroup)
 
 local MenuMore = {}
 
@@ -70,11 +74,20 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		end },
 		{ Id = "Daily", Title = "DAILY CHALLENGE", Sub = "One scored try a day", Icon = "calendar", Art = "Daily", Go = function() ctx.ShowScreen("Daily") end },
 		{ Id = "Party", Title = "PARTY", Sub = "Play with friends", Icon = "lobby_Party", Go = function() ctx.ShowScreen("Party") end },
+		-- next batch (docs/next/): invite rewards and the Roblox group bonus (the group row only
+		-- once the owner set Config.Group.Id)
+		{ Id = "Invite", Title = "INVITE FRIENDS", Sub = "Rewards for bringing friends", Icon = "userPlus", Feature = "InviteRewards", Go = function() ctx.ShowScreen("Invite") end },
+		{ Id = "Group", Title = "JOIN OUR GROUP", Sub = "Bonus gold for members", Icon = "people2", Feature = "GroupBonus", Shown = MenuGroup.Shown, Go = function() ctx.ShowScreen("Group") end },
 		{ Id = "Ranks", Title = "RANKS", Sub = "Leaderboards", Icon = "podium", Art = "Leaderboards", Go = function() ctx.ShowScreen("Ranks") end },
 		{ Id = "Stats", Title = "STATS", Sub = "Your records", Icon = "bars", Go = function() ctx.ShowScreen("Stats", "Stats") end },
 		{ Id = "Track", Title = "ACCOUNT LEVEL", Sub = "Rewards for every run", Icon = "medal", Art = "Track", Go = function() ctx.ShowScreen("Track") end },
 		{ Id = "Journal", Title = "JOURNAL", Sub = "Enemies you have met", Icon = "skull", Go = function() ctx.ShowScreen("Journal") end },
 		-- META (docs/features/META.md): each row shows only while its switch is on
+		-- the comeback gift: listed only while one waits, just before DAILY REWARD
+		{ Id = "Comeback", Title = "WELCOME BACK", Sub = "A gift is waiting", Icon = "gift", Feature = "ComebackGift", Shown = function()
+			return MenuComeback.Pending(ctx.Profile()) ~= nil
+		end, Go = function() ctx.ShowScreen("Comeback") end },
+		{ Id = "Quests", Title = "DAILY QUESTS", Sub = "Three quests a day", Icon = "flag", Feature = "DailyQuests", Go = function() ctx.ShowScreen("Quests") end },
 		{ Id = "Streak", Title = "DAILY REWARD", Sub = "Log in each day", Icon = "gift", Feature = "LoginStreak", Go = function() ctx.ShowScreen("Streak") end },
 		{ Id = "Weekly", Title = "WEEKLY CHALLENGE", Sub = "One hero, one week", Icon = "calendar", Feature = { "WeeklyChallenge", "TeamBoard" }, Go = function() ctx.ShowScreen("Weekly") end },
 		{ Id = "Season", Title = "SEASON", Sub = "Free rewards track", Icon = "flag", Feature = "SeasonTrack", Go = function() ctx.ShowScreen("Season") end },
@@ -124,7 +137,7 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 				st.Transparency = 0.1
 			end
 		end
-		if item.Id == "Daily" or item.Id == "Party" or item.Id == "Achievements" or item.Id == "Track" then
+		if item.Id == "Daily" or item.Id == "Party" or item.Id == "Achievements" or item.Id == "Track" or item.Id == "Quests" then
 			NoticeDots.Attach(item.Id, b.Instance, { Position = UDim2.new(1, -10, 0, 10) })
 		end
 		if item.Id == "Party" then
@@ -158,7 +171,7 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 	local function shownRows(): { any }
 		local list = {}
 		for _, r in ipairs(ui.Rows) do
-			local on = (not r.Item.Dev or DevPanel.IsDev()) and (not r.Item.Notice or saveStatus() ~= "ok") and featureOn(r.Item.Feature) and (not r.Item.Feature or Config.FeatureOn(r.Item.Feature))
+			local on = (not r.Item.Dev or DevPanel.IsDev()) and (not r.Item.Notice or saveStatus() ~= "ok") and featureOn(r.Item.Feature) and (not r.Item.Feature or Config.FeatureOn(r.Item.Feature)) and (not r.Item.Shown or r.Item.Shown())
 			r.Button.Instance.Visible = on
 			if on then
 				table.insert(list, r)
@@ -212,13 +225,17 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		-- META rows' live lines
 		local metaSubs = {
 			Streak = Config.FeatureOn("LoginStreak") and MenuStreak.Summary(p) or nil,
+			Quests = Config.FeatureOn("DailyQuests") and MenuQuests.Summary(p) or nil,
+			Comeback = Config.FeatureOn("ComebackGift") and MenuComeback.Summary(p) or nil,
 			Weekly = Config.FeatureOn("WeeklyChallenge") and MenuWeekly.Summary(p) or nil,
 			Season = Config.FeatureOn("SeasonTrack") and MenuSeason.Summary(p) or nil,
 			Titles = Config.FeatureOn("Titles") and MenuTitles.Summary(p) or nil,
 			Collection = Config.FeatureOn("CollectionBook") and MenuCollection.Summary(p) or nil,
+			Invite = Config.FeatureOn("InviteRewards") and MenuInvite.Summary() or nil,
+			Group = MenuGroup.Shown() and MenuGroup.Summary() or nil,
 		}
 		local metaKey = ""
-		for _, id in ipairs({ "Streak", "Weekly", "Season", "Titles", "Collection" }) do
+		for _, id in ipairs({ "Streak", "Quests", "Comeback", "Weekly", "Season", "Titles", "Collection", "Invite", "Group" }) do
 			metaKey ..= "|" .. tostring(metaSubs[id])
 		end
 		local key = partySub .. "|" .. dailySub .. "|" .. badge .. "|" .. save .. metaKey
@@ -229,7 +246,10 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		lastSave = save
 		lastKey = key
 		ui.NoticeRow.SetText(nil, save == "memory" and "Not saved in this session" or "Saving isn't working right now")
-		if saveChanged then
+		-- the WELCOME BACK row comes and goes with the gift
+		local gift = Config.FeatureOn("ComebackGift") and MenuComeback.Pending(p) ~= nil
+		if saveChanged or gift ~= ui.GiftShown then
+			ui.GiftShown = gift
 			MenuMore._layout()
 		end
 		ui.PartyRow.SetText(nil, partySub)

@@ -13,6 +13,7 @@
 	               (StoreService / StoreFx; looks only)
 	Developer products
 	  Gold500 / Gold1500 / Gold5000  add gold to the save
+	  StarterBundle  once per account: Pioneer skin + gold + title (StarterBundle.lua)
 	  Revive       adds a revive token; RunManager spends it at once if the buyer is
 	               waiting to be revived, otherwise it is kept for the next death
 	  Cosmetics / HeroUnlocks  the cosmetic store (StoreService): one look into
@@ -146,6 +147,11 @@ function MonetizationService.OwnsSkin(player: Player, skinId: string): boolean
 	if skin.Pass == "StarterPack" then
 		return MonetizationService.OwnsPass(player, "StarterPack")
 	end
+	if skin.Pass == "StarterBundle" then
+		-- the Starter Bundle's skin (StarterBundle.lua): owned through the save flag
+		local data = ctx and ctx.DataService.GetData(player)
+		return Config.FeatureOn("StarterBundle") and data ~= nil and data.StarterBundleOwned == true
+	end
 	return MonetizationService.OwnsPassId(player, Config.Monetization.SkinPasses[skinId])
 end
 
@@ -252,6 +258,11 @@ local function buildProductHandlers()
 				ctx.RunManager.OnReviveTokenGranted(player)
 			end)
 		end
+	end
+	-- the Starter Bundle (Config.Features.StarterBundle; StarterBundle.lua): once per account
+	local starter = ctx and ctx.StarterBundle
+	if starter and Config.FeatureOn("StarterBundle") and starter.ProductId() ~= 0 then
+		productHandlers[starter.ProductId()] = starter.Handler
 	end
 	-- the cosmetic store: looks and early hero unlocks (Config.Features.Store)
 	local store = ctx and ctx.StoreService

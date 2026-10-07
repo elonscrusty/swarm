@@ -37,6 +37,9 @@ def main():
     checks += [("discovery", ["phone"]), ("discovery", ["phone-portrait"])]
     checks += [("pings", ["phone"]), ("pings", ["phone-portrait"])]
     checks += [("accessibility-sim", [])]
+    checks += [("daily-quests-regression", []), ("comeback-regression", ["headless=off"])] + [("layout", ["meta", d, "screen=" + s]) for d in ("iphone", "phone-portrait", "pc") for s in ("Quests", "Comeback")]  # DailyQuests + ComebackGift (docs/next)
+    checks += [("bugreport-plus-regression", [])]  # BugReportPlus: snapshot, filter, 3/hour, DEV-only inbox (live rules)
+    checks += [("starter-bundle-regression", []), ("group-bonus-regression", []), ("invite-regression", [])] + [("layout", ["social", d, "screen=" + s]) for d in ("iphone", "phone-portrait", "pc") for s in ("Home", "Starter", "Group", "Invite", "Store", "More")]  # StarterBundle / GroupBonus / InviteRewards (docs/next)
     checks += [("uistate", [])]
     checks += [("home-board-regression", [])]
     checks += [("layout", ["menu", d, "board=" + b]) for d in ("iphone", "phone-portrait") for b in ("empty", "error", "out")]
@@ -72,6 +75,10 @@ def main():
                for scene in ("menu", "levelup", "results", "pause", "revive", "stage-choice", "characters", "countdown")]
     # the CHARACTERS screen with the Hero Mastery upgrade rows open
     checks += [("layout", ["characters", device, "mastery=open"]) for device in ("iphone", "phone-portrait")]
+    checks += [("fast-start-regression", [])]  # FastStart: quicker, bigger waves 1-3 on stage 1 (PASS/FAIL lines)
+    checks += [("layout", ["danger-arrows-regression", d]) for d in ("iphone", "phone-portrait", "pc")]  # DangerArrows: logic PASS/FAIL lines + layout
+    checks += [("layout", ["smart-tutorial-regression", d]) for d in ("iphone", "phone-portrait", "pc")]  # SmartTutorial: logic PASS/FAIL lines + layout
+    checks += [("walkthrough-regression", [])]  # Walkthrough: interactive first-run steps, holds, exactly-once chest, timeouts (PASS/FAIL lines)
 
     def run(check):
         scene, settings = check
@@ -83,7 +90,7 @@ def main():
             "--max-time", "3000" if scene == "corner-regression" else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression"):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression"):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
         if scene in ("results-flow", "leaderboards", "home-board-regression", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression"):

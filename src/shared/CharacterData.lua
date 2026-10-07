@@ -478,6 +478,7 @@ end
 	Skins. "Default" is implied for every character (its own Colors + Hat).
 	Pass = "Skin" → owned through Config.Monetization.SkinPasses[Id]
 	Pass = "StarterPack" → owned through the Starter Pack gamepass
+	Pass = "StarterBundle" → owned through the Starter Bundle product (save flag)
 ]]
 CharacterData.Skins = {
 	-- Knight
@@ -531,6 +532,26 @@ CharacterData.Skins = {
 			HatAccent = Palette.gold_400,
 		},
 		Hat = "Helmet",
+	},
+	-- Starter Bundle exclusive (docs/next/STARTER_BUNDLE.md; PENDING owner OK): a recolour of
+	-- the Knight meshes like the skins above (no new mesh). Owned through the save flag
+	-- StarterBundleOwned (MonetizationService.OwnsSkin), never sold on its own.
+	Knight_Pioneer = {
+		Id = "Knight_Pioneer",
+		Name = "Pioneer",
+		Character = "Knight",
+		Pass = "StarterBundle",
+		Colors = {
+			Metal = Palette.gold_500,
+			MetalDark = Palette.gold_700,
+			Cloth = Palette.moss_600,
+			Cloth2 = Palette.wood_700,
+			Accent = Palette.ivory_200,
+			Gold = Palette.gold_300,
+			Hat = Palette.gold_500,
+			HatAccent = Palette.moss_400,
+		},
+		Hat = "Plume",
 	},
 	-- Mage
 	Mage_Frost = {
@@ -697,7 +718,7 @@ CharacterData.Skins = {
 -- Skins usable by a character, in display order ("Default" first).
 function CharacterData.SkinsFor(characterId: string): { string }
 	local list = { "Default" }
-	for _, skinId in ipairs({ "_Crimson", "_Shadow", "_Paladin", "_Frost", "_Ember", "_Void", "_Forest", "_Pirate", "_Ninja", "_Sun", "_Moon", "_Angel" }) do
+	for _, skinId in ipairs({ "_Crimson", "_Shadow", "_Paladin", "_Pioneer", "_Frost", "_Ember", "_Void", "_Forest", "_Pirate", "_Ninja", "_Sun", "_Moon", "_Angel" }) do
 		local id = characterId .. skinId
 		if CharacterData.Skins[id] then
 			table.insert(list, id)

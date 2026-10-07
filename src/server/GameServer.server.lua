@@ -41,6 +41,9 @@ local ORDER = {
 	"MonetizationService",
 	"GoldSystem",
 	"StoreService", -- the cosmetic store: equip, gifts, earned looks (docs/features/STORE.md)
+	"StarterBundle", -- one-per-account starter bundle product (docs/next/STARTER_BUNDLE.md)
+	"GroupBonus", -- Roblox group member bonus at settlement + title (docs/next/GROUP_BONUS.md)
+	"InviteRewards", -- invite referrals: cosmetic rewards, pending credits (docs/next/INVITE_REWARDS.md)
 	"MeshService",
 	"MapBuilder",
 	"ModelBuilder",
@@ -73,10 +76,13 @@ local ORDER = {
 	"Ultimate", -- hero ultimate (feature 13, HEROPOWER)
 	"BuildPresets", -- favourite weapons / passives per hero (feature 14, HEROPOWER)
 	"MetaService", -- META (features 1, 19, 21-25): Sigils, weekly / team boards, season, titles, collection, login streak
+	"DailyQuests", -- daily quests (docs/next/DAILY_QUESTS.md)
+	"ComebackGift", -- welcome-back gift (docs/next/COMEBACK_GIFT.md)
 	"WeaponMastery", -- kills per weapon + mastery glow colours (feature 15, LOBBY)
 	"TeamCombo", -- team combo meter + burst (feature 16, TEAM)
 	"CoopBoss", -- co-op boss weak spot, BossAI variant hook (feature 18, TEAM)
 	"HeroSong", -- the Bard's Rally Song team buff (feature 11, HEROES)
+	"Walkthrough", -- interactive first-run walkthrough (docs/next/WALKTHROUGH.md)
 }
 
 for _, name in ipairs(ORDER) do
@@ -114,6 +120,7 @@ end
 local STEPS = {
 	{ "RunManager", ctx.RunManager.Step },
 	{ "StageManager", ctx.StageManager.Step },
+	{ "Walkthrough", ctx.Walkthrough.Step }, -- before EnemySpawner: its wave hold applies this frame
 	{ "EnemySpawner", ctx.EnemySpawner.Step },
 	{ "EnemyAI", ctx.EnemyAI.Step },
 	{ "WeaponSystem", ctx.WeaponSystem.Step },
@@ -128,6 +135,8 @@ local STEPS = {
 	{ "DamageNumbers", ctx.DamageNumbers.Step },
 	{ "Ultimate", ctx.Ultimate.Step },
 	{ "MetaService", ctx.MetaService.Step },
+	{ "DailyQuests", ctx.DailyQuests.Step },
+	{ "ComebackGift", ctx.ComebackGift.Step },
 	{ "TeamCombo", ctx.TeamCombo.Step },
 	{ "HeroSong", ctx.HeroSong.Step },
 	{ "Fx", ctx.Fx.Step },

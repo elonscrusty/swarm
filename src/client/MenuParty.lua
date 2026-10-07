@@ -256,6 +256,9 @@ local function inviteFriends(toast: (string, Color3?) -> ())
 	end)
 end
 
+-- the same prompt for the MORE screen's INVITE FRIENDS screen (MenuInvite, InviteRewards)
+MenuParty.InviteFriends = inviteFriends
+
 ------------------------------------------------------------------------------------------
 -- Invite card (top of the screen, any screen)
 ------------------------------------------------------------------------------------------

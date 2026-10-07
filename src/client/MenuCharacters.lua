@@ -48,6 +48,7 @@ local MetaUpgradeData = require(Shared:WaitForChild("MetaUpgradeData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
+local StarterCard = require(script.Parent.StarterCard)
 local Showcase = require(script.Parent.Showcase)
 local MenuHeroPower = require(script.Parent.MenuHeroPower)
 
@@ -518,7 +519,15 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				return
 			end
 			local passId = skinPassId(inspSkin)
-			if passId then
+			local bundleSkin = CharacterData.Skins[inspSkin] and (CharacterData.Skins[inspSkin] :: any).Pass == "StarterBundle"
+			if bundleSkin then
+				-- the Starter Bundle's skin (StarterBundle.lua): only inside the bundle
+				if StarterCard.Offered() then
+					ctx.ShowScreen("Starter")
+				else
+					ctx.Toast("This skin comes with the Starter Bundle.", C.TextMuted)
+				end
+			elseif passId then
 				MarketplaceService:PromptGamePassPurchase(player, passId)
 			else
 				ctx.Toast("That skin is coming soon!", C.TextMuted)
@@ -994,6 +1003,9 @@ ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d).
 			action.SetIcon("robux")
 			if skin and skin.Pass == "StarterPack" then
 				action.SetText(passId and "BUY PACK" or "COMING SOON")
+			elseif skin and (skin :: any).Pass == "StarterBundle" then
+				action.SetText(StarterCard.Offered() and "STARTER BUNDLE" or "BUNDLE ONLY")
+				passId = StarterCard.Offered() and 1 or nil
 			else
 				action.SetText(passId and "BUY SKIN" or "COMING SOON")
 			end

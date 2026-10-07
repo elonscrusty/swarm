@@ -281,6 +281,19 @@ function XPSystem.MagnetRadius(rp, pos: Vector3, radius: number)
 	end
 end
 
+-- The raw XP value of the gems on the floor (or flying) within `radius` of `pos`
+-- (the first-run walkthrough's top-up check, Walkthrough.lua).
+function XPSystem.ValueNear(pos: Vector3, radius: number): number
+	local r2, sum = radius * radius, 0
+	for _, gem in ipairs(activeGems) do
+		local dx, dz = gem.Pos.X - pos.X, gem.Pos.Z - pos.Z
+		if dx * dx + dz * dz <= r2 then
+			sum += gem.Value
+		end
+	end
+	return sum
+end
+
 local function nearestCollector(pos: Vector3, runPlayers): any?
 	local best, bestD = nil, math.huge
 	for _, rp in ipairs(runPlayers) do
@@ -325,6 +338,7 @@ local function updateGems(dt: number, runPlayers)
 				local to = target.Root.Position - gem.Pos
 				local dist = to.Magnitude
 				if dist <= collectDist then
+					target.GemsPicked = (target.GemsPicked or 0) + 1 -- daily quests (DailyQuests)
 					XPSystem.GiveSharedXP(gem.Value)
 					releaseGem(i)
 					removed = true

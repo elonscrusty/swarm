@@ -10,6 +10,8 @@
 
 	Report text arrives already filtered by the server and is shown as plain text (no rich
 	text). Remotes: BugInbox ("Page", cursor?) | ("SetStatus", id, status) → BugInboxData.
+	BugReportPlus (Config.Features): pages hold the latest 20 reports, each with its
+	automatic snapshot (BugSnapshotData.Lines), cleaned again by the server.
 ]]
 
 local Players = game:GetService("Players")
@@ -19,6 +21,7 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local B = require(Shared:WaitForChild("BugReportData"))
+local SnapshotData = require(Shared:WaitForChild("BugSnapshotData"))
 local UIKit = require(script.Parent.UIKit)
 
 local DevInbox = {}
@@ -144,7 +147,35 @@ local function buildRow(r: { [string]: any }, order: number)
 		text(face, "Small", "Client says: " .. r.ClientLine, { LayoutOrder = 4, TextWrapped = true, TextColor3 = C.TextFaint, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
 	end
 
-	local buttons = new("Frame", { Name = "Status", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 44) }, face)
+	-- BugReportPlus: the automatic snapshot (ids, enums, numbers; log lines filtered by the server)
+	if SnapshotData.On() and type(r.Snapshot) == "table" then
+		local box = new("Frame", {
+			Name = "Snapshot",
+			LayoutOrder = 5,
+			BackgroundColor3 = C.PanelInset,
+			BackgroundTransparency = 0.3,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+		}, face)
+		UIKit.corner(box, Theme.Radius.S)
+		UIKit.pad(box, 6)
+		UIKit.list(box, { Padding = UDim.new(0, 2) })
+		for i, line in ipairs(SnapshotData.Lines(r.Snapshot, r.ServerBuild)) do
+			local isLog = string.sub(line, 1, 1) == "[" or string.sub(line, 1, 4) == "Log:"
+			text(box, "Small", line, {
+				Name = "Line" .. i,
+				LayoutOrder = i,
+				RichText = false,
+				TextWrapped = true,
+				TextColor3 = isLog and C.TextFaint or C.TextMuted,
+				Size = UDim2.new(1, 0, 0, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+			})
+		end
+	end
+
+	local buttons = new("Frame", { Name = "Status", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, 44) }, face)
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		Padding = UDim.new(0, 6),

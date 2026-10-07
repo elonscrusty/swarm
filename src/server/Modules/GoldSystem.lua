@@ -100,7 +100,13 @@ function GoldSystem.SettleRun(rp, extracted: boolean, cleared: number, seconds: 
 	if data and survival > 0 then
 		data.Gold += survival
 	end
-	rp.GoldSettlement = { Earned = earned, Retained = kept, Lost = earned - kept, Rate = rate, Survival = survival }
+	-- Roblox group members (GroupBonus.lua): a bonus on what this run paid into the lobby,
+	-- added here at settlement only (never to in-run gold, so chest prices are unchanged)
+	local group = 0
+	if data and ctx.GroupBonus and ctx.GroupBonus.Settle then
+		group = ctx.GroupBonus.Settle(rp, kept + survival, data)
+	end
+	rp.GoldSettlement = { Earned = earned, Retained = kept, Lost = earned - kept, Rate = rate, Survival = survival, Group = group }
 	return rp.GoldSettlement
 end
 
@@ -251,6 +257,7 @@ function GoldSystem.SyncProfile(player: Player)
 		Settings = data.Settings,
 		TutorialDone = data.TutorialDone == true,
 		SeenTips = data.SeenTips or {},
+		TutorialStep = tonumber(data.TutorialStep) or 0, -- tutorial runs played (SmartTutorial)
 		ReviveTokens = data.ReviveTokens,
 		Achievements = ctx.AchievementService and ctx.AchievementService.ProfileView(data) or nil,
 		Title = data.Title or "",
@@ -456,8 +463,12 @@ end
 	  ("Seen", tipId)  a hint was shown: it never shows again (ids from Config.Tutorial.Tips)
 	  ("Skip")         "Skip tips": the tutorial is done
 	  ("Replay")       Settings > Replay tips: every hint shows again from the next run
+	                   (SmartTutorial: TutorialStep back to 0, so two tutorial runs again)
 	The flags only decide which hints a client shows; nothing else reads them.
 ]]
+-- the SmartTutorial tour (client Tutorial.lua); all seen = the tutorial is done
+local SMART_TIPS = { "Move", "Attack", "Gems", "LevelUp", "Chest", "Portal", "Boss" }
+
 local function onTutorial(player: Player, action: any, tipId: any)
 	local data = ctx.DataService.GetData(player)
 	if not data or type(action) ~= "string" then
@@ -466,6 +477,19 @@ local function onTutorial(player: Player, action: any, tipId: any)
 	if action == "Seen" then
 		if type(tipId) == "string" and table.find(Config.Tutorial.Tips, tipId) then
 			data.SeenTips[tipId] = true
+			-- SmartTutorial: every one of the seven tips seen ends the tutorial early
+			if (Config :: any).Features.SmartTutorial == true and data.TutorialDone ~= true then
+				local all = true
+				for _, id in ipairs(SMART_TIPS) do
+					if data.SeenTips[id] ~= true then
+						all = false
+						break
+					end
+				end
+				if all then
+					data.TutorialDone = true
+				end
+			end
 		end
 		return -- no profile sync: the client already knows
 	elseif action == "Skip" then
@@ -473,6 +497,8 @@ local function onTutorial(player: Player, action: any, tipId: any)
 	elseif action == "Replay" then
 		data.TutorialDone = false
 		table.clear(data.SeenTips)
+		data.TutorialStep = 0 -- SmartTutorial: the first Config.Tutorial.Smart.Runs runs again
+		data.WalkthroughReplay = true -- the interactive walkthrough again on the next run (Walkthrough.lua)
 		data.Settings.Tips = true
 	else
 		return

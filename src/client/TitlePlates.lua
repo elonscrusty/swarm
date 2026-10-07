@@ -58,7 +58,10 @@ local function build(who: Player, root: BasePart, title: string)
 		BorderSizePixel = 0,
 	}, gui)
 	UIKit.corner(plate, 12)
-	UIKit.text(plate, "Label", who.DisplayName, {
+	-- a star before the name for members of the game's Roblox group (GroupBonus.lua sets
+	-- GroupMember on the server; Config.Features.GroupBonus with a group id)
+	local star = Config.FeatureOn("GroupBonus") and ((Config :: any).Group.Id or 0) ~= 0 and who:GetAttribute("GroupMember") == true
+	UIKit.text(plate, "Label", (star and "\u{2605} " or "") .. who.DisplayName, {
 		Name = "Name",
 		Position = UDim2.fromOffset(6, 1),
 		Size = UDim2.new(1, -12, 0, 20),
@@ -87,7 +90,7 @@ local function update(who: Player)
 		drop(who)
 		return
 	end
-	local key = title .. "|" .. tostring(who:GetAttribute("CosPlate") or "") .. "|" .. tostring(who:GetAttribute("Supporter")) .. "|" .. root:GetFullName()
+	local key = title .. "|" .. tostring(who:GetAttribute("CosPlate") or "") .. "|" .. tostring(who:GetAttribute("Supporter")) .. "|" .. tostring(who:GetAttribute("GroupMember")) .. "|" .. root:GetFullName()
 	local p = plates[who]
 	if p and p.Key == key and p.Gui.Adornee == root then
 		return

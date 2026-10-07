@@ -75,7 +75,16 @@ local META_SCREENS = {
 	Titles = require(script.Parent.MenuTitles),
 	Collection = require(script.Parent.MenuCollection),
 	Streak = require(script.Parent.MenuStreak),
+	-- next batch (docs/next): daily quests (MenuQuests also builds the home chip) and the
+	-- welcome-back card
+	Quests = require(script.Parent.MenuQuests),
+	Comeback = require(script.Parent.MenuComeback),
+	-- next batch: STARTER BUNDLE (home card / store), JOIN OUR GROUP and INVITE FRIENDS (MORE rows)
+	Starter = require(script.Parent.MenuStarter),
+	Group = require(script.Parent.MenuGroup),
+	Invite = require(script.Parent.MenuInvite),
 }
+local StarterCard = require(script.Parent.StarterCard)
 local UIState = require(script.Parent.UIState)
 
 local LobbyScreen = {}
@@ -92,6 +101,11 @@ local current = "Home"
 local SCREEN_ORDER = { Home = 1, Play = 1.5, Characters = 2, Upgrades = 3, Store = 3.2, Arenas = 3.5, More = 3.8, Stats = 4, Journal = 4.5, Curses = 5, Daily = 6, Ranks = 7, Track = 8, Party = 9, Sigils = 1.6, Weekly = 6.5, Season = 8.2, Titles = 8.4, Collection = 8.6, Streak = 8.8 }
 -- where BACK goes from each screen (anything else goes home)
 local PARENT = { Store = "Upgrades", Arenas = "Play", Curses = "Play", Daily = "More", Party = "More", Ranks = "More", Stats = "More", Track = "More", Journal = "More", Sigils = "Play", Weekly = "More", Season = "More", Titles = "More", Collection = "More", Streak = "More" }
+SCREEN_ORDER.Quests, PARENT.Quests = 8.7, "More" -- daily quests (MORE row, home chip)
+SCREEN_ORDER.Comeback, PARENT.Comeback = 8.75, "More" -- welcome-back card (comeback gift)
+SCREEN_ORDER.Starter, PARENT.Starter = 3.1, "Home" -- STARTER BUNDLE (home card, store card)
+SCREEN_ORDER.Group, PARENT.Group = 8.9, "More" -- JOIN OUR GROUP (MORE row)
+SCREEN_ORDER.Invite, PARENT.Invite = 8.95, "More" -- INVITE FRIENDS (MORE row)
 -- the screen each one was opened from this time (home's WORLDS / DAILY / PARTY / the
 -- account pill go back home; the PLAY sheet's WORLD row goes back to the sheet)
 local cameFrom: { [string]: string } = {}
@@ -758,6 +772,10 @@ local function buildHome(screen: Frame)
 	ui.Board = HomeBoard.Build(screen, function()
 		LobbyScreen.Show("Ranks", "Score")
 	end)
+	-- daily quests: the small "QUESTS 1/3" chip (kept clear of TOP SCORES and PLAY in relayout)
+	ui.QuestChip = META_SCREENS.Quests.BuildChip(screen, function()
+		LobbyScreen.Show("Quests")
+	end)
 end
 
 ------------------------------------------------------------------------------------------
@@ -984,10 +1002,56 @@ local function relayout()
 		if fits then
 			heroFrac = ((capBottom + 66 + playY) / 2) / H
 		end
+		-- QUESTS chip: centred just above PLAY (the hero's gap; never with the queue up)
+		local chipH = 34
+		local chipW = math.min(w, META_SCREENS.Quests.ChipWidth(chipH))
+		local questY = playY - G - chipH
+		if Config.FeatureOn("DailyQuests") and not showQueue and questY > capBottom + 8 + (fits and 58 + G or 0) then
+			ui.QuestChip.Layout((W - chipW) / 2, questY, chipW, chipH)
+		else
+			ui.QuestChip.Hide()
+		end
+		-- STARTER BUNDLE card (new players only, StarterCard): under the TOP SCORES strip,
+		-- only while the hero keeps its 200 px above the QUESTS chip / PLAY; never with the
+		-- queue up
+		if ui.Starter then
+			local cardY = capBottom + 8 + (fits and 58 + G or 0)
+			local chipShown = Config.FeatureOn("DailyQuests") and not showQueue and questY > capBottom + 8 + (fits and 58 + G or 0)
+			local limit = chipShown and (questY - G) or (playY - 12)
+			if not showQueue and cardY + StarterCard.Height + 8 + 200 <= limit then
+				local bottomY = ui.Starter.Place((W - w) / 2, cardY, w, true)
+				if bottomY > cardY then
+					heroFrac = ((bottomY + 8 + limit) / 2) / H
+				end
+			else
+				ui.Starter.Hide()
+			end
+		end
 	else
 		local bw = math.floor(math.clamp(W * 0.21, 170, 300))
 		local by = topY + pillH + G
 		local bottom = H - math.max(M, math.floor(H * 0.03)) - cogS - G
+		-- QUESTS chip: the top of the TOP SCORES column, the board starts under it
+		if Config.FeatureOn("DailyQuests") then
+			local chipH = math.floor(math.clamp(H * 0.05, 32, 40))
+			local chipW = math.min(bw, META_SCREENS.Quests.ChipWidth(chipH))
+			ui.QuestChip.Layout(W - rightM - chipW, by, chipW, chipH)
+			by += chipH + G
+		else
+			ui.QuestChip.Hide()
+		end
+		-- STARTER BUNDLE card (new players only, StarterCard): next in the column, the board
+		-- moves down under it; left out when the board would lose its second row
+		if ui.Starter then
+			if bottom - (by + StarterCard.Height + G) >= 134 then
+				local bottomY = ui.Starter.Place(W - rightM - bw, by, bw, false)
+				if bottomY > by then
+					by = bottomY + G
+				end
+			else
+				ui.Starter.Hide()
+			end
+		end
 		ui.Board.Layout(W - rightM - bw, by, bw, bottom - by, false)
 	end
 	-- PLAY lettering scales with the plate (reference: the word fills ~56 % of the width)
@@ -1105,7 +1169,7 @@ end
 -- Upgrades). arg goes to the screen's OnShow (Ranks: the board, Stats: the tab).
 -- The notice dot a screen clears when the player looks at it (NoticeDots).
 local function markSeen(name: string, arg: any?)
-	local id = ({ Characters = "Heroes", Upgrades = "Shop", More = "More", Daily = "Daily", Party = "Party", Track = "Track" } :: { [string]: string })[name]
+	local id = ({ Characters = "Heroes", Upgrades = "Shop", More = "More", Daily = "Daily", Party = "Party", Track = "Track", Quests = "Quests" } :: { [string]: string })[name]
 	if name == "Stats" and arg == "Achievements" then
 		id = "Achievements"
 	end
@@ -1325,6 +1389,9 @@ function LobbyScreen.SetProfile(p: { [string]: any })
 		markSeen(current) -- a change on the open screen is seen already
 	end
 	maybeAskFirstRun(p)
+	-- daily quests chip; a waiting comeback gift opens its card once (home only)
+	ui.QuestChip.Refresh(p)
+	META_SCREENS.Comeback.MaybeOpen(p, current, ui.Frame.Visible, LobbyScreen.Show)
 end
 
 local function clearQueueList()
@@ -1515,6 +1582,17 @@ function LobbyScreen.Init(h: { [string]: any })
 		return f
 	end
 	buildHome(screen("Home"))
+	-- STARTER BUNDLE home card (Config.Features.StarterBundle; placed in relayout)
+	if Config.FeatureOn("StarterBundle") then
+		ui.Starter = StarterCard.Build(ui.Home, {
+			Open = function()
+				LobbyScreen.Show("Starter")
+			end,
+			Relayout = function()
+				relayout()
+			end,
+		})
+	end
 	buildChip(frame)
 	buildLoadingPill()
 	buildFirstRunCover(frame)

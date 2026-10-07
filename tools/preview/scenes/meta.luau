@@ -1,6 +1,6 @@
 -- meta: the META lobby screens (docs/features/META.md) with a sample profile, for screenshots
 -- and the phone layout checks (check_layout.py):
---   --set screen=Sigils|Weekly|Season|Titles|Collection|Streak|Play|More   (default Sigils)
+--   --set screen=Sigils|Weekly|Season|Titles|Collection|Streak|Quests|Comeback|Play|More   (default Sigils)
 --   --set tab=Bosses|Weapons|...  (Collection: the category; Weekly: TeamDuo / TeamTrio)
 --   --set empty=on                a brand-new profile (nothing found, nothing claimed)
 local C = lib("common")
@@ -15,6 +15,7 @@ local week = MetaData.WeekOf(now)
 -- a season that runs now, whatever the machine's date
 Config.Season.List = { { Id = "T1", Name = "Season 1", Start = CurseData.DateText(today - 10), End = CurseData.DateText(today + 80) } }
 local empty = preview.args.empty == "on"
+local screen = preview.args.screen or "Sigils"
 local p = C.profile()
 p.Heroes.Knight.XP = 2000 -- Mastery 3+: both Sigil slots
 p.Title = empty and "" or "Faithful"
@@ -30,10 +31,16 @@ p.Features = {
 	Collection = { Seen = empty and {} or { ["Hero:Knight"] = true, ["Boss:HiveMother"] = true } },
 	LoginStreak = { Day = empty and 0 or 4, LastDay = empty and 0 or today - 1, Best = empty and 0 or 9 },
 	Cosmetics = { Owned = empty and {} or { Nameplate_Ember = true }, Equipped = { Nameplate = empty and "" or "Nameplate_Ember" } },
+	-- next batch: daily quests (first one done, one claimed) and a waiting comeback gift
+	DailyQuests = (not empty) and (function()
+		local picks = C.shared("QuestData").Pick(today)
+		local q1, q2 = C.shared("QuestData").ById[picks[1]], C.shared("QuestData").ById[picks[2]]
+		return { Day = today, Progress = { [picks[1]] = q1.Goal, [picks[2]] = q2.Goal, [picks[3]] = 0 }, Claimed = { [picks[2]] = true } }
+	end)() or nil,
+	Comeback = { LastGift = now, Pending = (not empty and screen == "Comeback") and { Days = 8, Gold = 1000, Look = "Trail_Homecoming" } or nil },
 }
 C.sendProfile(p)
 C.settle(1)
-local screen = preview.args.screen or "Sigils"
 preview.client("LobbyScreen").Show(screen, preview.args.tab)
 C.settle(1)
 if screen == "Weekly" then

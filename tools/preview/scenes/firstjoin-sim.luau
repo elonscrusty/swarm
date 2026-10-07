@@ -20,6 +20,7 @@ local ben = preview.addPlayer("Ben", 3)
 preview.forceMeshesUploaded()
 preview.startServer()
 preview.advance(2)
+preview.shared("Config").Features.Walkthrough = false -- this scene checks the flow without the interactive walkthrough (walkthrough-regression covers it)
 
 local st = C.state()
 local RM = preview.server("RunManager")

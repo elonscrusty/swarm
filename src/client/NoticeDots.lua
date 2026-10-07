@@ -15,8 +15,8 @@
 	per-frame work. The halo pulse is a single looping tween per visible dot, played only
 	while the dot is shown; with reduced effects the dot is static.
 
-	Ids: Heroes, Shop, Daily, Party, More (home); Achievements, Track (MORE rows; the MORE
-	tile's dot counts only these two).
+	Ids: Heroes, Shop, Daily, Party, More (home); Achievements, Track, Quests (MORE rows; the
+	MORE tile's dot counts only these; Quests also dots the home QUESTS chip).
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -29,6 +29,9 @@ local UIKit = require(script.Parent.UIKit)
 local ClientSettings = require(script.Parent.ClientSettings)
 local ClientPerformance = require(script.Parent.ClientPerformance)
 local MenuDaily = require(script.Parent.MenuDaily)
+local QuestData = require(Shared:WaitForChild("QuestData"))
+local Config = require(Shared:WaitForChild("Config"))
+local CurseData = require(Shared:WaitForChild("CurseData"))
 
 local NoticeDots = {}
 
@@ -42,7 +45,7 @@ local keys: { [string]: string } = {}
 local seen: { [string]: string } = {}
 -- rows the MORE tile's dot counts: only what is reached through MORE. Daily and Party have
 -- their own home buttons (and dots), so counting them here dotted two places for one thing.
-local MORE_ROWS = { "Achievements", "Track" }
+local MORE_ROWS = { "Achievements", "Track", "Quests" }
 
 -- session baseline (first profile): only what changes after it counts as new
 local baseline: { Ach: { [string]: boolean }, Owned: { [string]: boolean }, Level: number }? = nil
@@ -277,6 +280,9 @@ function NoticeDots.Refresh(p: { [string]: any }?, invites: number?)
 	setKey("Achievements", sortedJoin(newAch))
 	local rewards = (level or 1) > base.Level and #AccountData.RewardsBetween(base.Level, level :: number) > 0
 	setKey("Track", rewards and ("lv:" .. tostring(level)) or "")
+	-- QUESTS (MORE row + home chip): a quest or the bonus ready to claim today
+	local feats = type(p.Features) == "table" and p.Features or {}
+	setKey("Quests", Config.FeatureOn("DailyQuests") and QuestData.DotKey(feats.DailyQuests, CurseData.DayOf(require(script.Parent.MetaUI).Now())) or "")
 	updateMore()
 end
 
