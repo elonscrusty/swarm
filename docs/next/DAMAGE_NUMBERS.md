@@ -46,7 +46,8 @@ locals left, so `buildPause` only calls `Build`), `Config.DamageNumberOptions`.
 Label counts come from `damage-numbers-regression` (virtual clock, 16 enemies hit 8 times a second for
 3 s, `NUMBERS` line in its output): Off creates 0 labels; Combine on creates far fewer labels than Combine
 off (the check requires at least 4x fewer) and never shows more at once; the 18-label cap holds either way.
-The actual figures: pending the final check. `perf-sim` was not extended or run in this pass (it measures
+Measured (virtual clock, 16 enemies x 8 hits/s x 3 s; labels created / most on screen at once): Off 0 / 0,
+Combine off 384 / 18 (the cap), Combine on 16 / 16. `perf-sim` was not extended or run (it measures
 server and client frame time with the setting on and does not change).
 
 ## Regression
@@ -59,6 +60,6 @@ server and client frame time with the setting on and does not change).
     python3 tools/run_regressions.py --only damage-settings-regression,layout-damage-numbers-regression-iphone
 
 ## Status
-Code written and type-checked (`tools/check.sh --quick`: TYPECHECK ok, COMPILE ok).
-Regression results: pending the final check (not run in this pass; no lune/render run yet).
-Not Studio-tested: real fonts (bold weight, the star glyph), phone readability of the three sizes.
+PASS offline: `damage-settings-regression` PASS, `layout-damage-numbers-regression-iphone`,
+`-phone-portrait` and `-pc` PASS (check_layout 0 problems on the Settings screen).
+BLOCKED until Studio: real fonts (bold weight, the star glyph), phone readability of the three sizes.

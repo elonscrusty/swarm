@@ -72,7 +72,7 @@ local function backToLobby()
 end
 local function spawnElite(rp, affix: string, dx: number)
 	local p = rp.Root.Position
-	local e = ES.Spawn("Beetle", Vector3.new(p.X + dx, p.Y, p.Z + 12), { Elite = true, Affix = affix, Force = true })
+	local e = ES.Spawn("Skeleton", Vector3.new(p.X + dx, p.Y, p.Z + 12), { Elite = true, Affix = affix, Force = true })
 	if e then
 		e.Speed = 0 -- stays where it spawned
 	end

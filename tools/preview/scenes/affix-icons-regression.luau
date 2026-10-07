@@ -54,6 +54,14 @@ check(count(shapes) == #ids and count(colours) == #ids and count(notices) == #id
 check(Data.Get("Nope") == nil and Data.Get(5) == nil and Data.Get(nil) == nil, "junk affix values have no data")
 
 -- elites
+-- the client's VFX waits for these folders (a run creates them); this scene has no drops
+for _, name in ipairs({ "SwarmGems", "SwarmPickups" }) do
+	if not workspace:FindFirstChild(name) then
+		local f = Instance.new("Folder")
+		f.Name = name
+		f.Parent = workspace
+	end
+end
 local folder = workspace:FindFirstChild("SwarmEnemies") or Instance.new("Folder")
 folder.Name = "SwarmEnemies"
 folder.Parent = workspace

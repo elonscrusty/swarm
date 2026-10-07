@@ -61,6 +61,9 @@ in `EnemySpawner.Step`.
     python3 tools/run_regressions.py --only affix-sight-regression,layout-affix-icons-regression-iphone
 
 ## Status
-Code written and type-checked (`tools/check.sh --quick`: TYPECHECK ok, COMPILE ok).
-Regression results: pending the final check (not run in this pass; no lune/render run yet).
-Not Studio-tested: real camera zoom and badge legibility, the real notice lane timing.
+PASS offline (full round plus a re-run after two scene fixes: the real-server scene spawned a
+non-existent enemy type, the layout scene needed empty SwarmGems / SwarmPickups folders):
+`affix-sight-regression` PASS, `layout-affix-icons-regression-iphone`, `-phone-portrait` and `-pc`
+PASS (36 PASS lines each, check_layout 0 problems). `tools/check.sh --quick` type check: my files
+clean.
+BLOCKED until Studio: real camera zoom and badge legibility, the real notice lane timing.
