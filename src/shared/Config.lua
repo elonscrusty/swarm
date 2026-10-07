@@ -268,6 +268,9 @@ Config.LevelUp = {
 	-- protection budget) so the auto-pick clock never runs while the client loads the
 	-- icons, plays the card reveal and arms touch input (up to ~1.2 s)
 	RevealGraceSeconds = 1.5,
+	-- Banish (batch B, Config.Features.Banish, docs/next/BANISH.md): BANISH then a NEW card
+	-- removes that weapon / passive from the offers for the rest of the run, this many per run
+	Banishes = 3,
 }
 
 ------------------------------------------------------------------------------------------

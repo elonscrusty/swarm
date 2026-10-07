@@ -12,6 +12,11 @@
 --   --set synergy=N      card N advances a synergy (bar "ELEMENTAL TRINITY • 2 / 3")
 --   --set hidden=on      the discovery-gated clues of a new player: the synergy and the
 --                        evolution partner / result read "???" (LevelUpSystem, DiscoveryService)
+--   --set evo=on         batch B5 EvolutionPreview: weapon cards carry the evolution icon +
+--                        recipe with progress, ingredient passives "Needed for <evolution>"
+--                        (the server's text, from EvolutionPreview)
+--   --set banish=N       batch B6 Banish: the offer carries N banishes left (BANISH button)
+--   --set banishmode=on  ... and banish mode is on (cards marked BANISH / OWNED)
 local A = lib("arena")
 local C = lib("common")
 A.build({ enemies = 90 })
@@ -139,8 +144,42 @@ if preview.args.fav == "on" and #choices > 0 then
 	C.sendProfile(C.profile({ SelectedCharacter = "Knight", Features = { Presets = { List = { { Hero = "Knight", Weapons = ids, Passives = ids } }, Active = { Knight = 1 } } } }))
 	C.settle(0.2)
 end
+-- --set evo=on: the evolution lines LevelUpSystem adds with EvolutionPreview on (weapon
+-- cards: recipe + progress; a passive an owned weapon needs: "Needed for ...")
+if preview.args.evo == "on" then
+	local EP = C.shared("EvolutionPreview")
+	local passives = { Heart = 1, Might = 2 }
+	local owned = { Whip = 6 }
+	for _, c in ipairs(choices) do
+		if c.Type == "WeaponUp" then
+			owned[c.Id] = c.Level - 1
+		end
+	end
+	for _, c in ipairs(choices) do
+		if c.Type == "WeaponUp" or c.Type == "WeaponNew" then
+			local def = WeaponData.Weapons[c.Id]
+			local st = def.Evolution and EP.Status(c.Id, c.Level, passives[def.Evolution.Passive] or 0)
+			if st then
+				c.Hint, c.HintReady, c.EvoIcon, c.EvoName = EP.WeaponLine(st), st.Ready, st.EvoId, st.Name
+			end
+		elseif c.Type == "PassiveNew" or c.Type == "PassiveUp" then
+			for wid, lv in pairs(owned) do
+				local def = WeaponData.Weapons[wid]
+				if def and def.Evolution and def.Evolution.Passive == c.Id then
+					local st = EP.Status(wid, lv, c.Level)
+					if st then
+						c.Hint, c.HintReady, c.EvoIcon, c.EvoName = EP.PassiveLine(st), st.Ready, st.EvoId, st.Name
+					end
+					break
+				end
+			end
+		end
+	end
+end
 C.fire("LevelUpOffer", {
 	OfferId = 1,
+	Banishes = tonumber(preview.args.banish),
+	BanishesMax = preview.args.banish and 3 or nil,
 	Group = group,
 	Choices = choices,
 	Rerolls = tonumber(preview.args.rerolls) or (welcome and 0 or 2),
@@ -209,5 +248,11 @@ if touchKind then
 		end
 		preview.log(string.format("[levelup] touch %s at %.2fs on card %d: %s", touchKind, tonumber(preview.args.touchAt) or 0.9, idx, taken and "TAKEN" or "ignored"))
 	end
+end
+if preview.args.banishmode == "on" then
+	C.settle(1.2)
+	local Banish = preview.client("LevelUpBanish")
+	Banish.Toggle()
+	preview.log(Banish.Active() and "PASS [levelup] banish mode on" or "FAIL [levelup] banish mode did not turn on")
 end
 C.settle(tonumber(preview.args.at) or 1.5)

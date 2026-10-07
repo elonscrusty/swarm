@@ -82,6 +82,8 @@ def main():
     # batch B (docs/PROMPT_BATCH_B.md, docs/next/); one block per group
     # batch B group A: AffixIcons, DamageNumberOptions
     # batch B group B: EvolutionPreview, Banish
+    checks += [("evolution-preview-regression", [])] + [("layout", ["evolution-panel-regression", d]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "evo=on"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["hud-build", d]) for d in ("iphone", "phone-portrait", "pc")]  # EvolutionPreview (docs/next/EVOLUTION_PREVIEW.md)
+    checks += [("banish-regression", [])] + [("layout", ["levelup", d, "banish=3"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "banish=2", "banishmode=on", "evo=on"]) for d in ("iphone", "phone-portrait", "pc")]  # Banish (docs/next/BANISH.md)
     # batch B group C: FinalStand, StageModifiers
     # batch B group D: PartyQuickLines, ReviveThanks
     # batch B group E: Prestige, QuickResume

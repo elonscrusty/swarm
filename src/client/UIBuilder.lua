@@ -1108,6 +1108,21 @@ local function chooseCard(index: number, input: InputObject?)
 	if not confirmInput(input) then
 		return
 	end
+	-- Banish mode (LevelUpBanish, docs/next/BANISH.md): the card is banished, not picked;
+	-- no picks until the re-rolled set is in (re-armed if the server sends none)
+	local handled, fired = require(script.Parent.LevelUpBanish).Intercept(index)
+	if handled then
+		if fired then
+			offerArm.At = math.huge
+			local token = offerArm.Token
+			task.delay(1, function()
+				if offerArm.Token == token and offerOpen then
+					offerArm.At = os.clock()
+				end
+			end)
+		end
+		return
+	end
 	offerOpen = false
 	offerArm.At = math.huge
 	Choice.choiceSound("ChoicePick")
@@ -1273,6 +1288,8 @@ local function buildLevelUp()
 			end)
 		end,
 	})
+	-- BANISH (LevelUpBanish, docs/next/BANISH.md): hidden unless the offer carries banishes
+	require(script.Parent.LevelUpBanish).Build(actions, levelUp.Cards, levelUp.RuleR)
 	-- REROLL / SKIP words and their "1 left" lines shrink inside the button (phone large text)
 	for _, b in ipairs({ levelUp.Reroll, levelUp.Skip }) do
 		for _, l in ipairs({ b.Title, b.Subtitle }) do
@@ -1636,8 +1653,18 @@ function Choice.hintPlate(label: TextLabel, c)
 	label.BackgroundTransparency = 0.45
 	label.Name = "Hint"
 	UIKit.corner(label, 6)
-	new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, label)
+	local pad = new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, label)
 	UIKit.stroke(label, c.HintReady and P.gold_400 or P.gold_600, 1, c.HintReady and 0.2 or 0.5)
+	if c.EvoIcon and Config.FeatureOn("EvolutionPreview") then
+		-- EvolutionPreview (docs/next/EVOLUTION_PREVIEW.md): the evolved weapon's icon in the
+		-- plate's left padding; the longer recipe line shrinks to fit instead of being cut
+		local size = math.clamp(label.Size.Y.Offset - 4, 14, 28)
+		local icon = Icons.Upgrade(label, tostring(c.EvoIcon), { Size = size, Name = "EvoIcon" })
+		icon.AnchorPoint = Vector2.new(0, 0.5)
+		icon.Position = UDim2.new(0, -size - 4, 0.5, 0)
+		pad.PaddingLeft = UDim.new(0, size + 10)
+		Choice.fit(label, label.TextSize, 8, label.TextWrapped)
+	end
 end
 
 -- Small gold diamonds at the four corners of a card (the sculpted frame of screen 04).
@@ -2295,11 +2322,14 @@ local function layoutLevelUp()
 	local ah = actionH()
 	levelUp.Actions.Position = UDim2.fromOffset(0, y)
 	levelUp.Actions.Size = UDim2.new(1, 0, 0, ah)
-	local bw = math.clamp(math.floor((v.X - 2 * margin() - 18) / 2), 150, 240)
+	-- a third button (BANISH, LevelUpBanish) when the offer carries banishes
+	local three = require(script.Parent.LevelUpBanish).Visible()
+	local bw = three and math.clamp(math.floor((v.X - 2 * margin() - 36) / 3), 96, 220) or math.clamp(math.floor((v.X - 2 * margin() - 18) / 2), 150, 240)
 	levelUp.Reroll.Instance.Size = UDim2.fromOffset(bw, ah)
 	levelUp.Skip.Instance.Size = UDim2.fromOffset(bw, ah)
+	require(script.Parent.LevelUpBanish).Size(bw, ah, { levelUp.Reroll, levelUp.Skip })
 	-- the flanking rules only where there is room for them
-	local ruleW = math.floor((v.X - 2 * margin() - 2 * bw - 3 * 18) / 2)
+	local ruleW = math.floor((v.X - 2 * margin() - (three and 3 or 2) * bw - (three and 4 or 3) * 18) / 2)
 	levelUp.RuleL.Visible = ruleW >= 40
 	levelUp.RuleR.Visible = ruleW >= 40
 	levelUp.RuleL.Size = UDim2.fromOffset(math.min(ruleW, 140), 1)
@@ -2342,6 +2372,7 @@ local function buildCards(animate: boolean)
 			GuiService.SelectedObject = card
 		end
 	end
+	require(script.Parent.LevelUpBanish).Mark() -- a relayout keeps the banish mode marks
 	layoutLevelUp()
 	return first
 end
@@ -2370,15 +2401,18 @@ local function showOffer(offer)
 	local rerolls, skips = tonumber(offer.Rerolls) or 0, tonumber(offer.Skips) or 0
 	local rerollMax, skipMax = tonumber(offer.RerollsMax) or rerolls, tonumber(offer.SkipsMax) or skips
 	local skipGold = tonumber(offer.SkipGold) or Config.LevelUp.SkipGold
+	-- BANISH first: with three buttons in the row REROLL / SKIP use their short lines
+	local Banish = require(script.Parent.LevelUpBanish)
+	Banish.Show(offer)
 	levelUp.Reroll.SetText(
 		"REROLL",
-		rerolls > 0 and (phoneLandscape() and string.format("%d left", rerolls) or string.format("%d left · %d new cards", rerolls, Config.LevelUp.Choices))
+		rerolls > 0 and ((phoneLandscape() or Banish.Visible()) and string.format("%d left", rerolls) or string.format("%d left · %d new cards", rerolls, Config.LevelUp.Choices))
 			or (rerollMax > 0 and "None left this run" or "Buy rerolls in the Shop")
 	)
 	levelUp.Reroll.SetEnabled(rerolls > 0)
 	levelUp.Skip.SetText(
 		"SKIP",
-		skips > 0 and (phoneLandscape() and string.format("%d left · +%d", skips, skipGold) or string.format("%d left · +%d gold", skips, skipGold))
+		skips > 0 and ((phoneLandscape() or Banish.Visible()) and string.format("%d left · +%d", skips, skipGold) or string.format("%d left · +%d gold", skips, skipGold))
 			or (skipMax > 0 and "None left this run" or "No skips left")
 	)
 	levelUp.Skip.SetEnabled(skips > 0)
@@ -2434,6 +2468,7 @@ end
 local function closeOffer()
 	offerOpen = false
 	offerHint = nil
+	require(script.Parent.LevelUpBanish).Close()
 	offerArm.Token += 1
 	offerArm.At = math.huge
 	offerArm.ShownAt = math.huge
