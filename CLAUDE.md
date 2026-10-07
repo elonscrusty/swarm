@@ -126,6 +126,18 @@ characters, run menu, level-up fixed (other lobby screens via the shared fix), d
 Also: review fixes (docs/features/REVIEW.md), Trial shrine from stage 2 (BALANCE.md), darker lobby
 (exposure -0.5). Regressions 145/151 then the 6 layout fails fixed and rechecked individually.
 
+Mobile clarity + boss/combat fairness batch (2026-10-07, owner's two recording briefs; offline only,
+NOT Studio-tested; report docs/CLARITY_PASS_2026-10-07.md): HUD stack + banner lane on a dark plate,
+urgent headlines replace lower ones, stale ones dropped (UIState validators); PORTAL arrow hides behind
+panels; merchant RUN GOLD / NEED N MORE / close X; objective text follows portal state, first solo run
+reveals the portal after the first pick (Config.FirstRun.RevealWaitsForPick); new-account PLAY screen
+(START SOLO + ADVANCED OPTIONS); one-sentence cards, role tags, early immediate-option help
+(Config.LevelUp.EarlyHelpLevels), +1.5 s reveal grace; phone camera x0.85; ULT charge/READY. Boss:
+telegraphs match hitboxes and are timed from server time, stage-1 Queen intro (Config.Boss.Intro),
+contact cooldown per player + 0.4 s contact grace, DEV CombatTrace, boss preference in range.
+Encounters: no new caravan/escort during the stage-1 boss (Config.Encounters.Intro), caravan 1 s start +
+rules + 10 s stage-1 grace, villager unstick (CatchUp 12), item timers on the run clock. Preview devices
+phone-1108 / phone-small; run_regressions --only/--workers. Regressions 165/165 after fixes (offline).
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,
