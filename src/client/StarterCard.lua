@@ -138,7 +138,7 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 	local function subText(): string
 		local left = StarterCard.TimeLeft()
 		local c = (Config :: any).StarterBundle or {}
-		local s = string.format("Pioneer skin + %s gold", UIKit.formatNumber(tonumber(c.Gold) or 0))
+		local s = string.format("Skin + %s gold", UIKit.formatNumber(tonumber(c.Gold) or 0))
 		return left ~= "" and (s .. " · " .. left) or s
 	end
 	function api.Wanted(): boolean
