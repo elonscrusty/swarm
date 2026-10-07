@@ -35,6 +35,13 @@
 	           re-forms when BOTH sides agree: the leader's own return data lists the member
 	           and the member's names that leader (one forged side can't pull anyone in).
 
+	Quick lines (Config.Features.PartyQuickLines, docs/next/PARTY_QUICK_LINES.md): ("Say",
+	lineIndex) through the Party remote. FIXED text only: the client sends an index into
+	Config.PartyQuickLines.Lines, never text, so there is nothing to filter. The index is
+	validated, the sender must be in a party of two or more, and a player may say one line
+	per MinGap seconds and PerMinute per minute; the line goes (PartySay, index only) to
+	the sender's own party members and nobody else.
+
 	Every client request comes through Remotes.Listen (rate limited, pcall'd) and is
 	validated: ids must be players on this server, actions must make sense for the sender.
 	Player attributes PartyId (0 = none) and PartyLeader tell every client who is grouped
@@ -355,6 +362,80 @@ local function kick(leader: Player, userId: any)
 	removeMember(target, "was removed")
 end
 
+------------------------------------------------------------------------------------------
+-- Quick lines (PartyQuickLines)
+------------------------------------------------------------------------------------------
+
+-- say[player] = { Last = os.clock() of the last line, Times = { os.clock() of lines in the last 60 s } }
+local say: { [Player]: { Last: number, Times: { number } } } = {}
+
+-- Why `index` from `player` can't go out now ("feature" | "index" | "party" | "gap" | "minute"),
+-- or nil. Records nothing (PartyService.Say does, when it sends).
+function PartyService.CheckSay(player: Player, index: any): string?
+	if not Config.FeatureOn("PartyQuickLines") then
+		return "feature"
+	end
+	local lines = Config.PartyQuickLines.Lines
+	if type(index) ~= "number" or index ~= index or index < 1 or index > #lines or index % 1 ~= 0 then
+		return "index"
+	end
+	local party = partyOf[player]
+	if not party or #party.Members < 2 then
+		return "party"
+	end
+	local now = os.clock()
+	local rec = say[player]
+	if rec then
+		if now - rec.Last < Config.PartyQuickLines.MinGap then
+			return "gap"
+		end
+		local recent = 0
+		for _, t in ipairs(rec.Times) do
+			if now - t < 60 then
+				recent += 1
+			end
+		end
+		if recent >= Config.PartyQuickLines.PerMinute then
+			return "minute"
+		end
+	end
+	return nil
+end
+
+-- A member's quick line: validated, rate limited, delivered to the sender's party only.
+-- Returns true when it was sent.
+function PartyService.Say(player: Player, index: any): boolean
+	local why = PartyService.CheckSay(player, index)
+	if why then
+		if why == "minute" then
+			notify(player, "Easy there: too many quick lines. Try again in a moment.", WARN)
+		end
+		return false
+	end
+	local party = partyOf[player] :: Party
+	local now = os.clock()
+	local rec = say[player]
+	if not rec then
+		rec = { Last = now, Times = {} }
+		say[player] = rec
+	end
+	rec.Last = now
+	local kept = {}
+	for _, t in ipairs(rec.Times) do
+		if now - t < 60 then
+			table.insert(kept, t)
+		end
+	end
+	table.insert(kept, now)
+	rec.Times = kept
+	for _, m in ipairs(party.Members) do
+		if m.Parent then
+			Remotes.FireClient("PartySay", m, { FromId = player.UserId, FromName = player.DisplayName, Index = index })
+		end
+	end
+	return true
+end
+
 local ACTIONS: { [string]: (Player, any) -> () } = {
 	Invite = invite,
 	Accept = accept,
@@ -376,6 +457,10 @@ local ACTIONS: { [string]: (Player, any) -> () } = {
 			party.Ready[player] = on or nil
 			pushParty(party)
 		end
+	end,
+	-- (lineIndex: number) a fixed quick line for the party (PartyQuickLines)
+	Say = function(player, index)
+		PartyService.Say(player, index)
 	end,
 	Sync = function(player)
 		push(player)
@@ -584,6 +669,7 @@ local function onRemoving(player: Player)
 	end
 	lastInvite[player] = nil
 	followAt[player] = nil
+	say[player] = nil
 end
 
 ------------------------------------------------------------------------------------------

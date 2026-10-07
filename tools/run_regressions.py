@@ -86,6 +86,10 @@ def main():
     # batch B group B: EvolutionPreview, Banish
     # batch B group C: FinalStand, StageModifiers
     # batch B group D: PartyQuickLines, ReviveThanks
+    checks += [("party-quick-lines-regression", ["headless=off"])]  # PartyQuickLines: party-only delivery, validation, 1/2 s + 10/min limits, bubble fades (PASS/FAIL lines; needs the full client)
+    checks += [("layout", ["party-quick-lines-layout", d, "view=" + v]) for d in ("iphone", "phone-portrait", "pc") for v in ("panel", "home", "solo")]  # PartyQuickLines: PARTY screen strip + feed, home SAY chip popup
+    checks += [("revive-thanks-regression", ["headless=off"])]  # ReviveThanks: offer, once, XP, pair limit, DEV taint, solo, 6 s button (PASS/FAIL lines; needs the full client)
+    checks += [("layout", ["revive-thanks-layout", d]) for d in ("iphone", "phone-portrait", "pc")]  # ReviveThanks: THANKS! button clear of JUMP / ULT / team list
     # batch B group E: Prestige, QuickResume
 
     def run(check):

@@ -62,6 +62,7 @@ local MenuLeaderboards = require(script.Parent.MenuLeaderboards)
 local MenuTrack = require(script.Parent.MenuTrack)
 local MenuArenas = require(script.Parent.MenuArenas)
 local MenuParty = require(script.Parent.MenuParty)
+local PartyLines = require(script.Parent.PartyLines)
 local NoticeDots = require(script.Parent.NoticeDots)
 local MenuPlay = require(script.Parent.MenuPlay)
 local MenuMore = require(script.Parent.MenuMore)
@@ -776,6 +777,8 @@ local function buildHome(screen: Frame)
 	ui.QuestChip = META_SCREENS.Quests.BuildChip(screen, function()
 		LobbyScreen.Show("Quests")
 	end)
+	-- party quick lines: a small SAY chip with a popup of fixed lines, only in a party
+	ui.SayChip = PartyLines.BuildChip(screen)
 end
 
 ------------------------------------------------------------------------------------------
@@ -1011,6 +1014,15 @@ local function relayout()
 		else
 			ui.QuestChip.Hide()
 		end
+		-- SAY chip (PartyLines, in a party only): just above the QUESTS chip, only while the
+		-- hero keeps its 200 px
+		local sayW = PartyLines.ChipWidth(chipH)
+		local sayY = (Config.FeatureOn("DailyQuests") and questY > capBottom + 8 + (fits and 58 + G or 0) and questY or playY) - G - chipH
+		if not showQueue and ui.SayChip.Wanted() and sayY >= capBottom + 8 + (fits and 58 + G or 0) + 200 then
+			ui.SayChip.Layout((W - sayW) / 2, sayY, sayW, chipH, Vector2.new(W, H), false)
+		else
+			ui.SayChip.Hide()
+		end
 		-- STARTER BUNDLE card (new players only, StarterCard): under the TOP SCORES strip,
 		-- only while the hero keeps its 200 px above the QUESTS chip / PLAY; never with the
 		-- queue up
@@ -1039,6 +1051,15 @@ local function relayout()
 			by += chipH + G
 		else
 			ui.QuestChip.Hide()
+		end
+		-- SAY chip (PartyLines, in a party only): under the QUESTS chip, the board starts under it
+		if ui.SayChip.Wanted() then
+			local sayH = math.floor(math.clamp(H * 0.05, 32, 40))
+			local sayW = math.min(bw, PartyLines.ChipWidth(sayH))
+			ui.SayChip.Layout(W - rightM - sayW, by, sayW, sayH, Vector2.new(W, H), true)
+			by += sayH + G
+		else
+			ui.SayChip.Hide()
 		end
 		-- STARTER BUNDLE card (new players only, StarterCard): next in the column, the board
 		-- moves down under it; left out when the board would lose its second row
@@ -1504,6 +1525,12 @@ function LobbyScreen.Update(_dt: number?)
 		end
 		ui.PartyBtn.SetText(party.Count > 0 and string.format("Party %d/%d", party.Count, party.Max) or "Party")
 		ui.PartyBtn.SetSelected(party.Count > 0)
+	end
+	-- the SAY chip (quick lines) comes and goes with the party: lay the home out again
+	local sayNow = ui.SayChip.Wanted()
+	if ui.SayShown ~= sayNow then
+		ui.SayShown = sayNow
+		relayout()
 	end
 	local showReady = party.Count > 0 and not party.Leader and kind == "Modes"
 	if ui.ReadyBtn.Instance.Visible ~= showReady then

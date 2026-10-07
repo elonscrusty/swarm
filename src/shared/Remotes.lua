@@ -47,6 +47,8 @@ Remotes.ServerToClient = {
 	"LeaderboardData", -- { Board, Rows = { {Rank, Name, Value, Me} }, Status, Age, MyRank?, MyBest } (LeaderboardService)
 	"PartyState", -- this player's party: { LeaderId, Members = { {UserId, Name, Ready} }, Max, Invites = { {FromId, FromName, Seconds} }, Sent = {userId} } (PartyService)
 	"PartyInvite", -- a new invite: { FromId, FromName, Seconds } (PartyService): the ACCEPT / DECLINE card
+	"PartySay", -- a party quick line: { FromId, FromName, Index } (PartyService, PartyQuickLines): the client shows Config.PartyQuickLines.Lines[Index]
+	"ReviveThanksOffer", -- you were revived: { Id, Seconds, FromName } show THANKS! for Seconds (ReviveThanks.lua, ReviveThanks)
 	"StoreResult", -- cosmetic store answer: { Kind = "Buy" | "Equip" | "Gift", Ok, Text } (StoreService)
 	"MerchantStock", -- this player's merchant cart stock: { Id, Stage, Items = { {Id, Rarity, Price, Sold} } } or { Id = 0 } (Merchant.lua, EXPLORE)
 }
@@ -86,8 +88,9 @@ Remotes.ClientToServer = {
 	"BugReport", -- ({ Category, Text, Client }) player bug report, filtered and rate limited (BugReportService)
 	"BugInbox", -- ("Page", cursor?) | ("SetStatus", id, status) DEV inbox, server-side allowlist
 	"LeaderboardRequest", -- (boardId) a Config.Leaderboards.Order id (LeaderboardService)
-	"Party", -- ("Invite" | "Accept" | "Decline" | "Kick", userId) | ("Ready", boolean) | ("Leave") | ("Sync") lobby PARTY screen (PartyService)
+	"Party", -- ("Invite" | "Accept" | "Decline" | "Kick", userId) | ("Ready", boolean) | ("Leave") | ("Say", lineIndex) | ("Sync") lobby PARTY screen (PartyService)
 	"PartyFollow", -- (friendUserId) JOIN a friend's server: server-side teleport, friends only (PartyService)
+	"ReviveThanks", -- (offerId) tap THANKS! after a teammate revive; the server checks the offer, the limits and the run (ReviveThanks.lua)
 	"TravelHome", -- ("Go" | "Stay") run server, back in its lobby: go to a public lobby now / stay and play here (RunServers)
 	"UseUltimate", -- () fire the hero ultimate; the server checks charge, life and the run (Ultimate.lua, HEROPOWER)
 	"SetPreset", -- (heroId, "Weapons" | "Passives", id, on) mark a favourite for the level-up tag (Ultimate.lua, HEROPOWER)

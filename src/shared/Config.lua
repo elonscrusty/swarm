@@ -1684,6 +1684,19 @@ Config.Modes = {
 	Weekly = { DisplayName = "Weekly", MaxPlayers = 1, Countdown = false },
 }
 
+-- Revive thank-you (Config.Features.ReviveThanks; docs/next/REVIVE_THANKS.md): after a
+-- teammate revives you, a THANKS! button shows for ThanksSeconds. A tap tells the reviver
+-- "<name> says thanks!" and gives them ThanksXP run XP (server-checked: once per revive, at
+-- most ThanksPerPair per run for one pair, never yourself, never solo, never a DEV run).
+-- PROPOSED: ThanksXP awaits the owner's approval.
+Config.Revive = {
+	ThanksXP = 25, -- run XP the reviver gets per thank-you
+	ThanksSeconds = 6, -- the button's time on screen
+	ThanksGrace = 1.5, -- the server accepts a tap this much later (network lag)
+	ThanksPerPair = 3, -- thank-yous per run for one (revived, reviver) pair
+	ThanksRate = 2, -- "ReviveThanks" remote calls per second per player
+}
+
 -- Parties (server PartyService.lua, lobby PARTY screen MenuParty.lua). Friends on this
 -- server form a party; when the leader starts SOLO / DUO / TRIO (or the Daily) the
 -- members join that run at once, up to the mode's size. A party is never bigger than
@@ -1697,6 +1710,19 @@ Config.Party = {
 	FriendsCacheSeconds = 30, -- the client asks Roblox for online friends at most this often
 	FollowCooldown = 6, -- seconds between JOIN (teleport) attempts per player
 	ActionRate = 4, -- "Party" remote calls per second per player
+}
+
+-- Party quick lines (Config.Features.PartyQuickLines; docs/next/PARTY_QUICK_LINES.md): fixed
+-- text only, the client sends a line INDEX (1..#Lines), never text. The server checks the
+-- index, the rate limits and that sender and receivers share a party. A line shows as a
+-- bubble over the sender's lobby hero and in the PARTY screen's feed.
+Config.PartyQuickLines = {
+	Lines = { "Ready?", "Go!", "GG", "One more?", "Wait for me", "Thanks!" },
+	MinGap = 2, -- seconds between two lines from one player
+	PerMinute = 10, -- lines per player in any 60 s
+	BubbleSeconds = 4, -- a bubble stays this long (the last FadeSeconds fade out)
+	FadeSeconds = 0.6,
+	FeedMax = 6, -- lines kept in the PARTY screen's feed
 }
 
 -- Private run servers (server RunServers.lua, client TravelOverlay.lua). In the live game a
