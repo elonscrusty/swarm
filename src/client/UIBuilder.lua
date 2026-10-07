@@ -1448,7 +1448,8 @@ end
 
 -- The art panel's height: what it would like, and the least it keeps before rows give way.
 function Choice.artPref(w: number): number
-	return UIKit.IsCompact() and math.floor(math.min(110, w * 0.42)) or math.floor(math.min(230, w * 0.72))
+	-- phones: up to 150 (was 110) so the upgrade picture is big; it only grows into spare card height
+	return UIKit.IsCompact() and math.floor(math.min(150, w * 0.55)) or math.floor(math.min(230, w * 0.72))
 end
 function Choice.artMin(): number
 	return UIKit.IsCompact() and 72 or 120
@@ -1689,12 +1690,12 @@ function Choice.cardArt(face: GuiObject, c, x: number, y: number, w: number, h: 
 	UIKit.corner(glow, 999)
 	-- (no plinth: the floating picture never sat on it and it read as a stray dark bar)
 	-- short panels (phones in landscape) give the picture nearly all their height
-	local iconS = math.max(32, math.floor(math.min(h < 100 and h - 14 or h - 30, w * 0.62)))
+	local iconS = math.max(32, math.floor(math.min(h < 140 and h - 14 or h - 26, w * 0.66)))
 	local holder = new("Frame", {
 		Name = "IconHolder",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, h < 100 and 4 or 6),
+		Position = UDim2.new(0.5, 0, 0.5, h < 140 and 4 or 6),
 		Size = UDim2.fromOffset(iconS, iconS),
 		ZIndex = 3,
 	}, art)
@@ -2034,7 +2035,14 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		}, 16)
 
 		-- the art panel takes what the text leaves (between Choice.artMin and Choice.artPref)
-		local artH = math.clamp(h - cardNeeds(c, w), Choice.artMin(), Choice.artPref(w))
+		local needs = cardNeeds(c, w)
+		local spare = h - needs
+		if spare < Choice.artMin() and #select(3, cardContent(c)) > 0 then
+			-- the before/after box will not fit even with the smallest picture (short phone
+			-- cards): it gets dropped below, so its room goes to the picture instead
+			spare += boxHeight() + 6
+		end
+		local artH = math.clamp(spare, Choice.artMin(), Choice.artPref(w))
 		local y = CARD.Inset
 		local art = Choice.cardArt(face, c, CARD.Inset, y, w - 2 * CARD.Inset, artH, edgeColor, animate and delay + 0.08 or nil)
 		local roleChip = Choice.roleChip(art, c)
