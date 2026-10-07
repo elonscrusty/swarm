@@ -64,6 +64,19 @@ local R = Theme.ItemRarity
 local FLAT = Vector3.new(1, 0, 1)
 local MARKER_RANGE = 140 -- studs: markers show this close
 local KINDS = { SecretRoom = true, Merchant = true, Rescue = true }
+-- A label that shrinks (down to minSize) instead of cutting or spilling: TextScaled under a
+-- size cap; TextFit leaves it alone.
+local function shrinkToFit(label: TextLabel, minSize: number)
+	local max = label.TextSize
+	label.TextScaled = true
+	label:SetAttribute("NoTextFit", true)
+	local c = label:FindFirstChild("Fit") or Instance.new("UITextSizeConstraint")
+	c.Name = "Fit"
+	c.MaxTextSize = max
+	c.MinTextSize = math.min(max, minSize)
+	c.Parent = label
+end
+
 local CARD_H = 158 -- offer card height (compact: CARD_H_COMPACT, no tile)
 local CARD_H_COMPACT = 100
 local HEAD_H = 38 -- title row: MERCHANT, RUN GOLD, close X
@@ -410,6 +423,13 @@ local function buildPanel(root: Frame)
 		local desc = UIKit.text(card, "Caption", "", { Name = "Desc", Position = UDim2.fromOffset(4, 72), Size = UDim2.new(1, -8, 0, 26), TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = P.ivory_200 }, 11)
 		local price = UIKit.text(card, "Label", "", { Name = "Price", Position = UDim2.fromOffset(4, 98), Size = UDim2.new(1, -8, 0, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 }, 14)
 		local btn = UIKit.Button(card, { Name = "Buy", Title = "BUY", Kind = "Primary", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.new(1, -12, 0, 34), Shadow = false, OnClick = function() buy(i) end })
+		-- "NEED 36 MORE", the rarity and the price shrink to fit narrow phone cards (large
+		-- Roblox text sizes cut them or ran the rarity into the price)
+		if btn.Title then
+			shrinkToFit(btn.Title, 9)
+		end
+		shrinkToFit(rarity, 8)
+		shrinkToFit(price, 9)
 		cards[i] = { Card = card, Stroke = stroke, TileBox = tileBox, Name = name, Rarity = rarity, Desc = desc, Price = price, Button = btn, Shown = "", Enabled = true }
 	end
 	return p
