@@ -106,7 +106,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 	}, face)
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Top }, ui.Chips)
 	local chips: { [string]: any } = {}
-	ui.Note = text(face, "Small", "", { Name = "Note", Size = UDim2.new(1, 0, 0, TS(14) + 6), TextColor3 = C.TextMuted, TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 14)
+	ui.Note = text(face, "Small", "", { Name = "Note", Size = UDim2.new(1, 0, 0, 2 * TS(14) + 6), TextColor3 = C.TextMuted, TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true }, 14)
 	ui.Scroll = new("ScrollingFrame", {
 		Name = "Scroll",
 		BackgroundTransparency = 1,
@@ -534,7 +534,8 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		ui.Chips.Position = UDim2.fromOffset(0, 0)
 		local noteY = chipsH + 4
 		ui.Note.Position = UDim2.fromOffset(0, noteY)
-		ui.ScrollTop = noteY + TS(14) + 10
+		-- the note may wrap to two lines on narrow phones (big Roblox text size)
+		ui.ScrollTop = noteY + 2 * TS(14) + 10
 		ui.Scroll.Position = UDim2.fromOffset(0, ui.ScrollTop)
 		ui.Scroll.Size = UDim2.new(1, 0, 1, -ui.ScrollTop)
 		local inner = w - 28 - 12
