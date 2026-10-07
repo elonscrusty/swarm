@@ -4123,7 +4123,9 @@ local function statTile(parent: Instance, icon: string, caption: string, order: 
 		Size = UDim2.new(1, -4, 0, TS(12) + 2),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextScaled = true, -- long captions (ENEMIES DEFEATED) shrink a little before they cut
 	}, 11)
+	new("UITextSizeConstraint", { MinTextSize = math.max(8, cap.TextSize - 4), MaxTextSize = cap.TextSize }, cap)
 	return value, cap
 end
 
@@ -4414,7 +4416,8 @@ local function buildResults()
 	UIKit.stroke(goal, P.moss_400, 1.5, 0.25)
 	results.Goal = goal
 	results.GoalIcon = new("Frame", { Name = "Icon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(28, 28) }, goal)
-	results.GoalText = text(goal, "Small", "", { Name = "Line", RichText = true, TextTruncate = Enum.TextTruncate.AtEnd, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
+	results.GoalText = text(goal, "Small", "", { Name = "Line", RichText = true, TextScaled = true, TextTruncate = Enum.TextTruncate.AtEnd, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
+	new("UITextSizeConstraint", { MinTextSize = math.max(10, results.GoalText.TextSize - 3), MaxTextSize = results.GoalText.TextSize }, results.GoalText) -- shrinks a little before it cuts
 	results.GoalMeter = UIKit.Meter(goal, {
 		Gradient = ColorSequence.new(P.moss_400, P.moss_200),
 		TextStyle = "Number",
@@ -4559,7 +4562,7 @@ local function buildResults()
 		local medalS = slim and 60 or 80
 		results.Medal.Size = UDim2.fromOffset(medalS, medalS)
 		results.BossBadge.Size = UDim2.fromOffset(medalS / 2, medalS / 2)
-		local tileH = slim and 48 or 104
+		local tileH = slim and math.max(48, TS(24) + TS(12) + 12) or 104 -- slim: value over caption, never overlapping
 		results.Divider.Visible = not slim
 		local btnH = slim and 42 or Theme.Size.Button
 		local headH = slim and math.max(medalS, titleSize + 4 + TS(13) + 6 + TS(15) + 2) or math.max(84, titleSize + 6 + TS(13) + 8 + TS(15) + 8)
@@ -4659,7 +4662,7 @@ local function buildResults()
 			local textX = 46
 			if oneRow then
 				goalH = math.max(slim and 34 or 40, lineH + 14)
-				local barW = meterShown and math.clamp(math.floor(inner * 0.3), 120, 200) or 0
+				local barW = meterShown and math.clamp(math.floor(inner * (inner < 600 and 0.2 or 0.3)), 90, 200) or 0
 				results.GoalText.Position = UDim2.fromOffset(textX, 0)
 				results.GoalText.Size = UDim2.new(1, -(textX + barW + (meterShown and 20 or 10)), 1, 0)
 				results.GoalMeter.Frame.AnchorPoint = Vector2.new(1, 0.5)

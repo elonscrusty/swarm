@@ -606,7 +606,7 @@ local bought: { [string]: { [string]: number } } = {} -- upgrades bought on this
 		-- whose upgrades these are, and one running note of what was bought on this visit
 		-- (rows update from the server's profile; no stream of confirmations here)
 		local headTxt = string.format("%s'S UPGRADES · only for the %s · paid with gold", string.upper(heroName), heroName)
-		text(ui.MasteryPanel, "Small", headTxt, { Name = "Owner", LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(13) + 6), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd, FontFace = DETAIL_HEADING }, 13)
+		text(ui.MasteryPanel, "Small", headTxt, { Name = "Owner", LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(13) + 6), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.gold_200, FontFace = DETAIL_HEADING }, 13) -- wraps to a second line at large text sizes
 		local bw = math.clamp(math.floor(innerW * 0.37), 128, 190)
 		local withIcon = bw >= 175 -- narrow buttons (phones) keep the whole label instead
 		local lineH = TS(13) + 4
@@ -679,6 +679,7 @@ text(row, "Small", effectLine, {
 				Title = title,
 				Icon = withIcon and icon or nil,
 				IconSize = 16,
+				Shrink = true, -- large text sizes: the label shrinks a little before it cuts
 				Align = "Center",
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, -8, 0.5, 0),

@@ -101,10 +101,12 @@ function HeroPresets.Tag(face: GuiObject, c: { [string]: any })
 	-- (portrait stack): on the top edge left of the key number, in the gap between cards
 	local hit = face.Parent
 	local wide = hit and hit:IsA("GuiObject") and hit.Size.X.Offset > 2 * hit.Size.Y.Offset
+	local plate = face:FindFirstChild("ChoosePlate") :: GuiObject?
 	local tag = UIKit.text(face, "Label", Config.BuildPresets.Tag, {
 		Name = "FavouriteTag",
 		AnchorPoint = if wide then Vector2.new(1, 0.5) else Vector2.new(0, 1),
-		Position = if wide then UDim2.new(1, -44, 0, 0) else UDim2.new(0, 8, 1, -8),
+		-- tall cards sit just above the CHOOSE plate so a wide tag (large text) never meets the key
+		Position = if wide then UDim2.new(1, -44, 0, 0) else (plate and UDim2.new(0, 8, 0, plate.Position.Y.Offset - 4) or UDim2.new(0, 8, 1, -8)),
 		Size = UDim2.fromOffset(0, UIKit.TS(12) + 6),
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextXAlignment = Enum.TextXAlignment.Center,
