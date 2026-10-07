@@ -82,6 +82,7 @@ local function allocProjectile(): Projectile?
 	p.NoHarvest = nil
 	p.Carry = nil
 	p.SeekAt = nil
+	p.Seeking = nil
 	p.Gravity = nil
 	-- armoury batch: per-kind data, Sling stagger / bounce gain
 	p.X = nil
@@ -188,10 +189,51 @@ local function skipDead(e): boolean
 	return not e.Alive
 end
 
-local function nearestEnemies(pos: Vector3, range: number, k: number): { any }
+-- The boss a single-target weapon aims at first (Config.Boss.Targeting.PreferBoss): it
+-- can be hit now, and its body edge is inside the weapon's range and within PreferWithin
+-- studs of the hero. nil = no preference (aim at the nearest as always).
+local function preferredBoss(pos: Vector3, range: number): any?
+	local T = Config.Boss.Targeting
+	local b = ctx.EnemySpawner.Boss
+	if not (T and T.PreferBoss and b and b.Alive) or b.Invulnerable or b.Dying or b.Untargetable then
+		return nil
+	end
+	local edge = ((b.Pos - pos) * FLAT).Magnitude - b.Radius
+	if edge <= math.min(range, T.PreferWithin) then
+		return b
+	end
+	return nil
+end
+
+--[[
+	Range checks use the target's body edge: a big body (a boss, an elite) whose centre is
+	past the range but whose edge is inside still counts (the projectile then reaches it;
+	the hit itself is still decided by the projectile touching the body). preferBoss: a
+	single-target weapon puts preferredBoss first.
+]]
+local function nearestEnemies(pos: Vector3, range: number, k: number, preferBoss: boolean?): { any }
 	local result = {}
+	local boss = preferBoss and preferredBoss(pos, range) or nil
 	if k <= 1 then
+		if boss then
+			result[1] = boss
+			return result
+		end
 		local e = grid():Nearest(pos.X, pos.Z, range, skipDead)
+		if not e then
+			-- no centre in range: the nearest body EDGE in range (QueryCircle adds radii)
+			local n = grid():QueryCircle(pos.X, pos.Z, range, queryBuf)
+			local best = math.huge
+			for i = 1, n do
+				local c = queryBuf[i]
+				if c.Alive then
+					local edge = ((c.Pos - pos) * FLAT).Magnitude - c.Radius
+					if edge < best then
+						e, best = c, edge
+					end
+				end
+			end
+		end
 		if e then
 			result[1] = e
 		end
@@ -204,7 +246,7 @@ local function nearestEnemies(pos: Vector3, range: number, k: number): { any }
 	local list = {}
 	for i = 1, n do
 		local e = queryBuf[i]
-		if e.Alive then
+		if e.Alive and e ~= boss then
 			list[#list + 1] = e
 		end
 	end
@@ -214,8 +256,11 @@ local function nearestEnemies(pos: Vector3, range: number, k: number): { any }
 		local bx, bz = b.Pos.X - px, b.Pos.Z - pz
 		return ax * ax + az * az < bx * bx + bz * bz
 	end)
-	for i = 1, math.min(k, #list) do
-		result[i] = list[i]
+	if boss then
+		result[1] = boss
+	end
+	for i = 1, math.min(k - #result, #list) do
+		result[#result + 1] = list[i]
 	end
 	return result
 end
@@ -374,6 +419,13 @@ end
 local function hittable(e): boolean
 	return e.Alive and not e.Invulnerable and not e.Dying and not e.Untargetable
 end
+-- A chased target is still worth chasing: alive, the same spawn, and still in the grid (a
+-- burrowed or rising boss leaves it: homing shots retarget or fly straight on, hooks and
+-- darts turn back, clouds stop following).
+local function chaseable(t, uid: number?): boolean
+	return t ~= nil and t.Alive and t.Uid == uid and not t.Untargetable
+end
+
 local function skipUnhittable(e): boolean
 	return not hittable(e)
 end
@@ -496,7 +548,7 @@ function Fire.Orb(rp, w, s, def)
 	local params = def.Params
 	local evo = w.Evolved and def.Evolution or nil
 	local origin = ground(rp.Root.Position)
-	local targets = nearestEnemies(origin, 60, s.amount)
+	local targets = nearestEnemies(origin, 60, s.amount, true)
 	if #targets == 0 then
 		return
 	end
@@ -779,7 +831,7 @@ function Fire.Longbow(rp, w, s, def)
 	local evo = w.Evolved and def.Evolution or nil
 	local origin = ground(rp.Root.Position)
 	-- auto aim (owner): the nearest enemy in range, else the movement direction, else facing
-	local target = nearestEnemies(origin, s.speed * s.duration, 1)[1]
+	local target = nearestEnemies(origin, s.speed * s.duration, 1, true)[1]
 	local dir = target and flatDir(target.Pos - origin, rp.Facing)
 		or (rp.MoveDir.Magnitude > 0.1 and rp.MoveDir or rp.Facing)
 	w.Attacks = (w.Attacks or 0) + 1
@@ -866,7 +918,7 @@ function Fire.Crossbow(rp, w, s, def)
 	local params = def.Params
 	local evo = w.Evolved and def.Evolution or nil
 	local origin = ground(rp.Root.Position)
-	local targets = nearestEnemies(origin, s.speed * s.duration, s.amount)
+	local targets = nearestEnemies(origin, s.speed * s.duration, s.amount, true)
 	if #targets == 0 then
 		w.Timer = math.min(w.Timer, 0.25) -- nothing in range: look again soon
 		return
@@ -1419,7 +1471,7 @@ function Fire.Soul(rp, w, s, def)
 	local params = def.Params
 	local evo = w.Evolved and def.Evolution or nil
 	local origin = ground(rp.Root.Position)
-	local targets = nearestEnemies(origin, params.Range, s.amount)
+	local targets = nearestEnemies(origin, params.Range, s.amount, true)
 	if #targets == 0 then
 		w.Timer = math.min(w.Timer, 0.3)
 		return
@@ -1945,7 +1997,7 @@ function Fire.Sling(rp, w, s, def)
 	local params = def.Params
 	local evo = w.Evolved and def.Evolution or nil
 	local origin = ground(rp.Root.Position)
-	local targets = nearestEnemies(origin, s.speed * s.duration * 1.2, s.amount)
+	local targets = nearestEnemies(origin, s.speed * s.duration * 1.2, s.amount, true)
 	local stagger = WeaponData.HasPerk(w, "Stagger") and { params.StaggerSlow, params.StaggerSeconds } or nil
 	for i = 1, s.amount do
 		local p = allocProjectile()
@@ -2035,7 +2087,7 @@ function Arm.stepCloud(p: Projectile, dt: number, now: number): boolean
 	end
 	local x = p.X
 	local t = p.Target
-	if not (t and t.Alive and t.Uid == p.TargetUid) then
+	if not chaseable(t, p.TargetUid) then
 		t = nil
 		if now >= (p.SeekAt or 0) then
 			p.SeekAt = now + 0.3
@@ -2370,7 +2422,7 @@ function Fire.Wisps(rp, w, s, def)
 		return
 	end
 	local origin = ground(rp.Root.Position)
-	local targets = nearestEnemies(origin, params.Range * s.area, #resting)
+	local targets = nearestEnemies(origin, params.Range * s.area, #resting, true)
 	if #targets == 0 then
 		w.Timer = math.min(w.Timer, 0.3)
 		return
@@ -2401,7 +2453,7 @@ function Arm.stepWisp(p: Projectile, dt: number, now: number): boolean
 	if p.Phase == "Dart" then
 		x.Dart += dt
 		local e = p.Target
-		if not (e and e.Alive and e.Uid == p.TargetUid) then
+		if not chaseable(e, p.TargetUid) then
 			e = grid():Nearest(p.Pos.X, p.Pos.Z, x.Retarget, function(o)
 				return p.Hits[o.Uid] ~= nil or not o.Alive
 			end)
@@ -2639,7 +2691,7 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 		local home = ground(owner.Root.Position)
 		if p.Phase == "Out" then
 			local t = p.Target
-			if not (t and t.Alive and t.Uid == p.TargetUid) or p.Age > p.OutLimit then
+			if not chaseable(t, p.TargetUid) or p.Age > p.OutLimit then
 				p.Phase = "Back"
 			else
 				local to = (t.Pos - p.Pos) * FLAT
@@ -2666,7 +2718,7 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 		return false
 	elseif kind == "Soul" then
 		local t = p.Target
-		if not (t and t.Alive and t.Uid == p.TargetUid and p.Hits[t.Uid] == nil) then
+		if not (chaseable(t, p.TargetUid) and p.Hits[(t :: any).Uid] == nil) then
 			t = nil
 			if now >= (p.SeekAt or 0) then
 				p.SeekAt = now + 0.15
@@ -2716,6 +2768,25 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 		p.Pos += p.Vel * dt
 	elseif kind == "Homing" then
 		local t = p.Target
+		if (t ~= nil or p.Seeking) and not chaseable(t, p.TargetUid) then
+			-- the target left the grid (a burrowed / rising boss): pick the nearest enemy
+			-- still in the grid (looked for every 0.2 s), else fly straight on until the
+			-- shot's life runs out. A target that died: straight on, as always.
+			local left = t ~= nil and t.Alive and t.Uid == p.TargetUid
+			t = nil
+			p.Target = nil
+			p.TargetUid = nil
+			p.Seeking = p.Seeking or left
+			if p.Seeking and now >= (p.SeekAt or 0) then
+				p.SeekAt = now + 0.2
+				t = grid():Nearest(p.Pos.X, p.Pos.Z, 30, skipDead)
+				if t then
+					p.Target = t
+					p.TargetUid = t.Uid
+					p.Seeking = nil
+				end
+			end
+		end
 		if t and t.Alive and t.Uid == p.TargetUid then
 			local want = flatDir(t.Pos - p.Pos, p.Vel.Unit)
 			local cur = p.Vel.Unit

@@ -807,28 +807,79 @@ local function onDowned(rp)
 	finalizeDeath(rp)
 end
 
+-- What kind of hit a cause string is (callers that do not pass one): "contact" | "projectile"
+-- | "hazard" (lingering ground: fire, acid pools, lava) | "area" (strikes, waves, eruptions).
+local function hitKind(cause: string?): string
+	local c = string.lower(cause or "")
+	if string.find(c, "contact", 1, true) then
+		return "contact"
+	elseif string.find(c, "projectile", 1, true) then
+		return "projectile"
+	elseif string.find(c, "pool", 1, true) or string.find(c, "fire", 1, true) or string.find(c, "lava", 1, true) then
+		return "hazard"
+	end
+	return "area"
+end
+
+--[[
+	DEV combat trace (DevTools "CombatTrace" sets rp.CombatTrace, only for devs, for one
+	run): one server Output line per hit on that player, never shown to players. Using it
+	is a DEV command, so the run is dev-tainted like every other one.
+	  [combat] t=<run time> src=<cause> kind=<contact|projectile|area|hazard> dmg=<n>
+	           hp=<before>-><after> phase=<boss state | none> (blocked=<why> when ignored)
+]]
+local function trace(rp, cause: string?, kind: string, dmg: number, before: number, after: number, blocked: string?)
+	local boss = ctx.EnemySpawner and ctx.EnemySpawner.Boss
+	local phaseName = boss and boss.Alive and boss.BossState and (tostring(boss.BossState) .. "/p" .. tostring(boss.PhaseIndex or 1)) or "none"
+	print(string.format("[combat] t=%.2f src=%s kind=%s dmg=%.1f hp=%.1f->%.1f phase=%s%s", runTime, cause or "Swarm damage", kind, dmg, before, after, phaseName, blocked and (" blocked=" .. blocked) or ""))
+end
+
 -- Server-only damage entry point (enemy contact, explosions, boss projectiles).
-function RunManager.DamagePlayer(rp, amount: number, cause: string?)
+-- kind: "contact" | "projectile" | "area" | "hazard" (nil = read from the cause). Contact
+-- hits give a short contact-only grace (Config.Player.ContactGraceSeconds).
+function RunManager.DamagePlayer(rp, amount: number, cause: string?, kind: string?)
 	if amount ~= amount or math.abs(amount) == math.huge or amount <= 0 then return end
 	if not RunManager.IsSimulating() or not rp.Alive then
 		return
 	end
+	local tracing = rp.CombatTrace == true -- DEV only (DevTools "CombatTrace")
+	local k = kind or hitKind(cause)
 	-- choosing an upgrade or watching a chest reward: that player can't be hurt (in a group
 	-- run the world keeps moving around them, see RefreshFrozen). Only a server-opened
 	-- panel counts (rp.Offer, bounded by LevelUpSystem's deadline and the protection
 	-- budget); the run menu, rewards (chest reels included) and client state never protect.
 	-- A solo reward hold freezes the whole world instead (RefreshFrozen).
 	if rp.Paused and rp.Offer ~= nil and Config.Player.LevelUpInvulnerable then
+		if tracing then
+			trace(rp, cause, k, 0, rp.HP, rp.HP, "choice")
+		end
 		return
 	end
 	-- dev godmode (DevTools sets it only for isDev players)
 	if rp.Player:GetAttribute("DevGod") == true then
+		if tracing then
+			trace(rp, cause, k, 0, rp.HP, rp.HP, "god")
+		end
 		return
 	end
 	local now = os.clock()
 	if runTime < rp.InvulnUntil then
+		if tracing then
+			trace(rp, cause, k, 0, rp.HP, rp.HP, "invulnerable")
+		end
 		return
 	end
+	if k == "contact" then
+		-- post-hit protection for body contact only (a crowd can't stack bites)
+		if runTime < (rp.ContactGraceUntil or 0) then
+			if tracing then
+				trace(rp, cause, k, 0, rp.HP, rp.HP, "contact-grace")
+			end
+			return
+		end
+		rp.ContactGraceUntil = runTime + (Config.Player.ContactGraceSeconds or 0)
+	end
+	local hpBefore = rp.HP
 	local dmg = math.max(Config.Player.MinDamagePerHit, amount * rp.Stats.DamageTaken - rp.Stats.Armor)
 	local taken = dmg -- after armor / Iron Plate, before the shield (Barbed Mail scales on it)
 	dmg = ctx.ItemSystem.AbsorbHit(rp, dmg) -- Guardian Ward shield first
@@ -840,6 +891,9 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?)
 		end
 	end
 	setHP(rp, rp.HP - dmg)
+	if tracing then
+		trace(rp, cause, k, dmg, hpBefore, rp.HP, dmg <= 0 and "shield" or nil)
+	end
 	if dmg > 0 and rp.HP <= 0 then
 		rp.DeathCause = cause or "Swarm damage"
 	end

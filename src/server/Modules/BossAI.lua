@@ -34,6 +34,14 @@
 	bands, a rolling wave with a gap, mines, lanes that erupt, a closing ring with a gap, a
 	breath cone); targets are living players only, so deaths,
 	revives and players leaving never leave a boss aiming at nobody.
+	Warnings match the damage: rush lanes are as wide as the body's contact reach and
+	reach past the rush's end (cut at the fence, where the rush stops too) and light up
+	while the rush runs; stinger spokes are drawn as wide as the stinger's hit lane; the
+	Venom Burst spots are marked during the claw pose and stay fixed.
+	Teachable first fight (Config.Boss.Intro, stage 1 at the base difficulty): opening
+	attacks, dizzy (harmless) recoveries after Venom Burst and the Stinger Ring, wider
+	stinger gaps in phase 1. FollowUps take the cycle's next slot when it is the same
+	attack, so nothing plays twice in a row.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -52,6 +60,7 @@ local FLAT = Vector3.new(1, 0, 1)
 local TAU = math.pi * 2
 local GROUP = "Boss"
 local STINGER_VISUAL = 7 -- WeaponData.Visuals index of the boss stinger
+local PLAYER_RADIUS = 1.2 -- the hero body every hit check adds (EnemyAI, WeaponSystem, Hazards)
 local clock = 0 -- boss time (only runs while the run simulates)
 
 ------------------------------------------------------------------------------------------
@@ -160,6 +169,18 @@ end
 local function recover(e, seconds: number)
 	e.SpeedOverride = 0
 	setState(e, "Recover", seconds)
+end
+
+-- The recovery after an attack: standing (contact still hurts), or, in the teachable
+-- first fight (Intro SafeRecover), dizzy for at least its Seconds so melee can punish.
+local function afterAttack(e, name: string, seconds: number)
+	local safe = e.Intro and e.Intro.SafeRecover
+	if safe and safe.Attacks and safe.Attacks[name] then
+		stunned(e, math.max(seconds, safe.Seconds or 0))
+	else
+		setAct(e, nil)
+		recover(e, seconds)
+	end
 end
 
 local function partySize(): number
@@ -290,6 +311,10 @@ local Start = {}
 	A lane rush: the Queen's Charge, the Matriarch's Dive, the Warlord's Horn Charge.
 	A.Stuck (Horn Charge): the lane stops at the first obstacle / the fence and he sticks
 	there. Acts: Queen Windup / Charge, Matriarch Lift / Swoop, Warlord Windup / Charge.
+	The lane shows the real hit area: as wide as the body's contact reach (EnemyAI
+	ContactReach, not just the body), as long as the rush plus that reach, and cut where
+	the fence stops the body (the rush then ends there too). It lights up while the rush
+	runs (the "active" seconds of the lane) and fades out fast after it.
 ]]
 function Start.Rush(e, name: string, windup: number?)
 	local A = e.BossData.Attacks[name]
@@ -299,9 +324,9 @@ function Start.Rush(e, name: string, windup: number?)
 	local w = windup or A.Windup
 	local full = A.Speed * A.Duration
 	local len, blocked = full, false
+	local c = Config.ArenaOrigin
 	if A.Stuck then
 		-- where would his horn hit something? (the lane shows exactly that)
-		local c = Config.ArenaOrigin
 		local half = Config.Arenas.Size / 2 - e.Radius - 1
 		local reach = e.Radius * 0.6
 		for d = 2, full, 1 do
@@ -318,10 +343,30 @@ function Start.Rush(e, name: string, windup: number?)
 		Start.GroundPound(e)
 		return
 	end
+	-- the fence: EnemyAI keeps the body's centre Radius inside it, so the rush stops there
+	-- (distance along dir to that box, per axis)
+	local function toBox(inset: number): number
+		local half = Config.Arenas.Size / 2 - inset
+		local t = math.huge
+		if math.abs(dir.X) > 1e-4 then
+			local edge = c.X + (dir.X > 0 and half or -half)
+			t = math.min(t, (edge - e.Pos.X) / dir.X)
+		end
+		if math.abs(dir.Z) > 1e-4 then
+			local edge = c.Z + (dir.Z > 0 and half or -half)
+			t = math.min(t, (edge - e.Pos.Z) / dir.Z)
+		end
+		return math.max(0, t)
+	end
+	len = math.max(2, math.min(len, toBox(e.Radius)))
 	e.ChargeBlocked = blocked
 	e.ChargeTime = len / A.Speed
-	local shown = len + (blocked and e.Radius * 0.6 or 0)
-	addWarn(e, Fx.Telegraph(e.Pos + dir * (shown / 2), math.atan2(-dir.X, -dir.Z), shown, e.Radius * 2, w))
+	local reach = ctx.EnemyAI.ContactReach(e)
+	-- the drawn lane: the rush + the body's reach past its end, never through the fence
+	local shown = math.max(2, math.min(len + reach, toBox(0)))
+	local yaw = math.floor(math.atan2(-dir.X, -dir.Z) * 100 + 0.5) / 100
+	local mid = e.Pos + dir * (shown / 2)
+	addWarn(e, Fx.Warn("lane", mid.X, mid.Z, yaw, shown, reach * 2, w, math.floor(e.ChargeTime * 100 + 0.5) / 100))
 	e.SpeedOverride = 0
 	setAct(e, name == "Dive" and "Lift" or "Windup")
 	setState(e, "ChargeWindup", w)
@@ -339,21 +384,40 @@ function Start.HornCharge(e)
 	Start.Rush(e, "HornCharge")
 end
 
+-- The circles' spots are chosen as the claws rise and stay fixed: a dashed marker shows
+-- each one during the pose, then the filling circle opens on the same spot.
 function Start.VenomBurst(e)
 	local A = e.BossData.Attacks.VenomBurst
+	local n = math.min(A.MaxCircles, A.Circles + partySize() - 1)
+	-- one circle right where each player stands (a small random offset), the rest close
+	-- around them, so the safe ground is a short step away
+	e.VenomSpots = spotsNearPlayers(n, 0, 1.5, 8, 14, A.Radius * 1.3)
+	for _, p in ipairs(e.VenomSpots) do
+		addWarn(e, Fx.Warn("circle", p.X, p.Z, A.Radius, A.Windup, "mark"))
+	end
 	e.SpeedOverride = 0
 	setAct(e, "Claws")
 	setState(e, "VenomWindup", A.Windup)
 end
 
+-- Stingers fly along spokes from where she stood at the wind-up (RingPos), so the drawn
+-- spokes and gaps are exactly the stinger lanes; each spoke is drawn as wide as the real
+-- hit lane (stinger radius + hero body, both sides). The teachable first fight (Intro)
+-- leaves wider gaps in phase 1.
 function Start.StingerRing(e)
 	local A = e.BossData.Attacks.StingerRing
 	local count, gaps = A.Count, A.Gaps
+	local gapWidth = A.GapWidth
+	if e.Intro and e.Intro.StingerGapWidth and e.PhaseIndex == 1 then
+		gapWidth = e.Intro.StingerGapWidth
+	end
+	-- at least one stinger lane between two gaps (they never merge into one)
+	gapWidth = math.clamp(gapWidth, 1, math.max(1, math.floor(count / gaps) - 1))
 	local skip = {}
 	local first = rng:NextInteger(0, count - 1)
 	for g = 0, gaps - 1 do
 		local c = first + math.floor(g * count / gaps)
-		for k = 0, A.GapWidth - 1 do
+		for k = 0, gapWidth - 1 do
 			skip[(c + k) % count] = true
 		end
 	end
@@ -366,10 +430,12 @@ function Start.StingerRing(e)
 	end
 	e.RingAngles = angles
 	e.RingWave = 0
+	e.RingPos = e.Pos
 	e.SpeedOverride = 0
 	setAct(e, "TailRaise")
 	local shown = A.Windup + (A.Waves - 1) * A.WaveGap + 0.35
-	addWarn(e, Fx.Warn("spokes", e.Pos.X, e.Pos.Z, e.Radius + 0.5, 18, shown, angles))
+	local lane = math.floor((A.ProjectileRadius + PLAYER_RADIUS) * 2 * 10 + 0.5) / 10
+	addWarn(e, Fx.Warn("spokes", e.Pos.X, e.Pos.Z, e.Radius, A.ShowLength or 36, shown, angles, lane))
 	setState(e, "Ring", A.Windup)
 end
 
@@ -859,22 +925,23 @@ end
 -- Active moments
 ------------------------------------------------------------------------------------------
 
+-- The circles open on the spots chosen when the claws rose (Start.VenomBurst).
 local function venomCircles(e)
 	local A = e.BossData.Attacks.VenomBurst
-	local n = math.min(A.MaxCircles, A.Circles + partySize() - 1)
-	-- one circle right where each player stands (a small random offset), the rest close
-	-- around them, so the safe ground is a short step away
-	for _, p in ipairs(spotsNearPlayers(n, 0, 1.5, 8, 14, A.Radius * 1.3)) do
-		Hazards.Strike(p, A.Radius, A.Fill, damage(A.Damage), { Group = GROUP, Style = "venom" })
+	local cause = e.BossData.DisplayName .. " Venom Burst"
+	for _, p in ipairs(e.VenomSpots or {}) do
+		Hazards.Strike(p, A.Radius, A.Fill, damage(A.Damage), { Group = GROUP, Style = "venom", Cause = cause })
 	end
+	e.VenomSpots = nil
 	Fx.Sound("Explosion")
 end
 
 local function fireRing(e)
 	local A = e.BossData.Attacks.StingerRing
+	local from = e.RingPos or e.Pos
 	for _, a in ipairs(e.RingAngles or {}) do
 		local dir = Vector3.new(math.cos(a), 0, math.sin(a))
-		ctx.WeaponSystem.SpawnHostile(e.Pos + dir * e.Radius, dir, A.Speed, damage(A.Damage), A.ProjectileRadius, A.Life, STINGER_VISUAL)
+		ctx.WeaponSystem.SpawnHostile(from + dir * e.Radius, dir, A.Speed, damage(A.Damage), A.ProjectileRadius, A.Life, STINGER_VISUAL)
 	end
 end
 
@@ -989,11 +1056,29 @@ local function startOf(e, name: string): ((any) -> ())?
 	return nil
 end
 
+-- The cycle slot after the current one.
+local function nextSlot(e): number
+	local cycle = phase(e).Cycle
+	return (e.BossCycle % #cycle) + 1
+end
+
 local function nextAttack(e)
 	table.clear(e.BossWarns) -- the last attack's telegraphs are over by now
 	local cycle = phase(e).Cycle
-	e.BossCycle = (e.BossCycle % #cycle) + 1
-	local name = cycle[e.BossCycle]
+	local name
+	local opening = e.Intro and e.Intro.Opening
+	if opening and (e.OpeningLeft or 0) > 0 and e.PhaseIndex == 1 then
+		-- teachable first fight: the opening attack a few times, then the normal cycle
+		-- (whose first slot is skipped when it is that same attack)
+		e.OpeningLeft -= 1
+		name = opening.Attack
+		if e.OpeningLeft == 0 and cycle[nextSlot(e)] == name then
+			e.BossCycle = nextSlot(e)
+		end
+	else
+		e.BossCycle = nextSlot(e)
+		name = cycle[e.BossCycle]
+	end
 	e.BossFollowup = phase(e).FollowUps and phase(e).FollowUps[name] or nil
 	local fn = startOf(e, name)
 	if fn then
@@ -1068,8 +1153,13 @@ State.Recover = function(e, _dt)
 		e.BossFollowup = nil
 		local fn = followup and startOf(e, followup) or nil
 		if fn and not e.PendingPhase and #living() > 0 then
-			-- Keep the complete punish window, then telegraph the follow-up normally.
+			-- Keep the complete punish window, then telegraph the follow-up normally. The
+			-- follow-up takes the cycle's next slot when that slot is the same attack, so
+			-- it never plays twice in a row (Charge → Venom Burst, Dive → Glimmer Mines).
 			e.Harmless = false
+			if phase(e).Cycle[nextSlot(e)] == followup then
+				e.BossCycle = nextSlot(e)
+			end
 			fn(e)
 		else
 			chase(e, paced(e, e.BossData.Chase))
@@ -1136,8 +1226,7 @@ end
 State.VenomHold = function(e, _dt)
 	e.SpeedOverride = 0
 	if e.BossTimer <= 0 then
-		setAct(e, nil)
-		recover(e, paced(e, e.BossData.Attacks.VenomBurst.Recover))
+		afterAttack(e, "VenomBurst", paced(e, e.BossData.Attacks.VenomBurst.Recover))
 	end
 end
 
@@ -1148,8 +1237,7 @@ State.Ring = function(e, _dt)
 		fireRing(e)
 		e.RingWave += 1
 		if e.RingWave >= A.Waves then
-			setAct(e, nil)
-			recover(e, paced(e, A.Recover))
+			afterAttack(e, "StingerRing", paced(e, A.Recover))
 		else
 			e.BossTimer = A.WaveGap
 		end
@@ -1187,7 +1275,7 @@ State.Burrowed = function(e, dt)
 	if e.BossTimer <= 0 then
 		e.SpeedOverride = 0
 		local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
-		Hazards.Strike(at, B.Radius, B.Warn, damage(B.Damage), { Group = GROUP, Style = "burrow" })
+		Hazards.Strike(at, B.Radius, B.Warn, damage(B.Damage), { Group = GROUP, Style = "burrow", Cause = e.BossData.DisplayName .. " Burrow eruption" })
 		setState(e, "Surface", B.Warn)
 	end
 end
@@ -1516,6 +1604,28 @@ end
 ]]
 BossAI.Variant = nil :: any
 
+-- The teachable first-fight rules (Config.Boss.Intro) for this boss, or nil: only on the
+-- intro stages at the base difficulty.
+local function introFor(boss): any
+	local I = Config.Boss.Intro
+	if not I or not I.Enabled or not boss then
+		return nil
+	end
+	local rules = I.Bosses and I.Bosses[boss.Id]
+	if not rules then
+		return nil
+	end
+	local stage = ctx.StageManager and ctx.StageManager.GetStage() or 0
+	if not table.find(I.Stages, stage) then
+		return nil
+	end
+	local diff = ctx.RunModifiers and ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or I.Difficulty
+	if diff ~= I.Difficulty then
+		return nil
+	end
+	return rules
+end
+
 function BossAI.ModifyHit(e, amount: number, rp): number
 	local v = BossAI.Variant
 	if v and v.Hit and rp then
@@ -1528,6 +1638,10 @@ end
 function BossAI.Begin(e, data: any?)
 	local boss = data or BossData.Get(Config.Boss.First)
 	e.BossData = boss
+	e.Intro = introFor(boss)
+	e.OpeningLeft = e.Intro and e.Intro.Opening and e.Intro.Opening.Count or 0
+	e.VenomSpots = nil
+	e.RingPos = nil
 	e.PhaseIndex = 1
 	e.PendingPhase = nil
 	e.BossCycle = 0

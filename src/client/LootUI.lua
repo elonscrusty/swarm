@@ -3,8 +3,11 @@
 	The client side of run items and map loot (server: ItemSystem, LootSystem):
 
 	  items strip    a compact wrap of item tiles with stack counts (HUD, top left under the
-	                 Roblox buttons; portrait: under the ability bar). Not Active, so the
-	                 thumbstick works on top of it. Under it: the run's curse chips (and
+	                 Roblox buttons; portrait: under the ability bar). A tap / click on it
+	                 opens VIEW BUILD (the run menu + the items list, LootUI.OpenBuild) -
+	                 only while the strip lies in the upper half of the screen, so it never
+	                 takes a touch from the thumbstick's resting zone (lower left); the
+	                 first item of a session says so once ("Tap your items ..."). Under it: the run's curse chips (and
 	                 DAILY on a Daily Challenge run, the curses' gold bonus), then a
 	                 "BARGAIN" chip while this stage's Bargain Shrine is sealed, then a
 	                 "SYNERGY" chip naming the build synergies that are active (player
@@ -38,9 +41,11 @@
 	  caravan        the Lost Caravan (server CaravanEvent, workspace.SwarmEvents): a pill
 	                 over the cart on screen (LOST CARAVAN / DEFEND / SAVED / LOST), an
 	                 edge arrow when it is off screen (while defending, or within
-	                 CARAVAN_HINT studs before), and a defence bar under the top HUD while
-	                 it is defended: time still to hold, or "RETURN TO THE CARAVAN" with the
-	                 seconds left before it is lost.
+	                 CARAVAN_HINT studs before), and a bar under the top HUD: before the
+	                 start, while you stand at the ring, what to do, the reward and the leave
+	                 rule (model attributes Info / Rule) with the start fill (Start) or why
+	                 it can't start yet (Blocked); while it is defended, the time still to
+	                 hold, or "RETURN TO THE CARAVAN" with the seconds left before it is lost.
 	UIBuilder builds it (LootUI.Build) and calls LootUI.Update every frame.
 ]]
 
@@ -68,6 +73,9 @@ local LootUI = {}
 
 -- UIBuilder's chest reward reel: items with Reward = true go there instead of a popup.
 LootUI.OnReward = nil :: ((any) -> ())?
+-- UIBuilder: VIEW BUILD from the items strip (opens the run menu, then the items list, like
+-- the run menu's own VIEW BUILD button). Unset: just the items list.
+LootUI.OpenBuild = nil :: (() -> ())?
 
 local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
@@ -98,6 +106,23 @@ local function ODDS_H(): number
 	return TS(24) + TS(12) + 12
 end
 local CARAVAN_HINT = 110 -- studs: the caravan's edge arrow shows this close before it starts
+local CARAVAN_INFO_RANGE = 4 -- studs past the ring edge: the pre-start bar shows this close
+local itemsHintShown = false -- "Tap your items ..." once per session
+-- Rough width of `str` in pixels (SourceSans like the theme fonts) for picking the longest
+-- label that fits; the labels also truncate, so a small error never overflows.
+local function textWidth(str: string, px: number, bold: boolean?): number
+	return TextService:GetTextSize(str, px, bold and Enum.Font.SourceSansBold or Enum.Font.SourceSans, Vector2.new(10000, 1000)).X * 1.08 + 2
+end
+local function fitText(label: TextLabel, options: { string }, width: number)
+	local px = label.TextSize
+	for _, str in ipairs(options) do
+		if textWidth(str, px, true) <= width then
+			label.Text = str
+			return
+		end
+	end
+	label.Text = options[#options]
+end
 local synergies: { string } = {}
 -- Shrine of Chance: the last try's outcome, shown in its prompt for a moment. The item
 -- (ItemGained, Source "Shrine of Chance") reaches the client before the try's "Done".
@@ -164,6 +189,21 @@ local function buildStrip(screen: Frame)
 	ui.ChipLayer = root
 	local strip = new("Frame", { Name = "ItemStrip", BackgroundTransparency = 1, Active = false, Visible = false, ZIndex = Theme.Z.Hud }, root)
 	ui.Strip = strip
+	-- a tap / click on the strip opens VIEW BUILD (a sibling so the grid ignores it; only
+	-- Active while the strip is clear of the thumbstick's resting zone: LootUI.Layout)
+	local tap = new("TextButton", { Name = "ItemStripTap", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Active = false, Selectable = false, Visible = false, ZIndex = Theme.Z.Hud + 1 }, root)
+	tap.Activated:Connect(function()
+		if not tap.Visible or #items == 0 then
+			return
+		end
+		if LootUI.OpenBuild then
+			LootUI.OpenBuild()
+		else
+			LootUI.OpenItems()
+		end
+	end)
+	ui.StripTap = tap
+	ui.StripTappable = false
 	ui.StripGrid = new("UIGridLayout", {
 		CellSize = UDim2.fromOffset(30, 30),
 		CellPadding = UDim2.fromOffset(5, 5),
@@ -373,7 +413,9 @@ local function buildCaravan(root: Frame)
 	local bar, bf = UIKit.Surface(root, { Name = "CaravanBar", Radius = Theme.Radius.M, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.3, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(340, 50), AnchorPoint = Vector2.new(0.5, 0) })
 	bar.Active = false
 	Icons.Draw(bf, "flag", { Size = 26, Position = UDim2.fromOffset(10, 8) })
-	ui.CaravanBarTitle = text(bf, "Label", "DEFEND THE CARAVAN", { Position = UDim2.fromOffset(44, 5), Size = UDim2.new(1, -110, 0, TS(13) + 6), TextColor3 = P.gold_200 }, 13)
+	ui.CaravanBarTitle = text(bf, "Label", "DEFEND THE CARAVAN", { Position = UDim2.fromOffset(44, 5), Size = UDim2.new(1, -110, 0, TS(13) + 6), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+	-- before the start: what to do + the reward, then the leave rule (wrapped, measured)
+	ui.CaravanBarInfo = text(bf, "Small", "", { Position = UDim2.fromOffset(44, TS(13) + 10), Size = UDim2.new(1, -56, 0, 0), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = P.ivory_100, Visible = false }, 12)
 	ui.CaravanBarTime = text(bf, "Label", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 5), Size = UDim2.fromOffset(70, TS(13) + 6), TextXAlignment = Enum.TextXAlignment.Right }, 13)
 	local track = new("Frame", { Name = "Track", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.2, BorderSizePixel = 0, Position = UDim2.new(0, 44, 1, -16), Size = UDim2.new(1, -56, 0, 8) }, bf)
 	UIKit.corner(track, 999)
@@ -577,6 +619,18 @@ local function onGained(data)
 	if data.Source == CHANCE_SOURCE then
 		chanceItemAt = os.clock()
 	end
+	-- the first item of a session: one hint that the strip opens the build view (after the
+	-- reward card / popup had its moment)
+	if not itemsHintShown and data.Source ~= "Dev" then
+		itemsHintShown = true
+		task.delay(4.5, function()
+			if player:GetAttribute("InRun") == true and ui.StripTap and ui.StripTappable and #items > 0 then
+				local touch = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+				local where = kit.IsPortrait() and "(top of the screen)" or "(top left)"
+				UIState.Notice({ Id = "hint.items", Text = string.format("%s your items %s to see what they do.", touch and "Tap" or "Click", where), Class = "Info", Seconds = 5 })
+			end
+		end)
+	end
 	if data.Reward == true and LootUI.OnReward then
 		LootUI.OnReward(data)
 		return
@@ -735,6 +789,13 @@ function LootUI.Layout()
 	local rows = math.max(1, math.ceil(#items / per))
 	ui.Strip.Position = UDim2.fromOffset(math.floor(x), math.floor(y))
 	ui.Strip.Size = UDim2.fromOffset(math.floor(w), rows * 35)
+	-- the tap area: only the tiles' rows (as wide as the tiles really reach), and only while
+	-- the strip sits in the upper half of the screen (MobileControls starts the stick on the
+	-- left half; thumbs rest low, UIBuilder's touchGuarded zone is the lower left)
+	local used = math.min(#items, per)
+	ui.StripTap.Position = UDim2.fromOffset(math.floor(x), math.floor(y))
+	ui.StripTap.Size = UDim2.fromOffset(math.max(35, used * 35), rows * 35)
+	ui.StripTappable = y + rows * 35 <= v.Y * 0.5
 	-- under the strip: the curse chips, then the bargain chip, then the popups
 	local yy = y + (#items > 0 and rows * 35 + 4 or 0)
 	ui.Curses.Position = UDim2.fromOffset(math.floor(x), math.floor(yy))
@@ -1078,14 +1139,19 @@ local function updateCaravan(root: BasePart?, alive: boolean)
 	local grace = tonumber(m:GetAttribute("Grace")) or -1
 	local dist = root and ((root.Position - pos) * FLAT).Magnitude or math.huge
 	local defending = st == "Defending"
-	-- defence bar
-	if defending ~= ui.CaravanBar.Visible then
-		ui.CaravanBar.Visible = defending
-		if defending then
+	local blocked = tostring(m:GetAttribute("Blocked") or "")
+	local startFill = math.clamp(tonumber(m:GetAttribute("Start")) or 0, 0, 1)
+	local radius = tonumber(m:GetAttribute("Radius")) or Config.Caravan.ZoneRadius
+	-- before the start, at the ring: what to do, the reward and the rule (+ the start fill)
+	local preStart = st == "Waiting" and alive and (startFill > 0 or dist <= radius + CARAVAN_INFO_RANGE)
+	local barOn = defending or preStart
+	if barOn ~= ui.CaravanBar.Visible then
+		ui.CaravanBar.Visible = barOn
+		if barOn then
 			UIAnim.Pop(ui.CaravanBar, 0, 0.6)
 		end
 	end
-	if defending then
+	if barOn then
 		local v: Vector2 = kit.VirtualSize()
 		local w = math.min(360, v.X - 32)
 		local top = Hud.TopBottom() + 8
@@ -1093,16 +1159,47 @@ local function updateCaravan(root: BasePart?, alive: boolean)
 			local els = Hud.Elements()
 			top = math.max(top, (els.BarBottom or 0) + 8)
 		end
-		ui.CaravanBar.Size = UDim2.fromOffset(w, 50)
+		local titleW = w - 110
+		local h = 50
+		if defending then
+			ui.CaravanBarInfo.Visible = false
+			local away = grace >= 0
+			-- the caravan is a side objective (COPY CP-05): say so when the title fits
+			fitText(ui.CaravanBarTitle, away and { "RETURN TO THE CARAVAN!", "RETURN!" } or { "OPTIONAL · DEFEND THE CARAVAN", "OPTIONAL · DEFEND", "DEFEND" }, titleW)
+			ui.CaravanBarTitle.TextColor3 = away and P.crimson_300 or P.gold_200
+			ui.CaravanBarTime.Text = away and string.format("LOST IN %d", grace) or string.format("%d s", tonumber(m:GetAttribute("Left")) or 0)
+			ui.CaravanBarTime.TextColor3 = away and P.crimson_300 or P.ivory_100
+			ui.CaravanFill.Size = UDim2.fromScale(math.clamp(tonumber(m:GetAttribute("Progress")) or 0, 0, 1), 1)
+			ui.CaravanFill.BackgroundColor3 = away and P.crimson_400 or P.gold_400
+		else
+			if blocked ~= "" then
+				fitText(ui.CaravanBarTitle, { "LOST CARAVAN · " .. string.upper(blocked), string.upper(blocked) }, titleW)
+				ui.CaravanBarTitle.TextColor3 = P.ivory_300
+			elseif startFill > 0 then
+				fitText(ui.CaravanBarTitle, { "STARTING · STAY IN THE RING", "STARTING..." }, titleW)
+				ui.CaravanBarTitle.TextColor3 = P.gold_200
+			else
+				fitText(ui.CaravanBarTitle, { "OPTIONAL · LOST CARAVAN", "LOST CARAVAN" }, titleW)
+				ui.CaravanBarTitle.TextColor3 = P.gold_200
+			end
+			ui.CaravanBarTime.Text = ""
+			ui.CaravanFill.Size = UDim2.fromScale(startFill, 1)
+			ui.CaravanFill.BackgroundColor3 = P.gold_400
+			local info = tostring(m:GetAttribute("Info") or "")
+			local rule = tostring(m:GetAttribute("Rule") or "")
+			local body = info .. ((info ~= "" and rule ~= "") and "\n" or "") .. rule
+			ui.CaravanBarInfo.Visible = body ~= ""
+			if body ~= "" then
+				local px = ui.CaravanBarInfo.TextSize
+				local bodyW = w - 56
+				local bh = math.ceil(TextService:GetTextSize(body, px, Enum.Font.SourceSans, Vector2.new(bodyW / 1.08, 1000)).Y) + 4
+				ui.CaravanBarInfo.Text = body
+				ui.CaravanBarInfo.Size = UDim2.new(1, -56, 0, bh)
+				h = TS(13) + 10 + bh + 22
+			end
+		end
+		ui.CaravanBar.Size = UDim2.fromOffset(w, h)
 		ui.CaravanBar.Position = UDim2.fromOffset(math.floor(v.X / 2), math.floor(top))
-		local away = grace >= 0
-		-- the caravan is a side objective (COPY CP-05): say so when the title fits
-		ui.CaravanBarTitle.Text = away and "RETURN TO THE CARAVAN!" or (w - 110 >= 250 and "OPTIONAL · DEFEND THE CARAVAN" or "OPTIONAL · DEFEND")
-		ui.CaravanBarTitle.TextColor3 = away and P.crimson_300 or P.gold_200
-		ui.CaravanBarTime.Text = away and string.format("LOST IN %d", grace) or string.format("%d s", tonumber(m:GetAttribute("Left")) or 0)
-		ui.CaravanBarTime.TextColor3 = away and P.crimson_300 or P.ivory_100
-		ui.CaravanFill.Size = UDim2.fromScale(math.clamp(tonumber(m:GetAttribute("Progress")) or 0, 0, 1), 1)
-		ui.CaravanFill.BackgroundColor3 = away and P.crimson_400 or P.gold_400
 	end
 	-- world pill over the cart
 	local label, color, edge
@@ -1113,7 +1210,13 @@ local function updateCaravan(root: BasePart?, alive: boolean)
 	elseif st == "Lost" then
 		label, color, edge = "LOST", C.TextMuted, P.stone_600
 	else
-		label, color, edge = "LOST CARAVAN · STAND IN THE RING", P.ivory_200, P.gold_400
+		if blocked ~= "" then
+			label, color, edge = "LOST CARAVAN · " .. string.upper(blocked), P.ivory_300, P.slate_400
+		elseif startFill > 0 then
+			label, color, edge = "STARTING · STAY IN THE RING", P.gold_200, P.gold_400
+		else
+			label, color, edge = "LOST CARAVAN · STAND IN THE RING", P.ivory_200, P.gold_400
+		end
 	end
 	local p, on = project(pos + Vector3.new(0, 9, 0))
 	local v: Vector2 = kit.VirtualSize()
@@ -1148,6 +1251,11 @@ function LootUI.Update(_dt: number, inRun: boolean)
 	local root = char and char.PrimaryPart
 	local alive = player:GetAttribute("Alive") ~= false
 	ui.Strip.Visible = inRun and #items > 0
+	local tappable = ui.Strip.Visible and ui.StripTappable == true
+	if ui.StripTap.Visible ~= tappable then
+		ui.StripTap.Visible = tappable
+		ui.StripTap.Active = tappable
+	end
 	refreshCurses(inRun)
 	if not inRun then
 		UIState.SetHold("Prompt", false)

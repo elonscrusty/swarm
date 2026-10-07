@@ -6,23 +6,33 @@
 	with the stage (LootSystem.Clear → Clear: travel, run end, the last player leaving
 	through MAIN MENU).
 
-	  Waiting    a living player steps into the cart's ring (ZoneRadius) during a fighting
-	             phase (Explore, Boss, Surge) → the defence starts.
+	  Waiting    a living player stays StartSeconds in the cart's ring (ZoneRadius) during a
+	             fighting phase (Explore, Boss, Surge) → the defence starts (leaving before
+	             that cancels; attribute Start shows the fill). On an introductory stage
+	             (Config.Encounters.Intro, EncounterDirector.IntroBlock) it can't start
+	             during the boss fight or right after a reward (attribute Blocked).
 	  Defending  time in the ring adds up to HoldSeconds (any living teammate counts, a
 	             teammate choosing a card included). A wave of this minute's enemies climbs
 	             out around the cart on start and every WaveEvery seconds (the last one with
-	             an elite). The ring may stand empty LeaveGrace seconds in a row; longer and
-	             the caravan is lost. While the portal is open (Open) time still counts but
+	             an elite). The ring may stand empty LeaveGrace seconds in a row
+	             (LeaveGraceByStage on early stages); longer and the caravan is lost.
+	             While the portal is open (Open) time still counts but
 	             no waves come. Frozen runs (level-up, pause, reward reel) stop everything.
-	  Saved      every living teammate gets one item (Config.Caravan.Weights, through
-	             ItemSystem.Grant + the reward reel) and run gold (GoldSystem.AddRunGold).
+	  Saved      every teammate still in the run (a downed one waiting for a revive too)
+	             gets one item (Config.Caravan.Weights, through ItemSystem.Grant + the
+	             reward reel) and run gold (GoldSystem.AddRunGold).
 	  Lost       nothing; the cart goes dark. Its waves stay and fight on.
 	Rewards use the existing paths only: no new currency, nothing bought.
 
 	World: one model in workspace.SwarmEvents with attributes the client reads (LootUI:
 	world marker, edge arrow, defence bar): EventKind = "Caravan", Title, State, Pos,
 	Radius, Hold (seconds), Progress (0-1), Left (seconds still to hold), Grace (seconds
-	before it is lost while the ring is empty, -1 = someone is in it), Benefit.
+	before it is lost while the ring is empty, -1 = someone is in it), Benefit, Info (what
+	to do and the reward), Rule (the leave rule), Start (0-1 start fill while Waiting),
+	Blocked (why it can't start yet, "" = it can).
+	Every clock here is Step's dt, and Step only runs while the run simulates, so a frozen
+	solo run (pause, level-up, reward reel) never uses up the start fill, the hold or the
+	grace.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -31,6 +41,7 @@ local Palette = require(game:GetService("ReplicatedStorage").Shared.Palette)
 local MapBuilder = require(script.Parent.MapBuilder)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local Fx = require(script.Parent.Fx)
+local EncounterDirector = require(script.Parent.EncounterDirector)
 
 local CaravanEvent = {}
 
@@ -51,6 +62,7 @@ type Caravan = {
 	Empty: number, -- seconds the ring has stood empty in a row
 	WaveTimer: number,
 	Waves: number,
+	StartHold: number, -- seconds a hero has stood in the ring while Waiting (StartSeconds)
 	Glow: { BasePart },
 	Light: PointLight?,
 	Ring: BasePart?,
@@ -211,9 +223,33 @@ function CaravanEvent.Clear()
 	end
 end
 
--- Should this stage get a caravan? (Config.Caravan.Chance)
-function CaravanEvent.Roll(): boolean
-	return rng:NextNumber() < (Config.Caravan.Chance or 1)
+-- Seconds the ring may stand empty on `stage` (Config.Caravan.LeaveGraceByStage, else
+-- LeaveGrace).
+local function graceFor(stage: number): number
+	local K = Config.Caravan
+	return (K.LeaveGraceByStage and K.LeaveGraceByStage[stage]) or K.LeaveGrace
+end
+CaravanEvent.GraceFor = graceFor
+
+-- "Common-Legendary item" from the reward weights (rarities with a weight > 0).
+local function rarityRange(): string
+	local w = Config.Caravan.Weights :: { [string]: number }
+	local first, last
+	for _, r in ipairs({ "Common", "Uncommon", "Legendary" }) do
+		if (w[r] or 0) > 0 then
+			first = first or r
+			last = r
+		end
+	end
+	if not first then
+		return "item"
+	end
+	return (first == last and first or (first .. "-" .. last)) .. " item"
+end
+
+local function goldFor(stage: number): number
+	local K = Config.Caravan
+	return math.floor(K.Gold * (1 + K.GoldStageScale * (stage - 1)) + 0.5)
 end
 
 -- Places this stage's caravan at floor point `pos` (LootSystem found the spot).
@@ -231,6 +267,7 @@ function CaravanEvent.Build(arena, pos: Vector3, stage: number)
 		Empty = 0,
 		WaveTimer = 0,
 		Waves = 0,
+		StartHold = 0,
 		Glow = {},
 		Light = nil,
 		Ring = nil,
@@ -248,6 +285,10 @@ function CaravanEvent.Build(arena, pos: Vector3, stage: number)
 	setAttr(c, "Left", K.HoldSeconds)
 	setAttr(c, "Grace", -1)
 	setAttr(c, "Benefit", soloRun() and "An item and gold for you" or "An item and gold for every teammate")
+	setAttr(c, "Info", string.format("Defend inside the ring for %d s · Reward: %s + %d gold%s", K.HoldSeconds, rarityRange(), goldFor(c.Stage), soloRun() and "" or " each"))
+	setAttr(c, "Rule", string.format("Leaving pauses it · ring empty %d s = caravan lost (optional reward only)", graceFor(c.Stage)))
+	setAttr(c, "Start", 0)
+	setAttr(c, "Blocked", "")
 	setState(c, "Waiting")
 	-- the cart blocks heroes and enemies like any prop (an axis-aligned box: it is small)
 	MapBuilder.AddCollider(arena, { Kind = "Box", Size = { 6, 6 }, Height = 4 }, CFrame.new(pos), 1)
@@ -355,6 +396,8 @@ local function spawnWave(c: Caravan)
 end
 
 local function start(c: Caravan)
+	setAttr(c, "Start", 0)
+	setAttr(c, "Blocked", "")
 	setState(c, "Defending")
 	c.Progress = 0
 	c.Empty = 0
@@ -384,8 +427,10 @@ local function succeed(c: Caravan, line: string?)
 	Fx.Ring(c.Pos, 18, P.gold_300)
 	Fx.Sound("Chest")
 	local gold = K.Gold * (1 + K.GoldStageScale * (c.Stage - 1))
+	-- "for every teammate": a teammate downed and waiting for a revive is still in the run
+	-- and gets it too (HoldReward only holds the living); one who left or is out does not
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
-		if rp.Alive and not rp.Returned and rp.Stats then
+		if (rp.Alive or rp.AwaitingRevive) and not rp.Returned and rp.Stats then
 			ctx.GoldSystem.AddRunGold(rp, gold * rp.Stats.GoldMult)
 			local granted, dramatic = ctx.ItemSystem.Grant(rp, ctx.ItemSystem.Roll(K.Weights, rp.Stats.Luck), "Lost Caravan", true, true)
 			if granted then ctx.RunManager.HoldReward(rp, dramatic == true) end
@@ -393,6 +438,7 @@ local function succeed(c: Caravan, line: string?)
 	end
 	local reward = soloRun() and "An item and gold for you." or "An item and gold for everyone."
 	ctx.RunManager.Broadcast((line or ("The caravan is saved! " .. reward)) .. " Back to the portal!", Color3.fromRGB(255, 220, 120), nil, { Id = "caravan.result" })
+	EncounterDirector.NoteReward() -- introductory stages: a quiet spell before the next one
 end
 
 local FIGHTING = { Explore = true, Boss = true, Surge = true }
@@ -408,9 +454,9 @@ local function fail(c: Caravan, phase: string)
 	recolour(c, P.stone_500, true)
 	Fx.Ring(c.Pos, 10, P.stone_500)
 	if FIGHTING[phase] then
-		ctx.RunManager.Broadcast("The caravan was overrun... its ring was left empty. Back to the portal!", Color3.fromRGB(255, 130, 110), nil, { Id = "caravan.result" })
+		ctx.RunManager.Broadcast("Caravan lost: the ring was empty too long. Optional reward missed.", Color3.fromRGB(255, 130, 110), nil, { Id = "caravan.result" })
 	else
-		ctx.RunManager.Broadcast("The caravan was left behind... its ring was left empty.", Color3.fromRGB(255, 130, 110), nil, { Id = "caravan.result" })
+		ctx.RunManager.Broadcast("Caravan left behind: the ring was empty too long. Optional reward missed.", Color3.fromRGB(255, 130, 110), nil, { Id = "caravan.result" })
 	end
 end
 
@@ -421,9 +467,30 @@ function CaravanEvent.Step(dt: number)
 	end
 	local phase = ctx.StageManager.GetPhase()
 	if c.State == "Waiting" then
-		if FIGHTING[phase] and anyInRing(c, true) then
-			c.StartPhase = phase
-			start(c)
+		-- introductory stages: not during the boss fight / right after a reward
+		local blocked = EncounterDirector.IntroBlock()
+		setAttr(c, "Blocked", blocked or "")
+		if not blocked and FIGHTING[phase] and anyInRing(c, true) then
+			-- a short intentional stay starts it; stepping out before that cancels
+			c.StartHold += dt
+			local need = math.max(0, Config.Caravan.StartSeconds or 0)
+			if c.StartHold >= need then
+				c.StartHold = 0
+				c.StartPhase = phase
+				start(c)
+				return
+			end
+			local f = math.floor(c.StartHold / math.max(0.01, need) * 20) / 20
+			setAttr(c, "Start", f)
+			if c.Ring then
+				c.Ring.Transparency = RING_FILL - (RING_FILL - 0.55) * f -- the ring fills in
+			end
+		elseif c.StartHold > 0 then
+			c.StartHold = 0
+			setAttr(c, "Start", 0)
+			if c.Ring then
+				c.Ring.Transparency = RING_FILL
+			end
 		end
 		return
 	end
@@ -449,7 +516,7 @@ function CaravanEvent.Step(dt: number)
 		c.Empty = 0
 	else
 		c.Empty += dt
-		if c.Empty >= K.LeaveGrace then
+		if c.Empty >= graceFor(c.Stage) then
 			fail(c, phase)
 			return
 		end
@@ -467,7 +534,7 @@ function CaravanEvent.Step(dt: number)
 	end
 	setAttr(c, "Progress", math.floor(c.Progress / K.HoldSeconds * 50) / 50)
 	setAttr(c, "Left", math.ceil(K.HoldSeconds - c.Progress))
-	setAttr(c, "Grace", c.Empty > 0 and math.ceil(K.LeaveGrace - c.Empty) or -1)
+	setAttr(c, "Grace", c.Empty > 0 and math.ceil(graceFor(c.Stage) - c.Empty) or -1)
 end
 
 function CaravanEvent.Init(c)

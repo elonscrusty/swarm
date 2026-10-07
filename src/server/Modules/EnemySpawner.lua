@@ -1197,7 +1197,16 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 		return false
 	end
 	if e.Invulnerable or e.Dying then
-		return false -- the Queen's entrance, burrow and collapse
+		-- the Queen's entrance, burrow and collapse. A hero hitting a boss that really is
+		-- protected now (not the collapse) sees a small throttled "IMMUNE" cue on it (VFX)
+		if e.Boss and rp and not e.Dying and e.Invulnerable and rp.Player then
+			local now = os.clock()
+			if now >= (rp.ImmuneCueAt or 0) then
+				rp.ImmuneCueAt = now + Config.Boss.Targeting.ImmuneCueSeconds
+				Fx.PlayerEvent(rp.Player, "immune:" .. tostring(e.Id))
+			end
+		end
+		return false
 	end
 	local crit = false
 	if rp and not isProc then

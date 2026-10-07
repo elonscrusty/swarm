@@ -566,9 +566,13 @@ local function buildDetails(frame: Frame)
 	ui.BuildList = list
 end
 
--- One row: icon, name, rank (right) and the one-line effect.
-local function detailRow(parent: Instance, order: number, icon: string, name: string, rank: string, effect: string, gold: boolean)
-	local row = new("Frame", { Name = "Row", BackgroundColor3 = P.slate_800, BackgroundTransparency = 0.35, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 48), LayoutOrder = order }, parent)
+--[[
+	One row: icon, name, rank (right), the effect line and an optional muted second line.
+	Both lines wrap (the row grows with AutomaticSize), so a full item description or a
+	phone's narrow panel never cuts the text; the list scrolls.
+]]
+local function detailRow(parent: Instance, order: number, icon: string, name: string, rank: string, effect: string, gold: boolean, extra: string?)
+	local row = new("Frame", { Name = "Row", BackgroundColor3 = P.slate_800, BackgroundTransparency = 0.35, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 48), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, parent)
 	UIKit.corner(row, Theme.Radius.S)
 	if gold then
 		UIKit.stroke(row, P.gold_400, 1.5, 0.2)
@@ -576,12 +580,50 @@ local function detailRow(parent: Instance, order: number, icon: string, name: st
 	Icons.Upgrade(row, icon, { Size = 38, Position = UDim2.fromOffset(5, 5), Back = P.slate_800 })
 	role(row, "Body", name, { Name = "Name", Position = UDim2.fromOffset(52, 3), Size = UDim2.new(1, -150, 0, 22), TextTruncate = Enum.TextTruncate.AtEnd })
 	role(row, "Label", rank, { Name = "Rank", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 3), Size = UDim2.fromOffset(92, 22), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = gold and P.gold_200 or P.ivory_300 })
-	local fx = role(row, "Caption", effect, { Name = "Effect", Position = UDim2.fromOffset(52, 24), Size = UDim2.new(1, -60, 0, 20), TextColor3 = P.ivory_200, TextScaled = true })
-	new("UITextSizeConstraint", { MaxTextSize = TS(TY.Caption.Size), MinTextSize = 9 }, fx)
+	local body = new("Frame", { Name = "Body", BackgroundTransparency = 1, Position = UDim2.fromOffset(52, 25), Size = UDim2.new(1, -60, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, row)
+	UIKit.list(body, { Padding = UDim.new(0, 1) })
+	UIKit.padding(body, 0, 0, 5, 0)
+	role(body, "Caption", effect, { Name = "Effect", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.ivory_200, LayoutOrder = 1 })
+	if extra and extra ~= "" and extra ~= effect then
+		role(body, "Caption", extra, { Name = "Extra", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.ivory_300, TextTransparency = 0.2, LayoutOrder = 2 })
+	end
 end
 
 local function detailHeader(parent: Instance, order: number, str: string)
 	role(parent, "Label", str, { Name = "Section", Size = UDim2.new(1, 0, 0, 22), LayoutOrder = order, TextColor3 = P.gold_300 })
+end
+
+local function trimNum(v: number): string
+	if math.abs(v - math.floor(v + 0.5)) < 1e-6 then
+		return tostring(math.floor(v + 0.5))
+	end
+	return (string.format("%.2f", v):gsub("0+$", ""):gsub("%.$", ""))
+end
+
+-- A weapon's key stats at its rank, before passives and items ("Damage 15 · Cooldown
+-- 1.2 s · 2 swings"; the totem leads with its heal: "Heals 2 HP each second · ...").
+local function weaponStatLine(wp): string
+	local def = WeaponData.Weapons[wp.Id]
+	local r = def and WeaponData.GetStats(wp.Id, wp.Level, wp.Evolved)
+	if not def or not r then
+		return ""
+	end
+	local use = WeaponData.StatUse[def.Behavior] or {}
+	local parts = {}
+	if def.Behavior == "Totem" and r.heal then
+		local params = def.Params or {}
+		local pulse = (wp.Evolved and params.EvoPulse) or params.Pulse or 1
+		table.insert(parts, string.format("Heals %s HP %s", trimNum(r.heal), WeaponData.EveryText(pulse)))
+	end
+	table.insert(parts, "Damage " .. trimNum(r.damage))
+	if use.cooldown then
+		table.insert(parts, string.format("%s %s s", def.CooldownLabel or "Cooldown", trimNum(r.cooldown)))
+	end
+	local amount = WeaponData.CapAmount(wp.Id, r.amount or 1)
+	if use.amount and amount >= 2 then
+		table.insert(parts, string.format("%s %s", trimNum(amount), string.lower(def.AmountLabel or "Shots")))
+	end
+	return table.concat(parts, "  ·  ")
 end
 
 local function refreshDetails()
@@ -602,21 +644,25 @@ local function refreshDetails()
 	end
 	local weapons = (inv and inv.Weapons) or {}
 	local passives = (inv and inv.Passives) or {}
-	detailHeader(list, nextOrder(), string.format("WEAPONS  %d / %d", #weapons, (inv and inv.WeaponSlots) or Config.Slots.Weapons))
+	-- weapon numbers are the weapon's own (passives and items add on top)
+	detailHeader(list, nextOrder(), string.format("WEAPONS  %d / %d  ·  BASE STATS", #weapons, (inv and inv.WeaponSlots) or Config.Slots.Weapons))
 	for _, wp in ipairs(weapons) do
 		local def = WeaponData.Weapons[wp.Id]
 		local evo = wp.Evolved and def and def.Evolution
 		local name = evo and evo.Name or (def and def.Name) or wp.Id
 		local rank = evo and "EVOLVED" or (wp.Level >= WeaponData.MaxLevel and string.format("MAX %d", wp.Level) or string.format("LV %d / %d", wp.Level, WeaponData.MaxLevel))
-		local effect = (evo and evo.Description) or (def and def.Description) or ""
-		detailRow(list, nextOrder(), weaponIconId(wp.Id, wp.Evolved), name, rank, effect, wp.Evolved or wp.Level >= WeaponData.MaxLevel)
+		local about = (evo and evo.Description) or (def and def.Description) or ""
+		local stats = weaponStatLine(wp)
+		detailRow(list, nextOrder(), weaponIconId(wp.Id, wp.Evolved), name, rank, stats ~= "" and stats or about, wp.Evolved or wp.Level >= WeaponData.MaxLevel, stats ~= "" and about or nil)
 	end
 	detailHeader(list, nextOrder(), string.format("PASSIVES  %d / %d", #passives, (inv and inv.PassiveSlots) or Config.Slots.Passives))
 	for _, ps in ipairs(passives) do
 		local def = PassiveData.Passives[ps.Id]
 		local maxLv = ps.MaxLevel or PassiveData.MaxLevelOf(ps.Id)
 		local rank = ps.Level >= maxLv and string.format("MAX %d", ps.Level) or string.format("LV %d / %d", ps.Level, maxLv)
-		detailRow(list, nextOrder(), ps.Id, (def and def.Name) or ps.Id, rank, (def and def.Description) or "", ps.Level >= maxLv)
+		-- the passive's whole effect at its level ("Deal 30% more damage with every weapon.")
+		local total = PassiveData.TotalText(ps.Id, ps.Level) or (def and def.Description) or ""
+		detailRow(list, nextOrder(), ps.Id, (def and def.Name) or ps.Id, rank, total, ps.Level >= maxLv, def and def.Note or nil)
 	end
 	local total = 0
 	for _, it in ipairs(runItems) do
@@ -627,7 +673,8 @@ local function refreshDetails()
 		local def = ItemData.Items[it.Id]
 		if def then
 			local rarity = def.Rarity and string.upper(def.Rarity) or ""
-			detailRow(list, nextOrder(), it.Id, def.Name, (it.Count > 1 and ("x" .. it.Count .. "  ") or "") .. rarity, def.Text or def.Desc or "", false)
+			-- the full description (Desc), not just the short card line
+			detailRow(list, nextOrder(), it.Id, def.Name, (it.Count > 1 and ("x" .. it.Count .. "  ") or "") .. rarity, def.Desc or def.Text or "", false)
 		end
 	end
 end

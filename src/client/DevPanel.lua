@@ -207,6 +207,10 @@ local function buildRun(p: Instance)
 	local dmg = button(g, "", 6, function()
 		send("DamageNumbers")
 	end)
+	-- toggles a server Output line per hit on you ("[combat] ..."); the server says ON / OFF
+	button(g, "Combat trace", 7, function()
+		send("CombatTrace")
+	end)
 	table.insert(refreshers, function()
 		local on = player:GetAttribute("DevGod") == true
 		god.SetText("Invincible: " .. (on and "ON" or "OFF"))

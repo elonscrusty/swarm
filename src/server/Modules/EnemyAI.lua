@@ -154,6 +154,12 @@ end
 
 -- Nearest spot outside every obstacle footprint (RunManager uses it to move a player who
 -- jumped on top of a low obstacle, where melee enemies cannot reach).
+-- How far from its centre an enemy's body hurts a player (contact check below): BossAI
+-- draws charge lanes this wide so the warning covers the real reach.
+function EnemyAI.ContactReach(e): number
+	return e.Radius + PLAYER_RADIUS
+end
+
 function EnemyAI.PushOut(pos: Vector3, r: number): Vector3
 	return pushOut(pos, r)
 end
@@ -801,10 +807,21 @@ function EnemyAI.Step(dt: number)
 					nearest2 = d2
 				end
 				local reach = e.Radius + PLAYER_RADIUS
-				if not harmless and d2 <= reach * reach and now >= e.NextContact then
-					e.NextContact = now + Config.Enemies.ContactCooldown
-					local name = (e.BossData and e.BossData.DisplayName) or e.Def.DisplayName or e.Type
-					ctx.RunManager.DamagePlayer(rp, e.Damage * (rallied and e.RallyDamage or 1), name .. " contact")
+				if not harmless and d2 <= reach * reach then
+					-- the contact cooldown is per enemy AND per player (one bite on you
+					-- never uses up its bite on your partner); a pooled record gets a fresh
+					-- table when its uid changes
+					local cd = e.ContactNext
+					if cd == nil or e.ContactUid ~= e.Uid then
+						cd = {}
+						e.ContactNext = cd
+						e.ContactUid = e.Uid
+					end
+					if now >= (cd[rp] or 0) then
+						cd[rp] = now + Config.Enemies.ContactCooldown
+						local name = (e.BossData and e.BossData.DisplayName) or e.Def.DisplayName or e.Type
+						ctx.RunManager.DamagePlayer(rp, e.Damage * (rallied and e.RallyDamage or 1), name .. " contact", "contact")
+					end
 				end
 			end
 		end

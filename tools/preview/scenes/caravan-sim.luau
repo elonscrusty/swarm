@@ -158,7 +158,7 @@ end
 -- 1) success --------------------------------------------------------------------------
 line("before")
 standAt(c.Pos + Vector3.new(4, 0, 0))
-advance(0.2)
+advance(1.2) -- the caravan starts after 1 s in the ring (Config.Caravan.StartSeconds)
 line("stepped into the ring")
 local items0, gold0 = itemCount(rp), rp.Gold
 local t = 0

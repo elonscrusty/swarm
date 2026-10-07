@@ -206,8 +206,10 @@ PassiveData.Passives = {
 		Id = "Luck",
 		Name = "Luck",
 		Color = Color3.fromRGB(110, 230, 80),
-		Description = "More luck: rarer items, better cards.",
-		Benefit = { luck = "gain {n} luck: rarer items and better cards" },
+		Description = "Better odds of new cards, rarer items and bonus drops.",
+		-- luck multiplies weights (new cards, item rarity, bonus drops): never a % chance
+		Benefit = { luck = "+{n} luck: better odds of new cards, rarer items and bonus drops" },
+		Note = "Not a % chance: luck boosts rarity and drop weights",
 		Values = {
 			{ luck = 0.15 },
 			{ luck = 0.30 },
@@ -243,7 +245,8 @@ PassiveData.Passives = {
 		Name = "Growth",
 		Color = Color3.fromRGB(60, 200, 120),
 		Description = "More XP from every gem.",
-		Benefit = { growth = "earn {n} more XP from every gem" },
+		Benefit = { growth = "gain {n} more XP" },
+		Note = "XP gain shown is before co-op and pacing changes",
 		Values = {
 			{ growth = 0.12 },
 			{ growth = 0.25 },
@@ -440,6 +443,44 @@ PassiveData.Passives = {
 	},
 }
 
+--[[
+	Card role tags (level-up card chip; LevelUpSystem's early-build help counts Damage,
+	Recovery and Defense as "immediate" picks). One of: Damage, Recovery, Defense, Growth,
+	Utility. Passives not listed are Utility.
+]]
+PassiveData.Roles = {
+	Might = "Damage",
+	Cooldown = "Damage",
+	Area = "Damage",
+	Duplicator = "Damage",
+	Ammo = "Damage",
+	Fletching = "Damage",
+	Precision = "Damage",
+	GiantsBane = "Damage",
+	EmberOil = "Damage",
+	Lionheart = "Damage",
+	Armor = "Defense",
+	Heart = "Defense",
+	Thornhide = "Defense",
+	AegisCharm = "Defense",
+	Stoneskin = "Defense",
+	Renewal = "Recovery",
+	BloodRune = "Recovery",
+	SecondWind = "Recovery",
+	StillWaters = "Recovery",
+	Luck = "Growth",
+	Growth = "Growth",
+	GildedPurse = "Growth",
+	SpeedBoots = "Utility",
+	Vacuum = "Utility",
+	Candle = "Utility",
+	Windstep = "Utility",
+}
+
+function PassiveData.RoleOf(passiveId: string): string
+	return PassiveData.Roles[passiveId] or "Utility"
+end
+
 -- Number of levels of one passive.
 function PassiveData.MaxLevelOf(passiveId: string): number
 	local def = PassiveData.Passives[passiveId]
@@ -515,6 +556,35 @@ function PassiveData.BenefitText(passiveId: string, level: number): string?
 			local i, j = string.find(t, "{n}", 1, true)
 			if i and j then
 				t = string.sub(t, 1, i - 1) .. amountWord(g.Key, g.Delta) .. string.sub(t, j + 1)
+			end
+			table.insert(clauses, t)
+		end
+	end
+	if #clauses == 0 then
+		return nil
+	end
+	local s = table.concat(clauses, " and ")
+	return string.upper(string.sub(s, 1, 1)) .. string.sub(s, 2) .. "."
+end
+
+-- The passive's whole effect at `level` (the BUILD details): "Deal 30% more damage with
+-- every weapon." From the level's total Values (BenefitNew clauses when set: they read as a
+-- total); nil when it cannot say.
+function PassiveData.TotalText(passiveId: string, level: number): string?
+	local def = PassiveData.Passives[passiveId]
+	if not def or not def.Benefit then
+		return nil
+	end
+	local v = def.Values[math.clamp(level, 1, #def.Values)] or {}
+	local templates = def.BenefitNew or def.Benefit
+	local clauses = {}
+	for _, key in ipairs(KEY_ORDER) do
+		local n = v[key]
+		local t = templates[key] or def.Benefit[key]
+		if n and math.abs(n) > 1e-6 and t then
+			local i, j = string.find(t, "{n}", 1, true)
+			if i and j then
+				t = string.sub(t, 1, i - 1) .. amountWord(key, n) .. string.sub(t, j + 1)
 			end
 			table.insert(clauses, t)
 		end

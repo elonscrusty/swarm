@@ -29,7 +29,11 @@
 	  Phases    list, first = start. Above = HP share where the phase ends (the next one
 	            starts below it); Speed divides Chase / Recover times (telegraphs keep their
 	            length, so a faster phase is never less readable); Cycle = attack order;
-	            Twist = one extra rule for the phase; Roar = pause + banner on entering it
+	            Twist = one extra rule for the phase; Roar = pause + banner on entering it;
+	            FollowUps = attack started right after another one's recovery (it takes
+	            the cycle's next slot when that is the same attack: never twice in a row)
+	  (Config.Boss.Intro makes the first stage's fight teachable: opening attacks, safe
+	   recoveries, wider stinger gaps)
 	  Attacks   per attack name (see each entry); "Move" picks the BossAI move when the
 	            name differs (Summon / BroodCall share one)
 	  OnHit     optional reaction to heavy damage (the Hive Mother's pulse)
@@ -82,7 +86,7 @@ BossData.Bosses = {
 			},
 			-- area: filling circles under / near the players, then they erupt
 			VenomBurst = {
-				Windup = 0.5, -- claws raise
+				Windup = 0.5, -- claws raise; dashed markers show the circles' spots (fixed from here)
 				Circles = 3, -- + 1 per extra player, at most MaxCircles
 				MaxCircles = 5,
 				Radius = 6,
@@ -100,7 +104,8 @@ BossData.Bosses = {
 				WaveGap = 0.55,
 				Speed = 26,
 				Damage = 15,
-				ProjectileRadius = 1.4,
+				ProjectileRadius = 1.4, -- hit lane = (this + hero body 1.2) x 2 = 5.2 studs, drawn that wide
+				ShowLength = 36, -- studs of each spoke drawn (fading out; the stingers fly Speed x Life)
 				Life = 5,
 				Recover = 1.0,
 			},

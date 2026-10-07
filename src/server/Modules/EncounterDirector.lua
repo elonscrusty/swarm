@@ -61,6 +61,7 @@ local active: { [string]: boolean } = {}
 local reserved: { { Name: string, Pos: Vector3 } } = {}
 local info: any = nil -- the live stage, nil between stages
 local lastError: { [string]: number } = {}
+local quietFrom = -math.huge -- run time of this stage's last optional reward (IntroBlock)
 
 local function D()
 	return Config.Encounters.Director
@@ -151,6 +152,47 @@ end
 -- The live stage's info table (nil between stages).
 function EncounterDirector.Stage(): any
 	return info
+end
+
+------------------------------------------------------------------------------------------
+-- Introductory pacing (Config.Encounters.Intro)
+------------------------------------------------------------------------------------------
+
+--[[
+	On an introductory stage an optional activity that has not started yet (the caravan
+	defence, the villager escort) may not start during the stage boss fight (Boss, Surge)
+	nor for QuietAfterSeconds after the boss died or an optional reward paid out. Returns
+	the short reason its label shows ("Available after the boss" / "Available in 12 s"),
+	or nil when it may start. Runs on the simulation clock (RunManager.GetRunTime), so a
+	paused run does not use up the quiet time. Activities already running are not asked.
+]]
+function EncounterDirector.IntroBlock(): string?
+	local I = Config.Encounters.Intro
+	local sm = ctx and ctx.StageManager
+	if not I or not sm or not table.find(I.Stages, sm.GetStage()) then
+		return nil
+	end
+	local phase = sm.GetPhase()
+	if phase == "Boss" or phase == "Surge" then
+		return "Available after the boss"
+	end
+	local last = quietFrom
+	if phase == "Open" then
+		last = math.max(last, sm.LastClearTime())
+	end
+	local left = I.QuietAfterSeconds - (ctx.RunManager.GetRunTime() - last)
+	if left > 0 then
+		return string.format("Available in %d s", math.ceil(left))
+	end
+	return nil
+end
+
+-- An optional activity paid its reward (caravan saved, villager delivered): on an
+-- introductory stage the next one waits Config.Encounters.Intro.QuietAfterSeconds.
+function EncounterDirector.NoteReward()
+	if ctx and ctx.RunManager then
+		quietFrom = ctx.RunManager.GetRunTime()
+	end
 end
 
 ------------------------------------------------------------------------------------------
@@ -283,6 +325,7 @@ function EncounterDirector.StageStart(arena: any, stage: number, portalPos: Vect
 		EncounterDirector.StageEnd("Restart")
 	end
 	info = { Arena = arena, Stage = stage, ArenaName = arenaName, PortalPos = portalPos, Rng = rng, Phase = "Explore" }
+	quietFrom = -math.huge
 	if #order == 0 then
 		return
 	end

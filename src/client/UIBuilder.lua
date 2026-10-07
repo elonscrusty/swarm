@@ -507,7 +507,34 @@ local function renderNotice(item: UIState.Notice): UIState.NoticeHandle
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextColor3 = C.Text,
 	})
-	new("UISizeConstraint", { MaxSize = Vector2.new(math.max(120, virtualSize().X - 2 * margin() - 72), TS(Theme.Type.Body.Size) + 22) }, l)
+	local sizeCap = new("UISizeConstraint", { MaxSize = Vector2.new(math.max(120, virtualSize().X - 2 * margin() - 72), TS(Theme.Type.Body.Size) + 22) }, l)
+	-- A notice too long for one line (phones) wraps to two lines instead of being cut: the
+	-- label gets the full width and a measured height (SourceSans like the theme font, with
+	-- slack); past two lines it truncates. The pill grows with it; the toast list is a
+	-- vertical list, so the stack below moves down with it.
+	local function fitNotice(s: string)
+		local px = l.TextSize
+		local oneH = TS(Theme.Type.Body.Size) + 22
+		local maxW = math.max(120, virtualSize().X - 2 * margin() - 72)
+		local TextService = game:GetService("TextService")
+		local wide = TextService:GetTextSize(s, px, Enum.Font.SourceSansBold, Vector2.new(10000, 1000)).X * 1.08 + 4
+		if wide <= maxW then
+			l.TextWrapped = false
+			l.AutomaticSize = Enum.AutomaticSize.X
+			l.Size = UDim2.fromOffset(0, oneH)
+			sizeCap.MaxSize = Vector2.new(maxW, oneH)
+			holder.Size = UDim2.fromOffset(0, oneH)
+			return
+		end
+		local wrapped = TextService:GetTextSize(s, px, Enum.Font.SourceSansBold, Vector2.new(maxW / 1.08, 1000)).Y
+		local h = math.min(math.ceil(wrapped) + 4, math.ceil(px * 2.3) + 4)
+		l.AutomaticSize = Enum.AutomaticSize.None
+		l.TextWrapped = true
+		l.Size = UDim2.fromOffset(maxW, h)
+		sizeCap.MaxSize = Vector2.new(maxW, h)
+		holder.Size = UDim2.fromOffset(0, math.max(oneH, h + 16))
+	end
+	fitNotice(str)
 	UIAnim.Pop(holder, 0, 0.5)
 	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		-- a colour flash fades off the pill as it pops in
@@ -524,6 +551,7 @@ local function renderNotice(item: UIState.Notice): UIState.NoticeHandle
 				return
 			end
 			l.Text = count > 1 and string.format("%s  x%d", newText, count) or newText
+			fitNotice(l.Text)
 			UIAnim.Punch(holder, 0.08)
 		end,
 		Dismiss = function()
@@ -641,7 +669,9 @@ local offerArm = {
 	Touches = setmetatable({}, { __mode = "k" }) :: any, -- touch input → record
 	LastTouch = nil :: any, -- the touch that ended last
 	Stage = 0.25,
-	Stagger = 0.06,
+	-- one quick reveal: every card lands within ~0.3 s (Stagger x 2 + the 0.24 s entrance),
+	-- before Arm (0.35 s) lets a pick count
+	Stagger = 0.03,
 	At = math.huge, -- input counts from this os.clock()
 	Press = 0, -- when the last confirm press (click / tap / A / Enter / 1-4) began
 	Token = 0, -- bumped by every offer and close (cancels a pending reveal)
@@ -837,6 +867,51 @@ local function cardLevelText(c): string
 	return ""
 end
 
+--[[
+	A run's final damage source in plain words, and a hint matched to it when one is known
+	to be true (nil otherwise). The server's causes are display text ("Brute contact",
+	"Scorpion Queen Venom Burst", "Spitter acid glob", "Boss shockwave"); an id-like name
+	("BigBrute") is split into words.
+	  Choice.deathCause("Scorpion Queen contact") → "Scorpion Queen (touch)",
+	    "Step sideways out of the marked lane before it charges."
+]]
+local CHARGERS = { ["scorpion queen"] = true, ["rhino warlord"] = true, ["moth matriarch"] = true }
+function Choice.deathCause(cause: string): (string, string?)
+	local s = string.sub(cause, 1, 70)
+	local low = string.lower(s)
+	local body = string.match(s, "^(.-) contact$")
+	local name = body or s
+	name = string.gsub(name, "_", " ")
+	name = string.gsub(name, "(%l)(%u)", "%1 %2")
+	if body then
+		name ..= " (touch)"
+	end
+	local hint: string? = nil
+	if string.find(low, "lava", 1, true) then
+		hint = "Stay out of the glowing lava."
+	elseif string.find(low, "venom burst", 1, true) or string.find(low, "ground eruption", 1, true)
+		or string.find(low, "burrow eruption", 1, true) or string.find(low, "frost fracture", 1, true) then
+		hint = "Leave the filling circles before they erupt."
+	elseif string.find(low, "shockwave", 1, true) then
+		hint = "Run through the gap in the shockwave ring."
+	elseif string.find(low, " eruption$") then
+		hint = "Step off the marked lines before they erupt."
+	elseif string.find(low, "acid", 1, true) then
+		hint = "Stay out of acid marks and pools."
+	elseif string.find(low, "explosion$") then
+		hint = "Leave the ring around a fusing enemy before it explodes."
+	elseif string.find(low, "freezing breath", 1, true) then
+		hint = "Step out of the frost breath's path."
+	elseif string.find(low, "meteor", 1, true) then
+		hint = "Leave the marked impact spots."
+	elseif string.find(low, "projectile", 1, true) then
+		hint = "Keep moving sideways to dodge shots."
+	elseif body then
+		hint = CHARGERS[string.lower(body)] and "Step sideways out of the marked lane before it charges." or "Keep moving; enemies hurt on touch."
+	end
+	return name, hint
+end
+
 local function hex(c: Color3): string
 	return string.format("#%02X%02X%02X", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
 end
@@ -916,6 +991,11 @@ local function cardContent(c): (string?, { any }, { any }, string?)
 			end)
 		end
 		details = others or WeaponData.NextPerkText(c.Id, tonumber(c.Level) or 1)
+	elseif c.Type == "WeaponNew" then
+		-- a NEW weapon: its own sentence (the Healing Totem's from its real numbers) and,
+		-- when it has one, the small note (ring size, teammates, no stacking)
+		desc = WeaponData.IntroText(c.Id, 1) or (c.Description ~= "" and c.Description) or summary
+		details = WeaponData.IntroNote(c.Id, 1)
 	elseif c.Type == "PassiveNew" or c.Type == "PassiveUp" then
 		local def = PassiveData.Passives[c.Id]
 		local level = tonumber(c.Level) or 1
@@ -944,6 +1024,7 @@ end
 
 -- Icon for a stat label (Icons names); amount stats ("Arrows", "Strikes") use the weapon.
 local STAT_ICONS = {
+	{ "pulse every", "clock" },
 	{ "projectile speed", "arrowFast" },
 	{ "projectiles", "duplicate" },
 	{ "extra shots", "duplicate" },
@@ -1314,7 +1395,9 @@ end
 -- on phones too: it is the line that says what the pick does.
 local function descHeight(desc: string?, w: number, c): number
 	local plain = string.gsub(desc or "", "<[^>]+>", "")
-	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.5 / math.max(1, w - 2 * CARD.Pad)), 1, 2)
+	-- a NEW weapon's sentence may say how it works (Healing Totem): three lines off phones
+	local most = (c and c.Type == "WeaponNew" and not UIKit.IsCompact()) and 3 or 2
+	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.5 / math.max(1, w - 2 * CARD.Pad)), 1, most)
 	return TS(14) * lines + 8
 end
 
@@ -1639,6 +1722,49 @@ function Choice.cardArt(face: GuiObject, c, x: number, y: number, w: number, h: 
 end
 
 --[[
+	The card's role chip (WeaponData.Roles / PassiveData.Roles): a small caps tag
+	("DAMAGE", "RECOVERY", "DEFENSE", "GROWTH", "UTILITY") in the role's colour. A plain
+	category, never a recommendation. nil for bonus cards.
+]]
+local ROLE_COLORS = {
+	Damage = P.crimson_300,
+	Recovery = P.fx_heal,
+	Defense = P.ice_300,
+	Growth = P.gold_300,
+	Utility = P.ivory_300,
+}
+function Choice.roleOf(c): string?
+	if c.Type == "PassiveNew" or c.Type == "PassiveUp" then
+		return PassiveData.Passives[c.Id] and PassiveData.RoleOf(c.Id) or nil
+	elseif c.Type == "WeaponNew" or c.Type == "WeaponUp" or c.Type == "Evolve" then
+		return WeaponData.Weapons[c.Id] and WeaponData.RoleOf(c.Id) or nil
+	end
+	return nil
+end
+function Choice.roleChip(parent: GuiObject, c): TextLabel?
+	local role = Choice.roleOf(c)
+	if not role then
+		return nil
+	end
+	local color = ROLE_COLORS[role] or P.ivory_300
+	local chip = text(parent, "Label", UIKit.track(string.upper(role)), {
+		Name = "RoleChip",
+		Size = UDim2.fromOffset(0, TS(10) + 6),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		BackgroundColor3 = P.slate_950,
+		BackgroundTransparency = 0.15,
+		TextColor3 = color,
+		ZIndex = 7,
+	}, 10)
+	chip:SetAttribute("NoTextFit", true)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, chip)
+	UIKit.corner(chip, 999)
+	UIKit.stroke(chip, color, 1, 0.45).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	return chip
+end
+
+--[[
 	One card (approved screen 04). Landscape (tall): a sculpted slate frame with corner gems;
 	a tab with the card kind and rank change ("NEW PASSIVE", "UPGRADE · LV 1 → 2", "FINAL
 	UPGRADE · LV 11 → 12"); the art panel; the serif name; the one-line effect; the boxed main
@@ -1751,7 +1877,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 	if (c.Rarity == "Rare" or c.Rarity == "Epic" or legendary) and not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		-- the rarer tabs shine now and then (started once the card has landed level:
 		-- Roblox does not clip inside a rotated card)
-		task.delay(animate and (offerArm.Stagger * (index - 1) + 0.32) or 0, function()
+		task.delay(animate and (offerArm.Stagger * (index - 1) + 0.26) or 0, function()
 			if shineOn.Parent then
 				offerArm.Fx.Add(UIAnim.Shine(shineOn, legendary and 1.8 or 2.8, legendary and 0.6 or 0.8))
 			end
@@ -1805,6 +1931,12 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		UIKit.stroke(num, P.ivory_300, 1, 0.3).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		local y = bandH + 10
 		cardTile(face, c, CARD.PTile, edgeColor, animate and delay + 0.08 or nil).Position = UDim2.fromOffset(pad, y)
+		local roleChip = Choice.roleChip(face, c)
+		if roleChip then
+			-- straddles the tile's bottom edge, under the icon
+			roleChip.AnchorPoint = Vector2.new(0.5, 0.5)
+			roleChip.Position = UDim2.fromOffset(pad + CARD.PTile / 2, y + CARD.PTile - 2)
+		end
 		local x = pad + CARD.PTile + 12
 		text(face, "H2", c.Name, { Position = UDim2.fromOffset(x, y - 2), Size = UDim2.new(0.6, -x, 0, TS(22) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
 		if sub ~= "" then
@@ -1904,7 +2036,13 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		-- the art panel takes what the text leaves (between Choice.artMin and Choice.artPref)
 		local artH = math.clamp(h - cardNeeds(c, w), Choice.artMin(), Choice.artPref(w))
 		local y = CARD.Inset
-		Choice.cardArt(face, c, CARD.Inset, y, w - 2 * CARD.Inset, artH, edgeColor, animate and delay + 0.08 or nil)
+		local art = Choice.cardArt(face, c, CARD.Inset, y, w - 2 * CARD.Inset, artH, edgeColor, animate and delay + 0.08 or nil)
+		local roleChip = Choice.roleChip(art, c)
+		if roleChip then
+			-- the art panel's lower left corner (the tab sits on the top edge)
+			roleChip.AnchorPoint = Vector2.new(0, 1)
+			roleChip.Position = UDim2.new(0, 6, 1, -6)
+		end
 		y += artH + 8
 		text(face, "H2", c.Name, {
 			Position = UDim2.fromOffset(pad, y),
@@ -2018,8 +2156,8 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 	end
 
 	if animate then
-		-- cards come in one after another (Stagger apart): up from below, settling from a
-		-- slight tilt and growing to full size in 0.3 s, then a light sweeps across; an
+		-- the cards come in together (a tiny Stagger apart): up from below, settling from a
+		-- slight tilt and growing to full size in 0.24 s, then a light sweeps across; an
 		-- evolution lands with a gold burst. Reduced effects: a quick settle, no tilt.
 		local s = UIAnim.ScaleOf(hit)
 		if (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
@@ -2035,12 +2173,12 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 					return
 				end
 				s.Scale = 0.86
-				UIAnim.Tween(s, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
-				UIAnim.Tween(hit, 0.3, { Rotation = 0 }, Enum.EasingStyle.Quint)
-				UIAnim.Tween(face, 0.28, { Position = home }, Enum.EasingStyle.Quint)
+				UIAnim.Tween(s, 0.24, { Scale = 1 }, Enum.EasingStyle.Back)
+				UIAnim.Tween(hit, 0.24, { Rotation = 0 }, Enum.EasingStyle.Quint)
+				UIAnim.Tween(face, 0.22, { Position = home }, Enum.EasingStyle.Quint)
 			end)
 			-- the sweep waits until the tilt has settled (no clipping inside rotated frames)
-			cardSweep(face, delay + 0.32, legendary and P.gold_200 or P.ivory_100)
+			cardSweep(face, delay + 0.26, legendary and P.gold_200 or P.ivory_100)
 			if c.Type == "Evolve" then
 				goldBurst(hit, delay + 0.12)
 			end
@@ -2244,7 +2382,8 @@ local function showOffer(offer)
 	if level then
 		table.insert(parts, "LEVEL " .. level)
 	end
-	table.insert(parts, "PICK ONE")
+	-- one card only (a tiny pool, a Clove Bulb set): say so rather than "pick one"
+	table.insert(parts, #(offer.Choices or {}) == 1 and "ONE CARD" or "PICK ONE")
 	if total > 1 then
 		table.insert(parts, string.format("%d OF %d", total - remaining + 1, total))
 	end
@@ -2745,8 +2884,8 @@ do
 		Compact reward card (approved screen 05): an automatic reward (a common chest /
 		shrine item, a one-level elite chest, and in a live duo / trio run every reward) is
 		reported by a contained side card: header "SMALL CHEST · REWARD", the reward in a
-		medallion, its name, rarity / count and what it does, and a draining bar
-		("Auto-added · 3s"). No reel, no dimmer, no confirmation: the server already granted
+		medallion, its name, rarity / count and what it does, "Added to your run" and a
+		draining bar (the time until the card closes). No reel, no dimmer, no confirmation: the server already granted
 		it, the card is presentation only. It never owns input (not a UIState primary): it
 		holds informational headlines (UIState hold "RewardCard") but leaves movement and
 		chest prompts alone, so the next chest can be opened while it shows. The x closes it
@@ -2808,9 +2947,10 @@ do
 		card.Body.Size = UDim2.new(1, -tx - 12, 0, bodyH)
 		y += mid + 10
 		card.Bar.Frame.Position = UDim2.fromOffset(14, y + math.floor((TS(12) + 6 - 6) / 2))
-		card.Bar.Frame.Size = UDim2.new(1, -28 - 118, 0, 6)
+		local whenW = math.min(160, math.floor(w * 0.5))
+		card.Bar.Frame.Size = UDim2.new(1, -28 - whenW - 6, 0, 6)
 		card.When.Position = UDim2.new(1, -12, 0, y)
-		card.When.Size = UDim2.fromOffset(112, TS(12) + 6)
+		card.When.Size = UDim2.fromOffset(whenW, TS(12) + 6)
 		-- beside the hero, never over him: left of centre under the top HUD in landscape
 		-- (the approved screen), under the hero in portrait
 		local m = margin()
@@ -2833,6 +2973,8 @@ do
 		card.Sub.Text = e.Sub
 		card.Sub.TextColor3 = e.NameColor:Lerp(C.TextMuted, 0.35)
 		card.Body.Text = e.Detail or ""
+		-- the reward is already granted; the bar beside this only counts down to the card closing
+		card.When.Text = "Added to your run"
 		card.MedalRim.Color = e.Accent
 		card.MedalRim.Transparency = e.Big and 0 or 0.15
 		if card.Edge then
@@ -2958,7 +3100,19 @@ do
 		card.Body = text(face, "Small", "", { Name = "RewardBody", TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.Text, ZIndex = 3 }, 13)
 		card.Bar = UIKit.Meter(face, { Gradient = ColorSequence.new(P.moss_300, P.moss_200), Size = UDim2.new(1, -146, 0, 6) })
 		card.Bar.Frame.ZIndex = 3
-		card.When = text(face, "Caption", "", { Name = "When", AnchorPoint = Vector2.new(1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.TextMuted, ZIndex = 3 })
+		card.When = text(face, "Caption", "Added to your run", { Name = "When", AnchorPoint = Vector2.new(1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 })
+		-- VIEW BUILD from the HUD items strip (LootUI): the run menu (solo: paused), then the
+		-- items list on top of it, exactly like the run menu's VIEW BUILD button; never over
+		-- a decision, results or travel (UIBuilder.OpenPause refuses those)
+		LootUI.OpenBuild = function()
+			if not UIState.CanOpen("Pause") or player:GetAttribute("InRun") ~= true then
+				return
+			end
+			(UIBuilder :: any).OpenPause() -- defined further down
+			if UIState.IsOpen("Pause") then
+				LootUI.OpenItems()
+			end
+		end
 		onRelayout(layoutCard)
 		layoutCard()
 		RunService.RenderStepped:Connect(function(dt)
@@ -2978,7 +3132,6 @@ do
 				return
 			end
 			card.Bar.Set(math.clamp(card.Left / math.max(0.1, card.Total), 0, 1))
-			card.When.Text = UIKit.track(string.format("Auto-added  ·  %ds", math.ceil(card.Left)))
 		end)
 		-- leaving the run, results, going down: the cards go (the rewards stay owned)
 		player:GetAttributeChangedSignal("InRun"):Connect(clearCards)
@@ -4460,6 +4613,18 @@ local function buildResults()
 	local grid = new("Frame", { Name = "Stats", BackgroundTransparency = 1, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 104) }, body)
 	results.Grid = grid
 	results.GridLayout = UIKit.list(grid, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
+	-- 0. one compact line over the tiles on a defeat: what dealt the final hit, plus a hint
+	-- matched to that cause when one is known to be true (Choice.deathCause)
+	results.Cause = text(body, "Small", "", {
+		Name = "Cause",
+		LayoutOrder = 0,
+		Visible = false,
+		Size = UDim2.new(1, 0, 0, TS(Theme.TextSize.Small) + 6),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = true,
+		RichText = true,
+		TextColor3 = C.Text,
+	}, Theme.TextSize.Small)
 	results.Time = statTile(grid, "clock", "Survived", 1)
 	results.Kills = statTile(grid, "stat_Kills", "Enemies defeated", 2)
 	results.Stages, results.StagesCaption = statTile(grid, "portal", "Stages cleared", 3)
@@ -4799,6 +4964,10 @@ local function buildResults()
 			if #recent > 1 then
 				detailText ..= "\nBefore that: " .. table.concat(recent, ", ", 2)
 			end
+		end
+		if results.Cause.Visible then
+			local cs = results.Cause.TextSize
+			results.Cause.Size = UDim2.new(1, 0, 0, lineCount(results.Cause.Text, cs, inner) * (cs + 4) + 4)
 		end
 		results.Details.Text = detailText
 		results.Details.Visible = open and detailText ~= ""
@@ -5231,7 +5400,7 @@ local function onRunResult(data)
 	results.Mode = type(data.Mode) == "string" and data.Mode or "Solo"
 	fillLedger(data)
 	fillDetails(data)
-	-- recent damage, for RUN DETAILS (the cause of death is not a headline: owner request)
+	-- recent damage, for RUN DETAILS (the final hit is also the one small "Defeated by" line)
 	local history = type(data.DamageHistory) == "table" and data.DamageHistory or {}
 	local recent = {}
 	if not data.Won and not data.Portal and not data.Abandoned then
@@ -5248,6 +5417,22 @@ local function onRunResult(data)
 		end
 	end
 	results.Recent = recent
+	-- "Defeated by: Scorpion Queen Venom Burst · Leave the filling circles before they
+	-- erupt." (the owner's later brief asks for the final damage source, as one small line)
+	local causeRaw = nil
+	if not data.Won and not data.Portal and not data.Abandoned then
+		causeRaw = type(data.DeathCause) == "string" and data.DeathCause ~= "" and data.DeathCause or nil
+		local last = history[#history]
+		if not causeRaw and type(last) == "table" and type(last.Cause) == "string" and last.Cause ~= "" then
+			causeRaw = last.Cause
+		end
+	end
+	if causeRaw then
+		local name, hint = Choice.deathCause(causeRaw)
+		results.Cause.Text = string.format('<font color="%s"><b>Defeated by:</b></font> %s', hex(P.crimson_300), name)
+			.. (hint and string.format('  ·  <font color="%s">%s</font>', hex(P.ivory_300), hint) or "")
+	end
+	results.Cause.Visible = causeRaw ~= nil
 	-- portal returns before WinMinStages stages are a safe escape, not a win
 	-- Abandoned: left from the pause menu's MAIN MENU (counted as a loss)
 	results.Title.Text = data.Won and "VICTORY!" or (data.Portal and "ESCAPED" or (data.Abandoned and "RUN ENDED" or "DEFEATED"))

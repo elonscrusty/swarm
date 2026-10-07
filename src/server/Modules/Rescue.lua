@@ -4,24 +4,32 @@
 	docs/features/EXPLORE.md). An OPTIONAL placed EncounterDirector encounter.
 
 	  Waiting    a lost villager waits on a spot the director reserved (far from the
-	             spawn), waving. A living player within FindRadius starts the escort.
+	             spawn), waving. A living player within FindRadius starts the escort
+	             (a one-time notice: "Escort: lead the villager to the portal ring"). On an
+	             introductory stage it can't start during the boss fight or right after a
+	             reward (EncounterDirector.IntroBlock; attribute Blocked).
 	  Following  it walks (WalkSpeed) after the NEAREST living player and stops
 	             FollowDistance studs from them. It walks around obstacles the way enemies
 	             are pushed out of them (EnemyAI.PushOut) and stays inside the fence; if it
-	             is stuck CatchUp studs behind for CatchUpSeconds it hops to its hero.
+	             is stuck CatchUp studs behind for CatchUpSeconds it hops to its hero (a
+	             free spot beside them, pushed out of obstacles and clamped to the fence;
+	             no free spot = no hop).
 	             Enemies can hurt it (contact, Config.Enemies.ContactCooldown per enemy),
 	             and enemies within AggroRadius that are closer to it than to any hero turn
 	             toward it.
-	  Saved      it stepped into the portal ring (Config.Stages.PortalRadius): every living
-	             teammate gets an item (ItemSystem.Roll with Rescue.Weights + ItemSystem.Grant,
+	  Saved      it stepped into the portal ring (Config.Stages.PortalRadius): every
+	             teammate still in the run (a downed one waiting for a revive too) gets an item (ItemSystem.Roll with Rescue.Weights + ItemSystem.Grant,
 	             the reward reel like a chest); if no item can be granted, run gold instead
 	             (GoldSystem.AddRunGold). Exactly once.
 	  Lost       its HP reached 0: a message says so; nothing is granted.
 	Nothing happens to a villager nobody finds. Frozen runs (level-up, pause, reward reel)
-	freeze it too.
+	freeze it too (it only steps while the run simulates; hits use the run clock).
+	Speech: a short line on a state change only (found, falling behind, delivered):
+	attributes Say (text) and SaySeq (counts up; the client shows it briefly).
 
 	World: model "Rescue" in workspace.SwarmEvents (anchored, no collision): EventKind =
-	"Rescue", Title, State, Pos (updated ~10 times a second), HPFrac, Optional = true.
+	"Rescue", Title, State, Pos (updated ~10 times a second), HPFrac, Optional = true,
+	Blocked ("" or why it can't start yet), Say / SaySeq.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -53,6 +61,8 @@ type Villager = {
 	PosTimer: number,
 	ShownHP: number,
 	WaveT: number,
+	Behind: boolean, -- said "Wait for me!" and not caught up since
+	SaidAt: number, -- run time of the last speech line
 }
 
 local ctx
@@ -140,6 +150,44 @@ local function nearestPlayer(pos: Vector3): (any?, number)
 	return best, bestD
 end
 
+-- A short speech line over the villager (state changes only; the client shows it briefly).
+local function say(c: Villager, line: string, force: boolean?)
+	local now = ctx.RunManager.GetRunTime()
+	if not force and now - c.SaidAt < (K().SayEvery or 6) then
+		return
+	end
+	c.SaidAt = now
+	c.Model:SetAttribute("Say", line)
+	c.Model:SetAttribute("SaySeq", (tonumber(c.Model:GetAttribute("SaySeq")) or 0) + 1)
+end
+
+-- Inside the fence (the walking clamp).
+local function clampToFence(p: Vector3): Vector3
+	local half = Config.Arenas.Size / 2 - 2
+	local o = Config.ArenaOrigin
+	return Vector3.new(math.clamp(p.X, o.X - half, o.X + half), o.Y, math.clamp(p.Z, o.Z - half, o.Z + half))
+end
+
+-- Catch-up hop: a free spot FollowDistance from the hero (behind them first, then around),
+-- pushed out of obstacles and clamped to the fence. nil = no free spot (no hop this time).
+local function hopSpot(target: Vector3, back: Vector3): Vector3?
+	local k = K()
+	for i = 0, 7 do
+		local a = i * math.pi / 4
+		local dir = CFrame.Angles(0, a, 0):VectorToWorldSpace(back)
+		local at = clampToFence(Vector3.new(target.X, Config.ArenaOrigin.Y, target.Z) - dir * k.FollowDistance)
+		if ctx.EnemyAI and ctx.EnemyAI.PushOut then
+			at = clampToFence(ctx.EnemyAI.PushOut(at, k.Radius))
+		end
+		local blocked = ctx.EnemyAI and ctx.EnemyAI.IsBlocked and ctx.EnemyAI.IsBlocked(at.X, at.Z, k.Radius)
+		-- bounded: never further from the hero than a short walk
+		if not blocked and ((at - target) * FLAT).Magnitude <= k.FollowDistance * 3 then
+			return at
+		end
+	end
+	return nil
+end
+
 local function finish(c: Villager, state: string)
 	c.State = state
 	setAttr(c.Model, "State", state)
@@ -156,8 +204,9 @@ local function save(c: Villager)
 	Fx.Sound("Chest")
 	local k = K()
 	local anyItem = false
+	-- "for everyone": a teammate downed and waiting for a revive is still in the run
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
-		if rp.Alive and not rp.Returned and rp.Stats then
+		if (rp.Alive or rp.AwaitingRevive) and not rp.Returned and rp.Stats then
 			local granted, dramatic = ctx.ItemSystem.Grant(rp, ctx.ItemSystem.Roll(k.Weights, rp.Stats.Luck), "Lost Villager", true)
 			if granted then
 				anyItem = true
@@ -169,7 +218,16 @@ local function save(c: Villager)
 	end
 	local reward = anyItem and (soloRun() and "An item for you." or "An item for everyone.") or "Gold for everyone."
 	ctx.RunManager.Broadcast("The villager is safe! " .. reward, Color3.fromRGB(255, 220, 120), nil, { Id = "rescue.result" })
-	c.Model:Destroy() -- home through the portal
+	EncounterDirector.NoteReward() -- introductory stages: a quiet spell before the next one
+	-- home through the portal: a last word, then gone (State Saved hides every escort label
+	-- at once; the model only stays for the line)
+	say(c, "Home at last! Thank you!", true)
+	local m = c.Model
+	task.delay(1.5, function()
+		if m.Parent then
+			m:Destroy()
+		end
+	end)
 end
 
 local function lose(c: Villager)
@@ -241,11 +299,16 @@ local function step(dt: number, info)
 	local k = K()
 	if c.State == "Waiting" then
 		local _, d = nearestPlayer(c.Pos)
-		if d <= k.FindRadius then
+		-- introductory stages: not during the boss fight / right after a reward
+		local blocked = EncounterDirector.IntroBlock()
+		setAttr(c.Model, "Blocked", blocked or "")
+		if not blocked and d <= k.FindRadius then
 			c.State = "Following"
 			setAttr(c.Model, "State", "Following")
+			setAttr(c.Model, "Blocked", "")
 			Fx.Ring(c.Pos, 6, P.gold_300)
-			ctx.RunManager.Broadcast("Optional: lead the villager to the portal!", Color3.fromRGB(255, 220, 140), nil, { Id = "rescue.found" })
+			say(c, "Thank you! Lead the way!", true)
+			ctx.RunManager.Broadcast("Escort: lead the villager to the portal ring", Color3.fromRGB(255, 220, 140), nil, { Id = "rescue.found" })
 		else
 			-- waving for help
 			c.WaveT += dt
@@ -266,9 +329,7 @@ local function step(dt: number, info)
 			if ctx.EnemyAI and ctx.EnemyAI.PushOut then
 				nextPos = ctx.EnemyAI.PushOut(nextPos, k.Radius)
 			end
-			local half = Config.Arenas.Size / 2 - 2
-			local o = Config.ArenaOrigin
-			c.Pos = Vector3.new(math.clamp(nextPos.X, o.X - half, o.X + half), o.Y, math.clamp(nextPos.Z, o.Z - half, o.Z + half))
+			c.Pos = clampToFence(nextPos)
 			c.Face = to
 		end
 		-- stuck behind something far from its hero: hop to them
@@ -277,12 +338,23 @@ local function step(dt: number, info)
 			if c.Stuck >= k.CatchUpSeconds then
 				c.Stuck = 0
 				local back = to.Magnitude > 0.1 and to.Unit or Vector3.new(0, 0, 1)
-				local at = target - back * k.FollowDistance
-				c.Pos = Vector3.new(at.X, Config.ArenaOrigin.Y, at.Z)
-				Fx.Ring(c.Pos, 4, P.gold_300)
+				local at = hopSpot(target, back)
+				if at then
+					c.Pos = at
+					c.Behind = false
+					Fx.Ring(c.Pos, 4, P.gold_300)
+				end
 			end
 		else
 			c.Stuck = 0
+		end
+		-- falling behind: one line, again only after it caught up
+		local gap = ((target - c.Pos) * FLAT).Magnitude
+		if not c.Behind and gap > (k.BehindDistance or 24) then
+			c.Behind = true
+			say(c, "Wait for me!")
+		elseif c.Behind and gap < k.FollowDistance * 2.5 then
+			c.Behind = false
 		end
 		place(c)
 	end
@@ -339,6 +411,8 @@ local function start(info): boolean
 		PosTimer = 0,
 		ShownHP = 1,
 		WaveT = 0,
+		Behind = false,
+		SaidAt = -math.huge,
 	}
 	place(c)
 	MapBuilder.ClearDecor(info.Arena, spot, 3)
@@ -348,6 +422,7 @@ local function start(info): boolean
 	m:SetAttribute("State", "Waiting")
 	m:SetAttribute("Pos", spot)
 	m:SetAttribute("HPFrac", 1)
+	m:SetAttribute("Blocked", "")
 	m.Parent = eventsFolder()
 	v = c
 	return true

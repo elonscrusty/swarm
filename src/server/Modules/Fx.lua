@@ -15,6 +15,9 @@
 	  r = { {x, z, radius, Color3} }               shockwave rings (bomb, revive, boss)
 	  w = { {id, kind, ...} }                      warnings / telegraphs / hazard visuals,
 	                                               drawn by src/client/Telegraphs.lua (Fx.Warn)
+	  wt = { serverTime, ... }                     when each w entry started (workspace:
+	                                               GetServerTimeNow(), same index as w), so
+	                                               the client's fill ends exactly at the hit
 	  x = { id, ... }                              cancel warnings by id (0 = all of them)
 	  u = { {userId, kind} }                       player events: "hurt" | "heal" | "levelup" | "die" | "revive"
 	  n = { soundName, ... }                       global one-shot sounds
@@ -133,7 +136,13 @@ function Fx.Warn(kind: string, ...: any): number
 	for i = 1, select("#", ...) do
 		entry[i + 2] = (select(i, ...))
 	end
-	pushCapped("w", entry)
+	local list = batch.w
+	if list and #list >= CAPS.w then
+		return warnId
+	end
+	push("w", entry)
+	-- the start time rides along at the same index (Telegraphs syncs its progress to it)
+	push("wt", math.floor(workspace:GetServerTimeNow() * 1000 + 0.5) / 1000)
 	return warnId
 end
 
@@ -144,7 +153,8 @@ function Fx.ClearWarn(id: number)
 	if id == 0 then
 		-- wipes everything sent so far: pending warnings are dropped and the 0 always
 		-- goes out (never lost to the cap behind per-enemy cancels)
-		(batch :: any).w = nil
+		(batch :: any).w = nil;
+		(batch :: any).wt = nil
 		batch.x = { 0 }
 		hasData = true
 		return
@@ -154,6 +164,10 @@ function Fx.ClearWarn(id: number)
 		for i, entry in ipairs(pending) do
 			if entry[1] == id then
 				table.remove(pending, i)
+				local times = batch.wt
+				if times then
+					table.remove(times, i)
+				end
 				return
 			end
 		end

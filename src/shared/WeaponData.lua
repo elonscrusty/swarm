@@ -208,6 +208,23 @@ function WeaponData.VisualTier(raw: number): number
 	return (raw // 32) % 4
 end
 
+--[[
+	Card role tags (level-up card chip; LevelUpSystem's early-build help counts Damage,
+	Recovery and Defense as "immediate" picks). One of: Damage, Recovery, Defense, Growth,
+	Utility. Weapons not listed are Damage.
+]]
+WeaponData.Roles = {
+	HealingTotem = "Recovery",
+	WardShields = "Defense",
+	FrostNova = "Defense",
+	WarHorn = "Defense",
+}
+WeaponData.ImmediateRoles = { Damage = true, Recovery = true, Defense = true }
+
+function WeaponData.RoleOf(weaponId: string): string
+	return WeaponData.Roles[weaponId] or "Damage"
+end
+
 -- Shorthand for building a stat row.
 local function row(damage, cooldown, amount, area, speed, pierce, duration, knockback)
 	return {
@@ -710,7 +727,7 @@ WeaponData.Weapons = {
 	HealingTotem = {
 		Id = "HealingTotem",
 		Name = "Healing Totem",
-		Description = "Plants a totem that heals allies and hurts enemies near it.",
+		Description = "Plants a totem behind you; stand in its green ring to heal. It also hurts enemies.",
 		Color = Color3.fromRGB(140, 190, 110),
 		Behavior = "Totem",
 		Area = true,
@@ -718,6 +735,7 @@ WeaponData.Weapons = {
 		AmountLabel = "Totems",
 		DurationLabel = "Totem life",
 		CooldownLabel = "Plant every",
+		HealLabel = "Heal per pulse",
 		Perks = { { Level = 8, Id = "Rooting", Name = "Rooting Pulse", Text = "Every 3rd pulse roots enemies in the ring for 0.5 s." } },
 		-- Pulse = seconds between pulses; a hero is healed by at most one totem per HealGap
 		Params = { Radius = 7, Pulse = 1.0, EvoPulse = 0.8, HealGap = 0.9, RootEvery = 3, RootSeconds = 0.5, MaxAmount = 3, Visual = 27, EvoVisual = 28 },
@@ -1380,11 +1398,14 @@ local function labelOf(def, stat: string): string
 		return "Pierce"
 	elseif stat == "cooldown" then
 		return def.CooldownLabel or "Cooldown"
+	elseif stat == "heal" then
+		return def.HealLabel or WeaponData.StatLabels.heal
 	end
 	return WeaponData.StatLabels[stat]
 end
 
 local DIFF_ORDER = { "damage", "heal", "amount", "cooldown", "area", "pierce", "speed", "duration", "knockback" }
+local TOTEM_DIFF_ORDER = { "heal", "damage", "amount", "cooldown", "area", "pierce", "speed", "duration", "knockback" }
 
 --[[
 	Card lines for a weapon going from one stat row to the next, in plain words:
@@ -1402,6 +1423,15 @@ function WeaponData.CardLines(weaponId: string, fromLevel: number, toLevel: numb
 	local use = WeaponData.StatUse[def.Behavior] or {}
 	if fromLevel <= 0 then
 		local r = def.Levels[1]
+		if def.Behavior == "Totem" then
+			-- what matters first (phones drop the last rows): heal per pulse and how often
+			local p = def.Params or {}
+			table.insert(out, { Label = labelOf(def, "heal"), To = fmt("heal", r.heal or 0) .. " HP" })
+			table.insert(out, { Label = "Pulse every", To = fmt("cooldown", p.Pulse or 1) })
+			table.insert(out, { Label = labelOf(def, "damage"), To = fmt("damage", r.damage) })
+			table.insert(out, { Label = labelOf(def, "cooldown"), To = fmt("cooldown", r.cooldown) })
+			return out
+		end
 		for _, stat in ipairs({ "damage", "heal", "amount", "cooldown" }) do
 			if use[stat] and r[stat] then
 				table.insert(out, { Label = labelOf(def, stat), To = fmt(stat, r[stat]) })
@@ -1414,7 +1444,9 @@ function WeaponData.CardLines(weaponId: string, fromLevel: number, toLevel: numb
 	end
 	local before = def.Levels[math.clamp(fromLevel, 1, WeaponData.MaxLevel)]
 	local after = evolve and def.Evolution and def.Evolution.Stats or def.Levels[math.clamp(toLevel, 1, WeaponData.MaxLevel)]
-	for _, stat in ipairs(DIFF_ORDER) do
+	-- the totem's heal leads (rows that do not fit on a phone are dropped from the end)
+	local order = def.Behavior == "Totem" and TOTEM_DIFF_ORDER or DIFF_ORDER
+	for _, stat in ipairs(order) do
 		-- an evolution can stop using a stat (Death Spiral orbits: speed 0); never show it,
 		-- but keep "Pierce 5 → all" (unlimited pierce is a real change)
 		local used = use[stat] and (not evolve or WeaponData.UsesStat(weaponId, stat, true) or (stat == "pierce" and after.pierce >= 999) or (stat == "amount" and after.amount ~= before.amount))
@@ -1635,7 +1667,8 @@ local function statSentence(weaponId: string, def, stat: string, line): string?
 	elseif stat == "damage" then
 		return string.format("Each hit deals %s more damage.", short(d))
 	elseif stat == "heal" then
-		return string.format("Each pulse heals %s more HP.", short(d))
+		local pulse = def.Params and def.Params.Pulse or 1
+		return string.format("Each pulse heals %s more HP (%s HP %s).", short(d), short(b), WeaponData.EveryText(pulse))
 	elseif stat == "cooldown" then
 		return d < 0 and string.format("Attacks %ss sooner (every %s).", short(-d), tostring(line.To)) or nil
 	elseif stat == "area" then
@@ -1702,6 +1735,45 @@ function WeaponData.BenefitText(weaponId: string, lines: { { [string]: string } 
 		end
 	end
 	return lead, (#others > 0 and ("Also " .. table.concat(others, ", ")) or nil)
+end
+
+-- "each second" / "every 0.8 s" for an interval in seconds.
+function WeaponData.EveryText(seconds: number): string
+	if math.abs(seconds - 1) < 1e-6 then
+		return "each second"
+	end
+	return "every " .. short(seconds) .. " s"
+end
+
+--[[
+	The sentence on a NEW weapon card, from the real values of level 1 (nil = the weapon's
+	own Description). Healing Totem:
+	  "Plants a totem behind you every 9 s (lasts 7 s). Stand in its green ring to heal
+	   2 HP each second; it also hurts enemies."
+	WeaponData.IntroNote: the small details line ("7 m ring · heals you and teammates ·
+	totems don't stack"), nil when there is none.
+]]
+function WeaponData.IntroText(weaponId: string, level: number?): string?
+	local def = WeaponData.Weapons[weaponId]
+	if not def or def.Behavior ~= "Totem" then
+		return nil
+	end
+	local r = def.Levels[math.clamp(level or 1, 1, WeaponData.MaxLevel)]
+	local p = def.Params or {}
+	return string.format(
+		"Plants a totem behind you every %s s (lasts %s s). Stand in its green ring to heal %s HP %s; it also hurts enemies.",
+		short(r.cooldown), short(r.duration), short(r.heal or 0), WeaponData.EveryText(p.Pulse or 1)
+	)
+end
+
+function WeaponData.IntroNote(weaponId: string, level: number?): string?
+	local def = WeaponData.Weapons[weaponId]
+	if not def or def.Behavior ~= "Totem" then
+		return nil
+	end
+	local r = def.Levels[math.clamp(level or 1, 1, WeaponData.MaxLevel)]
+	local radius = (def.Params and def.Params.Radius or 0) * r.area
+	return string.format("%s m ring · heals you and teammates · totems don't stack", short(math.floor(radius * 10 + 0.5) / 10))
 end
 
 -- The next perk after `level` ("Lv 9: Riposte"), or nil.

@@ -436,9 +436,10 @@ local function decorate(rp, c)
 		if c.Type == "WeaponNew" then
 			rarity = "Rare"
 			c.Rank = "NEW"
-			c.Description = def.Description
+			-- the Healing Totem says how it heals from its real numbers (IntroText)
+			c.Description = WeaponData.IntroText(c.Id, 1) or def.Description
 			c.Lines = WeaponData.CardLines(c.Id, 0, 1)
-			c.Summary = def.Description
+			c.Summary = c.Description
 			synergyClue(rp, c, "Weapon")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, WeaponData.MaxLevel)
@@ -547,9 +548,82 @@ local function showcaseChoices(rp, pool): { any }
 	return choices
 end
 
+-- A card's role tag (WeaponData.Roles / PassiveData.Roles): Damage, Recovery, Defense,
+-- Growth or Utility. The client shows the same tag as a chip.
+local function roleOf(c): string
+	if c.Type == "PassiveNew" or c.Type == "PassiveUp" then
+		return PassiveData.RoleOf(c.Id)
+	elseif c.Type == "Heal" then
+		return "Recovery"
+	elseif c.Type == "Gold" then
+		return "Growth"
+	end
+	return WeaponData.RoleOf(c.Id)
+end
+
+local function immediate(c): boolean
+	return WeaponData.ImmediateRoles[roleOf(c)] == true
+end
+
+--[[
+	Early build help (Config.LevelUp.EarlyHelpLevels): during the first level-ups of a run
+	a set of undecorated draws with no Damage / Recovery / Defense card swaps its
+	lowest-weight Utility card (else its lowest-weight Growth card) for a weighted pick of
+	the pool's immediate upgrades / passives. NEW weapons and evolutions are never forced;
+	a bonus-pick set is left alone.
+]]
+local function earlyHelp(rp, drawn: { any }, pool: { any })
+	local L = Config.LevelUp
+	-- the level-up this set is for (1 = the run's first), as sendOffer counts Level
+	local index = (tonumber(rp.Level) or 1) - (tonumber(rp.PendingLevels) or 0)
+	if #drawn == 0 or index > (L.EarlyHelpLevels or 0) or (rp.BonusPicks or 0) > 0 then
+		return
+	end
+	for _, c in ipairs(drawn) do
+		if immediate(c) then
+			return
+		end
+	end
+	local candidates, total = {}, 0
+	for i, c in ipairs(pool) do
+		if c.Type ~= "WeaponNew" and c.Type ~= "Evolve" and c.Weight > 0 and immediate(c) then
+			table.insert(candidates, i)
+			total += c.Weight
+		end
+	end
+	if total <= 0 then
+		return
+	end
+	local out, outRank, outWeight = nil, 0, math.huge
+	for i, c in ipairs(drawn) do
+		local rank = roleOf(c) == "Utility" and 2 or 1
+		if rank > outRank or (rank == outRank and c.Weight < outWeight) then
+			out, outRank, outWeight = i, rank, c.Weight
+		end
+	end
+	if not out then
+		return
+	end
+	local roll = rng:NextNumber() * total
+	local pick = candidates[#candidates]
+	for _, i in ipairs(candidates) do
+		roll -= pool[i].Weight
+		if roll <= 0 then
+			pick = i
+			break
+		end
+	end
+	local swapped = drawn[out]
+	drawn[out] = pool[pick]
+	table.remove(pool, pick)
+	table.insert(pool, swapped) -- back in the pool (a bonus pick below may still use it)
+end
+
 local function rollChoices(rp)
 	local pool = buildPool(rp)
 	local choices = showcaseChoices(rp, pool)
+	local showcase = #choices > 0
+	local drawn = {}
 	for _ = #choices + 1, Config.LevelUp.Choices do
 		local total = 0
 		for _, c in ipairs(pool) do
@@ -562,11 +636,18 @@ local function rollChoices(rp)
 		for i, c in ipairs(pool) do
 			roll -= c.Weight
 			if roll <= 0 then
-				table.insert(choices, decorate(rp, c))
+				table.insert(drawn, c)
 				table.remove(pool, i)
 				break
 			end
 		end
+	end
+	if not showcase then
+		earlyHelp(rp, drawn, pool)
+	end
+	-- decorated only now: a card swapped out above was never shown (no discovery record)
+	for _, c in ipairs(drawn) do
+		table.insert(choices, decorate(rp, c))
 	end
 	if #choices == 0 and #pool > 0 then
 		-- never an empty panel (a protected pause with nothing to pick): the first legal card
@@ -779,9 +860,13 @@ local function offerNext(rp)
 		-- than GroupAutoPickSeconds); solo / last fighter: the world freezes, normal timer
 		local group = ctx.RunManager.IsGroupChoice()
 		rp.ChoiceGroup = group
-		local seconds = Config.LevelUp.AutoPickSeconds
+		-- + RevealGraceSeconds: the clock must not run while the client is still revealing
+		-- the cards (icon load, entrance, touch arming); a group panel stays capped by the
+		-- protection budget left, which drains for the whole protected time as before
+		local grace = Config.LevelUp.RevealGraceSeconds or 0
+		local seconds = Config.LevelUp.AutoPickSeconds + grace
 		if group then
-			seconds = math.min(Config.LevelUp.GroupAutoPickSeconds, ctx.RunManager.ChoiceBudget(rp))
+			seconds = math.min(Config.LevelUp.GroupAutoPickSeconds + grace, ctx.RunManager.ChoiceBudget(rp))
 		end
 		rp.OfferDeadline = os.clock() + seconds
 		rp.ChoiceTimerPaused = false

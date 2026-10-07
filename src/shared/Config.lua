@@ -189,6 +189,10 @@ Config.Player = {
 	-- grace after closing the level-up cards or a chest reward: can't be hurt this long, so
 	-- the swarm that closed in meanwhile doesn't land a hit the moment play resumes
 	ChoiceGraceSeconds = 1.5,
+	-- after taking CONTACT damage (an enemy body touching you), further contact hits are
+	-- ignored this long, so a crowd cannot stack several bites into one frame; area
+	-- attacks, projectiles and hazards are not affected (RunManager.DamagePlayer)
+	ContactGraceSeconds = 0.4,
 	ReviveClearRadius = 22, -- non-boss enemies inside this radius die on revive
 	LevelUpInvulnerable = true, -- paused (choosing an upgrade) players can't be hurt
 	-- Movement sanity check: the server snaps players back if they move faster than their
@@ -256,6 +260,14 @@ Config.LevelUp = {
 	},
 	FallbackGold = 25, -- card offered when every slot is maxed
 	FallbackHeal = 30,
+	-- early build help (LevelUpSystem rollChoices): for the first this-many level-ups of a
+	-- run, a card set with no Damage / Recovery / Defense card swaps its lowest-weight
+	-- other card (Utility first, then Growth) for a weighted one, when the pool has one
+	EarlyHelpLevels = 3,
+	-- seconds added to every panel deadline (solo and group, still capped by the group
+	-- protection budget) so the auto-pick clock never runs while the client loads the
+	-- icons, plays the card reveal and arms touch input (up to ~1.2 s)
+	RevealGraceSeconds = 1.5,
 }
 
 ------------------------------------------------------------------------------------------
@@ -492,12 +504,15 @@ Config.Guarded = {
 -- one item (Weights) and run gold (Gold x (1 + GoldStageScale x (stage - 1))).
 ------------------------------------------------------------------------------------------
 Config.Caravan = {
-	Chance = 1, -- chance per stage that a caravan is placed (needs an open spot)
+	-- (no Chance here: LootSystem.BuildStage draws the caravan as one of
+	-- Config.Encounters.Types, Count per stage; the old per-stage Chance was never read)
 	MinDistance = 75, -- studs from the spawn centre
 	Clearance = 8, -- free radius for the cart
 	ZoneRadius = 12, -- the ring to hold (studs)
 	HoldSeconds = 20, -- seconds in the ring to save it (they add up; leaving pauses)
-	LeaveGrace = 8, -- seconds the ring may stand empty before the caravan is lost
+	LeaveGrace = 8, -- seconds the ring may stand empty before the caravan is lost ...
+	LeaveGraceByStage = { 10 }, -- ... except on these stages (index = stage): stage 1 is gentler
+	StartSeconds = 1, -- a living hero must stay this long in the ring to start the defence
 	WaveEvery = 5, -- a wave on start and then every this many seconds of defence
 	WaveBase = 4, -- + WavePerStage x stage + WavePerExtraPlayer x (players - 1) ...
 	WavePerStage = 2,
@@ -549,6 +564,8 @@ Config.Explore = {
 		MinDistance = 90, -- studs from the spawn centre
 		Clearance = 6,
 		FindRadius = 9, -- a living player this close starts the escort
+		BehindDistance = 24, -- studs from the nearest hero: "Wait for me!" (once until it catches up)
+		SayEvery = 6, -- seconds at least between two speech lines
 		WalkSpeed = 15, -- studs/s (hero walk speed is about 16-18)
 		FollowDistance = 5, -- stops this close to the hero it follows
 		CatchUp = 45, -- stuck this far behind for CatchUpSeconds: it hops to its hero
@@ -598,7 +615,7 @@ Config.Enemies = {
 	-- AI thinking (target choice, obstacle raycasts, separation) is split into this many
 	-- chunks; each enemy re-thinks every N frames. Movement itself runs every frame.
 	ThinkChunks = 3,
-	ContactCooldown = 0.6, -- seconds between contact hits from the same enemy
+	ContactCooldown = 0.6, -- seconds between contact hits from the same enemy on the same player
 	SeparationRadius = 1.1, -- multiplier on the two radii when pushing enemies apart
 	SeparationCell = 8, -- studs: cell of EnemyAI's fine separation grid (perf only)
 	-- Body sync (perf only, no gameplay effect): enemy bodies within BodySyncNear studs of
@@ -756,6 +773,42 @@ Config.Boss = {
 	ClearMinionsOnSpawn = true, -- normal enemies vanish when the boss arrives
 	MinionCapDuringBoss = 60, -- regular spawning keeps this many alive during the fight
 	ContactDamage = 30,
+	--[[
+		Teachable first boss (BossAI): applies only when the boss fight is on one of Stages
+		and the run's difficulty is Difficulty (the base one), to the bosses listed in Bosses.
+		  Opening       the first Count attacks are Attack (the simplest read), then the
+		                normal cycle introduces the others one by one
+		  SafeRecover   after these attacks she is dizzy (no contact damage) for at least
+		                Seconds, so melee heroes can punish safely
+		  StingerGapWidth  directions left out per stinger gap in phase 1 (BossData's
+		                GapWidth is 3 = 72 degrees between the lanes beside a gap; 4 = 90)
+	]]
+	Intro = {
+		Enabled = true,
+		Stages = { 1 },
+		Difficulty = "Standard",
+		Bosses = {
+			ScorpionQueen = {
+				Opening = { Attack = "Charge", Count = 2 },
+				SafeRecover = { Attacks = { VenomBurst = true, StingerRing = true }, Seconds = 0.8 },
+				StingerGapWidth = 4,
+			},
+		},
+	},
+	--[[
+		Weapon targeting near a boss (WeaponSystem.nearestEnemies, single-target weapons:
+		Magic Orb, Longbow, Crossbow, Soul Bolt, Sling, Spirit Wisps). With PreferBoss on, a
+		targetable boss whose body edge is inside the weapon's range AND within PreferWithin
+		studs of the hero is aimed at first (a multi-shot weapon still sends its other shots
+		at the nearest enemies). Range checks use the target's body edge, never its centre.
+		ImmuneCueSeconds: a hero hitting an invulnerable boss (entrance, burrowed) sees a small
+		"IMMUNE" cue at most this often.
+	]]
+	Targeting = {
+		PreferBoss = true,
+		PreferWithin = 20,
+		ImmuneCueSeconds = 1.0,
+	},
 }
 
 ------------------------------------------------------------------------------------------
@@ -1591,6 +1644,11 @@ Config.Movement = {
 Config.Encounters = {
 	Types = { "Guarded", "Caravan", "Runes", "Treasure" },
 	Count = { 1, 2 },
+	-- Introductory stages (EncounterDirector.IntroBlock; the caravan defence and the villager
+	-- escort): one that has NOT started yet can't start during the stage boss fight (Boss,
+	-- Surge) nor for QuietAfterSeconds after the boss died or an optional reward paid out.
+	-- One already running goes on under its normal rules. Later stages are unchanged.
+	Intro = { Stages = { 1 }, QuietAfterSeconds = 20 },
 	-- EncounterDirector (server): the feature encounters (map events, mini-bosses, shrines,
 	-- merchant, rescue, secret rooms ...) on top of the optional locations above.
 	Director = {

@@ -1444,6 +1444,14 @@ local function playerEvent(userId: number, kind: string)
 	local root = characterRoot(userId)
 	local isLocal = userId == player.UserId
 	local pos = root and root.Position
+	if type(kind) == "string" and string.sub(kind, 1, 7) == "immune:" then
+		-- only the hero who hit the protected boss sees it
+		local id = tonumber(string.sub(kind, 8))
+		if isLocal and id then
+			K.showImmune(id)
+		end
+		return
+	end
 	if kind == "hurt" then
 		if isLocal then
 			CameraController.Shake(0.22)
@@ -2006,24 +2014,177 @@ end
 
 --[[
 	Healing Totem pulse, one controlled beat per server pulse (friendly-area look: a dashed
-	ring rippling out to the totem's reach and turning a little, never a filled disc). A pulse
-	that healed someone adds a thin dark-moss inner edge (keeps it readable on snow and ice,
-	where the pale green alone washes out) and a small flare off the life-core; a damage-only
-	pulse is a single faint ring. Lifebloom: warmer, gold-green.
+	green-teal ring rippling out to the totem's reach and turning a little, never a filled
+	disc, with a small flat plus floating over the life-core). A pulse that healed someone
+	adds a thin dark-moss inner edge (keeps it readable on snow and ice, where the pale
+	green alone washes out) and a small flare off the life-core; a damage-only pulse is a
+	single faint ring and a faint plus. Lifebloom: warmer, gold-green.
+	Heal tick: when a healing pulse lands near the local hero and their HP number rises
+	within K.TOTEM_TICK_WINDOW of it, a small "+N" (N = that rise of the HP attribute, the
+	same number the HUD shows) floats up over the hero once; nothing when nobody was
+	healed (full HP, out of the ring). Reduced effects: the "+N" fades in place.
 ]]
 K.TOTEM_CORE_Y = 3.1 -- the life-core's height over the floor (Shot_Totem x 1.5)
+K.TOTEM_TICK_WINDOW = 0.35 -- seconds between the pulse and the HP rise that it explains
+K.totemTick = { PulseAt = -1, X = 0, Z = 0, R = 0, RiseAt = -1, Rise = 0, LastHP = nil :: number?, Gui = nil :: BillboardGui?, Label = nil :: TextLabel?, Watching = false }
+
+function K.showHealTick(amount: number)
+	local st = K.totemTick
+	local root = characterRoot(player.UserId)
+	if amount < 1 or not root then
+		return
+	end
+	if not st.Gui then
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "TotemHealTick"
+		gui.Size = UDim2.fromOffset(64, 26)
+		gui.AlwaysOnTop = true
+		gui.LightInfluence = 0
+		gui.MaxDistance = 160
+		gui.ResetOnSpawn = false
+		local label = Instance.new("TextLabel")
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.fromScale(1, 1)
+		label.Font = Enum.Font.GothamBold
+		label.TextSize = 18
+		label.TextColor3 = FX.Heal
+		label.TextStrokeColor3 = P.moss_900
+		label.TextStrokeTransparency = 0.2
+		label.Parent = gui
+		st.Gui, st.Label = gui, label
+	end
+	local gui, label = st.Gui :: BillboardGui, st.Label :: TextLabel
+	gui.Adornee = root
+	gui.Parent = player:FindFirstChildOfClass("PlayerGui")
+	label.Text = "+" .. tostring(math.floor(amount + 0.5))
+	label.TextTransparency = 0
+	label.TextStrokeTransparency = 0.2
+	gui.StudsOffset = Vector3.new(0, 3.4, 0)
+	local reduced = ClientSettings.Reduced()
+	local info = TweenInfo.new(reduced and 0.6 or 0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	if not reduced then
+		game:GetService("TweenService"):Create(gui, info, { StudsOffset = Vector3.new(0, 4.6, 0) }):Play()
+	end
+	game:GetService("TweenService"):Create(label, info, { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+end
+
+--[[
+	"IMMUNE" cue: the local hero hit a boss that is protected right now (rising out of the
+	ground, burrowed). The server sends it only to that hit's owner kind ("immune:<enemy
+	id>", throttled by Config.Boss.Targeting.ImmuneCueSeconds); a small grey word rises over
+	the boss and fades. One reused label.
+]]
+K.immune = { Gui = nil :: BillboardGui?, Label = nil :: TextLabel?, Anchor = nil :: BasePart? }
+
+function K.showImmune(enemyId: number)
+	local pos = EnemyRenderer.Position(enemyId)
+	if not pos then
+		return
+	end
+	local st = K.immune
+	if not st.Gui then
+		local anchor = Instance.new("Part")
+		anchor.Name = "ImmuneAnchor"
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.CanQuery = false
+		anchor.CanTouch = false
+		anchor.Transparency = 1
+		anchor.Size = Vector3.new(0.2, 0.2, 0.2)
+		anchor.Parent = fxFolder
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "BossImmune"
+		gui.Size = UDim2.fromOffset(96, 26)
+		gui.AlwaysOnTop = true
+		gui.LightInfluence = 0
+		gui.MaxDistance = 220
+		gui.ResetOnSpawn = false
+		gui.Adornee = anchor
+		local label = Instance.new("TextLabel")
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.fromScale(1, 1)
+		label.Font = Enum.Font.GothamBold
+		label.TextSize = 17
+		label.Text = "IMMUNE"
+		label.TextColor3 = P.ivory_300
+		label.TextStrokeColor3 = P.slate_950
+		label.TextStrokeTransparency = 0.15
+		label.Parent = gui
+		st.Gui, st.Label, st.Anchor = gui, label, anchor
+	end
+	local gui, label, anchor = st.Gui :: BillboardGui, st.Label :: TextLabel, st.Anchor :: BasePart
+	anchor.CFrame = CFrame.new(pos + Vector3.new(0, 7, 0))
+	gui.Parent = player:FindFirstChildOfClass("PlayerGui")
+	label.TextTransparency = 0
+	label.TextStrokeTransparency = 0.15
+	gui.StudsOffset = Vector3.zero
+	local reduced = ClientSettings.Reduced()
+	local info = TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	if not reduced then
+		game:GetService("TweenService"):Create(gui, info, { StudsOffset = Vector3.new(0, 1.5, 0) }):Play()
+	end
+	game:GetService("TweenService"):Create(label, info, { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+end
+
+-- Pairs a healing pulse near the hero with the HP rise it caused (either may arrive first).
+function K.matchHealTick()
+	local st = K.totemTick
+	if st.PulseAt < 0 or st.RiseAt < 0 or math.abs(st.PulseAt - st.RiseAt) > K.TOTEM_TICK_WINDOW then
+		return
+	end
+	local root = characterRoot(player.UserId)
+	if root then
+		local dx, dz = root.Position.X - st.X, root.Position.Z - st.Z
+		if dx * dx + dz * dz <= (st.R + 1) * (st.R + 1) then
+			K.showHealTick(st.Rise)
+		end
+	end
+	st.PulseAt, st.RiseAt, st.Rise = -1, -1, 0
+end
+
+function K.watchHealTicks()
+	local st = K.totemTick
+	if st.Watching then
+		return
+	end
+	st.Watching = true
+	st.LastHP = tonumber(player:GetAttribute("HP"))
+	player:GetAttributeChangedSignal("HP"):Connect(function()
+		local hp = tonumber(player:GetAttribute("HP"))
+		local last = st.LastHP
+		st.LastHP = hp
+		if hp and last and hp > last then
+			st.RiseAt, st.Rise = os.clock(), hp - last
+			K.matchHealTick()
+		end
+	end)
+end
+
 local function totemPulseFx(x: number, z: number, radius: number, evo: boolean, healed: boolean)
-	local color = evo and FX.Heal:Lerp(FX.Gold, 0.35) or FX.Heal:Lerp(P.moss_300, 0.25)
+	K.watchHealTicks()
+	-- friendly green-teal (never the red / amber of enemy warnings)
+	local color = evo and FX.Heal:Lerp(FX.Gold, 0.35) or FX.Heal:Lerp(P.ice_300, 0.3)
 	wave(x, z, 1.2, radius, healed and 0.42 or 0.28, color, healed and 0.12 or 0.4, 0.7, false, 0.6)
+	local core = Vector3.new(x, FLOOR_Y + K.TOTEM_CORE_Y, z)
+	if room(2) then
+		-- the small flat plus over the life-core (rises a little unless effects are reduced)
+		local at = CFrame.new(core + Vector3.new(0, 1.3, 0))
+		local rise = not ClientSettings.Reduced() and (at + Vector3.new(0, 0.8, 0)) or nil
+		local a0 = healed and 0.2 or 0.55
+		fx("Block", color, NEON, at, rise, Vector3.new(1.3, 0.1, 0.34), nil, a0, 1, 0.6, EASE_OUT)
+		fx("Block", color, NEON, at, rise, Vector3.new(0.34, 0.1, 1.3), nil, a0, 1, 0.6, EASE_OUT)
+	end
 	if healed then
 		if not ClientSettings.Reduced() then
 			wave(x, z, 1, radius - 0.32, 0.18, evo and P.gold_600 or P.moss_700, 0.2, 0.7, false, 0.6)
 		end
-		local core = Vector3.new(x, FLOOR_Y + K.TOTEM_CORE_Y, z)
 		if not ClientSettings.Flashes() and room(1) then
 			fx("Ball", color, NEON, CFrame.new(core), nil, Vector3.one * 1.1, Vector3.one * 2, 0.45, 1, 0.3, EASE_OUT)
 		end
 		sparkle(core, color, 2, 0.5, 1.4, 0.45)
+		local st = K.totemTick
+		st.PulseAt, st.X, st.Z, st.R = os.clock(), x, z, radius
+		K.matchHealTick()
 	end
 end
 

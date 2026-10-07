@@ -8,8 +8,12 @@
 	             EventKind = SecretRoom | Merchant | Rescue), shown within MARKER_RANGE studs:
 	               cracked wall  "CRACKED WALL" / "Attack it to break it" + a crack bar
 	               merchant      "MERCHANT" / "3 items for run gold"
-	               villager      "OPTIONAL" tag + "LOST VILLAGER" / "Lead me to the portal!"
-	                             + an HP bar while it follows
+	               villager      a small label (120 x 34): "OPTIONAL" tag, the name and one
+	                             short status ("Find me" / "Following you" / why it can't
+	                             start yet) + an HP bar while it follows; a speech line
+	                             (model Say / SaySeq: found, falling behind, delivered)
+	                             replaces the status for SAY_SECONDS. Delivered = only that
+	                             last line, then nothing.
 	  shimmer    the cracked wall's crack parts (named "Crack") pulse locally (the hint)
 	  merchant   the shop panel while you stand at the cart: "MERCHANT", your run gold
 	             ("RUN GOLD 27") and a close X; your own 3 offers (remote MerchantStock),
@@ -67,7 +71,9 @@ local FOOT_H = 20 -- the foot line under the offers
 local PENDING_MIN, PENDING_MAX = 0.5, 2 -- a sent buy blocks its offer this long (seconds)
 local compact = false
 
-type Marker = { Model: Model, Billboard: BillboardGui, Face: Frame, Title: TextLabel, Sub: TextLabel, Tag: TextLabel, Bar: Frame, Fill: Frame, Cracks: { BasePart }, Alpha: number, Applied: number }
+local SAY_SECONDS = 2.5 -- the villager's speech line replaces its status this long
+
+type Marker = { Model: Model, Billboard: BillboardGui, Face: Frame, Title: TextLabel, Sub: TextLabel, Tag: TextLabel, Bar: Frame, Fill: Frame, Cracks: { BasePart }, Alpha: number, Applied: number, SaySeq: number?, SayUntil: number? }
 
 local markers: { [Model]: Marker } = {}
 local stock: { [string]: any } = { Id = 0, Items = {} }
@@ -101,17 +107,21 @@ local function makeMarker(m: Model): Marker?
 	if not anchor or not anchor:IsA("BasePart") then
 		return nil
 	end
-	local bb = UIKit.new("BillboardGui", { Name = "ExploreMarker", Adornee = anchor, Size = UDim2.fromOffset(190, 64), StudsOffsetWorldSpace = Vector3.new(0, 5, 0), AlwaysOnTop = true, MaxDistance = MARKER_RANGE, Enabled = false, ResetOnSpawn = false }, player:WaitForChild("PlayerGui")) :: BillboardGui
-	local face = UIKit.new("Frame", { Name = "Face", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.15, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(180, 46) }, bb)
+	-- the villager walks among the heroes all escort long: a small label (name + one status),
+	-- not the 180 x 46 pill of the static merchant / wall
+	local small = m:GetAttribute("EventKind") == "Rescue"
+	local fw, fh = small and 120 or 180, small and 34 or 46
+	local bb = UIKit.new("BillboardGui", { Name = "ExploreMarker", Adornee = anchor, Size = UDim2.fromOffset(fw + 10, fh + (small and 16 or 18)), StudsOffsetWorldSpace = Vector3.new(0, 5, 0), AlwaysOnTop = true, MaxDistance = MARKER_RANGE, Enabled = false, ResetOnSpawn = false }, player:WaitForChild("PlayerGui")) :: BillboardGui
+	local face = UIKit.new("Frame", { Name = "Face", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.15, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(fw, fh) }, bb)
 	UIKit.corner(face, Theme.Radius.M)
-	UIKit.stroke(face, P.gold_400, 1.5, 0.25)
-	local title = UIKit.text(face, "Label", "", { Name = "Title", Position = UDim2.fromOffset(8, 3), Size = UDim2.new(1, -16, 0, 18), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 }, 14)
-	local sub = UIKit.text(face, "Caption", "", { Name = "Sub", Position = UDim2.fromOffset(8, 21), Size = UDim2.new(1, -16, 0, 14), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_200 }, 12)
-	local bar = UIKit.new("Frame", { Name = "Bar", BackgroundColor3 = P.slate_800, BorderSizePixel = 0, Position = UDim2.new(0, 12, 1, -7), Size = UDim2.new(1, -24, 0, 4), Visible = false }, face)
+	UIKit.stroke(face, P.gold_400, small and 1 or 1.5, 0.25)
+	local title = UIKit.text(face, "Label", "", { Name = "Title", Position = UDim2.fromOffset(6, small and 2 or 3), Size = UDim2.new(1, -12, 0, small and 14 or 18), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd }, small and 12 or 14)
+	local sub = UIKit.text(face, "Caption", "", { Name = "Sub", Position = UDim2.fromOffset(6, small and 16 or 21), Size = UDim2.new(1, -12, 0, small and 12 or 14), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_200, TextTruncate = Enum.TextTruncate.AtEnd }, small and 11 or 12)
+	local bar = UIKit.new("Frame", { Name = "Bar", BackgroundColor3 = P.slate_800, BorderSizePixel = 0, Position = UDim2.new(0, 10, 1, small and -4 or -7), Size = UDim2.new(1, -20, 0, small and 3 or 4), Visible = false }, face)
 	UIKit.corner(bar, 999)
 	local fill = UIKit.new("Frame", { Name = "Fill", BackgroundColor3 = P.gold_300, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, bar)
 	UIKit.corner(fill, 999)
-	local tag = UIKit.text(bb, "Caption", "OPTIONAL", { Name = "Tag", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromOffset(84, 16), TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = P.gold_500, BackgroundTransparency = 0, TextColor3 = P.slate_950, Visible = false }, 11)
+	local tag = UIKit.text(bb, "Caption", "OPTIONAL", { Name = "Tag", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromOffset(small and 64 or 84, small and 14 or 16), TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = P.gold_500, BackgroundTransparency = 0, TextColor3 = P.slate_950, Visible = false }, small and 10 or 11)
 	UIKit.corner(tag, 999)
 	local cracks = {}
 	for _, d in ipairs(m:GetChildren()) do
@@ -119,7 +129,7 @@ local function makeMarker(m: Model): Marker?
 			table.insert(cracks, d)
 		end
 	end
-	return { Model = m, Billboard = bb, Face = face, Title = title, Sub = sub, Tag = tag, Bar = bar, Fill = fill, Cracks = cracks, Alpha = 0, Applied = 0 }
+	return { Model = m, Billboard = bb, Face = face, Title = title, Sub = sub, Tag = tag, Bar = bar, Fill = fill, Cracks = cracks, Alpha = 0, Applied = 0, SaySeq = tonumber(m:GetAttribute("SaySeq")) or 0, SayUntil = nil }
 end
 
 local function set(obj: Instance, key: string, value: any)
@@ -147,17 +157,31 @@ local function fillMarker(mk: Marker)
 		title = "MERCHANT"
 		sub = "3 items for run gold"
 	elseif kind == "Rescue" then
+		-- name + one short status; a fresh speech line (Say / SaySeq) replaces the status
+		local seq = tonumber(m:GetAttribute("SaySeq")) or 0
+		if seq ~= (mk.SaySeq or 0) then
+			mk.SaySeq = seq
+			mk.SayUntil = clock + SAY_SECONDS
+		end
+		local speech = (mk.SayUntil and clock < mk.SayUntil) and tostring(m:GetAttribute("Say") or "") or ""
+		local blocked = tostring(m:GetAttribute("Blocked") or "")
 		tag = st == "Waiting" or st == "Following"
 		if st == "Following" then
-			title = "LOST VILLAGER"
-			sub = "Lead me to the portal!"
+			title = "VILLAGER"
+			sub = "Following you"
 			bar = true
 		elseif st == "Lost" then
 			title = "VILLAGER LOST"
 			sub = ""
+		elseif st == "Saved" then
+			title = "VILLAGER"
+			tag = false
 		else
 			title = "LOST VILLAGER"
-			sub = "Help! Come find me"
+			sub = blocked ~= "" and blocked or "Help! Find me"
+		end
+		if speech ~= "" then
+			sub = "\"" .. speech .. "\""
 		end
 	end
 	set(mk.Title, "Text", title)
@@ -218,8 +242,9 @@ local function clearOfHud(mk: Marker): boolean
 			hit = false
 			break
 		end
-		-- the face: 180 x 46 px, its bottom 32 px under the point
-		hit = WorldLabelFade.Hits(sp.X - 90, sp.Y - 14, sp.X + 90, sp.Y + 32, rects)
+		-- the face (180 x 46 px; the villager's 120 x 34), its bottom 32 px under the point
+		local half = mk.Face.Size.X.Offset / 2
+		hit = WorldLabelFade.Hits(sp.X - half, sp.Y + 32 - mk.Face.Size.Y.Offset, sp.X + half, sp.Y + 32, rects)
 		if not hit then
 			break
 		end
@@ -595,7 +620,17 @@ local function update(dt: number)
 			untrack(m)
 		else
 			local mpos = m:GetAttribute("Pos")
-			local want = on and typeof(mpos) == "Vector3" and m:GetAttribute("State") ~= "Saved"
+			local saved = m:GetAttribute("State") == "Saved"
+			-- delivered: every escort label stops; only the villager's last line shows briefly
+			if saved and m:GetAttribute("EventKind") == "Rescue" then
+				local seq = tonumber(m:GetAttribute("SaySeq")) or 0
+				if seq ~= (mk.SaySeq or 0) then
+					mk.SaySeq = seq
+					mk.SayUntil = clock + SAY_SECONDS
+				end
+				saved = not (mk.SayUntil and clock < mk.SayUntil)
+			end
+			local want = on and typeof(mpos) == "Vector3" and not saved
 			local hidden = true
 			if want then
 				fillMarker(mk)

@@ -19,7 +19,8 @@
 	  BossRotation (back to the normal boss order), SpawnEnemy type / SpawnElite type,
 	  GiveItem id, GiveItems (3 random), GiveWeapon id (max level), MaxWeapons (every
 	  weapon at max level), NewWeapons, EvolveWeapons, SpawnPortalBoss, TeleportToPortal,
-	  NextStage
+	  NextStage, CombatTrace (toggle for this run: RunManager.DamagePlayer prints one
+	  "[combat] ..." line per hit on you to the server Output; never shown to players)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -75,6 +76,7 @@ local KIND = {
 	SkipToBoss = "run", -- old clients
 	TeleportToPortal = "run",
 	NextStage = "run",
+	CombatTrace = "run",
 }
 
 -- Lobby commands that boost the profile (set data.DevBoosted). ResetProgress is not one:
@@ -238,6 +240,11 @@ function DevTools.Handle(ctx, player: Player, command: string, arg: any, inLobby
 		end
 	elseif command == "TeleportToPortal" then
 		ctx.StageManager.DevTeleport(rp)
+	elseif command == "CombatTrace" then
+		-- kept on the run player (gone with the run); using it taints the run like any
+		-- DEV command (RunManager.devCommand)
+		rp.CombatTrace = not (rp.CombatTrace == true)
+		ctx.RunManager.Notify(player, "DEV: combat trace " .. (rp.CombatTrace and "ON (server Output, [combat] lines)" or "OFF"), DEV_COLOR)
 	elseif command == "NextStage" then
 		if ctx.StageManager.DevNextStage() then
 			ctx.RunManager.Broadcast("DEV: on to the next stage", DEV_COLOR, nil, { Id = "dev" })

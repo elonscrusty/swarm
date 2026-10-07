@@ -3,7 +3,9 @@
 	Every enemy warning on the floor, drawn on this client only. The server sends each one
 	ONCE in the FxBatch (keys "w" = warnings, "x" = cancel by id, 0 = all; see server Fx.Warn)
 	and decides the damage itself at the moment the warning ends, so what you see is what
-	hits. Nothing here affects gameplay.
+	hits. Each warning carries the server time it started (batch "wt"): its progress is
+	counted from that, so the fill reaches the end exactly when the server hits (frozen
+	time is held as before). Nothing here affects gameplay.
 
 	Readability rules (docs/ART_DIRECTION.md §7 + the encounter brief):
 	  * shape first, colour second: filled growing circles (the fill reaching the rim = the
@@ -84,7 +86,13 @@ local STYLES = {
 	pound = { Zone = P.crimson_700, Fill = P.crimson_400, Edge = P.crimson_300, Dash = 1 },
 	-- an ice shard about to land (Frostbound Colossus): crimson like every hit, an icy rim
 	frost = { Zone = P.crimson_700, Fill = P.crimson_400, Edge = P.ice_100, Dash = 0.7, Inner = true },
+	-- a pre-marker (the Queen's claw pose): where the Venom Burst circles will open; dashed
+	-- rim and a faint zone, no fill (it hurts nobody; the real filling circle follows)
+	mark = { Zone = P.crimson_800, Fill = P.crimson_400, Edge = P.crimson_300, Dash = 0.45, NoFill = true },
 }
+-- A circle ends at the hit: it is gone this fast after its end (the impact pop takes over),
+-- so no red circle lingers on ground that is already safe again.
+local CIRCLE_AFTER = 0.06
 
 -- Sound for a new warning shape (the older shapes' cues are played by VFX).
 local function cue(name: string, x: number, z: number)
@@ -539,15 +547,20 @@ Kind.circle = function(x: number, z: number, radius: number, seconds: number, st
 	rec.Marks = marks
 	function rec.Update(t: number): boolean
 		local dur = rec.Dur
-		if t >= dur + FADE_OUT then
+		if t >= dur + CIRCLE_AFTER then
 			return false
 		end
-		local v = vis(t, dur)
+		local v = math.min(1, t / FADE_IN) * (1 - math.clamp((t - dur) / CIRCLE_AFTER, 0, 1))
 		local u = math.clamp(t / dur, 0, 1)
 		setT(rec.Rim, 1 - 0.62 * v)
-		setT(rec.Zone, 1 - 0.42 * v)
-		setDisc(rec.Fill, rec.R * 2 * (0.12 + 0.88 * u))
-		setT(rec.Fill, 1 - (0.42 + 0.3 * u) * v)
+		if rec.St.NoFill then
+			setT(rec.Zone, 1 - 0.22 * v)
+			setT(rec.Fill, 1)
+		else
+			setT(rec.Zone, 1 - 0.42 * v)
+			setDisc(rec.Fill, rec.R * 2 * (0.12 + 0.88 * u))
+			setT(rec.Fill, 1 - (0.42 + 0.3 * u) * v)
+		end
 		local edge
 		if rec.St.Blink and not ClientSettings.Flashes() then
 			local hz = 5 + 12 * u
@@ -577,9 +590,15 @@ end
 
 -- Lane (charges, lunges): outline, base, edge lines, an end cap, a fill running from the
 -- attacker (local +Z end) to the far end over the warning time.
-Kind.lane = function(x: number, z: number, yaw: number, length: number, width: number, seconds: number)
+-- active (optional, seconds): the rush itself. Three looks so you can tell them apart:
+--   warning    dark lane, the fill runs toward the end
+--   active     the whole lane lights up (bright fill, amber edges) while the rush runs
+--   aftermath  it fades out fast (LANE_AFTER): nothing red stays behind once it is over
+local LANE_AFTER = 0.15
+Kind.lane = function(x: number, z: number, yaw: number, length: number, width: number, seconds: number, active: number?)
 	local cf = CFrame.new(x, FLOOR_Y, z) * CFrame.Angles(0, tonumber(yaw) or 0, 0)
-	local rec: any = { Dur = math.max(0.1, seconds), CF = cf, Len = length, W = width }
+	local act = math.max(0, tonumber(active) or 0)
+	local rec: any = { Dur = math.max(0.1, seconds), Active = act, CF = cf, Len = length, W = width, Lit = false }
 	local edge = 0.3
 	rec.Rim = take("Block", C.Outline, Vector3.new(width + 0.8, 0.04, length + 0.8), 1)
 	rec.Rim.CFrame = cf * CFrame.new(0, Y_RIM, 0)
@@ -603,13 +622,40 @@ Kind.lane = function(x: number, z: number, yaw: number, length: number, width: n
 			table.insert(rec.Chev, p)
 		end
 	end
+	-- the active look: brighter colours, written once when the rush starts
+	local function light()
+		rec.Lit = true
+		rec.Fill.Color = Accessibility.Color(P.crimson_300, "Danger")
+		rec.Base.Color = Accessibility.Color(P.crimson_500, "Danger")
+		for _, k in ipairs({ "L", "R", "Cap" }) do
+			rec[k].Color = Accessibility.Color(P.amber_300, "Danger")
+		end
+	end
 	function rec.Update(t: number): boolean
 		local dur = rec.Dur
-		if t >= dur + FADE_OUT then
+		local fade = rec.Active > 0 and LANE_AFTER or FADE_OUT
+		local stop = dur + rec.Active
+		if t >= stop + fade then
 			return false
 		end
-		local v = vis(t, dur)
+		local v = math.min(1, t / FADE_IN) * (1 - math.clamp((t - stop) / fade, 0, 1))
 		local u = math.clamp(t / dur, 0, 1)
+		if t >= dur and rec.Active > 0 then
+			-- active: the whole lane lit and steady while the rush runs
+			if not rec.Lit then
+				light()
+			end
+			setT(rec.Rim, 1 - 0.6 * v)
+			setT(rec.Base, 1 - 0.5 * v)
+			setT(rec.L, 1 - 0.95 * v)
+			setT(rec.R, 1 - 0.95 * v)
+			setT(rec.Cap, 1 - 0.95 * v)
+			setAlpha(rec.Chev, 1 - 0.8 * v)
+			rec.Fill.Size = Vector3.new(rec.W, 0.04, rec.Len)
+			setT(rec.Fill, 1 - 0.75 * v)
+			bulk(rec.Fill, rec.CF * CFrame.new(0, Y_FILL, 0))
+			return true
+		end
 		local pulse = 0.78 + 0.22 * math.sin(t * (8 + 18 * u))
 		setT(rec.Rim, 1 - 0.5 * v)
 		setT(rec.Base, 1 - 0.38 * v)
@@ -634,8 +680,13 @@ Kind.lane = function(x: number, z: number, yaw: number, length: number, width: n
 end
 
 -- Stinger ring: one spoke per stinger lane; the missing spokes are the safe gaps.
-Kind.spokes = function(x: number, z: number, inner: number, length: number, seconds: number, angles: { number }?)
-	local rec: any = { Dur = math.max(0.1, seconds), Spokes = {}, X = x, Z = z, R0 = inner, Len = length }
+-- width (optional): the real hit lane (stinger + hero body). Then each spoke is drawn that
+-- wide, in SPOKE_SEGS pieces that fade along its length (the stingers fly on far past
+-- the drawn end), with a bright centre line; without it, the old thin spoke.
+local SPOKE_SEGS = 3
+Kind.spokes = function(x: number, z: number, inner: number, length: number, seconds: number, angles: { number }?, width: number?)
+	local w = tonumber(width)
+	local rec: any = { Dur = math.max(0.1, seconds), Spokes = {}, X = x, Z = z, R0 = inner, Len = length, W = w }
 	if type(angles) ~= "table" then
 		angles = {}
 	end
@@ -644,7 +695,13 @@ Kind.spokes = function(x: number, z: number, inner: number, length: number, seco
 			local dark = take("Block", C.Outline, Vector3.new(1.0, 0.04, 0.1), 1)
 			local core = take("Block", P.crimson_300, Vector3.new(0.45, 0.04, 0.1), 1)
 			local tip = take("Wedge", P.crimson_300, Vector3.new(0.04, 1.1, 1.1), 1)
-			table.insert(rec.Spokes, { A = a, Dark = dark, Core = core, Tip = tip })
+			local segs = {}
+			if w then
+				for k = 1, SPOKE_SEGS do
+					segs[k] = take("Block", P.crimson_600, Vector3.new(w, 0.04, 0.1), 1)
+				end
+			end
+			table.insert(rec.Spokes, { A = a, Dark = dark, Core = core, Tip = tip, Segs = segs })
 		end
 	end
 	-- a thin crimson circle at her feet ties the spokes together
@@ -658,17 +715,27 @@ Kind.spokes = function(x: number, z: number, inner: number, length: number, seco
 		local grow = math.clamp(t / 0.3, 0, 1)
 		local len = math.max(0.2, rec.Len * grow)
 		local pulse = 0.75 + 0.25 * math.sin(t * 14)
+		local lw = rec.W
 		for _, sp in ipairs(rec.Spokes) do
 			local dir = Vector3.new(math.cos(sp.A), 0, math.sin(sp.A))
 			local mid = Vector3.new(rec.X, FLOOR_Y + Y_EDGE, rec.Z) + dir * (rec.R0 + len / 2)
 			local cf = CFrame.lookAt(mid, mid + dir)
-			sp.Dark.Size = Vector3.new(1.0, 0.04, len + 0.4)
+			sp.Dark.Size = Vector3.new(lw and lw + 0.5 or 1.0, 0.04, len + 0.4)
 			sp.Core.Size = Vector3.new(0.45, 0.04, len)
-			sp.Dark.Transparency = 1 - 0.5 * v
-			sp.Core.Transparency = 1 - 0.85 * pulse * v
-			sp.Tip.Transparency = 1 - 0.85 * pulse * v
-			bulk(sp.Dark, cf * CFrame.new(0, -0.006, 0))
+			setT(sp.Dark, 1 - (lw and 0.35 or 0.5) * v)
+			setT(sp.Core, 1 - 0.85 * pulse * v)
+			setT(sp.Tip, 1 - 0.85 * pulse * v)
+			bulk(sp.Dark, cf * CFrame.new(0, -0.012, 0))
 			bulk(sp.Core, cf)
+			if lw then
+				-- the hit lane: SPOKE_SEGS pieces, fading toward the outer end
+				local segLen = len / SPOKE_SEGS
+				for k, seg in ipairs(sp.Segs) do
+					seg.Size = Vector3.new(lw, 0.04, segLen)
+					setT(seg, 1 - 0.55 * (1 - (k - 1) / SPOKE_SEGS) * v)
+					bulk(seg, cf * CFrame.new(0, -0.006, len / 2 - (k - 0.5) * segLen))
+				end
+			end
 			-- arrow head at the outer end (wedge lying flat, pointing outward)
 			bulk(sp.Tip, cf * CFrame.new(0, 0.01, -len / 2 - 0.5) * CFrame.Angles(math.pi / 2, 0, 0) * CFrame.Angles(0, math.pi / 2, 0))
 		end
@@ -680,6 +747,7 @@ Kind.spokes = function(x: number, z: number, inner: number, length: number, seco
 			give("Block", sp.Dark)
 			give("Block", sp.Core)
 			give("Wedge", sp.Tip)
+			giveAll("Block", sp.Segs)
 		end
 		giveAll("Block", rec.Ring)
 	end
@@ -1430,7 +1498,24 @@ local function clearWarn(id: number)
 	end
 end
 
-local function onWarn(w: { any })
+local state: Instance? = nil
+
+-- How far into its life a warning already is when it arrives: the server stamps each one
+-- with workspace:GetServerTimeNow() (batch "wt"), so the fill ends exactly when the server
+-- hits instead of a flush + ping later. Missing stamp: arrival time (the old behaviour).
+-- While the run is frozen nothing advances, so a warning arriving then starts at 0.
+local MAX_SYNC_AGE = 0.75
+local function ageOf(stamp: any): number
+	if type(stamp) ~= "number" or stamp ~= stamp then
+		return 0
+	end
+	if state and state:GetAttribute("Frozen") == true then
+		return 0
+	end
+	return math.clamp(workspace:GetServerTimeNow() - stamp, 0, MAX_SYNC_AGE)
+end
+
+local function onWarn(w: { any }, stamp: any)
 	local id, kind = w[1], w[2]
 	if type(id) ~= "number" or type(kind) ~= "string" then
 		return
@@ -1457,7 +1542,7 @@ local function onWarn(w: { any })
 	if recs[id] then
 		clearWarn(id)
 	end
-	rec.Start = os.clock()
+	rec.Start = os.clock() - ageOf(stamp)
 	recs[id] = rec
 end
 
@@ -1473,15 +1558,15 @@ local function onFxBatch(batch)
 		end
 	end
 	if type(batch.w) == "table" then
-		for _, w in ipairs(batch.w) do
+		local times = type(batch.wt) == "table" and batch.wt or nil
+		for i, w in ipairs(batch.w) do
 			if type(w) == "table" then
-				onWarn(w)
+				onWarn(w, times and times[i])
 			end
 		end
 	end
 end
 
-local state: Instance? = nil
 local lastStep = os.clock()
 
 local function step()
@@ -1489,7 +1574,8 @@ local function step()
 	local dt = now - lastStep
 	lastStep = now
 	-- the run is frozen (pause menu, level-up choice): the server's timers stop, so the
-	-- warnings hold their progress too and still match the hit when the run resumes
+	-- warnings hold their progress too and still match the hit when the run resumes (the
+	-- start shifts by the frozen time: no jump on resume, server-time sync or not)
 	if state and state:GetAttribute("Frozen") == true then
 		for _, rec in pairs(recs) do
 			rec.Start += dt
