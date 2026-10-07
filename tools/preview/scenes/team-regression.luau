@@ -302,6 +302,13 @@ for _ = 1, math.ceil((Config.CoopBoss.HoldSeconds + 3) / 0.1) do
 	if state:GetAttribute("BossWeakSpot") then opened = true break end
 end
 check(opened, "boss: the weak spot opens after the holder keeps aggro", boss.BossState)
+-- the side is checked the moment the spot opens (the boss keeps moving and attacking after)
+local spot = state:GetAttribute("BossWeakSpot")
+if typeof(spot) == "Vector3" then
+	local toSpot = ((spot - boss.Pos) * FLAT).Unit
+	local toHolder = ((rp.Root.Position - boss.Pos) * FLAT).Unit
+	check(toSpot:Dot(toHolder) < -0.5, "boss: the spot is on the far side from the holder")
+end
 check(state:GetAttribute("BossAggroId") == me.UserId, "boss: aggro holder published", state:GetAttribute("BossAggroId"))
 local noticed = false
 for _, n in ipairs(notices) do if n.Id == "boss.weakspot" then noticed = true end end
@@ -310,12 +317,6 @@ advance(0.1)
 check(WeakSpotC.BadgeText() == "HOLD AGGRO", "boss: holder's badge", WeakSpotC.BadgeText())
 local marker = WeakSpotC.Marker()
 check(marker and marker.Transparency < 1, "boss: client marker behind the boss")
-local spot = state:GetAttribute("BossWeakSpot")
-if typeof(spot) == "Vector3" then
-	local toSpot = ((spot - boss.Pos) * FLAT).Unit
-	local toHolder = ((rp.Root.Position - boss.Pos) * FLAT).Unit
-	check(toSpot:Dot(toHolder) < -0.5, "boss: the spot is on the far side from the holder")
-end
 local function hit(who, amount)
 	local hp = boss.HP
 	ES.Damage(boss, amount, who, nil, nil, true)

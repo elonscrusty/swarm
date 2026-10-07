@@ -37,7 +37,7 @@ def main():
     checks += [("discovery", ["phone"]), ("discovery", ["phone-portrait"])]
     checks += [("pings", ["phone"]), ("pings", ["phone-portrait"])]
     checks += [("accessibility-sim", [])]
-    checks += [("daily-quests-regression", []), ("comeback-regression", ["headless=off"])] + [("layout", ["meta", d, "screen=" + s]) for d in ("iphone", "phone-portrait", "pc") for s in ("Quests", "Comeback")]  # DailyQuests + ComebackGift (docs/next)
+    checks += [("daily-quests-regression", []), ("comeback-regression", [])] + [("layout", ["meta", d, "screen=" + s]) for d in ("iphone", "phone-portrait", "pc") for s in ("Quests", "Comeback")]  # DailyQuests + ComebackGift (docs/next)
     checks += [("bugreport-plus-regression", [])]  # BugReportPlus: snapshot, filter, 3/hour, DEV-only inbox (live rules)
     checks += [("starter-bundle-regression", []), ("group-bonus-regression", []), ("invite-regression", [])] + [("layout", ["social", d, "screen=" + s]) for d in ("iphone", "phone-portrait", "pc") for s in ("Home", "Starter", "Group", "Invite", "Store", "More")]  # StarterBundle / GroupBonus / InviteRewards (docs/next)
     checks += [("uistate", [])]
