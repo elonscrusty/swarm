@@ -8,7 +8,7 @@
 	Enemy record fields:
 	  Id (pool index, also the model name "E<Id>"), Uid (unique per spawn), Model, Part,
 	  Def, Type, Elite, Boss, Alive, Pos (ground position), Height (body centre above floor),
-	  Radius, HP, MaxHP, Speed, Damage, Dir, Knock (knockback velocity), NextContact,
+	  Radius, HP, MaxHP, Speed, Damage, Dir, Knock (knockback velocity), NextContact (latest contact bite; the real cooldown is per player, ContactNext),
 	  Ghost, Erratic, Phase, Slot (index in Active), Guard (guarded-altar id, LootSystem),
 	  Affix (elites: "Swift" | "Shielded" | "Burning"), Shield (HP the shield still soaks),
 	  DmgScale (attack damage multiplier), SpawnGrace, Act / ActTimer (EnemyAI behaviours),

@@ -819,6 +819,7 @@ function EnemyAI.Step(dt: number)
 					end
 					if now >= (cd[rp] or 0) then
 						cd[rp] = now + Config.Enemies.ContactCooldown
+						e.NextContact = cd[rp] -- latest bite on anyone (read by tests and tools)
 						local name = (e.BossData and e.BossData.DisplayName) or e.Def.DisplayName or e.Type
 						ctx.RunManager.DamagePlayer(rp, e.Damage * (rallied and e.RallyDamage or 1), name .. " contact", "contact")
 					end
