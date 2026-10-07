@@ -206,7 +206,7 @@ local LINES = {
 	{ Key = "AreaMult", Label = "Area", Fmt = pct },
 	{
 		Key = "Amount",
-		Label = "Extra projectiles",
+		Label = "Extra shots", -- projectiles, sword swings and strikes alike (not auras)
 		Fmt = function(v: number): string
 			return "+" .. num(v)
 		end,

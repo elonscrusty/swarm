@@ -1533,6 +1533,189 @@ function WeaponData.SummaryText(lines: { { [string]: string } }?, fallback: stri
 	return table.concat(parts, ", ")
 end
 
+--[[
+	Benefit sentences for level-up cards (one plain sentence for THIS pick, from the real
+	card lines; the before / after rows keep the numbers):
+	  Sword 1 → 2 swings   "Adds one extra sword swing per attack."
+	  Spear 15 → 20 dmg    "Each hit deals 5 more damage."
+	  a perk level         "Unlocks Riposte: every 3rd attack also cuts all around you."
+	WeaponData.BenefitText(id, lines) → (sentence, other gains or nil)
+]]
+local COUNT_WORDS = { "one", "two", "three", "four", "five" }
+function WeaponData.CountWord(n: number): string
+	local i = math.floor(n + 0.5)
+	return COUNT_WORDS[i] or tostring(i)
+end
+
+-- The thing one unit of a weapon's amount is ("sword swing", "knife", "lightning strike").
+local AMOUNT_NOUN = { Whip = "sword swing", Lightning = "lightning strike", Knives = "knife", Vortex = "vortex" }
+function WeaponData.AmountNoun(weaponId: string): string
+	local def = WeaponData.Weapons[weaponId]
+	if not def then
+		return "shot"
+	end
+	local noun = AMOUNT_NOUN[weaponId] or AMOUNT_NOUN[def.Behavior]
+	if noun then
+		return noun
+	end
+	local label = string.lower(def.AmountLabel or "shots")
+	if string.sub(label, -3) == "ves" then
+		return string.sub(label, 1, -4) .. "fe"
+	elseif string.sub(label, -4) == "ices" then
+		return string.sub(label, 1, -5) .. "ex"
+	elseif string.sub(label, -1) == "s" then
+		return string.sub(label, 1, -2)
+	end
+	return label
+end
+
+local function plural(noun: string, n: number): string
+	if math.abs(n - 1) < 1e-6 then
+		return noun
+	elseif string.sub(noun, -2) == "fe" then
+		return string.sub(noun, 1, -3) .. "ves"
+	elseif string.sub(noun, -2) == "ex" then
+		return string.sub(noun, 1, -3) .. "ices"
+	end
+	return noun .. "s"
+end
+
+local function numOf(s: any): number?
+	return tonumber(string.match(tostring(s or ""), "^[+-]?%d+%.?%d*"))
+end
+
+local function short(v: number): string
+	if math.abs(v - math.floor(v + 0.5)) < 1e-6 then
+		return tostring(math.floor(v + 0.5))
+	end
+	local s = string.format("%.2f", v):gsub("0+$", ""):gsub("%.$", "")
+	return s
+end
+
+-- Which weapon stat a card line is (labels can be renamed: "Swings", "Flame every").
+local function statOfLine(def, line): string?
+	for _, stat in ipairs(DIFF_ORDER) do
+		if labelOf(def, stat) == line.Label then
+			return stat
+		end
+	end
+	return nil
+end
+
+-- One sentence for one stat change of weapon `weaponId` (nil when it cannot say).
+local function statSentence(weaponId: string, def, stat: string, line): string?
+	local a, b = numOf(line.From), numOf(line.To)
+	local noun = WeaponData.AmountNoun(weaponId)
+	if stat == "pierce" then
+		if tostring(line.To) == "all" then
+			return string.format("Each %s now passes through every enemy.", noun)
+		end
+		if a and b and b > a then
+			local d = b - a
+			return string.format("Each %s passes through %s more %s.", noun, WeaponData.CountWord(d), d == 1 and "enemy" or "enemies")
+		end
+		return nil
+	end
+	if not a or not b or math.abs(b - a) < 1e-6 then
+		return nil
+	end
+	local d = b - a
+	if stat == "amount" then
+		local n = WeaponData.CountWord(math.abs(d))
+		if d < 0 then
+			return nil
+		elseif def.Deployable then
+			return string.format("Keeps %s more %s out at once.", n, plural(noun, d))
+		elseif def.Behavior == "Shields" then
+			return string.format("Adds %s more %s circling you.", n, plural(noun, d))
+		elseif def.Behavior == "Whip" then
+			return string.format("Adds %s extra %s per attack.", n, plural(noun, d))
+		end
+		return string.format("Adds %s more %s per attack.", n, plural(noun, d))
+	elseif stat == "damage" then
+		return string.format("Each hit deals %s more damage.", short(d))
+	elseif stat == "heal" then
+		return string.format("Each pulse heals %s more HP.", short(d))
+	elseif stat == "cooldown" then
+		return d < 0 and string.format("Attacks %ss sooner (every %s).", short(-d), tostring(line.To)) or nil
+	elseif stat == "area" then
+		return d > 0 and string.format("Attacks cover %s%% more area.", short(d)) or nil
+	elseif stat == "speed" then
+		return (d > 0 and a > 0) and string.format("%s fly %d%% faster.", (string.gsub(plural(noun, 2), "^%l", string.upper)), math.floor(d / a * 100 + 0.5)) or nil
+	elseif stat == "duration" then
+		local label = labelOf(def, "duration")
+		if label == "Range" then
+			return d > 0 and "Shots fly farther." or nil
+		end
+		return d > 0 and string.format("%s lasts %ss longer.", label, short(d)) or nil
+	elseif stat == "knockback" then
+		return d > 0 and "Knocks enemies back harder." or nil
+	end
+	return nil
+end
+
+local BENEFIT_ORDER = { "amount", "damage", "heal", "cooldown", "area", "pierce", "speed", "duration", "knockback" }
+
+function WeaponData.BenefitText(weaponId: string, lines: { { [string]: string } }?): (string?, string?)
+	local def = WeaponData.Weapons[weaponId]
+	if not def or not lines then
+		return nil, nil
+	end
+	local lead: string? = nil
+	local leadLine = nil
+	for _, line in ipairs(lines) do
+		if line.Text then
+			local name, rest = string.match(tostring(line.Text), "^([^:]+):%s*(.+)$")
+			if name and rest then
+				lead = string.format("Unlocks %s: %s%s", name, string.lower(string.sub(rest, 1, 1)), string.sub(rest, 2))
+			else
+				lead = "Unlocks " .. tostring(line.Text)
+			end
+			leadLine = line
+			break
+		end
+	end
+	if not lead then
+		for _, stat in ipairs(BENEFIT_ORDER) do
+			for _, line in ipairs(lines) do
+				if line.From and statOfLine(def, line) == stat then
+					local s = statSentence(weaponId, def, stat, line)
+					if s then
+						lead, leadLine = s, line
+						break
+					end
+				end
+			end
+			if lead then
+				break
+			end
+		end
+	end
+	-- the other gains, short ("+5 damage, -0.05s cooldown")
+	local others = {}
+	for _, line in ipairs(lines) do
+		if line ~= leadLine then
+			local t = WeaponData.DeltaText(line)
+			if t then
+				table.insert(others, t)
+			end
+		end
+	end
+	return lead, (#others > 0 and ("Also " .. table.concat(others, ", ")) or nil)
+end
+
+-- The next perk after `level` ("Lv 9: Riposte"), or nil.
+function WeaponData.NextPerkText(weaponId: string, level: number): string?
+	local def = WeaponData.Weapons[weaponId]
+	local best = nil
+	for _, perk in ipairs(def and def.Perks or {}) do
+		if perk.Level > level and (not best or perk.Level < best.Level) then
+			best = perk
+		end
+	end
+	return best and string.format("Lv %d unlocks %s", best.Level, best.Name) or nil
+end
+
 -- Plain text for a level-up card: what changes when going to `level` (1 = the weapon is new).
 function WeaponData.DescribeLevel(weaponId: string, level: number): string
 	local def = WeaponData.Weapons[weaponId]

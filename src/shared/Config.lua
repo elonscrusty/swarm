@@ -843,6 +843,14 @@ Config.Net = {
 	  9:19.5 phone    38 x 109 (was 38 x 108)
 	The spawn ring (Config.Spawn.ScreenRadius) stays past the screen edges at the player's
 	row; only the far top corners reach it, slightly less than before.
+	Landscape phones (short side under PhoneShortSide points, the same rule as the compact
+	UI) use RunDistance x PhoneDistanceMult (0.85 = 65.9 studs): the hero and enemies read
+	about 18% bigger on a small screen (owner brief, 2026-10-07). Visible ground there:
+	  19.5:9 / 1108x512 phone  113 x 70 (was 133 x 82)
+	  16:9 small phone 667x375  93 x 70 (was 109 x 82)
+	Enemies still spawn off-screen (ScreenRadius 72 > half the width), the amber wave edge
+	glow (StageUI) and the minimap boss pin still point at what is coming. Portrait phones
+	keep PortraitDistanceMult only.
 ]]
 Config.Camera = {
 	Pitch = 55, -- degrees down from horizontal
@@ -853,6 +861,8 @@ Config.Camera = {
 	RunFieldOfView = 42, -- vertical FOV of the run / spectate camera
 	FollowSharpness = 12, -- higher = snappier follow
 	PortraitDistanceMult = 1.35, -- zoom out further when the phone is held upright
+	PhoneDistanceMult = 0.85, -- landscape phones: a closer run camera (see the note above)
+	PhoneShortSide = 560, -- viewport short side (points) below which a screen counts as a phone
 	SpectatePanSeconds = 0.4, -- glide to the next teammate when the spectated one falls
 	ShakeScale = 1, -- multiplies every screen shake (0 = off)
 	ShakeMax = 0.6, -- studs; shakes stay small
@@ -1330,6 +1340,17 @@ Config.FirstRun = {
 	-- paid once per account when the first run ends (win or lose, not DEV-tainted), on top
 	-- of the run's gold: the price of the cheapest permanent upgrade (a hero's Max HP lv 1: 200)
 	BonusGold = 200,
+	--[[
+		The tutorial run's portal reveal (StageManager, RunManager.TutorialRevealHold): a
+		Solo run whose player has not finished the tutorial (save TutorialDone false, tips on,
+		not DEV-tainted) keeps the stage-1 portal hidden until the first level-up card is
+		picked, then reveals it RevealAfterPickSeconds later (the cards have closed), or at
+		RevealCapSeconds of stage time, whichever comes first. Co-op and returning players:
+		the normal Config.Stages.RevealDelaySeconds.
+	]]
+	RevealWaitsForPick = true, -- needs AutoStart on too (the preview switches it off)
+	RevealAfterPickSeconds = 1,
+	RevealCapSeconds = 45,
 }
 
 Config.Tutorial = {
@@ -1337,7 +1358,7 @@ Config.Tutorial = {
 	HintSeconds = 6.5, -- each hint stays this long
 	GapSeconds = 1.5, -- pause between two hints
 	FirstDelay = 1.5, -- the first hint after the run starts
-	PortalTipAt = 40, -- run seconds before the portal objective is explained
+	PortalTipDelay = 2, -- seconds after the portal reveal (its banner first) before the portal tip
 }
 
 --[[

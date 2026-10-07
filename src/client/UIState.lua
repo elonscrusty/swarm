@@ -11,9 +11,14 @@
 	  headline lane     one centre banner at a time (Hud draws it): semantic id dedupe,
 	                    short queue, expiry, held while a covering panel, a stage-start card
 	                    or reward feedback is up (Critical ones only wait for a covering panel).
+	                    A Critical headline cuts a showing informational one short. A headline
+	                    whose moment has passed (its Valid check, or a validator registered
+	                    for its id prefix, says false) is dropped and never plays late.
 	  notice lane       short pills under the top HUD (UIBuilder draws them): at most 2
 	                    (phones) or 3 visible, the same id coalesces ("x2"), waiting ones
 	                    expire; while a headline shows only Critical notices start.
+	  side panels       non-modal panels in the world (the merchant's shop) that other HUD
+	                    markers keep clear of: SetSidePanel / SidePanelOpen.
 	  cleanup           Reset(reason) on death / respawn / travel / leaving the run.
 
 	No Roblox services: pure state, so a Lune test can drive it (tools/preview/uistate_test.luau).
@@ -277,6 +282,30 @@ function UIState.FeedbackActive(): boolean
 end
 
 ------------------------------------------------------------------------------------------
+-- Side panels (non-modal, the world keeps going)
+------------------------------------------------------------------------------------------
+
+-- A side panel (the merchant's shop, ExploreUI) takes no input ownership and covers
+-- nothing, but edge markers and world labels must stay off it: they hide while one is open.
+local sidePanels: { [string]: boolean } = {}
+
+function UIState.SetSidePanel(name: string, on: boolean)
+	if on then
+		sidePanels[name] = true
+	else
+		sidePanels[name] = nil
+	end
+end
+
+-- With a name: that panel is open; without: any side panel is open.
+function UIState.SidePanelOpen(name: string?): boolean
+	if name then
+		return sidePanels[name] == true
+	end
+	return next(sidePanels) ~= nil
+end
+
+------------------------------------------------------------------------------------------
 -- Headline lane
 ------------------------------------------------------------------------------------------
 
@@ -289,6 +318,9 @@ export type Headline = {
 	Class: string?, -- "Critical" | "Info"
 	Expire: number?, -- seconds it may wait in the queue (default 6, Critical 4)
 	Prefer: boolean?, -- this producer's Sub / Sound / Color win over a queued twin's
+	-- still true? Checked while it waits and while it shows; false drops it (a queued
+	-- "the portal has appeared" once the portal is already open or the boss is up)
+	Valid: (() -> boolean)?,
 	-- filled in by UIState
 	QueuedAt: number?,
 }
@@ -307,6 +339,33 @@ local headlineCancel: (() -> ())? = nil
 
 local function critical(item: { Class: string? }): boolean
 	return item.Class == "Critical"
+end
+
+-- Validity by id prefix ("portal.reveal", "wave.", "stage."): registered once by the
+-- producer that knows the game state (StageUI), so a twin from the server is checked too.
+local validators: { [string]: ((string) -> boolean)? } = {}
+
+function UIState.SetValidator(prefix: string, fn: ((id: string) -> boolean)?)
+	validators[prefix] = fn
+end
+
+local function stillValid(item: Headline): boolean
+	local own = item.Valid
+	if own then
+		local ok, res = pcall(own)
+		if ok and res == false then
+			return false
+		end
+	end
+	for prefix, fn in pairs(validators) do
+		if fn and string.sub(item.Id, 1, #prefix) == prefix then
+			local ok, res = pcall(fn, item.Id)
+			if ok and res == false then
+				return false
+			end
+		end
+	end
+	return true
 end
 
 local function headlineHeld(item: Headline): boolean
@@ -343,6 +402,9 @@ function UIState.Headline(item: Headline)
 			end
 			if item.Prefer and item.Color then
 				q.Color = item.Color
+			end
+			if item.Valid then
+				q.Valid = item.Valid
 			end
 			return
 		end
@@ -397,24 +459,36 @@ local function stepHeadline(now: number)
 	if headlineNow and now - headlineSince > HEADLINE_SAFETY then
 		headlineNow = nil
 	end
-	-- an informational headline already up when a prompt / reward card / panel appears
-	-- leaves at once instead of sitting on top of it (it does not come back)
-	local cur = headlineNow
-	if cur and headlineHeld(cur) then
-		local cancel = headlineCancel
-		headlineNow = nil
-		headlineCancel = nil
-		headlineToken += 1
-		if cancel then
-			pcall(cancel)
-		end
-	end
-	-- stale ones leave the queue
+	-- stale ones leave the queue: waited too long, or their moment has passed
 	for i = #headlineQueue, 1, -1 do
 		local q = headlineQueue[i]
 		local wait = q.Expire or (critical(q) and 4 or 6)
-		if now - (q.QueuedAt or now) > wait then
+		if now - (q.QueuedAt or now) > wait or not stillValid(q) then
 			table.remove(headlineQueue, i)
+		end
+	end
+	-- an informational headline already up when a prompt / reward card / panel appears
+	-- leaves at once instead of sitting on top of it (it does not come back); so does one
+	-- that is no longer true, and an informational one when a threat is ready to show
+	local cur = headlineNow
+	if cur then
+		local cut = headlineHeld(cur) or not stillValid(cur)
+		if not cut and not critical(cur) then
+			for _, q in ipairs(headlineQueue) do
+				if critical(q) and not headlineHeld(q) then
+					cut = true
+					break
+				end
+			end
+		end
+		if cut then
+			local cancel = headlineCancel
+			headlineNow = nil
+			headlineCancel = nil
+			headlineToken += 1
+			if cancel then
+				pcall(cancel)
+			end
 		end
 	end
 	if headlineNow or not headlineRenderer then
@@ -649,6 +723,7 @@ function UIState.Reset(_reason: string?)
 	table.clear(noticeVisible)
 	table.clear(recentNotice)
 	table.clear(feedback)
+	table.clear(sidePanels)
 end
 
 ------------------------------------------------------------------------------------------

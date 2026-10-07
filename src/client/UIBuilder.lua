@@ -663,6 +663,30 @@ local function touchMode(): boolean
 	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and last ~= Enum.UserInputType.Gamepad1
 end
 
+-- The 1 / 2 / 3 key badges on the cards: shown for keyboard / mouse and gamepad, hidden
+-- while the player is on touch (InputPrompts.Mode, the game's device rule). The badges
+-- follow a device switch while the offer is open (Choice.watchKeys).
+function Choice.showKeys(): boolean
+	return Choice.Prompts.Mode() ~= "Touch"
+end
+function Choice.watchKeys()
+	if Choice.keysConn then
+		return
+	end
+	Choice.keysConn = Choice.Prompts.OnChanged(function()
+		local cards = levelUp.Cards
+		if not (cards and cards.Parent) then
+			return
+		end
+		local on = Choice.showKeys()
+		for _, d in ipairs(cards:GetDescendants()) do
+			if d.Name == "KeyBadge" and d:IsA("GuiObject") then
+				d.Visible = on
+			end
+		end
+	end)
+end
+
 -- A touch that began where the thumbs rest while playing: the thumbstick zone or JUMP.
 local function touchGuarded(pos: Vector2): boolean
 	local cam = workspace.CurrentCamera
@@ -817,50 +841,112 @@ local function hex(c: Color3): string
 	return string.format("#%02X%02X%02X", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
 end
 
+-- Which of the player's weapons an extra shot (Duplicator, Ammo) adds to, from the last
+-- Inventory: "Boosts Sword, Magic Orb · not Garlic Aura"; nil without an inventory.
+-- Same rule as WeaponSystem: weapons that use `amount`, up to their MaxAmount cap.
+function Choice.amountCompat(): string?
+	local inv = Choice.inventory
+	local weapons = inv and type(inv.Weapons) == "table" and inv.Weapons or nil
+	if not weapons or #weapons == 0 then
+		return nil
+	end
+	local yes, no = {}, {}
+	for _, w in ipairs(weapons) do
+		local def = type(w) == "table" and WeaponData.Weapons[w.Id]
+		if def then
+			local use = WeaponData.StatUse[def.Behavior]
+			local cap = def.Params and def.Params.MaxAmount
+			local row = WeaponData.GetStats(w.Id, tonumber(w.Level) or 1, w.Evolved == true)
+			local name = tostring(w.Name or def.Name)
+			if use and use.amount and not (cap and row and row.amount >= cap) then
+				table.insert(yes, name)
+			else
+				table.insert(no, name .. ((cap and use and use.amount) and " (at cap)" or ""))
+			end
+		end
+	end
+	local parts = {}
+	if #yes > 0 then
+		table.insert(parts, "Boosts " .. table.concat(yes, ", "))
+	end
+	if #no > 0 then
+		table.insert(parts, "not " .. table.concat(no, ", "))
+	end
+	local s = table.concat(parts, " · ")
+	return s ~= "" and (string.upper(string.sub(s, 1, 1)) .. string.sub(s, 2)) or nil
+end
+
 --[[
 	What a card says, split for the card layout:
-	  Desc     the short description (a weapon upgrade shows its new perk, or the weapon's
-	           own description)
+	  Desc     ONE plain sentence of what THIS pick gives, from the real values of the
+	           offered level (WeaponData.BenefitText / PassiveData.BenefitText): "Adds one
+	           extra sword swing per attack.", "Earn 15% more gold from kills, chests and
+	           bosses."; a NEW weapon shows its own description
 	  Stats    starting stats of a NEW weapon ({ Label, To }): a table of rows
 	  Changes  stat changes ({ Label, From, To }): the first is the boxed highlight, the
 	           rest small rows under it
+	  Details  the small muted line: the other gains, what an extra shot boosts in your
+	           build, exceptions and the later levels ("Next: Lv 2 +15% · Lv 3 +20%")
 	From the server's Lines (real StatSheet / WeaponData values); bonus cards and older
-	servers fall back to the plain Description.
+	servers fall back to the server's Summary / Description.
 ]]
-local function cardContent(c): (string?, { any }, { any })
+local function cardContent(c): (string?, { any }, { any }, string?)
 	local lines = type(c.Lines) == "table" and c.Lines or {}
 	local stats, changes = {}, {}
-	local perk: string? = nil
 	for _, line in ipairs(lines) do
 		if line.Text then
-			perk = string.format('<font color="%s"><b>%s</b></font> %s', hex(P.gold_300), tostring(line.Label), tostring(line.Text))
+			continue
 		elseif line.From then
 			table.insert(changes, line)
 		elseif line.To then
 			table.insert(stats, line)
 		end
 	end
-	-- upgrade cards lead with the server's one-line gain summary ("+10 damage, +1 arrow",
-	-- or the new perk); NEW / evolution / bonus cards with their short description
 	local summary = type(c.Summary) == "string" and c.Summary ~= "" and c.Summary or nil
 	local desc: string? = nil
+	local details: string? = nil
 	if c.Type == "WeaponUp" then
 		local def = WeaponData.Weapons[c.Id]
-		desc = perk or summary or (def and def.Description)
-	elseif c.Type == "PassiveUp" and summary then
-		desc = summary
+		local lead, others = WeaponData.BenefitText(c.Id, lines)
+		desc = lead or summary or (def and def.Description)
+		if desc then
+			-- a perk reads as a goal: "Unlocks Riposte:" in gold
+			desc = string.gsub(desc, "^(Unlocks [^:]+:)", function(head)
+				return string.format('<font color="%s"><b>%s</b></font>', hex(P.gold_300), head)
+			end)
+		end
+		details = others or WeaponData.NextPerkText(c.Id, tonumber(c.Level) or 1)
+	elseif c.Type == "PassiveNew" or c.Type == "PassiveUp" then
+		local def = PassiveData.Passives[c.Id]
+		local level = tonumber(c.Level) or 1
+		desc = PassiveData.BenefitText(c.Id, level) or summary or c.Description
+		local parts = {}
+		local value = def and def.Values[math.clamp(level, 1, #def.Values)]
+		local before = def and level > 1 and def.Values[level - 1] or {}
+		if value and (value.amount or 0) > (before.amount or 0) then
+			-- an extra shot: which of your weapons it reaches (or the general rule)
+			table.insert(parts, Choice.amountCompat() or (def and def.Note) or "Auras and bursts are not boosted")
+		elseif def and def.Note then
+			table.insert(parts, def.Note)
+		end
+		local tiers = PassiveData.TiersText(c.Id, level)
+		if tiers then
+			table.insert(parts, tiers)
+		end
+		details = #parts > 0 and table.concat(parts, " · ") or nil
 	elseif c.Description and c.Description ~= "" then
 		desc = c.Description
 	elseif summary then
 		desc = summary
 	end
-	return desc, stats, changes
+	return desc, stats, changes, details
 end
 
 -- Icon for a stat label (Icons names); amount stats ("Arrows", "Strikes") use the weapon.
 local STAT_ICONS = {
 	{ "projectile speed", "arrowFast" },
 	{ "projectiles", "duplicate" },
+	{ "extra shots", "duplicate" },
 	{ "cooldown", "clock" },
 	{ "duration", "hourglass" },
 	{ "area", "area" },
@@ -1224,13 +1310,27 @@ function Choice.summaryCard(c): boolean
 end
 
 -- Height of a description on a card `w` wide: one or two lines (a rough width estimate;
--- the label wraps and truncates for real); an upgrade's summary line takes one line on
--- phones in landscape.
+-- the label wraps, shrinks and truncates for real). The benefit sentence keeps two lines
+-- on phones too: it is the line that says what the pick does.
 local function descHeight(desc: string?, w: number, c): number
 	local plain = string.gsub(desc or "", "<[^>]+>", "")
-	local maxLines = (Choice.compactLandscape() and Choice.summaryCard(c)) and 1 or 2
-	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.5 / math.max(1, w - 2 * CARD.Pad)), 1, maxLines)
+	local lines = math.clamp(math.ceil((utf8.len(plain) or #plain) * TS(14) * 0.5 / math.max(1, w - 2 * CARD.Pad)), 1, 2)
 	return TS(14) * lines + 8
+end
+
+-- Size of the small muted details line (other gains, what it boosts, later levels): one
+-- line on phones in landscape, two elsewhere.
+function Choice.detailsSize(): number
+	return 12
+end
+function Choice.detailsHeight(details: string?, w: number): number
+	if not details then
+		return 0
+	end
+	local size = TS(Choice.detailsSize())
+	local maxLines = Choice.compactLandscape() and 1 or 2
+	local lines = math.clamp(math.ceil((utf8.len(details) or #details) * size * 0.5 / math.max(1, w - 2 * CARD.Pad)), 1, maxLines)
+	return size * lines + 4
 end
 
 -- Height of the evolution hint under the rows (two wrapped lines; it keeps its room on
@@ -1246,8 +1346,9 @@ end
 
 -- Height a landscape card needs for everything but its art panel.
 local function cardNeeds(c, w: number): number
-	local desc, stats, changes = cardContent(c)
+	local desc, stats, changes, details = cardContent(c)
 	local h = CARD.Inset + 8 + Choice.cardNameH() + (desc and descHeight(desc, w, c) + 6 or 0) + 4
+	h += details and Choice.detailsHeight(details, w) + 4 or 0
 	if #changes > 0 then
 		h += boxHeight() + 6 + (#changes - 1) * (CARD.Row - 2)
 	else
@@ -1272,9 +1373,12 @@ end
 
 -- Height a wide portrait card needs.
 local function cardNeedsPortrait(c): number
-	local _, stats, changes = cardContent(c)
+	local _, stats, changes, details = cardContent(c)
 	local rows = #changes > 0 and math.min(#changes, 2) or math.min(#stats, 3)
 	local h = CARD.PBand + 10 + CARD.PTile + 10 + rows * CARD.PRow
+	if details then
+		h += TS(Choice.detailsSize()) + 6
+	end
 	if c.Synergy then
 		h += CARD.Syn + 4
 	end
@@ -1550,9 +1654,10 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 	if portrait then
 		h = math.min(cardNeedsPortrait(c), h) -- stacked cards each take what they need
 	end
+	Choice.watchKeys()
 	local bandColor, edgeColor = cardBand(c)
 	local legendary = c.Rarity == "Legendary" or c.Type == "Evolve"
-	local desc, stats, changes = cardContent(c)
+	local desc, stats, changes, details = cardContent(c)
 	local pad = CARD.Pad
 	local hit = new("TextButton", {
 		Name = "Card" .. index,
@@ -1686,6 +1791,8 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		local bandH = CARD.PBand
 		-- number badge at the band's right end
 		local num = text(face, "Number", tostring(index), {
+			Name = "KeyBadge",
+			Visible = Choice.showKeys(),
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -pad, 0, bandH / 2),
 			Size = UDim2.fromOffset(20, 20),
@@ -1720,6 +1827,20 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			}, 14)
 		end
 		y += CARD.PTile + 10
+		if details then
+			-- the small muted details line (other gains, what it boosts, later levels)
+			local dl = text(face, "Small", details, {
+				Name = "Details",
+				Position = UDim2.fromOffset(pad, y - 4),
+				Size = UDim2.new(1, -2 * pad, 0, TS(Choice.detailsSize()) + 4),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = P.ivory_300,
+				TextTransparency = 0.15,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+			}, Choice.detailsSize())
+			Choice.fit(dl, dl.TextSize, 9, false)
+			y += TS(Choice.detailsSize()) + 6
+		end
 		local rw = w - 2 * pad
 		if #changes > 0 then
 			for i = 1, math.min(#changes, 2) do
@@ -1761,6 +1882,8 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		UIKit.list(plate, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 		local keySize = footH - 12
 		local num = text(plate, "Number", tostring(index), {
+			Name = "KeyBadge",
+			Visible = Choice.showKeys(),
 			Size = UDim2.fromOffset(keySize, keySize),
 			TextXAlignment = Enum.TextXAlignment.Center,
 			BackgroundColor3 = P.slate_900,
@@ -1821,6 +1944,23 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			}, 14)
 			Choice.fit(dl, dl.TextSize, 10, true)
 			y += dh + 6
+		end
+		if details then
+			-- the small muted details line under the benefit sentence
+			local hh = Choice.detailsHeight(details, w)
+			local dt = text(face, "Small", details, {
+				Name = "Details",
+				Position = UDim2.fromOffset(pad, y - 2),
+				Size = UDim2.new(1, -2 * pad, 0, hh),
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextWrapped = true,
+				TextColor3 = P.ivory_300,
+				TextTransparency = 0.15,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				ZIndex = 2,
+			}, Choice.detailsSize())
+			Choice.fit(dt, dt.TextSize, 9, not Choice.compactLandscape())
+			y += hh + 4
 		end
 		y += 4
 		-- top-down under the effect: the rows (what the card does comes first), then the
@@ -1926,6 +2066,24 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 	-- a press that starts on the card counts as fresh (touch and mouse)
 	hit.MouseButton1Down:Connect(function()
 		offerArm.Press = os.clock()
+	end)
+	-- press feedback: the face brightens while held (AttachStates also presses it smaller)
+	local bright = new("Frame", { Name = "PressGlow", BackgroundColor3 = P.ivory_100, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 52, Active = false }, face)
+	UIKit.corner(bright, Theme.Radius.L)
+	hit.InputBegan:Connect(function(input)
+		local t = input.UserInputType
+		if offerOpen and (t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch) then
+			UIAnim.Tween(bright, 0.06, { BackgroundTransparency = 0.86 })
+		end
+	end)
+	hit.InputEnded:Connect(function(input)
+		local t = input.UserInputType
+		if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+			UIAnim.Tween(bright, 0.2, { BackgroundTransparency = 1 })
+		end
+	end)
+	hit.MouseLeave:Connect(function()
+		UIAnim.Tween(bright, 0.2, { BackgroundTransparency = 1 })
 	end)
 	hit.Activated:Connect(function(input: InputObject?)
 		-- deferred: the press timing (InputBegan / Ended) of this same input is recorded first
@@ -5749,6 +5907,7 @@ function UIBuilder.Init(d: { [string]: any })
 	updateScale()
 
 	Remotes.Get("Inventory").OnClientEvent:Connect(function(data)
+		Choice.inventory = type(data) == "table" and data or nil -- level-up cards: what Duplicator boosts
 		Hud.SetInventory(data)
 	end)
 	Remotes.Get("LevelUpOffer").OnClientEvent:Connect(showOffer)

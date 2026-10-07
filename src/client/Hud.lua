@@ -114,6 +114,7 @@ local INV = { Pad = 10, Label = 84, Tile = 64, Gap = 8, RowGap = 14, Build = 66 
 local PILL_H, PAUSE = 44, 50 -- top right counters / pause button
 local TIMER_W, TIMER_H = 150, 52
 local OBJ_W, OBJ_H = 380, 54 -- objective panel under the timer (two lines)
+local OBJ_MIN = 240 -- narrowest objective panel beside the vitals (landscape)
 -- XP / portal cyan of the approved HUD (02/03 mockups); the health bar stays crimson
 local XP_GRADIENT = ColorSequence.new(Color3.fromRGB(150, 214, 229), Color3.fromRGB(84, 165, 189))
 local XP_STROKE = Color3.fromRGB(42, 92, 110)
@@ -712,15 +713,22 @@ local function refreshBuff()
 	end
 end
 
--- Stage banner: "STAGE 2" slams in over the arena for a moment (showStageBanner).
+-- Stage banner: "STAGE 2" slams in over the arena for a moment (showStageBanner). It sits on
+-- a dark translucent plate with a thin gold rim (the HUD surfaces' look), so the title and
+-- its line stay readable over bright grass and snow; layoutBanner sizes the inside.
 local function buildBanner(frame: Frame)
 	local box = new("Frame", { Name = "StageBanner", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(520, 110), Visible = false, Active = false, ZIndex = 8 }, frame)
 	ui.Banner = box
+	local back = new("Frame", { Name = "Back", BackgroundColor3 = P.slate_950, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 8 }, box)
+	UIKit.corner(back, Theme.Radius.L)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_900, P.slate_950) }, back)
+	ui.BannerBack = back
+	ui.BannerEdge = UIKit.stroke(back, P.gold_500, 1.5, 1)
 	ui.BannerTitle = role(box, "Display", "STAGE 1", {
 		Name = "Title",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromScale(0.5, 0),
-		Size = UDim2.new(1, 0, 0, TS(TY.Display.Size) + 6),
+		Position = UDim2.new(0.5, 0, 0, 6),
+		Size = UDim2.new(1, -24, 0, TS(TY.Display.Size) + 6),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.gold_200,
 		TextStrokeTransparency = 0.35,
@@ -734,12 +742,34 @@ local function buildBanner(frame: Frame)
 		Name = "Sub",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, TS(TY.Display.Size) + 18),
-		Size = UDim2.new(1, 0, 0, TS(TY.Body.Size) + 4),
+		Size = UDim2.new(1, -24, 0, TS(TY.Body.Size) + 4),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = P.ivory_200,
 		TextStrokeTransparency = 0.4,
+		TextScaled = true,
 		ZIndex = 9,
 	})
+	new("UITextSizeConstraint", { MaxTextSize = TS(TY.Body.Size), MinTextSize = 11 }, ui.BannerSub)
+end
+
+-- The banner's inside for one layout: title, gold rule and sub line on the plate. Compact
+-- (phones) uses a shorter plate so the lane under the top stack leaves room for the world
+-- (and an open merchant panel under it). Returns the plate height.
+local function layoutBanner(width: number, compact: boolean): number
+	local titleH = compact and 32 or (TS(TY.Display.Size) + 6)
+	local subH = compact and 18 or (TS(TY.Body.Size) + 4)
+	local h = 6 + titleH + 9 + subH + 7
+	ui.Banner.Size = UDim2.fromOffset(math.floor(width), h)
+	ui.BannerTitle.Size = UDim2.new(1, -24, 0, titleH)
+	local fit = ui.BannerTitle:FindFirstChildOfClass("UITextSizeConstraint")
+	if fit then
+		fit.MaxTextSize = compact and 30 or TS(TY.Display.Size)
+	end
+	ui.BannerLine.Position = UDim2.new(0.5, 0, 0, 6 + titleH + 3)
+	ui.BannerSub.Position = UDim2.new(0.5, 0, 0, 6 + titleH + 9)
+	ui.BannerSub.Size = UDim2.new(1, -24, 0, subH)
+	ui.BannerLineW = math.floor(math.min(260, width - 80))
+	return h
 end
 
 local bannerToken = 0
@@ -890,6 +920,9 @@ function showBanner(titleText: string, goal: string, color: Color3?, onShow: (()
 	sub.TextTransparency, sub.TextStrokeTransparency = 1, 1
 	line.Size = UDim2.fromOffset(0, 3)
 	line.BackgroundTransparency = 0
+	local back, edge = ui.BannerBack :: Frame, ui.BannerEdge :: UIStroke
+	back.BackgroundTransparency, edge.Transparency = 1, 1
+	edge.Color = color or P.gold_500
 	box.Visible = true
 	placeBanner()
 	local function tw(obj: Instance, seconds: number, goalProps: { [string]: any }, style: Enum.EasingStyle?, dir: Enum.EasingDirection?)
@@ -901,13 +934,18 @@ function showBanner(titleText: string, goal: string, color: Color3?, onShow: (()
 	sc.Scale = reduced and 1 or 2.4
 	tw(sc, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
 	tw(title, 0.25, { TextTransparency = 0, TextStrokeTransparency = 0.35 })
-	if not reduced then
+	tw(back, 0.2, { BackgroundTransparency = 0.18 })
+	tw(edge, 0.2, { Transparency = 0.3 })
+	local lineW = ui.BannerLineW or 260
+	if reduced then
+		line.Size = UDim2.fromOffset(lineW, 3)
+	else
 		local at = UDim2.new(0.5, 0, 0, TS(TY.Display.Size) / 2)
 		UIAnim.Sparks(box, at, P.gold_200, 10, 120, 0.6)
 		UIAnim.Ring(box, at, P.gold_300, 220, 0.5)
 		task.delay(0.1, function()
 			if token == bannerToken then
-				tw(line, 0.45, { Size = UDim2.fromOffset(260, 3) }, Enum.EasingStyle.Quint)
+				tw(line, 0.45, { Size = UDim2.fromOffset(lineW, 3) }, Enum.EasingStyle.Quint)
 			end
 		end)
 	end
@@ -923,6 +961,8 @@ function showBanner(titleText: string, goal: string, color: Color3?, onShow: (()
 		tw(title, 0.4, { TextTransparency = 1, TextStrokeTransparency = 1 })
 		tw(sub, 0.4, { TextTransparency = 1, TextStrokeTransparency = 1 })
 		tw(line, 0.4, { BackgroundTransparency = 1 })
+		tw(back, 0.4, { BackgroundTransparency = 1 })
+		tw(edge, 0.4, { Transparency = 1 })
 		task.delay(0.45, function()
 			if token == bannerToken then
 				box.Visible = false
@@ -1085,6 +1125,12 @@ local function layout()
 	-- approved 02/03 layout); portrait has no room beside the timer, so they stack centred
 	local kv = compact and 0.76 or 1
 	kv = math.min(kv, (W - 2 * M) / VIT.W)
+	if not portrait then
+		-- narrow landscape screens: the vitals give up a little size before the objective
+		-- beside them gets too narrow to read (OBJ_MIN), never below 0.6
+		local room = (W / 2 - OBJ_MIN / 2 - 10 - M) / VIT.W
+		kv = math.max(math.min(kv, room), math.min(kv, 0.6))
+	end
 	ui.PlateFit.Scale = kv
 	local vitW, vitH = VIT.W * kv, VIT.H * kv
 	local leftRight = 0 -- right edge of the left column (vitals, item strip)
@@ -1102,6 +1148,12 @@ local function layout()
 		-- the objective sits between the vitals and the minimap column under the counters
 		local mapLeft = W - M - (compact and 128 or 180)
 		local half = math.min(W / 2 - leftRight - 10, mapLeft - W / 2 - 10)
+		if 2 * half < OBJ_MIN and y < vy + vitH + 4 then
+			-- still too narrow beside the vitals: the objective drops under them (the timer
+			-- stays on top) and takes the width the minimap column leaves
+			y = vy + vitH + 6
+			half = mapLeft - W / 2 - 10
+		end
 		objW = math.clamp(2 * half, 200, OBJ_W)
 	end
 
@@ -1176,9 +1228,13 @@ local function layout()
 		face.Size = UDim2.fromScale(1, 1)
 	end
 
-	-- stage banner: under the top cluster in landscape, mid-screen in portrait
-	ui.Banner.Size = UDim2.fromOffset(math.min(520, W - 2 * M), 110)
-	bannerBaseY = math.floor(portrait and H * 0.5 or math.max(H * 0.3, topBottom + 70))
+	-- stage banner: landscape: its own lane right under the top-centre stack (timer,
+	-- objective, boss bar), so it never covers them and an open merchant panel sits under
+	-- it (Hud.BannerLane); portrait: mid-screen, under the stacked top panels
+	local bannerH = layoutBanner(math.min(compact and 440 or 520, W - 2 * M), compact)
+	local laneTop = topBottom + 6
+	ui.LaneTop, ui.LaneBottom = laneTop, laneTop + bannerH
+	bannerBaseY = math.floor(portrait and H * 0.5 or (laneTop + bannerH / 2))
 	bannerPortrait = portrait
 	ui.Banner.Position = UDim2.fromOffset(math.floor(W / 2), bannerBaseY)
 	placeBanner()
@@ -1560,9 +1616,24 @@ local function stageGoal(state: Configuration, stagePhase: string): (string, str
 		local chargeNow = state:GetAttribute("PortalCharge") or 0
 		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
 		if chargeNow > 0 then
-			return string.format("Opening the portal · %d%%", math.floor(chargeNow * 100)), waveText, P.gold_200
+			-- this hero in the ring: keep standing; a teammate charging it: the progress
+			local pos = state:GetAttribute("PortalPos")
+			local char = player.Character
+			local root = char and char.PrimaryPart
+			local inside = false
+			if typeof(pos) == "Vector3" and root and player:GetAttribute("Alive") ~= false then
+				local d = Vector3.new(pos.X - root.Position.X, 0, pos.Z - root.Position.Z)
+				inside = d.Magnitude <= Config.Stages.PortalRadius
+			end
+			local pct = math.floor(chargeNow * 100)
+			return inside and string.format("Stay in the ring · summoning %d%%", pct) or string.format("Summoning the boss · %d%%", pct), waveText, P.gold_200
 		elseif lockLeft > 0 then
 			return "Portal dormant · " .. UIKit.formatTime(lockLeft), waveText, P.ivory_100
+		end
+		-- before the reveal (SwarmState PortalHint) there is nothing to find yet: no arrow,
+		-- no beacon (the tutorial run waits for the first upgrade pick)
+		if state:GetAttribute("PortalHint") ~= true then
+			return "Survive until the portal opens", waveText, P.ivory_100
 		end
 		-- swarm pressure (SwarmState SwarmWarn): the objective turns into a warning
 		local warn = state:GetAttribute("SwarmWarn") or 0
@@ -1571,7 +1642,7 @@ local function stageGoal(state: Configuration, stagePhase: string): (string, str
 		elseif warn >= 1 then
 			return "Open the portal · swarm growing", waveText, P.amber_300
 		end
-		return "Find the portal", waveText, P.ivory_100
+		return "Reach the portal", waveText, P.ivory_100
 	elseif stagePhase == "Boss" then
 		return "Defeat the " .. tostring(state:GetAttribute("BossName") or state:GetAttribute("StageBoss") or "Queen"), waveText, P.crimson_300
 	elseif stagePhase == "Surge" then
@@ -2049,6 +2120,16 @@ function Hud.SetCovered(on: boolean)
 	if ui.Frame then
 		ui.Frame.Visible = hudOn and not on
 	end
+end
+
+-- The centre banner's reserved lane in landscape (top, bottom; root pixels), whether a
+-- banner shows or not: panels and world labels in the middle of the screen keep under it.
+-- Portrait: nil (the banner is mid-screen there).
+function Hud.BannerLane(): (number?, number?)
+	if host.IsPortrait and host.IsPortrait() then
+		return nil, nil
+	end
+	return ui.LaneTop, ui.LaneBottom
 end
 
 -- Top of the ability panel.

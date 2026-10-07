@@ -2920,6 +2920,7 @@ end
 type Deco = {
 	Character: Model?,
 	Marker: Ring?,
+	MarkerEdge: Ring?,
 	MarkerFill: BasePart?,
 	Chev: { BasePart }?,
 	MarkerStyle: string,
@@ -3135,6 +3136,9 @@ local function hideMarker(deco: Deco)
 	if deco.Marker then
 		hideRing(deco.Marker)
 	end
+	if deco.MarkerEdge then
+		hideRing(deco.MarkerEdge)
+	end
 	if deco.MarkerFill then
 		deco.MarkerFill.CFrame = PARK
 	end
@@ -3148,6 +3152,7 @@ end
 local function updateMarker(deco: Deco, root: BasePart, isLocal: boolean, alive: boolean, now: number)
 	if not deco.Marker then
 		deco.Marker = newRing(20)
+		deco.MarkerEdge = newRing(20)
 		local fill = newPart("Cylinder")
 		fill.Transparency = 1
 		deco.MarkerFill = fill
@@ -3165,6 +3170,9 @@ local function updateMarker(deco: Deco, root: BasePart, isLocal: boolean, alive:
 		fill.Transparency = 0.86
 		if style ~= "local" then
 			fill.CFrame = PARK
+			if deco.MarkerEdge then
+				hideRing(deco.MarkerEdge)
+			end
 		end
 		for _, c in ipairs(chev) do
 			c.Color = color
@@ -3181,6 +3189,11 @@ local function updateMarker(deco: Deco, root: BasePart, isLocal: boolean, alive:
 		styleRing(ringObj, 2.6, 0.2, P.crimson_300, math.floor((0.4 + 0.18 * math.sin(now * 5)) * 50 + 0.5) / 50)
 	elseif style == "local" then
 		styleRing(ringObj, 2.7, 0.22, FX.PlayerRing, 0.06)
+		-- a thin dark rim just outside the gold ring: gold alone fades into the bright
+		-- grass and snow (docs/overhaul/ART_VOCABULARY.md: pale things carry one darker element)
+		local edge = deco.MarkerEdge :: Ring
+		styleRing(edge, 2.88, 0.14, P.slate_900, 0.35)
+		placeRing(edge, pos.X, y - 0.006, pos.Z, 0)
 	else
 		styleRing(ringObj, 2.5, 0.18, FX.TeamRing, 0.15)
 	end
@@ -3318,6 +3331,7 @@ local function updateDecos(now: number, dt: number)
 	for other, deco in pairs(decos) do
 		if not other.Parent then
 			destroyRing(deco.Marker)
+			destroyRing(deco.MarkerEdge)
 			destroyRing(deco.Aura)
 			destroyRing(deco.AuraEdge)
 			for _, part in ipairs({ deco.MarkerFill, deco.AuraFill } :: { BasePart? }) do

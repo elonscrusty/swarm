@@ -61,6 +61,7 @@ local UIAnim = require(script.Parent.UIAnim)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
+local WorldLabelFade = require(script.Parent.WorldLabelFade)
 local UIState = require(script.Parent.UIState)
 
 local LootUI = {}
@@ -938,6 +939,35 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 	return y + 10
 end
 
+-- A world pill (altar, caravan) fades instead of popping while it would sit on the HUD
+-- (WorldLabelFade: top stack, minimap, banner, notice pills, the merchant's shop). The
+-- face, rim and text fade; the small icon hides past half way.
+local pillFade: { [GuiObject]: number } = {}
+local function fadePill(holder: GuiObject, face: Frame, label: TextLabel, dt: number)
+	local a = pillFade[holder] or 0
+	if holder.Visible then
+		local p, sz = holder.AbsolutePosition, holder.AbsoluteSize
+		a = WorldLabelFade.Step(a, WorldLabelFade.Hits(p.X, p.Y, p.X + sz.X, p.Y + sz.Y), dt)
+	else
+		a = 0
+	end
+	if pillFade[holder] == a then
+		return
+	end
+	pillFade[holder] = a
+	face.BackgroundTransparency = 0.15 + 0.85 * a
+	label.TextTransparency = a
+	local stroke = face:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Transparency = 0.15 + 0.85 * a
+	end
+	for _, ch in ipairs(face:GetChildren()) do
+		if ch:IsA("GuiObject") and ch.LayoutOrder == 1 then
+			ch.Visible = a < 0.5
+		end
+	end
+end
+
 local function updateMarker(altar: Model?, promptShown: boolean)
 	if not altar or (promptShown and target == altar) then
 		ui.Marker.Visible = false
@@ -971,7 +1001,6 @@ local function updateMarker(altar: Model?, promptShown: boolean)
 	local stroke = ui.MarkerFace:FindFirstChildOfClass("UIStroke")
 	if stroke then
 		stroke.Color = edge
-		stroke.Transparency = 0.15
 	end
 	ui.Marker.Visible = true
 	ui.Marker.Position = UDim2.fromOffset(math.floor(p.X + 0.5), math.floor(p.Y + math.sin(os.clock() * 2.5) * 3 + 0.5))
@@ -1096,7 +1125,6 @@ local function updateCaravan(root: BasePart?, alive: boolean)
 		local stroke = ui.CaravanMarkerFace:FindFirstChildOfClass("UIStroke")
 		if stroke then
 			stroke.Color = edge
-			stroke.Transparency = 0.15
 		end
 		local bob = ClientSettings.Reduced() and 0 or math.sin(os.clock() * 2.5) * 3
 		ui.CaravanMarker.Position = UDim2.fromOffset(math.floor(p.X + 0.5), math.floor(p.Y + bob + 0.5))
@@ -1179,6 +1207,7 @@ function LootUI.Update(_dt: number, inRun: boolean)
 		LootUI.Layout()
 	end
 	updateCaravan(root, alive)
+	fadePill(ui.CaravanMarker, ui.CaravanMarkerFace, ui.CaravanText, _dt)
 	if best ~= target then
 		-- walked to another one (or away): drop the hold
 		if hold.Id ~= 0 then
@@ -1290,6 +1319,7 @@ function LootUI.Update(_dt: number, inRun: boolean)
 		ui.Prompt.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	end
 	updateMarker(altar, shown)
+	fadePill(ui.Marker, ui.MarkerFace, ui.MarkerText, _dt)
 	-- informational centre headlines (stage banner, portal reveal) wait while a loot prompt
 	-- or an item popup is on screen, so they never land on top of them (UIState holds;
 	-- threat headlines still show)

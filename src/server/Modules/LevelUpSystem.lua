@@ -444,7 +444,8 @@ local function decorate(rp, c)
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, WeaponData.MaxLevel)
 			c.Lines = WeaponData.CardLines(c.Id, c.Level - 1, c.Level)
 			c.Description = joinLines(c.Lines)
-			c.Summary = WeaponData.SummaryText(c.Lines, c.Description)
+			-- one plain sentence for this pick ("Adds one extra sword swing per attack.")
+			c.Summary = (WeaponData.BenefitText(c.Id, c.Lines)) or WeaponData.SummaryText(c.Lines, c.Description)
 			if c.Level >= WeaponData.MaxLevel then
 				rarity = "Epic"
 			end
@@ -470,12 +471,13 @@ local function decorate(rp, c)
 			rarity = "Rare"
 			c.Rank = "NEW"
 			c.Description = def.Description
-			c.Summary = WeaponData.SummaryText(c.Lines, def.Description)
+			-- the gain of this level from the real Values ("Earn 15% more gold from ...")
+			c.Summary = PassiveData.BenefitText(c.Id, c.Level) or WeaponData.SummaryText(c.Lines, def.Description)
 			synergyClue(rp, c, "Passive")
 		else
 			c.Rank = string.format("Lv %d → %d / %d", c.Level - 1, c.Level, maxLevel)
 			c.Description = def.Description -- the lines carry the real numbers
-			c.Summary = WeaponData.SummaryText(c.Lines, def.Description)
+			c.Summary = PassiveData.BenefitText(c.Id, c.Level) or WeaponData.SummaryText(c.Lines, def.Description)
 			if c.Level >= maxLevel then
 				rarity = "Epic"
 			end

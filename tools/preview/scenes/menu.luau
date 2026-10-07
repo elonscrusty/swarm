@@ -30,6 +30,12 @@ if hero then
 	profile.Heroes[hero] = profile.Heroes[hero] or { XP = 900, Runs = 14 }
 	profile.Skins[hero] = "Default"
 end
+-- --set runs=N   the profile's saved run count (Stats.Runs; under 3 = the simple PLAY setup
+--                 for new accounts, MenuPlay.IsSimple); --set advanced=open also opens its
+--                 ADVANCED OPTIONS (with screen=Play)
+if preview.args.runs then
+	profile.Stats.Runs = tonumber(preview.args.runs) or 0
+end
 if preview.args.skin then
 	local id = profile.SelectedCharacter or "Knight"
 	profile.Skins[id] = preview.args.skin
@@ -109,6 +115,13 @@ end
 if preview.args.retry == "on" or preview.args.screen then
 	C.settle(1)
 	preview.client("LobbyScreen").Show(preview.args.retry == "on" and "Play" or preview.args.screen)
+end
+if preview.args.advanced == "open" then
+	C.settle(0.5)
+	local adv = preview.findGui(function(g) return g:IsA("GuiButton") and g.Name == "Advanced" and preview.isShown(g) end)
+	assert(adv[1], "the simple PLAY setup must show ADVANCED OPTIONS")
+	preview.click(adv[1])
+	C.settle(0.5)
 end
 if preview.args.retry == "on" then
 	local got = nil

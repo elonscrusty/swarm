@@ -11,17 +11,28 @@
 	               villager      "OPTIONAL" tag + "LOST VILLAGER" / "Lead me to the portal!"
 	                             + an HP bar while it follows
 	  shimmer    the cracked wall's crack parts (named "Crack") pulse locally (the hint)
-	  merchant   the shop panel while you stand at the cart: your own 3 offers (remote
-	             MerchantStock), each with its tile, name, rarity, price and BUY / SOLD. The
-	             price is shown with ItemData.PlayerPrice and your GoldMult attribute, like
-	             the loot prompt (LootUI), so it is the price the server charges; red when
-	             you can't afford it, and a press then shows "NEED N" on the purse
-	             (Hud.SetPurseHint). BUY sends MerchantBuy(merchantId, slot); the server
-	             decides. Keys 1 / 2 / 3 buy on a keyboard. Gamepad: D-pad left / right picks
-	             an offer (gold rim, "X BUY"), X buys it; no GUI selection, so the left
-	             stick keeps moving the hero. Not while the ping wheel is open or a chest
-	             prompt owns X (LootUI), and only while UIState.WorldInputAllowed().
-	Everything hides outside a run and while a panel covers the HUD (UIState.Covered).
+	  merchant   the shop panel while you stand at the cart: "MERCHANT", your run gold
+	             ("RUN GOLD 27") and a close X; your own 3 offers (remote MerchantStock),
+	             each with its tile, name, rarity, effect, price and BUY / SOLD. The price
+	             is shown with ItemData.PlayerPrice and your GoldMult attribute, like the
+	             loot prompt (LootUI), so it is the price the server charges. An offer you
+	             can't afford has a dimmed button "NEED 36 MORE" (price minus run gold,
+	             live as gold comes in) and a red price; when none is affordable the foot
+	             line says how to earn gold. BUY sends MerchantBuy(merchantId, slot); the
+	             server decides (range, slot, wallet, sold-before-grant) and answers with
+	             a fresh MerchantStock; a second press of the same offer is ignored until
+	             that answer (at least 0.5 s, at most 2 s). X closes the panel until you
+	             walk out of the cart's range and back. Keys 1 / 2 / 3 buy on a keyboard.
+	             Gamepad: D-pad left / right picks an offer (gold rim, "X BUY"), X buys it;
+	             no GUI selection, so the left stick keeps moving the hero. Not while the
+	             ping wheel is open or a chest prompt owns X (LootUI), and only while
+	             UIState.WorldInputAllowed(). Its ScreenGui draws over the HUD and notice
+	             pills (DisplayOrder 11) and it sits under the banner lane
+	             (Hud.BannerLane); while it shows it is a UIState side panel, so the
+	             portal edge marker hides, and the merchant's own world label fades out.
+	World labels fade (WorldLabelFade) while they would sit on the HUD, the minimap, the
+	banner or the open panel. Everything hides outside a run and while any panel is open
+	(UIState.Owner: level-up, reward, portal choice, run menu ...).
 ]]
 
 local Players = game:GetService("Players")
@@ -39,6 +50,7 @@ local UIAnim = require(script.Parent.UIAnim)
 local Hud = require(script.Parent.Hud)
 local LootUI = require(script.Parent.LootUI)
 local FeatureHud = require(script.Parent.FeatureHud)
+local WorldLabelFade = require(script.Parent.WorldLabelFade)
 
 local ExploreUI = {}
 
@@ -49,10 +61,13 @@ local FLAT = Vector3.new(1, 0, 1)
 local MARKER_RANGE = 140 -- studs: markers show this close
 local KINDS = { SecretRoom = true, Merchant = true, Rescue = true }
 local CARD_H = 158 -- offer card height (compact: CARD_H_COMPACT, no tile)
-local CARD_H_COMPACT = 120
+local CARD_H_COMPACT = 100
+local HEAD_H = 38 -- title row: MERCHANT, RUN GOLD, close X
+local FOOT_H = 20 -- the foot line under the offers
+local PENDING_MIN, PENDING_MAX = 0.5, 2 -- a sent buy blocks its offer this long (seconds)
 local compact = false
 
-type Marker = { Model: Model, Billboard: BillboardGui, Title: TextLabel, Sub: TextLabel, Tag: TextLabel, Bar: Frame, Fill: Frame, Cracks: { BasePart } }
+type Marker = { Model: Model, Billboard: BillboardGui, Face: Frame, Title: TextLabel, Sub: TextLabel, Tag: TextLabel, Bar: Frame, Fill: Frame, Cracks: { BasePart }, Alpha: number, Applied: number }
 
 local markers: { [Model]: Marker } = {}
 local stock: { [string]: any } = { Id = 0, Items = {} }
@@ -62,6 +77,10 @@ local cards: { { [string]: any } } = {}
 local panelFor = 0 -- merchant id the panel was built for
 local padSlot = 1 -- gamepad: the highlighted offer
 local clock = 0
+local pending: { [number]: number } = {} -- slot -> clock when its buy was sent
+local dismissedFor = 0 -- merchant id closed with X (until the player walks away)
+local balance: TextLabel? = nil
+local footLine: TextLabel? = nil
 
 local function inRun(): boolean
 	return player:GetAttribute("InRun") == true and Remotes.State():GetAttribute("Phase") == "Running"
@@ -100,7 +119,7 @@ local function makeMarker(m: Model): Marker?
 			table.insert(cracks, d)
 		end
 	end
-	return { Model = m, Billboard = bb, Title = title, Sub = sub, Tag = tag, Bar = bar, Fill = fill, Cracks = cracks }
+	return { Model = m, Billboard = bb, Face = face, Title = title, Sub = sub, Tag = tag, Bar = bar, Fill = fill, Cracks = cracks, Alpha = 0, Applied = 0 }
 end
 
 local function set(obj: Instance, key: string, value: any)
@@ -176,52 +195,57 @@ end
 
 -- World pills sit under every ScreenGui: when the default spot (5 studs over the anchor)
 -- lands under the HUD's top cluster (portrait: timer, objective, vitals, abilities), the
--- pill slides toward the camera (down the screen) in 3-stud steps until it is clear.
-local function hudRects(): { Rect }
-	local out = {}
-	local els = Hud.Elements()
-	for _, key in ipairs({ "TimerPill", "Stage", "Plate", "Boss", "Bar" }) do
-		local g = els[key]
-		if typeof(g) == "Instance" and g:IsA("GuiObject") and g.Visible then
-			local p, sz = g.AbsolutePosition, g.AbsoluteSize
-			table.insert(out, Rect.new(p.X, p.Y, p.X + sz.X, p.Y + sz.Y))
-		end
-	end
-	return out
-end
-
-local function clearOfHud(mk: Marker)
+-- pill slides toward the camera (down the screen) in 3-stud steps until it is clear. If it
+-- still touches the HUD, the minimap, the banner or an open panel there, it fades out
+-- (WorldLabelFade) instead of popping. Returns whether it should be hidden.
+local function clearOfHud(mk: Marker): boolean
 	local cam = workspace.CurrentCamera
 	local anchor = mk.Billboard.Adornee :: any
 	if not cam or not anchor then
-		return
+		return false
 	end
 	local look = cam.CFrame.LookVector * FLAT
 	local back = look.Magnitude > 0.01 and -look.Unit or Vector3.zero
-	local rects = hudRects()
+	local rects = WorldLabelFade.Rects()
 	local base = Vector3.new(0, 5, 0)
 	local chosen = base
+	local hit = false
 	for k = 0, 24, 3 do
 		local off = base + back * k
 		local sp, onScreen = cam:WorldToScreenPoint(anchor.Position + off)
 		chosen = off
 		if not onScreen then
+			hit = false
 			break
 		end
 		-- the face: 180 x 46 px, its bottom 32 px under the point
-		local l, r, t, b = sp.X - 90, sp.X + 90, sp.Y - 14, sp.Y + 32
-		local hit = false
-		for _, rc in ipairs(rects) do
-			if rc.Max.X > l and rc.Min.X < r and rc.Max.Y > t and rc.Min.Y < b then
-				hit = true
-				break
-			end
-		end
+		hit = WorldLabelFade.Hits(sp.X - 90, sp.Y - 14, sp.X + 90, sp.Y + 32, rects)
 		if not hit then
 			break
 		end
 	end
 	set(mk.Billboard, "StudsOffsetWorldSpace", chosen)
+	return hit
+end
+
+-- The pill's fade (0 shown .. 1 gone): face, rim, texts, tag and bar together.
+local function applyFade(mk: Marker)
+	local a = mk.Alpha
+	if mk.Applied == a then
+		return
+	end
+	mk.Applied = a
+	mk.Face.BackgroundTransparency = 0.15 + 0.85 * a
+	local stroke = mk.Face:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Transparency = 0.25 + 0.75 * a
+	end
+	mk.Title.TextTransparency = a
+	mk.Sub.TextTransparency = a
+	mk.Tag.TextTransparency = a
+	mk.Tag.BackgroundTransparency = a
+	mk.Bar.BackgroundTransparency = a
+	mk.Fill.BackgroundTransparency = a
 end
 
 ------------------------------------------------------------------------------------------
@@ -232,18 +256,29 @@ local function priceOf(item): number
 	return ItemData.PlayerPrice(tonumber(item.Price) or 0, tonumber(player:GetAttribute("GoldMult")) or 1)
 end
 
+local function wallet(): number
+	return tonumber(player:GetAttribute("RunGold")) or 0
+end
+
 local function buy(slot: number)
 	local item = stock.Items and stock.Items[slot]
 	local card = cards[slot]
 	if not item or item.Sold or not card or not UIState.WorldInputAllowed() then
 		return
 	end
+	-- a double tap: the first press is still on its way (the server answers every buy
+	-- with a fresh MerchantStock, which clears this); never a second request meanwhile
+	local sent = pending[slot]
+	if sent and clock - sent < PENDING_MAX then
+		return
+	end
 	local price = priceOf(item)
-	if (tonumber(player:GetAttribute("RunGold")) or 0) < price then
+	if wallet() < price then
 		UIAnim.Punch(card.Price, 0.3)
 		Hud.SetPurseHint(price, false, true)
 		return
 	end
+	pending[slot] = clock
 	Remotes.Get("MerchantBuy"):FireServer(stock.Id, slot)
 end
 
@@ -278,12 +313,14 @@ local function padMove(dir: number)
 	padSlot = list[(at - 1 + dir) % #list + 1]
 end
 
--- The gold rim and "X BUY" on the highlighted offer while a gamepad is in use.
-local function padHighlight()
+-- Each offer's button: SOLD; "NEED 36 MORE" dimmed while you can't afford it; BUY (a
+-- gamepad's highlighted offer: "X  BUY", the gold rim; X on a dear one punches its price).
+local function refreshButtons()
 	local pad = usingPad()
 	if pad then
 		padMove(0)
 	end
+	local gold = wallet()
 	for i, card in ipairs(cards) do
 		local item = stock.Items and stock.Items[i]
 		local on = pad and i == padSlot and item ~= nil and not item.Sold
@@ -292,22 +329,52 @@ local function padHighlight()
 		set(card.Stroke, "Thickness", on and 3 or 1.5)
 		set(card.Stroke, "Transparency", on and 0 or 0.4)
 		set(card.Stroke, "Color", on and P.gold_300 or (r and r.Color or P.ivory_200))
-		local label = item and item.Sold and "SOLD" or (on and "X  BUY" or "BUY")
+		local short = item and not item.Sold and math.max(0, priceOf(item) - gold) or 0
+		local label
+		if not item or item.Sold then
+			label = "SOLD"
+		elseif on then
+			label = "X  BUY"
+		elseif short > 0 then
+			label = "NEED " .. UIKit.formatNumber(short) .. " MORE"
+		else
+			label = "BUY"
+		end
 		if card.Label ~= label then
 			card.Label = label
 			card.Button.SetText(label)
+		end
+		local enabled = item ~= nil and not item.Sold and (short == 0 or on)
+		if card.Enabled ~= enabled then
+			card.Enabled = enabled
+			card.Button.SetEnabled(enabled)
 		end
 	end
 end
 
 local function buildPanel(root: Frame)
-	local p = UIKit.new("Frame", { Name = "MerchantPanel", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.06, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -150), Size = UDim2.fromOffset(420, CARD_H + 42), Visible = false }, root) :: Frame
+	local p = UIKit.new("Frame", { Name = "MerchantPanel", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.06, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -150), Size = UDim2.fromOffset(420, CARD_H + HEAD_H + FOOT_H + 6), Visible = false }, root) :: Frame
 	UIKit.corner(p, Theme.Radius.L)
 	UIKit.stroke(p, P.gold_400, 1.5, 0.2)
-	UIKit.text(p, "Label", "MERCHANT", { Name = "Title", Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.5, -12, 0, 20), TextColor3 = P.gold_200 }, 16)
-	UIKit.text(p, "Caption", "Your own offers · run gold", { Name = "Note", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 8), Size = UDim2.new(0.5, -12, 0, 16), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.ivory_300 }, 12)
-	local row = UIKit.new("Frame", { Name = "Row", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 34), Size = UDim2.new(1, -16, 0, CARD_H) }, p)
+	UIKit.text(p, "Label", "MERCHANT", { Name = "Title", Position = UDim2.fromOffset(12, 9), Size = UDim2.new(0.4, -12, 0, 20), TextColor3 = P.gold_200 }, 16)
+	-- the run gold you can spend here, beside the close button
+	balance = UIKit.text(p, "Label", "RUN GOLD 0", { Name = "Balance", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -50, 0, 9), Size = UDim2.new(0.6, -50, 0, 20), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 }, 15)
+	UIKit.IconButton(p, {
+		Icon = "close",
+		Kind = "Outline",
+		Size = 32,
+		Name = "Close",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -6, 0, 4),
+		OnClick = function()
+			-- closed until the player walks out of range and comes back
+			dismissedFor = panelFor
+		end,
+	})
+	local row = UIKit.new("Frame", { Name = "Row", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, HEAD_H), Size = UDim2.new(1, -16, 0, CARD_H) }, p)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6) })
+	footLine = UIKit.text(p, "Caption", "Your own offers · this cart stays all stage", { Name = "Foot", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -4), Size = UDim2.new(1, -24, 0, FOOT_H - 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_300, TextScaled = true }, 12)
+	UIKit.new("UITextSizeConstraint", { MaxTextSize = (footLine :: TextLabel).TextSize, MinTextSize = 10 }, footLine)
 	for i = 1, Config.Explore.Merchant.Slots do
 		local card = UIKit.new("Frame", { Name = "Offer" .. i, LayoutOrder = i, BackgroundColor3 = P.slate_900, BorderSizePixel = 0, Size = UDim2.new(1 / 3, -4, 1, 0) }, row)
 		UIKit.corner(card, Theme.Radius.M)
@@ -318,12 +385,14 @@ local function buildPanel(root: Frame)
 		local desc = UIKit.text(card, "Caption", "", { Name = "Desc", Position = UDim2.fromOffset(4, 72), Size = UDim2.new(1, -8, 0, 26), TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = P.ivory_200 }, 11)
 		local price = UIKit.text(card, "Label", "", { Name = "Price", Position = UDim2.fromOffset(4, 98), Size = UDim2.new(1, -8, 0, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 }, 14)
 		local btn = UIKit.Button(card, { Name = "Buy", Title = "BUY", Kind = "Primary", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.new(1, -12, 0, 34), Shadow = false, OnClick = function() buy(i) end })
-		cards[i] = { Card = card, Stroke = stroke, TileBox = tileBox, Name = name, Rarity = rarity, Desc = desc, Price = price, Button = btn, Shown = "" }
+		cards[i] = { Card = card, Stroke = stroke, TileBox = tileBox, Name = name, Rarity = rarity, Desc = desc, Price = price, Button = btn, Shown = "", Enabled = true }
 	end
 	return p
 end
 
 local function fillCards()
+	local gold = wallet()
+	local anyAffordable, anyLeft = false, false
 	for i, card in ipairs(cards) do
 		local item = stock.Items and stock.Items[i]
 		local def = item and ItemData.Items[item.Id]
@@ -342,16 +411,24 @@ local function fillCards()
 				card.Desc.Text = def.Text or ""
 				card.Rarity.TextColor3 = r.Color
 				card.Stroke.Color = r.Color
-				card.Label = item.Sold and "SOLD" or "BUY"
-				card.Button.SetText(card.Label)
-				card.Button.SetEnabled(not item.Sold)
 			end
 			local price = priceOf(item)
-			local afford = (tonumber(player:GetAttribute("RunGold")) or 0) >= price
+			local afford = gold >= price
+			if not item.Sold then
+				anyLeft = true
+				anyAffordable = anyAffordable or afford
+			end
 			set(card.Price, "Text", item.Sold and "Bought" or (UIKit.formatNumber(price) .. " gold"))
 			set(card.Price, "TextColor3", (item.Sold or afford) and P.gold_200 or P.crimson_300)
 		end
 	end
+	if balance then
+		set(balance, "Text", "RUN GOLD " .. UIKit.formatNumber(gold))
+	end
+	if footLine then
+		set(footLine, "Text", (anyLeft and not anyAffordable) and "Earn run gold from kills · this cart stays all stage" or "Your own offers · this cart stays all stage")
+	end
+	refreshButtons()
 end
 
 local function merchantModel(): Model?
@@ -361,7 +438,7 @@ local function merchantModel(): Model?
 end
 
 -- The main gui's root (UIBuilder: "Root" with a UIScale), to place the panel between the
--- HUD's top cluster and its bottom bar in real pixels.
+-- HUD's banner lane (under the top cluster) and its bottom bar in real pixels.
 local function hudSpace(myRoot: GuiObject): (number?, number?)
 	local pg = player:FindFirstChild("PlayerGui")
 	if not pg then
@@ -372,19 +449,39 @@ local function hudSpace(myRoot: GuiObject): (number?, number?)
 		local sc = r and r:FindFirstChildOfClass("UIScale")
 		if r and sc and r:FindFirstChild("HUD", true) then
 			local off = (r :: GuiObject).AbsolutePosition.Y - myRoot.AbsolutePosition.Y
-			return off + Hud.TopBottom() * sc.Scale, off + Hud.BarTop() * sc.Scale
+			local _, laneBottom = Hud.BannerLane()
+			local top = math.max(Hud.TopBottom(), laneBottom or 0)
+			return off + top * sc.Scale, off + Hud.BarTop() * sc.Scale
 		end
 	end
 	return nil, nil
 end
 
+-- Full: the item tile on top, then name, rarity, effect, price. Compact (short screens):
+-- no tile, rarity and price share one row.
 local function placeCard(card, small: boolean)
-	local y = small and 4 or 44
 	card.TileBox.Visible = not small
-	card.Name.Position = UDim2.fromOffset(4, y)
-	card.Rarity.Position = UDim2.fromOffset(4, y + 16)
-	card.Desc.Position = UDim2.fromOffset(4, y + 28)
-	card.Price.Position = UDim2.fromOffset(4, y + 54)
+	if small then
+		card.Name.Position = UDim2.fromOffset(4, 4)
+		card.Rarity.Position = UDim2.fromOffset(6, 21)
+		card.Rarity.Size = UDim2.new(0.5, -6, 0, 14)
+		card.Rarity.TextXAlignment = Enum.TextXAlignment.Left
+		card.Price.AnchorPoint = Vector2.new(1, 0)
+		card.Price.Position = UDim2.new(1, -6, 0, 20)
+		card.Price.Size = UDim2.new(0.5, -6, 0, 16)
+		card.Price.TextXAlignment = Enum.TextXAlignment.Right
+		card.Desc.Position = UDim2.fromOffset(4, 36)
+	else
+		card.Name.Position = UDim2.fromOffset(4, 44)
+		card.Rarity.Position = UDim2.fromOffset(4, 60)
+		card.Rarity.Size = UDim2.new(1, -8, 0, 13)
+		card.Rarity.TextXAlignment = Enum.TextXAlignment.Center
+		card.Price.AnchorPoint = Vector2.zero
+		card.Price.Position = UDim2.fromOffset(4, 98)
+		card.Price.Size = UDim2.new(1, -8, 0, 16)
+		card.Price.TextXAlignment = Enum.TextXAlignment.Center
+		card.Desc.Position = UDim2.fromOffset(4, 72)
+	end
 	card.Button.Instance.Size = UDim2.new(1, -12, 0, small and 30 or 34)
 end
 
@@ -396,17 +493,26 @@ local function layoutPanel(p: Frame)
 		w, h = cam and cam.ViewportSize.X or 800, cam and cam.ViewportSize.Y or 600
 	end
 	local width = math.min(420, w - 32)
+	local fullH, smallH = CARD_H + HEAD_H + FOOT_H + 6, CARD_H_COMPACT + HEAD_H + FOOT_H + 6
 	local bottom = h - 150
-	local top = 0
+	local small = false
 	if h > w then
 		bottom = h - 122 -- portrait: just above the JUMP button, under the minimap
 	else
 		local t, b = hudSpace(holder)
-		if t and b and b > t + 100 then
-			top, bottom = t + 6, b - 6
+		if t and b then
+			local top = t + 6
+			bottom = b - 6
+			if bottom - top < fullH then
+				small = true
+				if bottom - top < smallH then
+					-- short phones: under the banner lane, over the top of the ability panel
+					-- (this gui draws above the HUD; the panel stays clear of the screen edge)
+					bottom = math.min(h - 6, top + smallH)
+				end
+			end
 		end
 	end
-	local small = bottom - top < CARD_H + 42
 	if small ~= compact or p:GetAttribute("Laid") ~= true then
 		compact = small
 		p:SetAttribute("Laid", true)
@@ -415,7 +521,7 @@ local function layoutPanel(p: Frame)
 		end
 	end
 	local cardH = small and CARD_H_COMPACT or CARD_H
-	set(p, "Size", UDim2.fromOffset(width, cardH + 42))
+	set(p, "Size", UDim2.fromOffset(width, small and smallH or fullH))
 	local row = p:FindFirstChild("Row")
 	if row then
 		set(row, "Size", UDim2.new(1, -16, 0, cardH))
@@ -443,19 +549,64 @@ local function update(dt: number)
 			end
 		end
 	end
-	local on = inRun() and not UIState.Covered()
+	-- any panel (level-up, reward, portal choice, run menu ...) hides all of this: the
+	-- shop's gui draws above the main gui, so it must never sit over one of them
+	local on = inRun() and not UIState.Covered() and UIState.Owner() == nil
 	local root = myRoot()
+	local p = panel
+	-- the shop panel: at the cart, unless closed with X (until the player walks away)
+	local cart = merchantModel()
+	local cartId = cart and tonumber(cart:GetAttribute("MerchantId")) or 0
+	local pos = cart and cart:GetAttribute("Pos")
+	local radius = cart and tonumber(cart:GetAttribute("Radius")) or 0
+	local inRange = root ~= nil and typeof(pos) == "Vector3" and ((root.Position - pos) * FLAT).Magnitude <= radius
+	local near = on and inRange
+	if not inRange and inRun() and root ~= nil then
+		dismissedFor = 0
+	end
+	local show = p ~= nil and near and stock.Id ~= 0 and stock.Id == cartId and player:GetAttribute("Paused") ~= true and dismissedFor ~= cartId
+	if p and show then
+		if panelFor ~= cartId then
+			panelFor = cartId
+			table.clear(pending)
+			for _, card in ipairs(cards) do
+				card.Shown = ""
+			end
+		end
+		-- a sent buy unblocks after the server's answer (MerchantStock) or the safety time
+		for slot, at in pairs(pending) do
+			if clock - at >= PENDING_MAX then
+				pending[slot] = nil
+			end
+		end
+		layoutPanel(p)
+		fillCards()
+	end
+	if p then
+		set(p, "Visible", show)
+	end
+	UIState.SetSidePanel("Merchant", show)
+	if gui then
+		set(gui, "Enabled", inRun())
+	end
+	-- world pills (after the panel, so the merchant's own label knows it is open)
 	for m, mk in pairs(markers) do
 		if not m.Parent then
 			untrack(m)
 		else
-			local pos = m:GetAttribute("Pos")
-			local show = on and typeof(pos) == "Vector3" and m:GetAttribute("State") ~= "Saved"
-			set(mk.Billboard, "Enabled", show)
-			if show then
+			local mpos = m:GetAttribute("Pos")
+			local want = on and typeof(mpos) == "Vector3" and m:GetAttribute("State") ~= "Saved"
+			local hidden = true
+			if want then
 				fillMarker(mk)
-				clearOfHud(mk)
+				hidden = clearOfHud(mk)
+				if show and m:GetAttribute("EventKind") == "Merchant" then
+					hidden = true -- its panel is open: the label would only repeat it
+				end
 			end
+			mk.Alpha = want and WorldLabelFade.Step(mk.Alpha, hidden, dt) or 1
+			set(mk.Billboard, "Enabled", want and mk.Alpha < 0.99)
+			applyFade(mk)
 			-- the hint shimmer on a sealed wall
 			if #mk.Cracks > 0 and m:GetAttribute("State") == "Sealed" then
 				local t = 0.15 + 0.35 * (0.5 + 0.5 * math.sin(clock * 3.2))
@@ -467,32 +618,6 @@ local function update(dt: number)
 			end
 		end
 	end
-	-- the shop panel
-	local p = panel
-	if not p then
-		return
-	end
-	local cart = merchantModel()
-	local cartId = cart and tonumber(cart:GetAttribute("MerchantId")) or 0
-	local pos = cart and cart:GetAttribute("Pos")
-	local radius = cart and tonumber(cart:GetAttribute("Radius")) or 0
-	local near = on and root ~= nil and typeof(pos) == "Vector3" and ((root.Position - pos) * FLAT).Magnitude <= radius
-	local show = near and stock.Id ~= 0 and stock.Id == cartId and player:GetAttribute("Paused") ~= true
-	if show then
-		if panelFor ~= cartId then
-			panelFor = cartId
-			for _, card in ipairs(cards) do
-				card.Shown = ""
-			end
-		end
-		layoutPanel(p)
-		fillCards()
-		padHighlight()
-	end
-	set(p, "Visible", show)
-	if gui then
-		set(gui, "Enabled", inRun())
-	end
 end
 
 -- Tests / scenes: the stock the panel shows.
@@ -500,15 +625,23 @@ function ExploreUI.Stock(): { [string]: any }
 	return stock
 end
 
+-- Tests / scenes: the shop panel (nil before Init).
+function ExploreUI.Panel(): Frame?
+	return panel
+end
+
 function ExploreUI.Init()
 	if gui then
 		return
 	end
 	local playerGui = player:WaitForChild("PlayerGui")
-	local screen = UIKit.new("ScreenGui", { Name = "ExploreUI", ResetOnSpawn = false, IgnoreGuiInset = true, ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets, DisplayOrder = 9, Enabled = false }, playerGui) :: ScreenGui
+	-- DisplayOrder 11: over the main gui (10: HUD, notice pills), so nothing covers the
+	-- shop's buttons; it hides whenever a panel of the main gui opens (update)
+	local screen = UIKit.new("ScreenGui", { Name = "ExploreUI", ResetOnSpawn = false, IgnoreGuiInset = true, ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets, DisplayOrder = 11, Enabled = false }, playerGui) :: ScreenGui
 	gui = screen
 	local root = UIKit.new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, screen)
 	panel = buildPanel(root)
+	WorldLabelFade.Avoid(panel :: Frame)
 	Remotes.Get("MerchantStock").OnClientEvent:Connect(function(data)
 		if type(data) ~= "table" or type(data.Id) ~= "number" then
 			return
@@ -522,6 +655,14 @@ function ExploreUI.Init()
 			end
 		end
 		stock = { Id = data.Id, Items = items }
+		-- the server's answer: a pending buy unblocks once its minimum time has passed
+		for slot, at in pairs(pending) do
+			if clock - at >= PENDING_MIN then
+				pending[slot] = nil
+			else
+				pending[slot] = at + PENDING_MIN - PENDING_MAX -- frees at the minimum
+			end
+		end
 		for _, card in ipairs(cards) do
 			card.Shown = ""
 		end
@@ -542,7 +683,7 @@ function ExploreUI.Init()
 		end
 		if input.KeyCode == Enum.KeyCode.DPadLeft or input.KeyCode == Enum.KeyCode.DPadRight then
 			padMove(input.KeyCode == Enum.KeyCode.DPadRight and 1 or -1)
-			padHighlight()
+			refreshButtons()
 		elseif input.KeyCode == Enum.KeyCode.ButtonX then
 			local prompt = LootUI.Elements().Prompt :: GuiObject?
 			if prompt and prompt.Visible then

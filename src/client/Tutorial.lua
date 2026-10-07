@@ -11,13 +11,16 @@
 	Tutorial tips (a player's first run; anyone with a run played before skips them):
 	  Move      at the start: drag anywhere / WASD / left stick and how to jump (by input device); done
 	            early once the hero has walked a few steps
-	  Attack    "your weapons attack on their own" → the weapon row
-	  Gems      after the first kill: gems are XP → the XP bar
+	  Attack    "your weapon attacks automatically, keep moving" → the weapon row
+	  Gems      after the first kill: walk over the blue gems for XP → the XP bar
 	  LevelUp   the first level-up offer: one line under LEVEL UP! explains the cards
 	            (UIBuilder asks LevelUpHint; not a callout)
-	  Portal    after Config.Tutorial.PortalTipAt run seconds, unless the portal is already
-	            charging: only the next step (gold arrow, the ring, the real ChargeSeconds;
-	            RunIntro's stage card holds the whole plan) → the stage pill
+	  Portal    Config.Tutorial.PortalTipDelay seconds after the portal reveal (SwarmState
+	            PortalHint; its banner first), unless the portal is already charging: the
+	            PORTAL arrow, the ring, the real ChargeSeconds, the boss → the stage pill.
+	            The tutorial run's reveal waits for the first upgrade pick (server,
+	            Config.FirstRun.RevealCapSeconds), so the tour runs Move, Attack, Gems,
+	            the cards, Portal, Boss.
 	  Boss      when the stage boss appears: red floor shapes show where <boss name> strikes
 	            → the boss bar
 	Co-op tips (once ever, also for experienced players; "TEAM TIP" instead of a count):
@@ -592,7 +595,7 @@ local function startRun(_state: Configuration)
 	push("Move", "Move", moveText(), "boot")
 	-- the first run's welcome (server attribute FirstRunBoost: the first level-up comes
 	-- within ~20 s) keeps this one short so the gem tip lands before the cards
-	push("Attack", "Auto attack", "Your weapons fire on their own. Just keep moving!", "sword", welcome() and 4.5 or nil)
+	push("Attack", "Auto attack", "Your weapon attacks automatically. Keep moving to dodge enemies!", "sword", welcome() and 4.5 or nil)
 end
 
 local function triggers(state: Configuration)
@@ -606,24 +609,21 @@ local function triggers(state: Configuration)
 	if not run.Gems and (player:GetAttribute("Kills") or 0) > (run.Kills0 or 0) then
 		run.Gems = true
 		-- first run: straight after the current tip (the first level-up is close)
-		push("Gems", "Collect gems", "Walk over gems for XP. A full bar = a new upgrade!", "gem", nil, welcome())
+		push("Gems", "Collect gems", "Walk over blue gems to collect XP. A full bar = an upgrade!", "gem", nil, welcome())
 	end
-	-- the objective, a while into the run
-	local runTime = state:GetAttribute("RunTime") or 0
+	-- the objective, once the portal is revealed (its banner shows first)
 	local stagePhase = state:GetAttribute("StagePhase") or "None"
-	if not run.Portal and stagePhase == "Explore" and runTime >= T.PortalTipAt then
-		run.Portal = true
-		-- Staged opening: the stage-start card (RunIntro) lays out the whole plan (portal →
-		-- ring → boss); this tip only repeats the NEXT step with the real charge time, and
-		-- the Boss tip names the boss once it is summoned. A player already charging the
-		-- portal has found it: no tip.
-		if (tonumber(state:GetAttribute("PortalCharge")) or 0) <= 0 then
-			local lockLeft = tonumber(state:GetAttribute("PortalLockLeft")) or 0
-			local secs = tostring(Config.Stages.ChargeSeconds)
-			local body = lockLeft > 0
-					and string.format("The portal wakes in %s. Then stand in its ring for %s s.", UIKit.formatTime(lockLeft), secs)
-				or string.format("Follow the gold arrow, then stand in the portal's ring for %s s.", secs)
-			push("Portal", "Find the portal", body, "portal", T.HintSeconds + 1)
+	if not run.Portal and stagePhase == "Explore" and state:GetAttribute("PortalHint") == true then
+		run.RevealSeen = run.RevealSeen or os.clock()
+		if os.clock() - run.RevealSeen >= (T.PortalTipDelay or 2) then
+			run.Portal = true
+			-- A player already charging the portal has found it: no tip.
+			if (tonumber(state:GetAttribute("PortalCharge")) or 0) <= 0 then
+				local boss = tostring(state:GetAttribute("StageBoss") or "")
+				local body = string.format("Follow the PORTAL arrow, then stand in its ring for %s s to summon %s.",
+					tostring(Config.Stages.ChargeSeconds), boss ~= "" and ("the " .. boss) or "the boss")
+				push("Portal", "Reach the portal", body, "portal", T.HintSeconds + 1)
+			end
 		end
 	end
 	if not run.Boss and stagePhase == "Boss" then

@@ -8,9 +8,13 @@
 	             FeatureHud.RemoveBadge(id)  (weather, event, curse-timer badges ...)
 	  Announcer  one centred line in the upper third: FeatureHud.Announce(text, opts)
 	             (kill streaks, combo counter; the newest text replaces the old one)
-	  Ultimate   a round touch button above JUMP plus a keybind (Config.FeatureHud
+	  Ultimate   a round touch button beside / above JUMP plus a keybind (Config.FeatureHud
 	             UltimateKey / UltimatePad): FeatureHud.SetUltimate({ OnActivate, Charge,
-	             Label }) shows it; FeatureHud.SetUltimate(nil) hides it again
+	             Label, Icon }) shows it; FeatureHud.SetUltimate(nil) hides it again.
+	             Charging: the move's icon dimmed, a gold fill rising and "40%"; ready: a
+	             gold face, the icon bright, "READY" and a soft pulsing halo (static with
+	             Reduced effects). FeatureHud.UltimateCallout(text, seconds) shows a short
+	             non-blocking note next to the button (the first-ready explanation).
 	  PingWheel  an empty centred holder the TEAM feature fills: FeatureHud.Slot("PingWheel"),
 	             FeatureHud.SetPingWheel(open)
 
@@ -29,6 +33,8 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
 local UIState = require(script.Parent.UIState)
+local Icons = require(script.Parent.Icons)
+local ClientSettings = require(script.Parent.ClientSettings)
 
 local FeatureHud = {}
 
@@ -41,10 +47,20 @@ local slots: { [string]: Frame } = {}
 local badges: { [string]: Frame } = {}
 local announceLabel: TextLabel? = nil
 local announceUntil = 0
-local ultimate: { OnActivate: (() -> ())?, Charge: number?, Label: string? }? = nil
+export type UltimateCfg = { OnActivate: (() -> ())?, Charge: number?, Label: string?, Icon: string? }
+local ultimate: UltimateCfg? = nil
 local ultButton: TextButton? = nil
 local ultFill: Frame? = nil
 local ultLabel: TextLabel? = nil
+local ultIcon: CanvasGroup? = nil
+local ultIconKey: string? = nil
+local ultGlow: Frame? = nil
+local ultScale: UIScale? = nil
+local ultReady: boolean? = nil
+local ultLastFire = 0
+local callout: Frame? = nil
+local calloutLabel: TextLabel? = nil
+local calloutUntil = 0
 local pingOpen = false
 local visible = false
 local visibilityListeners: { (boolean) -> () } = {}
@@ -162,10 +178,11 @@ end
 ------------------------------------------------------------------------------------------
 
 --[[
-	cfg = { OnActivate = fn, Charge = 0..1 (1 = ready), Label = "ULT" } shows the button
-	(touch) and binds the key; nil hides it and unbinds. Call again to update the charge.
+	cfg = { OnActivate = fn, Charge = 0..1 (1 = ready), Label = "ULT", Icon = icon name
+	(Icons.Draw) } shows the button (touch) and binds the key; nil hides it and unbinds.
+	Call again to update the charge.
 ]]
-function FeatureHud.SetUltimate(cfg: { OnActivate: (() -> ())?, Charge: number?, Label: string? }?)
+function FeatureHud.SetUltimate(cfg: UltimateCfg?)
 	if (cfg == nil) ~= (ultimate == nil) then
 		layoutDirty = true
 	end
@@ -182,6 +199,12 @@ local function fireUltimate()
 	if not u or not visible or player:GetAttribute("Alive") ~= true or (u.Charge or 0) < 1 then
 		return
 	end
+	-- a touch fires on press (InputBegan) and Activated follows on release: one request
+	local now = os.clock()
+	if now - ultLastFire < 0.35 then
+		return
+	end
+	ultLastFire = now
 	if u.OnActivate then
 		local ok, err = pcall(u.OnActivate)
 		if not ok then
@@ -190,6 +213,28 @@ local function fireUltimate()
 	end
 end
 FeatureHud.FireUltimate = fireUltimate
+
+-- A short note beside the ultimate button for `seconds` (default 5); never blocks input.
+-- "" hides it.
+function FeatureHud.UltimateCallout(text: string, seconds: number?)
+	local label = calloutLabel
+	if not label then
+		return
+	end
+	label.Text = text
+	calloutUntil = text == "" and 0 or os.clock() + (seconds or 5)
+	layoutDirty = true
+end
+
+-- How a player fires the ultimate on this device: "Tap ULT", "Press Q", "Press RB".
+function FeatureHud.UltimateHow(): string
+	if UserInputService.GamepadEnabled and not UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+		return "Press RB"
+	elseif UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled then
+		return "Press " .. F.UltimateKey.Name
+	end
+	return "Tap ULT"
+end
 
 ------------------------------------------------------------------------------------------
 -- Ping wheel holder
@@ -303,6 +348,7 @@ end
 local ultAt = UDim2.fromOffset(0, 0)
 local ultDir = -1 -- -1: neighbours to the left, 1: to the right
 local shownCharge = -1
+local calloutRight = 0 -- right edge (root pixels) of the ULT + JUMP pair: the callout lines up with it
 local jumpButton: GuiObject? = nil
 local nextJumpFind = 0
 local function placeUltimate()
@@ -344,6 +390,10 @@ local function placeUltimate()
 	end
 	local at = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 	ultAt = at
+	calloutRight = x
+	if jump and jump.Visible and jump.AbsoluteSize.X > 1 then
+		calloutRight = math.max(x, jump.AbsolutePosition.X - origin.X + jump.AbsoluteSize.X)
+	end
 	if holder.Position ~= at then
 		holder.Position = at
 	end
@@ -391,22 +441,60 @@ function FeatureHud.Init()
 	announceLabel = UIKit.text(announce, "Title", "", { Name = "Line", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.35, TextScaled = true, Visible = false }, 26) :: any
 	slots.Announcer = announce
 
-	-- ultimate button (touch), above the JUMP button column
+	-- ultimate button (touch), beside / above JUMP (placeUltimate)
 	local size = F.UltimateSize
 	local ult = UIKit.new("Frame", { Name = "Ultimate", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(size, size), Visible = false }, root) :: Frame
 	slots.Ultimate = ult
+	-- ready halo: a soft gold ring just outside the button (pulses while ready)
+	local glow = UIKit.new("Frame", { Name = "Halo", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, 10, 1, 10), Visible = false }, ult) :: Frame
+	UIKit.corner(glow, 999)
+	UIKit.stroke(glow, P.gold_200, 3, 0.25)
+	ultGlow = glow
 	local button = UIKit.new("TextButton", { Name = "Button", Text = "", AutoButtonColor = true, BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.1, Size = UDim2.fromScale(1, 1) }, ult) :: TextButton
 	UIKit.corner(button, 999)
 	UIKit.stroke(button, P.gold_400, 2, 0.1)
+	ultScale = UIKit.new("UIScale", { Scale = 1 }, ult) :: UIScale
 	-- the charge: a round gold fill rising from the bottom (a UIGradient cut-off: Roblox's
-	-- ClipsDescendants clips to the square, not the round corners)
-	local fill = UIKit.new("Frame", { Name = "Charge", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.45, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, button) :: Frame
+	-- ClipsDescendants clips to the square, not the round corners); see-through so the
+	-- icon stays readable over it
+	local fill = UIKit.new("Frame", { Name = "Charge", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, button) :: Frame
 	UIKit.corner(fill, 999)
 	UIKit.new("UIGradient", { Name = "Level", Rotation = -90, Transparency = NumberSequence.new(1) }, fill)
 	ultFill = fill
-	ultLabel = UIKit.text(button, "Label", "ULT", { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 2 }, 15) :: any
-	button.Activated:Connect(fireUltimate)
+	-- the move's icon (dimmed while charging): a CanvasGroup fades picture and drawing alike
+	local iconSize = math.floor(size * 0.46)
+	local iconGroup = UIKit.new("CanvasGroup", { Name = "Icon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.4), Size = UDim2.fromOffset(iconSize, iconSize), GroupTransparency = 0.3, ZIndex = 2 }, button) :: CanvasGroup
+	ultIcon = iconGroup
+	-- "40%" / "READY" under the icon; its own size cap (the Roblox Text size setting must
+	-- not push it out of the round button)
+	local label = UIKit.text(button, "Label", "ULT", { Name = "Label", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.66, 0), Size = UDim2.new(0.8, 0, 0.2, 0), TextXAlignment = Enum.TextXAlignment.Center, TextScaled = true, ZIndex = 3, TextStrokeTransparency = 0.5 }, 13) :: TextLabel
+	label:SetAttribute("NoTextFit", true)
+	UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(13), MinTextSize = 8 }, label)
+	ultLabel = label
+	button.Activated:Connect(function(input: InputObject?)
+		-- touches already fired on press (below)
+		if input and input.UserInputType == Enum.UserInputType.Touch then
+			return
+		end
+		fireUltimate()
+	end)
+	-- touch: fire on press, like JUMP (a thumb already holding the stick never delays it)
+	button.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch then
+			fireUltimate()
+		end
+	end)
 	ultButton = button
+
+	-- first-ready callout: a small dark card above the button (right-aligned with it)
+	local note = UIKit.new("Frame", { Name = "UltCallout", BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.1, AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(260, 0), AutomaticSize = Enum.AutomaticSize.Y, Visible = false, Active = false }, root) :: Frame
+	UIKit.corner(note, Theme.Radius.M)
+	UIKit.stroke(note, P.gold_400, 1.5, 0.2)
+	UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }, note)
+	local noteText = UIKit.text(note, "Label", "", { Name = "Text", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_100 }, 14) :: TextLabel
+	noteText:SetAttribute("NoTextFit", true)
+	UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(14), MinTextSize = 10 }, noteText)
+	callout, calloutLabel = note, noteText
 
 	-- ping wheel holder (centre; TEAM fills it)
 	local wheel = UIKit.new("Frame", { Name = "PingWheel", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(260, 260), Visible = false }, root) :: Frame
@@ -591,16 +679,16 @@ function FeatureHud.Init()
 		end
 		if showUlt and u then
 			local charge = math.clamp(u.Charge or 0, 0, 1)
+			local ready = charge >= 0.999
 			local fill = ultFill :: Frame
 			if math.abs(charge - shownCharge) > 0.004 then
 				shownCharge = charge
 				local grad = fill:FindFirstChild("Level") :: UIGradient?
 				if grad then
-					-- opaque-ish gold up to `charge` (from the bottom), clear above it
-					if charge <= 0.001 then
+					-- gold up to `charge` (from the bottom), clear above it; none once ready
+					-- (the whole face turns gold instead)
+					if charge <= 0.001 or ready then
 						grad.Transparency = NumberSequence.new(1)
-					elseif charge >= 0.999 then
-						grad.Transparency = NumberSequence.new(0)
 					else
 						grad.Transparency = NumberSequence.new({
 							NumberSequenceKeypoint.new(0, 0),
@@ -612,14 +700,72 @@ function FeatureHud.Init()
 				end
 			end
 			local label = ultLabel :: TextLabel
-			local text = u.Label or "ULT"
+			local text = ready and "READY" or string.format("%d%%", math.floor(charge * 100))
 			if label.Text ~= text then
 				label.Text = text
 			end
-			local b = ultButton :: TextButton
-			local tint = charge >= 1 and P.gold_300 or P.slate_900
-			if b.BackgroundColor3 ~= tint then
-				b.BackgroundColor3 = tint
+			local iconKey = u.Icon or "sparkle"
+			local group = ultIcon :: CanvasGroup
+			if ultIconKey ~= iconKey then
+				ultIconKey = iconKey
+				group:ClearAllChildren()
+				Icons.Draw(group, iconKey, { Size = group.Size.X.Offset, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5) })
+			end
+			if ultReady ~= ready then
+				ultReady = ready
+				local b = ultButton :: TextButton
+				b.BackgroundColor3 = ready and P.gold_400 or P.slate_900
+				b.BackgroundTransparency = ready and 0 or 0.1
+				group.GroupTransparency = ready and 0 or 0.3
+				label.TextColor3 = ready and P.slate_950 or P.ivory_200
+				label.TextStrokeTransparency = ready and 1 or 0.5
+				local stroke = b:FindFirstChildOfClass("UIStroke")
+				if stroke then
+					stroke.Color = ready and P.ivory_100 or P.gold_400
+					stroke.Thickness = ready and 3 or 2
+				end
+				;(ultGlow :: Frame).Visible = ready
+				if not ready then
+					(ultScale :: UIScale).Scale = 1
+				end
+			end
+			if ready then
+				-- a gentle pulse (1.0 - 1.06) and a breathing halo; still with Reduced effects
+				local reduced = ClientSettings.Reduced()
+				local wave = reduced and 0 or (0.5 + 0.5 * math.sin(now * 5))
+				local sc = math.floor((1 + 0.06 * wave) * 100 + 0.5) / 100
+				local us = ultScale :: UIScale
+				if us.Scale ~= sc then
+					us.Scale = sc
+				end
+				local st = (ultGlow :: Frame):FindFirstChildOfClass("UIStroke")
+				local tr = math.floor((0.15 + 0.5 * (1 - wave)) * 20 + 0.5) / 20
+				if st and st.Transparency ~= tr then
+					st.Transparency = tr
+				end
+			end
+		end
+		-- first-ready callout: above the ultimate button, right edges level, inside the screen
+		local note = callout
+		if note then
+			local showNote = showUlt and calloutUntil > now and (calloutLabel :: TextLabel).Text ~= ""
+			if note.Visible ~= showNote then
+				note.Visible = showNote
+			end
+			if showNote then
+				local rs = root.AbsoluteSize
+				local w = math.min(260, rs.X - 24)
+				local x = math.max(calloutRight, w + 12)
+				x = math.min(x, rs.X - 12)
+				local y = ultAt.Y.Offset - F.UltimateSize - 14
+				local want = UDim2.fromOffset(x, y)
+				if note.Position ~= want then
+					note.Position = want
+				end
+				local sz = UDim2.fromOffset(w, 0)
+				if note.Size ~= sz then
+					note.Size = sz
+				end
 			end
 		end
 		local wheelOn = pingOpen

@@ -160,7 +160,10 @@ function PortalBeacon.Update(state: Configuration, inRun: boolean)
 	local ppos = state:GetAttribute("PortalPos")
 	local reveal = state:GetAttribute("PortalReveal") or 0
 	local phase = state:GetAttribute("StagePhase") or "None"
-	local on = inRun and typeof(ppos) == "Vector3" and reveal > 0 and phase ~= "Travel" and phase ~= "None"
+	-- PortalReveal counts reveals over the whole run, so a later stage also needs this
+	-- stage's PortalHint (set at the reveal, cleared when the next stage is built)
+	local hinted = state:GetAttribute("PortalHint") == true
+	local on = inRun and typeof(ppos) == "Vector3" and reveal > 0 and hinted and phase ~= "Travel" and phase ~= "None"
 	if not on then
 		lastReveal = inRun and reveal or 0
 		park()

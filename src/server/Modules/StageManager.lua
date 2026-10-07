@@ -9,7 +9,10 @@
 	           dormant for PortalLockSeconds; when the lock ends (and the stage banner has
 	           gone: RevealDelaySeconds) it is REVEALED (PortalHint / PortalReveal: the HUD
 	           arrow, banner, beacon and minimap ping) and any living player standing in
-	           its rune circle charges it (ChargeSeconds).
+	           its rune circle charges it (ChargeSeconds; never before the reveal). The
+	           tutorial run (RunManager.TutorialRevealHold) reveals the stage-1 portal
+	           only after the first level-up card is picked (or at
+	           Config.FirstRun.RevealCapSeconds).
 	  Boss     charging summons the stage's boss behind the portal (stage 1: the Scorpion
 	           Queen; later stages rotate the Queen, Moth Matriarch, Rhino Warlord and Hive
 	           Mother, never the same one twice in a row: bossFor); HP scaled by stage and
@@ -67,6 +70,9 @@ local portal: MapBuilder.Portal? = nil
 local lastPortal: { [string]: Vector3 } = {} -- last portal spot per arena (a new one differs)
 local stageTime = 0
 local revealed = false -- this stage's portal reveal happened (PortalReveal bumped)
+local revealAt = 0 -- stageTime of this stage's reveal (swarm pressure counts from it)
+local holdReleasedAt: number? = nil -- stageTime the tutorial reveal hold ended (nil = not yet)
+local tutorialHeld = false -- this stage's reveal waited for the tutorial's first pick
 local swarmWarn = 0 -- Config.Stages.Pressure step shown (SwarmState SwarmWarn)
 local reveals = 0
 local shownLock = -1
@@ -307,6 +313,9 @@ local function buildStage(n: number)
 	BiomeHazards.SetArena(arena) -- mud / ice / quicksand / lava pools of a biome arena
 	stageTime = 0
 	revealed = false
+	revealAt = 0
+	holdReleasedAt = nil
+	tutorialHeld = false
 	shownLock = -1
 	charge = 0
 	shownCharge = -1
@@ -646,6 +655,30 @@ end
 -- Per frame
 ------------------------------------------------------------------------------------------
 
+-- The tutorial run's reveal wait (Config.FirstRun.RevealAfterPickSeconds / RevealCapSeconds):
+-- stage 1 only, until the first level-up card was picked (+ a moment for the cards to
+-- close) or the cap. Everyone else: never.
+local function tutorialHold(): boolean
+	if stage ~= 1 then
+		return false
+	end
+	local cfg = (Config :: any).FirstRun or {}
+	if stageTime >= (tonumber(cfg.RevealCapSeconds) or 45) then
+		return false
+	end
+	if holdReleasedAt == nil then
+		if ctx.RunManager.TutorialRevealHold and ctx.RunManager.TutorialRevealHold() then
+			tutorialHeld = true
+			return true
+		end
+		holdReleasedAt = stageTime
+	end
+	if not tutorialHeld then
+		return false -- never held (a returning player, co-op): the usual reveal moment
+	end
+	return stageTime < (holdReleasedAt :: number) + (tonumber(cfg.RevealAfterPickSeconds) or 1)
+end
+
 local function stepExplore(dt: number)
 	stageTime += dt
 	local locked = math.max(0, lockSeconds() - stageTime)
@@ -656,8 +689,9 @@ local function stepExplore(dt: number)
 	end
 	-- the reveal: the portal can be charged (lock over), once the stage banner has gone
 	local revealDelay = Config.Stages.RevealDelaySeconds or 0
-	if not revealed and locked <= 0 and stageTime >= revealDelay then
+	if not revealed and locked <= 0 and stageTime >= revealDelay and not tutorialHold() then
 		revealed = true
+		revealAt = stageTime
 		reveals += 1
 		state:SetAttribute("PortalHint", true)
 		state:SetAttribute("PortalReveal", reveals)
@@ -669,7 +703,10 @@ local function stepExplore(dt: number)
 	-- swarm pressure: the longer the portal stays unopened, the louder the warning
 	local pressure = Config.Stages.Pressure
 	if pressure and revealed then
-		local step = stageTime >= pressure.DangerSeconds and 2 or (stageTime >= pressure.WarnSeconds and 1 or 0)
+		-- counted as if the reveal came at the usual moment: a tutorial run's later reveal
+		-- does not bring the warnings closer to it
+		local t = stageTime - math.max(0, revealAt - revealDelay)
+		local step = t >= pressure.DangerSeconds and 2 or (t >= pressure.WarnSeconds and 1 or 0)
 		if step > swarmWarn then
 			swarmWarn = step
 			-- the clients' banner (StageUI, through the Hud.Announce queue) watches this
@@ -696,7 +733,7 @@ local function stepExplore(dt: number)
 			end
 		end
 	end
-	if inside and locked <= 0 then
+	if inside and locked <= 0 and revealed then
 		charge = math.min(1, charge + dt / Config.Stages.ChargeSeconds)
 	else
 		charge = math.max(0, charge - dt * Config.Stages.ChargeDecay)
@@ -801,7 +838,8 @@ local function stepTravel(dt: number)
 		-- biome arenas with floor hazards name them ("Swamp · Mud pools slow you · ...")
 		local def = (Config.Arenas :: any)[arenaName]
 		local hint = (BiomeHazards.Count() > 0 and def and def.Hint) and (" · " .. def.Hint) or ""
-		ctx.RunManager.Broadcast(StageManager.ArenaDisplayName() .. hint .. " · find the portal", Color3.fromRGB(180, 200, 255), nil, { Id = "stage.objective" })
+		-- (the portal is revealed a few seconds later, with its own headline)
+		ctx.RunManager.Broadcast(StageManager.ArenaDisplayName() .. hint .. " · the portal opens soon", Color3.fromRGB(180, 200, 255), nil, { Id = "stage.objective" })
 	end
 end
 
