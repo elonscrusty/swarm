@@ -1014,17 +1014,17 @@ local function relayout()
 		-- STARTER BUNDLE card (new players only, StarterCard): under the TOP SCORES strip,
 		-- only while the hero keeps its 200 px above the QUESTS chip / PLAY; never with the
 		-- queue up
-		if ui.Starter then
+		if ui.StarterHome then
 			local cardY = capBottom + 8 + (fits and 58 + G or 0)
 			local chipShown = Config.FeatureOn("DailyQuests") and not showQueue and questY > capBottom + 8 + (fits and 58 + G or 0)
 			local limit = chipShown and (questY - G) or (playY - 12)
 			if not showQueue and cardY + StarterCard.Height + 8 + 200 <= limit then
-				local bottomY = ui.Starter.Place((W - w) / 2, cardY, w, true)
+				local bottomY = ui.StarterHome.Place((W - w) / 2, cardY, w, true)
 				if bottomY > cardY then
 					heroFrac = ((bottomY + 8 + limit) / 2) / H
 				end
 			else
-				ui.Starter.Hide()
+				ui.StarterHome.Hide()
 			end
 		end
 	else
@@ -1042,14 +1042,14 @@ local function relayout()
 		end
 		-- STARTER BUNDLE card (new players only, StarterCard): next in the column, the board
 		-- moves down under it; left out when the board would lose its second row
-		if ui.Starter then
+		if ui.StarterHome then
 			if bottom - (by + StarterCard.Height + G) >= 134 then
-				local bottomY = ui.Starter.Place(W - rightM - bw, by, bw, false)
+				local bottomY = ui.StarterHome.Place(W - rightM - bw, by, bw, false)
 				if bottomY > by then
 					by = bottomY + G
 				end
 			else
-				ui.Starter.Hide()
+				ui.StarterHome.Hide()
 			end
 		end
 		ui.Board.Layout(W - rightM - bw, by, bw, bottom - by, false)
@@ -1584,7 +1584,7 @@ function LobbyScreen.Init(h: { [string]: any })
 	buildHome(screen("Home"))
 	-- STARTER BUNDLE home card (Config.Features.StarterBundle; placed in relayout)
 	if Config.FeatureOn("StarterBundle") then
-		ui.Starter = StarterCard.Build(ui.Home, {
+		ui.StarterHome = StarterCard.Build(ui.Home, {
 			Open = function()
 				LobbyScreen.Show("Starter")
 			end,
