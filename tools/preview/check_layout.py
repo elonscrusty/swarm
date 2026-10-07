@@ -150,7 +150,10 @@ def collect(doc):
 
 def allowed(scene, device, text):
     for s, d, sub in ALLOW:
-        if (s == "*" or scene.startswith(s)) and (d == "*" or d == device) and sub in text:
+        # run_regressions names its files "layout-<scene>-<device>-<arg>", so the scene may
+        # also sit after a "layout-" prefix
+        named = scene.startswith(s) or scene.startswith("layout-" + s)
+        if (s == "*" or named) and (d == "*" or d == device or d in scene) and sub in text:
             return True
     return False
 
