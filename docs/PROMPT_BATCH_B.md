@@ -110,3 +110,79 @@ Before shipping, ask the owner to approve:
 - the Prestige reward (+5% gold per star, max 5)
 
 Report PASS/FAIL/BLOCKED per item.
+
+---
+
+## Added to batch B (owner, 2026-10-07): 6 more items, same general requirements as above
+
+## B5. Show weapon evolutions early (switch `EvolutionPreview`)
+- **Check first:** the level-up card already has an "Evolves into X with Y Lv N" line (UIBuilder level-up section and HeroPresets). Build on it; don't duplicate it.
+- **On a weapon card:** when the weapon has an evolution, show a small evolution icon (the evolved weapon's icon) plus its name, and the requirement with live progress, for example "Bloodblade: Sword Lv 12 + Heart Lv 3 (you: Heart 1)".
+- **On a passive card that's an evolution ingredient:** show the same small line, "Needed for Bloodblade".
+- **In the BUILD panel:** add an "Evolutions" section listing every evolution possible with the current build, with what's still missing.
+- **Data only:** read from WeaponData/SynergyData. No new combining or fusion system.
+- **Fit:** iphone at Largest text, phone-portrait and pc; check_layout at 0. Lines shrink-to-fit or wrap.
+- **Regression:** the right evolution is shown, progress updates after picks, the panel lists the missing parts.
+
+## B6. Banish (switch `Banish`)
+- **On the level-up panel:** a BANISH button next to REROLL and SKIP. Tapping it, then a card, removes that card's weapon or passive from offers for the rest of the run.
+- **Limits:** 3 banishes per run (`Config.LevelUp.Banishes`), shown as "BANISH · 3 left". Never banish something you already own.
+- **Server-side, using the OfferId flow:**
+  - the banished id is stored in the run state, and the pool skips it
+  - if the pool would run empty, fall back to the existing gold/heal cards
+  - the panel re-rolls that one slot after a banish
+- **Input:** touch, mouse, keyboard (B then 1/2/3) and gamepad.
+- **Co-op:** per player. It doesn't pause anyone.
+- **Regression:**
+  - the banished id never appears again that run
+  - the count decrements and stops at 0
+  - can't banish an owned item
+  - the empty pool falls back safely
+  - layout fits
+
+## B7. Stage modifiers (switch `StageModifiers`)
+- **What:** from stage 2, each stage rolls 1 modifier from a pool of at least 8, shown on the stage-start card (RunIntro) and as a HUD badge. Each one is a trade-off, for example:
+  - "Swift foes: enemies +15% speed, +20% XP"
+  - "Thick hides: enemies +20% HP, +25% gold"
+  - "Glass arena: you deal +20% damage, take +20% damage"
+  - "Gem rain: XP gems worth +30%, fewer chests"
+  - "Elite night: +1 elite per wave, elites drop +1 chest roll"
+  - "Calm: -15% enemies, -15% XP"
+  - "Bounty: kill gold x1.5, enemy damage +10%"
+  - "Haste: you +10% speed, cooldowns +10%"
+- **Rolls:** deterministic from the run seed. Daily and Weekly runs use their fixed seed, so everyone gets the same ones.
+- **Implementation:** server-side through existing multipliers (RunModifiers/curses pattern), cleared at stage end. No stacking with an identical curse effect beyond a cap.
+- **Balance:** econ-sim, 3 seeds, average across modifiers. No single modifier may push would-be deaths up more than about 20% or gold more than about 25%. Tune the numbers until that holds. Record it in docs/next/STAGE_MODIFIERS.md.
+- **Regression:** deterministic roll, effects applied and cleared, shown on the card and badge, layout fits.
+
+## B8. Party quick lines (switch `PartyQuickLines`)
+- **On the Party screen and the lobby (when in a party):** a row of quick-line buttons: "Ready?", "Go!", "GG", "One more?", "Wait for me", "Thanks!".
+- **Where they show:** as a short bubble over the sender's lobby hero and in a small party feed on the Party screen.
+- **Text:** fixed text only, with no free typing, so no filtering is needed.
+- **Server:** rate limit of 1 per 2 s and 10 per minute; only sent to the sender's party members.
+- **Regression:** party-only delivery, the rate limit, the bubble fades, layout fits.
+
+## B9. Revive thank-you (switch `ReviveThanks`)
+- **After being revived by a teammate:** a "THANKS!" button shows for 6 s near the HUD, away from JUMP and ULT. Tapping it:
+  - sends the reviver a "<name> says thanks!" notice
+  - gives the reviver +25 run XP (`Config.Revive.ThanksXP`)
+- **Limits:** once per revive and at most 3 per run per pair, server-checked. You can't thank yourself, and it doesn't work in solo.
+- **Regression:** XP granted once, the limits hold, the button hides after 6 s or after use, layout fits.
+
+## B10. Damage number options (switch `DamageNumberOptions`)
+- **Check first:** see what damage-number settings already exist (Settings / ClientSettings / CombatFx). Keep the existing Settings screen design; only add rows in its existing style.
+- **Setting "Damage numbers":** Off / Small / Normal / Big. Default Normal, which is the current look.
+- **Setting "Combine numbers":** on/off. When on, hits on the same enemy within 0.3 s merge into one rising number.
+- **Crits:** always show in a different colour and shape (bold with a star), even when Small.
+- **Persistence:** saved through the existing settings path.
+- **Performance:** Off and Combine must lower the count of number labels. Check with perf-sim.
+- **Regression:** each option changes the size or count, the setting persists, crits stay distinct, settings layout fits.
+
+## Updated order for batch B
+Do 1 (affix icons), B5, B6, B10, then 6 (Final Stand), B7, then B8, B9, then 12 (Prestige), then 18 (Quick resume).
+
+Before shipping, ask the owner to approve:
+- the stage modifier numbers
+- the thank-you XP
+- Final Stand
+- Prestige
