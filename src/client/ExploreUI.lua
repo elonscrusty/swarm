@@ -541,6 +541,7 @@ local function layoutPanel(p: Frame)
 	local fullH, smallH = CARD_H + HEAD_H + FOOT_H + 6, CARD_H_COMPACT + HEAD_H + FOOT_H + 6
 	local bottom = h - 150
 	local small = false
+	local tight = false
 	if h > w then
 		bottom = h - 122 -- portrait: just above the JUMP button, under the minimap
 	else
@@ -551,8 +552,11 @@ local function layoutPanel(p: Frame)
 			if bottom - top < fullH then
 				small = true
 				if bottom - top < smallH then
-					-- short phones: under the banner lane, over the top of the ability panel
-					-- (this gui draws above the HUD; the panel stays clear of the screen edge)
+					-- short phones: the foot line goes first; if it still doesn't fit, under
+					-- the banner lane, over the top of the ability panel (this gui draws
+					-- above the HUD; the panel stays clear of the screen edge)
+					tight = true
+					smallH -= FOOT_H
 					bottom = math.min(h - 6, top + smallH)
 				end
 			end
@@ -564,6 +568,9 @@ local function layoutPanel(p: Frame)
 		for _, card in ipairs(cards) do
 			placeCard(card, small)
 		end
+	end
+	if footLine then
+		set(footLine, "Visible", not tight)
 	end
 	local cardH = small and CARD_H_COMPACT or CARD_H
 	set(p, "Size", UDim2.fromOffset(width, small and smallH or fullH))
