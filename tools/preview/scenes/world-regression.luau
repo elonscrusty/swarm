@@ -231,7 +231,7 @@ local function heldCase(label: string, holdSeconds: number, wantSavedAtBoss: boo
 	end
 	local ring = cv.Pos + Vector3.new(3, 0, 0)
 	local items0 = items()
-	step(holdSeconds, ring)
+	step(holdSeconds + (Config.Caravan.StartSeconds or 0), ring) -- the defence starts after StartSeconds in the ring
 	check(cv.State == "Defending", label .. " defending after " .. holdSeconds .. " s")
 	SM.DevActivate() -- the boss comes while the hero holds the ring
 	step(0.5, ring)
