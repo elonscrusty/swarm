@@ -136,10 +136,9 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 	btn.Instance.Visible = false
 	local api = {}
 	local function subText(): string
-		local left = StarterCard.TimeLeft()
 		local c = (Config :: any).StarterBundle or {}
-		local s = string.format("Skin + %s gold", UIKit.formatNumber(tonumber(c.Gold) or 0))
-		return left ~= "" and (s .. " · " .. left) or s
+		-- short on purpose: the card is narrow on phones (the time left shows on its screen)
+		return string.format("Skin + %s gold", UIKit.formatNumber(tonumber(c.Gold) or 0))
 	end
 	function api.Wanted(): boolean
 		return StarterCard.Offered()

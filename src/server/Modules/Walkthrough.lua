@@ -121,13 +121,14 @@ local function eligible(rp, data, teamSize: number, mode: string?): boolean
 	if not FR or FR.AutoStart ~= true or mode ~= FR.Mode then
 		return false
 	end
-	if rp.DevTainted or rp.Endless or rp.Daily or data.WalkthroughDone == true then
+	if rp.DevTainted or rp.Endless or rp.Daily then
 		return false
 	end
 	if type(data.Settings) == "table" and data.Settings.Tips == false then
 		return false
 	end
-	local first = data.TutorialDone ~= true and type(data.Stats) == "table" and (tonumber(data.Stats.Runs) or 0) == 0
+	-- the very first run (never run before), or Settings > Replay tips (overrides Done)
+	local first = data.WalkthroughDone ~= true and data.TutorialDone ~= true and type(data.Stats) == "table" and (tonumber(data.Stats.Runs) or 0) == 0
 	if not first and data.WalkthroughReplay ~= true then
 		return false
 	end

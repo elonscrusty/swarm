@@ -107,7 +107,7 @@ local ok, err = S.runMain(function()
 		end
 		return true
 	end
-	local allowed = { Play = true, HeroCaption = true, AccountPill = true, PartyButton = true, Characters = true, Shop = true, Worlds = true, Daily = true, More = true, HitPad = true, HomeBoard = true } -- HomeBoard: TOP SCORES (owner 2026-10-07)
+	local allowed = { Play = true, HeroCaption = true, AccountPill = true, PartyButton = true, Characters = true, Shop = true, Worlds = true, Daily = true, More = true, HitPad = true, HomeBoard = true, QuestChip = true, StarterCard = true } -- HomeBoard: TOP SCORES (owner 2026-10-07); QuestChip / StarterCard: next batch (docs/next)
 	local extra = {}
 	for _, d in ipairs(home:GetDescendants()) do
 		if d:IsA("GuiButton") and shown(d) and not allowed[d.Name] then
