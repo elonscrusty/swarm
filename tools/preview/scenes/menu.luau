@@ -56,13 +56,36 @@ if preview.args.dots == "on" or preview.args.dots == "seen" then
 	profile.Account = { XP = 5000, Level = 6, Into = 0, Need = 100 }
 end
 C.sendProfile(profile)
-if preview.args.playtime ~= "none" then
-	local names = { "Ava", "Bramblewick", "Kestrel", "Moonpetal", "Ironjaw", "Thistle" }
+-- --set board=rows|empty|error|loading|out|first   the home TOP SCORES panel's High Score
+--                               answer (default rows: you are #12; out: not in the top 50;
+--                               first: you are #1; none: no answer)
+local boardArg = preview.args.board or "rows"
+if boardArg ~= "none" then
+	local names = { "Ava", "Bramblewick", "Kestrel_TheVeryLongName", "Moonpetal", "Ironjaw", "Thistle", "Pip", "Rook", "Wren", "Fable", "Odo" }
 	local rows = {}
-	for i, n in ipairs(names) do
-		table.insert(rows, { Rank = i, UserId = 2000 + i, Name = n, Value = 98000 - i * 9300, Me = false })
+	local d = { Board = "Score", Rows = rows, Status = "ok", Age = 5, Top = 50, MyBest = 0 }
+	if boardArg == "rows" or boardArg == "out" or boardArg == "first" then
+		for i, n in ipairs(names) do
+			-- a tie at #4 (shares the rank, as LeaderboardService.RankRows does)
+			local v = i == 5 and (98000 - 4 * 8500) or (98000 - i * 8500)
+			if i == #names then
+				v = 2245 -- the row just above you: "Beat #11 by 36"
+			end
+			table.insert(rows, { Rank = i == 5 and 4 or i, UserId = 2000 + i, Name = n, Value = v, Me = false })
+		end
+		if boardArg == "rows" then
+			table.insert(rows, { Rank = 12, UserId = 1, Name = "PreviewPlayer", Value = 2210, Me = true })
+			d.MyRank, d.MyBoard, d.MyBest = 12, 2210, 2210
+		elseif boardArg == "first" then
+			rows[1].Name, rows[1].Me, rows[1].UserId = "PreviewPlayer", true, 1
+			d.MyRank, d.MyBoard, d.MyBest = 1, rows[1].Value, rows[1].Value
+		else
+			d.MyBest = 1500
+		end
+	elseif boardArg == "error" or boardArg == "loading" then
+		d.Status = boardArg
 	end
-	C.fire("LeaderboardData", { Board = "Playtime", Rows = rows, Status = "ok", Age = 5, MyRank = 12, MyBest = 11160, Top = 50 })
+	C.fire("LeaderboardData", d)
 end
 if preview.args.play == "tap" then
 	local got = nil

@@ -37,6 +37,8 @@ import sys
 # (scene prefix or "*", device or "*", text substring) → intentional overlap / off-screen.
 ALLOW = [
     # the lobby hero nameplate's name sits over the hero ring on purpose
+    # the menu scene's TOP SCORES fixture has a 23-letter player name: names truncate on purpose
+    ("menu", "*", "Kestrel_Th"),
 ]
 
 MIN_OVERLAP_PX = 3.0  # both axes

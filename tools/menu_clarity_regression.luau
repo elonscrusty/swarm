@@ -107,14 +107,14 @@ local ok, err = S.runMain(function()
 		end
 		return true
 	end
-	local allowed = { Play = true, HeroCaption = true, AccountPill = true, PartyButton = true, Characters = true, Shop = true, Worlds = true, Daily = true, More = true, HitPad = true }
+	local allowed = { Play = true, HeroCaption = true, AccountPill = true, PartyButton = true, Characters = true, Shop = true, Worlds = true, Daily = true, More = true, HitPad = true, HomeBoard = true } -- HomeBoard: TOP SCORES (owner 2026-10-07)
 	local extra = {}
 	for _, d in ipairs(home:GetDescendants()) do
 		if d:IsA("GuiButton") and shown(d) and not allowed[d.Name] then
 			table.insert(extra, d.Name)
 		end
 	end
-	assert(#extra == 0, "home shows only PLAY, the caption, the account pill, PARTY, the bottom row and MORE; also: " .. table.concat(extra, ", "))
+	assert(#extra == 0, "home shows only PLAY, the caption, the account pill, PARTY, TOP SCORES, the bottom row and MORE; also: " .. table.concat(extra, ", "))
 	for _, name in ipairs({ "Play", "HeroCaption", "AccountPill", "PartyButton", "Characters", "Shop", "Worlds", "Daily", "More" }) do
 		local b = home:FindFirstChild(name, true)
 		assert(b and shown(b), "home must show " .. name)

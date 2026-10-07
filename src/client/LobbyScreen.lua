@@ -65,6 +65,7 @@ local MenuParty = require(script.Parent.MenuParty)
 local NoticeDots = require(script.Parent.NoticeDots)
 local MenuPlay = require(script.Parent.MenuPlay)
 local MenuMore = require(script.Parent.MenuMore)
+local HomeBoard = require(script.Parent.HomeBoard)
 -- META screens (docs/features/META.md); each opens only from its PLAY / MORE row, which
 -- shows only while its Config.Features switch is on
 local META_SCREENS = {
@@ -750,6 +751,11 @@ local function buildHome(screen: Frame)
 	buildNav(screen)
 	buildPlay(screen)
 	buildQueue(screen)
+	-- TOP SCORES (HomeBoard): the global High Score board's top rows and your rank; a tap
+	-- opens RANKS on HIGH SCORE
+	ui.Board = HomeBoard.Build(screen, function()
+		LobbyScreen.Show("Ranks", "Score")
+	end)
 end
 
 ------------------------------------------------------------------------------------------
@@ -953,6 +959,22 @@ local function relayout()
 		local qw = math.max(playW, math.min(W * 0.36, 440))
 		place(ui.Queue, playX, capBottom + G, qw, navY - G - (capBottom + G))
 	end
+	-- TOP SCORES: landscape, a slim panel on the right under the account / PARTY row, above
+	-- MORE and the cog; portrait, a strip under the hero caption when the hero keeps room
+	if portrait then
+		local w = math.min(W - 2 * M, 420)
+		local room = playY - capBottom - 12
+		local fits = room >= 58 + 200 -- the hero keeps at least 200 px between strip and PLAY
+		ui.Board.Layout((W - w) / 2, capBottom + 8, w, fits and 58 or 0, true)
+		if fits then
+			heroFrac = ((capBottom + 66 + playY) / 2) / H
+		end
+	else
+		local bw = math.floor(math.clamp(W * 0.21, 170, 300))
+		local by = topY + pillH + G
+		local bottom = H - math.max(M, math.floor(H * 0.03)) - cogS - G
+		ui.Board.Layout(W - rightM - bw, by, bw, bottom - by, false)
+	end
 	-- PLAY lettering scales with the plate (reference: the word fills ~56 % of the width)
 	if ui.PlayBtn.Title then
 		ui.PlayBtn.Title.TextSize = math.floor(math.clamp(playH * 0.6, 34, 92))
@@ -1059,6 +1081,8 @@ local function homeEntrance()
 	UIAnim.Pop(ui.PlayBtn.Instance, STAGGER * 3, 0.8)
 	UIAnim.Pop(ui.Nav, STAGGER * 4, 0.85)
 	UIAnim.Pop(ui.MoreBtn.Instance, STAGGER * 5, 0.85)
+	ui.Board.Pop(STAGGER * 3)
+	ui.Board.Request()
 end
 
 -- Slides to "Home" | "Play" | "More" | "Characters" | "Upgrades" | "Stats" | "Journal" |

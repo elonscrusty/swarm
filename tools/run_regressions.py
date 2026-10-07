@@ -57,6 +57,9 @@ def main():
     checks += [("results-flow", ["case=" + c]) for c in ("auto", "stay", "replay", "portal", "plain")]
     checks += [("leaderboards", ["mismatch=board"])]
     checks += [("leaderboards", ["status=error", "rows=0", "textcheck=on"])]
+    # the home screen's TOP SCORES panel (HomeBoard) and its states on phones
+    checks += [("home-board-regression", [])]
+    checks += [("layout", ["menu", d, "board=" + b]) for d in ("iphone", "phone-portrait") for b in ("empty", "error", "out")]
     checks += [("coop-regression", ["rejoin=" + value]) for value in ("success", "expired", "ended", "forged")]
     checks += [("reconnect-lobby", []), ("reconnect-lobby", ["fail=teleport"]), ("reconnect-lobby", ["fail=expired"])]
     # phone layouts: the scene's GUI export goes through tools/preview/check_layout.py
@@ -79,7 +82,7 @@ def main():
         if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression"):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
-        if scene in ("results-flow", "leaderboards", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression"):
+        if scene in ("results-flow", "leaderboards", "home-board-regression", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression"):
             command.remove("--set")
             command.remove("headless=on")
         if scene == "textfit-regression":
