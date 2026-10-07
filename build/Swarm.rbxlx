@@ -68970,7 +68970,8 @@ local MenuHeroPower = {}
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local P = Theme.Palette
 local HEADING = Font.fromEnum(Enum.Font.GothamBold)
-local TILE = 44
+local TILE = 44 -- tiles are built at this size and scaled to fit the row
+local TILE_MIN, TILE_MAX, GAP = 44, 76, 8
 
 local function wrapped(parent: Instance, style: string, color: Color3, size: number, order: number, name: string): TextLabel
 	return text(parent, style, "", {
@@ -69035,10 +69036,12 @@ function MenuHeroPower.Build(parent: Instance, order: number)
 	local function section(kind: string, label: string, ids: { string }, sOrder: number)
 		text(grid, "Label", label, { FontFace = HEADING, TextColor3 = P.ivory_300, LayoutOrder = sOrder, Size = UDim2.new(1, 0, 0, TS(12) + 4) }, 12)
 		local box = new("Frame", { Name = kind, BackgroundTransparency = 1, LayoutOrder = sOrder + 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, grid)
-		new("UIGridLayout", { CellSize = UDim2.fromOffset(TILE, TILE), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }, box)
+		local layout = new("UIGridLayout", { CellSize = UDim2.fromOffset(TILE, TILE), CellPadding = UDim2.fromOffset(GAP, GAP), SortOrder = Enum.SortOrder.LayoutOrder }, box)
+		local scales: { UIScale } = {}
 		for i, id in ipairs(ids) do
 			local hit = new("TextButton", { Name = id, Text = "", AutoButtonColor = true, BackgroundTransparency = 1, LayoutOrder = i }, box)
-			UIKit.Tile(hit, { Id = id, Size = TILE })
+			local tile = UIKit.Tile(hit, { Id = id, Size = TILE })
+			table.insert(scales, new("UIScale", { Name = "Fit", Scale = 1 }, tile))
 			local stroke = UIKit.stroke(hit, P.gold_300, 2.5, 1)
 			UIKit.corner(hit, math.floor(TILE * 0.2))
 			local mark = text(hit, "Label", "★", { Name = "Mark", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 2, 0, -2), Size = UDim2.fromOffset(16, 16), TextColor3 = P.gold_200, TextStrokeTransparency = 0.3, Visible = false, ZIndex = 5 }, 14)
@@ -69048,6 +69051,27 @@ function MenuHeroPower.Build(parent: Instance, order: number)
 				HeroPresets.Toggle(heroNow, kind, id)
 			end)
 		end
+		-- the icons grow to fill the row (TILE_MIN..TILE_MAX), so phones get big, easy taps
+		-- instead of seven small 44 px tiles
+		local function fit()
+			local first = box:FindFirstChildWhichIsA("TextButton")
+			local cell = layout.CellSize.X.Offset
+			if not first or cell <= 0 or first.AbsoluteSize.X <= 0 then
+				return
+			end
+			local unit = first.AbsoluteSize.X / cell -- screen pixels per layout unit
+			local w = box.AbsoluteSize.X / unit
+			local cols = math.max(4, math.ceil((w + GAP) / (TILE_MAX + GAP)))
+			local size = math.clamp(math.floor((w - GAP * (cols - 1)) / cols), TILE_MIN, TILE_MAX)
+			if size ~= cell then
+				layout.CellSize = UDim2.fromOffset(size, size)
+				for _, sc in ipairs(scales) do
+					sc.Scale = size / TILE
+				end
+			end
+		end
+		box:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+		task.defer(fit)
 	end
 	-- The tiles (every weapon and passive, ~600 instances) are built the first time the
 	-- grid opens, not with the screen: most players never open it, and a hidden grid still
