@@ -348,12 +348,18 @@ local function trySend(player: Player, data: { [string]: any }): boolean
 end
 
 -- RunManager (saveRunStats, after the DEV-taint return): a clean run was finished.
-function InviteRewards.OnRunCommitted(player: Player, data: { [string]: any }?)
+-- info = { Seconds, Won }: a run only counts when it was won or lasted MinRunSeconds, so
+-- joining and leaving at once doesn't credit the inviter.
+function InviteRewards.OnRunCommitted(player: Player, data: { [string]: any }?, info: { Seconds: number?, Won: boolean? }?)
 	if not InviteRewards.On() or not data then
 		return
 	end
 	local inv = invite(data)
 	if not inv.New or inv.ReferredBy <= 0 or inv.Sent then
+		return
+	end
+	local minSeconds = tonumber((Config.Invite :: any).MinRunSeconds) or 0
+	if info and info.Won ~= true and (tonumber(info.Seconds) or 0) < minSeconds then
 		return
 	end
 	inv.Runs += 1

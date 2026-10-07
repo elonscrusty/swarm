@@ -172,8 +172,12 @@ function GroupBonus.Start()
 		check(player)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
-		members[player] = nil
-		asking[player] = nil
+		-- deferred: a leaver's run settles in a later PlayerRemoving handler (RunManager)
+		-- and must still see the cached membership
+		task.defer(function()
+			members[player] = nil
+			asking[player] = nil
+		end)
 	end)
 end
 

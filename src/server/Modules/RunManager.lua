@@ -1345,7 +1345,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	end
 	-- invite rewards (InviteRewards.lua): a referred new player finished a clean run
 	if ctx.InviteRewards then
-		ctx.InviteRewards.OnRunCommitted(rp.Player, data)
+		ctx.InviteRewards.OnRunCommitted(rp.Player, data, { Seconds = t, Won = won })
 	end
 	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Mastery = masteryInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0,
 		-- beat the saved personal best score of this board (not on the first scored run)

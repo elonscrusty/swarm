@@ -45,6 +45,8 @@ None to switch it on.
   otherwise on their next join.
 
 ## PASS / BLOCKED
+- A run counts only when it was won or lasted `Config.Invite.MinRunSeconds` (120 s), so
+  joining and leaving at once never credits the inviter.
 - Offline: `invite-regression` (run without `--studio`).
   - New saves only, the referral is read once, the Friend Badge, no self-referral.
   - No credit before a finished run, then one credit.

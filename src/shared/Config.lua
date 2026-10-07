@@ -1168,6 +1168,7 @@ Config.Invite = {
 	Trail = "Trail_Recruiter", -- the inviter's trail at TrailAt credited friends
 	TrailAt = 3,
 	RunsNeeded = 1, -- the new player must finish this many runs before the inviter is credited
+	MinRunSeconds = 120, -- a run counts toward RunsNeeded when won or at least this long
 	MaxCredits = 200, -- credited friends kept in the inviter's save (the set is capped)
 	StoreName = "SwarmInvites", -- pending credits, keyed by the inviter (Studio: StoreName .. "_Studio")
 	PollSeconds = 300, -- an online inviter's pending credits are checked this often
