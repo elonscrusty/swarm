@@ -233,7 +233,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		Title = "PLAY DAILY",
 		TitleStyle = "Label",
 		TitleSize = 18,
-		Subtitle = "Scored attempt · your 1 try today",
+		Subtitle = "Scored · 1 try today",
 		Icon = "play",
 		IconSize = 26,
 		Align = "Center",
@@ -359,7 +359,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		end
 		ui.Sub.Text = string.format("1. Play solo on today's shared route.\n2. Clear %d stages; more clears rank higher.\n3. Ties: faster last boss kill wins. No clears? Longer survival wins.", Config.Stages.WinMinStages)
 		ui.Play.SetKind(used and "Secondary" or "Primary")
-		ui.Play.SetText(used and "PRACTICE RUN" or "PLAY DAILY", used and "No leaderboard score" or "Scored attempt · your 1 try today")
+		ui.Play.SetText(used and "PRACTICE RUN" or "PLAY DAILY", used and "No leaderboard score" or "Scored · 1 try today")
 		if shownDay ~= day then
 			shownDay = day
 			buildDay(d)
