@@ -113,7 +113,8 @@ def main():
             # features batch too, so this is Lune time, not game cost); with three workers in
             # parallel they pass 360 s, so they get 600 s.
             limit = 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim") else (
-                600 if scene in ("menu", "ui", "run-intro", "events-fx", "loot-focus-regression", "perf-regression", "results-flow") else 360)
+                600 if scene in ("menu", "ui", "run-intro", "events-fx", "loot-focus-regression", "perf-regression", "results-flow")
+                or (scene == "layout" and settings[0] == "smart-tutorial-regression") else 360)
             result = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=limit)
             output = result.stdout + result.stderr
             if scene == "layout" and result.returncode == 0:

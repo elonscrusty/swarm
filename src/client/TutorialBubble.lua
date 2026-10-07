@@ -37,6 +37,7 @@ local ICON = 34
 local PAD = 12
 local TAIL = 16
 local MAX_W = 440
+local PORTRAIT_LIFT = 270 -- portrait: bottom edge this far above the screen bottom (JUMP button row)
 local POINTER_MAX = 90 -- longest pointer line (virtual px)
 
 local kit: { [string]: any } = {}
@@ -126,7 +127,8 @@ local function textWidth(text: string): number
 	return 300
 end
 
--- Places the bubble: bottom centre, just above the ability tray. Returns its rect.
+-- Places the bubble: bottom centre, just above the ability tray (portrait: the lower
+-- screen, clear of the tray at the top). Returns its rect.
 local function place(): (number, number, number, number)
 	local v: Vector2 = kit.VirtualSize()
 	local W, H = v.X, v.Y
@@ -136,8 +138,17 @@ local function place(): (number, number, number, number)
 	local w = math.clamp(textWidth(text) * 1.3 + inner + 2 * PAD + 8, 220, math.min(MAX_W, W - 32))
 	local n = lines(text, (w - inner - 2 * PAD) / 1.25)
 	local h = math.max(ICON + 16, n * (TS(BODY_SIZE) + 4) * 1.25 + 16)
-	local bottom = math.min(H - 8, Hud.BarTop() - 14 - TAIL / 2)
-	bottom = math.max(bottom, math.min(H - 8, Hud.TopBottom() + 8 + h))
+	local bottom
+	if H > W then
+		-- portrait: the ability tray hangs under the top cluster, so "above the tray" would
+		-- be on top of the panels. Sit in the free lower part instead, above the JUMP button
+		-- and clear of the tray (and the minimap / BUILD panel that hang under it).
+		bottom = math.max(H - PORTRAIT_LIFT, Hud.BarBottom() + 60 + h)
+		bottom = math.min(H - 8, bottom)
+	else
+		bottom = math.min(H - 8, Hud.BarTop() - 14 - TAIL / 2)
+		bottom = math.max(bottom, math.min(H - 8, Hud.TopBottom() + 8 + h))
+	end
 	ui.Card.Size = UDim2.fromOffset(math.floor(w), math.floor(h))
 	ui.Card.Position = UDim2.fromOffset(math.floor(W / 2), math.floor(bottom))
 	return W / 2 - w / 2, bottom - h, w, h

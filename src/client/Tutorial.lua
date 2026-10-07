@@ -72,6 +72,7 @@ local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
 local InputPrompts = require(script.Parent.InputPrompts)
 local TutorialBubble = require(script.Parent.TutorialBubble)
+local FeatureHud = require(script.Parent.FeatureHud)
 local StageUI = require(script.Parent.StageUI)
 local WalkthroughClient = require(script.Parent.WalkthroughClient)
 
@@ -954,6 +955,8 @@ function Tutorial.Update(dt: number, state: Configuration, inRun: boolean, block
 	if not ui.Card then
 		return
 	end
+	-- the open quick-ping wheel covers the middle of the screen: tips wait behind it
+	blocked = blocked or FeatureHud.PingWheelOpen()
 	local now = os.clock()
 	-- the interactive first-run walkthrough (WalkthroughClient, Config.Features.Walkthrough)
 	-- owns the bubble while it runs; the tips it replaces never show
