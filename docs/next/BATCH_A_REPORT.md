@@ -30,8 +30,9 @@ smart-tutorial layout runs get the 600 s limit.
 
 ## Results
 - `bash tools/check.sh`: TYPECHECK ok, COMPILE ok, BUILD ok.
-- Full `tools/run_regressions.py`: see the final count in the commit message for this file.
-  The checks that failed in the full run were fixed and rerun on their own.
+- Full `tools/run_regressions.py`: 201/203 on the final round; the 2 fails (menu-phone,
+  menu-phone-portrait: the test didn't know the new Quests chip) were fixed and pass on rerun.
+  So 203/203 offline.
 
 ## Per item
 | # | Item | Offline | Blocked on |
@@ -39,8 +40,8 @@ smart-tutorial layout runs get the 600 s limit.
 | 1 | SmartTutorial | PASS | Studio / phone playtest |
 | 2 | DangerArrows | PASS | phone playtest |
 | 6 | FastStart | PASS (econ-sim numbers in FAST_START.md) | feel on a phone |
-| 11 | DailyQuests | PASS | owner OK on gold 300 / 300 / 600 |
-| 12 | ComebackGift | PASS | owner OK on gold 500 / 1,000; real days away |
+| 11 | DailyQuests | PASS | gold 300 / 300 / 600 owner OK; real run pacing |
+| 12 | ComebackGift | PASS | gold 500 / 1,000 owner OK; real days away |
 | 15 | InviteRewards | PASS (mocked) | real invites need the live game |
 | 17 | GroupBonus | PASS (mocked) | owner's group id (`Config.Group.Id` is 0 = off) |
 | 18 | StarterBundle | PASS (mocked purchase) | owner creates the product (Id 0 = hidden), OK on the Pioneer skin |
@@ -48,6 +49,7 @@ smart-tutorial layout runs get the 600 s limit.
 | - | Walkthrough | PASS | phone playtest |
 
 ## Owner decisions still needed
-- Gold for daily quests (300 / 300 / 600) and the comeback gift (500 / 1,000).
+- Gold for daily quests (300 / 300 / 600) and the comeback gift (500 / 1,000): owner OK 2026-10-07.
+- The bonus looks (Questor plate/trail, Homecoming trail) and the small gold fallbacks.
 - The Roblox group id for the group bonus.
 - Is the Pioneer Knight skin OK for the Starter Bundle; create its product and set the price.

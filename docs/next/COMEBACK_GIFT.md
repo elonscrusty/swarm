@@ -25,7 +25,8 @@ Pending = { Days, Gold, Look? } | nil }`. With the switch off neither field is w
 - `Config.Features.ComebackGift = true`
 - `Config.Comeback`: `AwayDays = 3`, `LongDays = 7`, `CooldownHours = 72`, `MinRuns = 1`,
   `SeenEvery = 60`, `Rate = 2`
-- PROPOSED, awaiting owner approval: `Gold = 500` (3-6 days), `LongGold = 1000` (7+ days),
+- Owner OK (2026-10-07): `Gold = 500` (3-6 days), `LongGold = 1000` (7+ days).
+- PROPOSED, awaiting owner approval:
   `LongCosmetic = "Trail_Homecoming"`, `CosmeticOwnedGold = 250`
 
 ## Owner steps
