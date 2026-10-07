@@ -33,14 +33,15 @@ Pending = { Days, Gold, Look? } | nil }`. With the switch off neither field is w
 2. Studio: the gift needs a save last seen 3+ days ago; test with a copy of a save or wait.
 
 ## Regression
-`tools/preview/scenes/comeback-regression.luau` (registered as `comeback-regression` with
-`headless=off`, the card test needs the client UI):
+`tools/preview/scenes/comeback-regression.luau` (server logic, headless, ~50 s):
 
-    python3 tools/run_regressions.py --only comeback-regression-headless-off
+    python3 tools/run_regressions.py --only comeback-regression,layout-meta-iphone-screen-Comeback
 
 Checks: switch off; new accounts (no LastSeen, no runs) never; 2 days nothing, 3 days the
 short gift; claim refused in a run, paid once; 72 h cooldown; 7+ days gold + look; a waiting
-gift is not replaced; owned look pays gold; LastSeen refreshed while online; the card opens by
-itself and its CLAIM pays. Layout: `layout-meta-iphone-screen-Comeback` (and phone-portrait, pc).
+gift is not replaced; owned look pays gold; LastSeen refreshed while online. The card opening
+by itself from home is checked in the client scene `meta` (screen=Comeback, a PASS/FAIL line
+in the `layout-meta-*-screen-Comeback` checks for iphone, phone-portrait and pc); a full
+client inside the server scene costs ~40 s real per simulated second.
 
 Expect: PASS offline. BLOCKED until Studio / live: real absence across days, DataStore saves.

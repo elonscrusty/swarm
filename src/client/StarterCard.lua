@@ -134,11 +134,25 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 		end,
 	})
 	btn.Instance.Visible = false
+	-- the subtitle shrinks instead of cutting (narrow card next to TOP SCORES, Largest text)
+	local sub = btn.Subtitle
+	if sub and sub:IsA("TextLabel") then
+		local max = sub.TextSize
+		sub.TextScaled = true
+		sub:SetAttribute("NoTextFit", true)
+		local fit = Instance.new("UITextSizeConstraint")
+		fit.Name = "Fit"
+		fit.MaxTextSize = max
+		fit.MinTextSize = math.min(max, 9)
+		fit.Parent = sub
+	end
 	local api = {}
 	local function subText(): string
 		local c = (Config :: any).StarterBundle or {}
 		-- short on purpose: the card is narrow on phones (the time left shows on its screen)
-		return string.format("Skin + %s gold", UIKit.formatNumber(tonumber(c.Gold) or 0))
+		local gold = tonumber(c.Gold) or 0
+		local amount = gold >= 1000 and (string.format("%g", math.floor(gold / 100) / 10) .. "k") or tostring(gold)
+		return "Skin + " .. amount .. " gold"
 	end
 	function api.Wanted(): boolean
 		return StarterCard.Offered()
