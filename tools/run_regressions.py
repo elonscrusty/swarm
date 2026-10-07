@@ -14,6 +14,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lune", default=str(repo.parent / "toolchain/lune" / ("lune.exe" if os.name == "nt" else "lune")))
     parser.add_argument("--out", type=Path, default=repo.parent / "verification")
+    parser.add_argument("--only", default="", help="comma-separated check names (as printed) to rerun just those")
+    parser.add_argument("--workers", type=int, default=3)
     args = parser.parse_args()
     args.out = args.out.resolve()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -123,7 +125,14 @@ def main():
         print(("PASS " if passed else "FAIL ") + name, flush=True)
         return {"name": name, "passed": passed, "exit": code}
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+    if args.only:
+        wanted = set(n.strip() for n in args.only.split(",") if n.strip())
+
+        def check_name(check):
+            scene, settings = check
+            return scene + ("-" + "-".join(settings).replace("=", "-") if settings else "")
+        checks = [c for c in checks if check_name(c) in wanted]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
         results = list(pool.map(run, checks))
     (args.out / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
     print(f"{sum(item['passed'] for item in results)}/{len(results)} checks passed; evidence: {args.out}")
