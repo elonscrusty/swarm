@@ -223,7 +223,8 @@ function GoldSystem.OnKill(rp, pos: Vector3?, chanceMult: number?)
 		chance = ctx.WorldEvents.GoldChance(chance) -- a GOLD RUSH map event (capped)
 	end
 	if rng:NextNumber() < chance then
-		local paid = GoldSystem.AddRunGold(rp, rng:NextInteger(Config.Gold.MinPerKill, Config.Gold.MaxPerKill) * (rp.Stats and rp.Stats.GoldMult or 1))
+		local mod = ctx.RunModifiers and ctx.RunModifiers.StageMod and ctx.RunModifiers.StageMod("KillGold") or 1 -- stage modifier Bounty
+		local paid = GoldSystem.AddRunGold(rp, rng:NextInteger(Config.Gold.MinPerKill, Config.Gold.MaxPerKill) * (rp.Stats and rp.Stats.GoldMult or 1) * mod)
 		if paid > 0 and pos then
 			Fx.Gold(pos, paid, rp.Player.UserId)
 		end

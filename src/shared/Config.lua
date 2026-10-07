@@ -158,6 +158,36 @@ Config.Endless = {
 	MaxExtraStages = 30, -- growth stops this many stages past LastNormalStage (stage 35)
 }
 
+-- Stage modifiers (batch B, switch Config.Features.StageModifiers; docs/next/STAGE_MODIFIERS.md).
+-- From FromStage on, every stage rolls ONE trade-off from Pool, deterministic from the run
+-- seed (RunModifiers: the Daily / Weekly seed, else a random seed per run; StageModifierData.Roll),
+-- never the same one two stages in a row (NoRepeat). Effects are multipliers on existing hooks
+-- (1 = none):
+--   EnemySpeed, EnemyHP (not bosses), EnemyDamage (every enemy hit), SpawnMult (live enemies),
+--   EliteChance (elite odds; > 1 also adds one elite per elite wave, like Elite Surge),
+--   XP (gem XP), Gold (the in-run gold stat), KillGold (normal kill gold), SmallChests (the
+--   number of small paid chests placed), Might / DamageTaken / Speed / CooldownMult (the
+--   hero's stat sheet), ChestRolls (extra level-up rolls in an elite's chest, a count).
+-- Caps: when a curse has the same effect, curse x modifier never goes past the cap (a curse
+-- alone above the cap keeps its own value). Numbers are proposals awaiting owner approval.
+Config.StageModifiers = {
+	FromStage = 2,
+	NoRepeat = true,
+	CardSeconds = 1.6, -- extra seconds the stage card stays up when it names a modifier (UI timing)
+	Caps = { EnemySpeed = 1.35, SpawnMult = 1.5, Might = 1.45, DamageTaken = 1.45, EliteChance = 3 },
+	Order = { "SwiftFoes", "ThickHides", "GlassArena", "GemRain", "EliteNight", "Calm", "Bounty", "Haste" },
+	Pool = {
+		SwiftFoes = { Name = "Swift Foes", Weight = 1, EnemySpeed = 1.12, XP = 1.2 },
+		ThickHides = { Name = "Thick Hides", Weight = 1, EnemyHP = 1.08, Gold = 1.12 },
+		GlassArena = { Name = "Glass Arena", Weight = 1, Might = 1.2, DamageTaken = 1.2 },
+		GemRain = { Name = "Gem Rain", Weight = 1, XP = 1.3, SmallChests = 0.6 },
+		EliteNight = { Name = "Elite Night", Weight = 1, EliteChance = 2, ChestRolls = 1 },
+		Calm = { Name = "Calm", Weight = 1, SpawnMult = 0.85, XP = 0.85 },
+		Bounty = { Name = "Bounty", Weight = 1, KillGold = 1.4, EnemyDamage = 1.05 },
+		Haste = { Name = "Haste", Weight = 1, Speed = 1.1, CooldownMult = 1.05 },
+	},
+}
+
 ------------------------------------------------------------------------------------------
 -- DEV TOOLS (Studio and the game's creator only; the server re-checks every request)
 ------------------------------------------------------------------------------------------
@@ -198,6 +228,20 @@ Config.Player = {
 	-- Movement sanity check: the server snaps players back if they move faster than their
 	-- speed * Movement.HopSpeedCap * Movement.ServerTolerance (plus a small allowance for lag).
 	SpeedCheckAllowance = 6,
+}
+
+-- Final Stand (batch B, switch Config.Features.FinalStand; docs/next/FINAL_STAND.md; server
+-- FinalStand.lua). The first time in a stage a living hero's HP drops below HPShare of max HP,
+-- they get Speed / Damage more for Seconds (StatSheet temporary multipliers, rp.TempMods).
+-- Not while choosing / protected, nor within ReviveGrace s of a revive. No healing; it never
+-- blocks lethal damage. Once per stage per player. Proposals awaiting owner approval.
+Config.FinalStand = {
+	HPShare = 0.10,
+	Seconds = 5,
+	Speed = 0.30, -- +30% move speed
+	Damage = 0.40, -- +40% damage dealt
+	ReviveGrace = 2,
+	Sound = "Evolve", -- an existing Config.Sounds entry, played once on the hero's client
 }
 
 -- Inventory slot limits (weapons and passives are separate).

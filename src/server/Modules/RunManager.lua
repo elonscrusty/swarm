@@ -685,6 +685,7 @@ local function revive(rp, message: string)
 	setDownedLook(rp, false)
 	setHP(rp, rp.Stats.MaxHP * Config.Player.ReviveHPFraction)
 	rp.InvulnUntil = runTime + Config.Player.ReviveInvulnSeconds
+	rp.RevivedAt = runTime -- Final Stand's revive grace (FinalStand.lua)
 	rp.Player:SetAttribute("Alive", true)
 	if rp.Root then
 		ctx.EnemySpawner.KillInRadius(rp.Root.Position, Config.Player.ReviveClearRadius, rp)
@@ -906,6 +907,7 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?, kind: strin
 		onDowned(rp)
 		return
 	end
+	if ctx.FinalStand then ctx.FinalStand.OnHurt(rp) end -- under 10% HP: Final Stand (once per stage)
 	ctx.ItemSystem.OnHurt(rp, amount, taken) -- Barbed Mail
 end
 

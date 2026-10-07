@@ -101,6 +101,7 @@ end
 -- the team-size share, see CoopShare, and by the pacing multiplier, see PaceMult).
 function XPSystem.GiveSharedXP(amount: number)
 	amount *= XPSystem.CoopShare() * XPSystem.PaceMult()
+	amount *= ctx.RunModifiers and ctx.RunModifiers.StageMod and ctx.RunModifiers.StageMod("XP") or 1 -- stage modifier (1 = none)
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Alive then
 			XPSystem.GiveXP(rp, amount * rp.Stats.Growth)

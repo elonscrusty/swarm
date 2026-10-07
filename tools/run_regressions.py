@@ -83,6 +83,8 @@ def main():
     # batch B group A: AffixIcons, DamageNumberOptions
     # batch B group B: EvolutionPreview, Banish
     # batch B group C: FinalStand, StageModifiers
+    checks += [("final-stand-regression", []), ("stage-modifiers-regression", [])]  # FinalStand / StageModifiers server logic (PASS/FAIL lines; docs/next/FINAL_STAND.md, STAGE_MODIFIERS.md)
+    checks += [("layout", ["final-stand-fx", d]) for d in ("iphone", "phone-portrait")] + [("layout", ["stage-modifiers-ui", d]) for d in ("iphone", "phone-portrait", "pc")]  # aura + headline, stage card line + HUD badge
     # batch B group D: PartyQuickLines, ReviveThanks
     # batch B group E: Prestige, QuickResume
 
