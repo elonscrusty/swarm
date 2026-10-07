@@ -81,6 +81,8 @@ def main():
     checks += [("walkthrough-regression", [])]  # Walkthrough: interactive first-run steps, holds, exactly-once chest, timeouts (PASS/FAIL lines)
     # batch B (docs/PROMPT_BATCH_B.md, docs/next/); one block per group
     # batch B group A: AffixIcons, DamageNumberOptions
+    checks += [("affix-sight-regression", []), ("damage-settings-regression", [])]  # AffixIcons first-sight notice + SeenAffixes (real server); DamageNumberOptions settings path (real server)
+    checks += [("layout", [scene, d]) for scene in ("affix-icons-regression", "damage-numbers-regression") for d in ("iphone", "phone-portrait", "pc")]  # AffixIcons badges (logic + layout), DamageNumberOptions rules, counts and Settings rows (logic + layout)
     # batch B group B: EvolutionPreview, Banish
     # batch B group C: FinalStand, StageModifiers
     # batch B group D: PartyQuickLines, ReviveThanks

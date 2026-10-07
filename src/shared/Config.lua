@@ -634,6 +634,22 @@ Config.Enemies = {
 	ParkPosition = Vector3.new(0, -150, 0),
 }
 
+-- Elite affix icons (Config.Features.AffixIcons; client AffixIcons.lua, server AffixSight.lua,
+-- shared AffixIconData.lua; docs/next/AFFIX_ICONS.md). A small badge over every elite shows
+-- its affix (Swift: blue speed lines in a circle, Shielded: silver shield, Burning: orange
+-- flame; the shape differs as well as the colour). SeenAffixes in the save remembers which
+-- first-sight notices a player already got.
+Config.AffixIcons = {
+	Size = 20, -- badge size in pixels (18-22 on phones); far below an enemy health bar (64 px)
+	Lift = 6.2, -- studs above the elite's body centre is half its height plus this
+	UpdateHz = 8, -- client scan rate for new / dead elites
+	PulseSeconds = 0.6, -- one half-beat of the soft pulse (none with Reduced effects)
+	PulseScale = 1.12,
+	MaxDistance = 200, -- the badge is not drawn farther than this many studs from the camera
+	SightRange = 60, -- server: an elite this close (studs) to a player counts as met
+	SightEvery = 0.5, -- server: seconds between the first-sight checks
+}
+
 ------------------------------------------------------------------------------------------
 -- DIFFICULTY SCALING (tier = floor(minutes))
 ------------------------------------------------------------------------------------------
@@ -1325,8 +1341,10 @@ Config.Audio = {
 Config.Settings = {
 	Defaults = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = true, Minimap = true,
 		Colorblind = "Off", ReduceFlashes = false, CombatVolume = 1, InterfaceVolume = 1, WarningVolume = 1,
-		MuteAll = false, VisualAudioCues = false, TouchLayout = "RightHanded" },
+		MuteAll = false, VisualAudioCues = false, TouchLayout = "RightHanded",
+		DamageNumberSize = "Normal", CombineNumbers = true }, -- last two: DamageNumberOptions
 	Enums = {
+		DamageNumberSize = { "Small", "Normal", "Big" },
 		Colorblind = { "Off", "Protanopia", "Deuteranopia", "Tritanopia" },
 		TouchLayout = { "RightHanded", "LeftHanded", "Compact" },
 	},
@@ -1539,6 +1557,22 @@ Config.DamageNumbers = {
 	MaxNewPerFrame = 3,
 	MergeSeconds = 0.5,
 	LifeSeconds = 0.9,
+}
+
+-- Damage number options (Config.Features.DamageNumberOptions; shared DamageNumberView.lua,
+-- client DamageText.lua + DamageOptionsUI.lua; docs/next/DAMAGE_NUMBERS.md). Settings:
+-- DamageNumbers (the old on / off switch = "Off" vs the three sizes), DamageNumberSize
+-- (Small / Normal / Big; Normal is the look above) and CombineNumbers (hits on one enemy
+-- within CombineSeconds merge into one rising number; off = every server batch gets its own).
+Config.DamageNumberOptions = {
+	Order = { "Off", "Small", "Normal", "Big" },
+	Sizes = { -- text size in pixels: plain hit, critical hit
+		Small = { Hit = 14, Crit = 18 },
+		Normal = { Hit = 18, Crit = 22 },
+		Big = { Hit = 24, Crit = 30 },
+	},
+	CombineSeconds = 0.3,
+	CritMark = "★", -- crits start with a star, are bold and gold (never colour alone)
 }
 
 ------------------------------------------------------------------------------------------

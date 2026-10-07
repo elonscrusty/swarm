@@ -3562,9 +3562,14 @@ local function buildPause()
 	pause.Reduced = UIKit.Toggle(colB, "Reduced effects", "sparkle", "Fewer particles and trails. No screen flashes.", ClientSettings.Get("ReducedEffects") == true, function(on)
 		ClientSettings.Set("ReducedEffects", on)
 	end, { LayoutOrder = 2 })
-	pause.Numbers = UIKit.Toggle(colB, "Damage numbers", "sword", "Totals over enemies, kept short in big fights.", ClientSettings.Get("DamageNumbers") == true, function(on)
-		ClientSettings.Set("DamageNumbers", on)
-	end, { LayoutOrder = 3 })
+	if Config.FeatureOn("DamageNumberOptions") then
+		-- Off / Small / Normal / Big + Combine numbers (DamageOptionsUI, docs/next/DAMAGE_NUMBERS.md)
+		pause.DamageRows = require(script.Parent.DamageOptionsUI).Build(colB, 3, 9)
+	else
+		pause.Numbers = UIKit.Toggle(colB, "Damage numbers", "sword", "Totals over enemies, kept short in big fights.", ClientSettings.Get("DamageNumbers") == true, function(on)
+			ClientSettings.Set("DamageNumbers", on)
+		end, { LayoutOrder = 3 })
+	end
 	pause.Tips = UIKit.Toggle(colB, "Show tips", "info", "Short hints while you play.", ClientSettings.Get("Tips") ~= false, function(on)
 		ClientSettings.Set("Tips", on)
 	end, { LayoutOrder = 4 })
@@ -3704,7 +3709,11 @@ local function syncOptions()
 	pause.Sfx.Set(ClientSettings.Get("Sfx"))
 	pause.Shake.Set(ClientSettings.Get("Shake"))
 	pause.Reduced.Set(ClientSettings.Get("ReducedEffects") == true)
-	pause.Numbers.Set(ClientSettings.Get("DamageNumbers") == true)
+	if pause.DamageRows then
+		pause.DamageRows.Sync()
+	else
+		pause.Numbers.Set(ClientSettings.Get("DamageNumbers") == true)
+	end
 	pause.Tips.Set(ClientSettings.Get("Tips") ~= false)
 	pause.Minimap.Set(ClientSettings.Get("Minimap") ~= false)
 	pause.Flashes.Set(ClientSettings.Get("ReduceFlashes") == true)
