@@ -59,6 +59,7 @@ Remotes.ClientToServer = {
 	"LevelUpChoose", -- (index)
 	"LevelUpReroll",
 	"LevelUpSkip",
+	"LevelUpBanish", -- (index, offerId) Banish: that NEW card's weapon / passive leaves the offers this run (docs/next/BANISH.md)
 	"JoinRun", -- join during the lobby countdown
 	"StartRun", -- (mode) lobby SOLO / DUO / TRIO button, or "Daily" (the DAILY card); during a countdown it joins
 	"StartFirstRun", -- a brand-new player's lobby asks for the automatic first Solo run (RunManager decides)

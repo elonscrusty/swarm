@@ -84,6 +84,8 @@ def main():
     checks += [("affix-sight-regression", []), ("damage-settings-regression", [])]  # AffixIcons first-sight notice + SeenAffixes (real server); DamageNumberOptions settings path (real server)
     checks += [("layout", [scene, d]) for scene in ("affix-icons-regression", "damage-numbers-regression") for d in ("iphone", "phone-portrait", "pc")]  # AffixIcons badges (logic + layout), DamageNumberOptions rules, counts and Settings rows (logic + layout)
     # batch B group B: EvolutionPreview, Banish
+    checks += [("evolution-preview-regression", [])] + [("layout", ["evolution-panel-regression", d]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "evo=on"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["hud-build", d]) for d in ("iphone", "phone-portrait", "pc")]  # EvolutionPreview (docs/next/EVOLUTION_PREVIEW.md)
+    checks += [("banish-regression", [])] + [("layout", ["levelup", d, "banish=3"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "banish=2", "banishmode=on", "evo=on"]) for d in ("iphone", "phone-portrait", "pc")]  # Banish (docs/next/BANISH.md)
     # batch B group C: FinalStand, StageModifiers
     # batch B group D: PartyQuickLines, ReviveThanks
     checks += [("party-quick-lines-regression", ["headless=off"])]  # PartyQuickLines: party-only delivery, validation, 1/2 s + 10/min limits, bubble fades (PASS/FAIL lines; needs the full client)

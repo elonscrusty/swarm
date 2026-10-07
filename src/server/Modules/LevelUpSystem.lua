@@ -22,6 +22,13 @@
 	owned or seen them; otherwise the clue says "???". Every card also carries Summary:
 	one short line of what it gives now ("+10 damage, +1 arrow").
 	Only the card index comes from the client; the server owns the card list.
+
+	Batch B: EvolutionPreview (docs/next/EVOLUTION_PREVIEW.md) puts the evolution recipe with
+	live progress on every weapon card that has an evolution and "Needed for <evolution>" on
+	the partner passive's card (fields Hint / HintReady / EvoIcon / EvoName). Banish
+	(docs/next/BANISH.md): remote LevelUpBanish (index, offerId) removes a NEW card's weapon /
+	passive from the pool for the rest of the run (rp.Banished, rp.BanishesLeft from
+	Config.LevelUp.Banishes) and re-rolls only that slot; owned things can never be banished.
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -30,6 +37,7 @@ local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponDat
 local PassiveData = require(game:GetService("ReplicatedStorage").Shared.PassiveData)
 local StatSheet = require(game:GetService("ReplicatedStorage").Shared.StatSheet)
 local SynergyData = require(game:GetService("ReplicatedStorage").Shared.SynergyData)
+local EvolutionPreview = require(game:GetService("ReplicatedStorage").Shared.EvolutionPreview)
 local Fx = require(script.Parent.Fx)
 
 local LevelUpSystem = {}
@@ -253,6 +261,23 @@ local function card(kind: string, id: string, level: number, weight: number)
 	return { Type = kind, Id = id, Level = level, Weight = weight }
 end
 
+-- Banish (Config.Features.Banish, docs/next/BANISH.md): banishes left this run (lazily set
+-- from Config.LevelUp.Banishes: a run player is new every run) and the banished ids.
+local function banishesLeft(rp): number
+	if rp.BanishesLeft == nil then
+		rp.BanishesLeft = math.max(0, math.floor(tonumber(Config.LevelUp.Banishes) or 0))
+	end
+	return rp.BanishesLeft
+end
+
+local function isBanished(rp, kind: string, id: string): boolean
+	local b = rp.Banished
+	return b ~= nil and b[kind .. ":" .. id] == true and Config.FeatureOn("Banish")
+end
+
+-- Only NEW cards can be banished (a card for something the player owns never can).
+local BANISHABLE = { WeaponNew = "Weapon", PassiveNew = "Passive" }
+
 
 -- Sheet stat → the weapon stat it feeds (a passive changing only stats no owned weapon
 -- uses does nothing for this build). Player stats (HP, armor, speed ...) always count.
@@ -334,7 +359,7 @@ local function buildPool(rp)
 	if #rp.WeaponOrder < Config.Slots.Weapons then
 		local unowned = 0
 		for _, id in ipairs(WeaponData.Order) do
-			if not rp.Weapons[id] then
+			if not rp.Weapons[id] and not isBanished(rp, "Weapon", id) then
 				unowned += 1
 			end
 		end
@@ -342,7 +367,7 @@ local function buildPool(rp)
 		-- don't crowd out upgrades
 		local share = newShare(rp, L.NewWeaponPoolRef, unowned)
 		for _, id in ipairs(WeaponData.Order) do
-			if not rp.Weapons[id] then
+			if not rp.Weapons[id] and not isBanished(rp, "Weapon", id) then
 				table.insert(pool, card("WeaponNew", id, 1, L.WeightNewWeapon * luck * share))
 			end
 		end
@@ -359,7 +384,7 @@ local function buildPool(rp)
 		-- the useful new passives share one weight bucket, like new weapons (newShare)
 		local fresh = {}
 		for _, id in ipairs(PassiveData.Order) do
-			if not rp.Passives[id] then
+			if not rp.Passives[id] and not isBanished(rp, "Passive", id) then
 				local _, useful = passiveLines(rp, id, 1)
 				if useful then
 					table.insert(fresh, id)
@@ -389,6 +414,18 @@ end
 -- Weapon card hint about its evolution, once the weapon is close (EvolveHintLevel+).
 local function evolveHint(rp, c, def)
 	local evo = def.Evolution
+	if evo and EvolutionPreview.On() then
+		-- EvolutionPreview: the recipe on every such weapon card, with live progress
+		-- ("Bloodblade: Sword Lv 12 + Heart Lv 3 (you: Heart 1)") and the evolved icon
+		local s = EvolutionPreview.Status(c.Id, c.Level, rp.Passives[evo.Passive] or 0)
+		if s then
+			c.Hint = EvolutionPreview.WeaponLine(s)
+			c.HintReady = s.Ready
+			c.EvoIcon = s.EvoId
+			c.EvoName = s.Name
+			return
+		end
+	end
 	if not evo or c.Level < Config.LevelUp.EvolveHintLevel then
 		return
 	end
@@ -487,6 +524,15 @@ local function decorate(rp, c)
 		for _, id in ipairs(rp.WeaponOrder) do
 			local wdef = WeaponData.Weapons[id]
 			if not rp.Weapons[id].Evolved and wdef.Evolution and wdef.Evolution.Passive == c.Id then
+				local s = EvolutionPreview.On() and EvolutionPreview.Status(id, rp.Weapons[id].Level, c.Level) or nil
+				if s then
+					-- EvolutionPreview: "Needed for Bloodblade (Heart Lv 3)"
+					c.Hint = EvolutionPreview.PassiveLine(s)
+					c.HintReady = s.Ready
+					c.EvoIcon = s.EvoId
+					c.EvoName = s.Name
+					break
+				end
 				local needed = math.min(3, PassiveData.MaxLevelOf(c.Id))
 				-- the weapon is owned (discovered); its evolution is named once reached before
 				local into = known(rp, "Evolutions", id) and (" into " .. wdef.Evolution.Name) or ""
@@ -704,6 +750,75 @@ local function useBonus(rp)
 	end
 end
 
+--[[
+	Banish (docs/next/BANISH.md): after a banish only slot `index` of the open set changes. A
+	weighted draw from the pool (the banished id is already out of it) that skips what the
+	other slots show; when nothing is left, the existing bonus cards: Roast Chicken while
+	hurt, else the Gold Pouch.
+]]
+local function rerollSlot(rp, index: number)
+	local offer = rp.Offer
+	local old = offer[index]
+	local taken = {}
+	for i, c in ipairs(offer) do
+		if i ~= index then
+			taken[c.Type .. ":" .. c.Id] = true
+		end
+	end
+	local pool, total = {}, 0
+	for _, c in ipairs(buildPool(rp)) do
+		if not taken[c.Type .. ":" .. c.Id] then
+			table.insert(pool, c)
+			total += math.max(0, c.Weight)
+		end
+	end
+	local pick = nil
+	if total > 0 then
+		local roll = rng:NextNumber() * total
+		for _, c in ipairs(pool) do
+			roll -= math.max(0, c.Weight)
+			if roll <= 0 then
+				pick = c
+				break
+			end
+		end
+		pick = pick or pool[#pool]
+	elseif #pool > 0 then
+		pick = pool[1]
+	end
+	local fallback = pick == nil
+	if fallback then
+		local hurt = rp.HP ~= nil and rp.Stats ~= nil and rp.HP < rp.Stats.MaxHP
+		local kind = hurt and "Heal" or "Gold"
+		if taken[kind .. ":" .. kind] then
+			kind = kind == "Heal" and "Gold" or "Heal"
+		end
+		pick = card(kind, kind, 0, 0)
+	end
+	local c = decorate(rp, pick)
+	if fallback then
+		c.Description = c.Type == "Heal" and "Nothing else to offer: patch yourself up." or "Nothing else to offer: take some gold."
+	end
+	c.Bonus = old and old.Bonus or nil
+	offer[index] = c
+end
+
+-- (tests / scenes) a decorated card exactly as an offer would show it, and the pool's
+-- "Type:Id" keys for this player right now.
+function LevelUpSystem.DescribeCard(rp, kind: string, id: string, level: number)
+	return decorate(rp, card(kind, id, level, 0))
+end
+function LevelUpSystem.PoolKeys(rp): { string }
+	local out = {}
+	for _, c in ipairs(buildPool(rp)) do
+		table.insert(out, c.Type .. ":" .. c.Id)
+	end
+	return out
+end
+function LevelUpSystem.BanishesLeft(rp): number
+	return banishesLeft(rp)
+end
+
 local function apply(rp, c)
 	if c.Type == "WeaponNew" then
 		LevelUpSystem.AddWeapon(rp, c.Id)
@@ -782,6 +897,9 @@ local function sendOffer(rp)
 		RerollsMax = rp.RerollsMax or rp.Rerolls, -- per run (permanent upgrades, VIP)
 		SkipsMax = rp.SkipsMax or rp.Skips,
 		SkipGold = Config.LevelUp.SkipGold,
+		-- Banish (docs/next/BANISH.md): nil while switched off (the client hides the button)
+		Banishes = Config.FeatureOn("Banish") and banishesLeft(rp) or nil,
+		BanishesMax = Config.FeatureOn("Banish") and math.max(0, math.floor(tonumber(Config.LevelUp.Banishes) or 0)) or nil,
 		Seconds = math.max(0, rp.OfferDeadline - os.clock()),
 		Level = rp.Level - rp.PendingLevels + 1,
 		Pending = rp.PendingLevels,
@@ -1117,6 +1235,34 @@ function LevelUpSystem.Start()
 		-- keep the original deadline: rerolling must not extend the protected pause
 		sendOffer(rp)
 		LevelUpSystem.SendInventory(rp)
+	end, 3)
+
+	-- Banish (Config.Features.Banish, docs/next/BANISH.md): the NEW card at `index` leaves
+	-- the pool for the rest of the run; only that slot re-rolls (fresh OfferId, same
+	-- deadline: nobody's pause changes). Per player, so co-op needs nothing extra.
+	Remotes.Listen("LevelUpBanish", function(player, index, offerId)
+		if not Config.FeatureOn("Banish") then
+			return
+		end
+		local rp = ctx.RunManager.GetRunPlayer(player)
+		if not rp or not rp.Offer or not rp.Paused or type(index) ~= "number" or index ~= index or staleId(rp, offerId) then
+			return
+		end
+		local c = rp.Offer[math.floor(index)]
+		local kind = c and BANISHABLE[c.Type]
+		if not c or not kind or banishesLeft(rp) <= 0 then
+			return
+		end
+		-- never something the player owns
+		if (kind == "Weapon" and rp.Weapons[c.Id]) or (kind == "Passive" and rp.Passives[c.Id]) then
+			return
+		end
+		rp.Banished = rp.Banished or {}
+		rp.Banished[kind .. ":" .. c.Id] = true
+		rp.BanishesLeft -= 1
+		rerollSlot(rp, math.floor(index))
+		sendOffer(rp)
+		rp.Player:SetAttribute("XPReward", #buildPool(rp) == 0 and "Coins" or "Upgrade")
 	end, 3)
 
 	Remotes.Listen("LevelUpSkip", function(player, offerId)
