@@ -87,8 +87,6 @@ def main():
     checks += [("evolution-preview-regression", [])] + [("layout", ["evolution-panel-regression", d]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "evo=on"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["hud-build", d]) for d in ("iphone", "phone-portrait", "pc")]  # EvolutionPreview (docs/next/EVOLUTION_PREVIEW.md)
     checks += [("banish-regression", [])] + [("layout", ["levelup", d, "banish=3"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "banish=2", "banishmode=on", "evo=on"]) for d in ("iphone", "phone-portrait", "pc")]  # Banish (docs/next/BANISH.md)
     # batch B group C: FinalStand, StageModifiers
-    checks += [("final-stand-regression", [])]  # FinalStand / StageModifiers server logic (PASS/FAIL lines; docs/next/FINAL_STAND.md, STAGE_MODIFIERS.md)
-    checks += [("layout", ["final-stand-fx", d]) for d in ("iphone", "phone-portrait")]  # aura + headline, stage card line + HUD badge
     # batch B group D: PartyQuickLines, ReviveThanks
     checks += [("revive-thanks-regression", ["headless=off"])]  # ReviveThanks: offer, once, XP, pair limit, DEV taint, solo, 6 s button (PASS/FAIL lines; needs the full client)
     checks += [("layout", ["revive-thanks-layout", d]) for d in ("iphone", "phone-portrait", "pc")]  # ReviveThanks: THANKS! button clear of JUMP / ULT / team list

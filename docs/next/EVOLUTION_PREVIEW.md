@@ -1,5 +1,7 @@
 # Show weapon evolutions early (switch `EvolutionPreview`)
 
+Owner decision (2026-10-07): OK that evolution names and partner passives show before they are discovered (no "???").
+
 ## What
 Players can see what a weapon evolves into, and what it still needs, long before it is ready.
 Built on the existing card hint line ("Evolves into X with Y Lv N"); with the switch on, that

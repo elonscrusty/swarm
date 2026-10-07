@@ -1,5 +1,9 @@
 # Final Stand (switch `FinalStand`)
 
+**HELD (owner decision, 2026-10-07): switched off (`Config.Features.FinalStand = false`) and its
+regression checks removed from tools/run_regressions.py. The code stays in the tree, unreleased;
+with the switch off the game behaves as before.**
+
 ## What
 The first time in a stage a living hero's HP drops below 10% of max HP, the hero gets
 FINAL STAND for 5 s: +30% move speed and +40% damage, a crimson-gold aura, a short

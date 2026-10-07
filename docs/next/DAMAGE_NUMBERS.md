@@ -1,5 +1,7 @@
 # Damage number options (switch `DamageNumberOptions`)
 
+Owner decision (2026-10-07): damage numbers stay OFF by default for new players; Normal is the size once switched on.
+
 ## What
 What existed: Settings had one toggle, "Damage numbers" (`Settings.DamageNumbers`, off by default).
 The server (`DamageNumbers.lua`) sums each player's hits per enemy and sends them 8 times a second,
