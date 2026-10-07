@@ -27,7 +27,8 @@ data.SelectedCharacter = "Knight"
 data.TutorialDone = true
 data.FirstRunBonus = true
 data.Gold = 1000
-C.startClient()
+-- Sections 1-5 are server rules: the client starts only for section 6 (the lobby card). A
+-- full client in a run costs minutes of Lune GUI layout per simulated second.
 preview.advance(1)
 
 local fails = 0
@@ -131,6 +132,10 @@ data.LastSeen = 1
 now += 100
 preview.advance(K.SeenEvery + 2)
 check("LastSeen refreshed while online", data.LastSeen == now, tostring(data.LastSeen))
+C.startClient()
+preview.advance(1)
+GS.SyncProfile(me)
+preview.advance(1)
 local LS = preview.client("LobbyScreen")
 LS.Show("Home")
 preview.advance(1)

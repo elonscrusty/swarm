@@ -17,7 +17,8 @@
 	Placement: the arrow sits where the direction from the screen centre meets the safe
 	rectangle, then slides along the edge until its box clears every HUD rect a world label
 	must keep off (WorldLabelFade.Rects: top-centre stack, vitals, ability bar, banner,
-	BUILD, centre bars, notice pills, minimap), the touch buttons (JUMP, ULT), the feature
+	BUILD, centre bars, notice pills, minimap), the gold / kills pills, pause, buff and status
+	chips (Hud), the touch buttons (JUMP, ULT), the feature
 	badges, the portal arrow (StageUI) and the arrows already placed. No clear spot = no
 	arrow. Hidden outside a running run, while dead and while any panel is open (the same
 	rules as the portal arrow).
@@ -297,6 +298,15 @@ end
 local function blockers(): { Box }
 	local out = WorldLabelFade.Rects()
 	addBox(out, MiniMap.Elements().Holder)
+	-- the top-right gold / kills pills and the pause button, the buff chip and the status plate
+	-- (WorldLabelFade.Rects does not list them)
+	local hud = Hud.Elements()
+	addBox(out, hud.Counters)
+	addBox(out, hud.Purse)
+	addBox(out, hud.Kills and hud.Kills.Frame)
+	addBox(out, hud.Pause and hud.Pause.Instance)
+	addBox(out, hud.Buff)
+	addBox(out, hud.Status)
 	local stage = StageUI.Elements()
 	addBox(out, stage.Arrow)
 	local pg = player:FindFirstChild("PlayerGui")
