@@ -552,6 +552,41 @@ function RunServers.SendToRun(list: { Player }, mode: string, starter: Player, a
 	return true
 end
 
+--[[
+	QuickResume (docs/next/QUICK_RESUME.md): RESUME RUN on a lobby server. Sends the player
+	back to their held solo run's reserved server with the access code saved when that run
+	was reserved (data.RunReconnect, never replicated); the run server restores the run with
+	RunManager.TryReconnect (same UserId, same run id and escrow). The route's Expires is
+	set to the solo window only now, so the lobby never teleports without the tap. False:
+	no route (not the live game, no saved route for that run, already travelling).
+]]
+function RunServers.ResumeSolo(player: Player): boolean
+	if role ~= "Lobby" or not live() or travelling[player] then
+		return false
+	end
+	local data = ctx.DataService.GetData(player)
+	local r = data and data.RunReconnect
+	local sr = data and data.SoloResume
+	if type(r) ~= "table" or type(sr) ~= "table" or type(r.AccessCode) ~= "string" or r.AccessCode == ""
+		or type(r.PrivateId) ~= "string" or r.PrivateId == "" or r.Id ~= sr.Id or type(sr.Expires) ~= "number" then
+		return false
+	end
+	r.Expires = sr.Expires
+	if not RunServers.HasPendingReconnect(data) then
+		r.Expires = 0
+		return false
+	end
+	local tr: Travel = { Kind = "Rejoin", Players = { player }, Options = makeOptions(r.AccessCode, { SwarmRejoin = { Id = r.Id } }), Retried = {} }
+	travelling[player] = tr
+	setTravel(player, "ToRun")
+	if not ctx.DataService.ReleaseForTeleport(player) or not teleport({ player }, tr.Options) then
+		failOne(player)
+		return true
+	end
+	watchTimeout(tr)
+	return true
+end
+
 -- On the way to a run server (or home from one) right now.
 function RunServers.IsTravelling(player: Player): boolean
 	return travelling[player] ~= nil
@@ -954,6 +989,8 @@ function RunServers.Start()
 				end
 				return
 			end
+			-- QuickResume: a waiting solo run gets the RESUME RUN card first (no auto-teleport)
+			if ctx.QuickResume and ctx.QuickResume.OnLobbyLoad(player, data) then return end
 			if not RunServers.HasPendingReconnect(data) then
 				if data and data.RunReconnect then endReconnect(player) end
 				return

@@ -161,6 +161,7 @@ DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer
 require(script.Parent:WaitForChild("TravelOverlay")).Init() -- private run servers: travel cover + go-home banner
 require(script.Parent:WaitForChild("PartyLines")).Init() -- party quick lines: bubbles + feed (idle while PartyQuickLines is off)
 require(script.Parent:WaitForChild("ReviveThanks")).Init() -- THANKS! after a teammate revive (idle while ReviveThanks is off)
+require(script.Parent:WaitForChild("ResumeCard")).Init() -- QuickResume: the RESUME RUN card of a held solo run (idle while the switch is off)
 
 -- Humanoid state switches don't replicate and the client owns its character, so the
 -- server's settings are repeated here: no tripping, ragdolling or dying (jumps: JumpController).

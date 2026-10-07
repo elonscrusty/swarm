@@ -55,6 +55,9 @@
 	  {{Hero, Weapons, Passives}}, Active {heroId → index}}, WeaponMastery {weaponId → count},
 	  Cosmetics {Owned {id → true}, Equipped {Trail, Burst, Pet, Emote, Nameplate, Dais}},
 	  Supporter (boolean)
+	batch B group E (additive, no schema bump; cleaned by their own modules):
+	  Prestige {heroId → stars} (Prestige.lua), SoloResume {Id, Expires, Stage, Level, Hero,
+	  Wave} (a disconnected solo run waiting for its player; QuickResume.lua, server only)
 
 	Save health is shown to the player (never pretend saving works): the player attribute
 	"SaveStatus" is "ok", "memory" (DataStores unavailable: nothing is saved this session)
@@ -462,6 +465,8 @@ function DataService.FeatureView(data: { [string]: any }): { [string]: any }
 		-- next batch (docs/next): DailyQuests {Day, Progress, Claimed}, Comeback {LastGift, Pending?}
 		DailyQuests = data.DailyQuests,
 		Comeback = data.Comeback,
+		-- batch B: Prestige {heroId → stars} (Prestige.lua, docs/next/PRESTIGE.md)
+		Prestige = data.Prestige,
 	}
 end
 

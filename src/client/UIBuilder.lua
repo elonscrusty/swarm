@@ -5147,6 +5147,8 @@ local function fillLedger(data: any)
 	local bonus = math.max(0, survival) + math.max(0, first)
 	-- Roblox group member bonus (GroupBonus): its own part of the line below
 	local group = math.max(0, math.floor(safeNumber(data.GoldGroup)))
+	-- the hero's prestige stars (Prestige.lua): counted with the group bonus in the note below
+	group += math.max(0, math.floor(safeNumber(data.GoldPrestige)))
 	local rate = data.GoldRetention ~= nil and safeNumber(data.GoldRetention) or (unspent > 0 and kept / unspent or 1)
 	local lostRun = not data.Won and not data.Portal
 	local cells = results.LedgerCells
@@ -5165,7 +5167,8 @@ local function fillLedger(data: any)
 	local banked = kept + bonus + group
 	local note = string.format('Added to your gold: <font color="%s"><b>%s</b></font>', hex(RES_MINT), UIKit.formatNumber(banked))
 	if group > 0 then
-		note ..= string.format(" (%s kept + %s bonuses + %s group bonus)", UIKit.formatNumber(kept), UIKit.formatNumber(bonus), UIKit.formatNumber(group))
+		note ..= string.format(" (%s kept + %s bonuses + %s %s)", UIKit.formatNumber(kept), UIKit.formatNumber(bonus), UIKit.formatNumber(group),
+			safeNumber(data.GoldPrestige) > 0 and (safeNumber(data.GoldGroup) > 0 and "group + prestige bonus" or "prestige bonus") or "group bonus")
 	elseif bonus > 0 then
 		note ..= string.format(" (%s kept + %s bonuses)", UIKit.formatNumber(kept), UIKit.formatNumber(bonus))
 	end
@@ -5305,6 +5308,10 @@ local function fillDetails(data: any)
 	if group > 0 then
 		table.insert(lines, string.format("Group bonus +%s gold (Roblox group member, %d%% up to %s per run)", UIKit.formatNumber(group),
 			math.floor(((Config :: any).Group.GoldBonus or 0) * 100 + 0.5), UIKit.formatNumber((Config :: any).Group.GoldCap or 0)))
+	end
+	local prestige = math.floor(safeNumber(data.GoldPrestige))
+	if prestige > 0 then
+		table.insert(lines, string.format("Prestige bonus +%s gold (the hero's prestige stars)", UIKit.formatNumber(prestige)))
 	end
 	if data.DevRun then
 		table.insert(lines, "DEV tools were used: nothing public was recorded")

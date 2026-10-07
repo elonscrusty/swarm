@@ -93,6 +93,8 @@ def main():
     checks += [("revive-thanks-regression", ["headless=off"])]  # ReviveThanks: offer, once, XP, pair limit, DEV taint, solo, 6 s button (PASS/FAIL lines; needs the full client)
     checks += [("layout", ["revive-thanks-layout", d]) for d in ("iphone", "phone-portrait", "pc")]  # ReviveThanks: THANKS! button clear of JUMP / ULT / team list
     # batch B group E: Prestige, QuickResume
+    checks += [("prestige-regression", [])] + [("layout", ["prestige-regression", d, "case=confirm"]) for d in ("iphone", "phone-portrait", "pc")]  # Prestige (docs/next/PRESTIGE.md)
+    checks += [("quick-resume-regression", ["case=local"]), ("quick-resume-regression", ["case=run"]), ("quick-resume-regression", ["case=run", "rejoin=expired"])] + [("quick-resume-regression", ["case=lobby", "flow=" + f]) for f in ("resume", "end", "timeout", "expired")] + [("layout", ["quick-resume-regression", d, "case=card"]) for d in ("iphone", "phone-portrait", "pc")]  # QuickResume (docs/next/QUICK_RESUME.md); case=run / lobby use the teleport mock (no --studio)
 
     def run(check):
         scene, settings = check
@@ -104,7 +106,7 @@ def main():
             "--max-time", "3000" if scene == "corner-regression" else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression"):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
         if scene in ("results-flow", "leaderboards", "home-board-regression", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression"):
