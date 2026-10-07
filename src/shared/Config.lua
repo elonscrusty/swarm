@@ -1899,7 +1899,7 @@ Config.Features = {
 	PartyQuickLines = true, -- fixed-text party quick lines (docs/next/PARTY_QUICK_LINES.md)
 	ReviveThanks = true, -- THANKS! button after a teammate revive (docs/next/REVIVE_THANKS.md)
 	Prestige = true, -- reset a maxed hero's mastery for a gold-bonus star (docs/next/PRESTIGE.md)
-	QuickResume = true, -- resume a disconnected solo run within 60 s (docs/next/QUICK_RESUME.md)
+	QuickResume = false, -- HELD (owner, 2026-10-07): built, not released; live servers close ~30 s after the last player leaves (docs/next/QUICK_RESUME.md)
 }
 
 -- Season track (feature 22, Config.Features.SeasonTrack; MetaData, docs/features/META.md).

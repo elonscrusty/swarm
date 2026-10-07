@@ -94,7 +94,6 @@ def main():
     checks += [("layout", ["revive-thanks-layout", d]) for d in ("iphone", "phone-portrait", "pc")]  # ReviveThanks: THANKS! button clear of JUMP / ULT / team list
     # batch B group E: Prestige, QuickResume
     checks += [("prestige-regression", [])] + [("layout", ["prestige-regression", d, "case=confirm"]) for d in ("iphone", "phone-portrait", "pc")]  # Prestige (docs/next/PRESTIGE.md)
-    checks += [("quick-resume-regression", ["case=local"]), ("quick-resume-regression", ["case=run"]), ("quick-resume-regression", ["case=run", "rejoin=expired"])] + [("quick-resume-regression", ["case=lobby", "flow=" + f]) for f in ("resume", "end", "timeout", "expired")] + [("layout", ["quick-resume-regression", d, "case=card"]) for d in ("iphone", "phone-portrait", "pc")]  # QuickResume (docs/next/QUICK_RESUME.md); case=run / lobby use the teleport mock (no --studio)
 
     def run(check):
         scene, settings = check

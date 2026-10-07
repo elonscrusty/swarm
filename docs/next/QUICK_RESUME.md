@@ -1,5 +1,11 @@
 # Quick resume (switch `QuickResume`)
 
+**HELD (owner decision, 2026-10-07): switched off (`Config.Features.QuickResume = false`) and its
+regression checks removed from tools/run_regressions.py.** Reason: a live Roblox server shuts down
+about 30 s after its last player leaves, so a held solo run on its own reserved server would mostly
+be gone before 60 s. A real solo resume would need the run saved and rebuilt on a new server. The
+code stays in the tree, unreleased and untested; with the switch off the game behaves as before.
+
 ## What
 Co-op runs already had a rejoin grace (`Config.RunServers.RejoinGraceSeconds`, RunManager
 `TryReconnect`, RunServers "Rejoin"). Quick resume gives SOLO runs (Solo, Daily, Weekly) the
