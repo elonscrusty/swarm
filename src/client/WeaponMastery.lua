@@ -33,7 +33,6 @@ local WeaponMastery = {}
 
 local player = Players.LocalPlayer
 local new, text = UIKit.new, UIKit.text
-local P = Theme.Palette
 local C = Theme.Color
 local M = Config.WeaponMastery
 local OWN_RANGE = 4.5 -- studs: a projectile appearing this close to your hero is yours
@@ -144,7 +143,7 @@ local function swatch(parent: Instance, color: Color3?, order: number): (TextBut
 		Name = "Swatch" .. order,
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = color or P.slate_700,
+		BackgroundColor3 = color or C.BluePale,
 		BorderSizePixel = 0,
 		Size = UDim2.fromOffset(SW, SW),
 		LayoutOrder = order,
@@ -152,15 +151,16 @@ local function swatch(parent: Instance, color: Color3?, order: number): (TextBut
 	UIKit.corner(b, 999)
 	local ring = new("Frame", { Name = "Ring", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, 8, 1, 8), Visible = false }, b)
 	UIKit.corner(ring, 999)
-	UIKit.stroke(ring, P.gold_300, 2.5, 0)
-	UIKit.stroke(b, P.slate_950, 1.5, 0.2)
+	UIKit.stroke(ring, C.Selected, 3, 0)
+	UIKit.stroke(b, C.Blue, 2, 0)
 	return b, ring
 end
 
 local function buildRow(list: Frame, weaponId: string, order: number)
 	local def = WeaponData.Weapons[weaponId]
-	local row = new("Frame", { Name = weaponId, BackgroundColor3 = P.slate_800, BackgroundTransparency = 0.15, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 64), LayoutOrder = order }, list)
+	local row = new("Frame", { Name = weaponId, BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 64), LayoutOrder = order }, list)
 	UIKit.corner(row, 10)
+	UIKit.stroke(row, C.Divider, 1.5, 0)
 	local icon = new("Frame", { Name = "Icon", BackgroundTransparency = 1, Position = UDim2.fromOffset(10, 12), Size = UDim2.fromOffset(40, 40) }, row)
 	pcall(Icons.Upgrade, icon, weaponId)
 	local name = text(row, "Label", string.upper(def.Name or weaponId), { Name = "Name", Position = UDim2.fromOffset(58, 8), Size = UDim2.new(1, -58, 0, 20), TextTruncate = Enum.TextTruncate.AtEnd }, 15)
@@ -171,9 +171,9 @@ local function buildRow(list: Frame, weaponId: string, order: number)
 	for slot = 1, #M.Milestones + 1 do
 		local i = slot - 1 -- 0 = the weapon's own colour
 		local m = M.Milestones[i]
-		local b, ring = swatch(swatches, m and m.Color or (def.Color or P.steel_300), i)
+		local b, ring = swatch(swatches, m and m.Color or (def.Color or C.TextMuted), i)
 		local lock = new("Frame", { Name = "Lock", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(16, 16), Visible = false }, b)
-		pcall(Icons.Draw, lock, "lock", { Color = P.ivory_100 })
+		pcall(Icons.Draw, lock, "lock", { Color = C.TextOnBlue })
 		b.Activated:Connect(function()
 			local need = m and m.Kills or 0
 			if (counts[weaponId] or 0) < need then
@@ -246,7 +246,7 @@ local function build()
 		Position = UDim2.fromOffset(12, 70),
 		Size = UDim2.new(1, -24, 1, -82),
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)

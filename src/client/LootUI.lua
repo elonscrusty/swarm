@@ -79,7 +79,7 @@ LootUI.OpenBuild = nil :: (() -> ())?
 
 local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 local R = Theme.ItemRarity
 
 local SEGMENTS = 20
@@ -211,25 +211,25 @@ local function buildStrip(screen: Frame)
 		FillDirection = Enum.FillDirection.Horizontal,
 	}, strip)
 	-- the stage's bargain (a pill under the strip)
-	local holder, face = UIKit.Surface(root, { Name = "BargainChip", Radius = 999, Transparency = 0.15, Edge = P.crimson_400, EdgeTransparency = 0.25, Shadow = false, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(0, 28) })
+	local holder, face = UIKit.Surface(root, { Name = "BargainChip", Radius = 999, Transparency = 0.04, Edge = C.Danger, EdgeTransparency = 0, Shadow = false, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(0, 28) })
 	holder.AutomaticSize = Enum.AutomaticSize.X
 	face.AutomaticSize = Enum.AutomaticSize.X
 	face.Size = UDim2.fromScale(0, 1)
 	UIKit.padding(face, 0, 12, 0, 8)
 	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
-	Icons.Draw(face, "shrine", { Size = 18, LayoutOrder = 1, Color = P.crimson_300 })
-	ui.BargainText = text(face, "Label", "BARGAIN", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.crimson_300 }, 12)
+	Icons.Draw(face, "shrine", { Size = 18, LayoutOrder = 1, Color = C.TextDanger })
+	ui.BargainText = text(face, "Label", "BARGAIN", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.TextDanger }, 12)
 	ui.Bargain = holder
 	-- the active build synergies (a pill under the bargain)
-	local sh, sf = UIKit.Surface(root, { Name = "SynergyChip", Radius = 999, Transparency = 0.15, Edge = P.moss_400, EdgeTransparency = 0.25, Shadow = false, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(0, 28) })
+	local sh, sf = UIKit.Surface(root, { Name = "SynergyChip", Radius = 999, Transparency = 0.04, Edge = C.SelectedEdge, EdgeTransparency = 0, Shadow = false, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(0, 28) })
 	sh.AutomaticSize = Enum.AutomaticSize.X
 	sh.Active = false
 	sf.AutomaticSize = Enum.AutomaticSize.X
 	sf.Size = UDim2.fromScale(0, 1)
 	UIKit.padding(sf, 0, 12, 0, 8)
 	UIKit.list(sf, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
-	Icons.Draw(sf, "sparkle", { Size = 18, LayoutOrder = 1, Color = P.moss_200 })
-	ui.SynergyText = text(sf, "Label", "SYNERGY", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.moss_200 }, 12)
+	Icons.Draw(sf, "sparkle", { Size = 18, LayoutOrder = 1, Color = C.Success })
+	ui.SynergyText = text(sf, "Label", "SYNERGY", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.Success }, 12)
 	ui.Synergy = sh
 	-- the run's curses (and DAILY): small chips under the strip (SwarmState Curses / DailyRun)
 	local row = new("Frame", { Name = "CurseChips", BackgroundTransparency = 1, Active = false, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(400, 26) }, root)
@@ -271,16 +271,16 @@ local function refreshCurses(inRun: boolean)
 	local order = 0
 	if daily then
 		order += 1
-		curseChip(ui.Curses, "calendar", "DAILY", P.gold_300, order)
+		curseChip(ui.Curses, "calendar", "DAILY", C.BlueDeep, order)
 	end
 	for _, id in ipairs(list) do
 		local def = CurseData.Curses[id]
 		order += 1
-		curseChip(ui.Curses, def.Icon, string.upper(def.Name), P.crimson_300, order)
+		curseChip(ui.Curses, def.Icon, string.upper(def.Name), C.TextDanger, order)
 	end
 	if #list > 0 then
 		order += 1
-		curseChip(ui.Curses, "coin", CurseData.GoldText(CurseData.GoldMult(list)) .. " GOLD", P.gold_300, order)
+		curseChip(ui.Curses, "coin", CurseData.GoldText(CurseData.GoldMult(list)) .. " GOLD", C.BlueDeep, order)
 	end
 	ui.Curses.Visible = order > 0
 	LootUI.Layout()
@@ -292,7 +292,7 @@ local function buildPopups(root: Frame)
 end
 
 local function buildPrompt(root: Frame)
-	local holder, face = UIKit.Surface(root, { Name = "LootPrompt", Radius = Theme.Radius.L, Transparency = 0.02, Edge = P.gold_400, EdgeTransparency = 0.25, Visible = false, ZIndex = Theme.Z.Loot, Size = UDim2.fromOffset(300, 150), AnchorPoint = Vector2.new(0, 0.5) })
+	local holder, face = UIKit.Surface(root, { Name = "LootPrompt", Radius = Theme.Radius.L, Transparency = 0.02, Edge = C.PanelEdge, EdgeTransparency = 0, Visible = false, ZIndex = Theme.Z.Loot, Size = UDim2.fromOffset(300, 150), AnchorPoint = Vector2.new(0, 0.5) })
 	ui.Prompt = holder
 	ui.PromptFace = face
 	local c = RING_R + 8
@@ -310,32 +310,32 @@ local function buildPrompt(root: Frame)
 			Position = UDim2.fromOffset(c + math.cos(a) * RING_R, c + math.sin(a) * RING_R),
 			Size = UDim2.fromOffset(4, 8),
 			Rotation = math.deg(a) + 90,
-			BackgroundColor3 = P.slate_500,
+			BackgroundColor3 = C.Divider,
 			BorderSizePixel = 0,
 		}, ringBox)
 		UIKit.corner(seg, 999)
 		ui.Segments[i] = seg
 	end
 	local x0 = c * 2 + 18
-	ui.PromptTitle = text(face, "H3", "Small Chest", { Position = UDim2.fromOffset(x0, 8), Size = UDim2.new(1, -x0 - 10, 0, TS(18) + 4), TextColor3 = P.gold_200 })
+	ui.PromptTitle = text(face, "H3", "Small Chest", { Position = UDim2.fromOffset(x0, 8), Size = UDim2.new(1, -x0 - 10, 0, TS(18) + 4), TextColor3 = C.BlueDeep })
 	ui.PromptDetail = text(face, "Caption", "", { Position = UDim2.fromOffset(x0, 10 + TS(18) + 2), Size = UDim2.new(1, -x0 - 10, 0, TS(12) + 4) })
 	ui.PromptDetailColor = ui.PromptDetail.TextColor3
 	-- an inset well behind the benefit / tradeoff lines (and the Shrine of Chance odds)
-	ui.PromptWell = new("Frame", { Name = "Well", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.05, BorderSizePixel = 0, Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -20, 0, 10), Visible = false }, face)
+	ui.PromptWell = new("Frame", { Name = "Well", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0, BorderSizePixel = 0, Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -20, 0, 10), Visible = false }, face)
 	UIKit.corner(ui.PromptWell, Theme.Radius.M)
-	ui.PromptBenefit = text(face, "BodyStrong", "", { Position = UDim2.fromOffset(18, 0), Size = UDim2.new(1, -36, 0, TS(LINE_PX) + 4), TextColor3 = P.moss_100, TextWrapped = true }, LINE_PX)
-	ui.PromptTradeoff = text(face, "BodyStrong", "", { Position = UDim2.fromOffset(18, 0), Size = UDim2.new(1, -36, 0, TS(LINE_PX) + 4), TextColor3 = P.crimson_300:Lerp(P.ivory_100, 0.3), TextWrapped = true }, LINE_PX)
+	ui.PromptBenefit = text(face, "BodyStrong", "", { Position = UDim2.fromOffset(18, 0), Size = UDim2.new(1, -36, 0, TS(LINE_PX) + 4), TextColor3 = C.Success, TextWrapped = true }, LINE_PX)
+	ui.PromptTradeoff = text(face, "BodyStrong", "", { Position = UDim2.fromOffset(18, 0), Size = UDim2.new(1, -36, 0, TS(LINE_PX) + 4), TextColor3 = C.TextDanger:Lerp(C.Text, 0.3), TextWrapped = true }, LINE_PX)
 	-- Shrine of Chance: three big numbers (odds, items left, tries left)
 	local odds = new("Frame", { Name = "Odds", BackgroundTransparency = 1, Position = UDim2.fromOffset(18, 0), Size = UDim2.new(1, -36, 0, ODDS_H()), Visible = false }, face)
 	ui.Odds = odds
 	ui.OddsCells = {}
 	for i, cap in ipairs({ "ODDS", "ITEMS LEFT", "TRIES LEFT" }) do
 		local cell = new("Frame", { Name = "Cell" .. i, BackgroundTransparency = 1, Position = UDim2.new((i - 1) / 3, 0, 0, 0), Size = UDim2.new(1 / 3, 0, 1, 0) }, odds)
-		local value = UIKit.Role(cell, "Number", "", { Name = "Value", Size = UDim2.new(1, 0, 0, TS(24) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 })
+		local value = UIKit.Role(cell, "Number", "", { Name = "Value", Size = UDim2.new(1, 0, 0, TS(24) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep })
 		value.TextSize = TS(24)
-		local caption = UIKit.Role(cell, "Caption", cap, { Name = "Caption", Position = UDim2.fromOffset(0, TS(24) + 4), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_200 })
+		local caption = UIKit.Role(cell, "Caption", cap, { Name = "Caption", Position = UDim2.fromOffset(0, TS(24) + 4), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text })
 		if i > 1 then
-			new("Frame", { Name = "Divider", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.6, BorderSizePixel = 0, Position = UDim2.new(0, 0, 0.15, 0), Size = UDim2.new(0, 1, 0.7, 0) }, cell)
+			new("Frame", { Name = "Divider", BackgroundColor3 = C.PanelEdge, BackgroundTransparency = 0.6, BorderSizePixel = 0, Position = UDim2.new(0, 0, 0.15, 0), Size = UDim2.new(0, 1, 0.7, 0) }, cell)
 		end
 		ui.OddsCells[i] = { Value = value, Caption = caption }
 	end
@@ -356,7 +356,7 @@ local function buildPrompt(root: Frame)
 	}, face)
 	UIKit.corner(btn, 10)
 	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Primary }, btn)
-	UIKit.stroke(btn, P.gold_200, 1.5, 0.2)
+	UIKit.stroke(btn, C.PrimaryEdge, 2, 0)
 	ui.HoldButton = btn
 	ui.HoldLabel = text(btn, "Label", "HOLD  E", { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextOnGold }, 15)
 	btn.InputBegan:Connect(function(input)
@@ -401,25 +401,25 @@ local function buildCaravan(root: Frame)
 	-- edge arrow: a badge with the banner icon and a diamond tip that turns toward the cart
 	local arrow = new("Frame", { Name = "CaravanArrow", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(52, 52), Visible = false, ZIndex = Theme.Z.Hud }, root)
 	local pivot = new("Frame", { Name = "Pivot", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(52, 52) }, arrow)
-	local tip = new("Frame", { Name = "Tip", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.fromOffset(18, 18), Rotation = 45, BackgroundColor3 = P.crimson_400, BorderSizePixel = 0 }, pivot)
+	local tip = new("Frame", { Name = "Tip", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0.5, 0), Size = UDim2.fromOffset(18, 18), Rotation = 45, BackgroundColor3 = C.Danger, BorderSizePixel = 0 }, pivot)
 	UIKit.corner(tip, 3)
-	local _, bface = UIKit.Surface(arrow, { Name = "Badge", Radius = 999, Transparency = 0.1, Edge = P.crimson_400, EdgeTransparency = 0.2, Size = UDim2.fromOffset(40, 40), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
-	Icons.Draw(bface, "flag", { Size = 24, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	local _, bface = UIKit.Surface(arrow, { Name = "Badge", Radius = 999, Transparency = 0.1, Edge = C.Danger, EdgeTransparency = 0.2, Size = UDim2.fromOffset(40, 40), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	Icons.Draw(bface, "flag", { Size = 24, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
 	ui.CaravanArrowDist = text(arrow, "Label", "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 1, -2), Size = UDim2.fromOffset(80, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.4 }, 12)
 	ui.CaravanArrow = arrow
 	ui.CaravanPivot = pivot
 	ui.CaravanTip = tip
 	-- defence bar
-	local bar, bf = UIKit.Surface(root, { Name = "CaravanBar", Radius = Theme.Radius.M, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.3, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(340, 50), AnchorPoint = Vector2.new(0.5, 0) })
+	local bar, bf = UIKit.Surface(root, { Name = "CaravanBar", Radius = Theme.Radius.M, Transparency = 0.1, Edge = C.PanelEdge, EdgeTransparency = 0.3, Visible = false, ZIndex = Theme.Z.Hud, Size = UDim2.fromOffset(340, 50), AnchorPoint = Vector2.new(0.5, 0) })
 	bar.Active = false
 	Icons.Draw(bf, "flag", { Size = 26, Position = UDim2.fromOffset(10, 8) })
-	ui.CaravanBarTitle = text(bf, "Label", "DEFEND THE CARAVAN", { Position = UDim2.fromOffset(44, 5), Size = UDim2.new(1, -110, 0, TS(13) + 6), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+	ui.CaravanBarTitle = text(bf, "Label", "DEFEND THE CARAVAN", { Position = UDim2.fromOffset(44, 5), Size = UDim2.new(1, -110, 0, TS(13) + 6), TextColor3 = C.BlueDeep, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
 	-- before the start: what to do + the reward, then the leave rule (wrapped, measured)
-	ui.CaravanBarInfo = text(bf, "Small", "", { Position = UDim2.fromOffset(44, TS(13) + 10), Size = UDim2.new(1, -56, 0, 0), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = P.ivory_100, Visible = false }, 12)
+	ui.CaravanBarInfo = text(bf, "Small", "", { Position = UDim2.fromOffset(44, TS(13) + 10), Size = UDim2.new(1, -56, 0, 0), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.Text, Visible = false }, 12)
 	ui.CaravanBarTime = text(bf, "Label", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 5), Size = UDim2.fromOffset(70, TS(13) + 6), TextXAlignment = Enum.TextXAlignment.Right }, 13)
-	local track = new("Frame", { Name = "Track", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.2, BorderSizePixel = 0, Position = UDim2.new(0, 44, 1, -16), Size = UDim2.new(1, -56, 0, 8) }, bf)
+	local track = new("Frame", { Name = "Track", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.2, BorderSizePixel = 0, Position = UDim2.new(0, 44, 1, -16), Size = UDim2.new(1, -56, 0, 8) }, bf)
 	UIKit.corner(track, 999)
-	local fill = new("Frame", { Name = "Fill", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1) }, track)
+	local fill = new("Frame", { Name = "Fill", BackgroundColor3 = C.PanelEdge, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1) }, track)
 	UIKit.corner(fill, 999)
 	ui.CaravanBar = bar
 	Hud.ReserveCentre(bar) -- centre banners stack under the defence bar
@@ -430,9 +430,12 @@ local function buildItemsModal(root: Frame)
 	local m = UIKit.Modal(root, "Items", 560, 520, Theme.Z.Pause + 2)
 	ui.Items = m
 	local content = m.Content
-	text(content, "H1", "ITEMS", { Size = UDim2.new(1, 0, 0, TS(30) + 6), TextXAlignment = Enum.TextXAlignment.Center })
-	ui.ItemsSub = text(content, "Caption", "", { Position = UDim2.fromOffset(0, TS(30) + 8), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center })
-	local top = TS(30) + TS(12) + 20
+	-- the title: white lettering, navy outline, on a blue plate (Bright Arcade)
+	local title = text(content, "H1", "ITEMS", { Size = UDim2.new(0, 220, 0, TS(30) + 10), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = C.Blue, BackgroundTransparency = 0 })
+	UIKit.PageTitleStyle(title, 3)
+	UIKit.corner(title, Theme.Radius.M)
+	ui.ItemsSub = text(content, "Caption", "", { Position = UDim2.fromOffset(0, TS(30) + 14), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center })
+	local top = TS(30) + TS(12) + 26
 	local scroll = new("ScrollingFrame", {
 		Name = "List",
 		BackgroundTransparency = 1,
@@ -442,7 +445,7 @@ local function buildItemsModal(root: Frame)
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.PanelEdge,
 	}, content)
 	UIKit.list(scroll, { Padding = UDim.new(0, 6) })
 	ui.ItemsList = scroll
@@ -499,14 +502,14 @@ local function refreshList()
 	for i, clue in ipairs(rows) do
 		local s = type(clue.Id) == "string" and SynergyData.Synergies[clue.Id] or nil
 		local active = clue.Active == true
-		local color = active and P.moss_200 or P.ivory_300
-		local accent = s and s.Color or P.slate_400
+		local color = active and C.Success or C.TextMuted
+		local accent = s and s.Color or C.Track
 		local name = s and s.Name or (type(clue.Name) == "string" and clue.Name or "???")
 		local row = UIKit.Panel(ui.ItemsList, { Name = "Synergy_" .. (s and s.Id or tostring(i)), LayoutOrder = i - 100, Size = UDim2.new(1, -8, 0, 62) }, true)
-		local tile = new("Frame", { BackgroundColor3 = P.slate_900, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(46, 46) }, row)
+		local tile = new("Frame", { BackgroundColor3 = C.PanelInset, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(46, 46) }, row)
 		UIKit.corner(tile, Theme.Radius.M)
 		UIKit.stroke(tile, accent, 1.5, active and 0.2 or 0.5)
-		Icons.Draw(tile, s and s.Icon or "sparkle", { Size = 34, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900, Color = if s then nil else P.slate_400 })
+		Icons.Draw(tile, s and s.Icon or "sparkle", { Size = 34, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset, Color = if s then nil else C.Track })
 		text(row, "BodyStrong", name, { Position = UDim2.fromOffset(64, 6), Size = UDim2.new(1, -150, 0, TS(16) + 4), TextColor3 = color })
 		local tag = active and "SYNERGY" or string.format("%d / %d", tonumber(clue.Have) or 0, tonumber(clue.Need) or 0)
 		text(row, "Caption", UIKit.track(tag), { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 8), Size = UDim2.fromOffset(90, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = color })
@@ -525,17 +528,17 @@ local function refreshList()
 	end
 	-- recent rewards: one short row each, newest first, above the synergies
 	if #history > 0 then
-		text(ui.ItemsList, "Caption", UIKit.track("RECENT REWARDS"), { Name = "RecentHead", LayoutOrder = -300, Size = UDim2.new(1, -8, 0, TS(12) + 6), TextColor3 = P.gold_300 })
+		text(ui.ItemsList, "Caption", UIKit.track("RECENT REWARDS"), { Name = "RecentHead", LayoutOrder = -300, Size = UDim2.new(1, -8, 0, TS(12) + 6), TextColor3 = C.BlueDeep })
 		local now = os.clock()
 		for i, h in ipairs(history) do
 			local row = UIKit.Panel(ui.ItemsList, { Name = "Recent" .. i, LayoutOrder = -300 + i, Size = UDim2.new(1, -8, 0, 40) }, true)
-			local tile = new("Frame", { BackgroundColor3 = P.slate_900, BorderSizePixel = 0, Position = UDim2.fromOffset(6, 4), Size = UDim2.fromOffset(32, 32) }, row)
+			local tile = new("Frame", { BackgroundColor3 = C.PanelInset, BorderSizePixel = 0, Position = UDim2.fromOffset(6, 4), Size = UDim2.fromOffset(32, 32) }, row)
 			UIKit.corner(tile, 999)
-			UIKit.stroke(tile, typeof(h.Color) == "Color3" and h.Color or P.slate_400, 1.5, 0.2)
+			UIKit.stroke(tile, typeof(h.Color) == "Color3" and h.Color or C.Track, 1.5, 0.2)
 			if h.Id == "Gold" then
-				Icons.Draw(tile, "coin", { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+				Icons.Draw(tile, "coin", { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
 			elseif type(h.Id) == "string" then
-				Icons.Upgrade(tile, h.Id, { Size = 24, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+				Icons.Upgrade(tile, h.Id, { Size = 24, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
 			end
 			local ago = math.max(0, math.floor(now - (h.At or now)))
 			local when = ago < 60 and (ago .. "s ago") or (math.floor(ago / 60) .. "m ago")
@@ -637,7 +640,7 @@ local function onGained(data)
 	end
 	local r = R[def.Rarity] or R.Common
 	popupOrder += 1
-	local holder, face = UIKit.Surface(ui.Popups, { Name = "ItemPopup", Size = UDim2.fromOffset(320, 84), Edge = r.Color, EdgeTransparency = def.Rarity == "Common" and 0.4 or 0.05, Transparency = 0.05, LayoutOrder = popupOrder })
+	local holder, face = UIKit.Surface(ui.Popups, { Name = "ItemPopup", Size = UDim2.fromOffset(320, 84), Edge = r.Color, EdgeTransparency = 0, Transparency = 0.02, LayoutOrder = popupOrder })
 	local n = tonumber(data.Count) or 1
 	itemTile(face, def.Id, 60, n).Position = UDim2.fromOffset(12, 12)
 	text(face, "H3", def.Name, { Position = UDim2.fromOffset(84, 8), Size = UDim2.new(1, -94, 0, TS(18) + 4), TextColor3 = r.Color, TextTruncate = Enum.TextTruncate.AtEnd })
@@ -854,7 +857,7 @@ local function setIcon(name: string)
 			ch:Destroy()
 		end
 	end
-	Icons.Draw(ui.PromptIconHolder, name, { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+	Icons.Draw(ui.PromptIconHolder, name, { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
 end
 
 local STATE_TEXT = {
@@ -891,7 +894,7 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 	local id = tonumber(model:GetAttribute("LootId")) or 0
 	local result = chanceResult.Id ~= 0 and chanceResult.Id == id and os.clock() < chanceResult.Until
 	local resultText = chanceResult.Win and "ITEM FOUND!" or "NO LUCK THIS TIME"
-	local resultColor = chanceResult.Win and P.gold_200 or P.ivory_200
+	local resultColor = chanceResult.Win and C.BlueDeep or C.Text
 	if result and tight then
 		detail = resultText
 	end
@@ -965,7 +968,7 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 		y += 6
 		ui.Price.Frame.Position = UDim2.fromOffset(14, y + 2)
 		ui.Price.SetValue(price > 0 and UIKit.formatNumber(price) or "FREE")
-		ui.Price.Value.TextColor3 = (price > 0 and not canAfford(model)) and P.crimson_300 or P.gold_200
+		ui.Price.Value.TextColor3 = (price > 0 and not canAfford(model)) and C.TextDanger or C.CoinDeep
 		ui.HoldButton.Position = UDim2.new(1, -12, 0, y)
 		-- label by the input actually used last (GamepadEnabled alone is true on many PCs and in
 		-- Studio, which showed "HOLD X" to keyboard players)
@@ -985,7 +988,7 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 		if note ~= "" then
 			ui.PromptNote.Text = UIKit.track(note)
 			ui.PromptNote.Position = UDim2.fromOffset(12, y)
-			ui.PromptNote.TextColor3 = progress > 0 and P.gold_200 or P.crimson_300
+			ui.PromptNote.TextColor3 = progress > 0 and C.BlueDeep or C.TextDanger
 			y += TS(12) + 6
 		end
 	else
@@ -994,7 +997,7 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 	local lit = math.floor(progress * SEGMENTS + 0.001)
 	for i, seg in ipairs(ui.Segments) do
 		local on = i <= lit
-		seg.BackgroundColor3 = on and P.gold_300 or (ok and P.slate_400 or P.stone_600)
+		seg.BackgroundColor3 = on and C.BlueDeep or (ok and C.Track or C.Disabled)
 		seg.BackgroundTransparency = on and 0 or 0.2
 	end
 	return y + 10
@@ -1048,14 +1051,14 @@ local function updateMarker(altar: Model?, promptShown: boolean)
 	end
 	local label, color, edge
 	if st == "Guarded" then
-		label, color, edge = string.upper(tostring(altar:GetAttribute("Detail") or "Guarded")), P.crimson_300, P.crimson_400
+		label, color, edge = string.upper(tostring(altar:GetAttribute("Detail") or "Guarded")), C.TextDanger, C.Danger
 	elseif st == "Claimable" then
-		label, color, edge = "UNGUARDED: OPEN IT", P.gold_200, P.gold_400
+		label, color, edge = "UNGUARDED: OPEN IT", C.BlueDeep, C.PanelEdge
 	elseif st == "Claimed" then
 		ui.Marker.Visible = false
 		return
 	else
-		label, color, edge = "GUARDED ALTAR", P.ivory_200, P.slate_400
+		label, color, edge = "GUARDED ALTAR", C.Text, C.Track
 	end
 	ui.MarkerText.Text = label
 	ui.MarkerText.TextColor3 = color
@@ -1166,25 +1169,25 @@ local function updateCaravan(root: BasePart?, alive: boolean)
 			local away = grace >= 0
 			-- the caravan is a side objective (COPY CP-05): say so when the title fits
 			fitText(ui.CaravanBarTitle, away and { "RETURN TO THE CARAVAN!", "RETURN!" } or { "OPTIONAL · DEFEND THE CARAVAN", "OPTIONAL · DEFEND", "DEFEND" }, titleW)
-			ui.CaravanBarTitle.TextColor3 = away and P.crimson_300 or P.gold_200
+			ui.CaravanBarTitle.TextColor3 = away and C.TextDanger or C.BlueDeep
 			ui.CaravanBarTime.Text = away and string.format("LOST IN %d", grace) or string.format("%d s", tonumber(m:GetAttribute("Left")) or 0)
-			ui.CaravanBarTime.TextColor3 = away and P.crimson_300 or P.ivory_100
+			ui.CaravanBarTime.TextColor3 = away and C.TextDanger or C.Text
 			ui.CaravanFill.Size = UDim2.fromScale(math.clamp(tonumber(m:GetAttribute("Progress")) or 0, 0, 1), 1)
-			ui.CaravanFill.BackgroundColor3 = away and P.crimson_400 or P.gold_400
+			ui.CaravanFill.BackgroundColor3 = away and C.Danger or C.PanelEdge
 		else
 			if blocked ~= "" then
 				fitText(ui.CaravanBarTitle, { "LOST CARAVAN · " .. string.upper(blocked), string.upper(blocked) }, titleW)
-				ui.CaravanBarTitle.TextColor3 = P.ivory_300
+				ui.CaravanBarTitle.TextColor3 = C.TextMuted
 			elseif startFill > 0 then
 				fitText(ui.CaravanBarTitle, { "STARTING · STAY IN THE RING", "STARTING..." }, titleW)
-				ui.CaravanBarTitle.TextColor3 = P.gold_200
+				ui.CaravanBarTitle.TextColor3 = C.BlueDeep
 			else
 				fitText(ui.CaravanBarTitle, { "OPTIONAL · LOST CARAVAN", "LOST CARAVAN" }, titleW)
-				ui.CaravanBarTitle.TextColor3 = P.gold_200
+				ui.CaravanBarTitle.TextColor3 = C.BlueDeep
 			end
 			ui.CaravanBarTime.Text = ""
 			ui.CaravanFill.Size = UDim2.fromScale(startFill, 1)
-			ui.CaravanFill.BackgroundColor3 = P.gold_400
+			ui.CaravanFill.BackgroundColor3 = C.PanelEdge
 			local info = tostring(m:GetAttribute("Info") or "")
 			local rule = tostring(m:GetAttribute("Rule") or "")
 			local body = info .. ((info ~= "" and rule ~= "") and "\n" or "") .. rule
@@ -1204,18 +1207,18 @@ local function updateCaravan(root: BasePart?, alive: boolean)
 	-- world pill over the cart
 	local label, color, edge
 	if defending then
-		label, color, edge = grace >= 0 and "UNDEFENDED" or "DEFEND", grace >= 0 and P.crimson_300 or P.gold_200, P.crimson_400
+		label, color, edge = grace >= 0 and "UNDEFENDED" or "DEFEND", grace >= 0 and C.TextDanger or C.BlueDeep, C.Danger
 	elseif st == "Saved" then
-		label, color, edge = "SAVED", P.gold_200, P.gold_400
+		label, color, edge = "SAVED", C.BlueDeep, C.PanelEdge
 	elseif st == "Lost" then
-		label, color, edge = "LOST", C.TextMuted, P.stone_600
+		label, color, edge = "LOST", C.TextMuted, C.Disabled
 	else
 		if blocked ~= "" then
-			label, color, edge = "LOST CARAVAN · " .. string.upper(blocked), P.ivory_300, P.slate_400
+			label, color, edge = "LOST CARAVAN · " .. string.upper(blocked), C.TextMuted, C.Track
 		elseif startFill > 0 then
-			label, color, edge = "STARTING · STAY IN THE RING", P.gold_200, P.gold_400
+			label, color, edge = "STARTING · STAY IN THE RING", C.BlueDeep, C.PanelEdge
 		else
-			label, color, edge = "LOST CARAVAN · STAND IN THE RING", P.ivory_200, P.gold_400
+			label, color, edge = "LOST CARAVAN · STAND IN THE RING", C.Text, C.PanelEdge
 		end
 	end
 	local p, on = project(pos + Vector3.new(0, 9, 0))
@@ -1241,7 +1244,7 @@ local function updateCaravan(root: BasePart?, alive: boolean)
 	ui.CaravanArrow.Visible = shown
 	if shown then
 		ui.CaravanArrowDist.Text = string.format("%d m", math.floor(dist + 0.5))
-		ui.CaravanTip.BackgroundColor3 = defending and P.crimson_400 or P.gold_400
+		ui.CaravanTip.BackgroundColor3 = defending and C.Danger or C.PanelEdge
 	end
 end
 

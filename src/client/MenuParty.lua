@@ -35,11 +35,12 @@ local PartyLines = require(script.Parent.PartyLines)
 local MenuParty = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 local player = Players.LocalPlayer
 
 local ROW_H = 56
 local ROW_GAP = 6
+local INSET, BASE = 4, 6 -- the lists clip: room for row outlines (sides / top) and below
 
 type State = { LeaderId: number, Members: { { UserId: number, Name: string, Ready: boolean? } }, Max: number, Invites: { { FromId: number, FromName: string, Seconds: number } }, Sent: { number } }
 
@@ -135,7 +136,7 @@ local function rowButton(parent: Instance, title: string, icon: string?, kind: s
 		Icon = icon,
 		IconSize = 16,
 		Align = "Center",
-		Shadow = false,
+		Depth = "Light",
 		Size = UDim2.fromOffset(bw(w, title), 40),
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -x, 0.5, 0),
@@ -147,11 +148,10 @@ end
 -- Head shot, name and a status line; `right` = room kept for buttons.
 local function personRow(parent: Instance, order: number, userId: number, name: string, sub: string, subColor: Color3?, right: number, gold: boolean?): Frame
 	local f = UIKit.Panel(parent, { Name = "Row" .. order, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H), ClipsDescendants = true }, true)
-	f.BackgroundColor3 = gold and P.slate_800 or P.slate_950
-	f.BackgroundTransparency = gold and 0.05 or 0.35
-	if gold then
-		UIKit.stroke(f, P.gold_400, 1.5, 0.15)
-	end
+	-- your own row is lime-pale with a lime edge (selected cue: the "(you)" tag too)
+	f.BackgroundColor3 = gold and C.SelectedPale or C.PanelRaised
+	f.BackgroundTransparency = 0
+	UIKit.stroke(f, gold and C.SelectedEdge or C.Blue, 2, 0)
 	UIKit.Avatar(f, userId, 40, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0) })
 	text(f, "BodyStrong", name, {
 		Name = "Name",
@@ -239,7 +239,7 @@ local function inviteFriends(toast: (string, Color3?) -> ())
 			return SocialService:CanSendGameInviteAsync(player)
 		end)
 		if not ok or not can then
-			toast("Invites can't be sent from here right now.", P.gold_300)
+			toast("Invites can't be sent from here right now.", C.BlueDeep)
 			return
 		end
 		local options: Instance? = nil
@@ -252,7 +252,7 @@ local function inviteFriends(toast: (string, Color3?) -> ())
 			SocialService:PromptGameInvite(player, options)
 		end)
 		if not shown then
-			toast("Couldn't open the invite prompt.", P.gold_300)
+			toast("Couldn't open the invite prompt.", C.BlueDeep)
 		end
 	end)
 end
@@ -267,14 +267,14 @@ MenuParty.InviteFriends = inviteFriends
 local card: { [string]: any } = {}
 
 local function buildCard(host: { [string]: any })
-	local holder, face = UIKit.Surface(host.Root, { Name = "PartyInviteCard", Radius = Theme.Radius.L, Transparency = 0.04, Edge = P.gold_400, EdgeTransparency = 0.1, Visible = false })
+	local holder, face = UIKit.Surface(host.Root, { Name = "PartyInviteCard", Radius = Theme.Radius.L, Transparency = 0, Edge = C.Blue, Visible = false })
 	holder.ZIndex = Theme.Z.Toast
 	card.Holder = holder
 	UIKit.padding(face, 10, 12, 10, 12)
 	card.AvatarSlot = new("Frame", { Name = "AvatarSlot", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 2), Size = UDim2.fromOffset(44, 44) }, face)
 	card.Title = text(face, "BodyStrong", "", { Name = "Title", Position = UDim2.fromOffset(56, 0), Size = UDim2.new(1, -56, 0, TS(16) + 4), TextTruncate = Enum.TextTruncate.AtEnd }, 16)
-	card.Sub = text(face, "Small", "", { Name = "Sub", Position = UDim2.fromOffset(56, TS(16) + 6), Size = UDim2.new(1, -56, 0, TS(13) + 4), TextColor3 = P.gold_300 }, 13)
-	local bar = new("Frame", { Name = "Time", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 6), Size = UDim2.new(1, 0, 0, 3) }, face)
+	card.Sub = text(face, "Small", "", { Name = "Sub", Position = UDim2.fromOffset(56, TS(16) + 6), Size = UDim2.new(1, -56, 0, TS(13) + 4), TextColor3 = C.BlueDeep }, 13)
+	local bar = new("Frame", { Name = "Time", BackgroundColor3 = C.Blue, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 6), Size = UDim2.new(1, 0, 0, 3) }, face)
 	UIKit.corner(bar, 2)
 	card.Bar = bar
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -4), Size = UDim2.new(1, 0, 0, 44) }, face)
@@ -377,13 +377,15 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	local tab = "Server"
 	local dirty = true
 
-	ui.Header = UIKit.ScreenHeader(screen, "PARTY", ctx.Back)
-	-- member count pill beside the title (real count over the server's party size)
-	ui.CountPill = UIKit.IconPill(ui.Header.Frame, nil, "1/3", { Name = "CountPill", AnchorPoint = Vector2.new(0, 0.5) })
 	local infoOpen = false
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	-- one raised panel: header (BACK, the PARTY plate, the member count), the two columns and
+	-- the footer line
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, EdgeThickness = Theme.Stroke.Medium, Depth = 4 })
 	ui.Panel = holder
-	UIKit.padding(face, 16, 18, 16, 18)
+	ui.Pad = UIKit.padding(face, 16, 18, 16, 18)
+	ui.Header = UIKit.ScreenHeader(face, "PARTY", ctx.Back, true)
+	-- member count pill beside the title (real count over the server's party size)
+	ui.CountPill = UIKit.IconPill(face, nil, "1/3", { Name = "CountPill", AnchorPoint = Vector2.new(0, 0.5) })
 
 	-- left: your party
 	local left = new("Frame", { Name = "Party", BackgroundTransparency = 1 }, face)
@@ -394,17 +396,19 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, left)
-	UIKit.padding(plist, 2, 8, 2, 2) -- strokes stay inside the clip; room for the scroll bar
+	UIKit.padding(plist, INSET, 8, BASE, INSET) -- strokes and raised buttons stay inside the clip; room for the scroll bar
 	UIKit.list(plist, { Padding = UDim.new(0, ROW_GAP) })
 	ui.Members = plist
 	ui.Leave = UIKit.Button(left, {
-		Kind = "Secondary",
+		Kind = "Danger",
 		Title = "LEAVE PARTY",
+		Shrink = true,
+		Depth = "Medium",
 		Icon = "close",
 		IconSize = 18,
 		Align = "Center",
@@ -418,6 +422,8 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	ui.Start = UIKit.Button(left, {
 		Kind = "Primary",
 		Title = "START",
+		Shrink = true,
+		Depth = "Strong",
 		Icon = "play",
 		IconSize = 18,
 		Align = "Center",
@@ -432,7 +438,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 
 	-- footer under both columns: one summary line, an info toggle for the detailed rules
 	ui.Foot = new("Frame", { Name = "Footer", BackgroundTransparency = 1 }, face)
-	ui.FootRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1) }, ui.Foot)
+	ui.FootRule = new("Frame", { Name = "Rule", BackgroundColor3 = C.Divider, BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1) }, ui.Foot)
 	ui.Info = UIKit.IconButton(ui.Foot, {
 		Icon = "info",
 		Size = 44,
@@ -442,13 +448,28 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			dirty = true
 		end,
 	})
+	ui.Info.SetDepth("Light")
 	ui.Summary = text(ui.Foot, "Small", "", { Name = "Summary", TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.TextMuted }, 14)
 	ui.Rules = text(ui.Foot, "Small", "", { Name = "Rules", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted, Visible = false }, 14)
 
 	-- right: this server / friends
 	local right = new("Frame", { Name = "Find", BackgroundTransparency = 1 }, face)
 	ui.Right = right
-	ui.Tabs = UIKit.Tabs(right, { { Id = "Server", Title = "This server", Icon = "people3" }, { Id = "Friends", Title = "Friends", Icon = "userPlus" } }, function(id)
+	-- THIS SERVER / FRIENDS: two raised tabs, the picked one lime with a check badge (the
+	-- colour is not the only cue); same select / Select() behaviour as UIKit.Tabs
+	local TABS = { { Id = "Server", Title = "This server", Icon = "people3" }, { Id = "Friends", Title = "Friends", Icon = "userPlus" } }
+	local tabsFrame = new("Frame", { Name = "Tabs", BackgroundTransparency = 1 }, right)
+	local tabButtons: { [string]: any } = {}
+	local tabIcons = true
+	local function paintTabs()
+		for id, b in pairs(tabButtons) do
+			local on = id == tab
+			b.SetKind(on and "Selected" or "Secondary")
+			b.SetDepth(on and "Strong" or "Light")
+			b.Check.Visible = on
+		end
+	end
+	local function onTab(id: string)
 		tab = id
 		dirty = true
 		if id == "Friends" then
@@ -456,13 +477,64 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 				dirty = true
 			end)
 		end
-	end)
+	end
+	for i, item in ipairs(TABS) do
+		local b = UIKit.Button(tabsFrame, {
+			Kind = "Secondary",
+			Title = string.upper(item.Title),
+			Icon = item.Icon,
+			IconSize = 22,
+			TitleStyle = "H2",
+			TitleSize = 18,
+			Align = "Center",
+			Shrink = true,
+			Depth = "Light",
+			Name = item.Id,
+			LayoutOrder = i,
+			OnClick = function()
+				if tab ~= item.Id then
+					tab = item.Id
+					paintTabs()
+					UIAnim.Bump(tabButtons[item.Id].Face, 0.06)
+					onTab(item.Id)
+				end
+			end,
+		})
+		local check = new("Frame", {
+			Name = "Check",
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, 6, 0, -6),
+			Size = UDim2.fromOffset(22, 22),
+			BackgroundColor3 = C.Text,
+			BorderSizePixel = 0,
+			ZIndex = 6,
+			Active = false,
+			Visible = false,
+		}, b.Instance)
+		UIKit.corner(check, 999)
+		UIKit.stroke(check, C.Panel, 2, 0)
+		Icons.Draw(check, "check", { Size = 13, Color = C.TextOnBlue, Back = C.Text, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+		b.Check = check
+		tabButtons[item.Id] = b
+	end
+	paintTabs()
+	ui.Tabs = {
+		Frame = tabsFrame,
+		Select = function(id: string)
+			tab = id
+			paintTabs()
+		end,
+	}
 	ui.InviteFriends = UIKit.Button(right, {
 		Kind = "Primary",
 		Title = "INVITE FRIENDS",
 		Icon = "userPlus",
-		IconSize = 20,
+		IconSize = 22,
+		TitleStyle = "H2",
+		TitleSize = 20,
 		Align = "Center",
+		Shrink = true,
+		Depth = "Strong",
 		Name = "InviteFriends",
 		OnClick = function()
 			inviteFriends(ctx.Toast)
@@ -478,20 +550,21 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			end)
 		end,
 	})
+	ui.Refresh.SetDepth("Light")
 	local list = new("ScrollingFrame", {
 		Name = "People",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, right)
-	UIKit.padding(list, 2, 8, 2, 2)
+	UIKit.padding(list, INSET, 8, BASE, INSET)
 	UIKit.list(list, { Padding = UDim.new(0, ROW_GAP) })
 	ui.List = list
-	ui.EmptyIcon = Icons.Draw(right, "people3", { Size = 56, Color = P.slate_500, AnchorPoint = Vector2.new(0.5, 0), Visible = false })
+	ui.EmptyIcon = Icons.Draw(right, "people3", { Size = 56, Color = C.Blue:Lerp(Color3.new(1, 1, 1), 0.45), AnchorPoint = Vector2.new(0.5, 0), Visible = false })
 	ui.Empty = text(right, "BodyStrong", "", { Name = "Empty", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text, Visible = false }, 18)
 	ui.EmptySub = text(right, "Body", "", { Name = "EmptySub", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, Visible = false })
 
@@ -524,7 +597,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		-- invites to you first
 		for _, inv in ipairs(openInvites()) do
 			order += 1
-			local f = personRow(plist, order, inv.FromId, inv.FromName, narrow and "Invited you" or "Invited you to their party", P.gold_300, bw(108, "ACCEPT") + 8 + 44 + 16, true)
+			local f = personRow(plist, order, inv.FromId, inv.FromName, narrow and "Invited you" or "Invited you to their party", C.BlueDeep, bw(108, "ACCEPT") + 8 + 44 + 16, false)
 			rowButton(f, "ACCEPT", nil, "Primary", 108, 8, function()
 				send("Accept", inv.FromId)
 				deadlines[inv.FromId] = 0
@@ -550,9 +623,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			local toggle = me and not leads and inParty()
 			-- right side: [KICK | READY toggle]
 			local btnW = canKick and bw(100, "KICK") or (toggle and bw(120, ready and "UNREADY" or "READY") or 0)
-			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and P.gold_300 or nil, btnW > 0 and btnW + 12 or 0, me)
+			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and C.BlueDeep or nil, btnW > 0 and btnW + 12 or 0, me)
 			if canKick then
-				rowButton(f, "KICK", nil, "Secondary", 100, 8, function()
+				rowButton(f, "KICK", nil, "Danger", 100, 8, function()
 					send("Kick", m.UserId)
 				end)
 			elseif toggle then
@@ -568,13 +641,13 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		for i = 1, slots do
 			order += 1
 			local f = UIKit.Panel(plist, { Name = "Slot" .. i, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H) }, true)
-			f.BackgroundColor3 = P.slate_950
-			f.BackgroundTransparency = 0.6
-			UIKit.stroke(f, P.slate_500, 1, 0.5)
-			local ring = new("Frame", { Name = "Ring", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(40, 40) }, f)
+			f.BackgroundColor3 = C.PanelRaised
+			f.BackgroundTransparency = 0
+			UIKit.stroke(f, C.Blue, 2, 0)
+			local ring = new("Frame", { Name = "Ring", BackgroundColor3 = C.TextMuted, BackgroundTransparency = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(40, 40) }, f)
 			UIKit.corner(ring, 999)
-			UIKit.stroke(ring, P.slate_500, 1, 0.4)
-			Icons.Draw(ring, "userPlus", { Size = 22, Color = P.slate_400, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+			UIKit.stroke(ring, C.TextMuted, 1, 0)
+			Icons.Draw(ring, "userPlus", { Size = 22, Color = C.TextOnBlue, Back = C.TextMuted, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 			text(f, "Body", canInvite and "Invite player" or "Open slot", { Name = "SlotText", Position = UDim2.fromOffset(60, 0), Size = UDim2.new(1, -(canInvite and 124 or 70), 1, 0), TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
 			if canInvite then
 				UIKit.IconButton(f, {
@@ -582,11 +655,11 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 					Size = 44,
 					Name = "InviteSlot",
 					AnchorPoint = Vector2.new(1, 0.5),
-					Position = UDim2.new(1, -8, 0.5, 0),
+					Position = UDim2.new(1, -8, 0.5, -1),
 					OnClick = function()
 						focusInvite()
 					end,
-				})
+				}).SetDepth("Light")
 			end
 		end
 		leftRows = order
@@ -635,9 +708,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			local same = myParty ~= 0 and theirParty == myParty
 			local sub, color = "On this server", nil
 			if same then
-				sub, color = "In your party", P.moss_200
+				sub, color = "In your party", C.Success
 			elseif invitedMe[p.UserId] then
-				sub, color = "Invited you", P.gold_300
+				sub, color = "Invited you", C.BlueDeep
 			elseif sentTo(p.UserId) then
 				sub = "Invite sent"
 			elseif theirParty ~= 0 then
@@ -666,7 +739,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	local function friendRows(): number
 		for i, f in ipairs(friends.Rows) do
 			local sub = f.Here and "On this server" or (f.InSwarm and "Playing SWARM" or "Online")
-			local r = personRow(list, i, f.UserId, f.Name, sub, f.InSwarm and P.moss_200 or nil, f.InSwarm and not f.Here and (bw(112, "JOIN") + 12) or 0)
+			local r = personRow(list, i, f.UserId, f.Name, sub, f.InSwarm and C.Success or nil, f.InSwarm and not f.Here and (bw(112, "JOIN") + 12) or 0)
 			if f.InSwarm and not f.Here then
 				rowButton(r, "JOIN", "play", "Primary", 112, 8, function()
 					Remotes.Get("PartyFollow"):FireServer(f.UserId)
@@ -714,38 +787,48 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		if abs.X > 0 and scale > 0 then
 			W, H = math.min(W, abs.X / scale), math.min(H, abs.Y / scale)
 		end
-		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+		local compact = UIKit.IsCompact()
+		local M = compact and Theme.Layout.MarginCompact or Theme.Layout.Margin
 		local headY = math.max(ins.Top + 4, 12)
-		place(ui.Header.Frame, M, headY, math.min(560, W - 2 * M), 56)
-		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		local short = not portrait and (H < 520 or (compact and H < 640))
+		local top = headY + (portrait and 130 or (short and 6 or 46))
 		local maxH = H - top - M
 		local w = math.min(W - 2 * M, 1040)
+		local padV = short and 10 or (compact and 12 or 16)
+		local padH = short and 12 or (compact and 14 or 18)
+		ui.Pad.PaddingTop, ui.Pad.PaddingBottom = UDim.new(0, padV), UDim.new(0, padV)
+		ui.Pad.PaddingLeft, ui.Pad.PaddingRight = UDim.new(0, padH), UDim.new(0, padH)
+		local PH, PV = 2 * padH, 2 * padV -- the face padding (sides, top + bottom)
+		-- header inside the panel: BACK, the PARTY plate, the count pill after the plate
+		local headH = short and 50 or 52
+		local HY = headH + 14 -- the columns start under the header
 		local labelH = TS(12) + 6
-		local stackedW = W - 2 * M - 36
+		local stackedW = W - 2 * M - PH
 		-- footer: summary line + info toggle (44 high); the opened rules add their wrapped lines
 		local rulesLines = infoOpen and math.clamp(math.ceil(#ui.Rules.Text * TS(14) * 0.56 / math.max(1, stackedW - 8)), 1, 5) or 0
 		local rulesH = infoOpen and (rulesLines * (TS(14) + 3) + 6) or 0
 		local footH = 10 + 44 + rulesH
 		local leaveH = ui.Leave.Instance.Visible and Theme.Size.Button or 0
-		local listWant = leftRows * (ROW_H + ROW_GAP) + 4
+		local listWant = leftRows * (ROW_H + ROW_GAP) - ROW_GAP + INSET + BASE
 		local tabsH = Theme.Size.TapMin + 4
-		local stacked = portrait or w - 36 < 620
+		local stacked = portrait or w - PH < 620
 		-- landscape: only as tall as the longer column needs (at least four rows)
 		local leftWant = labelH + 8 + listWant + 8 + (leaveH > 0 and leaveH + 8 or 0)
-		local rightWant = tabsH + 10 + (tab == "Friends" and 58 or 0) + math.max(4, rightRows) * (ROW_H + ROW_GAP) + 4
+		local rightWant = tabsH + 10 + (tab == "Friends" and 58 or 0) + math.max(4, rightRows) * (ROW_H + ROW_GAP) - ROW_GAP + INSET + BASE
 		-- quick lines strip under both columns (PartyLines): the row, then the feed
 		local sayOn = PartyLines.Available()
 		local sayRowH, feedLines, barH = 0, 0, 0
 		if sayOn then
-			sayRowH = ui.Say.Measure(w - 36)
+			sayRowH = ui.Say.Measure(w - PH)
 			feedLines = (portrait or H >= 560) and 3 or 1
 			barH = sayRowH + 6 + ui.Feed.Measure(feedLines) + 10
 		end
-		local panelH = math.min(maxH, (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + 36 + footH + barH)
-		local iw, ih = w - 36, panelH - 32
+		local panelH = math.min(maxH, HY + (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + PV + 4 + footH + barH)
+		local iw, ih = w - PH, panelH - PV
 		place(ui.Panel, (W - w) / 2, top, w, panelH)
-		local colH = ih - barH - footH
-		place(ui.Foot, 0, colH + 10, iw, footH - 10)
+		place(ui.Header.Frame, 0, 0, iw, headH)
+		local colH = ih - barH - footH - HY
+		place(ui.Foot, 0, HY + colH + 10, iw, footH - 10)
 		place(ui.FootRule, 0, 0, iw, 1)
 		place(ui.Info.Instance, 0, 6, 44, 44)
 		place(ui.Summary, 52, 6, iw - 52, 44)
@@ -753,7 +836,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		ui.Rules.Visible = infoOpen
 		ui.Bar.Visible = sayOn
 		if sayOn then
-			place(ui.Bar, 0, colH + footH + 10, iw, barH - 10)
+			place(ui.Bar, 0, HY + colH + footH + 10, iw, barH - 10)
 			ui.Say.Layout(iw)
 			ui.Say.Frame.Position = UDim2.fromOffset(0, 0)
 			ui.Feed.Layout(iw, feedLines)
@@ -770,7 +853,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			lh = colH
 			rx, ry, rw, rh = lw + 24, 0, iw - lw - 24, colH
 		end
-		place(ui.Left, 0, 0, lw, lh)
+		place(ui.Left, 0, HY, lw, lh)
 		local listH = math.max(ROW_H, lh - labelH - 8 - 8 - (leaveH > 0 and leaveH + 8 or 0))
 		place(ui.Members, 0, labelH + 8, lw, math.min(listH, listWant))
 		local y = labelH + 8 + math.min(listH, listWant) + 8
@@ -779,28 +862,34 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			place(ui.Leave.Instance, 0, y, bwid, leaveH)
 			place(ui.Start.Instance, bwid + 12, y, bwid, leaveH)
 		end
-		place(ui.Right, rx, ry, rw, rh)
+		place(ui.Right, rx, HY + ry, rw, rh)
 		-- narrow lists: compact row buttons (rows are rebuilt when this flips)
 		local wasNarrow = narrow
 		narrow = math.min(lw, rw) < 440
 		if narrow ~= wasNarrow then
 			dirty = true
 		end
-		-- tabs: no icons when the column is narrow, so the titles fit
-		for _, b in ipairs(ui.Tabs.Frame:GetChildren()) do
-			local icon = b:FindFirstChild("IconHolder", true)
-			if icon and icon:IsA("GuiObject") then
-				icon.Visible = rw >= 420
+		-- tabs: no icons when the column is narrow, so the titles fit; each tab keeps room
+		-- below for its raised base
+		local icons = rw >= 420
+		if icons ~= tabIcons then
+			tabIcons = icons
+			for _, item in ipairs(TABS) do
+				tabButtons[item.Id].SetIcon(icons and item.Icon or nil)
 			end
 		end
 		ui.Tabs.Frame.Position = UDim2.new()
 		ui.Tabs.Frame.Size = UDim2.new(1, 0, 0, tabsH)
+		local tabW = math.floor((rw - 10) / 2)
+		for i, item in ipairs(TABS) do
+			place(tabButtons[item.Id].Instance, (i - 1) * (tabW + 10), 0, tabW, tabsH - 6)
+		end
 		local ly = tabsH + 10
 		local friendsTab = tab == "Friends"
 		if friendsTab then
 			place(ui.InviteFriends.Instance, 0, ly, rw - 58, 48)
 			place(ui.Refresh.Instance, rw - 48, ly, 48, 48)
-			ly += 58
+			ly += 60
 		end
 		local areaH = math.max(ROW_H, rh - ly)
 		place(ui.List, 0, ly, rw, areaH)
@@ -822,9 +911,16 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		if showBtn then
 			place(ui.InviteFriends.Instance, math.floor((rw - math.min(rw - 24, 300)) / 2), ty + titleH + subH + 10, math.min(rw - 24, 300), 48)
 		end
-		-- header: count pill right after the title
-		local tb = ui.Header.Title.TextBounds.X
-		ui.CountPill.Frame.Position = UDim2.new(0, 148 + tb + 14, 0.5, 0)
+		-- header: count pill right after the title plate (measured: the plate grows with
+		-- Roblox's text size setting)
+		local plate = ui.Header.Plate and ui.Header.Plate.Frame
+		local plateW
+		if plate and plate.AbsoluteSize.X > 0 and holder.AbsoluteSize.X > 0 then
+			plateW = plate.AbsoluteSize.X * w / holder.AbsoluteSize.X -- screen px back to layout px
+		else
+			plateW = ui.Header.Title.TextSize * 0.62 * #ui.Header.Title.Text + 36
+		end
+		ui.CountPill.Frame.Position = UDim2.fromOffset(144 + math.floor(plateW) + 12, math.floor(headH / 2) - 2)
 	end
 	MenuParty._layout = function()
 		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
@@ -915,6 +1011,12 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	return {
 		Layout = layout,
 		OnShow = function()
+			-- once the title plate has its real width, place what sits after it
+			task.delay(0.1, function()
+				if screen.Visible then
+					MenuParty._layout()
+				end
+			end)
 			fill()
 			UIAnim.Pop(holder, 0, 0.94)
 			if tab == "Friends" then

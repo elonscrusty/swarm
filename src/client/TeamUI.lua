@@ -144,7 +144,7 @@ end
 
 local function buildRow(p: Player, order: number): Row
 	local w, h = rowSize()
-	local holder, face = UIKit.Surface(ui.List, { Name = "Mate_" .. p.Name, Radius = Theme.Radius.M, Transparency = 0.18, Shadow = false, Size = UDim2.fromOffset(w, h), LayoutOrder = order })
+	local holder, face = UIKit.Surface(ui.List, { Name = "Mate_" .. p.Name, Radius = Theme.Radius.M, Transparency = 0.04, EdgeThickness = 2, Shadow = false, Size = UDim2.fromOffset(w, h), LayoutOrder = order })
 	holder.Active = false
 	UIKit.padding(face, 5, 10, 5, 8)
 	local iconHolder = new("Frame", { Name = "Hero", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(32, 32) }, face)
@@ -196,8 +196,8 @@ local STATE_TEXT = {
 	out = "OUT",
 }
 local HEALTH = Theme.Gradient.Health
-local REVIVE = ColorSequence.new(P.gold_300, P.gold_500)
-local GREY = ColorSequence.new(P.stone_400, P.stone_600)
+local REVIVE = Theme.Gradient.Primary
+local GREY = ColorSequence.new(C.TextFaint, C.TextFaint)
 
 local function updateRow(r: Row, state: Configuration)
 	local p = r.Player
@@ -210,13 +210,13 @@ local function updateRow(r: Row, state: Configuration)
 				c:Destroy()
 			end
 		end
-		local icon = Icons.Character(r.IconHolder, heroId, { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+		local icon = Icons.Character(r.IconHolder, heroId, { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
 		-- the hero's painted bust in the ring (the class icon while it loads / without one)
 		r.Bust = ArtImage.RoundPortrait(r.IconHolder, ArtImage.Portrait(heroId), { icon })
 	end
 	if r.Bust then
 		-- greyed while down / out
-		r.Bust.ImageColor3 = (s == "down" or s == "out" or s == "deciding") and Color3.fromRGB(110, 110, 120) or Color3.new(1, 1, 1)
+		r.Bust.ImageColor3 = (s == "down" or s == "out" or s == "deciding") and Color3.fromRGB(150, 160, 175) or Color3.new(1, 1, 1)
 	end
 	local word = STATE_TEXT[s] or ""
 	local value: number
@@ -244,14 +244,14 @@ local function updateRow(r: Row, state: Configuration)
 		if grad then
 			grad.Color = (s == "reviving" or s == "down") and REVIVE or ((s == "out" or s == "deciding") and GREY or HEALTH)
 		end
-		r.State.TextColor3 = (s == "down") and P.crimson_300 or ((s == "reviving") and P.gold_300 or ((s == "choosing") and P.slate_300 or C.TextMuted))
+		r.State.TextColor3 = (s == "down") and C.TextDanger or ((s == "reviving") and C.BlueDeep or C.TextMuted)
 		r.Name.TextColor3 = (s == "out" or s == "deciding") and C.TextMuted or C.Text
 		if old ~= "" and (s == "down" or (old ~= "alive" and old ~= "choosing" and s == "alive")) then
 			UIAnim.Punch(r.Holder, 0.12)
 			if not ClientSettings.Reduced() then
 				local down = s == "down"
 				local face = r.Holder:FindFirstChild("Face")
-				local f = new("Frame", { Name = "Glow", BackgroundColor3 = down and P.crimson_400 or P.moss_300, BackgroundTransparency = 0.4, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, r.Holder)
+				local f = new("Frame", { Name = "Glow", BackgroundColor3 = down and C.Danger or C.Selected, BackgroundTransparency = 0.4, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, r.Holder)
 				local corner = face and face:FindFirstChildWhichIsA("UICorner")
 				if corner then
 					corner:Clone().Parent = f
@@ -260,13 +260,13 @@ local function updateRow(r: Row, state: Configuration)
 					f:Destroy()
 				end)
 				if not down then
-					UIAnim.Sparks(r.Holder, UDim2.new(0, 24, 0.5, 0), P.moss_200, 8, 36, 0.5)
+					UIAnim.Sparks(r.Holder, UDim2.new(0, 24, 0.5, 0), C.Selected, 8, 36, 0.5)
 				end
 			end
 		end
 	end
 	if r.Last and value > r.Last + 0.04 and (s == "alive" or s == "choosing") then
-		UIAnim.SweepOnce(r.Meter.Frame, P.moss_200, 0.45, 0.4)
+		UIAnim.SweepOnce(r.Meter.Frame, C.Selected, 0.45, 0.4)
 	end
 	r.Last = value
 	r.Meter.Set(value)
@@ -279,10 +279,10 @@ end
 local function buildMarker(p: Player): Marker
 	local holder = new("Frame", { Name = "Revive_" .. p.Name, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(MARK_R * 2 + 16, MARK_R * 2 + 16), ZIndex = Theme.Z.Hud, Visible = false }, ui.Markers)
 	local ring = new("Frame", { Name = "Ring", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, holder)
-	local disc = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(MARK_R * 2 - 10, MARK_R * 2 - 10), BackgroundColor3 = C.Panel, BackgroundTransparency = 0.2, BorderSizePixel = 0 }, ring)
+	local disc = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(MARK_R * 2 - 10, MARK_R * 2 - 10), BackgroundColor3 = C.Panel, BackgroundTransparency = 0.05, BorderSizePixel = 0 }, ring)
 	UIKit.corner(disc, 999)
 	UIKit.stroke(disc, P.crimson_400, 1.5, 0.2)
-	Icons.Draw(disc, "revive", { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	Icons.Draw(disc, "revive", { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.Panel })
 	local segs = {}
 	local c = MARK_R + 8
 	for i = 1, MARK_SEGMENTS do
@@ -292,9 +292,10 @@ local function buildMarker(p: Player): Marker
 			Position = UDim2.fromOffset(c + math.cos(a) * MARK_R, c + math.sin(a) * MARK_R),
 			Size = UDim2.fromOffset(4, 8),
 			Rotation = math.deg(a) + 90,
-			BackgroundColor3 = P.slate_500,
+			BackgroundColor3 = C.BluePale,
 			BorderSizePixel = 0,
 		}, ring)
+		UIKit.stroke(seg, C.Blue, 1, 0.3)
 		UIKit.corner(seg, 999)
 		segs[i] = seg
 	end
@@ -308,7 +309,7 @@ local function buildMarker(p: Player): Marker
 		Position = UDim2.new(0.5, 0, 1, 0),
 		Size = UDim2.fromOffset(200, TS(Theme.Type.Label.Size) + 4),
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = P.ivory_100,
+		TextColor3 = C.TextOnBlue,
 		TextStrokeTransparency = 0.3,
 	}, true)
 	return { Holder = holder, Segments = segs, Label = label, Arrow = arrow, Pivot = pivot, Ring = ring }
@@ -338,7 +339,7 @@ local function updateMarker(m: Marker, p: Player, root: BasePart, progress: numb
 	markLit[m.Holder] = lit
 	for i, seg in ipairs(m.Segments) do
 		local on = i <= lit
-		seg.BackgroundColor3 = on and P.gold_300 or P.slate_500
+		seg.BackgroundColor3 = on and C.Primary or C.BluePale
 		seg.BackgroundTransparency = on and 0 or 0.25
 	end
 	local name = isMe and "You" or p.DisplayName

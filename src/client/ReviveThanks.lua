@@ -2,7 +2,7 @@
 	ReviveThanks.lua (client; Config.Features.ReviveThanks, Config.Revive;
 	docs/next/REVIVE_THANKS.md)
 	After a teammate revives you the server sends ReviveThanksOffer { Id, Seconds, FromName }.
-	This shows a gold THANKS! button for Seconds (6) low in the middle of the screen, away
+	This shows a yellow THANKS! button for Seconds (6) low in the middle of the screen, away
 	from JUMP and ULT (bottom right, or bottom left when left-handed) and from the movement
 	stick, in its own ScreenGui. A tap sends only the offer id (remote ReviveThanks); the
 	server decides everything (the reviver's notice and run XP, the limits). The button hides

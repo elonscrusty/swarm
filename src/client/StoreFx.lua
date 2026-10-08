@@ -38,6 +38,7 @@ local StoreFx = {}
 local player = Players.LocalPlayer
 local S = (Config :: any).Store or {}
 local new = UIKit.new
+local C = UIKit.Theme.Color
 
 local folder: Folder? = nil
 local plateGui: Folder? = nil
@@ -237,7 +238,7 @@ function StoreFx.DecoratePlate(frame: GuiObject, who: Player): boolean
 	if not l and not supporter then
 		return false
 	end
-	local color = l and l.Color or Color3.fromRGB(255, 222, 120)
+	local color = l and l.Color or C.PrimaryEdge
 	local s = UIKit.stroke(frame, color, 2, 0)
 	s.Name = "StorePlateStroke"
 	if supporter or (l and l.Glow) then
@@ -248,7 +249,7 @@ function StoreFx.DecoratePlate(frame: GuiObject, who: Player): boolean
 		UIAnim.Breathe(glow, 0.06, 1.4)
 	end
 	if supporter then
-		local badge = UIKit.Badge(frame, "SUPPORTER", "Gold", { Name = "StoreSupporter", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 1, 2) })
+		local badge = UIKit.Badge(frame, "SUPPORTER", "Slate", { Name = "StoreSupporter", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 1, 2) })
 		badge.ZIndex = 3
 	end
 	return true
@@ -279,8 +280,8 @@ local function buildPlate(r: Rig, who: Player, adornee: BasePart)
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromScale(0.5, 0),
 		Size = UDim2.new(1, -20, 0, 24),
-		BackgroundColor3 = l and l.Color2 or Color3.fromRGB(40, 32, 20),
-		BackgroundTransparency = 0.2,
+		BackgroundColor3 = l and l.Color2 or C.Panel,
+		BackgroundTransparency = l and 0.2 or 0,
 		BorderSizePixel = 0,
 	}, gui)
 	UIKit.corner(plate, 999)
@@ -288,7 +289,7 @@ local function buildPlate(r: Rig, who: Player, adornee: BasePart)
 		Name = "Name",
 		Size = UDim2.fromScale(1, 1),
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = l and l.Color or Color3.fromRGB(255, 232, 160),
+		TextColor3 = l and l.Color or C.Text,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		ZIndex = 2,
 	}, 14)
@@ -317,7 +318,7 @@ local function showEmote(r: Rig, who: Player, adornee: BasePart)
 		MaxDistance = S.PlateRange or 70,
 		ResetOnSpawn = false,
 	}, plateGui)
-	local disc = new("Frame", { Name = "Disc", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(60, 60), BackgroundColor3 = Color3.fromRGB(28, 24, 36), BackgroundTransparency = 0.15, BorderSizePixel = 0 }, gui)
+	local disc = new("Frame", { Name = "Disc", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(60, 60), BackgroundColor3 = C.Panel, BackgroundTransparency = 0, BorderSizePixel = 0 }, gui)
 	UIKit.corner(disc, 999)
 	UIKit.stroke(disc, l.Color, 2, 0)
 	Icons.Draw(disc, l.Icon or "sparkle", { Size = 40, Color = l.Color, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5) } :: any)

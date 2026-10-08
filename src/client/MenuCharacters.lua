@@ -58,7 +58,7 @@ local MenuCharacters = {}
 local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
-local DETAIL_HEADING = Font.fromEnum(Enum.Font.GothamBold)
+local DETAIL_HEADING = Theme.Font.Heading
 
 -- A hero name shrinks to fit its row / tile ("Necromancer" in a narrow portrait tab, or a large
 -- Roblox Text size setting) instead of being cut to "Necroma..." (docs/MOBILE_FIX.md).
@@ -240,11 +240,14 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	end
 
 	ui.Header = UIKit.TitleBar(screen, "Characters", ctx.Back)
+	-- a little wider BACK than the kit's compact one: "BACK" keeps its letters at the Largest text size
+	ui.Header.Back.Instance.Size = UDim2.fromOffset(128, 42)
+	ui.Header.Title.Position = UDim2.new(0, 146, 0.5, 0)
 
 	------------------------------------------------------------------------------------
 	-- left: the roster (landscape) / tabs (portrait)
 	------------------------------------------------------------------------------------
-	local listHolder, listFace = UIKit.Surface(screen, { Name = "List", Radius = Theme.Radius.L, Transparency = 0.06 })
+	local listHolder, listFace = UIKit.Surface(screen, { Name = "List", Radius = Theme.Radius.L })
 	ui.List = listHolder
 	UIKit.padding(listFace, 10, 10, 10, 10)
 	ui.ListLayout = UIKit.list(listFace, { Padding = UDim.new(0, 0) })
@@ -256,7 +259,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			Text = def.Name, -- invisible: tools / a11y find the row by it
 			TextTransparency = 1,
 			AutoButtonColor = false,
-			BackgroundColor3 = P.slate_700,
+			BackgroundColor3 = C.PanelRaised,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, 64),
@@ -264,34 +267,34 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		}, listFace)
 		UIKit.corner(hit, Theme.Radius.M)
 		UIKit.Focusable(hit)
-		local edge = UIKit.stroke(hit, P.gold_400, 1.5, 1)
-		local accent = new("Frame", { Name = "Accent", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(0, 4, 1, -12), Visible = false, ZIndex = 3 }, hit)
+		local edge = UIKit.stroke(hit, C.PanelEdge, 2, 1)
+		local accent = new("Frame", { Name = "Accent", BackgroundColor3 = C.BlueDeep, BorderSizePixel = 0, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(0, 4, 1, -12), Visible = false, ZIndex = 3 }, hit)
 		UIKit.corner(accent, 2)
-		local sep = UIKit.Hairline(hit, { Name = "Sep", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 8, 1, 0), Size = UDim2.new(1, -16, 0, 1), BackgroundTransparency = 0.82 })
+		local sep = UIKit.Hairline(hit, { Name = "Sep", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 8, 1, 0), Size = UDim2.new(1, -16, 0, 1), BackgroundTransparency = 0 })
 		local icon = Icons.Character(hit, id, { Size = 46, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0) })
-		local name = text(hit, "H2", def.Name, { Name = "CharName", TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, Theme.TextSize.H2)
+		local name = text(hit, "H2", def.Name, { Name = "CharName", TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.Text }, Theme.TextSize.H2)
 		-- right side marks: check + EQUIPPED, lock, PREVIEW
 		local marks = new("Frame", { Name = "Marks", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.new(0, 170, 1, 0) }, hit)
 		UIKit.list(marks, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
-		local check = Icons.Draw(marks, "check", { Size = 20, Color = P.gold_300, Back = P.slate_900 })
+		local check = Icons.Draw(marks, "check", { Size = 20, Color = C.SelectedEdge, Back = C.Panel })
 		check.LayoutOrder = 1
-		local equipped = text(marks, "Label", "SELECTED", { Name = "Equipped", LayoutOrder = 2, Size = UDim2.fromOffset(0, TS(13) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_200 }, 13)
-		local lock = Icons.Draw(marks, "lock", { Size = 18, Color = P.stone_300, Back = P.slate_900 })
+		local equipped = text(marks, "Label", "SELECTED", { Name = "Equipped", LayoutOrder = 2, Size = UDim2.fromOffset(0, TS(13) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.SelectedEdge }, 13)
+		local lock = Icons.Draw(marks, "lock", { Size = 18, Color = C.DisabledText, Back = C.Panel })
 		lock.LayoutOrder = 3
 		local preview = UIKit.StatusPill(marks, "PREVIEW", { LayoutOrder = 4, Size = UDim2.fromOffset(0, TS(11) + 12) })
 		preview.TextSize = TS(11)
 		UIKit.SetStatus(preview, "PREVIEW")
-		preview.TextColor3 = P.gold_200
-		preview.BackgroundColor3 = P.slate_950
+		preview.TextColor3 = C.BlueDeep
+		preview.BackgroundColor3 = C.BluePale
 		local pe = preview:FindFirstChild("StatusEdge") :: UIStroke?
 		if pe then
-			pe.Color = P.gold_400
-			pe.Transparency = 0.15
+			pe.Color = C.PanelEdge
+			pe.Transparency = 0
 		end
 		UIAnim.Button(hit)
 		hit.MouseEnter:Connect(function()
 			if inspChar ~= id then
-				hit.BackgroundTransparency = 0.82
+				hit.BackgroundTransparency = 0.5
 			end
 		end)
 		hit.MouseLeave:Connect(function()
@@ -313,13 +316,16 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	ui.Centre = new("Frame", { Name = "HeroName", BackgroundTransparency = 1, Size = UDim2.fromOffset(420, 60) }, screen)
 	ui.CentreTitle = UIKit.TitleRule(ui.Centre, "", { Position = UDim2.fromOffset(0, 0) }, Theme.TextSize.H3 + 2)
 	ui.CentreTitle.Title.FontFace = Theme.Font.Display
-	ui.CentreTitle.Title.TextColor3 = P.ivory_100
-	ui.CentreSub = text(ui.Centre, "Body", "", { Name = "Preview", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, TS(15) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_300 }, 15)
+	UIKit.PageTitleStyle(ui.CentreTitle.Title, 2)
+	ui.CentreSub = text(ui.Centre, "Body", "", { Name = "Preview", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(0, TS(15) + 8), AutomaticSize = Enum.AutomaticSize.X, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text, BackgroundColor3 = C.Panel, BackgroundTransparency = 0 }, 15)
+	UIKit.corner(ui.CentreSub, 999)
+	UIKit.padding(ui.CentreSub, 0, 14, 0, 14)
+	UIKit.stroke(ui.CentreSub, C.PanelEdge, 2, 0)
 
 	------------------------------------------------------------------------------------
 	-- right: details
 	------------------------------------------------------------------------------------
-	local detailHolder, detailFace = UIKit.Surface(screen, { Name = "Details", Radius = Theme.Radius.L, Transparency = 0.04 })
+	local detailHolder, detailFace = UIKit.Surface(screen, { Name = "Details", Radius = Theme.Radius.L })
 	ui.Detail = detailHolder
 	local scroll = new("ScrollingFrame", {
 		Name = "Scroll",
@@ -327,8 +333,8 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(0, STICKY_H),
 		Size = UDim2.new(1, 0, 1, -STICKY_H),
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarThickness = 5,
+		ScrollBarImageColor3 = C.PanelEdge,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -338,10 +344,10 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	ui.Scroll = scroll
 	-- sticky strip over the scrolling details: which hero this panel is about (PREVIEW vs
 	-- EQUIPPED) and whose upgrades the rows below buy, so it stays clear while scrolling
-	ui.Sticky = new("Frame", { Name = "Sticky", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.2, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, STICKY_H), ZIndex = 4 }, detailFace)
+	ui.Sticky = new("Frame", { Name = "Sticky", BackgroundColor3 = C.BluePale, BackgroundTransparency = 0, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, STICKY_H), ZIndex = 4 }, detailFace)
 	UIKit.corner(ui.Sticky, Theme.Radius.L)
 	UIKit.Hairline(ui.Sticky, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, 0), Size = UDim2.new(1, -24, 0, 1), ZIndex = 5 })
-	ui.StickyText = text(ui.Sticky, "Label", "", { Name = "Text", Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, -32, 1, 0), RichText = true, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100, TextScaled = true, ZIndex = 5 }, 13)
+	ui.StickyText = text(ui.Sticky, "Label", "", { Name = "Text", Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, -32, 1, 0), RichText = true, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.Text, TextScaled = true, ZIndex = 5 }, 13)
 	new("UITextSizeConstraint", { MaxTextSize = TS(13), MinTextSize = 9 }, ui.StickyText)
 	-- footer for the action button when the details don't fit (phones): always in view
 	ui.Footer = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Visible = false, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) }, detailFace)
@@ -350,17 +356,17 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 
 	-- head: framed portrait | NAME + pill / ROLE / intro
 	local head = new("Frame", { Name = "Head", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, PORTRAIT), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, scroll)
-	ui.PortraitWell = new("Frame", { Name = "Portrait", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, Size = UDim2.fromOffset(PORTRAIT, PORTRAIT), ClipsDescendants = true }, head)
+	ui.PortraitWell = new("Frame", { Name = "Portrait", BackgroundColor3 = C.Panel, BackgroundTransparency = 0, Size = UDim2.fromOffset(PORTRAIT, PORTRAIT), ClipsDescendants = true }, head)
 	UIKit.corner(ui.PortraitWell, Theme.Radius.M)
-	UIKit.stroke(ui.PortraitWell, P.gold_400, 2, 0.1)
+	UIKit.stroke(ui.PortraitWell, C.PanelEdge, 3, 0)
 	local col = new("Frame", { Name = "Column", BackgroundTransparency = 1, Position = UDim2.fromOffset(PORTRAIT + 14, 0), Size = UDim2.new(1, -(PORTRAIT + 14), 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, head)
 	UIKit.list(col, { Padding = UDim.new(0, 6) })
 	local nameRow = new("Frame", { Name = "NameRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, TS(30) + 6), LayoutOrder = 1 }, col)
-	ui.Name = text(nameRow, "H1", "", { Name = "CharName", FontFace = DETAIL_HEADING, Size = UDim2.fromScale(1, 1), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, 28)
+	ui.Name = text(nameRow, "H1", "", { Name = "CharName", FontFace = DETAIL_HEADING, Size = UDim2.fromScale(1, 1), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.Text }, 28)
 	ui.State = UIKit.StatusPill(col, "OWNED", { LayoutOrder = 2, Size = UDim2.fromOffset(0, Theme.Size.Badge + 10) })
 	ui.StatePad = ui.State:FindFirstChildOfClass("UIPadding")
-	ui.StateLock = Icons.Draw(ui.State, "lock", { Size = 14, Color = P.crimson_300, Back = P.slate_950, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -4, 0.5, 0) })
-	ui.Role = text(col, "Label", "", { Name = "Role", FontFace = DETAIL_HEADING, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(13) + 4), TextColor3 = P.gold_300 }, 13)
+	ui.StateLock = Icons.Draw(ui.State, "lock", { Size = 14, Color = C.DisabledText, Back = C.Disabled, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -4, 0.5, 0) })
+	ui.Role = text(col, "Label", "", { Name = "Role", FontFace = DETAIL_HEADING, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(13) + 4), TextColor3 = C.BlueDeep }, 13)
 	ui.Desc = text(col, "Body", "", {
 		Name = "Intro",
 		LayoutOrder = 4,
@@ -369,7 +375,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextColor3 = P.ivory_200,
+		TextColor3 = C.Text,
 	}, 15)
 	UIKit.Divider(scroll, 10, { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 12) })
 
@@ -379,17 +385,17 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	local function fact(x: number, caption: string): (TextLabel, Frame)
 		local half = new("Frame", { Name = caption, BackgroundTransparency = 1, Position = UDim2.fromOffset(0, x > 0 and factH + 8 or 0), Size = UDim2.new(1, 0, 0, factH) }, facts)
 		local well = new("Frame", { Name = "Well", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(48, 48) }, half)
-		text(half, "Label", string.upper(caption), { FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(60, 4), Size = UDim2.new(1, -60, 0, TS(12) + 4), TextColor3 = P.gold_300 }, 12)
-		local value = text(half, "BodyStrong", "", { Position = UDim2.fromOffset(60, 8 + TS(12)), Size = UDim2.new(1, -60, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100 }, 18)
+		text(half, "Label", string.upper(caption), { FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(60, 4), Size = UDim2.new(1, -60, 0, TS(12) + 4), TextColor3 = C.BlueDeep }, 12)
+		local value = text(half, "BodyStrong", "", { Position = UDim2.fromOffset(60, 8 + TS(12)), Size = UDim2.new(1, -60, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.Text }, 18)
 		return value, well
 	end
 	ui.Weapon, ui.WeaponHolder = fact(0, "Starting weapon")
 	local bonus, traitWell = fact(0.5, "Trait")
 	ui.Bonus = bonus
-	local traitDisc = new("Frame", { BackgroundColor3 = P.moss_700, Size = UDim2.fromScale(1, 1) }, traitWell)
+	local traitDisc = new("Frame", { BackgroundColor3 = C.Blue, Size = UDim2.fromScale(1, 1) }, traitWell)
 	UIKit.corner(traitDisc, 999)
-	UIKit.stroke(traitDisc, P.moss_300, 1.5, 0.3)
-	Icons.Draw(traitDisc, "sparkle", { Size = 26, Color = P.ivory_100, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.moss_700 })
+	UIKit.stroke(traitDisc, C.BlueDeep, 2, 0)
+	Icons.Draw(traitDisc, "sparkle", { Size = 26, Color = C.TextOnBlue, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.Blue })
 	UIKit.Hairline(scroll, { LayoutOrder = 4 })
 
 	-- EFFECT (big "+N%" + text + weapon list), STRENGTH, TRADEOFF
@@ -416,16 +422,16 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 		return l
 	end
-	local _, effBody = infoRow(5, "Effect", P.gold_300)
+	local _, effBody = infoRow(5, "Effect", C.BlueDeep)
 	UIKit.list(effBody, { Padding = UDim.new(0, 6) })
 	local effTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, effBody)
-	ui.EffectBig = text(effTop, "Display", "", { Name = "Big", FontFace = DETAIL_HEADING, Size = UDim2.fromOffset(0, TS(24) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300 }, 24)
-	ui.Trait = wrapped(effTop, "Body", P.ivory_100, 15)
-	ui.EffectList = wrapped(effBody, "Small", P.ivory_300, 14, { LayoutOrder = 2, Name = "Weapons" })
-	local _, strBody = infoRow(6, "Strength", P.gold_300)
-	ui.Strength = wrapped(strBody, "Body", P.ivory_100, 15)
-	local _, tradeBody = infoRow(7, "Tradeoff", P.crimson_300)
-	ui.Tradeoff = wrapped(tradeBody, "Body", P.crimson_300, 15)
+	ui.EffectBig = text(effTop, "Display", "", { Name = "Big", FontFace = DETAIL_HEADING, Size = UDim2.fromOffset(0, TS(24) + 4), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.BlueDeep }, 24)
+	ui.Trait = wrapped(effTop, "Body", C.Text, 15)
+	ui.EffectList = wrapped(effBody, "Small", C.TextMuted, 14, { LayoutOrder = 2, Name = "Weapons" })
+	local _, strBody = infoRow(6, "Strength", C.BlueDeep)
+	ui.Strength = wrapped(strBody, "Body", C.Text, 15)
+	local _, tradeBody = infoRow(7, "Tradeoff", C.TextDanger)
+	ui.Tradeoff = wrapped(tradeBody, "Body", C.TextDanger, 15)
 
 	-- UNLOCK block (locked heroes): goal + big progress, the rule, a gold bar
 	local unlock = new("Frame", { Name = "Unlock", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 8 }, scroll)
@@ -433,11 +439,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.list(unlock, { Padding = UDim.new(0, 4) })
 	UIKit.Hairline(unlock, { LayoutOrder = 0 })
 	local uTop = new("Frame", { Name = "Top", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, unlock)
-	ui.UnlockLabel = text(uTop, "Label", "UNLOCK", { FontFace = DETAIL_HEADING, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
-	ui.UnlockName = text(uTop, "BodyStrong", "", { FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(0, TS(13) + 10), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.ivory_100 }, 16)
-	ui.UnlockCount = text(unlock, "Display", "", { FontFace = DETAIL_HEADING, LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(22) + 6), TextColor3 = P.gold_200 }, 22)
-	ui.UnlockRule = wrapped(unlock, "Body", P.ivory_200, 15, { Name = "Rule", LayoutOrder = 3 })
-	ui.UnlockMeter = UIKit.Meter(unlock, { Size = UDim2.new(1, 0, 0, 10), Color = P.gold_400, LayoutOrder = 4 } :: any)
+	ui.UnlockLabel = text(uTop, "Label", "UNLOCK", { FontFace = DETAIL_HEADING, TextColor3 = C.BlueDeep, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
+	ui.UnlockName = text(uTop, "BodyStrong", "", { FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(0, TS(13) + 10), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = C.Text }, 16)
+	ui.UnlockCount = text(unlock, "Display", "", { FontFace = DETAIL_HEADING, LayoutOrder = 2, Size = UDim2.new(1, 0, 0, TS(22) + 6), TextColor3 = C.BlueDeep }, 22)
+	ui.UnlockRule = wrapped(unlock, "Body", C.TextMuted, 15, { Name = "Rule", LayoutOrder = 3 })
+	ui.UnlockMeter = UIKit.Meter(unlock, { Size = UDim2.new(1, 0, 0, 10), Color = C.Blue, LayoutOrder = 4 } :: any)
 	ui.UnlockMeter.Frame.Name = "Progress"
 
 	-- Hero Mastery (owned heroes): UPGRADE <HERO> opens the hero's upgrade rows below it
@@ -492,11 +498,11 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 			if p.OwnedCharacters[inspChar] ~= true then
 				if def.Unlock then
 					local a = AchievementData.Achievements[def.Unlock.Achievement]
-					ctx.Toast(string.format("Unlock the %s: %s", def.Name, a and a.Description or "earn its achievement"), P.gold_300)
+					ctx.Toast(string.format("Unlock the %s: %s", def.Name, a and a.Description or "earn its achievement"), C.BlueDeep)
 					return
 				end
 				if p.Gold < def.Cost then
-					ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(def.Cost) .. " needed.", P.crimson_300)
+					ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(def.Cost) .. " needed.", C.Danger)
 					return
 				end
 				Remotes.Get("BuyCharacter"):FireServer(inspChar)
@@ -509,7 +515,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	-- SKINS header (label, rule, the button for a skin not owned) and the skin cards
 	local skinHeadH = math.max(Theme.Size.TapMin, TS(14) + 14)
 	local skinHead = new("Frame", { Name = "SkinHead", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, skinHeadH), LayoutOrder = 10 }, scroll)
-	text(skinHead, "Label", "SKINS", { FontFace = DETAIL_HEADING, TextColor3 = P.gold_300, Size = UDim2.fromOffset(64, skinHeadH) }, 13)
+	text(skinHead, "Label", "SKINS", { FontFace = DETAIL_HEADING, TextColor3 = C.BlueDeep, Size = UDim2.fromOffset(64, skinHeadH) }, 13)
 	ui.SkinRule = UIKit.Hairline(skinHead, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 70, 0.5, 0), Size = UDim2.new(1, -70, 0, 1) })
 	ui.SkinAction = UIKit.Button(skinHead, {
 		Name = "SkinAction",
@@ -569,23 +575,23 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				Name = skinId,
 				Text = "",
 				AutoButtonColor = false,
-				BackgroundColor3 = P.slate_900,
-				BackgroundTransparency = 0.15,
+				BackgroundColor3 = C.PanelRaised,
+				BackgroundTransparency = 0,
 				Size = UDim2.fromOffset(ui.SkinW, cardH),
 				LayoutOrder = order,
 			}, ui.Swatches)
 			UIKit.corner(hit, Theme.Radius.M)
 			UIKit.Focusable(hit)
-			local st = UIKit.stroke(hit, P.slate_600, 1.5, 0.3)
+			local st = UIKit.stroke(hit, C.Divider, 2, 0)
 			-- the swatch: torso colour, hat band, trim
 			local sw = new("Frame", { Name = "Swatch", BackgroundColor3 = look.Colors.Torso, Position = UDim2.fromOffset(10, 8), Size = UDim2.new(1, -20, 0, 34), ClipsDescendants = true }, hit)
 			UIKit.corner(sw, 4)
 			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(170, 170, 170)) }, sw)
 			new("Frame", { BackgroundColor3 = look.Colors.Hat, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0.36, 0) }, sw)
 			new("Frame", { BackgroundColor3 = look.GoldTrim and P.gold_400 or look.Colors.Accent, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.66), Size = UDim2.new(1, 0, 0, 5) }, sw)
-			local lock = new("Frame", { Name = "Lock", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, sw)
-			Icons.Draw(lock, "lock", { Size = 18, Color = P.ivory_200, Back = P.slate_950, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
-			text(hit, "Small", skinName(skinId), { Name = "SkinName", Position = UDim2.fromOffset(4, 45), Size = UDim2.new(1, -8, 0, TS(14) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd })
+			local lock = new("Frame", { Name = "Lock", BackgroundColor3 = C.Disabled, BackgroundTransparency = 0.25, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, sw)
+			Icons.Draw(lock, "lock", { Size = 18, Color = C.DisabledText, Back = C.Disabled, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+			text(hit, "Small", skinName(skinId), { Name = "SkinName", Position = UDim2.fromOffset(4, 45), Size = UDim2.new(1, -8, 0, TS(14) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
 			local pill = UIKit.StatusPill(hit, "OWNED", { Name = "State", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -7), Size = UDim2.fromOffset(0, TS(10) + 10) })
 			pill.TextSize = TS(10)
 			local pad = pill:FindFirstChildOfClass("UIPadding")
@@ -593,10 +599,10 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 				pad.PaddingLeft = UDim.new(0, 8)
 				pad.PaddingRight = UDim.new(0, 8)
 			end
-			local badge = new("Frame", { Name = "Check", BackgroundColor3 = P.gold_400, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0, 6), Size = UDim2.fromOffset(22, 22), Visible = false, ZIndex = 5 }, hit)
+			local badge = new("Frame", { Name = "Check", BackgroundColor3 = C.Selected, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0, 6), Size = UDim2.fromOffset(22, 22), Visible = false, ZIndex = 5 }, hit)
 			UIKit.corner(badge, 999)
-			UIKit.stroke(badge, P.gold_200, 1, 0.2)
-			Icons.Draw(badge, "check", { Size = 14, Color = P.gold_900, Back = P.gold_400, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+			UIKit.stroke(badge, C.SelectedEdge, 2, 0)
+			Icons.Draw(badge, "check", { Size = 14, Color = C.Text, Back = C.Selected, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 			UIAnim.Button(hit)
 			hit.Activated:Connect(function()
 				UIKit.Click()
@@ -630,7 +636,7 @@ local bought: { [string]: { [string]: number } } = {} -- upgrades bought on this
 		-- whose upgrades these are, and one running note of what was bought on this visit
 		-- (rows update from the server's profile; no stream of confirmations here)
 		local headTxt = string.format("%s'S UPGRADES · only for the %s · paid with gold", string.upper(heroName), heroName)
-		text(ui.MasteryPanel, "Small", headTxt, { Name = "Owner", LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(13) + 6), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.gold_200, FontFace = DETAIL_HEADING }, 13) -- wraps to a second line at large text sizes
+		text(ui.MasteryPanel, "Small", headTxt, { Name = "Owner", LayoutOrder = 0, Size = UDim2.new(1, 0, 0, TS(13) + 6), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = C.BlueDeep, FontFace = DETAIL_HEADING }, 13) -- wraps to a second line at large text sizes
 		local bw = math.clamp(math.floor(innerW * 0.37), 128, 190)
 		local withIcon = bw >= 175 -- narrow buttons (phones) keep the whole label instead
 		local lineH = TS(13) + 4
@@ -653,13 +659,14 @@ local bought: { [string]: { [string]: number } } = {} -- upgrades bought on this
 			end
 			lastHeroLevel[key] = level
 			local busy = pending[key] ~= nil
-			local row = new("Frame", { Name = id, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, Size = UDim2.new(1, 0, 0, rowH), LayoutOrder = order }, ui.MasteryPanel)
+			local row = new("Frame", { Name = id, BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, Size = UDim2.new(1, 0, 0, rowH), LayoutOrder = order }, ui.MasteryPanel)
 			UIKit.corner(row, Theme.Radius.M)
+			UIKit.stroke(row, C.Divider, 2, 0)
 			if id == "Signature" then
-				local disc = new("Frame", { Name = "Icon", BackgroundColor3 = P.moss_700, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(36, 36) }, row)
+				local disc = new("Frame", { Name = "Icon", BackgroundColor3 = C.Blue, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(36, 36) }, row)
 				UIKit.corner(disc, 999)
-				UIKit.stroke(disc, P.moss_300, 1.5, 0.3)
-				Icons.Draw(disc, Icons.MetaIcon("Signature"), { Size = 20, Color = P.ivory_100, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.moss_700 })
+				UIKit.stroke(disc, C.BlueDeep, 2, 0)
+				Icons.Draw(disc, Icons.MetaIcon("Signature"), { Size = 20, Color = C.TextOnBlue, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.Blue })
 			else
 				local tile = UIKit.Tile(row, { Id = Icons.MetaIcon(id), Size = 36 })
 				tile.AnchorPoint = Vector2.new(0, 0.5)
@@ -668,7 +675,7 @@ local bought: { [string]: { [string]: number } } = {} -- upgrades bought on this
 			local textW = innerW - 52 - bw - 16
 			text(row, "Label", string.upper(def.Name) .. " · LV " .. level .. "/" .. def.MaxLevel, {
 				Name = "Level", FontFace = DETAIL_HEADING, Position = UDim2.fromOffset(52, 5), Size = UDim2.fromOffset(textW, lineH),
-				TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = maxed and P.gold_300 or P.ivory_100,
+				TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = maxed and C.BlueDeep or C.Text,
 			}, 13)
 			local effectLine = effectStep(heroId, id, level, maxed)
 if locked then
@@ -678,7 +685,7 @@ end
 text(row, "Small", effectLine, {
 				Name = "Effect", Position = UDim2.fromOffset(52, 5 + lineH + 2), Size = UDim2.fromOffset(textW, rowH - lineH - 12),
 				TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd,
-				TextColor3 = maxed and P.gold_300 or (locked and P.ivory_300 or P.moss_200),
+				TextColor3 = maxed and C.BlueDeep or (locked and C.TextMuted or C.Success),
 			}, 13)
 			local title, kind = "", "Primary"
 			local icon = "coin"
@@ -715,7 +722,7 @@ text(row, "Small", effectLine, {
 					end
 					local pr = profile()
 					if pr and pr.Gold < (cost :: number) then
-						ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(cost :: number) .. " needed.", P.crimson_300)
+						ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(cost :: number) .. " needed.", C.Danger)
 						return
 					end
 					pending[key] = os.clock()
@@ -740,7 +747,7 @@ text(row, "Small", effectLine, {
 				table.insert(parts, name .. " LV " .. lv)
 			end
 			table.sort(parts)
-			text(ui.MasteryPanel, "Small", "Bought this visit: " .. table.concat(parts, " · "), { Name = "Bought", LayoutOrder = 100, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.moss_200 }, 13)
+			text(ui.MasteryPanel, "Small", "Bought this visit: " .. table.concat(parts, " · "), { Name = "Bought", LayoutOrder = 100, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = C.Success }, 13)
 		end
 	end
 
@@ -763,13 +770,13 @@ text(row, "Small", effectLine, {
 		local own = p.OwnedCharacters[id] == true
 		local sel = p.SelectedCharacter == id
 		local full = row.Mode == "row"
-		row.Instance.BackgroundTransparency = insp and 0.55 or (full and 1 or 0.4)
-		row.Instance.BackgroundColor3 = insp and P.slate_700 or P.slate_900
-		row.Edge.Transparency = insp and 0.05 or (full and 1 or 0.6)
-		row.Edge.Color = insp and P.gold_400 or P.slate_600
-		row.Edge.Thickness = insp and 2 or 1
+		row.Instance.BackgroundTransparency = (insp or not full) and 0 or 1
+		row.Instance.BackgroundColor3 = insp and C.BluePale or C.PanelRaised
+		row.Edge.Transparency = (insp or not full) and 0 or 1
+		row.Edge.Color = insp and C.PanelEdge or C.Divider
+		row.Edge.Thickness = insp and 3 or 2
 		row.Accent.Visible = insp and full
-		row.Name.TextColor3 = insp and P.gold_200 or ((own or full) and P.ivory_100 or P.stone_300)
+		row.Name.TextColor3 = insp and C.BlueDeep or ((own or full) and C.Text or C.TextMuted)
 		row.Check.Visible = sel
 		row.Equipped.Visible = sel and full
 		row.Lock.Visible = not own
@@ -906,7 +913,7 @@ text(row, "Small", effectLine, {
 		local wearing = selected and type(p.Skins) == "table" and (p.Skins[inspChar] or "Default") == previewSkin
 		ui.CentreSub.Text = (wearing and "Equipped  ·  " or "Preview  ·  ") .. skinName(previewSkin)
 local eqDef = CharacterData.Characters[p.SelectedCharacter or CharacterData.Default]
-local gold, muted = UIKit.hex(P.gold_300), UIKit.hex(P.ivory_300)
+local gold, muted = UIKit.hex(C.BlueDeep), UIKit.hex(C.TextMuted)
 local sticky
 if selected then
 	sticky = string.format('<font color="%s">EQUIPPED</font>  %s', gold, string.upper(def.Name))
@@ -914,7 +921,7 @@ if selected then
 		sticky ..= string.format('  <font color="%s">· previewing skin %s</font>', muted, skinName(previewSkin))
 	end
 else
-	sticky = string.format('<font color="%s">PREVIEW</font>  %s  <font color="%s">· you play the %s until you select another</font>', gold, string.upper(def.Name), muted, eqDef and eqDef.Name or "Knight")
+	sticky = string.format('<font color="%s">PREVIEW</font>  %s  <font color="%s">· you play the %s%s</font>', gold, string.upper(def.Name), muted, eqDef and eqDef.Name or "Knight", UIKit.IsCompact() and "" or " until you select another")
 end
 ui.StickyText.Text = sticky
 		-- how to unlock it: the achievement and its progress, or the gold price; an owned
@@ -971,15 +978,16 @@ ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d).
 			ui.Action.SetIcon("lock")
 			ui.Action.SetEnabled(false)
 		elseif not own then
-			ui.Action.SetEnabled(p.Gold >= def.Cost)
 			ui.Action.SetKind("Primary")
+			ui.Action.SetEnabled(p.Gold >= def.Cost)
 			ui.Action.SetText("UNLOCK  ·  " .. UIKit.formatNumber(def.Cost) .. " GOLD")
 			ui.Action.SetIcon("coin")
 		elseif selected then
-			ui.Action.SetKind("Secondary")
+			-- (lime with a check: nothing to do, a tap changes nothing)
+			ui.Action.SetEnabled(true)
+			ui.Action.SetKind("Selected")
 			ui.Action.SetText(string.upper(def.Name) .. " SELECTED")
 			ui.Action.SetIcon("check")
-			ui.Action.SetEnabled(false)
 		else
 			ui.Action.SetEnabled(true)
 			ui.Action.SetKind("Primary")
@@ -997,13 +1005,13 @@ ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d).
 			if isEq then
 				UIKit.SetStatus(s.Pill, "EQUIPPED", narrow and "EQUIPPED" or "SKIN EQUIPPED")
 			elseif mine then
-				UIKit.SetStatus(s.Pill, "OWNED-DARK", "OWNED")
+				UIKit.SetStatus(s.Pill, "OWNED", "OWNED")
 			else
-				UIKit.SetStatus(s.Pill, "SOON-DARK", skinPassId(skinId) and "R$" or "SOON")
+				UIKit.SetStatus(s.Pill, "LOCKED", skinPassId(skinId) and "R$" or "SOON")
 			end
-			s.Stroke.Color = isEq and P.gold_400 or (skinId == inspSkin and P.ivory_200 or P.slate_600)
-			s.Stroke.Thickness = (isEq or skinId == inspSkin) and 2 or 1.5
-			s.Stroke.Transparency = (isEq or skinId == inspSkin) and 0 or 0.3
+			s.Stroke.Color = isEq and C.SelectedEdge or (skinId == inspSkin and C.PanelEdge or C.Divider)
+			s.Stroke.Thickness = (isEq or skinId == inspSkin) and 3 or 2
+			s.Stroke.Transparency = 0
 		end
 		-- Preview never changes the equipped skin; only this explicit action does.
 		local skin = CharacterData.Skins[inspSkin]
@@ -1011,10 +1019,10 @@ ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d).
 		action.Instance.Visible = true
 		if skinOwned(p, inspSkin) then
 			local isEquipped = equipped == inspSkin
-			action.SetKind(isEquipped and "Secondary" or "Outline")
+			action.SetKind(isEquipped and "Selected" or "Secondary")
 			action.SetIcon("check")
 			action.SetText(isEquipped and "EQUIPPED" or "EQUIP SKIN")
-			action.SetEnabled(own and not isEquipped)
+			action.SetEnabled(own)
 		else
 			local passId = skinPassId(inspSkin)
 			action.Instance.Visible = true
@@ -1047,7 +1055,7 @@ ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d).
 		MenuCharacters._relayout()
 		UIAnim.Punch(ui.Detail, 0.03)
 		if screen.Visible then
-			UIAnim.Burst(ui.Detail, UDim2.fromScale(0.5, 0.1), { P.gold_300, P.ivory_100, P.steel_200 }, 12, 70)
+			UIAnim.Burst(ui.Detail, UDim2.fromScale(0.5, 0.1), { C.BlueLight, C.Panel, C.Blue }, 12, 70)
 		end
 	end
 

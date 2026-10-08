@@ -238,8 +238,8 @@ function BugReportUI.Build(root: Instance, h: { [string]: any })
 	local well = new("Frame", {
 		Name = "Well",
 		LayoutOrder = 4,
-		BackgroundColor3 = C.PanelInset,
-		BackgroundTransparency = 0.15,
+		BackgroundColor3 = C.PanelRaised,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 150),
 	}, content)

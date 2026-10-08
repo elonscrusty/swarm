@@ -126,18 +126,19 @@ function TeamPings.Init()
 	gui = pingGui
 	local frame = UIKit.new("Frame", { Name = "Controls", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, pingGui)
 	local M = Theme.Layout.Margin
-	local panel = UIKit.new("Frame", { Name = "PingOptions", BackgroundColor3 = Theme.Palette.slate_900, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, M, 1, -(M + 48 + 8)), Size = UDim2.fromOffset(248, 172), Visible = false }, frame)
+	local panel = UIKit.new("Frame", { Name = "PingOptions", BackgroundColor3 = Theme.Color.Panel, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, M, 1, -(M + 48 + 8)), Size = UDim2.fromOffset(248, 172), Visible = false }, frame)
 	UIKit.corner(panel, Theme.Radius.M)
-	UIKit.stroke(panel, Theme.Palette.gold_400, 1, 0.3)
-	local button = UIKit.Button(frame, { Name = "Ping", Title = "PING", Kind = "Secondary", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, M, 1, -M), Size = UDim2.fromOffset(88, 48), Shadow = false, OnClick = function() toggle(panel) end })
+	UIKit.stroke(panel, Theme.Color.PanelEdge, 2, 0)
+	local button = UIKit.Button(frame, { Name = "Ping", Title = "PING", Icon = "bars", IconSize = 20, Kind = "Secondary", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, M, 1, -M), Size = UDim2.fromOffset(112, 48), Shadow = false, Shrink = true, OnClick = function() toggle(panel) end })
 	for i, kind in ipairs(kinds) do
 		UIKit.Button(panel, { Name = kind, Title = string.upper(kind), Kind = "Secondary", Position = UDim2.fromOffset(8 + ((i - 1) % 2) * 120, 8 + math.floor((i - 1) / 2) * 54), Size = UDim2.fromOffset(112, 48), Shadow = false, OnClick = function() TeamPings.Send(kind); opened = false; panel.Visible = false end })
 	end
 	for _ = 1, 12 do
 		local anchor = UIKit.new("Part", { Name = "TeamPingMarker", Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false, Transparency = 1, Size = Vector3.one }, workspace)
 		local billboard = UIKit.new("BillboardGui", { Name = "Ping", Adornee = anchor, Size = UDim2.fromOffset(120, 44), StudsOffsetWorldSpace = Vector3.new(0, 4, 0), AlwaysOnTop = true, MaxDistance = 160, Enabled = false }, anchor)
-		local label = UIKit.text(billboard, "Label", "", { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 0.3, BackgroundColor3 = Theme.Palette.slate_950, BackgroundTransparency = 0.2 }, 14)
+		local label = UIKit.text(billboard, "Label", "", { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextStrokeTransparency = 1, BackgroundColor3 = Theme.Color.Text, BackgroundTransparency = 0.08 }, 14)
 		UIKit.corner(label, Theme.Radius.M)
+		UIKit.stroke(label, Theme.Color.PanelEdge, 2, 0)
 		table.insert(markers, { Anchor = anchor, Billboard = billboard, Label = label, Until = 0 })
 	end
 	Remotes.Get("TeamPingShown").OnClientEvent:Connect(function(payload)

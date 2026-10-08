@@ -24,7 +24,7 @@ local MetaUI = require(script.Parent.MetaUI)
 local MenuWeekly = {}
 
 local new, TS = UIKit.new, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 
 -- This week's setup (server clock).
 function MenuWeekly.Setup(): MetaData.Weekly
@@ -52,10 +52,10 @@ end
 function MenuWeekly.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui = MetaUI.Screen(screen, ctx, "WEEKLY")
-	local heroWell = new("Frame", { Name = "Hero", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.1, Size = UDim2.fromOffset(64, 64) }, ui.Head)
+	local heroWell = new("Frame", { Name = "Hero", BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, Size = UDim2.fromOffset(64, 64) }, ui.Head)
 	UIKit.corner(heroWell, 999)
-	UIKit.stroke(heroWell, P.gold_400, 2, 0.1)
-	local line1 = MetaUI.Line(ui.Head, "Label", "", 17, { Name = "WeekHero", TextColor3 = P.gold_200 })
+	UIKit.stroke(heroWell, C.PanelEdge, 2, 0)
+	local line1 = MetaUI.Line(ui.Head, "Label", "", 17, { Name = "WeekHero", TextColor3 = C.BlueDeep })
 	local line2 = MetaUI.Line(ui.Head, "Small", "", 14, { Name = "WeekCurses", TextColor3 = C.Text })
 	local line3 = MetaUI.Line(ui.Head, "Small", "", 14, { Name = "WeekBest" })
 
@@ -124,9 +124,9 @@ function MenuWeekly.Build(screen: Frame, ctx: { [string]: any })
 				Sub = UIKit.formatNumber(tonumber(r.Value) or 0) .. " points",
 				Height = 52,
 			})
-			row.SetDim(not r.Me)
+			row.SetDone(r.Me == true)
 			if r.Me then
-				row.Title.TextColor3 = P.gold_200
+				row.Title.TextColor3 = C.BlueDeep
 			end
 		end
 	end

@@ -38,7 +38,7 @@ local MenuPlaytime = require(script.Parent.MenuPlaytime)
 local MenuLeaderboards = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 local player = Players.LocalPlayer
 
 local BOARDS = {
@@ -170,7 +170,7 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 	local rowCount = 0
 
 	ui.Header = UIKit.ScreenHeader(screen, "LEADERBOARDS", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, Edge = C.Blue })
 	ui.Panel = holder
 	UIKit.padding(face, 16, 20, 16, 20)
 	local items = {}
@@ -203,7 +203,7 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 	ui.Sub = text(face, "Body", "", { Name = "BoardSub", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text })
 	ui.Explain = text(face, "Small", "", { Name = "BoardCaption", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextFaint, TextWrapped = true })
 	-- status note (loading / local / error)
-	local noteHolder, noteFace = UIKit.Surface(face, { Name = "Note", Radius = Theme.Radius.M, Transparency = 0.2, Edge = P.gold_400, EdgeTransparency = 0.5, Shadow = false, Visible = false })
+	local noteHolder, noteFace = UIKit.Surface(face, { Name = "Note", Radius = Theme.Radius.M, Transparency = 0, Color = C.BluePale, Edge = C.Blue, Shadow = false, Visible = false })
 	ui.Note = noteHolder
 	ui.NoteIcon = Icons.Draw(noteFace, "info", { Size = 22, Position = UDim2.new(0, 12, 0.5, -11) })
 	ui.NoteText = text(noteFace, "Small", "", { Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -54, 1, 0), TextWrapped = true, TextColor3 = C.Text })
@@ -221,7 +221,7 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -233,26 +233,25 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 	ui.Count = text(face, "Small", "", { Name = "Count", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextFaint })
 
 	-- YOUR BEST: pinned personal card
-	local youHolder, youFace = UIKit.Surface(face, { Name = "You", Radius = Theme.Radius.M, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.15, Shadow = false })
+	local youHolder, youFace = UIKit.Surface(face, { Name = "You", Radius = Theme.Radius.M, Transparency = 0, Edge = C.SelectedEdge, EdgeThickness = 2, Shadow = false })
 	ui.You = youHolder
 	Icons.Draw(youFace, "crown", { Size = 26, Position = UDim2.new(0, 14, 0.5, -13) })
 	ui.YouCaption = UIKit.SectionLabel(youFace, "Your best", nil, { Name = "Caption", Position = UDim2.fromOffset(48, 0), Size = UDim2.new(0, 90, 1, 0) })
-	ui.YouRank = text(youFace, "Number", "-", { Name = "Rank", Position = UDim2.fromOffset(140, 0), Size = UDim2.new(0, 64, 1, 0), TextColor3 = P.gold_200 }, 22)
+	ui.YouRank = text(youFace, "Number", "-", { Name = "Rank", Position = UDim2.fromOffset(140, 0), Size = UDim2.new(0, 64, 1, 0), TextColor3 = C.BlueDeep }, 22)
 	ui.YouAvatarSlot = new("Frame", { Name = "AvatarSlot", BackgroundTransparency = 1, Position = UDim2.new(0, 206, 0.5, -18), Size = UDim2.fromOffset(36, 36) }, youFace)
 	UIKit.Avatar(ui.YouAvatarSlot, player.UserId, 36)
 	ui.YouName = text(youFace, "BodyStrong", "", { Name = "Name", Position = UDim2.fromOffset(252, 0), Size = UDim2.new(0.4, -252, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
-	ui.YouValue = text(youFace, "Number", "", { Name = "Value", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 0), Size = UDim2.new(0.6, -16, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd }, 18)
+	ui.YouValue = text(youFace, "Number", "", { Name = "Value", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 0), Size = UDim2.new(0.6, -16, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.BlueDeep, TextTruncate = Enum.TextTruncate.AtEnd }, 18)
 	-- what the value is when the save and the board differ (YouText)
 	ui.YouNote = text(youFace, "Small", "", { Name = "Note", AnchorPoint = Vector2.new(1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd, Visible = false })
 
 	local function rowFor(r: { [string]: any }, order: number)
 		local me = r.Me == true
 		local f = UIKit.Panel(list, { Name = "Row" .. order, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H) }, true)
-		f.BackgroundColor3 = me and P.slate_800 or P.slate_950
-		f.BackgroundTransparency = me and 0.05 or 0.35
-		if me then
-			UIKit.stroke(f, P.gold_400, 1.5, 0.1)
-		end
+		-- your own row: lime-pale with a lime edge (and your name in blue)
+		f.BackgroundColor3 = me and C.SelectedPale or C.PanelRaised
+		f.BackgroundTransparency = 0
+		UIKit.stroke(f, me and C.SelectedEdge or C.Blue, 2, me and 0 or 0.35)
 		local rank = tonumber(r.Rank) or order
 		if rank <= 3 then
 			UIKit.Medal(f, rank, 40, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0) })
@@ -265,7 +264,7 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 			Position = UDim2.fromOffset(14 + RANK_W + 48, 0),
 			Size = UDim2.new(1, -(14 + RANK_W + 48 + SCORE_W + 20), 1, 0),
 			TextTruncate = Enum.TextTruncate.AtEnd,
-			TextColor3 = me and P.gold_200 or C.Text,
+			TextColor3 = me and C.BlueDeep or C.Text,
 		}, 17)
 		text(f, "Number", MenuLeaderboards.ValueText(board, tonumber(r.Value) or 0), {
 			Name = "Value",
@@ -273,7 +272,7 @@ function MenuLeaderboards.Build(screen: Frame, ctx: { [string]: any })
 			Position = UDim2.new(1, -16, 0, 0),
 			Size = UDim2.new(0, SCORE_W, 1, 0),
 			TextXAlignment = Enum.TextXAlignment.Right,
-			TextColor3 = P.gold_300,
+			TextColor3 = C.BlueDeep,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 		}, 18)
 		return f

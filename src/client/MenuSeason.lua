@@ -19,7 +19,7 @@ local MetaUI = require(script.Parent.MetaUI)
 local MenuSeason = {}
 
 local TS = UIKit.TS
-local P = Theme.Palette
+local C = Theme.Color
 
 -- (season or nil, xp, claimed set) for this profile (a save still on an old season reads 0).
 function MenuSeason.State(p: { [string]: any }?): (MetaData.Season?, number, { [string]: boolean })
@@ -69,7 +69,7 @@ end
 function MenuSeason.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui = MetaUI.Screen(screen, ctx, "SEASON")
-	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "SeasonName", TextColor3 = P.gold_200 })
+	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "SeasonName", TextColor3 = C.BlueDeep })
 	local sub = MetaUI.Line(ui.Head, "Small", "", 14, { Name = "SeasonEnds" })
 	local meter = UIKit.Meter(ui.Head, { Size = UDim2.new(1, 0, 0, 26) })
 	meter.Frame.Name = "SeasonBar"
@@ -132,7 +132,10 @@ function MenuSeason.Build(screen: Frame, ctx: { [string]: any })
 					end,
 				} or nil,
 			})
-			row.SetDim(not reached or got)
+			row.SetDim(not reached)
+			if got then
+				row.SetDone(true)
+			end
 		end
 	end
 

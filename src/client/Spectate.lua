@@ -32,7 +32,7 @@ local TeamPings = require(script.Parent.TeamPings)
 local Spectate = {}
 
 local player = Players.LocalPlayer
-local P = Theme.Palette
+local C = Theme.Color
 local S = Config.Spectate
 local started = false
 local gui: ScreenGui? = nil
@@ -120,13 +120,13 @@ local function arrow(parent: Instance, name: string, glyph: string, step: number
 		Name = name,
 		Text = "",
 		AutoButtonColor = true,
-		BackgroundColor3 = P.slate_900,
-		BackgroundTransparency = 0.08,
+		BackgroundColor3 = C.Panel,
+		BackgroundTransparency = 0.04,
 		Size = UDim2.fromOffset(S.ButtonSize, S.ButtonSize),
 		LayoutOrder = step < 0 and 1 or 3,
 	}, parent) :: TextButton
 	UIKit.corner(b, 999)
-	UIKit.stroke(b, P.gold_400, 1, 0.2)
+	UIKit.stroke(b, C.PanelEdge, 2, 0)
 	UIKit.text(b, "Label", glyph, { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center }, 20)
 	b.Activated:Connect(function()
 		Spectate.Cycle(step)
@@ -150,22 +150,24 @@ function Spectate.Init()
 	rowFrame = row
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
 	arrow(row, "Prev", "<", -1)
-	local pill = UIKit.new("Frame", { Name = "Watching", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.15, Size = UDim2.fromOffset(150, 40), LayoutOrder = 2 }, row)
+	local pill = UIKit.new("Frame", { Name = "Watching", BackgroundColor3 = C.Panel, BackgroundTransparency = 0.04, Size = UDim2.fromOffset(150, 40), LayoutOrder = 2 }, row)
 	UIKit.corner(pill, 999)
+	UIKit.stroke(pill, C.PanelEdge, 2, 0)
 	nameLabel = UIKit.text(pill, "Label", "", { Name = "Who", Size = UDim2.new(1, -12, 1, 0), Position = UDim2.fromOffset(6, 0), TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 13) :: any
 	arrow(row, "Next", ">", 1)
 	local revive = UIKit.new("TextButton", {
 		Name = "ReviveMe",
 		Text = "",
 		AutoButtonColor = true,
-		BackgroundColor3 = P.gold_300,
-		BackgroundTransparency = 0.05,
+		BackgroundColor3 = C.Primary,
+		BackgroundTransparency = 0,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, M, 1, -M),
 		Size = UDim2.fromOffset(150, 48),
 	}, screen) :: TextButton
 	UIKit.corner(revive, Theme.Radius.M)
-	reviveLabel = UIKit.text(revive, "Label", Config.QuickPings.Labels.ReviveMe or "REVIVE ME", { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.slate_950 }, 15) :: any
+	UIKit.stroke(revive, C.PrimaryEdge, 2, 0)
+	reviveLabel = UIKit.text(revive, "Label", Config.QuickPings.Labels.ReviveMe or "REVIVE ME", { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text }, 15) :: any
 	revive.Activated:Connect(function()
 		Spectate.AskRevive()
 	end)

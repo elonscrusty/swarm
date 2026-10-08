@@ -19,6 +19,7 @@ local Theme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"
 local CameraController = require(script.Parent.CameraController)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Icons = require(script.Parent.Icons)
+local UIKit = require(script.Parent.UIKit)
 
 local MobileControls = {}
 
@@ -44,6 +45,8 @@ local uiScale: UIScale? = nil
 local jumpButton: TextButton? = nil
 local jumpLabel: TextLabel? = nil
 local jumpArrow: CanvasGroup? = nil
+local jumpFace: Frame? = nil
+local jumpBaseFrame: Frame? = nil
 local jumpUsable: boolean? = nil
 local relayout: (() -> ())? = nil -- re-applies scale and side (set by buildGui)
 
@@ -74,7 +77,12 @@ function MobileControls.SetJumpButton(show: boolean, usable: boolean)
 	end
 	if jumpUsable ~= usable then
 		jumpUsable = usable
-		b.BackgroundTransparency = usable and 0.15 or 0.6
+		if jumpFace then
+			jumpFace.BackgroundTransparency = usable and 0 or 0.5
+		end
+		if jumpBaseFrame then
+			jumpBaseFrame.BackgroundTransparency = usable and 0 or 0.6
+		end
 		if jumpLabel then
 			jumpLabel.TextTransparency = usable and 0 or 0.5
 		end
@@ -130,24 +138,24 @@ local function buildGui()
 	gui.DisplayOrder = 11
 	gui.Parent = player:WaitForChild("PlayerGui")
 
-	-- visual style (Theme): dark slate well with a gold hairline and a faint inner ring,
-	-- an ivory knob with a gold rim
-	local P = Theme.Palette
+	-- visual style (Bright Arcade): a light translucent well with a blue rim and a faint inner
+	-- ring, a white knob with a blue rim
+	local C = Theme.Color
 	local r = Config.Controls.StickRadius
 	base = Instance.new("Frame")
 	base.Name = "StickBase"
 	base.AnchorPoint = Vector2.new(0.5, 0.5)
 	base.Size = UDim2.fromOffset(r * 2, r * 2)
-	base.BackgroundColor3 = P.slate_900
-	base.BackgroundTransparency = 0.55
+	base.BackgroundColor3 = C.Panel
+	base.BackgroundTransparency = 0.72
 	base.Visible = false
 	base.Parent = gui
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(1, 0)
 	corner.Parent = base
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = P.gold_400
-	stroke.Transparency = 0.45
+	stroke.Color = C.Blue
+	stroke.Transparency = 0.2
 	stroke.Thickness = 2
 	stroke.Parent = base
 	local inner = Instance.new("Frame")
@@ -161,8 +169,8 @@ local function buildGui()
 	ic.CornerRadius = UDim.new(1, 0)
 	ic.Parent = inner
 	local is = Instance.new("UIStroke")
-	is.Color = P.ivory_300
-	is.Transparency = 0.8
+	is.Color = C.Panel
+	is.Transparency = 0.35
 	is.Thickness = 1
 	is.Parent = inner
 	local scale = Instance.new("UIScale")
@@ -181,10 +189,10 @@ local function buildGui()
 	kc.Parent = knob
 	local kg = Instance.new("UIGradient")
 	kg.Rotation = 90
-	kg.Color = ColorSequence.new(P.ivory_100, P.ivory_400)
+	kg.Color = ColorSequence.new(C.Panel, C.BluePale)
 	kg.Parent = knob
 	local ks = Instance.new("UIStroke")
-	ks.Color = P.gold_500
+	ks.Color = C.Blue
 	ks.Thickness = 2
 	ks.Parent = knob
 
@@ -196,12 +204,17 @@ local function buildGui()
 	jump.AnchorPoint = Vector2.new(1, 1)
 	jump.Position = UDim2.new(1, -M.ButtonMargin, 1, -M.ButtonMargin)
 	jump.Size = UDim2.fromOffset(M.ButtonSize, M.ButtonSize)
-	jump.BackgroundColor3 = P.slate_900
-	jump.BackgroundTransparency = 0.15
+	jump.BackgroundTransparency = 1
 	jump.AutoButtonColor = false
 	jump.Text = ""
 	jump.Visible = false
 	jump.Parent = gui
+	-- Bright Arcade: a raised round face (blue gradient, white rim, top highlight) on a
+	-- dark-blue base; the TextButton itself stays the (unchanged) hit area
+	local face, _, js, jumpBase = UIKit.RoundFace(jump, Theme.Gradient.Blue, C.Panel, 3, 5)
+	js.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	UIKit.Highlight(face, 40, 0.55)
+	jumpFace, jumpBaseFrame = face, jumpBase
 	-- an up arrow over the word: reads as "jump" without reading
 	local arrow = Instance.new("CanvasGroup")
 	arrow.Name = "Arrow"
@@ -209,8 +222,9 @@ local function buildGui()
 	arrow.AnchorPoint = Vector2.new(0.5, 0.5)
 	arrow.Position = UDim2.fromScale(0.5, 0.36)
 	arrow.Size = UDim2.fromOffset(30, 30)
-	arrow.Parent = jump
-	Icons.Draw(arrow, "chevronsUp", { Size = 30, Color = P.gold_300, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5) })
+	arrow.ZIndex = 3
+	arrow.Parent = face
+	Icons.Draw(arrow, "chevronsUp", { Size = 30, Color = C.TextOnBlue, Back = C.Blue, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5) })
 	jumpArrow = arrow
 	local word = Instance.new("TextLabel")
 	word.Name = "Label"
@@ -219,23 +233,16 @@ local function buildGui()
 	word.Position = UDim2.fromScale(0.5, 0.58)
 	word.Size = UDim2.new(0.8, 0, 0, 20)
 	word.Text = "JUMP"
-	word.TextColor3 = P.ivory_100
+	word.TextColor3 = C.TextOnBlue
 	word.TextSize = 17
-	word.FontFace = Theme.Font.Label
+	word.FontFace = Theme.Font.Number
+	word.ZIndex = 3
 	word:SetAttribute("NoTextFit", true)
-	word.Parent = jump
+	word.Parent = face
 	local cap = Instance.new("UITextSizeConstraint") -- the Roblox Text size setting must not push it out
 	cap.MaxTextSize = 17
 	cap.Parent = word
 	jumpLabel = word
-	local jc = Instance.new("UICorner")
-	jc.CornerRadius = UDim.new(1, 0)
-	jc.Parent = jump
-	local js = Instance.new("UIStroke")
-	js.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	js.Color = P.gold_400
-	js.Thickness = 2.5
-	js.Parent = jump
 	local jumpScale = Instance.new("UIScale")
 	jumpScale.Parent = jump
 	jump.InputBegan:Connect(function(input)
@@ -244,12 +251,14 @@ local function buildGui()
 			if cb then
 				cb()
 			end
-			js.Thickness = 4
+			js.Thickness = 5
+			face.Position = UDim2.fromOffset(0, 3) -- presses down onto its base
 		end
 	end)
 	jump.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-			js.Thickness = 2.5
+			js.Thickness = 3
+			face.Position = UDim2.new()
 		end
 	end)
 	jumpButton = jump

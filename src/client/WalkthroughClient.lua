@@ -22,6 +22,7 @@ local GuiService = game:GetService("GuiService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local Theme = require(Shared:WaitForChild("Theme"))
 local InputPrompts = require(script.Parent.InputPrompts)
 local TutorialBubble = require(script.Parent.TutorialBubble)
 local StageUI = require(script.Parent.StageUI)
@@ -30,7 +31,7 @@ local ClientSettings = require(script.Parent.ClientSettings)
 local WalkthroughClient = {}
 
 local player = Players.LocalPlayer
-local GOLD = Color3.fromRGB(255, 205, 90)
+local GOLD = Theme.Color.Primary -- the yellow guide ring / arrow (a gameplay cue, readable on every arena)
 local RING_PIECES = 20
 
 local kit: { [string]: any } = {}
@@ -229,7 +230,7 @@ local function buildMarker(at: Vector3, ring: boolean)
 	label.Font = Enum.Font.GothamBlack
 	label.TextColor3 = GOLD
 	label.TextStrokeTransparency = 0.2
-	label.TextStrokeColor3 = Color3.fromRGB(40, 28, 10)
+	label.TextStrokeColor3 = Theme.Color.Text
 	label.Parent = bb
 	folder.Parent = workspace
 	markerFolder = folder

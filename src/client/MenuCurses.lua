@@ -21,7 +21,7 @@ local Icons = require(script.Parent.Icons)
 local MenuCurses = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 local player = Players.LocalPlayer
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
@@ -45,7 +45,7 @@ function MenuCurses.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = { Cards = {} }
 	ui.Header = UIKit.ScreenHeader(screen, "CURSES", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, EdgeThickness = Theme.Stroke.Medium })
 	ui.Panel = holder
 	UIKit.padding(face, 16, 16, 16, 16)
 	ui.Intro = text(face, "Body", string.format("Pick up to %d curses before a run. They make the run harder for everyone in it, and each one adds gold.", CurseData.MaxActive), {
@@ -54,13 +54,13 @@ function MenuCurses.Build(screen: Frame, ctx: { [string]: any })
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Size = UDim2.new(1, 0, 0, TS(16) * 2 + 8),
 	})
-	ui.Note = text(face, "Small", "", { Name = "Note", TextColor3 = P.gold_300, TextWrapped = true, Visible = false })
+	ui.Note = text(face, "Small", "", { Name = "Note", TextColor3 = C.BlueDeep, TextWrapped = true, Visible = false })
 	local scroll = new("ScrollingFrame", {
 		Name = "Cards",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -89,7 +89,7 @@ function MenuCurses.Build(screen: Frame, ctx: { [string]: any })
 		end
 		if not had then
 			if #cur >= CurseData.MaxActive then
-				ctx.Toast(string.format("Up to %d curses: drop one first.", CurseData.MaxActive), P.gold_300)
+				ctx.Toast(string.format("Up to %d curses: drop one first.", CurseData.MaxActive), C.BlueDeep)
 				return
 			end
 			table.insert(list, id)
@@ -110,8 +110,8 @@ function MenuCurses.Build(screen: Frame, ctx: { [string]: any })
 		end
 		local well = new("Frame", { Name = "Well", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.2, Position = UDim2.fromOffset(0, 14), Size = UDim2.fromOffset(46, 46) }, b.Content)
 		UIKit.corner(well, Theme.Radius.S + 2)
-		UIKit.stroke(well, P.crimson_400, 1, 0.4)
-		Icons.Draw(well, def.Icon, { Size = 28, Color = P.crimson_300, Back = C.PanelInset, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+		UIKit.stroke(well, C.Danger, 1.5, 0.2)
+		Icons.Draw(well, def.Icon, { Size = 28, Color = C.Danger, Back = C.PanelInset, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 		local name = text(b.Content, "H3", def.Name, { Name = "CurseName", Position = UDim2.fromOffset(58, 12), Size = UDim2.new(1, -58, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
 		text(b.Content, "Small", def.Short, { Name = "Short", Position = UDim2.fromOffset(58, 16 + TS(18)), Size = UDim2.new(1, -58, 0, TS(14) * 2 + 6), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted })
 		local gold = UIKit.Badge(b.Content, "+" .. math.floor(def.Gold * 100 + 0.5) .. "% GOLD", "Gold", { Name = "Gold", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -12) })
@@ -122,7 +122,7 @@ function MenuCurses.Build(screen: Frame, ctx: { [string]: any })
 	-- footer: the total, CLEAR, DONE
 	local foot = new("Frame", { Name = "Footer", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, face)
 	ui.Footer = foot
-	ui.Total = text(foot, "BodyStrong", "", { Name = "Total", Size = UDim2.new(1, -330, 1, 0), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd, RichText = true })
+	ui.Total = text(foot, "BodyStrong", "", { Name = "Total", Size = UDim2.new(1, -330, 1, 0), TextColor3 = C.Text, TextTruncate = Enum.TextTruncate.AtEnd, RichText = true })
 	ui.Clear = UIKit.Button(foot, { Kind = "Secondary", Title = "CLEAR", Icon = "close", IconSize = 18, Align = "Center", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -170, 0, 0), Size = UDim2.fromOffset(150, Theme.Size.Button), OnClick = function()
 		send({})
 	end })
@@ -139,19 +139,20 @@ function MenuCurses.Build(screen: Frame, ctx: { [string]: any })
 			card.On = on[id] == true
 			card.Button.SetSelected(card.On)
 			card.State.Text = card.On and "ON" or "OFF"
-			card.State.BackgroundColor3 = card.On and P.crimson_600 or C.PanelInset
-			card.Name.TextColor3 = card.On and P.crimson_300 or C.Text
+			card.State.BackgroundColor3 = card.On and C.Danger or C.PanelInset
+			card.State.TextColor3 = card.On and C.TextOnBlue or C.TextMuted
+			card.Name.TextColor3 = card.On and C.TextDanger or C.Text
 			if was ~= nil and was ~= card.On and card.On and screen.Visible then
 				UIAnim.Punch(card.Button.Instance, 0.06)
-				UIAnim.Flash(card.Button.Instance, P.crimson_300)
-				UIAnim.Burst(card.Button.Instance, UDim2.fromScale(0.5, 0.5), { P.crimson_300, P.gold_300 }, 10, 60)
+				UIAnim.Flash(card.Button.Instance, C.Danger)
+				UIAnim.Burst(card.Button.Instance, UDim2.fromScale(0.5, 0.5), { C.Danger, C.Coin }, 10, 60)
 			end
 		end
 		local mult = CurseData.GoldMult(cur)
 		if #cur == 0 then
 			ui.Total.Text = "No curses · normal gold"
 		else
-			ui.Total.Text = string.format('%d / %d curses  ·  <font color="%s">%s gold</font>', #cur, CurseData.MaxActive, UIKit.hex(P.gold_300), CurseData.GoldText(mult))
+			ui.Total.Text = string.format('%d / %d curses  ·  <font color="%s">%s gold</font>', #cur, CurseData.MaxActive, UIKit.hex(C.CoinDeep), CurseData.GoldText(mult))
 		end
 		ui.Clear.SetEnabled(#cur > 0)
 		-- someone else's countdown: their curses are the run's

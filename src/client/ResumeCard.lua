@@ -31,8 +31,8 @@ local ResumeCard = {}
 
 local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
-local HEADING = Font.fromEnum(Enum.Font.GothamBold)
+local C = Theme.Color
+local HEADING = Theme.Font.Heading
 local NAME = "ResumeRun"
 local END_CONFIRM = 3 -- seconds: END RUN needs a second tap within this
 
@@ -142,7 +142,6 @@ local function build(): UI
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(520, 320),
 		Radius = Theme.Radius.L,
-		Transparency = 0.04,
 		ZIndex = 2,
 	})
 	local body = new("Frame", { Name = "Content", BackgroundTransparency = 1, Position = UDim2.fromOffset(22, 22), Size = UDim2.new(1, -44, 1, -44), ZIndex = 3, ClipsDescendants = true }, face)
@@ -153,7 +152,7 @@ local function build(): UI
 		FontFace = HEADING,
 		Size = UDim2.new(1, 0, 0, TS(24) + 6),
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = P.gold_200,
+		TextColor3 = C.BlueDeep,
 		TextScaled = true,
 	}, 24)
 	local fit = Instance.new("UITextSizeConstraint")
@@ -161,10 +160,10 @@ local function build(): UI
 	fit.MinTextSize = 12
 	fit.Parent = title
 	title:SetAttribute("NoTextFit", true)
-	local info = line(body, 2, "Info", P.gold_300, 15)
+	local info = line(body, 2, "Info", C.BlueDeep, 15)
 	info.FontFace = HEADING
 	UIKit.Hairline(body, { LayoutOrder = 3 })
-	local blurb = line(body, 4, "Body", P.ivory_200, 15)
+	local blurb = line(body, 4, "Body", C.Text, 15)
 	blurb.Text = "Your solo run is paused: nothing can hurt your hero. Resume before the time runs out, or the run ends like a normal loss (you keep the usual share of its gold)."
 	local resume = UIKit.Button(body, {
 		Name = "ResumeRun",

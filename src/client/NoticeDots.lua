@@ -35,7 +35,7 @@ local CurseData = require(Shared:WaitForChild("CurseData"))
 
 local NoticeDots = {}
 
-local P = Theme.Palette
+local C = Theme.Color
 local new = UIKit.new
 
 type Dot = { Frame: Frame, Halo: Frame, Scale: UIScale, Tween: Tween? }
@@ -116,8 +116,8 @@ function NoticeDots.Attach(id: string, parent: Instance, props: { [string]: any 
 	}, parent)
 	local halo = new("Frame", {
 		Name = "Halo",
-		BackgroundColor3 = P.gold_400,
-		BackgroundTransparency = 0.3,
+		BackgroundColor3 = C.Danger,
+		BackgroundTransparency = 0.55,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -129,13 +129,13 @@ function NoticeDots.Attach(id: string, parent: Instance, props: { [string]: any 
 	scale.Parent = halo
 	local core = new("Frame", {
 		Name = "Core",
-		BackgroundColor3 = P.gold_200,
+		BackgroundColor3 = C.Danger,
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 6,
 	}, f)
 	UIKit.corner(core, 999)
-	UIKit.stroke(core, P.gold_500, 1, 0.1)
+	UIKit.stroke(core, C.Panel, 1.5, 0)
 	if props then
 		for k, v in pairs(props) do
 			(f :: any)[k] = v

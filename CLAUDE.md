@@ -168,6 +168,12 @@ height (tone patches 0.001 apart, tree-line shade, Forest blobs vs client clover
 margins, path wear vs cores) z-fought; MapBuilder.settleGround now gives tone discs free heights (0.02-0.08)
 under other flats, path step 0.02, GroundDetail PATH_TOP/FRINGE_TOP moved; dressing grass/flowers keep out of
 dressing rocks/shrubs/logs (also client ground detail via arena.Bare). New check: ground-zfight-regression.
+Bright Arcade UI (2026-10-08, owner's reference pack docs/ui_refs + brief docs/ui_refs/BRIEF.txt; offline only,
+NOT Studio-tested; notes docs/UI_BRIGHT_ARCADE.md): Theme switched to icy-white panels / royal blue / navy text /
+yellow main action / lime selected, fonts Fredoka One + Nunito; UIKit depth buttons (Depth Strong/Medium/Light),
+OptionCard, IconBadge (Theme.IconTint), TitlePlate, NavCard, Raise, RoundFace; every screen restyled; Play setup,
+Arena, Daily, Party, More, HUD, Build, ping wheel, run menu and settings polished screen by screen with the owner.
+Open: home screen polish (double SWARM logo fallback; owner's PLAY picture vs yellow button), other menus' polish.
 Funnel analytics (2026-10-08, offline only, NOT published-tested; docs/ANALYTICS.md): server Analytics.lua
 (AnalyticsService, switch Config.Features.Analytics): onboarding steps 1 Joined Game / 2 Ready to Play (validated
 remote ClientReady) / 3 Started First Run for accounts with no run started; custom events First Evolution, First

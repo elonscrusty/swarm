@@ -27,7 +27,7 @@ local Icons = require(script.Parent.Icons)
 local MenuStats = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -74,7 +74,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = { Values = {} }
 	ui.Header = UIKit.ScreenHeader(screen, "YOUR STATS", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, Edge = C.Blue })
 	ui.Panel = holder
 	UIKit.padding(face, 16, 16, 16, 16)
 	local tab = "Stats"
@@ -99,7 +99,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		Position = UDim2.fromOffset(0, TABS_H),
 		Size = UDim2.new(1, 0, 1, -TABS_H),
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
@@ -110,14 +110,14 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		local group = { Label = UIKit.SectionLabel(scroll, g.Caption), Tiles = {}, Bars = g.Bars == true }
 		for _, t in ipairs(g.Tiles) do
 			local f = UIKit.Panel(scroll, { Name = t.Key }, true)
-			f.BackgroundColor3 = P.slate_950
-			f.BackgroundTransparency = 0.3
-			Icons.Draw(f, t.Icon, { Name = "Icon", Size = 30, Position = UDim2.fromOffset(14, 12), Back = P.slate_950 })
-			text(f, "Caption", UIKit.track(t.Caption), { Name = "Caption", Position = UDim2.fromOffset(52, 12), Size = UDim2.new(1, -60, 0, 30), TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd })
+			f.BackgroundColor3 = C.PanelRaised
+			f.BackgroundTransparency = 0
+			Icons.Draw(f, t.Icon, { Name = "Icon", Size = 30, Position = UDim2.fromOffset(14, 12), Back = C.PanelRaised })
+			text(f, "Caption", UIKit.track(t.Caption), { Name = "Caption", Position = UDim2.fromOffset(52, 12), Size = UDim2.new(1, -60, 0, 30), TextColor3 = C.BlueDeep, TextTruncate = Enum.TextTruncate.AtEnd })
 			ui.Values[t.Key] = text(f, "Number", "-", { Name = "Value", Position = UDim2.fromOffset(14, 46), Size = UDim2.new(1, -28, 0, TS(26) + 4), TextTruncate = Enum.TextTruncate.AtEnd }, 26)
 			if g.Bars then
 				ui.Bars[t.Key] = UIKit.Meter(f, {
-					Gradient = ColorSequence.new(P.gold_500, P.gold_300),
+					Gradient = ColorSequence.new(C.Blue, C.BlueDeep),
 					AnchorPoint = Vector2.new(0, 1),
 					Position = UDim2.new(0, 14, 1, -14),
 					Size = UDim2.new(1, -28, 0, 8),
@@ -139,7 +139,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		Position = UDim2.fromOffset(0, TABS_H),
 		Size = UDim2.new(1, 0, 1, -TABS_H),
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -216,7 +216,7 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 		ui.Passes.Text = #passes > 0 and ("Passes: " .. table.concat(passes, " · ")) or "No passes yet."
-		ui.Passes.TextColor3 = #passes > 0 and P.gold_300 or C.TextFaint
+		ui.Passes.TextColor3 = #passes > 0 and C.BlueDeep or C.TextFaint
 	end
 
 	-- Earned cosmetics remain explicit equip actions; rewards themselves need no claim.
@@ -289,14 +289,15 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		end
 		local f = UIKit.Panel(ui.Ach, { Name = id, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, true)
 		if unlocked then
-			UIKit.stroke(f, P.gold_400, 1.5, 0.25)
+			f.BackgroundColor3 = C.SelectedPale
+			UIKit.stroke(f, C.SelectedEdge, 2, 0)
 		end
 		local column = new("Frame", { Name = "Text", BackgroundTransparency = 1, Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, f)
 		UIKit.list(column, { Padding = UDim.new(0, 7) })
 		UIKit.padding(column, 12, 0, 14, 0)
 		local heading = new("Frame", { Name = "Heading", LayoutOrder = 1, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40) }, column)
-		Icons.Draw(heading, def.Icon or "ach_Badge", { Size = 34, Position = UDim2.fromOffset(0, 2), Back = P.slate_950 })
-		text(heading, "H3", def.Name, { Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -44, 1, 0), TextColor3 = unlocked and P.gold_200 or C.Text, TextWrapped = true }, 18)
+		Icons.Draw(heading, def.Icon or "ach_Badge", { Size = 34, Position = UDim2.fromOffset(0, 2), Back = C.PanelRaised })
+		text(heading, "H3", def.Name, { Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -44, 1, 0), TextColor3 = unlocked and C.BlueDeep or C.Text, TextWrapped = true }, 18)
 		local goal = def.Event == "RunWon" and string.format("Clear %d stages and return through the portal to win.", Config.Stages.WinMinStages) or def.Description
 		text(column, "Small", goal, { Name = "Goal", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
 		text(column, "Small", (unlocked and "Earned: " or "Reward: ") .. AchievementData.RewardText(id), {
@@ -305,14 +306,14 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			TextWrapped = true,
-			TextColor3 = P.gold_300,
+			TextColor3 = C.BlueDeep,
 		})
 		if unlocked then
-			text(column, "Caption", "COMPLETED · REWARDS ADDED", { LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(12) + 4), TextColor3 = P.moss_200 })
+			text(column, "Caption", "COMPLETED · REWARDS ADDED", { LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(12) + 4), TextColor3 = C.Success })
 		else
 			text(column, "Small", (def.Kind == "Max" and "Best run: " or "Progress: ") .. AchievementData.ProgressText(id, progress), { Name = "Progress", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, TS(14) + 4), TextColor3 = C.Text })
 			local meter = UIKit.Meter(column, {
-				Gradient = ColorSequence.new(P.gold_500, P.gold_300),
+				Gradient = ColorSequence.new(C.Blue, C.BlueDeep),
 				LayoutOrder = 5,
 				Size = UDim2.new(1, 0, 0, 8),
 			})
@@ -348,25 +349,25 @@ function MenuStats.Build(screen: Frame, ctx: { [string]: any })
 		end)
 		local cosmeticsHeading: GuiObject?
 		local summary = new("Frame", { Name = "AchievementSummary", BackgroundTransparency = 1, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, Theme.Size.TapMin + 4) }, ui.Ach)
-		text(summary, "Label", string.format("%d / %d UNLOCKED", #completed, #AchievementData.Order), { Size = UDim2.new(1, -230, 1, 0), TextColor3 = P.gold_300 }, 14)
+		text(summary, "Label", string.format("%d / %d UNLOCKED", #completed, #AchievementData.Order), { Size = UDim2.new(1, -230, 1, 0), TextColor3 = C.BlueDeep }, 14)
 		text(ui.Ach, "Small", "Rewards are added automatically. Equip earned titles and name colors with WEAR REWARDS.", { Name = "RewardHelp", LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
 		UIKit.Button(summary, { Title = "WEAR REWARDS", Kind = "Secondary", Size = UDim2.fromOffset(220, Theme.Size.TapMin), AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Icon = "sparkle", TitleSize = 14, OnClick = function()
 			if cosmeticsHeading then
 				ui.Ach.CanvasPosition = Vector2.new(0, math.max(0, cosmeticsHeading.AbsolutePosition.Y - ui.Ach.AbsolutePosition.Y + ui.Ach.CanvasPosition.Y))
 			end
 		end })
-		text(ui.Ach, "Caption", #pending > 0 and "NEXT GOALS · CLOSEST FIRST" or "ALL GOALS COMPLETE", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(12) + 8), TextColor3 = P.gold_300 })
+		text(ui.Ach, "Caption", #pending > 0 and "NEXT GOALS · CLOSEST FIRST" or "ALL GOALS COMPLETE", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, TS(12) + 8), TextColor3 = C.BlueDeep })
 		for i, id in ipairs(pending) do
 			local f = achievementRow(p, id, 10 + i)
 			if animate then
 				UIAnim.Pop(f, math.min(0.2, 0.02 * i), 0.85)
 			end
 		end
-		cosmeticsHeading = text(ui.Ach, "Label", "YOUR COSMETICS", { Name = "CosmeticsHeading", LayoutOrder = 100, Size = UDim2.new(1, 0, 0, TS(15) + 8), TextColor3 = P.gold_300 })
+		cosmeticsHeading = text(ui.Ach, "Label", "YOUR COSMETICS", { Name = "CosmeticsHeading", LayoutOrder = 100, Size = UDim2.new(1, 0, 0, TS(15) + 8), TextColor3 = C.BlueDeep })
 		text(ui.Ach, "Small", "Tap to equip. Gold and character rewards are already yours; cosmetic choices change your lobby nameplate.", { LayoutOrder = 101, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true })
 		cosmeticRow(p, "Title", 102)
 		cosmeticRow(p, "Color", 103)
-		text(ui.Ach, "Label", "COMPLETED · " .. #completed, { Name = "CompletedHeading", LayoutOrder = 110, Size = UDim2.new(1, 0, 0, TS(15) + 8), TextColor3 = P.moss_200 })
+		text(ui.Ach, "Label", "COMPLETED · " .. #completed, { Name = "CompletedHeading", LayoutOrder = 110, Size = UDim2.new(1, 0, 0, TS(15) + 8), TextColor3 = C.Success })
 		for i, id in ipairs(completed) do achievementRow(p, id, 110 + i) end
 	end
 

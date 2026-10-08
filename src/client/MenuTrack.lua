@@ -20,7 +20,7 @@ local Cosmetics = require(script.Parent.Cosmetics)
 local MenuTrack = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 
 local KIND_ICON = { Title = "track_Title", Color = "track_Color", Ring = "track_Ring", Frame = "track_Frame" }
 local KIND_LABEL = { Title = "Title", Color = "Name color", Ring = "Dais ring", Frame = "Portrait frame" }
@@ -45,20 +45,20 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = {}
 	ui.Header = UIKit.ScreenHeader(screen, "ACCOUNT LEVEL", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L })
 	ui.Panel = holder
 	UIKit.padding(face, 16, 16, 16, 16)
 
 	-- head: framed hero medallion, level, XP bar, how XP is earned
 	local head = new("Frame", { Name = "Head", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 104) }, face)
 	ui.Head = head
-	local medal = new("Frame", { Name = "Portrait", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.05, Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(80, 80) }, head)
+	local medal = new("Frame", { Name = "Portrait", BackgroundColor3 = C.Panel, BackgroundTransparency = 0, Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(80, 80) }, head)
 	UIKit.corner(medal, 999)
-	ui.MedalStroke = UIKit.stroke(medal, P.gold_400, 2.5, 0.05)
+	ui.MedalStroke = UIKit.stroke(medal, C.PanelEdge, 3, 0)
 	ui.Medal = medal
 	ui.Level = text(head, "H1", "Level 1", { Name = "Level", Position = UDim2.fromOffset(110, 4), Size = UDim2.new(1, -110, 0, TS(30) + 6) })
 	ui.Meter = UIKit.Meter(head, {
-		Gradient = ColorSequence.new(P.gold_500, P.gold_300),
+		Gradient = ColorSequence.new(C.PanelEdge, C.BlueDeep),
 		TextStyle = "Number",
 		TextSize = Theme.TextSize.Small,
 		Position = UDim2.fromOffset(110, TS(30) + 14),
@@ -76,8 +76,8 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 		Name = "Rewards",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarThickness = 5,
+		ScrollBarImageColor3 = C.PanelEdge,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -91,20 +91,20 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 		if r.Kind == "Frame" then
 			local m = new("Frame", { BackgroundColor3 = C.PanelInset, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(30, 30) }, box)
 			UIKit.corner(m, 999)
-			Icons.Character(m, (ctx.Profile() or {}).SelectedCharacter or CharacterData.Default, { Size = 18, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+			Icons.Character(m, (ctx.Profile() or {}).SelectedCharacter or CharacterData.Default, { Size = 18, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.Panel })
 			Cosmetics.Frame(m, r.Id)
 		elseif r.Kind == "Ring" then
 			local def = AccountData.Rings[r.Id]
 			local ring = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(34, 14) }, box)
 			UIKit.corner(ring, 999)
-			UIKit.stroke(ring, def and def.Color or P.gold_300, 3, unlocked and 0 or 0.5)
+			UIKit.stroke(ring, def and def.Color or C.BlueDeep, 3, unlocked and 0 or 0.5)
 		elseif r.Kind == "Color" then
 			local c = AccountData.Colors[r.Id]
-			local dot = new("Frame", { BackgroundColor3 = c and c.Color or P.ivory_200, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(24, 24), BackgroundTransparency = unlocked and 0 or 0.4 }, box)
+			local dot = new("Frame", { BackgroundColor3 = c and c.Color or C.Text, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(24, 24), BackgroundTransparency = unlocked and 0 or 0.4 }, box)
 			UIKit.corner(dot, 999)
-			UIKit.stroke(dot, P.slate_950, 1.5, 0.2)
+			UIKit.stroke(dot, C.Panel, 1.5, 0.2)
 		else
-			Icons.Draw(box, KIND_ICON[r.Kind] or "gift", { Size = 26, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Color = (not unlocked) and P.stone_400 or nil, Dim = not unlocked, Back = C.PanelInset })
+			Icons.Draw(box, KIND_ICON[r.Kind] or "gift", { Size = 26, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Color = (not unlocked) and C.TextFaint or nil, Dim = not unlocked, Back = C.Panel })
 		end
 	end
 
@@ -112,13 +112,14 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 		local p = ctx.Profile() or {}
 		local unlocked = have >= level
 		local worn = p[WORN_KEY[r.Kind]] == r.Id
-		local f = UIKit.Panel(list, { Name = "Lv" .. level .. r.Kind, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 64) }, true)
+		local f = UIKit.Panel(list, { Name = "Lv" .. level .. r.Kind, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 64) })
 		if worn then
-			UIKit.stroke(f, P.gold_400, 1.5, 0.1)
+			f.BackgroundColor3 = C.SelectedPale
+			UIKit.stroke(f, C.SelectedEdge, 2, 0)
 		elseif not unlocked then
-			f.BackgroundTransparency = 0.45
+			f.BackgroundColor3 = C.Disabled
 		end
-		local badge = UIKit.Badge(f, "LV " .. level, unlocked and "Gold" or "Dark", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(0, 26) })
+		local badge = UIKit.Badge(f, "LV " .. level, unlocked and "Slate" or "Dark", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(0, 26) })
 		badge.TextSize = TS(13)
 		preview(f, r, unlocked)
 		local nameColor = (r.Kind == "Color" and unlocked) and (Cosmetics.NameColor(r.Id) or C.Text) or (unlocked and C.Text or C.TextMuted)
@@ -126,7 +127,7 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 		text(f, "Caption", UIKit.track(KIND_LABEL[r.Kind] or r.Kind), { Position = UDim2.fromOffset(136, 12 + TS(18)), Size = UDim2.new(1, -136 - 150, 0, TS(12) + 4) })
 		if unlocked then
 			UIKit.Button(f, {
-				Kind = worn and "Primary" or "Secondary",
+				Kind = worn and "Selected" or "Secondary",
 				Title = worn and "WORN" or "WEAR",
 				Icon = worn and "check" or nil,
 				IconSize = 16,
@@ -142,7 +143,7 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 				end,
 			})
 		else
-			text(f, "Label", "LOCKED", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.5, 0), Size = UDim2.fromOffset(120, 30), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.TextFaint })
+			text(f, "Label", "LOCKED", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.5, 0), Size = UDim2.fromOffset(120, 30), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.DisabledText })
 		end
 		return f
 	end
@@ -168,7 +169,7 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 				ch:Destroy()
 			end
 		end
-		Icons.Character(ui.Medal, p and p.SelectedCharacter or CharacterData.Default, { Size = 48, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+		Icons.Character(ui.Medal, p and p.SelectedCharacter or CharacterData.Default, { Size = 48, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.Panel })
 		local framed = Cosmetics.Frame(ui.Medal, p and p.Frame or "")
 		ui.MedalStroke.Transparency = framed and 1 or 0.05
 		for _, ch in ipairs(list:GetChildren()) do
