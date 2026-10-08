@@ -13,6 +13,11 @@ local TextChatService = game:GetService("TextChatService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Remotes = require(Shared:WaitForChild("Remotes"))
+-- SwarmV2: the client's CharacterData copy learns the four classes before any UI reads it
+pcall(function()
+	require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("ClassRoster")).Register(
+		require(Shared:WaitForChild("CharacterData")), require(Shared:WaitForChild("MetaUpgradeData")))
+end)
 
 local Audio = require(script.Parent:WaitForChild("Audio"))
 local CameraController = require(script.Parent:WaitForChild("CameraController"))

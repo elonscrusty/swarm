@@ -20,6 +20,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
 local Config = require(Shared.Config)
+-- SwarmV2: the four classes join CharacterData before any module reads it (old heroes hidden)
+require(ReplicatedStorage:WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("ClassRoster")).Register(
+	require(Shared.CharacterData), require(Shared.MetaUpgradeData))
 
 -- Remotes must exist before any module connects to them.
 Remotes.Setup()
