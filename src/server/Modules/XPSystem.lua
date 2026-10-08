@@ -26,6 +26,8 @@
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local Fx = require(script.Parent.Fx)
+local HeightGrid = require(script.Parent.HeightGrid)
+local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
 
 local XPSystem = {}
 
@@ -220,7 +222,7 @@ local function placeGem(gem: Gem, pos: Vector3)
 end
 
 function XPSystem.SpawnGem(position: Vector3, value: number)
-	local pos = Vector3.new(position.X, Config.ArenaOrigin.Y + Config.XP.GemHeight, position.Z)
+	local pos = Vector3.new(position.X, HeightGrid.GroundY(position.X, position.Z) + Config.XP.GemHeight, position.Z)
 	local near = findMergeTarget(pos, value)
 	if near then
 		-- piles up: one gem carries the sum (same total XP, fewer crystals on the floor)
@@ -298,7 +300,8 @@ end
 local function nearestCollector(pos: Vector3, runPlayers): any?
 	local best, bestD = nil, math.huge
 	for _, rp in ipairs(runPlayers) do
-		if rp.Alive and rp.Root and not rp.Paused then
+		if rp.Alive and rp.Root and not rp.Paused and (not HeightGrid.IsActive()
+			or math.abs(HeightGrid.GroundY(rp.Root.Position.X, rp.Root.Position.Z) + Config.XP.GemHeight - pos.Y) <= Nav.HitBand) then
 			local d = (rp.Root.Position - pos) * Vector3.new(1, 0, 1)
 			local radius = rp.Stats.PickupRadius
 			if rp.AuraPullRadius and rp.AuraPullRadius > radius then
@@ -365,7 +368,7 @@ function XPSystem.SpawnPickup(kind: string, position: Vector3): boolean
 	if #pickups >= Config.Drops.MaxFloorPickups then
 		return false
 	end
-	local pos = Vector3.new(position.X, Config.ArenaOrigin.Y + 1.2, position.Z)
+	local pos = Vector3.new(position.X, HeightGrid.GroundY(position.X, position.Z) + 1.2, position.Z)
 	local model = ModelBuilder.BuildPickup(kind, pos)
 	model.Parent = pickupFolder
 	table.insert(pickups, { Model = model, Kind = kind, Pos = pos, Expires = os.clock() + Config.Drops.PickupLifetime })
@@ -373,7 +376,7 @@ function XPSystem.SpawnPickup(kind: string, position: Vector3): boolean
 end
 
 function XPSystem.SpawnChest(position: Vector3)
-	local pos = Vector3.new(position.X, Config.ArenaOrigin.Y, position.Z)
+	local pos = HeightGrid.Ground(position)
 	local model = ModelBuilder.BuildChest(pos)
 	model.Parent = pickupFolder
 	table.insert(pickups, { Model = model, Kind = "Chest", Pos = pos, Expires = os.clock() + Config.Drops.ChestLifetime })

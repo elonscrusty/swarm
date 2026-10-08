@@ -30,6 +30,7 @@
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local EncounterDirector = require(script.Parent.EncounterDirector)
 local Hazards = require(script.Parent.Hazards)
+local HeightGrid = require(script.Parent.HeightGrid)
 
 local WorldEvents = {}
 
@@ -76,9 +77,8 @@ end
 
 -- A floor point inside the arena (kept EdgeMargin from the walls).
 local function clampToArena(p: Vector3): Vector3
-	local o = Config.ArenaOrigin
-	local half = Config.Arenas.Size / 2 - (Config.Chests.EdgeMargin or 12)
-	return Vector3.new(math.clamp(p.X, o.X - half, o.X + half), o.Y, math.clamp(p.Z, o.Z - half, o.Z + half))
+	local x, z = HeightGrid.ClampXZ(p.X, p.Z, Config.Chests.EdgeMargin or 12)
+	return Vector3.new(x, HeightGrid.GroundY(x, z), z)
 end
 
 local function around(rng: Random, centre: Vector3, r0: number, r1: number): Vector3

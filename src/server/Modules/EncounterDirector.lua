@@ -38,6 +38,7 @@
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local MapBuilder = require(script.Parent.MapBuilder)
+local HeightGrid = require(script.Parent.HeightGrid)
 
 local EncounterDirector = {}
 
@@ -260,7 +261,7 @@ function EncounterDirector.FindSpot(name: string, opts: { [string]: any }?): Vec
 	end
 	local d = D()
 	local o = opts or {}
-	local spot = MapBuilder.FindOpenSpot(info.Arena, rng, {
+	local spotOpts = {
 		MinDistance = o.MinDistance or d.MinDistance,
 		EdgeMargin = o.EdgeMargin or Config.Chests.EdgeMargin,
 		Clearance = o.Clearance or d.Clearance,
@@ -268,8 +269,20 @@ function EncounterDirector.FindSpot(name: string, opts: { [string]: any }?): Vec
 		Avoid = avoidList(),
 		KeepFrom = info.PortalPos,
 		KeepRadius = Config.Chests.PortalClearance,
-	} :: any)
+	} :: any
+	local spot = MapBuilder.FindOpenSpot(info.Arena, rng, spotOpts)
+	-- on walkable ground (height grid; always true on a flat arena: one try as before)
+	for _ = 1, 3 do
+		if not spot or HeightGrid.IsWalkable(spot.X, spot.Z) then
+			break
+		end
+		spot = MapBuilder.FindOpenSpot(info.Arena, rng, spotOpts)
+	end
+	if spot and not HeightGrid.IsWalkable(spot.X, spot.Z) then
+		spot = nil
+	end
 	if spot then
+		spot = HeightGrid.Ground(spot)
 		table.insert(reserved, { Name = name, Pos = spot })
 	end
 	return spot

@@ -54,6 +54,8 @@ local Fx = require(script.Parent.Fx)
 local Events = require(script.Parent.Events)
 local DevTools = require(script.Parent.DevTools)
 local EncounterDirector = require(script.Parent.EncounterDirector) -- feature encounters: PlayerOut on death / portal / abandon
+local HeightGrid = require(script.Parent.HeightGrid) -- ground height (flat FLOOR_Y without a height grid)
+local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
 
 local RunManager = {}
 local disconnected: { [number]: any } = {}
@@ -510,7 +512,7 @@ spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean, runC
 			local rp = byPlayer[player]
 			if rp and not rp.Returned and phase ~= "Lobby" then
 				local arena = MapBuilder.GetArena()
-				local cf = CFrame.new((arena and arena.Center or Config.ArenaOrigin) + Vector3.new(0, 3.5, 0))
+				local cf = CFrame.new(HeightGrid.Ground(arena and arena.Center or Config.ArenaOrigin) + Vector3.new(0, 3.5, 0))
 				local m = spawnCharacter(player, cf, false, rp.CharacterId)
 				RunManager.AttachCharacter(rp, m)
 			else
@@ -1580,6 +1582,7 @@ local function returnAll(how: string?)
 	ctx.StageManager.ForceBoss(nil)
 	ctx.RunModifiers.EndRun()
 	MapBuilder.DestroyArena()
+	HeightGrid.Clear() -- no arena: every height query is flat again
 	MapBuilder.ApplyLighting("Lobby")
 	frozen = false
 	menuPaused = false
@@ -1692,6 +1695,9 @@ end
 -- Moves a run player to a floor point (travel, dev teleport) without the speed check
 -- snapping them back.
 function RunManager.TeleportPlayer(rp, floorPos: Vector3)
+	if HeightGrid.IsActive() then
+		floorPos = HeightGrid.Ground(floorPos) -- onto the ground at that x, z (terraces, ramps)
+	end
 	local pos = floorPos + Vector3.new(0, 3.5, 0)
 	local char: Model? = rp.Character
 	local root: BasePart? = rp.Root
@@ -2170,7 +2176,7 @@ local function speedCheck(rp, dt: number)
 	if moved > allowed then
 		root.CFrame = CFrame.new(last + Vector3.new(0, 0.5, 0)) * root.CFrame.Rotation
 		root.AssemblyLinearVelocity = Vector3.zero
-	elseif pos.Y >= FLOOR_Y - 1 then
+	elseif pos.Y >= HeightGrid.GroundY(pos.X, pos.Z) - 1 then
 		-- (a spot under the floor is never "valid": snapping back to it kept a player who
 		-- fell through the floor falling forever; fallRescue handles that case)
 		rp.LastValidPos = pos
@@ -2192,8 +2198,27 @@ local function arenaHalf(): number
 end
 
 function RunManager.NeedsRescue(pos: Vector3): boolean
+	if HeightGrid.IsActive() then
+		-- a map with height: RescueBelow under the ground at this x, z (a drop from a terrace
+		-- is not a fall out of the map), or well outside the arena bounds
+		local minX, minZ, maxX, maxZ = HeightGrid.Bounds()
+		return pos.Y < HeightGrid.GroundY(pos.X, pos.Z) - Nav.RescueBelow
+			or pos.X < minX - 30 or pos.X > maxX + 30 or pos.Z < minZ - 30 or pos.Z > maxZ + 30
+	end
 	local c, h = Config.ArenaOrigin, arenaHalf() + 30
 	return pos.Y < FLOOR_Y - RESCUE_BELOW or math.abs(pos.X - c.X) > h or math.abs(pos.Z - c.Z) > h
+end
+
+-- True when a root at pos stands on good ground: the last safe spot a fall rescue returns to.
+local function standingSafe(pos: Vector3): boolean
+	if HeightGrid.IsActive() then
+		local minX, minZ, maxX, maxZ = HeightGrid.Bounds()
+		local g = HeightGrid.GroundY(pos.X, pos.Z)
+		return pos.Y > g + 0.5 and pos.Y < g + Nav.SafeAbove and HeightGrid.IsWalkable(pos.X, pos.Z)
+			and pos.X >= minX and pos.X <= maxX and pos.Z >= minZ and pos.Z <= maxZ
+	end
+	local c, h = Config.ArenaOrigin, arenaHalf()
+	return pos.Y > FLOOR_Y + 0.5 and pos.Y < FLOOR_Y + 8 and math.abs(pos.X - c.X) <= h and math.abs(pos.Z - c.Z) <= h
 end
 
 local function fallRescue(rp): boolean
@@ -2203,18 +2228,23 @@ local function fallRescue(rp): boolean
 	end
 	local pos = root.Position
 	if not RunManager.NeedsRescue(pos) then
-		local c, h = Config.ArenaOrigin, arenaHalf()
-		if not root.Anchored and pos.Y > FLOOR_Y + 0.5 and pos.Y < FLOOR_Y + 8
-			and math.abs(pos.X - c.X) <= h and math.abs(pos.Z - c.Z) <= h then
-			rp.SafePos = pos
+		if not root.Anchored and standingSafe(pos) then
+			rp.SafePos = pos -- the last good ground position (per run player)
 		end
 		return false
 	end
-	local safe: Vector3 = rp.SafePos or Config.ArenaOrigin
-	if RunManager.NeedsRescue(safe) then
-		safe = Config.ArenaOrigin
+	local fallback = HeightGrid.Ground(Config.ArenaOrigin)
+	local arena = MapBuilder.GetArena()
+	if HeightGrid.IsActive() and arena then
+		local spawn = arena.Spawn
+		local at = (typeof(spawn) == "Vector3" and spawn) or (typeof(spawn) == "CFrame" and spawn.Position) or arena.Center or Config.ArenaOrigin
+		fallback = HeightGrid.Ground(at)
 	end
-	RunManager.TeleportPlayer(rp, Vector3.new(safe.X, FLOOR_Y, safe.Z))
+	local safe: Vector3 = rp.SafePos or fallback
+	if RunManager.NeedsRescue(safe) then
+		safe = fallback
+	end
+	RunManager.TeleportPlayer(rp, Vector3.new(safe.X, HeightGrid.GroundY(safe.X, safe.Z), safe.Z))
 	if rp.Alive then
 		rp.InvulnUntil = math.max(rp.InvulnUntil or 0, runTime + RESCUE_GRACE)
 	end
@@ -2463,7 +2493,7 @@ function RunManager.TryReconnect(player: Player, id: string): boolean
 	rp.ReviveHeld, rp.RewardUntil, rp.Paused = false, nil, false
 	rp.PortalChoice, rp.PortalOffered = nil, false
 	local arena = MapBuilder.GetArena()
-	local position = arena and arena.Center or Config.ArenaOrigin
+	local position = HeightGrid.Ground(arena and arena.Center or Config.ArenaOrigin)
 	for _, teammate in ipairs(runPlayers) do
 		if teammate.Alive and teammate.Root then position = teammate.Root.Position; break end
 	end

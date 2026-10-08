@@ -47,6 +47,7 @@ local MeshCatalog = require(game:GetService("ReplicatedStorage").Shared.MeshCata
 local Palette = require(game:GetService("ReplicatedStorage").Shared.Palette)
 local StageModifierData = require(game:GetService("ReplicatedStorage").Shared.StageModifierData)
 local MapBuilder = require(script.Parent.MapBuilder)
+local HeightGrid = require(script.Parent.HeightGrid)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local Fx = require(script.Parent.Fx)
 local Events = require(script.Parent.Events)
@@ -935,8 +936,19 @@ function LootSystem.BuildStage(arena, stage: number, portalPos: Vector3?)
 		for k, v in pairs(over or {}) do
 			(opts :: any)[k] = v
 		end
+		-- on walkable ground (height grid; always true on a flat arena: one try as before)
 		local at = MapBuilder.FindOpenSpot(arena, rng, opts)
+		for _ = 1, 3 do
+			if not at or HeightGrid.IsWalkable(at.X, at.Z) then
+				break
+			end
+			at = MapBuilder.FindOpenSpot(arena, rng, opts)
+		end
+		if at and not HeightGrid.IsWalkable(at.X, at.Z) then
+			at = nil
+		end
 		if at then
+			at = HeightGrid.Ground(at)
 			table.insert(avoid, at)
 		end
 		return at

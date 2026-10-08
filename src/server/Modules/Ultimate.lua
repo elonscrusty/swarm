@@ -24,6 +24,8 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local CharacterData = require(ReplicatedStorage.Shared.CharacterData)
 local Fx = require(script.Parent.Fx)
+local HeightGrid = require(script.Parent.HeightGrid)
+local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
 
 local Ultimate = {}
 
@@ -165,7 +167,7 @@ function Ultimate.Use(player: Player): (boolean, string?)
 	end
 	local U = Config.Ultimate
 	local def = CharacterData.UltimateFor(rp.CharacterId)
-	local centre = rp.Root.Position * FLAT + Vector3.new(0, Config.ArenaOrigin.Y, 0)
+	local centre = HeightGrid.Ground(rp.Root.Position)
 	local radius = U.Radius * (def.Radius or 1)
 	local r2 = radius * radius
 	local damage = Ultimate.Damage(rp)
@@ -176,7 +178,7 @@ function Ultimate.Use(player: Player): (boolean, string?)
 	for _, e in ipairs(ctx.EnemySpawner.Active) do
 		if e.Alive and not e.Invulnerable then
 			local dx, dz = e.Pos.X - centre.X, e.Pos.Z - centre.Z
-			if dx * dx + dz * dz <= r2 then
+			if dx * dx + dz * dz <= r2 and HeightGrid.InBand(e.Pos.Y, centre.Y, Nav.HitBand) then
 				table.insert(hit, e)
 			end
 		end

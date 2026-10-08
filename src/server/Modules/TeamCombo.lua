@@ -26,6 +26,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local Fx = require(script.Parent.Fx)
+local HeightGrid = require(script.Parent.HeightGrid)
+local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
 
 local TeamCombo = {}
 
@@ -157,14 +159,14 @@ function TeamCombo.Fire(player: Player): (boolean, string?)
 	end
 	local T = Config.TeamCombo
 	local mid = (rp.Root.Position + mate.Root.Position) / 2
-	local centre = mid * FLAT + Vector3.new(0, Config.ArenaOrigin.Y, 0)
+	local centre = HeightGrid.Ground(mid)
 	local r2 = T.BurstRadius * T.BurstRadius
 	local amount = TeamCombo.Damage(rp, mate)
 	local hit = {}
 	for _, e in ipairs(ctx.EnemySpawner.Active) do
 		if e.Alive and not e.Invulnerable then
 			local dx, dz = e.Pos.X - centre.X, e.Pos.Z - centre.Z
-			if dx * dx + dz * dz <= r2 then
+			if dx * dx + dz * dz <= r2 and HeightGrid.InBand(e.Pos.Y, centre.Y, Nav.HitBand) then
 				table.insert(hit, e)
 			end
 		end

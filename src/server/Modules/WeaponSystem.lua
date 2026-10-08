@@ -25,6 +25,8 @@ local WeaponData = require(game:GetService("ReplicatedStorage").Shared.WeaponDat
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
 local MetaUpgradeData = require(game:GetService("ReplicatedStorage").Shared.MetaUpgradeData)
 local Fx = require(script.Parent.Fx)
+local HeightGrid = require(script.Parent.HeightGrid)
+local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
 
 local WeaponSystem = {}
 
@@ -49,6 +51,26 @@ local queryBuf = {}
 local syncTimer = 0
 local sentEmpty = true
 
+--[[
+	Ground level of the hits being resolved now (maps with height, HeightGrid): set around
+	each weapon's fire (the hero's ground), each projectile (its launch ground, p.Ground),
+	each pool / patch and each delayed hit. New projectiles start at this ground, and while
+	a height grid is active the enemy grid's vertical band (SpatialGrid BandY) keeps every
+	hit and every target pick on this level (|dy| <= Nav.HitBand). Flat arenas: the floor
+	height and no band, exactly as before.
+]]
+local curGround = Config.ArenaOrigin.Y
+local function useGround(y: number?)
+	curGround = y or Config.ArenaOrigin.Y
+	local g = ctx.EnemySpawner.Grid
+	if y and HeightGrid.IsActive() then
+		g.BandY = y
+		g.Band = Nav.HitBand
+	else
+		g.BandY = nil
+	end
+end
+
 local function allocProjectile(): Projectile?
 	local id = table.remove(freeIds)
 	if not id then
@@ -66,7 +88,9 @@ local function allocProjectile(): Projectile?
 	p.Weapon = nil
 	p.Age = 0
 	p.Yaw = 0
-	p.Y = Config.ArenaOrigin.Y + Config.Projectiles.Height
+	p.Ground = curGround -- the launch ground (hit band, flight height)
+	p.Floor = nil -- a ballistic shot's landing ground (Lob)
+	p.Y = curGround + Config.Projectiles.Height
 	p.VY = 0
 	p.Rehit = nil
 	p.Cancelled = false
@@ -176,7 +200,7 @@ local function yawOf(dir: Vector3): number
 end
 
 local function ground(v: Vector3): Vector3
-	return Vector3.new(v.X, Config.ArenaOrigin.Y, v.Z)
+	return HeightGrid.Ground(v)
 end
 
 local function grid()
@@ -197,6 +221,9 @@ local function preferredBoss(pos: Vector3, range: number): any?
 	local b = ctx.EnemySpawner.Boss
 	if not (T and T.PreferBoss and b and b.Alive) or b.Invulnerable or b.Dying or b.Untargetable then
 		return nil
+	end
+	if not HeightGrid.InBand(b.Pos.Y, curGround, Nav.HitBand) then
+		return nil -- on another level (height grid): not a target from here
 	end
 	local edge = ((b.Pos - pos) * FLAT).Magnitude - b.Radius
 	if edge <= math.min(range, T.PreferWithin) then
@@ -522,6 +549,7 @@ function Fire.Whip(rp, w, s, def)
 				killSource = w -- a delayed hit: credit the sword (OnKill)
 				local origin = ground(rp.Root.Position)
 				local healed = 0
+				useGround(origin.Y)
 				local n = grid():QueryCircle(origin.X, origin.Z, reach, queryBuf)
 				local hits = table.move(queryBuf, 1, n, 1, {})
 				for _, e in ipairs(hits) do
@@ -534,6 +562,7 @@ function Fire.Whip(rp, w, s, def)
 						end
 					end
 				end
+				useGround(nil)
 				if healed > 0 then
 					ctx.RunManager.Heal(rp, healed, true)
 				end
@@ -669,10 +698,12 @@ function Fire.HolyWater(rp, w, s, def)
 		p.Pos = origin
 		p.Vel = to / flight
 		p.Life = flight
-		p.Y = Config.ArenaOrigin.Y + 3
+		p.Y = p.Ground + 3
 		p.VY = 30 -- the arc is purely visual
-		-- gravity chosen so the bottle comes back down to ~0.5 studs exactly at landing
-		p.Gravity = 2 * (p.VY * flight + 2.5) / (flight * flight)
+		-- gravity chosen so the bottle comes back down to ~0.5 studs above the landing
+		-- ground exactly at landing (2.5 below the throw height on a flat floor)
+		p.Floor = HeightGrid.GroundY(dest.X, dest.Z)
+		p.Gravity = 2 * (p.VY * flight + math.max(-p.VY * flight * 0.5, p.Y - (p.Floor + 0.5))) / (flight * flight)
 		p.Damage = s.damage
 		p.Pierce = 0
 		p.Radius = 0
@@ -771,7 +802,7 @@ function Fire.Axe(rp, w, s, def)
 			local dir = rotateY(rp.Facing, spread)
 			p.Pos = origin
 			p.Vel = dir * s.speed
-			p.Y = Config.ArenaOrigin.Y + 3
+			p.Y = p.Ground + 3
 			p.VY = params.UpSpeed
 			p.Gravity = params.Gravity
 			p.Pierce = s.pierce
@@ -1087,6 +1118,7 @@ local function stepPatches(dt: number, now: number)
 			z.Timer = z.Tick
 			local owner = z.Owner
 			if owner.Alive then
+				useGround(z.Pos.Y)
 				local n = grid():QueryCircle(z.Pos.X, z.Pos.Z, z.Radius, queryBuf)
 				local hits = table.move(queryBuf, 1, n, 1, {})
 				for _, e in ipairs(hits) do
@@ -1183,7 +1215,8 @@ function Fire.TotemOne(rp, w, s, def)
 	p.Weapon = w
 	p.Pos = besideHero(rp, w.Placed)
 	p.Vel = Vector3.zero
-	p.Y = Config.ArenaOrigin.Y
+	p.Ground = p.Pos.Y
+	p.Y = p.Ground
 	p.Yaw = yawOf(rp.Facing)
 	p.Life = s.duration
 	p.Damage = s.damage
@@ -1366,7 +1399,8 @@ function Fire.TurretOne(rp, w, s, def)
 	p.Weapon = w
 	p.Pos = besideHero(rp, w.Placed)
 	p.Vel = Vector3.zero
-	p.Y = Config.ArenaOrigin.Y
+	p.Ground = p.Pos.Y
+	p.Y = p.Ground
 	p.Yaw = yawOf(rp.Facing)
 	p.Life = s.duration
 	p.Damage = s.damage
@@ -1399,7 +1433,8 @@ local function turretShoot(p: Projectile, target)
 	b.Owner = p.Owner
 	b.Weapon = p.Weapon
 	b.Pos = p.Pos + dir * 2.2 -- the muzzle of the turret model (drawn x1.6)
-	b.Y = Config.ArenaOrigin.Y + 2.9
+	b.Ground = p.Ground
+	b.Y = b.Ground + 2.9
 	b.Vel = dir * p.BoltSpeed
 	b.Damage = p.Damage
 	b.Pierce = p.BoltPierce
@@ -1451,7 +1486,8 @@ local function launchSoul(rp, w, from: Vector3, target, damage: number, speed: n
 	p.Owner = rp
 	p.Weapon = w
 	p.Pos = from
-	p.Y = Config.ArenaOrigin.Y + Config.Projectiles.Height + 0.6
+	p.Ground = HeightGrid.GroundY(from.X, from.Z)
+	p.Y = p.Ground + Config.Projectiles.Height + 0.6
 	p.Vel = dir * speed
 	p.Speed = speed
 	p.Damage = damage
@@ -1532,6 +1568,8 @@ function WeaponSystem.SpawnHostile(pos: Vector3, dir: Vector3, speed: number, da
 	p.Cause = boss and boss.BossData and (boss.BossData.DisplayName .. " projectile") or "Enemy projectile"
 	p.Visual = visual
 	p.Pos = ground(pos)
+	p.Ground = p.Pos.Y
+	p.Y = p.Ground + Config.Projectiles.Height
 	p.Vel = dir * speed
 	p.Damage = damage
 	p.Pierce = 1
@@ -1661,8 +1699,9 @@ end
 local function collidePlayers(p: Projectile): boolean
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Alive and rp.Root then
-			local d = (rp.Root.Position - p.Pos) * FLAT
-			if d.Magnitude <= p.Radius + PLAYER_RADIUS then
+			local rpos = rp.Root.Position
+			local d = (rpos - p.Pos) * FLAT
+			if d.Magnitude <= p.Radius + PLAYER_RADIUS and HeightGrid.InBand(HeightGrid.GroundY(rpos.X, rpos.Z), p.Ground, Nav.HitBand) then
 				ctx.RunManager.DamagePlayer(rp, p.Damage, p.Cause)
 				return true
 			end
@@ -1672,9 +1711,8 @@ local function collidePlayers(p: Projectile): boolean
 end
 
 local function outOfArena(pos: Vector3): boolean
-	local c = Config.ArenaOrigin
-	local h = Config.Arenas.Size / 2 + 20
-	return math.abs(pos.X - c.X) > h or math.abs(pos.Z - c.Z) > h
+	local minX, minZ, maxX, maxZ = HeightGrid.Bounds()
+	return pos.X < minX - 20 or pos.X > maxX + 20 or pos.Z < minZ - 20 or pos.Z > maxZ + 20
 end
 
 ------------------------------------------------------------------------------------------
@@ -1854,7 +1892,7 @@ function Fire.Quake(rp, w, s, def)
 		p.Owner = rp
 		p.Weapon = w
 		p.Pos = origin + dir * 1.5
-		p.Y = Config.ArenaOrigin.Y + 0.6
+		p.Y = p.Ground + 0.6
 		p.Vel = dir * s.speed
 		p.Damage = s.damage
 		p.Pierce = 999
@@ -1937,7 +1975,8 @@ function Fire.Meteor(rp, w, s, def)
 		p.Weapon = w
 		p.Pos = at + Vector3.new(-9, 0, -5)
 		p.Vel = Vector3.zero
-		p.Y = Config.ArenaOrigin.Y + 36
+		p.Ground = at.Y -- it lands (and hits) on the target's ground
+		p.Y = p.Ground + 36
 		p.Life = fall
 		p.Damage = s.damage
 		p.Pierce = 999
@@ -1961,7 +2000,7 @@ function Arm.stepMeteor(p: Projectile, _dt: number, _now: number): boolean
 	local x = p.X
 	local u = math.clamp(p.Age / p.Life, 0, 1)
 	p.Pos = x.From:Lerp(x.To, u)
-	p.Y = Config.ArenaOrigin.Y + 0.8 + 35 * (1 - u * u)
+	p.Y = p.Ground + 0.8 + 35 * (1 - u * u)
 	return false
 end
 
@@ -2057,7 +2096,8 @@ function Fire.Cloud(rp, w, s, def)
 		p.Owner = rp
 		p.Weapon = w
 		p.Pos = ground(target.Pos) + off
-		p.Y = Config.ArenaOrigin.Y + 1.2
+		p.Ground = p.Pos.Y
+		p.Y = p.Ground + 1.2
 		p.Vel = Vector3.zero
 		p.Speed = s.speed
 		p.Target = target
@@ -2155,7 +2195,7 @@ function Fire.Saw(rp, w, s, def)
 		p.Owner = rp
 		p.Weapon = w
 		p.Pos = origin + dir * 1.5
-		p.Y = Config.ArenaOrigin.Y + 1.4
+		p.Y = p.Ground + 1.4
 		p.Vel = dir * s.speed
 		p.Damage = s.damage
 		p.Pierce = 999
@@ -2238,7 +2278,8 @@ function Fire.Vines(rp, w, s, def)
 		p.Owner = rp
 		p.Weapon = w
 		p.Pos = at
-		p.Y = Config.ArenaOrigin.Y
+		p.Ground = HeightGrid.GroundY(at.X, at.Z)
+		p.Y = p.Ground
 		p.Vel = Vector3.zero
 		p.Damage = s.damage
 		p.Pierce = 999
@@ -2350,7 +2391,15 @@ function Fire.Horn(rp, w, s, def)
 				return
 			end
 			killSource = w -- a delayed blast: credit the horn (OnKill)
-			Arm.hornBlast(rp, ground(rp.Root.Position), sh.Dir, sh.Range, sh.Half, s.damage * sh.Share, s.knockback * sh.Share, s.duration, params.DazeSlow, evo ~= nil)
+			local at = ground(rp.Root.Position)
+			local prev = curGround
+			useGround(at.Y)
+			Arm.hornBlast(rp, at, sh.Dir, sh.Range, sh.Half, s.damage * sh.Share, s.knockback * sh.Share, s.duration, params.DazeSlow, evo ~= nil)
+			if sh.Delay <= 0 then
+				useGround(prev) -- fired inside the weapon step: back to the hero's ground
+			else
+				useGround(nil)
+			end
 		end
 		if sh.Delay <= 0 then
 			blast()
@@ -2503,7 +2552,10 @@ function Arm.stepWisp(p: Projectile, dt: number, now: number): boolean
 			p.Pos += to / d * math.min(d, p.Speed * 1.2 * dt)
 		end
 	end
-	p.Y = Config.ArenaOrigin.Y + Config.Projectiles.Height + 0.4 + math.sin(now * 3 + p.Id) * 0.3
+	if HeightGrid.IsActive() then
+		p.Ground = HeightGrid.GroundY(p.Pos.X, p.Pos.Z) -- a cloud drifts with its target
+	end
+	p.Y = p.Ground + Config.Projectiles.Height + 0.4 + math.sin(now * 3 + p.Id) * 0.3
 	return false
 end
 
@@ -2539,7 +2591,8 @@ function Fire.Vortex(rp, w, s, def)
 		p.Owner = rp
 		p.Weapon = w
 		p.Pos = at
-		p.Y = Config.ArenaOrigin.Y + 0.15
+		p.Ground = HeightGrid.GroundY(at.X, at.Z)
+		p.Y = p.Ground + 0.15
 		p.Vel = Vector3.zero
 		p.Damage = s.damage
 		p.Pierce = 999
@@ -2644,7 +2697,7 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 		if p.Kind == "Lob" then
 			-- landed: create a pool
 			table.insert(zones, {
-				Pos = p.Pos,
+				Pos = ground(p.Pos),
 				Radius = p.PoolRadius,
 				Life = p.PoolLife,
 				Tick = p.PoolTick,
@@ -2798,12 +2851,12 @@ local function stepProjectile(p: Projectile, dt: number, now: number): boolean -
 	elseif kind == "Arc" then
 		p.Pos += p.Vel * dt
 		p.VY -= p.Gravity * dt
-		p.Y = math.max(Config.ArenaOrigin.Y + 0.5, p.Y + p.VY * dt)
+		p.Y = math.max(p.Ground + 0.5, p.Y + p.VY * dt)
 		p.Yaw += dt * 12
 	elseif kind == "Lob" then
 		p.Pos += p.Vel * dt
 		p.VY -= p.Gravity * dt
-		p.Y = math.max(Config.ArenaOrigin.Y + 0.5, p.Y + p.VY * dt)
+		p.Y = math.max((p.Floor or p.Ground) + 0.5, p.Y + p.VY * dt)
 		return false -- bottles don't hit in flight
 	elseif kind == "Orbit" then
 		local owner = p.Owner
@@ -2870,6 +2923,7 @@ local function stepZones(dt: number)
 		z.Timer -= dt
 		if z.Timer <= 0 then
 			z.Timer = z.Tick
+			useGround(z.Pos.Y)
 			local n = grid():QueryCircle(z.Pos.X, z.Pos.Z, z.Radius, queryBuf)
 			local hits = table.move(queryBuf, 1, n, 1, {})
 			for _, e in ipairs(hits) do
@@ -3098,6 +3152,8 @@ function WeaponSystem.Step(dt: number)
 				updateSteadyAim(rp, dt)
 			end
 			if rp.Alive and not rp.Paused and rp.Root then
+				local rpos = rp.Root.Position
+				useGround(HeightGrid.GroundY(rpos.X, rpos.Z))
 				for _, id in ipairs(rp.WeaponOrder) do
 					local w = rp.Weapons[id]
 					w.Timer -= dt
@@ -3128,6 +3184,9 @@ function WeaponSystem.Step(dt: number)
 		for i = #live, 1, -1 do
 			local p = live[i]
 			killSource = p and p.Weapon
+			if p and p.Active then
+				useGround(p.Ground)
+			end
 			if p and p.Active and stepProjectile(p, dt, now) then
 				freeProjectile(p)
 			end
@@ -3136,6 +3195,7 @@ function WeaponSystem.Step(dt: number)
 		stepZones(dt)
 		stepPatches(dt, now)
 		killSource = nil
+		useGround(nil)
 	end
 
 	syncTimer += dt

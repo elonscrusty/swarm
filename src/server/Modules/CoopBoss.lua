@@ -29,6 +29,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local Fx = require(script.Parent.Fx)
 local BossAI = require(script.Parent.BossAI)
+local HeightGrid = require(script.Parent.HeightGrid)
 
 local CoopBoss = {}
 
@@ -71,7 +72,7 @@ function CoopBoss.SpotPosition(e): Vector3?
 	local away = (e.Pos - holder.Root.Position) * FLAT
 	local dir = away.Magnitude > 1e-3 and away.Unit or Vector3.zAxis
 	local at = e.Pos + dir * (e.Radius or 4) * Config.CoopBoss.MarkerDistance
-	return Vector3.new(at.X, Config.ArenaOrigin.Y, at.Z)
+	return HeightGrid.Ground(at)
 end
 
 local function publish(e)

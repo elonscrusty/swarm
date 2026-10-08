@@ -54,6 +54,7 @@ local Events = require(script.Parent.Events)
 local BiomeHazards = require(script.Parent.BiomeHazards)
 local EncounterDirector = require(script.Parent.EncounterDirector)
 local BossData = require(game:GetService("ReplicatedStorage").Shared.BossData)
+local HeightGrid = require(script.Parent.HeightGrid)
 
 local StageManager = {}
 
@@ -305,7 +306,9 @@ local function buildStage(n: number)
 	stage = n
 	arenaName = arenaFor(n)
 	local arena = MapBuilder.BuildArena(arenaName, n - 1)
-	local spot = MapBuilder.FindPortalSpot(arena, rng, lastPortal[arenaName])
+	-- ground heights + flow fields; flat (today's floor) when the map tags no NavGround
+	HeightGrid.Build(arena)
+	local spot = HeightGrid.Ground(MapBuilder.FindPortalSpot(arena, rng, lastPortal[arenaName]))
 	lastPortal[arenaName] = spot
 	portal = MapBuilder.BuildPortal(arena, spot)
 	-- chests, shrines and the guarded altar (new spots every stage; the old ones are gone)
@@ -416,7 +419,10 @@ local function startBoss(): boolean
 	local toCentre = (Config.ArenaOrigin - p.Pos) * FLAT
 	local dir = toCentre.Magnitude > 1 and -toCentre.Unit or Vector3.new(0, 0, -1)
 	local x, z = ctx.EnemySpawner.ClampToArena(p.Pos.X + dir.X * Config.Stages.BossSpawnOffset, p.Pos.Z + dir.Z * Config.Stages.BossSpawnOffset, 8)
-	local boss = ctx.EnemySpawner.SpawnBoss(Vector3.new(x, Config.ArenaOrigin.Y, z), forcedBoss or stageBoss)
+	if not (HeightGrid.IsWalkable(x, z) and HeightGrid.CanStep(p.Pos.X, p.Pos.Z, x, z)) then
+		x, z = p.Pos.X, p.Pos.Z -- behind the portal is a cliff / gap: climb out at the portal
+	end
+	local boss = ctx.EnemySpawner.SpawnBoss(Vector3.new(x, HeightGrid.GroundY(x, z), z), forcedBoss or stageBoss)
 	if not boss then
 		return false
 	end

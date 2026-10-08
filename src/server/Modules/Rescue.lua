@@ -38,6 +38,8 @@ local ModelBuilder = require(script.Parent.ModelBuilder)
 local MapBuilder = require(script.Parent.MapBuilder)
 local Fx = require(script.Parent.Fx)
 local EncounterDirector = require(script.Parent.EncounterDirector)
+local HeightGrid = require(script.Parent.HeightGrid)
+local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
 
 local Rescue = {}
 
@@ -163,9 +165,8 @@ end
 
 -- Inside the fence (the walking clamp).
 local function clampToFence(p: Vector3): Vector3
-	local half = Config.Arenas.Size / 2 - 2
-	local o = Config.ArenaOrigin
-	return Vector3.new(math.clamp(p.X, o.X - half, o.X + half), o.Y, math.clamp(p.Z, o.Z - half, o.Z + half))
+	local x, z = HeightGrid.ClampXZ(p.X, p.Z, 2)
+	return Vector3.new(x, HeightGrid.GroundY(x, z), z)
 end
 
 -- Catch-up hop: a free spot FollowDistance from the hero (behind them first, then around),
@@ -175,11 +176,12 @@ local function hopSpot(target: Vector3, back: Vector3): Vector3?
 	for i = 0, 7 do
 		local a = i * math.pi / 4
 		local dir = CFrame.Angles(0, a, 0):VectorToWorldSpace(back)
-		local at = clampToFence(Vector3.new(target.X, Config.ArenaOrigin.Y, target.Z) - dir * k.FollowDistance)
+		local at = clampToFence(Vector3.new(target.X, 0, target.Z) - dir * k.FollowDistance)
 		if ctx.EnemyAI and ctx.EnemyAI.PushOut then
 			at = clampToFence(ctx.EnemyAI.PushOut(at, k.Radius))
 		end
-		local blocked = ctx.EnemyAI and ctx.EnemyAI.IsBlocked and ctx.EnemyAI.IsBlocked(at.X, at.Z, k.Radius)
+		local blocked = (ctx.EnemyAI and ctx.EnemyAI.IsBlocked and ctx.EnemyAI.IsBlocked(at.X, at.Z, k.Radius))
+			or not HeightGrid.IsWalkable(at.X, at.Z)
 		-- bounded: never further from the hero than a short walk
 		if not blocked and ((at - target) * FLAT).Magnitude <= k.FollowDistance * 3 then
 			return at
@@ -326,12 +328,23 @@ local function step(dt: number, info)
 		local to = (target - c.Pos) * FLAT
 		if dist > k.FollowDistance then
 			local stepLen = math.min(k.WalkSpeed * dt, dist - k.FollowDistance)
-			local nextPos = c.Pos + to.Unit * stepLen
+			local dir = to.Unit
+			-- height grid: round cliffs along its hero's flow field (as the enemies do)
+			if HeightGrid.IsActive() and not (dist <= Nav.DirectSeekRange and HeightGrid.CanStep(c.Pos.X, c.Pos.Z, target.X, target.Z)) then
+				local flow = HeightGrid.FlowDir(rp, c.Pos.X, c.Pos.Z)
+				if flow ~= Vector3.zero then
+					dir = flow
+				end
+			end
+			local nextPos = c.Pos + dir * stepLen
 			if ctx.EnemyAI and ctx.EnemyAI.PushOut then
 				nextPos = ctx.EnemyAI.PushOut(nextPos, k.Radius)
 			end
+			if not HeightGrid.CanStep(c.Pos.X, c.Pos.Z, nextPos.X, nextPos.Z) then
+				nextPos = c.Pos -- never off a cliff (the catch-up hop below gets it unstuck)
+			end
 			c.Pos = clampToFence(nextPos)
-			c.Face = to
+			c.Face = dir
 		end
 		-- stuck behind something far from its hero: hop to them
 		if dist > k.CatchUp and ((c.Pos - before) * FLAT).Magnitude < k.WalkSpeed * dt * 0.25 then

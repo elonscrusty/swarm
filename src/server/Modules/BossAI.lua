@@ -51,6 +51,8 @@ local BossData = require(ReplicatedStorage.Shared.BossData)
 local EnemyData = require(ReplicatedStorage.Shared.EnemyData)
 local Fx = require(script.Parent.Fx)
 local Hazards = require(script.Parent.Hazards)
+local HeightGrid = require(script.Parent.HeightGrid)
+local Nav = require(ReplicatedStorage.SwarmV2.Run.RunConfig).Nav
 
 local BossAI = {}
 
@@ -105,8 +107,7 @@ local function targets(): { any }
 end
 
 local function floorPos(rp): Vector3
-	local p = rp.Root.Position
-	return Vector3.new(p.X, Config.ArenaOrigin.Y, p.Z)
+	return HeightGrid.Ground(rp.Root.Position)
 end
 
 local function nearest(pos: Vector3)
@@ -143,7 +144,7 @@ end
 
 local function clamp(pos: Vector3, margin: number?): Vector3
 	local x, z = ctx.EnemySpawner.ClampToArena(pos.X, pos.Z, margin or 4)
-	return Vector3.new(x, Config.ArenaOrigin.Y, z)
+	return Vector3.new(x, HeightGrid.GroundY(x, z), z)
 end
 
 local function setVulnerable(e, on: boolean)
@@ -324,15 +325,21 @@ function Start.Rush(e, name: string, windup: number?)
 	local w = windup or A.Windup
 	local full = A.Speed * A.Duration
 	local len, blocked = full, false
-	local c = Config.ArenaOrigin
+	-- the fence: the arena's bounds (today's square without them)
+	local minX, minZ, maxX, maxZ = HeightGrid.Bounds()
 	if A.Stuck then
-		-- where would his horn hit something? (the lane shows exactly that)
-		local half = Config.Arenas.Size / 2 - e.Radius - 1
+		-- where would his horn hit something? (the lane shows exactly that; a cliff he
+		-- cannot step onto or off counts, height grid)
+		local inset = e.Radius + 1
 		local reach = e.Radius * 0.6
+		local px, pz = e.Pos.X, e.Pos.Z
 		for d = 2, full, 1 do
 			local p = e.Pos + dir * d
 			local tip = p + dir * reach
-			if math.abs(p.X - c.X) > half or math.abs(p.Z - c.Z) > half or ctx.EnemyAI.IsBlocked(tip.X, tip.Z, 1.2) then
+			local cliff = not HeightGrid.CanStep(px, pz, tip.X, tip.Z)
+			px, pz = tip.X, tip.Z
+			if p.X < minX + inset or p.X > maxX - inset or p.Z < minZ + inset or p.Z > maxZ - inset
+				or ctx.EnemyAI.IsBlocked(tip.X, tip.Z, 1.2) or cliff then
 				len, blocked = math.max(2, d - 1), true
 				break
 			end
@@ -346,14 +353,13 @@ function Start.Rush(e, name: string, windup: number?)
 	-- the fence: EnemyAI keeps the body's centre Radius inside it, so the rush stops there
 	-- (distance along dir to that box, per axis)
 	local function toBox(inset: number): number
-		local half = Config.Arenas.Size / 2 - inset
 		local t = math.huge
 		if math.abs(dir.X) > 1e-4 then
-			local edge = c.X + (dir.X > 0 and half or -half)
+			local edge = dir.X > 0 and maxX - inset or minX + inset
 			t = math.min(t, (edge - e.Pos.X) / dir.X)
 		end
 		if math.abs(dir.Z) > 1e-4 then
-			local edge = c.Z + (dir.Z > 0 and half or -half)
+			local edge = dir.Z > 0 and maxZ - inset or minZ + inset
 			t = math.min(t, (edge - e.Pos.Z) / dir.Z)
 		end
 		return math.max(0, t)
@@ -491,7 +497,7 @@ local function stormWave(e, delay: number, gap: number, A: any?)
 	local gapHalf = math.rad(A.GapHalf)
 	local g = math.floor(gap * 1000 + 0.5) / 1000
 	local id = Fx.Warn("wave", e.Pos.X, e.Pos.Z, r0, delay, A.Speed, A.MaxRadius, A.Width, g, math.floor(gapHalf * 1000 + 0.5) / 1000)
-	local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+	local at = HeightGrid.Ground(e.Pos)
 	Hazards.Wave(at, delay, A.Speed, A.MaxRadius, A.Width, g, gapHalf, damage(A.Damage), { Group = GROUP, Warn = id, Start = r0 })
 end
 
@@ -536,7 +542,7 @@ end
 
 local function poundBands(e, outsideIn: boolean): number
 	local A = e.BossData.Attacks.GroundPound
-	local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+	local at = HeightGrid.Ground(e.Pos)
 	local bands = A.Bands
 	local n = #bands
 	for i, outer in ipairs(bands) do
@@ -585,11 +591,10 @@ end
 -- removed with the boss's other hazards. Returns nothing (the lane id is in BossWarns).
 local function lineHazard(e, from: Vector3, dir: Vector3, len: number, width: number, delay: number, travel: number?, dmg: number, pop: string)
 	-- stop at the fence (a lane drawn through the wall would lie)
-	local c = Config.ArenaOrigin
-	local half = Config.Arenas.Size / 2 - 1
+	local minX, minZ, maxX, maxZ = HeightGrid.Bounds()
 	for d = 2, len, 2 do
 		local p = from + dir * d
-		if math.abs(p.X - c.X) > half or math.abs(p.Z - c.Z) > half then
+		if p.X < minX + 1 or p.X > maxX - 1 or p.Z < minZ + 1 or p.Z > maxZ - 1 then
 			len = math.max(4, d - 2)
 			break
 		end
@@ -597,7 +602,7 @@ local function lineHazard(e, from: Vector3, dir: Vector3, len: number, width: nu
 	addWarn(e, Fx.Telegraph(from + dir * (len / 2), math.atan2(-dir.X, -dir.Z), len, width, delay))
 	e.BossLines = e.BossLines or {}
 	table.insert(e.BossLines, {
-		From = Vector3.new(from.X, Config.ArenaOrigin.Y, from.Z),
+		From = HeightGrid.Ground(from),
 		Dir = dir,
 		Len = len,
 		Half = width / 2,
@@ -649,7 +654,7 @@ end
 -- they stand in its gap. Drawn by the client from the same numbers ("bramble").
 local function closingRing(e, delay: number, gap: number)
 	local A = e.BossData.Attacks.BrambleRing
-	local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+	local at = HeightGrid.Ground(e.Pos)
 	local minR = e.Radius + 1.5
 	local gapHalf = math.rad(A.GapHalf)
 	local g = math.floor(gap * 1000 + 0.5) / 1000
@@ -675,9 +680,11 @@ local function stepRings(e, dt: number)
 			else
 				for _, rp in ipairs(players) do
 					if not R.Hit[rp] then
-						local dx, dz = rp.Root.Position.X - R.Pos.X, rp.Root.Position.Z - R.Pos.Z
+						local rpos = rp.Root.Position
+						local dx, dz = rpos.X - R.Pos.X, rpos.Z - R.Pos.Z
 						local d = math.sqrt(dx * dx + dz * dz)
-						if math.abs(d - R.R) <= R.Half + 0.6 then
+						-- (height grid: a hero on another level is not in the ring)
+						if math.abs(d - R.R) <= R.Half + 0.6 and HeightGrid.InBand(HeightGrid.GroundY(rpos.X, rpos.Z), R.Pos.Y, Nav.HazardBand) then
 							local off = (math.atan2(dz, dx) - R.Gap) % TAU
 							if math.min(off, TAU - off) > R.GapHalf then
 								R.Hit[rp] = true
@@ -1274,7 +1281,7 @@ State.Burrowed = function(e, dt)
 	end
 	if e.BossTimer <= 0 then
 		e.SpeedOverride = 0
-		local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+		local at = HeightGrid.Ground(e.Pos)
 		Hazards.Strike(at, B.Radius, B.Warn, damage(B.Damage), { Group = GROUP, Style = "burrow", Cause = e.BossData.DisplayName .. " Burrow eruption" })
 		setState(e, "Surface", B.Warn)
 	end
@@ -1741,7 +1748,7 @@ function BossAI.OnDamaged(e, amount: number)
 	if e.HitSum >= e.MaxHP * H.Share and clock >= (e.PulseReady or 0) then
 		e.HitSum = 0
 		e.PulseReady = clock + H.Cooldown
-		local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+		local at = HeightGrid.Ground(e.Pos)
 		Hazards.Strike(at, e.Radius + H.Radius, H.Warn, damage(H.Damage), { Group = GROUP, Style = "pulse" })
 	end
 end
