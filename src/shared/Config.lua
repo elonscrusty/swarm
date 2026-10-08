@@ -1681,6 +1681,18 @@ Config.Arenas = {
 	Lava = { DisplayName = "Lava", RequiredBestStage = 6, Hint = "Lava pools burn" },
 	Size = 400, -- square arena, centred on ArenaOrigin
 	ClearRadius = 40, -- nothing collidable this close to the centre (player spawn)
+	-- Environment dressing (MapBuilder.dressArena, Forest): small natural clusters of
+	-- grass tufts, wildflowers, mossy rocks, shrubs and fallen branches built once per
+	-- arena build into the arena's "ArenaDressing" folder (fixed seed, cleared with the
+	-- arena). Decoration only: no collision, queries or touches. Most clusters sit by the
+	-- arena edges and the path edges, a few in the meadow, almost none in the centre.
+	-- Ground / path materials are Roblox materials tinting the palette colours.
+	Dressing = {
+		Enabled = true,
+		GroundMaterial = "Grass", -- the Forest meadow floor and its broad tone patches
+		PathMaterial = "Ground", -- the Forest dirt paths
+		Clusters = { Edge = 18, Path = 20, Meadow = 8, Centre = 2 }, -- cluster counts per zone
+	},
 	-- Layouts (landmarks, groves, paths) are designed in MapBuilder with a fixed seed per
 	-- arena; obstacle coverage is kept close to the old builder (see MapBuilder header).
 
