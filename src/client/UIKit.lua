@@ -448,10 +448,9 @@ function UIKit.Surface(parent: Instance?, o: SurfaceOpts?): (Frame, Frame)
 		ZIndex = opts.ZIndex or 1,
 		Visible = if opts.Visible == nil then true else opts.Visible,
 	})
-	if opts.Depth then
-		depthBase(holder, radius, opts.Depth)
-	elseif opts.Shadow ~= false then
-		UIKit.Shadow(holder, radius, 4, 0)
+	if opts.Depth or opts.Shadow ~= false then
+		-- Shared menus, HUD plates and dialogs use the same crisp arcade base.
+		depthBase(holder, radius, opts.Depth or 3)
 	end
 	local face = new("Frame", {
 		Name = "Face",
@@ -701,6 +700,9 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 	local iconName = o.Icon
 	local iconSize = o.IconSize or Theme.Size.Icon
 	local depth: string? = o.Depth
+	if depth == nil and o.Shadow ~= false and kind ~= "Ghost" then
+		depth = kind == "Primary" and "Strong" or "Light"
+	end
 
 	local hit = new("TextButton", {
 		Name = o.Name or (o.Title or "Button"),
@@ -720,7 +722,8 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 	UIKit.Focusable(hit)
 
 	local glow: Frame? = nil
-	if o.Glow then
+	-- Raised controls get depth rather than a pulsing halo that obscures neighbours.
+	if o.Glow and depth == nil then
 		local g = new("Frame", {
 			Name = "Glow",
 			BackgroundColor3 = C.PrimaryTop,
@@ -1236,20 +1239,11 @@ function UIKit.Card(parent: Instance?, o: CardOpts): Button
 		Name = o.Name or o.Title,
 		Align = "Left",
 	})
-	-- icon well: a darker rounded square with a gold hairline
+	-- One cohesive icon tile, matching the setup and navigation cards.
 	local holder = b.Content:FindFirstChild("IconHolder") :: Frame
 	holder.Visible = true
 	holder.Size = UDim2.fromOffset(46, 46)
-	local well = new("Frame", {
-		Name = "Well",
-		BackgroundColor3 = C.PanelInset,
-		BackgroundTransparency = 0.2,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
-	}, holder)
-	corner(well, Theme.Radius.S + 2)
-	stroke(well, C.Blue, 1.5, 0.3)
-	Icons.Draw(well, o.Icon, { Size = 28, Color = C.Blue, Back = C.PanelInset, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	UIKit.IconBadge(holder, o.Icon, Theme.IconTint.Blue, 46)
 	local column = b.Content:FindFirstChild("Text") :: Frame
 	column.Size = UDim2.new(1, -(46 + 20 + 2 * Theme.Space.M), 1, 0)
 	if b.Title then
@@ -1998,6 +1992,7 @@ end
 export type Header = { Frame: Frame, Back: Button, Title: TextLabel, Plate: TitlePlate? }
 
 function UIKit.ScreenHeader(parent: Instance, title: string, onBack: () -> (), arcade: boolean?): Header
+	arcade = arcade ~= false
 	local f = new("Frame", { Name = "Header", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 56) }, parent)
 	local back = UIKit.Button(f, {
 		Kind = "Secondary",

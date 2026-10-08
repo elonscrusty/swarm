@@ -129,6 +129,7 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 	local button = UIKit.Button(face, {
 		Kind = "Outline",
 		Title = "RETRY",
+		Shrink = true,
 		Icon = "cycle",
 		IconSize = 20,
 		TitleStyle = "Label",

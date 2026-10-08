@@ -129,6 +129,7 @@ function MenuTrack.Build(screen: Frame, ctx: { [string]: any })
 			UIKit.Button(f, {
 				Kind = worn and "Selected" or "Secondary",
 				Title = worn and "WORN" or "WEAR",
+				Shrink = true,
 				Icon = worn and "check" or nil,
 				IconSize = 16,
 				Align = "Center",

@@ -147,55 +147,19 @@ end
 ------------------------------------------------------------------------------------------
 
 local function buildLogo(parent: Instance): Frame
-	local logo = new("Frame", { Name = "Logo", BackgroundTransparency = 1, Size = UDim2.fromOffset(360, 130) }, parent)
+	-- One clean arcade wordmark. The former painted logo and fallback letters could
+	-- stack during asset loading and introduced a second, incompatible visual style.
+	local logo = new("Frame", { Name = "Logo", BackgroundTransparency = 1, Size = UDim2.fromOffset(280, 102) }, parent)
 	ui.LogoScale = new("UIScale", { Name = "Fit" }, logo)
-	-- the sword behind the letters
-	local sword = new("Frame", { Name = "Sword", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(170, 54), Size = UDim2.fromOffset(330, 26), Rotation = -14 }, logo)
-	local blade = new("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Position = UDim2.fromOffset(84, 6), Size = UDim2.fromOffset(232, 14) }, sword)
-	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Steel }, blade)
-	UIKit.stroke(blade, P.steel_600, 1, 0.3)
-	new("Frame", { BackgroundColor3 = P.steel_200, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(316, 13), Size = UDim2.fromOffset(10, 10), Rotation = 45 }, sword)
-	new("Frame", { BackgroundColor3 = P.steel_400, BorderSizePixel = 0, Position = UDim2.fromOffset(92, 12), Size = UDim2.fromOffset(212, 2) }, sword)
-	local guard = new("Frame", { BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(80, 13), Size = UDim2.fromOffset(10, 52) }, sword)
-	UIKit.corner(guard, 4)
-	UIKit.stroke(guard, C.CoinDeep, 1, 0.2)
-	local grip = new("Frame", { BackgroundColor3 = P.leather_500, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromOffset(75, 13), Size = UDim2.fromOffset(46, 9) }, sword)
-	UIKit.corner(grip, 3)
-	local pommel = new("Frame", { BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(26, 13), Size = UDim2.fromOffset(16, 16) }, sword)
-	UIKit.corner(pommel, 999)
-	-- the letters: a shadow, then steel-gradient text with a dark outline
-	local function word(offset: Vector2, color: Color3, transparency: number): TextLabel
-		return new("TextLabel", {
-			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(offset.X, offset.Y),
-			Size = UDim2.fromOffset(360, 92),
-			Text = "SWARM",
-			FontFace = Theme.Font.Display,
-			TextSize = 84,
-			TextColor3 = color,
-			TextTransparency = transparency,
-			TextXAlignment = Enum.TextXAlignment.Left,
-		}, logo)
-	end
-	word(Vector2.new(4, 10), C.Shadow, 0.35)
-	local letters = word(Vector2.new(0, 4), Color3.new(1, 1, 1), 0)
-	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Steel }, letters)
-	new("UIStroke", { Color = C.Text, Thickness = 2, Transparency = 0.15, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual }, letters)
-	-- the painted logo (screens/logo_SWARM, 2:1) replaces the sword and letters; they stay
-	-- as the fallback while it loads or if it is not uploaded. The frame grows to fit it.
-	ui.LogoW, ui.LogoH = 350, 130
-	local drawn = { sword }
-	for _, ch in ipairs(logo:GetChildren()) do
-		if ch:IsA("TextLabel") and ch.Name ~= "Tagline" then
-			table.insert(drawn, ch)
-		end
-	end
-	local art = ArtImage.Place(logo, "screens/logo_SWARM", { Name = "LogoArt", Position = UDim2.fromOffset(0, -4), Size = UDim2.fromOffset(280, 140), ZIndex = 2 }, drawn)
-	if art then
-		-- the picture's box ends at about 136
-		ui.LogoW, ui.LogoH = 280, 136
-		logo.Size = UDim2.fromOffset(280, 136)
-	end
+	local wordmark = UIKit.TitlePlate(logo, "SWARM", 64, { Name = "Wordmark", Position = UDim2.fromOffset(3, 8), AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromOffset(274, 82) })
+	local face = wordmark.Frame:FindFirstChild("Plate") :: Frame
+	face.AutomaticSize = Enum.AutomaticSize.None
+	face.Size = UDim2.fromScale(1, 1)
+	wordmark.Label.AutomaticSize = Enum.AutomaticSize.None
+	wordmark.Label.Size = UDim2.fromScale(1, 1)
+	wordmark.Label.TextScaled = true
+	UIKit.new("UITextSizeConstraint", { MinTextSize = 36, MaxTextSize = 64 }, wordmark.Label)
+	ui.LogoW, ui.LogoH = 280, 102
 	return logo
 end
 

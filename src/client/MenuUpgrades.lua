@@ -188,8 +188,15 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			text(f, "Caption", UIKit.track(caption), { Position = UDim2.fromOffset(0, y), Size = UDim2.new(0, capW, 0, rowH), TextColor3 = C.TextFaint })
 			text(f, "BodyStrong", value, { Name = caption, Position = UDim2.fromOffset(capW, y), Size = UDim2.new(1, -capW, 0, rowH), TextColor3 = color, TextTruncate = Enum.TextTruncate.AtEnd }, UIKit.IsCompact() and 13 or 15)
 		end
-		effectRow(rowY, "Current", MetaUpgradeData.EffectText(id, level), C.Text)
-		effectRow(rowY + rowH, "Next", maxed and "Fully upgraded" or MetaUpgradeData.EffectText(id, level + 1), maxed and C.BlueDeep or C.Success)
+		local function effectLabel(atLevel: number): string
+			if UIKit.IsCompact() and atLevel > 0 and def.Effect and (id == "Reroll" or id == "Skip" or id == "Revive") then
+				local unit = id == "Reroll" and "rerolls" or (id == "Skip" and "skips" or "extra life")
+				return string.format("%d %s / run", def.Effect.Per * atLevel, unit)
+			end
+			return MetaUpgradeData.EffectText(id, atLevel)
+		end
+		effectRow(rowY, "Current", effectLabel(level), C.Text)
+		effectRow(rowY + rowH, "Next", maxed and "Fully upgraded" or effectLabel(level + 1), maxed and C.BlueDeep or C.Success)
 		if cost then
 			local busy = pending[id] ~= nil
 			local b
@@ -255,22 +262,28 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 	end
 
 	-- the stat upgrades moved to each hero (Characters screen, Hero Mastery)
-	local function heroCard(p, order: number)
-		local f = card(order)
+	local function heroCard(p, _order: number)
+		local f = UIKit.Panel(face, { Name = "HeroFooter", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -4), Size = UDim2.new(1, 0, 0, ui.HeroFooterH) })
+		ui.HeroFooter = f
+		UIKit.pad(f, 12)
 		local selected = p.SelectedCharacter or "Knight"
-		cardTop(f, function()
-			Icons.Character(f, selected, { Size = 56 })
-		end, "Hero upgrades", HERO_DESC, 0, math.max(metaDescLines(), descLines(HERO_DESC) + 1))
+		Icons.Character(f, selected, { Size = 52 })
+		local narrow = ui.Panel.Size.X.Offset < 600
+		local reserve = narrow and 64 or 304
+		text(f, "H2", "HERO UPGRADES", { Position = UDim2.fromOffset(64, 0), Size = UDim2.new(1, -reserve, 0, TS(20) + 4) }, 20)
+		text(f, "Small", HERO_DESC, { Position = UDim2.fromOffset(64, TS(20) + 6), Size = UDim2.new(1, -reserve, 0, TS(14) * 3 + 4), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top })
 		UIKit.Button(f, {
 			Kind = "Primary",
 			Title = "OPEN CHARACTERS",
+			Shrink = true,
+			TitleSize = 16,
 			Icon = "chevronsUp",
 			IconSize = 20,
 			Align = "Center",
 			Name = "HeroUpgrades",
-			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.fromScale(0, 1),
-			Size = UDim2.new(1, 0, 0, 46),
+			AnchorPoint = narrow and Vector2.new(0, 1) or Vector2.new(1, 0.5),
+			Position = narrow and UDim2.fromScale(0, 1) or UDim2.fromScale(1, 0.5),
+			Size = narrow and UDim2.new(1, 0, 0, 46) or UDim2.fromOffset(224, 46),
 			Shadow = false,
 			OnClick = function()
 				ctx.ShowScreen("Characters")
@@ -354,6 +367,10 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 	end
 
 	local function rebuild(animate: boolean)
+		if ui.HeroFooter then
+			ui.HeroFooter:Destroy()
+			ui.HeroFooter = nil
+		end
 		for _, c in ipairs(ui.Scroll:GetChildren()) do
 			if c:IsA("GuiObject") then
 				c:Destroy()
@@ -416,11 +433,17 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		local shopH = TS(20) + 8 + 2 * TS(14) + 16 + 50 + 28 + 8
 		local cellH = tab == "Shop" and shopH or metaH
 		ui.Grid.CellSize = UDim2.fromOffset(ui.CellW or 280, cellH)
+		ui.HeroFooterH = ui.Panel.Size.X.Offset < 600 and (TS(20) + 6 + TS(14) * 3 + 4 + 12 + 46 + 24) or 96
+		local footer = tab == "Permanent" and (ui.HeroFooterH + 12) or 0
+		ui.Scroll.Size = UDim2.new(1, 0, 1, -ui.ScrollTop - footer)
+		if ui.HeroFooter then
+			ui.HeroFooter.Size = UDim2.new(1, 0, 0, ui.HeroFooterH)
+		end
 		-- the panel is only as tall as its cards (portrait left half the screen empty)
 		if ui.PanelMaxH then
-			local count = tab == "Shop" and (#SHOP + (Config.FeatureOn("Store") and 1 or 0)) or (#MetaUpgradeData.AccountOrder + 1)
+			local count = tab == "Shop" and (#SHOP + (Config.FeatureOn("Store") and 1 or 0)) or #MetaUpgradeData.AccountOrder
 			local rows = math.ceil(count / (ui.Cols or 1))
-			local need = 28 + ui.ScrollTop + 12 + rows * cellH + (rows - 1) * 12 + 8
+			local need = 28 + ui.ScrollTop + 12 + rows * cellH + (rows - 1) * 12 + 8 + footer
 			ui.Panel.Size = UDim2.fromOffset(ui.Panel.Size.X.Offset, math.min(ui.PanelMaxH, need))
 		end
 	end

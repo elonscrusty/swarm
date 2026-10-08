@@ -26,8 +26,8 @@ Theme.Palette = Palette
 ------------------------------------------------------------------------------------------
 local hex = Color3.fromHex
 local A = {
-	PanelTop = hex("#FFFFFF"),
-	PanelBottom = hex("#E8F6FF"),
+	PanelTop = hex("#F8FCFF"),
+	PanelBottom = hex("#E1EFFB"),
 	CardFill = hex("#F5FBFF"),
 	Blue = hex("#087FFF"),
 	BlueLight = hex("#39C8FF"),
