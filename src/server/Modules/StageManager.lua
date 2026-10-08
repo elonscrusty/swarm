@@ -57,6 +57,23 @@ local BossData = require(game:GetService("ReplicatedStorage").Shared.BossData)
 
 local StageManager = {}
 
+-- Single-map settings (src/swarmv2/shared/Run/RunConfig.lua, Map section). Safe defaults when the
+-- module is not in the tree.
+local MapCfg: { [string]: any } = { MapName = "Cliffwood", SingleMap = true, BossLandmark = "Stone Circle", TransitionSeconds = 0.7, PortalLandmarkMargin = 14, BossEvery = 5 }
+do
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("SwarmV2")
+	local run = folder and folder:FindFirstChild("Run")
+	local mod = run and run:FindFirstChild("RunConfig")
+	if mod and mod:IsA("ModuleScript") then
+		local ok, cfg = pcall(require, mod)
+		if ok and type(cfg) == "table" and type(cfg.Map) == "table" then
+			for k, v in pairs(cfg.Map) do
+				MapCfg[k] = v
+			end
+		end
+	end
+end
+
 local ctx
 local state: Configuration
 local rng = Random.new()
@@ -89,6 +106,14 @@ local choiceHeld = 0 -- seconds this stage-clear countdown already waited for up
 local shownHeld: boolean? = nil
 local travelStep = ""
 local travelTimer = 0
+-- Single-map run (every stage on one arena, see buildStage): the arena, the portal's extra
+-- nodes and the stage-only colliders to drop at the next stage.
+local singleMode = false
+local mapArena: any = nil
+local lastLandmark: string? = nil
+local landmarkBag: { string } = {}
+local portalNodes: { Instance } = {}
+local stageBase: { Obstacles: number, Keepout: number, Colliders: { [Instance]: boolean } }? = nil
 local lastClearTime = 0 -- run time when the last stage boss died (Daily Challenge score)
 
 ------------------------------------------------------------------------------------------
@@ -236,6 +261,9 @@ local function extendPlan(n: number)
 end
 
 local function arenaFor(n: number): string
+	if singleMode and plan[1] then
+		return plan[1]
+	end
 	if #plan == 0 then
 		plan = { known(firstArena) and firstArena or "Forest" }
 	end
@@ -300,14 +328,174 @@ local function publishCharge()
 	end
 end
 
+--[[
+	Landmark for stage n's portal (single map). Stage MapCfg.BossEvery (5) and every multiple of
+	it use MapCfg.BossLandmark; the others take the next name of a shuffled bag, never the one
+	used last stage. Pure: bag and last are passed in and the updated bag comes back.
+]]
+function StageManager.PickLandmark(names: { string }, n: number, last: string?, bag: { string }, rand: Random): (string?, { string })
+	if #names == 0 then
+		return nil, bag
+	end
+	local bossName_ = MapCfg.BossLandmark
+	local every = MapCfg.BossEvery or 5
+	if n > 0 and n % every == 0 and table.find(names, bossName_) then
+		return bossName_, bag
+	end
+	local valid: { [string]: boolean } = {}
+	for _, name in ipairs(names) do
+		valid[name] = true
+	end
+	local fresh: { string } = {}
+	for _, name in ipairs(bag) do
+		if valid[name] then
+			table.insert(fresh, name)
+		end
+	end
+	bag = fresh
+	-- not the last landmark, and not the boss landmark the very stage before a boss stage
+	-- (the boss stage would repeat it)
+	local nextIsBoss = (n + 1) % every == 0 and table.find(names, bossName_) ~= nil and #names > 2
+	local function bad(name: string, strict: boolean): boolean
+		return (name == last and #names > 1) or (strict and nextIsBoss and name == bossName_)
+	end
+	local function shuffled(): { string }
+		local fresh_ = table.clone(names)
+		for i = #fresh_, 2, -1 do
+			local j = rand:NextInteger(1, i)
+			fresh_[i], fresh_[j] = fresh_[j], fresh_[i]
+		end
+		return fresh_
+	end
+	for _ = 1, 2 do
+		if #bag == 0 then
+			bag = shuffled()
+		end
+		for i, name in ipairs(bag) do
+			if not bad(name, true) then
+				table.remove(bag, i)
+				return name, bag
+			end
+		end
+		bag = {} -- everything left is excluded: start a new bag
+	end
+	bag = shuffled()
+	for i, name in ipairs(bag) do
+		if not bad(name, false) then
+			table.remove(bag, i)
+			return name, bag
+		end
+	end
+	return table.remove(bag, 1), bag
+end
+
+-- A clear spot inside the picked landmark (FindSpotInRadius), else the usual portal rule.
+local function landmarkSpot(arena, n: number): Vector3
+	local names: { string } = {}
+	local byName: { [string]: any } = {}
+	for _, lm in ipairs(arena.Landmarks) do
+		table.insert(names, lm.Name)
+		byName[lm.Name] = lm
+	end
+	local pick
+	pick, landmarkBag = StageManager.PickLandmark(names, n, lastLandmark, landmarkBag, rng)
+	lastLandmark = pick
+	local lm = pick and byName[pick]
+	if lm then
+		local spot = MapBuilder.FindSpotInRadius(arena, rng, lm.Pos, math.max(8, lm.Radius - (MapCfg.PortalLandmarkMargin or 0)), Config.Stages.PortalClearance)
+		if spot then
+			return spot
+		end
+	end
+	return MapBuilder.FindPortalSpot(arena, rng, nil)
+end
+
+-- Drops what the previous stage added to the shared map: its portal, stage colliders.
+local function resetStageProps(arena)
+	for _, node in ipairs(portalNodes) do
+		if node.Parent then
+			node:Destroy()
+		end
+	end
+	table.clear(portalNodes)
+	local base = stageBase
+	if not base then
+		return
+	end
+	for i = #arena.Obstacles, base.Obstacles + 1, -1 do
+		table.remove(arena.Obstacles, i)
+	end
+	for i = #arena.Keepout, base.Keepout + 1, -1 do
+		table.remove(arena.Keepout, i)
+	end
+	for _, c in ipairs(arena.ObstacleFolder:GetChildren()) do
+		if not base.Colliders[c] then
+			c:Destroy()
+		end
+	end
+end
+
+local function markStageBase(arena)
+	local set: { [Instance]: boolean } = {}
+	for _, c in ipairs(arena.ObstacleFolder:GetChildren()) do
+		set[c] = true
+	end
+	stageBase = { Obstacles = #arena.Obstacles, Keepout = #arena.Keepout, Colliders = set }
+end
+
 -- Builds stage n: its arena, the portal and the obstacle grid. Returns the arena.
+-- Single map (arena has Landmarks, RunConfig.Map.SingleMap ~= false): stage 1 builds the map
+-- and later stages reuse it, with a fresh portal in another landmark and fresh loot.
 local function buildStage(n: number)
 	stage = n
 	arenaName = arenaFor(n)
-	local arena = MapBuilder.BuildArena(arenaName, n - 1)
-	local spot = MapBuilder.FindPortalSpot(arena, rng, lastPortal[arenaName])
-	lastPortal[arenaName] = spot
-	portal = MapBuilder.BuildPortal(arena, spot)
+	local arena
+	local spot: Vector3
+	if singleMode and mapArena and n > 1 then
+		arena = mapArena
+		resetStageProps(arena)
+		markStageBase(arena)
+		spot = landmarkSpot(arena, n)
+		local before: { [Instance]: boolean } = {}
+		for _, c in ipairs(arena.Model:GetChildren()) do
+			before[c] = true
+		end
+		portal = MapBuilder.BuildPortal(arena, spot)
+		for _, c in ipairs(arena.Model:GetChildren()) do
+			if not before[c] then
+				table.insert(portalNodes, c)
+			end
+		end
+	else
+		arena = MapBuilder.BuildArena(arenaName, n - 1)
+		if singleMode then
+			if arena.Landmarks and #arena.Landmarks > 0 then
+				mapArena = arena
+				lastLandmark = nil
+				table.clear(landmarkBag)
+				table.clear(portalNodes)
+				markStageBase(arena)
+				spot = landmarkSpot(arena, n)
+				local before: { [Instance]: boolean } = {}
+				for _, c in ipairs(arena.Model:GetChildren()) do
+					before[c] = true
+				end
+				portal = MapBuilder.BuildPortal(arena, spot)
+				for _, c in ipairs(arena.Model:GetChildren()) do
+					if not before[c] then
+						table.insert(portalNodes, c)
+					end
+				end
+			else
+				singleMode = false -- no landmarks: the old arena rules
+			end
+		end
+		if not singleMode then
+			spot = MapBuilder.FindPortalSpot(arena, rng, lastPortal[arenaName])
+			lastPortal[arenaName] = spot
+			portal = MapBuilder.BuildPortal(arena, spot)
+		end
+	end
 	-- chests, shrines and the guarded altar (new spots every stage; the old ones are gone)
 	ctx.LootSystem.BuildStage(arena, n, spot)
 	-- feature encounters (EncounterDirector; nothing runs while none is registered)
@@ -371,6 +559,19 @@ function StageManager.BeginRun(selectedArena: string, fixed: { Arenas: { string 
 		fixedBosses = table.clone(fixed.Bosses)
 	end
 	table.clear(lastPortal)
+	-- single map: only when every planned arena is the single-map arena (a daily with old arenas
+	-- keeps the old tour); buildStage turns it off again if the built arena has no Landmarks
+	singleMode = MapCfg.SingleMap ~= false and #plan > 0
+	for _, name in ipairs(plan) do
+		if name ~= MapCfg.MapName then
+			singleMode = false
+		end
+	end
+	mapArena = nil
+	lastLandmark = nil
+	table.clear(landmarkBag)
+	table.clear(portalNodes)
+	stageBase = nil
 	local arena = buildStage(1)
 	setSub("Explore")
 	return arena
@@ -380,6 +581,10 @@ end
 function StageManager.EndRun()
 	EncounterDirector.StageEnd("RunEnd") -- feature encounters clean up (defeat, abandon, last one out)
 	portal = nil
+	singleMode = false
+	mapArena = nil
+	stageBase = nil
+	table.clear(portalNodes)
 	fixedBosses = nil
 	BiomeHazards.Clear()
 	ctx.LootSystem.Clear()
@@ -518,13 +723,33 @@ end
 local function startTravel()
 	closeOffers()
 	setSub("Travel")
-	travelStep = "FadeIn"
-	travelTimer = Config.Stages.TravelFadeSeconds
+	local seamless = singleMode and mapArena ~= nil
+	travelStep = seamless and "Swap" or "FadeIn"
+	travelTimer = seamless and (MapCfg.TransitionSeconds or 0.7) or Config.Stages.TravelFadeSeconds
+	if seamless then
+		-- the old stage ends in a burst around every player and over the live enemies
+		for _, rp in ipairs(participants()) do
+			if rp.Root and rp.Player.Parent then
+				Fx.Ring(rp.Root.Position, 60, Color3.fromRGB(255, 225, 150))
+				Fx.Explosion(rp.Root.Position, 30)
+			end
+		end
+		local shown = 0
+		for _, e in ipairs(ctx.EnemySpawner.Active) do
+			if shown >= 30 then
+				break
+			end
+			if e.Pos then
+				shown += 1
+				Fx.Explosion(e.Pos, 7)
+			end
+		end
+	end
 	local nextName = arenaFor(stage + 1)
 	local display = ((Config.Arenas :: any)[nextName] or {}).DisplayName or nextName
 	for _, rp in ipairs(participants()) do
 		if rp.Player.Parent then
-			Remotes.FireClient("StageTravel", rp.Player, { Stage = stage + 1, Arena = display, Boss = bossName(forcedBoss or bossFor(stage + 1)), Seconds = Config.Stages.TravelFadeSeconds })
+			Remotes.FireClient("StageTravel", rp.Player, { Stage = stage + 1, Arena = display, Boss = bossName(forcedBoss or bossFor(stage + 1)), Seconds = Config.Stages.TravelFadeSeconds, Seamless = seamless })
 		end
 	end
 	ctx.RunManager.ApplyMovementAll()
@@ -822,33 +1047,43 @@ local function stepOpen(dt: number)
 	end
 end
 
+local function finishTravel()
+	travelStep = ""
+	setSub("Explore")
+	portalState("Idle", 0)
+	ctx.RunManager.ApplyMovementAll()
+	-- the "STAGE n" title is the client HUD's stage banner (Hud.lua)
+	-- biome arenas with floor hazards name them ("Swamp · Mud pools slow you · ...")
+	local def = (Config.Arenas :: any)[arenaName]
+	local hint = (BiomeHazards.Count() > 0 and def and def.Hint) and (" · " .. def.Hint) or ""
+	-- (the portal is revealed a few seconds later, with its own headline)
+	ctx.RunManager.Broadcast(StageManager.ArenaDisplayName() .. hint .. " · the portal opens soon", Color3.fromRGB(180, 200, 255), nil, { Id = "stage.objective" })
+end
+
 local function stepTravel(dt: number)
 	travelTimer -= dt
 	if travelTimer > 0 then
 		return
 	end
-	if travelStep == "FadeIn" then
-		-- the screens are dark: bank what is still on the floor, then swap the arena
+	if travelStep == "FadeIn" or travelStep == "Swap" then
+		-- FadeIn: the screens are dark: bank what is still on the floor, then swap the arena.
+		-- Swap (single map): same clean-up with no fade; the players stay where they are.
 		ctx.XPSystem.CollectAll()
 		EncounterDirector.StageEnd("Travel")
 		ctx.EnemySpawner.DespawnAll()
 		ctx.WeaponSystem.Clear()
 		ctx.XPSystem.Clear()
 		local arena = buildStage(stage + 1)
+		if travelStep == "Swap" then
+			ctx.RunManager.TravelPlayers(arena, true)
+			finishTravel()
+			return
+		end
 		ctx.RunManager.TravelPlayers(arena)
 		travelStep = "FadeOut"
 		travelTimer = 0.5
 	else
-		travelStep = ""
-		setSub("Explore")
-		portalState("Idle", 0)
-		ctx.RunManager.ApplyMovementAll()
-		-- the "STAGE n" title is the client HUD's stage banner (Hud.lua)
-		-- biome arenas with floor hazards name them ("Swamp · Mud pools slow you · ...")
-		local def = (Config.Arenas :: any)[arenaName]
-		local hint = (BiomeHazards.Count() > 0 and def and def.Hint) and (" · " .. def.Hint) or ""
-		-- (the portal is revealed a few seconds later, with its own headline)
-		ctx.RunManager.Broadcast(StageManager.ArenaDisplayName() .. hint .. " · the portal opens soon", Color3.fromRGB(180, 200, 255), nil, { Id = "stage.objective" })
+		finishTravel()
 	end
 end
 

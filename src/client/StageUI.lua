@@ -447,6 +447,13 @@ local function onTravel(data)
 	if type(data) ~= "table" then
 		return
 	end
+	if data.Seamless == true then
+		-- one continuous map: no fade and no blackout, only the HUD's "STAGE n" banner
+		-- (it shows when the stage number changes); the stage-clear panel just closes
+		offer = nil
+		kit.Hide(ui.Choice.Overlay, "Portal")
+		return
+	end
 	travel.Active = true
 	travel.Since = os.clock()
 	-- the travel fade owns the screen (UIState: nothing else opens over it) and the last

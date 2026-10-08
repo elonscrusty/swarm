@@ -95,7 +95,13 @@ RunConfig.Nav = {}
 ------------------------------------------------------------------------------------------
 -- CLIFFWOOD BASIN MAP
 ------------------------------------------------------------------------------------------
-RunConfig.Map = {}
+RunConfig.Map = {
+	MapName = "Cliffwood", -- the single-map arena
+	SingleMap = true, -- false: every stage builds its own arena as before
+	BossLandmark = "Stone Circle", -- portal landmark of stage 5 and the Endless boss-milestone stages
+	TransitionSeconds = 0.7, -- the burst effect plays, then the old stage is cleared and the new one placed
+	PortalLandmarkMargin = 14, -- portal spot stays this far inside the landmark radius
+}
 
 ------------------------------------------------------------------------------------------
 -- CLASS KITS
