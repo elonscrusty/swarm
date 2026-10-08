@@ -45,7 +45,7 @@ end
 
 -- The Roblox lookup (yields). Tests replace it (the preview has no groups).
 GroupBonus._Lookup = function(player: Player, groupId: number): boolean
-	return player:IsInGroupAsync(groupId)
+	return (player :: any):IsInGroupAsync(groupId) -- newer API; older type definitions lack it
 end
 
 -- Never yields: the cached answer (unknown = not a member for now).

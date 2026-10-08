@@ -46,17 +46,19 @@ if ! { [ -x "$T/rojo/rojo" ] && "$T/rojo/rojo" --version 2>/dev/null | grep -q "
 fi
 
 # luau-lsp
-if ! { [ -x "$T/lsp/luau-lsp" ] && "$T/lsp/luau-lsp" version 2>/dev/null | grep -q "$LSP_VERSION"; }; then
+if ! { [ -x "$T/lsp/luau-lsp" ] && "$T/lsp/luau-lsp" --version 2>/dev/null | grep -q "$LSP_VERSION"; }; then
 	echo "setup_tools: installing luau-lsp $LSP_VERSION"
 	fetch "https://github.com/JohnnyMorganz/luau-lsp/releases/download/$LSP_VERSION/luau-lsp-linux.zip" "$TMP/luau-lsp.zip"
 	extract_bin "$TMP/luau-lsp.zip" luau-lsp "$T/lsp/luau-lsp"
 fi
 
-# Roblox global type definitions (main branch file; a versioned globalTypes.None.d.luau
-# is not needed because the unversioned file exists).
-if [ ! -s "$T/globalTypes.d.luau" ]; then
-	echo "setup_tools: fetching globalTypes.d.luau"
-	fetch "https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/scripts/globalTypes.d.luau" "$T/globalTypes.d.luau"
+# Roblox global type definitions, taken from the same luau-lsp release tag as the binary.
+# The main-branch file uses attribute syntax that luau-lsp 1.52.1 cannot parse, so the tag
+# copy is used. Replaced only when the content differs.
+fetch "https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/$LSP_VERSION/scripts/globalTypes.d.luau" "$TMP/globalTypes.d.luau"
+if ! cmp -s "$TMP/globalTypes.d.luau" "$T/globalTypes.d.luau" 2>/dev/null; then
+	echo "setup_tools: installing globalTypes.d.luau ($LSP_VERSION)"
+	cp -f "$TMP/globalTypes.d.luau" "$T/globalTypes.d.luau"
 fi
 
 # luau-compile (latest stable release of luau-lang/luau)
@@ -66,7 +68,7 @@ if [ ! -x "$T/luau/luau-compile" ]; then
 	extract_bin "$TMP/luau.zip" luau-compile "$T/luau/luau-compile"
 fi
 
-echo "setup_tools: rojo $("$T/rojo/rojo" --version | awk '{print $2}'), luau-lsp $("$T/lsp/luau-lsp" version 2>/dev/null | grep -o '[0-9][0-9.]*' | head -n 1 || true), luau-compile ok"
+echo "setup_tools: rojo $("$T/rojo/rojo" --version | awk '{print $2}'), luau-lsp $("$T/lsp/luau-lsp" --version 2>/dev/null | grep -o '[0-9][0-9.]*' | head -n 1 || true), luau-compile ok"
 
 # Lune and three.js for the preview renderer (idempotent itself).
 SWARM_TOOLS="$T" bash tools/preview/setup.sh
