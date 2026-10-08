@@ -208,7 +208,7 @@ Config.Dev = {
 ------------------------------------------------------------------------------------------
 Config.Player = {
 	BaseMaxHP = 120,
-	BaseSpeed = 16, -- Humanoid WalkSpeed
+	BaseSpeed = 22, -- Humanoid WalkSpeed (redesign: 16 -> 22)
 	BasePickupRadius = 7, -- studs, gems inside this radius fly to you
 	BaseLuck = 0, -- 0.1 = +10%
 	BaseArmor = 0, -- flat damage reduction per hit
@@ -1019,7 +1019,7 @@ Config.Controls = {
 	DeadZone = 0.12,
 	-- Touches that start in this part of the screen (0-1 from the left) drive the stick.
 	-- 1 = the whole screen; any touch anywhere moves the player.
-	TouchZone = 1,
+	TouchZone = 0.45, -- the left 45% is the floating move stick, the right side orbits the camera
 }
 
 ------------------------------------------------------------------------------------------
@@ -1865,17 +1865,18 @@ Config.Lobby = {
 ------------------------------------------------------------------------------------------
 Config.Movement = {
 	JumpEnabled = true,
-	JumpPower = 38, -- studs/s upward (about 3.7 studs high, 0.39 s in the air at 196.2 gravity)
+	JumpPower = 59.4, -- studs/s upward: sqrt(2 * 196.2 * 9), a 9-stud apex (JumpController scales it by class, RunConfig.Movement)
 	BufferSeconds = 0.12,
 	CoyoteSeconds = 0.1,
 	JumpCooldown = 0.2, -- minimum time between two jumps
-	AirControl = 3.5, -- how fast the air direction follows the stick (per second)
+	AirControl = 0.7, -- share of the live stick that steers in the air; the rest is the takeoff direction
 	HopWindow = 0.15, -- seconds after landing in which a jump counts as a chained hop
 	HopBonus = 0.06, -- speed multiplier added per chained hop
 	HopSpeedCap = 1.24, -- hard cap on the hop speed multiplier
 	HopDecay = 0.6, -- multiplier lost per second on the ground after HopWindow
 	ServerTolerance = 1.35, -- server speed check slack on top of the hop cap (lag, knockback)
-	ButtonSize = 84, -- touch JUMP button (pixels before UIScale)
+	ButtonSize = 96, -- touch JUMP button (pixels before UIScale)
+	DashButtonSize = 78, -- touch DASH button, above-left of JUMP
 	ButtonMargin = 26, -- from the right and bottom safe-area edges
 }
 
@@ -1993,8 +1994,8 @@ end
 
 -- Client FeatureHud (src/client/FeatureHud.lua): reserved HUD slots for new features.
 Config.FeatureHud = {
-	UltimateKey = Enum.KeyCode.Q, -- keyboard
-	UltimatePad = Enum.KeyCode.ButtonR1, -- gamepad
+	UltimateKey = Enum.KeyCode.F, -- keyboard
+	UltimatePad = Enum.KeyCode.ButtonY, -- gamepad
 	UltimateSize = 72, -- touch button (pixels), above the JUMP button
 	BadgeSize = 36, -- top-right badge row (pixels)
 	MaxBadges = 6,
