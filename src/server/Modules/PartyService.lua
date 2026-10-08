@@ -76,6 +76,21 @@ local function cfg()
 	return Config.Party
 end
 
+local changedListeners: { ({ Player }) -> () } = {}
+
+function PartyService.OnChanged(fn: ({ Player }) -> ())
+	table.insert(changedListeners, fn)
+end
+
+local function fireChanged(list: { Player })
+	for _, fn in ipairs(changedListeners) do
+		local ok, err = pcall(fn, list)
+		if not ok then
+			warn("[PartyService] OnChanged listener: " .. tostring(err))
+		end
+	end
+end
+
 -- The biggest party that can play together: the largest lobby mode, capped by the run size.
 function PartyService.MaxSize(): number
 	local biggest = 1
@@ -222,6 +237,9 @@ local function removeMember(player: Player, why: string)
 		pushParty(party)
 	end
 	push(player)
+	local changed = table.clone(party.Members)
+	table.insert(changed, player)
+	fireChanged(changed)
 end
 
 -- Puts `player` into `inviter`'s party (a new one when the inviter has none). Returns why not.
@@ -255,6 +273,7 @@ local function joinParty(player: Player, inviter: Player): string?
 	tellParty(p, player.DisplayName .. " joined the party!", player)
 	notify(player, "You joined " .. p.Leader.DisplayName .. "'s party.", GOOD)
 	pushParty(p)
+	fireChanged(table.clone(p.Members))
 	return nil
 end
 
@@ -436,11 +455,28 @@ function PartyService.Say(player: Player, index: any): boolean
 	return true
 end
 
+-- The leader hands the lead to another member (deterministic: only by the leader's choice).
+local function promote(leader: Player, userId: any)
+	local party = partyOf[leader]
+	local target = playerById(userId)
+	if not party or party.Leader ~= leader or not target or target == leader or partyOf[target] ~= party then
+		return
+	end
+	party.Leader = target
+	table.clear(party.Ready)
+	for _, m in ipairs(party.Members) do
+		notify(m, target.DisplayName .. " leads the party now.", GOOD)
+	end
+	pushParty(party)
+	fireChanged(table.clone(party.Members))
+end
+
 local ACTIONS: { [string]: (Player, any) -> () } = {
 	Invite = invite,
 	Accept = accept,
 	Decline = decline,
 	Kick = kick,
+	Promote = promote,
 	Leave = function(player)
 		if partyOf[player] then
 			notify(player, "You left the party.", WARN)

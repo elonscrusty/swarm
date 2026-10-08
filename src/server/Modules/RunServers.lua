@@ -493,7 +493,8 @@ end
 
 -- True while RunServers reports this player's teleport problems (PartyService stays quiet).
 function RunServers.OwnsTeleport(player: Player): boolean
-	return travelling[player] ~= nil or ownTeleport[player] ~= nil
+	-- a SwarmV2 lobby transfer (Travel = "ToRun" set by SwarmV2.Lobby.Transfer) reports its own failures
+	return travelling[player] ~= nil or ownTeleport[player] ~= nil or player:GetAttribute("Travel") == "ToRun"
 end
 
 ------------------------------------------------------------------------------------------
@@ -915,6 +916,10 @@ end
 
 local function onArrival(player: Player)
 	local td = joinTeleportData(player)
+	-- SwarmV2 matches (docs/redesign): MatchAdmission admits these arrivals, not the old tickets
+	if type(td) == "table" and type(td.SwarmV2) == "table" then
+		return
+	end
 	if type(td) == "table" and type(td.SwarmRejoin) == "table" and type(td.SwarmRejoin.Id) == "string" then
 		reconnecting[player] = td.SwarmRejoin.Id
 		return

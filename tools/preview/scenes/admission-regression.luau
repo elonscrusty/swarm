@@ -1,0 +1,7 @@
+local SSS = game:GetService("ServerScriptService")
+local MA = preview.require(SSS.SwarmV2.MatchAdmission)
+print("role", MA.ServerRole())
+local o = Instance.new("TeleportOptions")
+o:SetTeleportData({a=1})
+print(o:GetTeleportData(), o.ReservedServerAccessCode)
+print(preview.addPlayer("A", 5).UserId, game.JobId, game.PlaceId, game.PrivateServerId)
