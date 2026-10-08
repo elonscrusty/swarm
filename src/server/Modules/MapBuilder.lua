@@ -4408,6 +4408,24 @@ function MapBuilder.HasKit(name: string): boolean
 	return kitEntry(name) ~= nil
 end
 
+--[[
+	A clear floor spot (world position) inside a disc: rejection sampling with the same
+	"free" test as FindPortalSpot. Used by the single-map stage portal (a landmark's area).
+	nil when nothing fits.
+]]
+function MapBuilder.FindSpotInRadius(arena: Arena, rand: Random, centre: Vector3, radius: number, clear: number): Vector3?
+	local c = arena.Center
+	for _ = 1, 300 do
+		local a = rand:NextNumber(0, TAU)
+		local r = radius * math.sqrt(rand:NextNumber())
+		local x, z = centre.X - c.X + math.cos(a) * r, centre.Z - c.Z + math.sin(a) * r
+		if isFree(arena, x, z, clear, nil, HAZARD_PAD) then
+			return W(arena, x, z, centre.Y - c.Y)
+		end
+	end
+	return nil
+end
+
 function MapBuilder.DestroyArena()
 	if currentArena then
 		currentArena.Model:Destroy()

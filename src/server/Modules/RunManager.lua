@@ -1713,7 +1713,8 @@ end
 	TravelHealFraction, fallen ones (also those still on the revive offer) stand up with
 	ReviveOnTravelHPFraction. Level, XP, weapons, passives and gold are kept.
 ]]
-function RunManager.TravelPlayers(arena)
+-- stay: single-map stage change, nobody is teleported (the heal / revive still happens).
+function RunManager.TravelPlayers(arena, stay: boolean?)
 	local S = Config.Stages
 	local n = #runPlayers
 	for i, rp in ipairs(runPlayers) do
@@ -1735,8 +1736,10 @@ function RunManager.TravelPlayers(arena)
 			setHP(rp, math.max(rp.HP, rp.Stats.MaxHP * S.TravelHealFraction))
 		end
 		rp.InvulnUntil = runTime + Config.Player.ReviveInvulnSeconds
-		RunManager.TeleportPlayer(rp, placeOnArena(arena, i, n))
-		if rp.TravelHold and rp.Root then
+		if not stay then
+			RunManager.TeleportPlayer(rp, placeOnArena(arena, i, n))
+		end
+		if not stay and rp.TravelHold and rp.Root then
 			rp.Root.Anchored = true -- held until the travel ends (see travelHold)
 		end
 		RunManager.ApplyMovement(rp)
