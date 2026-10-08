@@ -764,7 +764,7 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local sw = math.min(math.floor(iw * 0.62), 340)
 		local startH = short and 44 or 48
 		place(ui.Start.Instance, pad + iw - sw, footY, sw, startH)
-		place(ui.Note, pad + iw - sw, footY + startH + 2, sw, 14)
+		place(ui.Note, pad + iw - sw, footY + startH + 4, sw, 14)
 		place(ui.Details, pad, footY, math.min(120, iw - sw - 8), startH)
 		ui.LastRun.Frame.Visible = hasLast
 	end

@@ -180,7 +180,7 @@ local function buildLogo(parent: Instance): Frame
 	word(Vector2.new(4, 10), C.Shadow, 0.35)
 	local letters = word(Vector2.new(0, 4), Color3.new(1, 1, 1), 0)
 	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Steel }, letters)
-	new("UIStroke", { Color = C.Shadow, Thickness = 2, Transparency = 0.15, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual }, letters)
+	new("UIStroke", { Color = C.Text, Thickness = 2, Transparency = 0.15, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual }, letters)
 	-- the painted logo (screens/logo_SWARM, 2:1) replaces the sword and letters; they stay
 	-- as the fallback while it loads or if it is not uploaded. The frame grows to fit it.
 	ui.LogoW, ui.LogoH = 350, 130
@@ -695,7 +695,7 @@ local function layoutNav(x: number, y: number, itemW: number, navH: number)
 	for _, item in ipairs(NAV) do
 		longest = math.max(longest, #item.Name)
 	end
-	local rowSize = math.clamp(math.floor(itemW / (longest * 0.57)), 12, TS(18))
+	local rowSize = math.clamp(math.floor((itemW - 14) / (longest * 0.57)), 12, TS(18))
 	for i, b in ipairs(ui.NavItems) do
 		place(b.Instance, (i - 1) * itemW + 4, 0, itemW - 8, navH)
 		local cap = b.Content:FindFirstChild("Caption") :: TextLabel?
