@@ -1,10 +1,17 @@
 --[[
 	CameraController.lua
-	Fixed-angle, slightly top-down follow camera. No rotation or zoom input: on a phone
-	every touch is movement. Zooms out further during runs and in portrait orientation.
-	When the local player is dead it follows a living teammate (spectate). Shake (smooth
-	noise) and Kick (a short pull toward the hero) add combat punch, both scaled by the
+	Run camera: third-person orbit (docs/redesign/gameplay/DESIGN.md section 1). Yaw and pitch
+	come from input (touch drag on the camera side of the screen, right-mouse drag or mouse-look,
+	gamepad right stick), distance 22 (pinch / wheel 16-28), focus = root + (0, 2.5, 0). A
+	spherecast pulls the camera in front of walls (fast in, slow out). Touch and gamepad recenter
+	behind the move direction after RecenterDelay without camera input. GroundAxes() gives the
+	camera-relative move axes. Reduced motion (ClientSettings.Reduced): no shake, kick or FOV kick,
+	slower recenter. When the local player is dead it follows a living teammate (spectate). Shake
+	(smooth noise) and Kick (a short pull toward the hero) add combat punch, both scaled by the
 	Screen shake setting.
+
+	Outside a run: if workspace attribute "SwarmV2Lobby" == true the lobby uses the standard Roblox
+	follow camera (CameraType Custom, left alone). Otherwise the old menu camera below.
 
 	Lobby (not in a run): the 2D lobby screen covers the screen and the camera is a fixed
 	scenic shot. If workspace has a Model/Folder "Lobby" (directly or inside "SwarmMap")
@@ -12,19 +19,21 @@
 	of the lobby spawn (SwarmState attribute "LobbySpawn"). It sways very slightly.
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local ClientSettings = require(script.Parent:WaitForChild("ClientSettings"))
+local RunConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
 
 local CameraController = {}
 
 local player = Players.LocalPlayer
 local focus: Vector3? = nil
-local distance = Config.Camera.LobbyDistance
 local shake = 0
 local kick = 0 -- studs of camera punch (Kick), eased out
 local spectated: Player? = nil -- teammate followed while the local player is down
@@ -79,6 +88,9 @@ end
 -- Kept small: scaled by Config.Camera.ShakeScale and the player's Screen shake setting
 -- (0 = off), capped at ShakeMax studs.
 function CameraController.Shake(amount: number)
+	if ClientSettings.Reduced() then
+		return
+	end
 	local cam = Config.Camera :: any
 	local setting = tonumber(ClientSettings.Get("Shake")) or 1
 	if setting <= 0 then
@@ -92,6 +104,9 @@ end
 -- beat. `amount` = studs pulled in, capped at KickMax, scaled by the Screen shake setting
 -- like Shake, eased back out within ~0.2 s.
 function CameraController.Kick(amount: number)
+	if ClientSettings.Reduced() then
+		return
+	end
 	local cam = Config.Camera :: any
 	local setting = tonumber(ClientSettings.Get("Shake")) or 1
 	if setting <= 0 then
@@ -148,6 +163,190 @@ function CameraController.SpectateCycle(step: number): Player?
 	return spectated
 end
 
+------------------------------------------------------------------------------------------
+-- Third-person orbit state and input
+------------------------------------------------------------------------------------------
+local R = RunConfig.Camera
+local yaw = math.rad(Config.Camera.Yaw) -- the camera sits at +(sin yaw, cos yaw) from the focus
+local pitch = math.rad(R.Pitch)
+local userDist: number = R.Distance
+local camDist: number? = nil -- collision-adjusted distance
+local lastInputAt = -math.huge
+local touchCam: InputObject? = nil
+local rmbDown = false
+local mouseLocked = false
+local padLook = Vector2.zero
+local pinchBase: number? = nil
+local fovKick = 0
+local wasInRun = false
+local standardMode = false -- the lobby uses the standard Roblox camera
+
+local function movementSide(x: number, width: number): boolean
+	local left = ClientSettings.Get("TouchLayout") == "LeftHanded"
+	local zone = math.min(Config.Controls.TouchZone, 0.5)
+	return left and x >= width * (1 - zone) or not left and x <= width * zone
+end
+
+local function cameraSide(x: number): boolean
+	return not movementSide(x, workspace.CurrentCamera.ViewportSize.X)
+end
+
+local function rotate(dx: number, dy: number)
+	yaw -= dx
+	pitch = math.clamp(pitch + dy, math.rad(R.MinPitch), math.rad(R.MaxPitch))
+	lastInputAt = os.clock()
+end
+
+local function inRunNow(): boolean
+	return player:GetAttribute("InRun") == true
+end
+
+local function setupInput()
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed or not inRunNow() then
+			return
+		end
+		local t = input.UserInputType
+		if t == Enum.UserInputType.Touch then
+			if touchCam == nil and cameraSide(input.Position.X) then
+				touchCam = input
+				lastInputAt = os.clock()
+			end
+		elseif t == Enum.UserInputType.MouseButton2 then
+			rmbDown = true
+			lastInputAt = os.clock()
+		elseif input.KeyCode == R.MouseLockKey then
+			mouseLocked = not mouseLocked
+			if not mouseLocked and not rmbDown then
+				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			end
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input, processed)
+		local t = input.UserInputType
+		if input == touchCam then
+			rotate(input.Delta.X * R.TouchSensitivity, input.Delta.Y * R.TouchSensitivity)
+		elseif t == Enum.UserInputType.MouseMovement then
+			if (rmbDown or mouseLocked) and inRunNow() then
+				rotate(input.Delta.X * R.MouseSensitivity, input.Delta.Y * R.MouseSensitivity)
+			end
+		elseif t == Enum.UserInputType.MouseWheel then
+			if not processed and inRunNow() then
+				userDist = math.clamp(userDist - input.Position.Z * R.WheelStep, R.MinDistance, R.MaxDistance)
+			end
+		elseif t == Enum.UserInputType.Gamepad1 and input.KeyCode == Enum.KeyCode.Thumbstick2 then
+			padLook = Vector2.new(input.Position.X, input.Position.Y)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input == touchCam then
+			touchCam = nil
+		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+			rmbDown = false
+			if not mouseLocked then
+				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			end
+		end
+	end)
+
+	-- two fingers on the camera side: pinch zoom
+	UserInputService.TouchPinch:Connect(function(positions, scale, _velocity, state, processed)
+		if processed or not inRunNow() or #positions < 2 then
+			return
+		end
+		if not (cameraSide(positions[1].X) and cameraSide(positions[2].X)) then
+			return
+		end
+		if state == Enum.UserInputState.Begin or pinchBase == nil then
+			pinchBase = userDist
+		end
+		local base = pinchBase
+		if base and scale > 0.05 then
+			userDist = math.clamp(base / scale, R.MinDistance, R.MaxDistance)
+		end
+		if state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
+			pinchBase = nil
+		end
+	end)
+
+	UserInputService.WindowFocusReleased:Connect(function()
+		touchCam = nil
+		rmbDown = false
+		padLook = Vector2.zero
+		if not mouseLocked then
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		end
+	end)
+end
+
+-- Camera collision: a spherecast from the focus toward the wanted position. Characters, enemies,
+-- projectiles, loot, effects, non-colliding parts and anything tagged CameraIgnore (or a tree
+-- canopy that fades, Occlusion) never block it.
+local ignoreNames: { [string]: boolean } = {}
+for _, name in ipairs(R.IgnoreFolders) do
+	ignoreNames[name] = true
+end
+local castParams = RaycastParams.new()
+castParams.FilterType = Enum.RaycastFilterType.Exclude
+local filterList: { Instance } = {}
+
+local function ignorable(part: BasePart): boolean
+	if not part.CanCollide or CollectionService:HasTag(part, R.IgnoreTag) or CollectionService:HasTag(part, "SwarmOccluder") then
+		return true
+	end
+	local node: Instance? = part.Parent
+	while node and node ~= workspace do
+		if ignoreNames[node.Name] or CollectionService:HasTag(node, R.IgnoreTag) or CollectionService:HasTag(node, "SwarmOccluder") then
+			return true
+		end
+		if node:IsA("Model") and node:FindFirstChildOfClass("Humanoid") then
+			return true
+		end
+		node = node.Parent
+	end
+	return false
+end
+
+-- How far from `from` along `dir` (unit) the camera may go, up to `want` studs.
+local function clearDistance(from: Vector3, dir: Vector3, want: number): number
+	table.clear(filterList)
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then
+			table.insert(filterList, p.Character)
+		end
+	end
+	local best = want
+	for _ = 1, 4 do
+		castParams.FilterDescendantsInstances = filterList
+		local hit = workspace:Spherecast(from, R.CollisionRadius, dir * want, castParams)
+		if not hit then
+			break
+		end
+		if ignorable(hit.Instance) then
+			table.insert(filterList, hit.Instance)
+		else
+			best = math.max(R.MinCollisionDistance, math.min(want, hit.Distance))
+			break
+		end
+	end
+	return best
+end
+
+-- A short widening of the FOV (dash start). Off in reduced motion.
+function CameraController.FovKick(degrees: number)
+	if ClientSettings.Reduced() then
+		return
+	end
+	fovKick = math.max(fovKick, math.min(degrees, 12))
+end
+
+-- Camera yaw (radians; the camera sits at +(sin yaw, cos yaw) of the focus).
+function CameraController.GetYaw(): number
+	return yaw
+end
+
 -- Reduced camera motion for jumps: while the local hero is in the air (a hop) the camera
 -- keeps the height it had on the ground, so bunny hops never bob the view. A long fall
 -- (over AirHoldSeconds) is followed normally.
@@ -202,24 +401,49 @@ local function subjectPosition(): (Vector3?, any)
 	return nil, nil
 end
 
+local function lobbyIsStandard(): boolean
+	return workspace:GetAttribute("SwarmV2Lobby") == true and not inRunNow()
+end
+
 function CameraController.Init()
 	local camera = workspace.CurrentCamera
-	camera.CameraType = Enum.CameraType.Scriptable
+	if not lobbyIsStandard() then
+		camera.CameraType = Enum.CameraType.Scriptable
+	end
 	camera.FieldOfView = Config.Camera.FieldOfView
+	setupInput()
 
 	-- Roblox may reset the camera type when the character changes.
 	player.CharacterAdded:Connect(function()
 		task.defer(function()
-			workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+			if not lobbyIsStandard() then
+				workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+			end
 		end)
 	end)
 
 	RunService:BindToRenderStep("SwarmCamera", Enum.RenderPriority.Camera.Value + 1, function(dt)
 		local cam = workspace.CurrentCamera
+		local inRun = player:GetAttribute("InRun") == true
+		standardMode = lobbyIsStandard()
+		if standardMode then
+			-- the lobby track's basecamp: the standard follow camera, left alone
+			if cam.CameraType == Enum.CameraType.Scriptable then
+				cam.CameraType = Enum.CameraType.Custom
+			end
+			local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if hum and cam.CameraSubject ~= hum then
+				cam.CameraSubject = hum
+			end
+			menuBlend = 0
+			focus = nil
+			camDist = nil
+			wasInRun = false
+			return
+		end
 		if cam.CameraType ~= Enum.CameraType.Scriptable then
 			cam.CameraType = Enum.CameraType.Scriptable
 		end
-		local inRun = player:GetAttribute("InRun") == true
 		if not inRun then
 			local menu = menuCFrame()
 			if menu then
@@ -266,7 +490,7 @@ function CameraController.Init()
 		end
 		menuBlend = 0
 		local C = Config.Camera :: any
-		cam.FieldOfView = inRun and (C.RunFieldOfView or C.FieldOfView) or C.FieldOfView
+		local reduced = ClientSettings.Reduced()
 		local target, who = subjectPosition()
 		if not target then
 			return
@@ -284,34 +508,88 @@ function CameraController.Init()
 			end
 			subjectKey = who
 		end
-		local viewport = cam.ViewportSize
-		local portrait = viewport.Y > viewport.X
-		local want = inRun and Config.Camera.RunDistance or Config.Camera.LobbyDistance
-		if portrait then
-			want *= Config.Camera.PortraitDistanceMult
-		elseif inRun and math.min(viewport.X, viewport.Y) < (C.PhoneShortSide or 560) then
-			-- landscape phone: closer, so the hero and enemies are not tiny on a small screen
-			want *= C.PhoneDistanceMult or 1
-		end
-		distance += (want - distance) * math.min(1, dt * 3)
+		target += Vector3.new(0, R.FocusHeight, 0)
 
-		-- big jumps (teleports) snap, normal movement is smoothed
+		-- a run starts: the view is behind the hero, looking where it looks
+		if inRun and not wasInRun then
+			local rootNow = rootOf(player)
+			if rootNow then
+				local lookDir = rootNow.CFrame.LookVector
+				yaw = math.atan2(-lookDir.X, -lookDir.Z)
+			end
+			pitch = math.rad(R.Pitch)
+			userDist = R.Distance
+			focus = nil
+			camDist = nil
+		end
+		wasInRun = inRun
+
+		-- orbit input held this frame
+		if mouseLocked then
+			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+		elseif rmbDown then
+			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+		end
+		local padActive = padLook.Magnitude > R.GamepadDeadZone
+		if padActive then
+			rotate(padLook.X * R.GamepadRate * dt, -padLook.Y * R.GamepadRate * dt)
+		end
+		local dragging = touchCam ~= nil or rmbDown or mouseLocked or padActive
+
+		-- recenter behind the move direction (touch and gamepad; slower in reduced motion)
+		local keyboardOnly = UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled and not UserInputService.GamepadEnabled
+		if inRun and not dragging and not keyboardOnly and now - lastInputAt >= R.RecenterDelay then
+			local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			local move = hum and hum.MoveDirection or Vector3.zero
+			if move.Magnitude > 0.3 then
+				local moveDir = Vector3.new(move.X, 0, move.Z).Unit
+				local fwd = Vector3.new(-math.sin(yaw), 0, -math.cos(yaw))
+				if moveDir:Dot(fwd) >= R.RecenterMinDot then
+					local goal = math.atan2(-moveDir.X, -moveDir.Z)
+					local delta = (goal - yaw + math.pi) % (2 * math.pi) - math.pi
+					local rate = if reduced then R.RecenterRateReduced else R.RecenterRate
+					local maxStep = rate * dt
+					-- slow down near the goal so it settles instead of snapping
+					yaw += math.clamp(delta * math.min(1, math.abs(delta) / 0.3 + 0.2), -maxStep, maxStep)
+				end
+			end
+		end
+
+		-- focus: spectate glide, snap on teleports, otherwise smoothed
 		if now < panUntil and focus and (target - (focus :: Vector3)).Magnitude < 400 then
-			-- quick, eased glide to the new subject
 			local left = math.max(panUntil - now, 1e-3)
 			focus = (focus :: Vector3):Lerp(target, math.clamp(dt / left * 2.2, 0, 1))
 		elseif not focus or (target - (focus :: Vector3)).Magnitude > 40 then
 			focus = target
 		else
-			focus = (focus :: Vector3):Lerp(target, 1 - math.exp(-dt * Config.Camera.FollowSharpness))
+			focus = (focus :: Vector3):Lerp(target, 1 - math.exp(-dt * R.FollowSharpness))
 		end
 
-		local pitch = math.rad(Config.Camera.Pitch)
-		local yaw = math.rad(Config.Camera.Yaw)
-		local offset = Vector3.new(math.sin(yaw) * math.cos(pitch), math.sin(pitch), math.cos(yaw) * math.cos(pitch)) * distance
 		local look = focus :: Vector3
+		local dir = Vector3.new(math.sin(yaw) * math.cos(pitch), math.sin(pitch), math.cos(yaw) * math.cos(pitch))
+
+		-- collision: pull in fast, ease back out slowly
+		local clear = clearDistance(look, dir, userDist)
+		local cd = camDist
+		if cd == nil or clear < cd - 4 then
+			cd = clear
+		elseif clear < cd then
+			cd += (clear - cd) * math.min(1, dt * R.PullInRate)
+		else
+			cd += (clear - cd) * math.min(1, dt * R.EaseOutRate)
+		end
+		camDist = cd
+		local dist: number = math.min(cd, clear)
+		if kick > 0.02 then
+			-- the punch: pulled in along the view line, eased back out
+			dist = math.max(R.MinCollisionDistance, dist - kick)
+			kick *= math.exp(-dt * 16)
+		else
+			kick = 0
+		end
+
 		local jitter = Vector3.zero
-		if shake > 0.01 then
+		if shake > 0.01 and not reduced then
 			-- smooth noise (not per-frame random jumps), decaying fast
 			local t = now * 18
 			jitter = Vector3.new(math.noise(t, 0.3), math.noise(0.7, t) * 0.6, math.noise(t, 5.1)) * (2 * shake)
@@ -319,22 +597,29 @@ function CameraController.Init()
 		else
 			shake = 0
 		end
-		if kick > 0.02 then
-			-- the punch: pulled in along the view line, eased back out
-			offset *= 1 - kick / distance
-			kick *= math.exp(-dt * 16)
+		if fovKick > 0.05 then
+			fovKick *= math.exp(-dt * 8)
 		else
-			kick = 0
+			fovKick = 0
 		end
-		cam.CFrame = CFrame.lookAt(look + offset + jitter, look + jitter)
+		cam.FieldOfView = (if inRun then R.FieldOfView else C.FieldOfView) + fovKick
+		cam.CFrame = CFrame.lookAt(look + dir * dist + jitter, look + jitter)
 		cam.Focus = CFrame.new(look)
 	end)
 end
 
--- World-space forward/right on the ground plane for camera-relative movement.
+
+-- World-space forward/right on the ground plane for camera-relative movement: the orbit
+-- yaw in a run, the standard camera's look direction in the lobby.
 function CameraController.GroundAxes(): (Vector3, Vector3)
-	local yaw = math.rad(Config.Camera.Yaw)
-	local forward = Vector3.new(-math.sin(yaw), 0, -math.cos(yaw))
+	local forward: Vector3
+	if standardMode then
+		local look = workspace.CurrentCamera.CFrame.LookVector
+		local flat = Vector3.new(look.X, 0, look.Z)
+		forward = if flat.Magnitude > 1e-3 then flat.Unit else Vector3.new(0, 0, -1)
+	else
+		forward = Vector3.new(-math.sin(yaw), 0, -math.cos(yaw))
+	end
 	local right = Vector3.new(-forward.Z, 0, forward.X)
 	return forward, right
 end

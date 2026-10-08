@@ -2167,6 +2167,15 @@ local function speedCheck(rp, dt: number)
 	local maxSpeed = (rp.Paused or rp.RewardUntil or frozen or not rp.Alive) and 0 or math.max(rp.Stats.Speed, Config.Player.BaseSpeed) * math.max(1, rp.TerrainSpeedMult or 1) * (rp.RushMult or 1)
 	-- hop cap: the client may raise its own WalkSpeed up to HopSpeedCap while chaining hops
 	local allowed = maxSpeed * Config.Movement.HopSpeedCap * Config.Movement.ServerTolerance * elapsed + Config.Player.SpeedCheckAllowance
+	-- dash / leap (SwarmV2 Run.Dash, validated there): the same pattern as RushMult. While the
+	-- dash is current, or ended less than AllowTail ago (plus this check window, which may have
+	-- started before it ended), max(normal, DashSpeed * 1.15) is allowed. A leap carries its own
+	-- rp.DashAllow (horizontal speed * 1.2). Never for a paused, frozen or downed player.
+	local dashUntil: number? = rp.DashUntil
+	if maxSpeed > 0 and dashUntil and os.clock() < dashUntil + 0.25 + elapsed then
+		local dashSpeed: number = rp.DashAllow or (rp.DashSpeed or 0) * 1.15
+		allowed = math.max(allowed, dashSpeed * elapsed + Config.Player.SpeedCheckAllowance)
+	end
 	if moved > allowed then
 		root.CFrame = CFrame.new(last + Vector3.new(0, 0.5, 0)) * root.CFrame.Rotation
 		root.AssemblyLinearVelocity = Vector3.zero

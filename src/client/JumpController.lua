@@ -10,8 +10,10 @@
 	    (HopDecay per second) and stopping resets it. The multiplier is applied to the
 	    local WalkSpeed only; the server's WalkSpeed stays the base and RunManager's speed check
 	    snaps back anything above the cap.
-	  * Air control: in the air the move input steers the takeoff direction at AirControl
-	    per second (MobileControls.AirFilter).
+	  * Air control: in the air the world move direction is AirControl (0.7) the live input and
+	    the rest the takeoff direction (MobileControls.AirFilter).
+	  * Jump height: JumpPower = sqrt(2 * gravity * apex), apex 9 studs (RunConfig.Movement,
+	    12 for the Toastmaster: player attribute SwarmClass).
 	  * No jumping in the lobby, while downed, while the run is frozen (SwarmState
 	    attributes Frozen / LevelUpPause), while the player is Paused, or while
 	    MobileControls is disabled by a panel.
@@ -26,8 +28,11 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local RunConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
 
 local JumpController = {}
+-- Set by DashClient while a dash / leap moves the hero: no jumping then.
+JumpController.Suppress = false
 
 local M = Config.Movement
 local player = Players.LocalPlayer
@@ -39,6 +44,7 @@ local landedAt = -math.huge -- when the last hop landed
 local jumpedAt = -math.huge
 local inHop = false -- airborne because of our own jump
 local wasGrounded = true
+local airStart: number? = nil
 local hopMult = 1
 local airDir = Vector3.zero
 
@@ -58,7 +64,7 @@ end
 
 -- True when the hero may jump right now (ignores ground / coyote checks).
 function JumpController.CanJump(): boolean
-	if not M.JumpEnabled then
+	if not M.JumpEnabled or JumpController.Suppress then
 		return false
 	end
 	if player:GetAttribute("InRun") ~= true or player:GetAttribute("Alive") == false or player:GetAttribute("Paused") == true then
@@ -79,15 +85,38 @@ function JumpController.Request()
 	requestedAt = os.clock()
 end
 
--- Air control: MobileControls passes the world move direction (0..1) every frame.
-function JumpController.AirFilter(world: Vector3, dt: number): Vector3
+-- Air control: MobileControls passes the world move direction (0..1) every frame. In the
+-- air the result is AirControl of the live input plus the rest of the takeoff direction.
+function JumpController.AirFilter(world: Vector3, _dt: number): Vector3
 	if wasGrounded then
 		airDir = world
 		return world
 	end
-	local k = 1 - math.exp(-math.max(dt, 0) * M.AirControl)
-	airDir = airDir:Lerp(world, k)
-	return airDir
+	local a = math.clamp(M.AirControl, 0, 1)
+	return airDir * (1 - a) + world * a
+end
+
+-- Calls back(airtime) whenever the hero lands after at least 0.1 s in the air (a jump, a
+-- dash arc or a fall). Returns a function that removes the callback.
+local landedCallbacks: { (number) -> () } = {}
+function JumpController.OnLanded(callback: (number) -> ()): () -> ()
+	table.insert(landedCallbacks, callback)
+	return function()
+		local i = table.find(landedCallbacks, callback)
+		if i then
+			table.remove(landedCallbacks, i)
+		end
+	end
+end
+
+-- The jump velocity of the local hero: sqrt(2 * gravity * apex) for its class.
+local function jumpPower(): number
+	local apex = RunConfig.Movement.JumpApex
+	local id = player:GetAttribute("SwarmClass")
+	if type(id) == "string" then
+		apex = RunConfig.Movement.JumpApexByClass[id] or apex
+	end
+	return math.sqrt(2 * workspace.Gravity * apex)
 end
 
 -- The current hop speed multiplier (1 = none), for UI or debugging.
@@ -114,7 +143,7 @@ local function doJump(hum: Humanoid, root: BasePart, now: number, moving: boolea
 	inHop = true
 	wasGrounded = false
 	local v = root.AssemblyLinearVelocity
-	root.AssemblyLinearVelocity = Vector3.new(v.X, M.JumpPower, v.Z)
+	root.AssemblyLinearVelocity = Vector3.new(v.X, jumpPower(), v.Z)
 	hum:ChangeState(Enum.HumanoidStateType.Jumping)
 end
 
@@ -144,7 +173,17 @@ local function step(dt: number)
 	local allowed = JumpController.CanJump()
 	local moving = hum.MoveDirection.Magnitude > 0.3
 
+	if not grounded and airStart == nil then
+		airStart = now
+	end
 	if grounded then
+		local started = airStart
+		airStart = nil
+		if started and now - started >= 0.1 then
+			for _, cb in ipairs(table.clone(landedCallbacks)) do
+				task.spawn(cb, now - started)
+			end
+		end
 		groundedAt = now
 		if not wasGrounded and inHop then
 			landedAt = now

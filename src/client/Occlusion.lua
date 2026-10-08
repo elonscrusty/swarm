@@ -38,6 +38,7 @@ local CELL = 32
 local PAD_FADE = 0.4 -- box padding when deciding to fade
 local PAD_KEEP = 1.6 -- larger padding to stay faded
 local FLOOR_Y = Config.ArenaOrigin.Y
+local FEET_BELOW_FOCUS = 5.5 -- focus (root + 2.5) down to the soles of the feet
 
 local player = Players.LocalPlayer
 
@@ -298,7 +299,9 @@ local function check()
 	local focus = cam and player:GetAttribute("InRun") == true and subject(cam) or nil
 	if cam and focus then
 		local eye = cam.CFrame.Position
-		local ground = Vector3.new(focus.X, FLOOR_Y, focus.Z)
+		-- third person: the focus is the upper torso (root + FOCUS_HEIGHT), so the rings sit at the
+		-- hero's feet, which also follows ground that is not at the arena floor height
+		local ground = Vector3.new(focus.X, focus.Y - FEET_BELOW_FOCUS, focus.Z)
 		for i, off in ipairs(OFFSETS) do
 			points[i] = ground + off
 		end
