@@ -3624,15 +3624,26 @@ local function snapToRows(cols: { Frame }, h: number, floor: number): number
 			return a.LayoutOrder < b.LayoutOrder
 		end)
 		local y = col.Position.Y.Offset + COLUMN.Top
+		local afterHeading = false
 		for _, ch in ipairs(list) do
-			table.insert(rows, { y, y + ch.Size.Y.Offset, ch.Name == "Heading" })
+			local heading = ch.Name == "Heading"
+			table.insert(rows, { y, y + ch.Size.Y.Offset, heading, afterHeading })
+			afterHeading = heading
 			y += ch.Size.Y.Offset + COLUMN.Gap
 		end
 	end
 	local best = nil
 	for _, r in ipairs(rows) do
-		-- (never right under a section heading: a heading alone at the edge reads as empty)
-		for _, cut in ipairs(r[3] and { r[1] - 2 } or { r[1] - 2, r[2] + 3 }) do
+		-- (never right under a section heading: a heading alone at the edge reads as empty,
+		-- so a heading and its first row stay together)
+		local cuts = {}
+		if not r[4] then
+			table.insert(cuts, r[1] - 2)
+		end
+		if not r[3] then
+			table.insert(cuts, r[2] + 3)
+		end
+		for _, cut in ipairs(cuts) do
 			if cut <= h and cut >= floor and (best == nil or cut > best) then
 				local ok = true
 				for _, o in ipairs(rows) do
