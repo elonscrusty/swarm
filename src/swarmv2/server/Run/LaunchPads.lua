@@ -59,7 +59,7 @@ function LaunchPads.Init(c: any)
 			return
 		end
 		acc = 0
-		local ok, err = pcall(step)
+		local ok, err = (pcall :: any)(step)
 		if not ok then
 			warn("[LaunchPads] " .. tostring(err))
 		end
