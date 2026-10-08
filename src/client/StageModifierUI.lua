@@ -12,7 +12,7 @@ local Players = game:GetService("Players")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
-local Palette = require(Shared:WaitForChild("Palette"))
+local Theme = require(Shared:WaitForChild("Theme"))
 local StageModifierData = require(Shared:WaitForChild("StageModifierData"))
 local FeatureHud = require(script.Parent.FeatureHud)
 
@@ -42,7 +42,7 @@ function StageModifierUI.Refresh()
 		return
 	end
 	if shown ~= id then
-		FeatureHud.Badge(BADGE, { Text = text, Color = Palette.crimson_300, Order = ORDER })
+		FeatureHud.Badge(BADGE, { Text = text, Color = Theme.Color.CrimsonDark, Order = ORDER })
 		shown = id
 	end
 end

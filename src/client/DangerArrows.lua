@@ -51,7 +51,7 @@ local Accessibility = require(script.Parent.Accessibility)
 local DangerArrows = {}
 
 local player = Players.LocalPlayer
-local P = Theme.Palette
+local P, C = Theme.Palette, Theme.Color
 local ACTIVE_Y = -100 -- below this an enemy body is parked in the server pool
 local TAG_H = 18
 local STEP = 12 -- pixels per slide step along the edge
@@ -129,14 +129,14 @@ local function makeArrow(parent: Instance, i: number): Arrow
 		BackgroundColor3 = P.crimson_500,
 	}, pivot) :: Frame
 	UIKit.corner(point, 3)
-	UIKit.stroke(point, P.slate_950, 2, 0.2)
+	UIKit.stroke(point, C.Panel, 2, 0)
 	local badge = UIKit.new("Frame", {
 		Name = "Badge",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromOffset((size + 24) / 2, (size + 24) / 2),
 		Size = UDim2.fromOffset(size, size),
-		BackgroundColor3 = P.slate_900,
-		BackgroundTransparency = 0.12,
+		BackgroundColor3 = C.Panel,
+		BackgroundTransparency = 0.04,
 		BorderSizePixel = 0,
 	}, holder) :: Frame
 	UIKit.corner(badge, 999)
@@ -148,9 +148,9 @@ local function makeArrow(parent: Instance, i: number): Arrow
 		Size = UDim2.fromOffset(0, TAG_H),
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = P.ivory_100,
-		BackgroundColor3 = P.slate_950,
-		BackgroundTransparency = 0.25,
+		TextColor3 = C.TextOnBlue,
+		BackgroundColor3 = C.Text,
+		BackgroundTransparency = 0.08,
 		TextStrokeTransparency = 1,
 	})
 	UIKit.corner(tag, 999)
@@ -216,7 +216,7 @@ local function setKind(a: Arrow, kind: string)
 			Name = "Glyph",
 			Size = math.floor(size * 0.66),
 			Color = col,
-			Back = P.slate_900,
+			Back = C.Panel,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 		})

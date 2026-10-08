@@ -25,7 +25,7 @@ local FeatureHud = require(script.Parent.FeatureHud)
 local TeamCombo = {}
 
 local player = Players.LocalPlayer
-local P = Theme.Palette
+local C = Theme.Color
 local T = Config.TeamCombo
 local started = false
 local lastUsed: number? = nil
@@ -86,7 +86,7 @@ local function refresh()
 	local text = TeamCombo.BadgeText(m, together)
 	if text ~= badgeText then
 		badgeText = text
-		FeatureHud.Badge("TeamCombo", { Text = text, Color = m >= 1 and P.gold_300 or P.moss_400, Order = 20 })
+		FeatureHud.Badge("TeamCombo", { Text = text, Color = m >= 1 and C.PrimaryEdge or C.SelectedEdge, Order = 20 })
 	end
 end
 
@@ -97,7 +97,7 @@ local function onUsed()
 		return
 	end
 	if lastUsed ~= nil and n > lastUsed and on() then
-		FeatureHud.Announce("TEAM COMBO!", { Color = P.gold_200, Seconds = 1.6 })
+		FeatureHud.Announce("TEAM COMBO!", { Color = C.Primary, Seconds = 1.6 })
 	end
 	lastUsed = n
 end
@@ -115,15 +115,15 @@ function TeamCombo.Init()
 			Name = "TeamCombo",
 			Text = "",
 			AutoButtonColor = true,
-			BackgroundColor3 = P.gold_300,
-			BackgroundTransparency = 0.05,
+			BackgroundColor3 = C.Primary,
+			BackgroundTransparency = 0,
 			AnchorPoint = Vector2.new(1, 1),
 			Size = UDim2.fromOffset(size, size),
 			Visible = false,
 		}, root) :: TextButton
 		UIKit.corner(b, 999)
-		UIKit.stroke(b, P.gold_200, 2, 0.1)
-		UIKit.text(b, "Label", "COMBO", { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.slate_950 }, 13)
+		UIKit.stroke(b, C.PrimaryEdge, 3, 0)
+		UIKit.text(b, "Label", "COMBO", { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text }, 13)
 		b.Activated:Connect(function()
 			TeamCombo.Fire()
 		end)

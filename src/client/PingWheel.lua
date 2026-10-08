@@ -22,17 +22,19 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
+local Icons = require(script.Parent.Icons)
 local FeatureHud = require(script.Parent.FeatureHud)
 local TeamPings = require(script.Parent.TeamPings)
 
 local PingWheel = {}
 
-local P = Theme.Palette
+local C = Theme.Color
 local Q = Config.QuickPings
 local started = false
 local open = false
 local highlight = 1
 local buttons: { [string]: TextButton } = {}
+local layoutWheel: () -> () = function() end
 local DIGITS = { Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six }
 
 local function digitOf(key: Enum.KeyCode): number?
@@ -60,6 +62,9 @@ end
 function PingWheel.SetOpen(want: boolean)
 	open = want == true and PingWheel.Usable()
 	FeatureHud.SetPingWheel(open)
+	if open then
+		layoutWheel()
+	end
 end
 
 function PingWheel.Toggle()
@@ -74,24 +79,40 @@ function PingWheel.Send(kind: string): boolean
 	local sent = TeamPings.Send(kind)
 	if not sent then
 		if kind == "Loot" then
-			FeatureHud.Announce("NO CHEST NEARBY", { Seconds = 1.2, Color = P.stone_300 })
+			FeatureHud.Announce("NO CHEST NEARBY", { Seconds = 1.2, Color = C.TextOnBlue })
 		elseif kind == "Portal" then
-			FeatureHud.Announce("NO PORTAL YET", { Seconds = 1.2, Color = P.stone_300 })
+			FeatureHud.Announce("NO PORTAL YET", { Seconds = 1.2, Color = C.TextOnBlue })
 		end
 	end
 	PingWheel.SetOpen(false)
 	return sent
 end
 
+-- Icons for the six presets (Icons.Draw names; the labels carry the meaning, the picture helps)
+local ICONS: { [string]: string } = {
+	Help = "warning",
+	Loot = "chest",
+	Portal = "portal",
+	OnMyWay = "boot",
+	Wave = "people2",
+	Cheer = "sparkle",
+}
+
+local hovered: string? = nil
+local faces: { [string]: { Gradient: UIGradient, Stroke: UIStroke } } = {}
+
+-- Lime = the highlighted option (gamepad / first) or the one under the pointer; navy-blue
+-- rim and white face otherwise. The label is always there too (colour is never the only cue).
 local function paintHighlight()
 	for i, kind in ipairs(Q.Order) do
-		local b = buttons[kind]
-		local stroke = b and b:FindFirstChildOfClass("UIStroke")
-		if stroke then
-			local want = i == highlight and P.gold_300 or P.gold_400
-			local thick = i == highlight and 3 or 1
-			if stroke.Color ~= want then stroke.Color = want end
-			if stroke.Thickness ~= thick then stroke.Thickness = thick end
+		local f = faces[kind]
+		if f then
+			local sel = i == highlight or hovered == kind
+			f.Gradient.Color = sel and Theme.Gradient.Selected or Theme.Gradient.Panel
+			local want = sel and C.SelectedEdge or C.PanelEdge
+			local thick = sel and 4 or 3
+			if f.Stroke.Color ~= want then f.Stroke.Color = want end
+			if f.Stroke.Thickness ~= thick then f.Stroke.Thickness = thick end
 		end
 	end
 end
@@ -108,13 +129,13 @@ function PingWheel.Init()
 	local size = Q.WheelSize
 	slot.Size = UDim2.fromOffset(size, size)
 	-- a dimmer behind the options (full screen): the wheel reads as the one thing to answer,
-	-- and a tap outside it closes it
+	-- and a tap outside it closes it (nothing is sent). Just dark enough: the HUD stays visible.
 	local dim = UIKit.new("TextButton", {
 		Name = "Dim",
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = P.slate_950,
-		BackgroundTransparency = 0.55,
+		BackgroundColor3 = C.Backdrop,
+		BackgroundTransparency = 0.62,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -124,63 +145,155 @@ function PingWheel.Init()
 	dim.Activated:Connect(function()
 		PingWheel.SetOpen(false)
 	end)
-	local b = Q.ButtonSize
-	local radius = size / 2 - b / 2
 	local n = #Q.Order
+	local icons: { [string]: GuiObject } = {}
 	for i, kind in ipairs(Q.Order) do
-		local a = -math.pi / 2 + (i - 1) / n * math.pi * 2
-		local emote = Q.Emotes[kind] == true
 		local button = UIKit.new("TextButton", {
 			Name = kind,
 			Text = "",
-			AutoButtonColor = true,
-			BackgroundColor3 = emote and P.slate_800 or P.slate_900,
-			BackgroundTransparency = 0.08,
+			AutoButtonColor = false,
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(size / 2 + math.cos(a) * radius, size / 2 + math.sin(a) * radius),
-			Size = UDim2.fromOffset(b, b),
+			Size = UDim2.fromOffset(Q.ButtonSize, Q.ButtonSize),
+			Selectable = true,
+			ZIndex = 2,
 		}, slot) :: TextButton
 		UIKit.corner(button, 999)
-		UIKit.stroke(button, P.gold_400, 1, 0.2)
-		UIKit.text(button, "Label", Q.Labels[kind] or string.upper(kind), {
+		local grad = UIKit.new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, button) :: UIGradient
+		local stroke = UIKit.stroke(button, C.PanelEdge, 3, 0)
+		faces[kind] = { Gradient = grad, Stroke = stroke }
+		local holder = UIKit.new("Frame", { Name = "Icon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.12, 0), Size = UDim2.fromOffset(28, 28), ZIndex = 3 }, button) :: Frame
+		Icons.Draw(holder, ICONS[kind] or "info", { Size = 28, Color = C.Blue, Back = C.Panel, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+		icons[kind] = holder
+		-- the label wraps inside its own button (scaled down rather than cut)
+		local label = UIKit.text(button, "Label", Q.Labels[kind] or string.upper(kind), {
 			Name = "Label",
-			Size = UDim2.new(1, -10, 1, -10),
-			Position = UDim2.fromOffset(5, 5),
+			AnchorPoint = Vector2.new(0.5, 1),
+			Size = UDim2.new(1, -16, 0.42, 0),
+			Position = UDim2.new(0.5, 0, 1, -6),
 			TextWrapped = true,
+			TextScaled = true,
 			TextXAlignment = Enum.TextXAlignment.Center,
-			TextColor3 = emote and P.gold_200 or P.stone_100,
-		}, 13)
+			TextYAlignment = Enum.TextYAlignment.Center,
+			TextColor3 = C.Text,
+			ZIndex = 3,
+		}, 14)
+		label:SetAttribute("NoTextFit", true)
+		UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(14), MinTextSize = 8 }, label)
 		UIKit.text(button, "Caption", tostring(i), {
 			Name = "Key",
 			Size = UDim2.fromOffset(16, 14),
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, 2),
 			TextXAlignment = Enum.TextXAlignment.Center,
-			TextColor3 = P.stone_400,
+			TextColor3 = C.TextFaint,
 			Visible = not UserInputService.TouchEnabled,
+			ZIndex = 3,
 		}, 10)
+		button.MouseEnter:Connect(function()
+			hovered = kind
+			paintHighlight()
+		end)
+		button.MouseLeave:Connect(function()
+			if hovered == kind then
+				hovered = nil
+				paintHighlight()
+			end
+		end)
+		button.SelectionGained:Connect(function()
+			highlight = i
+			paintHighlight()
+		end)
 		button.Activated:Connect(function()
 			PingWheel.Send(kind)
 		end)
 		buttons[kind] = button
 	end
+	-- the small close control in the middle (sends nothing)
 	local close = UIKit.new("TextButton", {
 		Name = "Close",
 		Text = "",
-		AutoButtonColor = true,
-		BackgroundColor3 = P.slate_950,
-		BackgroundTransparency = 0.1,
+		AutoButtonColor = false,
+		BackgroundColor3 = C.BlueDeep,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(52, 52),
+		Size = UDim2.fromOffset(46, 46),
+		Selectable = true,
+		ZIndex = 3,
 	}, slot) :: TextButton
 	UIKit.corner(close, 999)
-	UIKit.stroke(close, P.stone_400, 1, 0.3)
-	UIKit.text(close, "Label", "X", { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center }, 16)
+	UIKit.stroke(close, C.Panel, 2, 0)
+	UIKit.text(close, "Label", "X", { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextOnBlue, FontFace = Theme.Font.Number, ZIndex = 4 }, 20)
 	close.Activated:Connect(function()
 		PingWheel.SetOpen(false)
 	end)
 	paintHighlight()
+
+	--[[
+		Fit: the wheel is a ring of six round buttons around the close control, sized to
+		the space between the top plate and the ability panel (about 60% of the height);
+		on a very short screen (height < 300 or width < 420) it becomes a 3 x 2 grid with the
+		close control above it, so nothing leaves the safe area or overlaps.
+	]]
+	layoutWheel = function()
+		local root = slot.Parent :: GuiObject?
+		local rs = root and root.AbsoluteSize or Vector2.zero
+		if rs.X < 50 or rs.Y < 50 then
+			return
+		end
+		local grid = rs.Y < 300 or rs.X < 420
+		local btn = Q.ButtonSize
+		if not grid then
+			local side = math.clamp(math.min(Q.WheelSize, rs.Y * 0.6, rs.X * 0.9), 190, Q.WheelSize)
+			btn = math.clamp(math.floor(side * 0.3), 52, Q.ButtonSize)
+			local radius = side / 2 - btn / 2
+			slot.Size = UDim2.fromOffset(side, side)
+			slot.Position = UDim2.fromScale(0.5, 0.47)
+			for i, kind in ipairs(Q.Order) do
+				local a = -math.pi / 2 + (i - 1) / n * math.pi * 2
+				local b = buttons[kind]
+				b.Size = UDim2.fromOffset(btn, btn)
+				b.Position = UDim2.fromOffset(side / 2 + math.cos(a) * radius, side / 2 + math.sin(a) * radius)
+				UIKit.corner(b, 999)
+			end
+			close.AnchorPoint = Vector2.new(0.5, 0.5)
+			close.Position = UDim2.fromScale(0.5, 0.5)
+		else
+			local bw = math.floor(math.clamp((rs.X * 0.9 - 16) / 3, 70, 100))
+			local bh = math.floor(math.clamp((rs.Y - 90) / 2.4, 52, 64))
+			local w, h = bw * 3 + 16, bh * 2 + 8 + 40
+			slot.Size = UDim2.fromOffset(w, h)
+			slot.Position = UDim2.fromScale(0.5, 0.5)
+			for i, kind in ipairs(Q.Order) do
+				local col, row = (i - 1) % 3, math.floor((i - 1) / 3)
+				local b = buttons[kind]
+				b.Size = UDim2.fromOffset(bw, bh)
+				b.Position = UDim2.fromOffset(col * (bw + 8) + bw / 2, 40 + row * (bh + 8) + bh / 2)
+				UIKit.corner(b, Theme.Radius.L)
+			end
+			close.AnchorPoint = Vector2.new(1, 0)
+			close.Position = UDim2.fromOffset(w, 0)
+		end
+		for kind, holder in pairs(icons) do
+			-- the picture shrinks with a shorter button; the label keeps its own room
+			local bh = buttons[kind].AbsoluteSize.Y
+			local px = grid and 22 or math.clamp(math.floor(btn * 0.36), 20, 30)
+			holder.Size = UDim2.fromOffset(px, px)
+			for _, c in ipairs(holder:GetChildren()) do
+				if c:IsA("GuiObject") then
+					c.Size = UDim2.fromOffset(px, px)
+				end
+			end
+			holder.Position = UDim2.new(0.5, 0, 0, grid and 5 or math.max(6, math.floor(btn * 0.1)))
+			local _ = bh
+		end
+	end
+	local rootGui = slot.Parent :: GuiObject?
+	if rootGui then
+		rootGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutWheel)
+	end
+	layoutWheel()
 
 	-- the PING button and G open the wheel instead of the old panel (switch on only)
 	TeamPings.ToggleHook = function()

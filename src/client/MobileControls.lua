@@ -130,24 +130,24 @@ local function buildGui()
 	gui.DisplayOrder = 11
 	gui.Parent = player:WaitForChild("PlayerGui")
 
-	-- visual style (Theme): dark slate well with a gold hairline and a faint inner ring,
-	-- an ivory knob with a gold rim
-	local P = Theme.Palette
+	-- visual style (Bright Arcade): a light translucent well with a blue rim and a faint inner
+	-- ring, a white knob with a blue rim
+	local C = Theme.Color
 	local r = Config.Controls.StickRadius
 	base = Instance.new("Frame")
 	base.Name = "StickBase"
 	base.AnchorPoint = Vector2.new(0.5, 0.5)
 	base.Size = UDim2.fromOffset(r * 2, r * 2)
-	base.BackgroundColor3 = P.slate_900
-	base.BackgroundTransparency = 0.55
+	base.BackgroundColor3 = C.Panel
+	base.BackgroundTransparency = 0.72
 	base.Visible = false
 	base.Parent = gui
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(1, 0)
 	corner.Parent = base
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = P.gold_400
-	stroke.Transparency = 0.45
+	stroke.Color = C.Blue
+	stroke.Transparency = 0.2
 	stroke.Thickness = 2
 	stroke.Parent = base
 	local inner = Instance.new("Frame")
@@ -161,8 +161,8 @@ local function buildGui()
 	ic.CornerRadius = UDim.new(1, 0)
 	ic.Parent = inner
 	local is = Instance.new("UIStroke")
-	is.Color = P.ivory_300
-	is.Transparency = 0.8
+	is.Color = C.Panel
+	is.Transparency = 0.35
 	is.Thickness = 1
 	is.Parent = inner
 	local scale = Instance.new("UIScale")
@@ -181,10 +181,10 @@ local function buildGui()
 	kc.Parent = knob
 	local kg = Instance.new("UIGradient")
 	kg.Rotation = 90
-	kg.Color = ColorSequence.new(P.ivory_100, P.ivory_400)
+	kg.Color = ColorSequence.new(C.Panel, C.BluePale)
 	kg.Parent = knob
 	local ks = Instance.new("UIStroke")
-	ks.Color = P.gold_500
+	ks.Color = C.Blue
 	ks.Thickness = 2
 	ks.Parent = knob
 
@@ -196,9 +196,13 @@ local function buildGui()
 	jump.AnchorPoint = Vector2.new(1, 1)
 	jump.Position = UDim2.new(1, -M.ButtonMargin, 1, -M.ButtonMargin)
 	jump.Size = UDim2.fromOffset(M.ButtonSize, M.ButtonSize)
-	jump.BackgroundColor3 = P.slate_900
-	jump.BackgroundTransparency = 0.15
+	jump.BackgroundColor3 = Color3.new(1, 1, 1)
+	jump.BackgroundTransparency = 0
 	jump.AutoButtonColor = false
+	local jg = Instance.new("UIGradient")
+	jg.Rotation = 90
+	jg.Color = Theme.Gradient.Blue
+	jg.Parent = jump
 	jump.Text = ""
 	jump.Visible = false
 	jump.Parent = gui
@@ -210,7 +214,7 @@ local function buildGui()
 	arrow.Position = UDim2.fromScale(0.5, 0.36)
 	arrow.Size = UDim2.fromOffset(30, 30)
 	arrow.Parent = jump
-	Icons.Draw(arrow, "chevronsUp", { Size = 30, Color = P.gold_300, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5) })
+	Icons.Draw(arrow, "chevronsUp", { Size = 30, Color = C.TextOnBlue, Back = C.Blue, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5) })
 	jumpArrow = arrow
 	local word = Instance.new("TextLabel")
 	word.Name = "Label"
@@ -219,9 +223,9 @@ local function buildGui()
 	word.Position = UDim2.fromScale(0.5, 0.58)
 	word.Size = UDim2.new(0.8, 0, 0, 20)
 	word.Text = "JUMP"
-	word.TextColor3 = P.ivory_100
+	word.TextColor3 = C.TextOnBlue
 	word.TextSize = 17
-	word.FontFace = Theme.Font.Label
+	word.FontFace = Theme.Font.Number
 	word:SetAttribute("NoTextFit", true)
 	word.Parent = jump
 	local cap = Instance.new("UITextSizeConstraint") -- the Roblox Text size setting must not push it out
@@ -233,8 +237,8 @@ local function buildGui()
 	jc.Parent = jump
 	local js = Instance.new("UIStroke")
 	js.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	js.Color = P.gold_400
-	js.Thickness = 2.5
+	js.Color = C.Panel
+	js.Thickness = 3
 	js.Parent = jump
 	local jumpScale = Instance.new("UIScale")
 	jumpScale.Parent = jump
@@ -244,12 +248,12 @@ local function buildGui()
 			if cb then
 				cb()
 			end
-			js.Thickness = 4
+			js.Thickness = 5
 		end
 	end)
 	jump.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-			js.Thickness = 2.5
+			js.Thickness = 3
 		end
 	end)
 	jumpButton = jump

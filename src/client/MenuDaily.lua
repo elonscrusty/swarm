@@ -264,6 +264,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		IconSize = 22,
 		Align = "Center",
 		Name = "DailyBoard",
+			Shrink = true,
 		OnClick = function()
 			ctx.ShowScreen("Ranks", "Daily")
 		end,
@@ -275,7 +276,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	local scoringOpen = false
 	local warn = card(face, "Notice", C.Blue)
 	ui.Warn = warn
-	Icons.Draw(warn, "info", { Size = 22, Position = UDim2.fromOffset(12, 11), Back = C.PanelRaised })
+	Icons.Draw(warn, "info", { Size = 22, Color = C.Blue, Position = UDim2.fromOffset(12, 11), Back = C.PanelRaised })
 	ui.WarnText = text(warn, "Small", "", { Name = "Text", TextWrapped = true, TextColor3 = C.Text, TextYAlignment = Enum.TextYAlignment.Top }, 14)
 	ui.WarnText.Text = "Your scored attempt is used when the run starts, even if you lose or leave. If the run never starts (for example, the trip to the run server fails), you keep it."
 	ui.Toggle = new("TextButton", { Name = "ScoringToggle", BackgroundTransparency = 1, Text = "", AutoButtonColor = false }, warn)
@@ -482,10 +483,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local bw = (side and (iw - sideW - 18) or iw) - 8 -- room for the scroll bar
 		local y = 2
 		local infoW, textW = bw, bw
-		local headPx = TS(26)
-		local headLines = wrappedLines(ui.Heading.Text, headPx, textW)
-		place(ui.Heading, 0, y, textW, headLines * (headPx + 4) + 4)
-		y += ui.Heading.Size.Y.Offset + 6
+		-- (the page title and the date row already say what this is: no "Today's challenge" heading)
+		ui.Heading.Visible = false
 		local detailW = textW - 54 - 10
 		for _, row in ipairs(ui.Rows) do
 			local line = row:FindFirstChild("Line") :: TextLabel
@@ -654,9 +653,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			fill()
 			askRank()
 			UIAnim.Pop(holder, 0, 0.92)
-			holder.ClipsDescendants = true
-			UIAnim.Sweep(holder, 0.2, 0.8, 0.8)
-			local pops = table.clone(ui.Stops)
+				local pops = table.clone(ui.Stops)
 			for _, f in ipairs(ui.CurseCards) do
 				table.insert(pops, f)
 			end
