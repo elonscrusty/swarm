@@ -53,6 +53,19 @@ local A = {
 }
 Theme.Arcade = A
 
+-- Icon badge fills (UIKit.IconBadge): simple white glyphs on a few bright, friendly
+-- colours so each option reads at a glance (one colour per kind of thing, not per screen).
+Theme.IconTint = {
+	Blue = hex("#2E8BFF"),
+	Green = hex("#3CC25A"),
+	Red = hex("#F2575A"),
+	Purple = hex("#9A5BF0"),
+	Orange = hex("#FF9F1C"),
+	Teal = hex("#1FC4C4"),
+	Gold = hex("#F2B705"),
+	Navy = hex("#2A3F8F"),
+}
+
 ------------------------------------------------------------------------------------------
 -- UI COLOURS (semantic: screens use these, never raw values)
 ------------------------------------------------------------------------------------------

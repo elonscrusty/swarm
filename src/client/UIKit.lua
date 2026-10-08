@@ -355,6 +355,61 @@ function UIKit.Shadow(holder: Instance, radius: number, depth: number?, z: numbe
 	return near
 end
 
+--[[
+	Arcade depth (Bright Arcade "dimensional construction"): a solid dark-blue base under the
+	face, offset downward, a bright outline and a soft white highlight across the top. The
+	base sits behind the face inside the hit area's own frame (outside any layout, never
+	Active), so it neither moves text nor takes input. Strong = the selected mode / the main
+	action, Medium = panels and tabs, Light = option cards and quiet controls.
+]]
+local DEPTH = {
+	Strong = { Offset = 5, Stroke = 3, Highlight = 0.42 },
+	Medium = { Offset = 4, Stroke = 2.5, Highlight = 0.55 },
+	Light = { Offset = 3, Stroke = 2, Highlight = 0.7 },
+}
+UIKit.Depths = DEPTH
+
+-- The soft top highlight of a raised face (a white band fading downward).
+local function highlight(face: GuiObject, radius: number, strength: number): Frame
+	local h = new("Frame", {
+		Name = "Highlight",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 3, 0, 2),
+		Size = UDim2.new(1, -6, 0.46, 0),
+		ZIndex = 2,
+		Active = false,
+	}, face)
+	corner(h, math.max(2, radius - 2))
+	new("UIGradient", {
+		Rotation = 90,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, strength),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+	}, h)
+	return h
+end
+UIKit.Highlight = highlight
+
+-- The solid base under a raised face (child of `holder`, behind the face).
+local function depthBase(holder: GuiObject, radius: number, offset: number, color: Color3?): Frame
+	local b = new("Frame", {
+		Name = "Base",
+		BackgroundColor3 = color or C.Shadow,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, offset),
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 0,
+		Active = false,
+	}, holder)
+	corner(b, radius)
+	return b
+end
+UIKit.DepthBase = depthBase
+
 export type SurfaceOpts = {
 	Name: string?,
 	Radius: number?,
@@ -364,6 +419,7 @@ export type SurfaceOpts = {
 	EdgeTransparency: number?,
 	EdgeThickness: number?,
 	Shadow: boolean?,
+	Depth: number?, -- solid dark-blue base this many px below (arcade panel) instead of the soft shadow
 	Gradient: boolean?,
 	Size: UDim2?,
 	Position: UDim2?,
@@ -392,7 +448,9 @@ function UIKit.Surface(parent: Instance?, o: SurfaceOpts?): (Frame, Frame)
 		ZIndex = opts.ZIndex or 1,
 		Visible = if opts.Visible == nil then true else opts.Visible,
 	})
-	if opts.Shadow ~= false then
+	if opts.Depth then
+		depthBase(holder, radius, opts.Depth)
+	elseif opts.Shadow ~= false then
 		UIKit.Shadow(holder, radius, 4, 0)
 	end
 	local face = new("Frame", {
@@ -591,6 +649,7 @@ export type ButtonOpts = {
 	Radius: number?,
 	Shadow: boolean?,
 	Glow: boolean?,
+	Depth: string?, -- "Strong" | "Medium" | "Light": arcade base + outline + highlight (no soft shadow)
 	Name: string?,
 	OnClick: ((InputObject?) -> ())?,
 	Sound: boolean?,
@@ -602,11 +661,13 @@ export type Button = {
 	Content: Frame,
 	Title: TextLabel?,
 	Subtitle: TextLabel?,
+	Caption: TextLabel?,
 	SetText: (title: string?, subtitle: string?) -> (),
 	SetEnabled: (on: boolean) -> (),
 	SetSelected: (on: boolean) -> (),
 	SetKind: (kind: string) -> (),
 	SetIcon: (name: string?) -> (),
+	SetDepth: (level: string?) -> (),
 	IsEnabled: () -> boolean,
 	Kind: () -> string,
 }
@@ -624,6 +685,8 @@ local KIND = {
 }
 UIKit.Kinds = KIND
 
+
+
 --[[
 	The button component. The TextButton is the hit area (what layouts place, at least
 	TapMin tall); inside it sit an optional glow / shadow and the Face that carries the
@@ -637,6 +700,7 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 	local hovered = false
 	local iconName = o.Icon
 	local iconSize = o.IconSize or Theme.Size.Icon
+	local depth: string? = o.Depth
 
 	local hit = new("TextButton", {
 		Name = o.Name or (o.Title or "Button"),
@@ -682,7 +746,10 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 		UIAnim.Glow(g, "BackgroundTransparency", Theme.Alpha.Glow, 0.86, 1.8)
 		glow = g
 	end
-	if o.Shadow ~= false and kind ~= "Ghost" then
+	local base: Frame? = nil
+	if depth then
+		base = depthBase(hit, radius, DEPTH[depth].Offset)
+	elseif o.Shadow ~= false and kind ~= "Ghost" then
 		UIKit.Shadow(hit, radius, 3, 0)
 	end
 
@@ -719,6 +786,9 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 		ZIndex = 2,
 		Active = false,
 	}, face)
+	-- the arcade highlight (only with Depth)
+	local shine = highlight(face, radius, 0.6)
+	shine.Visible = false
 
 	local content = new("Frame", {
 		Name = "Content",
@@ -866,11 +936,30 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 			gradient.Color = Theme.Gradient.Panel
 			gradient.Enabled = true
 		end
-		bevel.Visible = kind ~= "Ghost"
+		local d = depth and DEPTH[depth]
+		bevel.Visible = kind ~= "Ghost" and d == nil
 		bevel.BackgroundTransparency = primary and 0.55 or 0.85
+		shine.Visible = d ~= nil and enabled
+		if d then
+			local g = shine:FindFirstChildOfClass("UIGradient")
+			if g then
+				g.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, d.Highlight), NumberSequenceKeypoint.new(1, 1) })
+			end
+		end
+		if base then
+			base.Visible = d ~= nil and kind ~= "Ghost"
+			base.Position = UDim2.fromOffset(0, d and d.Offset or 0)
+			base.BackgroundColor3 = enabled and C.Shadow or C.DisabledText
+		end
 		faceStroke.Color = selected and C.SelectedEdge or k.Edge
 		faceStroke.Thickness = selected and Theme.Stroke.Thick or Theme.Stroke.Thin
 		faceStroke.Transparency = selected and 0 or (hovered and math.max(0, k.EdgeT - 0.35) or k.EdgeT)
+		if d and kind ~= "Ghost" then
+			-- raised: a bright blue outline (dark blue on the yellow main action)
+			faceStroke.Color = not enabled and C.DisabledText or (primary and C.Shadow or C.Blue)
+			faceStroke.Thickness = d.Stroke
+			faceStroke.Transparency = 0
+		end
 		if glow then
 			glow.Visible = primary
 			local wide = hit:FindFirstChild("GlowWide")
@@ -905,13 +994,21 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 	hit.InputBegan:Connect(function(input)
 		local t = input.UserInputType
 		if enabled and (t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch) then
-			UIAnim.Tween(press, 0.08, { Scale = Theme.Motion.PressScale })
+			if depth then
+				-- raised buttons press down onto their base instead of shrinking
+				UIAnim.Tween(face, 0.06, { Position = UDim2.fromOffset(0, math.floor(DEPTH[depth].Offset * 0.6)) })
+			else
+				UIAnim.Tween(press, 0.08, { Scale = Theme.Motion.PressScale })
+			end
 		end
 	end)
 	hit.InputEnded:Connect(function(input)
 		local t = input.UserInputType
 		if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
 			UIAnim.Tween(press, 0.22, { Scale = 1 }, Enum.EasingStyle.Back)
+			if depth then
+				UIAnim.Tween(face, 0.12, { Position = UDim2.fromOffset(0, hovered and -Theme.Motion.HoverLift or 0) })
+			end
 			if t == Enum.UserInputType.Touch then
 				setHover(false)
 			end
@@ -980,6 +1077,16 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 			iconHolder.Visible = name ~= nil
 			fitColumn()
 			drawIcons()
+		end,
+		SetDepth = function(level: string?)
+			if depth == level then
+				return
+			end
+			depth = level
+			if level and not base then
+				base = depthBase(hit, radius, DEPTH[level].Offset)
+			end
+			paint()
 		end,
 		IsEnabled = function(): boolean
 			return enabled
@@ -1888,9 +1995,9 @@ function UIKit.PageTitleStyle(l: TextLabel, thickness: number?): TextLabel
 	return l
 end
 
-export type Header = { Frame: Frame, Back: Button, Title: TextLabel }
+export type Header = { Frame: Frame, Back: Button, Title: TextLabel, Plate: TitlePlate? }
 
-function UIKit.ScreenHeader(parent: Instance, title: string, onBack: () -> ()): Header
+function UIKit.ScreenHeader(parent: Instance, title: string, onBack: () -> (), arcade: boolean?): Header
 	local f = new("Frame", { Name = "Header", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 56) }, parent)
 	local back = UIKit.Button(f, {
 		Kind = "Secondary",
@@ -1901,7 +2008,16 @@ function UIKit.ScreenHeader(parent: Instance, title: string, onBack: () -> ()): 
 		Align = "Center",
 		OnClick = onBack,
 		Name = "Back",
+		Depth = arcade and "Light" or nil,
 	})
+	if arcade then
+		-- Bright Arcade header: BACK then the title on a raised blue plate
+		local plate = UIKit.TitlePlate(f, string.upper(title), Theme.TextSize.H1, {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 144, 0.5, -2),
+		})
+		return { Frame = f, Back = back, Title = plate.Label, Plate = plate }
+	end
 	local t = text(f, "H1", string.upper(title), {
 		Name = "Title",
 		Position = UDim2.fromOffset(148, 0),
@@ -2349,6 +2465,176 @@ function UIKit.TitleBar(parent: Instance, title: string, onBack: () -> ()): Titl
 			t.Text = string.upper(s)
 		end,
 	}
+end
+
+------------------------------------------------------------------------------------------
+-- Bright Arcade building blocks (Play setup first; meant for every menu)
+------------------------------------------------------------------------------------------
+
+--[[
+	Icon badge: a simple white glyph (Icons vector set) on a bright round tile with a darker
+	rim and a soft top highlight. One shape and size per row, so every option's icon sits in
+	the same bounding area. `tint` = a Theme.IconTint colour.
+]]
+function UIKit.IconBadge(parent: Instance?, icon: string, tint: Color3, size: number, props: { [string]: any }?): Frame
+	local f = new("Frame", {
+		Name = "IconBadge",
+		BackgroundColor3 = tint,
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(size, size),
+		Active = false,
+	})
+	corner(f, math.floor(size * 0.3))
+	stroke(f, tint:Lerp(C.Shadow, 0.45), math.max(2, size / 22), 0)
+	highlight(f, math.floor(size * 0.3), 0.55)
+	Icons.Draw(f, icon, {
+		Name = "Glyph",
+		Size = math.floor(size * 0.62),
+		Color = Color3.new(1, 1, 1),
+		Back = tint,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.52),
+	}).ZIndex = 3
+	if props then
+		for k, v in pairs(props) do
+			(f :: any)[k] = v
+		end
+	end
+	f.Parent = parent
+	return f
+end
+
+export type TitlePlate = { Frame: Frame, Label: TextLabel, SetText: (s: string) -> () }
+
+--[[
+	Page title plate: a blue raised plate (gradient, dark-blue base, top highlight) holding
+	the heading in bold white Fredoka with a restrained navy outline. Width follows the text.
+]]
+function UIKit.TitlePlate(parent: Instance?, str: string, size: number?, props: { [string]: any }?): TitlePlate
+	local px = TS(size or Theme.TextSize.H1)
+	local h = px + 18
+	local holder = new("Frame", {
+		Name = "TitlePlate",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(0, h),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Active = false,
+	})
+	depthBase(holder, Theme.Radius.M, 4)
+	local plate = new("Frame", {
+		Name = "Plate",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(0, h),
+		AutomaticSize = Enum.AutomaticSize.X,
+		ZIndex = 1,
+		Active = false,
+	}, holder)
+	corner(plate, Theme.Radius.M)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Blue }, plate)
+	stroke(plate, C.Shadow, 2.5, 0)
+	highlight(plate, Theme.Radius.M, 0.6)
+	padding(plate, 0, 18, 0, 18)
+	local l = text(plate, "H1", str, {
+		Name = "Title",
+		Size = UDim2.fromOffset(0, h),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 3,
+	}, size or Theme.TextSize.H1)
+	UIKit.PageTitleStyle(l, 2)
+	-- (the base is scale-sized: it follows the holder, which follows the plate's width)
+	if props then
+		for k, v in pairs(props) do
+			(holder :: any)[k] = v
+		end
+	end
+	holder.Parent = parent
+	return {
+		Frame = holder,
+		Label = l,
+		SetText = function(s: string)
+			l.Text = s
+		end,
+	}
+end
+
+export type OptionCardOpts = {
+	Name: string?,
+	Caption: string, -- small category label ("HERO")
+	Icon: string, -- Icons vector name
+	Tint: Color3?, -- icon badge colour (Theme.IconTint)
+	IconSize: number?,
+	Chevron: boolean?,
+	Depth: string?, -- default "Light"
+	OnClick: (() -> ())?,
+}
+
+--[[
+	Option card (Play setup HERO / WORLD / DIFFICULTY / CURSES ...): a raised white card with
+	a fixed icon area on the left, a text column (category caption, the selected value in
+	heavy navy, a medium-weight blue-grey subtitle) and a separate right-aligned chevron.
+	One continuous rounded outline; the base sits under it (keep ~5 px free below the card
+	and ~3 px around it inside a clipping parent so the outline and base are never cut).
+	Returns the same handle shape as UIKit.Button (Instance, Face, Content, Title, Subtitle,
+	SetText(value, sub), SetSelected, SetEnabled, SetKind, SetDepth ...).
+]]
+function UIKit.OptionCard(parent: Instance?, o: OptionCardOpts): Button
+	local iconSize = o.IconSize or 46
+	local b = UIKit.Button(parent, {
+		Kind = "Secondary",
+		Title = " ",
+		Subtitle = " ",
+		TitleStyle = "H2",
+		TitleSize = 20,
+		Chevron = o.Chevron ~= false,
+		Align = "Left",
+		Shrink = true,
+		Name = o.Name or o.Caption,
+		Depth = o.Depth or "Light",
+		Radius = Theme.Radius.M,
+		OnClick = o.OnClick,
+	})
+	local content = b.Content
+	local pad = content:FindFirstChildOfClass("UIPadding")
+	if pad then
+		pad.PaddingLeft = UDim.new(0, 14)
+		pad.PaddingRight = UDim.new(0, 12)
+	end
+	local list = content:FindFirstChildOfClass("UIListLayout")
+	if list then
+		list.Padding = UDim.new(0, 12)
+	end
+	-- the fixed icon area
+	local holder = content:FindFirstChild("IconHolder") :: Frame
+	holder.Visible = true
+	holder.Size = UDim2.fromOffset(iconSize, iconSize)
+	UIKit.IconBadge(holder, o.Icon, o.Tint or Theme.IconTint.Blue, iconSize)
+	-- the chevron zone (its own column, never over the text)
+	local right = content:FindFirstChild("Right") :: Frame
+	right.Size = UDim2.fromOffset(22, 22)
+	-- text column: caption, value, subtitle
+	local column = content:FindFirstChild("Text") :: Frame
+	local function fit()
+		local used = iconSize + (right.Visible and 22 or 0)
+		local gaps = 12 * ((right.Visible and 2 or 1))
+		column.Size = UDim2.new(1, -(used + gaps), 1, 0)
+	end
+	fit()
+	right:GetPropertyChangedSignal("Visible"):Connect(fit)
+	local cap = text(column, "Caption", UIKit.track(o.Caption), { Name = "Caption", LayoutOrder = 0, TextColor3 = C.Blue, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
+	cap.Size = UDim2.new(1, 0, 0, TS(12) + 2)
+	if b.Title then
+		b.Title.FontFace = Theme.Font.Title
+		b.Title.TextColor3 = C.Text
+	end
+	if b.Subtitle then
+		b.Subtitle.FontFace = Theme.Font.Body
+		b.Subtitle.TextSize = TS(14)
+		b.Subtitle.TextColor3 = C.TextMuted
+	end
+	b.Caption = cap
+	return b
 end
 
 return UIKit
