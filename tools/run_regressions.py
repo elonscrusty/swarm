@@ -111,6 +111,8 @@ def main():
     # funnel analytics (server Analytics.lua, docs/ANALYTICS.md): AnalyticsService mock as a
     # published lobby, the same flow in Studio (nothing sent), and the real client's ready report
     checks += [("analytics-regression", ["mode=published"]), ("analytics-regression", ["mode=studio"]), ("analytics-client", [])]
+    # redesign: ground height + flow fields (server HeightGrid; flat fallback, ramp / cliff, routing, cave)
+    checks += [("heightgrid-regression", [])]
 
     def run(check):
         scene, settings = check
