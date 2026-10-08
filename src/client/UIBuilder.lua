@@ -1599,7 +1599,7 @@ local function cardTile(face: GuiObject, c, size: number, accent: Color3, popDel
 	end
 	-- the painted rarity frame (ui/frames, 9-slice) around the tile; the drawn rim stays
 	-- under it and is all there is when the frame is not uploaded
-	ArtImage.Frame(tile, ArtImage.CardBand(c), math.max(6, math.floor(size * 0.1)))
+	-- Rarity remains on the accent rim; ornate painted frames clash with arcade cards.
 	if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		offerArm.Fx.Add(UIAnim.Glow(halo, "BackgroundTransparency", 0.86, 0.95, 1.8))
 		if popDelay then
@@ -1983,10 +1983,11 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 	}, levelUp.Cards)
 	hit:SetAttribute("Legendary", legendary)
 	UIKit.Focusable(hit)
-	UIKit.Shadow(hit, Theme.Radius.L, 5, 0)
+	UIKit.DepthBase(hit, Theme.Radius.L, 4)
 	-- glow behind the card: always on an evolution, on focus for the others
 	local glow = new("Frame", {
 		Name = "Glow",
+		Visible = false, -- rarity band + focus outline provide the cue without glare
 		BackgroundColor3 = legendary and C.PrimaryBottom or C.BlueLight,
 		BackgroundTransparency = legendary and 0.75 or 1,
 		BorderSizePixel = 0,
@@ -1995,9 +1996,6 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		ZIndex = 0,
 	}, hit)
 	UIKit.corner(glow, Theme.Radius.L + 7)
-	if legendary then
-		offerArm.Fx.Add(UIAnim.Glow(glow, "BackgroundTransparency", 0.72, 0.9, 1.1))
-	end
 	local face = new("Frame", {
 		Name = "Face",
 		BackgroundColor3 = Color3.new(1, 1, 1),
@@ -3403,7 +3401,7 @@ do
 			local flash = new("Frame", { Name = "Flash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.Panel, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 6 }, f)
 			UIKit.corner(flash, Theme.Radius.M)
 			-- painted rarity frame (ui/frames, 9-slice) over the rim; nil when not uploaded
-			local art = ArtImage.Frame(f, "Common", 6, { ZIndex = 5 })
+			local art: ImageLabel? = nil -- clean rarity rim and bottom marker replace ornate frames
 			slots[k] = { Frame = f, Rim = rim, Bar = bar, Flash = flash, Art = art, Index = -1, Icon = nil, IconId = nil }
 		end
 		-- soft edges so tiles slide in and out of view

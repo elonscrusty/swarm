@@ -12,11 +12,12 @@
 	    WORLD       the lobby's arena and the next one still locked (opens ARENAS)
 	    DIFFICULTY  cycles through the unlocked tiers; locked tiers name what clears them
 	    CURSES      the run modifiers picked and their gold (opens CURSES, MenuCurses)
+	  Details     additional settings below the four-card grid:
 	    SIGILS      the worn sigils (opens SIGILS; only while the Sigils feature is on)
 	    ENDLESS     switch (remote SetEndless; the server's answer is the player attribute
 	                "Endless", Config.Endless): no portal win, its own leaderboard
 	  LAST RUN    the saved last run with RETRY (MenuLastRun), when there is one
-	  footer      "Details" (shows the DAILY CHALLENGE and WEEKLY CHALLENGE rows under the grid)
+	  footer      "Details" (also shows DAILY CHALLENGE and WEEKLY CHALLENGE rows)
 	              and the gold START (remote StartRun, the same validated start the server always
 	              used: RunManager.startRun) with a one-line note of what it does. A party
 	              member's START is their READY toggle instead (the leader starts).
@@ -24,14 +25,14 @@
 	The picked mode lives here (MenuPlay.Mode) so the home screen's line under PLAY shows
 	the same thing. It defaults to SOLO; joining a party picks the party's size.
 
-	New accounts (owner brief item 9; MenuPlay.IsSimple: fewer than SIMPLE_RUNS (3)
-	saved runs, profile.Stats.Runs, and not in a party) get a simpler setup:
+	Legacy quick-start presentation (retained internally, no longer selected by
+	MenuPlay.IsSimple; every account now gets the reference's four-card setup):
 	  a summary card   HERO (opens CHARACTERS) and WORLD (opens ARENAS)
 	  START SOLO       one big primary action ("QuickStart"; same start as START)
 	  ADVANCED OPTIONS collapsed by default; opens mode (SOLO / DUO / TRIO), the rule line,
 	                   difficulty, curses, endless, daily, sigils, weekly and LAST RUN (the
 	                   same controls as the full screen, moved into one scroll column)
-	Anyone in a party (leader or member) always gets the full screen with READY.
+	Party members keep the same setup with READY.
 ]]
 
 local Players = game:GetService("Players")
@@ -68,7 +69,6 @@ local MODES = {
 
 local mode = Config.Modes.Order[1] or "Solo"
 local listeners: { () -> () } = {}
-local SIMPLE_RUNS = 3 -- saved runs before the full run setup shows by default
 local advancedOpen = false -- the simple setup's ADVANCED OPTIONS (kept for the session)
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
@@ -90,15 +90,11 @@ function MenuPlay.SetMode(id: string)
 	end
 end
 
--- True when this profile gets the simple run setup: a new account (fewer than SIMPLE_RUNS
--- runs saved) that is not in a party (party play keeps the full screen with READY).
-function MenuPlay.IsSimple(profile: { [string]: any }?): boolean
-	local stats = profile and profile.Stats
-	local runs = type(stats) == "table" and tonumber(stats.Runs) or nil
-	if runs == nil or runs >= SIMPLE_RUNS then
-		return false
-	end
-	return MenuParty.Summary().Count == 0
+-- Keep the approved mode tabs + four-card setup for every account. The legacy
+-- quick-start presentation remains available internally, but is no longer selected
+-- by saved run count: it concealed the reference layout from new players.
+function MenuPlay.IsSimple(_profile: { [string]: any }?): boolean
+	return false
 end
 
 -- Called whenever the picked mode changes.
@@ -278,6 +274,9 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			Icon = icon,
 			Tint = tint,
 			Chevron = chevron,
+			IconSize = UIKit.IsCompact() and 46 or 52,
+			TitleSize = UIKit.IsCompact() and 22 or 24,
+			Depth = "Medium",
 			OnClick = onClick,
 		})
 	end
@@ -527,9 +526,8 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	MenuPlay.OnModeChanged(showMode)
 	showMode()
 
-	-- SIGILS and ENDLESS sit in the grid when the panel has room for a third row; on short phones
-	-- (the reference's 2x2 cards) they move under "Details >" with the daily and weekly rows.
-	local inlineExtras = true
+	-- Keep the four reference cards primary; all additional settings sit under Details.
+	local inlineExtras = false
 	-- Places the rows in a grid (two columns when `w` allows) from y0; returns the next y.
 	-- The scroll body clips: cards keep INSET px clear on the sides / top and BASE px below,
 	-- so their outlines and raised bases are never cut (the old interrupted borders).
@@ -687,7 +685,7 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local W, H = v.X, v.Y
 		local compact = UIKit.IsCompact()
 		local M = compact and Theme.Layout.MarginCompact or Theme.Layout.Margin
-		local G = 10
+		local G = 12 -- match grid(): leave room for both rows' raised bases
 		local headY = math.max(ins.Top + 4, 12)
 		-- clear the Roblox buttons and the gold readout along the top
 		-- short: header and mode tabs share one row (landscape phones, where the second row of
@@ -697,19 +695,19 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local pad = short and 10 or (compact and 12 or 18)
 		local headH = short and 50 or 52
 		-- phones at the Largest Roblox text size need the taller rows (three text lines)
-		local rowH = short and 92 or (compact and 78 or 72)
+		local rowH = short and 92 or (compact and 94 or 110)
 		if simple then
 			place(ui.Header.Frame, pad, pad, 300, headH)
 			layoutSimple(W, H, top, M, portrait, pad, headH, short and 84 or rowH, short)
 			return
 		end
 		local hasLast = ui.LastRun.Has()
-		local w = math.min(W - 2 * M, 760)
+		local w = math.min(W - 2 * M, 1000)
 		local iw = w - 2 * pad
 		local availH = H - top - M
 		local tabH = compact and 48 or 56
 		local ruleH = iw >= 600 and 22 or 36
-		local startH = short and 54 or 60
+		local startH = short and 54 or 72
 		local noteH = 18
 		local footH = startH + 6 + noteH
 		local cols = (iw - 6) >= 620 and 2 or 1
@@ -718,10 +716,14 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local overhead = pad + topBlock + ruleH + G + G + footH + pad
 		local bodyAvail = availH - overhead - INSET - BASE -- room for the cards' outlines and raised bases
 		local lastH = hasLast and (76 + G) or 0
-		local minRow = 64
+		-- Keep the caption, value and subtitle inside the card at every text size.
+		-- Short displays scroll rather than squeezing the third line into the outline.
+		local minRow = math.max(76, UIKit.TS(12) + UIKit.TS(compact and 22 or 24) + UIKit.TS(14) + 26)
+		rowH = math.max(rowH, minRow)
 		local extraCount = (sigilsOn and 1 or 0) + (endlessEnabled and 1 or 0)
-		-- the third row (SIGILS / ENDLESS) only when it fits beside the four cards
-		inlineExtras = extraCount == 0 or math.ceil((4 + extraCount) / cols) * (minRow + G) - G + lastH <= bodyAvail
+		-- The reference's four cards are the primary setup. Extra modifiers live
+		-- under Details even on a large monitor, so the hierarchy stays consistent.
+		inlineExtras = false
 		local nMain = 4 + (inlineExtras and extraCount or 0)
 		local rowsN = math.ceil(nMain / cols)
 		-- rows give up height (never below a finger's size) so the cards fit without scrolling

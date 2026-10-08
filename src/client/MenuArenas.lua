@@ -375,7 +375,8 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local fixed = bodyY + G + confirmH + pad
 		-- columns: as many as fit (up to four); portrait keeps two
 		local inner = iw - 2 * INSET
-		local cols = math.clamp(math.floor((inner + GAP) / (190 + GAP)), 1, 4)
+		-- Six worlds form a balanced 3x2 grid; phones keep two readable columns.
+		local cols = math.clamp(math.floor((inner + GAP) / (260 + GAP)), 1, 3)
 		if portrait then
 			cols = math.min(cols, 2)
 		end

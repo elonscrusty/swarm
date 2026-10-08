@@ -239,10 +239,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		return out
 	end
 
-	ui.Header = UIKit.TitleBar(screen, "Characters", ctx.Back)
+	ui.Header = UIKit.ScreenHeader(screen, "Characters", ctx.Back, true)
 	-- a little wider BACK than the kit's compact one: "BACK" keeps its letters at the Largest text size
 	ui.Header.Back.Instance.Size = UDim2.fromOffset(128, 42)
-	ui.Header.Title.Position = UDim2.new(0, 146, 0.5, 0)
 
 	------------------------------------------------------------------------------------
 	-- left: the roster (landscape) / tabs (portrait)
