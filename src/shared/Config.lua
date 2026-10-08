@@ -1965,7 +1965,8 @@ Config.Season = {
 -- or farther than FarStuds, nearest first, at most MaxArrows, refreshed UpdateHz times a second.
 Config.DangerArrows = {
 	FarStuds = 60, -- on screen but farther than this still gets an arrow
-	MaxArrows = 4,
+	MaxArrows = 2,
+	Elites = false, -- plain elites get no arrow (boss and champion only); the screen was too busy
 	UpdateHz = 10,
 	FadeSeconds = 0.15, -- fade in (under 0.2 s)
 	Size = 44, -- badge size in pixels (the distance tag sits under it)

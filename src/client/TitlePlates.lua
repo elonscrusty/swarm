@@ -86,7 +86,9 @@ end
 local function update(who: Player)
 	local title = who:GetAttribute("Title")
 	local root = rootOf(who)
-	if not Config.FeatureOn("Titles") or type(title) ~= "string" or title == "" or not root then
+	-- no plate over your own hero during a run: it sat on the middle of a phone screen
+	local ownInRun = who == Players.LocalPlayer and who:GetAttribute("InRun") == true
+	if not Config.FeatureOn("Titles") or type(title) ~= "string" or title == "" or not root or ownInRun then
 		drop(who)
 		return
 	end

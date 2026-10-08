@@ -11,6 +11,9 @@ local C = lib("common")
 local s = A.build({ enemies = 0, swarm = false, seconds = 300, stage = 2 })
 C.settle(2)
 local Config = C.shared("Config")
+-- the shipped setting hides elite arrows and caps at 2; test the full logic
+Config.DangerArrows.Elites = true
+Config.DangerArrows.MaxArrows = 4
 local EnemyData = C.shared("EnemyData")
 local DA = preview.client("DangerArrows")
 local UIState = preview.client("UIState")

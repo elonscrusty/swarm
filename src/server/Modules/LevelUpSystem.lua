@@ -422,6 +422,9 @@ local function evolveHint(rp, c, def)
 		if s then
 			c.Hint = EvolutionPreview.WeaponLine(s)
 			c.HintReady = s.Ready
+			-- the client hides the line until the partner passive is owned (or the weapon
+			-- is near its evolution level); the BUILD panel still lists every recipe
+			c.HintStarted = s.Ready or s.PassiveHave > 0 or c.Level >= Config.LevelUp.EvolveHintLevel
 			c.EvoIcon = s.EvoId
 			c.EvoName = s.Name
 			return

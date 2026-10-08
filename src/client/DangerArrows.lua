@@ -242,7 +242,8 @@ local function classify(body: BasePart): string?
 	if typeof(mini) == "string" and mini ~= "" then
 		return "Champion"
 	end
-	if body:GetAttribute("Elite") == true then
+	-- elites only when Config.DangerArrows.Elites is on (off: phones were too busy)
+	if body:GetAttribute("Elite") == true and cfg().Elites == true then
 		return "Elite"
 	end
 	return nil

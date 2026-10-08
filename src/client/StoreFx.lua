@@ -475,7 +475,9 @@ local function refreshPlayer(who: Player, camPos: Vector3?)
 	end
 	-- nameplate (none on the menu hero: the lobby screens sit over it)
 	local adornee: BasePart? = nil
-	if not menu and root and not hidden(r) then
+	-- and none over your own hero during a run (it covered the middle of a phone screen)
+	local ownInRun = who == player and who:GetAttribute("InRun") == true
+	if not menu and root and not hidden(r) and not ownInRun then
 		adornee = root
 	end
 	local plateKey = adornee and (tostring(who:GetAttribute("CosPlate") or "") .. "|" .. tostring(who:GetAttribute("Supporter")) .. "|" .. adornee:GetFullName()) or ""

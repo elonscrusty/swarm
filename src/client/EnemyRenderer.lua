@@ -1071,7 +1071,7 @@ local function ensureAura(slot: Slot, affix: string)
 		gui.Name = "AffixTag"
 		gui.Size = UDim2.fromOffset(110, 20)
 		gui.LightInfluence = 0
-		gui.MaxDistance = 220
+		gui.MaxDistance = 75 -- only near elites show the word (far ones: the aura alone)
 		local label = Instance.new("TextLabel")
 		label.BackgroundTransparency = 1
 		label.Size = UDim2.fromScale(1, 1)

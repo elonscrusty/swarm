@@ -2394,6 +2394,13 @@ local function showOffer(offer)
 	offerArm.Token += 1
 	local token = offerArm.Token
 	lastOffer = offer
+	-- a weapon card's evolution recipe shows only once its partner is started (the server
+	-- marks HintStarted = false otherwise); "(you: no Heart)" on every card crowded phones
+	for _, c in ipairs(type(offer.Choices) == "table" and offer.Choices or {}) do
+		if type(c) == "table" and c.HintStarted == false then
+			c.Hint = nil
+		end
+	end
 	offerArm.Revealed = false
 	offerArm.At = math.huge
 	offerArm.ShownAt = math.huge
@@ -2937,10 +2944,10 @@ do
 		clock stopped) while a covering panel owns the screen. Every reward also lands in the
 		recent-rewards history (LootUI.RecordReward, the ITEMS list).
 	]]
-	local CARD_SECONDS = 3 -- on screen when nothing waits
-	local CARD_QUEUED = 1.6 -- when more are waiting
+	local CARD_SECONDS = 2.4 -- on screen when nothing waits
+	local CARD_QUEUED = 1.4 -- when more are waiting
 	local CARD_RARE = 4 -- a rare reward shown as a card (live duo / trio run)
-	local CARD_W = 340
+	local CARD_W = 290
 	local card: { [string]: any } = { Queue = {}, Cur = nil, Left = 0, Total = 0, Held = false }
 
 	-- More than one living fighter in the run: the world is live, so even a rare reward is
@@ -2966,34 +2973,34 @@ do
 		if not card.Panel then
 			return
 		end
+		-- a slim toast (the old header / rarity / "Added to your run" rows crowded phones):
+		-- medallion, name with the x, one line of what it does, and a thin draining strip
 		local v = virtualSize()
 		local w = math.min(CARD_W, v.X - 2 * margin())
-		local nameH = TS(18) + 6
-		local subH = TS(12) + 4
+		local nameH = TS(16) + 4
 		local bodyH = TS(13) + 4
-		local mid = math.max(64, nameH + subH + bodyH + 4)
-		local headH = TS(12) + 12
-		local h = 8 + headH + 8 + mid + 10 + TS(12) + 6 + 10
+		local MED = 46
+		local mid = math.max(MED, nameH + bodyH)
+		local h = 8 + mid + 8 + 4
 		card.Panel.Size = UDim2.fromOffset(w, h)
-		card.Head.Size = UDim2.new(1, -54, 0, headH)
-		card.Close.Size = UDim2.fromOffset(headH + 6, headH + 6)
-		card.Rule.Position = UDim2.fromOffset(12, 8 + headH + 2)
-		local y = 8 + headH + 8
-		card.Medal.Position = UDim2.fromOffset(14, y + math.floor((mid - 64) / 2))
-		local tx = 14 + 64 + 14
-		local ty = y + math.floor((mid - (nameH + subH + bodyH)) / 2)
+		card.Head.Visible = false
+		card.Rule.Visible = false
+		card.Sub.Visible = false
+		card.When.Visible = false
+		local closeS = nameH + 6
+		card.Close.Size = UDim2.fromOffset(closeS, closeS)
+		card.Close.Position = UDim2.new(1, -4, 0, 4)
+		local y = 8
+		card.Medal.Size = UDim2.fromOffset(MED, MED)
+		card.Medal.Position = UDim2.fromOffset(10, y + math.floor((mid - MED) / 2))
+		local tx = 10 + MED + 10
+		local ty = y + math.floor((mid - (nameH + bodyH)) / 2)
 		card.Name.Position = UDim2.fromOffset(tx, ty)
-		card.Name.Size = UDim2.new(1, -tx - 12, 0, nameH)
-		card.Sub.Position = UDim2.fromOffset(tx, ty + nameH)
-		card.Sub.Size = UDim2.new(1, -tx - 12, 0, subH)
-		card.Body.Position = UDim2.fromOffset(tx, ty + nameH + subH)
-		card.Body.Size = UDim2.new(1, -tx - 12, 0, bodyH)
-		y += mid + 10
-		card.Bar.Frame.Position = UDim2.fromOffset(14, y + math.floor((TS(12) + 6 - 6) / 2))
-		local whenW = math.min(160, math.floor(w * 0.5))
-		card.Bar.Frame.Size = UDim2.new(1, -28 - whenW - 6, 0, 6)
-		card.When.Position = UDim2.new(1, -12, 0, y)
-		card.When.Size = UDim2.fromOffset(whenW, TS(12) + 6)
+		card.Name.Size = UDim2.new(1, -tx - closeS - 4, 0, nameH)
+		card.Body.Position = UDim2.fromOffset(tx, ty + nameH)
+		card.Body.Size = UDim2.new(1, -tx - 10, 0, bodyH)
+		card.Bar.Frame.Position = UDim2.fromOffset(12, h - 7)
+		card.Bar.Frame.Size = UDim2.new(1, -24, 0, 3)
 		-- beside the hero, never over him: left of centre under the top HUD in landscape
 		-- (the approved screen), under the hero in portrait
 		local m = margin()
@@ -3029,8 +3036,8 @@ do
 			end
 			card.IconId = e.Land
 			local land = e.Land
-			card.Icon = (land == "Gold") and Icons.Draw(card.Medal, "coin", { Size = 40, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
-				or Icons.Upgrade(card.Medal, land, { Size = 42, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+			card.Icon = (land == "Gold") and Icons.Draw(card.Medal, "coin", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+				or Icons.Upgrade(card.Medal, land, { Size = 32, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
 		end
 	end
 
@@ -3138,7 +3145,7 @@ do
 		UIKit.corner(medal, 999)
 		card.MedalRim = UIKit.stroke(medal, P.gold_400, 2, 0.15)
 		card.Medal = medal
-		card.Name = text(face, "H3", "", { Name = "RewardName", TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 }, 19)
+		card.Name = text(face, "H3", "", { Name = "RewardName", TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 }, 17)
 		card.Sub = text(face, "Caption", "", { Name = "RewardSub", TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 })
 		card.Body = text(face, "Small", "", { Name = "RewardBody", TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.Text, ZIndex = 3 }, 13)
 		card.Bar = UIKit.Meter(face, { Gradient = ColorSequence.new(P.moss_300, P.moss_200), Size = UDim2.new(1, -146, 0, 6) })
