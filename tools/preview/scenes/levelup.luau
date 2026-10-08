@@ -249,6 +249,41 @@ if touchKind then
 		preview.log(string.format("[levelup] touch %s at %.2fs on card %d: %s", touchKind, tonumber(preview.args.touchAt) or 0.9, idx, taken and "TAKEN" or "ignored"))
 	end
 end
+-- --set details=N   taps card N's DETAILS toggle (a click, then the card's own
+--                   Activated at once, as if the tap had reached the card too): the panel
+--                   opens and the card is NOT picked (PASS / FAIL lines)
+local detailsIdx = tonumber(preview.args.details)
+if detailsIdx then
+	C.settle(1.2)
+	local gui = game:GetService("Players").LocalPlayer.PlayerGui
+	local card, toggle
+	for _, d in ipairs(gui:GetDescendants()) do
+		if d.Name == "Card" .. detailsIdx and d:IsA("TextButton") then
+			card = d
+		end
+	end
+	toggle = card and card:FindFirstChild("DetailsToggle", true)
+	local picks = 0
+	preview.remote("LevelUpChoose").OnServerEvent:Connect(function()
+		picks += 1
+	end)
+	if toggle then
+		preview.click(toggle)
+		preview.click(card)
+		C.settle(0.3)
+		local panel = card:FindFirstChild("DetailsPanel", true)
+		local taken = false
+		for _, d in ipairs(gui:GetDescendants()) do
+			if d.Name == "PickFlash" or d.Name == "PickShade" then
+				taken = true
+			end
+		end
+		preview.log(((panel and panel.Visible) and "PASS" or "FAIL") .. " [levelup] DETAILS opens the card's details panel")
+		preview.log((not taken and picks == 0) and "PASS [levelup] tapping DETAILS does not pick the card" or "FAIL [levelup] tapping DETAILS picked the card")
+	else
+		preview.log("FAIL [levelup] card " .. detailsIdx .. " has no DETAILS toggle")
+	end
+end
 if preview.args.banishmode == "on" then
 	C.settle(1.2)
 	local Banish = preview.client("LevelUpBanish")
