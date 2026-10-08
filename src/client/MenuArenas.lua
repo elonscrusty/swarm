@@ -138,7 +138,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
-	UIKit.padding(scroll, 16, 16, 16, 16)
+	UIKit.padding(scroll, 10, 16, 10, 16)
 	ui.Scroll = scroll
 	ui.Grid = new("UIGridLayout", { CellSize = UDim2.fromOffset(320, 180), CellPadding = UDim2.fromOffset(GAP, GAP), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, scroll)
 
@@ -209,8 +209,8 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local checkBadge = cornerBadge(pic, "check", P.gold_400, P.gold_900, P.gold_200)
 		-- the text side
 		local info = new("Frame", { Name = "Info", BackgroundTransparency = 1 }, b.Content)
-		local title = text(info, "H2", string.upper(def.DisplayName), { Name = "ArenaName", Size = UDim2.new(1, -110, 0, TS(22) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
-		local state = UIKit.StatusPill(info, "LOCKED", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0) })
+		local title = text(info, "H3", string.upper(def.DisplayName), { Name = "ArenaName", Size = UDim2.new(1, 0, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
+		local state = UIKit.StatusPill(pic, "LOCKED", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -6, 0, 6), ZIndex = 8 })
 		local hazardIcon = Icons.Draw(info, look.Icon, { Size = 22, Position = UDim2.fromOffset(0, TS(22) + 12) })
 		local hazard = text(info, "Small", look.Hazard, {
 			Name = "Hazard",
@@ -284,7 +284,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			elseif open then
 				card.Rule.Text = string.format("Unlocked at stage %d", need)
 			else
-				card.Rule.Text = string.format("Reach stage %d  ·  Best %d", need, best)
+				card.Rule.Text = string.format("Reach stage %d", need)
 				card.Meter.Set(math.clamp(best / need, 0, 1), "")
 				card.Count.Text = string.format("%d/%d", math.min(best, need), need)
 			end
@@ -299,40 +299,40 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		end
 	end
 
-	-- inside a card: the picture on the left (wide cards) or on top (narrow ones), the text
-	local function cardLayout(card: { [string]: any }, cellW: number, cellH: number, stacked: boolean)
-		local pad = 10
-		local iw, ih = cellW - 2 * pad, cellH - 2 * pad
-		local ix, iy, infoW, infoH
-		if stacked then
-			local picH = math.floor(ih * 0.42)
-			place(card.Pic, pad, pad, iw, picH)
-			ix, iy, infoW, infoH = pad, pad + picH + 8, iw, ih - picH - 8
-		else
-			local picW = math.floor(iw * 0.4)
-			place(card.Pic, pad, pad, picW, ih)
-			ix, iy, infoW, infoH = pad + picW + 12, pad + 2, iw - picW - 12, ih - 2
-		end
-		place(card.Info, ix, iy, infoW, infoH)
-		-- top: name + pill, hazard; bottom up: bar, rule, divider
-		local titleH = TS(22) + 4
-		card.Title.Size = UDim2.new(1, -(card.State.AbsoluteSize.X / math.max(0.01, host.Scale()) + 8), 0, titleH)
+	-- Inside a card: the picture on top (state pill and lock/check badge on it), then the name,
+	-- the hazard line, the unlock rule and, while locked, the progress bar. Heights are exact so
+	-- every card has the same size.
+	local CARD_PAD = 8
+	-- Card text block height (title, hazard lines, rule, bar) for a cell width.
+	local function infoMetrics(cellW: number): (number, number)
+		local hazLines = cellW < 230 and 3 or 2
+		local titleH = TS(18) + 4
 		local lineH = TS(14) + 4
-		local barY = infoH - 8
-		card.Meter.Frame.Position = UDim2.fromOffset(0, barY)
-		card.Count.Position = UDim2.new(1, 0, 0, barY + 4)
-		local ruleY = barY - 6 - lineH
+		return titleH + 4 + hazLines * (TS(14) + 2) + 6 + lineH + 4 + 8, hazLines
+	end
+
+	local function cardLayout(card: { [string]: any }, cellW: number, picH: number)
+		local pad = CARD_PAD
+		local infoH, hazLines = infoMetrics(cellW)
+		local iw = cellW - 2 * pad
+		place(card.Pic, pad, pad, iw, picH)
+		place(card.Info, pad, pad + picH + 6, iw, infoH)
+		local titleH = TS(18) + 4
+		local lineH = TS(14) + 4
+		card.Title.Size = UDim2.new(1, 0, 0, titleH)
+		card.Title.Position = UDim2.fromOffset(0, 0)
+		card.HazardIcon.Visible = false
+		card.Divider.Visible = false
+		local hazH = hazLines * (TS(14) + 2)
+		card.Hazard.Position = UDim2.fromOffset(0, titleH + 4)
+		card.Hazard.Size = UDim2.new(1, 0, 0, hazH)
+		card.Hazard.TextWrapped = true
+		local ruleY = titleH + 4 + hazH + 6
 		card.Rule.Position = UDim2.fromOffset(0, ruleY)
-		card.Divider.Position = UDim2.fromOffset(0, ruleY - 6)
-		local hazY = titleH + 8
-		card.HazardIcon.Position = UDim2.fromOffset(0, hazY + 1)
-		card.Hazard.Position = UDim2.fromOffset(28, hazY)
-		-- two hazard lines when they fit above the divider, else one (truncated)
-		local room = ruleY - 8 - hazY
-		local twoLines = room >= TS(14) * 2 + 4
-		card.Hazard.Size = UDim2.new(1, -28, 0, twoLines and (TS(14) * 2 + 6) or lineH)
-		card.Hazard.TextWrapped = twoLines
-		card.Hazard.TextTruncate = twoLines and Enum.TextTruncate.None or Enum.TextTruncate.AtEnd
+		card.Rule.Size = UDim2.new(1, -44, 0, lineH)
+		card.Count.Position = UDim2.new(1, 0, 0, ruleY + lineH / 2)
+		card.Meter.Frame.Position = UDim2.fromOffset(0, ruleY + lineH + 4)
+		card.Meter.Frame.Size = UDim2.new(1, 0, 0, 6)
 	end
 
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
@@ -352,31 +352,35 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local x0 = (W - w) / 2
 		local introH = TS(16) * (w < 560 and 2 or 1) + 8
 		place(ui.Intro, x0 + 4, top, w - 8, introH)
+		-- fixed footer: the confirm button always sits at the bottom, never over the cards
 		local confirmH = Theme.Size.Button
-		local confirmW = math.min(380, w)
+		local confirmW = math.min(420, w)
 		local confirmY = Hh - M - confirmH
 		local panelTop = top + introH + 8
-		local panelMax = confirmY - 14 - panelTop
-		-- columns: three on wide screens; narrow cards put the picture on top
+		local panelMax = confirmY - 12 - panelTop
+		-- columns: as many as fit (up to four); portrait keeps two
 		local inner = w - 32 - 6
-		local cols = math.clamp(math.floor((inner + GAP) / 330), 1, 3)
+		local cols = math.clamp(math.floor((inner + GAP) / (190 + GAP)), 1, 4)
 		if portrait then
 			cols = math.min(cols, 2)
 		end
+		cols = math.max(cols, math.min(2, #Config.Arenas.Order))
 		local cellW = math.floor((inner - (cols - 1) * GAP) / cols)
-		local stacked = cellW < 360
+		local infoH = infoMetrics(cellW)
 		local rows = math.ceil(#Config.Arenas.Order / cols)
-		local minH = stacked and math.max(250, TS(22) + TS(14) * 3 + 150) or math.max(130, TS(22) + TS(14) * 2 + 70)
-		local fitH = math.floor((panelMax - 32 - (rows - 1) * GAP) / rows)
-		local cellH = math.clamp(fitH, minH, stacked and 320 or 200)
+		local picH = math.clamp(math.floor((cellW - 2 * CARD_PAD) * 0.5), 66, 118)
+		if rows > 1 and not portrait then
+			-- phone landscape: shrink the picture so a full row shows above the footer
+			picH = math.clamp(panelMax - 20 - (2 * CARD_PAD + 6 + infoH), 44, picH)
+		end
+		local cellH = 2 * CARD_PAD + picH + 6 + infoH
 		ui.Grid.CellSize = UDim2.fromOffset(cellW, cellH)
-		local gridH = rows * cellH + (rows - 1) * GAP + 32
-		local panelH = math.min(gridH, panelMax)
+		local gridH = rows * cellH + (rows - 1) * GAP + 20
+		local panelH = math.min(gridH, math.max(panelMax, 0))
 		place(ui.Panel, x0, panelTop, w, panelH)
-		-- the button right under the panel (at the bottom when the panel fills the screen)
-		place(ui.Confirm.Instance, (W - confirmW) / 2, math.min(confirmY, panelTop + panelH + 16), confirmW, confirmH)
+		place(ui.Confirm.Instance, (W - confirmW) / 2, confirmY, confirmW, confirmH)
 		for _, card in pairs(ui.Cards) do
-			cardLayout(card, cellW, cellH, stacked)
+			cardLayout(card, cellW, picH)
 		end
 	end
 	MenuArenas._layout = function()

@@ -77,6 +77,7 @@ def main():
                for scene in ("menu", "levelup", "results", "pause", "revive", "stage-choice", "characters", "countdown")]
     # the CHARACTERS screen with the Hero Mastery upgrade rows open
     checks += [("layout", ["characters", device, "mastery=open"]) for device in ("iphone", "phone-portrait")]
+    checks += [("layout", ["arenas", d]) for d in ("iphone", "phone-portrait", "pc", "tablet")]  # ARENAS screen: four cards per row, fixed footer
     checks += [("fast-start-regression", [])]  # FastStart: quicker, bigger waves 1-3 on stage 1 (PASS/FAIL lines)
     checks += [("layout", ["danger-arrows-regression", d]) for d in ("iphone", "phone-portrait", "pc")]  # DangerArrows: logic PASS/FAIL lines + layout
     checks += [("layout", ["smart-tutorial-regression", d]) for d in ("iphone", "phone-portrait", "pc")]  # SmartTutorial: logic PASS/FAIL lines + layout
