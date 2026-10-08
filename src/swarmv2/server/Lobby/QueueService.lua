@@ -511,7 +511,11 @@ function QueueService.PadUpdate(p: Player, gateId: string?)
 		end
 		return
 	end
-	if not q and gateId and gateId ~= before and not recent and padRefused[p] ~= gateId then
+	if not q and gateId and recent then
+		padGate[p] = before :: any -- too soon: read this pad again on the next poll
+		return
+	end
+	if not q and gateId and gateId ~= before and padRefused[p] ~= gateId then
 		local why = QueueService.Join(p, gateId, "pad")
 		if why then
 			padRefused[p] = gateId

@@ -110,6 +110,7 @@ def main():
     checks += [("layout", ["levelup", d, "details=2"]) for d in ("iphone", "pc")]
     # funnel analytics (server Analytics.lua, docs/ANALYTICS.md): AnalyticsService mock as a
     # published lobby, the same flow in Studio (nothing sent), and the real client's ready report
+    checks += [("admission-regression", []), ("lobby-queue-regression", []), ("party-v2-regression", [])]  # SwarmV2 lobby: MatchAdmission + TicketStore, QueueService/Transfer/ClassService, PartyService Promote/OnChanged + save normalisation (PASS/FAIL lines)
     checks += [("analytics-regression", ["mode=published"]), ("analytics-regression", ["mode=studio"]), ("analytics-client", [])]
 
     def run(check):

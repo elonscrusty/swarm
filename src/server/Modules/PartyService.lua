@@ -219,6 +219,8 @@ local function removeMember(player: Player, why: string)
 	if i then
 		table.remove(party.Members, i)
 	end
+	local changed = table.clone(party.Members) -- before a closing party is emptied
+	table.insert(changed, player)
 	if #party.Members <= 1 then
 		for _, m in ipairs(party.Members) do
 			partyOf[m] = nil
@@ -237,8 +239,6 @@ local function removeMember(player: Player, why: string)
 		pushParty(party)
 	end
 	push(player)
-	local changed = table.clone(party.Members)
-	table.insert(changed, player)
 	fireChanged(changed)
 end
 

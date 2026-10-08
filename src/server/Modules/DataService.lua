@@ -137,7 +137,7 @@ local function defaultData()
 		Meta = {},
 		Heroes = {},
 		HeroUpgrades = {},
-		OwnedCharacters = { [CharacterData.Default] = true },
+		OwnedCharacters = { [CharacterData.Default] = true, [ClassCatalog.Default] = true },
 		SelectedCharacter = CharacterData.Default,
 		Skins = {},
 		Stats = { BestTime = 0, TotalKills = 0, Wins = 0, Runs = 0, BestStage = 0, MostKills = 0, BestScore = 0, BestScoreEndless = 0, BestLevel = 0, TimePlayed = 0 },
