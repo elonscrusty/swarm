@@ -204,7 +204,7 @@ local function buildGround(parent: Instance)
 	local f = folder(parent, "Ground")
 	mk(f, "Floor", Vector3.new(360, 8, 360), at(0, -4, 0), GRASS, Enum.Material.Grass)
 	-- tone patches: unique heights where they could overlap (>= 0.05 apart), tops all under the paths
-	local patches = {
+	local patches: { { any } } = {
 		{ -70, -30, 32, 0.05, Color3.fromRGB(116, 176, 72) },
 		{ 60, 60, 34, 0.05, Color3.fromRGB(78, 142, 58) },
 		{ -20, 60, 30, 0.10, Color3.fromRGB(80, 146, 60) },
@@ -215,7 +215,7 @@ local function buildGround(parent: Instance)
 		{ 70, -10, 20, 0.20, Color3.fromRGB(82, 148, 60) },
 	}
 	for i, p in ipairs(patches) do
-		disc(f, "TonePatch" .. i, p[1], p[2], p[3] * 2, p[4], 0.04, p[5] :: any, Enum.Material.Grass, false)
+		disc(f, "TonePatch" .. i, p[1], p[2], p[3] * 2, p[4], 0.04, p[5], Enum.Material.Grass, false)
 	end
 	-- dirt paths: each segment on its own height (0.25 + 0.05 k), plaza on top where they meet
 	local segs = pathSegments()
@@ -396,7 +396,7 @@ local function buildRuins(parent: Instance, rng: Random)
 		local h = s[3]
 		mk(f, "StandingStone", Vector3.new(2.6, h, 2.0), at(s[1], h / 2, s[2]) * CFrame.Angles(rng:NextNumber(-0.05, 0.05), rng:NextNumber(0, math.pi), rng:NextNumber(-0.05, 0.05)), tint(Color3.fromRGB(150, 150, 152), rng:NextNumber(0.88, 1.08)), ROCK)
 	end
-	local pillars = { { -30, 52, 12, false }, { -22, 56, 5, true }, { 54, 62, 11, false }, { 62, 70, 4, true } }
+	local pillars: { { any } } = { { -30, 52, 12, false }, { -22, 56, 5, true }, { 54, 62, 11, false }, { 62, 70, 4, true } }
 	for _, p in ipairs(pillars) do
 		local h = p[3]
 		mk(f, "BrokenPillar", Vector3.new(4, h, 4), at(p[1], h / 2, p[2]), Color3.fromRGB(154, 152, 148), ROCK)
@@ -868,7 +868,7 @@ local function buildWalls(parent: Instance)
 	local f = folder(parent, "Boundary")
 	local h = 90
 	local span = HALF * 2 + 6
-	local defs = {
+	local defs: { { any } } = {
 		{ Vector3.new(span, h, 2), 0, -HALF - 1 },
 		{ Vector3.new(span, h, 2), 0, HALF + 1 },
 		{ Vector3.new(2, h, span), HALF + 1, 0 },
