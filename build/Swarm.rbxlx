@@ -64163,7 +64163,8 @@ end
 -- Health panel and ability panel, designed at full size (reference px), fitted with a UIScale.
 local VIT = { W = 380, PadX = 10, PadY = 9, HP = 26, XP = 20, Gap = 8 } -- health / level panel
 VIT.H = VIT.PadY * 2 + VIT.HP + VIT.Gap + VIT.XP
-local INV = { Pad = 10, Label = 84, Tile = 64, Gap = 8, RowGap = 14, Build = 66 } -- ability panel (+ BUILD column)
+-- ability panel: one row (weapons | passives) under a slim level / XP strip, + BUILD column
+local INV = { Pad = 10, Tile = 64, Gap = 8, Split = 18, XP = 22, XPGap = 6, Build = 66 }
 local PILL_H, PAUSE = 44, 50 -- top right counters / pause button
 local TIMER_W, TIMER_H = 150, 52
 local OBJ_W, OBJ_H = 380, 54 -- objective panel under the timer (two lines)
@@ -64471,20 +64472,42 @@ local function weaponIconId(id: string, evolved: boolean): string
 	return id
 end
 
--- Columns the ability panel shows: the owned weapons / passives plus one free "+" slot
--- (at least 3), up to the real slot count. A fresh run's tray is short and grows as the
--- build fills; the build details always state the full capacity ("WEAPONS 2 / 6").
-local function shownSlots(): number
-	local cap = math.max((inventory and inventory.WeaponSlots) or Config.Slots.Weapons, (inventory and inventory.PassiveSlots) or Config.Slots.Passives)
-	local owned = math.max(inventory and inventory.Weapons and #inventory.Weapons or 0, inventory and inventory.Passives and #inventory.Passives or 0)
-	return math.clamp(owned + 1, math.min(3, cap), cap)
+-- Tiles the ability panel shows per kind: the owned weapons (or passives) plus one free
+-- "+" slot (at least 2), up to the real slot count. A fresh run's tray is short and grows
+-- as the build fills; the build details always state the full capacity ("WEAPONS 2 / 6").
+local function shownOf(owned: number, cap: number): number
+	return math.clamp(owned + 1, math.min(2, cap), cap)
 end
 
-local function invSize(): (number, number, number)
-	local slots = shownSlots()
-	local w = INV.Pad * 2 + INV.Label + slots * INV.Tile + math.max(0, slots - 1) * INV.Gap + INV.Build
-	local h = INV.Pad * 2 + INV.Tile * 2 + INV.RowGap
-	return w, h, slots
+local function shownSlots(): (number, number)
+	local capW = (inventory and inventory.WeaponSlots) or Config.Slots.Weapons
+	local capP = (inventory and inventory.PassiveSlots) or Config.Slots.Passives
+	local nW = shownOf(inventory and inventory.Weapons and #inventory.Weapons or 0, capW)
+	local nP = shownOf(inventory and inventory.Passives and #inventory.Passives or 0, capP)
+	return nW, nP
+end
+
+local function rowWidth(n: number): number
+	return n * INV.Tile + math.max(0, n - 1) * INV.Gap
+end
+
+local function invSize(): (number, number)
+	local nW, nP = shownSlots()
+	local w = INV.Pad * 2 + rowWidth(nW) + INV.Split + rowWidth(nP) + INV.Build
+	local h = INV.Pad * 2 + INV.XP + INV.XPGap + INV.Tile
+	return w, h
+end
+
+-- Places the weapon row, the divider and the passive row side by side (one row).
+local function placeRows()
+	local nW, nP = shownSlots()
+	local y = INV.Pad + INV.XP + INV.XPGap
+	ui.WeaponRow.Position = UDim2.fromOffset(INV.Pad, y)
+	ui.WeaponRow.Size = UDim2.fromOffset(rowWidth(nW), INV.Tile)
+	local sx = INV.Pad + rowWidth(nW) + math.floor(INV.Split / 2)
+	ui.BarSplit.Position = UDim2.fromOffset(sx, y + 6)
+	ui.PassiveRow.Position = UDim2.fromOffset(INV.Pad + rowWidth(nW) + INV.Split, y)
+	ui.PassiveRow.Size = UDim2.fromOffset(rowWidth(nP), INV.Tile)
 end
 
 local setBuildOpen: (boolean) -> ()
@@ -64497,39 +64520,17 @@ local relayout: () -> () = function() end
 local function buildBar(frame: Frame)
 	local holder = new("Frame", { Name = "AbilityBar", BackgroundTransparency = 1, Active = false }, frame)
 	ui.Bar = holder
-	-- phones: the panel is scaled to about half size, where the words came out a few points
-	-- tall (cut or unreadable at large Roblox text sizes), so a narrower column shows a sword
-	-- and a shield instead and the tiles get the room
-	local iconLabels = UIKit.IsCompact()
-	INV.Label = iconLabels and 46 or 84
 	local w, h = invSize()
 	local body, face = goldSurface(holder, "Body", Theme.Radius.L, UDim2.fromOffset(w, h))
 	ui.BarBody = body
+	ui.BarFace = face
 	ui.BarFit = new("UIScale", { Name = "Fit", Scale = 1 }, body)
-	local function rowLabel(str: string, y: number, icon: string)
-		if iconLabels then
-			local slot = new("Frame", { Name = str, BackgroundTransparency = 1, Position = UDim2.fromOffset(INV.Pad, y), Size = UDim2.fromOffset(INV.Label - 6, INV.Tile) }, face)
-			Icons.Draw(slot, icon, { Size = 40, Color = P.gold_200, Back = P.slate_900, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
-			return
-		end
-		-- the word gets the label column only (the first tile starts right after it) and
-		-- shrinks to fit: on a phone with large text "WEAPONS" ran under the first tile
-		local l = role(face, "Label", str, {
-			Name = str,
-			Position = UDim2.fromOffset(INV.Pad + 2, y + math.floor(INV.Tile / 2) - 12),
-			Size = UDim2.fromOffset(INV.Label - 8, 24),
-			TextColor3 = P.ivory_100,
-		})
-		fitText(l, 9)
-	end
-	local y2 = INV.Pad + INV.Tile + INV.RowGap
-	rowLabel("WEAPONS", INV.Pad, "sword")
-	rowLabel("PASSIVES", y2, "shield")
-	ui.BarRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, Position = UDim2.fromOffset(INV.Pad, INV.Pad + INV.Tile + INV.RowGap / 2), Size = UDim2.new(1, -(2 * INV.Pad + INV.Build), 0, 1) }, face)
-	ui.WeaponRow = new("Frame", { Name = "Weapons", BackgroundTransparency = 1, Active = false, Position = UDim2.fromOffset(INV.Pad + INV.Label, INV.Pad), Size = UDim2.new(1, -(2 * INV.Pad + INV.Label + INV.Build), 0, INV.Tile) }, face)
+	ui.WeaponRow = new("Frame", { Name = "Weapons", BackgroundTransparency = 1, Active = false }, face)
 	UIKit.list(ui.WeaponRow, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, INV.Gap) })
-	ui.PassiveRow = new("Frame", { Name = "Passives", BackgroundTransparency = 1, Active = false, Position = UDim2.fromOffset(INV.Pad + INV.Label, y2), Size = UDim2.new(1, -(2 * INV.Pad + INV.Label + INV.Build), 0, INV.Tile) }, face)
+	ui.BarSplit = new("Frame", { Name = "Split", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.fromOffset(2, INV.Tile - 12) }, face)
+	ui.PassiveRow = new("Frame", { Name = "Passives", BackgroundTransparency = 1, Active = false }, face)
 	UIKit.list(ui.PassiveRow, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, INV.Gap) })
+	placeRows()
 
 	-- BUILD column: a divider, a chevron and the word; the whole column is the button
 	new("Frame", { Name = "BuildRule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -(INV.Build - 4), 0, INV.Pad + 4), Size = UDim2.new(0, 1, 1, -(2 * INV.Pad + 8)) }, face)
@@ -65223,7 +65224,9 @@ local function layout()
 	ui.Counters.Position = UDim2.fromOffset(W - M - PAUSE - 8, pauseY + (PAUSE - PILL_H) / 2)
 	local countersLeft = W - M - PAUSE - 8 - ui.Counters.AbsoluteSize.X / scale
 
-	-- timer pill (top centre; below the Roblox buttons or the counters if it would touch them)
+	-- timer: landscape beside the ability panel at the bottom (placed with it below);
+	-- portrait: top centre as before
+	local timerW, timerH = compact and 124 or TIMER_W, compact and 46 or TIMER_H
 	local timerY = 6
 	if ins.Left + 8 > W / 2 - TIMER_W / 2 then
 		timerY = ins.Top + 2
@@ -65231,41 +65234,31 @@ local function layout()
 	if countersLeft < W / 2 + TIMER_W / 2 + 8 then
 		timerY = math.max(timerY, pauseY + PAUSE + 6)
 	end
-	place(ui.TimerPill, W / 2 - TIMER_W / 2, timerY, TIMER_W, TIMER_H)
-	local y = timerY + TIMER_H + 6
-
-	-- vitals (HP, run level, XP): top left under the Roblox buttons in landscape (the
-	-- approved 02/03 layout); portrait has no room beside the timer, so they stack centred
-	local kv = compact and 0.76 or 1
-	kv = math.min(kv, (W - 2 * M) / VIT.W)
-	if not portrait then
-		-- narrow landscape screens: the vitals give up a little size before the objective
-		-- beside them gets too narrow to read (OBJ_MIN), never below 0.6
-		local room = (W / 2 - OBJ_MIN / 2 - 10 - M) / VIT.W
-		kv = math.max(math.min(kv, room), math.min(kv, 0.6))
+	local y = timerY
+	if portrait then
+		place(ui.TimerPill, W / 2 - TIMER_W / 2, timerY, TIMER_W, TIMER_H)
+		y = timerY + TIMER_H + 6
 	end
-	ui.PlateFit.Scale = kv
-	local vitW, vitH = VIT.W * kv, VIT.H * kv
-	local leftRight = 0 -- right edge of the left column (vitals, item strip)
+
+	-- no top-left vitals panel any more (hidden; the level / XP row sits on the ability
+	-- panel): the item strip and chips start under the Roblox buttons
+	place(ui.Plate, M, math.max(ins.Top, 4), 0, 0)
+	local leftRight = 0
 	local objW
 	if portrait then
 		-- the objective must clear Roblox's menu / chat buttons (44 px tall in a 58 px bar)
 		y = math.max(y, ins.Top + 58 + 4)
 		objW = math.min(OBJ_W + 40, W - 2 * M)
+		ui.LeftBottom = nil
+		ui.LeftWidth = nil
 	else
-		local vy = math.max(ins.Top, 4) + 6
-		place(ui.Plate, M, vy, vitW, vitH)
-		leftRight = M + vitW
-		ui.LeftBottom = vy + vitH
-		ui.LeftWidth = vitW
-		-- the objective sits between the vitals and the minimap column under the counters
+		ui.LeftBottom = math.max(ins.Top, 4) + 6
+		ui.LeftWidth = 300
+		-- the objective sits between the Roblox buttons and the minimap column
 		local mapLeft = W - M - (compact and 128 or 180)
-		local half = math.min(W / 2 - leftRight - 10, mapLeft - W / 2 - 10)
-		if 2 * half < OBJ_MIN and y < vy + vitH + 4 then
-			-- still too narrow beside the vitals: the objective drops under them (the timer
-			-- stays on top) and takes the width the minimap column leaves
-			y = vy + vitH + 6
-			half = mapLeft - W / 2 - 10
+		local half = mapLeft - W / 2 - 10
+		if ins.Left + 8 > W / 2 - OBJ_MIN / 2 then
+			y = math.max(y, ins.Top + 2)
 		end
 		objW = math.clamp(2 * half, 200, OBJ_W)
 	end
@@ -65278,13 +65271,6 @@ local function layout()
 	ui.StageRoom = objW
 	if ui.Stage.Visible then
 		y += objH + 6
-	end
-
-	if portrait then
-		place(ui.Plate, W / 2 - vitW / 2, y, vitW, vitH)
-		y += vitH
-		ui.LeftBottom = nil
-		ui.LeftWidth = nil
 	end
 
 	-- boss bar under the objective (clear of the left column in landscape)
@@ -65303,12 +65289,19 @@ local function layout()
 		k = math.min(compact and 0.86 or 1, (W - 2 * M) / invW, (H * 0.22) / invH)
 	else
 		local jumpClear = (Config.Movement.ButtonSize or 84) + (Config.Movement.ButtonMargin or 26) / scale + ins.Right + 12
-		k = math.min(compact and 0.68 or 0.78, (W - 2 * math.max(M, jumpClear)) / invW, (H * 0.24) / invH)
+		k = math.min(compact and 0.68 or 0.78, (W - 2 * math.max(M, jumpClear) - timerW - 8) / invW, (H * 0.24) / invH)
 	end
 	ui.BarFit.Scale = k
 	local barW, barH = invW * k, invH * k
 	local barY = portrait and (topBottom + 8) or (H - M - barH)
-	place(ui.Bar, W / 2 - barW / 2, barY, barW, barH)
+	if portrait then
+		place(ui.Bar, W / 2 - barW / 2, barY, barW, barH)
+	else
+		-- timer + ability panel as one centred cluster at the bottom
+		local left = W / 2 - (timerW + 8 + barW) / 2
+		place(ui.TimerPill, left, barY + (barH - timerH) / 2, timerW, timerH)
+		place(ui.Bar, left + timerW + 8, barY, barW, barH)
+	end
 	local clusterTop, clusterBottom = barY, barY + barH
 	ui.BarTop = clusterTop
 	ui.BarBottom = clusterBottom
@@ -65474,6 +65467,7 @@ function Hud.SetInventory(inv: { [string]: any }?)
 	end
 	local w, h = invSize()
 	ui.BarBody.Size = UDim2.fromOffset(w, h)
+	placeRows()
 	layout()
 	local size = INV.Tile
 	-- tiles that are new or just levelled up pop in
@@ -65489,8 +65483,8 @@ function Hud.SetInventory(inv: { [string]: any }?)
 		end
 	end
 	local maxW = WeaponData.MaxLevel
-	local shown = shownSlots()
-	for i = 1, math.min(shown, inv.WeaponSlots or Config.Slots.Weapons) do
+	local shownW, shownP = shownSlots()
+	for i = 1, shownW do
 		local wp = inv.Weapons[i]
 		local tile
 		if wp then
@@ -65501,7 +65495,7 @@ function Hud.SetInventory(inv: { [string]: any }?)
 		end
 		tile.LayoutOrder = i
 	end
-	for i = 1, math.min(shown, inv.PassiveSlots or Config.Slots.Passives) do
+	for i = 1, shownP do
 		local p = inv.Passives[i]
 		local tile
 		if p then
@@ -66280,6 +66274,12 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	UIState.SetRenderer("Headline", renderHeadline)
 	buildBuffChip(frame)
 	buildBar(frame)
+	-- the level / XP row lives on top of the ability panel; the top-left vitals panel is
+	-- gone (owner 2026-10-08: the hero's own bar shows health)
+	ui.XPRow.Parent = ui.BarFace
+	ui.XPRow.Position = UDim2.fromOffset(INV.Pad, INV.Pad)
+	ui.XPRow.Size = UDim2.new(1, -(2 * INV.Pad + INV.Build), 0, INV.XP)
+	ui.Plate.Visible = false
 	-- the build details sit in their own layer over the HUD, the banner layer and the world
 	-- markers (the player opened them on purpose); shown and hidden with the HUD
 	local detailLayer = new("Frame", { Name = "HUDBuild", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Active = false, ZIndex = Theme.Z.Hud + 4 }, root)
