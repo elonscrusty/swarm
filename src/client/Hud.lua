@@ -1232,6 +1232,9 @@ local function layout()
 	-- and never taller than ~25% of the screen; portrait: under the top cluster, away from
 	-- the thumbs
 	local invW, invH = invSize()
+	-- the panel body always matches the current inventory (also after SetInventory(nil))
+	ui.BarBody.Size = UDim2.fromOffset(invW, invH)
+	placeRows()
 	local k
 	if portrait then
 		k = math.min(compact and 0.86 or 1, (W - 2 * M) / invW, (H * 0.22) / invH)

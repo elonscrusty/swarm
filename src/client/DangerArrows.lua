@@ -523,7 +523,7 @@ local function update()
 		return
 	end
 	local rects = blockers()
-	local maxN = math.max(0, math.floor(tonumber(cfg().MaxArrows) or 4))
+	local maxN = math.clamp(math.floor(tonumber(cfg().MaxArrows) or 4), 0, #arrows)
 	table.clear(debugInfo)
 	-- keep each enemy on the arrow it already had (no swapping between refreshes)
 	local placed: { [number]: { t: Target, x: number, y: number, angle: number } } = {}
@@ -626,7 +626,8 @@ function DangerArrows.Init()
 	gui = screen
 	local frame = UIKit.new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, screen) :: Frame
 	root = frame
-	local n = math.max(0, math.floor(tonumber(cfg().MaxArrows) or 4))
+	-- a pool of at least 4: MaxArrows (the live cap, read each refresh) can be raised later
+	local n = math.max(4, math.floor(tonumber(cfg().MaxArrows) or 4))
 	for i = 1, n do
 		table.insert(arrows, makeArrow(frame, i))
 	end
