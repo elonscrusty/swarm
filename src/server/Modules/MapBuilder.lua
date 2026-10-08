@@ -93,7 +93,7 @@ local TAU = math.pi * 2
 local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- turns a Cylinder's axis (X) upward
 local SMOOTH = Enum.Material.SmoothPlastic
 
-local SEEDS = { Lobby = 20250, Forest = 41207, Ruins = 93011, Swamp = 52361, Snow = 63127, Desert = 74471, Lava = 85219 }
+local SEEDS = { Lobby = 20250, Forest = 41207, Ruins = 93011, Swamp = 52361, Snow = 63127, Desert = 74471, Lava = 85219, Cliffwood = 31337 }
 -- environment dressing (dressArena): one folder per arena model, built once per build
 local DRESSING_FOLDER = "ArenaDressing"
 local DRESS: any = (Config.Arenas :: any).Dressing or {}
@@ -1324,6 +1324,11 @@ local function isFree(arena: Arena, x: number, z: number, clear: number, pathPad
 	if math.abs(x) > arena.Half - 3 or math.abs(z) > arena.Half - 3 then
 		return false
 	end
+	-- maps with cliffs and drops (Cliffwood) say where the flat floor is
+	local walkable = arena.Walkable
+	if walkable and not walkable(x, z) then
+		return false
+	end
 	local c = arena.Center
 	local wx, wz = c.X + x, c.Z + z
 	for _, ob in ipairs(arena.Obstacles) do
@@ -1364,23 +1369,23 @@ local function insideClearing(arena: Arena, wx: number, wz: number, r: number): 
 	return math.sqrt(dx * dx + dz * dz) - r < arena.Clear
 end
 
-local function circleCollider(arena: Arena, wx: number, wz: number, r: number, h: number)
+local function circleCollider(arena: Arena, wx: number, wz: number, r: number, h: number, baseY: number?)
 	if insideClearing(arena, wx, wz, r) then
 		warn(string.format("[MapBuilder] collider at (%.0f, %.0f) skipped: inside the spawn clearing", wx, wz))
 		return
 	end
-	local y = arena.Center.Y
+	local y = baseY or arena.Center.Y
 	local cp = part({ Name = "Collider", Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, r * 2, r * 2), CFrame = CFrame.new(wx, y + h / 2, wz) * UPRIGHT, Transparency = 1, CanCollide = true, CanQuery = true })
 	cp.Parent = arena.ObstacleFolder
 	table.insert(arena.Obstacles, { Kind = "Circle", Pos = Vector3.new(wx, y, wz), Radius = r })
 end
 
-local function boxCollider(arena: Arena, cx: number, cz: number, sx: number, sz: number, h: number)
+local function boxCollider(arena: Arena, cx: number, cz: number, sx: number, sz: number, h: number, baseY: number?)
 	if insideClearing(arena, cx, cz, math.sqrt(sx * sx + sz * sz) / 2) then
 		warn(string.format("[MapBuilder] collider at (%.0f, %.0f) skipped: inside the spawn clearing", cx, cz))
 		return
 	end
-	local y = arena.Center.Y
+	local y = baseY or arena.Center.Y
 	local cp = part({ Name = "Collider", Size = Vector3.new(sx, h, sz), CFrame = CFrame.new(cx, y + h / 2, cz), Transparency = 1, CanCollide = true, CanQuery = true })
 	cp.Parent = arena.ObstacleFolder
 	table.insert(arena.Obstacles, {
@@ -1397,28 +1402,28 @@ end
 -- Registers the catalog collider of kit piece `name` placed at `cf` (scaled). Boxes are
 -- axis-aligned in the obstacle format: the box of a turned piece is its world AABB, so
 -- colliding box pieces are placed at multiples of 90° (small tilts only grow it a bit).
-local function addShape(arena: Arena, shape: any, cf: CFrame, s: number)
+local function addShape(arena: Arena, shape: any, cf: CFrame, s: number, baseY: number?)
 	local off = shape.Offset
 	local centre = off and cf:PointToWorldSpace(Vector3.new(off[1] * s, 0, off[2] * s)) or cf.Position
 	if shape.Kind == "Circle" then
-		circleCollider(arena, centre.X, centre.Z, shape.Radius * s, shape.Height * s)
+		circleCollider(arena, centre.X, centre.Z, shape.Radius * s, shape.Height * s, baseY)
 	elseif shape.Kind == "Box" then
 		local hx, hz = shape.Size[1] * s / 2, shape.Size[2] * s / 2
 		local r, l = cf.RightVector, cf.LookVector
 		local ex = math.abs(r.X) * hx + math.abs(l.X) * hz
 		local ez = math.abs(r.Z) * hx + math.abs(l.Z) * hz
-		boxCollider(arena, centre.X, centre.Z, ex * 2, ez * 2, shape.Height * s)
+		boxCollider(arena, centre.X, centre.Z, ex * 2, ez * 2, shape.Height * s, baseY)
 	elseif shape.Kind == "Multi" then
 		for _, sub in ipairs(shape.Shapes) do
-			addShape(arena, sub, cf, s)
+			addShape(arena, sub, cf, s, baseY)
 		end
 	end
 end
 
-local function kitCollider(arena: Arena, name: string, cf: CFrame, s: number)
+local function kitCollider(arena: Arena, name: string, cf: CFrame, s: number, baseY: number?)
 	local entry = kitEntry(name)
 	if entry and entry.Collider then
-		addShape(arena, entry.Collider, cf, s)
+		addShape(arena, entry.Collider, cf, s, baseY)
 	end
 end
 
@@ -1427,6 +1432,14 @@ local function obstacle(arena: Arena, name: string, x: number, z: number, yawDeg
 	local cf = CFrame.new(W(arena, x, z)) * yawCF(yawDeg)
 	local m = prop(arena.Model, name, cf, s, palette, opts)
 	kitCollider(arena, name, cf, s)
+	return m
+end
+
+-- The same on a raised floor: y is the floor height (arena-relative), the collider stands on it.
+local function obstacleAt(arena: Arena, name: string, x: number, z: number, y: number, yawDeg: number, s: number, palette: Pal?, opts: PropOpts?): Model
+	local cf = CFrame.new(W(arena, x, z, y)) * yawCF(yawDeg)
+	local m = prop(arena.Model, name, cf, s, palette, opts)
+	kitCollider(arena, name, cf, s, arena.Center.Y + y)
 	return m
 end
 
@@ -3968,7 +3981,25 @@ end
 
 ------------------------------------------------------------------------------------------
 
+-- The helpers a separate map builder needs (CliffwoodBuilder), by reference.
+MapBuilder.Kit = {
+	P = P, rgb = rgb, mix = mix, deco = deco, disc = disc, slab = slab, prop = prop, tag = tag,
+	W = W, yawCF = yawCF, UPRIGHT = UPRIGHT, kitEntry = kitEntry, keepout = keepout,
+	circleCollider = circleCollider, boxCollider = boxCollider, obstacleAt = obstacleAt,
+	pointLight = pointLight, materialNamed = materialNamed,
+	ForestPine = FOREST_PINE, ForestRound = FOREST_ROUND, TorchFlame = TORCH_FLAME, TorchFire = TORCH_FIRE,
+	Dress = DRESS,
+	Seed = function(arena: Arena): number
+		return (SEEDS[arena.Name] or SEEDS.Forest) + (arena.Variant or 0) * 7919
+	end,
+}
+
+local function buildCliffwood(arena: Arena)
+	require(script.Parent.CliffwoodBuilder).Build(arena, MapBuilder.Kit)
+end
+
 local BUILDERS: { [string]: (Arena) -> () } = {
+	Cliffwood = buildCliffwood,
 	Forest = buildForest,
 	Ruins = buildRuins,
 	Swamp = buildSwamp,
@@ -4148,7 +4179,7 @@ function MapBuilder.FindPortalSpot(arena: Arena, rand: Random, avoid: Vector3?):
 					far = dx * dx + dz * dz >= avoidDist * avoidDist
 				end
 				if far then
-					return W(arena, x, z)
+					return W(arena, x, z, arena.FloorAt and arena.FloorAt(x, z) or nil)
 				end
 			end
 		end
@@ -4349,7 +4380,7 @@ function MapBuilder.FindOpenSpot(arena: Arena, rand: Random, opts: SpotOpts): Ve
 					end
 				end
 				if ok then
-					return W(arena, x, z)
+					return W(arena, x, z, arena.FloorAt and arena.FloorAt(x, z) or nil)
 				end
 			end
 		end
