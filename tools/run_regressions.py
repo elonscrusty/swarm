@@ -39,7 +39,9 @@ def main():
     checks += [("accessibility-sim", [])]
     checks += [("daily-quests-regression", []), ("comeback-regression", ["headless=off"])] + [("layout", ["meta", d, "screen=" + s]) for d in ("iphone", "phone-portrait", "pc") for s in ("Quests", "Comeback")]  # DailyQuests + ComebackGift (docs/next)
     checks += [("bugreport-plus-regression", [])]  # BugReportPlus: snapshot, filter, 3/hour, DEV-only inbox (live rules)
-    checks += [("starter-bundle-regression", []), ("group-bonus-regression", []), ("invite-regression", [])] + [("layout", ["social", d, "screen=" + s]) for d in ("iphone", "phone-portrait", "pc") for s in ("Home", "Starter", "Group", "Invite", "Store", "More")]  # StarterBundle / GroupBonus / InviteRewards (docs/next)
+    # StarterBundle / GroupBonus / InviteRewards (docs/next) are held by the owner (switches off): their
+    # logic regressions and the social Home card check need the switch on, so they are left out until release
+    checks += [("layout", ["social", d, "screen=" + s]) for d in ("iphone", "phone-portrait", "pc") for s in ("Starter", "Group", "Invite", "Store", "More")]
     checks += [("uistate", [])]
     checks += [("home-board-regression", [])]
     checks += [("layout", ["menu", d, "board=" + b]) for d in ("iphone", "phone-portrait") for b in ("empty", "error", "out")]
