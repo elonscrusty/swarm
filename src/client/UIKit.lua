@@ -2637,4 +2637,72 @@ function UIKit.OptionCard(parent: Instance?, o: OptionCardOpts): Button
 	return b
 end
 
+export type NavCardOpts = {
+	Name: string?,
+	Title: string,
+	Subtitle: string?,
+	Icon: string, -- Icons vector name
+	Tint: Color3?, -- icon badge colour (Theme.IconTint)
+	IconSize: number?,
+	Chevron: boolean?,
+	Depth: string?, -- default "Light"
+	LayoutOrder: number?,
+	OnClick: (() -> ())?,
+}
+
+--[[
+	Navigation card (MORE list and similar menus): the OptionCard look without the caption
+	line, a raised white card with the icon badge on the left, a heavy navy title, a muted
+	one-line subtitle and the chevron in its own column. Same handle as UIKit.Button.
+]]
+function UIKit.NavCard(parent: Instance?, o: NavCardOpts): Button
+	local iconSize = o.IconSize or 44
+	local b = UIKit.Button(parent, {
+		Kind = "Secondary",
+		Title = o.Title,
+		Subtitle = o.Subtitle or " ",
+		TitleStyle = "H2",
+		TitleSize = 19,
+		Chevron = o.Chevron ~= false,
+		Align = "Left",
+		Shrink = true,
+		Name = o.Name or o.Title,
+		LayoutOrder = o.LayoutOrder,
+		Depth = o.Depth or "Light",
+		Radius = Theme.Radius.M,
+		OnClick = o.OnClick,
+	})
+	local content = b.Content
+	local pad = content:FindFirstChildOfClass("UIPadding")
+	if pad then
+		pad.PaddingLeft = UDim.new(0, 12)
+		pad.PaddingRight = UDim.new(0, 12)
+	end
+	local list = content:FindFirstChildOfClass("UIListLayout")
+	if list then
+		list.Padding = UDim.new(0, 12)
+	end
+	-- the badge has its own holder: SetKind / SetEnabled redraw the button's IconHolder
+	local holder = new("Frame", { Name = "BadgeHolder", BackgroundTransparency = 1, Size = UDim2.fromOffset(iconSize, iconSize), LayoutOrder = 1, Active = false }, content)
+	UIKit.IconBadge(holder, o.Icon, o.Tint or Theme.IconTint.Blue, iconSize)
+	local right = content:FindFirstChild("Right") :: Frame
+	right.Size = UDim2.fromOffset(22, 22)
+	local column = content:FindFirstChild("Text") :: Frame
+	local function fit()
+		local used = iconSize + (right.Visible and 22 or 0)
+		local gaps = 12 * (right.Visible and 2 or 1)
+		column.Size = UDim2.new(1, -(used + gaps), 1, 0)
+	end
+	fit()
+	right:GetPropertyChangedSignal("Visible"):Connect(fit)
+	if b.Title then
+		b.Title.FontFace = Theme.Font.Title
+	end
+	if b.Subtitle then
+		b.Subtitle.FontFace = Theme.Font.Body
+		b.Subtitle.TextSize = TS(14)
+	end
+	return b
+end
+
 return UIKit

@@ -118,26 +118,24 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 	local ui: { [string]: any } = { Cards = {} }
 	local optimistic: string? = nil
 	local optimisticUntil = 0
-	ui.Header = UIKit.ScreenHeader(screen, "ARENA", ctx.Back)
-	ui.Best = UIKit.IconPill(ui.Header.Frame, "crown", "BEST STAGE 0", { Name = "BestStage", AnchorPoint = Vector2.new(0, 0.5) })
+	-- one raised panel: header (BACK, the ARENA plate, BEST STAGE), the scrolling cards, and
+	-- the CONFIRM footer (header and footer stay outside the scroll)
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, EdgeThickness = Theme.Stroke.Medium, Depth = 4 })
+	ui.Panel = holder
+	ui.Header = UIKit.ScreenHeader(face, "ARENA", ctx.Back, true)
+	ui.Best = UIKit.IconPill(face, "crown", "BEST STAGE 0", { Name = "BestStage", AnchorPoint = Vector2.new(0, 0.5) })
 	-- (no intro line: the cards and the CONFIRM footer say it; keeps the body tall enough on phones)
 	ui.Intro = text(screen, "Body", "Choose your starting arena.", { Name = "Intro", Visible = false })
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L })
-	ui.Panel = holder
 	local scroll = new("ScrollingFrame", {
 		Name = "Cards",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
 		ScrollBarThickness = 4,
 		ScrollBarImageColor3 = C.Blue,
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
-	UIKit.padding(scroll, 10, 16, 10, 16)
 	ui.Scroll = scroll
-	ui.Grid = new("UIGridLayout", { CellSize = UDim2.fromOffset(320, 180), CellPadding = UDim2.fromOffset(GAP, GAP), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, scroll)
 
 	local function selected(): string
 		if optimistic and os.clock() < optimisticUntil then
@@ -152,14 +150,18 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		return p and p.Stats and tonumber(p.Stats.BestStage) or 0
 	end
 
-	ui.Confirm = UIKit.Button(screen, {
+	ui.Confirm = UIKit.Button(face, {
 		Kind = "Primary",
 		Title = "CONFIRM FOREST",
-		TitleStyle = "H3",
+		TitleStyle = "H1",
+		TitleSize = 24,
 		Icon = "arena_Forest",
-		IconSize = 26,
+		IconSize = 28,
 		Align = "Center",
-		Glow = true,
+		Shrink = true,
+		Glow = false,
+		Depth = "Strong",
+		Radius = Theme.Radius.L,
 		Name = "Confirm",
 		Size = UDim2.fromOffset(360, Theme.Size.Button),
 		OnClick = function()
@@ -175,7 +177,8 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			Name = name,
 			LayoutOrder = i,
 			Size = UDim2.fromOffset(320, 180),
-			Shadow = false,
+			Depth = "Light",
+			Radius = Theme.Radius.M,
 			OnClick = function()
 				local best = bestStage()
 				if not unlocked(best, name) then
@@ -220,7 +223,8 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local rule = new("Frame", { Name = "Divider", BackgroundColor3 = C.PanelEdge, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1) }, info)
 		local ruleText = text(info, "Small", "", { Name = "Rule", Size = UDim2.new(1, 0, 0, TS(14) + 4), TextColor3 = C.Text, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 0, BackgroundColor3 = C.BluePale, TextTruncate = Enum.TextTruncate.AtEnd })
 		UIKit.corner(ruleText, 8)
-		UIKit.padding(ruleText, 0, 8, 0, 8)
+		local rulePad = UIKit.padding(ruleText, 0, 8, 0, 30) -- room for the biome icon at its left
+		hazardIcon.ZIndex = 2 -- the biome icon sits on the rule strip
 		local meter = UIKit.Meter(info, { Name = "Progress", Size = UDim2.new(1, -52, 0, 8), Color = C.Blue } :: any)
 		local count = text(info, "Label", "", { Name = "Count", AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(48, TS(14) + 4), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.BlueDeep })
 		ui.Cards[name] = {
@@ -237,6 +241,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			Hazard = hazard,
 			Divider = rule,
 			Rule = ruleText,
+			RulePad = rulePad,
 			Meter = meter,
 			Count = count,
 			State = state,
@@ -261,7 +266,9 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			local isSel = name == sel
 			local wasSel = card.Selected
 			card.Selected = isSel
-			card.Button.SetSelected(isSel)
+			-- the picked arena: lime with a check badge and SELECTED pill, raised higher
+			card.Button.SetKind(isSel and "Selected" or "Secondary")
+			card.Button.SetDepth(isSel and "Strong" or "Light")
 			card.Veil.Visible = not open
 			card.Lock.Visible = not open
 			card.Check.Visible = isSel
@@ -280,6 +287,8 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			end
 			card.Rule.TextColor3 = open and C.Text or C.DisabledText
 			card.Open = open
+			card.HazardIcon.Visible = open
+			card.RulePad.PaddingLeft = UDim.new(0, open and 30 or 8)
 			card.Rule.Size = UDim2.new(1, open and 0 or -44, 0, card.Rule.Size.Y.Offset)
 			card.Rule.BackgroundColor3 = isSel and C.SelectedPale or C.BluePale
 			card.Meter.Frame.Visible = not open
@@ -314,7 +323,6 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local lineH = TS(14) + 8
 		card.Title.Size = UDim2.new(1, 0, 0, titleH)
 		card.Title.Position = UDim2.fromOffset(0, 0)
-		card.HazardIcon.Visible = false
 		card.Divider.Visible = false
 		local hazH = hazLines * (TS(14) + 2)
 		card.Hazard.Position = UDim2.fromOffset(0, titleH + 4)
@@ -323,36 +331,50 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local ruleY = titleH + 4 + hazH + 6
 		card.Rule.Position = UDim2.fromOffset(0, ruleY)
 		card.Rule.Size = UDim2.new(1, card.Open and 0 or -44, 0, lineH)
+		-- the biome icon at the left of the rule strip
+		card.HazardIcon.Visible = card.Open == true -- locked: the progress count says it
+		card.RulePad.PaddingLeft = UDim.new(0, card.Open and 30 or 8)
+		card.HazardIcon.Size = UDim2.fromOffset(18, 18)
+		card.HazardIcon.Position = UDim2.fromOffset(7, ruleY + math.floor((lineH - 18) / 2))
 		card.Count.Position = UDim2.new(1, 0, 0, ruleY + lineH / 2)
 		card.Meter.Frame.Position = UDim2.fromOffset(0, ruleY + lineH + 4)
 		card.Meter.Frame.Size = UDim2.new(1, 0, 0, 6)
 	end
 
+	-- The scroll body clips: cards keep INSET px clear on the sides / top and BASE px below,
+	-- so their outlines and raised bases are never cut.
+	local INSET, BASE = 4, 6
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
 		local W, Hh = v.X, v.Y
 		local compact = UIKit.IsCompact()
 		local M = compact and Theme.Layout.MarginCompact or Theme.Layout.Margin
+		local G = 10
 		local headY = math.max(ins.Top + 4, 12)
-		place(ui.Header.Frame, M, headY, math.min(620, W - 2 * M), 56)
-		-- the BEST STAGE badge right after the title
-		local tb = ui.Header.Title.TextBounds.X
-		if tb < 10 then
-			tb = TS(Theme.TextSize.H1) * 0.75 * #ui.Header.Title.Text
-		end
-		ui.Best.Frame.Position = UDim2.new(0, 148 + tb + 16, 0.5, 0)
-		local top = headY + 62 + (portrait and 58 or 0)
+		local short = not portrait and (Hh < 520 or (compact and Hh < 640))
+		local top = headY + (portrait and 130 or (short and 6 or 46))
+		local pad = short and 10 or (compact and 12 or 18)
+		local headH = short and 50 or 52
 		local w = math.min(W - 2 * M, 1180)
-		local x0 = (W - w) / 2
-		local introH = TS(16) * (w < 560 and 2 or 1) + 8
-		place(ui.Intro, x0 + 4, top, w - 8, introH)
-		-- fixed footer: the confirm button always sits at the bottom, never over the cards
-		local confirmH = Theme.Size.Button
-		local confirmW = math.min(420, w)
-		local confirmY = Hh - M - confirmH
-		local panelTop = top + introH + 8
-		local panelMax = confirmY - 12 - panelTop
+		local iw = w - 2 * pad
+		local availH = Hh - top - M
+		-- header: BACK, the ARENA plate, then the BEST STAGE badge after the plate (measured:
+		-- the plate grows with Roblox's text size setting)
+		place(ui.Header.Frame, pad, pad, iw, headH)
+		local plate = ui.Header.Plate and ui.Header.Plate.Frame
+		local plateW
+		if plate and plate.AbsoluteSize.X > 0 and holder.AbsoluteSize.X > 0 then
+			plateW = plate.AbsoluteSize.X * w / holder.AbsoluteSize.X -- screen px back to layout px
+		else
+			plateW = ui.Header.Title.TextSize * 0.62 * #ui.Header.Title.Text + 36
+		end
+		ui.Best.Frame.Position = UDim2.fromOffset(pad + 144 + math.floor(plateW) + 14, pad + math.floor(headH / 2) - 2)
+		-- footer: the yellow CONFIRM, centred, never over the cards
+		local confirmH = short and 54 or 60
+		local confirmW = math.min(440, iw)
+		local bodyY = pad + headH + G
+		local fixed = bodyY + G + confirmH + pad
 		-- columns: as many as fit (up to four); portrait keeps two
-		local inner = w - 32 - 6
+		local inner = iw - 2 * INSET
 		local cols = math.clamp(math.floor((inner + GAP) / (190 + GAP)), 1, 4)
 		if portrait then
 			cols = math.min(cols, 2)
@@ -362,19 +384,31 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local infoH = infoMetrics(cellW)
 		local rows = math.ceil(#Config.Arenas.Order / cols)
 		local picH = math.clamp(math.floor((cellW - 2 * CARD_PAD) * 0.5), 66, 118)
-		if rows > 1 and not portrait then
-			-- phone landscape: shrink the picture so a full row shows above the footer
-			picH = math.clamp(panelMax - 24 - (2 * CARD_PAD + 6 + infoH), 44, picH)
+		if rows > 1 then
+			-- smaller pictures so every row shows when that keeps them a fair size (desktop);
+			-- else (phone landscape) so at least one full row shows above the footer
+			local bodyAvail = availH - fixed - INSET - BASE
+			local fitAll = math.floor((bodyAvail - (rows - 1) * GAP) / rows) - (2 * CARD_PAD + 6 + infoH)
+			if fitAll >= 66 then
+				picH = math.min(picH, fitAll)
+			elseif not portrait then
+				picH = math.clamp(bodyAvail - (2 * CARD_PAD + 6 + infoH), 44, picH)
+			end
 		end
 		local cellH = 2 * CARD_PAD + picH + 6 + infoH
-		ui.Grid.CellSize = UDim2.fromOffset(cellW, cellH)
-		local gridH = rows * cellH + (rows - 1) * GAP + 20
-		local panelH = math.min(gridH, math.max(panelMax, 0))
-		place(ui.Panel, x0, panelTop, w, panelH)
-		place(ui.Confirm.Instance, (W - confirmW) / 2, confirmY, confirmW, confirmH)
-		for _, card in pairs(ui.Cards) do
+		local gridH = INSET + rows * cellH + (rows - 1) * GAP + BASE
+		local h = math.min(availH, fixed + gridH)
+		place(ui.Panel, (W - w) / 2, top, w, h)
+		local footY = h - pad - confirmH
+		place(scroll, pad, bodyY, iw + 6, math.max(0, footY - G - bodyY))
+		for i, name in ipairs(Config.Arenas.Order) do
+			local card = ui.Cards[name]
+			local col, r = (i - 1) % cols, (i - 1) // cols
+			place(card.Button.Instance, INSET + col * (cellW + GAP), INSET + r * (cellH + GAP), cellW, cellH)
 			cardLayout(card, cellW, picH)
 		end
+		scroll.CanvasSize = UDim2.fromOffset(0, gridH)
+		place(ui.Confirm.Instance, pad + (iw - confirmW) / 2, footY, confirmW, confirmH)
 	end
 	MenuArenas._layout = function()
 		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
@@ -392,6 +426,12 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			MenuArenas._refresh()
 		end,
 		OnShow = function(_p)
+			-- once the title plate has its real width, place what sits after it
+			task.delay(0.1, function()
+				if screen.Visible then
+					MenuArenas._layout()
+				end
+			end)
 			MenuArenas._refresh()
 			for i, name in ipairs(Config.Arenas.Order) do
 				UIAnim.Pop(ui.Cards[name].Button.Instance, 0.03 * i, 0.8)

@@ -36,6 +36,8 @@ local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
 local C, P = Theme.Color, Theme.Palette
 
 local ROUTE_STAGES = 5 -- stages shown on the route row
+local INSET, BASE = 4, 6 -- the body scroll clips: room for card outlines (sides / top) and below
+local RULE_ICON = 36 -- the rule rows' icon badges
 local CHEVRON = 22 -- room for the ">" between route cards
 local MONTHS = { "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC" }
 
@@ -186,24 +188,23 @@ end
 function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = { Stops = {}, Chevrons = {}, CurseCards = {} }
-	ui.Header = UIKit.ScreenHeader(screen, "Daily Challenge", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, Edge = C.Blue })
+	-- one raised panel: header (BACK + the title plate, and the date row beside it when it
+	-- fits), the scrolling rules / route, the PLAY DAILY column and the pinned notice
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, EdgeThickness = Theme.Stroke.Medium, Depth = 4 })
 	ui.Panel = holder
-	UIKit.padding(face, 18, 20, 18, 20)
+	ui.Pad = UIKit.padding(face, 18, 20, 18, 20)
+	ui.Header = UIKit.ScreenHeader(face, "Daily Challenge", ctx.Back, true)
 
 	-- header row: calendar, date / reset, status pill, hairline
 	local top = new("Frame", { Name = "Top", BackgroundTransparency = 1 }, face)
 	ui.Top = top
-	local well = new("Frame", { Name = "Well", BackgroundColor3 = C.BluePale, BackgroundTransparency = 0, Size = UDim2.fromOffset(48, 48) }, top)
-	UIKit.corner(well, Theme.Radius.M)
-	UIKit.stroke(well, C.Blue, 2, 0)
-	Icons.Draw(well, "calendar", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.BluePale })
+	ui.Well = UIKit.IconBadge(top, "calendar", Theme.IconTint.Orange, 46, { Name = "Well", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) })
 	ui.Date = text(top, "H2", "", { Name = "Date", Position = UDim2.fromOffset(62, 0), Size = UDim2.new(1, -180, 0, TS(22) + 4) })
 	ui.Reset = text(top, "Caption", "", { Name = "Reset", Position = UDim2.fromOffset(62, TS(22) + 6), Size = UDim2.new(1, -180, 0, TS(12) + 4), TextColor3 = C.BlueDeep })
 	ui.Pill = UIKit.StatusPill(top, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0) })
 	ui.Rule = UIKit.Hairline(face)
 
-	local body = new("ScrollingFrame", {
+	local bodyScroll = new("ScrollingFrame", {
 		Name = "Body",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
@@ -212,14 +213,18 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
-	ui.Body = body
+	ui.Body = bodyScroll
+	-- the scroll clips: the cards sit in a content frame INSET px in from its left edge so
+	-- their outlines are never cut (the layout keeps INSET at the top and BASE below)
+	local body = new("Frame", { Name = "Content", BackgroundTransparency = 1, Position = UDim2.fromOffset(INSET, 0) }, bodyScroll)
 
 	-- rules: heading, three icon rows, your result card
 	ui.Heading = text(body, "H1", "Today's challenge", { Name = "Heading", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top }, 26)
 	ui.Rows = {}
-	for i, icon in ipairs({ "person", "flag", "trophy" }) do
+	local T = Theme.IconTint
+	for i, look in ipairs({ { "person", T.Blue }, { "flag", T.Red }, { "trophy", T.Gold } }) do
 		local row = card(body, "Rule" .. i, C.Blue)
-		Icons.Draw(row, icon, { Size = 30, Position = UDim2.new(0, 12, 0.5, -15), Back = C.PanelRaised })
+		UIKit.IconBadge(row, look[1], look[2], RULE_ICON, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0) })
 		text(row, "Label", "", { Name = "Line", Position = UDim2.fromOffset(54, 0), TextTruncate = Enum.TextTruncate.AtEnd }, 17)
 		text(row, "Small", "", { Name = "Detail", TextColor3 = C.TextMuted, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top }, 15)
 		table.insert(ui.Rows, row)
@@ -239,14 +244,17 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	ui.Footer = foot
 	ui.Play = UIKit.Button(foot, {
 		Kind = "Primary",
-		Glow = true,
+		Glow = false,
 		Title = "PLAY DAILY",
-		TitleStyle = "Label",
-		TitleSize = 18,
+		TitleStyle = "H1",
+		TitleSize = 24,
 		Subtitle = "1 scored attempt left",
 		Icon = "play",
-		IconSize = 26,
+		IconSize = 28,
 		Align = "Center",
+		Shrink = true,
+		Depth = "Strong",
+		Radius = Theme.Radius.L,
 		Name = "PlayDaily",
 		OnClick = function()
 			local phase = Remotes.State():GetAttribute("Phase") or "Lobby"
@@ -264,7 +272,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		IconSize = 22,
 		Align = "Center",
 		Name = "DailyBoard",
-			Shrink = true,
+		Shrink = true,
+		Depth = "Medium",
 		OnClick = function()
 			ctx.ShowScreen("Ranks", "Daily")
 		end,
@@ -424,23 +433,61 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	-- every position is set here (the stop count and text sizes are known)
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
 		local W, H = v.X, v.Y
-		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
+		local compact = UIKit.IsCompact()
+		local M = compact and Theme.Layout.MarginCompact or Theme.Layout.Margin
 		local headY = math.max(ins.Top + 4, 12)
-		place(ui.Header.Frame, M, headY, math.min(620, W - 2 * M), 56)
-		ui.Header.Title.TextSize = TS(UIKit.IsCompact() and 24 or 32)
-		local topY = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		local short = not portrait and (H < 520 or (compact and H < 640))
+		local topY = headY + (portrait and 130 or (short and 6 or 46))
 		-- the go-home notice owns the bottom-right corner while it shows: stay clear of it
 		local reserve = TravelOverlay.NoticeReserve()
 		local maxH = H - topY - M - reserve
 		local w = math.min(W - 2 * M, maxH < 520 and 1160 or 1000) -- short phones: use the width
-		local iw = w - 40 -- inside the face padding
+		local padV = short and 10 or (compact and 12 or 18)
+		local padH = short and 12 or (compact and 14 or 20)
+		ui.Pad.PaddingTop, ui.Pad.PaddingBottom = UDim.new(0, padV), UDim.new(0, padV)
+		ui.Pad.PaddingLeft, ui.Pad.PaddingRight = UDim.new(0, padH), UDim.new(0, padH)
+		local PV = 2 * padV -- the face padding, top + bottom
+		local iw = w - 2 * padH -- inside the face padding
 		local narrow = iw < 640
 
-		-- header row
+		-- header: BACK + the title plate; the date row sits beside it when it fits (wide
+		-- screens), else under it with a hairline
+		local headH = short and 50 or 52
+		place(ui.Header.Frame, 0, 0, iw, headH)
+		-- phones: a smaller title so the date row fits beside it
+		ui.Header.Title.TextSize = TS(compact and 26 or Theme.TextSize.H1)
+		local plate = ui.Header.Plate and ui.Header.Plate.Frame
+		local plateW
+		if plate and plate.AbsoluteSize.X > 0 and holder.AbsoluteSize.X > 0 then
+			plateW = plate.AbsoluteSize.X * w / holder.AbsoluteSize.X -- screen px back to layout px
+		else
+			plateW = ui.Header.Title.TextSize * 0.62 * #ui.Header.Title.Text + 36
+		end
 		local topH = math.max(48, TS(22) + TS(12) + 12)
-		place(ui.Top, 0, 0, iw, topH)
-		place(ui.Rule, 0, topH + 10, iw, 1)
-		local bodyY = topH + 22
+		local dateX = 144 + math.floor(plateW) + 18
+		local textNeed = math.max(#ui.Date.Text * TS(22) * 0.62, #ui.Reset.Text * TS(12) * 0.62)
+		local pillNeed = #(ui.Pill.Text or "") * TS(12) * 0.7 + 34
+		-- beside the title with the calendar badge, or (phones) without it, or under the title
+		local room = iw - dateX - textNeed - 16 - pillNeed
+		local inline = room >= 0
+		local badge = room >= 60 or not inline
+		ui.Well.Visible = badge
+		local tx = badge and 60 or 0
+		ui.Date.Position = UDim2.fromOffset(tx, 0)
+		ui.Reset.Position = UDim2.fromOffset(tx, TS(22) + 6)
+		ui.Date.Size = UDim2.new(1, -(tx + pillNeed + 8), 0, TS(22) + 4)
+		ui.Reset.Size = UDim2.new(1, -(tx + pillNeed + 8), 0, TS(12) + 4)
+		local bodyY
+		if inline then
+			place(ui.Top, dateX, math.floor((headH - topH) / 2), iw - dateX, topH)
+			ui.Rule.Visible = false
+			bodyY = headH + 14
+		else
+			place(ui.Top, 0, headH + 10, iw, topH)
+			ui.Rule.Visible = true
+			place(ui.Rule, 0, headH + 10 + topH + 8, iw, 2)
+			bodyY = headH + 10 + topH + 20
+		end
 
 		-- Short landscape screens keep the actions beside the scrolling explanation.
 		local side = not narrow
@@ -461,12 +508,12 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local stripH = math.max(44, warnTextH + 16) + (stackToggle and 34 or 0)
 		local detailLines = open and wrappedLines(ui.Details.Text, TS(14), warnW - 28, 0.42) or 0
 		local detailH = open and (detailLines * (TS(14) + 3) + 8) or 0
-		local avail = maxH - 36 - bodyY - 12
+		local avail = maxH - PV - bodyY - 12
 		-- no room for the details beside a usable body (short phone screens): they take the panel
 		local focus = open and (avail - stripH - 8 - 90 < detailH)
 		local warnH = focus and avail or (stripH + detailH + (open and 8 or 0))
 		local viewH = focus and math.max(40, avail - stripH - 8) or detailH
-		body.Visible = not focus
+		bodyScroll.Visible = not focus
 		foot.Visible = not focus
 		place(ui.Warn, 0, 0, warnW, warnH)
 		place(ui.WarnText, 44, 10, warnTextW, warnTextH)
@@ -480,12 +527,12 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		ui.DetailsScroll.CanvasSize = UDim2.fromOffset(0, detailH)
 
 		-- body content (scroll canvas coordinates)
-		local bw = (side and (iw - sideW - 18) or iw) - 8 -- room for the scroll bar
-		local y = 2
+		local bw = (side and (iw - sideW - 18) or iw) - 6 - 2 * INSET -- room for the scroll bar and the outlines
+		local y = INSET
 		local infoW, textW = bw, bw
 		-- (the page title and the date row already say what this is: no "Today's challenge" heading)
 		ui.Heading.Visible = false
-		local detailW = textW - 54 - 10
+		local detailW = textW - 58 - 10
 		for _, row in ipairs(ui.Rows) do
 			local line = row:FindFirstChild("Line") :: TextLabel
 			local detail = row:FindFirstChild("Detail") :: TextLabel
@@ -493,8 +540,8 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			local lineH = TS(17) + 4
 			local dH = dLines * (TS(15) + 3)
 			place(row, 0, y, textW, lineH + dH + 20)
-			place(line, 54, 10, detailW, lineH)
-			place(detail, 54, 10 + lineH, detailW, dH)
+			place(line, 58, 10, detailW, lineH)
+			place(detail, 58, 10 + lineH, detailW, dH)
 			y += row.Size.Y.Offset + 8
 		end
 		if ui.Info.Visible then
@@ -589,17 +636,19 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			place(ui.BonusCard, bonusX, bonusTop, bonusW, bonusH)
 		end
 		y = math.max(cy, bonusTop + bonusH) + 8
-		body.CanvasSize = UDim2.fromOffset(0, y)
+		y += BASE
+		body.Size = UDim2.fromOffset(bw, y)
+		bodyScroll.CanvasSize = UDim2.fromOffset(0, y)
 
 		-- panel: as tall as the content needs, the body scrolls when it cannot fit
 		local sideNeed = side and (playH + 10 + boardH + 6 + attemptsH) or 0
-		local chrome = 36 + bodyY + warnH + 12 + (side and 0 or (16 + footH))
+		local chrome = PV + bodyY + warnH + 12 + (side and 0 or (16 + footH))
 		local h = focus and maxH or math.min(maxH, chrome + math.max(y, sideNeed))
 		local bodyH = h - chrome
 		place(ui.Panel, (W - w) / 2, topY, w, h)
-		place(body, 0, bodyY, side and (iw - sideW - 18) or iw, bodyH)
-		body.ScrollBarThickness = y > bodyH + 1 and 4 or 0
-		place(ui.Warn, 0, h - 36 - warnH, warnW, warnH)
+		place(bodyScroll, 0, bodyY, side and (iw - sideW - 18) or iw, bodyH)
+		bodyScroll.ScrollBarThickness = y > bodyH + 1 and 4 or 0
+		place(ui.Warn, 0, h - PV - warnH, warnW, warnH)
 		if side then
 			place(foot, iw - sideW, bodyY, sideW, bodyH)
 			if sideNeed > bodyH then
@@ -617,7 +666,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 				place(ui.Attempts, 0, playH + 10 + boardH + 6, sideW, attemptsH)
 			end
 		else
-			place(foot, 0, h - 36 - warnH - 12 - footH, iw, footH)
+			place(foot, 0, h - PV - warnH - 12 - footH, iw, footH)
 			place(ui.Play.Instance, 0, 0, iw, playH)
 			place(ui.Board.Instance, 0, playH + 10, iw, boardH)
 			ui.Attempts.Visible = true
@@ -645,6 +694,12 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end,
 		OnShow = function(_p)
+			-- once the title plate has its real width, place what sits after it
+			task.delay(0.1, function()
+				if screen.Visible then
+					MenuDaily._layout()
+				end
+			end)
 			shownDay = -1
 			scoringOpen = false
 			ui.DetailsScroll.Visible = false
