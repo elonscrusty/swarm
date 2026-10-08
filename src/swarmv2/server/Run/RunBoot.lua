@@ -19,6 +19,10 @@ function RunBoot.Init(ctx: any)
 	boot("Dash", function()
 		require(script.Parent.Dash).Init(ctx)
 	end)
+	-- last: it may start admitting players (match servers)
+	boot("RunEntry", function()
+		require(script.Parent.RunEntry).Init(ctx)
+	end)
 end
 
 return RunBoot

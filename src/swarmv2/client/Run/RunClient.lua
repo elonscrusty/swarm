@@ -19,6 +19,15 @@ function RunClient.Init()
 	boot("DashClient", function()
 		require(script.Parent.DashClient).Init()
 	end)
+	boot("EntryOverlay", function()
+		require(script.Parent.EntryOverlay).Init()
+	end)
+	boot("ClassAnimator", function()
+		require(script.Parent.ClassAnimator).Init()
+	end)
+	boot("ClassHud", function()
+		require(script.Parent.ClassHud).Init()
+	end)
 end
 
 return RunClient
