@@ -56,6 +56,23 @@ local DevTools = require(script.Parent.DevTools)
 local EncounterDirector = require(script.Parent.EncounterDirector) -- feature encounters: PlayerOut on death / portal / abandon
 
 local RunManager = {}
+
+-- SwarmV2 run entry (src/swarmv2/server/Run/RunEntry.lua): admitted class per player,
+-- and whether this server shows the old lobby hero (off on match servers / the new lobby).
+local admittedClass: { [Player]: string? } = {}
+local lobbySpawnSuppressed = false
+
+function RunManager.SetAdmittedClass(player: Player, classId: string?)
+	admittedClass[player] = classId
+end
+
+-- Set by SwarmV2 RunEntry: called once per player whose run is over (after the commit).
+RunManager.OnReturnHome = nil :: ((Player, string) -> ())?
+
+function RunManager.SetLobbySpawnSuppressed(on: boolean)
+	lobbySpawnSuppressed = on
+end
+
 local disconnected: { [number]: any } = {}
 
 local ctx
@@ -514,7 +531,7 @@ spawnCharacter = function(player: Player, cframe: CFrame, inLobby: boolean, runC
 				local m = spawnCharacter(player, cf, false, rp.CharacterId)
 				RunManager.AttachCharacter(rp, m)
 			else
-				spawnCharacter(player, lobbySpawnCFrame(), true)
+				if not lobbySpawnSuppressed then spawnCharacter(player, lobbySpawnCFrame(), true) end
 			end
 		end)
 	end)
@@ -939,6 +956,11 @@ local function newRunPlayer(player: Player)
 	local data = ctx.DataService.GetData(player)
 	-- the hero this run plays: the selected one, or the Weekly Challenge's lent hero (META)
 	local heroId = ctx.MetaService and ctx.MetaService.RunHero(mode, data) or data.SelectedCharacter
+	-- SwarmV2: the class admitted by MatchAdmission (never a client claim) wins
+	local admitted = admittedClass[player]
+	if admitted and CharacterData.Characters[admitted] then
+		heroId = admitted
+	end
 	-- the stat sheet's permanent levels: the account upgrades (Revive / Reroll / Skip) from
 	-- Meta, the selected hero's own stat track and its Signature (Hero Mastery); the old
 	-- shared stat levels left in Meta are never read
@@ -1113,6 +1135,67 @@ local function arenaForStarter(who: Player?, name: string): string
 	return Config.Arenas.Order[1]
 end
 
+-- One player's run setup (beginRun for each starter; AddLatePlayer for a late admitted
+-- arrival). `count` = team size used for team-only rules; `pos` overrides the spawn spot.
+local function setupRunPlayer(player: Player, i: number, count: number, arena: any, pos: Vector3?, team: { Player })
+	local rp = newRunPlayer(player)
+	if ctx.TeamPingService then ctx.TeamPingService.Assign(rp, i) end
+	if ctx.RunServers and ctx.RunServers.RegisterRun then ctx.RunServers.RegisterRun(rp) end
+	ctx.AchievementService.OnRunStart(player)
+	table.insert(runPlayers, rp)
+	byPlayer[player] = rp
+	local spawnPos = pos or (placeOnArena(arena, i, count) + Vector3.new(0, 3.5, 0))
+	local model = spawnCharacter(player, CFrame.new(spawnPos), false, rp.CharacterId)
+	RunManager.AttachCharacter(rp, model)
+
+	local character = CharacterData.Characters[rp.CharacterId] or CharacterData.Characters[CharacterData.Default]
+	ctx.LevelUpSystem.AddWeapon(rp, character.StartWeapon)
+	ctx.RunModifiers.SetupRunPlayer(rp) -- daily: scored / practice + the starting bonus
+	if ctx.MetaService then
+		ctx.MetaService.SetupRunPlayer(rp, mode, team) -- META: worn Sigils, the run's team
+	end
+	ctx.LevelUpSystem.RecomputeStats(rp)
+	setHP(rp, rp.Stats.MaxHP)
+	player:SetAttribute("CharacterId", rp.CharacterId) -- the HUD's team list shows the hero
+	player:SetAttribute("InRun", true)
+	player:SetAttribute("Alive", true)
+	player:SetAttribute("Level", 1)
+	player:SetAttribute("XP", 0)
+	player:SetAttribute("XPNeeded", rp.XPNeeded)
+	player:SetAttribute("Kills", 0)
+	player:SetAttribute("RunGold", 0)
+	-- chest / shrine prices are shown x this (gamepass owners earn and pay more)
+	player:SetAttribute("GoldMult", ctx.MonetizationService.GoldMultiplier(player))
+	ctx.ItemSystem.Send(rp)
+	local rules = reviveRules()
+	player:SetAttribute("PartnerRevivesLeft", rules and count > 1 and rules.PerRun or 0)
+	ctx.WeaponSystem.OnInventoryChanged(rp)
+	ctx.LevelUpSystem.SendInventory(rp)
+	RunManager.ApplyMovement(rp)
+	ctx.RunModifiers.AfterSetup(rp) -- daily Head Start: its level-ups
+
+	local data = ctx.DataService.GetData(player)
+	if data then
+		-- before Runs counts this run: an account's very first run gets the welcome
+		if firstRunWelcome(rp, data, count) then
+			rp.FirstRun = true
+			rp.XPNeeded = math.max(1, math.floor(tonumber((Config :: any).FirstRun.FirstLevelXP) or rp.XPNeeded))
+			player:SetAttribute("XPNeeded", rp.XPNeeded)
+			player:SetAttribute("FirstRunBoost", true)
+		end
+		-- the interactive first-run walkthrough (Walkthrough.lua; Solo only, once)
+		if ctx.Walkthrough then
+			ctx.Walkthrough.Consider(rp, data, count, mode)
+		end
+		-- funnel analytics: the account's first / second run really started (pcalled inside)
+		if ctx.Analytics then
+			ctx.Analytics.OnRunStart(player, tonumber(data.Stats.Runs) or 0)
+		end
+		data.Stats.Runs += 1
+	end
+	return byPlayer[player]
+end
+
 local function beginRun(here: boolean?)
 	local runStarter = starter -- whose curses the run uses (Solo / Daily: the only player)
 	local list = {}
@@ -1173,61 +1256,7 @@ local function beginRun(here: boolean?)
 	setPhase("Running")
 
 	for i, player in ipairs(list) do
-		local rp = newRunPlayer(player)
-		if ctx.TeamPingService then ctx.TeamPingService.Assign(rp, i) end
-		if ctx.RunServers and ctx.RunServers.RegisterRun then ctx.RunServers.RegisterRun(rp) end
-		ctx.AchievementService.OnRunStart(player)
-		table.insert(runPlayers, rp)
-		byPlayer[player] = rp
-		local pos = placeOnArena(arena, i, #list) + Vector3.new(0, 3.5, 0)
-		local model = spawnCharacter(player, CFrame.new(pos), false, rp.CharacterId)
-		RunManager.AttachCharacter(rp, model)
-
-		local character = CharacterData.Characters[rp.CharacterId] or CharacterData.Characters[CharacterData.Default]
-		ctx.LevelUpSystem.AddWeapon(rp, character.StartWeapon)
-		ctx.RunModifiers.SetupRunPlayer(rp) -- daily: scored / practice + the starting bonus
-		if ctx.MetaService then
-			ctx.MetaService.SetupRunPlayer(rp, mode, list) -- META: worn Sigils, the run's team
-		end
-		ctx.LevelUpSystem.RecomputeStats(rp)
-		setHP(rp, rp.Stats.MaxHP)
-		player:SetAttribute("CharacterId", rp.CharacterId) -- the HUD's team list shows the hero
-		player:SetAttribute("InRun", true)
-		player:SetAttribute("Alive", true)
-		player:SetAttribute("Level", 1)
-		player:SetAttribute("XP", 0)
-		player:SetAttribute("XPNeeded", rp.XPNeeded)
-		player:SetAttribute("Kills", 0)
-		player:SetAttribute("RunGold", 0)
-		-- chest / shrine prices are shown x this (gamepass owners earn and pay more)
-		player:SetAttribute("GoldMult", ctx.MonetizationService.GoldMultiplier(player))
-		ctx.ItemSystem.Send(rp)
-		local rules = reviveRules()
-		player:SetAttribute("PartnerRevivesLeft", rules and #list > 1 and rules.PerRun or 0)
-		ctx.WeaponSystem.OnInventoryChanged(rp)
-		ctx.LevelUpSystem.SendInventory(rp)
-		RunManager.ApplyMovement(rp)
-		ctx.RunModifiers.AfterSetup(rp) -- daily Head Start: its level-ups
-
-		local data = ctx.DataService.GetData(player)
-		if data then
-			-- before Runs counts this run: an account's very first run gets the welcome
-			if firstRunWelcome(rp, data, #list) then
-				rp.FirstRun = true
-				rp.XPNeeded = math.max(1, math.floor(tonumber((Config :: any).FirstRun.FirstLevelXP) or rp.XPNeeded))
-				player:SetAttribute("XPNeeded", rp.XPNeeded)
-				player:SetAttribute("FirstRunBoost", true)
-			end
-			-- the interactive first-run walkthrough (Walkthrough.lua; Solo only, once)
-			if ctx.Walkthrough then
-				ctx.Walkthrough.Consider(rp, data, #list, mode)
-			end
-			-- funnel analytics: the account's first / second run really started (pcalled inside)
-			if ctx.Analytics then
-				ctx.Analytics.OnRunStart(player, tonumber(data.Stats.Runs) or 0)
-			end
-			data.Stats.Runs += 1
-		end
+		setupRunPlayer(player, i, #list, arena, nil, list)
 	end
 	state:SetAttribute("Participants", #runPlayers)
 	ctx.RunModifiers.Publish()
@@ -1251,6 +1280,39 @@ local function beginRun(here: boolean?)
 	-- no portal objective notice here: before the reveal the portal can't be found yet (the
 	-- HUD pill says "Survive until the portal opens"); the reveal headline (StageUI, id
 	-- portal.reveal) carries the instruction and the real stage boss's name
+end
+
+--[[
+	SwarmV2 late arrival: an admitted player who reached this match server after the run
+	started (inside the arrival grace). Joins the running run once, next to a living
+	teammate (or the arena spawn), with the same setup as a starter. The run clock is not
+	reset. False when the run isn't running, the team is full or they're already in.
+]]
+function RunManager.AddLatePlayer(player: Player): boolean
+	if phase ~= "Running" or byPlayer[player] or not player.Parent or not ctx.DataService.GetData(player) then
+		return false
+	end
+	if #runPlayers >= math.max(maxPlayers(), 4) then
+		return false
+	end
+	local pos: Vector3? = nil
+	for _, other in ipairs(runPlayers) do
+		if other.Alive and other.Root then
+			pos = other.Root.Position + Vector3.new(4, 3.5, 0)
+			break
+		end
+	end
+	local arena = MapBuilder.GetArena()
+	if not pos and not arena then
+		return false
+	end
+	local team = { player }
+	for _, other in ipairs(runPlayers) do
+		table.insert(team, other.Player)
+	end
+	setupRunPlayer(player, #runPlayers + 1, #runPlayers + 1, arena, pos, team)
+	state:SetAttribute("Participants", #runPlayers)
+	return true
 end
 
 -- Who started the countdown (their curses are on show), or nil.
@@ -1555,9 +1617,14 @@ local function returnPlayerToLobby(rp, how: string?)
 	player:SetAttribute("DevGod", nil) -- invincibility lasts one run
 	if player.Parent then
 		resetPlayerAttributes(player)
-		spawnCharacter(player, lobbySpawnCFrame(), true)
+		if not lobbySpawnSuppressed then spawnCharacter(player, lobbySpawnCFrame(), true) end
 		ctx.GoldSystem.SyncProfile(player)
-		if ctx.RunServers then
+		if RunManager.OnReturnHome then
+			-- SwarmV2: rewards are committed by now (rp.Committed); the entry module sends
+			-- the player back through MatchAdmission.ReturnToLobby
+			admittedClass[player] = nil
+			RunManager.OnReturnHome(player, how or "portal")
+		elseif ctx.RunServers then
 			ctx.RunServers.OnBackInLobby(player, how or "portal")
 		end
 	end
@@ -2695,7 +2762,7 @@ function RunManager.Start()
 		ctx.MonetizationService.RefreshAttributes(player)
 		if not RunManager.IsParticipant(player) then
 			resetPlayerAttributes(player)
-			spawnCharacter(player, lobbySpawnCFrame(), true)
+			if not lobbySpawnSuppressed then spawnCharacter(player, lobbySpawnCFrame(), true) end
 		end
 	end)
 end
