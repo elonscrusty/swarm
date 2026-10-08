@@ -45,6 +45,7 @@ local EnemyRenderer = require(script.Parent.EnemyRenderer)
 local CameraController = require(script.Parent.CameraController)
 local Occlusion = require(script.Parent.Occlusion)
 local CombatFx = require(script.Parent.CombatFx)
+local GroundHeight = require(script.Parent.GroundHeight)
 
 local VFX = {}
 -- Tuning constants live in one table: a module chunk may hold at most 200 locals.
@@ -55,7 +56,16 @@ local FX = Theme.Fx
 
 local player = Players.LocalPlayer
 local PARK = CFrame.new(0, -150, 0) -- under the floor, above FallenPartsDestroyHeight
-local FLOOR_Y = Config.ArenaOrigin.Y
+-- The ground under the effect being drawn: the flat floor, or (maps with height) the
+-- GroundHeight at its x, z. Every function that draws on the floor sets it first (floorAt).
+local BASE_FLOOR: number = Config.ArenaOrigin.Y
+local FLOOR_Y = BASE_FLOOR
+local function floorAt(x: any, z: any): number
+	if type(x) == "number" and type(z) == "number" then
+		return GroundHeight.At(x, z)
+	end
+	return BASE_FLOOR
+end
 local GRAPHICS = Config.Graphics :: any
 local MAX_FX_PARTS: number = GRAPHICS.MaxEffectParts or 220
 local MAX_TRAILS: number = GRAPHICS.MaxTrails or 40
@@ -456,6 +466,7 @@ local function stepWaves(now: number)
 			local r = w.R0 + (w.R1 - w.R0) * ease(EASE_OUT3, u)
 			-- crisp while it travels, gone by the end
 			styleRing(w.Ring, r, w.W * (1 - 0.45 * u), w.Color, w.A0 + (1 - w.A0) * u * u, w.Dash)
+			FLOOR_Y = floorAt(w.X, w.Z)
 			placeRing(w.Ring, w.X, FLOOR_Y + 0.09, w.Z, w.Spin + w.Turn * u)
 		end
 	end
@@ -918,6 +929,7 @@ end
 
 -- Glass shards + a low splash where a bottle lands.
 local function shatter(pos: Vector3, color: Color3)
+	FLOOR_Y = floorAt(pos.X, pos.Z)
 	if not room(4) then
 		return
 	end
@@ -1037,6 +1049,7 @@ end
 
 -- Creature-tinted dust that swells and fades, plus a couple of chitin bits hopping away.
 local function deathPuff(x: number, z: number, dust: Color3, bitsColor: Color3, size: number, bits: number)
+	FLOOR_Y = floorAt(x, z)
 	local s = math.clamp(size, 1.6, 12)
 	local y = FLOOR_Y + math.min(s * 0.32, 2.2)
 	fx("Ball", dust, SMOOTH, CFrame.new(x, y, z), nil, Vector3.new(s * 0.55, s * 0.32, s * 0.55), Vector3.new(s * 1.25, s * 0.5, s * 1.25), 0.4, 1, 0.24 + s * 0.012, EASE_OUT3)
@@ -1230,6 +1243,7 @@ local function renderSwings(now: number)
 			table.insert(swingRigs, rig)
 		else
 			local a = swingAngle(sw.Sweep, math.min(t, swingEnd))
+			FLOOR_Y = floorAt(sw.X, sw.Z)
 			local pivot = CFrame.new(sw.X, FLOOR_Y + K.SWING_HEIGHT, sw.Z) * CFrame.Angles(0, sw.Yaw + a, 0)
 			bulk(rig.Carrier, pivot)
 			if t >= K.SWING_WINDUP and not sw.Trailing and t < swingEnd then
@@ -1275,6 +1289,7 @@ end
 
 -- Lightning: a thin pale bolt from the sky and a small flash on the ground.
 local function bolt(x: number, z: number, radius: number, tier: number?)
+	FLOOR_Y = floorAt(x, z)
 	local t = tonumber(tier) or 0
 	if type(x) ~= "number" or type(z) ~= "number" or not room(7, true) then
 		return
@@ -1288,6 +1303,7 @@ local function bolt(x: number, z: number, radius: number, tier: number?)
 end
 
 local function chain(x1: number, z1: number, x2: number, z2: number)
+	FLOOR_Y = floorAt(x1, z1)
 	if type(x1) ~= "number" or type(x2) ~= "number" then
 		return
 	end
@@ -1309,6 +1325,7 @@ K.MAX_POOLS = 24
 K.RIPPLE_PERIOD = 1.1
 
 local function pool(x: number, z: number, radius: number, seconds: number, evo: boolean)
+	FLOOR_Y = floorAt(x, z)
 	if type(x) ~= "number" or type(radius) ~= "number" or #poolList >= K.MAX_POOLS then
 		return
 	end
@@ -1376,6 +1393,7 @@ local function stepPools(now: number)
 				rp.Size = Vector3.new(0.05, rr * 2, rr * 2)
 				rp.Transparency = 1 - 0.4 * (1 - ph) * vis
 			end
+			FLOOR_Y = floorAt(pl.X, pl.Z)
 			for k, em in ipairs(pl.Embers) do
 				local ph = (t * 0.8 + k * 0.5) % 1
 				local a = k * math.pi + t * 0.7
@@ -1388,6 +1406,7 @@ end
 
 -- Warm amber burst: a small hot core, a dusty puff and a shock ring (never blinding).
 local function explosion(x: number, z: number, radius: number)
+	FLOOR_Y = floorAt(x, z)
 	if type(x) ~= "number" or type(radius) ~= "number" then
 		return
 	end
@@ -1416,6 +1435,7 @@ end
 
 -- Shockwave ring from the server (bomb, revive, boss): colour brought into the palette.
 local function ring(x: number, z: number, radius: number, color: Color3)
+	FLOOR_Y = floorAt(x, z)
 	if type(x) ~= "number" or type(radius) ~= "number" then
 		return
 	end
@@ -1444,6 +1464,9 @@ local function playerEvent(userId: number, kind: string)
 	local root = characterRoot(userId)
 	local isLocal = userId == player.UserId
 	local pos = root and root.Position
+	if pos then
+		FLOOR_Y = floorAt(pos.X, pos.Z)
+	end
 	if type(kind) == "string" and string.sub(kind, 1, 7) == "immune:" then
 		-- only the hero who hit the protected boss sees it
 		local id = tonumber(string.sub(kind, 8))
@@ -1505,7 +1528,7 @@ local function warningSound(w: { any })
 	if not x or not z then
 		return
 	end
-	local at = Vector3.new(x, FLOOR_Y + 1, z)
+	local at = Vector3.new(x, floorAt(x, z) + 1, z)
 	if kind == "circle" then
 		local style = w[7]
 		local seconds = tonumber(w[6]) or 0.7
@@ -1593,6 +1616,7 @@ local function freeCoin(c: Coin)
 end
 
 local function goldBurst(x: number, z: number, amount: number, userId: number)
+	FLOOR_Y = floorAt(x, z)
 	amount = math.max(1, math.floor(amount))
 	local count = math.clamp(amount, 1, 3)
 	local pile = amount >= 8
@@ -1648,7 +1672,7 @@ local function renderCoins(now: number)
 				local rp = root.Position
 				local side = Vector3.new(c.Land.X - rp.X, 0, c.Land.Z - rp.Z)
 				side = side.Magnitude > 0.1 and side.Unit or Vector3.new(1, 0, 0)
-				local to = Vector3.new(rp.X, FLOOR_Y + 0.9, rp.Z) + side * K.COIN_END_RING
+				local to = Vector3.new(rp.X, floorAt(rp.X, rp.Z) + 0.9, rp.Z) + side * K.COIN_END_RING
 				pos = c.Land:Lerp(to, k) + Vector3.new(0, math.sin(u * math.pi) * 1.5, 0)
 			else
 				pos = c.Land
@@ -1791,6 +1815,7 @@ K.ICE_DEEP = P.ice_300
 -- Frost Nova: a pale ice ring racing out to the burst's edge, a frosty floor flash and ice
 -- spikes thrown outward (Absolute Zero: a second, brighter ring and more spikes).
 local function nova(x: number, z: number, radius: number, evo: boolean)
+	FLOOR_Y = floorAt(x, z)
 	wave(x, z, radius * 0.15, radius, 0.45 + (evo and 0.15 or 0), K.ICE, 0.12, 0.34, true)
 	if evo then
 		wave(x, z, radius * 0.1, radius * 0.75, 0.3, FX.Holy, 0.25, 0.42, true)
@@ -1872,6 +1897,7 @@ local function colourFire(fp: FirePatch, stage: number)
 end
 
 local function firePatch(x: number, z: number, radius: number, life: number, evo: boolean)
+	FLOOR_Y = floorAt(x, z)
 	local reduced = ClientSettings.Reduced()
 	local cap = reduced and K.FIRE_MAX_PARTS * (GRAPHICS.ReducedEffectsBudget or 0.4) or K.FIRE_MAX_PARTS
 	while #firePatches > 0 and (#firePatches >= K.FIRE_MAX_PATCHES or K.fireParts + 5 > cap) do
@@ -1922,6 +1948,7 @@ end
 
 -- A spark lifting off the fire (one at a time, none with Reduced effects).
 local function fireEmber(fp: FirePatch, t: number)
+	FLOOR_Y = floorAt(fp.X, fp.Z)
 	if not room(1) then
 		return
 	end
@@ -1982,6 +2009,7 @@ local function stepFirePatches(now: number)
 			local left = math.clamp((fp.Life - t) / 0.5, 0, 1) -- 1 → 0 over the last half second
 			-- barely there: overlapping beds must never hide the floor
 			fp.Bed.Transparency = 1 - 0.09 * math.min(1, t / 0.2) * left
+			FLOOR_Y = floorAt(fp.X, fp.Z)
 			local origin = CFrame.new(fp.X, FLOOR_Y + 0.1, fp.Z) * face
 			for _, lick in ipairs(fp.Licks) do
 				local grow = math.clamp((t - lick.Delay) / 0.3, 0, 1)
@@ -2161,6 +2189,7 @@ function K.watchHealTicks()
 end
 
 local function totemPulseFx(x: number, z: number, radius: number, evo: boolean, healed: boolean)
+	FLOOR_Y = floorAt(x, z)
 	K.watchHealTicks()
 	-- friendly green-teal (never the red / amber of enemy warnings)
 	local color = evo and FX.Heal:Lerp(FX.Gold, 0.35) or FX.Heal:Lerp(P.ice_300, 0.3)
@@ -2190,6 +2219,7 @@ end
 
 -- A small gold burst (turret flak) or a crimson-gold one (Dragon Lance tips).
 local function smallBurst(x: number, z: number, radius: number, core: Color3, ringColor: Color3)
+	FLOOR_Y = floorAt(x, z)
 	if room(1) then
 		fx("Ball", core, SMOOTH, CFrame.new(x, FLOOR_Y + 1.2, z), nil, Vector3.one * 0.5, Vector3.one * radius * 0.55, 0.45, 1, 0.16, EASE_OUT)
 	end
@@ -2266,6 +2296,7 @@ end
 -- Earthsplitter: stone shards jutting out of the floor and a dust ring. kind 0/1 = a spike
 -- step (1 = Worldbreaker: basalt and lava), 2/3 = the Aftershock eruption (bigger).
 function K.quakeSpikes(x: number, z: number, r: number, kind: number)
+	FLOOR_Y = floorAt(x, z)
 	local big = kind >= 2
 	local evo = kind % 2 == 1
 	local spikes = big and 6 or 3
@@ -2285,6 +2316,7 @@ end
 
 -- Starfall: a shrinking amber ring and a faint disc where the meteor will land in `fall` s.
 function K.meteorMark(x: number, z: number, r: number, fall: number, evo: boolean)
+	FLOOR_Y = floorAt(x, z)
 	local col = evo and P.gold_300 or P.amber_300
 	wave(x, z, r * 1.05, r * 0.25, 0.3, col, 0.25, fall)
 	if room(1) then
@@ -2296,6 +2328,7 @@ end
 -- and clods of earth are thrown out as the roots (the planted model, ModelLibrary snare)
 -- burst up. No green disc: the earth patch and the roots carry the read.
 function K.vineSprout(x: number, z: number, r: number, evo: boolean)
+	FLOOR_Y = floorAt(x, z)
 	wave(x, z, r * 0.3, r * 1.05, 0.3, evo and P.moss_200 or P.moss_300, 0.25, 0.4, false, 0.55)
 	local n = ClientSettings.Reduced() and 2 or (evo and 5 or 4)
 	if room(n) then
@@ -2310,6 +2343,7 @@ end
 
 -- Vine Snare release: the roots let go and sink back into the earth with a little dust.
 function K.snareRelease(pos: Vector3, evo: boolean)
+	FLOOR_Y = floorAt(pos.X, pos.Z)
 	local n = ClientSettings.Reduced() and 0 or (evo and 4 or 3)
 	local r = evo and 4.4 or 2.8 -- the planted model's root ring (ModelLibrary SHOTS[51] / [52])
 	if n > 0 and room(n) then
@@ -2327,6 +2361,7 @@ end
 
 -- War Horn: three bands of sound racing out across the cone (a full ring = Titan's Roar).
 function K.hornBlast(x: number, z: number, yaw: number, range: number, halfDeg: number, evo: boolean)
+	FLOOR_Y = floorAt(x, z)
 	local col = evo and P.gold_300 or P.ivory_200
 	if halfDeg >= 180 then
 		wave(x, z, 1.5, range, 0.6, col, 0.2, 0.32)
@@ -2358,6 +2393,7 @@ function K.vortexOpen(x: number, z: number, r: number, evo: boolean)
 end
 
 function K.implosion(x: number, z: number, r: number, evo: boolean)
+	FLOOR_Y = floorAt(x, z)
 	local col = evo and P.fx_arcane or P.ivory_100
 	wave(x, z, r, 0.4, 0.5, col, 0.2, 0.25)
 	if room(1) then
@@ -2525,6 +2561,7 @@ function K.stepClouds(_dt: number, now: number)
 			continue
 		end
 		local x, z, r = kit.Pos.X, kit.Pos.Z, kit.R
+		FLOOR_Y = floorAt(x, z)
 		local t = now - kit.Born
 		local fading = fade < 1 or kit.Fade < 1
 		kit.Fade = fade
@@ -2604,7 +2641,7 @@ local function onWeaponFx(batch)
 		smallBurst(v[1], v[2], tonumber(v[3]) or 4, P.gold_200, P.crimson_300)
 	end)
 	each("sh", function(v)
-		sparkle(Vector3.new(v[1], FLOOR_Y + 1, v[2]), FX.Heal, 4, 0.7, 2.6, 0.5)
+		sparkle(Vector3.new(v[1], floorAt(v[1], v[2]) + 1, v[2]), FX.Heal, 4, 0.7, 2.6, 0.5)
 	end)
 	each("qk", function(v)
 		K.quakeSpikes(v[1], v[2], tonumber(v[3]) or 2, tonumber(v[4]) or 0)
@@ -2622,7 +2659,7 @@ local function onWeaponFx(batch)
 		K.hornBlast(v[1], v[2], tonumber(v[3]) or 0, tonumber(v[4]) or 9, tonumber(v[5]) or 55, v[6] == 1)
 	end)
 	each("wb", function(v)
-		sparkle(Vector3.new(v[1], FLOOR_Y + 2.5, v[2]), v[3] == 1 and FX.Gold or P.ivory_100, 5, 0.8, 1.2, 0.3)
+		sparkle(Vector3.new(v[1], floorAt(v[1], v[2]) + 2.5, v[2]), v[3] == 1 and FX.Gold or P.ivory_100, 5, 0.8, 1.2, 0.3)
 		if v[3] == 1 then
 			smallBurst(v[1], v[2], 4, FX.Gold, P.gold_300)
 		end
@@ -2780,6 +2817,7 @@ end
 K.GEM_POPS_NEAR = 2
 K.gemNearWindow, K.gemNearCount = 0, 0
 local function gemPop(pos: Vector3, kind: string, onHero: boolean?)
+	FLOOR_Y = floorAt(pos.X, pos.Z)
 	if popsThisFrame >= 5 or not room(6) then
 		return
 	end
@@ -2977,6 +3015,7 @@ local function renderGems(dt: number)
 			n = poseKit(kit, kind, base.X, floorY, base.Z, yaw, pop, n)
 			height = (dim[2] + dim[3]) * pop
 			-- the floor glow stays on the floor; a gem flying up to a player leaves it behind
+			FLOOR_Y = floorAt(base.X, base.Z)
 			local resting = base.Y <= FLOOR_Y + GEM_HEIGHT + 0.5
 			local wantHalo = (resting and not reduced) and 0.9 or 1
 			if kit.Halo.Transparency ~= wantHalo then
@@ -3345,6 +3384,7 @@ local function updateMarker(deco: Deco, root: BasePart, isLocal: boolean, alive:
 		end
 	end
 	local pos = root.Position
+	FLOOR_Y = floorAt(pos.X, pos.Z)
 	local y = FLOOR_Y + 0.07
 	if style == "down" then
 		styleRing(ringObj, 2.6, 0.2, P.crimson_300, math.floor((0.4 + 0.18 * math.sin(now * 5)) * 50 + 0.5) / 50)
@@ -3411,6 +3451,7 @@ local function updateAura(deco: Deco, root: BasePart, radius: number, evo: boole
 	deco.AuraShown = true
 	local color = evo and FX.Arcane or P.ivory_200
 	local pos = root.Position
+	FLOOR_Y = floorAt(pos.X, pos.Z)
 	local ringObj = deco.Aura :: Ring
 	styleRing(ringObj, radius, 0.16, color, 0.45, 0.62)
 	local spin = evo and -now * 0.8 or now * 0.3

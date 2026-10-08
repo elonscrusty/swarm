@@ -45,6 +45,7 @@ local ArtImage = require(script.Parent.ArtImage)
 local Hud = require(script.Parent.Hud)
 local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
+local GroundHeight = require(script.Parent.GroundHeight) -- ground under effects on maps with height
 
 local TeamUI = {}
 
@@ -487,7 +488,7 @@ end
 
 local function placeWorldRing(r: WorldRing, pos: Vector3, radius: number, progress: number)
 	-- above the dirt paths (their top is ~0.18 over the floor)
-	local y = Config.ArenaOrigin.Y + 0.26
+	local y = GroundHeight.At(pos.X, pos.Z) + 0.26
 	local n = #r.Segments
 	local arc = 2 * math.pi * radius / n
 	local lit = math.floor(progress * n + 0.001)

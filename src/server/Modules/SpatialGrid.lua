@@ -5,6 +5,10 @@
 
 	Items must have `Pos: Vector3` and `Radius: number` fields.
 	Cell tables are reused between frames so a rebuild allocates nothing.
+
+	Vertical band (maps with height, HeightGrid): while `grid.BandY` is set, QueryCircle and
+	Nearest skip items whose Pos.Y is more than `grid.Band` away from it. WeaponSystem sets
+	it around each weapon's hits and clears it after; nil (the default) = no filter.
 ]]
 
 local SpatialGrid = {}
@@ -20,6 +24,8 @@ function SpatialGrid.new(cellSize: number)
 	self.Cells = {} :: { [number]: { Item } }
 	self.Used = {} :: { number } -- keys of non-empty cells (for cheap clearing)
 	self.Count = 0
+	self.BandY = nil :: number?
+	self.Band = 7
 	return self
 end
 
@@ -85,15 +91,17 @@ function SpatialGrid:QueryCircle(x: number, z: number, r: number, out: { Item },
 	local size = self.CellSize
 	local reach = r + (pad or 6)
 	local n = 0
+	local bandY, band = self.BandY, self.Band
 	for cx = math.floor((x - reach) / size), math.floor((x + reach) / size) do
 		for cz = math.floor((z - reach) / size), math.floor((z + reach) / size) do
 			local cell = self.Cells[key(cx, cz)]
 			if cell then
 				for i = 1, #cell do
 					local item = cell[i]
-					local dx, dz = item.Pos.X - x, item.Pos.Z - z
+					local ip = item.Pos
+					local dx, dz = ip.X - x, ip.Z - z
 					local rr = r + item.Radius
-					if dx * dx + dz * dz <= rr * rr then
+					if dx * dx + dz * dz <= rr * rr and (bandY == nil or math.abs(ip.Y - bandY) <= band) then
 						n += 1
 						out[n] = item
 					end
@@ -132,6 +140,7 @@ function SpatialGrid:Nearest(x: number, z: number, maxRange: number, skip: ((any
 	local ccx, ccz = math.floor(x / size), math.floor(z / size)
 	local maxRing = math.ceil(maxRange / size) + 1
 	local best, bestD2 = nil, maxRange * maxRange
+	local bandY, band = self.BandY, self.Band
 	for ring = 0, maxRing do
 		for cx = ccx - ring, ccx + ring do
 			for cz = ccz - ring, ccz + ring do
@@ -141,7 +150,7 @@ function SpatialGrid:Nearest(x: number, z: number, maxRange: number, skip: ((any
 					if cell then
 						for i = 1, #cell do
 							local item = cell[i]
-							if not (skip and skip(item)) then
+							if not (skip and skip(item)) and (bandY == nil or math.abs(item.Pos.Y - bandY) <= band) then
 								local dx, dz = item.Pos.X - x, item.Pos.Z - z
 								local d2 = dx * dx + dz * dz
 								if d2 < bestD2 then

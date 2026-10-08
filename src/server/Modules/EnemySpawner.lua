@@ -36,6 +36,8 @@ local Fx = require(script.Parent.Fx)
 local DamageNumbers = require(script.Parent.DamageNumbers)
 local AffixSight = require(script.Parent.AffixSight) -- first-sight notice for elite affixes (AffixIcons)
 local BossAI = require(script.Parent.BossAI)
+local HeightGrid = require(script.Parent.HeightGrid)
+local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
 local BossData = require(game:GetService("ReplicatedStorage").Shared.BossData)
 
 local EnemySpawner = {}
@@ -128,11 +130,9 @@ local function liveCount(test: (any) -> boolean): number
 end
 EnemySpawner.LiveCount = liveCount
 
--- Clamps a ground point inside the fence.
+-- Clamps a ground point inside the fence (the arena's bounds; today's square without them).
 local function clampToArena(x: number, z: number, margin: number): (number, number)
-	local c = Config.ArenaOrigin
-	local h = Config.Arenas.Size / 2 - margin
-	return math.clamp(x, c.X - h, c.X + h), math.clamp(z, c.Z - h, c.Z + h)
+	return HeightGrid.ClampXZ(x, z, margin)
 end
 EnemySpawner.ClampToArena = clampToArena
 
@@ -154,10 +154,54 @@ end
 	clamped inside the fence. ArenaEdge: just inside the fence on the side nearest that
 	player. Points inside obstacles are retried.
 ]]
+--[[
+	With a height grid (HeightGrid.IsActive): a walkable spot connected to the player, at a
+	path distance of Nav.SpawnMinPath-SpawnMaxPath studs (the player's flow field). Before
+	the player's first field is ready, a walkable spot at that straight distance. The
+	closest-to-range connected spot found is the fallback.
+	TODO (camera yaw): prefer spots behind the player's camera once the client reports its
+	yaw (DESIGN.md section 3; a small rate-limited remote in SwarmV2Net.Run).
+]]
+local function gridSpawnPoint(rp, radius: number, angle: number?): Vector3?
+	local p = rp.Root.Position
+	local minD, maxD = Nav.SpawnMinPath, Nav.SpawnMaxPath
+	local hasField = HeightGrid.HasField(rp)
+	local fallback: Vector3? = nil
+	local fallbackGap = math.huge
+	for attempt = 1, Nav.SpawnTries do
+		local a = (angle and attempt == 1) and angle or rng:NextNumber(0, math.pi * 2)
+		-- path >= straight distance, so try a little closer than the minimum too
+		local r = rng:NextNumber(minD * 0.8, maxD)
+		local x, z = clampToArena(p.X + math.cos(a) * r, p.Z + math.sin(a) * r, 4)
+		if HeightGrid.IsWalkable(x, z) and not ctx.EnemyAI.IsBlocked(x, z, radius) then
+			local d
+			if hasField then
+				d = HeightGrid.PathDistance(rp, x, z)
+			else
+				local dx, dz = x - p.X, z - p.Z
+				d = math.sqrt(dx * dx + dz * dz)
+			end
+			if d >= minD and d <= maxD then
+				return Vector3.new(x, HeightGrid.GroundY(x, z), z)
+			elseif d < math.huge then
+				local gap = d < minD and minD - d or d - maxD
+				if gap < fallbackGap then
+					fallbackGap = gap
+					fallback = Vector3.new(x, HeightGrid.GroundY(x, z), z)
+				end
+			end
+		end
+	end
+	return fallback
+end
+
 function EnemySpawner.SpawnPoint(radius: number, angle: number?, around: any?): Vector3?
 	local rp = (around and around.Alive and around.Root) and around or randomAlivePlayer()
 	if not rp then
 		return nil
+	end
+	if HeightGrid.IsActive() then
+		return gridSpawnPoint(rp, radius, angle)
 	end
 	local p = rp.Root.Position
 	local c = Config.ArenaOrigin
@@ -306,7 +350,16 @@ function EnemySpawner.Spawn(typeId: string, position: Vector3, opts: { Elite: bo
 	e.Alive = true
 	e.Radius = def.Radius * sizeMult
 	e.Height = (def.FlyHeight or 0) + def.Size.Y * sizeMult / 2
-	e.Pos = Vector3.new(position.X, Config.ArenaOrigin.Y, position.Z)
+	-- on the ground (the caller's Y is ignored); a spot off the walkable ground moves to the
+	-- nearest walkable cell when there is one close by (HeightGrid)
+	local px, pz = position.X, position.Z
+	if not HeightGrid.IsWalkable(px, pz) then
+		local nx, nz = HeightGrid.NearestWalkable(px, pz, 4)
+		if nx and nz then
+			px, pz = nx, nz
+		end
+	end
+	e.Pos = Vector3.new(px, HeightGrid.GroundY(px, pz), pz)
 	e.HP = hp
 	e.MaxHP = hp
 	e.Speed = def.Speed * math.min(1 + tier * D.SpeedPerMinute, D.SpeedCap)
@@ -1330,8 +1383,9 @@ function EnemySpawner.Explode(e)
 	local scale = EnemySpawner.DamageScale(e)
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		if rp.Alive and rp.Root then
-			local d = (rp.Root.Position - e.Pos) * Vector3.new(1, 0, 1)
-			if d.Magnitude <= radius then
+			local rpos = rp.Root.Position
+			local d = (rpos - e.Pos) * Vector3.new(1, 0, 1)
+			if d.Magnitude <= radius and HeightGrid.InBand(HeightGrid.GroundY(rpos.X, rpos.Z), e.Pos.Y, Nav.ContactBand) then
 				ctx.RunManager.DamagePlayer(rp, ex.Damage * scale, (e.Def.DisplayName or e.Type) .. " explosion")
 			end
 		end

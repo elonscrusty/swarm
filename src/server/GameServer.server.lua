@@ -4,7 +4,7 @@
 	then drives all per-frame systems from ONE Heartbeat connection.
 
 	Frame order: RunManager (timer, deaths) → StageManager (portal, boss, surge, choice,
-	travel) → EnemySpawner (spawns) → EnemyAI (movement,
+	travel) → HeightGrid (flow fields) → EnemySpawner (spawns) → EnemyAI (movement,
 	contact, grid rebuild) → WeaponSystem (firing, projectiles, sync) → XPSystem (gems,
 	pickups) → ItemSystem (regen, shields, magnet pulses) → LootSystem (chest / shrine
 	holds, the guarded altar) → CaravanEvent (the Lost Caravan defence) → LevelUpSystem (auto-pick timers) → AchievementService (run
@@ -48,6 +48,7 @@ local ORDER = {
 	"MeshService",
 	"MapBuilder",
 	"ModelBuilder",
+	"HeightGrid", -- ground height + flow fields (flat fallback without NavGround parts)
 	"XPSystem",
 	"LevelUpSystem",
 	"EnemySpawner",
@@ -140,6 +141,7 @@ local STEPS = {
 	{ "RunManager", ctx.RunManager.Step },
 	{ "StageManager", ctx.StageManager.Step },
 	{ "Walkthrough", ctx.Walkthrough.Step }, -- before EnemySpawner: its wave hold applies this frame
+	{ "HeightGrid", ctx.HeightGrid.Step }, -- flow fields (one rebuild spread over frames)
 	{ "EnemySpawner", ctx.EnemySpawner.Step },
 	{ "EnemyAI", ctx.EnemyAI.Step },
 	{ "WeaponSystem", ctx.WeaponSystem.Step },

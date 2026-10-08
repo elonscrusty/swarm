@@ -20,6 +20,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local ClientSettings = require(script.Parent.ClientSettings)
 local EnemyRenderer = require(script.Parent.EnemyRenderer)
+local GroundHeight = require(script.Parent.GroundHeight) -- ground under effects on maps with height
 
 local HitFeel = {}
 
@@ -35,7 +36,7 @@ local TAU = math.pi * 2
 
 local folder: Folder? = nil
 local pool: { BasePart } = {}
-type Piece = { Part: BasePart, Start: number, Life: number, From: Vector3, Vel: Vector3, Spin: Vector3, Size: Vector3 }
+type Piece = { Part: BasePart, Start: number, Life: number, From: Vector3, Vel: Vector3, Spin: Vector3, Size: Vector3, Floor: number }
 local pieces: { Piece } = {}
 local spare: { Piece } = {}
 local tokens = 0
@@ -178,7 +179,8 @@ function HitFeel.Burst(x: number, z: number, color: Color3, size: number): numbe
 	local now = os.clock()
 	local r = math.clamp(size, 1.5, 12)
 	local chunk = math.clamp(r * 0.22, 0.35, 1.6)
-	local from = Vector3.new(x, FLOOR_Y + r * 0.45, z)
+	local floorY = GroundHeight.At(x, z)
+	local from = Vector3.new(x, floorY + r * 0.45, z)
 	local st = style
 	if st and typeof(st.Color) == "Color3" then
 		color = color:Lerp(st.Color, math.clamp(tonumber(st.Mix) or 0.7, 0, 1))
@@ -204,6 +206,7 @@ function HitFeel.Burst(x: number, z: number, color: Color3, size: number): numbe
 		pc.Vel = vel
 		pc.Spin = Vector3.new(math.random() * 14 - 7, math.random() * 14 - 7, math.random() * 14 - 7)
 		pc.Size = s
+		pc.Floor = floorY
 		pieces[#pieces + 1] = pc
 	end
 	stats.Bursts += 1
@@ -228,7 +231,7 @@ local function stepPieces(now: number)
 			spare[#spare + 1] = pc
 		else
 			local pos = pc.From + pc.Vel * t - Vector3.new(0, 0.5 * g * t * t, 0)
-			local floor = FLOOR_Y + pc.Size.Y * 0.5
+			local floor = (pc.Floor or FLOOR_Y) + pc.Size.Y * 0.5
 			local spin = pc.Spin * t
 			if pos.Y < floor then
 				-- landed: rests on the floor, stops tumbling

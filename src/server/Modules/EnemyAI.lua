@@ -45,6 +45,8 @@ local SpatialGrid = require(script.Parent.SpatialGrid)
 local Fx = require(script.Parent.Fx)
 local Hazards = require(script.Parent.Hazards)
 local BossAI = require(script.Parent.BossAI)
+local HeightGrid = require(script.Parent.HeightGrid)
+local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
 
 local EnemyAI = {}
 -- Weather (a snow storm): every walking enemy x this; 1 = normal.
@@ -171,6 +173,8 @@ end
 -- Living players' root positions, read once per frame (EnemyAI.Step) instead of once per
 -- enemy per use: rp -> position.
 local playerPos: { [any]: Vector3 } = {}
+-- Their ground height (HeightGrid; only filled while a height grid is active): rp -> Y.
+local playerGround: { [any]: number } = {}
 -- Players whose server-opened upgrade choice protects them this frame (the state that
 -- ChoiceProtectedUntil mirrors: rp.Offer while rp.Paused). Enemies pick someone else while
 -- anyone else is free (owner OK 2026-10-05, SEC-02b); if all are protected, nothing changes.
@@ -209,9 +213,9 @@ end
 -- footprints (obstacle grid cells around the ray) and the fence's boundary walls can be hit,
 -- so on open ground the raycast is skipped (most of a swarm, most of the time).
 local function obstacleAhead(pos: Vector3, dir: Vector3, reach: number): boolean
-	local c = Config.ArenaOrigin
-	local edge = Config.Arenas.Size / 2 - reach - 2
-	if math.abs(pos.X - c.X) > edge or math.abs(pos.Z - c.Z) > edge then
+	local minX, minZ, maxX, maxZ = HeightGrid.Bounds()
+	local m = reach + 2
+	if pos.X < minX + m or pos.X > maxX - m or pos.Z < minZ + m or pos.Z > maxZ - m then
 		return true -- near the fence
 	end
 	local half = reach / 2
@@ -226,12 +230,23 @@ local function think(e, runPlayers)
 		e.Sep = Vector3.zero
 		return
 	end
-	local to = (playerPos[target] - e.Pos) * FLAT
-	if to.Magnitude < 0.1 then
+	local tp = playerPos[target]
+	local to = (tp - e.Pos) * FLAT
+	local toDist = to.Magnitude
+	if toDist < 0.1 then
 		e.Dir = Vector3.zero
 		return
 	end
 	local desired = to.Unit
+	-- Height grid (terraces, ramps, a cave): close and on a steppable straight line, seek
+	-- directly; otherwise walk down the target's flow field (round a cliff to its ramp). No
+	-- field here (outside its radius, no grid): seek directly as on a flat arena.
+	if HeightGrid.IsActive() and not (toDist <= Nav.DirectSeekRange and HeightGrid.CanStep(e.Pos.X, e.Pos.Z, tp.X, tp.Z)) then
+		local flow = HeightGrid.FlowDir(target, e.Pos.X, e.Pos.Z)
+		if flow ~= Vector3.zero then
+			desired = flow
+		end
+	end
 
 	if e.Erratic > 0 then
 		local angle = math.sin(clock * 3 + e.Phase) * e.Erratic
@@ -352,7 +367,7 @@ local function behaveBurrow(e, dt: number, to: Vector3?, dist: number)
 			-- the circle shows where it bursts out; it holds still under it
 			e.SpeedOverride = 0
 			e.PinPos = e.Pos
-			local at = Vector3.new(e.Pos.X, Config.ArenaOrigin.Y, e.Pos.Z)
+			local at = HeightGrid.Ground(e.Pos)
 			Hazards.Strike(at, B.Radius, B.Warn, B.Damage * (e.DmgScale or 1), { Style = "burrow" })
 			setAct(e, "Surface", B.Warn)
 		end
@@ -431,7 +446,7 @@ local function nestSpots(e): { Vector3 }
 	local out = {}
 	for _, d in ipairs({ look, side }) do
 		local x, z = ctx.EnemySpawner.ClampToArena(e.Pos.X + d.X * r, e.Pos.Z + d.Z * r, 4)
-		table.insert(out, Vector3.new(x, Config.ArenaOrigin.Y, z))
+		table.insert(out, Vector3.new(x, HeightGrid.GroundY(x, z), z))
 	end
 	return out
 end
@@ -493,7 +508,7 @@ local function behaveStatic(e, dt: number)
 			for k = 1, count do
 				local a = k * math.pi * 2 / count + rng:NextNumber(0, 1)
 				local x, z = ctx.EnemySpawner.ClampToArena(e.Pos.X + math.cos(a) * 2.2, e.Pos.Z + math.sin(a) * 2.2, 4)
-				table.insert(spots, Vector3.new(x, Config.ArenaOrigin.Y, z))
+				table.insert(spots, Vector3.new(x, HeightGrid.GroundY(x, z), z))
 			end
 			Fx.Warn("pop", e.Pos.X, e.Pos.Z, 2, "hatch")
 			ctx.EnemySpawner.Despawn(e) -- hatched: the shell is gone (no reward)
@@ -520,7 +535,7 @@ end
 local function startWindupRanged(e, R, to: Vector3)
 	local t = e.Target
 	local p = t.Root.Position
-	local point = Vector3.new(p.X, Config.ArenaOrigin.Y, p.Z)
+	local point = HeightGrid.Ground(p)
 	e.GlobTarget = point
 	e.WarnId = Fx.Warn("circle", point.X, point.Z, R.Splash, R.Windup + R.Flight, "acid")
 	e.Face = to.Unit
@@ -679,7 +694,7 @@ local function behave(e, dt: number)
 				end
 				if #list < B.MaxPatches then
 					local at = e.Pos - e.Dir * e.Radius
-					table.insert(list, Hazards.Patch(Vector3.new(at.X, Config.ArenaOrigin.Y, at.Z), B.Radius + e.Radius * 0.3, B.Arm, B.Life, B.Tick, B.Damage * (e.DmgScale or 1)))
+					table.insert(list, Hazards.Patch(HeightGrid.Ground(at), B.Radius + e.Radius * 0.3, B.Arm, B.Life, B.Tick, B.Damage * (e.DmgScale or 1)))
 				end
 			end
 		end
@@ -700,11 +715,19 @@ function EnemyAI.Step(dt: number)
 	local active = ctx.EnemySpawner.Active
 	local runPlayers = ctx.RunManager.GetRunPlayers()
 	table.clear(playerPos)
+	table.clear(playerGround)
 	table.clear(protectedNow)
 	anyFree = false
+	-- a weapon band left set by a failed WeaponSystem step must not filter these queries
+	ctx.EnemySpawner.Grid.BandY = nil
+	local heights = HeightGrid.IsActive()
 	for _, rp in ipairs(runPlayers) do
 		if rp.Alive and rp.Root then
-			playerPos[rp] = rp.Root.Position
+			local rpos = rp.Root.Position
+			playerPos[rp] = rpos
+			if heights then
+				playerGround[rp] = HeightGrid.GroundY(rpos.X, rpos.Z)
+			end
 			if isProtected(rp) then
 				protectedNow[rp] = true
 			else
@@ -718,8 +741,10 @@ function EnemyAI.Step(dt: number)
 	local decay = math.max(0, 1 - Config.Enemies.KnockbackDecay * dt)
 	local sepStrength = Config.Enemies.SeparationStrength
 	local recycle2 = Config.Enemies.RecycleDistance ^ 2
-	local half = Config.Arenas.Size / 2
-	local c = Config.ArenaOrigin
+	-- the fence: the arena's bounds (today's square around ArenaOrigin without them)
+	local minX, minZ, maxX, maxZ = HeightGrid.Bounds()
+	local floorY = Config.ArenaOrigin.Y
+	local contactBand = Nav.ContactBand
 	local syncNear2 = Config.Enemies.BodySyncNear ^ 2
 	local farEvery = Config.Enemies.BodyFarEvery
 
@@ -789,7 +814,29 @@ function EnemyAI.Step(dt: number)
 				pos = free
 			end
 		end
-		pos = Vector3.new(math.clamp(pos.X, c.X - half + e.Radius, c.X + half - e.Radius), c.Y, math.clamp(pos.Z, c.Z - half + e.Radius, c.Z + half - e.Radius))
+		local r = e.Radius
+		local nx = math.clamp(pos.X, minX + r, math.max(minX + r, maxX - r))
+		local nz = math.clamp(pos.Z, minZ + r, math.max(minZ + r, maxZ - r))
+		if heights then
+			if not static and not pin then
+				-- never step off a cliff or onto a wall face: cancel the blocked axis (slide)
+				local ox, oz = e.Pos.X, e.Pos.Z
+				if not HeightGrid.CanStep(ox, oz, nx, nz) then
+					if HeightGrid.CanStep(ox, oz, nx, oz) then
+						nz = oz
+					elseif HeightGrid.CanStep(ox, oz, ox, nz) then
+						nx = ox
+					else
+						nx, nz = ox, oz
+					end
+				end
+				pos = Vector3.new(nx, HeightGrid.GroundY(nx, nz), nz)
+			else
+				pos = Vector3.new(nx, pos.Y, nz)
+			end
+		else
+			pos = Vector3.new(nx, floorY, nz)
+		end
 		e.Pos = pos
 
 		local far = true
@@ -807,7 +854,8 @@ function EnemyAI.Step(dt: number)
 					nearest2 = d2
 				end
 				local reach = e.Radius + PLAYER_RADIUS
-				if not harmless and d2 <= reach * reach then
+				-- with a height grid: only on (about) the same level, not across a cliff
+				if not harmless and d2 <= reach * reach and (not heights or math.abs(playerGround[rp] - pos.Y) <= contactBand) then
 					-- the contact cooldown is per enemy AND per player (one bite on you
 					-- never uses up its bite on your partner); a pooled record gets a fresh
 					-- table when its uid changes

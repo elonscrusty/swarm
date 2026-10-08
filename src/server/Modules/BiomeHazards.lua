@@ -23,6 +23,7 @@
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local Hazards = require(script.Parent.Hazards)
+local HeightGrid = require(script.Parent.HeightGrid)
 
 local BiomeHazards = {}
 
@@ -185,7 +186,7 @@ function BiomeHazards.Step(dt: number)
 			for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 				if rp.Alive and rp.Root and not rp.Paused and made < D.MaxTargets then
 					local p = rp.Root.Position
-					local pos = Vector3.new(p.X, Config.ArenaOrigin.Y, p.Z)
+					local pos = HeightGrid.Ground(p)
 					local frost = arenaName == "Snow"
 					Hazards.Strike(pos, D.Radius, D.Warn, D.Damage * ctx.StageManager.DamageMult(),
 						{ Group = "Biome", Style = frost and "frost" or "venom", Cause = frost and "Frost fracture" or "Ground eruption" })

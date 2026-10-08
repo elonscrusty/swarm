@@ -21,6 +21,8 @@
 
 local Fx = require(script.Parent.Fx)
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local HeightGrid = require(script.Parent.HeightGrid)
+local Nav = require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Nav
 
 local Hazards = {}
 
@@ -48,12 +50,15 @@ local function playersIn(pos: Vector3, radius: number, inner: number?): { any }
 	local out = {}
 	local r = radius + PLAYER_RADIUS * 0.5
 	local r0 = inner or 0
+	local heights = HeightGrid.IsActive()
 	for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 		local root: BasePart? = rp.Root
 		if rp.Alive and root then
-			local dx, dz = root.Position.X - pos.X, root.Position.Z - pos.Z
+			local rpos = root.Position
+			local dx, dz = rpos.X - pos.X, rpos.Z - pos.Z
 			local d2 = dx * dx + dz * dz
-			if d2 <= r * r and d2 >= r0 * r0 then
+			-- with a height grid: only a player on (about) the hazard's ground level
+			if d2 <= r * r and d2 >= r0 * r0 and (not heights or math.abs(HeightGrid.GroundY(rpos.X, rpos.Z) - pos.Y) <= Nav.HazardBand) then
 				table.insert(out, rp)
 			end
 		end
@@ -69,6 +74,7 @@ Hazards.PlayersIn = playersIn
 ]]
 function Hazards.Strike(pos: Vector3, radius: number, delay: number, damage: number, opts: { [string]: any }?)
 	makeRoom()
+	pos = HeightGrid.Ground(pos) -- every hazard sits on the ground at its x, z
 	local o = opts or {}
 	local style = o.Style or "venom"
 	local warn = o.Warn or Fx.Warn("circle", pos.X, pos.Z, radius, delay, style)
@@ -81,6 +87,7 @@ end
 -- style "fire" (a Burning elite, the default) | "acid" (the Hive Mother's pools).
 function Hazards.Patch(pos: Vector3, radius: number, arm: number, life: number, tick: number, damage: number, group: string?, style: string?)
 	makeRoom()
+	pos = HeightGrid.Ground(pos)
 	local p = {
 		Pos = pos,
 		Radius = radius,
@@ -105,6 +112,7 @@ end
 ]]
 function Hazards.Wave(pos: Vector3, delay: number, speed: number, maxRadius: number, width: number, gap: number, gapHalf: number, damage: number, opts: { [string]: any }?)
 	makeRoom()
+	pos = HeightGrid.Ground(pos)
 	local o = opts or {}
 	local w = { Pos = pos, R = o.Start or 0, Speed = speed, MaxR = maxRadius, Width = width, Gap = gap, GapHalf = gapHalf, Delay = delay, Damage = damage, Group = o.Group, Warn = o.Warn, Passed = {}, Cause = o.Cause or "Boss shockwave" }
 	table.insert(waves, w)
@@ -204,9 +212,12 @@ function Hazards.Step(dt: number)
 				for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
 					local root: BasePart? = rp.Root
 					if rp.Alive and root and not w.Passed[rp] then
-						local dx, dz = root.Position.X - w.Pos.X, root.Position.Z - w.Pos.Z
+						local rpos = root.Position
+						local dx, dz = rpos.X - w.Pos.X, rpos.Z - w.Pos.Z
 						local d = math.sqrt(dx * dx + dz * dz)
-						if math.abs(d - w.R) <= half then
+						if math.abs(d - w.R) <= half and not HeightGrid.InBand(HeightGrid.GroundY(rpos.X, rpos.Z), w.Pos.Y, Nav.HazardBand) then
+							w.Passed[rp] = true -- another level (a terrace above / below): it rolls past
+						elseif math.abs(d - w.R) <= half then
 							-- the band reached them: hit unless they stand in the gap
 							w.Passed[rp] = true
 							if d < 0.5 or angleGap(math.atan2(dz, dx), w.Gap) > w.GapHalf then
