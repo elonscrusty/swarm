@@ -243,10 +243,10 @@ local function buildVignette(fxGui: ScreenGui)
 			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, strength), NumberSequenceKeypoint.new(1, 1) }),
 		}, f)
 	end
-	edge(0, UDim2.fromScale(0, 0), UDim2.fromScale(0.42, 1), 0.35)
-	edge(180, UDim2.fromScale(0.62, 0), UDim2.fromScale(0.38, 1), 0.4)
-	edge(90, UDim2.fromScale(0, 0), UDim2.fromScale(1, 0.25), 0.45)
-	edge(-90, UDim2.fromScale(0, 0.72), UDim2.fromScale(1, 0.28), 0.4)
+	edge(0, UDim2.fromScale(0, 0), UDim2.fromScale(0.42, 1), 0.88)
+	edge(180, UDim2.fromScale(0.62, 0), UDim2.fromScale(0.38, 1), 0.9)
+	edge(90, UDim2.fromScale(0, 0), UDim2.fromScale(1, 0.25), 0.94)
+	edge(-90, UDim2.fromScale(0, 0.72), UDim2.fromScale(1, 0.28), 0.9)
 	-- the dense sub-screens dim the scene a little more
 	ui.Dim = new("Frame", { BackgroundColor3 = C.Backdrop, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, v)
 end
@@ -1096,7 +1096,7 @@ function LobbyScreen.Show(name: string, arg: any?)
 		homeAmbient(false)
 	end
 	relayout()
-	UIAnim.Tween(ui.Dim, Theme.Motion.Base, { BackgroundTransparency = (name ~= "Home" and name ~= "Characters") and 0.4 or 1 })
+	UIAnim.Tween(ui.Dim, Theme.Motion.Base, { BackgroundTransparency = (name ~= "Home" and name ~= "Characters") and 0.82 or 1 })
 	if from == "Characters" or name == "Characters" then
 		if name == "Characters" and screens.Characters.Inspect then
 			screens.Characters.Inspect(selectedChar())
