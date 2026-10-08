@@ -150,6 +150,12 @@ Batch B (2026-10-07, branch claude/batch-b-0rk7j6, merged to main 2026-10-08, of
 released AffixIcons (save SeenAffixes), DamageNumberOptions (default stays off, owner), EvolutionPreview
 (names show before discovery, owner OK), Banish (3/run), ReviveThanks (25 XP, proposed). Held by the owner
 (built, switched off, checks removed): FinalStand, StageModifiers, PartyQuickLines, Prestige, QuickResume.
+Merge + pre-publish audit (2026-10-08, offline only, NOT Studio-tested; docs/audit/AUDIT_2026-10-08.md,
+owner steps in docs/RELEASE_CHECKLIST.md "Publish 2026-10-09"): batch A + B merged to main; save safety (lock
+steal, leave retries, migration pcall, unsaveable values), pass lookups, receipt rollback, DEV reset Studio only,
+arena checked per starter, level-up needs the offer id, merchant refund, client pcall boot, perf (rect cache, shared
+enemy body list, client light flicker), held-feature titles/looks hidden. Regressions 226/226 (held StarterBundle /
+GroupBonus / InviteRewards checks left out). Owner decisions open: audit section 3.
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,

@@ -2475,6 +2475,7 @@ CharacterData.Skins = {
 		Name = "Pioneer",
 		Character = "Knight",
 		Pass = "StarterBundle",
+		Feature = "StarterBundle", -- the Config.Features switch: while off, the menus hide it unless owned
 		Colors = {
 			Metal = Palette.gold_500,
 			MetalDark = Palette.gold_700,
@@ -4147,6 +4148,7 @@ Config.Invite = {
 	Trail = "Trail_Recruiter", -- the inviter's trail at TrailAt credited friends
 	TrailAt = 3,
 	RunsNeeded = 1, -- the new player must finish this many runs before the inviter is credited
+	MinRunSeconds = 120, -- a run counts toward RunsNeeded when won or at least this long
 	MaxCredits = 200, -- credited friends kept in the inviter's save (the set is capped)
 	StoreName = "SwarmInvites", -- pending credits, keyed by the inviter (Studio: StoreName .. "_Studio")
 	PollSeconds = 300, -- an online inviter's pending credits are checked this often
@@ -5214,7 +5216,7 @@ Config.BuildPresets = {
 -- everyone; progress from clean runs only (never DEV / DevBoosted-tainted ones).
 Config.DailyQuests = {
 	Slots = { "Easy", "Easy", "Hard" }, -- the pool tier of each slot (QuestData.Quests)
-	-- gold per slot: proposed, awaiting owner approval
+	-- gold per slot (owner OK 2026-10-07)
 	Rewards = { 300, 300, 600 },
 	-- all three claimed: the first of these earned looks not owned yet (StoreCatalog
 	-- entries, Source "Earned"); proposed, awaiting owner approval
@@ -5232,7 +5234,7 @@ Config.DailyQuests = {
 Config.Comeback = {
 	AwayDays = 3,
 	LongDays = 7, -- this many days away or more: the long-absence gift
-	-- gold: proposed, awaiting owner approval
+	-- gold (owner OK 2026-10-07)
 	Gold = 500, -- 3-6 days away
 	LongGold = 1000, -- 7+ days away
 	-- 7+ days: this earned look too (StoreCatalog entry, Source "Earned"); proposed, awaiting owner approval
@@ -9852,10 +9854,12 @@ MetaData.Titles = {
 	{ Id = "Title_Seasoned", Name = "Seasoned", How = "Season tier 20" },
 	{ Id = "Title_Season Champion", Name = "Season Champion", How = "Season tier 30" },
 	-- next batch (docs/next/): the Starter Bundle, invites and the Roblox group; each is
-	-- granted by its own server module (StarterBundle, InviteRewards, GroupBonus)
-	{ Id = "Title_Pioneer", Name = "Pioneer", How = "Comes with the Starter Bundle" },
-	{ Id = "Title_Recruiter", Name = "Recruiter", How = "Invite a new friend who finishes a run" },
-	{ Id = "Title_Group Member", Name = "Group Member", How = "Join our Roblox group" },
+	-- granted by its own server module (StarterBundle, InviteRewards, GroupBonus); Feature =
+	-- the Config.Features switch: while it is off nobody can earn the title, so the menu hides it
+	-- (unless the player already owns it)
+	{ Id = "Title_Pioneer", Name = "Pioneer", How = "Comes with the Starter Bundle", Feature = "StarterBundle" },
+	{ Id = "Title_Recruiter", Name = "Recruiter", How = "Invite a new friend who finishes a run", Feature = "InviteRewards" },
+	{ Id = "Title_Group Member", Name = "Group Member", How = "Join our Roblox group", Feature = "GroupBonus" },
 }
 MetaData.TitleById = {}
 for _, t in ipairs(MetaData.Titles) do
@@ -9883,7 +9887,7 @@ end
 function MetaData.CosmeticEntries(): { { [string]: any } }
 	local out = {}
 	for _, t in ipairs(MetaData.Titles) do
-		table.insert(out, { Id = t.Id, Kind = "Title", Name = t.Name, Source = "Earned", Condition = t.How })
+		table.insert(out, { Id = t.Id, Kind = "Title", Name = t.Name, Source = "Earned", Condition = t.How, Feature = t.Feature })
 	end
 	for _, n in ipairs(MetaData.Nameplates) do
 		table.insert(out, { Id = n.Id, Kind = "Nameplate", Name = n.Name, Source = "Earned", Condition = n.How })
@@ -12476,6 +12480,8 @@ end
 	  Emote      Icon (Icons name), Color, Pose ("Wave" | "Cheer" | "Flex" | "Bow")
 	  Nameplate  Color, Color2, Glow
 	  Dais       Color (stone), Color2 (trim), Material, Glow
+	Feature (optional): the Config.Features switch of the module that grants the look; the
+	store screen hides the look while that switch is off, unless the player already owns it.
 ]]
 StoreCatalog.Entries = {
 	-- Trails
@@ -12485,7 +12491,7 @@ StoreCatalog.Entries = {
 	{ Id = "Trail_Leaf", Kind = "Trail", Name = "Leaf Trail", Source = "Earned", Earn = { Stat = "Runs", At = 25 }, Desc = "Green leaves swirl behind you.", Look = { Color = rgb(118, 196, 92), Color2 = rgb(214, 240, 150), Width = 1.0 } },
 	{ Id = "Trail_Star", Kind = "Trail", Name = "Starlight Trail", Source = "Earned", Earn = { Level = 15 }, Desc = "A pale starlit line.", Look = { Color = rgb(240, 236, 255), Color2 = rgb(150, 170, 255), Width = 0.9 } },
 	-- Invite rewards: Stats.Recruits = new friends credited (InviteRewards, docs/next/INVITE_REWARDS.md)
-	{ Id = "Trail_Recruiter", Kind = "Trail", Name = "Recruiter Trail", Source = "Earned", Earn = { Stat = "Recruits", At = 3 }, Condition = "Invite 3 new friends who finish a run", Desc = "Teal sparks for bringing friends.", Look = { Color = rgb(90, 220, 200), Color2 = rgb(220, 255, 240), Width = 1.0 } },
+	{ Id = "Trail_Recruiter", Kind = "Trail", Name = "Recruiter Trail", Source = "Earned", Earn = { Stat = "Recruits", At = 3 }, Feature = "InviteRewards", Condition = "Invite 3 new friends who finish a run", Desc = "Teal sparks for bringing friends.", Look = { Color = rgb(90, 220, 200), Color2 = rgb(220, 255, 240), Width = 1.0 } },
 	-- Death bursts (how enemy deaths burst on YOUR screen; HitFeel draws them)
 	{ Id = "Burst_Confetti", Kind = "Burst", Name = "Confetti Burst", Source = "Store", StoreKey = "Cosmetics.Burst_Confetti", Desc = "Foes pop into bright confetti.", Look = { Color = rgb(255, 120, 170), Mix = 1, Colors = { rgb(255, 92, 120), rgb(255, 212, 80), rgb(96, 210, 255), rgb(140, 230, 120), rgb(200, 140, 255) } } },
 	{ Id = "Burst_Void", Kind = "Burst", Name = "Void Burst", Source = "Store", StoreKey = "Cosmetics.Burst_Void", Desc = "Foes crack into glowing violet shards.", Look = { Color = rgb(150, 80, 255), Mix = 0.75, Neon = true } },
@@ -12515,11 +12521,11 @@ StoreCatalog.Entries = {
 	{ Id = "Nameplate_Dawn", Kind = "Nameplate", Name = "Dawn Frame", Source = "Earned", Condition = "Login streak of 14 days", Desc = "For showing up, day after day.", Look = { Color = rgb(255, 214, 120), Color2 = rgb(96, 64, 24) } },
 	-- Daily quests / comeback gift (docs/next/DAILY_QUESTS.md, COMEBACK_GIFT.md): earned by
 	-- play, put in Cosmetics.Owned by DailyQuests / ComebackGift on the server (no Earn goal).
-	{ Id = "Plate_Questor", Kind = "Nameplate", Name = "Questor Plate", Source = "Earned", Condition = "Finish all 3 daily quests in a day", Desc = "For a full day of quests.", Look = { Color = rgb(110, 210, 190), Color2 = rgb(24, 70, 64) } },
-	{ Id = "Trail_Questor", Kind = "Trail", Name = "Questor Trail", Source = "Earned", Condition = "Finish all 3 daily quests on two days", Desc = "A teal ribbon of finished quests.", Look = { Color = rgb(96, 214, 190), Color2 = rgb(220, 255, 240), Width = 1.0 } },
+	{ Id = "Plate_Questor", Kind = "Nameplate", Name = "Questor Plate", Source = "Earned", Feature = "DailyQuests", Condition = "Finish all 3 daily quests in a day", Desc = "For a full day of quests.", Look = { Color = rgb(110, 210, 190), Color2 = rgb(24, 70, 64) } },
+	{ Id = "Trail_Questor", Kind = "Trail", Name = "Questor Trail", Source = "Earned", Feature = "DailyQuests", Condition = "Finish all 3 daily quests on two days", Desc = "A teal ribbon of finished quests.", Look = { Color = rgb(96, 214, 190), Color2 = rgb(220, 255, 240), Width = 1.0 } },
 	{ Id = "Trail_Homecoming", Kind = "Trail", Name = "Homecoming Trail", Source = "Earned", Condition = "Come back after a week away", Desc = "A warm glow for a returning hero.", Look = { Color = rgb(255, 170, 110), Color2 = rgb(255, 236, 190), Width = 1.0 } },
 	-- Invite rewards (docs/next/INVITE_REWARDS.md): InviteRewards puts them in Cosmetics.Owned
-	{ Id = "Plate_Friend", Kind = "Nameplate", Name = "Friend Badge", Source = "Earned", Condition = "Join SWARM through a friend's invite", Desc = "You came with a friend.", Look = { Color = rgb(120, 220, 200), Color2 = rgb(24, 70, 64) } },
+	{ Id = "Plate_Friend", Kind = "Nameplate", Name = "Friend Badge", Source = "Earned", Feature = "InviteRewards", Condition = "Join SWARM through a friend's invite", Desc = "You came with a friend.", Look = { Color = rgb(120, 220, 200), Color2 = rgb(24, 70, 64) } },
 	-- Lobby dais themes (under your hero in the menu)
 	{ Id = "Dais_Marble", Kind = "Dais", Name = "Marble Dais", Source = "Earned", Earn = { Stat = "Wins", At = 5 }, Desc = "White marble with a gold edge.", Look = { Color = rgb(236, 232, 224), Color2 = rgb(214, 172, 70), Material = "Marble" } },
 	{ Id = "Dais_Obsidian", Kind = "Dais", Name = "Obsidian Dais", Source = "Store", StoreKey = "Cosmetics.Dais_Obsidian", Desc = "Black glass with violet light.", Look = { Color = rgb(30, 26, 40), Color2 = rgb(160, 100, 255), Material = "Glass", Glow = true } },
@@ -18359,6 +18365,10 @@ function BugReportService.Start()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		busy[player] = nil
+		-- per-user timers would otherwise pile up for every visitor of a long-lived server
+		lastSent[player.UserId] = nil
+		lastTry[player.UserId] = nil
+		sentTimes[player.UserId] = nil
 	end)
 	Remotes.Listen("BugReport", submit, 1)
 	Remotes.Listen("BugInbox", inbox, 2)
@@ -20316,6 +20326,7 @@ return DamageNumbers
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
@@ -20334,6 +20345,9 @@ type Profile = {
 	Released: boolean,
 	LockLost: boolean,
 	LastSave: number,
+	-- the LastJob that was stored when we loaded / last saved / reclaimed: a stored LastJob
+	-- that differs while the lock is empty means another server wrote the save in between
+	BaseJob: string?,
 }
 
 local store: DataStore? = nil
@@ -21038,7 +21052,7 @@ local function arrivedByHandoff(player: Player): boolean
 		return player:GetJoinData()
 	end)
 	local td = ok and type(data) == "table" and data.TeleportData or nil
-	return type(td) == "table" and (td.SwarmRun ~= nil or td.SwarmReturn ~= nil or td.SwarmRejoin ~= nil)
+	return type(td) == "table" and (td.SwarmRun ~= nil or td.SwarmReturn ~= nil or td.SwarmRejoin ~= nil or td.PartyInviter ~= nil)
 end
 
 local function loadProfile(player: Player): Profile?
@@ -21069,7 +21083,21 @@ local function loadProfile(player: Player): Profile?
 			return old
 		end)
 		if ok and not lockedByOther then
-			local data = DataService.Migrate(type(record) == "table" and record.Data or nil)
+			local migrated, data = pcall(DataService.Migrate, type(record) == "table" and record.Data or nil)
+			if not migrated then
+				-- never save a half-migrated table over the stored one: give the lock back
+				-- untouched (Data is not written) and let the player retry later
+				warn("[DataService] migration failed for " .. key .. ": " .. tostring(data))
+				update(key, function(old)
+					local lock = type(old) == "table" and old.Lock or nil
+					if type(old) == "table" and type(lock) == "table" and lock.JobId == jobId then
+						old.Lock = nil
+						return old
+					end
+					return nil
+				end)
+				return nil
+			end
 			-- a brand-new account (no earlier save, nothing recovered): FirstJoin is now and the
 			-- invite rewards may treat it as new to SWARM (StarterBundle / InviteRewards)
 			if type(record) ~= "table" or (record.Data == nil and record.Recovered == nil) then
@@ -21084,6 +21112,7 @@ local function loadProfile(player: Player): Profile?
 				Released = false,
 				LockLost = false,
 				LastSave = os.clock(),
+				BaseJob = type(record) == "table" and record.LastJob or nil,
 			}
 		end
 		if attempt < attempts then
@@ -21096,6 +21125,30 @@ end
 ------------------------------------------------------------------------------------------
 -- Save
 ------------------------------------------------------------------------------------------
+
+-- Replaces what JSONEncode rejects, in place: NaN / inf become 0, Instances, userdata,
+-- functions and threads are dropped (each warned with its path). Returns nothing.
+local function sanitizeData(tbl: { [any]: any }, path: string, depth: number, seen: { [any]: boolean })
+	if seen[tbl] or depth > 40 then
+		return
+	end
+	seen[tbl] = true
+	for k, v in pairs(tbl) do
+		local t = type(v)
+		local here = path .. "." .. tostring(k)
+		if t == "number" then
+			if v ~= v or v == math.huge or v == -math.huge then
+				warn("[DataService] non-finite number reset to 0 at " .. here)
+				tbl[k] = 0
+			end
+		elseif t == "table" then
+			sanitizeData(v, here, depth + 1, seen)
+		elseif t ~= "string" and t ~= "boolean" then
+			warn("[DataService] unsaveable " .. t .. " dropped at " .. here)
+			tbl[k] = nil
+		end
+	end
+end
 
 --[[
 	Saves a profile. `release` clears the session lock (leave / shutdown).
@@ -21115,10 +21168,21 @@ function DataService.SaveProfile(profile: Profile, release: boolean?): boolean
 	profile.Saving = true
 	local lostLock = false
 	local snapshot = profile.Data
+	-- a value the DataStore cannot encode (NaN, an Instance, a function) would fail every
+	-- retry and lose the whole save: clean it first, loudly
+	if not pcall(HttpService.JSONEncode, HttpService, snapshot) then
+		sanitizeData(snapshot, profile.Key, 0, {})
+	end
 	local ok = update(profile.Key, function(old)
 		old = (type(old) == "table") and old or {}
 		local lock = old.Lock
 		if lock and lock.JobId ~= jobId then
+			lostLock = true
+			return nil
+		end
+		-- no lock but a different writer than the one we loaded from: another server stole our
+		-- stale lock, saved and released; writing now would overwrite its newer save
+		if lock == nil and old.LastJob ~= nil and old.LastJob ~= jobId and old.LastJob ~= profile.BaseJob then
 			lostLock = true
 			return nil
 		end
@@ -21129,6 +21193,9 @@ function DataService.SaveProfile(profile: Profile, release: boolean?): boolean
 	end)
 	profile.Saving = false
 	profile.LastSave = os.clock()
+	if ok and not lostLock then
+		profile.BaseJob = jobId
+	end
 	if not lostLock and profile.Player.Parent then
 		-- the player sees when progress is not being written (UIBuilder save notice)
 		DataService.SetSaveStatus(profile.Player, ok and "ok" or "failing")
@@ -21265,6 +21332,9 @@ function DataService.Reclaim(player: Player): boolean
 	if type(record) == "table" and record.LastJob ~= nil and record.LastJob ~= jobId and type(record.Data) == "table" then
 		p.Data = DataService.Migrate(record.Data)
 	end
+	if type(record) == "table" then
+		p.BaseJob = record.LastJob
+	end
 	p.Released = false
 	p.LastSave = os.clock()
 	DataService.SetSaveStatus(player, "ok")
@@ -21334,13 +21404,29 @@ local function onPlayerRemoving(player: Player)
 	-- Other services commit run results on PlayerRemoving first (GameServer orders this).
 	local userId = player.UserId
 	releasing[userId] = true
-	local ok, err = pcall(DataService.SaveProfile, profile, true)
+	-- SaveProfile returns false (no throw) when the write failed: retry the release save a few
+	-- times (about 25 s in all) before giving up, unless the lock is gone for good
+	local saved, lastErr = false, nil
+	for attempt = 1, 6 do
+		local ok, result = pcall(DataService.SaveProfile, profile, true)
+		if ok and result then
+			saved = true
+			break
+		end
+		if not ok then
+			lastErr = result
+		end
+		if profile.LockLost or profile.Released or store == nil or attempt == 6 then
+			break
+		end
+		task.wait(5)
+	end
 	releasing[userId] = nil
 	if profiles[player] == profile then
 		profiles[player] = nil
 	end
-	if not ok then
-		warn("[DataService] final save failed for " .. profile.Key .. ": " .. tostring(err))
+	if not saved and not profile.LockLost and not profile.Released then
+		warn("[DataService] final save failed for " .. profile.Key .. (lastErr and (": " .. tostring(lastErr)) or ""))
 	end
 end
 DataService.ReleasePlayer = onPlayerRemoving
@@ -21511,14 +21597,14 @@ return {
 	                   every arena (best stage), account level 50 (its rings, frames, titles)
 	                   and, in Studio only, every skin for this session (skins are Robux
 	                   items: never saved, never granted in live servers)
-	  ResetProgress    a fresh save of the developer's own profile (purchases and settings kept); lobby only
+	  ResetProgress    a fresh save of the developer's own profile (purchases and settings kept); lobby only, Studio only
 	  LobbyGold n      + n gold to the save (n = 1..1,000,000)
 	  AccountLevels n  + n account levels (1..50)
 	  DamageNumbers    toggles the damage numbers setting
 	Run (your own run player):
 	  AddLevels n, AddGold n (run wallet), God (toggle; player attribute DevGod, read by
 	  RunManager.DamagePlayer), SpawnBoss id (the portal summons that boss now),
-	  BossRotation (back to the normal boss order), SpawnEnemy type / SpawnElite type,
+	  BossRotation (back to the normal boss order; live run only), SpawnEnemy type / SpawnElite type,
 	  GiveItem id, GiveItems (3 random), GiveWeapon id (max level), MaxWeapons (every
 	  weapon at max level), NewWeapons, EvolveWeapons, SpawnPortalBoss, TeleportToPortal,
 	  NextStage, CombatTrace (toggle for this run: RunManager.DamagePlayer prints one
@@ -21565,7 +21651,7 @@ local KIND = {
 	AddLevels = "run",
 	AddGold = "run",
 	SpawnBoss = "run",
-	BossRotation = "any",
+	BossRotation = "run", -- changes the live run's boss order: only for a live participant
 	SpawnEnemy = "run",
 	SpawnElite = "run",
 	GiveItem = "run",
@@ -21663,7 +21749,12 @@ function DevTools.Handle(ctx, player: Player, command: string, arg: any, inLobby
 	if command == "UnlockAll" then
 		unlockAll(ctx, player, data)
 	elseif command == "ResetProgress" then
-		-- wipes only the developer's own save (tap twice on the client to confirm)
+		-- wipes only the developer's own save (tap twice on the client to confirm); a live
+		-- save is never wiped from here, even by an allowlisted developer
+		if not game:GetService("RunService"):IsStudio() then
+			ctx.RunManager.Notify(player, "DEV: reset is Studio only", DEV_COLOR)
+			return
+		end
 		if arg ~= "CONFIRM" then
 			return
 		end
@@ -25918,8 +26009,12 @@ function GroupBonus.Start()
 		check(player)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
-		members[player] = nil
-		asking[player] = nil
+		-- deferred: a leaver's run settles in a later PlayerRemoving handler (RunManager)
+		-- and must still see the cached membership
+		task.defer(function()
+			members[player] = nil
+			asking[player] = nil
+		end)
 	end)
 end
 
@@ -26662,12 +26757,18 @@ local function trySend(player: Player, data: { [string]: any }): boolean
 end
 
 -- RunManager (saveRunStats, after the DEV-taint return): a clean run was finished.
-function InviteRewards.OnRunCommitted(player: Player, data: { [string]: any }?)
+-- info = { Seconds, Won }: a run only counts when it was won or lasted MinRunSeconds, so
+-- joining and leaving at once doesn't credit the inviter.
+function InviteRewards.OnRunCommitted(player: Player, data: { [string]: any }?, info: { Seconds: number?, Won: boolean? }?)
 	if not InviteRewards.On() or not data then
 		return
 	end
 	local inv = invite(data)
 	if not inv.New or inv.ReferredBy <= 0 or inv.Sent then
+		return
+	end
+	local minSeconds = tonumber((Config.Invite :: any).MinRunSeconds) or 0
+	if info and info.Won ~= true and (tonumber(info.Seconds) or 0) < minSeconds then
 		return
 	end
 	inv.Runs += 1
@@ -29213,10 +29314,9 @@ function LevelUpSystem.Init(c)
 end
 
 function LevelUpSystem.Start()
-	-- offerId (optional, LevelUpOffer.OfferId / attribute ChoiceOfferId): when sent, a
-	-- request for any other card set is dropped, so each round applies exactly once.
+	-- offerId (LevelUpOffer.OfferId / attribute ChoiceOfferId): required. A request without
+	-- it, or for any other card set, is dropped, so each round applies exactly once.
 	local function staleId(rp, offerId): boolean
-		if offerId == nil then return false end
 		return type(offerId) ~= "number" or offerId ~= rp.OfferSeq
 	end
 
@@ -30702,6 +30802,10 @@ end
 
 function LootSystem.Step(dt: number)
 	if not ctx.RunManager.IsRunning() then
+		-- run over / not started: no hold may outlive it (it would pin the rp and Obj)
+		if next(holds) ~= nil then
+			table.clear(holds)
+		end
 		return
 	end
 	local simulating = ctx.RunManager.IsSimulating()
@@ -31008,32 +31112,16 @@ local function slab(parent: Instance, name: string, top: Vector3, sx: number, sz
 end
 
 ------------------------------------------------------------------------------------------
--- Fire lights: one flicker loop for every torch / brazier light in the world.
+-- Fire lights: tagged here, flickered on each client (client/FlickerLights.lua). The server
+-- used to rewrite every light's Brightness 10x a second, which replicated forever.
 ------------------------------------------------------------------------------------------
 
-local flickers: { { Light: Light, Base: number, Phase: number } } = {}
-local flickerRunning = false
+local FLICKER_TAG = "SwarmFlickerLight"
 
 local function addFlicker(light: Light)
-	table.insert(flickers, { Light = light, Base = light.Brightness, Phase = rng:NextNumber(0, 10) })
-	if flickerRunning then
-		return
-	end
-	flickerRunning = true
-	task.spawn(function()
-		while true do
-			local t = os.clock()
-			for i = #flickers, 1, -1 do
-				local f = flickers[i]
-				if f.Light.Parent == nil then
-					table.remove(flickers, i)
-				else
-					f.Light.Brightness = f.Base * (0.86 + 0.09 * math.sin(t * 7.3 + f.Phase) + 0.05 * math.sin(t * 17.9 + f.Phase * 2))
-				end
-			end
-			task.wait(0.1)
-		end
-	end)
+	light:SetAttribute("FlickerBase", light.Brightness)
+	light:SetAttribute("FlickerPhase", rng:NextNumber(0, 10))
+	CollectionService:AddTag(light, FLICKER_TAG)
 end
 
 local FIRE = rgb(255, 168, 92)
@@ -35143,7 +35231,18 @@ function Merchant.Buy(rp, merchantId: any, slot: any): (boolean, string?)
 	if granted then
 		ctx.RunManager.HoldReward(rp, dramatic == true)
 	else
-		warn(string.format("[Merchant] %s paid %d for %s but no item could be granted", rp.Player.Name, price, offer.Id))
+		warn(string.format("[Merchant] %s paid %d for %s but no item could be granted: refunded", rp.Player.Name, price, offer.Id))
+		-- nothing was delivered: hand back the exact run gold (no GoldMult) and reopen the slot
+		local data = ctx.DataService.GetData(rp.Player)
+		if data and type(data.RunEscrow) == "table" and not rp.GoldSettlement then
+			data.RunEscrow.Gold += price
+			rp.Gold += price
+			rp.GoldSpent = math.max(0, (rp.GoldSpent or 0) - price)
+			rp.Player:SetAttribute("RunGold", rp.Gold)
+		end
+		offer.Sold = nil
+		send(rp)
+		return false, "grant"
 	end
 	Fx.Sound("Chest")
 	send(rp)
@@ -37725,6 +37824,10 @@ local passCache: { [Player]: { [number]: boolean } } = {}
 ------------------------------------------------------------------------------------------
 
 local inFlight: { [Player]: { [number]: boolean } } = {}
+-- player → passId → os.clock() of a failed lookup: OwnsPassId does not start another one for
+-- RETRY_SECONDS (a web outage must not turn every gold drop into a new request)
+local failedAt: { [Player]: { [number]: number } } = {}
+local RETRY_SECONDS = 15
 
 -- Asks Roblox (yields). Only called from background threads, never from the game loop.
 local function queryPass(player: Player, passId: number)
@@ -37741,6 +37844,16 @@ local function queryPass(player: Player, passId: number)
 		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
 	end)
 	flights[passId] = nil
+	if not ok then
+		local failed = failedAt[player]
+		if not failed then
+			failed = {}
+			failedAt[player] = failed
+		end
+		failed[passId] = os.clock()
+	elseif failedAt[player] then
+		failedAt[player][passId] = nil
+	end
 	if ok and player.Parent then
 		local cache = passCache[player]
 		if not cache then
@@ -37767,7 +37880,12 @@ function MonetizationService.OwnsPassId(player: Player, passId: number?): boolea
 	local cache = passCache[player]
 	local cached = cache and cache[passId]
 	if cached == nil then
-		task.spawn(queryPass, player, passId)
+		-- a player who has left gets no new web call (the leave commit still reads the cache)
+		local failed = failedAt[player]
+		local lastFail = failed and failed[passId]
+		if player.Parent and not (lastFail and os.clock() - lastFail < RETRY_SECONDS) then
+			task.spawn(queryPass, player, passId)
+		end
 		return false
 	end
 	return cached
@@ -37958,6 +38076,35 @@ local function buildProductHandlers()
 	end
 end
 
+-- Plain-data copy / in-place restore of the save, so a handler that errors half way does
+-- not leave a partial grant behind for the retried receipt to add to.
+local function deepCopy(value: any): any
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in pairs(value) do
+		copy[k] = deepCopy(v)
+	end
+	return copy
+end
+
+local function restoreInto(dst: { [any]: any }, src: { [any]: any })
+	for k in pairs(dst) do
+		if src[k] == nil then
+			dst[k] = nil
+		end
+	end
+	for k, v in pairs(src) do
+		local cur = dst[k]
+		if type(v) == "table" and type(cur) == "table" then
+			restoreInto(cur, v)
+		else
+			dst[k] = deepCopy(v)
+		end
+	end
+end
+
 local function processReceipt(info): Enum.ProductPurchaseDecision
 	if type(info) ~= "table" or type(info.PlayerId) ~= "number" or info.PurchaseId == nil then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
@@ -37999,7 +38146,11 @@ local function processReceipt(info): Enum.ProductPurchaseDecision
 			return Enum.ProductPurchaseDecision.NotProcessedYet -- the recipient's save failed: retry
 		end
 	else
+		local before = deepCopy(profile.Data)
 		ok, err = pcall(handler, player, profile.Data)
+		if not ok then
+			restoreInto(profile.Data, before)
+		end
 	end
 	if not ok then
 		warn("[Monetization] product handler failed: " .. tostring(err))
@@ -38091,8 +38242,12 @@ function MonetizationService.Start()
 		warm(p)
 	end
 	Players.PlayerRemoving:Connect(function(player)
-		passCache[player] = nil
-		inFlight[player] = nil
+		-- deferred: RunManager's leave commit reads pass ownership after this handler runs
+		task.defer(function()
+			passCache[player] = nil
+			inFlight[player] = nil
+			failedAt[player] = nil
+		end)
 	end)
 end
 
@@ -41036,6 +41191,17 @@ function RunManager.TutorialRevealHold(): boolean
 	return (tonumber(rp.Level) or 1) - (tonumber(rp.PendingLevels) or 0) < 2
 end
 
+-- The lobby arena is one global pick checked only against whoever changed it, so a run's
+-- arena is re-checked against the STARTER's own BestStage; otherwise the first arena.
+local function arenaForStarter(who: Player?, name: string): string
+	local def = (Config.Arenas :: any)[name]
+	local data = who and ctx.DataService.GetData(who)
+	if def and data and (data.Stats.BestStage or 0) >= (def.RequiredBestStage or 0) then
+		return name
+	end
+	return Config.Arenas.Order[1]
+end
+
 local function beginRun(here: boolean?)
 	local runStarter = starter -- whose curses the run uses (Solo / Daily: the only player)
 	local list = {}
@@ -41053,9 +41219,10 @@ local function beginRun(here: boolean?)
 		setPhase("Lobby")
 		return
 	end
+	local runArena = arenaForStarter(runStarter or list[1], selectedArena)
 	-- live game: the team plays on its own private run server (RunServers saves and
 	-- teleports them; this lobby is free again at once). `here` = play on this server.
-	if not here and ctx.RunServers and ctx.RunServers.SendToRun(list, mode, runStarter or list[1], selectedArena) then
+	if not here and ctx.RunServers and ctx.RunServers.SendToRun(list, mode, runStarter or list[1], runArena) then
 		setPhase("Lobby")
 		return
 	end
@@ -41064,7 +41231,7 @@ local function beginRun(here: boolean?)
 	local daily = ctx.RunModifiers.BeginRun(mode, runStarter or list[1])
 	-- stage 1: the lobby's arena with its portal (StageManager also sets EnemyAI's arena);
 	-- the daily has its own arena tour and boss order
-	local arena = ctx.StageManager.BeginRun(daily and daily.Arenas[1] or ctx.RunModifiers.WeeklyArena() or selectedArena, daily)
+	local arena = ctx.StageManager.BeginRun(daily and daily.Arenas[1] or ctx.RunModifiers.WeeklyArena() or runArena, daily)
 
 	runTime = 0
 	table.clear(disconnected)
@@ -41285,7 +41452,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	end
 	-- invite rewards (InviteRewards.lua): a referred new player finished a clean run
 	if ctx.InviteRewards then
-		ctx.InviteRewards.OnRunCommitted(rp.Player, data)
+		ctx.InviteRewards.OnRunCommitted(rp.Player, data, { Seconds = t, Won = won })
 	end
 	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Mastery = masteryInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0,
 		-- beat the saved personal best score of this board (not on the first scored run)
@@ -43600,6 +43767,17 @@ local function settle(player: Player)
 	end)
 end
 
+-- The STARTER's own BestStage decides (not "any member"): a locked arena falls back to the first.
+local function arenaFor(t: Ticket, starter: Player?): string
+	local def = (Config.Arenas :: any)[t.Arena]
+	local need = def and def.RequiredBestStage or 0
+	local data = starter and ctx.DataService.GetData(starter)
+	if data and (data.Stats.BestStage or 0) >= need then
+		return t.Arena
+	end
+	return Config.Arenas.Order[1]
+end
+
 -- Lobby: the team could not travel. Saves back, and the run starts on this server.
 local function fallbackHere(players: { Player }, t: Ticket, starter: Player?)
 	local back = {}
@@ -43617,7 +43795,8 @@ local function fallbackHere(players: { Player }, t: Ticket, starter: Player?)
 	for _, p in ipairs(back) do
 		notify(p, "Couldn't reach a run server: playing on this server.", WARN)
 	end
-	if not ctx.RunManager.StartTeamRun(back, t.Mode, t.Arena, starter) then
+	local startP = starter or back[1]
+	if not ctx.RunManager.StartTeamRun(back, t.Mode, arenaFor(t, startP), startP) then
 		for _, p in ipairs(back) do
 			notify(p, "Couldn't start the run right now: try again.", BAD)
 		end
@@ -44039,18 +44218,6 @@ local function setStatus(s: string)
 	state:SetAttribute("RunServerStatus", s)
 end
 
-local function arenaFor(t: Ticket, players: { Player }): string
-	local def = (Config.Arenas :: any)[t.Arena]
-	local need = def and def.RequiredBestStage or 0
-	for _, p in ipairs(players) do
-		local data = ctx.DataService.GetData(p)
-		if data and (data.Stats.BestStage or 0) >= need then
-			return t.Arena
-		end
-	end
-	return Config.Arenas.Order[1]
-end
-
 local function startTicketRun()
 	local t = ticket :: Ticket
 	local list, starter = {}, nil
@@ -44084,7 +44251,7 @@ local function startTicketRun()
 		end
 	end
 	setStatus("Started")
-	if not ctx.RunManager.StartTeamRun(list, t.Mode, arenaFor(t, list), starter) then
+	if not ctx.RunManager.StartTeamRun(list, t.Mode, arenaFor(t, starter), starter) then
 		setStatus("Failed")
 		sendHome(list, "The run couldn't start: back to the lobby.")
 	end
@@ -46346,6 +46513,20 @@ end
 	their save (saved first); gone → the buyer's own save.
 ]]
 function StoreService.GrantGift(buyer: Player, buyerData: { [string]: any }, g: Gift): boolean
+	local granted = StoreService.GrantGiftNow(buyer, buyerData, g)
+	if granted then
+		-- done: the receipt is recorded right after this returns (a retry stops at HasPurchase
+		-- before it asks for the route again), so the entry would only pile up
+		for id, route in pairs(routes) do
+			if route == g then
+				routes[id] = nil
+			end
+		end
+	end
+	return granted
+end
+
+function StoreService.GrantGiftNow(buyer: Player, buyerData: { [string]: any }, g: Gift): boolean
 	local item = StoreService.ProductMap()[g.ProductId]
 	if not item then
 		return false
@@ -47726,14 +47907,14 @@ local function eligible(rp, data, teamSize: number, mode: string?): boolean
 	if not FR or FR.AutoStart ~= true or mode ~= FR.Mode then
 		return false
 	end
-	if rp.DevTainted or rp.Endless or rp.Daily then
+	-- done once already: only Settings > Replay tips (WalkthroughReplay) brings it back
+	if rp.DevTainted or rp.Endless or rp.Daily or (data.WalkthroughDone == true and data.WalkthroughReplay ~= true) then
 		return false
 	end
 	if type(data.Settings) == "table" and data.Settings.Tips == false then
 		return false
 	end
-	-- the very first run (never run before), or Settings > Replay tips (overrides Done)
-	local first = data.WalkthroughDone ~= true and data.TutorialDone ~= true and type(data.Stats) == "table" and (tonumber(data.Stats.Runs) or 0) == 0
+	local first = data.TutorialDone ~= true and type(data.Stats) == "table" and (tonumber(data.Stats.Runs) or 0) == 0
 	if not first and data.WalkthroughReplay ~= true then
 		return false
 	end
@@ -47853,12 +48034,15 @@ local function spawnChest(w)
 	local C = cfg()
 	local hp = heroPos(w.Rp) or Config.ArenaOrigin
 	local at = openSpot(hp, C.ChestDistance or 12, C.RingClearance or 5)
-	local ok, obj = pcall(ctx.LootSystem.AddFeatureChest, arena, C.ChestType or "Small", at, true)
+	-- free on the account's first walkthrough only; a replay's chest has the normal price,
+	-- so Replay tips can't be used for a free chest every run
+	local free = w.First == true
+	local ok, obj = pcall(ctx.LootSystem.AddFeatureChest, arena, C.ChestType or "Small", at, free)
 	if not ok or not obj then
 		warn("[Walkthrough] chest failed: " .. tostring(obj))
 		return
 	end
-	ctx.LootSystem.SetObjState(obj, "Ready", { Title = "Gift Chest", Detail = "Free · hold to open" })
+	ctx.LootSystem.SetObjState(obj, "Ready", free and { Title = "Gift Chest", Detail = "Free · hold to open" } or { Title = "Chest", Detail = "Hold to open" })
 	obj.OnOpened = function()
 		if active == w then
 			w.ChestOpened = true
@@ -47975,9 +48159,10 @@ function Walkthrough.Consider(rp, data, teamSize: number, mode: string?)
 	if not data or not eligible(rp, data, teamSize, mode) then
 		return false
 	end
+	local first = data.WalkthroughDone ~= true
 	data.WalkthroughDone = true
 	data.WalkthroughReplay = false
-	active = { Rp = rp, Step = nil, Time = 0, Reveal = true, Level0 = rp.Level or 1 }
+	active = { Rp = rp, Step = nil, Time = 0, Reveal = true, Level0 = rp.Level or 1, First = first }
 	rp.Walkthrough = true
 	table.clear(log)
 	if ctx.EnemySpawner.SetHold then
@@ -52762,6 +52947,76 @@ local badges: { [BasePart]: Badge } = {}
 local lastScan = 0
 local started = false
 
+-- The enemy pool's "Body" parts (a fixed pool the server never destroys), kept up to date by
+-- ChildAdded / ChildRemoved instead of GetChildren + FindFirstChild("Body") on ~300 models
+-- per scan. Shared with DangerArrows and MiniMap: treat the list as read only.
+local enemyBodies: { BasePart } = {}
+local bodyOf: { [Instance]: BasePart } = {}
+local bodyIndex: { [BasePart]: number } = {}
+local bodyFolder: Instance? = nil
+local bodyConns: { RBXScriptConnection } = {}
+
+local function addBody(model: Instance, body: Instance?)
+	if bodyOf[model] or not body or not body:IsA("BasePart") or bodyFolder == nil or model.Parent ~= bodyFolder then
+		return
+	end
+	bodyOf[model] = body
+	table.insert(enemyBodies, body)
+	bodyIndex[body] = #enemyBodies
+end
+
+local function removeBody(model: Instance)
+	local body = bodyOf[model]
+	if not body then
+		return
+	end
+	bodyOf[model] = nil
+	local i = bodyIndex[body]
+	bodyIndex[body] = nil
+	local last = #enemyBodies
+	if i and i <= last then
+		local moved = enemyBodies[last]
+		enemyBodies[i] = moved
+		enemyBodies[last] = nil
+		if moved ~= body then
+			bodyIndex[moved] = i
+		end
+	end
+end
+
+local function watchEnemy(model: Instance)
+	local body = model:FindFirstChild("Body")
+	if body then
+		addBody(model, body)
+		return
+	end
+	task.spawn(function()
+		addBody(model, model:WaitForChild("Body", 10)) -- a model whose parts arrive late
+	end)
+end
+
+function AffixIcons.EnemyBodies(): { BasePart }
+	local folder = workspace:FindFirstChild("SwarmEnemies")
+	if folder ~= bodyFolder then
+		for _, c in ipairs(bodyConns) do
+			c:Disconnect()
+		end
+		table.clear(bodyConns)
+		table.clear(enemyBodies)
+		table.clear(bodyOf)
+		table.clear(bodyIndex)
+		bodyFolder = folder
+		if folder then
+			table.insert(bodyConns, folder.ChildAdded:Connect(watchEnemy))
+			table.insert(bodyConns, folder.ChildRemoved:Connect(removeBody))
+			for _, m in ipairs(folder:GetChildren()) do
+				watchEnemy(m)
+			end
+		end
+	end
+	return enemyBodies
+end
+
 local function cfg(): { [string]: any }
 	return (Config :: any).AffixIcons or {}
 end
@@ -52910,29 +53165,23 @@ local seen: { [BasePart]: boolean } = {}
 
 local function update()
 	table.clear(seen)
-	local folder = workspace:FindFirstChild("SwarmEnemies")
-	if folder then
-		for _, m in ipairs(folder:GetChildren()) do
-			local body = m:FindFirstChild("Body")
-			if body and body:IsA("BasePart") then
-				local affix = affixOf(body)
-				if affix then
-					seen[body] = true
-					local b = badges[body]
-					if b and b.Affix ~= affix then
-						destroy(b)
-						badges[body] = nil
-						b = nil
-					end
-					if not b then
-						b = build(body, affix)
-						badges[body] = b
-					end
-					if b then
-						b.Gui.StudsOffsetWorldSpace = Vector3.new(0, body.Size.Y / 2 + (tonumber(cfg().Lift) or 6.2), 0)
-						setPulse(b)
-					end
-				end
+	for _, body in ipairs(AffixIcons.EnemyBodies()) do
+		local affix = affixOf(body)
+		if affix then
+			seen[body] = true
+			local b = badges[body]
+			if b and b.Affix ~= affix then
+				destroy(b)
+				badges[body] = nil
+				b = nil
+			end
+			if not b then
+				b = build(body, affix)
+				badges[body] = b
+			end
+			if b then
+				b.Gui.StudsOffsetWorldSpace = Vector3.new(0, body.Size.Y / 2 + (tonumber(cfg().Lift) or 6.2), 0)
+				setPulse(b)
 			end
 		end
 	end
@@ -55912,46 +56161,58 @@ task.spawn(function()
 	task.wait(0.55)
 	gui:Destroy()
 end)
-Audio.Init()
-CameraController.Init()
-MobileControls.Init()
-EnemyRenderer.Init() -- before VFX: it sets up the folder the 3D models live in
-VFX.Init({
-	OnLocalEvent = function(kind)
-		if kind == "hurt" then
-			UIBuilder.HurtFlash()
-		end
-	end,
-})
-UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls })
-require(script.Parent:WaitForChild("TeamPings")).Init()
-require(script.Parent:WaitForChild("FeatureHud")).Init() -- reserved HUD slots for new features (empty until one uses them)
-require(script.Parent:WaitForChild("Ultimate")).Init() -- hero ultimate button + build preset cache (HEROPOWER)
-require(script.Parent:WaitForChild("HeroSong")).Init() -- HEROES: the Bard's SONG badge (idle while the switch is off)
-require(script.Parent:WaitForChild("ChallengesUI")).Init() -- CHALLENGES: champion plate + ring, trial / curse badges (idle while the switches are off)
-require(script.Parent:WaitForChild("WorldFx")).Init() -- EVENTS: map events + weather visuals (idle while the switches are off)
-require(script.Parent:WaitForChild("TeamCombo")).Init() -- TEAM: combo meter + PingWheel, Spectate, WeakSpot (idle while the switches are off)
-require(script.Parent:WaitForChild("ExploreUI")).Init() -- EXPLORE: cracked wall / merchant / villager markers + the merchant panel (idle while the switches are off)
-require(script.Parent:WaitForChild("FinalStandFx")).Init() -- batch B: Final Stand aura + headline (idle while the switch is off)
-require(script.Parent:WaitForChild("StageModifierUI")).Init() -- batch B: stage modifier HUD badge (idle while the switch is off)
-require(script.Parent:WaitForChild("DangerArrows")).Init() -- off-screen boss / champion / elite edge arrows (idle while the switch is off)
-require(script.Parent:WaitForChild("AffixIcons")).Init() -- elite affix badges (idle while the switch is off)
+
+-- One module failing to start (a live-only error) must not stop the ones after it.
+local function boot(name: string, fn: () -> ())
+	local ok, err = pcall(fn)
+	if not ok then
+		warn("[ClientMain] " .. name .. " failed to start: " .. tostring(err))
+	end
+end
+
+boot("Audio", function() Audio.Init() end)
+boot("CameraController", function() CameraController.Init() end)
+boot("MobileControls", function() MobileControls.Init() end)
+boot("EnemyRenderer", function() EnemyRenderer.Init() end) -- before VFX: it sets up the folder the 3D models live in
+boot("VFX", function()
+	VFX.Init({
+		OnLocalEvent = function(kind)
+			if kind == "hurt" then
+				UIBuilder.HurtFlash()
+			end
+		end,
+	})
+end)
+boot("UIBuilder", function() UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls }) end)
+boot("TeamPings", function() require(script.Parent:WaitForChild("TeamPings")).Init() end)
+boot("FeatureHud", function() require(script.Parent:WaitForChild("FeatureHud")).Init() end) -- reserved HUD slots for new features (empty until one uses them)
+boot("Ultimate", function() require(script.Parent:WaitForChild("Ultimate")).Init() end) -- hero ultimate button + build preset cache (HEROPOWER)
+boot("HeroSong", function() require(script.Parent:WaitForChild("HeroSong")).Init() end) -- HEROES: the Bard's SONG badge (idle while the switch is off)
+boot("ChallengesUI", function() require(script.Parent:WaitForChild("ChallengesUI")).Init() end) -- CHALLENGES: champion plate + ring, trial / curse badges (idle while the switches are off)
+boot("WorldFx", function() require(script.Parent:WaitForChild("WorldFx")).Init() end) -- EVENTS: map events + weather visuals (idle while the switches are off)
+boot("TeamCombo", function() require(script.Parent:WaitForChild("TeamCombo")).Init() end) -- TEAM: combo meter + PingWheel, Spectate, WeakSpot (idle while the switches are off)
+boot("ExploreUI", function() require(script.Parent:WaitForChild("ExploreUI")).Init() end) -- EXPLORE: cracked wall / merchant / villager markers + the merchant panel (idle while the switches are off)
+boot("FinalStandFx", function() require(script.Parent:WaitForChild("FinalStandFx")).Init() end) -- batch B: Final Stand aura + headline (idle while the switch is off)
+boot("StageModifierUI", function() require(script.Parent:WaitForChild("StageModifierUI")).Init() end) -- batch B: stage modifier HUD badge (idle while the switch is off)
+boot("DangerArrows", function() require(script.Parent:WaitForChild("DangerArrows")).Init() end) -- off-screen boss / champion / elite edge arrows (idle while the switch is off)
+boot("AffixIcons", function() require(script.Parent:WaitForChild("AffixIcons")).Init() end) -- elite affix badges (idle while the switch is off)
 -- FEEL (docs/features/FEEL.md): each one idles while its Config.Features switch is off
-require(script.Parent:WaitForChild("BossIntro")).Init()
-require(script.Parent:WaitForChild("Announcer")).Init()
-require(script.Parent:WaitForChild("HitFeel")).Init()
+boot("BossIntro", function() require(script.Parent:WaitForChild("BossIntro")).Init() end)
+boot("Announcer", function() require(script.Parent:WaitForChild("Announcer")).Init() end)
+boot("HitFeel", function() require(script.Parent:WaitForChild("HitFeel")).Init() end)
 -- LOBBY (docs/features/LOBBY.md): weapon mastery glows + menu, the COURTYARD (idle while switched off)
-require(script.Parent:WaitForChild("WeaponMastery")).Init()
-require(script.Parent:WaitForChild("LobbyFun")).Init()
-require(script.Parent:WaitForChild("StoreFx")).Init() -- STORE: pets, trails, plates, emotes, dais, burst style (idle while the switch is off)
-require(script.Parent:WaitForChild("TitlePlates")).Init() -- META: name + worn title over each hero (idle while the switch is off)
-require(script.Parent:WaitForChild("ClientPerformance")).Init()
-require(script.Parent:WaitForChild("GroundDetail")).Init()
-DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer
-require(script.Parent:WaitForChild("TravelOverlay")).Init() -- private run servers: travel cover + go-home banner
-require(script.Parent:WaitForChild("PartyLines")).Init() -- party quick lines: bubbles + feed (idle while PartyQuickLines is off)
-require(script.Parent:WaitForChild("ReviveThanks")).Init() -- THANKS! after a teammate revive (idle while ReviveThanks is off)
-require(script.Parent:WaitForChild("ResumeCard")).Init() -- QuickResume: the RESUME RUN card of a held solo run (idle while the switch is off)
+boot("WeaponMastery", function() require(script.Parent:WaitForChild("WeaponMastery")).Init() end)
+boot("LobbyFun", function() require(script.Parent:WaitForChild("LobbyFun")).Init() end)
+boot("StoreFx", function() require(script.Parent:WaitForChild("StoreFx")).Init() end) -- STORE: pets, trails, plates, emotes, dais, burst style (idle while the switch is off)
+boot("TitlePlates", function() require(script.Parent:WaitForChild("TitlePlates")).Init() end) -- META: name + worn title over each hero (idle while the switch is off)
+boot("ClientPerformance", function() require(script.Parent:WaitForChild("ClientPerformance")).Init() end)
+boot("GroundDetail", function() require(script.Parent:WaitForChild("GroundDetail")).Init() end)
+boot("FlickerLights", function() require(script.Parent:WaitForChild("FlickerLights")).Init() end) -- torch / brazier light flicker (MapBuilder only tags the lights)
+boot("DamageText", function() DamageText.Init() end) -- optional damage numbers (Settings), after EnemyRenderer
+boot("TravelOverlay", function() require(script.Parent:WaitForChild("TravelOverlay")).Init() end) -- private run servers: travel cover + go-home banner
+boot("PartyLines", function() require(script.Parent:WaitForChild("PartyLines")).Init() end) -- party quick lines: bubbles + feed (idle while PartyQuickLines is off)
+boot("ReviveThanks", function() require(script.Parent:WaitForChild("ReviveThanks")).Init() end) -- THANKS! after a teammate revive (idle while ReviveThanks is off)
+boot("ResumeCard", function() require(script.Parent:WaitForChild("ResumeCard")).Init() end) -- QuickResume: the RESUME RUN card of a held solo run (idle while the switch is off)
 
 -- Humanoid state switches don't replicate and the client owns its character, so the
 -- server's settings are repeated here: no tripping, ragdolling or dying (jumps: JumpController).
@@ -57253,7 +57514,8 @@ return DamageText
 	Placement: the arrow sits where the direction from the screen centre meets the safe
 	rectangle, then slides along the edge until its box clears every HUD rect a world label
 	must keep off (WorldLabelFade.Rects: top-centre stack, vitals, ability bar, banner,
-	BUILD, centre bars, notice pills, minimap), the touch buttons (JUMP, ULT), the feature
+	BUILD, centre bars, notice pills, minimap), the gold / kills pills, pause, buff and status
+	chips (Hud), the touch buttons (JUMP, ULT), the feature
 	badges, the portal arrow (StageUI) and the arrows already placed. No clear spot = no
 	arrow. Hidden outside a running run, while dead and while any panel is open (the same
 	rules as the portal arrow).
@@ -57276,6 +57538,7 @@ local UIKit = require(script.Parent.UIKit)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local MiniMap = require(script.Parent.MiniMap)
+local AffixIcons = require(script.Parent.AffixIcons)
 local StageUI = require(script.Parent.StageUI)
 local UIState = require(script.Parent.UIState)
 local WorldLabelFade = require(script.Parent.WorldLabelFade)
@@ -57484,20 +57747,13 @@ end
 
 local function targets(from: Vector3): { Target }
 	local out: { Target } = {}
-	local folder = workspace:FindFirstChild("SwarmEnemies")
-	if not folder then
-		return out
-	end
-	for _, m in ipairs(folder:GetChildren()) do
-		local body = m:FindFirstChild("Body")
-		if body and body:IsA("BasePart") then
-			local pos = body.Position
-			if pos.Y >= ACTIVE_Y then
-				local kind = classify(body)
-				if kind then
-					local flat = Vector3.new(pos.X - from.X, 0, pos.Z - from.Z)
-					table.insert(out, { Kind = kind, Dist = flat.Magnitude, Pos = pos, Body = body })
-				end
+	for _, body in ipairs(AffixIcons.EnemyBodies()) do
+		local pos = body.Position
+		if pos.Y >= ACTIVE_Y then
+			local kind = classify(body)
+			if kind then
+				local flat = Vector3.new(pos.X - from.X, 0, pos.Z - from.Z)
+				table.insert(out, { Kind = kind, Dist = flat.Magnitude, Pos = pos, Body = body })
 			end
 		end
 	end
@@ -57531,25 +57787,17 @@ end
 
 -- Every rect an arrow must keep off right now.
 local function blockers(): { Box }
-	local out = WorldLabelFade.Rects()
+	local out = table.clone(WorldLabelFade.Rects()) -- the shared list is cached: copy before adding
 	addBox(out, MiniMap.Elements().Holder)
-	-- HUD pieces WorldLabelFade leaves out: the gold / kills counters, the pause button,
-	-- the BUILD button and the buff / status chips
+	-- the top-right gold / kills pills and the pause button, the buff chip and the status plate
+	-- (WorldLabelFade.Rects does not list them)
 	local hud = Hud.Elements()
-	local hudFrame = hud.Frame
-	if typeof(hudFrame) == "Instance" and hudFrame:IsA("GuiObject") and hudFrame.Visible then
-		local counters = hud.Counters
-		if typeof(counters) == "Instance" then
-			for _, c in ipairs(counters:GetChildren()) do
-				addBox(out, c)
-			end
-		end
-		local pause = hud.Pause
-		addBox(out, type(pause) == "table" and pause.Instance or pause)
-		for _, key in ipairs({ "BuildButton", "Buff", "Status" }) do
-			addBox(out, hud[key])
-		end
-	end
+	addBox(out, hud.Counters)
+	addBox(out, hud.Purse)
+	addBox(out, hud.Kills and hud.Kills.Frame)
+	addBox(out, hud.Pause and hud.Pause.Instance)
+	addBox(out, hud.Buff)
+	addBox(out, hud.Status)
 	local stage = StageUI.Elements()
 	addBox(out, stage.Arrow)
 	local pg = player:FindFirstChild("PlayerGui")
@@ -57706,12 +57954,11 @@ local function show(a: Arrow, t: Target, x: number, y: number, angle: number, of
 			TweenService:Create(a.Holder, TweenInfo.new(tonumber(cfg().FadeSeconds) or 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { GroupTransparency = 0 }):Play()
 		end
 	else
-		local step = 1 / math.max(1, tonumber(cfg().UpdateHz) or 10)
-		TweenService:Create(a.Holder, TweenInfo.new(step, Enum.EasingStyle.Linear), { Position = pos }):Play()
+		-- set straight away (no tween per arrow per refresh; the refresh is 10 Hz)
+		a.Holder.Position = pos
 		-- turn the short way round
 		local cur = a.Pivot.Rotation
-		local goal = cur + ((angle - cur + 180) % 360 - 180)
-		TweenService:Create(a.Pivot, TweenInfo.new(step, Enum.EasingStyle.Linear), { Rotation = goal }):Play()
+		a.Pivot.Rotation = cur + ((angle - cur + 180) % 360 - 180)
 	end
 	a.Shown = true
 	a.Body = t.Body
@@ -60928,6 +61175,9 @@ end
 ------------------------------------------------------------------------------------------
 
 local scanTimer = 0
+local panelTimer = 0 -- shop panel layout / card refresh (5 Hz unless the size or shown state changes)
+local panelShown = false
+local panelHolderSize = Vector2.zero
 
 local function update(dt: number)
 	clock += dt
@@ -60972,9 +61222,18 @@ local function update(dt: number)
 				pending[slot] = nil
 			end
 		end
-		layoutPanel(p)
-		fillCards()
+		-- the layout and card text only change with the screen size, the panel opening, gold
+		-- or the HUD's lanes, so they run when the size / shown state changed or at 5 Hz
+		local holderSize = (p.Parent :: GuiObject).AbsoluteSize
+		panelTimer -= dt
+		if panelTimer <= 0 or not panelShown or holderSize ~= panelHolderSize then
+			panelTimer = 0.2
+			panelHolderSize = holderSize
+			layoutPanel(p)
+			fillCards()
+		end
 	end
+	panelShown = show
 	if p then
 		set(p, "Visible", show)
 	end
@@ -62053,6 +62312,73 @@ return FinalStandFx
         </Item>
         <Item class="ModuleScript" referent="137">
           <Properties>
+            <string name="Name">FlickerLights</string>
+            <string name="Source"><![CDATA[--[[
+	FlickerLights.lua (client)
+	Torch / brazier lights flicker here, ~10 times a second. MapBuilder only tags the lights
+	("SwarmFlickerLight") and stores their FlickerBase / FlickerPhase attributes; writing
+	Brightness on the server replicated every change to every player, forever.
+	Client-only writes: the server value stays the base brightness.
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local RunService = game:GetService("RunService")
+
+local FlickerLights = {}
+
+local TAG = "SwarmFlickerLight"
+local STEP = 0.1
+
+local lights: { [Light]: { Base: number, Phase: number } } = {}
+local started = false
+
+local function add(inst: Instance)
+	if inst:IsA("Light") then
+		local base = inst:GetAttribute("FlickerBase")
+		local phase = inst:GetAttribute("FlickerPhase")
+		lights[inst] = {
+			Base = type(base) == "number" and base or inst.Brightness,
+			Phase = type(phase) == "number" and phase or 0,
+		}
+	end
+end
+
+function FlickerLights.Init()
+	if started then
+		return
+	end
+	started = true
+	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
+		add(inst)
+	end
+	CollectionService:GetInstanceAddedSignal(TAG):Connect(add)
+	CollectionService:GetInstanceRemovedSignal(TAG):Connect(function(inst)
+		lights[inst :: Light] = nil
+	end)
+	local acc = 0
+	RunService.Heartbeat:Connect(function(dt)
+		acc += dt
+		if acc < STEP then
+			return
+		end
+		acc = 0
+		local t = os.clock()
+		for light, f in pairs(lights) do
+			if light.Parent == nil then
+				lights[light] = nil
+			else
+				light.Brightness = f.Base * (0.86 + 0.09 * math.sin(t * 7.3 + f.Phase) + 0.05 * math.sin(t * 17.9 + f.Phase * 2))
+			end
+		end
+	end)
+end
+
+return FlickerLights
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="138">
+          <Properties>
             <string name="Name">GroundDetail</string>
             <string name="Source"><![CDATA[--[[
 	GroundDetail.lua
@@ -62885,7 +63211,7 @@ return GroundDetail
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="138">
+        <Item class="ModuleScript" referent="139">
           <Properties>
             <string name="Name">HeroPresets</string>
             <string name="Source"><![CDATA[--[[
@@ -63014,7 +63340,7 @@ return HeroPresets
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="139">
+        <Item class="ModuleScript" referent="140">
           <Properties>
             <string name="Name">HeroSong</string>
             <string name="Source"><![CDATA[--[[
@@ -63058,7 +63384,7 @@ return HeroSong
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="140">
+        <Item class="ModuleScript" referent="141">
           <Properties>
             <string name="Name">HitFeel</string>
             <string name="Source"><![CDATA[--[[
@@ -63412,7 +63738,7 @@ return HitFeel
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="141">
+        <Item class="ModuleScript" referent="142">
           <Properties>
             <string name="Name">HomeBoard</string>
             <string name="Source"><![CDATA[--[[
@@ -63716,7 +64042,7 @@ return HomeBoard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="142">
+        <Item class="ModuleScript" referent="143">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--[[
@@ -65919,6 +66245,11 @@ function Hud.BarTop(): number
 	return ui.BarTop or 600
 end
 
+-- Bottom of the ability panel.
+function Hud.BarBottom(): number
+	return ui.BarBottom or 700
+end
+
 -- Bottom of the top cluster (toasts go below it).
 function Hud.TopBottom(): number
 	return ui.TopBottom or 200
@@ -66015,7 +66346,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="143">
+        <Item class="ModuleScript" referent="144">
           <Properties>
             <string name="Name">Icons</string>
             <string name="Source"><![CDATA[--[[
@@ -68485,7 +68816,7 @@ return Icons
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="144">
+        <Item class="ModuleScript" referent="145">
           <Properties>
             <string name="Name">IdleFx</string>
             <string name="Source"><![CDATA[--[[
@@ -69145,7 +69476,7 @@ return IdleFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="145">
+        <Item class="ModuleScript" referent="146">
           <Properties>
             <string name="Name">InputPrompts</string>
             <string name="Source"><![CDATA[--[[
@@ -69317,7 +69648,7 @@ return InputPrompts
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="146">
+        <Item class="ModuleScript" referent="147">
           <Properties>
             <string name="Name">JumpController</string>
             <string name="Source"><![CDATA[--[[
@@ -69526,7 +69857,7 @@ return JumpController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="147">
+        <Item class="ModuleScript" referent="148">
           <Properties>
             <string name="Name">LevelUpBanish</string>
             <string name="Source"><![CDATA[--[[
@@ -69784,7 +70115,7 @@ return LevelUpBanish
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="148">
+        <Item class="ModuleScript" referent="149">
           <Properties>
             <string name="Name">LobbyFun</string>
             <string name="Source"><![CDATA[--[[
@@ -70335,7 +70666,7 @@ return LobbyFun
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="149">
+        <Item class="ModuleScript" referent="150">
           <Properties>
             <string name="Name">LobbyScreen</string>
             <string name="Source"><![CDATA[--[[
@@ -72032,7 +72363,7 @@ return LobbyScreen
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="150">
+        <Item class="ModuleScript" referent="151">
           <Properties>
             <string name="Name">LootUI</string>
             <string name="Source"><![CDATA[--[[
@@ -73538,7 +73869,7 @@ return LootUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="151">
+        <Item class="ModuleScript" referent="152">
           <Properties>
             <string name="Name">MenuArenas</string>
             <string name="Source"><![CDATA[--[[
@@ -73955,7 +74286,7 @@ return MenuArenas
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="152">
+        <Item class="ModuleScript" referent="153">
           <Properties>
             <string name="Name">MenuCharacters</string>
             <string name="Source"><![CDATA[--[[
@@ -74184,6 +74515,19 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	end
 	local function skinOwned(p, skinId: string): boolean
 		return skinId == "Default" or p.OwnedSkins[skinId] == true
+	end
+	-- the hero's skins; one of a held feature (Starter Bundle skin) is left out while its
+	-- switch is off, unless the player already owns it
+	local function visibleSkins(): { string }
+		local p = profile()
+		local out = {}
+		for _, skinId in ipairs(CharacterData.SkinsFor(inspChar)) do
+			local feature = skinId ~= "Default" and CharacterData.Skins[skinId] and (CharacterData.Skins[skinId] :: any).Feature
+			if not feature or Config.FeatureOn(feature) or (p ~= nil and skinOwned(p, skinId)) then
+				table.insert(out, skinId)
+			end
+		end
+		return out
 	end
 
 	ui.Header = UIKit.TitleBar(screen, "Characters", ctx.Back)
@@ -74510,7 +74854,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 		table.clear(swatches)
 		local cardH = 34 + TS(14) + TS(10) + 32
-		for order, skinId in ipairs(CharacterData.SkinsFor(inspChar)) do
+		for order, skinId in ipairs(visibleSkins()) do
 			local look = CharacterData.ResolveLook(inspChar, skinId)
 			local hit = new("TextButton", {
 				Name = skinId,
@@ -75053,7 +75397,7 @@ ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d).
 
 	-- skin cards share the row: up to five, at least 82 px wide
 	local function fitSkins(innerW: number)
-		local n = math.max(1, #CharacterData.SkinsFor(inspChar))
+		local n = math.max(1, #visibleSkins())
 		local per = math.clamp(math.floor((innerW + SKIN_GAP) / (82 + SKIN_GAP)), 1, 5)
 		local w = math.floor((innerW - (math.min(n, per) - 1) * SKIN_GAP) / math.min(n, per))
 		w = math.clamp(w, 82, 124)
@@ -75224,7 +75568,7 @@ return MenuCharacters
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="153">
+        <Item class="ModuleScript" referent="154">
           <Properties>
             <string name="Name">MenuCollection</string>
             <string name="Source"><![CDATA[--[[
@@ -75333,7 +75677,7 @@ return MenuCollection
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="154">
+        <Item class="ModuleScript" referent="155">
           <Properties>
             <string name="Name">MenuComeback</string>
             <string name="Source"><![CDATA[--[[
@@ -75513,7 +75857,7 @@ return MenuComeback
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="155">
+        <Item class="ModuleScript" referent="156">
           <Properties>
             <string name="Name">MenuCurses</string>
             <string name="Source"><![CDATA[--[[
@@ -75777,7 +76121,7 @@ return MenuCurses
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="156">
+        <Item class="ModuleScript" referent="157">
           <Properties>
             <string name="Name">MenuDaily</string>
             <string name="Source"><![CDATA[--[[
@@ -76362,7 +76706,7 @@ return MenuDaily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="157">
+        <Item class="ModuleScript" referent="158">
           <Properties>
             <string name="Name">MenuGroup</string>
             <string name="Source"><![CDATA[--[[
@@ -76510,7 +76854,7 @@ return MenuGroup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="158">
+        <Item class="ModuleScript" referent="159">
           <Properties>
             <string name="Name">MenuHeroPower</string>
             <string name="Source"><![CDATA[--[[
@@ -76727,7 +77071,7 @@ return MenuHeroPower
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="159">
+        <Item class="ModuleScript" referent="160">
           <Properties>
             <string name="Name">MenuInvite</string>
             <string name="Source"><![CDATA[--[[
@@ -76842,7 +77186,7 @@ return MenuInvite
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="160">
+        <Item class="ModuleScript" referent="161">
           <Properties>
             <string name="Name">MenuJournal</string>
             <string name="Source"><![CDATA[-- Manually opened field notes; no automatic introductions or build recommendations.
@@ -76918,7 +77262,7 @@ return MenuJournal
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="161">
+        <Item class="ModuleScript" referent="162">
           <Properties>
             <string name="Name">MenuLastRun</string>
             <string name="Source"><![CDATA[--[[
@@ -77122,7 +77466,7 @@ return MenuLastRun
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="162">
+        <Item class="ModuleScript" referent="163">
           <Properties>
             <string name="Name">MenuLeaderboards</string>
             <string name="Source"><![CDATA[--[[
@@ -77691,7 +78035,7 @@ return MenuLeaderboards
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="163">
+        <Item class="ModuleScript" referent="164">
           <Properties>
             <string name="Name">MenuMore</string>
             <string name="Source"><![CDATA[--[[
@@ -77987,7 +78331,7 @@ return MenuMore
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="164">
+        <Item class="ModuleScript" referent="165">
           <Properties>
             <string name="Name">MenuParty</string>
             <string name="Source"><![CDATA[--[[
@@ -78861,7 +79205,7 @@ return MenuParty
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="165">
+        <Item class="ModuleScript" referent="166">
           <Properties>
             <string name="Name">MenuPlay</string>
             <string name="Source"><![CDATA[--[[
@@ -79557,7 +79901,7 @@ return MenuPlay
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="166">
+        <Item class="ModuleScript" referent="167">
           <Properties>
             <string name="Name">MenuPlaytime</string>
             <string name="Source"><![CDATA[--[[
@@ -79765,7 +80109,7 @@ return MenuPlaytime
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="167">
+        <Item class="ModuleScript" referent="168">
           <Properties>
             <string name="Name">MenuPrestige</string>
             <string name="Source"><![CDATA[--[[
@@ -79936,7 +80280,7 @@ return MenuPrestige
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="168">
+        <Item class="ModuleScript" referent="169">
           <Properties>
             <string name="Name">MenuQuests</string>
             <string name="Source"><![CDATA[--[[
@@ -80205,7 +80549,7 @@ return MenuQuests
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="169">
+        <Item class="ModuleScript" referent="170">
           <Properties>
             <string name="Name">MenuSeason</string>
             <string name="Source"><![CDATA[--[[
@@ -80375,7 +80719,7 @@ return MenuSeason
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="170">
+        <Item class="ModuleScript" referent="171">
           <Properties>
             <string name="Name">MenuSigils</string>
             <string name="Source"><![CDATA[--[[
@@ -80551,7 +80895,7 @@ return MenuSigils
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="171">
+        <Item class="ModuleScript" referent="172">
           <Properties>
             <string name="Name">MenuStarter</string>
             <string name="Source"><![CDATA[--[[
@@ -80677,7 +81021,7 @@ return MenuStarter
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="172">
+        <Item class="ModuleScript" referent="173">
           <Properties>
             <string name="Name">MenuStats</string>
             <string name="Source"><![CDATA[--[[
@@ -81143,7 +81487,7 @@ return MenuStats
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="173">
+        <Item class="ModuleScript" referent="174">
           <Properties>
             <string name="Name">MenuStore</string>
             <string name="Source"><![CDATA[--[[
@@ -81664,7 +82008,11 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		end
 		if section == "Skins" then
 			for i, e in ipairs(CosmeticData.OfKind("Skin")) do
-				table.insert(made, skinCard(p, e, i))
+				-- a skin of a held feature (Starter Bundle) is hidden while its switch is off, unless owned
+				local feature = (CharacterData.Skins[e.Id] :: any).Feature
+				if not feature or Config.FeatureOn(feature) or (type(p.OwnedSkins) == "table" and p.OwnedSkins[e.Id] == true) then
+					table.insert(made, skinCard(p, e, i))
+				end
 			end
 		elseif section == "Supporter" then
 			table.insert(made, supporterCard(p, 1))
@@ -81681,7 +82029,11 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 			end
 		elseif sec and sec.Kind then
 			for i, e in ipairs(CosmeticData.OfKind(sec.Kind)) do
-				if e.Source ~= "Default" and not (e :: any).Weapon then
+				-- a look of a held feature (invites, daily quests) is hidden while its switch is off, unless owned
+				local entry = StoreCatalog.Get(e.Id)
+				local feature = entry and entry.Feature
+				local ownedLook = view(p).Owned[e.Id] == true
+				if e.Source ~= "Default" and not (e :: any).Weapon and (ownedLook or not feature or Config.FeatureOn(feature)) then
 					table.insert(made, itemCard(p, e, i))
 				end
 			end
@@ -81801,7 +82153,7 @@ return MenuStore
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="174">
+        <Item class="ModuleScript" referent="175">
           <Properties>
             <string name="Name">MenuStreak</string>
             <string name="Source"><![CDATA[--[[
@@ -81949,7 +82301,7 @@ return MenuStreak
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="175">
+        <Item class="ModuleScript" referent="176">
           <Properties>
             <string name="Name">MenuTitles</string>
             <string name="Source"><![CDATA[--[[
@@ -82085,7 +82437,13 @@ function MenuTitles.Build(screen: Frame, ctx: { [string]: any })
 		local list = CosmeticData.OfKind("Title")
 		local earned, locked = {}, {}
 		for _, e in ipairs(list) do
-			table.insert(MenuTitles.Owns(p, e.Name) and earned or locked, e)
+			local owned = MenuTitles.Owns(p, e.Name)
+			-- a title of a held feature (Starter Bundle, invites, group) can't be earned while its
+			-- switch is off: hidden, unless the player already owns it
+			local feature = (e :: any).Feature
+			if owned or feature == nil or Config.FeatureOn(feature) then
+				table.insert(owned and earned or locked, e)
+			end
 		end
 		for _, group in ipairs({ earned, locked }) do
 			for _, e in ipairs(group) do
@@ -82140,7 +82498,7 @@ return MenuTitles
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="176">
+        <Item class="ModuleScript" referent="177">
           <Properties>
             <string name="Name">MenuTrack</string>
             <string name="Source"><![CDATA[--[[
@@ -82390,7 +82748,7 @@ return MenuTrack
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="177">
+        <Item class="ModuleScript" referent="178">
           <Properties>
             <string name="Name">MenuUpgrades</string>
             <string name="Source"><![CDATA[--[[
@@ -82897,7 +83255,7 @@ return MenuUpgrades
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="178">
+        <Item class="ModuleScript" referent="179">
           <Properties>
             <string name="Name">MenuWeekly</string>
             <string name="Source"><![CDATA[--[[
@@ -83104,7 +83462,7 @@ return MenuWeekly
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="179">
+        <Item class="ModuleScript" referent="180">
           <Properties>
             <string name="Name">MetaUI</string>
             <string name="Source"><![CDATA[--[[
@@ -83350,7 +83708,7 @@ return MetaUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="180">
+        <Item class="ModuleScript" referent="181">
           <Properties>
             <string name="Name">MiniMap</string>
             <string name="Source"><![CDATA[--[[
@@ -83408,6 +83766,7 @@ local TeamUI = require(script.Parent.TeamUI)
 local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Accessibility = require(script.Parent.Accessibility)
+local AffixIcons = require(script.Parent.AffixIcons) -- EnemyBodies: the cached enemy pool list
 
 local MiniMap = {}
 
@@ -84103,26 +84462,20 @@ end
 
 -- At ENEMY_HZ: the boss body and an even sample of the enemies in range.
 local function updateEnemies(root: BasePart)
-	local folder = workspace:FindFirstChild("SwarmEnemies")
 	local count = 0
 	local boss: BasePart? = nil
 	local here = root.Position
 	local reach = (viewPx / 2) / scale + 2 -- studs from the player to the view's edge
-	if folder then
-		for _, m in ipairs(folder:GetChildren()) do
-			local body = m:FindFirstChild("Body")
-			if body and body:IsA("BasePart") then
-				local pos = body.Position
-				if pos.Y > PARKED_Y then
-					local typeId = body:GetAttribute("Type")
-					local def = type(typeId) == "string" and EnemyData.Enemies[typeId] or nil
-					if def and def.IsBoss then
-						boss = body
-					elseif def and math.abs(pos.X - here.X) < reach and math.abs(pos.Z - here.Z) < reach then
-						count += 1
-						candidates[count] = body
-					end
-				end
+	for _, body in ipairs(AffixIcons.EnemyBodies()) do
+		local pos = body.Position
+		if pos.Y > PARKED_Y then
+			local typeId = body:GetAttribute("Type")
+			local def = type(typeId) == "string" and EnemyData.Enemies[typeId] or nil
+			if def and def.IsBoss then
+				boss = body
+			elseif def and math.abs(pos.X - here.X) < reach and math.abs(pos.Z - here.Z) < reach then
+				count += 1
+				candidates[count] = body
 			end
 		end
 	end
@@ -84223,7 +84576,7 @@ return MiniMap
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="181">
+        <Item class="ModuleScript" referent="182">
           <Properties>
             <string name="Name">MobileControls</string>
             <string name="Source"><![CDATA[--[[
@@ -84639,7 +84992,7 @@ return MobileControls
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="182">
+        <Item class="ModuleScript" referent="183">
           <Properties>
             <string name="Name">ModelLibrary</string>
             <string name="Source"><![CDATA[--[[
@@ -86329,7 +86682,7 @@ return ModelLibrary
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="183">
+        <Item class="ModuleScript" referent="184">
           <Properties>
             <string name="Name">NoticeDots</string>
             <string name="Source"><![CDATA[--[[
@@ -86645,7 +86998,7 @@ return NoticeDots
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="184">
+        <Item class="ModuleScript" referent="185">
           <Properties>
             <string name="Name">Occlusion</string>
             <string name="Source"><![CDATA[--[[
@@ -87037,7 +87390,7 @@ return Occlusion
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="185">
+        <Item class="ModuleScript" referent="186">
           <Properties>
             <string name="Name">PartyLines</string>
             <string name="Source"><![CDATA[--[[
@@ -87653,7 +88006,7 @@ return PartyLines
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="186">
+        <Item class="ModuleScript" referent="187">
           <Properties>
             <string name="Name">PhotoMode</string>
             <string name="Source"><![CDATA[--[[
@@ -88104,7 +88457,7 @@ return PhotoMode
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="187">
+        <Item class="ModuleScript" referent="188">
           <Properties>
             <string name="Name">PingWheel</string>
             <string name="Source"><![CDATA[--[[
@@ -88334,7 +88687,7 @@ return PingWheel
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="188">
+        <Item class="ModuleScript" referent="189">
           <Properties>
             <string name="Name">PortalBeacon</string>
             <string name="Source"><![CDATA[--[[
@@ -88611,7 +88964,7 @@ return PortalBeacon
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="189">
+        <Item class="ModuleScript" referent="190">
           <Properties>
             <string name="Name">PrestigeConfirm</string>
             <string name="Source"><![CDATA[--[[
@@ -88974,7 +89327,7 @@ return PrestigeConfirm
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="190">
+        <Item class="ModuleScript" referent="191">
           <Properties>
             <string name="Name">ResumeCard</string>
             <string name="Source"><![CDATA[--[[
@@ -89328,7 +89681,7 @@ return ResumeCard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="191">
+        <Item class="ModuleScript" referent="192">
           <Properties>
             <string name="Name">ReviveThanks</string>
             <string name="Source"><![CDATA[--[[
@@ -89534,7 +89887,7 @@ return ReviveThanks
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="192">
+        <Item class="ModuleScript" referent="193">
           <Properties>
             <string name="Name">RunIntro</string>
             <string name="Source"><![CDATA[--[[
@@ -90060,7 +90413,7 @@ return RunIntro
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="193">
+        <Item class="ModuleScript" referent="194">
           <Properties>
             <string name="Name">Showcase</string>
             <string name="Source"><![CDATA[--[[
@@ -91161,7 +91514,7 @@ return Showcase
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="194">
+        <Item class="ModuleScript" referent="195">
           <Properties>
             <string name="Name">Spectate</string>
             <string name="Source"><![CDATA[--[[
@@ -91386,7 +91739,7 @@ return Spectate
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="195">
+        <Item class="ModuleScript" referent="196">
           <Properties>
             <string name="Name">StageModifierUI</string>
             <string name="Source"><![CDATA[--[[
@@ -91459,7 +91812,7 @@ return StageModifierUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="196">
+        <Item class="ModuleScript" referent="197">
           <Properties>
             <string name="Name">StageUI</string>
             <string name="Source"><![CDATA[--[[
@@ -92451,7 +92804,7 @@ return StageUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="197">
+        <Item class="ModuleScript" referent="198">
           <Properties>
             <string name="Name">StarterCard</string>
             <string name="Source"><![CDATA[--[[
@@ -92476,12 +92829,14 @@ local Workspace = game:GetService("Workspace")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
 
 local StarterCard = {}
 
 local player = Players.LocalPlayer
-StarterCard.Height = 58
+StarterCard.Height = 62
+local TITLE_H = 28 -- icon + title row
 
 local price: number? = nil
 local asking = false
@@ -92573,7 +92928,6 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 	local btn = UIKit.Button(parent, {
 		Kind = "Outline",
 		Title = "STARTER BUNDLE",
-		Subtitle = "",
 		Icon = "gift",
 		IconSize = 26,
 		TitleStyle = "Label",
@@ -92590,25 +92944,36 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 		end,
 	})
 	btn.Instance.Visible = false
-	-- the subtitle shrinks instead of cutting (narrow card next to TOP SCORES, Largest text)
-	local sub = btn.Subtitle
-	if sub and sub:IsA("TextLabel") then
-		local max = sub.TextSize
-		sub.TextScaled = true
-		sub:SetAttribute("NoTextFit", true)
-		local fit = Instance.new("UITextSizeConstraint")
-		fit.Name = "Fit"
-		fit.MaxTextSize = max
-		fit.MinTextSize = math.min(max, 9)
-		fit.Parent = sub
-	end
+	-- Title row (icon, STARTER BUNDLE, chevron) on top; the detail line takes the card's full
+	-- width under it and wraps to a second line when the card is narrow (phones), so it is
+	-- never cut ("Pioneer skin + 2,000 gold" / "6d left").
+	local content = btn.Face:FindFirstChild("Content") :: Frame
+	content.Position = UDim2.fromOffset(0, 4)
+	content.Size = UDim2.new(1, 0, 0, TITLE_H)
+	local detail = UIKit.Role(btn.Face, "Body", "", {
+		Name = "Detail",
+		FontFace = Theme.Font.BodyStrong,
+		TextSize = 13,
+		TextColor3 = Theme.Color.TextMuted,
+		Position = UDim2.fromOffset(Theme.Space.L, TITLE_H + 4),
+		Size = UDim2.new(1, -2 * Theme.Space.L, 1, -(TITLE_H + 6)),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		ZIndex = 4,
+	})
+	local lastWide = false
+	local column = content:FindFirstChild("Text") :: Frame
+	local chevron = content:FindFirstChild("Right") :: Frame
 	local api = {}
 	local function subText(): string
+		local left = StarterCard.TimeLeft()
 		local c = (Config :: any).StarterBundle or {}
-		-- short on purpose: the card is narrow on phones (the time left shows on its screen)
-		local gold = tonumber(c.Gold) or 0
-		local amount = gold >= 1000 and (string.format("%g", math.floor(gold / 100) / 10) .. "k") or tostring(gold)
-		return "Skin + " .. amount .. " gold"
+		local s = string.format("Pioneer skin + %s gold", UIKit.formatNumber(tonumber(c.Gold) or 0))
+		if left == "" then
+			return s
+		end
+		return s .. (lastWide and " · " or "\n") .. left
 	end
 	function api.Wanted(): boolean
 		return StarterCard.Offered()
@@ -92618,7 +92983,11 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 			btn.Instance.Visible = false
 			return y
 		end
-		btn.SetText(nil, subText())
+		lastWide = w >= 250
+		-- a narrow card drops the chevron so STARTER BUNDLE keeps a readable size
+		chevron.Visible = lastWide
+		column.Size = UDim2.new(1, lastWide and -70 or -38, 1, 0)
+		detail.Text = subText()
 		btn.Instance.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 		btn.Instance.Size = UDim2.fromOffset(math.floor(w + 0.5), StarterCard.Height)
 		btn.Instance.Visible = true
@@ -92636,7 +93005,7 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 	player:GetAttributeChangedSignal("StarterOffer"):Connect(changed)
 	player:GetAttributeChangedSignal("StarterEnds"):Connect(function()
 		if btn.Instance.Visible then
-			btn.SetText(nil, subText())
+			detail.Text = subText()
 		end
 	end)
 	-- the "6d left" line follows the clock
@@ -92644,7 +93013,7 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 		while btn.Instance.Parent do
 			task.wait(60)
 			if btn.Instance.Visible then
-				btn.SetText(nil, subText())
+				detail.Text = subText()
 			end
 		end
 	end)
@@ -92655,7 +93024,7 @@ return StarterCard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="198">
+        <Item class="ModuleScript" referent="199">
           <Properties>
             <string name="Name">StoreFx</string>
             <string name="Source"><![CDATA[--[[
@@ -93312,7 +93681,7 @@ return StoreFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="199">
+        <Item class="ModuleScript" referent="200">
           <Properties>
             <string name="Name">TeamCombo</string>
             <string name="Source"><![CDATA[--[[
@@ -93489,7 +93858,7 @@ return TeamCombo
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="200">
+        <Item class="ModuleScript" referent="201">
           <Properties>
             <string name="Name">TeamPings</string>
             <string name="Source"><![CDATA[--[[
@@ -93668,7 +94037,7 @@ return TeamPings
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="201">
+        <Item class="ModuleScript" referent="202">
           <Properties>
             <string name="Name">TeamUI</string>
             <string name="Source"><![CDATA[--[[
@@ -94313,7 +94682,7 @@ return TeamUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="202">
+        <Item class="ModuleScript" referent="203">
           <Properties>
             <string name="Name">Telegraphs</string>
             <string name="Source"><![CDATA[--[[
@@ -95940,7 +96309,7 @@ return Telegraphs
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="203">
+        <Item class="ModuleScript" referent="204">
           <Properties>
             <string name="Name">TerrainFx</string>
             <string name="Source"><![CDATA[--[[
@@ -96030,7 +96399,7 @@ return TerrainFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="204">
+        <Item class="ModuleScript" referent="205">
           <Properties>
             <string name="Name">TextFit</string>
             <string name="Source"><![CDATA[--[[
@@ -96385,7 +96754,7 @@ return TextFit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="205">
+        <Item class="ModuleScript" referent="206">
           <Properties>
             <string name="Name">TitlePlates</string>
             <string name="Source"><![CDATA[--[[
@@ -96516,7 +96885,7 @@ return TitlePlates
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="206">
+        <Item class="ModuleScript" referent="207">
           <Properties>
             <string name="Name">TravelOverlay</string>
             <string name="Source"><![CDATA[--[[
@@ -96739,7 +97108,7 @@ return TravelOverlay
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="207">
+        <Item class="ModuleScript" referent="208">
           <Properties>
             <string name="Name">Tutorial</string>
             <string name="Source"><![CDATA[--[[
@@ -96816,6 +97185,7 @@ local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
 local InputPrompts = require(script.Parent.InputPrompts)
 local TutorialBubble = require(script.Parent.TutorialBubble)
+local FeatureHud = require(script.Parent.FeatureHud)
 local StageUI = require(script.Parent.StageUI)
 local WalkthroughClient = require(script.Parent.WalkthroughClient)
 
@@ -97698,6 +98068,8 @@ function Tutorial.Update(dt: number, state: Configuration, inRun: boolean, block
 	if not ui.Card then
 		return
 	end
+	-- the open quick-ping wheel covers the middle of the screen: tips wait behind it
+	blocked = blocked or FeatureHud.PingWheelOpen()
 	local now = os.clock()
 	-- the interactive first-run walkthrough (WalkthroughClient, Config.Features.Walkthrough)
 	-- owns the bubble while it runs; the tips it replaces never show
@@ -97833,7 +98205,7 @@ return Tutorial
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="208">
+        <Item class="ModuleScript" referent="209">
           <Properties>
             <string name="Name">TutorialBubble</string>
             <string name="Source"><![CDATA[--[[
@@ -97851,8 +98223,7 @@ return Tutorial
 	Show(text, icon, target?)  target() returns the point to aim at in root (virtual) pixels,
 	                           or nil (no pointer); it is asked again every Step
 	Hide()                     pops the bubble out
-	SetCovered(on)             hidden behind a panel (keeps the tip); the quick-ping wheel
-	                           (PingWheel) hides it too
+	SetCovered(on)             hidden behind a panel (keeps the tip)
 	Step(dt)                   per frame: placement and the pointer
 ]]
 
@@ -97865,9 +98236,6 @@ local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local ClientSettings = require(script.Parent.ClientSettings)
-local PingWheel = require(script.Parent.PingWheel)
-local LootUI = require(script.Parent.LootUI)
-local MiniMap = require(script.Parent.MiniMap)
 
 local TutorialBubble = {}
 
@@ -97879,6 +98247,7 @@ local ICON = 34
 local PAD = 12
 local TAIL = 16
 local MAX_W = 440
+local PORTRAIT_LIFT = 270 -- portrait: bottom edge this far above the screen bottom (JUMP button row)
 local POINTER_MAX = 90 -- longest pointer line (virtual px)
 
 local kit: { [string]: any } = {}
@@ -97968,69 +98337,8 @@ local function textWidth(text: string): number
 	return 300
 end
 
--- Root-pixel rect (x, y, w, h) of a shown GuiObject, or nil.
-local function rectOf(g: Instance?): { number }?
-	local root = rootFrame
-	if not root or not g or not g:IsA("GuiObject") or not g.Visible or g.AbsoluteSize.X < 1 then
-		return nil
-	end
-	local anc: Instance? = g.Parent
-	while anc and anc:IsA("GuiObject") do
-		if not anc.Visible then
-			return nil
-		end
-		anc = anc.Parent
-	end
-	local v: Vector2 = kit.VirtualSize()
-	local k = v.X / math.max(1, root.AbsoluteSize.X)
-	local p = (g.AbsolutePosition - root.AbsolutePosition) * k
-	local sz = g.AbsoluteSize * k
-	return { p.X, p.Y, sz.X, sz.Y }
-end
-
--- Portrait: the ability tray sits at the top under the HUD stack, so the bubble goes near
--- the bottom, above whatever lives there (JUMP / PING, the item strip, the loot prompt,
--- the minimap) and below the hero.
-local function portraitBottom(W: number, H: number, w: number, h: number): number
-	local obstacles: { { number } } = {}
-	local function add(g: Instance?)
-		local r = rectOf(g)
-		if r then
-			table.insert(obstacles, r)
-		end
-	end
-	local pg = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
-	if pg then
-		add(pg:FindFirstChild("JumpButton", true))
-		local ping = pg:FindFirstChild("Ping", true)
-		if ping and ping:IsA("GuiButton") then
-			add(ping)
-		end
-	end
-	local loot = LootUI.Elements()
-	add(loot.Strip)
-	add(loot.Prompt)
-	add(MiniMap.Elements().Holder)
-	local l, r = W / 2 - w / 2, W / 2 + w / 2
-	local bottom = H - 16
-	for _ = 1, 6 do
-		local moved = false
-		for _, o in ipairs(obstacles) do
-			if l < o[1] + o[3] and r > o[1] and bottom - h < o[2] + o[4] and bottom > o[2] then
-				bottom = o[2] - 10
-				moved = true
-			end
-		end
-		if not moved then
-			break
-		end
-	end
-	-- never up into the hero (screen centre) or the top HUD
-	return math.max(bottom, math.min(H - 16, H / 2 + 90 + h), Hud.TopBottom() + 8 + h)
-end
-
--- Places the bubble: bottom centre, just above the ability tray (landscape), or near the
--- bottom clear of the touch controls (portrait). Returns its rect.
+-- Places the bubble: bottom centre, just above the ability tray (portrait: the lower
+-- screen, clear of the tray at the top). Returns its rect.
 local function place(): (number, number, number, number)
 	local v: Vector2 = kit.VirtualSize()
 	local W, H = v.X, v.Y
@@ -98040,9 +98348,13 @@ local function place(): (number, number, number, number)
 	local w = math.clamp(textWidth(text) * 1.3 + inner + 2 * PAD + 8, 220, math.min(MAX_W, W - 32))
 	local n = lines(text, (w - inner - 2 * PAD) / 1.25)
 	local h = math.max(ICON + 16, n * (TS(BODY_SIZE) + 4) * 1.25 + 16)
-	local bottom: number
-	if kit.IsPortrait and kit.IsPortrait() then
-		bottom = portraitBottom(W, H, w, h)
+	local bottom
+	if H > W then
+		-- portrait: the ability tray hangs under the top cluster, so "above the tray" would
+		-- be on top of the panels. Sit in the free lower part instead, above the JUMP button
+		-- and clear of the tray (and the minimap / BUILD panel that hang under it).
+		bottom = math.max(H - PORTRAIT_LIFT, Hud.BarBottom() + 60 + h)
+		bottom = math.min(H - 8, bottom)
 	else
 		bottom = math.min(H - 8, Hud.BarTop() - 14 - TAIL / 2)
 		bottom = math.max(bottom, math.min(H - 8, Hud.TopBottom() + 8 + h))
@@ -98097,13 +98409,8 @@ local function placePointer(x: number, y: number, w: number, h: number)
 	ui.Pointer.Visible = true
 end
 
--- Hidden: a panel covers the screen (the caller says) or the quick-ping wheel is open.
-local function hiddenNow(): boolean
-	return covered or PingWheel.IsOpen()
-end
-
 local function layout()
-	if not showing or not ui.Card or hiddenNow() then
+	if not showing or not ui.Card then
 		return
 	end
 	local x, y, w, h = place()
@@ -98122,12 +98429,9 @@ function TutorialBubble.Show(text: string, icon: string, aim: (() -> Vector2?)?)
 	showing = true
 	ui.Body.Text = text
 	setIcon(icon)
-	local hidden = hiddenNow()
-	if not hidden then
-		layout()
-	end
-	ui.Card.Visible = not hidden
-	ui.Pointer.Visible = ui.Pointer.Visible and not hidden
+	layout()
+	ui.Card.Visible = not covered
+	ui.Pointer.Visible = ui.Pointer.Visible and not covered
 	UIAnim.Pop(ui.Card, 0, 0.85)
 end
 
@@ -98160,29 +98464,22 @@ function TutorialBubble.SetCovered(on: boolean)
 	if not ui.Card then
 		return
 	end
-	if hiddenNow() then
+	if on then
 		ui.Card.Visible = false
 		ui.Pointer.Visible = false
-	elseif showing and not ui.Card.Visible then
+	elseif showing then
 		ui.Card.Visible = true
 		layout()
 	end
 end
 
 function TutorialBubble.Showing(): boolean
-	return showing and not hiddenNow()
+	return showing and not covered
 end
 
 function TutorialBubble.Step(dt: number)
 	clock += dt
-	if not ui.Card then
-		return
-	end
-	if showing and hiddenNow() then
-		ui.Card.Visible = false
-		ui.Pointer.Visible = false
-	elseif showing then
-		ui.Card.Visible = true
+	if showing and not covered then
 		layout()
 	end
 end
@@ -98215,7 +98512,7 @@ return TutorialBubble
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="209">
+        <Item class="ModuleScript" referent="210">
           <Properties>
             <string name="Name">UIAnim</string>
             <string name="Source"><![CDATA[--[[
@@ -98931,7 +99228,7 @@ return UIAnim
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="210">
+        <Item class="ModuleScript" referent="211">
           <Properties>
             <string name="Name">UIBuilder</string>
             <string name="Source"><![CDATA[--[[
@@ -105186,7 +105483,7 @@ return UIBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="211">
+        <Item class="ModuleScript" referent="212">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[--[[
@@ -107507,7 +107804,7 @@ return UIKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="212">
+        <Item class="ModuleScript" referent="213">
           <Properties>
             <string name="Name">UIState</string>
             <string name="Source"><![CDATA[--[[
@@ -108308,7 +108605,7 @@ return UIState
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="213">
+        <Item class="ModuleScript" referent="214">
           <Properties>
             <string name="Name">Ultimate</string>
             <string name="Source"><![CDATA[--[[
@@ -108422,7 +108719,7 @@ return Ultimate
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="214">
+        <Item class="ModuleScript" referent="215">
           <Properties>
             <string name="Name">VFX</string>
             <string name="Source"><![CDATA[--[[
@@ -112243,7 +112540,7 @@ return VFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="215">
+        <Item class="ModuleScript" referent="216">
           <Properties>
             <string name="Name">ViewportPreview</string>
             <string name="Source"><![CDATA[--[[
@@ -112435,7 +112732,7 @@ return ViewportPreview
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="216">
+        <Item class="ModuleScript" referent="217">
           <Properties>
             <string name="Name">WalkthroughClient</string>
             <string name="Source"><![CDATA[--[[
@@ -112779,7 +113076,7 @@ return WalkthroughClient
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="217">
+        <Item class="ModuleScript" referent="218">
           <Properties>
             <string name="Name">WeakSpot</string>
             <string name="Source"><![CDATA[--[[
@@ -112886,7 +113183,7 @@ return WeakSpot
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="218">
+        <Item class="ModuleScript" referent="219">
           <Properties>
             <string name="Name">WeaponMastery</string>
             <string name="Source"><![CDATA[--[[
@@ -113222,7 +113519,7 @@ return WeaponMastery
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="219">
+        <Item class="ModuleScript" referent="220">
           <Properties>
             <string name="Name">WorldFx</string>
             <string name="Source"><![CDATA[--[[
@@ -113677,7 +113974,7 @@ return WorldFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="220">
+        <Item class="ModuleScript" referent="221">
           <Properties>
             <string name="Name">WorldLabelFade</string>
             <string name="Source"><![CDATA[--[[
@@ -113701,6 +113998,9 @@ type Box = { number } -- { left, top, right, bottom }
 
 local avoid: { GuiObject } = {}
 local FADE_SECONDS = 0.18
+local RECT_CACHE_SECONDS = 0.1 -- Rects() answers from its last build for this long (shared by every caller)
+local cached: { Box } = {}
+local cachedAt = -1
 
 -- A panel world labels must keep off while it is visible (and its ScreenGui enabled).
 function WorldLabelFade.Avoid(g: GuiObject)
@@ -113721,8 +114021,13 @@ local function add(out: { Box }, g: any)
 	end
 end
 
--- Every HUD rect a world label must not cover right now.
+-- Every HUD rect a world label must not cover right now (the same list for ~0.1 s, so
+-- several labels in a frame share one build; callers must not change it).
 function WorldLabelFade.Rects(): { Box }
+	local now = os.clock()
+	if now - cachedAt < RECT_CACHE_SECONDS then
+		return cached
+	end
 	local out: { Box } = {}
 	local els = Hud.Elements()
 	local frame = els.Frame
@@ -113749,6 +114054,8 @@ function WorldLabelFade.Rects(): { Box }
 	for _, g in ipairs(avoid) do
 		add(out, g)
 	end
+	cached = out
+	cachedAt = now
 	return out
 end
 
@@ -113779,7 +114086,7 @@ return WorldLabelFade
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="221">
+  <Item class="Workspace" referent="222">
     <Properties>
       <string name="Name">Workspace</string>
       <float name="FallenPartsDestroyHeight">-200</float>

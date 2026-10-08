@@ -6,6 +6,29 @@ the mock Roblox API); **BLOCKED** = can only be verified in Studio or a live ser
 the owner's steps below; **FAIL** = a known problem left in the build. Nothing in this
 document was tested in Studio or on a real phone unless the owner's section says so.
 
+## Publish 2026-10-09 (after the 2026-10-08 merge and audit)
+
+Build: `build/Swarm.rbxlx` from `main` (batch A + batch B merged, audit fixes in
+docs/audit/AUDIT_2026-10-08.md). Offline: type check, compile, Rojo build and
+`tools/run_regressions.py` **226/226 PASS**. NOT tested in Studio, live or on a phone.
+No save schema change since Hero Mastery (still 7).
+
+Owner steps, in order (stop at the first FAIL):
+1. Open `build/Swarm.rbxlx` in Studio, play solo. Output: `[SWARM] server ready`, no red
+   errors (a `[ClientMain] ... failed to start` warning means one screen broke: report it).
+2. New-account path: Studio's `_Studio` save starts fresh with DEV RESET PROGRESS (Studio
+   only now): first run starts by itself, walkthrough tips, first upgrade, gift chest, portal.
+3. Phone run (landscape + portrait): level-up cards, BANISH, chest reel, merchant, danger
+   arrows, elite affix badges, pause, die (revive offer), results.
+4. Duo from two devices: level-up does not freeze the partner, revive + THANKS!, PING.
+5. Robux in Studio sandbox: one gold pack and the Revive, each granted once, nothing extra
+   after a rejoin.
+6. Decide the open items in docs/audit/AUDIT_2026-10-08.md section 3 (auto revive prompt,
+   Store "Coming soon", speed check, paid power on boards). Nothing there blocks publishing.
+7. Publish, then Creator Hub, Servers, **Migrate to Latest Update**.
+8. Live: join from the phone, play one run, rejoin and check the save, DEV button only for
+   you, leaderboards fill, no red errors in the Developer Console.
+
 ## 0. Full-game sweep (2026-10-03, later the same day)
 
 Offline only; nothing below was tested in Studio or on a real phone.
