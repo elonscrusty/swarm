@@ -659,16 +659,16 @@ end
 ------------------------------------------------------------------------------------------
 
 local LIGHTING = {
-	-- Bright Arcade courtyard: clear daylight, clean whites, saturated toy colours.
+	-- Bright Arcade courtyard: blue-hour colours with controlled highlights.
 	Lobby = {
-		Clock = 11.0, Brightness = 2.2, Latitude = 35, Shadow = 0.7,
-		Ambient = rgb(148, 160, 180), Outdoor = rgb(174, 190, 208), Top = rgb(255, 248, 226), Bottom = rgb(132, 172, 144),
-		Diffuse = 0.65, Specular = 0.3, Exposure = 0,
-		Atmo = { Density = 0.08, Offset = 0.1, Color = rgb(210, 240, 255), Decay = rgb(112, 190, 245), Glare = 0.04, Haze = 0.35 },
-		Bloom = { Intensity = 0.1, Size = 16, Threshold = 1.8 },
-		Grade = { Brightness = 0, Contrast = 0.04, Saturation = 0.14, Tint = rgb(255, 255, 255) },
-		Rays = { Intensity = 0.015, Spread = 0.65 },
-		Clouds = { Cover = 0.3, Density = 0.35, Color = rgb(255, 255, 255) },
+		Clock = 16.8, Brightness = 1.1, Latitude = 35, Shadow = 0.65,
+		Ambient = rgb(96, 113, 140), Outdoor = rgb(118, 139, 166), Top = rgb(200, 216, 236), Bottom = rgb(73, 104, 127),
+		Diffuse = 0.4, Specular = 0.18, Exposure = -0.35,
+		Atmo = { Density = 0.1, Offset = 0.1, Color = rgb(124, 165, 206), Decay = rgb(62, 104, 168), Glare = 0, Haze = 0.45 },
+		Bloom = { Intensity = 0.03, Size = 12, Threshold = 2.2 },
+		Grade = { Brightness = -0.025, Contrast = 0.1, Saturation = 0.08, Tint = rgb(236, 244, 255) },
+		Rays = { Intensity = 0, Spread = 0.65 },
+		Clouds = { Cover = 0.35, Density = 0.4, Color = rgb(158, 179, 205) },
 	},
 	-- Arenas follow the bright "sunny storybook" look (docs/ART_DIRECTION.md): a warm
 	-- high sun with soft shadows, warm ambient and a green / sand ground bounce, little
@@ -887,8 +887,8 @@ function MapBuilder.BuildLobby()
 	local daisPos = o + Vector3.new(0, 0, MENU.DaisZ)
 	local keepZ = MENU.DaisZ + MENU.KeepZ -- keep wall front face (relative to o)
 	local FACE_SOUTH = yawCF(180) -- kit fronts face −Z; this turns them toward the camera
-	local CASTLE: Pal = { Stone = rgb(226, 238, 246), Trim = rgb(255, 251, 229), Base = rgb(140, 187, 219), Warm = rgb(255, 206, 66), Iron = rgb(44, 87, 147) }
-	local LEAVES: Pal = { Needles = rgb(40, 174, 99), Needles2 = rgb(91, 208, 104) }
+	local CASTLE: Pal = { Stone = rgb(133, 159, 184), Trim = rgb(184, 202, 217), Base = rgb(78, 118, 160), Warm = rgb(204, 158, 50), Iron = rgb(44, 69, 107) }
+	local LEAVES: Pal = { Needles = rgb(34, 112, 83), Needles2 = rgb(62, 150, 91) }
 	local BANNER: Pal = { Cloth = rgb(28, 143, 247), Gold = rgb(255, 218, 53), Wood = rgb(142, 99, 54) }
 	-- warm orange-yellow: a strong green channel keeps bright neon from turning pink
 	local FLAME: Pal = { Flame = rgb(255, 150, 36), Core = rgb(255, 226, 120) }
@@ -910,7 +910,7 @@ function MapBuilder.BuildLobby()
 		f.Parent = h
 	end
 	-- a strand of ivy hanging down a wall face (z = the face), leaves in two greens
-	local IVY = { rgb(68, 190, 100), rgb(140, 220, 105), rgb(42, 162, 91) }
+	local IVY = { rgb(43, 132, 86), rgb(89, 162, 95), rgb(32, 112, 78) }
 	local function ivy(x: number, top: number, z: number, len: number)
 		local y = top
 		local dx = 0
@@ -925,13 +925,13 @@ function MapBuilder.BuildLobby()
 	end
 
 	--------------------------------------------------------------------------------------
-	-- Pale flagstones over blue grout, with a bright meadow outside the courtyard.
+	-- Muted blue-grey flagstones and meadow keep the bright controls prominent.
 	local floorX0, floorX1 = -51, 51
 	local floorZ0, floorZ1 = keepZ - 4, MENU.WaitZ + 10
 	add({ Name = "Floor", Size = Vector3.new(floorX1 - floorX0, 2, floorZ1 - floorZ0), CFrame = CFrame.new(at((floorX0 + floorX1) / 2, -1.06, (floorZ0 + floorZ1) / 2)), Color = rgb(115, 158, 193), CanCollide = true, CanQuery = true })
-	add({ Name = "Grounds", Size = Vector3.new(420, 2, 420), CFrame = CFrame.new(at(0, -1.3, -60)), Color = rgb(86, 188, 100), CanCollide = true })
+	add({ Name = "Grounds", Size = Vector3.new(420, 2, 420), CFrame = CFrame.new(at(0, -1.3, -60)), Color = rgb(45, 120, 79), CanCollide = true })
 	local tones = {
-		rgb(222, 235, 243), rgb(198, 222, 236), rgb(232, 241, 246), rgb(181, 209, 229),
+		rgb(133, 160, 184), rgb(117, 145, 170), rgb(147, 173, 195), rgb(101, 132, 163),
 	}
 	local tile = 6
 	local daisR = 5.5 * MENU.DaisScale
@@ -966,7 +966,7 @@ function MapBuilder.BuildLobby()
 	end
 	-- the old keep on the hill: pale blue stone with merlons and warm windows
 	local keepBack = keepZ - 44
-	local KEEP = rgb(160, 201, 225)
+	local KEEP = rgb(92, 132, 164)
 	add({ Name = "Keep", Size = Vector3.new(16, 30, 12), CFrame = CFrame.new(at(13, 15, keepBack)), Color = KEEP })
 	add({ Name = "KeepTower", Size = Vector3.new(7, 36, 7), CFrame = CFrame.new(at(2.5, 18, keepBack + 2)), Color = mix(KEEP, CASTLE.Trim, 0.15) })
 	for k = 0, 3 do
@@ -996,7 +996,7 @@ function MapBuilder.BuildLobby()
 	--------------------------------------------------------------------------------------
 	-- The dais (raycast-able top for the showcase) with glowing gold runes, braziers in
 	-- two pairs (big near ones, smaller ones further back).
-	local dais = prop(folder, "Dais", CFrame.new(daisPos), MENU.DaisScale, { Top = rgb(236, 245, 251), Rim = rgb(35, 150, 244), Rim2 = rgb(38, 90, 161), Rim3 = rgb(115, 211, 255) }, { query = true })
+	local dais = prop(folder, "Dais", CFrame.new(daisPos), MENU.DaisScale, { Top = rgb(143, 171, 198), Rim = rgb(30, 108, 199), Rim2 = rgb(29, 62, 117), Rim3 = rgb(68, 156, 216) }, { query = true })
 	local daisEntry = kitEntry("Dais")
 	local daisTop = ((daisEntry and daisEntry.Top) or 1.2) * MENU.DaisScale
 	for _, d in ipairs(dais:GetChildren()) do
@@ -1004,12 +1004,12 @@ function MapBuilder.BuildLobby()
 			d.CanCollide = true
 		end
 	end
-	local RUNE = rgb(255, 213, 49)
+	local RUNE = rgb(212, 164, 45)
 	local runes = Instance.new("Model")
 	runes.Name = "DaisRunes"
 	runes.Parent = folder
 	local function rune(size: Vector3, cf: CFrame)
-		local r = deco(runes, { Name = "Rune", Size = size, CFrame = cf, Color = RUNE, Material = NEON })
+		local r = deco(runes, { Name = "Rune", Size = size, CFrame = cf, Color = RUNE, Material = SMOOTH })
 		r.CastShadow = false
 	end
 	-- two glowing circles on the top
@@ -1058,9 +1058,9 @@ function MapBuilder.BuildLobby()
 	-- key light: soft and neutral-warm, in front of the hero above the camera line (bright
 	-- enough to read, never washed out; silver stays silver, gold trim stays gold); a cool
 	-- blue rim and a soft warm fill from the left separate it from the gate
-	pointLight(folder, daisPos + Vector3.new(-2.5, 9, 8), 15, 1.05, rgb(255, 247, 224), false)
-	pointLight(folder, daisPos + Vector3.new(3, 8, -4.5), 10, 1.3, rgb(170, 220, 255), false)
-	pointLight(folder, daisPos + Vector3.new(-5, 5, 1.5), 9, 0.8, rgb(255, 232, 171), false)
+	pointLight(folder, daisPos + Vector3.new(-2.5, 9, 8), 15, 0.75, rgb(255, 247, 224), false)
+	pointLight(folder, daisPos + Vector3.new(3, 8, -4.5), 10, 0.7, rgb(170, 220, 255), false)
+	pointLight(folder, daisPos + Vector3.new(-5, 5, 1.5), 9, 0.35, rgb(255, 232, 171), false)
 	-- gentle neutral fill supports daylight without tinting the pale castle purple
 	pointLight(folder, daisPos + Vector3.new(0, 24, -12), 60, 0.35, rgb(230, 244, 255), false)
 	pointLight(folder, at(0, 16, keepZ + 12), 40, 0.35, rgb(230, 244, 255), false)
@@ -1136,7 +1136,7 @@ function MapBuilder.BuildLobby()
 	motes.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 0.14), NumberSequenceKeypoint.new(1, 0) })
 	motes.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.3), NumberSequenceKeypoint.new(1, 1) })
 	motes.Lifetime = NumberRange.new(4, 7)
-	motes.Rate = 4
+	motes.Rate = 1
 	motes.Speed = NumberRange.new(0.2, 0.6)
 	motes.SpreadAngle = Vector2.new(180, 180)
 	motes.Acceleration = Vector3.new(0, 0.25, 0)
@@ -1153,7 +1153,7 @@ function MapBuilder.BuildLobby()
 	souls.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.25, 0.3), NumberSequenceKeypoint.new(1, 0.08) })
 	souls.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.25, 0.15), NumberSequenceKeypoint.new(1, 1) })
 	souls.Lifetime = NumberRange.new(2.5, 4.5)
-	souls.Rate = 3
+	souls.Rate = 1
 	souls.Speed = NumberRange.new(0.2, 0.5)
 	souls.SpreadAngle = Vector2.new(180, 180)
 	souls.Acceleration = Vector3.new(0, 0.35, 0)
@@ -1198,7 +1198,7 @@ function MapBuilder.BuildLobby()
 	local menuCamera = add({ Name = "MenuCamera", Size = Vector3.new(1, 1, 1), CFrame = camCF, Transparency = 1 })
 	menuCamera:SetAttribute("FieldOfView", fov)
 	menuCamera:SetAttribute("Focus", camLook)
-	-- Daylight atmosphere and dynamic white clouds supply the sky. The previous
+	-- Blue-hour atmosphere and soft clouds supply the sky. The previous
 	-- sunset discs, orange horizon halos and night stars are intentionally gone.
 	menuStand:SetAttribute("Top", daisTop)
 
