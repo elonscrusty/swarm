@@ -90,11 +90,10 @@ function MenuStreak.Build(screen: Frame, ctx: { [string]: any })
 				Sub = (i == at and can) and "Today's reward" or (i < at or (i == at and not can)) and "This week: done" or "Coming up",
 				Height = 52,
 			})
-			local isToday = i == at and can
-			row.SetDone(i < at or (i == at and not can))
-			row.SetDim(i > at)
-			if isToday then
-				row.SetDone(false)
+			if i > at then
+				row.SetDim(true) -- coming up
+			elseif i < at or not can then
+				row.SetDone(i < at or i == at) -- claimed this week (lime)
 			end
 		end
 		section("STREAK MILESTONES")

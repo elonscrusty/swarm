@@ -1011,7 +1011,11 @@ function showBanner(titleText: string, goal: string, color: Color3?, onShow: (()
 	title.Text = UIKit.track(titleText)
 	-- a caller's colour (portal blue, crimson threat...) is the accent: the line and rim use it
 	-- as given, the title a deeper shade of it so it reads on the white plate
-	local ink = color and color:Lerp(C.Text, 0.4) or C.BlueDeep
+	local ink = C.BlueDeep
+	if color then
+		local lum = 0.299 * color.R + 0.587 * color.G + 0.114 * color.B
+		ink = color:Lerp(C.Text, lum > 0.55 and 0.65 or 0.2)
+	end
 	title.TextColor3 = ink
 	line.BackgroundColor3 = color or C.Blue
 	sub.Text = goal
@@ -1261,6 +1265,10 @@ local function layout()
 	-- boss bar under the objective (clear of the left column in landscape)
 	local bossW = portrait and math.min(560, W - 2 * M) or math.min(560, W - 2 * (leftRight + 12))
 	local bossY = y + 4
+	-- the plate must not run under the gold / kills chips when it shares their rows
+	if not portrait and bossY < pauseY + PAUSE + 4 then
+		bossW = math.min(bossW, math.max(240, 2 * (countersLeft - 8 - W / 2)))
+	end
 	place(ui.Boss, W / 2 - bossW / 2, bossY, bossW, 46)
 	local topBottom = ui.Boss.Visible and (bossY + 62) or (y + 2)
 	ui.TopBottom = topBottom

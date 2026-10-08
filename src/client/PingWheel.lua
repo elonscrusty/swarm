@@ -236,6 +236,12 @@ function PingWheel.Init()
 		on a very short screen (height < 300 or width < 420) it becomes a 3 x 2 grid with the
 		close control above it, so nothing leaves the safe area or overlaps.
 	]]
+	local function setRadius(b: GuiObject, r: UDim)
+		local c = b:FindFirstChildOfClass("UICorner")
+		if c and c.CornerRadius ~= r then
+			c.CornerRadius = r
+		end
+	end
 	layoutWheel = function()
 		local root = slot.Parent :: GuiObject?
 		local rs = root and root.AbsoluteSize or Vector2.zero
@@ -255,7 +261,7 @@ function PingWheel.Init()
 				local b = buttons[kind]
 				b.Size = UDim2.fromOffset(btn, btn)
 				b.Position = UDim2.fromOffset(side / 2 + math.cos(a) * radius, side / 2 + math.sin(a) * radius)
-				UIKit.corner(b, 999)
+				setRadius(b, UDim.new(0, 999))
 			end
 			close.AnchorPoint = Vector2.new(0.5, 0.5)
 			close.Position = UDim2.fromScale(0.5, 0.5)
@@ -270,7 +276,7 @@ function PingWheel.Init()
 				local b = buttons[kind]
 				b.Size = UDim2.fromOffset(bw, bh)
 				b.Position = UDim2.fromOffset(col * (bw + 8) + bw / 2, 40 + row * (bh + 8) + bh / 2)
-				UIKit.corner(b, Theme.Radius.L)
+				setRadius(b, UDim.new(0, Theme.Radius.L))
 			end
 			close.AnchorPoint = Vector2.new(1, 0)
 			close.Position = UDim2.fromOffset(w, 0)
