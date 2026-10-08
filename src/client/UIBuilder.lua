@@ -3612,7 +3612,7 @@ end
 -- row: the columns' rows laid out as their UIListLayout does (COLUMN.Top on top,
 -- COLUMN.Gap between). Returns h when there is no such cut.
 local function snapToRows(cols: { Frame }, h: number, floor: number): number
-	local rows: { { number } } = {}
+	local rows: { { any } } = {}
 	for _, col in ipairs(cols) do
 		local list = {}
 		for _, ch in ipairs(col:GetChildren()) do
@@ -3625,13 +3625,14 @@ local function snapToRows(cols: { Frame }, h: number, floor: number): number
 		end)
 		local y = col.Position.Y.Offset + COLUMN.Top
 		for _, ch in ipairs(list) do
-			table.insert(rows, { y, y + ch.Size.Y.Offset })
+			table.insert(rows, { y, y + ch.Size.Y.Offset, ch.Name == "Heading" })
 			y += ch.Size.Y.Offset + COLUMN.Gap
 		end
 	end
 	local best = nil
 	for _, r in ipairs(rows) do
-		for _, cut in ipairs({ r[1] - 2, r[2] + 3 }) do
+		-- (never right under a section heading: a heading alone at the edge reads as empty)
+		for _, cut in ipairs(r[3] and { r[1] - 2 } or { r[1] - 2, r[2] + 3 }) do
 			if cut <= h and cut >= floor and (best == nil or cut > best) then
 				local ok = true
 				for _, o in ipairs(rows) do
@@ -3690,18 +3691,15 @@ local function buildPause()
 	-- one tidy row each, the other options in plain stacks below them (one scroll), the
 	-- save note and one button (DONE in the lobby, BACK to the run menu during a run).
 	local m = UIKit.Modal(root, "Pause", 640, 470, Theme.Z.Pause)
+	UIKit.Raise(m.Panel, 6, 3) -- arcade panel depth (as the Play setup panel)
 	pause.Overlay = m.Overlay
 	pause.Modal = m
 	local content = m.Content
 	fitModal(m, UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }))
-	-- the title: white lettering with a navy outline on a blue tab (Bright Arcade)
-	local tab = new("Frame", { Name = "TitleTab", BackgroundColor3 = C.Blue, BorderSizePixel = 0, LayoutOrder = 1, Size = UDim2.fromOffset(220, TS(30) + 14) }, content)
-	UIKit.corner(tab, 999)
-	UIKit.stroke(tab, C.Shadow, 2, 0)
-	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Blue }, tab)
-	pause.TitleTab = tab
-	pause.Title = text(tab, "H2", "Settings", { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center }, 30)
-	UIKit.PageTitleStyle(pause.Title, 3)
+	-- the title on the shared blue title plate (UIKit.TitlePlate, as on the Play setup screen)
+	local plate = UIKit.TitlePlate(content, "Settings", 30, { LayoutOrder = 1 })
+	pause.TitleTab = plate.Frame
+	pause.Title = plate.Label
 	pause.Note = text(content, "Body", "", {
 		LayoutOrder = 5,
 		TextXAlignment = Enum.TextXAlignment.Center,
@@ -3725,6 +3723,7 @@ local function buildPause()
 		ElasticBehavior = Enum.ElasticBehavior.Never,
 	}, content)
 	pause.Options = options
+	UIKit.ScrollHint(options) -- phones hide scroll bars: show that more options sit below
 	local primary = settingsColumn(options, "Main", 2) -- the wells pad their own sliders
 	local colA = settingsColumn(options, "Sound")
 	local colB = settingsColumn(options, "Comfort")
@@ -3733,9 +3732,8 @@ local function buildPause()
 	-- Music / Effects: a white card each (icon, label, percentage, slim slider); values
 	-- apply while dragging (ClientSettings.Set) and save a moment after the last change
 	local function well(order: number, height: number): Frame
-		local w = new("Frame", { Name = "Well", BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, BorderSizePixel = 0, LayoutOrder = order, Size = UDim2.new(1, 0, 0, height + 20) }, primary)
-		UIKit.corner(w, Theme.Radius.M)
-		UIKit.stroke(w, C.PanelEdge, 2, 0)
+		-- a raised white card (royal blue rim, a shallow dark-blue base under it)
+		local _, w = UIKit.Surface(primary, { Name = "Well", Radius = Theme.Radius.M, Transparency = 0, Edge = C.PanelEdge, EdgeThickness = 2, Depth = 5, LayoutOrder = order, Size = UDim2.new(1, 0, 0, height + 20) })
 		UIKit.padding(w, 8, 18, 10, 16)
 		return w
 	end
@@ -3794,6 +3792,7 @@ local function buildPause()
 		b = UIKit.Button(colB, {
 			Title = label .. ": " .. settingWord(ClientSettings.Get(key)), Kind = "Outline", Icon = "cycle", IconSize = 18,
 			Shrink = true,
+			Depth = "Light",
 			Size = UDim2.new(1, 0, 0, 46), LayoutOrder = i + 6,
 			OnClick = function()
 				local choices = (Config.Settings :: any).Enums[key]
@@ -3811,6 +3810,7 @@ local function buildPause()
 		Icon = "cycle",
 		IconSize = 18,
 		Align = "Center",
+		Depth = "Light",
 		Size = UDim2.new(1, 0, 0, 46),
 		LayoutOrder = 10,
 		OnClick = function()
@@ -3826,6 +3826,7 @@ local function buildPause()
 		Icon = "warning",
 		IconSize = 18,
 		Align = "Center",
+		Depth = "Light",
 		Size = UDim2.new(1, 0, 0, 46),
 		LayoutOrder = 11,
 		OnClick = function()
@@ -3835,7 +3836,7 @@ local function buildPause()
 
 	-- one button: DONE (lobby SETTINGS) / BACK (settings opened from the run menu). The run
 	-- menu itself (resume, build, leave) is the side drawer below (buildRunMenu).
-	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
+	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, Theme.Size.Button + 5) }, content)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 	pause.Resume = UIKit.Button(row, {
 		Kind = "Primary",
@@ -3843,6 +3844,7 @@ local function buildPause()
 		Icon = "check",
 		IconSize = 20,
 		Align = "Center",
+		Depth = "Strong",
 		Size = UDim2.fromOffset(240, Theme.Size.Button),
 		LayoutOrder = 2,
 		OnClick = function()
@@ -3860,6 +3862,7 @@ local function buildPause()
 			UIBuilder.ClosePause()
 		end,
 	})
+	pause.Close.SetDepth("Medium")
 	local function layoutOptions()
 		local v = virtualSize()
 		local w = tallModalWidth(640)
@@ -3889,7 +3892,7 @@ local function buildPause()
 		local lines = math.clamp(math.ceil(#pause.Note.Text / perLine), 1, 3)
 		pause.Note.Size = UDim2.new(1, 0, 0, lines * (TS(15) + 2) + 6)
 		-- what the rest of the panel takes: title, divider, note, buttons, gaps, padding
-		local fixed = (TS(30) + 14) + 10 + pause.Note.Size.Y.Offset + Theme.Size.Button + 4 * 10 + 2 * Theme.Space.XL + 8
+		local fixed = (TS(30) + 18) + 10 + pause.Note.Size.Y.Offset + Theme.Size.Button + 5 + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(160, v.Y - 24 - fixed)
 		-- compact: Music and Effects plus a look at the next options; the rest scrolls
 		local h = math.min(contentH, room, top + 230)
@@ -4079,29 +4082,33 @@ function runMenu.buildRunMenu()
 	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, drawer)
 	runMenu.Drawer = drawer
 	-- past the safe area (a phone's notch side) the drawer colour runs on to the screen edge
-	runMenu.Tail = new("Frame", { Name = "Tail", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 2 }, drawer)
+	runMenu.Tail = new("Frame", { Name = "Tail", BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 2 }, drawer)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, runMenu.Tail)
+	-- and under it (a phone's home-indicator strip), so the drawer reaches the screen's bottom
+	runMenu.TailBottom = new("Frame", { Name = "TailBottom", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 2 }, drawer)
 	-- the royal blue edge toward the arena
 	runMenu.Edge = new("Frame", { Name = "Edge", BackgroundColor3 = C.PanelEdge, BackgroundTransparency = 0, BorderSizePixel = 0, Size = UDim2.new(0, 4, 1, 0), ZIndex = 3 }, drawer)
 
 	-- run gold and kills (the numbers the HUD shows)
+	-- (the HUD's own pills: white, royal blue rim, a shallow dark-blue base, the gold coin art)
 	local function chip(name: string, icon: string): (Frame, TextLabel)
-		local f = new("Frame", { Name = name, BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 3 }, drawer)
-		UIKit.corner(f, Theme.Radius.M)
-		UIKit.stroke(f, C.PanelEdge, 2, 0)
-		Icons.Draw(f, icon, { Size = 22, Color = icon == "coin" and C.CoinDeep or C.Text, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0) })
-		local l = text(f, "Number", "0", { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -44, 1, 0), ZIndex = 3 })
+		local f, face = UIKit.Surface(drawer, { Name = name, Radius = Theme.Radius.M, Transparency = 0, Edge = C.PanelEdge, EdgeThickness = 2.5, Depth = 5, ZIndex = 3 })
+		if icon == "coin" then
+			Icons.Draw(face, "lobby_Gold", { Size = 26, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0) })
+		else
+			Icons.Draw(face, icon, { Size = 22, Color = C.Text, Back = C.Panel, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0) })
+		end
+		local l = text(face, "Number", "0", { Position = UDim2.fromOffset(40, 0), Size = UDim2.new(1, -46, 1, 0), ZIndex = 3 })
 		return f, l
 	end
 	runMenu.GoldChip, runMenu.GoldText = chip("Gold", "coin")
 	runMenu.KillsChip, runMenu.KillsText = chip("Kills", "skull")
 
-	runMenu.Crest = Icons.Draw(drawer, "helmet", { Size = 52, Color = C.Blue })
-	runMenu.Crest.AnchorPoint = Vector2.new(0.5, 0)
-	-- the title: white lettering, navy outline, on a blue plate (Bright Arcade)
-	runMenu.Title = text(drawer, "H1", "RUN MENU", { TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = C.Blue, BackgroundTransparency = 0, ZIndex = 3 })
-	UIKit.PageTitleStyle(runMenu.Title, 3)
-	UIKit.corner(runMenu.Title, Theme.Radius.M)
-	runMenu.fit(runMenu.Title, 18)
+	runMenu.Crest = UIKit.IconBadge(drawer, "helmet", Theme.IconTint.Blue, 46, { AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 })
+	-- the title on the shared blue title plate (UIKit.TitlePlate, as on the Play setup screen)
+	local plate = UIKit.TitlePlate(drawer, "RUN MENU", 28, { AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 })
+	runMenu.TitleFrame = plate.Frame
+	runMenu.Title = plate.Label
 	-- "DUO · RUN CONTINUES" / "SOLO · GAME PAUSED"
 	local pill = new("Frame", { Name = "Status", BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 }, drawer)
 	UIKit.corner(pill, 999)
@@ -4121,6 +4128,7 @@ function runMenu.buildRunMenu()
 		IconSize = 22,
 		Align = "Center",
 		Shrink = true,
+		Depth = "Strong",
 		ZIndex = 3,
 		OnClick = function()
 			if runMenu.Confirming then
@@ -4137,6 +4145,7 @@ function runMenu.buildRunMenu()
 		IconSize = 22,
 		Align = "Center",
 		Shrink = true,
+		Depth = "Medium",
 		ZIndex = 3,
 		OnClick = function()
 			UIBuilder.OpenRunSettings()
@@ -4149,6 +4158,7 @@ function runMenu.buildRunMenu()
 		IconSize = 22,
 		Align = "Center",
 		Shrink = true,
+		Depth = "Medium",
 		ZIndex = 3,
 		OnClick = function()
 			LootUI.OpenItems()
@@ -4162,6 +4172,7 @@ function runMenu.buildRunMenu()
 		Title = "LEAVE RUN",
 		Align = "Center",
 		Shrink = true,
+		Depth = "Medium",
 		ZIndex = 3,
 		OnClick = function()
 			if os.clock() - (runMenu.ArmedAt or 0) < runMenu.ARM then
@@ -4200,7 +4211,8 @@ function runMenu.buildRunMenu()
 		local gap = compact and 8 or 12
 		local bh = Theme.Size.Button
 		local chipH = 40
-		local titleH = TS(30) + 6
+		local titleH = TS(28) + 18
+		local dep = 5 -- room for the raised buttons' bases under each row
 		local pillH = TS(14) + 14
 		local hintH = TS(14) + 8
 		-- note lines (rough: ~0.55 em per character; the label shrinks to fit for real)
@@ -4209,13 +4221,13 @@ function runMenu.buildRunMenu()
 		local noteH = lines * (TS(16) + 3) + 4
 		local confirming = runMenu.Confirming == true
 		local buttons = confirming and 2 or 4
-		local crest = sheet and 0 or 52
+		local crest = sheet and 0 or 46
 		-- SETTINGS and VIEW BUILD share one row on the shortest screens
 		local paired = false
 		local function need(): number
 			local rows = (paired and not confirming) and buttons - 1 or buttons
-			return top + chipH + gap + (crest > 0 and crest + 4 or 0) + titleH + 6 + pillH + gap + 1 + gap + noteH + gap * 2
-				+ rows * bh + rows * gap + gap + 1 + 12
+			return top + chipH + 5 + gap + (crest > 0 and crest + 6 or 0) + titleH + 4 + 8 + pillH + gap + 1 + gap + noteH + gap * 2
+				+ rows * (bh + dep) + rows * gap + gap + 1 + 12
 		end
 		-- short screens: drop the crest, the top-right inset, then tighter buttons, then
 		-- pair SETTINGS / VIEW BUILD, then a shorter note box (the note shrinks to fit)
@@ -4252,22 +4264,25 @@ function runMenu.buildRunMenu()
 		runMenu.Tail.Visible = (sheet and gapBottom or gapRight) > 0
 		runMenu.Tail.Position = sheet and UDim2.new(0, 0, 1, 0) or UDim2.new(1, 0, 0, -gapTop)
 		runMenu.Tail.Size = sheet and UDim2.new(1, 0, 0, gapBottom) or UDim2.new(0, gapRight, 1, gapTop + gapBottom)
-		runMenu.Edge.Size = sheet and UDim2.new(1, 0, 0, 4) or UDim2.new(0, 4, 1, 0)
+		runMenu.TailBottom.Visible = not sheet and gapBottom > 0
+		runMenu.TailBottom.Position = UDim2.new(0, 0, 1, 0)
+		runMenu.TailBottom.Size = UDim2.new(1, 0, 0, gapBottom)
+		runMenu.Edge.Position = sheet and UDim2.new() or UDim2.fromOffset(0, -gapTop)
+		runMenu.Edge.Size = sheet and UDim2.new(1, 0, 0, 4) or UDim2.new(0, 4, 1, gapTop + gapBottom)
 		local y = top
 		local half = math.floor((inner - gap) / 2)
 		runMenu.GoldChip.Position = UDim2.fromOffset(pad, y)
 		runMenu.GoldChip.Size = UDim2.fromOffset(half, chipH)
 		runMenu.KillsChip.Position = UDim2.fromOffset(pad + half + gap, y)
 		runMenu.KillsChip.Size = UDim2.fromOffset(inner - half - gap, chipH)
-		y += chipH + gap
+		y += chipH + 5 + gap
 		runMenu.Crest.Visible = crest > 0
 		if crest > 0 then
 			runMenu.Crest.Position = UDim2.fromOffset(math.floor(w / 2), y)
-			y += crest + 4
+			y += crest + 6
 		end
-		runMenu.Title.Position = UDim2.fromOffset(pad, y)
-		runMenu.Title.Size = UDim2.fromOffset(inner, titleH)
-		y += titleH + 6
+		runMenu.TitleFrame.Position = UDim2.fromOffset(math.floor(w / 2), y)
+		y += titleH + 4 + 8
 		local pw = math.min(inner, math.floor(utf8.len(runMenu.PillText.Text) or 0) * math.floor(TS(14) * 0.75) + 48)
 		runMenu.Pill.Position = UDim2.fromOffset(math.floor(w / 2), y)
 		runMenu.Pill.Size = UDim2.fromOffset(pw, pillH)
@@ -4283,7 +4298,7 @@ function runMenu.buildRunMenu()
 			if on then
 				b.Instance.Position = UDim2.fromOffset(pad, y)
 				b.Instance.Size = UDim2.fromOffset(inner, bh)
-				y += bh + gap
+				y += bh + dep + gap
 			end
 		end
 		place(runMenu.Return, true)
@@ -4295,7 +4310,7 @@ function runMenu.buildRunMenu()
 			runMenu.Build.Instance.Visible = true
 			runMenu.Build.Instance.Position = UDim2.fromOffset(pad + hw + gap, y)
 			runMenu.Build.Instance.Size = UDim2.fromOffset(inner - hw - gap, bh)
-			y += bh + gap
+			y += bh + dep + gap
 		else
 			place(runMenu.Settings, not confirming)
 			place(runMenu.Build, not confirming)
@@ -4437,6 +4452,7 @@ function UIBuilder.OpenRunSettings()
 		hide(runMenu.Overlay, "Pause")
 	end
 	pauseMode = "RunSettings"
+	pause.Overlay:SetAttribute("BackdropTransparency", Theme.Alpha.Backdrop)
 	pause.Title.Text = "Settings"
 	pause.Resume.SetText("BACK")
 	pause.Resume.SetIcon("chevronLeft")
@@ -4456,6 +4472,9 @@ function UIBuilder.OpenSettings()
 		return
 	end
 	pauseMode = "Settings"
+	-- lobby: nothing to watch behind it, so a firmer dim than in a run (where a live group
+	-- run must stay readable under it)
+	pause.Overlay:SetAttribute("BackdropTransparency", 0.4)
 	pause.Title.Text = "Settings"
 	pause.Resume.SetText("DONE")
 	pause.Resume.SetIcon("check")

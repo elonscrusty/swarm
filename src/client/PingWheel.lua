@@ -34,6 +34,7 @@ local started = false
 local open = false
 local highlight = 1
 local buttons: { [string]: TextButton } = {}
+local labels: { [string]: TextLabel } = {}
 local layoutWheel: () -> () = function() end
 local DIGITS = { Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four, Enum.KeyCode.Five, Enum.KeyCode.Six }
 
@@ -88,7 +89,8 @@ function PingWheel.Send(kind: string): boolean
 	return sent
 end
 
--- Icons for the six presets (Icons.Draw names; the labels carry the meaning, the picture helps)
+-- Icons for the six presets (Icons.Draw names on a UIKit.IconBadge; the labels carry the
+-- meaning, the picture helps) and their badge colours (Theme.IconTint)
 local ICONS: { [string]: string } = {
 	Help = "warning",
 	Loot = "chest",
@@ -97,11 +99,20 @@ local ICONS: { [string]: string } = {
 	Wave = "people2",
 	Cheer = "sparkle",
 }
+local TINTS: { [string]: Color3 } = {
+	Help = Theme.IconTint.Red,
+	Loot = Theme.IconTint.Orange,
+	Portal = Theme.IconTint.Purple,
+	OnMyWay = Theme.IconTint.Blue,
+	Wave = Theme.IconTint.Teal,
+	Cheer = Theme.IconTint.Green,
+}
+local DEPTH = 4 -- the dark-blue base under each raised option (px)
 
 local hovered: string? = nil
 local faces: { [string]: { Gradient: UIGradient, Stroke: UIStroke } } = {}
 
--- Lime = the highlighted option (gamepad / first) or the one under the pointer; navy-blue
+-- Lime = the highlighted option (gamepad / first) or the one under the pointer; royal blue
 -- rim and white face otherwise. The label is always there too (colour is never the only cue).
 local function paintHighlight()
 	for i, kind in ipairs(Q.Order) do
@@ -109,7 +120,7 @@ local function paintHighlight()
 		if f then
 			local sel = i == highlight or hovered == kind
 			f.Gradient.Color = sel and Theme.Gradient.Selected or Theme.Gradient.Panel
-			local want = sel and C.SelectedEdge or C.PanelEdge
+			local want = sel and C.SelectedEdge or C.Blue
 			local thick = sel and 4 or 3
 			if f.Stroke.Color ~= want then f.Stroke.Color = want end
 			if f.Stroke.Thickness ~= thick then f.Stroke.Thickness = thick end
@@ -152,36 +163,35 @@ function PingWheel.Init()
 			Name = kind,
 			Text = "",
 			AutoButtonColor = false,
-			BackgroundColor3 = Color3.new(1, 1, 1),
-			BackgroundTransparency = 0,
+			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Size = UDim2.fromOffset(Q.ButtonSize, Q.ButtonSize),
 			Selectable = true,
 			ZIndex = 2,
 		}, slot) :: TextButton
-		UIKit.corner(button, 999)
-		local grad = UIKit.new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, button) :: UIGradient
-		local stroke = UIKit.stroke(button, C.PanelEdge, 3, 0)
+		-- raised arcade face: dark-blue base under a white face with a royal blue rim
+		local face, grad, stroke = UIKit.RoundFace(button, Theme.Gradient.Panel, C.Blue, 3, DEPTH)
 		faces[kind] = { Gradient = grad, Stroke = stroke }
-		local holder = UIKit.new("Frame", { Name = "Icon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.12, 0), Size = UDim2.fromOffset(28, 28), ZIndex = 3 }, button) :: Frame
-		Icons.Draw(holder, ICONS[kind] or "info", { Size = 28, Color = C.Blue, Back = C.Panel, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+		local holder = UIKit.new("Frame", { Name = "Icon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.12, 0), Size = UDim2.fromOffset(28, 28), ZIndex = 4 }, face) :: Frame
 		icons[kind] = holder
 		-- the label wraps inside its own button (scaled down rather than cut)
-		local label = UIKit.text(button, "Label", Q.Labels[kind] or string.upper(kind), {
+		local label = UIKit.text(face, "Label", Q.Labels[kind] or string.upper(kind), {
 			Name = "Label",
 			AnchorPoint = Vector2.new(0.5, 1),
-			Size = UDim2.new(1, -16, 0.42, 0),
-			Position = UDim2.new(0.5, 0, 1, -6),
+			Size = UDim2.new(1, -16, 0.4, 0),
+			Position = UDim2.new(0.5, 0, 1, -7),
 			TextWrapped = true,
 			TextScaled = true,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextYAlignment = Enum.TextYAlignment.Center,
 			TextColor3 = C.Text,
-			ZIndex = 3,
+			FontFace = Theme.Font.Title,
+			ZIndex = 4,
 		}, 14)
 		label:SetAttribute("NoTextFit", true)
 		UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(14), MinTextSize = 8 }, label)
-		UIKit.text(button, "Caption", tostring(i), {
+		labels[kind] = label
+		UIKit.text(face, "Caption", tostring(i), {
 			Name = "Key",
 			Size = UDim2.fromOffset(16, 14),
 			AnchorPoint = Vector2.new(0.5, 0),
@@ -189,7 +199,7 @@ function PingWheel.Init()
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextColor3 = C.TextFaint,
 			Visible = not UserInputService.TouchEnabled,
-			ZIndex = 3,
+			ZIndex = 4,
 		}, 10)
 		button.MouseEnter:Connect(function()
 			hovered = kind
@@ -215,16 +225,15 @@ function PingWheel.Init()
 		Name = "Close",
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = C.BlueDeep,
+		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(44, 44),
 		Selectable = true,
 		ZIndex = 3,
 	}, slot) :: TextButton
-	UIKit.corner(close, 999)
-	UIKit.stroke(close, C.Panel, 2, 0)
-	UIKit.text(close, "Label", "X", { Name = "Label", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextOnBlue, FontFace = Theme.Font.Number, ZIndex = 4 }, 20)
+	local closeFace = UIKit.RoundFace(close, ColorSequence.new(C.BlueDeep, C.Shadow), C.Panel, 2.5, 3)
+	Icons.Draw(closeFace, "close", { Name = "Glyph", Size = 20, Color = C.TextOnBlue, Back = C.BlueDeep, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) }).ZIndex = 5
 	close.Activated:Connect(function()
 		PingWheel.SetOpen(false)
 	end)
@@ -237,9 +246,11 @@ function PingWheel.Init()
 		close control above it, so nothing leaves the safe area or overlaps.
 	]]
 	local function setRadius(b: GuiObject, r: UDim)
-		local c = b:FindFirstChildOfClass("UICorner")
-		if c and c.CornerRadius ~= r then
-			c.CornerRadius = r
+		for _, part in ipairs({ b:FindFirstChild("Face"), b:FindFirstChild("Base") }) do
+			local c = part and part:FindFirstChildOfClass("UICorner")
+			if c and c.CornerRadius ~= r then
+				c.CornerRadius = r
+			end
 		end
 	end
 	layoutWheel = function()
@@ -250,9 +261,15 @@ function PingWheel.Init()
 		end
 		local grid = rs.Y < 300 or rs.X < 420
 		local btn = Q.ButtonSize
+		local grow = 1
 		if not grid then
-			local side = math.clamp(math.min(Q.WheelSize, rs.Y * 0.6, rs.X * 0.9), 190, Q.WheelSize)
-			btn = math.clamp(math.floor(side * 0.27), 52, Q.ButtonSize)
+			-- Q.WheelSize on phones; a big screen grows it with its height (to ~42%), so the
+			-- options stay readable at desktop size
+			local cap = math.max(Q.WheelSize, math.floor(rs.Y * 0.42))
+			local side = math.clamp(math.min(cap, rs.Y * 0.6, rs.X * 0.9), 190, cap)
+			grow = side / Q.WheelSize
+			-- a clear gap between neighbours (six on a ring: neighbour distance = radius)
+			btn = math.clamp(math.floor(side * 0.25), 52, math.floor(Q.ButtonSize * math.max(1, grow)))
 			local radius = side / 2 - btn / 2
 			slot.Size = UDim2.fromOffset(side, side)
 			slot.Position = UDim2.fromScale(0.5, 0.47)
@@ -265,6 +282,8 @@ function PingWheel.Init()
 			end
 			close.AnchorPoint = Vector2.new(0.5, 0.5)
 			close.Position = UDim2.fromScale(0.5, 0.5)
+			local cs = math.floor(44 * math.max(1, grow))
+			close.Size = UDim2.fromOffset(cs, cs)
 		else
 			local bw = math.floor(math.clamp((rs.X * 0.9 - 16) / 3, 70, 100))
 			local bh = math.floor(math.clamp((rs.Y - 90) / 2.4, 52, 64))
@@ -282,17 +301,31 @@ function PingWheel.Init()
 			close.Position = UDim2.fromOffset(w, 0)
 		end
 		for kind, holder in pairs(icons) do
-			-- the picture shrinks with a shorter button; the label keeps its own room
-			local bh = buttons[kind].AbsoluteSize.Y
-			local px = grid and 22 or math.clamp(math.floor(btn * 0.36), 20, 30)
-			holder.Size = UDim2.fromOffset(px, px)
-			for _, c in ipairs(holder:GetChildren()) do
-				if c:IsA("GuiObject") then
-					c.Size = UDim2.fromOffset(px, px)
+			-- the badge shrinks with a shorter button; the label keeps its own room
+			local px = grid and 22 or math.clamp(math.floor(btn * 0.4), 20, math.floor(30 * math.max(1, grow)))
+			if holder.Size.X.Offset ~= px or not holder:FindFirstChild("IconBadge") then
+				holder.Size = UDim2.fromOffset(px, px)
+				local old = holder:FindFirstChild("IconBadge")
+				if old then
+					old:Destroy()
+				end
+				UIKit.IconBadge(holder, ICONS[kind] or "info", TINTS[kind] or Theme.IconTint.Blue, px, { ZIndex = 4 })
+			end
+			local top = grid and 5 or math.max(6, math.floor(btn * 0.11))
+			holder.Position = UDim2.new(0.5, 0, 0, top)
+			-- the label takes the room under the badge (never over it)
+			local label = labels[kind]
+			if label then
+				local bh = grid and buttons[kind].Size.Y.Offset or btn
+				local y = top + px + 2
+				label.AnchorPoint = Vector2.new(0.5, 0)
+				label.Position = UDim2.new(0.5, 0, 0, y)
+				label.Size = UDim2.new(1, grid and -10 or -12, 0, math.max(12, bh - y - (grid and 4 or 7)))
+				local fit = label:FindFirstChildOfClass("UITextSizeConstraint")
+				if fit then
+					fit.MaxTextSize = math.floor(UIKit.TS(14) * math.max(1, grow))
 				end
 			end
-			holder.Position = UDim2.new(0.5, 0, 0, grid and 5 or math.max(6, math.floor(btn * 0.1)))
-			local _ = bh
 		end
 	end
 	local rootGui = slot.Parent :: GuiObject?
