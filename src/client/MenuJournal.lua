@@ -5,26 +5,26 @@ local Journal = require(Shared:WaitForChild("EnemyJournalData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local MenuJournal = {}
-local P = Theme.Palette
+local C = Theme.Color
 
 function MenuJournal.Build(screen: Frame, ctx: { [string]: any })
 	-- opened from the STATS screen's JOURNAL tab: BACK returns there, not to the home screen
-	local header = UIKit.TitleBar(screen, "Enemy journal", function()
+	local header = UIKit.ScreenHeader(screen, "Enemy journal", function()
 		ctx.ShowScreen("Stats")
 	end)
-	local holder, face = UIKit.Surface(screen, { Name = "Journal", Radius = Theme.Radius.L, Transparency = 0.06 })
+	local holder, face = UIKit.Surface(screen, { Name = "Journal", Radius = Theme.Radius.L })
 	UIKit.padding(face, 20, 20, 20, 20)
-	local count = UIKit.text(face, "H3", "", { Name = "DiscoveryCount", Size = UDim2.new(1, 0, 0, 28), TextColor3 = P.gold_300 }, 18)
+	local count = UIKit.text(face, "H3", "", { Name = "DiscoveryCount", Size = UDim2.new(1, 0, 0, 28), TextColor3 = C.BlueDeep }, 18)
 	local note = UIKit.text(face, "Small", "Attack clues from enemies you have encountered. Drops appear only after you observe them.", { Position = UDim2.fromOffset(0, 34), Size = UDim2.new(1, 0, 0, 44), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top }, 14)
-	local scroll = UIKit.new("ScrollingFrame", { Name = "Entries", BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(0, 84), Size = UDim2.new(1, 0, 1, -84), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 4, ScrollBarImageColor3 = P.gold_500 }, face)
+	local scroll = UIKit.new("ScrollingFrame", { Name = "Entries", BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(0, 84), Size = UDim2.new(1, 0, 1, -84), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 5, ScrollBarImageColor3 = C.PanelEdge }, face)
 	UIKit.list(scroll, { Padding = UDim.new(0, 16) })
 	local entries = {}
 	for i, id in ipairs(Journal.Order) do
 		local row = UIKit.new("Frame", { Name = id, BackgroundTransparency = 1, Size = UDim2.new(1, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = i }, scroll)
 		UIKit.list(row, { Padding = UDim.new(0, 6) })
-		local name = UIKit.text(row, "H3", "", { Name = "EnemyName", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, FontFace = Font.fromEnum(Enum.Font.GothamBold), LayoutOrder = 1 }, 18)
+		local name = UIKit.text(row, "H3", "", { Name = "EnemyName", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, LayoutOrder = 1 }, 18)
 		local clue = UIKit.text(row, "Body", "", { Name = "AttackClue", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, LineHeight = 1.15, LayoutOrder = 2 }, 15)
-		local drops = UIKit.text(row, "Small", "", { Name = "ObservedDrops", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = P.gold_300, LayoutOrder = 3 }, 14)
+		local drops = UIKit.text(row, "Small", "", { Name = "ObservedDrops", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextColor3 = C.BlueDeep, LayoutOrder = 3 }, 14)
 		UIKit.Hairline(row, { LayoutOrder = 4 })
 		entries[id] = { Frame = row, Order = i, Name = name, Clue = clue, Drops = drops }
 	end
@@ -37,9 +37,9 @@ function MenuJournal.Build(screen: Frame, ctx: { [string]: any })
 			-- recorded enemies first, the unknown placeholders after them (same order within each)
 			row.Frame.LayoutOrder = row.Order + (entry.Known and 0 or #Journal.Order)
 			row.Name.Text = entry.Name
-			row.Name.TextColor3 = entry.Known and P.ivory_100 or P.stone_300
+			row.Name.TextColor3 = entry.Known and C.Text or C.TextFaint
 			row.Clue.Text = entry.Clue
-			row.Clue.TextColor3 = entry.Known and P.ivory_200 or P.stone_300
+			row.Clue.TextColor3 = entry.Known and C.Text or C.TextFaint
 			row.Drops.Text = entry.Known and (#entry.Drops > 0 and "Observed drops: " .. table.concat(entry.Drops, " · ") or "No drops observed yet.") or ""
 			row.Drops.Visible = entry.Known
 		end

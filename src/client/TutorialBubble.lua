@@ -30,7 +30,7 @@ local ClientSettings = require(script.Parent.ClientSettings)
 local TutorialBubble = {}
 
 local new, TS = UIKit.new, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 
 local BODY_SIZE = Theme.Type.Body.Size
 local ICON = 34
@@ -54,9 +54,9 @@ local function build(root: Frame)
 		Name = "TipBubble",
 		Radius = Theme.Radius.L,
 		Transparency = 0.04,
-		Edge = P.gold_400,
+		Edge = C.PanelEdge,
 		EdgeThickness = 2,
-		EdgeTransparency = 0.1,
+		EdgeTransparency = 0,
 		Visible = false,
 		ZIndex = Theme.Z.Toast,
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -67,12 +67,12 @@ local function build(root: Frame)
 	ui.Face = face
 	-- the speech-bubble tail: a diamond behind the face, half of it out toward the target
 	local tail = new("Frame", { Name = "Tail", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(TAIL, TAIL), Rotation = 45, BackgroundColor3 = C.Panel, BorderSizePixel = 0, ZIndex = 0, Visible = false }, holder)
-	UIKit.stroke(tail, P.gold_400, 2, 0.1)
+	UIKit.stroke(tail, C.PanelEdge, 2, 0)
 	ui.Tail = tail
 	UIKit.padding(face, 8, PAD, 8, PAD)
-	local well = new("Frame", { Name = "IconWell", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.05, Size = UDim2.fromOffset(ICON, ICON), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5) }, face)
+	local well = new("Frame", { Name = "IconWell", BackgroundColor3 = C.BluePale, BackgroundTransparency = 0, Size = UDim2.fromOffset(ICON, ICON), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5) }, face)
 	UIKit.corner(well, 999)
-	UIKit.stroke(well, P.gold_400, 2, 0.15)
+	UIKit.stroke(well, C.Blue, 2, 0)
 	ui.IconWell = well
 	ui.Body = UIKit.Role(face, "Body", "", {
 		Name = "Body",
@@ -87,9 +87,9 @@ local function build(root: Frame)
 	local pointer = new("Frame", { Name = "TipPointer", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, Active = false, ZIndex = Theme.Z.Toast }, root)
 	ui.Pointer = pointer
 	local function bar(name: string): Frame
-		local f = new("Frame", { Name = name, AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = P.gold_300, BorderSizePixel = 0, Size = UDim2.fromOffset(10, 4) }, pointer)
+		local f = new("Frame", { Name = name, AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = C.Primary, BorderSizePixel = 0, Size = UDim2.fromOffset(10, 4) }, pointer)
 		UIKit.corner(f, 999)
-		UIKit.stroke(f, P.slate_950, 1, 0.4)
+		UIKit.stroke(f, C.Text, 1, 0.2)
 		return f
 	end
 	ui.Line = bar("Line")
@@ -103,7 +103,7 @@ local function setIcon(name: string)
 			c:Destroy()
 		end
 	end
-	Icons.Draw(ui.IconWell, name, { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	Icons.Draw(ui.IconWell, name, { Size = 22, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.BluePale })
 end
 
 -- Wrapped line count of the text at width w (1-3), measured like Roblox lays it out.

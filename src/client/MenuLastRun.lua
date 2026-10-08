@@ -25,7 +25,7 @@ local UIKit = require(script.Parent.UIKit)
 local MenuParty = require(script.Parent.MenuParty)
 
 local MenuLastRun = {}
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 
 export type Card = {
 	Frame: Frame,
@@ -44,7 +44,7 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 	local holder, face = UIKit.Surface(parent, {
 		Name = "LastRun",
 		Radius = Theme.Radius.M,
-		Transparency = 0.12,
+		Transparency = 0,
 		Edge = C.PanelEdge,
 		EdgeTransparency = Theme.Alpha.Edge,
 		Visible = false,
@@ -60,7 +60,7 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 0, 0.5, -textH / 2 + lineH[1] / 2),
 		Size = UDim2.new(1, 0, 0, lineH[1]),
-		TextColor3 = P.gold_300,
+		TextColor3 = C.BlueDeep,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, 12)
 	local sub = UIKit.text(column, "Small", "", {
@@ -68,7 +68,7 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 0, 0.5, -textH / 2 + lineH[1] + 1 + lineH[2] / 2),
 		Size = UDim2.new(1, 0, 0, lineH[2]),
-		TextColor3 = P.ivory_100,
+		TextColor3 = C.Text,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, 14)
 	local haul = UIKit.text(column, "Small", "", {
@@ -76,7 +76,7 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 0, 0.5, textH / 2 - lineH[3] / 2),
 		Size = UDim2.new(1, 0, 0, lineH[3]),
-		TextColor3 = P.ivory_300,
+		TextColor3 = C.TextMuted,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, 13)
 
@@ -98,30 +98,30 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 			-- the Daily's scored try / practice is decided on its own screen (its START button
 			-- is the validated path for it)
 			ctx.ShowScreen("Daily")
-			toast("Your last run was the Daily Challenge: start it from here.", P.gold_300)
+			toast("Your last run was the Daily Challenge: start it from here.", C.BlueDeep)
 			return
 		end
 		if not table.find(Config.Modes.Order, mode) then
 			-- a mode no longer offered in the lobby (old saves): the closest start is SOLO
-			toast(string.format("%s runs are no longer offered: starting SOLO instead.", string.upper(mode)), P.gold_300)
+			toast(string.format("%s runs are no longer offered: starting SOLO instead.", string.upper(mode)), C.BlueDeep)
 			mode = "Solo"
 		end
 		local party = MenuParty.Summary()
 		if party.Count > 0 then
 			if not party.Leader then
-				toast("Your party leader starts the runs (or leave the party).", P.gold_300)
+				toast("Your party leader starts the runs (or leave the party).", C.BlueDeep)
 				return
 			end
 			local partyMode = MenuParty.PartyMode()
 			if partyMode and partyMode ~= mode then
 				local def = (Config.Modes :: any)[partyMode]
-				toast(string.format("Your party of %d plays %s: starting that instead.", party.Count, string.upper(def and def.DisplayName or partyMode)), P.gold_300)
+				toast(string.format("Your party of %d plays %s: starting that instead.", party.Count, string.upper(def and def.DisplayName or partyMode)), C.BlueDeep)
 				mode = partyMode
 			end
 		end
 		local now = DifficultyData.Selected(profile)
 		if last.Difficulty ~= now and DifficultyData.Tiers[now] then
-			toast(string.format("Difficulty is set to %s now (your last run was %s).", string.upper(DifficultyData.Tiers[now].Name), string.upper(tostring(last.Difficulty))), P.gold_300)
+			toast(string.format("Difficulty is set to %s now (your last run was %s).", string.upper(DifficultyData.Tiers[now].Name), string.upper(tostring(last.Difficulty))), C.BlueDeep)
 		end
 		Remotes.Get("StartRun"):FireServer(mode)
 	end
@@ -153,13 +153,13 @@ function MenuLastRun.Build(parent: Instance, ctx: { [string]: any }): Card
 		local modeName = modeDef and modeDef.DisplayName or tostring(last.Mode or "Solo")
 		if won then
 			title.Text = UIKit.track("LAST RUN · VICTORY")
-			title.TextColor3 = P.gold_300
+			title.TextColor3 = C.SelectedEdge
 		elseif fell then
 			title.Text = UIKit.track(string.upper("LAST RUN · FELL ON " .. stageText(last)))
-			title.TextColor3 = P.crimson_300
+			title.TextColor3 = C.TextDanger
 		else
 			title.Text = UIKit.track(string.upper("LAST RUN · LEFT ON " .. stageText(last)))
-			title.TextColor3 = P.ivory_300
+			title.TextColor3 = C.TextMuted
 		end
 		local hero = CharacterData.Characters[last.CharacterId]
 		local tier = DifficultyData.Tiers[last.Difficulty]

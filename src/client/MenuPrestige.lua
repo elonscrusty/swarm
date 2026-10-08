@@ -28,8 +28,8 @@ local PrestigeConfirm = require(script.Parent.PrestigeConfirm)
 local MenuPrestige = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local P = Theme.Palette
-local HEADING = Font.fromEnum(Enum.Font.GothamBold)
+local C = Theme.Color
+local HEADING = Theme.Font.Heading
 
 local function on(): boolean
 	return Config.FeatureOn("Prestige")
@@ -63,15 +63,15 @@ function MenuPrestige.Badge(holder: GuiObject?, stars: number)
 			Position = UDim2.new(1, -2, 1, -2),
 			Size = UDim2.fromOffset(0, TS(12) + 6),
 			AutomaticSize = Enum.AutomaticSize.X,
-			BackgroundColor3 = P.slate_950,
-			BackgroundTransparency = 0.1,
-			TextColor3 = P.gold_200,
+			BackgroundColor3 = C.Panel,
+			BackgroundTransparency = 0,
+			TextColor3 = C.BlueDeep,
 			FontFace = HEADING,
 			ZIndex = 8,
 		}, 12)
 		b:SetAttribute("NoTextFit", true)
 		UIKit.corner(b, 6)
-		UIKit.stroke(b, P.gold_400, 1, 0.1)
+		UIKit.stroke(b, C.PanelEdge, 1.5, 0)
 		UIKit.padding(b, 0, 4, 0, 4)
 		badge = b
 	end
@@ -99,10 +99,10 @@ function MenuPrestige.Build(parent: Instance, order: number)
 	local root = new("Frame", { Name = "Prestige", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order, Visible = false }, parent)
 	UIKit.list(root, { Padding = UDim.new(0, 6) })
 	UIKit.Hairline(root, { LayoutOrder = 0 })
-	text(root, "Label", "PRESTIGE", { Name = "Caption", FontFace = HEADING, TextColor3 = P.gold_300, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
-	local stateLine = wrapped(root, "BodyStrong", P.gold_200, 15, 2, "Stars")
+	text(root, "Label", "PRESTIGE", { Name = "Caption", FontFace = HEADING, TextColor3 = C.BlueDeep, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
+	local stateLine = wrapped(root, "BodyStrong", C.BlueDeep, 15, 2, "Stars")
 	stateLine.FontFace = HEADING
-	local rule = wrapped(root, "Small", P.ivory_300, 14, 3, "Rule")
+	local rule = wrapped(root, "Small", C.TextMuted, 14, 3, "Rule")
 	local heroNow = CharacterData.Default
 	local starsNow = 0
 	local button = UIKit.Button(root, {

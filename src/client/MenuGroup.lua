@@ -19,7 +19,7 @@ local MetaUI = require(script.Parent.MetaUI)
 local MenuGroup = {}
 
 local TS = UIKit.TS
-local P = Theme.Palette
+local C = Theme.Color
 local player = Players.LocalPlayer
 
 local groupName: string? = nil
@@ -77,7 +77,7 @@ end
 function MenuGroup.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui = MetaUI.Screen(screen, ctx, "JOIN OUR GROUP", 720)
-	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "GroupName", TextColor3 = P.gold_200 })
+	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "GroupName", TextColor3 = C.BlueDeep })
 	local sub = MetaUI.Line(ui.Head, "Small", "", 14, { Name = "GroupStatus" })
 	UIKit.list(ui.Body, { Padding = UDim.new(0, 6) })
 
@@ -91,7 +91,7 @@ function MenuGroup.Build(screen: Frame, ctx: { [string]: any })
 		title.Text = name and string.upper(name) or "OUR ROBLOX GROUP"
 		if MenuGroup.IsMember() then
 			sub.Text = "You're a member. Your bonus is on. Thank you!"
-			sub.TextColor3 = P.moss_200
+			sub.TextColor3 = C.Success
 		else
 			sub.Text = "Find us on Roblox: search for " .. (name and ('"' .. name .. '"') or "our group") .. " and join."
 			sub.TextColor3 = Theme.Color.TextMuted

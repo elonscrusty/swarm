@@ -80,7 +80,7 @@ local Tutorial = {}
 
 local player = Players.LocalPlayer
 local new, TS = UIKit.new, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 local T = Config.Tutorial
 local S = T.Smart or {}
 
@@ -180,28 +180,28 @@ end
 local function build(root: Frame)
 	rootFrame = root
 	-- the gold ring around the element a tip explains (under the card)
-	local focus = new("Frame", { Name = "TipFocus", BackgroundColor3 = P.gold_300, BackgroundTransparency = 0.9, Visible = false, Active = false, ZIndex = Theme.Z.Toast }, root)
+	local focus = new("Frame", { Name = "TipFocus", BackgroundColor3 = C.Primary, BackgroundTransparency = 0.85, Visible = false, Active = false, ZIndex = Theme.Z.Toast }, root)
 	UIKit.corner(focus, Theme.Radius.M)
-	ui.FocusStroke = UIKit.stroke(focus, P.gold_300, 3, 0.05)
+	ui.FocusStroke = UIKit.stroke(focus, C.Primary, 3, 0)
 	UIAnim.PulseStroke(ui.FocusStroke, 2, 4)
 	ui.Focus = focus
 
-	local holder, face = UIKit.Surface(root, { Name = "TipCard", Radius = Theme.Radius.L, Transparency = 0.02, Edge = P.gold_400, EdgeThickness = 2, EdgeTransparency = 0.1, Visible = false, ZIndex = Theme.Z.Toast, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(560, 140) })
+	local holder, face = UIKit.Surface(root, { Name = "TipCard", Radius = Theme.Radius.L, Transparency = 0.02, Edge = C.PanelEdge, EdgeThickness = 2, EdgeTransparency = 0, Visible = false, ZIndex = Theme.Z.Toast, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(560, 140) })
 	holder.Active = false
 	ui.Card = holder
 	ui.Face = face
 	-- the arrow: a diamond behind the face, half of it sticking out toward the target
 	local arrow = new("Frame", { Name = "Arrow", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(ARROW, ARROW), Rotation = 45, BackgroundColor3 = C.Panel, BorderSizePixel = 0, ZIndex = 0, Visible = false }, holder)
-	UIKit.stroke(arrow, P.gold_400, 2, 0.1)
+	UIKit.stroke(arrow, C.PanelEdge, 2, 0)
 	ui.Arrow = arrow
 	UIKit.padding(face, 14, 16, 14, 16)
 
-	local iconWell = new("Frame", { Name = "IconWell", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.05, Size = UDim2.fromOffset(ICON, ICON) }, face)
+	local iconWell = new("Frame", { Name = "IconWell", BackgroundColor3 = C.BluePale, BackgroundTransparency = 0, Size = UDim2.fromOffset(ICON, ICON) }, face)
 	UIKit.corner(iconWell, 999)
-	UIKit.stroke(iconWell, P.gold_400, 2, 0.15)
+	UIKit.stroke(iconWell, C.Blue, 2, 0)
 	ui.IconWell = iconWell
 	ui.Step = UIKit.Badge(face, "TIP 1 / 5", "Gold", { Name = "Step", AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0) })
-	ui.Title = UIKit.Role(face, "Title", "", { Name = "Title", Position = UDim2.fromOffset(ICON + 14, 0), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd })
+	ui.Title = UIKit.Role(face, "Title", "", { Name = "Title", Position = UDim2.fromOffset(ICON + 14, 0), TextColor3 = C.BlueDeep, TextTruncate = Enum.TextTruncate.AtEnd })
 	ui.Body = UIKit.Role(face, "Body", "", {
 		Name = "Body",
 		Position = UDim2.fromOffset(ICON + 14, TS(TITLE_SIZE) + 6),
@@ -228,7 +228,7 @@ local function build(root: Frame)
 	local track = new("Frame", { Name = "TimerTrack", BackgroundColor3 = C.PanelInset, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1) }, face)
 	UIKit.corner(track, 999)
 	ui.TimerTrack = track
-	ui.Timer = new("Frame", { Name = "Timer", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, track)
+	ui.Timer = new("Frame", { Name = "Timer", BackgroundColor3 = C.Blue, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, track)
 	UIKit.corner(ui.Timer, 999)
 end
 
@@ -532,7 +532,7 @@ local function setIcon(name: string)
 			c:Destroy()
 		end
 	end
-	Icons.Draw(ui.IconWell, name, { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	Icons.Draw(ui.IconWell, name, { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.BluePale })
 end
 
 local function hideCard()
@@ -611,13 +611,13 @@ local function showNext(now: number)
 		UIAnim.Pop(ui.Step, 0.3, 0.3)
 		local clip = new("Frame", { Name = "ShineClip", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ClipsDescendants = true, ZIndex = 20 }, ui.Card)
 		UIKit.corner(clip, Theme.Radius.L)
-		UIAnim.SweepOnce(clip, P.ivory_100, 0.6, 0.8)
+		UIAnim.SweepOnce(clip, C.Panel, 0.6, 0.8)
 		task.delay(0.8, function()
 			clip:Destroy()
 		end)
 		if ui.Focus.Visible then
 			UIAnim.Pop(ui.Focus, 0.15, 1.25)
-			UIAnim.Ring(rootFrame :: Frame, ui.Focus.Position + UDim2.fromOffset(ui.Focus.Size.X.Offset / 2, ui.Focus.Size.Y.Offset / 2), P.gold_300, math.max(ui.Focus.Size.X.Offset, ui.Focus.Size.Y.Offset) + 40, 0.5)
+			UIAnim.Ring(rootFrame :: Frame, ui.Focus.Position + UDim2.fromOffset(ui.Focus.Size.X.Offset / 2, ui.Focus.Size.Y.Offset / 2), C.Primary, math.max(ui.Focus.Size.X.Offset, ui.Focus.Size.Y.Offset) + 40, 0.5)
 		end
 	end
 	markSeen(tip.Id)

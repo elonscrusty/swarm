@@ -17,7 +17,7 @@ local MetaUI = require(script.Parent.MetaUI)
 local MenuCollection = {}
 
 local new, TS = UIKit.new, UIKit.TS
-local P = Theme.Palette
+local C = Theme.Color
 
 function MenuCollection.Summary(p: { [string]: any }?): string
 	local seen, total = CollectionData.Progress(p)
@@ -32,7 +32,7 @@ local ROWS = {
 function MenuCollection.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui = MetaUI.Screen(screen, ctx, "COLLECTION")
-	local progress = MetaUI.Line(ui.Head, "Label", "", 16, { Name = "Progress", TextColor3 = P.gold_200 })
+	local progress = MetaUI.Line(ui.Head, "Label", "", 16, { Name = "Progress", TextColor3 = C.BlueDeep })
 	local selected = "Enemies"
 	local fill: () -> ()
 	local tabRows = {}

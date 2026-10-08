@@ -27,7 +27,7 @@ local MetaUI = require(script.Parent.MetaUI)
 local MenuTitles = {}
 
 local new, TS = UIKit.new, UIKit.TS
-local P = Theme.Palette
+local C = Theme.Color
 
 -- True when this profile has earned the title text `name`.
 function MenuTitles.Owns(p: { [string]: any }?, name: string): boolean
@@ -74,11 +74,11 @@ end
 function MenuTitles.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui = MetaUI.Screen(screen, ctx, "TITLES")
-	local plate = new("Frame", { Name = "Plate", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.15, AnchorPoint = Vector2.new(0.5, 0) }, ui.Head)
+	local plate = new("Frame", { Name = "Plate", BackgroundColor3 = C.Panel, BackgroundTransparency = 0, AnchorPoint = Vector2.new(0.5, 0) }, ui.Head)
 	UIKit.corner(plate, Theme.Radius.M)
-	local plateStroke = UIKit.stroke(plate, P.gold_400, 2, 0.1)
+	local plateStroke = UIKit.stroke(plate, C.PanelEdge, 3, 0)
 	local plateName = MetaUI.Line(plate, "Label", Players.LocalPlayer.DisplayName, 18, { Name = "PlateName", TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, TS(18) + 4) })
-	local plateTitle = MetaUI.Line(plate, "Small", "", 14, { Name = "PlateTitle", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, Position = UDim2.fromOffset(8, 6 + TS(18)), Size = UDim2.new(1, -16, 0, TS(14) + 4) })
+	local plateTitle = MetaUI.Line(plate, "Small", "", 14, { Name = "PlateTitle", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, Position = UDim2.fromOffset(8, 6 + TS(18)), Size = UDim2.new(1, -16, 0, TS(14) + 4) })
 	UIKit.list(ui.Body, { Padding = UDim.new(0, 6) })
 
 	local function fill()
@@ -88,7 +88,7 @@ function MenuTitles.Build(screen: Frame, ctx: { [string]: any })
 		plateName.Text = Players.LocalPlayer.DisplayName
 		plateTitle.Text = worn ~= "" and worn or "No title worn"
 		local def = MetaData.NameplateById[wornId]
-		plateStroke.Color = def and def.Color or P.gold_400
+		plateStroke.Color = def and def.Color or C.PanelEdge
 		MetaUI.Clear(ui.Body)
 		local order = 0
 		local function section(str: string)
@@ -113,13 +113,14 @@ function MenuTitles.Build(screen: Frame, ctx: { [string]: any })
 				Height = 58,
 				Action = have and {
 					Title = isWorn and "WORN" or "WEAR",
-					Kind = isWorn and "Outline" or "Primary",
+					Kind = isWorn and "Selected" or "Secondary",
 					OnClick = function()
 						Remotes.Get("StoreEquip"):FireServer("Nameplate", isWorn and "" or n.Id)
 					end,
 				} or nil,
 			})
 			row.SetDim(not have)
+			row.SetDone(have and isWorn)
 			local holder = row.Icon
 			for _, d in ipairs(holder:GetDescendants()) do
 				if d:IsA("GuiObject") and d.BackgroundTransparency < 1 then
@@ -153,13 +154,14 @@ function MenuTitles.Build(screen: Frame, ctx: { [string]: any })
 					Height = 58,
 					Action = have and {
 						Title = isWorn and "WORN" or "WEAR",
-						Kind = isWorn and "Outline" or "Primary",
+						Kind = isWorn and "Selected" or "Secondary",
 						OnClick = function()
 							Remotes.Get("EquipCosmetic"):FireServer("Title", isWorn and "" or e.Name)
 						end,
 					} or nil,
 				})
 				row.SetDim(not have)
+			row.SetDone(have and isWorn)
 			end
 		end
 	end

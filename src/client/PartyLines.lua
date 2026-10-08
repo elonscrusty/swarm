@@ -35,9 +35,9 @@ local Showcase = require(script.Parent.Showcase)
 local PartyLines = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 local player = Players.LocalPlayer
-local NAVY = Color3.fromRGB(16, 22, 38)
+local PLATE = C.Panel -- the white plate of a bubble / chip (Bright Arcade)
 
 local BTN_H = 40
 local GAP = 6
@@ -259,9 +259,9 @@ local function showBubble(userId: number, line: string)
 		MaxDistance = 140,
 		ResetOnSpawn = false,
 	}, folder()) :: BillboardGui
-	local body = new("Frame", { Name = "Body", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -8, 1, -8), BackgroundColor3 = NAVY, BackgroundTransparency = 0.12, BorderSizePixel = 0 }, gui) :: Frame
+	local body = new("Frame", { Name = "Body", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -8, 1, -8), BackgroundColor3 = PLATE, BackgroundTransparency = 0.04, BorderSizePixel = 0 }, gui) :: Frame
 	UIKit.corner(body, 14)
-	local stroke = UIKit.stroke(body, P.gold_300, 2, 0.1)
+	local stroke = UIKit.stroke(body, C.PanelEdge, 2, 0)
 	local label = new("TextLabel", {
 		Name = "Line",
 		BackgroundTransparency = 1,
@@ -271,7 +271,7 @@ local function showBubble(userId: number, line: string)
 		FontFace = Theme.Font.Title,
 		TextSize = 22,
 		TextScaled = true,
-		TextColor3 = P.ivory_100,
+		TextColor3 = C.Text,
 		TextXAlignment = Enum.TextXAlignment.Center,
 	}, body) :: TextLabel
 	label:SetAttribute("NoTextFit", true)
@@ -407,7 +407,7 @@ function PartyLines.BuildFeed(parent: Instance): FeedView
 	local frame = new("Frame", { Name = "QuickFeed", BackgroundTransparency = 1, Size = UDim2.fromOffset(100, 40) }, parent) :: Frame
 	local labels: { TextLabel } = {}
 	for i = 1, cfg().FeedMax do
-		local l = text(frame, "Small", "", { Name = "Line" .. i, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = P.ivory_100, Visible = false }, 14)
+		local l = text(frame, "Small", "", { Name = "Line" .. i, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.Text, Visible = false }, 14)
 		labels[i] = l
 	end
 	local empty = text(frame, "Small", "Tap a quick line to talk to your party.", { Name = "Empty", TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.TextMuted }, 14)
@@ -426,7 +426,7 @@ function PartyLines.BuildFeed(parent: Instance): FeedView
 				k += 1
 				l.Visible = true
 				l.Text = entry.Name .. ": " .. entry.Text
-				l.TextColor3 = entry.FromId == player.UserId and P.gold_200 or P.ivory_100
+				l.TextColor3 = entry.FromId == player.UserId and C.BlueDeep or C.Text
 				l.Position = UDim2.fromOffset(0, (i - 1) * lineH)
 				l.Size = UDim2.new(1, 0, 0, lineH)
 			else
@@ -475,17 +475,17 @@ function PartyLines.BuildChip(parent: Frame): Chip
 		Name = "SayChip",
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = NAVY,
-		BackgroundTransparency = 0.18,
+		BackgroundColor3 = PLATE,
+		BackgroundTransparency = 0.04,
 		BorderSizePixel = 0,
 		Visible = false,
 	}, parent) :: TextButton
 	UIKit.corner(b, 10)
-	UIKit.stroke(b, P.gold_400, 1.5, 0.25)
+	UIKit.stroke(b, C.PanelEdge, 2, 0)
 	UIKit.Focusable(b)
 	UIAnim.Button(b)
 	local iconHolder = new("Frame", { Name = "IconHolder", BackgroundTransparency = 1 }, b)
-	Icons.Draw(iconHolder, "people3", { Size = 18, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = NAVY })
+	Icons.Draw(iconHolder, "people3", { Size = 18, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = PLATE })
 	local label = new("TextLabel", {
 		Name = "ChipText",
 		BackgroundTransparency = 1,
@@ -493,15 +493,13 @@ function PartyLines.BuildChip(parent: Frame): Chip
 		FontFace = Theme.Font.Title,
 		TextSize = 15,
 		TextScaled = true,
-		TextColor3 = P.gold_200,
+		TextColor3 = C.BlueDeep,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.6,
 	}, b)
 	new("UITextSizeConstraint", { Name = "Fit", MaxTextSize = 16, MinTextSize = 8 }, label)
 
-	local holder, face = UIKit.Surface(parent, { Name = "SayPopup", Radius = Theme.Radius.M, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35, ZIndex = 15, Visible = false })
+	local holder, face = UIKit.Surface(parent, { Name = "SayPopup", Radius = Theme.Radius.M, Transparency = 0.02, EdgeTransparency = 0, ZIndex = 15, Visible = false })
 	UIKit.padding(face, 10, 10, 10, 10)
 	local row = PartyLines.BuildRow(face, { Name = "PopupLines" })
 

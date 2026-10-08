@@ -35,6 +35,7 @@
 ]]
 
 local Players = game:GetService("Players")
+local TextService = game:GetService("TextService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -45,7 +46,6 @@ local CurseData = require(Shared:WaitForChild("CurseData"))
 local DifficultyData = require(Shared:WaitForChild("DifficultyData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
-local ArtImage = require(script.Parent.ArtImage)
 local MenuCurses = require(script.Parent.MenuCurses)
 local MenuParty = require(script.Parent.MenuParty)
 local MenuLastRun = require(script.Parent.MenuLastRun)
@@ -57,7 +57,8 @@ local MenuWeekly = require(script.Parent.MenuWeekly)
 local MenuPlay = {}
 
 local player = Players.LocalPlayer
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
+local Icons = require(script.Parent.Icons)
 
 local MODES = {
 	Solo = { Sub = "Just you", Icon = "person" },
@@ -127,7 +128,7 @@ function MenuPlay.Start(toast: ((string, Color3?) -> ())?): boolean
 	if party.Count > 0 then
 		if not party.Leader then
 			if toast then
-				toast("Your party leader starts the runs: tap READY.", P.gold_300)
+				toast("Your party leader starts the runs: tap READY.", C.BlueDeep)
 			end
 			return false
 		end
@@ -183,11 +184,8 @@ function MenuPlay.RuleLine(): string
 		return string.format("You lead a party of %d: Start begins a %s countdown for your party.", party.Count, name)
 	end
 	local style = MODES[mode]
-	local lead = name .. (style and (" · " .. style.Sub) or "")
-	if mode == (Config.Modes.Order[1] or "Solo") then
-		return lead .. ". Start begins the run at once."
-	end
-	return string.format("%s. Start opens a countdown that players in this server can join.", lead)
+	-- one concise line about the mode; the note under START says what START does
+	return name .. (style and (" · " .. style.Sub) or "")
 end
 
 function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
@@ -201,14 +199,13 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			ctx.Toast(str, color)
 		end
 	end
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.04, Edge = P.gold_500, EdgeTransparency = 0.35 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, EdgeThickness = Theme.Stroke.Medium, Depth = 4 })
 	ui.Panel = holder
 	ui.Face = face
-	-- header: BACK and a modest "Play" title, inside the panel
-	ui.Header = UIKit.ScreenHeader(face, "Play", ctx.Back)
-	ui.Header.Title.TextSize = UIKit.TS(30)
+	-- header: BACK and the PLAY title on its blue plate, inside the panel
+	ui.Header = UIKit.ScreenHeader(face, "Play", ctx.Back, true)
 
-	-- MODE tabs: the picked one gold
+	-- MODE tabs: the picked one lime (with a check badge: the colour is not the only cue)
 	for i, id in ipairs(Config.Modes.Order) do
 		local def = (Config.Modes :: any)[id]
 		local style = MODES[id] or { Sub = def.MaxPlayers .. " players", Icon = "people3" }
@@ -216,34 +213,49 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			Kind = "Secondary",
 			Title = string.upper(def.DisplayName),
 			Icon = style.Icon,
-			IconSize = 30,
+			IconSize = 28,
 			TitleStyle = "H2",
-			TitleSize = 20,
+			TitleSize = 21,
 			Align = "Center",
 			Shrink = true,
 			Name = id,
 			LayoutOrder = i,
-			Shadow = false,
+			Depth = "Light",
 			OnClick = function()
 				local party = MenuParty.Summary()
 				if party.Count > 0 and not party.Leader then
-					toast("Your party leader picks the mode.", P.gold_300)
+					toast("Your party leader picks the mode.", C.BlueDeep)
 					return
 				end
 				local forced = party.Count > 1 and MenuParty.PartyMode() or nil
 				if forced and forced ~= id then
-					toast(string.format("A party of %d plays %s.", party.Count, string.upper(forced)), P.gold_300)
+					toast(string.format("A party of %d plays %s.", party.Count, string.upper(forced)), C.BlueDeep)
 					return
 				end
 				MenuPlay.SetMode(id)
 				UIAnim.Bump(ui.Modes[i].Face, 0.06)
 			end,
 		})
-		ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. id, { Size = UDim2.fromScale(1.3, 1.3) })
+		-- the picked tab's check badge
+		local badge = UIKit.new("Frame", {
+			Name = "Check",
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, 6, 0, -6),
+			Size = UDim2.fromOffset(22, 22),
+			BackgroundColor3 = C.Text,
+			BorderSizePixel = 0,
+			ZIndex = 6,
+			Active = false,
+			Visible = false,
+		}, b.Instance)
+		UIKit.corner(badge, 999)
+		UIKit.stroke(badge, C.Panel, 2, 0)
+		Icons.Draw(badge, "check", { Size = 13, Color = C.TextOnBlue, Back = C.Text, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+		b.Check = badge
 		ui.Modes[i] = b
 	end
-	ui.Rule = UIKit.text(face, "Small", "", { Name = "Rule", TextWrapped = true, TextColor3 = C.TextMuted, TextYAlignment = Enum.TextYAlignment.Center, TextScaled = true }, 14)
-	UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(14), MinTextSize = 9 }, ui.Rule)
+	ui.Rule = UIKit.text(face, "Body", "", { Name = "Rule", TextWrapped = true, TextColor3 = C.TextMuted, TextYAlignment = Enum.TextYAlignment.Center, TextScaled = true }, 15)
+	UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(15), MinTextSize = 10 }, ui.Rule)
 
 	-- the options column scrolls when it does not fit (phones in landscape)
 	local opts = UIKit.new("ScrollingFrame", {
@@ -251,36 +263,23 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
 	ui.Options = opts
 
-	-- One setting row: a small caps caption, the value, an optional muted line, a chevron.
-	local function row(name: string, caption: string, icon: string, art: string?, chevron: boolean, onClick: () -> ()): any
-		local b = UIKit.Button(opts, {
-			Kind = "Secondary",
-			Title = " ",
-			Subtitle = " ",
-			Icon = icon,
-			IconSize = 34,
-			TitleStyle = "Label",
-			TitleSize = 18,
-			Chevron = chevron,
-			Align = "Left",
-			Shrink = true,
+	-- One option card (UIKit.OptionCard): icon badge, caption, value, muted line, chevron.
+	local T = Theme.IconTint
+	local function row(name: string, caption: string, icon: string, tint: Color3, chevron: boolean, onClick: () -> ()): any
+		return UIKit.OptionCard(opts, {
 			Name = name,
-			Shadow = false,
+			Caption = caption,
+			Icon = icon,
+			Tint = tint,
+			Chevron = chevron,
 			OnClick = onClick,
 		})
-		if art then
-			ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. art, { Size = UDim2.fromScale(1.3, 1.3) })
-		end
-		local column = b.Content:FindFirstChild("Text")
-		local cap = UIKit.text(column, "Caption", string.upper(caption), { Name = "Caption", LayoutOrder = 0, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
-		cap.TextColor3 = C.TextMuted
-		return b
 	end
 	-- value line (and the muted line under it; "" hides it)
 	local hideSummarySub = false -- the simple setup's side-by-side HERO / WORLD have no room for it
@@ -291,13 +290,13 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		end
 	end
 
-	ui.Hero = row("Hero", "Hero", "helmet", "Characters", true, function()
+	ui.Hero = row("Hero", "Hero", "helmet", T.Blue, true, function()
 		ctx.ShowScreen("Characters")
 	end)
-	ui.Arena = row("Arena", "World", "castle", "Arenas", true, function()
+	ui.Arena = row("Arena", "World", "castle", T.Green, true, function()
 		ctx.ShowScreen("Arenas")
 	end)
-	ui.Difficulty = row("Difficulty", "Difficulty", "skull", nil, true, function()
+	ui.Difficulty = row("Difficulty", "Difficulty", "skull", T.Red, true, function()
 		local profile = ctx.Profile()
 		local currentTier = DifficultyData.Selected(profile)
 		local at = table.find(DifficultyData.Order, currentTier) or 1
@@ -313,22 +312,22 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			if not DifficultyData.IsUnlocked(profile, id) then
 				local nextLocked = DifficultyData.Tiers[id]
 				local needs = DifficultyData.Tiers[nextLocked.Requires]
-				toast(string.format("Clear all %d %s stages to unlock %s.", Config.Stages.WinMinStages, needs and needs.Name or "Standard", nextLocked.Name), P.gold_300)
+				toast(string.format("Clear all %d %s stages to unlock %s.", Config.Stages.WinMinStages, needs and needs.Name or "Standard", nextLocked.Name), C.BlueDeep)
 				return
 			end
 		end
 	end)
-	ui.Curses = row("Curses", "Curses", "curse", "Curses", true, function()
+	ui.Curses = row("Curses", "Curses", "curse", T.Purple, true, function()
 		ctx.ShowScreen("Curses")
 	end)
 	-- META (docs/features/META.md): the worn Sigils (shown only while the switch is on)
-	ui.Sigils = row("Sigils", "Sigils", "sparkle", nil, true, function()
+	ui.Sigils = row("Sigils", "Sigils", "sparkle", T.Gold, true, function()
 		ctx.ShowScreen("Sigils")
 	end)
 	local sigilsOn = Config.FeatureOn("Sigils")
 	ui.Sigils.Instance.Visible = sigilsOn
 	-- ENDLESS: the row is the switch (remote SetEndless; the player attribute is the answer)
-	ui.Endless = row("Endless", "Endless", "cycle", nil, false, function()
+	ui.Endless = row("Endless", "Endless", "cycle", T.Teal, false, function()
 		endlessOn = not endlessOn
 		endlessSentAt = os.clock()
 		ui.PaintEndless()
@@ -350,26 +349,26 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -Theme.Space.L, 0.5, 0),
 			Size = UDim2.fromOffset(46, 26),
-			BackgroundColor3 = P.slate_700,
+			BackgroundColor3 = C.Track,
 			BorderSizePixel = 0,
 			ZIndex = 4,
 			Active = false,
 		}, ui.Endless.Face)
 		UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, track)
-		UIKit.new("UIStroke", { Color = P.slate_500, Thickness = 1, Transparency = 0.3 }, track)
+		UIKit.new("UIStroke", { Color = C.PanelEdge, Thickness = 2, Transparency = 0 }, track)
 		local knob = UIKit.new("Frame", {
 			Name = "Knob",
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 3, 0.5, 0),
 			Size = UDim2.fromOffset(20, 20),
-			BackgroundColor3 = P.ivory_200,
+			BackgroundColor3 = C.Panel,
 			BorderSizePixel = 0,
 			ZIndex = 5,
 			Active = false,
 		}, track)
 		UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, knob)
 		ui.PaintEndless = function()
-			track.BackgroundColor3 = endlessOn and P.gold_400 or P.slate_700
+			track.BackgroundColor3 = endlessOn and C.Selected or C.Track
 			knob.Position = endlessOn and UDim2.new(1, -23, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
 			ui.Endless.SetSelected(endlessOn)
 			setRow(ui.Endless, endlessOn and "On" or "Off", endlessOn and "No portal win · own leaderboard" or nil)
@@ -378,11 +377,11 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	end
 	ui.LastRun = MenuLastRun.Build(opts, ctx)
 	-- DETAILS: the daily and weekly challenges (the footer link shows them under the grid)
-	ui.Daily = row("Daily", "Daily challenge", "calendar", "Daily", true, function()
+	ui.Daily = row("Daily", "Daily challenge", "calendar", T.Orange, true, function()
 		ctx.ShowScreen("Daily")
 	end)
 	local weeklyOn = Config.FeatureOn("WeeklyChallenge")
-	ui.Weekly = row("Weekly", "Weekly challenge", "calendar", nil, true, function()
+	ui.Weekly = row("Weekly", "Weekly challenge", "calendar", T.Navy, true, function()
 		ctx.ShowScreen("Weekly")
 	end)
 
@@ -407,28 +406,29 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	ui.Start = UIKit.Button(face, {
 		Kind = "Primary",
 		Glow = false,
-		Title = "Start Solo",
+		Title = "START SOLO",
 		Icon = "play",
-		IconSize = 32,
-		TitleStyle = "H2",
-		TitleSize = 24,
+		IconSize = 30,
+		TitleStyle = "H1",
+		TitleSize = 28,
 		Align = "Center",
 		Shrink = true,
 		Name = "Start",
+		Depth = "Strong",
+		Radius = Theme.Radius.L,
 		OnClick = function()
 			onStart()
 		end,
 	})
-	ArtImage.ButtonIcon(ui.Start.Content:FindFirstChild("IconHolder"), "icons/ui/ui_Play", { Size = UDim2.fromScale(1.4, 1.4) })
-	ui.Note = UIKit.text(face, "Caption", "", { Name = "StartNote", TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
-	ui.Divider = UIKit.new("Frame", { Name = "Divider", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0 }, face)
+	ui.Note = UIKit.text(face, "Body", "", { Name = "StartNote", TextColor3 = C.TextMuted, TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+	ui.Divider = UIKit.new("Frame", { Name = "Divider", BackgroundColor3 = C.Divider, BorderSizePixel = 0 }, face)
 	-- "Details >": shows the daily and weekly challenge rows
 	ui.Details = UIKit.new("TextButton", {
 		Name = "Details",
 		Text = "Details >",
 		FontFace = Theme.Font.Label,
 		TextSize = UIKit.TS(16),
-		TextColor3 = P.gold_200,
+		TextColor3 = C.BlueDeep,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		BackgroundTransparency = 1,
 		AutoButtonColor = false,
@@ -448,7 +448,7 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	ui.Summary = UIKit.new("Frame", { Name = "Summary", BackgroundTransparency = 1 }, face)
 	ui.QuickStart = UIKit.Button(face, {
 		Kind = "Primary",
-		Glow = true,
+		Glow = false,
 		Title = "START SOLO",
 		Subtitle = "Just you · the run begins at once",
 		Icon = "play",
@@ -458,11 +458,12 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		Align = "Center",
 		Shrink = true,
 		Name = "QuickStart",
+		Depth = "Strong",
+		Radius = Theme.Radius.L,
 		OnClick = function()
 			onStart()
 		end,
 	})
-	ArtImage.ButtonIcon(ui.QuickStart.Content:FindFirstChild("IconHolder"), "icons/ui/ui_Play", { Size = UDim2.fromScale(1.6, 1.6) })
 	ui.Advanced = UIKit.Button(face, {
 		Kind = "Secondary",
 		Title = "ADVANCED OPTIONS",
@@ -475,6 +476,7 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		Align = "Left",
 		Shrink = true,
 		Name = "Advanced",
+		Depth = "Light",
 		OnClick = function()
 			advancedOpen = not advancedOpen
 			showAdvanced()
@@ -495,17 +497,19 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		for i, id in ipairs(Config.Modes.Order) do
 			local on = id == mode
 			ui.Modes[i].SetSelected(false)
-			ui.Modes[i].SetKind(on and "Primary" or "Secondary")
+			ui.Modes[i].SetKind(on and "Selected" or "Secondary")
+			ui.Modes[i].SetDepth(on and "Strong" or "Light")
+			ui.Modes[i].Check.Visible = on
 			-- a member, or a party of fixed size, cannot pick another size
 			local locked = member or (forced ~= nil and forced ~= id)
 			ui.Modes[i].Instance:SetAttribute("Locked", locked)
 			ui.Modes[i].Face.BackgroundTransparency = (locked and not on) and 0.5 or 0
 		end
 		local def = (Config.Modes :: any)[mode]
-		local startText = "Start " .. (def and def.DisplayName or mode)
+		local startText = "START " .. string.upper(def and def.DisplayName or mode)
 		local note
 		if member then
-			startText = party.MyReady and "Unready" or "Ready"
+			startText = party.MyReady and "UNREADY" or "READY"
 			note = "Your leader starts the run"
 		elseif party.Count > 1 then
 			note = "Starts a countdown for your party"
@@ -523,11 +527,17 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	MenuPlay.OnModeChanged(showMode)
 	showMode()
 
-	local gridList = { ui.Hero.Instance, ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.Sigils.Instance, ui.Endless.Instance }
+	-- SIGILS and ENDLESS sit in the grid when the panel has room for a third row; on short phones
+	-- (the reference's 2x2 cards) they move under "Details >" with the daily and weekly rows.
+	local inlineExtras = true
 	-- Places the rows in a grid (two columns when `w` allows) from y0; returns the next y.
+	-- The scroll body clips: cards keep INSET px clear on the sides / top and BASE px below,
+	-- so their outlines and raised bases are never cut (the old interrupted borders).
+	local INSET, BASE = 4, 6
 	local function grid(list: { GuiObject }, w: number, y0: number, rowH: number): number
-		local G = 10
+		local G = 12
 		local cols = w >= 620 and 2 or 1
+		w -= 2 * INSET
 		local cw = math.floor((w - (cols - 1) * G) / cols)
 		local n = 0
 		for _, b in ipairs(list) do
@@ -538,7 +548,7 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 				continue
 			end
 			local col, r = n % cols, math.floor(n / cols)
-			place(b, col * (cw + G), y0 + r * (rowH + G), cw, rowH)
+			place(b, INSET + col * (cw + G), y0 + r * (rowH + G), cw, rowH)
 			n += 1
 		end
 		return y0 + math.ceil(n / cols) * (rowH + G)
@@ -546,20 +556,30 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 
 	local function layoutOptions(colW: number, rowH: number, y0: number?): number
 		local w = colW - 6
-		ui.Sigils.Instance.Visible = sigilsOn
-		ui.Endless.Instance.Visible = endlessEnabled
 		local showDetails = simple or detailsOpen
+		local inline = simple or inlineExtras
+		ui.Sigils.Instance.Visible = sigilsOn and (inline or showDetails)
+		ui.Endless.Instance.Visible = endlessEnabled and (inline or showDetails)
 		ui.Daily.Instance.Visible = showDetails
 		ui.Weekly.Instance.Visible = showDetails and weeklyOn
-		local y = grid(gridList, w, y0 or 0, rowH)
-		if ui.LastRun.Has() then
-			place(ui.LastRun.Frame, 0, y, w, 76)
-			ui.LastRun.SetWidth(w)
-			y += 76 + 10
+		local mainList = { ui.Hero.Instance, ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance }
+		local moreList = { ui.Daily.Instance, ui.Weekly.Instance }
+		if inline then
+			table.insert(mainList, ui.Sigils.Instance)
+			table.insert(mainList, ui.Endless.Instance)
+		else
+			table.insert(moreList, 1, ui.Sigils.Instance)
+			table.insert(moreList, 2, ui.Endless.Instance)
 		end
-		y = grid({ ui.Daily.Instance, ui.Weekly.Instance }, w, y, rowH)
-		opts.CanvasSize = UDim2.fromOffset(0, math.max(0, y - 10))
-		return math.max(0, y - 10)
+		local y = grid(mainList, w, (y0 or 0) + INSET, rowH)
+		if ui.LastRun.Has() then
+			place(ui.LastRun.Frame, INSET, y, w - 2 * INSET, 76)
+			ui.LastRun.SetWidth(w - 2 * INSET)
+			y += 76 + 12
+		end
+		y = grid(moreList, w, y, rowH)
+		opts.CanvasSize = UDim2.fromOffset(0, math.max(0, y - 12 + BASE))
+		return math.max(0, y - 12 + BASE)
 	end
 
 	-- Moves the controls between the full screen and the simple setup (same buttons).
@@ -588,21 +608,22 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local G = 10
 		local w = colW - 6
 		local y = 0
-		local per = math.floor((w - 2 * G) / 3)
+		local per = math.floor((w - 2 * INSET - 2 * G) / 3)
+		y = INSET + 6
 		if per >= 110 then
 			for i, b in ipairs(ui.Modes) do
-				place(b.Instance, (i - 1) * (per + G), 0, per, 52)
+				place(b.Instance, INSET + (i - 1) * (per + G), y, per, 52)
 			end
-			y = 52 + G
+			y += 52 + G
 		else
 			for _, b in ipairs(ui.Modes) do
-				place(b.Instance, 0, y, w, 48)
+				place(b.Instance, INSET, y, w - 2 * INSET, 48)
 				y += 48 + G
 			end
 		end
-		place(ui.Rule, 0, y, w, 40)
+		place(ui.Rule, INSET, y, w - 2 * INSET, 40)
 		y += 40 + G
-		layoutOptions(colW, rowH, y)
+		layoutOptions(colW, rowH, y - INSET)
 	end
 
 	local function layoutSimple(W: number, H: number, top: number, M: number, portrait: boolean, pad: number, headH: number, rowH: number, short: boolean)
@@ -669,10 +690,12 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local G = 10
 		local headY = math.max(ins.Top + 4, 12)
 		-- clear the Roblox buttons and the gold readout along the top
-		local top = headY + (portrait and 130 or 46)
-		local pad = compact and 12 or 18
-		local headH = 52
-		local short = not portrait and H < 520
+		-- short: header and mode tabs share one row (landscape phones, where the second row of
+		-- option cards otherwise ends up under the scroll edge)
+		local short = not portrait and (H < 520 or (compact and H < 640))
+		local top = headY + (portrait and 130 or (short and 6 or 46))
+		local pad = short and 10 or (compact and 12 or 18)
+		local headH = short and 50 or 52
 		-- phones at the Largest Roblox text size need the taller rows (three text lines)
 		local rowH = short and 92 or (compact and 78 or 72)
 		if simple then
@@ -686,46 +709,74 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local availH = H - top - M
 		local tabH = compact and 48 or 56
 		local ruleH = iw >= 600 and 22 or 36
-		local footH = 66
+		local startH = short and 54 or 60
+		local noteH = 18
+		local footH = startH + 6 + noteH
 		local cols = (iw - 6) >= 620 and 2 or 1
-		local rows = 4 + (sigilsOn and 1 or 0) + (endlessEnabled and 1 or 0)
-		local want = math.ceil(rows / cols) * (rowH + G) - G + (hasLast and 76 + G or 0)
+		-- header (+ tabs beside it on short screens), tabs, rule, body, footer
+		local topBlock = short and (headH + 6) or (headH + G + tabH + 8)
+		local overhead = pad + topBlock + ruleH + G + G + footH + pad
+		local bodyAvail = availH - overhead - INSET - BASE -- room for the cards' outlines and raised bases
+		local lastH = hasLast and (76 + G) or 0
+		local minRow = 64
+		local extraCount = (sigilsOn and 1 or 0) + (endlessEnabled and 1 or 0)
+		-- the third row (SIGILS / ENDLESS) only when it fits beside the four cards
+		inlineExtras = extraCount == 0 or math.ceil((4 + extraCount) / cols) * (minRow + G) - G + lastH <= bodyAvail
+		local nMain = 4 + (inlineExtras and extraCount or 0)
+		local rowsN = math.ceil(nMain / cols)
+		-- rows give up height (never below a finger's size) so the cards fit without scrolling
+		rowH = math.clamp(math.floor((bodyAvail - lastH - (rowsN - 1) * G) / rowsN), minRow, rowH)
+		local want = rowsN * (rowH + G) - G + lastH + INSET + BASE
 		if detailsOpen then
-			local extra = 1 + (weeklyOn and 1 or 0)
+			local extra = 1 + (weeklyOn and 1 or 0) + (inlineExtras and 0 or extraCount)
 			want += G + math.ceil(extra / cols) * (rowH + G) - G
 		end
-		-- header (+ tabs beside it on short screens), tabs, rule, body, footer
-		local topBlock = short and (headH + 6) or (headH + G + tabH + 4)
-		local h = math.min(availH, pad + topBlock + ruleH + G + want + G + footH + pad)
+		local h = math.min(availH, overhead + want)
 		place(ui.Panel, (W - w) / 2, top, w, h)
 		local y = pad
 		if short then
 			place(ui.Header.Frame, pad, y, 270, headH)
-			local tx = pad + 280
-			local per = math.floor((w - pad - tx - 2 * 8) / 3)
+			-- the tabs start after BACK and the PLAY plate (measured: the plate grows with
+			-- Roblox's text size setting)
+			local plate = ui.Header.Plate and ui.Header.Plate.Frame
+			local plateW
+			if plate and plate.AbsoluteSize.X > 0 and holder.AbsoluteSize.X > 0 then
+				plateW = plate.AbsoluteSize.X * w / holder.AbsoluteSize.X -- screen px back to layout px
+			else
+				local label = ui.Header.Title
+				plateW = TextService:GetTextSize(label.Text, label.TextSize, Enum.Font.FredokaOne, Vector2.new(1000, 200)).X + 36
+			end
+			local tx = pad + 144 + plateW + 14
+			local per = math.floor((w - pad - tx - 2 * 10) / 3)
+			-- narrow tabs (large Roblox text) drop their icons before the names shrink
+			local icons = per >= 150
 			for i, b in ipairs(ui.Modes) do
-				place(b.Instance, tx + (i - 1) * (per + 8), y + 2, per, headH - 4)
+				local id = Config.Modes.Order[i]
+				b.SetIcon(icons and (MODES[id] and MODES[id].Icon or "people3") or nil)
+				place(b.Instance, tx + (i - 1) * (per + 10), y + 2, per, headH - 8)
 			end
 			y += headH + 6
 		else
 			place(ui.Header.Frame, pad, y, iw, headH)
 			y += headH + G
-			local per = math.floor((iw - 2 * 8) / 3)
+			local per = math.floor((iw - 2 * 10) / 3)
 			for i, b in ipairs(ui.Modes) do
-				place(b.Instance, pad + (i - 1) * (per + 8), y, per, tabH)
+				local id = Config.Modes.Order[i]
+				b.SetIcon(MODES[id] and MODES[id].Icon or "people3")
+				place(b.Instance, pad + (i - 1) * (per + 10), y, per, tabH)
 			end
-			y += tabH + 4
+			y += tabH + 8
 		end
 		place(ui.Rule, pad, y, iw, ruleH)
 		y += ruleH + G
 		local footY = h - pad - footH
 		place(opts, pad, y, iw + 6, math.max(0, footY - G - y))
 		layoutOptions(iw + 6, rowH)
-		place(ui.Divider, pad, footY - 6, iw, 1)
-		local sw = math.min(math.floor(iw * 0.62), 340)
-		place(ui.Start.Instance, pad + iw - sw, footY, sw, 48)
-		place(ui.Note, pad + iw - sw, footY + 50, sw, 16)
-		place(ui.Details, pad, footY, math.min(120, iw - sw - 8), 48)
+		place(ui.Divider, pad, footY - 8, iw, 2)
+		local sw = math.min(math.floor(iw * 0.6), 400)
+		place(ui.Start.Instance, pad + iw - sw, footY, sw, startH)
+		place(ui.Note, pad + iw - sw, footY + startH + 8, sw, noteH)
+		place(ui.Details, pad, footY, math.min(120, iw - sw - 8), startH)
 		ui.LastRun.Frame.Visible = hasLast
 	end
 	MenuPlay._layout = function()
@@ -770,7 +821,10 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			or ("Used when it starts · resets in " .. MenuDaily.TimeLeft())
 		setRow(ui.Daily, used and "Scored try used" or "Scored try ready", dailySub)
 		if sigilsOn then
-			setRow(ui.Sigils, MenuSigils.Summary(profile), nil)
+			-- "None worn · found on bosses and elites": the value, then the hint as the muted line
+			local summary = MenuSigils.Summary(profile)
+			local value, hint = string.match(summary, "^(.-) · (.+)$")
+			setRow(ui.Sigils, value or summary, hint)
 		end
 		if weeklyOn then
 			setRow(ui.Weekly, MenuWeekly.Summary(profile), "One hero, one week")

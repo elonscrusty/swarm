@@ -33,7 +33,7 @@ local MenuUpgrades = {}
 
 local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 
 local SHOP = {
 	{ Name = "500 Gold", Kind = "Product", Key = "Gold500", Icon = "shop_GoldPouch", Desc = "A pouch of gold." },
@@ -64,39 +64,18 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 	local tab = "Permanent"
 
 	ui.Header = UIKit.ScreenHeader(screen, "UPGRADES", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, })
 	ui.Panel = holder
 	UIKit.padding(face, 14, 16, 14, 16)
-	ui.Tabs = new("Frame", { Name = "Tabs", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, Theme.Size.TapMin) }, face)
-	UIKit.Hairline(ui.Tabs, { Position = UDim2.new(0, 0, 1, -1) })
-	local tabButtons: { [string]: TextButton } = {}
-	-- one gold underline that slides to the picked tab
-	local underline = new("Frame", { Name = "Selected", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.25, 1), Size = UDim2.new(0.25, 0, 0, 2), ZIndex = 2 }, ui.Tabs)
-	for i, id in ipairs({ "Permanent", "Shop" }) do
-		local button = new("TextButton", {
-			Name = id,
-			BackgroundTransparency = 1,
-			AutoButtonColor = false,
-			Text = string.upper(id),
-			FontFace = Theme.Font.Label,
-			TextSize = TS(16),
-			TextColor3 = id == tab and P.gold_300 or C.TextMuted,
-			Position = UDim2.fromScale((i - 1) / 2, 0),
-			Size = UDim2.fromScale(0.5, 1),
-		}, ui.Tabs)
-		UIKit.Focusable(button)
-		tabButtons[id] = button
-		button.Activated:Connect(function()
-			if tab == id then return end
-			tab = id
-			for key, other in pairs(tabButtons) do
-				other.TextColor3 = key == tab and P.gold_300 or C.TextMuted
-			end
-			UIAnim.SlideTo(underline, UDim2.fromScale((i - 0.5) / 2, 1))
-			-- the new cards pop in (staggered) in place of the old ones
-			MenuUpgrades._rebuild(true)
-		end)
-	end
+	local tabs = UIKit.Tabs(face, {
+		{ Id = "Permanent", Title = "Permanent" },
+		{ Id = "Shop", Title = "Shop" },
+	}, function(id: string)
+		tab = id
+		-- the new cards pop in (staggered) in place of the old ones
+		MenuUpgrades._rebuild(true)
+	end)
+	ui.Tabs = tabs.Frame
 	ui.Note = text(face, "Small", "", { Position = UDim2.fromOffset(0, Theme.Size.TapMin + 6), Size = UDim2.new(1, 0, 0, TS(14) + 6), TextColor3 = C.TextMuted, TextXAlignment = Enum.TextXAlignment.Center }, 15)
 	ui.Scroll = new("ScrollingFrame", {
 		Name = "Scroll",
@@ -104,8 +83,8 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(0, Theme.Size.TapMin + 14 + TS(14) + 6),
 		Size = UDim2.new(1, 0, 1, -(Theme.Size.TapMin + 14 + TS(14) + 6)),
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarThickness = 5,
+		ScrollBarImageColor3 = C.PanelEdge,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -120,8 +99,8 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 
 	local function card(order: number): Frame
 		local f = UIKit.Panel(ui.Scroll, { LayoutOrder = order, Name = "Card" .. order })
-		f.BackgroundColor3 = P.slate_950
-		f.BackgroundTransparency = 0.25
+		f.BackgroundColor3 = C.PanelRaised
+		f.BackgroundTransparency = 0
 		UIKit.pad(f, 14)
 		return f
 	end
@@ -174,13 +153,13 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		cardTop(f, function()
 			UIKit.Tile(f, { Id = Icons.MetaIcon(id), Size = 56 })
 		end, def.Name, def.Description, 0, lines)
-		-- one segment per level: gold = bought, ivory = the next one is affordable, dark = left
+		-- one segment per level: blue = bought, outlined = the next one is affordable, pale = left
 		local barY = math.max(64, TS(20) + 12 + lines * TS(14)) -- under the description
 		local rank = text(f, "Label", string.format("LV %d / %d", level, def.MaxLevel), {
 			Name = "Rank",
 			Position = UDim2.fromOffset(0, barY),
 			Size = UDim2.new(0, 90, 0, TS(13) + 4),
-			TextColor3 = maxed and P.gold_300 or C.TextMuted,
+			TextColor3 = maxed and C.BlueDeep or C.TextMuted,
 		}, 13)
 		local marks = new("Frame", { Name = "RankMarks", BackgroundTransparency = 1, Position = UDim2.fromOffset(92, barY + math.floor((TS(13) + 4 - 8) / 2)), Size = UDim2.new(1, -92, 0, 8) }, f)
 		for i = 1, def.MaxLevel do
@@ -188,8 +167,8 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			local available = i == level + 1 and affordable
 			local seg = new("Frame", {
 				Name = "Rank" .. i,
-				BackgroundColor3 = bought and P.gold_400 or P.slate_600,
-				BackgroundTransparency = bought and 0 or 0.2,
+				BackgroundColor3 = bought and C.PanelEdge or C.Track,
+				BackgroundTransparency = 0,
 				BorderSizePixel = 0,
 				Position = UDim2.new((i - 1) / def.MaxLevel, 2, 0, 1),
 				Size = UDim2.new(1 / def.MaxLevel, -4, 0, 6),
@@ -197,7 +176,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			UIKit.corner(seg, 3)
 			if available then
 				-- the next level is affordable: an outlined segment, not a filled one
-				UIKit.stroke(seg, P.gold_300, 1, 0.1)
+				UIKit.stroke(seg, C.BlueDeep, 1, 0.1)
 			end
 		end
 		UIKit.Hairline(f, { Position = UDim2.fromOffset(0, barY + TS(13) + 14) })
@@ -210,7 +189,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 			text(f, "BodyStrong", value, { Name = caption, Position = UDim2.fromOffset(capW, y), Size = UDim2.new(1, -capW, 0, rowH), TextColor3 = color, TextTruncate = Enum.TextTruncate.AtEnd }, UIKit.IsCompact() and 13 or 15)
 		end
 		effectRow(rowY, "Current", MetaUpgradeData.EffectText(id, level), C.Text)
-		effectRow(rowY + rowH, "Next", maxed and "Fully upgraded" or MetaUpgradeData.EffectText(id, level + 1), maxed and P.gold_300 or P.moss_200)
+		effectRow(rowY + rowH, "Next", maxed and "Fully upgraded" or MetaUpgradeData.EffectText(id, level + 1), maxed and C.BlueDeep or C.Success)
 		if cost then
 			local busy = pending[id] ~= nil
 			local b
@@ -231,7 +210,7 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 					end
 					local pr = ctx.Profile()
 					if pr and pr.Gold < cost then
-						ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(cost) .. " needed.", P.crimson_300)
+						ctx.Toast("Not enough gold yet: " .. UIKit.formatNumber(cost) .. " needed.", C.Danger)
 						return
 					end
 					pending[id] = os.clock()
@@ -267,8 +246,8 @@ function MenuUpgrades.Build(screen: Frame, ctx: { [string]: any })
 		if lastLevels[id] ~= nil and level > lastLevels[id] then
 			UIAnim.Punch(f, 0.06)
 			UIAnim.Pop(rank, 0, 1.4)
-			UIAnim.Flash(f, P.gold_300)
-			UIAnim.Burst(f, UDim2.fromScale(0.5, 0.45), { P.gold_300, P.gold_500, P.ivory_100 }, 18, 80)
+			UIAnim.Flash(f, C.BlueDeep)
+			UIAnim.Burst(f, UDim2.fromScale(0.5, 0.45), { C.BlueDeep, C.PanelEdge, C.Text }, 18, 80)
 			UIKit.Sound("Item") -- the purchase landed (not only the tap's click)
 		end
 		lastLevels[id] = level

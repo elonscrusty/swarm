@@ -24,7 +24,7 @@ local MenuStreak = require(script.Parent.MenuStreak)
 local MenuComeback = {}
 
 local TS = UIKit.TS
-local P = Theme.Palette
+local C = Theme.Color
 
 local autoShown = false
 
@@ -72,7 +72,7 @@ end
 function MenuComeback.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui = MetaUI.Screen(screen, ctx, "WELCOME BACK!", 640)
-	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "AwayDays", TextColor3 = P.gold_200 })
+	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "AwayDays", TextColor3 = C.BlueDeep })
 	local sub = MetaUI.Line(ui.Head, "Small", "", 14, { Name = "GiftRule" })
 	UIKit.list(ui.Body, { Padding = UDim.new(0, 6) })
 	local last: { [string]: any }? = nil -- the gift shown (kept after the claim to show it as claimed)
@@ -119,7 +119,7 @@ function MenuComeback.Build(screen: Frame, ctx: { [string]: any })
 				Sub = g and "A gift for coming back" or "Claimed",
 				Height = 60,
 			})
-			row.SetDim(g == nil)
+			row.SetDone(g == nil)
 			if type(shown.Look) == "string" then
 				local e = CosmeticData.Get(shown.Look)
 				local look = MetaUI.Row(ui.Body, {
@@ -130,7 +130,7 @@ function MenuComeback.Build(screen: Frame, ctx: { [string]: any })
 					Sub = g and "Wear it from the STORE (already owned: gold instead)" or "Claimed",
 					Height = 60,
 				})
-				look.SetDim(g == nil)
+				look.SetDone(g == nil)
 			end
 		end
 		local streakOpen = Config.FeatureOn("LoginStreak") and (MenuStreak.State(p))

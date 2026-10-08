@@ -26,7 +26,7 @@ local Announcer = {}
 
 local player = Players.LocalPlayer
 local A = Config.Feel.Announcer
-local P = Theme.Palette
+local C = Theme.Color
 
 local combo = 0
 local lastKills = 0
@@ -64,11 +64,11 @@ local function milestone(m: number, index: number)
 	local pitch = 2 ^ (((index - 1) * (A.PitchStep or 2)) / 12)
 	Audio.Play("ComboMilestone", pitch)
 	if UIState.HeadlineShowing() ~= nil then
-		UIState.Notice({ Id = "combo.streak", Text = text, Color = P.gold_300, Class = "Info", Seconds = 2 })
+		UIState.Notice({ Id = "combo.streak", Text = text, Color = C.BlueDeep, Class = "Info", Seconds = 2 })
 		stats.Notices += 1
 		return
 	end
-	FeatureHud.Announce(text, { Color = P.gold_300, Seconds = A.CalloutSeconds })
+	FeatureHud.Announce(text, { Color = C.Primary, Seconds = A.CalloutSeconds })
 	shownText = text
 	calloutUntil = os.clock() + A.CalloutSeconds
 	stats.Callouts += 1
@@ -113,7 +113,7 @@ local function refresh(now: number)
 	local text = string.format("%d COMBO", combo)
 	if text ~= shownText then
 		shownText = text
-		FeatureHud.Announce(text, { Color = P.ivory_100, Seconds = math.max(0.2, A.ResetSeconds - (now - lastKillAt)) })
+		FeatureHud.Announce(text, { Color = C.TextOnBlue, Seconds = math.max(0.2, A.ResetSeconds - (now - lastKillAt)) })
 	end
 end
 

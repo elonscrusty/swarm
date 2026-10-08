@@ -39,7 +39,7 @@ local ClientSettings = require(script.Parent.ClientSettings)
 local FeatureHud = {}
 
 local player = Players.LocalPlayer
-local P = Theme.Palette
+local C = Theme.Color
 local F = Config.FeatureHud
 
 local gui: ScreenGui? = nil
@@ -123,7 +123,7 @@ function FeatureHud.Badge(id: string, opts: { Text: string?, Color: Color3?, Ord
 	end
 	local b = badges[id]
 	if not b then
-		b = UIKit.new("Frame", { Name = "Badge_" .. id, BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.15, Size = UDim2.fromOffset(0, F.BadgeSize), AutomaticSize = Enum.AutomaticSize.X }, row) :: Frame
+		b = UIKit.new("Frame", { Name = "Badge_" .. id, BackgroundColor3 = C.Panel, BackgroundTransparency = 0.04, Size = UDim2.fromOffset(0, F.BadgeSize), AutomaticSize = Enum.AutomaticSize.X }, row) :: Frame
 		UIKit.corner(b, Theme.Radius.M)
 		UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, b)
 		UIKit.text(b, "Label", "", { Name = "Text", Size = UDim2.fromOffset(0, F.BadgeSize), AutomaticSize = Enum.AutomaticSize.X, TextXAlignment = Enum.TextXAlignment.Center }, 14)
@@ -136,9 +136,9 @@ function FeatureHud.Badge(id: string, opts: { Text: string?, Color: Color3?, Ord
 	end
 	local stroke = frame:FindFirstChildOfClass("UIStroke")
 	if stroke then
-		stroke.Color = opts.Color or P.gold_400
+		stroke.Color = opts.Color or C.PanelEdge
 	else
-		UIKit.stroke(frame, opts.Color or P.gold_400, 1, 0.3)
+		UIKit.stroke(frame, opts.Color or C.PanelEdge, 2, 0)
 	end
 	frame.LayoutOrder = opts.Order or 100
 	applyCap()
@@ -168,7 +168,8 @@ function FeatureHud.Announce(text: string, opts: { Color: Color3?, Seconds: numb
 	end
 	local o = opts or {}
 	label.Text = text
-	label.TextColor3 = o.Color or P.gold_200
+	label.TextColor3 = o.Color or C.TextOnBlue
+	label.TextStrokeColor3 = C.Text
 	announceUntil = text == "" and 0 or os.clock() + (o.Seconds or F.AnnounceSeconds)
 	layoutDirty = true
 end
@@ -448,16 +449,16 @@ function FeatureHud.Init()
 	-- ready halo: a soft gold ring just outside the button (pulses while ready)
 	local glow = UIKit.new("Frame", { Name = "Halo", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, 10, 1, 10), Visible = false }, ult) :: Frame
 	UIKit.corner(glow, 999)
-	UIKit.stroke(glow, P.gold_200, 3, 0.25)
+	UIKit.stroke(glow, C.Primary, 3, 0.25)
 	ultGlow = glow
-	local button = UIKit.new("TextButton", { Name = "Button", Text = "", AutoButtonColor = true, BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.1, Size = UDim2.fromScale(1, 1) }, ult) :: TextButton
+	local button = UIKit.new("TextButton", { Name = "Button", Text = "", AutoButtonColor = true, BackgroundColor3 = C.Panel, BackgroundTransparency = 0.02, Size = UDim2.fromScale(1, 1) }, ult) :: TextButton
 	UIKit.corner(button, 999)
-	UIKit.stroke(button, P.gold_400, 2, 0.1)
+	UIKit.stroke(button, C.PanelEdge, 3, 0)
 	ultScale = UIKit.new("UIScale", { Scale = 1 }, ult) :: UIScale
 	-- the charge: a round gold fill rising from the bottom (a UIGradient cut-off: Roblox's
 	-- ClipsDescendants clips to the square, not the round corners); see-through so the
 	-- icon stays readable over it
-	local fill = UIKit.new("Frame", { Name = "Charge", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, button) :: Frame
+	local fill = UIKit.new("Frame", { Name = "Charge", BackgroundColor3 = C.Primary, BackgroundTransparency = 0, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, button) :: Frame
 	UIKit.corner(fill, 999)
 	UIKit.new("UIGradient", { Name = "Level", Rotation = -90, Transparency = NumberSequence.new(1) }, fill)
 	ultFill = fill
@@ -467,7 +468,7 @@ function FeatureHud.Init()
 	ultIcon = iconGroup
 	-- "40%" / "READY" under the icon; its own size cap (the Roblox Text size setting must
 	-- not push it out of the round button)
-	local label = UIKit.text(button, "Label", "ULT", { Name = "Label", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.66, 0), Size = UDim2.new(0.8, 0, 0.2, 0), TextXAlignment = Enum.TextXAlignment.Center, TextScaled = true, ZIndex = 3, TextStrokeTransparency = 0.5 }, 13) :: TextLabel
+	local label = UIKit.text(button, "Label", "ULT", { Name = "Label", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.66, 0), Size = UDim2.new(0.8, 0, 0.2, 0), TextXAlignment = Enum.TextXAlignment.Center, TextScaled = true, ZIndex = 3, TextColor3 = C.Text, FontFace = Theme.Font.Number }, 13) :: TextLabel
 	label:SetAttribute("NoTextFit", true)
 	UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(13), MinTextSize = 8 }, label)
 	ultLabel = label
@@ -487,11 +488,11 @@ function FeatureHud.Init()
 	ultButton = button
 
 	-- first-ready callout: a small dark card above the button (right-aligned with it)
-	local note = UIKit.new("Frame", { Name = "UltCallout", BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.1, AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(260, 0), AutomaticSize = Enum.AutomaticSize.Y, Visible = false, Active = false }, root) :: Frame
+	local note = UIKit.new("Frame", { Name = "UltCallout", BackgroundColor3 = C.Panel, BackgroundTransparency = 0.04, AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(260, 0), AutomaticSize = Enum.AutomaticSize.Y, Visible = false, Active = false }, root) :: Frame
 	UIKit.corner(note, Theme.Radius.M)
-	UIKit.stroke(note, P.gold_400, 1.5, 0.2)
+	UIKit.stroke(note, C.PanelEdge, 2, 0)
 	UIKit.new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }, note)
-	local noteText = UIKit.text(note, "Label", "", { Name = "Text", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_100 }, 14) :: TextLabel
+	local noteText = UIKit.text(note, "Label", "", { Name = "Text", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.Text }, 14) :: TextLabel
 	noteText:SetAttribute("NoTextFit", true)
 	UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(14), MinTextSize = 10 }, noteText)
 	callout, calloutLabel = note, noteText
@@ -714,16 +715,16 @@ function FeatureHud.Init()
 			if ultReady ~= ready then
 				ultReady = ready
 				local b = ultButton :: TextButton
-				b.BackgroundColor3 = ready and P.gold_400 or P.slate_900
-				b.BackgroundTransparency = ready and 0 or 0.1
-				group.GroupTransparency = ready and 0 or 0.3
-				label.TextColor3 = ready and P.slate_950 or P.ivory_200
-				label.TextStrokeTransparency = ready and 1 or 0.5
+				b.BackgroundColor3 = ready and C.Primary or C.Panel
+				b.BackgroundTransparency = ready and 0 or 0.02
+				group.GroupTransparency = ready and 0 or 0.15
+				label.TextColor3 = C.Text
 				local stroke = b:FindFirstChildOfClass("UIStroke")
 				if stroke then
-					stroke.Color = ready and P.ivory_100 or P.gold_400
-					stroke.Thickness = ready and 3 or 2
+					stroke.Color = ready and C.PrimaryEdge or C.PanelEdge
+					stroke.Thickness = ready and 4 or 3
 				end
+
 				;(ultGlow :: Frame).Visible = ready
 				if not ready then
 					(ultScale :: UIScale).Scale = 1

@@ -79,7 +79,7 @@ local updateSaveNotice: (boolean) -> () -- defined with the save notice below
 local blocking: { [string]: boolean } = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 local formatTime = UIKit.formatTime
 
 -- Reduce flashes (or Reduced effects, or the performance governor): no bright fills that
@@ -311,6 +311,21 @@ local function onRelayout(fn: () -> ())
 end
 
 -- A modal's panel takes the height of its content (UIListLayout in Content) + padding.
+-- A page / modal title: white lettering with a navy outline on a rounded plate (blue by
+-- default; pass a colour for a red defeat plate). Returns the plate's gradient.
+function UIBuilder.TitlePlate(label: TextLabel, color: Color3?): UIGradient
+	local c = color or C.Blue
+	label.BackgroundColor3 = c
+	label.BackgroundTransparency = 0
+	label.TextXAlignment = Enum.TextXAlignment.Center
+	UIKit.PageTitleStyle(label, 3)
+	if not label:FindFirstChild("PlateCorner") then
+		UIKit.corner(label, Theme.Radius.M).Name = "PlateCorner"
+	end
+	-- (no UIGradient here: on a TextLabel it would tint the lettering too)
+	return label:FindFirstChildOfClass("UIGradient") or new("UIGradient", { Enabled = false }, label)
+end
+
 local function fitModal(m: UIKit.Modal, list: UIListLayout)
 	local function fit()
 		-- every child of a modal's content has an offset height, so add them up
@@ -364,7 +379,7 @@ local placeToasts: () -> () -- the notice lane's spot (below)
 -- Server colours are bright; bring them into the palette.
 local function accentOf(color: Color3?): Color3
 	if not color then
-		return P.gold_300
+		return C.Blue
 	end
 	return Theme.Tint(color, 0.5, 0.88)
 end
@@ -474,10 +489,10 @@ local function renderNotice(item: UIState.Notice): UIState.NoticeHandle
 		Name = "Toast",
 		Size = UDim2.fromOffset(0, TS(Theme.Type.Body.Size) + 22),
 		Radius = 999,
-		Transparency = 0.12,
-		-- the thin gold rim of the HUD pills
-		Edge = P.gold_500,
-		EdgeTransparency = 0.35,
+		Transparency = 0.04,
+		-- the royal blue rim of the HUD pills
+		Edge = C.PanelEdge,
+		EdgeTransparency = 0,
 		LayoutOrder = toastOrder,
 	})
 	holder.AutomaticSize = Enum.AutomaticSize.X
@@ -489,7 +504,7 @@ local function renderNotice(item: UIState.Notice): UIState.NoticeHandle
 	local dotFrame
 	if iconName then
 		dotFrame = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(22, 22), LayoutOrder = 1 }, face)
-		Icons.Draw(dotFrame, iconName, { Size = 22, Back = P.slate_900 })
+		Icons.Draw(dotFrame, iconName, { Size = 22, Back = C.Panel })
 		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			-- the icon pops with a little spin
 			dotFrame.Rotation = -25
@@ -788,16 +803,10 @@ end
 -- Header band colours: (band fill, accent). The accent rims the card and its icon tile.
 local function cardBand(c): (Color3, Color3)
 	if c.Type == "Gold" or c.Type == "Heal" then
-		return P.moss_700, P.moss_200
+		return C.SelectedPale, C.SelectedEdge
 	end
 	local r = Theme.Rarity[c.Rarity] or Theme.Rarity.Common
-	if c.Rarity == "Rare" then
-		-- NEW cards read cool ice-blue next to the slate upgrades
-		return P.ice_500:Lerp(P.slate_800, 0.55), P.ice_300
-	elseif c.Rarity == "Legendary" then
-		return r.Band, r.Color
-	end
-	return r.Band:Lerp(P.slate_900, 0.35), r.Color
+	return r.Band, r.Color
 end
 
 -- An upgrade's rank change: ("LV 5 → 6", "12") from the server's Rank ("Lv 5 → 6 / 12"),
@@ -987,7 +996,7 @@ local function cardContent(c): (string?, { any }, { any }, string?)
 		if desc then
 			-- a perk reads as a goal: "Unlocks Riposte:" in gold
 			desc = string.gsub(desc, "^(Unlocks [^:]+:)", function(head)
-				return string.format('<font color="%s"><b>%s</b></font>', hex(P.gold_300), head)
+				return string.format('<font color="%s"><b>%s</b></font>', hex(C.BlueDeep), head)
 			end)
 		end
 		details = others or WeaponData.NextPerkText(c.Id, tonumber(c.Level) or 1)
@@ -1049,13 +1058,13 @@ local function statIcon(parent: Instance, label: string, c, size: number): Frame
 	local l = string.lower(label)
 	for _, pair in ipairs(STAT_ICONS) do
 		if string.find(l, pair[1], 1, true) then
-			return Icons.Draw(parent, pair[2], { Size = size, Color = P.gold_300 })
+			return Icons.Draw(parent, pair[2], { Size = size, Color = C.BlueDeep })
 		end
 	end
 	if WeaponData.Weapons[c.Id] then
 		return Icons.Upgrade(parent, cardIconId(c), { Size = size })
 	end
-	return Icons.Draw(parent, "chevronsUp", { Size = size, Color = P.gold_300 })
+	return Icons.Draw(parent, "chevronsUp", { Size = size, Color = C.BlueDeep })
 end
 
 -- "Synergy: Elemental Trinity 2/3" → "ELEMENTAL TRINITY · 2 / 3" (the server's card text).
@@ -1088,7 +1097,7 @@ local function pickAnimation(index: number)
 				s.Scale = reduced and 1.03 or 1.09
 				UIAnim.Tween(s, 0.14, { Scale = 1.04 }, Enum.EasingStyle.Quad)
 				if face and face:IsA("GuiObject") and not noFlashes() then
-					local flash = new("Frame", { Name = "PickFlash", BackgroundColor3 = P.gold_200, BackgroundTransparency = 0.6, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 60 }, face)
+					local flash = new("Frame", { Name = "PickFlash", BackgroundColor3 = C.PrimaryTop, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 60 }, face)
 					UIKit.corner(flash, Theme.Radius.L)
 					TweenService:Create(flash, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
 				end
@@ -1156,11 +1165,11 @@ end
 -- Evolution card: a gold burst (ring + rays) behind it as it lands.
 local function goldBurst(hit: GuiObject, delay: number)
 	local holder = new("Frame", { Name = "Burst", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(10, 10), ZIndex = 0 }, hit)
-	local ring = new("Frame", { BackgroundColor3 = P.gold_300, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(40, 40), ZIndex = 0 }, holder)
+	local ring = new("Frame", { BackgroundColor3 = C.Primary, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(40, 40), ZIndex = 0 }, holder)
 	UIKit.corner(ring, 999)
 	local rays = {}
 	for i = 0, 7 do
-		local ray = new("Frame", { BackgroundColor3 = P.gold_200, BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(6, 20), Rotation = i * 45, ZIndex = 0 }, holder)
+		local ray = new("Frame", { BackgroundColor3 = C.PrimaryTop, BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(6, 20), Rotation = i * 45, ZIndex = 0 }, holder)
 		UIKit.corner(ray, 3)
 		table.insert(rays, ray)
 	end
@@ -1181,9 +1190,9 @@ local function goldBurst(hit: GuiObject, delay: number)
 	end)
 end
 
--- A thin gold rule fading out towards `fadeLeft`'s side (flanks the buttons and hint).
-local function goldRule(parent: Instance, width: number, fadeLeft: boolean, order: number): Frame
-	local r = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromOffset(width, 1), LayoutOrder = order }, parent)
+-- A thin blue rule fading out towards `fadeLeft`'s side (flanks the buttons and hint).
+local function ruleLine(parent: Instance, width: number, fadeLeft: boolean, order: number): Frame
+	local r = new("Frame", { Name = "Rule", BackgroundColor3 = C.BlueLight, BorderSizePixel = 0, Size = UDim2.fromOffset(width, 1), LayoutOrder = order }, parent)
 	new("UIGradient", { Transparency = NumberSequence.new(fadeLeft and 1 or 0.25, fadeLeft and 0.25 or 1) }, r)
 	return r
 end
@@ -1220,15 +1229,11 @@ local function buildLevelUp()
 	levelUp.Title = text(panel, "Display", "CHOOSE YOUR UPGRADE", {
 		Name = "Title",
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = P.gold_300,
-		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.45,
 	}, 46)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.gold_200, P.gold_400) }, levelUp.Title)
+	UIKit.PageTitleStyle(levelUp.Title, 4)
 	levelUp.Divider = UIKit.Divider(panel, 460)
-	levelUp.Sub = text(panel, "Label", "PICK ONE", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextTruncate = Enum.TextTruncate.AtEnd }, 18)
+	levelUp.Sub = text(panel, "Label", "PICK ONE", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextOnBlue, TextTruncate = Enum.TextTruncate.AtEnd }, 18)
 	levelUp.Pill = UIKit.IconPill(panel, "clock", "AUTO-PICK IN 25s", { AnchorPoint = Vector2.new(0.5, 0) })
-	levelUp.Pill.Label.TextColor3 = C.Text
 	levelUp.Cards = new("Frame", { Name = "Cards", BackgroundTransparency = 1 }, panel)
 	levelUp.Layout = UIKit.list(levelUp.Cards, {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -1239,8 +1244,8 @@ local function buildLevelUp()
 	local actions = new("Frame", { Name = "Actions", BackgroundTransparency = 1 }, panel)
 	levelUp.Actions = actions
 	UIKit.list(actions, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 18) })
-	levelUp.RuleL = goldRule(actions, 110, true, 0)
-	levelUp.RuleR = goldRule(actions, 110, false, 3)
+	levelUp.RuleL = ruleLine(actions, 110, true, 0)
+	levelUp.RuleR = ruleLine(actions, 110, false, 3)
 	-- REROLL: Config.LevelUp.Choices new cards; SKIP: no card, a little run gold. Both show what is left this
 	-- run (permanent upgrades / VIP give them); with none bought they say where to get them.
 	levelUp.Reroll = UIKit.Button(actions, {
@@ -1308,9 +1313,9 @@ local function buildLevelUp()
 	-- how to choose (keyboard / touch / gamepad), between two short rules
 	local hint = new("Frame", { Name = "Hint", BackgroundTransparency = 1 }, panel)
 	UIKit.list(hint, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 14) })
-	goldRule(hint, 90, true, 0)
-	levelUp.HintText = text(hint, "Body", "", { Size = UDim2.fromOffset(0, TS(15) + 6), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.TextMuted, LayoutOrder = 1 }, 15)
-	goldRule(hint, 90, false, 2)
+	ruleLine(hint, 90, true, 0)
+	levelUp.HintText = text(hint, "Body", "", { Size = UDim2.fromOffset(0, TS(15) + 6), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.TextOnBlue, LayoutOrder = 1 }, 15)
+	ruleLine(hint, 90, false, 2)
 	levelUp.Hint = hint
 	UserInputService.LastInputTypeChanged:Connect(function()
 		if overlay.Visible and lastOffer then
@@ -1612,7 +1617,7 @@ end
 
 -- One stat row: icon, caps label, right-aligned value (RichText). Returns its height.
 local function statRow(parent: Instance, c, line, x: number, y: number, w: number, h: number, value: string): number
-	local row = new("Frame", { Name = "Row", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.55, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h - 2) }, parent)
+	local row = new("Frame", { Name = "Row", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h - 2) }, parent)
 	UIKit.corner(row, 6)
 	local icon = statIcon(row, tostring(line.Label), c, 18)
 	icon.AnchorPoint = Vector2.new(0, 0.5)
@@ -1621,7 +1626,7 @@ local function statRow(parent: Instance, c, line, x: number, y: number, w: numbe
 	local name = text(row, "Caption", UIKit.track(tostring(line.Label)), {
 		Position = UDim2.fromOffset(34, 0),
 		Size = UDim2.new(0.55, -34, 1, 0),
-		TextColor3 = P.ivory_300,
+		TextColor3 = C.TextMuted,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, 13)
 	Choice.fit(name, name.TextSize, 9, false)
@@ -1637,14 +1642,14 @@ local function statRow(parent: Instance, c, line, x: number, y: number, w: numbe
 end
 
 local function changeValue(line): string
-	return string.format('%s <font color="%s">→</font> <font color="%s">%s</font>', tostring(line.From), hex(P.gold_400), hex(P.fx_heal), tostring(line.To))
+	return string.format('%s <font color="%s">→</font> <font color="%s">%s</font>', tostring(line.From), hex(C.Blue), hex(C.Success), tostring(line.To))
 end
 
 -- The boxed highlight of a card's main change: icon + caps stat, big "From → To".
 local function changeBox(parent: Instance, c, line, x: number, y: number, w: number)
-	local box = new("Frame", { Name = "Highlight", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, boxHeight()) }, parent)
+	local box = new("Frame", { Name = "Highlight", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, boxHeight()) }, parent)
 	UIKit.corner(box, 8)
-	UIKit.stroke(box, P.slate_600, 1, 0.35)
+	UIKit.stroke(box, C.Divider, 1.5, 0)
 	local compact = UIKit.IsCompact()
 	local head = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, compact and 5 or 8), Size = UDim2.new(1, 0, 0, 22) }, box)
 	UIKit.list(head, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
@@ -1652,8 +1657,8 @@ local function changeBox(parent: Instance, c, line, x: number, y: number, w: num
 	-- passive values are the hero's totals (hero and meta bonuses included), not the
 	-- amount this card adds: say so (CP-09)
 	local isPassive = c.Type == "PassiveNew" or c.Type == "PassiveUp"
-	text(head, "Caption", UIKit.track((isPassive and "Total " or "") .. tostring(line.Label)), { Size = UDim2.fromOffset(0, 22), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, LayoutOrder = 2 }, 14)
-	text(box, "Number", string.format('%s  <font color="%s">→</font>  <font color="%s">%s</font>', tostring(line.From), hex(P.gold_400), hex(P.fx_heal), tostring(line.To)), {
+	text(head, "Caption", UIKit.track((isPassive and "Total " or "") .. tostring(line.Label)), { Size = UDim2.fromOffset(0, 22), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.BlueDeep, LayoutOrder = 2 }, 14)
+	text(box, "Number", string.format('%s  <font color="%s">→</font>  <font color="%s">%s</font>', tostring(line.From), hex(C.Blue), hex(C.Success), tostring(line.To)), {
 		Position = UDim2.fromOffset(6, compact and 27 or 32),
 		Size = UDim2.new(1, -12, 0, compact and 32 or 36),
 		TextXAlignment = Enum.TextXAlignment.Center,
@@ -1666,24 +1671,24 @@ end
 -- Green rounded bar: the synergy this card advances / completes (SynergyData).
 local function synergyBar(parent: Instance, c, x: number, y: number, w: number, h: number)
 	local ready = c.SynergyReady == true
-	local bar = new("Frame", { Name = "Synergy", BackgroundColor3 = ready and P.moss_600 or P.moss_800, BackgroundTransparency = 0.1, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h) }, parent)
+	local bar = new("Frame", { Name = "Synergy", BackgroundColor3 = ready and C.Selected or C.SelectedPale, BackgroundTransparency = 0, BorderSizePixel = 0, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h) }, parent)
 	UIKit.corner(bar, 6)
-	UIKit.stroke(bar, ready and P.moss_200 or P.moss_400, 1, 0.2)
+	UIKit.stroke(bar, C.SelectedEdge, 1.5, 0)
 	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, bar)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
-	Icons.Draw(row, "sparkle", { Size = h - 12, Color = P.fx_heal }).LayoutOrder = 1
-	text(row, "Caption", synergyText(c), { Size = UDim2.fromOffset(0, h), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.fx_heal, LayoutOrder = 2, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+	Icons.Draw(row, "sparkle", { Size = h - 12, Color = C.Text }).LayoutOrder = 1
+	text(row, "Caption", synergyText(c), { Size = UDim2.fromOffset(0, h), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.Text, LayoutOrder = 2, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
 end
 
 -- The evolution / synergy hint under a card's stats (CP-11): its own soft plate with a
--- gold edge so it reads as a goal, not fine print. Same truthful text as before.
+-- blue edge so it reads as a goal, not fine print. Same truthful text as before.
 function Choice.hintPlate(label: TextLabel, c)
-	label.BackgroundColor3 = P.slate_950
-	label.BackgroundTransparency = 0.45
+	label.BackgroundColor3 = c.HintReady and C.PrimaryTop or C.PanelInset
+	label.BackgroundTransparency = 0
 	label.Name = "Hint"
 	UIKit.corner(label, 6)
 	local pad = new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, label)
-	UIKit.stroke(label, c.HintReady and P.gold_400 or P.gold_600, 1, c.HintReady and 0.2 or 0.5)
+	UIKit.stroke(label, c.HintReady and C.PrimaryEdge or C.PanelEdge, 1, 0)
 	if c.EvoIcon and Config.FeatureOn("EvolutionPreview") then
 		-- EvolutionPreview (docs/next/EVOLUTION_PREVIEW.md): the evolved weapon's icon in the
 		-- plate's left padding; the longer recipe line shrinks to fit instead of being cut
@@ -1696,7 +1701,7 @@ function Choice.hintPlate(label: TextLabel, c)
 	end
 end
 
--- Small gold diamonds at the four corners of a card (the sculpted frame of screen 04).
+-- Small diamonds at the four corners of a card (the sculpted frame of screen 04).
 function Choice.cornerGems(face: GuiObject, color: Color3)
 	for _, at in ipairs({ { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } }) do
 		local gem = new("Frame", {
@@ -1709,7 +1714,7 @@ function Choice.cornerGems(face: GuiObject, color: Color3)
 			Rotation = 45,
 			ZIndex = 5,
 		}, face)
-		UIKit.stroke(gem, P.slate_950, 1, 0.3)
+		UIKit.stroke(gem, C.PanelInset, 1, 0.3)
 	end
 end
 
@@ -1730,12 +1735,12 @@ function Choice.cardArt(face: GuiObject, c, x: number, y: number, w: number, h: 
 		ZIndex = 2,
 	}, face)
 	UIKit.corner(art, Theme.Radius.L - 2)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(tint:Lerp(P.slate_800, 0.5), tint:Lerp(P.slate_950, 0.82)) }, art)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(tint:Lerp(C.Panel, 0.55), tint:Lerp(C.PanelInset, 0.8)) }, art)
 	local rim = UIKit.stroke(art, accent, 1, 0.5)
 	local glowS = math.floor(math.min(w, h) * 1.05)
 	local glow = new("Frame", {
 		Name = "Glow",
-		BackgroundColor3 = tint:Lerp(P.ivory_100, 0.35),
+		BackgroundColor3 = tint:Lerp(C.Panel, 0.3),
 		BackgroundTransparency = 0.8,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1771,7 +1776,7 @@ function Choice.cardArt(face: GuiObject, c, x: number, y: number, w: number, h: 
 		end
 	end
 	if c.Type == "Evolve" then
-		rim.Color = P.gold_400
+		rim.Color = C.PanelEdge
 		rim.Thickness = 2
 		rim.Transparency = 0
 	end
@@ -1784,11 +1789,11 @@ end
 	category, never a recommendation. nil for bonus cards.
 ]]
 local ROLE_COLORS = {
-	Damage = P.crimson_300,
-	Recovery = P.fx_heal,
-	Defense = P.ice_300,
-	Growth = P.gold_300,
-	Utility = P.ivory_300,
+	Damage = C.TextDanger,
+	Recovery = C.Success,
+	Defense = C.Blue,
+	Growth = C.BlueDeep,
+	Utility = C.TextMuted,
 }
 function Choice.roleOf(c): string?
 	if c.Type == "PassiveNew" or c.Type == "PassiveUp" then
@@ -1803,13 +1808,13 @@ function Choice.roleChip(parent: GuiObject, c): TextLabel?
 	if not role then
 		return nil
 	end
-	local color = ROLE_COLORS[role] or P.ivory_300
+	local color = ROLE_COLORS[role] or C.TextMuted
 	local chip = text(parent, "Label", UIKit.track(string.upper(role)), {
 		Name = "RoleChip",
 		Size = UDim2.fromOffset(0, TS(10) + 6),
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		BackgroundColor3 = P.slate_950,
+		BackgroundColor3 = C.PanelInset,
 		BackgroundTransparency = 0.15,
 		TextColor3 = color,
 		ZIndex = 7,
@@ -1837,8 +1842,8 @@ function Choice.detailsToggle(face: GuiObject, c, index: number, pad: number, y:
 		Name = "DetailsToggle",
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = P.slate_950,
-		BackgroundTransparency = 0.5,
+		BackgroundColor3 = C.Panel,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, y),
@@ -1847,18 +1852,18 @@ function Choice.detailsToggle(face: GuiObject, c, index: number, pad: number, y:
 		ZIndex = 45,
 	}, face)
 	UIKit.corner(toggle, 999)
-	UIKit.stroke(toggle, P.slate_500, 1, 0.4)
+	UIKit.stroke(toggle, C.PanelEdge, 1.5, 0)
 	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 45 }, toggle)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
-	local word = text(row, "Caption", "DETAILS", { Size = UDim2.fromOffset(0, th), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.ivory_300, LayoutOrder = 1, ZIndex = 45 }, 12)
+	local word = text(row, "Caption", "DETAILS", { Size = UDim2.fromOffset(0, th), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = C.TextMuted, LayoutOrder = 1, ZIndex = 45 }, 12)
 	word:SetAttribute("NoTextFit", true)
-	local chevron = Icons.Draw(row, "chevronRight", { Size = 14, Color = P.gold_300 })
+	local chevron = Icons.Draw(row, "chevronRight", { Size = 14, Color = C.BlueDeep })
 	chevron.LayoutOrder = 2
 	chevron.Rotation = 90
 
 	local panel = new("Frame", {
 		Name = "DetailsPanel",
-		BackgroundColor3 = P.slate_950,
+		BackgroundColor3 = C.PanelInset,
 		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		-- under the card's tab (kind + level stay readable while it is open)
@@ -1869,7 +1874,7 @@ function Choice.detailsToggle(face: GuiObject, c, index: number, pad: number, y:
 		ZIndex = 44,
 	}, face)
 	UIKit.corner(panel, Theme.Radius.L - 2)
-	UIKit.stroke(panel, P.gold_500, 1, 0.5)
+	UIKit.stroke(panel, C.PanelEdge, 1.5, 0)
 	local scroll = new("ScrollingFrame", {
 		Name = "Body",
 		BackgroundTransparency = 1,
@@ -1877,7 +1882,7 @@ function Choice.detailsToggle(face: GuiObject, c, index: number, pad: number, y:
 		Position = UDim2.fromOffset(0, 6),
 		Size = UDim2.new(1, 0, 1, -12),
 		ScrollBarThickness = 3,
-		ScrollBarImageColor3 = P.gold_400,
+		ScrollBarImageColor3 = C.PanelEdge,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		ElasticBehavior = Enum.ElasticBehavior.Never,
 		Selectable = false,
@@ -1886,7 +1891,7 @@ function Choice.detailsToggle(face: GuiObject, c, index: number, pad: number, y:
 	local inner = w - 2 * top
 	local px, rw = pad - top, inner - 2 * (pad - top)
 	local yy = 4
-	text(scroll, "Caption", UIKit.track(string.upper(tostring(c.Name))), { Position = UDim2.fromOffset(px, yy), Size = UDim2.new(1, -2 * px, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 44 }, 12)
+	text(scroll, "Caption", UIKit.track(string.upper(tostring(c.Name))), { Position = UDim2.fromOffset(px, yy), Size = UDim2.new(1, -2 * px, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 44 }, 12)
 	yy += TS(12) + 10
 	if details then
 		local size = TS(13)
@@ -1899,7 +1904,7 @@ function Choice.detailsToggle(face: GuiObject, c, index: number, pad: number, y:
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextYAlignment = Enum.TextYAlignment.Top,
 			TextWrapped = true,
-			TextColor3 = P.ivory_200,
+			TextColor3 = C.Text,
 			ZIndex = 44,
 		}, 13)
 		Choice.fit(dl, dl.TextSize, 9, true)
@@ -1979,10 +1984,10 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 	hit:SetAttribute("Legendary", legendary)
 	UIKit.Focusable(hit)
 	UIKit.Shadow(hit, Theme.Radius.L, 5, 0)
-	-- gold glow behind the card: always on an evolution, on focus for the others
+	-- glow behind the card: always on an evolution, on focus for the others
 	local glow = new("Frame", {
 		Name = "Glow",
-		BackgroundColor3 = P.gold_300,
+		BackgroundColor3 = legendary and C.PrimaryBottom or C.BlueLight,
 		BackgroundTransparency = legendary and 0.75 or 1,
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(-7, -7),
@@ -2002,19 +2007,21 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		ClipsDescendants = false,
 	}, hit)
 	UIKit.corner(face, Theme.Radius.L)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_800, P.slate_950) }, face)
-	-- warm gold tint of the focused / picked card
-	local warm = new("Frame", { Name = "Warm", BackgroundColor3 = P.gold_600, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, face)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, face)
+	-- lime tint of the focused / picked card
+	local warm = new("Frame", { Name = "Warm", BackgroundColor3 = C.Selected, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, face)
 	UIKit.corner(warm, Theme.Radius.L)
 	new("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0.2, 0.75) }, warm)
-	local edgeRest = portrait and edgeColor or edgeColor:Lerp(P.slate_400, 0.5)
-	local edge = UIKit.stroke(face, legendary and P.gold_400 or edgeRest, legendary and 2.5 or 2, legendary and 0 or 0.3)
+	-- one solid card border: royal blue, red for a final upgrade, yellow for an evolution
+	local edgeRest = (c.Rarity == "Common" or c.Rarity == nil) and C.PanelEdge or edgeColor
+	local edge = UIKit.stroke(face, legendary and C.PrimaryEdge or edgeRest, legendary and 3 or 2.5, 0)
 	if legendary then
 		offerArm.Fx.Add(UIAnim.PulseStroke(edge, 2, 3.5))
 	end
 	local plateStroke: UIStroke? = nil -- the CHOOSE plate's rim (landscape)
+	local plateFill: Frame? = nil
 	local bandLabel: TextLabel
-	local labelColor = legendary and P.gold_900 or edgeColor:Lerp(P.ivory_100, 0.45)
+	local labelColor = C.Text
 	local shineOn: GuiObject
 
 	if portrait then
@@ -2023,7 +2030,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		local band = new("Frame", { Name = "Band", BackgroundColor3 = bandColor, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, bandH), ZIndex = 2, ClipsDescendants = true }, face)
 		UIKit.corner(band, Theme.Radius.L)
 		new("Frame", { BackgroundColor3 = bandColor, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -Theme.Radius.L), Size = UDim2.new(1, 0, 0, Theme.Radius.L), ZIndex = 2 }, band)
-		new("Frame", { Name = "Line", BackgroundColor3 = legendary and P.gold_300 or edgeColor, BackgroundTransparency = 0.6, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 3 }, band)
+		new("Frame", { Name = "Line", BackgroundColor3 = legendary and C.PrimaryEdge or edgeColor, BackgroundTransparency = 0.4, BorderSizePixel = 0, Position = UDim2.new(0, 0, 1, -1), Size = UDim2.new(1, 0, 0, 1), ZIndex = 3 }, band)
 		bandLabel = text(band, "Label", UIKit.track(cardKind(c, true)), {
 			Position = UDim2.fromOffset(pad, 0),
 			Size = UDim2.new(1, -pad * 2 - 28, 1, 0),
@@ -2044,18 +2051,17 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			Size = UDim2.fromOffset(0, CARD.TabH),
 			AutomaticSize = Enum.AutomaticSize.X,
 			TextXAlignment = Enum.TextXAlignment.Center,
-			BackgroundColor3 = legendary and P.gold_400 or bandColor:Lerp(P.slate_950, 0.25),
-			BackgroundTransparency = 0.04,
+			BackgroundColor3 = bandColor,
+			BackgroundTransparency = 0,
 			TextColor3 = labelColor,
 			ClipsDescendants = true,
 			ZIndex = 6,
 		}, 13)
 		new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, tab)
 		UIKit.corner(tab, 8)
-		UIKit.stroke(tab, legendary and P.gold_200 or edgeColor, 1, 0.25).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		UIKit.stroke(tab, legendary and C.PrimaryEdge or edgeColor, 1.5, 0).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		bandLabel = tab
 		shineOn = tab
-		Choice.cornerGems(face, legendary and P.gold_300 or P.gold_500)
 	end
 	if (c.Rarity == "Rare" or c.Rarity == "Epic" or legendary) and not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 		-- the rarer tabs shine now and then (started once the card has landed level:
@@ -2067,7 +2073,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		end)
 	end
 
-	-- focus look (hover, gamepad selection, the pick): thicker gold border, glow, warm tint
+	-- focus look (hover, gamepad selection, the pick): thicker lime border, glow, lime tint
 	local focused = false
 	local function setFocus(on: boolean)
 		if focused == on then
@@ -2077,12 +2083,15 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		local t = Theme.Motion.Fast
 		UIAnim.Tween(warm, t, { BackgroundTransparency = on and 0.82 or 1 })
 		if not legendary then
-			UIAnim.Tween(edge, t, { Color = on and P.gold_300 or edgeRest, Thickness = on and 3.5 or 2, Transparency = on and 0 or 0.3 })
+			UIAnim.Tween(edge, t, { Color = on and C.SelectedEdge or edgeRest, Thickness = on and 3.5 or 2.5 })
 			UIAnim.Tween(glow, t, { BackgroundTransparency = on and 0.8 or 1 })
-			bandLabel.TextColor3 = on and P.gold_200 or labelColor
+			bandLabel.TextColor3 = on and C.BlueDeep or labelColor
 		end
 		if plateStroke then
-			UIAnim.Tween(plateStroke, t, { Color = on and P.gold_200 or P.gold_500, Transparency = on and 0 or 0.35, Thickness = on and 2 or 1.5 })
+			UIAnim.Tween(plateStroke, t, { Color = on and C.SelectedEdge or C.PanelEdge, Thickness = on and 2 or 1.5 })
+		end
+		if plateFill then
+			UIAnim.Tween(plateFill, t, { BackgroundColor3 = on and C.Selected or C.PanelInset })
 		end
 	end
 	levelUp.Focus[index] = setFocus
@@ -2106,12 +2115,12 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			Position = UDim2.new(1, -pad, 0, bandH / 2),
 			Size = UDim2.fromOffset(20, 20),
 			TextXAlignment = Enum.TextXAlignment.Center,
-			BackgroundColor3 = P.slate_950,
+			BackgroundColor3 = C.PanelInset,
 			BackgroundTransparency = 0.3,
 			ZIndex = 4,
 		}, 13)
 		UIKit.corner(num, 999)
-		UIKit.stroke(num, P.ivory_300, 1, 0.3).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		UIKit.stroke(num, C.TextMuted, 1, 0.3).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		local y = bandH + 10
 		cardTile(face, c, CARD.PTile, edgeColor, animate and delay + 0.08 or nil).Position = UDim2.fromOffset(pad, y)
 		local roleChip = Choice.roleChip(face, c)
@@ -2128,7 +2137,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				Position = UDim2.new(1, -pad, 0, y + 2),
 				Size = UDim2.new(0.4, -pad, 0, TS(13) + 4),
 				TextXAlignment = Enum.TextXAlignment.Right,
-				TextColor3 = legendary and P.gold_300 or P.ivory_300,
+				TextColor3 = legendary and C.BlueDeep or C.TextMuted,
 			}, 13)
 		end
 		if desc then
@@ -2149,7 +2158,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				Position = UDim2.fromOffset(pad, y - 4),
 				Size = UDim2.new(1, -2 * pad, 0, TS(Choice.detailsSize()) + 4),
 				TextXAlignment = Enum.TextXAlignment.Left,
-				TextColor3 = P.ivory_300,
+				TextColor3 = C.TextMuted,
 				TextTransparency = 0.15,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, Choice.detailsSize())
@@ -2175,7 +2184,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				Position = UDim2.fromOffset(pad, y + 2),
 				Size = UDim2.new(1, -2 * pad, 0, TS(13) + 4),
 				TextXAlignment = Enum.TextXAlignment.Center,
-				TextColor3 = c.HintReady and P.gold_300 or P.gold_200,
+				TextColor3 = c.HintReady and C.Text or C.BlueDeep,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, 13), c)
 		end
@@ -2185,15 +2194,16 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		local footY = h - footH - CARD.FootPad
 		local plate = new("Frame", {
 			Name = "ChoosePlate",
-			BackgroundColor3 = P.slate_950,
-			BackgroundTransparency = 0.2,
+			BackgroundColor3 = C.PanelInset,
+			BackgroundTransparency = 0,
 			BorderSizePixel = 0,
 			Position = UDim2.fromOffset(pad + 4, footY),
 			Size = UDim2.new(1, -2 * (pad + 4), 0, footH),
 			ZIndex = 2,
 		}, face)
 		UIKit.corner(plate, 10)
-		plateStroke = UIKit.stroke(plate, P.gold_500, 1.5, 0.35)
+		plateStroke = UIKit.stroke(plate, C.PanelEdge, 1.5, 0)
+		plateFill = plate
 		UIKit.list(plate, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 		local keySize = footH - 12
 		local num = text(plate, "Number", tostring(index), {
@@ -2201,17 +2211,17 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			Visible = Choice.showKeys(),
 			Size = UDim2.fromOffset(keySize, keySize),
 			TextXAlignment = Enum.TextXAlignment.Center,
-			BackgroundColor3 = P.slate_900,
+			BackgroundColor3 = C.PanelInset,
 			BackgroundTransparency = 0,
 			LayoutOrder = 1,
 			ZIndex = 3,
 		}, 16)
 		UIKit.corner(num, 6)
-		UIKit.stroke(num, P.ivory_200, 1.5, 0.15).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		UIKit.stroke(num, C.Text, 1.5, 0.15).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		text(plate, "Label", "CHOOSE", {
 			Size = UDim2.fromOffset(0, footH),
 			AutomaticSize = Enum.AutomaticSize.X,
-			TextColor3 = P.ivory_100,
+			TextColor3 = C.Text,
 			LayoutOrder = 2,
 			ZIndex = 3,
 		}, 16)
@@ -2249,7 +2259,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 					Position = UDim2.fromOffset(pad, y),
 					Size = UDim2.new(1, -2 * pad, 0, TS(13) + 4),
 					TextXAlignment = Enum.TextXAlignment.Center,
-					TextColor3 = legendary and P.gold_300 or P.ivory_300,
+					TextColor3 = legendary and C.BlueDeep or C.TextMuted,
 					TextTruncate = Enum.TextTruncate.AtEnd,
 					ZIndex = 2,
 				}, 13)
@@ -2265,7 +2275,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextWrapped = true,
 				RichText = true,
-				TextColor3 = P.ivory_200,
+				TextColor3 = C.Text,
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				ZIndex = 2,
 			}, 14)
@@ -2305,7 +2315,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				TextYAlignment = Enum.TextYAlignment.Center,
 				TextWrapped = true,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextColor3 = c.HintReady and P.gold_300 or P.gold_200,
+				TextColor3 = c.HintReady and C.Text or C.BlueDeep,
 			}, 13), c)
 			local hintLabel = face:FindFirstChild("Hint")
 			if hintLabel and hintLabel:IsA("TextLabel") and Choice.compactLandscape() and not hintLabel:FindFirstChild("Fit") then
@@ -2340,18 +2350,18 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				UIAnim.Tween(face, 0.22, { Position = home }, Enum.EasingStyle.Quint)
 			end)
 			-- the sweep waits until the tilt has settled (no clipping inside rotated frames)
-			cardSweep(face, delay + 0.26, legendary and P.gold_200 or P.ivory_100)
+			cardSweep(face, delay + 0.26, legendary and C.PrimaryTop or C.BlueLight)
 			if c.Type == "Evolve" then
 				goldBurst(hit, delay + 0.12)
 			end
 		end
 	end
-	-- touch: dimmed with a thin gold sweep along the bottom until taps count (TouchArm)
+	-- touch: dimmed with a thin blue sweep along the bottom until taps count (TouchArm)
 	local lockLeft = offerArm.ShownAt + offerArm.TouchArm - os.clock()
 	if lockLeft > 0.05 and lockLeft < 5 and touchMode() then
 		local lock = new("Frame", { Name = "Lock", BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.45, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 55 }, face)
 		UIKit.corner(lock, Theme.Radius.L)
-		local bar = new("Frame", { Name = "ArmBar", BackgroundColor3 = P.gold_300, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, -5), Size = UDim2.new(0, 0, 0, 3), ZIndex = 56 }, face)
+		local bar = new("Frame", { Name = "ArmBar", BackgroundColor3 = C.BlueDeep, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 12, 1, -5), Size = UDim2.new(0, 0, 0, 3), ZIndex = 56 }, face)
 		UIKit.corner(bar, 999)
 		local sweep = TweenService:Create(bar, TweenInfo.new(lockLeft, Enum.EasingStyle.Linear), { Size = UDim2.new(1, -24, 0, 3) })
 		sweep:Play()
@@ -2368,7 +2378,7 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		offerArm.Press = os.clock()
 	end)
 	-- press feedback: the face brightens while held (AttachStates also presses it smaller)
-	local bright = new("Frame", { Name = "PressGlow", BackgroundColor3 = P.ivory_100, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 52, Active = false }, face)
+	local bright = new("Frame", { Name = "PressGlow", BackgroundColor3 = C.Text, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 52, Active = false }, face)
 	UIKit.corner(bright, Theme.Radius.L)
 	hit.InputBegan:Connect(function(input)
 		local t = input.UserInputType
@@ -2725,7 +2735,7 @@ do
 		if def then
 			return (RARITY[def.Rarity] or RARITY.Common).Color
 		end
-		return P.slate_400
+		return C.Track
 	end
 
 	local function layoutChest()
@@ -2799,7 +2809,7 @@ do
 				local list = iconPool[id]
 				local icon = list and table.remove(list)
 				if not icon then
-					icon = Icons.Upgrade(nil, id, { Size = ICON, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Back = P.slate_800 })
+					icon = Icons.Upgrade(nil, id, { Size = ICON, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Back = C.PanelRaised })
 				end
 				icon.Parent = s.Frame
 				s.Icon, s.IconId = icon, id
@@ -2864,7 +2874,7 @@ do
 	local function burst(big: boolean, color: Color3)
 		local g = chest.Glow :: Frame
 		g.Size = UDim2.fromOffset(10, 10)
-		g.BackgroundColor3 = big and P.gold_200 or color
+		g.BackgroundColor3 = big and C.PrimaryTop or color
 		g.BackgroundTransparency = big and 0.15 or 0.45
 		local size = big and 340 or 220
 		TweenService:Create(g, TweenInfo.new(big and 0.7 or 0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(size, size), BackgroundTransparency = 1 }):Play()
@@ -2907,7 +2917,7 @@ do
 				if s.Index == reward.Land then
 					UIAnim.Punch(s.Frame, e.Big and 0.24 or 0.14)
 					if flashes then
-						s.Flash.BackgroundColor3 = e.Big and P.gold_200 or P.ivory_100
+						s.Flash.BackgroundColor3 = e.Big and C.PrimaryTop or C.Panel
 						s.Flash.BackgroundTransparency = 0.35
 						TweenService:Create(s.Flash, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
 					end
@@ -2995,7 +3005,7 @@ do
 		end
 		setCaption()
 		setRevealAlpha(1, false)
-		chest.Marker.Color = P.gold_300
+		chest.Marker.Color = C.Blue
 		chest.Timer.Set(1)
 		reward.LastTick = reward.P0
 		if spin > 0 then
@@ -3156,7 +3166,7 @@ do
 		card.MedalRim.Color = e.Accent
 		card.MedalRim.Transparency = e.Big and 0 or 0.15
 		if card.Edge then
-			card.Edge.Color = e.Big and P.gold_300 or P.gold_400
+			card.Edge.Color = e.Big and C.PrimaryEdge or C.PanelEdge
 		end
 		if card.IconId ~= e.Land then
 			if card.Icon then
@@ -3164,8 +3174,8 @@ do
 			end
 			card.IconId = e.Land
 			local land = e.Land
-			card.Icon = (land == "Gold") and Icons.Draw(card.Medal, "coin", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
-				or Icons.Upgrade(card.Medal, land, { Size = 32, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+			card.Icon = (land == "Gold") and Icons.Draw(card.Medal, "coin", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
+				or Icons.Upgrade(card.Medal, land, { Size = 32, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
 		end
 	end
 
@@ -3246,37 +3256,37 @@ do
 			Size = UDim2.fromOffset(CARD_W, 140),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Radius = Theme.Radius.L,
-			Edge = P.gold_400,
-			EdgeTransparency = 0.2,
-			Transparency = 0.06,
+			Edge = C.PanelEdge,
+			EdgeTransparency = 0,
+			Transparency = 0.02,
 			ZIndex = 2,
 		})
 		holder.Active = false
 		face.Active = false
 		card.Panel = holder
 		card.Edge = face:FindFirstChildOfClass("UIStroke") :: UIStroke
-		card.Sheen = new("Frame", { Name = "Sheen", Size = UDim2.fromScale(1, 1), BackgroundColor3 = P.gold_300, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 2 }, face)
+		card.Sheen = new("Frame", { Name = "Sheen", Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.PrimaryTop, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 2 }, face)
 		UIKit.corner(card.Sheen, Theme.Radius.L)
-		card.Head = text(face, "Caption", "", { Name = "Head", Position = UDim2.fromOffset(14, 8), TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 })
+		card.Head = text(face, "Caption", "", { Name = "Head", Position = UDim2.fromOffset(14, 8), TextColor3 = C.BlueDeep, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 })
 		-- the x: closes this card early (nothing to confirm; the reward is already owned)
 		local close = new("TextButton", { Name = "Close", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -6, 0, 5), ZIndex = 4 }, face)
-		Icons.Draw(close, "close", { Size = 16, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Color = P.gold_300 })
+		Icons.Draw(close, "close", { Size = 16, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Color = C.BlueDeep })
 		close.Activated:Connect(function()
 			if card.Cur then
 				nextCard()
 			end
 		end)
 		card.Close = close
-		card.Rule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.new(1, -24, 0, 1), ZIndex = 3 }, face)
+		card.Rule = new("Frame", { Name = "Rule", BackgroundColor3 = C.Divider, BackgroundTransparency = 0, BorderSizePixel = 0, Size = UDim2.new(1, -24, 0, 1), ZIndex = 3 }, face)
 		-- the reward in a round medallion with a rarity rim
-		local medal = new("Frame", { Name = "Medal", BackgroundColor3 = P.slate_900, BorderSizePixel = 0, Size = UDim2.fromOffset(64, 64), ZIndex = 3 }, face)
+		local medal = new("Frame", { Name = "Medal", BackgroundColor3 = C.PanelInset, BorderSizePixel = 0, Size = UDim2.fromOffset(64, 64), ZIndex = 3 }, face)
 		UIKit.corner(medal, 999)
-		card.MedalRim = UIKit.stroke(medal, P.gold_400, 2, 0.15)
+		card.MedalRim = UIKit.stroke(medal, C.PanelEdge, 2, 0.15)
 		card.Medal = medal
 		card.Name = text(face, "H3", "", { Name = "RewardName", TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 }, 17)
 		card.Sub = text(face, "Caption", "", { Name = "RewardSub", TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 })
 		card.Body = text(face, "Small", "", { Name = "RewardBody", TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.Text, ZIndex = 3 }, 13)
-		card.Bar = UIKit.Meter(face, { Gradient = ColorSequence.new(P.moss_300, P.moss_200), Size = UDim2.new(1, -146, 0, 6) })
+		card.Bar = UIKit.Meter(face, { Gradient = Theme.Gradient.XP, Size = UDim2.new(1, -146, 0, 6) })
 		card.Bar.Frame.ZIndex = 3
 		card.When = text(face, "Caption", "Added to your run", { Name = "When", AnchorPoint = Vector2.new(1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3 })
 		-- VIEW BUILD from the HUD items strip (LootUI): the run menu (solo: paused), then the
@@ -3358,35 +3368,39 @@ do
 			Size = UDim2.fromOffset(360, 260),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Radius = Theme.Radius.L,
-			Edge = P.gold_400,
-			EdgeTransparency = 0.15,
-			Transparency = 0.04,
+			Edge = C.PanelEdge,
+			EdgeTransparency = 0,
+			Transparency = 0.02,
 			ZIndex = 2,
 		})
 		chest.Panel = holder
 		chest.Face = face
-		chest.Glow = new("Frame", { Name = "Glow", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(10, 10), BackgroundColor3 = P.gold_300, BackgroundTransparency = 1, ZIndex = 2 }, face)
+		chest.Glow = new("Frame", { Name = "Glow", AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(10, 10), BackgroundColor3 = C.PrimaryBottom, BackgroundTransparency = 1, ZIndex = 2 }, face)
 		UIKit.corner(chest.Glow, 999)
 		local header = new("Frame", { Name = "Header", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), ZIndex = 3 }, face)
 		UIKit.list(header, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
 		chest.Header = header
 		chest.Icon = Icons.Draw(header, "reward_ChestLarge", { Size = 26, LayoutOrder = 1 })
-		chest.Title = text(header, "H1", "TREASURE!", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.gold_300, ZIndex = 3 }, 22)
+		-- the title: white lettering on a blue plate (Bright Arcade page-title style)
+		chest.Title = text(header, "H1", "TREASURE!", { LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = C.Blue, BackgroundTransparency = 0, ZIndex = 3 }, 22)
+		UIKit.PageTitleStyle(chest.Title, 2)
+		UIKit.corner(chest.Title, 999)
+		UIKit.padding(chest.Title, 0, 14, 0, 14)
 		chest.Source = text(face, "Caption", "", { Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
 
 		-- the reel window: slots scroll inside it, the marker frames the centre one
-		local win = new("Frame", { Name = "Reel", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 3 }, face)
+		local win = new("Frame", { Name = "Reel", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 3 }, face)
 		UIKit.corner(win, Theme.Radius.M)
-		UIKit.stroke(win, P.slate_600, 1, 0.3)
+		UIKit.stroke(win, C.PanelEdge, 2, 0)
 		chest.Window = win
 		for k = 1, SLOTS do
-			local f = new("Frame", { Name = "Slot" .. k, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(TILE, TILE), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.05, BorderSizePixel = 0, Visible = false, ZIndex = 3 }, win)
+			local f = new("Frame", { Name = "Slot" .. k, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(TILE, TILE), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0, BorderSizePixel = 0, Visible = false, ZIndex = 3 }, win)
 			UIKit.corner(f, Theme.Radius.M)
-			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_700, P.slate_900) }, f)
-			local rim = UIKit.stroke(f, P.slate_500, 2, 0.05)
+			new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, f)
+			local rim = UIKit.stroke(f, C.Divider, 2, 0.05)
 			local bar = new("Frame", { Name = "Bar", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -4), Size = UDim2.new(1, -18, 0, 3), BorderSizePixel = 0, ZIndex = 4 }, f)
 			UIKit.corner(bar, 999)
-			local flash = new("Frame", { Name = "Flash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = P.ivory_100, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 6 }, f)
+			local flash = new("Frame", { Name = "Flash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.Panel, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 6 }, f)
 			UIKit.corner(flash, Theme.Radius.M)
 			-- painted rarity frame (ui/frames, 9-slice) over the rim; nil when not uploaded
 			local art = ArtImage.Frame(f, "Common", 6, { ZIndex = 5 })
@@ -3394,15 +3408,15 @@ do
 		end
 		-- soft edges so tiles slide in and out of view
 		for side = 0, 1 do
-			local edge = new("Frame", { Name = "Edge", AnchorPoint = Vector2.new(side, 0), Position = UDim2.fromScale(side, 0), Size = UDim2.new(0, 46, 1, 0), BackgroundColor3 = P.slate_950, BorderSizePixel = 0, ZIndex = 7 }, win)
+			local edge = new("Frame", { Name = "Edge", AnchorPoint = Vector2.new(side, 0), Position = UDim2.fromScale(side, 0), Size = UDim2.new(0, 46, 1, 0), BackgroundColor3 = C.PanelInset, BorderSizePixel = 0, ZIndex = 7 }, win)
 			new("UIGradient", { Rotation = side == 0 and 0 or 180, Transparency = NumberSequence.new(0.05, 1) }, edge)
 		end
 		local marker = new("Frame", { Name = "Marker", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(TILE + 8, TILE + 8), BackgroundTransparency = 1, ZIndex = 8 }, win)
 		UIKit.corner(marker, Theme.Radius.M + 2)
-		chest.Marker = UIKit.stroke(marker, P.gold_300, 2.5, 0)
+		chest.Marker = UIKit.stroke(marker, C.Blue, 2.5, 0)
 		-- pointer notches above and below the marker
 		for side = 0, 1 do
-			local notch = new("Frame", { Name = "Notch", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, side, 0), Size = UDim2.fromOffset(12, 12), Rotation = 45, BackgroundColor3 = P.gold_300, BorderSizePixel = 0, ZIndex = 9 }, win)
+			local notch = new("Frame", { Name = "Notch", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, side, 0), Size = UDim2.fromOffset(12, 12), Rotation = 45, BackgroundColor3 = C.Blue, BorderSizePixel = 0, ZIndex = 9 }, win)
 			UIKit.corner(notch, 2)
 		end
 
@@ -3411,7 +3425,7 @@ do
 		chest.Sub = text(face, "Caption", "", { Size = UDim2.new(1, -24, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 3 })
 		chest.Detail = text(face, "Small", "", { TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, TextColor3 = C.Text, ZIndex = 3 }, 14)
 		-- footer: the reveal's time left as a draining bar + "TAP TO SKIP"
-		chest.Timer = UIKit.Meter(face, { Gradient = ColorSequence.new(P.gold_500, P.gold_300), AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -TS(12) - 10), Size = UDim2.fromOffset(120, 3) })
+		chest.Timer = UIKit.Meter(face, { Gradient = Theme.Gradient.XP, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -TS(12) - 10), Size = UDim2.fromOffset(120, 3) })
 		chest.Hint = text(face, "Caption", UIKit.track(string.upper(InputPrompts.ToSkip())), { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -5), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
 		onRelayout(layoutChest)
 		layoutChest()
@@ -3511,9 +3525,9 @@ do
 			e = {
 				Land = nameToId[tostring(top.Name)] or tostring(top.Name),
 				Fill = upgradeFill,
-				Accent = evolved and P.gold_300 or P.slate_300,
+				Accent = evolved and C.PrimaryEdge or C.TextMuted,
 				Name = tostring(top.Name),
-				NameColor = evolved and P.gold_200 or C.Text,
+				NameColor = evolved and Theme.ItemRarity.Legendary.Color or C.Text,
 				Sub = UIKit.track(string.upper(tostring(top.Text))),
 				Detail = #extras > 0 and ("Also: " .. table.concat(extras, "  ·  ")) or "A free level from the chest",
 				Big = evolved,
@@ -3523,9 +3537,9 @@ do
 			e = {
 				Land = "Gold",
 				Fill = upgradeFill,
-				Accent = P.gold_300,
+				Accent = C.Coin,
 				Name = "+" .. UIKit.formatNumber(gold) .. " gold",
-				NameColor = P.gold_200,
+				NameColor = C.CoinDeep,
 				Sub = UIKit.track("GOLD"),
 				Detail = "Added to your purse",
 				Big = false,
@@ -3598,7 +3612,7 @@ end
 -- row: the columns' rows laid out as their UIListLayout does (COLUMN.Top on top,
 -- COLUMN.Gap between). Returns h when there is no such cut.
 local function snapToRows(cols: { Frame }, h: number, floor: number): number
-	local rows: { { number } } = {}
+	local rows: { { any } } = {}
 	for _, col in ipairs(cols) do
 		local list = {}
 		for _, ch in ipairs(col:GetChildren()) do
@@ -3610,14 +3624,26 @@ local function snapToRows(cols: { Frame }, h: number, floor: number): number
 			return a.LayoutOrder < b.LayoutOrder
 		end)
 		local y = col.Position.Y.Offset + COLUMN.Top
+		local afterHeading = false
 		for _, ch in ipairs(list) do
-			table.insert(rows, { y, y + ch.Size.Y.Offset })
+			local heading = ch.Name == "Heading"
+			table.insert(rows, { y, y + ch.Size.Y.Offset, heading, afterHeading })
+			afterHeading = heading
 			y += ch.Size.Y.Offset + COLUMN.Gap
 		end
 	end
 	local best = nil
 	for _, r in ipairs(rows) do
-		for _, cut in ipairs({ r[1] - 2, r[2] + 3 }) do
+		-- (never right under a section heading: a heading alone at the edge reads as empty,
+		-- so a heading and its first row stay together)
+		local cuts = {}
+		if not r[4] then
+			table.insert(cuts, r[1] - 2)
+		end
+		if not r[3] then
+			table.insert(cuts, r[2] + 3)
+		end
+		for _, cut in ipairs(cuts) do
 			if cut <= h and cut >= floor and (best == nil or cut > best) then
 				local ok = true
 				for _, o in ipairs(rows) do
@@ -3676,12 +3702,15 @@ local function buildPause()
 	-- one tidy row each, the other options in plain stacks below them (one scroll), the
 	-- save note and one button (DONE in the lobby, BACK to the run menu during a run).
 	local m = UIKit.Modal(root, "Pause", 640, 470, Theme.Z.Pause)
+	UIKit.Raise(m.Panel, 6, 3) -- arcade panel depth (as the Play setup panel)
 	pause.Overlay = m.Overlay
 	pause.Modal = m
 	local content = m.Content
 	fitModal(m, UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }))
-	pause.Title = text(content, "H2", "Settings", { LayoutOrder = 1, TextXAlignment = Enum.TextXAlignment.Center }, 28)
-	UIKit.Divider(content, 200, { LayoutOrder = 2 })
+	-- the title on the shared blue title plate (UIKit.TitlePlate, as on the Play setup screen)
+	local plate = UIKit.TitlePlate(content, "Settings", 30, { LayoutOrder = 1 })
+	pause.TitleTab = plate.Frame
+	pause.Title = plate.Label
 	pause.Note = text(content, "Body", "", {
 		LayoutOrder = 5,
 		TextXAlignment = Enum.TextXAlignment.Center,
@@ -3692,30 +3721,31 @@ local function buildPause()
 
 	-- options: Music and Effects first (full width), then the other sound options (left)
 	-- and comfort / help (right); one column on narrow screens, one scroll when short
+	-- (a plain box around the scroll so its scroll hint stays out of the modal's list)
+	local optionsBox = new("Frame", { Name = "OptionsBox", LayoutOrder = 3, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 300) }, content)
 	local options = new("ScrollingFrame", {
 		Name = "Options",
-		LayoutOrder = 3,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 300),
+		Size = UDim2.fromScale(1, 1),
 		CanvasSize = UDim2.fromOffset(0, 300),
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_400,
+		ScrollBarImageColor3 = C.PanelEdge,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		ElasticBehavior = Enum.ElasticBehavior.Never,
-	}, content)
+	}, optionsBox)
 	pause.Options = options
+	UIKit.ScrollHint(options) -- phones hide scroll bars: a badge says more options sit below
 	local primary = settingsColumn(options, "Main", 2) -- the wells pad their own sliders
 	local colA = settingsColumn(options, "Sound")
 	local colB = settingsColumn(options, "Comfort")
 	pause.Primary, pause.ColA, pause.ColB = primary, colA, colB
 
-	-- Music / Effects: a dark well each (icon, label, percentage, slim slider); values
+	-- Music / Effects: a white card each (icon, label, percentage, slim slider); values
 	-- apply while dragging (ClientSettings.Set) and save a moment after the last change
 	local function well(order: number, height: number): Frame
-		local w = new("Frame", { Name = "Well", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, LayoutOrder = order, Size = UDim2.new(1, 0, 0, height + 20) }, primary)
-		UIKit.corner(w, Theme.Radius.M)
-		UIKit.stroke(w, P.slate_600, 1, 0.5)
+		-- a raised white card (royal blue rim, a shallow dark-blue base under it)
+		local _, w = UIKit.Surface(primary, { Name = "Well", Radius = Theme.Radius.M, Transparency = 0, Edge = C.PanelEdge, EdgeThickness = 2, Depth = 5, LayoutOrder = order, Size = UDim2.new(1, 0, 0, height + 20) })
 		UIKit.padding(w, 8, 18, 10, 16)
 		return w
 	end
@@ -3774,6 +3804,7 @@ local function buildPause()
 		b = UIKit.Button(colB, {
 			Title = label .. ": " .. settingWord(ClientSettings.Get(key)), Kind = "Outline", Icon = "cycle", IconSize = 18,
 			Shrink = true,
+			Depth = "Light",
 			Size = UDim2.new(1, 0, 0, 46), LayoutOrder = i + 6,
 			OnClick = function()
 				local choices = (Config.Settings :: any).Enums[key]
@@ -3791,13 +3822,14 @@ local function buildPause()
 		Icon = "cycle",
 		IconSize = 18,
 		Align = "Center",
+		Depth = "Light",
 		Size = UDim2.new(1, 0, 0, 46),
 		LayoutOrder = 10,
 		OnClick = function()
 			Tutorial.Replay()
 			ClientSettings.Set("Tips", true)
 			pause.Tips.Set(true)
-			UIBuilder.Toast("Tips are on again: they show as you play.", P.gold_300)
+			UIBuilder.Toast("Tips are on again: they show as you play.", C.Blue)
 		end,
 	})
 	UIKit.Button(colB, {
@@ -3806,6 +3838,7 @@ local function buildPause()
 		Icon = "warning",
 		IconSize = 18,
 		Align = "Center",
+		Depth = "Light",
 		Size = UDim2.new(1, 0, 0, 46),
 		LayoutOrder = 11,
 		OnClick = function()
@@ -3815,7 +3848,7 @@ local function buildPause()
 
 	-- one button: DONE (lobby SETTINGS) / BACK (settings opened from the run menu). The run
 	-- menu itself (resume, build, leave) is the side drawer below (buildRunMenu).
-	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
+	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, Theme.Size.Button + 5) }, content)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 	pause.Resume = UIKit.Button(row, {
 		Kind = "Primary",
@@ -3823,6 +3856,7 @@ local function buildPause()
 		Icon = "check",
 		IconSize = 20,
 		Align = "Center",
+		Depth = "Strong",
 		Size = UDim2.fromOffset(240, Theme.Size.Button),
 		LayoutOrder = 2,
 		OnClick = function()
@@ -3832,7 +3866,7 @@ local function buildPause()
 	pause.Close = UIKit.IconButton(m.Face, {
 		Icon = "close",
 		Size = 40,
-		Kind = "Ghost",
+		Kind = "Secondary",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -10, 0, 10),
 		ZIndex = 5,
@@ -3840,6 +3874,7 @@ local function buildPause()
 			UIBuilder.ClosePause()
 		end,
 	})
+	pause.Close.SetDepth("Medium")
 	local function layoutOptions()
 		local v = virtualSize()
 		local w = tallModalWidth(640)
@@ -3869,7 +3904,7 @@ local function buildPause()
 		local lines = math.clamp(math.ceil(#pause.Note.Text / perLine), 1, 3)
 		pause.Note.Size = UDim2.new(1, 0, 0, lines * (TS(15) + 2) + 6)
 		-- what the rest of the panel takes: title, divider, note, buttons, gaps, padding
-		local fixed = (TS(28) + 6) + 10 + pause.Note.Size.Y.Offset + Theme.Size.Button + 4 * 10 + 2 * Theme.Space.XL + 8
+		local fixed = (TS(30) + 18) + 10 + pause.Note.Size.Y.Offset + Theme.Size.Button + 5 + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(160, v.Y - 24 - fixed)
 		-- compact: Music and Effects plus a look at the next options; the rest scrolls
 		local h = math.min(contentH, room, top + 230)
@@ -3877,7 +3912,7 @@ local function buildPause()
 			-- the scroll edge falls between rows, not through a title or its description
 			h = snapToRows({ primary, colA, colB }, h, math.max(140, h - 140))
 		end
-		options.Size = UDim2.new(1, 0, 0, h)
+		optionsBox.Size = UDim2.new(1, 0, 0, h)
 		options.CanvasSize = UDim2.fromOffset(0, contentH)
 		options.ScrollBarThickness = contentH > h + 1 and 4 or 0
 		pause.Resume.Instance.Size = UDim2.fromOffset(math.clamp(inner, 120, 220), Theme.Size.Button)
@@ -4049,40 +4084,48 @@ function runMenu.buildRunMenu()
 
 	local drawer = new("Frame", {
 		Name = "Drawer",
-		BackgroundColor3 = P.slate_900,
-		BackgroundTransparency = 0.02,
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Active = true,
 		AnchorPoint = Vector2.new(1, 0),
 		ZIndex = 2,
 	}, overlay)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, drawer)
 	runMenu.Drawer = drawer
 	-- past the safe area (a phone's notch side) the drawer colour runs on to the screen edge
-	runMenu.Tail = new("Frame", { Name = "Tail", BackgroundColor3 = P.slate_900, BackgroundTransparency = 0.02, BorderSizePixel = 0, ZIndex = 2 }, drawer)
-	-- the gold edge toward the arena
-	runMenu.Edge = new("Frame", { Name = "Edge", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.25, BorderSizePixel = 0, Size = UDim2.new(0, 2, 1, 0), ZIndex = 3 }, drawer)
+	runMenu.Tail = new("Frame", { Name = "Tail", BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 2 }, drawer)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, runMenu.Tail)
+	-- and under it (a phone's home-indicator strip), so the drawer reaches the screen's bottom
+	runMenu.TailBottom = new("Frame", { Name = "TailBottom", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 2 }, drawer)
+	-- the royal blue edge toward the arena
+	runMenu.Edge = new("Frame", { Name = "Edge", BackgroundColor3 = C.PanelEdge, BackgroundTransparency = 0, BorderSizePixel = 0, Size = UDim2.new(0, 4, 1, 0), ZIndex = 3 }, drawer)
 
 	-- run gold and kills (the numbers the HUD shows)
+	-- (the HUD's own pills: white, royal blue rim, a shallow dark-blue base, the gold coin art)
 	local function chip(name: string, icon: string): (Frame, TextLabel)
-		local f = new("Frame", { Name = name, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, BorderSizePixel = 0, ZIndex = 3 }, drawer)
-		UIKit.corner(f, Theme.Radius.M)
-		UIKit.stroke(f, P.gold_500, 1, 0.55)
-		Icons.Draw(f, icon, { Size = 22, Color = P.gold_300, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0) })
-		local l = text(f, "Number", "0", { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -44, 1, 0), ZIndex = 3 })
+		local f, face = UIKit.Surface(drawer, { Name = name, Radius = Theme.Radius.M, Transparency = 0, Edge = C.PanelEdge, EdgeThickness = 2.5, Depth = 5, ZIndex = 3 })
+		if icon == "coin" then
+			Icons.Draw(face, "lobby_Gold", { Size = 26, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0) })
+		else
+			Icons.Draw(face, icon, { Size = 22, Color = C.Text, Back = C.Panel, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0) })
+		end
+		local l = text(face, "Number", "0", { Position = UDim2.fromOffset(40, 0), Size = UDim2.new(1, -46, 1, 0), ZIndex = 3 })
 		return f, l
 	end
 	runMenu.GoldChip, runMenu.GoldText = chip("Gold", "coin")
 	runMenu.KillsChip, runMenu.KillsText = chip("Kills", "skull")
 
-	runMenu.Crest = Icons.Draw(drawer, "helmet", { Size = 52, Color = P.gold_400 })
-	runMenu.Crest.AnchorPoint = Vector2.new(0.5, 0)
-	runMenu.Title = text(drawer, "H1", "RUN MENU", { TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 3 })
-	runMenu.fit(runMenu.Title, 18)
+	runMenu.Crest = UIKit.IconBadge(drawer, "helmet", Theme.IconTint.Blue, 46, { AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 })
+	-- the title on the shared blue title plate (UIKit.TitlePlate, as on the Play setup screen)
+	local plate = UIKit.TitlePlate(drawer, "RUN MENU", 28, { AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 })
+	runMenu.TitleFrame = plate.Frame
+	runMenu.Title = plate.Label
 	-- "DUO · RUN CONTINUES" / "SOLO · GAME PAUSED"
-	local pill = new("Frame", { Name = "Status", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 }, drawer)
+	local pill = new("Frame", { Name = "Status", BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 }, drawer)
 	UIKit.corner(pill, 999)
-	runMenu.PillStroke = UIKit.stroke(pill, P.gold_400, 1.5, 0.1)
-	runMenu.PillText = text(pill, "Label", "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -20, 1, -6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, ZIndex = 3 })
+	runMenu.PillStroke = UIKit.stroke(pill, C.PanelEdge, 2, 0)
+	runMenu.PillText = text(pill, "Label", "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -20, 1, -6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, ZIndex = 3 })
 	runMenu.fit(runMenu.PillText, 9)
 	runMenu.Pill = pill
 	runMenu.Rule = UIKit.Hairline(drawer, { AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 })
@@ -4097,6 +4140,7 @@ function runMenu.buildRunMenu()
 		IconSize = 22,
 		Align = "Center",
 		Shrink = true,
+		Depth = "Strong",
 		ZIndex = 3,
 		OnClick = function()
 			if runMenu.Confirming then
@@ -4113,6 +4157,7 @@ function runMenu.buildRunMenu()
 		IconSize = 22,
 		Align = "Center",
 		Shrink = true,
+		Depth = "Medium",
 		ZIndex = 3,
 		OnClick = function()
 			UIBuilder.OpenRunSettings()
@@ -4125,6 +4170,7 @@ function runMenu.buildRunMenu()
 		IconSize = 22,
 		Align = "Center",
 		Shrink = true,
+		Depth = "Medium",
 		ZIndex = 3,
 		OnClick = function()
 			LootUI.OpenItems()
@@ -4132,12 +4178,13 @@ function runMenu.buildRunMenu()
 	})
 	runMenu.Rule2 = UIKit.Hairline(drawer, { AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 })
 	runMenu.Rule2.Parent = drawer
-	-- LEAVE RUN: crimson; the first press asks, the confirm press (armed) leaves
+	-- LEAVE RUN: red (Danger); the first press asks, the confirm press (armed) leaves
 	local leave = UIKit.Button(drawer, {
-		Kind = "Outline",
+		Kind = "Danger",
 		Title = "LEAVE RUN",
 		Align = "Center",
 		Shrink = true,
+		Depth = "Medium",
 		ZIndex = 3,
 		OnClick = function()
 			if os.clock() - (runMenu.ArmedAt or 0) < runMenu.ARM then
@@ -4153,26 +4200,7 @@ function runMenu.buildRunMenu()
 		end,
 	})
 	runMenu.Leave = leave
-	Icons.Draw(leave.Face, "arrowRight", { Size = 22, Color = P.crimson_300, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0) })
-	-- the button repaints its edge / title on hover: keep them crimson
-	local edge = leave.Face:FindFirstChildOfClass("UIStroke")
-	local function crimson()
-		if edge and edge.Color ~= P.crimson_400 then
-			edge.Color = P.crimson_400
-		end
-		if leave.Title and leave.Title.TextColor3 ~= P.crimson_300 then
-			leave.Title.TextColor3 = P.crimson_300
-		end
-	end
-	crimson()
-	if edge then
-		edge:GetPropertyChangedSignal("Color"):Connect(crimson)
-	end
-	if leave.Title then
-		leave.Title:GetPropertyChangedSignal("TextColor3"):Connect(crimson)
-	end
-	local tint = new("Frame", { Name = "Tint", BackgroundColor3 = P.crimson_700, BackgroundTransparency = 0.78, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), ZIndex = 1, Active = false }, leave.Face)
-	UIKit.corner(tint, Theme.Radius.M)
+	Icons.Draw(leave.Face, "arrowRight", { Size = 22, Color = C.TextOnBlue, Back = C.Danger, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0) })
 
 	runMenu.Hint = text(drawer, "Small", "", { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
 	runMenu.fit(runMenu.Hint, 9)
@@ -4195,7 +4223,8 @@ function runMenu.buildRunMenu()
 		local gap = compact and 8 or 12
 		local bh = Theme.Size.Button
 		local chipH = 40
-		local titleH = TS(30) + 6
+		local titleH = TS(28) + 18
+		local dep = 5 -- room for the raised buttons' bases under each row
 		local pillH = TS(14) + 14
 		local hintH = TS(14) + 8
 		-- note lines (rough: ~0.55 em per character; the label shrinks to fit for real)
@@ -4204,13 +4233,13 @@ function runMenu.buildRunMenu()
 		local noteH = lines * (TS(16) + 3) + 4
 		local confirming = runMenu.Confirming == true
 		local buttons = confirming and 2 or 4
-		local crest = sheet and 0 or 52
+		local crest = sheet and 0 or 46
 		-- SETTINGS and VIEW BUILD share one row on the shortest screens
 		local paired = false
 		local function need(): number
 			local rows = (paired and not confirming) and buttons - 1 or buttons
-			return top + chipH + gap + (crest > 0 and crest + 4 or 0) + titleH + 6 + pillH + gap + 1 + gap + noteH + gap * 2
-				+ rows * bh + rows * gap + gap + 1 + 12
+			return top + chipH + 5 + gap + (crest > 0 and crest + 6 or 0) + titleH + 4 + 8 + pillH + gap + 1 + gap + noteH + gap * 2
+				+ rows * (bh + dep) + rows * gap + gap + 1 + 12
 		end
 		-- short screens: drop the crest, the top-right inset, then tighter buttons, then
 		-- pair SETTINGS / VIEW BUILD, then a shorter note box (the note shrinks to fit)
@@ -4247,22 +4276,25 @@ function runMenu.buildRunMenu()
 		runMenu.Tail.Visible = (sheet and gapBottom or gapRight) > 0
 		runMenu.Tail.Position = sheet and UDim2.new(0, 0, 1, 0) or UDim2.new(1, 0, 0, -gapTop)
 		runMenu.Tail.Size = sheet and UDim2.new(1, 0, 0, gapBottom) or UDim2.new(0, gapRight, 1, gapTop + gapBottom)
-		runMenu.Edge.Size = sheet and UDim2.new(1, 0, 0, 2) or UDim2.new(0, 2, 1, 0)
+		runMenu.TailBottom.Visible = not sheet and gapBottom > 0
+		runMenu.TailBottom.Position = UDim2.new(0, 0, 1, 0)
+		runMenu.TailBottom.Size = UDim2.new(1, 0, 0, gapBottom)
+		runMenu.Edge.Position = sheet and UDim2.new() or UDim2.fromOffset(0, -gapTop)
+		runMenu.Edge.Size = sheet and UDim2.new(1, 0, 0, 4) or UDim2.new(0, 4, 1, gapTop + gapBottom)
 		local y = top
 		local half = math.floor((inner - gap) / 2)
 		runMenu.GoldChip.Position = UDim2.fromOffset(pad, y)
 		runMenu.GoldChip.Size = UDim2.fromOffset(half, chipH)
 		runMenu.KillsChip.Position = UDim2.fromOffset(pad + half + gap, y)
 		runMenu.KillsChip.Size = UDim2.fromOffset(inner - half - gap, chipH)
-		y += chipH + gap
+		y += chipH + 5 + gap
 		runMenu.Crest.Visible = crest > 0
 		if crest > 0 then
 			runMenu.Crest.Position = UDim2.fromOffset(math.floor(w / 2), y)
-			y += crest + 4
+			y += crest + 6
 		end
-		runMenu.Title.Position = UDim2.fromOffset(pad, y)
-		runMenu.Title.Size = UDim2.fromOffset(inner, titleH)
-		y += titleH + 6
+		runMenu.TitleFrame.Position = UDim2.fromOffset(math.floor(w / 2), y)
+		y += titleH + 4 + 8
 		local pw = math.min(inner, math.floor(utf8.len(runMenu.PillText.Text) or 0) * math.floor(TS(14) * 0.75) + 48)
 		runMenu.Pill.Position = UDim2.fromOffset(math.floor(w / 2), y)
 		runMenu.Pill.Size = UDim2.fromOffset(pw, pillH)
@@ -4278,7 +4310,7 @@ function runMenu.buildRunMenu()
 			if on then
 				b.Instance.Position = UDim2.fromOffset(pad, y)
 				b.Instance.Size = UDim2.fromOffset(inner, bh)
-				y += bh + gap
+				y += bh + dep + gap
 			end
 		end
 		place(runMenu.Return, true)
@@ -4290,7 +4322,7 @@ function runMenu.buildRunMenu()
 			runMenu.Build.Instance.Visible = true
 			runMenu.Build.Instance.Position = UDim2.fromOffset(pad + hw + gap, y)
 			runMenu.Build.Instance.Size = UDim2.fromOffset(inner - hw - gap, bh)
-			y += bh + gap
+			y += bh + dep + gap
 		else
 			place(runMenu.Settings, not confirming)
 			place(runMenu.Build, not confirming)
@@ -4360,8 +4392,8 @@ function runMenu.setConfirm(on: boolean)
 	if on then
 		runMenu.Title.Text = "LEAVE RUN?"
 		runMenu.PillText.Text = UIKit.track("This run ends")
-		runMenu.PillStroke.Color = P.crimson_400
-		runMenu.PillText.TextColor3 = P.crimson_300
+		runMenu.PillStroke.Color = C.Danger
+		runMenu.PillText.TextColor3 = C.TextDanger
 		runMenu.Note.Text = runMenu.leaveNote()
 		runMenu.Return.SetText("KEEP PLAYING")
 		runMenu.Leave.SetText("YES, LEAVE RUN")
@@ -4369,8 +4401,8 @@ function runMenu.setConfirm(on: boolean)
 	else
 		runMenu.Title.Text = "RUN MENU"
 		runMenu.PillText.Text = UIKit.track(runMenu.teamWord() .. " · " .. (frozen and "Game paused" or "Run continues"))
-		runMenu.PillStroke.Color = frozen and P.gold_400 or P.crimson_400
-		runMenu.PillText.TextColor3 = frozen and P.gold_200 or P.ivory_100
+		runMenu.PillStroke.Color = frozen and C.PanelEdge or C.Danger
+		runMenu.PillText.TextColor3 = frozen and C.BlueDeep or C.TextDanger
 		runMenu.Note.Text = runMenu.runMenuNote()
 		runMenu.Return.SetText("RETURN TO RUN")
 		runMenu.Leave.SetText("LEAVE RUN")
@@ -4432,6 +4464,7 @@ function UIBuilder.OpenRunSettings()
 		hide(runMenu.Overlay, "Pause")
 	end
 	pauseMode = "RunSettings"
+	pause.Overlay:SetAttribute("BackdropTransparency", Theme.Alpha.Backdrop)
 	pause.Title.Text = "Settings"
 	pause.Resume.SetText("BACK")
 	pause.Resume.SetIcon("chevronLeft")
@@ -4451,6 +4484,9 @@ function UIBuilder.OpenSettings()
 		return
 	end
 	pauseMode = "Settings"
+	-- lobby: nothing to watch behind it, so a firmer dim than in a run (where a live group
+	-- run must stay readable under it)
+	pause.Overlay:SetAttribute("BackdropTransparency", 0.4)
 	pause.Title.Text = "Settings"
 	pause.Resume.SetText("DONE")
 	pause.Resume.SetIcon("check")
@@ -4517,12 +4553,13 @@ local function buildRevive()
 	fitModal(m, UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }))
 	-- the fallen hero's painted bust (greyed, in a crimson ring) with the heart on its
 	-- corner; just the heart when the hero has no portrait (onReviveOffer)
-	local hero = new("Frame", { Name = "Hero", BackgroundColor3 = P.slate_950, BorderSizePixel = 0, Size = UDim2.fromOffset(84, 84), LayoutOrder = 1, Visible = false }, content)
+	local hero = new("Frame", { Name = "Hero", BackgroundColor3 = C.PanelInset, BorderSizePixel = 0, Size = UDim2.fromOffset(84, 84), LayoutOrder = 1, Visible = false }, content)
 	UIKit.corner(hero, 999)
-	UIKit.stroke(hero, P.crimson_400, 2.5, 0.05)
+	UIKit.stroke(hero, C.Danger, 2.5, 0.05)
 	revive.Hero = hero
 	revive.Heart = Icons.Draw(content, "heart", { Size = 48, LayoutOrder = 1 })
-	revive.Title = text(content, "H1", "YOU FELL!", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300 })
+	revive.Title = text(content, "H1", "YOU FELL!", { LayoutOrder = 2, Size = UDim2.new(0.8, 0, 0, TS(26) + 14), TextXAlignment = Enum.TextXAlignment.Center })
+	UIBuilder.TitlePlate(revive.Title, C.Danger)
 	revive.Text = text(content, "Body", "Revive and keep fighting?", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center })
 	local row = new("Frame", { Size = UDim2.new(1, 0, 0, Theme.Size.Button), BackgroundTransparency = 1, LayoutOrder = 4 }, content)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12) })
@@ -4552,7 +4589,7 @@ local function buildRevive()
 		end,
 	})
 	revive.Timer = text(content, "Caption", "", { LayoutOrder = 5, TextXAlignment = Enum.TextXAlignment.Center })
-	revive.Meter = UIKit.Meter(content, { Gradient = ColorSequence.new(P.crimson_500, P.crimson_300), Size = UDim2.fromOffset(260, 5), LayoutOrder = 6 })
+	revive.Meter = UIKit.Meter(content, { Gradient = ColorSequence.new(C.Danger, C.TextDanger), Size = UDim2.fromOffset(260, 5), LayoutOrder = 6 })
 	onRelayout(function()
 		local v = virtualSize()
 		m.Panel.Size = UDim2.new(UDim.new(0, math.min(460, v.X - 32)), m.Panel.Size.Y)
@@ -4621,15 +4658,14 @@ local resultsDeadline = 0
 local pendingReplay: { Mode: string, Until: number, Waited: boolean }? = nil
 
 -- Results screen tokens (approved screen 06 / SWARM_UI_reference_guide shared language)
-local RES_CYAN = Color3.fromRGB(100, 183, 203) -- account level (cosmetic) bar
-local RES_CYAN_DARK = Color3.fromRGB(58, 128, 148)
-local RES_MINT = Color3.fromRGB(159, 206, 152)
+local RES_CYAN = C.Blue -- account level (cosmetic) bar
+local RES_MINT = C.Success
 
 -- A summary tile (screen 06: icon, big number, caption). Fixed size from layoutResults.
 local function statTile(parent: Instance, icon: string, caption: string, order: number): (TextLabel, TextLabel)
 	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(140, 104) }, true)
-	UIKit.stroke(f, P.gold_600, 1, 0.45)
-	local glyph = Icons.Draw(f, icon, { Size = 26, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Color = if icon == "coin" or icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
+	UIKit.stroke(f, C.PanelEdge, 2, 0)
+	local glyph = Icons.Draw(f, icon, { Size = 26, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Color = if icon == "coin" or icon == "portal" then nil else C.Blue, Back = C.Panel })
 	glyph.Name = "TileIcon" -- hidden on phones in landscape (slim tiles)
 	local value = text(f, "Number", "0", {
 		Name = "Value",
@@ -4675,7 +4711,7 @@ end
 -- gain line and bar. The three are never merged into one bar.
 local function progressCard(parent: Instance, name: string, order: number, gradient: ColorSequence, accent: Color3): { [string]: any }
 	local f = UIKit.Panel(parent, { Name = name, LayoutOrder = order, Size = UDim2.fromOffset(200, 84) }, true)
-	local stroke = UIKit.stroke(f, accent, 1, 0.55)
+	local stroke = UIKit.stroke(f, accent, 2, 0)
 	local title = text(f, "Label", "", {
 		Name = "Title",
 		Position = UDim2.fromOffset(12, 8),
@@ -4773,15 +4809,15 @@ local function buildResults()
 	-- header: the hero's medallion, the verdict, "HERO · ARENA · STAGE", damage and score
 	local head = new("Frame", { Name = "Head", BackgroundTransparency = 1, LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 92) }, content)
 	UIKit.list(head, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 16) })
-	local medal = new("Frame", { Name = "Hero", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.05, Size = UDim2.fromOffset(80, 80), LayoutOrder = 1 }, head)
+	local medal = new("Frame", { Name = "Hero", BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, Size = UDim2.fromOffset(80, 80), LayoutOrder = 1 }, head)
 	UIKit.corner(medal, 999)
-	results.MedalStroke = UIKit.stroke(medal, P.gold_400, 2.5, 0.05)
+	results.MedalStroke = UIKit.stroke(medal, C.PanelEdge, 3, 0)
 	results.Medal = medal
 	-- the boss that ended the run (bosses/<id>), a small crimson disc on the medal's
 	-- bottom-left (clear of the title column)
-	local bossBadge = new("Frame", { Name = "BossBadge", BackgroundColor3 = P.slate_950, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 4, 1, -6), Size = UDim2.fromOffset(40, 40), ZIndex = 6, Visible = false }, medal)
+	local bossBadge = new("Frame", { Name = "BossBadge", BackgroundColor3 = C.PanelInset, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 4, 1, -6), Size = UDim2.fromOffset(40, 40), ZIndex = 6, Visible = false }, medal)
 	UIKit.corner(bossBadge, 999)
-	UIKit.stroke(bossBadge, P.crimson_400, 2, 0.05)
+	UIKit.stroke(bossBadge, C.Danger, 2, 0.05)
 	results.BossBadge = bossBadge
 	local stateFolder = Remotes.State()
 	local function noteBoss()
@@ -4801,8 +4837,9 @@ local function buildResults()
 	local titleCol = new("Frame", { Name = "TitleCol", BackgroundTransparency = 1, Size = UDim2.fromOffset(420, 92), LayoutOrder = 2 }, head)
 	results.TitleCol = titleCol
 	results.Title = text(titleCol, "Display", "VICTORY!", { Position = UDim2.fromOffset(0, 2), Size = UDim2.new(1, 0, 0, TS(44) + 6) }, 44)
+	results.TitleGradient = UIBuilder.TitlePlate(results.Title, C.Blue)
 	results.Arena = text(titleCol, "Label", "", { Position = UDim2.fromOffset(0, TS(44) + 10), Size = UDim2.new(1, 0, 0, TS(13) + 6), TextColor3 = C.Text, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
-	results.Hero = text(titleCol, "BodyStrong", "", { Position = UDim2.fromOffset(0, TS(44) + TS(12) + 18), Size = UDim2.new(1, 0, 0, TS(15) + 4), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
+	results.Hero = text(titleCol, "BodyStrong", "", { Position = UDim2.fromOffset(0, TS(44) + TS(12) + 18), Size = UDim2.new(1, 0, 0, TS(15) + 4), TextColor3 = C.BlueDeep, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
 	results.Divider = UIKit.Divider(content, 260, { LayoutOrder = 2 })
 
 	-- body (scrolls on short screens): tiles, gold ledger, progress, rewards, RUN DETAILS
@@ -4813,7 +4850,7 @@ local function buildResults()
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 300),
 		ScrollBarThickness = 0,
-		ScrollBarImageColor3 = P.gold_400,
+		ScrollBarImageColor3 = C.PanelEdge,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		ElasticBehavior = Enum.ElasticBehavior.Never,
 	}, content)
@@ -4844,13 +4881,13 @@ local function buildResults()
 	-- 2. the gold ledger (RunResult: GoldEarned = the unspent run purse at the end,
 	-- GoldSpent = chests / shrines, Gold = kept, GoldLost, GoldSurvival + FirstRun = bonuses)
 	local ledger = UIKit.Panel(body, { Name = "GoldLedger", LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 96) }, true)
-	UIKit.stroke(ledger, P.gold_600, 1, 0.45)
+	UIKit.stroke(ledger, C.PanelEdge, 2, 0)
 	results.Ledger = ledger
 	local cellsRow = new("Frame", { Name = "Cells", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 0, 52) }, ledger)
 	results.LedgerRow = cellsRow
 	results.LedgerList = UIKit.list(cellsRow, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6), Wraps = true })
 	results.LedgerCells = {
-		Earned = ledgerCell(cellsRow, "Earned", 1, P.gold_200),
+		Earned = ledgerCell(cellsRow, "Earned", 1, C.CoinDeep),
 		Spent = ledgerCell(cellsRow, "Spent", 2, C.Text),
 		Unspent = ledgerCell(cellsRow, "Unspent", 3, C.Text),
 		Kept = ledgerCell(cellsRow, "Kept", 4, RES_MINT),
@@ -4872,9 +4909,9 @@ local function buildResults()
 	local prog = new("Frame", { Name = "Progress", BackgroundTransparency = 1, LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 84) }, body)
 	results.Progress = prog
 	results.ProgList = UIKit.list(prog, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8), Wraps = true })
-	results.RunCard = progressCard(prog, "RunLevel", 1, ColorSequence.new(P.steel_200, P.steel_400), P.steel_300)
-	results.MasteryCard = progressCard(prog, "HeroMastery", 2, ColorSequence.new(P.gold_300, P.gold_500), P.gold_400)
-	results.AccountCard = progressCard(prog, "AccountLevel", 3, ColorSequence.new(RES_CYAN, RES_CYAN_DARK), RES_CYAN)
+	results.RunCard = progressCard(prog, "RunLevel", 1, Theme.Gradient.Selected, C.SelectedEdge)
+	results.MasteryCard = progressCard(prog, "HeroMastery", 2, Theme.Gradient.Primary, C.PrimaryEdge)
+	results.AccountCard = progressCard(prog, "AccountLevel", 3, Theme.Gradient.Blue, RES_CYAN)
 	-- the account bar animation (animateAccountXP) works on these
 	results.XPMeter = results.AccountCard.Meter
 	results.XPText = results.AccountCard.Level
@@ -4882,7 +4919,7 @@ local function buildResults()
 
 	-- 4. rewards (new best, arena unlocked, achievements, first-run bonus, cosmetics)
 	results.Best = UIKit.Badge(body, "NEW BEST TIME!", "Gold", { LayoutOrder = 4, Visible = false })
-	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 5, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Visible = false })
+	results.Unlocked = text(body, "BodyStrong", "", { LayoutOrder = 5, Size = UDim2.new(1, 0, 0, TS(16) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, Visible = false })
 	results.Achievements = text(body, "Small", "", {
 		Name = "Achievements",
 		LayoutOrder = 6,
@@ -4902,18 +4939,18 @@ local function buildResults()
 		LayoutOrder = 7,
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = C.PanelInset,
-		BackgroundTransparency = Theme.Alpha.PanelSoft,
+		BackgroundColor3 = C.PanelRaised,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 44),
 	}, body)
 	UIKit.corner(toggle, 10)
-	UIKit.stroke(toggle, P.gold_600, 1, 0.45)
+	UIKit.stroke(toggle, C.PanelEdge, 2, 0)
 	results.DetailsToggle = toggle
-	Icons.Draw(toggle, "info", { Size = 20, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Color = P.gold_300 })
+	Icons.Draw(toggle, "info", { Size = 20, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Color = C.BlueDeep })
 	results.DetailsTitle = text(toggle, "Label", UIKit.track("Run details"), { Name = "Title", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 42, 0.5, 0), Size = UDim2.fromOffset(TS(13) * 8, TS(13) + 6), TextXAlignment = Enum.TextXAlignment.Left }, 13)
 	results.DetailsSub = text(toggle, "Small", "Build, gold earned and spent, recent damage", { Name = "Sub", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 42 + TS(13) * 8 + 10, 0.5, 0), Size = UDim2.new(1, -(42 + TS(13) * 8 + 10 + 80), 0, TS(12) + 6), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.TextMuted }, 12)
-	results.DetailsState = text(toggle, "Caption", "SHOW", { Name = "State", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(64, TS(12) + 6), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 }, 12)
+	results.DetailsState = text(toggle, "Caption", "SHOW", { Name = "State", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(64, TS(12) + 6), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.BlueDeep }, 12)
 	results.Details = text(body, "Small", "", {
 		Name = "DetailsText",
 		LayoutOrder = 8,
@@ -4941,19 +4978,19 @@ local function buildResults()
 	end)
 
 	-- the scroll hint row (shown only while the body scrolls; see results.MoreHint)
-	results.More = text(content, "Caption", UIKit.track("More below"), { Name = "MoreHint", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, MORE_H), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, Visible = false }, 11)
+	results.More = text(content, "Caption", UIKit.track("More below"), { Name = "MoreHint", LayoutOrder = 4, Size = UDim2.new(1, 0, 0, MORE_H), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, Visible = false }, 11)
 	-- NEXT GOAL (RunResult.NextGoal, picked by the server from the settled save): the
 	-- reason to play again, pinned just above REPLAY / MAIN MENU so it never scrolls away:
 	-- icon, one line, a progress bar (beside the line when wide, under it when narrow)
-	local goal = new("Frame", { Name = "NextGoal", BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.15, BorderSizePixel = 0, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 0), Visible = false }, content)
+	local goal = new("Frame", { Name = "NextGoal", BackgroundColor3 = C.SelectedPale, BackgroundTransparency = 0, BorderSizePixel = 0, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, 0), Visible = false }, content)
 	UIKit.corner(goal, 10)
-	UIKit.stroke(goal, P.moss_400, 1.5, 0.25)
+	UIKit.stroke(goal, C.SelectedEdge, 2, 0)
 	results.Goal = goal
 	results.GoalIcon = new("Frame", { Name = "Icon", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(28, 28) }, goal)
 	results.GoalText = text(goal, "Small", "", { Name = "Line", RichText = true, TextScaled = true, TextTruncate = Enum.TextTruncate.AtEnd, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center })
 	new("UITextSizeConstraint", { MinTextSize = math.max(10, results.GoalText.TextSize - 3), MaxTextSize = results.GoalText.TextSize }, results.GoalText) -- shrinks a little before it cuts
 	results.GoalMeter = UIKit.Meter(goal, {
-		Gradient = ColorSequence.new(P.moss_400, P.moss_200),
+		Gradient = ColorSequence.new(C.SelectedEdge, C.Success),
 		TextStyle = "Number",
 		TextSize = 11,
 		Size = UDim2.fromOffset(160, 16),
@@ -5171,7 +5208,7 @@ local function buildResults()
 		local detailText = results.DetailsBase or ""
 		if recent and #recent > 0 then
 			-- "Last hit: Brute 24", then the hits before it on one line
-			detailText ..= (detailText ~= "" and "\n" or "") .. string.format('<font color="%s"><b>Last hit:</b></font> %s', hex(P.crimson_300), recent[1])
+			detailText ..= (detailText ~= "" and "\n" or "") .. string.format('<font color="%s"><b>Last hit:</b></font> %s', hex(C.TextDanger), recent[1])
 			if #recent > 1 then
 				detailText ..= "\nBefore that: " .. table.concat(recent, ", ", 2)
 			end
@@ -5332,7 +5369,7 @@ local function fillLedger(data: any)
 		note ..= string.format(" (%s kept + %s bonuses)", UIKit.formatNumber(kept), UIKit.formatNumber(bonus))
 	end
 	if lost > 0 then
-		note ..= string.format('  ·  <font color="%s">%s lost</font> on %s', hex(P.crimson_300), UIKit.formatNumber(lost), data.Abandoned and "leaving early" or "defeat")
+		note ..= string.format('  ·  <font color="%s">%s lost</font> on %s', hex(C.TextDanger), UIKit.formatNumber(lost), data.Abandoned and "leaving early" or "defeat")
 	end
 	if lostRun then
 		-- the server rule (GoldSystem.RetentionRate): base + per stage cleared, capped
@@ -5369,7 +5406,7 @@ function fillMastery(data: any)
 	end
 	local from, to = math.floor(safeNumber(mst.From)), math.floor(safeNumber(mst.To))
 	local levelText = from ~= to and string.format('<font color="%s">Level %d → %d</font>', hex(RES_MINT), from, to) or ("Level " .. to)
-	local gain = string.format('<font color="%s"><b>+%s XP</b></font>', hex(P.gold_200), UIKit.formatNumber(math.floor(safeNumber(mst.Gained))))
+	local gain = string.format('<font color="%s"><b>+%s XP</b></font>', hex(C.BlueDeep), UIKit.formatNumber(math.floor(safeNumber(mst.Gained))))
 	local into, need = tonumber(mst.Into), tonumber(mst.Need)
 	if not (into and need) then
 		local heroes = profile and type(profile.Heroes) == "table" and profile.Heroes or nil
@@ -5429,7 +5466,7 @@ end
 local function fillDetails(data: any)
 	local lines = {}
 	local diff = tostring(data.Difficulty or "Standard")
-	table.insert(lines, string.format('<font color="%s"><b>DIFFICULTY</b></font>  %s', hex(P.gold_300), diff))
+	table.insert(lines, string.format('<font color="%s"><b>DIFFICULTY</b></font>  %s', hex(C.BlueDeep), diff))
 	local curses = type(data.Curses) == "table" and data.Curses or {}
 	if #curses > 0 then
 		local names = {}
@@ -5437,20 +5474,20 @@ local function fillDetails(data: any)
 			local def = CurseData.Curses[id]
 			table.insert(names, def and def.Name or tostring(id))
 		end
-		table.insert(lines, string.format('<font color="%s"><b>CURSES</b></font>  %s  ·  %s gold', hex(P.crimson_300), table.concat(names, " · "), CurseData.GoldText(tonumber(data.CurseGold) or CurseData.GoldMult(curses))))
+		table.insert(lines, string.format('<font color="%s"><b>CURSES</b></font>  %s  ·  %s gold', hex(C.TextDanger), table.concat(names, " · "), CurseData.GoldText(tonumber(data.CurseGold) or CurseData.GoldMult(curses))))
 	end
 	local d = type(data.Daily) == "table" and data.Daily or nil
 	if d then
 		if d.Scored then
-			table.insert(lines, string.format('<font color="%s"><b>DAILY · SCORED</b></font>  %s%s', hex(P.gold_300), tostring(d.Text or ""), d.NewBest and "  ·  NEW DAILY BEST" or ""))
+			table.insert(lines, string.format('<font color="%s"><b>DAILY · SCORED</b></font>  %s%s', hex(C.BlueDeep), tostring(d.Text or ""), d.NewBest and "  ·  NEW DAILY BEST" or ""))
 		else
-			table.insert(lines, string.format('<font color="%s"><b>DAILY · PRACTICE</b></font>  %s  (not scored)', hex(P.gold_300), tostring(d.Text or "")))
+			table.insert(lines, string.format('<font color="%s"><b>DAILY · PRACTICE</b></font>  %s  (not scored)', hex(C.BlueDeep), tostring(d.Text or "")))
 		end
 	end
 	-- gold: where the numbers come from
 	local unspent = math.floor(safeNumber(data.GoldEarned or data.Gold))
 	local spent = math.floor(safeNumber(data.GoldSpent))
-	table.insert(lines, string.format('<font color="%s"><b>GOLD</b></font>  %s earned · %s spent on chests and shrines · %s left at the end', hex(P.gold_300),
+	table.insert(lines, string.format('<font color="%s"><b>GOLD</b></font>  %s earned · %s spent on chests and shrines · %s left at the end', hex(C.BlueDeep),
 		UIKit.formatNumber(unspent + spent), UIKit.formatNumber(spent), UIKit.formatNumber(unspent)))
 	if data.Portal then
 		table.insert(lines, "Earned includes the portal bonus for the stages cleared")
@@ -5498,8 +5535,8 @@ local function fillGoal(data: any)
 		Icons.Draw(results.GoalIcon, Icons.Has(icon) and icon or "flag", iconOpts)
 	end
 	local sub = type(g.Sub) == "string" and g.Sub ~= "" and string.format('  <font color="%s">· %s</font>', hex(C.TextMuted), g.Sub) or ""
-	results.GoalLong = string.format('<font color="%s"><b>NEXT GOAL</b></font>  %s%s', hex(P.moss_200), goalText, sub)
-	results.GoalShort = string.format('<font color="%s"><b>NEXT GOAL</b></font>  %s', hex(P.moss_200), goalText)
+	results.GoalLong = string.format('<font color="%s"><b>NEXT GOAL</b></font>  %s%s', hex(C.Success), goalText, sub)
+	results.GoalShort = string.format('<font color="%s"><b>NEXT GOAL</b></font>  %s', hex(C.Success), goalText)
 	results.GoalText.Text = results.GoalLong
 	local share = math.clamp(tonumber(g.Progress) or 0, 0, 1)
 	local barText = type(g.ProgressText) == "string" and g.ProgressText or nil
@@ -5540,7 +5577,7 @@ local function fillBuild(build: any)
 	end
 	if #passives > 0 and order > 0 then
 		order += 1
-		new("Frame", { Name = "Gap", BackgroundColor3 = P.gold_600, BackgroundTransparency = 0.4, BorderSizePixel = 0, Size = UDim2.fromOffset(2, 30), LayoutOrder = order }, row)
+		new("Frame", { Name = "Gap", BackgroundColor3 = C.PanelEdge, BackgroundTransparency = 0.4, BorderSizePixel = 0, Size = UDim2.fromOffset(2, 30), LayoutOrder = order }, row)
 		width += 8
 	end
 	for _, pv in ipairs(passives) do
@@ -5591,7 +5628,7 @@ local function animateAccountXP(data: any)
 			end
 			-- level up: flash, ring and sparks on the bar, the text punches
 			meter.Set(1)
-			UIAnim.SweepOnce(meter.Frame, P.ivory_100, 0.4, 0.1)
+			UIAnim.SweepOnce(meter.Frame, C.Text, 0.4, 0.1)
 			UIAnim.Ring(results.AccountFrame, UDim2.new(1, -40, 0, 30), RES_CYAN, 120, 0.6)
 			UIAnim.Sparks(results.AccountFrame, UDim2.new(1, -40, 0, 30), RES_CYAN, 12, 70, 0.6)
 			UIAnim.Punch(results.XPText, 0.12)
@@ -5604,7 +5641,7 @@ local function animateAccountXP(data: any)
 		nv:Destroy()
 		if token == results.XPToken then
 			meter.Set(into)
-			UIAnim.SweepOnce(meter.Frame, P.ivory_100, 0.4, 0.5)
+			UIAnim.SweepOnce(meter.Frame, C.Text, 0.4, 0.5)
 		end
 	end)
 end
@@ -5656,15 +5693,15 @@ local function onRunResult(data)
 	end
 	if causeRaw then
 		local name, hint = Choice.deathCause(causeRaw)
-		results.Cause.Text = string.format('<font color="%s"><b>Defeated by:</b></font> %s', hex(P.crimson_300), name)
-			.. (hint and string.format('  ·  <font color="%s">%s</font>', hex(P.ivory_300), hint) or "")
+		results.Cause.Text = string.format('<font color="%s"><b>Defeated by:</b></font> %s', hex(C.TextDanger), name)
+			.. (hint and string.format('  ·  <font color="%s">%s</font>', hex(C.TextMuted), hint) or "")
 	end
 	results.Cause.Visible = causeRaw ~= nil
 	-- portal returns before WinMinStages stages are a safe escape, not a win
 	-- Abandoned: left from the pause menu's MAIN MENU (counted as a loss)
 	results.Title.Text = data.Won and "VICTORY!" or (data.Portal and "ESCAPED" or (data.Abandoned and "RUN ENDED" or "DEFEATED"))
-	results.Title.TextColor3 = (data.Won or data.Portal) and P.gold_300 or P.crimson_300
-	results.MedalStroke.Color = (data.Won or data.Portal) and P.gold_400 or P.crimson_400
+	UIBuilder.TitlePlate(results.Title, (data.Won or data.Portal) and C.Blue or C.Danger)
+	results.MedalStroke.Color = (data.Won or data.Portal) and C.PanelEdge or C.Danger
 	local cleared = tonumber(data.StagesCleared) or 0
 	local heroId = type(data.CharacterId) == "string" and data.CharacterId or CharacterData.Default
 	local heroDef = CharacterData.Characters[heroId]
@@ -5677,7 +5714,7 @@ local function onRunResult(data)
 			ch:Destroy()
 		end
 	end
-	local classIcon = Icons.Character(results.Medal, heroId, { Size = 48, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+	local classIcon = Icons.Character(results.Medal, heroId, { Size = 48, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
 	-- the hero's painted bust in the medal (the class icon while it loads / without one)
 	ArtImage.RoundPortrait(results.Medal, ArtImage.Portrait(heroId), { classIcon })
 	-- fell in a boss fight: that boss on the medal's corner
@@ -5745,12 +5782,12 @@ local function onRunResult(data)
 	local earned = type(data.Achievements) == "table" and data.Achievements or {}
 	local lines = {}
 	for _, a in ipairs(earned) do
-		table.insert(lines, string.format('<font color="%s"><b>ACHIEVEMENT · %s</b></font>  %s', hex(P.gold_300), string.upper(tostring(a.Name)), tostring(a.Reward or "")))
+		table.insert(lines, string.format('<font color="%s"><b>ACHIEVEMENT · %s</b></font>  %s', hex(C.BlueDeep), string.upper(tostring(a.Name)), tostring(a.Reward or "")))
 	end
 	-- the first run's one-time welcome bonus (server-paid, Config.FirstRun.BonusGold)
 	local firstBonus = type(data.FirstRun) == "table" and tonumber(data.FirstRun.Bonus) or nil
 	if firstBonus and firstBonus == firstBonus and firstBonus > 0 and firstBonus < math.huge then
-		table.insert(lines, 1, string.format('<font color="%s"><b>FIRST RUN BONUS</b></font>  +%s gold', hex(P.gold_300), UIKit.formatNumber(math.floor(firstBonus))))
+		table.insert(lines, 1, string.format('<font color="%s"><b>FIRST RUN BONUS</b></font>  +%s gold', hex(C.BlueDeep), UIKit.formatNumber(math.floor(firstBonus))))
 	end
 	-- account level rewards are cosmetic (frames, rings): never shown as combat upgrades
 	local a = type(data.Account) == "table" and data.Account or nil
@@ -5802,8 +5839,8 @@ local function onRunResult(data)
 	if not reduced and good then
 		task.delay(0.3, function()
 			if results.Overlay.Visible then
-				UIAnim.Sparks(results.TitleCol, UDim2.new(0, 120, 0, 28), P.gold_200, 14, 120, 0.7)
-				UIAnim.Ring(results.TitleCol, UDim2.new(0, 120, 0, 28), P.gold_300, 200, 0.6)
+				UIAnim.Sparks(results.TitleCol, UDim2.new(0, 120, 0, 28), C.BlueDeep, 14, 120, 0.7)
+				UIAnim.Ring(results.TitleCol, UDim2.new(0, 120, 0, 28), C.BlueDeep, 200, 0.6)
 			end
 		end)
 	end
@@ -5844,8 +5881,8 @@ local function onRunResult(data)
 				local k = panel.AbsoluteSize.X / math.max(1, panel.Size.X.Offset)
 				local c = (best.AbsolutePosition - panel.AbsolutePosition + best.AbsoluteSize / 2) / math.max(0.01, k)
 				local at = UDim2.fromOffset(c.X, c.Y)
-				UIAnim.Sparks(panel, at, P.gold_200, 16, 110, 0.8)
-				UIAnim.Ring(panel, at, P.gold_300, 200, 0.6)
+				UIAnim.Sparks(panel, at, C.BlueDeep, 16, 110, 0.8)
+				UIAnim.Ring(panel, at, C.BlueDeep, 200, 0.6)
 			end)
 		end
 	end
@@ -5902,14 +5939,14 @@ local saveNotice: { [string]: any } = {}
 	when it starts (the pause menu repeats it), so the HUD stays clear.
 ]]
 local function buildSaveNotice()
-	local holder, face = UIKit.Surface(root, { Name = "SaveNotice", Radius = 999, Transparency = 0.06, Edge = P.crimson_400, EdgeTransparency = 0.15, Shadow = true, Visible = false, ZIndex = Theme.Z.Toast, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(0, TS(15) + 20) })
+	local holder, face = UIKit.Surface(root, { Name = "SaveNotice", Radius = 999, Transparency = 0.06, Edge = C.Danger, EdgeTransparency = 0.15, Shadow = true, Visible = false, ZIndex = Theme.Z.Toast, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(0, TS(15) + 20) })
 	holder.AutomaticSize = Enum.AutomaticSize.X
 	holder.Active = false
 	face.AutomaticSize = Enum.AutomaticSize.X
 	face.Size = UDim2.fromScale(0, 1)
 	UIKit.padding(face, 0, 16, 0, 10)
 	UIKit.list(face, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
-	Icons.Draw(face, "warning", { Size = 20, LayoutOrder = 1, Back = P.slate_900 })
+	Icons.Draw(face, "warning", { Size = 20, LayoutOrder = 1, Back = C.PanelInset })
 	saveNotice.Text = text(face, "BodyStrong", "Progress isn't being saved right now", { LayoutOrder = 2, Size = UDim2.fromOffset(0, TS(15) + 20), AutomaticSize = Enum.AutomaticSize.X }, 15)
 	saveNotice.Holder = holder
 	saveNotice.Status = "ok"
@@ -5936,9 +5973,9 @@ updateSaveNotice = function(inRun: boolean)
 		saveNotice.Text.Text = status == "memory" and "Progress isn't being saved in this session" or "Progress isn't being saved right now"
 		if bad then
 			-- a toast when it starts (run or lobby); the lobby keeps the line in MORE
-			UIBuilder.Toast(saveNotice.Text.Text .. ". We'll keep trying.", P.crimson_300)
+			UIBuilder.Toast(saveNotice.Text.Text .. ". We'll keep trying.", C.TextDanger)
 		elseif not bad and (was == "failing") then
-			UIBuilder.Toast("Saving works again. Your progress is safe.", P.moss_300)
+			UIBuilder.Toast("Saving works again. Your progress is safe.", C.Success)
 		end
 	end
 	-- never over the lobby: session notices stay out of the home screen's composition (the
@@ -6068,7 +6105,7 @@ local function updateFrame(dt: number)
 			Remotes.Get("StartRun"):FireServer(pr.Mode)
 		elseif os.clock() > pr.Until or (phase == "Running" and pr.Waited) then
 			pendingReplay = nil
-			UIBuilder.Toast("A run is in progress. Start a new one when it ends.", P.gold_300)
+			UIBuilder.Toast("A run is in progress. Start a new one when it ends.", C.BlueDeep)
 		elseif not pr.Waited then
 			pr.Waited = true -- the last run is still closing (others on its results screen)
 		end
@@ -6328,7 +6365,7 @@ function UIBuilder.Init(d: { [string]: any })
 			return
 		end
 		local reward = (info.Reward and info.Reward ~= "") and (" · " .. tostring(info.Reward)) or ""
-		UIState.Notice({ Id = "achievement", Text = "Achievement: " .. tostring(info.Name) .. reward, Color = P.gold_300, Class = "Info", Seconds = Config.UI.ToastSeconds })
+		UIState.Notice({ Id = "achievement", Text = "Achievement: " .. tostring(info.Name) .. reward, Color = C.BlueDeep, Class = "Info", Seconds = Config.UI.ToastSeconds })
 		if deps.Audio and deps.Audio.Play then
 			pcall(deps.Audio.Play, "Evolve") -- its own swell, not the level-up arpeggio
 		end

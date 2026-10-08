@@ -59,7 +59,7 @@ local WorldLabelFade = require(script.Parent.WorldLabelFade)
 local ExploreUI = {}
 
 local player = Players.LocalPlayer
-local P = Theme.Palette
+local C = Theme.Color
 local R = Theme.ItemRarity
 local FLAT = Vector3.new(1, 0, 1)
 local MARKER_RANGE = 140 -- studs: markers show this close
@@ -125,16 +125,16 @@ local function makeMarker(m: Model): Marker?
 	local small = m:GetAttribute("EventKind") == "Rescue"
 	local fw, fh = small and 120 or 180, small and 34 or 46
 	local bb = UIKit.new("BillboardGui", { Name = "ExploreMarker", Adornee = anchor, Size = UDim2.fromOffset(fw + 10, fh + (small and 16 or 18)), StudsOffsetWorldSpace = Vector3.new(0, 5, 0), AlwaysOnTop = true, MaxDistance = MARKER_RANGE, Enabled = false, ResetOnSpawn = false }, player:WaitForChild("PlayerGui")) :: BillboardGui
-	local face = UIKit.new("Frame", { Name = "Face", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.15, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(fw, fh) }, bb)
+	local face = UIKit.new("Frame", { Name = "Face", BackgroundColor3 = C.Panel, BackgroundTransparency = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(fw, fh) }, bb)
 	UIKit.corner(face, Theme.Radius.M)
-	UIKit.stroke(face, P.gold_400, small and 1 or 1.5, 0.25)
-	local title = UIKit.text(face, "Label", "", { Name = "Title", Position = UDim2.fromOffset(6, small and 2 or 3), Size = UDim2.new(1, -12, 0, small and 14 or 18), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd }, small and 12 or 14)
-	local sub = UIKit.text(face, "Caption", "", { Name = "Sub", Position = UDim2.fromOffset(6, small and 16 or 21), Size = UDim2.new(1, -12, 0, small and 12 or 14), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_200, TextTruncate = Enum.TextTruncate.AtEnd }, small and 11 or 12)
-	local bar = UIKit.new("Frame", { Name = "Bar", BackgroundColor3 = P.slate_800, BorderSizePixel = 0, Position = UDim2.new(0, 10, 1, small and -4 or -7), Size = UDim2.new(1, -20, 0, small and 3 or 4), Visible = false }, face)
+	UIKit.stroke(face, C.PanelEdge, small and 1.5 or 2, 0)
+	local title = UIKit.text(face, "Label", "", { Name = "Title", Position = UDim2.fromOffset(6, small and 2 or 3), Size = UDim2.new(1, -12, 0, small and 14 or 18), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, TextTruncate = Enum.TextTruncate.AtEnd }, small and 12 or 14)
+	local sub = UIKit.text(face, "Caption", "", { Name = "Sub", Position = UDim2.fromOffset(6, small and 16 or 21), Size = UDim2.new(1, -12, 0, small and 12 or 14), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd }, small and 11 or 12)
+	local bar = UIKit.new("Frame", { Name = "Bar", BackgroundColor3 = C.Track, BorderSizePixel = 0, Position = UDim2.new(0, 10, 1, small and -4 or -7), Size = UDim2.new(1, -20, 0, small and 3 or 4), Visible = false }, face)
 	UIKit.corner(bar, 999)
-	local fill = UIKit.new("Frame", { Name = "Fill", BackgroundColor3 = P.gold_300, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, bar)
+	local fill = UIKit.new("Frame", { Name = "Fill", BackgroundColor3 = C.Blue, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, bar)
 	UIKit.corner(fill, 999)
-	local tag = UIKit.text(bb, "Caption", "OPTIONAL", { Name = "Tag", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromOffset(small and 64 or 84, small and 14 or 16), TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = P.gold_500, BackgroundTransparency = 0, TextColor3 = P.slate_950, Visible = false }, small and 10 or 11)
+	local tag = UIKit.text(bb, "Caption", "OPTIONAL", { Name = "Tag", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromOffset(small and 64 or 84, small and 14 or 16), TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = C.Primary, BackgroundTransparency = 0, TextColor3 = C.Text, Visible = false }, small and 10 or 11)
 	UIKit.corner(tag, 999)
 	local cracks = {}
 	for _, d in ipairs(m:GetChildren()) do
@@ -204,7 +204,7 @@ local function fillMarker(mk: Marker)
 	if bar then
 		local f = math.clamp(frac or 1, 0, 1)
 		set(mk.Fill, "Size", UDim2.fromScale(f, 1))
-		set(mk.Fill, "BackgroundColor3", kind == "Rescue" and (f > 0.35 and P.moss_300 or P.crimson_300) or P.gold_300)
+		set(mk.Fill, "BackgroundColor3", kind == "Rescue" and (f > 0.35 and C.SelectedEdge or C.Danger) or C.Blue)
 	end
 end
 
@@ -364,9 +364,9 @@ local function refreshButtons()
 		local on = pad and i == padSlot and item ~= nil and not item.Sold
 		local def = item and ItemData.Items[item.Id]
 		local r = def and (R[def.Rarity] or R.Common)
-		set(card.Stroke, "Thickness", on and 3 or 1.5)
-		set(card.Stroke, "Transparency", on and 0 or 0.4)
-		set(card.Stroke, "Color", on and P.gold_300 or (r and r.Color or P.ivory_200))
+		set(card.Stroke, "Thickness", on and 4 or 2)
+		set(card.Stroke, "Transparency", 0)
+		set(card.Stroke, "Color", on and C.Selected or (r and r.Color or C.Divider))
 		local short = item and not item.Sold and math.max(0, priceOf(item) - gold) or 0
 		local label
 		if not item or item.Sold then
@@ -391,12 +391,13 @@ local function refreshButtons()
 end
 
 local function buildPanel(root: Frame)
-	local p = UIKit.new("Frame", { Name = "MerchantPanel", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.06, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -150), Size = UDim2.fromOffset(420, CARD_H + HEAD_H + FOOT_H + 6), Visible = false }, root) :: Frame
+	local p = UIKit.new("Frame", { Name = "MerchantPanel", BackgroundColor3 = C.Panel, BackgroundTransparency = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -150), Size = UDim2.fromOffset(420, CARD_H + HEAD_H + FOOT_H + 6), Visible = false }, root) :: Frame
 	UIKit.corner(p, Theme.Radius.L)
-	UIKit.stroke(p, P.gold_400, 1.5, 0.2)
-	UIKit.text(p, "Label", "MERCHANT", { Name = "Title", Position = UDim2.fromOffset(12, 9), Size = UDim2.new(0.4, -12, 0, 20), TextColor3 = P.gold_200 }, 16)
+	UIKit.new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, p)
+	UIKit.stroke(p, C.PanelEdge, 2, 0)
+	UIKit.text(p, "Label", "MERCHANT", { Name = "Title", Position = UDim2.fromOffset(12, 9), Size = UDim2.new(0.4, -12, 0, 20), TextColor3 = C.BlueDeep }, 16)
 	-- the run gold you can spend here, beside the close button
-	balance = UIKit.text(p, "Label", "RUN GOLD 0", { Name = "Balance", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -50, 0, 9), Size = UDim2.new(0.6, -50, 0, 20), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 }, 15)
+	balance = UIKit.text(p, "Label", "RUN GOLD 0", { Name = "Balance", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -50, 0, 9), Size = UDim2.new(0.6, -50, 0, 20), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.Text }, 15)
 	UIKit.IconButton(p, {
 		Icon = "close",
 		Kind = "Outline",
@@ -411,17 +412,17 @@ local function buildPanel(root: Frame)
 	})
 	local row = UIKit.new("Frame", { Name = "Row", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, HEAD_H), Size = UDim2.new(1, -16, 0, CARD_H) }, p)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 6) })
-	footLine = UIKit.text(p, "Caption", "Your own offers · this cart stays all stage", { Name = "Foot", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -4), Size = UDim2.new(1, -24, 0, FOOT_H - 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_300, TextScaled = true }, 12)
+	footLine = UIKit.text(p, "Caption", "Your own offers · this cart stays all stage", { Name = "Foot", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -4), Size = UDim2.new(1, -24, 0, FOOT_H - 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, TextScaled = true }, 12)
 	UIKit.new("UITextSizeConstraint", { MaxTextSize = (footLine :: TextLabel).TextSize, MinTextSize = 10 }, footLine)
 	for i = 1, Config.Explore.Merchant.Slots do
-		local card = UIKit.new("Frame", { Name = "Offer" .. i, LayoutOrder = i, BackgroundColor3 = P.slate_900, BorderSizePixel = 0, Size = UDim2.new(1 / 3, -4, 1, 0) }, row)
+		local card = UIKit.new("Frame", { Name = "Offer" .. i, LayoutOrder = i, BackgroundColor3 = C.PanelRaised, BorderSizePixel = 0, Size = UDim2.new(1 / 3, -4, 1, 0) }, row)
 		UIKit.corner(card, Theme.Radius.M)
-		local stroke = UIKit.stroke(card, P.ivory_200, 1.5, 0.4)
+		local stroke = UIKit.stroke(card, C.Divider, 2, 0)
 		local tileBox = UIKit.new("Frame", { Name = "TileBox", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(36, 36) }, card)
 		local name = UIKit.text(card, "Label", "", { Name = "ItemName", Position = UDim2.fromOffset(4, 44), Size = UDim2.new(1, -8, 0, 16), TextXAlignment = Enum.TextXAlignment.Center, TextScaled = true }, 13)
 		local rarity = UIKit.text(card, "Caption", "", { Name = "Rarity", Position = UDim2.fromOffset(4, 60), Size = UDim2.new(1, -8, 0, 13), TextXAlignment = Enum.TextXAlignment.Center }, 11)
-		local desc = UIKit.text(card, "Caption", "", { Name = "Desc", Position = UDim2.fromOffset(4, 72), Size = UDim2.new(1, -8, 0, 26), TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = P.ivory_200 }, 11)
-		local price = UIKit.text(card, "Label", "", { Name = "Price", Position = UDim2.fromOffset(4, 98), Size = UDim2.new(1, -8, 0, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200 }, 14)
+		local desc = UIKit.text(card, "Caption", "", { Name = "Desc", Position = UDim2.fromOffset(4, 72), Size = UDim2.new(1, -8, 0, 26), TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = C.TextMuted }, 11)
+		local price = UIKit.text(card, "Label", "", { Name = "Price", Position = UDim2.fromOffset(4, 98), Size = UDim2.new(1, -8, 0, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text }, 14)
 		local btn = UIKit.Button(card, { Name = "Buy", Title = "BUY", Kind = "Primary", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.new(1, -12, 0, 34), Shadow = false, OnClick = function() buy(i) end })
 		-- "NEED 36 MORE", the rarity and the price shrink to fit narrow phone cards (large
 		-- Roblox text sizes cut them or ran the rarity into the price)
@@ -464,7 +465,7 @@ local function fillCards()
 				anyAffordable = anyAffordable or afford
 			end
 			set(card.Price, "Text", item.Sold and "Bought" or (UIKit.formatNumber(price) .. " gold"))
-			set(card.Price, "TextColor3", (item.Sold or afford) and P.gold_200 or P.crimson_300)
+			set(card.Price, "TextColor3", (item.Sold or afford) and C.Text or C.TextDanger)
 		end
 	end
 	if balance then

@@ -28,7 +28,7 @@ local Icons = require(script.Parent.Icons)
 local MenuPlaytime = {}
 
 local new, text = UIKit.new, UIKit.text
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 local player = Players.LocalPlayer
 
 local ASK_SECONDS = 60
@@ -55,15 +55,15 @@ export type Board = {
 }
 
 function MenuPlaytime.Build(parent: Instance, ctx: { [string]: any }): Board
-	local holder, face = UIKit.Surface(parent, { Name = "Playtime", Radius = Theme.Radius.M, Transparency = 0.12, Edge = P.gold_400, EdgeTransparency = 0.45 })
+	local holder, face = UIKit.Surface(parent, { Name = "Playtime", Radius = Theme.Radius.M, Transparency = 0, Edge = C.Blue })
 	local hit = new("TextButton", { Name = "Open", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 1 }, face)
 	hit.Activated:Connect(function()
 		UIKit.Click()
 		ctx.ShowScreen("Ranks", "Playtime")
 	end)
 	UIKit.padding(face, 6, 12, 6, 12)
-	local icon = Icons.Draw(face, "clock", { Size = 18, Color = P.gold_300, Position = UDim2.fromOffset(0, 6) })
-	local title = text(face, "Label", UIKit.track("Playtime"), { Name = "Title", Position = UDim2.fromOffset(24, 0), Size = UDim2.new(1, -24, 0, HEAD_H), TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
+	local icon = Icons.Draw(face, "clock", { Size = 18, Color = C.BlueDeep, Position = UDim2.fromOffset(0, 6) })
+	local title = text(face, "Label", UIKit.track("Playtime"), { Name = "Title", Position = UDim2.fromOffset(24, 0), Size = UDim2.new(1, -24, 0, HEAD_H), TextColor3 = C.BlueDeep, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
 	local list = new("Frame", { Name = "Rows", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, HEAD_H), Size = UDim2.new(1, 0, 1, -HEAD_H) }, face)
 	UIKit.list(list, { Padding = UDim.new(0, 0) })
 
@@ -84,10 +84,10 @@ function MenuPlaytime.Build(parent: Instance, ctx: { [string]: any }): Board
 
 	local function row(order: number, rank: string, name: string, value: string, me: boolean)
 		local f = new("Frame", { Name = "Row" .. order, BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H) }, list)
-		local color = me and P.gold_200 or C.Text
-		text(f, "Number", rank, { Name = "Rank", Size = UDim2.new(0, 34, 1, 0), TextColor3 = (order <= 3 and not me) and P.gold_300 or C.TextMuted }, 14)
+		local color = me and C.BlueDeep or C.Text
+		text(f, "Number", rank, { Name = "Rank", Size = UDim2.new(0, 34, 1, 0), TextColor3 = (order <= 3 and not me) and C.BlueDeep or C.TextMuted }, 14)
 		text(f, "BodyStrong", name, { Name = "Name", Position = UDim2.fromOffset(36, 0), Size = UDim2.new(1, -36 - 74, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = color }, 14)
-		text(f, "Number", value, { Name = "Value", AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 72, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_300 }, 14)
+		text(f, "Number", value, { Name = "Value", AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 72, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.BlueDeep }, 14)
 	end
 
 	local function fill()

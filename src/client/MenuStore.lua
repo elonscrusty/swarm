@@ -34,7 +34,7 @@ local MenuStore = {}
 
 local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 
 -- price cache: "Product:123" / "GamePass:123" → Robux
 local prices: { [string]: number } = {}
@@ -89,7 +89,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 	local message: string? = nil
 
 	ui.Header = UIKit.ScreenHeader(screen, "STORE", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, })
 	ui.Panel = holder
 	UIKit.padding(face, 12, 14, 12, 14)
 	-- section chips (scroll sideways on phones)
@@ -99,7 +99,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, Theme.Size.TapMin + 6),
 		ScrollBarThickness = 3,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.PanelEdge,
 		AutomaticCanvasSize = Enum.AutomaticSize.X,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.X,
@@ -112,8 +112,8 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		Name = "Scroll",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarThickness = 5,
+		ScrollBarImageColor3 = C.PanelEdge,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -132,7 +132,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		local title = string.upper(s.Title)
 		local w = math.floor(#title * TS(14) * 0.7 + 64)
 		chips[s.Id] = UIKit.Button(ui.Chips, {
-			Kind = s.Id == section and "Primary" or "Ghost",
+			Kind = s.Id == section and "Selected" or "Secondary",
 			Title = title,
 			Icon = s.Icon,
 			IconSize = 16,
@@ -150,7 +150,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 				section = s.Id
 				message = nil
 				for id, b in pairs(chips) do
-					b.SetKind(id == section and "Primary" or "Ghost")
+					b.SetKind(id == section and "Selected" or "Secondary")
 				end
 				rebuild(true)
 			end,
@@ -159,8 +159,8 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 
 	local function card(order: number): Frame
 		local f = UIKit.Panel(ui.Scroll, { LayoutOrder = order, Name = "Card" .. order })
-		f.BackgroundColor3 = P.slate_950
-		f.BackgroundTransparency = 0.25
+		f.BackgroundColor3 = C.PanelRaised
+		f.BackgroundTransparency = 0
 		UIKit.pad(f, 12)
 		return f
 	end
@@ -179,7 +179,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		local descY = TS(18) + 8
 		local lines = 3
 		if badge then
-			UIKit.Badge(f, badge, badge == "WORN" and "Gold" or "Moss", { Name = "State", Position = UDim2.fromOffset(64, descY) })
+			UIKit.Badge(f, badge, badge == "WORN" and "Moss" or "Slate", { Name = "State", Position = UDim2.fromOffset(64, descY) })
 			descY += Theme.Size.Badge + 4
 			lines = 2
 		end
@@ -187,9 +187,9 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 	end
 
 	local function swatch(f: Frame, icon: string, color: Color3?)
-		local tile = new("Frame", { Name = "Swatch", Size = UDim2.fromOffset(52, 52), BackgroundColor3 = P.slate_800, BorderSizePixel = 0 }, f)
+		local tile = new("Frame", { Name = "Swatch", Size = UDim2.fromOffset(52, 52), BackgroundColor3 = C.Panel, BorderSizePixel = 0 }, f)
 		UIKit.corner(tile, Theme.Radius.M)
-		UIKit.stroke(tile, color or P.gold_400, 2, 0.1)
+		UIKit.stroke(tile, color or C.PanelEdge, 2, 0.1)
 		Icons.Draw(tile, icon, { Size = 34, Color = color, Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5) })
 	end
 
@@ -259,7 +259,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 
 	local function earnedCaption(f: Frame, e: any, p: any)
 		local have, need = StoreCatalog.Progress(e.Earn, p)
-		bottomCaption(f, string.format("%s / %s", UIKit.formatNumber(math.min(have, need)), UIKit.formatNumber(need)), P.gold_300)
+		bottomCaption(f, string.format("%s / %s", UIKit.formatNumber(math.min(have, need)), UIKit.formatNumber(need)), C.BlueDeep)
 	end
 
 	local function view(p: any): any
@@ -336,7 +336,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		local f = card(order)
 		f.Name = "StarterBundle"
 		cardTop(f, function()
-			swatch(f, "gift", P.gold_300)
+			swatch(f, "gift", C.BlueDeep)
 		end, "Starter Bundle", StarterCard.Contents() .. ". Once per account.", "NEW")
 		local b
 		local function label(): string
@@ -357,7 +357,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		local v = view(p)
 		local f = card(order)
 		cardTop(f, function()
-			swatch(f, "crown", P.gold_300)
+			swatch(f, "crown", C.BlueDeep)
 		end, StoreCatalog.Supporter.Name, StoreCatalog.Supporter.Desc, v.Supporter and "OWNED" or nil)
 		if v.Supporter then
 			local plate = StoreCatalog.Supporter.Plate
@@ -390,7 +390,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end, def and def.Name or heroId, desc, owned and "OWNED" or nil)
 		if owned then
-			bottomCaption(f, "Yours", P.moss_200)
+			bottomCaption(f, "Yours", C.Success)
 		elseif not def or not heroBuyable(heroId) then
 			bottomCaption(f, "Coming soon")
 		else
@@ -432,7 +432,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 			target = list[1]
 		end
 		cardTop(f, function()
-			swatch(f, "gift", P.gold_300)
+			swatch(f, "gift", C.BlueDeep)
 		end, "Send to", target and target.DisplayName or "Nobody else is here right now.", nil)
 		if #list > 1 then
 			bottomButton(f, { Kind = "Outline", Title = "NEXT PLAYER", Icon = "chevronRight", Name = "NextPlayer", OnClick = function()
@@ -500,7 +500,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		end
 		local p = ctx.Profile()
 		ui.Note.Text = noteText()
-		ui.Note.TextColor3 = message and P.gold_200 or C.TextMuted
+		ui.Note.TextColor3 = message and C.BlueDeep or C.TextMuted
 		if not p then
 			return
 		end
@@ -607,10 +607,10 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		message = r.Text
 		if screen.Visible then
 			ui.Note.Text = r.Text
-			ui.Note.TextColor3 = r.Ok and P.moss_200 or P.gold_200
+			ui.Note.TextColor3 = r.Ok and C.Success or C.TextDanger
 			UIAnim.Pop(ui.Note, 0, 0.9)
 		else
-			ctx.Toast(r.Text, r.Ok and P.moss_200 or P.gold_200)
+			ctx.Toast(r.Text, r.Ok and C.Success or C.TextDanger)
 		end
 	end)
 	Players.PlayerAdded:Connect(function()
@@ -642,7 +642,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 					end
 				end
 				for id, b in pairs(chips) do
-					b.SetKind(id == section and "Primary" or "Ghost")
+					b.SetKind(id == section and "Selected" or "Secondary")
 				end
 			end
 			message = nil

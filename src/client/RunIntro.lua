@@ -47,7 +47,7 @@ local UIState = require(script.Parent.UIState)
 local RunIntro = {}
 
 local new, TS = UIKit.new, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 
 -- seconds on screen (UI timing, not game balance)
 local SECONDS_FIRST_STAGE = 3.6
@@ -113,13 +113,13 @@ end
 local function hintCell(parent: Instance, name: string, icon: string): { [string]: any }
 	local cell = new("Frame", { Name = name, BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.1, BorderSizePixel = 0, Active = false }, parent)
 	UIKit.corner(cell, Theme.Radius.M)
-	UIKit.stroke(cell, P.gold_500, 1, 0.55)
-	local well = new("Frame", { Name = "Icon", BackgroundColor3 = P.slate_800, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.fromOffset(HINT_ICON + 10, HINT_ICON + 10) }, cell)
+	UIKit.stroke(cell, C.Divider, 1.5, 0)
+	local well = new("Frame", { Name = "Icon", BackgroundColor3 = C.BluePale, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 0.5), Size = UDim2.fromOffset(HINT_ICON + 10, HINT_ICON + 10) }, cell)
 	UIKit.corner(well, 999)
-	UIKit.stroke(well, P.gold_400, 1.5, 0.2)
+	UIKit.stroke(well, C.Blue, 1.5, 0)
 	Icons.Draw(well, icon, { Size = HINT_ICON, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
-	local title = UIKit.Role(cell, "Label", "", { Name = "Title", TextColor3 = P.ivory_100, TextWrapped = true }, false)
-	local sub = UIKit.Role(cell, "Caption", "", { Name = "Sub", TextColor3 = P.gold_200, TextWrapped = true }, false)
+	local title = UIKit.Role(cell, "Label", "", { Name = "Title", TextColor3 = C.Text, TextWrapped = true }, false)
+	local sub = UIKit.Role(cell, "Caption", "", { Name = "Sub", TextColor3 = C.BlueDeep, TextWrapped = true }, false)
 	return { Frame = cell, Well = well, Title = title, Sub = sub }
 end
 
@@ -136,25 +136,25 @@ local function build(root: Frame)
 		GroupTransparency = 0,
 	}, root)
 	ui.Card = holder
-	-- the panel: opaque slate, gold edge (strong contrast over the arena)
+	-- the panel: icy white, royal blue edge (strong contrast over the arena)
 	local face = new("Frame", { Name = "Face", BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.02, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Active = false }, holder)
 	UIKit.corner(face, Theme.Radius.L)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_800, P.slate_950) }, face)
-	UIKit.stroke(face, P.gold_400, 2, 0.1)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, face)
+	UIKit.stroke(face, C.PanelEdge, 3, 0)
 	ui.Face = face
-	-- a gold band across the top
-	local band = new("Frame", { Name = "Band", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 4) }, face)
+	-- a blue band across the top
+	local band = new("Frame", { Name = "Band", BackgroundColor3 = C.Blue, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 4) }, face)
 	UIKit.corner(band, 2)
 
-	ui.Eyebrow = UIKit.Role(face, "Label", "STAGE 1", { Name = "Eyebrow", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd }, false)
-	ui.Head = UIKit.Role(face, "Display", "OPEN THE PORTAL", { Name = "Head", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_200, TextWrapped = true }, false)
+	ui.Eyebrow = UIKit.Role(face, "Label", "STAGE 1", { Name = "Eyebrow", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, TextTruncate = Enum.TextTruncate.AtEnd }, false)
+	ui.Head = UIKit.Role(face, "Display", "OPEN THE PORTAL", { Name = "Head", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text, TextWrapped = true }, false)
 	ui.Head.TextSize = TS(HEAD)
-	ui.Sub = UIKit.Role(face, "Label", "BEFORE THE SWARM GROWS TOO STRONG", { Name = "Sub", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.ivory_100, TextWrapped = true }, false)
+	ui.Sub = UIKit.Role(face, "Label", "BEFORE THE SWARM GROWS TOO STRONG", { Name = "Sub", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, TextWrapped = true }, false)
 	ui.Sub.TextSize = TS(SUB)
 	ui.Why = UIKit.Role(face, "Body", "", { Name = "Why", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, TextWrapped = true }, false)
 	-- the stage modifier (batch B, StageModifiers): its name and effects on one wrapped line
-	ui.Mod = UIKit.Role(face, "Body", "", { Name = "Modifier", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300, TextWrapped = true, Visible = false }, false)
-	ui.Rule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.4, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(160, 2) }, face)
+	ui.Mod = UIKit.Role(face, "Body", "", { Name = "Modifier", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextDanger, TextWrapped = true, Visible = false }, false)
+	ui.Rule = new("Frame", { Name = "Rule", BackgroundColor3 = C.Divider, BackgroundTransparency = 0, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(160, 2) }, face)
 	ui.Hints = {
 		hintCell(face, "HintPortal", "portal"),
 		hintCell(face, "HintCharge", "hourglass"),
@@ -164,7 +164,7 @@ local function build(root: Frame)
 	local track = new("Frame", { Name = "TimerTrack", BackgroundColor3 = C.PanelInset, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1) }, face)
 	UIKit.corner(track, 999)
 	ui.TimerTrack = track
-	ui.Timer = new("Frame", { Name = "Timer", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, track)
+	ui.Timer = new("Frame", { Name = "Timer", BackgroundColor3 = C.Blue, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, track)
 	UIKit.corner(ui.Timer, 999)
 end
 
@@ -405,8 +405,8 @@ function RunIntro.Show(stageNo: number): boolean
 	tw(card, 0.18, { GroupTransparency = 0 })
 	tw(sc, 0.38, { Scale = 1 }, Enum.EasingStyle.Back)
 	local at = UDim2.new(0.5, 0, 0, ui.Head.Position.Y.Offset + ui.Head.Size.Y.Offset / 2)
-	UIAnim.Ring(ui.Face, at, P.gold_300, 260, 0.5)
-	UIAnim.Sparks(ui.Face, at, P.gold_200, 10, 140, 0.6)
+	UIAnim.Ring(ui.Face, at, C.BlueLight, 260, 0.5)
+	UIAnim.Sparks(ui.Face, at, C.Primary, 10, 140, 0.6)
 	UIAnim.Sweep(ui.Face, 0.15)
 	if show.Full then
 		local objs = {}

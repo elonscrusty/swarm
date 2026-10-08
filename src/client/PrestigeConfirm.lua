@@ -35,8 +35,7 @@ local PrestigeConfirm = {}
 
 local player = Players.LocalPlayer
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
-local HEADING = Font.fromEnum(Enum.Font.GothamBold)
+local C = Theme.Color
 local NAME = "PrestigeConfirm"
 local OPEN_GUARD = 0.35 -- seconds after opening in which a tap never counts
 
@@ -107,7 +106,7 @@ local function row(parent: Instance, order: number, name: string): TextLabel
 		TextWrapped = true,
 		RichText = true,
 		LineHeight = 1.12,
-		TextColor3 = P.ivory_200,
+		TextColor3 = C.Text,
 		TextYAlignment = Enum.TextYAlignment.Top,
 	}, 15)
 end
@@ -137,7 +136,7 @@ local function build(): UI
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(520, 360),
 		Radius = Theme.Radius.L,
-		Transparency = 0.04,
+		Transparency = 0.02,
 		ZIndex = 2,
 	})
 	local scroll = new("ScrollingFrame", {
@@ -155,20 +154,23 @@ local function build(): UI
 	local title = text(scroll, "H2", "PRESTIGE", {
 		Name = "Title",
 		LayoutOrder = 1,
-		FontFace = HEADING,
-		Size = UDim2.new(1, 0, 0, TS(24) + 6),
+		Size = UDim2.new(1, 0, 0, TS(24) + 14),
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = P.gold_200,
+		BackgroundColor3 = C.Blue,
+		BackgroundTransparency = 0,
 		TextScaled = true,
 	}, 24)
+	-- white lettering with a navy outline on a blue plate (Bright Arcade page title)
+	UIKit.PageTitleStyle(title, 2)
+	UIKit.corner(title, Theme.Radius.M)
 	local fit = Instance.new("UITextSizeConstraint")
-	fit.MaxTextSize = TS(24)
+	fit.MaxTextSize = TS(22)
 	fit.MinTextSize = 12
 	fit.Parent = title
 	title:SetAttribute("NoTextFit", true)
 	UIKit.Hairline(scroll, { LayoutOrder = 2 })
 	local body = row(scroll, 3, "Body")
-	body.TextColor3 = P.ivory_100
+	body.TextColor3 = C.Text
 	body.TextXAlignment = Enum.TextXAlignment.Center
 	local resets = row(scroll, 4, "Resets")
 	local stays = row(scroll, 5, "Stays")
@@ -176,7 +178,7 @@ local function build(): UI
 	local buttons = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 7, Size = UDim2.new(1, 0, 0, Theme.Size.TapMin + 4) }, scroll)
 	local confirm = UIKit.Button(buttons, {
 		Name = "PrestigeConfirmButton",
-		Kind = "Primary",
+		Kind = "Danger", -- it resets the hero's upgrades
 		Title = "PRESTIGE",
 		Align = "Center",
 		Shrink = true,
@@ -202,7 +204,7 @@ local function build(): UI
 		end,
 	})
 	local hint = row(scroll, 8, "Hint")
-	hint.TextColor3 = P.ivory_300
+	hint.TextColor3 = C.TextMuted
 	hint.TextXAlignment = Enum.TextXAlignment.Center
 	holder.ZIndex = 2
 	gui.Parent = player:WaitForChild("PlayerGui")
@@ -223,7 +225,7 @@ local function hintText(): string
 	local def = CharacterData.Characters[state.Hero]
 	local button = PrestigeData.ButtonText(def and def.Name or state.Hero)
 	if left > 0 then
-		return string.format('<font color="%s"><b>Tap %s again to confirm (%d)</b></font>', UIKit.hex(P.gold_200), button, math.ceil(left))
+		return string.format('<font color="%s"><b>Tap %s again to confirm (%d)</b></font>', UIKit.hex(C.BlueDeep), button, math.ceil(left))
 	end
 	return string.format("Tap %s twice within %d s to confirm. Nothing changes until then.", button, seconds())
 end
@@ -245,10 +247,10 @@ local function fill()
 	local nextStars = state.Stars + 1
 	u.Title.Text = string.format("PRESTIGE %s  %s", string.upper(name), PrestigeData.StarText(nextStars))
 	u.Body.Text = PrestigeData.ConfirmText(name, nextStars)
-	local gold, muted = UIKit.hex(P.gold_300), UIKit.hex(P.ivory_300)
+	local gold, muted = UIKit.hex(C.BlueDeep), UIKit.hex(C.TextMuted)
 	local n = #MetaUpgradeData.HeroOrder()
-	u.Resets.Text = string.format('<font color="%s"><b>RESETS</b></font>  The %s\'s %d upgrades go to level 0 (you can buy them again).', UIKit.hex(P.crimson_300), name, n)
-	u.Stays.Text = string.format('<font color="%s"><b>STAYS</b></font>  Gold, mastery level, skins, looks, unlocks and every other hero.', UIKit.hex(P.moss_300))
+	u.Resets.Text = string.format('<font color="%s"><b>RESETS</b></font>  The %s\'s %d upgrades go to level 0 (you can buy them again).', UIKit.hex(C.TextDanger), name, n)
+	u.Stays.Text = string.format('<font color="%s"><b>STAYS</b></font>  Gold, mastery level, skins, looks, unlocks and every other hero.', UIKit.hex(C.Success))
 	u.Gets.Text = string.format('<font color="%s"><b>YOU GET</b></font>  %s and %s gold from %s runs <font color="%s">(paid when a run ends; no combat power)</font>.', gold, PrestigeData.StarText(nextStars), PrestigeData.PercentText(nextStars), name, muted)
 	u.Confirm.SetText(PrestigeData.ButtonText(name))
 	refreshHint()

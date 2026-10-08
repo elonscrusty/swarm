@@ -1,0 +1,108 @@
+SWARM — COMPLETE BRIGHT ARCADE UI REDESIGN
+
+Use the attached Bright Arcade reference images to completely restyle SWARM's existing Roblox user interface. Implement the actual working interface in the existing project. I want a consistent, polished, readable Roblox arcade look across every menu and gameplay overlay, not just a palette swap.
+
+FIRST INSPECT THE PROJECT
+Identify the current UI builders, ScreenGuis, navigation controller, run-state handling, data bindings, icon assets, and input handling. Reuse existing gameplay services and authoritative data. Keep save data, ownership, currencies, purchases, unlocks, matchmaking, party limits, rewards, weapon stats, cooldowns, pauses, and progression intact. The screenshots show example states, not values to hardcode. Project code is authoritative when sample text or generated image details disagree with it.
+
+The images are visual references, not screenshots to place over the game. Build real Frames, TextLabels, TextButtons, ImageLabels, scrolling containers, sliders, and responsive layouts. Do not use a whole reference screenshot as one clickable image. Do not recreate the scenery shown in these mockups; this task changes the UI. Keep the existing game world and game identity.
+
+VISUAL DIRECTION
+Bright Arcade: icy-white panels, bright royal blue borders, navy text, chunky rounded typography, sunny yellow main actions, and lime green selected states. Friendly and bold, with clear hierarchy and readable information. Retain the medieval knight/adventure subject matter in icons and imagery.
+
+Suggested centralized theme tokens:
+  PanelTop #FFFFFF
+  PanelBottom #E8F6FF
+  CardFill #F5FBFF
+  Blue #087FFF
+  BlueLight #39C8FF
+  BlueDeep #1744CD
+  Shadow #082D9C
+  Text #08164E
+  TextSecondary #455F9D
+  PrimaryTop #FFF35A
+  PrimaryBottom #FFD21C
+  PrimaryEdge #E8A90B
+  Selected #BBF52B
+  SelectedPale #EAFACB
+  Danger #E65050
+  DisabledFill #D8E3EE
+  DisabledText #778AA5
+
+Treat these as implementation starting values; match the reference appearance while maintaining contrast. Use one shared Theme module, not scattered constants. Gold coins and existing character art may keep their original colors; the UI frames must follow Bright Arcade.
+
+Panels: rounded rectangles with blue outlines, modest blue shadows offset downward, and subtle white/blue highlights. Avoid excessive nested borders: one main panel border, one card border, and at most one restrained highlight are enough. Do not turn every element into a complicated layered ornament. No gold frame system, parchment, serif headings, dark medieval plates, neon glow, halftone, or excessive bloom.
+
+Buttons: yellow only for the main action, white/light blue for secondary actions, lime for selected modes/items, muted blue-gray for unavailable actions, red for leave/destructive actions. Add icon plus label where useful. Use navy text on yellow/lime/light backgrounds. Selected states must also have a checkmark, clear label, or another non-color cue. Disabled buttons must explain the existing requirement and ignore activation.
+
+Typography: choose an available Roblox rounded sans-serif FontFace that closely matches the references. Titles and action labels should be heavy and upright. Body text should be simpler and readable. Use at most two font families. Reserve display lettering with a modest navy outline for page headings; do not outline every small text label. Use consistent type tiers. At normal desktop scale, a sensible starting range is title 32–44 px, major action 22–28 px, card title 20–26 px, body 16–20 px, and metadata 14–16 px. Adapt for smaller viewports without shrinking everything into unreadable text.
+
+Icons: cohesive toy-like fantasy illustrations with navy outlines and simple shapes. Prefer approved existing assets, clean crops, or purpose-built assets. Do not invent Roblox asset IDs, hotlink unreliable images, or use emoji as final icon art. Use aspect constraints so icons do not stretch. When no new asset exists, use a clean available icon and identify the missing asset honestly. Do not add a plus icon beside the currency balance unless an existing supported action is actually connected to it. Some references stylize platform controls: leave native Roblox CoreGui controls unchanged and reserve their space.
+
+RESPONSIVE LAYOUT
+Support desktop, tablet, and small landscape phones, including approximately 844x390 and 667x375. Check portrait layout too if the experience supports it. Read the viewport and safe-area information using the project's current supported Roblox patterns. Respect topbar inset, notches, and native movement/jump controls.
+
+Use anchor points, layouts, padding, size constraints, aspect constraints, and sensible breakpoints. Do not position every element at a fixed screenshot coordinate. Use a consistent spacing scale such as 8/12/16/24 logical pixels and a minimum useful touch area near 44–48 logical pixels. Use size constraints so desktop menus do not stretch across the entire ultrawide display.
+
+Separate menu header, content body, and footer. Pin back/close controls and primary actions outside scrolling content. Scroll only the body when needed. Do not use an unexplained floating down-chevron to hide clipped content. Clearly show scroll affordances when content extends below the body. Avoid unnecessary nested scrolling. Body text can wrap; reserve enough height for wrapped text. Do not reduce all text sizes to make a crowded screen fit. Reflow grids into fewer columns when needed. Do not duplicate TextLabels to create shadows that flicker, misalign, or overlap.
+
+Choose an explicit UI layering order: gameplay HUD, temporary notifications, menu dimmer, active menu, confirmation dialog. Wave banners and other notices must never cover a menu title or close control. A menu's body content may be clipped inside its scrolling viewport; headers and footers must remain visible. Restore focus/input correctly when closing a modal.
+
+REFERENCE SCREEN 1 — ARENA
+Back control and ARENA title, compact best-stage badge, current currency.
+Four cards in order: Forest, Ruins, Swamp, Snow. Use existing map thumbnails or approved equivalents. Show the existing hazards and unlock requirements. Reference examples: Forest has no hazards; Ruins has no hazards and tight lanes; Swamp mud reduces movement to 65% speed; Snow ice gives 120% speed and slippery movement. Use actual current values from code.
+Forest example selected: lime outline, checkmark, SELECTED badge. Other unlocked cards use quieter blue UNLOCKED badges. Locked cards show a lock and actual requirement; do not make them selectable. Yellow footer action reads CONFIRM [selected arena]. Never change selection merely by opening the menu. Responsive grid or horizontal scroll may be used when four cards no longer fit comfortably.
+
+REFERENCE SCREEN 2 — DAILY CHALLENGE
+Include the Daily Challenge page identity, even if a generated image emphasizes the date instead. Show live challenge date/reset countdown and readiness. Arrange objectives clearly on the left and actions on the right where room allows. Reference objectives: Solo/shared route, clear five stages, more clears rank higher. Preserve the real scoring system.
+Yellow PLAY DAILY button, attempt availability nearby, secondary VIEW LEADERBOARD. Short notice explaining that the scored attempt is used when a run starts, even if the player loses or leaves. Keep the existing How scoring works disclosure and its actual content. Do not hardcode the screenshot date/countdown or add attempts/rewards. Fit notice text inside its row without trailing clipped words or diagonal overlays.
+
+REFERENCE SCREEN 3 — PARTY
+Page title, actual party capacity, and back. Party member list on left; server/friends tabs and invite targets on right. Three slots is the reference capacity; preserve the project's actual limit. Current player row with avatar and name, empty slots with Invite player and plus buttons. Distinguish no-party state from a created party.
+Lime selected tab. Empty server state: No other players here; invite a friend to play together; yellow Invite Friends action connected to existing supported invitation flow. Show existing party status, requests, owner controls, and populated list behavior, not just the empty example. Do not send invitations automatically. Bottom explanation about Duo/Trio eligibility stays concise.
+
+REFERENCE SCREEN 4 — SETTINGS
+Centered modal, dim background, clear title, usable close button. Music and Effects rows with icon, label, percentage, and blue slider with yellow knob. Preserve all real existing settings; the reference only shows two visible audio controls and does not authorize deleting other supported settings. Remove or relabel ambiguous empty section headers only if they have no function.
+Slider supports drag/tap, clamps to real range, updates text and actual sound behavior, and persists using existing settings storage. Preserve muted/zero behavior. Changes save automatically note only if true. Yellow DONE and close perform the same intended dismissal. Never allow slider dragging to trigger underlying game controls.
+
+REFERENCE SCREEN 5 — MORE
+Consistent navigation card grid, two columns at wide sizes, fewer columns when needed. Each card has icon, title, short live subtitle, and chevron. Preserve these entries when they exist: Daily Challenge, Party, Ranks, Stats, Account Level, Journal, Daily Reward, Season, Titles, Collection. Preserve the underlying destination screens.
+Subtitles are live: readiness/reset, leaderboard label, account rewards, records, encountered enemies, daily claim availability, season tier, equipped title/earned count, collection count. A claimable Daily Reward can use yellow; normal navigation cards stay white/blue. No false notification badges or fake claim availability. Scroll body on small phones while keeping Back visible.
+
+REFERENCE SCREEN 6 — PLAY SETUP
+PLAY title and Back, Solo/Duo/Trio tabs with selected mode in lime. Short mode description derived from actual settings. Four cards: Hero, World, Difficulty, Curses. Display current selection, relevant subtitle, and chevron. Use the reference 2x2 layout where space permits.
+Reference values: Knight / Gold Trim; Forest / Next: Desert at stage 5; Standard / Veteran locked; None / Harder runs, more gold. Bind to real data. Yellow START [mode] button and short accurate countdown explanation. Keep Details if supported. Preserve selection and return navigation across submenus. Validate prerequisites through existing systems, prevent repeated Start taps from creating duplicate runs, and clearly show loading/countdown state.
+
+REFERENCE SCREEN 7 — RUN MENU
+White/blue right-side drawer, or a responsive centered modal at narrow widths, over dim gameplay. RUN MENU, current run gold/kills, actual mode/status. Yellow Return to Run; secondary Settings and View Build; separate red Leave Run. Maintain existing confirmation behavior for leaving a run.
+Solo Game Paused is shown only when the run truly pauses. Multiplayer must show the correct continues-running state and must not freeze the shared server. Preserve existing pause/resume mechanics; do not add a new blanket pause system. All dismissal paths must restore the correct previous state.
+
+REFERENCE SCREEN 8 — PING WHEEL
+Six clear choices surrounding a small central close control: Help Here, Chest Here, Go Portal, On My Way, Hello!, Nice! Preserve actual existing ping meanings and network behavior. Use white/blue compact buttons, consistent icons, navy text; lime selected/hovered state. Labels can wrap within their own button. No overlap between choices, close, or HUD controls. Fit the wheel within safe bounds; use an accessible compact grid on very small displays if needed.
+Support existing touch, mouse, and controller inputs. Closing cancels without sending a ping. One activation sends one existing ping, with existing limits preserved. Dim just enough to make the wheel readable; the rest of the HUD remains recognizable.
+
+REFERENCE SCREEN 9 — YOUR BUILD
+Centered readable panel with YOUR BUILD, close, and correct run-status text. Weapons and Passives are distinct sections with counts, icons, item name, level, concise stats, and a short description. Keep Evolutions and any other existing sections accessible via the body scroll/disclosure; never cut their header in half.
+Reference samples are Sword LV4/12: damage 15, cooldown 1.35s, two swings; Axe LV1/12: damage 20, cooldown 2.5s; Heart LV1/5: +20% max HP. Use real current stats, including modifiers, and preserve existing semantics. Do not replace accurate descriptions with invented abilities.
+Keep wave notifications above or outside the build panel, never across its title. Preserve whether the run continues while the build panel is open; communicate accurately. Do not cover ability/jump controls unnecessarily if gameplay continues.
+
+REFERENCE SCREEN 10 — ACTIVE GAMEPLAY HUD
+Leave the center of gameplay open. Compact top-center stage/wave/objective. Top-right run currency, kills, pause; minimap beneath. Small peripheral timer. Compact lower-center level/XP and equipped weapons/passives with levels; Build action. Lower-right existing ability meter and Jump; lower-left Ping, all respecting movement controls.
+Keep saved indicators, portal markers, and existing combat information functional and readable. Their reference numbers are examples. Use slimmer blue/white HUD frames than menu panels: avoid large white slabs hiding enemies. Preserve minimap updates and markers. Keep ability cooldown/progress accessible with an icon and numeric/status label. Avoid covering the Roblox mobile joystick or duplicating native Jump behavior incorrectly.
+Developer controls omitted from player mockups must remain available through their existing authorized developer-only path. Do not expose them to all players or remove their backend function.
+
+APPLY THE STYLE TO ALL OTHER EXISTING UI
+The reference images cover ten visible screens, not every possible screen in the project. Carry the same shared components through the existing main menu, character selector (including Bard and Golem if present), shop, world screens, reward dialogs, leaderboard, statistics, account progression, journal, season, titles, collection, tooltips, confirmations, loading states, and result screens. Do not invent missing subsystems or alter prices, rewards, abilities, rarity rules, or progression to fill a mockup. Preserve the SWARM logo identity; restyle surrounding UI consistently.
+
+IMPLEMENTATION AND PERFORMANCE
+Build reusable constructors/components for panel, title, action button, selected tab, navigation card, icon, status badge, slider, list row, modal, and HUD chip. Use the project's framework if one already exists. Use UI layouts and data bindings rather than ten separate incompatible UI systems.
+Use Frames/UICorner/UIStroke/UIGradient and small approved image assets where appropriate. Decorative gradients/shadows should be lightweight. Avoid per-frame rebuilding, expensive blur stacks, full-screen particles, new render loops per card, duplicate event connections, or orphaned GUI objects. Create once and update relevant properties when data changes. Disconnect transient handlers and cancel tweens during cleanup.
+Short interaction polish: hover/press/focus states, a small downward press offset, restrained 0.1–0.18 second transitions. Respect reduced-motion settings if supported. Hover must not be the only cue; touch and controller must work. Keep controller selection/focus visible. Use existing UI sounds without adding loud repeated audio.
+Keep purchases and authoritative gameplay validation in existing trusted systems. Do not rewrite DataStores or change RemoteEvent contracts solely for visual work. Avoid speculative engine APIs; use documented APIs available in this project's environment. Preserve Roblox CoreGui.
+
+VERIFY BEFORE FINISHING
+Open every changed screen at desktop, tablet, and small landscape phone sizes. Check long player names, large balances, wrapped descriptions, empty and populated parties, selected/unselected/locked cards, unavailable daily attempts, zero and full audio, high item counts, ongoing multiplayer, paused solo, and repeated opening/closing.
+Check no clipped labels, hidden footer actions, panel collisions, blocked joystick/jump, title/banner overlap, or distorted icons. Verify navigation, sliders, Start, selection confirmation, leaderboard, invitations, Build, pings, Return, and Leave still work through existing code paths. Verify player data and selections survive reopening and a normal rejoin using the project's existing test process. Check Output for errors, duplicate connections, or missing assets. Do not claim device tests were performed if only code inspection was possible; state the limitation and provide concrete Studio test steps.
+
+DELIVERABLE
+Make the actual changes, then report what files/scripts changed and what was verified. If I need to manually replace scripts, provide complete replacements with exact placement instructions rather than isolated snippets. Identify any missing image assets and their intended use; do not pretend placeholder IDs are real. The final result must visibly match Bright Arcade throughout the UI and remain usable on mobile.
