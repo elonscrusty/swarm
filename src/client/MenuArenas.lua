@@ -120,7 +120,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 	local optimisticUntil = 0
 	ui.Header = UIKit.ScreenHeader(screen, "ARENAS", ctx.Back)
 	ui.Best = UIKit.IconPill(ui.Header.Frame, "crown", "BEST STAGE 0", { Name = "BestStage", AnchorPoint = Vector2.new(0, 0.5) })
-	ui.Intro = text(screen, "Body", "Choose where your run starts. Later stages visit every arena.", {
+	ui.Intro = text(screen, "Body", "Choose your starting arena.", {
 		Name = "Intro",
 		TextWrapped = true,
 		TextColor3 = P.ivory_200,

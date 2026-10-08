@@ -1770,7 +1770,7 @@ function UIKit.ScrollHint(sf: ScrollingFrame)
 		}, overlay)
 		corner(b, 10)
 		stroke(b, P.gold_400, 1.5, 0.1)
-		local g = Icons.Draw(b, "chevronRight", { Size = 14, Color = P.gold_300 })
+		local g = Icons.Draw(b, "chevronRight", { Size = 12, Color = P.gold_300 })
 		g.AnchorPoint = Vector2.new(0.5, 0.5)
 		g.Position = UDim2.fromScale(0.5, 0.5)
 		g.Rotation = rotation
@@ -1801,17 +1801,18 @@ function UIKit.ScrollHint(sf: ScrollingFrame)
 		if horizontal then
 			more = at.X * k + window.X < canvas.X - 4
 			back = at.X > 4
-			down.AnchorPoint, down.Position = Vector2.new(1, 0.5), UDim2.new(1, -2, 0.5, 0)
-			up.AnchorPoint, up.Position = Vector2.new(0, 0.5), UDim2.new(0, 2, 0.5, 0)
-			down.Size, up.Size = UDim2.fromOffset(20, 30), UDim2.fromOffset(20, 30)
+			down.AnchorPoint, down.Position = Vector2.new(0.5, 0.5), UDim2.new(1, 0, 0.5, 0)
+			up.AnchorPoint, up.Position = Vector2.new(0.5, 0.5), UDim2.new(0, 0, 0.5, 0)
+			down.Size, up.Size = UDim2.fromOffset(16, 26), UDim2.fromOffset(16, 26)
 			downGlyph.Rotation = 0
 			upGlyph.Rotation = 180
 		else
 			more = at.Y * k + window.Y < canvas.Y - 4
 			back = at.Y > 4
-			down.AnchorPoint, down.Position = Vector2.new(0.5, 1), UDim2.new(0.5, 0, 1, -2)
-			up.AnchorPoint, up.Position = Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 2)
-			down.Size, up.Size = UDim2.fromOffset(30, 20), UDim2.fromOffset(30, 20)
+			-- on the frame's edge (half outside), small: inside it covered the last row's text
+			down.AnchorPoint, down.Position = Vector2.new(0.5, 0.5), UDim2.new(0.5, 0, 1, 0)
+			up.AnchorPoint, up.Position = Vector2.new(0.5, 0.5), UDim2.new(0.5, 0, 0, 0)
+			down.Size, up.Size = UDim2.fromOffset(26, 16), UDim2.fromOffset(26, 16)
 			downGlyph.Rotation = 90
 			upGlyph.Rotation = -90
 		end
