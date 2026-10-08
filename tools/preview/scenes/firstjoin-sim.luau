@@ -106,7 +106,7 @@ end
 check("first offer has a showcase weapon", showcase == 1, table.concat(names, ", "))
 check("first offer upgrades the start weapon", startUp)
 check("first offer has 3 cards", #offer == Config.LevelUp.Choices, tostring(#offer))
-preview.remote("LevelUpChoose"):FireServer(showcase or 1)
+preview.remote("LevelUpChoose"):FireServer(showcase or 1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId"))
 preview.advance(1)
 check("showcase weapon taken", rp ~= nil and #rp.WeaponOrder == 2, rp and table.concat(rp.WeaponOrder, ",") or "")
 check("level 2 costs the normal curve", rp ~= nil and rp.XPNeeded == preview.server("XPSystem").XPNeeded(2), tostring(rp and rp.XPNeeded))

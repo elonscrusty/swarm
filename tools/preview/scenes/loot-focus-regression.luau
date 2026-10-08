@@ -46,7 +46,7 @@ for _ = 1, 20 do
 	if not me:GetAttribute("Paused") then
 		break
 	end
-	preview.remote("LevelUpChoose"):FireServer(1)
+	preview.remote("LevelUpChoose"):FireServer(1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId"))
 	advance(0.3)
 end
 local rp = assert(RM.GetRunPlayer(me), "run player")

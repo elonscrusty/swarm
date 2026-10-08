@@ -53,7 +53,7 @@ assert(rp, "solo run player")
 local function guard()
 	rp.InvulnUntil = math.huge
 	if rp.Offer then
-		preview.remote("LevelUpChoose"):FireServer(1)
+		preview.remote("LevelUpChoose"):FireServer(1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId"))
 	end
 	if rp.RewardSeq then
 		preview.remote("RewardClose"):FireServer(rp.RewardSeq)

@@ -63,7 +63,7 @@ for _, choice in ipairs(rp.Offer) do
 end
 local panel, deadline = rp.PanelId, rp.OfferDeadline
 for i = 1, 4 do
-	preview.remote("LevelUpChoose"):FireServer(1)
+	preview.remote("LevelUpChoose"):FireServer(1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId"))
 	preview.advance(0.25)
 	if i < 4 then
 		assert(rp.Offer and rp.PanelId == panel and rp.OfferDeadline == deadline, "choices must share one panel and deadline")
@@ -159,7 +159,7 @@ rp.Passives.Heart = PassiveData.MaxLevelOf("Heart") - 1
 rp.NextUpgradeCombatTime = 0
 LU.QueueLevels(rp, 3)
 assert(coins == 0 and rp.PendingLevels == 3, "weapons alone must not trigger coin conversion")
-preview.remote("LevelUpChoose"):FireServer(1)
+preview.remote("LevelUpChoose"):FireServer(1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId"))
 preview.advance(0.25)
 assert(rp.Passives.Heart == PassiveData.MaxLevelOf("Heart") and coins == 2 * 25 * 1.35,
 	"final passive must drain remaining bank as coins immediately")

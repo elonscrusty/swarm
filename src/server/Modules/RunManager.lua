@@ -1102,6 +1102,17 @@ function RunManager.TutorialRevealHold(): boolean
 	return (tonumber(rp.Level) or 1) - (tonumber(rp.PendingLevels) or 0) < 2
 end
 
+-- The lobby arena is one global pick checked only against whoever changed it, so a run's
+-- arena is re-checked against the STARTER's own BestStage; otherwise the first arena.
+local function arenaForStarter(who: Player?, name: string): string
+	local def = (Config.Arenas :: any)[name]
+	local data = who and ctx.DataService.GetData(who)
+	if def and data and (data.Stats.BestStage or 0) >= (def.RequiredBestStage or 0) then
+		return name
+	end
+	return Config.Arenas.Order[1]
+end
+
 local function beginRun(here: boolean?)
 	local runStarter = starter -- whose curses the run uses (Solo / Daily: the only player)
 	local list = {}
@@ -1119,9 +1130,10 @@ local function beginRun(here: boolean?)
 		setPhase("Lobby")
 		return
 	end
+	local runArena = arenaForStarter(runStarter or list[1], selectedArena)
 	-- live game: the team plays on its own private run server (RunServers saves and
 	-- teleports them; this lobby is free again at once). `here` = play on this server.
-	if not here and ctx.RunServers and ctx.RunServers.SendToRun(list, mode, runStarter or list[1], selectedArena) then
+	if not here and ctx.RunServers and ctx.RunServers.SendToRun(list, mode, runStarter or list[1], runArena) then
 		setPhase("Lobby")
 		return
 	end
@@ -1130,7 +1142,7 @@ local function beginRun(here: boolean?)
 	local daily = ctx.RunModifiers.BeginRun(mode, runStarter or list[1])
 	-- stage 1: the lobby's arena with its portal (StageManager also sets EnemyAI's arena);
 	-- the daily has its own arena tour and boss order
-	local arena = ctx.StageManager.BeginRun(daily and daily.Arenas[1] or ctx.RunModifiers.WeeklyArena() or selectedArena, daily)
+	local arena = ctx.StageManager.BeginRun(daily and daily.Arenas[1] or ctx.RunModifiers.WeeklyArena() or runArena, daily)
 
 	runTime = 0
 	table.clear(disconnected)

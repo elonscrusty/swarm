@@ -387,6 +387,17 @@ local function settle(player: Player)
 	end)
 end
 
+-- The STARTER's own BestStage decides (not "any member"): a locked arena falls back to the first.
+local function arenaFor(t: Ticket, starter: Player?): string
+	local def = (Config.Arenas :: any)[t.Arena]
+	local need = def and def.RequiredBestStage or 0
+	local data = starter and ctx.DataService.GetData(starter)
+	if data and (data.Stats.BestStage or 0) >= need then
+		return t.Arena
+	end
+	return Config.Arenas.Order[1]
+end
+
 -- Lobby: the team could not travel. Saves back, and the run starts on this server.
 local function fallbackHere(players: { Player }, t: Ticket, starter: Player?)
 	local back = {}
@@ -404,7 +415,8 @@ local function fallbackHere(players: { Player }, t: Ticket, starter: Player?)
 	for _, p in ipairs(back) do
 		notify(p, "Couldn't reach a run server: playing on this server.", WARN)
 	end
-	if not ctx.RunManager.StartTeamRun(back, t.Mode, t.Arena, starter) then
+	local startP = starter or back[1]
+	if not ctx.RunManager.StartTeamRun(back, t.Mode, arenaFor(t, startP), startP) then
 		for _, p in ipairs(back) do
 			notify(p, "Couldn't start the run right now: try again.", BAD)
 		end
@@ -826,18 +838,6 @@ local function setStatus(s: string)
 	state:SetAttribute("RunServerStatus", s)
 end
 
-local function arenaFor(t: Ticket, players: { Player }): string
-	local def = (Config.Arenas :: any)[t.Arena]
-	local need = def and def.RequiredBestStage or 0
-	for _, p in ipairs(players) do
-		local data = ctx.DataService.GetData(p)
-		if data and (data.Stats.BestStage or 0) >= need then
-			return t.Arena
-		end
-	end
-	return Config.Arenas.Order[1]
-end
-
 local function startTicketRun()
 	local t = ticket :: Ticket
 	local list, starter = {}, nil
@@ -871,7 +871,7 @@ local function startTicketRun()
 		end
 	end
 	setStatus("Started")
-	if not ctx.RunManager.StartTeamRun(list, t.Mode, arenaFor(t, list), starter) then
+	if not ctx.RunManager.StartTeamRun(list, t.Mode, arenaFor(t, starter), starter) then
 		setStatus("Failed")
 		sendHome(list, "The run couldn't start: back to the lobby.")
 	end

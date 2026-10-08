@@ -55,7 +55,7 @@ local survivor = start()
 -- (as a player would) until two real run minutes have passed
 for _ = 1, 400 do
 	if RM.GetRunTime() >= 125 then break end
-	if survivor.Offer then preview.remote("LevelUpChoose"):FireServer(1) end
+	if survivor.Offer then preview.remote("LevelUpChoose"):FireServer(1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId")) end
 	preview.advance(1)
 end
 assert(RM.GetRunTime() >= 125, "run clock must reach two minutes: " .. RM.GetRunTime())

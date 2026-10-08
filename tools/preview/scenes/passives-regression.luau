@@ -26,7 +26,7 @@ local function clearOffers()
 		if not rp.Paused then
 			return
 		end
-		preview.remote("LevelUpChoose"):FireServer(1)
+		preview.remote("LevelUpChoose"):FireServer(1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId"))
 		advance(0.3)
 	end
 end

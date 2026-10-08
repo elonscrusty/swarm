@@ -1211,10 +1211,9 @@ function LevelUpSystem.Init(c)
 end
 
 function LevelUpSystem.Start()
-	-- offerId (optional, LevelUpOffer.OfferId / attribute ChoiceOfferId): when sent, a
-	-- request for any other card set is dropped, so each round applies exactly once.
+	-- offerId (LevelUpOffer.OfferId / attribute ChoiceOfferId): required. A request without
+	-- it, or for any other card set, is dropped, so each round applies exactly once.
 	local function staleId(rp, offerId): boolean
-		if offerId == nil then return false end
 		return type(offerId) ~= "number" or offerId ~= rp.OfferSeq
 	end
 

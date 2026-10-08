@@ -1405,6 +1405,10 @@ end
 
 function LootSystem.Step(dt: number)
 	if not ctx.RunManager.IsRunning() then
+		-- run over / not started: no hold may outlive it (it would pin the rp and Obj)
+		if next(holds) ~= nil then
+			table.clear(holds)
+		end
 		return
 	end
 	local simulating = ctx.RunManager.IsSimulating()

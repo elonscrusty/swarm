@@ -267,7 +267,18 @@ function Merchant.Buy(rp, merchantId: any, slot: any): (boolean, string?)
 	if granted then
 		ctx.RunManager.HoldReward(rp, dramatic == true)
 	else
-		warn(string.format("[Merchant] %s paid %d for %s but no item could be granted", rp.Player.Name, price, offer.Id))
+		warn(string.format("[Merchant] %s paid %d for %s but no item could be granted: refunded", rp.Player.Name, price, offer.Id))
+		-- nothing was delivered: hand back the exact run gold (no GoldMult) and reopen the slot
+		local data = ctx.DataService.GetData(rp.Player)
+		if data and type(data.RunEscrow) == "table" and not rp.GoldSettlement then
+			data.RunEscrow.Gold += price
+			rp.Gold += price
+			rp.GoldSpent = math.max(0, (rp.GoldSpent or 0) - price)
+			rp.Player:SetAttribute("RunGold", rp.Gold)
+		end
+		offer.Sold = nil
+		send(rp)
+		return false, "grant"
 	end
 	Fx.Sound("Chest")
 	send(rp)

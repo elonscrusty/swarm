@@ -112,9 +112,9 @@ local function reviveByHelper()
 			end
 			if who[2].Offer ~= nil then
 				if who[1] == me then
-					preview.remote("LevelUpChoose"):FireServer(1)
+					preview.remote("LevelUpChoose"):FireServer(1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId"))
 				else
-					preview.fireServerAs(who[1], "LevelUpChoose", 1)
+					preview.fireServerAs(who[1], "LevelUpChoose", 1, who[1]:GetAttribute("ChoiceOfferId"))
 				end
 			else
 				LU.Cancel(who[2])

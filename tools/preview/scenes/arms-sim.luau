@@ -23,7 +23,7 @@ local function wait(t: number)
 			if not me:GetAttribute("Paused") then
 				break
 			end
-			preview.remote("LevelUpChoose"):FireServer(1)
+			preview.remote("LevelUpChoose"):FireServer(1, game:GetService("Players").LocalPlayer:GetAttribute("ChoiceOfferId"))
 			preview.advance(0.2)
 		end
 	end
