@@ -250,8 +250,16 @@ local function buildLegend(face: Frame)
 		{ Name = "Loot", Color = C.CoinDeep, Size = 5 },
 		{ Name = "Ally", Color = C.BlueLight, Round = true, Size = 5 },
 	}
+	-- each cell as wide as its word needs (equal quarters ran "Portal" into the Boss key)
+	local weight, total = {}, 0
 	for i, entry in ipairs(keys) do
-		local cell = new("Frame", { Name = entry.Name, BackgroundTransparency = 1, Position = UDim2.fromScale((i - 1) / #keys, 0), Size = UDim2.fromScale(1 / #keys, 1), ZIndex = 3 }, legend)
+		weight[i] = #entry.Name + (entry.Ring and 4 or 3)
+		total += weight[i]
+	end
+	local at = 0
+	for i, entry in ipairs(keys) do
+		local cell = new("Frame", { Name = entry.Name, BackgroundTransparency = 1, Position = UDim2.fromScale(at / total, 0), Size = UDim2.fromScale(weight[i] / total, 1), ZIndex = 3 }, legend)
+		at += weight[i]
 		local marker = new("Frame", { Name = "Key", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 4, 0.5, 0), Size = UDim2.fromOffset(entry.Size, entry.Size), Rotation = entry.Diamond and 45 or 0, BackgroundColor3 = entry.Color, BorderSizePixel = 0, ZIndex = 4 }, cell)
 		UIKit.corner(marker, entry.Round and 999 or 1)
 		if entry.Ring then
@@ -268,6 +276,7 @@ function MiniMap.Build(root: Frame, k: { [string]: any })
 	local holder, face = UIKit.Surface(root, { Name = "MiniMap", Radius = Theme.Radius.M, Edge = C.PanelEdge, EdgeThickness = 2, Transparency = 0.04, Shadow = false, Size = UDim2.fromOffset(SIZE_PC, SIZE_PC + HEADER_PC + FOOTER_PC), ZIndex = Theme.Z.Hud, Visible = false })
 	holder.Active = false
 	face.Active = false
+	UIKit.Raise(holder, 4, 2.5) -- the slim arcade base of the other HUD frames
 	ui.Holder, ui.Face = holder, face
 	Hud.AvoidInPortrait(holder) -- portrait: the centre banners drop below the map
 	-- the clipped viewport (the dark "outside" of the arena), inset so the corners stay clean

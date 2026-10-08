@@ -143,7 +143,7 @@ local function buildArrow(root: Frame)
 	UIKit.corner(tip, 3)
 	UIKit.stroke(tip, C.BlueDeep, 1.5, 0)
 	local badge, face = UIKit.Surface(holder, { Name = "Badge", Radius = 999, Transparency = 0.02, Edge = C.PanelEdge, EdgeThickness = 3, Shadow = false, Size = UDim2.fromOffset(48, 48), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
-	local _ = badge
+	UIKit.Raise(badge, 5, 3)
 	Icons.Draw(face, "portal", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.Panel })
 	-- "PORTAL · 139 m" on a navy tag under the badge (readable over grass and snow)
 	ui.ArrowDistance = UIKit.Role(holder, "Label", "", {
@@ -253,6 +253,7 @@ end
 local function buildChoice(root: Frame)
 	local m = UIKit.Modal(root, "Portal", 560, 480, Theme.Z.LevelUp - 2)
 	m.Overlay:SetAttribute("BackdropTransparency", 0.5)
+	UIKit.Raise(m.Panel, 6, 3) -- arcade panel depth (as the Play setup panel)
 	ui.Choice = m
 	local content = m.Content
 	local list = UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center })
@@ -287,6 +288,7 @@ local function buildChoice(root: Frame)
 		Size = UDim2.fromOffset(240, 76),
 		LayoutOrder = 1,
 		Glow = true,
+		Depth = "Strong",
 		OnClick = function()
 			choose("Next")
 		end,
@@ -300,6 +302,7 @@ local function buildChoice(root: Frame)
 		TitleSize = 15,
 		Size = UDim2.fromOffset(240, 76),
 		LayoutOrder = 2,
+		Depth = "Medium",
 		OnClick = function()
 			choose("Return")
 		end,

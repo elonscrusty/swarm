@@ -159,9 +159,13 @@ local function setText(label: TextLabel, str: string)
 	end
 end
 
--- A slim white / blue HUD frame (Bright Arcade): icy gradient face, royal blue rim, no big shadow.
+-- A slim white / blue HUD frame (Bright Arcade): icy gradient face, royal blue rim and a
+-- shallow dark-blue base (4 px, UIKit.Raise; ~1.5 px shows past the rim) instead of a soft
+-- shadow, so it stays slim.
 local function goldSurface(parent: Instance, name: string, radius: number, size: UDim2?): (Frame, Frame)
-	return UIKit.Surface(parent, { Name = name, Transparency = 0.04, Radius = radius, Edge = C.PanelEdge, EdgeThickness = 2, Shadow = false, Size = size })
+	local holder, face = UIKit.Surface(parent, { Name = name, Transparency = 0.04, Radius = radius, Edge = C.PanelEdge, EdgeThickness = 2, Shadow = false, Size = size })
+	UIKit.Raise(holder, 4, 2.5)
+	return holder, face
 end
 
 -- A pill that grows with its content (holder + face both AutomaticSize X).
@@ -345,6 +349,7 @@ local function buildCounters(frame: Frame)
 			end
 		end,
 	})
+	ui.Pause.SetDepth("Medium")
 end
 
 -- The level medallion: a yellow disc (the arcade main-action colour) with the level-up chevrons.
@@ -391,12 +396,15 @@ local function buildVitals(frame: Frame)
 
 	local xpRow = new("Frame", { Name = "XP", BackgroundTransparency = 1, Position = UDim2.fromOffset(VIT.PadX, VIT.PadY + VIT.HP + VIT.Gap), Size = UDim2.new(1, -2 * VIT.PadX, 0, VIT.XP) }, face)
 	ui.XPRow = xpRow
+	-- a navy strip behind the level row (screen 10): white "LV 5" and the blue bar read on it
+	local strip = new("Frame", { Name = "Strip", BackgroundColor3 = C.Text, BorderSizePixel = 0, Position = UDim2.fromOffset(-3, -2), Size = UDim2.new(1, 6, 1, 4), ZIndex = 0, Active = false }, xpRow)
+	UIKit.corner(strip, 999)
 	ui.Medal = medallion(xpRow, 24, 1)
 	ui.Level = role(xpRow, "Number", "LV 1", {
 		Name = "Level",
 		Position = UDim2.fromOffset(32, 0),
 		Size = UDim2.new(0, 66, 1, 0),
-		TextColor3 = C.Text,
+		TextColor3 = C.TextOnBlue,
 	})
 	-- "LV 14" stays left of the XP bar (large phone text ran it under the bar)
 	fitText(ui.Level, 10)
@@ -502,7 +510,11 @@ local function buildBar(frame: Frame)
 	}, face)
 	UIKit.corner(btn, Theme.Radius.M)
 	ui.BuildGradient = new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Blue }, btn)
-	UIKit.stroke(btn, C.BlueDeep, 2, 0)
+	UIKit.stroke(btn, C.Shadow, 2, 0)
+	UIKit.Highlight(btn, Theme.Radius.M, 0.6)
+	-- the arcade base under the button (behind it in the panel face)
+	local btnBase = new("Frame", { Name = "BuildBase", BackgroundColor3 = C.Shadow, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -4, 0.5, 3), Size = UDim2.new(0, INV.Build - 10, 1, -12), ZIndex = 3, Active = false }, face)
+	UIKit.corner(btnBase, Theme.Radius.M)
 	ui.BuildButton = btn
 	ui.BuildChevron = Icons.Draw(btn, "chevronsUp", { Size = 22, Color = C.TextOnBlue, Back = C.Blue, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -12), ZIndex = 5 })
 	fitText(role(btn, "Label", "BUILD", {
@@ -537,22 +549,31 @@ local BUILD_W = 560
 
 local function buildDetails(frame: Frame)
 	local holder, face = goldSurface(frame, "BuildDetails", Theme.Radius.L, UDim2.fromOffset(BUILD_W, 300))
-	-- the build panel is a real panel (the player opened it on purpose): a blue drop shadow
-	UIKit.Shadow(holder, Theme.Radius.L, 4, 0)
+	-- the build panel is a real panel (the player opened it on purpose): the full arcade
+	-- depth of the menus (a deeper base and a thicker rim than the slim HUD frames)
+	UIKit.Raise(holder, 6, 3)
+	face.BackgroundTransparency = 0
 	holder.Visible = false
 	holder.Active = true -- taps on the open panel do not walk the hero
 	holder.AnchorPoint = Vector2.new(0.5, 1)
 	ui.Build = holder
 	ui.BuildFace = face
 	UIKit.padding(face, 8, 12, 10, 12)
-	local title = role(face, "Display", "YOUR BUILD", { Name = "Title", Size = UDim2.new(1, -52, 0, 32), TextSize = TS(28), TextTruncate = Enum.TextTruncate.AtEnd })
-	UIKit.PageTitleStyle(title, 2.5)
-	ui.BuildTitle = title
-	ui.BuildNote = role(face, "Caption", "The run keeps going while this is open", { Name = "Note", Position = UDim2.fromOffset(0, 32), Size = UDim2.new(1, -52, 0, 16), TextTruncate = Enum.TextTruncate.AtEnd })
+	-- the title on the shared blue title plate (as on the Play setup screen)
+	local plate = UIKit.TitlePlate(face, "YOUR BUILD", 22, { Name = "Title" })
+	ui.BuildTitle = plate.Label
+	ui.BuildPlate = plate.Frame
+	-- the plate's width follows its text (AutomaticSize): the note beside it follows too
+	plate.Frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		relayout()
+	end)
+	local titleH = TS(22) + 18
+	ui.BuildTitleH = titleH
+	ui.BuildNote = role(face, "Caption", "The run keeps going while this is open", { Name = "Note", Position = UDim2.fromOffset(2, titleH + 6), Size = UDim2.new(1, -52, 0, 16), TextTruncate = Enum.TextTruncate.AtEnd, TextWrapped = true })
 	local close = UIKit.IconButton(face, {
 		Icon = "close",
 		Kind = "Danger",
-		Size = 38,
+		Size = 40,
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 0),
@@ -560,13 +581,15 @@ local function buildDetails(frame: Frame)
 			setBuildOpen(false)
 		end,
 	})
+	close.SetDepth("Medium")
 	ui.BuildClose = close
+	local listTop = titleH + 28
 	local list = new("ScrollingFrame", {
 		Name = "List",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(0, 54),
-		Size = UDim2.new(1, 0, 1, -54),
+		Position = UDim2.fromOffset(0, listTop),
+		Size = UDim2.new(1, 0, 1, -listTop),
 		CanvasSize = UDim2.fromOffset(0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 5,
@@ -590,7 +613,7 @@ end
 local function detailRow(parent: Instance, order: number, icon: string, name: string, rank: string, effect: string, gold: boolean, extra: string?, frac: number?, ready: boolean?)
 	local row = new("Frame", { Name = "Row", BackgroundColor3 = ready and C.SelectedPale or C.PanelRaised, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 58), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order }, parent)
 	UIKit.corner(row, Theme.Radius.S)
-	UIKit.stroke(row, ready and C.SelectedEdge or (gold and C.PrimaryEdge or C.Divider), (ready or gold) and 2 or 1.5, 0)
+	UIKit.stroke(row, ready and C.SelectedEdge or (gold and C.PrimaryEdge or C.PanelEdge), 2, 0)
 	local tile = new("Frame", { Name = "IconTile", BackgroundColor3 = C.BluePale, BorderSizePixel = 0, Position = UDim2.fromOffset(8, 7), Size = UDim2.fromOffset(44, 44) }, row)
 	UIKit.corner(tile, Theme.Radius.S)
 	UIKit.stroke(tile, C.Blue, 1.5, 0)
@@ -1337,6 +1360,22 @@ local function layout()
 		end
 		local face = ui.BuildFace :: Frame
 		face.Size = UDim2.fromScale(1, 1)
+		-- the status note under the title plate, or beside it on a short screen (the list
+		-- gets that row back); it wraps to two lines there rather than being cut
+		local titleH = ui.BuildTitleH or 40
+		local plateW = math.floor(ui.BuildPlate.AbsoluteSize.X / scale + 0.5)
+		local besideW = math.floor(bw) - 24 - plateW - 12 - 48
+		local beside = H < 500 and plateW > 0 and besideW >= 150
+		if beside then
+			ui.BuildNote.Position = UDim2.fromOffset(plateW + 12, math.floor((titleH - 32) / 2))
+			ui.BuildNote.Size = UDim2.fromOffset(besideW, 32)
+		else
+			ui.BuildNote.Position = UDim2.fromOffset(2, titleH + 6)
+			ui.BuildNote.Size = UDim2.new(1, -52, 0, 16)
+		end
+		local listTop = beside and (titleH + 10) or (titleH + 28)
+		ui.BuildList.Position = UDim2.fromOffset(0, listTop)
+		ui.BuildList.Size = UDim2.new(1, 0, 1, -listTop)
 	end
 
 	-- stage banner: landscape: its own lane right under the top-centre stack (timer,
@@ -1938,8 +1977,8 @@ local function updateXP(dt: number, nowT: number)
 		UIAnim.Ring(ui.XPRow, at, C.Primary, 80, 0.5)
 		UIAnim.Sparks(ui.XPRow, at, C.Primary, 8, 40, 0.55)
 		if not (ClientSettings.Flashes() or ClientPerformance.Reduced()) then
-			ui.Level.TextColor3 = C.Blue
-			UIAnim.Tween(ui.Level, 0.8, { TextColor3 = C.Text })
+			ui.Level.TextColor3 = C.Primary
+			UIAnim.Tween(ui.Level, 0.8, { TextColor3 = C.TextOnBlue })
 		end
 	elseif not ClientSettings.Flashes() and anim.LastXPFrac and target > anim.LastXPFrac + 0.015 and nowT - (anim.XPSweepAt or 0) > 0.6 then
 		-- a gem burst: a quick glint along the bar

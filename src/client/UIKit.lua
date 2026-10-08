@@ -2705,4 +2705,77 @@ function UIKit.NavCard(parent: Instance?, o: NavCardOpts): Button
 	return b
 end
 
+------------------------------------------------------------------------------------------
+-- Bright Arcade for in-run screens (HUD frames, run menu, settings, build panel)
+------------------------------------------------------------------------------------------
+
+--[[
+	Raises an existing Surface (or Modal panel) holder to the arcade look: the soft shadow
+	layers go, a solid dark-blue base sits `offset` px under the face (behind it, never
+	Active), the face rim becomes solid royal blue `strokePx` thick and, when `shine` is set,
+	a soft white highlight runs across the top (that transparency at the top edge). HUD frames
+	use a small offset (2-3 px) so they stay slim over the arena. Returns the base.
+]]
+function UIKit.Raise(holder: GuiObject, offset: number?, strokePx: number?, shine: number?): Frame?
+	local face = holder:FindFirstChild("Face") :: GuiObject?
+	if not face then
+		return nil
+	end
+	for _, name in ipairs({ "Shadow", "ShadowWide" }) do
+		local s = holder:FindFirstChild(name)
+		if s and s ~= face then
+			s:Destroy()
+		end
+	end
+	local radius = Theme.Radius.M
+	local fc = face:FindFirstChildOfClass("UICorner")
+	if fc then
+		radius = fc.CornerRadius.Offset
+	end
+	local base = holder:FindFirstChild("Base") :: Frame?
+	if not base then
+		base = depthBase(holder, radius, offset or 4)
+	end
+	local b = base :: Frame
+	b.Position = UDim2.fromOffset(0, offset or 4)
+	local s = face:FindFirstChildOfClass("UIStroke")
+	if s then
+		s.Color = C.Blue
+		s.Thickness = strokePx or 2.5
+		s.Transparency = 0
+	end
+	if shine and not face:FindFirstChild("Highlight") then
+		highlight(face, math.min(radius, 16), shine)
+	end
+	return b
+end
+
+-- A round arcade face for HUD buttons drawn by hand (JUMP, ping options): a transparent
+-- holder keeps the hit area; inside it a dark-blue base `offset` px down and the face
+-- (returned with its gradient and rim) on top. `colors` = the face gradient.
+function UIKit.RoundFace(holder: GuiObject, colors: ColorSequence, rim: Color3, rimPx: number, offset: number): (Frame, UIGradient, UIStroke, Frame)
+	local base = new("Frame", {
+		Name = "Base",
+		BackgroundColor3 = C.Shadow,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, offset),
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = holder.ZIndex,
+		Active = false,
+	}, holder)
+	corner(base, 999)
+	local face = new("Frame", {
+		Name = "Face",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = holder.ZIndex + 1,
+		Active = false,
+	}, holder)
+	corner(face, 999)
+	local g = new("UIGradient", { Rotation = 90, Color = colors }, face)
+	local s = stroke(face, rim, rimPx, 0)
+	return face, g, s, base
+end
+
 return UIKit
