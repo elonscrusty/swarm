@@ -68,7 +68,11 @@ end
 ------------------------------------------------------------------------------------------
 do
 	assert(recruits(idata) == 0 and not idata.Titles.Owned[Config.Invite.Title], "no credit before a finished run")
-	IR.OnRunCommitted(newbie, ndata)
+	-- join-and-leave: a short lost run doesn't count
+	IR.OnRunCommitted(newbie, ndata, { Seconds = 5, Won = false })
+	preview.advance(1)
+	assert(recruits(idata) == 0 and ndata.Invite.Runs == 0, "a 5 s run never credits the inviter")
+	IR.OnRunCommitted(newbie, ndata, { Seconds = Config.Invite.MinRunSeconds, Won = false })
 	preview.advance(1)
 	assert(recruits(idata) == 1, "credited once after the run: " .. recruits(idata))
 	assert(idata.Invite.Credited[tostring(newbie.UserId)] == true, "the credit is keyed by the new player")

@@ -4,7 +4,7 @@
 --   3) 2 days away: nothing; 3 days away: the short gift (gold, no look)
 --   4) claim: paid once, refused in a run, the second claim pays nothing
 --   5) at most once per 72 h; 7+ days: gold + the look; an owned look pays gold instead
---   6) LastSeen kept fresh while online (the card opening by itself: meta.luau screen=Comeback)
+--   6) LastSeen kept fresh while online; the lobby opens the WELCOME BACK card by itself
 -- PASS / FAIL lines; any FAIL fails the regression.
 local C = lib("common")
 local Players = game:GetService("Players")
@@ -17,6 +17,7 @@ local Config = C.shared("Config")
 local RM = preview.server("RunManager")
 local DS = preview.server("DataService")
 local CB = preview.server("ComebackGift")
+local GS = preview.server("GoldSystem")
 local K = Config.Comeback
 local DAY = 86400
 
@@ -26,7 +27,8 @@ data.SelectedCharacter = "Knight"
 data.TutorialDone = true
 data.FirstRunBonus = true
 data.Gold = 1000
-C.startClient()
+-- Sections 1-5 are server rules: the client starts only for section 6 (the lobby card). A
+-- full client in a run costs minutes of Lune GUI layout per simulated second.
 preview.advance(1)
 
 local fails = 0
@@ -124,18 +126,37 @@ claim()
 check("look already owned: gold instead", gift ~= nil and data.Gold == g0 + K.LongGold + K.CosmeticOwnedGold, string.format("+%d", data.Gold - g0))
 
 ------------------------------------------------------------------------------------------
--- 6) LastSeen while online (the WELCOME BACK card opening by itself is checked in the
---    client scene meta.luau, screen=Comeback: a full client here costs ~40 s per sim second)
+-- 6) LastSeen while online; the lobby card
 ------------------------------------------------------------------------------------------
-K.SeenEvery = 2
 data.LastSeen = 1
 now += 100
-preview.advance(K.SeenEvery + 1)
+preview.advance(K.SeenEvery + 2)
 check("LastSeen refreshed while online", data.LastSeen == now, tostring(data.LastSeen))
-K.SeenEvery = 60
+C.startClient()
+preview.advance(1)
+GS.SyncProfile(me)
+preview.advance(1)
+local LS = preview.client("LobbyScreen")
+LS.Show("Home")
+preview.advance(1)
+preview.client("MenuComeback")._ResetSession()
+now += 4 * DAY
+gift = away(4)
+GS.SyncProfile(me)
+preview.advance(1.5)
+check("the WELCOME BACK card opens by itself", gift ~= nil and LS.Current() == "Comeback", LS.Current())
+local btn = preview.findGui(function(g)
+	return g:IsA("GuiButton") and g.Name == "ClaimComeback" and preview.isShown(g)
+end)[1]
+g0 = data.Gold
+if btn then
+	preview.click(btn)
+	preview.advance(1)
+end
+check("its CLAIM button pays the gift", btn ~= nil and data.Gold == g0 + K.Gold and data.Comeback.Pending == nil, string.format("+%d", data.Gold - g0))
 
 CB._SetClock(nil)
 if fails > 0 then
 	error(string.format("comeback-regression: %d check(s) failed", fails))
 end
-preview.log("PASS comeback-regression: off, new accounts, 2 vs 3 days, once, cooldown, long gift, LastSeen")
+preview.log("PASS comeback-regression: off, new accounts, 2 vs 3 days, once, cooldown, long gift, card")

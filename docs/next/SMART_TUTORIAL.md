@@ -4,7 +4,7 @@ Status: built and type-checked, offline only, NOT tested in Studio.
 
 ## What
 Seven tips over a player's first 2 runs, one at a time, each only when it is needed, in a
-small speech bubble near the bottom centre (just above the ability tray). When a tip is about
+small speech bubble near the bottom centre (just above the ability tray; in phone portrait, where the tray sits under the top HUD, it goes in the free lower screen instead). When a tip is about
 a thing, the bubble's tail and a gold pointer aim at it. A bubble fades once its action is
 done or after 8 s, and hides (and waits) while a panel covers the screen (UIState owner or
 the stage-start card).
@@ -52,7 +52,7 @@ Boss callouts are replaced (not shown) while the switch is on, so nothing double
 - `tools/preview/scenes/tutorial.luau --set smart=off` shows the old callout.
 
 Expected: PASS offline (steps on the right events, once each, skipped when done, hidden behind
-panels, bubble above the tray). BLOCKED: Studio playtest on the owner's phone (real touch,
+panels and the open ping wheel, bubble above the tray). BLOCKED: Studio playtest on the owner's phone (real touch,
 Text size Largest, the real first-run flow).
 
 Note: with the switch on, the second tutorial run also keeps `TutorialDone` false, so its

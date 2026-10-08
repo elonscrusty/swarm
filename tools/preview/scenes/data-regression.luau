@@ -277,8 +277,8 @@ end
 -- 30-features batch (docs/features/FOUNDATION.md): flags, cosmetics registry, save fields
 do
 	local NAMES = { "Sigils", "MapEvents", "MiniBosses", "SecretRooms", "TrialShrine", "Merchant", "CursedChests", "Rescue", "Weather", "BossIntro", "NewHeroes", "SecondSkill", "Ultimate", "BuildPresets", "WeaponMastery", "TeamCombo", "QuickPings", "CoopBoss", "TeamBoard", "Spectate", "WeeklyChallenge", "SeasonTrack", "Titles", "CollectionBook", "LoginStreak", "Announcer", "HitFeel", "MusicSlots", "PhotoMode", "LobbyFun", "Store",
-		-- next batch (docs/next/)
-		"SmartTutorial", "Walkthrough", "DangerArrows", "FastStart", "DailyQuests", "ComebackGift", "StarterBundle", "GroupBonus", "InviteRewards", "BugReportPlus" }
+		-- next batch (docs/next)
+		"SmartTutorial", "DangerArrows", "FastStart", "DailyQuests", "ComebackGift", "StarterBundle", "GroupBonus", "InviteRewards", "BugReportPlus", "Walkthrough" }
 	local n = 0
 	for name, on in pairs(Config.Features) do
 		n += 1
@@ -359,7 +359,7 @@ do
 	for _, k in ipairs({ "Sigils", "Weekly", "Season", "Titles", "Collection", "LoginStreak", "Presets", "WeaponMastery", "Cosmetics" }) do
 		if type(view[k]) ~= "table" then bad("FeatureView misses " .. k) end
 	end
-	preview.log("PASS feature foundation: 31 flags, " .. #Cos.Order .. " cosmetics, save fields default / keep / clean / cap")
+	preview.log("PASS feature foundation: " .. #NAMES .. " flags, " .. #Cos.Order .. " cosmetics, save fields default / keep / clean / cap")
 end
 
 preview.log(string.format("data sanity: %d finding(s)", #findings))

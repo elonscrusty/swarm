@@ -138,13 +138,14 @@ contact cooldown per player + 0.4 s contact grace, DEV CombatTrace, boss prefere
 Encounters: no new caravan/escort during the stage-1 boss (Config.Encounters.Intro), caravan 1 s start +
 rules + 10 s stage-1 grace, villager unstick (CatchUp 12), item timers on the run clock. Preview devices
 phone-1108 / phone-small; run_regressions --only/--workers. Regressions 165/165 after fixes (offline).
-Next batch (2026-10-07, docs/PROMPT_NEXT_BATCH.md + owner's interactive walkthrough request; offline only,
-NOT Studio-tested; docs/next/*.md): SmartTutorial (bubble tips, TutorialBubble), Walkthrough (first solo run:
-ring, 5 bugs, gems, upgrade, gift chest, then waves/portal), DangerArrows, FastStart (waves 1-3 of stage 1
-shorter/bigger, measured), DailyQuests, ComebackGift, StarterBundle (product id 0), GroupBonus (Config.Group.Id 0),
-InviteRewards, BugReportPlus (snapshot + DEV viewer). HELD by the owner (switches off): GroupBonus,
-StarterBundle, InviteRewards, DailyQuests. Quest/comeback gold amounts and the Pioneer skin await approval.
-Regressions 202/203 (the 1 a timeout, rerun). Next prompts waiting: docs/PROMPT_BATCH_B.md, docs/PROMPT_POLISH_C.md.
+Next batch / Batch A (2026-10-07, docs/PROMPT_NEXT_BATCH.md + owner's interactive walkthrough request; offline only,
+NOT Studio-tested; docs/next/*.md, report docs/next/BATCH_A_REPORT.md; batch-a merged to main 2026-10-08):
+SmartTutorial (bubble tips, TutorialBubble), Walkthrough (first solo run: ring, 5 bugs, gems, upgrade, gift chest,
+then waves/portal), DangerArrows, FastStart (waves 1-3 of stage 1 shorter/bigger, measured), DailyQuests,
+ComebackGift, StarterBundle (product id 0), GroupBonus (Config.Group.Id 0), InviteRewards, BugReportPlus
+(snapshot + DEV viewer). HELD by the owner (switches off): GroupBonus, StarterBundle, InviteRewards, DailyQuests.
+Owner OK 2026-10-07: quest gold 300/300/600, comeback gold 500/1000. Waiting on the owner: group id, Pioneer skin
+OK + Starter Bundle product. Next prompts waiting: docs/PROMPT_POLISH_C.md.
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,

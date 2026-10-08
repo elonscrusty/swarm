@@ -20,12 +20,14 @@ local Workspace = game:GetService("Workspace")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
 
 local StarterCard = {}
 
 local player = Players.LocalPlayer
-StarterCard.Height = 58
+StarterCard.Height = 62
+local TITLE_H = 28 -- icon + title row
 
 local price: number? = nil
 local asking = false
@@ -117,7 +119,6 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 	local btn = UIKit.Button(parent, {
 		Kind = "Outline",
 		Title = "STARTER BUNDLE",
-		Subtitle = "",
 		Icon = "gift",
 		IconSize = 26,
 		TitleStyle = "Label",
@@ -134,25 +135,36 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 		end,
 	})
 	btn.Instance.Visible = false
-	-- the subtitle shrinks instead of cutting (narrow card next to TOP SCORES, Largest text)
-	local sub = btn.Subtitle
-	if sub and sub:IsA("TextLabel") then
-		local max = sub.TextSize
-		sub.TextScaled = true
-		sub:SetAttribute("NoTextFit", true)
-		local fit = Instance.new("UITextSizeConstraint")
-		fit.Name = "Fit"
-		fit.MaxTextSize = max
-		fit.MinTextSize = math.min(max, 9)
-		fit.Parent = sub
-	end
+	-- Title row (icon, STARTER BUNDLE, chevron) on top; the detail line takes the card's full
+	-- width under it and wraps to a second line when the card is narrow (phones), so it is
+	-- never cut ("Pioneer skin + 2,000 gold" / "6d left").
+	local content = btn.Face:FindFirstChild("Content") :: Frame
+	content.Position = UDim2.fromOffset(0, 4)
+	content.Size = UDim2.new(1, 0, 0, TITLE_H)
+	local detail = UIKit.Role(btn.Face, "Body", "", {
+		Name = "Detail",
+		FontFace = Theme.Font.BodyStrong,
+		TextSize = 13,
+		TextColor3 = Theme.Color.TextMuted,
+		Position = UDim2.fromOffset(Theme.Space.L, TITLE_H + 4),
+		Size = UDim2.new(1, -2 * Theme.Space.L, 1, -(TITLE_H + 6)),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		ZIndex = 4,
+	})
+	local lastWide = false
+	local column = content:FindFirstChild("Text") :: Frame
+	local chevron = content:FindFirstChild("Right") :: Frame
 	local api = {}
 	local function subText(): string
+		local left = StarterCard.TimeLeft()
 		local c = (Config :: any).StarterBundle or {}
-		-- short on purpose: the card is narrow on phones (the time left shows on its screen)
-		local gold = tonumber(c.Gold) or 0
-		local amount = gold >= 1000 and (string.format("%g", math.floor(gold / 100) / 10) .. "k") or tostring(gold)
-		return "Skin + " .. amount .. " gold"
+		local s = string.format("Pioneer skin + %s gold", UIKit.formatNumber(tonumber(c.Gold) or 0))
+		if left == "" then
+			return s
+		end
+		return s .. (lastWide and " · " or "\n") .. left
 	end
 	function api.Wanted(): boolean
 		return StarterCard.Offered()
@@ -162,7 +174,11 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 			btn.Instance.Visible = false
 			return y
 		end
-		btn.SetText(nil, subText())
+		lastWide = w >= 250
+		-- a narrow card drops the chevron so STARTER BUNDLE keeps a readable size
+		chevron.Visible = lastWide
+		column.Size = UDim2.new(1, lastWide and -70 or -38, 1, 0)
+		detail.Text = subText()
 		btn.Instance.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 		btn.Instance.Size = UDim2.fromOffset(math.floor(w + 0.5), StarterCard.Height)
 		btn.Instance.Visible = true
@@ -180,7 +196,7 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 	player:GetAttributeChangedSignal("StarterOffer"):Connect(changed)
 	player:GetAttributeChangedSignal("StarterEnds"):Connect(function()
 		if btn.Instance.Visible then
-			btn.SetText(nil, subText())
+			detail.Text = subText()
 		end
 	end)
 	-- the "6d left" line follows the clock
@@ -188,7 +204,7 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 		while btn.Instance.Parent do
 			task.wait(60)
 			if btn.Instance.Visible then
-				btn.SetText(nil, subText())
+				detail.Text = subText()
 			end
 		end
 	end)

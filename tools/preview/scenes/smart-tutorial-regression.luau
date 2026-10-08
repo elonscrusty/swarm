@@ -4,18 +4,19 @@
 -- kill), Gems (a gem near the hero; done when XP moves), LevelUp (the line under LEVEL UP!),
 -- Chest (a ready chest within 12 studs; done when it opens), Portal (after the reveal; done
 -- when the charge starts), Boss (the boss phase). Also: one tip at a time, each shown once,
--- the bubble sits above the ability tray and hides behind a panel, a finished tutorial
+-- the bubble sits clear of the ability tray (above it; below it in portrait) and hides behind a panel, a finished tutorial
 -- (TutorialDone, or TutorialStep = 2) shows nothing, a second tutorial run still shows tips.
 -- Prints PASS / FAIL lines. Registered as a layout check on iphone, phone-portrait and pc
 -- (the final frame shows the Move bubble for check_layout).
 local A = lib("arena")
 local C = lib("common")
 local Players = game:GetService("Players")
--- the world folders the client waits for (no swarm in this scene)
-for _, name in ipairs({ "SwarmEnemies", "SwarmPickups", "SwarmGems", "SwarmLoot" }) do
-	if not workspace:FindFirstChild(name) then
+-- the run folders the client waits on (VFX, EnemyRenderer); without them the scene logs
+-- WaitForChild time-outs. The gem test below reuses SwarmGems.
+for _, n in ipairs({ "SwarmGems", "SwarmPickups", "SwarmEnemies" }) do
+	if not workspace:FindFirstChild(n) then
 		local f = Instance.new("Folder")
-		f.Name = name
+		f.Name = n
 		f.Parent = workspace
 	end
 end
@@ -93,15 +94,15 @@ local b = els()
 check(b.Card and b.Card.Visible, "the Move bubble is on screen")
 local body = b.Body and b.Body.Text or ""
 check(string.find(body, "to move") ~= nil, "Move uses the input prompt text: " .. body)
+local v = Hud.BarTop()
 local card = b.Card
-local vp = workspace.CurrentCamera.ViewportSize
-if card and vp.Y > vp.X then
-	-- portrait: the tray is at the top under the HUD stack; the bubble sits below all of it
-	local top = card.Position.Y.Offset - card.Size.Y.Offset
-	check(top >= Hud.TopBottom(), string.format("portrait: bubble top %d below the HUD stack %d", top, Hud.TopBottom()))
-elseif card then
-	local v = Hud.BarTop()
-	check(card.Position.Y.Offset <= v + 1, string.format("bubble bottom %d above the tray top %d", card.Position.Y.Offset, v))
+if card then
+	-- clear of the ability tray: above it (landscape / pc: the tray is at the bottom), or in
+	-- portrait (the tray hangs under the top panels) below it. Never over it.
+	local bottom = card.Position.Y.Offset
+	local top = bottom - card.Size.Y.Offset
+	local trayTop, trayBottom = v, Hud.BarBottom()
+	check(bottom <= trayTop + 1 or top >= trayBottom - 1, string.format("bubble %d..%d clear of the tray %d..%d", top, bottom, trayTop, trayBottom))
 end
 step(1)
 check(Tutorial.Current() == "Move", "Move stays until the hero moves")
@@ -220,4 +221,4 @@ Tutorial.Replay()
 newRun({ TutorialDone = false, TutorialStep = 1, SeenTips = { Attack = true }, Settings = settings })
 check(waitFor("Move", 15), "TutorialStep 1 (second run): Move shows")
 step(0.6)
-preview.log(string.format("smart-tutorial-regression: %d check(s) failed", fails))
+preview.log(string.format("smart-tutorial-regression: %d failure(s)", fails))

@@ -26,7 +26,9 @@ wave comes within 4 s and the portal appears about 1 s later. After that the usu
 - If the 5 kills don't drop enough XP for the first level, a top-up gem is dropped next to
   the hero (checked against `Config.FirstRun.FirstLevelXP`, the first-run level cost).
 - The free chest is a normal Small chest with no price (`LootSystem.AddFeatureChest`). The
-  loot system opens it exactly once, and its reward is a normal Small chest item.
+  loot system opens it exactly once, and its reward is a normal Small chest item. It is free
+  only on the account's first walkthrough: on a Replay tips run the chest has its normal
+  price, so replaying can't hand out a free chest every run.
 - The SmartTutorial tips the walkthrough teaches by doing (Move, Attack, Gems, LevelUp, Chest)
   are marked seen when it starts, so they never show after it.
 - Death, leaving (MAIN MENU), DEV tools, switching tips off or the run ending stop it

@@ -238,7 +238,12 @@ end
 limit += WC.GoSeconds + 60
 local spawnPos = rp.Root.Position
 local t = 0
+local replayChest = nil
 while t < limit and step() ~= nil do
+	if step() == "Chest" and not replayChest then
+		local _, _, cur = W.Current()
+		replayChest = cur and cur.Chest
+	end
 	-- stand still at the spawn (never in the ring); pick cards so panels don't wait
 	if rp.Root then
 		standAt(rp, spawnPos)
@@ -266,6 +271,7 @@ for _, e in ipairs(log) do
 end
 check("timeouts: steps in order", table.concat(seq, ",") == "Move,Fight,Gems,Upgrade,Chest,Go,End", table.concat(seq, ","))
 check("timeouts: Chest timed out, chest still openable", string.find(orderText, "Chest:timeout", 1, true) ~= nil)
+check("replay chest is not free (no free chest per replay)", replayChest ~= nil and (replayChest.Price or 0) > 0, tostring(replayChest and replayChest.Price))
 leave()
 
 -- 5. leaving mid-walkthrough ends it cleanly

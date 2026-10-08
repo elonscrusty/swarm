@@ -2184,6 +2184,11 @@ function Hud.BarTop(): number
 	return ui.BarTop or 600
 end
 
+-- Bottom of the ability panel.
+function Hud.BarBottom(): number
+	return ui.BarBottom or 700
+end
+
 -- Bottom of the top cluster (toasts go below it).
 function Hud.TopBottom(): number
 	return ui.TopBottom or 200

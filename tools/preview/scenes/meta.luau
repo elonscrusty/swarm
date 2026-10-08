@@ -41,11 +41,6 @@ p.Features = {
 }
 C.sendProfile(p)
 C.settle(1)
-if screen == "Comeback" then
-	-- a waiting comeback gift opens its card by itself from the home screen (MenuComeback.MaybeOpen)
-	local cur = preview.client("LobbyScreen").Current()
-	preview.log((cur == "Comeback" and "PASS" or "FAIL") .. "  the WELCOME BACK card opens by itself (" .. tostring(cur) .. ")")
-end
 preview.client("LobbyScreen").Show(screen, preview.args.tab)
 C.settle(1)
 if screen == "Weekly" then

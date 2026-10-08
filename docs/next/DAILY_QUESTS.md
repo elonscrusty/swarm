@@ -38,7 +38,8 @@ replaced on the next commit / claim / load.
 - `Config.Features.DailyQuests = true` (false: no chip, no row, no counting, remote ignored)
 - `Config.DailyQuests`: `Slots = { "Easy", "Easy", "Hard" }`, `PlayMinSeconds = 60`,
   `ToastGap = 20`, `Rate = 4`
-- PROPOSED, awaiting owner approval: `Rewards = { 300, 300, 600 }` gold per slot,
+- Owner OK (2026-10-07): `Rewards = { 300, 300, 600 }` gold per slot.
+- PROPOSED, awaiting owner approval:
   `BonusCosmetics = { "Plate_Questor", "Trail_Questor" }` (new earned looks in
   StoreCatalog, never sold), `BonusGoldAfter = 200`
 

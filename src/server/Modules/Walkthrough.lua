@@ -121,14 +121,14 @@ local function eligible(rp, data, teamSize: number, mode: string?): boolean
 	if not FR or FR.AutoStart ~= true or mode ~= FR.Mode then
 		return false
 	end
-	if rp.DevTainted or rp.Endless or rp.Daily then
+	-- done once already: only Settings > Replay tips (WalkthroughReplay) brings it back
+	if rp.DevTainted or rp.Endless or rp.Daily or (data.WalkthroughDone == true and data.WalkthroughReplay ~= true) then
 		return false
 	end
 	if type(data.Settings) == "table" and data.Settings.Tips == false then
 		return false
 	end
-	-- the very first run (never run before), or Settings > Replay tips (overrides Done)
-	local first = data.WalkthroughDone ~= true and data.TutorialDone ~= true and type(data.Stats) == "table" and (tonumber(data.Stats.Runs) or 0) == 0
+	local first = data.TutorialDone ~= true and type(data.Stats) == "table" and (tonumber(data.Stats.Runs) or 0) == 0
 	if not first and data.WalkthroughReplay ~= true then
 		return false
 	end
@@ -248,12 +248,15 @@ local function spawnChest(w)
 	local C = cfg()
 	local hp = heroPos(w.Rp) or Config.ArenaOrigin
 	local at = openSpot(hp, C.ChestDistance or 12, C.RingClearance or 5)
-	local ok, obj = pcall(ctx.LootSystem.AddFeatureChest, arena, C.ChestType or "Small", at, true)
+	-- free on the account's first walkthrough only; a replay's chest has the normal price,
+	-- so Replay tips can't be used for a free chest every run
+	local free = w.First == true
+	local ok, obj = pcall(ctx.LootSystem.AddFeatureChest, arena, C.ChestType or "Small", at, free)
 	if not ok or not obj then
 		warn("[Walkthrough] chest failed: " .. tostring(obj))
 		return
 	end
-	ctx.LootSystem.SetObjState(obj, "Ready", { Title = "Gift Chest", Detail = "Free · hold to open" })
+	ctx.LootSystem.SetObjState(obj, "Ready", free and { Title = "Gift Chest", Detail = "Free · hold to open" } or { Title = "Chest", Detail = "Hold to open" })
 	obj.OnOpened = function()
 		if active == w then
 			w.ChestOpened = true
@@ -370,9 +373,10 @@ function Walkthrough.Consider(rp, data, teamSize: number, mode: string?)
 	if not data or not eligible(rp, data, teamSize, mode) then
 		return false
 	end
+	local first = data.WalkthroughDone ~= true
 	data.WalkthroughDone = true
 	data.WalkthroughReplay = false
-	active = { Rp = rp, Step = nil, Time = 0, Reveal = true, Level0 = rp.Level or 1 }
+	active = { Rp = rp, Step = nil, Time = 0, Reveal = true, Level0 = rp.Level or 1, First = first }
 	rp.Walkthrough = true
 	table.clear(log)
 	if ctx.EnemySpawner.SetHold then

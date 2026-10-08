@@ -1168,6 +1168,7 @@ Config.Invite = {
 	Trail = "Trail_Recruiter", -- the inviter's trail at TrailAt credited friends
 	TrailAt = 3,
 	RunsNeeded = 1, -- the new player must finish this many runs before the inviter is credited
+	MinRunSeconds = 120, -- a run counts toward RunsNeeded when won or at least this long
 	MaxCredits = 200, -- credited friends kept in the inviter's save (the set is capped)
 	StoreName = "SwarmInvites", -- pending credits, keyed by the inviter (Studio: StoreName .. "_Studio")
 	PollSeconds = 300, -- an online inviter's pending credits are checked this often
@@ -2158,7 +2159,7 @@ Config.BuildPresets = {
 -- everyone; progress from clean runs only (never DEV / DevBoosted-tainted ones).
 Config.DailyQuests = {
 	Slots = { "Easy", "Easy", "Hard" }, -- the pool tier of each slot (QuestData.Quests)
-	-- gold per slot: proposed, awaiting owner approval
+	-- gold per slot (owner OK 2026-10-07)
 	Rewards = { 300, 300, 600 },
 	-- all three claimed: the first of these earned looks not owned yet (StoreCatalog
 	-- entries, Source "Earned"); proposed, awaiting owner approval
@@ -2176,7 +2177,7 @@ Config.DailyQuests = {
 Config.Comeback = {
 	AwayDays = 3,
 	LongDays = 7, -- this many days away or more: the long-absence gift
-	-- gold: proposed, awaiting owner approval
+	-- gold (owner OK 2026-10-07)
 	Gold = 500, -- 3-6 days away
 	LongGold = 1000, -- 7+ days away
 	-- 7+ days: this earned look too (StoreCatalog entry, Source "Earned"); proposed, awaiting owner approval

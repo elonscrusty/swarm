@@ -16,7 +16,7 @@ through the Colorblind setting. At most 4 arrows: a boss always gets one, the re
 first. Arrows fade in (0.15 s) and pulse softly; Reduced effects keeps them but stops the pulse.
 
 They slide along the edge to stay inside the safe area and off the HUD: top-centre stack,
-vitals, ability bar, banner, BUILD panel, centre bars, notice pills, minimap, JUMP / ULT
+vitals, ability bar, banner, BUILD panel, centre bars, notice pills, minimap, gold / kills pills, pause, buff and status chips, JUMP / ULT
 buttons, feature badges, the portal arrow and each other. If there is no clear spot an arrow
 is skipped. They hide outside a running run, while dead, and while any panel is open (same
 rules as the portal arrow).

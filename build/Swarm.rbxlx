@@ -4007,6 +4007,7 @@ Config.Invite = {
 	Trail = "Trail_Recruiter", -- the inviter's trail at TrailAt credited friends
 	TrailAt = 3,
 	RunsNeeded = 1, -- the new player must finish this many runs before the inviter is credited
+	MinRunSeconds = 120, -- a run counts toward RunsNeeded when won or at least this long
 	MaxCredits = 200, -- credited friends kept in the inviter's save (the set is capped)
 	StoreName = "SwarmInvites", -- pending credits, keyed by the inviter (Studio: StoreName .. "_Studio")
 	PollSeconds = 300, -- an online inviter's pending credits are checked this often
@@ -4642,7 +4643,7 @@ Config.Features = {
 	Titles = true, -- 23 achievement titles under the name
 	CollectionBook = true, -- 24 collection book
 	LoginStreak = true, -- 25 daily login streak
-	DailyQuests = false, -- held by the owner (2026-10-07) -- 3 daily quests per UTC day (docs/next/DAILY_QUESTS.md)
+	DailyQuests = true, -- 3 daily quests per UTC day (docs/next/DAILY_QUESTS.md)
 	ComebackGift = true, -- welcome-back gift after 3+ days away (docs/next/COMEBACK_GIFT.md)
 	Announcer = false, -- off 2026-10-07: the owner found the combo text blocked the screen. -- 26 kill-streak announcer + combo counter
 	HitFeel = true, -- 27 hit-stop + death burst
@@ -4651,9 +4652,9 @@ Config.Features = {
 	LobbyFun = true, -- 30 training dummy, mirror, jump-pad course
 	Store = true, -- the cosmetics store (docs/features/STORE.md)
 	FastStart = true, -- quicker, slightly bigger waves 1-3 on stage 1 (Config.FastStart, docs/next/FAST_START.md)
-	StarterBundle = false, -- held by the owner (2026-10-07) -- one-per-account starter bundle product (docs/next/STARTER_BUNDLE.md)
-	GroupBonus = false, -- held by the owner (2026-10-07) -- Roblox group member gold bonus + title (docs/next/GROUP_BONUS.md)
-	InviteRewards = false, -- held by the owner (2026-10-07) -- invite friends: cosmetic rewards (docs/next/INVITE_REWARDS.md)
+	StarterBundle = true, -- one-per-account starter bundle product (docs/next/STARTER_BUNDLE.md)
+	GroupBonus = true, -- Roblox group member gold bonus + title (docs/next/GROUP_BONUS.md)
+	InviteRewards = true, -- invite friends: cosmetic rewards (docs/next/INVITE_REWARDS.md)
 	BugReportPlus = true, -- bug report snapshot, 3 reports/hour, DEV inbox latest 20 (docs/next/BUG_REPORT_PLUS.md)
 	SmartTutorial = true, -- one-at-a-time speech-bubble tips over the first 2 runs (docs/next/SMART_TUTORIAL.md)
 	DangerArrows = true, -- off-screen boss / champion / elite edge arrows (docs/next/DANGER_ARROWS.md)
@@ -4997,7 +4998,7 @@ Config.BuildPresets = {
 -- everyone; progress from clean runs only (never DEV / DevBoosted-tainted ones).
 Config.DailyQuests = {
 	Slots = { "Easy", "Easy", "Hard" }, -- the pool tier of each slot (QuestData.Quests)
-	-- gold per slot: proposed, awaiting owner approval
+	-- gold per slot (owner OK 2026-10-07)
 	Rewards = { 300, 300, 600 },
 	-- all three claimed: the first of these earned looks not owned yet (StoreCatalog
 	-- entries, Source "Earned"); proposed, awaiting owner approval
@@ -5015,7 +5016,7 @@ Config.DailyQuests = {
 Config.Comeback = {
 	AwayDays = 3,
 	LongDays = 7, -- this many days away or more: the long-absence gift
-	-- gold: proposed, awaiting owner approval
+	-- gold (owner OK 2026-10-07)
 	Gold = 500, -- 3-6 days away
 	LongGold = 1000, -- 7+ days away
 	-- 7+ days: this earned look too (StoreCatalog entry, Source "Earned"); proposed, awaiting owner approval
@@ -24696,8 +24697,12 @@ function GroupBonus.Start()
 		check(player)
 	end)
 	Players.PlayerRemoving:Connect(function(player)
-		members[player] = nil
-		asking[player] = nil
+		-- deferred: a leaver's run settles in a later PlayerRemoving handler (RunManager)
+		-- and must still see the cached membership
+		task.defer(function()
+			members[player] = nil
+			asking[player] = nil
+		end)
 	end)
 end
 
@@ -25440,12 +25445,18 @@ local function trySend(player: Player, data: { [string]: any }): boolean
 end
 
 -- RunManager (saveRunStats, after the DEV-taint return): a clean run was finished.
-function InviteRewards.OnRunCommitted(player: Player, data: { [string]: any }?)
+-- info = { Seconds, Won }: a run only counts when it was won or lasted MinRunSeconds, so
+-- joining and leaving at once doesn't credit the inviter.
+function InviteRewards.OnRunCommitted(player: Player, data: { [string]: any }?, info: { Seconds: number?, Won: boolean? }?)
 	if not InviteRewards.On() or not data then
 		return
 	end
 	local inv = invite(data)
 	if not inv.New or inv.ReferredBy <= 0 or inv.Sent then
+		return
+	end
+	local minSeconds = tonumber((Config.Invite :: any).MinRunSeconds) or 0
+	if info and info.Won ~= true and (tonumber(info.Seconds) or 0) < minSeconds then
 		return
 	end
 	inv.Runs += 1
@@ -39162,7 +39173,7 @@ local function saveRunStats(rp, won: boolean): (boolean, string?)
 	end
 	-- invite rewards (InviteRewards.lua): a referred new player finished a clean run
 	if ctx.InviteRewards then
-		ctx.InviteRewards.OnRunCommitted(rp.Player, data)
+		ctx.InviteRewards.OnRunCommitted(rp.Player, data, { Seconds = t, Won = won })
 	end
 	rp.CommitInfo = { Daily = dailyInfo, Account = accountInfo, Mastery = masteryInfo, Score = score, ScoreBoard = scoreBoard, NewBestLevel = (rp.Level or 1) > levelBefore and levelBefore > 0,
 		-- beat the saved personal best score of this board (not on the first scored run)
@@ -45334,14 +45345,14 @@ local function eligible(rp, data, teamSize: number, mode: string?): boolean
 	if not FR or FR.AutoStart ~= true or mode ~= FR.Mode then
 		return false
 	end
-	if rp.DevTainted or rp.Endless or rp.Daily then
+	-- done once already: only Settings > Replay tips (WalkthroughReplay) brings it back
+	if rp.DevTainted or rp.Endless or rp.Daily or (data.WalkthroughDone == true and data.WalkthroughReplay ~= true) then
 		return false
 	end
 	if type(data.Settings) == "table" and data.Settings.Tips == false then
 		return false
 	end
-	-- the very first run (never run before), or Settings > Replay tips (overrides Done)
-	local first = data.WalkthroughDone ~= true and data.TutorialDone ~= true and type(data.Stats) == "table" and (tonumber(data.Stats.Runs) or 0) == 0
+	local first = data.TutorialDone ~= true and type(data.Stats) == "table" and (tonumber(data.Stats.Runs) or 0) == 0
 	if not first and data.WalkthroughReplay ~= true then
 		return false
 	end
@@ -45461,12 +45472,15 @@ local function spawnChest(w)
 	local C = cfg()
 	local hp = heroPos(w.Rp) or Config.ArenaOrigin
 	local at = openSpot(hp, C.ChestDistance or 12, C.RingClearance or 5)
-	local ok, obj = pcall(ctx.LootSystem.AddFeatureChest, arena, C.ChestType or "Small", at, true)
+	-- free on the account's first walkthrough only; a replay's chest has the normal price,
+	-- so Replay tips can't be used for a free chest every run
+	local free = w.First == true
+	local ok, obj = pcall(ctx.LootSystem.AddFeatureChest, arena, C.ChestType or "Small", at, free)
 	if not ok or not obj then
 		warn("[Walkthrough] chest failed: " .. tostring(obj))
 		return
 	end
-	ctx.LootSystem.SetObjState(obj, "Ready", { Title = "Gift Chest", Detail = "Free · hold to open" })
+	ctx.LootSystem.SetObjState(obj, "Ready", free and { Title = "Gift Chest", Detail = "Free · hold to open" } or { Title = "Chest", Detail = "Hold to open" })
 	obj.OnOpened = function()
 		if active == w then
 			w.ChestOpened = true
@@ -45583,9 +45597,10 @@ function Walkthrough.Consider(rp, data, teamSize: number, mode: string?)
 	if not data or not eligible(rp, data, teamSize, mode) then
 		return false
 	end
+	local first = data.WalkthroughDone ~= true
 	data.WalkthroughDone = true
 	data.WalkthroughReplay = false
-	active = { Rp = rp, Step = nil, Time = 0, Reveal = true, Level0 = rp.Level or 1 }
+	active = { Rp = rp, Step = nil, Time = 0, Reveal = true, Level0 = rp.Level or 1, First = first }
 	rp.Walkthrough = true
 	table.clear(log)
 	if ctx.EnemySpawner.SetHold then
@@ -54396,7 +54411,8 @@ return DamageText
 	Placement: the arrow sits where the direction from the screen centre meets the safe
 	rectangle, then slides along the edge until its box clears every HUD rect a world label
 	must keep off (WorldLabelFade.Rects: top-centre stack, vitals, ability bar, banner,
-	BUILD, centre bars, notice pills, minimap), the touch buttons (JUMP, ULT), the feature
+	BUILD, centre bars, notice pills, minimap), the gold / kills pills, pause, buff and status
+	chips (Hud), the touch buttons (JUMP, ULT), the feature
 	badges, the portal arrow (StageUI) and the arrows already placed. No clear spot = no
 	arrow. Hidden outside a running run, while dead and while any panel is open (the same
 	rules as the portal arrow).
@@ -54676,23 +54692,15 @@ end
 local function blockers(): { Box }
 	local out = WorldLabelFade.Rects()
 	addBox(out, MiniMap.Elements().Holder)
-	-- HUD pieces WorldLabelFade leaves out: the gold / kills counters, the pause button,
-	-- the BUILD button and the buff / status chips
+	-- the top-right gold / kills pills and the pause button, the buff chip and the status plate
+	-- (WorldLabelFade.Rects does not list them)
 	local hud = Hud.Elements()
-	local hudFrame = hud.Frame
-	if typeof(hudFrame) == "Instance" and hudFrame:IsA("GuiObject") and hudFrame.Visible then
-		local counters = hud.Counters
-		if typeof(counters) == "Instance" then
-			for _, c in ipairs(counters:GetChildren()) do
-				addBox(out, c)
-			end
-		end
-		local pause = hud.Pause
-		addBox(out, type(pause) == "table" and pause.Instance or pause)
-		for _, key in ipairs({ "BuildButton", "Buff", "Status" }) do
-			addBox(out, hud[key])
-		end
-	end
+	addBox(out, hud.Counters)
+	addBox(out, hud.Purse)
+	addBox(out, hud.Kills and hud.Kills.Frame)
+	addBox(out, hud.Pause and hud.Pause.Instance)
+	addBox(out, hud.Buff)
+	addBox(out, hud.Status)
 	local stage = StageUI.Elements()
 	addBox(out, stage.Arrow)
 	local pg = player:FindFirstChild("PlayerGui")
@@ -62882,6 +62890,11 @@ end
 -- Top of the ability panel.
 function Hud.BarTop(): number
 	return ui.BarTop or 600
+end
+
+-- Bottom of the ability panel.
+function Hud.BarBottom(): number
+	return ui.BarBottom or 700
 end
 
 -- Bottom of the top cluster (toasts go below it).
@@ -87303,12 +87316,14 @@ local Workspace = game:GetService("Workspace")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
+local Theme = require(Shared:WaitForChild("Theme"))
 local UIKit = require(script.Parent.UIKit)
 
 local StarterCard = {}
 
 local player = Players.LocalPlayer
-StarterCard.Height = 58
+StarterCard.Height = 62
+local TITLE_H = 28 -- icon + title row
 
 local price: number? = nil
 local asking = false
@@ -87400,7 +87415,6 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 	local btn = UIKit.Button(parent, {
 		Kind = "Outline",
 		Title = "STARTER BUNDLE",
-		Subtitle = "",
 		Icon = "gift",
 		IconSize = 26,
 		TitleStyle = "Label",
@@ -87417,25 +87431,36 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 		end,
 	})
 	btn.Instance.Visible = false
-	-- the subtitle shrinks instead of cutting (narrow card next to TOP SCORES, Largest text)
-	local sub = btn.Subtitle
-	if sub and sub:IsA("TextLabel") then
-		local max = sub.TextSize
-		sub.TextScaled = true
-		sub:SetAttribute("NoTextFit", true)
-		local fit = Instance.new("UITextSizeConstraint")
-		fit.Name = "Fit"
-		fit.MaxTextSize = max
-		fit.MinTextSize = math.min(max, 9)
-		fit.Parent = sub
-	end
+	-- Title row (icon, STARTER BUNDLE, chevron) on top; the detail line takes the card's full
+	-- width under it and wraps to a second line when the card is narrow (phones), so it is
+	-- never cut ("Pioneer skin + 2,000 gold" / "6d left").
+	local content = btn.Face:FindFirstChild("Content") :: Frame
+	content.Position = UDim2.fromOffset(0, 4)
+	content.Size = UDim2.new(1, 0, 0, TITLE_H)
+	local detail = UIKit.Role(btn.Face, "Body", "", {
+		Name = "Detail",
+		FontFace = Theme.Font.BodyStrong,
+		TextSize = 13,
+		TextColor3 = Theme.Color.TextMuted,
+		Position = UDim2.fromOffset(Theme.Space.L, TITLE_H + 4),
+		Size = UDim2.new(1, -2 * Theme.Space.L, 1, -(TITLE_H + 6)),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		ZIndex = 4,
+	})
+	local lastWide = false
+	local column = content:FindFirstChild("Text") :: Frame
+	local chevron = content:FindFirstChild("Right") :: Frame
 	local api = {}
 	local function subText(): string
+		local left = StarterCard.TimeLeft()
 		local c = (Config :: any).StarterBundle or {}
-		-- short on purpose: the card is narrow on phones (the time left shows on its screen)
-		local gold = tonumber(c.Gold) or 0
-		local amount = gold >= 1000 and (string.format("%g", math.floor(gold / 100) / 10) .. "k") or tostring(gold)
-		return "Skin + " .. amount .. " gold"
+		local s = string.format("Pioneer skin + %s gold", UIKit.formatNumber(tonumber(c.Gold) or 0))
+		if left == "" then
+			return s
+		end
+		return s .. (lastWide and " · " or "\n") .. left
 	end
 	function api.Wanted(): boolean
 		return StarterCard.Offered()
@@ -87445,7 +87470,11 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 			btn.Instance.Visible = false
 			return y
 		end
-		btn.SetText(nil, subText())
+		lastWide = w >= 250
+		-- a narrow card drops the chevron so STARTER BUNDLE keeps a readable size
+		chevron.Visible = lastWide
+		column.Size = UDim2.new(1, lastWide and -70 or -38, 1, 0)
+		detail.Text = subText()
 		btn.Instance.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 		btn.Instance.Size = UDim2.fromOffset(math.floor(w + 0.5), StarterCard.Height)
 		btn.Instance.Visible = true
@@ -87463,7 +87492,7 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 	player:GetAttributeChangedSignal("StarterOffer"):Connect(changed)
 	player:GetAttributeChangedSignal("StarterEnds"):Connect(function()
 		if btn.Instance.Visible then
-			btn.SetText(nil, subText())
+			detail.Text = subText()
 		end
 	end)
 	-- the "6d left" line follows the clock
@@ -87471,7 +87500,7 @@ function StarterCard.Build(parent: Instance, opts: { [string]: any })
 		while btn.Instance.Parent do
 			task.wait(60)
 			if btn.Instance.Visible then
-				btn.SetText(nil, subText())
+				detail.Text = subText()
 			end
 		end
 	end)
@@ -91643,6 +91672,7 @@ local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
 local InputPrompts = require(script.Parent.InputPrompts)
 local TutorialBubble = require(script.Parent.TutorialBubble)
+local FeatureHud = require(script.Parent.FeatureHud)
 local StageUI = require(script.Parent.StageUI)
 local WalkthroughClient = require(script.Parent.WalkthroughClient)
 
@@ -92525,6 +92555,8 @@ function Tutorial.Update(dt: number, state: Configuration, inRun: boolean, block
 	if not ui.Card then
 		return
 	end
+	-- the open quick-ping wheel covers the middle of the screen: tips wait behind it
+	blocked = blocked or FeatureHud.PingWheelOpen()
 	local now = os.clock()
 	-- the interactive first-run walkthrough (WalkthroughClient, Config.Features.Walkthrough)
 	-- owns the bubble while it runs; the tips it replaces never show
@@ -92678,8 +92710,7 @@ return Tutorial
 	Show(text, icon, target?)  target() returns the point to aim at in root (virtual) pixels,
 	                           or nil (no pointer); it is asked again every Step
 	Hide()                     pops the bubble out
-	SetCovered(on)             hidden behind a panel (keeps the tip); the quick-ping wheel
-	                           (PingWheel) hides it too
+	SetCovered(on)             hidden behind a panel (keeps the tip)
 	Step(dt)                   per frame: placement and the pointer
 ]]
 
@@ -92692,9 +92723,6 @@ local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local ClientSettings = require(script.Parent.ClientSettings)
-local PingWheel = require(script.Parent.PingWheel)
-local LootUI = require(script.Parent.LootUI)
-local MiniMap = require(script.Parent.MiniMap)
 
 local TutorialBubble = {}
 
@@ -92706,6 +92734,7 @@ local ICON = 34
 local PAD = 12
 local TAIL = 16
 local MAX_W = 440
+local PORTRAIT_LIFT = 270 -- portrait: bottom edge this far above the screen bottom (JUMP button row)
 local POINTER_MAX = 90 -- longest pointer line (virtual px)
 
 local kit: { [string]: any } = {}
@@ -92795,69 +92824,8 @@ local function textWidth(text: string): number
 	return 300
 end
 
--- Root-pixel rect (x, y, w, h) of a shown GuiObject, or nil.
-local function rectOf(g: Instance?): { number }?
-	local root = rootFrame
-	if not root or not g or not g:IsA("GuiObject") or not g.Visible or g.AbsoluteSize.X < 1 then
-		return nil
-	end
-	local anc: Instance? = g.Parent
-	while anc and anc:IsA("GuiObject") do
-		if not anc.Visible then
-			return nil
-		end
-		anc = anc.Parent
-	end
-	local v: Vector2 = kit.VirtualSize()
-	local k = v.X / math.max(1, root.AbsoluteSize.X)
-	local p = (g.AbsolutePosition - root.AbsolutePosition) * k
-	local sz = g.AbsoluteSize * k
-	return { p.X, p.Y, sz.X, sz.Y }
-end
-
--- Portrait: the ability tray sits at the top under the HUD stack, so the bubble goes near
--- the bottom, above whatever lives there (JUMP / PING, the item strip, the loot prompt,
--- the minimap) and below the hero.
-local function portraitBottom(W: number, H: number, w: number, h: number): number
-	local obstacles: { { number } } = {}
-	local function add(g: Instance?)
-		local r = rectOf(g)
-		if r then
-			table.insert(obstacles, r)
-		end
-	end
-	local pg = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
-	if pg then
-		add(pg:FindFirstChild("JumpButton", true))
-		local ping = pg:FindFirstChild("Ping", true)
-		if ping and ping:IsA("GuiButton") then
-			add(ping)
-		end
-	end
-	local loot = LootUI.Elements()
-	add(loot.Strip)
-	add(loot.Prompt)
-	add(MiniMap.Elements().Holder)
-	local l, r = W / 2 - w / 2, W / 2 + w / 2
-	local bottom = H - 16
-	for _ = 1, 6 do
-		local moved = false
-		for _, o in ipairs(obstacles) do
-			if l < o[1] + o[3] and r > o[1] and bottom - h < o[2] + o[4] and bottom > o[2] then
-				bottom = o[2] - 10
-				moved = true
-			end
-		end
-		if not moved then
-			break
-		end
-	end
-	-- never up into the hero (screen centre) or the top HUD
-	return math.max(bottom, math.min(H - 16, H / 2 + 90 + h), Hud.TopBottom() + 8 + h)
-end
-
--- Places the bubble: bottom centre, just above the ability tray (landscape), or near the
--- bottom clear of the touch controls (portrait). Returns its rect.
+-- Places the bubble: bottom centre, just above the ability tray (portrait: the lower
+-- screen, clear of the tray at the top). Returns its rect.
 local function place(): (number, number, number, number)
 	local v: Vector2 = kit.VirtualSize()
 	local W, H = v.X, v.Y
@@ -92867,9 +92835,13 @@ local function place(): (number, number, number, number)
 	local w = math.clamp(textWidth(text) * 1.3 + inner + 2 * PAD + 8, 220, math.min(MAX_W, W - 32))
 	local n = lines(text, (w - inner - 2 * PAD) / 1.25)
 	local h = math.max(ICON + 16, n * (TS(BODY_SIZE) + 4) * 1.25 + 16)
-	local bottom: number
-	if kit.IsPortrait and kit.IsPortrait() then
-		bottom = portraitBottom(W, H, w, h)
+	local bottom
+	if H > W then
+		-- portrait: the ability tray hangs under the top cluster, so "above the tray" would
+		-- be on top of the panels. Sit in the free lower part instead, above the JUMP button
+		-- and clear of the tray (and the minimap / BUILD panel that hang under it).
+		bottom = math.max(H - PORTRAIT_LIFT, Hud.BarBottom() + 60 + h)
+		bottom = math.min(H - 8, bottom)
 	else
 		bottom = math.min(H - 8, Hud.BarTop() - 14 - TAIL / 2)
 		bottom = math.max(bottom, math.min(H - 8, Hud.TopBottom() + 8 + h))
@@ -92924,13 +92896,8 @@ local function placePointer(x: number, y: number, w: number, h: number)
 	ui.Pointer.Visible = true
 end
 
--- Hidden: a panel covers the screen (the caller says) or the quick-ping wheel is open.
-local function hiddenNow(): boolean
-	return covered or PingWheel.IsOpen()
-end
-
 local function layout()
-	if not showing or not ui.Card or hiddenNow() then
+	if not showing or not ui.Card then
 		return
 	end
 	local x, y, w, h = place()
@@ -92949,12 +92916,9 @@ function TutorialBubble.Show(text: string, icon: string, aim: (() -> Vector2?)?)
 	showing = true
 	ui.Body.Text = text
 	setIcon(icon)
-	local hidden = hiddenNow()
-	if not hidden then
-		layout()
-	end
-	ui.Card.Visible = not hidden
-	ui.Pointer.Visible = ui.Pointer.Visible and not hidden
+	layout()
+	ui.Card.Visible = not covered
+	ui.Pointer.Visible = ui.Pointer.Visible and not covered
 	UIAnim.Pop(ui.Card, 0, 0.85)
 end
 
@@ -92987,29 +92951,22 @@ function TutorialBubble.SetCovered(on: boolean)
 	if not ui.Card then
 		return
 	end
-	if hiddenNow() then
+	if on then
 		ui.Card.Visible = false
 		ui.Pointer.Visible = false
-	elseif showing and not ui.Card.Visible then
+	elseif showing then
 		ui.Card.Visible = true
 		layout()
 	end
 end
 
 function TutorialBubble.Showing(): boolean
-	return showing and not hiddenNow()
+	return showing and not covered
 end
 
 function TutorialBubble.Step(dt: number)
 	clock += dt
-	if not ui.Card then
-		return
-	end
-	if showing and hiddenNow() then
-		ui.Card.Visible = false
-		ui.Pointer.Visible = false
-	elseif showing then
-		ui.Card.Visible = true
+	if showing and not covered then
 		layout()
 	end
 end
