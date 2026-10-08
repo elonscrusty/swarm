@@ -61,6 +61,9 @@ def main():
     checks += [("heroes-regression", []), ("heroes-regression", ["coop=on"])]
     checks += [("layout", ["team", d, "mode=Duo", "wheel=on"]) for d in ("iphone", "phone-portrait")]
     checks += [("layout", ["meta", d, "screen=" + s]) for d in ("iphone", "phone-portrait") for s in ("Sigils", "Weekly", "Season", "Titles", "Collection", "Streak", "Play", "More")]
+    # the PLAY run setup (MenuPlay): full screen with a last run, and the new-account setup with ADVANCED open
+    checks += [("layout", ["menu", d, "screen=Play", "runs=10"]) for d in ("iphone", "phone-portrait", "tablet", "pc")]
+    checks += [("layout", ["menu", d, "screen=Play", "runs=0", "advanced=open"]) for d in ("iphone", "phone-portrait")]
     checks += [("events-fx", [])]
     checks += [("layout", ["explore", d]) for d in ("iphone", "phone-portrait")]
     checks += [("layout", ["characters", d, "favourites=open"]) for d in ("iphone", "phone-portrait")]

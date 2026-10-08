@@ -1,31 +1,32 @@
 --[[
 	MenuPlay.lua
-	The run-setup step (the home screen's PLAY opens it; overhaul 01_Title "Choose your
-	mode next."):
+	The run-setup step (the home screen's PLAY opens it). One centred panel (owner picture,
+	2026-10-08):
 
-	  left        SOLO / DUO / TRIO (big; the picked one lit), a line that says who starts
-	              and what the size means (a party plays its own size, a member waits for
-	              the leader), START
-	  right       (scrolls when it does not fit)
+	  header      BACK + "Play"
+	  mode tabs   SOLO / DUO / TRIO (the picked one gold), one muted line under them saying
+	              what the picked size means and who starts
+	  grid        two columns (one on narrow screens; it scrolls when it does not fit) of rows,
+	              each with a small caption, the value, an optional muted line and a chevron:
 	    HERO        the selected hero and equipped skin (opens CHARACTERS)
 	    WORLD       the lobby's arena and the next one still locked (opens ARENAS)
 	    DIFFICULTY  cycles through the unlocked tiers; locked tiers name what clears them
 	    CURSES      the run modifiers picked and their gold (opens CURSES, MenuCurses)
+	    SIGILS      the worn sigils (opens SIGILS; only while the Sigils feature is on)
 	    ENDLESS     switch (remote SetEndless; the server's answer is the player attribute
 	                "Endless", Config.Endless): no portal win, its own leaderboard
-	    DAILY       today's scored try / practice and the reset time (opens DAILY, which
-	                holds the full rules)
-	    LAST RUN    the saved last run with RETRY (MenuLastRun), when there is one
-	  START       starts the picked mode (remote StartRun, the same validated start the
-	              server always used: RunManager.startRun). A party member's START is
-	              their READY toggle instead (the leader starts).
+	  LAST RUN    the saved last run with RETRY (MenuLastRun), when there is one
+	  footer      "Details" (shows the DAILY CHALLENGE and WEEKLY CHALLENGE rows under the grid)
+	              and the gold START (remote StartRun, the same validated start the server always
+	              used: RunManager.startRun) with a one-line note of what it does. A party
+	              member's START is their READY toggle instead (the leader starts).
 
 	The picked mode lives here (MenuPlay.Mode) so the home screen's line under PLAY shows
 	the same thing. It defaults to SOLO; joining a party picks the party's size.
 
 	New accounts (owner brief item 9; MenuPlay.IsSimple: fewer than SIMPLE_RUNS (3)
 	saved runs, profile.Stats.Runs, and not in a party) get a simpler setup:
-	  a summary card   HERO · KNIGHT (opens CHARACTERS) and WORLD · FOREST (opens ARENAS)
+	  a summary card   HERO (opens CHARACTERS) and WORLD (opens ARENAS)
 	  START SOLO       one big primary action ("QuickStart"; same start as START)
 	  ADVANCED OPTIONS collapsed by default; opens mode (SOLO / DUO / TRIO), the rule line,
 	                   difficulty, curses, endless, daily, sigils, weekly and LAST RUN (the
@@ -166,7 +167,7 @@ local function arenaText(profile: { [string]: any }?): (string, string)
 		end
 	end
 	if nextDef then
-		return title, string.format("Next world: %s (reach stage %d)", nextDef.DisplayName, nextNeed)
+		return title, string.format("Next: %s at stage %d", nextDef.DisplayName, nextNeed)
 	end
 	return title, (arena and arena.Hint) or "Face the swarm"
 end
@@ -179,42 +180,50 @@ function MenuPlay.RuleLine(): string
 	if party.Count > 0 and not party.Leader then
 		return "Party member: your leader picks the mode, curses and Endless and starts the run. Tap READY."
 	elseif party.Count > 1 then
-		return string.format("You lead a party of %d: START begins a %s countdown for your party.", party.Count, name)
-	elseif mode == (Config.Modes.Order[1] or "Solo") then
-		return "Just you. START begins the run at once."
+		return string.format("You lead a party of %d: Start begins a %s countdown for your party.", party.Count, name)
 	end
-	return string.format("START opens a %s countdown that players in this server can JOIN.", name)
+	local style = MODES[mode]
+	local lead = name .. (style and (" · " .. style.Sub) or "")
+	if mode == (Config.Modes.Order[1] or "Solo") then
+		return lead .. ". Start begins the run at once."
+	end
+	return string.format("%s. Start opens a countdown that players in this server can join.", lead)
 end
 
 function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = { Modes = {} }
 	local endlessSentAt = -100
+	local endlessOn = player:GetAttribute("Endless") == true
+	local detailsOpen = false
 	local function toast(str: string, color: Color3?)
 		if ctx.Toast then
 			ctx.Toast(str, color)
 		end
 	end
-	ui.Header = UIKit.ScreenHeader(screen, "PLAY", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.04, Edge = P.gold_500, EdgeTransparency = 0.35 })
 	ui.Panel = holder
 	ui.Face = face
+	-- header: BACK and a modest "Play" title, inside the panel
+	ui.Header = UIKit.ScreenHeader(face, "Play", ctx.Back)
+	ui.Header.Title.TextSize = UIKit.TS(30)
 
-	-- MODE: three big buttons, the picked one lit
+	-- MODE tabs: the picked one gold
 	for i, id in ipairs(Config.Modes.Order) do
 		local def = (Config.Modes :: any)[id]
 		local style = MODES[id] or { Sub = def.MaxPlayers .. " players", Icon = "people3" }
 		local b = UIKit.Button(face, {
 			Kind = "Secondary",
 			Title = string.upper(def.DisplayName),
-			Subtitle = style.Sub,
 			Icon = style.Icon,
 			IconSize = 30,
 			TitleStyle = "H2",
-			Align = "Left",
+			TitleSize = 20,
+			Align = "Center",
 			Shrink = true,
 			Name = id,
 			LayoutOrder = i,
+			Shadow = false,
 			OnClick = function()
 				local party = MenuParty.Summary()
 				if party.Count > 0 and not party.Leader then
@@ -230,10 +239,10 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 				UIAnim.Bump(ui.Modes[i].Face, 0.06)
 			end,
 		})
-		ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. id, { Size = UDim2.fromScale(1.5, 1.5) })
+		ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. id, { Size = UDim2.fromScale(1.3, 1.3) })
 		ui.Modes[i] = b
 	end
-	ui.Rule = UIKit.text(face, "Small", "", { Name = "Rule", TextWrapped = true, TextColor3 = P.ivory_200, TextYAlignment = Enum.TextYAlignment.Center, TextScaled = true }, 14)
+	ui.Rule = UIKit.text(face, "Small", "", { Name = "Rule", TextWrapped = true, TextColor3 = C.TextMuted, TextYAlignment = Enum.TextYAlignment.Center, TextScaled = true }, 14)
 	UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(14), MinTextSize = 9 }, ui.Rule)
 
 	-- the options column scrolls when it does not fit (phones in landscape)
@@ -248,33 +257,47 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	}, face)
 	ui.Options = opts
 
-	local function row(name: string, title: string, sub: string, icon: string, art: string?, onClick: () -> ()): any
+	-- One setting row: a small caps caption, the value, an optional muted line, a chevron.
+	local function row(name: string, caption: string, icon: string, art: string?, chevron: boolean, onClick: () -> ()): any
 		local b = UIKit.Button(opts, {
 			Kind = "Secondary",
-			Title = title,
-			Subtitle = sub,
+			Title = " ",
+			Subtitle = " ",
 			Icon = icon,
-			IconSize = 26,
+			IconSize = 34,
 			TitleStyle = "Label",
-			TitleSize = 16,
-			Chevron = true,
+			TitleSize = 18,
+			Chevron = chevron,
 			Align = "Left",
 			Shrink = true,
 			Name = name,
+			Shadow = false,
 			OnClick = onClick,
 		})
 		if art then
-			ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. art, { Size = UDim2.fromScale(1.45, 1.45) })
+			ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. art, { Size = UDim2.fromScale(1.3, 1.3) })
 		end
+		local column = b.Content:FindFirstChild("Text")
+		local cap = UIKit.text(column, "Caption", string.upper(caption), { Name = "Caption", LayoutOrder = 0, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
+		cap.TextColor3 = C.TextMuted
 		return b
 	end
-	ui.Hero = row("Hero", "HERO · KNIGHT", "Change in Characters", "helmet", "Characters", function()
+	-- value line (and the muted line under it; "" hides it)
+	local hideSummarySub = false -- the simple setup's side-by-side HERO / WORLD have no room for it
+	local function setRow(b: any, value: string, sub: string?)
+		b.SetText(value, sub or "")
+		if b.Subtitle then
+			b.Subtitle.Visible = sub ~= nil and sub ~= "" and not (hideSummarySub and (b == ui.Hero or b == ui.Arena))
+		end
+	end
+
+	ui.Hero = row("Hero", "Hero", "helmet", "Characters", true, function()
 		ctx.ShowScreen("Characters")
 	end)
-	ui.Arena = row("Arena", "WORLD · FOREST", "Face the swarm", "castle", "Arenas", function()
+	ui.Arena = row("Arena", "World", "castle", "Arenas", true, function()
 		ctx.ShowScreen("Arenas")
 	end)
-	ui.Difficulty = row("Difficulty", "DIFFICULTY · STANDARD", "Tap to change", "skull", nil, function()
+	ui.Difficulty = row("Difficulty", "Difficulty", "skull", nil, true, function()
 		local profile = ctx.Profile()
 		local currentTier = DifficultyData.Selected(profile)
 		local at = table.find(DifficultyData.Order, currentTier) or 1
@@ -295,34 +318,74 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 	end)
-	ui.Curses = row("Curses", "CURSES", "Harder runs, more gold", "curse", "Curses", function()
+	ui.Curses = row("Curses", "Curses", "curse", "Curses", true, function()
 		ctx.ShowScreen("Curses")
 	end)
-	local eHolder, eFace = UIKit.Surface(opts, { Name = "EndlessRow", Radius = Theme.Radius.M, Transparency = 0.12, Edge = C.PanelEdge, EdgeTransparency = Theme.Alpha.Edge, Shadow = false })
-	ui.EndlessRow = eHolder
-	ui.EndlessEdge = eFace:FindFirstChildOfClass("UIStroke")
-	UIKit.padding(eFace, 0, 12, 0, 12)
-	ui.EndlessToggle = UIKit.Toggle(eFace, "Endless", "cycle", "No portal win: stages go on. Own leaderboard.", player:GetAttribute("Endless") == true, function(on)
-		endlessSentAt = os.clock()
-		Remotes.Get("SetEndless"):FireServer(on)
-	end, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.new(1, 0, 0, 56) })
-	if Config.Endless == nil or not Config.Endless.Enabled then
-		eHolder.Visible = false
-	end
-	ui.Daily = row("Daily", "DAILY CHALLENGE", "One scored try a day", "calendar", "Daily", function()
-		ctx.ShowScreen("Daily")
-	end)
-	-- META (docs/features/META.md): the worn Sigils and the Weekly Challenge (shown only while
-	-- their switches are on)
-	ui.Sigils = row("Sigils", "SIGILS", "None worn", "sparkle", nil, function()
+	-- META (docs/features/META.md): the worn Sigils (shown only while the switch is on)
+	ui.Sigils = row("Sigils", "Sigils", "sparkle", nil, true, function()
 		ctx.ShowScreen("Sigils")
 	end)
-	ui.Sigils.Instance.Visible = Config.FeatureOn("Sigils")
-	ui.Weekly = row("Weekly", "WEEKLY CHALLENGE", "One hero, one week", "calendar", nil, function()
+	local sigilsOn = Config.FeatureOn("Sigils")
+	ui.Sigils.Instance.Visible = sigilsOn
+	-- ENDLESS: the row is the switch (remote SetEndless; the player attribute is the answer)
+	ui.Endless = row("Endless", "Endless", "cycle", nil, false, function()
+		endlessOn = not endlessOn
+		endlessSentAt = os.clock()
+		ui.PaintEndless()
+		Remotes.Get("SetEndless"):FireServer(endlessOn)
+	end)
+	local endlessEnabled = Config.Endless ~= nil and Config.Endless.Enabled == true
+	ui.Endless.Instance.Visible = endlessEnabled
+	do
+		local right = ui.Endless.Content:FindFirstChild("Right")
+		if right then
+			(right :: Frame).Visible = false
+		end
+		local contentPad = ui.Endless.Content:FindFirstChildOfClass("UIPadding")
+		if contentPad then
+			contentPad.PaddingRight = UDim.new(0, Theme.Space.L + 52)
+		end
+		local track = UIKit.new("Frame", {
+			Name = "Switch",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -Theme.Space.L, 0.5, 0),
+			Size = UDim2.fromOffset(46, 26),
+			BackgroundColor3 = P.slate_700,
+			BorderSizePixel = 0,
+			ZIndex = 4,
+			Active = false,
+		}, ui.Endless.Face)
+		UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, track)
+		UIKit.new("UIStroke", { Color = P.slate_500, Thickness = 1, Transparency = 0.3 }, track)
+		local knob = UIKit.new("Frame", {
+			Name = "Knob",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 3, 0.5, 0),
+			Size = UDim2.fromOffset(20, 20),
+			BackgroundColor3 = P.ivory_200,
+			BorderSizePixel = 0,
+			ZIndex = 5,
+			Active = false,
+		}, track)
+		UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, knob)
+		ui.PaintEndless = function()
+			track.BackgroundColor3 = endlessOn and P.gold_400 or P.slate_700
+			knob.Position = endlessOn and UDim2.new(1, -23, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
+			ui.Endless.SetSelected(endlessOn)
+			setRow(ui.Endless, endlessOn and "On" or "Off", endlessOn and "No portal win · own leaderboard" or nil)
+		end
+		ui.PaintEndless()
+	end
+	ui.LastRun = MenuLastRun.Build(opts, ctx)
+	-- DETAILS: the daily and weekly challenges (the footer link shows them under the grid)
+	ui.Daily = row("Daily", "Daily challenge", "calendar", "Daily", true, function()
+		ctx.ShowScreen("Daily")
+	end)
+	local weeklyOn = Config.FeatureOn("WeeklyChallenge")
+	ui.Weekly = row("Weekly", "Weekly challenge", "calendar", nil, true, function()
 		ctx.ShowScreen("Weekly")
 	end)
-	ui.Weekly.Instance.Visible = Config.FeatureOn("WeeklyChallenge")
-	ui.LastRun = MenuLastRun.Build(opts, ctx)
+
 	local function onStart()
 		local party = MenuParty.Summary()
 		if party.Count > 0 and not party.Leader then
@@ -343,19 +406,42 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	end
 	ui.Start = UIKit.Button(face, {
 		Kind = "Primary",
-		Glow = true,
-		Title = "START",
+		Glow = false,
+		Title = "Start Solo",
 		Icon = "play",
-		IconSize = 30,
-		TitleStyle = "H1",
-		TitleSize = 30,
+		IconSize = 32,
+		TitleStyle = "H2",
+		TitleSize = 24,
 		Align = "Center",
+		Shrink = true,
 		Name = "Start",
 		OnClick = function()
 			onStart()
 		end,
 	})
-	ArtImage.ButtonIcon(ui.Start.Content:FindFirstChild("IconHolder"), "icons/ui/ui_Play", { Size = UDim2.fromScale(1.6, 1.6) })
+	ArtImage.ButtonIcon(ui.Start.Content:FindFirstChild("IconHolder"), "icons/ui/ui_Play", { Size = UDim2.fromScale(1.4, 1.4) })
+	ui.Note = UIKit.text(face, "Caption", "", { Name = "StartNote", TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
+	ui.Divider = UIKit.new("Frame", { Name = "Divider", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0 }, face)
+	-- "Details >": shows the daily and weekly challenge rows
+	ui.Details = UIKit.new("TextButton", {
+		Name = "Details",
+		Text = "Details >",
+		FontFace = Theme.Font.Label,
+		TextSize = UIKit.TS(16),
+		TextColor3 = P.gold_200,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+	}, face)
+	UIKit.Focusable(ui.Details)
+	ui.Details.Activated:Connect(function()
+		detailsOpen = not detailsOpen
+		ui.Details.Text = detailsOpen and "Hide details" or "Details >"
+		MenuPlay._layout()
+		if detailsOpen then
+			opts.CanvasPosition = Vector2.new(0, opts.CanvasSize.Y.Offset)
+		end
+	end)
 
 	-- the simple setup (new accounts, MenuPlay.IsSimple): a summary card holding the HERO and
 	-- WORLD rows, one big START with a line under it, and ADVANCED OPTIONS (collapsed)
@@ -408,46 +494,72 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local forced = party.Count > 1 and MenuParty.PartyMode() or nil
 		for i, id in ipairs(Config.Modes.Order) do
 			local on = id == mode
-			ui.Modes[i].SetSelected(on)
-			ui.Modes[i].SetKind(on and "Outline" or "Secondary")
+			ui.Modes[i].SetSelected(false)
+			ui.Modes[i].SetKind(on and "Primary" or "Secondary")
 			-- a member, or a party of fixed size, cannot pick another size
-			ui.Modes[i].Instance:SetAttribute("Locked", member or (forced ~= nil and forced ~= id))
-			ui.Modes[i].Face.BackgroundTransparency = (member or (forced ~= nil and forced ~= id)) and 0.5 or 0
+			local locked = member or (forced ~= nil and forced ~= id)
+			ui.Modes[i].Instance:SetAttribute("Locked", locked)
+			ui.Modes[i].Face.BackgroundTransparency = (locked and not on) and 0.5 or 0
 		end
 		local def = (Config.Modes :: any)[mode]
-		local startText = "START " .. string.upper(def and def.DisplayName or mode)
+		local startText = "Start " .. (def and def.DisplayName or mode)
+		local note
 		if member then
-			startText = party.MyReady and "UNREADY" or "READY"
+			startText = party.MyReady and "Unready" or "Ready"
+			note = "Your leader starts the run"
+		elseif party.Count > 1 then
+			note = "Starts a countdown for your party"
+		elseif mode == (Config.Modes.Order[1] or "Solo") then
+			note = "Starts your run immediately"
+		else
+			note = "Opens a countdown others here can join"
 		end
 		ui.Start.SetText(startText)
-		ui.QuickStart.SetText(startText, mode == (Config.Modes.Order[1] or "Solo") and "Just you · the run begins at once"
+		ui.Note.Text = note
+		ui.QuickStart.SetText(string.upper(startText), mode == (Config.Modes.Order[1] or "Solo") and "Just you · the run begins at once"
 			or "Opens a countdown that players here can JOIN")
 		ui.Rule.Text = MenuPlay.RuleLine()
 	end
 	MenuPlay.OnModeChanged(showMode)
 	showMode()
 
-	local optionList = { ui.Hero.Instance, ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.Sigils.Instance, ui.EndlessRow, ui.Daily.Instance, ui.Weekly.Instance }
-	local function layoutOptions(colW: number, rowH: number, endlessH: number, lastH: number, y0: number?): number
-		local G = Theme.Layout.Gutter
-		local y = y0 or 0
-		for _, b in ipairs(optionList) do
+	local gridList = { ui.Hero.Instance, ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.Sigils.Instance, ui.Endless.Instance }
+	-- Places the rows in a grid (two columns when `w` allows) from y0; returns the next y.
+	local function grid(list: { GuiObject }, w: number, y0: number, rowH: number): number
+		local G = 10
+		local cols = w >= 620 and 2 or 1
+		local cw = math.floor((w - (cols - 1) * G) / cols)
+		local n = 0
+		for _, b in ipairs(list) do
 			if simple and (b == ui.Hero.Instance or b == ui.Arena.Instance) then
 				continue -- on the summary card
 			end
-			if b.Visible or (b ~= ui.EndlessRow and b ~= ui.Sigils.Instance and b ~= ui.Weekly.Instance) then
-				local h = b == ui.EndlessRow and endlessH or rowH
-				place(b, 0, y, colW - 6, h)
-				y += h + G
+			if not b.Visible then
+				continue
 			end
+			local col, r = n % cols, math.floor(n / cols)
+			place(b, col * (cw + G), y0 + r * (rowH + G), cw, rowH)
+			n += 1
 		end
+		return y0 + math.ceil(n / cols) * (rowH + G)
+	end
+
+	local function layoutOptions(colW: number, rowH: number, y0: number?): number
+		local w = colW - 6
+		ui.Sigils.Instance.Visible = sigilsOn
+		ui.Endless.Instance.Visible = endlessEnabled
+		local showDetails = simple or detailsOpen
+		ui.Daily.Instance.Visible = showDetails
+		ui.Weekly.Instance.Visible = showDetails and weeklyOn
+		local y = grid(gridList, w, y0 or 0, rowH)
 		if ui.LastRun.Has() then
-			place(ui.LastRun.Frame, 0, y, colW - 6, lastH)
-			ui.LastRun.SetWidth(colW - 6)
-			y += lastH + G
+			place(ui.LastRun.Frame, 0, y, w, 76)
+			ui.LastRun.SetWidth(w)
+			y += 76 + 10
 		end
-		opts.CanvasSize = UDim2.fromOffset(0, math.max(0, y - G))
-		return math.max(0, y - G)
+		y = grid({ ui.Daily.Instance, ui.Weekly.Instance }, w, y, rowH)
+		opts.CanvasSize = UDim2.fromOffset(0, math.max(0, y - 10))
+		return math.max(0, y - 10)
 	end
 
 	-- Moves the controls between the full screen and the simple setup (same buttons).
@@ -461,6 +573,9 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		end
 		ui.Rule.Parent = on and opts or face
 		ui.Start.Instance.Visible = not on
+		ui.Note.Visible = not on
+		ui.Divider.Visible = not on
+		ui.Details.Visible = not on
 		ui.Summary.Visible = on
 		ui.QuickStart.Instance.Visible = on
 		ui.Advanced.Instance.Visible = on
@@ -469,39 +584,54 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 
 	-- The simple setup's ADVANCED column: the modes (a row of three when they fit), the
 	-- rule line, then the usual option rows.
-	local function layoutAdvanced(colW: number)
-		local G = Theme.Layout.Gutter
+	local function layoutAdvanced(colW: number, rowH: number)
+		local G = 10
 		local w = colW - 6
 		local y = 0
 		local per = math.floor((w - 2 * G) / 3)
-		if per >= 190 then
+		if per >= 110 then
 			for i, b in ipairs(ui.Modes) do
-				place(b.Instance, (i - 1) * (per + G), 0, per, 64)
+				place(b.Instance, (i - 1) * (per + G), 0, per, 52)
 			end
-			y = 64 + G
+			y = 52 + G
 		else
 			for _, b in ipairs(ui.Modes) do
-				place(b.Instance, 0, y, w, 56)
-				y += 56 + G
+				place(b.Instance, 0, y, w, 48)
+				y += 48 + G
 			end
 		end
 		place(ui.Rule, 0, y, w, 40)
 		y += 40 + G
-		layoutOptions(colW, 56, 64, ui.LastRun.Has() and 76 or 0, y)
+		layoutOptions(colW, rowH, y)
 	end
 
-	local function layoutSimple(W: number, H: number, top: number, M: number, portrait: boolean)
+	local function layoutSimple(W: number, H: number, top: number, M: number, portrait: boolean, pad: number, headH: number, rowH: number, short: boolean)
 		local G = Theme.Layout.Gutter
-		local pad = 16
-		local rowH, advH = 58, 56
 		local availH = H - top - M
+		local advH = 56
+		local y0 = pad + headH + G
 		-- the left (portrait: only) column: HERO, WORLD, START, ADVANCED OPTIONS
+		-- (short landscape screens put HERO and WORLD side by side)
+		local sideBySide = short and not portrait
+		local summaryH = sideBySide and rowH or (2 * rowH + 10)
 		local function column(x: number, colW: number, startH: number)
-			local y = pad
-			place(ui.Summary, x, y, colW, 2 * rowH + G)
-			place(ui.Hero.Instance, 0, 0, colW, rowH)
-			place(ui.Arena.Instance, 0, rowH + G, colW, rowH)
-			y += 2 * rowH + 2 * G
+			local y = y0
+			hideSummarySub = sideBySide
+			for _, r in ipairs({ ui.Hero, ui.Arena }) do
+				if r.Subtitle then
+					r.Subtitle.Visible = not sideBySide and r.Subtitle.Text ~= ""
+				end
+			end
+			place(ui.Summary, x, y, colW, summaryH)
+			if sideBySide then
+				local half = math.floor((colW - 10) / 2)
+				place(ui.Hero.Instance, 0, 0, half, rowH)
+				place(ui.Arena.Instance, half + 10, 0, half, rowH)
+			else
+				place(ui.Hero.Instance, 0, 0, colW, rowH)
+				place(ui.Arena.Instance, 0, rowH + 10, colW, rowH)
+			end
+			y += summaryH + G
 			place(ui.QuickStart.Instance, x, y, colW, startH)
 			y += startH + G
 			place(ui.Advanced.Instance, x, y, colW, advH)
@@ -511,23 +641,23 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			local w = math.min(W - 2 * M, 560)
 			local inner = w - 2 * pad
 			local startH = 96
-			local need = 2 * pad + 2 * rowH + 4 * G + startH + advH
+			local need = y0 + summaryH + G + startH + G + advH + pad
 			local h = advancedOpen and availH or math.min(availH, need)
 			place(ui.Panel, (W - w) / 2, top, w, h)
 			local y = column(pad, inner, startH)
 			place(opts, pad, y, inner + 6, math.max(0, h - pad - y))
-			layoutAdvanced(inner + 6)
+			layoutAdvanced(inner + 6, rowH)
 		else
 			local maxH = math.min(availH, 520)
 			local w = advancedOpen and math.min(W - 2 * M, 1000) or math.min(W - 2 * M, 600)
 			local colW = advancedOpen and math.floor((w - 2 * pad - 2 * G) / 2) or (w - 2 * pad)
-			local fixed = 2 * pad + 2 * rowH + 3 * G + advH
+			local fixed = y0 + summaryH + 2 * G + advH + pad
 			local startH = math.clamp(maxH - fixed, 64, advancedOpen and 150 or 104)
 			local h = advancedOpen and maxH or math.min(maxH, fixed + startH)
 			place(ui.Panel, (W - w) / 2, top, w, h)
 			column(pad, colW, startH)
-			place(opts, pad + colW + 2 * G, pad, colW + 6, h - 2 * pad)
-			layoutAdvanced(colW + 6)
+			place(opts, pad + colW + 2 * G, y0, colW + 6, h - y0 - pad)
+			layoutAdvanced(colW + 6, rowH)
 		end
 		ui.LastRun.Frame.Visible = ui.LastRun.Has()
 	end
@@ -536,58 +666,66 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local W, H = v.X, v.Y
 		local compact = UIKit.IsCompact()
 		local M = compact and Theme.Layout.MarginCompact or Theme.Layout.Margin
-		local G = Theme.Layout.Gutter
+		local G = 10
 		local headY = math.max(ins.Top + 4, 12)
-		place(ui.Header.Frame, M, headY, math.min(520, W - 2 * M), 56)
-		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		-- clear the Roblox buttons and the gold readout along the top
+		local top = headY + (portrait and 130 or 46)
+		local pad = compact and 12 or 18
+		local headH = 52
+		local short = not portrait and H < 520
+		-- phones at the Largest Roblox text size need the taller rows (three text lines)
+		local rowH = short and 92 or (compact and 78 or 72)
 		if simple then
-			layoutSimple(W, H, top, M, portrait)
+			place(ui.Header.Frame, pad, pad, 300, headH)
+			layoutSimple(W, H, top, M, portrait, pad, headH, short and 84 or rowH, short)
 			return
 		end
 		local hasLast = ui.LastRun.Has()
-		local pad = 16
-		local endlessH = 64
-		if portrait then
-			local w = math.min(W - 2 * M, 560)
-			local inner = w - 2 * pad
-			local modeH, rowH, lastH, startH, ruleH = 64, 56, 76, 68, 40
-			local h = H - top - M
-			place(ui.Panel, (W - w) / 2, top, w, h)
-			local y = pad
-			for i = 1, #ui.Modes do
-				place(ui.Modes[i].Instance, pad, y, inner, modeH)
-				y += modeH + G
-			end
-			place(ui.Rule, pad, y, inner, ruleH)
-			y += ruleH + G
-			place(ui.Start.Instance, pad, h - pad - startH, inner, startH)
-			local optsH = h - pad - startH - G - y
-			place(opts, pad, y, inner + 6, math.max(0, optsH))
-			layoutOptions(inner + 6, rowH, endlessH, hasLast and lastH or 0)
-		else
-			-- two columns: the modes, the rule line and START on the left, the options right
-			local w = math.min(W - 2 * M, 1000)
-			local h = math.min(H - top - M, 520)
-			place(ui.Panel, (W - w) / 2, top, w, h)
-			local inner = h - 2 * pad
-			local colW = math.floor((w - 2 * pad - 2 * G) / 2)
-			local startH = math.clamp(math.floor(inner * 0.2), 52, 80)
-			local ruleH = math.clamp(math.floor(inner * 0.13), 32, 52)
-			local modeH = math.floor((inner - startH - ruleH - 3 * G) / 3)
-			local y = pad
-			for i = 1, #ui.Modes do
-				place(ui.Modes[i].Instance, pad, y, colW, modeH)
-				y += modeH + G
-			end
-			place(ui.Rule, pad, y, colW, ruleH)
-			place(ui.Start.Instance, pad, h - pad - startH, colW, startH)
-			local x = pad + colW + 2 * G
-			local rows = 5 + (ui.Sigils.Instance.Visible and 1 or 0) + (ui.Weekly.Instance.Visible and 1 or 0)
-			local lastH = hasLast and 76 or 0
-			local rowH = math.clamp(math.floor((inner - lastH - (hasLast and G or 0) - endlessH - rows * G) / rows), Theme.Size.TapMin, 66)
-			place(opts, x, pad, colW + 6, inner)
-			layoutOptions(colW + 6, rowH, endlessH, lastH)
+		local w = math.min(W - 2 * M, 760)
+		local iw = w - 2 * pad
+		local availH = H - top - M
+		local tabH = compact and 48 or 56
+		local ruleH = iw >= 600 and 22 or 36
+		local footH = 66
+		local cols = (iw - 6) >= 620 and 2 or 1
+		local rows = 4 + (sigilsOn and 1 or 0) + (endlessEnabled and 1 or 0)
+		local want = math.ceil(rows / cols) * (rowH + G) - G + (hasLast and 76 + G or 0)
+		if detailsOpen then
+			local extra = 1 + (weeklyOn and 1 or 0)
+			want += G + math.ceil(extra / cols) * (rowH + G) - G
 		end
+		-- header (+ tabs beside it on short screens), tabs, rule, body, footer
+		local topBlock = short and (headH + 6) or (headH + G + tabH + 4)
+		local h = math.min(availH, pad + topBlock + ruleH + G + want + G + footH + pad)
+		place(ui.Panel, (W - w) / 2, top, w, h)
+		local y = pad
+		if short then
+			place(ui.Header.Frame, pad, y, 270, headH)
+			local tx = pad + 280
+			local per = math.floor((w - pad - tx - 2 * 8) / 3)
+			for i, b in ipairs(ui.Modes) do
+				place(b.Instance, tx + (i - 1) * (per + 8), y + 2, per, headH - 4)
+			end
+			y += headH + 6
+		else
+			place(ui.Header.Frame, pad, y, iw, headH)
+			y += headH + G
+			local per = math.floor((iw - 2 * 8) / 3)
+			for i, b in ipairs(ui.Modes) do
+				place(b.Instance, pad + (i - 1) * (per + 8), y, per, tabH)
+			end
+			y += tabH + 4
+		end
+		place(ui.Rule, pad, y, iw, ruleH)
+		y += ruleH + G
+		local footY = h - pad - footH
+		place(opts, pad, y, iw + 6, math.max(0, footY - G - y))
+		layoutOptions(iw + 6, rowH)
+		place(ui.Divider, pad, footY - 6, iw, 1)
+		local sw = math.min(math.floor(iw * 0.62), 340)
+		place(ui.Start.Instance, pad + iw - sw, footY, sw, 48)
+		place(ui.Note, pad + iw - sw, footY + 50, sw, 16)
+		place(ui.Details, pad, footY, math.min(120, iw - sw - 8), 48)
 		ui.LastRun.Frame.Visible = hasLast
 	end
 	MenuPlay._layout = function()
@@ -608,36 +746,34 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local hero = CharacterData.Characters[heroId] or CharacterData.Characters[CharacterData.Default]
 		local skinId = profile and type(profile.Skins) == "table" and profile.Skins[hero.Id] or "Default"
 		local skin = skinId ~= "Default" and CharacterData.Skins[skinId] or nil
-		ui.Hero.SetText("HERO · " .. string.upper(hero.Name), (skin and (skin.Name .. " · ") or "") .. "Change in Characters")
-		local title, sub = arenaText(profile)
-		ui.Arena.SetText(title, sub)
+		setRow(ui.Hero, hero.Name, skin and skin.Name or "Default skin")
+		local arenaId = Remotes.State():GetAttribute("SelectedArena") or "Forest"
+		local arena = (Config.Arenas :: any)[arenaId]
+		local _, arenaSub = arenaText(profile)
+		setRow(ui.Arena, arena and arena.DisplayName or tostring(arenaId), arenaSub)
 		local tier = DifficultyData.Tiers[DifficultyData.Selected(profile)]
 		local nextLocked: string? = nil
-		local unlocked = 0
 		for _, id in ipairs(DifficultyData.Order) do
-			if DifficultyData.IsUnlocked(profile, id) then
-				unlocked += 1
-			elseif not nextLocked then
-				-- the lock and what opens it, beside the option (the tap toast says the same)
+			if not DifficultyData.IsUnlocked(profile, id) then
+				-- the next locked tier beside the option (the tap toast names what opens it)
 				local t = DifficultyData.Tiers[id]
-				local needs = DifficultyData.Tiers[t.Requires]
-				nextLocked = string.format("%s locked: clear all %d %s stages", t.Name, Config.Stages.WinMinStages, needs and needs.Name or "Standard")
+				nextLocked = t.Name .. " locked"
+				break
 			end
 		end
-		local diffSub = unlocked > 1 and ("Tap to change" .. (nextLocked and (" · " .. nextLocked) or "")) or (nextLocked or "Tap to change")
-		ui.Difficulty.SetText("DIFFICULTY · " .. string.upper(tier and tier.Name or "Standard"), diffSub)
+		setRow(ui.Difficulty, tier and tier.Name or "Standard", nextLocked or "Tap to change")
 		local curses = MenuCurses.Current()
-		ui.Curses.SetText(#curses > 0 and string.format("CURSES · %d", #curses) or "CURSES", curseLine(curses, "Harder runs, more gold"))
+		setRow(ui.Curses, #curses > 0 and string.format("%d active", #curses) or "None", curseLine(curses, "Harder runs, more gold"))
 		ui.Curses.SetSelected(#curses > 0)
 		local used, score = MenuDaily.Status(profile)
-		local dailySub = used and ("Scored try used" .. (score > 0 and (" · " .. CurseData.ScoreText(score)) or "") .. " · practice only · resets in " .. MenuDaily.TimeLeft())
-			or ("One scored try · used when it starts · resets in " .. MenuDaily.TimeLeft())
-		ui.Daily.SetText(nil, dailySub)
-		if ui.Sigils.Instance.Visible then
-			ui.Sigils.SetText(nil, MenuSigils.Summary(profile))
+		local dailySub = used and ("Practice only" .. (score > 0 and (" · " .. CurseData.ScoreText(score)) or "") .. " · resets in " .. MenuDaily.TimeLeft())
+			or ("Used when it starts · resets in " .. MenuDaily.TimeLeft())
+		setRow(ui.Daily, used and "Scored try used" or "Scored try ready", dailySub)
+		if sigilsOn then
+			setRow(ui.Sigils, MenuSigils.Summary(profile), nil)
 		end
-		if ui.Weekly.Instance.Visible then
-			ui.Weekly.SetText(nil, MenuWeekly.Summary(profile))
+		if weeklyOn then
+			setRow(ui.Weekly, MenuWeekly.Summary(profile), "One hero, one week")
 		end
 		showMode()
 		if modeChanged or had ~= ui.LastRun.Has() then
@@ -662,15 +798,10 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		end,
 		Update = function(_dt: number)
 			-- the ENDLESS switch follows the server's answer (after a short wait for our tap)
-			local endlessOn = player:GetAttribute("Endless") == true
-			if os.clock() - endlessSentAt > 1.5 and ui.EndlessToggle.Get() ~= endlessOn then
-				ui.EndlessToggle.Set(endlessOn)
-			end
-			local lit = ui.EndlessToggle.Get()
-			if ui.EndlessEdge and ui.EndlessRow:GetAttribute("Lit") ~= lit then
-				ui.EndlessRow:SetAttribute("Lit", lit)
-				ui.EndlessEdge.Color = lit and P.gold_400 or C.PanelEdge
-				ui.EndlessEdge.Transparency = lit and 0.1 or Theme.Alpha.Edge
+			local serverOn = player:GetAttribute("Endless") == true
+			if os.clock() - endlessSentAt > 1.5 and endlessOn ~= serverOn then
+				endlessOn = serverOn
+				ui.PaintEndless()
 			end
 			if screen.Visible then
 				local party = MenuParty.Summary()

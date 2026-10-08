@@ -132,13 +132,15 @@ local ok, err = S.runMain(function()
 	preview.advance(0.4)
 	assert(Lobby.Current() == "Play" and started == nil, "PLAY opens the run-setup step without starting")
 	local sheet = root.Lobby.Screens.Play
-	for _, name in ipairs({ "Solo", "Duo", "Trio", "Hero", "Arena", "Difficulty", "Curses", "EndlessRow", "Daily", "Start" }) do
+	for _, name in ipairs({ "Solo", "Duo", "Trio", "Hero", "Arena", "Difficulty", "Curses", "Endless", "Daily", "Details", "Start" }) do
 		local b = sheet:FindFirstChild(name, true)
 		assert(b, "the run-setup step must have " .. name)
 	end
-	assert(hasText(sheet, "HERO · KNIGHT") and hasText(sheet, "Gold Trim"), "the run-setup step names the hero and skin")
-	assert(hasText(sheet, "One scored try") and hasText(sheet, "resets in"), "the Daily row discloses the scored try and the reset")
-	assert(hasText(sheet, "Just you"), "the rule line explains SOLO")
+	assert(hasText(sheet, "HERO") and hasText(sheet, "Knight") and hasText(sheet, "Gold Trim"), "the run-setup step names the hero and skin")
+	sheet:FindFirstChild("Details", true).Activated:_fire() -- "Details >" shows the daily and weekly rows
+	preview.advance(0.2)
+	assert(hasText(sheet, "Used when it starts") and hasText(sheet, "resets in"), "the Daily row discloses the scored try and the reset")
+	assert(hasText(sheet, "Just you") and hasText(sheet, "Starts your run immediately"), "the rule line and the start note explain SOLO")
 	sheet:FindFirstChild("Start", true).Activated:_fire()
 	preview.advance(0.3)
 	assert(started == "Solo", "START starts SOLO, got " .. tostring(started))
