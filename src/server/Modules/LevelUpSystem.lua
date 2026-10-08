@@ -230,6 +230,9 @@ function LevelUpSystem.AddWeapon(rp, weaponId: string): boolean
 	if rp.Weapons[weaponId] or not WeaponData.Weapons[weaponId] then
 		return false
 	end
+	if not WeaponData.AllowedFor(weaponId, rp.CharacterId) then
+		return false -- a class signature weapon belongs to its own class only
+	end
 	if #rp.WeaponOrder >= Config.Slots.Weapons then
 		return false
 	end
@@ -358,8 +361,21 @@ local function buildPool(rp)
 		end
 	end
 	if #rp.WeaponOrder < Config.Slots.Weapons then
-		local unowned = 0
+		-- the shared weapons plus the signature weapon of this player's own class (a ClassOnly
+		-- weapon is never offered to another class)
+		local offer = {}
 		for _, id in ipairs(WeaponData.Order) do
+			if WeaponData.AllowedFor(id, rp.CharacterId) then
+				table.insert(offer, id)
+			end
+		end
+		for _, id in ipairs(WeaponData.ClassOrder) do
+			if WeaponData.Weapons[id] and WeaponData.Weapons[id].ClassOnly == rp.CharacterId then
+				table.insert(offer, id)
+			end
+		end
+		local unowned = 0
+		for _, id in ipairs(offer) do
 			if not rp.Weapons[id] and not isBanished(rp, "Weapon", id) then
 				unowned += 1
 			end
@@ -367,7 +383,7 @@ local function buildPool(rp)
 		-- with many weapons the "new weapon" weight is shared (newShare), so more weapons
 		-- don't crowd out upgrades
 		local share = newShare(rp, L.NewWeaponPoolRef, unowned)
-		for _, id in ipairs(WeaponData.Order) do
+		for _, id in ipairs(offer) do
 			if not rp.Weapons[id] and not isBanished(rp, "Weapon", id) then
 				table.insert(pool, card("WeaponNew", id, 1, L.WeightNewWeapon * luck * share))
 			end

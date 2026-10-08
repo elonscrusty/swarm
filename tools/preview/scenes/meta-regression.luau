@@ -98,6 +98,8 @@ local function backToLobby()
 end
 
 local data = assert(DS.GetData(me), "profile missing")
+-- these checks are about the old heroes: let a run play a hidden one (SwarmV2 RunConfig)
+require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Classes.MapLegacyToDefault = false
 data.OwnedCharacters = { Knight = true }
 data.SelectedCharacter = "Knight"
 data.Heroes = { Knight = { XP = 0, Runs = 0 } }

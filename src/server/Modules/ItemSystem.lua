@@ -155,6 +155,10 @@ function ItemSystem.Grant(rp, id: string, source: string?, reward: boolean?, dra
 		Fx.Ring(rp.Root.Position, def.Rarity == "Legendary" and 14 or 8, color)
 	end
 	Fx.Sound("Item")
+	-- SwarmV2: a chest / shrine / merchant / encounter pickup charges Ruckus's Loot Rush
+	if reward == true and ctx.ClassKits then
+		ctx.ClassKits.OnLootPickup(rp, source)
+	end
 	return true, showcase
 end
 

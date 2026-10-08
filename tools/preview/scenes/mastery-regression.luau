@@ -17,6 +17,8 @@ local CharacterData = preview.shared("CharacterData")
 
 local data = assert(DS.GetData(player), "profile missing")
 data.OwnedCharacters = { Knight = true, Mage = true }
+-- these checks are about the old Knight: let a run play a hidden old hero (SwarmV2 RunConfig)
+require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Classes.MapLegacyToDefault = false
 data.SelectedCharacter = "Knight"
 data.Meta = { MaxHP = 9, Might = 9, Revive = 1 } -- old shared stat levels stay but are not read
 data.HeroUpgrades = { Knight = { MaxHP = 4, Signature = 2 }, Mage = { MaxHP = 1 } }
@@ -163,6 +165,11 @@ local expect = {
 		return WS.WeaponStats(fakeRp("Engineer", l), { Id = "Turret", Level = 1 }).duration / base
 	end },
 	Necromancer = { 0.15, 0.25, function(l) return WS._TraitValue(fakeRp("Necromancer", l), 0) end },
+	-- SwarmV2 classes (ClassRoster): the signature adds to the class's own stat bonus
+	ruckus = { 1.25, 1.45, function(l) return sheetAt("ruckus", l).PickupRadius / Config.Player.BasePickupRadius end },
+	toastmaster = { 1.10, 1.25, function(l) return sheetAt("toastmaster", l).MaxHP / Config.Player.BaseMaxHP end },
+	captain_croak = { 1.10, 1.20, function(l) return sheetAt("captain_croak", l).Growth end },
+	granny_boom = { 1.10, 1.25, function(l) return sheetAt("granny_boom", l).AreaMult end },
 	-- HEROES (feature 11): present while Config.Features.NewHeroes is on
 	Archer = { 0.90, 0.80, function(l) return sheetAt("Archer", l).CooldownMult end },
 	Golem = { 1.25, 1.40, function(l) return sheetAt("Golem", l).MaxHP / Config.Player.BaseMaxHP end },

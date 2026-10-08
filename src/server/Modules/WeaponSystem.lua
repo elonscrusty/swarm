@@ -112,6 +112,10 @@ local function allocProjectile(): Projectile?
 	p.X = nil
 	p.Stagger = nil
 	p.BounceGain = nil
+	-- class signature weapons: derived hits never proc (NoProc), hit hook name
+	p.NoProc = nil
+	p.NoProcOnBounce = nil
+	p.Hook = nil
 	table.insert(live, p)
 	p.LiveIndex = #live
 	return p
@@ -396,6 +400,11 @@ end
 ------------------------------------------------------------------------------------------
 
 local Fire = {}
+
+-- SwarmV2 class signature weapons (Scrap Toss, Toast Volley, Bubble Bomb, Yarn Bomb): helpers,
+-- hit hooks and the extra projectile kinds live in `Class` (defined near Arm, below); declared
+-- here because collideEnemies and ricochet call into it.
+local Class = { Hit = {} }
 
 -- Visual tier sent with projectiles and slashes (0 = levels 1-3, 1 = 4-6, 2 = 7-8, 3 = evolved).
 -- Purely cosmetic: the client draws stronger trails/glows for higher tiers.
@@ -1124,7 +1133,7 @@ local function stepPatches(dt: number, now: number)
 				for _, e in ipairs(hits) do
 					if e.Alive and burnReady(z.Weapon, e, z.Tick, now) then
 						killSource = z.Weapon
-						damageEnemy(owner, e, z.Damage, nil, 0)
+						damageEnemy(owner, e, z.Damage, nil, 0, z.NoProc)
 						if z.Ignite and e.Alive then
 							burns[e] = { Uid = e.Uid, Until = now + z.IgniteSeconds, Next = now + z.Tick, Tick = z.Tick, Damage = z.Damage * z.IgniteShare, Owner = owner, Weapon = z.Weapon }
 						end
@@ -1144,7 +1153,7 @@ local function stepPatches(dt: number, now: number)
 			b.Next = now + b.Tick
 			if burnReady(b.Weapon, e, b.Tick, now) then
 				killSource = b.Weapon
-				damageEnemy(b.Owner, e, b.Damage, nil, 0)
+				damageEnemy(b.Owner, e, b.Damage, nil, 0, b.NoProc)
 			end
 		end
 	end
@@ -1638,6 +1647,9 @@ local function ricochet(p: Projectile): boolean
 	local d = flatDir(nextE.Pos - p.Pos, p.Vel.Unit)
 	p.Vel = d * speed
 	p.Yaw = yawOf(d)
+	if p.NoProcOnBounce then
+		p.NoProc = true -- a bounced hit is a derived hit: no crit, no item procs
+	end
 	p.Pierce = 1
 	p.Age = math.min(p.Age, p.Life - RICOCHET_RANGE / speed - 0.05)
 	return true
@@ -1665,10 +1677,10 @@ local function collideEnemies(p: Projectile, now: number): boolean
 				end
 				local at = e.Pos
 				if dir then
-					died = damageEnemy(p.Owner, e, amount, dir, p.Knockback, false, p.NoHarvest)
+					died = damageEnemy(p.Owner, e, amount, dir, p.Knockback, p.NoProc == true, p.NoHarvest)
 				else
 					local d = (e.Pos - p.Pos) * FLAT
-					died = damageEnemy(p.Owner, e, amount, d.Magnitude > 1e-3 and d.Unit or Vector3.zAxis, p.Knockback, false, p.NoHarvest)
+					died = damageEnemy(p.Owner, e, amount, d.Magnitude > 1e-3 and d.Unit or Vector3.zAxis, p.Knockback, p.NoProc == true, p.NoHarvest)
 				end
 				if p.Stagger and e.Alive then
 					slowEnemy(e, p.Stagger[1], p.Stagger[2], now) -- Sling's Stagger perk
@@ -1678,6 +1690,12 @@ local function collideEnemies(p: Projectile, now: number): boolean
 				end
 				if p.FlakBurst then
 					flakBurst(p, e, at)
+				end
+				if p.Hook then
+					local hook = Class.Hit[p.Hook]
+					if hook then
+						hook(p, e, now, died, at)
+					end
 				end
 				if died and p.Wander then
 					-- Wandering Souls (Soul Bolt perk): a soul that kills flies on once
@@ -2654,6 +2672,343 @@ function Arm.implode(p: Projectile)
 	pushFx("vi", { r1(c.X), r1(c.Z), r1(x.R), x.Evo })
 end
 
+------------------------------------------------------------------------------------------
+-- SwarmV2 class signature weapons: SCRAP TOSS (Ruckus), TOAST VOLLEY (Toastmaster), BUBBLE
+-- BOMB (Captain Croak), YARN BOMB (Granny Boom). Server-simulated pooled projectiles like
+-- every other weapon; the kit passives (Loot Rush, Overheat, Big Splash, Tangled Up) are in
+-- ClassKits (reached through ctx.ClassKits). Every derived hit (bounce, ricochet, burst, can,
+-- burn, scorch, landing blast, tangle) is dealt with isProc = true ("NoProc"): no crit, no
+-- item procs, so nothing can trigger itself. WeaponData ClassOnly keeps them to their class.
+------------------------------------------------------------------------------------------
+
+-- A straight shot that bounces (ricochet) `bounces` more times; bounced hits are NoProc.
+function Class.Shot(rp, w, pos: Vector3, dir: Vector3, visual: number, speed: number, damage: number, radius: number, life: number, knockback: number, bounces: number): Projectile?
+	local p = allocProjectile()
+	if not p then
+		return nil
+	end
+	p.Kind = "Straight"
+	p.Visual = visual
+	p.Owner = rp
+	p.Weapon = w
+	p.Pos = pos
+	p.Vel = dir * speed
+	p.Damage = damage
+	p.Pierce = 1
+	p.Bounces = bounces
+	p.NoProcOnBounce = true
+	p.Radius = radius
+	p.Life = life
+	p.Knockback = knockback
+	p.Yaw = yawOf(dir)
+	return p
+end
+
+-- The direction of shot i of n at the nearest enemies `targets`; extra shots fan out.
+function Class.Aim(rp, origin: Vector3, targets: { any }, i: number, n: number, spreadDeg: number): Vector3
+	local target = targets[((i - 1) % math.max(1, #targets)) + 1]
+	if target then
+		local dir = flatDir(target.Pos - origin, rp.Facing)
+		if i > #targets then
+			dir = rotateY(dir, (i % 2 == 0 and 1 or -1) * math.rad(spreadDeg))
+		end
+		return dir
+	end
+	return rotateY(rp.Facing, (i - (n + 1) / 2) * math.rad(spreadDeg))
+end
+
+-- SCRAP TOSS / JUNKYARD BARRAGE: scrap at the nearest enemies, bouncing on (row pierce =
+-- bounces + 1). Loot Rush: a stored Scrap Barrage adds a ring of scraps to this volley.
+function Fire.ScrapToss(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+	local radius = params.Radius * s.area
+	local gain = evo and params.EvoBounceGain or params.BounceGain
+	local targets = nearestEnemies(origin, s.speed * s.duration * 1.2, s.amount, true)
+	for i = 1, s.amount do
+		local dir = Class.Aim(rp, origin, targets, i, s.amount, 8)
+		local p = Class.Shot(rp, w, origin + dir * 1.5, dir, visual, s.speed, s.damage, radius, s.duration, s.knockback, math.max(0, s.pierce - 1))
+		if not p then
+			return
+		end
+		p.BounceGain = gain
+	end
+	local kits = ctx.ClassKits
+	if kits and kits.TakeBarrage(rp) then
+		local K = kits.Config().LootRush
+		for i = 1, K.RingCount do
+			local dir = rotateY(rp.Facing, (i - 1) * TAU / K.RingCount)
+			local p = Class.Shot(rp, w, origin + dir * 1.5, dir, visual, s.speed, s.damage, radius, s.duration, s.knockback, K.RingBounces)
+			if not p then
+				break
+			end
+		end
+		Fx.Ring(origin, 5, Color3.fromRGB(240, 200, 90))
+	end
+	Fx.Sound("Hit")
+end
+
+-- TOAST VOLLEY / DOUBLE DECKER: slices at the nearest enemies that ricochet on. Every hit
+-- feeds Overheat (ClassKits).
+function Fire.ToastVolley(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+	local radius = params.Radius * s.area
+	local targets = nearestEnemies(origin, s.speed * s.duration * 1.2, s.amount, true)
+	for i = 1, s.amount do
+		local dir = Class.Aim(rp, origin, targets, i, s.amount, params.Spread)
+		local p = Class.Shot(rp, w, origin + dir * 1.5, dir, visual, s.speed, s.damage, radius, s.duration, s.knockback, math.max(0, s.pierce - 1))
+		if not p then
+			return
+		end
+		p.Hook = "Toast"
+	end
+	Fx.Sound("Hit")
+end
+
+function Class.Hit.Toast(p: Projectile, e, now: number, died: boolean, _at: Vector3)
+	local kits = ctx.ClassKits
+	if kits and not died then
+		kits.OnToastHit(p.Owner, e, p.Damage, p.Weapon, now)
+	end
+end
+
+-- BUBBLE BOMB / TIDAL BURST: a bubble that bursts around every enemy it hits (BurstShare of
+-- the hit to the others within BurstRadius x area) and bounces once. Big Splash (ClassKits)
+-- makes the first bubble of the next volley hit harder and burst wider.
+function Fire.BubbleBomb(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local baseVisual = evo and params.EvoVisual or params.Visual
+	local radius = params.Radius * s.area
+	local share = evo and params.EvoBurstShare or params.BurstShare
+	local burst = params.BurstRadius * s.area
+	local targets = nearestEnemies(origin, s.speed * s.duration * 1.2, s.amount, true)
+	local kits = ctx.ClassKits
+	local splash = kits ~= nil and kits.TakeSplash(rp) or nil
+	for i = 1, s.amount do
+		local dir = Class.Aim(rp, origin, targets, i, s.amount, 9)
+		local big = splash ~= nil and i == 1
+		local damage = s.damage * (big and splash.DamageMult or 1)
+		local visual = WeaponData.VisualByte(baseVisual, big and 3 or visualTier(w))
+		local p = Class.Shot(rp, w, origin + dir * 1.5, dir, visual, s.speed, damage, radius * (big and 1.2 or 1), s.duration, s.knockback, math.max(0, s.pierce - 1))
+		if not p then
+			return
+		end
+		p.Hook = "Bubble"
+		p.X = { R = burst * (big and splash.RadiusMult or 1), Share = share }
+	end
+	Fx.Sound("Hit")
+end
+
+function Class.Hit.Bubble(p: Projectile, e, _now: number, _died: boolean, at: Vector3)
+	local x = p.X
+	if not x or not p.Owner.Alive then
+		return
+	end
+	burstAround(p.Owner, at, x.R, p.Damage * x.Share, e)
+	pushFx("fk", { r1(at.X), r1(at.Z), r1(x.R) })
+end
+
+-- YARN BOMB / GRAND KNITWORK: a yarn ball lobbed at the thickest crowd; it explodes on
+-- landing (the Starfall warning ring shows where). Tangled Up (ClassKits) tangles what it hits.
+function Fire.YarnBomb(rp, w, s, def)
+	local params = def.Params
+	local evo = w.Evolved and def.Evolution or nil
+	local origin = ground(rp.Root.Position)
+	local radius = params.BlastRadius * s.area
+	local taken = {}
+	for i = 1, s.amount do
+		local t = Arm.densest(origin, params.Range, 10, radius, taken)
+		if not t then
+			if i == 1 then
+				w.Timer = math.min(w.Timer, 0.4) -- nothing in range: look again soon
+			end
+			return
+		end
+		local at = ground(t.Pos)
+		table.insert(taken, at)
+		local p = allocProjectile()
+		if not p then
+			return
+		end
+		local dist = ((at - origin) * FLAT).Magnitude
+		local flight = math.clamp(dist / math.max(1, s.speed), params.MinFlight, params.MaxFlight) + (i - 1) * 0.1
+		p.Kind = "Yarn"
+		p.Visual = visualByte(evo and params.EvoVisual or params.Visual, w)
+		p.Owner = rp
+		p.Weapon = w
+		p.Pos = origin
+		p.Vel = Vector3.zero
+		p.Life = flight
+		p.Damage = s.damage
+		p.Pierce = 999
+		p.Radius = 0
+		p.Knockback = s.knockback
+		p.Yaw = yawOf(flatDir(at - origin, rp.Facing))
+		p.X = { From = origin, To = at, R = radius }
+		pushFx("mt", { r1(at.X), r1(at.Z), r1(radius), r1(flight), evo and 1 or 0 })
+	end
+	Fx.Sound("Hit")
+end
+
+function Class.stepYarn(p: Projectile, dt: number, _now: number): boolean
+	local x = p.X
+	local u = math.clamp(p.Age / p.Life, 0, 1)
+	p.Pos = x.From:Lerp(x.To, u)
+	p.Y = Config.ArenaOrigin.Y + 1.2 + 9 * math.sin(math.pi * u)
+	p.Yaw += dt * 9
+	return false
+end
+
+function Class.landYarn(p: Projectile)
+	local x = p.X
+	local owner = p.Owner
+	if not owner.Alive then
+		return
+	end
+	local at = x.To
+	local now = ctx.RunManager.GetRunTime()
+	local n = grid():QueryCircle(at.X, at.Z, x.R, queryBuf)
+	local hits = table.move(queryBuf, 1, n, 1, {})
+	local kits = ctx.ClassKits
+	for _, e in ipairs(hits) do
+		if e.Alive then
+			local died = hitEnemy(owner, e, p.Damage, at, p.Knockback)
+			if not died and e.Alive and kits then
+				kits.OnYarnHit(owner, e, now)
+			end
+		end
+	end
+	Fx.Explosion(at, x.R)
+	Fx.Sound("Hit")
+end
+
+-- A rolling can (Ruckus dash): rolls on its dash momentum, then explodes after its fuse.
+function Class.stepCan(p: Projectile, dt: number, _now: number): boolean
+	p.Pos += p.Vel * dt
+	p.Vel *= math.max(0, 1 - 2.4 * dt)
+	p.Yaw += dt * 10
+	return false
+end
+
+function Class.popCan(p: Projectile)
+	local x = p.X
+	if not p.Owner.Alive then
+		return
+	end
+	burstAround(p.Owner, p.Pos, x.R, p.Damage)
+	Fx.Explosion(p.Pos, x.R)
+end
+
+------------------------------------------------------------------------------------------
+-- API for ClassKits (server/Run/ClassKits.lua). All damage here is NoProc.
+------------------------------------------------------------------------------------------
+
+-- Damage to everything within `radius` of `at` (a landing blast). Never procs.
+function WeaponSystem.ClassBurst(rp, at: Vector3, radius: number, damage: number, weapon: any?)
+	local prev = killSource
+	killSource = weapon or killSource
+	burstAround(rp, at, radius, damage)
+	killSource = prev
+	Fx.Explosion(at, radius)
+end
+
+-- Sets enemy `e` burning for `seconds` (refresh only: an enemy that already burns just gets
+-- its timer pushed out, never a second burn). tickDamage every `tick` s, NoProc.
+function WeaponSystem.Ignite(rp, e, seconds: number, tickDamage: number, tick: number, weapon: any): boolean
+	if not e.Alive then
+		return false
+	end
+	local now = ctx.RunManager.GetRunTime()
+	local b = burns[e]
+	if b and b.Uid == e.Uid and now < b.Until then
+		b.Until = math.max(b.Until, now + seconds)
+		return false
+	end
+	burns[e] = { Uid = e.Uid, Until = now + seconds, Next = now + tick, Tick = tick, Damage = tickDamage, Owner = rp, Weapon = weapon, NoProc = true }
+	return true
+end
+
+-- Drops a rolling can at `pos` rolling along `dir`; it explodes after `fuse` s for `damage`
+-- within `radius`. At most `maxLive` of the hero's cans exist at once.
+function WeaponSystem.DropCan(rp, pos: Vector3, dir: Vector3, damage: number, radius: number, fuse: number, speed: number, maxLive: number): boolean
+	local w = rp.Weapons.ScrapToss
+	if not w then
+		return false
+	end
+	local mine = 0
+	for _, o in ipairs(live) do
+		if o.Kind == "Can" and o.Owner == rp then
+			mine += 1
+		end
+	end
+	if mine >= maxLive then
+		return false
+	end
+	local p = allocProjectile()
+	if not p then
+		return false
+	end
+	p.Kind = "Can"
+	p.Visual = visualByte(61, w)
+	p.Owner = rp
+	p.Weapon = w
+	p.Pos = ground(pos)
+	p.Y = Config.ArenaOrigin.Y + 0.7
+	p.Vel = flatDir(dir, rp.Facing) * speed
+	p.Life = fuse
+	p.Damage = damage
+	p.Pierce = 999
+	p.Radius = 0
+	p.Knockback = 0
+	p.Yaw = yawOf(flatDir(dir, rp.Facing))
+	p.X = { R = radius }
+	return true
+end
+
+-- A fire patch that burns enemies in it (Granny's boost scorch); harmless to heroes. NoProc.
+function WeaponSystem.Scorch(rp, pos: Vector3, radius: number, damage: number, life: number, tick: number, maxPatches: number)
+	local mine, oldest = 0, nil
+	for i, z in ipairs(patches) do
+		if z.Owner == rp and z.NoProc then
+			mine += 1
+			oldest = oldest or i
+		end
+	end
+	if mine >= maxPatches and oldest then
+		table.remove(patches, oldest)
+	end
+	rp.ClassFxWeapon = rp.ClassFxWeapon or {}
+	local at = ground(pos)
+	table.insert(patches, {
+		Pos = at,
+		Radius = radius,
+		Life = life,
+		Tick = tick,
+		Timer = 0.1,
+		Damage = damage,
+		Owner = rp,
+		Weapon = rp.ClassFxWeapon,
+		NoProc = true,
+	})
+	pushFx("fp", { r1(at.X), r1(at.Z), r1(radius), r1(life), 0 })
+end
+
+-- The effective stats row of one of the hero's weapons (nil when not owned), and the weapon.
+function WeaponSystem.ClassWeaponStats(rp, weaponId: string)
+	local w = rp.Weapons[weaponId]
+	if not w then
+		return nil, nil
+	end
+	return weaponStats(rp, w), w
+end
+
 -- Kind → step function for the armoury batch (true = remove the projectile).
 Arm.Step = {
 	Ward = Arm.stepWard,
@@ -2664,6 +3019,8 @@ Arm.Step = {
 	Snare = Arm.stepSnare,
 	Wisp = Arm.stepWisp,
 	Vortex = Arm.stepVortex,
+	Yarn = Class.stepYarn,
+	Can = Class.stepCan,
 }
 
 -- A projectile of the batch reached its Life: true = it keeps going (a saw's rebound).
@@ -2681,6 +3038,10 @@ function Arm.expire(p: Projectile): boolean
 		return Arm.reboundSaw(p)
 	elseif kind == "Vortex" then
 		Arm.implode(p)
+	elseif kind == "Yarn" then
+		Class.landYarn(p)
+	elseif kind == "Can" then
+		Class.popCan(p)
 	end
 	return false
 end

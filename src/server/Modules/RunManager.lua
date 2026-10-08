@@ -958,6 +958,10 @@ local function newRunPlayer(player: Player)
 	local data = ctx.DataService.GetData(player)
 	-- the hero this run plays: the selected one, or the Weekly Challenge's lent hero (META)
 	local heroId = ctx.MetaService and ctx.MetaService.RunHero(mode, data) or data.SelectedCharacter
+	-- SwarmV2: the 11 old heroes are hidden; a save that still selects one plays the default class
+	if ctx.ClassRegistry then
+		heroId = ctx.ClassRegistry.RunHero(heroId)
+	end
 	-- SwarmV2: the class admitted by MatchAdmission (never a client claim) wins
 	local admitted = admittedClass[player]
 	if admitted and CharacterData.Characters[admitted] then

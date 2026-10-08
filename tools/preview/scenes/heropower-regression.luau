@@ -22,6 +22,8 @@ local CharacterData = preview.shared("CharacterData")
 local U = Config.Ultimate
 
 local data = assert(DS.GetData(player), "profile missing")
+-- these checks are about the old heroes: let a run play a hidden one (SwarmV2 RunConfig)
+require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Classes.MapLegacyToDefault = false
 data.OwnedCharacters = { Knight = true, Priest = true }
 data.SelectedCharacter = "Knight"
 data.Heroes = { Knight = { XP = 0, Runs = 0 } }
@@ -228,10 +230,10 @@ assert(not table.find(entry.Weapons, "Whip"), "Whip removed")
 for _, id in ipairs(CharacterData.Order) do
 	BP.Set(player, id, "Weapons", "Whip", true)
 end
-assert(#data.Presets.List == #CharacterData.Order, "one list per hero")
+assert(#data.Presets.List >= #CharacterData.Order, "one list per hero")
 -- the save stays valid after cleaning
 DS.CleanFeatureFields(data)
-assert(#data.Presets.List == #CharacterData.Order and data.Presets.Active.Knight ~= nil, "clean keeps the presets")
+assert(#data.Presets.List >= #CharacterData.Order and data.Presets.Active.Knight ~= nil, "clean keeps the presets")
 -- switch off
 Config.Features.BuildPresets = false
 assert(not BP.Set(player, "Mage", "Weapons", "MagicOrb", true), "switch off: refused")

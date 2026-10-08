@@ -262,7 +262,7 @@ do
 	local old = join("Oldtimer", 50002)
 	local d3 = assert(DS.GetData(old), "old save loads")
 	assert(d3.Version == Config.Data.SchemaVersion and d3.Gold == 77 and d3.OwnedCharacters.Mage == true, "v0 save migrates, keeps gold and heroes")
-	assert(d3.HeroUpgrades.Knight.MaxHP == 3 and d3.Meta.MaxHP == 3, "shared stat levels copied to heroes, Meta kept")
+	assert(d3.HeroUpgrades.ruckus.MaxHP == 3 and d3.Meta.MaxHP == 3, "shared stat levels copied to heroes, Meta kept")
 	for k, v in pairs(Config.Settings.Defaults) do
 		assert(d3.Settings[k] ~= nil and type(d3.Settings[k]) == type(v), "migrated settings key " .. k)
 	end
