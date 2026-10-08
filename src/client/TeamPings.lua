@@ -129,7 +129,7 @@ function TeamPings.Init()
 	local panel = UIKit.new("Frame", { Name = "PingOptions", BackgroundColor3 = Theme.Color.Panel, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, M, 1, -(M + 48 + 8)), Size = UDim2.fromOffset(248, 172), Visible = false }, frame)
 	UIKit.corner(panel, Theme.Radius.M)
 	UIKit.stroke(panel, Theme.Color.PanelEdge, 2, 0)
-	local button = UIKit.Button(frame, { Name = "Ping", Title = "PING", Icon = "bars", IconSize = 20, Kind = "Secondary", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, M, 1, -M), Size = UDim2.fromOffset(88, 48), Shadow = false, OnClick = function() toggle(panel) end })
+	local button = UIKit.Button(frame, { Name = "Ping", Title = "PING", Icon = "bars", IconSize = 20, Kind = "Secondary", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, M, 1, -M), Size = UDim2.fromOffset(112, 48), Shadow = false, Shrink = true, OnClick = function() toggle(panel) end })
 	for i, kind in ipairs(kinds) do
 		UIKit.Button(panel, { Name = kind, Title = string.upper(kind), Kind = "Secondary", Position = UDim2.fromOffset(8 + ((i - 1) % 2) * 120, 8 + math.floor((i - 1) / 2) * 54), Size = UDim2.fromOffset(112, 48), Shadow = false, OnClick = function() TeamPings.Send(kind); opened = false; panel.Visible = false end })
 	end

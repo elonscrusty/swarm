@@ -218,7 +218,7 @@ function PingWheel.Init()
 		BackgroundColor3 = C.BlueDeep,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(46, 46),
+		Size = UDim2.fromOffset(44, 44),
 		Selectable = true,
 		ZIndex = 3,
 	}, slot) :: TextButton
@@ -246,7 +246,7 @@ function PingWheel.Init()
 		local btn = Q.ButtonSize
 		if not grid then
 			local side = math.clamp(math.min(Q.WheelSize, rs.Y * 0.6, rs.X * 0.9), 190, Q.WheelSize)
-			btn = math.clamp(math.floor(side * 0.3), 52, Q.ButtonSize)
+			btn = math.clamp(math.floor(side * 0.27), 52, Q.ButtonSize)
 			local radius = side / 2 - btn / 2
 			slot.Size = UDim2.fromOffset(side, side)
 			slot.Position = UDim2.fromScale(0.5, 0.47)

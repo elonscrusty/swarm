@@ -114,7 +114,7 @@ VIT.H = VIT.PadY * 2 + VIT.HP + VIT.Gap + VIT.XP
 -- ability panel: one row (weapons | passives) under a slim level / XP strip, + BUILD column
 local INV = { Pad = 10, Tile = 64, Gap = 8, Split = 18, XP = 22, XPGap = 6, Build = 66 }
 local PILL_H, PAUSE = 44, 50 -- top right counters / pause button
-local TIMER_W, TIMER_H = 150, 52
+local TIMER_W, TIMER_H = 128, 46
 local OBJ_W, OBJ_H = 380, 54 -- objective panel under the timer (two lines)
 local OBJ_MIN = 240 -- narrowest objective panel beside the vitals (landscape)
 -- Bright Arcade: the XP bar is the blue fill on a navy-edged track; the health bar stays crimson
@@ -186,7 +186,7 @@ local function buildTimer(frame: Frame)
 	ui.Timer = role(face, "Stat", "00:00", {
 		Name = "Timer",
 		Size = UDim2.fromScale(1, 1),
-		TextSize = TS(TY.Display.Size),
+		TextSize = TS(28),
 		TextXAlignment = Enum.TextXAlignment.Center,
 	})
 	fitText(ui.Timer, 16)
@@ -1211,7 +1211,7 @@ local function layout()
 
 	-- timer: landscape beside the ability panel at the bottom (placed with it below);
 	-- portrait: top centre as before
-	local timerW, timerH = compact and 124 or TIMER_W, compact and 46 or TIMER_H
+	local timerW, timerH = compact and 108 or TIMER_W, compact and 40 or TIMER_H
 	local timerY = 6
 	if ins.Left + 8 > W / 2 - TIMER_W / 2 then
 		timerY = ins.Top + 2
