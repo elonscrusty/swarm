@@ -9,10 +9,12 @@
 	                   own lobby menu is never shown as the destination)
 	  SwarmState RunServer + RunServerStatus = "Waiting"  "STARTING YOUR RUN" with
 	                   "Heroes ready: N / M" (RunServerHere / RunServerExpected)
-	Banner (top centre, small): player attribute TravelHomeIn = seconds  "Main lobby in Ns"
-	  with GO NOW / STAY (remote TravelHome "Go" | "Stay"). Hidden while the results panel
-	  is open (SetResultsOpen): the results footer shows the same countdown then, so there
-	  is only ever one.
+	Notice (bottom-right corner, compact, inside the device safe area): player attribute
+	  TravelHomeIn = seconds  "Return to lobby in Ns" with GO NOW / STAY (remote TravelHome
+	  "Go" | "Stay"). It lives in its own ScreenGui, so it never sits in a menu's layout; the
+	  Daily screen reserves the corner while it shows (TravelOverlay.NoticeReserve). Hidden
+	  while the results panel is open (SetResultsOpen): the results footer shows the same
+	  countdown then, so there is only ever one.
 	Nothing shows in Studio or on a lobby server that never teleports. Reduced effects: no
 	dot animation, no fades.
 ]]
@@ -40,8 +42,15 @@ local cover: Frame
 local coverTitle: TextLabel
 local coverLine: TextLabel
 local coverDots: TextLabel
+local noticeGui: ScreenGui
+local noticeRoot: Frame
+local noticeScale: UIScale
 local banner: Frame
 local bannerText: TextLabel
+local NOTICE_HEIGHT = 56
+local NOTICE_WIDTH = 440
+local GO_WIDTH = 108
+local STAY_WIDTH = 88
 local shownCover = false
 local resultsOpen = false -- UIBuilder: the results panel is up (it shows TravelHomeIn itself)
 
@@ -59,6 +68,8 @@ local function fit()
 	local s = math.clamp(math.min(size.X / refX, size.Y / refY), Config.UI.MinScale, Config.UI.MaxScale)
 	scale.Scale = s
 	root.Size = UDim2.fromScale(1 / s, 1 / s)
+	noticeScale.Scale = math.max(s, 0.8) -- stays readable on small screens
+	noticeRoot.Size = UDim2.fromScale(1 / noticeScale.Scale, 1 / noticeScale.Scale)
 end
 
 local function build()
@@ -95,23 +106,35 @@ local function build()
 	coverLine = UIKit.Role(panel, "Body", "", { Name = "Line", LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, TextWrapped = true, Size = UDim2.new(1, 0, 0, 44) })
 	coverDots = UIKit.Role(panel, "Heading", "• • •", { Name = "Dots", LayoutOrder = 4, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Gold, Size = UDim2.new(1, 0, 0, 24) })
 
-	-- the go-home banner (run server lobby, after a run)
-	banner = UIKit.Panel(root, {
+	-- the go-home notice (run server lobby, after a run): its own ScreenGui in the device
+	-- safe area, anchored to the bottom-right corner
+	noticeGui = new("ScreenGui", {
+		Name = "TravelHomeNotice",
+		IgnoreGuiInset = true,
+		ResetOnSpawn = false,
+		DisplayOrder = 90,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	})
+	noticeGui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	noticeRoot = new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, noticeGui)
+	noticeScale = new("UIScale", { Scale = 1 }, noticeRoot)
+	banner = UIKit.Panel(noticeRoot, {
 		Name = "HomeBanner",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 64),
-		Size = UDim2.fromOffset(560, 64),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -12, 1, -12),
+		Size = UDim2.new(1, -24, 0, NOTICE_HEIGHT),
 		Visible = false,
 		ZIndex = 5,
 	})
-	UIKit.padding(banner, 6, 8, 6, 16)
-	UIKit.list(banner, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) })
-	bannerText = UIKit.Role(banner, "Body", "", { Name = "Text", LayoutOrder = 1, Size = UDim2.new(1, -290, 1, 0), TextWrapped = true })
+	new("UISizeConstraint", { MaxSize = Vector2.new(NOTICE_WIDTH, NOTICE_HEIGHT) }, banner)
+	UIKit.padding(banner, 4, 8, 4, 10)
+	UIKit.list(banner, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	bannerText = UIKit.Role(banner, "Body", "", { Name = "Text", LayoutOrder = 1, Size = UDim2.new(1, -(GO_WIDTH + STAY_WIDTH + 16), 1, 0), TextWrapped = true, TextSize = 15 })
 	UIKit.Button(banner, {
 		Kind = "Primary",
 		Title = "GO NOW",
 		Name = "GoNow",
-		Size = UDim2.fromOffset(140, Theme.Size.TapMin),
+		Size = UDim2.fromOffset(GO_WIDTH, Theme.Size.TapMin),
 		LayoutOrder = 2,
 		OnClick = function()
 			Remotes.Get("TravelHome"):FireServer("Go")
@@ -121,7 +144,7 @@ local function build()
 		Kind = "Secondary",
 		Title = "STAY",
 		Name = "Stay",
-		Size = UDim2.fromOffset(120, Theme.Size.TapMin),
+		Size = UDim2.fromOffset(STAY_WIDTH, Theme.Size.TapMin),
 		LayoutOrder = 3,
 		OnClick = function()
 			Remotes.Get("TravelHome"):FireServer("Stay")
@@ -129,6 +152,7 @@ local function build()
 	})
 
 	gui.Parent = player:WaitForChild("PlayerGui")
+	noticeGui.Parent = player:WaitForChild("PlayerGui")
 	fit()
 	local cam = workspace.CurrentCamera
 	if cam then
@@ -182,7 +206,7 @@ local function update(state: Configuration, t: number)
 	local bannerOn = not show and not resultsOpen and type(left) == "number" and player:GetAttribute("InRun") ~= true
 	banner.Visible = bannerOn
 	if bannerOn then
-		bannerText.Text = string.format("Main lobby in %ds", left)
+		bannerText.Text = string.format("Return to lobby in %ds", left)
 	end
 end
 
@@ -207,6 +231,16 @@ end
 function TravelOverlay.Covering(): boolean
 	local travel = player:GetAttribute("Travel")
 	return travel == "ToRun" or travel == "ToLobby"
+end
+
+-- Vertical room (in pixels, bottom of the screen) a menu panel must leave clear while the
+-- go-home notice shows; 0 when it is hidden.
+function TravelOverlay.NoticeReserve(): number
+	local left = player:GetAttribute("TravelHomeIn")
+	if type(left) == "number" and player:GetAttribute("InRun") ~= true and not resultsOpen then
+		return NOTICE_HEIGHT + 24
+	end
+	return 0
 end
 
 -- Preview / tests: the cover's and banner's current state.

@@ -258,7 +258,7 @@ else
 	preview.advance(1)
 	check("home timer set", me:GetAttribute("TravelHomeIn") == Config.RunServers.HomeDelaySeconds - 1 or me:GetAttribute("TravelHomeIn") == Config.RunServers.HomeDelaySeconds, tostring(me:GetAttribute("TravelHomeIn")))
 	local o = preview.client("TravelOverlay").Debug()
-	check("client banner", o.Banner and string.find(o.BannerText, "Main lobby in") ~= nil, o.BannerText)
+	check("client banner", o.Banner and string.find(o.BannerText, "Return to lobby in") ~= nil, o.BannerText)
 	-- Dee stays
 	as(dee, "TravelHome", "Stay")
 	preview.advance(0.5)

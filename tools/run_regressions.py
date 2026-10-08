@@ -43,6 +43,9 @@ def main():
     # logic regressions and the social Home card check need the switch on, so they are left out until release
     checks += [("layout", ["social", d, "screen=" + s]) for d in ("iphone", "phone-portrait", "pc") for s in ("Starter", "Group", "Invite", "Store", "More")]
     checks += [("uistate", [])]
+    # DAILY CHALLENGE screen + the go-home notice (bottom-right, clear of the panel; ticks live; GO NOW / STAY remotes)
+    checks += [("layout", ["daily", d, "travel=on"]) for d in ("iphone", "phone-portrait", "pc", "tablet")]
+    checks += [("layout", ["daily", d, "used=on", "details=on", "travel=on"]) for d in ("iphone", "phone-portrait", "pc")]
     checks += [("home-board-regression", [])]
     checks += [("layout", ["menu", d, "board=" + b]) for d in ("iphone", "phone-portrait") for b in ("empty", "error", "out")]
     # the player's Roblox Text size setting on a phone (TextFit, docs/MOBILE_FIX.md)
