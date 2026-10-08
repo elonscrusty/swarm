@@ -1353,6 +1353,11 @@ local function refreshAccount(p: { [string]: any }): boolean
 	return width
 end
 
+-- The lobby menu is on screen with the player's profile in it (ClientMain: ClientReady).
+function LobbyScreen.ShowsProfile(): boolean
+	return ui.Frame ~= nil and ui.Frame.Visible and profile ~= nil
+end
+
 function LobbyScreen.SetJoined(on: boolean)
 	joinedCountdown = on
 end

@@ -1957,6 +1957,7 @@ Config.Features = {
 	ReviveThanks = true, -- THANKS! button after a teammate revive (docs/next/REVIVE_THANKS.md)
 	Prestige = false, -- HELD (owner, 2026-10-07): built, not released; reset a maxed hero's mastery for a gold-bonus star (docs/next/PRESTIGE.md)
 	QuickResume = false, -- HELD (owner, 2026-10-07): built, not released; live servers close ~30 s after the last player leaves (docs/next/QUICK_RESUME.md)
+	Analytics = true, -- new-player funnel + first-milestone events, server-side AnalyticsService only (server Analytics.lua, docs/ANALYTICS.md)
 }
 
 -- Season track (feature 22, Config.Features.SeasonTrack; MetaData, docs/features/META.md).

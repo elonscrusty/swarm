@@ -834,6 +834,9 @@ local function apply(rp, c)
 	elseif c.Type == "Evolve" then
 		if canEvolve(rp, c.Id) then
 			rp.Weapons[c.Id].Evolved = true
+			if ctx.Analytics then
+				ctx.Analytics.OnEvolution(rp.Player) -- before discover: an empty record = the account's first
+			end
 			discover(rp, "Evolutions", c.Id)
 			ctx.RunManager.Notify(rp.Player, WeaponData.Weapons[c.Id].Evolution.Name .. "!", Color3.fromRGB(255, 210, 60))
 		end
@@ -1067,6 +1070,9 @@ local function chestLevelUp(rp, rewards)
 	for _, id in ipairs(rp.WeaponOrder) do
 		if canEvolve(rp, id) then
 			rp.Weapons[id].Evolved = true
+			if ctx.Analytics then
+				ctx.Analytics.OnEvolution(rp.Player) -- before discover: an empty record = the account's first
+			end
 			discover(rp, "Evolutions", id) -- a chest evolution reveals the result on later cards too
 			local def = WeaponData.Weapons[id]
 			table.insert(rewards, { Name = def.Evolution.Name, Text = "EVOLVED!", Color = def.Color })

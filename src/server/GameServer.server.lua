@@ -87,6 +87,7 @@ local ORDER = {
 	"CoopBoss", -- co-op boss weak spot, BossAI variant hook (feature 18, TEAM)
 	"HeroSong", -- the Bard's Rally Song team buff (feature 11, HEROES)
 	"Walkthrough", -- interactive first-run walkthrough (docs/next/WALKTHROUGH.md)
+	"Analytics", -- new-player funnel + first-milestone events (AnalyticsService, docs/ANALYTICS.md)
 }
 
 for _, name in ipairs(ORDER) do

@@ -969,8 +969,15 @@ local function stepWaves(dt: number, runTime: number)
 	setWaveLeft(alive)
 	local fast = fastStartCfg(runWave)
 	local clearShare = fast and tonumber(fast.ClearShare) or W.ClearShare
-	if wavePhase == "Fighting" and (alive <= math.max(W.ClearMin or 0, math.floor(waveTotal * clearShare)) or waveTimer <= 0) then
-		breather(W.BreatherSeconds * fastStart(runWave, "BreatherMult"), runTime)
+	if wavePhase == "Fighting" then
+		local cleared = alive <= math.max(W.ClearMin or 0, math.floor(waveTotal * clearShare))
+		if cleared or waveTimer <= 0 then
+			-- funnel analytics: only a real clear counts, not the MaxSeconds timeout (pcalled inside)
+			if cleared and ctx.Analytics then
+				ctx.Analytics.OnWaveCleared(runWave)
+			end
+			breather(W.BreatherSeconds * fastStart(runWave, "BreatherMult"), runTime)
+		end
 	end
 end
 

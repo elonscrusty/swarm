@@ -280,7 +280,7 @@ do
 		-- next batch (docs/next/)
 		"SmartTutorial", "Walkthrough", "DangerArrows", "FastStart", "DailyQuests", "ComebackGift", "StarterBundle", "GroupBonus", "InviteRewards", "BugReportPlus",
 		-- batch B (docs/PROMPT_BATCH_B.md)
-		"AffixIcons", "EvolutionPreview", "Banish", "DamageNumberOptions", "FinalStand", "StageModifiers", "PartyQuickLines", "ReviveThanks", "Prestige", "QuickResume" }
+		"AffixIcons", "EvolutionPreview", "Banish", "DamageNumberOptions", "FinalStand", "StageModifiers", "PartyQuickLines", "ReviveThanks", "Prestige", "QuickResume", "Analytics" }
 	local n = 0
 	for name, on in pairs(Config.Features) do
 		n += 1

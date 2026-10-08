@@ -354,6 +354,11 @@ function Mock.api()
 		return R.teleport
 	end
 
+	-- The AnalyticsService mock's record (classes/services.luau): calls, fails.
+	function api.analytics()
+		return R.analytics
+	end
+
 	-- TeleportService.TeleportInitFailed for a player (a teleport that failed after the call).
 	function api.teleportInitFailed(p, message: string?)
 		R.fire(states[R.services.TeleportService], "TeleportInitFailed", p, roblox.Enum.TeleportResult.Failure, message or "mock failure")

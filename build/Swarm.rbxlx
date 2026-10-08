@@ -4874,6 +4874,7 @@ Config.Features = {
 	ReviveThanks = true, -- THANKS! button after a teammate revive (docs/next/REVIVE_THANKS.md)
 	Prestige = false, -- HELD (owner, 2026-10-07): built, not released; reset a maxed hero's mastery for a gold-bonus star (docs/next/PRESTIGE.md)
 	QuickResume = false, -- HELD (owner, 2026-10-07): built, not released; live servers close ~30 s after the last player leaves (docs/next/QUICK_RESUME.md)
+	Analytics = true, -- new-player funnel + first-milestone events, server-side AnalyticsService only (server Analytics.lua, docs/ANALYTICS.md)
 }
 
 -- Season track (feature 22, Config.Features.SeasonTrack; MetaData, docs/features/META.md).
@@ -11630,6 +11631,7 @@ Remotes.ClientToServer = {
 	"JoinRun", -- join during the lobby countdown
 	"StartRun", -- (mode) lobby SOLO / DUO / TRIO button, or "Daily" (the DAILY card); during a countdown it joins
 	"StartFirstRun", -- a brand-new player's lobby asks for the automatic first Solo run (RunManager decides)
+	"ClientReady", -- () once per visit: loading picture gone, lobby menu up with the profile (Analytics: onboarding step 2, validated there)
 	"StartNow", -- the countdown's starter skips the rest of the countdown
 	"CycleArena", -- (arenaName?) lobby ARENA screen: pick that arena (unlocked), or the next unlocked one
 	"DevCommand", -- (command, arg?) Studio / creator only, re-checked on the server (DevTools)
@@ -15184,6 +15186,7 @@ local ORDER = {
 	"CoopBoss", -- co-op boss weak spot, BossAI variant hook (feature 18, TEAM)
 	"HeroSong", -- the Bard's Rally Song team buff (feature 11, HEROES)
 	"Walkthrough", -- interactive first-run walkthrough (docs/next/WALKTHROUGH.md)
+	"Analytics", -- new-player funnel + first-milestone events (AnalyticsService, docs/ANALYTICS.md)
 }
 
 for _, name in ipairs(ORDER) do
@@ -15799,6 +15802,265 @@ return AffixSight
       </Item>
       <Item class="ModuleScript" referent="46">
         <Properties>
+          <string name="Name">Analytics</string>
+          <string name="Source"><![CDATA[--[[
+	Analytics.lua  (server only)
+	Roblox funnel analytics for new players (AnalyticsService; switch
+	Config.Features.Analytics; docs/ANALYTICS.md). Every call comes from this server module:
+	Roblox ignores events sent from the client or from Studio, so nothing is sent in Studio
+	(Studio only keeps the local log below for the offline checks).
+
+	Onboarding funnel (LogOnboardingFunnelStepEvent; Roblox keeps the first of each step per
+	user, across servers and reconnects, and counts skipped earlier steps as done). Step
+	numbers and names are fixed: never renumber or rename them, the dashboard keys on them.
+	  1 Joined Game       the player's save loaded on a lobby server
+	  2 Ready to Play     the client reports (remote ClientReady) that the loading picture is
+	                      gone and the lobby menu shows with the player's profile; the server
+	                      accepts it once per server visit, only after step 1 here
+	  3 Started First Run a run really started for the player (RunManager.beginRun) and the
+	                      save says it is the account's first (Stats.Runs was 0)
+	Only accounts that have never started a run (save Stats.Runs == 0 when the save loads)
+	enter the funnel, so long-time players never inflate step 1. No later steps: everything
+	after the first run start is optional or can happen in any order.
+
+	Custom events (LogCustomEvent, value 1, at most once per account by the save rules):
+	  "First Evolution"       a weapon evolved (level-up card or chest) and the save had no
+	                          evolution discovered yet (Discovered.Evolutions)
+	  "First Wave Completed"  wave 1 of the account's first run was cleared (EnemySpawner's
+	                          clear rule, not its timeout); the player was in the run and alive
+	  "Started Second Run"    a run really started and the save says it is the account's
+	                          second (Stats.Runs was 1)
+	The "first" in every name is per account (across visits), read from the existing save;
+	nothing new is saved. DEV-tainted runs send no custom events.
+
+	Every AnalyticsService call is wrapped in pcall: an analytics failure never reaches
+	gameplay. Per server visit each player sends each step / event at most once.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
+local Remotes = require(game:GetService("ReplicatedStorage").Shared.Remotes)
+
+local Analytics = {}
+
+-- Fixed step numbers / names (the Creator Dashboard groups by them).
+Analytics.Steps = {
+	JoinedGame = { Step = 1, Name = "Joined Game" },
+	ReadyToPlay = { Step = 2, Name = "Ready to Play" },
+	StartedFirstRun = { Step = 3, Name = "Started First Run" },
+}
+Analytics.Events = {
+	FirstEvolution = "First Evolution",
+	FirstWaveCompleted = "First Wave Completed",
+	StartedSecondRun = "Started Second Run",
+}
+
+local ctx
+local service: AnalyticsService? = nil
+
+-- per server visit: players whose save showed no run ever started when it loaded
+local onboarding: { [Player]: boolean } = {}
+-- per server visit: what this player has already sent ("Step1", "First Evolution", ...)
+local sent: { [Player]: { [string]: boolean } } = {}
+-- players in the account's first run right now (set at its start, cleared at the next one)
+local inFirstRun: { [Player]: boolean } = {}
+
+--[[
+	What was sent (or, in Studio, would have been): { Kind = "Step" | "Event", UserId,
+	Step?, Name } in order. Read by the offline checks; capped so a long server stays small.
+]]
+Analytics.Log = {} :: { { Kind: string, UserId: number, Step: number?, Name: string } }
+local LOG_MAX = 200
+
+local function enabled(): boolean
+	return Config.FeatureOn("Analytics")
+end
+
+-- Real calls only in a published game (Roblox drops Studio / unpublished events anyway).
+local function live(): boolean
+	return service ~= nil and not RunService:IsStudio() and game.PlaceId ~= 0
+end
+
+local function record(entry)
+	if #Analytics.Log >= LOG_MAX then
+		table.remove(Analytics.Log, 1)
+	end
+	table.insert(Analytics.Log, entry)
+end
+
+-- First time `key` for this player this visit? Marks it.
+local function once(player: Player, key: string): boolean
+	local s = sent[player]
+	if not s then
+		s = {}
+		sent[player] = s
+	end
+	if s[key] then
+		return false
+	end
+	s[key] = true
+	return true
+end
+
+local function logStep(player: Player, step: { Step: number, Name: string })
+	if not enabled() or not player.Parent or not once(player, "Step" .. step.Step) then
+		return
+	end
+	record({ Kind = "Step", UserId = player.UserId, Step = step.Step, Name = step.Name })
+	if live() then
+		local ok, err = pcall(function()
+			(service :: AnalyticsService):LogOnboardingFunnelStepEvent(player, step.Step, step.Name)
+		end)
+		if not ok then
+			warn("[Analytics] onboarding step " .. step.Step .. " failed: " .. tostring(err))
+		end
+	end
+end
+
+local function logEvent(player: Player, name: string)
+	if not enabled() or not player.Parent or not once(player, name) then
+		return
+	end
+	record({ Kind = "Event", UserId = player.UserId, Name = name })
+	if live() then
+		local ok, err = pcall(function()
+			(service :: AnalyticsService):LogCustomEvent(player, name, 1)
+		end)
+		if not ok then
+			warn("[Analytics] custom event '" .. name .. "' failed: " .. tostring(err))
+		end
+	end
+end
+
+local function runServer(): boolean
+	return ctx.RunServers ~= nil and ctx.RunServers.IsRunServer()
+end
+
+local function devTainted(player: Player): boolean
+	return ctx.RunManager ~= nil and ctx.RunManager.IsDevTainted(player)
+end
+
+-- Step 1: the save loaded on a lobby server (a run server's players came from a lobby).
+local function onProfileLoaded(player: Player)
+	-- memory-only saves start from defaults: an old account would look brand new
+	if not enabled() or runServer() or ctx.DataService.IsMemoryOnly() then
+		return
+	end
+	local data = ctx.DataService.GetData(player)
+	if not data or type(data.Stats) ~= "table" or (tonumber(data.Stats.Runs) or 0) > 0 then
+		return
+	end
+	onboarding[player] = true
+	logStep(player, Analytics.Steps.JoinedGame)
+end
+
+--[[
+	Step 2: remote ClientReady (no arguments; anything sent is ignored). Accepted once per
+	visit, only from a player in the funnel on this lobby server whose save is loaded and
+	whose step 1 went out; repeats, early calls and everyone else are dropped.
+]]
+local function onClientReady(player: Player)
+	if not onboarding[player] or not ctx.DataService.GetData(player) then
+		return
+	end
+	local s = sent[player]
+	if not s or not s.Step1 then
+		return
+	end
+	logStep(player, Analytics.Steps.ReadyToPlay)
+end
+
+--[[
+	RunManager.beginRun, for each run player just before the save counts the run:
+	`priorRuns` = the save's Stats.Runs before this run. 0 → step 3, 1 → "Started Second
+	Run". Works on lobby and run servers alike (the run plays where it starts).
+]]
+function Analytics.OnRunStart(player: Player, priorRuns: number)
+	local ok, err = pcall(function()
+		if priorRuns == 0 then
+			inFirstRun[player] = true
+		else
+			inFirstRun[player] = nil
+		end
+		if priorRuns == 0 then
+			logStep(player, Analytics.Steps.StartedFirstRun)
+		elseif priorRuns == 1 then
+			logEvent(player, Analytics.Events.StartedSecondRun)
+		end
+	end)
+	if not ok then
+		warn("[Analytics] OnRunStart: " .. tostring(err))
+	end
+end
+
+--[[
+	LevelUpSystem, when a weapon evolves (card or chest), BEFORE the evolution is recorded
+	in the save's Discovered.Evolutions: an empty record means this is the account's first.
+]]
+function Analytics.OnEvolution(player: Player)
+	local ok, err = pcall(function()
+		local data = ctx.DataService.GetData(player)
+		local evolutions = data and type(data.Discovered) == "table" and data.Discovered.Evolutions
+		if type(evolutions) ~= "table" or next(evolutions) ~= nil or devTainted(player) then
+			return
+		end
+		logEvent(player, Analytics.Events.FirstEvolution)
+	end)
+	if not ok then
+		warn("[Analytics] OnEvolution: " .. tostring(err))
+	end
+end
+
+-- EnemySpawner: run wave `n` was cleared (its own clear rule, not the timeout).
+function Analytics.OnWaveCleared(n: number)
+	if n ~= 1 then
+		return
+	end
+	local ok, err = pcall(function()
+		for _, rp in ipairs(ctx.RunManager.GetRunPlayers()) do
+			local player = rp.Player
+			if inFirstRun[player] and rp.Alive and not rp.DevTainted then
+				logEvent(player, Analytics.Events.FirstWaveCompleted)
+			end
+		end
+	end)
+	if not ok then
+		warn("[Analytics] OnWaveCleared: " .. tostring(err))
+	end
+end
+
+function Analytics.Init(c)
+	ctx = c
+	local ok, result = pcall(function()
+		return game:GetService("AnalyticsService")
+	end)
+	if ok then
+		service = result
+	else
+		warn("[Analytics] AnalyticsService unavailable: " .. tostring(result))
+	end
+end
+
+function Analytics.Start()
+	ctx.DataService.OnProfileLoaded(onProfileLoaded)
+	Remotes.Listen("ClientReady", function(player)
+		onClientReady(player)
+	end, 1)
+	Players.PlayerRemoving:Connect(function(player)
+		onboarding[player] = nil
+		sent[player] = nil
+		inFirstRun[player] = nil
+	end)
+end
+
+return Analytics
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="47">
+        <Properties>
           <string name="Name">BiomeHazards</string>
           <string name="Source"><![CDATA[--[[
 	BiomeHazards.lua
@@ -16016,7 +16278,7 @@ return BiomeHazards
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="47">
+      <Item class="ModuleScript" referent="48">
         <Properties>
           <string name="Name">BossAI</string>
           <string name="Source"><![CDATA[--[[
@@ -17813,7 +18075,7 @@ return BossAI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="48">
+      <Item class="ModuleScript" referent="49">
         <Properties>
           <string name="Name">BugReportService</string>
           <string name="Source"><![CDATA[--[[
@@ -18402,7 +18664,7 @@ return BugReportService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="49">
+      <Item class="ModuleScript" referent="50">
         <Properties>
           <string name="Name">BuildPresets</string>
           <string name="Source"><![CDATA[--[[
@@ -18521,7 +18783,7 @@ return BuildPresets
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="50">
+      <Item class="ModuleScript" referent="51">
         <Properties>
           <string name="Name">CaravanEvent</string>
           <string name="Source"><![CDATA[--[[
@@ -19074,7 +19336,7 @@ return CaravanEvent
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="51">
+      <Item class="ModuleScript" referent="52">
         <Properties>
           <string name="Name">ComebackGift</string>
           <string name="Source"><![CDATA[--[[
@@ -19315,7 +19577,7 @@ return ComebackGift
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="52">
+      <Item class="ModuleScript" referent="53">
         <Properties>
           <string name="Name">CoopBoss</string>
           <string name="Source"><![CDATA[--[[
@@ -19512,7 +19774,7 @@ return CoopBoss
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="53">
+      <Item class="ModuleScript" referent="54">
         <Properties>
           <string name="Name">CursedChest</string>
           <string name="Source"><![CDATA[--[[
@@ -19757,7 +20019,7 @@ return CursedChest
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="54">
+      <Item class="ModuleScript" referent="55">
         <Properties>
           <string name="Name">DailyQuests</string>
           <string name="Source"><![CDATA[--[[
@@ -20185,7 +20447,7 @@ return DailyQuests
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="55">
+      <Item class="ModuleScript" referent="56">
         <Properties>
           <string name="Name">DamageNumbers</string>
           <string name="Source"><![CDATA[--[[
@@ -20278,7 +20540,7 @@ return DamageNumbers
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="56">
+      <Item class="ModuleScript" referent="57">
         <Properties>
           <string name="Name">DataService</string>
           <string name="Source"><![CDATA[--[[
@@ -21529,7 +21791,7 @@ return DataService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="57">
+      <Item class="ModuleScript" referent="58">
         <Properties>
           <string name="Name">DevAccess</string>
           <string name="Source"><![CDATA[--[[
@@ -21591,7 +21853,7 @@ return DevAccess
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="58">
+      <Item class="ModuleScript" referent="59">
         <Properties>
           <string name="Name">DevAllowlist</string>
           <string name="Source"><![CDATA[--[[
@@ -21607,7 +21869,7 @@ return {
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="59">
+      <Item class="ModuleScript" referent="60">
         <Properties>
           <string name="Name">DevTools</string>
           <string name="Source"><![CDATA[--[[
@@ -21873,7 +22135,7 @@ return DevTools
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="60">
+      <Item class="ModuleScript" referent="61">
         <Properties>
           <string name="Name">DiscoveryService</string>
           <string name="Source"><![CDATA[--[[
@@ -22036,7 +22298,7 @@ return DiscoveryService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="61">
+      <Item class="ModuleScript" referent="62">
         <Properties>
           <string name="Name">EncounterDirector</string>
           <string name="Source"><![CDATA[--[[
@@ -22454,7 +22716,7 @@ return EncounterDirector
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="62">
+      <Item class="ModuleScript" referent="63">
         <Properties>
           <string name="Name">EnemyAI</string>
           <string name="Source"><![CDATA[--[[
@@ -23382,7 +23644,7 @@ return EnemyAI
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="63">
+      <Item class="ModuleScript" referent="64">
         <Properties>
           <string name="Name">EnemySpawner</string>
           <string name="Source"><![CDATA[--[[
@@ -24356,8 +24618,15 @@ local function stepWaves(dt: number, runTime: number)
 	setWaveLeft(alive)
 	local fast = fastStartCfg(runWave)
 	local clearShare = fast and tonumber(fast.ClearShare) or W.ClearShare
-	if wavePhase == "Fighting" and (alive <= math.max(W.ClearMin or 0, math.floor(waveTotal * clearShare)) or waveTimer <= 0) then
-		breather(W.BreatherSeconds * fastStart(runWave, "BreatherMult"), runTime)
+	if wavePhase == "Fighting" then
+		local cleared = alive <= math.max(W.ClearMin or 0, math.floor(waveTotal * clearShare))
+		if cleared or waveTimer <= 0 then
+			-- funnel analytics: only a real clear counts, not the MaxSeconds timeout (pcalled inside)
+			if cleared and ctx.Analytics then
+				ctx.Analytics.OnWaveCleared(runWave)
+			end
+			breather(W.BreatherSeconds * fastStart(runWave, "BreatherMult"), runTime)
+		end
 	end
 end
 
@@ -24856,7 +25125,7 @@ return EnemySpawner
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="64">
+      <Item class="ModuleScript" referent="65">
         <Properties>
           <string name="Name">Events</string>
           <string name="Source"><![CDATA[--[[
@@ -24904,7 +25173,7 @@ return Events
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="65">
+      <Item class="ModuleScript" referent="66">
         <Properties>
           <string name="Name">FinalStand</string>
           <string name="Source"><![CDATA[--[[
@@ -25093,7 +25362,7 @@ return FinalStand
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="66">
+      <Item class="ModuleScript" referent="67">
         <Properties>
           <string name="Name">Fx</string>
           <string name="Source"><![CDATA[--[[
@@ -25309,7 +25578,7 @@ return Fx
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="67">
+      <Item class="ModuleScript" referent="68">
         <Properties>
           <string name="Name">GoldSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -25856,7 +26125,7 @@ return GoldSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="68">
+      <Item class="ModuleScript" referent="69">
         <Properties>
           <string name="Name">GroupBonus</string>
           <string name="Source"><![CDATA[--[[
@@ -26046,7 +26315,7 @@ return GroupBonus
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="69">
+      <Item class="ModuleScript" referent="70">
         <Properties>
           <string name="Name">Hazards</string>
           <string name="Source"><![CDATA[--[[
@@ -26281,7 +26550,7 @@ return Hazards
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="70">
+      <Item class="ModuleScript" referent="71">
         <Properties>
           <string name="Name">HeroSong</string>
           <string name="Source"><![CDATA[--[[
@@ -26428,7 +26697,7 @@ return HeroSong
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="71">
+      <Item class="ModuleScript" referent="72">
         <Properties>
           <string name="Name">InviteRewards</string>
           <string name="Source"><![CDATA[--[[
@@ -26879,7 +27148,7 @@ return InviteRewards
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="72">
+      <Item class="ModuleScript" referent="73">
         <Properties>
           <string name="Name">ItemSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -27440,7 +27709,7 @@ return ItemSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="73">
+      <Item class="ModuleScript" referent="74">
         <Properties>
           <string name="Name">JournalService</string>
           <string name="Source"><![CDATA[-- Server-observed enemy and drop discoveries. The journal is opened manually.
@@ -27486,7 +27755,7 @@ return JournalService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="74">
+      <Item class="ModuleScript" referent="75">
         <Properties>
           <string name="Name">LeaderboardService</string>
           <string name="Source"><![CDATA[--[[
@@ -28122,7 +28391,7 @@ return LeaderboardService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="75">
+      <Item class="ModuleScript" referent="76">
         <Properties>
           <string name="Name">LevelUpSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -28961,6 +29230,9 @@ local function apply(rp, c)
 	elseif c.Type == "Evolve" then
 		if canEvolve(rp, c.Id) then
 			rp.Weapons[c.Id].Evolved = true
+			if ctx.Analytics then
+				ctx.Analytics.OnEvolution(rp.Player) -- before discover: an empty record = the account's first
+			end
 			discover(rp, "Evolutions", c.Id)
 			ctx.RunManager.Notify(rp.Player, WeaponData.Weapons[c.Id].Evolution.Name .. "!", Color3.fromRGB(255, 210, 60))
 		end
@@ -29194,6 +29466,9 @@ local function chestLevelUp(rp, rewards)
 	for _, id in ipairs(rp.WeaponOrder) do
 		if canEvolve(rp, id) then
 			rp.Weapons[id].Evolved = true
+			if ctx.Analytics then
+				ctx.Analytics.OnEvolution(rp.Player) -- before discover: an empty record = the account's first
+			end
 			discover(rp, "Evolutions", id) -- a chest evolution reveals the result on later cards too
 			local def = WeaponData.Weapons[id]
 			table.insert(rewards, { Name = def.Evolution.Name, Text = "EVOLVED!", Color = def.Color })
@@ -29419,7 +29694,7 @@ return LevelUpSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="76">
+      <Item class="ModuleScript" referent="77">
         <Properties>
           <string name="Name">LootSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -30964,7 +31239,7 @@ return LootSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="77">
+      <Item class="ModuleScript" referent="78">
         <Properties>
           <string name="Name">MapBuilder</string>
           <string name="Source"><![CDATA[--[[
@@ -35392,7 +35667,7 @@ return MapBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="78">
+      <Item class="ModuleScript" referent="79">
         <Properties>
           <string name="Name">Merchant</string>
           <string name="Source"><![CDATA[--[[
@@ -35781,7 +36056,7 @@ return Merchant
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="79">
+      <Item class="ModuleScript" referent="80">
         <Properties>
           <string name="Name">MeshService</string>
           <string name="Source"><![CDATA[--[[
@@ -36239,7 +36514,7 @@ return MeshService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="80">
+      <Item class="ModuleScript" referent="81">
         <Properties>
           <string name="Name">MetaService</string>
           <string name="Source"><![CDATA[--[[
@@ -36910,7 +37185,7 @@ return MetaService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="81">
+      <Item class="ModuleScript" referent="82">
         <Properties>
           <string name="Name">MiniBoss</string>
           <string name="Source"><![CDATA[--[[
@@ -37262,7 +37537,7 @@ return MiniBoss
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="82">
+      <Item class="ModuleScript" referent="83">
         <Properties>
           <string name="Name">ModelBuilder</string>
           <string name="Source"><![CDATA[--[[
@@ -38210,7 +38485,7 @@ return ModelBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="83">
+      <Item class="ModuleScript" referent="84">
         <Properties>
           <string name="Name">MonetizationService</string>
           <string name="Source"><![CDATA[--[[
@@ -38688,7 +38963,7 @@ return MonetizationService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="84">
+      <Item class="ModuleScript" referent="85">
         <Properties>
           <string name="Name">PartyService</string>
           <string name="Source"><![CDATA[--[[
@@ -39411,7 +39686,7 @@ return PartyService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="85">
+      <Item class="ModuleScript" referent="86">
         <Properties>
           <string name="Name">Prestige</string>
           <string name="Source"><![CDATA[--[[
@@ -39593,7 +39868,7 @@ return Prestige
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="86">
+      <Item class="ModuleScript" referent="87">
         <Properties>
           <string name="Name">QuickResume</string>
           <string name="Source"><![CDATA[--[[
@@ -39906,7 +40181,7 @@ return QuickResume
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="87">
+      <Item class="ModuleScript" referent="88">
         <Properties>
           <string name="Name">Rescue</string>
           <string name="Source"><![CDATA[--[[
@@ -40359,7 +40634,7 @@ return Rescue
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="88">
+      <Item class="ModuleScript" referent="89">
         <Properties>
           <string name="Name">ReviveThanks</string>
           <string name="Source"><![CDATA[--[[
@@ -40517,7 +40792,7 @@ return ReviveThanks
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="89">
+      <Item class="ModuleScript" referent="90">
         <Properties>
           <string name="Name">RunManager</string>
           <string name="Source"><![CDATA[--[[
@@ -41743,6 +42018,10 @@ local function beginRun(here: boolean?)
 			-- the interactive first-run walkthrough (Walkthrough.lua; Solo only, once)
 			if ctx.Walkthrough then
 				ctx.Walkthrough.Consider(rp, data, #list, mode)
+			end
+			-- funnel analytics: the account's first / second run really started (pcalled inside)
+			if ctx.Analytics then
+				ctx.Analytics.OnRunStart(player, tonumber(data.Stats.Runs) or 0)
 			end
 			data.Stats.Runs += 1
 		end
@@ -43222,7 +43501,7 @@ return RunManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="90">
+      <Item class="ModuleScript" referent="91">
         <Properties>
           <string name="Name">RunModifiers</string>
           <string name="Source"><![CDATA[--[[
@@ -43808,7 +44087,7 @@ return RunModifiers
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="91">
+      <Item class="ModuleScript" referent="92">
         <Properties>
           <string name="Name">RunServers</string>
           <string name="Source"><![CDATA[--[[
@@ -44847,7 +45126,7 @@ return RunServers
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="92">
+      <Item class="ModuleScript" referent="93">
         <Properties>
           <string name="Name">SecretRoom</string>
           <string name="Source"><![CDATA[--[[
@@ -45312,7 +45591,7 @@ return SecretRoom
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="93">
+      <Item class="ModuleScript" referent="94">
         <Properties>
           <string name="Name">SpatialGrid</string>
           <string name="Source"><![CDATA[--[[
@@ -45482,7 +45761,7 @@ return SpatialGrid
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="94">
+      <Item class="ModuleScript" referent="95">
         <Properties>
           <string name="Name">StageManager</string>
           <string name="Source"><![CDATA[--[[
@@ -46456,7 +46735,7 @@ return StageManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="95">
+      <Item class="ModuleScript" referent="96">
         <Properties>
           <string name="Name">StarterBundle</string>
           <string name="Source"><![CDATA[--[[
@@ -46646,7 +46925,7 @@ return StarterBundle
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="96">
+      <Item class="ModuleScript" referent="97">
         <Properties>
           <string name="Name">StoreService</string>
           <string name="Source"><![CDATA[--[[
@@ -47191,7 +47470,7 @@ return StoreService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="97">
+      <Item class="ModuleScript" referent="98">
         <Properties>
           <string name="Name">TeamCombo</string>
           <string name="Source"><![CDATA[--[[
@@ -47449,7 +47728,7 @@ return TeamCombo
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="98">
+      <Item class="ModuleScript" referent="99">
         <Properties>
           <string name="Name">TeamPingService</string>
           <string name="Source"><![CDATA[-- Preset team communication. Clients provide targets, never text or recipients.
@@ -47551,7 +47830,7 @@ return TeamPingService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="99">
+      <Item class="ModuleScript" referent="100">
         <Properties>
           <string name="Name">TrialShrine</string>
           <string name="Source"><![CDATA[--[[
@@ -47923,7 +48202,7 @@ return TrialShrine
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="100">
+      <Item class="ModuleScript" referent="101">
         <Properties>
           <string name="Name">Ultimate</string>
           <string name="Source"><![CDATA[--[[
@@ -48214,7 +48493,7 @@ return Ultimate
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="101">
+      <Item class="ModuleScript" referent="102">
         <Properties>
           <string name="Name">Walkthrough</string>
           <string name="Source"><![CDATA[--[[
@@ -48681,7 +48960,7 @@ return Walkthrough
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="102">
+      <Item class="ModuleScript" referent="103">
         <Properties>
           <string name="Name">WeaponMastery</string>
           <string name="Source"><![CDATA[--[[
@@ -48826,7 +49105,7 @@ return WeaponMastery
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="103">
+      <Item class="ModuleScript" referent="104">
         <Properties>
           <string name="Name">WeaponSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -51991,7 +52270,7 @@ return WeaponSystem
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="104">
+      <Item class="ModuleScript" referent="105">
         <Properties>
           <string name="Name">Weather</string>
           <string name="Source"><![CDATA[--[[
@@ -52205,7 +52484,7 @@ return Weather
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="105">
+      <Item class="ModuleScript" referent="106">
         <Properties>
           <string name="Name">WorldEvents</string>
           <string name="Source"><![CDATA[--[[
@@ -52570,7 +52849,7 @@ return WorldEvents
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="106">
+      <Item class="ModuleScript" referent="107">
         <Properties>
           <string name="Name">XPSystem</string>
           <string name="Source"><![CDATA[--[[
@@ -53111,19 +53390,19 @@ return XPSystem
       </Item>
     </Item>
   </Item>
-  <Item class="SoundService" referent="107">
+  <Item class="SoundService" referent="108">
     <Properties>
       <string name="Name">SoundService</string>
       <bool name="RespectFilteringEnabled">true</bool>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="108">
+  <Item class="StarterGui" referent="109">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="109">
+  <Item class="StarterPlayer" referent="110">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <float name="CameraMaxZoomDistance">120</float>
@@ -53136,15 +53415,15 @@ return XPSystem
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="110">
+    <Item class="StarterPlayerScripts" referent="111">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="111">
+      <Item class="Folder" referent="112">
         <Properties>
           <string name="Name">SwarmClient</string>
         </Properties>
-        <Item class="ModuleScript" referent="112">
+        <Item class="ModuleScript" referent="113">
           <Properties>
             <string name="Name">Accessibility</string>
             <string name="Source"><![CDATA[-- Shared combat colours and optional readable sound cues. Hazard outlines are cosmetic,
@@ -53321,7 +53600,7 @@ return Accessibility
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="113">
+        <Item class="ModuleScript" referent="114">
           <Properties>
             <string name="Name">AffixIcons</string>
             <string name="Source"><![CDATA[--[[
@@ -53682,7 +53961,7 @@ return AffixIcons
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="114">
+        <Item class="ModuleScript" referent="115">
           <Properties>
             <string name="Name">Announcer</string>
             <string name="Source"><![CDATA[--[[
@@ -53858,7 +54137,7 @@ return Announcer
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="115">
+        <Item class="ModuleScript" referent="116">
           <Properties>
             <string name="Name">ArtImage</string>
             <string name="Source"><![CDATA[--[[
@@ -54267,7 +54546,7 @@ return ArtImage
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="116">
+        <Item class="ModuleScript" referent="117">
           <Properties>
             <string name="Name">AssetPreload</string>
             <string name="Source"><![CDATA[--[[
@@ -54418,7 +54697,7 @@ return AssetPreload
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="117">
+        <Item class="ModuleScript" referent="118">
           <Properties>
             <string name="Name">Audio</string>
             <string name="Source"><![CDATA[--[[
@@ -55057,7 +55336,7 @@ return Audio
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="118">
+        <Item class="ModuleScript" referent="119">
           <Properties>
             <string name="Name">BossIntro</string>
             <string name="Source"><![CDATA[--[[
@@ -55355,7 +55634,7 @@ return BossIntro
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="119">
+        <Item class="ModuleScript" referent="120">
           <Properties>
             <string name="Name">BugReportUI</string>
             <string name="Source"><![CDATA[--[[
@@ -55726,7 +56005,7 @@ return BugReportUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="120">
+        <Item class="ModuleScript" referent="121">
           <Properties>
             <string name="Name">BugSnapshot</string>
             <string name="Source"><![CDATA[--[[
@@ -55937,7 +56216,7 @@ return BugSnapshot
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="121">
+        <Item class="ModuleScript" referent="122">
           <Properties>
             <string name="Name">CameraController</string>
             <string name="Source"><![CDATA[--[[
@@ -56285,7 +56564,7 @@ return CameraController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="122">
+        <Item class="ModuleScript" referent="123">
           <Properties>
             <string name="Name">ChallengesUI</string>
             <string name="Source"><![CDATA[--[[
@@ -56465,7 +56744,7 @@ return ChallengesUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="123">
+        <Item class="LocalScript" referent="124">
           <Properties>
             <string name="Name">ClientMain</string>
             <string name="Source"><![CDATA[--[[
@@ -56647,6 +56926,26 @@ boot("PartyLines", function() require(script.Parent:WaitForChild("PartyLines")).
 boot("ReviveThanks", function() require(script.Parent:WaitForChild("ReviveThanks")).Init() end) -- THANKS! after a teammate revive (idle while ReviveThanks is off)
 boot("ResumeCard", function() require(script.Parent:WaitForChild("ResumeCard")).Init() end) -- QuickResume: the RESUME RUN card of a held solo run (idle while the switch is off)
 
+--[[
+	Ready to play (server Analytics: onboarding step 2): told once per visit, when the
+	loading picture is gone, no travel cover is up and the player can act: the lobby menu
+	shows with their profile, or they are already in a run. The server decides whether it
+	counts; this only reports the moment.
+]]
+task.spawn(function()
+	local LobbyScreen = require(script.Parent:WaitForChild("LobbyScreen"))
+	local gui = player:WaitForChild("PlayerGui")
+	local t0 = os.clock()
+	while os.clock() - t0 < 600 do
+		if not gui:FindFirstChild("LoadingScreen") and player:GetAttribute("Travel") == nil
+			and (LobbyScreen.ShowsProfile() or (player:GetAttribute("InRun") == true and player.Character ~= nil)) then
+			Remotes.Get("ClientReady"):FireServer()
+			return
+		end
+		task.wait(0.25)
+	end
+end)
+
 -- Humanoid state switches don't replicate and the client owns its character, so the
 -- server's settings are repeated here: no tripping, ragdolling or dying (jumps: JumpController).
 local function setupCharacter(char: Model)
@@ -56686,7 +56985,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="124">
+        <Item class="ModuleScript" referent="125">
           <Properties>
             <string name="Name">ClientPerformance</string>
             <string name="Source"><![CDATA[-- Reduce decoration after sustained slow frames; never change danger cues or saved settings.
@@ -56735,7 +57034,7 @@ return ClientPerformance
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="125">
+        <Item class="ModuleScript" referent="126">
           <Properties>
             <string name="Name">ClientSettings</string>
             <string name="Source"><![CDATA[--[[
@@ -56852,7 +57151,7 @@ return ClientSettings
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="126">
+        <Item class="ModuleScript" referent="127">
           <Properties>
             <string name="Name">CombatFx</string>
             <string name="Source"><![CDATA[--[[
@@ -57458,7 +57757,7 @@ return CombatFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="127">
+        <Item class="ModuleScript" referent="128">
           <Properties>
             <string name="Name">Cosmetics</string>
             <string name="Source"><![CDATA[--[[
@@ -57535,7 +57834,7 @@ return Cosmetics
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="128">
+        <Item class="ModuleScript" referent="129">
           <Properties>
             <string name="Name">DamageOptionsUI</string>
             <string name="Source"><![CDATA[--[[
@@ -57620,7 +57919,7 @@ return DamageOptionsUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="129">
+        <Item class="ModuleScript" referent="130">
           <Properties>
             <string name="Name">DamageText</string>
             <string name="Source"><![CDATA[--[[
@@ -57925,7 +58224,7 @@ return DamageText
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="130">
+        <Item class="ModuleScript" referent="131">
           <Properties>
             <string name="Name">DangerArrows</string>
             <string name="Source"><![CDATA[--[[
@@ -58582,7 +58881,7 @@ return DangerArrows
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="131">
+        <Item class="ModuleScript" referent="132">
           <Properties>
             <string name="Name">DevInbox</string>
             <string name="Source"><![CDATA[--[[
@@ -58993,7 +59292,7 @@ return DevInbox
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="132">
+        <Item class="ModuleScript" referent="133">
           <Properties>
             <string name="Name">DevPanel</string>
             <string name="Source"><![CDATA[--[[
@@ -59482,7 +59781,7 @@ return DevPanel
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="133">
+        <Item class="ModuleScript" referent="134">
           <Properties>
             <string name="Name">EnemyRenderer</string>
             <string name="Source"><![CDATA[--[[
@@ -61018,7 +61317,7 @@ return EnemyRenderer
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="134">
+        <Item class="ModuleScript" referent="135">
           <Properties>
             <string name="Name">ExploreUI</string>
             <string name="Source"><![CDATA[--[[
@@ -61797,7 +62096,7 @@ return ExploreUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="135">
+        <Item class="ModuleScript" referent="136">
           <Properties>
             <string name="Name">FeatureHud</string>
             <string name="Source"><![CDATA[--[[
@@ -62581,7 +62880,7 @@ return FeatureHud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="136">
+        <Item class="ModuleScript" referent="137">
           <Properties>
             <string name="Name">FinalStandFx</string>
             <string name="Source"><![CDATA[--[[
@@ -62745,7 +63044,7 @@ return FinalStandFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="137">
+        <Item class="ModuleScript" referent="138">
           <Properties>
             <string name="Name">FlickerLights</string>
             <string name="Source"><![CDATA[--[[
@@ -62812,7 +63111,7 @@ return FlickerLights
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="138">
+        <Item class="ModuleScript" referent="139">
           <Properties>
             <string name="Name">GroundDetail</string>
             <string name="Source"><![CDATA[--[[
@@ -63683,7 +63982,7 @@ return GroundDetail
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="139">
+        <Item class="ModuleScript" referent="140">
           <Properties>
             <string name="Name">HeroPresets</string>
             <string name="Source"><![CDATA[--[[
@@ -63812,7 +64111,7 @@ return HeroPresets
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="140">
+        <Item class="ModuleScript" referent="141">
           <Properties>
             <string name="Name">HeroSong</string>
             <string name="Source"><![CDATA[--[[
@@ -63856,7 +64155,7 @@ return HeroSong
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="141">
+        <Item class="ModuleScript" referent="142">
           <Properties>
             <string name="Name">HitFeel</string>
             <string name="Source"><![CDATA[--[[
@@ -64210,7 +64509,7 @@ return HitFeel
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="142">
+        <Item class="ModuleScript" referent="143">
           <Properties>
             <string name="Name">HomeBoard</string>
             <string name="Source"><![CDATA[--[[
@@ -64514,7 +64813,7 @@ return HomeBoard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="143">
+        <Item class="ModuleScript" referent="144">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--[[
@@ -66821,7 +67120,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="144">
+        <Item class="ModuleScript" referent="145">
           <Properties>
             <string name="Name">Icons</string>
             <string name="Source"><![CDATA[--[[
@@ -69291,7 +69590,7 @@ return Icons
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="145">
+        <Item class="ModuleScript" referent="146">
           <Properties>
             <string name="Name">IdleFx</string>
             <string name="Source"><![CDATA[--[[
@@ -69951,7 +70250,7 @@ return IdleFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="146">
+        <Item class="ModuleScript" referent="147">
           <Properties>
             <string name="Name">InputPrompts</string>
             <string name="Source"><![CDATA[--[[
@@ -70123,7 +70422,7 @@ return InputPrompts
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="147">
+        <Item class="ModuleScript" referent="148">
           <Properties>
             <string name="Name">JumpController</string>
             <string name="Source"><![CDATA[--[[
@@ -70332,7 +70631,7 @@ return JumpController
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="148">
+        <Item class="ModuleScript" referent="149">
           <Properties>
             <string name="Name">LevelUpBanish</string>
             <string name="Source"><![CDATA[--[[
@@ -70591,7 +70890,7 @@ return LevelUpBanish
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="149">
+        <Item class="ModuleScript" referent="150">
           <Properties>
             <string name="Name">LobbyFun</string>
             <string name="Source"><![CDATA[--[[
@@ -71142,7 +71441,7 @@ return LobbyFun
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="150">
+        <Item class="ModuleScript" referent="151">
           <Properties>
             <string name="Name">LobbyScreen</string>
             <string name="Source"><![CDATA[--[[
@@ -72500,6 +72799,11 @@ local function refreshAccount(p: { [string]: any }): boolean
 	return width
 end
 
+-- The lobby menu is on screen with the player's profile in it (ClientMain: ClientReady).
+function LobbyScreen.ShowsProfile(): boolean
+	return ui.Frame ~= nil and ui.Frame.Visible and profile ~= nil
+end
+
 function LobbyScreen.SetJoined(on: boolean)
 	joinedCountdown = on
 end
@@ -72839,7 +73143,7 @@ return LobbyScreen
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="151">
+        <Item class="ModuleScript" referent="152">
           <Properties>
             <string name="Name">LootUI</string>
             <string name="Source"><![CDATA[--[[
@@ -74345,7 +74649,7 @@ return LootUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="152">
+        <Item class="ModuleScript" referent="153">
           <Properties>
             <string name="Name">MenuArenas</string>
             <string name="Source"><![CDATA[--[[
@@ -74766,7 +75070,7 @@ return MenuArenas
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="153">
+        <Item class="ModuleScript" referent="154">
           <Properties>
             <string name="Name">MenuCharacters</string>
             <string name="Source"><![CDATA[--[[
@@ -76048,7 +76352,7 @@ return MenuCharacters
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="154">
+        <Item class="ModuleScript" referent="155">
           <Properties>
             <string name="Name">MenuCollection</string>
             <string name="Source"><![CDATA[--[[
@@ -76157,7 +76461,7 @@ return MenuCollection
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="155">
+        <Item class="ModuleScript" referent="156">
           <Properties>
             <string name="Name">MenuComeback</string>
             <string name="Source"><![CDATA[--[[
@@ -76337,7 +76641,7 @@ return MenuComeback
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="156">
+        <Item class="ModuleScript" referent="157">
           <Properties>
             <string name="Name">MenuCurses</string>
             <string name="Source"><![CDATA[--[[
@@ -76601,7 +76905,7 @@ return MenuCurses
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="157">
+        <Item class="ModuleScript" referent="158">
           <Properties>
             <string name="Name">MenuDaily</string>
             <string name="Source"><![CDATA[--[[
@@ -77300,7 +77604,7 @@ return MenuDaily
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="158">
+        <Item class="ModuleScript" referent="159">
           <Properties>
             <string name="Name">MenuGroup</string>
             <string name="Source"><![CDATA[--[[
@@ -77448,7 +77752,7 @@ return MenuGroup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="159">
+        <Item class="ModuleScript" referent="160">
           <Properties>
             <string name="Name">MenuHeroPower</string>
             <string name="Source"><![CDATA[--[[
@@ -77665,7 +77969,7 @@ return MenuHeroPower
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="160">
+        <Item class="ModuleScript" referent="161">
           <Properties>
             <string name="Name">MenuInvite</string>
             <string name="Source"><![CDATA[--[[
@@ -77780,7 +78084,7 @@ return MenuInvite
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="161">
+        <Item class="ModuleScript" referent="162">
           <Properties>
             <string name="Name">MenuJournal</string>
             <string name="Source"><![CDATA[-- Manually opened field notes; no automatic introductions or build recommendations.
@@ -77856,7 +78160,7 @@ return MenuJournal
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="162">
+        <Item class="ModuleScript" referent="163">
           <Properties>
             <string name="Name">MenuLastRun</string>
             <string name="Source"><![CDATA[--[[
@@ -78060,7 +78364,7 @@ return MenuLastRun
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="163">
+        <Item class="ModuleScript" referent="164">
           <Properties>
             <string name="Name">MenuLeaderboards</string>
             <string name="Source"><![CDATA[--[[
@@ -78629,7 +78933,7 @@ return MenuLeaderboards
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="164">
+        <Item class="ModuleScript" referent="165">
           <Properties>
             <string name="Name">MenuMore</string>
             <string name="Source"><![CDATA[--[[
@@ -78925,7 +79229,7 @@ return MenuMore
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="165">
+        <Item class="ModuleScript" referent="166">
           <Properties>
             <string name="Name">MenuParty</string>
             <string name="Source"><![CDATA[--[[
@@ -79878,7 +80182,7 @@ return MenuParty
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="166">
+        <Item class="ModuleScript" referent="167">
           <Properties>
             <string name="Name">MenuPlay</string>
             <string name="Source"><![CDATA[--[[
@@ -80705,7 +81009,7 @@ return MenuPlay
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="167">
+        <Item class="ModuleScript" referent="168">
           <Properties>
             <string name="Name">MenuPlaytime</string>
             <string name="Source"><![CDATA[--[[
@@ -80913,7 +81217,7 @@ return MenuPlaytime
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="168">
+        <Item class="ModuleScript" referent="169">
           <Properties>
             <string name="Name">MenuPrestige</string>
             <string name="Source"><![CDATA[--[[
@@ -81084,7 +81388,7 @@ return MenuPrestige
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="169">
+        <Item class="ModuleScript" referent="170">
           <Properties>
             <string name="Name">MenuQuests</string>
             <string name="Source"><![CDATA[--[[
@@ -81353,7 +81657,7 @@ return MenuQuests
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="170">
+        <Item class="ModuleScript" referent="171">
           <Properties>
             <string name="Name">MenuSeason</string>
             <string name="Source"><![CDATA[--[[
@@ -81523,7 +81827,7 @@ return MenuSeason
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="171">
+        <Item class="ModuleScript" referent="172">
           <Properties>
             <string name="Name">MenuSigils</string>
             <string name="Source"><![CDATA[--[[
@@ -81699,7 +82003,7 @@ return MenuSigils
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="172">
+        <Item class="ModuleScript" referent="173">
           <Properties>
             <string name="Name">MenuStarter</string>
             <string name="Source"><![CDATA[--[[
@@ -81825,7 +82129,7 @@ return MenuStarter
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="173">
+        <Item class="ModuleScript" referent="174">
           <Properties>
             <string name="Name">MenuStats</string>
             <string name="Source"><![CDATA[--[[
@@ -82291,7 +82595,7 @@ return MenuStats
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="174">
+        <Item class="ModuleScript" referent="175">
           <Properties>
             <string name="Name">MenuStore</string>
             <string name="Source"><![CDATA[--[[
@@ -82957,7 +83261,7 @@ return MenuStore
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="175">
+        <Item class="ModuleScript" referent="176">
           <Properties>
             <string name="Name">MenuStreak</string>
             <string name="Source"><![CDATA[--[[
@@ -83105,7 +83409,7 @@ return MenuStreak
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="176">
+        <Item class="ModuleScript" referent="177">
           <Properties>
             <string name="Name">MenuTitles</string>
             <string name="Source"><![CDATA[--[[
@@ -83302,7 +83606,7 @@ return MenuTitles
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="177">
+        <Item class="ModuleScript" referent="178">
           <Properties>
             <string name="Name">MenuTrack</string>
             <string name="Source"><![CDATA[--[[
@@ -83552,7 +83856,7 @@ return MenuTrack
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="178">
+        <Item class="ModuleScript" referent="179">
           <Properties>
             <string name="Name">MenuUpgrades</string>
             <string name="Source"><![CDATA[--[[
@@ -84059,7 +84363,7 @@ return MenuUpgrades
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="179">
+        <Item class="ModuleScript" referent="180">
           <Properties>
             <string name="Name">MenuWeekly</string>
             <string name="Source"><![CDATA[--[[
@@ -84266,7 +84570,7 @@ return MenuWeekly
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="180">
+        <Item class="ModuleScript" referent="181">
           <Properties>
             <string name="Name">MetaUI</string>
             <string name="Source"><![CDATA[--[[
@@ -84512,7 +84816,7 @@ return MetaUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="181">
+        <Item class="ModuleScript" referent="182">
           <Properties>
             <string name="Name">MiniMap</string>
             <string name="Source"><![CDATA[--[[
@@ -85380,7 +85684,7 @@ return MiniMap
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="182">
+        <Item class="ModuleScript" referent="183">
           <Properties>
             <string name="Name">MobileControls</string>
             <string name="Source"><![CDATA[--[[
@@ -85796,7 +86100,7 @@ return MobileControls
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="183">
+        <Item class="ModuleScript" referent="184">
           <Properties>
             <string name="Name">ModelLibrary</string>
             <string name="Source"><![CDATA[--[[
@@ -87486,7 +87790,7 @@ return ModelLibrary
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="184">
+        <Item class="ModuleScript" referent="185">
           <Properties>
             <string name="Name">NoticeDots</string>
             <string name="Source"><![CDATA[--[[
@@ -87802,7 +88106,7 @@ return NoticeDots
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="185">
+        <Item class="ModuleScript" referent="186">
           <Properties>
             <string name="Name">Occlusion</string>
             <string name="Source"><![CDATA[--[[
@@ -88194,7 +88498,7 @@ return Occlusion
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="186">
+        <Item class="ModuleScript" referent="187">
           <Properties>
             <string name="Name">PartyLines</string>
             <string name="Source"><![CDATA[--[[
@@ -88810,7 +89114,7 @@ return PartyLines
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="187">
+        <Item class="ModuleScript" referent="188">
           <Properties>
             <string name="Name">PhotoMode</string>
             <string name="Source"><![CDATA[--[[
@@ -89261,7 +89565,7 @@ return PhotoMode
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="188">
+        <Item class="ModuleScript" referent="189">
           <Properties>
             <string name="Name">PingWheel</string>
             <string name="Source"><![CDATA[--[[
@@ -89491,7 +89795,7 @@ return PingWheel
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="189">
+        <Item class="ModuleScript" referent="190">
           <Properties>
             <string name="Name">PortalBeacon</string>
             <string name="Source"><![CDATA[--[[
@@ -89768,7 +90072,7 @@ return PortalBeacon
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="190">
+        <Item class="ModuleScript" referent="191">
           <Properties>
             <string name="Name">PrestigeConfirm</string>
             <string name="Source"><![CDATA[--[[
@@ -90131,7 +90435,7 @@ return PrestigeConfirm
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="191">
+        <Item class="ModuleScript" referent="192">
           <Properties>
             <string name="Name">ResumeCard</string>
             <string name="Source"><![CDATA[--[[
@@ -90485,7 +90789,7 @@ return ResumeCard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="192">
+        <Item class="ModuleScript" referent="193">
           <Properties>
             <string name="Name">ReviveThanks</string>
             <string name="Source"><![CDATA[--[[
@@ -90691,7 +90995,7 @@ return ReviveThanks
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="193">
+        <Item class="ModuleScript" referent="194">
           <Properties>
             <string name="Name">RunIntro</string>
             <string name="Source"><![CDATA[--[[
@@ -91217,7 +91521,7 @@ return RunIntro
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="194">
+        <Item class="ModuleScript" referent="195">
           <Properties>
             <string name="Name">Showcase</string>
             <string name="Source"><![CDATA[--[[
@@ -92318,7 +92622,7 @@ return Showcase
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="195">
+        <Item class="ModuleScript" referent="196">
           <Properties>
             <string name="Name">Spectate</string>
             <string name="Source"><![CDATA[--[[
@@ -92543,7 +92847,7 @@ return Spectate
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="196">
+        <Item class="ModuleScript" referent="197">
           <Properties>
             <string name="Name">StageModifierUI</string>
             <string name="Source"><![CDATA[--[[
@@ -92616,7 +92920,7 @@ return StageModifierUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="197">
+        <Item class="ModuleScript" referent="198">
           <Properties>
             <string name="Name">StageUI</string>
             <string name="Source"><![CDATA[--[[
@@ -93608,7 +93912,7 @@ return StageUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="198">
+        <Item class="ModuleScript" referent="199">
           <Properties>
             <string name="Name">StarterCard</string>
             <string name="Source"><![CDATA[--[[
@@ -93828,7 +94132,7 @@ return StarterCard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="199">
+        <Item class="ModuleScript" referent="200">
           <Properties>
             <string name="Name">StoreFx</string>
             <string name="Source"><![CDATA[--[[
@@ -94486,7 +94790,7 @@ return StoreFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="200">
+        <Item class="ModuleScript" referent="201">
           <Properties>
             <string name="Name">TeamCombo</string>
             <string name="Source"><![CDATA[--[[
@@ -94663,7 +94967,7 @@ return TeamCombo
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="201">
+        <Item class="ModuleScript" referent="202">
           <Properties>
             <string name="Name">TeamPings</string>
             <string name="Source"><![CDATA[--[[
@@ -94842,7 +95146,7 @@ return TeamPings
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="202">
+        <Item class="ModuleScript" referent="203">
           <Properties>
             <string name="Name">TeamUI</string>
             <string name="Source"><![CDATA[--[[
@@ -95487,7 +95791,7 @@ return TeamUI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="203">
+        <Item class="ModuleScript" referent="204">
           <Properties>
             <string name="Name">Telegraphs</string>
             <string name="Source"><![CDATA[--[[
@@ -97114,7 +97418,7 @@ return Telegraphs
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="204">
+        <Item class="ModuleScript" referent="205">
           <Properties>
             <string name="Name">TerrainFx</string>
             <string name="Source"><![CDATA[--[[
@@ -97204,7 +97508,7 @@ return TerrainFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="205">
+        <Item class="ModuleScript" referent="206">
           <Properties>
             <string name="Name">TextFit</string>
             <string name="Source"><![CDATA[--[[
@@ -97559,7 +97863,7 @@ return TextFit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="206">
+        <Item class="ModuleScript" referent="207">
           <Properties>
             <string name="Name">TitlePlates</string>
             <string name="Source"><![CDATA[--[[
@@ -97692,7 +97996,7 @@ return TitlePlates
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="207">
+        <Item class="ModuleScript" referent="208">
           <Properties>
             <string name="Name">TravelOverlay</string>
             <string name="Source"><![CDATA[--[[
@@ -97949,7 +98253,7 @@ return TravelOverlay
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="208">
+        <Item class="ModuleScript" referent="209">
           <Properties>
             <string name="Name">Tutorial</string>
             <string name="Source"><![CDATA[--[[
@@ -99046,7 +99350,7 @@ return Tutorial
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="209">
+        <Item class="ModuleScript" referent="210">
           <Properties>
             <string name="Name">TutorialBubble</string>
             <string name="Source"><![CDATA[--[[
@@ -99353,7 +99657,7 @@ return TutorialBubble
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="210">
+        <Item class="ModuleScript" referent="211">
           <Properties>
             <string name="Name">UIAnim</string>
             <string name="Source"><![CDATA[--[[
@@ -100069,7 +100373,7 @@ return UIAnim
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="211">
+        <Item class="ModuleScript" referent="212">
           <Properties>
             <string name="Name">UIBuilder</string>
             <string name="Source"><![CDATA[--[[
@@ -106483,7 +106787,7 @@ return UIBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="212">
+        <Item class="ModuleScript" referent="213">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[--[[
@@ -108805,7 +109109,7 @@ return UIKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="213">
+        <Item class="ModuleScript" referent="214">
           <Properties>
             <string name="Name">UIState</string>
             <string name="Source"><![CDATA[--[[
@@ -109606,7 +109910,7 @@ return UIState
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="214">
+        <Item class="ModuleScript" referent="215">
           <Properties>
             <string name="Name">Ultimate</string>
             <string name="Source"><![CDATA[--[[
@@ -109720,7 +110024,7 @@ return Ultimate
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="215">
+        <Item class="ModuleScript" referent="216">
           <Properties>
             <string name="Name">VFX</string>
             <string name="Source"><![CDATA[--[[
@@ -113541,7 +113845,7 @@ return VFX
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="216">
+        <Item class="ModuleScript" referent="217">
           <Properties>
             <string name="Name">ViewportPreview</string>
             <string name="Source"><![CDATA[--[[
@@ -113733,7 +114037,7 @@ return ViewportPreview
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="217">
+        <Item class="ModuleScript" referent="218">
           <Properties>
             <string name="Name">WalkthroughClient</string>
             <string name="Source"><![CDATA[--[[
@@ -114077,7 +114381,7 @@ return WalkthroughClient
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="218">
+        <Item class="ModuleScript" referent="219">
           <Properties>
             <string name="Name">WeakSpot</string>
             <string name="Source"><![CDATA[--[[
@@ -114184,7 +114488,7 @@ return WeakSpot
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="219">
+        <Item class="ModuleScript" referent="220">
           <Properties>
             <string name="Name">WeaponMastery</string>
             <string name="Source"><![CDATA[--[[
@@ -114520,7 +114824,7 @@ return WeaponMastery
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="220">
+        <Item class="ModuleScript" referent="221">
           <Properties>
             <string name="Name">WorldFx</string>
             <string name="Source"><![CDATA[--[[
@@ -114975,7 +115279,7 @@ return WorldFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="221">
+        <Item class="ModuleScript" referent="222">
           <Properties>
             <string name="Name">WorldLabelFade</string>
             <string name="Source"><![CDATA[--[[
@@ -115087,7 +115391,7 @@ return WorldLabelFade
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="222">
+  <Item class="Workspace" referent="223">
     <Properties>
       <string name="Name">Workspace</string>
       <float name="FallenPartsDestroyHeight">-200</float>

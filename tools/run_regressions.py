@@ -108,6 +108,9 @@ def main():
     checks += [("layout", ["pause", d, "view=settings"]) for d in ("iphone", "phone-portrait")]
     # (landscape cards only: the narrow portrait cards keep their one-line details inline, no toggle)
     checks += [("layout", ["levelup", d, "details=2"]) for d in ("iphone", "pc")]
+    # funnel analytics (server Analytics.lua, docs/ANALYTICS.md): AnalyticsService mock as a
+    # published lobby, the same flow in Studio (nothing sent), and the real client's ready report
+    checks += [("analytics-regression", ["mode=published"]), ("analytics-regression", ["mode=studio"]), ("analytics-client", [])]
 
     def run(check):
         scene, settings = check
@@ -119,10 +122,10 @@ def main():
             "--max-time", "3000" if scene == "corner-regression" else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")) or (scene == "analytics-regression" and settings == ["mode=published"]):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
-        if scene in ("results-flow", "leaderboards", "home-board-regression", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression"):
+        if scene in ("results-flow", "leaderboards", "home-board-regression", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression", "analytics-client"):
             command.remove("--set")
             command.remove("headless=on")
         if scene == "textfit-regression":
@@ -142,7 +145,7 @@ def main():
             # features batch too, so this is Lune time, not game cost); with three workers in
             # parallel they pass 360 s, so they get 600 s.
             limit = 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim") else (
-                600 if scene in ("menu", "ui", "run-intro", "events-fx", "loot-focus-regression", "perf-regression", "results-flow", "textfit-regression", "comeback-regression")
+                600 if scene in ("menu", "ui", "run-intro", "events-fx", "loot-focus-regression", "perf-regression", "results-flow", "textfit-regression", "comeback-regression", "analytics-client")
                 or (scene == "layout" and settings[0] == "smart-tutorial-regression") else 360)
             result = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=limit)
             output = result.stdout + result.stderr

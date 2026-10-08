@@ -168,6 +168,11 @@ height (tone patches 0.001 apart, tree-line shade, Forest blobs vs client clover
 margins, path wear vs cores) z-fought; MapBuilder.settleGround now gives tone discs free heights (0.02-0.08)
 under other flats, path step 0.02, GroundDetail PATH_TOP/FRINGE_TOP moved; dressing grass/flowers keep out of
 dressing rocks/shrubs/logs (also client ground detail via arena.Bare). New check: ground-zfight-regression.
+Funnel analytics (2026-10-08, offline only, NOT published-tested; docs/ANALYTICS.md): server Analytics.lua
+(AnalyticsService, switch Config.Features.Analytics): onboarding steps 1 Joined Game / 2 Ready to Play (validated
+remote ClientReady) / 3 Started First Run for accounts with no run started; custom events First Evolution, First
+Wave Completed (wave 1 of the first run cleared, not timed out), Started Second Run, all from existing save fields.
+Checks: analytics-regression (mode=published|studio), analytics-client.
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,

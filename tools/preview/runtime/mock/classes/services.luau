@@ -1305,4 +1305,38 @@ R.defineClass("TeleportService", {
 	},
 })
 
+--[[
+	AnalyticsService (scenes: preview.analytics() returns R.analytics). Every Log* call is
+	recorded in calls as { Method, UserId, Step?, Name, Value? }; set fails to N to make the
+	next N calls throw (the server must shrug them off). Roblox itself drops events from the
+	client and Studio; the mock records whatever reaches it.
+]]
+R.analytics = R.analytics or { calls = {}, fails = 0 }
+local function analyticsCall(entry)
+	if R.analytics.fails > 0 then
+		R.analytics.fails -= 1
+		error("mock AnalyticsService failure")
+	end
+	table.insert(R.analytics.calls, entry)
+end
+R.defineClass("AnalyticsService", {
+	methods = {
+		LogOnboardingFunnelStepEvent = function(_, player, step, stepName)
+			analyticsCall({ Method = "Onboarding", UserId = player.UserId, Step = step, Name = stepName })
+		end,
+		LogCustomEvent = function(_, player, eventName, value)
+			analyticsCall({ Method = "Custom", UserId = player.UserId, Name = eventName, Value = value })
+		end,
+		LogFunnelStepEvent = function(_, player, funnelName, _session, step, stepName)
+			analyticsCall({ Method = "Funnel", UserId = player.UserId, Name = funnelName .. ":" .. tostring(stepName), Step = step })
+		end,
+		LogProgressionEvent = function(_, player, path)
+			analyticsCall({ Method = "Progression", UserId = player.UserId, Name = path })
+		end,
+		LogEconomyEvent = function(_, player)
+			analyticsCall({ Method = "Economy", UserId = player.UserId, Name = "" })
+		end,
+	},
+})
+
 return true

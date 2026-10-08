@@ -1222,6 +1222,10 @@ local function beginRun(here: boolean?)
 			if ctx.Walkthrough then
 				ctx.Walkthrough.Consider(rp, data, #list, mode)
 			end
+			-- funnel analytics: the account's first / second run really started (pcalled inside)
+			if ctx.Analytics then
+				ctx.Analytics.OnRunStart(player, tonumber(data.Stats.Runs) or 0)
+			end
 			data.Stats.Runs += 1
 		end
 	end

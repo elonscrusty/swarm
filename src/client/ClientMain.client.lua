@@ -177,6 +177,26 @@ boot("PartyLines", function() require(script.Parent:WaitForChild("PartyLines")).
 boot("ReviveThanks", function() require(script.Parent:WaitForChild("ReviveThanks")).Init() end) -- THANKS! after a teammate revive (idle while ReviveThanks is off)
 boot("ResumeCard", function() require(script.Parent:WaitForChild("ResumeCard")).Init() end) -- QuickResume: the RESUME RUN card of a held solo run (idle while the switch is off)
 
+--[[
+	Ready to play (server Analytics: onboarding step 2): told once per visit, when the
+	loading picture is gone, no travel cover is up and the player can act: the lobby menu
+	shows with their profile, or they are already in a run. The server decides whether it
+	counts; this only reports the moment.
+]]
+task.spawn(function()
+	local LobbyScreen = require(script.Parent:WaitForChild("LobbyScreen"))
+	local gui = player:WaitForChild("PlayerGui")
+	local t0 = os.clock()
+	while os.clock() - t0 < 600 do
+		if not gui:FindFirstChild("LoadingScreen") and player:GetAttribute("Travel") == nil
+			and (LobbyScreen.ShowsProfile() or (player:GetAttribute("InRun") == true and player.Character ~= nil)) then
+			Remotes.Get("ClientReady"):FireServer()
+			return
+		end
+		task.wait(0.25)
+	end
+end)
+
 -- Humanoid state switches don't replicate and the client owns its character, so the
 -- server's settings are repeated here: no tripping, ragdolling or dying (jumps: JumpController).
 local function setupCharacter(char: Model)

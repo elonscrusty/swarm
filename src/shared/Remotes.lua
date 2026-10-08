@@ -63,6 +63,7 @@ Remotes.ClientToServer = {
 	"JoinRun", -- join during the lobby countdown
 	"StartRun", -- (mode) lobby SOLO / DUO / TRIO button, or "Daily" (the DAILY card); during a countdown it joins
 	"StartFirstRun", -- a brand-new player's lobby asks for the automatic first Solo run (RunManager decides)
+	"ClientReady", -- () once per visit: loading picture gone, lobby menu up with the profile (Analytics: onboarding step 2, validated there)
 	"StartNow", -- the countdown's starter skips the rest of the countdown
 	"CycleArena", -- (arenaName?) lobby ARENA screen: pick that arena (unlocked), or the next unlocked one
 	"DevCommand", -- (command, arg?) Studio / creator only, re-checked on the server (DevTools)
