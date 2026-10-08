@@ -68,6 +68,7 @@ Dash.OnLanded = newSignal()
 
 local D = RunConfig.Dash
 local ctx: any = nil
+local launchRemote: RemoteEvent? = nil
 local ackRemote: RemoteEvent? = nil
 
 local buckets: { [Player]: { tokens: number, last: number } } = {}
@@ -138,6 +139,40 @@ end
 -- True while the dash (or leap) of this run player is moving them.
 function Dash.IsDashing(rp: any): boolean
 	return rp.DashUntil ~= nil and os.clock() < rp.DashUntil
+end
+
+--[[
+	A server-started ballistic launch (spring launch pads): the same arc as a leap from
+	`from` to `target`, with the speed-check allowance, no cooldown change. The client
+	(network owner) flies itself after the Launch remote. False when the player can't.
+]]
+function Dash.Launch(rp: any, from: Vector3, target: Vector3, extraApex: number): boolean
+	local remote = launchRemote
+	local root: BasePart? = rp.Root
+	if not remote or not root or not rp.Alive or rp.Paused or rp.RewardUntil then
+		return false
+	end
+	local flatV = Vector3.new(target.X - from.X, 0, target.Z - from.Z)
+	local dist = flatV.Magnitude
+	if dist < 4 then
+		return false
+	end
+	local g = workspace.Gravity
+	local rise = math.max(0, target.Y - from.Y)
+	local apex = rise + math.max(4, extraApex)
+	local vy = math.sqrt(2 * g * apex)
+	-- time up to the apex, then down to the target height
+	local duration = vy / g + math.sqrt(2 * (apex - rise) / g)
+	local speed = dist / duration
+	local now = os.clock()
+	rp.DashKind = "Leap"
+	rp.DashDir = flatV.Unit
+	rp.DashSpeed = speed
+	rp.DashAllow = speed * D.LeapAllowMult
+	rp.DashUntil = now + duration
+	rp.LeapUntil = now + duration + 1.5
+	remote:FireClient(rp.Player, flatV.Unit, speed, duration, vy)
+	return true
 end
 
 local function reply(player: Player, ok: boolean, kind: string, dir: Vector3, speed: number, duration: number, vy: number, cooldown: number)
@@ -280,6 +315,7 @@ function Dash.Init(runCtx: any)
 	local runFolder = ensure(net, "Folder", "Run")
 	local request = ensure(runFolder, "RemoteEvent", "Dash") :: RemoteEvent
 	ackRemote = ensure(runFolder, "RemoteEvent", "DashAck") :: RemoteEvent
+	launchRemote = ensure(runFolder, "RemoteEvent", "Launch") :: RemoteEvent
 
 	request.OnServerEvent:Connect(function(player: Player, dir: any)
 		local ok, err = (pcall :: any)(handleRequest, player, dir)

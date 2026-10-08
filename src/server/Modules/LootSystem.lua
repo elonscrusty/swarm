@@ -48,6 +48,7 @@ local Palette = require(game:GetService("ReplicatedStorage").Shared.Palette)
 local StageModifierData = require(game:GetService("ReplicatedStorage").Shared.StageModifierData)
 local MapBuilder = require(script.Parent.MapBuilder)
 local HeightGrid = require(script.Parent.HeightGrid)
+local RunConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local Fx = require(script.Parent.Fx)
 local Events = require(script.Parent.Events)
@@ -991,10 +992,38 @@ function LootSystem.BuildStage(arena, stage: number, portalPos: Vector3?)
 			MapBuilder.ClearDecor(arena, at, 3)
 		end
 	end
-	-- chests
+	-- chests: a big designed map (arena.LootSpots, Cliffwood) gets its planned spots first,
+	-- spaced along the routes, then random ones; more chests there (RunConfig.Map.ChestMult)
+	local planned: { Vector3 } = {}
+	for _, p in ipairs(arena.LootSpots or {}) do
+		table.insert(planned, p)
+	end
+	for i = #planned, 2, -1 do
+		local j = rng:NextInteger(1, i)
+		planned[i], planned[j] = planned[j], planned[i]
+	end
+	local function plannedSpot(): Vector3?
+		while #planned > 0 do
+			local p = table.remove(planned) :: Vector3
+			local ok = not portalPos or ((p - portalPos) * Vector3.new(1, 0, 1)).Magnitude >= C.PortalClearance
+			for _, a in ipairs(avoid) do
+				if ok and ((p - a) * Vector3.new(1, 0, 1)).Magnitude < C.Clearance * 2 then
+					ok = false
+				end
+			end
+			if ok and HeightGrid.IsWalkable(p.X, p.Z) then
+				local at = HeightGrid.Ground(p)
+				table.insert(avoid, at)
+				return at
+			end
+		end
+		return nil
+	end
+	local countMult = (arena.LootSpots and #arena.LootSpots > 0) and (tonumber((RunConfig.Map :: any).ChestMult) or 1) or 1
 	local function chests(typeName: string, n: number)
+		n = math.floor(n * countMult + 0.5)
 		for _ = 1, n do
-			local at = spot(nil)
+			local at = plannedSpot() or spot(nil)
 			if at then
 				buildChest(typeName, at, rng:NextNumber(-0.3, 0.3))
 				MapBuilder.ClearDecor(arena, at, 2.2)

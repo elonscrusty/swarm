@@ -110,6 +110,7 @@ def main():
     checks += [("layout", ["levelup", d, "details=2"]) for d in ("iphone", "pc")]
     # funnel analytics (server Analytics.lua, docs/ANALYTICS.md): AnalyticsService mock as a
     # published lobby, the same flow in Studio (nothing sent), and the real client's ready report
+    checks += [("run-entry-regression", [])]  # SwarmV2 arrival barrier, local match start with the admitted class, return hook
     checks += [("analytics-regression", ["mode=published"]), ("analytics-regression", ["mode=studio"]), ("analytics-client", [])]
     # redesign: ground height + flow fields (server HeightGrid; flat fallback, ramp / cliff, routing, cave)
     checks += [("heightgrid-regression", [])]
@@ -146,7 +147,7 @@ def main():
             # Long client scenes: 220-290 s each when run alone (menu was 267 s before the
             # features batch too, so this is Lune time, not game cost); with three workers in
             # parallel they pass 360 s, so they get 600 s.
-            limit = 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim") else (
+            limit = 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim", "run-entry-regression") else (
                 600 if scene in ("menu", "ui", "run-intro", "events-fx", "loot-focus-regression", "perf-regression", "results-flow", "textfit-regression", "comeback-regression", "analytics-client")
                 or (scene == "layout" and settings[0] == "smart-tutorial-regression") else 360)
             result = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=limit)

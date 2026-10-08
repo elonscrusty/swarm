@@ -126,6 +126,7 @@ RunConfig.Map = {
 	BossLandmark = "Stone Circle", -- portal landmark of stage 5 and the Endless boss-milestone stages
 	TransitionSeconds = 0.7, -- the burst effect plays, then the old stage is cleared and the new one placed
 	PortalLandmarkMargin = 14, -- portal spot stays this far inside the landmark radius
+	ChestMult = 2.5, -- chests per stage x this on the big map (loot every 10-15 s of travel)
 }
 
 ------------------------------------------------------------------------------------------

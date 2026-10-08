@@ -322,6 +322,14 @@ function DashClient.Init()
 			end
 			start(kind, dir, speed, duration, vy)
 		end)
+		-- spring launch pads: the server starts the arc (no request, no cooldown)
+		local launch = net:WaitForChild("Launch") :: RemoteEvent
+		launch.OnClientEvent:Connect(function(dir, speed, duration, vy)
+			if typeof(dir) ~= "Vector3" or type(speed) ~= "number" or type(duration) ~= "number" or type(vy) ~= "number" then
+				return
+			end
+			start("Leap", dir, speed, duration, vy)
+		end)
 	end)
 
 	player:GetAttributeChangedSignal("Alive"):Connect(function()

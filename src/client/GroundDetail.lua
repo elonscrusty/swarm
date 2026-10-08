@@ -773,7 +773,8 @@ end
 
 local function setArena(model: Model?)
 	releaseAll()
-	if model then
+	-- maps with terraces (NoGroundDetail, Cliffwood) skip the flat-floor dressing
+	if model and model:GetAttribute("NoGroundDetail") ~= true then
 		ctx = readArena(model)
 	else
 		ctx = nil
