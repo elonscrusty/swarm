@@ -563,6 +563,10 @@ local function buildDetails(frame: Frame)
 	local plate = UIKit.TitlePlate(face, "YOUR BUILD", 22, { Name = "Title" })
 	ui.BuildTitle = plate.Label
 	ui.BuildPlate = plate.Frame
+	-- the plate's width follows its text (AutomaticSize): the note beside it follows too
+	plate.Frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		relayout()
+	end)
 	local titleH = TS(22) + 18
 	ui.BuildTitleH = titleH
 	ui.BuildNote = role(face, "Caption", "The run keeps going while this is open", { Name = "Note", Position = UDim2.fromOffset(2, titleH + 6), Size = UDim2.new(1, -52, 0, 16), TextTruncate = Enum.TextTruncate.AtEnd, TextWrapped = true })

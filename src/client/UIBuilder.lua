@@ -3723,7 +3723,6 @@ local function buildPause()
 		ElasticBehavior = Enum.ElasticBehavior.Never,
 	}, content)
 	pause.Options = options
-	UIKit.ScrollHint(options) -- phones hide scroll bars: show that more options sit below
 	local primary = settingsColumn(options, "Main", 2) -- the wells pad their own sliders
 	local colA = settingsColumn(options, "Sound")
 	local colB = settingsColumn(options, "Comfort")

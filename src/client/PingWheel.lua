@@ -233,7 +233,19 @@ function PingWheel.Init()
 		ZIndex = 3,
 	}, slot) :: TextButton
 	local closeFace = UIKit.RoundFace(close, ColorSequence.new(C.BlueDeep, C.Shadow), C.Panel, 2.5, 3)
-	Icons.Draw(closeFace, "close", { Name = "Glyph", Size = 20, Color = C.TextOnBlue, Back = C.BlueDeep, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) }).ZIndex = 5
+	local closePx = 0
+	local function drawClose(px: number)
+		if px == closePx then
+			return
+		end
+		closePx = px
+		local old = closeFace:FindFirstChild("Glyph")
+		if old then
+			old:Destroy()
+		end
+		Icons.Draw(closeFace, "close", { Name = "Glyph", Size = px, Color = C.TextOnBlue, Back = C.BlueDeep, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) }).ZIndex = 5
+	end
+	drawClose(20)
 	close.Activated:Connect(function()
 		PingWheel.SetOpen(false)
 	end)
@@ -284,6 +296,7 @@ function PingWheel.Init()
 			close.Position = UDim2.fromScale(0.5, 0.5)
 			local cs = math.floor(44 * math.max(1, grow))
 			close.Size = UDim2.fromOffset(cs, cs)
+			drawClose(math.floor(cs * 0.45))
 		else
 			local bw = math.floor(math.clamp((rs.X * 0.9 - 16) / 3, 70, 100))
 			local bh = math.floor(math.clamp((rs.Y - 90) / 2.4, 52, 64))
@@ -299,6 +312,8 @@ function PingWheel.Init()
 			end
 			close.AnchorPoint = Vector2.new(1, 0)
 			close.Position = UDim2.fromOffset(w, 0)
+			close.Size = UDim2.fromOffset(44, 44)
+			drawClose(20)
 		end
 		for kind, holder in pairs(icons) do
 			-- the badge shrinks with a shorter button; the label keeps its own room
@@ -320,7 +335,8 @@ function PingWheel.Init()
 				local y = top + px + 2
 				label.AnchorPoint = Vector2.new(0.5, 0)
 				label.Position = UDim2.new(0.5, 0, 0, y)
-				label.Size = UDim2.new(1, grid and -10 or -12, 0, math.max(12, bh - y - (grid and 4 or 7)))
+				-- (a round button narrows toward its bottom: the label keeps off the rim)
+				label.Size = UDim2.new(1, grid and -10 or -math.floor(btn * 0.24), 0, math.max(12, bh - y - (grid and 4 or 7)))
 				local fit = label:FindFirstChildOfClass("UITextSizeConstraint")
 				if fit then
 					fit.MaxTextSize = math.floor(UIKit.TS(14) * math.max(1, grow))
