@@ -3721,19 +3721,21 @@ local function buildPause()
 
 	-- options: Music and Effects first (full width), then the other sound options (left)
 	-- and comfort / help (right); one column on narrow screens, one scroll when short
+	-- (a plain box around the scroll so its scroll hint stays out of the modal's list)
+	local optionsBox = new("Frame", { Name = "OptionsBox", LayoutOrder = 3, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 300) }, content)
 	local options = new("ScrollingFrame", {
 		Name = "Options",
-		LayoutOrder = 3,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 300),
+		Size = UDim2.fromScale(1, 1),
 		CanvasSize = UDim2.fromOffset(0, 300),
 		ScrollBarThickness = 4,
 		ScrollBarImageColor3 = C.PanelEdge,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		ElasticBehavior = Enum.ElasticBehavior.Never,
-	}, content)
+	}, optionsBox)
 	pause.Options = options
+	UIKit.ScrollHint(options) -- phones hide scroll bars: a badge says more options sit below
 	local primary = settingsColumn(options, "Main", 2) -- the wells pad their own sliders
 	local colA = settingsColumn(options, "Sound")
 	local colB = settingsColumn(options, "Comfort")
@@ -3910,7 +3912,7 @@ local function buildPause()
 			-- the scroll edge falls between rows, not through a title or its description
 			h = snapToRows({ primary, colA, colB }, h, math.max(140, h - 140))
 		end
-		options.Size = UDim2.new(1, 0, 0, h)
+		optionsBox.Size = UDim2.new(1, 0, 0, h)
 		options.CanvasSize = UDim2.fromOffset(0, contentH)
 		options.ScrollBarThickness = contentH > h + 1 and 4 or 0
 		pause.Resume.Instance.Size = UDim2.fromOffset(math.clamp(inner, 120, 220), Theme.Size.Button)
