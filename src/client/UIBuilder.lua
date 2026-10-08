@@ -634,8 +634,8 @@ function Choice.choicePillText(left: number, narrow: boolean): string
 	local s
 	if player:GetAttribute("ChoiceTimerPaused") == true then
 		s = string.format("TIMER PAUSED · %ds", secs)
-	elseif rounds and rounds > 1 and not narrow then
-		s = string.format("AUTO-PICK ALL %d IN %ds", rounds, secs)
+	elseif rounds and rounds > 1 then
+		s = string.format(narrow and "AUTO-PICK ALL %d · %ds" or "AUTO-PICK ALL %d IN %ds", rounds, secs)
 	else
 		s = string.format("AUTO-PICK IN %ds", secs)
 	end
@@ -1105,6 +1105,11 @@ local function pickAnimation(index: number)
 end
 
 local function chooseCard(index: number, input: InputObject?)
+	-- a tap that went to a card's DETAILS toggle (it sits inside the card) is never a pick
+	local t = input and input.UserInputType
+	if (t == nil or t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch) and os.clock() - (Choice.DetailsAt or 0) < 0.4 then
+		return
+	end
 	if not confirmInput(input) then
 		return
 	end
@@ -1242,7 +1247,8 @@ local function buildLevelUp()
 		Kind = "Outline",
 		Title = "REROLL",
 		Subtitle = "New cards",
-		TitleStyle = "H3",
+		TitleStyle = "Label",
+		TitleSize = 17,
 		Icon = "cycle",
 		IconSize = 26,
 		Size = UDim2.fromOffset(230, 60),
@@ -1272,7 +1278,8 @@ local function buildLevelUp()
 		Kind = "Outline",
 		Title = "SKIP",
 		Subtitle = "No card",
-		TitleStyle = "H3",
+		TitleStyle = "Label",
+		TitleSize = 17,
 		Icon = "skip",
 		IconSize = 26,
 		Size = UDim2.fromOffset(230, 60),
@@ -1361,7 +1368,7 @@ function Choice.cardFootH(): number
 end
 -- "CHOOSE YOUR UPGRADE" at the biggest size that fits the screen width.
 function Choice.titleSize(): number
-	local base = UIKit.IsCompact() and 34 or 46
+	local base = UIKit.IsCompact() and 28 or 38
 	local fit = (virtualSize().X - 2 * margin()) / (19 * 0.8) / (UIKit.IsCompact() and Theme.TextScaleCompact or 1)
 	return math.max(18, math.min(base, math.floor(fit)))
 end
@@ -1433,10 +1440,22 @@ function Choice.detailsHeight(details: string?, w: number): number
 	return size * lines + 4
 end
 
+-- A landscape card keeps its face short: icon, name, the one-sentence effect, the main
+-- change and the goals (synergy, evolution). The longer explanation, the later levels and
+-- every stat row sit behind a small DETAILS toggle (Choice.moreH tall, just above CHOOSE).
+function Choice.hasMore(c): boolean
+	local _, stats, changes, details = cardContent(c)
+	return details ~= nil or #changes > 0 or #stats > 0
+end
+function Choice.moreH(): number
+	return UIKit.IsCompact() and 30 or 32
+end
+
 -- Height of the evolution hint under the rows (two wrapped lines; it keeps its room on
 -- phones, where a stat row gives way: the description line already sums up the gain).
 local function hintHeight(): number
-	return TS(13) * 2 + 6
+	-- phones in landscape: one line that shrinks to fit, so the synergy line keeps its room too
+	return Choice.compactLandscape() and TS(13) + 10 or TS(13) * 2 + 6
 end
 
 -- The boxed highlight: shorter on phones.
@@ -1446,13 +1465,13 @@ end
 
 -- Height a landscape card needs for everything but its art panel.
 local function cardNeeds(c, w: number): number
-	local desc, stats, changes, details = cardContent(c)
+	local desc, _, changes = cardContent(c)
 	local h = CARD.Inset + 8 + Choice.cardNameH() + (desc and descHeight(desc, w, c) + 6 or 0) + 4
-	h += details and Choice.detailsHeight(details, w) + 4 or 0
 	if #changes > 0 then
-		h += boxHeight() + 6 + (#changes - 1) * (CARD.Row - 2)
-	else
-		h += #stats * CARD.Row
+		h += boxHeight() + 6
+	end
+	if Choice.hasMore(c) then
+		h += Choice.moreH() + 6
 	end
 	if c.Synergy then
 		h += CARD.Syn + 10
@@ -1461,6 +1480,16 @@ local function cardNeeds(c, w: number): number
 		h += hintHeight() + 2
 	end
 	return h + 10 + Choice.cardFootH() + CARD.FootPad
+end
+
+-- What a card of height h leaves for its art panel; under Choice.artMin the before/after
+-- box gets dropped (short phone cards), so its room goes to the picture instead.
+function Choice.cardSpare(c, w: number, h: number): number
+	local spare = h - cardNeeds(c, w)
+	if spare < Choice.artMin() and #select(3, cardContent(c)) > 0 then
+		spare += boxHeight() + 6
+	end
+	return spare
 end
 
 -- The art panel's height: what it would like, and the least it keeps before rows give way.
@@ -1793,6 +1822,132 @@ function Choice.roleChip(parent: GuiObject, c): TextLabel?
 end
 
 --[[
+	The DETAILS toggle of a landscape card and the panel it opens over the card's upper part
+	(art, name, effect): the longer explanation (other gains, what it boosts, later levels)
+	and every stat row (each change From → To, or a NEW weapon's starting stats). The toggle
+	is its own button inside the card: a tap on it opens / closes the panel and never picks
+	the card (chooseCard ignores taps for a moment after it, Choice.DetailsAt). Not a
+	gamepad stop (the selection stays card to card; A still picks). Which cards are open is
+	kept per offer (Choice.DetailsOpen), so a relayout keeps them.
+]]
+function Choice.detailsToggle(face: GuiObject, c, index: number, pad: number, y: number, w: number, top: number, bottom: number)
+	local _, stats, changes, details = cardContent(c)
+	local th = Choice.moreH()
+	local toggle = new("TextButton", {
+		Name = "DetailsToggle",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundColor3 = P.slate_950,
+		BackgroundTransparency = 0.5,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, y),
+		Size = UDim2.fromOffset(math.min(w - 2 * pad, 150), th),
+		Selectable = false,
+		ZIndex = 45,
+	}, face)
+	UIKit.corner(toggle, 999)
+	UIKit.stroke(toggle, P.slate_500, 1, 0.4)
+	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 45 }, toggle)
+	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
+	local word = text(row, "Caption", "DETAILS", { Size = UDim2.fromOffset(0, th), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.ivory_300, LayoutOrder = 1, ZIndex = 45 }, 12)
+	word:SetAttribute("NoTextFit", true)
+	local chevron = Icons.Draw(row, "chevronRight", { Size = 14, Color = P.gold_300 })
+	chevron.LayoutOrder = 2
+	chevron.Rotation = 90
+
+	local panel = new("Frame", {
+		Name = "DetailsPanel",
+		BackgroundColor3 = P.slate_950,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		-- under the card's tab (kind + level stay readable while it is open)
+		Position = UDim2.fromOffset(top, CARD.TabH + 4),
+		Size = UDim2.new(1, -2 * top, 0, math.max(40, bottom - CARD.TabH - 4)),
+		Visible = false,
+		Active = false,
+		ZIndex = 44,
+	}, face)
+	UIKit.corner(panel, Theme.Radius.L - 2)
+	UIKit.stroke(panel, P.gold_500, 1, 0.5)
+	local scroll = new("ScrollingFrame", {
+		Name = "Body",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, 6),
+		Size = UDim2.new(1, 0, 1, -12),
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = P.gold_400,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ElasticBehavior = Enum.ElasticBehavior.Never,
+		Selectable = false,
+		ZIndex = 44,
+	}, panel)
+	local inner = w - 2 * top
+	local px, rw = pad - top, inner - 2 * (pad - top)
+	local yy = 4
+	text(scroll, "Caption", UIKit.track(string.upper(tostring(c.Name))), { Position = UDim2.fromOffset(px, yy), Size = UDim2.new(1, -2 * px, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 44 }, 12)
+	yy += TS(12) + 10
+	if details then
+		local size = TS(13)
+		local lines = math.max(1, math.ceil((utf8.len(details) or #details) * size * 0.5 / math.max(1, rw)) + 1)
+		local dh = lines * (size + 2) + 4
+		local dl = text(scroll, "Small", details, {
+			Name = "Details",
+			Position = UDim2.fromOffset(px, yy),
+			Size = UDim2.new(1, -2 * px, 0, dh),
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextWrapped = true,
+			TextColor3 = P.ivory_200,
+			ZIndex = 44,
+		}, 13)
+		Choice.fit(dl, dl.TextSize, 9, true)
+		yy += dh + 6
+	end
+	if #changes > 0 then
+		for _, line in ipairs(changes) do
+			yy += statRow(scroll, c, line, px, yy, rw, CARD.Row - 2, changeValue(line))
+		end
+	else
+		for _, line in ipairs(stats) do
+			yy += statRow(scroll, c, line, px, yy, rw, CARD.Row - 2, tostring(line.To))
+		end
+	end
+	scroll.CanvasSize = UDim2.fromOffset(0, yy + 4)
+	for _, d in ipairs(scroll:GetDescendants()) do
+		if d:IsA("GuiObject") then
+			d.ZIndex = math.max(d.ZIndex, 44)
+		end
+	end
+
+	local function setOpen(on: boolean)
+		panel.Visible = on
+		chevron.Rotation = on and -90 or 90
+		word.Text = on and "CLOSE" or "DETAILS"
+		Choice.DetailsOpen = Choice.DetailsOpen or {}
+		Choice.DetailsOpen[index] = on or nil
+	end
+	setOpen(Choice.DetailsOpen ~= nil and Choice.DetailsOpen[index] == true)
+	local function mark()
+		Choice.DetailsAt = os.clock()
+	end
+	toggle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			mark()
+		end
+	end)
+	toggle.MouseButton1Down:Connect(mark)
+	toggle.Activated:Connect(function()
+		mark()
+		if offerOpen then
+			setOpen(not panel.Visible)
+		end
+	end)
+	return toggle
+end
+
+--[[
 	One card (approved screen 04). Landscape (tall): a sculpted slate frame with corner gems;
 	a tab with the card kind and rank change ("NEW PASSIVE", "UPGRADE · LV 1 → 2", "FINAL
 	UPGRADE · LV 11 → 12"); the art panel; the serif name; the one-line effect; the boxed main
@@ -2062,12 +2217,11 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		}, 16)
 
 		-- the art panel takes what the text leaves (between Choice.artMin and Choice.artPref)
-		local needs = cardNeeds(c, w)
-		local spare = h - needs
-		if spare < Choice.artMin() and #select(3, cardContent(c)) > 0 then
-			-- the before/after box will not fit even with the smallest picture (short phone
-			-- cards): it gets dropped below, so its room goes to the picture instead
-			spare += boxHeight() + 6
+		-- one art height for every card of the offer (the busiest card decides), so the
+		-- names, effects and goals line up across the three cards
+		local spare = Choice.cardSpare(c, w, h)
+		for _, other in ipairs(lastOffer and lastOffer.Choices or {}) do
+			spare = math.min(spare, Choice.cardSpare(other, w, h))
 		end
 		local artH = math.clamp(spare, Choice.artMin(), Choice.artPref(w))
 		local y = CARD.Inset
@@ -2118,57 +2272,23 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			Choice.fit(dl, dl.TextSize, 10, true)
 			y += dh + 6
 		end
-		if details then
-			-- the small muted details line under the benefit sentence
-			local hh = Choice.detailsHeight(details, w)
-			local dt = text(face, "Small", details, {
-				Name = "Details",
-				Position = UDim2.fromOffset(pad, y - 2),
-				Size = UDim2.new(1, -2 * pad, 0, hh),
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextWrapped = true,
-				TextColor3 = P.ivory_300,
-				TextTransparency = 0.15,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				ZIndex = 2,
-			}, Choice.detailsSize())
-			Choice.fit(dt, dt.TextSize, 9, not Choice.compactLandscape())
-			y += hh + 4
-		end
 		y += 4
-		-- top-down under the effect: the rows (what the card does comes first), then the
-		-- synergy bar and the evolution hint while they fit above the plate
-		local bottom = footY - 8
+		-- top-down under the effect: the main change box, then the synergy bar and the
+		-- evolution hint while they fit above the DETAILS toggle and the plate
+		local more = Choice.hasMore(c)
+		local moreY = footY - (more and Choice.moreH() + 6 or 0)
+		local bottom = moreY - 6
 		local rw = w - 2 * pad
-		-- the synergy bar and the evolution hint keep their room (rows that do not fit are
-		-- dropped instead: the effect line already sums up the gain)
+		-- the synergy bar and the evolution hint keep their room (the box gives way: the
+		-- effect line already sums up the gain, and DETAILS lists every change)
 		local synRoom = c.Synergy and CARD.Syn + 8 or 0
 		local hintRoom = c.Hint and hintHeight() + 4 or 0
 		local function fits(hh: number): boolean
 			return y + hh <= bottom - synRoom - hintRoom
 		end
-		if #changes > 0 then
-			local start = 1
-			if fits(boxHeight()) then
-				changeBox(face, c, changes[1], pad, y, rw)
-				y += boxHeight() + 6
-				start = 2
-			end
-			for i = start, #changes do
-				if not fits(CARD.Row - 2) then
-					break
-				end
-				y += statRow(face, c, changes[i], pad, y, rw, CARD.Row - 2, changeValue(changes[i]))
-			end
-		else
-			-- slimmer rows on phones in landscape, so a NEW weapon keeps its third stat
-			local rowH = Choice.compactLandscape() and CARD.Row - 4 or CARD.Row
-			for _, line in ipairs(stats) do
-				if not fits(rowH) then
-					break
-				end
-				y += statRow(face, c, line, pad, y, rw, rowH, tostring(line.To))
-			end
+		if #changes > 0 and fits(boxHeight()) then
+			changeBox(face, c, changes[1], pad, y, rw)
+			y += boxHeight() + 6
 		end
 		synRoom = 0
 		if c.Synergy and fits(CARD.Syn + 4) then
@@ -2187,6 +2307,13 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				TextColor3 = c.HintReady and P.gold_300 or P.gold_200,
 			}, 13), c)
+			local hintLabel = face:FindFirstChild("Hint")
+			if hintLabel and hintLabel:IsA("TextLabel") and Choice.compactLandscape() and not hintLabel:FindFirstChild("Fit") then
+				Choice.fit(hintLabel, hintLabel.TextSize, 8, true)
+			end
+		end
+		if more then
+			Choice.detailsToggle(face, c, index, pad, moreY, w, CARD.Inset, moreY - 6)
 		end
 	end
 
@@ -2404,6 +2531,7 @@ local function showOffer(offer)
 	offerArm.Revealed = false
 	offerArm.At = math.huge
 	offerArm.ShownAt = math.huge
+	Choice.DetailsOpen = {} -- new cards: every DETAILS panel starts closed
 	clearCards()
 	local rerolls, skips = tonumber(offer.Rerolls) or 0, tonumber(offer.Skips) or 0
 	local rerollMax, skipMax = tonumber(offer.RerollsMax) or rerolls, tonumber(offer.SkipsMax) or skips
@@ -3451,6 +3579,8 @@ end
 ------------------------------------------------------------------------------------------
 
 local pause: { [string]: any } = {}
+-- spacing of the settings option stacks (top padding, gap between rows, sides, bottom)
+local COLUMN = { Top = 4, Gap = 8, Side = 18, Bottom = 4 }
 
 -- Total height of a list's children (offset sizes) plus the gaps between them.
 local function stackHeight(frame: Instance, gap: number): number
@@ -3465,8 +3595,8 @@ local function stackHeight(frame: Instance, gap: number): number
 end
 
 -- The tallest cut (<= h, >= floor) through the stacked settings columns that splits no
--- row: the columns' rows laid out as their UIListLayout does (COLUMN_PAD - 4 on top, 6
--- between). Returns h when there is no such cut.
+-- row: the columns' rows laid out as their UIListLayout does (COLUMN.Top on top,
+-- COLUMN.Gap between). Returns h when there is no such cut.
 local function snapToRows(cols: { Frame }, h: number, floor: number): number
 	local rows: { { number } } = {}
 	for _, col in ipairs(cols) do
@@ -3479,10 +3609,10 @@ local function snapToRows(cols: { Frame }, h: number, floor: number): number
 		table.sort(list, function(a, b)
 			return a.LayoutOrder < b.LayoutOrder
 		end)
-		local y = col.Position.Y.Offset + 12
+		local y = col.Position.Y.Offset + COLUMN.Top
 		for _, ch in ipairs(list) do
 			table.insert(rows, { y, y + ch.Size.Y.Offset })
-			y += ch.Size.Y.Offset + 6
+			y += ch.Size.Y.Offset + COLUMN.Gap
 		end
 	end
 	local best = nil
@@ -3505,32 +3635,32 @@ local function snapToRows(cols: { Frame }, h: number, floor: number): number
 	return best or h
 end
 
--- A settings column heading: serif caps in gold over a hairline.
+-- A small heading over a group of secondary settings: muted caps over a hairline (no card).
 local function sectionCaption(parent: Instance, str: string, order: number)
-	local h = TS(18) + 14
+	local h = TS(13) + 12
 	local f = new("Frame", { Name = "Heading", BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.new(1, 0, 0, h) }, parent)
-	text(f, "H3", string.upper(str), { Size = UDim2.new(1, 0, 1, -6), TextColor3 = P.gold_200 })
+	text(f, "Caption", string.upper(str), { Size = UDim2.new(1, 0, 1, -4), TextYAlignment = Enum.TextYAlignment.Bottom }, 13)
 	UIKit.Hairline(f, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) })
 end
 
--- The settings columns sit on charcoal cards with a thin gold edge (COLUMN_PAD inside).
-local COLUMN_PAD = 16
-local function settingsColumn(parent: Instance, name: string): Frame
-	local col = new("Frame", { Name = name, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, Size = UDim2.fromOffset(300, 300) }, parent)
-	UIKit.corner(col, Theme.Radius.M)
-	UIKit.stroke(col, P.gold_500, 1, 0.6)
-	UIKit.padding(col, COLUMN_PAD - 4, COLUMN_PAD, COLUMN_PAD, COLUMN_PAD)
-	UIKit.list(col, { Padding = UDim.new(0, 6) })
+-- The settings columns are plain stacks (no card); the side padding keeps the slider
+-- knobs (half a knob past the track's ends) inside the scroll clip.
+local function settingsColumn(parent: Instance, name: string, side: number?): Frame
+	local col = new("Frame", { Name = name, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromOffset(300, 300) }, parent)
+	UIKit.padding(col, COLUMN.Top, side or COLUMN.Side, COLUMN.Bottom, side or COLUMN.Side)
+	UIKit.list(col, { Padding = UDim.new(0, COLUMN.Gap) })
 	return col
 end
 
--- One line under the options: where settings live and whether saving works right now.
+-- One line under the options: whether saving works right now. Every change applies at
+-- once and ClientSettings.Set sends it to the server (SaveSettings, debounced), so with a
+-- working save "Changes save automatically." is the truth.
 local function settingsNote(): string
 	local status = player:GetAttribute("SaveStatus")
 	if status == "failing" or status == "memory" then
 		return "Progress isn't being saved right now, so changes may not be kept."
 	end
-	return "Settings are saved with your progress."
+	return "Changes save automatically."
 end
 
 -- An enum setting's value as words: "RightHanded" → "RIGHT HANDED".
@@ -3542,26 +3672,29 @@ end
 local pauseMode = "Settings" -- "Settings" (lobby) | "RunSettings" (opened from the run menu)
 
 local function buildPause()
-	local m = UIKit.Modal(root, "Pause", 760, 470, Theme.Z.Pause)
+	-- A compact centred modal: "Settings" (modest serif) + close X, Music and Effects as
+	-- one tidy row each, the other options in plain stacks below them (one scroll), the
+	-- save note and one button (DONE in the lobby, BACK to the run menu during a run).
+	local m = UIKit.Modal(root, "Pause", 640, 470, Theme.Z.Pause)
 	pause.Overlay = m.Overlay
 	pause.Modal = m
 	local content = m.Content
 	fitModal(m, UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }))
-	pause.Title = text(content, "H1", "PAUSED", { LayoutOrder = 1, TextXAlignment = Enum.TextXAlignment.Center })
-	UIKit.Divider(content, 220, { LayoutOrder = 2 })
+	pause.Title = text(content, "H2", "Settings", { LayoutOrder = 1, TextXAlignment = Enum.TextXAlignment.Center }, 28)
+	UIKit.Divider(content, 200, { LayoutOrder = 2 })
 	pause.Note = text(content, "Body", "", {
-		LayoutOrder = 3,
+		LayoutOrder = 5,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = true,
 		TextColor3 = C.TextMuted,
-		Size = UDim2.new(1, 0, 0, TS(16) + 8),
-	})
+		Size = UDim2.new(1, 0, 0, TS(15) + 8),
+	}, 15)
 
-	-- options: sound sliders (left) and comfort / help switches (right); one column and a
-	-- scroll on narrow or short screens
+	-- options: Music and Effects first (full width), then the other sound options (left)
+	-- and comfort / help (right); one column on narrow screens, one scroll when short
 	local options = new("ScrollingFrame", {
 		Name = "Options",
-		LayoutOrder = 4,
+		LayoutOrder = 3,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 300),
@@ -3572,17 +3705,30 @@ local function buildPause()
 		ElasticBehavior = Enum.ElasticBehavior.Never,
 	}, content)
 	pause.Options = options
+	local primary = settingsColumn(options, "Main", 2) -- the wells pad their own sliders
 	local colA = settingsColumn(options, "Sound")
 	local colB = settingsColumn(options, "Comfort")
-	pause.ColA, pause.ColB = colA, colB
+	pause.Primary, pause.ColA, pause.ColB = primary, colA, colB
 
-	sectionCaption(colA, "Sound", 1)
-	pause.Music = UIKit.Slider(colA, "Music", "music", ClientSettings.Get("Music"), function(v)
+	-- Music / Effects: a dark well each (icon, label, percentage, slim slider); values
+	-- apply while dragging (ClientSettings.Set) and save a moment after the last change
+	local function well(order: number, height: number): Frame
+		local w = new("Frame", { Name = "Well", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, LayoutOrder = order, Size = UDim2.new(1, 0, 0, height + 20) }, primary)
+		UIKit.corner(w, Theme.Radius.M)
+		UIKit.stroke(w, P.slate_600, 1, 0.5)
+		UIKit.padding(w, 8, 18, 10, 16)
+		return w
+	end
+	-- the slider's frame ends just under its track (its touch strip still reaches below)
+	local slim = { Size = UDim2.new(1, 0, 0, 58) }
+	pause.Music = UIKit.Slider(well(1, 58), "Music", "music", ClientSettings.Get("Music"), function(v)
 		ClientSettings.Set("Music", v)
-	end, function() end, { LayoutOrder = 2 })
-	pause.Sfx = UIKit.Slider(colA, "Effects", "speaker", ClientSettings.Get("Sfx"), function(v)
+	end, function() end, slim)
+	pause.Sfx = UIKit.Slider(well(2, 58), "Effects", "speaker", ClientSettings.Get("Sfx"), function(v)
 		ClientSettings.Set("Sfx", v)
-	end, function() end, { LayoutOrder = 3 })
+	end, function() end, slim)
+
+	sectionCaption(colA, "More sound", 1)
 	pause.ChannelSliders = {}
 	for i, option in ipairs({ { "CombatVolume", "Combat" }, { "InterfaceVolume", "Interface" }, { "WarningVolume", "Warnings" } }) do
 		local key = option[1]
@@ -3669,7 +3815,7 @@ local function buildPause()
 
 	-- one button: DONE (lobby SETTINGS) / BACK (settings opened from the run menu). The run
 	-- menu itself (resume, build, leave) is the side drawer below (buildRunMenu).
-	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
+	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 	pause.Resume = UIKit.Button(row, {
 		Kind = "Primary",
@@ -3696,39 +3842,45 @@ local function buildPause()
 	})
 	local function layoutOptions()
 		local v = virtualSize()
-		local w = tallModalWidth(760)
+		local w = tallModalWidth(640)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
 		local twoCol = inner >= 540 and not (UIKit.IsCompact() and v.Y > v.X)
-		local gap = 20
-		local side = 2 -- the columns' padding keeps the slider knobs inside the scroll clip
-		local colW = twoCol and math.floor((inner - gap - 2 * side) / 2) or (inner - 2 * side)
-		local hA, hB = stackHeight(colA, 6) + 2 * COLUMN_PAD - 4, stackHeight(colB, 6) + 2 * COLUMN_PAD - 4
+		local gap = 12
+		local colW = twoCol and math.floor((inner - gap) / 2) or inner
+		local function height(col: Frame): number
+			return stackHeight(col, COLUMN.Gap) + COLUMN.Top + COLUMN.Bottom
+		end
+		local hP, hA, hB = height(primary), height(colA), height(colB)
 		if twoCol then
-			hA = math.max(hA, hB) -- two cards of one height
+			hA = math.max(hA, hB) -- two stacks of one height
 			hB = hA
 		end
+		primary.Size = UDim2.fromOffset(inner, hP)
+		primary.Position = UDim2.fromOffset(0, 0)
 		colA.Size = UDim2.fromOffset(colW, hA)
 		colB.Size = UDim2.fromOffset(colW, hB)
-		colA.Position = UDim2.fromOffset(side, 0)
-		colB.Position = twoCol and UDim2.fromOffset(side + colW + gap, 0) or UDim2.fromOffset(side, hA + 18)
-		local contentH = (twoCol and math.max(hA, hB) or (hA + 18 + hB)) + 6
+		local top = hP + 10
+		colA.Position = UDim2.fromOffset(0, top)
+		colB.Position = twoCol and UDim2.fromOffset(colW + gap, top) or UDim2.fromOffset(0, top + hA + 12)
+		local contentH = top + (twoCol and hA or (hA + 12 + hB)) + 6
 		-- the note takes as many lines as its text needs (rough: ~0.5 em per character)
-		local perLine = math.max(10, math.floor(inner / (TS(16) * 0.5)))
+		local perLine = math.max(10, math.floor(inner / (TS(15) * 0.5)))
 		local lines = math.clamp(math.ceil(#pause.Note.Text / perLine), 1, 3)
-		pause.Note.Size = UDim2.new(1, 0, 0, lines * (TS(16) + 2) + 6)
+		pause.Note.Size = UDim2.new(1, 0, 0, lines * (TS(15) + 2) + 6)
 		-- what the rest of the panel takes: title, divider, note, buttons, gaps, padding
-		local fixed = (TS(30) + 6) + 10 + pause.Note.Size.Y.Offset + Theme.Size.Button + 4 * 10 + 2 * Theme.Space.XL + 8
+		local fixed = (TS(28) + 6) + 10 + pause.Note.Size.Y.Offset + Theme.Size.Button + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(160, v.Y - 24 - fixed)
-		local h = math.min(contentH, room)
+		-- compact: Music and Effects plus a look at the next options; the rest scrolls
+		local h = math.min(contentH, room, top + 230)
 		if contentH > h + 1 then
 			-- the scroll edge falls between rows, not through a title or its description
-			h = snapToRows({ colA, colB }, h, math.max(140, h - 140))
+			h = snapToRows({ primary, colA, colB }, h, math.max(140, h - 140))
 		end
 		options.Size = UDim2.new(1, 0, 0, h)
 		options.CanvasSize = UDim2.fromOffset(0, contentH)
 		options.ScrollBarThickness = contentH > h + 1 and 4 or 0
-		pause.Resume.Instance.Size = UDim2.fromOffset(math.clamp(inner, 120, 240), Theme.Size.Button)
+		pause.Resume.Instance.Size = UDim2.fromOffset(math.clamp(inner, 120, 220), Theme.Size.Button)
 	end
 	pause.Layout = layoutOptions
 	onRelayout(layoutOptions)
@@ -4280,7 +4432,7 @@ function UIBuilder.OpenRunSettings()
 		hide(runMenu.Overlay, "Pause")
 	end
 	pauseMode = "RunSettings"
-	pause.Title.Text = "SETTINGS"
+	pause.Title.Text = "Settings"
 	pause.Resume.SetText("BACK")
 	pause.Resume.SetIcon("chevronLeft")
 	pause.Note.Text = runMenu.menuFreezesRun() and settingsNote() or ("Game not paused, you can be hit. " .. settingsNote())
@@ -4299,7 +4451,7 @@ function UIBuilder.OpenSettings()
 		return
 	end
 	pauseMode = "Settings"
-	pause.Title.Text = "SETTINGS"
+	pause.Title.Text = "Settings"
 	pause.Resume.SetText("DONE")
 	pause.Resume.SetIcon("check")
 	pause.Note.Text = settingsNote()

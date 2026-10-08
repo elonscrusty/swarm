@@ -99,6 +99,12 @@ def main():
     checks += [("revive-thanks-regression", [])]  # ReviveThanks: offer, once, XP, pair limit, DEV taint, solo, 6 s offer (PASS/FAIL lines; server run, client module without UI)
     checks += [("layout", ["revive-thanks-layout", d]) for d in ("iphone", "phone-portrait", "pc")]  # ReviveThanks: THANKS! button clear of JUMP / ULT / team list
     # batch B group E: Prestige, QuickResume
+    # menu redesign 2026-10-08: the compact Settings modal (lobby and from the run menu) and the
+    # level-up cards' DETAILS toggle (opens the panel, never picks the card)
+    checks += [("layout", ["settings", d]) for d in ("iphone", "phone-portrait", "pc")]
+    checks += [("layout", ["pause", d, "view=settings"]) for d in ("iphone", "phone-portrait")]
+    # (landscape cards only: the narrow portrait cards keep their one-line details inline, no toggle)
+    checks += [("layout", ["levelup", d, "details=2"]) for d in ("iphone", "pc")]
 
     def run(check):
         scene, settings = check
