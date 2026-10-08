@@ -240,6 +240,9 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	end
 
 	ui.Header = UIKit.TitleBar(screen, "Characters", ctx.Back)
+	-- a little wider BACK than the kit's compact one: "BACK" keeps its letters at the Largest text size
+	ui.Header.Back.Instance.Size = UDim2.fromOffset(128, 42)
+	ui.Header.Title.Position = UDim2.new(0, 146, 0.5, 0)
 
 	------------------------------------------------------------------------------------
 	-- left: the roster (landscape) / tabs (portrait)
@@ -918,7 +921,7 @@ if selected then
 		sticky ..= string.format('  <font color="%s">· previewing skin %s</font>', muted, skinName(previewSkin))
 	end
 else
-	sticky = string.format('<font color="%s">PREVIEW</font>  %s  <font color="%s">· you play the %s until you select another</font>', gold, string.upper(def.Name), muted, eqDef and eqDef.Name or "Knight")
+	sticky = string.format('<font color="%s">PREVIEW</font>  %s  <font color="%s">· you play the %s%s</font>', gold, string.upper(def.Name), muted, eqDef and eqDef.Name or "Knight", UIKit.IsCompact() and "" or " until you select another")
 end
 ui.StickyText.Text = sticky
 		-- how to unlock it: the achievement and its progress, or the gold price; an owned

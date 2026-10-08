@@ -404,6 +404,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	ui.Leave = UIKit.Button(left, {
 		Kind = "Danger",
 		Title = "LEAVE PARTY",
+		Shrink = true,
 		Icon = "close",
 		IconSize = 18,
 		Align = "Center",
@@ -417,6 +418,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	ui.Start = UIKit.Button(left, {
 		Kind = "Primary",
 		Title = "START",
+		Shrink = true,
 		Icon = "play",
 		IconSize = 18,
 		Align = "Center",
@@ -523,7 +525,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		-- invites to you first
 		for _, inv in ipairs(openInvites()) do
 			order += 1
-			local f = personRow(plist, order, inv.FromId, inv.FromName, narrow and "Invited you" or "Invited you to their party", C.BlueDeep, bw(108, "ACCEPT") + 8 + 44 + 16, true)
+			local f = personRow(plist, order, inv.FromId, inv.FromName, narrow and "Invited you" or "Invited you to their party", C.BlueDeep, bw(108, "ACCEPT") + 8 + 44 + 16, false)
 			rowButton(f, "ACCEPT", nil, "Primary", 108, 8, function()
 				send("Accept", inv.FromId)
 				deadlines[inv.FromId] = 0
