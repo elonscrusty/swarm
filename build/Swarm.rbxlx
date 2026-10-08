@@ -4598,6 +4598,18 @@ Config.Arenas = {
 	Lava = { DisplayName = "Lava", RequiredBestStage = 6, Hint = "Lava pools burn" },
 	Size = 400, -- square arena, centred on ArenaOrigin
 	ClearRadius = 40, -- nothing collidable this close to the centre (player spawn)
+	-- Environment dressing (MapBuilder.dressArena, Forest): small natural clusters of
+	-- grass tufts, wildflowers, mossy rocks, shrubs and fallen branches built once per
+	-- arena build into the arena's "ArenaDressing" folder (fixed seed, cleared with the
+	-- arena). Decoration only: no collision, queries or touches. Most clusters sit by the
+	-- arena edges and the path edges, a few in the meadow, almost none in the centre.
+	-- Ground / path materials are Roblox materials tinting the palette colours.
+	Dressing = {
+		Enabled = true,
+		GroundMaterial = "Grass", -- the Forest meadow floor and its broad tone patches
+		PathMaterial = "Ground", -- the Forest dirt paths
+		Clusters = { Edge = 18, Path = 20, Meadow = 8, Centre = 2 }, -- cluster counts per zone
+	},
 	-- Layouts (landmarks, groves, paths) are designed in MapBuilder with a fixed seed per
 	-- arena; obstacle coverage is kept close to the old builder (see MapBuilder header).
 
@@ -10532,6 +10544,17 @@ local Palette = {
 	meadow_400 = Color3.fromRGB(116, 156, 105),
 	meadow_300 = Color3.fromRGB(138, 173, 124),
 	meadow_200 = Color3.fromRGB(163, 191, 149),
+	lawn_800 = Color3.fromRGB(54, 84, 48),
+	lawn_700 = Color3.fromRGB(66, 98, 56),
+	lawn_600 = Color3.fromRGB(76, 112, 62),
+	lawn_500 = Color3.fromRGB(84, 124, 70),
+	lawn_400 = Color3.fromRGB(98, 136, 74),
+	lawn_olive = Color3.fromRGB(104, 116, 64),
+	soil_600 = Color3.fromRGB(124, 96, 70),
+	soil_500 = Color3.fromRGB(150, 118, 86),
+	soil_400 = Color3.fromRGB(172, 136, 98),
+	soil_300 = Color3.fromRGB(190, 156, 118),
+	bloom_yellow = Color3.fromRGB(238, 203, 85),
 	pave_100 = Color3.fromRGB(236, 230, 216),
 	pave_200 = Color3.fromRGB(218, 212, 198),
 	pave_300 = Color3.fromRGB(197, 192, 180),
@@ -31040,6 +31063,21 @@ local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- turns a Cylinder's axis (X)
 local SMOOTH = Enum.Material.SmoothPlastic
 
 local SEEDS = { Lobby = 20250, Forest = 41207, Ruins = 93011, Swamp = 52361, Snow = 63127, Desert = 74471, Lava = 85219 }
+-- environment dressing (dressArena): one folder per arena model, built once per build
+local DRESSING_FOLDER = "ArenaDressing"
+local DRESS: any = (Config.Arenas :: any).Dressing or {}
+
+-- A Roblox material by its Enum name (Config strings), or `default`.
+local function materialNamed(name: any, default: Enum.Material): Enum.Material
+	if type(name) == "string" then
+		for _, m in ipairs(Enum.Material:GetEnumItems()) do
+			if m.Name == name then
+				return m
+			end
+		end
+	end
+	return default
+end
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -31105,13 +31143,14 @@ local function disc(parent: Instance, name: string, top: Vector3, radius: number
 end
 
 -- Flat slab whose TOP surface is at top.Y (paths, paving).
-local function slab(parent: Instance, name: string, top: Vector3, sx: number, sz: number, yaw: number, color: Color3, thick: number?): BasePart
+local function slab(parent: Instance, name: string, top: Vector3, sx: number, sz: number, yaw: number, color: Color3, thick: number?, material: Enum.Material?): BasePart
 	local t = thick or 0.1
 	return deco(parent, {
 		Name = name,
 		Size = Vector3.new(sx, t, sz),
 		CFrame = CFrame.new(top - Vector3.new(0, t / 2, 0)) * CFrame.Angles(0, yaw, 0),
 		Color = color,
+		Material = material,
 	})
 end
 
@@ -32388,7 +32427,9 @@ end
 local CLUTTER_SCALE: { [string]: number } = { GrassTuft = 1.0, Flowers = 1.5, Fern = 1.35, Rock_Small = 1.3, Mushroom = 1.3, Reeds = 1.3, Lilypads = 1.2, Snow_Drift = 1.1, Snow_Bush = 1.1, Ash_Pile = 1.2 }
 
 -- Small clutter scattered in a disc around (cx, cz): { {name, sMin, sMax, palette?} }.
-local function scatter(arena: Arena, cx: number, cz: number, radius: number, count: number, kinds: { { any } }, clear: number?, pathPad: number?)
+-- dry: draw the same seeded numbers but place nothing (a scatter replaced by the
+-- dressing keeps the seeded layout after it, obstacles included, exactly as it was).
+local function scatter(arena: Arena, cx: number, cz: number, radius: number, count: number, kinds: { { any } }, clear: number?, pathPad: number?, dry: boolean?)
 	count = math.max(1, math.floor(count * (arena.DecorDensity or 1) + 0.5))
 	local placed = 0
 	for _ = 1, count * 8 do
@@ -32400,7 +32441,12 @@ local function scatter(arena: Arena, cx: number, cz: number, radius: number, cou
 		local x, z = cx + math.cos(a) * r, cz + math.sin(a) * r
 		if isFree(arena, x, z, clear or 0.8, pathPad) then
 			local k = pick(kinds)
-			decor(arena, k[1], x, z, nil, rng:NextNumber(k[2], k[3]) * (CLUTTER_SCALE[k[1]] or 1), k[4])
+			if dry then
+				rng:NextNumber(k[2], k[3])
+				randomYaw()
+			else
+				decor(arena, k[1], x, z, nil, rng:NextNumber(k[2], k[3]) * (CLUTTER_SCALE[k[1]] or 1), k[4])
+			end
 			placed += 1
 		end
 	end
@@ -32438,7 +32484,7 @@ end
 -- bend, so neighbours overlap and close the wedge on the outside of every bend;
 -- neighbours sit 0.06 studs apart in height (odd / even), so the overlaps never
 -- z-fight from the high run camera. Registered in arena.Paths (decoration keeps off it).
-local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Color3, edge: Color3, yBase: number)
+local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Color3, edge: Color3, yBase: number, material: Enum.Material?)
 	-- nearly straight runs (under 3° of turn, up to 40 studs) become one segment
 	local raw = smoothPath(ctrl, 18)
 	local pts: { Vector2 } = { raw[1] }
@@ -32484,7 +32530,7 @@ local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Co
 		for _, layer in ipairs({ { "PathEdge", edgeW, edge, yBase, 0.1 }, { "Path", width, core, yBase + 0.16, 0.2 } }) do
 			local ea, eb = layer[2] / 2 * ma, layer[2] / 2 * mb
 			local mid = (a + b) / 2 + dir * ((eb - ea) / 2)
-			slab(arena.Decor, layer[1], W(arena, mid.X, mid.Y, layer[4] + lift), layer[2], len + ea + eb, yaw, layer[3], layer[5])
+			slab(arena.Decor, layer[1], W(arena, mid.X, mid.Y, layer[4] + lift), layer[2], len + ea + eb, yaw, layer[3], layer[5], material)
 		end
 		table.insert(arena.Paths, { A = Vector3.new(a.X, 0, a.Y), B = Vector3.new(b.X, 0, b.Y), W = edgeW / 2 })
 	end
@@ -32858,6 +32904,209 @@ local function vignettes(arena: Arena, list: { Vignette })
 end
 
 ------------------------------------------------------------------------------------------
+-- ENVIRONMENT DRESSING (owner's meadow reference, 2026-10-08): small natural clusters
+-- from a short reusable set of kit props (grass tufts in related greens, white / yellow
+-- wildflowers, rounded grey rocks with occasional moss, compact shrubs, a fallen branch,
+-- pebbles), built once per arena build into the arena model's "ArenaDressing" folder.
+--   * own Random (arena seed + variant): the same dressing on every server and every
+--     rebuild, and the seeded layout of everything else is untouched;
+--   * cluster centres: most along the arena edges, then beside the paths (outside the
+--     spawn clearing), a few in the meadow and only a couple of tiny ones in the centre,
+--     so the combat area stays open; members spread unevenly around their centre with
+--     random turn and size (no grid, no even scatter);
+--   * everything is decoration (prop(): no collision, queries or touches, no scripts);
+--     only the rocks, shrubs and branches cast a (soft) shadow;
+--   * nothing on a path core, in a collider, a landmark keepout or a hazard pool; tufts,
+--     flowers and pebbles may lean over the soft path margin, which breaks its outline.
+-- Dressing is cleared with the arena (DestroyArena) and by ClearDecor (chests, altars,
+-- the portal).
+------------------------------------------------------------------------------------------
+
+type DressSet = { [string]: { Pal } }
+
+-- What one cluster holds: { kit name, min count, max count, min scale, max scale, set key }.
+local DRESS_CLUSTERS: { [string]: { { any } } } = {
+	Meadow = { { "GrassTuft", 2, 3, 1.0, 1.5, "Tuft" }, { "Flowers", 0, 2, 1.1, 1.5, "Flower" } },
+	Flowers = { { "Flowers", 2, 3, 1.1, 1.6, "Flower" }, { "GrassTuft", 0, 2, 1.0, 1.4, "Tuft" } },
+	Rocks = { { "Rock", 1, 1, 0.34, 0.55, "Rock" }, { "Rock_Small", 1, 2, 0.8, 1.3, "Pebble" }, { "GrassTuft", 0, 2, 1.0, 1.5, "Tuft" }, { "Flowers", 0, 1, 1.0, 1.4, "Flower" } },
+	Shrub = { { "Bush", 1, 1, 0.7, 1.0, "Bush" }, { "GrassTuft", 0, 2, 1.0, 1.5, "Tuft" }, { "Fern", 0, 1, 0.9, 1.2, "Fern" }, { "Flowers", 0, 1, 1.0, 1.4, "Flower" } },
+	Branch = { { "Log", 1, 1, 0.3, 0.42, "Log" }, { "GrassTuft", 1, 2, 1.0, 1.4, "Tuft" } },
+	Pebbles = { { "Rock_Small", 2, 3, 0.45, 0.8, "Pebble" }, { "GrassTuft", 0, 1, 0.9, 1.3, "Tuft" } },
+}
+-- Cluster kinds per zone (weights).
+local DRESS_ZONES: { [string]: { { any } } } = {
+	Edge = { { "Shrub", 3 }, { "Rocks", 3 }, { "Meadow", 2 }, { "Flowers", 2 }, { "Branch", 1 } },
+	Path = { { "Pebbles", 3 }, { "Meadow", 3 }, { "Flowers", 2 }, { "Rocks", 1 } },
+	Meadow = { { "Meadow", 3 }, { "Flowers", 3 }, { "Rocks", 1 } },
+	Centre = { { "Flowers", 1 }, { "Meadow", 1 } },
+}
+-- Pieces that may lean over the soft path margin (small) vs ones kept off it (solid).
+local DRESS_SMALL: { [string]: boolean } = { GrassTuft = true, Flowers = true, Rock_Small = true }
+local DRESS_SHADOW: { [string]: boolean } = { Rock = true, Bush = true, Log = true }
+
+local function weighted(r: Random, list: { { any } }): string
+	local total = 0
+	for _, e in ipairs(list) do
+		total += e[2]
+	end
+	local roll = r:NextNumber(0, total)
+	for _, e in ipairs(list) do
+		roll -= e[2]
+		if roll <= 0 then
+			return e[1]
+		end
+	end
+	return list[#list][1]
+end
+
+local function dressCluster(arena: Arena, folder: Folder, r: Random, set: DressSet, kind: string, cx: number, cz: number, small: boolean)
+	local spread = small and 1.8 or r:NextNumber(2.2, 3.8)
+	for _, member in ipairs(DRESS_CLUSTERS[kind]) do
+		local name = member[1]
+		local n = r:NextInteger(member[2], member[3])
+		if small then
+			n = math.min(n, 2)
+		end
+		local solid = not DRESS_SMALL[name]
+		for i = 1, n do
+			-- the anchor piece (a rock / shrub / branch) sits near the centre, the rest
+			-- gather unevenly around it
+			local reach = (solid and i == 1) and 0.6 or spread
+			for _ = 1, 6 do
+				local a = r:NextNumber(0, TAU)
+				local d = reach * (0.3 + 0.7 * math.sqrt(r:NextNumber()))
+				local x, z = cx + math.cos(a) * d, cz + math.sin(a) * d
+				local margin = solid and 0.8 or -0.9 -- signed distance to the path's outer edge
+				if isFree(arena, x, z, solid and 1.2 or 0.5, nil, 0.5) and pathDistance(arena, x, z) > margin then
+					local pals = set[member[6]]
+					local pal = if pals then pals[r:NextInteger(1, #pals)] else nil
+					local s = r:NextNumber(member[4], member[5]) * (CLUTTER_SCALE[name] or 1)
+					local cf = CFrame.new(W(arena, x, z)) * CFrame.Angles(0, r:NextNumber(0, TAU), 0)
+					prop(folder, name, cf, s, pal, if DRESS_SHADOW[name] then {} else { shadow = false })
+					break
+				end
+			end
+		end
+	end
+end
+
+-- Builds the dressing of `arena` from `set` (palettes per set key). Cluster counts per
+-- zone come from Config.Arenas.Dressing.Clusters.
+local function dressArena(arena: Arena, set: DressSet)
+	if DRESS.Enabled == false then
+		return
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = DRESSING_FOLDER
+	folder.Parent = arena.Model
+	local r = Random.new((SEEDS[arena.Name] or 0) * 3 + 811 + (arena.Variant or 0) * 7919)
+	local counts = DRESS.Clusters or {}
+	local h = arena.Half
+	local function place(zone: string, x: number, z: number, small: boolean?)
+		dressCluster(arena, folder, r, set, weighted(r, DRESS_ZONES[zone]), x, z, small == true)
+	end
+
+	-- edges: stratified around the perimeter (one bin per cluster, jittered and inset
+	-- unevenly), so clusters never line up or repeat at a fixed spacing
+	local edgeN = counts.Edge or 20
+	for i = 0, edgeN - 1 do
+		for _ = 1, 5 do
+			local u = (i + r:NextNumber(0.1, 0.9)) / edgeN * 8 * h
+			local side, t = math.floor(u / (2 * h)), u % (2 * h) - h
+			local d = r:NextNumber(5, 20)
+			local x, z
+			if side == 0 then
+				x, z = t, -h + d
+			elseif side == 1 then
+				x, z = h - d, t
+			elseif side == 2 then
+				x, z = -t, h - d
+			else
+				x, z = -h + d, -t
+			end
+			if isFree(arena, x, z, 2.5, 1.5, 2) then
+				place("Edge", x, z)
+				break
+			end
+		end
+	end
+
+	-- path edges: beside a path segment outside the clearing, either side
+	local segs, total = {}, 0
+	for _, seg in ipairs(arena.Paths) do
+		local mid = (seg.A + seg.B) / 2
+		local len = (seg.B - seg.A).Magnitude
+		if mid.Magnitude > arena.Clear + 8 and math.abs(mid.X) < h - 6 and math.abs(mid.Z) < h - 6 and len > 1 then
+			table.insert(segs, seg)
+			total += len
+		end
+	end
+	if total > 0 then
+		for _ = 1, counts.Path or 14 do
+			for _ = 1, 6 do
+				local roll = r:NextNumber(0, total)
+				local seg = segs[#segs]
+				for _, sg in ipairs(segs) do
+					roll -= (sg.B - sg.A).Magnitude
+					if roll <= 0 then
+						seg = sg
+						break
+					end
+				end
+				local dir = seg.B - seg.A
+				local p = seg.A + dir * r:NextNumber(0.1, 0.9)
+				local side = r:NextNumber() < 0.5 and -1 or 1
+				local nrm = Vector3.new(-dir.Z, 0, dir.X).Unit * side
+				local at = p + nrm * (seg.W + r:NextNumber(1.2, 3.2))
+				if at.Magnitude > arena.Clear + 4 and isFree(arena, at.X, at.Z, 2, 0.4, 2) then
+					place("Path", at.X, at.Z)
+					break
+				end
+			end
+		end
+	end
+
+	-- open meadow: a few, well away from the centre
+	for _ = 1, counts.Meadow or 7 do
+		for _ = 1, 8 do
+			local a, d = r:NextNumber(0, TAU), r:NextNumber(62, h - 30)
+			local x, z = math.cos(a) * d, math.sin(a) * d
+			if isFree(arena, x, z, 3, 3, 3) then
+				place("Meadow", x, z)
+				break
+			end
+		end
+	end
+
+	-- the centre: only a couple of tiny flower / grass clusters at the clearing's rim
+	for _ = 1, counts.Centre or 2 do
+		for _ = 1, 8 do
+			local a, d = r:NextNumber(0, TAU), r:NextNumber(26, arena.Clear - 4)
+			local x, z = math.cos(a) * d, math.sin(a) * d
+			if isFree(arena, x, z, 2, 3, 3) then
+				place("Centre", x, z, true)
+				break
+			end
+		end
+	end
+end
+
+-- A broad, soft ground tone: one big disc plus 2-3 smaller lobes of the same tone on
+-- seeded sides (its own Random), so the variation reads as irregular meadow, not as
+-- circles. Tops step down 0.02 studs per lobe (0.1 .. 0.02: under the path margins at
+-- 0.12+, and far enough apart that textured tops never z-fight from the run camera).
+local function groundBlob(arena: Arena, r: Random, x: number, z: number, radius: number, color: Color3, material: Enum.Material)
+	local y = 0.1
+	disc(arena.Decor, "Patch", W(arena, x, z, y), radius, color).Material = material
+	local a0 = r:NextNumber(0, TAU)
+	for k = 1, r:NextInteger(2, 3) do
+		local a = a0 + k * r:NextNumber(1.3, 2.1)
+		local d = radius * r:NextNumber(0.55, 0.95)
+		disc(arena.Decor, "Patch", W(arena, x + math.cos(a) * d, z + math.sin(a) * d, y - 0.02 * k), radius * r:NextNumber(0.35, 0.6), color).Material = material
+	end
+end
+
+------------------------------------------------------------------------------------------
 -- FOREST: a mossy clearing in the woods (the main map).
 --
 --   centre      open clearing where two dirt paths cross (spawn), a little low decor
@@ -32881,6 +33130,21 @@ local FOREST_PINE: { Pal } = {
 	{ Needles = mix(P.moss_800, P.slate_700, 0.2), Needles2 = P.moss_700 },
 }
 local FLOWER_TONES: { Pal } = { { Bloom = P.ivory_100 }, { Bloom = P.ivory_100 }, { Bloom = P.gold_300 } }
+-- the meadow dressing set (dressArena): related greens, white and buttercup-yellow
+-- flowers, grey rocks (some mossy), compact shrubs, a weathered branch
+local FOREST_DRESSING = {
+	Tuft = { { Grass = P.lawn_600 }, { Grass = P.lawn_400 }, { Grass = mix(P.lawn_500, P.lawn_olive, 0.5) }, { Grass = P.lawn_700 } },
+	Flower = { { Bloom = P.ivory_100, Leaves = P.lawn_600 }, { Bloom = P.ivory_100, Leaves = P.lawn_500 }, { Bloom = P.bloom_yellow, Leaves = P.lawn_600 } },
+	Rock = {
+		{ Stone = P.stone_400, Stone2 = P.stone_500, Moss = P.lawn_500 },
+		{ Stone = P.stone_300, Stone2 = P.stone_400, Moss = P.stone_300 },
+		{ Stone = mix(P.stone_400, P.stone_300, 0.5), Stone2 = P.stone_500, Moss = mix(P.stone_400, P.stone_300, 0.5) },
+	},
+	Pebble = { { Stone = P.stone_400 }, { Stone = P.stone_300 }, { Stone = mix(P.stone_400, P.soil_500, 0.25) } },
+	Bush = { { Leaves = P.lawn_700, Leaves2 = P.lawn_600 }, { Leaves = P.lawn_800, Leaves2 = P.lawn_600 }, { Leaves = mix(P.lawn_700, P.lawn_olive, 0.3), Leaves2 = P.lawn_500 } },
+	Fern = { { Fern = P.lawn_600 }, { Fern = P.lawn_700 } },
+	Log = { { Bark = P.wood_600, Heart = P.soil_300, Moss = P.lawn_600 } },
+}
 
 local SMALL_DECOR = {
 	{ "GrassTuft", 1.0, 1.6 },
@@ -32979,11 +33243,26 @@ local function buildForest(arena: Arena)
 	local c, h = arena.Center, arena.Half
 	local m = arena.Model
 
-	-- ground: deeper meadow outside, a bright sunny meadow inside, big soft patches in two tones
-	local base = mix(P.meadow_500, P.meadow_400, 0.3)
-	deco(m, { Name = "ForestFloor", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = mix(P.meadow_600, P.meadow_700, 0.5), CanCollide = true, CanQuery = true })
-	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 20, 1, h * 2 + 20), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = base, CanCollide = true, CanQuery = true })
-	local darker, lighter, warm = mix(P.meadow_600, P.meadow_500, 0.3), mix(P.meadow_400, P.meadow_300, 0.45), mix(P.meadow_400, P.dirt_300, 0.3)
+	-- ground (owner's meadow reference): a medium meadow green on the Grass material (a
+	-- restrained texture), deeper green outside, and broad irregular tone blobs (moss,
+	-- olive, warm and darker greens, one step from the base) instead of a flat pale lime.
+	-- The base sits between the lime Mites and the dark Beetle Warriors in brightness, and
+	-- cooler than both, so the swarm, blue gems and telegraphs keep their contrast.
+	local grassMat = materialNamed(DRESS.GroundMaterial, SMOOTH)
+	local pathMat = materialNamed(DRESS.PathMaterial, SMOOTH)
+	local base = P.lawn_500
+	deco(m, { Name = "ForestFloor", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = mix(P.lawn_600, P.lawn_700, 0.5), Material = grassMat, CanCollide = true, CanQuery = true })
+	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 20, 1, h * 2 + 20), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = base, Material = grassMat, CanCollide = true, CanQuery = true })
+	local darker, lighter, warm = mix(P.lawn_600, P.lawn_500, 0.4), mix(P.lawn_400, P.lawn_500, 0.55), mix(P.lawn_olive, P.lawn_500, 0.55)
+	local moss = mix(P.lawn_600, P.lawn_700, 0.25)
+	local blobs = Random.new(SEEDS.Forest + 17)
+	-- the seeded numbers the old one-tone patches drew (patch(): 5 each), so everything
+	-- placed after them keeps its exact seeded place
+	local function skipPatch()
+		for _ = 1, 5 do
+			rng:NextNumber()
+		end
+	end
 	for _, pt in ipairs({
 		{ -150, -150, 26, darker }, { 120, -165, 22, darker }, { -170, 60, 24, darker }, { 160, 120, 26, darker },
 		{ 30, -120, 20, darker }, { -60, 150, 22, darker }, { -110, -40, 18, darker },
@@ -32991,25 +33270,34 @@ local function buildForest(arena: Arena)
 		{ 140, -110, 18, lighter }, { -140, 120, 20, lighter }, { 0, 140, 24, lighter }, { -175, -90, 20, lighter },
 		{ 120, 175, 16, warm }, { 175, 10, 18, warm },
 	}) do
-		patch(arena, pt[1], pt[2], pt[3], pt[4], 0.02)
+		-- same seeded spots as before (the layout after them is unchanged); the shape
+		-- comes from groundBlob's own Random
+		skipPatch()
+		groundBlob(arena, blobs, pt[1], pt[2], pt[3], pt[4], grassMat)
+	end
+	for _, pt in ipairs({ { -100, 10, 20, moss }, { 60, 120, 22, warm }, { 150, -150, 20, moss }, { -30, 75, 16, darker }, { 100, -30, 16, warm } }) do
+		groundBlob(arena, blobs, pt[1], pt[2], pt[3], pt[4], grassMat)
 	end
 
-	-- the clearing: worn lighter grass around the crossing (low, almost no decoration)
-	patch(arena, 0, 0, 24, mix(P.meadow_400, P.meadow_300, 0.4), 0.05)
-	patch(arena, 3, 2, 13, mix(P.meadow_300, P.dirt_300, 0.35), 0.07)
+	-- the clearing: a slightly warmer, worn green around the crossing (no pale spot)
+	skipPatch()
+	skipPatch()
+	groundBlob(arena, blobs, 2, 1, 20, mix(P.lawn_500, P.lawn_olive, 0.3), grassMat)
 
-	-- paths: west-east and south-north, crossing in the clearing
-	local core, edge = P.dirt_400, mix(P.dirt_400, base, 0.55)
+	-- paths: west-east and south-north, crossing in the clearing. Warm tan soil on the
+	-- Ground material; the margin is a slightly darker soil (no yellow border) that the
+	-- tufts, flowers and pebbles of the dressing and the client's path detail break up.
+	local core, edge = P.soil_400, mix(P.soil_400, P.soil_500, 0.6)
 	dirtPath(arena, {
 		Vector2.new(-262, 30), Vector2.new(-205, 16), Vector2.new(-145, 30), Vector2.new(-88, 14),
 		Vector2.new(-40, 8), Vector2.new(0, 0), Vector2.new(42, -9), Vector2.new(92, -3),
 		Vector2.new(142, -22), Vector2.new(200, -12), Vector2.new(262, -22),
-	}, 7, core, edge, 0.12)
+	}, 7, core, edge, 0.12, pathMat)
 	dirtPath(arena, {
 		Vector2.new(-24, 262), Vector2.new(-16, 192), Vector2.new(-30, 132), Vector2.new(-10, 82),
 		Vector2.new(-6, 40), Vector2.new(0, 0), Vector2.new(9, -32), Vector2.new(14, -62),
 		Vector2.new(6, -102), Vector2.new(-16, -150), Vector2.new(-8, -200), Vector2.new(-14, -262),
-	}, 6, core, edge, 0.16)
+	}, 6, core, edge, 0.16, pathMat)
 	-- stepping stones and pebbles along the paths
 	for _, sp in ipairs({ { 22, -4.5 }, { -20, 4 } }) do
 		local cf = CFrame.new(W(arena, sp[1], sp[2], -0.42)) * randomYaw()
@@ -33018,9 +33306,10 @@ local function buildForest(arena: Arena)
 
 	boundaryWalls(arena)
 
-	-- clearing decor (low, sparse, off the paths)
-	scatter(arena, 0, 0, 34, 26, { { "GrassTuft", 1.0, 1.6 }, { "GrassTuft", 1.0, 1.6 }, { "GrassTuft", 1.2, 1.8 }, { "Flowers", 1.0, 1.4, FLOWER_TONES[1] }, { "Rock_Small", 0.7, 1.1 } }, 1.2, 0.4)
-	scatter(arena, 0, 0, 40, 8, { { "Fern", 1, 1.4 }, { "Flowers", 1.1, 1.5, FLOWER_TONES[3] }, { "Flowers", 1.1, 1.5, FLOWER_TONES[1] } }, 1.5, 0.5)
+	-- clearing decor: replaced by the dressing (the centre stays open); dry runs keep the
+	-- seeded layout after them as it was
+	scatter(arena, 0, 0, 34, 26, { { "GrassTuft", 1.0, 1.6 }, { "GrassTuft", 1.0, 1.6 }, { "GrassTuft", 1.2, 1.8 }, { "Flowers", 1.0, 1.4, FLOWER_TONES[1] }, { "Rock_Small", 0.7, 1.1 } }, 1.2, 0.4, true)
+	scatter(arena, 0, 0, 40, 8, { { "Fern", 1, 1.4 }, { "Flowers", 1.1, 1.5, FLOWER_TONES[3] }, { "Flowers", 1.1, 1.5, FLOWER_TONES[1] } }, 1.5, 0.5, true)
 
 	--------------------------------------------------------------------------------------
 	-- LANDMARKS (mid ring)
@@ -33131,10 +33420,10 @@ local function buildForest(arena: Arena)
 		scatter(arena, bx, bz, 18, 3, SHADE_DECOR, 1)
 	end
 
-	-- meadow scatter: grass tufts, flowers and pebbles everywhere else (sparse)
+	-- meadow scatter: replaced by the dressing clusters (dry: same seeded numbers)
 	for _ = 1, 7 do
 		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(44, 190)
-		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, SMALL_DECOR, 1.5, 0.5)
+		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, SMALL_DECOR, 1.5, 0.5, true)
 	end
 
 	-- BORDER: mossy rock cliffs on three sides, a low rocky rim and the broken fence on the
@@ -33166,6 +33455,8 @@ local function buildForest(arena: Arena)
 		{ "Bush", 1.4, 2.0, nil },
 		{ "Tree_Round", 0.75, 0.9, FOREST_ROUND[2] },
 	}, 26, mix(P.meadow_700, P.meadow_800, 0.6))
+
+	dressArena(arena, FOREST_DRESSING)
 end
 
 ------------------------------------------------------------------------------------------
@@ -34652,6 +34943,7 @@ function MapBuilder.BuildArena(name: string, variant: number?)
 	MapBuilder.DestroyArena()
 	rng = Random.new((SEEDS[name] or SEEDS.Forest) + (variant or 0) * 7919)
 	local arena = newArena(name)
+	arena.Variant = variant or 0
 	local build = BUILDERS[name] or buildForest
 	build(arena)
 	writeDetailLayout(arena)
@@ -34742,16 +35034,9 @@ function MapBuilder.BuildPortal(arena: Arena, pos: Vector3): Portal
 	local model = prop(arena.Model, "Portal", cf, 1, arena.PortalPalette, { occluder = true }) -- biome moss / snow / sand tint
 	kitCollider(arena, "Portal", cf, 1)
 	table.insert(arena.Keepout, { X = pos.X - arena.Center.X, Z = pos.Z - arena.Center.Z, R = S.PortalRadius })
-	-- scattered clutter (grass, ferns, bushes) would poke through the dais and the circle
-	for _, d in ipairs(arena.Decor:GetChildren()) do
-		if d:IsA("Model") and #d:GetChildren() > 0 then
-			local at = d:GetPivot().Position
-			local dx, dz = at.X - pos.X, at.Z - pos.Z
-			if dx * dx + dz * dz < (S.PortalRadius + 1) ^ 2 then
-				d:Destroy()
-			end
-		end
-	end
+	-- scattered clutter and dressing (grass, ferns, bushes) would poke through the dais
+	-- and the circle
+	MapBuilder.ClearDecor(arena, pos, S.PortalRadius + 1)
 
 	local fx = Instance.new("Folder")
 	fx.Name = "PortalFx"
@@ -34927,12 +35212,19 @@ end
 -- Removes scattered decoration (grass, ferns, bushes) within `radius` of `pos`, so it
 -- doesn't poke through a chest or an altar.
 function MapBuilder.ClearDecor(arena: Arena, pos: Vector3, radius: number)
-	for _, d in ipairs(arena.Decor:GetChildren()) do
-		if d:IsA("Model") and #d:GetChildren() > 0 then
-			local at = d:GetPivot().Position
-			local dx, dz = at.X - pos.X, at.Z - pos.Z
-			if dx * dx + dz * dz < radius * radius then
-				d:Destroy()
+	local folders = { arena.Decor }
+	local dressing = arena.Model:FindFirstChild(DRESSING_FOLDER)
+	if dressing then
+		table.insert(folders, dressing)
+	end
+	for _, folder in ipairs(folders) do
+		for _, d in ipairs(folder:GetChildren()) do
+			if d:IsA("Model") and #d:GetChildren() > 0 then
+				local at = d:GetPivot().Position
+				local dx, dz = at.X - pos.X, at.Z - pos.Z
+				if dx * dx + dz * dz < radius * radius then
+					d:Destroy()
+				end
 			end
 		end
 	end
@@ -62455,7 +62747,7 @@ end
 -- Tones stay one step from the floor so creatures and gems keep their contrast.
 ------------------------------------------------------------------------------------------
 
-type Kind = { K: string, W: number, C: { Color3 }, S: number } -- weight, colours, size mult
+type Kind = { K: string, W: number, C: { Color3 }, S: number, M: Enum.Material? } -- weight, colours, size mult, material (default SmoothPlastic)
 type Recipe = { Density: number, Kinds: { Kind }, Total: number }
 
 local function recipe(density: number, kinds: { Kind }): Recipe
@@ -62467,11 +62759,13 @@ local function recipe(density: number, kinds: { Kind }): Recipe
 end
 
 local RECIPES: { [string]: Recipe } = {
+	-- Forest (owner's meadow reference): tufts in related greens around the lawn floor, white
+	-- and buttercup flowers, moss / clover discs on the floor's Grass material, few pebbles
 	Forest = recipe(1.0, {
-		{ K = "Tuft", W = 48, C = { mix(P.meadow_600, P.meadow_700, 0.3), P.meadow_600, mix(P.meadow_300, P.meadow_200, 0.3) }, S = 1 },
-		{ K = "Flower", W = 11, C = { P.ivory_100, P.ivory_100, P.gold_300 }, S = 1 },
-		{ K = "Disc", W = 17, C = { mix(P.meadow_600, P.fen_500, 0.4), mix(P.meadow_400, P.meadow_300, 0.5) }, S = 1 },
-		{ K = "Pebble", W = 6, C = { P.stone_400, P.stone_300 }, S = 1 },
+		{ K = "Tuft", W = 48, C = { P.lawn_600, mix(P.lawn_500, P.lawn_olive, 0.4), P.lawn_400, P.lawn_700 }, S = 1 },
+		{ K = "Flower", W = 10, C = { P.ivory_100, P.ivory_100, P.bloom_yellow }, S = 1 },
+		{ K = "Disc", W = 10, C = { mix(P.lawn_500, P.lawn_600, 0.5), mix(P.lawn_500, P.lawn_olive, 0.3) }, S = 1.2, M = Enum.Material.Grass },
+		{ K = "Pebble", W = 5, C = { P.stone_400, P.stone_300 }, S = 1 },
 	}),
 	Ruins = recipe(0.85, {
 		{ K = "Tuft", W = 44, C = { P.meadow_600, mix(P.meadow_600, P.meadow_700, 0.4), mix(P.meadow_300, P.meadow_400, 0.5) }, S = 1 },
@@ -62696,7 +62990,7 @@ local function frac(a: Ctx, cx: number, cz: number, slot: number): number
 	return (h % 1000003) / 1000003
 end
 
-type Piece = { Kind: Kind, CF: CFrame, Size: Vector3, Color: Color3, Shape: Enum.PartType }
+type Piece = { Kind: Kind, CF: CFrame, Size: Vector3, Color: Color3, Shape: Enum.PartType, Material: Enum.Material? }
 
 local function pickKind(a: Ctx, roll: number): Kind
 	local acc = roll * a.Recipe.Total
@@ -62728,7 +63022,7 @@ local function makePiece(a: Ctx, kind: Kind, x: number, z: number, r1: number, r
 		local d = (0.7 + r3 * 0.8) * s
 		-- an upright-axis cylinder: Size.X is the thickness
 		local cf = CFrame.new(wx, FLOOR_Y + 0.1 - 0.03, wz) * CFrame.Angles(0, yaw, math.rad(90))
-		return { Kind = kind, CF = cf, Size = Vector3.new(0.06, d, d), Color = kind.C[1 + math.floor(r2 * #kind.C) % #kind.C], Shape = Enum.PartType.Cylinder }
+		return { Kind = kind, CF = cf, Size = Vector3.new(0.06, d, d), Color = kind.C[1 + math.floor(r2 * #kind.C) % #kind.C], Shape = Enum.PartType.Cylinder, Material = kind.M }
 	end
 	local size = Vector3.new((0.5 + r3 * 0.35) * s, 0.32 * s, (0.4 + r2 * 0.3) * s)
 	local cf = CFrame.new(wx, FLOOR_Y + 0.06 + size.Y * 0.3, wz) * CFrame.Angles(0.15, yaw, 0.1)
@@ -62742,14 +63036,29 @@ end
 -- Same pool and the same deterministic cells as the rest; only cells on a path get them.
 ------------------------------------------------------------------------------------------
 
-type PathRecipe = { Edge: { Color3 }, EdgeChance: number, Worn: { { K: string, C: { Color3 } } }, WornChance: number }
+-- Fringe (optional): grass that grows over the soft path margin, so the edge reads
+-- gently irregular instead of a ruled line: flat grass-coloured lobes (material M, under
+-- the path core) and short tufts, FringeChance per margin sample.
+type PathRecipe = {
+	Edge: { Color3 },
+	EdgeChance: number,
+	Worn: { { K: string, C: { Color3 } } },
+	WornChance: number,
+	Fringe: { C: { Color3 }, Tuft: { Color3 }, M: Enum.Material? }?,
+	FringeChance: number?,
+}
 
 local PATH_RECIPES: { [string]: PathRecipe } = {
 	Forest = {
-		Edge = { P.stone_400, P.stone_300, mix(P.stone_400, P.moss_500, 0.3) },
-		EdgeChance = 0.75,
-		Worn = { { K = "Rut", C = { mix(P.dirt_500, P.dirt_400, 0.4) } }, { K = "Pebble", C = { P.stone_400, P.dirt_300 } }, { K = "Root", C = { P.wood_600, P.wood_700 } } },
+		-- occasional small pebbles at the margin (was a near-continuous stone line)
+		Edge = { P.stone_400, P.stone_300, mix(P.stone_400, P.soil_500, 0.3) },
+		EdgeChance = 0.18,
+		-- soft soil variation on the path: darker and lighter worn spots, a few pebbles
+		-- and an odd root (all flat or low; the path stays smooth to walk)
+		Worn = { { K = "Rut", C = { P.soil_500, mix(P.soil_400, P.soil_600, 0.35) } }, { K = "Rut", C = { P.soil_300 } }, { K = "Pebble", C = { P.stone_400, P.soil_300 } }, { K = "Root", C = { P.wood_600, P.wood_700 } } },
 		WornChance = 0.5,
+		Fringe = { C = { P.lawn_500, mix(P.lawn_500, P.lawn_600, 0.4) }, Tuft = { P.lawn_600, P.lawn_400, mix(P.lawn_500, P.lawn_olive, 0.4) }, M = Enum.Material.Grass },
+		FringeChance = 0.7,
 	},
 	Ruins = {
 		Edge = { P.pave_300, P.pave_400, P.stone_400 },
@@ -62784,6 +63093,7 @@ local PATH_RECIPES: { [string]: PathRecipe } = {
 }
 local PATH_KIND: Kind = { K = "Path", W = 0, C = {}, S = 1 }
 local PATH_TOP = 0.34 -- the path slabs' top above the floor (MapBuilder dirtPath)
+local FRINGE_TOP = 0.22 -- above the margin slabs (0.12 .. 0.18) and under the core (0.28+)
 
 -- Nearest path: signed distance to its outer edge and the segment's heading (radians).
 local function pathNear(a: Ctx, x: number, z: number): (number, number)
@@ -62801,7 +63111,7 @@ local function pathNear(a: Ctx, x: number, z: number): (number, number)
 	return best, heading
 end
 
-local function pathPiece(a: Ctx, kind: string, color: Color3, x: number, z: number, heading: number, r1: number, r2: number, out: { Piece })
+local function pathPiece(a: Ctx, kind: string, color: Color3, x: number, z: number, heading: number, r1: number, r2: number, out: { Piece }, material: Enum.Material?)
 	local wx, wz = a.CX + x, a.CZ + z
 	local y = FLOOR_Y + PATH_TOP
 	local along = CFrame.Angles(0, heading, 0) -- local Z runs along the path
@@ -62834,6 +63144,10 @@ local function pathPiece(a: Ctx, kind: string, color: Color3, x: number, z: numb
 		local base = CFrame.new(wx, y + 0.02, wz) * along * CFrame.Angles(0, flip + (r1 - 0.5) * 0.3, 0)
 		add(Vector3.new(0.42, 0.04, 0.75), base * CFrame.new(-0.3, 0, 0))
 		add(Vector3.new(0.42, 0.04, 0.75), base * CFrame.new(0.3, 0, 1.1))
+	elseif kind == "Fringe" then
+		-- a flat grass lobe over the margin (under the core: it only eats the margin band)
+		local d = 1.6 + r1 * 1.6
+		table.insert(out, { Kind = PATH_KIND, CF = CFrame.new(wx, FLOOR_Y + FRINGE_TOP - 0.02, wz) * CFrame.Angles(0, r2 * TAU, math.rad(90)), Size = Vector3.new(0.04, d, d), Color = color, Shape = Enum.PartType.Cylinder, Material = material })
 	elseif kind == "Track" then
 		-- two cart-wheel grooves along the path
 		local len = 4 + r1 * 3
@@ -62862,7 +63176,19 @@ local function pathCellPieces(a: Ctx, cx: number, cz: number, out: { Piece })
 		end
 		local pd, heading = pathNear(a, x, z)
 		local r0, r1, r2 = frac(a, cx, cz, 42 + i * 5), frac(a, cx, cz, 43 + i * 5), frac(a, cx, cz, 44 + i * 5)
-		if pd > -1.8 and pd < -0.5 then
+		local fringe = pr.Fringe
+		if fringe and pd > -1.0 and pd < 0.4 and r0 >= pr.EdgeChance and r0 < pr.EdgeChance + (pr.FringeChance or 0) then
+			if r2 < 0.6 then
+				pathPiece(a, "Fringe", fringe.C[1 + math.floor(r1 * #fringe.C) % #fringe.C], x, z, heading, r1, r2, out, fringe.M)
+			else
+				-- a short tuft leaning over the margin
+				local tuft: Kind = { K = "Tuft", W = 0, C = fringe.Tuft, S = 0.85 }
+				for blade = 1, 3 do
+					local angle = r1 * TAU + blade * 2.4
+					table.insert(out, makePiece(a, tuft, x + math.cos(angle) * 0.15, z + math.sin(angle) * 0.15, (r1 + blade * 0.27) % 1, (r2 + blade * 0.31) % 1, (r0 + blade * 0.23) % 1))
+				end
+			end
+		elseif pd > -1.8 and pd < -0.5 then
 			if r0 < pr.EdgeChance then
 				pathPiece(a, "Edge", pr.Edge[1 + math.floor(r1 * #pr.Edge) % #pr.Edge], x, z, heading, r1, r2, out)
 			end
@@ -63104,6 +63430,7 @@ local function update(cam: Camera)
 			p.Shape = piece.Shape
 			p.Size = piece.Size
 			p.Color = piece.Color
+			p.Material = piece.Material or Enum.Material.SmoothPlastic
 			table.insert(moveParts, p)
 			table.insert(moveCFs, piece.CF)
 			table.insert(placed, p)
@@ -70033,7 +70360,8 @@ function LevelUpBanish.Build(actions: Frame, cards: Frame, ruleR: GuiObject?)
 		Kind = "Outline",
 		Title = "BANISH",
 		Subtitle = "3 left",
-		TitleStyle = "H3",
+		TitleStyle = "Label",
+		TitleSize = 17,
 		Icon = "close",
 		IconSize = 26,
 		Size = UDim2.fromOffset(230, 60),
@@ -74003,7 +74331,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 	local optimisticUntil = 0
 	ui.Header = UIKit.ScreenHeader(screen, "ARENAS", ctx.Back)
 	ui.Best = UIKit.IconPill(ui.Header.Frame, "crown", "BEST STAGE 0", { Name = "BestStage", AnchorPoint = Vector2.new(0, 0.5) })
-	ui.Intro = text(screen, "Body", "Choose where your run starts. Later stages visit every arena.", {
+	ui.Intro = text(screen, "Body", "Choose your starting arena.", {
 		Name = "Intro",
 		TextWrapped = true,
 		TextColor3 = P.ivory_200,
@@ -74021,7 +74349,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
-	UIKit.padding(scroll, 16, 16, 16, 16)
+	UIKit.padding(scroll, 10, 16, 10, 16)
 	ui.Scroll = scroll
 	ui.Grid = new("UIGridLayout", { CellSize = UDim2.fromOffset(320, 180), CellPadding = UDim2.fromOffset(GAP, GAP), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, scroll)
 
@@ -74092,8 +74420,8 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local checkBadge = cornerBadge(pic, "check", P.gold_400, P.gold_900, P.gold_200)
 		-- the text side
 		local info = new("Frame", { Name = "Info", BackgroundTransparency = 1 }, b.Content)
-		local title = text(info, "H2", string.upper(def.DisplayName), { Name = "ArenaName", Size = UDim2.new(1, -110, 0, TS(22) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
-		local state = UIKit.StatusPill(info, "LOCKED", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0) })
+		local title = text(info, "H3", string.upper(def.DisplayName), { Name = "ArenaName", Size = UDim2.new(1, 0, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
+		local state = UIKit.StatusPill(pic, "LOCKED", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -6, 0, 6), ZIndex = 8 })
 		local hazardIcon = Icons.Draw(info, look.Icon, { Size = 22, Position = UDim2.fromOffset(0, TS(22) + 12) })
 		local hazard = text(info, "Small", look.Hazard, {
 			Name = "Hazard",
@@ -74167,7 +74495,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			elseif open then
 				card.Rule.Text = string.format("Unlocked at stage %d", need)
 			else
-				card.Rule.Text = string.format("Reach stage %d  ·  Best %d", need, best)
+				card.Rule.Text = string.format("Reach stage %d", need)
 				card.Meter.Set(math.clamp(best / need, 0, 1), "")
 				card.Count.Text = string.format("%d/%d", math.min(best, need), need)
 			end
@@ -74182,40 +74510,40 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		end
 	end
 
-	-- inside a card: the picture on the left (wide cards) or on top (narrow ones), the text
-	local function cardLayout(card: { [string]: any }, cellW: number, cellH: number, stacked: boolean)
-		local pad = 10
-		local iw, ih = cellW - 2 * pad, cellH - 2 * pad
-		local ix, iy, infoW, infoH
-		if stacked then
-			local picH = math.floor(ih * 0.42)
-			place(card.Pic, pad, pad, iw, picH)
-			ix, iy, infoW, infoH = pad, pad + picH + 8, iw, ih - picH - 8
-		else
-			local picW = math.floor(iw * 0.4)
-			place(card.Pic, pad, pad, picW, ih)
-			ix, iy, infoW, infoH = pad + picW + 12, pad + 2, iw - picW - 12, ih - 2
-		end
-		place(card.Info, ix, iy, infoW, infoH)
-		-- top: name + pill, hazard; bottom up: bar, rule, divider
-		local titleH = TS(22) + 4
-		card.Title.Size = UDim2.new(1, -(card.State.AbsoluteSize.X / math.max(0.01, host.Scale()) + 8), 0, titleH)
+	-- Inside a card: the picture on top (state pill and lock/check badge on it), then the name,
+	-- the hazard line, the unlock rule and, while locked, the progress bar. Heights are exact so
+	-- every card has the same size.
+	local CARD_PAD = 8
+	-- Card text block height (title, hazard lines, rule, bar) for a cell width.
+	local function infoMetrics(cellW: number): (number, number)
+		local hazLines = cellW < 230 and 3 or 2
+		local titleH = TS(18) + 4
 		local lineH = TS(14) + 4
-		local barY = infoH - 8
-		card.Meter.Frame.Position = UDim2.fromOffset(0, barY)
-		card.Count.Position = UDim2.new(1, 0, 0, barY + 4)
-		local ruleY = barY - 6 - lineH
+		return titleH + 4 + hazLines * (TS(14) + 2) + 6 + lineH + 4 + 8, hazLines
+	end
+
+	local function cardLayout(card: { [string]: any }, cellW: number, picH: number)
+		local pad = CARD_PAD
+		local infoH, hazLines = infoMetrics(cellW)
+		local iw = cellW - 2 * pad
+		place(card.Pic, pad, pad, iw, picH)
+		place(card.Info, pad, pad + picH + 6, iw, infoH)
+		local titleH = TS(18) + 4
+		local lineH = TS(14) + 4
+		card.Title.Size = UDim2.new(1, 0, 0, titleH)
+		card.Title.Position = UDim2.fromOffset(0, 0)
+		card.HazardIcon.Visible = false
+		card.Divider.Visible = false
+		local hazH = hazLines * (TS(14) + 2)
+		card.Hazard.Position = UDim2.fromOffset(0, titleH + 4)
+		card.Hazard.Size = UDim2.new(1, 0, 0, hazH)
+		card.Hazard.TextWrapped = true
+		local ruleY = titleH + 4 + hazH + 6
 		card.Rule.Position = UDim2.fromOffset(0, ruleY)
-		card.Divider.Position = UDim2.fromOffset(0, ruleY - 6)
-		local hazY = titleH + 8
-		card.HazardIcon.Position = UDim2.fromOffset(0, hazY + 1)
-		card.Hazard.Position = UDim2.fromOffset(28, hazY)
-		-- two hazard lines when they fit above the divider, else one (truncated)
-		local room = ruleY - 8 - hazY
-		local twoLines = room >= TS(14) * 2 + 4
-		card.Hazard.Size = UDim2.new(1, -28, 0, twoLines and (TS(14) * 2 + 6) or lineH)
-		card.Hazard.TextWrapped = twoLines
-		card.Hazard.TextTruncate = twoLines and Enum.TextTruncate.None or Enum.TextTruncate.AtEnd
+		card.Rule.Size = UDim2.new(1, -44, 0, lineH)
+		card.Count.Position = UDim2.new(1, 0, 0, ruleY + lineH / 2)
+		card.Meter.Frame.Position = UDim2.fromOffset(0, ruleY + lineH + 4)
+		card.Meter.Frame.Size = UDim2.new(1, 0, 0, 6)
 	end
 
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
@@ -74235,31 +74563,35 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local x0 = (W - w) / 2
 		local introH = TS(16) * (w < 560 and 2 or 1) + 8
 		place(ui.Intro, x0 + 4, top, w - 8, introH)
+		-- fixed footer: the confirm button always sits at the bottom, never over the cards
 		local confirmH = Theme.Size.Button
-		local confirmW = math.min(380, w)
+		local confirmW = math.min(420, w)
 		local confirmY = Hh - M - confirmH
 		local panelTop = top + introH + 8
-		local panelMax = confirmY - 14 - panelTop
-		-- columns: three on wide screens; narrow cards put the picture on top
+		local panelMax = confirmY - 12 - panelTop
+		-- columns: as many as fit (up to four); portrait keeps two
 		local inner = w - 32 - 6
-		local cols = math.clamp(math.floor((inner + GAP) / 330), 1, 3)
+		local cols = math.clamp(math.floor((inner + GAP) / (190 + GAP)), 1, 4)
 		if portrait then
 			cols = math.min(cols, 2)
 		end
+		cols = math.max(cols, math.min(2, #Config.Arenas.Order))
 		local cellW = math.floor((inner - (cols - 1) * GAP) / cols)
-		local stacked = cellW < 360
+		local infoH = infoMetrics(cellW)
 		local rows = math.ceil(#Config.Arenas.Order / cols)
-		local minH = stacked and math.max(250, TS(22) + TS(14) * 3 + 150) or math.max(130, TS(22) + TS(14) * 2 + 70)
-		local fitH = math.floor((panelMax - 32 - (rows - 1) * GAP) / rows)
-		local cellH = math.clamp(fitH, minH, stacked and 320 or 200)
+		local picH = math.clamp(math.floor((cellW - 2 * CARD_PAD) * 0.5), 66, 118)
+		if rows > 1 and not portrait then
+			-- phone landscape: shrink the picture so a full row shows above the footer
+			picH = math.clamp(panelMax - 20 - (2 * CARD_PAD + 6 + infoH), 44, picH)
+		end
+		local cellH = 2 * CARD_PAD + picH + 6 + infoH
 		ui.Grid.CellSize = UDim2.fromOffset(cellW, cellH)
-		local gridH = rows * cellH + (rows - 1) * GAP + 32
-		local panelH = math.min(gridH, panelMax)
+		local gridH = rows * cellH + (rows - 1) * GAP + 20
+		local panelH = math.min(gridH, math.max(panelMax, 0))
 		place(ui.Panel, x0, panelTop, w, panelH)
-		-- the button right under the panel (at the bottom when the panel fills the screen)
-		place(ui.Confirm.Instance, (W - confirmW) / 2, math.min(confirmY, panelTop + panelH + 16), confirmW, confirmH)
+		place(ui.Confirm.Instance, (W - confirmW) / 2, confirmY, confirmW, confirmH)
 		for _, card in pairs(ui.Cards) do
-			cardLayout(card, cellW, cellH, stacked)
+			cardLayout(card, cellW, picH)
 		end
 	end
 	MenuArenas._layout = function()
@@ -76138,16 +76470,18 @@ return MenuCurses
 	The DAILY CHALLENGE screen (lobby DAILY card): today's fixed setup, the same for every
 	player (CurseData.Daily(day), day = SwarmState "DailyDay", UTC), laid out as one
 	dashboard panel:
-	  header    calendar, the date ("OCT 02, 2026"), "NEW TRY IN 4H 27M · 00:00 UTC", a status
-	            pill (READY / USED)
-	  hero      "Your scored attempt is ready" (or your scored result), the rules line, an
-	            info card ("counts as soon as the run starts" / practice wording, best ever)
+	  header    Back + "Daily Challenge", then calendar, the date ("OCT 02, 2026"), "RESETS IN
+	            4H 27M (00:00 UTC)" (live) and a status pill (READY / DONE)
+	  rules     "Today's challenge": three icon rows (bold line + muted line), your scored
+	            result / best / rank card
+	  actions   PLAY DAILY (gold) and VIEW LEADERBOARD (outlined) with the scored attempts left
+	  notice    pinned: when the attempt is used, plus the "How scoring works" toggle
 	  ROUTE     the first stages as numbered cards (arena picture art/arenas/<Arena> with a
 	            drawn stand-in, arena name, the stage boss) joined by chevrons
 	  CURSES    crimson curse cards and the real gold multiplier chip
 	  BONUS     the green starting-bonus card
-	  footer    PLAY DAILY (StartRun "Daily": the first run of the day is scored, later ones
-	            are practice) and LEADERBOARD (the Ranks screen on its Daily tab)
+	  PLAY DAILY fires StartRun "Daily": the first run of the day is scored, later ones are
+	  practice; the leaderboard button opens the Ranks screen on its Daily tab.
 ]]
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -76161,6 +76495,7 @@ local ItemData = require(Shared:WaitForChild("ItemData"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
+local TravelOverlay = require(script.Parent.TravelOverlay)
 
 local MenuDaily = {}
 
@@ -76200,10 +76535,10 @@ local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
 end
 
-local function wrappedLines(value: string, pixels: number, width: number): number
+local function wrappedLines(value: string, pixels: number, width: number, factor: number?): number
 	local count = 0
 	for _, line in ipairs(string.split(value, "\n")) do
-		count += math.max(1, math.ceil(#line * pixels * 0.53 / math.max(1, width)))
+		count += math.max(1, math.ceil(#line * pixels * (factor or 0.53) / math.max(1, width)))
 	end
 	return count
 end
@@ -76253,10 +76588,10 @@ function MenuDaily.TimeLeft(): string
 	return string.format("%dm", math.max(1, m))
 end
 
--- The header line: "NEW TRY IN 5H 12M · 00:00 UTC" (the countdown reads the same in every
+-- The header line: "RESETS IN 5H 12M (00:00 UTC)" (the countdown reads the same in every
 -- time zone; the UTC reset stays as a small note).
 function MenuDaily.ResetLine(): string
-	return UIKit.track("New try in " .. MenuDaily.TimeLeft()) .. "  ·  00:00 UTC"
+	return UIKit.track("Resets in " .. MenuDaily.TimeLeft()) .. "  (00:00 UTC)"
 end
 
 -- "2026-10-02" -> "OCT 02, 2026".
@@ -76318,7 +76653,7 @@ end
 function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = { Stops = {}, Chevrons = {}, CurseCards = {} }
-	ui.Header = UIKit.ScreenHeader(screen, "DAILY CHALLENGE", ctx.Back)
+	ui.Header = UIKit.ScreenHeader(screen, "Daily Challenge", ctx.Back)
 	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
 	ui.Panel = holder
 	UIKit.padding(face, 18, 20, 18, 20)
@@ -76346,11 +76681,18 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	}, face)
 	ui.Body = body
 
-	-- hero: heading, rules line, info card
-	ui.Heading = text(body, "H1", "", { Name = "Heading", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top }, 26)
-	ui.Sub = text(body, "Body", "", { Name = "Sub", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted })
+	-- rules: heading, three icon rows, your result card
+	ui.Heading = text(body, "H1", "Today's challenge", { Name = "Heading", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top }, 26)
+	ui.Rows = {}
+	for i, icon in ipairs({ "person", "flag", "trophy" }) do
+		local row = new("Frame", { Name = "Rule" .. i, BackgroundTransparency = 1 }, body)
+		Icons.Draw(row, icon, { Size = 28, Position = UDim2.fromOffset(0, 2), Back = P.slate_900 })
+		text(row, "Label", "", { Name = "Line", Position = UDim2.fromOffset(42, 0), TextTruncate = Enum.TextTruncate.AtEnd }, 17)
+		text(row, "Small", "", { Name = "Detail", TextColor3 = C.TextMuted, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top }, 15)
+		table.insert(ui.Rows, row)
+	end
 	ui.Info = card(body, "Info", P.gold_400, 0.45)
-	Icons.Draw(ui.Info, "info", { Size = 22, Position = UDim2.fromOffset(12, 12), Back = P.slate_950 })
+	Icons.Draw(ui.Info, "trophy", { Size = 22, Position = UDim2.fromOffset(12, 12), Back = P.slate_950 })
 	ui.InfoText = text(ui.Info, "Small", "", { Name = "Text", Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -54, 1, 0), TextWrapped = true, TextColor3 = C.Text }, 15)
 
 	ui.RouteLabel = UIKit.SectionLabel(body, "Today's shared route")
@@ -76368,7 +76710,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		Title = "PLAY DAILY",
 		TitleStyle = "Label",
 		TitleSize = 18,
-		Subtitle = "Scored · 1 try today",
+		Subtitle = "1 scored attempt left",
 		Icon = "play",
 		IconSize = 26,
 		Align = "Center",
@@ -76384,7 +76726,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	})
 	ui.Board = UIKit.Button(foot, {
 		Kind = "Secondary",
-		Title = "DAILY LEADERBOARD",
+		Title = "VIEW LEADERBOARD",
 		Icon = "podium",
 		IconSize = 22,
 		Align = "Center",
@@ -76393,6 +76735,42 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			ctx.ShowScreen("Ranks", "Daily")
 		end,
 	})
+
+	ui.Attempts = text(foot, "Small", "", { Name = "Attempts", TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = P.gold_300 }, 15)
+
+	-- pinned notice: when the attempt is used, and the "How scoring works" toggle
+	local scoringOpen = false
+	local warn = card(face, "Notice", P.gold_400, 0.45)
+	ui.Warn = warn
+	Icons.Draw(warn, "info", { Size = 22, Position = UDim2.fromOffset(12, 11), Back = P.slate_950 })
+	ui.WarnText = text(warn, "Small", "", { Name = "Text", TextWrapped = true, TextColor3 = C.Text, TextYAlignment = Enum.TextYAlignment.Top }, 14)
+	ui.WarnText.Text = "Your scored attempt is used when the run starts, even if you lose or leave. If the run never starts (for example, the trip to the run server fails), you keep it."
+	ui.Toggle = new("TextButton", { Name = "ScoringToggle", BackgroundTransparency = 1, Text = "", AutoButtonColor = false }, warn)
+	ui.ToggleText = text(ui.Toggle, "Label", "How scoring works", { Name = "Text", TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_300 }, 14)
+	ui.ToggleChevron = Icons.Draw(ui.Toggle, "chevronRight", { Size = 16, Color = P.gold_300, AnchorPoint = Vector2.new(1, 0.5) })
+	ui.ToggleChevron.Rotation = 90
+	ui.DetailsScroll = new("ScrollingFrame", {
+		Name = "DetailsScroll",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = P.gold_500,
+		CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		Visible = false,
+	}, warn)
+	ui.Details = text(ui.DetailsScroll, "Small", "", { Name = "Details", TextWrapped = true, TextColor3 = C.TextMuted, TextYAlignment = Enum.TextYAlignment.Top }, 14)
+	ui.Details.Text = "Only your first Daily run each UTC day is scored; later runs are practice and never change your scored result.\n"
+		.. "Stages cleared come first: more cleared stages always rank higher.\n"
+		.. "Tie-break: with at least one stage cleared, the faster last boss kill ranks higher.\n"
+		.. "No stages cleared: the longer you survived ranks higher.\n"
+		.. "The Daily leaderboard lists the scored attempt only."
+	ui.Toggle.Activated:Connect(function()
+		scoringOpen = not scoringOpen
+		ui.DetailsScroll.Visible = scoringOpen
+		ui.ToggleChevron.Rotation = scoringOpen and -90 or 90
+		MenuDaily._layout()
+	end)
 
 	local shownDay = -1
 	local rankData = nil
@@ -76476,25 +76854,32 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local used, score, best, bestDay = MenuDaily.Status(p)
 		local key = tostring(day) .. ":" .. tostring(score)
 		if key ~= resultKey then resultKey = key; askRank() end
-		local bestLine = best > 0 and string.format("\nPersonal best: %s (%s).", CurseData.ScoreText(best), CurseData.DateText(bestDay)) or ""
+		local bestLine = best > 0 and string.format("Personal best: %s (%s).", CurseData.ScoreText(best), CurseData.DateText(bestDay)) or ""
 		local rankLine = MenuDaily.RankText(rankData, day, score, os.clock() - rankReceivedAt)
 		displayedRank = rankLine
+		local infoParts = {}
 		if used then
-			UIKit.SetStatus(ui.Pill, "PRACTICE")
-			ui.Heading.Text = "Practice today's challenge"
-			ui.InfoText.Text = (score > 0 and ("Scored result: " .. CurseData.ScoreText(score) .. ". ") or "Today's scored attempt is used. ")
-				.. "Practice runs never change your scored result. New scored try in " .. MenuDaily.TimeLeft() .. " (00:00 UTC)." .. bestLine
-				.. (rankLine and ("\n" .. rankLine) or "")
+			UIKit.SetStatus(ui.Pill, "DONE")
+			table.insert(infoParts, (score > 0 and ("Scored result: " .. CurseData.ScoreText(score) .. ".") or "Today's scored attempt is used.") .. " Practice runs never change it.")
 		else
 			UIKit.SetStatus(ui.Pill, "READY")
-			ui.Heading.Text = "Your scored attempt is ready"
-			ui.InfoText.Text = "One scored try today. It is used once the run starts, even if you lose or leave. "
-				.. "If the run never starts (for example, the trip to the run server fails), you keep it. New try in "
-				.. MenuDaily.TimeLeft() .. " (00:00 UTC)." .. bestLine
 		end
-		ui.Sub.Text = string.format("1. Play solo on today's shared route.\n2. Clear %d stages; more clears rank higher.\n3. Ties: faster last boss kill wins. No clears? Longer survival wins.", Config.Stages.WinMinStages)
+		if bestLine ~= "" then table.insert(infoParts, bestLine) end
+		if used and rankLine then table.insert(infoParts, rankLine) end
+		ui.InfoText.Text = table.concat(infoParts, "\n")
+		ui.Info.Visible = #infoParts > 0
+		local rules = {
+			{ "Solo \u{B7} Shared route", "Play solo on today's shared route." },
+			{ string.format("Clear %d stages", Config.Stages.WinMinStages), "Every stage you clear adds to your score." },
+			{ "More clears rank higher", "Faster last boss kill breaks ties." },
+		}
+		for i, row in ipairs(ui.Rows) do
+			(row:FindFirstChild("Line") :: TextLabel).Text = rules[i][1];
+			(row:FindFirstChild("Detail") :: TextLabel).Text = rules[i][2]
+		end
+		ui.Attempts.Text = used and "Scored attempts left: 0 of 1" or "Scored attempts left: 1 of 1"
 		ui.Play.SetKind(used and "Secondary" or "Primary")
-		ui.Play.SetText(used and "PRACTICE RUN" or "PLAY DAILY", used and "No leaderboard score" or "Scored · 1 try today")
+		ui.Play.SetText(used and "PRACTICE RUN" or "PLAY DAILY", used and "No leaderboard score" or "1 scored attempt left")
 		if shownDay ~= day then
 			shownDay = day
 			buildDay(d)
@@ -76508,8 +76893,11 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
 		local headY = math.max(ins.Top + 4, 12)
 		place(ui.Header.Frame, M, headY, math.min(620, W - 2 * M), 56)
+		ui.Header.Title.TextSize = TS(UIKit.IsCompact() and 24 or 32)
 		local topY = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
-		local maxH = H - topY - M
+		-- the go-home notice owns the bottom-right corner while it shows: stay clear of it
+		local reserve = TravelOverlay.NoticeReserve()
+		local maxH = H - topY - M - reserve
 		local w = math.min(W - 2 * M, maxH < 520 and 1160 or 1000) -- short phones: use the width
 		local iw = w - 40 -- inside the face padding
 		local narrow = iw < 640
@@ -76521,12 +76909,41 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local bodyY = topH + 22
 
 		-- Short landscape screens keep the actions beside the scrolling explanation.
-		local side = not narrow and maxH < 520
+		local side = not narrow
 		local sideW = side and math.clamp(math.floor(iw * 0.3), 220, 300) or 0
-		local playH = side and 64 or 70
+		local playH = (side and maxH < 520) and 56 or (side and 64 or 70)
 		local boardH = Theme.Size.Button
-		local footH = side and 0 or (narrow and (playH + 10 + boardH) or playH)
-		ui.Info.Parent = body
+		local attemptsH = TS(15) + 6
+		local footH = side and 0 or (playH + 10 + boardH + 6 + attemptsH)
+
+		-- pinned notice: the attempt rule, the scoring toggle, the expanded details
+		local open = ui.DetailsScroll.Visible
+		local warnW = iw
+		local togW = math.ceil(#ui.ToggleText.Text * TS(14) * 0.55) + 30
+		local stackToggle = iw < 560
+		local warnTextW = stackToggle and (warnW - 56) or (warnW - 56 - togW - 12)
+		local warnLines = wrappedLines(ui.WarnText.Text, TS(14), warnTextW, 0.42)
+		local warnTextH = warnLines * (TS(14) + 3)
+		local stripH = math.max(44, warnTextH + 16) + (stackToggle and 34 or 0)
+		local detailLines = open and wrappedLines(ui.Details.Text, TS(14), warnW - 28, 0.42) or 0
+		local detailH = open and (detailLines * (TS(14) + 3) + 8) or 0
+		local avail = maxH - 36 - bodyY - 12
+		-- no room for the details beside a usable body (short phone screens): they take the panel
+		local focus = open and (avail - stripH - 8 - 90 < detailH)
+		local warnH = focus and avail or (stripH + detailH + (open and 8 or 0))
+		local viewH = focus and math.max(40, avail - stripH - 8) or detailH
+		body.Visible = not focus
+		foot.Visible = not focus
+		place(ui.Warn, 0, 0, warnW, warnH)
+		place(ui.WarnText, 44, 10, warnTextW, warnTextH)
+		local togY = stackToggle and (10 + warnTextH) or math.floor((stripH - 34) / 2)
+		place(ui.Toggle, stackToggle and 44 or (warnW - togW - 10), togY, togW, 34)
+		place(ui.ToggleText, 0, 0, togW - 22, 34)
+		ui.ToggleText.TextXAlignment = Enum.TextXAlignment.Left
+		ui.ToggleChevron.Position = UDim2.new(1, 0, 0.5, 0)
+		place(ui.DetailsScroll, 14, stripH + 4, warnW - 28, viewH)
+		place(ui.Details, 0, 0, warnW - 28 - 6, detailH)
+		ui.DetailsScroll.CanvasSize = UDim2.fromOffset(0, detailH)
 
 		-- body content (scroll canvas coordinates)
 		local bw = (side and (iw - sideW - 18) or iw) - 8 -- room for the scroll bar
@@ -76535,14 +76952,26 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local headPx = TS(26)
 		local headLines = wrappedLines(ui.Heading.Text, headPx, textW)
 		place(ui.Heading, 0, y, textW, headLines * (headPx + 4) + 4)
-		local subPx = TS(16)
-		local subLines = wrappedLines(ui.Sub.Text, subPx, textW)
-		place(ui.Sub, 0, y + ui.Heading.Size.Y.Offset + 4, textW, subLines * (subPx + 3) + 4)
-		local heroH = ui.Heading.Size.Y.Offset + 4 + ui.Sub.Size.Y.Offset
-		local infoLines = wrappedLines(ui.InfoText.Text, TS(15), infoW - 54)
-		local infoH = math.max(48, infoLines * (TS(15) + 4) + 18)
-		place(ui.Info, 0, y + heroH + 10, infoW, infoH)
-		y += heroH + 10 + infoH + 16
+		y += ui.Heading.Size.Y.Offset + 6
+		local detailW = textW - 42
+		for _, row in ipairs(ui.Rows) do
+			local line = row:FindFirstChild("Line") :: TextLabel
+			local detail = row:FindFirstChild("Detail") :: TextLabel
+			local dLines = wrappedLines(detail.Text, TS(15), detailW)
+			local lineH = TS(17) + 4
+			local dH = dLines * (TS(15) + 3)
+			place(row, 0, y, textW, lineH + dH + 2)
+			place(line, 42, 0, detailW, lineH)
+			place(detail, 42, lineH, detailW, dH)
+			y += row.Size.Y.Offset + 10
+		end
+		if ui.Info.Visible then
+			local infoLines = wrappedLines(ui.InfoText.Text, TS(15), infoW - 54)
+			local infoH = math.max(48, infoLines * (TS(15) + 4) + 18)
+			place(ui.Info, 0, y + 2, infoW, infoH)
+			y += infoH + 2
+		end
+		y += 16
 
 		-- route: one row, or balanced rows (3 + 2) when the cards would get too small
 		local labelH = TS(12) + 6
@@ -76631,29 +77060,36 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		body.CanvasSize = UDim2.fromOffset(0, y)
 
 		-- panel: as tall as the content needs, the body scrolls when it cannot fit
-		local sideNeed = side and (playH + 10 + boardH) or 0
-		local chrome = 36 + bodyY + (side and 0 or (16 + footH))
-		local h = math.min(maxH, chrome + math.max(y, sideNeed))
+		local sideNeed = side and (playH + 10 + boardH + 6 + attemptsH) or 0
+		local chrome = 36 + bodyY + warnH + 12 + (side and 0 or (16 + footH))
+		local h = focus and maxH or math.min(maxH, chrome + math.max(y, sideNeed))
 		local bodyH = h - chrome
 		place(ui.Panel, (W - w) / 2, topY, w, h)
 		place(body, 0, bodyY, side and (iw - sideW - 18) or iw, bodyH)
 		body.ScrollBarThickness = y > bodyH + 1 and 4 or 0
+		place(ui.Warn, 0, h - 36 - warnH, warnW, warnH)
 		if side then
 			place(foot, iw - sideW, bodyY, sideW, bodyH)
-			place(ui.Play.Instance, 0, 0, sideW, playH)
-			place(ui.Board.Instance, 0, playH + 10, sideW, boardH)
-		else
-			place(foot, 0, h - 36 - footH, iw, footH)
-			if narrow then
-				place(ui.Play.Instance, 0, 0, iw, playH)
-				place(ui.Board.Instance, 0, playH + 10, iw, boardH)
+			if sideNeed > bodyH then
+				-- short screen: the two buttons share the column; the attempts stay in the
+				-- PLAY DAILY subtitle ("1 scored attempt left")
+				local pH = math.max(48, math.floor((bodyH - 8) * 0.6))
+				local bH = math.max(36, bodyH - 8 - pH)
+				ui.Attempts.Visible = false
+				place(ui.Play.Instance, 0, 0, sideW, pH)
+				place(ui.Board.Instance, 0, pH + 8, sideW, bH)
 			else
-				local pw = math.min(400, math.floor(iw * 0.48))
-				local bw2 = math.min(260, math.floor(iw * 0.3))
-				local x0 = math.floor((iw - (pw + 14 + bw2)) / 2)
-				place(ui.Play.Instance, x0, 0, pw, playH)
-				place(ui.Board.Instance, x0 + pw + 14, math.floor((playH - boardH) / 2), bw2, boardH)
+				ui.Attempts.Visible = true
+				place(ui.Play.Instance, 0, 0, sideW, playH)
+				place(ui.Board.Instance, 0, playH + 10, sideW, boardH)
+				place(ui.Attempts, 0, playH + 10 + boardH + 6, sideW, attemptsH)
 			end
+		else
+			place(foot, 0, h - 36 - warnH - 12 - footH, iw, footH)
+			place(ui.Play.Instance, 0, 0, iw, playH)
+			place(ui.Board.Instance, 0, playH + 10, iw, boardH)
+			ui.Attempts.Visible = true
+			place(ui.Attempts, 0, playH + 10 + boardH + 6, iw, attemptsH)
 		end
 	end
 	MenuDaily._layout = function()
@@ -76667,6 +77103,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	end)
 
 	local clock = 0
+	local lastReserve = 0
 	return {
 		Layout = layout,
 		Refresh = function(_p)
@@ -76677,6 +77114,10 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		end,
 		OnShow = function(_p)
 			shownDay = -1
+			scoringOpen = false
+			ui.DetailsScroll.Visible = false
+			ui.DetailsScroll.CanvasPosition = Vector2.new()
+			ui.ToggleChevron.Rotation = 90
 			fill()
 			askRank()
 			UIAnim.Pop(holder, 0, 0.92)
@@ -76696,6 +77137,11 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 			if clock >= 1 then
 				clock = 0
 				if screen.Visible then
+					local reserve = TravelOverlay.NoticeReserve()
+					if reserve ~= lastReserve then
+						lastReserve = reserve
+						MenuDaily._layout()
+					end
 					if os.clock() - askedAt >= 30 then askRank(); fill() end
 					local _, score = MenuDaily.Status(ctx.Profile())
 					if displayedRank and not MenuDaily.RankText(rankData, MenuDaily.Today(), score, os.clock() - rankReceivedAt) then fill() end
@@ -78723,6 +79169,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	local dirty = true
 
 	ui.Header = UIKit.ScreenHeader(screen, "PARTY", ctx.Back)
+	-- member count pill beside the title (real count over the server's party size)
+	ui.CountPill = UIKit.IconPill(ui.Header.Frame, nil, "1/3", { Name = "CountPill", AnchorPoint = Vector2.new(0, 0.5) })
+	local infoOpen = false
 	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
 	ui.Panel = holder
 	UIKit.padding(face, 16, 18, 16, 18)
@@ -78744,7 +79193,6 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.padding(plist, 2, 8, 2, 2) -- strokes stay inside the clip; room for the scroll bar
 	UIKit.list(plist, { Padding = UDim.new(0, ROW_GAP) })
 	ui.Members = plist
-	ui.Hint = text(left, "Small", "", { Name = "Hint", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted }, 14)
 	ui.Leave = UIKit.Button(left, {
 		Kind = "Secondary",
 		Title = "LEAVE PARTY",
@@ -78772,6 +79220,21 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end,
 	})
+
+	-- footer under both columns: one summary line, an info toggle for the detailed rules
+	ui.Foot = new("Frame", { Name = "Footer", BackgroundTransparency = 1 }, face)
+	ui.FootRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1) }, ui.Foot)
+	ui.Info = UIKit.IconButton(ui.Foot, {
+		Icon = "info",
+		Size = 44,
+		Name = "PartyInfo",
+		OnClick = function()
+			infoOpen = not infoOpen
+			dirty = true
+		end,
+	})
+	ui.Summary = text(ui.Foot, "Small", "", { Name = "Summary", TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.TextMuted }, 14)
+	ui.Rules = text(ui.Foot, "Small", "", { Name = "Rules", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted, Visible = false }, 14)
 
 	-- right: this server / friends
 	local right = new("Frame", { Name = "Find", BackgroundTransparency = 1 }, face)
@@ -78819,13 +79282,29 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.padding(list, 2, 8, 2, 2)
 	UIKit.list(list, { Padding = UDim.new(0, ROW_GAP) })
 	ui.List = list
-	ui.Empty = text(right, "Body", "", { Name = "Empty", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, Visible = false })
+	ui.EmptyIcon = Icons.Draw(right, "people3", { Size = 56, Color = P.slate_500, AnchorPoint = Vector2.new(0.5, 0), Visible = false })
+	ui.Empty = text(right, "BodyStrong", "", { Name = "Empty", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text, Visible = false }, 18)
+	ui.EmptySub = text(right, "Body", "", { Name = "EmptySub", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, Visible = false })
 
 	-- quick lines (PartyQuickLines): a strip under both columns, the row of fixed lines and
 	-- the party feed (PartyLines); only in a party
 	ui.Bar = new("Frame", { Name = "QuickBar", BackgroundTransparency = 1, Visible = false }, face)
 	ui.Say = PartyLines.BuildRow(ui.Bar)
 	ui.Feed = PartyLines.BuildFeed(ui.Bar)
+
+	-- The + on an "Invite player" row: show the list of people to invite (This server, or
+	-- Friends when nobody else is on the server).
+	local function focusInvite()
+		local id = #Players:GetPlayers() > 1 and "Server" or "Friends"
+		tab = id
+		ui.Tabs.Select(id)
+		dirty = true
+		if id == "Friends" then
+			fetchFriends(false, function()
+				dirty = true
+			end)
+		end
+	end
 
 	local leftRows = 0
 	local rightRows = 0
@@ -78857,24 +79336,12 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			local me = m.UserId == player.UserId
 			local leads = m.UserId == state.LeaderId
 			local ready = m.Ready == true
-			local sub = leads and "Leader · starts the runs" or (inParty() and (ready and "Ready" or "Not ready") or "Not in a party yet")
+			local sub = leads and "Leader" or (inParty() and (ready and "Member · Ready" or "Member · Not ready") or "Not in a party yet")
 			local canKick = isLeader() and not me
 			local toggle = me and not leads and inParty()
-			-- right side: [pill] [KICK | READY toggle]
+			-- right side: [KICK | READY toggle]
 			local btnW = canKick and bw(100, "KICK") or (toggle and bw(120, ready and "UNREADY" or "READY") or 0)
-			local pillW = (leads or (inParty() and not toggle)) and (ready and 84 or 112) or 0
-			local right = (btnW > 0 and btnW + 12 or 0) + (pillW > 0 and pillW + 8 or 0)
-			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and P.gold_300 or nil, right, me)
-			if pillW > 0 then
-				local pill = UIKit.StatusPill(f, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -(btnW > 0 and btnW + 20 or 12), 0.5, 0), Name = leads and "Leader" or "ReadyPill" })
-				if leads then
-					UIKit.SetStatus(pill, "READY", "LEADER")
-				elseif ready then
-					UIKit.SetStatus(pill, "UNLOCKED", "READY")
-				else
-					UIKit.SetStatus(pill, "WAITING", "NOT READY")
-				end
-			end
+			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and P.gold_300 or nil, btnW > 0 and btnW + 12 or 0, me)
 			if canKick then
 				rowButton(f, "KICK", nil, "Secondary", 100, 8, function()
 					send("Kick", m.UserId)
@@ -78885,27 +79352,47 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 				end).Instance.Name = "ReadyToggle"
 			end
 		end
-		-- open slots
+		-- open slots: "Invite player" rows; the + takes the leader to the list of people to invite
+		-- (This server, or Friends when nobody else is here). Members can't invite: plain row.
 		local slots = math.max(0, state.Max - #members)
+		local canInvite = not inParty() or isLeader()
 		for i = 1, slots do
 			order += 1
 			local f = UIKit.Panel(plist, { Name = "Slot" .. i, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H) }, true)
 			f.BackgroundColor3 = P.slate_950
 			f.BackgroundTransparency = 0.6
 			UIKit.stroke(f, P.slate_500, 1, 0.5)
-			Icons.Draw(f, "userPlus", { Size = 24, Color = P.slate_400, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 18, 0.5, 0) })
-			text(f, "Body", "Open slot", { Position = UDim2.fromOffset(60, 0), Size = UDim2.new(1, -70, 1, 0), TextColor3 = C.TextFaint }, 15)
+			local ring = new("Frame", { Name = "Ring", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(40, 40) }, f)
+			UIKit.corner(ring, 999)
+			UIKit.stroke(ring, P.slate_500, 1, 0.4)
+			Icons.Draw(ring, "userPlus", { Size = 22, Color = P.slate_400, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+			text(f, "Body", canInvite and "Invite player" or "Open slot", { Name = "SlotText", Position = UDim2.fromOffset(60, 0), Size = UDim2.new(1, -(canInvite and 124 or 70), 1, 0), TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
+			if canInvite then
+				UIKit.IconButton(f, {
+					Icon = "plus",
+					Size = 44,
+					Name = "InviteSlot",
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -8, 0.5, 0),
+					OnClick = function()
+						focusInvite()
+					end,
+				})
+			end
 		end
 		leftRows = order
 		local count = math.max(1, #state.Members)
 		ui.PartyLabel.Text = UIKit.track(string.format("Your party  %d/%d", count, state.Max))
+		ui.CountPill.SetText(string.format("%d/%d", count, state.Max))
+		ui.Summary.Text = string.format("Party members join Duo or Trio runs (up to %d players).", state.Max)
 		if not inParty() then
-			ui.Hint.Text = "Invite players on this server or your friends. When the leader starts DUO or TRIO, party members join that run (up to its size). SOLO and Daily runs are the leader's alone."
+			ui.Rules.Text = "Invite players on this server or your friends. When the leader starts DUO or TRIO, party members join that run (up to its size). SOLO and Daily runs are the leader's alone."
 		elseif isLeader() then
-			ui.Hint.Text = "When everyone is READY, press START (or DUO / TRIO on the home screen): your party joins your run."
+			ui.Rules.Text = "When everyone is READY, press START (or DUO / TRIO on the home screen): your party joins your run."
 		else
-			ui.Hint.Text = "Tap READY when you're set. Your leader starts the run and you join it automatically."
+			ui.Rules.Text = "Tap READY when you're set. Your leader starts the run and you join it automatically."
 		end
+		ui.Rules.Visible = infoOpen
 		ui.Leave.Instance.Visible = inParty()
 		local sum = MenuParty.Summary()
 		local mode = MenuParty.PartyMode()
@@ -78990,12 +79477,22 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		ui.Refresh.Instance.Visible = friendsTab
 		if friendsTab then
 			n = friendRows()
-			ui.Empty.Text = friends.Status == "loading" and "Looking for your friends..." or (friends.Status == "error" and "Couldn't load your friends list. Tap refresh to try again." or "None of your friends are online. Invite them with INVITE FRIENDS!")
+			if friends.Status == "loading" then
+				ui.Empty.Text, ui.EmptySub.Text = "Looking for your friends...", ""
+			elseif friends.Status == "error" then
+				ui.Empty.Text, ui.EmptySub.Text = "Couldn't load your friends.", "Tap refresh to try again."
+			else
+				ui.Empty.Text, ui.EmptySub.Text = "No friends online.", "Invite them with INVITE FRIENDS."
+			end
 		else
 			n = serverRows()
-			ui.Empty.Text = "Nobody else is on this server yet. Use the FRIENDS tab to invite your friends."
+			ui.Empty.Text, ui.EmptySub.Text = "No other players here.", "Invite a friend to play together."
+			-- the real invite action sits in the empty state
+			ui.InviteFriends.Instance.Visible = n == 0
 		end
 		ui.Empty.Visible = n == 0
+		ui.EmptySub.Visible = n == 0 and ui.EmptySub.Text ~= ""
+		ui.EmptyIcon.Visible = n == 0
 		rightRows = n
 		MenuParty._layout()
 	end
@@ -79016,15 +79513,16 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		local w = math.min(W - 2 * M, 1040)
 		local labelH = TS(12) + 6
 		local stackedW = W - 2 * M - 36
-		local hintW = (portrait or stackedW < 620) and stackedW or math.floor(stackedW * 0.44)
-		local hintLines = math.clamp(math.ceil(#ui.Hint.Text * TS(14) * 0.56 / math.max(1, hintW - 8)), 1, 5)
-		local hintH = hintLines * (TS(14) + 3) + 6
+		-- footer: summary line + info toggle (44 high); the opened rules add their wrapped lines
+		local rulesLines = infoOpen and math.clamp(math.ceil(#ui.Rules.Text * TS(14) * 0.56 / math.max(1, stackedW - 8)), 1, 5) or 0
+		local rulesH = infoOpen and (rulesLines * (TS(14) + 3) + 6) or 0
+		local footH = 10 + 44 + rulesH
 		local leaveH = ui.Leave.Instance.Visible and Theme.Size.Button or 0
 		local listWant = leftRows * (ROW_H + ROW_GAP) + 4
 		local tabsH = Theme.Size.TapMin + 4
 		local stacked = portrait or w - 36 < 620
 		-- landscape: only as tall as the longer column needs (at least four rows)
-		local leftWant = labelH + 8 + listWant + 8 + hintH + (leaveH > 0 and leaveH + 8 or 0)
+		local leftWant = labelH + 8 + listWant + 8 + (leaveH > 0 and leaveH + 8 or 0)
 		local rightWant = tabsH + 10 + (tab == "Friends" and 58 or 0) + math.max(4, rightRows) * (ROW_H + ROW_GAP) + 4
 		-- quick lines strip under both columns (PartyLines): the row, then the feed
 		local sayOn = PartyLines.Available()
@@ -79034,13 +79532,19 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			feedLines = (portrait or H >= 560) and 3 or 1
 			barH = sayRowH + 6 + ui.Feed.Measure(feedLines) + 10
 		end
-		local panelH = math.min(maxH, (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + 36 + barH)
+		local panelH = math.min(maxH, (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + 36 + footH + barH)
 		local iw, ih = w - 36, panelH - 32
 		place(ui.Panel, (W - w) / 2, top, w, panelH)
-		local colH = ih - barH
+		local colH = ih - barH - footH
+		place(ui.Foot, 0, colH + 10, iw, footH - 10)
+		place(ui.FootRule, 0, 0, iw, 1)
+		place(ui.Info.Instance, 0, 6, 44, 44)
+		place(ui.Summary, 52, 6, iw - 52, 44)
+		place(ui.Rules, 52, 52, iw - 52, rulesH)
+		ui.Rules.Visible = infoOpen
 		ui.Bar.Visible = sayOn
 		if sayOn then
-			place(ui.Bar, 0, colH + 10, iw, barH - 10)
+			place(ui.Bar, 0, colH + footH + 10, iw, barH - 10)
 			ui.Say.Layout(iw)
 			ui.Say.Frame.Position = UDim2.fromOffset(0, 0)
 			ui.Feed.Layout(iw, feedLines)
@@ -79058,14 +79562,13 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			rx, ry, rw, rh = lw + 24, 0, iw - lw - 24, colH
 		end
 		place(ui.Left, 0, 0, lw, lh)
-		local listH = math.max(ROW_H, lh - labelH - 8 - 8 - hintH - (leaveH > 0 and leaveH + 8 or 0))
+		local listH = math.max(ROW_H, lh - labelH - 8 - 8 - (leaveH > 0 and leaveH + 8 or 0))
 		place(ui.Members, 0, labelH + 8, lw, math.min(listH, listWant))
 		local y = labelH + 8 + math.min(listH, listWant) + 8
-		place(ui.Hint, 0, y, lw, hintH)
 		if leaveH > 0 then
 			local bwid = ui.Start.Instance.Visible and math.min(220, math.floor((lw - 12) / 2)) or math.min(lw, 260)
-			place(ui.Leave.Instance, 0, y + hintH + 4, bwid, leaveH)
-			place(ui.Start.Instance, bwid + 12, y + hintH + 4, bwid, leaveH)
+			place(ui.Leave.Instance, 0, y, bwid, leaveH)
+			place(ui.Start.Instance, bwid + 12, y, bwid, leaveH)
 		end
 		place(ui.Right, rx, ry, rw, rh)
 		-- narrow lists: compact row buttons (rows are rebuilt when this flips)
@@ -79084,13 +79587,35 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		ui.Tabs.Frame.Position = UDim2.new()
 		ui.Tabs.Frame.Size = UDim2.new(1, 0, 0, tabsH)
 		local ly = tabsH + 10
-		if ui.InviteFriends.Instance.Visible then
+		local friendsTab = tab == "Friends"
+		if friendsTab then
 			place(ui.InviteFriends.Instance, 0, ly, rw - 58, 48)
 			place(ui.Refresh.Instance, rw - 48, ly, 48, 48)
 			ly += 58
 		end
-		place(ui.List, 0, ly, rw, math.max(ROW_H, rh - ly))
-		place(ui.Empty, 12, ly + 12, rw - 24, TS(16) * 3 + 12)
+		local areaH = math.max(ROW_H, rh - ly)
+		place(ui.List, 0, ly, rw, areaH)
+		-- empty state: icon, headline, one line, and (This server) the real invite button
+		local showBtn = not friendsTab and ui.InviteFriends.Instance.Visible
+		local titleH = TS(18) * 2 + 8
+		local subH = ui.EmptySub.Visible and (TS(16) * 2 + 6) or 0
+		local blockH = 56 + 8 + titleH + subH + (showBtn and 62 or 0)
+		local iconSz = areaH >= blockH and 56 or 0
+		if iconSz == 0 then
+			blockH -= 64
+		end
+		ui.EmptyIcon.Visible = ui.Empty.Visible and iconSz > 0
+		local by = ly + math.max(0, math.floor((areaH - blockH) / 2))
+		ui.EmptyIcon.Position = UDim2.fromOffset(math.floor(rw / 2), by)
+		local ty = by + (iconSz > 0 and 64 or 0)
+		place(ui.Empty, 12, ty, rw - 24, titleH)
+		place(ui.EmptySub, 12, ty + titleH, rw - 24, subH)
+		if showBtn then
+			place(ui.InviteFriends.Instance, math.floor((rw - math.min(rw - 24, 300)) / 2), ty + titleH + subH + 10, math.min(rw - 24, 300), 48)
+		end
+		-- header: count pill right after the title
+		local tb = ui.Header.Title.TextBounds.X
+		ui.CountPill.Frame.Position = UDim2.new(0, 148 + tb + 14, 0.5, 0)
 	end
 	MenuParty._layout = function()
 		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
@@ -79219,32 +79744,33 @@ return MenuParty
             <string name="Name">MenuPlay</string>
             <string name="Source"><![CDATA[--[[
 	MenuPlay.lua
-	The run-setup step (the home screen's PLAY opens it; overhaul 01_Title "Choose your
-	mode next."):
+	The run-setup step (the home screen's PLAY opens it). One centred panel (owner picture,
+	2026-10-08):
 
-	  left        SOLO / DUO / TRIO (big; the picked one lit), a line that says who starts
-	              and what the size means (a party plays its own size, a member waits for
-	              the leader), START
-	  right       (scrolls when it does not fit)
+	  header      BACK + "Play"
+	  mode tabs   SOLO / DUO / TRIO (the picked one gold), one muted line under them saying
+	              what the picked size means and who starts
+	  grid        two columns (one on narrow screens; it scrolls when it does not fit) of rows,
+	              each with a small caption, the value, an optional muted line and a chevron:
 	    HERO        the selected hero and equipped skin (opens CHARACTERS)
 	    WORLD       the lobby's arena and the next one still locked (opens ARENAS)
 	    DIFFICULTY  cycles through the unlocked tiers; locked tiers name what clears them
 	    CURSES      the run modifiers picked and their gold (opens CURSES, MenuCurses)
+	    SIGILS      the worn sigils (opens SIGILS; only while the Sigils feature is on)
 	    ENDLESS     switch (remote SetEndless; the server's answer is the player attribute
 	                "Endless", Config.Endless): no portal win, its own leaderboard
-	    DAILY       today's scored try / practice and the reset time (opens DAILY, which
-	                holds the full rules)
-	    LAST RUN    the saved last run with RETRY (MenuLastRun), when there is one
-	  START       starts the picked mode (remote StartRun, the same validated start the
-	              server always used: RunManager.startRun). A party member's START is
-	              their READY toggle instead (the leader starts).
+	  LAST RUN    the saved last run with RETRY (MenuLastRun), when there is one
+	  footer      "Details" (shows the DAILY CHALLENGE and WEEKLY CHALLENGE rows under the grid)
+	              and the gold START (remote StartRun, the same validated start the server always
+	              used: RunManager.startRun) with a one-line note of what it does. A party
+	              member's START is their READY toggle instead (the leader starts).
 
 	The picked mode lives here (MenuPlay.Mode) so the home screen's line under PLAY shows
 	the same thing. It defaults to SOLO; joining a party picks the party's size.
 
 	New accounts (owner brief item 9; MenuPlay.IsSimple: fewer than SIMPLE_RUNS (3)
 	saved runs, profile.Stats.Runs, and not in a party) get a simpler setup:
-	  a summary card   HERO · KNIGHT (opens CHARACTERS) and WORLD · FOREST (opens ARENAS)
+	  a summary card   HERO (opens CHARACTERS) and WORLD (opens ARENAS)
 	  START SOLO       one big primary action ("QuickStart"; same start as START)
 	  ADVANCED OPTIONS collapsed by default; opens mode (SOLO / DUO / TRIO), the rule line,
 	                   difficulty, curses, endless, daily, sigils, weekly and LAST RUN (the
@@ -79385,7 +79911,7 @@ local function arenaText(profile: { [string]: any }?): (string, string)
 		end
 	end
 	if nextDef then
-		return title, string.format("Next world: %s (reach stage %d)", nextDef.DisplayName, nextNeed)
+		return title, string.format("Next: %s at stage %d", nextDef.DisplayName, nextNeed)
 	end
 	return title, (arena and arena.Hint) or "Face the swarm"
 end
@@ -79398,42 +79924,50 @@ function MenuPlay.RuleLine(): string
 	if party.Count > 0 and not party.Leader then
 		return "Party member: your leader picks the mode, curses and Endless and starts the run. Tap READY."
 	elseif party.Count > 1 then
-		return string.format("You lead a party of %d: START begins a %s countdown for your party.", party.Count, name)
-	elseif mode == (Config.Modes.Order[1] or "Solo") then
-		return "Just you. START begins the run at once."
+		return string.format("You lead a party of %d: Start begins a %s countdown for your party.", party.Count, name)
 	end
-	return string.format("START opens a %s countdown that players in this server can JOIN.", name)
+	local style = MODES[mode]
+	local lead = name .. (style and (" · " .. style.Sub) or "")
+	if mode == (Config.Modes.Order[1] or "Solo") then
+		return lead .. ". Start begins the run at once."
+	end
+	return string.format("%s. Start opens a countdown that players in this server can join.", lead)
 end
 
 function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = { Modes = {} }
 	local endlessSentAt = -100
+	local endlessOn = player:GetAttribute("Endless") == true
+	local detailsOpen = false
 	local function toast(str: string, color: Color3?)
 		if ctx.Toast then
 			ctx.Toast(str, color)
 		end
 	end
-	ui.Header = UIKit.ScreenHeader(screen, "PLAY", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.04, Edge = P.gold_500, EdgeTransparency = 0.35 })
 	ui.Panel = holder
 	ui.Face = face
+	-- header: BACK and a modest "Play" title, inside the panel
+	ui.Header = UIKit.ScreenHeader(face, "Play", ctx.Back)
+	ui.Header.Title.TextSize = UIKit.TS(30)
 
-	-- MODE: three big buttons, the picked one lit
+	-- MODE tabs: the picked one gold
 	for i, id in ipairs(Config.Modes.Order) do
 		local def = (Config.Modes :: any)[id]
 		local style = MODES[id] or { Sub = def.MaxPlayers .. " players", Icon = "people3" }
 		local b = UIKit.Button(face, {
 			Kind = "Secondary",
 			Title = string.upper(def.DisplayName),
-			Subtitle = style.Sub,
 			Icon = style.Icon,
 			IconSize = 30,
 			TitleStyle = "H2",
-			Align = "Left",
+			TitleSize = 20,
+			Align = "Center",
 			Shrink = true,
 			Name = id,
 			LayoutOrder = i,
+			Shadow = false,
 			OnClick = function()
 				local party = MenuParty.Summary()
 				if party.Count > 0 and not party.Leader then
@@ -79449,10 +79983,10 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 				UIAnim.Bump(ui.Modes[i].Face, 0.06)
 			end,
 		})
-		ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. id, { Size = UDim2.fromScale(1.5, 1.5) })
+		ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. id, { Size = UDim2.fromScale(1.3, 1.3) })
 		ui.Modes[i] = b
 	end
-	ui.Rule = UIKit.text(face, "Small", "", { Name = "Rule", TextWrapped = true, TextColor3 = P.ivory_200, TextYAlignment = Enum.TextYAlignment.Center, TextScaled = true }, 14)
+	ui.Rule = UIKit.text(face, "Small", "", { Name = "Rule", TextWrapped = true, TextColor3 = C.TextMuted, TextYAlignment = Enum.TextYAlignment.Center, TextScaled = true }, 14)
 	UIKit.new("UITextSizeConstraint", { MaxTextSize = UIKit.TS(14), MinTextSize = 9 }, ui.Rule)
 
 	-- the options column scrolls when it does not fit (phones in landscape)
@@ -79467,33 +80001,47 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	}, face)
 	ui.Options = opts
 
-	local function row(name: string, title: string, sub: string, icon: string, art: string?, onClick: () -> ()): any
+	-- One setting row: a small caps caption, the value, an optional muted line, a chevron.
+	local function row(name: string, caption: string, icon: string, art: string?, chevron: boolean, onClick: () -> ()): any
 		local b = UIKit.Button(opts, {
 			Kind = "Secondary",
-			Title = title,
-			Subtitle = sub,
+			Title = " ",
+			Subtitle = " ",
 			Icon = icon,
-			IconSize = 26,
+			IconSize = 34,
 			TitleStyle = "Label",
-			TitleSize = 16,
-			Chevron = true,
+			TitleSize = 18,
+			Chevron = chevron,
 			Align = "Left",
 			Shrink = true,
 			Name = name,
+			Shadow = false,
 			OnClick = onClick,
 		})
 		if art then
-			ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. art, { Size = UDim2.fromScale(1.45, 1.45) })
+			ArtImage.ButtonIcon(b.Content:FindFirstChild("IconHolder"), "icons/ui/ui_" .. art, { Size = UDim2.fromScale(1.3, 1.3) })
 		end
+		local column = b.Content:FindFirstChild("Text")
+		local cap = UIKit.text(column, "Caption", string.upper(caption), { Name = "Caption", LayoutOrder = 0, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
+		cap.TextColor3 = C.TextMuted
 		return b
 	end
-	ui.Hero = row("Hero", "HERO · KNIGHT", "Change in Characters", "helmet", "Characters", function()
+	-- value line (and the muted line under it; "" hides it)
+	local hideSummarySub = false -- the simple setup's side-by-side HERO / WORLD have no room for it
+	local function setRow(b: any, value: string, sub: string?)
+		b.SetText(value, sub or "")
+		if b.Subtitle then
+			b.Subtitle.Visible = sub ~= nil and sub ~= "" and not (hideSummarySub and (b == ui.Hero or b == ui.Arena))
+		end
+	end
+
+	ui.Hero = row("Hero", "Hero", "helmet", "Characters", true, function()
 		ctx.ShowScreen("Characters")
 	end)
-	ui.Arena = row("Arena", "WORLD · FOREST", "Face the swarm", "castle", "Arenas", function()
+	ui.Arena = row("Arena", "World", "castle", "Arenas", true, function()
 		ctx.ShowScreen("Arenas")
 	end)
-	ui.Difficulty = row("Difficulty", "DIFFICULTY · STANDARD", "Tap to change", "skull", nil, function()
+	ui.Difficulty = row("Difficulty", "Difficulty", "skull", nil, true, function()
 		local profile = ctx.Profile()
 		local currentTier = DifficultyData.Selected(profile)
 		local at = table.find(DifficultyData.Order, currentTier) or 1
@@ -79514,34 +80062,74 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end
 	end)
-	ui.Curses = row("Curses", "CURSES", "Harder runs, more gold", "curse", "Curses", function()
+	ui.Curses = row("Curses", "Curses", "curse", "Curses", true, function()
 		ctx.ShowScreen("Curses")
 	end)
-	local eHolder, eFace = UIKit.Surface(opts, { Name = "EndlessRow", Radius = Theme.Radius.M, Transparency = 0.12, Edge = C.PanelEdge, EdgeTransparency = Theme.Alpha.Edge, Shadow = false })
-	ui.EndlessRow = eHolder
-	ui.EndlessEdge = eFace:FindFirstChildOfClass("UIStroke")
-	UIKit.padding(eFace, 0, 12, 0, 12)
-	ui.EndlessToggle = UIKit.Toggle(eFace, "Endless", "cycle", "No portal win: stages go on. Own leaderboard.", player:GetAttribute("Endless") == true, function(on)
-		endlessSentAt = os.clock()
-		Remotes.Get("SetEndless"):FireServer(on)
-	end, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.new(1, 0, 0, 56) })
-	if Config.Endless == nil or not Config.Endless.Enabled then
-		eHolder.Visible = false
-	end
-	ui.Daily = row("Daily", "DAILY CHALLENGE", "One scored try a day", "calendar", "Daily", function()
-		ctx.ShowScreen("Daily")
-	end)
-	-- META (docs/features/META.md): the worn Sigils and the Weekly Challenge (shown only while
-	-- their switches are on)
-	ui.Sigils = row("Sigils", "SIGILS", "None worn", "sparkle", nil, function()
+	-- META (docs/features/META.md): the worn Sigils (shown only while the switch is on)
+	ui.Sigils = row("Sigils", "Sigils", "sparkle", nil, true, function()
 		ctx.ShowScreen("Sigils")
 	end)
-	ui.Sigils.Instance.Visible = Config.FeatureOn("Sigils")
-	ui.Weekly = row("Weekly", "WEEKLY CHALLENGE", "One hero, one week", "calendar", nil, function()
+	local sigilsOn = Config.FeatureOn("Sigils")
+	ui.Sigils.Instance.Visible = sigilsOn
+	-- ENDLESS: the row is the switch (remote SetEndless; the player attribute is the answer)
+	ui.Endless = row("Endless", "Endless", "cycle", nil, false, function()
+		endlessOn = not endlessOn
+		endlessSentAt = os.clock()
+		ui.PaintEndless()
+		Remotes.Get("SetEndless"):FireServer(endlessOn)
+	end)
+	local endlessEnabled = Config.Endless ~= nil and Config.Endless.Enabled == true
+	ui.Endless.Instance.Visible = endlessEnabled
+	do
+		local right = ui.Endless.Content:FindFirstChild("Right")
+		if right then
+			(right :: Frame).Visible = false
+		end
+		local contentPad = ui.Endless.Content:FindFirstChildOfClass("UIPadding")
+		if contentPad then
+			contentPad.PaddingRight = UDim.new(0, Theme.Space.L + 52)
+		end
+		local track = UIKit.new("Frame", {
+			Name = "Switch",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -Theme.Space.L, 0.5, 0),
+			Size = UDim2.fromOffset(46, 26),
+			BackgroundColor3 = P.slate_700,
+			BorderSizePixel = 0,
+			ZIndex = 4,
+			Active = false,
+		}, ui.Endless.Face)
+		UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, track)
+		UIKit.new("UIStroke", { Color = P.slate_500, Thickness = 1, Transparency = 0.3 }, track)
+		local knob = UIKit.new("Frame", {
+			Name = "Knob",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 3, 0.5, 0),
+			Size = UDim2.fromOffset(20, 20),
+			BackgroundColor3 = P.ivory_200,
+			BorderSizePixel = 0,
+			ZIndex = 5,
+			Active = false,
+		}, track)
+		UIKit.new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, knob)
+		ui.PaintEndless = function()
+			track.BackgroundColor3 = endlessOn and P.gold_400 or P.slate_700
+			knob.Position = endlessOn and UDim2.new(1, -23, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
+			ui.Endless.SetSelected(endlessOn)
+			setRow(ui.Endless, endlessOn and "On" or "Off", endlessOn and "No portal win · own leaderboard" or nil)
+		end
+		ui.PaintEndless()
+	end
+	ui.LastRun = MenuLastRun.Build(opts, ctx)
+	-- DETAILS: the daily and weekly challenges (the footer link shows them under the grid)
+	ui.Daily = row("Daily", "Daily challenge", "calendar", "Daily", true, function()
+		ctx.ShowScreen("Daily")
+	end)
+	local weeklyOn = Config.FeatureOn("WeeklyChallenge")
+	ui.Weekly = row("Weekly", "Weekly challenge", "calendar", nil, true, function()
 		ctx.ShowScreen("Weekly")
 	end)
-	ui.Weekly.Instance.Visible = Config.FeatureOn("WeeklyChallenge")
-	ui.LastRun = MenuLastRun.Build(opts, ctx)
+
 	local function onStart()
 		local party = MenuParty.Summary()
 		if party.Count > 0 and not party.Leader then
@@ -79562,19 +80150,42 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 	end
 	ui.Start = UIKit.Button(face, {
 		Kind = "Primary",
-		Glow = true,
-		Title = "START",
+		Glow = false,
+		Title = "Start Solo",
 		Icon = "play",
-		IconSize = 30,
-		TitleStyle = "H1",
-		TitleSize = 30,
+		IconSize = 32,
+		TitleStyle = "H2",
+		TitleSize = 24,
 		Align = "Center",
+		Shrink = true,
 		Name = "Start",
 		OnClick = function()
 			onStart()
 		end,
 	})
-	ArtImage.ButtonIcon(ui.Start.Content:FindFirstChild("IconHolder"), "icons/ui/ui_Play", { Size = UDim2.fromScale(1.6, 1.6) })
+	ArtImage.ButtonIcon(ui.Start.Content:FindFirstChild("IconHolder"), "icons/ui/ui_Play", { Size = UDim2.fromScale(1.4, 1.4) })
+	ui.Note = UIKit.text(face, "Caption", "", { Name = "StartNote", TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 12)
+	ui.Divider = UIKit.new("Frame", { Name = "Divider", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0 }, face)
+	-- "Details >": shows the daily and weekly challenge rows
+	ui.Details = UIKit.new("TextButton", {
+		Name = "Details",
+		Text = "Details >",
+		FontFace = Theme.Font.Label,
+		TextSize = UIKit.TS(16),
+		TextColor3 = P.gold_200,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+	}, face)
+	UIKit.Focusable(ui.Details)
+	ui.Details.Activated:Connect(function()
+		detailsOpen = not detailsOpen
+		ui.Details.Text = detailsOpen and "Hide details" or "Details >"
+		MenuPlay._layout()
+		if detailsOpen then
+			opts.CanvasPosition = Vector2.new(0, opts.CanvasSize.Y.Offset)
+		end
+	end)
 
 	-- the simple setup (new accounts, MenuPlay.IsSimple): a summary card holding the HERO and
 	-- WORLD rows, one big START with a line under it, and ADVANCED OPTIONS (collapsed)
@@ -79627,46 +80238,72 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local forced = party.Count > 1 and MenuParty.PartyMode() or nil
 		for i, id in ipairs(Config.Modes.Order) do
 			local on = id == mode
-			ui.Modes[i].SetSelected(on)
-			ui.Modes[i].SetKind(on and "Outline" or "Secondary")
+			ui.Modes[i].SetSelected(false)
+			ui.Modes[i].SetKind(on and "Primary" or "Secondary")
 			-- a member, or a party of fixed size, cannot pick another size
-			ui.Modes[i].Instance:SetAttribute("Locked", member or (forced ~= nil and forced ~= id))
-			ui.Modes[i].Face.BackgroundTransparency = (member or (forced ~= nil and forced ~= id)) and 0.5 or 0
+			local locked = member or (forced ~= nil and forced ~= id)
+			ui.Modes[i].Instance:SetAttribute("Locked", locked)
+			ui.Modes[i].Face.BackgroundTransparency = (locked and not on) and 0.5 or 0
 		end
 		local def = (Config.Modes :: any)[mode]
-		local startText = "START " .. string.upper(def and def.DisplayName or mode)
+		local startText = "Start " .. (def and def.DisplayName or mode)
+		local note
 		if member then
-			startText = party.MyReady and "UNREADY" or "READY"
+			startText = party.MyReady and "Unready" or "Ready"
+			note = "Your leader starts the run"
+		elseif party.Count > 1 then
+			note = "Starts a countdown for your party"
+		elseif mode == (Config.Modes.Order[1] or "Solo") then
+			note = "Starts your run immediately"
+		else
+			note = "Opens a countdown others here can join"
 		end
 		ui.Start.SetText(startText)
-		ui.QuickStart.SetText(startText, mode == (Config.Modes.Order[1] or "Solo") and "Just you · the run begins at once"
+		ui.Note.Text = note
+		ui.QuickStart.SetText(string.upper(startText), mode == (Config.Modes.Order[1] or "Solo") and "Just you · the run begins at once"
 			or "Opens a countdown that players here can JOIN")
 		ui.Rule.Text = MenuPlay.RuleLine()
 	end
 	MenuPlay.OnModeChanged(showMode)
 	showMode()
 
-	local optionList = { ui.Hero.Instance, ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.Sigils.Instance, ui.EndlessRow, ui.Daily.Instance, ui.Weekly.Instance }
-	local function layoutOptions(colW: number, rowH: number, endlessH: number, lastH: number, y0: number?): number
-		local G = Theme.Layout.Gutter
-		local y = y0 or 0
-		for _, b in ipairs(optionList) do
+	local gridList = { ui.Hero.Instance, ui.Arena.Instance, ui.Difficulty.Instance, ui.Curses.Instance, ui.Sigils.Instance, ui.Endless.Instance }
+	-- Places the rows in a grid (two columns when `w` allows) from y0; returns the next y.
+	local function grid(list: { GuiObject }, w: number, y0: number, rowH: number): number
+		local G = 10
+		local cols = w >= 620 and 2 or 1
+		local cw = math.floor((w - (cols - 1) * G) / cols)
+		local n = 0
+		for _, b in ipairs(list) do
 			if simple and (b == ui.Hero.Instance or b == ui.Arena.Instance) then
 				continue -- on the summary card
 			end
-			if b.Visible or (b ~= ui.EndlessRow and b ~= ui.Sigils.Instance and b ~= ui.Weekly.Instance) then
-				local h = b == ui.EndlessRow and endlessH or rowH
-				place(b, 0, y, colW - 6, h)
-				y += h + G
+			if not b.Visible then
+				continue
 			end
+			local col, r = n % cols, math.floor(n / cols)
+			place(b, col * (cw + G), y0 + r * (rowH + G), cw, rowH)
+			n += 1
 		end
+		return y0 + math.ceil(n / cols) * (rowH + G)
+	end
+
+	local function layoutOptions(colW: number, rowH: number, y0: number?): number
+		local w = colW - 6
+		ui.Sigils.Instance.Visible = sigilsOn
+		ui.Endless.Instance.Visible = endlessEnabled
+		local showDetails = simple or detailsOpen
+		ui.Daily.Instance.Visible = showDetails
+		ui.Weekly.Instance.Visible = showDetails and weeklyOn
+		local y = grid(gridList, w, y0 or 0, rowH)
 		if ui.LastRun.Has() then
-			place(ui.LastRun.Frame, 0, y, colW - 6, lastH)
-			ui.LastRun.SetWidth(colW - 6)
-			y += lastH + G
+			place(ui.LastRun.Frame, 0, y, w, 76)
+			ui.LastRun.SetWidth(w)
+			y += 76 + 10
 		end
-		opts.CanvasSize = UDim2.fromOffset(0, math.max(0, y - G))
-		return math.max(0, y - G)
+		y = grid({ ui.Daily.Instance, ui.Weekly.Instance }, w, y, rowH)
+		opts.CanvasSize = UDim2.fromOffset(0, math.max(0, y - 10))
+		return math.max(0, y - 10)
 	end
 
 	-- Moves the controls between the full screen and the simple setup (same buttons).
@@ -79680,6 +80317,9 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		end
 		ui.Rule.Parent = on and opts or face
 		ui.Start.Instance.Visible = not on
+		ui.Note.Visible = not on
+		ui.Divider.Visible = not on
+		ui.Details.Visible = not on
 		ui.Summary.Visible = on
 		ui.QuickStart.Instance.Visible = on
 		ui.Advanced.Instance.Visible = on
@@ -79688,39 +80328,54 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 
 	-- The simple setup's ADVANCED column: the modes (a row of three when they fit), the
 	-- rule line, then the usual option rows.
-	local function layoutAdvanced(colW: number)
-		local G = Theme.Layout.Gutter
+	local function layoutAdvanced(colW: number, rowH: number)
+		local G = 10
 		local w = colW - 6
 		local y = 0
 		local per = math.floor((w - 2 * G) / 3)
-		if per >= 190 then
+		if per >= 110 then
 			for i, b in ipairs(ui.Modes) do
-				place(b.Instance, (i - 1) * (per + G), 0, per, 64)
+				place(b.Instance, (i - 1) * (per + G), 0, per, 52)
 			end
-			y = 64 + G
+			y = 52 + G
 		else
 			for _, b in ipairs(ui.Modes) do
-				place(b.Instance, 0, y, w, 56)
-				y += 56 + G
+				place(b.Instance, 0, y, w, 48)
+				y += 48 + G
 			end
 		end
 		place(ui.Rule, 0, y, w, 40)
 		y += 40 + G
-		layoutOptions(colW, 56, 64, ui.LastRun.Has() and 76 or 0, y)
+		layoutOptions(colW, rowH, y)
 	end
 
-	local function layoutSimple(W: number, H: number, top: number, M: number, portrait: boolean)
+	local function layoutSimple(W: number, H: number, top: number, M: number, portrait: boolean, pad: number, headH: number, rowH: number, short: boolean)
 		local G = Theme.Layout.Gutter
-		local pad = 16
-		local rowH, advH = 58, 56
 		local availH = H - top - M
+		local advH = 56
+		local y0 = pad + headH + G
 		-- the left (portrait: only) column: HERO, WORLD, START, ADVANCED OPTIONS
+		-- (short landscape screens put HERO and WORLD side by side)
+		local sideBySide = short and not portrait
+		local summaryH = sideBySide and rowH or (2 * rowH + 10)
 		local function column(x: number, colW: number, startH: number)
-			local y = pad
-			place(ui.Summary, x, y, colW, 2 * rowH + G)
-			place(ui.Hero.Instance, 0, 0, colW, rowH)
-			place(ui.Arena.Instance, 0, rowH + G, colW, rowH)
-			y += 2 * rowH + 2 * G
+			local y = y0
+			hideSummarySub = sideBySide
+			for _, r in ipairs({ ui.Hero, ui.Arena }) do
+				if r.Subtitle then
+					r.Subtitle.Visible = not sideBySide and r.Subtitle.Text ~= ""
+				end
+			end
+			place(ui.Summary, x, y, colW, summaryH)
+			if sideBySide then
+				local half = math.floor((colW - 10) / 2)
+				place(ui.Hero.Instance, 0, 0, half, rowH)
+				place(ui.Arena.Instance, half + 10, 0, half, rowH)
+			else
+				place(ui.Hero.Instance, 0, 0, colW, rowH)
+				place(ui.Arena.Instance, 0, rowH + 10, colW, rowH)
+			end
+			y += summaryH + G
 			place(ui.QuickStart.Instance, x, y, colW, startH)
 			y += startH + G
 			place(ui.Advanced.Instance, x, y, colW, advH)
@@ -79730,23 +80385,23 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 			local w = math.min(W - 2 * M, 560)
 			local inner = w - 2 * pad
 			local startH = 96
-			local need = 2 * pad + 2 * rowH + 4 * G + startH + advH
+			local need = y0 + summaryH + G + startH + G + advH + pad
 			local h = advancedOpen and availH or math.min(availH, need)
 			place(ui.Panel, (W - w) / 2, top, w, h)
 			local y = column(pad, inner, startH)
 			place(opts, pad, y, inner + 6, math.max(0, h - pad - y))
-			layoutAdvanced(inner + 6)
+			layoutAdvanced(inner + 6, rowH)
 		else
 			local maxH = math.min(availH, 520)
 			local w = advancedOpen and math.min(W - 2 * M, 1000) or math.min(W - 2 * M, 600)
 			local colW = advancedOpen and math.floor((w - 2 * pad - 2 * G) / 2) or (w - 2 * pad)
-			local fixed = 2 * pad + 2 * rowH + 3 * G + advH
+			local fixed = y0 + summaryH + 2 * G + advH + pad
 			local startH = math.clamp(maxH - fixed, 64, advancedOpen and 150 or 104)
 			local h = advancedOpen and maxH or math.min(maxH, fixed + startH)
 			place(ui.Panel, (W - w) / 2, top, w, h)
 			column(pad, colW, startH)
-			place(opts, pad + colW + 2 * G, pad, colW + 6, h - 2 * pad)
-			layoutAdvanced(colW + 6)
+			place(opts, pad + colW + 2 * G, y0, colW + 6, h - y0 - pad)
+			layoutAdvanced(colW + 6, rowH)
 		end
 		ui.LastRun.Frame.Visible = ui.LastRun.Has()
 	end
@@ -79755,58 +80410,66 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local W, H = v.X, v.Y
 		local compact = UIKit.IsCompact()
 		local M = compact and Theme.Layout.MarginCompact or Theme.Layout.Margin
-		local G = Theme.Layout.Gutter
+		local G = 10
 		local headY = math.max(ins.Top + 4, 12)
-		place(ui.Header.Frame, M, headY, math.min(520, W - 2 * M), 56)
-		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		-- clear the Roblox buttons and the gold readout along the top
+		local top = headY + (portrait and 130 or 46)
+		local pad = compact and 12 or 18
+		local headH = 52
+		local short = not portrait and H < 520
+		-- phones at the Largest Roblox text size need the taller rows (three text lines)
+		local rowH = short and 92 or (compact and 78 or 72)
 		if simple then
-			layoutSimple(W, H, top, M, portrait)
+			place(ui.Header.Frame, pad, pad, 300, headH)
+			layoutSimple(W, H, top, M, portrait, pad, headH, short and 84 or rowH, short)
 			return
 		end
 		local hasLast = ui.LastRun.Has()
-		local pad = 16
-		local endlessH = 64
-		if portrait then
-			local w = math.min(W - 2 * M, 560)
-			local inner = w - 2 * pad
-			local modeH, rowH, lastH, startH, ruleH = 64, 56, 76, 68, 40
-			local h = H - top - M
-			place(ui.Panel, (W - w) / 2, top, w, h)
-			local y = pad
-			for i = 1, #ui.Modes do
-				place(ui.Modes[i].Instance, pad, y, inner, modeH)
-				y += modeH + G
-			end
-			place(ui.Rule, pad, y, inner, ruleH)
-			y += ruleH + G
-			place(ui.Start.Instance, pad, h - pad - startH, inner, startH)
-			local optsH = h - pad - startH - G - y
-			place(opts, pad, y, inner + 6, math.max(0, optsH))
-			layoutOptions(inner + 6, rowH, endlessH, hasLast and lastH or 0)
-		else
-			-- two columns: the modes, the rule line and START on the left, the options right
-			local w = math.min(W - 2 * M, 1000)
-			local h = math.min(H - top - M, 520)
-			place(ui.Panel, (W - w) / 2, top, w, h)
-			local inner = h - 2 * pad
-			local colW = math.floor((w - 2 * pad - 2 * G) / 2)
-			local startH = math.clamp(math.floor(inner * 0.2), 52, 80)
-			local ruleH = math.clamp(math.floor(inner * 0.13), 32, 52)
-			local modeH = math.floor((inner - startH - ruleH - 3 * G) / 3)
-			local y = pad
-			for i = 1, #ui.Modes do
-				place(ui.Modes[i].Instance, pad, y, colW, modeH)
-				y += modeH + G
-			end
-			place(ui.Rule, pad, y, colW, ruleH)
-			place(ui.Start.Instance, pad, h - pad - startH, colW, startH)
-			local x = pad + colW + 2 * G
-			local rows = 5 + (ui.Sigils.Instance.Visible and 1 or 0) + (ui.Weekly.Instance.Visible and 1 or 0)
-			local lastH = hasLast and 76 or 0
-			local rowH = math.clamp(math.floor((inner - lastH - (hasLast and G or 0) - endlessH - rows * G) / rows), Theme.Size.TapMin, 66)
-			place(opts, x, pad, colW + 6, inner)
-			layoutOptions(colW + 6, rowH, endlessH, lastH)
+		local w = math.min(W - 2 * M, 760)
+		local iw = w - 2 * pad
+		local availH = H - top - M
+		local tabH = compact and 48 or 56
+		local ruleH = iw >= 600 and 22 or 36
+		local footH = 66
+		local cols = (iw - 6) >= 620 and 2 or 1
+		local rows = 4 + (sigilsOn and 1 or 0) + (endlessEnabled and 1 or 0)
+		local want = math.ceil(rows / cols) * (rowH + G) - G + (hasLast and 76 + G or 0)
+		if detailsOpen then
+			local extra = 1 + (weeklyOn and 1 or 0)
+			want += G + math.ceil(extra / cols) * (rowH + G) - G
 		end
+		-- header (+ tabs beside it on short screens), tabs, rule, body, footer
+		local topBlock = short and (headH + 6) or (headH + G + tabH + 4)
+		local h = math.min(availH, pad + topBlock + ruleH + G + want + G + footH + pad)
+		place(ui.Panel, (W - w) / 2, top, w, h)
+		local y = pad
+		if short then
+			place(ui.Header.Frame, pad, y, 270, headH)
+			local tx = pad + 280
+			local per = math.floor((w - pad - tx - 2 * 8) / 3)
+			for i, b in ipairs(ui.Modes) do
+				place(b.Instance, tx + (i - 1) * (per + 8), y + 2, per, headH - 4)
+			end
+			y += headH + 6
+		else
+			place(ui.Header.Frame, pad, y, iw, headH)
+			y += headH + G
+			local per = math.floor((iw - 2 * 8) / 3)
+			for i, b in ipairs(ui.Modes) do
+				place(b.Instance, pad + (i - 1) * (per + 8), y, per, tabH)
+			end
+			y += tabH + 4
+		end
+		place(ui.Rule, pad, y, iw, ruleH)
+		y += ruleH + G
+		local footY = h - pad - footH
+		place(opts, pad, y, iw + 6, math.max(0, footY - G - y))
+		layoutOptions(iw + 6, rowH)
+		place(ui.Divider, pad, footY - 6, iw, 1)
+		local sw = math.min(math.floor(iw * 0.62), 340)
+		place(ui.Start.Instance, pad + iw - sw, footY, sw, 48)
+		place(ui.Note, pad + iw - sw, footY + 50, sw, 16)
+		place(ui.Details, pad, footY, math.min(120, iw - sw - 8), 48)
 		ui.LastRun.Frame.Visible = hasLast
 	end
 	MenuPlay._layout = function()
@@ -79827,36 +80490,34 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local hero = CharacterData.Characters[heroId] or CharacterData.Characters[CharacterData.Default]
 		local skinId = profile and type(profile.Skins) == "table" and profile.Skins[hero.Id] or "Default"
 		local skin = skinId ~= "Default" and CharacterData.Skins[skinId] or nil
-		ui.Hero.SetText("HERO · " .. string.upper(hero.Name), (skin and (skin.Name .. " · ") or "") .. "Change in Characters")
-		local title, sub = arenaText(profile)
-		ui.Arena.SetText(title, sub)
+		setRow(ui.Hero, hero.Name, skin and skin.Name or "Default skin")
+		local arenaId = Remotes.State():GetAttribute("SelectedArena") or "Forest"
+		local arena = (Config.Arenas :: any)[arenaId]
+		local _, arenaSub = arenaText(profile)
+		setRow(ui.Arena, arena and arena.DisplayName or tostring(arenaId), arenaSub)
 		local tier = DifficultyData.Tiers[DifficultyData.Selected(profile)]
 		local nextLocked: string? = nil
-		local unlocked = 0
 		for _, id in ipairs(DifficultyData.Order) do
-			if DifficultyData.IsUnlocked(profile, id) then
-				unlocked += 1
-			elseif not nextLocked then
-				-- the lock and what opens it, beside the option (the tap toast says the same)
+			if not DifficultyData.IsUnlocked(profile, id) then
+				-- the next locked tier beside the option (the tap toast names what opens it)
 				local t = DifficultyData.Tiers[id]
-				local needs = DifficultyData.Tiers[t.Requires]
-				nextLocked = string.format("%s locked: clear all %d %s stages", t.Name, Config.Stages.WinMinStages, needs and needs.Name or "Standard")
+				nextLocked = t.Name .. " locked"
+				break
 			end
 		end
-		local diffSub = unlocked > 1 and ("Tap to change" .. (nextLocked and (" · " .. nextLocked) or "")) or (nextLocked or "Tap to change")
-		ui.Difficulty.SetText("DIFFICULTY · " .. string.upper(tier and tier.Name or "Standard"), diffSub)
+		setRow(ui.Difficulty, tier and tier.Name or "Standard", nextLocked or "Tap to change")
 		local curses = MenuCurses.Current()
-		ui.Curses.SetText(#curses > 0 and string.format("CURSES · %d", #curses) or "CURSES", curseLine(curses, "Harder runs, more gold"))
+		setRow(ui.Curses, #curses > 0 and string.format("%d active", #curses) or "None", curseLine(curses, "Harder runs, more gold"))
 		ui.Curses.SetSelected(#curses > 0)
 		local used, score = MenuDaily.Status(profile)
-		local dailySub = used and ("Scored try used" .. (score > 0 and (" · " .. CurseData.ScoreText(score)) or "") .. " · practice only · resets in " .. MenuDaily.TimeLeft())
-			or ("One scored try · used when it starts · resets in " .. MenuDaily.TimeLeft())
-		ui.Daily.SetText(nil, dailySub)
-		if ui.Sigils.Instance.Visible then
-			ui.Sigils.SetText(nil, MenuSigils.Summary(profile))
+		local dailySub = used and ("Practice only" .. (score > 0 and (" · " .. CurseData.ScoreText(score)) or "") .. " · resets in " .. MenuDaily.TimeLeft())
+			or ("Used when it starts · resets in " .. MenuDaily.TimeLeft())
+		setRow(ui.Daily, used and "Scored try used" or "Scored try ready", dailySub)
+		if sigilsOn then
+			setRow(ui.Sigils, MenuSigils.Summary(profile), nil)
 		end
-		if ui.Weekly.Instance.Visible then
-			ui.Weekly.SetText(nil, MenuWeekly.Summary(profile))
+		if weeklyOn then
+			setRow(ui.Weekly, MenuWeekly.Summary(profile), "One hero, one week")
 		end
 		showMode()
 		if modeChanged or had ~= ui.LastRun.Has() then
@@ -79881,15 +80542,10 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		end,
 		Update = function(_dt: number)
 			-- the ENDLESS switch follows the server's answer (after a short wait for our tap)
-			local endlessOn = player:GetAttribute("Endless") == true
-			if os.clock() - endlessSentAt > 1.5 and ui.EndlessToggle.Get() ~= endlessOn then
-				ui.EndlessToggle.Set(endlessOn)
-			end
-			local lit = ui.EndlessToggle.Get()
-			if ui.EndlessEdge and ui.EndlessRow:GetAttribute("Lit") ~= lit then
-				ui.EndlessRow:SetAttribute("Lit", lit)
-				ui.EndlessEdge.Color = lit and P.gold_400 or C.PanelEdge
-				ui.EndlessEdge.Transparency = lit and 0.1 or Theme.Alpha.Edge
+			local serverOn = player:GetAttribute("Endless") == true
+			if os.clock() - endlessSentAt > 1.5 and endlessOn ~= serverOn then
+				endlessOn = serverOn
+				ui.PaintEndless()
 			end
 			if screen.Visible then
 				local party = MenuParty.Summary()
@@ -96911,10 +97567,12 @@ return TitlePlates
 	                   own lobby menu is never shown as the destination)
 	  SwarmState RunServer + RunServerStatus = "Waiting"  "STARTING YOUR RUN" with
 	                   "Heroes ready: N / M" (RunServerHere / RunServerExpected)
-	Banner (top centre, small): player attribute TravelHomeIn = seconds  "Main lobby in Ns"
-	  with GO NOW / STAY (remote TravelHome "Go" | "Stay"). Hidden while the results panel
-	  is open (SetResultsOpen): the results footer shows the same countdown then, so there
-	  is only ever one.
+	Notice (bottom-right corner, compact, inside the device safe area): player attribute
+	  TravelHomeIn = seconds  "Return to lobby in Ns" with GO NOW / STAY (remote TravelHome
+	  "Go" | "Stay"). It lives in its own ScreenGui, so it never sits in a menu's layout; the
+	  Daily screen reserves the corner while it shows (TravelOverlay.NoticeReserve). Hidden
+	  while the results panel is open (SetResultsOpen): the results footer shows the same
+	  countdown then, so there is only ever one.
 	Nothing shows in Studio or on a lobby server that never teleports. Reduced effects: no
 	dot animation, no fades.
 ]]
@@ -96942,8 +97600,15 @@ local cover: Frame
 local coverTitle: TextLabel
 local coverLine: TextLabel
 local coverDots: TextLabel
+local noticeGui: ScreenGui
+local noticeRoot: Frame
+local noticeScale: UIScale
 local banner: Frame
 local bannerText: TextLabel
+local NOTICE_HEIGHT = 56
+local NOTICE_WIDTH = 440
+local GO_WIDTH = 108
+local STAY_WIDTH = 88
 local shownCover = false
 local resultsOpen = false -- UIBuilder: the results panel is up (it shows TravelHomeIn itself)
 
@@ -96961,6 +97626,8 @@ local function fit()
 	local s = math.clamp(math.min(size.X / refX, size.Y / refY), Config.UI.MinScale, Config.UI.MaxScale)
 	scale.Scale = s
 	root.Size = UDim2.fromScale(1 / s, 1 / s)
+	noticeScale.Scale = math.max(s, 0.8) -- stays readable on small screens
+	noticeRoot.Size = UDim2.fromScale(1 / noticeScale.Scale, 1 / noticeScale.Scale)
 end
 
 local function build()
@@ -96997,23 +97664,35 @@ local function build()
 	coverLine = UIKit.Role(panel, "Body", "", { Name = "Line", LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, TextWrapped = true, Size = UDim2.new(1, 0, 0, 44) })
 	coverDots = UIKit.Role(panel, "Heading", "• • •", { Name = "Dots", LayoutOrder = 4, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Gold, Size = UDim2.new(1, 0, 0, 24) })
 
-	-- the go-home banner (run server lobby, after a run)
-	banner = UIKit.Panel(root, {
+	-- the go-home notice (run server lobby, after a run): its own ScreenGui in the device
+	-- safe area, anchored to the bottom-right corner
+	noticeGui = new("ScreenGui", {
+		Name = "TravelHomeNotice",
+		IgnoreGuiInset = true,
+		ResetOnSpawn = false,
+		DisplayOrder = 90,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	})
+	noticeGui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	noticeRoot = new("Frame", { Name = "Root", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, noticeGui)
+	noticeScale = new("UIScale", { Scale = 1 }, noticeRoot)
+	banner = UIKit.Panel(noticeRoot, {
 		Name = "HomeBanner",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 64),
-		Size = UDim2.fromOffset(560, 64),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -12, 1, -12),
+		Size = UDim2.new(1, -24, 0, NOTICE_HEIGHT),
 		Visible = false,
 		ZIndex = 5,
 	})
-	UIKit.padding(banner, 6, 8, 6, 16)
-	UIKit.list(banner, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) })
-	bannerText = UIKit.Role(banner, "Body", "", { Name = "Text", LayoutOrder = 1, Size = UDim2.new(1, -290, 1, 0), TextWrapped = true })
+	new("UISizeConstraint", { MaxSize = Vector2.new(NOTICE_WIDTH, NOTICE_HEIGHT) }, banner)
+	UIKit.padding(banner, 4, 8, 4, 10)
+	UIKit.list(banner, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) })
+	bannerText = UIKit.Role(banner, "Body", "", { Name = "Text", LayoutOrder = 1, Size = UDim2.new(1, -(GO_WIDTH + STAY_WIDTH + 16), 1, 0), TextWrapped = true, TextSize = 15 })
 	UIKit.Button(banner, {
 		Kind = "Primary",
 		Title = "GO NOW",
 		Name = "GoNow",
-		Size = UDim2.fromOffset(140, Theme.Size.TapMin),
+		Size = UDim2.fromOffset(GO_WIDTH, Theme.Size.TapMin),
 		LayoutOrder = 2,
 		OnClick = function()
 			Remotes.Get("TravelHome"):FireServer("Go")
@@ -97023,7 +97702,7 @@ local function build()
 		Kind = "Secondary",
 		Title = "STAY",
 		Name = "Stay",
-		Size = UDim2.fromOffset(120, Theme.Size.TapMin),
+		Size = UDim2.fromOffset(STAY_WIDTH, Theme.Size.TapMin),
 		LayoutOrder = 3,
 		OnClick = function()
 			Remotes.Get("TravelHome"):FireServer("Stay")
@@ -97031,6 +97710,7 @@ local function build()
 	})
 
 	gui.Parent = player:WaitForChild("PlayerGui")
+	noticeGui.Parent = player:WaitForChild("PlayerGui")
 	fit()
 	local cam = workspace.CurrentCamera
 	if cam then
@@ -97084,7 +97764,7 @@ local function update(state: Configuration, t: number)
 	local bannerOn = not show and not resultsOpen and type(left) == "number" and player:GetAttribute("InRun") ~= true
 	banner.Visible = bannerOn
 	if bannerOn then
-		bannerText.Text = string.format("Main lobby in %ds", left)
+		bannerText.Text = string.format("Return to lobby in %ds", left)
 	end
 end
 
@@ -97109,6 +97789,16 @@ end
 function TravelOverlay.Covering(): boolean
 	local travel = player:GetAttribute("Travel")
 	return travel == "ToRun" or travel == "ToLobby"
+end
+
+-- Vertical room (in pixels, bottom of the screen) a menu panel must leave clear while the
+-- go-home notice shows; 0 when it is hidden.
+function TravelOverlay.NoticeReserve(): number
+	local left = player:GetAttribute("TravelHomeIn")
+	if type(left) == "number" and player:GetAttribute("InRun") ~= true and not resultsOpen then
+		return NOTICE_HEIGHT + 24
+	end
+	return 0
 end
 
 -- Preview / tests: the cover's and banner's current state.
@@ -99879,8 +100569,8 @@ function Choice.choicePillText(left: number, narrow: boolean): string
 	local s
 	if player:GetAttribute("ChoiceTimerPaused") == true then
 		s = string.format("TIMER PAUSED · %ds", secs)
-	elseif rounds and rounds > 1 and not narrow then
-		s = string.format("AUTO-PICK ALL %d IN %ds", rounds, secs)
+	elseif rounds and rounds > 1 then
+		s = string.format(narrow and "AUTO-PICK ALL %d · %ds" or "AUTO-PICK ALL %d IN %ds", rounds, secs)
 	else
 		s = string.format("AUTO-PICK IN %ds", secs)
 	end
@@ -100350,6 +101040,11 @@ local function pickAnimation(index: number)
 end
 
 local function chooseCard(index: number, input: InputObject?)
+	-- a tap that went to a card's DETAILS toggle (it sits inside the card) is never a pick
+	local t = input and input.UserInputType
+	if (t == nil or t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch) and os.clock() - (Choice.DetailsAt or 0) < 0.4 then
+		return
+	end
 	if not confirmInput(input) then
 		return
 	end
@@ -100487,7 +101182,8 @@ local function buildLevelUp()
 		Kind = "Outline",
 		Title = "REROLL",
 		Subtitle = "New cards",
-		TitleStyle = "H3",
+		TitleStyle = "Label",
+		TitleSize = 17,
 		Icon = "cycle",
 		IconSize = 26,
 		Size = UDim2.fromOffset(230, 60),
@@ -100517,7 +101213,8 @@ local function buildLevelUp()
 		Kind = "Outline",
 		Title = "SKIP",
 		Subtitle = "No card",
-		TitleStyle = "H3",
+		TitleStyle = "Label",
+		TitleSize = 17,
 		Icon = "skip",
 		IconSize = 26,
 		Size = UDim2.fromOffset(230, 60),
@@ -100606,7 +101303,7 @@ function Choice.cardFootH(): number
 end
 -- "CHOOSE YOUR UPGRADE" at the biggest size that fits the screen width.
 function Choice.titleSize(): number
-	local base = UIKit.IsCompact() and 34 or 46
+	local base = UIKit.IsCompact() and 28 or 38
 	local fit = (virtualSize().X - 2 * margin()) / (19 * 0.8) / (UIKit.IsCompact() and Theme.TextScaleCompact or 1)
 	return math.max(18, math.min(base, math.floor(fit)))
 end
@@ -100678,10 +101375,22 @@ function Choice.detailsHeight(details: string?, w: number): number
 	return size * lines + 4
 end
 
+-- A landscape card keeps its face short: icon, name, the one-sentence effect, the main
+-- change and the goals (synergy, evolution). The longer explanation, the later levels and
+-- every stat row sit behind a small DETAILS toggle (Choice.moreH tall, just above CHOOSE).
+function Choice.hasMore(c): boolean
+	local _, stats, changes, details = cardContent(c)
+	return details ~= nil or #changes > 0 or #stats > 0
+end
+function Choice.moreH(): number
+	return UIKit.IsCompact() and 30 or 32
+end
+
 -- Height of the evolution hint under the rows (two wrapped lines; it keeps its room on
 -- phones, where a stat row gives way: the description line already sums up the gain).
 local function hintHeight(): number
-	return TS(13) * 2 + 6
+	-- phones in landscape: one line that shrinks to fit, so the synergy line keeps its room too
+	return Choice.compactLandscape() and TS(13) + 10 or TS(13) * 2 + 6
 end
 
 -- The boxed highlight: shorter on phones.
@@ -100691,13 +101400,13 @@ end
 
 -- Height a landscape card needs for everything but its art panel.
 local function cardNeeds(c, w: number): number
-	local desc, stats, changes, details = cardContent(c)
+	local desc, _, changes = cardContent(c)
 	local h = CARD.Inset + 8 + Choice.cardNameH() + (desc and descHeight(desc, w, c) + 6 or 0) + 4
-	h += details and Choice.detailsHeight(details, w) + 4 or 0
 	if #changes > 0 then
-		h += boxHeight() + 6 + (#changes - 1) * (CARD.Row - 2)
-	else
-		h += #stats * CARD.Row
+		h += boxHeight() + 6
+	end
+	if Choice.hasMore(c) then
+		h += Choice.moreH() + 6
 	end
 	if c.Synergy then
 		h += CARD.Syn + 10
@@ -100706,6 +101415,16 @@ local function cardNeeds(c, w: number): number
 		h += hintHeight() + 2
 	end
 	return h + 10 + Choice.cardFootH() + CARD.FootPad
+end
+
+-- What a card of height h leaves for its art panel; under Choice.artMin the before/after
+-- box gets dropped (short phone cards), so its room goes to the picture instead.
+function Choice.cardSpare(c, w: number, h: number): number
+	local spare = h - cardNeeds(c, w)
+	if spare < Choice.artMin() and #select(3, cardContent(c)) > 0 then
+		spare += boxHeight() + 6
+	end
+	return spare
 end
 
 -- The art panel's height: what it would like, and the least it keeps before rows give way.
@@ -101038,6 +101757,132 @@ function Choice.roleChip(parent: GuiObject, c): TextLabel?
 end
 
 --[[
+	The DETAILS toggle of a landscape card and the panel it opens over the card's upper part
+	(art, name, effect): the longer explanation (other gains, what it boosts, later levels)
+	and every stat row (each change From → To, or a NEW weapon's starting stats). The toggle
+	is its own button inside the card: a tap on it opens / closes the panel and never picks
+	the card (chooseCard ignores taps for a moment after it, Choice.DetailsAt). Not a
+	gamepad stop (the selection stays card to card; A still picks). Which cards are open is
+	kept per offer (Choice.DetailsOpen), so a relayout keeps them.
+]]
+function Choice.detailsToggle(face: GuiObject, c, index: number, pad: number, y: number, w: number, top: number, bottom: number)
+	local _, stats, changes, details = cardContent(c)
+	local th = Choice.moreH()
+	local toggle = new("TextButton", {
+		Name = "DetailsToggle",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundColor3 = P.slate_950,
+		BackgroundTransparency = 0.5,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, y),
+		Size = UDim2.fromOffset(math.min(w - 2 * pad, 150), th),
+		Selectable = false,
+		ZIndex = 45,
+	}, face)
+	UIKit.corner(toggle, 999)
+	UIKit.stroke(toggle, P.slate_500, 1, 0.4)
+	local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 45 }, toggle)
+	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) })
+	local word = text(row, "Caption", "DETAILS", { Size = UDim2.fromOffset(0, th), AutomaticSize = Enum.AutomaticSize.X, TextColor3 = P.ivory_300, LayoutOrder = 1, ZIndex = 45 }, 12)
+	word:SetAttribute("NoTextFit", true)
+	local chevron = Icons.Draw(row, "chevronRight", { Size = 14, Color = P.gold_300 })
+	chevron.LayoutOrder = 2
+	chevron.Rotation = 90
+
+	local panel = new("Frame", {
+		Name = "DetailsPanel",
+		BackgroundColor3 = P.slate_950,
+		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
+		-- under the card's tab (kind + level stay readable while it is open)
+		Position = UDim2.fromOffset(top, CARD.TabH + 4),
+		Size = UDim2.new(1, -2 * top, 0, math.max(40, bottom - CARD.TabH - 4)),
+		Visible = false,
+		Active = false,
+		ZIndex = 44,
+	}, face)
+	UIKit.corner(panel, Theme.Radius.L - 2)
+	UIKit.stroke(panel, P.gold_500, 1, 0.5)
+	local scroll = new("ScrollingFrame", {
+		Name = "Body",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, 6),
+		Size = UDim2.new(1, 0, 1, -12),
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = P.gold_400,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ElasticBehavior = Enum.ElasticBehavior.Never,
+		Selectable = false,
+		ZIndex = 44,
+	}, panel)
+	local inner = w - 2 * top
+	local px, rw = pad - top, inner - 2 * (pad - top)
+	local yy = 4
+	text(scroll, "Caption", UIKit.track(string.upper(tostring(c.Name))), { Position = UDim2.fromOffset(px, yy), Size = UDim2.new(1, -2 * px, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 44 }, 12)
+	yy += TS(12) + 10
+	if details then
+		local size = TS(13)
+		local lines = math.max(1, math.ceil((utf8.len(details) or #details) * size * 0.5 / math.max(1, rw)) + 1)
+		local dh = lines * (size + 2) + 4
+		local dl = text(scroll, "Small", details, {
+			Name = "Details",
+			Position = UDim2.fromOffset(px, yy),
+			Size = UDim2.new(1, -2 * px, 0, dh),
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextWrapped = true,
+			TextColor3 = P.ivory_200,
+			ZIndex = 44,
+		}, 13)
+		Choice.fit(dl, dl.TextSize, 9, true)
+		yy += dh + 6
+	end
+	if #changes > 0 then
+		for _, line in ipairs(changes) do
+			yy += statRow(scroll, c, line, px, yy, rw, CARD.Row - 2, changeValue(line))
+		end
+	else
+		for _, line in ipairs(stats) do
+			yy += statRow(scroll, c, line, px, yy, rw, CARD.Row - 2, tostring(line.To))
+		end
+	end
+	scroll.CanvasSize = UDim2.fromOffset(0, yy + 4)
+	for _, d in ipairs(scroll:GetDescendants()) do
+		if d:IsA("GuiObject") then
+			d.ZIndex = math.max(d.ZIndex, 44)
+		end
+	end
+
+	local function setOpen(on: boolean)
+		panel.Visible = on
+		chevron.Rotation = on and -90 or 90
+		word.Text = on and "CLOSE" or "DETAILS"
+		Choice.DetailsOpen = Choice.DetailsOpen or {}
+		Choice.DetailsOpen[index] = on or nil
+	end
+	setOpen(Choice.DetailsOpen ~= nil and Choice.DetailsOpen[index] == true)
+	local function mark()
+		Choice.DetailsAt = os.clock()
+	end
+	toggle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			mark()
+		end
+	end)
+	toggle.MouseButton1Down:Connect(mark)
+	toggle.Activated:Connect(function()
+		mark()
+		if offerOpen then
+			setOpen(not panel.Visible)
+		end
+	end)
+	return toggle
+end
+
+--[[
 	One card (approved screen 04). Landscape (tall): a sculpted slate frame with corner gems;
 	a tab with the card kind and rank change ("NEW PASSIVE", "UPGRADE · LV 1 → 2", "FINAL
 	UPGRADE · LV 11 → 12"); the art panel; the serif name; the one-line effect; the boxed main
@@ -101307,12 +102152,11 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 		}, 16)
 
 		-- the art panel takes what the text leaves (between Choice.artMin and Choice.artPref)
-		local needs = cardNeeds(c, w)
-		local spare = h - needs
-		if spare < Choice.artMin() and #select(3, cardContent(c)) > 0 then
-			-- the before/after box will not fit even with the smallest picture (short phone
-			-- cards): it gets dropped below, so its room goes to the picture instead
-			spare += boxHeight() + 6
+		-- one art height for every card of the offer (the busiest card decides), so the
+		-- names, effects and goals line up across the three cards
+		local spare = Choice.cardSpare(c, w, h)
+		for _, other in ipairs(lastOffer and lastOffer.Choices or {}) do
+			spare = math.min(spare, Choice.cardSpare(other, w, h))
 		end
 		local artH = math.clamp(spare, Choice.artMin(), Choice.artPref(w))
 		local y = CARD.Inset
@@ -101363,57 +102207,23 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 			Choice.fit(dl, dl.TextSize, 10, true)
 			y += dh + 6
 		end
-		if details then
-			-- the small muted details line under the benefit sentence
-			local hh = Choice.detailsHeight(details, w)
-			local dt = text(face, "Small", details, {
-				Name = "Details",
-				Position = UDim2.fromOffset(pad, y - 2),
-				Size = UDim2.new(1, -2 * pad, 0, hh),
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextWrapped = true,
-				TextColor3 = P.ivory_300,
-				TextTransparency = 0.15,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				ZIndex = 2,
-			}, Choice.detailsSize())
-			Choice.fit(dt, dt.TextSize, 9, not Choice.compactLandscape())
-			y += hh + 4
-		end
 		y += 4
-		-- top-down under the effect: the rows (what the card does comes first), then the
-		-- synergy bar and the evolution hint while they fit above the plate
-		local bottom = footY - 8
+		-- top-down under the effect: the main change box, then the synergy bar and the
+		-- evolution hint while they fit above the DETAILS toggle and the plate
+		local more = Choice.hasMore(c)
+		local moreY = footY - (more and Choice.moreH() + 6 or 0)
+		local bottom = moreY - 6
 		local rw = w - 2 * pad
-		-- the synergy bar and the evolution hint keep their room (rows that do not fit are
-		-- dropped instead: the effect line already sums up the gain)
+		-- the synergy bar and the evolution hint keep their room (the box gives way: the
+		-- effect line already sums up the gain, and DETAILS lists every change)
 		local synRoom = c.Synergy and CARD.Syn + 8 or 0
 		local hintRoom = c.Hint and hintHeight() + 4 or 0
 		local function fits(hh: number): boolean
 			return y + hh <= bottom - synRoom - hintRoom
 		end
-		if #changes > 0 then
-			local start = 1
-			if fits(boxHeight()) then
-				changeBox(face, c, changes[1], pad, y, rw)
-				y += boxHeight() + 6
-				start = 2
-			end
-			for i = start, #changes do
-				if not fits(CARD.Row - 2) then
-					break
-				end
-				y += statRow(face, c, changes[i], pad, y, rw, CARD.Row - 2, changeValue(changes[i]))
-			end
-		else
-			-- slimmer rows on phones in landscape, so a NEW weapon keeps its third stat
-			local rowH = Choice.compactLandscape() and CARD.Row - 4 or CARD.Row
-			for _, line in ipairs(stats) do
-				if not fits(rowH) then
-					break
-				end
-				y += statRow(face, c, line, pad, y, rw, rowH, tostring(line.To))
-			end
+		if #changes > 0 and fits(boxHeight()) then
+			changeBox(face, c, changes[1], pad, y, rw)
+			y += boxHeight() + 6
 		end
 		synRoom = 0
 		if c.Synergy and fits(CARD.Syn + 4) then
@@ -101432,6 +102242,13 @@ local function makeCard(c, index: number, count: number, animate: boolean)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 				TextColor3 = c.HintReady and P.gold_300 or P.gold_200,
 			}, 13), c)
+			local hintLabel = face:FindFirstChild("Hint")
+			if hintLabel and hintLabel:IsA("TextLabel") and Choice.compactLandscape() and not hintLabel:FindFirstChild("Fit") then
+				Choice.fit(hintLabel, hintLabel.TextSize, 8, true)
+			end
+		end
+		if more then
+			Choice.detailsToggle(face, c, index, pad, moreY, w, CARD.Inset, moreY - 6)
 		end
 	end
 
@@ -101649,6 +102466,7 @@ local function showOffer(offer)
 	offerArm.Revealed = false
 	offerArm.At = math.huge
 	offerArm.ShownAt = math.huge
+	Choice.DetailsOpen = {} -- new cards: every DETAILS panel starts closed
 	clearCards()
 	local rerolls, skips = tonumber(offer.Rerolls) or 0, tonumber(offer.Skips) or 0
 	local rerollMax, skipMax = tonumber(offer.RerollsMax) or rerolls, tonumber(offer.SkipsMax) or skips
@@ -102696,6 +103514,8 @@ end
 ------------------------------------------------------------------------------------------
 
 local pause: { [string]: any } = {}
+-- spacing of the settings option stacks (top padding, gap between rows, sides, bottom)
+local COLUMN = { Top = 4, Gap = 8, Side = 18, Bottom = 4 }
 
 -- Total height of a list's children (offset sizes) plus the gaps between them.
 local function stackHeight(frame: Instance, gap: number): number
@@ -102710,8 +103530,8 @@ local function stackHeight(frame: Instance, gap: number): number
 end
 
 -- The tallest cut (<= h, >= floor) through the stacked settings columns that splits no
--- row: the columns' rows laid out as their UIListLayout does (COLUMN_PAD - 4 on top, 6
--- between). Returns h when there is no such cut.
+-- row: the columns' rows laid out as their UIListLayout does (COLUMN.Top on top,
+-- COLUMN.Gap between). Returns h when there is no such cut.
 local function snapToRows(cols: { Frame }, h: number, floor: number): number
 	local rows: { { number } } = {}
 	for _, col in ipairs(cols) do
@@ -102724,10 +103544,10 @@ local function snapToRows(cols: { Frame }, h: number, floor: number): number
 		table.sort(list, function(a, b)
 			return a.LayoutOrder < b.LayoutOrder
 		end)
-		local y = col.Position.Y.Offset + 12
+		local y = col.Position.Y.Offset + COLUMN.Top
 		for _, ch in ipairs(list) do
 			table.insert(rows, { y, y + ch.Size.Y.Offset })
-			y += ch.Size.Y.Offset + 6
+			y += ch.Size.Y.Offset + COLUMN.Gap
 		end
 	end
 	local best = nil
@@ -102750,32 +103570,32 @@ local function snapToRows(cols: { Frame }, h: number, floor: number): number
 	return best or h
 end
 
--- A settings column heading: serif caps in gold over a hairline.
+-- A small heading over a group of secondary settings: muted caps over a hairline (no card).
 local function sectionCaption(parent: Instance, str: string, order: number)
-	local h = TS(18) + 14
+	local h = TS(13) + 12
 	local f = new("Frame", { Name = "Heading", BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.new(1, 0, 0, h) }, parent)
-	text(f, "H3", string.upper(str), { Size = UDim2.new(1, 0, 1, -6), TextColor3 = P.gold_200 })
+	text(f, "Caption", string.upper(str), { Size = UDim2.new(1, 0, 1, -4), TextYAlignment = Enum.TextYAlignment.Bottom }, 13)
 	UIKit.Hairline(f, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) })
 end
 
--- The settings columns sit on charcoal cards with a thin gold edge (COLUMN_PAD inside).
-local COLUMN_PAD = 16
-local function settingsColumn(parent: Instance, name: string): Frame
-	local col = new("Frame", { Name = name, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, Size = UDim2.fromOffset(300, 300) }, parent)
-	UIKit.corner(col, Theme.Radius.M)
-	UIKit.stroke(col, P.gold_500, 1, 0.6)
-	UIKit.padding(col, COLUMN_PAD - 4, COLUMN_PAD, COLUMN_PAD, COLUMN_PAD)
-	UIKit.list(col, { Padding = UDim.new(0, 6) })
+-- The settings columns are plain stacks (no card); the side padding keeps the slider
+-- knobs (half a knob past the track's ends) inside the scroll clip.
+local function settingsColumn(parent: Instance, name: string, side: number?): Frame
+	local col = new("Frame", { Name = name, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromOffset(300, 300) }, parent)
+	UIKit.padding(col, COLUMN.Top, side or COLUMN.Side, COLUMN.Bottom, side or COLUMN.Side)
+	UIKit.list(col, { Padding = UDim.new(0, COLUMN.Gap) })
 	return col
 end
 
--- One line under the options: where settings live and whether saving works right now.
+-- One line under the options: whether saving works right now. Every change applies at
+-- once and ClientSettings.Set sends it to the server (SaveSettings, debounced), so with a
+-- working save "Changes save automatically." is the truth.
 local function settingsNote(): string
 	local status = player:GetAttribute("SaveStatus")
 	if status == "failing" or status == "memory" then
 		return "Progress isn't being saved right now, so changes may not be kept."
 	end
-	return "Settings are saved with your progress."
+	return "Changes save automatically."
 end
 
 -- An enum setting's value as words: "RightHanded" → "RIGHT HANDED".
@@ -102787,26 +103607,29 @@ end
 local pauseMode = "Settings" -- "Settings" (lobby) | "RunSettings" (opened from the run menu)
 
 local function buildPause()
-	local m = UIKit.Modal(root, "Pause", 760, 470, Theme.Z.Pause)
+	-- A compact centred modal: "Settings" (modest serif) + close X, Music and Effects as
+	-- one tidy row each, the other options in plain stacks below them (one scroll), the
+	-- save note and one button (DONE in the lobby, BACK to the run menu during a run).
+	local m = UIKit.Modal(root, "Pause", 640, 470, Theme.Z.Pause)
 	pause.Overlay = m.Overlay
 	pause.Modal = m
 	local content = m.Content
 	fitModal(m, UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center }))
-	pause.Title = text(content, "H1", "PAUSED", { LayoutOrder = 1, TextXAlignment = Enum.TextXAlignment.Center })
-	UIKit.Divider(content, 220, { LayoutOrder = 2 })
+	pause.Title = text(content, "H2", "Settings", { LayoutOrder = 1, TextXAlignment = Enum.TextXAlignment.Center }, 28)
+	UIKit.Divider(content, 200, { LayoutOrder = 2 })
 	pause.Note = text(content, "Body", "", {
-		LayoutOrder = 3,
+		LayoutOrder = 5,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = true,
 		TextColor3 = C.TextMuted,
-		Size = UDim2.new(1, 0, 0, TS(16) + 8),
-	})
+		Size = UDim2.new(1, 0, 0, TS(15) + 8),
+	}, 15)
 
-	-- options: sound sliders (left) and comfort / help switches (right); one column and a
-	-- scroll on narrow or short screens
+	-- options: Music and Effects first (full width), then the other sound options (left)
+	-- and comfort / help (right); one column on narrow screens, one scroll when short
 	local options = new("ScrollingFrame", {
 		Name = "Options",
-		LayoutOrder = 4,
+		LayoutOrder = 3,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 300),
@@ -102817,17 +103640,30 @@ local function buildPause()
 		ElasticBehavior = Enum.ElasticBehavior.Never,
 	}, content)
 	pause.Options = options
+	local primary = settingsColumn(options, "Main", 2) -- the wells pad their own sliders
 	local colA = settingsColumn(options, "Sound")
 	local colB = settingsColumn(options, "Comfort")
-	pause.ColA, pause.ColB = colA, colB
+	pause.Primary, pause.ColA, pause.ColB = primary, colA, colB
 
-	sectionCaption(colA, "Sound", 1)
-	pause.Music = UIKit.Slider(colA, "Music", "music", ClientSettings.Get("Music"), function(v)
+	-- Music / Effects: a dark well each (icon, label, percentage, slim slider); values
+	-- apply while dragging (ClientSettings.Set) and save a moment after the last change
+	local function well(order: number, height: number): Frame
+		local w = new("Frame", { Name = "Well", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.35, BorderSizePixel = 0, LayoutOrder = order, Size = UDim2.new(1, 0, 0, height + 20) }, primary)
+		UIKit.corner(w, Theme.Radius.M)
+		UIKit.stroke(w, P.slate_600, 1, 0.5)
+		UIKit.padding(w, 8, 18, 10, 16)
+		return w
+	end
+	-- the slider's frame ends just under its track (its touch strip still reaches below)
+	local slim = { Size = UDim2.new(1, 0, 0, 58) }
+	pause.Music = UIKit.Slider(well(1, 58), "Music", "music", ClientSettings.Get("Music"), function(v)
 		ClientSettings.Set("Music", v)
-	end, function() end, { LayoutOrder = 2 })
-	pause.Sfx = UIKit.Slider(colA, "Effects", "speaker", ClientSettings.Get("Sfx"), function(v)
+	end, function() end, slim)
+	pause.Sfx = UIKit.Slider(well(2, 58), "Effects", "speaker", ClientSettings.Get("Sfx"), function(v)
 		ClientSettings.Set("Sfx", v)
-	end, function() end, { LayoutOrder = 3 })
+	end, function() end, slim)
+
+	sectionCaption(colA, "More sound", 1)
 	pause.ChannelSliders = {}
 	for i, option in ipairs({ { "CombatVolume", "Combat" }, { "InterfaceVolume", "Interface" }, { "WarningVolume", "Warnings" } }) do
 		local key = option[1]
@@ -102914,7 +103750,7 @@ local function buildPause()
 
 	-- one button: DONE (lobby SETTINGS) / BACK (settings opened from the run menu). The run
 	-- menu itself (resume, build, leave) is the side drawer below (buildRunMenu).
-	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 5, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
+	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, LayoutOrder = 6, Size = UDim2.new(1, 0, 0, Theme.Size.Button) }, content)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12) })
 	pause.Resume = UIKit.Button(row, {
 		Kind = "Primary",
@@ -102941,39 +103777,45 @@ local function buildPause()
 	})
 	local function layoutOptions()
 		local v = virtualSize()
-		local w = tallModalWidth(760)
+		local w = tallModalWidth(640)
 		m.Panel.Size = UDim2.new(UDim.new(0, w), m.Panel.Size.Y)
 		local inner = w - 2 * Theme.Space.XL
 		local twoCol = inner >= 540 and not (UIKit.IsCompact() and v.Y > v.X)
-		local gap = 20
-		local side = 2 -- the columns' padding keeps the slider knobs inside the scroll clip
-		local colW = twoCol and math.floor((inner - gap - 2 * side) / 2) or (inner - 2 * side)
-		local hA, hB = stackHeight(colA, 6) + 2 * COLUMN_PAD - 4, stackHeight(colB, 6) + 2 * COLUMN_PAD - 4
+		local gap = 12
+		local colW = twoCol and math.floor((inner - gap) / 2) or inner
+		local function height(col: Frame): number
+			return stackHeight(col, COLUMN.Gap) + COLUMN.Top + COLUMN.Bottom
+		end
+		local hP, hA, hB = height(primary), height(colA), height(colB)
 		if twoCol then
-			hA = math.max(hA, hB) -- two cards of one height
+			hA = math.max(hA, hB) -- two stacks of one height
 			hB = hA
 		end
+		primary.Size = UDim2.fromOffset(inner, hP)
+		primary.Position = UDim2.fromOffset(0, 0)
 		colA.Size = UDim2.fromOffset(colW, hA)
 		colB.Size = UDim2.fromOffset(colW, hB)
-		colA.Position = UDim2.fromOffset(side, 0)
-		colB.Position = twoCol and UDim2.fromOffset(side + colW + gap, 0) or UDim2.fromOffset(side, hA + 18)
-		local contentH = (twoCol and math.max(hA, hB) or (hA + 18 + hB)) + 6
+		local top = hP + 10
+		colA.Position = UDim2.fromOffset(0, top)
+		colB.Position = twoCol and UDim2.fromOffset(colW + gap, top) or UDim2.fromOffset(0, top + hA + 12)
+		local contentH = top + (twoCol and hA or (hA + 12 + hB)) + 6
 		-- the note takes as many lines as its text needs (rough: ~0.5 em per character)
-		local perLine = math.max(10, math.floor(inner / (TS(16) * 0.5)))
+		local perLine = math.max(10, math.floor(inner / (TS(15) * 0.5)))
 		local lines = math.clamp(math.ceil(#pause.Note.Text / perLine), 1, 3)
-		pause.Note.Size = UDim2.new(1, 0, 0, lines * (TS(16) + 2) + 6)
+		pause.Note.Size = UDim2.new(1, 0, 0, lines * (TS(15) + 2) + 6)
 		-- what the rest of the panel takes: title, divider, note, buttons, gaps, padding
-		local fixed = (TS(30) + 6) + 10 + pause.Note.Size.Y.Offset + Theme.Size.Button + 4 * 10 + 2 * Theme.Space.XL + 8
+		local fixed = (TS(28) + 6) + 10 + pause.Note.Size.Y.Offset + Theme.Size.Button + 4 * 10 + 2 * Theme.Space.XL + 8
 		local room = math.max(160, v.Y - 24 - fixed)
-		local h = math.min(contentH, room)
+		-- compact: Music and Effects plus a look at the next options; the rest scrolls
+		local h = math.min(contentH, room, top + 230)
 		if contentH > h + 1 then
 			-- the scroll edge falls between rows, not through a title or its description
-			h = snapToRows({ colA, colB }, h, math.max(140, h - 140))
+			h = snapToRows({ primary, colA, colB }, h, math.max(140, h - 140))
 		end
 		options.Size = UDim2.new(1, 0, 0, h)
 		options.CanvasSize = UDim2.fromOffset(0, contentH)
 		options.ScrollBarThickness = contentH > h + 1 and 4 or 0
-		pause.Resume.Instance.Size = UDim2.fromOffset(math.clamp(inner, 120, 240), Theme.Size.Button)
+		pause.Resume.Instance.Size = UDim2.fromOffset(math.clamp(inner, 120, 220), Theme.Size.Button)
 	end
 	pause.Layout = layoutOptions
 	onRelayout(layoutOptions)
@@ -103525,7 +104367,7 @@ function UIBuilder.OpenRunSettings()
 		hide(runMenu.Overlay, "Pause")
 	end
 	pauseMode = "RunSettings"
-	pause.Title.Text = "SETTINGS"
+	pause.Title.Text = "Settings"
 	pause.Resume.SetText("BACK")
 	pause.Resume.SetIcon("chevronLeft")
 	pause.Note.Text = runMenu.menuFreezesRun() and settingsNote() or ("Game not paused, you can be hit. " .. settingsNote())
@@ -103544,7 +104386,7 @@ function UIBuilder.OpenSettings()
 		return
 	end
 	pauseMode = "Settings"
-	pause.Title.Text = "SETTINGS"
+	pause.Title.Text = "Settings"
 	pause.Resume.SetText("DONE")
 	pause.Resume.SetIcon("check")
 	pause.Note.Text = settingsNote()
@@ -107277,7 +108119,7 @@ function UIKit.ScrollHint(sf: ScrollingFrame)
 		}, overlay)
 		corner(b, 10)
 		stroke(b, P.gold_400, 1.5, 0.1)
-		local g = Icons.Draw(b, "chevronRight", { Size = 14, Color = P.gold_300 })
+		local g = Icons.Draw(b, "chevronRight", { Size = 12, Color = P.gold_300 })
 		g.AnchorPoint = Vector2.new(0.5, 0.5)
 		g.Position = UDim2.fromScale(0.5, 0.5)
 		g.Rotation = rotation
@@ -107308,17 +108150,18 @@ function UIKit.ScrollHint(sf: ScrollingFrame)
 		if horizontal then
 			more = at.X * k + window.X < canvas.X - 4
 			back = at.X > 4
-			down.AnchorPoint, down.Position = Vector2.new(1, 0.5), UDim2.new(1, -2, 0.5, 0)
-			up.AnchorPoint, up.Position = Vector2.new(0, 0.5), UDim2.new(0, 2, 0.5, 0)
-			down.Size, up.Size = UDim2.fromOffset(20, 30), UDim2.fromOffset(20, 30)
+			down.AnchorPoint, down.Position = Vector2.new(0.5, 0.5), UDim2.new(1, 0, 0.5, 0)
+			up.AnchorPoint, up.Position = Vector2.new(0.5, 0.5), UDim2.new(0, 0, 0.5, 0)
+			down.Size, up.Size = UDim2.fromOffset(16, 26), UDim2.fromOffset(16, 26)
 			downGlyph.Rotation = 0
 			upGlyph.Rotation = 180
 		else
 			more = at.Y * k + window.Y < canvas.Y - 4
 			back = at.Y > 4
-			down.AnchorPoint, down.Position = Vector2.new(0.5, 1), UDim2.new(0.5, 0, 1, -2)
-			up.AnchorPoint, up.Position = Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 2)
-			down.Size, up.Size = UDim2.fromOffset(30, 20), UDim2.fromOffset(30, 20)
+			-- on the frame's edge (half outside), small: inside it covered the last row's text
+			down.AnchorPoint, down.Position = Vector2.new(0.5, 0.5), UDim2.new(0.5, 0, 1, 0)
+			up.AnchorPoint, up.Position = Vector2.new(0.5, 0.5), UDim2.new(0.5, 0, 0, 0)
+			down.Size, up.Size = UDim2.fromOffset(26, 16), UDim2.fromOffset(26, 16)
 			downGlyph.Rotation = 90
 			upGlyph.Rotation = -90
 		end

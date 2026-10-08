@@ -156,6 +156,13 @@ steal, leave retries, migration pcall, unsaveable values), pass lookups, receipt
 arena checked per starter, level-up needs the offer id, merchant refund, client pcall boot, perf (rect cache, shared
 enemy body list, client light flicker), held-feature titles/looks hidden. Regressions 226/226 (held StarterBundle /
 GroupBonus / InviteRewards checks left out). Owner decisions open: audit section 3.
+Declutter + menu redesign batch (2026-10-08, offline only, NOT Studio-tested): own name plate hidden
+everywhere; HUD: one-row ability panel with the level/XP row on it, timer beside it at the bottom (landscape),
+top-left vitals panel hidden (owner); danger arrows boss/champion only (max 2); slim chest reward toast;
+evolution recipe on weapon cards only once started (HintStarted). Owner reference screens rebuilt: Settings
+(compact modal), Party, Daily Challenge (+ travel notice in its own corner), Upgrade cards (DETAILS toggle,
+"AUTO-PICK ALL N"), Arenas, Play tab (one panel, SOLO/DUO/TRIO tabs, 2-column rows). Forest arena polish
+(Config.Arenas.Dressing, "ArenaDressing" folder, lawn/soil palette; ~24% more parts; grass may read dark).
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,
