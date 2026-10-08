@@ -67,7 +67,7 @@ end
 -- Tones stay one step from the floor so creatures and gems keep their contrast.
 ------------------------------------------------------------------------------------------
 
-type Kind = { K: string, W: number, C: { Color3 }, S: number } -- weight, colours, size mult
+type Kind = { K: string, W: number, C: { Color3 }, S: number, M: Enum.Material? } -- weight, colours, size mult, material (default SmoothPlastic)
 type Recipe = { Density: number, Kinds: { Kind }, Total: number }
 
 local function recipe(density: number, kinds: { Kind }): Recipe
@@ -79,11 +79,13 @@ local function recipe(density: number, kinds: { Kind }): Recipe
 end
 
 local RECIPES: { [string]: Recipe } = {
+	-- Forest (owner's meadow reference): tufts in related greens around the lawn floor, white
+	-- and buttercup flowers, moss / clover discs on the floor's Grass material, few pebbles
 	Forest = recipe(1.0, {
-		{ K = "Tuft", W = 48, C = { mix(P.meadow_600, P.meadow_700, 0.3), P.meadow_600, mix(P.meadow_300, P.meadow_200, 0.3) }, S = 1 },
-		{ K = "Flower", W = 11, C = { P.ivory_100, P.ivory_100, P.gold_300 }, S = 1 },
-		{ K = "Disc", W = 17, C = { mix(P.meadow_600, P.fen_500, 0.4), mix(P.meadow_400, P.meadow_300, 0.5) }, S = 1 },
-		{ K = "Pebble", W = 6, C = { P.stone_400, P.stone_300 }, S = 1 },
+		{ K = "Tuft", W = 48, C = { P.lawn_600, mix(P.lawn_500, P.lawn_olive, 0.4), P.lawn_400, P.lawn_700 }, S = 1 },
+		{ K = "Flower", W = 10, C = { P.ivory_100, P.ivory_100, P.bloom_yellow }, S = 1 },
+		{ K = "Disc", W = 10, C = { mix(P.lawn_500, P.lawn_600, 0.5), mix(P.lawn_500, P.lawn_olive, 0.3) }, S = 1.2, M = Enum.Material.Grass },
+		{ K = "Pebble", W = 5, C = { P.stone_400, P.stone_300 }, S = 1 },
 	}),
 	Ruins = recipe(0.85, {
 		{ K = "Tuft", W = 44, C = { P.meadow_600, mix(P.meadow_600, P.meadow_700, 0.4), mix(P.meadow_300, P.meadow_400, 0.5) }, S = 1 },
@@ -308,7 +310,7 @@ local function frac(a: Ctx, cx: number, cz: number, slot: number): number
 	return (h % 1000003) / 1000003
 end
 
-type Piece = { Kind: Kind, CF: CFrame, Size: Vector3, Color: Color3, Shape: Enum.PartType }
+type Piece = { Kind: Kind, CF: CFrame, Size: Vector3, Color: Color3, Shape: Enum.PartType, Material: Enum.Material? }
 
 local function pickKind(a: Ctx, roll: number): Kind
 	local acc = roll * a.Recipe.Total
@@ -340,7 +342,7 @@ local function makePiece(a: Ctx, kind: Kind, x: number, z: number, r1: number, r
 		local d = (0.7 + r3 * 0.8) * s
 		-- an upright-axis cylinder: Size.X is the thickness
 		local cf = CFrame.new(wx, FLOOR_Y + 0.1 - 0.03, wz) * CFrame.Angles(0, yaw, math.rad(90))
-		return { Kind = kind, CF = cf, Size = Vector3.new(0.06, d, d), Color = kind.C[1 + math.floor(r2 * #kind.C) % #kind.C], Shape = Enum.PartType.Cylinder }
+		return { Kind = kind, CF = cf, Size = Vector3.new(0.06, d, d), Color = kind.C[1 + math.floor(r2 * #kind.C) % #kind.C], Shape = Enum.PartType.Cylinder, Material = kind.M }
 	end
 	local size = Vector3.new((0.5 + r3 * 0.35) * s, 0.32 * s, (0.4 + r2 * 0.3) * s)
 	local cf = CFrame.new(wx, FLOOR_Y + 0.06 + size.Y * 0.3, wz) * CFrame.Angles(0.15, yaw, 0.1)
@@ -354,14 +356,29 @@ end
 -- Same pool and the same deterministic cells as the rest; only cells on a path get them.
 ------------------------------------------------------------------------------------------
 
-type PathRecipe = { Edge: { Color3 }, EdgeChance: number, Worn: { { K: string, C: { Color3 } } }, WornChance: number }
+-- Fringe (optional): grass that grows over the soft path margin, so the edge reads
+-- gently irregular instead of a ruled line: flat grass-coloured lobes (material M, under
+-- the path core) and short tufts, FringeChance per margin sample.
+type PathRecipe = {
+	Edge: { Color3 },
+	EdgeChance: number,
+	Worn: { { K: string, C: { Color3 } } },
+	WornChance: number,
+	Fringe: { C: { Color3 }, Tuft: { Color3 }, M: Enum.Material? }?,
+	FringeChance: number?,
+}
 
 local PATH_RECIPES: { [string]: PathRecipe } = {
 	Forest = {
-		Edge = { P.stone_400, P.stone_300, mix(P.stone_400, P.moss_500, 0.3) },
-		EdgeChance = 0.75,
-		Worn = { { K = "Rut", C = { mix(P.dirt_500, P.dirt_400, 0.4) } }, { K = "Pebble", C = { P.stone_400, P.dirt_300 } }, { K = "Root", C = { P.wood_600, P.wood_700 } } },
+		-- occasional small pebbles at the margin (was a near-continuous stone line)
+		Edge = { P.stone_400, P.stone_300, mix(P.stone_400, P.soil_500, 0.3) },
+		EdgeChance = 0.18,
+		-- soft soil variation on the path: darker and lighter worn spots, a few pebbles
+		-- and an odd root (all flat or low; the path stays smooth to walk)
+		Worn = { { K = "Rut", C = { P.soil_500, mix(P.soil_400, P.soil_600, 0.35) } }, { K = "Rut", C = { P.soil_300 } }, { K = "Pebble", C = { P.stone_400, P.soil_300 } }, { K = "Root", C = { P.wood_600, P.wood_700 } } },
 		WornChance = 0.5,
+		Fringe = { C = { P.lawn_500, mix(P.lawn_500, P.lawn_600, 0.4) }, Tuft = { P.lawn_600, P.lawn_400, mix(P.lawn_500, P.lawn_olive, 0.4) }, M = Enum.Material.Grass },
+		FringeChance = 0.7,
 	},
 	Ruins = {
 		Edge = { P.pave_300, P.pave_400, P.stone_400 },
@@ -396,6 +413,7 @@ local PATH_RECIPES: { [string]: PathRecipe } = {
 }
 local PATH_KIND: Kind = { K = "Path", W = 0, C = {}, S = 1 }
 local PATH_TOP = 0.34 -- the path slabs' top above the floor (MapBuilder dirtPath)
+local FRINGE_TOP = 0.22 -- above the margin slabs (0.12 .. 0.18) and under the core (0.28+)
 
 -- Nearest path: signed distance to its outer edge and the segment's heading (radians).
 local function pathNear(a: Ctx, x: number, z: number): (number, number)
@@ -413,7 +431,7 @@ local function pathNear(a: Ctx, x: number, z: number): (number, number)
 	return best, heading
 end
 
-local function pathPiece(a: Ctx, kind: string, color: Color3, x: number, z: number, heading: number, r1: number, r2: number, out: { Piece })
+local function pathPiece(a: Ctx, kind: string, color: Color3, x: number, z: number, heading: number, r1: number, r2: number, out: { Piece }, material: Enum.Material?)
 	local wx, wz = a.CX + x, a.CZ + z
 	local y = FLOOR_Y + PATH_TOP
 	local along = CFrame.Angles(0, heading, 0) -- local Z runs along the path
@@ -446,6 +464,10 @@ local function pathPiece(a: Ctx, kind: string, color: Color3, x: number, z: numb
 		local base = CFrame.new(wx, y + 0.02, wz) * along * CFrame.Angles(0, flip + (r1 - 0.5) * 0.3, 0)
 		add(Vector3.new(0.42, 0.04, 0.75), base * CFrame.new(-0.3, 0, 0))
 		add(Vector3.new(0.42, 0.04, 0.75), base * CFrame.new(0.3, 0, 1.1))
+	elseif kind == "Fringe" then
+		-- a flat grass lobe over the margin (under the core: it only eats the margin band)
+		local d = 1.6 + r1 * 1.6
+		table.insert(out, { Kind = PATH_KIND, CF = CFrame.new(wx, FLOOR_Y + FRINGE_TOP - 0.02, wz) * CFrame.Angles(0, r2 * TAU, math.rad(90)), Size = Vector3.new(0.04, d, d), Color = color, Shape = Enum.PartType.Cylinder, Material = material })
 	elseif kind == "Track" then
 		-- two cart-wheel grooves along the path
 		local len = 4 + r1 * 3
@@ -474,7 +496,19 @@ local function pathCellPieces(a: Ctx, cx: number, cz: number, out: { Piece })
 		end
 		local pd, heading = pathNear(a, x, z)
 		local r0, r1, r2 = frac(a, cx, cz, 42 + i * 5), frac(a, cx, cz, 43 + i * 5), frac(a, cx, cz, 44 + i * 5)
-		if pd > -1.8 and pd < -0.5 then
+		local fringe = pr.Fringe
+		if fringe and pd > -1.0 and pd < 0.4 and r0 >= pr.EdgeChance and r0 < pr.EdgeChance + (pr.FringeChance or 0) then
+			if r2 < 0.6 then
+				pathPiece(a, "Fringe", fringe.C[1 + math.floor(r1 * #fringe.C) % #fringe.C], x, z, heading, r1, r2, out, fringe.M)
+			else
+				-- a short tuft leaning over the margin
+				local tuft: Kind = { K = "Tuft", W = 0, C = fringe.Tuft, S = 0.85 }
+				for blade = 1, 3 do
+					local angle = r1 * TAU + blade * 2.4
+					table.insert(out, makePiece(a, tuft, x + math.cos(angle) * 0.15, z + math.sin(angle) * 0.15, (r1 + blade * 0.27) % 1, (r2 + blade * 0.31) % 1, (r0 + blade * 0.23) % 1))
+				end
+			end
+		elseif pd > -1.8 and pd < -0.5 then
 			if r0 < pr.EdgeChance then
 				pathPiece(a, "Edge", pr.Edge[1 + math.floor(r1 * #pr.Edge) % #pr.Edge], x, z, heading, r1, r2, out)
 			end
@@ -716,6 +750,7 @@ local function update(cam: Camera)
 			p.Shape = piece.Shape
 			p.Size = piece.Size
 			p.Color = piece.Color
+			p.Material = piece.Material or Enum.Material.SmoothPlastic
 			table.insert(moveParts, p)
 			table.insert(moveCFs, piece.CF)
 			table.insert(placed, p)

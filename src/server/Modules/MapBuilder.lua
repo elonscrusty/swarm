@@ -94,6 +94,21 @@ local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- turns a Cylinder's axis (X)
 local SMOOTH = Enum.Material.SmoothPlastic
 
 local SEEDS = { Lobby = 20250, Forest = 41207, Ruins = 93011, Swamp = 52361, Snow = 63127, Desert = 74471, Lava = 85219 }
+-- environment dressing (dressArena): one folder per arena model, built once per build
+local DRESSING_FOLDER = "ArenaDressing"
+local DRESS: any = (Config.Arenas :: any).Dressing or {}
+
+-- A Roblox material by its Enum name (Config strings), or `default`.
+local function materialNamed(name: any, default: Enum.Material): Enum.Material
+	if type(name) == "string" then
+		for _, m in ipairs(Enum.Material:GetEnumItems()) do
+			if m.Name == name then
+				return m
+			end
+		end
+	end
+	return default
+end
 
 local function rgb(r: number, g: number, b: number): Color3
 	return Color3.fromRGB(r, g, b)
@@ -159,13 +174,14 @@ local function disc(parent: Instance, name: string, top: Vector3, radius: number
 end
 
 -- Flat slab whose TOP surface is at top.Y (paths, paving).
-local function slab(parent: Instance, name: string, top: Vector3, sx: number, sz: number, yaw: number, color: Color3, thick: number?): BasePart
+local function slab(parent: Instance, name: string, top: Vector3, sx: number, sz: number, yaw: number, color: Color3, thick: number?, material: Enum.Material?): BasePart
 	local t = thick or 0.1
 	return deco(parent, {
 		Name = name,
 		Size = Vector3.new(sx, t, sz),
 		CFrame = CFrame.new(top - Vector3.new(0, t / 2, 0)) * CFrame.Angles(0, yaw, 0),
 		Color = color,
+		Material = material,
 	})
 end
 
@@ -1442,7 +1458,9 @@ end
 local CLUTTER_SCALE: { [string]: number } = { GrassTuft = 1.0, Flowers = 1.5, Fern = 1.35, Rock_Small = 1.3, Mushroom = 1.3, Reeds = 1.3, Lilypads = 1.2, Snow_Drift = 1.1, Snow_Bush = 1.1, Ash_Pile = 1.2 }
 
 -- Small clutter scattered in a disc around (cx, cz): { {name, sMin, sMax, palette?} }.
-local function scatter(arena: Arena, cx: number, cz: number, radius: number, count: number, kinds: { { any } }, clear: number?, pathPad: number?)
+-- dry: draw the same seeded numbers but place nothing (a scatter replaced by the
+-- dressing keeps the seeded layout after it, obstacles included, exactly as it was).
+local function scatter(arena: Arena, cx: number, cz: number, radius: number, count: number, kinds: { { any } }, clear: number?, pathPad: number?, dry: boolean?)
 	count = math.max(1, math.floor(count * (arena.DecorDensity or 1) + 0.5))
 	local placed = 0
 	for _ = 1, count * 8 do
@@ -1454,7 +1472,12 @@ local function scatter(arena: Arena, cx: number, cz: number, radius: number, cou
 		local x, z = cx + math.cos(a) * r, cz + math.sin(a) * r
 		if isFree(arena, x, z, clear or 0.8, pathPad) then
 			local k = pick(kinds)
-			decor(arena, k[1], x, z, nil, rng:NextNumber(k[2], k[3]) * (CLUTTER_SCALE[k[1]] or 1), k[4])
+			if dry then
+				rng:NextNumber(k[2], k[3])
+				randomYaw()
+			else
+				decor(arena, k[1], x, z, nil, rng:NextNumber(k[2], k[3]) * (CLUTTER_SCALE[k[1]] or 1), k[4])
+			end
 			placed += 1
 		end
 	end
@@ -1492,7 +1515,7 @@ end
 -- bend, so neighbours overlap and close the wedge on the outside of every bend;
 -- neighbours sit 0.06 studs apart in height (odd / even), so the overlaps never
 -- z-fight from the high run camera. Registered in arena.Paths (decoration keeps off it).
-local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Color3, edge: Color3, yBase: number)
+local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Color3, edge: Color3, yBase: number, material: Enum.Material?)
 	-- nearly straight runs (under 3° of turn, up to 40 studs) become one segment
 	local raw = smoothPath(ctrl, 18)
 	local pts: { Vector2 } = { raw[1] }
@@ -1538,7 +1561,7 @@ local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Co
 		for _, layer in ipairs({ { "PathEdge", edgeW, edge, yBase, 0.1 }, { "Path", width, core, yBase + 0.16, 0.2 } }) do
 			local ea, eb = layer[2] / 2 * ma, layer[2] / 2 * mb
 			local mid = (a + b) / 2 + dir * ((eb - ea) / 2)
-			slab(arena.Decor, layer[1], W(arena, mid.X, mid.Y, layer[4] + lift), layer[2], len + ea + eb, yaw, layer[3], layer[5])
+			slab(arena.Decor, layer[1], W(arena, mid.X, mid.Y, layer[4] + lift), layer[2], len + ea + eb, yaw, layer[3], layer[5], material)
 		end
 		table.insert(arena.Paths, { A = Vector3.new(a.X, 0, a.Y), B = Vector3.new(b.X, 0, b.Y), W = edgeW / 2 })
 	end
@@ -1912,6 +1935,209 @@ local function vignettes(arena: Arena, list: { Vignette })
 end
 
 ------------------------------------------------------------------------------------------
+-- ENVIRONMENT DRESSING (owner's meadow reference, 2026-10-08): small natural clusters
+-- from a short reusable set of kit props (grass tufts in related greens, white / yellow
+-- wildflowers, rounded grey rocks with occasional moss, compact shrubs, a fallen branch,
+-- pebbles), built once per arena build into the arena model's "ArenaDressing" folder.
+--   * own Random (arena seed + variant): the same dressing on every server and every
+--     rebuild, and the seeded layout of everything else is untouched;
+--   * cluster centres: most along the arena edges, then beside the paths (outside the
+--     spawn clearing), a few in the meadow and only a couple of tiny ones in the centre,
+--     so the combat area stays open; members spread unevenly around their centre with
+--     random turn and size (no grid, no even scatter);
+--   * everything is decoration (prop(): no collision, queries or touches, no scripts);
+--     only the rocks, shrubs and branches cast a (soft) shadow;
+--   * nothing on a path core, in a collider, a landmark keepout or a hazard pool; tufts,
+--     flowers and pebbles may lean over the soft path margin, which breaks its outline.
+-- Dressing is cleared with the arena (DestroyArena) and by ClearDecor (chests, altars,
+-- the portal).
+------------------------------------------------------------------------------------------
+
+type DressSet = { [string]: { Pal } }
+
+-- What one cluster holds: { kit name, min count, max count, min scale, max scale, set key }.
+local DRESS_CLUSTERS: { [string]: { { any } } } = {
+	Meadow = { { "GrassTuft", 2, 3, 1.0, 1.5, "Tuft" }, { "Flowers", 0, 2, 1.1, 1.5, "Flower" } },
+	Flowers = { { "Flowers", 2, 3, 1.1, 1.6, "Flower" }, { "GrassTuft", 0, 2, 1.0, 1.4, "Tuft" } },
+	Rocks = { { "Rock", 1, 1, 0.34, 0.55, "Rock" }, { "Rock_Small", 1, 2, 0.8, 1.3, "Pebble" }, { "GrassTuft", 0, 2, 1.0, 1.5, "Tuft" }, { "Flowers", 0, 1, 1.0, 1.4, "Flower" } },
+	Shrub = { { "Bush", 1, 1, 0.7, 1.0, "Bush" }, { "GrassTuft", 0, 2, 1.0, 1.5, "Tuft" }, { "Fern", 0, 1, 0.9, 1.2, "Fern" }, { "Flowers", 0, 1, 1.0, 1.4, "Flower" } },
+	Branch = { { "Log", 1, 1, 0.3, 0.42, "Log" }, { "GrassTuft", 1, 2, 1.0, 1.4, "Tuft" } },
+	Pebbles = { { "Rock_Small", 2, 3, 0.45, 0.8, "Pebble" }, { "GrassTuft", 0, 1, 0.9, 1.3, "Tuft" } },
+}
+-- Cluster kinds per zone (weights).
+local DRESS_ZONES: { [string]: { { any } } } = {
+	Edge = { { "Shrub", 3 }, { "Rocks", 3 }, { "Meadow", 2 }, { "Flowers", 2 }, { "Branch", 1 } },
+	Path = { { "Pebbles", 3 }, { "Meadow", 3 }, { "Flowers", 2 }, { "Rocks", 1 } },
+	Meadow = { { "Meadow", 3 }, { "Flowers", 3 }, { "Rocks", 1 } },
+	Centre = { { "Flowers", 1 }, { "Meadow", 1 } },
+}
+-- Pieces that may lean over the soft path margin (small) vs ones kept off it (solid).
+local DRESS_SMALL: { [string]: boolean } = { GrassTuft = true, Flowers = true, Rock_Small = true }
+local DRESS_SHADOW: { [string]: boolean } = { Rock = true, Bush = true, Log = true }
+
+local function weighted(r: Random, list: { { any } }): string
+	local total = 0
+	for _, e in ipairs(list) do
+		total += e[2]
+	end
+	local roll = r:NextNumber(0, total)
+	for _, e in ipairs(list) do
+		roll -= e[2]
+		if roll <= 0 then
+			return e[1]
+		end
+	end
+	return list[#list][1]
+end
+
+local function dressCluster(arena: Arena, folder: Folder, r: Random, set: DressSet, kind: string, cx: number, cz: number, small: boolean)
+	local spread = small and 1.8 or r:NextNumber(2.2, 3.8)
+	for _, member in ipairs(DRESS_CLUSTERS[kind]) do
+		local name = member[1]
+		local n = r:NextInteger(member[2], member[3])
+		if small then
+			n = math.min(n, 2)
+		end
+		local solid = not DRESS_SMALL[name]
+		for i = 1, n do
+			-- the anchor piece (a rock / shrub / branch) sits near the centre, the rest
+			-- gather unevenly around it
+			local reach = (solid and i == 1) and 0.6 or spread
+			for _ = 1, 6 do
+				local a = r:NextNumber(0, TAU)
+				local d = reach * (0.3 + 0.7 * math.sqrt(r:NextNumber()))
+				local x, z = cx + math.cos(a) * d, cz + math.sin(a) * d
+				local margin = solid and 0.8 or -0.9 -- signed distance to the path's outer edge
+				if isFree(arena, x, z, solid and 1.2 or 0.5, nil, 0.5) and pathDistance(arena, x, z) > margin then
+					local pals = set[member[6]]
+					local pal = if pals then pals[r:NextInteger(1, #pals)] else nil
+					local s = r:NextNumber(member[4], member[5]) * (CLUTTER_SCALE[name] or 1)
+					local cf = CFrame.new(W(arena, x, z)) * CFrame.Angles(0, r:NextNumber(0, TAU), 0)
+					prop(folder, name, cf, s, pal, if DRESS_SHADOW[name] then {} else { shadow = false })
+					break
+				end
+			end
+		end
+	end
+end
+
+-- Builds the dressing of `arena` from `set` (palettes per set key). Cluster counts per
+-- zone come from Config.Arenas.Dressing.Clusters.
+local function dressArena(arena: Arena, set: DressSet)
+	if DRESS.Enabled == false then
+		return
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = DRESSING_FOLDER
+	folder.Parent = arena.Model
+	local r = Random.new((SEEDS[arena.Name] or 0) * 3 + 811 + (arena.Variant or 0) * 7919)
+	local counts = DRESS.Clusters or {}
+	local h = arena.Half
+	local function place(zone: string, x: number, z: number, small: boolean?)
+		dressCluster(arena, folder, r, set, weighted(r, DRESS_ZONES[zone]), x, z, small == true)
+	end
+
+	-- edges: stratified around the perimeter (one bin per cluster, jittered and inset
+	-- unevenly), so clusters never line up or repeat at a fixed spacing
+	local edgeN = counts.Edge or 20
+	for i = 0, edgeN - 1 do
+		for _ = 1, 5 do
+			local u = (i + r:NextNumber(0.1, 0.9)) / edgeN * 8 * h
+			local side, t = math.floor(u / (2 * h)), u % (2 * h) - h
+			local d = r:NextNumber(5, 20)
+			local x, z
+			if side == 0 then
+				x, z = t, -h + d
+			elseif side == 1 then
+				x, z = h - d, t
+			elseif side == 2 then
+				x, z = -t, h - d
+			else
+				x, z = -h + d, -t
+			end
+			if isFree(arena, x, z, 2.5, 1.5, 2) then
+				place("Edge", x, z)
+				break
+			end
+		end
+	end
+
+	-- path edges: beside a path segment outside the clearing, either side
+	local segs, total = {}, 0
+	for _, seg in ipairs(arena.Paths) do
+		local mid = (seg.A + seg.B) / 2
+		local len = (seg.B - seg.A).Magnitude
+		if mid.Magnitude > arena.Clear + 8 and math.abs(mid.X) < h - 6 and math.abs(mid.Z) < h - 6 and len > 1 then
+			table.insert(segs, seg)
+			total += len
+		end
+	end
+	if total > 0 then
+		for _ = 1, counts.Path or 14 do
+			for _ = 1, 6 do
+				local roll = r:NextNumber(0, total)
+				local seg = segs[#segs]
+				for _, sg in ipairs(segs) do
+					roll -= (sg.B - sg.A).Magnitude
+					if roll <= 0 then
+						seg = sg
+						break
+					end
+				end
+				local dir = seg.B - seg.A
+				local p = seg.A + dir * r:NextNumber(0.1, 0.9)
+				local side = r:NextNumber() < 0.5 and -1 or 1
+				local nrm = Vector3.new(-dir.Z, 0, dir.X).Unit * side
+				local at = p + nrm * (seg.W + r:NextNumber(1.2, 3.2))
+				if at.Magnitude > arena.Clear + 4 and isFree(arena, at.X, at.Z, 2, 0.4, 2) then
+					place("Path", at.X, at.Z)
+					break
+				end
+			end
+		end
+	end
+
+	-- open meadow: a few, well away from the centre
+	for _ = 1, counts.Meadow or 7 do
+		for _ = 1, 8 do
+			local a, d = r:NextNumber(0, TAU), r:NextNumber(62, h - 30)
+			local x, z = math.cos(a) * d, math.sin(a) * d
+			if isFree(arena, x, z, 3, 3, 3) then
+				place("Meadow", x, z)
+				break
+			end
+		end
+	end
+
+	-- the centre: only a couple of tiny flower / grass clusters at the clearing's rim
+	for _ = 1, counts.Centre or 2 do
+		for _ = 1, 8 do
+			local a, d = r:NextNumber(0, TAU), r:NextNumber(26, arena.Clear - 4)
+			local x, z = math.cos(a) * d, math.sin(a) * d
+			if isFree(arena, x, z, 2, 3, 3) then
+				place("Centre", x, z, true)
+				break
+			end
+		end
+	end
+end
+
+-- A broad, soft ground tone: one big disc plus 2-3 smaller lobes of the same tone on
+-- seeded sides (its own Random), so the variation reads as irregular meadow, not as
+-- circles. Tops step down 0.02 studs per lobe (0.1 .. 0.02: under the path margins at
+-- 0.12+, and far enough apart that textured tops never z-fight from the run camera).
+local function groundBlob(arena: Arena, r: Random, x: number, z: number, radius: number, color: Color3, material: Enum.Material)
+	local y = 0.1
+	disc(arena.Decor, "Patch", W(arena, x, z, y), radius, color).Material = material
+	local a0 = r:NextNumber(0, TAU)
+	for k = 1, r:NextInteger(2, 3) do
+		local a = a0 + k * r:NextNumber(1.3, 2.1)
+		local d = radius * r:NextNumber(0.55, 0.95)
+		disc(arena.Decor, "Patch", W(arena, x + math.cos(a) * d, z + math.sin(a) * d, y - 0.02 * k), radius * r:NextNumber(0.35, 0.6), color).Material = material
+	end
+end
+
+------------------------------------------------------------------------------------------
 -- FOREST: a mossy clearing in the woods (the main map).
 --
 --   centre      open clearing where two dirt paths cross (spawn), a little low decor
@@ -1935,6 +2161,21 @@ local FOREST_PINE: { Pal } = {
 	{ Needles = mix(P.moss_800, P.slate_700, 0.2), Needles2 = P.moss_700 },
 }
 local FLOWER_TONES: { Pal } = { { Bloom = P.ivory_100 }, { Bloom = P.ivory_100 }, { Bloom = P.gold_300 } }
+-- the meadow dressing set (dressArena): related greens, white and buttercup-yellow
+-- flowers, grey rocks (some mossy), compact shrubs, a weathered branch
+local FOREST_DRESSING = {
+	Tuft = { { Grass = P.lawn_600 }, { Grass = P.lawn_400 }, { Grass = mix(P.lawn_500, P.lawn_olive, 0.5) }, { Grass = P.lawn_700 } },
+	Flower = { { Bloom = P.ivory_100, Leaves = P.lawn_600 }, { Bloom = P.ivory_100, Leaves = P.lawn_500 }, { Bloom = P.bloom_yellow, Leaves = P.lawn_600 } },
+	Rock = {
+		{ Stone = P.stone_400, Stone2 = P.stone_500, Moss = P.lawn_500 },
+		{ Stone = P.stone_300, Stone2 = P.stone_400, Moss = P.stone_300 },
+		{ Stone = mix(P.stone_400, P.stone_300, 0.5), Stone2 = P.stone_500, Moss = mix(P.stone_400, P.stone_300, 0.5) },
+	},
+	Pebble = { { Stone = P.stone_400 }, { Stone = P.stone_300 }, { Stone = mix(P.stone_400, P.soil_500, 0.25) } },
+	Bush = { { Leaves = P.lawn_700, Leaves2 = P.lawn_600 }, { Leaves = P.lawn_800, Leaves2 = P.lawn_600 }, { Leaves = mix(P.lawn_700, P.lawn_olive, 0.3), Leaves2 = P.lawn_500 } },
+	Fern = { { Fern = P.lawn_600 }, { Fern = P.lawn_700 } },
+	Log = { { Bark = P.wood_600, Heart = P.soil_300, Moss = P.lawn_600 } },
+}
 
 local SMALL_DECOR = {
 	{ "GrassTuft", 1.0, 1.6 },
@@ -2033,11 +2274,26 @@ local function buildForest(arena: Arena)
 	local c, h = arena.Center, arena.Half
 	local m = arena.Model
 
-	-- ground: deeper meadow outside, a bright sunny meadow inside, big soft patches in two tones
-	local base = mix(P.meadow_500, P.meadow_400, 0.3)
-	deco(m, { Name = "ForestFloor", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = mix(P.meadow_600, P.meadow_700, 0.5), CanCollide = true, CanQuery = true })
-	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 20, 1, h * 2 + 20), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = base, CanCollide = true, CanQuery = true })
-	local darker, lighter, warm = mix(P.meadow_600, P.meadow_500, 0.3), mix(P.meadow_400, P.meadow_300, 0.45), mix(P.meadow_400, P.dirt_300, 0.3)
+	-- ground (owner's meadow reference): a medium meadow green on the Grass material (a
+	-- restrained texture), deeper green outside, and broad irregular tone blobs (moss,
+	-- olive, warm and darker greens, one step from the base) instead of a flat pale lime.
+	-- The base sits between the lime Mites and the dark Beetle Warriors in brightness, and
+	-- cooler than both, so the swarm, blue gems and telegraphs keep their contrast.
+	local grassMat = materialNamed(DRESS.GroundMaterial, SMOOTH)
+	local pathMat = materialNamed(DRESS.PathMaterial, SMOOTH)
+	local base = P.lawn_500
+	deco(m, { Name = "ForestFloor", Size = Vector3.new(h * 2 + 360, 2, h * 2 + 360), CFrame = CFrame.new(c - Vector3.new(0, 1.08, 0)), Color = mix(P.lawn_600, P.lawn_700, 0.5), Material = grassMat, CanCollide = true, CanQuery = true })
+	deco(m, { Name = "Floor", Size = Vector3.new(h * 2 + 20, 1, h * 2 + 20), CFrame = CFrame.new(c - Vector3.new(0, 0.5, 0)), Color = base, Material = grassMat, CanCollide = true, CanQuery = true })
+	local darker, lighter, warm = mix(P.lawn_600, P.lawn_500, 0.4), mix(P.lawn_400, P.lawn_500, 0.55), mix(P.lawn_olive, P.lawn_500, 0.55)
+	local moss = mix(P.lawn_600, P.lawn_700, 0.25)
+	local blobs = Random.new(SEEDS.Forest + 17)
+	-- the seeded numbers the old one-tone patches drew (patch(): 5 each), so everything
+	-- placed after them keeps its exact seeded place
+	local function skipPatch()
+		for _ = 1, 5 do
+			rng:NextNumber()
+		end
+	end
 	for _, pt in ipairs({
 		{ -150, -150, 26, darker }, { 120, -165, 22, darker }, { -170, 60, 24, darker }, { 160, 120, 26, darker },
 		{ 30, -120, 20, darker }, { -60, 150, 22, darker }, { -110, -40, 18, darker },
@@ -2045,25 +2301,34 @@ local function buildForest(arena: Arena)
 		{ 140, -110, 18, lighter }, { -140, 120, 20, lighter }, { 0, 140, 24, lighter }, { -175, -90, 20, lighter },
 		{ 120, 175, 16, warm }, { 175, 10, 18, warm },
 	}) do
-		patch(arena, pt[1], pt[2], pt[3], pt[4], 0.02)
+		-- same seeded spots as before (the layout after them is unchanged); the shape
+		-- comes from groundBlob's own Random
+		skipPatch()
+		groundBlob(arena, blobs, pt[1], pt[2], pt[3], pt[4], grassMat)
+	end
+	for _, pt in ipairs({ { -100, 10, 20, moss }, { 60, 120, 22, warm }, { 150, -150, 20, moss }, { -30, 75, 16, darker }, { 100, -30, 16, warm } }) do
+		groundBlob(arena, blobs, pt[1], pt[2], pt[3], pt[4], grassMat)
 	end
 
-	-- the clearing: worn lighter grass around the crossing (low, almost no decoration)
-	patch(arena, 0, 0, 24, mix(P.meadow_400, P.meadow_300, 0.4), 0.05)
-	patch(arena, 3, 2, 13, mix(P.meadow_300, P.dirt_300, 0.35), 0.07)
+	-- the clearing: a slightly warmer, worn green around the crossing (no pale spot)
+	skipPatch()
+	skipPatch()
+	groundBlob(arena, blobs, 2, 1, 20, mix(P.lawn_500, P.lawn_olive, 0.3), grassMat)
 
-	-- paths: west-east and south-north, crossing in the clearing
-	local core, edge = P.dirt_400, mix(P.dirt_400, base, 0.55)
+	-- paths: west-east and south-north, crossing in the clearing. Warm tan soil on the
+	-- Ground material; the margin is a slightly darker soil (no yellow border) that the
+	-- tufts, flowers and pebbles of the dressing and the client's path detail break up.
+	local core, edge = P.soil_400, mix(P.soil_400, P.soil_500, 0.6)
 	dirtPath(arena, {
 		Vector2.new(-262, 30), Vector2.new(-205, 16), Vector2.new(-145, 30), Vector2.new(-88, 14),
 		Vector2.new(-40, 8), Vector2.new(0, 0), Vector2.new(42, -9), Vector2.new(92, -3),
 		Vector2.new(142, -22), Vector2.new(200, -12), Vector2.new(262, -22),
-	}, 7, core, edge, 0.12)
+	}, 7, core, edge, 0.12, pathMat)
 	dirtPath(arena, {
 		Vector2.new(-24, 262), Vector2.new(-16, 192), Vector2.new(-30, 132), Vector2.new(-10, 82),
 		Vector2.new(-6, 40), Vector2.new(0, 0), Vector2.new(9, -32), Vector2.new(14, -62),
 		Vector2.new(6, -102), Vector2.new(-16, -150), Vector2.new(-8, -200), Vector2.new(-14, -262),
-	}, 6, core, edge, 0.16)
+	}, 6, core, edge, 0.16, pathMat)
 	-- stepping stones and pebbles along the paths
 	for _, sp in ipairs({ { 22, -4.5 }, { -20, 4 } }) do
 		local cf = CFrame.new(W(arena, sp[1], sp[2], -0.42)) * randomYaw()
@@ -2072,9 +2337,10 @@ local function buildForest(arena: Arena)
 
 	boundaryWalls(arena)
 
-	-- clearing decor (low, sparse, off the paths)
-	scatter(arena, 0, 0, 34, 26, { { "GrassTuft", 1.0, 1.6 }, { "GrassTuft", 1.0, 1.6 }, { "GrassTuft", 1.2, 1.8 }, { "Flowers", 1.0, 1.4, FLOWER_TONES[1] }, { "Rock_Small", 0.7, 1.1 } }, 1.2, 0.4)
-	scatter(arena, 0, 0, 40, 8, { { "Fern", 1, 1.4 }, { "Flowers", 1.1, 1.5, FLOWER_TONES[3] }, { "Flowers", 1.1, 1.5, FLOWER_TONES[1] } }, 1.5, 0.5)
+	-- clearing decor: replaced by the dressing (the centre stays open); dry runs keep the
+	-- seeded layout after them as it was
+	scatter(arena, 0, 0, 34, 26, { { "GrassTuft", 1.0, 1.6 }, { "GrassTuft", 1.0, 1.6 }, { "GrassTuft", 1.2, 1.8 }, { "Flowers", 1.0, 1.4, FLOWER_TONES[1] }, { "Rock_Small", 0.7, 1.1 } }, 1.2, 0.4, true)
+	scatter(arena, 0, 0, 40, 8, { { "Fern", 1, 1.4 }, { "Flowers", 1.1, 1.5, FLOWER_TONES[3] }, { "Flowers", 1.1, 1.5, FLOWER_TONES[1] } }, 1.5, 0.5, true)
 
 	--------------------------------------------------------------------------------------
 	-- LANDMARKS (mid ring)
@@ -2185,10 +2451,10 @@ local function buildForest(arena: Arena)
 		scatter(arena, bx, bz, 18, 3, SHADE_DECOR, 1)
 	end
 
-	-- meadow scatter: grass tufts, flowers and pebbles everywhere else (sparse)
+	-- meadow scatter: replaced by the dressing clusters (dry: same seeded numbers)
 	for _ = 1, 7 do
 		local a, r = rng:NextNumber(0, TAU), rng:NextNumber(44, 190)
-		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, SMALL_DECOR, 1.5, 0.5)
+		scatter(arena, math.cos(a) * r, math.sin(a) * r, 6, 2, SMALL_DECOR, 1.5, 0.5, true)
 	end
 
 	-- BORDER: mossy rock cliffs on three sides, a low rocky rim and the broken fence on the
@@ -2220,6 +2486,8 @@ local function buildForest(arena: Arena)
 		{ "Bush", 1.4, 2.0, nil },
 		{ "Tree_Round", 0.75, 0.9, FOREST_ROUND[2] },
 	}, 26, mix(P.meadow_700, P.meadow_800, 0.6))
+
+	dressArena(arena, FOREST_DRESSING)
 end
 
 ------------------------------------------------------------------------------------------
@@ -3706,6 +3974,7 @@ function MapBuilder.BuildArena(name: string, variant: number?)
 	MapBuilder.DestroyArena()
 	rng = Random.new((SEEDS[name] or SEEDS.Forest) + (variant or 0) * 7919)
 	local arena = newArena(name)
+	arena.Variant = variant or 0
 	local build = BUILDERS[name] or buildForest
 	build(arena)
 	writeDetailLayout(arena)
@@ -3796,16 +4065,9 @@ function MapBuilder.BuildPortal(arena: Arena, pos: Vector3): Portal
 	local model = prop(arena.Model, "Portal", cf, 1, arena.PortalPalette, { occluder = true }) -- biome moss / snow / sand tint
 	kitCollider(arena, "Portal", cf, 1)
 	table.insert(arena.Keepout, { X = pos.X - arena.Center.X, Z = pos.Z - arena.Center.Z, R = S.PortalRadius })
-	-- scattered clutter (grass, ferns, bushes) would poke through the dais and the circle
-	for _, d in ipairs(arena.Decor:GetChildren()) do
-		if d:IsA("Model") and #d:GetChildren() > 0 then
-			local at = d:GetPivot().Position
-			local dx, dz = at.X - pos.X, at.Z - pos.Z
-			if dx * dx + dz * dz < (S.PortalRadius + 1) ^ 2 then
-				d:Destroy()
-			end
-		end
-	end
+	-- scattered clutter and dressing (grass, ferns, bushes) would poke through the dais
+	-- and the circle
+	MapBuilder.ClearDecor(arena, pos, S.PortalRadius + 1)
 
 	local fx = Instance.new("Folder")
 	fx.Name = "PortalFx"
@@ -3981,12 +4243,19 @@ end
 -- Removes scattered decoration (grass, ferns, bushes) within `radius` of `pos`, so it
 -- doesn't poke through a chest or an altar.
 function MapBuilder.ClearDecor(arena: Arena, pos: Vector3, radius: number)
-	for _, d in ipairs(arena.Decor:GetChildren()) do
-		if d:IsA("Model") and #d:GetChildren() > 0 then
-			local at = d:GetPivot().Position
-			local dx, dz = at.X - pos.X, at.Z - pos.Z
-			if dx * dx + dz * dz < radius * radius then
-				d:Destroy()
+	local folders = { arena.Decor }
+	local dressing = arena.Model:FindFirstChild(DRESSING_FOLDER)
+	if dressing then
+		table.insert(folders, dressing)
+	end
+	for _, folder in ipairs(folders) do
+		for _, d in ipairs(folder:GetChildren()) do
+			if d:IsA("Model") and #d:GetChildren() > 0 then
+				local at = d:GetPivot().Position
+				local dx, dz = at.X - pos.X, at.Z - pos.Z
+				if dx * dx + dz * dz < radius * radius then
+					d:Destroy()
+				end
 			end
 		end
 	end
