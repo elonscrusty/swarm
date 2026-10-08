@@ -939,6 +939,10 @@ local function newRunPlayer(player: Player)
 	local data = ctx.DataService.GetData(player)
 	-- the hero this run plays: the selected one, or the Weekly Challenge's lent hero (META)
 	local heroId = ctx.MetaService and ctx.MetaService.RunHero(mode, data) or data.SelectedCharacter
+	-- SwarmV2: the 11 old heroes are hidden; a save that still selects one plays the default class
+	if ctx.ClassRegistry then
+		heroId = ctx.ClassRegistry.RunHero(heroId)
+	end
 	-- the stat sheet's permanent levels: the account upgrades (Revive / Reroll / Skip) from
 	-- Meta, the selected hero's own stat track and its Signature (Hero Mastery); the old
 	-- shared stat levels left in Meta are never read

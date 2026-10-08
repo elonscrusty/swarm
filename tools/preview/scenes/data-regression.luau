@@ -15,7 +15,7 @@ end
 local KEYS = { "damage", "cooldown", "amount", "area", "speed", "pierce", "duration", "knockback" }
 -- direction a stat should move with levels: +1 non-decreasing, -1 non-increasing
 local DIR = { damage = 1, cooldown = -1, amount = 1, area = 1, speed = 1, pierce = 1, duration = 1, knockback = 1 }
-local BEHAVIORS = { Whip = 1, Orb = 1, Knives = 1, Aura = 1, HolyWater = 1, Lightning = 1, Axe = 1, Boomerang = 1, Longbow = 1, Spear = 1, Crossbow = 1, Nova = 1, FireTrail = 1, Totem = 1, Hook = 1, Turret = 1, Soul = 1, Shields = 1, Quake = 1, Meteor = 1, Sling = 1, Cloud = 1, Saw = 1, Vines = 1, Horn = 1, Wisps = 1, Vortex = 1 }
+local BEHAVIORS = { Whip = 1, Orb = 1, Knives = 1, Aura = 1, HolyWater = 1, Lightning = 1, Axe = 1, Boomerang = 1, Longbow = 1, Spear = 1, Crossbow = 1, Nova = 1, FireTrail = 1, Totem = 1, Hook = 1, Turret = 1, Soul = 1, Shields = 1, Quake = 1, Meteor = 1, Sling = 1, Cloud = 1, Saw = 1, Vines = 1, Horn = 1, Wisps = 1, Vortex = 1, ScrapToss = 1, ToastVolley = 1, BubbleBomb = 1, YarnBomb = 1 }
 local PERKS_USED = { Riposte = 1, Split = 1, Ricochet = 1, Chill = 1, Volley = 1, Impale = 1, Shatter = 1, Wildfire = 1, Rooting = 1, Barbed = 1, Flak = 1, Wandering = 1, Bulwark = 1, Aftershock = 1, Molten = 1, Stagger = 1, Choking = 1, Rebound = 1, Thornbloom = 1, Echo = 1, Glow = 1, Implosion = 1 }
 
 local seenOrder = {}
@@ -24,6 +24,17 @@ local allWeapons = table.clone(WeaponData.Order)
 for _, id in ipairs(WeaponData.HeldOrder or {}) do
 	if table.find(WeaponData.Order, id) then
 		bad("weapon " .. id .. " is in both Order and HeldOrder")
+	end
+	table.insert(allWeapons, id)
+end
+-- SwarmV2 class signature weapons: in ClassOrder only, each owned by exactly one class
+for _, id in ipairs(WeaponData.ClassOrder or {}) do
+	if table.find(WeaponData.Order, id) or table.find(WeaponData.HeldOrder or {}, id) then
+		bad("class weapon " .. id .. " must not be in Order / HeldOrder")
+	end
+	local def = WeaponData.Weapons[id]
+	if not (def and type(def.ClassOnly) == "string") then
+		bad("class weapon " .. id .. " needs ClassOnly")
 	end
 	table.insert(allWeapons, id)
 end

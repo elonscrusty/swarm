@@ -292,7 +292,7 @@ end
 function ModelBuilder.MeshesFor(characterId: string, skinId: string?): { string }
 	local look = CharacterData.ResolveLook(characterId, skinId)
 	local def = CharacterData.Characters[characterId]
-	local list = { characterId }
+	local list = { def and def.MeshName or characterId }
 	if def and look.Hat ~= def.Hat then
 		table.insert(list, "Hat_" .. look.Hat)
 	end
@@ -570,14 +570,16 @@ end
 	its part-built fallback). Returns nil when the hero's meshes aren't loaded.
 ]]
 local function buildMeshCharacter(characterId: string, skinId: string?, crown: boolean): Model?
-	local folder = MeshService.Get(characterId)
-	local entry = MeshCatalog.Models[characterId]
+	local def = CharacterData.Characters[characterId]
+	-- a SwarmV2 class names its mesh model (MeshName, e.g. "CaptainCroak"); old heroes use their id
+	local meshName = def and def.MeshName or characterId
+	local folder = MeshService.Get(meshName)
+	local entry = MeshCatalog.Models[meshName]
 	if not folder or not entry then
 		return nil
 	end
 	local palette = CharacterData.MeshPalette(characterId, skinId) or {}
 	local look = CharacterData.ResolveLook(characterId, skinId)
-	local def = CharacterData.Characters[characterId]
 	local customHat = def ~= nil and look.Hat ~= def.Hat
 	local model, root = newRoot()
 

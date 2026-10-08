@@ -21,6 +21,8 @@ local Fx = preview.server("Fx")
 local WeaponData = preview.shared("WeaponData")
 
 local data = assert(DS.GetData(player), "profile missing")
+-- these checks are about the old Knight: let a run play a hidden old hero (SwarmV2 RunConfig)
+require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Classes.MapLegacyToDefault = false
 data.SelectedCharacter = "Knight"
 preview.remote("StartRun"):FireServer("Solo")
 preview.advance(3)

@@ -90,6 +90,10 @@ WeaponData.Order = {
 -- Held for a later update: ids built and tested but kept out of Order (none right now).
 WeaponData.HeldOrder = {} :: { string }
 
+-- Class signature weapons (SwarmV2): each is owned by exactly one class (Weapon.ClassOnly) and
+-- is in neither Order nor HeldOrder. They start with their class and are never offered to others.
+WeaponData.ClassOrder = { "ScrapToss", "ToastVolley", "BubbleBomb", "YarnBomb" } :: { string }
+
 
 -- Display names for stat diffs on level-up cards.
 WeaponData.StatLabels = {
@@ -191,6 +195,19 @@ WeaponData.Visuals = {
 	[54] = { Name = "ChoirWisp", Shape = "Ball", Size = Vector3.new(1.1, 1.1, 1.1), Color = Palette.gold_200, Material = "Neon", Style = "Orb", NoPose = true, Trail = { Color = Palette.gold_200, Tail = Palette.fx_holy, Width = 0.45, Life = 0.18 }, Impact = Palette.gold_200 },
 	[55] = { Name = "Vortex", Shape = "Cylinder", Size = Vector3.new(0.3, 5, 5), Color = Palette.fx_arcane, Material = "Neon", Style = "Vortex", Spin = 5, Ground = true, NoPose = true },
 	[56] = { Name = "Singularity", Shape = "Cylinder", Size = Vector3.new(0.3, 6, 6), Color = Palette.slate_900, Material = "Neon", Style = "Vortex", Spin = 7, Ground = true, NoPose = true },
+	--[[
+		57-63: the class signature weapons (SwarmV2 kits, ClassOnly weapons). Part-built looks only:
+		57 scrap chunk, 58 toast slice, 59 bubble, 60 yarn ball, 61 rolling can, 62 burnt toast
+		(Double Decker), 63 giant bubble (Tidal Burst). Scrap and yarn evolutions use the
+		same shape with the cosmetic tier 3.
+	]]
+	[57] = { Name = "ScrapChunk", Shape = "Block", Size = Vector3.new(1.1, 0.8, 1.3), Color = Palette.steel_300, Material = "CorrodedMetal", Style = "Knife", Tumble = 16, Trail = { Color = Palette.leather_500, Tail = Palette.steel_400, Width = 0.25, Life = 0.1 }, Impact = Palette.steel_200 },
+	[58] = { Name = "ToastSlice", Shape = "Block", Size = Vector3.new(1.3, 0.25, 1.3), Color = Palette.sand_400, Material = "SmoothPlastic", Style = "Knife", Tumble = 20, Trail = { Color = Palette.amber_300, Tail = Palette.sand_500, Width = 0.3, Life = 0.1 }, Impact = Palette.amber_300 },
+	[59] = { Name = "Bubble", Shape = "Ball", Size = Vector3.new(1.9, 1.9, 1.9), Color = Palette.ice_100, Material = "Glass", Style = "Orb", Trail = { Color = Palette.fx_holy, Tail = Palette.ice_300, Width = 0.4, Life = 0.12 }, Impact = Palette.fx_holy },
+	[60] = { Name = "YarnBall", Shape = "Ball", Size = Vector3.new(1.7, 1.7, 1.7), Color = Color3.fromRGB(240, 120, 175), Material = "Fabric", Style = "Meteor", Tumble = 9, NoPose = true, Trail = { Color = Color3.fromRGB(255, 170, 205), Tail = Color3.fromRGB(240, 120, 175), Width = 0.5, Life = 0.16 }, Impact = Color3.fromRGB(255, 170, 205) },
+	[61] = { Name = "RollingCan", Shape = "Cylinder", Size = Vector3.new(1.6, 1.3, 1.3), Color = Palette.steel_300, Material = "Metal", Style = "Saw", Spin = 10, Ground = true, NoPose = true, Impact = Palette.steel_200 },
+	[62] = { Name = "BurntToast", Shape = "Block", Size = Vector3.new(1.5, 0.3, 1.5), Color = Palette.leather_700, Material = "SmoothPlastic", Style = "Knife", Tumble = 24, Trail = { Color = Palette.fx_fire, Tail = Palette.leather_700, Width = 0.4, Life = 0.12 }, Impact = Palette.fx_fire },
+	[63] = { Name = "GiantBubble", Shape = "Ball", Size = Vector3.new(2.8, 2.8, 2.8), Color = Palette.fx_holy, Material = "Glass", Style = "Orb", Trail = { Color = Palette.fx_holy, Tail = Palette.ice_300, Width = 0.6, Life = 0.16 }, Impact = Palette.fx_holy },
 }
 
 -- Projectile visual byte: index 1-31 in the low 5 bits, 32-63 as (index - 32) with bit 7
@@ -1261,6 +1278,154 @@ WeaponData.Weapons = {
 			Stats = row(10, 3.2, 3, 1.8, 0, 999, 4.0, 0),
 		},
 	},
+
+	--[[
+		The four class signature weapons (SwarmV2 gameplay track; docs/redesign/gameplay/CLASSES.md).
+		ClassOnly = the class id that may own / be offered the weapon (LevelUpSystem); they are
+		not in Order, so no other class ever sees them. Kit numbers (passives, movement
+		reactions) live in SwarmV2 RunConfig.Classes; the level rows below are weapon data.
+	]]
+
+	-- SCRAP TOSS (Ruckus): a chunk of scrap that bounces to the next enemy. Row pierce =
+	-- bounces + 1. Loot Rush (ClassKits) adds a ring of scraps to a volley.
+	ScrapToss = {
+		Id = "ScrapToss",
+		Name = "Scrap Toss",
+		Description = "Flings scrap at the nearest enemy; it bounces on to another.",
+		Color = Color3.fromRGB(150, 135, 110),
+		Behavior = "ScrapToss",
+		ClassOnly = "ruckus",
+		AmountLabel = "Scraps",
+		DurationLabel = "Range",
+		Params = { Radius = 0.9, BounceGain = 0, EvoBounceGain = 0.15, Visual = 57, EvoVisual = 57 },
+		Levels = {
+			row(10, 0.9, 1, 1.0, 50, 2, 1.2, 5),
+			row(11, 0.9, 1, 1.0, 50, 2, 1.2, 5),
+			row(12, 0.85, 1, 1.0, 52, 2, 1.2, 5),
+			row(13, 0.85, 2, 1.0, 52, 2, 1.2, 5),
+			row(14, 0.8, 2, 1.05, 54, 3, 1.2, 6),
+			row(15, 0.8, 2, 1.05, 54, 3, 1.25, 6),
+			row(16, 0.75, 2, 1.1, 56, 3, 1.25, 6),
+			row(17, 0.75, 3, 1.1, 56, 3, 1.25, 6),
+			row(18, 0.7, 3, 1.15, 58, 4, 1.3, 7),
+			row(19, 0.7, 3, 1.15, 58, 4, 1.3, 7),
+			row(21, 0.65, 3, 1.2, 60, 4, 1.3, 7),
+			row(23, 0.6, 3, 1.2, 60, 4, 1.3, 8),
+		},
+		Evolution = {
+			Id = "JunkyardBarrage",
+			Name = "Junkyard Barrage",
+			Passive = "GildedPurse",
+			Description = "Four heavy scraps per volley; each bounce hits 15% harder.",
+			Stats = row(32, 0.5, 4, 1.4, 68, 6, 1.4, 10),
+		},
+	},
+
+	-- TOAST VOLLEY (Toastmaster): slices that ricochet once. Overheat (ClassKits): 3 hits on
+	-- one enemy within 4 s set it burning.
+	ToastVolley = {
+		Id = "ToastVolley",
+		Name = "Toast Volley",
+		Description = "Pops toast at the nearest enemies; slices ricochet to another.",
+		Color = Color3.fromRGB(225, 180, 105),
+		Behavior = "ToastVolley",
+		ClassOnly = "toastmaster",
+		AmountLabel = "Slices",
+		DurationLabel = "Range",
+		Params = { Radius = 0.8, Spread = 9, Visual = 58, EvoVisual = 62 },
+		Levels = {
+			row(7.5, 0.65, 1, 1.0, 62, 2, 1.0, 3),
+			row(8, 0.65, 1, 1.0, 62, 2, 1.0, 3),
+			row(8.5, 0.62, 2, 1.0, 63, 2, 1.0, 3),
+			row(9, 0.6, 2, 1.0, 63, 2, 1.0, 3),
+			row(9.5, 0.58, 2, 1.0, 64, 3, 1.0, 3),
+			row(10, 0.56, 2, 1.0, 64, 3, 1.0, 3),
+			row(10.5, 0.54, 2, 1.0, 65, 3, 1.0, 3),
+			row(11, 0.52, 3, 1.0, 66, 3, 1.0, 4),
+			row(11.5, 0.5, 3, 1.0, 66, 3, 1.0, 4),
+			row(12, 0.5, 3, 1.0, 68, 4, 1.0, 4),
+			row(12, 0.48, 3, 1.0, 68, 4, 1.0, 4),
+			row(12.5, 0.46, 3, 1.0, 70, 4, 1.0, 4),
+		},
+		Evolution = {
+			Id = "DoubleDecker",
+			Name = "Double Decker",
+			Passive = "EmberOil",
+			Description = "Four scorched slices that ricochet four times.",
+			Stats = row(18, 0.42, 4, 1.2, 76, 5, 1.1, 5),
+		},
+	},
+
+	-- BUBBLE BOMB (Captain Croak): a bubble that bursts on the first enemy, bounces once to
+	-- another and bursts again. Burst = BurstRadius x area, BurstShare of the hit.
+	BubbleBomb = {
+		Id = "BubbleBomb",
+		Name = "Bubble Bomb",
+		Description = "Lobs a bubble that bursts on impact, bounces, and bursts again.",
+		Color = Color3.fromRGB(130, 215, 235),
+		Behavior = "BubbleBomb",
+		Area = true,
+		ClassOnly = "captain_croak",
+		AmountLabel = "Bubbles",
+		DurationLabel = "Range",
+		Params = { Radius = 1.1, BurstRadius = 7, BurstShare = 0.6, EvoBurstShare = 1.0, Visual = 59, EvoVisual = 63 },
+		Levels = {
+			row(11, 1.2, 1, 1.0, 40, 2, 1.4, 4),
+			row(12, 1.2, 1, 1.0, 40, 2, 1.4, 4),
+			row(13, 1.15, 1, 1.05, 40, 2, 1.4, 4),
+			row(14, 1.1, 2, 1.05, 42, 2, 1.4, 4),
+			row(15, 1.1, 2, 1.1, 42, 2, 1.4, 5),
+			row(16, 1.05, 2, 1.1, 42, 3, 1.4, 5),
+			row(17, 1.0, 2, 1.15, 44, 3, 1.4, 5),
+			row(18, 1.0, 2, 1.15, 44, 3, 1.4, 5),
+			row(19, 0.95, 3, 1.2, 44, 3, 1.4, 6),
+			row(20, 0.9, 3, 1.2, 46, 3, 1.4, 6),
+			row(22, 0.9, 3, 1.25, 46, 3, 1.4, 6),
+			row(24, 0.85, 3, 1.3, 46, 4, 1.4, 6),
+		},
+		Evolution = {
+			Id = "TidalBurst",
+			Name = "Tidal Burst",
+			Passive = "Area",
+			Description = "Huge bubbles whose bursts hit as hard as the bubble itself.",
+			Stats = row(34, 0.75, 3, 1.5, 48, 4, 1.5, 8),
+		},
+	},
+
+	-- YARN BOMB (Granny Boom): a yarn ball lobbed at the thickest crowd; it explodes on landing.
+	-- Tangled Up (ClassKits) tangles and slows what the blast hits.
+	YarnBomb = {
+		Id = "YarnBomb",
+		Name = "Yarn Bomb",
+		Description = "Lobs an exploding yarn ball at the biggest crowd.",
+		Color = Color3.fromRGB(240, 120, 175),
+		Behavior = "YarnBomb",
+		Area = true,
+		ClassOnly = "granny_boom",
+		AmountLabel = "Bombs",
+		Params = { BlastRadius = 8, Range = 34, MinFlight = 0.35, MaxFlight = 1.2, MaxAmount = 4, Visual = 60, EvoVisual = 60 },
+		Levels = {
+			row(12.5, 1.4, 1, 1.0, 32, 999, 0, 8),
+			row(13.5, 1.4, 1, 1.0, 32, 999, 0, 8),
+			row(14.5, 1.35, 1, 1.05, 32, 999, 0, 8),
+			row(15.5, 1.3, 2, 1.05, 33, 999, 0, 9),
+			row(16.5, 1.25, 2, 1.1, 33, 999, 0, 9),
+			row(17.5, 1.2, 2, 1.1, 34, 999, 0, 9),
+			row(18.5, 1.15, 2, 1.15, 34, 999, 0, 10),
+			row(20, 1.1, 3, 1.15, 34, 999, 0, 10),
+			row(21, 1.05, 3, 1.2, 35, 999, 0, 10),
+			row(22.5, 1.0, 3, 1.2, 35, 999, 0, 11),
+			row(24, 0.95, 3, 1.25, 36, 999, 0, 11),
+			row(26, 0.9, 3, 1.3, 36, 999, 0, 12),
+		},
+		Evolution = {
+			Id = "GrandKnitwork",
+			Name = "Grand Knitwork",
+			Passive = "Duplicator",
+			Description = "Four giant yarn bombs with a wider, harder blast.",
+			Stats = row(36, 0.75, 4, 1.5, 38, 999, 0, 14),
+		},
+	},
 }
 
 -- Returns the stat row for a weapon at a level (evolved overrides the row).
@@ -1320,6 +1485,11 @@ WeaponData.StatUse = {
 	Wisps = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
 	-- damage per tick; the pull strength is fixed (Params)
 	Vortex = { damage = true, cooldown = true, amount = true, area = true, duration = true },
+	-- class signature weapons (pierce = bounces + 1; yarn: speed = throw speed)
+	ScrapToss = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
+	ToastVolley = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
+	BubbleBomb = { damage = true, cooldown = true, amount = true, area = true, speed = true, pierce = true, duration = true, knockback = true },
+	YarnBomb = { damage = true, cooldown = true, amount = true, area = true, speed = true, knockback = true },
 }
 
 -- True when the weapon (id, level, evolved) uses stat-row key `stat`.
@@ -1351,6 +1521,16 @@ function WeaponData.CapAmount(weaponId: string, amount: number): number
 	local def = WeaponData.Weapons[weaponId]
 	local cap = def and def.Params and def.Params.MaxAmount
 	return cap and math.min(amount, cap) or amount
+end
+
+-- May a player of class `classId` own / be offered weapon `weaponId`? A weapon without ClassOnly
+-- is open to everyone; a ClassOnly weapon only to its own class.
+function WeaponData.AllowedFor(weaponId: string, classId: string?): boolean
+	local def = WeaponData.Weapons[weaponId]
+	if not def then
+		return false
+	end
+	return def.ClassOnly == nil or def.ClassOnly == classId
 end
 
 -- Perk unlocked at exactly `level` (nil if none).
