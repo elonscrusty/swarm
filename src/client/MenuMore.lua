@@ -38,7 +38,7 @@ local MenuGroup = require(script.Parent.MenuGroup)
 local MenuMore = {}
 
 local new = UIKit.new
-local P = Theme.Palette
+local C = Theme.Color
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -48,9 +48,10 @@ end
 function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = { Rows = {} }
-	ui.Header = UIKit.ScreenHeader(screen, "MORE", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, EdgeThickness = Theme.Stroke.Medium })
 	ui.Panel = holder
+	-- BACK and the title stay in the panel's header; only the list below scrolls
+	ui.Header = UIKit.ScreenHeader(face, "MORE", ctx.Back)
 	local scroll = new("ScrollingFrame", {
 		Name = "List",
 		BackgroundTransparency = 1,
@@ -58,7 +59,7 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		Position = UDim2.fromOffset(12, 12),
 		Size = UDim2.new(1, -24, 1, -24),
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
@@ -69,7 +70,7 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		-- screen never shows it); a tap repeats it as a toast
 		{ Id = "SaveStatus", Title = "PROGRESS NOT SAVED", Sub = "Saving isn't working right now", Icon = "warning", Notice = true, Go = function()
 			if host.Toast then
-				host.Toast("Progress isn't being saved right now. We'll keep trying.", P.crimson_300)
+				host.Toast("Progress isn't being saved right now. We'll keep trying.", C.Danger)
 			end
 		end },
 		{ Id = "Daily", Title = "DAILY CHALLENGE", Sub = "One scored try a day", Icon = "calendar", Art = "Daily", Go = function() ctx.ShowScreen("Daily") end },
@@ -115,9 +116,9 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 			Title = item.Title,
 			Subtitle = item.Sub,
 			Icon = item.Icon,
-			IconSize = 28,
-			TitleStyle = "Label",
-			TitleSize = 17,
+			IconSize = 34,
+			TitleStyle = "H2",
+			TitleSize = 19,
 			Chevron = true,
 			Align = "Left",
 			Shrink = true,
@@ -133,8 +134,8 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 			ui.NoticeRow = b
 			local st = b.Face:FindFirstChildOfClass("UIStroke")
 			if st then
-				st.Color = P.crimson_400
-				st.Transparency = 0.1
+				st.Color = C.Danger
+				st.Transparency = 0
 			end
 		end
 		if item.Id == "Daily" or item.Id == "Party" or item.Id == "Achievements" or item.Id == "Track" or item.Id == "Quests" then
@@ -145,6 +146,8 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 			ui.PartyBadge = UIKit.Badge(b.Instance, "", "Crimson", { Name = "InviteBadge", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 4, 0, -4), ZIndex = 6, Visible = false })
 		elseif item.Id == "Daily" then
 			ui.DailyRow = b
+		elseif item.Id == "Streak" then
+			ui.StreakRow = b
 		end
 	end
 
@@ -185,19 +188,25 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 		local M = UIKit.IsCompact() and Theme.Layout.MarginCompact or Theme.Layout.Margin
 		local G = Theme.Layout.Gutter
 		local headY = math.max(ins.Top + 4, 12)
-		place(ui.Header.Frame, M, headY, math.min(520, W - 2 * M), 56)
-		local top = math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		local short = not portrait and H < 520
+		local top = short and (headY + 6) or math.max(headY + 66 + (portrait and 58 or 0), portrait and 0 or 76)
+		local pad = short and 10 or 12
+		local headH = short and 50 or 56
 		local w = math.min(W - 2 * M, 900)
-		local inner = w - 24 - 8
+		local inner = w - 2 * pad - 6
 		local cols = inner >= 600 and 2 or 1
 		local cellW = math.floor((inner - (cols - 1) * G) / cols)
 		local list = shownRows()
 		local rows = math.ceil(#list / cols)
+		local bodyTop = pad + headH + 8
 		-- rows shrink (never below a finger's size) so the whole list fits without scrolling
-		local rowH = math.clamp(math.floor((H - top - M - 24 - (rows - 1) * G) / rows), 56, 68)
+		local rowH = math.clamp(math.floor((H - top - M - bodyTop - pad - (rows - 1) * G) / rows), 60, 72)
 		local contentH = rows * rowH + (rows - 1) * G
-		local h = math.min(contentH + 24, H - top - M)
+		local h = math.min(bodyTop + contentH + pad, H - top - M)
 		place(ui.Panel, (W - w) / 2, top, w, h)
+		place(ui.Header.Frame, pad, pad, w - 2 * pad, headH)
+		scroll.Position = UDim2.fromOffset(pad, bodyTop)
+		scroll.Size = UDim2.fromOffset(w - 2 * pad, h - bodyTop - pad)
 		for i, r in ipairs(list) do
 			local c = (i - 1) % cols
 			local rr = math.floor((i - 1) / cols)
@@ -253,8 +262,12 @@ function MenuMore.Build(screen: Frame, ctx: { [string]: any })
 			MenuMore._layout()
 		end
 		ui.PartyRow.SetText(nil, partySub)
-		ui.PartyRow.SetSelected(party.Count > 0)
-		ui.DailyRow.SetText(nil, dailySub)
+				ui.DailyRow.SetText(nil, dailySub)
+		-- a claimable DAILY REWARD is the one yellow card (real claim state, MenuStreak.State)
+		if ui.StreakRow then
+			local canClaim = Config.FeatureOn("LoginStreak") and (MenuStreak.State(p))
+			ui.StreakRow.SetKind(canClaim and "Primary" or "Secondary")
+		end
 		for _, r in ipairs(ui.Rows) do
 			local line = metaSubs[r.Item.Id]
 			if line then

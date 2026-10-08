@@ -26,8 +26,8 @@ local HeroPresets = require(script.Parent.HeroPresets)
 local MenuHeroPower = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local P = Theme.Palette
-local HEADING = Font.fromEnum(Enum.Font.GothamBold)
+local C = Theme.Color
+local HEADING = Theme.Font.Heading
 local TILE = 44 -- tiles are built at this size and scaled to fit the row
 local TILE_MIN, TILE_MAX, GAP = 44, 76, 8
 
@@ -46,7 +46,7 @@ local function wrapped(parent: Instance, style: string, color: Color3, size: num
 end
 
 local function caption(parent: Instance, label: string, order: number): TextLabel
-	return text(parent, "Label", label, { FontFace = HEADING, TextColor3 = P.gold_300, LayoutOrder = order, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
+	return text(parent, "Label", label, { FontFace = HEADING, TextColor3 = C.BlueDeep, LayoutOrder = order, Size = UDim2.new(1, 0, 0, TS(13) + 4) }, 13)
 end
 
 function MenuHeroPower.Build(parent: Instance, order: number)
@@ -56,20 +56,20 @@ function MenuHeroPower.Build(parent: Instance, order: number)
 
 	-- ULTIMATE
 	local ultCap = caption(root, "ULTIMATE", 1)
-	local ultName = wrapped(root, "BodyStrong", P.ivory_100, 16, 2, "UltName")
+	local ultName = wrapped(root, "BodyStrong", C.Text, 16, 2, "UltName")
 	ultName.FontFace = HEADING
-	local ultText = wrapped(root, "Body", P.ivory_200, 15, 3, "UltText")
+	local ultText = wrapped(root, "Body", C.Text, 15, 3, "UltText")
 
 	-- SECOND SKILL
 	local skillCap = caption(root, "SECOND SKILL", 4)
-	local skillName = wrapped(root, "BodyStrong", P.ivory_100, 16, 5, "SkillName")
+	local skillName = wrapped(root, "BodyStrong", C.Text, 16, 5, "SkillName")
 	skillName.FontFace = HEADING
-	local skillText = wrapped(root, "Body", P.ivory_200, 15, 6, "SkillText")
-	local skillState = wrapped(root, "Small", P.gold_200, 14, 7, "SkillState")
+	local skillText = wrapped(root, "Body", C.Text, 15, 6, "SkillText")
+	local skillState = wrapped(root, "Small", C.BlueDeep, 14, 7, "SkillState")
 
 	-- FAVOURITES
 	local favCap = caption(root, "FAVOURITES", 8)
-	local favText = wrapped(root, "Small", P.ivory_300, 14, 9, "FavText")
+	local favText = wrapped(root, "Small", C.TextMuted, 14, 9, "FavText")
 	local open = false
 	local heroNow = CharacterData.Default
 	local refreshSelf: () -> () = function() end
@@ -92,7 +92,7 @@ function MenuHeroPower.Build(parent: Instance, order: number)
 	UIKit.list(grid, { Padding = UDim.new(0, 6) })
 	local tiles: { [string]: { Stroke: UIStroke, Mark: GuiObject, Kind: string } } = {}
 	local function section(kind: string, label: string, ids: { string }, sOrder: number)
-		text(grid, "Label", label, { FontFace = HEADING, TextColor3 = P.ivory_300, LayoutOrder = sOrder, Size = UDim2.new(1, 0, 0, TS(12) + 4) }, 12)
+		text(grid, "Label", label, { FontFace = HEADING, TextColor3 = C.TextMuted, LayoutOrder = sOrder, Size = UDim2.new(1, 0, 0, TS(12) + 4) }, 12)
 		local box = new("Frame", { Name = kind, BackgroundTransparency = 1, LayoutOrder = sOrder + 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y }, grid)
 		local layout = new("UIGridLayout", { CellSize = UDim2.fromOffset(TILE, TILE), CellPadding = UDim2.fromOffset(GAP, GAP), SortOrder = Enum.SortOrder.LayoutOrder }, box)
 		local scales: { UIScale } = {}
@@ -100,9 +100,9 @@ function MenuHeroPower.Build(parent: Instance, order: number)
 			local hit = new("TextButton", { Name = id, Text = "", AutoButtonColor = true, BackgroundTransparency = 1, LayoutOrder = i }, box)
 			local tile = UIKit.Tile(hit, { Id = id, Size = TILE })
 			table.insert(scales, new("UIScale", { Name = "Fit", Scale = 1 }, tile))
-			local stroke = UIKit.stroke(hit, P.gold_300, 2.5, 1)
+			local stroke = UIKit.stroke(hit, C.SelectedEdge, 3, 1)
 			UIKit.corner(hit, math.floor(TILE * 0.2))
-			local mark = text(hit, "Label", "★", { Name = "Mark", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 2, 0, -2), Size = UDim2.fromOffset(16, 16), TextColor3 = P.gold_200, TextStrokeTransparency = 0.3, Visible = false, ZIndex = 5 }, 14)
+			local mark = text(hit, "Label", "★", { Name = "Mark", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 2, 0, -2), Size = UDim2.fromOffset(16, 16), TextColor3 = C.SelectedEdge, TextStrokeTransparency = 1, Visible = false, ZIndex = 5 }, 14)
 			tiles[id] = { Stroke = stroke, Mark = mark, Kind = kind }
 			hit.Activated:Connect(function()
 				UIKit.Click()
@@ -171,7 +171,7 @@ function MenuHeroPower.Build(parent: Instance, order: number)
 			skillName.Text = skill.Name
 			skillText.Text = skill.Text
 			skillState.Text = unlocked and "Unlocked: on in every run with this hero." or string.format("Unlocks at mastery rank %d.", Config.SecondSkill.Rank)
-			skillState.TextColor3 = unlocked and P.moss_300 or P.gold_200
+			skillState.TextColor3 = unlocked and C.Success or C.BlueDeep
 		end
 		-- favourites (owned heroes)
 		local favShown = favOn and owned

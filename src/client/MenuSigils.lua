@@ -20,7 +20,7 @@ local MetaUI = require(script.Parent.MetaUI)
 local MenuSigils = {}
 
 local new, TS = UIKit.new, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 
 -- Slots this profile has (the server decides the same way).
 function MenuSigils.Slots(p: { [string]: any }?): number
@@ -59,9 +59,9 @@ function MenuSigils.Build(screen: Frame, ctx: { [string]: any })
 	local ui = MetaUI.Screen(screen, ctx, "SIGILS")
 	local slotFrames = {}
 	for i = 1, 2 do
-		local f = new("TextButton", { Name = "Slot" .. i, Text = "", AutoButtonColor = false, BackgroundColor3 = C.PanelInset, BackgroundTransparency = 0.2, BorderSizePixel = 0 }, ui.Head)
+		local f = new("TextButton", { Name = "Slot" .. i, Text = "", AutoButtonColor = false, BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, BorderSizePixel = 0 }, ui.Head)
 		UIKit.corner(f, Theme.Radius.M)
-		local stroke = UIKit.stroke(f, P.gold_500, 1.5, 0.3)
+		local stroke = UIKit.stroke(f, C.PanelEdge, 2, 0)
 		local well = new("Frame", { Name = "Well", BackgroundTransparency = 1, Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(44, 44) }, f)
 		local title = MetaUI.Line(f, "Label", "", 15, { Name = "SlotTitle", Position = UDim2.fromOffset(62, 8), Size = UDim2.new(1, -70, 0, TS(15) + 4) })
 		local sub = new("TextLabel", { Name = "SlotSub", BackgroundTransparency = 1, Position = UDim2.fromOffset(62, 12 + TS(15)), Size = UDim2.new(1, -70, 1, -(16 + TS(15))), Text = "", FontFace = Theme.Font.Body, TextSize = TS(12), TextColor3 = C.TextMuted, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextTruncate = Enum.TextTruncate.AtEnd }, f)
@@ -71,7 +71,7 @@ function MenuSigils.Build(screen: Frame, ctx: { [string]: any })
 			if s.Id ~= "" then
 				MetaUI.Send("EquipSigil", i, "")
 			elseif i > MenuSigils.Slots(ctx.Profile()) and ctx.Toast then
-				ctx.Toast("Slot 2 opens when any hero reaches Mastery " .. SigilData.SlotUnlockMastery .. ".", P.gold_300)
+				ctx.Toast("Slot 2 opens when any hero reaches Mastery " .. SigilData.SlotUnlockMastery .. ".", C.BlueDeep)
 			end
 		end)
 	end
@@ -91,15 +91,17 @@ function MenuSigils.Build(screen: Frame, ctx: { [string]: any })
 			s.Id = id
 			local def = SigilData.Sigils[id]
 			if def then
-				Icons.Draw(s.Well, def.Icon, { Size = 40, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
+				Icons.Draw(s.Well, def.Icon, { Size = 40, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelRaised })
 				s.Title.Text = def.Name
 				s.Sub.Text = def.Text .. " · tap to remove"
-				s.Stroke.Color = P.gold_400
+				s.Stroke.Color = C.SelectedEdge
+				s.Frame.BackgroundColor3 = C.SelectedPale
 			else
-				Icons.Draw(s.Well, i <= slots and "plus" or "lock", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Color = C.TextMuted, Back = C.PanelInset })
+				Icons.Draw(s.Well, i <= slots and "plus" or "lock", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Color = C.TextMuted, Back = C.PanelRaised })
 				s.Title.Text = "SLOT " .. i
 				s.Sub.Text = i <= slots and "Empty: equip a Sigil below" or ("Locked: any hero at Mastery " .. SigilData.SlotUnlockMastery)
-				s.Stroke.Color = C.PanelEdge
+				s.Stroke.Color = i <= slots and C.PanelEdge or C.Divider
+				s.Frame.BackgroundColor3 = i <= slots and C.PanelRaised or C.Disabled
 			end
 		end
 		MetaUI.Clear(ui.Body)
@@ -120,7 +122,7 @@ function MenuSigils.Build(screen: Frame, ctx: { [string]: any })
 				Sub = have and def.Text or "Not found yet: bosses and elites drop Sigils",
 				Action = have and {
 					Title = isWorn and "WORN" or "EQUIP",
-					Kind = isWorn and "Outline" or "Primary",
+					Kind = isWorn and "Selected" or "Secondary",
 					OnClick = function()
 						if isWorn then
 							MetaUI.Send("EquipSigil", isWorn, "")
@@ -131,6 +133,9 @@ function MenuSigils.Build(screen: Frame, ctx: { [string]: any })
 					end,
 				} or nil,
 			})
+			if isWorn then
+				row.SetDone(true)
+			end
 			if not have then
 				MetaUI.Silhouette(row.Icon)
 				row.SetDim(true)

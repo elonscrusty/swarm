@@ -35,7 +35,7 @@ local PartyLines = require(script.Parent.PartyLines)
 local MenuParty = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 local player = Players.LocalPlayer
 
 local ROW_H = 56
@@ -147,11 +147,10 @@ end
 -- Head shot, name and a status line; `right` = room kept for buttons.
 local function personRow(parent: Instance, order: number, userId: number, name: string, sub: string, subColor: Color3?, right: number, gold: boolean?): Frame
 	local f = UIKit.Panel(parent, { Name = "Row" .. order, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H), ClipsDescendants = true }, true)
-	f.BackgroundColor3 = gold and P.slate_800 or P.slate_950
-	f.BackgroundTransparency = gold and 0.05 or 0.35
-	if gold then
-		UIKit.stroke(f, P.gold_400, 1.5, 0.15)
-	end
+	-- your own row is lime-pale with a lime edge (selected cue: the "(you)" tag too)
+	f.BackgroundColor3 = gold and C.SelectedPale or C.PanelRaised
+	f.BackgroundTransparency = 0
+	UIKit.stroke(f, gold and C.SelectedEdge or C.Blue, 2, 0)
 	UIKit.Avatar(f, userId, 40, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0) })
 	text(f, "BodyStrong", name, {
 		Name = "Name",
@@ -239,7 +238,7 @@ local function inviteFriends(toast: (string, Color3?) -> ())
 			return SocialService:CanSendGameInviteAsync(player)
 		end)
 		if not ok or not can then
-			toast("Invites can't be sent from here right now.", P.gold_300)
+			toast("Invites can't be sent from here right now.", C.BlueDeep)
 			return
 		end
 		local options: Instance? = nil
@@ -252,7 +251,7 @@ local function inviteFriends(toast: (string, Color3?) -> ())
 			SocialService:PromptGameInvite(player, options)
 		end)
 		if not shown then
-			toast("Couldn't open the invite prompt.", P.gold_300)
+			toast("Couldn't open the invite prompt.", C.BlueDeep)
 		end
 	end)
 end
@@ -267,14 +266,14 @@ MenuParty.InviteFriends = inviteFriends
 local card: { [string]: any } = {}
 
 local function buildCard(host: { [string]: any })
-	local holder, face = UIKit.Surface(host.Root, { Name = "PartyInviteCard", Radius = Theme.Radius.L, Transparency = 0.04, Edge = P.gold_400, EdgeTransparency = 0.1, Visible = false })
+	local holder, face = UIKit.Surface(host.Root, { Name = "PartyInviteCard", Radius = Theme.Radius.L, Transparency = 0, Edge = C.Blue, Visible = false })
 	holder.ZIndex = Theme.Z.Toast
 	card.Holder = holder
 	UIKit.padding(face, 10, 12, 10, 12)
 	card.AvatarSlot = new("Frame", { Name = "AvatarSlot", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 2), Size = UDim2.fromOffset(44, 44) }, face)
 	card.Title = text(face, "BodyStrong", "", { Name = "Title", Position = UDim2.fromOffset(56, 0), Size = UDim2.new(1, -56, 0, TS(16) + 4), TextTruncate = Enum.TextTruncate.AtEnd }, 16)
-	card.Sub = text(face, "Small", "", { Name = "Sub", Position = UDim2.fromOffset(56, TS(16) + 6), Size = UDim2.new(1, -56, 0, TS(13) + 4), TextColor3 = P.gold_300 }, 13)
-	local bar = new("Frame", { Name = "Time", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 6), Size = UDim2.new(1, 0, 0, 3) }, face)
+	card.Sub = text(face, "Small", "", { Name = "Sub", Position = UDim2.fromOffset(56, TS(16) + 6), Size = UDim2.new(1, -56, 0, TS(13) + 4), TextColor3 = C.BlueDeep }, 13)
+	local bar = new("Frame", { Name = "Time", BackgroundColor3 = C.Blue, BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 6), Size = UDim2.new(1, 0, 0, 3) }, face)
 	UIKit.corner(bar, 2)
 	card.Bar = bar
 	local row = new("Frame", { Name = "Buttons", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -4), Size = UDim2.new(1, 0, 0, 44) }, face)
@@ -381,7 +380,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	-- member count pill beside the title (real count over the server's party size)
 	ui.CountPill = UIKit.IconPill(ui.Header.Frame, nil, "1/3", { Name = "CountPill", AnchorPoint = Vector2.new(0, 0.5) })
 	local infoOpen = false
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, Edge = C.Blue })
 	ui.Panel = holder
 	UIKit.padding(face, 16, 18, 16, 18)
 
@@ -394,7 +393,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -403,7 +402,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.list(plist, { Padding = UDim.new(0, ROW_GAP) })
 	ui.Members = plist
 	ui.Leave = UIKit.Button(left, {
-		Kind = "Secondary",
+		Kind = "Danger",
 		Title = "LEAVE PARTY",
 		Icon = "close",
 		IconSize = 18,
@@ -432,7 +431,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 
 	-- footer under both columns: one summary line, an info toggle for the detailed rules
 	ui.Foot = new("Frame", { Name = "Footer", BackgroundTransparency = 1 }, face)
-	ui.FootRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1) }, ui.Foot)
+	ui.FootRule = new("Frame", { Name = "Rule", BackgroundColor3 = C.Divider, BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1) }, ui.Foot)
 	ui.Info = UIKit.IconButton(ui.Foot, {
 		Icon = "info",
 		Size = 44,
@@ -483,7 +482,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -491,7 +490,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.padding(list, 2, 8, 2, 2)
 	UIKit.list(list, { Padding = UDim.new(0, ROW_GAP) })
 	ui.List = list
-	ui.EmptyIcon = Icons.Draw(right, "people3", { Size = 56, Color = P.slate_500, AnchorPoint = Vector2.new(0.5, 0), Visible = false })
+	ui.EmptyIcon = Icons.Draw(right, "people3", { Size = 56, Color = C.Blue:Lerp(Color3.new(1, 1, 1), 0.45), AnchorPoint = Vector2.new(0.5, 0), Visible = false })
 	ui.Empty = text(right, "BodyStrong", "", { Name = "Empty", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text, Visible = false }, 18)
 	ui.EmptySub = text(right, "Body", "", { Name = "EmptySub", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, Visible = false })
 
@@ -524,7 +523,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		-- invites to you first
 		for _, inv in ipairs(openInvites()) do
 			order += 1
-			local f = personRow(plist, order, inv.FromId, inv.FromName, narrow and "Invited you" or "Invited you to their party", P.gold_300, bw(108, "ACCEPT") + 8 + 44 + 16, true)
+			local f = personRow(plist, order, inv.FromId, inv.FromName, narrow and "Invited you" or "Invited you to their party", C.BlueDeep, bw(108, "ACCEPT") + 8 + 44 + 16, true)
 			rowButton(f, "ACCEPT", nil, "Primary", 108, 8, function()
 				send("Accept", inv.FromId)
 				deadlines[inv.FromId] = 0
@@ -550,9 +549,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			local toggle = me and not leads and inParty()
 			-- right side: [KICK | READY toggle]
 			local btnW = canKick and bw(100, "KICK") or (toggle and bw(120, ready and "UNREADY" or "READY") or 0)
-			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and P.gold_300 or nil, btnW > 0 and btnW + 12 or 0, me)
+			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and C.BlueDeep or nil, btnW > 0 and btnW + 12 or 0, me)
 			if canKick then
-				rowButton(f, "KICK", nil, "Secondary", 100, 8, function()
+				rowButton(f, "KICK", nil, "Danger", 100, 8, function()
 					send("Kick", m.UserId)
 				end)
 			elseif toggle then
@@ -568,13 +567,13 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		for i = 1, slots do
 			order += 1
 			local f = UIKit.Panel(plist, { Name = "Slot" .. i, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H) }, true)
-			f.BackgroundColor3 = P.slate_950
-			f.BackgroundTransparency = 0.6
-			UIKit.stroke(f, P.slate_500, 1, 0.5)
-			local ring = new("Frame", { Name = "Ring", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(40, 40) }, f)
+			f.BackgroundColor3 = C.PanelRaised
+			f.BackgroundTransparency = 0
+			UIKit.stroke(f, C.Blue, 2, 0)
+			local ring = new("Frame", { Name = "Ring", BackgroundColor3 = C.TextMuted, BackgroundTransparency = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(40, 40) }, f)
 			UIKit.corner(ring, 999)
-			UIKit.stroke(ring, P.slate_500, 1, 0.4)
-			Icons.Draw(ring, "userPlus", { Size = 22, Color = P.slate_400, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+			UIKit.stroke(ring, C.TextMuted, 1, 0)
+			Icons.Draw(ring, "userPlus", { Size = 22, Color = C.TextOnBlue, Back = C.TextMuted, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 			text(f, "Body", canInvite and "Invite player" or "Open slot", { Name = "SlotText", Position = UDim2.fromOffset(60, 0), Size = UDim2.new(1, -(canInvite and 124 or 70), 1, 0), TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
 			if canInvite then
 				UIKit.IconButton(f, {
@@ -635,9 +634,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			local same = myParty ~= 0 and theirParty == myParty
 			local sub, color = "On this server", nil
 			if same then
-				sub, color = "In your party", P.moss_200
+				sub, color = "In your party", C.Success
 			elseif invitedMe[p.UserId] then
-				sub, color = "Invited you", P.gold_300
+				sub, color = "Invited you", C.BlueDeep
 			elseif sentTo(p.UserId) then
 				sub = "Invite sent"
 			elseif theirParty ~= 0 then
@@ -666,7 +665,7 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	local function friendRows(): number
 		for i, f in ipairs(friends.Rows) do
 			local sub = f.Here and "On this server" or (f.InSwarm and "Playing SWARM" or "Online")
-			local r = personRow(list, i, f.UserId, f.Name, sub, f.InSwarm and P.moss_200 or nil, f.InSwarm and not f.Here and (bw(112, "JOIN") + 12) or 0)
+			local r = personRow(list, i, f.UserId, f.Name, sub, f.InSwarm and C.Success or nil, f.InSwarm and not f.Here and (bw(112, "JOIN") + 12) or 0)
 			if f.InSwarm and not f.Here then
 				rowButton(r, "JOIN", "play", "Primary", 112, 8, function()
 					Remotes.Get("PartyFollow"):FireServer(f.UserId)

@@ -28,12 +28,11 @@ local Icons = require(script.Parent.Icons)
 local HomeBoard = {}
 
 local new = UIKit.new
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 local BOARD = "Score"
 local ASK_SECONDS = 20
 local MAX_ROWS = 5
-local NAVY = Color3.fromRGB(16, 22, 38)
-local RANK_COLORS = { P.gold_300, Color3.fromRGB(214, 220, 230), Color3.fromRGB(214, 146, 84) }
+local RANK_COLORS = { C.CoinDeep, C.TextFaint, C.Warning }
 
 local fmt = UIKit.formatNumber
 
@@ -103,8 +102,7 @@ local function label(parent: Instance, name: string, size: number, font: Font, c
 		TextColor3 = color,
 		TextXAlignment = align or Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.6,
+		TextStrokeTransparency = 1,
 	}, parent)
 	if scaled ~= false then
 		new("UITextSizeConstraint", { Name = "Fit", MaxTextSize = size, MinTextSize = 8 }, l)
@@ -124,20 +122,20 @@ function HomeBoard.Build(parent: Frame, onOpen: () -> ())
 	local covered = false
 	local wanted = false -- the layout found room for the panel
 
-	local b = new("TextButton", { Name = "HomeBoard", Text = "", AutoButtonColor = false, BackgroundColor3 = NAVY, BackgroundTransparency = 0.18, BorderSizePixel = 0, ClipsDescendants = true, Visible = false }, parent)
+	local b = new("TextButton", { Name = "HomeBoard", Text = "", AutoButtonColor = false, BackgroundColor3 = C.Panel, BackgroundTransparency = 0, BorderSizePixel = 0, ClipsDescendants = true, Visible = false }, parent)
 	UIKit.corner(b, 10)
-	UIKit.stroke(b, P.gold_400, 1.5, 0.25)
+	UIKit.stroke(b, C.PanelEdge, 2, 0)
 	UIKit.Focusable(b)
 	UIAnim.Button(b)
 	b.Activated:Connect(function()
 		UIKit.Click()
 		onOpen()
 	end)
-	local icon = Icons.Draw(b, "trophy", { Size = 18, Back = NAVY })
-	local title = label(b, "Title", 15, Theme.Font.Title, P.gold_300)
-	local chev = label(b, "More", 15, Theme.Font.Title, P.gold_300, Enum.TextXAlignment.Right)
+	local icon = Icons.Draw(b, "trophy", { Size = 18, Back = C.Panel })
+	local title = label(b, "Title", 15, Theme.Font.Title, C.Text)
+	local chev = label(b, "More", 15, Theme.Font.Title, C.BlueDeep, Enum.TextXAlignment.Right)
 	chev.Text = "›"
-	local rule = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_400, BackgroundTransparency = 0.6, BorderSizePixel = 0 }, b)
+	local rule = new("Frame", { Name = "Rule", BackgroundColor3 = C.Divider, BackgroundTransparency = 0, BorderSizePixel = 0 }, b)
 	local rows = {}
 	for i = 1, MAX_ROWS do
 		local f = new("Frame", { Name = "Row" .. i, BackgroundTransparency = 1, Visible = false }, b)
@@ -145,12 +143,12 @@ function HomeBoard.Build(parent: Frame, onOpen: () -> ())
 			Frame = f,
 			Rank = label(f, "Rank", 14, Theme.Font.Number, RANK_COLORS[i] or C.TextMuted),
 			Name = label(f, "Name", 14, Theme.Font.BodyStrong, C.Text, nil, false),
-			Value = label(f, "Value", 14, Theme.Font.Number, P.gold_300, Enum.TextXAlignment.Right),
+			Value = label(f, "Value", 14, Theme.Font.Number, C.BlueDeep, Enum.TextXAlignment.Right),
 		}
 	end
 	local stateLine = label(b, "State", 13, Theme.Font.Body, C.TextMuted, Enum.TextXAlignment.Center)
-	local you = label(b, "You", 14, Theme.Font.BodyStrong, P.ivory_100)
-	local hook = label(b, "Hook", 13, Theme.Font.Label, P.gold_200)
+	local you = label(b, "You", 14, Theme.Font.BodyStrong, C.Text)
+	local hook = label(b, "Hook", 13, Theme.Font.Label, C.BlueDeep)
 	api.Button = b
 
 	local shownRows = 0 -- rows the layout has room for
@@ -170,7 +168,7 @@ function HomeBoard.Build(parent: Frame, onOpen: () -> ())
 				r.Rank.Text = "#" .. rank
 				r.Rank.TextColor3 = RANK_COLORS[rank] or C.TextMuted
 				r.Name.Text = tostring(e.Name or "?")
-				r.Name.TextColor3 = e.Me and P.gold_200 or C.Text
+				r.Name.TextColor3 = e.Me and C.BlueDeep or C.Text
 				r.Value.Text = fmt(tonumber(e.Value) or 0)
 			end
 		end

@@ -17,7 +17,7 @@ local Icons = require(script.Parent.Icons)
 local MetaUI = {}
 
 local new, text, TS = UIKit.new, UIKit.text, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
+local C = Theme.Color
 
 function MetaUI.place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -56,14 +56,14 @@ export type ScreenFrame = {
 -- The screen frame: header + panel (Head on top, Body scrolling, Foot at the bottom).
 function MetaUI.Screen(screen: Frame, ctx: { [string]: any }, title: string, maxW: number?): ScreenFrame
 	local header = UIKit.ScreenHeader(screen, title, ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L })
 	local head = new("Frame", { Name = "Head", BackgroundTransparency = 1 }, face)
 	local body = new("ScrollingFrame", {
 		Name = "Body",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarThickness = 5,
+		ScrollBarImageColor3 = C.PanelEdge,
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -113,6 +113,7 @@ export type Row = {
 	Sub: TextLabel,
 	Action: any?,
 	SetDim: (on: boolean) -> (),
+	SetDone: (on: boolean) -> (),
 }
 
 --[[
@@ -123,17 +124,17 @@ function MetaUI.Row(parent: Instance, o: { [string]: any }): Row
 	local h = o.Height or 64
 	local f = new("Frame", {
 		Name = o.Name or "Row",
-		BackgroundColor3 = C.PanelInset,
-		BackgroundTransparency = 0.35,
+		BackgroundColor3 = C.PanelRaised,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, -8, 0, h),
 		LayoutOrder = o.Order or 0,
 	}, parent)
 	UIKit.corner(f, Theme.Radius.M)
-	local stroke = UIKit.stroke(f, C.PanelEdge, 1, Theme.Alpha.Edge)
+	local stroke = UIKit.stroke(f, C.PanelEdge, 2, 0)
 	local iconHolder = new("Frame", { Name = "IconHolder", BackgroundTransparency = 1, Position = UDim2.fromOffset(10, (h - 40) // 2), Size = UDim2.fromOffset(40, 40) }, f)
 	if o.Icon then
-		Icons.Draw(iconHolder, o.Icon, { Size = 36, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
+		Icons.Draw(iconHolder, o.Icon, { Size = 36, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelRaised })
 	end
 	local actionW = o.Action and 112 or 0
 	local textW = -(60 + actionW + (o.Action and 12 or 8))
@@ -163,17 +164,21 @@ function MetaUI.Row(parent: Instance, o: { [string]: any }): Row
 		Sub = sub,
 		Action = action,
 		SetDim = function(on: boolean)
-			f.BackgroundTransparency = on and 0.6 or 0.35
-			title.TextColor3 = on and C.TextMuted or C.Text
-			stroke.Color = on and C.PanelEdge or P.gold_500
-			stroke.Transparency = on and Theme.Alpha.Edge or 0.35
+			f.BackgroundColor3 = on and C.Disabled or C.PanelRaised
+			title.TextColor3 = on and C.DisabledText or C.Text
+			stroke.Color = on and C.Divider or C.PanelEdge
+		end,
+		-- finished / claimed / equipped: pale lime with a green edge (the row's own text says why)
+		SetDone = function(on: boolean)
+			f.BackgroundColor3 = on and C.SelectedPale or C.PanelRaised
+			stroke.Color = on and C.SelectedEdge or C.PanelEdge
 		end,
 	}
 end
 
 -- Darkens everything drawn in `frame` into a silhouette (not found yet).
 function MetaUI.Silhouette(frame: Instance)
-	local dark = Color3.fromRGB(16, 18, 26)
+	local dark = C.TextMuted
 	for _, d in ipairs(frame:GetDescendants()) do
 		if d:IsA("ImageLabel") or d:IsA("ImageButton") then
 			d.ImageColor3 = dark
@@ -195,17 +200,17 @@ end
 	known). o = { Name, Order, Icon, Character?, Text, Known, Size }.
 ]]
 function MetaUI.Tile(parent: Instance, o: { [string]: any }): Frame
-	local f = new("Frame", { Name = o.Name or "Tile", BackgroundColor3 = C.PanelInset, BackgroundTransparency = o.Known and 0.2 or 0.55, BorderSizePixel = 0, LayoutOrder = o.Order or 0 }, parent)
+	local f = new("Frame", { Name = o.Name or "Tile", BackgroundColor3 = o.Known and C.PanelRaised or C.Disabled, BackgroundTransparency = 0, BorderSizePixel = 0, LayoutOrder = o.Order or 0 }, parent)
 	UIKit.corner(f, Theme.Radius.M)
-	UIKit.stroke(f, o.Known and P.gold_500 or C.PanelEdge, 1, o.Known and 0.45 or Theme.Alpha.Edge)
+	UIKit.stroke(f, o.Known and C.PanelEdge or C.Divider, 2, 0)
 	local well = new("Frame", { Name = "Well", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.new(0, 48, 0, 48) }, f)
 	local icon
 	if o.Character then
-		icon = Icons.Character(well, o.Character, { Size = 44, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
+		icon = Icons.Character(well, o.Character, { Size = 44, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelRaised })
 	elseif o.Icon == "skull" or o.Icon == "crown" then
-		icon = Icons.Draw(well, o.Icon, { Size = 44, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset, Color = o.Known and P.crimson_300 or nil })
+		icon = Icons.Draw(well, o.Icon, { Size = 44, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelRaised, Color = o.Known and C.Danger or nil })
 	else
-		icon = Icons.Upgrade(well, o.Icon, { Size = 44, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelInset })
+		icon = Icons.Upgrade(well, o.Icon, { Size = 44, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelRaised })
 	end
 	if not o.Known then
 		MetaUI.Silhouette(icon)

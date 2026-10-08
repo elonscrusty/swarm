@@ -20,13 +20,13 @@ local StarterCard = require(script.Parent.StarterCard)
 local MenuStarter = {}
 
 local TS = UIKit.TS
-local P = Theme.Palette
+local C = Theme.Color
 local player = Players.LocalPlayer
 
 function MenuStarter.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui = MetaUI.Screen(screen, ctx, "STARTER BUNDLE", 720)
-	local title = MetaUI.Line(ui.Head, "H3", "FOR NEW HEROES", 20, { Name = "StarterHead", TextColor3 = P.gold_200 })
+	local title = MetaUI.Line(ui.Head, "H3", "FOR NEW HEROES", 20, { Name = "StarterHead", TextColor3 = C.BlueDeep })
 	local sub = MetaUI.Line(ui.Head, "Small", "", 14, { Name = "StarterRule" })
 	UIKit.list(ui.Body, { Padding = UDim.new(0, 6) })
 	local buy
@@ -67,7 +67,7 @@ function MenuStarter.Build(screen: Frame, ctx: { [string]: any })
 		}
 		for i, r in ipairs(rows) do
 			local row = MetaUI.Row(ui.Body, { Name = r.Name, Order = i, Icon = r.Icon, Title = r.Title, Sub = r.Sub, Height = 60 })
-			row.SetDim(owned)
+			row.SetDone(owned)
 		end
 		if owned then
 			buy.SetText("OWNED")

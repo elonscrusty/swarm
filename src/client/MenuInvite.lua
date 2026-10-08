@@ -20,7 +20,7 @@ local MenuParty = require(script.Parent.MenuParty)
 local MenuInvite = {}
 
 local TS = UIKit.TS
-local P = Theme.Palette
+local C = Theme.Color
 local player = Players.LocalPlayer
 
 local function cfg(): { [string]: any }
@@ -43,7 +43,7 @@ end
 function MenuInvite.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui = MetaUI.Screen(screen, ctx, "INVITE FRIENDS", 720)
-	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "InviteCount", TextColor3 = P.gold_200 })
+	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "InviteCount", TextColor3 = C.BlueDeep })
 	local sub = MetaUI.Line(ui.Head, "Small", "A friend counts once: new to SWARM and finished a run.", 14, { Name = "InviteRule" })
 	UIKit.list(ui.Body, { Padding = UDim.new(0, 6) })
 	UIKit.Button(ui.Foot, {

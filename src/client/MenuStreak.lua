@@ -18,7 +18,7 @@ local MetaUI = require(script.Parent.MetaUI)
 local MenuStreak = {}
 
 local TS = UIKit.TS
-local P = Theme.Palette
+local C = Theme.Color
 
 -- (canClaimToday, streak after that claim, current streak, best) for this profile.
 function MenuStreak.State(p: { [string]: any }?): (boolean, number, number, number)
@@ -44,7 +44,7 @@ end
 function MenuStreak.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui = MetaUI.Screen(screen, ctx, "DAILY REWARD")
-	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "StreakDays", TextColor3 = P.gold_200 })
+	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "StreakDays", TextColor3 = C.BlueDeep })
 	local sub = MetaUI.Line(ui.Head, "Small", "", 14, { Name = "StreakRule" })
 	UIKit.list(ui.Body, { Padding = UDim.new(0, 6) })
 	local claim = UIKit.Button(ui.Foot, {
@@ -90,7 +90,12 @@ function MenuStreak.Build(screen: Frame, ctx: { [string]: any })
 				Sub = (i == at and can) and "Today's reward" or (i < at or (i == at and not can)) and "This week: done" or "Coming up",
 				Height = 52,
 			})
-			row.SetDim(not (i == at and can))
+			local isToday = i == at and can
+			row.SetDone(i < at or (i == at and not can))
+			row.SetDim(i > at)
+			if isToday then
+				row.SetDone(false)
+			end
 		end
 		section("STREAK MILESTONES")
 		for _, m in ipairs(MetaData.StreakMilestones) do
@@ -112,7 +117,7 @@ function MenuStreak.Build(screen: Frame, ctx: { [string]: any })
 				Sub = done and "Earned" or string.format("%d more day%s", m.Day - current, m.Day - current == 1 and "" or "s"),
 				Height = 56,
 			})
-			row.SetDim(done)
+			row.SetDone(done)
 		end
 	end
 

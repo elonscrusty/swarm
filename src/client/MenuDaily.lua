@@ -7,11 +7,11 @@
 	            4H 27M (00:00 UTC)" (live) and a status pill (READY / DONE)
 	  rules     "Today's challenge": three icon rows (bold line + muted line), your scored
 	            result / best / rank card
-	  actions   PLAY DAILY (gold) and VIEW LEADERBOARD (outlined) with the scored attempts left
+	  actions   PLAY DAILY (yellow) and VIEW LEADERBOARD (outlined) with the scored attempts left
 	  notice    pinned: when the attempt is used, plus the "How scoring works" toggle
 	  ROUTE     the first stages as numbered cards (arena picture art/arenas/<Arena> with a
 	            drawn stand-in, arena name, the stage boss) joined by chevrons
-	  CURSES    crimson curse cards and the real gold multiplier chip
+	  CURSES    crimson curse cards and the real gold multiplier chip (coin gold)
 	  BONUS     the green starting-bonus card
 	  PLAY DAILY fires StartRun "Daily": the first run of the day is scored, later ones are
 	  practice; the leaderboard button opens the Ranks screen on its Daily tab.
@@ -139,9 +139,9 @@ end
 
 -- A charcoal card with a coloured hairline (route stops, curses, the bonus).
 local function card(parent: Instance, name: string, edge: Color3, edgeT: number?): Frame
-	local f = new("Frame", { Name = name, BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.25, BorderSizePixel = 0 }, parent)
+	local f = new("Frame", { Name = name, BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, BorderSizePixel = 0 }, parent)
 	UIKit.corner(f, Theme.Radius.M)
-	UIKit.stroke(f, edge, 1.5, edgeT or 0.35)
+	UIKit.stroke(f, edge, 2, edgeT or 0)
 	return f
 end
 
@@ -169,7 +169,7 @@ end
 
 -- Arena picture with a painted stand-in (sky / ground bands + the arena icon).
 local function arenaPicture(parent: Instance, arena: string): Frame
-	local tint = ARENA_TINT[arena] or { P.slate_500, P.slate_700 }
+	local tint = ARENA_TINT[arena] or { C.BluePale, C.Blue }
 	local pic = UIKit.ArtPicture(parent, "arenas/" .. arena, { Name = "Picture" }, function(fb: Frame)
 		local sky = new("Frame", { Name = "Sky", BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, fb)
 		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(tint[1], tint[2]) }, sky)
@@ -187,19 +187,19 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui: { [string]: any } = { Stops = {}, Chevrons = {}, CurseCards = {} }
 	ui.Header = UIKit.ScreenHeader(screen, "Daily Challenge", ctx.Back)
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0, Edge = C.Blue })
 	ui.Panel = holder
 	UIKit.padding(face, 18, 20, 18, 20)
 
 	-- header row: calendar, date / reset, status pill, hairline
 	local top = new("Frame", { Name = "Top", BackgroundTransparency = 1 }, face)
 	ui.Top = top
-	local well = new("Frame", { Name = "Well", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.2, Size = UDim2.fromOffset(48, 48) }, top)
+	local well = new("Frame", { Name = "Well", BackgroundColor3 = C.BluePale, BackgroundTransparency = 0, Size = UDim2.fromOffset(48, 48) }, top)
 	UIKit.corner(well, Theme.Radius.M)
-	UIKit.stroke(well, P.gold_500, 1, 0.5)
-	Icons.Draw(well, "calendar", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_950 })
+	UIKit.stroke(well, C.Blue, 2, 0)
+	Icons.Draw(well, "calendar", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.BluePale })
 	ui.Date = text(top, "H2", "", { Name = "Date", Position = UDim2.fromOffset(62, 0), Size = UDim2.new(1, -180, 0, TS(22) + 4) })
-	ui.Reset = text(top, "Caption", "", { Name = "Reset", Position = UDim2.fromOffset(62, TS(22) + 6), Size = UDim2.new(1, -180, 0, TS(12) + 4), TextColor3 = P.gold_300 })
+	ui.Reset = text(top, "Caption", "", { Name = "Reset", Position = UDim2.fromOffset(62, TS(22) + 6), Size = UDim2.new(1, -180, 0, TS(12) + 4), TextColor3 = C.BlueDeep })
 	ui.Pill = UIKit.StatusPill(top, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0) })
 	ui.Rule = UIKit.Hairline(face)
 
@@ -208,7 +208,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	}, face)
@@ -218,19 +218,19 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 	ui.Heading = text(body, "H1", "Today's challenge", { Name = "Heading", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top }, 26)
 	ui.Rows = {}
 	for i, icon in ipairs({ "person", "flag", "trophy" }) do
-		local row = new("Frame", { Name = "Rule" .. i, BackgroundTransparency = 1 }, body)
-		Icons.Draw(row, icon, { Size = 28, Position = UDim2.fromOffset(0, 2), Back = P.slate_900 })
-		text(row, "Label", "", { Name = "Line", Position = UDim2.fromOffset(42, 0), TextTruncate = Enum.TextTruncate.AtEnd }, 17)
+		local row = card(body, "Rule" .. i, C.Blue)
+		Icons.Draw(row, icon, { Size = 30, Position = UDim2.new(0, 12, 0.5, -15), Back = C.PanelRaised })
+		text(row, "Label", "", { Name = "Line", Position = UDim2.fromOffset(54, 0), TextTruncate = Enum.TextTruncate.AtEnd }, 17)
 		text(row, "Small", "", { Name = "Detail", TextColor3 = C.TextMuted, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top }, 15)
 		table.insert(ui.Rows, row)
 	end
-	ui.Info = card(body, "Info", P.gold_400, 0.45)
-	Icons.Draw(ui.Info, "trophy", { Size = 22, Position = UDim2.fromOffset(12, 12), Back = P.slate_950 })
+	ui.Info = card(body, "Info", C.Blue)
+	Icons.Draw(ui.Info, "trophy", { Size = 22, Position = UDim2.fromOffset(12, 12), Back = C.PanelRaised })
 	ui.InfoText = text(ui.Info, "Small", "", { Name = "Text", Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -54, 1, 0), TextWrapped = true, TextColor3 = C.Text }, 15)
 
 	ui.RouteLabel = UIKit.SectionLabel(body, "Today's shared route")
 	ui.CursesLabel = UIKit.SectionLabel(body, "Modifiers")
-	ui.BonusLabel = UIKit.SectionLabel(body, "Starting bonus", P.moss_200)
+	ui.BonusLabel = UIKit.SectionLabel(body, "Starting bonus", C.Success)
 	-- the gold multiplier chip (beside the CURSES label)
 	ui.GoldChip = UIKit.IconPill(body, "coin", "")
 
@@ -251,7 +251,7 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		OnClick = function()
 			local phase = Remotes.State():GetAttribute("Phase") or "Lobby"
 			if phase ~= "Lobby" then
-				ctx.Toast("Wait for the current run to end.", P.gold_300)
+				ctx.Toast("Wait for the current run to end.")
 				return
 			end
 			Remotes.Get("StartRun"):FireServer("Daily")
@@ -269,25 +269,25 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		end,
 	})
 
-	ui.Attempts = text(foot, "Small", "", { Name = "Attempts", TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = P.gold_300 }, 15)
+	ui.Attempts = text(foot, "Small", "", { Name = "Attempts", TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, TextColor3 = C.BlueDeep }, 15)
 
 	-- pinned notice: when the attempt is used, and the "How scoring works" toggle
 	local scoringOpen = false
-	local warn = card(face, "Notice", P.gold_400, 0.45)
+	local warn = card(face, "Notice", C.Blue)
 	ui.Warn = warn
-	Icons.Draw(warn, "info", { Size = 22, Position = UDim2.fromOffset(12, 11), Back = P.slate_950 })
+	Icons.Draw(warn, "info", { Size = 22, Position = UDim2.fromOffset(12, 11), Back = C.PanelRaised })
 	ui.WarnText = text(warn, "Small", "", { Name = "Text", TextWrapped = true, TextColor3 = C.Text, TextYAlignment = Enum.TextYAlignment.Top }, 14)
 	ui.WarnText.Text = "Your scored attempt is used when the run starts, even if you lose or leave. If the run never starts (for example, the trip to the run server fails), you keep it."
 	ui.Toggle = new("TextButton", { Name = "ScoringToggle", BackgroundTransparency = 1, Text = "", AutoButtonColor = false }, warn)
-	ui.ToggleText = text(ui.Toggle, "Label", "How scoring works", { Name = "Text", TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_300 }, 14)
-	ui.ToggleChevron = Icons.Draw(ui.Toggle, "chevronRight", { Size = 16, Color = P.gold_300, AnchorPoint = Vector2.new(1, 0.5) })
+	ui.ToggleText = text(ui.Toggle, "Label", "How scoring works", { Name = "Text", TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.BlueDeep }, 14)
+	ui.ToggleChevron = Icons.Draw(ui.Toggle, "chevronRight", { Size = 16, Color = C.BlueDeep, AnchorPoint = Vector2.new(1, 0.5) })
 	ui.ToggleChevron.Rotation = 90
 	ui.DetailsScroll = new("ScrollingFrame", {
 		Name = "DetailsScroll",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 3,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		Visible = false,
@@ -336,45 +336,45 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		for i = 1, ROUTE_STAGES do
 			local id = d.Arenas[i]
 			local boss = BossData.Get(d.Bosses[i])
-			local f = card(body, "Stop" .. i, i == 1 and P.gold_400 or P.gold_500, i == 1 and 0.2 or 0.55)
+			local f = card(body, "Stop" .. i, i == 1 and C.SelectedEdge or C.Blue)
 			arenaPicture(f, id)
 			local num = text(f, "Number", tostring(i), {
 				Name = "Num",
-				BackgroundColor3 = i == 1 and P.gold_400 or P.slate_900,
+				BackgroundColor3 = i == 1 and C.Selected or C.Blue,
 				BackgroundTransparency = 0.05,
-				TextColor3 = i == 1 and P.gold_900 or P.gold_200,
+				TextColor3 = i == 1 and C.Text or C.TextOnBlue,
 				TextXAlignment = Enum.TextXAlignment.Center,
 				Size = UDim2.fromOffset(24, 24),
 				ZIndex = 4,
 			}, 14)
 			UIKit.corner(num, 999)
-			UIKit.stroke(num, P.gold_300, 1, 0.3)
+			UIKit.stroke(num, i == 1 and C.SelectedEdge or C.BlueDeep, 1.5, 0)
 			text(f, "H3", id, { Name = "Arena", TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd }, 16)
-			text(f, "Small", "Boss: " .. (boss and boss.DisplayName or "?"), { Name = "Boss", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.crimson_300, TextWrapped = true }, 13)
+			text(f, "Small", "Boss: " .. (boss and boss.DisplayName or "?"), { Name = "Boss", TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextDanger, TextWrapped = true }, 13)
 			table.insert(ui.Stops, f)
 			if i < ROUTE_STAGES then
-				local chev = Icons.Draw(body, "chevronRight", { Size = 16, Color = P.gold_400 })
+				local chev = Icons.Draw(body, "chevronRight", { Size = 16, Color = C.Blue })
 				table.insert(ui.Chevrons, chev)
 			end
 		end
 		for i, id in ipairs(d.Curses) do
 			local def = CurseData.Curses[id]
-			local f = card(body, "Curse" .. i, P.crimson_400, 0.25)
-			f.BackgroundColor3 = P.crimson_900
-			f.BackgroundTransparency = 0.45
-			Icons.Draw(f, def.Icon, { Size = 34, Position = UDim2.new(0, 12, 0.5, -17), Back = P.slate_950 })
-			cardText(f, string.upper(def.Name), def.Short, P.crimson_300)
+			local f = card(body, "Curse" .. i, C.Danger)
+			f.BackgroundColor3 = C.Danger:Lerp(Color3.new(1, 1, 1), 0.9)
+			f.BackgroundTransparency = 0
+			Icons.Draw(f, def.Icon, { Size = 34, Position = UDim2.new(0, 12, 0.5, -17), Back = C.PanelRaised })
+			cardText(f, string.upper(def.Name), def.Short, C.TextDanger)
 			table.insert(ui.CurseCards, f)
 		end
 		ui.GoldChip.SetText(UIKit.track(CurseData.GoldText(CurseData.GoldMult(d.Curses)) .. " gold"))
 		ui.GoldChip.Frame.Visible = #d.Curses > 0
 		ui.CursesLabel.Visible = #d.Curses > 0
 		local bdef = CurseData.Bonuses[d.Bonus]
-		local b = card(body, "Bonus", P.moss_300, 0.3)
-		b.BackgroundColor3 = P.moss_900
-		b.BackgroundTransparency = 0.4
-		Icons.Draw(b, bdef and bdef.Icon or "gift", { Size = 34, Position = UDim2.new(0, 12, 0.5, -17), Back = P.slate_950 })
-		cardText(b, string.upper(bdef and bdef.Name or d.Bonus), CurseData.BonusText(d, MenuDaily.NameOf), P.moss_200)
+		local b = card(body, "Bonus", C.SelectedEdge)
+		b.BackgroundColor3 = C.SelectedPale
+		b.BackgroundTransparency = 0
+		Icons.Draw(b, bdef and bdef.Icon or "gift", { Size = 34, Position = UDim2.new(0, 12, 0.5, -17), Back = C.PanelRaised })
+		cardText(b, string.upper(bdef and bdef.Name or d.Bonus), CurseData.BonusText(d, MenuDaily.NameOf), C.Success)
 		ui.BonusCard = b
 	end
 
@@ -486,17 +486,17 @@ function MenuDaily.Build(screen: Frame, ctx: { [string]: any })
 		local headLines = wrappedLines(ui.Heading.Text, headPx, textW)
 		place(ui.Heading, 0, y, textW, headLines * (headPx + 4) + 4)
 		y += ui.Heading.Size.Y.Offset + 6
-		local detailW = textW - 42
+		local detailW = textW - 54 - 10
 		for _, row in ipairs(ui.Rows) do
 			local line = row:FindFirstChild("Line") :: TextLabel
 			local detail = row:FindFirstChild("Detail") :: TextLabel
 			local dLines = wrappedLines(detail.Text, TS(15), detailW)
 			local lineH = TS(17) + 4
 			local dH = dLines * (TS(15) + 3)
-			place(row, 0, y, textW, lineH + dH + 2)
-			place(line, 42, 0, detailW, lineH)
-			place(detail, 42, lineH, detailW, dH)
-			y += row.Size.Y.Offset + 10
+			place(row, 0, y, textW, lineH + dH + 20)
+			place(line, 54, 10, detailW, lineH)
+			place(detail, 54, 10 + lineH, detailW, dH)
+			y += row.Size.Y.Offset + 8
 		end
 		if ui.Info.Visible then
 			local infoLines = wrappedLines(ui.InfoText.Text, TS(15), infoW - 54)

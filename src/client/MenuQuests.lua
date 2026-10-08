@@ -32,9 +32,7 @@ local NoticeDots = require(script.Parent.NoticeDots)
 local MenuQuests = {}
 
 local new, TS = UIKit.new, UIKit.TS
-local C, P = Theme.Color, Theme.Palette
-local NAVY = Color3.fromRGB(16, 22, 38)
-
+local C = Theme.Color
 local function today(): number
 	return CurseData.DayOf(MetaUI.Now())
 end
@@ -78,7 +76,7 @@ end
 function MenuQuests.Build(screen: Frame, ctx: { [string]: any })
 	local host = ctx.Host
 	local ui = MetaUI.Screen(screen, ctx, "DAILY QUESTS", 760)
-	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "QuestsDone", TextColor3 = P.gold_200 })
+	local title = MetaUI.Line(ui.Head, "H3", "", 20, { Name = "QuestsDone", TextColor3 = C.BlueDeep })
 	local sub = MetaUI.Line(ui.Head, "Small", "", 14, { Name = "QuestsRule" })
 	UIKit.list(ui.Body, { Padding = UDim.new(0, 6) })
 
@@ -118,7 +116,8 @@ function MenuQuests.Build(screen: Frame, ctx: { [string]: any })
 			if row.Action then
 				row.Action.SetEnabled(isDone and not got)
 			end
-			row.SetDim(got)
+			row.SetDim(false)
+			row.SetDone(got)
 		end
 		order += 1
 		local l = UIKit.SectionLabel(ui.Body, "ALL THREE")
@@ -143,7 +142,7 @@ function MenuQuests.Build(screen: Frame, ctx: { [string]: any })
 		if bonus.Action then
 			bonus.Action.SetEnabled(ready)
 		end
-		bonus.SetDim(bonusClaimed)
+		bonus.SetDone(bonusClaimed)
 	end
 
 	local function layout(v: Vector2, portrait: boolean, ins: { [string]: number })
@@ -190,13 +189,13 @@ function MenuQuests.BuildChip(parent: Frame, onOpen: () -> ()): Chip
 		Name = "QuestChip",
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = NAVY,
-		BackgroundTransparency = 0.18,
+		BackgroundColor3 = C.Panel,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Visible = false,
 	}, parent)
 	UIKit.corner(b, 10)
-	UIKit.stroke(b, P.gold_400, 1.5, 0.25)
+	UIKit.stroke(b, C.PanelEdge, 2, 0)
 	UIKit.Focusable(b)
 	UIAnim.Button(b)
 	b.Activated:Connect(function()
@@ -204,7 +203,7 @@ function MenuQuests.BuildChip(parent: Frame, onOpen: () -> ()): Chip
 		onOpen()
 	end)
 	local iconHolder = new("Frame", { Name = "IconHolder", BackgroundTransparency = 1 }, b)
-	Icons.Draw(iconHolder, "flag", { Size = 18, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = NAVY })
+	Icons.Draw(iconHolder, "flag", { Size = 18, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.Panel })
 	local label = new("TextLabel", {
 		Name = "ChipText",
 		BackgroundTransparency = 1,
@@ -212,11 +211,10 @@ function MenuQuests.BuildChip(parent: Frame, onOpen: () -> ()): Chip
 		FontFace = Theme.Font.Title,
 		TextSize = 15,
 		TextScaled = true,
-		TextColor3 = P.gold_200,
+		TextColor3 = C.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextStrokeColor3 = C.Shadow,
-		TextStrokeTransparency = 0.6,
+		TextStrokeTransparency = 1,
 	}, b)
 	new("UITextSizeConstraint", { Name = "Fit", MaxTextSize = 16, MinTextSize = 8 }, label)
 	NoticeDots.Attach("Quests", b, { Position = UDim2.new(1, -4, 0, 4) })

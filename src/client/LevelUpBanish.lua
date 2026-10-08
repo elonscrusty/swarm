@@ -36,7 +36,6 @@ local UIKit = require(script.Parent.UIKit)
 
 local LevelUpBanish = {}
 
-local P = Theme.Palette
 local C = Theme.Color
 local ui: { [string]: any } = {}
 local state = {
@@ -65,7 +64,7 @@ local function refreshButton()
 	b.Instance.Visible = state.Shown
 	if state.Active then
 		b.SetText("CANCEL", "Tap a NEW card")
-		b.SetKind("Primary")
+		b.SetKind("Selected")
 	else
 		b.SetText("BANISH", state.Left > 0 and string.format("%d left", state.Left) or "None left this run")
 		b.SetKind("Outline")
@@ -103,7 +102,7 @@ function LevelUpBanish.Mark()
 				local can = LevelUpBanish.CanBanish(c)
 				local mark = UIKit.new("Frame", {
 					Name = "BanishMark",
-					BackgroundColor3 = can and P.crimson_500 or C.Backdrop,
+					BackgroundColor3 = can and C.Danger or C.Backdrop,
 					BackgroundTransparency = can and 0.82 or 0.45,
 					BorderSizePixel = 0,
 					Size = UDim2.fromScale(1, 1),
@@ -112,7 +111,7 @@ function LevelUpBanish.Mark()
 				}, face)
 				UIKit.corner(mark, Theme.Radius.L)
 				if can then
-					UIKit.stroke(mark, P.crimson_300, 3, 0)
+					UIKit.stroke(mark, C.Danger, 3, 0)
 				end
 				if word then
 					if word:GetAttribute("BanishOrig") == nil then

@@ -16,7 +16,7 @@ local UIKit = require(script.Parent.UIKit)
 
 local Cosmetics = {}
 
-local P = Theme.Palette
+local C, P = Theme.Color, Theme.Palette
 local new = UIKit.new
 
 -- Decorates a round medallion frame (removes an earlier decoration). Returns the main
@@ -53,7 +53,7 @@ function Cosmetics.Frame(medal: GuiObject, frameId: string?): UIStroke?
 			BorderSizePixel = 0,
 			ZIndex = 4,
 		}, holder)
-		UIKit.stroke(gem, P.slate_950, 1, 0.2)
+		UIKit.stroke(gem, C.Panel, 1, 0.2)
 	end
 	return stroke
 end
@@ -63,9 +63,9 @@ function Cosmetics.NameColor(id: string?): Color3?
 	return c and c.Color or nil
 end
 
--- "LV 7" pill (gold) for nameplates and headers.
+-- "LV 7" pill (blue) for nameplates and headers.
 function Cosmetics.LevelBadge(parent: Instance?, level: number, props: { [string]: any }?): TextLabel
-	return UIKit.Badge(parent, "LV " .. tostring(level), "Gold", props)
+	return UIKit.Badge(parent, "LV " .. tostring(level), "Slate", props)
 end
 
 return Cosmetics

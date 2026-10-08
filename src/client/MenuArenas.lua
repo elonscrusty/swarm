@@ -41,7 +41,7 @@ local PIC_R = Theme.Radius.S + 2 -- picture corners
 local LOOK: { [string]: { [string]: any } } = {
 	Forest = { Sky = P.moss_200, Sky2 = P.moss_400, Far = P.moss_600, Ground = P.moss_700, Icon = "arena_Forest", Hazard = "No hazards" },
 	Ruins = { Sky = P.amber_300, Sky2 = P.stone_300, Far = P.stone_500, Ground = P.stone_600, Icon = "arena_Ruins", Hazard = "No hazards  ·  Tight lanes" },
-	Swamp = { Sky = P.murk_300, Sky2 = P.murk_500, Far = P.murk_700, Ground = P.bog_700, Pool = P.bog_500, Icon = "arena_Swamp", Hazard = "Mud slows you to " .. pct(H.Mud.PlayerSpeed) .. " speed" },
+	Swamp = { Sky = P.murk_300, Sky2 = P.murk_500, Far = P.murk_700, Ground = P.bog_700, Pool = P.bog_500, Icon = "arena_Swamp", Hazard = "Mud: " .. pct(H.Mud.PlayerSpeed) .. " movement speed" },
 	Snow = { Sky = P.ice_100, Sky2 = P.snow_300, Far = P.snow_400, Ground = P.snow_200, Pool = P.ice_300, Icon = "arena_Snow", Hazard = "Ice: " .. pct(H.Ice.PlayerSpeed) .. " speed, slippery" },
 	Desert = { Sky = P.amber_300, Sky2 = P.sand_300, Far = P.sand_600, Ground = P.sand_400, Pool = P.sand_700, Icon = "arena_Desert", Hazard = "Quicksand slows you to " .. pct(H.Quicksand.PlayerSpeed) .. " speed" },
 	Lava = { Sky = P.basalt_600, Sky2 = P.basalt_800, Far = P.basalt_700, Ground = P.basalt_900, Pool = P.lava_500, Glow = true, Icon = "arena_Lava", Hazard = string.format("Lava: %d damage every %ss", H.Lava.Damage, tostring(H.Lava.Tick)) },
@@ -90,12 +90,12 @@ local function painting(f: Frame, look: { [string]: any })
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.42),
 		Size = UDim2.fromOffset(44, 44),
-		BackgroundColor3 = P.slate_900,
+		BackgroundColor3 = C.PanelRaised,
 		BackgroundTransparency = 0.35,
 	}, f)
 	UIKit.corner(well, 999)
-	UIKit.stroke(well, P.ivory_100, 1, 0.6)
-	Icons.Draw(well, look.Icon, { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	UIKit.stroke(well, C.Text, 1, 0.6)
+	Icons.Draw(well, look.Icon, { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.PanelRaised })
 end
 
 -- Round badge on the picture's corner: a lock (locked) or a gold check (selected).
@@ -118,14 +118,11 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 	local ui: { [string]: any } = { Cards = {} }
 	local optimistic: string? = nil
 	local optimisticUntil = 0
-	ui.Header = UIKit.ScreenHeader(screen, "ARENAS", ctx.Back)
+	ui.Header = UIKit.ScreenHeader(screen, "ARENA", ctx.Back)
 	ui.Best = UIKit.IconPill(ui.Header.Frame, "crown", "BEST STAGE 0", { Name = "BestStage", AnchorPoint = Vector2.new(0, 0.5) })
-	ui.Intro = text(screen, "Body", "Choose your starting arena.", {
-		Name = "Intro",
-		TextWrapped = true,
-		TextColor3 = P.ivory_200,
-	})
-	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06 })
+	-- (no intro line: the cards and the CONFIRM footer say it; keeps the body tall enough on phones)
+	ui.Intro = text(screen, "Body", "Choose your starting arena.", { Name = "Intro", Visible = false })
+	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L })
 	ui.Panel = holder
 	local scroll = new("ScrollingFrame", {
 		Name = "Cards",
@@ -133,7 +130,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 1),
 		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = P.gold_500,
+		ScrollBarImageColor3 = C.Blue,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -182,7 +179,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			OnClick = function()
 				local best = bestStage()
 				if not unlocked(best, name) then
-					ctx.Toast(string.format("Reach stage %d in a run to unlock %s", def.RequiredBestStage or 0, def.DisplayName), P.gold_300)
+					ctx.Toast(string.format("Reach stage %d in a run to unlock %s", def.RequiredBestStage or 0, def.DisplayName))
 					return
 				end
 				if selected() ~= name then
@@ -202,11 +199,11 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local art = UIKit.ArtPicture(pic, "arenas/" .. name, { Name = "Art", CornerRadius = PIC_R }, function(fb: Frame)
 			painting(fb, look)
 		end)
-		local veil = new("Frame", { Name = "Veil", Size = UDim2.fromScale(1, 1), BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.5, BorderSizePixel = 0, Visible = false, ZIndex = 5 }, pic)
+		local veil = new("Frame", { Name = "Veil", Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.Disabled, BackgroundTransparency = 0.35, BorderSizePixel = 0, Visible = false, ZIndex = 5 }, pic)
 		UIKit.corner(veil, PIC_R)
-		local picEdge = UIKit.stroke(art, P.slate_950, 1, 0.4)
-		local lockBadge = cornerBadge(pic, "lock", P.slate_950, P.ivory_200, P.stone_500)
-		local checkBadge = cornerBadge(pic, "check", P.gold_400, P.gold_900, P.gold_200)
+		local picEdge = UIKit.stroke(art, C.Blue, 2, 0)
+		local lockBadge = cornerBadge(pic, "lock", C.Disabled, C.DisabledText, C.TextFaint)
+		local checkBadge = cornerBadge(pic, "check", C.Selected, C.Text, C.SelectedEdge)
 		-- the text side
 		local info = new("Frame", { Name = "Info", BackgroundTransparency = 1 }, b.Content)
 		local title = text(info, "H3", string.upper(def.DisplayName), { Name = "ArenaName", Size = UDim2.new(1, 0, 0, TS(18) + 4), TextTruncate = Enum.TextTruncate.AtEnd })
@@ -218,12 +215,14 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			Size = UDim2.new(1, -28, 0, TS(14) * 2 + 6),
 			TextWrapped = true,
 			TextYAlignment = Enum.TextYAlignment.Top,
-			TextColor3 = P.ivory_200,
+			TextColor3 = C.Text,
 		})
 		local rule = new("Frame", { Name = "Divider", BackgroundColor3 = C.PanelEdge, BackgroundTransparency = 0.55, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1) }, info)
-		local ruleText = text(info, "Small", "", { Name = "Rule", Size = UDim2.new(1, 0, 0, TS(14) + 4), TextColor3 = P.gold_200, TextTruncate = Enum.TextTruncate.AtEnd })
-		local meter = UIKit.Meter(info, { Name = "Progress", Size = UDim2.new(1, -52, 0, 8), Color = P.gold_400 } :: any)
-		local count = text(info, "Label", "", { Name = "Count", AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(48, TS(14) + 4), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_200 })
+		local ruleText = text(info, "Small", "", { Name = "Rule", Size = UDim2.new(1, 0, 0, TS(14) + 4), TextColor3 = C.Text, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 0, BackgroundColor3 = C.BluePale, TextTruncate = Enum.TextTruncate.AtEnd })
+		UIKit.corner(ruleText, 8)
+		UIKit.padding(ruleText, 0, 8, 0, 8)
+		local meter = UIKit.Meter(info, { Name = "Progress", Size = UDim2.new(1, -52, 0, 8), Color = C.Blue } :: any)
+		local count = text(info, "Label", "", { Name = "Count", AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(48, TS(14) + 4), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.BlueDeep })
 		ui.Cards[name] = {
 			Button = b,
 			Pic = pic,
@@ -266,19 +265,10 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 			card.Veil.Visible = not open
 			card.Lock.Visible = not open
 			card.Check.Visible = isSel
-			card.PicEdge.Color = isSel and P.gold_400 or P.slate_950
-			card.PicEdge.Transparency = isSel and 0.2 or 0.4
-			card.Title.TextColor3 = isSel and P.gold_200 or (open and C.Text or P.ivory_300)
-			card.Hazard.TextColor3 = open and P.ivory_200 or P.ivory_300
+			card.PicEdge.Color = isSel and C.SelectedEdge or C.Blue
+			card.Title.TextColor3 = open and C.Text or C.DisabledText
+			card.Hazard.TextColor3 = open and C.TextMuted or C.DisabledText
 			UIKit.SetStatus(card.State, isSel and "SELECTED" or (open and "UNLOCKED" or "LOCKED"))
-			if not open and not isSel then
-				-- locked: a dark outline pill (not red: nothing is wrong, it's just ahead)
-				card.State.TextColor3 = P.ivory_300
-				local edge = card.State:FindFirstChild("StatusEdge") :: UIStroke?
-				if edge then
-					edge.Color = P.stone_400
-				end
-			end
 			if need <= 0 then
 				card.Rule.Text = "Open from the start"
 			elseif open then
@@ -288,13 +278,16 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 				card.Meter.Set(math.clamp(best / need, 0, 1), "")
 				card.Count.Text = string.format("%d/%d", math.min(best, need), need)
 			end
-			card.Rule.TextColor3 = open and P.moss_200 or P.gold_200
+			card.Rule.TextColor3 = open and C.Text or C.DisabledText
+			card.Open = open
+			card.Rule.Size = UDim2.new(1, open and 0 or -44, 0, card.Rule.Size.Y.Offset)
+			card.Rule.BackgroundColor3 = isSel and C.SelectedPale or C.BluePale
 			card.Meter.Frame.Visible = not open
 			card.Count.Visible = not open
 			if wasSel == false and isSel and screen.Visible then
 				UIAnim.Punch(card.Button.Instance, 0.06)
 				UIAnim.Sweep(card.Button.Instance, 0, 0.6, 0.5)
-				UIAnim.Burst(card.Button.Instance, UDim2.fromScale(0.5, 0.5), { P.gold_300, P.ivory_100 }, 10, 70)
+				UIAnim.Burst(card.Button.Instance, UDim2.fromScale(0.5, 0.5), { C.BlueDeep, C.Text }, 10, 70)
 			end
 		end
 	end
@@ -305,9 +298,9 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 	local CARD_PAD = 8
 	-- Card text block height (title, hazard lines, rule, bar) for a cell width.
 	local function infoMetrics(cellW: number): (number, number)
-		local hazLines = cellW < 230 and 3 or 2
+		local hazLines = cellW < 140 and 3 or 2
 		local titleH = TS(18) + 4
-		local lineH = TS(14) + 4
+		local lineH = TS(14) + 8
 		return titleH + 4 + hazLines * (TS(14) + 2) + 6 + lineH + 4 + 8, hazLines
 	end
 
@@ -318,7 +311,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		place(card.Pic, pad, pad, iw, picH)
 		place(card.Info, pad, pad + picH + 6, iw, infoH)
 		local titleH = TS(18) + 4
-		local lineH = TS(14) + 4
+		local lineH = TS(14) + 8
 		card.Title.Size = UDim2.new(1, 0, 0, titleH)
 		card.Title.Position = UDim2.fromOffset(0, 0)
 		card.HazardIcon.Visible = false
@@ -329,7 +322,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		card.Hazard.TextWrapped = true
 		local ruleY = titleH + 4 + hazH + 6
 		card.Rule.Position = UDim2.fromOffset(0, ruleY)
-		card.Rule.Size = UDim2.new(1, -44, 0, lineH)
+		card.Rule.Size = UDim2.new(1, card.Open and 0 or -44, 0, lineH)
 		card.Count.Position = UDim2.new(1, 0, 0, ruleY + lineH / 2)
 		card.Meter.Frame.Position = UDim2.fromOffset(0, ruleY + lineH + 4)
 		card.Meter.Frame.Size = UDim2.new(1, 0, 0, 6)
@@ -371,7 +364,7 @@ function MenuArenas.Build(screen: Frame, ctx: { [string]: any })
 		local picH = math.clamp(math.floor((cellW - 2 * CARD_PAD) * 0.5), 66, 118)
 		if rows > 1 and not portrait then
 			-- phone landscape: shrink the picture so a full row shows above the footer
-			picH = math.clamp(panelMax - 20 - (2 * CARD_PAD + 6 + infoH), 44, picH)
+			picH = math.clamp(panelMax - 24 - (2 * CARD_PAD + 6 + infoH), 44, picH)
 		end
 		local cellH = 2 * CARD_PAD + picH + 6 + infoH
 		ui.Grid.CellSize = UDim2.fromOffset(cellW, cellH)
