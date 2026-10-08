@@ -10,6 +10,8 @@ Roblox font families map to them like this (see FAMILY_MAP; docs/PREVIEW.md):
     Inconsolata.json    -> Inconsolata            (same font, Enum.Font.Code)
     GothamSSm.json      -> Montserrat             (substitute: Gotham is proprietary)
     BuilderSans.json    -> Inter                  (substitute: Builder Sans is not public)
+    FredokaOne.json     -> Fredoka One            (same font, Enum.Font.FredokaOne)
+    Nunito.json         -> Nunito                 (same font)
     Arial / Legacy      -> Arimo                  (metric-compatible Arial clone)
     anything else       -> Source Sans 3          (reported as a substitution)
 
@@ -27,7 +29,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(os.path.dirname(HERE), ".cache", "fonts")
 METRICS = os.path.join(CACHE, "metrics.json")
-VERSION = 3  # bump when the families or the measured characters change
+VERSION = 4  # bump when the families or the measured characters change
 
 # Google family -> weights (normal) and weights that also get an italic file.
 FAMILIES = {
@@ -37,6 +39,8 @@ FAMILIES = {
     "Inter": ([300, 400, 500, 600, 700, 800, 900], []),
     "Inconsolata": ([400, 700], []),
     "Arimo": ([400, 700], [400, 700]),
+    "Fredoka One": ([400], []),
+    "Nunito": ([400, 600, 700, 800, 900], []),
 }
 
 # Roblox family json -> (google family, note). Keys are lower case file stems.
@@ -52,7 +56,8 @@ FAMILY_MAP = {
     "legacyarial": ("Arimo", "substitute for Legacy"),
     "montserrat": ("Montserrat", "same font"),
     "roboto": ("Inter", "substitute for Roboto"),
-    "nunito": ("Montserrat", "substitute for Nunito"),
+    "nunito": ("Nunito", "same font"),
+    "fredokaone": ("Fredoka One", "same font"),
 }
 
 CHARS = [chr(c) for c in range(32, 127)] + [chr(c) for c in range(160, 256)] + list(

@@ -4,9 +4,10 @@
 	motion for the UI, the world and effects. Colours come from Palette (generated from
 	art/palette.json, shared with the Blender models), so models, UI and effects match.
 
-	Art direction (docs/ART_DIRECTION.md): heroic low-poly fantasy. Moss greens, cool stone
-	grays, slate blues, crimson and antique gold; ivory text on dark slate panels; gold is
-	an accent, not a fill. No neon grass, no rainbow buttons, restrained glow.
+	World art direction (docs/ART_DIRECTION.md): heroic low-poly fantasy. The UI follows
+	the owner's "Bright Arcade" reference pack (2026-10-08, docs/UI_BRIGHT_ARCADE.md): icy-white
+	panels with royal blue borders and a blue drop shadow, navy text, chunky rounded type,
+	yellow for the one main action, lime for selected states, red for leave / destructive.
 
 	Use Theme.Color.* / Theme.Font.* / Theme.Space.* instead of hard-coded values.
 	The client UI kit (src/client/UIKit.lua) turns these tokens into components.
@@ -19,105 +20,146 @@ local Theme = {}
 Theme.Palette = Palette
 
 ------------------------------------------------------------------------------------------
--- UI COLOURS
+-- BRIGHT ARCADE TOKENS (owner's 2026-10-08 UI reference pack)
+-- Icy-white panels, royal blue borders, navy text, sunny yellow main actions, lime
+-- selected states. Gold coins and character art keep their own colours.
+------------------------------------------------------------------------------------------
+local hex = Color3.fromHex
+local A = {
+	PanelTop = hex("#FFFFFF"),
+	PanelBottom = hex("#E8F6FF"),
+	CardFill = hex("#F5FBFF"),
+	Blue = hex("#087FFF"),
+	BlueLight = hex("#39C8FF"),
+	BlueDeep = hex("#1744CD"),
+	BluePale = hex("#CDE9FF"),
+	Shadow = hex("#082D9C"),
+	Text = hex("#08164E"),
+	TextSecondary = hex("#455F9D"),
+	PrimaryTop = hex("#FFF35A"),
+	PrimaryBottom = hex("#FFD21C"),
+	PrimaryEdge = hex("#E8A90B"),
+	Selected = hex("#BBF52B"),
+	SelectedDeep = hex("#5E9E00"),
+	SelectedPale = hex("#EAFACB"),
+	Danger = hex("#E65050"),
+	DangerDeep = hex("#B42A2A"),
+	DisabledFill = hex("#D8E3EE"),
+	DisabledText = hex("#778AA5"),
+	Track = hex("#C9DDF2"),
+	Divider = hex("#B9D7F2"),
+	Coin = hex("#FFC21C"),
+	CoinDeep = hex("#C98A00"),
+}
+Theme.Arcade = A
+
+------------------------------------------------------------------------------------------
+-- UI COLOURS (semantic: screens use these, never raw values)
 ------------------------------------------------------------------------------------------
 Theme.Color = {
 	-- surfaces
-	Backdrop = Palette.slate_950, -- full-screen dimmer behind modals (with transparency)
-	Panel = Palette.slate_900, -- standard panel / card
-	PanelRaised = Palette.slate_800, -- hovered card, inner wells
-	PanelInset = Palette.slate_950, -- bar tracks, input wells
-	PanelEdge = Palette.gold_500, -- thin panel border (used with BorderTransparency)
-	Divider = Palette.slate_600,
-	Shadow = Palette.slate_950, -- soft drop shadows under panels
-	Track = Palette.slate_950, -- meter / slider tracks
+	Backdrop = A.Text, -- full-screen dimmer behind modals (with transparency)
+	Panel = A.PanelTop, -- standard panel / card
+	PanelRaised = A.CardFill, -- hovered card, inner wells
+	PanelInset = A.PanelBottom, -- bar tracks, input wells
+	PanelEdge = A.Blue, -- panel / card border
+	Divider = A.Divider,
+	Shadow = A.Shadow, -- the blue drop shadow under panels
+	Track = A.Track, -- meter / slider tracks
 
 	-- text
-	Text = Palette.ivory_100,
-	TextMuted = Palette.ivory_300,
-	TextFaint = Palette.ivory_400,
-	TextOnGold = Palette.gold_900,
-	TextOnGoldMuted = Palette.gold_800,
-	TextDanger = Palette.crimson_300,
+	Text = A.Text,
+	TextMuted = A.TextSecondary,
+	TextFaint = A.DisabledText,
+	TextOnGold = A.Text, -- navy on the yellow main action
+	TextOnGoldMuted = hex("#6B5310"),
+	TextDanger = A.DangerDeep,
+	TextOnBlue = A.PanelTop, -- white on blue plates (title tabs, badges)
 
-	-- accents
-	Gold = Palette.gold_500,
-	GoldLight = Palette.gold_300,
-	GoldDark = Palette.gold_700,
-	Crimson = Palette.crimson_500,
-	CrimsonDark = Palette.crimson_700,
-	Slate = Palette.slate_500,
-	SlateLight = Palette.slate_300,
-	Moss = Palette.moss_400,
-	Steel = Palette.steel_300,
-	Coin = Palette.gold_400,
+	-- accents (the old gold accent names now point at the arcade blues)
+	Gold = A.Blue,
+	GoldLight = A.BlueDeep,
+	GoldDark = A.Shadow,
+	Blue = A.Blue,
+	BlueLight = A.BlueLight,
+	BlueDeep = A.BlueDeep,
+	BluePale = A.BluePale,
+	Crimson = A.Danger,
+	CrimsonDark = A.DangerDeep,
+	Slate = A.TextSecondary,
+	SlateLight = A.BlueLight,
+	Moss = A.SelectedDeep,
+	Steel = A.TextSecondary,
+	Coin = A.Coin,
+	CoinDeep = A.CoinDeep,
 
-	-- primary button (gold gradient, dark text)
-	PrimaryTop = Palette.gold_300,
-	Primary = Palette.gold_400,
-	PrimaryBottom = Palette.gold_600,
-	PrimaryEdge = Palette.gold_200,
+	-- primary button (sunny yellow gradient, navy text)
+	PrimaryTop = A.PrimaryTop,
+	Primary = A.PrimaryBottom,
+	PrimaryBottom = A.PrimaryBottom,
+	PrimaryEdge = A.PrimaryEdge,
 
 	-- meters
 	Health = Palette.crimson_500,
 	HealthLight = Palette.crimson_400,
 	HealthTrail = Palette.ivory_200,
-	XP = Palette.gold_400,
-	XPLight = Palette.gold_300,
+	XP = A.Blue,
+	XPLight = A.BlueLight,
 	Boss = Palette.crimson_600,
 	Heal = Palette.fx_heal,
 
 	-- states
-	Locked = Palette.stone_500,
-	Success = Palette.moss_300,
-	Warning = Palette.gold_400,
-	Danger = Palette.crimson_400,
-	Disabled = Palette.stone_700, -- face of a disabled button
-	DisabledText = Palette.stone_300,
-	Selected = Palette.gold_400, -- strong border of the selected card / swatch
-	Focus = Palette.gold_300, -- gamepad selection outline
-	Hover = Palette.ivory_100, -- light sheen laid over a hovered button
+	Locked = A.DisabledText,
+	Success = A.SelectedDeep,
+	Warning = A.PrimaryEdge,
+	Danger = A.Danger,
+	Disabled = A.DisabledFill, -- face of a disabled button
+	DisabledText = A.DisabledText,
+	Selected = A.Selected, -- lime: selected tab / card (always with a check or label)
+	SelectedPale = A.SelectedPale,
+	SelectedEdge = A.SelectedDeep,
+	Focus = A.BlueLight, -- gamepad selection outline
+	Hover = A.PanelTop, -- light sheen laid over a hovered button
 }
 
 -- Transparency levels used across the UI (0 = opaque).
 Theme.Alpha = {
-	Panel = 0.08, -- panels stay a touch see-through over the 3D scene
-	PanelSoft = 0.25, -- secondary panels, HUD plates
-	Backdrop = 0.35, -- modal dimmer
-	Edge = 0.55, -- thin gold border on panels
-	EdgeStrong = 0.1, -- focused / primary border
-	Shadow = 0.55, -- soft drop shadow under panels
-	Hover = 0.9, -- the light sheen on a hovered button
+	Panel = 0, -- panels are solid icy white
+	PanelSoft = 0.08, -- secondary panels, HUD plates
+	Backdrop = 0.55, -- modal dimmer (navy, light enough to keep the world recognisable)
+	Edge = 0, -- blue panel borders are solid
+	EdgeStrong = 0,
+	Shadow = 0.25, -- the blue drop shadow under panels
+	Hover = 0.85, -- the light sheen on a hovered button
 	Glow = 0.72, -- primary button glow
 	Disabled = 0.35, -- icons / text on a disabled control
-	Vignette = 0.35, -- strongest point of the menu edge vignette
+	Vignette = 0.6, -- strongest point of the menu edge vignette
 }
 
--- Rarity / card tiers (level-up cards, upgrade tiles). Muted, inside the palette.
+-- Rarity / card tiers (level-up cards, upgrade tiles), readable on white.
 Theme.Rarity = {
-	Common = { Label = "Upgrade", Color = Palette.steel_300, Band = Palette.slate_600 },
-	Rare = { Label = "New", Color = Palette.slate_300, Band = Palette.slate_500 },
-	Epic = { Label = "Max", Color = Palette.crimson_300, Band = Palette.crimson_700 },
-	Legendary = { Label = "Evolution", Color = Palette.gold_300, Band = Palette.gold_600 },
+	Common = { Label = "Upgrade", Color = A.TextSecondary, Band = A.BluePale },
+	Rare = { Label = "New", Color = A.Blue, Band = A.BluePale },
+	Epic = { Label = "Max", Color = A.DangerDeep, Band = hex("#FFD9D9") },
+	Legendary = { Label = "Evolution", Color = A.CoinDeep, Band = A.PrimaryBottom },
 }
 
--- Run item rarities (ItemData): ivory commons, slate-blue uncommons, gold legendaries.
--- Color = text / border, Band = the darker fill behind badges and tile rims.
+-- Run item rarities (ItemData): grey-blue commons, blue uncommons, gold legendaries.
+-- Color = text / border, Band = the lighter fill behind badges and tile rims.
 Theme.ItemRarity = {
-	Common = { Label = "Common", Color = Palette.ivory_200, Band = Palette.stone_600 },
-	Uncommon = { Label = "Uncommon", Color = Palette.slate_300, Band = Palette.slate_600 },
-	Legendary = { Label = "Legendary", Color = Palette.gold_300, Band = Palette.gold_700 },
+	Common = { Label = "Common", Color = A.TextSecondary, Band = A.DisabledFill },
+	Uncommon = { Label = "Uncommon", Color = A.Blue, Band = A.BluePale },
+	Legendary = { Label = "Legendary", Color = A.CoinDeep, Band = hex("#FFE680") },
 }
 
 ------------------------------------------------------------------------------------------
 -- GRADIENTS (UIGradient colour sequences)
 ------------------------------------------------------------------------------------------
 Theme.Gradient = {
-	-- antique gold fill of the one primary button per screen
+	-- sunny yellow fill of the one primary button per screen
 	Primary = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Palette.gold_200),
-		ColorSequenceKeypoint.new(0.45, Palette.gold_400),
-		ColorSequenceKeypoint.new(1, Palette.gold_600),
+		ColorSequenceKeypoint.new(0, A.PrimaryTop),
+		ColorSequenceKeypoint.new(1, A.PrimaryBottom),
 	}),
 	-- polished steel: the SWARM logo letters, steel trims
 	Steel = ColorSequence.new({
@@ -125,38 +167,42 @@ Theme.Gradient = {
 		ColorSequenceKeypoint.new(0.55, Palette.steel_200),
 		ColorSequenceKeypoint.new(1, Palette.steel_400),
 	}),
-	-- panels: a faint top-down light so flat slate reads as a surface
-	Panel = ColorSequence.new(Palette.slate_800, Palette.slate_900),
+	-- panels: white at the top, icy blue at the bottom
+	Panel = ColorSequence.new(A.PanelTop, A.PanelBottom),
+	-- lime selected state
+	Selected = ColorSequence.new(hex("#D6FF6A"), A.Selected),
+	-- blue title tab / secondary plates
+	Blue = ColorSequence.new(A.BlueLight, A.Blue),
 	Health = ColorSequence.new(Palette.crimson_400, Palette.crimson_600),
-	XP = ColorSequence.new(Palette.gold_300, Palette.gold_500),
+	XP = ColorSequence.new(A.BlueLight, A.Blue),
 	Boss = ColorSequence.new(Palette.crimson_500, Palette.crimson_700),
 }
 
 ------------------------------------------------------------------------------------------
 -- TYPOGRAPHY
--- Display / headings: Merriweather (classic serif, reads as "fantasy" without being
--- hard to read). Body and numbers: Source Sans (clean, compact, legible on phones).
+-- Display / titles / buttons: Fredoka One (chunky, rounded, upright). Body and small
+-- labels: Nunito (rounded sans, readable on phones). Two families only.
 ------------------------------------------------------------------------------------------
 -- Families come from the built-in enum fonts, so the asset paths are always right.
-local MERRI = Font.fromEnum(Enum.Font.Merriweather).Family
-local SOURCE = Font.fromEnum(Enum.Font.SourceSans).Family
+local FREDOKA = Font.fromEnum(Enum.Font.FredokaOne).Family
+local NUNITO = Font.fromEnum(Enum.Font.Nunito).Family
 
 Theme.Font = {
-	Display = Font.new(MERRI, Enum.FontWeight.Heavy),
-	Heading = Font.new(MERRI, Enum.FontWeight.Bold),
-	Title = Font.new(MERRI, Enum.FontWeight.Bold),
-	Body = Font.new(SOURCE, Enum.FontWeight.Regular),
-	BodyStrong = Font.new(SOURCE, Enum.FontWeight.SemiBold),
-	Label = Font.new(SOURCE, Enum.FontWeight.Bold), -- small caps-style labels (upper case)
-	Number = Font.new(SOURCE, Enum.FontWeight.Bold),
+	Display = Font.new(FREDOKA, Enum.FontWeight.Regular),
+	Heading = Font.new(FREDOKA, Enum.FontWeight.Regular),
+	Title = Font.new(FREDOKA, Enum.FontWeight.Regular),
+	Body = Font.new(NUNITO, Enum.FontWeight.SemiBold),
+	BodyStrong = Font.new(NUNITO, Enum.FontWeight.Bold),
+	Label = Font.new(NUNITO, Enum.FontWeight.ExtraBold), -- small caps labels, chips, badges
+	Number = Font.new(FREDOKA, Enum.FontWeight.Regular),
 }
 
 -- Text sizes in reference pixels (the UI is designed at Config.UI.ReferenceSize and
 -- scaled with one UIScale, so these stay proportional on every screen).
 Theme.TextSize = {
 	Hero = 64, -- logo
-	Display = 40, -- run timer, result title
-	H1 = 30, -- screen titles, character name
+	Display = 40, -- run timer, page titles, result title
+	H1 = 32, -- screen titles, character name
 	H2 = 22, -- card titles, button titles
 	H3 = 18, -- section headers
 	Body = 16,
@@ -169,23 +215,23 @@ Theme.TextSize = {
 	same look on every screen (UIKit.Role builds a label from one). Sizes are reference px
 	(UIKit.TS adds the phone boost). Stroke = text stroke transparency (nil = no stroke:
 	text on a panel); text drawn straight over the 3D world gets a stroke.
-	  Display  the run timer, stage banners, big results words      Merriweather Heavy 40
-	  Title    panel / tip / boss titles                            Merriweather Bold 22
-	  Heading  section and status lines                             Merriweather Bold 18
-	  Body     sentences, objectives, toasts                        Source Sans SemiBold 16
-	  Label    caps labels, chips, pills, names                     Source Sans Bold 14
-	  Number   HUD figures: HP, kills, gold, XP                     Source Sans Bold 18
-	  Stat     the big figure of a counter (the gold purse)         Source Sans Bold 30
-	  Caption  small print under a figure, badges                   Source Sans Bold 12
+	  Display  the run timer, stage banners, big results words      Fredoka One 40
+	  Title    panel / tip / boss titles                            Fredoka One 22
+	  Heading  section and status lines                             Fredoka One 18
+	  Body     sentences, objectives, toasts                        Nunito Bold 16
+	  Label    caps labels, chips, pills, names                     Nunito ExtraBold 14
+	  Number   HUD figures: HP, kills, gold, XP                     Fredoka One 18
+	  Stat     the big figure of a counter (the gold purse)         Fredoka One 30
+	  Caption  small print under a figure, badges                   Nunito ExtraBold 12
 ]]
 Theme.Type = {
-	Display = { Font = Theme.Font.Display, Size = Theme.TextSize.Display, Stroke = 0.55 },
+	Display = { Font = Theme.Font.Display, Size = Theme.TextSize.Display, Stroke = nil },
 	Title = { Font = Theme.Font.Title, Size = Theme.TextSize.H2, Stroke = nil },
-	Heading = { Font = Theme.Font.Heading, Size = Theme.TextSize.H3, Stroke = 0.5 },
+	Heading = { Font = Theme.Font.Heading, Size = Theme.TextSize.H3, Stroke = nil },
 	Body = { Font = Theme.Font.BodyStrong, Size = Theme.TextSize.Body, Stroke = nil },
 	Label = { Font = Theme.Font.Label, Size = Theme.TextSize.Small, Stroke = nil },
-	Number = { Font = Theme.Font.Number, Size = Theme.TextSize.H3, Stroke = 0.55 },
-	Stat = { Font = Theme.Font.Number, Size = 30, Stroke = 0.45 },
+	Number = { Font = Theme.Font.Number, Size = Theme.TextSize.H3, Stroke = nil },
+	Stat = { Font = Theme.Font.Number, Size = 30, Stroke = nil },
 	Caption = { Font = Theme.Font.Label, Size = Theme.TextSize.Caption, Stroke = nil },
 }
 
@@ -199,9 +245,9 @@ Theme.TextScaleCompact = 1.2
 ------------------------------------------------------------------------------------------
 Theme.Space = { XS = 4, S = 8, M = 12, L = 16, XL = 24, XXL = 32 }
 
-Theme.Radius = { S = 6, M = 10, L = 14, Pill = 999 }
+Theme.Radius = { S = 8, M = 14, L = 20, Pill = 999 }
 
-Theme.Stroke = { Hairline = 1, Thin = 1.5, Medium = 2, Thick = 3 }
+Theme.Stroke = { Hairline = 1, Thin = 2, Medium = 3, Thick = 4 }
 
 Theme.Size = {
 	TapMin = 48, -- smallest touch target (reference px)
@@ -259,9 +305,9 @@ Theme.Motion = {
 Theme.Icon = {
 	Grid = 24, -- icons are designed on a 24 x 24 grid and scale to any size
 	Stroke = 2.6, -- line weight in grid units (same for every icon)
-	Main = Palette.ivory_100, -- default glyph colour
-	Accent = Palette.gold_400, -- default second colour
-	Back = Palette.slate_900, -- colour of cut-outs (eyes, visors, holes)
+	Main = A.Text, -- default glyph colour (navy on white panels)
+	Accent = A.Blue, -- default second colour
+	Back = A.PanelTop, -- colour of cut-outs (eyes, visors, holes)
 }
 
 --[[

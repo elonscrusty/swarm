@@ -50,7 +50,7 @@ UIKit.COLORS = {
 	Gray = C.Locked,
 	XP = C.XP,
 	Orange = C.Warning,
-	Purple = P.slate_300,
+	Purple = C.BlueDeep,
 }
 
 local audio: any = nil
@@ -333,7 +333,7 @@ function UIKit.Shadow(holder: Instance, radius: number, depth: number?, z: numbe
 	local wide = new("Frame", {
 		Name = "ShadowWide",
 		BackgroundColor3 = C.Shadow,
-		BackgroundTransparency = 0.82,
+		BackgroundTransparency = 0.94,
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(-d, -d / 2),
 		Size = UDim2.new(1, d * 2, 1, d * 2),
@@ -406,7 +406,8 @@ function UIKit.Surface(parent: Instance?, o: SurfaceOpts?): (Frame, Frame)
 	corner(face, radius)
 	if opts.Gradient ~= false then
 		local base = opts.Color or C.Panel
-		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(base:Lerp(P.slate_700, 0.45), base) }, face)
+		local seq = if base == C.Panel then Theme.Gradient.Panel else ColorSequence.new(base, base:Lerp(Color3.new(0, 0, 0), 0.06))
+		new("UIGradient", { Rotation = 90, Color = seq }, face)
 	end
 	stroke(face, opts.Edge or C.PanelEdge, opts.EdgeThickness or Theme.Stroke.Thin, opts.EdgeTransparency or Theme.Alpha.Edge)
 	holder.Parent = parent
@@ -610,13 +611,18 @@ export type Button = {
 	Kind: () -> string,
 }
 
+-- Bright Arcade kinds: yellow = the one main action, white / icy blue = secondary, lime =
+-- selected, red = leave / destructive, blue-grey = unavailable.
 local KIND = {
-	Primary = { Text = C.TextOnGold, Sub = C.TextOnGoldMuted, Icon = P.gold_900, IconBack = P.gold_400, Edge = C.PrimaryEdge, EdgeT = 0.15 },
-	Secondary = { Text = C.Text, Sub = C.TextMuted, Icon = P.gold_400, IconBack = C.Panel, Edge = C.PanelEdge, EdgeT = Theme.Alpha.Edge },
-	Outline = { Text = P.gold_200, Sub = C.TextMuted, Icon = P.gold_300, IconBack = C.Panel, Edge = P.gold_400, EdgeT = 0.05 },
+	Primary = { Text = C.TextOnGold, Sub = C.TextOnGoldMuted, Icon = C.Text, IconBack = C.Primary, Edge = C.PrimaryEdge, EdgeT = 0 },
+	Secondary = { Text = C.Text, Sub = C.TextMuted, Icon = C.Blue, IconBack = C.Panel, Edge = C.PanelEdge, EdgeT = 0 },
+	Outline = { Text = C.BlueDeep, Sub = C.TextMuted, Icon = C.Blue, IconBack = C.Panel, Edge = C.Blue, EdgeT = 0 },
 	Ghost = { Text = C.TextMuted, Sub = C.TextFaint, Icon = C.TextMuted, IconBack = C.Panel, Edge = C.PanelEdge, EdgeT = 1 },
-	Disabled = { Text = C.DisabledText, Sub = P.stone_400, Icon = P.stone_400, IconBack = C.Disabled, Edge = P.stone_500, EdgeT = 0.5 },
+	Selected = { Text = C.Text, Sub = C.Text, Icon = C.Text, IconBack = C.Selected, Edge = C.SelectedEdge, EdgeT = 0 },
+	Danger = { Text = C.TextOnBlue, Sub = C.TextOnBlue, Icon = C.TextOnBlue, IconBack = C.Danger, Edge = C.CrimsonDark, EdgeT = 0 },
+	Disabled = { Text = C.DisabledText, Sub = C.DisabledText, Icon = C.DisabledText, IconBack = C.Disabled, Edge = C.DisabledText, EdgeT = 0.4 },
 }
+UIKit.Kinds = KIND
 
 --[[
 	The button component. The TextButton is the hit area (what layouts place, at least
@@ -653,7 +659,7 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 	if o.Glow then
 		local g = new("Frame", {
 			Name = "Glow",
-			BackgroundColor3 = P.gold_300,
+			BackgroundColor3 = C.PrimaryTop,
 			BackgroundTransparency = Theme.Alpha.Glow,
 			BorderSizePixel = 0,
 			Position = UDim2.fromOffset(-6, -6),
@@ -664,7 +670,7 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 		corner(g, radius + 6)
 		local g2 = new("Frame", {
 			Name = "GlowWide",
-			BackgroundColor3 = P.gold_400,
+			BackgroundColor3 = C.Primary,
 			BackgroundTransparency = 0.9,
 			BorderSizePixel = 0,
 			Position = UDim2.fromOffset(-14, -14),
@@ -847,14 +853,22 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 		elseif not enabled then
 			face.BackgroundColor3 = C.Disabled
 			gradient.Enabled = false
+		elseif kind == "Selected" or (selected and kind ~= "Ghost") then
+			face.BackgroundColor3 = Color3.new(1, 1, 1)
+			gradient.Color = Theme.Gradient.Selected
+			gradient.Enabled = true
+		elseif kind == "Danger" then
+			face.BackgroundColor3 = Color3.new(1, 1, 1)
+			gradient.Color = ColorSequence.new(C.Danger, C.CrimsonDark:Lerp(C.Danger, 0.5))
+			gradient.Enabled = true
 		else
 			face.BackgroundColor3 = Color3.new(1, 1, 1)
-			gradient.Color = ColorSequence.new(P.slate_800, P.slate_900)
+			gradient.Color = Theme.Gradient.Panel
 			gradient.Enabled = true
 		end
 		bevel.Visible = kind ~= "Ghost"
 		bevel.BackgroundTransparency = primary and 0.55 or 0.85
-		faceStroke.Color = selected and C.Selected or k.Edge
+		faceStroke.Color = selected and C.SelectedEdge or k.Edge
 		faceStroke.Thickness = selected and Theme.Stroke.Thick or Theme.Stroke.Thin
 		faceStroke.Transparency = selected and 0 or (hovered and math.max(0, k.EdgeT - 0.35) or k.EdgeT)
 		if glow then
@@ -865,7 +879,7 @@ function UIKit.Button(parent: Instance?, o: ButtonOpts): Button
 			end
 		end
 		if titleLabel then
-			titleLabel.TextColor3 = (selected and kind ~= "Primary" and enabled) and P.gold_200 or k.Text
+			titleLabel.TextColor3 = (selected and kind ~= "Primary" and enabled) and C.Text or k.Text
 		end
 		if subLabel then
 			subLabel.TextColor3 = k.Sub
@@ -1039,12 +1053,12 @@ function UIKit.IconButton(parent: Instance?, o: IconButtonOpts): Button
 			old:Destroy()
 		end
 		local kind = o.Kind or "Secondary"
-		local color = not enabled and KIND.Disabled.Icon or (kind == "Primary" and P.gold_900 or P.gold_400)
+		local k = not enabled and KIND.Disabled or ((KIND :: any)[kind] or KIND.Secondary)
 		Icons.Draw(b.Content, o.Icon, {
 			Name = "Glyph",
 			Size = iconSize,
-			Color = color,
-			Back = kind == "Primary" and P.gold_400 or C.Panel,
+			Color = k.Icon,
+			Back = k.IconBack,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = o.Caption and UDim2.new(0.5, 0, 0.5, -TS(Theme.TextSize.Caption) / 2 - 2) or UDim2.fromScale(0.5, 0.5),
 		})
@@ -1127,8 +1141,8 @@ function UIKit.Card(parent: Instance?, o: CardOpts): Button
 		Size = UDim2.fromScale(1, 1),
 	}, holder)
 	corner(well, Theme.Radius.S + 2)
-	stroke(well, C.Gold, 1, 0.5)
-	Icons.Draw(well, o.Icon, { Size = 28, Color = P.gold_400, Back = C.PanelInset, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	stroke(well, C.Blue, 1.5, 0.3)
+	Icons.Draw(well, o.Icon, { Size = 28, Color = C.Blue, Back = C.PanelInset, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 	local column = b.Content:FindFirstChild("Text") :: Frame
 	column.Size = UDim2.new(1, -(46 + 20 + 2 * Theme.Space.M), 1, 0)
 	if b.Title then
@@ -1199,13 +1213,13 @@ function UIKit.Badge(parent: Instance?, str: string, kind: string?, props: { [st
 	local k = kind or "Dark"
 	local bg, fg = C.PanelInset, C.Text
 	if k == "Gold" then
-		bg, fg = P.gold_400, P.gold_900
+		bg, fg = C.Primary, C.Text
 	elseif k == "Crimson" then
-		bg, fg = P.crimson_600, P.ivory_100
+		bg, fg = C.Danger, C.TextOnBlue
 	elseif k == "Slate" then
-		bg, fg = P.slate_600, P.ivory_100
+		bg, fg = C.Blue, C.TextOnBlue
 	elseif k == "Moss" then
-		bg, fg = P.moss_600, P.ivory_100
+		bg, fg = C.Selected, C.Text
 	end
 	local l = text(nil, "Label", str, {
 		Name = "Badge",
@@ -1260,7 +1274,7 @@ function UIKit.Meter(parent: Instance?, o: MeterOpts): Meter
 		ClipsDescendants = true,
 	})
 	corner(f, radius)
-	stroke(f, P.slate_600, 1, 0.3)
+	stroke(f, C.Shadow, 1.5, 0.35)
 	local trail: Frame? = nil
 	if o.Trail then
 		local t = new("Frame", { Name = "Trail", BackgroundColor3 = C.HealthTrail, BackgroundTransparency = 0.25, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1) }, f)
@@ -1289,9 +1303,9 @@ function UIKit.Meter(parent: Instance?, o: MeterOpts): Meter
 			Name = "Value",
 			Size = UDim2.fromScale(1, 1),
 			TextXAlignment = Enum.TextXAlignment.Center,
-			TextColor3 = C.Text,
-			TextStrokeColor3 = C.Shadow,
-			TextStrokeTransparency = 0.55,
+			TextColor3 = C.TextOnBlue,
+			TextStrokeColor3 = C.Text,
+			TextStrokeTransparency = 0.1,
 			ZIndex = 3,
 		}, o.TextSize)
 	end
@@ -1346,18 +1360,18 @@ function UIKit.Tile(parent: Instance?, o: TileOpts): Frame
 		Active = false,
 	})
 	corner(tile, radius)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.slate_700, P.slate_900) }, tile)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Panel }, tile)
 	if o.Evolved then
-		stroke(tile, P.gold_400, math.max(2, size / 22), 0)
+		stroke(tile, C.PrimaryEdge, math.max(2.5, size / 18), 0)
 	else
-		stroke(tile, empty and P.slate_600 or P.slate_500, 1, empty and 0.5 or 0.2)
+		stroke(tile, C.Blue, math.max(1.5, size / 26), empty and 0.6 or 0)
 	end
 	if not empty then
 		local inset = math.floor(size * 0.13)
 		Icons.Upgrade(tile, o.Id, {
 			Size = size - inset * 2,
 			Position = UDim2.fromOffset(inset, inset),
-			Back = P.slate_800,
+			Back = C.Panel,
 			Name = "Icon",
 		})
 	end
@@ -1370,18 +1384,18 @@ function UIKit.Tile(parent: Instance?, o: TileOpts): Frame
 			Position = UDim2.new(1, 3, 1, 3),
 			Size = UDim2.fromOffset(0, bh),
 			AutomaticSize = Enum.AutomaticSize.X,
-			BackgroundColor3 = gold and P.gold_400 or P.slate_950,
+			BackgroundColor3 = gold and C.Selected or C.Primary,
 			BorderSizePixel = 0,
 			Text = "x" .. tostring(o.Level),
 			FontFace = Theme.Font.Number,
 			TextSize = math.floor(bh * 0.78),
-			TextColor3 = gold and P.gold_900 or C.Text,
+			TextColor3 = C.Text,
 			ZIndex = 5,
 			Active = false,
 		}, tile)
 		padding(badge, 0, 4, 0, 4)
 		corner(badge, 999)
-		stroke(badge, gold and P.gold_200 or P.slate_500, 1, 0.2)
+		stroke(badge, gold and C.SelectedEdge or C.PrimaryEdge, 1.5, 0)
 	end
 	tile.Parent = parent
 	return tile
@@ -1403,12 +1417,12 @@ function UIKit.Tabs(parent: Instance?, items: { { Id: string, Title: string, Ico
 	local f = new("Frame", {
 		Name = "Tabs",
 		BackgroundColor3 = C.PanelInset,
-		BackgroundTransparency = 0.25,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, Theme.Size.TapMin),
 	})
 	corner(f, Theme.Radius.M)
-	stroke(f, C.PanelEdge, 1, 0.7)
+	stroke(f, C.PanelEdge, 2, 0)
 	padding(f, 4, 4, 4, 4)
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -1420,7 +1434,7 @@ function UIKit.Tabs(parent: Instance?, items: { { Id: string, Title: string, Ico
 	local current = items[1] and items[1].Id or ""
 	local function refresh()
 		for id, b in pairs(buttons) do
-			b.SetKind(id == current and "Primary" or "Ghost")
+			b.SetKind(id == current and "Selected" or "Ghost")
 		end
 	end
 	for i, item in ipairs(items) do
@@ -1476,10 +1490,10 @@ function UIKit.Slider(parent: Instance?, title: string, icon: string?, value: nu
 	local f = new("Frame", { Name = title, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 72) })
 	local head = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 28) }, f)
 	if icon then
-		Icons.Draw(head, icon, { Size = 20, Color = P.gold_400, Position = UDim2.fromOffset(0, 4) })
+		Icons.Draw(head, icon, { Size = 20, Color = C.Blue, Position = UDim2.fromOffset(0, 4) })
 	end
 	text(head, "Label", string.upper(title), { Position = UDim2.fromOffset(icon and 28 or 0, 0), Size = UDim2.new(1, -100, 1, 0) })
-	local valueLabel = text(head, "Number", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 80, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = P.gold_300 })
+	local valueLabel = text(head, "Number", "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 80, 1, 0), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = C.Text })
 	local track = new("Frame", {
 		Name = "Track",
 		BackgroundColor3 = C.Track,
@@ -1488,22 +1502,22 @@ function UIKit.Slider(parent: Instance?, title: string, icon: string?, value: nu
 		Size = UDim2.new(1, 0, 0, 10),
 	}, f)
 	corner(track, 999)
-	stroke(track, P.slate_600, 1, 0.3)
+	stroke(track, C.Shadow, 1.5, 0.5)
 	local fill = new("Frame", { Name = "Fill", BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Size = UDim2.fromScale(v, 1) }, track)
 	corner(fill, 999)
-	new("UIGradient", { Color = ColorSequence.new(P.gold_600, P.gold_300) }, fill)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Blue }, fill)
 	local knob = new("Frame", {
 		Name = "Knob",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(v, 0.5),
 		Size = UDim2.fromOffset(Theme.Size.Slider, Theme.Size.Slider),
-		BackgroundColor3 = P.ivory_100,
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
 		ZIndex = 3,
 	}, track)
 	corner(knob, 999)
-	stroke(knob, P.gold_500, 2, 0)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(P.ivory_100, P.ivory_300) }, knob)
+	stroke(knob, C.PrimaryEdge, 2.5, 0)
+	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Primary }, knob)
 
 	local function show()
 		fill.Size = UDim2.fromScale(v, 1)
@@ -1598,7 +1612,7 @@ function UIKit.Toggle(parent: Instance?, title: string, icon: string?, descripti
 	UIKit.Focusable(row)
 	local x = 0
 	if icon then
-		Icons.Draw(row, icon, { Size = 20, Color = P.gold_400, Position = UDim2.fromOffset(0, description and 6 or 14) })
+		Icons.Draw(row, icon, { Size = 20, Color = C.Blue, Position = UDim2.fromOffset(0, description and 6 or 14) })
 		x = 28
 	end
 	-- narrow columns (phones): the title shrinks a little instead of truncating, and the
@@ -1632,13 +1646,13 @@ function UIKit.Toggle(parent: Instance?, title: string, icon: string?, descripti
 		BorderSizePixel = 0,
 	}, row)
 	corner(track, 999)
-	local edge = stroke(track, P.slate_600, 1.5, 0.2)
+	local edge = stroke(track, C.PanelEdge, 2, 0)
 	local knob = new("Frame", {
 		Name = "Knob",
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.new(0, 3, 0.5, 0),
 		Size = UDim2.fromOffset(24, 24),
-		BackgroundColor3 = P.ivory_200,
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
 		ZIndex = 3,
 	}, track)
@@ -1656,11 +1670,11 @@ function UIKit.Toggle(parent: Instance?, title: string, icon: string?, descripti
 		else
 			knob.Position = goal.Position
 		end
-		track.BackgroundColor3 = on and P.gold_500 or C.Track
-		edge.Color = on and P.gold_300 or P.slate_600
-		knob.BackgroundColor3 = on and P.ivory_100 or P.stone_300
+		track.BackgroundColor3 = on and C.Selected or C.Track
+		edge.Color = on and C.SelectedEdge or C.PanelEdge
+		knob.BackgroundColor3 = on and Color3.new(1, 1, 1) or C.Panel
 		word.Text = on and "ON" or "OFF"
-		word.TextColor3 = on and P.gold_900 or C.TextMuted
+		word.TextColor3 = on and C.Text or C.TextMuted
 		-- the word sits on the side the knob left
 		word.Position = UDim2.fromOffset(on and -12 or 12, 0)
 	end
@@ -1769,8 +1783,8 @@ function UIKit.ScrollHint(sf: ScrollingFrame)
 			ZIndex = sf.ZIndex + 5,
 		}, overlay)
 		corner(b, 10)
-		stroke(b, P.gold_400, 1.5, 0.1)
-		local g = Icons.Draw(b, "chevronRight", { Size = 12, Color = P.gold_300 })
+		stroke(b, C.Blue, 2, 0)
+		local g = Icons.Draw(b, "chevronRight", { Size = 12, Color = C.Blue })
 		g.AnchorPoint = Vector2.new(0.5, 0.5)
 		g.Position = UDim2.fromScale(0.5, 0.5)
 		g.Rotation = rotation
@@ -1851,6 +1865,29 @@ end
 -- Screen header (lobby sub-screens): [< BACK]  TITLE
 ------------------------------------------------------------------------------------------
 
+--[[
+	Page heading lettering (Bright Arcade): chunky white Fredoka with a modest navy-blue
+	outline (a contextual UIStroke on the text, not a duplicated shadow label). Only for page
+	titles; small labels never get an outline.
+]]
+function UIKit.PageTitleStyle(l: TextLabel, thickness: number?): TextLabel
+	l.FontFace = Theme.Font.Display
+	l.TextColor3 = C.TextOnBlue
+	l.TextStrokeTransparency = 1
+	local old = l:FindFirstChild("TitleOutline")
+	if old then
+		old:Destroy()
+	end
+	new("UIStroke", {
+		Name = "TitleOutline",
+		Color = C.Shadow,
+		Thickness = thickness or 3,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+		LineJoinMode = Enum.LineJoinMode.Round,
+	}, l)
+	return l
+end
+
 export type Header = { Frame: Frame, Back: Button, Title: TextLabel }
 
 function UIKit.ScreenHeader(parent: Instance, title: string, onBack: () -> ()): Header
@@ -1865,12 +1902,12 @@ function UIKit.ScreenHeader(parent: Instance, title: string, onBack: () -> ()): 
 		OnClick = onBack,
 		Name = "Back",
 	})
-	local t = text(f, "H1", title, {
+	local t = text(f, "H1", string.upper(title), {
 		Name = "Title",
 		Position = UDim2.fromOffset(148, 0),
 		Size = UDim2.new(1, -148, 1, 0),
-		TextColor3 = C.Text,
 	})
+	UIKit.PageTitleStyle(t)
 	return { Frame = f, Back = back, Title = t }
 end
 
@@ -1952,12 +1989,12 @@ end
 -- Status pill looks: OWNED slate, LOCKED crimson outline, SELECTED / READY / EQUIPPED gold,
 -- UNLOCKED green; anything else (USED, PRACTICE, SOON ...) dark.
 local STATUS: { [string]: { Back: Color3, Text: Color3, Edge: Color3?, Fill: boolean } } = {
-	OWNED = { Back = P.slate_600, Text = P.ivory_100, Fill = true },
-	LOCKED = { Back = P.slate_950, Text = P.crimson_300, Edge = P.crimson_500, Fill = true },
-	SELECTED = { Back = P.gold_400, Text = P.gold_900, Fill = true },
-	READY = { Back = P.gold_400, Text = P.gold_900, Fill = true },
-	EQUIPPED = { Back = P.gold_400, Text = P.gold_900, Fill = true },
-	UNLOCKED = { Back = P.moss_600, Text = P.ivory_100, Fill = true },
+	OWNED = { Back = C.Blue, Text = C.TextOnBlue, Edge = C.BlueDeep, Fill = true },
+	LOCKED = { Back = C.Disabled, Text = C.DisabledText, Edge = C.DisabledText, Fill = true },
+	SELECTED = { Back = C.Selected, Text = C.Text, Edge = C.SelectedEdge, Fill = true },
+	READY = { Back = C.Selected, Text = C.Text, Edge = C.SelectedEdge, Fill = true },
+	EQUIPPED = { Back = C.Selected, Text = C.Text, Edge = C.SelectedEdge, Fill = true },
+	UNLOCKED = { Back = C.Blue, Text = C.TextOnBlue, Edge = C.BlueDeep, Fill = true },
 }
 
 -- Restyles a StatusPill for `status` (upper-case key); `label` overrides the shown text.
@@ -2000,7 +2037,7 @@ end
 
 -- Small gold letter-spaced caps over a section ("EFFECT", "SKINS", "ROUTE").
 function UIKit.SectionLabel(parent: Instance?, str: string, color: Color3?, props: { [string]: any }?): TextLabel
-	local l = text(nil, "Caption", UIKit.track(str), { Name = "Section", TextColor3 = color or P.gold_300 })
+	local l = text(nil, "Caption", UIKit.track(str), { Name = "Section", TextColor3 = color or C.Blue })
 	if props then
 		for k, v in pairs(props) do
 			(l :: any)[k] = v
@@ -2018,14 +2055,15 @@ function UIKit.IconPill(parent: Instance?, icon: string?, str: string, props: { 
 	local h = Theme.Size.Badge + 14
 	local f = new("Frame", {
 		Name = "IconPill",
-		BackgroundColor3 = P.slate_900,
-		BackgroundTransparency = 0.08,
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		Size = UDim2.fromOffset(0, h),
 		AutomaticSize = Enum.AutomaticSize.X,
 	})
 	corner(f, 999)
-	stroke(f, P.gold_400, 1.5, 0.15)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(C.BlueDeep:Lerp(C.Blue, 0.3), C.BlueDeep) }, f)
+	stroke(f, C.Shadow, 2, 0)
 	padding(f, 0, 12, 0, icon and 8 or 12)
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -2041,7 +2079,7 @@ function UIKit.IconPill(parent: Instance?, icon: string?, str: string, props: { 
 		Name = "Text",
 		Size = UDim2.fromOffset(0, h),
 		AutomaticSize = Enum.AutomaticSize.X,
-		TextColor3 = P.gold_200,
+		TextColor3 = C.TextOnBlue,
 		LayoutOrder = 2,
 	})
 	if props then
@@ -2077,7 +2115,7 @@ function UIKit.TitleRule(parent: Instance?, str: string, props: { [string]: any 
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, f)
 	local function rule(order: number, fadeLeft: boolean)
-		local r = new("Frame", { Name = "Rule", BackgroundColor3 = P.gold_400, BorderSizePixel = 0, Size = UDim2.fromOffset(72, 2), LayoutOrder = order }, f)
+		local r = new("Frame", { Name = "Rule", BackgroundColor3 = C.Blue, BorderSizePixel = 0, Size = UDim2.fromOffset(72, 2), LayoutOrder = order }, f)
 		new("UIGradient", {
 			Transparency = NumberSequence.new(fadeLeft and 1 or 0.1, fadeLeft and 0.1 or 1),
 		}, r)
@@ -2116,13 +2154,13 @@ function UIKit.SegmentBar(parent: Instance?, level: number, max: number, props: 
 		local on = i <= level
 		local s = new("Frame", {
 			Name = "Seg" .. i,
-			BackgroundColor3 = on and P.gold_400 or P.slate_950,
+			BackgroundColor3 = on and C.Blue or C.Track,
 			BorderSizePixel = 0,
 			Position = UDim2.new((i - 1) / n, (i == 1) and 0 or gap / 2, 0, 0),
 			Size = UDim2.new(1 / n, -gap + ((i == 1 or i == n) and gap / 2 or 0), 1, 0),
 		}, f)
 		corner(s, 999)
-		stroke(s, on and P.gold_200 or P.slate_600, 1, on and 0.4 or 0.3)
+		stroke(s, on and C.BlueDeep or C.Divider, 1, 0)
 	end
 	if props then
 		for k, v in pairs(props) do
@@ -2139,18 +2177,18 @@ local avatarCache: { [number]: string } = {}
 function UIKit.Avatar(parent: Instance?, userId: number?, size: number, props: { [string]: any }?): Frame
 	local f = new("Frame", {
 		Name = "Avatar",
-		BackgroundColor3 = P.slate_700,
+		BackgroundColor3 = C.BluePale,
 		BorderSizePixel = 0,
 		Size = UDim2.fromOffset(size, size),
 		ClipsDescendants = true,
 		Active = false,
 	})
 	corner(f, 999)
-	stroke(f, P.gold_500, 1, 0.45)
+	stroke(f, C.Blue, 2, 0)
 	-- silhouette: head + shoulders
-	local head = new("Frame", { Name = "Head", BackgroundColor3 = P.slate_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.2), Size = UDim2.fromScale(0.38, 0.38) }, f)
+	local head = new("Frame", { Name = "Head", BackgroundColor3 = C.Blue, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.2), Size = UDim2.fromScale(0.38, 0.38) }, f)
 	corner(head, 999)
-	local body = new("Frame", { Name = "Shoulders", BackgroundColor3 = P.slate_400, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.64), Size = UDim2.fromScale(0.72, 0.6) }, f)
+	local body = new("Frame", { Name = "Shoulders", BackgroundColor3 = C.Blue, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.64), Size = UDim2.fromScale(0.72, 0.6) }, f)
 	corner(body, 999)
 	local img = new("ImageLabel", { Name = "HeadShot", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2, Active = false }, f)
 	corner(img, 999)
@@ -2161,7 +2199,7 @@ function UIKit.Avatar(parent: Instance?, userId: number?, size: number, props: {
 		if img.Image ~= "" and img.IsLoaded then
 			head.Visible = false
 			body.Visible = false
-			f.BackgroundColor3 = P.slate_800
+			f.BackgroundColor3 = C.BluePale
 		end
 	end
 	img:GetPropertyChangedSignal("IsLoaded"):Connect(hideSilhouette)
@@ -2245,7 +2283,7 @@ end
 
 -- A thin horizontal hairline (dividers inside cards and panels).
 function UIKit.Hairline(parent: Instance?, props: { [string]: any }?): Frame
-	local f = new("Frame", { Name = "Hairline", BackgroundColor3 = P.gold_500, BackgroundTransparency = 0.7, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1) })
+	local f = new("Frame", { Name = "Hairline", BackgroundColor3 = C.Divider, BackgroundTransparency = 0, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 2) })
 	if props then
 		for k, v in pairs(props) do
 			(f :: any)[k] = v
@@ -2291,24 +2329,24 @@ function UIKit.TitleBar(parent: Instance, title: string, onBack: () -> ()): Titl
 		OnClick = onBack,
 		Name = "Back",
 	})
-	local px = TS(Theme.TextSize.H2 + 2)
-	local t = text(f, "H2", UIKit.spaced(title), {
+	local px = TS(Theme.TextSize.H2 + 6)
+	local t = text(f, "H2", string.upper(title), {
 		Name = "Title",
-		FontFace = Theme.Font.Display,
-		Position = UDim2.fromOffset(126, 2),
+		Position = UDim2.new(0, 126, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
 		Size = UDim2.fromOffset(0, px + 6),
 		AutomaticSize = Enum.AutomaticSize.X,
-		TextColor3 = P.ivory_100,
-	}, Theme.TextSize.H2 + 2)
-	-- the rule follows the title's width
-	local rule = UIKit.Divider(t, 10, { Name = "Rule", AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 10) })
+	}, Theme.TextSize.H2 + 6)
+	UIKit.PageTitleStyle(t)
+	-- (kept for callers: the old gold rule under the title, now hidden)
+	local rule = UIKit.Divider(t, 10, { Name = "Rule", AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 10), Visible = false })
 	return {
 		Frame = f,
 		Back = back,
 		Title = t,
 		Rule = rule,
 		SetTitle = function(s: string)
-			t.Text = UIKit.spaced(s)
+			t.Text = string.upper(s)
 		end,
 	}
 end
