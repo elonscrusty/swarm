@@ -158,6 +158,36 @@ Config.Endless = {
 	MaxExtraStages = 30, -- growth stops this many stages past LastNormalStage (stage 35)
 }
 
+-- Stage modifiers (batch B, switch Config.Features.StageModifiers; docs/next/STAGE_MODIFIERS.md).
+-- From FromStage on, every stage rolls ONE trade-off from Pool, deterministic from the run
+-- seed (RunModifiers: the Daily / Weekly seed, else a random seed per run; StageModifierData.Roll),
+-- never the same one two stages in a row (NoRepeat). Effects are multipliers on existing hooks
+-- (1 = none):
+--   EnemySpeed, EnemyHP (not bosses), EnemyDamage (every enemy hit), SpawnMult (live enemies),
+--   EliteChance (elite odds; > 1 also adds one elite per elite wave, like Elite Surge),
+--   XP (gem XP), Gold (the in-run gold stat), KillGold (normal kill gold), SmallChests (the
+--   number of small paid chests placed), Might / DamageTaken / Speed / CooldownMult (the
+--   hero's stat sheet), ChestRolls (extra level-up rolls in an elite's chest, a count).
+-- Caps: when a curse has the same effect, curse x modifier never goes past the cap (a curse
+-- alone above the cap keeps its own value). Numbers are proposals awaiting owner approval.
+Config.StageModifiers = {
+	FromStage = 2,
+	NoRepeat = true,
+	CardSeconds = 1.6, -- extra seconds the stage card stays up when it names a modifier (UI timing)
+	Caps = { EnemySpeed = 1.35, SpawnMult = 1.5, Might = 1.45, DamageTaken = 1.45, EliteChance = 3 },
+	Order = { "SwiftFoes", "ThickHides", "GlassArena", "GemRain", "EliteNight", "Calm", "Bounty", "Haste" },
+	Pool = {
+		SwiftFoes = { Name = "Swift Foes", Weight = 1, EnemySpeed = 1.12, XP = 1.2 },
+		ThickHides = { Name = "Thick Hides", Weight = 1, EnemyHP = 1.08, Gold = 1.12 },
+		GlassArena = { Name = "Glass Arena", Weight = 1, Might = 1.2, DamageTaken = 1.2 },
+		GemRain = { Name = "Gem Rain", Weight = 1, XP = 1.3, SmallChests = 0.6 },
+		EliteNight = { Name = "Elite Night", Weight = 1, EliteChance = 2, ChestRolls = 1 },
+		Calm = { Name = "Calm", Weight = 1, SpawnMult = 0.85, XP = 0.85 },
+		Bounty = { Name = "Bounty", Weight = 1, KillGold = 1.4, EnemyDamage = 1.05 },
+		Haste = { Name = "Haste", Weight = 1, Speed = 1.1, CooldownMult = 1.05 },
+	},
+}
+
 ------------------------------------------------------------------------------------------
 -- DEV TOOLS (Studio and the game's creator only; the server re-checks every request)
 ------------------------------------------------------------------------------------------
@@ -198,6 +228,20 @@ Config.Player = {
 	-- Movement sanity check: the server snaps players back if they move faster than their
 	-- speed * Movement.HopSpeedCap * Movement.ServerTolerance (plus a small allowance for lag).
 	SpeedCheckAllowance = 6,
+}
+
+-- Final Stand (batch B, switch Config.Features.FinalStand; docs/next/FINAL_STAND.md; server
+-- FinalStand.lua). The first time in a stage a living hero's HP drops below HPShare of max HP,
+-- they get Speed / Damage more for Seconds (StatSheet temporary multipliers, rp.TempMods).
+-- Not while choosing / protected, nor within ReviveGrace s of a revive. No healing; it never
+-- blocks lethal damage. Once per stage per player. Proposals awaiting owner approval.
+Config.FinalStand = {
+	HPShare = 0.10,
+	Seconds = 5,
+	Speed = 0.30, -- +30% move speed
+	Damage = 0.40, -- +40% damage dealt
+	ReviveGrace = 2,
+	Sound = "Evolve", -- an existing Config.Sounds entry, played once on the hero's client
 }
 
 -- Inventory slot limits (weapons and passives are separate).
@@ -268,6 +312,9 @@ Config.LevelUp = {
 	-- protection budget) so the auto-pick clock never runs while the client loads the
 	-- icons, plays the card reveal and arms touch input (up to ~1.2 s)
 	RevealGraceSeconds = 1.5,
+	-- Banish (batch B, Config.Features.Banish, docs/next/BANISH.md): BANISH then a NEW card
+	-- removes that weapon / passive from the offers for the rest of the run, this many per run
+	Banishes = 3,
 }
 
 ------------------------------------------------------------------------------------------
@@ -632,6 +679,22 @@ Config.Enemies = {
 	-- Where pooled (inactive) enemies and gems wait: under the floor, but above
 	-- Workspace.FallenPartsDestroyHeight (-200).
 	ParkPosition = Vector3.new(0, -150, 0),
+}
+
+-- Elite affix icons (Config.Features.AffixIcons; client AffixIcons.lua, server AffixSight.lua,
+-- shared AffixIconData.lua; docs/next/AFFIX_ICONS.md). A small badge over every elite shows
+-- its affix (Swift: blue speed lines in a circle, Shielded: silver shield, Burning: orange
+-- flame; the shape differs as well as the colour). SeenAffixes in the save remembers which
+-- first-sight notices a player already got.
+Config.AffixIcons = {
+	Size = 20, -- badge size in pixels (18-22 on phones); far below an enemy health bar (64 px)
+	Lift = 6.2, -- studs above the elite's body centre is half its height plus this
+	UpdateHz = 8, -- client scan rate for new / dead elites
+	PulseSeconds = 0.6, -- one half-beat of the soft pulse (none with Reduced effects)
+	PulseScale = 1.12,
+	MaxDistance = 200, -- the badge is not drawn farther than this many studs from the camera
+	SightRange = 60, -- server: an elite this close (studs) to a player counts as met
+	SightEvery = 0.5, -- server: seconds between the first-sight checks
 }
 
 ------------------------------------------------------------------------------------------
@@ -1326,8 +1389,10 @@ Config.Audio = {
 Config.Settings = {
 	Defaults = { Music = 0.6, Sfx = 0.8, Shake = 1, ReducedEffects = false, DamageNumbers = false, Tips = true, Minimap = true,
 		Colorblind = "Off", ReduceFlashes = false, CombatVolume = 1, InterfaceVolume = 1, WarningVolume = 1,
-		MuteAll = false, VisualAudioCues = false, TouchLayout = "RightHanded" },
+		MuteAll = false, VisualAudioCues = false, TouchLayout = "RightHanded",
+		DamageNumberSize = "Normal", CombineNumbers = true }, -- last two: DamageNumberOptions
 	Enums = {
+		DamageNumberSize = { "Small", "Normal", "Big" },
 		Colorblind = { "Off", "Protanopia", "Deuteranopia", "Tritanopia" },
 		TouchLayout = { "RightHanded", "LeftHanded", "Compact" },
 	},
@@ -1542,6 +1607,22 @@ Config.DamageNumbers = {
 	LifeSeconds = 0.9,
 }
 
+-- Damage number options (Config.Features.DamageNumberOptions; shared DamageNumberView.lua,
+-- client DamageText.lua + DamageOptionsUI.lua; docs/next/DAMAGE_NUMBERS.md). Settings:
+-- DamageNumbers (the old on / off switch = "Off" vs the three sizes), DamageNumberSize
+-- (Small / Normal / Big; Normal is the look above) and CombineNumbers (hits on one enemy
+-- within CombineSeconds merge into one rising number; off = every server batch gets its own).
+Config.DamageNumberOptions = {
+	Order = { "Off", "Small", "Normal", "Big" },
+	Sizes = { -- text size in pixels: plain hit, critical hit
+		Small = { Hit = 14, Crit = 18 },
+		Normal = { Hit = 18, Crit = 22 },
+		Big = { Hit = 24, Crit = 30 },
+	},
+	CombineSeconds = 0.3,
+	CritMark = "★", -- crits start with a star, are bold and gold (never colour alone)
+}
+
 ------------------------------------------------------------------------------------------
 -- UI
 ------------------------------------------------------------------------------------------
@@ -1651,6 +1732,19 @@ Config.Modes = {
 	Weekly = { DisplayName = "Weekly", MaxPlayers = 1, Countdown = false },
 }
 
+-- Revive thank-you (Config.Features.ReviveThanks; docs/next/REVIVE_THANKS.md): after a
+-- teammate revives you, a THANKS! button shows for ThanksSeconds. A tap tells the reviver
+-- "<name> says thanks!" and gives them ThanksXP run XP (server-checked: once per revive, at
+-- most ThanksPerPair per run for one pair, never yourself, never solo, never a DEV run).
+-- PROPOSED: ThanksXP awaits the owner's approval.
+Config.Revive = {
+	ThanksXP = 25, -- run XP the reviver gets per thank-you
+	ThanksSeconds = 6, -- the button's time on screen
+	ThanksGrace = 1.5, -- the server accepts a tap this much later (network lag)
+	ThanksPerPair = 3, -- thank-yous per run for one (revived, reviver) pair
+	ThanksRate = 2, -- "ReviveThanks" remote calls per second per player
+}
+
 -- Parties (server PartyService.lua, lobby PARTY screen MenuParty.lua). Friends on this
 -- server form a party; when the leader starts SOLO / DUO / TRIO (or the Daily) the
 -- members join that run at once, up to the mode's size. A party is never bigger than
@@ -1664,6 +1758,19 @@ Config.Party = {
 	FriendsCacheSeconds = 30, -- the client asks Roblox for online friends at most this often
 	FollowCooldown = 6, -- seconds between JOIN (teleport) attempts per player
 	ActionRate = 4, -- "Party" remote calls per second per player
+}
+
+-- Party quick lines (Config.Features.PartyQuickLines; docs/next/PARTY_QUICK_LINES.md): fixed
+-- text only, the client sends a line INDEX (1..#Lines), never text. The server checks the
+-- index, the rate limits and that sender and receivers share a party. A line shows as a
+-- bubble over the sender's lobby hero and in the PARTY screen's feed.
+Config.PartyQuickLines = {
+	Lines = { "Ready?", "Go!", "GG", "One more?", "Wait for me", "Thanks!" },
+	MinGap = 2, -- seconds between two lines from one player
+	PerMinute = 10, -- lines per player in any 60 s
+	BubbleSeconds = 4, -- a bubble stays this long (the last FadeSeconds fade out)
+	FadeSeconds = 0.6,
+	FeedMax = 6, -- lines kept in the PARTY screen's feed
 }
 
 -- Private run servers (server RunServers.lua, client TravelOverlay.lua). In the live game a
@@ -1683,6 +1790,13 @@ Config.RunServers = {
 	ReplayGraceSeconds = 10, -- REPLAY on a run server: the new run / countdown must start within this, else the home countdown (the defeat results / MAIN MENU go home at once, FLOW)
 	HandoffLoadAttempts = 12, -- DataService load retries for a player arriving by a SWARM teleport
 	RejoinGraceSeconds = 120, -- a disconnected co-op member can return while this run remains alive
+	SoloResumeSeconds = 60, -- QuickResume: a disconnected SOLO run waits (frozen) this long (docs/next/QUICK_RESUME.md)
+}
+
+-- Quick resume (Config.Features.QuickResume; server QuickResume.lua, client ResumeCard.lua;
+-- docs/next/QUICK_RESUME.md). The window itself is Config.RunServers.SoloResumeSeconds.
+Config.QuickResume = {
+	Rate = 2, -- "QuickResume" requests per second per player (Remotes.Listen)
 }
 
 ------------------------------------------------------------------------------------------
@@ -1820,6 +1934,17 @@ Config.Features = {
 	SmartTutorial = true, -- one-at-a-time speech-bubble tips over the first 2 runs (docs/next/SMART_TUTORIAL.md)
 	DangerArrows = true, -- off-screen boss / champion / elite edge arrows (docs/next/DANGER_ARROWS.md)
 	Walkthrough = true, -- interactive first-run walkthrough: move, fight, gems, upgrade, chest, go (Config.Walkthrough, docs/next/WALKTHROUGH.md)
+	-- batch B (docs/PROMPT_BATCH_B.md, docs/next/)
+	AffixIcons = true, -- elite affix badges over elites + first-sight notice (docs/next/AFFIX_ICONS.md)
+	EvolutionPreview = true, -- evolution line on cards + BUILD panel Evolutions list (docs/next/EVOLUTION_PREVIEW.md)
+	Banish = true, -- BANISH on the level-up panel, 3 per run (docs/next/BANISH.md)
+	DamageNumberOptions = true, -- damage number size + combine settings (docs/next/DAMAGE_NUMBERS.md)
+	FinalStand = false, -- HELD (owner, 2026-10-07): built, not released; 5 s speed/damage burst under 10% HP, once per stage (docs/next/FINAL_STAND.md)
+	StageModifiers = false, -- HELD (owner, 2026-10-07): built, not released; one trade-off modifier per stage from stage 2 (docs/next/STAGE_MODIFIERS.md)
+	PartyQuickLines = false, -- HELD (owner, 2026-10-07): built, not released; fixed-text party quick lines (docs/next/PARTY_QUICK_LINES.md)
+	ReviveThanks = true, -- THANKS! button after a teammate revive (docs/next/REVIVE_THANKS.md)
+	Prestige = false, -- HELD (owner, 2026-10-07): built, not released; reset a maxed hero's mastery for a gold-bonus star (docs/next/PRESTIGE.md)
+	QuickResume = false, -- HELD (owner, 2026-10-07): built, not released; live servers close ~30 s after the last player leaves (docs/next/QUICK_RESUME.md)
 }
 
 -- Season track (feature 22, Config.Features.SeasonTrack; MetaData, docs/features/META.md).
@@ -2119,6 +2244,21 @@ Config.HeroMastery = {
 	PerLevel = 100, -- each next level needs this much more (4,950 XP to level 10)
 	StatPerLevel = 2,
 	SignatureEvery = 2, -- signature level n needs mastery 2n (levels 2, 4, 6, 8, 10)
+}
+
+-- Prestige (Config.Features.Prestige; shared PrestigeData.lua, server Prestige.lua, client
+-- MenuPrestige.lua + PrestigeConfirm.lua; docs/next/PRESTIGE.md). A hero with its whole
+-- mastery track maxed resets those upgrade levels to 0 for a star. PROPOSED reward numbers,
+-- awaiting owner approval: +5% per star of the gold a run with that hero pays into the
+-- lobby at settlement (never in-run gold, so chest prices keep the GoldMult rule), max 5
+-- stars = +25%. No combat power, no Robux path.
+Config.Prestige = {
+	MaxStars = 5, -- PROPOSED
+	GoldPerStar = 0.05, -- PROPOSED
+	GoldCap = 0.25, -- PROPOSED (never above MaxStars x GoldPerStar)
+	ConfirmSeconds = 3, -- the PRESTIGE <HERO> button needs a second tap within this
+	Rate = 2, -- "Prestige" requests per second per player (Remotes.Listen)
+	CooldownSeconds = 5, -- server: at most one prestige per player this often
 }
 
 ------------------------------------------------------------------------------------------

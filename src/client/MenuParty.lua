@@ -30,6 +30,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
+local PartyLines = require(script.Parent.PartyLines)
 
 local MenuParty = {}
 
@@ -475,6 +476,12 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	ui.List = list
 	ui.Empty = text(right, "Body", "", { Name = "Empty", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, Visible = false })
 
+	-- quick lines (PartyQuickLines): a strip under both columns, the row of fixed lines and
+	-- the party feed (PartyLines); only in a party
+	ui.Bar = new("Frame", { Name = "QuickBar", BackgroundTransparency = 1, Visible = false }, face)
+	ui.Say = PartyLines.BuildRow(ui.Bar)
+	ui.Feed = PartyLines.BuildFeed(ui.Bar)
+
 	local leftRows = 0
 	local rightRows = 0
 
@@ -674,19 +681,36 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		-- landscape: only as tall as the longer column needs (at least four rows)
 		local leftWant = labelH + 8 + listWant + 8 + hintH + (leaveH > 0 and leaveH + 8 or 0)
 		local rightWant = tabsH + 10 + (tab == "Friends" and 58 or 0) + math.max(4, rightRows) * (ROW_H + ROW_GAP) + 4
-		local panelH = math.min(maxH, (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + 36)
+		-- quick lines strip under both columns (PartyLines): the row, then the feed
+		local sayOn = PartyLines.Available()
+		local sayRowH, feedLines, barH = 0, 0, 0
+		if sayOn then
+			sayRowH = ui.Say.Measure(w - 36)
+			feedLines = (portrait or H >= 560) and 3 or 1
+			barH = sayRowH + 6 + ui.Feed.Measure(feedLines) + 10
+		end
+		local panelH = math.min(maxH, (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + 36 + barH)
 		local iw, ih = w - 36, panelH - 32
 		place(ui.Panel, (W - w) / 2, top, w, panelH)
+		local colH = ih - barH
+		ui.Bar.Visible = sayOn
+		if sayOn then
+			place(ui.Bar, 0, colH + 10, iw, barH - 10)
+			ui.Say.Layout(iw)
+			ui.Say.Frame.Position = UDim2.fromOffset(0, 0)
+			ui.Feed.Layout(iw, feedLines)
+			ui.Feed.Frame.Position = UDim2.fromOffset(0, sayRowH + 6)
+		end
 		local lw, lh, rx, ry, rw, rh
 		if stacked then
 			-- stacked: the party (as tall as it needs, up to half), then the lists
 			lw = iw
-			lh = math.min(leftWant, math.max(math.floor(ih * 0.45), ih - 14 - rightWant))
-			rx, ry, rw, rh = 0, lh + 14, iw, ih - lh - 14
+			lh = math.min(leftWant, math.max(math.floor(colH * 0.45), colH - 14 - rightWant))
+			rx, ry, rw, rh = 0, lh + 14, iw, colH - lh - 14
 		else
 			lw = math.floor(iw * 0.44)
-			lh = ih
-			rx, ry, rw, rh = lw + 24, 0, iw - lw - 24, ih
+			lh = colH
+			rx, ry, rw, rh = lw + 24, 0, iw - lw - 24, colH
 		end
 		place(ui.Left, 0, 0, lw, lh)
 		local listH = math.max(ROW_H, lh - labelH - 8 - 8 - hintH - (leaveH > 0 and leaveH + 8 or 0))

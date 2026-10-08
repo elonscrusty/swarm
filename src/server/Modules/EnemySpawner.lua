@@ -34,6 +34,7 @@ local ModelBuilder = require(script.Parent.ModelBuilder)
 local SpatialGrid = require(script.Parent.SpatialGrid)
 local Fx = require(script.Parent.Fx)
 local DamageNumbers = require(script.Parent.DamageNumbers)
+local AffixSight = require(script.Parent.AffixSight) -- first-sight notice for elite affixes (AffixIcons)
 local BossAI = require(script.Parent.BossAI)
 local BossData = require(game:GetService("ReplicatedStorage").Shared.BossData)
 
@@ -1430,6 +1431,7 @@ function EnemySpawner.Step(dt: number)
 		state:SetAttribute("WaveLeft", 0)
 	end
 	lastRunTime = runTime
+	AffixSight.Step(dt, ctx, EnemySpawner.Active) -- once per account and affix (docs/next/AFFIX_ICONS.md)
 	calmLeft = math.max(0, calmLeft - dt)
 	lullLeft = math.max(0, lullLeft - dt)
 	sinceWave += dt

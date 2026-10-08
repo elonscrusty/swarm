@@ -277,8 +277,10 @@ end
 -- 30-features batch (docs/features/FOUNDATION.md): flags, cosmetics registry, save fields
 do
 	local NAMES = { "Sigils", "MapEvents", "MiniBosses", "SecretRooms", "TrialShrine", "Merchant", "CursedChests", "Rescue", "Weather", "BossIntro", "NewHeroes", "SecondSkill", "Ultimate", "BuildPresets", "WeaponMastery", "TeamCombo", "QuickPings", "CoopBoss", "TeamBoard", "Spectate", "WeeklyChallenge", "SeasonTrack", "Titles", "CollectionBook", "LoginStreak", "Announcer", "HitFeel", "MusicSlots", "PhotoMode", "LobbyFun", "Store",
-		-- next batch (docs/next)
-		"SmartTutorial", "DangerArrows", "FastStart", "DailyQuests", "ComebackGift", "StarterBundle", "GroupBonus", "InviteRewards", "BugReportPlus", "Walkthrough" }
+		-- next batch (docs/next/)
+		"SmartTutorial", "Walkthrough", "DangerArrows", "FastStart", "DailyQuests", "ComebackGift", "StarterBundle", "GroupBonus", "InviteRewards", "BugReportPlus",
+		-- batch B (docs/PROMPT_BATCH_B.md)
+		"AffixIcons", "EvolutionPreview", "Banish", "DamageNumberOptions", "FinalStand", "StageModifiers", "PartyQuickLines", "ReviveThanks", "Prestige", "QuickResume" }
 	local n = 0
 	for name, on in pairs(Config.Features) do
 		n += 1

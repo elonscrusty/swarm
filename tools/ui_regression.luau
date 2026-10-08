@@ -247,7 +247,10 @@ local ok, err = S.runMain(function()
 			names[c:FindFirstChild("Name").Text] = true
 		end
 	end
-	check("build details list weapons, passives and items", hudEls.Build.Visible == true and rows == 3 and names[preview.shared("WeaponData").Weapons.Whip.Name] and names["Might"] and names["Storm Charm"])
+	-- EvolutionPreview adds one row per evolution in reach (docs/next/EVOLUTION_PREVIEW.md)
+	local EvolutionPreview = preview.shared("EvolutionPreview")
+	local evoRows = EvolutionPreview.On() and #EvolutionPreview.List({ { Id = "Whip", Level = 3 } }, { { Id = "Might", Level = 2 } }, true) or 0
+	check("build details list weapons, passives and items", hudEls.Build.Visible == true and rows == 3 + evoRows and names[preview.shared("WeaponData").Weapons.Whip.Name] and names["Might"] and names["Storm Charm"])
 	Hud.SetCovered(true)
 	check("a covering decision closes the build details", hudEls.Build.Visible == false and Hud.BuildOpen() == false)
 	Hud.SetCovered(false)

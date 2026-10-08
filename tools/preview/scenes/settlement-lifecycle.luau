@@ -37,9 +37,12 @@ RM.ReturnThroughPortal(extracted)
 assert(data.Gold == expected and data.Stats.Wins == 1, "repeat portal callback must not duplicate reward or win")
 preview.advance(1)
 local disconnected = start()
+-- the plain leave settlement (QuickResume off); a held solo run is quick-resume-regression's
+Config.Features.QuickResume = false
 RM.OnPlayerRemoving(player)
 assert(data.Gold == expected + 70 and data.RunEscrow == nil, "disconnect must settle current ledger as a failure")
 RM.OnPlayerRemoving(player)
+Config.Features.QuickResume = true
 assert(data.Gold == expected + 70, "repeat disconnect must not settle twice")
 assert(disconnected.GoldSettlement.Retained == 70, "disconnect must use the same settlement record")
 preview.log("PASS abandon, safe extraction, tier clear, disconnect and duplicate end callbacks")

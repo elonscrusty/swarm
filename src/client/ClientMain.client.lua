@@ -144,7 +144,10 @@ require(script.Parent:WaitForChild("ChallengesUI")).Init() -- CHALLENGES: champi
 require(script.Parent:WaitForChild("WorldFx")).Init() -- EVENTS: map events + weather visuals (idle while the switches are off)
 require(script.Parent:WaitForChild("TeamCombo")).Init() -- TEAM: combo meter + PingWheel, Spectate, WeakSpot (idle while the switches are off)
 require(script.Parent:WaitForChild("ExploreUI")).Init() -- EXPLORE: cracked wall / merchant / villager markers + the merchant panel (idle while the switches are off)
+require(script.Parent:WaitForChild("FinalStandFx")).Init() -- batch B: Final Stand aura + headline (idle while the switch is off)
+require(script.Parent:WaitForChild("StageModifierUI")).Init() -- batch B: stage modifier HUD badge (idle while the switch is off)
 require(script.Parent:WaitForChild("DangerArrows")).Init() -- off-screen boss / champion / elite edge arrows (idle while the switch is off)
+require(script.Parent:WaitForChild("AffixIcons")).Init() -- elite affix badges (idle while the switch is off)
 -- FEEL (docs/features/FEEL.md): each one idles while its Config.Features switch is off
 require(script.Parent:WaitForChild("BossIntro")).Init()
 require(script.Parent:WaitForChild("Announcer")).Init()
@@ -158,6 +161,9 @@ require(script.Parent:WaitForChild("ClientPerformance")).Init()
 require(script.Parent:WaitForChild("GroundDetail")).Init()
 DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer
 require(script.Parent:WaitForChild("TravelOverlay")).Init() -- private run servers: travel cover + go-home banner
+require(script.Parent:WaitForChild("PartyLines")).Init() -- party quick lines: bubbles + feed (idle while PartyQuickLines is off)
+require(script.Parent:WaitForChild("ReviveThanks")).Init() -- THANKS! after a teammate revive (idle while ReviveThanks is off)
+require(script.Parent:WaitForChild("ResumeCard")).Init() -- QuickResume: the RESUME RUN card of a held solo run (idle while the switch is off)
 
 -- Humanoid state switches don't replicate and the client owns its character, so the
 -- server's settings are repeated here: no tripping, ragdolling or dying (jumps: JumpController).

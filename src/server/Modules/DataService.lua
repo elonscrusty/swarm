@@ -55,6 +55,9 @@
 	  {{Hero, Weapons, Passives}}, Active {heroId → index}}, WeaponMastery {weaponId → count},
 	  Cosmetics {Owned {id → true}, Equipped {Trail, Burst, Pet, Emote, Nameplate, Dais}},
 	  Supporter (boolean)
+	batch B group E (additive, no schema bump; cleaned by their own modules):
+	  Prestige {heroId → stars} (Prestige.lua), SoloResume {Id, Expires, Stage, Level, Hero,
+	  Wave} (a disconnected solo run waiting for its player; QuickResume.lua, server only)
 
 	Save health is shown to the player (never pretend saving works): the player attribute
 	"SaveStatus" is "ok", "memory" (DataStores unavailable: nothing is saved this session)
@@ -173,6 +176,8 @@ local function defaultData()
 		-- the interactive first-run walkthrough (Walkthrough.lua): ran once / Replay tips asked for it again
 		WalkthroughDone = false,
 		WalkthroughReplay = false,
+		-- elite affixes whose first-sight notice this account got ({ Swift = true, ... }; AffixSight.lua)
+		SeenAffixes = {},
 	}
 end
 DataService.DefaultData = defaultData
@@ -460,6 +465,8 @@ function DataService.FeatureView(data: { [string]: any }): { [string]: any }
 		-- next batch (docs/next): DailyQuests {Day, Progress, Claimed}, Comeback {LastGift, Pending?}
 		DailyQuests = data.DailyQuests,
 		Comeback = data.Comeback,
+		-- batch B: Prestige {heroId → stars} (Prestige.lua, docs/next/PRESTIGE.md)
+		Prestige = data.Prestige,
 	}
 end
 
@@ -597,6 +604,18 @@ function DataService.Migrate(data: any): { [string]: any }
 	end
 	if type(data.WalkthroughReplay) ~= "boolean" then
 		data.WalkthroughReplay = false
+	end
+	-- additive (no schema bump; AffixSight.lua): elite affixes already announced, known ids only
+	do
+		local clean = {}
+		if type(data.SeenAffixes) == "table" then
+			for _, id in ipairs(Config.Enemies.EliteAffixes) do
+				if data.SeenAffixes[id] == true then
+					clean[id] = true
+				end
+			end
+		end
+		data.SeenAffixes = clean
 	end
 	-- additive (no schema bump): a missing or malformed flag reads as "not boosted"; a
 	-- set flag is never cleared here (only a DEV ResetProgress starts a fresh profile)

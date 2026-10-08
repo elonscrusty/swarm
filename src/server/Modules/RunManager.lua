@@ -161,7 +161,8 @@ function RunManager.RefreshFrozen()
 	-- who is opening a chest ("<Name> is opening a chest" on everyone else's HUD)
 	state:SetAttribute("RewardIds", rewarding and ("," .. table.concat(rewardIds, ",") .. ",") or "")
 	state:SetAttribute("RewardNames", rewarding and table.concat(rewardNames, ", ") or "")
-	local newFrozen = phase == "Running" and (menuPaused or (choiceFreezes and (choosing or rewarding)))
+	-- QuickResume: a held solo run (its player disconnected) stays frozen until resumed / settled
+	local newFrozen = phase == "Running" and (menuPaused or RunManager.SoloAway ~= nil or (choiceFreezes and (choosing or rewarding)))
 	-- who is choosing, so the HUD can say "<Name> is choosing an upgrade" to everyone else
 	-- (the chooser sees the cards instead); set before LevelUpPause so both arrive together
 	state:SetAttribute("ChoosingIds", (phase == "Running" and choosing) and ("," .. table.concat(ids, ",") .. ",") or "")
@@ -685,6 +686,7 @@ local function revive(rp, message: string)
 	setDownedLook(rp, false)
 	setHP(rp, rp.Stats.MaxHP * Config.Player.ReviveHPFraction)
 	rp.InvulnUntil = runTime + Config.Player.ReviveInvulnSeconds
+	rp.RevivedAt = runTime -- Final Stand's revive grace (FinalStand.lua)
 	rp.Player:SetAttribute("Alive", true)
 	if rp.Root then
 		ctx.EnemySpawner.KillInRadius(rp.Root.Position, Config.Player.ReviveClearRadius, rp)
@@ -766,6 +768,9 @@ partnerRevives = function(dt: number)
 				Events.Fire("PartnerRevive", helper.Player)
 				setHP(rp, rp.Stats.MaxHP * D.HPFraction)
 				RunManager.Notify(helper.Player, "You revived " .. rp.Player.DisplayName .. "!", Color3.fromRGB(120, 255, 160), { Id = "team.revived." .. rp.Player.UserId })
+				if ctx.ReviveThanks then
+					ctx.ReviveThanks.OnRevived(rp, helper) -- ReviveThanks: the THANKS! offer (docs/next/REVIVE_THANKS.md)
+				end
 			end
 		end
 	end
@@ -906,6 +911,7 @@ function RunManager.DamagePlayer(rp, amount: number, cause: string?, kind: strin
 		onDowned(rp)
 		return
 	end
+	if ctx.FinalStand then ctx.FinalStand.OnHurt(rp) end -- under 10% HP: Final Stand (once per stage)
 	ctx.ItemSystem.OnHurt(rp, amount, taken) -- Barbed Mail
 end
 
@@ -1457,6 +1463,7 @@ local function finishPlayer(rp, portal: boolean, inLobby: boolean)
 		GoldRetention = rp.GoldSettlement and rp.GoldSettlement.Rate or 1,
 		GoldSurvival = rp.GoldSettlement and rp.GoldSettlement.Survival or 0, -- always kept (own line)
 		GoldGroup = rp.GoldSettlement and rp.GoldSettlement.Group or 0, -- Roblox group member bonus (GroupBonus, own line)
+		GoldPrestige = rp.GoldSettlement and rp.GoldSettlement.Prestige or 0, -- the hero's prestige stars (Prestige.lua, own line)
 		DeathCause = not portal and not rp.Abandoned and not rp.Alive and rp.DeathCause or nil,
 		DamageHistory = not portal and not rp.Abandoned and rp.DamageHistory or {},
 		Difficulty = ctx.RunModifiers.DifficultyId and ctx.RunModifiers.DifficultyId() or "Standard",
@@ -1543,6 +1550,7 @@ end
 -- Clears the run world and goes back to the Lobby phase.
 local function returnAll(how: string?)
 	table.clear(disconnected)
+	RunManager.SoloAway = nil -- QuickResume: a held solo run ends with the world
 	for _, rp in ipairs(runPlayers) do
 		returnPlayerToLobby(rp, how)
 	end
@@ -2257,6 +2265,11 @@ function RunManager.Step(dt: number)
 	if phase ~= "Running" then
 		return
 	end
+	-- QuickResume: a held solo run whose player did not come back in time is settled once
+	if RunManager.SoloAway and os.time() >= RunManager.SoloAway.Expires then
+		RunManager.ExpireSoloHold(false)
+		return
+	end
 
 	local now = os.clock()
 	local live = groupLive()
@@ -2345,7 +2358,9 @@ function RunManager.OnPlayerRemoving(player: Player)
 			if other ~= rp and other.Alive and not other.Returned and other.Player.Parent then resumable = true; break end
 		end
 	end
-	if resumable then
+	-- QuickResume (docs/next/QUICK_RESUME.md): a solo run waits, frozen, for its player
+	local soloHold = not resumable and wasInRun and ctx.QuickResume ~= nil and ctx.QuickResume.CanHold(rp, #runPlayers, maxPlayers())
+	if resumable or soloHold then
 		ctx.LevelUpSystem.Cancel(rp, true)
 		local data = ctx.DataService.GetData(player)
 		-- Preserve lifetime progress even if reconnect never succeeds. Completion rewards
@@ -2361,8 +2376,15 @@ function RunManager.OnPlayerRemoving(player: Player)
 		local snapshot = table.clone(rp)
 		snapshot.Root, snapshot.Character, snapshot.Humanoid = nil, nil, nil
 		snapshot.ReviveHeld, snapshot.RewardUntil, snapshot.RewardSeq = false, nil, 0
-		data.RunReconnect.Expires = os.time() + Config.RunServers.RejoinGraceSeconds
-		disconnected[player.UserId] = { Player = snapshot, Expires = data.RunReconnect.Expires }
+		if soloHold then
+			snapshot.ResumePos = rp.Root and rp.Root.Position or nil
+			local expires = ctx.QuickResume.Mark(rp, data)
+			RunManager.SoloAway = { UserId = player.UserId, Expires = expires, RunId = rp.RunId }
+			disconnected[player.UserId] = { Player = snapshot, Expires = expires }
+		else
+			data.RunReconnect.Expires = os.time() + Config.RunServers.RejoinGraceSeconds
+			disconnected[player.UserId] = { Player = snapshot, Expires = data.RunReconnect.Expires }
+		end
 	elseif wasInRun then
 		saveRunStats(rp, false)
 	end
@@ -2378,8 +2400,11 @@ function RunManager.OnPlayerRemoving(player: Player)
 	rp.Root = nil
 	if phase == "Running" then
 		if #runPlayers == 0 then
-			-- nobody is left to see results: clear the run world straight away
-			returnAll()
+			-- nobody is left to see results: clear the run world straight away (a held solo
+			-- run stays, frozen, for QuickResume)
+			if not RunManager.SoloAway then
+				returnAll()
+			end
 		else
 			ctx.StageManager.OnRosterChanged()
 			checkEnd()
@@ -2392,14 +2417,22 @@ end
 function RunManager.TryReconnect(player: Player, id: string): boolean
 	local saved = disconnected[player.UserId]
 	local data = ctx.DataService.GetData(player)
+	-- QuickResume: this player's held solo run (no co-op route needed on the same server)
+	local solo = RunManager.SoloAway ~= nil and RunManager.SoloAway.UserId == player.UserId
 	if phase ~= "Running" or byPlayer[player] or not saved or saved.Expires <= os.time()
 		or saved.Player.RunId ~= runId or id ~= runId or not data or not data.RunEscrow
-		or data.RunEscrow.Id ~= runId or not data.RunReconnect or data.RunReconnect.Id ~= runId
+		or data.RunEscrow.Id ~= runId or not (solo or (data.RunReconnect and data.RunReconnect.Id == runId))
 		or saved.Player.Committed or #runPlayers >= maxPlayers() then return false end
 	local rp = saved.Player
 	-- Consume before callbacks or any operation that may yield.
 	disconnected[player.UserId] = nil
-	data.RunReconnect.Expires = 0
+	if data.RunReconnect then
+		data.RunReconnect.Expires = 0
+	end
+	if solo then
+		RunManager.SoloAway = nil
+		menuPaused = false -- a pause menu left open when the player dropped has no owner now
+	end
 	rp.Player = player
 	rp.Gold = data.RunEscrow.Gold
 	if data.DevBoosted == true and not runDevTainted then
@@ -2418,8 +2451,19 @@ function RunManager.TryReconnect(player: Player, id: string): boolean
 	for _, teammate in ipairs(runPlayers) do
 		if teammate.Alive and teammate.Root then position = teammate.Root.Position; break end
 	end
+	if rp.ResumePos then
+		position, rp.ResumePos = rp.ResumePos, nil -- a resumed solo hero comes back where it stood
+	end
 	local model = spawnCharacter(player, CFrame.new(position + Vector3.new(3, 3.5, 0)), false, rp.CharacterId)
-	if not model then return false end
+	if not model then
+		if solo and #runPlayers == 0 then
+			returnAll() -- the held solo run can't come back: free the world (QuickResume settles the save)
+		end
+		return false
+	end
+	if solo then
+		data.SoloResume = nil -- QuickResume: consumed (one resume per disconnect)
+	end
 	table.insert(runPlayers, rp)
 	byPlayer[player] = rp
 	RunManager.AttachCharacter(rp, model)
@@ -2461,6 +2505,70 @@ function RunManager.CommitAll()
 			saveRunStats(rp, false)
 		end
 	end
+	if RunManager.SoloAway then
+		RunManager.ExpireSoloHold(true) -- QuickResume: the held run's boards, once
+	end
+end
+
+------------------------------------------------------------------------------------------
+-- QuickResume (Config.Features.QuickResume, QuickResume.lua, docs/next/QUICK_RESUME.md)
+------------------------------------------------------------------------------------------
+
+-- The solo run held on this server for this UserId ({ UserId, Expires, RunId }), or nil.
+function RunManager.SoloHoldFor(userId: number): { [string]: any }?
+	local hold = RunManager.SoloAway
+	return (hold and hold.UserId == userId) and hold or nil
+end
+
+--[[
+	Ends a held solo run that will not be resumed (its time ran out, END RUN, a failed
+	resume, shutdown), once. The player back on this server: the normal leave commit
+	(saveRunStats: the loss / leave gold-kept rule, stats, boards, account XP). The player
+	away (their save is elsewhere): the boards get the run's final score once here, and the
+	gold settles on their next load (GoldSystem.RecoverEscrow, the same kept rule). Then the
+	run world is cleared (not at shutdown). Returns true when a hold was ended.
+]]
+function RunManager.ExpireSoloHold(atShutdown: boolean?): boolean
+	local hold = RunManager.SoloAway
+	if not hold then
+		return false
+	end
+	RunManager.SoloAway = nil
+	local saved = disconnected[hold.UserId]
+	disconnected[hold.UserId] = nil
+	local rp = saved and saved.Player
+	if rp and phase == "Running" and rp.RunId == runId and not rp.Committed then
+		local here = game:GetService("Players"):GetPlayerByUserId(hold.UserId)
+		local data = here and not byPlayer[here] and not ctx.DataService.IsReleased(here) and ctx.DataService.GetData(here)
+		if here and data then
+			rp.Player = here
+			saveRunStats(rp, false)
+			if ctx.QuickResume then
+				ctx.QuickResume.Clear(here, data)
+			end
+			local s = rp.GoldSettlement
+			local kept = s and (s.Retained + (s.Survival or 0) + (s.Group or 0) + (s.Prestige or 0)) or 0
+			ctx.GoldSystem.SyncProfile(here)
+			RunManager.Notify(here, string.format("Your run ended. %d gold kept.", kept), Color3.fromRGB(255, 200, 120), { Id = "resume.settled" })
+		else
+			rp.Committed = true
+			if not rp.DevTainted then
+				local cleared = ctx.StageManager.StagesCleared()
+				local score = ctx.LeaderboardService.RunScore({ Cleared = cleared, Bosses = bossKills, Level = rp.Level, Kills = rp.Kills, Seconds = runTime })
+				local board = rp.Endless and "ScoreEndless" or "Score"
+				ctx.LeaderboardService.Submit(rp.Player, board, score, nil, rp.RunId)
+				ctx.LeaderboardService.Submit(rp.Player, "BestStage", ctx.StageManager.GetStage(), nil, rp.RunId)
+				ctx.LeaderboardService.Submit(rp.Player, "Kills", rp.Kills, nil, rp.RunId)
+				ctx.LeaderboardService.Submit(rp.Player, "Level", rp.Level or 1, nil, rp.RunId)
+			end
+		end
+	end
+	if not atShutdown and phase == "Running" and #runPlayers == 0 then
+		returnAll()
+	else
+		RunManager.RefreshFrozen()
+	end
+	return true
 end
 
 ------------------------------------------------------------------------------------------

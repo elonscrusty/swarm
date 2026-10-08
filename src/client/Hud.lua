@@ -68,6 +68,7 @@ local ItemData = require(Shared:WaitForChild("ItemData"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 local CharacterData = require(Shared:WaitForChild("CharacterData"))
 local EnemyData = require(Shared:WaitForChild("EnemyData"))
+local EvolutionPreview = require(Shared:WaitForChild("EvolutionPreview")) -- batch B5 (docs/next/EVOLUTION_PREVIEW.md)
 local UIKit = require(script.Parent.UIKit)
 local UIAnim = require(script.Parent.UIAnim)
 local Icons = require(script.Parent.Icons)
@@ -663,6 +664,19 @@ local function refreshDetails()
 		-- the passive's whole effect at its level ("Deal 30% more damage with every weapon.")
 		local total = PassiveData.TotalText(ps.Id, ps.Level) or (def and def.Description) or ""
 		detailRow(list, nextOrder(), ps.Id, (def and def.Name) or ps.Id, rank, total, ps.Level >= maxLv, def and def.Note or nil)
+	end
+	if EvolutionPreview.On() then
+		-- EvolutionPreview (docs/next/EVOLUTION_PREVIEW.md): every evolution this build can
+		-- reach, its recipe and what is still missing (WeaponData only; ready ones first)
+		local slotsFree = #weapons < ((inv and inv.WeaponSlots) or Config.Slots.Weapons)
+		local evos = EvolutionPreview.List(weapons, passives, slotsFree)
+		detailHeader(list, nextOrder(), #evos > 0 and string.format("EVOLUTIONS  %d", #evos) or "EVOLUTIONS  none in reach yet")
+		for _, s in ipairs(evos) do
+			local recipe = string.format("%s Lv %d + %s Lv %d", s.WeaponName, s.WeaponNeed, s.PassiveName, s.PassiveNeed)
+			local met = (s.WeaponOk and 1 or 0) + (s.PassiveOk and 1 or 0)
+			local status = s.Ready and "Ready! Look for the EVOLUTION card, or open a chest." or ("Missing: " .. tostring(s.Missing))
+			detailRow(list, nextOrder(), s.EvoId, s.Name, s.Ready and "READY" or string.format("%d / 2", met), recipe, s.Ready, status)
+		end
 	end
 	local total = 0
 	for _, it in ipairs(runItems) do

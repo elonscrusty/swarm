@@ -45,6 +45,7 @@ local ItemData = require(game:GetService("ReplicatedStorage").Shared.ItemData)
 local EnemyData = require(game:GetService("ReplicatedStorage").Shared.EnemyData)
 local MeshCatalog = require(game:GetService("ReplicatedStorage").Shared.MeshCatalog)
 local Palette = require(game:GetService("ReplicatedStorage").Shared.Palette)
+local StageModifierData = require(game:GetService("ReplicatedStorage").Shared.StageModifierData)
 local MapBuilder = require(script.Parent.MapBuilder)
 local ModelBuilder = require(script.Parent.ModelBuilder)
 local Fx = require(script.Parent.Fx)
@@ -990,7 +991,11 @@ function LootSystem.BuildStage(arena, stage: number, portalPos: Vector3?)
 	end
 	chests("Golden", C.GoldenCount)
 	chests("Large", rng:NextInteger(C.LargeCount[1], C.LargeCount[2]))
-	chests("Small", rng:NextInteger(C.SmallCount[1], C.SmallCount[2]))
+	-- the stage modifier Gem Rain places fewer small chests (same roll, so the rest of the
+	-- stage's loot rolls are unchanged; docs/next/STAGE_MODIFIERS.md)
+	local modId = ctx.RunModifiers and ctx.RunModifiers.StageModifierFor and ctx.RunModifiers.StageModifierFor(stageNo)
+	local smallMult = modId and StageModifierData.Effects(modId).SmallChests or 1
+	chests("Small", math.floor(rng:NextInteger(C.SmallCount[1], C.SmallCount[2]) * smallMult + 0.5))
 	for _, fn in ipairs(builtHooks) do
 		local ok, err = pcall(fn, arena, stageNo) -- feature variants (cursed chests); own rng
 		if not ok then

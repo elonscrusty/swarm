@@ -79,6 +79,18 @@ def main():
     checks += [("layout", ["danger-arrows-regression", d]) for d in ("iphone", "phone-portrait", "pc")]  # DangerArrows: logic PASS/FAIL lines + layout
     checks += [("layout", ["smart-tutorial-regression", d]) for d in ("iphone", "phone-portrait", "pc")]  # SmartTutorial: logic PASS/FAIL lines + layout
     checks += [("walkthrough-regression", [])]  # Walkthrough: interactive first-run steps, holds, exactly-once chest, timeouts (PASS/FAIL lines)
+    # batch B (docs/PROMPT_BATCH_B.md, docs/next/); one block per group
+    # batch B group A: AffixIcons, DamageNumberOptions
+    checks += [("affix-sight-regression", []), ("damage-settings-regression", [])]  # AffixIcons first-sight notice + SeenAffixes (real server); DamageNumberOptions settings path (real server)
+    checks += [("layout", [scene, d]) for scene in ("affix-icons-regression", "damage-numbers-regression") for d in ("iphone", "phone-portrait", "pc")]  # AffixIcons badges (logic + layout), DamageNumberOptions rules, counts and Settings rows (logic + layout)
+    # batch B group B: EvolutionPreview, Banish
+    checks += [("evolution-preview-regression", [])] + [("layout", ["evolution-panel-regression", d]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "evo=on"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["hud-build", d]) for d in ("iphone", "phone-portrait", "pc")]  # EvolutionPreview (docs/next/EVOLUTION_PREVIEW.md)
+    checks += [("banish-regression", [])] + [("layout", ["levelup", d, "banish=3"]) for d in ("iphone", "phone-portrait", "pc")] + [("layout", ["levelup", d, "banish=2", "banishmode=on", "evo=on"]) for d in ("iphone", "phone-portrait", "pc")]  # Banish (docs/next/BANISH.md)
+    # batch B group C: FinalStand, StageModifiers
+    # batch B group D: PartyQuickLines, ReviveThanks
+    checks += [("revive-thanks-regression", [])]  # ReviveThanks: offer, once, XP, pair limit, DEV taint, solo, 6 s offer (PASS/FAIL lines; server run, client module without UI)
+    checks += [("layout", ["revive-thanks-layout", d]) for d in ("iphone", "phone-portrait", "pc")]  # ReviveThanks: THANKS! button clear of JUMP / ULT / team list
+    # batch B group E: Prestige, QuickResume
 
     def run(check):
         scene, settings = check
@@ -90,7 +102,7 @@ def main():
             "--max-time", "3000" if scene == "corner-regression" else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression"):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
         if scene in ("results-flow", "leaderboards", "home-board-regression", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression"):
