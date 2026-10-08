@@ -108,6 +108,20 @@ for _, name in ipairs(ORDER) do
 	end
 end
 
+-- SwarmV2 redesign boot hooks (docs/redesign/OWNERSHIP.md): the lobby track owns
+-- LobbyBoot, the gameplay track owns RunBoot. One failing must not stop the server.
+do
+	local SwarmV2 = game:GetService("ServerScriptService"):WaitForChild("SwarmV2")
+	for _, path in ipairs({ { "Lobby", "LobbyBoot" }, { "Run", "RunBoot" } }) do
+		local ok, err = pcall(function()
+			require(SwarmV2:WaitForChild(path[1]):WaitForChild(path[2])).Init(ctx)
+		end)
+		if not ok then
+			warn("[GameServer] SwarmV2 " .. path[2] .. " failed: " .. tostring(err))
+		end
+	end
+end
+
 -- Leaving: commit run stats first, then save + release the profile.
 Players.PlayerRemoving:Connect(function(player)
 	local ok, err = pcall(ctx.RunManager.OnPlayerRemoving, player)

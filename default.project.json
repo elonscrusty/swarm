@@ -6,6 +6,9 @@
       "$className": "ReplicatedStorage",
       "Shared": {
         "$path": "src/shared"
+      },
+      "SwarmV2": {
+        "$path": "src/swarmv2/shared"
       }
     },
     "ServerScriptService": {
@@ -15,6 +18,9 @@
       },
       "Modules": {
         "$path": "src/server/Modules"
+      },
+      "SwarmV2": {
+        "$path": "src/swarmv2/server"
       }
     },
     "StarterPlayer": {
@@ -34,6 +40,9 @@
         "$className": "StarterPlayerScripts",
         "SwarmClient": {
           "$path": "src/client"
+        },
+        "SwarmV2Client": {
+          "$path": "src/swarmv2/client"
         }
       }
     },
@@ -67,8 +76,16 @@
         "ShadowSoftness": 0.4,
         "EnvironmentDiffuseScale": 0.5,
         "EnvironmentSpecularScale": 0.35,
-        "Ambient": [0.38, 0.42, 0.44],
-        "OutdoorAmbient": [0.52, 0.55, 0.57]
+        "Ambient": [
+          0.38,
+          0.42,
+          0.44
+        ],
+        "OutdoorAmbient": [
+          0.52,
+          0.55,
+          0.57
+        ]
       }
     },
     "SoundService": {

@@ -147,6 +147,13 @@ boot("VFX", function()
 	})
 end)
 boot("UIBuilder", function() UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls }) end)
+-- SwarmV2 redesign boot hooks (docs/redesign/OWNERSHIP.md): lobby track owns LobbyClient,
+-- gameplay track owns RunClient.
+do
+	local SwarmV2Client = script.Parent.Parent:WaitForChild("SwarmV2Client")
+	boot("SwarmV2LobbyClient", function() require(SwarmV2Client:WaitForChild("Lobby"):WaitForChild("LobbyClient")).Init() end)
+	boot("SwarmV2RunClient", function() require(SwarmV2Client:WaitForChild("Run"):WaitForChild("RunClient")).Init() end)
+end
 boot("TeamPings", function() require(script.Parent:WaitForChild("TeamPings")).Init() end)
 boot("FeatureHud", function() require(script.Parent:WaitForChild("FeatureHud")).Init() end) -- reserved HUD slots for new features (empty until one uses them)
 boot("Ultimate", function() require(script.Parent:WaitForChild("Ultimate")).Init() end) -- hero ultimate button + build preset cache (HEROPOWER)
