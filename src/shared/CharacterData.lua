@@ -541,6 +541,7 @@ CharacterData.Skins = {
 		Name = "Pioneer",
 		Character = "Knight",
 		Pass = "StarterBundle",
+		Feature = "StarterBundle", -- the Config.Features switch: while off, the menus hide it unless owned
 		Colors = {
 			Metal = Palette.gold_500,
 			MetalDark = Palette.gold_700,

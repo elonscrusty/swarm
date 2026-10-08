@@ -67,6 +67,7 @@
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
 local CharacterData = require(game:GetService("ReplicatedStorage").Shared.CharacterData)
@@ -85,6 +86,9 @@ type Profile = {
 	Released: boolean,
 	LockLost: boolean,
 	LastSave: number,
+	-- the LastJob that was stored when we loaded / last saved / reclaimed: a stored LastJob
+	-- that differs while the lock is empty means another server wrote the save in between
+	BaseJob: string?,
 }
 
 local store: DataStore? = nil
@@ -789,7 +793,7 @@ local function arrivedByHandoff(player: Player): boolean
 		return player:GetJoinData()
 	end)
 	local td = ok and type(data) == "table" and data.TeleportData or nil
-	return type(td) == "table" and (td.SwarmRun ~= nil or td.SwarmReturn ~= nil or td.SwarmRejoin ~= nil)
+	return type(td) == "table" and (td.SwarmRun ~= nil or td.SwarmReturn ~= nil or td.SwarmRejoin ~= nil or td.PartyInviter ~= nil)
 end
 
 local function loadProfile(player: Player): Profile?
@@ -820,7 +824,21 @@ local function loadProfile(player: Player): Profile?
 			return old
 		end)
 		if ok and not lockedByOther then
-			local data = DataService.Migrate(type(record) == "table" and record.Data or nil)
+			local migrated, data = pcall(DataService.Migrate, type(record) == "table" and record.Data or nil)
+			if not migrated then
+				-- never save a half-migrated table over the stored one: give the lock back
+				-- untouched (Data is not written) and let the player retry later
+				warn("[DataService] migration failed for " .. key .. ": " .. tostring(data))
+				update(key, function(old)
+					local lock = type(old) == "table" and old.Lock or nil
+					if type(old) == "table" and type(lock) == "table" and lock.JobId == jobId then
+						old.Lock = nil
+						return old
+					end
+					return nil
+				end)
+				return nil
+			end
 			-- a brand-new account (no earlier save, nothing recovered): FirstJoin is now and the
 			-- invite rewards may treat it as new to SWARM (StarterBundle / InviteRewards)
 			if type(record) ~= "table" or (record.Data == nil and record.Recovered == nil) then
@@ -835,6 +853,7 @@ local function loadProfile(player: Player): Profile?
 				Released = false,
 				LockLost = false,
 				LastSave = os.clock(),
+				BaseJob = type(record) == "table" and record.LastJob or nil,
 			}
 		end
 		if attempt < attempts then
@@ -847,6 +866,30 @@ end
 ------------------------------------------------------------------------------------------
 -- Save
 ------------------------------------------------------------------------------------------
+
+-- Replaces what JSONEncode rejects, in place: NaN / inf become 0, Instances, userdata,
+-- functions and threads are dropped (each warned with its path). Returns nothing.
+local function sanitizeData(tbl: { [any]: any }, path: string, depth: number, seen: { [any]: boolean })
+	if seen[tbl] or depth > 40 then
+		return
+	end
+	seen[tbl] = true
+	for k, v in pairs(tbl) do
+		local t = type(v)
+		local here = path .. "." .. tostring(k)
+		if t == "number" then
+			if v ~= v or v == math.huge or v == -math.huge then
+				warn("[DataService] non-finite number reset to 0 at " .. here)
+				tbl[k] = 0
+			end
+		elseif t == "table" then
+			sanitizeData(v, here, depth + 1, seen)
+		elseif t ~= "string" and t ~= "boolean" then
+			warn("[DataService] unsaveable " .. t .. " dropped at " .. here)
+			tbl[k] = nil
+		end
+	end
+end
 
 --[[
 	Saves a profile. `release` clears the session lock (leave / shutdown).
@@ -866,10 +909,21 @@ function DataService.SaveProfile(profile: Profile, release: boolean?): boolean
 	profile.Saving = true
 	local lostLock = false
 	local snapshot = profile.Data
+	-- a value the DataStore cannot encode (NaN, an Instance, a function) would fail every
+	-- retry and lose the whole save: clean it first, loudly
+	if not pcall(HttpService.JSONEncode, HttpService, snapshot) then
+		sanitizeData(snapshot, profile.Key, 0, {})
+	end
 	local ok = update(profile.Key, function(old)
 		old = (type(old) == "table") and old or {}
 		local lock = old.Lock
 		if lock and lock.JobId ~= jobId then
+			lostLock = true
+			return nil
+		end
+		-- no lock but a different writer than the one we loaded from: another server stole our
+		-- stale lock, saved and released; writing now would overwrite its newer save
+		if lock == nil and old.LastJob ~= nil and old.LastJob ~= jobId and old.LastJob ~= profile.BaseJob then
 			lostLock = true
 			return nil
 		end
@@ -880,6 +934,9 @@ function DataService.SaveProfile(profile: Profile, release: boolean?): boolean
 	end)
 	profile.Saving = false
 	profile.LastSave = os.clock()
+	if ok and not lostLock then
+		profile.BaseJob = jobId
+	end
 	if not lostLock and profile.Player.Parent then
 		-- the player sees when progress is not being written (UIBuilder save notice)
 		DataService.SetSaveStatus(profile.Player, ok and "ok" or "failing")
@@ -1016,6 +1073,9 @@ function DataService.Reclaim(player: Player): boolean
 	if type(record) == "table" and record.LastJob ~= nil and record.LastJob ~= jobId and type(record.Data) == "table" then
 		p.Data = DataService.Migrate(record.Data)
 	end
+	if type(record) == "table" then
+		p.BaseJob = record.LastJob
+	end
 	p.Released = false
 	p.LastSave = os.clock()
 	DataService.SetSaveStatus(player, "ok")
@@ -1085,13 +1145,29 @@ local function onPlayerRemoving(player: Player)
 	-- Other services commit run results on PlayerRemoving first (GameServer orders this).
 	local userId = player.UserId
 	releasing[userId] = true
-	local ok, err = pcall(DataService.SaveProfile, profile, true)
+	-- SaveProfile returns false (no throw) when the write failed: retry the release save a few
+	-- times (about 25 s in all) before giving up, unless the lock is gone for good
+	local saved, lastErr = false, nil
+	for attempt = 1, 6 do
+		local ok, result = pcall(DataService.SaveProfile, profile, true)
+		if ok and result then
+			saved = true
+			break
+		end
+		if not ok then
+			lastErr = result
+		end
+		if profile.LockLost or profile.Released or store == nil or attempt == 6 then
+			break
+		end
+		task.wait(5)
+	end
 	releasing[userId] = nil
 	if profiles[player] == profile then
 		profiles[player] = nil
 	end
-	if not ok then
-		warn("[DataService] final save failed for " .. profile.Key .. ": " .. tostring(err))
+	if not saved and not profile.LockLost and not profile.Released then
+		warn("[DataService] final save failed for " .. profile.Key .. (lastErr and (": " .. tostring(lastErr)) or ""))
 	end
 end
 DataService.ReleasePlayer = onPlayerRemoving

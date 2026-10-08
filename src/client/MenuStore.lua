@@ -516,7 +516,11 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		end
 		if section == "Skins" then
 			for i, e in ipairs(CosmeticData.OfKind("Skin")) do
-				table.insert(made, skinCard(p, e, i))
+				-- a skin of a held feature (Starter Bundle) is hidden while its switch is off, unless owned
+				local feature = (CharacterData.Skins[e.Id] :: any).Feature
+				if not feature or Config.FeatureOn(feature) or (type(p.OwnedSkins) == "table" and p.OwnedSkins[e.Id] == true) then
+					table.insert(made, skinCard(p, e, i))
+				end
 			end
 		elseif section == "Supporter" then
 			table.insert(made, supporterCard(p, 1))
@@ -533,7 +537,11 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 			end
 		elseif sec and sec.Kind then
 			for i, e in ipairs(CosmeticData.OfKind(sec.Kind)) do
-				if e.Source ~= "Default" and not (e :: any).Weapon then
+				-- a look of a held feature (invites, daily quests) is hidden while its switch is off, unless owned
+				local entry = StoreCatalog.Get(e.Id)
+				local feature = entry and entry.Feature
+				local ownedLook = view(p).Owned[e.Id] == true
+				if e.Source ~= "Default" and not (e :: any).Weapon and (ownedLook or not feature or Config.FeatureOn(feature)) then
 					table.insert(made, itemCard(p, e, i))
 				end
 			end

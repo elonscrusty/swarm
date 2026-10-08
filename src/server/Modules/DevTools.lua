@@ -9,14 +9,14 @@
 	                   every arena (best stage), account level 50 (its rings, frames, titles)
 	                   and, in Studio only, every skin for this session (skins are Robux
 	                   items: never saved, never granted in live servers)
-	  ResetProgress    a fresh save of the developer's own profile (purchases and settings kept); lobby only
+	  ResetProgress    a fresh save of the developer's own profile (purchases and settings kept); lobby only, Studio only
 	  LobbyGold n      + n gold to the save (n = 1..1,000,000)
 	  AccountLevels n  + n account levels (1..50)
 	  DamageNumbers    toggles the damage numbers setting
 	Run (your own run player):
 	  AddLevels n, AddGold n (run wallet), God (toggle; player attribute DevGod, read by
 	  RunManager.DamagePlayer), SpawnBoss id (the portal summons that boss now),
-	  BossRotation (back to the normal boss order), SpawnEnemy type / SpawnElite type,
+	  BossRotation (back to the normal boss order; live run only), SpawnEnemy type / SpawnElite type,
 	  GiveItem id, GiveItems (3 random), GiveWeapon id (max level), MaxWeapons (every
 	  weapon at max level), NewWeapons, EvolveWeapons, SpawnPortalBoss, TeleportToPortal,
 	  NextStage, CombatTrace (toggle for this run: RunManager.DamagePlayer prints one
@@ -63,7 +63,7 @@ local KIND = {
 	AddLevels = "run",
 	AddGold = "run",
 	SpawnBoss = "run",
-	BossRotation = "any",
+	BossRotation = "run", -- changes the live run's boss order: only for a live participant
 	SpawnEnemy = "run",
 	SpawnElite = "run",
 	GiveItem = "run",
@@ -161,7 +161,12 @@ function DevTools.Handle(ctx, player: Player, command: string, arg: any, inLobby
 	if command == "UnlockAll" then
 		unlockAll(ctx, player, data)
 	elseif command == "ResetProgress" then
-		-- wipes only the developer's own save (tap twice on the client to confirm)
+		-- wipes only the developer's own save (tap twice on the client to confirm); a live
+		-- save is never wiped from here, even by an allowlisted developer
+		if not game:GetService("RunService"):IsStudio() then
+			ctx.RunManager.Notify(player, "DEV: reset is Studio only", DEV_COLOR)
+			return
+		end
 		if arg ~= "CONFIRM" then
 			return
 		end

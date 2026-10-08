@@ -170,32 +170,16 @@ local function slab(parent: Instance, name: string, top: Vector3, sx: number, sz
 end
 
 ------------------------------------------------------------------------------------------
--- Fire lights: one flicker loop for every torch / brazier light in the world.
+-- Fire lights: tagged here, flickered on each client (client/FlickerLights.lua). The server
+-- used to rewrite every light's Brightness 10x a second, which replicated forever.
 ------------------------------------------------------------------------------------------
 
-local flickers: { { Light: Light, Base: number, Phase: number } } = {}
-local flickerRunning = false
+local FLICKER_TAG = "SwarmFlickerLight"
 
 local function addFlicker(light: Light)
-	table.insert(flickers, { Light = light, Base = light.Brightness, Phase = rng:NextNumber(0, 10) })
-	if flickerRunning then
-		return
-	end
-	flickerRunning = true
-	task.spawn(function()
-		while true do
-			local t = os.clock()
-			for i = #flickers, 1, -1 do
-				local f = flickers[i]
-				if f.Light.Parent == nil then
-					table.remove(flickers, i)
-				else
-					f.Light.Brightness = f.Base * (0.86 + 0.09 * math.sin(t * 7.3 + f.Phase) + 0.05 * math.sin(t * 17.9 + f.Phase * 2))
-				end
-			end
-			task.wait(0.1)
-		end
-	end)
+	light:SetAttribute("FlickerBase", light.Brightness)
+	light:SetAttribute("FlickerPhase", rng:NextNumber(0, 10))
+	CollectionService:AddTag(light, FLICKER_TAG)
 end
 
 local FIRE = rgb(255, 168, 92)

@@ -199,10 +199,12 @@ MetaData.Titles = {
 	{ Id = "Title_Seasoned", Name = "Seasoned", How = "Season tier 20" },
 	{ Id = "Title_Season Champion", Name = "Season Champion", How = "Season tier 30" },
 	-- next batch (docs/next/): the Starter Bundle, invites and the Roblox group; each is
-	-- granted by its own server module (StarterBundle, InviteRewards, GroupBonus)
-	{ Id = "Title_Pioneer", Name = "Pioneer", How = "Comes with the Starter Bundle" },
-	{ Id = "Title_Recruiter", Name = "Recruiter", How = "Invite a new friend who finishes a run" },
-	{ Id = "Title_Group Member", Name = "Group Member", How = "Join our Roblox group" },
+	-- granted by its own server module (StarterBundle, InviteRewards, GroupBonus); Feature =
+	-- the Config.Features switch: while it is off nobody can earn the title, so the menu hides it
+	-- (unless the player already owns it)
+	{ Id = "Title_Pioneer", Name = "Pioneer", How = "Comes with the Starter Bundle", Feature = "StarterBundle" },
+	{ Id = "Title_Recruiter", Name = "Recruiter", How = "Invite a new friend who finishes a run", Feature = "InviteRewards" },
+	{ Id = "Title_Group Member", Name = "Group Member", How = "Join our Roblox group", Feature = "GroupBonus" },
 }
 MetaData.TitleById = {}
 for _, t in ipairs(MetaData.Titles) do
@@ -230,7 +232,7 @@ end
 function MetaData.CosmeticEntries(): { { [string]: any } }
 	local out = {}
 	for _, t in ipairs(MetaData.Titles) do
-		table.insert(out, { Id = t.Id, Kind = "Title", Name = t.Name, Source = "Earned", Condition = t.How })
+		table.insert(out, { Id = t.Id, Kind = "Title", Name = t.Name, Source = "Earned", Condition = t.How, Feature = t.Feature })
 	end
 	for _, n in ipairs(MetaData.Nameplates) do
 		table.insert(out, { Id = n.Id, Kind = "Nameplate", Name = n.Name, Source = "Earned", Condition = n.How })

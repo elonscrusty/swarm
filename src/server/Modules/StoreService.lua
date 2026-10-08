@@ -295,6 +295,20 @@ end
 	their save (saved first); gone → the buyer's own save.
 ]]
 function StoreService.GrantGift(buyer: Player, buyerData: { [string]: any }, g: Gift): boolean
+	local granted = StoreService.GrantGiftNow(buyer, buyerData, g)
+	if granted then
+		-- done: the receipt is recorded right after this returns (a retry stops at HasPurchase
+		-- before it asks for the route again), so the entry would only pile up
+		for id, route in pairs(routes) do
+			if route == g then
+				routes[id] = nil
+			end
+		end
+	end
+	return granted
+end
+
+function StoreService.GrantGiftNow(buyer: Player, buyerData: { [string]: any }, g: Gift): boolean
 	local item = StoreService.ProductMap()[g.ProductId]
 	if not item then
 		return false

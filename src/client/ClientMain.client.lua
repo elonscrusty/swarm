@@ -124,46 +124,58 @@ task.spawn(function()
 	task.wait(0.55)
 	gui:Destroy()
 end)
-Audio.Init()
-CameraController.Init()
-MobileControls.Init()
-EnemyRenderer.Init() -- before VFX: it sets up the folder the 3D models live in
-VFX.Init({
-	OnLocalEvent = function(kind)
-		if kind == "hurt" then
-			UIBuilder.HurtFlash()
-		end
-	end,
-})
-UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls })
-require(script.Parent:WaitForChild("TeamPings")).Init()
-require(script.Parent:WaitForChild("FeatureHud")).Init() -- reserved HUD slots for new features (empty until one uses them)
-require(script.Parent:WaitForChild("Ultimate")).Init() -- hero ultimate button + build preset cache (HEROPOWER)
-require(script.Parent:WaitForChild("HeroSong")).Init() -- HEROES: the Bard's SONG badge (idle while the switch is off)
-require(script.Parent:WaitForChild("ChallengesUI")).Init() -- CHALLENGES: champion plate + ring, trial / curse badges (idle while the switches are off)
-require(script.Parent:WaitForChild("WorldFx")).Init() -- EVENTS: map events + weather visuals (idle while the switches are off)
-require(script.Parent:WaitForChild("TeamCombo")).Init() -- TEAM: combo meter + PingWheel, Spectate, WeakSpot (idle while the switches are off)
-require(script.Parent:WaitForChild("ExploreUI")).Init() -- EXPLORE: cracked wall / merchant / villager markers + the merchant panel (idle while the switches are off)
-require(script.Parent:WaitForChild("FinalStandFx")).Init() -- batch B: Final Stand aura + headline (idle while the switch is off)
-require(script.Parent:WaitForChild("StageModifierUI")).Init() -- batch B: stage modifier HUD badge (idle while the switch is off)
-require(script.Parent:WaitForChild("DangerArrows")).Init() -- off-screen boss / champion / elite edge arrows (idle while the switch is off)
-require(script.Parent:WaitForChild("AffixIcons")).Init() -- elite affix badges (idle while the switch is off)
+
+-- One module failing to start (a live-only error) must not stop the ones after it.
+local function boot(name: string, fn: () -> ())
+	local ok, err = pcall(fn)
+	if not ok then
+		warn("[ClientMain] " .. name .. " failed to start: " .. tostring(err))
+	end
+end
+
+boot("Audio", function() Audio.Init() end)
+boot("CameraController", function() CameraController.Init() end)
+boot("MobileControls", function() MobileControls.Init() end)
+boot("EnemyRenderer", function() EnemyRenderer.Init() end) -- before VFX: it sets up the folder the 3D models live in
+boot("VFX", function()
+	VFX.Init({
+		OnLocalEvent = function(kind)
+			if kind == "hurt" then
+				UIBuilder.HurtFlash()
+			end
+		end,
+	})
+end)
+boot("UIBuilder", function() UIBuilder.Init({ Audio = Audio, MobileControls = MobileControls }) end)
+boot("TeamPings", function() require(script.Parent:WaitForChild("TeamPings")).Init() end)
+boot("FeatureHud", function() require(script.Parent:WaitForChild("FeatureHud")).Init() end) -- reserved HUD slots for new features (empty until one uses them)
+boot("Ultimate", function() require(script.Parent:WaitForChild("Ultimate")).Init() end) -- hero ultimate button + build preset cache (HEROPOWER)
+boot("HeroSong", function() require(script.Parent:WaitForChild("HeroSong")).Init() end) -- HEROES: the Bard's SONG badge (idle while the switch is off)
+boot("ChallengesUI", function() require(script.Parent:WaitForChild("ChallengesUI")).Init() end) -- CHALLENGES: champion plate + ring, trial / curse badges (idle while the switches are off)
+boot("WorldFx", function() require(script.Parent:WaitForChild("WorldFx")).Init() end) -- EVENTS: map events + weather visuals (idle while the switches are off)
+boot("TeamCombo", function() require(script.Parent:WaitForChild("TeamCombo")).Init() end) -- TEAM: combo meter + PingWheel, Spectate, WeakSpot (idle while the switches are off)
+boot("ExploreUI", function() require(script.Parent:WaitForChild("ExploreUI")).Init() end) -- EXPLORE: cracked wall / merchant / villager markers + the merchant panel (idle while the switches are off)
+boot("FinalStandFx", function() require(script.Parent:WaitForChild("FinalStandFx")).Init() end) -- batch B: Final Stand aura + headline (idle while the switch is off)
+boot("StageModifierUI", function() require(script.Parent:WaitForChild("StageModifierUI")).Init() end) -- batch B: stage modifier HUD badge (idle while the switch is off)
+boot("DangerArrows", function() require(script.Parent:WaitForChild("DangerArrows")).Init() end) -- off-screen boss / champion / elite edge arrows (idle while the switch is off)
+boot("AffixIcons", function() require(script.Parent:WaitForChild("AffixIcons")).Init() end) -- elite affix badges (idle while the switch is off)
 -- FEEL (docs/features/FEEL.md): each one idles while its Config.Features switch is off
-require(script.Parent:WaitForChild("BossIntro")).Init()
-require(script.Parent:WaitForChild("Announcer")).Init()
-require(script.Parent:WaitForChild("HitFeel")).Init()
+boot("BossIntro", function() require(script.Parent:WaitForChild("BossIntro")).Init() end)
+boot("Announcer", function() require(script.Parent:WaitForChild("Announcer")).Init() end)
+boot("HitFeel", function() require(script.Parent:WaitForChild("HitFeel")).Init() end)
 -- LOBBY (docs/features/LOBBY.md): weapon mastery glows + menu, the COURTYARD (idle while switched off)
-require(script.Parent:WaitForChild("WeaponMastery")).Init()
-require(script.Parent:WaitForChild("LobbyFun")).Init()
-require(script.Parent:WaitForChild("StoreFx")).Init() -- STORE: pets, trails, plates, emotes, dais, burst style (idle while the switch is off)
-require(script.Parent:WaitForChild("TitlePlates")).Init() -- META: name + worn title over each hero (idle while the switch is off)
-require(script.Parent:WaitForChild("ClientPerformance")).Init()
-require(script.Parent:WaitForChild("GroundDetail")).Init()
-DamageText.Init() -- optional damage numbers (Settings), after EnemyRenderer
-require(script.Parent:WaitForChild("TravelOverlay")).Init() -- private run servers: travel cover + go-home banner
-require(script.Parent:WaitForChild("PartyLines")).Init() -- party quick lines: bubbles + feed (idle while PartyQuickLines is off)
-require(script.Parent:WaitForChild("ReviveThanks")).Init() -- THANKS! after a teammate revive (idle while ReviveThanks is off)
-require(script.Parent:WaitForChild("ResumeCard")).Init() -- QuickResume: the RESUME RUN card of a held solo run (idle while the switch is off)
+boot("WeaponMastery", function() require(script.Parent:WaitForChild("WeaponMastery")).Init() end)
+boot("LobbyFun", function() require(script.Parent:WaitForChild("LobbyFun")).Init() end)
+boot("StoreFx", function() require(script.Parent:WaitForChild("StoreFx")).Init() end) -- STORE: pets, trails, plates, emotes, dais, burst style (idle while the switch is off)
+boot("TitlePlates", function() require(script.Parent:WaitForChild("TitlePlates")).Init() end) -- META: name + worn title over each hero (idle while the switch is off)
+boot("ClientPerformance", function() require(script.Parent:WaitForChild("ClientPerformance")).Init() end)
+boot("GroundDetail", function() require(script.Parent:WaitForChild("GroundDetail")).Init() end)
+boot("FlickerLights", function() require(script.Parent:WaitForChild("FlickerLights")).Init() end) -- torch / brazier light flicker (MapBuilder only tags the lights)
+boot("DamageText", function() DamageText.Init() end) -- optional damage numbers (Settings), after EnemyRenderer
+boot("TravelOverlay", function() require(script.Parent:WaitForChild("TravelOverlay")).Init() end) -- private run servers: travel cover + go-home banner
+boot("PartyLines", function() require(script.Parent:WaitForChild("PartyLines")).Init() end) -- party quick lines: bubbles + feed (idle while PartyQuickLines is off)
+boot("ReviveThanks", function() require(script.Parent:WaitForChild("ReviveThanks")).Init() end) -- THANKS! after a teammate revive (idle while ReviveThanks is off)
+boot("ResumeCard", function() require(script.Parent:WaitForChild("ResumeCard")).Init() end) -- QuickResume: the RESUME RUN card of a held solo run (idle while the switch is off)
 
 -- Humanoid state switches don't replicate and the client owns its character, so the
 -- server's settings are repeated here: no tripping, ragdolling or dying (jumps: JumpController).

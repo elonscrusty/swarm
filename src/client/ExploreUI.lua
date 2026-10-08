@@ -587,6 +587,9 @@ end
 ------------------------------------------------------------------------------------------
 
 local scanTimer = 0
+local panelTimer = 0 -- shop panel layout / card refresh (5 Hz unless the size or shown state changes)
+local panelShown = false
+local panelHolderSize = Vector2.zero
 
 local function update(dt: number)
 	clock += dt
@@ -631,9 +634,18 @@ local function update(dt: number)
 				pending[slot] = nil
 			end
 		end
-		layoutPanel(p)
-		fillCards()
+		-- the layout and card text only change with the screen size, the panel opening, gold
+		-- or the HUD's lanes, so they run when the size / shown state changed or at 5 Hz
+		local holderSize = (p.Parent :: GuiObject).AbsoluteSize
+		panelTimer -= dt
+		if panelTimer <= 0 or not panelShown or holderSize ~= panelHolderSize then
+			panelTimer = 0.2
+			panelHolderSize = holderSize
+			layoutPanel(p)
+			fillCards()
+		end
 	end
+	panelShown = show
 	if p then
 		set(p, "Visible", show)
 	end

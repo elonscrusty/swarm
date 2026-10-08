@@ -131,7 +131,13 @@ function MenuTitles.Build(screen: Frame, ctx: { [string]: any })
 		local list = CosmeticData.OfKind("Title")
 		local earned, locked = {}, {}
 		for _, e in ipairs(list) do
-			table.insert(MenuTitles.Owns(p, e.Name) and earned or locked, e)
+			local owned = MenuTitles.Owns(p, e.Name)
+			-- a title of a held feature (Starter Bundle, invites, group) can't be earned while its
+			-- switch is off: hidden, unless the player already owns it
+			local feature = (e :: any).Feature
+			if owned or feature == nil or Config.FeatureOn(feature) then
+				table.insert(owned and earned or locked, e)
+			end
 		end
 		for _, group in ipairs({ earned, locked }) do
 			for _, e in ipairs(group) do

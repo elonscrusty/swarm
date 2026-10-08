@@ -42,6 +42,10 @@ local passCache: { [Player]: { [number]: boolean } } = {}
 ------------------------------------------------------------------------------------------
 
 local inFlight: { [Player]: { [number]: boolean } } = {}
+-- player → passId → os.clock() of a failed lookup: OwnsPassId does not start another one for
+-- RETRY_SECONDS (a web outage must not turn every gold drop into a new request)
+local failedAt: { [Player]: { [number]: number } } = {}
+local RETRY_SECONDS = 15
 
 -- Asks Roblox (yields). Only called from background threads, never from the game loop.
 local function queryPass(player: Player, passId: number)
@@ -58,6 +62,16 @@ local function queryPass(player: Player, passId: number)
 		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
 	end)
 	flights[passId] = nil
+	if not ok then
+		local failed = failedAt[player]
+		if not failed then
+			failed = {}
+			failedAt[player] = failed
+		end
+		failed[passId] = os.clock()
+	elseif failedAt[player] then
+		failedAt[player][passId] = nil
+	end
 	if ok and player.Parent then
 		local cache = passCache[player]
 		if not cache then
@@ -84,7 +98,12 @@ function MonetizationService.OwnsPassId(player: Player, passId: number?): boolea
 	local cache = passCache[player]
 	local cached = cache and cache[passId]
 	if cached == nil then
-		task.spawn(queryPass, player, passId)
+		-- a player who has left gets no new web call (the leave commit still reads the cache)
+		local failed = failedAt[player]
+		local lastFail = failed and failed[passId]
+		if player.Parent and not (lastFail and os.clock() - lastFail < RETRY_SECONDS) then
+			task.spawn(queryPass, player, passId)
+		end
 		return false
 	end
 	return cached
@@ -275,6 +294,35 @@ local function buildProductHandlers()
 	end
 end
 
+-- Plain-data copy / in-place restore of the save, so a handler that errors half way does
+-- not leave a partial grant behind for the retried receipt to add to.
+local function deepCopy(value: any): any
+	if type(value) ~= "table" then
+		return value
+	end
+	local copy = {}
+	for k, v in pairs(value) do
+		copy[k] = deepCopy(v)
+	end
+	return copy
+end
+
+local function restoreInto(dst: { [any]: any }, src: { [any]: any })
+	for k in pairs(dst) do
+		if src[k] == nil then
+			dst[k] = nil
+		end
+	end
+	for k, v in pairs(src) do
+		local cur = dst[k]
+		if type(v) == "table" and type(cur) == "table" then
+			restoreInto(cur, v)
+		else
+			dst[k] = deepCopy(v)
+		end
+	end
+end
+
 local function processReceipt(info): Enum.ProductPurchaseDecision
 	if type(info) ~= "table" or type(info.PlayerId) ~= "number" or info.PurchaseId == nil then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
@@ -316,7 +364,11 @@ local function processReceipt(info): Enum.ProductPurchaseDecision
 			return Enum.ProductPurchaseDecision.NotProcessedYet -- the recipient's save failed: retry
 		end
 	else
+		local before = deepCopy(profile.Data)
 		ok, err = pcall(handler, player, profile.Data)
+		if not ok then
+			restoreInto(profile.Data, before)
+		end
 	end
 	if not ok then
 		warn("[Monetization] product handler failed: " .. tostring(err))
@@ -408,8 +460,12 @@ function MonetizationService.Start()
 		warm(p)
 	end
 	Players.PlayerRemoving:Connect(function(player)
-		passCache[player] = nil
-		inFlight[player] = nil
+		-- deferred: RunManager's leave commit reads pass ownership after this handler runs
+		task.defer(function()
+			passCache[player] = nil
+			inFlight[player] = nil
+			failedAt[player] = nil
+		end)
 	end)
 end
 

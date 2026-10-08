@@ -41,6 +41,7 @@ local UIKit = require(script.Parent.UIKit)
 local Icons = require(script.Parent.Icons)
 local Hud = require(script.Parent.Hud)
 local MiniMap = require(script.Parent.MiniMap)
+local AffixIcons = require(script.Parent.AffixIcons)
 local StageUI = require(script.Parent.StageUI)
 local UIState = require(script.Parent.UIState)
 local WorldLabelFade = require(script.Parent.WorldLabelFade)
@@ -249,20 +250,13 @@ end
 
 local function targets(from: Vector3): { Target }
 	local out: { Target } = {}
-	local folder = workspace:FindFirstChild("SwarmEnemies")
-	if not folder then
-		return out
-	end
-	for _, m in ipairs(folder:GetChildren()) do
-		local body = m:FindFirstChild("Body")
-		if body and body:IsA("BasePart") then
-			local pos = body.Position
-			if pos.Y >= ACTIVE_Y then
-				local kind = classify(body)
-				if kind then
-					local flat = Vector3.new(pos.X - from.X, 0, pos.Z - from.Z)
-					table.insert(out, { Kind = kind, Dist = flat.Magnitude, Pos = pos, Body = body })
-				end
+	for _, body in ipairs(AffixIcons.EnemyBodies()) do
+		local pos = body.Position
+		if pos.Y >= ACTIVE_Y then
+			local kind = classify(body)
+			if kind then
+				local flat = Vector3.new(pos.X - from.X, 0, pos.Z - from.Z)
+				table.insert(out, { Kind = kind, Dist = flat.Magnitude, Pos = pos, Body = body })
 			end
 		end
 	end
@@ -296,7 +290,7 @@ end
 
 -- Every rect an arrow must keep off right now.
 local function blockers(): { Box }
-	local out = WorldLabelFade.Rects()
+	local out = table.clone(WorldLabelFade.Rects()) -- the shared list is cached: copy before adding
 	addBox(out, MiniMap.Elements().Holder)
 	-- the top-right gold / kills pills and the pause button, the buff chip and the status plate
 	-- (WorldLabelFade.Rects does not list them)
@@ -463,12 +457,11 @@ local function show(a: Arrow, t: Target, x: number, y: number, angle: number, of
 			TweenService:Create(a.Holder, TweenInfo.new(tonumber(cfg().FadeSeconds) or 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { GroupTransparency = 0 }):Play()
 		end
 	else
-		local step = 1 / math.max(1, tonumber(cfg().UpdateHz) or 10)
-		TweenService:Create(a.Holder, TweenInfo.new(step, Enum.EasingStyle.Linear), { Position = pos }):Play()
+		-- set straight away (no tween per arrow per refresh; the refresh is 10 Hz)
+		a.Holder.Position = pos
 		-- turn the short way round
 		local cur = a.Pivot.Rotation
-		local goal = cur + ((angle - cur + 180) % 360 - 180)
-		TweenService:Create(a.Pivot, TweenInfo.new(step, Enum.EasingStyle.Linear), { Rotation = goal }):Play()
+		a.Pivot.Rotation = cur + ((angle - cur + 180) % 360 - 180)
 	end
 	a.Shown = true
 	a.Body = t.Body

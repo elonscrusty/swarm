@@ -54,6 +54,76 @@ local badges: { [BasePart]: Badge } = {}
 local lastScan = 0
 local started = false
 
+-- The enemy pool's "Body" parts (a fixed pool the server never destroys), kept up to date by
+-- ChildAdded / ChildRemoved instead of GetChildren + FindFirstChild("Body") on ~300 models
+-- per scan. Shared with DangerArrows and MiniMap: treat the list as read only.
+local enemyBodies: { BasePart } = {}
+local bodyOf: { [Instance]: BasePart } = {}
+local bodyIndex: { [BasePart]: number } = {}
+local bodyFolder: Instance? = nil
+local bodyConns: { RBXScriptConnection } = {}
+
+local function addBody(model: Instance, body: Instance?)
+	if bodyOf[model] or not body or not body:IsA("BasePart") or bodyFolder == nil or model.Parent ~= bodyFolder then
+		return
+	end
+	bodyOf[model] = body
+	table.insert(enemyBodies, body)
+	bodyIndex[body] = #enemyBodies
+end
+
+local function removeBody(model: Instance)
+	local body = bodyOf[model]
+	if not body then
+		return
+	end
+	bodyOf[model] = nil
+	local i = bodyIndex[body]
+	bodyIndex[body] = nil
+	local last = #enemyBodies
+	if i and i <= last then
+		local moved = enemyBodies[last]
+		enemyBodies[i] = moved
+		enemyBodies[last] = nil
+		if moved ~= body then
+			bodyIndex[moved] = i
+		end
+	end
+end
+
+local function watchEnemy(model: Instance)
+	local body = model:FindFirstChild("Body")
+	if body then
+		addBody(model, body)
+		return
+	end
+	task.spawn(function()
+		addBody(model, model:WaitForChild("Body", 10)) -- a model whose parts arrive late
+	end)
+end
+
+function AffixIcons.EnemyBodies(): { BasePart }
+	local folder = workspace:FindFirstChild("SwarmEnemies")
+	if folder ~= bodyFolder then
+		for _, c in ipairs(bodyConns) do
+			c:Disconnect()
+		end
+		table.clear(bodyConns)
+		table.clear(enemyBodies)
+		table.clear(bodyOf)
+		table.clear(bodyIndex)
+		bodyFolder = folder
+		if folder then
+			table.insert(bodyConns, folder.ChildAdded:Connect(watchEnemy))
+			table.insert(bodyConns, folder.ChildRemoved:Connect(removeBody))
+			for _, m in ipairs(folder:GetChildren()) do
+				watchEnemy(m)
+			end
+		end
+	end
+	return enemyBodies
+end
+
 local function cfg(): { [string]: any }
 	return (Config :: any).AffixIcons or {}
 end
@@ -202,29 +272,23 @@ local seen: { [BasePart]: boolean } = {}
 
 local function update()
 	table.clear(seen)
-	local folder = workspace:FindFirstChild("SwarmEnemies")
-	if folder then
-		for _, m in ipairs(folder:GetChildren()) do
-			local body = m:FindFirstChild("Body")
-			if body and body:IsA("BasePart") then
-				local affix = affixOf(body)
-				if affix then
-					seen[body] = true
-					local b = badges[body]
-					if b and b.Affix ~= affix then
-						destroy(b)
-						badges[body] = nil
-						b = nil
-					end
-					if not b then
-						b = build(body, affix)
-						badges[body] = b
-					end
-					if b then
-						b.Gui.StudsOffsetWorldSpace = Vector3.new(0, body.Size.Y / 2 + (tonumber(cfg().Lift) or 6.2), 0)
-						setPulse(b)
-					end
-				end
+	for _, body in ipairs(AffixIcons.EnemyBodies()) do
+		local affix = affixOf(body)
+		if affix then
+			seen[body] = true
+			local b = badges[body]
+			if b and b.Affix ~= affix then
+				destroy(b)
+				badges[body] = nil
+				b = nil
+			end
+			if not b then
+				b = build(body, affix)
+				badges[body] = b
+			end
+			if b then
+				b.Gui.StudsOffsetWorldSpace = Vector3.new(0, body.Size.Y / 2 + (tonumber(cfg().Lift) or 6.2), 0)
+				setPulse(b)
 			end
 		end
 	end

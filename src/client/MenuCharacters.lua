@@ -225,6 +225,19 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 	local function skinOwned(p, skinId: string): boolean
 		return skinId == "Default" or p.OwnedSkins[skinId] == true
 	end
+	-- the hero's skins; one of a held feature (Starter Bundle skin) is left out while its
+	-- switch is off, unless the player already owns it
+	local function visibleSkins(): { string }
+		local p = profile()
+		local out = {}
+		for _, skinId in ipairs(CharacterData.SkinsFor(inspChar)) do
+			local feature = skinId ~= "Default" and CharacterData.Skins[skinId] and (CharacterData.Skins[skinId] :: any).Feature
+			if not feature or Config.FeatureOn(feature) or (p ~= nil and skinOwned(p, skinId)) then
+				table.insert(out, skinId)
+			end
+		end
+		return out
+	end
 
 	ui.Header = UIKit.TitleBar(screen, "Characters", ctx.Back)
 
@@ -550,7 +563,7 @@ function MenuCharacters.Build(screen: Frame, ctx: { [string]: any })
 		end
 		table.clear(swatches)
 		local cardH = 34 + TS(14) + TS(10) + 32
-		for order, skinId in ipairs(CharacterData.SkinsFor(inspChar)) do
+		for order, skinId in ipairs(visibleSkins()) do
 			local look = CharacterData.ResolveLook(inspChar, skinId)
 			local hit = new("TextButton", {
 				Name = skinId,
@@ -1093,7 +1106,7 @@ ui.UnlockRule.Text = string.format("Runs with the %s raise its mastery (max %d).
 
 	-- skin cards share the row: up to five, at least 82 px wide
 	local function fitSkins(innerW: number)
-		local n = math.max(1, #CharacterData.SkinsFor(inspChar))
+		local n = math.max(1, #visibleSkins())
 		local per = math.clamp(math.floor((innerW + SKIN_GAP) / (82 + SKIN_GAP)), 1, 5)
 		local w = math.floor((innerW - (math.min(n, per) - 1) * SKIN_GAP) / math.min(n, per))
 		w = math.clamp(w, 82, 124)

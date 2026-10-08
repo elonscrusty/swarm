@@ -19,6 +19,9 @@ type Box = { number } -- { left, top, right, bottom }
 
 local avoid: { GuiObject } = {}
 local FADE_SECONDS = 0.18
+local RECT_CACHE_SECONDS = 0.1 -- Rects() answers from its last build for this long (shared by every caller)
+local cached: { Box } = {}
+local cachedAt = -1
 
 -- A panel world labels must keep off while it is visible (and its ScreenGui enabled).
 function WorldLabelFade.Avoid(g: GuiObject)
@@ -39,8 +42,13 @@ local function add(out: { Box }, g: any)
 	end
 end
 
--- Every HUD rect a world label must not cover right now.
+-- Every HUD rect a world label must not cover right now (the same list for ~0.1 s, so
+-- several labels in a frame share one build; callers must not change it).
 function WorldLabelFade.Rects(): { Box }
+	local now = os.clock()
+	if now - cachedAt < RECT_CACHE_SECONDS then
+		return cached
+	end
 	local out: { Box } = {}
 	local els = Hud.Elements()
 	local frame = els.Frame
@@ -67,6 +75,8 @@ function WorldLabelFade.Rects(): { Box }
 	for _, g in ipairs(avoid) do
 		add(out, g)
 	end
+	cached = out
+	cachedAt = now
 	return out
 end
 

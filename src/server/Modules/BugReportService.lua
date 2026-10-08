@@ -571,6 +571,10 @@ function BugReportService.Start()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		busy[player] = nil
+		-- per-user timers would otherwise pile up for every visitor of a long-lived server
+		lastSent[player.UserId] = nil
+		lastTry[player.UserId] = nil
+		sentTimes[player.UserId] = nil
 	end)
 	Remotes.Listen("BugReport", submit, 1)
 	Remotes.Listen("BugInbox", inbox, 2)

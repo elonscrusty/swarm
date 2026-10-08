@@ -58,6 +58,8 @@ end
 	  Emote      Icon (Icons name), Color, Pose ("Wave" | "Cheer" | "Flex" | "Bow")
 	  Nameplate  Color, Color2, Glow
 	  Dais       Color (stone), Color2 (trim), Material, Glow
+	Feature (optional): the Config.Features switch of the module that grants the look; the
+	store screen hides the look while that switch is off, unless the player already owns it.
 ]]
 StoreCatalog.Entries = {
 	-- Trails
@@ -67,7 +69,7 @@ StoreCatalog.Entries = {
 	{ Id = "Trail_Leaf", Kind = "Trail", Name = "Leaf Trail", Source = "Earned", Earn = { Stat = "Runs", At = 25 }, Desc = "Green leaves swirl behind you.", Look = { Color = rgb(118, 196, 92), Color2 = rgb(214, 240, 150), Width = 1.0 } },
 	{ Id = "Trail_Star", Kind = "Trail", Name = "Starlight Trail", Source = "Earned", Earn = { Level = 15 }, Desc = "A pale starlit line.", Look = { Color = rgb(240, 236, 255), Color2 = rgb(150, 170, 255), Width = 0.9 } },
 	-- Invite rewards: Stats.Recruits = new friends credited (InviteRewards, docs/next/INVITE_REWARDS.md)
-	{ Id = "Trail_Recruiter", Kind = "Trail", Name = "Recruiter Trail", Source = "Earned", Earn = { Stat = "Recruits", At = 3 }, Condition = "Invite 3 new friends who finish a run", Desc = "Teal sparks for bringing friends.", Look = { Color = rgb(90, 220, 200), Color2 = rgb(220, 255, 240), Width = 1.0 } },
+	{ Id = "Trail_Recruiter", Kind = "Trail", Name = "Recruiter Trail", Source = "Earned", Earn = { Stat = "Recruits", At = 3 }, Feature = "InviteRewards", Condition = "Invite 3 new friends who finish a run", Desc = "Teal sparks for bringing friends.", Look = { Color = rgb(90, 220, 200), Color2 = rgb(220, 255, 240), Width = 1.0 } },
 	-- Death bursts (how enemy deaths burst on YOUR screen; HitFeel draws them)
 	{ Id = "Burst_Confetti", Kind = "Burst", Name = "Confetti Burst", Source = "Store", StoreKey = "Cosmetics.Burst_Confetti", Desc = "Foes pop into bright confetti.", Look = { Color = rgb(255, 120, 170), Mix = 1, Colors = { rgb(255, 92, 120), rgb(255, 212, 80), rgb(96, 210, 255), rgb(140, 230, 120), rgb(200, 140, 255) } } },
 	{ Id = "Burst_Void", Kind = "Burst", Name = "Void Burst", Source = "Store", StoreKey = "Cosmetics.Burst_Void", Desc = "Foes crack into glowing violet shards.", Look = { Color = rgb(150, 80, 255), Mix = 0.75, Neon = true } },
@@ -97,11 +99,11 @@ StoreCatalog.Entries = {
 	{ Id = "Nameplate_Dawn", Kind = "Nameplate", Name = "Dawn Frame", Source = "Earned", Condition = "Login streak of 14 days", Desc = "For showing up, day after day.", Look = { Color = rgb(255, 214, 120), Color2 = rgb(96, 64, 24) } },
 	-- Daily quests / comeback gift (docs/next/DAILY_QUESTS.md, COMEBACK_GIFT.md): earned by
 	-- play, put in Cosmetics.Owned by DailyQuests / ComebackGift on the server (no Earn goal).
-	{ Id = "Plate_Questor", Kind = "Nameplate", Name = "Questor Plate", Source = "Earned", Condition = "Finish all 3 daily quests in a day", Desc = "For a full day of quests.", Look = { Color = rgb(110, 210, 190), Color2 = rgb(24, 70, 64) } },
-	{ Id = "Trail_Questor", Kind = "Trail", Name = "Questor Trail", Source = "Earned", Condition = "Finish all 3 daily quests on two days", Desc = "A teal ribbon of finished quests.", Look = { Color = rgb(96, 214, 190), Color2 = rgb(220, 255, 240), Width = 1.0 } },
+	{ Id = "Plate_Questor", Kind = "Nameplate", Name = "Questor Plate", Source = "Earned", Feature = "DailyQuests", Condition = "Finish all 3 daily quests in a day", Desc = "For a full day of quests.", Look = { Color = rgb(110, 210, 190), Color2 = rgb(24, 70, 64) } },
+	{ Id = "Trail_Questor", Kind = "Trail", Name = "Questor Trail", Source = "Earned", Feature = "DailyQuests", Condition = "Finish all 3 daily quests on two days", Desc = "A teal ribbon of finished quests.", Look = { Color = rgb(96, 214, 190), Color2 = rgb(220, 255, 240), Width = 1.0 } },
 	{ Id = "Trail_Homecoming", Kind = "Trail", Name = "Homecoming Trail", Source = "Earned", Condition = "Come back after a week away", Desc = "A warm glow for a returning hero.", Look = { Color = rgb(255, 170, 110), Color2 = rgb(255, 236, 190), Width = 1.0 } },
 	-- Invite rewards (docs/next/INVITE_REWARDS.md): InviteRewards puts them in Cosmetics.Owned
-	{ Id = "Plate_Friend", Kind = "Nameplate", Name = "Friend Badge", Source = "Earned", Condition = "Join SWARM through a friend's invite", Desc = "You came with a friend.", Look = { Color = rgb(120, 220, 200), Color2 = rgb(24, 70, 64) } },
+	{ Id = "Plate_Friend", Kind = "Nameplate", Name = "Friend Badge", Source = "Earned", Feature = "InviteRewards", Condition = "Join SWARM through a friend's invite", Desc = "You came with a friend.", Look = { Color = rgb(120, 220, 200), Color2 = rgb(24, 70, 64) } },
 	-- Lobby dais themes (under your hero in the menu)
 	{ Id = "Dais_Marble", Kind = "Dais", Name = "Marble Dais", Source = "Earned", Earn = { Stat = "Wins", At = 5 }, Desc = "White marble with a gold edge.", Look = { Color = rgb(236, 232, 224), Color2 = rgb(214, 172, 70), Material = "Marble" } },
 	{ Id = "Dais_Obsidian", Kind = "Dais", Name = "Obsidian Dais", Source = "Store", StoreKey = "Cosmetics.Dais_Obsidian", Desc = "Black glass with violet light.", Look = { Color = rgb(30, 26, 40), Color2 = rgb(160, 100, 255), Material = "Glass", Glow = true } },

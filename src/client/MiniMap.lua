@@ -53,6 +53,7 @@ local TeamUI = require(script.Parent.TeamUI)
 local LootUI = require(script.Parent.LootUI)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Accessibility = require(script.Parent.Accessibility)
+local AffixIcons = require(script.Parent.AffixIcons) -- EnemyBodies: the cached enemy pool list
 
 local MiniMap = {}
 
@@ -748,26 +749,20 @@ end
 
 -- At ENEMY_HZ: the boss body and an even sample of the enemies in range.
 local function updateEnemies(root: BasePart)
-	local folder = workspace:FindFirstChild("SwarmEnemies")
 	local count = 0
 	local boss: BasePart? = nil
 	local here = root.Position
 	local reach = (viewPx / 2) / scale + 2 -- studs from the player to the view's edge
-	if folder then
-		for _, m in ipairs(folder:GetChildren()) do
-			local body = m:FindFirstChild("Body")
-			if body and body:IsA("BasePart") then
-				local pos = body.Position
-				if pos.Y > PARKED_Y then
-					local typeId = body:GetAttribute("Type")
-					local def = type(typeId) == "string" and EnemyData.Enemies[typeId] or nil
-					if def and def.IsBoss then
-						boss = body
-					elseif def and math.abs(pos.X - here.X) < reach and math.abs(pos.Z - here.Z) < reach then
-						count += 1
-						candidates[count] = body
-					end
-				end
+	for _, body in ipairs(AffixIcons.EnemyBodies()) do
+		local pos = body.Position
+		if pos.Y > PARKED_Y then
+			local typeId = body:GetAttribute("Type")
+			local def = type(typeId) == "string" and EnemyData.Enemies[typeId] or nil
+			if def and def.IsBoss then
+				boss = body
+			elseif def and math.abs(pos.X - here.X) < reach and math.abs(pos.Z - here.Z) < reach then
+				count += 1
+				candidates[count] = body
 			end
 		end
 	end
