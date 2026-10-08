@@ -716,7 +716,10 @@ function MenuPlay.Build(screen: Frame, ctx: { [string]: any })
 		local overhead = pad + topBlock + ruleH + G + G + footH + pad
 		local bodyAvail = availH - overhead - INSET - BASE -- room for the cards' outlines and raised bases
 		local lastH = hasLast and (76 + G) or 0
-		local minRow = 64
+		-- Keep the caption, value and subtitle inside the card at every text size.
+		-- Short displays scroll rather than squeezing the third line into the outline.
+		local minRow = math.max(76, UIKit.TS(12) + UIKit.TS(compact and 22 or 24) + UIKit.TS(14) + 26)
+		rowH = math.max(rowH, minRow)
 		local extraCount = (sigilsOn and 1 or 0) + (endlessEnabled and 1 or 0)
 		-- The reference's four cards are the primary setup. Extra modifiers live
 		-- under Details even on a large monitor, so the hierarchy stays consistent.
