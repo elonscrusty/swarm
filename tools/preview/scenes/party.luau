@@ -7,6 +7,7 @@
 --   --set view=memberhome the home screen as a member: the READY button beside PARTY
 --   --set ready=on        party members are READY (leader: START DUO enabled)
 --   --set view=solo       the PARTY screen with no party yet
+--   --set view=alone      no party and nobody else on the server: the empty state
 --   --set view=friends    the FRIENDS tab (the mock friends list is empty: the empty note)
 --   --set view=card       the invite card over the home screen (and the PARTY badge)
 local C = lib("common")
@@ -14,12 +15,18 @@ C.lobby()
 local Players = game:GetService("Players")
 local me = Players.LocalPlayer
 local view = preview.args.view or "home"
+local alone = view == "alone" -- nobody else on the server: the empty state
 local ava = preview.addPlayer("Ava", 2)
 local cal = preview.addPlayer("Cal", 4)
 local dee = preview.addPlayer("Dee", 5)
 local eve = preview.addPlayer("Eve", 6)
-preview.addPlayer("MaximilianTheVeryLongName", 7) -- name truncation
+local long = preview.addPlayer("MaximilianTheVeryLongName", 7) -- name truncation
 dee:SetAttribute("InRun", true)
+if alone then
+	for _, p in ipairs({ ava, cal, dee, eve, long }) do
+		p.Parent = nil
+	end
+end
 C.startClient()
 C.sendProfile()
 C.settle(1)
@@ -30,14 +37,14 @@ local members = { { UserId = me.UserId, Name = me.DisplayName }, { UserId = 2, N
 if not leader then
 	members = { { UserId = 2, Name = "Ava" }, { UserId = me.UserId, Name = me.DisplayName, Ready = readyOn } }
 end
-if view == "solo" then
+if view == "solo" or alone then
 	members = {}
 else
 	me:SetAttribute("PartyId", 1)
 	ava:SetAttribute("PartyId", 1)
 end
 C.fire("PartyState", {
-	LeaderId = view == "solo" and 0 or (leader and me.UserId or 2),
+	LeaderId = (view == "solo" or alone) and 0 or (leader and me.UserId or 2),
 	Members = members,
 	Max = 3,
 	Invites = (view == "panel" or view == "card") and { { FromId = 4, FromName = "Cal", Seconds = 24 } } or {},
@@ -48,7 +55,7 @@ if view == "card" then
 end
 C.settle(1)
 local LobbyScreen = preview.client("LobbyScreen")
-if view == "panel" or view == "member" or view == "solo" or view == "friends" then
+if view == "panel" or view == "member" or view == "solo" or view == "friends" or alone then
 	LobbyScreen.Show("Party")
 	C.settle(1.5)
 	if view == "friends" then

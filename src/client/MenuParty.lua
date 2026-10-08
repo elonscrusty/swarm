@@ -378,6 +378,9 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	local dirty = true
 
 	ui.Header = UIKit.ScreenHeader(screen, "PARTY", ctx.Back)
+	-- member count pill beside the title (real count over the server's party size)
+	ui.CountPill = UIKit.IconPill(ui.Header.Frame, nil, "1/3", { Name = "CountPill", AnchorPoint = Vector2.new(0, 0.5) })
+	local infoOpen = false
 	local holder, face = UIKit.Surface(screen, { Name = "Panel", Radius = Theme.Radius.L, Transparency = 0.06, Edge = P.gold_400, EdgeTransparency = 0.35 })
 	ui.Panel = holder
 	UIKit.padding(face, 16, 18, 16, 18)
@@ -399,7 +402,6 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.padding(plist, 2, 8, 2, 2) -- strokes stay inside the clip; room for the scroll bar
 	UIKit.list(plist, { Padding = UDim.new(0, ROW_GAP) })
 	ui.Members = plist
-	ui.Hint = text(left, "Small", "", { Name = "Hint", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted }, 14)
 	ui.Leave = UIKit.Button(left, {
 		Kind = "Secondary",
 		Title = "LEAVE PARTY",
@@ -427,6 +429,21 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end,
 	})
+
+	-- footer under both columns: one summary line, an info toggle for the detailed rules
+	ui.Foot = new("Frame", { Name = "Footer", BackgroundTransparency = 1 }, face)
+	ui.FootRule = new("Frame", { Name = "Rule", BackgroundColor3 = P.slate_600, BackgroundTransparency = 0.5, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1) }, ui.Foot)
+	ui.Info = UIKit.IconButton(ui.Foot, {
+		Icon = "info",
+		Size = 44,
+		Name = "PartyInfo",
+		OnClick = function()
+			infoOpen = not infoOpen
+			dirty = true
+		end,
+	})
+	ui.Summary = text(ui.Foot, "Small", "", { Name = "Summary", TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = C.TextMuted }, 14)
+	ui.Rules = text(ui.Foot, "Small", "", { Name = "Rules", TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.TextMuted, Visible = false }, 14)
 
 	-- right: this server / friends
 	local right = new("Frame", { Name = "Find", BackgroundTransparency = 1 }, face)
@@ -474,13 +491,29 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 	UIKit.padding(list, 2, 8, 2, 2)
 	UIKit.list(list, { Padding = UDim.new(0, ROW_GAP) })
 	ui.List = list
-	ui.Empty = text(right, "Body", "", { Name = "Empty", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, Visible = false })
+	ui.EmptyIcon = Icons.Draw(right, "people3", { Size = 56, Color = P.slate_500, AnchorPoint = Vector2.new(0.5, 0), Visible = false })
+	ui.Empty = text(right, "BodyStrong", "", { Name = "Empty", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.Text, Visible = false }, 18)
+	ui.EmptySub = text(right, "Body", "", { Name = "EmptySub", TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, Visible = false })
 
 	-- quick lines (PartyQuickLines): a strip under both columns, the row of fixed lines and
 	-- the party feed (PartyLines); only in a party
 	ui.Bar = new("Frame", { Name = "QuickBar", BackgroundTransparency = 1, Visible = false }, face)
 	ui.Say = PartyLines.BuildRow(ui.Bar)
 	ui.Feed = PartyLines.BuildFeed(ui.Bar)
+
+	-- The + on an "Invite player" row: show the list of people to invite (This server, or
+	-- Friends when nobody else is on the server).
+	local function focusInvite()
+		local id = #Players:GetPlayers() > 1 and "Server" or "Friends"
+		tab = id
+		ui.Tabs.Select(id)
+		dirty = true
+		if id == "Friends" then
+			fetchFriends(false, function()
+				dirty = true
+			end)
+		end
+	end
 
 	local leftRows = 0
 	local rightRows = 0
@@ -512,24 +545,12 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			local me = m.UserId == player.UserId
 			local leads = m.UserId == state.LeaderId
 			local ready = m.Ready == true
-			local sub = leads and "Leader · starts the runs" or (inParty() and (ready and "Ready" or "Not ready") or "Not in a party yet")
+			local sub = leads and "Leader" or (inParty() and (ready and "Member · Ready" or "Member · Not ready") or "Not in a party yet")
 			local canKick = isLeader() and not me
 			local toggle = me and not leads and inParty()
-			-- right side: [pill] [KICK | READY toggle]
+			-- right side: [KICK | READY toggle]
 			local btnW = canKick and bw(100, "KICK") or (toggle and bw(120, ready and "UNREADY" or "READY") or 0)
-			local pillW = (leads or (inParty() and not toggle)) and (ready and 84 or 112) or 0
-			local right = (btnW > 0 and btnW + 12 or 0) + (pillW > 0 and pillW + 8 or 0)
-			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and P.gold_300 or nil, right, me)
-			if pillW > 0 then
-				local pill = UIKit.StatusPill(f, "READY", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -(btnW > 0 and btnW + 20 or 12), 0.5, 0), Name = leads and "Leader" or "ReadyPill" })
-				if leads then
-					UIKit.SetStatus(pill, "READY", "LEADER")
-				elseif ready then
-					UIKit.SetStatus(pill, "UNLOCKED", "READY")
-				else
-					UIKit.SetStatus(pill, "WAITING", "NOT READY")
-				end
-			end
+			local f = personRow(plist, order, m.UserId, m.Name .. (me and "  (you)" or ""), sub, (leads or ready) and P.gold_300 or nil, btnW > 0 and btnW + 12 or 0, me)
 			if canKick then
 				rowButton(f, "KICK", nil, "Secondary", 100, 8, function()
 					send("Kick", m.UserId)
@@ -540,27 +561,47 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 				end).Instance.Name = "ReadyToggle"
 			end
 		end
-		-- open slots
+		-- open slots: "Invite player" rows; the + takes the leader to the list of people to invite
+		-- (This server, or Friends when nobody else is here). Members can't invite: plain row.
 		local slots = math.max(0, state.Max - #members)
+		local canInvite = not inParty() or isLeader()
 		for i = 1, slots do
 			order += 1
 			local f = UIKit.Panel(plist, { Name = "Slot" .. i, LayoutOrder = order, Size = UDim2.new(1, 0, 0, ROW_H) }, true)
 			f.BackgroundColor3 = P.slate_950
 			f.BackgroundTransparency = 0.6
 			UIKit.stroke(f, P.slate_500, 1, 0.5)
-			Icons.Draw(f, "userPlus", { Size = 24, Color = P.slate_400, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 18, 0.5, 0) })
-			text(f, "Body", "Open slot", { Position = UDim2.fromOffset(60, 0), Size = UDim2.new(1, -70, 1, 0), TextColor3 = C.TextFaint }, 15)
+			local ring = new("Frame", { Name = "Ring", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(40, 40) }, f)
+			UIKit.corner(ring, 999)
+			UIKit.stroke(ring, P.slate_500, 1, 0.4)
+			Icons.Draw(ring, "userPlus", { Size = 22, Color = P.slate_400, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+			text(f, "Body", canInvite and "Invite player" or "Open slot", { Name = "SlotText", Position = UDim2.fromOffset(60, 0), Size = UDim2.new(1, -(canInvite and 124 or 70), 1, 0), TextColor3 = C.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd }, 15)
+			if canInvite then
+				UIKit.IconButton(f, {
+					Icon = "plus",
+					Size = 44,
+					Name = "InviteSlot",
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -8, 0.5, 0),
+					OnClick = function()
+						focusInvite()
+					end,
+				})
+			end
 		end
 		leftRows = order
 		local count = math.max(1, #state.Members)
 		ui.PartyLabel.Text = UIKit.track(string.format("Your party  %d/%d", count, state.Max))
+		ui.CountPill.SetText(string.format("%d/%d", count, state.Max))
+		ui.Summary.Text = string.format("Party members join Duo or Trio runs (up to %d players).", state.Max)
 		if not inParty() then
-			ui.Hint.Text = "Invite players on this server or your friends. When the leader starts DUO or TRIO, party members join that run (up to its size). SOLO and Daily runs are the leader's alone."
+			ui.Rules.Text = "Invite players on this server or your friends. When the leader starts DUO or TRIO, party members join that run (up to its size). SOLO and Daily runs are the leader's alone."
 		elseif isLeader() then
-			ui.Hint.Text = "When everyone is READY, press START (or DUO / TRIO on the home screen): your party joins your run."
+			ui.Rules.Text = "When everyone is READY, press START (or DUO / TRIO on the home screen): your party joins your run."
 		else
-			ui.Hint.Text = "Tap READY when you're set. Your leader starts the run and you join it automatically."
+			ui.Rules.Text = "Tap READY when you're set. Your leader starts the run and you join it automatically."
 		end
+		ui.Rules.Visible = infoOpen
 		ui.Leave.Instance.Visible = inParty()
 		local sum = MenuParty.Summary()
 		local mode = MenuParty.PartyMode()
@@ -645,12 +686,22 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		ui.Refresh.Instance.Visible = friendsTab
 		if friendsTab then
 			n = friendRows()
-			ui.Empty.Text = friends.Status == "loading" and "Looking for your friends..." or (friends.Status == "error" and "Couldn't load your friends list. Tap refresh to try again." or "None of your friends are online. Invite them with INVITE FRIENDS!")
+			if friends.Status == "loading" then
+				ui.Empty.Text, ui.EmptySub.Text = "Looking for your friends...", ""
+			elseif friends.Status == "error" then
+				ui.Empty.Text, ui.EmptySub.Text = "Couldn't load your friends.", "Tap refresh to try again."
+			else
+				ui.Empty.Text, ui.EmptySub.Text = "No friends online.", "Invite them with INVITE FRIENDS."
+			end
 		else
 			n = serverRows()
-			ui.Empty.Text = "Nobody else is on this server yet. Use the FRIENDS tab to invite your friends."
+			ui.Empty.Text, ui.EmptySub.Text = "No other players here.", "Invite a friend to play together."
+			-- the real invite action sits in the empty state
+			ui.InviteFriends.Instance.Visible = n == 0
 		end
 		ui.Empty.Visible = n == 0
+		ui.EmptySub.Visible = n == 0 and ui.EmptySub.Text ~= ""
+		ui.EmptyIcon.Visible = n == 0
 		rightRows = n
 		MenuParty._layout()
 	end
@@ -671,15 +722,16 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		local w = math.min(W - 2 * M, 1040)
 		local labelH = TS(12) + 6
 		local stackedW = W - 2 * M - 36
-		local hintW = (portrait or stackedW < 620) and stackedW or math.floor(stackedW * 0.44)
-		local hintLines = math.clamp(math.ceil(#ui.Hint.Text * TS(14) * 0.56 / math.max(1, hintW - 8)), 1, 5)
-		local hintH = hintLines * (TS(14) + 3) + 6
+		-- footer: summary line + info toggle (44 high); the opened rules add their wrapped lines
+		local rulesLines = infoOpen and math.clamp(math.ceil(#ui.Rules.Text * TS(14) * 0.56 / math.max(1, stackedW - 8)), 1, 5) or 0
+		local rulesH = infoOpen and (rulesLines * (TS(14) + 3) + 6) or 0
+		local footH = 10 + 44 + rulesH
 		local leaveH = ui.Leave.Instance.Visible and Theme.Size.Button or 0
 		local listWant = leftRows * (ROW_H + ROW_GAP) + 4
 		local tabsH = Theme.Size.TapMin + 4
 		local stacked = portrait or w - 36 < 620
 		-- landscape: only as tall as the longer column needs (at least four rows)
-		local leftWant = labelH + 8 + listWant + 8 + hintH + (leaveH > 0 and leaveH + 8 or 0)
+		local leftWant = labelH + 8 + listWant + 8 + (leaveH > 0 and leaveH + 8 or 0)
 		local rightWant = tabsH + 10 + (tab == "Friends" and 58 or 0) + math.max(4, rightRows) * (ROW_H + ROW_GAP) + 4
 		-- quick lines strip under both columns (PartyLines): the row, then the feed
 		local sayOn = PartyLines.Available()
@@ -689,13 +741,19 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			feedLines = (portrait or H >= 560) and 3 or 1
 			barH = sayRowH + 6 + ui.Feed.Measure(feedLines) + 10
 		end
-		local panelH = math.min(maxH, (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + 36 + barH)
+		local panelH = math.min(maxH, (stacked and (leftWant + 14 + rightWant) or math.max(leftWant, rightWant)) + 36 + footH + barH)
 		local iw, ih = w - 36, panelH - 32
 		place(ui.Panel, (W - w) / 2, top, w, panelH)
-		local colH = ih - barH
+		local colH = ih - barH - footH
+		place(ui.Foot, 0, colH + 10, iw, footH - 10)
+		place(ui.FootRule, 0, 0, iw, 1)
+		place(ui.Info.Instance, 0, 6, 44, 44)
+		place(ui.Summary, 52, 6, iw - 52, 44)
+		place(ui.Rules, 52, 52, iw - 52, rulesH)
+		ui.Rules.Visible = infoOpen
 		ui.Bar.Visible = sayOn
 		if sayOn then
-			place(ui.Bar, 0, colH + 10, iw, barH - 10)
+			place(ui.Bar, 0, colH + footH + 10, iw, barH - 10)
 			ui.Say.Layout(iw)
 			ui.Say.Frame.Position = UDim2.fromOffset(0, 0)
 			ui.Feed.Layout(iw, feedLines)
@@ -713,14 +771,13 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 			rx, ry, rw, rh = lw + 24, 0, iw - lw - 24, colH
 		end
 		place(ui.Left, 0, 0, lw, lh)
-		local listH = math.max(ROW_H, lh - labelH - 8 - 8 - hintH - (leaveH > 0 and leaveH + 8 or 0))
+		local listH = math.max(ROW_H, lh - labelH - 8 - 8 - (leaveH > 0 and leaveH + 8 or 0))
 		place(ui.Members, 0, labelH + 8, lw, math.min(listH, listWant))
 		local y = labelH + 8 + math.min(listH, listWant) + 8
-		place(ui.Hint, 0, y, lw, hintH)
 		if leaveH > 0 then
 			local bwid = ui.Start.Instance.Visible and math.min(220, math.floor((lw - 12) / 2)) or math.min(lw, 260)
-			place(ui.Leave.Instance, 0, y + hintH + 4, bwid, leaveH)
-			place(ui.Start.Instance, bwid + 12, y + hintH + 4, bwid, leaveH)
+			place(ui.Leave.Instance, 0, y, bwid, leaveH)
+			place(ui.Start.Instance, bwid + 12, y, bwid, leaveH)
 		end
 		place(ui.Right, rx, ry, rw, rh)
 		-- narrow lists: compact row buttons (rows are rebuilt when this flips)
@@ -739,13 +796,35 @@ function MenuParty.Build(screen: Frame, ctx: { [string]: any })
 		ui.Tabs.Frame.Position = UDim2.new()
 		ui.Tabs.Frame.Size = UDim2.new(1, 0, 0, tabsH)
 		local ly = tabsH + 10
-		if ui.InviteFriends.Instance.Visible then
+		local friendsTab = tab == "Friends"
+		if friendsTab then
 			place(ui.InviteFriends.Instance, 0, ly, rw - 58, 48)
 			place(ui.Refresh.Instance, rw - 48, ly, 48, 48)
 			ly += 58
 		end
-		place(ui.List, 0, ly, rw, math.max(ROW_H, rh - ly))
-		place(ui.Empty, 12, ly + 12, rw - 24, TS(16) * 3 + 12)
+		local areaH = math.max(ROW_H, rh - ly)
+		place(ui.List, 0, ly, rw, areaH)
+		-- empty state: icon, headline, one line, and (This server) the real invite button
+		local showBtn = not friendsTab and ui.InviteFriends.Instance.Visible
+		local titleH = TS(18) * 2 + 8
+		local subH = ui.EmptySub.Visible and (TS(16) * 2 + 6) or 0
+		local blockH = 56 + 8 + titleH + subH + (showBtn and 62 or 0)
+		local iconSz = areaH >= blockH and 56 or 0
+		if iconSz == 0 then
+			blockH -= 64
+		end
+		ui.EmptyIcon.Visible = ui.Empty.Visible and iconSz > 0
+		local by = ly + math.max(0, math.floor((areaH - blockH) / 2))
+		ui.EmptyIcon.Position = UDim2.fromOffset(math.floor(rw / 2), by)
+		local ty = by + (iconSz > 0 and 64 or 0)
+		place(ui.Empty, 12, ty, rw - 24, titleH)
+		place(ui.EmptySub, 12, ty + titleH, rw - 24, subH)
+		if showBtn then
+			place(ui.InviteFriends.Instance, math.floor((rw - math.min(rw - 24, 300)) / 2), ty + titleH + subH + 10, math.min(rw - 24, 300), 48)
+		end
+		-- header: count pill right after the title
+		local tb = ui.Header.Title.TextBounds.X
+		ui.CountPill.Frame.Position = UDim2.new(0, 148 + tb + 14, 0.5, 0)
 	end
 	MenuParty._layout = function()
 		layout(host.VirtualSize(), host.IsPortrait(), host.Insets())
