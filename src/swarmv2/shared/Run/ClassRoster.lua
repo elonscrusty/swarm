@@ -141,6 +141,21 @@ local Defs: { [string]: { [string]: any } } = {
 
 local SIGNATURE_LEVELS = 5
 
+-- The ultimate and the second (rank-unlocked) skill of each class, built from the existing
+-- effects (CharacterData.Ultimates / SecondSkills shape; the Look names are Ultimate.lua's).
+local Ultimates: { [string]: { [string]: any } } = {
+	ruckus = { Name = "Trash Avalanche", Text = "Tips the can: a shockwave of junk hurls back everything near you, and you take no damage for 1 s.", Damage = 1.0, Radius = 0.9, Look = "Quake", Color = Palette.steel_300, Guard = 1.0, Knock = 1.8 },
+	toastmaster = { Name = "Burnt Offering", Text = "Every toaster coil flares: flames burst all around you.", Damage = 1.1, Radius = 1.0, Look = "Fire", Color = Palette.amber_500 },
+	captain_croak = { Name = "Tidal Splash", Text = "A wave of bubbles bursts all around you and chills the survivors.", Damage = 1.0, Radius = 1.0, Look = "Stars", Color = Palette.ice_300, Slow = { Mult = 0.6, Seconds = 2 } },
+	granny_boom = { Name = "Knitting Needles", Text = "A whirl of flying needles cuts every enemy around you.", Damage = 1.15, Radius = 0.85, Look = "Blades", Color = Color3.fromRGB(240, 120, 175) },
+}
+local SecondSkills: { [string]: { [string]: any } } = {
+	ruckus = { Name = "Quick Paws", Text = "+5% move speed.", Bonus = { speed = 0.05 } },
+	toastmaster = { Name = "Crisp Edge", Text = "+5% crit chance.", Bonus = { critChance = 0.05 } },
+	captain_croak = { Name = "Long Legs", Text = "+20% pickup radius.", Bonus = { pickup = 0.20 } },
+	granny_boom = { Name = "Tough Old Bird", Text = "+1 armor: every hit does 1 less damage.", Bonus = { armor = 1 } },
+}
+
 function ClassRoster.Register(CharacterData: any, MetaUpgradeData: any?): { string }
 	local added = {}
 	local C = RunConfig.Classes
@@ -156,6 +171,12 @@ function ClassRoster.Register(CharacterData: any, MetaUpgradeData: any?): { stri
 			entry.Class = true -- a SwarmV2 class (not one of the old heroes)
 			CharacterData.Characters[id] = entry
 			table.insert(added, id)
+		end
+		if CharacterData.Ultimates and CharacterData.Ultimates[id] == nil and Ultimates[id] then
+			CharacterData.Ultimates[id] = table.clone(Ultimates[id])
+		end
+		if CharacterData.SecondSkills and CharacterData.SecondSkills[id] == nil and SecondSkills[id] then
+			CharacterData.SecondSkills[id] = table.clone(SecondSkills[id])
 		end
 		local sigs = MetaUpgradeData and MetaUpgradeData.Signature
 		if sigs and sigs[id] == nil and def and num then
