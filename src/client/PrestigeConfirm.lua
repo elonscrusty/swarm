@@ -163,8 +163,6 @@ local function build(): UI
 	-- white lettering with a navy outline on a blue plate (Bright Arcade page title)
 	UIKit.PageTitleStyle(title, 2)
 	UIKit.corner(title, Theme.Radius.M)
-	UIKit.stroke(title, C.Shadow, 2, 0).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Blue }, title)
 	local fit = Instance.new("UITextSizeConstraint")
 	fit.MaxTextSize = TS(22)
 	fit.MinTextSize = 12

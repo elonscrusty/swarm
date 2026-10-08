@@ -434,8 +434,6 @@ local function buildItemsModal(root: Frame)
 	local title = text(content, "H1", "ITEMS", { Size = UDim2.new(0, 220, 0, TS(30) + 10), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = C.Blue, BackgroundTransparency = 0 })
 	UIKit.PageTitleStyle(title, 3)
 	UIKit.corner(title, Theme.Radius.M)
-	UIKit.stroke(title, C.Shadow, 2, 0).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Blue }, title)
 	ui.ItemsSub = text(content, "Caption", "", { Position = UDim2.fromOffset(0, TS(30) + 14), Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center })
 	local top = TS(30) + TS(12) + 26
 	local scroll = new("ScrollingFrame", {

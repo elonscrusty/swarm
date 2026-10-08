@@ -321,14 +321,9 @@ function UIBuilder.TitlePlate(label: TextLabel, color: Color3?): UIGradient
 	UIKit.PageTitleStyle(label, 3)
 	if not label:FindFirstChild("PlateCorner") then
 		UIKit.corner(label, Theme.Radius.M).Name = "PlateCorner"
-		UIKit.stroke(label, C.Shadow, 2, 0).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	end
-	local g = label:FindFirstChild("PlateGradient") :: UIGradient?
-	if not g then
-		g = new("UIGradient", { Name = "PlateGradient", Rotation = 90 }, label) :: UIGradient
-	end
-	(g :: UIGradient).Color = ColorSequence.new(c:Lerp(Color3.new(1, 1, 1), 0.25), c)
-	return g :: UIGradient
+	-- (no UIGradient here: on a TextLabel it would tint the lettering too)
+	return label:FindFirstChildOfClass("UIGradient") or new("UIGradient", { Enabled = false }, label)
 end
 
 local function fitModal(m: UIKit.Modal, list: UIListLayout)
@@ -3391,8 +3386,6 @@ do
 		UIKit.PageTitleStyle(chest.Title, 2)
 		UIKit.corner(chest.Title, 999)
 		UIKit.padding(chest.Title, 0, 14, 0, 14)
-		new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Blue }, chest.Title)
-		UIKit.stroke(chest.Title, C.Shadow, 1.5, 0).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		chest.Source = text(face, "Caption", "", { Size = UDim2.new(1, 0, 0, TS(12) + 4), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 3 })
 
 		-- the reel window: slots scroll inside it, the marker frames the centre one
@@ -4108,8 +4101,6 @@ function runMenu.buildRunMenu()
 	runMenu.Title = text(drawer, "H1", "RUN MENU", { TextXAlignment = Enum.TextXAlignment.Center, BackgroundColor3 = C.Blue, BackgroundTransparency = 0, ZIndex = 3 })
 	UIKit.PageTitleStyle(runMenu.Title, 3)
 	UIKit.corner(runMenu.Title, Theme.Radius.M)
-	UIKit.stroke(runMenu.Title, C.Shadow, 2, 0).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	new("UIGradient", { Rotation = 90, Color = Theme.Gradient.Blue }, runMenu.Title)
 	runMenu.fit(runMenu.Title, 18)
 	-- "DUO · RUN CONTINUES" / "SOLO · GAME PAUSED"
 	local pill = new("Frame", { Name = "Status", BackgroundColor3 = C.PanelRaised, BackgroundTransparency = 0, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0), ZIndex = 3 }, drawer)

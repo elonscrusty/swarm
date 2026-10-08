@@ -60,6 +60,7 @@ local MiniMap = {}
 local player = Players.LocalPlayer
 local new = UIKit.new
 local P = Theme.Palette
+local C = Theme.Color
 
 local SIZE_PC, SIZE_COMPACT = 180, 128 -- panel width (px, design space)
 local MAP_INSET = 7
@@ -155,7 +156,7 @@ local function makePin(parent: Instance, name: string, size: number, color: Colo
 	local pointer = new("Frame", { Name = "Pointer", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = z, Visible = false }, f)
 	pin.Pointer = pointer
 	pin.Arrow = new("Frame", { Name = "Arrow", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 3), Size = UDim2.fromOffset(7, 7), Rotation = 45, BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = z }, pointer)
-	UIKit.stroke(pin.Arrow, P.slate_950, 1, 0.2)
+	UIKit.stroke(pin.Arrow, C.Text, 1, 0.2)
 	if ringed then
 		local r, rs = ring(f, "Ring", size + 4, color, z)
 		r.Position = UDim2.fromScale(0.5, 0.5)
@@ -186,7 +187,7 @@ local function buildMarkers(world: Frame)
 	-- a faint quarter grid on the arena floor: shows movement even in an empty field
 	for i = 1, 3 do
 		for _, vertical in ipairs({ true, false }) do
-			new("Frame", { Name = "Grid", AnchorPoint = Vector2.new(0.5, 0.5), Position = vertical and UDim2.fromScale(i / 4, 0.5) or UDim2.fromScale(0.5, i / 4), Size = vertical and UDim2.new(0, 1, 1, 0) or UDim2.new(1, 0, 0, 1), BackgroundColor3 = P.slate_400, BackgroundTransparency = i == 2 and 0.72 or 0.84, BorderSizePixel = 0, ZIndex = 2 }, world)
+			new("Frame", { Name = "Grid", AnchorPoint = Vector2.new(0.5, 0.5), Position = vertical and UDim2.fromScale(i / 4, 0.5) or UDim2.fromScale(0.5, i / 4), Size = vertical and UDim2.new(0, 1, 1, 0) or UDim2.new(1, 0, 0, 1), BackgroundColor3 = C.BlueLight, BackgroundTransparency = i == 2 and 0.7 or 0.82, BorderSizePixel = 0, ZIndex = 2 }, world)
 		end
 	end
 	ui.Hazards = new("Frame", { Name = "Hazards", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2 }, world)
@@ -200,13 +201,13 @@ local function buildMarkers(world: Frame)
 	for i = 1, MAX_LOOT do
 		ui.Loot[i] = dot(world, "Loot", 6, P.gold_300, 5, false)
 		UIKit.corner(ui.Loot[i], 1)
-		UIKit.stroke(ui.Loot[i], P.slate_950, 1, 0)
+		UIKit.stroke(ui.Loot[i], C.Text, 1, 0)
 	end
 	ui.Altar, ui.AltarStroke = ring(world, "Altar", 9, P.amber_300, 5)
 	ui.Mates = {}
 	for i = 1, MAX_MATES do
 		local m = dot(world, "Mate", 7, P.ice_300, 7, true)
-		UIKit.stroke(m, P.slate_950, 1, 0)
+		UIKit.stroke(m, C.Text, 1, 0)
 		ui.Mates[i] = m
 	end
 end
@@ -216,7 +217,7 @@ local function buildPins(view: Frame)
 	ui.Pins = pins
 	ui.CaravanPin = makePin(pins, "Caravan", 9, P.wood_400, P.ivory_300, false, false, 1, 10)
 	ui.BossPin = makePin(pins, "Boss", 12, Accessibility.Color(P.crimson_500, "Danger"), P.ivory_100, true, false, 1, 12)
-	ui.PortalPin = makePin(pins, "Portal", 12, P.ivory_100, P.slate_950, true, true, 3, 14)
+	ui.PortalPin = makePin(pins, "Portal", 12, P.ivory_100, C.Text, true, true, 3, 14)
 	-- compatibility names (tests / preview tools)
 	ui.Portal, ui.PortalStroke = ui.PortalPin.Frame, ui.PortalPin.RingStroke
 	ui.Boss, ui.Caravan = ui.BossPin.Frame, ui.CaravanPin.Frame
@@ -228,13 +229,13 @@ end
 local function buildPlayer(view: Frame)
 	local pivot = new("Frame", { Name = "Player", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1, ZIndex = 20 }, view)
 	ui.Player = pivot
-	local nose = new("Frame", { Name = "Heading", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -3), Size = UDim2.fromOffset(7, 7), Rotation = 45, BackgroundColor3 = P.gold_200, BorderSizePixel = 0, ZIndex = 20 }, pivot)
-	UIKit.stroke(nose, P.slate_950, 1.5, 0)
-	local body = new("Frame", { Name = "Body", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 1), Size = UDim2.fromOffset(9, 9), BackgroundColor3 = P.gold_300, BorderSizePixel = 0, ZIndex = 21 }, pivot)
+	local nose = new("Frame", { Name = "Heading", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -3), Size = UDim2.fromOffset(7, 7), Rotation = 45, BackgroundColor3 = C.PrimaryTop, BorderSizePixel = 0, ZIndex = 20 }, pivot)
+	UIKit.stroke(nose, C.Text, 1.5, 0)
+	local body = new("Frame", { Name = "Body", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 1), Size = UDim2.fromOffset(9, 9), BackgroundColor3 = C.Primary, BorderSizePixel = 0, ZIndex = 21 }, pivot)
 	UIKit.corner(body, 999)
-	UIKit.stroke(body, P.slate_950, 1.5, 0)
+	UIKit.stroke(body, C.Text, 1.5, 0)
 	-- covers the nose's inner stroke so the outline reads as one teardrop
-	local fill = new("Frame", { Name = "Fill", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), Size = UDim2.fromOffset(5, 5), BackgroundColor3 = P.gold_300, BorderSizePixel = 0, ZIndex = 22 }, pivot)
+	local fill = new("Frame", { Name = "Fill", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), Size = UDim2.fromOffset(5, 5), BackgroundColor3 = C.Primary, BorderSizePixel = 0, ZIndex = 22 }, pivot)
 	UIKit.corner(fill, 999)
 end
 
@@ -244,10 +245,10 @@ local function buildLegend(face: Frame)
 	local keys = {
 		-- the stage's way on is called the PORTAL everywhere (objective panel, edge marker,
 		-- banners); its key is the marker's own diamond-in-a-ring
-		{ Name = "Portal", Color = P.ivory_100, Diamond = true, Size = 6, Ring = true },
+		{ Name = "Portal", Color = C.Blue, Diamond = true, Size = 6, Ring = true },
 		{ Name = "Boss", Color = Accessibility.Color(P.crimson_500, "Danger"), Diamond = true, Size = 6 },
-		{ Name = "Loot", Color = P.gold_400, Size = 5 },
-		{ Name = "Ally", Color = Accessibility.Color(P.ice_300, "Ally"), Round = true, Size = 5 },
+		{ Name = "Loot", Color = C.CoinDeep, Size = 5 },
+		{ Name = "Ally", Color = C.BlueLight, Round = true, Size = 5 },
 	}
 	for i, entry in ipairs(keys) do
 		local cell = new("Frame", { Name = entry.Name, BackgroundTransparency = 1, Position = UDim2.fromScale((i - 1) / #keys, 0), Size = UDim2.fromScale(1 / #keys, 1), ZIndex = 3 }, legend)
@@ -258,31 +259,31 @@ local function buildLegend(face: Frame)
 			UIKit.corner(ring, 999)
 			UIKit.stroke(ring, entry.Color, 1, 0.1)
 		end
-		UIKit.text(cell, "Small", entry.Name, { Position = UDim2.fromOffset(entry.Ring and 13 or 11, 0), Size = UDim2.new(1, -(entry.Ring and 13 or 11), 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_200, ZIndex = 4 }, 10)
+		UIKit.text(cell, "Small", entry.Name, { Position = UDim2.fromOffset(entry.Ring and 13 or 11, 0), Size = UDim2.new(1, -(entry.Ring and 13 or 11), 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.TextMuted, ZIndex = 4 }, 10)
 	end
 end
 
 function MiniMap.Build(root: Frame, k: { [string]: any })
 	kit = k
-	local holder, face = UIKit.Surface(root, { Name = "MiniMap", Transparency = 0.08, Radius = Theme.Radius.M, Edge = P.gold_500, EdgeTransparency = 0.35, Shadow = false, Size = UDim2.fromOffset(SIZE_PC, SIZE_PC + HEADER_PC + FOOTER_PC), ZIndex = Theme.Z.Hud, Visible = false })
+	local holder, face = UIKit.Surface(root, { Name = "MiniMap", Radius = Theme.Radius.M, Edge = C.PanelEdge, EdgeThickness = 2, Transparency = 0.04, Shadow = false, Size = UDim2.fromOffset(SIZE_PC, SIZE_PC + HEADER_PC + FOOTER_PC), ZIndex = Theme.Z.Hud, Visible = false })
 	holder.Active = false
 	face.Active = false
 	ui.Holder, ui.Face = holder, face
 	Hud.AvoidInPortrait(holder) -- portrait: the centre banners drop below the map
 	-- the clipped viewport (the dark "outside" of the arena), inset so the corners stay clean
-	local view = new("Frame", { Name = "View", BackgroundColor3 = P.slate_950, BackgroundTransparency = 0.05, BorderSizePixel = 0, ClipsDescendants = true, Position = UDim2.fromOffset(MAP_INSET, HEADER_PC), Size = UDim2.fromOffset(viewPx, viewPx), ZIndex = 2 }, face)
+	local view = new("Frame", { Name = "View", BackgroundColor3 = C.Text, BackgroundTransparency = 0.05, BorderSizePixel = 0, ClipsDescendants = true, Position = UDim2.fromOffset(MAP_INSET, HEADER_PC), Size = UDim2.fromOffset(viewPx, viewPx), ZIndex = 2 }, face)
 	UIKit.corner(view, 5)
-	UIKit.stroke(view, P.gold_700, 1, 0.45)
+	UIKit.stroke(view, C.BlueDeep, 1.5, 0)
 	ui.View = view
 	-- the world: the whole arena at map scale; its stroke is the fence
-	local world = new("Frame", { Name = "World", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = P.slate_700, BackgroundTransparency = 0.2, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 1), ZIndex = 2 }, view)
-	ui.WorldStroke = UIKit.stroke(world, P.gold_600, 2, 0.25)
+	local world = new("Frame", { Name = "World", AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = C.BlueDeep:Lerp(C.Text, 0.55), BackgroundTransparency = 0.1, BorderSizePixel = 0, Size = UDim2.fromOffset(1, 1), ZIndex = 2 }, view)
+	ui.WorldStroke = UIKit.stroke(world, C.BlueLight, 2, 0.35)
 	ui.World = world
 	buildMarkers(world)
 	buildPins(view)
 	buildPlayer(view)
-	ui.Title = UIKit.text(face, "Label", "MAP", { Position = UDim2.fromOffset(MAP_INSET + 1, 2), Size = UDim2.new(1, -30, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = P.ivory_400, ZIndex = 3 }, 10)
-	ui.North = UIKit.text(face, "Label", "N", { Name = "North", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -MAP_INSET, 0, 2), Size = UDim2.fromOffset(14, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, ZIndex = 3 }, 13)
+	ui.Title = UIKit.text(face, "Label", "MAP", { Position = UDim2.fromOffset(MAP_INSET + 1, 2), Size = UDim2.new(1, -30, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.TextMuted, ZIndex = 3 }, 10)
+	ui.North = UIKit.text(face, "Label", "N", { Name = "North", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -MAP_INSET, 0, 2), Size = UDim2.fromOffset(14, 16), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BlueDeep, ZIndex = 3 }, 13)
 	buildLegend(face)
 	ClientSettings.OnChanged(function(key, value)
 		if key == "Minimap" then

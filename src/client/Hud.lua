@@ -595,9 +595,10 @@ local function detailRow(parent: Instance, order: number, icon: string, name: st
 	UIKit.corner(tile, Theme.Radius.S)
 	UIKit.stroke(tile, C.Blue, 1.5, 0)
 	Icons.Upgrade(tile, icon, { Size = 36, Position = UDim2.fromOffset(4, 4), Back = C.BluePale })
-	local rankW = frac and 104 or 150
-	role(row, "Heading", name, { Name = "Name", Position = UDim2.fromOffset(60, 4), Size = UDim2.new(1, -(60 + rankW + 14), 0, 24), TextTruncate = Enum.TextTruncate.AtEnd })
-	role(row, frac and "Heading" or "Label", rank, { Name = "Rank", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 4), Size = UDim2.fromOffset(rankW, 24), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = ready and C.SelectedEdge or C.Text, TextTruncate = Enum.TextTruncate.AtEnd })
+	local rankW = frac and 118 or 150
+	fitText(role(row, "Heading", name, { Name = "Name", Position = UDim2.fromOffset(60, 4), Size = UDim2.new(1, -(60 + rankW + 14), 0, 24) }), 11)
+	fitText(role(row, frac and "Heading" or "Label", rank, { Name = "Rank", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 4), Size = UDim2.fromOffset(rankW, 24), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = ready and C.SelectedEdge or C.Text }), 10)
+
 	if frac then
 		local track = new("Frame", { Name = "Progress", BackgroundColor3 = C.Track, BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 33), Size = UDim2.fromOffset(rankW - 8, 8) }, row)
 		UIKit.corner(track, 999)

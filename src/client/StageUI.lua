@@ -137,28 +137,29 @@ local function buildArrow(root: Frame)
 		Position = UDim2.new(1, -8, 0.5, 0),
 		Size = UDim2.fromOffset(22, 22),
 		Rotation = 45,
-		BackgroundColor3 = P.gold_400,
+		BackgroundColor3 = C.Blue,
 		BorderSizePixel = 0,
 	}, pivot)
 	UIKit.corner(tip, 3)
-	UIKit.stroke(tip, P.gold_200, 1.5, 0.2)
-	local badge, face = UIKit.Surface(holder, { Name = "Badge", Radius = 999, Transparency = 0.1, Edge = P.gold_400, EdgeTransparency = 0.2, Size = UDim2.fromOffset(48, 48), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+	UIKit.stroke(tip, C.BlueDeep, 1.5, 0)
+	local badge, face = UIKit.Surface(holder, { Name = "Badge", Radius = 999, Transparency = 0.02, Edge = C.PanelEdge, EdgeThickness = 3, Shadow = false, Size = UDim2.fromOffset(48, 48), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
 	local _ = badge
-	Icons.Draw(face, "portal", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
-	-- "PORTAL · 139 m" on a dark tag under the badge (readable over grass and snow)
+	Icons.Draw(face, "portal", { Size = 30, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.Panel })
+	-- "PORTAL · 139 m" on a navy tag under the badge (readable over grass and snow)
 	ui.ArrowDistance = UIKit.Role(holder, "Label", "", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 1, 0),
 		Size = UDim2.fromOffset(ARROW_TAG_W, TS(Theme.Type.Label.Size) + 6),
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = P.ivory_100,
-		TextStrokeTransparency = 0.6,
-		BackgroundColor3 = P.slate_950,
-		BackgroundTransparency = 0.2,
+		TextColor3 = C.TextOnBlue,
+		TextStrokeTransparency = 1,
+		BackgroundColor3 = C.Text,
+		BackgroundTransparency = 0.08,
 		-- scales down inside its box: the phone's large-text setting grew "139 m" onto the tray
 		TextScaled = true,
 	}, true)
 	UIKit.corner(ui.ArrowDistance, 999)
+	UIKit.stroke(ui.ArrowDistance, C.PanelEdge, 2, 0)
 	UIKit.padding(ui.ArrowDistance, 1, 8, 1, 8)
 	new("UITextSizeConstraint", { MinTextSize = 10, MaxTextSize = ui.ArrowDistance.TextSize }, ui.ArrowDistance)
 	UIAnim.Breathe(badge, 0.06, 1.6)
@@ -180,12 +181,12 @@ local function buildRing(root: Frame)
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(RING_R * 2 - 8, RING_R * 2 - 8),
 		BackgroundColor3 = C.Panel,
-		BackgroundTransparency = 0.25,
+		BackgroundTransparency = 0.05,
 		BorderSizePixel = 0,
 	}, holder)
 	UIKit.corner(disc, 999)
-	UIKit.stroke(disc, P.gold_500, 1, 0.5)
-	Icons.Draw(disc, "portal", { Size = 28, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = P.slate_900 })
+	UIKit.stroke(disc, C.PanelEdge, 2, 0)
+	Icons.Draw(disc, "portal", { Size = 28, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Back = C.Panel })
 	ui.Segments = {}
 	local c = RING_R + 12
 	for i = 1, SEGMENTS do
@@ -196,10 +197,11 @@ local function buildRing(root: Frame)
 			Position = UDim2.fromOffset(c + math.cos(a) * RING_R, c + math.sin(a) * RING_R),
 			Size = UDim2.fromOffset(4, 9),
 			Rotation = math.deg(a) + 90,
-			BackgroundColor3 = P.slate_500,
-			BackgroundTransparency = 0.2,
+			BackgroundColor3 = C.BluePale,
+			BackgroundTransparency = 0.05,
 			BorderSizePixel = 0,
 		}, holder)
+		UIKit.stroke(seg, C.Blue, 1, 0.3)
 		UIKit.corner(seg, 999)
 		ui.Segments[i] = seg
 	end
@@ -208,14 +210,18 @@ local function buildRing(root: Frame)
 		Position = UDim2.new(0.5, 0, 1, 2),
 		Size = UDim2.fromOffset(220, TS(Theme.Type.Label.Size) + 6),
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = P.gold_200,
-		TextStrokeTransparency = 0.35,
+		TextColor3 = C.TextOnBlue,
+		TextStrokeTransparency = 1,
+		BackgroundColor3 = C.Text,
+		BackgroundTransparency = 0.08,
 	}, true)
+	UIKit.corner(ui.RingLabel, 999)
+	UIKit.stroke(ui.RingLabel, C.PanelEdge, 2, 0)
 end
 
 local function smallStat(parent: Instance, icon: string, caption: string, order: number): TextLabel
 	local f = UIKit.Panel(parent, { Name = caption, LayoutOrder = order, Size = UDim2.fromOffset(104, 74) }, true)
-	Icons.Draw(f, icon, { Size = 20, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Color = if icon == "coin" or icon == "portal" then nil else P.gold_400, Back = P.slate_950 })
+	Icons.Draw(f, icon, { Size = 20, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Color = if icon == "coin" or icon == "portal" then nil else C.Blue, Back = C.PanelInset })
 	local value = UIKit.Role(f, "Number", "0", {
 		Name = "Value",
 		Position = UDim2.fromOffset(0, 28),
@@ -251,8 +257,8 @@ local function buildChoice(root: Frame)
 	local content = m.Content
 	local list = UIKit.list(content, { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center })
 	kit.FitModal(m, list)
-	ui.ChoiceIcon = Icons.Draw(content, "portal", { Size = 46, LayoutOrder = 1, Back = P.slate_900 })
-	ui.ChoiceTitle = text(content, "H1", "STAGE 1 CLEARED", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300 })
+	ui.ChoiceIcon = Icons.Draw(content, "portal", { Size = 46, LayoutOrder = 1, Back = C.Panel })
+	ui.ChoiceTitle = UIKit.PageTitleStyle(text(content, "H1", "STAGE 1 CLEARED", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center }), 2.5)
 	UIKit.Divider(content, 240, { LayoutOrder = 3 })
 	ui.ChoiceSub = text(content, "Body", "The portal is open. Go deeper, or take your winnings home.", {
 		LayoutOrder = 4,
@@ -321,7 +327,7 @@ end
 local function buildFade(root: Frame)
 	local fade = new("Frame", {
 		Name = "StageFade",
-		BackgroundColor3 = P.slate_950,
+		BackgroundColor3 = C.Text,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Visible = false,
@@ -331,9 +337,9 @@ local function buildFade(root: Frame)
 	ui.Fade = fade
 	local box = new("Frame", { Name = "Title", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(600, 150), ZIndex = 2 }, fade)
 	UIKit.list(box, { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center })
-	Icons.Draw(box, "portal", { Size = 44, LayoutOrder = 1, Back = P.slate_950, ZIndex = 2 })
-	ui.FadeTitle = UIKit.Role(box, "Display", "STAGE 2", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = P.gold_300, Size = UDim2.new(1, 0, 0, TS(Theme.Type.Display.Size) + 8), ZIndex = 2 })
-	ui.FadeSub = UIKit.Role(box, "Body", "", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.TextMuted, ZIndex = 2 })
+	Icons.Draw(box, "portal", { Size = 44, LayoutOrder = 1, Back = C.Text, ZIndex = 2 })
+	ui.FadeTitle = UIKit.Role(box, "Display", "STAGE 2", { LayoutOrder = 2, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.PrimaryTop, Size = UDim2.new(1, 0, 0, TS(Theme.Type.Display.Size) + 8), ZIndex = 2 })
+	ui.FadeSub = UIKit.Role(box, "Body", "", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = C.BluePale, ZIndex = 2 })
 	ui.FadeLabels = { ui.FadeTitle, ui.FadeSub }
 end
 
@@ -401,8 +407,8 @@ local function onOffer(data)
 		-- the title lands with sparks and the panel catches a glint
 		task.delay(0.2, function()
 			if offer == data and ui.ChoiceTitle.Parent then
-				UIAnim.Sparks(ui.Choice.Panel, UDim2.new(0.5, 0, 0, 90), P.gold_200, 12, 110, 0.65)
-				UIAnim.Ring(ui.Choice.Panel, UDim2.new(0.5, 0, 0, 50), P.gold_300, 140, 0.55)
+				UIAnim.Sparks(ui.Choice.Panel, UDim2.new(0.5, 0, 0, 90), C.Primary, 12, 110, 0.65)
+				UIAnim.Ring(ui.Choice.Panel, UDim2.new(0.5, 0, 0, 50), C.BlueLight, 140, 0.55)
 			end
 		end)
 	end
@@ -458,8 +464,9 @@ local function onTravel(data)
 	UIAnim.Pop(ui.FadeSub, 0.3, 0.9)
 	task.delay(0.35, function()
 		if travel.Active then
-			UIAnim.Ring(ui.Fade, UDim2.fromScale(0.5, 0.45), P.gold_300, 360, 0.7)
-			UIAnim.Sparks(ui.Fade, UDim2.fromScale(0.5, 0.45), P.gold_200, 14, 160, 0.7)
+			UIAnim.Ring(ui.Fade, UDim2.fromScale(0.5, 0.45), C.BlueLight, 360, 0.7)
+			UIAnim.Sparks(ui.Fade, UDim2.fromScale(0.5, 0.45), C.Primary, 14, 160, 0.7)
+
 		end
 	end)
 end
@@ -661,15 +668,15 @@ local function updateArrowAndRing(state: Configuration, stagePhase: string)
 			-- the rune that just lit pops
 			UIAnim.Punch(ui.Segments[math.min(lit, SEGMENTS)], 0.9)
 			if lit >= SEGMENTS then
-				UIAnim.Sparks(ui.Ring, UDim2.fromScale(0.5, 0.5), P.gold_200, 12, 60, 0.6)
-				UIAnim.Ring(ui.Ring, UDim2.fromScale(0.5, 0.5), P.gold_300, 130, 0.5)
+				UIAnim.Sparks(ui.Ring, UDim2.fromScale(0.5, 0.5), C.Primary, 12, 60, 0.6)
+				UIAnim.Ring(ui.Ring, UDim2.fromScale(0.5, 0.5), C.BlueLight, 130, 0.5)
 			end
 		end
 		ui.LitSegments = lit
 		for i, seg in ipairs(ui.Segments) do
 			local on = i <= lit
-			seg.BackgroundColor3 = on and P.gold_300 or P.slate_500
-			seg.BackgroundTransparency = on and 0 or 0.25
+			seg.BackgroundColor3 = on and C.Primary or C.BluePale
+			seg.BackgroundTransparency = on and 0 or 0.05
 			seg.Size = on and UDim2.fromOffset(5, 11) or UDim2.fromOffset(4, 9)
 		end
 		local lockLeft = state:GetAttribute("PortalLockLeft") or 0
