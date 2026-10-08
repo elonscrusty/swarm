@@ -274,6 +274,18 @@ export function paintOverlays(root, overlays, project) {
       }
     } else if (o.kind === 'box') {
       pts = [project(o.minX, y, o.minZ), project(o.maxX, y, o.minZ), project(o.maxX, y, o.maxZ), project(o.minX, y, o.maxZ)];
+    } else if (o.kind === 'line') {
+      const l = document.createElementNS(SVGNS, 'polyline');
+      const p1 = project(o.x1, y, o.z1);
+      const p2 = project(o.x2, y, o.z2);
+      l.setAttribute('points', p1.join(',') + ' ' + p2.join(','));
+      l.setAttribute('fill', 'none');
+      l.setAttribute('stroke', o.color || 'red');
+      l.setAttribute('stroke-width', String(o.width || 1.5));
+      l.setAttribute('stroke-linecap', 'round');
+      if (o.dash) l.setAttribute('stroke-dasharray', o.dash);
+      svg.appendChild(l);
+      continue;
     } else if (o.kind === 'label') {
       const p = project(o.x, y, o.z);
       const t = document.createElementNS(SVGNS, 'text');

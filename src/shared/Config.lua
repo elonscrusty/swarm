@@ -1664,7 +1664,7 @@ Config.UI = {
 ------------------------------------------------------------------------------------------
 Config.Arenas = {
 	-- Lobby picker order (the ARENA card cycles through the unlocked ones).
-	Order = { "Forest", "Ruins", "Swamp", "Snow", "Desert", "Lava" },
+	Order = { "Forest", "Ruins", "Swamp", "Snow", "Desert", "Lava", "Cliffwood" },
 	-- Stage runs: stage 1 is the lobby's arena, later stages tour Rotation (shuffled per
 	-- run when ShuffleRotation; when the tour runs out it reshuffles every arena). Never
 	-- the same arena twice in a row.
@@ -1679,6 +1679,8 @@ Config.Arenas = {
 	Snow = { DisplayName = "Snow", RequiredBestStage = 4, Hint = "Ice ponds are slippery" },
 	Desert = { DisplayName = "Desert", RequiredBestStage = 5, Hint = "Beware the quicksand" },
 	Lava = { DisplayName = "Lava", RequiredBestStage = 6, Hint = "Lava pools burn" },
+	-- The one-map redesign (CliffwoodBuilder): about 1100 x 1100 studs of basins, ramps, a bridge and a cave.
+	Cliffwood = { DisplayName = "Cliffwood Basin", RequiredBestStage = 0, Hint = "Cliffs, ramps and a cave shortcut" },
 	Size = 400, -- square arena, centred on ArenaOrigin
 	ClearRadius = 40, -- nothing collidable this close to the centre (player spawn)
 	-- Environment dressing (MapBuilder.dressArena, Forest): small natural clusters of
