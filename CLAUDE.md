@@ -163,6 +163,11 @@ evolution recipe on weapon cards only once started (HintStarted). Owner referenc
 (compact modal), Party, Daily Challenge (+ travel notice in its own corner), Upgrade cards (DETAILS toggle,
 "AUTO-PICK ALL N"), Arenas, Play tab (one panel, SOLO/DUO/TRIO tabs, 2-column rows). Forest arena polish
 (Config.Arenas.Dressing, "ArenaDressing" folder, lawn/soil palette; ~24% more parts; grass may read dark).
+Ground flicker fix (2026-10-08, offline only, NOT Studio-tested): overlapping flat ground pieces at the same
+height (tone patches 0.001 apart, tree-line shade, Forest blobs vs client clover at 0.1, path fringe vs path
+margins, path wear vs cores) z-fought; MapBuilder.settleGround now gives tone discs free heights (0.02-0.08)
+under other flats, path step 0.02, GroundDetail PATH_TOP/FRINGE_TOP moved; dressing grass/flowers keep out of
+dressing rocks/shrubs/logs (also client ground detail via arena.Bare). New check: ground-zfight-regression.
 Open / next (release-candidate brief, phases):
 - E: one synergy package, one exploration encounter, roster + 2 bosses (Briar Sentinel, Frostbound Colossus),
   snow contrast, milestone character unlocks (Robux hooks only for approved mappings), performance pass,

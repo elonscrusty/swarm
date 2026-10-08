@@ -412,8 +412,10 @@ local PATH_RECIPES: { [string]: PathRecipe } = {
 	},
 }
 local PATH_KIND: Kind = { K = "Path", W = 0, C = {}, S = 1 }
-local PATH_TOP = 0.34 -- the path slabs' top above the floor (MapBuilder dirtPath)
-local FRINGE_TOP = 0.22 -- above the margin slabs (0.12 .. 0.18) and under the core (0.28+)
+-- the highest path slab top above the floor (MapBuilder dirtPath: cores 0.28 .. 0.34);
+-- worn pieces sit 0.02+ above it so none shares a height with a core slab (flicker)
+local PATH_TOP = 0.36
+local FRINGE_TOP = 0.25 -- above the margin slabs (0.12 .. 0.18) and under the cores (0.28+)
 
 -- Nearest path: signed distance to its outer edge and the segment's heading (radians).
 local function pathNear(a: Ctx, x: number, z: number): (number, number)

@@ -32482,8 +32482,8 @@ end
 -- Flat dirt path with a soft (grass-dirt) edge: two slabs per segment (edge + core), no
 -- extra parts at the bends. Each segment is lengthened at both ends by the mitre of its
 -- bend, so neighbours overlap and close the wedge on the outside of every bend;
--- neighbours sit 0.06 studs apart in height (odd / even), so the overlaps never
--- z-fight from the high run camera. Registered in arena.Paths (decoration keeps off it).
+-- neighbours sit 0.02 studs apart in height (odd / even): enough that the overlaps never
+-- z-fight from the high run camera, low enough that the step does not show as a seam line. Registered in arena.Paths (decoration keeps off it).
 local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Color3, edge: Color3, yBase: number, material: Enum.Material?)
 	-- nearly straight runs (under 3° of turn, up to 40 studs) become one segment
 	local raw = smoothPath(ctrl, 18)
@@ -32525,7 +32525,7 @@ local function dirtPath(arena: Arena, ctrl: { Vector2 }, width: number, core: Co
 		local len = d.Magnitude
 		local dir = d.Unit
 		local yaw = math.atan2(-d.X, -d.Y)
-		local lift = (i % 2) * 0.06
+		local lift = (i % 2) * 0.02
 		local ma, mb = mitre(i), mitre(i + 1)
 		for _, layer in ipairs({ { "PathEdge", edgeW, edge, yBase, 0.1 }, { "Path", width, core, yBase + 0.16, 0.2 } }) do
 			local ea, eb = layer[2] / 2 * ma, layer[2] / 2 * mb
@@ -32959,7 +32959,31 @@ local function weighted(r: Random, list: { { any } }): string
 	return list[#list][1]
 end
 
-local function dressCluster(arena: Arena, folder: Folder, r: Random, set: DressSet, kind: string, cx: number, cz: number, small: boolean)
+-- Footprint radius of a placed kit piece (studs, from its bounding box).
+local function footprint(model: Model, fallback: number): number
+	local ok, size = pcall(function()
+		return model:GetExtentsSize()
+	end)
+	if ok and size then
+		return math.max(size.X, size.Z) / 2
+	end
+	return fallback
+end
+
+-- Solid dressing pieces (rocks, shrubs, branches) as { X, Z, R }: later pieces keep out
+-- of them, so grass and flowers never grow through a rock or a bush.
+local function dressClash(solids: { { X: number, Z: number, R: number } }, x: number, z: number, pad: number): boolean
+	for _, o in ipairs(solids) do
+		local dx, dz = o.X - x, o.Z - z
+		local rr = o.R + pad
+		if dx * dx + dz * dz < rr * rr then
+			return true
+		end
+	end
+	return false
+end
+
+local function dressCluster(arena: Arena, folder: Folder, r: Random, set: DressSet, kind: string, cx: number, cz: number, small: boolean, solids: { { X: number, Z: number, R: number } })
 	local spread = small and 1.8 or r:NextNumber(2.2, 3.8)
 	for _, member in ipairs(DRESS_CLUSTERS[kind]) do
 		local name = member[1]
@@ -32977,12 +33001,24 @@ local function dressCluster(arena: Arena, folder: Folder, r: Random, set: DressS
 				local d = reach * (0.3 + 0.7 * math.sqrt(r:NextNumber()))
 				local x, z = cx + math.cos(a) * d, cz + math.sin(a) * d
 				local margin = solid and 0.8 or -0.9 -- signed distance to the path's outer edge
-				if isFree(arena, x, z, solid and 1.2 or 0.5, nil, 0.5) and pathDistance(arena, x, z) > margin then
+				-- small pieces keep 0.25 studs off a solid piece's edge; solids keep their
+				-- own footprint apart (checked against the solid's radius once it is built)
+				if isFree(arena, x, z, solid and 1.2 or 0.5, nil, 0.5) and pathDistance(arena, x, z) > margin and not dressClash(solids, x, z, solid and 0.6 or 0.25) then
 					local pals = set[member[6]]
 					local pal = if pals then pals[r:NextInteger(1, #pals)] else nil
 					local s = r:NextNumber(member[4], member[5]) * (CLUTTER_SCALE[name] or 1)
 					local cf = CFrame.new(W(arena, x, z)) * CFrame.Angles(0, r:NextNumber(0, TAU), 0)
-					prop(folder, name, cf, s, pal, if DRESS_SHADOW[name] then {} else { shadow = false })
+					local piece = prop(folder, name, cf, s, pal, if DRESS_SHADOW[name] then {} else { shadow = false })
+					if solid then
+						local rad = footprint(piece, s)
+						if dressClash(solids, x, z, rad * 0.85) then
+							piece:Destroy() -- would sink into a solid already there
+							continue
+						end
+						table.insert(solids, { X = x, Z = z, R = rad * 0.85 })
+						-- the client's ground detail (GroundDetail) keeps out of it too
+						table.insert(arena.Bare, { X = x, Z = z, R = rad * 0.85 })
+					end
 					break
 				end
 			end
@@ -33002,8 +33038,9 @@ local function dressArena(arena: Arena, set: DressSet)
 	local r = Random.new((SEEDS[arena.Name] or 0) * 3 + 811 + (arena.Variant or 0) * 7919)
 	local counts = DRESS.Clusters or {}
 	local h = arena.Half
+	local solids: { { X: number, Z: number, R: number } } = {}
 	local function place(zone: string, x: number, z: number, small: boolean?)
-		dressCluster(arena, folder, r, set, weighted(r, DRESS_ZONES[zone]), x, z, small == true)
+		dressCluster(arena, folder, r, set, weighted(r, DRESS_ZONES[zone]), x, z, small == true, solids)
 	end
 
 	-- edges: stratified around the perimeter (one bin per cluster, jittered and inset
@@ -33192,7 +33229,7 @@ local function pondBank(arena: Arena, x: number, z: number, r: number, bank: Col
 		local a = a0 + (k - 1) * own:NextNumber(1.9, 2.8)
 		local lr = r * own:NextNumber(0.42, 0.58)
 		local d = r + 1.9 - lr + own:NextNumber(0.6, 1.6) -- pokes 0.6-1.6 studs past the ring
-		disc(m, "PondBank", W(arena, x + math.cos(a) * d, z + math.sin(a) * d, 0.08 - k * 0.006), lr, k == 2 and wet or bank)
+		disc(m, "PondBank", W(arena, x + math.cos(a) * d, z + math.sin(a) * d, 0.08 - k * 0.02), lr, k == 2 and wet or bank)
 	end
 end
 
@@ -34915,6 +34952,105 @@ local BUILDERS: { [string]: (Arena) -> () } = {
 -- attributes on the arena model (arena-relative studs, one decimal): path segments
 -- "ax,az,bx,bz,halfWidth;...", and "x,z,r;..." circles of landmark keepouts, bare floor
 -- and hazard pools. Colliders are read from the Obstacles folder, so they are not repeated.
+-- Ground tone discs (the soft colour patches and the tree-line shade) are drawn as thin
+-- discs over the floor. Two overlapping flat tops at (nearly) the same height flicker
+-- ("z-fight") from the high run camera, worst on phones, so after the build every tone
+-- disc gets one of the TONE_LEVELS heights: different from every overlapping tone disc
+-- it would show against, and at least TONE_GAP under every other flat ground piece it
+-- overlaps (paths, pond banks, hazard rings, paving). Same-colour plain discs may share a
+-- level (identical flat colour cannot flicker). Lower original tops keep the lower levels.
+local TONE_NAMES: { [string]: boolean } = { Patch = true, Shade = true }
+local TONE_LEVELS = { 0.02, 0.04, 0.06, 0.08 } -- under the client's clover discs (0.1)
+local TONE_GAP = 0.02
+
+type FlatTop = { X: number, Z: number, R: number, Top: number }
+
+local function settleGround(arena: Arena)
+	local cy = arena.Center.Y
+	local tones: { { Part: Part, X: number, Z: number, R: number, Top: number, Order: number, Level: number? } } = {}
+	local fixed: { FlatTop } = {}
+	for i, d in ipairs(arena.Model:GetDescendants()) do
+		if not d:IsA("Part") or d.Transparency >= 0.99 then
+			continue
+		end
+		local cf, sz = d.CFrame, d.Size
+		local top, radius
+		if d.Shape == Enum.PartType.Cylinder and math.abs(cf.RightVector.Y) > 0.999 and sz.X <= 1.2 then
+			top, radius = cf.Position.Y + sz.X / 2 - cy, math.min(sz.Y, sz.Z) / 2
+		elseif d.Shape == Enum.PartType.Block and math.abs(cf.UpVector.Y) > 0.999 and sz.Y <= 1.2 and math.min(sz.X, sz.Z) >= sz.Y * 3 then
+			-- slabs: their bounding circle (a little generous is fine: it only lowers tones)
+			top, radius = cf.Position.Y + sz.Y / 2 - cy, math.sqrt(sz.X * sz.X + sz.Z * sz.Z) / 2
+		else
+			continue
+		end
+		if top < 0.01 or top > 1 then
+			continue -- the floor itself, raised platforms and cliff tops
+		end
+		if TONE_NAMES[d.Name] and d.Shape == Enum.PartType.Cylinder and d.Parent == arena.Decor then
+			table.insert(tones, { Part = d, X = cf.Position.X, Z = cf.Position.Z, R = radius, Top = top, Order = i })
+		elseif radius < 40 then
+			table.insert(fixed, { X = cf.Position.X, Z = cf.Position.Z, R = radius, Top = top })
+		end
+	end
+	table.sort(tones, function(a, b)
+		if math.abs(a.Top - b.Top) > 1e-4 then
+			return a.Top < b.Top
+		end
+		return a.Order < b.Order
+	end)
+	local function overlap(ax: number, az: number, ar: number, bx: number, bz: number, br: number): boolean
+		local dx, dz = ax - bx, az - bz
+		local rr = ar + br - 0.1
+		return rr > 0 and dx * dx + dz * dz < rr * rr
+	end
+	local placed = {}
+	local clashes = 0
+	for _, t in ipairs(tones) do
+		local ceiling = math.huge
+		for _, f in ipairs(fixed) do
+			if overlap(t.X, t.Z, t.R, f.X, f.Z, f.R) then
+				ceiling = math.min(ceiling, f.Top - TONE_GAP)
+			end
+		end
+		local used, floorLevel = {}, 1
+		for _, q in ipairs(placed) do
+			if overlap(t.X, t.Z, t.R, q.X, q.Z, q.R) then
+				local plain = t.Part.Material == SMOOTH and q.Part.Material == SMOOTH
+				if not (plain and q.Part.Color == t.Part.Color) then
+					used[q.Level] = true
+					if q.Top < t.Top - 1e-4 then
+						floorLevel = math.max(floorLevel, q.Level + 1) -- keep the designed order
+					end
+				end
+			end
+		end
+		local level
+		for pass = 1, 2 do
+			for k = if pass == 1 then floorLevel else 1, #TONE_LEVELS do
+				if not used[k] and TONE_LEVELS[k] <= ceiling + 1e-6 then
+					level = k
+					break
+				end
+			end
+			if level then
+				break
+			end
+		end
+		if not level then
+			clashes += 1
+			level = 1
+		end
+		t.Level = level
+		table.insert(placed, t)
+		local thick = t.Part.Size.X
+		local p = t.Part.Position
+		t.Part.CFrame = CFrame.new(p.X, cy + TONE_LEVELS[level] - thick / 2, p.Z) * UPRIGHT
+	end
+	if clashes > 0 then
+		warn(string.format("[MapBuilder] %s: %d ground tone discs found no free height", arena.Name, clashes))
+	end
+end
+
 local function writeDetailLayout(arena: Arena)
 	local c = arena.Center
 	local function num(v: number): string
@@ -34946,6 +35082,7 @@ function MapBuilder.BuildArena(name: string, variant: number?)
 	arena.Variant = variant or 0
 	local build = BUILDERS[name] or buildForest
 	build(arena)
+	settleGround(arena)
 	writeDetailLayout(arena)
 	arena.Model.Parent = arena.Root
 	MapBuilder.ApplyLighting(name)
@@ -63092,8 +63229,10 @@ local PATH_RECIPES: { [string]: PathRecipe } = {
 	},
 }
 local PATH_KIND: Kind = { K = "Path", W = 0, C = {}, S = 1 }
-local PATH_TOP = 0.34 -- the path slabs' top above the floor (MapBuilder dirtPath)
-local FRINGE_TOP = 0.22 -- above the margin slabs (0.12 .. 0.18) and under the core (0.28+)
+-- the highest path slab top above the floor (MapBuilder dirtPath: cores 0.28 .. 0.34);
+-- worn pieces sit 0.02+ above it so none shares a height with a core slab (flicker)
+local PATH_TOP = 0.36
+local FRINGE_TOP = 0.25 -- above the margin slabs (0.12 .. 0.18) and under the cores (0.28+)
 
 -- Nearest path: signed distance to its outer edge and the segment's heading (radians).
 local function pathNear(a: Ctx, x: number, z: number): (number, number)
