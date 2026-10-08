@@ -472,6 +472,9 @@ end
 
 local setBuildOpen: (boolean) -> ()
 local relayout: () -> () = function() end
+-- AutomaticSize can notify while Build is still assembling the HUD. Defer layout
+-- until every element exists; Build performs one complete layout at the end.
+local layoutReady = false
 
 -- Ability panel (bottom centre): labels + two rows of tiles, and at its right end the
 -- BUILD button that opens the build details (every weapon, passive and item with its rank
@@ -1219,7 +1222,7 @@ local function setBossArt(id: any)
 end
 
 local function layout()
-	if not ui.Frame then
+	if not layoutReady or not ui.Frame then
 		return
 	end
 	local v: Vector2 = host.VirtualSize()
@@ -2311,6 +2314,7 @@ function Hud.TopBottom(): number
 end
 
 function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
+	layoutReady = false
 	host = h
 	local frame = new("Frame", { Name = "HUD", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = Theme.Z.Hud }, root)
 	ui.Frame = frame
@@ -2394,6 +2398,7 @@ function Hud.Build(root: Frame, fxGui: ScreenGui, h: { [string]: any })
 	end)
 	-- the counters grow with their numbers; keep the timer clear of them
 	ui.Counters:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+	layoutReady = true
 	h.OnRelayout(layout)
 	layout()
 end

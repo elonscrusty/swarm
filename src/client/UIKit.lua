@@ -2565,6 +2565,7 @@ export type OptionCardOpts = {
 	Icon: string, -- Icons vector name
 	Tint: Color3?, -- icon badge colour (Theme.IconTint)
 	IconSize: number?,
+	TitleSize: number?, -- default 20; larger setup cards can opt in
 	Chevron: boolean?,
 	Depth: string?, -- default "Light"
 	OnClick: (() -> ())?,
@@ -2586,7 +2587,7 @@ function UIKit.OptionCard(parent: Instance?, o: OptionCardOpts): Button
 		Title = " ",
 		Subtitle = " ",
 		TitleStyle = "H2",
-		TitleSize = 20,
+		TitleSize = o.TitleSize or 20,
 		Chevron = o.Chevron ~= false,
 		Align = "Left",
 		Shrink = true,
