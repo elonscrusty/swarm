@@ -45,11 +45,16 @@ local ModelLibrary = require(script.Parent.ModelLibrary)
 local Audio = require(script.Parent.Audio)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Accessibility = require(script.Parent.Accessibility)
+local GroundHeight = require(script.Parent.GroundHeight)
 
 local Telegraphs = {}
 
 local P = Palette
-local FLOOR_Y = Config.ArenaOrigin.Y
+-- The ground under the warning being built or updated: the flat floor, or (maps with
+-- height) GroundHeight at the warning's x, z, set by onWarn / step / Puff / Dust around each
+-- call and kept with the warning (rec.Floor).
+local BASE_FLOOR: number = Config.ArenaOrigin.Y
+local FLOOR_Y = BASE_FLOOR
 local PARK = CFrame.new(0, -150, 0)
 local DISC = CFrame.Angles(0, 0, math.rad(90)) -- cylinder axis X → Y: a flat disc
 local TAU = math.pi * 2
@@ -285,9 +290,11 @@ end
 -- Small dust puff where an enemy climbs out (EnemyRenderer, on spawn, on screen only).
 -- In a big swarm (many one-shots alive) or with Reduced effects it is the dust disc alone.
 function Telegraphs.Puff(x: number, z: number, radius: number)
+	FLOOR_Y = GroundHeight.At(x, z)
 	local d = radius * 2
 	anim("Cylinder", C.Dust, SMOOTH, flatDisc(x, z, 0.05), nil, Vector3.new(0.04, d * 0.5, d * 0.5), Vector3.new(0.04, d * 1.6, d * 1.6), 0.45, 1, 0.4)
 	if #anims > PUFF_BUSY or ClientSettings.Reduced() then
+		FLOOR_Y = BASE_FLOOR
 		return
 	end
 	for i = 1, 3 do
@@ -296,12 +303,13 @@ function Telegraphs.Puff(x: number, z: number, radius: number)
 		local to = from + Vector3.new(math.cos(a) * radius * 0.8, 0.9, math.sin(a) * radius * 0.8)
 		anim("Ball", C.Dust, SMOOTH, CFrame.new(from), CFrame.new(to), Vector3.one * 0.7, Vector3.one * 1.3, 0.35, 1, 0.45)
 	end
+	FLOOR_Y = BASE_FLOOR
 end
 
 -- One puff of the burrow trail (EnemyRenderer, while the Queen is underground).
 function Telegraphs.Dust(x: number, z: number, size: number)
 	local a = math.random() * TAU
-	local from = Vector3.new(x + math.cos(a) * size * 0.4, FLOOR_Y + 0.3, z + math.sin(a) * size * 0.4)
+	local from = Vector3.new(x + math.cos(a) * size * 0.4, GroundHeight.At(x, z) + 0.3, z + math.sin(a) * size * 0.4)
 	anim("Ball", (math.random() < 0.5) and C.Dust or C.DustDark, SMOOTH, CFrame.new(from), CFrame.new(from + Vector3.new(0, 1.2, 0)), Vector3.one * size * 0.5, Vector3.one * size, 0.25, 1, 0.6)
 	if math.random() < 0.35 then
 		local to = from + Vector3.new(math.cos(a) * size, -0.2, math.sin(a) * size)
@@ -824,7 +832,7 @@ end
 
 Kind.glob = function(x1: number, z1: number, x2: number, z2: number, seconds: number, arc: number?, style: string?)
 	local isEgg = style == "egg"
-	local rec: any = { Dur = math.max(0.1, seconds), A = Vector3.new(x1, FLOOR_Y + (isEgg and 4 or 2.2), z1), B = Vector3.new(x2, FLOOR_Y + (isEgg and 1 or 0.6), z2), H = tonumber(arc) or 6, Pieces = isEgg and eggGlobPieces() or globPieces(), Phase = math.random() * 6, Egg = isEgg }
+	local rec: any = { Dur = math.max(0.1, seconds), A = Vector3.new(x1, FLOOR_Y + (isEgg and 4 or 2.2), z1), B = Vector3.new(x2, GroundHeight.At(x2, z2) + (isEgg and 1 or 0.6), z2), H = tonumber(arc) or 6, Pieces = isEgg and eggGlobPieces() or globPieces(), Phase = math.random() * 6, Egg = isEgg }
 	function rec.Update(t: number): boolean
 		if t >= rec.Dur then
 			return false
@@ -1520,25 +1528,35 @@ local function onWarn(w: { any }, stamp: any)
 	if type(id) ~= "number" or type(kind) ~= "string" then
 		return
 	end
+	local floor = BASE_FLOOR
+	if type(w[3]) == "number" and type(w[4]) == "number" then
+		floor = GroundHeight.At(w[3], w[4]) -- every kind starts with its floor x, z
+	end
 	if kind == "pop" then
 		local fn = POP[tostring(w[6])]
 		if fn and type(w[3]) == "number" and type(w[4]) == "number" then
-			fn(w[3], w[4], tonumber(w[5]) or 3, w[7])
+			FLOOR_Y = floor
+			pcall(fn, w[3], w[4], tonumber(w[5]) or 3, w[7])
+			FLOOR_Y = BASE_FLOOR
 		end
 		return
 	end
+	FLOOR_Y = floor
 	local sound = CUES[kind]
 	if sound and type(w[3]) == "number" and type(w[4]) == "number" then
 		cue(sound, w[3], w[4])
 	end
 	local make = Kind[kind]
 	if not make then
+		FLOOR_Y = BASE_FLOOR
 		return
 	end
 	local ok, rec = pcall(make, table.unpack(w, 3))
+	FLOOR_Y = BASE_FLOOR
 	if not ok or not rec then
 		return
 	end
+	rec.Floor = floor
 	if recs[id] then
 		clearWarn(id)
 	end
@@ -1582,12 +1600,14 @@ local function step()
 		end
 	end
 	for id, rec in pairs(recs) do
+		FLOOR_Y = rec.Floor or BASE_FLOOR
 		local ok, alive = pcall(rec.Update, now - rec.Start)
 		if not ok or not alive then
 			rec.Release()
 			recs[id] = nil
 		end
 	end
+	FLOOR_Y = BASE_FLOOR
 	stepAnims(now)
 	flush()
 end

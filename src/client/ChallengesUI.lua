@@ -22,6 +22,7 @@ local Remotes = require(Shared:WaitForChild("Remotes"))
 local Theme = require(Shared:WaitForChild("Theme"))
 local FeatureHud = require(script.Parent.FeatureHud)
 local EnemyRenderer = require(script.Parent.EnemyRenderer)
+local GroundHeight = require(script.Parent.GroundHeight) -- ground under effects on maps with height
 
 local ChallengesUI = {}
 
@@ -30,7 +31,6 @@ local P = Theme.Palette
 local VIOLET = Color3.fromRGB(190, 120, 255)
 local VIOLET_DARK = Color3.fromRGB(110, 50, 170)
 local DISC = CFrame.Angles(0, 0, math.rad(90))
-local FLOOR_Y = Config.ArenaOrigin.Y
 local PARK = CFrame.new(0, -500, 0)
 
 local plate: BillboardGui? = nil
@@ -131,8 +131,9 @@ local function stepChampion(clock: number)
 	local outer, inner = ringOuter :: BasePart, ringInner :: BasePart
 	outer.Size = Vector3.new(0.05, size * (1.08 + pulse), size * (1.08 + pulse))
 	inner.Size = Vector3.new(0.05, size * 0.92, size * 0.92)
-	outer.CFrame = CFrame.new(pos.X, FLOOR_Y + 0.33, pos.Z) * DISC
-	inner.CFrame = CFrame.new(pos.X, FLOOR_Y + 0.335, pos.Z) * DISC
+	local floorY = GroundHeight.At(pos.X, pos.Z)
+	outer.CFrame = CFrame.new(pos.X, floorY + 0.33, pos.Z) * DISC
+	inner.CFrame = CFrame.new(pos.X, floorY + 0.335, pos.Z) * DISC
 end
 
 local function stepBadges()

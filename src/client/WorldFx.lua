@@ -30,6 +30,7 @@ local ClientSettings = require(script.Parent.ClientSettings)
 local EnemyRenderer = require(script.Parent.EnemyRenderer)
 local FeatureHud = require(script.Parent.FeatureHud)
 local UIState = require(script.Parent.UIState)
+local GroundHeight = require(script.Parent.GroundHeight) -- ground under effects on maps with height
 
 local WorldFx = {}
 
@@ -257,7 +258,7 @@ local function stepFog(dt: number)
 	if not (cam and root and root:IsA("BasePart")) then
 		return
 	end
-	local floor = Vector3.new(root.Position.X, Config.ArenaOrigin.Y, root.Position.Z)
+	local floor = Vector3.new(root.Position.X, GroundHeight.At(root.Position.X, root.Position.Z), root.Position.Z)
 	local c = cam:WorldToViewportPoint(floor)
 	local e = cam:WorldToViewportPoint(floor + Vector3.new(fog.Radius, 0, 0))
 	local px = math.max(40, math.abs(e.X - c.X))
@@ -378,7 +379,7 @@ local function step(dt: number)
 		local char = player.Character
 		local root = char and char:FindFirstChild("HumanoidRootPart")
 		if root and root:IsA("BasePart") then
-			local y = emitterKind == "Embers" and Config.ArenaOrigin.Y + 0.6 or root.Position.Y + 26
+			local y = emitterKind == "Embers" and GroundHeight.At(root.Position.X, root.Position.Z) + 0.6 or root.Position.Y + 26
 			p.CFrame = CFrame.new(root.Position.X, y, root.Position.Z)
 		end
 	end

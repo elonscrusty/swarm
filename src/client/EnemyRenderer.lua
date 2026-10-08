@@ -64,6 +64,7 @@ local ModelLibrary = require(script.Parent.ModelLibrary)
 local Telegraphs = require(script.Parent.Telegraphs)
 local ClientSettings = require(script.Parent.ClientSettings)
 local Accessibility = require(script.Parent.Accessibility)
+local GroundHeight = require(script.Parent.GroundHeight) -- ground under effects on maps with height
 local Players = game:GetService("Players")
 
 local EnemyRenderer = {}
@@ -121,7 +122,6 @@ type PooledModel = { Pieces: { any }, Motion: string, Scale: number, Type: strin
 local slots: { [number]: Slot } = {}
 local PARK = CFrame.new(0, -150, 0)
 local ACTIVE_Y = -100
-local FLOOR_Y = Config.ArenaOrigin.Y
 local DISC = CFrame.Angles(0, 0, math.rad(90)) -- cylinder axis X → Y (a flat disc)
 local FLAT = Vector3.new(1, 0, 1)
 local RANK_EVERY = 0.3 -- seconds between nearest-first detail rankings
@@ -1405,12 +1405,13 @@ local function step(dt: number)
 					halo.Transparency = calm and 0.3 or (0.3 + 0.1 * math.sin(clock * 2.4 + slot.Phase))
 					core.Transparency = 0.5
 					local p = render.Position
+					local floorY = GroundHeight.At(p.X, p.Z)
 					n += 1
 					partsBuf[n] = halo
-					cframesBuf[n] = CFrame.new(p.X, FLOOR_Y + 0.34, p.Z) * DISC -- over the paths, under telegraphs
+					cframesBuf[n] = CFrame.new(p.X, floorY + 0.34, p.Z) * DISC -- over the paths, under telegraphs
 					n += 1
 					partsBuf[n] = core :: BasePart
-					cframesBuf[n] = CFrame.new(p.X, FLOOR_Y + 0.345, p.Z) * DISC
+					cframesBuf[n] = CFrame.new(p.X, floorY + 0.345, p.Z) * DISC
 				elseif slot.Halo then
 					dropHalo(slot)
 				end
@@ -1431,7 +1432,7 @@ local function step(dt: number)
 					n += 1
 					partsBuf[n] = ring
 					local p = render.Position
-					cframesBuf[n] = CFrame.new(p.X, FLOOR_Y + 0.345, p.Z) * DISC
+					cframesBuf[n] = CFrame.new(p.X, GroundHeight.At(p.X, p.Z) + 0.345, p.Z) * DISC
 				elseif slot.RallyRing and slot.RallyRing.CFrame.Y > ACTIVE_Y then
 					slot.RallyRing.CFrame = PARK
 				end

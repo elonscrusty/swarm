@@ -24,6 +24,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local GroundHeight = require(script.Parent.GroundHeight) -- ground under effects on maps with height
 
 local Occlusion = {}
 
@@ -37,7 +38,6 @@ local OUTER: number = SETTINGS.OuterRadius or 11
 local CELL = 32
 local PAD_FADE = 0.4 -- box padding when deciding to fade
 local PAD_KEEP = 1.6 -- larger padding to stay faded
-local FLOOR_Y = Config.ArenaOrigin.Y
 
 local player = Players.LocalPlayer
 
@@ -298,7 +298,8 @@ local function check()
 	local focus = cam and player:GetAttribute("InRun") == true and subject(cam) or nil
 	if cam and focus then
 		local eye = cam.CFrame.Position
-		local ground = Vector3.new(focus.X, FLOOR_Y, focus.Z)
+		local floorY = GroundHeight.At(focus.X, focus.Z)
+		local ground = Vector3.new(focus.X, floorY, focus.Z)
 		for i, off in ipairs(OFFSETS) do
 			points[i] = ground + off
 		end
@@ -318,7 +319,7 @@ local function check()
 							local pad = item.Target > 0 and PAD_KEEP or PAD_FADE
 							local cover = false
 							-- anything entirely below knee height hides nothing worth seeing
-							if item.Max.Y > FLOOR_Y + 1.2 then
+							if item.Max.Y > floorY + 1.2 then
 								for _, p in ipairs(points) do
 									if crosses(eye, p, item.Min, item.Max, pad) then
 										cover = true

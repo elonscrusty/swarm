@@ -27,6 +27,7 @@ local InputPrompts = require(script.Parent.InputPrompts)
 local TutorialBubble = require(script.Parent.TutorialBubble)
 local StageUI = require(script.Parent.StageUI)
 local ClientSettings = require(script.Parent.ClientSettings)
+local GroundHeight = require(script.Parent.GroundHeight) -- ground under effects on maps with height
 
 local WalkthroughClient = {}
 
@@ -200,7 +201,7 @@ local function buildMarker(at: Vector3, ring: boolean)
 	local folder = Instance.new("Folder")
 	folder.Name = "WalkthroughMarker"
 	local radius = ring and ((Config :: any).Walkthrough.RingRadius or 4.5) or 2.6
-	local ground = Vector3.new(at.X, Config.ArenaOrigin.Y + 0.15, at.Z)
+	local ground = Vector3.new(at.X, GroundHeight.At(at.X, at.Z) + 0.15, at.Z)
 	if ring then
 		for i = 1, RING_PIECES do
 			local a = (i / RING_PIECES) * math.pi * 2

@@ -34,6 +34,7 @@ local Theme = require(Shared:WaitForChild("Theme"))
 local Audio = require(script.Parent.Audio)
 local ClientSettings = require(script.Parent.ClientSettings)
 local CameraController = require(script.Parent.CameraController)
+local GroundHeight = require(script.Parent.GroundHeight) -- ground under effects on maps with height
 
 local CombatFx = {}
 
@@ -53,7 +54,6 @@ local HUGE: number = C.HugeKillSize or 9.5
 local REDUCED: number = C.ReducedBudget or 0.25
 
 local PARK = CFrame.new(0, -150, 0)
-local FLOOR_Y = Config.ArenaOrigin.Y
 local TAU = math.pi * 2
 local NEON = Enum.Material.Neon
 local SMOOTH = Enum.Material.SmoothPlastic
@@ -394,6 +394,7 @@ end
 	rank = its place in the FxBatch (VFX passes it so only the first few get shards).
 ]]
 function CombatFx.Kill(x: number, z: number, color: Color3, size: number, rank: number)
+	local FLOOR_Y = GroundHeight.At(x, z)
 	local pos = Vector3.new(x, FLOOR_Y + math.clamp(size * 0.35, 0.8, 3), z)
 	local big = size >= BIG
 	local huge = size >= HUGE
@@ -479,7 +480,7 @@ function CombatFx.LevelUp(pos: Vector3, isLocal: boolean)
 	if not claim(2 + motes, true) then
 		return
 	end
-	local base = Vector3.new(pos.X, FLOOR_Y, pos.Z)
+	local base = Vector3.new(pos.X, GroundHeight.At(pos.X, pos.Z), pos.Z)
 	-- the pillar: a tall thin neon core that shoots up and thins, inside a soft column
 	spawn("Cylinder", P.gold_200, NEON, CFrame.new(base + Vector3.new(0, 7, 0)) * UPRIGHT, nil, Vector3.new(4, 1.6, 1.6), Vector3.new(14, 0.3, 0.3), 0.15, 1, 0.5)
 	spawn("Cylinder", FX.Gold, SMOOTH, CFrame.new(base + Vector3.new(0, 5, 0)) * UPRIGHT, nil, Vector3.new(10, 3.2, 3.2), Vector3.new(12, 4.6, 4.6), 0.55, 1, 0.55)
@@ -503,7 +504,7 @@ function CombatFx.Evolve()
 	local reduced = ClientSettings.Reduced()
 	local rays = reduced and 0 or 12
 	if claim(3 + rays, true) then
-		local base = Vector3.new(hp.X, FLOOR_Y, hp.Z)
+		local base = Vector3.new(hp.X, GroundHeight.At(hp.X, hp.Z), hp.Z)
 		local at = base + Vector3.new(0, 2, 0)
 		spawn("Ball", WHITE, NEON, CFrame.new(towardCamera(at, 2)), nil, Vector3.one * 2, Vector3.one * 9, 0.05, 1, 0.22)
 		spawn("Cylinder", P.gold_200, NEON, CFrame.new(base + Vector3.new(0, 9, 0)) * UPRIGHT, nil, Vector3.new(18, 2.4, 2.4), Vector3.new(20, 0.4, 0.4), 0.1, 1, 0.7)
