@@ -5,7 +5,13 @@
 	a grid of cards. Every item comes from CosmeticData / StoreCatalog:
 	  earned items   show their goal and the progress ("Win 10 runs · 3 / 10")
 	  store items    show the Robux price from MarketplaceService:GetProductInfo (never a
-	                 number from the game), or "Coming soon" while the Config id is 0
+	                 number from the game), or "Coming soon" while the Config id is 0. The
+	                 buy button only works with a real price: "R$ ..." (disabled) while it
+	                 loads, PRICE UNAVAILABLE / UNAVAILABLE (disabled) when the lookup fails
+	                 or the item is off sale (asked again after PRICE_RETRY_SECONDS)
+	  purchase       a cancel is a neutral line; a paid product shows PENDING until the
+	                 server says its receipt is saved (StoreResult "Granted" / the profile
+	                 shows it owned): a closing Roblox prompt is never shown as a success
 	  owned items    WEAR / TAKE OFF (StoreEquip; skins: the existing EquipSkin), the worn
 	                 emote PLAY
 	Buying goes through the server (StoreBuy): it checks the item and opens the Roblox
@@ -38,6 +44,14 @@ local C = Theme.Color
 
 -- price cache: "Product:123" / "GamePass:123" → Robux
 local prices: { [string]: number } = {}
+-- key → os.clock() of a failed / off-sale lookup ("UNAVAILABLE" = off sale, else failed)
+local priceFailedAt: { [string]: number } = {}
+local offSale: { [string]: boolean } = {}
+local PRICE_RETRY_SECONDS = 30
+-- key → callbacks waiting for the one lookup in flight
+local priceWaiting: { [string]: { (string, string) -> () } } = {}
+-- StoreBuy item id → true while the player's own paid purchase waits for its saved grant
+local pendingItems: { [string]: boolean } = {}
 
 local function place(obj: GuiObject, x: number, y: number, w: number, h: number)
 	obj.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
@@ -63,22 +77,56 @@ local function heroBuyable(heroId: string): boolean
 	return StoreCatalog.HeroEarnable(CharacterData.Characters[heroId])
 end
 
--- The price label for an id; fetches it once (async) and calls back to refresh the button.
-local function priceText(id: number, pass: boolean, onPrice: (string) -> ()): string
-	local key = (pass and "GamePass:" or "Product:") .. id
+local function priceKey(id: number, pass: boolean): string
+	return (pass and "GamePass:" or "Product:") .. id
+end
+
+-- The known price state of an id: ("ready", "R$ 49"), ("unavailable", text) or nil.
+local function knownPrice(key: string): (string?, string?)
 	if prices[key] then
-		return "R$ " .. UIKit.formatNumber(prices[key])
+		return "ready", "R$ " .. UIKit.formatNumber(prices[key])
 	end
+	local failed = priceFailedAt[key]
+	if failed and os.clock() - failed < PRICE_RETRY_SECONDS then
+		return "unavailable", offSale[key] and "UNAVAILABLE" or "PRICE UNAVAILABLE"
+	end
+	return nil, nil
+end
+
+-- The price state for an id: "ready" (buyable), "loading" or "unavailable" (disabled) and its
+-- label. Fetches it (one lookup per id at a time) and calls back when the answer arrives.
+local function priceState(id: number, pass: boolean, onAnswer: (string, string) -> ()): (string, string)
+	local key = priceKey(id, pass)
+	local state, label = knownPrice(key)
+	if state then
+		return state :: string, label :: string
+	end
+	local waiting = priceWaiting[key]
+	if waiting then
+		table.insert(waiting, onAnswer)
+		return "loading", "R$ ..."
+	end
+	waiting = { onAnswer }
+	priceWaiting[key] = waiting
 	task.spawn(function()
 		local ok, info = pcall(function()
 			return MarketplaceService:GetProductInfo(id, pass and Enum.InfoType.GamePass or Enum.InfoType.Product)
 		end)
-		if ok and type(info) == "table" and type(info.PriceInRobux) == "number" then
+		if ok and type(info) == "table" and type(info.PriceInRobux) == "number" and info.IsForSale ~= false then
 			prices[key] = info.PriceInRobux
-			onPrice("R$ " .. UIKit.formatNumber(info.PriceInRobux))
+			priceFailedAt[key] = nil
+		else
+			-- the web call failed, or the item has no price / is off sale: never sell it blind
+			priceFailedAt[key] = os.clock()
+			offSale[key] = ok and type(info) == "table" and info.IsForSale == false
+		end
+		priceWaiting[key] = nil
+		local s, l = knownPrice(key)
+		for _, fn in ipairs(waiting) do
+			fn(s or "unavailable", l or "PRICE UNAVAILABLE")
 		end
 	end)
-	return "BUY"
+	return "loading", "R$ ..."
 end
 
 function MenuStore.Build(screen: Frame, ctx: { [string]: any })
@@ -208,34 +256,44 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 		text(f, "Caption", UIKit.track(str), { Name = "Status", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -12), Size = UDim2.new(1, 0, 0, TS(13) + 6), TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = color or C.TextFaint, TextTruncate = Enum.TextTruncate.AtEnd }, 13)
 	end
 
-	-- price button (R$ from Roblox) → StoreBuy; "Coming soon" for an id of 0
+	-- price button (R$ from Roblox) → StoreBuy; "Coming soon" for an id of 0; disabled
+	-- without a real price; PENDING while the player's own purchase waits for its grant
 	local function buyButton(f: Frame, itemId: string, robuxId: number, pass: boolean, title: string?, target: number?)
 		if robuxId == 0 then
 			bottomCaption(f, "Coming soon")
 			return
 		end
+		if target == nil and pendingItems[itemId] then
+			bottomCaption(f, "Pending · saving", C.BlueDeep)
+			return
+		end
 		local b
+		local ready = false
 		local function label(price: string): string
 			return title and (title .. " · " .. price) or price
 		end
+		local function apply(state: string, price: string)
+			ready = state == "ready"
+			if b and b.Instance.Parent then
+				b.SetText(label(price))
+				b.SetEnabled(ready)
+			end
+		end
+		local state, price = priceState(robuxId, pass, apply)
 		b = bottomButton(f, {
 			Kind = "Outline",
-			Title = label(priceText(robuxId, pass, function(price)
-				if b and b.Instance.Parent then
-					b.SetText(label(price))
-				end
-			end)),
+			Title = label(price),
 			Icon = "robux",
 			Name = "Buy",
 			OnClick = function()
-				Remotes.Get("StoreBuy"):FireServer(itemId, target)
+				if ready then -- only a real platform price opens the Roblox prompt
+					Remotes.Get("StoreBuy"):FireServer(itemId, target)
+				end
 			end,
 		})
-		-- the price may have arrived before the button existed (an answer without a yield)
-		local cached = prices[(pass and "GamePass:" or "Product:") .. robuxId]
-		if cached then
-			b.SetText(label("R$ " .. UIKit.formatNumber(cached)))
-		end
+		-- the answer may have arrived before the button existed (a lookup without a yield)
+		local known, knownLabel = knownPrice(priceKey(robuxId, pass))
+		apply(known or state, knownLabel or price)
 		return b
 	end
 
@@ -269,6 +327,9 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 	local function itemCard(p: any, e: any, order: number)
 		local v = view(p)
 		local owned = v.Owned[e.Id] == true
+		if owned then
+			pendingItems[e.Id] = nil -- the saved grant arrived
+		end
 		local worn = (v.Equipped[e.Kind] or "") == e.Id
 		local l = e.Look or {}
 		local f = card(order)
@@ -390,6 +451,7 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 			end
 		end, def and def.Name or heroId, desc, owned and "OWNED" or nil)
 		if owned then
+			pendingItems["Hero_" .. heroId] = nil
 			bottomCaption(f, "Yours", C.Success)
 		elseif not def or not heroBuyable(heroId) then
 			bottomCaption(f, "Coming soon")
@@ -607,12 +669,25 @@ function MenuStore.Build(screen: Frame, ctx: { [string]: any })
 			return
 		end
 		message = r.Text
+		local item = type(r.Item) == "string" and r.Item or nil
+		-- Pending: paid, the receipt is not saved yet (no success shown); Granted: saved;
+		-- Cancelled: neutral (nothing was charged)
+		if item and r.Kind == "Pending" and r.Gift ~= true then
+			pendingItems[item] = true
+		elseif item and r.Kind == "Granted" then
+			pendingItems[item] = nil
+		end
+		local color = r.Kind == "Cancelled" and C.TextMuted or r.Kind == "Pending" and C.BlueDeep
+			or (r.Ok and C.Success or C.TextDanger)
 		if screen.Visible then
+			if r.Kind == "Pending" or r.Kind == "Granted" then
+				rebuild(false) -- the card's PENDING caption / buy button
+			end
 			ui.Note.Text = r.Text
-			ui.Note.TextColor3 = r.Ok and C.Success or C.TextDanger
+			ui.Note.TextColor3 = color
 			UIAnim.Pop(ui.Note, 0, 0.9)
 		else
-			ctx.Toast(r.Text, r.Ok and C.Success or C.TextDanger)
+			ctx.Toast(r.Text, color)
 		end
 	end)
 	Players.PlayerAdded:Connect(function()

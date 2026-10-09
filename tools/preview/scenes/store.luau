@@ -3,6 +3,8 @@
 --   --set ids=on     fake store ids (the shop shows mock Roblox prices instead of "Coming soon")
 --   --set view=dais  goes home afterwards: the worn dais theme, the pet and the Supporter
 --                    banner on the lobby dais (StoreFx)
+--   --set price=fail Roblox's price lookup fails: PRICE UNAVAILABLE, buying disabled
+--   --set pending=on a paid Pet_Owl waits for its saved grant: PENDING, no buy button
 -- Asserts: every section builds cards, prices come from GetProductInfo (mock 49), id 0 reads
 -- "Coming soon", earned items show progress, owned items WEAR / TAKE OFF.
 local C = lib("common")
@@ -19,6 +21,11 @@ if preview.args.ids == "on" then
 		n += 1
 		Config.Monetization.HeroUnlocks[k] = n
 	end
+end
+if preview.args.price == "fail" then
+	preview.setProductInfo(function()
+		error("web outage (test)")
+	end)
 end
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
@@ -56,6 +63,10 @@ if section then
 	end
 	C.settle(2)
 end
+if preview.args.pending == "on" then
+	C.fire("StoreResult", { Kind = "Pending", Ok = true, Item = "Pet_Owl", Text = "Payment received. Adding it to your save..." })
+	C.settle(1)
+end
 -- checks: cards exist; prices / Coming soon match the ids
 local cards = preview.findGui(function(obj)
 	return string.match(obj.Name, "^Card%d+$") ~= nil and preview.isShown(obj)
@@ -67,7 +78,36 @@ else
 end
 local soon = C.findText("COMING SOON")
 local priced = C.findText("R%$ 49")
-if preview.args.ids == "on" then
+-- honest price / purchase states (docs/redesign/continuation/COMMERCE_AUDIT.md section 5)
+local function buyButtons(): ({ any }, number)
+	local list, enabled = {}, 0
+	for _, b in ipairs(preview.findGui(function(obj)
+		return obj.Name == "Buy" and obj:IsA("GuiButton") and preview.isShown(obj)
+	end)) do
+		table.insert(list, b)
+		if b.Selectable then
+			enabled += 1
+		end
+	end
+	return list, enabled
+end
+if preview.args.price == "fail" then
+	local list, enabled = buyButtons()
+	if not C.findText("PRICE UNAVAILABLE") or priced then
+		preview.log("FAIL store: a failed price lookup must read PRICE UNAVAILABLE")
+	elseif #list > 0 and enabled > 0 then
+		preview.log(string.format("FAIL store: %d of %d buy buttons still enabled without a price", enabled, #list))
+	else
+		preview.log(string.format("PASS store: price lookup failed -> PRICE UNAVAILABLE, %d buy buttons disabled", #list))
+	end
+elseif preview.args.pending == "on" then
+	local pendingCard = C.findText("PENDING")
+	if not pendingCard then
+		preview.log("FAIL store: a paid purchase waiting for its grant must read PENDING")
+	else
+		preview.log("PASS store: pending purchase shows PENDING (no success, no second buy)")
+	end
+elseif preview.args.ids == "on" then
 	if section ~= "Heroes" and section ~= "Gift" and not priced then
 		preview.log("FAIL store: ids on but no Robux price shown")
 	end

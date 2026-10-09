@@ -879,7 +879,11 @@ R.defineClass("MarketplaceService", {
 		PromptSubscriptionPurchase = function(_, _, id)
 			logPrompt("PromptSubscriptionPurchase", id)
 		end,
-		GetProductInfo = function(_, id)
+		GetProductInfo = function(_, id, infoType)
+			-- opt-in (preview.setProductInfo): fn(id, infoType) -> info table, or error() for a web failure
+			if R.productInfoHook then
+				return R.productInfoHook(id, infoType)
+			end
 			return { Name = "Product " .. tostring(id), Description = "", PriceInRobux = 49, IconImageAssetId = 0, ProductId = id, AssetId = id, IsForSale = true }
 		end,
 		GetProductInfoAsync = function(_, id)
@@ -1089,6 +1093,9 @@ R.defineClass("GlobalDataStore", {
 			states[ds].x.data[key] = R.copyValue(value)
 		end,
 		UpdateAsync = function(ds, key, fn)
+			-- opt-in network time (preview.setDataStoreLatency): the write yields first, so
+			-- another thread can change the key (or the save table) before the transform runs
+			if R.dataStoreLatency then S.wait(R.dataStoreLatency) end
 			if R.dataStoreFailure.Writes then error("DataStore write unavailable (test)") end
 			local data = states[ds].x.data
 			local new = fn(R.copyValue(data[key]), nil)

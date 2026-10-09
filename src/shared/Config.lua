@@ -1115,7 +1115,13 @@ Config.Data = {
 	LoadAttempts = 6,
 	LoadRetryDelay = 4,
 	SaveAttempts = 4,
-	MaxStoredPurchaseIds = 150,
+	-- Receipt history (PurchaseIds + PurchaseTimes): the idempotency record of every developer
+	-- product. Above MaxStoredPurchaseIds only ids older than PurchaseIdKeepDays are dropped
+	-- (oldest first); PurchaseIdHardCap is the size guard for the save (~90 bytes an id).
+	-- A dropped id could only double-grant if Roblox replayed a receipt older than both.
+	MaxStoredPurchaseIds = 1000,
+	PurchaseIdKeepDays = 365,
+	PurchaseIdHardCap = 5000,
 	-- size caps for the additive feature fields (DataService.Migrate trims anything above)
 	Caps = {
 		IdLength = 64, -- longest id string kept in a set / list
