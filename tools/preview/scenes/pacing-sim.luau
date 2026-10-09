@@ -28,6 +28,7 @@
 --   lune run tools/preview/runtime/main.luau -- --scene pacing-sim --studio --device pc
 --     --max-time 40000 --set headless=on [--set part=solo --set classes=ruckus --set minutes=3]
 --   --set fps=30 (simulated server frames per second; projectiles need >= 30)
+--   --set maxminutes=22 (a run still going at this director minute stops there, reported)
 local MapRay = lib("mapray")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -429,7 +430,32 @@ local function botStep(b, dt: number)
 					r.BeaconWalkFrom = r.BeaconWalkFrom or { T = clock(), D = d }
 				end
 			end
-			stepToward(rp, b, bpos, dt, inner - 2, b.Goal.Field)
+			if b.Detour and os.clock() < b.Detour.Until then
+				if stepToward(rp, b, p + b.Detour.Dir * 4, dt, 0.5, nil) == 0 then
+					b.Detour.Dir = -b.Detour.Dir
+				end
+				return
+			end
+			if stepToward(rp, b, bpos, dt, inner - 2, b.Goal.Field) == 0 then
+				-- blocked (a tree or rock the grid does not know): side-step for a moment
+				b.Stuck += dt
+				if b.Stuck > 1 then
+					local to = Vector3.new(bpos.X - p.X, 0, bpos.Z - p.Z)
+					b.Detour = { Dir = rotate(to.Unit, (math.random() < 0.5 and 1 or -1) * math.pi / 2), Until = os.clock() + 1.2 }
+				end
+			else
+				b.Stuck = 0
+			end
+			-- still far 40 s after setting off: the bot is lost (blocked, or circling a collider the
+			-- grid does not know); it is put beside the beacon, and the report says so
+			if r and clock() - (r.BeaconWalkFrom and r.BeaconWalkFrom.T or clock()) > 40 and not r.BeaconMoved then
+				r.BeaconMoved = true
+				local x, z = HG.NearestWalkable(bpos.X + 10, bpos.Z, 6)
+				if x and z then
+					RM.TeleportPlayer(rp, Vector3.new(x, HG.GroundY(x, z), z))
+					rp.LastValidPos = rp.Root.Position
+				end
+			end
 			return
 		end
 		if r and r.BeaconWalkFrom and not r.BeaconArrived then
@@ -622,8 +648,13 @@ local function play(rps: { any }, stopAt: number, realStop: number?)
 	local dt = 1 / FPS
 	local t0 = os.clock()
 	local bossAt = nil
+	local hardStop = (tonumber(args.maxminutes) or 22) * 60
 	while st:GetAttribute("Phase") == "Running" and clock() < stopAt do
 		if realStop and os.clock() - t0 > realStop then
+			break
+		end
+		if clock() >= hardStop then
+			out(string.format("  stopped at %s: the run did not end (beacon %s, stage %s)", mmss(clock()), tostring(Beacon.Phase()), tostring(st:GetAttribute("RunStage"))))
 			break
 		end
 		for _, b in ipairs(bots) do
@@ -716,7 +747,8 @@ local function report(rp, label: string, upTo: number)
 	out(string.format("  XP awarded %d, collected %d (%.0f%%); level choices %d, chest choices %d; walked %.0f studs",
 		r.Awarded or 0, collected, (r.Awarded or 0) > 0 and collected / r.Awarded * 100 or 0, r.LevelChoices or 0, r.ChestChoices or 0, r.Walked or 0))
 	if r.BeaconWalkFrom then
-		out(string.format("  beacon: walked from %.0f studs at %s, arrived %s", r.BeaconWalkFrom.D, mmss(r.BeaconWalkFrom.T), mmss(r.BeaconArrived)))
+		out(string.format("  beacon: walked from %.0f studs at %s, arrived %s%s", r.BeaconWalkFrom.D, mmss(r.BeaconWalkFrom.T), mmss(r.BeaconArrived),
+			r.BeaconMoved and " (the bot got stuck on the way and was moved beside it after 40 s)" or ""))
 	end
 	table.insert(summary, {
 		Label = label,
@@ -760,11 +792,12 @@ end
 ------------------------------------------------------------------------------------------
 local lateBuilds = {} -- class -> build at 13:00 (full runs)
 local fullSet = {}
-for _, id in ipairs(string.split(args.full or "ruckus,granny_boom", ",")) do
+for _, id in ipairs(string.split(string.gsub(args.full or "ruckus,granny_boom", "%+", ","), ",")) do
 	fullSet[id] = true
 end
 if parts.solo then
-	local list = (args.classes == nil or args.classes == "all") and table.clone(RunConfig.Classes.Order) or string.split(args.classes, ",")
+	-- (ids separated by "," or "+": run_regressions splits its --only list on commas)
+	local list = (args.classes == nil or args.classes == "all") and table.clone(RunConfig.Classes.Order) or string.split(string.gsub(args.classes, "%+", ","), ",")
 	local minutes = tonumber(args.minutes) or 6
 	for _, cls in ipairs(list) do
 		local t0 = os.clock()
@@ -793,7 +826,7 @@ end
 ------------------------------------------------------------------------------------------
 local partyBuilds = nil
 if parts.party then
-	local classes = args.partyclasses and string.split(args.partyclasses, ",") or { RunConfig.Classes.Order[1], RunConfig.Classes.Order[2], RunConfig.Classes.Order[3], RunConfig.Classes.Order[4] }
+	local classes = args.partyclasses and string.split(string.gsub(args.partyclasses, "%+", ","), ",") or { RunConfig.Classes.Order[1], RunConfig.Classes.Order[2], RunConfig.Classes.Order[3], RunConfig.Classes.Order[4] }
 	local players = { me, mates[1], mates[2], mates[3] }
 	local rps = startRun(players, classes)
 	check("party: 4-player Cliffwood director run started", rps ~= nil and SM.IsDirector() and SM.PartyN() == 4, tostring(SM.PartyN()))

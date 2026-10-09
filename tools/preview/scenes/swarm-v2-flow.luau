@@ -306,10 +306,26 @@ if cycles > 0 then
 		advance(3, 10)
 		local inTree, all = preview.liveInstances()
 		local lc = preview.liveCounts()
-		local row = { Tree = inTree, All = all, Conns = lc.connections, Waiting = lc.waiting, Tweens = lc.tweens, Heap = collectgarbage("count") / 1024, BySignal = lc.bySignal, Ok = inRun and home }
+		local row = { Tree = inTree, All = all, Conns = lc.connections, Waiting = lc.waiting, Tweens = lc.tweens, Heap = collectgarbage("count") / 1024, BySignal = lc.byFn or lc.bySignal, Ok = inRun and home }
+		local prev = rows[#rows]
 		table.insert(rows, row)
-		preview.log(string.format("F cycle %2d %s: tree %6d  all %6d  conns %5d  waiting %4d  tweens %3d  heap %6.1f MB",
-			c, (inRun and home) and "ok" or "STUCK", inTree, all, lc.connections, lc.waiting, lc.tweens, row.Heap))
+		local delta = {}
+		if prev then
+			for name, n in pairs(row.BySignal) do
+				local d = n - (prev.BySignal[name] or 0)
+				if d ~= 0 then
+					table.insert(delta, string.format("%s %+d", name, d))
+				end
+			end
+			for name, n in pairs(prev.BySignal) do
+				if row.BySignal[name] == nil then
+					table.insert(delta, string.format("%s %+d", name, -n))
+				end
+			end
+			table.sort(delta)
+		end
+		preview.log(string.format("F cycle %2d %s: tree %6d  all %6d  conns %5d  waiting %4d  tweens %3d  heap %6.1f MB  [%s]",
+			c, (inRun and home) and "ok" or "STUCK", inTree, all, lc.connections, lc.waiting, lc.tweens, row.Heap, table.concat(delta, ", ")))
 	end
 	local okAll = true
 	for _, row in ipairs(rows) do

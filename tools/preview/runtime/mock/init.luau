@@ -547,12 +547,15 @@ function Mock.api()
 	-- task.wait / task.delay, deferred threads, tweens in the active list, live Sounds
 	-- (playing / all) not destroyed.
 	function api.liveCounts()
-		local out = { connections = 0, waiting = #S.waiting, deferred = #S.deferred, tweens = 0, sounds = 0, soundsPlaying = 0, bySignal = {} }
+		local out = { connections = 0, waiting = #S.waiting, deferred = #S.deferred, tweens = 0, sounds = 0, soundsPlaying = 0, bySignal = {}, byFn = {} }
 		for c in pairs(R.connRegistry or {}) do
 			if c.Connected then
 				out.connections += 1
 				local n = tostring(c._signal and c._signal._name)
 				out.bySignal[n] = (out.bySignal[n] or 0) + 1
+				-- the connected function's "Script:line" (where a growing count comes from)
+				local f = type(c._fn) == "function" and Prof.fnLabel(c._fn) or "?"
+				out.byFn[f] = (out.byFn[f] or 0) + 1
 			end
 		end
 		out.tweens = R.activeTweens and #R.activeTweens or 0

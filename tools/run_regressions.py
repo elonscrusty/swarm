@@ -139,7 +139,7 @@ def main():
     # first choice, first loot, builds by minute; targets print PASS / WARN, FAIL = a run that could
     # not be measured) and the 4-player / 200-enemy / maximum-build cost scene with spikes and
     # run / return leak cycles (Lune mock numbers, not device FPS)
-    checks += [("pacing-sim", ["part=solo", "classes=ruckus,granny_boom", "minutes=3", "full=none"])]
+    checks += [("pacing-sim", ["part=solo", "classes=ruckus+granny_boom", "minutes=3", "full=none"])]
     checks += [("perf-sim", ["scenario=cliffwood", "seconds=20", "window=10", "cycles=4"])]
 
     def run(check):
