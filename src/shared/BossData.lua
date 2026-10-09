@@ -619,7 +619,7 @@ BossData.Bosses.BasinBreaker = {
 			ShortFallback = "RootSlam", -- a wall right in front: slam instead of a 5-stud charge
 		},
 		SapCircles = {
-			Windup = 0.4, -- it rears up before the first circle
+			Windup = 0.5, -- it rears up before the first circle (every boss wind-up is at least 0.5 s)
 			Count = 3,
 			Interval = 1.0, -- seconds between the circles (each shows when the last one lands)
 			Warn = 1.0,

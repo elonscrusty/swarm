@@ -17,7 +17,9 @@ local KEYS = { "damage", "cooldown", "amount", "area", "speed", "pierce", "durat
 local DIR = { damage = 1, cooldown = -1, amount = 1, area = 1, speed = 1, pierce = 1, duration = 1, knockback = 1 }
 local BEHAVIORS = { Whip = 1, Orb = 1, Knives = 1, Aura = 1, HolyWater = 1, Lightning = 1, Axe = 1, Boomerang = 1, Longbow = 1, Spear = 1, Crossbow = 1, Nova = 1, FireTrail = 1, Totem = 1, Hook = 1, Turret = 1, Soul = 1, Shields = 1, Quake = 1, Meteor = 1, Sling = 1, Cloud = 1, Saw = 1, Vines = 1, Horn = 1, Wisps = 1, Vortex = 1, ScrapToss = 1, ToastVolley = 1, BubbleBomb = 1, YarnBomb = 1 }
 -- [stream B] rank-system behaviours (WeaponData Rank specs; WeaponSystem Fire.Rank*)
-local RANK_BEHAVIORS = { RankShot = 1, RankSwing = 1, RankBubble = 1, RankYarn = 1, RankOrb = 1, RankVortex = 1 }
+local RANK_BEHAVIORS = { RankShot = 1, RankSwing = 1, RankBubble = 1, RankYarn = 1, RankOrb = 1, RankVortex = 1,
+	-- [stream C] the eight newer class signatures' behaviours (WeaponSystem Fire.Rank*)
+	RankSeed = 1, RankSneakers = 1, RankDodgeball = 1, RankPuck = 1, RankConfetti = 1, RankClaws = 1, RankGlove = 1 }
 local PERKS_USED = { Riposte = 1, Split = 1, Ricochet = 1, Chill = 1, Volley = 1, Impale = 1, Shatter = 1, Wildfire = 1, Rooting = 1, Barbed = 1, Flak = 1, Wandering = 1, Bulwark = 1, Aftershock = 1, Molten = 1, Stagger = 1, Choking = 1, Rebound = 1, Thornbloom = 1, Echo = 1, Glow = 1, Implosion = 1 }
 
 local seenOrder = {}
@@ -255,7 +257,9 @@ for id in pairs(Config.Pacing.IntroGroupOf) do
 end
 
 -- BossData
-local STARTS = { Charge = 1, Dive = 1, HornCharge = 1, VenomBurst = 1, StingerRing = 1, Burrow = 1, Summon = 1, BroodCall = 1, DustStorm = 1, GlimmerMines = 1, WingGust = 1, GroundPound = 1, WarBanner = 1, EggBarrage = 1, AcidPools = 1, RootLines = 1, ThornVolley = 1, BrambleRing = 1, Sproutling = 1, GroundSlam = 1, IceLanes = 1, FrostBreath = 1, ShardRain = 1 }
+local STARTS = { Charge = 1, Dive = 1, HornCharge = 1, VenomBurst = 1, StingerRing = 1, Burrow = 1, Summon = 1, BroodCall = 1, DustStorm = 1, GlimmerMines = 1, WingGust = 1, GroundPound = 1, WarBanner = 1, EggBarrage = 1, AcidPools = 1, RootLines = 1, ThornVolley = 1, BrambleRing = 1, Sproutling = 1, GroundSlam = 1, IceLanes = 1, FrostBreath = 1, ShardRain = 1,
+	-- [stream D] the Basin Breaker (BossAI Start.RootSlam / BreakerCharge / SapCircles)
+	RootSlam = 1, BreakerCharge = 1, SapCircles = 1 }
 for id, boss in pairs(BossData.Bosses) do
 	if boss.Id ~= id then
 		bad("boss " .. id .. " Id mismatch")
@@ -314,7 +318,9 @@ do
 		-- next batch (docs/next/)
 		"SmartTutorial", "Walkthrough", "DangerArrows", "FastStart", "DailyQuests", "ComebackGift", "StarterBundle", "GroupBonus", "InviteRewards", "BugReportPlus",
 		-- batch B (docs/PROMPT_BATCH_B.md)
-		"AffixIcons", "EvolutionPreview", "Banish", "DamageNumberOptions", "FinalStand", "StageModifiers", "PartyQuickLines", "ReviveThanks", "Prestige", "QuickResume", "Analytics" }
+		"AffixIcons", "EvolutionPreview", "Banish", "DamageNumberOptions", "FinalStand", "StageModifiers", "PartyQuickLines", "ReviveThanks", "Prestige", "QuickResume", "Analytics",
+		-- redesign continuation, stream G (class signature cues, client ClassSfx.lua)
+		"ClassSfx" }
 	local n = 0
 	for name, on in pairs(Config.Features) do
 		n += 1
