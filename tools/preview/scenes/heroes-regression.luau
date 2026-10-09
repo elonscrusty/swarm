@@ -1,16 +1,13 @@
--- heroes-regression: HEROES (feature 11, docs/features/HEROES.md) against the real server.
+-- heroes-regression: the hero roster after the redesign against the real server.
 --   solo (default):
---     1) data: Archer / Bard / Golem in Order and Characters with the switch on; start
---        weapon released, gold price on an existing tier, Store key at Id 0, signature,
---        second skill, ultimate, uploaded mesh with the hero rig, part-built fallback
---     2) unlock: BuyCharacter refuses without gold, buys with it, never twice
---     3) runs: each new hero starts with its weapon and its trait in the stat sheet
---     4) Rally Song solo: the Bard buffs itself at SelfShare, server-side; weapon damage
---        goes up by the same factor; the SongBuff attribute is published and cleared
---     5) switch off: the heroes leave Order / Characters, buying is refused, a saved
---        selection falls back to the Knight without losing the unlock
---   --set coop=on: a Duo run (Bard + Knight): the mate in range gets the full song, out of
---     range none, two Bards never stack
+--     1) roster: CharacterData.Order is the 12 classes (RunConfig.Classes.Order); the 11 old
+--        heroes (Archer / Bard / Golem of feature 11 included) are hidden but keep their
+--        Characters entries (docs/redesign/DECISIONS.md 2026-10-08 and C1)
+--     2) a hidden hero is never bought (BuyCharacter), selected or upgraded: gold untouched
+--     3) an old save keeps its unlock, hero upgrades and selection; its run plays the
+--        default class (RunConfig.Classes.MapLegacyToDefault)
+--   --set coop=on: the Rally Song code (HeroSong) on a Duo run (Bard + Knight forced on the
+--     run players): the mate in range gets the full song, out of range none, two Bards never stack
 -- Every check errors on failure.
 local Players = game:GetService("Players")
 local me = Players.LocalPlayer
@@ -97,149 +94,61 @@ if coop then
 end
 
 local data = assert(DS.GetData(me), "profile missing")
+local RunConfig = preview.require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig)
+local LEGACY = { "Knight", "Mage", "Rogue", "Priest", "Ranger", "Alchemist", "Engineer", "Necromancer", "Archer", "Bard", "Golem" }
 
 ------------------------------------------------------------------------------------------
--- 1) data
+-- 1) roster: the twelve classes are listed; the 11 old heroes (Archer / Bard / Golem too)
+--    are hidden, their entries kept so old saves still load (docs/redesign/DECISIONS.md)
 ------------------------------------------------------------------------------------------
-local TIERS = { [10000] = true, [20000] = true, [30000] = true }
-for _, id in ipairs(NEW) do
-	local def = assert(CharacterData.Characters[id], "in Characters: " .. id)
-	assert(table.find(CharacterData.Order, id), "in Order: " .. id)
-	assert(table.find(WeaponData.Order, def.StartWeapon), "start weapon is released: " .. id)
-	assert(def.Unlock == nil and TIERS[def.Cost], "earned by gold on an existing tier: " .. id)
-	local path = assert(def.StoreKey, "store key: " .. id)
-	local node: any = Config.Monetization
-	for key in string.gmatch(path, "[^%.]+") do
-		node = node[key]
-	end
-	assert(node == 0, "early unlock id is 0 (coming soon): " .. id)
-	assert(Meta.Signature[id] and Meta.TraitValue(id, 0), "signature: " .. id)
-	assert(CharacterData.SecondSkills[id] and CharacterData.Ultimates[id], "second skill + ultimate: " .. id)
-	assert(CharacterData.UltimateFor(id) == CharacterData.Ultimates[id], "own ultimate, not the fallback: " .. id)
-	local mesh = assert(MeshCatalog.Models[id], "mesh in the catalog: " .. id)
-	assert(mesh.AssetId and mesh.AssetId > 0, "mesh uploaded: " .. id)
-	assert(mesh.Joints and mesh.Joints.Neck and mesh.Joints.LeftShoulder, "hero rig joints: " .. id)
-	local bones = {}
-	for _, piece in ipairs(mesh.Pieces) do
-		if piece.Bone == piece.Name then
-			bones[piece.Name] = true
-		end
-	end
-	for _, b in ipairs({ "Torso", "Head", "LeftArm", "RightArm", "LeftLeg", "RightLeg" }) do
-		assert(bones[b], id .. " mesh bone piece " .. b)
-	end
-	assert(MB.ClassGear[id], "part-built fallback gear: " .. id)
-	assert(#CharacterData.SkinsFor(id) >= 2, "Default + Gold Trim skins: " .. id)
+assert(#CharacterData.Order == 12 and #RunConfig.Classes.Order == 12, "12 classes listed: " .. #CharacterData.Order)
+for i, id in ipairs(RunConfig.Classes.Order) do
+	assert(CharacterData.Order[i] == id, "class order " .. i .. ": " .. tostring(CharacterData.Order[i]))
+	assert(CharacterData.Characters[id], "class entry: " .. id)
 end
-assert(#CharacterData.Order == 11, "11 heroes with the switch on")
-preview.log("PASS data: 3 heroes, tiers, store keys, signature/second/ultimate, meshes")
+for _, id in ipairs(LEGACY) do
+	assert(not table.find(CharacterData.Order, id), "old hero hidden from Order: " .. id)
+	assert(CharacterData.Characters[id], "old hero entry kept for saves: " .. id)
+end
+assert(CharacterData.Default == RunConfig.Classes.Default, "default class: " .. tostring(CharacterData.Default))
+preview.log("PASS roster: the 12 classes listed, the 11 old heroes hidden, their entries kept")
 
 ------------------------------------------------------------------------------------------
--- 2) unlock with gold
+-- 2) a hidden hero is never bought, selected or upgraded (gold untouched)
 ------------------------------------------------------------------------------------------
-data.Gold = 5000
-preview.remote("BuyCharacter"):FireServer("Archer")
-preview.advance(0.5)
-assert(not data.OwnedCharacters.Archer and data.Gold == 5000, "refused without gold")
 data.Gold = 65000
 for _, id in ipairs(NEW) do
-	local before = data.Gold
+	data.OwnedCharacters[id] = nil
 	preview.remote("BuyCharacter"):FireServer(id)
-	preview.advance(0.5)
-	assert(data.OwnedCharacters[id] == true, "bought: " .. id)
-	assert(data.Gold == before - CharacterData.Characters[id].Cost, "paid its price: " .. id)
-	preview.remote("BuyCharacter"):FireServer(id)
-	preview.advance(0.5)
-	assert(data.Gold == before - CharacterData.Characters[id].Cost, "never bought twice: " .. id)
+	preview.advance(0.6)
+	assert(not data.OwnedCharacters[id] and data.Gold == 65000, "hidden hero not sold: " .. id)
 end
-preview.log("PASS unlock: refused without gold, bought once at its tier")
+data.OwnedCharacters.Golem = true -- an unlock bought before the redesign
+local selected = data.SelectedCharacter
+preview.remote("SelectCharacter"):FireServer("Golem")
+preview.advance(0.6)
+assert(data.SelectedCharacter == selected, "hidden hero not selectable")
+preview.remote("BuyHeroUpgrade"):FireServer("Golem", "MaxHP", 0)
+preview.advance(0.6)
+assert(data.Gold == 65000 and not (data.HeroUpgrades.Golem and data.HeroUpgrades.Golem.MaxHP), "hidden hero not upgraded")
+preview.log("PASS hidden heroes: never bought, selected or upgraded")
 
 ------------------------------------------------------------------------------------------
--- 3) runs with each hero
-------------------------------------------------------------------------------------------
-local function startRun(hero: string)
-	preview.remote("SelectCharacter"):FireServer(hero)
-	preview.advance(0.3)
-	assert(data.SelectedCharacter == hero, "selected " .. hero)
-	preview.remote("StartRun"):FireServer("Solo")
-	preview.advance(3)
-	local rp = assert(RM.GetRunPlayer(me), "run player missing")
-	rp.InvulnUntil = 1e9
-	return rp
-end
-local function endRun(rp)
-	RM.AbandonRun(rp)
-	preview.advance(Config.Run.ResultsSeconds + 2)
-	assert(not RM.IsParticipant(me), "back in the lobby")
-end
-
-local knight = startRun("Knight")
-local kStats = table.clone(knight.Stats)
-endRun(knight)
-
-local rp = startRun("Archer")
-assert(rp.WeaponOrder[1] == "Crossbow", "Archer starts with the Crossbow")
-assert(rp.Stats.CooldownMult < kStats.CooldownMult - 0.05, "Quick Draw lowers the cooldown")
-endRun(rp)
-
-rp = startRun("Golem")
-assert(rp.WeaponOrder[1] == "Earthsplitter", "Golem starts with the Earthsplitter")
-assert(rp.Stats.MaxHP > kStats.MaxHP * 1.2, "Stone Body: +25% max HP")
-assert(rp.Stats.Armor == kStats.Armor + 1, "Stone Body: +1 armor")
-assert(rp.Stats.Speed < kStats.Speed, "Stone Body: slower")
-endRun(rp)
-preview.log("PASS runs: Archer Crossbow + Quick Draw, Golem Earthsplitter + Stone Body")
-
-------------------------------------------------------------------------------------------
--- 4) Rally Song, solo
-------------------------------------------------------------------------------------------
-rp = startRun("Bard")
-assert(rp.WeaponOrder[1] == "WarHorn", "Bard starts with the War Horn")
-preview.advance(1)
-local v = Song.Value(rp)
-local share = CharacterData.Characters.Bard.Song.SelfShare
-near(rp.SongBuff or 0, v * share, "solo Bard buffs itself at SelfShare")
-assert(rp.SongBuff > 0 and rp.SongBuff < v, "solo buff is smaller than the team buff")
-assert(me:GetAttribute("SongBuff") == math.floor(v * share * 100 + 0.5), "SongBuff attribute (whole percent)")
-local w = rp.Weapons[rp.WeaponOrder[1]]
-local withSong = WS.WeaponStats(rp, w).damage
-local saved = rp.SongBuff
-rp.SongBuff = 0
-local without = WS.WeaponStats(rp, w).damage
-rp.SongBuff = saved
-near(withSong / without, 1 + saved, "weapon damage x (1 + song)")
--- the client can't change it: the value is recomputed from server state every tick
-rp.SongBuff = 5
-Song.Refresh()
-near(rp.SongBuff, v * share, "recomputed on the server")
--- switch off mid-run: the buff and the badge go away
-Config.Features.NewHeroes = false
-Song.Refresh()
-near(rp.SongBuff, 0, "switch off: no song")
-assert(me:GetAttribute("SongBuff") == nil, "switch off: badge cleared")
-Config.Features.NewHeroes = true
-Song.Refresh()
-endRun(rp)
-Song.Refresh()
-assert(me:GetAttribute("SongBuff") == nil, "badge cleared after the run")
-preview.log("PASS Rally Song solo: self share, damage factor, server-side, cleared")
-
-------------------------------------------------------------------------------------------
--- 5) switch off
+-- 3) an old save: unlock, upgrades and selection stay untouched; its run plays the default
 ------------------------------------------------------------------------------------------
 data.SelectedCharacter = "Golem"
-Config.Features.NewHeroes = false
-CharacterData.SetNewHeroes(false)
-assert(#CharacterData.Order == 8 and not CharacterData.Characters.Archer, "off: back to 8 heroes")
-data.Gold = 50000
-data.OwnedCharacters.Archer = nil
-preview.remote("BuyCharacter"):FireServer("Archer")
-preview.advance(0.5)
-assert(not data.OwnedCharacters.Archer and data.Gold == 50000, "off: buying refused")
+data.HeroUpgrades.Golem = { MaxHP = 2 }
 local migrated = DS.Migrate(data)
-assert(migrated.SelectedCharacter == "Knight", "off: selection falls back to the Knight")
-assert(migrated.OwnedCharacters.Golem == true, "off: the unlock is kept")
-CharacterData.SetNewHeroes(true)
-Config.Features.NewHeroes = true
-assert(#CharacterData.Order == 11, "on again: 11 heroes")
-preview.log("PASS switch off: hidden, not buyable, selection safe, unlock kept")
+assert(migrated.OwnedCharacters.Golem == true, "old unlock kept")
+assert(migrated.HeroUpgrades.Golem and migrated.HeroUpgrades.Golem.MaxHP == 2, "old hero upgrades kept")
+assert(migrated.SelectedCharacter == "Golem", "old selection left as it is")
+preview.remote("StartRun"):FireServer("Solo")
+preview.advance(3)
+local rp = assert(RM.GetRunPlayer(me), "run player missing")
+rp.InvulnUntil = 1e9
+assert(rp.CharacterId == RunConfig.Classes.Default, "a saved old hero plays the default class: " .. tostring(rp.CharacterId))
+RM.AbandonRun(rp)
+preview.advance(Config.Run.ResultsSeconds + 2)
+assert(not RM.IsParticipant(me), "back in the lobby")
+assert(data.OwnedCharacters.Golem == true and data.SelectedCharacter == "Golem" and data.HeroUpgrades.Golem.MaxHP == 2, "after the run: old save fields untouched")
+preview.log("PASS old saves: unlock, upgrades and selection kept; the run plays " .. RunConfig.Classes.Default)

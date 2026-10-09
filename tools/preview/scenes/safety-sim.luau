@@ -126,16 +126,20 @@ do
 	assert(data.Gold <= spent, "gold can only go down when buying")
 	data.Meta.Reroll = level ~= 0 and level or nil
 	preview.advance(2)
-	local owned = data.HeroUpgrades.Knight and data.HeroUpgrades.Knight.MaxHP or 0
+	-- (the default class: the old heroes are hidden and never upgraded, docs/redesign/DECISIONS.md)
+	local hero = CharacterData.Default
+	local owned = data.HeroUpgrades[hero] and data.HeroUpgrades[hero].MaxHP or 0
 	for _ = 1, 10 do
-		preview.remote("BuyHeroUpgrade"):FireServer("Knight", "MaxHP", owned)
+		preview.remote("BuyHeroUpgrade"):FireServer(hero, "MaxHP", owned)
 	end
 	preview.advance(1)
-	assert((data.HeroUpgrades.Knight and data.HeroUpgrades.Knight.MaxHP or 0) <= owned + 1, "a hero upgrade double tap must buy at most one level")
+	local now = data.HeroUpgrades[hero] and data.HeroUpgrades[hero].MaxHP or 0
+	assert(now == owned + 1, "a hero upgrade double tap must buy exactly one level (got " .. tostring(now - owned) .. ")")
 	-- a character costs its server price; an achievement hero cannot be bought
+	-- (a priced class: the old Mage is hidden and never sold)
 	data.Gold = 100
-	preview.remote("BuyCharacter"):FireServer("Mage")
-	assert(not data.OwnedCharacters.Mage and data.Gold == 100, "short gold must refuse a hero")
+	preview.remote("BuyCharacter"):FireServer("toastmaster")
+	assert(not data.OwnedCharacters.toastmaster and data.Gold == 100, "short gold must refuse a hero")
 	for id, def in pairs(CharacterData.Characters) do
 		if def.Unlock then
 			data.Gold = 1e7

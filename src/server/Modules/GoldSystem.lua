@@ -431,6 +431,13 @@ end
 -- The profile a lobby action may change: loaded, still ours and not handed to a teleport
 -- (DataService.IsReady). A change made while the profile is released (teleport handoff) would
 -- stay in memory and never be saved, so those actions are refused instead.
+-- A hero the lobby lists (CharacterData.Order: the twelve classes). The old heroes are hidden
+-- (docs/redesign/DECISIONS.md): their entries and save data stay, but they are never bought,
+-- selected or upgraded again.
+local function listedHero(characterId: string): boolean
+	return table.find(CharacterData.Order, characterId) ~= nil
+end
+
 local function writableData(player: Player): { [string]: any }?
 	local ds = ctx.DataService
 	if ds.IsReady and not ds.IsReady(player) then
@@ -441,7 +448,7 @@ end
 
 local function onSelectCharacter(player: Player, characterId: any)
 	local data = writableData(player)
-	if not data or type(characterId) ~= "string" or not CharacterData.Characters[characterId] then
+	if not data or type(characterId) ~= "string" or not CharacterData.Characters[characterId] or not listedHero(characterId) then
 		return
 	end
 	if not data.OwnedCharacters[characterId] or not inLobby(player) then
@@ -458,7 +465,7 @@ local function onBuyCharacter(player: Player, characterId: any)
 		return
 	end
 	local def = CharacterData.Characters[characterId]
-	if not def or data.OwnedCharacters[characterId] then
+	if not def or data.OwnedCharacters[characterId] or not listedHero(characterId) then
 		return
 	end
 	if def.Unlock then
@@ -522,7 +529,7 @@ local function onBuyHeroUpgrade(player: Player, heroId: any, upgradeId: any, exp
 		return
 	end
 	local hero = CharacterData.Characters[heroId]
-	local def = hero and MetaUpgradeData.HeroDef(heroId, upgradeId)
+	local def = hero and listedHero(heroId) and MetaUpgradeData.HeroDef(heroId, upgradeId)
 	if not def or data.OwnedCharacters[heroId] ~= true then
 		GoldSystem.SyncProfile(player)
 		return
