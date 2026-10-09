@@ -191,6 +191,8 @@ local playerGround: { [any]: number } = {}
 -- anyone else is free (owner OK 2026-10-05, SEC-02b); if all are protected, nothing changes.
 local protectedNow: { [any]: boolean } = {}
 local anyFree = false
+-- [stream D] true during a director run's frame (EnemyAI.Step): walkers hold at a stand-off
+local directorFrame = false
 
 local function isProtected(rp): boolean
 	return rp.Paused == true and rp.Offer ~= nil
@@ -257,10 +259,16 @@ local function think(e, runPlayers)
 		return
 	end
 	local desired = to.Unit
+	-- [stream D] director runs: a walker stops at a stand-off inside its contact reach instead of
+	-- standing on top of the hero (still biting; the hero's aim always has a direction)
+	local holding = directorFrame and not e.Boss and toDist < (e.Radius + PLAYER_RADIUS) * 0.75
+	if holding then
+		desired = Vector3.zero
+	end
 	-- Height grid (terraces, ramps, a cave): close and on a steppable straight line, seek
 	-- directly; otherwise walk down the target's flow field (round a cliff to its ramp). No
 	-- field here (outside its radius, no grid): seek directly as on a flat arena.
-	if HeightGrid.IsActive() and not (toDist <= Nav.DirectSeekRange and HeightGrid.CanStep(e.Pos.X, e.Pos.Z, tp.X, tp.Z)) then
+	if not holding and HeightGrid.IsActive() and not (toDist <= Nav.DirectSeekRange and HeightGrid.CanStep(e.Pos.X, e.Pos.Z, tp.X, tp.Z)) then
 		local flow = HeightGrid.FlowDir(target, e.Pos.X, e.Pos.Z)
 		if flow ~= Vector3.zero then
 			desired = flow
@@ -279,7 +287,7 @@ local function think(e, runPlayers)
 	-- docs/overhaul/CORNER_REPORT.md, tools/preview/scenes/corner-regression.luau.)
 	local look = math.min(Config.Enemies.AvoidRayLength + e.Radius, to.Magnitude)
 	local normal: Vector3? = nil
-	if not e.Ghost and rayParams and obstacleAhead(e.Pos, desired, look) then
+	if not holding and not e.Ghost and rayParams and obstacleAhead(e.Pos, desired, look) then
 		-- 1 stud up: the lowest colliders (rubble, low walls, plinths) top out at ~1.3 studs;
 		-- a ray at 2.5 passed over them and an enemy meeting one head-on stalled behind it
 		local origin = e.Pos + Vector3.new(0, 1, 0)
@@ -786,6 +794,7 @@ function EnemyAI.Step(dt: number)
 	local farEvery = Config.Enemies.BodyFarEvery
 	-- [stream D] director runs only (the stage loop keeps its tested behaviour)
 	local stuckOn = Dir.Stuck ~= nil and ctx.StageManager.IsDirector ~= nil and ctx.StageManager.IsDirector()
+	directorFrame = ctx.StageManager.IsDirector ~= nil and ctx.StageManager.IsDirector()
 	local bossSlowCap = (Dir.Boss and Dir.Boss.SlowCap) or 0.10
 
 	table.clear(movedBuf)

@@ -221,12 +221,12 @@ local function pickLevels()
 		advance(0.3)
 	end
 end
--- coarse simulation: 0.5 s slices at 10 frames a second
-local function run(seconds: number, onSlice: (() -> ())?)
+-- coarse simulation: 0.5 s slices at 10 frames a second (fps overrides it)
+local function run(seconds: number, onSlice: (() -> ())?, fps: number?)
 	local left = seconds
 	while left > 0 do
 		local dt = math.min(left, 0.5)
-		advance(dt, 10)
+		advance(dt, fps or 10)
 		left -= dt
 		pickLevels()
 		if onSlice then
@@ -397,7 +397,7 @@ for ci, cls in ipairs(classes) do
 				end
 			end
 		end
-	end)
+	end, 30) -- 30 fps: at 10 a point-blank class shot passes a beetle standing next to the hero before its first hit check (the director's beetles take two hits)
 	local kills = (tonumber(me:GetAttribute("Kills")) or 0) - kills0
 	local counts = {}
 	for k, v in pairs(WS.DebugCounts()) do

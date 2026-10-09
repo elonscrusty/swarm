@@ -188,11 +188,10 @@ if rp then
 	waitFor(20, function()
 		return false
 	end)
-	-- [stream D] the director's opening (0.6 enemies/s, 35-70 studs out) can leave 20 s without
-	-- kill gold: bank a known amount so D5 checks the settlement, not the combat dice
-	if (rp.Gold or 0) <= 0 then
-		preview.server("GoldSystem").AddRunGold(rp, 100)
-	end
+	-- [stream D] the director's opening (0.6 enemies/s, 35-70 studs out) can leave 20 s with
+	-- almost no kill gold (a defeat keeps 35%, rounded down to 0): bank a known amount so D5
+	-- checks the settlement, not the combat dice
+	preview.server("GoldSystem").AddRunGold(rp, 100)
 end
 RM.EndRun(false)
 advance(0.5)
