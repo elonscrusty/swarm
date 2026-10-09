@@ -305,4 +305,4 @@ Breaker to win!", and the team rules line names personal XP shards and shared te
 | layout smart-tutorial-regression iphone | PASS (alone; timed out once in a parallel batch) |
 | cliffwood-run-sim | PASS (after the dash-check fix) |
 | class-kits-sim, survival-sim, economy2-sim, builds-sim | PASS |
-| swarm-v2-flow A-E | PASS inside the cycles runs; the plain registered run timed out (1 500 s) under the shared load |
+| swarm-v2-flow (A-E plus F leak cycles, `--set cycles=6`) | PASS 53/53; the plain registered run timed out once (1 500 s) in a parallel batch under the shared load |
