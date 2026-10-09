@@ -241,6 +241,12 @@ function Mock.api()
 		R.dataStoreFailure = { Reads = reads, Writes = writes, Open = opening == true }
 	end
 
+	-- Opt-in: every DataStore UpdateAsync yields this many seconds before it runs (nil = none),
+	-- so receipt / save races can be tested (receipt-regression).
+	function api.setDataStoreLatency(seconds: number?)
+		R.dataStoreLatency = seconds
+	end
+
 	-- The client modules folder the running client uses (PlayerScripts copy).
 	function api.clientFolder()
 		local ps = R.findChild(states[R.localPlayer], "PlayerScripts")
@@ -295,6 +301,12 @@ function Mock.api()
 	-- boolean (may task.wait to model a slow lookup). nil restores "owns nothing".
 	function api.setPassLookup(fn)
 		R.passLookupHook = fn
+	end
+
+	-- Opt-in MarketplaceService:GetProductInfo for a scene: fn(id, infoType) -> info table (or
+	-- error() to model a web failure). nil restores the default (R$ 49, for sale).
+	function api.setProductInfo(fn)
+		R.productInfoHook = fn
 	end
 
 	-- MarketplaceService prompts opened so far: { {kind, id, t} } (store tests).

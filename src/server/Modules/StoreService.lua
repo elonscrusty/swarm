@@ -13,6 +13,9 @@
 	        they left it goes to the buyer instead. The route is kept per PurchaseId, so a
 	        retried receipt goes to the same player; owned looks are a set, so a retry never
 	        grants twice, and the buyer's PurchaseIds stay the idempotency record.
+	  Prompt closed  a cancel is a neutral "Cancelled" line (nothing charged); a paid product
+	        is "Pending" until its receipt is saved, then "Granted" (the receipt's live part,
+	        run by MonetizationService after the save). A closing prompt never grants.
 	  StoreEquip (kind, id)   wears an owned Trail / Burst / Pet / Emote / Nameplate / Dais
 	        ("" = none); ("Sync") re-checks earned looks. Ownership is decided here only.
 	  StoreEmote ()           plays the worn emote (attribute CosEmoteAt), with a cooldown.
@@ -42,8 +45,10 @@ local GOLD = Color3.fromRGB(255, 215, 80)
 type Gift = { Target: number, TargetName: string, ProductId: number, Item: string, At: number, Delivered: boolean? }
 local pendingGift: { [Player]: Gift } = {}
 local routes: { [string]: Gift } = {} -- purchaseId → the gift it was routed as
-local prompted: { [Player]: { Id: number, At: number } } = {}
+local prompted: { [Player]: { Id: number, At: number, Item: string?, Gift: boolean? } } = {}
 local lastEmote: { [Player]: number } = {}
+-- "userId:productId" → os.clock() a store receipt was saved (no "Pending" line after it)
+local committed: { [string]: number } = {}
 
 local function on(): boolean
 	return Config.FeatureOn("Store")
@@ -246,8 +251,13 @@ function StoreService.GrantItem(player: Player, data: { [string]: any }, item: {
 	return e.Name
 end
 
-local function afterGrant(player: Player, text: string)
-	task.defer(function()
+-- The live part of a grant (worn looks, profile sync, thank-you line). Returned to
+-- MonetizationService, which runs it only once the receipt is saved.
+local function afterGrant(player: Player, text: string, itemId: string?, productId: number?): () -> ()
+	return function()
+		if productId then
+			committed[player.UserId .. ":" .. productId] = os.clock()
+		end
 		if not player.Parent then
 			return
 		end
@@ -257,18 +267,25 @@ local function afterGrant(player: Player, text: string)
 			pcall(ctx.RunManager.RefreshLobbyCharacter, player)
 		end
 		notify(player, text)
-	end)
+		Remotes.FireClient("StoreResult", player, { Kind = "Granted", Ok = true, Item = itemId, Text = text })
+	end
 end
 
--- Product handler for one productId (MonetizationService builds these).
-function StoreService.Handler(productId: number): ((Player, { [string]: any }) -> ())?
+-- The StoreBuy item id the client knows for a store product ("Hero_<id>" for a hero).
+local function itemIdOf(item: { Kind: string, Id: string }): string
+	return item.Kind == "Hero" and ("Hero_" .. item.Id) or item.Id
+end
+
+-- Product handler for one productId (MonetizationService builds these): changes the save
+-- and returns the live part.
+function StoreService.Handler(productId: number): ((Player, { [string]: any }) -> () -> ())?
 	local item = StoreService.ProductMap()[productId]
 	if not item then
 		return nil
 	end
 	return function(player, data)
 		local name = StoreService.GrantItem(player, data, item)
-		afterGrant(player, name .. " is yours. Thank you!")
+		return afterGrant(player, name .. " is yours. Thank you!", itemIdOf(item), productId)
 	end
 end
 
@@ -290,12 +307,13 @@ end
 
 --[[
 	Grants a gift (called from ProcessReceipt with the buyer's save). Returns false when it
-	could not be saved yet (the receipt stays unacknowledged and Roblox retries).
+	could not be saved yet (the receipt stays unacknowledged and Roblox retries), else true
+	and the live part to run once the buyer's receipt is saved.
 	The recipient is looked up again here: still in this server with a loaded profile →
 	their save (saved first); gone → the buyer's own save.
 ]]
-function StoreService.GrantGift(buyer: Player, buyerData: { [string]: any }, g: Gift): boolean
-	local granted = StoreService.GrantGiftNow(buyer, buyerData, g)
+function StoreService.GrantGift(buyer: Player, buyerData: { [string]: any }, g: Gift): (boolean, (() -> ())?)
+	local granted, after = StoreService.GrantGiftNow(buyer, buyerData, g)
 	if granted then
 		-- done: the receipt is recorded right after this returns (a retry stops at HasPurchase
 		-- before it asks for the route again), so the entry would only pile up
@@ -305,13 +323,13 @@ function StoreService.GrantGift(buyer: Player, buyerData: { [string]: any }, g: 
 			end
 		end
 	end
-	return granted
+	return granted, after
 end
 
-function StoreService.GrantGiftNow(buyer: Player, buyerData: { [string]: any }, g: Gift): boolean
+function StoreService.GrantGiftNow(buyer: Player, buyerData: { [string]: any }, g: Gift): (boolean, (() -> ())?)
 	local item = StoreService.ProductMap()[g.ProductId]
 	if not item then
-		return false
+		return false, nil
 	end
 	local recipient = Players:GetPlayerByUserId(g.Target)
 	local profile = recipient and ctx.DataService.GetProfile(recipient)
@@ -324,27 +342,27 @@ function StoreService.GrantGiftNow(buyer: Player, buyerData: { [string]: any }, 
 		local name = StoreService.GrantItem(recipient, profile.Data, item)
 		g.Delivered = true
 		if not ctx.DataService.ForceSave(recipient) then
-			return false
+			return false, nil
 		end
-		afterGrant(recipient, buyer.DisplayName .. " sent you a gift: " .. name .. "!")
-		task.defer(function()
+		-- the recipient's save holds the gift now: their line can show at once
+		task.defer(afterGrant(recipient, buyer.DisplayName .. " sent you a gift: " .. name .. "!"))
+		return true, function()
+			committed[buyer.UserId .. ":" .. g.ProductId] = os.clock()
 			notify(buyer, "Gift sent: " .. name .. " to " .. g.TargetName .. ". Thank you!")
 			result(buyer, "Gift", true, "Gift sent to " .. g.TargetName .. ".")
-		end)
-		return true
+		end
 	end
 	-- the recipient left (or owns it already) before the purchase finished: the buyer keeps it
 	local name = StoreService.GrantItem(buyer, buyerData, item)
-	afterGrant(buyer, g.TargetName .. (already and " owns it already" or " left") .. ", so " .. name .. " is yours. Thank you!")
-	return true
+	return true, afterGrant(buyer, g.TargetName .. (already and " owns it already" or " left") .. ", so " .. name .. " is yours. Thank you!", itemIdOf(item), g.ProductId)
 end
 
 ------------------------------------------------------------------------------------------
 -- Remotes
 ------------------------------------------------------------------------------------------
 
-local function prompt(player: Player, id: number, isPass: boolean)
-	prompted[player] = { Id = id, At = os.clock() }
+local function prompt(player: Player, id: number, isPass: boolean, itemId: string?, isGift: boolean?)
+	prompted[player] = { Id = id, At = os.clock(), Item = itemId, Gift = isGift == true }
 	local ok = pcall(function()
 		if isPass then
 			MarketplaceService:PromptGamePassPurchase(player, id)
@@ -367,6 +385,11 @@ local function onBuy(player: Player, itemId: any, target: any)
 	end
 	local data = ctx.DataService.GetData(player)
 	if not data then
+		return
+	end
+	if ctx.DataService.IsReady and not ctx.DataService.IsReady(player) then
+		-- loading, handed off for a teleport or lock lost: nothing can be saved here now
+		result(player, "Buy", false, "Your save is busy. Try again in a moment.")
 		return
 	end
 	local pid, isPass, owned = 0, false, false
@@ -405,7 +428,7 @@ local function onBuy(player: Player, itemId: any, target: any)
 			result(player, "Buy", false, "You own this already.")
 			return
 		end
-		prompt(player, pid, isPass)
+		prompt(player, pid, isPass, itemId)
 		return
 	end
 	-- gift: a real player in this server, not the buyer, profile loaded, not owning it
@@ -424,7 +447,7 @@ local function onBuy(player: Player, itemId: any, target: any)
 		return
 	end
 	pendingGift[player] = { Target = recipient.UserId, TargetName = recipient.DisplayName, ProductId = pid, Item = itemId, At = os.clock() }
-	prompt(player, pid, false)
+	prompt(player, pid, false, itemId, true)
 end
 
 local function onEquip(player: Player, kind: any, id: any)
@@ -479,9 +502,14 @@ local function onEmote(player: Player)
 	player:SetAttribute("CosEmoteAt", workspace:GetServerTimeNow())
 end
 
--- A store prompt closed without a purchase: a calm line (nothing was charged).
-local function onPromptClosed(player: Player?, id: number, purchased: boolean)
-	if not player or purchased then
+--[[
+	A store prompt closed. Without a purchase: a calm, neutral line (Kind "Cancelled"; nothing
+	was charged). With a developer-product purchase: "Pending" until the receipt is saved
+	(MonetizationService runs the "Granted" line then); a closing prompt is never proof of a
+	grant. A pass purchase is handled by MonetizationService's own pass event.
+]]
+local function onPromptClosed(player: Player?, id: number, purchased: boolean, isPass: boolean?)
+	if not player then
 		return
 	end
 	local p = prompted[player]
@@ -489,11 +517,19 @@ local function onPromptClosed(player: Player?, id: number, purchased: boolean)
 		return
 	end
 	prompted[player] = nil
+	if purchased then
+		-- (the receipt can be saved before this event: then the Granted line already went out)
+		local at = committed[player.UserId .. ":" .. id]
+		if not isPass and not (at and os.clock() - at < 30) then
+			Remotes.FireClient("StoreResult", player, { Kind = "Pending", Ok = true, Item = p.Item, Gift = p.Gift, Text = "Payment received. Adding it to your save..." })
+		end
+		return
+	end
 	local g = pendingGift[player]
 	if g and g.ProductId == id then
 		pendingGift[player] = nil
 	end
-	result(player, "Buy", false, "No purchase made. Nothing was charged.")
+	Remotes.FireClient("StoreResult", player, { Kind = "Cancelled", Ok = false, Item = p.Item, Text = "No purchase made. Nothing was charged." })
 end
 
 ------------------------------------------------------------------------------------------
@@ -509,10 +545,10 @@ function StoreService.Start()
 	Remotes.Listen("StoreEquip", onEquip, 6)
 	Remotes.Listen("StoreEmote", onEmote, 2)
 	MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId, productId, purchased)
-		onPromptClosed(Players:GetPlayerByUserId(userId), productId, purchased == true)
+		onPromptClosed(Players:GetPlayerByUserId(userId), productId, purchased == true, false)
 	end)
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
-		onPromptClosed(player, passId, purchased == true)
+		onPromptClosed(player, passId, purchased == true, true)
 	end)
 	ctx.DataService.OnProfileLoaded(function(player)
 		if not on() then
@@ -528,6 +564,12 @@ function StoreService.Start()
 		pendingGift[player] = nil
 		prompted[player] = nil
 		lastEmote[player] = nil
+		local prefix = player.UserId .. ":"
+		for key in pairs(committed) do
+			if string.sub(key, 1, #prefix) == prefix then
+				committed[key] = nil
+			end
+		end
 	end)
 end
 
