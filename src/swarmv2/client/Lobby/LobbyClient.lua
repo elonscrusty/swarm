@@ -223,7 +223,7 @@ function LobbyClient.Start(): boolean
 		party.Layout(ctx, Kit.M, Kit.M + 64 + 8 + (portrait and 60 + 8 or 0))
 		classes.Layout(ctx)
 		queue.Layout(ctx)
-		toastHost.Position = UDim2.fromOffset(ctx.W / 2, barBottom + 8)
+		toastHost.Position = UDim2.fromOffset(ctx.W / 2, barBottom + 8 + (portrait and 74 or 0))
 		classes.Render(ctx)
 		queue.Render(ctx)
 		party.Render(ctx)

@@ -29,8 +29,8 @@ export type Panel = {
 }
 
 local MODE_LINES = {
-	Public = "Recruit gates: other players from this camp can join, up to 4.",
-	Party = "Party gate: only you and your party play together.",
+	Public = "Recruit match: others from camp can join (up to 4).",
+	Party = "Party match: only you and your party play.",
 }
 
 local STATE_TEXT = {
@@ -237,6 +237,7 @@ function QueuePanel.Build(ctx: Kit.Ctx): Panel
 	local msig = ""
 	local lastQ: any? = nil
 
+	local lockedNow = false
 	local function layoutQueue(c: Kit.Ctx, nMembers: number, hasMsg: boolean)
 		local cols = c.Portrait and 1 or 2
 		grid.CellSize = UDim2.new(1 / cols, -(cols == 2 and 3 or 0), 0, 40)
@@ -251,7 +252,7 @@ function QueuePanel.Build(ctx: Kit.Ctx): Panel
 		if hasMsg then
 			y += 22
 		end
-		local h = y + 6 + 56 + 24
+		local h = y + 6 + (lockedNow and 0 or 56) + 24
 		holder.Size = UDim2.fromOffset(math.min(c.W - 2 * Kit.M, c.Portrait and 480 or 500), h)
 	end
 
@@ -270,32 +271,31 @@ function QueuePanel.Build(ctx: Kit.Ctx): Panel
 			Kit.Icons.Draw(f, "crown", { Size = 20, Color = C.Coin, Position = UDim2.fromOffset(x, 10), ZIndex = 7, Name = "Crown" })
 			x += 24
 		end
-		Kit.txt(f, "BodyStrong", m.Name .. (isMe and " (you)" or ""), {
+		Kit.txt(f, "BodyStrong", m.Name, {
 			Name = "Name",
 			Position = UDim2.fromOffset(x, 2),
-			Size = UDim2.new(1, -(x + 62), 0, 20),
+			Size = UDim2.new(1, -(x + 84), 0, 20),
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 7,
 		}, 15)
 		Kit.txt(f, "Caption", string.upper(className(m.ClassId)), {
 			Name = "Class",
 			Position = UDim2.fromOffset(x, 21),
-			Size = UDim2.new(1, -(x + 62), 0, 16),
+			Size = UDim2.new(1, -(x + 84), 0, 16),
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 7,
 		}, 12)
-		local tick = Kit.txt(f, "Label", m.Ready and "READY" or "...", {
+		Kit.txt(f, "Label", m.Ready and "READY" or "", {
 			Name = "ReadyTick",
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -6, 0.5, 0),
-			Size = UDim2.fromOffset(58, 24),
+			Size = UDim2.fromOffset(52, 24),
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextColor3 = m.Ready and C.Success or C.TextFaint,
 			ZIndex = 7,
 		}, 13)
 		if m.Ready then
-			Kit.Icons.Draw(f, "check", { Size = 14, Color = C.Success, Position = UDim2.new(1, -64, 0.5, -7), ZIndex = 7, Name = "Tick" })
-			tick.Size = UDim2.fromOffset(48, 24)
+			Kit.Icons.Draw(f, "check", { Size = 14, Color = C.Success, Position = UDim2.new(1, -78, 0.5, -7), ZIndex = 7, Name = "Tick" })
 		end
 	end
 
@@ -333,6 +333,10 @@ function QueuePanel.Build(ctx: Kit.Ctx): Panel
 			gateLabel.Text = def and def.Label or q.GateId
 			modeLine.Text = MODE_LINES[q.Mode] or ""
 			local locked = q.State == "Committed" or q.State == "Teleporting"
+			if locked ~= lockedNow then
+				lockedNow = locked
+				msig = ""
+			end
 			ready.Instance.Visible = not locked
 			leave.Instance.Visible = not locked
 			local me = Kit.me().UserId
@@ -384,10 +388,10 @@ function QueuePanel.Build(ctx: Kit.Ctx): Panel
 				text = "STARTING IN " .. tostring(left)
 				color = C.Success
 			elseif q.State == "Committed" then
-				text = "Match found. Getting your squad ready..."
+				text = "Match found. Get ready!"
 				color = C.BlueDeep
 			elseif q.State == "Teleporting" then
-				text = "Teleporting to the run..."
+				text = "Teleporting now"
 				color = C.BlueDeep
 			elseif q.State == "Failed" then
 				text = "Could not start the run."

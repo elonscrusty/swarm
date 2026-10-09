@@ -77,7 +77,7 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 	caret.Name = "Caret"
 
 	local sheet: Kit.Sheet
-	sheet = Kit.sheet(ctx.Root, "ClassSheet", "CHOOSE YOUR CLASS", function()
+	sheet = Kit.sheet(ctx.Root, "ClassSheet", "YOUR CLASS", function()
 		ctx.OpenSheet(nil)
 	end)
 	local list = new("Frame", { Name = "Cards", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -30), ZIndex = 12 }, sheet.Body)
@@ -161,7 +161,7 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 		Kit.txt(face, "Small", info.Tagline, {
 			Name = "Tagline",
 			Position = UDim2.fromOffset(8, 106),
-			Size = UDim2.new(1, -16, 0, 66),
+			Size = UDim2.new(1, -16, 0, 76),
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextYAlignment = Enum.TextYAlignment.Top,
 			TextWrapped = true,
@@ -198,16 +198,6 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 		if not enabled then
 			b.SetEnabled(false)
 		end
-		if not owned and not selected and info.Cost > 0 then
-			Kit.txt(face, "Caption", locked and "" or ("PRICE " .. Kit.gold(info.Cost)), {
-				Name = "Price",
-				Position = UDim2.new(0, 6, 1, -82),
-				Size = UDim2.new(1, -12, 0, 18),
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextColor3 = C.TextMuted,
-				ZIndex = 14,
-			}, 12)
-		end
 		holder.Parent = list
 	end
 
@@ -235,7 +225,7 @@ function ClassPanel.Build(ctx: Kit.Ctx): Panel
 			local v = c.View
 			local info = classOf(v)
 			name.Text = info.Name
-			role.Text = (info.Role or "") .. (v and v.ClassLocked and "  (locked)" or "")
+			role.Text = (v and v.ClassLocked) and "CLASS LOCKED" or (info.Role or "")
 			swatch.BackgroundColor3 = info.Primary or C.Panel
 			swatchStroke.Color = info.Accent or C.Text
 			gold.Text = v and ("GOLD " .. Kit.gold(v.Gold)) or ""
