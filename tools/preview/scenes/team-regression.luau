@@ -158,7 +158,8 @@ local badgeText = badge and badge:FindFirstChild("Text") and badge:FindFirstChil
 check(string.find(badgeText, "TEAM", 1, true), "combo: client badge shows the meter", badgeText)
 -- choosing a card: protected, so no charge and no fire
 LUS.QueueLevels(rp, 1)
-check(rp.Offer ~= nil and rp.Paused, "combo: a level-up panel is open")
+-- ([stream B] the rank system's team-run choices are live: open without pausing the chooser)
+check(rp.Offer ~= nil and (rp.Paused or rp.LiveChoice), "combo: a level-up panel is open")
 local before = Combo.Meter()
 for _ = 1, 15 do together(); advance(0.1) end
 check(Combo.Meter() <= before + 1e-6, "combo: no charge while a player is choosing", string.format("%.3f -> %.3f", before, Combo.Meter()))

@@ -1294,7 +1294,10 @@ end
 	call Storm Charm lightning (ItemSystem); isProc = this hit IS an item proc (no crit, no
 	further procs).
 ]]
-function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockback: number?, isProc: boolean?): boolean
+-- critIn ([stream B], WeaponSystem.Damage): nil = roll crits here as before (ItemSystem.ModifyHit,
+-- non-proc hits only); true = the caller already rolled a crit (amount includes it: show it);
+-- false = this hit never crits (no roll).
+function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockback: number?, isProc: boolean?, critIn: boolean?): boolean
 	if not e.Alive or not (amount > 0) then -- (NaN too: it would make the enemy unkillable)
 		return false
 	end
@@ -1310,8 +1313,8 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 		end
 		return false
 	end
-	local crit = false
-	if rp and not isProc then
+	local crit = critIn == true -- [stream B]
+	if rp and not isProc and critIn == nil then
 		amount, crit = ctx.ItemSystem.ModifyHit(rp, amount, e) -- e: Giant's Bane
 	end
 	if e.Shield > 0 then

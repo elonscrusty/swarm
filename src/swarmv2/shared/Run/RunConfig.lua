@@ -6,6 +6,8 @@
 	Sections:
 	  Camera / Movement / Dash   third-person orbit camera, jump and air control, dash and leap
 	                             (docs/redesign/gameplay/DESIGN.md sections 1 and 2).
+	  Builds / Combat            [stream B] weapon ranks, offers, evolutions, damage rules
+	                             (docs/redesign/gameplay/BUILDS.md).
 ]]
 
 export type DashDef = {
@@ -252,8 +254,94 @@ RunConfig.Entry = {
 ------------------------------------------------------------------------------------------
 -- CONTINUATION PACK sections (docs/redesign/continuation/GAMEPLAY_PLAN.md): one per stream
 ------------------------------------------------------------------------------------------
-RunConfig.Builds = {} -- [stream B] ranks, offers, slots, evolutions
-RunConfig.Combat = {} -- [stream B] damage formula, crit, armor, status caps, targeting
+--[[
+	[stream B] BUILDS: weapon ranks 1-5, the 15-weapon catalog, 8 loot passives, offers and evolutions
+	(continuation brief "Progression and personal choices", "Twelve approved classes", "Eight
+	original loot passives"; docs/redesign/gameplay/BUILDS.md). Pure rules: SwarmV2.Run.BuildRules.
+	Enabled = false switches the whole run back to the old 12-level system (6 + 6 slots, old weights,
+	every old weapon / passive / synergy offered): only for the regressions of the old content.
+
+	Baselines (audited, BUILDS.md): B = 10 = the ordinary starter damage before upgrades (Knight's
+	Sword level 1 and Ruckus's Scrap Toss level 1 both dealt 10). H0 = Config.Player.BaseMaxHP (120),
+	the normal player maximum HP; class HP modifiers multiply it (RunConfig.Classes, stream C).
+]]
+RunConfig.Builds = {
+	Enabled = true,
+	B = 10, -- weapon / enemy HP coefficients multiply this
+	MaxRank = 5,
+	RankDamageStep = 0.20, -- hit = B x coeff x (1 + 0.20 (r - 1)) x (1 + additive damage bonus)
+	RankIntervalMult = 0.95, -- interval = base x 0.95^(r - 1) / (1 + attack speed bonus)
+	WeaponSlots = 4, -- the class signature is weapon slot 1 (protected, never replaced)
+	PassiveSlots = 4,
+	Choices = 3, -- at most this many distinct options per offer
+	-- category weights (empty categories are removed and the rest renormalised; uniform inside)
+	CategoryWeights = { WeaponUpgrade = 45, PassiveUpgrade = 35, NewWeapon = 12, NewPassive = 8 },
+	CategoryOrder = { "WeaponUpgrade", "PassiveUpgrade", "NewWeapon", "NewPassive" },
+	-- rank grant by rarity (tiers past the item's remaining capacity are removed, then renormalised)
+	Rarities = {
+		{ Name = "Common", Ranks = 1, Weight = 70, Label = "Common", Color = Color3.fromRGB(205, 210, 220) },
+		{ Name = "Uncommon", Ranks = 2, Weight = 23, Label = "Uncommon", Color = Color3.fromRGB(90, 200, 110) },
+		{ Name = "Rare", Ranks = 3, Weight = 6, Label = "Rare", Color = Color3.fromRGB(80, 160, 255) },
+		{ Name = "Epic", Ranks = 4, Weight = 1, Label = "Epic", Color = Color3.fromRGB(190, 90, 255) },
+	},
+	EvolutionLabel = "Evolution",
+	EvolutionColor = Color3.fromRGB(255, 200, 40),
+	-- evolutions: player level >= EvolutionLevel, weapon rank 5, the partner passive at rank 3
+	EvolutionLevel = 8,
+	EvolutionWeaponRank = 5,
+	EvolutionPassiveRank = 3,
+	-- the only evolutions offered (the four signature recipes; every other recipe stays as data)
+	Evolutions = { "ScrapToss", "ToastVolley", "BubbleBomb", "YarnBomb" },
+	HealShare = 0.10, -- exhausted pool: one card healing this share of max HP (living heroes only)
+	-- personal choices: one at a time from a queue. Live (a team run): the world and the chooser keep
+	-- going, no protection, ChoiceSeconds per choice. Solo: kept as before the pack (the world
+	-- freezes while choosing, the longer solo timer), documented in BUILDS.md.
+	ChoiceSeconds = 10,
+	SoloChoiceSeconds = 25,
+	RerollsPerPanel = 1,
+	FreeRerolls = 2, -- per run, on top of the existing VIP pass rerolls and account Reroll upgrade
+	HideSynergies = true, -- SynergyData sets give nothing and are never hinted while Enabled
+}
+
+--[[
+	[stream B] COMBAT: shared damage rules (WeaponSystem.Damage, HasLineOfSight, NearestTarget).
+	Crit and proc rolls are server-side. Status damage never crits; secondaries never proc.
+]]
+RunConfig.Combat = {
+	DamageBonusMax = 2.0, -- additive damage bonus clamp (0..2), class bonuses included
+	AttackSpeedMax = 1.0, -- attack speed bonus clamp (0..1)
+	MinInterval = 0.25, -- seconds, no weapon attacks faster
+	CritBase = 0.05,
+	CritMax = 0.50,
+	CritMult = 1.75, -- critical direct damage
+	ArmorMax = 100, -- armor A reduces damage by A / (100 + A), A clamped 0..100
+	-- targeting: nearest living hostile in range with line of sight, ties by enemy Uid
+	Retarget = 0.15, -- seconds between re-picks
+	TargetHold = 0.30, -- a still-valid target is kept at least this long
+	LeadMaxSeconds = 0.25, -- projectile aim prediction: at most this much of the flight time ...
+	LeadMaxStuds = 3, -- ... and at most this many studs
+	LOSHeight = 2.5, -- sight line height above the ground at both ends
+	LOSStep = 2, -- studs between ground samples along a sight line
+	LOSTolerance = 0.5, -- ground may rise this far above the line before it blocks
+	LOSMaxChecks = 8, -- sight-line tests per target pick (bounded search)
+	-- statuses
+	ScorchDpsB = 0.12, -- scorch: 0.12 B per second ...
+	ScorchSeconds = 3, -- ... for 3 s, refreshed (strongest source kept, never stacked)
+	ScorchTick = 0.5,
+	SlowCap = 0.40, -- strongest slow only, at most 40 % slower
+	BossSlowCap = 0.10,
+	KnockbackCap = 24, -- horizontal knockback speed per target, studs/s
+	EliteKnockMult = 0.5,
+	StaggerImmunity = 1.5, -- seconds a normal enemy cannot be staggered again
+	EliteStaggerMax = 0.15,
+	-- secondary effects (bounces, bursts, pulses, splinters, fragments)
+	SecondaryPerSecond = 10, -- per-player emission cap (token bucket, burst 10)
+	MaxChainDepth = 2, -- a primary hit (0) may emit (1); only documented finite chains reach 2
+	-- Splinter Badge: two splinters at different visible enemies within this range
+	SplinterRange = 8,
+	SplinterCoeff = 0.15,
+	SplinterCount = 2,
+}
 RunConfig.Director = {} -- [stream D] run clock, beacon, boss, enemy pressure
 RunConfig.Survival = {} -- [stream E1] downed, revive, protection, falls, movement feel
 -- [stream E2] XP shards, team run gold, chests, class goals (DECISIONS C3, C7, C9). Read by

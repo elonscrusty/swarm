@@ -12,6 +12,9 @@ for _, id in ipairs(WeaponData.Order) do
 	end
 	assert(def.Evolution.Stats.damage > def.Levels[12].damage, id .. " evolution must strengthen damage")
 end
+-- [stream B] the panel pacing below (4-choice panels, old pool) is the old 12-level system; the
+-- continuation pack's rank system (one choice at a time) is checked by builds-sim / choice-regression
+require(game:GetService("ReplicatedStorage").SwarmV2.Run.RunConfig).Builds.Enabled = false
 preview.startServer()
 preview.advance(1)
 local XP = preview.server("XPSystem")
