@@ -648,7 +648,9 @@ local function shardRadius(rp): number
 	local ref = Config.Player.BasePickupRadius
 	local radius = base
 	if type(stat) == "number" and type(ref) == "number" and ref > 0 and stat == stat and stat < math.huge then
-		radius = base * math.max(0.25, stat / ref)
+		-- bonuses add the same studs they add to the normal pickup radius (Doug's Clean Route
+		-- +4, Collector's Bell +1.5/rank stay exact on shards)
+		radius = math.max(base * 0.25, base + (stat - ref))
 	end
 	if rp.AuraPullRadius and rp.AuraPullRadius > radius then
 		radius = rp.AuraPullRadius
