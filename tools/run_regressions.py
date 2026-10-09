@@ -135,6 +135,10 @@ def main():
     checks += [("layout", ["run-hud", "iphone", "enemies=10", "view=" + v]) for v in ("interact", "inventory", "bigmap", "menu")]
     checks += [("layout", ["run-hud", "pc", "enemies=10", "view=" + v]) for v in ("cards", "downed")]
     checks += [("layout", ["run-hud", d, "enemies=10", "missing=on"]) for d in ("iphone", "pc")]  # every contract attribute absent: empty / hidden states
+    # continuation pack, stream B: rank builds + combat core (formulas, offers, rarity / category
+    # distributions, slots, evolutions, heal fallback, deadlines, rerolls, statuses, budget, line of
+    # sight); choice-regression also runs once with the old 12-level system switched back on
+    checks += [("builds-sim", []), ("choice-regression", ["builds=legacy"])]
 
     def run(check):
         scene, settings = check

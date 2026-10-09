@@ -57,7 +57,12 @@ RM.DamagePlayer = function(rp, amount, cause)
 	if rp.HP and before and rp.HP < before then
 		taken[cause or "?"] = (taken[cause or "?"] or 0) + (before - rp.HP)
 	end
-	rp.HP = rp.MaxHP or rp.HP
+	-- (the run player keeps its max HP in rp.Stats: rp.MaxHP is nil, so the top-up never happened;
+	-- with the rank system's weaker rank-1 starter the swarm wore an idle hero down before the
+	-- event checks)
+	if rp.Alive then
+		rp.HP = (rp.Stats and rp.Stats.MaxHP) or rp.MaxHP or rp.HP
+	end
 end
 
 local F = workspace:WaitForChild("WorldFx")
