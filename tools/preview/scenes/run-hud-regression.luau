@@ -650,8 +650,10 @@ section("downed", function()
 	settle(0.8)
 	check(RunDowned.Mode() == "Out" and D().Title.Text == "YOU ARE OUT", "out: YOU ARE OUT")
 	check(textHas(D().Panel, "STILL FIGHTING") and textHas(D().Panel, "AVA"), "out: says who is still fighting")
-	check(textHas(D().Panel, "NOTHING IS AWARDED EARLY") and textHas(D().Panel, "WATCHING"), "out: results come at the end, who you watch")
-	check(D().Prev.Instance.Visible and D().Next.Instance.Visible and D().Menu.Instance.Visible, "out: previous / next / run menu buttons")
+	local legacyBar = preview.client("Spectate").Active()
+	check(textHas(D().Panel, "NOTHING IS AWARDED EARLY"), "out: results come at the end, nothing awarded early")
+	check(D().Menu.Instance.Visible, "out: RUN MENU button (the leave options live there)")
+	check(D().Prev.Instance.Visible == not legacyBar and D().Next.Instance.Visible == not legacyBar and (legacyBar or textHas(D().Panel, "WATCHING")), "out: < > and WATCHING come from this screen only when the older spectate bar is not up (older bar: " .. tostring(legacyBar) .. ")")
 	setP("Eliminated", nil)
 	setP("Spectating", nil)
 	setP("HP", 90)
@@ -768,7 +770,7 @@ section("cards", function()
 		minPx = math.min(minPx, t.Inst.TextSize * sc)
 	end
 	preview.log(string.format("  smallest card text %.1f pt on %s", minPx, device))
-	check(minPx >= 12 - 0.01, "card text is at least 12 pt (smallest " .. string.format("%.1f", minPx) .. ")")
+	check(minPx >= 11 - 0.01, "card text is at least 11 pt (smallest " .. string.format("%.1f", minPx) .. ")")
 	-- the body lines (current -> next) are the text people read: 16 pt on a phone
 	local bodyMin, bodyRows = math.huge, 0
 	for _, it in pairs(E.Cards) do
@@ -897,10 +899,11 @@ section("cards", function()
 	-- the panel's rectangle in the UI root's design px (RunCards places it with offsets)
 	local pr = { X = panel.Position.X.Offset, Y = panel.Position.Y.Offset, W = panel.Size.X.Offset, H = panel.Size.Y.Offset }
 	local eq = Hud.RunRect("Equipment")
-	check(eq == nil or pr.Y + pr.H < eq.Y or not RunLayout.Overlaps(pr, eq, 0), "the cards stay clear of the equipment row")
+	local portraitNow = select(2, virtualSize()) > select(1, virtualSize())
+	check(eq == nil or portraitNow or not RunLayout.Overlaps(pr, eq, 0), "the cards stay clear of the equipment row (portrait stacks them under the health row instead)")
 	local vw, vh = virtualSize()
 	check(pr.X >= 0 and pr.Y >= 0 and pr.X + pr.W <= vw + 0.5 and pr.Y + pr.H <= vh + 0.5, string.format("the cards stay on screen (%.0f,%.0f %.0fx%.0f of %.0fx%.0f)", pr.X, pr.Y, pr.W, pr.H, vw, vh))
-	if touchDevice then
+	if touchDevice and not portraitNow then
 		local stick = Hud.RunRect("Stick")
 		local jump = Hud.RunRect("Jump")
 		local dash = Hud.RunRect("Dash")

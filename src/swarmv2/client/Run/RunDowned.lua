@@ -37,6 +37,7 @@ local UIAnim = require(Client:WaitForChild("UIAnim"))
 local Icons = require(Client:WaitForChild("Icons"))
 local ClientSettings = require(Client:WaitForChild("ClientSettings"))
 local CameraController = require(Client:WaitForChild("CameraController"))
+local SpectateBar = require(Client:WaitForChild("Spectate")) -- the older bar (WATCHING, < >, REVIVE ME) still serves team runs
 local RunTheme = require(script.Parent.RunTheme)
 local W = require(script.Parent.RunWidgets)
 local RunObjective = require(script.Parent.RunObjective)
@@ -135,7 +136,7 @@ function RunDowned.Layout()
 	ui.Next.Instance.Size = UDim2.fromOffset(tp, tp)
 	ui.Next.Instance.Position = UDim2.fromOffset(16 + tp, 8)
 	ui.Menu.Instance.Size = UDim2.fromOffset(150, tp)
-	local h = mode == "Out" and (tp + 90) or 146
+	local h = mode == "Out" and (tp + 70) or 146
 	local top = (kit.TopBottom and kit.TopBottom() or 140) + 10
 	ui.Panel.Size = UDim2.fromOffset(w, h)
 	ui.Panel.Position = UDim2.fromOffset(math.floor((v.X - w) / 2 + 0.5), math.floor(top + 0.5))
@@ -253,14 +254,18 @@ function RunDowned.Update(_dt: number, state: Instance, inRun: boolean)
 	ui.Ring.Frame.Visible = not isOut
 	ui.Seconds.Visible = not isOut
 	ui.Caption.Visible = not isOut
-	ui.Prev.Instance.Visible = isOut
-	ui.Next.Instance.Visible = isOut
+	-- the older spectate bar carries WATCHING, < > and REVIVE ME while it is up; this screen adds them only without it
+	local ownNav = isOut and not SpectateBar.Active()
+	ui.Prev.Instance.Visible = ownNav
+	ui.Next.Instance.Visible = ownNav
 	ui.Menu.Instance.Visible = isOut
 	local tp = ui.TouchPx or 48
-	ui.Title.Position = UDim2.fromOffset(isOut and 10 or 116, isOut and (tp + 14) or 8)
-	ui.Title.Size = UDim2.new(1, isOut and -20 or -126, 0, 30)
-	ui.Line.Position = UDim2.fromOffset(isOut and 10 or 116, isOut and (tp + 44) or 40)
-	ui.Line.Size = UDim2.new(1, isOut and -20 or -126, 0, isOut and 40 or 40)
+	-- Out: the title and the RUN MENU button share the first row (with < > before it when this screen owns them)
+	local navW = ownNav and (2 * tp + 24) or 0
+	ui.Title.Position = UDim2.fromOffset(isOut and (12 + navW) or 116, isOut and (8 + math.max(0, (tp - 30) / 2)) or 8)
+	ui.Title.Size = UDim2.new(1, isOut and (-12 - navW - 170) or -126, 0, 30)
+	ui.Line.Position = UDim2.fromOffset(isOut and 12 or 116, isOut and (tp + 14) or 40)
+	ui.Line.Size = UDim2.new(1, isOut and -24 or -126, 0, 44)
 	if isOut then
 		ui.Title.Text = "YOU ARE OUT"
 		ui.Title.TextColor3 = RunTheme.Cream
@@ -291,16 +296,21 @@ function RunDowned.Update(_dt: number, state: Instance, inRun: boolean)
 		show(true)
 		-- watched teammate in the title row
 		local wname = watched and string.upper(watched.DisplayName) or "NO ONE TO WATCH"
-		ui.Prev.Instance.Visible = true
-		ui.Next.Instance.Visible = true
 		ui.WatchLabel = ui.WatchLabel or W.Text(ui.Face, "", { Name = "Watching", Size = 16, Font = "Label", Position = UDim2.fromOffset(40 + 2 * (ui.TouchPx or 48), 8), Box = UDim2.new(1, -(40 + 2 * (ui.TouchPx or 48)) - 170, 0, ui.TouchPx or LAYOUT.TouchMin), Fit = 10, Color = RunTheme.Cyan, ZIndex = 4 })
-		ui.WatchLabel.Visible = true
-		W.Set(ui.WatchLabel, "WATCHING  " .. wname)
+		ui.WatchLabel.Visible = false -- the title row stays "YOU ARE OUT"; WATCHING sits in the older bar / on the camera
+		if ownNav then
+			ui.WatchLabel.Visible = true
+			ui.Title.Visible = false
+			W.Set(ui.WatchLabel, "WATCHING  " .. wname)
+		else
+			ui.Title.Visible = true
+		end
 		return
 	end
 	if ui.WatchLabel then
 		ui.WatchLabel.Visible = false
 	end
+	ui.Title.Visible = true
 	if isRevived then
 		-- "REVIVED": the heart is back, the protection is a word, not another timer
 		ui.Title.Text = "REVIVED"

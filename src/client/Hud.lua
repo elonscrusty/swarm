@@ -1842,7 +1842,9 @@ local function hudTile(parent: Instance, id: string?, rank: number?, max: number
 		}, art)
 	else
 		local inset = math.floor(size * 0.08)
-		Icons.Upgrade(art, id, { Size = size - inset * 2, Position = UDim2.fromOffset(inset, inset), Back = K.NavyRaised, Name = "Icon" })
+		-- a little smaller and up-left of the centre, so the rank badge in the corner never sits on a glyph
+		local iconSize = size - inset * 2 - 8
+		Icons.Upgrade(art, id, { Size = iconSize, Position = UDim2.fromOffset(inset + 1, inset), Back = K.NavyRaised, Name = "Icon" })
 		if rank and rank > 0 then
 			local d = math.max(16, math.floor(size * 0.36))
 			local badge = new("TextLabel", {

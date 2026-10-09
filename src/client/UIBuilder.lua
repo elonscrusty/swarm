@@ -6418,6 +6418,9 @@ function UIBuilder.Init(d: { [string]: any })
 		end,
 		EquipmentTop = Hud.BarTop,
 		Hud = Hud,
+		IsPortrait = function(): boolean
+			return portrait
+		end,
 		Scale = function(): number
 			return uiScale.Scale
 		end,

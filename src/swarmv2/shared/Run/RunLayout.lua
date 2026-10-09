@@ -236,6 +236,10 @@ function RunLayout.Compute(env: Env, sizes: Sizes, cfg: any): Layout
 	end
 	local health = RunLayout.AvoidTopbar(rect(hx, hy, hw, hh), env)
 	out.Health = RunLayout.Clamp(health, env, 2)
+	-- a narrow screen (portrait): the counters drop under the health plate instead of running into it
+	if RunLayout.Overlaps(out.Health, out.Counters, gap) then
+		out.Counters = RunLayout.Clamp(rect(out.Counters.X, RunLayout.Bottom(out.Health) + 6, out.Counters.W, out.Counters.H), env, 2)
+	end
 
 	-- timer: top centre
 	local tw, th = sizes.Timer.W, sizes.Timer.H

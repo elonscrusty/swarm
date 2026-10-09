@@ -69,6 +69,7 @@ local touches: { [any]: { At: number, Pos: Vector2, Moved: number } } = setmetat
 local ring: any = nil
 local keyBadges: { [number]: Frame } = {}
 local rerollKey = ""
+local stacked = false -- portrait: one card per row, the full width
 local emptySlots = 0 -- missing card slots the server reported (payload.Empty): drawn as quiet placeholders
 local emptyText = ""
 
@@ -206,17 +207,40 @@ local function lineHeight(): number
 	return UIKit.TS(lineSize()) + 4
 end
 
+-- A small label's design size so it comes out at `pt` points on a phone, never under its normal size.
+local function labelSize(base: number, pt: number): number
+	if not UIKit.IsCompact() then
+		return base
+	end
+	local scale = math.max(0.3, kit.Scale and kit.Scale() or 1)
+	return math.max(base, math.ceil(pt / (scale * Theme.TextScaleCompact)))
+end
+
+-- Portrait: one card per row at the full width (see Layout).
+local function isStacked(): boolean
+	return UIKit.IsCompact() and kit.IsPortrait ~= nil and kit.IsPortrait() == true
+end
+
+-- A synergy line is one row when the card is wide, two when it is a narrow column card and the text is long.
+local function synergyRows(c: any): number
+	if not c.Synergy or isStacked() then
+		return c.Synergy and 1 or 0
+	end
+	return (utf8.len("SYNERGY  " .. c.Synergy) or 0) > 24 and 2 or 1
+end
+
 -- Height one card needs for its rows (rarity, name, category, up to three lines, slot, synergy).
 local function needHeight(c: any): number
-	local rows = { 24, 34, 18 }
+	local rows = { 24, 34, UIKit.TS(labelSize(13, 12)) + 4 }
 	for _ = 1, math.min(#c.Lines, 3) do
 		table.insert(rows, lineHeight())
 	end
-	if c.Slot then
-		table.insert(rows, 20)
+	if c.Slot and not isStacked() then
+		table.insert(rows, UIKit.TS(labelSize(14, 12)) + 4)
 	end
-	if c.Synergy then
-		table.insert(rows, 22)
+	local syn = synergyRows(c)
+	if syn > 0 then
+		table.insert(rows, syn * (UIKit.TS(labelSize(13, 12)) + 2) + 6)
 	end
 	local h = 0
 	for _, r in ipairs(rows) do
@@ -240,9 +264,9 @@ function RunCards.Build(root: Instance, k: any)
 	ui.Ring = ring
 	ui.Seconds = W.Text(ring.Frame, "10", { Name = "Seconds", Size = 18, Font = "Number", Align = "Center", Box = UDim2.fromScale(1, 1), ZIndex = 5, Color = RunTheme.Cream })
 	ui.Title = W.Text(face, "LEVEL UP", { Name = "Title", Size = 20, Font = "Heading", Position = UDim2.fromOffset(62, 4), Box = UDim2.new(0.5, -62, 0, 26), Fit = 13, Color = RunTheme.Gold })
-	ui.Status = W.Text(face, "Combat continues", { Name = "Status", Size = 14, Font = "Label", Position = UDim2.fromOffset(62, 29), Box = UDim2.new(0.5, -62, 0, 20), Fit = 10, Color = RunTheme.CreamMuted })
+	ui.Status = W.Text(face, "Combat continues", { Name = "Status", Size = 14, Font = "Label", Position = UDim2.fromOffset(62, 29), Box = UDim2.new(0.6, -62, 0, 20), Fit = 11, Color = RunTheme.CreamMuted })
 	ui.Cards = new("Frame", { Name = "Cards", BackgroundTransparency = 1, Position = UDim2.fromOffset(8, HEAD_H), Size = UDim2.new(1, -16, 0, CARD_MIN_H), Active = false }, face)
-	UIKit.list(ui.Cards, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Top, Padding = UDim.new(0, 8) })
+	ui.CardsList = UIKit.list(ui.Cards, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Top, Padding = UDim.new(0, 8) })
 	ui.Reroll = W.Button(face, {
 		Name = "Reroll",
 		Text = "REROLL",
@@ -348,7 +372,7 @@ local function buildCard(c: any, index: number, count: number, w: number): Frame
 	local sym = W.RaritySymbol(r1, c.Rarity, 18)
 	sym.AnchorPoint = Vector2.new(0, 0.5)
 	sym.Position = UDim2.new(0, 0, 0.5, 0)
-	W.Text(r1, string.upper(c.RarityLabel), { Name = "RarityWord", Size = 14, Font = "Label", Position = UDim2.fromOffset(24, 0), Box = UDim2.new(1, -24 - 36, 1, 0), Fit = 10, Color = rarityColor })
+	W.Text(r1, string.upper(c.RarityLabel), { Name = "RarityWord", Size = labelSize(14, 12), Font = "Label", Position = UDim2.fromOffset(24, 0), Box = UDim2.new(1, -24 - 36, 1, 0), Fit = 11, Color = rarityColor })
 	local key = W.KeyCap(r1, tostring(index), { Height = 24, Width = 28, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), ZIndex = 4 })
 	key.Name = "KeyBadge"
 	key.Visible = InputPrompts.Mode() ~= "Touch"
@@ -368,21 +392,25 @@ local function buildCard(c: any, index: number, count: number, w: number): Frame
 	if c.RankTo and c.RankFrom then
 		table.insert(meta, string.format("RANK %d → %d", c.RankFrom, c.RankTo))
 	end
-	W.Text(inner, table.concat(meta, "  ·  "), { Name = "Category", Size = 13, Font = "Label", Box = UDim2.new(1, 0, 0, 18), LayoutOrder = 3, Fit = 9, Color = RunTheme.CreamMuted })
+	if c.Slot and isStacked() then
+		table.insert(meta, string.upper(c.Slot))
+	end
+	W.Text(inner, table.concat(meta, "  ·  "), { Name = "Category", Size = labelSize(13, 12), Font = "Label", Box = UDim2.new(1, 0, 0, UIKit.TS(labelSize(13, 12)) + 4), LayoutOrder = 3, Fit = 11, Color = RunTheme.CreamMuted })
 	-- current -> next lines (at most three)
 	local shown = math.min(#c.Lines, 3)
 	for i = 1, shown do
 		lineRow(inner, c.Lines[i], 10 + i)
 	end
 	-- slot, synergy
-	if c.Slot then
-		W.Text(inner, c.Slot, { Name = "Slot", Size = 14, Font = "Label", Box = UDim2.new(1, 0, 0, 20), LayoutOrder = 20, Fit = 10, Color = RunTheme.Cyan })
+	if c.Slot and not isStacked() then
+		W.Text(inner, c.Slot, { Name = "Slot", Size = labelSize(14, 12), Font = "Label", Box = UDim2.new(1, 0, 0, UIKit.TS(labelSize(14, 12)) + 4), LayoutOrder = 20, Fit = 11, Color = RunTheme.Cyan })
 	end
 	if c.Synergy then
-		local syn = new("Frame", { Name = "Synergy", BackgroundColor3 = RunTheme.NavyDeep, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 22), LayoutOrder = 21, Active = false }, inner)
+		local sRows = synergyRows(c)
+		local syn = new("Frame", { Name = "Synergy", BackgroundColor3 = RunTheme.NavyDeep, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, sRows * (UIKit.TS(labelSize(13, 12)) + 2) + 6), LayoutOrder = 21, Active = false }, inner)
 		corner(syn, 6)
 		stroke(syn, RunTheme.Gold, 1, 0.4)
-		W.Text(syn, "SYNERGY  " .. c.Synergy, { Name = "SynergyText", Size = 13, Font = "Label", Box = UDim2.new(1, -10, 1, 0), Position = UDim2.fromOffset(6, 0), Fit = 9, Color = RunTheme.Gold })
+		W.Text(syn, "SYNERGY  " .. c.Synergy, { Name = "SynergyText", Size = labelSize(13, 12), Font = "Label", Box = UDim2.new(1, -10, 1, 0), Position = UDim2.fromOffset(6, 0), Fit = 11, Color = RunTheme.Gold, Wrap = sRows > 1 })
 	end
 
 	-- states: hover, pressed, focus (the cyan outline), picked
@@ -444,10 +472,54 @@ function RunCards.Layout()
 	local cw = cardWidth()
 	local touch = W.TouchPx(kit.Scale and kit.Scale() or 1)
 	headH = math.max(HEAD_H, touch + 6)
-	local panelH = headH + cardH + 10
-	ui.Cards.Position = UDim2.fromOffset(8, headH)
-	ui.Cards.Size = UDim2.new(1, -16, 0, cardH)
 	ui.Reroll.Instance.Size = UDim2.fromOffset(150, touch)
+	ui.Reroll.Instance.Position = UDim2.new(1, -10, 0, 2)
+	stacked = isStacked()
+	ui.CardsList.FillDirection = stacked and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
+	ui.Cards.Position = UDim2.fromOffset(8, headH)
+	if stacked then
+		-- portrait: one card per row at the full width, under the health / counters / timer cluster (the
+		-- objective strip, equipment, party and map are covered for the few seconds the offer is open)
+		local margin = LAYOUT.MarginPhone
+		local panelW = math.min(v.X - 2 * margin, 560)
+		local cardW = panelW - 16
+		local total, n = 0, 0
+		for i = 1, #cards do
+			local it = items[i]
+			if it then
+				local h = it.Card.NeedH or cardH
+				it.Holder.Size = UDim2.fromOffset(cardW, h)
+				total += h
+				n += 1
+			end
+		end
+		for _, c in ipairs(ui.Cards:GetChildren()) do
+			if c:IsA("Frame") and string.sub(c.Name, 1, 5) == "Empty" then
+				c.Size = UDim2.fromOffset(cardW, 84)
+				total += 84
+				n += 1
+			end
+		end
+		total += math.max(0, n - 1) * 6
+		ui.Cards.Size = UDim2.new(1, -16, 0, total)
+		local panelH = headH + total + 10
+		local top = (kit.TopBottom and kit.TopBottom() or 140) + 8
+		local hud = kit.Hud
+		if hud then
+			top = 6
+			for _, name in ipairs({ "Health", "Counters", "Timer" }) do
+				local r = hud.RunRect(name)
+				if r and r.H > 0 then
+					top = math.max(top, r.Y + r.H + 8)
+				end
+			end
+		end
+		ui.Panel.Position = UDim2.fromOffset(math.floor((v.X - panelW) / 2 + 0.5), math.floor(top + 0.5))
+		ui.Panel.Size = UDim2.fromOffset(panelW, panelH)
+		return
+	end
+	local panelH = headH + cardH + 10
+	ui.Cards.Size = UDim2.new(1, -16, 0, cardH)
 	local top = (kit.TopBottom and kit.TopBottom() or 140) + 8
 	-- stay between the party column and the map when the screen is wide enough to (a phone has no
 	-- room: the cards then cover them for the few seconds the offer is open)
@@ -475,13 +547,21 @@ function RunCards.Layout()
 	-- under the timer (covering the strip for the few seconds the offer is open), 3. squeezed into the widest
 	-- gap between them. The REVIVE button is adopted above this panel (RunInteract), so it never needs room.
 	local thumbs = kit.Thumbs and kit.Thumbs() or nil
-	local function blocked(t0: number, t1: number): { { number } }
+	local function blocked(t0: number, t1: number, withHud: boolean?): { { number } }
 		local out = {}
 		if thumbs then
 			for _, name in ipairs({ "Stick", "Jump", "Dash" }) do
 				local t = thumbs[name]
 				if t and t.W > 0 and t.Y - 4 < t1 and t.Y + t.H + 4 > t0 then
 					table.insert(out, { t.X - 6, t.X + t.W + 6 })
+				end
+			end
+		end
+		if withHud and kit.Hud then
+			for _, name in ipairs({ "Health", "Party" }) do
+				local r = kit.Hud.RunRect(name)
+				if r and r.W > 0 and r.Y - 4 < t1 and r.Y + r.H + 4 > t0 then
+					table.insert(out, { r.X - 6, r.X + r.W + 6 })
 				end
 			end
 		end
@@ -497,7 +577,7 @@ function RunCards.Layout()
 	end
 	if hits(x, x + panelW, blocked(top, top + panelH)) then
 		top = math.max((kit.TimerBottom and kit.TimerBottom() or 70) + 6, 6)
-		local band = blocked(top, top + panelH)
+		local band = blocked(top, top + panelH, true)
 		if hits(x, x + panelW, band) then
 			table.sort(band, function(a, b)
 				return a[1] < b[1]
@@ -618,7 +698,8 @@ function RunCards.Show(payload: any)
 	local cw = cardWidth()
 	cardH = CARD_MIN_H
 	for _, c in ipairs(cards) do
-		cardH = math.max(cardH, needHeight(c))
+		c.NeedH = needHeight(c)
+		cardH = math.max(cardH, c.NeedH)
 	end
 	for i, c in ipairs(cards) do
 		buildCard(c, i, #cards, cw)
