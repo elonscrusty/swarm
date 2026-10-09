@@ -131,7 +131,12 @@ for _, rp in ipairs({ rM, rA, rB }) do
 end
 ES.SetHold("economy2", true)
 
+local rA0 = nil -- (Ava's record, set below)
 local function clearOffers()
+	-- Ava stays downed through the long sections (stream E1 eliminates after BleedSeconds)
+	if rA0 and rA0.Downed == true then
+		rA0.BleedLeft = 20
+	end
 	for _, rp in ipairs(RM.GetRunPlayers()) do
 		if rp.Offer or rp.Paused or (rp.PendingLevels or 0) > 0 then
 			LU.Cancel(rp)
@@ -168,6 +173,7 @@ rA.RevivesLeft, rA.ProductReviveUsed = 0, true
 RM.DamagePlayer(rA, 1e7, "economy2 test")
 preview.advance(0.5)
 check("setup Ava is downed and still in the run", rA.Alive == false and table.find(RM.GetRunPlayers(), rA) ~= nil)
+rA0 = rA
 check("setup downed Ava is eligible", XP.IsEligible(rA) == true)
 ES.DespawnAll()
 clearOffers()
@@ -213,6 +219,11 @@ ben:SetAttribute("Eliminated", true)
 local nB2 = XP.ShardsOf(rB)
 killAt("Slime", K + Vector3.new(0, 0, -20), rM)
 check("B eliminated Ben gets no shard", (XP.ShardsOf(rB)) == nB2 and XP.IsEligible(rB) == false)
+do
+	local xpB, lvB = rB.XP, rB.Level
+	XP.GiveXP(rB, 5)
+	check("B GiveXP: an eliminated hero gets nothing", rB.XP == xpB and rB.Level == lvB)
+end
 ben:SetAttribute("Eliminated", nil)
 
 -- a kill without a killer (sweep, self-destruct): no XP, no gold
@@ -297,6 +308,7 @@ check("C expired shards gave no XP", select(1, granted(rA)) == 0)
 ------------------------------------------------------------------------------------------
 do
 	clearOffers()
+	check("D Ava is still downed, not eliminated", rA.Alive == false and not (RM.IsEliminated and RM.IsEliminated(rA)))
 	local fake = { Def = EnemyData.Enemies.Boss, Boss = true, Uid = 987654, Pos = K, Alive = false }
 	local b0 = { granted(rM) }
 	local bA = { granted(rA) }
@@ -551,6 +563,11 @@ do
 	Events.Fire("PartnerRevive", ben)
 	Goals.OnRevive(rB) -- the same completion reported again (stream E1 hook)
 	check("G Revives: one completion counts once", Goals.For(rB).Revives == r0 + 1, Goals.For(rB).Revives - r0)
+	-- stream E1 also counts it on rp.Revives: the settlement takes one of them, never both
+	local saveRevives = rB.Revives
+	rB.Revives = Goals.For(rB).Revives
+	check("G Revives: rp.Revives and the event counter are not added together", Goals.Snapshot(rB, 0).Revives == Goals.For(rB).Revives)
+	rB.Revives = saveRevives
 end
 -- weapons held
 do

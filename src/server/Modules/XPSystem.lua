@@ -208,10 +208,26 @@ function XPSystem.GiveShardXP(rp, value: number)
 	end
 end
 
+-- Is this run player out for the rest of the run (stream E1: RunManager.IsEliminated, or
+-- the Eliminated flag / attribute)?
+local function eliminated(rp): boolean
+	local RM = ctx and ctx.RunManager
+	if RM and RM.IsEliminated and RM.IsEliminated(rp) then
+		return true
+	end
+	local player = rp.Player
+	return rp.Eliminated == true or (player ~= nil and player:GetAttribute("Eliminated") == true)
+end
+
 function XPSystem.GiveXP(rp, amount: number)
 	-- only a finite positive amount: NaN would freeze the bar for the rest of the run and
 	-- an infinite one would spin the level loop below forever (server hang)
 	if not (amount > 0 and amount < math.huge) then
+		return
+	end
+	-- [stream E2] an eliminated hero gets nothing more; a downed one keeps the XP and its
+	-- levels wait in the choice queue until the revive (LevelUpSystem holds downed choices)
+	if eliminated(rp) then
 		return
 	end
 	rp.XP += amount
@@ -249,12 +265,9 @@ function XPSystem.IsEligible(rp): boolean
 	end
 	local player = rp.Player
 	if not player or not player.Parent then
-		return false
+		return false -- (a hero inside the disconnect window is away: out of the run list too)
 	end
-	if rp.Eliminated == true or player:GetAttribute("Eliminated") == true then
-		return false
-	end
-	return true
+	return not eliminated(rp)
 end
 
 -- The reward kind of an enemy: e.Kind (stream D) when it names a known kind, else the

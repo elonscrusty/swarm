@@ -24,9 +24,10 @@
 	                 Sword is "Whip"), WeaponData Melee / Close = true, or a source table with
 	                 Dash = true (a dash effect: stream C passes it to WeaponSystem.ClassBurst)
 	  Bosses       boss kills, cooperative: every eligible participant (XPSystem.GrantDirect)
-	  Revives      teammate revives completed (Events "PartnerRevive"; stream E1 may call
-	                 ClassGoals.OnRevive(helperRp) instead: a completion reported twice within
-	                 ReviveDedupe s counts once)
+	  Revives      teammate revives completed: stream E1's rp.Revives (RunManager
+	                 completeRevive); Events "PartnerRevive" / ClassGoals.OnRevive(helperRp) keep a
+	                 second count of the same completions (deduped within ReviveDedupe s) and the
+	                 larger of the two is settled, never their sum
 
 	Settlement (Commit, called by RunManager.saveRunStats once per run, rp.Committed): adds
 	this run's counters to the save's data.Stats.ClassGoals (created when missing, never
@@ -277,7 +278,9 @@ function ClassGoals.Snapshot(rp: any, seconds: number?): { [string]: number }
 	local g = ClassGoals.For(rp)
 	return {
 		XP = g.XP, Distance = g.Distance, Elites = g.Elites, Chests = g.Chests, Dashes = g.Dashes,
-		Kills = count(rp.Kills), CloseKills = g.CloseKills, Bosses = g.Bosses, Revives = g.Revives,
+		-- Revives: stream E1 counts completed teammate revives on rp.Revives (the Events
+		-- "PartnerRevive" / OnRevive counter is the same number; the larger one wins, never both)
+		Kills = count(rp.Kills), CloseKills = g.CloseKills, Bosses = g.Bosses, Revives = math.max(g.Revives, count(rp.Revives)),
 		BestSurvive = math.floor(count(seconds)), MostWeapons = math.max(g.MostWeapons, #weaponIds(rp)),
 	}
 end
