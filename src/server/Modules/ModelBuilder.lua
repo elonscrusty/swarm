@@ -713,7 +713,15 @@ function ModelBuilder.AddHumanoid(model: Model, characterId: string, skinId: str
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 	humanoid.UseJumpPower = true
-	humanoid.JumpPower = Config.Movement.JumpPower -- the client JumpController decides when (Config.Movement)
+	-- [stream E1] one jump source: sqrt(2 * gravity * RunConfig.Movement.JumpApex) (SurvivalRules);
+	-- the client JumpController keeps it equal per class and decides when
+	local v2 = game:GetService("ReplicatedStorage"):FindFirstChild("SwarmV2")
+	local runFolder = v2 and v2:FindFirstChild("Run")
+	local rules = runFolder and runFolder:FindFirstChild("SurvivalRules")
+	local runConfig = runFolder and runFolder:FindFirstChild("RunConfig")
+	humanoid.JumpPower = if rules and runConfig and rules:IsA("ModuleScript") and runConfig:IsA("ModuleScript")
+		then (require(rules) :: any).JumpVelocity(workspace.Gravity, (require(runConfig) :: any).Movement.JumpApex)
+		else Config.Movement.JumpPower
 	humanoid.WalkSpeed = Config.Player.BaseSpeed
 	humanoid.AutoRotate = true
 	humanoid.Parent = model

@@ -127,6 +127,9 @@ def main():
     # distributions, slots, evolutions, heal fallback, deadlines, rerolls, statuses, budget, line of
     # sight); choice-regression also runs once with the old 12-level system switched back on
     checks += [("builds-sim", []), ("choice-regression", ["builds=legacy"])]
+    # continuation stream E1 survival rules: downed / hold-to-revive / bleed-out / wipe once, shared hit
+    # protection, falls, out-of-bounds rescue, movement caps and dash, disconnect window (PASS/FAIL lines)
+    checks += [("survival-sim", [])]
 
     def run(check):
         scene, settings = check

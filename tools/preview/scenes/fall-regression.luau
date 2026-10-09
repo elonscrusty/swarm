@@ -4,7 +4,8 @@
 -- Checks, for a duo travelling through every arena (Desert included): roots are held
 -- (anchored) for the whole travel and released after it, each hero lands on a colliding
 -- floor at the arena floor height, a hero under the floor / outside the arena is put
--- back on the floor (no damage, short grace), and the speed check never stores a spot
+-- back on the floor (stream E1: at most 10% of max HP, never the last hit point, then a 3 s
+-- damage lockout with no second cost inside it), and the speed check never stores a spot
 -- under the floor.
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
@@ -154,14 +155,17 @@ rp.LastValidPos = rp.Root.Position
 preview.advance(0.6)
 local p = rp.Root.Position
 assert(p.Y > FLOOR + 1 and p.Y < FLOOR + 6, "a hero under the floor must be put back on it, got " .. tostring(p))
-assert(rp.HP == hp, "the rescue must not hurt")
-assert(rp.InvulnUntil > RM.GetRunTime(), "the rescue grants a short grace")
+local maxHP = rp.Stats.MaxHP
+assert(rp.HP < hp and hp - rp.HP <= maxHP * 0.10 + 1e-6, string.format("the rescue costs at most 10%% of max HP (%.1f -> %.1f of %.1f)", hp, rp.HP, maxHP))
+assert(rp.InvulnUntil >= RM.GetRunTime() + 2.0, "the rescue grants the 3 s damage lockout")
+local afterFirst = rp.HP
 assert((rp.FallRescues or 0) >= 1, "rescue counted")
 assert(floorUnder(p), "rescued onto a colliding floor")
--- deep fall
+-- deep fall (inside the first rescue's lockout: no second cost)
 drop(Vector3.new(spot.X + 3, FLOOR - 150, spot.Z))
 preview.advance(0.2)
 assert(rp.Root.Position.Y > FLOOR + 1, "deep fall rescued")
+assert(rp.HP == afterFirst, "no second rescue cost inside the lockout")
 -- out of bounds (past the boundary walls)
 drop(Vector3.new(Config.Arenas.Size, FLOOR + 3, 0))
 preview.advance(0.2)

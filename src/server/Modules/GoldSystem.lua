@@ -531,7 +531,9 @@ function GoldSystem.Start()
 		local data = ctx.DataService.GetData(player)
 		-- a disconnected solo run waiting for its player (QuickResume) keeps its escrow too
 		if data and not (ctx.RunServers and type(ctx.RunServers.HasPendingReconnect) == "function" and ctx.RunServers.HasPendingReconnect(data))
-			and not (ctx.QuickResume and ctx.QuickResume.Pending(data)) then
+			and not (ctx.QuickResume and ctx.QuickResume.Pending(data))
+			-- [stream E1] back on the match server inside their disconnect window: the run resumes it
+			and not (ctx.RunManager and type(ctx.RunManager.HoldsReconnect) == "function" and ctx.RunManager.HoldsReconnect(player.UserId)) then
 			GoldSystem.RecoverEscrow(data)
 		end
 		GoldSystem.SyncProfile(player)

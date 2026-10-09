@@ -137,6 +137,7 @@ drop("Thornhide")
 local function hitFor(amount: number): number
 	rp.HP = rp.Stats.MaxHP
 	rp.InvulnUntil = 0
+	rp.HitProtectUntil = 0 -- stream E1: each hit here is a separate test, not inside the shared 0.35 s window
 	local before = rp.HP
 	RM.DamagePlayer(rp, amount, "test")
 	rp.InvulnUntil = math.huge

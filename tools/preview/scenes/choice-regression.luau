@@ -31,8 +31,12 @@ end
 tough(rp)
 tough(mate)
 rp.InvulnUntil, mate.InvulnUntil = 0, 0
+-- (stream E1: each landed hit opens the shared 0.35 s hit protection; cleared so all three land)
 local function hit(r)
-	for _ = 1, 3 do RM.DamagePlayer(r, 1e5, "Test") end
+	for _ = 1, 3 do
+		r.HitProtectUntil = 0
+		RM.DamagePlayer(r, 1e5, "Test")
+	end
 end
 local function serverLeft(): number
 	return (player:GetAttribute("ChoiceProtectedUntil") or 0) - workspace:GetServerTimeNow()

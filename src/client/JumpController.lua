@@ -1,19 +1,23 @@
 --[[
 	JumpController.lua
-	Jump and bunny hop for the local hero (numbers in Config.Movement).
+	Jump, air steering and the generic speed cap for the local hero (stream E1 survival rules,
+	numbers in RunConfig.Survival.Move and RunConfig.Movement).
 
 	  * Input: Space, gamepad A and the touch JUMP button (MobileControls). A press is kept
-	    for BufferSeconds, so pressing just before landing still jumps on the landing frame;
-	    a press within CoyoteSeconds of walking off an edge still jumps.
-	  * Bunny hop: a jump within HopWindow of landing from a jump, while moving, raises a
-	    speed multiplier by HopBonus up to HopSpeedCap. On the ground it decays back to 1
-	    (HopDecay per second) and stopping resets it. The multiplier is applied to the
-	    local WalkSpeed only; the server's WalkSpeed stays the base and RunManager's speed check
-	    snaps back anything above the cap.
-	  * Air control: in the air the world move direction is AirControl (0.7) the live input and
+	    for BufferSeconds (0.10), so pressing just before landing still jumps as soon as the
+	    post-landing restriction (LandLockSeconds 0.12, shortened by Spring Stitch's LandLockReduce
+	    attribute) ends; a press within CoyoteSeconds (0.10) of walking off an edge still jumps.
+	    One jump per takeoff (JumpCooldown, no double jumps).
+	  * No bunny hop: chained jumps never raise the speed. Horizontal momentum carries through a
+	    jump (the humanoid keeps walking), and the flat speed is capped at HorizontalCap (34)
+	    outside dashes / leaps (Suppress) and an explicit class boost (player attributes
+	    SpeedBoost + SpeedBoostUntil, server time, set by RunManager.SetSpeedBoost).
+	  * Air control: in the air the world move direction is AirControl (0.65) the live input and
 	    the rest the takeoff direction (MobileControls.AirFilter).
-	  * Jump height: JumpPower = sqrt(2 * gravity * apex), apex 9 studs (RunConfig.Movement,
-	    12 for the Toastmaster: player attribute SwarmClass).
+	  * Jump height: one source. The takeoff speed is sqrt(2 * workspace.Gravity * apex)
+	    (SurvivalRules.JumpVelocity, apex RunConfig.Movement.JumpApex = 9, per class
+	    JumpApexByClass by the run hero's CharacterId); the Humanoid's own JumpPower is kept equal
+	    to it (UseJumpPower), so the jump state never adds a different impulse.
 	  * No jumping in the lobby, while downed, while the run is frozen (SwarmState
 	    attributes Frozen / LevelUpPause), while the player is Paused, or while
 	    MobileControls is disabled by a panel.
@@ -28,31 +32,27 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
-local RunConfig = require(game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run"):WaitForChild("RunConfig"))
+local RunFolder = game:GetService("ReplicatedStorage"):WaitForChild("SwarmV2"):WaitForChild("Run")
+local RunConfig = require(RunFolder:WaitForChild("RunConfig"))
+local SurvivalRules = require(RunFolder:WaitForChild("SurvivalRules"))
 
 local JumpController = {}
--- Set by DashClient while a dash / leap moves the hero: no jumping then.
+-- Set by DashClient while a dash / leap moves the hero: no jumping then (and no speed cap).
 JumpController.Suppress = false
 
 local M = Config.Movement
+local SM = RunConfig.Survival.Move
 local player = Players.LocalPlayer
 
 local controls: any = nil
 local requestedAt = -math.huge -- last jump press (buffer)
 local groundedAt = -math.huge -- last frame on the ground (coyote time)
-local landedAt = -math.huge -- when the last hop landed
 local jumpedAt = -math.huge
-local inHop = false -- airborne because of our own jump
+local landedAt = -math.huge -- the last landing (post-landing jump restriction)
 local wasGrounded = true
 local airStart: number? = nil
-local hopMult = 1
 local airDir = Vector3.zero
-
--- WalkSpeed bookkeeping: the server writes the base speed (0 when frozen); we write
--- base * hopMult locally. A value we did not write is a new base from the server.
 local hookedHum: Humanoid? = nil
-local baseSpeed = 0
-local lastWritten: number? = nil
 
 local function isGrounded(hum: Humanoid): boolean
 	local st = hum:GetState()
@@ -67,17 +67,24 @@ local function inCamp(): boolean
 	return player:GetAttribute("InRun") ~= true and workspace:GetAttribute("SwarmV2Lobby") == true
 end
 
+local function currentHumanoid(): Humanoid?
+	local char = player.Character
+	return char and char:FindFirstChildOfClass("Humanoid") or nil
+end
+
 -- True when the hero may jump right now (ignores ground / coyote checks).
 function JumpController.CanJump(): boolean
 	if not M.JumpEnabled or JumpController.Suppress then
 		return false
 	end
+	local hum = currentHumanoid()
+	local canMove = hum ~= nil and hum.WalkSpeed > 0
 	if inCamp() then
 		-- the SwarmV2 basecamp: a normal walkable place, no run state applies
 		if controls and controls.IsEnabled and not controls.IsEnabled() then
 			return false
 		end
-		return baseSpeed > 0
+		return canMove
 	end
 	if player:GetAttribute("InRun") ~= true or player:GetAttribute("Alive") == false or player:GetAttribute("Paused") == true then
 		return false
@@ -89,7 +96,7 @@ function JumpController.CanJump(): boolean
 	if controls and controls.IsEnabled and not controls.IsEnabled() then
 		return false
 	end
-	return baseSpeed > 0
+	return canMove
 end
 
 -- Queues a jump (buffered for BufferSeconds).
@@ -104,8 +111,13 @@ function JumpController.AirFilter(world: Vector3, _dt: number): Vector3
 		airDir = world
 		return world
 	end
-	local a = math.clamp(M.AirControl, 0, 1)
+	local a = math.clamp(RunConfig.Movement.AirControl, 0, 1)
 	return airDir * (1 - a) + world * a
+end
+
+-- True while the hero is in the air (for the move driver).
+function JumpController.Airborne(): boolean
+	return not wasGrounded
 end
 
 -- Calls back(airtime) whenever the hero lands after at least 0.1 s in the air (a jump, a
@@ -122,44 +134,58 @@ function JumpController.OnLanded(callback: (number) -> ()): () -> ()
 end
 
 -- The jump velocity of the local hero: sqrt(2 * gravity * apex) for its class.
-local function jumpPower(): number
+function JumpController.JumpPower(): number
 	local apex = RunConfig.Movement.JumpApex
-	local id = player:GetAttribute("SwarmClass")
+	-- the run's hero (CharacterId, set by the server from the admitted class), else the lobby pick
+	local id = player:GetAttribute("InRun") == true and player:GetAttribute("CharacterId") or player:GetAttribute("SwarmClass")
 	if type(id) == "string" then
 		apex = RunConfig.Movement.JumpApexByClass[id] or apex
 	end
-	return math.sqrt(2 * workspace.Gravity * apex)
+	return SurvivalRules.JumpVelocity(workspace.Gravity, apex)
 end
 
--- The current hop speed multiplier (1 = none), for UI or debugging.
-function JumpController.HopMultiplier(): number
-	return hopMult
-end
-
-local function resetHop()
-	hopMult = 1
-	inHop = false
-	landedAt = -math.huge
-end
-
-local function doJump(hum: Humanoid, root: BasePart, now: number, moving: boolean)
-	-- a chained hop: landing from our own jump, jumping again quickly, while moving
-	if moving and now - landedAt <= M.HopWindow then
-		hopMult = math.min(M.HopSpeedCap, hopMult + M.HopBonus)
-	elseif not moving then
-		hopMult = 1
+-- The post-landing jump restriction in seconds (RunConfig.Survival.Move.LandLockSeconds, 0.12),
+-- shortened by the Spring Stitch passive (Player attribute LandLockReduce, stream B). Runs only.
+function JumpController.LandLock(): number
+	if player:GetAttribute("InRun") ~= true then
+		return 0
 	end
+	local reduce = tonumber(player:GetAttribute("LandLockReduce")) or 0
+	if reduce ~= reduce then
+		reduce = 0
+	end
+	return math.max(0, (SM.LandLockSeconds or 0) - math.max(0, reduce))
+end
+
+-- Kept for older callers: there is no hop speed multiplier any more.
+function JumpController.HopMultiplier(): number
+	return 1
+end
+
+-- The flat speed allowed right now (nil = no cap: dash, leap, lobby).
+function JumpController.SpeedCap(): number?
+	if JumpController.Suppress or player:GetAttribute("InRun") ~= true then
+		return nil
+	end
+	local boost = player:GetAttribute("SpeedBoost")
+	local untilT = player:GetAttribute("SpeedBoostUntil")
+	if type(boost) == "number" and type(untilT) == "number" and workspace:GetServerTimeNow() < untilT then
+		return math.max(SM.HorizontalCap, boost)
+	end
+	return SM.HorizontalCap
+end
+
+local function doJump(hum: Humanoid, root: BasePart, now: number)
 	requestedAt = -math.huge
 	jumpedAt = now
 	groundedAt = -math.huge -- no second coyote jump
-	inHop = true
 	wasGrounded = false
 	local v = root.AssemblyLinearVelocity
-	root.AssemblyLinearVelocity = Vector3.new(v.X, jumpPower(), v.Z)
+	root.AssemblyLinearVelocity = Vector3.new(v.X, JumpController.JumpPower(), v.Z)
 	hum:ChangeState(Enum.HumanoidStateType.Jumping)
 end
 
-local function step(dt: number)
+local function step(_dt: number)
 	local char = player.Character
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -167,23 +193,18 @@ local function step(dt: number)
 		hookedHum = nil
 		return
 	end
-	if hum ~= hookedHum then
+	-- one jump source: the Humanoid's own jump impulse equals the computed takeoff speed
+	local jp = JumpController.JumpPower()
+	if hum ~= hookedHum or math.abs(hum.JumpPower - jp) > 0.01 or not hum.UseJumpPower then
 		hookedHum = hum
-		baseSpeed = hum.WalkSpeed
-		lastWritten = nil
-		resetHop()
+		hum.UseJumpPower = true
+		hum.JumpPower = jp
 	end
 	local now = os.clock()
-	-- a WalkSpeed we did not write came from the server: that is the new base
-	local cur = hum.WalkSpeed
-	if lastWritten == nil or math.abs(cur - (lastWritten :: number)) > 1e-3 then
-		baseSpeed = cur
-	end
 
 	-- the takeoff frame may still read as grounded before physics runs
 	local grounded = isGrounded(hum) and now - jumpedAt > 0.1
 	local allowed = JumpController.CanJump()
-	local moving = hum.MoveDirection.Magnitude > 0.3
 
 	if not grounded and airStart == nil then
 		airStart = now
@@ -191,41 +212,40 @@ local function step(dt: number)
 	if grounded then
 		local started = airStart
 		airStart = nil
+		if started and now - started >= 0.05 then
+			landedAt = now
+		end
 		if started and now - started >= 0.1 then
 			for _, cb in ipairs(table.clone(landedCallbacks)) do
 				task.spawn(cb, now - started)
 			end
 		end
 		groundedAt = now
-		if not wasGrounded and inHop then
-			landedAt = now
-		end
-		inHop = false
 	end
 	wasGrounded = grounded
 
+	-- the post-landing restriction: no jump for LandLock() s after a landing; a press buffered
+	-- just before (or during) it is kept and fires the moment it ends
+	local lock = JumpController.LandLock()
+	local locked = grounded and now - landedAt < lock
+	local pending = now - requestedAt <= SM.BufferSeconds
+		or (requestedAt >= landedAt - SM.BufferSeconds and now - landedAt <= lock + SM.BufferSeconds)
 	if not allowed then
 		requestedAt = -math.huge
-		resetHop()
-	elseif now - requestedAt <= M.BufferSeconds and now - jumpedAt >= M.JumpCooldown then
-		if grounded or now - groundedAt <= M.CoyoteSeconds then
-			doJump(hum, root, now, moving)
+	elseif pending and not locked and now - jumpedAt >= SM.JumpCooldown then
+		if grounded or now - groundedAt <= SM.CoyoteSeconds then
+			doJump(hum, root, now)
 		end
 	end
 
-	-- decay the hop bonus on the ground; stopping ends it at once
-	if not moving and wasGrounded then
-		hopMult = 1
-	elseif wasGrounded and now - landedAt > M.HopWindow then
-		hopMult = math.max(1, hopMult - M.HopDecay * dt)
-	end
-
-	local want = baseSpeed * hopMult
-	if math.abs(cur - want) > 1e-3 then
-		hum.WalkSpeed = want
-		lastWritten = hum.WalkSpeed
-	else
-		lastWritten = cur
+	-- the generic horizontal cap (pushes, slopes, anything but a dash / leap / class boost)
+	local cap = JumpController.SpeedCap()
+	if cap and not root.Anchored then
+		local v = root.AssemblyLinearVelocity
+		local capped = SurvivalRules.CapHorizontal(v, cap)
+		if capped ~= v then
+			root.AssemblyLinearVelocity = capped
+		end
 	end
 
 	if controls and controls.SetJumpButton then
@@ -237,6 +257,7 @@ function JumpController.Init(mobileControls: any)
 	controls = mobileControls
 	mobileControls.AirFilter = JumpController.AirFilter
 	mobileControls.OnJump = JumpController.Request
+	mobileControls.Airborne = JumpController.Airborne
 
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if processed then
@@ -247,7 +268,7 @@ function JumpController.Init(mobileControls: any)
 		end
 	end)
 
-	-- before SwarmMove (Input + 1) so the hop speed and air state are current
+	-- before SwarmMove (Input + 1) so the air state is current
 	RunService:BindToRenderStep("SwarmJump", Enum.RenderPriority.Input.Value, step)
 end
 
