@@ -11,12 +11,14 @@
 --                  bramble (gathering: the way out) | closing | summon | collapse
 --   FrostboundColossus  entrance | slam | wave | lanes | spikes | breath | shards |
 --                  armor (phase 2, frost armour on) | stunned (armour shattered) | collapse
+--   BasinBreaker   entrance | slam (root slam ring) | charge (the 45-stud lane) | sap (three
+--                  circles, one after another) | stuck | collapse   [stream D, the Cliffwood boss]
 -- --set t=<seconds> changes how long after the warnings the picture is taken.
 local A = lib("arena")
 local C = lib("common")
 local E = lib("encounter")
 local bossId = preview.args.boss or "ScorpionQueen"
-local DEFAULT_MOMENT = { ScorpionQueen = "charge", MothMatriarch = "storm", RhinoWarlord = "pound", HiveMother = "eggs", BriarSentinel = "roots", FrostboundColossus = "lanes" }
+local DEFAULT_MOMENT = { ScorpionQueen = "charge", MothMatriarch = "storm", RhinoWarlord = "pound", HiveMother = "eggs", BriarSentinel = "roots", FrostboundColossus = "lanes", BasinBreaker = "slam" }
 local moment = preview.args.moment or DEFAULT_MOMENT[bossId] or "entrance"
 local s = A.build({ swarm = false })
 local c = s.centre
@@ -27,9 +29,9 @@ local function at(dx, dz)
 end
 local BossData = C.shared("BossData")
 local data = BossData and BossData.Get(bossId)
-local typeOf = { ScorpionQueen = "Boss", MothMatriarch = "MothBoss", RhinoWarlord = "RhinoBoss", HiveMother = "HiveBoss", BriarSentinel = "BriarBoss", FrostboundColossus = "FrostBoss" }
+local typeOf = { ScorpionQueen = "Boss", MothMatriarch = "MothBoss", RhinoWarlord = "RhinoBoss", HiveMother = "HiveBoss", BriarSentinel = "BriarBoss", FrostboundColossus = "FrostBoss", BasinBreaker = "BasinBoss" }
 local bossType = typeOf[bossId] or "Boss"
-local radius = ({ Boss = 6, MothBoss = 5, RhinoBoss = 6, HiveBoss = 5.5, BriarBoss = 5.5, FrostBoss = 6 })[bossType]
+local radius = ({ Boss = 6, MothBoss = 5, RhinoBoss = 6, HiveBoss = 5.5, BriarBoss = 5.5, FrostBoss = 6, BasinBoss = 6 })[bossType]
 local phase2 = moment == "stunned" or moment == "gust" or moment == "trails" or moment == "collapse" or moment == "closing" or moment == "armor"
 local hpShare = moment == "collapse" and 0 or (phase2 and 0.42 or 0.78)
 C.setState({ BossMaxHP = 2700, BossHP = math.floor(2700 * hpShare), BossName = data and data.DisplayName or "Scorpion Queen", BossId = bossId, BossIntro = moment == "entrance" and 2.5 or 0.05, BossPhaseAt = hpShare < 0.5 and 0 or 0.5, BossPhase = hpShare < 0.5 and 2 or 1, StagePhase = "Boss", Stage = bossId == "ScorpionQueen" and 1 or 3 })
@@ -44,6 +46,7 @@ local acts = {
 	HiveMother = { entrance = "Emerge", eggs = "Heave", pools = "Spew", trails = "Spew", brood = "Summon", collapse = "Collapse" },
 	BriarSentinel = { entrance = "Emerge", roots = "Root", erupt = "Rooted", volley = "Volley", bramble = "Root", closing = "Rooted", summon = "Summon", collapse = "Collapse" },
 	FrostboundColossus = { entrance = "Emerge", slam = "SlamWindup", wave = "Slam", lanes = "Stomp", spikes = "Stomp", breath = "Inhale", shards = "ShardCall", stunned = "Stunned", collapse = "Collapse" },
+	BasinBreaker = { entrance = "Emerge", slam = "SlamWindup", charge = "Windup", sap = "Spew", stuck = "Stuck", collapse = "Collapse" },
 }
 local bossBody = E.enemy(s, bossType, bossAt, hero, { Act = (acts[bossId] or {})[moment] })
 if bossBody and bossId == "FrostboundColossus" and moment == "armor" then
@@ -350,6 +353,30 @@ elseif bossId == "FrostboundColossus" then
 	elseif moment == "stunned" then
 		warns = { { "pop", bossAt.X, bossAt.Z, radius * 1.8, "frost" } }
 		C.fire("Notify", { Text = "FROST ARMOUR SHATTERED!", Color = Color3.fromRGB(190, 225, 255) })
+		wait = 0.3
+	elseif moment == "collapse" then
+		warns = { { "pop", bossAt.X, bossAt.Z, 13, "dust" } }
+		wait = 0.8
+	end
+elseif bossId == "BasinBreaker" then
+	local A2 = data.Attacks
+	if moment == "entrance" then
+		warns = { { "pop", bossAt.X, bossAt.Z, 20, "dust" }, { "circle", bossAt.X, bossAt.Z, 8, 2.5, "burrow" } }
+		wait = 1.3
+	elseif moment == "slam" then
+		warns = { { "circle", bossAt.X, bossAt.Z, A2.RootSlam.Radius, A2.RootSlam.Windup, "burrow" } }
+		wait = 0.7
+	elseif moment == "charge" then
+		local reach = radius + 1.2
+		local Ch = A2.BreakerCharge
+		warns = { laneTo(Ch.Speed * Ch.Duration + reach, reach * 2, Ch.Windup) }
+		wait = 0.9
+	elseif moment == "sap" then
+		local S = A2.SapCircles
+		warns = { { "circle", hero.X + 0.5, hero.Z, S.Radius, S.Warn, "acid" } }
+		wait = 0.6
+	elseif moment == "stuck" then
+		warns = { { "pop", bossAt.X + 4, bossAt.Z, 6, "slam" } }
 		wait = 0.3
 	elseif moment == "collapse" then
 		warns = { { "pop", bossAt.X, bossAt.Z, 13, "dust" } }
