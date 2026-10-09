@@ -1344,7 +1344,12 @@ function EnemySpawner.Kill(e, rp, isProc: boolean?)
 	-- [stream E2] personal XP shards + team run gold + class goals (RunConfig.Economy): true =
 	-- handled, so the old shared gem drops below are skipped
 	local personal = ctx.XPSystem.OnEnemyKilled(e, rp, pos)
-	if not personal and rng:NextNumber() < (def.GemChance or 1) then
+	if personal then
+		-- a beaten enemy gave its XP as personal shards: the journal records the XP drop
+		if rp and ctx.XPSystem.KindOf(e) then
+			table.insert(drops, "XP")
+		end
+	elseif rng:NextNumber() < (def.GemChance or 1) then
 		-- wave members (stepWaves) and, with waves on, the boss fight's crowd and the surge
 		-- (the only XP for a minute or two: without it the level-ups dried up, then came 5-6
 		-- at once at the portal)
