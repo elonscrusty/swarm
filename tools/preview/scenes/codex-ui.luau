@@ -108,7 +108,7 @@ if qs then
 	end
 end
 preview.log("codex-ui progress line: " .. header)
-preview.log(string.format("codex-ui tab=%s found=%s: %d PASS, %d FAIL", tab, found, passes, fails))
+preview.log(string.format("codex-ui tab=%s found=%s: %d checks passed, %d failed", tab, found, passes, fails))
 if fails > 0 then
 	error(string.format("codex-ui: %d checks failed", fails))
 end

@@ -173,14 +173,21 @@ local function send(state)
 	C.settle(0.6)
 end
 local function press(pred)
-	local g = preview.findGui(pred)[1]
-	if g then
-		preview.click(g)
+	local found
+	for _, g in ipairs(preview.findGui(pred)) do
+		if preview.isShown(g) then
+			found = g
+			break
+		end
+	end
+	found = found or preview.findGui(pred)[1]
+	if found then
+		preview.click(found)
 	else
 		preview.warn("button not found")
 	end
 	C.settle(0.6)
-	return g ~= nil
+	return found ~= nil
 end
 local function btn(name: string)
 	return function(o)
@@ -190,25 +197,33 @@ end
 local function texts(root: any?): string
 	local out = {}
 	for _, g in ipairs(preview.findGui(function(o)
-		return (o.ClassName == "TextLabel" or o.ClassName == "TextButton") and o.Text ~= "" and o.Visible
+		return (o.ClassName == "TextLabel" or o.ClassName == "TextButton") and o.Text ~= "" and preview.isShown(o)
 	end)) do
 		table.insert(out, g.Text)
 	end
 	return table.concat(out, " | ")
 end
+-- true when ANY element with this name is shown (the older screens reuse names such as "SETTINGS")
 local function visible(name: string): boolean
-	local g = preview.findGui(btn(name))[1]
-	if not g then
-		return false
-	end
-	local o: any = g
-	while o do
-		if o:IsA("GuiObject") and not o.Visible then
-			return false
+	for _, g in ipairs(preview.findGui(btn(name))) do
+		local shown = true
+		local o: any = g
+		while o do
+			if o:IsA("GuiObject") and not o.Visible then
+				shown = false
+				break
+			end
+			if o:IsA("LayerCollector") and not o.Enabled then
+				shown = false
+				break
+			end
+			o = o.Parent
 		end
-		o = o.Parent
+		if shown then
+			return true
+		end
 	end
-	return true
+	return false
 end
 local function openBrowser()
 	press(function(o)
@@ -223,20 +238,20 @@ if view == "loading" then
 	-- nothing answered: the load card, then the 8 s explanation and the 30 s retry
 	local age = tonumber(preview.args.age) or 0
 	check("loading: the load card shows from the start and the class chip does not guess", visible("LoadCard") and string.find(texts(), "Loading class") ~= nil, texts())
-	check("loading: no guide, no purchase while nothing is loaded", not visible("Guide"))
+	check("loading: no guide, no purchase while nothing is loaded", not visible("LobbyGuide"))
 	if age > 0 then
 		preview.advance(age, 10)
 		C.settle(0.3)
 	end
 	local t = texts()
 	if age >= 31 then
-		check("loading 31 s: a plain failure message and RETRY, progress called safe", string.find(t, "untouched") ~= nil and visible("Retry"), t)
-		press(btn("Retry"))
+		check("loading 31 s: a plain failure message and RETRY, progress called safe", string.find(t, "untouched") ~= nil and visible("LoadRetry"), t)
+		press(btn("LoadRetry"))
 		check("loading: RETRY asks again (RequestProfile + LobbySync), once", profileAsks == 1 and sentCount("LobbySync") >= 2, tostring(profileAsks) .. "/" .. tostring(sentCount("LobbySync")))
 	elseif age >= 9 then
-		check("loading 9 s: says what is still loading and that nothing is lost", string.find(t, "Still loading") ~= nil and string.find(t, "Nothing is lost") ~= nil and not visible("Retry"), t)
+		check("loading 9 s: says what is still loading and that nothing is lost", string.find(t, "Still loading") ~= nil and string.find(t, "Nothing is lost") ~= nil and not visible("LoadRetry"), t)
 	else
-		check("loading 0 s: plain 'Loading' line, no retry yet", string.find(t, "Loading your profile") ~= nil and not visible("Retry"), t)
+		check("loading 0 s: plain 'Loading' line, no retry yet", string.find(t, "Loading your profile") ~= nil and not visible("LoadRetry"), t)
 	end
 	if age < 31 then
 		-- the data arrives: the card goes away and the real class shows
@@ -261,10 +276,10 @@ else
 		for _, name in ipairs({ "ClassChip", "PartyButton", "PlayButton", "SHOP", "CODEX", "SETTINGS", "MORE", "HelpButton" }) do
 			check("home: entry point " .. name .. " is on screen", visible(name))
 		end
-		check("home: first-time guide opened by itself for an account with no runs (and is dismissible)", visible("Guide") and visible("Skip"))
-		press(btn("Skip"))
-		check("home: SKIP closes the guide and saves LobbyGuideSeen", not visible("Guide"))
-		check("home: HOW TO PLAY reopens it", press(btn("HelpButton")) and visible("Guide"))
+		check("home: first-time guide opened by itself for an account with no runs (and is dismissible)", visible("LobbyGuide") and visible("Skip"))
+		press(btn("GuideSkip"))
+		check("home: SKIP closes the guide and saves LobbyGuideSeen", not visible("LobbyGuide"))
+		check("home: HOW TO PLAY reopens it", press(btn("HelpButton")) and visible("LobbyGuide"))
 	end
 	if view == "grid" or view == "owned" or view == "page2" or view == "details" or view == "pending" or view == "refused" or view == "queued" or view == "confirm" then
 		if view == "queued" then
@@ -278,9 +293,9 @@ else
 		end
 		openBrowser()
 		if view == "owned" then
-			press(btn("Tab_Owned"))
+			press(btn("ClassTab_Owned"))
 		elseif view == "page2" then
-			press(btn("Next"))
+			press(btn("ClassPageNext"))
 		elseif view == "details" then
 			tapCard("granny_boom")
 		elseif view == "pending" or view == "refused" then
@@ -292,16 +307,16 @@ else
 			tapCard(many and "peter_parkour" or "toastmaster")
 		elseif view == "confirm" then
 			tapCard("captain_croak")
-			press(btn("Main"))
+			press(btn("ClassMain"))
 		end
 	end
 	if view == "pending" then
-		press(btn("Main"))
+		press(btn("ClassMain"))
 		check("pending: SELECT sent exactly one ClassAction Select toastmaster", sentCount("ClassAction", "Select", "toastmaster") == 1)
 		local t = texts()
 		check("pending: the previous class stays SELECTED on the card until the server answers", string.find(t, "SELECTING") ~= nil and string.find(t, "Ruckus") ~= nil)
 		check("pending: a second press cannot send twice", (function()
-			press(btn("Main"))
+			press(btn("ClassMain"))
 			return sentCount("ClassAction", "Select", "toastmaster") == 1
 		end)())
 		preview.advance(7, 10)
@@ -314,14 +329,14 @@ else
 		send(v)
 		check("pending: a later confirmation selects the class", string.find(texts(), "SELECTED") ~= nil)
 	elseif view == "refused" then
-		press(btn("Main"))
+		press(btn("ClassMain"))
 		local v = table.clone(base)
 		v.ClassAck = { N = 1, Id = "toastmaster", Action = "Select", Ok = false, Code = "NOT_OWNED" }
 		send(v)
 		check("refused: the reason is shown and the old class is kept", string.find(texts(), "do not own") ~= nil and string.find(texts(), "Still using Ruckus") ~= nil, texts())
 	elseif view == "queued" then
 		check("queued: explains the class lock and offers LEAVE QUEUE", string.find(texts(), "leave the queue") ~= nil or string.find(texts(), "Leave the queue") ~= nil, texts())
-		check("queued: LEAVE QUEUE is visible and sends QueueAction Leave", visible("LeaveQueue") and press(btn("LeaveQueue")) and sentCount("QueueAction", "Leave") == 1)
+		check("queued: LEAVE QUEUE is visible and sends QueueAction Leave", visible("ClassLeaveQueue") and press(btn("ClassLeaveQueue")) and sentCount("QueueAction", "Leave") == 1)
 	elseif view == "confirm" then
 		local t = texts()
 		check("confirm: the dialog names the class, the price and the outcome", string.find(t, "Buy Captain Croak") ~= nil and string.find(t, "20,000") ~= nil and string.find(t, "unlocked for good") ~= nil)
@@ -333,13 +348,13 @@ else
 		-- the guide opened by itself for this new account
 		local step = tonumber(preview.args.step) or 1
 		for _ = 2, step do
-			press(btn("Next"))
+			press(btn("GuideNext"))
 		end
-		check("guide: open on the right step", visible("Guide"), texts())
+		check("guide: open on the right step", visible("LobbyGuide"), texts())
 	end
 end
 
-preview.log(string.format("class-browser-ui view=%s: %d PASS, %d FAIL", view, passes, fails))
+preview.log(string.format("class-browser-ui view=%s: %d checks passed, %d failed", view, passes, fails))
 if fails > 0 then
 	error(string.format("class-browser-ui: %d checks failed", fails))
 end

@@ -140,6 +140,8 @@ local function tryModel(p: Portrait): boolean
 	if tpl then
 		ViewportPreview.SetModel(p.Preview, tpl)
 		if p.Preview.Model ~= nil then
+			-- a little more room than ViewportPreview's tight fit: the idle bob never clips a head
+			p.Preview.Radius = p.Preview.Radius * 1.22
 			p.Done = true
 			p.Swatch.Visible = false
 			p.Status.Visible = false
@@ -178,6 +180,7 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 	local cols, rows = 3, 2
 	local cardW, cardH = 200, 200
 	local rowStyle = false
+	local headH = 100 -- the details head grows when a long name wraps
 	local cardButtons: { [string]: TextButton } = {}
 	local ctxRefresh: () -> () = function() end -- layout + render (set below)
 
@@ -604,16 +607,22 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 		local access = ClassDetails.Access(id, owned, v and v.Progress and v.Progress[id] or nil)
 		local bKind, bText = badgeFor(id)
 
-		-- head: name, badges, role and id
+		-- head: name (wraps up to three lines), badges, role and id
 		local nameSize = compact and 26 or 30
+		local headW = (mode == "PhoneLandscape") and math.floor(details.Size.X.Offset * 0.42) or details.Size.X.Offset
+		local nameLines = math.clamp(math.ceil(#d.Name * nameSize * 0.56 / math.max(120, headW)), 1, 3)
+		local nameH = nameLines * (nameSize + 6) + 2
+		headH = 70 + nameH
 		Brief.label(detailHead, "Title", d.Name, {
 			Name = "ClassName",
 			TextSize = nameSize,
-			Size = UDim2.new(1, 0, 0, nameSize + 8),
+			Size = UDim2.new(1, 0, 0, nameH),
+			TextWrapped = true,
+			TextYAlignment = Enum.TextYAlignment.Top,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 14,
 		}, compact)
-		local badgeRow = new("Frame", { Name = "Badges", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, nameSize + 10), Size = UDim2.new(1, 0, 0, 28), ZIndex = 14 }, detailHead)
+		local badgeRow = new("Frame", { Name = "Badges", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, nameH + 2), Size = UDim2.new(1, 0, 0, 28), ZIndex = 14 }, detailHead)
 		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 6) }, badgeRow)
 		if v ~= nil and v.Selected == id then
 			Brief.badge(badgeRow, "Selected", "SELECTED", { LayoutOrder = 1, ZIndex = 14 }, compact)
@@ -621,7 +630,7 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 		Brief.badge(badgeRow, bKind, bText, { LayoutOrder = 2, ZIndex = 14 }, compact)
 		Brief.label(detailHead, "Label", d.Role .. "  |  id: " .. id, {
 			Name = "RoleAndId",
-			Position = UDim2.fromOffset(0, nameSize + 42),
+			Position = UDim2.fromOffset(0, nameH + 34),
 			Size = UDim2.new(1, 0, 0, Brief.size("Label", compact) + 6),
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 14,
@@ -842,9 +851,9 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 		if mode == "PhoneLandscape" then
 			-- left: name, notes, buttons stacked; right: the scrolling text
 			local lw = math.floor(dw * 0.42)
-			place(detailHead, 0, 0, lw, 100)
+			place(detailHead, 0, 0, lw, headH)
 			local nh = notesHeight(lw)
-			place(actions, 0, 106, lw, nh + 8 + 56 + 8 + 48)
+			place(actions, 0, headH + 6, lw, nh + 8 + 56 + 8 + 48)
 			place(actionNote, 0, 0, lw, nh)
 			place(actionRow, 0, nh + 8, lw, 56 + 8 + 48)
 			place(mainBtn.Instance, 0, 0, lw, 56)
@@ -859,11 +868,11 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 		else
 			local nh = notesHeight(dw)
 			local actionsH = nh + (nh > 0 and 8 or 0) + 56
-			place(detailHead, 0, 0, dw, 100)
+			place(detailHead, 0, 0, dw, headH)
 			place(actions, 0, dh - actionsH, dw, actionsH)
 			place(actionNote, 0, 0, dw, nh)
 			place(actionRow, 0, actionsH - 56, dw, 56)
-			place(scroll, 0, 106, dw, math.max(60, dh - 106 - actionsH - 8))
+			place(scroll, 0, headH + 6, dw, math.max(60, dh - headH - 6 - actionsH - 8))
 			local pwid = hasLeave and math.floor(dw * 0.26) or math.floor(dw * 0.34)
 			place(previewBtn.Instance, 0, 0, pwid, 56)
 			local used = pwid + 8
@@ -887,17 +896,17 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 	end
 
 	-- buttons (built once) ---------------------------------------------------------------------
-	closeBtn = Brief.button(header, { Name = "Close", Title = "", Icon = "close", Size = UDim2.fromOffset(48, 48), ZIndex = 14, Kind = "Secondary", OnClick = function()
+	closeBtn = Brief.button(header, { Name = "ClassClose", Title = "", Icon = "close", Size = UDim2.fromOffset(48, 48), ZIndex = 14, Kind = "Secondary", OnClick = function()
 		close()
 	end })
-	backBtn = Brief.button(header, { Name = "Back", Title = "BACK", Icon = "chevronLeft", Size = UDim2.fromOffset(120, 48), ZIndex = 14, Kind = "Secondary", OnClick = function()
+	backBtn = Brief.button(header, { Name = "ClassBack", Title = "BACK", Icon = "chevronLeft", Size = UDim2.fromOffset(120, 48), ZIndex = 14, Kind = "Secondary", OnClick = function()
 		screen = "Grid"
 		ctxRefresh()
 		Brief.focusIfGamepad(cardButtons[inspected])
 	end })
 	backBtn.Instance.Visible = false
 	for i, f in ipairs(FILTERS) do
-		tabButtons[f] = Brief.button(tabRow, { Name = "Tab_" .. f, Title = string.upper(f), Size = UDim2.fromOffset(110, 48), LayoutOrder = i, ZIndex = 13, Kind = f == filter and "Selected" or "Secondary", OnClick = function()
+		tabButtons[f] = Brief.button(tabRow, { Name = "ClassTab_" .. f, Title = string.upper(f), Size = UDim2.fromOffset(110, 48), LayoutOrder = i, ZIndex = 13, Kind = f == filter and "Selected" or "Secondary", OnClick = function()
 			filter = f
 			-- keep the highlighted card on screen when it is still in the list, else go to page 1
 			local list = filtered()
@@ -911,23 +920,23 @@ function ClassBrowser.Build(ctx: Kit.Ctx): Panel
 			ctxRefresh()
 		end })
 	end
-	prevBtn = Brief.button(pagerRow, { Name = "Prev", Title = "", Icon = "chevronLeft", Size = UDim2.fromOffset(48, 48), ZIndex = 13, OnClick = function()
+	prevBtn = Brief.button(pagerRow, { Name = "ClassPagePrev", Title = "", Icon = "chevronLeft", Size = UDim2.fromOffset(48, 48), ZIndex = 13, OnClick = function()
 		page = math.max(1, page - 1)
 		ctxRefresh()
 	end })
-	nextBtn = Brief.button(pagerRow, { Name = "Next", Title = "", Icon = "chevronRight", Size = UDim2.fromOffset(48, 48), ZIndex = 13, OnClick = function()
+	nextBtn = Brief.button(pagerRow, { Name = "ClassPageNext", Title = "", Icon = "chevronRight", Size = UDim2.fromOffset(48, 48), ZIndex = 13, OnClick = function()
 		page += 1
 		ctxRefresh()
 	end })
-	previewBtn = Brief.button(actionRow, { Name = "Preview", Title = "PREVIEW", Size = UDim2.fromOffset(150, 56), ZIndex = 14, Kind = "Secondary", OnClick = function()
+	previewBtn = Brief.button(actionRow, { Name = "ClassPreview", Title = "PREVIEW", Size = UDim2.fromOffset(150, 56), ZIndex = 14, Kind = "Secondary", OnClick = function()
 		previewOn = not previewOn
 		ctxRefresh()
 	end })
-	leaveBtn = Brief.button(actionRow, { Name = "LeaveQueue", Title = "LEAVE QUEUE", TitleSize = 16, Size = UDim2.fromOffset(150, 56), ZIndex = 14, Kind = "Danger", OnClick = function()
+	leaveBtn = Brief.button(actionRow, { Name = "ClassLeaveQueue", Title = "LEAVE QUEUE", TitleSize = 16, Size = UDim2.fromOffset(150, 56), ZIndex = 14, Kind = "Danger", OnClick = function()
 		ctx.Fire("QueueAction", "Leave")
 	end })
 	leaveBtn.Instance.Visible = false
-	mainBtn = Brief.button(actionRow, { Name = "Main", Title = "SELECT", Size = UDim2.fromOffset(200, 56), ZIndex = 14, Kind = "Primary", TitleSize = 20, OnClick = function()
+	mainBtn = Brief.button(actionRow, { Name = "ClassMain", Title = "SELECT", Size = UDim2.fromOffset(200, 56), ZIndex = 14, Kind = "Primary", TitleSize = 20, OnClick = function()
 		local pl = plan(inspected)
 		if not pl.Enabled or not pl.Action then
 			return

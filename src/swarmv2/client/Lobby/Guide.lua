@@ -86,7 +86,7 @@ function Guide.Build(ctx: Kit.Ctx, onDone: (completed: boolean, reopened: boolea
 	local compact = ctx.Compact
 
 	local overlay = new("Frame", {
-		Name = "Guide",
+		Name = "LobbyGuide",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		Visible = false,
@@ -164,14 +164,14 @@ function Guide.Build(ctx: Kit.Ctx, onDone: (completed: boolean, reopened: boolea
 		skip.SetText(step == #Guide.Steps and "CLOSE" or "SKIP")
 	end
 
-	skip = Brief.button(card, { Name = "Skip", Title = "SKIP", Size = UDim2.fromOffset(110, 56), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 20, 1, -16), ZIndex = 43, Kind = "Quiet", OnClick = function()
+	skip = Brief.button(card, { Name = "GuideSkip", Title = "SKIP", Size = UDim2.fromOffset(110, 56), AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 20, 1, -16), ZIndex = 43, Kind = "Quiet", OnClick = function()
 		finish(false)
 	end })
-	back = Brief.button(card, { Name = "Back", Title = "BACK", Size = UDim2.fromOffset(110, 56), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -150, 1, -16), ZIndex = 43, Kind = "Secondary", OnClick = function()
+	back = Brief.button(card, { Name = "GuideBack", Title = "BACK", Size = UDim2.fromOffset(110, 56), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -150, 1, -16), ZIndex = 43, Kind = "Secondary", OnClick = function()
 		step = math.max(1, step - 1)
 		paint()
 	end })
-	nextBtn = Brief.button(card, { Name = "Next", Title = "NEXT", Size = UDim2.fromOffset(122, 56), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -20, 1, -16), ZIndex = 43, Kind = "Primary", TitleSize = 20, OnClick = function()
+	nextBtn = Brief.button(card, { Name = "GuideNext", Title = "NEXT", Size = UDim2.fromOffset(122, 56), AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -20, 1, -16), ZIndex = 43, Kind = "Primary", TitleSize = 20, OnClick = function()
 		if step >= #Guide.Steps then
 			finish(true)
 		else
@@ -205,7 +205,7 @@ function Guide.Build(ctx: Kit.Ctx, onDone: (completed: boolean, reopened: boolea
 		Layout = function(c: Kit.Ctx)
 			compact = c.Compact
 			local w = math.min(560, c.W - 24)
-			local h = c.Compact and (c.Portrait and 420 or 330) or 340
+			local h = c.Compact and (c.Portrait and 420 or 330) or 380
 			card.Size = UDim2.fromOffset(w, h)
 			local size = Brief.size("Body", compact)
 			body.TextSize = size

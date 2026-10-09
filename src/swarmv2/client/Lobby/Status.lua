@@ -84,7 +84,7 @@ function Status.Build(ctx: Kit.Ctx): Panel
 	local warnIcon = Kit.Icons.Draw(card, "warning", { Name = "WarnIcon", Size = 22, Color = T.Danger, Position = UDim2.fromOffset(20, 152), ZIndex = 17 })
 	warnIcon.Visible = false
 	local retry = Brief.button(card, {
-		Name = "Retry",
+		Name = "LoadRetry",
 		Title = "RETRY",
 		Icon = "cycle",
 		Size = UDim2.new(1, -40, 0, 56),

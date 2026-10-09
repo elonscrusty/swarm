@@ -317,7 +317,7 @@ do
 				text ..= "\n" .. r.Label .. ": " .. r.Value
 			end
 			local low = string.lower(text)
-			local bad = #d.Lines == 0 or #text < 20 or string.find(low, "nil") ~= nil or string.find(low, "%f[%w]nan%f[%W]") ~= nil or string.find(text, "%%[a-z]") ~= nil or string.find(text, "No details available") ~= nil
+			local bad = #d.Lines == 0 or #text < 20 or string.find(low, "nil") ~= nil or string.find(low, "%f[%w]nan%f[%W]") ~= nil or string.find(text, "%%[a-z]") ~= nil or string.find(text, "No details available") ~= nil or string.find(text, "%d B%f[%W]") ~= nil
 			if bad then
 				all = false
 				check("codex: " .. c.Id .. "/" .. e.Id .. " has real details", false, text)
@@ -387,7 +387,7 @@ do
 	check("settings: reset to defaults restores the camera, size, effects and volume", math.abs(mult - 1) < 1e-9 and sx == 1 and sy == 1 and math.abs(CS.UIScaleMult() - 1) < 1e-9 and CS.EffectsMult() == 1 and CS.MasterVolume() == 1)
 end
 
-preview.log(string.format("class-browser-regression: %d PASS, %d FAIL", passes, fails))
+preview.log(string.format("class-browser-regression: %d checks passed, %d failed", passes, fails))
 if fails > 0 then
 	error(string.format("class-browser-regression: %d checks failed", fails))
 end

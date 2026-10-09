@@ -104,10 +104,13 @@ function MenuSettingsPlus.Build(colA: Instance, colB: Instance, opts: { Close: (
 		ClientSettings.Set("EffectsIntensity", v)
 	end, function() end, { LayoutOrder = 17 })
 	local size
+	-- applied when the finger lets go: resizing the screen under a dragging finger would make the slider jump
 	size = UIKit.Slider(colB, "UI size", "area", ClientSettings.Get("UIScale"), function(v)
+		readout(size, ClientSettings.UIScaleText)
+	end, function(v)
 		ClientSettings.Set("UIScale", v)
 		readout(size, ClientSettings.UIScaleText)
-	end, function() end, { LayoutOrder = 18 })
+	end, { LayoutOrder = 18 })
 	note(colB, "Effects intensity only trims decoration (sparks, trails). Warnings and attack telegraphs always show in full.", 19, 3)
 	note(colB, "Reduced effects (above) also means reduced motion: no camera shake or kicks, slower camera recentre.", 20, 3)
 

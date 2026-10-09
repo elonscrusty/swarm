@@ -277,6 +277,11 @@ local function weaponDetail(id: string): Detail
 	for _, rank in ipairs({ 3, 5 }) do
 		local text = WeaponData.MilestoneText(id, rank)
 		if text then
+			-- the card texts quote damage in multiples of B ("0.40 B"): show the damage itself
+			local shown = string.gsub(text, "([%d%.]+) B%f[%W]", function(coeff: string): string
+				return num((tonumber(coeff) or 0) * B()) .. " damage"
+			end)
+			text = shown
 			table.insert(lines, string.format("Rank %d: %s.", rank, text))
 		end
 	end
