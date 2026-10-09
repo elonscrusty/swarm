@@ -48,11 +48,16 @@ function LobbyClient.Start(): boolean
 	local QueuePanel = require(script.Parent.QueuePanel)
 	local PartyStrip = require(script.Parent.PartyStrip)
 	local MenuBar = require(script.Parent.MenuBar)
+	local Status = require(script.Parent.Status)
+	local Guide = require(script.Parent.Guide)
+	local Remotes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
 	local LobbyNet = require(ReplicatedStorage:WaitForChild("SwarmV2"):WaitForChild("Lobby"):WaitForChild("LobbyNet"))
 	local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+	local LobbyConfig = require(ReplicatedStorage:WaitForChild("SwarmV2"):WaitForChild("Lobby"):WaitForChild("LobbyConfig"))
 	local clientRoot = script.Parent.Parent.Parent:WaitForChild("SwarmClient")
 	local LobbyScreen = require(clientRoot:WaitForChild("LobbyScreen"))
 	local UIBuilder = require(clientRoot:WaitForChild("UIBuilder"))
+	local ClientSettings = require(clientRoot:WaitForChild("ClientSettings"))
 
 	local UIKit, Theme, C = Kit.UIKit, Kit.Theme, Kit.C
 	local player = Players.LocalPlayer
@@ -100,7 +105,11 @@ function LobbyClient.Start(): boolean
 		H = 450,
 		Portrait = false,
 		Touch = UserInputService.TouchEnabled,
+		Compact = false,
+		Scale = 1,
 		View = nil,
+		Profile = nil,
+		OpenGuide = function(_reopen: boolean?) end,
 		Fire = function(name: string, ...: any)
 			LobbyNet.Get(name):FireServer(...)
 		end,
@@ -171,6 +180,8 @@ function LobbyClient.Start(): boolean
 	local queue: QueuePanel.Panel
 	local party: PartyStrip.Panel
 	local menu: MenuBar.Panel
+	local status: Status.Panel
+	local guide: Guide.Panel
 
 	local function openSheet(name: string?)
 		classes.Sheet.Close()
@@ -189,8 +200,20 @@ function LobbyClient.Start(): boolean
 		pcall(LobbyScreen.Show, screen)
 	end
 
+	-- the first-time guide: finishing or skipping it (not a reopen) is remembered in the saved settings
+	local function guideDone(_completed: boolean, reopened: boolean)
+		if not reopened then
+			ClientSettings.Set("LobbyGuideSeen", true)
+		end
+	end
 	classes = ClassPanel.Build(ctx)
 	queue = QueuePanel.Build(ctx)
+	guide = Guide.Build(ctx, guideDone)
+	status = Status.Build(ctx)
+	ctx.OpenGuide = function(_reopen: boolean?)
+		openSheet(nil)
+		guide.Open(_reopen ~= false)
+	end
 	party = PartyStrip.Build(ctx, function()
 		openScreen("Party")
 	end)
@@ -216,26 +239,72 @@ function LobbyClient.Start(): boolean
 			refX, refY = refY, refX
 		end
 		local s = math.clamp(math.min(size.X / refX, size.Y / refY), Config.UI.MinScale, Config.UI.MaxScale)
+		s *= ClientSettings.UIScaleMult() -- [stream L1] Settings > UI size
 		uiScale.Scale = s
 		root.Size = UDim2.fromScale(1 / s, 1 / s)
 		ctx.W, ctx.H, ctx.Portrait = size.X / s, size.Y / s, portrait
+		ctx.Compact, ctx.Scale = compact, s
 		local barBottom = menu.Layout(ctx)
-		party.Layout(ctx, Kit.M, Kit.M + 64 + 8 + (portrait and 60 + 8 or 0))
+		-- left column: class chip (72), party strip (66), status row (48); portrait phones put the menu row
+		-- between the party strip and the status row
+		local partyY = Kit.M + 72 + 8
+		party.Layout(ctx, Kit.M, partyY)
+		local statusY = partyY + 66 + 8
+		if portrait then
+			statusY = barBottom + 8
+		end
+		status.Layout(ctx, Kit.M, statusY)
 		classes.Layout(ctx)
 		queue.Layout(ctx)
+		guide.Layout(ctx)
 		toastHost.Position = UDim2.fromOffset(ctx.W / 2, barBottom + 8 + (portrait and 74 or 0))
 		classes.Render(ctx)
 		queue.Render(ctx)
 		party.Render(ctx)
+		status.Render(ctx)
+	end
+
+	local autoGuideDone = false
+	local function eligibleForGuide(): boolean
+		-- only a real profile that says "never started a run" (missing data is never a new player)
+		local p = ctx.Profile
+		if type(p) ~= "table" or ctx.View == nil then
+			return false
+		end
+		local stats = p.Stats
+		local runs = type(stats) == "table" and tonumber(stats.Runs) or nil
+		if runs == nil or runs > 0 then
+			return false
+		end
+		local settings = p.Settings
+		if type(settings) == "table" and settings.LobbyGuideSeen == true then
+			return false
+		end
+		if p.TutorialDone == true or (tonumber(p.TutorialStep) or 0) > 0 then
+			return false
+		end
+		return LobbyConfig.Home.Guide == true
+	end
+	local function maybeAutoGuide()
+		if autoGuideDone or not eligibleForGuide() then
+			return
+		end
+		if player:GetAttribute("InRun") == true or LobbyScreen.Current() ~= "Home" then
+			return
+		end
+		autoGuideDone = true
+		guide.Open(false)
 	end
 
 	local function render()
 		classes.Render(ctx)
 		queue.Render(ctx)
 		party.Render(ctx)
+		status.Render(ctx)
 		if ctx.View and ctx.View.Queue then
 			queue.Sheet.Close()
 		end
+		maybeAutoGuide()
 	end
 
 	------------------------------------------------------------------ server messages
@@ -245,6 +314,19 @@ function LobbyClient.Start(): boolean
 		end
 		ctx.View = state
 		render()
+	end)
+	-- the save's profile (ProfileSync): settings, stats and tutorial flags; the guide and the load card read it
+	Remotes.Get("ProfileSync").OnClientEvent:Connect(function(p: any)
+		if type(p) == "table" then
+			ctx.Profile = p
+			render()
+		end
+	end)
+	-- Settings > How to play asks for the guide through this player attribute
+	player:GetAttributeChangedSignal("SwarmGuideRequest"):Connect(function()
+		if player:GetAttribute("InRun") ~= true and player:GetAttribute("SwarmGuideRequest") ~= nil then
+			ctx.OpenGuide(true)
+		end
 	end)
 	LobbyNet.Get("LobbyNotice").OnClientEvent:Connect(function(text: any, kind: any)
 		if type(text) == "string" then
@@ -263,7 +345,31 @@ function LobbyClient.Start(): boolean
 		end
 	end
 	player:GetAttributeChangedSignal("InRun"):Connect(refreshVisible)
+	-- Escape and gamepad B close the topmost layer first: guide, then the class browser (confirmation,
+	-- details, grid), then the gate sheet
+	UserInputService.InputBegan:Connect(function(input: InputObject)
+		if input.KeyCode ~= Enum.KeyCode.Escape and input.KeyCode ~= Enum.KeyCode.ButtonB then
+			return
+		end
+		if not gui.Enabled or not content.Visible or UserInputService:GetFocusedTextBox() ~= nil then
+			return
+		end
+		if guide.Back() then
+			return
+		end
+		if classes.Back() then
+			return
+		end
+		if queue.Sheet.IsOpen() then
+			queue.Sheet.Close()
+		end
+	end)
 	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+	ClientSettings.OnChanged(function(key: string)
+		if key == "UIScale" then
+			layout()
+		end
+	end)
 	gui.Parent = player:WaitForChild("PlayerGui")
 	layout()
 	refreshVisible()
@@ -272,6 +378,8 @@ function LobbyClient.Start(): boolean
 		refreshVisible()
 		if gui.Enabled and content.Visible then
 			queue.Step(ctx)
+			classes.Step(ctx)
+			status.Step(ctx)
 		end
 	end)
 
