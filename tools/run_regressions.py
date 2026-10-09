@@ -169,6 +169,11 @@ def main():
     # continuation stream E1 survival rules: downed / hold-to-revive / bleed-out / wipe once, shared hit
     # protection, falls, out-of-bounds rescue, movement caps and dash, disconnect window (PASS/FAIL lines)
     checks += [("survival-sim", [])]
+    # studio review SW-04 / SW-05 / SW-07 (stream R5): team chest purchase on the real server (below / equal /
+    # above, rapid holds, two holders, gold mid-approach, several chests, a price rising mid-hold), the paid
+    # revive's purchase states (no automatic dialog, cancel / pending / fulfilled once, unavailable), and what
+    # the client prompts / HUD / revive overlay say in each state
+    checks += [("chest-purchase-regression", []), ("revive-purchase-regression", []), ("transactions-ui-regression", [])]
     # continuation stream G (feel and audio): the 12 class cues, movement hooks, run-stage stingers + charge hum,
     # down / revive / chest cues, crit tick + burst, shake caps, recoil (class-sfx-regression); who rolled a crit
     # reaches the clients (crit-owner-regression, real server)
@@ -190,10 +195,10 @@ def main():
             "--max-time", "3000" if scene in ("corner-regression", "class-kits-sim", "cliffwood-run-sim", "swarm-v2-flow", "director-sim", "pacing-sim") else "400", "--set", "headless=on",
         ]
         # Live-store and teleport fixtures intentionally run outside Studio.
-        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "receipt-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")) or (scene == "analytics-regression" and settings == ["mode=published"]):
+        if scene in ("storage-sim", "runserver-sim", "difficulty-handoff", "coop-regression", "reconnect-lobby", "safety-sim", "security-regression", "heroes-regression", "store-regression", "receipt-regression", "revive-purchase-regression", "starter-bundle-regression", "invite-regression", "bugreport-plus-regression") or (scene == "quick-resume-regression" and settings and settings[0] in ("case=run", "case=lobby")) or (scene == "analytics-regression" and settings == ["mode=published"]):
             command.remove("--studio")
         # results-flow drives the client results screen, so it needs the client running
-        if scene in ("results-flow", "leaderboards", "home-board-regression", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression", "analytics-client", "swarm-v2-flow"):
+        if scene in ("results-flow", "leaderboards", "home-board-regression", "run-intro", "results", "lobby-screens-regression", "hud-key-regression", "perf-regression", "events-fx", "textfit-regression", "analytics-client", "swarm-v2-flow", "transactions-ui-regression"):
             command.remove("--set")
             command.remove("headless=on")
         if scene == "textfit-regression":
@@ -212,7 +217,7 @@ def main():
             # Long client scenes: 220-290 s each when run alone (menu was 267 s before the
             # features batch too, so this is Lune time, not game cost); with three workers in
             # parallel they pass 360 s, so they get 600 s.
-            limit = 2400 if scene == "layout" and settings[0] == "run-hud-regression" else 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim", "run-entry-regression", "class-kits-sim", "cliffwood-run-sim", "swarm-v2-flow", "director-sim", "pacing-sim") or (scene == "layout" and settings[0] == "run-hud") else (
+            limit = 2400 if scene == "layout" and settings[0] == "run-hud-regression" else 1500 if scene in ("corner-regression", "world-regression", "reward-once-regression", "stage-sim", "run-entry-regression", "class-kits-sim", "cliffwood-run-sim", "swarm-v2-flow", "director-sim", "pacing-sim", "transactions-ui-regression") or (scene == "layout" and settings[0] == "run-hud") else (
                 900 if scene == "perf-sim" else
                 600 if scene in ("menu", "ui", "run-intro", "events-fx", "loot-focus-regression", "perf-regression", "results-flow", "textfit-regression", "comeback-regression", "analytics-client")
                 or (scene == "layout" and settings[0] in ("smart-tutorial-regression", "walkthrough-bubble")) else 360)

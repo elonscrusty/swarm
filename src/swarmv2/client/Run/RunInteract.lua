@@ -17,10 +17,15 @@
 	  beacon  "Hold to start the beacon" - RunStage BeaconAvailable, BeaconPos within BeaconRange.
 	          Server: SwarmV2Net.Run.Interact:FireServer("Beacon", "Beacon", holding) (stream D); absent
 	          = nothing shown.
-	  chest   "Open chest  ·  140 gold" with the cost and the team balance ("you have 215", or
-	          "need 55 more" in red): from the loot model (LootUI) and SwarmState TeamRunGold /
-	          ChestCost. The hold itself is LootUI's existing LootHold flow (the server decides and
-	          debits once); this prompt only presents it and forwards the press / release.
+	  chest   "Open chest  ·  140 gold" with the cost and the team balance ("team has 215", or
+	          "need 55 more" in red). [R5] Every word comes from LootUI.ChestStatus (one price, one
+	          balance, shortfall = price - balance of those two) by state: Available, Unaffordable,
+	          Opening (holding), Pending (hold done, the server decides), Claimed ("Chest opened ·
+	          paid 54 · next chest 73" for a moment after this player's purchase), Failed (the
+	          server's reason, hold again), Choosing (a choice is open: no chest prompt at all).
+	          Holding the key while short of gold starts the hold as soon as the gold arrives.
+	          The hold itself is LootUI's existing LootHold flow (the server decides and debits
+	          once); this prompt only presents it and forwards the press / release.
 
 	Missing attributes are fine: no target, no prompt. Reduced motion: no pop.
 ]]
@@ -215,8 +220,15 @@ local function findTarget(state: Instance): { [string]: any }?
 	end
 	-- chest
 	local model = LootUI and LootUI.Target and LootUI.Target() or nil
-	if model and model.Parent and model:GetAttribute("LootKind") == "Chest" and model:GetAttribute("State") == "Ready" then
-		return { Kind = "Chest", Id = model:GetAttribute("LootId"), Model = model, Hold = tonumber(model:GetAttribute("Hold")) or CFG.ChestHold }
+	if model and model.Parent and model:GetAttribute("LootKind") == "Chest" then
+		local ready = model:GetAttribute("State") == "Ready"
+		-- [R5] the chest this player is opening / just bought stays the target for its pending /
+		-- claimed line; any other opened chest is not a target
+		local id = tonumber(model:GetAttribute("LootId")) or 0
+		local mine = id ~= 0 and ((LootUI.HoldingId and LootUI.HoldingId() == id) or (LootUI.RecentClaim and (LootUI.RecentClaim() or {}).Id == id))
+		if ready or mine then
+			return { Kind = "Chest", Id = model:GetAttribute("LootId"), Model = model, Hold = tonumber(model:GetAttribute("Hold")) or CFG.ChestHold }
+		end
 	end
 	return nil
 end
@@ -372,21 +384,42 @@ end
 -- Per frame
 ------------------------------------------------------------------------------------------
 
-local function chestLines(t: { [string]: any }, state: Instance): (string, string, boolean)
-	local price = LootUI and LootUI.PriceOf and LootUI.PriceOf(t.Model) or 0
-	local cost = tonumber(state:GetAttribute("ChestCost"))
-	if price <= 0 and cost then
-		price = cost
+-- [R5] The chest's words by transaction state, all from LootUI.ChestStatus (the same price and
+-- balance LootUI's own prompt and the HUD purse hint use; no second source, no fallbacks that
+-- could mix the team gold with a player's personal run gold). Returns label, sub, ok, state.
+local function chestLines(t: { [string]: any }): (string, string, boolean, string)
+	local cs = LootUI and LootUI.ChestStatus and t.Model and LootUI.ChestStatus(t.Model) or nil
+	if not cs then
+		return "", "", true, "Choosing" -- no loot model: nothing to show
 	end
-	local gold = LootUI and LootUI.WalletOf and t.Model and LootUI.WalletOf(t.Model) or tonumber(state:GetAttribute("TeamRunGold")) or tonumber(player:GetAttribute("RunGold")) or 0
-	if price <= 0 then
-		return "Open chest", "Free", true
+	local fmt = UIKit.formatNumber
+	local money = cs.Team and "team gold" or "gold"
+	local st = cs.State
+	if st == "Claimed" then
+		if cs.Paid then
+			local paid = cs.Paid > 0 and string.format("Paid %s %s", fmt(cs.Paid), money) or "Free"
+			local nxt = (cs.Team and cs.Next) and string.format("  ·  next chest %s", fmt(cs.Next)) or ""
+			return "Chest opened", paid .. nxt, true, st
+		end
+		return "Chest opened", "", true, st
+	elseif st == "Opening" then
+		return "Opening chest", cs.Price > 0 and string.format("Keep holding  ·  %s %s", fmt(cs.Price), money) or "Keep holding", true, st
+	elseif st == "Pending" then
+		return "Opening chest...", "Waiting for the server", true, st
+	elseif st == "Failed" then
+		return "Couldn't open the chest", tostring(cs.Reason) .. "  ·  hold to try again", false, st
+	elseif cs.Price <= 0 then
+		return "Open chest", "Free", true, st
+	elseif st == "Unaffordable" then
+		return "Open chest  ·  not enough gold", string.format("%s %s  ·  need %s more", fmt(cs.Price), money, fmt(cs.Short)), false, st
 	end
-	local afford = gold >= price
-	local sub = afford and string.format("%s gold  ·  you have %s", UIKit.formatNumber(price), UIKit.formatNumber(gold))
-		or string.format("%s gold  ·  need %s more", UIKit.formatNumber(price), UIKit.formatNumber(price - gold))
-	return "Open chest", sub, afford
+	return "Open chest", string.format("%s %s  ·  %s %s", fmt(cs.Price), money, cs.Team and "team has" or "you have", fmt(cs.Balance)), true, st
 end
+
+-- [R5] holding the key while short of gold: start the hold once the gold has arrived (a
+-- deliberate hold still; at most every RETRY seconds so a stale view never spams the server)
+local RETRY = 0.5
+local retryAt = 0
 
 function RunInteract.Update(_dt: number, state: Instance, inRun: boolean)
 	if not ui.Panel then
@@ -438,10 +471,24 @@ function RunInteract.Update(_dt: number, state: Instance, inRun: boolean)
 		sub = string.format("%s s hold  ·  stay within %d studs", tostring(math.floor((t.Hold or CFG.BeaconHold) * 10 + 0.5) / 10), CFG.BeaconRange)
 		progress = holding and math.clamp((now - holdStart) / t.Hold, 0, 1) or 0
 	else
-		label, sub, ok = chestLines(t, state)
+		local cstate
+		label, sub, ok, cstate = chestLines(t)
+		if cstate == "Choosing" then
+			-- a choice is open: no chest prompt beside it (and no purchase: LootUI refuses)
+			if ui.Panel.Visible then
+				ui.Panel.Visible = false
+			end
+			return
+		end
 		progress = LootUI and LootUI.HoldProgress and LootUI.HoldProgress() or 0
-		if not ok then
-			label = "Open chest  ·  not enough gold"
+		if cstate == "Pending" or cstate == "Claimed" then
+			progress = 1
+		end
+		-- the key is still held and the gold just arrived: start the hold now
+		if holding and cstate == "Available" and LootUI.HoldingId and LootUI.HoldingId() == 0 and now >= retryAt then
+			retryAt = now + RETRY
+			holdStart = now
+			LootUI.Press()
 		end
 	end
 	W.Set(ui.Label, label)

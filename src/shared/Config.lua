@@ -1205,6 +1205,11 @@ Config.Monetization = {
 	DoubleGoldMult = 2,
 	VIPExtraRerolls = 1,
 	RevivePromptSeconds = 12, -- how long the revive offer stays up after death
+	-- [R5] the offer never opens Roblox's purchase dialog by itself: only a REVIVE tap does
+	-- (remote ReviveBuy). While that dialog is open the offer's clock waits (at most this long);
+	-- after Roblox confirms the purchase it waits this long for the receipt to revive the hero.
+	RevivePurchaseWaitSeconds = 90,
+	RevivePendingSeconds = 30,
 }
 
 -- The cosmetic store (Config.Features.Store; docs/features/STORE.md). Looks only.

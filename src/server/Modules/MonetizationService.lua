@@ -550,6 +550,15 @@ end
 -- is on its way (the grant itself only ever comes from ProcessReceipt). Store products have
 -- their own line (StoreService); a cancel says nothing here.
 local function onProductPromptFinished(userId: number, productId: number, purchased: boolean)
+	-- [R5] the revive offer follows its own dialog (cancelled -> the offer runs on; bought -> pending
+	-- until the receipt revives). Not a grant: only the receipt grants.
+	local reviveId = Config.Monetization.Products.Revive
+	if type(productId) == "number" and reviveId and reviveId ~= 0 and productId == reviveId then
+		local who = Players:GetPlayerByUserId(userId)
+		if who and ctx.RunManager and ctx.RunManager.OnRevivePromptFinished then
+			ctx.RunManager.OnRevivePromptFinished(who, purchased == true)
+		end
+	end
 	if purchased ~= true or type(productId) ~= "number" or not productHandlers[productId] then
 		return
 	end

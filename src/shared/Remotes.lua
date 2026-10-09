@@ -34,7 +34,7 @@ Remotes.ServerToClient = {
 	"RunResult", -- win / lose stats
 	"ProfileSync", -- lobby data: gold, owned, meta levels, stats, settings, passes
 	"OpenPanel", -- "Joined" after joining a countdown (old: lobby board prompt → panel name)
-	"ReviveOffer", -- died: offer the Revive product for N seconds
+	"ReviveOffer", -- died: offer the Revive product for N seconds ({ Seconds, ProductId, benefit } | { State } | { Close })
 	"PortalOffer", -- the stage portal opened: NEXT STAGE / RETURN TO LOBBY panel (or Close / Chosen)
 	"StageTravel", -- the group is travelling to the next stage: fade + "Stage N" banner
 	"Items", -- this player's run items: { {Id, Count}, ... } (ItemSystem)
@@ -78,6 +78,7 @@ Remotes.ClientToServer = {
 	"SaveSettings", -- ({ Music, Sfx, Shake = 0-1, ReducedEffects, DamageNumbers, Tips = bool }) any subset
 	"Tutorial", -- ("Seen", tipId) | ("Skip") | ("Replay") first-run tips (GoldSystem)
 	"ReviveDecline", -- close the revive offer early
+	"ReviveBuy", -- [R5] the player tapped REVIVE: the server opens Roblox's purchase dialog (never automatically)
 	"RewardClose", -- (seq) the chest reward reel showed every reward up to seq (ends the reward pause)
 	"RequestProfile", -- ask for a ProfileSync
 	"PortalChoice", -- ("Next" | "Return") answer to PortalOffer, validated by StageManager

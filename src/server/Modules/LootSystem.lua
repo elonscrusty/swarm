@@ -1242,10 +1242,20 @@ local function usable(obj: Obj): boolean
 	return st == "Ready"
 end
 
-local function feedback(rp, obj: Obj?, stateName: string, reason: string?)
+-- LootFeedback to the holder: Done (the action happened) or Cancel (+ Reason: gold, used, gone,
+-- far, down, paused, locked, error). [R5] a bought chest's Done also carries Paid (what was taken),
+-- Team (paid from the team gold) and Next (the shared price of the next team chest), so the client
+-- can show the completed purchase apart from the next chest's higher price.
+local function feedback(rp, obj: Obj?, stateName: string, reason: string?, extra: { [string]: any }?)
 	local player: Player = rp.Player
 	if player.Parent then
-		Remotes.FireClient("LootFeedback", player, { Id = obj and obj.Id or 0, State = stateName, Reason = reason })
+		local msg = { Id = obj and obj.Id or 0, State = stateName, Reason = reason }
+		if extra then
+			for k, v in pairs(extra) do
+				msg[k] = v
+			end
+		end
+		Remotes.FireClient("LootFeedback", player, msg)
 	end
 end
 
@@ -1297,10 +1307,12 @@ local function queueChestChoice(r, title: string)
 	end
 end
 
-local function openChest(rp, obj: Obj)
+-- Returns the receipt { Paid, Team, Next } when the chest was opened by this call, else nil
+-- (refused: a Cancel was already sent, nothing was taken).
+local function openChest(rp, obj: Obj): { [string]: any }?
 	if obj.State ~= "Ready" then
 		feedback(rp, obj, "Cancel", "used") -- (a hold that finished after the chest was bought)
-		return
+		return nil
 	end
 	local price
 	local team = isTeamChest(obj)
@@ -1311,14 +1323,14 @@ local function openChest(rp, obj: Obj)
 		if not paid then
 			feedback(rp, obj, "Cancel", "gold")
 			ctx.RunManager.Notify(rp.Player, REASON_TEXT.gold, Color3.fromRGB(255, 120, 120))
-			return
+			return nil
 		end
 	else
 		price = priceFor(rp, obj)
 		if not ctx.GoldSystem.SpendRunGold(rp, price) then
 			feedback(rp, obj, "Cancel", "gold")
 			ctx.RunManager.Notify(rp.Player, REASON_TEXT.gold, Color3.fromRGB(255, 120, 120))
-			return
+			return nil
 		end
 		if ctx.MetaService then
 			ctx.MetaService.OnGoldPaid(rp, price) -- Haggler's Coin Sigil: part of the price back
@@ -1329,6 +1341,7 @@ local function openChest(rp, obj: Obj)
 	-- right after the gold is taken, before any cosmetic step that could fail. What the
 	-- client shows afterwards (card, reveal, skip, close, death) never touches the grant.
 	setState(obj, "Opened")
+	local receipt = { Paid = price, Team = team, Next = team and ctx.GoldSystem.ChestCost() or nil }
 	if team then
 		refreshTeamPrices()
 	end
@@ -1377,6 +1390,7 @@ local function openChest(rp, obj: Obj)
 			warn("[LootSystem] chest hook failed: " .. tostring(hookErr))
 		end
 	end
+	return receipt
 end
 
 local function useChance(rp, obj: Obj)
@@ -1532,7 +1546,13 @@ local function complete(rp, obj: Obj)
 	if obj.OnComplete then
 		obj.OnComplete(rp, obj) -- a feature object (Shrine of Trial)
 	elseif obj.Kind == "Chest" then
-		openChest(rp, obj)
+		-- [R5] a refused chest already sent its Cancel: no "Done" after it (the client must
+		-- not read a refused purchase as an opened chest)
+		local receipt = openChest(rp, obj)
+		if receipt then
+			feedback(rp, obj, "Done", nil, receipt)
+		end
+		return
 	elseif obj.Type == "Rune" then
 		useRune(rp, obj)
 	elseif obj.Type == "Chance" then

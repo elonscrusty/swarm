@@ -2068,7 +2068,7 @@ end
 -- Purse (run gold, the gold pill top right)
 ------------------------------------------------------------------------------------------
 
-local purse = { Shown = nil :: number?, Target = 0, LastPunch = 0, Float = nil :: TextLabel?, FloatAt = 0, FloatSum = 0, Price = 0, Afford = true, AlarmUntil = 0, Need = 0, Red = false }
+local purse = { Shown = nil :: number?, Target = 0, LastPunch = 0, Float = nil :: TextLabel?, FloatAt = 0, FloatSum = 0, Price = 0, Afford = true, AlarmUntil = 0, Need = 0, Red = false, Balance = nil :: number? }
 
 -- "+N" drifting up into the gold pill from just under it; gains close together add up on
 -- one label.
@@ -2110,11 +2110,14 @@ end
 	priced loot in reach. alarm = the player just tried to open it without enough gold:
 	the gold pill flashes red with "NEED N" for a moment and shakes.
 ]]
-function Hud.SetPurseHint(price: number, afford: boolean, alarm: boolean?)
+-- [R5] balance: the gold this price is paid from (LootUI.WalletOf: team gold for a team chest, the
+-- player's run gold for a shrine); the shortfall is price - balance of the same two numbers.
+function Hud.SetPurseHint(price: number, afford: boolean, alarm: boolean?, balance: number?)
 	purse.Price, purse.Afford = price, afford
+	purse.Balance = balance
 	if alarm and ui.Purse then
 		purse.AlarmUntil = os.clock() + 1.4
-		purse.Need = math.max(0, price - Hud.Gold())
+		purse.Need = math.max(0, price - (balance or Hud.Gold()))
 		UIAnim.Punch(ui.Purse, 0.12)
 		if not (ClientSettings.Reduced() or ClientPerformance.Reduced()) then
 			local face = ui.PurseFace :: Frame
@@ -2184,13 +2187,15 @@ updatePurse = function(dt: number)
 			-- the price in reach ("140 / 34" read like a fraction of a total)
 			hint, hintColor = "COST " .. UIKit.formatNumber(purse.Price), K.Good
 		else
-			hint, hintColor = "NEED " .. UIKit.formatNumber(purse.Price - gold), K.Danger
+			hint, hintColor = "NEED " .. UIKit.formatNumber(math.max(1, purse.Price - (purse.Balance or gold))), K.Danger
 		end
 	else
 		-- [stream E2] no chest in reach: the team's next chest price (SwarmState ChestCost) beside the team gold
 		local nextCost = tonumber(Remotes.State():GetAttribute("ChestCost"))
 		if nextCost and nextCost > 0 then
-			hint, hintColor = "CHEST " .. UIKit.formatNumber(nextCost), gold >= nextCost and K.Good or K.CreamMuted
+			-- [R5] after a purchase the raised price is the NEXT chest's, not what the last one cost
+			local bought = (tonumber(Remotes.State():GetAttribute("TeamChestsBought")) or 0) > 0
+			hint, hintColor = (bought and "NEXT CHEST " or "CHEST ") .. UIKit.formatNumber(nextCost), gold >= nextCost and K.Good or K.CreamMuted
 		end
 	end
 	if ui.PurseHint.Visible ~= (hint ~= "") then

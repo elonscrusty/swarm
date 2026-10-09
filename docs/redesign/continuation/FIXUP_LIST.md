@@ -11,7 +11,7 @@
   - heroes-regression: "in Order: Archer". Old heroes are now hidden by design, so update the test.
   - coop-regression: "kill records emitted drops". XP drops are personal shards now (E2).
   - layout store gift ids
-- **Owner decision:** the Revive prompt opens automatically on elimination with a 12 s countdown (existing
+- DONE (studio review R5, product and benefit unchanged; owner may still revert) **Owner decision:** the Revive prompt opens automatically on elimination with a 12 s countdown (existing
   behaviour, C8). The brief wants a deliberate button. Proposal: open it only when the player taps REVIVE.
 - **Owner decision:** the class bonus changes. Stream C removed the first four classes' old innate
   bonuses, and Granny's boost fire trail.

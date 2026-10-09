@@ -38,7 +38,7 @@ pass id) or `UserOwnsGamePassAsync` on the server. No client message grants a pa
 | Gold500 | 3716061041 | SHOP "500 Gold: A pouch of gold." | +500 account gold | `data.Gold` | yes, every PurchaseId is one grant | `buildProductHandlers` gold handler |
 | Gold1500 | 3716061205 | SHOP "1,500 Gold" | +1500 | `data.Gold` | yes | same |
 | Gold5000 | 3716061092 | SHOP "5,000 Gold" | +5000 | `data.Gold` | yes | same |
-| Revive | 3716061270 | run overlay "YOU FELL! / REVIVE R$n" for `RevivePromptSeconds` (12) on elimination, once per run | +1 `ReviveTokens`; spent at once if the buyer is waiting for / just lost the offer (`RunManager.OnReviveTokenGranted`), else kept and spent automatically at the next elimination | `data.ReviveTokens` | yes (one product revive per run) | revive handler; consumption `RunManager.OnReviveTokenGranted` / `eliminate` |
+| Revive | 3716061270 | run overlay "YOU FELL! / REVIVE R$n" for `RevivePromptSeconds` (12) on elimination, once per run; the overlay states the real benefit (50% HP where you fell, 3 s protection, nearby enemies cleared, build kept, one per run). Since R5 (2026-10-09) Roblox's dialog opens only when the player taps REVIVE (remote `ReviveBuy`), with server states Prompting / Cancelled / Failed / Pending / Fulfilled | +1 `ReviveTokens`; spent at once if the buyer is waiting for / just lost the offer (`RunManager.OnReviveTokenGranted`), else kept and spent automatically at the next elimination | `data.ReviveTokens` | yes (one product revive per run) | revive handler; consumption `RunManager.OnReviveTokenGranted` / `eliminate` |
 
 Every receipt is recorded in `data.PurchaseIds` (+ `data.PurchaseTimes`, new) by `DataService.RecordPurchase`.
 

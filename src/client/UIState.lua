@@ -267,6 +267,12 @@ function UIState.SetHold(name: string, on: boolean)
 	end
 end
 
+-- [R5] Is this hold on? (LootUI: the live upgrade / reward cards hold "Cards" without taking the
+-- world input, and no chest prompt or purchase may sit beside an open choice.)
+function UIState.HoldActive(name: string): boolean
+	return holds[name] == true
+end
+
 -- Automatic reward feedback on screen (mini reel / compact reward card). Holds non-critical
 -- headlines and hides the loot prompt.
 function UIState.SetFeedback(on: boolean, key: string?)

@@ -714,6 +714,65 @@ local function canAfford(model: Model): boolean
 	return walletOf(model) >= priceOf(model)
 end
 
+--[[
+	[R5] One chest transaction state for every display (this prompt, RunInteract's prompt, the HUD
+	purse hint), from ONE price and ONE balance (priceOf / walletOf above: a team chest is the
+	SwarmState ChestCost against TeamRunGold; anything else Price x GoldMult against this player's
+	RunGold), so the shortfall is always Price - Balance of those same two numbers.
+	  Available     Ready, the balance covers the price (or it is free)
+	  Unaffordable  Ready, Balance < Price (Short = the gold still missing)
+	  Opening       this player's hold on it is running
+	  Pending       the hold is complete; the server is deciding (LootHold / LootFeedback)
+	  Choosing      a reward / upgrade choice is open: no chest prompt and no purchase beside it
+	  Claimed       opened (by this player: Paid = what was taken, Next = the next team chest's price)
+	  Failed        the server refused this player's hold for a reason other than gold (Reason)
+]]
+local ANSWER_SHOW = 2.5 -- seconds a claim / failure stays on the prompt
+local lastAnswer = { Id = 0, State = "", Reason = nil :: string?, Paid = nil :: number?, Team = false, Next = nil :: number?, At = -math.huge }
+
+local FAIL_TEXT = {
+	used = "Someone else opened it",
+	gone = "It's gone",
+	far = "Too far away",
+	down = "You're down",
+	paused = "The game is paused",
+	locked = "Defeat its guard first",
+	error = "Something went wrong. Nothing was spent",
+}
+
+-- True while a choice (the live upgrade / reward cards, or a blocking panel) is open.
+local function choosing(): boolean
+	return UIState.HoldActive("Cards") or not UIState.WorldInputAllowed()
+end
+
+local function chestStatus(model: Model): { [string]: any }
+	local id = tonumber(model:GetAttribute("LootId")) or 0
+	local price = priceOf(model)
+	local balance = walletOf(model)
+	local team = teamChest(model)
+	local nextCost = tonumber(Remotes.State():GetAttribute("ChestCost"))
+	local s = { Id = id, Price = price, Balance = balance, Short = math.max(0, price - balance), Team = team, Next = nextCost, State = "Available", Reason = nil :: string?, Paid = nil :: number? }
+	local now = os.clock()
+	local answered = lastAnswer.Id == id and id ~= 0 and now - lastAnswer.At < ANSWER_SHOW
+	if choosing() then
+		s.State = "Choosing"
+	elseif hold.Id ~= 0 and hold.Id == id then
+		s.State = hold.Waiting and "Pending" or "Opening"
+	elseif not usable(model) then
+		s.State = "Claimed"
+		if answered and lastAnswer.State == "Done" then
+			s.Paid = lastAnswer.Paid
+			s.Next = lastAnswer.Next or nextCost
+		end
+	elseif answered and lastAnswer.State == "Cancel" and lastAnswer.Reason ~= "gold" then
+		s.State = "Failed"
+		s.Reason = FAIL_TEXT[lastAnswer.Reason or ""] or "It couldn't be opened"
+	elseif price > 0 and balance < price then
+		s.State = "Unaffordable"
+	end
+	return s
+end
+
 -- [stream F] the run interact prompt (RunInteract) presents chests and forwards the press:
 --   LootUI.Target()       the loot model in reach (nil when none)
 --   LootUI.PriceOf(m)     what it costs this player
@@ -731,6 +790,25 @@ end
 function LootUI.WalletOf(model: Model): number -- the balance this loot is paid from (team gold for a team chest)
 	return walletOf(model)
 end
+-- [R5] the chest transaction state (see chestStatus): { State, Price, Balance, Short, Team, Next, Paid, Reason }
+function LootUI.ChestStatus(model: Model): { [string]: any }
+	return chestStatus(model)
+end
+-- [R5] a choice is open: chest prompts hide and no chest is bought meanwhile
+function LootUI.Choosing(): boolean
+	return choosing()
+end
+-- [R5] the loot id of this player's hold in progress (0 = none)
+function LootUI.HoldingId(): number
+	return hold.Id
+end
+-- [R5] the chest this player just bought (within ANSWER_SHOW s): { Id, Paid, Team, Next } or nil
+function LootUI.RecentClaim(): { [string]: any }?
+	if lastAnswer.State == "Done" and lastAnswer.Id ~= 0 and os.clock() - lastAnswer.At < ANSWER_SHOW and lastAnswer.Paid ~= nil then
+		return { Id = lastAnswer.Id, Paid = lastAnswer.Paid, Team = lastAnswer.Team, Next = lastAnswer.Next }
+	end
+	return nil
+end
 function LootUI.HoldProgress(): number
 	if hold.Id == 0 then
 		return 0
@@ -744,13 +822,17 @@ function LootUI.Press()
 	if not t or hold.Id ~= 0 or not usable(t) or not UIState.WorldInputAllowed() then
 		return
 	end
+	-- [R5] no purchase beside an open choice (its prompt is hidden too)
+	if choosing() then
+		return
+	end
 	-- a possible revive (or the beacon) owns the interact key: an incidental chest is not bought
 	if LootUI.Suppress and LootUI.Suppress() then
 		return
 	end
 	if not canAfford(t) then
 		UIAnim.Punch(ui.Price.Frame, 0.3)
-		Hud.SetPurseHint(priceOf(t), false, true)
+		Hud.SetPurseHint(priceOf(t), false, true, walletOf(t))
 		return
 	end
 	hold.Id = tonumber(t:GetAttribute("LootId")) or 0
@@ -796,10 +878,22 @@ local function onFeedback(data)
 		hold.Id = 0
 		hold.Waiting = false
 	end
+	-- [R5] the answer for this loot (claim / refusal shown on its prompt for a moment)
+	if type(data.Id) == "number" and data.Id ~= 0 and (data.State == "Done" or data.State == "Cancel") then
+		lastAnswer.Id, lastAnswer.State, lastAnswer.At = data.Id, data.State, os.clock()
+		lastAnswer.Reason = type(data.Reason) == "string" and data.Reason or nil
+		lastAnswer.Paid = type(data.Paid) == "number" and data.Paid or nil
+		lastAnswer.Team = data.Team == true
+		lastAnswer.Next = type(data.Next) == "number" and data.Next or nil
+	end
 	if data.State == "Cancel" and data.Reason == "gold" then
 		UIAnim.Punch(ui.Price.Frame, 0.3)
+		-- the refused loot's own price and balance (not whatever is nearest now)
 		local t = target
-		Hud.SetPurseHint(t and priceOf(t) or 0, false, true)
+		if t and tonumber(t:GetAttribute("LootId")) ~= data.Id then
+			t = nil
+		end
+		Hud.SetPurseHint(t and priceOf(t) or 0, false, true, t and walletOf(t) or nil)
 	end
 end
 
@@ -1028,8 +1122,13 @@ local function fillPrompt(model: Model, progress: number, tight: boolean?): numb
 		ui.HoldLabel.Text = touch and "HOLD" or (pad and "HOLD  X" or "HOLD  E")
 		y += 44
 		local note = ""
-		if price > 0 and not canAfford(model) then
-			note = string.format(teamChest(model) and "Need %s more team gold" or "Need %s more gold", UIKit.formatNumber(price - walletOf(model)))
+		local cs = kind == "Chest" and chestStatus(model) or nil
+		if cs and cs.State == "Failed" then
+			note = cs.Reason .. " · hold to try again"
+		elseif price > 0 and not canAfford(model) then
+			note = string.format(teamChest(model) and "Need %s more team gold" or "Need %s more gold", UIKit.formatNumber(math.max(0, price - walletOf(model))))
+		elseif cs and cs.State == "Pending" then
+			note = "Opening..."
 		elseif progress > 0 then
 			note = string.format("Opening %d%%", math.floor(progress * 100))
 		end
@@ -1381,7 +1480,7 @@ function LootUI.Update(_dt: number, inRun: boolean)
 	-- hidden while a panel or reward feedback is on screen (the opened chest's prompt must
 	-- not sit beside its own reward); a hold in progress lets go
 	local allowed = UIState.WorldInputAllowed()
-	if not allowed and hold.Id ~= 0 then
+	if (not allowed or choosing()) and hold.Id ~= 0 then -- [R5] a choice opening mid-hold lets go too
 		LootUI.Release()
 	end
 	local shown = target ~= nil and target.Parent ~= nil and allowed
@@ -1389,26 +1488,32 @@ function LootUI.Update(_dt: number, inRun: boolean)
 	if shown and LootUI.HideChestPrompt and (target :: Model):GetAttribute("LootKind") == "Chest" and LootUI.HideChestPrompt() then
 		shown = false
 	end
+	-- [R5] no chest prompt beside an open choice (the live cards don't block world input)
+	if shown and (target :: Model):GetAttribute("LootKind") == "Chest" and choosing() then
+		shown = false
+	end
 	ui.Prompt.Visible = shown
 	if shown and usable(target :: Model) then
 		local t = target :: Model
-		Hud.SetPurseHint(priceOf(t), canAfford(t))
+		Hud.SetPurseHint(priceOf(t), canAfford(t), nil, walletOf(t))
 	else
 		Hud.SetPurseHint(0, true)
 	end
-	if shown then
-		local t = target :: Model
-		local progress = 0
-		if hold.Id ~= 0 then
-			progress = math.clamp((os.clock() - hold.Start) / math.max(0.1, hold.Seconds), 0, 1)
-			if progress >= 1 then
-				hold.Waiting = true -- the server finishes it; LootFeedback resets
-				if os.clock() - hold.Start > hold.Seconds + 1.5 then
-					hold.Id = 0
-					hold.Waiting = false
-				end
+	-- [R5] the hold's own clock runs whichever prompt draws it (RunInteract hides this one): a
+	-- complete hold waits for the server's answer (Pending), and a lost answer frees it again
+	local progress = 0
+	if hold.Id ~= 0 then
+		progress = math.clamp((os.clock() - hold.Start) / math.max(0.1, hold.Seconds), 0, 1)
+		if progress >= 1 then
+			hold.Waiting = true -- the server finishes it; LootFeedback resets
+			if os.clock() - hold.Start > hold.Seconds + 1.5 then
+				hold.Id = 0
+				hold.Waiting = false
 			end
 		end
+	end
+	if shown then
+		local t = target :: Model
 		local v: Vector2 = kit.VirtualSize()
 		local w = math.min(kit.IsPortrait() and 360 or 340, v.X - 24)
 		ui.Prompt.Size = UDim2.fromOffset(w, ui.Prompt.Size.Y.Offset) -- fillPrompt wraps lines to this width

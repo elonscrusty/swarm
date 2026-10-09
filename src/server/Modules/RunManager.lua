@@ -742,6 +742,9 @@ local resolvingRescue = false -- ResolveRescue is running (its eliminations chec
 -- Player attribute "AwaitingRevive": out of action and deciding on the revive product.
 local function setAwaiting(rp, on: boolean)
 	rp.AwaitingRevive = on
+	if not on then
+		rp.RevivePurchase = nil -- [R5] the purchase state belongs to one open offer
+	end
 	rp.Player:SetAttribute("AwaitingRevive", on or nil)
 end
 
@@ -952,13 +955,87 @@ local function eliminate(rp)
 	end
 	if data and not rp.ProductReviveUsed and ctx.MonetizationService.ReviveAvailable() then
 		setAwaiting(rp, true)
+		rp.RevivePurchase = nil
 		rp.ReviveDeadline = os.clock() + Config.Monetization.RevivePromptSeconds
 		publishDown(rp)
-		Remotes.FireClient("ReviveOffer", rp.Player, { Seconds = Config.Monetization.RevivePromptSeconds, ProductId = Config.Monetization.Products.Revive })
-		ctx.MonetizationService.PromptRevive(rp.Player)
+		-- [R5] the offer explains what the revive really does (the numbers revive() uses below);
+		-- Roblox's purchase dialog opens only when the player taps REVIVE (remote ReviveBuy),
+		-- never automatically
+		Remotes.FireClient("ReviveOffer", rp.Player, {
+			Seconds = Config.Monetization.RevivePromptSeconds,
+			ProductId = Config.Monetization.Products.Revive,
+			HPShare = Config.Player.ReviveHPFraction,
+			Protect = Config.Player.ReviveInvulnSeconds,
+			ClearRadius = Config.Player.ReviveClearRadius,
+			PerRun = 1, -- rp.ProductReviveUsed: one product revive per run
+		})
 		return
 	end
 	finalizeElimination(rp)
+end
+
+--[[
+	[R5] The paid revive's purchase, step by step (the offer above stays open throughout):
+	  ReviveBuy (the REVIVE tap)   -> "Prompting": Roblox's dialog opens; the offer's clock waits
+	                                  (RevivePurchaseWaitSeconds at most)
+	  dialog closed, not bought    -> "Cancelled": nothing changed, the offer runs on with the time
+	                                  it had left (at least a few seconds)
+	  dialog closed, bought        -> "Pending": waiting for the receipt (RevivePendingSeconds)
+	  the receipt saved            -> OnReviveTokenGranted revives the hero: the offer closes with
+	                                  State "Fulfilled". Only this is success
+	  the dialog could not open    -> "Failed": try again
+	The client shows these states (UIBuilder revive section); it never decides any of them.
+]]
+local REVIVE_MIN_LEFT = 4 -- seconds a cancelled purchase leaves on the offer at least
+
+local function reviveState(rp, stateName: string, extra: { [string]: any }?)
+	rp.RevivePurchase = stateName
+	local msg = { State = stateName, Seconds = math.max(0, rp.ReviveDeadline - os.clock()) }
+	if extra then
+		for k, v in pairs(extra) do
+			msg[k] = v
+		end
+	end
+	Remotes.FireClient("ReviveOffer", rp.Player, msg)
+end
+
+-- The REVIVE tap: open Roblox's purchase dialog for this player's open offer (server-checked).
+function RunManager.RequestRevivePurchase(player: Player)
+	local rp = byPlayer[player]
+	if not rp or not rp.AwaitingRevive or rp.Returned or rp.ProductReviveUsed or phase ~= "Running" then
+		return
+	end
+	if rp.RevivePurchase == "Prompting" or rp.RevivePurchase == "Pending" then
+		return -- one dialog at a time; a confirmed purchase is waiting for its receipt
+	end
+	if not ctx.MonetizationService.ReviveAvailable() then
+		return
+	end
+	local now = os.clock()
+	rp.ReviveLeftAtPrompt = math.max(0, rp.ReviveDeadline - now)
+	if not ctx.MonetizationService.PromptRevive(player) then
+		reviveState(rp, "Failed", { Reason = "The purchase window could not open. Try again." })
+		return
+	end
+	rp.ReviveDeadline = now + Config.Monetization.RevivePurchaseWaitSeconds
+	reviveState(rp, "Prompting")
+end
+
+-- Roblox's dialog for the revive product closed (MonetizationService). purchased = Roblox says it
+-- was bought: still not a revive until the receipt is saved (OnReviveTokenGranted).
+function RunManager.OnRevivePromptFinished(player: Player, purchased: boolean)
+	local rp = byPlayer[player]
+	if not rp or not rp.AwaitingRevive or rp.Returned or rp.RevivePurchase ~= "Prompting" then
+		return -- no open offer (already revived by the receipt, declined, timed out or a store purchase)
+	end
+	local now = os.clock()
+	if purchased then
+		rp.ReviveDeadline = now + Config.Monetization.RevivePendingSeconds
+		reviveState(rp, "Pending")
+	else
+		rp.ReviveDeadline = now + math.max(REVIVE_MIN_LEFT, rp.ReviveLeftAtPrompt or 0)
+		reviveState(rp, "Cancelled")
+	end
 end
 
 -- Downed heroes nobody can reach any more are eliminated now (no waiting out the bleed).
@@ -1253,6 +1330,8 @@ function RunManager.OnReviveTokenGranted(player: Player)
 		data.ReviveTokens -= 1
 		rp.ProductReviveUsed = true
 		revive(rp, "Revived!")
+		-- [R5] the server's revive is the only confirmation the offer shows
+		Remotes.FireClient("ReviveOffer", player, { Close = true, State = "Fulfilled" })
 	else
 		RunManager.Notify(player, "Revive saved. It will be used automatically next time you are out.", Color3.fromRGB(255, 230, 120))
 	end
@@ -2945,6 +3024,10 @@ function RunManager.Step(dt: number)
 			if menuPaused or frozen or ctx.StageManager.IsHolding() then
 				rp.ReviveDeadline += dt
 			elseif now >= rp.ReviveDeadline then
+				if rp.RevivePurchase == "Pending" then
+					-- [R5] Roblox said bought but no receipt yet: honest about what happens next
+					RunManager.Notify(rp.Player, "Still waiting for the payment. If it goes through, you'll be revived, or it's saved for your next fall.", Color3.fromRGB(255, 230, 120))
+				end
 				finalizeElimination(rp)
 			end
 		end
@@ -3431,9 +3514,14 @@ function RunManager.Start()
 
 	Remotes.Listen("ReviveDecline", function(player)
 		local rp = byPlayer[player]
-		if rp and rp.AwaitingRevive then
+		-- [R5] not while a confirmed purchase waits for its receipt (it revives when it lands)
+		if rp and rp.AwaitingRevive and rp.RevivePurchase ~= "Pending" then
 			finalizeElimination(rp)
 		end
+	end, 2)
+	-- [R5] the REVIVE tap: the server opens the purchase dialog (RequestRevivePurchase checks it)
+	Remotes.Listen("ReviveBuy", function(player)
+		RunManager.RequestRevivePurchase(player)
 	end, 2)
 
 	-- [stream E1] Hold-to-revive (Survival.Downed): ReviveHold(true) while interact is held (the

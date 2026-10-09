@@ -12,7 +12,8 @@
 	temporary balance owned by the whole team, never saved and never converted into account
 	gold. Credited once per eligible kill by enemy kind (CreditKill: Normal 3, Tough 6,
 	Elite 20); it pays for chests only (BuyChest: round(40 x 1.35^k), at most 400, k = chests
-	bought this run). SwarmState attributes TeamRunGold and ChestCost show both. It starts at
+	bought this run). SwarmState attributes TeamRunGold and ChestCost show both (and
+	TeamChestsBought the purchase count, so the client can say "next chest"). It starts at
 	Economy.Gold.StartGold with every run (BeginRun sees a new run id) and is cleared in the
 	lobby. With the
 	redesign economy on, chests no longer spend the personal escrow below; that escrow, its
@@ -80,6 +81,11 @@ local function publishTeam()
 	local cost = GoldSystem.ChestCost()
 	if state:GetAttribute("ChestCost") ~= cost then
 		state:SetAttribute("ChestCost", cost)
+	end
+	-- [R5] chests bought this run: the HUD labels the price "NEXT CHEST" once one was bought, so
+	-- the raised price never reads as what the last chest cost
+	if state:GetAttribute("TeamChestsBought") ~= team.Bought then
+		state:SetAttribute("TeamChestsBought", team.Bought)
 	end
 end
 

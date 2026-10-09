@@ -4596,9 +4596,57 @@ end
 -- Revive offer
 ------------------------------------------------------------------------------------------
 
-local revive: { [string]: any } = {}
+--[[
+	[R5] The offer's states, all decided by the server (RunManager eliminate / RequestRevivePurchase /
+	OnRevivePromptFinished / OnReviveTokenGranted; ReviveOffer { State }):
+	  Eligible    the offer: what the revive really does, the Roblox price, REVIVE / NO THANKS
+	  Requesting  REVIVE tapped, waiting for the server to open Roblox's dialog
+	  Prompting   Roblox's dialog is open: the timer waits
+	  Pending     Roblox says bought: waiting for the server to revive (never shown as success)
+	  Cancelled   not bought: the run is unchanged, the offer runs on
+	  Failed      the dialog could not open: try again
+	  Fulfilled   the server revived the hero: the offer closes ({ Close, State = "Fulfilled" })
+	Unavailable = no offer at all (no product, or the run's paid revive was used): the server sends none.
+	The native dialog never opens by itself: only the REVIVE tap asks for it.
+]]
+local revive: { [string]: any } = { State = "Eligible", Benefit = "" }
 local reviveDeadline = 0
 local reviveSeconds = 10
+local reviveTimerRuns = true -- false while Roblox's dialog is open / the purchase is pending
+
+local REVIVE_TEXT = {
+	Requesting = "Opening the Roblox purchase window...",
+	Prompting = "Finish or cancel the Roblox purchase window. The timer waits.",
+	Pending = "Roblox confirmed the purchase. Waiting for the server to revive you...",
+	Cancelled = "Purchase not completed. Your run is unchanged.",
+}
+
+local function setReviveState(stateName: string, note: string?)
+	revive.State = stateName
+	local canBuy = (stateName == "Eligible" or stateName == "Cancelled" or stateName == "Failed") and revive.PriceReady == true
+	revive.Buy.SetEnabled(canBuy)
+	revive.No.SetEnabled(stateName ~= "Pending" and stateName ~= "Requesting")
+	if stateName == "Requesting" or stateName == "Prompting" then
+		revive.Buy.SetText("WAITING...")
+	elseif stateName == "Pending" then
+		revive.Buy.SetText("REVIVING...")
+	elseif revive.PriceReady == true then
+		revive.Buy.SetText("REVIVE  R$" .. tostring(revive.Price))
+	end
+	reviveTimerRuns = not (stateName == "Requesting" or stateName == "Prompting" or stateName == "Pending")
+	local lead = note or REVIVE_TEXT[stateName]
+	local str = lead and (lead .. "\n" .. revive.Benefit) or revive.Benefit
+	revive.Text.Text = str
+	-- the modal adds up offset heights (fitModal): size the wrapped lines (average glyph ~0.5 em)
+	local px = revive.Text.TextSize
+	local width = math.max(160, math.min(460, virtualSize().X - 32) * 0.92 - 16)
+	local perLine = math.max(10, math.floor(width / (px * 0.5)))
+	local rows = 0
+	for line in string.gmatch(str .. "\n", "(.-)\n") do
+		rows += math.max(1, math.ceil(#line / perLine))
+	end
+	revive.Text.Size = UDim2.new(0.92, 0, 0, rows * (px + 4) + 2)
+end
 
 local function buildRevive()
 	local m = UIKit.Modal(root, "Revive", 460, 340, Theme.Z.Revive)
@@ -4614,7 +4662,7 @@ local function buildRevive()
 	revive.Heart = Icons.Draw(content, "heart", { Size = 48, LayoutOrder = 1 })
 	revive.Title = text(content, "H1", "YOU FELL!", { LayoutOrder = 2, Size = UDim2.new(0.8, 0, 0, TS(26) + 14), TextXAlignment = Enum.TextXAlignment.Center })
 	UIBuilder.TitlePlate(revive.Title, C.Danger)
-	revive.Text = text(content, "Body", "Revive and keep fighting?", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center })
+	revive.Text = text(content, "Body", "Revive and keep fighting?", { LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, Size = UDim2.new(0.92, 0, 0, TS(16) + 4) })
 	local row = new("Frame", { Size = UDim2.new(1, 0, 0, Theme.Size.Button), BackgroundTransparency = 1, LayoutOrder = 4 }, content)
 	UIKit.list(row, { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12) })
 	revive.Buy = UIKit.Button(row, {
@@ -4627,9 +4675,19 @@ local function buildRevive()
 		LayoutOrder = 1,
 		OnClick = function()
 			local id = Config.Monetization.Products.Revive
-			-- only with a real platform price (the lookup below); never sold blind
-			if id and id ~= 0 and revive.PriceReady == true then
-				MarketplaceService:PromptProductPurchase(player, id)
+			-- only with a real platform price (the lookup below); never sold blind. [R5] the
+			-- server opens Roblox's dialog (ReviveBuy) and reports every step back
+			local st = revive.State
+			if id and id ~= 0 and revive.PriceReady == true and (st == "Eligible" or st == "Cancelled" or st == "Failed") then
+				setReviveState("Requesting")
+				Remotes.Get("ReviveBuy"):FireServer()
+				local token = revive.OfferToken
+				task.delay(6, function()
+					-- no answer from the server: let the player try again (nothing was bought)
+					if revive.OfferToken == token and revive.State == "Requesting" then
+						setReviveState("Failed", "The purchase window did not open. Try again.")
+					end
+				end)
 			end
 		end,
 	})
@@ -4639,6 +4697,9 @@ local function buildRevive()
 		Size = UDim2.fromOffset(170, Theme.Size.Button),
 		LayoutOrder = 2,
 		OnClick = function()
+			if revive.State == "Pending" or revive.State == "Requesting" then
+				return -- a confirmed purchase is on its way: the server revives or closes the offer
+			end
 			Remotes.Get("ReviveDecline"):FireServer()
 			hide(revive.Overlay, "Revive")
 		end,
@@ -4652,12 +4713,43 @@ local function buildRevive()
 end
 
 local function onReviveOffer(data)
+	if type(data) ~= "table" then
+		return
+	end
 	if data.Close then
+		revive.State = data.State == "Fulfilled" and "Fulfilled" or "Closed"
 		hide(revive.Overlay, "Revive")
 		return
 	end
+	if type(data.State) == "string" then
+		-- [R5] a step of the purchase (server-decided); the offer itself stays as it was
+		if not revive.Overlay.Visible then
+			return
+		end
+		local left = tonumber(data.Seconds)
+		if left and data.State ~= "Prompting" and data.State ~= "Pending" then
+			reviveSeconds = math.max(reviveSeconds, left)
+			reviveDeadline = os.clock() + left
+		end
+		if data.State == "Failed" then
+			setReviveState("Failed", type(data.Reason) == "string" and data.Reason or "The purchase could not start. Try again.")
+		elseif REVIVE_TEXT[data.State] then
+			setReviveState(data.State)
+		end
+		return
+	end
+	revive.OfferToken = (revive.OfferToken or 0) + 1
 	reviveSeconds = math.max(1, data.Seconds or 10)
 	reviveDeadline = os.clock() + reviveSeconds
+	-- [R5] what the revive really does, from the server's own numbers (RunManager revive())
+	local hp = tonumber(data.HPShare)
+	local protect = tonumber(data.Protect)
+	local lines = {}
+	table.insert(lines, string.format("Back where you fell with %s HP%s.", hp and (tostring(math.floor(hp * 100 + 0.5)) .. "%") or "some",
+		protect and string.format(" and %s s of protection", tostring(protect)) or ""))
+	table.insert(lines, "Level, weapons and items are kept." .. (tonumber(data.ClearRadius) and " Nearby enemies are cleared." or ""))
+	table.insert(lines, "One paid revive per run.")
+	revive.Benefit = table.concat(lines, "\n")
 	-- the hero's portrait when there is one: the heart moves onto its corner
 	local heroId = tostring(player:GetAttribute("CharacterId") or (profile and profile.SelectedCharacter) or CharacterData.Default)
 	local bust = ArtImage.RoundPortrait(revive.Hero, ArtImage.Portrait(heroId), nil)
@@ -4678,6 +4770,8 @@ local function onReviveOffer(data)
 	-- the price comes from Roblox; until it answers the button waits, and a failed lookup
 	-- (or an item off sale) shows PRICE UNAVAILABLE instead of a blind purchase
 	revive.PriceReady = false
+	revive.Price = nil
+	setReviveState("Eligible")
 	revive.Buy.SetText("REVIVE  R$ ...")
 	revive.Buy.SetEnabled(false)
 	revive.PriceToken = (revive.PriceToken or 0) + 1
@@ -4691,8 +4785,8 @@ local function onReviveOffer(data)
 		end
 		if ok and info and type(info.PriceInRobux) == "number" and info.IsForSale ~= false then
 			revive.PriceReady = true
-			revive.Buy.SetText("REVIVE  R$" .. tostring(info.PriceInRobux))
-			revive.Buy.SetEnabled(true)
+			revive.Price = info.PriceInRobux
+			setReviveState(revive.State) -- enables REVIVE only in a state that may buy
 		else
 			revive.Buy.SetText("PRICE UNAVAILABLE")
 		end
@@ -6134,11 +6228,19 @@ local function updateFrame(dt: number)
 		levelUp.Pill.SetText(Choice.choicePillText(Choice.choiceSecondsLeft(), virtualSize().X < 520))
 	end
 	if revive.Overlay.Visible then
-		local left = math.max(0, reviveDeadline - os.clock())
-		revive.Timer.Text = UIKit.track(string.format("Offer ends in %ds", math.ceil(left)))
-		revive.Meter.Set(left / reviveSeconds)
-		if left <= 0 then
-			hide(revive.Overlay, "Revive")
+		if reviveTimerRuns then
+			local raw = reviveDeadline - os.clock()
+			local left = math.max(0, raw)
+			revive.Timer.Text = UIKit.track(string.format("Offer ends in %ds", math.ceil(left)))
+			revive.Meter.Set(left / reviveSeconds)
+			-- [R5] the server closes the offer; this is only the fallback when its Close is lost
+			if raw <= -2 then
+				hide(revive.Overlay, "Revive")
+			end
+		else
+			-- the dialog is open / the purchase is pending: the server's clock waits too
+			reviveDeadline += dt
+			revive.Timer.Text = UIKit.track(revive.State == "Pending" and "Waiting for the server" or "Timer paused")
 		end
 	end
 	TravelOverlay.SetResultsOpen(results.Overlay.Visible)
