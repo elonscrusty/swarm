@@ -31,7 +31,8 @@ end
 
 local labels = { FuseTick = "BOMB FUSE", SpitterWindup = "ACID ATTACK", Lunge = "CHARGE",
 	BossWarn = "BOSS ATTACK", BossSummon = "ENEMIES SUMMONED", BurrowWarn = "BURROW ATTACK",
-	Hurt = "HIT", Revive = "REVIVED", LevelUp = "LEVEL UP", Death = "FALLEN" }
+	Hurt = "HIT", Revive = "REVIVED", LevelUp = "LEVEL UP", Death = "FALLEN",
+	Downed = "YOU ARE DOWN", BeaconActivate = "BEACON LIT", BossSpawn = "BOSS ARRIVES" } -- [stream G]
 local cue: TextLabel? = nil
 local lastCue = -math.huge
 local cueToken = 0

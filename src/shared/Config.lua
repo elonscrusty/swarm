@@ -1010,6 +1010,13 @@ Config.Camera = {
 	SpectatePanSeconds = 0.4, -- glide to the next teammate when the spectated one falls
 	ShakeScale = 1, -- multiplies every screen shake (0 = off)
 	ShakeMax = 0.6, -- studs; shakes stay small
+	-- [stream G] ordinary feedback (hits taken, explosions, kills) shakes at most OrdinaryShakeMax studs
+	-- and for ShakeSeconds (< 0.12 s); a boss event (roar, phase change, Boss stage, huge kill) is
+	-- the one capped longer shake: at most BossShakeMax studs for BossShakeSeconds. Reduced effects: none.
+	OrdinaryShakeMax = 0.4,
+	ShakeSeconds = 0.11,
+	BossShakeMax = 0.55,
+	BossShakeSeconds = 0.3,
 	KickMax = 4, -- studs: the most a camera punch (CombatFx big kills, evolution) pulls in
 }
 
@@ -1256,6 +1263,9 @@ Config.Invite = {
 	picks a note of this scale instead) with Climb (seconds: quick repeats walk up the
 	scale, a pause resets it), DuckMusic (seconds the music dips under this sound),
 	World = played at a world position (3D, quieter far away) when the caller gives one.
+	[stream G] Keep = the end-of-run sound sweep (Audio.StopEffects) lets it finish; Loop = a
+	looping hum driven by Audio.SetLoop (Volume x LevelLow..1, speed SpeedLow..SpeedHigh by level,
+	Fade s), not part of the voice mix. Audio.Play / PlayAt also take a one-off gain multiplier.
 
 	Mixing goal (owner feedback: "less annoying"): the frequent sounds (hits, deaths, gems,
 	coins, clicks) are quiet, soft-timbred and rate-limited; the rare cues that carry
@@ -1321,6 +1331,40 @@ Config.Sounds = {
 	ResultsLose = { Id = "rbxassetid://106619962538253", Volume = 0.3, Category = "UI", MinGap = 1, Pitch = 0.9, PitchVar = 0, DuckMusic = 2.4 }, -- results after a loss (SWARM SFX Death, softer)
 	PartyJoin = { Id = "rbxassetid://105588297309015", Volume = 0.22, Category = "UI", MinGap = 0.4, Pitch = 0.9, PitchVar = 0.02 }, -- a duo partner joins the menu party (SWARM SFX Item)
 	TitleStart = { Id = "rbxassetid://130072904039232", Volume = 0.34, Category = "UI", MinGap = 0.3, Pitch = 0.8, PitchVar = 0.02 }, -- PLAY on the title (SWARM SFX Click, deeper)
+	-- CLASS SIGNATURE CUES (stream G, client ClassSfx.lua; docs/AUDIO.md "Second batch"). Quiet and
+	-- rate-limited, in the Weapon group (3 voices, under the Combat slider) so a fight never starves
+	-- hits, pickups or warnings of voices. A teammate's cue plays at Config.Feel.ClassSfx.OtherGain.
+	-- All "SWARM SFX" originals from tools/synth_sfx.py; volumes from each file's loudest 100 ms
+	-- (target -29 dB for the frequent ones, like Hit and Coin).
+	ScrapClatter = { Id = "rbxassetid://126675498482317", Volume = 0.16, Category = "Weapon", MinGap = 0.07, PitchVar = 0.14 }, -- Ruckus: tin bits clatter
+	ToastPop = { Id = "rbxassetid://89543620087020", Volume = 0.11, Category = "Weapon", MinGap = 0.07, PitchVar = 0.1 }, -- Toastmaster: spring + pop
+	BubbleBloop = { Id = "rbxassetid://132010916160149", Volume = 0.085, Category = "Weapon", MinGap = 0.07, PitchVar = 0.12 }, -- Captain Croak: rubbery bloop
+	YarnPop = { Id = "rbxassetid://81759392777602", Volume = 0.11, Category = "Weapon", MinGap = 0.07, PitchVar = 0.08 }, -- Granny Boom: fuse + pomf
+	DodgeballThump = { Id = "rbxassetid://130806214212181", Volume = 0.08, Category = "Weapon", MinGap = 0.07, PitchVar = 0.08 }, -- Coach Crunch: rubber thump
+	DodgeballWhistle = { Id = "rbxassetid://125785610035813", Volume = 0.08, Category = "Weapon", MinGap = 0.35, PitchVar = 0.03 }, -- Coach Crunch: short pea whistle
+	MopSwoosh = { Id = "rbxassetid://100812590264480", Volume = 0.125, Category = "Weapon", MinGap = 0.1, PitchVar = 0.1 }, -- Doug: wet swoosh
+	MopSqueak = { Id = "rbxassetid://130304148137330", Volume = 0.085, Category = "Weapon", MinGap = 0.25, PitchVar = 0.1 }, -- Doug: floor squeak
+	ConfettiRattle = { Id = "rbxassetid://125336972916367", Volume = 0.26, Category = "Weapon", MinGap = 0.12, PitchVar = 0.1 }, -- Rambozo: popper rattle
+	ConfettiHonk = { Id = "rbxassetid://123550918869276", Volume = 0.075, Category = "Weapon", MinGap = 0.4, PitchVar = 0.04 }, -- Rambozo: bulb-horn honk
+	GymScrape = { Id = "rbxassetid://123947392192969", Volume = 0.16, Category = "Weapon", MinGap = 0.12, PitchVar = 0.1 }, -- Swolverine: gauntlet scrape
+	PuckClack = { Id = "rbxassetid://101673143804604", Volume = 0.2, Category = "Weapon", MinGap = 0.07, PitchVar = 0.1 }, -- Crash Cassidy: puck clack
+	SkateRoll = { Id = "rbxassetid://78117229124778", Volume = 0.095, Category = "Weapon", MinGap = 0.35, PitchVar = 0.06 }, -- Crash Cassidy: skate roll
+	GloveThud = { Id = "rbxassetid://87565218066949", Volume = 0.11, Category = "Weapon", MinGap = 0.08, PitchVar = 0.08 }, -- Knuckles: leather thud
+	GloveBell = { Id = "rbxassetid://111533137471424", Volume = 0.075, Category = "Weapon", MinGap = 0.35, PitchVar = 0.02 }, -- Knuckles: ring bell
+	ShoeBoing = { Id = "rbxassetid://98678378204244", Volume = 0.065, Category = "Weapon", MinGap = 0.12, PitchVar = 0.08 }, -- Peter: spring-shoe boing
+	SeedSprout = { Id = "rbxassetid://104808793216642", Volume = 0.095, Category = "Weapon", MinGap = 0.08, PitchVar = 0.1 }, -- Barry: sprout
+	-- a critical hit the local hero landed (server crit roll, Fx "k" + "ku"): small bright tick
+	CritTick = { Id = "rbxassetid://130747321535480", Volume = 0.32, Category = "Weapon", MinGap = 0.07, PitchVar = 0.05 },
+	-- RUN STAGE CUES (SwarmState RunStage, ClassSfx.lua). Stingers sit in UI / Boss like PortalAppear and
+	-- Victory; the charge hum is a loop (Audio.SetLoop) whose level follows BeaconCharge.
+	BeaconActivate = { Id = "rbxassetid://101983713680096", Volume = 0.45, Category = "UI", MinGap = 1.5, PitchVar = 0, DuckMusic = 2.2 }, -- the beacon is lit (Rally): gong + sparkle
+	BeaconCharge = { Id = "rbxassetid://116632965410778", Volume = 0.1, Category = "Stage", Loop = true, SpeedLow = 0.92, SpeedHigh = 1.3, LevelLow = 0.45, Fade = 0.5 }, -- 2 s seamless hum while the beacon charges
+	BossSpawn = { Id = "rbxassetid://77012636523636", Volume = 0.6, Category = "Boss", MinGap = 3, PitchVar = 0, DuckMusic = 2.6 }, -- the Boss stage starts: swell, brass stab, drum
+	RunVictory = { Keep = true, Id ="rbxassetid://135733489539540", Volume = 0.43, Category = "UI", MinGap = 4, PitchVar = 0, DuckMusic = 3.4 }, -- Victory stinger (the results fanfare waits: Audio.Hold)
+	RunDefeat = { Keep = true, Id ="rbxassetid://122212551428474", Volume = 0.37, Category = "UI", MinGap = 4, PitchVar = 0, DuckMusic = 3.4 }, -- Defeat stinger
+	Downed = { Id = "rbxassetid://116846841000990", Volume = 0.37, Category = "Player", MinGap = 0.8, PitchVar = 0, DuckMusic = 1.2 }, -- the local hero goes down (thump + falling tone)
+	ReviveBeat = { Id = "rbxassetid://96148528483086", Volume = 0.135, Category = "Player", MinGap = 0.3, PitchVar = 0 }, -- warm pulse while a revive is held; ClassSfx raises its pitch with ReviveProgress
+	ChestBuy = { Id = "rbxassetid://127806368430108", Volume = 0.3, Category = "Pickup", MinGap = 0.4, PitchVar = 0.02 }, -- the team pays for a chest: coins into the lock
 	-- music (APMOfficial, free in any Roblox experience; looped, crossfaded and ducked under
 	-- big moments by Audio.lua). Swap: paste another Creator Store id as "rbxassetid://<id>"
 	-- (docs/AUDIO.md lists candidates to audition); "" = silent.
@@ -1366,11 +1410,20 @@ Config.Audio = {
 		Player = { Volume = 1, MaxVoices = 3, Priority = 4 },
 		Warning = { Volume = 1, MaxVoices = 3, Priority = 5 },
 		Boss = { Volume = 1, MaxVoices = 2, Priority = 5 },
+		-- [stream G] class signature cues + the crit tick: under the Combat slider, at most 3 at once, never
+		-- above pickups; Stage = the beacon charge loop (Interface slider), not counted in the 12 voices
+		Weapon = { Volume = 0.8, MaxVoices = 3, Priority = 2, Channel = "Combat" },
+		Stage = { Volume = 0.9, MaxVoices = 1, Priority = 3, Channel = "Interface" },
 	},
-	Duck = { Triggers = { "Warning", "Boss" }, Target = "Combat", Volume = 0.45, Seconds = 0.5 },
+	Duck = { Triggers = { "Warning", "Boss" }, Target = "Combat", Volume = 0.45, Seconds = 0.5,
+		-- turned down too while a warning / boss cue plays (x volume); Weapon: class cues never mask a telegraph
+		Also = { Pickup = 0.6, Player = 0.8, Weapon = 0.5, Stage = 0.6 } },
 	Crowd = { Categories = { "Combat", "Pickup" }, Window = 0.6, Start = 4, Full = 14, Floor = 0.35 },
 	World = { RollOffMin = 90, RollOffMax = 280, Emitters = 10 },
-	Music = { Fade = 1.5, Resume = true },
+	-- IntensityBoost: Audio.SetIntensity(level 0..1) lifts the playing track by up to this share at the
+	-- Rally / Charge / Boss stages (ClassSfx); IntensityDip: a warning / boss cue dips the music to this x
+	-- for its duck while the intensity is raised, so the louder music never masks a telegraph
+	Music = { Fade = 1.5, Resume = true, IntensityBoost = 0.14, IntensityFade = 2.5, IntensityDip = 0.75 },
 	-- music dip under big moments (sounds with DuckMusic): to Volume x in Attack s, back in Release s
 	MusicDuck = { Volume = 0.4, Attack = 0.12, Release = 1.2 },
 	DefaultPitchVar = 0.05,
@@ -1955,6 +2008,7 @@ Config.Features = {
 	Prestige = false, -- HELD (owner, 2026-10-07): built, not released; reset a maxed hero's mastery for a gold-bonus star (docs/next/PRESTIGE.md)
 	QuickResume = false, -- HELD (owner, 2026-10-07): built, not released; live servers close ~30 s after the last player leaves (docs/next/QUICK_RESUME.md)
 	Analytics = true, -- new-player funnel + first-milestone events, server-side AnalyticsService only (server Analytics.lua, docs/ANALYTICS.md)
+	ClassSfx = true, -- class signature cues, run-stage stingers + charge hum, down / revive / chest-buy cues, crit tick, music pressure (client ClassSfx.lua, docs/AUDIO.md "Second batch"); off = the old generic sounds
 }
 
 -- Season track (feature 22, Config.Features.SeasonTrack; MetaData, docs/features/META.md).
@@ -2097,6 +2151,29 @@ Config.Feel = {
 		Words = { [50] = "KILLING SPREE", [100] = "RAMPAGE", [250] = "UNSTOPPABLE", [500] = "LEGENDARY", [1000] = "GODLIKE" },
 		CalloutSeconds = 1.8,
 		PitchStep = 2, -- semitones higher per milestone (ComboMilestone sound)
+	},
+	-- [stream G] class signature cues, movement cues, crit feedback and the attacker's recoil
+	-- (client ClassSfx.lua; VFX recoil; CombatFx.Crit). Sounds are Config.Sounds entries.
+	ClassSfx = {
+		OtherGain = 0.45, -- a teammate's cue plays at this share of its volume
+		OtherRange = 70, -- studs: a teammate farther from the hero than this is not heard
+		PerUserGap = 0.12, -- s between two cues of one hero (a burst of pellets is one cue)
+		MaxPerSecond = 9, -- class cues started per second on this client, all heroes together
+		ImpactGap = 0.12, -- s between two impact cues (the local hero's own projectiles only)
+		HonkEvery = 6, -- every Nth Confetti Minigun burst honks
+		SqueakEvery = 3, -- every Nth mop sweep squeaks
+		ReviveBeatGap = 0.45, -- s between revive-hold pulses
+		ReviveHearRange = 14, -- studs: revive pulses are heard from this far from the downed hero
+		CritGain = 1, CritOtherGain = 0, -- crit tick gain for the local hero's own crits / a teammate's (0 = silent)
+		RecoilSeconds = 0.12, -- attacker's lean + squash on a throw / cast / swing (off with Reduced effects)
+		RecoilLean = 0.13, RecoilSquash = 0.16, -- radians back, studs down at the peak
+		StageShake = 0.4, -- Boss stage start: boss-kind camera shake amount
+		-- music pressure per SwarmState RunStage (Audio.SetIntensity; Config.Audio.Music.IntensityBoost is the ceiling)
+		StageIntensity = { Survive = 0, BeaconAvailable = 0.25, Rally = 0.6, Charge = 0.8, Boss = 1, Victory = 0, Defeat = 0 },
+		ChargeNear = 45, -- studs from the beacon within which the charge hum plays at full level ...
+		ChargeFar = 0.6, -- ... and this share of it farther away
+		ChargeRefresh = 0.25, -- s between hum updates
+		VictoryHold = 6, -- s the results fanfare / loss sting wait after the run's own stinger
 	},
 	HitFeel = {
 		StopSeconds = 0.035, -- camera hold on a big hit (<= 0.04)

@@ -24,6 +24,8 @@
 	  g = { {x, z, amount, userId} }               gold coins burst from a kill that paid gold
 	                                               (visual only; the gold is already paid)
 	  k = { enemyId, ... }                         critical hits (gold star on the enemy; Fx.Crit)
+	  ku = { userId, ... }                         [stream G] who rolled each crit, same index as k (0 = no player),
+	                                               so a client gives its OWN crits the crit tick and the bigger burst
 ]]
 
 local Config = require(game:GetService("ReplicatedStorage").Shared.Config)
@@ -70,8 +72,14 @@ function Fx.Hit(enemyId: number)
 end
 
 -- A critical hit landed on enemy `enemyId` (the client's CombatFx draws a gold star on it).
-function Fx.Crit(enemyId: number)
-	pushCapped("k", enemyId)
+-- userId = the player whose hit crit ([stream G]: ku, same index as k; 0 when nobody's).
+function Fx.Crit(enemyId: number, userId: number?)
+	local list = batch.k
+	if list and #list >= CAPS.k then
+		return
+	end
+	push("k", enemyId)
+	push("ku", userId or 0)
 end
 
 function Fx.Death(pos: Vector3, color: Color3, size: number)

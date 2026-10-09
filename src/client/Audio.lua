@@ -21,6 +21,15 @@
 	    victory...) dip the music (Config.Audio.MusicDuck) so the big moments land.
 	  * 3D: sounds marked World can be played at a world position (PlayAt): full volume
 	    near the hero (the camera is ~78 studs up), quieter far away.
+	* Gain (Play / PlayAt third argument): a one-off volume multiplier, so a teammate's class cue
+	  (ClassSfx) is the same sound at a lower level.
+	* Loops (Config.Sounds entries with Loop = true, Audio.SetLoop): the beacon charge hum. One
+	  looping Sound per entry whose volume and speed follow a 0..1 level; not part of the voice mix.
+	* Hold (Audio.Hold): skips a named effect for a while (the results fanfare while the run's
+	  Victory / Defeat stinger is still playing).
+	* Intensity (Audio.SetIntensity, Config.Audio.Music): the music rises by up to IntensityBoost at
+	  the Rally / Charge / Boss stages; while it is raised a warning / boss cue dips the music to
+	  IntensityDip for its duck, so the louder music never masks a telegraph.
 	Music: LobbyMusic / BattleMusic / BossMusic slots (empty Id = silent), looped, in their
 	own group. SetMusic crossfades (Config.Audio.Music.Fade) and a track resumes where it
 	stopped (Resume), so battle music carries on after a boss instead of restarting.
@@ -42,7 +51,12 @@ local sfxGroup: SoundGroup
 local musicGroup: SoundGroup
 local musicDuckGroup: SoundGroup
 local musicDuckUntil = 0
+local musicDuckDepth = 1 -- the deepest dip of the one running (Audio.DuckMusic)
 local musicDuckTween: Tween? = nil
+local intensity = 0 -- Audio.SetIntensity, 0..1
+local held: { [string]: number } = {} -- Audio.Hold: effect name -> os.clock() until which it is skipped
+type Loop = { Sound: Sound, Level: number, On: boolean, Tween: Tween? }
+local loops: { [string]: Loop } = {}
 local climbStep: { [string]: number } = {}
 local groups: { [string]: SoundGroup } = {}
 local channels: { [string]: SoundGroup } = {}
@@ -58,7 +72,7 @@ local emitters: { Emitter } = {}
 local nextEmitter = 1
 local emitterFolder: Folder? = nil
 
-type Voice = { Sound: Sound, Category: string, Priority: number, Ends: number }
+type Voice = { Sound: Sound, Category: string, Priority: number, Ends: number, Keep: boolean? }
 local voices: { Voice } = {}
 
 local duckUntil = 0
@@ -137,7 +151,7 @@ function Audio.Init()
 		local g = Instance.new("SoundGroup")
 		g.Name = name
 		g.Volume = cat.Volume or 1
-		g.Parent = channels[name == "UI" and "Interface" or (name == "Warning" or name == "Boss") and "Warning" or "Combat"]
+		g.Parent = channels[cat.Channel or (name == "UI" and "Interface" or (name == "Warning" or name == "Boss") and "Warning" or "Combat")]
 		groups[name] = g
 	end
 
@@ -147,6 +161,11 @@ function Audio.Init()
 				local s = newSound(name, def, SoundService, musicDuckGroup)
 				s.Looped = true
 				musicSounds[name] = s
+			elseif def.Loop then
+				local s = newSound(name, def, SoundService, groups[categoryOf(def)])
+				s.Looped = true
+				s.Volume = 0
+				loops[name] = { Sound = s, Level = 0, On = false }
 			else
 				local cat = categoryOf(def)
 				local list = {}
@@ -291,26 +310,30 @@ local function updateCrowd()
 end
 
 --[[
-	Dips the music for `seconds` (Config.Audio.MusicDuck: fast down, slow recovery).
-	Overlapping calls extend the dip instead of stacking.
+	Dips the music for `seconds` (Config.Audio.MusicDuck: fast down, slow recovery) to `depth`
+	(default MusicDuck.Volume). Overlapping calls extend the dip instead of stacking, and a
+	deeper dip wins while they overlap.
 ]]
-function Audio.DuckMusic(seconds: number)
+function Audio.DuckMusic(seconds: number, depth: number?)
 	local D = A.MusicDuck
 	if not D or not musicDuckGroup then
 		return
 	end
+	local vol = math.clamp(depth or D.Volume, 0, 1)
 	local now = os.clock()
 	local untilT = now + seconds
-	if untilT <= musicDuckUntil then
+	local wasDucked = musicDuckUntil > now
+	local deeper = wasDucked and vol < musicDuckDepth - 0.001
+	if untilT <= musicDuckUntil and not deeper then
 		return
 	end
-	local wasDucked = musicDuckUntil > now
-	musicDuckUntil = untilT
-	if not wasDucked then
+	musicDuckUntil = math.max(musicDuckUntil, untilT)
+	if not wasDucked or deeper then
+		musicDuckDepth = wasDucked and math.min(vol, musicDuckDepth) or vol
 		if musicDuckTween then
 			musicDuckTween:Cancel()
 		end
-		local t = TweenService:Create(musicDuckGroup, TweenInfo.new(D.Attack), { Volume = D.Volume })
+		local t = TweenService:Create(musicDuckGroup, TweenInfo.new(D.Attack), { Volume = musicDuckDepth })
 		musicDuckTween = t
 		t:Play()
 	end
@@ -319,6 +342,7 @@ function Audio.DuckMusic(seconds: number)
 			if musicDuckTween then
 				musicDuckTween:Cancel()
 			end
+			musicDuckDepth = 1
 			local t = TweenService:Create(musicDuckGroup, TweenInfo.new(D.Release, Enum.EasingStyle.Sine), { Volume = 1 })
 			musicDuckTween = t
 			t:Play()
@@ -346,7 +370,7 @@ local function pickSpeed(name: string, def, now: number): number
 	return base + (math.random() * 2 - 1) * var
 end
 
-local function startVoice(s: Sound, def, category: string, priority: number, pitch: number?, speed: number?)
+local function startVoice(s: Sound, def, category: string, priority: number, pitch: number?, speed: number?, gain: number?)
 	-- A pool slot may still be playing while a different slot finished first.
 	-- Restarting that Sound replaces its voice; it cannot count twice against the mix.
 	for i = #voices, 1, -1 do
@@ -357,10 +381,11 @@ local function startVoice(s: Sound, def, category: string, priority: number, pit
 	local now = os.clock()
 	local var = def.PitchVar or A.DefaultPitchVar
 	s.PlaybackSpeed = math.max(0.1, pitch or speed or ((def.Pitch or 1) + (math.random() * 2 - 1) * var))
+	s.Volume = (def.Volume or 0.5) * math.clamp(gain or 1, 0, 2)
 	s.TimePosition = 0
 	s:Play()
 	local length = s.TimeLength > 0 and s.TimeLength / s.PlaybackSpeed or 1.5
-	table.insert(voices, { Sound = s, Category = category, Priority = priority, Ends = now + math.min(length, 4) })
+	table.insert(voices, { Sound = s, Category = category, Priority = priority, Ends = now + math.min(length, 4), Keep = def.Keep == true })
 	if A.Crowd and table.find(A.Crowd.Categories, category) then
 		table.insert(crowdStarts, now)
 		updateCrowd()
@@ -371,6 +396,11 @@ local function startVoice(s: Sound, def, category: string, priority: number, pit
 	if table.find(A.Duck.Triggers, category) then
 		duckUntil = math.max(duckUntil, now + A.Duck.Seconds)
 		setDuck(true)
+		local dip = A.Music and A.Music.IntensityDip
+		-- (a swarm of fuse ticks does not queue a dip each: skipped while one at least as deep still has 0.4 s to run)
+		if intensity > 0 and dip and not (musicDuckDepth <= dip + 0.001 and musicDuckUntil > now + 0.4) then
+			Audio.DuckMusic(A.Duck.Seconds + 0.3, dip)
+		end
 		task.delay(A.Duck.Seconds + 0.05, function()
 			if os.clock() >= duckUntil then
 				setDuck(false)
@@ -389,6 +419,10 @@ local function gate(name: string): (any, string, number, number)
 	if def.MinGap and now - (lastPlayed[name] or -math.huge) < def.MinGap then
 		return nil, "", 0, 1
 	end
+	local holdUntil = held[name]
+	if holdUntil and now < holdUntil then
+		return nil, "", 0, 1
+	end
 	pruneVoices(now)
 	local category = categoryOf(def)
 	local priority = priorityOf(def)
@@ -400,20 +434,22 @@ local function gate(name: string): (any, string, number, number)
 	return def, category, priority, speed
 end
 
--- Plays an effect (2D). pitch overrides the playback speed (no random variation).
-function Audio.Play(name: string, pitch: number?)
+-- Plays an effect (2D). pitch overrides the playback speed (no random variation); gain
+-- multiplies its volume once (a teammate's cue). Returns true when it started.
+function Audio.Play(name: string, pitch: number?, gain: number?): boolean
 	Accessibility.Cue(name, nil)
 	local list = pools[name]
 	if not list then
-		return
+		return false
 	end
 	local def, category, priority, speed = gate(name)
 	if not def then
-		return
+		return false
 	end
 	local i = nextIndex[name]
 	nextIndex[name] = (i % #list) + 1
-	startVoice(list[i], def, category, priority, pitch, speed)
+	startVoice(list[i], def, category, priority, pitch, speed, gain)
+	return true
 end
 
 local function getEmitter(): Emitter
@@ -450,14 +486,14 @@ end
 	Plays an effect at a world position (sounds marked World in Config.Sounds; others fall
 	back to Play). Telegraph cues use this, so a far-away warning is quieter.
 ]]
-function Audio.PlayAt(name: string, position: Vector3, pitch: number?)
+function Audio.PlayAt(name: string, position: Vector3, pitch: number?, gain: number?)
 	Accessibility.Cue(name, position)
 	local def0 = Config.Sounds[name]
 	if not def0 or def0.Id == "" then
 		return
 	end
 	if not def0.World then
-		Audio.Play(name, pitch)
+		Audio.Play(name, pitch, gain)
 		return
 	end
 	local def, category, priority, speed = gate(name)
@@ -480,11 +516,17 @@ function Audio.PlayAt(name: string, position: Vector3, pitch: number?)
 		e.Name = name
 		s.Name = name
 		s.SoundId = def.Id
-		s.Volume = def.Volume or 0.5
 	end
 	s.SoundGroup = groups[category]
 	e.Part.CFrame = CFrame.new(position)
-	startVoice(s, def, category, priority, pitch, speed)
+	startVoice(s, def, category, priority, pitch, speed, gain)
+end
+
+-- The volume a track settles at: its own Volume, lifted by the stage intensity (SetIntensity).
+local function musicTarget(name: string): number
+	local def = Config.Sounds[name]
+	local boost = (A.Music and A.Music.IntensityBoost) or 0
+	return (def and def.Volume or 0.3) * (1 + boost * intensity)
 end
 
 local function fadeMusic(name: string, s: Sound, target: number, seconds: number, onDone: (() -> ())?)
@@ -530,13 +572,12 @@ function Audio.SetMusic(name: string?)
 	currentMusic = name
 	if name and musicSounds[name] then
 		local s = musicSounds[name]
-		local def = Config.Sounds[name]
 		if not s.IsPlaying then
 			s.Volume = 0
 			s.TimePosition = (M.Resume and musicPositions[name]) or 0
 			s:Play()
 		end
-		fadeMusic(name, s, def and def.Volume or 0.3, M.Fade)
+		fadeMusic(name, s, musicTarget(name), M.Fade)
 	end
 end
 
@@ -594,6 +635,91 @@ function Audio.CurrentMusic(): string?
 	return currentMusic
 end
 
+--[[
+	Run pressure for the music (0 = calm .. 1 = the boss): the playing track settles up to
+	Config.Audio.Music.IntensityBoost louder over IntensityFade seconds. Warnings stay on top: see
+	startVoice (the dip). Called by ClassSfx from RunStage; 0 again outside a run.
+]]
+function Audio.SetIntensity(level: number)
+	level = math.clamp(tonumber(level) or 0, 0, 1)
+	if math.abs(level - intensity) < 0.001 then
+		return
+	end
+	intensity = level
+	local name = currentMusic
+	local s = name and musicSounds[name]
+	if name and s and s.IsPlaying then
+		fadeMusic(name, s, musicTarget(name), (A.Music and A.Music.IntensityFade) or 2)
+	end
+end
+
+function Audio.Intensity(): number
+	return intensity
+end
+
+-- Skips the effect `name` for `seconds` (the results fanfare while the run stinger plays).
+function Audio.Hold(name: string, seconds: number)
+	held[name] = os.clock() + seconds
+end
+
+--[[
+	A looping effect (Config.Sounds entry with Loop = true): on at `level` (0..1), off with nil / 0.
+	The volume goes from Volume x LevelLow up to Volume, the speed from SpeedLow up to SpeedHigh,
+	both eased over Fade seconds. Not part of the voice mix, but its group (Stage) is ducked by warnings.
+]]
+function Audio.SetLoop(name: string, level: number?)
+	local L = loops[name]
+	local def = Config.Sounds[name]
+	if not L or not def then
+		return
+	end
+	local lv = math.clamp(tonumber(level) or 0, 0, 1)
+	local fade = math.max(0.05, def.Fade or 0.4)
+	local s = L.Sound
+	if L.Tween then
+		L.Tween:Cancel()
+		L.Tween = nil
+	end
+	if lv <= 0 then
+		if L.On then
+			L.On = false
+			L.Level = 0
+			local t = TweenService:Create(s, TweenInfo.new(fade), { Volume = 0 })
+			L.Tween = t
+			t.Completed:Connect(function(state)
+				if state == Enum.PlaybackState.Completed and not L.On then
+					s:Stop()
+				end
+			end)
+			t:Play()
+		end
+		return
+	end
+	local low = def.LevelLow or 0.4
+	local volume = (def.Volume or 0.1) * (low + (1 - low) * lv)
+	local speed = (def.SpeedLow or 1) + ((def.SpeedHigh or 1) - (def.SpeedLow or 1)) * lv
+	if not L.On or not s.IsPlaying then
+		L.On = true
+		s.Volume = 0
+		s.PlaybackSpeed = speed
+		s.TimePosition = 0
+		s:Play()
+	end
+	L.Level = lv
+	local t = TweenService:Create(s, TweenInfo.new(fade), { Volume = volume, PlaybackSpeed = speed })
+	L.Tween = t
+	t:Play()
+end
+
+-- For tests: the loops' state { [name] = { On, Level, Playing, Volume, Speed } }.
+function Audio.Loops(): { [string]: { On: boolean, Level: number, Playing: boolean, Volume: number, Speed: number } }
+	local out = {}
+	for name, L in pairs(loops) do
+		out[name] = { On = L.On, Level = L.Level, Playing = L.Sound.IsPlaying, Volume = L.Sound.Volume, Speed = L.Sound.PlaybackSpeed }
+	end
+	return out
+end
+
 function Audio.SetVolumes(music: number, sfx: number)
 	local muted = ClientSettings.Get("MuteAll") == true
 	musicGroup.Volume = muted and 0 or math.clamp(music, 0, 1)
@@ -605,12 +731,32 @@ end
 
 -- Stops every effect (run end / travel: no stray warning ticks).
 function Audio.StopEffects()
+	-- (a run's Victory / Defeat stinger, Keep = true, plays out: the run often ends right after it starts)
+	local kept: { Voice } = {}
 	for _, v in ipairs(voices) do
-		v.Sound:Stop()
+		if v.Keep and v.Sound.IsPlaying then
+			table.insert(kept, v)
+		else
+			v.Sound:Stop()
+		end
 	end
 	table.clear(voices)
+	for _, v in ipairs(kept) do
+		table.insert(voices, v)
+	end
+	for _, L in pairs(loops) do
+		L.On = false
+		L.Level = 0
+		if L.Tween then
+			L.Tween:Cancel()
+			L.Tween = nil
+		end
+		L.Sound.Volume = 0
+		L.Sound:Stop()
+	end
 	setDuck(false)
 	musicDuckUntil = 0
+	musicDuckDepth = 1
 	if musicDuckGroup then
 		if musicDuckTween then
 			musicDuckTween:Cancel()

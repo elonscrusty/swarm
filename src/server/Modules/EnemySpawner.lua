@@ -1344,7 +1344,7 @@ function EnemySpawner.Damage(e, amount: number, rp, knockDir: Vector3?, knockbac
 	end
 	Fx.Hit(e.Id)
 	if crit then
-		Fx.Crit(e.Id) -- gold crit star (client CombatFx)
+		Fx.Crit(e.Id, rp and rp.Player and rp.Player.UserId or nil) -- gold crit star (client CombatFx); [stream G] + who crit
 	end
 	if knockDir and knockback and knockback > 0 then
 		local resist = e.Def.KnockbackResist or 0
