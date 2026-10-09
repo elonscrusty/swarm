@@ -3055,7 +3055,7 @@ function Class.popCan(p: Projectile)
 	if x.Coeff then
 		-- [stream C] rank system: Coeff x B at the signature's rank, one can hit per target per dash
 		-- (the dash's cast ledger), terrain blocks the blast
-		WeaponSystem.KitBurst(p.Owner, p.Pos, x.R, x.Coeff, x.WeaponId, { CastId = x.CastId, Close = true, Fx = false })
+		WeaponSystem.KitBurst(p.Owner, p.Pos, x.R, x.Coeff, x.WeaponId, { CastId = x.CastId, Dash = true, Fx = false })
 	else
 		burstAround(p.Owner, p.Pos, x.R, p.Damage)
 	end
@@ -4240,13 +4240,23 @@ end
 	sight within `radius` of `at`, nearest first (WeaponSystem.Damage: armor, knockback rules, statuses).
 	opts: Max (targets), CastId (each target once per cast: the cans of one dash, the mini-pops of one
 	grenade, one tackle), Exclude ({ [uid] = true }), Primary (crit + procs; default: a secondary,
-	neither), Knock, Stagger, Slow + SlowSeconds, Mult, Rank, Fx (false: no burst effect), Close (a
-	kill counts as close-range: rp.KitCloseKills). Returns the number hit and the enemies hit.
+	neither), Knock, Stagger, Slow + SlowSeconds, Mult, Rank, Fx (false: no burst effect), Dash (a dash
+	effect) / Close (a close-range effect): the kill source the OnKill listeners get is then
+	{ Id = weaponId, Dash = true | Close = true } (stream E2's CloseKills class goal), not the weapon.
+	Returns the number hit and the enemies hit.
 ]]
 function WeaponSystem.KitBurst(rp, at: Vector3, radius: number, coeff: number, weaponId: string?, opts: any?): (number, { any })
 	local o = opts or {}
 	local list = WeaponSystem.KitQuery(at, radius)
 	local ledger = o.CastId and Rk.ledger(o.CastId) or nil
+	local rank, damageWeapon, source = o.Rank, weaponId, nil
+	if o.Dash or o.Close then
+		-- a movement / landing effect: credited to a source marked Dash / Close at the weapon's rank
+		local w = weaponId and rp and rp.Weapons and rp.Weapons[weaponId] or nil
+		rank = rank or (w and (w.Evolved and BuildRules.MaxRank() or w.Level)) or 1
+		damageWeapon = nil
+		source = { Id = weaponId, Level = rank, Dash = o.Dash == true or nil, Close = o.Close == true or nil }
+	end
 	local dopts = {
 		Secondary = if o.Primary then nil else true,
 		CastId = o.CastId,
@@ -4267,10 +4277,12 @@ function WeaponSystem.KitBurst(rp, at: Vector3, radius: number, coeff: number, w
 		if e.Alive and not (ledger and ledger[e.Uid]) and not (o.Exclude and o.Exclude[e.Uid]) and WeaponSystem.HasLineOfSight(at, e.Pos) then
 			hit += 1
 			table.insert(hits, e)
-			local died = WeaponSystem.Damage(rp, e, coeff, weaponId, o.Rank, dopts)
-			if died and o.Close and rp then
-				rp.KitCloseKills = (rp.KitCloseKills or 0) + 1
+			local prevSource = killSource
+			if source then
+				killSource = source
 			end
+			WeaponSystem.Damage(rp, e, coeff, damageWeapon, rank, dopts)
+			killSource = prevSource
 		end
 	end
 	if o.Fx ~= false and radius > 0 then
@@ -4365,7 +4377,7 @@ Class.Expire.Balloon = function(p: Projectile)
 	end
 	local c = x.Cfg
 	local at = p.Pos
-	WeaponSystem.KitBurst(owner, at, c.Radius, c.Coeff, x.WeaponId, { Close = true, Fx = false })
+	WeaponSystem.KitBurst(owner, at, c.Radius, c.Coeff, x.WeaponId, { Dash = true, Fx = false })
 	Fx.Explosion(at, c.Radius)
 	Fx.Sound("Hit")
 	local cast = WeaponSystem.NewCast()
@@ -4380,7 +4392,7 @@ Class.Expire.Balloon = function(p: Projectile)
 				break
 			end
 			local spot = ground(at + rotateY(d, math.pi / 2 + (i - 1) * TAU / c.MiniCount) * c.MiniOffset)
-			WeaponSystem.KitBurst(owner, spot, c.MiniRadius, c.MiniCoeff, x.WeaponId, { CastId = cast, Close = true })
+			WeaponSystem.KitBurst(owner, spot, c.MiniRadius, c.MiniCoeff, x.WeaponId, { CastId = cast, Dash = true })
 			owner.MiniPops += 1
 		end
 	end)

@@ -35,7 +35,7 @@
 	these hooks: every hook checks rp.CharacterId.
 
 	Called from other modules (through ctx.ClassKits, which RunBoot sets):
-	  ItemSystem.Grant (item rewards) / LevelUpSystem.QueueChoice ("Chest") -> OnLootPickup
+	  ItemSystem.Grant (item rewards) / LootSystem (a chest choice, stream E2) -> OnLootPickup
 	  WeaponSystem -> TakeBarrage, TakeSplash, TakeStride, OnToastHit, OnYarnHit, Config
 	  Dash (signals) -> OnDash(rp, kind, dir), OnLeapLanded(rp), OnLanded(rp, airtime)
 
@@ -198,7 +198,7 @@ end
 -- Ruckus: Junk Collector
 ------------------------------------------------------------------------------------------
 
--- An eligible reward: a chest (LevelUpSystem.QueueChoice "Chest"), a shrine / merchant / encounter
+-- An eligible reward: a chest (LootSystem's chest choice), a shrine / merchant / encounter
 -- item (ItemSystem.Grant reward = true). XP shards never reach this. Rewards while a barrage is
 -- already stored do not count.
 function ClassKits.OnLootPickup(rp, _source: string?)
@@ -490,7 +490,7 @@ local function stepContact(rp, s)
 		Max = s.DashHitsLeft,
 		Stagger = s.DashStagger,
 		Knock = s.DashKnock,
-		Close = true,
+		Dash = true, -- a dash hit (CloseKills goal source)
 		Fx = false,
 	})
 	s.DashHitsLeft -= n

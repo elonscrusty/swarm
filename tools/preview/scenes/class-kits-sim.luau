@@ -177,6 +177,8 @@ local function spawn(offset: Vector3, hp: number?, opts: any?)
 		e.SpeedOverride = 0
 		e.Knock = Vector3.zero
 		e.Shield = 0
+		-- (a pooled record keeps these from its last life: EnemySpawner.Spawn does not reset them)
+		e.StaggerUntil, e.StaggerImmuneUntil = nil, nil
 	end
 	return e
 end
@@ -265,13 +267,10 @@ local TESTS: { [string]: (string) -> () } = {}
 
 TESTS.ruckus = function(cls)
 	local sig = "ScrapToss"
-	-- the chest reward hook (before choices are closed)
+	-- (a chest reward reaches OnLootPickup from LootSystem's chest choice, stream E2)
 	local s = K.State(rp)
-	LevelUp.QueueChoice(rp, "Chest", "PassiveOnly")
-	check("ruckus: a chest charges Junk Collector", s.Picks == 1, s.Picks)
 	LevelUp.CancelAll(rp)
 	step(0.3)
-	s.Picks = 0
 	-- bounce: a different visible target within 10 studs; a target 20 studs away is never chosen
 	clearEnemies()
 	hold(sig)
@@ -336,10 +335,7 @@ TESTS.ruckus = function(cls)
 	-- a cross-class signature works for any holder (Glove Combo charge), the kit does not come with it
 	local data = DS.GetData(me)
 	data.OwnedCharacters.knuckles_mcgee = true
-	local ent = LevelUp.Entitled and LevelUp.Entitled(rp, "GloveCombo")
-	if not ent then
-		rp.OwnedClasses = rp.OwnedClasses or {}
-	end
+	rp.OwnedClasses = nil -- (the run's ownership snapshot, as if it was owned at the start)
 	local added = LevelUp.AddWeapon(rp, "GloveCombo")
 	if added then
 		clearEnemies()
@@ -539,9 +535,8 @@ TESTS.coach_crunch = function(cls)
 		local ang = i * math.pi / 3
 		table.insert(ring, spawn(Vector3.new(math.cos(ang) * 1.6, 0, math.sin(ang) * 1.6)))
 	end
-	fakeDash(Vector3.new(1, 0, 0))
-	advance(0.1, 30)
 	local t = now()
+	fakeDash(Vector3.new(1, 0, 0))
 	step(0.3)
 	local hits, staggered, right = 0, 0, 0
 	for _, e in ipairs(ring) do
@@ -550,7 +545,8 @@ TESTS.coach_crunch = function(cls)
 			if near(loss(e), hit(0.60, 1)) then
 				right += 1
 			end
-			if e.StaggerUntil and e.StaggerUntil <= t + 0.26 and e.StaggerImmuneUntil then
+			local st = e.StaggerUntil
+			if st and st >= t + 0.25 - 0.01 and st <= t + 0.25 + 0.1 and e.StaggerImmuneUntil then
 				staggered += 1
 			end
 		end
@@ -560,12 +556,13 @@ TESTS.coach_crunch = function(cls)
 	clearEnemies()
 	local plain = spawn(Vector3.new(1.5, 0, 0))
 	local elite = spawn(Vector3.new(-1.5, 0, 0), nil, { Elite = true })
-	fakeDash(Vector3.new(1, 0, 0))
-	advance(0.1, 30)
 	t = now()
+	fakeDash(Vector3.new(1, 0, 0))
 	step(0.3)
 	check("coach_crunch: uncharged tackle 0.30 B", near(loss(plain), hit(0.30, 1)), f2(loss(plain)))
-	check("coach_crunch: an elite staggers at most 0.15 s", elite ~= nil and elite.StaggerUntil ~= nil and elite.StaggerUntil <= t + 0.16, elite and f2((elite.StaggerUntil or 0) - t))
+	local est = elite and elite.StaggerUntil
+	check("coach_crunch: an elite staggers at most 0.15 s", elite ~= nil and loss(elite) > 0 and est ~= nil and est >= t + 0.14 and est <= t + 0.15 + 0.1,
+		elite and f2((est or 0) - t))
 end
 
 TESTS.doug_janitor = function(cls)
@@ -623,6 +620,35 @@ TESTS.peter_parkour = function(cls)
 	check("peter_parkour: out leg hits the first 2 (0.70 B)", near(loss(line[1]), out) and near(loss(line[2]), out), f2(loss(line[1])) .. " " .. f2(loss(line[2])))
 	check("peter_parkour: back leg hits 2 (0.35 B), one hit per target per leg", near(loss(line[3]), back) and near(loss(line[4]), back),
 		f2(loss(line[3])) .. " " .. f2(loss(line[4])))
+	-- terrain ends the blocked leg: a cliff 10 studs out turns the shoe back (the enemy behind it is
+	-- never hit); a blocked way back ends the shoe (no return hits)
+	local Rk = WS._Rank
+	local realBlocked = Rk.terrainBlocked
+	local origin = rp.Root.Position
+	clearEnemies()
+	local nearE, behind = spawn(Vector3.new(5, 0, 0)), spawn(Vector3.new(15, 0, 0))
+	Rk.terrainBlocked = function(p)
+		if p.Kind == "Shoe" and p.X and p.X.Leg == "Out" and ((p.Pos - origin) * Vector3.new(1, 0, 1)).Magnitude > 10 then
+			return true
+		end
+		return realBlocked(p)
+	end
+	noCrit()
+	fireOnce(sig)
+	step(2.2)
+	check("peter_parkour: a cliff ends the way out (it turns back)", loss(behind) == 0 and near(loss(nearE), hit(0.70, 1) + hit(0.35, 1)), f2(loss(nearE)) .. " / " .. f2(loss(behind)))
+	clearEnemies()
+	nearE = spawn(Vector3.new(5, 0, 0))
+	Rk.terrainBlocked = function(p)
+		if p.Kind == "Shoe" and p.X and p.X.Leg == "Back" then
+			return true
+		end
+		return realBlocked(p)
+	end
+	fireOnce(sig)
+	step(2.2)
+	Rk.terrainBlocked = realBlocked
+	check("peter_parkour: a blocked way back ends the shoe (no return hit)", near(loss(nearE), hit(0.70, 1)), f2(loss(nearE)))
 	-- Stride: 2 s above 20 studs/s; the next throw +30 %; the charge is spent
 	clearEnemies()
 	circleRun(22, 2.4)
@@ -663,12 +689,13 @@ TESTS.barry_plotter = function(cls)
 	end
 	local near3 = loss(tgt) - l0
 	check("barry_plotter: plant fires 0.25 B per second, +15% with Barry near (Garden Company)", near(near3, 3 * hit(0.25, 1, 0.15), 0.05) or near(near3, 2 * hit(0.25, 1, 0.15), 0.05), f2(near3))
-	rp.Root.CFrame = rp.Root.CFrame + Vector3.new(-30, 0, 0)
+	local range = KC.GardenCompany.Range
+	KC.GardenCompany.Range = 0 -- (Barry out of reach of the plant)
 	l0 = loss(tgt)
 	step(2)
 	local far2 = loss(tgt) - l0
+	KC.GardenCompany.Range = range
 	check("barry_plotter: without Barry near the plant shot is 0.25 B", near(far2, 2 * hit(0.25, 1), 0.05) or near(far2, hit(0.25, 1), 0.05), f2(far2))
-	rp.Root.CFrame = rp.Root.CFrame + Vector3.new(30, 0, 0)
 	step(1.5)
 	check("barry_plotter: no recursion (plants never plant)", maxPlants == 1, maxPlants)
 	check("barry_plotter: the plant is gone after 6 s", (WS.KitPlants(rp)) == 0)
@@ -724,15 +751,16 @@ TESTS.rambozo = function(cls)
 	clearEnemies()
 	noCrit()
 	e = spawn(Vector3.new(6, 0, 0))
+	fireOnce(sig)
+	step(0.6)
+	check("rambozo: all 3 pellets can hit one target up close", near(loss(e), 3 * hit(0.20, 1)), f2(loss(e)))
+	clearEnemies()
+	e = spawn(Vector3.new(27, 0, 0))
 	local before = count("Straight")
 	fireOnce(sig)
 	local pellets = count("Straight") - before
-	step(0.6)
-	check("rambozo: 3 pellets, all hit one target up close", pellets == 3 and near(loss(e), 3 * hit(0.20, 1)), string.format("%d pellets %s", pellets, f2(loss(e))))
-	clearEnemies()
-	e = spawn(Vector3.new(27, 0, 0))
-	fireOnce(sig)
 	step(0.8)
+	check("rambozo: a burst is 3 pellets", pellets == 3, pellets)
 	check("rambozo: spread lowers distant output", loss(e) > 0 and loss(e) < 3 * hit(0.20, 1) - 0.01, f2(loss(e)))
 	setRank(sig, 3)
 	before = count("Straight")
@@ -877,21 +905,21 @@ TESTS.crash_cassidy = function(cls)
 		local ang = i * math.pi / 3
 		table.insert(ring, spawn(Vector3.new(math.cos(ang) * 1.6, 0, math.sin(ang) * 1.6)))
 	end
-	fakeDash(Vector3.new(1, 0, 0))
-	advance(0.03, 30)
-	local knocked = 0
-	for _, e in ipairs(ring) do
-		if e.Knock and e.Knock.Magnitude > 1 then
-			knocked += 1
-		end
+	local starts = {}
+	for i, e in ipairs(ring) do
+		starts[i] = e.Pos
 	end
-	step(0.3)
-	local hits, right = 0, 0
-	for _, e in ipairs(ring) do
+	fakeDash(Vector3.new(1, 0, 0))
+	step(0.4)
+	local hits, right, knocked = 0, 0, 0
+	for i, e in ipairs(ring) do
 		if loss(e) > 0 then
 			hits += 1
 			if near(loss(e), hit(0.35, 1)) then
 				right += 1
+			end
+			if ((e.Pos - starts[i]) * Vector3.new(1, 0, 1)).Magnitude > 1 then
+				knocked += 1
 			end
 		end
 	end
@@ -992,9 +1020,7 @@ for _, hero in ipairs(classes) do
 	check(hero .. ": run started as the class", rp ~= nil and rp.CharacterId == hero, rp and rp.CharacterId)
 	if rp then
 		rp.InvulnUntil = math.huge
-		if hero ~= "ruckus" then
-			LevelUp.CancelAll(rp) -- no level choices: the checks keep their exact build
-		end
+		LevelUp.CancelAll(rp) -- no level choices: the checks keep their exact build
 		step(0.3)
 		local sig = WeaponData.Signatures[hero]
 		check(hero .. ": starts with " .. sig .. " in slot 1", rp.Weapons[sig] ~= nil and rp.WeaponOrder[1] == sig)

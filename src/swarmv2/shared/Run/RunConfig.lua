@@ -270,9 +270,9 @@ RunConfig.Classes = {
 		},
 	} :: { [string]: any },
 
-	-- weapons whose kills count as close-range (unlock goal CloseKills, stream E2), plus dash hits
-	-- (WeaponSystem.KitBurst opts.Close: rp.LastCloseKillAt)
-	CloseRangeWeapons = { "MopSweep", "ProteinClaws", "GloveCombo", "Whip" } :: { string },
+	-- CloseKills (stream E2, ClassGoals): the melee signatures carry WeaponData Melee = true; dash
+	-- effects (cans, tackle, body-check, balloon) are credited to a source with Dash = true and the
+	-- landing blast to one with Close = true (WeaponSystem.KitBurst).
 
 	-- server-measured horizontal speed (Warm-Up, Stride, Momentum): studs moved over this window
 	SpeedWindow = 0.25,

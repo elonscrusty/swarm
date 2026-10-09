@@ -1660,7 +1660,8 @@ local RANK: { [string]: any } = {
 local NEW_SIGNATURES: { { [string]: any } } = {
 	{ Id = "Dodgeball", Name = "Dodgeball", ClassOnly = "coach_crunch", Color = Color3.fromRGB(220, 80, 70),
 		Description = "Hurls a dodgeball at the nearest enemy; it bounces to another.", AmountLabel = "Balls" },
-	{ Id = "MopSweep", Name = "Mop Sweep", ClassOnly = "doug_janitor", Color = Color3.fromRGB(120, 170, 200),
+	-- [stream C] Melee = true: a close-range weapon (stream E2's CloseKills class goal)
+	{ Id = "MopSweep", Name = "Mop Sweep", ClassOnly = "doug_janitor", Melee = true, Color = Color3.fromRGB(120, 170, 200),
 		Description = "Sweeps a wet mop arc in front of you and slows what it hits.", AmountLabel = "Sweeps" },
 	{ Id = "ReturningSneakers", Name = "Returning Sneakers", ClassOnly = "peter_parkour", Color = Color3.fromRGB(240, 150, 60),
 		Description = "Throws a sneaker that hits on the way out and on the way back.", AmountLabel = "Sneakers" },
@@ -1668,11 +1669,11 @@ local NEW_SIGNATURES: { { [string]: any } } = {
 		Description = "Plants seeds that grow into shooting plants.", AmountLabel = "Seeds" },
 	{ Id = "ConfettiMinigun", Name = "Confetti Minigun", ClassOnly = "rambozo", Color = Color3.fromRGB(240, 110, 200),
 		Description = "Sprays bursts of confetti pellets at the nearest enemy.", AmountLabel = "Pellets" },
-	{ Id = "ProteinClaws", Name = "Protein Claws", ClassOnly = "swolverine", Color = Color3.fromRGB(200, 200, 210),
+	{ Id = "ProteinClaws", Name = "Protein Claws", ClassOnly = "swolverine", Melee = true, Color = Color3.fromRGB(200, 200, 210),
 		Description = "Alternating claw swipes in front of you.", AmountLabel = "Swipes" },
 	{ Id = "RicochetPuck", Name = "Ricochet Puck", ClassOnly = "crash_cassidy", Color = Color3.fromRGB(60, 60, 70),
 		Description = "Slaps a puck at the nearest enemy; it ricochets to another.", AmountLabel = "Pucks" },
-	{ Id = "GloveCombo", Name = "Glove Combo", ClassOnly = "knuckles_mcgee", Color = Color3.fromRGB(220, 50, 50),
+	{ Id = "GloveCombo", Name = "Glove Combo", ClassOnly = "knuckles_mcgee", Melee = true, Color = Color3.fromRGB(220, 50, 50),
 		Description = "Punch combos at the nearest enemy, then a big uppercut.", AmountLabel = "Punches" },
 }
 
