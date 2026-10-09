@@ -1,5 +1,5 @@
 -- cliffwood-run-sim: the redesign streams TOGETHER on the real server (docs/redesign/gameplay/DESIGN.md).
--- For each class (ruckus, toastmaster, captain_croak, granny_boom) a Solo run on arena "Cliffwood"
+-- For each of the twelve classes (RunConfig.Classes.Order) a Solo run on arena "Cliffwood"
 -- started with the admitted class (RunManager.SetAdmittedClass + StartTeamRun), ~40 s at a coarse step:
 --   HeightGrid active; the hero is the class rig (mesh Torso, Motor6Ds, Humanoid); it starts with
 --   the class weapon; the weapon deals damage and kills; enemies stand on HeightGrid.GroundY and
@@ -295,8 +295,8 @@ local function fly(rp, duration: number, at: (number) -> Vector3)
 	end
 end
 
-local SIGNATURE = { ruckus = "ScrapToss", toastmaster = "ToastVolley", captain_croak = "BubbleBomb", granny_boom = "YarnBomb" }
-local classes = { "ruckus", "toastmaster", "captain_croak", "granny_boom" }
+local SIGNATURE = require(ReplicatedStorage.Shared.WeaponData).Signatures
+local classes = table.clone(require(ReplicatedStorage.SwarmV2.Run.RunConfig).Classes.Order)
 if preview.args.character then
 	classes = { preview.args.character }
 end

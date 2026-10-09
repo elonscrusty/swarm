@@ -1494,9 +1494,21 @@ WeaponData.Weapons = {
 	             orb hits a target at most once per interval
 	  RankVortex a rift at a visible reachable target (Range): Coeff pulses every Tick for Duration,
 	             MaxTargets per pulse, Pull studs/s inward (ordinary enemies), one rift per owner
-	The 8 newer signatures run a placeholder behaviour (RankShot / RankSwing with the right
-	coefficient) until stream C gives them their own; their extra fields (Return*, Plant*, Charge*,
-	...) and milestone data are stored here for that.
+	[stream C] The 8 newer signatures (WeaponSystem, class signature section):
+	  RankDodgeball  RankShot + SecondBall (rank 5: a delayed half-damage ball, secondary)
+	  RankSwing      Mop Sweep (arc, MaxTargets, Slow)
+	  RankSneakers   a shoe out to Range and back: Coeff to OutTargets enemies on the way out (primary),
+	                 ReturnCoeff to ReturnTargets on the way back (secondary); one hit per target per
+	                 leg; terrain ends the blocked leg
+	  RankSeed       a seed (Coeff impact) that grows a stationary plant on reachable ground: PlantCoeff
+	                 every PlantFireEvery s at the nearest visible enemy within PlantRange for
+	                 PlantSeconds; PlantCap per owner (the oldest is replaced); plants never plant
+	  RankConfetti   Amount pellets at one target with a small fixed spread (SameTarget)
+	  RankClaws      alternating forward swipes (RankSwing geometry); ThirdPulse (rank 5)
+	  RankPuck       RankShot (bounces)
+	  RankGlove      punches at the nearest target within Reach; ChargeAfter landed punches charge the
+	                 weapon (w.Charge): the next punch is an UppercutCoeff uppercut plus a ShockRadius
+	                 ShockCoeff shockwave on up to ShockTargets other enemies (any holder)
 ]]
 local RANK: { [string]: any } = {
 	-- Ruckus: 0.90 B scrap, 0.90 s, range 32, speed 70; bounces once (0.45 B) within 10 studs
@@ -1537,7 +1549,7 @@ local RANK: { [string]: any } = {
 	},
 	-- Coach Crunch: 0.85 B dodgeball, 1.00 s, range 35, speed 70; bounces once (0.40 B) within 10
 	Dodgeball = {
-		Behavior = "RankShot", Coeff = 0.85, Interval = 1.00, Range = 35, Speed = 70, Radius = 1.0,
+		Behavior = "RankDodgeball", Coeff = 0.85, Interval = 1.00, Range = 35, Speed = 70, Radius = 1.0,
 		Bounces = 1, BounceCoeff = 0.40, BounceRange = 10, Knockback = 6, Visual = 45,
 		Milestones = {
 			[3] = { Bounces = 2, Text = "Bounces twice" },
@@ -1553,22 +1565,22 @@ local RANK: { [string]: any } = {
 			[5] = { MaxTargets = 8, Text = "Hits up to 8 enemies" },
 		},
 	},
-	-- Peter Parkour: shoe out 0.70 B (2 targets) and back 0.35 B (2 targets), 1.20 s, range 28
-	-- (placeholder: a straight shoe hitting OutTargets enemies; the return leg is stream C's)
+	-- Peter Parkour: shoe out 0.70 B (2 targets) and back 0.35 B (2 targets), 1.20 s, range 28; one hit
+	-- per target per leg, terrain ends the blocked leg ([stream C] RankSneakers)
 	ReturningSneakers = {
-		Behavior = "RankShot", Coeff = 0.70, ReturnCoeff = 0.35, Interval = 1.20, Range = 28, Speed = 45,
-		Radius = 1.0, Pierce = 2, OutTargets = 2, ReturnTargets = 2, Knockback = 3, Visual = 5,
+		Behavior = "RankSneakers", Coeff = 0.70, ReturnCoeff = 0.35, Interval = 1.20, Range = 28, Speed = 45,
+		Radius = 1.0, OutTargets = 2, ReturnTargets = 2, ReturnMaxSeconds = 2.5, Knockback = 3, Visual = 5,
 		Milestones = {
-			[3] = { OutTargets = 3, Pierce = 3, Text = "Hits 3 enemies on the way out" },
+			[3] = { OutTargets = 3, Text = "Hits 3 enemies on the way out" },
 			[5] = { ReturnTargets = 3, Text = "Hits 3 enemies on the way back" },
 		},
 	},
-	-- Barry Plotter: 0.25 B seed every 1.80 s, range 28; a plant (6 s, 0.25 B per second at the
-	-- nearest visible enemy within 20, cap 3) - placeholder: the seed impact only
+	-- Barry Plotter: 0.25 B seed every 1.80 s, range 28; a stationary plant (6 s, 0.25 B once per second
+	-- at the nearest visible enemy within 20, cap 3, the oldest replaced) ([stream C] RankSeed)
 	SeedSlinger = {
-		Behavior = "RankShot", Coeff = 0.25, Interval = 1.80, Range = 28, Speed = 40, Radius = 0.8,
+		Behavior = "RankSeed", Coeff = 0.25, Interval = 1.80, Range = 28, Speed = 40, Radius = 0.8,
 		PlantCoeff = 0.25, PlantSeconds = 6, PlantFireEvery = 1.0, PlantRange = 20, PlantCap = 3,
-		Knockback = 0, Visual = 45,
+		Knockback = 0, Visual = 45, PlantVisual = 51,
 		Milestones = {
 			[3] = { PlantSeconds = 8, Text = "Plants last 8 s" },
 			[5] = { PlantCap = 4, Text = "Up to 4 plants" },
@@ -1576,7 +1588,7 @@ local RANK: { [string]: any } = {
 	},
 	-- Rambozo: three 0.20 B pellets every 0.75 s, range 30 (all three can hit one target)
 	ConfettiMinigun = {
-		Behavior = "RankShot", Coeff = 0.20, Interval = 0.75, Range = 30, Speed = 80, Radius = 0.6,
+		Behavior = "RankConfetti", Coeff = 0.20, Interval = 0.75, Range = 30, Speed = 80, Radius = 0.6,
 		Amount = 3, Spread = 4, SameTarget = true, Knockback = 1, Visual = 24,
 		Milestones = {
 			[3] = { Amount = 4, Text = "4 pellets per burst" },
@@ -1585,7 +1597,7 @@ local RANK: { [string]: any } = {
 	},
 	-- Swolverine: 0.65 B claw swipes every 0.75 s, 14-stud forward reach, max 3 targets, alternating
 	ProteinClaws = {
-		Behavior = "RankSwing", Coeff = 0.65, Interval = 0.75, Reach = 14, Arc = 100, MaxTargets = 3,
+		Behavior = "RankClaws", Coeff = 0.65, Interval = 0.75, Reach = 14, Arc = 100, MaxTargets = 3,
 		Alternate = true, Knockback = 4,
 		Milestones = {
 			[3] = { MaxTargets = 4, Text = "Hits up to 4 enemies" },
@@ -1594,17 +1606,18 @@ local RANK: { [string]: any } = {
 	},
 	-- Crash Cassidy: 0.70 B puck every 1.00 s, range 38; bounces once (0.35 B) within 10
 	RicochetPuck = {
-		Behavior = "RankShot", Coeff = 0.70, Interval = 1.00, Range = 38, Speed = 75, Radius = 0.9,
+		Behavior = "RankPuck", Coeff = 0.70, Interval = 1.00, Range = 38, Speed = 75, Radius = 0.9,
 		Bounces = 1, BounceCoeff = 0.35, BounceRange = 10, Knockback = 5, Visual = 49,
 		Milestones = {
 			[3] = { Bounces = 2, Text = "Bounces twice" },
 			[5] = { Bounces = 3, Text = "Bounces three times" },
 		},
 	},
-	-- Knuckles McGee: 0.65 B punches at the nearest target within 8 studs every 0.65 s; the 6th punch
-	-- after 5 hits is a 1.40 B uppercut with a radius-4 0.30 B shockwave (3 more targets)
+	-- Knuckles McGee: 0.65 B punches at the nearest target within 8 studs every 0.65 s; the punch after 5
+	-- landed punches is a 1.40 B uppercut with a radius-4 0.30 B shockwave (3 more targets). The charge
+	-- belongs to the weapon (any holder) ([stream C] RankGlove)
 	GloveCombo = {
-		Behavior = "RankSwing", Coeff = 0.65, Interval = 0.65, Reach = 8, Arc = 70, MaxTargets = 1,
+		Behavior = "RankGlove", Coeff = 0.65, Interval = 0.65, Reach = 8, Arc = 70, MaxTargets = 1,
 		ChargeAfter = 5, UppercutCoeff = 1.40, ShockRadius = 4, ShockCoeff = 0.30, ShockTargets = 3, Knockback = 4,
 		Milestones = {
 			[3] = { ChargeAfter = 4, Text = "Uppercut after 4 punches" },
@@ -1643,11 +1656,12 @@ local RANK: { [string]: any } = {
 	},
 }
 
--- The eight newer class signatures (data entries; behaviours above are placeholders for stream C).
+-- The eight newer class signatures (data entries; their behaviours: [stream C] WeaponSystem Fire.Rank*).
 local NEW_SIGNATURES: { { [string]: any } } = {
 	{ Id = "Dodgeball", Name = "Dodgeball", ClassOnly = "coach_crunch", Color = Color3.fromRGB(220, 80, 70),
 		Description = "Hurls a dodgeball at the nearest enemy; it bounces to another.", AmountLabel = "Balls" },
-	{ Id = "MopSweep", Name = "Mop Sweep", ClassOnly = "doug_janitor", Color = Color3.fromRGB(120, 170, 200),
+	-- [stream C] Melee = true: a close-range weapon (stream E2's CloseKills class goal)
+	{ Id = "MopSweep", Name = "Mop Sweep", ClassOnly = "doug_janitor", Melee = true, Color = Color3.fromRGB(120, 170, 200),
 		Description = "Sweeps a wet mop arc in front of you and slows what it hits.", AmountLabel = "Sweeps" },
 	{ Id = "ReturningSneakers", Name = "Returning Sneakers", ClassOnly = "peter_parkour", Color = Color3.fromRGB(240, 150, 60),
 		Description = "Throws a sneaker that hits on the way out and on the way back.", AmountLabel = "Sneakers" },
@@ -1655,11 +1669,11 @@ local NEW_SIGNATURES: { { [string]: any } } = {
 		Description = "Plants seeds that grow into shooting plants.", AmountLabel = "Seeds" },
 	{ Id = "ConfettiMinigun", Name = "Confetti Minigun", ClassOnly = "rambozo", Color = Color3.fromRGB(240, 110, 200),
 		Description = "Sprays bursts of confetti pellets at the nearest enemy.", AmountLabel = "Pellets" },
-	{ Id = "ProteinClaws", Name = "Protein Claws", ClassOnly = "swolverine", Color = Color3.fromRGB(200, 200, 210),
+	{ Id = "ProteinClaws", Name = "Protein Claws", ClassOnly = "swolverine", Melee = true, Color = Color3.fromRGB(200, 200, 210),
 		Description = "Alternating claw swipes in front of you.", AmountLabel = "Swipes" },
 	{ Id = "RicochetPuck", Name = "Ricochet Puck", ClassOnly = "crash_cassidy", Color = Color3.fromRGB(60, 60, 70),
 		Description = "Slaps a puck at the nearest enemy; it ricochets to another.", AmountLabel = "Pucks" },
-	{ Id = "GloveCombo", Name = "Glove Combo", ClassOnly = "knuckles_mcgee", Color = Color3.fromRGB(220, 50, 50),
+	{ Id = "GloveCombo", Name = "Glove Combo", ClassOnly = "knuckles_mcgee", Melee = true, Color = Color3.fromRGB(220, 50, 50),
 		Description = "Punch combos at the nearest enemy, then a big uppercut.", AmountLabel = "Punches" },
 }
 
@@ -1833,6 +1847,14 @@ WeaponData.StatUse = {
 	RankYarn = { damage = true, cooldown = true, area = true, knockback = true },
 	RankOrb = { damage = true, cooldown = true, amount = true, area = true, knockback = true },
 	RankVortex = { damage = true, cooldown = true, area = true, duration = true },
+	-- [stream C] the 8 newer class signatures
+	RankDodgeball = { damage = true, cooldown = true, amount = true, speed = true, pierce = true, knockback = true },
+	RankSneakers = { damage = true, cooldown = true, speed = true, knockback = true },
+	RankSeed = { damage = true, cooldown = true, speed = true },
+	RankConfetti = { damage = true, cooldown = true, amount = true, speed = true, knockback = true },
+	RankClaws = { damage = true, cooldown = true, area = true, knockback = true },
+	RankPuck = { damage = true, cooldown = true, amount = true, speed = true, pierce = true, knockback = true },
+	RankGlove = { damage = true, cooldown = true, area = true, knockback = true },
 }
 
 -- True when the weapon (id, level, evolved) uses stat-row key `stat`.

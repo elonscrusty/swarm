@@ -16,7 +16,8 @@
 	    the rest the takeoff direction (MobileControls.AirFilter).
 	  * Jump height: one source. The takeoff speed is sqrt(2 * workspace.Gravity * apex)
 	    (SurvivalRules.JumpVelocity, apex RunConfig.Movement.JumpApex = 9, per class
-	    JumpApexByClass by the run hero's CharacterId); the Humanoid's own JumpPower is kept equal
+	    JumpApexByClass by the run hero's CharacterId; [stream C] a class charged jump,
+	    RunConfig.Classes.ChargedJump: Peter Parkour's apex 11 once per 6 s); the Humanoid's own JumpPower is kept equal
 	    to it (UseJumpPower), so the jump state never adds a different impulse.
 	  * No jumping in the lobby, while downed, while the run is frozen (SwarmState
 	    attributes Frozen / LevelUpPause), while the player is Paused, or while
@@ -133,13 +134,33 @@ function JumpController.OnLanded(callback: (number) -> ()): () -> ()
 	end
 end
 
+-- [stream C] A class's charged jump (RunConfig.Classes.ChargedJump; Peter Parkour: apex 11 once per
+-- 6 s) when it is ready, else nil. Only the takeoff height changes: no double jump, no speed.
+local chargedReadyAt = 0
+local function chargedJump(id: any): { Apex: number, Cooldown: number }?
+	local list = RunConfig.Classes.ChargedJump
+	local cj = type(id) == "string" and list and list[id] or nil
+	if cj and player:GetAttribute("InRun") == true and os.clock() >= chargedReadyAt then
+		return cj
+	end
+	return nil
+end
+
+local function heroId(): any
+	-- the run's hero (CharacterId, set by the server from the admitted class), else the lobby pick
+	return player:GetAttribute("InRun") == true and player:GetAttribute("CharacterId") or player:GetAttribute("SwarmClass")
+end
+
 -- The jump velocity of the local hero: sqrt(2 * gravity * apex) for its class.
 function JumpController.JumpPower(): number
 	local apex = RunConfig.Movement.JumpApex
-	-- the run's hero (CharacterId, set by the server from the admitted class), else the lobby pick
-	local id = player:GetAttribute("InRun") == true and player:GetAttribute("CharacterId") or player:GetAttribute("SwarmClass")
+	local id = heroId()
 	if type(id) == "string" then
 		apex = RunConfig.Movement.JumpApexByClass[id] or apex
+	end
+	local cj = chargedJump(id)
+	if cj then
+		apex = math.max(apex, cj.Apex) -- [stream C] the charged jump
 	end
 	return SurvivalRules.JumpVelocity(workspace.Gravity, apex)
 end
@@ -181,7 +202,11 @@ local function doJump(hum: Humanoid, root: BasePart, now: number)
 	groundedAt = -math.huge -- no second coyote jump
 	wasGrounded = false
 	local v = root.AssemblyLinearVelocity
+	local cj = chargedJump(heroId()) -- [stream C] this jump spends the charged jump
 	root.AssemblyLinearVelocity = Vector3.new(v.X, JumpController.JumpPower(), v.Z)
+	if cj then
+		chargedReadyAt = now + cj.Cooldown
+	end
 	hum:ChangeState(Enum.HumanoidStateType.Jumping)
 end
 
